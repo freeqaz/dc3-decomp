@@ -361,21 +361,29 @@ def validate_variant(
     """
     result = ValidationResult(tier=ValidationTier.INVALID, passed=False)
 
-    # Level 1: Parse
-    parse_ok, parse_diags = check_parse_validity(variant.source)
-    result.parse_ok = parse_ok
-    result.diagnostics.extend(parse_diags)
-    if not parse_ok:
-        return result
-    result.tier = ValidationTier.PARSE_OK
-
-    # Level 2: Build
+    # Level 2 first: the actual compiler (MWCC/MSVC) has already parsed the
+    # variant if the build succeeded. tree-sitter for C++ is fragile around
+    # Milo macros and rejects many variants the compiler accepts, so we treat
+    # a successful build as authoritative for PARSE+BUILD and only fall back
+    # to tree-sitter when the build failed (to distinguish parse errors from
+    # link errors etc).
     build_ok, build_diags = check_build_success(score_result)
     result.build_ok = build_ok
     result.diagnostics.extend(build_diags)
-    if not build_ok:
+    if build_ok:
+        result.parse_ok = True
+        result.tier = ValidationTier.BUILD_OK
+    else:
+        # Build failed — run tree-sitter to figure out if it was a parse
+        # problem or something later (link, missing symbol, etc).
+        parse_ok, parse_diags = check_parse_validity(variant.source)
+        result.parse_ok = parse_ok
+        result.diagnostics.extend(parse_diags)
+        if not parse_ok:
+            return result
+        result.tier = ValidationTier.PARSE_OK
+        # Stop here — build failed even though parse was ok.
         return result
-    result.tier = ValidationTier.BUILD_OK
 
     # Level 3: Score
     score_ok, score_diags = check_score_improved(score_result, baseline_score)
