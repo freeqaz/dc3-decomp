@@ -29,7 +29,7 @@ from .file_util import (
     SourceFileLock,
 )
 from .project import get_project_config, get_project_for_path, ProjectConfig, ProjectType
-from .score_cache import ScoreCache, md5_bytes, md5_file
+from .score_cache import ScoreCache, compute_dep_hash, md5_bytes, md5_file
 from .types import (
     Diagnosis,
     ScoreResult,
@@ -421,6 +421,19 @@ class Scorer:
         except Exception:
             return None
 
+    def _dep_file_path(self) -> Path:
+        """Path to the compiler-generated .d file alongside the .o target."""
+        return self._obj_path.with_suffix(".d")
+
+    def _current_dep_hash(self) -> Optional[str]:
+        """Hash the current state of every header listed in the last build's
+        .d file. Returns None if the .d file is missing (e.g., fresh build dir);
+        cache lookups then bypass the dep-hash check and behave like the legacy
+        cache. After the first build, the .d file is populated and dep-hash
+        verification kicks in.
+        """
+        return compute_dep_hash(self._dep_file_path())
+
     def _check_dedup(self, variant: Variant) -> Optional[ScoreResult]:
         """Check dedup layers (source dedup + persistent cache).
 
@@ -440,9 +453,13 @@ class Scorer:
                 error="source_dedup",
             )
 
-        # Layer 2: Persistent cache lookup
+        # Layer 2: Persistent cache lookup — but only honor a hit if the
+        # current header state matches what was cached. Without this check
+        # the cache reports stale 100% results when a batched edit touched
+        # any transitively-included header.
         if self._cache:
-            cached = self._cache.lookup_source(source_md5)
+            current_dep_hash = self._current_dep_hash()
+            cached = self._cache.lookup_source(source_md5, current_dep_hash)
             if cached is not None:
                 match_pct, build_ok = cached
                 return ScoreResult(
@@ -475,13 +492,19 @@ class Scorer:
         build_ok, build_error = self._build()
         if not build_ok:
             if self._cache:
-                self._cache.store(source_md5, None, 0.0, False)
+                # A build failure has no reliable dep_hash — write a fresh
+                # entry but stamp dep_hash=None so it's invalidated next session.
+                self._cache.store(source_md5, None, 0.0, False, dep_hash=None)
             return ScoreResult(
                 variant=variant,
                 match_percent=0.0,
                 build_success=False,
                 error=build_error,
             )
+
+        # After a successful build the .d file reflects this build's deps;
+        # capture the dep_hash so future lookups can detect stale header state.
+        post_build_dep_hash = self._current_dep_hash()
 
         # Layer 3: Obj hash dedup — same .obj means same score
         obj_md5 = md5_file(self._obj_path) if self._obj_path.exists() else None
@@ -490,7 +513,10 @@ class Scorer:
             obj_cached = self._cache.lookup_obj(obj_md5)
             if obj_cached is not None:
                 # Store in persistent cache too
-                self._cache.store(source_md5, obj_md5, obj_cached, True)
+                self._cache.store(
+                    source_md5, obj_md5, obj_cached, True,
+                    dep_hash=post_build_dep_hash,
+                )
                 return ScoreResult(
                     variant=variant,
                     match_percent=obj_cached,
@@ -503,7 +529,10 @@ class Scorer:
 
         # Store in cache
         if self._cache:
-            self._cache.store(source_md5, obj_md5, match_percent, True)
+            self._cache.store(
+                source_md5, obj_md5, match_percent, True,
+                dep_hash=post_build_dep_hash,
+            )
 
         # Guard rail: if baseline was equivalent, check variant equivalence
         execution_equivalent = None
@@ -583,6 +612,11 @@ class Scorer:
                 with source_lock:
                     return _compile_worker(idx, variant, source_md5, obj_out)
 
+            # Capture header-set hash once for the whole batch — every variant
+            # in this batch shares the same source tree state, so a single
+            # snapshot suffices for invalidation tracking.
+            batch_dep_hash = self._current_dep_hash()
+
             futures = {}
             with ThreadPoolExecutor(max_workers=workers) as pool:
                 for idx, variant, source_md5 in to_build:
@@ -600,7 +634,10 @@ class Scorer:
 
                     if not build_ok:
                         if self._cache:
-                            self._cache.store(source_md5, None, 0.0, False)
+                            self._cache.store(
+                                source_md5, None, 0.0, False,
+                                dep_hash=None,
+                            )
                         results[orig_idx] = ScoreResult(
                             variant=variant,
                             match_percent=0.0,
@@ -626,7 +663,10 @@ class Scorer:
                 if self._cache:
                     obj_cached = self._cache.lookup_obj(obj_md5)
                     if obj_cached is not None:
-                        self._cache.store(source_md5, obj_md5, obj_cached, True)
+                        self._cache.store(
+                            source_md5, obj_md5, obj_cached, True,
+                            dep_hash=batch_dep_hash,
+                        )
                         results[orig_idx] = ScoreResult(
                             variant=variant,
                             match_percent=obj_cached,
@@ -639,7 +679,10 @@ class Scorer:
                 match_percent = self._run_objdiff_on_obj(obj_out)
 
                 if self._cache:
-                    self._cache.store(source_md5, obj_md5, match_percent, True)
+                    self._cache.store(
+                        source_md5, obj_md5, match_percent, True,
+                        dep_hash=batch_dep_hash,
+                    )
 
                 results[orig_idx] = ScoreResult(
                     variant=variant,
@@ -729,9 +772,16 @@ class Scorer:
         if self._cache and self._obj_path.exists():
             obj_md5 = md5_file(self._obj_path)
             self._cache._obj_scores[obj_md5] = baseline
-            # Also store baseline in persistent cache
+            # Also store baseline in persistent cache. The .d file alongside
+            # the .o was just regenerated by the baseline build, so its dep
+            # hash represents the canonical "this baseline build's headers"
+            # state — exactly what we want to invalidate on next session if
+            # any of those headers change.
             if self._original_source_md5:
-                self._cache.store(self._original_source_md5, obj_md5, baseline, True)
+                self._cache.store(
+                    self._original_source_md5, obj_md5, baseline, True,
+                    dep_hash=self._current_dep_hash(),
+                )
 
         return baseline
 
