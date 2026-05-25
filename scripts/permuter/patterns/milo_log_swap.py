@@ -51,6 +51,8 @@ _ALL_MACROS = set(_LOG_MACROS.keys())
 
 class MiloLogSwapPattern(Pattern):
     name = "milo_log_swap"
+    # opt_in: 13/13 variants failed compile (100%, 0 wins).
+    opt_in = True
 
     def relevant(self, diagnosis: Diagnosis) -> bool:
         # Clusters suggest instruction count differences (log macros vary in size)

@@ -43,6 +43,9 @@ _CALLEE_SAVED_RE = re.compile(r"r(1[3-9]|2\d|3[01])")
 
 class MemberRefBindPattern(Pattern):
     name = "member_ref_bind"
+    # opt_in: 212/218 variants failed compile (97%, 0 wins from 13 runs).
+    # Generated `auto&` references mismatch ObjPtr/smart-pointer types.
+    opt_in = True
 
     def relevant(self, diagnosis: Diagnosis) -> bool:
         # Callee-saved GPR swaps — this pattern can fix register allocation

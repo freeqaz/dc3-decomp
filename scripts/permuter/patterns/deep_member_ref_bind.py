@@ -42,6 +42,9 @@ _MEMBER_RE = re.compile(rb"^m[A-Z]")
 
 class DeepMemberRefBindPattern(Pattern):
     name = "deep_member_ref_bind"
+    # opt_in: 63/63 variants failed compile (100%). Multi-level member binding
+    # generates incorrect const/reference qualifiers that don't compile.
+    opt_in = True
 
     def relevant(self, diagnosis: Diagnosis) -> bool:
         # Callee-saved GPR swaps

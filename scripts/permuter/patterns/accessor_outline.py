@@ -46,6 +46,9 @@ _MAX_VARIANTS = 5
 
 class AccessorOutlinePattern(Pattern):
     name = "accessor_outline"
+    # opt_in: 71/71 variants failed compile historically (100% fail rate, 0 wins).
+    # Generated wrappers conflict with existing inline accessors. Needs rework.
+    opt_in = True
     safety_tier = "experimental"
     structural_domain = "cross_unit"
     follow_ups = ("declaration_reorder", "value_address_caching")

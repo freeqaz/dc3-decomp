@@ -46,6 +46,9 @@ _CALLEE_SAVED_RE = re.compile(r"r(1[3-9]|2\d|3[01])")
 
 class ValueAddressCachingPattern(Pattern):
     name = "value_address_caching"
+    # opt_in: 79/84 variants failed compile (94%, 0 wins from 6 runs).
+    # Type inference on `auto val = member` often picks the wrong width.
+    opt_in = True
     safety_tier = "normal"
     structural_domain = "register_allocation"
     follow_ups = ("declaration_reorder", "prologue_pressure")

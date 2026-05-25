@@ -39,6 +39,9 @@ _CALLEE_SAVED_RE = re.compile(r"[rf](1[3-9]|2\d|3[01])")
 
 class SubscriptRefBindPattern(Pattern):
     name = "subscript_ref_bind"
+    # opt_in: 53/53 variants failed compile (100%). Generated reference type
+    # inference doesn't match what the binding expression actually produces.
+    opt_in = True
 
     def relevant(self, diagnosis: Diagnosis) -> bool:
         # Callee-saved register swaps

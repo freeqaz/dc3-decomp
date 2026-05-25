@@ -38,6 +38,10 @@ _BRANCH_OPCODES = {"beq", "bne", "ble", "bgt", "bge", "blt",
 
 class NullGuardInsertPattern(Pattern):
     name = "null_guard_insert"
+    # opt_in: 111/120 variants failed compile (93%, 0 wins from 10 runs).
+    # Inserted guards corrupt control flow when the original logic already
+    # short-circuits, or generated guards reference uninitialized variables.
+    opt_in = True
 
     def relevant(self, diagnosis: Diagnosis) -> bool:
         # Delete clusters suggest missing code (target has instructions we don't)

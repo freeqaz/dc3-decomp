@@ -30,6 +30,13 @@ _FREE_FUNC_RE = re.compile(
     r"__cdecl\s+([\w]+)\s*\("
 )
 
+# Matches MWCC-style demangled free functions: "FuncName(" at start, no class qualifier.
+# Example: "MakeColor(float, float, float, Hmx::Color&)" — no return type, no __cdecl,
+# the leading token IS the function name.
+_MWCC_FREE_FUNC_RE = re.compile(
+    r"^([\w~][\w]*)\s*\("
+)
+
 
 def extract_qualified_name(demangled: str) -> str | None:
     """Extract qualified C++ name from MSVC demangled signature.
@@ -47,6 +54,11 @@ def extract_qualified_name(demangled: str) -> str | None:
 
     # Try free function pattern
     m = _FREE_FUNC_RE.search(demangled)
+    if m:
+        return m.group(1)
+
+    # MWCC-style: "FuncName(" with no return type / __cdecl prefix.
+    m = _MWCC_FREE_FUNC_RE.match(demangled)
     if m:
         return m.group(1)
 
