@@ -1,0 +1,139 @@
+# Unicorn equivalence checker regression corpus.
+#
+# Each entry has (symbol, unit, expected_verdict, expected_class, source).
+# The corpus_check.py harness re-runs the unicorn comparator against each
+# entry and reports deltas. New corpus entries should be hand-verified —
+# the goal is a small, high-trust regression suite.
+#
+# expected_verdict: EQUIVALENT | DIVERGENT
+# expected_class:   the divergence class, or null for EQUIVALENT
+# source:           free-form provenance note (which experiment found this)
+#
+# Sections:
+#   known_tps    — confirmed behaviorally-equivalent functions. New signal
+#                  layers MUST NOT flip these to DIVERGENT.
+#   known_divergent — confirmed-different functions, with the class that the
+#                  current signal model assigns. Useful for catching class
+#                  reclassification regressions (e.g. v15 should not
+#                  suddenly call a call_count func a build_env).
+#   known_fps    — confirmed false positives we want to FIX. Empty at
+#                  signal v1 because Phase 0 found 0 flips. Will populate
+#                  when Phase 3 (unmapped fingerprint) or Phase 6
+#                  (sentinel object memory) surfaces new FPs.
+#
+# Seeded 2026-05-14 from cl_temp_files/phase0/ outputs.
+
+known_tps:
+  # The full TP holdout from Phase 0 (n=96, stable EQUIVALENT under both
+  # zero-mock baseline and -1 hostile-mock). Sampled uniformly across
+  # units, all at current_percent >= 99%.
+  - { symbol: "?Invert@@YAXABVTransform@@AAV1@@Z", unit: "default/system/char/CharIKFingers", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?ChildFinished@FlowTimer@@UAAXPAVFlowNode@@@Z", unit: "default/system/flow/FlowTimer", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?WriteChunk@ChunkStream@@AAAHXZ", unit: "default/system/utl/ChunkStream", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?Copy@BaseMaterial@@UAAXPBVObject@Hmx@@W4CopyType@23@@Z", unit: "default/system/rndobj/BaseMaterial", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?PostUpdate@SkeletonUpdate@@AAAXXZ", unit: "default/system/gesture/SkeletonUpdate", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?Load@RndGenerator@@UAAXAAVBinStream@@@Z", unit: "default/system/rndobj/Gen", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?Poll@CharBoneTwist@@UAAXXZ", unit: "default/system/char/CharBoneTwist", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "??0SfxInst@@QAA@PAVSfx@@@Z", unit: "default/system/synth/Sfx", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "??0App@@QAA@HPAPAD@Z", unit: "default/App", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?ApplyLoop@MoggClip@@AAAX_NHH@Z", unit: "default/system/synth/MoggClip", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?AnnotatePractice@ClipPlayer@@QAA?AVDataNode@@XZ", unit: "default/system/hamobj/ClipPlayer", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?Poll@AccomplishmentManager@@QAAXXZ", unit: "default/lazer/meta_ham/AccomplishmentManager", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?SetKeyframe@LightPreset@@IAAXAAUKeyframe@1@@Z", unit: "default/system/world/LightPreset", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?Draw@DirectionGestureFilterSingleUser@@UAAXABVSkeleton@@AAVSkeletonViz@@@Z", unit: "default/system/gesture/DirectionGestureFilter", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?Clamp@Box@@QAA_NAAVVector3@@@Z", unit: "default/system/math/Geo", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?Load@HamDirector@@UAAXAAVBinStream@@@Z", unit: "default/system/hamobj/HamDirector", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?FindNextDircut@HamDirector@@IAAPAVHamCamShot@@XZ", unit: "default/system/hamobj/HamDirector", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "parsedate", unit: "default/system/net/curl/lib/parsedate", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?Create@RndBitmap@@QAAXPAX@Z", unit: "default/system/rndobj/Bitmap", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?Copy@Spotlight@@UAAXPBVObject@Hmx@@W4CopyType@23@@Z", unit: "default/system/world/Spotlight", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?HolmesClientInit@@YAXXZ", unit: "default/system/os/HolmesClient", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?CollideShowing@Character@@UAAPAVRndDrawable@@ABVSegment@@AAMAAVPlane@@@Z", unit: "default/system/char/Character", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?SendCallback@AutoGlitchReport@@SAXMMPBDP6AXMPAX@Z1@Z", unit: "default/system/os/Timer", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?UpdateFakeArmPos@SkeletonUpdate@@AAAXXZ", unit: "default/system/gesture/SkeletonUpdate", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?PostLoad@HamListRibbon@@UAAXAAVBinStream@@@Z", unit: "default/system/hamobj/HamListRibbon", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?SetMoveState@HollaBackMinigame@@QAAXHVSymbol@@@Z", unit: "default/system/hamobj/HollaBackMinigame", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?WriteTimePlayed@MetagameStats@@QAAXPAVHamProfile@@H@Z", unit: "default/lazer/meta_ham/MetagameStats", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?NewMs@DeJitter@@QAAMMAAM@Z", unit: "default/system/utl/DeJitter", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?InitPool@ParticleCommonPool@@QAAXXZ", unit: "default/system/rndobj/Part", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?Load@FlowSwitchCase@@UAAXAAVBinStream@@@Z", unit: "default/system/flow/FlowSwitchCase", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?start_pass_fdctmgr@@YAXPAUjpeg_compress_struct@@@Z", unit: "default/system/jpeg/jcdctmgr", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?InterpTangent@@YAXABVVector3@@000MAAV1@@Z", unit: "default/system/math/Key", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?Poll@CharServoBone@@UAAXXZ", unit: "default/system/char/CharServoBone", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?op6@@YA?AVDataNode@@PAVDataArray@@@Z", unit: "default/system/synth/ByteGrinder", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?Load@CamShot@@UAAXAAVBinStream@@@Z", unit: "default/system/world/CameraShot", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "??0AutoPrepTarget@@QAA@AAVCamShotFrame@@@Z", unit: "default/system/world/CameraShot", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?Load@RhythmDetector@@UAAXAAVBinStream@@@Z", unit: "default/system/hamobj/RhythmDetector", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?Poll@LabelNumberTicker@@UAAXXZ", unit: "default/system/ui/LabelNumberTicker", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?UpdateAnimations@RhythmBattlePlayer@@QAAXPAVObject@Hmx@@@Z", unit: "default/system/hamobj/RhythmBattlePlayer", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?Highlight@CharCuff@@UAAXXZ", unit: "default/system/char/CharCuff", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?Text@PlaylistSortNode@@UBAXPAVUIListLabel@@PAVUILabel@@@Z", unit: "default/lazer/meta_ham/PlaylistSortNode", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?DrawBeatString@CharClipDisplay@@QAAXPBDMABVColor@Hmx@@@Z", unit: "default/system/char/CharClipDisplay", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?CollidePlane@RndMesh@@QAAHABVFace@1@ABVPlane@@@Z", unit: "default/system/rndobj/Mesh", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?SkeletonUpdateCallbackSlowdownCB@@YAXMPAX@Z", unit: "default/system/gesture/SkeletonUpdate", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?LoadNewSong@Game@@QAAXVSymbol@@0@Z", unit: "default/lazer/game/Game", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?SyncProperty@PracticeSection@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z", unit: "default/system/hamobj/PracticeSection", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?InitializePlaylists@HamSongMgr@@QAAXXZ", unit: "default/lazer/meta_ham/HamSongMgr", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?DrawLine3D@SkeletonViz@@QAAXABVVector3@@0MABVColor@Hmx@@PAV34@@Z", unit: "default/system/gesture/SkeletonViz", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?ChildFinished@FlowSequence@@UAAXPAVFlowNode@@@Z", unit: "default/system/flow/FlowSequence", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?CalculateSwell@HamNavList@@QBAMH@Z", unit: "default/system/hamobj/HamNavList", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?NextSkeletonIndexToTrack@SkeletonChooser@@AAAHH@Z", unit: "default/lazer/meta_ham/SkeletonChooser", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?Load@CharBone@@UAAXAAVBinStream@@@Z", unit: "default/system/char/CharBone", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?UpdateLocal@RndCam@@IAAXXZ", unit: "default/system/rndobj/Cam", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?Reset@DetectFrame@@QAAXPBVFilterVersion@@MPBVMoveFrame@@PBUDancerFrame@@W4MoveMirrored@@@Z", unit: "default/system/hamobj/DetectFrame", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?SetSelectedSimulateScroll@UIListState@@QAAXH@Z", unit: "default/system/ui/UIListState", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?SetTypeDef@UIPicture@@UAAXPAVDataArray@@@Z", unit: "default/system/ui/UIPicture", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?SetAttackSmoothing@Synapse@1DSP@@QAAXM@Z", unit: "default/system/synth_xbox/Synapse_dsp", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?ReadMetaEvent@MidiReader@@AAAXHEAAVBinStream@@@Z", unit: "default/system/midi/MidiReader", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?DrawBlend@CharClipDisplay@@QAAXMM@Z", unit: "default/system/char/CharClipDisplay", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?Set@Quat@Hmx@@QAAXABVMatrix3@2@@Z", unit: "default/system/math/Rot", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?Replace@RndCamAnim@@UAA_NPAVObjRef@@PAVObject@Hmx@@@Z", unit: "default/system/rndobj/CamAnim", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?SetFrame@FloatKeys@@UAAXMMM@Z", unit: "default/system/rndobj/PropKeys", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?Text@SongSelectPlaylistProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z", unit: "default/lazer/meta_ham/SongSelectPlaylistPanel", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?Load@RndPropAnim@@UAAXAAVBinStream@@@Z", unit: "default/system/rndobj/PropAnim", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "??0XboxEnumeration@@QAA@HPAV?$vector@_KV?$StlNodeAlloc@_K@stlpmtx_std@@@stlpmtx_std@@@Z", unit: "default/system/meta/StoreEnumeration", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?MyFindClip@@YAPAVCharClip@@ABVDataNode@@PAVObjectDir@@@Z", unit: "default/system/char/CharDriver", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?MoveToDeltaFacing@CharServoBone@@QAAXAAVTransform@@@Z", unit: "default/system/char/CharServoBone", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?Copy@RndPostProc@@UAAXPBVObject@Hmx@@W4CopyType@23@@Z", unit: "default/system/rndobj/PostProc", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?Copy@CharIKRod@@UAAXPBVObject@Hmx@@W4CopyType@23@@Z", unit: "default/system/char/CharIKRod", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?WriteClipHeader@SkeletonClip@@IAAXAAVFileStream@@@Z", unit: "default/system/gesture/SkeletonClip", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?Identified@IdentityInfo@@AAAXI@Z", unit: "default/system/gesture/IdentityInfo", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?Copy@RndTransformable@@UAAXPBVObject@Hmx@@W4CopyType@23@@Z", unit: "default/system/rndobj/Trans", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?BeginTiling@DxRnd@@AAAXABVColor@Hmx@@MI@Z", unit: "default/system/rnddx9/Rnd_Xbox", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?ManageJob@DingoServer@@UAAXPAVDingoJob@@@Z", unit: "default/system/net/DingoSvr", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?Load@LightPreset@@UAAXAAVBinStream@@@Z", unit: "default/system/world/LightPreset", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?PreLoad@WorldInstance@@UAAXAAVBinStream@@@Z", unit: "default/system/world/Instance", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?SetEditAction@MetaMaterial@@IAAXW4MatProp@@W4MatPropEditAction@@@Z", unit: "default/system/rndobj/MetaMaterial", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?FillCompressedVertex@@YAXAAUCompressedVertex_Xbox@@ABVVert@RndMesh@@_N@Z", unit: "default/system/rnddx9/Mesh", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?AddFatal@PoseFatalities@@AAAXH@Z", unit: "default/system/hamobj/PoseFatalities", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?Count@HamLabel@@UAAXHHMVSymbol@@@Z", unit: "default/system/hamobj/HamLabel", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?UpdateCrewMesh@CampaignMasterQuestCrewSelectPanel@@QAAXVSymbol@@@Z", unit: "default/lazer/meta_ham/CampaignMasterQuestCrewSelectPanel", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?SelectMove@OriginalChoreoRemixer@@MAAXHH@Z", unit: "default/system/hamobj/OriginalChoreoRemixer", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?Select@ChallengeSortNode@@UAA?AVSymbol@@XZ", unit: "default/lazer/meta_ham/ChallengeSortNode", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?AnimateFlashcard@BustAMovePanel@@AAAXH@Z", unit: "default/lazer/game/BustAMovePanel", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?Text@HamNavProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z", unit: "default/system/hamobj/HamNavProvider", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?Load@RhythmBattlePlayer@@UAAXAAVBinStream@@@Z", unit: "default/system/hamobj/RhythmBattlePlayer", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?IsValidSwipePosition@DirectionGestureFilterSingleUser@@ABA_NABVSkeleton@@@Z", unit: "default/system/gesture/DirectionGestureFilter", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "file_upload", unit: "default/system/net/curl/lib/file", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?UpdateApproxLighting@NgEnviron@@UAAXPBVVector3@@@Z", unit: "default/system/rndobj/Env_NG", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?ArchiveInit@@YAXXZ", unit: "default/system/os/Archive", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?SongAudioData@HamSongMgr@@UBAPAVSongInfo@@H@Z", unit: "default/lazer/meta_ham/HamSongMgr", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?GetDisabledCount@HamNavList@@ABAHH@Z", unit: "default/system/hamobj/HamNavList", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?op0@@YA?AVDataNode@@PAVDataArray@@@Z", unit: "default/system/synth/ByteGrinder", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?ChildFinished@FlowQueueable@@UAAXPAVFlowNode@@@Z", unit: "default/system/flow/FlowQueueable", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+  - { symbol: "?Handle@Game@@UAA?AVDataNode@@PAVDataArray@@_N@Z", unit: "default/lazer/game/Game", expected_verdict: EQUIVALENT, expected_class: null, source: "phase0-tp-holdout" }
+
+known_divergent:
+  # Reserved for high-confidence stable-divergent functions. Empty for
+  # now — the Phase 0 seed candidates (4 functions from the TP holdout
+  # that came back DIVERGENT at 99% match) turned out to flap because
+  # the underlying .obj files get rebuilt by concurrent decomp work,
+  # changing the call sequence enough to flip the verdict. A future
+  # entry here needs to be confirmed stable across at least 3 rebuilds
+  # of its .obj before being added.
+
+known_fps:
+  # Empty at signal v1. Phase 0 found 0 hostile-mock flips in the 50-80%
+  # match band. Phases 3 (unmapped fingerprint) and 6 (sentinel object
+  # memory) target different signal axes; if either surfaces real FPs,
+  # add the symbols here so we can track that they STAY fixed.
