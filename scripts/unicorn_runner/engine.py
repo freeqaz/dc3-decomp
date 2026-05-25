@@ -21,6 +21,7 @@ os.environ["LIBUNICORN_PATH"] = str(_UNICORN_DIR / "build")
 
 from unicorn import Uc, UC_ARCH_PPC, UC_MODE_PPC32, UC_MODE_BIG_ENDIAN
 from unicorn import UC_HOOK_BLOCK, UC_HOOK_CODE, UC_HOOK_MEM_READ_UNMAPPED, UC_HOOK_MEM_WRITE_UNMAPPED
+from unicorn import UC_MEM_READ_UNMAPPED, UC_MEM_WRITE_UNMAPPED, UC_MEM_FETCH_UNMAPPED
 from unicorn import UcError, UC_ERR_FETCH_UNMAPPED
 from unicorn.ppc_const import *
 from unicorn.unicorn_py3.unicorn import uclib
@@ -33,15 +34,36 @@ from .memory_map import (
 
 
 class ExecutionResult:
-    """Result of executing a function in Unicorn."""
+    """Result of executing a function in Unicorn.
 
-    def __init__(self, call_log, r3, f1, object_memory, globals_memory, error=None):
+    terminated_normally: True iff the function returned via blr to the
+        SENTINEL_ADDR (the controlled return path). False if it ran into
+        any other exit condition (cap exhaustion, wild jump, error).
+    cap_exhausted: True iff emu_start returned because the max_insns
+        count was hit (PC neither at SENTINEL_ADDR nor at the post-func
+        terminator and no UcError was raised).
+    final_pc: PC value at emu_start return. SENTINEL_ADDR (0xDEAD0000)
+        for normal returns; the in-function address for cap exhaustion;
+        the faulting address for unmapped fetches.
+    unmapped_log: list of (kind, page_base, addr) tuples for unmapped
+        accesses in suspicious regions (page 0, kernel range). Used by
+        the comparator to fingerprint null-deref-style divergences that
+        would otherwise be hidden by on-demand page mapping.
+    """
+
+    def __init__(self, call_log, r3, f1, object_memory, globals_memory,
+                 error=None, terminated_normally=False, cap_exhausted=False,
+                 final_pc=0, unmapped_log=None):
         self.call_log = call_log
         self.r3 = r3
         self.f1 = f1
         self.object_memory = object_memory
         self.globals_memory = globals_memory
         self.error = error
+        self.terminated_normally = terminated_normally
+        self.cap_exhausted = cap_exhausted
+        self.final_pc = final_pc
+        self.unmapped_log = unmapped_log or []
 
 
 # Call log tuple indices (flat tuple instead of nested dicts for speed)
@@ -93,6 +115,10 @@ class UnicornEngine:
 
         self._rdata_mapped = False
         self._ondemand_pages = set()
+        # Phase 3.1: pages in suspicious ranges (null/kernel) that we
+        # had to map on demand. We unmap them between executions so
+        # _on_unmapped fires every time, not just on the first encounter.
+        self._suspicious_pages = set()
 
         # Fill buffer cache: fill_pattern -> bytes(REGION_SIZE)
         self._fill_cache = {}
@@ -118,6 +144,10 @@ class UnicornEngine:
         self._call_log = []
         self._verbose = False
         self._fill_page = None
+        # Phase 3.1: suspicious unmapped accesses. Stack-page accesses
+        # legitimately differ across decomp/orig due to register
+        # allocation, so we scope to unambiguous-bug ranges only.
+        self._unmapped_log = []
 
         # Set up hooks once.
         # UC_HOOK_BLOCK fires once per translation block (at the block start)
@@ -170,13 +200,41 @@ class UnicornEngine:
 
     def _on_unmapped(self, uc, access, address, size, value, user_data):
         page_base = address & ~0xFFF
+
+        # Phase 3.1: log suspicious unmapped accesses for the comparator
+        # to fingerprint. Scope to clear-bug pages only:
+        #   - low addresses (page 0, near-null deref): address < 0x1000
+        #   - kernel/sentinel range: address >= 0xF0000000
+        # Stack-page (~0x10000000) and tramp-region accesses legitimately
+        # differ between decomp and orig; we ignore them.
+        #
+        # Note: we fire EVERY time the suspicious access happens, even
+        # for pages that are already on-demand mapped (so we don't lose
+        # signal due to engine reuse warming up page 0). The fingerprint
+        # in the comparator dedupes by (kind, page_base) anyway.
+        if address < 0x1000 or address >= 0xF0000000:
+            if access == UC_MEM_READ_UNMAPPED:
+                kind = "rd"
+            elif access == UC_MEM_WRITE_UNMAPPED:
+                kind = "wr"
+            elif access == UC_MEM_FETCH_UNMAPPED:
+                kind = "fetch"
+            else:
+                kind = f"k{access}"
+            self._unmapped_log.append((kind, page_base, address & 0xFFFFFFFC))
+
         if page_base not in self._ondemand_pages:
             try:
                 uc.mem_map(page_base, 0x1000)
                 if self._fill_page is not None:
                     uc.mem_write(page_base, self._fill_page)
                 self._ondemand_pages.add(page_base)
+                if address < 0x1000 or address >= 0xF0000000:
+                    self._suspicious_pages.add(page_base)
             except Exception:
+                # Surface this — silently swallowing harness errors is bad.
+                # We log the fact of the failure so the operator notices.
+                self._unmapped_log.append(("map_failed", page_base, address))
                 return False
         return True
 
@@ -215,6 +273,21 @@ class UnicornEngine:
             self._call_log = []
         self._verbose = verbose
         self._fill_page = self._get_fill_page(fill_pattern) if fill_pattern is not None else None
+        self._unmapped_log = []
+
+        # Phase 3.1: unmap any suspicious-range pages from previous runs
+        # so the unmapped hook fires this run too. Non-suspicious
+        # on-demand pages (e.g. extended data sections) stay mapped to
+        # keep on-demand mapping cheap for normal cases.
+        for page in self._suspicious_pages:
+            try:
+                mu.mem_unmap(page, 0x1000)
+            except Exception:
+                # Race with concurrent harness use; leave it mapped and
+                # accept the miss for this one run.
+                pass
+            self._ondemand_pages.discard(page)
+        self._suspicious_pages = set()
 
         # Reset memory regions
         fill_buf = self._get_fill_region(fill_pattern)
@@ -278,14 +351,30 @@ class UnicornEngine:
 
         # Execute (count= caps instructions to prevent runaway loops)
         error = None
+        terminated_normally = False
+        cap_exhausted = False
         try:
             mu.emu_start(CODE_BASE, CODE_BASE + func_size,
                          timeout=timeout, count=max_insns)
+            # emu_start returned without raising. Two ways this happens:
+            # 1. We reached the function's end address (CODE_BASE+func_size).
+            #    The function ran off the end without a blr — unusual but
+            #    occasionally happens with tail calls; treat as normal.
+            # 2. We hit the instruction count cap. PC will be somewhere
+            #    inside the function. This is the cap_exhausted case —
+            #    the function did not actually finish, so we can't trust
+            #    the captured state.
+            pc_after = mu.reg_read(UC_PPC_REG_PC)
+            if CODE_BASE <= pc_after < CODE_BASE + func_size:
+                cap_exhausted = True
+            else:
+                # PC at or past the function-end terminator.
+                terminated_normally = True
         except UcError as e:
             if e.errno == UC_ERR_FETCH_UNMAPPED:
                 pc = mu.reg_read(UC_PPC_REG_PC)
                 if pc == SENTINEL_ADDR:
-                    pass
+                    terminated_normally = True
                 else:
                     error = f"Unexpected fetch from unmapped 0x{pc:08X}"
             else:
@@ -294,6 +383,7 @@ class UnicornEngine:
         # Capture output state
         r3 = mu.reg_read(UC_PPC_REG_3)
         f1 = mu.reg_read(UC_PPC_REG_FPR0 + 1)
+        final_pc = mu.reg_read(UC_PPC_REG_PC)
         object_memory = bytes(mu.mem_read(OBJECT_BASE, REGION_SIZE))
         globals_memory = bytes(mu.mem_read(GLOBAL_BASE, REGION_SIZE))
 
@@ -318,6 +408,10 @@ class UnicornEngine:
             object_memory=object_memory,
             globals_memory=globals_memory,
             error=error,
+            terminated_normally=terminated_normally,
+            cap_exhausted=cap_exhausted,
+            final_pc=final_pc,
+            unmapped_log=list(self._unmapped_log),
         )
 
 

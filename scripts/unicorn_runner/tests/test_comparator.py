@@ -135,15 +135,31 @@ class TestCompare(unittest.TestCase):
         self.assertEqual(result.verdict, "DIVERGENT")
         self.assertEqual(result.details["reason"], "orig_error")
 
-    def test_matching_errors_equivalent(self):
-        """Both sides hit the same error → EQUIVALENT with matching_error detail."""
+    def test_matching_errors_same_pc_equivalent(self):
+        """Phase 2.1 (softened): matching errors AT MATCHING PC → EQUIVALENT.
+
+        Under zero-fill fixtures both sides commonly null-deref to the
+        same address — we don't flag that as divergent, but we DO tag
+        the verdict so Phase 3 (unmapped fingerprint) can distinguish
+        symmetric-null-deref from real matching faults.
+        """
         err = "Unexpected fetch from unmapped 0x00000000"
-        decomp = MockExecutionResult(error=err)
-        orig = MockExecutionResult(error=err)
+        decomp = MockExecutionResult(error=err, final_pc=0x4)
+        orig = MockExecutionResult(error=err, final_pc=0x4)
         result = self.compare(decomp, orig, [], [])
         self.assertEqual(result.verdict, "EQUIVALENT")
         self.assertEqual(result.details["matching_error"], err)
+        self.assertEqual(result.details["matching_error_pc"], 0x4)
         self.assertTrue(len(result.warnings) > 0)
+
+    def test_matching_errors_different_pc_wild_jump(self):
+        """Phase 2.1: same error string but different PCs → DIVERGENT (wild_jump_match)."""
+        err = "Unexpected fetch from unmapped 0x00000000"
+        decomp = MockExecutionResult(error=err, final_pc=0x4)
+        orig = MockExecutionResult(error=err, final_pc=0x10)
+        result = self.compare(decomp, orig, [], [])
+        self.assertEqual(result.verdict, "DIVERGENT")
+        self.assertEqual(result.details["reason"], "wild_jump_match")
 
     def test_mismatched_errors_divergent(self):
         """Both sides error but with different messages → DIVERGENT."""
@@ -152,6 +168,43 @@ class TestCompare(unittest.TestCase):
         result = self.compare(decomp, orig, [], [])
         self.assertEqual(result.verdict, "DIVERGENT")
         self.assertEqual(result.details["reason"], "error_mismatch")
+
+    def test_both_cap_exhausted_divergent(self):
+        """Phase 2.2: both sides hitting the insn cap → DIVERGENT (cap_exhausted)."""
+        decomp = MockExecutionResult(cap_exhausted=True, final_pc=0x80001234)
+        orig = MockExecutionResult(cap_exhausted=True, final_pc=0x80005678)
+        result = self.compare(decomp, orig, [], [])
+        self.assertEqual(result.verdict, "DIVERGENT")
+        self.assertEqual(result.details["reason"], "cap_exhausted_both")
+
+    def test_one_sided_cap_exhausted_divergent(self):
+        """Phase 2.2: one-sided cap exhaustion → DIVERGENT (cap_exhausted_decomp)."""
+        decomp = MockExecutionResult(cap_exhausted=True, final_pc=0x80001234)
+        orig = MockExecutionResult()  # terminated_normally=True by default
+        result = self.compare(decomp, orig, [], [])
+        self.assertEqual(result.verdict, "DIVERGENT")
+        self.assertEqual(result.details["reason"], "cap_exhausted_decomp")
+
+    def test_unmapped_fingerprint_mismatch_divergent(self):
+        """Phase 3.2: decomp pokes null page, orig doesn't → DIVERGENT."""
+        decomp = MockExecutionResult()
+        decomp.unmapped_log = [("rd", 0x00000000, 0x00000004)]
+        orig = MockExecutionResult()
+        orig.unmapped_log = []
+        result = self.compare(decomp, orig, [], [])
+        self.assertEqual(result.verdict, "DIVERGENT")
+        self.assertEqual(result.details["reason"], "unmapped_access_mismatch")
+
+    def test_unmapped_fingerprint_match_equivalent(self):
+        """Phase 3.2: both sides touch the same null page → EQUIVALENT (fingerprint matches)."""
+        decomp = MockExecutionResult()
+        decomp.unmapped_log = [("rd", 0x00000000, 0x00000004)]
+        orig = MockExecutionResult()
+        orig.unmapped_log = [("rd", 0x00000000, 0x00000010)]  # different addr, same page
+        result = self.compare(decomp, orig, [], [])
+        self.assertEqual(result.verdict, "EQUIVALENT")
+        # Fingerprint should be present and non-empty
+        self.assertNotEqual(result.details["unmapped_fingerprint"], "")
 
 
 class TestFormatResult(unittest.TestCase):

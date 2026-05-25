@@ -148,6 +148,19 @@ def _run_comparison_core(symbol, decomp_coff, orig_coff, timeout=5_000_000,
     if len(decomp_bytes) == 0 or len(orig_bytes) == 0:
         return EXIT_SKIPPED, None, [], f"SKIPPED: Symbol '{symbol}' has zero size"
 
+    # Phase 2.3: refuse to compare stub-vs-real implementations. A 4x size
+    # ratio is the threshold — well outside legitimate codegen variation
+    # (typically <1.2x) but inside enough to catch a `return;` stub against
+    # a real 200-line method. See docs/sessions/2026-02-19-unicorn-
+    # reteleport-callcount-anomaly.md for the bug that motivates this.
+    smaller = min(len(decomp_bytes), len(orig_bytes))
+    larger = max(len(decomp_bytes), len(orig_bytes))
+    if larger >= 64 and smaller / larger < 0.25:
+        return EXIT_SKIPPED, None, [], (
+            f"SKIPPED: size mismatch — decomp={len(decomp_bytes)}B "
+            f"orig={len(orig_bytes)}B (ratio {smaller/larger:.2f})"
+        )
+
     # Resolve section-symbol REL24 targets (e.g. .text -> actual function name)
     # Critical for original .obj files where all functions share one .text section
     decomp_relocs = resolve_section_rel24_targets(

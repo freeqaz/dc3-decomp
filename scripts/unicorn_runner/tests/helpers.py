@@ -109,16 +109,31 @@ def assemble(*insns):
 # ---------------------------------------------------------------------------
 
 class MockExecutionResult:
-    """Lightweight stand-in for engine.ExecutionResult."""
+    """Lightweight stand-in for engine.ExecutionResult.
+
+    terminated_normally and cap_exhausted default to safe values:
+    - When `error` is None, terminated_normally defaults to True (normal
+      return path).
+    - When `error` is set, terminated_normally defaults to False (a wild
+      jump produced the error).
+    - cap_exhausted always defaults to False unless overridden.
+    """
 
     def __init__(self, r3=0, f1=0, call_log=None, object_memory=None,
-                 globals_memory=None, error=None):
+                 globals_memory=None, error=None,
+                 terminated_normally=None, cap_exhausted=False,
+                 final_pc=0):
         self.r3 = r3
         self.f1 = f1
         self.call_log = call_log or []
         self.object_memory = object_memory or (b"\x00" * 0x10000)
         self.globals_memory = globals_memory or (b"\x00" * 0x10000)
         self.error = error
+        if terminated_normally is None:
+            terminated_normally = error is None
+        self.terminated_normally = terminated_normally
+        self.cap_exhausted = cap_exhausted
+        self.final_pc = final_pc
 
 
 def make_reloc(offset, symbol_name, type_name):

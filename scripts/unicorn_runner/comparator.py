@@ -1,5 +1,6 @@
 """Comparison logic for Unicorn function execution results."""
 
+import hashlib
 import json
 import struct
 
@@ -85,6 +86,22 @@ def compare_memory(decomp_mem, orig_mem, base, size):
     return diffs
 
 
+def unmapped_fingerprint(unmapped_log):
+    """Hash the set of suspicious unmapped accesses for cross-side comparison.
+
+    The log already filters to bug-shaped regions (page 0, kernel range).
+    We reduce to a sorted set of (kind, page_base) — exact addresses
+    within a 4KB page are noise (offset can shift with code scheduling).
+
+    Returns 16 hex chars of sha256, or "" if the log is empty.
+    """
+    if not unmapped_log:
+        return ""
+    page_set = sorted({(kind, page) for kind, page, _addr in unmapped_log})
+    raw = ";".join(f"{k}:{p:08x}" for k, p in page_set).encode("ascii")
+    return hashlib.sha256(raw).hexdigest()[:16]
+
+
 def build_offset_symbol_map(orig_relocs):
     """Map function-relative offsets to original symbol names (REL24 only)."""
     return {r["offset"]: r["symbol_name"]
@@ -123,19 +140,66 @@ def compare(decomp_result, orig_result, decomp_relocs, orig_relocs):
     Returns:
         ComparisonResult with verdict and details
     """
-    # Check for execution errors
+    # Phase 2.2: Cap-exhaustion check. Both sides hitting the instruction
+    # cap means execution was truncated identically; the captured state
+    # is incomplete and we cannot conclude EQUIVALENT. One-sided cap is a
+    # real divergence (decomp loops where orig terminates, or vice versa).
+    d_cap = getattr(decomp_result, "cap_exhausted", False)
+    o_cap = getattr(orig_result, "cap_exhausted", False)
+    if d_cap and o_cap:
+        return ComparisonResult("DIVERGENT", {
+            "reason": "cap_exhausted_both",
+            "decomp_final_pc": getattr(decomp_result, "final_pc", 0),
+            "orig_final_pc": getattr(orig_result, "final_pc", 0),
+        })
+    if d_cap:
+        return ComparisonResult("DIVERGENT", {
+            "reason": "cap_exhausted_decomp",
+            "decomp_final_pc": getattr(decomp_result, "final_pc", 0),
+        })
+    if o_cap:
+        return ComparisonResult("DIVERGENT", {
+            "reason": "cap_exhausted_orig",
+            "orig_final_pc": getattr(orig_result, "final_pc", 0),
+        })
+
+    # Check for execution errors. Phase 2.1 (softened after corpus-check
+    # showed 94/95 TPs hit a symmetric wild-jump under zero fill): we
+    # keep the old "matching error → EQUIVALENT" rule for now, since
+    # under the current zero-fill fixture both sides commonly null-deref
+    # to the same low address and crash identically. That's a harness
+    # limitation, not a real divergence between decomp and orig.
+    #
+    # We do, however, tag the verdict so Phase 3 (unmapped-access
+    # fingerprint) can later distinguish symmetric-null-deref from
+    # genuine matching faults. Same-error-different-PC is still flagged
+    # as wild_jump_match for diagnostic visibility.
     if decomp_result.error and orig_result.error:
         if decomp_result.error == orig_result.error:
-            # Both crashed identically (e.g. null dispatch) — treat as equivalent
-            return ComparisonResult("EQUIVALENT", {
-                "matching_error": decomp_result.error,
-            }, warnings=[f"Both sides hit identical error: {decomp_result.error}"])
-        else:
+            d_pc = getattr(decomp_result, "final_pc", 0)
+            o_pc = getattr(orig_result, "final_pc", 0)
+            # Matching errors at matching PC → EQUIVALENT, tagged.
+            # Matching errors at different PC → DIVERGENT (wild_jump_match).
+            if d_pc == o_pc:
+                return ComparisonResult("EQUIVALENT", {
+                    "matching_error": decomp_result.error,
+                    "matching_error_pc": d_pc,
+                }, warnings=[
+                    f"Both sides hit identical error at PC=0x{d_pc:08X}: "
+                    f"{decomp_result.error}",
+                ])
             return ComparisonResult("DIVERGENT", {
-                "reason": "error_mismatch",
+                "reason": "wild_jump_match",
                 "decomp_error": decomp_result.error,
                 "orig_error": orig_result.error,
+                "decomp_final_pc": d_pc,
+                "orig_final_pc": o_pc,
             })
+        return ComparisonResult("DIVERGENT", {
+            "reason": "error_mismatch",
+            "decomp_error": decomp_result.error,
+            "orig_error": orig_result.error,
+        })
     if decomp_result.error:
         return ComparisonResult("DIVERGENT", {
             "reason": "decomp_error",
@@ -184,6 +248,27 @@ def compare(decomp_result, orig_result, decomp_relocs, orig_relocs):
             "globals_diffs": globals_diffs[:20],
         })
 
+    # Phase 3.2: unmapped-access fingerprint divergence. If decomp pokes
+    # a low/kernel-range address that orig doesn't (or vice versa), that
+    # is observable behavioral divergence even though the on-demand-map
+    # hook hid the fault from the call/memory/return checks above.
+    d_unmapped = getattr(decomp_result, "unmapped_log", None) or []
+    o_unmapped = getattr(orig_result, "unmapped_log", None) or []
+    d_fp = unmapped_fingerprint(d_unmapped)
+    o_fp = unmapped_fingerprint(o_unmapped)
+    if d_fp != o_fp:
+        return ComparisonResult("DIVERGENT", {
+            "reason": "unmapped_access_mismatch",
+            "decomp_fingerprint": d_fp,
+            "orig_fingerprint": o_fp,
+            "decomp_unmapped_pages": sorted({
+                (k, p) for k, p, _ in d_unmapped
+            })[:10],
+            "orig_unmapped_pages": sorted({
+                (k, p) for k, p, _ in o_unmapped
+            })[:10],
+        })
+
     # Secondary diagnostic: offset-matched symbol check
     warnings = check_call_targets(
         decomp_relocs, orig_relocs,
@@ -193,6 +278,9 @@ def compare(decomp_result, orig_result, decomp_relocs, orig_relocs):
         "call_count": len(decomp_result.call_log),
         "r3": decomp_result.r3,
         "f1": decomp_result.f1,
+        # Both sides share the same fingerprint (possibly ""). Persist
+        # so downstream can audit the suspicious-access set.
+        "unmapped_fingerprint": d_fp,
     }
 
     return ComparisonResult("EQUIVALENT", details, warnings)
@@ -247,6 +335,24 @@ def classify_divergence(result, decomp_result, orig_result, decomp_relocs, orig_
         return "orig_error"
     if reason in ("error_mismatch", "decomp_error"):
         return "error"
+
+    # Phase 2.1 / 2.2: new sub-classes from the cap+sentinel tightening.
+    if reason == "wild_jump_match":
+        # Both sides crashed at the same wild PC. Often correlates with
+        # null-deref-from-this paths where both decomp and orig follow
+        # the same broken control flow under zero-fill.
+        return "wild_jump_match"
+    if reason == "cap_exhausted_both":
+        return "cap_exhausted"
+    if reason == "cap_exhausted_decomp":
+        return "cap_exhausted_decomp"
+    if reason == "cap_exhausted_orig":
+        return "cap_exhausted_orig"
+
+    # Phase 3.2: unmapped-access fingerprint mismatch — one side pokes
+    # null-range or kernel-range pages that the other doesn't.
+    if reason == "unmapped_access_mismatch":
+        return "unmapped_access_mismatch"
 
     # call_arg_mismatch: check if mismatching values are in globals region
     # (__FILE__ string references live in GLOBAL_BASE)
@@ -517,6 +623,45 @@ def format_result(result, decomp_result, orig_result, decomp_relocs, orig_relocs
         elif reason in ("decomp_error", "orig_error"):
             side = "Decomp" if reason == "decomp_error" else "Original"
             lines.append(f"  {side} execution error: {result.details['error']}")
+
+        elif reason == "wild_jump_match":
+            lines.append("  Both sides crashed at the same wild address:")
+            lines.append(f"    Decomp:   {result.details['decomp_error']} "
+                         f"(PC=0x{result.details['decomp_final_pc']:08X})")
+            lines.append(f"    Original: {result.details['orig_error']} "
+                         f"(PC=0x{result.details['orig_final_pc']:08X})")
+            lines.append("    (suspect: not equivalent — same wrong path on both sides)")
+
+        elif reason == "cap_exhausted_both":
+            lines.append("  Both sides hit the instruction count cap "
+                         "(execution incomplete):")
+            lines.append(f"    Decomp PC=0x{result.details['decomp_final_pc']:08X}")
+            lines.append(f"    Original PC=0x{result.details['orig_final_pc']:08X}")
+
+        elif reason == "cap_exhausted_decomp":
+            lines.append("  Decomp hit the instruction count cap; original returned. "
+                         f"Decomp PC=0x{result.details['decomp_final_pc']:08X}")
+
+        elif reason == "cap_exhausted_orig":
+            lines.append("  Original hit the instruction count cap; decomp returned. "
+                         f"Original PC=0x{result.details['orig_final_pc']:08X}")
+
+        elif reason == "unmapped_access_mismatch":
+            d_fp = result.details.get("decomp_fingerprint", "")
+            o_fp = result.details.get("orig_fingerprint", "")
+            lines.append("  Suspicious unmapped-access fingerprint differs:")
+            lines.append(f"    Decomp fingerprint:   {d_fp or '(none)'}")
+            lines.append(f"    Original fingerprint: {o_fp or '(none)'}")
+            d_pages = result.details.get("decomp_unmapped_pages", [])
+            o_pages = result.details.get("orig_unmapped_pages", [])
+            if d_pages:
+                lines.append("    Decomp touched pages:")
+                for k, p in d_pages[:5]:
+                    lines.append(f"      {k} 0x{p:08X}")
+            if o_pages:
+                lines.append("    Original touched pages:")
+                for k, p in o_pages[:5]:
+                    lines.append(f"      {k} 0x{p:08X}")
 
     return "\n".join(lines)
 
