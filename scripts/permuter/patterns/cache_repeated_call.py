@@ -65,6 +65,23 @@ class CacheRepeatedCallPattern(Pattern):
             return 0.5
         return 0.3
 
+    def context_priority(
+        self, diagnosis: Diagnosis, ctx: FunctionContext
+    ) -> float:
+        """Require an AST memoization opportunity (same call >=2x in one stmt).
+
+        The diagnosis-only gate triggers on any ``bl`` mismatch which is far
+        too broad. This override returns 0 unless we can actually find at
+        least one statement containing the same call_expression text >=2
+        times — i.e., the precondition for this transform to fire at all.
+        """
+        base_priority = self.priority(diagnosis)
+        if base_priority <= 0.0:
+            return 0.0
+        if not _has_repeated_call_opportunity(ctx):
+            return 0.0
+        return base_priority
+
     def generate(self, ctx: FunctionContext) -> Iterator[Variant]:
         source = ctx.file_source
         stmts = ctx.statements
@@ -107,7 +124,15 @@ class CacheRepeatedCallPattern(Pattern):
                     var_name = var_name_str.encode("utf-8")
 
                     # Build declaration: auto _e0 = v.end();
-                    decl_line = indent + b"auto " + var_name + b" = " + call_text_bytes + b";\n"
+                    # MWCC is C++98 and has no `auto` type deduction — it parses
+                    # `auto x = ...` as the old storage-class `int x` (warning
+                    # 10349) and coerces to int. So on mwcc emit `int` directly:
+                    # equivalent codegen for the int-typed expressions that can
+                    # actually match (pointer/float exprs error or truncate under
+                    # both spellings and never become wins), but valid C++98 with
+                    # no warning and no stray `auto` leaking into committed source.
+                    type_kw = b"auto" if getattr(ctx, "compiler_dialect", "mwcc") == "msvc" else b"int"
+                    decl_line = indent + type_kw + b" " + var_name + b" = " + call_text_bytes + b";\n"
 
                     ed = SourceEditor(source)
                     ed.insert_at(line_start, decl_line)
@@ -137,6 +162,24 @@ class CacheRepeatedCallPattern(Pattern):
                         tags=frozenset({"introduced_temp"}),
                     )
                     counter += 1
+
+
+def _has_repeated_call_opportunity(ctx: FunctionContext) -> bool:
+    """Return True if any statement contains the same call_expression >=2x.
+
+    This is the precondition for the cache_repeated_call transform to fire
+    at all. We walk the same trees ``generate()`` does, but only check for
+    existence (early-exit on first hit) rather than enumerating variants.
+    """
+    source = ctx.file_source
+    for stmt in ctx.statements:
+        for body_stmt in _iter_statements_in_subtree(stmt):
+            groups = _find_repeated_calls(body_stmt, source)
+            for call_text, nodes in groups:
+                # Match generate()'s minimum-length filter
+                if len(nodes) >= 2 and len(call_text) >= 4:
+                    return True
+    return False
 
 
 def _iter_statements_in_subtree(node: Node) -> Iterator[Node]:

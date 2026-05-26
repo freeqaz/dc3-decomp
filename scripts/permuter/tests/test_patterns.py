@@ -797,7 +797,7 @@ void test_func(int display) {
 """,
         expected_source="""\
 void test_func(int display) {
-    auto _tmp0 = mElements.size();
+    int _tmp0 = mElements.size();
     check(display < _tmp0, 0x74);
 }
 """,
@@ -3590,10 +3590,10 @@ void test_func() {
     check(a < getSize(), 0x74);
 }
 """,
-        intermediate_contains="auto _tmp0 = getSize()",
+        intermediate_contains="int _tmp0 = getSize()",
         expected_source="""\
 void test_func() {
-    auto _tmp0 = getSize();
+    int _tmp0 = getSize();
     int a = 1;
     check(a < _tmp0, 0x74);
 }

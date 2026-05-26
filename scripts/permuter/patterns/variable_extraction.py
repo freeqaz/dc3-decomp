@@ -90,8 +90,15 @@ class VariableExtractionPattern(Pattern):
             used_names.add(var_name_str)
             var_name = var_name_str.encode("utf-8")
 
-            # Build the declaration line (auto variant — always first)
-            decl_line = indent + b"auto " + var_name + b" = " + call_text + b";\n"
+            # Build the declaration line (untyped variant — always first).
+            # MWCC is C++98: it parses `auto x = ...` as the old storage-class
+            # `int x` (warning 10349) and coerces to int. Emitting `int` directly
+            # on mwcc is equivalent codegen for the int-typed calls that can match
+            # (pointer/float calls error or truncate under both spellings and
+            # never win), but is valid C++98 with no warning and no stray `auto`
+            # leaking into committed source. msvc keeps real `auto` deduction.
+            untyped_kw = b"auto" if getattr(ctx, "compiler_dialect", "mwcc") == "msvc" else b"int"
+            decl_line = indent + untyped_kw + b" " + var_name + b" = " + call_text + b";\n"
 
             # Use SourceEditor: insert decl at line start, replace call with var_name
             ed = SourceEditor(ctx.file_source)
