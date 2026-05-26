@@ -7,6 +7,7 @@
 #include "gfx/GpuDevice.h"
 
 #include <emscripten/emscripten.h>
+#include <emscripten/em_asm.h>
 #include <emscripten/html5.h>
 
 #include <cstdio>
@@ -22,8 +23,20 @@ GpuDevice::~GpuDevice() {
 
 bool GpuDevice::Init(const GpuDeviceDesc& desc) {
     mHeadless = desc.headless;
-    mWidth = desc.width;
-    mHeight = desc.height;
+    // The page resizer in index.html assigns to canvas.width/height to match
+    // the viewport before WebGPU is initialized. The hardcoded 1280x720
+    // defaults would then mismatch the live canvas and break surface configure.
+    // Read the actual backing dimensions instead.
+    int canvasW = EM_ASM_INT({
+        var c = document.getElementById('dc3-canvas');
+        return c ? c.width : 0;
+    });
+    int canvasH = EM_ASM_INT({
+        var c = document.getElementById('dc3-canvas');
+        return c ? c.height : 0;
+    });
+    mWidth = (canvasW > 0) ? canvasW : desc.width;
+    mHeight = (canvasH > 0) ? canvasH : desc.height;
 
     // Create instance (no TimedWaitAny — browser doesn't support sync wait)
     mInstance = wgpu::CreateInstance(nullptr);

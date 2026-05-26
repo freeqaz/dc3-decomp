@@ -120,8 +120,30 @@
             logDiv.scrollTop = logDiv.scrollHeight;
         }
 
+        // Hard stop if WebGPU isn't available — without it the canvas is just
+        // black after the splash, and we'd otherwise download 12MB of assets
+        // before that's obvious. Show the user how to enable it instead.
         if (!navigator.gpu) {
-            log('WebGPU not available — engine will run without rendering', true);
+            const ua = navigator.userAgent;
+            const isFirefox = /Firefox/.test(ua);
+            const isChromium = /Chrom(e|ium)/.test(ua);
+            const browserHelp = isFirefox
+                ? 'Firefox: WebGPU requires Nightly with <code>dom.webgpu.enabled=true</code> in <code>about:config</code>.'
+                : isChromium
+                ? 'Chrome/Chromium on Linux: launch with <code>--enable-unsafe-webgpu --enable-features=Vulkan</code>, or toggle <code>chrome://flags/#enable-unsafe-webgpu</code>.'
+                : 'Use a Chromium-based browser with WebGPU enabled, or Firefox Nightly with <code>dom.webgpu.enabled</code>.';
+            status.innerHTML =
+                '<strong>WebGPU not available in this browser.</strong><br>' +
+                '<span style="color:#aaa">DC3 needs WebGPU to render. ' + browserHelp + '</span>';
+            status.className = 'error';
+            status.style.maxWidth = '900px';
+            status.style.textAlign = 'center';
+            log('WebGPU not available — refusing to boot engine (would render black)', true);
+            // Hide the splash overlay so the error is visible.
+            const sv = document.getElementById('splash-video');
+            if (sv) sv.remove();
+            // Stop here — don't load the WASM module.
+            throw new Error('WebGPU unavailable');
         }
         {
             status.textContent = 'Loading WASM...';
@@ -156,6 +178,16 @@
                 printErr: function(text) {
                     console.error(text);
                     log(text, true);
+                    // Adapter/device failures from the WebGPU layer arrive on stderr.
+                    // Surface them in the status bar so the user knows why nothing renders.
+                    if (text.includes('adapter request failed') ||
+                        text.includes('device request failed') ||
+                        text.includes('device lost')) {
+                        status.textContent = 'GPU error — see console';
+                        status.className = 'error';
+                        var sv = document.getElementById('splash-video');
+                        if (sv) sv.remove();
+                    }
                 }
             };
 
