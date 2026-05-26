@@ -1139,17 +1139,18 @@ void ObjectDir::PreLoad(BinStream &bs) {
         if (d.rev < 0x1B) {
             bool b;
             d >> b;
-            mAlwaysInlined = b;
+            mAlwaysInlined = b != 0;
         } else {
             d >> mAlwaysInlined;
         }
         int hashLen;
         d >> hashLen;
         if (hashLen) {
-            char *hash = (char *)MemOrPoolAlloc(hashLen + 1, __FILE__, 0x9B0, "Always Inline CDB");
+            char *hash = (char *)MemOrPoolAlloc(hashLen + 1, __FILE__, 0x30A, "Always Inline CDB");
             mAlwaysInlineHash = hash;
             bs.Read(hash, hashLen);
-            hash[hashLen] = '\0';
+            char *ptr = (char *)mAlwaysInlineHash;
+            ptr[hashLen] = '\0';
         }
     }
 
@@ -1169,7 +1170,7 @@ void ObjectDir::PreLoad(BinStream &bs) {
             } else {
                 bool b;
                 d >> b;
-                proxyType = (InlineDirType)b;
+                proxyType = (InlineDirType)(b != 0);
             }
             if (!gLoadingProxyFromDisk) {
                 mInlineProxyType = proxyType;
@@ -1255,7 +1256,7 @@ void ObjectDir::PreLoad(BinStream &bs) {
                 RemovingSubDir(mSubDirs[i]);
             }
             if (!bs.Cached()
-                && mSubDirs.size() == notInlinedSubDirs.size() + inlinedSubDirs.size()) {
+                && notInlinedSubDirs.size() + inlinedSubDirs.size() == mSubDirs.size()) {
                 i20 = 1;
             } else {
                 mSubDirs.reserve(notInlinedSubDirs.size() + inlinedSubDirs.size());
@@ -1284,7 +1285,7 @@ void ObjectDir::PreLoad(BinStream &bs) {
                 if (d.rev > 0x18) {
                     unsigned char b;
                     d >> b;
-                    MILO_ASSERT_RANGE_EQ(b, kInlineCached, kInlineCachedShared, 0x3C3);
+                    MILO_ASSERT_RANGE_EQ(b, kInlineCached, kInlineCachedShared, 0x3BE);
                     dType = (InlineDirType)b;
                 } else {
                     dType = kInlineCached;
@@ -1310,11 +1311,11 @@ void ObjectDir::PreLoad(BinStream &bs) {
         if (d.rev > 0xF) {
             int inlineProxy;
             d >> inlineProxy;
-            MILO_ASSERT(inlineProxy != 1, 0x3E1);
+            MILO_ASSERT(inlineProxy != 1, 0x3DC);
         } else if (d.rev > 0xE) {
             bool inlineProxy;
             d >> inlineProxy;
-            MILO_ASSERT(!inlineProxy, 0x3E6);
+            MILO_ASSERT(!inlineProxy, 0x3E1);
         }
     }
 
@@ -1350,7 +1351,7 @@ void ObjectDir::PreLoad(BinStream &bs) {
 
     if (d.rev > 20 && d.rev < 24) {
         int offset = notInlinedSubDirs.size();
-        MILO_ASSERT(mSubDirs.capacity() >= offset + inlinedSubDirs.size(), 0x41A);
+        MILO_ASSERT(mSubDirs.capacity() >= offset + inlinedSubDirs.size(), 0x415);
         for (int i = 0; i < inlinedSubDirs.size(); i++) {
             mSubDirs[i + offset].LoadInlinedFile(inlinedSubDirs[i], bs);
 #ifdef HX_NATIVE
