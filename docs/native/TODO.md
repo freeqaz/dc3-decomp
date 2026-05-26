@@ -1,5 +1,25 @@
 # Native Port TODO — Phase 6 Polish & Remaining Work
 
+## What's Next (2026-05-25 entry point)
+
+Native port convergence is settled — boot → menu → song select → game_screen → gameplay all run through Xbox-shaped DTA flow with audio, rendering, and animation. Open issues are bugs, not missing features.
+
+**P1 — open bugs affecting visible behavior**
+- **IK feet-in-floor** — `CharIKFoot::Poll` never fires for player characters; `HamIKEffector::mConstraints` empty. Failing test: `GameplayTelemetryTest.FeetNotBelowFloorDuringGameplay`. See `docs/sessions/2026-05-14-feet-in-floor-empty-constraints.md`. May be downstream of the bone-garbage bug below.
+- **Bone garbage root cause** (§8.4) — some leg/foot bones produce ~1e16 translations; currently masked by identity fallback. Possibly the root cause of the IK feet bug above.
+
+**P2 — polish (§8.4)**
+- `RockCentral::ManageJob` unstub (crashes on `SendDropInDatapoint`)
+- Face servo explicit polling verification
+- `movemgr` DTA error spam (cosmetic)
+- Letterboxing artifact at some camera angles
+- ObjRef ring validation guard removal test (`Object.cpp:300-316`)
+
+**P3 — decomp residue**
+- 4,880 AT_LIMIT functions (14.2%). Recent audits (2026-05-14) found 19 prematurely-flagged — the new permuter patterns from 2026-05-25 should expose more.
+
+Detailed history below.
+
 ## Current State (Session 75 — 2026-03-23)
 - **Song audio decryption FIXED** — v0xE mogg decrypt pipeline fully working (AES-CTR via pure C++ GrindArray, HMXA→OggS conversion). See `docs/sessions/2026-03-23-mogg-v0xe-decrypt-failure.md`
 - **Audio-driven beat timing** — HandleWait succeeds with audioReady=1, songMs advances, beats track song position. Wall-clock fallback available when audio fails
@@ -246,7 +266,8 @@ HamDirector (`src/system/hamobj/HamDirector.cpp:137-202`) exposes ~40+ DTA handl
 - [ ] **RockCentral::ManageJob unstub** — Currently guarded with `#ifdef HX_NATIVE delete job; return;`. The actual TheServer needs null-safe ManageJob or the network layer needs proper stub initialization. Crashes on `SendDropInDatapoint` / `SendDropOutDatapoint` during game start.
 - [x] **Flashcard rendering during game_screen** — **DONE** (2026-03-17): DirLoader parent chain + FindObject ProxyDir fallback resolves flow targets. `skipUIDraw` removed; `TheUI->Draw()` runs on game_screen. Flow animations control visibility/alpha naturally. See [session doc](../sessions/2026-03-17-dirloader-parent-chain.md).
 - [x] **Phrase meter objects** — **DONE** (2026-03-17): phrase_meter0/1 are in venue .milo and load AFTER HUD. Flow animations that reference them fail silently (2 of the remaining 7 harmless warnings). MoveDir::Enter finds them later via `venue->Find<HamPhraseMeter>(...)` after venue merge.
-- [ ] **Bone garbage root cause** — Some leg/foot bones produce invalid translations (~1e16). Currently mitigated by identity fallback. Need to trace through CharBones data to find source of corruption.
+- [ ] **IK feet-in-floor** (2026-05-14) — `CharIKFoot::Poll` never fires for player characters; `HamIKEffector::mConstraints` empty so the IK solver has nothing to anchor feet against. Toe Z drops to -4.2 below floor during crouch poses. Decision needed: fix-forward vs. capture Xbox ground truth via Xenia (blocked by `__mftb()` timer bug). Failing test: `GameplayTelemetryTest.FeetNotBelowFloorDuringGameplay`. See `docs/sessions/2026-05-14-feet-in-floor-empty-constraints.md`.
+- [ ] **Bone garbage root cause** — Some leg/foot bones produce invalid translations (~1e16). Currently mitigated by identity fallback. Need to trace through CharBones data to find source of corruption. Possibly upstream of the IK feet bug above.
 - [ ] **Face servo explicit polling** — Verify CharFaceServo is in Character::mPolls. If not, add explicit poll in gameplay path.
 - [ ] **movemgr DTA error** — `movemgr not function or object` spam every frame during gameplay. TheMoveMgr is null on native; DTA scripts reference it. Low priority (cosmetic log noise).
 - [ ] **Letterboxing artifact** — Some camera angles show black bars on right side. May be aspect ratio mismatch in camera framing.
@@ -260,9 +281,15 @@ HamDirector (`src/system/hamobj/HamDirector.cpp:137-202`) exposes ~40+ DTA handl
 
 **Result**: Zero `shell_basic.mmat` errors (was 1,636). Metamaterials load correctly. Desktop unaffected.
 
-### 8.6 AppLabel WASM vtable crash — OPEN
+### 8.6 AppLabel WASM vtable crash — CONFIRMED RESOLVED (2026-05-26)
 
-`function signature mismatch` at `MainMenuProvider.cpp:48` (`app_label`) when entering `main_screen` with metamaterials loaded. WASM `call_indirect` type check failure — AppLabel virtual function signature doesn't match the vtable slot. Separate issue from metamaterials, likely needs `AppLabel` class layout or virtual function signature fix.
+Originally filed 2026-03-22: `function signature mismatch` at `MainMenuProvider.cpp:48` (`app_label`) when entering `main_screen` with metamaterials loaded. WASM `call_indirect` type check failure — AppLabel virtual function signature didn't match the vtable slot.
+
+Resolved by **PR #217 "acc context, match applabel"** (52b79625, 2026-04-09), which reworked 114 lines of `AppLabel.cpp` and 60 lines of `AppLabel.h` for decomp accuracy — the exact signature-correctness work that clears a WASM `call_indirect` mismatch.
+
+**Validated 2026-05-26** via `node scripts/web/screenshot.mjs`: full boot → attract → title → main_screen → choose_mode → song_select with `MainMenuProvider: 5 items` logged (proving the `dynamic_cast<AppLabel*>` + `SetTextToken` path executed). Zero `function signature`, `call_indirect`, `PAGE_ERROR`, or `CRASH` events across 1,179 log lines. Screenshot captured cleanly.
+
+**Regression guard**: `scripts/web/smoke-test.mjs` (run via `npm run web:smoke-test`). Boots to main_screen, asserts MainMenuProvider populated + no pageerror + no WASM-trap signatures. Exits non-zero on failure. Run before declaring any AppLabel/HamLabel/MainMenuProvider change safe on web. Requires `python3 native/web/server.py --port 8420` running first.
 
 ---
 

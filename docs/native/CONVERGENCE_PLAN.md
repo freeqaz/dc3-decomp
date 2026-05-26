@@ -1,8 +1,14 @@
 # Native Port Convergence Plan
 
-**Goal**: Make the native port operate 1:1 with the Xbox version — same DTA flows, same panel hierarchy, same loading pipeline. Diverge only where necessary (graphics API, 64-bit platform, input abstraction).
+> **⚠️ SUPERSEDED (2026-05-25).** This plan captures the 2026-03-21 entry point; convergence has since landed. The native port runs 1:1 with Xbox's DTA-driven pipeline — all scaffolding hacks removed, full DTA flow, song audio (v0xE), animation, camera cuts, post-proc all working.
+>
+> **Canonical current state**: [`PLAN.md`](PLAN.md) (what works) and [`TODO.md`](TODO.md) (what's next).
+>
+> Kept here as the historical Phase 0 → Phase 1 plan and the audit-doc index. Phases 2–6 below were either completed under different doc lineages (PLAN/TODO) or rolled into the polish backlog.
 
-**Status**: Phase 1 complete. game_screen reached through full DTA flow. Phase 2-3 next.
+**Original goal**: Make the native port operate 1:1 with the Xbox version — same DTA flows, same panel hierarchy, same loading pipeline. Diverge only where necessary (graphics API, 64-bit platform, input abstraction).
+
+**Original status (2026-03-21)**: Phase 1 complete. game_screen reached through full DTA flow. Phase 2-3 next.
 
 **Working docs**: `docs/sessions/convergence/` (audit reports 01-06)
 
