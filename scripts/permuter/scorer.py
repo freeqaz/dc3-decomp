@@ -19,6 +19,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Optional
@@ -34,6 +35,7 @@ from .preprocess_cache import (
     derive_preprocess_command,
     fast_path_enabled,
 )
+from .profiling import get_profiler
 from .project import get_project_config, get_project_for_path, ProjectConfig, ProjectType
 from .score_cache import ScoreCache, compute_dep_hash, md5_bytes, md5_file
 from .types import (
@@ -293,6 +295,7 @@ class Scorer:
             self._compile_shell_cmd, src_name, work_name
         )
 
+        _t0 = time.perf_counter()
         result = subprocess.run(
             cmd,
             shell=True,
@@ -300,6 +303,7 @@ class Scorer:
             capture_output=True,
             text=True,
         )
+        get_profiler().record_subprocess("compile", time.perf_counter() - _t0)
         if result.returncode != 0:
             combined = result.stdout + result.stderr
             if "error" in combined.lower():
@@ -608,11 +612,13 @@ class Scorer:
                 return False, "could not redirect source path for spliced compile"
             cmd = redirected
             atomic_write_bytes(work_src, spliced_source)
+            _t0 = time.perf_counter()
             result = subprocess.run(
                 cmd, shell=True,
                 cwd=self._compile_cwd or str(self._project.repo_root),
                 capture_output=True, text=True,
             )
+            get_profiler().record_subprocess("compile", time.perf_counter() - _t0)
             if result.returncode != 0:
                 combined = result.stdout + result.stderr
                 if "error" in combined.lower():
@@ -678,6 +684,7 @@ class Scorer:
         # Write source to the working copy (not the real source path)
         atomic_write_bytes(work_src, source_bytes)
 
+        _t0 = time.perf_counter()
         result = subprocess.run(
             cmd,
             shell=True,
@@ -685,6 +692,7 @@ class Scorer:
             capture_output=True,
             text=True,
         )
+        get_profiler().record_subprocess("compile", time.perf_counter() - _t0)
         if result.returncode != 0:
             combined = result.stdout + result.stderr
             if "error" in combined.lower():
@@ -814,10 +822,14 @@ class Scorer:
         cmd.extend([self.symbol, "-c", "functionRelocDiffs=none", "-f", "json"])
         if include_instructions:
             cmd.append("--include-instructions")
+        profiler = get_profiler()
+        profiler.set_objdiff_binary(objdiff)
+        _t0 = time.perf_counter()
         result = subprocess.run(
             cmd, capture_output=True, text=True,
             cwd=str(self._project.repo_root),
         )
+        profiler.record_subprocess("objdiff", time.perf_counter() - _t0)
         try:
             data = json.loads(result.stdout)
             match_pct = data.get("fuzzy_match_percent", 0.0)
