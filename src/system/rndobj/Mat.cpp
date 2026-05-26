@@ -184,7 +184,7 @@ BEGIN_PROPSYNCS(RndMat)
             if (!(_op & (kPropSize | kPropGet)) && !IsEditable(action)) {
                 return true;
             }
-            return PropSync(mPointLights, _val, _prop, _i + 1, _op) != false;
+            return PropSync(mPointLights, _val, _prop, _i + 1, _op);
         }
     }
     {
@@ -194,7 +194,7 @@ BEGIN_PROPSYNCS(RndMat)
             if (!(_op & (kPropSize | kPropGet)) && !IsEditable(action)) {
                 return true;
             }
-            return PropSync(mFog, _val, _prop, _i + 1, _op) != false;
+            return PropSync(mFog, _val, _prop, _i + 1, _op);
         }
     }
     {
@@ -204,7 +204,7 @@ BEGIN_PROPSYNCS(RndMat)
             if (!(_op & (kPropSize | kPropGet)) && !IsEditable(action)) {
                 return true;
             }
-            return PropSync(mFadeout, _val, _prop, _i + 1, _op) != false;
+            return PropSync(mFadeout, _val, _prop, _i + 1, _op);
         }
     }
     {
@@ -214,7 +214,7 @@ BEGIN_PROPSYNCS(RndMat)
             if (!(_op & (kPropSize | kPropGet)) && !IsEditable(action)) {
                 return true;
             }
-            return PropSync(mColorAdjust, _val, _prop, _i + 1, _op) != false;
+            return PropSync(mColorAdjust, _val, _prop, _i + 1, _op);
         }
     }
     {
@@ -224,7 +224,7 @@ BEGIN_PROPSYNCS(RndMat)
             if (!(_op & (kPropSize | kPropGet)) && !IsEditable(action)) {
                 return true;
             }
-            return PropSync(mFur, _val, _prop, _i + 1, _op) != false;
+            return PropSync(mFur, _val, _prop, _i + 1, _op);
         }
     }
     SYNC_PERF_PROP(recv_proj_lights, mPerfSettings.mRecvProjLights)
