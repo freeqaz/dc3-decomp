@@ -76,9 +76,17 @@ class ScopeWideningPattern(Pattern):
     follow_ups = ("declaration_reorder", "declaration_movement")
 
     def relevant(self, diagnosis: Diagnosis) -> bool:
-        # Most useful when there's a dominant offset_swap (slot inversion)
-        # or many callee-saved register swaps.
-        if getattr(diagnosis, "offset_swap_count", 0) > 10:
+        # Most useful when there's an offset_swap (slot inversion) or many
+        # callee-saved register swaps.
+        #
+        # offset_swap_count only sums GENUINE mirror pairs (a delta +D paired
+        # with -D); it already filters delta==0 and unpaired deltas. So the
+        # minimum meaningful value is 2 (one +D + one -D instruction), which
+        # is a real slot inversion. Real OFFSET_SWAP AT_LIMIT funcs measure
+        # 2-6 here (e.g. ShapeDeltaBox=4, CheckRTs=2, OnMsg=6); the original
+        # `> 10` gate was tuned to a single outlier (WrapText=139) and never
+        # tripped on real functions.
+        if getattr(diagnosis, "offset_swap_count", 0) >= 2:
             return True
         if diagnosis.reg_swap_pairs:
             for (r0, r1) in diagnosis.reg_swap_pairs:
@@ -90,8 +98,11 @@ class ScopeWideningPattern(Pattern):
 
     def priority(self, diagnosis: Diagnosis) -> float:
         score = 0.0
-        if getattr(diagnosis, "offset_swap_count", 0) > 10:
-            score = max(score, 0.8)
+        swap = getattr(diagnosis, "offset_swap_count", 0)
+        if swap >= 10:
+            score = max(score, 0.8)   # strong cascade (rare)
+        elif swap >= 2:
+            score = max(score, 0.6)   # typical real slot inversion
         if diagnosis.reg_swap_pairs:
             score = max(score, 0.5)
         return score if score > 0 else 0.2

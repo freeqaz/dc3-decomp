@@ -47,22 +47,54 @@ class TestRelevance(unittest.TestCase):
         d = _empty_diag()
         self.assertFalse(pat.relevant(d))
 
-    def test_not_relevant_small_offset_swap(self):
+    def test_not_relevant_weak_single_pair(self):
+        """A weak single-pair inversion (count==2) is left to scope_widening.
+
+        Measured: CheckRTs={+32:1,-32:1} -> 2. slot_pad grows the stack
+        frame, so it requires a stronger signal (>= 4).
+        """
         pat = get_pattern("slot_pad")
         d = _empty_diag()
-        d.offset_deltas = {192: 5, -192: 5}  # only 10 instructions
+        d.offset_deltas = {32: 1, -32: 1}  # count == 2
+        self.assertEqual(d.offset_swap_count, 2)
         self.assertFalse(pat.relevant(d))
 
+    def test_relevant_real_offset_swap(self):
+        """Real OFFSET_SWAP funcs with count >= 4 trip the gate.
+
+        Measured: ShapeDeltaBox={+4:2,-4:2} -> 4, OnMsg={+4:3,-4:3} -> 6.
+        The original `> 20` gate (tuned to WrapText=139) never fired here.
+        """
+        pat = get_pattern("slot_pad")
+        # ShapeDeltaBox shape — count of 4 (the new minimum)
+        d = _empty_diag()
+        d.offset_deltas = {4: 2, -4: 2}
+        self.assertEqual(d.offset_swap_count, 4)
+        self.assertTrue(pat.relevant(d))
+        # OnMsg shape — count of 6
+        d2 = _empty_diag()
+        d2.offset_deltas = {4: 3, -4: 3}
+        self.assertEqual(d2.offset_swap_count, 6)
+        self.assertTrue(pat.relevant(d2))
+
     def test_relevant_large_offset_swap(self):
+        """The original WrapText-style large cascade still trips the gate."""
         pat = get_pattern("slot_pad")
         d = _empty_diag()
         d.offset_deltas = {192: 87, -192: 52}
         self.assertTrue(pat.relevant(d))
 
+    def test_priority_typical_for_real_swap(self):
+        """A typical real slot inversion (4-6) gets a mid priority."""
+        pat = get_pattern("slot_pad")
+        d = _empty_diag()
+        d.offset_deltas = {4: 2, -4: 2}  # count == 4
+        self.assertGreaterEqual(pat.priority(d), 0.4)
+
     def test_priority_high_for_dominant_swap(self):
         pat = get_pattern("slot_pad")
         d = _empty_diag()
-        d.offset_deltas = {192: 87, -192: 52}  # > 100
+        d.offset_deltas = {192: 87, -192: 52}  # >= 20
         self.assertGreaterEqual(pat.priority(d), 0.6)
 
 

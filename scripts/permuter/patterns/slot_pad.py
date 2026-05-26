@@ -45,14 +45,22 @@ class SlotPadPattern(Pattern):
 
     def relevant(self, diagnosis: Diagnosis) -> bool:
         # Only relevant when there's a meaningful offset-swap cascade.
-        return getattr(diagnosis, "offset_swap_count", 0) > 20
+        #
+        # slot_pad grows the stack frame (more disruptive than scope_widening's
+        # decl hoist), so it gates on a slightly stronger signal: >= 4 means at
+        # least two mismatched instructions per mirror side. Real OFFSET_SWAP
+        # AT_LIMIT funcs measure 2-6 here; the original `> 20` gate was tuned to
+        # WrapText=139 (an outlier) and never tripped on real functions. Weak
+        # single-pair inversions (count==2) are left to the cheaper
+        # scope_widening pattern.
+        return getattr(diagnosis, "offset_swap_count", 0) >= 4
 
     def priority(self, diagnosis: Diagnosis) -> float:
         cnt = getattr(diagnosis, "offset_swap_count", 0)
-        if cnt > 100:
-            return 0.7
-        if cnt > 20:
-            return 0.4
+        if cnt >= 20:
+            return 0.7   # strong cascade (rare)
+        if cnt >= 4:
+            return 0.4   # typical real slot inversion
         return 0.0
 
     def generate(self, ctx: FunctionContext) -> Iterator[Variant]:

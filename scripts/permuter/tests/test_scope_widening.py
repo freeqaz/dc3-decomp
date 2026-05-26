@@ -70,8 +70,27 @@ class TestRelevance(unittest.TestCase):
         pat = get_pattern("scope_widening")
         self.assertFalse(pat.relevant(_empty_diag()))
 
-    def test_relevant_with_offset_swap_count(self):
-        """offset_swap_count comes from mirror-paired offset_deltas."""
+    def test_relevant_with_real_offset_swap_count(self):
+        """Real OFFSET_SWAP funcs carry small mirror-pair counts (2-6).
+
+        Measured ground truth: ShapeDeltaBox={+4:2,-4:2} -> 4,
+        CheckRTs={+32:1,-32:1} -> 2, OnMsg={+4:3,-4:3} -> 6. The gate
+        must trip on these, NOT just the synthetic WrapText=139 outlier.
+        """
+        pat = get_pattern("scope_widening")
+        # ShapeDeltaBox shape
+        d = _empty_diag()
+        d.offset_deltas = {4: 2, -4: 2}
+        self.assertEqual(d.offset_swap_count, 4)
+        self.assertTrue(pat.relevant(d))
+        # CheckRTs shape — single mirror pair, count of 2 (the minimum)
+        d2 = _empty_diag()
+        d2.offset_deltas = {32: 1, -32: 1}
+        self.assertEqual(d2.offset_swap_count, 2)
+        self.assertTrue(pat.relevant(d2))
+
+    def test_relevant_with_strong_offset_swap_count(self):
+        """The original WrapText-style large cascade still trips the gate."""
         pat = get_pattern("scope_widening")
         d = _empty_diag()
         # 192 + -192 mirror pair = offset_swap_count of 15
@@ -79,12 +98,27 @@ class TestRelevance(unittest.TestCase):
         self.assertEqual(d.offset_swap_count, 15)
         self.assertTrue(pat.relevant(d))
 
-    def test_offset_swap_count_priority_high(self):
-        """offset_swap_count > 10 should give the highest priority bump."""
+    def test_not_relevant_unpaired_offset_delta(self):
+        """An unpaired (non-mirror) offset delta is not a slot inversion."""
+        pat = get_pattern("scope_widening")
+        d = _empty_diag()
+        d.offset_deltas = {4: 3}  # no -4 mirror -> offset_swap_count == 0
+        self.assertEqual(d.offset_swap_count, 0)
+        self.assertFalse(pat.relevant(d))
+
+    def test_offset_swap_count_priority_strong(self):
+        """A large offset_swap_count (>=10) gives the highest priority bump."""
         pat = get_pattern("scope_widening")
         d = _empty_diag()
         d.offset_deltas = {192: 8, -192: 7}
         self.assertGreaterEqual(pat.priority(d), 0.8)
+
+    def test_offset_swap_count_priority_typical(self):
+        """A typical real slot inversion (2-6) gets a solid mid priority."""
+        pat = get_pattern("scope_widening")
+        d = _empty_diag()
+        d.offset_deltas = {4: 2, -4: 2}  # count == 4
+        self.assertGreaterEqual(pat.priority(d), 0.6)
 
 
 class TestHoistFromIf(unittest.TestCase):
