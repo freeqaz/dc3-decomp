@@ -100,15 +100,32 @@ class Scorer:
         self._backup_path = self.source_path.with_suffix(
             self.source_path.suffix + ".permuter_bak"
         )
-        # Check for stale backup from a previous crash/kill
+        # Check for stale backup from a previous crash/kill. Only auto-restore
+        # if the backup is younger than the source — otherwise the backup
+        # predates committed work and restoring it would silently destroy
+        # newer changes (see e.g. GemTrack.cpp.permuter_bak stuck from May 14).
         if self._backup_path.exists():
-            print(
-                f"  WARNING: Found stale backup {self._backup_path.name} — "
-                f"restoring from previous interrupted run.",
-                file=sys.stderr,
-            )
-            shutil.copy2(self._backup_path, self.source_path)
-            self._backup_path.unlink()
+            try:
+                bak_mtime = self._backup_path.stat().st_mtime
+                src_mtime = self.source_path.stat().st_mtime
+            except OSError:
+                bak_mtime = src_mtime = 0.0
+            if bak_mtime >= src_mtime:
+                print(
+                    f"  WARNING: Found stale backup {self._backup_path.name} — "
+                    f"restoring from previous interrupted run.",
+                    file=sys.stderr,
+                )
+                shutil.copy2(self._backup_path, self.source_path)
+                self._backup_path.unlink()
+            else:
+                raise RuntimeError(
+                    f"Refusing to restore: {self._backup_path.name} is older "
+                    f"than {self.source_path.name} — the backup likely predates "
+                    f"committed work. Inspect and delete the stale backup "
+                    f"(plus .permuter.lock / .permuter_work_*) manually before "
+                    f"re-running the permuter."
+                )
 
         self._original_source = self.source_path.read_bytes()
         self._tracked_file_originals: dict[Path, bytes | None] = {}
@@ -144,6 +161,17 @@ class Scorer:
                 print(f"  {stats}", file=sys.stderr)
             self._cache.close()
             self._cache = None
+        # Restore the main source from the original bytes. The to_disk=True
+        # path in IL capture writes variants directly to self.source_path; if
+        # the loop completed (or threw) before restoring, the last variant is
+        # still on disk. Restoring unconditionally is cheap and safe — by
+        # contract, scoring never legitimately mutates the real source.
+        if getattr(self, "_original_source", None) is not None:
+            try:
+                if self.source_path.read_bytes() != self._original_source:
+                    atomic_write_bytes(self.source_path, self._original_source)
+            except OSError:
+                pass
         # Restore any auxiliary files that were modified (headers, etc.)
         if hasattr(self, "_tracked_file_originals"):
             restore_tracked_files(self._tracked_file_originals)
@@ -373,6 +401,16 @@ class Scorer:
                         hashes[id(variant)] = self._il_function_hash(function)
                         break
         finally:
+            # Restore the real source before returning. to_disk=True wrote
+            # the last variant to self.source_path; leaving it there poisons
+            # subsequent ninja builds (and is how parallel-sweep agents have
+            # picked up "WIP" looking code that was never theirs).
+            if self._original_source is not None:
+                try:
+                    if self.source_path.read_bytes() != self._original_source:
+                        atomic_write_bytes(self.source_path, self._original_source)
+                except OSError:
+                    pass
             shutil.rmtree(tmp_dir, ignore_errors=True)
         return hashes
 
@@ -381,10 +419,17 @@ class Scorer:
 
         When include_instructions is True, passes --include-instructions for
         diagnosis. The JSON dict is only returned when include_instructions=True.
+
+        Passes `-u UNIT` when self.unit is set — required when a symbol is
+        shared across multiple translation units (e.g. inline stlport methods,
+        LinkerMerged symbols). Without -u, objdiff-cli errors with "No such
+        file" because it can't disambiguate.
         """
         objdiff = self._project.objdiff_cli
-        cmd = [objdiff, "diff", "-p", ".", self.symbol,
-               "-c", "functionRelocDiffs=none", "-f", "json"]
+        cmd = [objdiff, "diff", "-p", "."]
+        if self.unit:
+            cmd.extend(["-u", self.unit])
+        cmd.extend([self.symbol, "-c", "functionRelocDiffs=none", "-f", "json"])
         if include_instructions:
             cmd.append("--include-instructions")
         result = subprocess.run(
