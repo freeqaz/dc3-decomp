@@ -81,6 +81,21 @@ class OffsetNode:
     def end_byte(self) -> int:
         return self._inner.end_byte + self._offset
 
+    # start_point / end_point are (row, col) positions. They describe the
+    # location inside the *synthetic* wrapper parse, not the original file,
+    # so they are NOT offset-adjusted (unlike the byte offsets above).
+    # Consumers (beam_search complexity estimate, types.py line heuristics)
+    # only use the line *delta* (end_point[0] - start_point[0]), which is
+    # identical in the synthetic and original parses. Splicing always uses
+    # the offset-adjusted byte properties instead.
+    @property
+    def start_point(self) -> tuple[int, int]:
+        return self._inner.start_point
+
+    @property
+    def end_point(self) -> tuple[int, int]:
+        return self._inner.end_point
+
     @property
     def type(self) -> str:
         return self._inner.type
