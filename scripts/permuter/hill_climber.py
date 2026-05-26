@@ -19,13 +19,14 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import atexit
 import json
 import os
 import signal
 import subprocess
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from .classifier import classify_mismatches, format_classifications
@@ -66,10 +67,10 @@ _interrupted = False
 
 
 def _sigint_handler(signum, frame):
-    """Handle Ctrl+C by setting flag for graceful shutdown."""
+    """Handle Ctrl+C / SIGTERM by setting flag for graceful shutdown."""
     global _interrupted
     if _interrupted:
-        # Second Ctrl+C — force exit
+        # Second signal — force exit (atexit still strips the banner)
         print("\nForce quit.", file=sys.stderr)
         raise KeyboardInterrupt
     _interrupted = True
@@ -78,10 +79,21 @@ def _sigint_handler(signum, frame):
 
 
 def install_signal_handler():
-    """Install the graceful SIGINT handler. Returns the previous handler."""
+    """Install graceful SIGINT/SIGTERM handlers. Returns the previous SIGINT handler."""
     global _interrupted
     _interrupted = False
-    return signal.signal(signal.SIGINT, _sigint_handler)
+    prev = signal.signal(signal.SIGINT, _sigint_handler)
+    # SIGTERM is what `kill <pid>` and process-manager shutdowns send by default.
+    # Without this, SIGTERM terminates immediately, skipping the `finally` that
+    # strips the lock banner — leaving orphaned banners in source files.
+    try:
+        signal.signal(signal.SIGTERM, _sigint_handler)
+    except (ValueError, OSError):
+        pass  # e.g. not on the main thread
+    # Backstop for any exit path that bypasses the finally (sys.exit, SIGTERM
+    # winding down, uncaught fast-paths): strip whatever banner we currently hold.
+    atexit.register(_cleanup_active_banner)
+    return prev
 
 
 def _base_pattern_names(name: str) -> list[str]:
@@ -118,6 +130,48 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent  # Fallback; prefer _g
 
 _BANNER_START = b"/* ===== PERMUTER LOCK"
 _BANNER_END = b"===== */\n"
+_BANNER_STALE_AFTER = timedelta(minutes=5)
+
+# Path of the source file we currently hold a lock banner on. Used by the
+# atexit/signal backstop so a banner is stripped even when the normal `finally`
+# is bypassed (SIGTERM, sys.exit). Cleared by _strip_banner.
+_active_banner_path: "Path | None" = None
+
+
+def _cleanup_active_banner() -> None:
+    """atexit/signal backstop: strip the banner from the file we still hold."""
+    path = _active_banner_path
+    if path is not None:
+        try:
+            _strip_banner(path)
+        except OSError:
+            pass
+
+
+def _banner_is_stale(content: bytes) -> bool:
+    """True if the file's lock banner is older than the staleness window.
+
+    A stale banner means the process that wrote it died without cleaning up
+    (SIGKILL, power loss). Parses the 'Started: YYYY-MM-DD HH:MM' line; treats
+    an unparseable banner as stale so it never wedges a file permanently.
+    """
+    if _BANNER_START not in content:
+        return False
+    try:
+        start = content.index(_BANNER_START)
+        end = content.index(_BANNER_END, start)
+        block = content[start:end].decode("utf-8", errors="replace")
+    except ValueError:
+        return True
+    for line in block.splitlines():
+        if "Started:" in line:
+            stamp = line.split("Started:", 1)[1].strip().split(" (", 1)[0].strip()
+            try:
+                started = datetime.strptime(stamp, "%Y-%m-%d %H:%M")
+            except ValueError:
+                return True
+            return datetime.now() - started > _BANNER_STALE_AFTER
+    return True  # banner with no parseable timestamp — treat as stale
 
 # Lazy project config — initialized on first use (avoids import-time detection
 # when hill_climber is imported but not invoked, e.g. in test suites).
@@ -176,15 +230,27 @@ def _make_banner(function_name: str) -> bytes:
 
 
 def _add_banner(path: Path, function_name: str) -> None:
-    """Add a permuter lock banner to the top of a source file."""
+    """Add a permuter lock banner to the top of a source file.
+
+    If a banner already exists and is stale (the owning process died without
+    cleaning up), strip it and claim the file. If it is fresh, another live
+    process holds the lock — leave it untouched and don't take ownership.
+    """
+    global _active_banner_path
     content = path.read_bytes()
     if _BANNER_START in content:
-        return  # Already has a banner
+        if not _banner_is_stale(content):
+            return  # fresh banner — another live process owns this file
+        content = _strip_banner_bytes(content)  # reclaim a stale/orphaned lock
     atomic_write_bytes(path, _make_banner(function_name) + content)
+    _active_banner_path = path
 
 
 def _strip_banner(path: Path) -> None:
     """Remove the permuter lock banner from a file if present."""
+    global _active_banner_path
+    if _active_banner_path == path:
+        _active_banner_path = None
     content = path.read_bytes()
     if _BANNER_START not in content:
         return
@@ -1261,6 +1327,12 @@ def hill_climb(
                         stopped_reason = "verification_failed"
                     else:
                         current_percent = actual_pct
+
+        # Final safety net: ensure no lock banner survives in the working file,
+        # regardless of which branch ran above. restore_tracked_files can
+        # re-introduce a banner that was present when originals were snapshotted,
+        # and the interrupt/no-apply branch never stripped it at all.
+        _strip_banner(source_path)
 
     elapsed = time.time() - start_time
     final_percent = current_percent if apply else initial_percent
