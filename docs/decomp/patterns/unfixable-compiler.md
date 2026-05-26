@@ -880,6 +880,78 @@ The `if (!obj)` pattern produces **identical instructions** to the target — th
 
 ---
 
+## Self-Copy of 16-byte Member (Regalloc Coin Flip)
+
+**Prevalence:** Occasional — Color / Vector4 / 16-byte struct member assignments
+**Typical Gap:** ~0.2-0.5% (8 instructions per site)
+**Status:** Confirmed AT_LIMIT 2026-05-26 (Spotlight::SyncProperty triage). Two source rewrites regressed.
+
+When a function inlines a self-copy of a 16-byte member (e.g. `mColorOwner->mColor = c` where `mColor` is `Hmx::Color`), the MSVC register allocator freely picks between two equivalent addressing modes: (a) keep the base in one register and use `+0x1b0` displacement on every store, or (b) materialize `&this->mColor` into a separate register and store via `0(rN)`.
+
+### Symptom
+
+Functions reach 99.x% AT_LIMIT with a residual ~8-instruction cluster in an inlined member-assignment. `run_diff_inspect mode=mismatches` shows the target uses split registers (e.g. r9 = `mColorOwner`, r11 = `mColorOwner + 0x1b0`); base uses single-register + displacement. Both forms are valid PowerPC code; the difference is pure allocator choice.
+
+### Root Cause
+
+The interference graph is identical in both forms, but BSF coloring at c2.dll RVA `0x026780` (see [Register Allocation root cause](#root-cause-c2dll-register-allocator-mechanism)) picks a different color when the inlined sequence's surrounding live ranges shift. Any source-level rewrite that successfully *moves* the swap also tends to introduce *new* clusters elsewhere.
+
+### Detection
+
+Orchestrator classifies as `REGISTER_SWAP (Unfixable) + AtLimit (High)`. If two source-level rewrites both regress, accept and move on.
+
+### Real Example
+
+| Function | Match | Notes |
+|----------|-------|-------|
+| Spotlight::SyncProperty | 99.8% | 8-instr cluster in inlined `SetIntensity → SetColorIntensity → mColorOwner->mColor = c`. Tried RB3's `Hmx::Color(Color())` temp-copy → 98.8% (regressed +11 inserts + OFFSET_SWAP). Tried local-pointer cache `Spotlight *owner = mColorOwner; owner->mColor = c;` → 99.5% (regressed +4 deletes). Both reverted. |
+
+---
+
+## BEGIN_HANDLERS Static-Init Guard Elision
+
+**Prevalence:** Common — `Handle()` methods with many `_NEW_STATIC_SYMBOL` / `HANDLE_*` macros
+**Typical Gap:** 1 instruction (~0.05-0.1%)
+**Status:** No source-level fix on MSVC. RB3 (MetroWerks) controlled via `#pragma dont_inline on`; MSVC has no equivalent.
+
+### Symptom
+
+A `Handle()` method with many handlers is at 99.x% AT_LIMIT. The single missing/extra instruction is a `lwz r8, ?$S1@...@4IA, r30` — a function-local static-init guard load before using one of the `static Symbol _s` constants. Target keeps the load; ours elides it (or vice versa).
+
+### Root Cause
+
+Each `static Symbol _s("name");` inside a function gets a static-init guard variable (`?$S1@...@4IA`). The first reference loads the guard, checks if init ran, runs it once, sets the guard. Subsequent references should skip the load — but MSVC's analysis isn't perfect:
+
+- After a sibling handler's `HANDLE_EXPR` (or any expression with a temporary that gets `Release`d on the way out), MSVC may decide the cleanup path "proves" the next static is already initialized and elide the next guard load.
+- The decision depends on alias-analysis state at the dispatch point, which depends on the *full set* of `static Symbol` declarations seen so far in the function.
+
+Target was compiled at a point in the codebase's history with slightly different surrounding handlers; the alias-analysis decision differs.
+
+### Why It's Unfixable
+
+- No `#pragma` or `__declspec` disables this specific elision in MSVC.
+- Reordering handlers shifts the elision to a different `_s` symbol (the gap moves but doesn't shrink).
+- Adding handlers can shift the elision in or out, but DC3 handlers are DTA-load-bearing and can't be removed.
+- RB3 controlled this via MetroWerks `#pragma dont_inline on` — no MSVC equivalent.
+
+### Detection
+
+In `run_diff_inspect mode=mismatches`, the residual cluster is a single instruction inside a `BEGIN_HANDLERS` body:
+
+```
+delete: lwz r8, ?$S1@?2??Handle@MyClass@@...@4IA, r30
+```
+
+The function has many `_NEW_STATIC_SYMBOL` / `HANDLE_*` macros (DC3 norm: 20+).
+
+### Real Example
+
+| Function | Match | Notes |
+|----------|-------|-------|
+| RndPropAnim::Handle | 99.9% normalized (98.7% raw) | 26 `_NEW_STATIC_SYMBOL` declarations; single instruction at idx 669 elided after a sibling's `DataArray::Release` cleanup |
+
+---
+
 ## See Also
 
 - [verifiable-icf.md](verifiable-icf.md) - ICF/linker-side verifiable patterns

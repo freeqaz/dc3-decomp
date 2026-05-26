@@ -892,6 +892,56 @@ Applying only one or two of these changes did NOT improve the match. All three w
 
 ---
 
+## Bool-Returning Call Coercion Defeats Shared Tail-Call
+
+**Impact:** +2-3%
+**Success Rate:** HIGH
+**Time:** 2 minutes
+
+Strip `!= false` / `(bool)(...)` wrappers around `bool`-returning calls in handler/property dispatch — MSVC merges identical tail-call signatures into a single shared `bl` site, and the wrapper defeats it.
+
+### Symptom
+
+A handler-style function (`SyncProperty`, `Handle`, message dispatch) has many `if (sym == _s) { ...edit-check...; return Helper(...); }` blocks calling the *same* helper with the *same* parameter shape. objdiff shows clusters of `delete: mr r7,r28 / mr r5 / mr r4 / addi r6,r25,0x1` all targeting one shared `bl Helper` address — base emits N separate inline calls; target emits N branches to one shared call site.
+
+### Why It Works
+
+When multiple basic blocks end in `return Helper(member, _val, _prop, _i + 1, _op);` with exactly the same call signature, MSVC merges them into a single `bl Helper` site and replaces each block's tail with `b 0x...` to that site (shared tail-call merging). Writing `return Helper(...) != false;` introduces a `bool`-normalize node in the IR — even though the runtime value is identical, the trailing comparison defeats the equivalence check the merger uses, so each block compiles to its own inline `bl`.
+
+### Fix
+
+```cpp
+// Before — defeats the merge
+bool MyClass::SyncProperty(...) {
+    if (sym == _foo) { ...; return PropSync(mFoo, _val, _prop, _i + 1, _op) != false; }
+    if (sym == _bar) { ...; return PropSync(mBar, _val, _prop, _i + 1, _op) != false; }
+    if (sym == _baz) { ...; return PropSync(mBaz, _val, _prop, _i + 1, _op) != false; }
+    ...
+}
+
+// After — bare returns of a bool-typed call merge into one shared bl
+bool MyClass::SyncProperty(...) {
+    if (sym == _foo) { ...; return PropSync(mFoo, _val, _prop, _i + 1, _op); }
+    if (sym == _bar) { ...; return PropSync(mBar, _val, _prop, _i + 1, _op); }
+    if (sym == _baz) { ...; return PropSync(mBaz, _val, _prop, _i + 1, _op); }
+    ...
+}
+```
+
+### Detection
+
+In `run_diff_inspect mode=mismatches`, look for many `delete: mr ...` clusters whose `bl` targets all resolve to the *same* function and the same offset within the function. The deletes correspond to inline-call argument setup that the merge would eliminate.
+
+### Real Example
+
+| Function | Before | After | Delta |
+|----------|--------|-------|-------|
+| RndMat::SyncProperty | 97.9% (99.2% normalized) | 100% | +2.1% (commit `7f5af665`) |
+
+5 properties (`force_alpha_write`, `point_lights`, `fog`, `fade_out`, `color_adjust`) all branched to the same `bl PropSync` site in target; ours emitted 3 separate `bl PropSync` calls before stripping the `!= false` wrapper.
+
+---
+
 ## AT_LIMIT Triage Methodology
 
 **Impact:** Finding remaining fixable functions

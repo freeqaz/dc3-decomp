@@ -1043,6 +1043,58 @@ The `alloca_intrinsic` permuter pattern automatically tests both `alloca()` and 
 
 ---
 
+## Local Pointer Reload to Break Member-Address Reuse
+
+**Impact:** Variable (one site eliminated a 75-instruction register-allocation swap)
+**Success Rate:** MEDIUM
+**Time:** 5 minutes
+
+Introduce a fresh local pointer to load a string/buffer member separately for each use site, instead of letting the compiler reuse a single register across both computations.
+
+### Symptom
+
+A function reads the same member (typically a `const char*` field accessed through `c_str()` or a hash chain) twice — once for a length check, once for an actual scan/copy. objdiff shows a large register-allocation swap (e.g., r19 ↔ r20 spanning many instructions and multiple basic blocks) that's invariant to declaration-order changes.
+
+### Why It Works
+
+When the compiler sees two uses of `obj->mField.c_str()` separated by control flow, it may decide to keep the result in a single register across the entire span (interfering with everything else in scope) or reload it (smaller live range). The choice affects the interference graph and thus the entire downstream register allocation. Introducing a fresh local `char *ptr = obj->mField.c_str();` immediately before each use forces the reload, shrinks the live range, and breaks the swap.
+
+### Fix
+
+```cpp
+// Before — single live range across check + scan, large interference graph
+if (mAlwaysInlineHash.length() > 0) {
+    int n = mAlwaysInlineHash.length();
+    for (int i = 0; i < n; i++) { ...mAlwaysInlineHash[i]... }
+    // mAlwaysInlineHash's c_str register interferes with everything in this scope
+}
+
+// After — reload through a fresh pointer at the use site
+if (mAlwaysInlineHash.length() > 0) {
+    int n = mAlwaysInlineHash.length();
+    char *ptr = mAlwaysInlineHash.c_str();
+    for (int i = 0; i < n; i++) { ...ptr[i]... }
+    // ptr is a short live range, doesn't interfere with the length check
+}
+```
+
+### Detection
+
+`run_diff_inspect mode=clusters` reports a single REGISTER_SWAP cluster that's much longer than typical (50+ instructions) with a consistent swap pair (e.g., r19 ↔ r20 everywhere) spanning multiple basic blocks. If tried-and-failed declaration reorders haven't moved it, the swap is structural to the variable's live range, not its color — this pattern likely applies.
+
+### Real Example
+
+| Function | Before | After | Delta | Notes |
+|----------|--------|-------|-------|-------|
+| ObjectDir::PreLoad | 98.6% | 99.6% | +1.0% | Reloaded `mAlwaysInlineHash` via a separate `char *ptr` before the null-terminator scan; eliminated a 75-instruction r19↔r20 swap that dominated the diff (commit `e9bbdbf1`) |
+
+### Related Patterns
+
+- [Variable Extraction](#variable-extraction) — sibling pattern; introduces a temp to shape an *expression*, this pattern introduces a temp to shape a *live range*
+- [Pre-Compute References Before Calls](#pre-compute-references-before-clobbering-calls) — sibling pattern with a different motivation (call clobbering vs interference graph)
+
+---
+
 ## See Also
 
 - [fixable-operators.md](fixable-operators.md) - Assignment patterns

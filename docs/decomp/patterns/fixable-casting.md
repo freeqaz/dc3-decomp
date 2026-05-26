@@ -525,6 +525,54 @@ The `sizeof_signed_cast` permuter pattern automatically inserts `(int)` casts on
 
 ---
 
+## Bool→Int Normalization via `b != 0`
+
+**Impact:** +1-2% per site
+**Success Rate:** HIGH
+**Time:** 1 minute
+
+Force MSVC to emit the bool→int normalize (`subic`/`subfe` pair) at an assignment site by writing `member = b != 0` instead of `member = b`.
+
+### Symptom
+
+A `bool` (or `char` used as boolean) is stored into a non-bool member — typically `int`, `unsigned`, or an enum. objdiff shows the target binary emits a `subic`/`subfe` normalize pair (canonical 0/1 lowering) immediately before the store; ours skips the normalize and stores directly.
+
+### Why It Works
+
+MSVC treats explicit `b != 0` as a distinct conversion site and emits the canonical bool→int normalize (`subic r0, rB, 1; subfe rR, r0, rB` → 0 or 1). Direct `member = b` is sometimes elided when the front-end can prove `b` is already a 0/1 value, even though the target binary kept the normalize. The explicit `!= 0` is a semantic no-op that forces the canonical lowering.
+
+### Fix
+
+```cpp
+// Before — front-end may elide the normalize
+void Foo::Load(BinStream& bs) {
+    char b;
+    bs >> b;
+    mAlwaysInlined = b;                   // sometimes loses the subic/subfe pair
+    proxyType = (InlineDirType)b;         // same
+}
+
+// After — explicit != 0 keeps the normalize
+void Foo::Load(BinStream& bs) {
+    char b;
+    bs >> b;
+    mAlwaysInlined = b != 0;
+    proxyType = (InlineDirType)(b != 0);
+}
+```
+
+### Detection
+
+Run `run_diff_inspect mode=mismatches`. If inserts in target are `subic`/`subfe` pairs immediately preceding a store to a member offset, this pattern applies.
+
+### Real Example
+
+| Function | Before | After | Delta |
+|----------|--------|-------|-------|
+| ObjectDir::PreLoad | 98.6% | 99.6% | +1.0% (commit `e9bbdbf1`, applied at two sites: `mAlwaysInlined`, `proxyType`) |
+
+---
+
 ## See Also
 
 - [fixable-comparison.md](fixable-comparison.md) - Signedness comparison patterns

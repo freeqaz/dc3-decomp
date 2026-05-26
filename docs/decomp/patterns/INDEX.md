@@ -54,6 +54,9 @@ These patterns can often be fixed with source changes. Sorted by ROI (impact x s
 | Inline Boundary Cascade (ICF) | varies | requires diagnose | [fixable-inline-boundary.md](fixable-inline-boundary.md#inline-boundary-cascade-icf-merge-of-out-of-line-accessor) |
 | Manual Helper Inlining | +2-12% | HIGH | [fixable-control-flow.md](fixable-control-flow.md#manual-helper-inlining-reverse-inline-a-trivial-helper) |
 | Static Variable Type in MakeString Args | +1-2% | HIGH | [fixable-casting.md](fixable-casting.md#sub-pattern-static-variable-type-in-makestring-args) |
+| Bool-Returning Call Coercion Defeats Shared Tail-Call | +2-3% | HIGH | [fixable-control-flow.md](fixable-control-flow.md#bool-returning-call-coercion-defeats-shared-tail-call) |
+| Bool→Int Normalization via `b != 0` | +1-2% | HIGH | [fixable-casting.md](fixable-casting.md#boolint-normalization-via-b--0) |
+| Local Pointer Reload to Break Member-Address Reuse | varies (regalloc cluster) | MEDIUM | [fixable-declarations.md](fixable-declarations.md#local-pointer-reload-to-break-member-address-reuse) |
 
 ### Additional Fixable Patterns
 
@@ -124,6 +127,8 @@ These patterns resist simple source-level fixes. Each documents what would be ne
 | Store-then-Reload Scheduling | global store sites | 0.5-1% | [unfixable-compiler.md](unfixable-compiler.md#store-then-reload-scheduling) |
 | Address Relocation Noise | ~150 AT_LIMIT functions | 0.5-2% | [unfixable-compiler.md](unfixable-compiler.md#address-relocation-noise) |
 | Static Guard Naming (`??_B` vs `$S`) | TUs with few-static funcs | 1-3% | [unfixable-compiler.md](unfixable-compiler.md#static-guard-naming-convention-_b-vs-s) |
+| 16-byte Member Self-Copy Regalloc | Color/Vector4 sites | 0.2-0.5% | [unfixable-compiler.md](unfixable-compiler.md#self-copy-of-16-byte-member-regalloc-coin-flip) |
+| BEGIN_HANDLERS Static-Init Guard Elision | Handle() w/ many `_NEW_STATIC_SYMBOL` | ~0.05-0.1% | [unfixable-compiler.md](unfixable-compiler.md#begin_handlers-static-init-guard-elision) |
 
 ---
 
