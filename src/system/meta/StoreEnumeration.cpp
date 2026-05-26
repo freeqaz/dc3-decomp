@@ -59,7 +59,7 @@ bool XboxEnumeration::IsSuccess() const {
 void XboxEnumeration::Start() {
     mEnumerating = true;
     if (mHandle == 0) {
-        int error;
+        unsigned int error;
         mBufferSize = 0;
         if (mCurOffers == mOfferIDsBegin) {
             mContentList.clear();
