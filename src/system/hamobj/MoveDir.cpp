@@ -797,8 +797,8 @@ void MoveDir::Draw(const BaseSkeleton &baseSkeleton, SkeletonViz &skeletonViz) {
         int actual_ms = unk414->ElapsedMs();
         if (actual_ms != -1) {
             for (int i = 0; i < kNumJoints; i++) {
-                Vector3 vdisp;
                 int disp_ms;
+                Vector3 vdisp;
                 unk414->Displacement(
                     nullptr, kCoordCamera, (SkeletonJoint)i, actual_ms, vdisp, disp_ms
                 );
@@ -817,9 +817,11 @@ void MoveDir::Draw(const BaseSkeleton &baseSkeleton, SkeletonViz &skeletonViz) {
         const Skeleton *player_skel = dynamic_cast<const Skeleton *>(&baseSkeleton);
         MILO_ASSERT(player_skel, 0x51F);
         SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
+        auto history = handle.History();
+        auto songSpeed = SongSpeed();
         ErrorFrameInput input(
-            handle.History(), mShowErrorFrames->GetDancerFrame()->mSkeleton, baseSkeleton,
-            SongSpeed()
+            history, mShowErrorFrames->GetDancerFrame()->mSkeleton, baseSkeleton,
+            songSpeed
         );
         ErrorNode **nodePtr = mFilterVer->mErrorNodes;
         for (int i = 0; i < mFilterVer->NumNodes(); i++) {
