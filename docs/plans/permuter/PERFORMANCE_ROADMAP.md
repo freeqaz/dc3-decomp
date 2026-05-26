@@ -361,7 +361,7 @@ Wk2  A1 preprocess-cache A/B + flip default (1.5d) → B3 canonicalize dedup (1d
 Wk3  B2 hard filters (1d, harness-gated)   [A2 objdiff daemon PARKED — A0 profiling: spawn is 0.4%]
 Wk4  C1 source-diff into ranking (2–3d) → C2 investigate decl-order gap (0.5d: close or file)
 Wk5+ C3 FMA expr synthesis (~1wk), B4 predictor (after history instrumentation)
-     [A4 compile worker PARKED — A0 profiling: spawn is 0.17%; attack compile-run via A1/B3 instead]
+     [A4 compile worker PARKED — A0 profiling: spawn is 0.16%; attack compile-run via A1/B3 instead]
 ```
 
 **Start here:** ~~A0~~ (done) + A3. A0's profiling reordered the throughput
