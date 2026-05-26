@@ -95,6 +95,13 @@ from . import loop_rotation_to_while  # noqa: F401  # Convert `goto check; do{..
 from . import nested_goto_skip_to_ifelse  # noqa: F401  # Merge nested-if conditions to skip past a goto-to-outer-scope label
 from . import bare_label_loop_to_while  # noqa: F401  # Sibling-label variant of loop_rotation_to_while (no `do` keyword)
 from . import common_tail_goto_to_duplicate  # noqa: F401  # Duplicate else-clause tail to eliminate a forward goto-into-else
+from . import bitpack_or_reorder  # noqa: F401  # Sort `A|B|C` OR-chains by descending shift amount (high bits first)
+from . import mutex_if_to_else_if  # noqa: F401  # Merge adjacent mutually-exclusive ifs into if/else-if (drop redundant reload)
+from . import demorgan_guard  # noqa: F401  # if(A&&B&&C){body} <-> if(!A||!B||!C) return; body
+from . import positive_branch_invert  # noqa: F401  # if(c)return F; mid; return T  <->  if(!c){mid;return T;} return F
+from . import member_readback  # noqa: F401  # Replace arg bool-read with stored member (clrlwi. vs cmpwi)
+from . import cache_repeated_call  # noqa: F401  # Hoist repeated identical call expr into local (v.end() 2x)
+from . import symbol_str_compare  # noqa: F401  # Add .Str()/.mStr to Symbol operands in == / != (cmplw vs strcmp)
 
 from .base import get_all_patterns, get_pattern, list_patterns
 
