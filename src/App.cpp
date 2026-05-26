@@ -280,7 +280,7 @@ static const int kAppArchivePermissions[11] = {
 
 Symbol RemoveDigitSuffix(const Symbol &);
 bool IsUselessLoad(const char *);
-void DebugModal(Debug::ModalType &, FixedString &, bool);
+static void DebugModal(Debug::ModalType &, FixedString &, bool);
 bool XShowNuiCallback(u32 &);
 DWORD KinectGuideThread(void *);
 
@@ -849,7 +849,7 @@ void App::DrawRegular() {
 
 App::~App() { TheDebug.Exit(0, true); }
 
-void DebugModal(Debug::ModalType &ty, FixedString &str, bool b3) {
+static void DebugModal(Debug::ModalType &ty, FixedString &str, bool b3) {
     if (ty == Debug::kModalFail) {
         gRealCallback(ty, str, b3);
     } else {

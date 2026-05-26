@@ -29,7 +29,7 @@ bool CharEyes::sDisableEyeJitter;
 bool CharEyes::sDisableInterestObjects;
 bool CharEyes::sDisableProceduralBlink;
 bool CharEyes::sDisableEyeClamping;
-bool CharLookAt::sDisableJitter;
+// CharLookAt::sDisableJitter is defined in CharLookAt.cpp
 
 INIT_REVS(18, 0)
 
