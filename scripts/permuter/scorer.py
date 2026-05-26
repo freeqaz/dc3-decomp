@@ -854,10 +854,14 @@ class Scorer:
             "-c", "functionRelocDiffs=none",
             "-f", "json",
         ]
+        profiler = get_profiler()
+        profiler.set_objdiff_binary(objdiff)
+        _t0 = time.perf_counter()
         result = subprocess.run(
             cmd, capture_output=True, text=True,
             cwd=str(self._project.repo_root),
         )
+        profiler.record_subprocess("objdiff", time.perf_counter() - _t0)
         try:
             data = json.loads(result.stdout)
             return data.get("fuzzy_match_percent", 0.0)
