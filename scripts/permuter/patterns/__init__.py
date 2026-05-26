@@ -81,6 +81,7 @@ from . import u8_to_unsigned_long  # noqa: F401  # Widen u8 intermediates to pre
 from . import value_address_caching  # noqa: F401  # Swap ref binding <-> value caching for register alloc
 from . import scope_narrowing  # noqa: F401  # Move declarations into narrower scopes (if/else/loop/block)
 from . import scope_widening  # noqa: F401  # Hoist declarations OUT of narrower scopes — for OFFSET_SWAP / slot inversion
+from . import slot_pad  # noqa: F401  # Insert dummy local at function top to shift slot allocations
 from . import redundant_guard_elimination  # noqa: F401  # Remove exhaustive else-if/if-or guards
 from . import accessor_outline  # noqa: F401  # Outline inlined accessors via noinline wrappers
 from . import handler_inline  # noqa: F401  # Named/temp Message vars and handler wrapper inlining
