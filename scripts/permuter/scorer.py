@@ -129,13 +129,22 @@ class Scorer:
                 shutil.copy2(self._backup_path, self.source_path)
                 self._backup_path.unlink()
             else:
-                raise RuntimeError(
-                    f"Refusing to restore: {self._backup_path.name} is older "
-                    f"than {self.source_path.name} — the backup likely predates "
-                    f"committed work. Inspect and delete the stale backup "
-                    f"(plus .permuter.lock / .permuter_work_*) manually before "
-                    f"re-running the permuter."
+                # Backup is OLDER than the source: the source has been committed
+                # or modified since the backup was made, so the backup is an
+                # orphan from an old killed run. Restoring it would clobber the
+                # newer committed work — so DON'T restore. Just discard the stale
+                # orphan and proceed with the current (newer) source as baseline.
+                # Erroring out here used to wedge ~27 functions per sweep.
+                print(
+                    f"  WARNING: Discarding stale backup {self._backup_path.name} "
+                    f"(older than source — predates committed work); proceeding "
+                    f"with current source.",
+                    file=sys.stderr,
                 )
+                try:
+                    self._backup_path.unlink()
+                except OSError:
+                    pass
 
         self._original_source = self.source_path.read_bytes()
         self._tracked_file_originals: dict[Path, bytes | None] = {}
