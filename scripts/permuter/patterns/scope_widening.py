@@ -104,24 +104,54 @@ class ScopeWideningPattern(Pattern):
             if counter >= _MAX_VARIANTS:
                 return
             decl_node, target_body, scope_kind = move
+            decl_name = _get_declared_name(decl_node) or "decl"
+
+            # Variant A: bare hoist (just move the decl up)
             new_source = _apply_widening(
                 ctx.file_source, decl_node, target_body
             )
-            if new_source is None or new_source == ctx.file_source:
-                continue
-            decl_name = _get_declared_name(decl_node) or "decl"
-            yield Variant(
-                name=f"scope_widen_{counter}",
-                pattern_name=self.name,
-                description=(
-                    f"Hoist '{decl_name}' from {scope_kind} to enclosing scope"
-                ),
-                source=new_source,
-                func_byte_range=ctx.func_byte_range,
-                original_source=ctx.file_source,
-                tags=frozenset({"widened_scope"}),
-            )
-            counter += 1
+            if new_source is not None and new_source != ctx.file_source:
+                yield Variant(
+                    name=f"scope_widen_{counter}_bare",
+                    pattern_name=self.name,
+                    description=(
+                        f"Hoist '{decl_name}' from {scope_kind} to enclosing scope"
+                    ),
+                    source=new_source,
+                    func_byte_range=ctx.func_byte_range,
+                    original_source=ctx.file_source,
+                    tags=frozenset({"widened_scope"}),
+                )
+                counter += 1
+                if counter >= _MAX_VARIANTS:
+                    return
+
+            # Variant B: hoist + per-iter `name = T();` reset to preserve
+            # the per-iter ctor zero-write pattern that target may emit.
+            # Costs a stack temp slot but unlocks slot inversion fix when
+            # the dominant cascade is from a loop-local with non-trivial ctor.
+            if scope_kind == "loop":
+                reset_source = _apply_widening_with_reset(
+                    ctx.file_source, decl_node, target_body
+                )
+                if (
+                    reset_source is not None
+                    and reset_source != ctx.file_source
+                    and reset_source != new_source
+                ):
+                    yield Variant(
+                        name=f"scope_widen_{counter}_reset",
+                        pattern_name=self.name,
+                        description=(
+                            f"Hoist '{decl_name}' + per-iter T() reset "
+                            f"(for ctor-zero preservation)"
+                        ),
+                        source=reset_source,
+                        func_byte_range=ctx.func_byte_range,
+                        original_source=ctx.file_source,
+                        tags=frozenset({"widened_scope", "ctor_reset"}),
+                    )
+                    counter += 1
 
 
 def _find_widening_moves(
@@ -309,6 +339,84 @@ def _apply_widening(
         + source[decl_line_end:]
     )
     return result
+
+
+def _apply_widening_with_reset(
+    source: bytes,
+    decl_node: Node,
+    target_compound: Node,
+) -> bytes | None:
+    """Hoist `decl_node` to `target_compound` AND insert a per-iter
+    `name = T();` reset where the decl used to be.
+
+    This preserves the per-iter constructor zero-write pattern that
+    inner-scope decls naturally produce. For RndText::WrapText's Line
+    tmpLine case, this is the only way to keep per-iter ctor writes
+    while moving the slot allocation order.
+
+    The reset adds a stack temp for `T()` — variant scoring decides
+    whether the trade-off is worth it.
+    """
+    decl_line_start = _line_start(source, decl_node.start_byte)
+    decl_line_end = _line_end(source, decl_node.end_byte)
+    decl_text = source[decl_node.start_byte:decl_node.end_byte]
+
+    # Find the declared name and type for the reset stmt
+    var_name = _get_declared_name(decl_node)
+    type_text = _get_decl_type_text(source, decl_node)
+    if not var_name or not type_text:
+        return None
+
+    # Insertion point: after the opening brace of target_compound
+    insert_pos = target_compound.start_byte + 1  # past '{'
+    if insert_pos < len(source) and source[insert_pos:insert_pos + 1] == b"\n":
+        insert_pos += 1
+
+    if insert_pos > decl_line_start:
+        return None
+
+    target_indent = _get_body_indent(source, target_compound)
+    new_decl_line = target_indent + decl_text + b"\n"
+
+    # Build the reset stmt with the SAME indent as the original decl
+    orig_indent = b""
+    for i in range(decl_line_start, decl_node.start_byte):
+        ch = source[i:i + 1]
+        if ch in (b" ", b"\t"):
+            orig_indent += ch
+        else:
+            break
+    reset_text = orig_indent + var_name.encode() + b" = " + type_text + b"();\n"
+
+    # 1) Insert hoisted decl at target_compound top
+    # 2) Replace original decl line with reset stmt (in-place at same line)
+    result = (
+        source[:insert_pos]
+        + new_decl_line
+        + source[insert_pos:decl_line_start]
+        + reset_text
+        + source[decl_line_end:]
+    )
+    return result
+
+
+def _get_decl_type_text(source: bytes, decl: Node) -> bytes | None:
+    """Extract the type-specifier bytes from a declaration node.
+
+    For `Line tmpLine;`, returns b"Line". Handles qualified names
+    (e.g. `RndText::Line`) but not function pointers or array types.
+    """
+    if decl.type != "declaration":
+        return None
+    # Find the type-specifier child(ren) — everything before the declarator.
+    declarator = decl.child_by_field_name("declarator")
+    if declarator is None:
+        return None
+    type_end = declarator.start_byte
+    type_start = decl.start_byte
+    text = source[type_start:type_end]
+    # Strip leading/trailing whitespace
+    return text.strip()
 
 
 def _get_body_indent(source: bytes, body_node: Node) -> bytes:

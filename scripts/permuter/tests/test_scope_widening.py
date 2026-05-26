@@ -71,17 +71,19 @@ class TestRelevance(unittest.TestCase):
         self.assertFalse(pat.relevant(_empty_diag()))
 
     def test_relevant_with_offset_swap_count(self):
-        """offset_swap_count is a dynamic attr; pattern reads it via getattr."""
+        """offset_swap_count comes from mirror-paired offset_deltas."""
         pat = get_pattern("scope_widening")
         d = _empty_diag()
-        d.offset_swap_count = 15
+        # 192 + -192 mirror pair = offset_swap_count of 15
+        d.offset_deltas = {192: 8, -192: 7}
+        self.assertEqual(d.offset_swap_count, 15)
         self.assertTrue(pat.relevant(d))
 
     def test_offset_swap_count_priority_high(self):
         """offset_swap_count > 10 should give the highest priority bump."""
         pat = get_pattern("scope_widening")
         d = _empty_diag()
-        d.offset_swap_count = 15
+        d.offset_deltas = {192: 8, -192: 7}
         self.assertGreaterEqual(pat.priority(d), 0.8)
 
 
@@ -413,6 +415,54 @@ void test_func() {
         self.assertEqual(v.pattern_name, "scope_widening")
         self.assertIn("widened_scope", v.tags)
         self.assertTrue(v.name.startswith("scope_widen_"))
+
+
+class TestHoistWithReset(unittest.TestCase):
+    """Variant B: hoist + per-iter T() reset to preserve ctor zero-writes.
+
+    Only emitted for loop-body hoists where the per-iter ctor pattern
+    matters (e.g. RndText::WrapText Line tmpLine in line-build loop).
+    """
+
+    def test_loop_hoist_emits_reset_variant(self):
+        src = """\
+void test_func() {
+    while (x) {
+        Line tmpLine;
+        Use(tmpLine);
+    }
+}
+"""
+        variants = _variants(src)
+        # Should have both _bare and _reset variants for loop scope
+        bare = [v for v in variants if "bare" in v.name]
+        reset = [v for v in variants if "reset" in v.name]
+        self.assertTrue(bare, "Expected a bare hoist variant for loop")
+        self.assertTrue(reset, "Expected a reset variant for loop hoist")
+        self.assertIn("ctor_reset", reset[0].tags)
+        # Reset variant should include `tmpLine = Line();` somewhere
+        self.assertIn(
+            b"tmpLine = Line();",
+            reset[0].source,
+            "Reset variant should add per-iter T() reset",
+        )
+
+    def test_if_hoist_does_not_emit_reset(self):
+        """Reset variant is only useful for loops — skip for if-body hoists."""
+        src = """\
+void test_func() {
+    if (cond) {
+        Line emptyLine;
+        Use(emptyLine);
+    }
+}
+"""
+        variants = _variants(src)
+        reset = [v for v in variants if "reset" in v.name]
+        self.assertEqual(
+            len(reset), 0,
+            "Reset variant should NOT be emitted for non-loop scopes",
+        )
 
 
 if __name__ == "__main__":

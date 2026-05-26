@@ -163,6 +163,53 @@ class Diagnosis:
             return False
         return (gd > 0) != (fd > 0)
 
+    @property
+    def offset_swap_count(self) -> int:
+        """Sum of instructions involved in mirror-paired offset shifts.
+
+        A slot inversion appears as two large entries in `offset_deltas`:
+        one positive delta D and one negative delta -D, both with high
+        counts. This sums those mirror pairs across all symmetric deltas.
+
+        For RndText::WrapText: -192 (87 inst) + +192 (52 inst) = 139.
+        Threshold checked by `scope_widening` etc. is typically 10.
+        """
+        total = 0
+        seen: set[int] = set()
+        for delta, count in self.offset_deltas.items():
+            if delta == 0 or delta in seen:
+                continue
+            mirror = self.offset_deltas.get(-delta, 0)
+            if mirror > 0:
+                total += count + mirror
+                seen.add(delta)
+                seen.add(-delta)
+        return total
+
+    @property
+    def dominant_slot_pair(self) -> tuple[int, int] | None:
+        """The largest mirror-paired offset delta as (smaller, larger).
+
+        For WrapText's -192/+192 cascade, returns the absolute delta
+        (192). Useful for patterns that need to know the slot-inversion
+        magnitude. Returns None if no mirror pair detected.
+        """
+        best_delta = 0
+        best_total = 0
+        for delta, count in self.offset_deltas.items():
+            if delta <= 0:
+                continue
+            mirror = self.offset_deltas.get(-delta, 0)
+            if mirror == 0:
+                continue
+            total = count + mirror
+            if total > best_total:
+                best_total = total
+                best_delta = delta
+        if best_delta == 0:
+            return None
+        return (best_delta, best_total)
+
 
 @dataclass
 class PreprocRegion:
