@@ -236,10 +236,22 @@ def load_progress(log_dir: Path) -> set[str]:
 
 
 def save_progress(log_dir: Path, completed: set[str]):
-    """Save completed symbols to progress file."""
+    """Save completed symbols to progress file.
+
+    Defensive: long sweeps have been killed by concurrent `git clean` /
+    `rm -rf logs/` racing with the write here. Re-ensure the dir exists
+    before opening so we don't crash mid-sweep just because the log
+    directory got swept out from under us.
+    """
+    log_dir.mkdir(parents=True, exist_ok=True)
     progress_file = log_dir / "progress.json"
-    with open(progress_file, "w") as f:
-        json.dump({"completed": sorted(completed)}, f, indent=2)
+    try:
+        with open(progress_file, "w") as f:
+            json.dump({"completed": sorted(completed)}, f, indent=2)
+    except OSError as e:
+        # Last-ditch: log + swallow. Losing progress checkpoints is a
+        # smaller harm than crashing the whole sweep.
+        print(f"  warn: save_progress failed: {e}", file=sys.stderr)
 
 
 def main():
@@ -397,12 +409,17 @@ def main():
                     file=sys.stderr,
                 )
 
-            # Save per-function result
+            # Save per-function result. Wrap so a vanished log_dir doesn't
+            # kill the whole sweep — re-create defensively, then try.
+            log_dir.mkdir(parents=True, exist_ok=True)
             safe_name = re.sub(r"[^a-zA-Z0-9_]", "_", func_name)[:60]
             result_file = log_dir / f"{i:03d}_{safe_name}.json"
             from dataclasses import asdict
-            with open(result_file, "w") as f:
-                json.dump(asdict(result), f, indent=2, default=str)
+            try:
+                with open(result_file, "w") as f:
+                    json.dump(asdict(result), f, indent=2, default=str)
+            except OSError as e:
+                print(f"  warn: result-file write failed: {e}", file=sys.stderr)
 
         except Exception as e:
             stats["errors"] += 1
