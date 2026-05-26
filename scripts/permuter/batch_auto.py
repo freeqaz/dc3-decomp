@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sqlite3
 import sys
@@ -105,6 +106,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--no-compose", action="store_true",
         help="Disable two-step pattern composition",
+    )
+    parser.add_argument(
+        "--workers", type=int, default=0,
+        help="Parallel variant-scoring workers (default: 0 = min(nproc-2, 16))",
     )
     parser.add_argument(
         "--resume", type=Path,
@@ -316,6 +321,14 @@ def main():
     patterns = get_all_patterns()
     start_time = time.time()
 
+    # Resolve worker count: 0 = auto-derive from nproc (the scorer is now
+    # actually parallel after the source_lock removal in scorer.py).
+    workers = args.workers
+    if workers <= 0:
+        nproc = os.cpu_count() or 4
+        workers = max(2, min(nproc - 2, 16))
+    print(f"[batch_auto] using {workers} variant-scoring workers", file=sys.stderr)
+
     stats = {
         "total": len(runnable),
         "processed": 0,
@@ -349,6 +362,7 @@ def main():
                 plateau_limit=args.plateau_limit,
                 compose=not args.no_compose,
                 apply=not args.no_apply,
+                workers=workers,
             )
 
             stats["processed"] += 1

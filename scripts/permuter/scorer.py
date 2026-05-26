@@ -18,6 +18,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Optional
@@ -258,10 +259,24 @@ class Scorer:
                 return False, combined
         return True, None
 
-    def _build_to_path(self, source_bytes: bytes, obj_output: Path) -> tuple[bool, str | None]:
-        """Compile variant source to a specific object path (for parallel builds)."""
+    def _build_to_path(
+        self, source_bytes: bytes, obj_output: Path,
+        work_src: Path | None = None,
+    ) -> tuple[bool, str | None]:
+        """Compile variant source to a specific object path (for parallel builds).
+
+        Args:
+            source_bytes: variant source.
+            obj_output: where the .o lands.
+            work_src: per-call source file path. When None, uses the scorer's
+                shared `_working_source` (single-threaded fallback). For
+                concurrent calls, pass a unique path per worker so threads
+                don't clobber each other's writes.
+        """
         if self._compile_shell_cmd is None:
             self._extract_compile_cmd()
+        if work_src is None:
+            work_src = self._working_source
 
         # Redirect output to the temp object path
         cmd = self._project.redirect_output_for_parallel(
@@ -273,11 +288,11 @@ class Scorer:
 
         # Redirect source filename to the working copy
         src_name = self.source_path.name
-        work_name = self._working_source.name
+        work_name = work_src.name
         cmd = self._project.redirect_source_in_cmd(cmd, src_name, work_name)
 
         # Write source to the working copy (not the real source path)
-        atomic_write_bytes(self._working_source, source_bytes)
+        atomic_write_bytes(work_src, source_bytes)
 
         result = subprocess.run(
             cmd,
@@ -594,23 +609,43 @@ class Scorer:
         # Create temp dir for variant .obj files
         tmp_dir = Path(tempfile.mkdtemp(prefix="permuter_"))
         try:
-            # Build function for thread pool
+            # Build function for thread pool. Each worker writes to its own
+            # `work_src` file so they can compile concurrently — without this,
+            # the previous source_lock serialized the whole pool to ~1
+            # variant at a time despite max_workers=N.
+            #
+            # `_apply_variant_files` still mutates the scorer's auxiliary
+            # files (headers etc.), so its call lives outside the per-variant
+            # work-src write. For variants that have auxiliary file updates
+            # this is unavoidably serialized; for body-only variants (the
+            # common case) parallelism is now real.
+            apply_lock = threading.Lock()
+
+            # Per-worker source files must live in the SAME directory as the
+            # original source — the compile cmd has the source's directory
+            # baked in via the -c flag, and redirect_source_in_cmd only swaps
+            # the filename, not the path. We use the scorer's _working_dir
+            # (same as the single-threaded _working_source) plus an idx
+            # suffix to keep names unique across workers in the same batch.
+            worker_src_paths: list[Path] = []
+
             def _compile_worker(
                 idx: int, variant: Variant, source_md5: str, obj_out: Path,
             ) -> tuple[int, bool, str | None, str, Path]:
                 """Compile one variant. Returns (idx, build_ok, error, source_md5, obj_out)."""
-                self._apply_variant_files(variant)
-                build_ok, build_error = self._build_to_path(variant.source, obj_out)
+                # Only serialize the aux-file application; the heavy compile
+                # itself runs in parallel via a per-worker source path.
+                with apply_lock:
+                    self._apply_variant_files(variant)
+                work_src = (
+                    self._working_dir
+                    / f".permuter_work_{idx}_{self.source_path.name}"
+                )
+                worker_src_paths.append(work_src)
+                build_ok, build_error = self._build_to_path(
+                    variant.source, obj_out, work_src=work_src,
+                )
                 return (idx, build_ok, build_error, source_md5, obj_out)
-
-            # Submit compile jobs — serialize source writes via a lock since
-            # all compiles read from the same source_path
-            import threading
-            source_lock = threading.Lock()
-
-            def _locked_compile(idx, variant, source_md5, obj_out):
-                with source_lock:
-                    return _compile_worker(idx, variant, source_md5, obj_out)
 
             # Capture header-set hash once for the whole batch — every variant
             # in this batch shares the same source tree state, so a single
@@ -622,7 +657,7 @@ class Scorer:
                 for idx, variant, source_md5 in to_build:
                     obj_out = tmp_dir / f"variant_{idx}{self._project.obj_extension}"
                     future = pool.submit(
-                        _locked_compile, idx, variant, source_md5, obj_out,
+                        _compile_worker, idx, variant, source_md5, obj_out,
                     )
                     futures[future] = (idx, variant, source_md5)
 
@@ -690,8 +725,16 @@ class Scorer:
                     build_success=True,
                 )
         finally:
-            # Clean up temp dir
+            # Clean up temp dir + per-worker source files
             shutil.rmtree(tmp_dir, ignore_errors=True)
+            for p in worker_src_paths:
+                try:
+                    p.unlink(missing_ok=True)
+                    # Best-effort cleanup of the .d file MWCC emits alongside.
+                    dep_file = p.with_suffix(p.suffix + ".d")
+                    dep_file.unlink(missing_ok=True)
+                except OSError:
+                    pass
 
         return results  # type: ignore[return-value]
 
