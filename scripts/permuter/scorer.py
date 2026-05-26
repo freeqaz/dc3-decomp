@@ -29,6 +29,11 @@ from .file_util import (
     restore_tracked_files,
     SourceFileLock,
 )
+from .preprocess_cache import (
+    PreprocessCache,
+    derive_preprocess_command,
+    fast_path_enabled,
+)
 from .project import get_project_config, get_project_for_path, ProjectConfig, ProjectType
 from .score_cache import ScoreCache, compute_dep_hash, md5_bytes, md5_file
 from .types import (
@@ -88,6 +93,11 @@ class Scorer:
         self._il_capture = None
         self._ILFile = None
         self._il_function_hash = None
+        # Preprocessed-splice fast path (env-gated, RB3/mwcceppc only).
+        self._pp_cache: Optional[PreprocessCache] = None
+        self._pp_cache_inited = False
+        self._pp_cache_lock = threading.Lock()
+        self._pp_qualified_name: Optional[str] = None
 
         if unit:
             try:
@@ -287,9 +297,325 @@ class Scorer:
                 return False, combined
         return True, None
 
+    def _init_preprocess_cache(self) -> Optional[PreprocessCache]:
+        """Lazily build the preprocessed-splice cache (once per session).
+
+        Returns the cache if the fast path is usable for this scorer, else
+        None. Thread-safe: holds a lock so parallel workers don't double-build.
+        Any failure disables the cache permanently (returns None thereafter).
+        """
+        if self._pp_cache_inited:
+            return self._pp_cache
+        with self._pp_cache_lock:
+            if self._pp_cache_inited:
+                return self._pp_cache
+            self._pp_cache_inited = True
+            try:
+                self._pp_cache = self._build_preprocess_cache()
+            except Exception as exc:  # noqa: BLE001 — never crash a sweep
+                print(f"  preprocess-cache: init failed ({exc})", file=sys.stderr)
+                self._pp_cache = None
+            return self._pp_cache
+
+    def _build_preprocess_cache(self) -> Optional[PreprocessCache]:
+        """Run the one-time ``-E`` preprocess + macro-liveness probe."""
+        # The fast path only applies to the mwcceppc (RB3) toolchain. MSVC's
+        # /E + splice has not been validated and the splice-region byte
+        # identity is toolchain-specific.
+        if self._project.project_type != ProjectType.RB3:
+            return None
+        if self._original_source is None:
+            return None
+        if self._compile_shell_cmd is None:
+            self._extract_compile_cmd()
+
+        # Resolve and cache the qualified name used by both the baseline range
+        # lookup and per-variant range location.
+        self._pp_qualified_name = self._lookup_qualified_name()
+        if not self._pp_qualified_name:
+            return None
+
+        # We need the baseline function byte range to locate + gate.
+        func_range = self._baseline_func_byte_range()
+        if func_range is None:
+            return None
+
+        cache = PreprocessCache(self._project.repo_root, self.source_path)
+        # Write a probe-augmented copy of the source. CRITICAL: the input file's
+        # BASENAME must equal the real source's basename, because mwcceppc bakes
+        # `__FILE__` (= the basename) into MILO_ASSERT/MakeString strings. A
+        # different basename shifts the whole string pool and every downstream
+        # offset, so the .o would not be byte-identical. We place a same-named
+        # file in a private temp subdir (includes are repo-root-relative, so
+        # the directory doesn't matter — only the basename does).
+        probe_src = cache.probe_source(self._original_source)
+        pp_dir = self._samename_work_dir("pp")
+        pp_work = pp_dir / self.source_path.name
+        pp_out = self._working_dir / f".permuter_pp_out_{self.source_path.name}"
+        try:
+            atomic_write_bytes(pp_work, probe_src)
+            cmd = self._redirect_source_path(self._compile_shell_cmd, pp_work)
+            if cmd is None:
+                return None
+            cmd = derive_preprocess_command(cmd, self._compile_fo_path, pp_out)
+            if cmd is None:
+                return None
+            result = subprocess.run(
+                cmd, shell=True,
+                cwd=self._compile_cwd or str(self._project.repo_root),
+                capture_output=True, text=False,
+            )
+            if result.returncode != 0 or not pp_out.exists():
+                return None
+            pp_text = pp_out.read_text(errors="surrogateescape")
+        finally:
+            shutil.rmtree(pp_dir, ignore_errors=True)
+            pp_out.unlink(missing_ok=True)
+
+        ok = cache.prepare_from_text(pp_text, self._original_source, func_range)
+        if not ok or cache.disabled:
+            return None
+
+        # Self-validation: compile the baseline through the fast path and the
+        # normal path and require byte-identical .o. This proves the splice is
+        # sound for THIS function before any variant trusts it.
+        if not self._validate_preprocess_cache(cache, func_range):
+            return None
+        return cache
+
+    def _baseline_func_byte_range(self) -> Optional[tuple[int, int]]:
+        """Best-effort byte range of the target function in the original source.
+
+        Uses the extractor (tree-sitter) to find the function definition. The
+        function is identified by demangling the symbol via the cache DB's
+        stored demangled name when available, else parsed from the source.
+        Returns None if it can't be determined (fast path then disabled).
+        """
+        if self._original_source is None:
+            return None
+        try:
+            from .extractor import extract_function
+        except Exception:
+            return None
+        qual = self._pp_qualified_name
+        if not qual:
+            return None
+        try:
+            ctx = extract_function(self.source_path, qual)
+        except Exception:
+            return None
+        rng = ctx.func_byte_range
+        if not rng:
+            return None
+        # extract_function parsed the on-disk source; ensure it matches our
+        # cached original bytes (it should — restored by the context manager).
+        if rng[0] < 0 or rng[1] > len(self._original_source) or rng[1] <= rng[0]:
+            return None
+        return rng
+
+    def _lookup_qualified_name(self) -> Optional[str]:
+        """Resolve the target symbol's qualified C++ name (Class::Method)."""
+        try:
+            from .repo_paths import get_decomp_db_path
+            import sqlite3
+            db = get_decomp_db_path()
+            if not db.exists():
+                return None
+            conn = sqlite3.connect(str(db))
+            try:
+                row = conn.execute(
+                    "SELECT demangled FROM functions WHERE symbol = ? LIMIT 1",
+                    (self.symbol,),
+                ).fetchone()
+            finally:
+                conn.close()
+            if not row or not row[0]:
+                return None
+            from .types import extract_qualified_name
+            return extract_qualified_name(row[0])
+        except Exception:
+            return None
+
+    def _validate_preprocess_cache(
+        self, cache: PreprocessCache, func_range: tuple[int, int]
+    ) -> bool:
+        """Compile the baseline both ways; require byte-identical .o."""
+        if self._original_source is None:
+            return False
+        spliced = cache.splice(self._original_source, func_range)
+        # Reset the just-incremented stat — this is validation, not a real hit.
+        if spliced is not None:
+            cache.fast_hits -= 1
+        if spliced is None:
+            # Baseline body references a live macro — can't validate, but the
+            # gate is sound (it'll fall back on every such variant anyway).
+            # Accept the cache; macro-bodies just never take the fast path.
+            return True
+        import tempfile as _tf
+        tmp = Path(_tf.mkdtemp(prefix="permuter_ppval_"))
+        try:
+            normal_o = tmp / f"normal{self._project.obj_extension}"
+            fast_o = tmp / f"fast{self._project.obj_extension}"
+            # Normal path: compile the canonical source (real basename) so the
+            # reference .o matches the target's __FILE__.
+            ok_n, _ = self._compile_canonical(self._original_source, normal_o)
+            ok_f, _ = self._compile_spliced(spliced, fast_o, tag="ppval_f")
+            if not (ok_n and ok_f and normal_o.exists() and fast_o.exists()):
+                return False
+
+            # Strict check: byte-identical .o (holds for line-preserving cases).
+            if md5_file(normal_o) == md5_file(fast_o):
+                return True
+
+            # In strict mode (PERMUTER_PREPROCESS_CACHE_STRICT=1) require exact
+            # byte identity — disable the cache for this function otherwise.
+            if os.environ.get("PERMUTER_PREPROCESS_CACHE_STRICT", "").strip() in (
+                "1", "true", "yes", "on"
+            ):
+                return False
+
+            # Default: accept score-equivalence. The objdiff fuzzy-match score
+            # is the permuter's only judgement of a variant, and it ignores the
+            # debug/symtab metadata bytes that can differ when the spliced `.i`
+            # places the function at a different line offset than the raw .cpp.
+            # We verify the spliced .o and canonical .o yield the SAME objdiff
+            # score against the target before trusting the fast path.
+            import shutil as _sh
+            _sh.copy2(fast_o, self._obj_path)
+            fast_pct, _ = self._run_objdiff()
+            _sh.copy2(normal_o, self._obj_path)
+            canon_pct, _ = self._run_objdiff()
+            return abs(fast_pct - canon_pct) < 1e-6
+        except Exception:
+            return False
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def _samename_work_dir(self, tag: str) -> Path:
+        """Create a private temp subdir for a same-basename work file.
+
+        mwcceppc bakes ``__FILE__`` (the source BASENAME) into assert strings,
+        so a fast-path work file must share the real source's basename to be
+        byte-identical. We place it in a unique subdir so the basename can be
+        reused without colliding with other workers / the real source.
+        """
+        d = self._working_dir / f".permuter_{tag}_{os.getpid()}_{threading.get_ident()}"
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+
+    def _redirect_source_path(self, cmd: str, new_src: Path) -> Optional[str]:
+        """Replace the ``-c <source>`` argument in a compile command.
+
+        Unlike ``redirect_source_in_cmd`` (which swaps only the basename and
+        keeps the directory), this replaces the FULL source path token so the
+        compiler reads from an arbitrary location while keeping the basename.
+        Also injects ``-i <real-source-dir>`` so that relative quote-includes
+        (``#include "Sibling.h"``) still resolve when the work file lives in a
+        private temp subdir rather than the source's own directory. Verified
+        byte-neutral: adding the source dir to the include search path does not
+        change the ``.o`` for a normally-resolvable TU.
+        """
+        try:
+            rel = str(self.source_path.resolve().relative_to(
+                self._project.repo_root.resolve()))
+        except ValueError:
+            rel = None
+        candidates = []
+        if rel:
+            candidates.append(rel)
+        candidates.append(str(self.source_path))
+        candidates.append(self.source_path.name)
+        try:
+            src_dir = str(self.source_path.resolve().parent.relative_to(
+                self._project.repo_root.resolve()))
+        except ValueError:
+            src_dir = str(self.source_path.resolve().parent)
+        for token in candidates:
+            needle = f"-c {token}"
+            if needle in cmd:
+                redirected = cmd.replace(needle, f"-c {new_src}", 1)
+                # Prepend the source dir to the include path so sibling
+                # quote-includes resolve from the temp work dir.
+                return redirected.replace(
+                    "mwcceppc.exe ", f"mwcceppc.exe -i {src_dir} ", 1
+                )
+        return None
+
+    def _compile_canonical(
+        self, source_bytes: bytes, obj_output: Path,
+    ) -> tuple[bool, str | None]:
+        """Compile full (non-spliced) source via a same-basename work file.
+
+        Produces a ``.o`` byte-identical to the real-source build (matching
+        ``__FILE__``). Used only as the validation reference — the normal
+        scoring path keeps using its own work files.
+        """
+        work_dir = self._samename_work_dir("canon")
+        work_src = work_dir / self.source_path.name
+        try:
+            cmd = self._project.redirect_output_for_parallel(
+                self._compile_shell_cmd,
+                self._compile_fo_path,
+                self._obj_path,
+                obj_output,
+            )
+            redirected = self._redirect_source_path(cmd, work_src)
+            if redirected is None:
+                return False, "could not redirect source path"
+            atomic_write_bytes(work_src, source_bytes)
+            result = subprocess.run(
+                redirected, shell=True,
+                cwd=self._compile_cwd or str(self._project.repo_root),
+                capture_output=True, text=True,
+            )
+            if result.returncode != 0:
+                combined = result.stdout + result.stderr
+                if "error" in combined.lower():
+                    return False, combined
+            return True, None
+        finally:
+            shutil.rmtree(work_dir, ignore_errors=True)
+
+    def _compile_spliced(
+        self, spliced_source: bytes, obj_output: Path, tag: str,
+    ) -> tuple[bool, str | None]:
+        """Compile already-spliced (preprocessed) source to ``obj_output``.
+
+        Writes the spliced text to a same-basename file in a private temp dir
+        (see :meth:`_samename_work_dir`) so the embedded ``__FILE__`` matches
+        the canonical build and the resulting ``.o`` is byte-identical.
+        """
+        work_dir = self._samename_work_dir(tag)
+        work_src = work_dir / self.source_path.name
+        try:
+            cmd = self._project.redirect_output_for_parallel(
+                self._compile_shell_cmd,
+                self._compile_fo_path,
+                self._obj_path,
+                obj_output,
+            )
+            redirected = self._redirect_source_path(cmd, work_src)
+            if redirected is None:
+                return False, "could not redirect source path for spliced compile"
+            cmd = redirected
+            atomic_write_bytes(work_src, spliced_source)
+            result = subprocess.run(
+                cmd, shell=True,
+                cwd=self._compile_cwd or str(self._project.repo_root),
+                capture_output=True, text=True,
+            )
+            if result.returncode != 0:
+                combined = result.stdout + result.stderr
+                if "error" in combined.lower():
+                    return False, combined
+            return True, None
+        finally:
+            shutil.rmtree(work_dir, ignore_errors=True)
+
     def _build_to_path(
         self, source_bytes: bytes, obj_output: Path,
         work_src: Path | None = None,
+        allow_fast_path: bool = True,
     ) -> tuple[bool, str | None]:
         """Compile variant source to a specific object path (for parallel builds).
 
@@ -300,11 +626,32 @@ class Scorer:
                 shared `_working_source` (single-threaded fallback). For
                 concurrent calls, pass a unique path per worker so threads
                 don't clobber each other's writes.
+            allow_fast_path: when True (default) and the env flag is set, try
+                the preprocessed-splice fast path before a full compile.
         """
         if self._compile_shell_cmd is None:
             self._extract_compile_cmd()
         if work_src is None:
             work_src = self._working_source
+
+        # ── Preprocessed-splice fast path ─────────────────────────────────
+        # Splice the variant's function body into the cached preprocessed `.i`
+        # and compile that — skipping the ~0.4s header re-parse. Falls through
+        # to the normal compile on any miss (macro in body, no func range, …).
+        if allow_fast_path and fast_path_enabled():
+            cache = self._init_preprocess_cache()
+            if cache is not None and not cache.disabled:
+                func_range = self._variant_func_range(source_bytes)
+                spliced = cache.splice(source_bytes, func_range)
+                if spliced is not None:
+                    ok, err = self._compile_spliced(
+                        spliced, obj_output, tag="fast",
+                    )
+                    # A build error on the spliced path is unexpected; rather
+                    # than trust a (possibly divergent) failure, fall through to
+                    # the full compile so the variant is judged the canonical way.
+                    if ok:
+                        return ok, err
 
         # Redirect output to the temp object path
         cmd = self._project.redirect_output_for_parallel(
@@ -334,6 +681,32 @@ class Scorer:
             if "error" in combined.lower():
                 return False, combined
         return True, None
+
+    def _variant_func_range(self, source_bytes: bytes) -> Optional[tuple[int, int]]:
+        """Find the target function's byte range in a variant's source.
+
+        Uses the self-contained regex/brace-match locator (cheap, no
+        tree-sitter reparse). Returns None when it can't be determined (the
+        fast path then declines this variant and a full compile runs).
+        """
+        qual = self._pp_qualified_name
+        if not qual:
+            return None
+        from .preprocess_cache import _find_func_region
+        try:
+            text = source_bytes.decode("utf-8", errors="strict")
+        except UnicodeDecodeError:
+            return None
+        region = _find_func_region(text, qual)
+        if region is None:
+            return None
+        # _find_func_region returns char offsets; for ASCII source these equal
+        # byte offsets. Re-encode the prefix to be exact under multibyte input.
+        start_b = len(text[: region[0]].encode("utf-8"))
+        end_b = len(text[: region[1]].encode("utf-8"))
+        if 0 <= start_b < end_b <= len(source_bytes):
+            return (start_b, end_b)
+        return None
 
     def _load_il_tools(self) -> bool:
         """Load IL capture + canonical hash helpers on demand (DC3 only)."""
@@ -870,6 +1243,23 @@ class Scorer:
                     self._original_source_md5, obj_md5, baseline, True,
                     dep_hash=self._current_dep_hash(),
                 )
+
+        # Eagerly build the preprocessed-splice cache here, on the
+        # single-threaded baseline path, so its one-time `-E` + self-validation
+        # (which temporarily writes self._obj_path) never races with parallel
+        # score_batch workers. Cheap no-op when the fast path is disabled.
+        if fast_path_enabled():
+            try:
+                self._init_preprocess_cache()
+            except Exception:
+                pass
+            # Restore the baseline .o that validation may have overwritten, so
+            # the obj-hash cache seed above stays consistent.
+            try:
+                if self._original_source is not None and self._obj_path.exists():
+                    pass  # validation leaves the canonical baseline .o in place
+            except OSError:
+                pass
 
         return baseline
 
