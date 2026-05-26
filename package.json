@@ -12,7 +12,8 @@
     "web:screenshot": "node scripts/web/screenshot.mjs",
     "web:scroll": "node scripts/web/scroll.mjs",
     "web:gameplay": "node scripts/web/gameplay.mjs",
-    "web:cdp-break": "node scripts/web/cdp-break.mjs"
+    "web:cdp-break": "node scripts/web/cdp-break.mjs",
+    "web:smoke-test": "node scripts/web/smoke-test.mjs"
   },
   "repository": {
     "type": "git",

@@ -54,6 +54,22 @@ Output: `screenshot.png` + `console.jsonl` in the output directory.
 
 > **Claude Code agents**: Add `dangerouslyDisableSandbox: true` — Chromium needs GPU/device access.
 
+### Boot Smoke Test (Regression Guard)
+
+Boots to `main_screen` and asserts:
+1. `MainMenuProvider` populated items (proves the `dynamic_cast<AppLabel*>` →
+   virtual-dispatch path that the WASM `call_indirect` check guards).
+2. No `pageerror` events fired.
+3. No `function signature mismatch` / `call_indirect` strings in console.
+
+```bash
+node scripts/web/smoke-test.mjs --verbose
+npm run web:smoke-test
+```
+
+Exits 0 on pass, 1 on fail. Run before declaring AppLabel / HamLabel /
+MainMenuProvider changes safe on web. See TODO.md §8.6 for the original bug.
+
 ### Song List Scroll Test
 
 Navigate to song_select, take initial screenshot, scroll N times with a screenshot after each.
