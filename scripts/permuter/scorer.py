@@ -828,13 +828,29 @@ class Scorer:
     def _run_objdiff_on_obj(self, obj_path: Path) -> float:
         """Run objdiff on a specific .obj file against the original.
 
-        Temporarily swaps the built .obj, runs objdiff in project mode,
-        and returns the match percentage.
+        Uses -1 <target> -2 <base> to diff the variant obj directly against
+        the original without touching self._obj_path, making this safe to call
+        from multiple threads simultaneously.
         """
-        # Copy the variant obj over the standard obj path so objdiff finds it
-        shutil.copy2(obj_path, self._obj_path)
-        match_pct, _ = self._run_objdiff(include_instructions=False)
-        return match_pct
+        target_obj = self._project.target_obj_for_base_obj(self._obj_path)
+        objdiff = self._project.objdiff_cli
+        cmd = [
+            objdiff, "diff",
+            "-1", str(target_obj),
+            "-2", str(obj_path),
+            self.symbol,
+            "-c", "functionRelocDiffs=none",
+            "-f", "json",
+        ]
+        result = subprocess.run(
+            cmd, capture_output=True, text=True,
+            cwd=str(self._project.repo_root),
+        )
+        try:
+            data = json.loads(result.stdout)
+            return data.get("fuzzy_match_percent", 0.0)
+        except (json.JSONDecodeError, KeyError):
+            return 0.0
 
     def _check_equivalence(self) -> Optional[bool]:
         """Run unicorn comparison and return True if equivalent, False if divergent.
@@ -1001,17 +1017,17 @@ class Scorer:
         variants: list[Variant],
         workers: int = 6,
     ) -> list[ScoreResult]:
-        """Score multiple variants with parallel compilation.
+        """Score multiple variants with parallel compilation and scoring.
 
         Workflow:
         1. Run dedup layers on all variants (instant, serial)
         2. Compile remaining variants in parallel (ThreadPoolExecutor)
-        3. Score compiled .obj files sequentially via objdiff
+        3. Score compiled .obj files in parallel via objdiff
         4. Return results in the same order as input variants
 
         Args:
             variants: List of variants to score.
-            workers: Number of parallel compile workers (default: 6).
+            workers: Number of parallel compile/objdiff workers (default: 6).
 
         Returns:
             List of ScoreResults in same order as input.
@@ -1109,18 +1125,22 @@ class Scorer:
                     else:
                         compiled.append((orig_idx, variant, source_md5, obj_out))
 
-            # Phase 3: Score compiled objects sequentially (objdiff is fast)
-            for orig_idx, variant, source_md5, obj_out in compiled:
+            # Phase 3: Score compiled objects in parallel.
+            # _run_objdiff_on_obj uses -1/-2 flags so each call diffs its own
+            # obj file directly — no shared path is touched, making it reentrant.
+            # ScoreCache._lock serializes SQLite writes and _obj_scores updates.
+            # results[orig_idx] writes are safe because each idx is distinct.
+            def _score_worker(
+                orig_idx: int, variant: Variant, source_md5: str, obj_out: Path,
+            ) -> tuple[int, ScoreResult]:
                 if not obj_out.exists():
-                    results[orig_idx] = ScoreResult(
+                    return orig_idx, ScoreResult(
                         variant=variant,
                         match_percent=0.0,
                         build_success=False,
                         error="obj file missing after compile",
                     )
-                    continue
 
-                # Obj hash dedup
                 obj_md5 = md5_file(obj_out)
                 if self._cache:
                     obj_cached = self._cache.lookup_obj(obj_md5)
@@ -1129,15 +1149,13 @@ class Scorer:
                             source_md5, obj_md5, obj_cached, True,
                             dep_hash=batch_dep_hash,
                         )
-                        results[orig_idx] = ScoreResult(
+                        return orig_idx, ScoreResult(
                             variant=variant,
                             match_percent=obj_cached,
                             build_success=True,
                             error="obj_dedup",
                         )
-                        continue
 
-                # Run objdiff on this .obj
                 match_percent = self._run_objdiff_on_obj(obj_out)
 
                 if self._cache:
@@ -1146,11 +1164,20 @@ class Scorer:
                         dep_hash=batch_dep_hash,
                     )
 
-                results[orig_idx] = ScoreResult(
+                return orig_idx, ScoreResult(
                     variant=variant,
                     match_percent=match_percent,
                     build_success=True,
                 )
+
+            with ThreadPoolExecutor(max_workers=workers) as score_pool:
+                score_futures = [
+                    score_pool.submit(_score_worker, orig_idx, variant, source_md5, obj_out)
+                    for orig_idx, variant, source_md5, obj_out in compiled
+                ]
+                for fut in as_completed(score_futures):
+                    idx, score_result = fut.result()
+                    results[idx] = score_result
         finally:
             # Clean up temp dir + per-worker source files
             shutil.rmtree(tmp_dir, ignore_errors=True)

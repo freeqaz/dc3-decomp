@@ -69,6 +69,29 @@ class ProjectConfig:
             pass
         return f"{self.build_prefix}/{obj_path}"
 
+    def target_obj_for_base_obj(self, base_obj: Path) -> Path:
+        """Derive the original (target) .obj path from the compiled (base) .obj path.
+
+        The base lives under build/<id>/src/... and the target under build/<id>/obj/...
+        Both layouts are the same for DC3 and RB3.  Works for both relative and
+        absolute base_obj paths.
+
+        DC3: build/373307D9/src/system/rndobj/Foo.obj -> build/373307D9/obj/system/rndobj/Foo.obj
+        """
+        # Handle both absolute and relative paths.  _obj_path is typically
+        # relative (e.g. "build/373307D9/src/Foo.obj"), so resolve to absolute
+        # first so relative_to comparisons work against the absolute repo_root.
+        abs_base = base_obj if base_obj.is_absolute() else self.repo_root / base_obj
+        src_prefix = self.repo_root / "build" / self.build_id / "src"
+        obj_prefix = self.repo_root / "build" / self.build_id / "obj"
+        try:
+            rel = abs_base.relative_to(src_prefix)
+            return obj_prefix / rel
+        except ValueError:
+            # Path doesn't follow the expected layout; fall back to the base obj
+            # so callers at least get something (objdiff will report a mismatch).
+            return abs_base
+
     def obj_path_for_unit(self, unit: str) -> Path:
         """Convert a unit name to its built object path.
 

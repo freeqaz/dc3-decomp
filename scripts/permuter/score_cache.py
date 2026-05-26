@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import hashlib
 import sqlite3
+import threading
 from pathlib import Path
 from typing import Iterable, Optional
 
@@ -147,17 +148,22 @@ class ScoreCache:
         self.hits_persistent = 0
         self.stale_dep = 0
         self.misses = 0
-        # Open DB
-        self._conn = sqlite3.connect(str(db_path))
+        # Lock guarding both _obj_scores and _conn: sqlite3 connections are not
+        # safe to share across threads, and _obj_scores mutations must be atomic.
+        self._lock = threading.Lock()
+        # Open DB — check_same_thread=False lets us hold the connection in the
+        # main thread and call it under _lock from worker threads.
+        self._conn = sqlite3.connect(str(db_path), check_same_thread=False)
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute(_SCHEMA)
         _migrate_schema(self._conn)
         self._conn.commit()
 
     def close(self):
-        if self._conn:
-            self._conn.close()
-            self._conn = None
+        with self._lock:
+            if self._conn:
+                self._conn.close()
+                self._conn = None
 
     def lookup_source(
         self,
@@ -173,43 +179,45 @@ class ScoreCache:
 
         Returns (match_pct, build_ok) or None if not cached (or stale).
         """
-        row = self._conn.execute(
-            "SELECT match_pct, build_ok, dep_hash FROM score_cache "
-            "WHERE symbol = ? AND source_md5 = ?",
-            (self.symbol, source_md5),
-        ).fetchone()
-        if row is None:
-            return None
-
-        match_pct, build_ok, stored_dep_hash = row[0], bool(row[1]), row[2]
-
-        # If we have a current dep_hash to compare against, enforce it.
-        # A cached row with stored_dep_hash = NULL is from a legacy entry
-        # written before this fix shipped — treat as stale to be safe (forces
-        # one rebuild, then the new entry has a dep_hash).
-        if current_dep_hash is not None:
-            if stored_dep_hash is None or stored_dep_hash != current_dep_hash:
-                self.stale_dep += 1
-                self._conn.execute(
-                    "DELETE FROM score_cache "
-                    "WHERE symbol = ? AND source_md5 = ?",
-                    (self.symbol, source_md5),
-                )
-                self._conn.commit()
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT match_pct, build_ok, dep_hash FROM score_cache "
+                "WHERE symbol = ? AND source_md5 = ?",
+                (self.symbol, source_md5),
+            ).fetchone()
+            if row is None:
                 return None
 
-        self.hits_persistent += 1
-        return (match_pct, build_ok)
+            match_pct, build_ok, stored_dep_hash = row[0], bool(row[1]), row[2]
+
+            # If we have a current dep_hash to compare against, enforce it.
+            # A cached row with stored_dep_hash = NULL is from a legacy entry
+            # written before this fix shipped — treat as stale to be safe (forces
+            # one rebuild, then the new entry has a dep_hash).
+            if current_dep_hash is not None:
+                if stored_dep_hash is None or stored_dep_hash != current_dep_hash:
+                    self.stale_dep += 1
+                    self._conn.execute(
+                        "DELETE FROM score_cache "
+                        "WHERE symbol = ? AND source_md5 = ?",
+                        (self.symbol, source_md5),
+                    )
+                    self._conn.commit()
+                    return None
+
+            self.hits_persistent += 1
+            return (match_pct, build_ok)
 
     def lookup_obj(self, obj_md5: str) -> Optional[float]:
         """Check session-local obj hash cache.
 
         Returns match_pct or None if not seen this session.
         """
-        if obj_md5 in self._obj_scores:
-            self.hits_obj += 1
-            return self._obj_scores[obj_md5]
-        return None
+        with self._lock:
+            if obj_md5 in self._obj_scores:
+                self.hits_obj += 1
+                return self._obj_scores[obj_md5]
+            return None
 
     def store(
         self,
@@ -222,25 +230,26 @@ class ScoreCache:
         """Store a score result in both session and persistent cache."""
         import time
 
-        if obj_md5 is not None:
-            self._obj_scores[obj_md5] = match_pct
+        with self._lock:
+            if obj_md5 is not None:
+                self._obj_scores[obj_md5] = match_pct
 
-        self._conn.execute(
-            "INSERT OR REPLACE INTO score_cache "
-            "(symbol, source_md5, obj_md5, match_pct, build_ok, timestamp, dep_hash) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (
-                self.symbol,
-                source_md5,
-                obj_md5,
-                match_pct,
-                int(build_ok),
-                time.time(),
-                dep_hash,
-            ),
-        )
-        self._conn.commit()
-        self.misses += 1
+            self._conn.execute(
+                "INSERT OR REPLACE INTO score_cache "
+                "(symbol, source_md5, obj_md5, match_pct, build_ok, timestamp, dep_hash) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    self.symbol,
+                    source_md5,
+                    obj_md5,
+                    match_pct,
+                    int(build_ok),
+                    time.time(),
+                    dep_hash,
+                ),
+            )
+            self._conn.commit()
+            self.misses += 1
 
     def stats_summary(self) -> str:
         """Return a short summary of cache hit/miss stats."""
@@ -263,8 +272,9 @@ class ScoreCache:
 
     def clear_symbol(self):
         """Clear all cached entries for the current symbol."""
-        self._conn.execute(
-            "DELETE FROM score_cache WHERE symbol = ?",
-            (self.symbol,),
-        )
-        self._conn.commit()
+        with self._lock:
+            self._conn.execute(
+                "DELETE FROM score_cache WHERE symbol = ?",
+                (self.symbol,),
+            )
+            self._conn.commit()
