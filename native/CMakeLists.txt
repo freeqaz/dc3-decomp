@@ -230,6 +230,42 @@ if(NOT EMSCRIPTEN)
 endif()
 
 # ============================================================================
+# milo-native-engine (shared LP64 engine) — consumed by dc3-native via the
+# engine-clean gfx/audio/platform source set compiled into libmilo-engine.a.
+# Sibling repo + soft SHA pin (warn on mismatch). See
+# rb3/docs/native/NATIVE_PORT_ROADMAP.md.
+# ============================================================================
+set(MILO_ENGINE_PATH "${CMAKE_SOURCE_DIR}/../../milo-native-engine"
+    CACHE PATH "Path to milo-native-engine checkout")
+set(MILO_ENGINE_PIN "291a70fab054624e50d4970b651ccbfdf56090ce"
+    CACHE STRING "Engine commit SHA verified against")
+if(EXISTS "${MILO_ENGINE_PATH}/.git")
+    execute_process(COMMAND git rev-parse HEAD
+        WORKING_DIRECTORY ${MILO_ENGINE_PATH}
+        OUTPUT_VARIABLE _milo_engine_head OUTPUT_STRIP_TRAILING_WHITESPACE)
+    if(NOT _milo_engine_head MATCHES "^${MILO_ENGINE_PIN}")
+        message(WARNING
+            "milo-native-engine HEAD is ${_milo_engine_head}\n"
+            "  but dc3-native pins ${MILO_ENGINE_PIN}\n"
+            "  (update MILO_ENGINE_PIN once the new engine state is canonical)")
+    endif()
+endif()
+
+# Inject DC3's matched-fork context so the engine compiles against DC3's Milo
+# headers with the MSVC-PPC compat flags + shared PCH.
+set(MILO_ENGINE_DECOMP_INCLUDE_DIRS
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/../src
+    ${CMAKE_SOURCE_DIR}/../src/system
+    ${CMAKE_SOURCE_DIR}/../src/system/oggvorbis
+    ${CMAKE_SOURCE_DIR}/../src/lazer
+    ${CMAKE_SOURCE_DIR}/../include)
+set(MILO_ENGINE_DECOMP_COMPAT_FLAGS
+    ${DC3_MSVC_COMPAT_FLAGS} ${DC3_ATOMIC_COMPAT_FLAGS} ${DC3_DECOMP_FLAGS})
+set(MILO_ENGINE_DECOMP_PCH ${CMAKE_SOURCE_DIR}/../src/system/decomp_pch.h)
+add_subdirectory(${MILO_ENGINE_PATH} ${CMAKE_BINARY_DIR}/milo-engine)
+
+# ============================================================================
 # Source files from decomp (generated from config/373307D9/objects.json)
 # Excludes: xdk/, lib/binkxenon, synth_xbox/, rnddx9/, *_Xbox.cpp, *_Win.cpp
 # ============================================================================
@@ -1076,6 +1112,46 @@ set(DC3_NATIVE_SOURCES
     ${DC3_NATIVE_CORE_SOURCES}
 )
 
+# Engine-clean core files now provided by libmilo-engine.a. Targets that LINK
+# the engine (dc3-native, milo-viewer, render-test, milo-tests) use this
+# filtered core list and additionally drop the moved gfx set + CharTwistSolver
+# + ImGuiBackend + DebugPanel + VideoEncoder (all in the engine). Other targets
+# (export tools, dc3-web) are unchanged and still compile everything locally.
+# (FFmpeg*.cpp are genex list items and stay in both; allow-multiple-definition
+#  tolerates the duplicate.)
+set(DC3_NATIVE_CORE_SOURCES_ENGINE ${DC3_NATIVE_CORE_SOURCES})
+list(REMOVE_ITEM DC3_NATIVE_CORE_SOURCES_ENGINE
+    src/audio/AudioDevice.cpp
+    src/platform/AsyncFile_Native.cpp
+    src/platform/BinkMovie_Stub.cpp
+    src/platform/BoneSetup.cpp
+    src/platform/Cache_Stub.cpp
+    src/platform/Cam_Native.cpp
+    src/platform/CDReader_Native.cpp
+    src/platform/ChecksumData_Stub.cpp
+    src/platform/DataParser_Native.cpp
+    src/platform/File_Native.cpp
+    src/platform/FxSendNative.cpp
+    src/platform/Joypad_Native.cpp
+    src/platform/Keyboard_Native.cpp
+    src/platform/Keygen_Stub.cpp
+    src/platform/MapFile_Stub.cpp
+    src/platform/MaterialSetup.cpp
+    src/platform/MeshGpuCache.cpp
+    src/platform/Mesh_Wgpu.cpp
+    src/platform/Net_Stub.cpp
+    src/platform/NetworkSocket_Stub.cpp
+    src/platform/Part_Wgpu.cpp
+    src/platform/RndTex_Native.cpp
+    src/platform/SampleInst_Native.cpp
+    src/platform/StreamReceiver_Native.cpp
+    src/platform/Synth_Stub.cpp
+    src/platform/SynthCommon_Stub.cpp
+    src/platform/Tex_Wgpu.cpp
+    src/platform/TransparentQueue.cpp
+    src/platform/VirtualKeyboard_Stub.cpp
+)
+
 # ============================================================================
 # Graphics subsystem sources (WebGPU/Dawn)
 # ============================================================================
@@ -1306,10 +1382,10 @@ else() # NOT EMSCRIPTEN — native targets
 
 add_executable(dc3-native
     ${DC3_ENGINE_SOURCES}
-    ${DC3_NATIVE_SOURCES}
-    ${DC3_GFX_SOURCES}
-    src/gfx/ImGuiBackend.cpp
-    src/platform/DebugPanel.cpp
+    src/main_native.cpp
+    ${DC3_NATIVE_CORE_SOURCES_ENGINE}
+    src/platform/DebugPanel.cpp   # deferred glue (pairs with HttpServer/DC3_HTTP_SERVER)
+    # gfx set + ImGuiBackend.cpp now provided by milo-engine
 )
 
 target_compile_options(dc3-native PRIVATE
@@ -1348,6 +1424,7 @@ target_link_options(dc3-native PRIVATE
 )
 
 target_link_libraries(dc3-native PRIVATE
+    milo-engine
     ${DC3_PLATFORM_LIBS}
     ${FFMPEG_LIBRARIES}
     imgui
@@ -1427,18 +1504,15 @@ add_executable(milo-viewer
     src/viewer/ViewerArgs.cpp
     src/viewer/ViewerCamera.cpp
     src/viewer/ViewerDebugUI.cpp
-    src/char/CharTwistSolver.cpp
     src/viewer/ViewerPoseDump.cpp
     src/viewer/ViewerScene.cpp
     src/viewer/ViewerAnimation.cpp
     src/viewer/ViewerCapture.cpp
-    src/gfx/ImGuiBackend.cpp
-    src/platform/DebugPanel.cpp
-    src/gfx/VideoEncoder.cpp
+    src/platform/DebugPanel.cpp   # deferred glue (pairs with HttpServer)
     ${DC3_ENGINE_SOURCES}
-    ${DC3_NATIVE_CORE_SOURCES}
-    ${DC3_GFX_SOURCES}
+    ${DC3_NATIVE_CORE_SOURCES_ENGINE}
     ${DC3_EXPORT_SOURCES}
+    # CharTwistSolver + ImGuiBackend + VideoEncoder + gfx set -> milo-engine
 )
 
 target_compile_options(milo-viewer PRIVATE
@@ -1475,6 +1549,7 @@ target_link_options(milo-viewer PRIVATE
 )
 
 target_link_libraries(milo-viewer PRIVATE
+    milo-engine
     ${DC3_PLATFORM_LIBS}
     imgui
     $<$<BOOL:${ENABLE_FFMPEG}>:${FFMPEG_LIBRARIES}>
@@ -1492,8 +1567,8 @@ add_executable(render-test
     src/render_test/render_test_main.cpp
     src/render_test/test_scene.cpp
     ${DC3_ENGINE_SOURCES}
-    ${DC3_NATIVE_CORE_SOURCES}
-    ${DC3_GFX_SOURCES}
+    ${DC3_NATIVE_CORE_SOURCES_ENGINE}
+    # gfx set -> milo-engine
 )
 
 target_compile_options(render-test PRIVATE
@@ -1523,6 +1598,7 @@ target_link_options(render-test PRIVATE
 )
 
 target_link_libraries(render-test PRIVATE
+    milo-engine
     ${DC3_PLATFORM_LIBS}
 )
 target_precompile_headers(render-test PRIVATE
@@ -1652,10 +1728,9 @@ if(BUILD_TESTS)
         tests/test_movegraph.cpp
         tests/test_dta_flow.cpp
         tests/test_foot_bone_invariants.cpp
-        src/char/CharTwistSolver.cpp
         ${DC3_ENGINE_SOURCES}
-        ${DC3_NATIVE_CORE_SOURCES}
-        ${DC3_GFX_SOURCES}
+        ${DC3_NATIVE_CORE_SOURCES_ENGINE}
+        # CharTwistSolver + gfx set -> milo-engine
     )
     target_compile_options(milo-tests PRIVATE
         ${DC3_MSVC_COMPAT_FLAGS}
@@ -1684,6 +1759,7 @@ if(BUILD_TESTS)
         ${DC3_PLATFORM_LINK_OPTIONS}
     )
     target_link_libraries(milo-tests PRIVATE
+        milo-engine
         GTest::gtest GTest::gtest_main
         ${DC3_PLATFORM_LIBS}
         ${FFMPEG_LIBRARIES}
