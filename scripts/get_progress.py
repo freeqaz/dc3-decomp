@@ -4,10 +4,20 @@
 Returns total/complete/at_limit counts, percentages, pattern breakdown,
 and top units with remaining work.
 
+Excludes MSVC EH funclets (__unwind$NNN / __catch$NNN) from "remaining" —
+the compiler emits these as a side effect of compiling a parent function
+with /EHsc; they have no source representation you can author. dtk's
+splitter emits each as an unnamed `fn_<addr>` symbol because the binary
+loses the funclet's name at link time, which inflates the workable count.
+We treat any `fn_<addr>` whose address appears as an `__unwind$` or
+`__catch$` entry in the original linker map (orig/373307D9/ham_xbox_r.map)
+as a build artifact, not workable.
+
 Usage:
     python3 scripts/get_progress.py
 """
 
+import re
 import sys
 from pathlib import Path
 
@@ -17,6 +27,37 @@ sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
 from orchestrator.database import get_connection, get_stats
 
 DB_PATH = str(PROJECT_ROOT / "decomp.db")
+MAP_PATH = PROJECT_ROOT / "orig" / "373307D9" / "ham_xbox_r.map"
+
+
+def _load_funclet_addrs(map_path: Path = MAP_PATH) -> set[str]:
+    """Return lowercase 8-hex addresses of __unwind$ / __catch$ funclets in
+    the original linker map. Empty set if the map is missing — filter just
+    becomes a no-op so callers don't have to special-case it."""
+    if not map_path.exists():
+        return set()
+    addrs: set[str] = set()
+    addr_re = re.compile(r"\s([0-9a-f]{8})\s")
+    with open(map_path) as f:
+        for line in f:
+            if "__unwind$" in line or "__catch$" in line:
+                m = addr_re.search(line)
+                if m:
+                    addrs.add(m.group(1).lower())
+    return addrs
+
+
+def _funclet_filter_sql(funclet_addrs: set[str]) -> str:
+    """SQL fragment for `WHERE ... AND <here>` that excludes any function
+    whose symbol is `fn_<hexaddr>` and whose address is a funclet.
+
+    Inlined-literal join (not a parameter list) because sqlite3 hard-caps
+    bound-parameter count below the ~22k funclet count."""
+    if not funclet_addrs:
+        return "1=1"
+    # quoted lowercase 'fn_<addr>' literals
+    quoted = ",".join(f"'fn_{a}'" for a in sorted(funclet_addrs))
+    return f"LOWER(symbol) NOT IN ({quoted})"
 
 
 def get_progress() -> str:
@@ -40,8 +81,21 @@ def get_progress() -> str:
     ).fetchone()[0]
     remaining = non_excluded - complete - at_limit
 
+    # Funclet bookkeeping: fn_<addr> stubs that are __unwind$/__catch$ aren't
+    # source-authorable. Subtract them so "Remaining" reflects real work.
+    funclet_addrs = _load_funclet_addrs()
+    funclet_filter = _funclet_filter_sql(funclet_addrs)
+    funclet_remaining = conn.execute(
+        f"SELECT COUNT(*) FROM functions WHERE verdict IS NULL "
+        f"AND unit NOT LIKE '%xdk%' AND symbol LIKE 'fn_%' "
+        f"AND NOT ({funclet_filter})"
+    ).fetchone()[0]
+    remaining_real = remaining - funclet_remaining
+    real_surface = non_excluded - funclet_remaining  # base for the "real" %
+
     complete_pct = (complete / non_excluded * 100) if non_excluded else 0
     done_pct = ((complete + at_limit) / non_excluded * 100) if non_excluded else 0
+    real_done_pct = ((complete + at_limit) / real_surface * 100) if real_surface else 0
 
     output = "## Decomp Progress\n\n"
     output += "| Metric | Count | % of non-excluded |\n"
@@ -51,8 +105,11 @@ def get_progress() -> str:
     output += f"| Non-excluded | {non_excluded:,} | 100% |\n"
     output += f"| COMPLETE | {complete:,} | {complete_pct:.1f}% |\n"
     output += f"| AT_LIMIT | {at_limit:,} | {at_limit / non_excluded * 100:.1f}% |\n"
-    output += f"| Remaining | {remaining:,} | {remaining / non_excluded * 100:.1f}% |\n"
-    output += f"| **Done (COMPLETE + AT_LIMIT)** | **{complete + at_limit:,}** | **{done_pct:.1f}%** |\n"
+    output += f"| Remaining (raw) | {remaining:,} | {remaining / non_excluded * 100:.1f}% |\n"
+    output += f"| EH funclets (`__unwind$` / `__catch$`) — build artifact | {funclet_remaining:,} | — |\n"
+    output += f"| **Remaining (real, post-funclet)** | **{remaining_real:,}** | — |\n"
+    output += f"| Done (COMPLETE + AT_LIMIT), raw non-excluded | {complete + at_limit:,} | {done_pct:.1f}% |\n"
+    output += f"| **Done (COMPLETE + AT_LIMIT), real surface** | **{complete + at_limit:,}** | **{real_done_pct:.1f}%** |\n"
 
     # Pattern counts
     pattern_keys = [
@@ -87,14 +144,15 @@ def get_progress() -> str:
             if count > 0:
                 output += f"| {label} | {count:,} |\n"
 
-    # Top units with remaining work
-    rows = conn.execute("""
+    # Top units with remaining work (real surface: exclude EH funclets)
+    rows = conn.execute(f"""
         SELECT unit, COUNT(*) as cnt
         FROM functions
         WHERE verdict IS NULL
           AND unit NOT LIKE '%xdk%'
           AND symbol NOT LIKE 'merged_%'
           AND demangled NOT LIKE '%stlpmtx_std::%'
+          AND ({funclet_filter})
         GROUP BY unit
         ORDER BY cnt DESC
         LIMIT 15
