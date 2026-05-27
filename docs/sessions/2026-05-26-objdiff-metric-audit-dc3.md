@@ -752,14 +752,54 @@ of an ICF-folded function. Address resolved → multiple symbols → benign.
 The handoff anticipated this (its Agent-13 task was a noise-audit, not a
 fix dispatch). Followup carved out below.
 
-### Pending — wave 2 still running
+### Session totals (2026-05-27 03:20 UTC)
 
-Subagents in flight at time of writing (2026-05-27 ~02:50 UTC):
+**23 functions taken to 100% match** + 4 with substantial improvements (now AT_LIMIT
+due to regalloc residue) + tool/infrastructure fixes. ~12 audit REVIEW items
+verified as benign ICF (no source change needed, just better filtering).
 
-- MoggClip MI sub-object cast (Play/ApplyLoop/Save)
-- HamVisDir destructor 8-byte member shift
-- DataFlex `yylex` / `yy_get_previous_state` lexer-constant divergence
-- RndParticleSys::MoveParticles (70.9% raw — large, opportunistic)
+| Outcome | Count |
+|---|---:|
+| Functions at 100% match (committed) | 23 |
+| Substantial improvements (AT_LIMIT residue) | 4 |
+| ICF-benign verifications (no fix needed) | 12 |
+| Infrastructure fixes (dtk auto-vtable, audit script TMPDIR, dump_vtable UX) | 3 |
+| Session commits | 17 |
+
+### Final wave (4 more wins)
+
+| Function | Unit | Before → After | Root cause |
+|---|---|---|---|
+| `?Activate@FlowDistance@@UAA_NXZ` | `default/system/flow/FlowDistance` | 99.7% raw → 100% norm | `kWhenAble = 5` was wrong; correct value is `4`. Cross-verified against `og-dc3-decomp/src/system/flow/FlowNode.h:24`. Added `kPassThrough = 5` (the new enum value, observed in `FlowQueueable::ChildFinished` as a "pass through to base FlowNode" sentinel). |
+| `?SelectConfig@RndShader@@SAXPAVRndMat@@W4ShaderType@@_N@Z` | `default/system/rndobj/Shader` | 99.2% → 100% norm | The `doError` flag was initialized to `true` with combinator logic; target inits to `false` and only sets inside the `(mat && ShowMetaMatErrors)` branch. Source-level semantic bug; 6 register-swap mismatches all disappear once the regalloc anchor instruction at idx 59 is correct. |
+| `?Load@Spotlight@@UAAXAAVBinStream@@@Z` | `default/system/world/Spotlight` | 99.7% raw → 100% norm | (a) `mFlare->mSizes` / `mFlare->mRange` serialise via `Key<float>::operator>>`, not `Vector2::operator>>` (same 8-byte payload, different template instantiation; DC3-specific — RB3 uses Vector2). (b) Three `char buf[0x80]` locals inside the legacy-rev compat blocks were being aliased to one stack slot by the compiler — hoist to function-scope as `bufSpot`/`bufFlare`/`bufLens` to force three distinct slots. |
+| `?SetProperty@PropertyTask@@IAAXAAVDataNode@@@Z` | `default/system/flow/FlowSetProperty` | 99.5% → 100% norm | The field at `PropertyTask + 0x78` was declared `float mElapsed` but target reads it as int compared to `kDataString` (18). It's actually an int caching `mStartValue.Type()` at ctor time (saved before the atoi conversion clobbers `mStartValue`'s type). Replaced the spurious mElapsed declaration with `int mStartValueType`. |
+
+### Spotlight::Generate, MoveParticles, OptionsPanel::OnMsg — AT_LIMIT
+
+- `Spotlight::Generate` — 99.2% raw / 99.5% norm. r30↔r31 callee-saved register-allocation swap; no source-level transformation moves it. `mr r3, r31` is hoisted above the if/else chain in target; ours keeps `r31 = this+0x1f4` indirect. **Unfixable.**
+- `MoveParticles` — 70.9% → 80.0% (+9 points over 5 commits). Remainder is 113 r29↔r30 swap instructions (40% of the noise), plus 35 f0↔f13 / 22 f12↔f13 FPR swaps, plus 12 small stack-shift store offsets after the +48 frame-size recovery. **AT_LIMIT** per orchestrator verdict. Five distinct root causes nailed (field-name mismatches in bubble + rotate blocks, fmuls+fadds vs fmadds, size() caching, Plane stack local, Vector4 refs to hoist pos/vel into callee-saved regs, `Multiply(Vec3, Matrix3, Vec3 &)` inline).
+- `OptionsPanel::OnMsg(RCJobCompleteMsg)` — 94.2% → 99.7% (+5.5 points). Remaining 22 mismatches are callee-saved r20↔r21 / r27↔r29↔r30 register-swap noise. **AT_LIMIT (High)**.
+
+### Additional ICF-benign verifications (audit REVIEW → no fix needed)
+
+| Function | Audit "wrong call" → resolved address | ICF cluster size |
+|---|---|---|
+| `?Poll@AccomplishmentManager@@…` | `bl ?GetAccomplishmentProgress@HamProfile@@QBA…` (TGT) vs `bl ?AccessAccomplishmentProgress@HamProfile@@QAA…` (SRC) → both 0x828DFB08 | 2 (Get/Access merged) |
+| `?NumItems@HamNavList@@ABAHXZ` and `?GetDisabledCount@HamNavList@@ABAHH@Z` | `bl ?gathering@CUgtFilter@NUISPEECH@@…` (TGT) → 0x826018C8 | 5 (template-instantiated empty-returns getters) |
+
+### Infrastructure work (parallel)
+
+1. **dtk auto-vtable false-positive fix** (`../jeff` upstream commit `f4a3eff`): `FindXboxVtables` no longer emits synthetic `vftable_<addr>` candidates whose address range overlaps a user-declared symbol. Unblocks the DC3 build (was failing every `xex split` with "ends within symbol 'vftable_8226BC34'" because the heuristic was hitting the tail of `??_7CFilterSkin@LEAPCORE@@6BILeapFilter@@@` plus the first pointer of the next file's vtable).
+2. **Audit script TMPDIR support** (`scripts/analysis/audit_normalized_masking.py`): hard-coded `/tmp/objdiff_audit` is now `$TMPDIR/objdiff_audit` so the script works inside the harness sandbox (read-only `/tmp`).
+3. **dump_vtable.py UX overhaul** (`scripts/dump_vtable.py`, `.claude/skills/vtable/SKILL.md`): replaced the broken hardcoded `[Object]` slot annotations with class-header-derived declaration-order names. Parses the class header to extract `virtual` methods, walks the parent chain to count inherited slots, and labels each slot as `[inherited from <Parent>]` or `[new in <Class>]`. Also added `--diff-pair OFFSET1 OFFSET2` for vtable-mismatch diagnosis. Tested on RndDrawable (slot 5 = Draw, slot 6 = DrawShowing — ICF-folded as OnlyReturns).
+
+### Pending — final agents
+
+Subagent still in flight: PropertyTask + **StreamRecorder::Poll** MI cast fix
+(`?Poll@StreamRecorder@@UAAXXZ`, still 99.8% with the 3 `lwz [off:-272]` /
+`addi [off:-272]` / `lwz [off:+20]` MI sub-object pattern matching
+`DrawPtrVec::Draw`'s fix shape).
 
 ### Audit-script followups still owed
 
