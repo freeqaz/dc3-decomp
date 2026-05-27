@@ -751,7 +751,7 @@ void WorldCrowd::Reset3DCrowd() {
             InstanceList::iterator instIt = instances.begin();
             int curInstIdx = 0;
             for (int i = 0; (unsigned int)i != it->m3DCharsCreated.size(); i++) {
-                int targetInstIdx = (int)(intptr_t)it->m3DCharsCreated[i].mHandle;
+                int targetInstIdx = it->m3DCharsCreated[i].mIdx;
                 while (curInstIdx != targetInstIdx) {
                     ++instIt;
                     curInstIdx++;
