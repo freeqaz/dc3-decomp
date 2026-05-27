@@ -431,11 +431,17 @@ def _build_ref_decls(
             if type_bytes is None:
                 # Can't emit concrete type — skip this variant
                 return b""
-            # Detect if member is a pointer (type ends with *)
+            # Detect if member is a pointer (type ends with *) or reference (ends with &)
             stripped = type_bytes.rstrip()
             if stripped.endswith(b"*"):
+                # Pointer member: ``T* local = this->mFoo;``
+                line = indent + stripped + b" " + local_name + b" = this->" + name_bytes + b";\n"
+            elif stripped.endswith(b"&"):
+                # Reference member (e.g. ``const T &mFoo``): already a reference type.
+                # Emit ``const T& local = this->mFoo;`` without adding another &.
                 line = indent + stripped + b" " + local_name + b" = this->" + name_bytes + b";\n"
             else:
+                # Value member: emit ``T& local = this->mFoo;``
                 line = indent + type_bytes + b"& " + local_name + b" = this->" + name_bytes + b";\n"
         lines.append(line)
 
@@ -530,7 +536,17 @@ def _collect_field_types(body: Node, source: bytes, out: dict[str, bytes]) -> No
         # Skip method declarations
         if any(c.type == "function_declarator" for c in child.children):
             continue
-        type_text = source[type_node.start_byte:type_node.end_byte]
+        # Build full type text including any leading qualifiers (e.g. ``const``).
+        # tree-sitter puts qualifiers as sibling type_qualifier nodes before the
+        # actual type node, so we scan all children up to (but not including) the
+        # type node to pick them up.
+        qualifier_prefix = b""
+        for sib in child.children:
+            if sib.start_byte >= type_node.start_byte:
+                break
+            if sib.type == "type_qualifier":
+                qualifier_prefix += source[sib.start_byte:sib.end_byte] + b" "
+        type_text = qualifier_prefix + source[type_node.start_byte:type_node.end_byte]
         for c in child.children:
             if c.type == "field_identifier":
                 name = source[c.start_byte:c.end_byte].decode("utf-8", errors="replace")
@@ -545,6 +561,13 @@ def _collect_field_types(body: Node, source: bytes, out: dict[str, bytes]) -> No
                         modifier = b" &" + modifier
                     sub = inner.child_by_field_name("declarator")
                     if sub is None:
+                        # tree-sitter may put field_identifier directly as a child
+                        # (e.g. ``&mFoo`` has field_identifier as direct child, not
+                        # under a "declarator" named field).
+                        for ch in inner.children:
+                            if ch.type == "field_identifier":
+                                inner = ch
+                                break
                         break
                     inner = sub
                 if inner.type == "field_identifier":
