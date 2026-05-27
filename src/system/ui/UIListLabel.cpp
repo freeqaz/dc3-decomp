@@ -97,7 +97,7 @@ UIListSlotElement *UIListLabel::CreateElement(UIList *uilist) {
     Hmx::Object *newObj = Hmx::Object::NewObject(mLabel->ClassName());
     UILabel *l = dynamic_cast<UILabel *>(newObj);
     MILO_ASSERT(l, 0x89);
-    l->Copy(mLabel, kCopyDeep);
+    l->Copy(mLabel, kCopyShallow);
     l->SetTextToken(gNullStr);
     return new UIListLabelElement(this, l);
 }

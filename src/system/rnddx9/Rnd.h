@@ -69,8 +69,8 @@ public:
     virtual RndTex *PreProcessTexture() { return mPreProcessTex; }
     virtual RndTex *PostProcessTexture() { return mPostProcessTex; }
     virtual RndTex *PreDepthTexture() { return mPreDepthTex; }
-    virtual void Suspend();
     virtual void Resume();
+    virtual void Suspend();
     virtual void CreateLargeQuad(int, int, LargeQuadRenderData &);
     virtual void
     DrawLargeQuad(const LargeQuadRenderData &, const Transform &, RndMat *, ShaderType);
