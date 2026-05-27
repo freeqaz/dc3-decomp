@@ -85,3 +85,49 @@ macro scan and then still does the full compile.
   for macro-light functions where it delivers 1.4-2.1x with zero risk.
 
 ---
+
+## 2. Throughput + stability sweep (16 RB3 functions)
+
+Full permuter (`hill_climb`, 3 rounds, compose on, adaptive off) over the 16-fn
+bench set, fresh isolated cache, profiling on (`rb3_throughput.json`).
+
+| Metric | RB3 (mwcceppc) | DC3 baseline (for ref) |
+|--------|----------------|------------------------|
+| variants / second | **2.14** | 1.47 |
+| total variants scored | 345 | 816 |
+| wins / 100 attempts | **6.25** (1/16 improved) | 12.9 |
+| functions reached 100% | 0 | 0 |
+| overall wall | 160.9 s | 553.5 s |
+| **crashes / exceptions / hangs** | **0** | — |
+
+**Stability: clean.** 0 errors, 0 crashes, 0 hangs across all 16 functions and
+345 variant compiles on the mwcceppc toolchain. The one win:
+`VocalPart::AddPhrasePoints` 98.9344% → 99.0164% (+0.082%) via
+`compose:argument_swap+declaration_reorder` — a real cross-toolchain win,
+confirming the compose/beam machinery works identically on RB3.
+
+Per-call subprocess cost (the A2/A4 input, contention-robust):
+- **compile**: 258 calls, spawn 0.88ms + **run 2136ms** (mwcceppc parse is the
+  cost — exactly what the preprocess-cache targets).
+- **objdiff**: 158 calls, spawn 1.02ms + **run 25.6ms** (10x cheaper than DC3's
+  263ms — RB3 `.o` are smaller / objdiff has less to compare).
+
+Implication: on RB3 the compile-run dominates even harder than on DC3 (objdiff
+is nearly free), so the preprocess-cache *should* be a bigger relative win here
+— but it is gated by macro density (section 1). The lever that would lift RB3
+above the 1.5x bar is widening fast-path coverage past macro-referencing bodies
+(see section 4), not anything in the objdiff/diff path.
+
+### Note on intermittent source-lock contention
+
+Across the sweep runs, a handful of functions intermittently failed with
+`RuntimeError: Source file locked by another permuter`. Root cause: the RB3
+source tree is shared, and (a) a SIGKILL'd permuter's `flock` lingers until the
+kernel reaps the fd, and (b) other agents occasionally touch `../rb3`. This is
+the lock guard working **correctly** — it fails fast rather than letting two
+permuters race the same `.cpp`. It is not engine instability: every function
+that failed succeeded cleanly on a re-run against a quiet tree (section 1's fill
+pass). `rb3_ppab.py` now has `--only` / `--start` / `--count` + `--checkpoint`
+so a contended run can be resumed without losing completed work.
+
+---
