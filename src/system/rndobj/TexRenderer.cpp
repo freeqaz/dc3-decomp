@@ -248,8 +248,8 @@ void RndTexRenderer::DrawToTexture() {
         float f33 = 0;
         RndEnvironTracker tracker((RndEnviron *)mEnviron, nullptr);
         if (!mForce) {
-            static Message pre_render_msg("pre_render");
-            HandleType(pre_render_msg);
+            static Message preRender("pre_render");
+            HandleType(preRender);
         }
         RndCam *cam;
         RndDir *rdir = dynamic_cast<RndDir *>((RndDrawable *)mDrawable);
@@ -370,8 +370,10 @@ void RndTexRenderer::DrawToTexture() {
             Hmx::Matrix3 m1a8;
             Hmx::Matrix3 m1cc;
             for (int i = 0; i < 3; i++) {
-                m1a8[i].Set(verts[i]->tex.x, verts[i]->tex.y, 1.0f);
                 m1cc[i] = vertVectors[i];
+            }
+            for (int i = 0; i < 3; i++) {
+                m1a8[i].Set(verts[i]->tex.x, verts[i]->tex.y, 1.0f);
             }
             Hmx::Matrix3 m1f0;
             Invert(m1a8, m1a8);
@@ -452,8 +454,8 @@ void RndTexRenderer::DrawToTexture() {
         current->Select();
         mFirstDraw = false;
         if (!mForce) {
-            static Message post_render_msg("post_render");
-            HandleType(post_render_msg);
+            static Message msg("post_render");
+            HandleType(msg);
         }
     }
     if (!mForce)
