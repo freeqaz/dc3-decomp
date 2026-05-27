@@ -101,6 +101,7 @@ def _migrate(conn: sqlite3.Connection) -> None:
 def _get_conn(db_path: Path | None = None) -> sqlite3.Connection:
     conn = sqlite3.connect(str(db_path or _CACHE_DB))
     conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=30000")
     conn.executescript(_SCHEMA)
     _migrate(conn)
     return conn

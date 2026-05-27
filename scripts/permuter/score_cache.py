@@ -155,6 +155,7 @@ class ScoreCache:
         # main thread and call it under _lock from worker threads.
         self._conn = sqlite3.connect(str(db_path), check_same_thread=False)
         self._conn.execute("PRAGMA journal_mode=WAL")
+        self._conn.execute("PRAGMA busy_timeout=30000")
         self._conn.execute(_SCHEMA)
         _migrate_schema(self._conn)
         self._conn.commit()
