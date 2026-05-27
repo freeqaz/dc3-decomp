@@ -18,6 +18,7 @@ Example:
 
 from __future__ import annotations
 
+import re
 from typing import Iterator
 
 from tree_sitter import Node
@@ -80,8 +81,8 @@ class ArgumentSwapPattern(Pattern):
                 if not _is_safe_arg(arg_a) or not _is_safe_arg(arg_b):
                     continue
 
-                # Skip if args are likely type-incompatible (44% build failure root cause)
-                if not _args_type_compatible(arg_a, arg_b):
+                # Skip if args are likely type-incompatible (54.5% build failure root cause)
+                if not _args_type_compatible(arg_a, arg_b, ctx):
                     continue
 
                 # Skip if args are identical text (swap would be no-op)
@@ -127,7 +128,39 @@ def _arg_category(node: Node) -> str:
     return "expr"
 
 
-def _args_type_compatible(arg_a: Node, arg_b: Node) -> bool:
+def _cast_type_name(node: Node) -> str | None:
+    """Extract the type name string from a cast_expression node, e.g. '(VShaderConstant)0' -> 'VShaderConstant'."""
+    if node.type != "cast_expression":
+        return None
+    type_node = node.child_by_field_name("type")
+    if type_node is None:
+        return None
+    text = type_node.text
+    if text is None:
+        return None
+    return text.decode("utf-8", errors="replace").strip()
+
+
+def _ident_is_pointer_like(ident: str, ctx: FunctionContext) -> bool:
+    """Heuristic: True when *ident* is declared or used as a pointer in the TU.
+
+    Mirrors the guard in signed_unsigned.py to detect pointer types syntactically.
+    Two signals: arrow usage (``ident->``) and a pointer declaration
+    (``Type *ident`` / ``Type* ident``). False positives only cost a skipped
+    variant, so the bias toward detecting pointers is intentional.
+    """
+    src = ctx.file_source.decode("utf-8", errors="replace")
+    esc = re.escape(ident)
+    # Used as a pointer: ident->member
+    if re.search(rf"\b{esc}\s*->", src):
+        return True
+    # Declared as a pointer: `Type *ident` or `Type* ident`
+    if re.search(rf"[\w>\)]\s*\*\s*{esc}\b", src):
+        return True
+    return False
+
+
+def _args_type_compatible(arg_a: Node, arg_b: Node, ctx: FunctionContext | None = None) -> bool:
     """Heuristic check if two args are likely type-compatible for swapping.
 
     Prevents build failures from swapping e.g. a Symbol and an int.
@@ -162,6 +195,36 @@ def _args_type_compatible(arg_a: Node, arg_b: Node) -> bool:
         return False
     if cat_b == "null" and cat_a not in ("null", "expr"):
         return False
+
+    # cast_expression carries a typed annotation: (SomeType)val.
+    # Swapping a typed cast with a differently-typed arg almost always causes
+    # a build failure (54.5% of all argument_swap compile errors trace here).
+    # Allow cast+cast only when both sides cast to the same type name.
+    if cat_a == "cast" or cat_b == "cast":
+        if cat_a == "cast" and cat_b == "cast":
+            # Both casts — allow only if they name the same target type
+            type_a = _cast_type_name(arg_a)
+            type_b = _cast_type_name(arg_b)
+            if type_a is None or type_b is None or type_a != type_b:
+                return False
+        else:
+            # One cast, one non-cast — incompatible by construction
+            return False
+
+    # For expr+expr: reject when one identifier is pointer-like and the other
+    # is not a pointer (e.g. RemoveSink(mObj*, gNullStr) → Symbol vs Object*).
+    if cat_a == "expr" and cat_b == "expr" and ctx is not None:
+        text_a = arg_a.text
+        text_b = arg_b.text
+        if text_a and text_b:
+            str_a = text_a.decode("utf-8", errors="replace")
+            str_b = text_b.decode("utf-8", errors="replace")
+            # Only check single identifiers (not complex expressions)
+            if re.match(r"^\w+$", str_a) and re.match(r"^\w+$", str_b):
+                ptr_a = _ident_is_pointer_like(str_a, ctx)
+                ptr_b = _ident_is_pointer_like(str_b, ctx)
+                if ptr_a != ptr_b:
+                    return False
 
     return True
 
