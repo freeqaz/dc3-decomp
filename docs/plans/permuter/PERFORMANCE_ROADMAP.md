@@ -1,6 +1,9 @@
 # Permuter Performance & Power Roadmap
 
 Status: Active — opened 2026-05-26 · reviewed 2026-05-26 (staff design review)
+· 2026-05-27: **Workstreams A, B, and Synthesis (C) all closed out** — every
+item landed, parked-with-evidence, or shipped behind a default-off flag pending
+data/A-B. See the per-item statuses and the Review Log.
 
 Living tracking document for making the permuter **faster** (more variants
 scored per second) and **smarter** (fewer variants needed per win). Review
@@ -765,3 +768,15 @@ Append a dated line each time this doc is reviewed or an item changes state.
   confirms the prune *does* fire when a strong signal exists (0.9 suppress fact
   → pattern budget 48→0). **Default left OFF** — the payoff is fewer compiles and
   we measured none here; re-evaluate on a switch/tail-call-heavy subset.
+- **2026-05-27** — **Roadmap close-out (Workstreams A/B/C).** All items resolved:
+  **landed** — A0 (harness+profiling), A3 (parallel objdiff), A1 (A/B harness),
+  C1 (+A/B, default `both`), C2/C2-fix (Ghidra+m2c decl-order), C3 (FMA synth +
+  `is_all_noise` fix), B1 (strategy flag), B2 (hard filters, flag-off), B4
+  (predictor+history, flag-off); **parked with evidence** — A2/A4 (spawn <0.5%
+  of loop), B3 (0/162 dedup hits), MSVC `/E`+splice (PCH absorbs the lever);
+  C4 was already shipped. Strategic finding: throughput is structurally floored
+  on DC3 (PCH + negligible spawn), so the remaining levers are fewer/smarter
+  variants (B/C), most now shipped behind default-off flags pending live-sweep
+  data. Integrated suite: 1431 passed, 13 pre-existing environmental failures,
+  zero new. Default-off flags awaiting validation: `PERMUTER_HARD_FILTERS` (B2),
+  `PERMUTER_PREDICTOR` (B4); C1's `PERMUTER_C1_SOURCE_DIFF` is on (`both`).
