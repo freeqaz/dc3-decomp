@@ -131,3 +131,24 @@ pass). `rb3_ppab.py` now has `--only` / `--start` / `--count` + `--checkpoint`
 so a contended run can be resumed without losing completed work.
 
 ---
+
+## 3. Flag A/B on RB3 (`rb3_flag_ab.py`, A = control, B = treatment)
+
+Each flag: 2 sides x `hill_climb` (3 rounds, fresh cache) over the first 10
+RB3 bench functions. "Win" = function improved above baseline at least once.
+Stability = exceptions captured per side (never swallowed).
+
+### `PERMUTER_HARD_FILTERS` (A=off, B=on, adaptive on)
+
+| | A (off) | B (on) |
+|---|---|---|
+| wins | 1/10 | 1/10 |
+| variants scored | 226 | 226 |
+| variants/sec | 1.59 | 1.61 |
+| errors | 0 | 0 |
+
+**Verdict: SAFE but a no-op on RB3.** Identical wins and identical variant
+counts — no RB3 function in the sample produced suppress signals strong enough
+for the hard filter to cull anything. No regression, no crashes. Nothing to
+gain or lose here on RB3; the DC3 B2 validation is the deciding data.
+
