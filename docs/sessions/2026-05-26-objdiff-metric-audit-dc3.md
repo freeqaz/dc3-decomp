@@ -728,6 +728,10 @@ of an ICF-folded function. Address resolved → multiple symbols → benign.
 | `?OnUpload@KinectSharePanel@@…` | same | 0x82378970 | 166 |
 | `?OnPostLink@KinectSharePanel@@…` | same | 0x82378970 | 166 |
 | `?HandleNetCacheLoaderFailure@StorePanel@@…` | same | 0x82378970 | 166 |
+| `??1DataArray@@…` | `bl ??_GVocalEvent@MidiParser` vs `bl ??_GDataNode@@` | 0x8254CC60 | 2 (two empty scalar-deleting dtors) |
+| `?Load@CharBone@@…` | `bl ??_DRndTransformable@@` vs `bl ??_DRndTransformableRemover@@` | 0x8264A208 | 2 (vbase dtor helpers) |
+| `?Load@WorldCrowd@@…` | `bl ?OnGetOccluded@CamShot` vs `bl ?OnRebuild@WorldCrowd` | 0x82901C78 | 13 (empty `OnXxx(DataArray*) → DataNode` handlers) |
+| `?PopulatePlaylistSongProvider@MetaPerformer@@…` | `bl ?GetRequest@HttpReqCurl` vs `bl ?Title@HamSongMetadata` | 0x82B05A38 | 8 (single-load getters) |
 
 The handoff anticipated this (its Agent-13 task was a noise-audit, not a
 fix dispatch). Followup carved out below.
