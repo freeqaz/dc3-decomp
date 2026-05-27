@@ -16,6 +16,7 @@ Example:
 
 from __future__ import annotations
 
+import re
 from typing import Iterator
 
 from tree_sitter import Node
@@ -235,6 +236,26 @@ def _cast_candidates(casts, left, right):
         yield cast, "right", right
 
 
+def _ident_is_pointer_like(ident: str, ctx: FunctionContext) -> bool:
+    """Heuristic: True when *ident* is declared or used as a pointer in the TU.
+
+    Used by the no-libclang fallback to avoid emitting ``(int)<ptr>`` casts,
+    which are hard compile errors. Two signals: arrow usage (``ident->``) and a
+    pointer declaration (``Type *ident`` / ``Type* ident``). False positives
+    (e.g. matching a multiplication ``a * ident``) only cost a skipped variant,
+    so the bias toward detecting pointers is intentional.
+    """
+    src = ctx.file_source.decode("utf-8", errors="replace")
+    esc = re.escape(ident)
+    # Used as a pointer: ident->member
+    if re.search(rf"\b{esc}\s*->", src):
+        return True
+    # Declared as a pointer: `Type *ident` or `Type* ident`
+    if re.search(rf"[\w>\)]\s*\*\s*{esc}\b", src):
+        return True
+    return False
+
+
 def _is_likely_pointer(left: Node, right: Node, ctx: FunctionContext) -> bool:
     """Heuristic: return True if this comparison likely involves pointers.
 
@@ -263,6 +284,16 @@ def _is_likely_pointer(left: Node, right: Node, ctx: FunctionContext) -> bool:
         # Pointer dereference: *ptr
         if operand.type == "pointer_expression":
             return True
+
+        # Plain identifier that is declared or used as a pointer elsewhere
+        # (e.g. `CharClip *drivclip` or `drivclip->Foo()`). Casting it to (int)
+        # is a hard compile error — the single biggest signed_unsigned build
+        # failure once varext was fixed. Erring toward skipping is safe here:
+        # we only forgo a cast variant, never emit a wrong match.
+        if operand.type == "identifier":
+            ident = ctx.source_text(operand)
+            if ident and _ident_is_pointer_like(ident, ctx):
+                return True
 
     # Check if whole comparison is X != nullptr / X == NULL pattern
     left_text = ctx.source_text(left)
