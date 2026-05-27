@@ -148,6 +148,8 @@ def main():
                     help="Skip the first N bench functions (slice with --count).")
     ap.add_argument("--count", type=int, default=0,
                     help="Run at most this many functions from --start (0 = all).")
+    ap.add_argument("--only", default="",
+                    help="Comma-separated qualified-name substrings to include.")
     ap.add_argument("--out", type=Path, default=None)
     ap.add_argument("--checkpoint", type=Path, default=None,
                     help="Flush per-function records here after EACH function so a "
@@ -168,6 +170,10 @@ def main():
         functions = functions[args.start:]
     if args.count:
         functions = functions[: args.count]
+    if args.only:
+        needles = [n.strip() for n in args.only.split(",") if n.strip()]
+        functions = [f for f in functions
+                     if any(n in f["qualified_name"] for n in needles)]
 
     print(f"[rb3-ppab] {len(functions)} functions, workers={workers}, "
           f"patterns={len(patterns)}", file=sys.stderr)
