@@ -1630,10 +1630,10 @@ void MakeNormals(RndMesh *m) {
 }
 
 void ResetNormals(RndMesh *m) {
-    Vector4 zeroVec(0, 0, 0, 0);
     if (!m || m->GetGeomOwner() != m || m->Verts().size() == 0)
         return;
 
+    Vector4 zeroVec(0, 0, 0, 0);
     bool leftHanded = LeftHanded(m->WorldXfm().m);
     std::vector<Vector4> faceTangents(m->Faces().size(), zeroVec);
 
