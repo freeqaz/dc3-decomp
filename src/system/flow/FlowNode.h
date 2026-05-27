@@ -24,7 +24,11 @@ public:
         /** "Forcably stop what we're doing and restart" */
         kImmediate = 3,
         /** "Ask our children to stop, then run again when they finish" */
-        kWhenAble = 5
+        kWhenAble = 4,
+        /** "Treat us as transparent: forward child-finished directly to the base
+         *  FlowNode without doing any queueable bookkeeping. Used by listeners that
+         *  should pass through completions without ever being interrupted." */
+        kPassThrough = 5
     };
     enum StopMode {
         /** "Stop immediately." */

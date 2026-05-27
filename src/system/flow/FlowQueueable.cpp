@@ -76,7 +76,7 @@ void FlowQueueable::Deactivate(bool b) {
 
 void FlowQueueable::ChildFinished(FlowNode *node) {
     FLOW_LOG("Child Finished of class:%s\n", node->ClassName());
-    if (mInterrupt == kWhenAble) {
+    if (mInterrupt == kPassThrough) {
         FlowNode::ChildFinished(node);
         return;
     }
