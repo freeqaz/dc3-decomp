@@ -12,16 +12,26 @@ from tree_sitter import Node
 # Regex to extract qualified C++ name from demangled signature.
 # Matches Class::Method( and also handles operator overloads like:
 #   Class::operator()(...  Class::operator==(... Class::operator<<(...
+#
+# Bug history: a bare `[!=<>]=?|<<|>>` suffix used to match against ANY base
+# (e.g. `Hmx::Object` followed by `>` from a template-arg list), so
+# `operator>><Hmx::Object>(...)` parsed as base `Hmx::Object` + suffix `>` ->
+# `Hmx::Object>`. The fix: ONLY allow `<`/`>`-class suffixes when the base
+# ends with the literal `operator` keyword (i.e. it's a real operator
+# overload like `Class::operator<` / `Class::operator>>`); other suffix
+# families (`()`, `[]`, `++`, `+`, etc.) are unambiguous and remain matchable
+# against any base.
 _QUALIFIED_NAME_RE = re.compile(
     r"([\w~][\w:~]*(?:::[\w~]+)+)"  # Base: Class::Method (requires ::)
     r"("
     r"\(\)"  # operator()
-    r"|[!=<>]=?"  # operator==, operator!=, operator<, etc.
-    r"|<<|>>"  # operator<<, operator>>
     r"|\[\]"  # operator[]
     r"|\+\+|--"  # operator++, operator--
-    r"|[+\-*/&|^%~!]"  # operator+, operator-, etc.
+    r"|[+\-*/&|^%~!]=?"  # operator+, operator-, ..., operator+=, etc.
+    r"|==|!="  # operator==, operator!=
+    r"|(?<=\boperator)(?:<<=|>>=|<<|>>|<=|>=|<|>)"  # only after 'operator'
     r")?"  # operator suffix is optional
+    r"(?:<[^()]*>)?"  # optional template-argument list (e.g. operator>><T>)
     r"\s*\("  # opening paren of arg list
 )
 
@@ -35,6 +45,19 @@ _FREE_FUNC_RE = re.compile(
 # the leading token IS the function name.
 _MWCC_FREE_FUNC_RE = re.compile(
     r"^([\w~][\w]*)\s*\("
+)
+
+# Free-function operator overloads (no class qualifier), optionally templated.
+# Examples:
+#   operator>><Hmx::Object>(Hmx::Object&, BinStream&)
+#   operator<<(BinStream&, const Foo&)
+#   operator+(const Vec&, const Vec&)
+_FREE_OPERATOR_RE = re.compile(
+    r"^(operator(?:"
+    r"\(\)|\[\]|\+\+|--|<<=|>>=|<<|>>|<=|>=|==|!=|[+\-*/&|^%~!<>]=?"
+    r"))"
+    r"(?:<[^()]*>)?"  # optional template-argument list
+    r"\s*\("
 )
 
 
@@ -51,6 +74,11 @@ def extract_qualified_name(demangled: str) -> str | None:
         if m.group(2):
             name += m.group(2)
         return name
+
+    # Free-function operator overload (no class qualifier), templated or not.
+    m = _FREE_OPERATOR_RE.match(demangled)
+    if m:
+        return m.group(1)
 
     # Try free function pattern
     m = _FREE_FUNC_RE.search(demangled)
@@ -76,11 +104,19 @@ class SwapInfo:
 
 @dataclass
 class DiffOp:
-    """An opcode mismatch between target and base."""
+    """An opcode mismatch between target and base.
+
+    ``target_arg`` / ``base_arg`` carry the first symbolic argument when one
+    is available (typically the branch target of a ``bl`` instruction).
+    Patterns that need to distinguish, e.g., ``bl strcmp`` from ``bl Foo``
+    can check these fields. ``""`` when unavailable.
+    """
 
     index: int
     target_opcode: str
     base_opcode: str
+    target_arg: str = ""
+    base_arg: str = ""
 
 
 @dataclass
