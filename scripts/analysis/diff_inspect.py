@@ -1106,8 +1106,44 @@ _STACK_RE = re.compile(r'(-?0x[0-9a-fA-F]+|-?\d+)(?:\(r1\)|,\s*r1\b)')
 _STWU_RE = re.compile(r'stwu\s+r1,\s*(-?0x[0-9a-fA-F]+|-?\d+)(?:\(r1\)|,\s*r1\b)')
 
 
-def _extract_frame_size_from_instrs(instrs, side='target'):
-    """Find stwu r1, -N(r1) in prologue and return N (positive)."""
+def _get_prologue_mismatch_info(data: dict) -> "dict | None":
+    """Extract structured frame-size fields from a PROLOGUE_MISMATCH analysis pattern.
+
+    Returns the ``info`` dict (keys: target_frame_size, base_frame_size, …)
+    when objdiff v4.1+ fields are present, or None when absent.
+
+    JSON path: data["analysis"]["patterns"][i]["details"]["info"]
+    where pattern == "PROLOGUE_MISMATCH".
+    """
+    try:
+        for pattern in data.get("analysis", {}).get("patterns", []):
+            if pattern.get("pattern") == "PROLOGUE_MISMATCH":
+                info = pattern.get("details", {}).get("info", {})
+                if "target_frame_size" in info and "base_frame_size" in info:
+                    return info
+    except (AttributeError, TypeError):
+        pass
+    return None
+
+
+def _extract_frame_size_from_instrs(instrs, side='target', prologue_info=None):
+    """Return frame size (positive bytes) for *side* (target or base).
+
+    Preference order:
+    1. Structured PrologueMismatchInfo fields from objdiff v4.1+ (``prologue_info``
+       dict with keys ``target_frame_size`` / ``base_frame_size``).  These are
+       authoritative and require no instruction scanning.
+    2. Fallback: scan the first 20 instructions for ``stwu r1, -N(r1)`` using a
+       regex.  Handles older objdiff binaries that lack the structured fields.
+    """
+    # Prefer structured field when available (objdiff v4.1+)
+    if prologue_info is not None:
+        key = "target_frame_size" if side == "target" else "base_frame_size"
+        val = prologue_info.get(key)
+        if val is not None:
+            return abs(int(val))
+
+    # Fallback: stwu-regex scan over the instruction list
     for ins in instrs[:20]:
         s = ins.get(side)
         if not s:
@@ -1275,11 +1311,19 @@ def _diff_layouts(target_slots, source_slots):
     return {'rows': rows}
 
 
-def cmd_stack_layout(instrs, symbol=None, project_dir=None):
-    """Stack frame layout comparison between target and base."""
+def cmd_stack_layout(instrs, symbol=None, project_dir=None, data=None):
+    """Stack frame layout comparison between target and base.
+
+    *data* is the full objdiff JSON dict.  When provided and it contains a
+    PROLOGUE_MISMATCH pattern with structured frame-size fields (objdiff v4.1+),
+    those values are used instead of the stwu-regex fallback.
+    """
+    # Extract structured frame sizes when available (objdiff v4.1+), else None
+    prologue_info = _get_prologue_mismatch_info(data) if data is not None else None
+
     # Frame sizes
-    tgt_frame = _extract_frame_size_from_instrs(instrs, 'target')
-    src_frame = _extract_frame_size_from_instrs(instrs, 'base')
+    tgt_frame = _extract_frame_size_from_instrs(instrs, 'target', prologue_info)
+    src_frame = _extract_frame_size_from_instrs(instrs, 'base', prologue_info)
 
     # Collect accesses
     tgt_accesses = _collect_stack_accesses(instrs, 'target')
@@ -1895,7 +1939,7 @@ Filter modes:
         cmd_replaces(instrs)
         return
     if args.stack_layout:
-        cmd_stack_layout(instrs, symbol=args.symbol, project_dir=args.project_dir)
+        cmd_stack_layout(instrs, symbol=args.symbol, project_dir=args.project_dir, data=data)
         return
     if args.compare_asm:
         cmd_compare_asm(instrs, symbol=args.symbol, project_dir=args.project_dir)

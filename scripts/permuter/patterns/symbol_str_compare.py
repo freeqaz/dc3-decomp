@@ -49,6 +49,14 @@ _MILO_MACROS = {
 # feedback_symbol_ptr_compare.md and feedback_strcmp_bool_materialization.md,
 # only these are the canonical signal — a generic ``bl`` mismatch is too broad.
 # Includes both the raw libc strcmp and known Symbol::operator== mangles.
+#
+# Audit note (2026-05-27): objdiff v4.1+ resolves ICF-merged ``bl`` targets to
+# their canonical symbol name via ``typed_args[].value``.
+# ``diagnosis.py:_extract_first_symbolic_arg`` already reads ``typed_args``
+# first (before ``arguments`` and before the raw ``args`` string), so
+# ``d.target_arg`` already carries the resolved name — no code change needed
+# here.  This frozenset membership check therefore correctly matches even
+# ICF-merged entries once objdiff resolves them.
 _SYMBOL_EQ_BL_TARGETS = frozenset({
     "strcmp",
     # Symbol::operator==(const Symbol&) and char* overloads (MWCC mangling)

@@ -70,11 +70,37 @@ _NOISY_SUBSTRINGS = (
 )
 
 
-def _stack_signal_summary(instrs: list) -> "str | None":
+def _extract_prologue_mismatch_info(data: dict) -> "dict | None":
+    """Extract structured frame-size fields from a PROLOGUE_MISMATCH analysis pattern.
+
+    Returns the ``info`` dict (keys: target_frame_size, base_frame_size, …)
+    when the new objdiff v4.1+ fields are present, or None when they are absent
+    (older binary or function has no prologue mismatch).
+
+    JSON path: data["analysis"]["patterns"][i]["details"]["info"]
+    where pattern == "PROLOGUE_MISMATCH".
+    """
+    try:
+        for pattern in data.get("analysis", {}).get("patterns", []):
+            if pattern.get("pattern") == "PROLOGUE_MISMATCH":
+                info = pattern.get("details", {}).get("info", {})
+                if "target_frame_size" in info and "base_frame_size" in info:
+                    return info
+    except (AttributeError, TypeError):
+        pass
+    return None
+
+
+def _stack_signal_summary(instrs: list, data: "dict | None" = None) -> "str | None":
     """Compute a one-line stack-layout signal from already-parsed objdiff
     instructions. Returns None when no actionable signal exists (frame matches
     AND no user-slot mismatches). Otherwise returns "**Stack:** ..." for
-    inline display in run_objdiff output. Pure JSON consumer — no recompile."""
+    inline display in run_objdiff output. Pure JSON consumer — no recompile.
+
+    When *data* is the full objdiff JSON dict, structured frame-size fields
+    from PrologueMismatchInfo (objdiff v4.1+) take priority over the stwu-regex
+    fallback inside parse_prologue. Older binaries without these fields fall
+    back transparently."""
     try:
         from analysis.stack_layout import (
             build_fingerprints, parse_prologue,
@@ -93,6 +119,14 @@ def _stack_signal_summary(instrs: list) -> "str | None":
             return None
         tgt_prol = parse_prologue(instrs, "target")
         base_prol = parse_prologue(instrs, "base")
+
+        # Prefer structured frame-size fields (objdiff v4.1+) over stwu-regex.
+        if data is not None:
+            prologue_info = _extract_prologue_mismatch_info(data)
+            if prologue_info is not None:
+                tgt_prol.frame_size = prologue_info["target_frame_size"]
+                base_prol.frame_size = prologue_info["base_frame_size"]
+
         dom = dominant_delta_from_rows(tgt_slots, base_slots)
         rows = classify_slots(
             tgt_slots, base_slots, dom,
@@ -1731,7 +1765,7 @@ class DecompMCPServer:
             # 3b) Stack-layout one-liner (only when actionable signal exists)
             try:
                 data = json.loads(json_output)
-                stack_line = _stack_signal_summary(data.get("instructions", []))
+                stack_line = _stack_signal_summary(data.get("instructions", []), data)
                 if stack_line:
                     output += f"\n\n{stack_line}"
             except (json.JSONDecodeError, KeyError):
