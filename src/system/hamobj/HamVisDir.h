@@ -53,10 +53,11 @@ protected:
     FreestyleMotionFilter *mFilter; // 0x2c4
     bool mRunning; // 0x2c8
 
-    // maybe this all here is a struct in itself
-    std::vector<unsigned int> unk2cc; // 0x2cc
-    int unk2d8; // 0x2d8
-    int unk2dc; // 0x2dc
+    // std::vector<bool> uses _Bit_iterator (pointer + offset) for _M_start/_M_finish,
+    // so its base layout is 8 + 8 + 4 = 0x14 bytes (vs 0xC for vector<T>).
+    // Storage chunks are allocated as unsigned int*, hence the StlNodeAlloc<unsigned int>
+    // deallocate call in the dtor.
+    std::vector<bool> unk2cc; // 0x2cc (size 0x14)
 
     /** "Animated from 0 - 100, depending on player one's hand height" */
     ObjPtr<RndAnimatable> mPlayer1Right; // 0x2e0

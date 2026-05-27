@@ -28,7 +28,7 @@ PoseOwner::~PoseOwner() {
 }
 
 HamVisDir::HamVisDir()
-    : mFilter(0), mRunning(0), unk2d8(0), unk2dc(0), mPlayer1Right(this),
+    : mFilter(0), mRunning(0), mPlayer1Right(this),
       mPlayer1Left(this), mPlayer2Right(this), mPlayer2Left(this), mMiloManualFrame(1),
       mGrooviness(0) {
 #ifdef HX_NATIVE
