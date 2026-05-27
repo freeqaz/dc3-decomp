@@ -298,7 +298,7 @@ void RndRibbon::UpdateChase() {
         if (numTransforms != 0) {
             unsigned int k = 0;
             do {
-                if (currentTime - mDecay <= *(float *)(((intptr_t)&*mTransforms.begin() + (k + 0x40))))
+                if (*(float *)(((intptr_t)&*mTransforms.begin() + (k + 0x40))) >= currentTime - mDecay)
                     break;
                 removeCount++;
                 k += 0x44;
@@ -320,10 +320,10 @@ void RndRibbon::UpdateChase() {
         newKey.frame = 0.0f;
         mTransforms.resize(numTransforms - (int)removeCount, newKey);
 
-        memcpy(&newKey, &Transform::IDXfm(), 0x40);
         newKey.frame = 0.0f;
 
         numTransforms = ((intptr_t)&*mTransforms.end() - (intptr_t)&*mTransforms.begin()) / 0x44;
+        memcpy(&newKey, &Transform::IDXfm(), 0x40);
         if (numTransforms == 0) {
             newKey.frame = currentTime;
             newKey.value.v = followPos;
@@ -389,7 +389,8 @@ void RndRibbon::UpdateChase() {
                     float clampedDot2 = 1.0f;
                     if (clampedDot - 1.0f < 0.0f)
                         clampedDot2 = clampedDot;
-                    curAngle = std::acos(clampedDot2);
+                    auto _tmp0 = std::acos(clampedDot2);
+                    curAngle = _tmp0;
                     Vector3 newSlerpFwd;
                     Interp(forward, followPos, 0.5f, newSlerpFwd);
                     Normalize(newSlerpFwd, newSlerpFwd);
