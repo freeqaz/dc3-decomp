@@ -68,11 +68,66 @@ _NULL_SYMBOL_NAMES = {b"gNullStr", b"Symbol()", b"kNoStr", b"kNullStr"}
 # Comparison operators we care about
 _CMP_OPS = {"==", "!="}
 
-# Pattern for Symbol variable names (heuristic: ends with common Symbol naming)
-# We detect Symbols conservatively by looking at context clues.
+# Identifiers that are never Symbol values
+_KNOWN_NON_SYMBOL: frozenset[bytes] = frozenset({
+    b"nullptr", b"NULL", b"true", b"false",
+    b"this", b"i", b"j", b"n", b"idx", b"len",
+    b"size", b"count", b"ret", b"result",
+})
 
-# Regex for identifier that could be a Symbol (conservative: just use context)
-_IDENTIFIER_RE = re.compile(rb"^[a-zA-Z_]\w*$")
+# Non-Symbol C++ type keywords that indicate a non-Symbol declaration
+_NON_SYMBOL_TYPE_RE = re.compile(
+    r"\b(int|unsigned|bool|float|double|char|short|long|void|size_t"
+    r"|uint8_t|uint16_t|uint32_t|uint64_t|int8_t|int16_t|int32_t|int64_t"
+    r"|uintptr_t|intptr_t|ptrdiff_t)\b"
+)
+
+
+def _ident_declared_as_symbol(ident: str, tu_source: str) -> bool:
+    """Return True when *ident* is textually declared as Symbol in the TU.
+
+    Positive signals (any one is enough):
+    1. ``Symbol ident`` — local/param/member declaration.
+    2. ``const Symbol& ident`` or ``const Symbol ident`` — reference param.
+    3. ``Symbol& ident`` — reference param.
+    4. ``ident.Str()`` or ``ident.mStr`` usage elsewhere in TU (proven Symbol).
+    """
+    esc = re.escape(ident)
+    # Declaration: "Symbol ident" or "Symbol& ident" or "const Symbol[&] ident"
+    if re.search(rf"\bSymbol\s*&?\s*{esc}\b", tu_source):
+        return True
+    if re.search(rf"\bconst\s+Symbol\s*&?\s*{esc}\b", tu_source):
+        return True
+    # Cross-TU usage: ident.Str() or ident.mStr proves it's a Symbol
+    if re.search(rf"\b{esc}\s*\.\s*Str\s*\(\s*\)", tu_source):
+        return True
+    if re.search(rf"\b{esc}\s*\.\s*mStr\b", tu_source):
+        return True
+    return False
+
+
+def _ident_declared_as_non_symbol(ident: str, tu_source: str) -> bool:
+    """Return True when *ident* is textually declared as a non-Symbol type in the TU.
+
+    Checks for declarations like ``int ident``, ``bool ident``, ``float ident``,
+    pointer declarations ``Type *ident``, or arrow usage ``ident->`` (pointer).
+    False positives (e.g. matching inside a comment) are acceptable — they only
+    cause a skipped variant.
+    """
+    esc = re.escape(ident)
+    # Arrow usage: ident is a pointer
+    if re.search(rf"\b{esc}\s*->", tu_source):
+        return True
+    # Pointer declaration: "Type *ident" or "Type* ident"
+    if re.search(rf"[\w>\)]\s*\*\s*{esc}\b", tu_source):
+        return True
+    # Non-Symbol primitive-type declaration: "int ident" / "bool ident" / etc.
+    m = re.search(rf"\b(\w[\w:]*)\s+{esc}\b", tu_source)
+    if m:
+        declared_type = m.group(1)
+        if _NON_SYMBOL_TYPE_RE.search(declared_type):
+            return True
+    return False
 
 
 class SymbolStrComparePattern(Pattern):
@@ -119,6 +174,9 @@ class SymbolStrComparePattern(Pattern):
         body = ctx.body_node
         counter = 0
 
+        # Decode TU source once for TU-level grep heuristics
+        tu_source = source.decode("utf-8", errors="replace")
+
         # Find all == / != comparisons in the function body
         for cmp_node in find_comparisons(body, {"==", "!="}):
             if counter >= 8:
@@ -137,8 +195,8 @@ class SymbolStrComparePattern(Pattern):
             right_text = source[right.start_byte:right.end_byte]
 
             # Determine which operands look like Symbol values
-            left_is_sym = _looks_like_symbol(left, left_text)
-            right_is_sym = _looks_like_symbol(right, right_text)
+            left_is_sym = _looks_like_symbol(left, left_text, tu_source)
+            right_is_sym = _looks_like_symbol(right, right_text, tu_source)
 
             if not left_is_sym and not right_is_sym:
                 continue
@@ -239,22 +297,32 @@ def _inside_milo_macro(node: Node, source: bytes) -> bool:
     return False
 
 
-def _looks_like_symbol(node: Node, text: bytes) -> bool:
+def _looks_like_symbol(node: Node, text: bytes, tu_source: str) -> bool:
     """Heuristic: does this node look like a Symbol VALUE (not a char*)?
 
     We need to distinguish Symbol objects (which have .Str()/.mStr) from plain
-    char* constants like gNullStr.  Only Symbol objects need conversion.
+    char* constants like gNullStr, integers, enums, and pointers.  Only Symbol
+    objects need conversion.
 
-    Conservative checks (require at least one strong signal):
-    1. Already has .Str() or .mStr — was a Symbol
-    2. Known Symbol-returning call (ClassName(), StaticClassName())
-    3. Field expression (obj.mSym, obj->mSym)
-    4. An identifier that is NOT a known char* sentinel
+    This function uses a POSITIVE-SIGNAL gate: an operand is only accepted
+    as a Symbol when at least one strong positive signal is present.  The old
+    "accept unknown identifiers as potential Symbols" logic caused a 92%
+    build-failure rate by emitting `int_var.Str()` on integer/enum/pointer types.
 
-    Explicitly EXCLUDED (these are char*, not Symbol):
-    - gNullStr, kNullStr, kNoStr (char* sentinels)
+    Positive signals (require at least one):
+    1. Already has .Str() or .mStr — was proven a Symbol.
+    2. Known Symbol-returning call (ClassName(), GetName(), GetSymbol(), etc.).
+    3. Identifier declared as ``Symbol ident`` / ``const Symbol& ident`` in TU.
+    4. Identifier used elsewhere in TU as ``ident.Str()`` or ``ident.mStr``.
+    5. For field_expression: the field name itself passes a positive Symbol check.
+
+    Explicitly EXCLUDED (always return False):
+    - Known char* sentinels (gNullStr, kNullStr, etc.)
     - String literals
-    - nullptr / NULL
+    - nullptr / NULL / 0
+    - Identifiers declared as int/bool/float/pointer in TU
+    - Identifiers that appear with arrow usage (ident->member) — they're pointers
+    - Unknown identifiers without any positive signal (fail-closed)
     """
     # Known char* sentinels — do NOT add .Str() to these
     if text in _NULL_SYMBOL_NAMES:
@@ -282,23 +350,35 @@ def _looks_like_symbol(node: Node, text: bytes) -> bool:
                 return True
         return False  # Unknown calls — don't assume Symbol
 
-    # Field expression (this->mSym, obj->mSym, obj.mSym) — likely member access
+    # Field expression (this->mSym, obj->mSym, obj.mSym) — check field name
     if node.type == "field_expression":
-        return True
+        field = node.child_by_field_name("field")
+        if field is None:
+            return False
+        field_name = field.text
+        if not field_name:
+            return False
+        field_str = field_name.decode("utf-8", errors="replace")
+        # Require positive Symbol evidence for the field name in the TU
+        return _ident_declared_as_symbol(field_str, tu_source)
 
-    # Plain identifier — could be Symbol or char*. Accept as possible Symbol
-    # only when it's an mFoo member-name pattern, or is the non-null-sentinel side.
+    # Plain identifier — require POSITIVE Symbol evidence from TU
     if node.type == "identifier":
-        # Members starting with m + uppercase (Hmx naming: mSym, mName, etc.)
-        if len(text) >= 2 and text[0:1] == b"m" and text[1:2].isupper():
+        if text in _KNOWN_NON_SYMBOL:
+            return False
+
+        ident = text.decode("utf-8", errors="replace")
+
+        # Hard reject: declared as a non-Symbol type or used as a pointer
+        if _ident_declared_as_non_symbol(ident, tu_source):
+            return False
+
+        # Accept only when we have positive Symbol evidence
+        if _ident_declared_as_symbol(ident, tu_source):
             return True
-        # Local/param names that commonly hold Symbols (heuristic: lower-case start
-        # but NOT a known integer/pointer type name)
-        _KNOWN_NON_SYMBOL = {b"nullptr", b"NULL", b"true", b"false",
-                             b"this", b"i", b"j", b"n", b"idx", b"len",
-                             b"size", b"count", b"ret", b"result"}
-        if text not in _KNOWN_NON_SYMBOL:
-            return True  # Conservative: accept unknown identifiers as potential Symbols
+
+        # No positive evidence — fail closed to avoid build errors
+        return False
 
     return False
 
