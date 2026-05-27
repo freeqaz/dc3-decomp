@@ -1835,7 +1835,7 @@ void RndText::FitTextScroll() {
     float scrollCharWidth = 0.0f;
 
     Hmx::Rect bounds;
-    if ((mWidth > 0.0f && charWidths[numChars] > mWidth) || (mFitType == kFitScrollMarqueeWrapAlways)) {
+    if ((charWidths[numChars] > mWidth) || (mFitType == kFitScrollMarqueeWrapAlways)) {
         mWidth = 0.0f;
         mWrapEnabled = true;
 
@@ -1872,7 +1872,7 @@ void RndText::FitTextScroll() {
             mLineOffsets.push_back(scrollCharWidth);
             mLineHeight = mTotalWidth;
 
-            if (mTotalWidth > 0.0f) {
+            if (scrollCharWidth < mTotalWidth) {
                 float f = mTotalWidth;
                 while (!(f > mWidth)) {
                     f += mTotalWidth;
