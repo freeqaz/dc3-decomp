@@ -158,6 +158,53 @@ int Band_ScoreSinger(Band* this, int base) {
 }
 """
 
+# RB3/mwcc style: implicit-this member access (bare mFoo, no `this->`).
+# This is the form _collect_this_members must ALSO detect, not just explicit
+# this->member. Function below should generate variants.
+_IMPLICIT_THIS_SRC = """\
+int GemManager_GetBestHit(int idx) {
+    int g = mGems;
+    float s = mSpeed;
+    if (mActive) {
+        return g + (int)(s * mScore);
+    }
+    return 0;
+}
+"""
+
+# Implicit-this but member name collides with a local — must NOT count the local
+# as a member.
+_IMPLICIT_THIS_LOCAL_SHADOW_SRC = """\
+int GemManager_Foo(int idx) {
+    int mLocal = idx;
+    int g = mGems;
+    float s = mSpeed;
+    bool a = mActive;
+    return g + (int)(s) + (a ? 1 : 0) + mLocal;
+}
+"""
+
+# Implicit-this where ALL m-prefixed names are locals — should NOT fire (no real members)
+_ALL_LOCALS_SRC = """\
+int just_locals(int x) {
+    int mFirst = x;
+    int mSecond = x + 1;
+    int mThird = x + 2;
+    return mFirst + mSecond + mThird;
+}
+"""
+
+# x.mFoo where mFoo is a field of another object — must NOT count as implicit-this
+_OTHER_OBJECT_FIELD_SRC = """\
+struct Box { int mWidth; int mHeight; int mDepth; };
+int sum_box(Box& b, int idx) {
+    int w = b.mWidth;
+    int h = b.mHeight;
+    int d = b.mDepth;
+    return w + h + d + idx;
+}
+"""
+
 
 # ---------------------------------------------------------------------------
 # Test class
@@ -379,6 +426,57 @@ class TestMwccRegorderProbe(unittest.TestCase):
                                   _diag_callee_saved_gpr(), dialect="mwcc")
         self.assertEqual(len(variants), 0,
                          "Expected 0 variants for mwcc when no header is available")
+
+    # -----------------------------------------------------------------------
+    # Implicit-this member access (RB3/mwcc convention) — bare mFoo without `this->`
+    # -----------------------------------------------------------------------
+
+    def test_implicit_this_member_access_collects(self):
+        """Bare `mFoo` references should be collected as implicit-this members."""
+        from scripts.permuter.patterns.mwcc_regorder_probe import _collect_this_members
+        ctx = self._make_ctx(_IMPLICIT_THIS_SRC, "GemManager_GetBestHit",
+                             _diag_callee_saved_gpr())
+        members = _collect_this_members(ctx)
+        names = [name for name, _ in members]
+        # Order of first appearance: mGems, mSpeed, mActive, mScore
+        self.assertEqual(names[:4], ["mGems", "mSpeed", "mActive", "mScore"])
+
+    def test_implicit_this_generates_variants(self):
+        """Implicit-this functions should generate permutation variants."""
+        variants = self._variants(_IMPLICIT_THIS_SRC, "GemManager_GetBestHit",
+                                  _diag_callee_saved_gpr())
+        self.assertGreater(len(variants), 0,
+                           "Expected variants for implicit-this member access")
+
+    def test_implicit_this_skips_local_shadow(self):
+        """An m-prefixed local must NOT be counted as a member."""
+        from scripts.permuter.patterns.mwcc_regorder_probe import _collect_this_members
+        ctx = self._make_ctx(_IMPLICIT_THIS_LOCAL_SHADOW_SRC, "GemManager_Foo",
+                             _diag_callee_saved_gpr())
+        members = _collect_this_members(ctx)
+        names = [name for name, _ in members]
+        self.assertNotIn("mLocal", names,
+                         "Local `mLocal` was incorrectly classified as a member")
+        # Real members should still be present
+        for expected in ("mGems", "mSpeed", "mActive"):
+            self.assertIn(expected, names, f"Missing real member {expected!r}")
+
+    def test_all_locals_no_variants(self):
+        """If every m-prefixed identifier is a local, no variants emitted."""
+        variants = self._variants(_ALL_LOCALS_SRC, "just_locals",
+                                  _diag_callee_saved_gpr())
+        self.assertEqual(len(variants), 0,
+                         "Expected 0 variants when all m-names are locals")
+
+    def test_other_object_field_not_member(self):
+        """`b.mWidth` (field of another object) must NOT count as implicit-this."""
+        from scripts.permuter.patterns.mwcc_regorder_probe import _collect_this_members
+        ctx = self._make_ctx(_OTHER_OBJECT_FIELD_SRC, "sum_box",
+                             _diag_callee_saved_gpr())
+        members = _collect_this_members(ctx)
+        names = [name for name, _ in members]
+        self.assertEqual(names, [],
+                         f"Other-object field access incorrectly collected: {names}")
 
 
 if __name__ == "__main__":

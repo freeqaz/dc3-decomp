@@ -235,42 +235,125 @@ class MwccRegorderProbePattern(Pattern):
 # AST helpers
 # ---------------------------------------------------------------------------
 
+_MEMBER_NAME_RE = re.compile(r"^m[A-Z]")
+
+
+def _collect_local_names(ctx: FunctionContext) -> set[str]:
+    """Collect identifier names that are declared as locals/params in the body.
+
+    Used to avoid mistaking a local variable for an implicit member access when
+    the source uses unqualified ``mFoo`` style (RB3/mwcc convention).
+    """
+    source = ctx.file_source
+    names: set[str] = set()
+    for node in walk(ctx.body_node):
+        if node.type == "init_declarator" or node.type == "declarator":
+            ident = node.child_by_field_name("declarator") or node
+            # Walk down to the underlying identifier (skip pointer/ref wrappers)
+            cur = ident
+            while cur is not None and cur.type not in ("identifier", "field_identifier"):
+                cur = cur.named_children[0] if cur.named_children else None
+            if cur is not None and cur.type == "identifier":
+                names.add(source[cur.start_byte:cur.end_byte].decode("utf-8", errors="replace"))
+    # Also collect param names from the function declarator
+    fn_node = ctx.body_node.parent
+    if fn_node is not None:
+        for node in walk(fn_node):
+            if node.type == "parameter_declaration":
+                decl = node.child_by_field_name("declarator")
+                cur = decl
+                while cur is not None and cur.type not in ("identifier",):
+                    cur = cur.named_children[0] if cur and cur.named_children else None
+                if cur is not None:
+                    names.add(source[cur.start_byte:cur.end_byte].decode("utf-8", errors="replace"))
+            if node == ctx.body_node:
+                break
+    return names
+
+
 def _collect_this_members(ctx: FunctionContext) -> list[tuple[str, Node]]:
-    """Collect distinct this->member accesses in order of first appearance.
+    """Collect distinct this->member (and implicit-this ``mFoo``) accesses
+    in order of first appearance.
 
     Returns list of (member_name, first_node) pairs, ordered by first occurrence
     in the function body.  Caps at _MAX_MEMBERS.
+
+    RB3/mwcc style uses unqualified ``mFoo`` references (no explicit ``this->``).
+    DC3/msvc style often uses explicit ``this->mFoo``. Both forms drive the
+    same callee-saved register allocation, so we collect both.
     """
     source = ctx.file_source
     body = ctx.body_node
     seen_names: list[str] = []
     first_nodes: dict[str, Node] = {}
 
+    # Locals/params we should NOT mistake for implicit-this members
+    locals_set = _collect_local_names(ctx)
+
     for node in walk(body):
-        if node.type != "field_expression":
-            continue
-        # Check if the argument (object) is `this`
-        arg = node.child_by_field_name("argument")
-        if arg is None:
-            continue
-        arg_text = source[arg.start_byte:arg.end_byte]
-        if arg_text not in (b"this", b"(*this)") and arg.type != "this":
+        # Case 1: explicit this->member field expression
+        if node.type == "field_expression":
+            arg = node.child_by_field_name("argument")
+            if arg is None:
+                continue
+            arg_text = source[arg.start_byte:arg.end_byte]
+            if arg_text not in (b"this", b"(*this)") and arg.type != "this":
+                continue
+            field = node.child_by_field_name("field")
+            if field is None:
+                continue
+            field_name = source[field.start_byte:field.end_byte].decode("utf-8", errors="replace")
+            parent = node.parent
+            if parent is not None and parent.type == "call_expression":
+                continue
+            if field_name not in first_nodes:
+                first_nodes[field_name] = node
+                seen_names.append(field_name)
+                if len(seen_names) >= _MAX_MEMBERS:
+                    break
             continue
 
-        # Get the field name
-        field = node.child_by_field_name("field")
-        if field is None:
+        # Case 2: bare identifier matching m[A-Z] (implicit-this member access).
+        # Filter out the cases where the identifier is NOT an implicit-this read:
+        #   - field of a field_expression (e.g. `obj.mFoo` — `mFoo` is field, not implicit-this)
+        #   - function of a call_expression (e.g. `mFoo()` — covered by case 1 above for methods)
+        #   - declarator of a local declaration
+        #   - declared as a local elsewhere in the body
+        if node.type != "identifier":
             continue
-        field_name = source[field.start_byte:field.end_byte].decode("utf-8", errors="replace")
-
-        # Only track plain member names (filter out method calls — they have call parents)
+        name = source[node.start_byte:node.end_byte].decode("utf-8", errors="replace")
+        if not _MEMBER_NAME_RE.match(name):
+            continue
+        if name in locals_set:
+            continue
         parent = node.parent
-        if parent is not None and parent.type == "call_expression":
+        if parent is None:
             continue
-
-        if field_name not in first_nodes:
-            first_nodes[field_name] = node
-            seen_names.append(field_name)
+        # Skip if this identifier is the field of a field_expression (e.g. `x.mFoo`)
+        if parent.type == "field_expression":
+            field = parent.child_by_field_name("field")
+            if field is not None and field.start_byte == node.start_byte:
+                continue
+        # Skip if this identifier IS the call function (e.g. `mFoo(...)` — method-call form)
+        if parent.type == "call_expression":
+            func = parent.child_by_field_name("function")
+            if func is not None and func.start_byte == node.start_byte:
+                continue
+        # Skip if this identifier is the declarator side of an init_declarator
+        # (e.g. `int mFoo = expr` — `mFoo` is the LHS, `expr` is the RHS we
+        # DO want to include).
+        if parent.type == "init_declarator":
+            decl = parent.child_by_field_name("declarator")
+            if decl is not None and decl.start_byte == node.start_byte:
+                continue
+        # Skip if this identifier is the name of a parameter declaration
+        if parent.type == "parameter_declaration":
+            decl = parent.child_by_field_name("declarator")
+            if decl is not None and decl.start_byte == node.start_byte:
+                continue
+        if name not in first_nodes:
+            first_nodes[name] = node
+            seen_names.append(name)
             if len(seen_names) >= _MAX_MEMBERS:
                 break
 
