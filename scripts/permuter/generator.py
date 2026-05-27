@@ -245,6 +245,116 @@ def generate_variants(
 ) -> Iterator[Variant]:
     """Apply patterns to a function context and yield variants.
 
+    Thin wrapper over ``_generate_variants_impl``. When the B4 predictor flag
+    (``PERMUTER_PREDICTOR``) is OFF — the default — this delegates straight to
+    the impl generator, yielding lazily exactly as before (byte-for-byte
+    identical behaviour, no buffering). When ON, it routes through
+    ``_predict_and_cull`` which ranks the queue and drops the bottom fraction
+    if (and only if) the queue is over the predictor budget.
+    """
+    from .predictor import predictor_enabled
+
+    impl = _generate_variants_impl(
+        ctx, patterns, max_variants,
+        compose_pairs=compose_pairs,
+        chains=chains,
+        round_hints=round_hints,
+        failed_patterns=failed_patterns,
+    )
+    if not predictor_enabled():
+        # Default path: pure pass-through, preserves lazy yielding + order.
+        yield from impl
+        return
+
+    yield from _predict_and_cull(impl, ctx, max_variants)
+
+
+def _predict_and_cull(
+    impl: "Iterator[Variant]",
+    ctx: FunctionContext,
+    max_variants: int,
+) -> Iterator[Variant]:
+    """Rank the generated queue by predicted win-prob and cull when over budget.
+
+    Budget-gated: the predictor budget defaults to ``max_variants`` (so even
+    with the flag ON it's a no-op unless a *tighter* budget is set via
+    ``PERMUTER_PREDICTOR_BUDGET``). Materializes the queue only here, on the
+    flag-ON path, so the default path never pays the buffering cost.
+    """
+    import os
+    from .predictor import WinPredictor, VariantFeatures, rank_and_cull
+
+    queue = list(impl)
+
+    # Predictor budget: how many variants we're willing to compile. Defaults to
+    # max_variants (no-op) — set PERMUTER_PREDICTOR_BUDGET lower to actually cull.
+    try:
+        budget = int(os.environ.get("PERMUTER_PREDICTOR_BUDGET", str(max_variants)))
+    except (TypeError, ValueError):
+        budget = max_variants
+
+    if len(queue) <= budget:
+        # Under budget — nothing to cull, preserve original order.
+        yield from queue
+        return
+
+    model = WinPredictor.from_history()
+    diag_fp = _diag_fingerprint(ctx)
+    func_loc, func_stmts = _ctx_size(ctx)
+
+    def feature_of(variant: Variant) -> VariantFeatures:
+        label = _base_pattern_names(variant.pattern_name)[0]
+        return VariantFeatures(
+            pattern_label=label,
+            diag_fingerprint=diag_fp,
+            func_loc=func_loc,
+            func_stmts=func_stmts,
+        )
+
+    survivors = rank_and_cull(queue, feature_of, budget, model)
+    print(
+        f"Predictor: queue {len(queue)} -> {len(survivors)} "
+        f"(budget {budget})",
+        file=sys.stderr,
+    )
+    yield from survivors
+
+
+def _base_pattern_names(pattern_name: str) -> list[str]:
+    """Split a (possibly composed) pattern name into base stage names."""
+    for prefix in ("compose:", "chain:", "crosscompose:", "merge:", "evo_cross:", "evo_mut:"):
+        if pattern_name.startswith(prefix):
+            return pattern_name[len(prefix):].split("+")
+    return [pattern_name]
+
+
+def _diag_fingerprint(ctx: FunctionContext) -> str | None:
+    """Diagnosis fingerprint for the predictor, from the context's diagnosis."""
+    from .climb_history import diagnosis_fingerprint
+    return diagnosis_fingerprint(ctx.diagnosis)
+
+
+def _ctx_size(ctx: FunctionContext) -> tuple[int | None, int | None]:
+    """(LOC, statement count) for the function in this context."""
+    try:
+        start, end = ctx.func_byte_range
+        loc = ctx.file_source[start:end].count(b"\n") + 1
+        return loc, len(ctx.statements)
+    except Exception:
+        return None, None
+
+
+def _generate_variants_impl(
+    ctx: FunctionContext,
+    patterns: list[Pattern],
+    max_variants: int = 100,
+    compose_pairs: list[tuple[str, str]] | None = None,
+    chains: list[ChainSpec] | None = None,
+    round_hints: RoundHints | None = None,
+    failed_patterns: set[str] | None = None,
+) -> Iterator[Variant]:
+    """Apply patterns to a function context and yield variants.
+
     Phase 1: Independent variants with per-pattern budgets (allocated
     proportionally by pattern priority scores, with optional suppression).
 

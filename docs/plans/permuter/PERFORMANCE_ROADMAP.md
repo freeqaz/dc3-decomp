@@ -313,20 +313,59 @@ and a re-measure shows a non-trivial hit rate.
 
 **Owner:** — · **Effort:** 1 day · **Risk:** low · **Status:** parked (0 measured benefit)
 
-### B4 — Variant outcome predictor `[-]`
+### B4 — Variant outcome predictor `[~]` · **Mechanism landed 2026-05-27 — default OFF pending history accumulation**
 
-Train a small classifier to rank the build queue and cut the bottom 50% under
-tight budget. `scripts/permuter/predictor.py` (does not exist yet), called from
-`generate_variants` (`generator.py:237`).
+Rank the build queue by predicted win-probability and cull the bottom fraction
+under a tight budget. `scripts/permuter/predictor.py` (new), wired into
+`generate_variants` (`generator.py`) behind `PERMUTER_PREDICTOR` (default OFF).
 
-**Blocker — history is thin:** `climb_history.py` currently records only
-`initial_pct`/`final_pct`/`delta`/`rounds_used` and a *set* of patterns. Of the
-5 features the predictor wants, only ~2 exist; **diagnosis fingerprint, function
-size, beam depth, and a per-variant pattern label (vs. today's pattern set) all
-need new instrumentation in `record_climb` first.** **Deferred** — instrument
-history during A1/B1, then revisit once it's wide enough.
+**Prerequisite — history instrumentation (DONE):** the original blocker was
+that `climb_history.py` recorded only `initial_pct`/`final_pct`/`delta`/
+`rounds_used` and a pattern *set*. Now instrumented:
+- New `climb_history` columns (backward-compatible via in-place
+  `ALTER TABLE ADD COLUMN` in `_migrate()`; pre-B4 rows read back as NULL):
+  `diag_fingerprint`, `func_loc`, `func_stmts`, `beam_depth`.
+- New `climb_variant` table — **one row per scored variant** with a
+  per-variant `pattern_label` + `won`/`delta`, the per-variant granularity the
+  predictor needs (the per-climb pattern *set* can't tell winners from losers).
+- `record_climb` now accepts these features + a `variant_outcomes` list; it's
+  wired into the result-assembly paths of `hill_climber.hill_climb` and
+  `beam_search.beam_search` (both best-effort, never fail the run). Per-variant
+  outcomes are accumulated cheaply alongside the existing
+  `pattern_accumulator.record_variant` calls; dedup/cache pseudo-results are
+  skipped (no real compile-run signal).
+- `db_path` injection added across `climb_history` for test isolation.
 
-**Owner:** — · **Effort:** ~1 week R&D (after history instrumentation) · **Risk:** medium
+**Predictor design:** empirical-Bayes win-rate over the recorded features —
+NOT logistic regression, because history is thin and a Beta(α=1, β=10) prior
+*degrades gracefully*: with zero data every variant scores the global ~9%
+prior, so ranking is a stable no-op (all tie) and culling can't pick wrongly.
+`score = 0.5·p(pattern,diag) + 0.35·p(pattern) + 0.15·p(global)`, times a weak
+±10% `tanh(log(loc/median))` size nudge (big functions have more codegen DOF).
+Stdlib + `math` only — no sklearn/numpy.
+
+**Budget-gated culling:** `rank_and_cull(items, feature_of, budget, model)` is
+a no-op when `len(items) <= budget` (original order preserved). Over budget it
+sorts by score (stable on input index) and keeps `max(budget, round(n·(1-cull)))`
+— never below budget. In `generate_variants` the predictor budget defaults to
+`max_variants` (so even flag-ON is a no-op) and only bites when
+`PERMUTER_PREDICTOR_BUDGET` is set lower; `PERMUTER_PREDICTOR_CULL` (default
+0.5) tunes the fraction. Flag OFF = pure pass-through to the unchanged impl
+generator (lazy yielding, byte-identical order).
+
+**Tests:** 19 in `tests/test_predictor.py` — new-feature record/readback,
+old-schema migration + read, predictor ranking (per-pattern, per-diagnosis,
+bounded size nudge, train-from-DB), budget-gate (under/over/floor), and
+flag-OFF byte-identity vs the impl generator. Full suite: 1376 pass (1357
+baseline + 19), 14 pre-existing failures unchanged.
+
+**Status:** default **OFF** — the mechanism is proven (instrumentation records
+the features; predictor trains on available data without crashing; culling
+respects the budget) but **win-rate impact is unvalidated**: real history is
+still thin, so a default-on cull would risk dropping winners. Revisit (and run
+an A/B sweep) once climb runs accumulate enough `climb_variant` rows.
+
+**Owner:** — · **Effort:** mechanism done; ~A/B + tuning remaining · **Risk:** medium
 
 ---
 
@@ -603,3 +642,22 @@ Append a dated line each time this doc is reviewed or an item changes state.
   score identically on match% + fact_agreement + guidance_agreement; that is rare
   in short sweeps. Signal expected to provide benefit in longer live sweeps with
   deeper beam competition. 21 `test_source_diff_ranking.py` tests still pass.
+- **2026-05-27** — **B4 mechanism landed** (history instrumentation +
+  predictor; branch `perf/b4-predictor`). Cleared the "history is thin"
+  prerequisite: `climb_history` gained 4 backward-compatible columns
+  (`diag_fingerprint`/`func_loc`/`func_stmts`/`beam_depth`, in-place
+  `ALTER TABLE` migration so pre-B4 rows still load) plus a new `climb_variant`
+  table giving **per-variant** pattern labels + win/delta (the granularity the
+  predictor needs). `record_climb` — previously defined but **never called** —
+  is now wired into both `hill_climb` and `beam_search` result-assembly
+  (best-effort). New `predictor.py`: empirical-Bayes Beta(1,10) win-rate blend
+  (per-(pattern,diag)/per-pattern/global) + bounded ±10% size nudge, stdlib-only
+  (no sklearn/numpy). Wired into `generate_variants` behind `PERMUTER_PREDICTOR`
+  (default **OFF**): flag-OFF is a pure pass-through to the unchanged impl
+  generator (byte-identical, verified by test); flag-ON ranks+culls only when
+  over `PERMUTER_PREDICTOR_BUDGET` (defaults to `max_variants` = still a no-op),
+  keeping `max(budget, round(n·(1-cull)))`. 19 new `test_predictor.py` tests;
+  suite 1376 pass (1357 + 19), 14 pre-existing failures unchanged. **Win-rate
+  impact unvalidated** (real history still thin) — kept default-OFF; A/B sweep
+  deferred until `climb_variant` accumulates rows. Mechanism (record features →
+  train without crashing → budget-respecting cull) demonstrated end-to-end.

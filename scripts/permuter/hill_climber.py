@@ -48,6 +48,7 @@ from .types import (
     RoundHints,
     RoundResult,
     ScoreResult,
+    VariantOutcome,
     variant_file_updates,
 )
 from .validator import (
@@ -103,6 +104,44 @@ def _base_pattern_names(name: str) -> list[str]:
             _, parts = name.split(":", 1)
             return parts.split("+")
     return [name]
+
+
+def _function_size(ctx) -> tuple[int | None, int | None]:
+    """Return (source LOC, top-level statement count) for a parsed function.
+
+    Both are predictor features: large functions tend to have more degrees of
+    freedom (more variants help), tiny ones plateau fast. Best-effort — returns
+    (None, None) if the context can't be measured.
+    """
+    try:
+        start, end = ctx.func_byte_range
+        text = ctx.file_source[start:end]
+        loc = text.count(b"\n") + 1
+        stmts = len(ctx.statements)
+        return loc, stmts
+    except Exception:
+        return None, None
+
+
+def _record_outcome(
+    outcomes: list[VariantOutcome],
+    result: ScoreResult,
+    baseline: float,
+) -> None:
+    """Append a per-variant outcome for the B4 predictor.
+
+    Skips pseudo-results (dedup/cache hits) that never actually compiled —
+    they carry no real win/loss signal. The label is the *primary* base
+    pattern name so composed/chained variants are attributed to their lead
+    pattern (matching how priorities are keyed).
+    """
+    if not result.build_success:
+        return
+    if result.error in ("source_dedup", "cache_hit", "obj_dedup"):
+        return
+    label = _base_pattern_names(result.variant.pattern_name)[0]
+    delta = result.match_percent - baseline
+    outcomes.append(VariantOutcome(pattern_label=label, delta=delta, won=delta > 0))
 
 
 def _accumulate_il_pattern_metrics(
@@ -515,6 +554,12 @@ def hill_climb(
     # Diagnosis category from the first round — recorded with pattern_runs so
     # strategy_db.bulk_load_from_pattern_runs can group by real diag_cat, not 'unknown'.
     last_diag_cat: str | None = None
+    # B4: per-variant outcomes for the climb_history predictor (pattern label +
+    # delta vs round baseline). One entry per successfully-built scored variant.
+    variant_outcomes: list[VariantOutcome] = []
+    # B4: function-size features (captured from round 1's parsed context).
+    func_loc: int | None = None
+    func_stmts: int | None = None
 
     # Pattern stats tracking
     from .pattern_stats import RunStatsAccumulator
@@ -578,6 +623,10 @@ def hill_climb(
                 print(f"Extraction failed: {e}", file=sys.stderr)
                 stopped_reason = "error"
                 break
+
+            # B4: capture function size from the first parsed context.
+            if func_loc is None:
+                func_loc, func_stmts = _function_size(ctx)
 
             # Fresh scorer per round — context manager restores source on exit
             with Scorer(source_path, symbol, unit=unit) as scorer:
@@ -1034,6 +1083,7 @@ def hill_climb(
                         baseline=baseline,
                         build_success=result.build_success,
                     )
+                    _record_outcome(variant_outcomes, result, baseline)
 
                     # Append validation tier to the line when enabled
                     vtier_str = ""
@@ -1088,6 +1138,7 @@ def hill_climb(
                                 baseline=baseline,
                                 build_success=result.build_success,
                             )
+                            _record_outcome(variant_outcomes, result, baseline)
 
                 # --- Phase 5: Multi-variant merge ---
                 improving_count = sum(
@@ -1128,6 +1179,7 @@ def hill_climb(
                                 baseline=baseline,
                                 build_success=result.build_success,
                             )
+                            _record_outcome(variant_outcomes, result, baseline)
 
                 # Analyze canonical IL for top scored variants in the round.
                 build_ok_results = [r for r in batch_results if r.build_success]
@@ -1416,6 +1468,30 @@ def hill_climb(
     try:
         from .strategy_db import record_permuter_result
         record_permuter_result(result, unit=unit)
+    except Exception:
+        pass  # Best-effort
+
+    # B4: record this climb (and its per-variant outcomes) into climb_history
+    # so the variant outcome predictor has features to train on. Best-effort —
+    # never fail the run on a history-write error.
+    try:
+        import hashlib
+        from .climb_history import record_climb
+        record_climb(
+            symbol=symbol,
+            source_md5=hashlib.md5(original_source).hexdigest(),
+            pattern_names=[p.name for p in patterns],
+            initial_pct=initial_percent,
+            final_pct=final_percent,
+            stopped_reason=stopped_reason,
+            rounds_used=len(rounds),
+            elapsed_seconds=round(elapsed, 2),
+            diag_fingerprint=last_diag_cat,
+            func_loc=func_loc,
+            func_stmts=func_stmts,
+            beam_depth=len(rounds),  # hill-climb: search depth == rounds used
+            variant_outcomes=variant_outcomes,
+        )
     except Exception:
         pass  # Best-effort
 

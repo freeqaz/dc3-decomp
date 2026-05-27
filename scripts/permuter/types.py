@@ -544,6 +544,21 @@ class RoundResult:
 
 
 @dataclass
+class VariantOutcome:
+    """Per-variant outcome captured for the B4 predictor.
+
+    One of these is recorded for each variant a climb actually scored, giving
+    the predictor per-variant pattern granularity (vs. the per-climb pattern
+    *set* on the climb_history row). ``won`` means this variant improved on
+    the round baseline (delta > 0).
+    """
+
+    pattern_label: str  # base pattern name (e.g. "ternary_collapse")
+    delta: float        # match-% gain vs the round baseline
+    won: bool           # True if delta > 0
+
+
+@dataclass
 class HillClimbResult:
     """Result of a full hill-climbing session for one function."""
 

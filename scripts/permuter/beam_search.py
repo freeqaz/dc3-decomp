@@ -43,6 +43,7 @@ from .types import (
     RoundResult,
     ScoreResult,
     Variant,
+    VariantOutcome,
     variant_file_updates,
     variant_identity_bytes,
 )
@@ -702,6 +703,10 @@ def beam_search(
     result_il_duplicate_buckets = 0
     result_il_pattern_metrics: dict[str, dict[str, int]] = {}
     all_validation_results: list = []  # list[ValidationResult] across all depths
+    # B4: per-variant outcomes + function-size features for the predictor.
+    variant_outcomes: list = []  # list[VariantOutcome]
+    func_loc: int | None = None
+    func_stmts: int | None = None
 
     original_source = source_path.read_bytes()
     applied_file_originals: dict[Path, bytes | None] = {
@@ -853,6 +858,16 @@ def beam_search(
     # Cache RB3 source once
     rb3_source = _load_rb3_source(symbol, source_path)
 
+    # B4: capture function-size features once from the seed context.
+    _size_ctx = _reparse_context(original_source, source_path, function_name)
+    if _size_ctx is not None:
+        try:
+            _s, _e = _size_ctx.func_byte_range
+            func_loc = original_source[_s:_e].count(b"\n") + 1
+            func_stmts = len(_size_ctx.statements)
+        except Exception:
+            pass
+
     # -----------------------------------------------------------
     # Search loop: expand → score → select at each depth
     # -----------------------------------------------------------
@@ -983,6 +998,16 @@ def beam_search(
                 baseline,
                 result.build_success,
             )
+
+            # B4: per-variant outcome (delta vs the parent state this variant
+            # expanded from — the true win/loss baseline in beam search).
+            if (result.build_success
+                    and result.error not in ("source_dedup", "cache_hit", "obj_dedup")):
+                _label = _base_pattern_names(result.variant.pattern_name)[0]
+                _delta = result.match_percent - parent.score
+                variant_outcomes.append(
+                    VariantOutcome(pattern_label=_label, delta=_delta, won=_delta > 0)
+                )
 
             if not result.build_success:
                 build_fails += 1
@@ -1261,6 +1286,31 @@ def beam_search(
         )
     except Exception as e:
         print(f"WARNING: beam pattern stats storage failed: {e}", file=sys.stderr)
+
+    # B4: record this beam run (+ per-variant outcomes) into climb_history.
+    # Best-effort — never fail the search on a history-write error.
+    try:
+        import hashlib
+        from .climb_history import record_climb, diagnosis_fingerprint
+        record_climb(
+            symbol=symbol,
+            source_md5=hashlib.md5(original_source).hexdigest(),
+            pattern_names=[p.name for p in patterns],
+            initial_pct=initial_percent,
+            final_pct=final_percent,
+            stopped_reason=stopped_reason,
+            rounds_used=len(rounds),
+            elapsed_seconds=time.time() - start_time,
+            diag_fingerprint=diagnosis_fingerprint(
+                best_ever_state.diagnosis if best_ever_state else None
+            ),
+            func_loc=func_loc,
+            func_stmts=func_stmts,
+            beam_depth=config.depth,  # beam: search depth is the configured depth
+            variant_outcomes=variant_outcomes,
+        )
+    except Exception:
+        pass  # Best-effort
 
     return _build_result(
         symbol, function_name, source_path,
