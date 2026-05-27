@@ -1285,13 +1285,14 @@ DataNode HamDirector::OnFileLoaded(DataArray *a) {
     static Symbol viz("viz");
     static Symbol game_hud("game_hud");
     Symbol sym = a->Sym(2);
+    auto _arg0 = mCharacterOutfits[0];
     if (mMerger) {
         mAsyncLoaded = mMerger->AsyncLoad();
         if (sym == song) {
             if (!TheGameData->Venue().Null()) {
                 if (TheHamWardrobe) {
                     TheHamWardrobe->LoadCharacters(
-                        mCharacterOutfits[0],
+                        _arg0,
                         mCharacterOutfits[1],
                         mCrews[0],
                         mCrews[1],
@@ -1834,8 +1835,7 @@ void HamDirector::LoadCrew(Symbol crew0, Symbol crew1) {
     char buffer[128];
     Symbol symbols[2] = { crew0, crew1 };
     Symbol mind_control("mind_control");
-    Symbol gameplaySym = TheHamProvider->Property("gameplay_mode", true)->Sym();
-    bool isMindControl = gameplaySym == mind_control;
+    bool isMindControl = mind_control == TheHamProvider->Property("gameplay_mode", true)->Sym();
     for (int i = 0; i < 2; i++) {
         HamPlayerData *hpd = TheGameData->Player(i);
         MILO_ASSERT(hpd, 0x98B);

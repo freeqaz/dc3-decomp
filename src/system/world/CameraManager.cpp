@@ -369,7 +369,7 @@ bool CameraManager::SetCrowds(ObjVector<CamShotCrowd> &crowds) {
     FOREACH (it, mCrowds) {
         WorldCrowd *curCrowd = *it;
         CamShotCrowd *cit = crowds.begin();
-        for (; cit != crowds.end(); cit++) {
+        for (; crowds.end() != cit; cit++) {
             if (curCrowd == cit->mCrowd) {
                 break;
             }

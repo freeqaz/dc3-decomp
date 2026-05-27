@@ -245,7 +245,7 @@ BEGIN_LOADS(FlowSetProperty)
         node.Load(bs);
         mValue = node;
     } else if (d.rev == 2) {
-        int type;
+        unsigned int type;
         bs >> type;
         if (type == kDataObject) {
             Flow *owner = GetOwnerFlow();

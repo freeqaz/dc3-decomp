@@ -1097,7 +1097,7 @@ void CharEyes::LidTrackAndClampingUpdate(EyeDesc &desc, float blinkWeight) {
         if (drawCheat.Int(0)) {
             RndGraph *graph = RndGraph::GetOneFrame();
 
-            if (!(lidsOK)) {
+            if (graph && !(lidsOK)) {
                 graph->AddSphere(
                     upperBlinkPos, 0.05f, Hmx::Color(1.0f, 0.0f, 0.0f, 1.0f)
                 );
@@ -1106,7 +1106,7 @@ void CharEyes::LidTrackAndClampingUpdate(EyeDesc &desc, float blinkWeight) {
                     upperBlinkPos, 0.05f, Hmx::Color(0.0f, 0.0f, 1.0f, 1.0f)
                 );
             }
-            if (!(lidsOK)) {
+            if (graph && !(lidsOK)) {
                 graph->AddSphere(
                     lowerBlinkPos, 0.05f, Hmx::Color(1.0f, 0.0f, 0.0f, 1.0f)
                 );
@@ -1125,7 +1125,7 @@ void CharEyes::LidTrackAndClampingUpdate(EyeDesc &desc, float blinkWeight) {
             Vector3 normalEnd(
                 cross.x + sourcePos.x, cross.y + sourcePos.y, cross.z + sourcePos.z
             );
-            if (!(lidsOK)) {
+            if (graph && !(lidsOK)) {
                 graph->AddLine(
                     sourcePos, normalEnd, Hmx::Color(1.0f, 0.0f, 0.0f, 1.0f), false
                 );

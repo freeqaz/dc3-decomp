@@ -195,7 +195,7 @@ void FlowManager::Poll() {
             << MakeString("Average: %.3f ms   Peak: %.3f ms    Frame: %.3f ms\n", mAvgFrameTime, mPeakFrameTime, total);
     }
 
-    Symbol flowSym("flow");
+    const Symbol& flowSym = ("flow");
     Timer *autoTimer = AutoTimer::GetTimer(flowSym);
     if (autoTimer) {
         autoTimer->SetLastMs(total);

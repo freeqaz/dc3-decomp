@@ -1526,8 +1526,8 @@ void PartyModeMgr::FinalizeParty() {
     static Symbol events_per_player("events_per_player");
     static Symbol total_events("total_events");
     DataArray *numEventsArr = mPartyModeCfg->FindArray(crew_showdown_num_events, true);
-    int team1Size = mTeam1Players.size();
     int team2Size = mTeam2Players.size();
+    int team1Size = mTeam1Players.size();
     int maxTeamSize = team2Size;
     if (team2Size <= team1Size) {
         maxTeamSize = team1Size;
@@ -1764,9 +1764,9 @@ toggle:
 
 void PartyModeMgr::ResetModes(bool resetAll) {
     unk40 = true;
-    mModePicker.mItems.resize(0, Symbol());
-    Symbol is_in_party_mode("is_in_party_mode");
-    int isPartyMode = TheHamProvider->Property(is_in_party_mode)->Int();
+    PseudoRandomPicker<Symbol> &_ref0 = mModePicker;
+    _ref0.mItems.resize(0, Symbol());
+    int isPartyMode = TheHamProvider->Property(("is_in_party_mode"))->Int();
     DataArray *cfgArr;
     if (isPartyMode) {
         cfgArr = mPartyModeCfg->FindArray(Symbol("crew_showdown_weighted_event_types"));
@@ -1786,14 +1786,14 @@ void PartyModeMgr::ResetModes(bool resetAll) {
             if ((resetAll && weight != 0) || IsModeIncluded(sym)) {
                 int count = subArr->Node(1).Int(subArr);
                 for (int j = 0; j < count; j++) {
-                    mModePicker.mItems.insert(mModePicker.mItems.end(), sym);
+                    _ref0.mItems.insert(_ref0.mItems.end(), sym);
                 }
                 ToggleIncludedModeOn(sym, true);
             }
         }
     }
-    mModePicker.mNumGets = 0;
-    mModePicker.mMode = 2;
+    _ref0.mNumGets = 0;
+    _ref0.mMode = 2;
     unk40 = false;
 }
 
@@ -1814,7 +1814,7 @@ void PartyModeMgr::UpdateScores() {
     int side2 = pPlayer2Provider->Property(side, true)->Int();
     if (score2 < score1) {
         mJustWonSide = side1;
-    } else if (score1 < score2) {
+    } else if (!(!(score2 > score1))) {
         mJustWonSide = side2;
     } else {
         mJustWonSide = 2;

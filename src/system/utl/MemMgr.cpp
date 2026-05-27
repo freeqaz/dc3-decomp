@@ -132,7 +132,8 @@ void MemFree(void *mem, const char *file, int line, const char *name) {
         int freed = 0;
         MemHeap *heap = gHeaps;
         for (i = 0; i < gNumHeaps; i++, heap++) {
-            freed = heap->Free((int *)mem);
+            if (heap)
+                freed = heap->Free((int *)mem);
             if (freed)
                 break;
         }

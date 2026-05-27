@@ -1108,8 +1108,9 @@ void RndMesh::CopyGeometry(const RndMesh *mesh, bool b2) {
 }
 
 void RndMesh::SetVolume(RndMesh::Volume vol) {
-    if (mGeomOwner != this)
-        mGeomOwner->SetVolume(vol);
+    ObjOwnerPtr<RndMesh> &_ref0 = mGeomOwner;
+    if (_ref0 != this)
+        _ref0->SetVolume(vol);
     else {
         mVolume = vol;
         RELEASE(mBSPTree);
@@ -1127,8 +1128,8 @@ void RndMesh::SetVolume(RndMesh::Volume vol) {
                     Vector3 vb0;
                     vb0.Zero();
                     vb0[i % 3] = i > 2 ? -1.0f : 1.0f;
-                    const Vector3 &point = i > 2 ? box.mMin : box.mMax;
-                    bspIt->plane = Plane(vb0, point);
+                    Vector3 _val0 = i > 2 ? box.mMin : box.mMax;
+                    bspIt->plane = Plane(_val0, vb0);
                     bspIt->left = 0;
                     if (i == 5) {
                         bspIt->right = 0;
@@ -1384,7 +1385,10 @@ DataNode RndMesh::OnCompareEdgeVerts(const DataArray *da) {
         vec30[i].unique();
     }
     for (int i = 0; i < Verts().size(); i++) {
-        FOREACH (it, vec30[i]) {
+        {
+            auto it = vec30[i].begin();
+            if (it != vec30[i].end()) {
+                do {
             int i10 = 0;
             FOREACH (it2, vec30[*it]) {
                 FOREACH (it3, vec30[i]) {
@@ -1399,6 +1403,10 @@ DataNode RndMesh::OnCompareEdgeVerts(const DataArray *da) {
             if (i10 < 2) {
                 vec28.push_back(i);
                 break;
+            }
+        
+                    ++it;
+                } while (it != vec30[i].end());
             }
         }
     }

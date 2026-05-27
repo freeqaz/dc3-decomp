@@ -540,8 +540,8 @@ void SpotlightDrawer::DrawWorld() {
         SortLights();
         DrawMeshVec(sCans);
         sCans.resize(0);
-        RndEnviron *cur = RndEnviron::sCurrent;
         if (!sLights.empty()) {
+            RndEnviron *cur = RndEnviron::sCurrent;
             Vector3 *pos = RndEnviron::CurrentPos();
             MILO_ASSERT(sEnviron->GetUseApprox() == false, 0x1dc);
             sEnviron->Select(nullptr);

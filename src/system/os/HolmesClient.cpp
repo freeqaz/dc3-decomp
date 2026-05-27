@@ -838,9 +838,9 @@ bool HolmesClientCacheFile(char *arg0, const char *arg1) {
         return false;
     }
 
-    bool result = false;
     u8 fileInfo[0x20];
     int attrResult = GetFileAttributesExA(arg0, (GET_FILEEX_INFO_LEVELS)0, fileInfo);
+    bool result = false;
     bool fileExists = (attrResult - 1) != (-1);
     if ((str != gLastCachedResource) && (gLastCacheResult > 0 || fileExists)) {
         EndCmd(Holmes::kCacheFile);

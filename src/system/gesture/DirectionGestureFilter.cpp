@@ -374,8 +374,8 @@ void DirectionGestureFilterDoubleUser::GetValidSkeletons(int &out1, int &out2) c
 
 bool DirectionGestureFilterDoubleUser::IsHandValid(const Skeleton &skeleton) const {
     int i1, i2;
-    GetValidSkeletons(i1, i2);
     bool result = false;
+    GetValidSkeletons(i1, i2);
     if (i1 >= 0 && mFilter1->IsHandValid(TheGestureMgr->GetSkeleton(i1))
         && mStillFilters[0]->StandingStill()) {
         result = true;
@@ -388,8 +388,8 @@ bool DirectionGestureFilterDoubleUser::IsHandValid(const Skeleton &skeleton) con
 
 bool DirectionGestureFilterDoubleUser::IsValidScrollPos(const Skeleton &skeleton) const {
     int i1, i2;
-    GetValidSkeletons(i1, i2);
     bool result = false;
+    GetValidSkeletons(i1, i2);
     if (i1 >= 0 && mFilter1->IsValidScrollPos(TheGestureMgr->GetSkeleton(i1))) {
         result = true;
     } else if (i2 >= 0 && mFilter2->IsValidScrollPos(TheGestureMgr->GetSkeleton(i2))) {

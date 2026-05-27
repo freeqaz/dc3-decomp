@@ -87,9 +87,9 @@ void HandsUpGestureFilter::Update(Skeleton const &skeleton, int elapsed) {
         return;
     }
 
+    mRaisedMs = 0;
 reset:
     mHandsUp = false;
-    mRaisedMs = 0;
 }
 
 void HandsUpGestureFilter::Update(int i, int j) {

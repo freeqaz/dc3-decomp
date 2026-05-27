@@ -279,8 +279,7 @@ void HamScrollBehavior::Update(float input) {
     mNavList->SetScrollSoundFrame(mSmoother.Level());
 
     // Scroll speed anim
-    RndAnimatable *scrollAnim = mNavList->mScrollSpeedAnim;
-    if (scrollAnim) {
+    if ((mNavList->mScrollSpeedAnim)) {
         float shift;
         switch (mSpeedState) {
         case 0:
@@ -312,7 +311,7 @@ void HamScrollBehavior::Update(float input) {
         default:
             goto skip_anim;
         }
-        scrollAnim->SetFrame(shift, 1.0f);
+        (mNavList->mScrollSpeedAnim)->SetFrame(shift, 1.0f);
     }
 skip_anim:
 

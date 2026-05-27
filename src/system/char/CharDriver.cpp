@@ -610,8 +610,8 @@ void CharDriver::Poll() {
                     float fb = (float)std::floor(beat);
                     float fo = (float)floorf(mOldBeat);
                     int i12 = (int)fb ^ ((int)fo + 1);
-                    CharClipDriver *d = playing;
                     if (i12 & flags) {
+                        CharClipDriver *d = playing;
                         while (d) {
                             d->mPlayFlags &= 0xffff0fff;
                             d = d->Next();

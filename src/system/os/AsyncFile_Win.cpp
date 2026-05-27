@@ -188,11 +188,11 @@ void AsyncFileWin::_ReadAsync(void *buf, int count) {
     memset(&mOverlapped, 0, sizeof(OVERLAPPED));
     unk64 = count;
     unk5c = buf;
-    bool aligned = false;
+    unsigned char aligned = 0;
     if (((int)buf & 3) == 0) {
         if (Tell() % mSectorBytes == 0) {
             if (count % mSectorBytes == 0) {
-                aligned = true;
+                aligned = 1;
             }
         }
     }

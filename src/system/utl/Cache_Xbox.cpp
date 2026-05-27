@@ -404,6 +404,10 @@ int CacheXbox::ThreadWrite() {
 }
 
 CacheDirEntry::CacheDirEntry(const CacheDirEntry &o) : mName(o.mName), mDateTime(o.mDateTime), mSize(o.mSize) {}
+__declspec(noinline) DWORD _outline_DeviceID(CacheIDXbox* _obj) {
+    return _obj->DeviceID();
+}
+
 
 int CacheXbox::ThreadRead() {
     HANDLE hFile = CreateFileA(
@@ -416,7 +420,7 @@ int CacheXbox::ThreadRead() {
             if (err <= 3) {
                 return 8;
             } else if (err != 0x15) {
-                if (IsDeviceConnected(mCacheID.DeviceID())) {
+                if (IsDeviceConnected(_outline_DeviceID(&mCacheID))) {
                     MILO_NOTIFY(
                         "CacheXbox::ReadAsync() - Unhandled error from CreateFile(): %d\n",
                         err
@@ -435,7 +439,7 @@ int CacheXbox::ThreadRead() {
 
     if (!success) {
         DWORD err = GetLastError();
-        if (!IsDeviceConnected(mCacheID.DeviceID())) {
+        if (!IsDeviceConnected(_outline_DeviceID(&mCacheID))) {
             return 8;
         }
         MILO_NOTIFY(

@@ -706,7 +706,7 @@ void PoseFatalities::UpdateClipDriver(int player) {
         }
         if (clipDriver != nullptr && clipDriver->GetClip() != nullptr) {
             MILO_ASSERT(NUM_FATALITIES == clipDriver->NumBeatEvents(), 0x123);
-            Symbol beatSym(MakeString("pose_fatality_%i", mFatalityPoseIndex[player] - 1));
+            const Symbol& beatSym = (MakeString("pose_fatality_%i", mFatalityPoseIndex[player] - 1));
             clipDriver->SetBeatOffset(unk1718[player], kTaskBeats, beatSym);
             if (unk1718[player] < 0.0f) {
                 unk1718[player] += TheTaskMgr.DeltaUISeconds();

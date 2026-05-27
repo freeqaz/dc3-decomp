@@ -1191,7 +1191,7 @@ void MoveDir::ResetDetectFrames(int player, Difficulty diff) {
     mDebugLoopMarker = -1.0f;
     mpd.mFeedbackMode = 0;
     if (mpd.mDetectFrames.begin() != mpd.mDetectFrames.end()) {
-        mpd.mDetectFrames.erase(mpd.mDetectFrames.begin(), mpd.mDetectFrames.end());
+        mpd.mDetectFrames.erase(mpd.mDetectFrames.end(), mpd.mDetectFrames.begin());
     }
     if (diff != kDifficultyBeginner) {
         DancerSequence *seq;

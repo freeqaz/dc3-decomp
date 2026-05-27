@@ -192,7 +192,7 @@ DataNode BeatClock::OnSyncState(DataArray *msg) {
             + (float)((mSongPos.GetMeasure() - oldPos.GetMeasure()) * mBeatsPerMeasure)
             + (float)(mSongPos.GetTick() - oldPos.GetTick()) * (1.0f / 480.0f);
 
-        if (std::fabs(delta) >= 0.0001f) {
+        if (0.0001f <= std::fabs(delta)) {
             float newTotalBeat = mSongPos.GetTotalBeat() + delta;
             mSongPos.AccessTotalBeat() = newTotalBeat;
             mSongPos.AccessTotalTick() = newTotalBeat * 480.0f;

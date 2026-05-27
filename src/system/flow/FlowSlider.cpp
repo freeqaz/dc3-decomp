@@ -194,7 +194,7 @@ void FlowSlider::UpdateActivations() {
         }
 
         {
-            if (mValue <= curCase->Value() && mValue >= prevCase->Value()) {
+            if (mValue <= curCase->Value() && (bool)(mValue >= prevCase->Value())) {
                 float curPos = curCase->Value();
                 float prevPos = prevCase->Value();
                 if (curPos != prevPos) {

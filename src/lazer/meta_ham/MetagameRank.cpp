@@ -1102,8 +1102,8 @@ int MetagameRank::ComputeRankNumber(bool forceAward) {
 
 void MetagameRank::AwardForRankUp(int i1) {
     std::vector<const Unlockable *> unlocks;
-    auto it = unlocks.rbegin();
     for (; i1 > 0; i1--) {
+        auto it = unlocks.rbegin();
         if (unlocks.empty()) {
             BuildUnlockablesList(unk79, unlocks);
             it = unlocks.rbegin();

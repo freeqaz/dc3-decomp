@@ -11,8 +11,8 @@
 SuperFormatString::SuperFormatString(
     const char *cc, const DataArray *da, bool b, Locale &locale, Symbol lang
 ) {
-    char param[8];
     char tempFmt[2048];
+    char param[8];
     char phInfo[64];
     mTokensOnly = b;
     mHasPercentFormat = false;
@@ -22,8 +22,8 @@ SuperFormatString::SuperFormatString(
     } else {
         int phType = 0;
         int state = 0;
-        char *paramPos = param;
         char *phInfoPos = phInfo;
+        char *paramPos = param;
         char *tempFmtEnd = tempFmt + 2048;
         char *tempFmtPos = tempFmt;
         bool sawPercent = false;

@@ -87,7 +87,8 @@ BEGIN_LOADS(RndFont3d)
         unsigned short key;
         d >> key;
         CharInfo *info = new CharInfo();
-        d >> info->unk0;
+        if (info)
+            d >> info->unk0;
         d >> info->advance;
 #ifdef HX_NATIVE
         // On native, CharInfo::mMesh has no owner (constructed with nullptr),

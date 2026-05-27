@@ -168,6 +168,7 @@ BEGIN_LOADS(RndTransformable)
         }
     }
 
+    auto _arg0 = mConstraint + kConstraintLocalRotate;
     switch (gRev) {
     default:
         bs >> (int &)mConstraint;
@@ -178,7 +179,7 @@ BEGIN_LOADS(RndTransformable)
         if (mConstraint == 4) {
             mConstraint = kConstraintNone;
         } else if (mConstraint == 2 || mConstraint == 3 || mConstraint == 4) {
-            mConstraint = (Constraint)(mConstraint + kConstraintLocalRotate);
+            mConstraint = (Constraint)(_arg0);
         }
         break;
     case 6:
@@ -229,7 +230,11 @@ BEGIN_LOADS(RndTransformable)
         unsigned int numb4;
         bs >> (int &)numb4;
         int sp80[6] = { 0, 0, 0, 5, 6, 7 };
-                mConstraint = numb4 >= 0x18 ? kConstraintNone : (Constraint)sp80[numb4];
+                                if (numb4 >= 0x18) {
+                    mConstraint = kConstraintNone;
+                } else {
+                    mConstraint = (Constraint)sp80[numb4];
+                }
         break;
     }
     case 0:

@@ -460,7 +460,8 @@ void CharIKHand::IKElbow(RndTransformable *elbow, RndTransformable *shoulder) {
                 float d = (sphereToAxisDist * sphereToAxisDist + -(sDistToAxis * sDistToAxis - sPerpDist * sPerpDist)) / (sphereToAxisDist * 2.0f);
                 float sqrtTerm = std::sqrt(-(d * d - sPerpDist * sPerpDist));
                 float tiltAngle = std::asin(sqrtTerm / elbowLen);
-                if (IsNaN(tiltAngle))
+                bool _cond = IsNaN(tiltAngle);
+                if (_cond)
                     return;
                 Vector3 tiltDir(sphereCenter);
                 tiltDir -= axisProj;

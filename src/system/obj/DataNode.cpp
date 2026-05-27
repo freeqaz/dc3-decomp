@@ -648,13 +648,17 @@ bool DataNode::operator>(const DataNode &other) const {
     } else
         return false;
 }
+__declspec(noinline) const char * _outline_Name(Hmx::Object* _obj) {
+    return _obj->Name();
+}
+
 
 bool DataNode::Equal(const DataNode &n, DataArray *a, bool warn) const {
     DataType otherType = n.Type();
     const DataNode &first = mType < n.Type() ? *this : n;
     const DataNode &second = mType < otherType ? n : *this;
-    DataType firstType = first.Type();
     DataType secondType = second.Type();
+    DataType firstType = first.Type();
     if (firstType == secondType) {
         bool res;
         if (firstType == kDataString) {
@@ -677,7 +681,7 @@ bool DataNode::Equal(const DataNode &n, DataArray *a, bool warn) const {
             if (firstType == kDataObject) {
                 Hmx::Object *obj = first.UncheckedObj();
                 if (obj)
-                    objName = obj->Name();
+                    objName = _outline_Name(obj);
                 if (secondType == kDataSymbol) {
                     return streq(objName, second.UncheckedStr());
                 } else if (secondType == kDataString) {

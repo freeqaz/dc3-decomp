@@ -1326,8 +1326,7 @@ void HamNavList::DetermineHighlightedItem() {
 
     int numItems = NumItems();
     int maxItem = numItems - 1;
-    double maxItemD = (double)maxItem;
-    float maxItemF = (float)maxItemD;
+    float maxItemF = (float)(double)maxItem;
     float numItemsF = (float)(double)numItems;
 
     float threshold = (1.0f - maxItemF * 0.15f) / numItemsF;
@@ -1721,8 +1720,8 @@ void HamNavList::DrawShowing() {
     LinkRibbonDrawState(mRibbonDrawStates, widgetState);
 
     if (mScrollBehavior.IsScrolling()) {
-        int first = mListState.FirstShowing();
         for (unsigned int i = 0; i < mRibbonDrawStates.size(); i++) {
+            int first = mListState.FirstShowing();
             if ((int)i < first || (int)i >= first + HamListRibbon::sNumListSelectable) {
                 mRibbonDrawStates[i].mSwellSmoother.SetParams(0.0f, 0.0f, 0.0f);
             }
@@ -1752,9 +1751,8 @@ void HamNavList::DrawShowing() {
 #endif
 
     for (unsigned int i = 0; i < mRibbonDrawStates.size(); i++) {
-        HamListRibbonDrawState &state = mRibbonDrawStates[i];
-        if (state.mHidden && state.mElemDrawState) {
-            UIListElementDrawState *elem = (UIListElementDrawState *)state.mElemDrawState;
+        if (mRibbonDrawStates[i].mHidden && mRibbonDrawStates[i].mElemDrawState) {
+            UIListElementDrawState *elem = (UIListElementDrawState *)mRibbonDrawStates[i].mElemDrawState;
             elem->mAlpha = 0.0f;
         }
     }
