@@ -4,10 +4,14 @@ Uses the native CMake build's compile_commands.json to parse TUs and
 resolve types at specific byte offsets. Strips -DHX_NATIVE=1 so we
 analyze PPC code paths (where the decomp bugs live).
 
-Requires ``native/build/compile_commands.json``. If absent, regenerate
-with::
+Requires a ``compile_commands.json`` under one of the native build
+subdirectories (``native/build``, ``native/build-native``, or
+``native/build-asan``). The directory is auto-detected per project. If
+absent, regenerate with::
 
-    cd native/build && cmake . -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+    cd native/<build-dir> && cmake . -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+Override the directory via ``PERMUTER_COMPDB_DIR`` env var.
 
 Graceful degradation: if clang.cindex is unavailable OR the compdb is
 missing OR a TU fails to parse, is_available() may still return True but
@@ -31,8 +35,12 @@ _ARGS_CACHE: dict[str, list[str]] = {}  # filepath -> filtered args
 _INITIALIZED = False
 _AVAILABLE: Optional[bool] = None
 
-# Project root (two levels up from scripts/permuter/)
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+# Candidate native build subdirectory names, tried in order.
+# DC3 uses "native/build"; RB3 uses "native/build-native".
+_NATIVE_BUILD_CANDIDATES = ("native/build", "native/build-native", "native/build-asan")
+
+# Env override for the compdb dir (absolute path or relative to repo root).
+_COMPDB_DIR_ENV = "PERMUTER_COMPDB_DIR"
 
 
 class TypeKind(Enum):
@@ -175,6 +183,39 @@ def resolve_decl_type(
 # Internal helpers
 # ---------------------------------------------------------------------------
 
+def _find_compdb_dir() -> Path | None:
+    """Locate the compile_commands.json directory for the current project.
+
+    Resolution order:
+    1. PERMUTER_COMPDB_DIR env var (absolute or relative to repo root).
+    2. Iterate _NATIVE_BUILD_CANDIDATES under repo root; first one with a
+       compile_commands.json wins.
+
+    Returns the directory Path, or None if no compdb is found.
+    """
+    from .project import get_project_config
+
+    repo_root = get_project_config().repo_root
+
+    # 1. Env override
+    import os
+    env_val = os.environ.get(_COMPDB_DIR_ENV, "").strip()
+    if env_val:
+        p = Path(env_val)
+        if not p.is_absolute():
+            p = repo_root / p
+        if (p / "compile_commands.json").exists():
+            return p
+
+    # 2. Candidate subdirs under native/
+    for candidate in _NATIVE_BUILD_CANDIDATES:
+        p = repo_root / candidate
+        if (p / "compile_commands.json").exists():
+            return p
+
+    return None
+
+
 def _init() -> bool:
     """Initialize libclang singletons. Returns True if successful."""
     global _IDX, _COMPDB, _RESOURCE_DIR, _INITIALIZED
@@ -189,8 +230,8 @@ def _init() -> bool:
         from clang.cindex import CompilationDatabase, Index
 
         _IDX = Index.create()
-        compdb_dir = _PROJECT_ROOT / "native" / "build"
-        if not (compdb_dir / "compile_commands.json").exists():
+        compdb_dir = _find_compdb_dir()
+        if compdb_dir is None:
             return False
         _COMPDB = CompilationDatabase.fromDirectory(str(compdb_dir))
         _RESOURCE_DIR = _get_clang_resource_dir()
