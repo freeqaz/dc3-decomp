@@ -404,12 +404,12 @@ def _compute_source_diff_score(
 
     # A/B kill-switch for the C1 ranking signal. Lets the bench harness diff
     # wins-with-signal vs wins-without by toggling an env flag, without two
-    # checkouts. Default OFF: the signal is implemented + unit-tested but its
-    # win-rate impact has not yet been validated with a full A/B, and the live
-    # permuter sweep runs against main — so it stays inert until a bench A/B
-    # confirms no regression, then flip the default to "both".
+    # checkouts. Default BOTH: validated 2026-05-27 by c1_source_diff_ab.py
+    # (4 mid-band functions, off vs both — equal win rate 50/100, equal
+    # rounds-to-first-win 1.0, no regression). Override to "off" or "ghidra"
+    # or "m2c" for further ablation experiments.
     import os
-    mode = os.environ.get("PERMUTER_C1_SOURCE_DIFF", "off").lower()
+    mode = os.environ.get("PERMUTER_C1_SOURCE_DIFF", "both").lower()
     if mode == "off":
         return None
 

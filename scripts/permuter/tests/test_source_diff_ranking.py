@@ -190,9 +190,10 @@ class TestComputeSourceDiffScore(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.source_path = Path(self.tmp.name) / "src.cpp"
         self.source_path.write_bytes(_SOURCE_FILE.encode())
-        # These tests exercise the scoring computation itself, which is gated
-        # off by the production default (PERMUTER_C1_SOURCE_DIFF=off). Force a
-        # computing mode so the function actually runs; restore on cleanup.
+        # These tests exercise the scoring computation itself. The production
+        # default is now "both" (flipped after A/B validation 2026-05-27), but
+        # we set it explicitly here so the tests remain independent of the
+        # default and survive future A/B experiments. Restore on cleanup.
         import os
         _prev = os.environ.get("PERMUTER_C1_SOURCE_DIFF")
         os.environ["PERMUTER_C1_SOURCE_DIFF"] = "both"

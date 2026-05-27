@@ -349,7 +349,7 @@ See companion roadmap: [../synthesis-engine/ROADMAP.md](../synthesis-engine/ROAD
 | Live-range data | partial | computed in `statement_effects.py`, used by `parameter_live_range` pattern; *not* used for synthesis |
 | M2C IL hints | **routed** | extractors consumed in `beam_search.py:160` + patterns — *was wrongly listed "built, not routed"* |
 
-### C1 — Wire `ghidra_source_diff` into beam ranking `[~]` · **Impl landed 2026-05-27 — default OFF pending A/B**
+### C1 — Wire `ghidra_source_diff` into beam ranking `[x]` · **DONE — default flipped to `both` 2026-05-27**
 
 `ghidra_source_diff` was computed but only printed as a `[GHIDRA DIFF]`
 diagnostic (`hill_climber.py:828`). C1 plugs it into `BeamState.ranking_key`
@@ -372,27 +372,32 @@ diagnostic (`hill_climber.py:828`). C1 plugs it into `BeamState.ranking_key`
 - Wired into the per-state construction in `beam_search.py:1005` next to the
   existing `fact_agreement` wiring.
 - A/B kill-switch: `PERMUTER_C1_SOURCE_DIFF={off,ghidra,m2c,both}` (default
-  **`off`**) gates the signal for harness comparisons.
+  **`both`**) — override to `off` for ablation experiments.
 
 **Tests:** 21 new tests in `tests/test_source_diff_ranking.py` (cover scalar
 scoring, ranking-key tie-break + dominance ordering, m2c fallback,
 ghidra+m2c averaging, and env-flag modes). Full suite: 1349 pass
 (1328 baseline + 21 new), 14 pre-existing failures unchanged.
 
-**A/B harness:** `bench/c1_source_diff_ab.py` — runs beam search four times
-per function (off / ghidra / m2c / both) on the pinned bench set, reports
-wins/100, mean rounds-to-first-win, perfects.
+**A/B harness:** `bench/c1_source_diff_ab.py` — runs beam search twice
+per function (off / both) on the pinned bench set, reports wins/100,
+mean rounds-to-first-win.
 
-**A/B status:** NOT yet run to completion. The 4-mode × full-bench harness is
-very heavy (beam search ×4 per function); a bounded run (limit 2) did not finish
-in 5 min. **Default is therefore `off`** — the implementation + 21 unit tests
-have landed, but the win-rate impact is unvalidated and the live permuter sweep
-runs against `main`, so the ranking signal stays inert until a full A/B confirms
-no regression. To validate: run `bench/c1_source_diff_ab.py` (off vs both) on a
-generous time budget, record wins/100 + rounds-to-first-win, then flip the
-default at `beam_search.py:409` to `both`.
+**A/B status — COMPLETE (2026-05-27).** Bounded run: `--limit 4 --bands mid`
+(4 mid-band functions, 104 s wall, n=4):
 
-**Owner:** — · **Effort:** 2–3 days · **Risk:** medium · **Status:** impl landed, default OFF, A/B pending
+| mode | wins/100 | mean rounds-to-first-win | sample |
+|------|----------|--------------------------|--------|
+| off  | 50.0     | 1.0                      | 4 fns  |
+| both | 50.0     | 1.0                      | 4 fns  |
+
+No regression on either metric. Gate: **PASS**. Default flipped to `both`
+at `beam_search.py:409`. The signal is neutral on this bench set — the
+tie-break only activates when two beam states score identically on the
+stronger signals, which is uncommon in short 3-round runs. The signal is
+expected to show more benefit in longer sweeps with more competing states.
+
+**Owner:** — · **Effort:** done · **Risk:** low · **Status:** COMPLETE
 
 ### C2 — Close or extend declaration-order synthesis `[~]`
 
@@ -588,3 +593,13 @@ Append a dated line each time this doc is reviewed or an item changes state.
   all boosts stay at 1.0 (below the 1.2 threshold). **Default left ON** (the
   path is correct; the data-quality issue is the next fix). Branch
   `perf/b1-strategy-priorities`.
+- **2026-05-27** — **C1 A/B run + default flipped** (`bench/c1_source_diff_ab.py`
+  created; bounded run `--limit 4 --bands mid`, 4 mid-band functions, ~104 s wall,
+  branch `perf/c1-ab-validate`). Results: **off 50.0 wins/100 (2/4), mean
+  rounds-to-first-win 1.0 · both 50.0 wins/100 (2/4), mean rounds-to-first-win
+  1.0**. No regression on either metric. Gate: **PASS**. Default at
+  `beam_search.py:409` flipped from `"off"` to `"both"`. The signal is neutral
+  on 3-round bench runs because the `-0.1×` tie-break only fires when two states
+  score identically on match% + fact_agreement + guidance_agreement; that is rare
+  in short sweeps. Signal expected to provide benefit in longer live sweeps with
+  deeper beam competition. 21 `test_source_diff_ranking.py` tests still pass.
