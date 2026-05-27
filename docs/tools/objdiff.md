@@ -48,6 +48,7 @@ For comprehensive usage information, see:
 - **[OBJDIFF_CLI_USAGE.md](../OBJDIFF_CLI_USAGE.md)** - Main usage guide with examples
 - **[OBJDIFF_CLI_COMMANDS.md](../OBJDIFF_CLI_COMMANDS.md)** - Full command reference
 - **[OBJDIFF_LEARNINGS.md](../OBJDIFF_LEARNINGS.md)** - Patterns and lessons learned from decomp work
+- **[objdiff/JSON_EXTENSIONS.md](objdiff/JSON_EXTENSIONS.md)** - Fork-only JSON: data-symbol diffs (`--include-data`, vtables/init data) + instruction branch graph (see the `/data-diff` skill)
 
 ## Typical Workflow
 
