@@ -41,9 +41,14 @@ can be gamed by generating more low-signal variants, so weight it accordingly.
 
 | Metric | Baseline (2026-05-26) | Current | Target |
 |--------|----------------------|---------|--------|
-| variants / second | 1.47 | — | 2× baseline |
-| wins / 100 attempts | 12.9 (4/31 discovered) | — | +50% |
-| wall-clock to first 100% | n/a (0/31; bench is AT_LIMIT) | — | −50% |
+| variants / second | 1.47 | 1.47 (A1 no-op on DC3) | 2× baseline |
+| wins / 100 attempts | 12.9 (4/31 discovered) | 12.9 (unchanged) | +50% |
+| wall-clock to first 100% | n/a (0/31; bench is AT_LIMIT) | n/a | −50% |
+
+> **A1 A/B (2026-05-27):** the preprocess cache is RB3-only and never engaged
+> on the all-DC3 bench set (0 fast hits / 732 variants, 0 score divergence,
+> median compile-run speedup 0.97×). It does **not** move the Current column —
+> the 56% compile-run cost is unchanged on DC3. Gate failed → default left OFF.
 
 > Baseline captured by `scripts/permuter/bench/run.py` over the pinned
 > 31-function set; full numbers + profiling in
@@ -96,7 +101,7 @@ risky throughput items (A2, A4) are worth building at all.
 
 **Owner:** A0 agent · **Effort:** 1.5 days · **Risk:** low · **Status:** done
 
-### A1 — Validate & default-on the preprocess cache (RB3) `[ ]`
+### A1 — Validate & default-on the preprocess cache (RB3) `[!]` · **A/B run 2026-05-26: gate FAILED on the DC3 bench set — default NOT flipped**
 
 The macro-aware preprocessed-splice fast path (`preprocess_cache.py`, toggle
 `PERMUTER_PREPROCESS_CACHE` at `preprocess_cache.py:51`, shipped commit
@@ -105,19 +110,33 @@ a1a873e8) is off by default. It is mature in design (21 tests in
 (landed 2026-05-26). Defaulting on is a measurement problem, not a code problem.
 Consumes the A0 harness.
 
-- [ ] A/B via the A0 harness: run each bench function with cache off vs on, same
-      seed/patterns. (Add `bench/preprocess_cache_ab.py` driver on top of A0.)
-- [ ] Assert per-variant objdiff match% identical to 4 decimals; byte-identical
-      `.obj` for the no-line-shift case.
-- [ ] Record fallback rate (live-macro hits) per unit cluster, build-success
-      parity, wall-clock delta under parallel load.
-- [ ] Exercise `PERMUTER_PREPROCESS_CACHE_STRICT` (`scorer.py:472`) — the
-      existing strict-mode companion that hard-fails on cache/full-compile
-      divergence — as the validation oracle during the A/B.
-- [ ] Gate: zero score divergence across N≥50, median speedup ≥1.5×.
-- [ ] Flip default at `preprocess_cache.py:51`; keep env var as off-switch.
+- [x] A/B driver added: `bench/preprocess_cache_ab.py` on top of A0. Generates
+      one deterministic round of variants per bench function (same seed/patterns
+      as hill_climb round 1) and scores that identical list cache-OFF then
+      cache-ON, each against a fresh isolated score cache.
+- [x] Asserts per-variant objdiff match% identical to 4 decimals between off/on.
+      Byte-identity for the no-line-shift case is enforced by the cache's own
+      `_validate_preprocess_cache` self-check, driven in STRICT mode (below).
+- [x] Records live-macro fallback rate per unit cluster + build-success parity.
+      Per-call **compile-run ms** (via `PERMUTER_PROFILE=1`) is the headline
+      speed signal — contention-robust, unlike wall-clock.
+- [x] STRICT mode (`PERMUTER_PREPROCESS_CACHE_STRICT`, `scorer.py:472`) forced
+      on in the ON run as the validation oracle.
+- [ ] ~~Gate: zero score divergence across N≥50, median speedup ≥1.5×.~~
+      **Result (HEAD `0c9b6fad`, 31 fns / 732 variants):** 0 divergences,
+      0 build-parity breaks — BUT **0 fast hits / 0 fallbacks, median compile-run
+      speedup 0.97×**. The fast path is **structurally inert on DC3**: it is
+      hard-gated to `ProjectType.RB3`/mwcceppc (`scorer.py:338` — "MSVC's /E +
+      splice has not been validated"), and DC3 uses cl.exe. The bench set is
+      100% DC3, so the cache never engages → the 1.5× speedup gate cannot be met.
+- [ ] **Default NOT flipped** — gate failed (speedup < 1.5×; zero coverage).
+      The env off-switch is unchanged. To actually land A1, validate on an RB3
+      worktree (`PERMUTER_PROJECT=rb3` + RB3 build present) where the fast path
+      runs, or first extend/validate the splice path for the DC3/MSVC toolchain.
 
 **Owner:** — · **Effort:** 1.5 days · **Risk:** low (silent fallback)
+**Blocker:** feature is RB3-only; no RB3 toolchain present in the DC3 worktree,
+so the A0/A1 bench set (all DC3) cannot exercise or validate it.
 
 ### A2 — objdiff daemon mode `[-]` · **A0 profiling says: not worth it**
 
@@ -437,3 +456,15 @@ Append a dated line each time this doc is reviewed or an item changes state.
   spawn" assumption was wrong by ~90×. Throughput leverage is fewer/cheaper
   compiles+diffs (A3, A1, B3), not faster spawn. (Baseline taken under heavy
   concurrent load; wall-clock inflated, per-call ms are the robust signal.)
+- **2026-05-27** — **A1 A/B run** (`bench/preprocess_cache_ab.py` added on top
+  of A0; results `bench/preprocess_cache_ab-results.json`, HEAD `0c9b6fad`).
+  31 functions / **732 variants** scored cache-OFF vs cache-ON (each against a
+  fresh isolated score cache; STRICT mode as the oracle; per-call compile-run ms
+  from `PERMUTER_PROFILE`). **Result: 0 score divergences, 0 build-parity breaks,
+  but 0 fast hits / 0 fallbacks and median compile-run speedup 0.97× (pooled
+  0.93×).** Root cause: the fast path is hard-gated to `ProjectType.RB3`/mwcceppc
+  (`scorer.py:338`); the bench set is 100% DC3 (cl.exe), so the splice never
+  engages. **Gate FAILED (speedup < 1.5×, zero coverage) → default at
+  `preprocess_cache.py:51` left OFF.** A1 cannot be validated/landed from a
+  DC3-only worktree — it needs an RB3 build present, or the splice path extended
+  to the DC3/MSVC toolchain first. 21 `test_preprocess_cache.py` tests still pass.
