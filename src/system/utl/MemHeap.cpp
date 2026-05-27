@@ -92,7 +92,7 @@ void MemHeap::Print(TextStream &ts, bool verbose) {
             // Alloc block
             unsigned int hdr = *curPtr;
             unsigned int *headerPtr = curPtr;
-            while (hdr == 0) {
+            while ((int)hdr == 0) {
                 headerPtr++;
                 hdr = *headerPtr;
             }
