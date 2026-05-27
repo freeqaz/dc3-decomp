@@ -507,7 +507,6 @@ void CharIKHand::IKElbow(RndTransformable *elbow, RndTransformable *shoulder) {
 
 void CharIKHand::Highlight() {
     float charWeight = Weight();
-    float leftover = 0;
     float localWeights[16];
 
     auto& hand = mHand;
@@ -515,6 +514,7 @@ void CharIKHand::Highlight() {
         return;
     else {
         if (mTargets.size() != 1) {
+            float leftover = 0;
             float *fp = &localWeights[0];
             for (ObjVector<IKTarget>::iterator it = mTargets.begin();
                  it != mTargets.end();

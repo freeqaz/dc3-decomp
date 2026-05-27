@@ -104,6 +104,7 @@ void KinectSharePanel::Poll() {
 }
 
 void KinectSharePanel::ConvertImages() {
+    int iref;
     auto texPtr = mTex.Ptr();
     MILO_ASSERT(texPtr, 0x2B);
     RndBitmap bitmapa0;
@@ -119,7 +120,6 @@ void KinectSharePanel::ConvertImages() {
     mBuf = MemAlloc(pixelBytes, __FILE__, 0x3B, "JpegWriter");
     MILO_ASSERT(mBuf != NULL, 0x3C);
     if (mBuf) {
-        int iref;
         LoadBitmapIntoJpeg(pixels, w, h, bpp, mBuf, iref);
         unk58 = iref;
         mImagePostParams.FullImageByteCount = iref;

@@ -276,9 +276,9 @@ void HiResScreen::Merge(
     if (srcH >= dstY) {
         return;
     }
-    int xConst = srcH - srcY;
     int xBlend = srcH - blendThreshY;
     int yIter = srcY;
+    int xConst = srcH - srcY;
     do {
         if ((unsigned int)yIter >= mAccumHeight) break;
         if (yIter >= 0) {
@@ -306,7 +306,7 @@ void HiResScreen::Merge(
                         }
                         float blend;
                         if (blendX > 0.0f || blendY > 0.0f) {
-                            blend = sqrtf(blendX * blendX + blendY * blendY);
+                            blend = sqrtf(blendY * blendY + blendX * blendX);
                             blend = blend - 0.5f;
                             blend = blend + blend;
                             blend = Max(blend, 0.0f);

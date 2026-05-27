@@ -321,7 +321,7 @@ int ClipDistMap::CalcWidth() {
 
     float aStart = mAStart;
     int spb = mSamplesPerBeat;
-    int width = Max(0, (int)(float)floor(((mAEnd - aStart) * (float)spb) + 0.5f)) + 1;
+    int width = Max(0, (int)(float)floorf(((mAEnd - aStart) * (float)spb) + 0.5f)) + 1;
     mAEnd = mAStart + (float)(width - 1) / (float)mSamplesPerBeat;
     return width;
 }

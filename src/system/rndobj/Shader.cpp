@@ -887,9 +887,9 @@ u64 RndShaderStandard::CalcShaderOpts(NgMat *mat, ShaderType s, bool b) {
 }
 
 u64 RndShaderPostProc::CalcShaderOpts(NgMat *mat, ShaderType s, bool b) {
-    bool v2a = TheShaderMgr.unk2a;
     bool v2e = TheShaderMgr.unk2e;
     bool v25 = TheShaderMgr.unk25;
+    bool v2a = TheShaderMgr.unk2a;
     bool v39 = TheShaderMgr.unk39;
     bool v3d = TheShaderMgr.unk3d;
     bool v3f = TheShaderMgr.unk3f;

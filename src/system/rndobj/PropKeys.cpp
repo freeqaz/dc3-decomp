@@ -748,8 +748,9 @@ void Vector3Keys::SetFrame(float frame, float blend, float) {
         Hmx::Matrix3 m64;
         MakeRotMatrix(v70, m64, false);
         Vector3 v7c;
-        idx = Vector3At(frame, v7c);
+        auto nextIdx = Vector3At(frame, v7c);
         Scale(v7c, m64, m64);
+        idx = nextIdx;
         mTrans->SetLocalRot(m64);
         break;
     }

@@ -119,8 +119,7 @@ void RndGraph::Reset() {
 void RndGraph::DrawAll() {
     if (sCam)
         sCam->Select();
-    auto _tmp0 = sGraphs->end();
-    for (std::list<RndGraph *>::iterator it = sGraphs->begin(); _tmp0 != it;
+    for (std::list<RndGraph *>::iterator it = sGraphs->begin(); it != sGraphs->end();
          ++it) {
         (*it)->Draw();
     }
@@ -128,7 +127,7 @@ void RndGraph::DrawAll() {
         sOneFrame->Draw();
         sOneFrame->Reset();
     }
-    for (std::list<FakeGraph>::iterator it = sFakes.begin(); sFakes.end() != it; ++it) {
+    for (std::list<FakeGraph>::iterator it = sFakes.begin(); it != sFakes.end(); ++it) {
         it->mDrawCallback();
     }
     sCam = nullptr;

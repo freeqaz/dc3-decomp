@@ -2961,7 +2961,7 @@ void HamDirector::DrawIconMan(Symbol moveName, Symbol nextClip, Symbol prevClip,
     PropKeys *practiceKeys = mMasterClipAnim->GetKeys(this, DataArrayPtr(practice));
     Keys<Symbol, Symbol> *keys = practiceKeys->AsSymbolKeys();
 
-    unsigned int foundIdx = 0;
+    int foundIdx = 0;
     unsigned int numKeys = (unsigned int)keys->size();
     for (; foundIdx < numKeys; foundIdx++) {
         if ((*keys)[foundIdx].value == moveName) goto found;

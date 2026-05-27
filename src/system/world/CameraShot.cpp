@@ -352,9 +352,9 @@ bool CamShotFrame::HasTargets() const {
 }
 
 void CamShotFrame::BuildTransform(RndCam *cam, Transform &tf, bool b3) const {
-    CamShotFrame *me = const_cast<CamShotFrame *>(this);
-
     Vector3 targetPos;
+
+    CamShotFrame *me = const_cast<CamShotFrame *>(this);
     GetCurrentTargetPosition(targetPos);
 
 #ifdef HX_NATIVE
@@ -380,7 +380,7 @@ void CamShotFrame::BuildTransform(RndCam *cam, Transform &tf, bool b3) const {
     }
 #endif
 
-    screenPos.x = -((mScreenOffset.x + 1.0f) * 0.5f - screenPos.x);
+    screenPos.x = -(-(screenPos.x - (mScreenOffset.x + 1.0f) * 0.5f));
     screenPos.y = -((1.0f - mScreenOffset.y) * 0.5f - screenPos.y);
 
     float dist = std::sqrt(screenPos.y * screenPos.y + screenPos.x * screenPos.x);
@@ -419,8 +419,7 @@ void CamShotFrame::BuildTransform(RndCam *cam, Transform &tf, bool b3) const {
         tf = mWorldOffset;
     }
 
-    RndTransformable *parent = mParent;
-    if (parent) {
+    if (mParent) {
         bool useLiveParent;
         if (!mParentFirstFrame || mCamShot->mShotStarted) {
             useLiveParent = true;
@@ -430,7 +429,7 @@ void CamShotFrame::BuildTransform(RndCam *cam, Transform &tf, bool b3) const {
 
         const Transform *parentXfm;
         if (useLiveParent) {
-            parentXfm = &parent->WorldXfm();
+            parentXfm = &mParent->WorldXfm();
         } else {
             parentXfm = &mTargetXfm;
         }

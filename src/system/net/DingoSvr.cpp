@@ -126,7 +126,7 @@ void DingoServer::AddDelayedCalls() {
             delete job;
         }
     }
-    mDelayedJobs.erase(mDelayedJobs.begin(), mDelayedJobs.end());
+    mDelayedJobs.erase(mDelayedJobs.end(), mDelayedJobs.begin());
 }
 
 DataNode DingoServer::OnMsg(const ConnectionStatusChangedMsg &msg) {

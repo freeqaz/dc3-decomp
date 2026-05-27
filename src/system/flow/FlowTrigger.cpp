@@ -109,19 +109,26 @@ BEGIN_LOADS(FlowTrigger)
         d >> mStopProperties;
     }
     if (d.rev == 0) {
-        FOREACH (it, mTriggerEvents) {
-            String cur = it->Str();
-            if (cur.contains("on_") && cur.contains("_change")) {
-                cur.erase(cur.length() - 7, 7);
-                cur.erase(0, 3);
-                PropTriggerDefn defn(this);
-                defn.mProvider = mEventProvider;
-                DataArrayPtr ptr(new DataArray(1));
-                ptr->Node(0) = Symbol(cur.c_str());
-                defn.mProperty = ptr;
-                mTriggerProperties.push_back(defn);
-                mTriggerEvents.erase(it);
-            }
+        // Manual do-while (not FOREACH) — matches target codegen via the
+        // hoisted end() iterator + explicit advancement (permuter-found).
+        auto end = mTriggerEvents.end();
+        auto it = mTriggerEvents.begin();
+        if (it != end) {
+            do {
+                String cur = it->Str();
+                if (cur.contains("on_") && cur.contains("_change")) {
+                    cur.erase(cur.length() - 7, 7);
+                    cur.erase(0, 3);
+                    PropTriggerDefn defn(this);
+                    defn.mProvider = mEventProvider;
+                    DataArrayPtr ptr(new DataArray(1));
+                    ptr->Node(0) = Symbol(cur.c_str());
+                    defn.mProperty = ptr;
+                    mTriggerProperties.push_back(defn);
+                    mTriggerEvents.erase(it);
+                }
+                ++it;
+            } while (it != mTriggerEvents.end());
         }
     }
 END_LOADS

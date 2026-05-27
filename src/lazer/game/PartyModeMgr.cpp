@@ -1727,8 +1727,9 @@ void PartyModeMgr::ReadPartySongQueue() {
     mGetPartySongQueueJob = nullptr;
     if (mPartySongQueue.size() != 0) {
         mCurrSyncedSongID = 0;
+        Symbol shortname;
         while (mPartySongQueue.size() != 0) {
-            Symbol shortname = TheHamSongMgr.GetShortNameFromSongID(mPartySongQueue.front().mSongID, false);
+                        shortname = TheHamSongMgr.GetShortNameFromSongID(mPartySongQueue.front().mSongID, false);
             if (!shortname.Null()) {
                 break;
             }
@@ -1742,7 +1743,7 @@ void PartyModeMgr::ReadPartySongQueue() {
         }
     } else {
         mCurrSyncedSongID = 0;
-        Symbol updated("song_queue_updated");
+        const Symbol& updated = ("song_queue_updated");
         BroadcastSyncMsg(updated);
     }
 }

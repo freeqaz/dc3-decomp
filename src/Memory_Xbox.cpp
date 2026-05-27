@@ -347,7 +347,8 @@ PhysMemTypeTracker::~PhysMemTypeTracker() {
 void *PhysicalAlloc(int size) {
     void *ptr = XPhysicalAlloc(size, -1, 0, 4);
     if (ptr) {
-        gPhysicalUsage += XPhysicalSize(ptr);
+        auto physSize = XPhysicalSize(ptr);
+        gPhysicalUsage += physSize;
     } else {
         if (size != 0) {
             MemAllocFailed(size, true);

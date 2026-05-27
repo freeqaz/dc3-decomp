@@ -1565,9 +1565,8 @@ void RndText::UpdateScrollOffsets() {
                 mLineWidths.insert(mLineWidths.end(), firstWidth);
             }
             mLineWidths.erase(mLineWidths.begin());
-            Hmx::Object *alt = mAltStyle;
-            if (alt != nullptr) {
-                alt->Handle(textScrolledIn, false);
+            if (mAltStyle != nullptr) {
+                mAltStyle->Handle(textScrolledIn, false);
             }
         }
 
@@ -1581,9 +1580,8 @@ void RndText::UpdateScrollOffsets() {
             }
             mLineOffsets.insert(mLineOffsets.end(), firstOffset);
             mLineOffsets.erase(mLineOffsets.begin());
-            Hmx::Object *alt2 = mAltStyle;
-            if (alt2 != nullptr) {
-                alt2->Handle(textScrolledOut, false);
+            if (mAltStyle != nullptr) {
+                mAltStyle->Handle(textScrolledOut, false);
             }
         }
         break;

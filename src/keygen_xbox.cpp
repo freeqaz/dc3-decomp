@@ -41,10 +41,10 @@ unsigned char asciiDigitToHex(char digit) {
 }
 
 void parseHex16(const char *input, unsigned char *output) {
-    unsigned int val;
     const char *src = input;
 
     for (unsigned int i = 0; i < 0x10; ++i) {
+        unsigned int val;
         val = (asciiDigitToHex(src[0]) << 4) + asciiDigitToHex(src[1]);
         src += 2;
         *output++ = val;
