@@ -344,6 +344,30 @@ def merge_auxiliary_file_sets(
     )
 
 
+_COMPOUND_PATTERN_PREFIXES = (
+    "compose:",
+    "chain:",
+    "crosscompose:",
+    "merge:",
+    "evo_cross:",
+    "evo_mut:",
+)
+
+
+def _base_pattern_names(pattern_name: str) -> list[str]:
+    """Split a (possibly composed) pattern name into its base stage names.
+
+    Composed names look like ``compose:foo+bar`` or ``chain:a+b+c``.  Bare
+    pattern names are returned as a single-element list so callers can use
+    one uniform shape.  This mirrors the helper of the same name in
+    ``beam_search.py`` / ``hill_climber.py``; keep them in sync.
+    """
+    for prefix in _COMPOUND_PATTERN_PREFIXES:
+        if pattern_name.startswith(prefix):
+            return pattern_name[len(prefix):].split("+")
+    return [pattern_name]
+
+
 def variant_file_updates(primary_path: Path, variant: Variant) -> dict[Path, bytes]:
     """Return the exact file writes implied by a variant.
 
@@ -353,12 +377,19 @@ def variant_file_updates(primary_path: Path, variant: Variant) -> dict[Path, byt
 
     Exception: patterns whose `structural_domain` is "cross_unit" (e.g.
     accessor_outline) legitimately insert wrapper functions outside the
-    target's byte range. For those we skip the pre-function check.
+    target's byte range. For those we skip the pre-function check.  The
+    exemption also applies to composed pattern names such as
+    ``compose:accessor_outline+declaration_reorder`` — any stage being
+    cross-unit is enough, because the wrapper insertion (or its byte
+    aftermath) survives later stages.
     """
     # Patterns that may legitimately write outside the target function's range.
     # Keep this list small — defaults remain strict.
     _CROSS_UNIT_PATTERNS = {"accessor_outline", "helper_inline"}
-    skip_scope_check = variant.pattern_name in _CROSS_UNIT_PATTERNS
+    skip_scope_check = any(
+        stage in _CROSS_UNIT_PATTERNS
+        for stage in _base_pattern_names(variant.pattern_name)
+    )
 
     # Scope isolation check: verify only target function bytes changed
     if (variant.func_byte_range and variant.original_source

@@ -13,10 +13,11 @@ def _make_variant(
     original: bytes | None = None,
     byte_range: tuple[int, int] | None = None,
     name: str = "test",
+    pattern_name: str = "test_pattern",
 ) -> Variant:
     return Variant(
         name=name,
-        pattern_name="test_pattern",
+        pattern_name=pattern_name,
         description="test variant",
         source=source,
         func_byte_range=byte_range,
@@ -117,6 +118,66 @@ class TestScopeIsolation(unittest.TestCase):
         )
         with self.assertRaises(ValueError):
             variant_file_updates(_PATH, variant)
+
+    def test_cross_unit_pattern_skips_before_check(self):
+        """Cross-unit patterns may insert wrappers before the function."""
+        mod = bytearray(_ORIGINAL)
+        # Modify a byte BEFORE the function — simulates a wrapper insertion.
+        mod[0:2] = b"XX"
+        variant = _make_variant(
+            bytes(mod),
+            _ORIGINAL,
+            (_FUNC_START, _FUNC_END),
+            pattern_name="accessor_outline",
+        )
+        # Should NOT raise — cross-unit patterns are exempt.
+        result = variant_file_updates(_PATH, variant)
+        self.assertIn(_PATH.resolve(), result)
+
+    def test_composed_cross_unit_pattern_skips_before_check(self):
+        """compose:accessor_outline+X should also be exempt.
+
+        Regression test: previously the cross-unit allowlist used exact
+        pattern_name equality, so composed names never matched and
+        legitimate wrapper insertions raised ValueError.
+        """
+        mod = bytearray(_ORIGINAL)
+        mod[0:2] = b"XX"
+        variant = _make_variant(
+            bytes(mod),
+            _ORIGINAL,
+            (_FUNC_START, _FUNC_END),
+            pattern_name="compose:accessor_outline+declaration_reorder",
+        )
+        result = variant_file_updates(_PATH, variant)
+        self.assertIn(_PATH.resolve(), result)
+
+    def test_chain_cross_unit_pattern_skips_before_check(self):
+        """chain:a+accessor_outline+b should also be exempt."""
+        mod = bytearray(_ORIGINAL)
+        mod[0:2] = b"XX"
+        variant = _make_variant(
+            bytes(mod),
+            _ORIGINAL,
+            (_FUNC_START, _FUNC_END),
+            pattern_name="chain:declaration_reorder+accessor_outline+goto_to_return",
+        )
+        result = variant_file_updates(_PATH, variant)
+        self.assertIn(_PATH.resolve(), result)
+
+    def test_compose_without_cross_unit_stage_still_strict(self):
+        """compose:foo+bar with no cross-unit stage must still raise."""
+        mod = bytearray(_ORIGINAL)
+        mod[0:2] = b"XX"
+        variant = _make_variant(
+            bytes(mod),
+            _ORIGINAL,
+            (_FUNC_START, _FUNC_END),
+            pattern_name="compose:declaration_reorder+goto_to_return",
+        )
+        with self.assertRaises(ValueError) as cm:
+            variant_file_updates(_PATH, variant)
+        self.assertIn("BEFORE", str(cm.exception))
 
 
 if __name__ == "__main__":
