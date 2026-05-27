@@ -170,4 +170,76 @@ budget ever drops a real winner on a larger function set — not observed in thi
 sample. Worth the coordinator's consideration for a low-budget default, but the
 budget is the risk knob, not the flag itself.
 
+### `PERMUTER_C1_SOURCE_DIFF` (A=off, B=both)
+
+| | A (off) | B (both) |
+|---|---|---|
+| wins | 1/10 | 1/10 |
+| variants scored | 237 | 237 |
+| errors | 0 | 0 |
+
+**Verdict: SAFE, neutral on RB3.** Identical wins and variant counts — C1 is a
+beam-ranking tie-break, so it reorders the queue but does not change the
+discovered set on this 10-fn sample. No regression, no crashes. (C1 is already
+default-on per the repo history; this run confirms it does no harm on RB3.)
+
+---
+
+## 4. Optimization findings — RB3 / mwcceppc path
+
+1. **objdiff is nearly free on RB3** (25.6ms/call vs DC3's 263ms). RB3 `.o`
+   targets are smaller, so any diff-side optimization (A2 daemon, etc.) has
+   almost no headroom here. The entire per-variant cost is the **mwcceppc
+   compile (2136ms run)**. Optimization effort on RB3 should target the
+   compile, not the diff.
+
+2. **The preprocess-cache is the right lever but macro-gated.** It directly
+   attacks the 2136ms compile by skipping the `-E` re-parse, and where it
+   fires it delivers 1.4-2.1x with zero divergences. The ceiling is the
+   macro-aware gate: ~half of real RB3 functions reference a live macro
+   (`MILO_ASSERT`, `FOREACH`, `RELEASE`, ...) in the body and fall back to a
+   full compile. **The highest-value RB3 optimization is widening fast-path
+   coverage past simple macro references** — e.g. splicing the *expanded* form
+   of a known set of safe object-like macros, or pre-expanding the variant body
+   against the cached live-macro map before the splice. That would move the
+   macro-heavy population (currently 0.93x) onto the fast path and likely lift
+   the pooled RB3 speedup above 1.5x.
+
+3. **The fallback path is mildly net-negative** (0.93x pooled on macro-heavy
+   fns). When the cache is enabled but the body can't be spliced, the run still
+   pays the one-time `-E` preprocess + the per-variant macro scan and then does
+   the full compile anyway. For a default-on world this argues for a per-
+   function "is this body splice-eligible?" pre-check that disables the cache
+   entirely (skipping even the `-E`) for macro-dense functions, so the fallback
+   never costs more than plain OFF.
+
+4. **The predictor is the cheapest throughput win on RB3** (-38% variants /
+   -22% wall at budget 8, no win loss), and unlike the preprocess-cache it is
+   compiler-agnostic (it culls before compile, so mwcceppc's high compile cost
+   makes each culled variant worth more here than on DC3).
+
+5. **Lock contention is real on a shared tree.** Running the permuter against
+   `../rb3` while other agents touch it (or after a SIGKILL'd run) hits the
+   `flock` guard. This is correct fail-fast behavior, but for batch sweeps the
+   driver should clean stale `.permuter.lock` files at startup and retry locked
+   functions once — the `--only` re-run path makes that a one-liner today.
+
+---
+
+## Summary — verdicts (RB3 only; coordinator cross-checks DC3)
+
+| Flag / feature | RB3 verdict | Evidence |
+|----------------|-------------|----------|
+| `PERMUTER_PREPROCESS_CACHE` | **Do NOT default-on for RB3** (safe as opt-in) | N=185, 0 divergences, but pooled 1.20x / median 1.18x < 1.5x; macro-gated (1.44x active / 0.93x fallback) |
+| `PERMUTER_HARD_FILTERS` | SAFE, no-op on RB3 | 1/1 wins, 226/226 variants, 0 err |
+| `PERMUTER_PREDICTOR` (budget 8) | SAFE, throughput win | -38% variants, -22% wall, 1/1 wins, 0 err |
+| `PERMUTER_C1_SOURCE_DIFF` | SAFE, neutral | 1/1 wins, 237/237 variants, 0 err |
+
+**Engine stability on a second toolchain: solid.** Across all sweeps (ppab +
+throughput + 3 flag A/Bs ≈ 1700+ variant compiles on mwcceppc): **0 genuine
+crashes / exceptions / hangs.** The only failures were transient
+source-`flock` contention on the shared RB3 tree (the lock guard working
+correctly), all of which succeeded on re-run.
+
+
 
