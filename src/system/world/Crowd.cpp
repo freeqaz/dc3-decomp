@@ -111,7 +111,8 @@ WorldCrowd::WorldCrowd()
       mModifyStamp(0) {
     if (gNumCrowd++ == 0) {
         int w, h, bpp;
-        if (GetGfxMode() == kNewGfx) {
+        auto _tmp0 = GetGfxMode();
+        if (_tmp0 == kNewGfx) {
             w = 256;
             h = 512;
             bpp = 32;
@@ -136,8 +137,8 @@ WorldCrowd::WorldCrowd()
         mat->SetTexWrap(kTexWrapClamp);
         mat->SetPerPixelLit(false);
         mat->SetPointLights(true);
-        CreateAndSetMetaMat(mat);
         gImpostorCamera = Hmx::Object::New<RndCam>();
+        CreateAndSetMetaMat(mat);
         SetMatAndCameraLod();
     }
 }
@@ -773,34 +774,29 @@ void WorldCrowd::SetFullness(float flatFullness, float charFullness) {
     mFlatFullness = flatFullness;
     Delete3DCrowdHandles();
     FOREACH (it, mCharacters) {
-        RndMultiMesh *multiMesh = it->mMMesh;
-        if (multiMesh) {
-            InstanceList &instances = multiMesh->mInstances;
-            int instanceCount = (int)instances.size();
-            InstanceList &backup = it->mBackup;
-            int backupCount = (int)backup.size();
+        if (it->mMMesh) {
+            int instanceCount = (int)it->mMMesh->mInstances.size();
+            int backupCount = (int)it->mBackup.size();
             int targetInstances = (int)((float)(instanceCount + backupCount) * mFlatFullness);
             if (instanceCount < targetInstances) {
                 int toMove = targetInstances - instanceCount;
-                InstanceList::iterator backIt = backup.begin();
+                InstanceList::iterator backIt = it->mBackup.begin();
                 for (int i = 0; i < toMove; i++) {
                     ++backIt;
                 }
-                instances.splice(instances.end(), backup, backup.begin(), backIt);
+                it->mMMesh->mInstances.splice(it->mMMesh->mInstances.end(), it->mBackup, it->mBackup.begin(), backIt);
             } else if (targetInstances < instanceCount) {
                 int toRemove = instanceCount - targetInstances;
-                InstanceList::iterator instIt = instances.begin();
+                InstanceList::iterator instIt = it->mMMesh->mInstances.begin();
                 for (int i = 0; i < toRemove; i++) {
                     ++instIt;
                 }
-                backup.splice(backup.end(), instances, instances.begin(), instIt);
-                multiMesh->InvalidateProxies();
+                it->mBackup.splice(it->mBackup.end(), it->mMMesh->mInstances, it->mMMesh->mInstances.begin(), instIt);
+                it->mMMesh->InvalidateProxies();
             }
             unsigned int totalChars3D = it->m3DCharsCreated.size();
             int targetChars3D = (int)((float)totalChars3D * charFullness);
-            if (targetChars3D >= (int)totalChars3D) {
-                targetChars3D = (int)totalChars3D;
-            }
+            targetChars3D = Min(targetChars3D, (int)totalChars3D);
             int currentChars3D = (int)it->m3DChars.size();
             if (currentChars3D < targetChars3D) {
                 int toAdd = targetChars3D - currentChars3D;
