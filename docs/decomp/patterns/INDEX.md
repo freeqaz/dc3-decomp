@@ -3,7 +3,11 @@
 Quick reference for all documented decompilation patterns in DC3 (Dance Central 3), targeting Xbox 360 / MSVC (PowerPC).
 
 > **Data source:** `decomp.db` — 50,981 functions (34,215 non-excluded). 92.8% COMPLETE, 7.2% AT_LIMIT, 0.04% remaining (14 stubs).
-> **Last updated:** 2026-03-03
+> **Last updated:** 2026-05-27
+
+## Session catalogues
+
+- [permuter-patterns-2026-05-27.md](permuter-patterns-2026-05-27.md) — 3 new patterns (reference_elimination_chain, loop_body_assign_hoist, signed_unsigned_cast_polarity), 15 proposal-stage patterns, tooling fixes (libclang+guards), validated wins on both DC3 and RB3.
 
 ## Fixable Patterns
 
