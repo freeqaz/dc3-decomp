@@ -4,8 +4,15 @@ Uses the native CMake build's compile_commands.json to parse TUs and
 resolve types at specific byte offsets. Strips -DHX_NATIVE=1 so we
 analyze PPC code paths (where the decomp bugs live).
 
-Graceful degradation: if clang.cindex is unavailable, is_available()
-returns False and all resolve_* functions return None.
+Requires ``native/build/compile_commands.json``. If absent, regenerate
+with::
+
+    cd native/build && cmake . -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+Graceful degradation: if clang.cindex is unavailable OR the compdb is
+missing OR a TU fails to parse, is_available() may still return True but
+resolve_* functions return None. Patterns that depend on types must
+treat None as "unknown" and fall back to syntactic heuristics.
 """
 
 from __future__ import annotations
@@ -212,18 +219,34 @@ def _get_clang_resource_dir() -> str | None:
 
 def _filter_compile_args(raw_args: list[str], filepath: str) -> list[str]:
     """Filter compile_commands args for libclang parsing."""
-    filtered = []
-    skip_next = False
-    for a in raw_args[1:]:  # skip compiler path
-        if skip_next:
-            skip_next = False
+    filtered: list[str] = []
+    args = raw_args[1:]  # skip compiler path
+    skip_n = 0
+    for i, a in enumerate(args):
+        if skip_n > 0:
+            skip_n -= 1
             continue
         if a in ("-o", "-c"):
-            skip_next = True
+            skip_n = 1
             continue
         if a == filepath:
             continue
         if a.startswith("--driver-mode"):
+            continue
+        # `--` is the end-of-options separator; libclang's _IDX.parse treats
+        # everything after as input files, breaking the parse.
+        if a == "--":
+            continue
+        # Skip `-Xclang -include[-pch] -Xclang <pch-file>` blocks: PCH inclusion
+        # via libclang requires version-matched .pch files we don't have here.
+        if (a == "-Xclang" and i + 3 < len(args)
+                and args[i + 1] in ("-include-pch", "-include")
+                and args[i + 2] == "-Xclang"
+                and args[i + 3].endswith((".pch", ".hxx", ".h", ".hpp"))):
+            skip_n = 3
+            continue
+        # `-Winvalid-pch` is meaningless once PCH is stripped.
+        if a == "-Winvalid-pch":
             continue
         filtered.append(a)
     filtered.append("-w")
