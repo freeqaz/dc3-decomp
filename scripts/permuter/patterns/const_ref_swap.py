@@ -35,6 +35,13 @@ _PRIMITIVE_TYPES = frozenset({
     "int64_t", "uint8_t", "uint16_t", "uint32_t", "uint64_t",
     "intptr_t", "uintptr_t", "ptrdiff_t", "DWORD", "BOOL", "BYTE",
     "WORD",
+    # Windows/WinNT typedefs — uppercase but scalar
+    "LONGLONG", "ULONGLONG", "LARGE_INTEGER", "ULARGE_INTEGER",
+    "HANDLE", "HRESULT", "HWND", "HMODULE", "HINSTANCE", "HKEY",
+    "WPARAM", "LPARAM", "LRESULT", "COLORREF",
+    "UINT", "ULONG", "USHORT", "INT", "LONG", "CHAR", "WCHAR",
+    "LPCSTR", "LPSTR", "LPCWSTR", "LPWSTR", "LPVOID", "LPCVOID",
+    "DWORD64", "XUID", "UINT64", "INT64", "UINT32", "INT32",
 })
 
 # Well-known Milo/Hmx struct types (always safe to swap).
@@ -73,6 +80,39 @@ def _is_struct_type(type_text: str) -> bool:
     # Qualified names like Hmx::Foo, std::string
     if "::" in bare and _UPPERCASE_START_RE.match(bare.split("::")[-1]):
         return True
+
+    return False
+
+
+def _is_address_taken(body: Node, var_name: bytes, decl_node: Node) -> bool:
+    """Check if *var_name* has its address taken (&var) after its declaration.
+
+    Taking the address of a const-ref variable has different semantics than
+    taking the address of a copy — for a const-ref ``r``, ``&r`` gives the
+    address of the referent, while for a copy ``v``, ``&v`` gives the address
+    of the local copy. Skip when address-of is detected to avoid semantic
+    changes.
+    """
+    after_decl = False
+    for n in walk(body):
+        if n.id == decl_node.id:
+            after_decl = True
+            continue
+        if not after_decl:
+            continue
+
+        # tree-sitter parses `&expr` inside argument lists as
+        # `pointer_expression` (not `unary_expression`); check both forms.
+        if n.type in ("unary_expression", "pointer_expression"):
+            op = n.child_by_field_name("operator")
+            arg = n.child_by_field_name("argument")
+            if (
+                op is not None and op.text == b"&"
+                and arg is not None
+                and arg.type == "identifier"
+                and arg.text == var_name
+            ):
+                return True
 
     return False
 
@@ -131,8 +171,11 @@ class ConstRefSwapPattern(Pattern):
             stmt_node, var_name, type_text, is_const_ref, decl_start, decl_end = decl
 
             # If converting to const ref, verify the variable is not modified
+            # and its address is not taken (different semantics for ref vs copy).
             if not is_const_ref:
                 if _is_modified_after(body, var_name, stmt_node):
+                    continue
+                if _is_address_taken(body, var_name, stmt_node):
                     continue
 
             ed = SourceEditor(source)
@@ -256,15 +299,38 @@ def _analyze_declaration(
     if not _is_struct_type(bare_type):
         return None
 
-    # Initializer must be a simple expression (not a call that changes
-    # semantics when evaluated 0 vs 1 times).
-    if value.type == "call_expression":
-        # Calls have side effects — copy vs ref changes evaluation count.
-        # However, for copy init vs const ref init, the call is evaluated
-        # exactly once in both cases, so this is actually safe. But the
-        # result type might not be an lvalue for const ref binding.
-        # Skip to be safe.
-        return None
+    # For copy→ref direction, the initializer must produce an lvalue (or at
+    # least be something MWCC accepts as a const-ref binding target). Several
+    # value types are structurally incompatible with const-ref binding:
+    #
+    #   - argument_list: constructor-call syntax `T v(a, b)` — the `value`
+    #     node is the argument_list `(a, b)`. Rewriting as `const T& v(a, b)`
+    #     is not valid C++; it always produces a build failure.
+    #   - call_expression: function returning by value — technically binds to
+    #     const-ref in MWCC, but we skip to avoid unpredictable codegen.
+    #   - initializer_list: aggregate `{...}` — not ref-able.
+    #   - new_expression: heap allocation, never an lvalue.
+    #
+    # We only allow the copy→ref swap for value types that are clearly lvalues
+    # or simple rvalue expressions (binary, cast, conditional) that MWCC will
+    # accept for const-ref binding.
+    if not is_const_ref:
+        _BLOCKED_VALUE_TYPES = frozenset({
+            "argument_list",    # T v(args) — constructor syntax, never valid as const T& v(args)
+            "call_expression",  # f() returns temporary — skip to avoid false wins
+            "initializer_list", # {a, b, c} — aggregate, not ref-able
+            "new_expression",   # new T(...) — pointer result, not applicable
+        })
+        if value.type in _BLOCKED_VALUE_TYPES:
+            return None
+
+        # Reject null/nullptr initializers: `T v = nullptr` for struct types
+        # is unusual (usually a pointer typedef); converting to const-ref changes
+        # semantics and is likely a type error.
+        if value.type in ("null", "nullptr") or (
+            value.type == "identifier" and value.text in (b"nullptr", b"NULL")
+        ):
+            return None
 
     return (stmt, var_name, bare_type, is_const_ref, stmt.start_byte, stmt.end_byte)
 
