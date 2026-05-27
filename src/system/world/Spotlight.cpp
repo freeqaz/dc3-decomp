@@ -1111,7 +1111,8 @@ void Spotlight::BuildBeam(BeamDef &def) {
 void Spotlight::BuildCone(BeamDef &def) {
     MILO_ASSERT(!SpotlightDrawer::DrawNGSpotlights(), 0x5B6);
     def.mIsCone = true;
-    def.mBeam = Hmx::Object::New<RndMesh>();
+    auto _tmp0 = Hmx::Object::New<RndMesh>();
+    def.mBeam = _tmp0;
     RndMesh::VertVector &verts = def.mBeam->Verts();
     std::vector<RndMesh::Face> &faces = def.mBeam->Faces();
 
@@ -1120,7 +1121,7 @@ void Spotlight::BuildCone(BeamDef &def) {
 
     float len = def.mLength;
     float bottomBorderLen = def.mBottomBorder * len;
-    bottomBorderLen = (float)__fsel(len - bottomBorderLen, bottomBorderLen, len);
+    bottomBorderLen = (float)__fsel(bottomBorderLen - len, bottomBorderLen, len);
     float borderY = len - bottomBorderLen;
     float borderRadius = (borderY / len) * (def.mBottomRadius - def.mTopRadius) + def.mTopRadius;
 
@@ -1128,7 +1129,7 @@ void Spotlight::BuildCone(BeamDef &def) {
     float uvStep = 1.0f / 15.0f;
     float angleStep = 0.4188790f;
 
-    for (int i = 0; i != 15; i++) {
+    for (unsigned int i = 0; i - 15; i++) {
         float cosA = std::cos(angle);
         float sinA = std::sin(angle);
 
@@ -1273,11 +1274,7 @@ void Spotlight::BuildNGCone(BeamDef &def, int numSegments) {
         }
 
         short sideWidth;
-        if (seg < numSegments - 1) {
-            sideWidth = 3;
-        } else {
-            sideWidth = 3 - (short)numVerts;
-        }
+                sideWidth = seg < numSegments - 1 ? 3 : 3 - (short)numVerts;
 
         short cur = baseIdx - 1;
         int curFlip = flip;
@@ -1285,7 +1282,7 @@ void Spotlight::BuildNGCone(BeamDef &def, int numSegments) {
         do {
             flip = curFlip + 1;
             short nextRow = cur - 1 + sideWidth;
-            if (curFlip & 1) {
+            if (curFlip && 1) {
                 faces[iFace].Set(nextRow, cur - 1, nextRow + 1);
                 faces[iFace + 1].Set(nextRow + 1, cur - 1, cur);
             } else {
@@ -1351,9 +1348,9 @@ void Spotlight::BuildNGSheet(BeamDef &def) {
 
     def.mBeam = Hmx::Object::New<RndMesh>();
     int numSections = def.mNumSections;
-    std::vector<RndMesh::Face> &faces = def.mBeam->Faces();
-
     RndMesh::VertVector &verts = def.mBeam->Verts();
+
+    std::vector<RndMesh::Face> &faces = def.mBeam->Faces();
     if (numSections <= 1) numSections = 5;
     int numSegments = def.mNumSegments;
     if (numSegments <= 2) numSegments = 10;

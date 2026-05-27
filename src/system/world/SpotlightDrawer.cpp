@@ -303,7 +303,8 @@ void SpotlightDrawer::DrawLight(Spotlight *spot) {
         entry.mSpotlight = spot;
         sLights.push_back(entry);
 
-        if (sHaveAdditionals || spot->GetAdditionalObjects().size() > 0) {
+        auto _tmp1 = spot->GetAdditionalObjects().size();
+        if (sHaveAdditionals || _tmp1 > 0) {
             sHaveAdditionals = true;
         }
 
@@ -329,13 +330,12 @@ void SpotlightDrawer::DrawLight(Spotlight *spot) {
         sNeedDraw = true;
     }
 
-    RndMesh* lightCanMesh = spot->mLightCanMesh;
-    if (lightCanMesh && !spot->mLightCanSort) {
+    if (spot->mLightCanMesh && !spot->mLightCanSort) {
         const Transform& xfm = spot->WorldXfm();
         float nearDist = spot->mLightCanOffset;
         if (nearDist <= 0.0f) {
             SpotMeshEntry meshEntry;
-            meshEntry.mCanMesh = lightCanMesh;
+            meshEntry.mCanMesh = spot->mLightCanMesh;
             meshEntry.mEnvMesh = nullptr;
             meshEntry.mSpotlight = spot;
             meshEntry.mTransform = xfm;
