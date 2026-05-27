@@ -2335,9 +2335,8 @@ void RndText::DrawShowing() {
         for (int i = 0; i < numMeshes; i++) {
             RndMesh *mesh = fontMap->Mesh(i);
             if (mesh) {
-                auto blacklightDisabled = TheUI ? TheUI->DisableScreenBlacklight() : true;
                 if (!sBlacklightModeEnabled || !fontMap->mBlacklight ||
-                    blacklightDisabled) {
+                    TheUI->DisableScreenBlacklight()) {
                     DrawMesh(mesh, mStyles[0].mSize, 0);
                 } else {
                     QueueBlacklightPacket(mesh, mStyles[0].mSize, 0);
