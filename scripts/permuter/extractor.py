@@ -15,6 +15,20 @@ from .types import FunctionContext, PreprocRegion
 CPP_LANGUAGE = Language(tscpp.language())
 _PARSER = Parser(CPP_LANGUAGE)
 
+
+def _project_compiler_dialect() -> str:
+    """Resolve the project's compiler dialect (mwcc | msvc) from permuter.json.
+
+    Lazily imported to avoid an import cycle. Every FunctionContext built here
+    must carry the project dialect so dialect-gated patterns (e.g. varext's
+    `auto`) emit correctly under batch entry points, not just the single-fn CLI.
+    """
+    try:
+        from .project_config import get_compiler
+        return get_compiler()
+    except Exception:
+        return "mwcc"
+
 _AST_CACHE_MAX = 50
 _ast_cache: OrderedDict[bytes, Tree] = OrderedDict()
 
@@ -310,6 +324,7 @@ def _try_macro_extraction(
             statements=statements,
             func_byte_range=(macro_start, macro_end),
             preproc_regions=_find_function_preproc_regions(source, (macro_start, macro_end)),
+            compiler_dialect=_project_compiler_dialect(),
         )
 
     return None
@@ -434,6 +449,7 @@ def reparse_variant(
                 func_byte_range=func_range,
                 diagnosis=original_ctx.diagnosis,
                 symbol=original_ctx.symbol,
+                compiler_dialect=original_ctx.compiler_dialect,
                 ghidra_code=original_ctx.ghidra_code,
                 ghidra_ast=original_ctx.ghidra_ast,
                 m2c_code=original_ctx.m2c_code,
@@ -621,4 +637,5 @@ def _build_context(
         statements=statements,
         func_byte_range=func_range,
         preproc_regions=_find_function_preproc_regions(source, func_range),
+        compiler_dialect=_project_compiler_dialect(),
     )
