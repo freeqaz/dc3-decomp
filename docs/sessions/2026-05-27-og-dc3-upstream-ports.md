@@ -88,13 +88,35 @@ through:
 Each step verified with `run_objdiff`. Subagent used `run_diff_inspect mode="mismatches"`
 between steps to pick the next cluster.
 
-### Sweep diminishing returns in 90-95% band
+### 90-95% band sweep — full results (committed `6e9b495a`)
 
-90-95% AT_LIMIT band sweep (335 functions) yielded **1 improvement in 25
-functions processed** (+0.09%) before manual port work overtook it. Most
-mismatches in this band are prologue/regalloc divergences that the permuter's
-source transformations can't shift. Wave-2 funded the conclusion: at sub-95%,
-manual upstream-port (or audit-style root-cause finds) beats automated permuter.
+The 90-95% AT_LIMIT sweep (335 functions) ran to completion: **37 improved,
+283 no-change, 15 errors, +48.7% total delta**. Landed 32 of the 37 (commit
+`6e9b495a`); the others were churn (+0.01-0.05) in already-committed files or
+TexRenderer's +0.04 on top of its earlier commit.
+
+**Caution learned: don't judge a sweep mid-run.** When checked at 25/335 the
+sweep showed only 1 win (+0.09%) — the early alphabetical-ish functions were
+low-yield. The back half held the big wins:
+- HamDirector::LoadCrew         90.7 → 99.2 (+8.4)
+- PoseFatalities::UpdateClipDriver 93.7 → 99.2 (+5.6)
+- PartyModeMgr::ResetModes       92.7 → 98.2 (+5.5)
+- MetagameRank::AwardForRankUp   94.9 → 98.9 (+4.0)
+- HamNavList::DrawShowing        90.7 → 94.5 (+3.9)
+- SpotlightDrawer::DrawWorld     91.3 → 94.3 (+3.0)
+
+The 90-95% band is **worth sweeping** (≈11% hit rate, +48.7% total). The
+mid-run pessimism in the prior draft of this note was wrong. Run the full
+sweep, don't extrapolate from the first 10%.
+
+**Harvest safety (autonomous):** the working tree mixed sweep output with
+concurrent-agent work. Separated by: (1) cross-referencing the sweep's JSON
+`improvements` list against `git status`, (2) confirming no `.permuter.lock`
+files and no sweep-win file modified in the last 3 min, (3) `run_objdiff`
+spot-checks that on-disk % == sweep's claimed final %, (4) grepping staged
+additions for comments/structs/asserts (none → pure mechanical transforms).
+Committed only the 32 verified files by explicit path; `git add -A` would have
+bundled Flow.cpp, audit Wave 3, and permuter-dev scripts.
 
 ## What to do next
 
@@ -113,9 +135,11 @@ manual upstream-port (or audit-style root-cause finds) beats automated permuter.
    Agents 4 (AccomplishmentProgress), 6 (Spotlight class), 11 (HamVisDir),
    12 (DataFlex), 13 (Profile::GetPadNum sweep) are unstarted.
 
-3. **Skip the 90-95% permuter sweep** — confirmed low hit rate (~4%, tiny
-   gains). The remaining at-limit functions in this band are dominated by
-   regalloc/prologue divergences. Direct manual work has 10-100× better ROI.
+3. **Run the sub-90% permuter sweep** (task #15). The 90-95% sweep landed
+   +48.7% (32 wins) — the band is productive, contrary to the mid-run guess.
+   Command: `venv/bin/python -m scripts.permuter.batch_auto --target workable
+   --include-at-limit --min-pct 80 --max-pct 90 --limit 0 --json 2>&1 | tee
+   cl_temp_files/permuter/sweep_80_90.log`. Run to completion before judging.
 
 4. **Mark stale DB stats.** `CheckBSPTree` was logged as 89.3% in the function
    DB but is actually 99% AT_LIMIT (regswap, unfixable). The DB has more stale
