@@ -701,6 +701,22 @@ Commit `3ca539f7` — wave 1:
 | `?OnSetHeightFromText@UILabel@@…` | `default/system/ui/UILabel` | 99.97% → 100% | `ComputeHeight(mCurScrollChars, …)` should be `ComputeHeight(mNumLinesRendered, …)` — same offset, wrong field name. |
 | `?InitPool@ParticleCommonPool@@QAAXXZ` | `default/system/rndobj/Part` | 99.85% → 100%norm | Two compounding bugs: (a) bogus trailing `mBirthVelocityZ` pushed `RndFancyParticle` to 0xcc instead of the target 0xc8; (b) `mPoolParticles` was typed `RndParticle*` so `mPoolParticles[i]` used the wrong stride. Fixed by removing the spurious member and re-typing `mPoolParticles` to `RndFancyParticle*` in `Part.h`. Velocity reads in MoveParticles relabeled to the now-correct adjacent fields. |
 
+Wave 3 (additional commits — `aeb1e5df`, `dca0b4e6`, `7d89ff55`, and partials d938521b/af01330c/cef0a559 for MoveParticles, plus `659e8b02` HamVisDir, `a5511687` XboxEnumeration, `377314f1` UIListSubList, `b687680a` MoggClip):
+
+| Function | Unit | Before → After | Root cause |
+|---|---|---|---|
+| `?IsSuccess@XboxEnumeration@@UBA_NXZ` | `default/system/meta/StoreEnumeration` | 99.3% → 100% | Hardcoded `*((bool*)((u8*)this + 0x24))` read `mOverlapped.InternalHigh` instead of `mEnumerating` (target reads +0x1c). Replaced with named `return mEnumerating;` (also drops the spurious `#ifdef HX_NATIVE` split). |
+| `??1HamVisDir@@UAA@XZ` | `default/system/hamobj/HamVisDir` | 99.3% → 100% (norm) | `unk2cc` was declared `std::vector<unsigned int>` (size 0xC); target has `std::vector<bool>` (STLport _Bvector_base, size 0x14). Changed type; the two phantom `unk2d8`/`unk2dc` slots are the vector's internal `_M_finish` halves, not real members. |
+| `?Draw@UIListSubList@@UAA…` | `default/system/ui/UIListSubList` | 99.99% → 100% | `UIListElementDrawState` had `mElementState` (0x28) before `mComponentState` (0x2c); target has them reversed. Swap. Sibling `UIListDir::DrawWidgets` stays 100%. |
+| `?Play@MoggClip@@UAAXM@Z` | `default/system/synth/MoggClip` | 99.8% → 100% | Missing inline `SetControllerVolume(mControllerVolume)` helper made Play, Save, SyncProperty, PreLoad all confuse `mVolume` (0x44) and `mControllerVolume` (0x40). Added the helper + fixed the four call sites. **4 functions fixed at once.** |
+| `?Save@MoggClip@@UAAXAAVBinStream@@@Z` | same | 99.9% → 100% | Same root cause as above. |
+| `?SyncProperty@MoggClip@@…` | same | 99.2% raw → 100% | Same. |
+| `?PreLoad@MoggClip@@UAAXAAVBinStream@@@Z` | same | 99.8% → 100% | Same. |
+| `?AddAccomplishment@AccomplishmentProgress@@QAA_NVSymbol@@@Z` | `default/lazer/meta_ham/AccomplishmentProgress` | 99.15% → 100% (norm) | `MILO_LOG` → `MILO_NOTIFY` in the error branch. The handoff doc listed four wrong-call divergences here; three turned out to be ICF noise (same address, different name), only one was a real wrong-helper. |
+| `?OnMsg@OptionsPanel@@…(RCJobCompleteMsg…)` | `default/lazer/meta_ham/OptionsPanel` | 94.19% → 99.7% | The `switch ((unsigned int)res)` cast forced unsigned compares (`cmplw`); target uses signed dispatch (`cmpw` then `subic.`/`subf.`). Drop the cast and re-mark the four HRESULT case labels `0x800AXXXX` as `(int)` so they're valid for a signed switch. **5.5%-point improvement on a 1416-byte function.** Remaining 22 mismatches are callee-saved regswap noise (verdict: AtLimit). |
+| `?Draw@DrawPtrVec@@QBAXXZ` | `default/system/char/Character` | 99.97% → 100% | Source called `it->Obj()->DrawShowing()`; target calls `it->Obj()->Draw()` (the guarded entry that frustum-culls before dispatching to `DrawShowing`). Confirmed by `dump_vtable.py`'s slot-5 vs slot-6 distinction. (The non-HX_NATIVE definition of the same function at `Draw.cpp:154` already calls `->Draw()` — confirming intent.) |
+| `?MoveParticles@RndParticleSys@@IAAXMM@Z` | `default/system/rndobj/Part` | 75.0% → 80.0%+ | Multi-step: (1) introduce intermediate scalar temps so the compiler emits `fmuls+fadds` separately instead of `fmadds`; (2) re-reference `p->pos`/`p->vel` instead of the locally-bound `pos`/`vel` (so the compiler uses the heap-stored copies in a different register set); (3) use the 3-arg `Multiply(Vec3, Matrix3, Vec3 &)` form. Still iterating; large function with deep regalloc + 5 OFFSET_SWAP residues. |
+
 Commit `a10eec2a` — wave 2:
 
 | Function | Unit | Before → After | Root cause |
