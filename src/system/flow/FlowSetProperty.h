@@ -39,7 +39,7 @@ protected:
     float mEasePower; // 0x5C
     bool mIsColorInterp; // 0x60
     ObjPtr<Hmx::Object> mListener; // 0x64
-    float mElapsed; // 0x78
+    int mStartValueType; // 0x78 - cached mStartValue.Type() at ctor time (before atoi conversion)
     EaseFunc *mEaseFunc; // 0x7C
 };
 

@@ -25,7 +25,7 @@ FlowSetProperty::FlowSetProperty()
 PropertyTask::PropertyTask(Hmx::Object *obj, DataNode &prop, DataNode &val, TaskUnits units, float dur, EaseType t, float power, bool flag, Hmx::Object *listener)
     : mTarget(this, nullptr), mProperty(prop), mValue(val), mStartValue(0),
       mDuration(dur), mEasePower(power), mIsColorInterp(flag),
-      mListener(this, nullptr), mElapsed(0.0f), mEaseFunc(gEaseFuncs[t]) {
+      mListener(this, nullptr), mEaseFunc(gEaseFuncs[t]) {
     auto refsEnd = obj->Refs().end();
     MILO_ASSERT(obj, 0x4D);
     MILO_ASSERT(t >= kEaseLinear && t <= kEaseQuarterHalfStairstep, 0x16B);
@@ -57,8 +57,12 @@ PropertyTask::PropertyTask(Hmx::Object *obj, DataNode &prop, DataNode &val, Task
     mTarget = obj;
     mStartValue = *obj->Property(mProperty.Array(), true);
 
-    // Handle string-to-int conversion for kDataString type
-    if (mStartValue.Type() == kDataString) {
+    // Cache the original start value type so SetProperty can decide whether
+    // to format-as-string when assigning the (possibly interpolated) value
+    // back to the target property. We must save this BEFORE the atoi
+    // conversion below, since that overwrites mStartValue's type to kDataInt.
+    mStartValueType = mStartValue.Type();
+    if (mStartValueType == kDataString) {
         mStartValue = atoi(mStartValue.Str());
     }
     if (mValue.Type() == kDataString) {
@@ -138,7 +142,10 @@ bool PropertyTask::Replace(ObjRef *from, Hmx::Object *to) {
 }
 
 void PropertyTask::SetProperty(DataNode &val) {
-    if (val.Type() == kDataString) {
+    // Use the cached original start value type, not val's type. The
+    // interpolated value gets coerced to int/float during ramping, so val.Type()
+    // would lose the string-formatting decision.
+    if (mStartValueType == kDataString) {
         DataNode strNode(MakeString("%i", val));
         mTarget->SetProperty(mProperty.Array(), strNode);
     } else {
