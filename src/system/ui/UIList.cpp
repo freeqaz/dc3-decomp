@@ -330,13 +330,13 @@ void UIList::UpdateExtendedEntries(UIListState const &state) {
     UIListProvider *prov = state.Provider();
     if (prov && prov->NumData() > 0) {
         UIList *pMainList = mParent ? mParent : this;
-        MILO_ASSERT(pMainList, 0x3FD);
+        MILO_ASSERT(pMainList, 0x3EF);
         for (ObjPtrList<UILabel, ObjectDir>::iterator it =
                  pMainList->mExtendedLabelEntries.begin();
              it != pMainList->mExtendedLabelEntries.end();
              ++it) {
             UILabel *label = *it;
-            MILO_ASSERT(label, 0x404);
+            MILO_ASSERT(label, 0x3F6);
             prov->UpdateExtendedText(state.SelectedDisplay(), state.SelectedData(), label);
         }
         for (ObjPtrList<RndMesh, ObjectDir>::iterator it =
@@ -344,7 +344,7 @@ void UIList::UpdateExtendedEntries(UIListState const &state) {
              it != pMainList->mExtendedMeshEntries.end();
              ++it) {
             RndMesh *mesh = *it;
-            MILO_ASSERT(mesh, 0x40F);
+            MILO_ASSERT(mesh, 0x401);
             prov->UpdateExtendedMesh(state.SelectedDisplay(), state.SelectedData(), mesh);
         }
         for (ObjPtrList<Hmx::Object, ObjectDir>::iterator it =
@@ -352,7 +352,7 @@ void UIList::UpdateExtendedEntries(UIListState const &state) {
              it != pMainList->mExtendedCustomEntries.end();
              ++it) {
             Hmx::Object *custom = *it;
-            MILO_ASSERT(custom, 0x41A);
+            MILO_ASSERT(custom, 0x40C);
             prov->UpdateExtendedCustom(
                 state.SelectedDisplay(), state.SelectedData(), custom
             );
