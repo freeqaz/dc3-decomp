@@ -1273,8 +1273,8 @@ bool RndBitmap::LoadDIB(BinStream *bs, unsigned int offbits) {
         }
     }
     if (infoheader.biBitCount == 4) {
-        unsigned char *p = (unsigned char *)pixels;
         for (int k = pixelBytes; k > 0; k--) {
+            unsigned char *p = (unsigned char *)pixels;
             *p = (*p << 4) | (*p >> 4);
             p++;
         }
@@ -1325,9 +1325,9 @@ void RndBitmap::Load(BinStream &bs) {
         workingMip->mMip = newMip;
         workingW = workingW >> 1;
         workingH = workingH >> 1;
+        workingMip = newMip;
         newMip->Create(workingW, workingH, 0, mBpp, mOrder, mPalette, 0, 0);
         ReadChunks(bs, newMip->mPixels, newMip->PixelBytes(), 0x8000);
-        workingMip = newMip;
     }
 }
 #endif
