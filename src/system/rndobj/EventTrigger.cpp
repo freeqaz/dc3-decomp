@@ -653,52 +653,48 @@ void EventTrigger::CleanupHideShow() {
 DataNode EventTrigger::Cleanup(DataArray *arr) {
     ObjectDir *dir = arr->Obj<ObjectDir>(1);
     std::list<EventTrigger *> trigList;
-    for (ObjDirItr<EventTrigger> iter(dir, true); iter != nullptr; ++iter) {
-        trigList.push_back(iter);
-        for (std::list<Symbol>::iterator iter2 = iter->mTriggerEvents.begin();
-             iter2 != iter->mTriggerEvents.end(); ++iter2) {
+    for (ObjDirItr<EventTrigger> it(dir, true); it != nullptr; ++it) {
+        trigList.push_back(it);
+        FOREACH (event, it->mTriggerEvents) {
             char buf[128];
-            strcpy(buf, iter2->Str());
+            strcpy(buf, event->Str());
             FileNormalizePath(buf);
-            *iter2 = buf;
+            *event = buf;
         }
-        for (ObjList<Anim>::iterator iter2 = iter->mAnims.begin();
-             iter2 != iter->mAnims.end(); ++iter2) {
-            RndAnimFilter *filter = dynamic_cast<RndAnimFilter *>(iter2->mAnim.Ptr());
+        FOREACH (anim, it->mAnims) {
+            RndAnimFilter *filter = dynamic_cast<RndAnimFilter *>(anim->mAnim.Ptr());
             if (filter) {
-                const ObjRef &refs = filter->Refs();
-                ObjRef::iterator rit = refs.begin();
-                ObjRef::iterator ritEnd = refs.end();
-                for (; rit != ritEnd; ++rit) {
-                    if (rit->RefOwner() && rit->RefOwner() != (EventTrigger *)iter) break;
+                ObjRef::iterator ref;
+                for (ref = filter->Refs().begin(); ref != filter->Refs().end(); ++ref) {
+                    if (ref->RefOwner() && ref->RefOwner() != it) {
+                        break;
+                    }
                 }
-                if (rit == ritEnd && filter->GetType() != RndAnimFilter::kShuttle) {
+                if (ref == filter->Refs().end()
+                    && filter->GetType() != RndAnimFilter::kShuttle) {
+                    anim->mAnim = filter->Anim();
+                    anim->mEnable = true;
+                    anim->mRate = filter->GetRate();
+                    anim->mStart = filter->Start();
+                    anim->mEnd = filter->End();
+                    anim->mPeriod = filter->Period();
+                    anim->mScale = filter->Property("scale")->Float();
                     static Symbol range("range");
                     static Symbol loop("loop");
-                    iter2->mAnim = filter->Anim();
-                    iter2->mEnable = true;
-                    iter2->mRate = filter->GetRate();
-                    iter2->mStart = filter->Start();
-                    iter2->mEnd = filter->End();
-                    iter2->mPeriod = filter->Period();
-                    iter2->mScale = filter->Property("scale", true)->Float();
-                                        if ((filter->GetType() == RndAnimFilter::kLoop)) {
-                        iter2->mType = loop;
-                    } else {
-                        iter2->mType = range;
-                    }
+                    if (filter->GetType() == RndAnimFilter::kLoop)
+                        anim->mType = loop;
+                    else
+                        anim->mType = range;
                     delete filter;
                 }
             }
         }
     }
-    for (std::list<EventTrigger *>::iterator iter = trigList.begin();
-         iter != trigList.end(); ++iter) {
+    FOREACH (iter, trigList) {
         EventTrigger *curTrig = *iter;
         for (std::list<EventTrigger *>::iterator iter2 = iter; iter2 != trigList.end();) {
             EventTrigger *curTrig2 = *iter2;
-            if (curTrig != curTrig2
-                && curTrig2->mTriggerEvents == curTrig->mTriggerEvents
+            if (curTrig != curTrig2 && curTrig2->mTriggerEvents == curTrig->mTriggerEvents
                 && curTrig2->mEnableEvents == curTrig->mEnableEvents
                 && curTrig2->mDisableEvents == curTrig->mDisableEvents
                 && curTrig2->mWaitForEvents == curTrig->mWaitForEvents) {
@@ -726,12 +722,11 @@ DataNode EventTrigger::Cleanup(DataArray *arr) {
                 curTrig2->ReplaceRefs(curTrig);
                 delete curTrig2;
                 iter2 = trigList.erase(iter2);
-            } else {
+            } else
                 ++iter2;
-            }
         }
     }
-    return DataNode(0);
+    return 0;
 }
 
 DataNode EventTrigger::OnProxyCalls(DataArray *) {
