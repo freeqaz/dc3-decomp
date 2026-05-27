@@ -1304,7 +1304,7 @@ def annotate_vtable(class_name, vtable_symbol, entries):
                     elif entry['declared_in'] == 'Hmx::Object':
                         annotations[i] = f'[Hmx::Object] {entry["name"]}'
                     else:
-                        annotations[i] = f'[inherited from {entry["declared_in"]}] {entry["name"]}'
+                        annotations[i] = f'[from {entry["declared_in"]}] {entry["name"]}'
     elif base_class:
         # Subobject vtable: slots correspond to base_class's primary layout.
         # Special-cased: RndHighlightable subobject vtable has only [Highlight]
@@ -1336,7 +1336,7 @@ def annotate_vtable(class_name, vtable_symbol, entries):
                     elif entry['declared_in'] == 'Hmx::Object':
                         annotations[i] = f'[Hmx::Object] {entry["name"]}'
                     else:
-                        annotations[i] = f'[inherited from {entry["declared_in"]}] {entry["name"]}'
+                        annotations[i] = f'[from {entry["declared_in"]}] {entry["name"]}'
 
     return annotations
 

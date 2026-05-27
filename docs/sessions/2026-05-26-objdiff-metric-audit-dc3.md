@@ -794,12 +794,23 @@ verified as benign ICF (no source change needed, just better filtering).
 2. **Audit script TMPDIR support** (`scripts/analysis/audit_normalized_masking.py`): hard-coded `/tmp/objdiff_audit` is now `$TMPDIR/objdiff_audit` so the script works inside the harness sandbox (read-only `/tmp`).
 3. **dump_vtable.py UX overhaul** (`scripts/dump_vtable.py`, `.claude/skills/vtable/SKILL.md`): replaced the broken hardcoded `[Object]` slot annotations with class-header-derived declaration-order names. Parses the class header to extract `virtual` methods, walks the parent chain to count inherited slots, and labels each slot as `[inherited from <Parent>]` or `[new in <Class>]`. Also added `--diff-pair OFFSET1 OFFSET2` for vtable-mismatch diagnosis. Tested on RndDrawable (slot 5 = Draw, slot 6 = DrawShowing — ICF-folded as OnlyReturns).
 
-### Pending — final agents
+### StreamRecorder::Poll — final win (commit `4fdb3115`)
 
-Subagent still in flight: PropertyTask + **StreamRecorder::Poll** MI cast fix
-(`?Poll@StreamRecorder@@UAAXXZ`, still 99.8% with the 3 `lwz [off:-272]` /
-`addi [off:-272]` / `lwz [off:+20]` MI sub-object pattern matching
-`DrawPtrVec::Draw`'s fix shape).
+`?Poll@StreamRecorder@@UAAXXZ`: 99.77% → **100%** raw. The three
+`[off:-272]` / `[off:+20]` MI cast pattern wasn't `DrawShowing` after
+all — it was a **wrong virtual** entirely. Source called
+`mInputDir->DrawShowing()` (RndDrawable vtable @ +0x9c, slot 6); target
+calls `mInputDir->Poll()` (RndPollable sub-vtable @ +0x1ac, slot 1).
+Semantically correct: StreamRecorder's per-frame `Poll()` recurses
+into the input dir's poll chain so its `RndTexRenderer` advances one
+frame before the sampled texture is read. Fix is `Poll()` not
+`DrawShowing()`. (Coincidentally similar root-cause shape to
+`DrawPtrVec::Draw` — wrong virtual on the same object — but a
+different wrong virtual.)
+
+### Final totals (24 functions to 100%, 18 session commits)
+
+Updated final tally above is **24** (not 23) once StreamRecorder lands.
 
 ### Audit-script followups still owed
 
