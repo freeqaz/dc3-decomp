@@ -285,7 +285,10 @@ void StreamRecorder::Poll() {
     } else {
         if (mRecordingPos >= 0.0f) {
             if (mInputDir) {
-                mInputDir->DrawShowing();
+                // Recurse the input dir's poll chain so its TexRenderer (and
+                // any other pollables) advance one frame before we sample the
+                // rendered texture for this recorded frame.
+                mInputDir->Poll();
                 mRecordingPos += TheTaskMgr.DeltaSeconds();
             }
         }
