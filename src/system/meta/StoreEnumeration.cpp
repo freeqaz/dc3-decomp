@@ -42,18 +42,10 @@ XboxEnumeration::~XboxEnumeration() {
 }
 
 bool XboxEnumeration::IsSuccess() const {
-#ifdef HX_NATIVE
-    // Use proper member access instead of hardcoded struct offsets
     if (mHandle != 0) {
         MILO_ASSERT(false, 0x208);
     }
-    return (bool)mOverlapped.InternalHigh;
-#else
-    if (*((u32*)((u8*)this + 0x3c)) != 0) {
-        MILO_ASSERT(false, 0x208);
-    }
-    return *((bool*)((u8*)this + 0x24));
-#endif
+    return mEnumerating;
 }
 
 void XboxEnumeration::Start() {
