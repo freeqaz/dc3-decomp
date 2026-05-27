@@ -48,6 +48,87 @@ def hard_filters_enabled() -> bool:
     )
 
 
+def syntax_probe_enabled() -> bool:
+    """Whether the pre-queue syntax probe is active.
+
+    Default ON: it is baseline-relative (a variant is only dropped when it
+    introduces MORE tree-sitter parse errors than the unmodified baseline
+    already has), so it cannot drop a variant the compiler would have accepted
+    purely because of tree-sitter's known C++/macro fragility. Set
+    PERMUTER_SYNTAX_PROBE=0 to disable as an escape hatch.
+    """
+    return os.environ.get("PERMUTER_SYNTAX_PROBE", "1").strip().lower() in (
+        "1", "true", "yes", "on",
+    )
+
+
+def _count_parse_errors(source: bytes) -> int:
+    """Count ERROR + MISSING tree-sitter nodes in *source* (uncapped).
+
+    Uses the same tree-sitter C++ grammar/parser the rest of the permuter uses
+    (via extractor's cached parse) so the baseline and variant are measured by
+    the identical parser. Parsing is ~3 orders of magnitude cheaper than a
+    compile, so running it per generated variant is cheap relative to the
+    compile it may save.
+    """
+    from .extractor import _cached_parse
+
+    tree = _cached_parse(source)
+    root = tree.root_node
+    if not root.has_error:
+        return 0
+    count = 0
+    # Iterative DFS — avoids recursion limits on large files and is allocation
+    # light. We count both explicit ERROR nodes and MISSING (inserted) nodes,
+    # which together are tree-sitter's two error signals.
+    stack = [root]
+    while stack:
+        node = stack.pop()
+        if node.type == "ERROR" or node.is_missing:
+            count += 1
+        # Only descend into subtrees that actually contain an error, so a
+        # fully-parsed function elsewhere in the file costs nothing.
+        for child in node.children:
+            if child.has_error or child.is_missing or child.type == "ERROR":
+                stack.append(child)
+    return count
+
+
+def _syntax_probe_filter(
+    variants: "Iterator[Variant]",
+    baseline_source: bytes,
+) -> "Iterator[Variant]":
+    """Drop variants that introduce NEW syntax errors vs the baseline.
+
+    Baseline-relative by design: real Milo source already trips tree-sitter
+    (function-like macros, BEGIN_*/END_* blocks) so the unmodified file reports
+    parse errors. We therefore reject a variant only when its parse-error count
+    strictly exceeds the baseline's — i.e. the pattern's edit introduced a brand
+    new error. This guarantees no false drops from pre-existing macro fragility
+    (correctness — no lost wins — outranks the speedup), while still catching the
+    generically-doomed variants (e.g. an extraction that breaks the surrounding
+    statement) before they reach the expensive compile.
+    """
+    baseline_errors = _count_parse_errors(baseline_source)
+    dropped = 0
+    for variant in variants:
+        # Fast path: unchanged source can't add errors (and patterns sometimes
+        # emit the original bytes). Avoids a redundant parse on the no-op case.
+        if variant.source == baseline_source:
+            yield variant
+            continue
+        if _count_parse_errors(variant.source) > baseline_errors:
+            dropped += 1
+            continue
+        yield variant
+    if dropped > 0:
+        print(
+            f"Syntax probe: dropped {dropped} variant(s) that introduced "
+            f"new parse errors (pre-compile)",
+            file=sys.stderr,
+        )
+
+
 def _winner_domains(round_hints: RoundHints | None) -> set[str]:
     """Collect structural domains from the most recent winning pattern(s)."""
     if not round_hints or not round_hints.last_winner:
@@ -293,6 +374,14 @@ def generate_variants(
         round_hints=round_hints,
         failed_patterns=failed_patterns,
     )
+
+    # Generic pre-queue syntax probe: drop variants that introduce NEW parse
+    # errors before they reach the (expensive) compile. Baseline-relative so it
+    # never false-drops a compilable variant (see _syntax_probe_filter). Wraps
+    # the lazy impl stream so it stays lazy and order-preserving.
+    if syntax_probe_enabled():
+        impl = _syntax_probe_filter(impl, ctx.file_source)
+
     if not predictor_enabled():
         # Default path: pure pass-through, preserves lazy yielding + order.
         yield from impl
