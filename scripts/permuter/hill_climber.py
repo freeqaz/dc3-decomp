@@ -512,6 +512,9 @@ def hill_climb(
     result_il_duplicate_buckets = 0
     result_il_pattern_metrics: dict[str, dict[str, int]] = {}
     all_validation_results: list[ValidationResult] = []
+    # Diagnosis category from the first round — recorded with pattern_runs so
+    # strategy_db.bulk_load_from_pattern_runs can group by real diag_cat, not 'unknown'.
+    last_diag_cat: str | None = None
 
     # Pattern stats tracking
     from .pattern_stats import RunStatsAccumulator
@@ -712,6 +715,10 @@ def hill_climb(
                                 "has_offset": bool(scorer.diagnosis.offset_deltas),
                             }
                             diag_cat = classify_diagnosis_category(diag_info)
+                            # Persist the first-round category so store_run
+                            # below can write real categories instead of NULL.
+                            if last_diag_cat is None:
+                                last_diag_cat = diag_cat
                         if unit_cat:
                             strategy_recs = apply_strategy_boosts(
                                 round_hints, unit_cat, diag_cat,
@@ -1347,6 +1354,7 @@ def hill_climb(
             source_path=str(source_path),
             initial_pct=initial_percent,
             final_pct=final_percent,
+            diagnosis_category=last_diag_cat,
             unit=unit,
             caller="hill_climber",
         )

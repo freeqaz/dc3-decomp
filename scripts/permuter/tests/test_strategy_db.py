@@ -13,6 +13,7 @@ from scripts.permuter.strategy_db import (
     StrategyRecord,
     _MANUAL_ONLY_PATTERNS,
     apply_strategy_boosts,
+    classify_diagnosis_category,
     unit_category,
 )
 from scripts.permuter.types import RoundHints
@@ -176,6 +177,95 @@ class TestApplyStrategyBoosts(unittest.TestCase):
         recs = apply_strategy_boosts(hints, "system/rndobj", db_path=Path("/nonexistent/db"))
         self.assertEqual(recs, [])
         self.assertEqual(len(hints.atlas_boost_patterns), 0)
+
+
+class TestDiagnosisCategoryStoredCorrectly(unittest.TestCase):
+    """Regression tests for the B1 bug: pattern_runs must record real diag_cat values.
+
+    Before the fix, every record in strategy.db had diagnosis_category='unknown'
+    because hill_climber.py never passed the category to store_run, and
+    beam_search.py used a non-existent .category attribute.  The boost formula
+    requires a matching diag_cat to return non-trivial hit counts, so
+    the prioritisation was silently inert.
+    """
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.db_path = Path(self.tmpdir) / "test_strategy.db"
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_upsert_with_real_diag_cat_stored_as_given(self):
+        """Verify that a record inserted with a real diag_cat is stored verbatim."""
+        db = StrategyDB(self.db_path)
+        db.upsert_strategy("signed_unsigned", "system/rndobj", "regswap", 5.0, False, "sym1")
+        db.close()
+
+        db = StrategyDB(self.db_path)
+        results = db.lookup(unit_cat="system/rndobj", diag_cat="regswap", min_wins=1)
+        db.close()
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].diagnosis_category, "regswap",
+                         "Expected 'regswap' but got 'unknown' — diag_cat was dropped")
+
+    def test_classify_diagnosis_category_produces_real_cats(self):
+        """classify_diagnosis_category() must return concrete categories, not 'unknown'."""
+        regswap = classify_diagnosis_category({"has_regswap": True, "has_structural": False,
+                                               "has_prologue": False, "has_offset": False})
+        self.assertEqual(regswap, "regswap")
+
+        mixed = classify_diagnosis_category({"has_regswap": True, "has_structural": True,
+                                             "has_prologue": False, "has_offset": False})
+        self.assertEqual(mixed, "mixed")
+
+        clean = classify_diagnosis_category({"has_regswap": False, "has_structural": False,
+                                             "has_prologue": False, "has_offset": False})
+        self.assertEqual(clean, "clean")
+
+    def test_recommend_patterns_finds_real_diag_cat_not_unknown(self):
+        """recommend_patterns must return boost >1.0 when diag_cat matches stored records."""
+        db = StrategyDB(self.db_path)
+        # Seed enough wins in a specific diag_cat to exceed the boost threshold (1.2)
+        for _ in range(20):
+            db.upsert_strategy("comparison_flip", "system/rndobj", "regswap", 5.0, True, "sym")
+        db.close()
+
+        db = StrategyDB(self.db_path)
+        recs = db.recommend_patterns("system/rndobj", diag_cat="regswap")
+        db.close()
+
+        self.assertTrue(any(r.pattern == "comparison_flip" for r in recs),
+                        "comparison_flip should appear in recommendations")
+        cf = next(r for r in recs if r.pattern == "comparison_flip")
+        self.assertGreater(cf.priority_boost, 1.2,
+                           "boost must exceed 1.2 threshold to activate strategy-DB boosting")
+
+    def test_unknown_diag_cat_does_not_match_real_cat_query(self):
+        """Records stored as 'unknown' must NOT appear in a 'regswap' query.
+
+        This is the exact failure mode B1 identified: all records were 'unknown'
+        so queries for 'regswap' returned 0 rows and the boost stayed at 1.0.
+        """
+        db = StrategyDB(self.db_path)
+        for _ in range(20):
+            # Old behaviour: everything stored as 'unknown'
+            db.upsert_strategy("comparison_flip", "system/rndobj", "unknown", 5.0, True, "sym")
+        db.close()
+
+        db = StrategyDB(self.db_path)
+        recs = db.recommend_patterns("system/rndobj", diag_cat="regswap")
+        db.close()
+
+        cf_list = [r for r in recs if r.pattern == "comparison_flip"]
+        if cf_list:
+            cf = cf_list[0]
+            # unit_count drives the boost; it must be 0 when the only records are 'unknown'
+            # (the cross-count may be non-zero, but that only gives boost up to ~1.1)
+            self.assertLessEqual(cf.priority_boost, 1.2,
+                                 "Records stored as 'unknown' should NOT activate the regswap boost")
 
 
 class TestStrategyRecord(unittest.TestCase):

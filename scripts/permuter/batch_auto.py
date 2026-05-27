@@ -406,6 +406,7 @@ def main():
                 compose=not args.no_compose,
                 apply=not args.no_apply,
                 workers=workers,
+                unit=candidate.get("unit"),
             )
 
             stats["processed"] += 1

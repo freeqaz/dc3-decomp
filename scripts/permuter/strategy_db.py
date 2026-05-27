@@ -829,6 +829,36 @@ def _print_stats(stats: dict):
         print(f"  {u['unit']:35s} wins={u['wins']:5d} patterns={u['patterns']:3d}")
 
 
+def cmd_clean_unknown(args):
+    """Delete all rows with diagnosis_category='unknown' from strategy.db.
+
+    Old runs written before the fix stored NULL diagnosis_category, which
+    bulk_load_from_pattern_runs coerced to 'unknown'.  These rows can never
+    be backfilled because the original mismatch context is gone.  Deleting
+    them lets fresh runs (which now record real categories) accumulate a
+    correct, queryable distribution.
+
+    Mining-derived rows also use 'unknown' because mine_patterns.py has no
+    diagnosis data — those rows are removed here too and will reappear on
+    the next `strategy_db build`.  The trade-off is accepted: cross-diagnosis
+    data is less valuable than correctly-keyed per-diagnosis data.
+    """
+    if not DB_PATH.exists():
+        print(f"No strategy.db found at {DB_PATH}", file=sys.stderr)
+        sys.exit(1)
+
+    db = StrategyDB()
+    conn = db._connect()
+    before = conn.execute("SELECT COUNT(*) FROM strategy WHERE diagnosis_category='unknown'").fetchone()[0]
+    conn.execute("DELETE FROM strategy WHERE diagnosis_category='unknown'")
+    conn.commit()
+    after = conn.execute("SELECT COUNT(*) FROM strategy").fetchone()[0]
+    db.close()
+
+    print(f"Deleted {before} 'unknown' rows; {after} rows remain.")
+    print("Re-run `strategy_db build-from-runs` after more permuter runs to populate real categories.")
+
+
 def main():
     import argparse
 
@@ -847,6 +877,11 @@ def main():
 
     sub.add_parser("stats", help="Show database statistics")
 
+    sub.add_parser(
+        "clean-unknown",
+        help="Delete stale diagnosis_category='unknown' rows (pre-fix data with unrecoverable context)",
+    )
+
     args = parser.parse_args()
     if args.command == "build":
         cmd_build(args)
@@ -856,6 +891,8 @@ def main():
         cmd_query(args)
     elif args.command == "stats":
         cmd_stats(args)
+    elif args.command == "clean-unknown":
+        cmd_clean_unknown(args)
     else:
         parser.print_help()
 

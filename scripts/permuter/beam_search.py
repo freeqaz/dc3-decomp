@@ -1167,7 +1167,15 @@ def beam_search(
         from .pattern_stats import store_run as store_pattern_run
         diag_cat = None
         if best_ever_state and best_ever_state.diagnosis:
-            diag_cat = getattr(best_ever_state.diagnosis, 'category', None)
+            from .strategy_db import classify_diagnosis_category
+            diag_info = {
+                "has_regswap": bool(best_ever_state.diagnosis.reg_swap_pairs),
+                "has_structural": best_ever_state.diagnosis.replace_real > 0
+                                  or bool(best_ever_state.diagnosis.clusters),
+                "has_prologue": best_ever_state.diagnosis.has_prologue_mismatch,
+                "has_offset": bool(best_ever_state.diagnosis.offset_deltas),
+            }
+            diag_cat = classify_diagnosis_category(diag_info)
         store_pattern_run(
             accumulator=pattern_accumulator,
             symbol=symbol,
