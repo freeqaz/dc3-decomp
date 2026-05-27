@@ -243,34 +243,36 @@ def parse_mangled_method(mangled):
 # ---------------------------------------------------------------------------
 # Ground-truth virtual layout for Hmx::Object
 #
-# This is the root of the class hierarchy. Anchoring the layout here avoids
-# parsing the OBJ_CLASSNAME / OBJ_SET_TYPE macros in Object.h. Order matches
-# ??_7Object@Hmx@@6B@ in build/373307D9/obj/system/obj/Object.obj.
+# Each entry: (name, is_const) — cv-qualifier matters because a derived
+# class's `void Print() const` does NOT override `void Print()` (the binary
+# treats them as separate slots).
+# Order matches ??_7Object@Hmx@@6B@ in build/373307D9/obj/system/obj/Object.obj.
 # ---------------------------------------------------------------------------
-OBJECT_VIRTUALS = [
-    '~Object',         # 0: scalar deleting dtor
-    'RefOwner',        # 1
-    'Replace',         # 2
-    'ClassName',       # 3 (from OBJ_CLASSNAME macro)
-    'SetType',         # 4 (from OBJ_SET_TYPE macro)
-    'Handle',          # 5
-    'SyncProperty',    # 6
-    'InitObject',      # 7
-    'Save',            # 8
-    'Copy',            # 9
-    'Load',            # 10
-    'PreSave',         # 11
-    'PostSave',        # 12
-    'Print',           # 13
-    'Export',          # 14
-    'SetTypeDef',      # 15
-    'ObjectDef',       # 16
-    'SetName',         # 17
-    'DataDir',         # 18
-    'PreLoad',         # 19
-    'PostLoad',        # 20
-    'FindPathName',    # 21
+OBJECT_VIRTUALS_INFO = [
+    ('~Object',         False),  # 0: scalar deleting dtor
+    ('RefOwner',        True),   # 1 (const)
+    ('Replace',         False),  # 2
+    ('ClassName',       True),   # 3 (const, from OBJ_CLASSNAME macro)
+    ('SetType',         False),  # 4 (from OBJ_SET_TYPE macro)
+    ('Handle',          False),  # 5
+    ('SyncProperty',    False),  # 6
+    ('InitObject',      False),  # 7
+    ('Save',            False),  # 8
+    ('Copy',            False),  # 9
+    ('Load',            False),  # 10
+    ('PreSave',         False),  # 11
+    ('PostSave',        False),  # 12
+    ('Print',           False),  # 13 (NOT const — distinct from `Print() const`)
+    ('Export',          False),  # 14
+    ('SetTypeDef',      False),  # 15
+    ('ObjectDef',       False),  # 16
+    ('SetName',         False),  # 17
+    ('DataDir',         False),  # 18
+    ('PreLoad',         False),  # 19
+    ('PostLoad',        False),  # 20
+    ('FindPathName',    False),  # 21
 ]
+OBJECT_VIRTUALS = [n for n, _c in OBJECT_VIRTUALS_INFO]
 
 
 # RndHighlightable is a virtual base in DC3's class hierarchy. Its dtor
@@ -513,10 +515,14 @@ def _extract_class_body_virtuals(body, class_name):
         is_pure = '=' in decl[decl_start - decl_start:]  # `= 0`
         is_pure = '= 0' in (after_paren + decl[decl_end - decl_start - 1:])
 
+        # Detect `const` cv-qualifier on the method (immediately after `)`)
+        # Look for `const` as a standalone keyword in `after_paren`.
+        is_const = bool(re.search(r'\bconst\b', after_paren))
         results.append({
             'name': name,
             'override': is_override,
             'pure': is_pure,
+            'const': is_const,
         })
 
         # If the declaration is an inline definition (terminated by `{`),
@@ -672,6 +678,43 @@ def get_class_info(class_name):
 # Cache: class_name -> list of {'name': str, 'declared_in': str, 'override': bool}
 _LAYOUT_CACHE = {}
 
+# Cache: class_name -> bool (does its primary inheritance chain include
+# a virtual base anywhere?)
+_HAS_VBASE_CACHE = {}
+
+
+def class_has_vbase_in_chain(class_name, visited=None):
+    """Return True if `class_name` or any of its non-virtual ancestors has
+    a virtual base in its declaration. Cached.
+    """
+    if visited is None:
+        visited = set()
+    if class_name in visited:
+        return False
+    visited = visited | {class_name}
+    if class_name in _HAS_VBASE_CACHE:
+        return _HAS_VBASE_CACHE[class_name]
+    norm = _normalize_class_name(class_name)
+    if norm == 'Hmx::Object':
+        _HAS_VBASE_CACHE[class_name] = False
+        return False
+    info = get_class_info(norm)
+    if info is None:
+        _HAS_VBASE_CACHE[class_name] = False
+        return False
+    for b in info['bases']:
+        if b['virtual']:
+            _HAS_VBASE_CACHE[class_name] = True
+            return True
+    # Recurse into non-virtual primary base
+    for b in info['bases']:
+        if not b['virtual'] and '<' not in b['name']:
+            if class_has_vbase_in_chain(_normalize_class_name(b['name']), visited):
+                _HAS_VBASE_CACHE[class_name] = True
+                return True
+    _HAS_VBASE_CACHE[class_name] = False
+    return False
+
 
 def _normalize_class_name(name):
     """Normalize a class name (strip namespace, template args)."""
@@ -688,8 +731,8 @@ def _normalize_class_name(name):
 def get_object_subobject_layout():
     """Return the 22-virtual layout of Hmx::Object (the inherited subobject)."""
     return [
-        {'name': n, 'declared_in': 'Hmx::Object', 'override': False}
-        for n in OBJECT_VIRTUALS
+        {'name': n, 'declared_in': 'Hmx::Object', 'override': False, 'const': c}
+        for n, c in OBJECT_VIRTUALS_INFO
     ]
 
 
@@ -810,18 +853,41 @@ def build_primary_vtable_layout(class_name, visited=None):
         _LAYOUT_CACHE[class_name] = None
         return None
 
-    parent_names = {e['name'] for e in parent_layout}
-    # OBJ_CLASSNAME / OBJ_SET_TYPE expand to ClassName / SetType virtuals.
-    # These override Object's slots and are NOT new slots.
+    # Build a set of (name, const?) pairs from the parent layout.
+    # In MSVC PPC, a derived virtual that differs only in cv-qualifier from
+    # the parent virtual is a *new* virtual (separate slot), not an override.
+    parent_sigs = {(e['name'], e.get('const', False)) for e in parent_layout}
+    parent_name_only = {e['name'] for e in parent_layout}
+    # OBJ_CLASSNAME / OBJ_SET_TYPE expand to ClassName/SetType virtuals.
+    # ClassName is const, SetType is non-const.
     if 'OBJ_CLASSNAME' in info['macros']:
-        parent_names.add('ClassName')
+        parent_sigs.add(('ClassName', True))
+        parent_name_only.add('ClassName')
     if 'OBJ_SET_TYPE' in info['macros']:
-        parent_names.add('SetType')
+        parent_sigs.add(('SetType', False))
+        parent_name_only.add('SetType')
 
-    # Also collect virtuals from SECONDARY bases. Methods that share a name
-    # with a secondary base's virtual are overrides — they go in the
-    # secondary base's subobject vtable, not the primary vtable.
-    secondary_names = set()
+    # If the inheritance chain contains a virtual base (typically
+    # `virtual RndHighlightable` -> `virtual Hmx::Object`), then Object's
+    # virtuals are reachable through the vbase subobject vtable. Overrides
+    # of them DON'T add slots to the primary vtable.
+    if class_has_vbase_in_chain(class_name):
+        for n, c in OBJECT_VIRTUALS_INFO:
+            parent_sigs.add((n, c))
+            parent_name_only.add(n)
+        # Also any vbase's own virtuals
+        for b in info['bases']:
+            if b['virtual']:
+                vb_layout = build_primary_vtable_layout(
+                    _normalize_class_name(b['name']), visited
+                )
+                if vb_layout:
+                    for entry in vb_layout:
+                        parent_sigs.add((entry['name'], entry.get('const', False)))
+                        parent_name_only.add(entry['name'])
+
+    # Collect virtuals from SECONDARY bases (signature-aware).
+    secondary_sigs = set()
     for b in info['bases']:
         if b['virtual']:
             continue
@@ -834,15 +900,16 @@ def build_primary_vtable_layout(class_name, visited=None):
         )
         if sec_layout:
             for entry in sec_layout:
-                secondary_names.add(entry['name'])
+                secondary_sigs.add((entry['name'], entry.get('const', False)))
 
     # Build new layout
     layout = list(parent_layout)
     for v in info['virtuals']:
-        if v['name'] in parent_names:
-            # Override — reuses parent's slot
+        sig = (v['name'], v.get('const', False))
+        if sig in parent_sigs:
+            # Same name AND same cv-qualifier as a parent virtual — override
             continue
-        if v['name'] in secondary_names:
+        if sig in secondary_sigs:
             # Override of a secondary base's virtual — lives in that
             # base's subobject vtable, not the primary.
             continue
@@ -855,6 +922,7 @@ def build_primary_vtable_layout(class_name, visited=None):
             'name': v['name'],
             'declared_in': norm,
             'override': False,
+            'const': v.get('const', False),
         })
 
     _LAYOUT_CACHE[class_name] = layout
@@ -1197,25 +1265,29 @@ def annotate_vtable(class_name, vtable_symbol, entries):
         if has_vbase:
             # Primary vtable holds class's new virtuals only
             new_layout = []
-            # Compute the set of virtuals inherited from virtual base(s) and Object
-            inherited_names = set(OBJECT_VIRTUALS)
+            # Compute the set of (name, const) sigs inherited from virtual
+            # base(s) and Object.
+            inherited_sigs = set(OBJECT_VIRTUALS_INFO)
             for b in info['bases']:
                 if b['virtual']:
                     pl = build_primary_vtable_layout(_normalize_class_name(b['name']))
                     if pl:
                         for entry in pl:
-                            inherited_names.add(entry['name'])
+                            inherited_sigs.add(
+                                (entry['name'], entry.get('const', False))
+                            )
             if 'OBJ_CLASSNAME' in info['macros']:
-                inherited_names.add('ClassName')
+                inherited_sigs.add(('ClassName', True))
             if 'OBJ_SET_TYPE' in info['macros']:
-                inherited_names.add('SetType')
+                inherited_sigs.add(('SetType', False))
 
             for v in info['virtuals']:
                 if v['name'].startswith('~'):
                     continue
                 if v['override']:
                     continue
-                if v['name'] in inherited_names:
+                sig = (v['name'], v.get('const', False))
+                if sig in inherited_sigs:
                     continue
                 new_layout.append(v['name'])
 
