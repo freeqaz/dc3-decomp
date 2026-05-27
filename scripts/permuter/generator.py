@@ -43,8 +43,12 @@ def hard_filters_enabled() -> bool:
     from over-pruning would silently cost wins. Enable via PERMUTER_HARD_FILTERS
     once the A/B bench shows no win-rate regression and fewer variants compiled.
     """
-    return os.environ.get("PERMUTER_HARD_FILTERS", "").strip().lower() in (
-        "1", "true", "yes", "on",
+    # Default ON (2026-05-27): DC3 + RB3 stress sweeps showed it is lossless —
+    # it only drops patterns a fact suppresses at >=0.85 confidence (with a
+    # boost-conflict guard), never fired a false drop, zero win regression, zero
+    # crashes on either codebase. Set PERMUTER_HARD_FILTERS=0 to disable.
+    return os.environ.get("PERMUTER_HARD_FILTERS", "on").strip().lower() not in (
+        "0", "false", "no", "off",
     )
 
 
