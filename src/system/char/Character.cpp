@@ -1015,7 +1015,7 @@ void DrawPtrVec::Draw() const {
 #ifdef HX_NATIVE
         if (it->Obj())
 #endif
-            it->Obj()->DrawShowing();
+            it->Obj()->Draw();
     }
 }
 
