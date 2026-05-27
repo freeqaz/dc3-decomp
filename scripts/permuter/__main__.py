@@ -191,6 +191,27 @@ def main():
         print(f"Error: required arguments: {', '.join(missing)}", file=sys.stderr)
         sys.exit(1)
 
+    # Validate --unit against objdiff.json so we fail loudly instead of
+    # silently scoring every variant as 0% when the name is wrong.
+    if args.unit:
+        from .project import validate_unit_name
+        ok, suggestions = validate_unit_name(args.unit)
+        if not ok:
+            print(
+                f"Error: --unit '{args.unit}' is not present in objdiff.json.",
+                file=sys.stderr,
+            )
+            if suggestions:
+                print("  Did you mean one of:", file=sys.stderr)
+                for s in suggestions:
+                    print(f"    {s}", file=sys.stderr)
+            else:
+                print(
+                    "  No units share that basename; check objdiff.json.",
+                    file=sys.stderr,
+                )
+            sys.exit(1)
+
     # Resolve patterns
     if args.patterns == "all":
         patterns = get_all_patterns()

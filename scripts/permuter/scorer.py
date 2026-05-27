@@ -49,6 +49,16 @@ from .types import (
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent  # Fallback; actual root from project config
 
 
+class ObjdiffRunFailed(RuntimeError):
+    """Raised when objdiff-cli fails to produce a JSON result.
+
+    This is distinct from a legitimate 0% fuzzy match — it means objdiff
+    couldn't run at all (e.g. unit not found, missing target obj, malformed
+    invocation).  Callers should NOT treat this as a real score; surface it
+    so the user sees the actual problem instead of a silent 0% cascade.
+    """
+
+
 class Scorer:
     """Scores variants by writing source, building, and running objdiff.
 
@@ -814,6 +824,11 @@ class Scorer:
         shared across multiple translation units (e.g. inline stlport methods,
         LinkerMerged symbols). Without -u, objdiff-cli errors with "No such
         file" because it can't disambiguate.
+
+        Raises ObjdiffRunFailed when objdiff-cli cannot produce a JSON
+        result (e.g. unit not found, missing target obj).  Use the exception
+        to distinguish "objdiff legitimately scored 0%" from "objdiff
+        couldn't run at all".
         """
         objdiff = self._project.objdiff_cli
         cmd = [objdiff, "diff", "-p", "."]
@@ -832,10 +847,23 @@ class Scorer:
         profiler.record_subprocess("objdiff", time.perf_counter() - _t0)
         try:
             data = json.loads(result.stdout)
-            match_pct = data.get("fuzzy_match_percent", 0.0)
-            return match_pct, data if include_instructions else None
-        except (json.JSONDecodeError, KeyError):
-            return 0.0, None
+        except (json.JSONDecodeError, ValueError):
+            # JSON parse failure means objdiff didn't emit valid output.
+            # Distinguish structural failure (unit not found, missing obj,
+            # nonzero exit, "Failed:" in stderr) from a legitimate 0% score.
+            stderr = (result.stderr or "").strip()
+            raise ObjdiffRunFailed(
+                f"objdiff-cli failed (exit={result.returncode}): "
+                f"{stderr or 'no stderr; empty stdout'} "
+                f"(cmd: {' '.join(cmd)})"
+            )
+        if not isinstance(data, dict) or "fuzzy_match_percent" not in data:
+            raise ObjdiffRunFailed(
+                f"objdiff-cli returned unexpected JSON shape "
+                f"(missing fuzzy_match_percent): {data!r}"
+            )
+        match_pct = data.get("fuzzy_match_percent", 0.0)
+        return match_pct, data if include_instructions else None
 
     def _run_objdiff_on_obj(self, obj_path: Path) -> float:
         """Run objdiff on a specific .obj file against the original.
@@ -843,6 +871,9 @@ class Scorer:
         Uses -1 <target> -2 <base> to diff the variant obj directly against
         the original without touching self._obj_path, making this safe to call
         from multiple threads simultaneously.
+
+        Raises ObjdiffRunFailed when objdiff-cli cannot produce a JSON
+        result; see _run_objdiff for rationale.
         """
         target_obj = self._project.target_obj_for_base_obj(self._obj_path)
         objdiff = self._project.objdiff_cli
@@ -864,9 +895,19 @@ class Scorer:
         profiler.record_subprocess("objdiff", time.perf_counter() - _t0)
         try:
             data = json.loads(result.stdout)
-            return data.get("fuzzy_match_percent", 0.0)
-        except (json.JSONDecodeError, KeyError):
-            return 0.0
+        except (json.JSONDecodeError, ValueError):
+            stderr = (result.stderr or "").strip()
+            raise ObjdiffRunFailed(
+                f"objdiff-cli failed (exit={result.returncode}): "
+                f"{stderr or 'no stderr; empty stdout'} "
+                f"(cmd: {' '.join(cmd)})"
+            )
+        if not isinstance(data, dict) or "fuzzy_match_percent" not in data:
+            raise ObjdiffRunFailed(
+                f"objdiff-cli returned unexpected JSON shape "
+                f"(missing fuzzy_match_percent): {data!r}"
+            )
+        return data.get("fuzzy_match_percent", 0.0)
 
     def _check_equivalence(self) -> Optional[bool]:
         """Run unicorn comparison and return True if equivalent, False if divergent.

@@ -349,3 +349,54 @@ def get_project_for_path(source_path: Path) -> ProjectConfig:
             return get_project_config(parent)
     # Fallback
     return get_project_config()
+
+
+@lru_cache(maxsize=4)
+def _load_objdiff_unit_names(objdiff_path: Path) -> tuple[str, ...]:
+    """Load and cache the set of unit names from a project's objdiff.json."""
+    import json
+    try:
+        with open(objdiff_path) as fp:
+            data = json.load(fp)
+    except (OSError, ValueError):
+        return ()
+    units = data.get("units") or []
+    return tuple(u.get("name", "") for u in units if u.get("name"))
+
+
+def validate_unit_name(unit: str, repo_root: Path | None = None) -> tuple[bool, list[str]]:
+    """Verify a unit name exists in the project's objdiff.json.
+
+    Returns (ok, suggestions). When ok is False, suggestions is a small list
+    of unit names with the same basename as the input, intended as a hint
+    ("did you mean main/band3/game/VocalPlayer?").
+
+    Returns (True, []) without checking when no objdiff.json is present —
+    we don't want to break workflows that bypass objdiff (e.g. tests).
+    """
+    if repo_root is None:
+        repo_root = _resolve_repo_root()
+    objdiff_path = repo_root / "objdiff.json"
+    if not objdiff_path.is_file():
+        return True, []
+    units = _load_objdiff_unit_names(objdiff_path)
+    if not units:
+        return True, []
+    if unit in units:
+        return True, []
+    # Build suggestions: same trailing basename ("game/VocalPlayer" matches
+    # any unit ending in "/VocalPlayer" or exactly "VocalPlayer").
+    basename = unit.rsplit("/", 1)[-1]
+    suggestions: list[str] = []
+    for name in units:
+        tail = name.rsplit("/", 1)[-1]
+        if tail == basename:
+            suggestions.append(name)
+    # Also include any unit containing the input as a substring, in case the
+    # user provided a partial prefix.  Cap total suggestions to keep output
+    # readable.
+    if not suggestions:
+        for name in units:
+            if unit and unit in name:
+                suggestions.append(name)
+    return False, suggestions[:8]
