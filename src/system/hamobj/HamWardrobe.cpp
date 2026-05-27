@@ -402,7 +402,7 @@ void HamWardrobe::PlayCrowdAnimation(Symbol animName, int flags, bool override) 
              it != mCrowdMembers.end(); ++it) {
             Character *c = *it;
             if (animName.Null()) {
-                c->Exit();
+                c->Enter();
             } else {
                 auto _val0 = ("stance");
                 Symbol stance = c->Property(_val0, true)->Sym(NULL);
