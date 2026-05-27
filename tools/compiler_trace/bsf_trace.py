@@ -40,9 +40,47 @@ _STMW_RE = re.compile(r"\bstmw\s+r(\d+)")
 # These appear in debug builds instead of __savegprlr_N or stmw
 _INDIVIDUAL_SAVE_RE = re.compile(r"\bst[dw]\s+r(\d+)\s*,\s*-")
 
-# 32-bit wibo build (required for GDB — the 64-bit one crashes)
+# 32-bit wibo build (required for GDB — the 64-bit one crashes).
 _MILOHAX_DIR = Path(__file__).resolve().parent.parent.parent.parent
-WIBO_32 = _MILOHAX_DIR / "wibo" / "build" / "debug" / "wibo"
+
+
+def _resolve_wibo_32() -> Path:
+    """Locate the 32-bit debug wibo robustly.
+
+    The repo-adjacent path (``_MILOHAX_DIR``) is wrong inside a git worktree:
+    ``__file__`` then resolves next to the worktree (e.g. ``/tmp/claude/wt-*``)
+    rather than the canonical milohax checkout, so BSF tracing silently falls
+    back to unguided mode. Try, in order: an explicit env override, the
+    repo-adjacent path, the worktree's *real* repo parent (via git-common-dir),
+    and the conventional ``~/code/milohax`` layout. First existing path wins.
+    """
+    rel = ("wibo", "build", "debug", "wibo")
+    env = os.environ.get("BSF_WIBO_32") or os.environ.get("PERMUTER_WIBO_32")
+    if env:
+        return Path(env)
+    candidates = [_MILOHAX_DIR.joinpath(*rel)]
+    try:
+        here = Path(__file__).resolve().parent
+        common = subprocess.run(
+            ["git", "rev-parse", "--git-common-dir"],
+            cwd=str(here), capture_output=True, text=True, timeout=5,
+        )
+        if common.returncode == 0 and common.stdout.strip():
+            gcd = Path(common.stdout.strip())
+            if not gcd.is_absolute():
+                gcd = (here / gcd).resolve()
+            real_repo = gcd.parent if gcd.name == ".git" else gcd
+            candidates.append(real_repo.parent.joinpath(*rel))
+    except Exception:
+        pass
+    candidates.append(Path.home() / "code" / "milohax" / Path(*rel))
+    for c in candidates:
+        if c.exists():
+            return c
+    return candidates[0]
+
+
+WIBO_32 = _resolve_wibo_32()
 
 # BSF function address in c2.dll
 BSF_RVA = 0x026780
