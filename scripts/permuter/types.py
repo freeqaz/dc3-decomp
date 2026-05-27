@@ -827,20 +827,37 @@ class BeamState:
     # IL-guided pattern pressure carried along this lineage
     il_duplicate_patterns: frozenset[str] = field(default_factory=frozenset)
     il_unique_patterns: frozenset[str] = field(default_factory=frozenset)
+    # Structural-distance to Ghidra's (or m2c-fallback) decompilation.
+    # Lower = closer / more promising. None = no decompilation available.
+    # Populated by beam_search when ghidra_code or ctx.m2c_code is present.
+    source_diff_score: float | None = None
 
     @property
     def ranking_key(self) -> tuple:
         """Lexicographic ranking tuple (higher = better).
 
         Order: match%, validation_tier, -build_fails, guidance,
-               fact_agreement, il_diversity_bonus, -stagnation, -chain_length.
+               fact_agreement, source_diff_bonus, il_diversity_bonus,
+               -stagnation, -chain_length.
+
+        WHY source_diff_bonus weight 0.1: keep it well below the unit-sized
+        fact_agreement / guidance signals so it can break ties between states
+        already equal on the stronger signals, without overruling them. States
+        without a decomp (source_diff_score is None) get 0.0 = neutral.
         """
+        # Negate so smaller diffs sort higher; clamp absent signal to 0.0.
+        source_diff_bonus = (
+            -0.1 * self.source_diff_score
+            if self.source_diff_score is not None
+            else 0.0
+        )
         return (
             self.score,
             self.validation_tier,
             -self.build_fail_count,
             self.guidance_agreement,
             self.fact_agreement,
+            source_diff_bonus,
             self.il_diversity_bonus,
             -self.stagnation_count,
             -len(self.provenance),

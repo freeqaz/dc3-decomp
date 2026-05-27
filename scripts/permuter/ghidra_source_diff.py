@@ -67,6 +67,46 @@ class SourceDiff:
     source_call_count: int = 0
 
 
+def score_source_diff(diff: SourceDiff) -> float:
+    """Collapse a structural diff into a single scalar (lower = closer).
+
+    Each missing/extra call counts the per-call count delta; each guard diff is
+    a unit point; control-flow differences contribute one point per unbalanced
+    statement-type count (or a small flat penalty for same-counts-wrong-order).
+    Returns 0.0 when ghidra and source agree structurally.
+    """
+    score = 0.0
+
+    # Call deltas: weight by the count gap, not just the presence of a name.
+    for c in diff.missing_calls:
+        score += float(abs(c.count_ghidra - c.count_source))
+    for c in diff.extra_calls:
+        score += float(abs(c.count_ghidra - c.count_source))
+
+    # Each guard mismatch is a single structural divergence.
+    score += float(len(diff.guard_diffs))
+
+    # Control-flow divergence: count how many statement-type buckets disagree.
+    cf = diff.control_flow_diff
+    if cf is not None:
+        g_counts: dict[str, int] = {}
+        s_counts: dict[str, int] = {}
+        for item in cf.ghidra_skeleton:
+            g_counts[item] = g_counts.get(item, 0) + 1
+        for item in cf.source_skeleton:
+            s_counts[item] = s_counts.get(item, 0) + 1
+        all_types = set(g_counts) | set(s_counts)
+        cf_penalty = 0.0
+        for t in all_types:
+            cf_penalty += float(abs(g_counts.get(t, 0) - s_counts.get(t, 0)))
+        if cf_penalty == 0.0:
+            # Same counts, different ordering — small flat penalty.
+            cf_penalty = 0.5
+        score += cf_penalty
+
+    return score
+
+
 # Keywords that look like calls but aren't
 _NOT_CALLS = frozenset({
     "if", "while", "for", "switch", "return", "sizeof", "typeof", "do",

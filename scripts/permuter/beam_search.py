@@ -380,6 +380,74 @@ def _compute_fact_agreement(
     return score
 
 
+def _compute_source_diff_score(
+    state_source: bytes,
+    source_path: Path,
+    function_name: str,
+    ghidra_code: str | None,
+    m2c_code: str | None,
+) -> float | None:
+    """Compute structural distance between this state's source and decomp text.
+
+    Scores against BOTH Ghidra and m2c when available (each decompiler captures
+    different aspects of the target — Ghidra is structurally cleaner, m2c often
+    preserves expression shapes Ghidra collapses), then averages the two so a
+    state that diverges from either pays a partial cost. With only one source
+    available we use that one alone. Returns None when neither is available.
+
+    Lower = closer to the target decompilation. Wrapped in broad exception
+    handling because tree-sitter on partially-edited state source can throw,
+    and a ranking signal must never break the search.
+    """
+    if not ghidra_code and not m2c_code:
+        return None
+
+    # A/B kill-switch for the C1 ranking signal. Lets the bench harness diff
+    # wins-with-signal vs wins-without by toggling an env flag, without two
+    # checkouts. Default OFF: the signal is implemented + unit-tested but its
+    # win-rate impact has not yet been validated with a full A/B, and the live
+    # permuter sweep runs against main — so it stays inert until a bench A/B
+    # confirms no regression, then flip the default to "both".
+    import os
+    mode = os.environ.get("PERMUTER_C1_SOURCE_DIFF", "off").lower()
+    if mode == "off":
+        return None
+
+    try:
+        from .ghidra_source_diff import diff_ghidra_vs_source, score_source_diff
+
+        ctx = _reparse_context(state_source, source_path, function_name)
+        if ctx is None or ctx.body_node is None:
+            return None
+
+        # Mode controls which decomp source(s) drive the score. "both" (default)
+        # averages — see test_compute_source_diff_score tests for the contract.
+        # "ghidra"/"m2c" use only one source even if both are available, so the
+        # A/B harness can ask: is averaging better than either alone?
+        use_ghidra = ghidra_code and mode in ("both", "ghidra")
+        use_m2c = m2c_code and mode in ("both", "m2c")
+
+        scores: list[float] = []
+        if use_ghidra:
+            sdiff = diff_ghidra_vs_source(
+                ghidra_code, ctx.file_source, ctx.body_node,
+            )
+            scores.append(score_source_diff(sdiff))
+        if use_m2c:
+            sdiff = diff_ghidra_vs_source(
+                m2c_code, ctx.file_source, ctx.body_node,
+            )
+            scores.append(score_source_diff(sdiff))
+
+        if not scores:
+            return None
+        # Average: combines signal from both decompilers. A state that disagrees
+        # with either pays a partial cost; states aligned with both score best.
+        return sum(scores) / len(scores)
+    except Exception:
+        return None
+
+
 def _base_pattern_names(name: str) -> list[str]:
     """Split composed pattern names into base pattern names."""
     for prefix in ("compose:", "chain:", "crosscompose:", "merge:", "evo_cross:", "evo_mut:"):
@@ -990,6 +1058,10 @@ def beam_search(
                 il_unique_patterns=frozenset(
                     set(parent.il_unique_patterns)
                     | il_unique_pattern_names.get(id(result.variant), set())
+                ),
+                source_diff_score=_compute_source_diff_score(
+                    result.variant.source, source_path, function_name,
+                    ghidra_code, m2c_code_cached,
                 ),
             )
             child_states.append(child)

@@ -349,16 +349,50 @@ See companion roadmap: [../synthesis-engine/ROADMAP.md](../synthesis-engine/ROAD
 | Live-range data | partial | computed in `statement_effects.py`, used by `parameter_live_range` pattern; *not* used for synthesis |
 | M2C IL hints | **routed** | extractors consumed in `beam_search.py:160` + patterns — *was wrongly listed "built, not routed"* |
 
-### C1 — Wire `ghidra_source_diff` into beam ranking `[ ]`
+### C1 — Wire `ghidra_source_diff` into beam ranking `[~]` · **Impl landed 2026-05-27 — default OFF pending A/B**
 
-`ghidra_source_diff` is computed today but only printed as a diagnostic
-(`hill_climber.py:828`). Structural diff between Ghidra decompilation and our
-source is a strong "what to change next" signal. Plug it into
-`BeamState.ranking_key` (`types.py:801`) alongside `fact_agreement`
-(`types.py:789`) and the validator score; prioritize patterns that reduce the
-structural diff.
+`ghidra_source_diff` was computed but only printed as a `[GHIDRA DIFF]`
+diagnostic (`hill_climber.py:828`). C1 plugs it into `BeamState.ranking_key`
+(`types.py:765`) alongside `fact_agreement` and `validation_tier`.
 
-**Owner:** — · **Effort:** 2–3 days · **Risk:** medium · **Do first in C**
+**Implementation:**
+- `score_source_diff()` in `ghidra_source_diff.py:69` collapses a `SourceDiff`
+  to a non-negative scalar (lower = closer to target decompilation). Counts
+  per-call deltas, guard mismatches, and control-flow bucket differences.
+- New `BeamState.source_diff_score: float | None` field (`types.py:763`).
+- `BeamState.ranking_key` adds a `-0.1 * source_diff_score` term
+  (`types.py:776`). **WHY 0.1×:** keep it well below the unit-sized
+  `fact_agreement` / `guidance_agreement` signals so it can break ties
+  between states already equal on the stronger signals, without overruling
+  them. States without a decomp get 0.0 = neutral.
+- `_compute_source_diff_score()` in `beam_search.py:383` reparses the state
+  source and scores against **both Ghidra and m2c** when available
+  (averaged — each decompiler captures different aspects of the target).
+  Mirrors the C2-fix m2c-fallback pattern in `constraint_solver`.
+- Wired into the per-state construction in `beam_search.py:1005` next to the
+  existing `fact_agreement` wiring.
+- A/B kill-switch: `PERMUTER_C1_SOURCE_DIFF={off,ghidra,m2c,both}` (default
+  **`off`**) gates the signal for harness comparisons.
+
+**Tests:** 21 new tests in `tests/test_source_diff_ranking.py` (cover scalar
+scoring, ranking-key tie-break + dominance ordering, m2c fallback,
+ghidra+m2c averaging, and env-flag modes). Full suite: 1349 pass
+(1328 baseline + 21 new), 14 pre-existing failures unchanged.
+
+**A/B harness:** `bench/c1_source_diff_ab.py` — runs beam search four times
+per function (off / ghidra / m2c / both) on the pinned bench set, reports
+wins/100, mean rounds-to-first-win, perfects.
+
+**A/B status:** NOT yet run to completion. The 4-mode × full-bench harness is
+very heavy (beam search ×4 per function); a bounded run (limit 2) did not finish
+in 5 min. **Default is therefore `off`** — the implementation + 21 unit tests
+have landed, but the win-rate impact is unvalidated and the live permuter sweep
+runs against `main`, so the ranking signal stays inert until a full A/B confirms
+no regression. To validate: run `bench/c1_source_diff_ab.py` (off vs both) on a
+generous time budget, record wins/100 + rounds-to-first-win, then flip the
+default at `beam_search.py:409` to `both`.
+
+**Owner:** — · **Effort:** 2–3 days · **Risk:** medium · **Status:** impl landed, default OFF, A/B pending
 
 ### C2 — Close or extend declaration-order synthesis `[~]`
 
