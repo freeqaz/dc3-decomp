@@ -115,184 +115,153 @@ bool RndTexBlender::MakeWorldSphere(Sphere &sphere, bool b) {
 }
 
 void RndTexBlender::DrawShowing() {
-    if (TheRnd.GetDrawMode() != Rnd::kDrawNormal)
-        return;
-
-    ProcessCmd cmds = TheRnd.ProcCmds();
-    if (!(cmds & kProcessWorld)) {
-        if (cmds != kProcessNone)
-            return;
-    }
-
-    RndTex *outputTex = mOutputTextures;
-    if (!outputTex)
-        return;
-
-    if ((outputTex->GetType() & RndTex::kRenderedNoZ) != RndTex::kRenderedNoZ) {
-        MILO_NOTIFY_ONCE(
-            "%s: \"%s\" must be renderable with no z-buffer",
-            PathName(this),
-            outputTex->Name()
-        );
-        return;
-    }
-
-    if (outputTex->Width() * outputTex->Height() > 0x40000) {
-        MILO_NOTIFY_ONCE(
-            "%s: \"%s\" is %d x %d, must be no larger than 512 x 512",
-            PathName(this),
-            outputTex->Name(),
-            outputTex->Height(),
-            outputTex->Width()
-        );
-    }
-
-    std::vector<std::pair<RndTexBlendController *, float> > nearList;
-    std::vector<std::pair<RndTexBlendController *, float> > farList;
-    std::vector<std::pair<RndTexBlendController *, float> > customList;
-
-    float influence = mControllerInfluence;
-    for (ObjPtrList<RndTexBlendController>::iterator it = mControllerList.begin();
-         it != mControllerList.end();
-         ++it) {
-        RndTexBlendController *ctrl = *it;
-        float blendAmount;
-        RndTexBlendController::BlendState state = ctrl->GetBlendState(blendAmount, influence);
-        switch (state) {
-        case RndTexBlendController::kBlendNear:
-            nearList.push_back(std::pair<RndTexBlendController *, float>(ctrl, blendAmount));
-            break;
-        case RndTexBlendController::kBlendFar:
-            farList.push_back(std::pair<RndTexBlendController *, float>(ctrl, blendAmount));
-            break;
-        case RndTexBlendController::kBlendCustom:
-            customList.push_back(std::pair<RndTexBlendController *, float>(ctrl, blendAmount));
-            break;
-        }
-    }
-
-    if (!unkc0 && nearList.empty() && farList.empty() && customList.empty()
-        && mRenderedStates == 1) {
-        return;
-    }
-
-    unkc0 = false;
-    RndCam *cam = TheRnd.GetDefaultCam();
-    RndCam *savedCam = RndCam::Current();
-
-    if (savedCam->TargetTex()) {
-        MILO_NOTIFY_ONCE(
-            "%s: Cannot render to texture (%s) while already rendering to texture (%s).",
-            PathName(savedCam->TargetTex()),
-            PathName(this),
-            PathName(savedCam->TargetTex())
-        );
-    }
-
-    cam->SetTargetTex(outputTex);
-    cam->Select();
-
-    if (mBaseMap) {
-        RndMat *mat = TheShaderMgr.GetWork();
-        SetupMaterial(mat, mBaseMap);
-        mat->SetAlpha(1.0f);
-        Hmx::Rect rect(0.0f, 0.0f, (float)outputTex->Width(), (float)outputTex->Height());
-        Hmx::Color color(1.0f, 1.0f, 1.0f, 1.0f);
-        TheNgRnd.DrawRect(rect, mat, kDrawRectShader, color, nullptr, nullptr);
-        mRenderedStates = 1;
-    }
-
-    std::sort(nearList.begin(), nearList.end(), BlendSorter());
-    std::sort(farList.begin(), farList.end(), BlendSorter());
-
-    RndTex *nearTex = mNearMap;
-    if (nearTex && !nearList.empty()) {
-        mRenderedStates |= kTexNear;
-        RndMat *mat = TheShaderMgr.GetWork();
-
-        Transform xfm;
-        xfm.Reset();
-        Hmx::Matrix4 viewProjMtx(xfm);
-        TheShaderMgr.SetVConstant(kVS_ViewProjMatrix, viewProjMtx);
-        TheShaderMgr.SetTransform(xfm);
-        SetupMaterial(mat, nearTex);
-        mat->SetBlend(BaseMaterial::kBlendSrcAlpha);
-
-        float lastAlpha = -1.0f;
-        for (std::vector<std::pair<RndTexBlendController *, float> >::iterator it =
-                 nearList.begin();
-             it != nearList.end();
-             ++it) {
-            float alpha = it->second;
-            RndTexBlendController *ctrl = it->first;
-            if (alpha != lastAlpha) {
-                mat->SetAlpha(alpha);
-                RndShader::SelectConfig(mat, kUnwrapUVShader, false);
-                lastAlpha = alpha;
-            }
-            RndMesh *mesh = ctrl->Mesh();
-            if (mesh->IsSkinned()) {
+    if (TheRnd.GetDrawMode() == Rnd::kDrawNormal
+        && ((TheRnd.ProcCmds() & kProcessWorld) != 0 || TheRnd.ProcCmds() == 0)
+        && mOutputTextures) {
+        if ((mOutputTextures->GetType() & RndTex::kRenderedNoZ) != RndTex::kRenderedNoZ) {
+            MILO_NOTIFY_ONCE(
+                "%s: \"%s\" must be renderable with no z-buffer",
+                PathName(this),
+                mOutputTextures->Name()
+            );
+        } else {
+            if (0x40000 < mOutputTextures->Height() * mOutputTextures->Width()) {
                 MILO_NOTIFY_ONCE(
-                    "%s: \"%s\" should not be a skinned mesh",
+                    "%s: \"%s\" is %d x %d, must be no larger than 512 x 512",
                     PathName(this),
-                    mesh->Name()
+                    mOutputTextures->Name(),
+                    mOutputTextures->Height(),
+                    mOutputTextures->Width()
                 );
             }
-            mesh->DrawFacesInRange(0, -1);
-        }
-        mat->SetAlpha(1.0f);
-        RndCam *cur = RndCam::Current();
-        if (cur) {
-            TheShaderMgr.SetVConstant(kVS_ViewProjMatrix, cur->GetViewProjMatrix());
+            std::vector<std::pair<RndTexBlendController *, float> > nearList, farList,
+                customList;
+            FOREACH (it, mControllerList) {
+                RndTexBlendController *curCtrlr = *it;
+                float second;
+                RndTexBlendController::BlendState state =
+                    curCtrlr->GetBlendState(second, mControllerInfluence);
+                switch (state) {
+                case 1:
+                    nearList.push_back(std::make_pair(curCtrlr, second));
+                    break;
+                case 2:
+                    farList.push_back(std::make_pair(curCtrlr, second));
+                    break;
+                case 3:
+                    customList.push_back(std::make_pair(curCtrlr, second));
+                    break;
+                }
+            }
+            if (unkc0 || !nearList.empty() || !farList.empty() || !customList.empty()
+                || mRenderedStates != 1) {
+                unkc0 = false;
+                RndCam *cam = TheRnd.GetDefaultCam();
+                RndTex *targetTex = RndCam::Current()->TargetTex();
+                if (targetTex) {
+                    MILO_NOTIFY_ONCE(
+                        "%s: Cannot render to texture (%s) while already rendering to texture (%s).",
+                        PathName(targetTex),
+                        PathName(this),
+                        PathName(targetTex)
+                    );
+                }
+                cam->SetTargetTex(mOutputTextures);
+                cam->Select();
+                if (mBaseMap) {
+                    RndMat *work = TheShaderMgr.GetWork();
+                    SetupMaterial(work, mBaseMap);
+                    work->SetAlpha(1);
+                    TheNgRnd.DrawRect(
+                        Hmx::Rect(
+                            0, 0, mOutputTextures->Width(), mOutputTextures->Height()
+                        ),
+                        work,
+                        (ShaderType)6,
+                        Hmx::Color(1, 1, 1),
+                        nullptr,
+                        nullptr
+                    );
+                    mRenderedStates = 1;
+                }
+                std::sort(nearList.begin(), nearList.end(), BlendSorter());
+                std::sort(farList.begin(), farList.end(), BlendSorter());
+                if (mNearMap && !nearList.empty()) {
+                    mRenderedStates |= 2;
+                    RndMat *work = TheShaderMgr.GetWork();
+                    Transform xfm;
+                    xfm.Reset();
+                    TheShaderMgr.SetVConstant((VShaderConstant)4, Hmx::Matrix4(xfm));
+                    TheShaderMgr.SetTransform(xfm);
+                    SetupMaterial(work, mNearMap);
+                    work->SetBlend(BaseMaterial::kBlendSrcAlpha);
+                    float alpha = -1;
+                    FOREACH (it, nearList) {
+                        RndTexBlendController *blendCtrlr = it->first;
+                        float f17 = it->second;
+                        if (f17 != alpha) {
+                            work->SetAlpha(f17);
+                            RndShader::SelectConfig(work, (ShaderType)0x16, false);
+                            alpha = f17;
+                        }
+                        RndMesh *mesh = blendCtrlr->Mesh();
+                        if (mesh->IsSkinned()) {
+                            MILO_NOTIFY_ONCE(
+                                "%s: \"%s\" should not be a skinned mesh",
+                                PathName(this),
+                                mesh->Name()
+                            );
+                        }
+                        mesh->DrawFacesInRange(0, -1);
+                    }
+                    work->SetAlpha(1);
+                    if (RndCam::Current()) {
+                        TheShaderMgr.SetVConstant(
+                            (VShaderConstant)4, RndCam::Current()->GetViewProjMatrix()
+                        );
+                    }
+                }
+                if (mFarMap && !farList.empty()) {
+                    mRenderedStates |= 4;
+                    RndMat *work = TheShaderMgr.GetWork();
+                    Transform xfm;
+                    xfm.Reset();
+                    TheShaderMgr.SetVConstant((VShaderConstant)4, Hmx::Matrix4(xfm));
+                    TheShaderMgr.SetTransform(xfm);
+                    SetupMaterial(work, mFarMap);
+                    work->SetBlend(BaseMaterial::kBlendSrcAlpha);
+                    float alpha = -1;
+                    FOREACH (it, farList) {
+                        RndTexBlendController *blendCtrlr = it->first;
+                        float f17 = it->second;
+                        if (f17 != alpha) {
+                            work->SetAlpha(f17);
+                            RndShader::SelectConfig(work, (ShaderType)0x16, false);
+                            alpha = f17;
+                        }
+                        RndMesh *mesh = blendCtrlr->Mesh();
+                        if (mesh->IsSkinned()) {
+                            MILO_NOTIFY_ONCE(
+                                "%s: \"%s\" should not be a skinned mesh",
+                                PathName(this),
+                                mesh->Name()
+                            );
+                        }
+                        mesh->DrawFacesInRange(0, -1);
+                    }
+                    work->SetAlpha(1);
+                    if (RndCam::Current()) {
+                        TheShaderMgr.SetVConstant(
+                            (VShaderConstant)4, RndCam::Current()->GetViewProjMatrix()
+                        );
+                    }
+                }
+                DrawBlendList(customList, (TexState)8);
+                cam->SetTargetTex(nullptr);
+                RndCam::Current()->Select();
+            }
         }
     }
-
-    RndTex *farTex = mFarMap;
-    if (farTex && !farList.empty()) {
-        mRenderedStates |= kTexFar;
-        RndMat *mat = TheShaderMgr.GetWork();
-
-        Transform xfm;
-        xfm.Reset();
-        Hmx::Matrix4 viewProjMtx(xfm);
-        TheShaderMgr.SetVConstant(kVS_ViewProjMatrix, viewProjMtx);
-        TheShaderMgr.SetTransform(xfm);
-        SetupMaterial(mat, farTex);
-        mat->SetBlend(BaseMaterial::kBlendSrcAlpha);
-
-        float lastAlpha = -1.0f;
-        for (std::vector<std::pair<RndTexBlendController *, float> >::iterator it =
-                 farList.begin();
-             it != farList.end();
-             ++it) {
-            float alpha = it->second;
-            RndTexBlendController *ctrl = it->first;
-            if (alpha != lastAlpha) {
-                mat->SetAlpha(alpha);
-                RndShader::SelectConfig(mat, kUnwrapUVShader, false);
-                lastAlpha = alpha;
-            }
-            RndMesh *mesh = ctrl->Mesh();
-            if (mesh->IsSkinned()) {
-                MILO_NOTIFY_ONCE(
-                    "%s: \"%s\" should not be a skinned mesh",
-                    PathName(this),
-                    mesh->Name()
-                );
-            }
-            mesh->DrawFacesInRange(0, -1);
-        }
-        mat->SetAlpha(1.0f);
-        RndCam *cur = RndCam::Current();
-        if (cur) {
-            TheShaderMgr.SetVConstant(kVS_ViewProjMatrix, cur->GetViewProjMatrix());
-        }
-    }
-
-    DrawBlendList(customList, kTexCustom);
-
-    cam->SetTargetTex(nullptr);
-    savedCam->Select();
 }
 
 #pragma endregion
