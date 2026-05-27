@@ -518,6 +518,55 @@ Do **not** build `patterns/decl_order_from_ghidra.py` from scratch — extend
 
 **Owner:** — · **Effort:** ~1 day (fix + m2c fallback) · **Risk:** low (additive candidate) · **Gated on A0 harness for validation**
 
+### C2-combined — Ghidra **and** m2c as combined views (not fallback) `[x]` · **Done 2026-05-27** (branch `perf/ghidra-m2c-combined`)
+
+The C2-fix added m2c as a *fallback* (used only when Ghidra is absent). This
+follow-up makes the two independent decompilers work **together**: their
+*agreement* is a strong signal, their *disagreement* gives two hypotheses both
+worth trying. Applied consistently across all three fallback sites.
+
+**Design (`ghidra_var_match.combine_var_orders`):**
+- **Agree** (both present, shared locals in same relative order) → HIGH
+  confidence: one preferred order (Ghidra's `VarInfo`, richer types), and the
+  synthesized variant is tagged `ghidra_m2c_agree`.
+- **Disagree** (shared order conflicts) → emit BOTH orderings (Ghidra first,
+  then m2c) as separate hypotheses; `synthesize()` produces a primary `synth_*`
+  AND an extra `synth_alt0` (tagged `ghidra_m2c_alt`). Bounded to ≤2 hypotheses.
+- **One-only / none** → that one / nothing (prior behavior preserved).
+
+**Sites converted (verified):**
+- `constraint_solver.extract_constraints` — the `if ghidra / elif m2c` var-order
+  branch is now a single `combine_var_orders(ghidra_order, m2c_order)` call that
+  sets `decl_order`, `decl_order_verdict`, `decl_order_high_confidence`.
+- `constraint_solver._resolve_decl_order` — re-derives both orders via
+  `_decl_order_edit_sets` (one edit-list per hypothesis); the new
+  `synthesize()` recombines each with the shared cf/null edits and emits a
+  variant per hypothesis on disagreement.
+- `ghidra_var_match.ghidra_guided_reorder` — added a **name-matched candidate**
+  (highest preference): when the decompiler's local names overlap the source
+  decl names, reorder source decls into that decompiler's first-use order
+  exactly (the original C2 vision). This is what makes a Ghidra-vs-m2c
+  *disagreement* yield two genuinely different reorders.
+- Generalized to control flow: new `m2c.extract_condition_structure_from_text`
+  mirrors `ghidra_ast.extract_condition_structure`; `extract_constraints` unions
+  both tag sets (`_combine_cf_tags`, agreed tags first) and sets
+  `cf_high_confidence` when they fully agree. Purely additive — never drops a
+  tag a single source found.
+
+**Already-combined sites confirmed (no regression):** `beam_search._compute_source_diff_score`
+(C1) averages Ghidra+m2c structural-diff scores — sound; `_compute_guidance_agreement`
+consults both with +2/agree, −1/conflict semantics — sound.
+
+**Validation:** 18 new `test_ghidra_m2c_combined.py` tests (agree→high-conf/preferred,
+disagree→both orders emitted, ghidra-only/m2c-only→that one, cf-tag union, m2c
+cf extractor). Full permuter suite: 1418 passed, same 14 pre-existing
+environmental failures, zero new. Behavioral check (direct `synthesize()` on a
+realistic Ghidra+m2c pair): agree→1 candidate tagged `ghidra_m2c_agree`,
+disagree→2 candidates (primary + `synth_alt0`). Additive/widening only — the
+search can only gain a hypothesis, never narrow.
+
+**Owner:** done · **Effort:** ~1 day · **Risk:** low (additive, no flag — pure synthesis)
+
 ### C3 — Expression-shape synthesis for FMA cluster `[x]`
 
 ~51 known functions with FMA/algebraic-rewrite mismatches (projected ~80% hit
@@ -780,3 +829,24 @@ Append a dated line each time this doc is reviewed or an item changes state.
   data. Integrated suite: 1431 passed, 13 pre-existing environmental failures,
   zero new. Default-off flags awaiting validation: `PERMUTER_HARD_FILTERS` (B2),
   `PERMUTER_PREDICTOR` (B4); C1's `PERMUTER_C1_SOURCE_DIFF` is on (`both`).
+- **2026-05-27** — **C2-combined: Ghidra + m2c used together, not as fallback**
+  (branch `perf/ghidra-m2c-combined`). Converted the three var-order fallback
+  sites to a single `ghidra_var_match.combine_var_orders` consensus:
+  **agree** → high-confidence single preferred order (Ghidra's `VarInfo`),
+  variant tagged `ghidra_m2c_agree`; **disagree** → BOTH orderings emitted as
+  two hypotheses (`synth_*` + `synth_alt0` tagged `ghidra_m2c_alt`, bounded ≤2);
+  **one-only/none** → prior behavior preserved. `synthesize()` now builds a
+  deterministic edit set per decl-order hypothesis (shared cf/null edits
+  recombined per hypothesis) and dedups collapsing sources.
+  `ghidra_guided_reorder` gained a name-matched candidate (reorder source decls
+  into the decompiler's exact first-use order when names overlap) — the lever
+  that makes a disagreement produce two genuinely different reorders, and the
+  original C2 vision. Generalized to control flow: new
+  `m2c.extract_condition_structure_from_text` mirrors the Ghidra cf extractor;
+  `extract_constraints` unions both tag sets (agreed tags first) and sets
+  `cf_high_confidence` on full agreement. C1's source-diff averaging and
+  `_compute_guidance_agreement` already combine both — confirmed sound, left
+  as-is. **18 new `test_ghidra_m2c_combined.py` tests pass; full suite 1418
+  passed / 14 pre-existing env failures / zero new.** Behavioral check
+  (direct `synthesize()`): agree→1 candidate, disagree→2. Additive/widening
+  only — never narrows the search, no new flag (pure synthesis).

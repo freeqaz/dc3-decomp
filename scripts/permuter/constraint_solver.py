@@ -42,34 +42,70 @@ def extract_constraints(ctx: FunctionContext) -> ConstraintSet:
     """
     cs = ConstraintSet()
 
-    # Ghidra-based constraints (preferred)
+    # ------------------------------------------------------------------
+    # Ghidra + m2c combined constraints.
+    #
+    # Ghidra and m2c are two INDEPENDENT decompilations of the same target. We
+    # used to treat m2c purely as a fallback (only when Ghidra was absent). But
+    # because they are independent views, their *agreement* is a strong signal
+    # and their *disagreement* gives two hypotheses both worth trying. So we
+    # extract from both and COMBINE rather than fall back.
+    # ------------------------------------------------------------------
     if ctx.ghidra_ast is not None:
         cs.ghidra_available = True
-        ast = ctx.ghidra_ast
 
-        # 1. Variable first-use order (for declaration reorder)
-        var_order = extract_variable_first_use_order(ast)
-        if var_order:
-            cs.decl_order = [v.name for v in var_order]
+    # --- 1. Variable first-use order (for declaration reorder) ---
+    # Pull the order from each decompiler that is present, then run them through
+    # combine_var_orders to get an agree/disagree/single verdict.
+    from .ghidra_var_match import combine_var_orders
 
-        # 2. Control flow structure (conjunction vs nested_if vs guard)
-        cf_tags = extract_condition_structure(ast)
-        for i, tag in enumerate(cf_tags):
-            cs.cf_directions[i] = tag
+    ghidra_var_order = None
+    if ctx.ghidra_ast is not None:
+        gvo = extract_variable_first_use_order(ctx.ghidra_ast)
+        if gvo:
+            ghidra_var_order = gvo
 
-        # 3. Prologue save counts
-        if ctx.ghidra_code:
-            cs.target_gpr_saves = extract_savegpr_count(ctx.ghidra_code)
-            cs.target_fpr_saves = extract_savefpr_count(ctx.ghidra_code)
-
-    # m2c fallback: when Ghidra is absent but m2c text is available, use m2c's
-    # variable first-use order. Ghidra has gaps; m2c is less readable but often
-    # closer to the original code's intent — valuable redundancy for hard cases.
-    elif ctx.m2c_code:
+    m2c_var_order = None
+    if ctx.m2c_code:
         from .m2c import extract_variable_first_use_order_from_text
-        m2c_order = extract_variable_first_use_order_from_text(ctx.m2c_code)
-        if m2c_order:
-            cs.decl_order = [v.name for v in m2c_order]
+        mvo = extract_variable_first_use_order_from_text(ctx.m2c_code)
+        if mvo:
+            m2c_var_order = mvo
+
+    consensus = combine_var_orders(ghidra_var_order, m2c_var_order)
+    if consensus.orders:
+        # decl_order carries the names of the *preferred* order (first hypothesis).
+        # _resolve_decl_order re-derives the full VarInfo orders itself and, on a
+        # "disagree" verdict, tries both — see that helper.
+        cs.decl_order = [v.name for v in consensus.orders[0]]
+        cs.decl_order_verdict = consensus.verdict
+        cs.decl_order_high_confidence = consensus.high_confidence
+
+    # --- 2. Control flow structure (conjunction / guard / nested_if) ---
+    # Combine guard-shape tags from both decompilers. Tags present in BOTH are
+    # high-confidence; tags from either alone are still emitted (additive — never
+    # narrows the search). cf_high_confidence is set when the two agree on the
+    # full tag set (and at least one tag exists).
+    ghidra_cf_tags: list[str] = []
+    if ctx.ghidra_ast is not None:
+        ghidra_cf_tags = extract_condition_structure(ctx.ghidra_ast)
+
+    m2c_cf_tags: list[str] = []
+    if ctx.m2c_code:
+        from .m2c import extract_condition_structure_from_text
+        m2c_cf_tags = extract_condition_structure_from_text(ctx.m2c_code)
+
+    combined_cf_tags = _combine_cf_tags(ghidra_cf_tags, m2c_cf_tags)
+    for i, tag in enumerate(combined_cf_tags):
+        cs.cf_directions[i] = tag
+    if (ghidra_cf_tags and m2c_cf_tags
+            and set(ghidra_cf_tags) == set(m2c_cf_tags)):
+        cs.cf_high_confidence = True
+
+    # --- 3. Prologue save counts (Ghidra-only; m2c text lacks __savegprlr_N) ---
+    if ctx.ghidra_ast is not None and ctx.ghidra_code:
+        cs.target_gpr_saves = extract_savegpr_count(ctx.ghidra_code)
+        cs.target_fpr_saves = extract_savefpr_count(ctx.ghidra_code)
 
     # Diagnosis-based constraints
     if ctx.diagnosis is not None:
@@ -110,48 +146,66 @@ def extract_constraints(ctx: FunctionContext) -> ConstraintSet:
     return cs
 
 
+def _non_decl_resolved_edits(
+    constraints: ConstraintSet, ctx: FunctionContext,
+) -> list[ResolvedEdit]:
+    """Compute the non-decl-order deterministic edits (cf direction, null guard).
+
+    These are shared across all decl-order hypotheses, so they're computed once
+    and recombined per hypothesis in synthesize().
+    """
+    edits: list[ResolvedEdit] = []
+
+    # Control flow direction (and_split / merge)
+    if constraints.cf_directions:
+        edits.extend(_resolve_cf_directions(constraints, ctx))
+
+    # Null guard removal
+    if constraints.null_checks_to_remove:
+        edits.extend(_resolve_null_guards(constraints, ctx))
+
+    return edits
+
+
+def _resolve_conflicts(edits: list[ResolvedEdit]) -> list[ResolvedEdit]:
+    """Sort edits by offset and drop ones overlapping a higher-priority edit."""
+    _PRIORITY = {"decl_order": 4, "cf_direction": 3, "expr_shape": 2, "null_guard": 1}
+    ordered = sorted(edits, key=lambda e: (e.start, -_PRIORITY.get(e.category, 0)))
+
+    resolved: list[ResolvedEdit] = []
+    last_end = -1
+    for edit in ordered:
+        if edit.start >= last_end:
+            resolved.append(edit)
+            last_end = edit.end
+        # else: overlapping with higher-priority edit, drop
+    return resolved
+
+
 def resolve_to_edits(constraints: ConstraintSet, ctx: FunctionContext) -> list[ResolvedEdit]:
     """Phase 2: Map resolved constraints to deterministic source edits.
 
     Delegates to existing pattern helpers for each constraint type.
     Returns edits sorted by byte offset, with conflicts resolved by priority.
+    Uses the PREFERRED decl-order hypothesis (Ghidra-first on a disagreement);
+    the alternative is emitted as an extra variant by synthesize().
     """
     edits: list[ResolvedEdit] = []
 
     # 1. Declaration reorder (highest priority)
-    # Fires when we have a decl_order constraint (from Ghidra or m2c fallback)
+    # Fires when we have a decl_order constraint (from Ghidra and/or m2c)
     # AND either a Ghidra AST or m2c text to drive the var-order extraction in
     # _resolve_decl_order. swap_pairs is no longer required — the C2 fix in
     # ghidra_guided_reorder emits Ghidra-order-driven candidates when swap_pairs
     # is empty.
     if (constraints.decl_order is not None
             and (ctx.ghidra_ast is not None or ctx.m2c_code)):
-        decl_edits = _resolve_decl_order(constraints, ctx)
-        edits.extend(decl_edits)
+        edits.extend(_resolve_decl_order(constraints, ctx))
 
-    # 2. Control flow direction (and_split / merge)
-    if constraints.cf_directions:
-        cf_edits = _resolve_cf_directions(constraints, ctx)
-        edits.extend(cf_edits)
+    # 2/3. Control flow direction + null guard removal.
+    edits.extend(_non_decl_resolved_edits(constraints, ctx))
 
-    # 3. Null guard removal
-    if constraints.null_checks_to_remove:
-        ng_edits = _resolve_null_guards(constraints, ctx)
-        edits.extend(ng_edits)
-
-    # Conflict resolution: sort by start offset, drop overlapping lower-priority edits
-    _PRIORITY = {"decl_order": 4, "cf_direction": 3, "expr_shape": 2, "null_guard": 1}
-    edits.sort(key=lambda e: (e.start, -_PRIORITY.get(e.category, 0)))
-
-    resolved: list[ResolvedEdit] = []
-    last_end = -1
-    for edit in edits:
-        if edit.start >= last_end:
-            resolved.append(edit)
-            last_end = edit.end
-        # else: overlapping with higher-priority edit, drop
-
-    return resolved
+    return _resolve_conflicts(edits)
 
 
 def enumerate_free_variables(
@@ -216,37 +270,84 @@ def synthesize(ctx: FunctionContext) -> SynthesisResult:
             skip_reason=constraints.skip_reason,
         )
 
-    det_edits = resolve_to_edits(constraints, ctx)
+    # Build a deterministic-edit set per decl-order hypothesis.
+    #
+    # When Ghidra and m2c AGREE (or only one is present) there is a single
+    # hypothesis. When they DISAGREE, combine_var_orders yields two — Ghidra's
+    # and m2c's orderings — and we synthesize a candidate for BOTH rather than
+    # silently preferring one, so the search covers both. The non-decl edits
+    # (cf direction, null guards) are shared, recombined per hypothesis.
+    non_decl_edits = _non_decl_resolved_edits(constraints, ctx)
+
+    det_edit_sets: list[list[ResolvedEdit]] = []
+    if (constraints.decl_order is not None
+            and (ctx.ghidra_ast is not None or ctx.m2c_code)):
+        for decl_edits in _decl_order_edit_sets(constraints, ctx):
+            det_edit_sets.append(_resolve_conflicts(decl_edits + non_decl_edits))
+
+    # Fallback: no decl-order hypotheses (or no decl_order constraint) — still
+    # apply the non-decl edits as a single set so cf/null-guard synthesis works.
+    if not det_edit_sets:
+        det_edit_sets = [_resolve_conflicts(list(non_decl_edits))]
+
     free_combos = enumerate_free_variables(constraints, ctx)
 
     variants: list[Variant] = []
+    seen_sources: set[bytes] = set()
+
+    # High-confidence tag: Ghidra and m2c agreed on the decl-order (or the cf
+    # shape). Downstream ranking / logging can treat tagged variants as the
+    # preferred guess — the two independent decompilers concur, so this is the
+    # strongest synthesis signal available.
+    primary_tags: frozenset[str] = frozenset()
+    if constraints.decl_order_high_confidence or constraints.cf_high_confidence:
+        primary_tags = frozenset({"ghidra_m2c_agree"})
+
+    def _emit(name: str, description: str, source: bytes,
+              tags: frozenset[str] = frozenset()) -> None:
+        # Dedup: disagreeing hypotheses can collapse to the same source (e.g. a
+        # symmetric 2-var swap), and the free-combo loop can revisit a base.
+        if source != ctx.file_source and source not in seen_sources:
+            seen_sources.add(source)
+            variants.append(Variant(
+                name=name,
+                pattern_name="constraint_solver",
+                description=description,
+                source=source,
+                tags=tags,
+            ))
+
+    # Preferred (primary) edit set keeps the historical synth_0/synth_i naming;
+    # the alternative hypothesis (disagreement) is suffixed _altN so logs make
+    # the two-hypothesis split visible.
+    primary_edits = det_edit_sets[0]
+    alt_edit_sets = det_edit_sets[1:]
+
     if not free_combos:
-        # Single composite variant from deterministic edits only
-        if det_edits:
-            source = _apply_edits(ctx.file_source, det_edits)
-            if source != ctx.file_source:
-                variants.append(Variant(
-                    name="synth_0",
-                    pattern_name="constraint_solver",
-                    description=f"{len(det_edits)} resolved constraints",
-                    source=source,
-                ))
+        _emit("synth_0", f"{len(primary_edits)} resolved constraints",
+              _apply_edits(ctx.file_source, primary_edits), primary_tags)
     else:
         for i, free_edits in enumerate(free_combos):
-            all_edits = det_edits + free_edits
-            source = _apply_edits(ctx.file_source, all_edits)
-            if source != ctx.file_source:
-                variants.append(Variant(
-                    name=f"synth_{i}",
-                    pattern_name="constraint_solver",
-                    description=f"{len(det_edits)} resolved + {len(free_edits)} free",
-                    source=source,
-                ))
+            all_edits = primary_edits + free_edits
+            _emit(f"synth_{i}",
+                  f"{len(primary_edits)} resolved + {len(free_edits)} free",
+                  _apply_edits(ctx.file_source, all_edits), primary_tags)
+
+    # Extra candidate(s) for the disagreeing decl-order hypothesis. Bounded by
+    # combine_var_orders to a single alternative (Ghidra + m2c => at most 2
+    # hypotheses total), so this adds at most one variant. Tagged distinctly so
+    # it is never confused with the high-confidence agree signal.
+    for j, alt_edits in enumerate(alt_edit_sets):
+        _emit(f"synth_alt{j}",
+              f"alt decl-order hypothesis ({constraints.decl_order_verdict}): "
+              f"{len(alt_edits)} resolved constraints",
+              _apply_edits(ctx.file_source, alt_edits),
+              frozenset({"ghidra_m2c_alt"}))
 
     return SynthesisResult(
         constraints=constraints,
         variants=variants,
-        deterministic_edit_count=len(det_edits),
+        deterministic_edit_count=len(primary_edits),
         free_variable_count=constraints.free_variable_count,
     )
 
@@ -254,6 +355,36 @@ def synthesize(ctx: FunctionContext) -> SynthesisResult:
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
+
+def _combine_cf_tags(ghidra_tags: list[str], m2c_tags: list[str]) -> list[str]:
+    """Union the control-flow guard-shape tags from Ghidra and m2c.
+
+    Tags present in BOTH decompilers come first (high-confidence — both
+    independent views see the same shape), followed by tags unique to either,
+    preserving discovery order. This is purely additive: it can only widen the
+    set of cf_directions the resolver considers, never drop one a single source
+    found. Returns [] when both inputs are empty.
+    """
+    g = list(dict.fromkeys(ghidra_tags))  # dedup, preserve order
+    m = list(dict.fromkeys(m2c_tags))
+    if not g and not m:
+        return []
+    g_set, m_set = set(g), set(m)
+
+    ordered: list[str] = []
+    # Agreed tags first (in Ghidra's discovery order, then any m2c-order extras).
+    for tag in g:
+        if tag in m_set and tag not in ordered:
+            ordered.append(tag)
+    for tag in m:
+        if tag in g_set and tag not in ordered:
+            ordered.append(tag)
+    # Then single-source tags, Ghidra first.
+    for tag in g + m:
+        if tag not in ordered:
+            ordered.append(tag)
+    return ordered
 
 
 def _apply_edits(source: bytes, edits: list[ResolvedEdit]) -> bytes:
@@ -270,48 +401,63 @@ def _apply_edits(source: bytes, edits: list[ResolvedEdit]) -> bytes:
         return source
 
 
-def _resolve_decl_order(
-    constraints: ConstraintSet, ctx: FunctionContext,
-) -> list[ResolvedEdit]:
-    """Resolve declaration reorder constraint to source edits.
+def _decl_order_var_hypotheses(ctx: FunctionContext) -> list[list]:
+    """Return the variable-order hypotheses to try, most-preferred first.
 
-    Uses ghidra_var_match.ghidra_guided_reorder() to compute target orderings,
-    then translates the best reorder to byte-level edits.
+    Combines Ghidra + m2c via combine_var_orders:
+      * agree / single-source -> one hypothesis
+      * disagree              -> two hypotheses (Ghidra's order, then m2c's)
 
-    Prefers Ghidra's variable first-use order, falling back to m2c's when
-    Ghidra is unavailable but m2c text is present (C2 fix).
+    Each hypothesis is a list of VarInfo in first-use order. Returns [] when
+    neither decompiler produced a usable order.
     """
     try:
-        from .ghidra_var_match import ghidra_guided_reorder
+        from .ghidra_var_match import combine_var_orders
         from .ghidra_ast import extract_variable_first_use_order
     except ImportError:
         return []
 
-    ghidra_vars = []
+    ghidra_vars = None
     if ctx.ghidra_ast is not None:
-        ghidra_vars = extract_variable_first_use_order(ctx.ghidra_ast)
+        gvo = extract_variable_first_use_order(ctx.ghidra_ast)
+        if gvo:
+            ghidra_vars = gvo
 
-    # m2c fallback when Ghidra produced nothing.
-    if not ghidra_vars and ctx.m2c_code:
+    m2c_vars = None
+    if ctx.m2c_code:
         from .m2c import extract_variable_first_use_order_from_text
-        ghidra_vars = extract_variable_first_use_order_from_text(ctx.m2c_code)
+        mvo = extract_variable_first_use_order_from_text(ctx.m2c_code)
+        if mvo:
+            m2c_vars = mvo
 
-    if not ghidra_vars:
+    return combine_var_orders(ghidra_vars, m2c_vars).orders
+
+
+def _decl_order_edits_for_vars(
+    var_order: list, constraints: ConstraintSet, ctx: FunctionContext,
+) -> list[ResolvedEdit]:
+    """Convert one variable first-use order into byte-level decl-swap edits.
+
+    Uses ghidra_guided_reorder() to turn the (target var order, source decl
+    order, swap pairs) into candidate orderings, then realizes the best
+    candidate as a sequence of declaration swaps. Returns [] when nothing to do.
+    """
+    from .ghidra_var_match import ghidra_guided_reorder
+
+    if not var_order:
         return []
 
-    # Extract source declaration names from the function body
     source_decls = _extract_source_decl_names(ctx)
     if len(source_decls) < 2:
         return []
 
     swap_pairs = [(str(a), str(b)) for a, b in constraints.swap_pairs]
     candidates = ghidra_guided_reorder(
-        ghidra_vars,
+        var_order,
         [name for name, _, _ in source_decls],
         swap_pairs,
         constraints.target_gpr_saves,
     )
-
     if not candidates:
         return []
 
@@ -319,7 +465,6 @@ def _resolve_decl_order(
     target_order = candidates[0]
     source_names = [name for name, _, _ in source_decls]
 
-    # Find which pairs need to swap
     edits: list[ResolvedEdit] = []
     for target_idx, target_name in enumerate(target_order):
         if target_idx >= len(source_names):
@@ -355,6 +500,42 @@ def _resolve_decl_order(
                     break
 
     return edits
+
+
+def _decl_order_edit_sets(
+    constraints: ConstraintSet, ctx: FunctionContext,
+) -> list[list[ResolvedEdit]]:
+    """Resolve declaration-reorder edits for EVERY var-order hypothesis.
+
+    Returns one edit-list per hypothesis from combine_var_orders, in
+    preference order. When Ghidra and m2c disagree this yields TWO edit-lists
+    (one per decompiler's ordering) so the search can try both — turning the
+    disagreement into two candidates instead of silently preferring one.
+    Empty edit-lists (hypothesis implies no reorder) are dropped.
+    """
+    hypotheses = _decl_order_var_hypotheses(ctx)
+    edit_sets: list[list[ResolvedEdit]] = []
+    for var_order in hypotheses:
+        edits = _decl_order_edits_for_vars(var_order, constraints, ctx)
+        if edits:
+            edit_sets.append(edits)
+    return edit_sets
+
+
+def _resolve_decl_order(
+    constraints: ConstraintSet, ctx: FunctionContext,
+) -> list[ResolvedEdit]:
+    """Resolve declaration reorder constraint to source edits (preferred order).
+
+    Combines Ghidra + m2c variable first-use orders (see combine_var_orders):
+    when they agree (or only one is present) this returns that single order's
+    edits; when they disagree it returns the PREFERRED (Ghidra-first) order's
+    edits. The alternative disagreeing hypothesis is surfaced separately by
+    synthesize() as an extra variant, so the deterministic edit set stays
+    conflict-free while the search still covers both orderings.
+    """
+    edit_sets = _decl_order_edit_sets(constraints, ctx)
+    return edit_sets[0] if edit_sets else []
 
 
 def _extract_source_decl_names(ctx: FunctionContext) -> list[tuple[str, int, int]]:

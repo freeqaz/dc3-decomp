@@ -151,6 +151,38 @@ def ghidra_guided_reorder(
             seen.add(key)
             candidates.append(candidate)
 
+    def _add_named_candidate(candidate: list[str]) -> None:
+        key = tuple(candidate)
+        if key not in seen and candidate != source_decl_names:
+            seen.add(key)
+            candidates.append(candidate)
+
+    # ------------------------------------------------------------------
+    # Name-matched candidate (highest preference when names overlap).
+    # ------------------------------------------------------------------
+    # When the decompiler's local names overlap our source decl names — the
+    # case when debug info (DWARF/PDB) gives both the same identifiers, or when
+    # comparing two of OUR hypotheses against OUR source — we can pick the EXACT
+    # target permutation: reorder source decls into the decompiler's first-use
+    # order, keeping any source-only names in their relative position. This is
+    # the original C2 vision ("reorder declarations to match the decompiler's
+    # first-use order") and the lever that makes a Ghidra-vs-m2c *disagreement*
+    # yield two genuinely different reorders (each names a different order).
+    ghidra_name_order = [v.name for v in ghidra_vars]
+    overlap = [n for n in ghidra_name_order if n in set(source_decl_names)]
+    if len(overlap) >= 2:
+        # Build target order: walk source positions; positions whose name is in
+        # the overlap get filled from the decompiler's order, others stay put.
+        overlap_iter = iter(overlap)
+        named_order: list[str] = []
+        overlap_set = set(overlap)
+        for name in source_decl_names:
+            if name in overlap_set:
+                named_order.append(next(overlap_iter))
+            else:
+                named_order.append(name)
+        _add_named_candidate(named_order)
+
     # ------------------------------------------------------------------
     # Ghidra-order-driven candidates (additive; fires with no swap_pairs)
     # ------------------------------------------------------------------
@@ -248,3 +280,111 @@ def _is_float_type(decl_type: str) -> bool:
     """Check if a Ghidra declaration type represents a float."""
     t = decl_type.lower().strip()
     return t in ("float", "double", "float10")
+
+
+# ---------------------------------------------------------------------------
+# Combining two independent decompilers' variable orders (Ghidra + m2c)
+# ---------------------------------------------------------------------------
+#
+# Ghidra and m2c are independent views of the same target binary. Neither names
+# locals the way our source does, so we can't cross-map by name — but each
+# produces a *first-use order* that reflects the target's register-allocation
+# order. When BOTH are present we treat their relationship as a signal:
+#
+#   * agree     -> high confidence; the shared ordering is the preferred guess.
+#   * disagree  -> two competing hypotheses; we should try BOTH orderings rather
+#                  than silently preferring one (the search then covers both).
+#   * one-only  -> use that one (the historical behavior).
+
+
+@dataclass
+class VarOrderConsensus:
+    """Result of combining Ghidra and m2c variable first-use orders.
+
+    ``verdict`` is one of:
+        "agree"        — both decompilers present and consistent on shared vars
+        "disagree"     — both present but the shared-var relative order differs
+        "ghidra_only"  — only Ghidra produced an order
+        "m2c_only"     — only m2c produced an order
+        "none"         — neither produced a usable order
+
+    ``orders`` is the ordered list of VarInfo orderings to try, most-preferred
+    first. For "agree"/single-source it holds one order; for "disagree" it holds
+    both (Ghidra first, then m2c) so callers can emit a hypothesis per order.
+
+    ``high_confidence`` is True only for "agree" — a clean signal the decl-order
+    constraint should win on priority / be the preferred synthesized candidate.
+    """
+
+    verdict: str
+    orders: list[list[VarInfo]]
+    high_confidence: bool
+
+
+def _shared_relative_order_matches(
+    a: list[VarInfo], b: list[VarInfo],
+) -> bool:
+    """Do two var orders agree on the relative order of the locals they share?
+
+    We can only compare by *name*, and Ghidra/m2c invent different local names,
+    so in practice the shared set is the subset of names that happen to coincide
+    (e.g. user-named locals when debug info is present, or identical sp/stack
+    slot names). When the shared set is empty there is nothing to disagree about,
+    so we conservatively treat that as agreement (no conflict signal) — the
+    callers still get both orders to try via the single-source path.
+    """
+    a_names = [v.name for v in a]
+    b_names = [v.name for v in b]
+    shared = set(a_names) & set(b_names)
+    if len(shared) < 2:
+        return True  # nothing comparable -> no conflict
+    a_seq = [n for n in a_names if n in shared]
+    b_seq = [n for n in b_names if n in shared]
+    return a_seq == b_seq
+
+
+def combine_var_orders(
+    ghidra_vars: list[VarInfo] | None,
+    m2c_vars: list[VarInfo] | None,
+) -> VarOrderConsensus:
+    """Combine Ghidra + m2c variable first-use orders into a consensus.
+
+    This is the join point that turns "m2c is a fallback" into "Ghidra and m2c
+    are two independent views we exploit together":
+
+      * Both present & agree on shared locals -> high-confidence single order
+        (prefer Ghidra's VarInfo list, which carries richer type info).
+      * Both present & disagree                -> return BOTH orders so the
+        caller can synthesize a candidate per hypothesis (bounded: at most 2).
+      * Exactly one present                    -> that one (preserved behavior).
+      * Neither                                 -> empty.
+    """
+    g = ghidra_vars or []
+    m = m2c_vars or []
+
+    if g and m:
+        if _shared_relative_order_matches(g, m):
+            # Agreement: one preferred order. Prefer Ghidra's VarInfo because it
+            # carries decl_type/type_prefix from the AST; m2c's is text-derived.
+            return VarOrderConsensus(
+                verdict="agree",
+                orders=[g],
+                high_confidence=True,
+            )
+        # Disagreement: emit both hypotheses, Ghidra first (slightly preferred
+        # as the historically primary source), m2c second.
+        return VarOrderConsensus(
+            verdict="disagree",
+            orders=[g, m],
+            high_confidence=False,
+        )
+
+    if g:
+        return VarOrderConsensus(
+            verdict="ghidra_only", orders=[g], high_confidence=False,
+        )
+    if m:
+        return VarOrderConsensus(
+            verdict="m2c_only", orders=[m], high_confidence=False,
+        )
+    return VarOrderConsensus(verdict="none", orders=[], high_confidence=False)

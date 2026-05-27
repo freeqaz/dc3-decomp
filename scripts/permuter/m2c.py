@@ -225,6 +225,57 @@ def extract_return_pattern(code: str) -> str:
     return "unknown"
 
 
+# Condition-shape tags, mirroring ghidra_ast.extract_condition_structure so the
+# two extractors can be combined directly. Text-based (no parse), so it is a
+# coarser approximation than the tree-sitter version, but good enough for the
+# agree/disagree consensus on guard *shape*.
+_M2C_CONJUNCTION_RE = re.compile(r"\bif\s*\([^)]*&&[^)]*\)")
+_M2C_DISJUNCTION_RE = re.compile(r"\bif\s*\([^)]*\|\|[^)]*\)")
+# if (cond) return false/0; — a guard that returns a falsey value.
+_M2C_GUARD_RETURN_FALSE_RE = re.compile(
+    r"\bif\s*\([^)]*\)\s*\{?\s*return\s+(?:false|0)\s*;"
+)
+
+
+def extract_condition_structure_from_text(code: str) -> list[str]:
+    """Classify condition/guard shapes in m2c output text.
+
+    Mirrors ``ghidra_ast.extract_condition_structure`` tag vocabulary so the two
+    can be combined for an agree/disagree signal:
+
+        "conjunction"        — an ``if`` whose condition uses ``&&``
+        "disjunction"        — an ``if`` whose condition uses ``||``
+        "guard_return"       — an ``if (cond) return ...;`` early-return guard
+        "guard_return_false" — an ``if (cond) return false/0;`` guard
+
+    Returns a deduplicated, order-preserving tag list (same shape as the Ghidra
+    extractor). Operates on text only — no tree-sitter parse — so it is a
+    coarser approximation, sufficient for the structural consensus.
+    """
+    if not code:
+        return []
+    body = code.split("{", 1)[1] if "{" in code else code
+
+    tags: list[str] = []
+    seen: set[str] = set()
+
+    def _add(tag: str) -> None:
+        if tag not in seen:
+            seen.add(tag)
+            tags.append(tag)
+
+    if _M2C_CONJUNCTION_RE.search(body):
+        _add("conjunction")
+    if _M2C_DISJUNCTION_RE.search(body):
+        _add("disjunction")
+    if _GUARD_RETURN_RE.search(body):
+        _add("guard_return")
+    if _M2C_GUARD_RETURN_FALSE_RE.search(body):
+        _add("guard_return_false")
+
+    return tags
+
+
 def extract_call_order(code: str) -> list[str]:
     """Extract function call names in order of appearance.
 

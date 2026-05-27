@@ -940,7 +940,18 @@ class ConstraintSet:
 
     # Deterministic (from Ghidra)
     decl_order: list | None = None             # target var names in register order
+    # When True, Ghidra AND m2c agreed on the decl-order — a high-confidence
+    # signal the reorder constraint should win on priority. Set by the combined
+    # Ghidra+m2c var-order extractor in constraint_solver.extract_constraints.
+    decl_order_high_confidence: bool = False
+    # How the decl_order was derived: "agree" | "disagree" | "ghidra_only" |
+    # "m2c_only" | "" (unset). "disagree" means both decompilers produced an
+    # order but they conflict, so _resolve_decl_order should try BOTH.
+    decl_order_verdict: str = ""
     cf_directions: dict = field(default_factory=dict)  # stmt_idx -> tag
+    # When True, Ghidra AND m2c agreed on the control-flow guard shape — same
+    # high-confidence semantics as decl_order_high_confidence, for cf_directions.
+    cf_high_confidence: bool = False
     expr_diffs: list = field(default_factory=list)      # list of expression diff info
     null_checks_to_remove: list = field(default_factory=list)  # stmt indices
 
