@@ -152,3 +152,22 @@ counts — no RB3 function in the sample produced suppress signals strong enough
 for the hard filter to cull anything. No regression, no crashes. Nothing to
 gain or lose here on RB3; the DC3 B2 validation is the deciding data.
 
+### `PERMUTER_PREDICTOR` (A=off, B=on with `PREDICTOR_BUDGET=8`, cull 0.5)
+
+| | A (off) | B (on, budget 8) |
+|---|---|---|
+| wins | 1/10 | 1/10 |
+| variants scored | 237 | **146 (-38.4%)** |
+| wall seconds | 152.2 | **119.4 (-21.6%)** |
+| errors | 0 | 0 |
+
+**Verdict: SAFE and a throughput win on RB3.** With a tight budget (8 << the
+40 max_variants) the predictor culled ~38% of the variant queue and cut wall
+time ~22% while preserving the single win (it kept the winner even when it
+compiled only 8/17 variants on that function). No regression, no crashes. This
+is the predictor working as designed; the open question is whether a tighter
+budget ever drops a real winner on a larger function set — not observed in this
+sample. Worth the coordinator's consideration for a low-budget default, but the
+budget is the risk knob, not the flag itself.
+
+

@@ -1,0 +1,285 @@
+{
+  "schema": "rb3-flag-ab/1",
+  "flag": "predictor",
+  "timestamp": "2026-05-27T06:15:13.214929+00:00",
+  "overall_wall_seconds": 271.65,
+  "n_functions": 10,
+  "summary": {
+    "flag": "predictor",
+    "n_functions_scored": 10,
+    "a_wins": 1,
+    "b_wins": 1,
+    "a_variants_scored": 237,
+    "b_variants_scored": 146,
+    "a_variants_per_sec": 1.557,
+    "b_variants_per_sec": 1.223,
+    "a_errors": 0,
+    "b_errors": 0,
+    "a_wall_seconds": 152.23,
+    "b_wall_seconds": 119.4,
+    "win_regression": false,
+    "new_crashes": false
+  },
+  "functions": [
+    {
+      "qualified_name": "CrowdRating::CalculateValue",
+      "unit": "main/band3/game/CrowdRating",
+      "band": "high",
+      "baseline_percent": 99.0,
+      "a": {
+        "improved": false,
+        "reached_100": false,
+        "rounds_to_first_win": null,
+        "best_discovered": 99.0,
+        "initial_percent": 99.0,
+        "variants_scored": 0,
+        "wall_seconds": 4.498,
+        "error": null
+      },
+      "b": {
+        "improved": false,
+        "reached_100": false,
+        "rounds_to_first_win": null,
+        "best_discovered": 99.0,
+        "initial_percent": 99.0,
+        "variants_scored": 0,
+        "wall_seconds": 3.037,
+        "error": null
+      }
+    },
+    {
+      "qualified_name": "Player::GetEnabledStateAt",
+      "unit": "main/band3/game/Player",
+      "band": "high",
+      "baseline_percent": 98.9583,
+      "a": {
+        "improved": false,
+        "reached_100": false,
+        "rounds_to_first_win": null,
+        "best_discovered": 98.9583,
+        "initial_percent": 98.9583,
+        "variants_scored": 18,
+        "wall_seconds": 17.123,
+        "error": null
+      },
+      "b": {
+        "improved": false,
+        "reached_100": false,
+        "rounds_to_first_win": null,
+        "best_discovered": 98.9583,
+        "initial_percent": 98.9583,
+        "variants_scored": 16,
+        "wall_seconds": 14.31,
+        "error": null
+      }
+    },
+    {
+      "qualified_name": "GamePanel::UpdateNowBar",
+      "unit": "main/band3/game/GamePanel",
+      "band": "high",
+      "baseline_percent": 98.945,
+      "a": {
+        "improved": false,
+        "reached_100": false,
+        "rounds_to_first_win": null,
+        "best_discovered": 98.945,
+        "initial_percent": 98.945,
+        "variants_scored": 44,
+        "wall_seconds": 40.061,
+        "error": null
+      },
+      "b": {
+        "improved": false,
+        "reached_100": false,
+        "rounds_to_first_win": null,
+        "best_discovered": 98.945,
+        "initial_percent": 98.945,
+        "variants_scored": 22,
+        "wall_seconds": 28.697,
+        "error": null
+      }
+    },
+    {
+      "qualified_name": "VocalPart::AddPhrasePoints",
+      "unit": "main/band3/game/VocalPart",
+      "band": "high",
+      "baseline_percent": 98.9344,
+      "a": {
+        "improved": true,
+        "reached_100": false,
+        "rounds_to_first_win": 1,
+        "best_discovered": 99.2623,
+        "initial_percent": 98.9344,
+        "variants_scored": 17,
+        "wall_seconds": 11.356,
+        "error": null
+      },
+      "b": {
+        "improved": true,
+        "reached_100": false,
+        "rounds_to_first_win": 1,
+        "best_discovered": 99.2623,
+        "initial_percent": 98.9344,
+        "variants_scored": 8,
+        "wall_seconds": 8.643,
+        "error": null
+      }
+    },
+    {
+      "qualified_name": "StoreMetadataManager::MarkDownloaded",
+      "unit": "main/system/meta/StorePackedMetadata",
+      "band": "high",
+      "baseline_percent": 98.9151,
+      "a": {
+        "improved": false,
+        "reached_100": false,
+        "rounds_to_first_win": null,
+        "best_discovered": 98.9151,
+        "initial_percent": 98.9151,
+        "variants_scored": 26,
+        "wall_seconds": 11.274,
+        "error": null
+      },
+      "b": {
+        "improved": false,
+        "reached_100": false,
+        "rounds_to_first_win": null,
+        "best_discovered": 98.9151,
+        "initial_percent": 98.9151,
+        "variants_scored": 16,
+        "wall_seconds": 9.696,
+        "error": null
+      }
+    },
+    {
+      "qualified_name": "StoreMetadataManager::MarkDeleted",
+      "unit": "main/system/meta/StorePackedMetadata",
+      "band": "high",
+      "baseline_percent": 98.9151,
+      "a": {
+        "improved": false,
+        "reached_100": false,
+        "rounds_to_first_win": null,
+        "best_discovered": 98.9151,
+        "initial_percent": 98.9151,
+        "variants_scored": 26,
+        "wall_seconds": 11.291,
+        "error": null
+      },
+      "b": {
+        "improved": false,
+        "reached_100": false,
+        "rounds_to_first_win": null,
+        "best_discovered": 98.9151,
+        "initial_percent": 98.9151,
+        "variants_scored": 16,
+        "wall_seconds": 9.601,
+        "error": null
+      }
+    },
+    {
+      "qualified_name": "MainHubPanel::ReloadMessages",
+      "unit": "main/band3/meta_band/MainHubPanel",
+      "band": "high",
+      "baseline_percent": 98.9109,
+      "a": {
+        "improved": false,
+        "reached_100": false,
+        "rounds_to_first_win": null,
+        "best_discovered": 98.9109,
+        "initial_percent": 98.9109,
+        "variants_scored": 50,
+        "wall_seconds": 25.71,
+        "error": null
+      },
+      "b": {
+        "improved": false,
+        "reached_100": false,
+        "rounds_to_first_win": null,
+        "best_discovered": 98.9109,
+        "initial_percent": 98.9109,
+        "variants_scored": 24,
+        "wall_seconds": 17.147,
+        "error": null
+      }
+    },
+    {
+      "qualified_name": "Character::DrawLod",
+      "unit": "main/system/char/Character",
+      "band": "high",
+      "baseline_percent": 98.8889,
+      "a": {
+        "improved": false,
+        "reached_100": false,
+        "rounds_to_first_win": null,
+        "best_discovered": 98.8889,
+        "initial_percent": 98.8889,
+        "variants_scored": 12,
+        "wall_seconds": 12.606,
+        "error": null
+      },
+      "b": {
+        "improved": false,
+        "reached_100": false,
+        "rounds_to_first_win": null,
+        "best_discovered": 98.8889,
+        "initial_percent": 98.8889,
+        "variants_scored": 12,
+        "wall_seconds": 12.63,
+        "error": null
+      }
+    },
+    {
+      "qualified_name": "Splash::ShowNext",
+      "unit": "main/system/movie/Splash",
+      "band": "high",
+      "baseline_percent": 98.8775,
+      "a": {
+        "improved": false,
+        "reached_100": false,
+        "rounds_to_first_win": null,
+        "best_discovered": 98.8775,
+        "initial_percent": 98.8775,
+        "variants_scored": 28,
+        "wall_seconds": 12.925,
+        "error": null
+      },
+      "b": {
+        "improved": false,
+        "reached_100": false,
+        "rounds_to_first_win": null,
+        "best_discovered": 98.8775,
+        "initial_percent": 98.8775,
+        "variants_scored": 16,
+        "wall_seconds": 10.279,
+        "error": null
+      }
+    },
+    {
+      "qualified_name": "PlatformMgr::PlatformMgr",
+      "unit": "main/system/os/PlatformMgr_Wii",
+      "band": "high",
+      "baseline_percent": 98.8739,
+      "a": {
+        "improved": false,
+        "reached_100": false,
+        "rounds_to_first_win": null,
+        "best_discovered": 98.8739,
+        "initial_percent": 98.8739,
+        "variants_scored": 16,
+        "wall_seconds": 5.382,
+        "error": null
+      },
+      "b": {
+        "improved": false,
+        "reached_100": false,
+        "rounds_to_first_win": null,
+        "best_discovered": 98.8739,
+        "initial_percent": 98.8739,
+        "variants_scored": 16,
+        "wall_seconds": 5.36,
+        "error": null
+      }
+    }
+  ]
+}
