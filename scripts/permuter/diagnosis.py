@@ -267,6 +267,13 @@ def is_all_noise(diagnosis: Diagnosis) -> bool:
     for (r0, r1), info in diagnosis.reg_swap_pairs.items():
         if r0.startswith("r") or r1.startswith("r"):
             return False
+        # Single-instruction FPR swap = commutative operand order (a*b vs b*a,
+        # a+b vs b+a), fixable by fma_reorder's commutation rewrites. A
+        # multi-instruction FPR swap is instead a spill/allocation artifact
+        # (typically unfixable), so it stays classified as noise.
+        if (r0.startswith("f") and r1.startswith("f")
+                and info.first_idx == info.last_idx):
+            return False
 
     # Check for unexplained diff_arg
     unexplained = diagnosis.noise_total - diagnosis.noise_explained

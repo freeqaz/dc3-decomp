@@ -239,6 +239,21 @@ def diag_with_fma_addsub_ops() -> Diagnosis:
     return d
 
 
+def diag_with_fpr_commute_swap() -> Diagnosis:
+    """Single-instruction FPR register swap — operand commutation signature.
+
+    A commutative float-op operand swap (a*b vs b*a, a+b vs b+a) keeps the
+    opcode identical, so objdiff reports it as a diff_arg register swap (in
+    reg_swap_pairs, not diff_ops) confined to one instruction. This is the
+    C3 commutation trigger for fma_reorder.
+    """
+    d = _empty_diag()
+    d.reg_swap_pairs = {
+        ("f0", "f10"): SwapInfo(count=2, first_idx=20, last_idx=20),
+    }
+    return d
+
+
 def diag_always() -> Diagnosis:
     """Empty diagnosis — for patterns whose relevant() always returns True."""
     return _empty_diag()
@@ -2216,6 +2231,70 @@ float test_func(float a, float b, float c) {
 """,
     ),
 
+    # =============== fma_reorder (C3 operand commutation) ===============
+    # Commute a multiply's operands: a*b -> b*a. Fixes single-instruction
+    # FPR swaps on fmuls/fmadds (Normalize(Plane)/Normalize(Quat) class).
+
+    PatternFixture(
+        id="fma_commute_multiply",
+        pattern_name="fma_reorder",
+        description="Commute multiply operands a*b -> b*a (fmuls swap)",
+        func_name="test_func",
+        diagnosis=diag_with_fpr_commute_swap(),
+        match_mode="contains",
+        seeded_source="""\
+float test_func(float a, float mult) {
+    return a * mult;
+}
+""",
+        expected_source="return mult * a;",
+    ),
+
+    PatternFixture(
+        id="fma_commute_flat_add",
+        pattern_name="fma_reorder",
+        description="Commute flat add operands a+b -> b+a (fadds swap)",
+        func_name="test_func",
+        diagnosis=diag_with_fpr_commute_swap(),
+        match_mode="contains",
+        seeded_source="""\
+float test_func(float a, float b) {
+    return a + b;
+}
+""",
+        expected_source="return b + a;",
+    ),
+
+    PatternFixture(
+        id="fma_commute_mul_chain_preserves_grouping",
+        pattern_name="fma_reorder",
+        description="Commute (x*y)*z -> z*(x*y) preserving grouping",
+        func_name="test_func",
+        diagnosis=diag_with_fpr_commute_swap(),
+        match_mode="contains",
+        seeded_source="""\
+float test_func(float x, float y, float z) {
+    return x * y * z;
+}
+""",
+        expected_source="return z * (x * y);",
+    ),
+
+    PatternFixture(
+        id="fma_reassociate_mul_chain",
+        pattern_name="fma_reorder",
+        description="Reassociate (x*y)*z -> x*(y*z) (changes fusion order)",
+        func_name="test_func",
+        diagnosis=diag_with_fpr_commute_swap(),
+        match_mode="contains",
+        seeded_source="""\
+float test_func(float x, float y, float z) {
+    return x * y * z;
+}
+""",
+        expected_source="return x * (y * z);",
+    ),
+
     # ===================== reference_elimination =====================
 
     PatternFixture(
@@ -3131,6 +3210,18 @@ class TestPatternRelevance(unittest.TestCase):
     def test_fma_irrelevant_empty(self):
         p = get_pattern("fma_reorder")
         self.assertFalse(p.relevant(_empty_diag()))
+
+    def test_fma_relevant_fpr_commute_swap(self):
+        """C3: single-instruction FPR swap triggers commutation."""
+        p = get_pattern("fma_reorder")
+        d = diag_with_fpr_commute_swap()
+        self.assertTrue(p.relevant(d))
+        self.assertGreater(p.priority(d), 0.6)
+
+    def test_fma_irrelevant_gpr_multi_instruction_swap(self):
+        """GPR swap across many instructions = declaration_reorder, not FMA."""
+        p = get_pattern("fma_reorder")
+        self.assertFalse(p.relevant(diag_with_gpr_swaps()))
 
     def test_comparison_flip_relevant_cmp(self):
         p = get_pattern("comparison_flip")
@@ -4166,6 +4257,30 @@ class TestDiagnosisNoise(unittest.TestCase):
         ]
         diag = diagnose_baseline({"instructions": instrs})
         self.assertEqual(diag.noise_explained, 1)  # immediate with numeric values = noise
+
+    def test_single_instruction_fpr_swap_not_noise(self):
+        """C3: a single-instruction FPR swap is a commutation candidate, not noise."""
+        from scripts.permuter.diagnosis import is_all_noise
+
+        diag = _empty_diag()
+        diag.reg_swap_pairs = {
+            ("f0", "f10"): SwapInfo(count=2, first_idx=20, last_idx=20),
+        }
+        diag.noise_total = 1
+        diag.noise_explained = 1  # the diff_arg is "explained" by the swap
+        self.assertFalse(is_all_noise(diag))
+
+    def test_multi_instruction_fpr_swap_still_noise(self):
+        """A multi-instruction FPR swap is a spill/alloc artifact — stays noise."""
+        from scripts.permuter.diagnosis import is_all_noise
+
+        diag = _empty_diag()
+        diag.reg_swap_pairs = {
+            ("f28", "f31"): SwapInfo(count=8, first_idx=10, last_idx=55),
+        }
+        diag.noise_total = 8
+        diag.noise_explained = 8
+        self.assertTrue(is_all_noise(diag))
 
 
 # ---------------------------------------------------------------------------

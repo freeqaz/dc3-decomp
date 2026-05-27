@@ -491,17 +491,61 @@ Do **not** build `patterns/decl_order_from_ghidra.py` from scratch — extend
 
 **Owner:** — · **Effort:** ~1 day (fix + m2c fallback) · **Risk:** low (additive candidate) · **Gated on A0 harness for validation**
 
-### C3 — Expression-shape synthesis for FMA cluster `[ ]`
+### C3 — Expression-shape synthesis for FMA cluster `[x]`
 
 ~51 known functions with FMA/algebraic-rewrite mismatches (projected ~80% hit
 rate, per `docs/sessions/2026-03-05-ghidra-guided-permuter.md`).
 `ghidra_expr_match` already exists **and is wired into the `fma_reorder`
-pattern** (`fma_reorder.py:104`). This item extends that coverage: detect FMA
-mismatch shape via diff-inspect, synthesize algebraic rewrites
-(associate/commute/factor), emit ≤4 deterministic variants. Audit how far
-`fma_reorder` already gets on the cluster before adding new rewrites.
+pattern** (`fma_reorder.py:104`). This item extended that coverage with
+operand-commutation + multiply-chain reassociation synthesis.
 
-**Owner:** — · **Effort:** ~1 week · **Risk:** medium
+**Audit (2026-05-27, branch `perf/c3-fma-synthesis`).** Sampled the
+float-heavy `src/system/math/*` cluster via `run_diff_inspect`
+(Normalize(Plane/Quat), Box::Volume, FastInvert, FastInterp, Set(Quat),
+Multiply(Plane/Box), MakeScale, Frustum::Set, …). Two findings reshaped the
+item:
+
+1. **fma_reorder's prior coverage** = `+`/`-` addend reorder where one side is
+   a multiply, the `a-b*c -> -(b*c-a)` negation rewrite, and `a-(b-c)` paren
+   expansion (proven on CalcSpline/InterpTangent). It triggers only on
+   `fmadds`/`fadds`-family opcodes in `diagnosis.diff_ops`.
+2. **The dominant cluster shape it MISSED** is pure *operand commutation* of a
+   multiply / flat add: `fmuls fX,A,B` vs `fmuls fX,B,A`, `fmadds` multiplicand
+   swap, `fadds` operand swap. These never appear in `diff_ops` — objdiff
+   reports them as a **single-instruction FPR register swap** (a `diff_arg`
+   that lands in `reg_swap_pairs`). So `fma_reorder.relevant()` returned False
+   AND, worse, `diagnosis.is_all_noise()` classified the whole function as
+   noise (it only special-cased GPR swaps), so the permuter never even tried.
+
+**What shipped** (additive, behind no flag — pure synthesis, never regresses):
+- `fma_reorder`: detect the commutation signature (FPR swap with
+  `first_idx==last_idx`), emit ≤4 deterministic commutation variants
+  (`a*b->b*a`, flat `a+b->b+a`, grouping preserved so it's pure commutation)
+  plus a multiply-chain reassociation `(a*b)*c -> a*(b*c)`.
+- `diagnosis.is_all_noise()`: a single-instruction FPR swap is now a fixable
+  commutation candidate (multi-instruction FPR swaps stay noise = spill
+  artifacts). This unblocks the cluster from being silently skipped.
+- 8 unit tests (synthetic FMA expressions → expected variant set + relevance +
+  noise classification). Full permuter suite: no new failures.
+
+**Realized hit rate: 0 added byte-match wins on the commutation subset — a
+negative result, honestly reported.** A controlled experiment (manually
+swapping `in.b*mult -> mult*in.b` in `Normalize(Plane)` and rebuilding)
+produced byte-identical assembly: **the MSVC PPC compiler canonicalizes
+commutative float operand order by register liveness and ignores source
+operand order** for in-register products. So the bulk of the "~51 FMA cluster"
+is the *commutation* subset, which is compiler-normalized and NOT
+source-fixable. The ~80% projection in the 2026-03-05 doc applies to the
+*Ghidra-guided structural/paren-expansion* subset (already shipped, proven on
+CalcSpline/InterpTangent), not bare commutation. Reassociation `(a*b)*c` is the
+one lever the compiler can't normalize, but the sampled chain cases
+(Box::Volume) are bottlenecked upstream by struct-field load-order shifts, so
+the multiply alone can't reach 100% there either. Net: the synthesis is
+correct and bounded, the `is_all_noise` fix is the durable win (stops
+mis-discarding these functions), and the empirical verdict is that this cluster
+is mostly an unfixable compiler-codegen artifact rather than a source-shape gap.
+
+**Owner:** done · **Effort:** ~1 day (audit-driven) · **Risk:** low (additive)
 
 ---
 
@@ -661,3 +705,18 @@ Append a dated line each time this doc is reviewed or an item changes state.
   impact unvalidated** (real history still thin) — kept default-OFF; A/B sweep
   deferred until `climb_variant` accumulates rows. Mechanism (record features →
   train without crashing → budget-respecting cull) demonstrated end-to-end.
+- **2026-05-27** — **C3 done** (branch `perf/c3-fma-synthesis`). Audited the
+  `src/system/math/*` FMA cluster. fma_reorder's gap = pure operand commutation
+  (`fmuls`/`fmadds`/`fadds` operand swaps), which surface as single-instruction
+  FPR `reg_swap_pairs` (not `diff_ops`) and were being discarded by
+  `is_all_noise()` (GPR-only special-case). Shipped: commutation +
+  multiply-chain reassociation synthesis in `fma_reorder` (≤4 deterministic
+  variants), an `is_all_noise()` fix that no longer mis-discards
+  single-instruction FPR swaps, and 8 unit tests (no new suite failures).
+  **Realized: 0 added wins — negative result, reported honestly.** A controlled
+  rebuild (manual `in.b*mult -> mult*in.b` in Normalize(Plane)) emitted
+  byte-identical asm: MSVC PPC canonicalizes commutative float operand order by
+  register liveness, so the commutation subset of the cluster is a compiler
+  codegen artifact, not a source-shape gap. The ~80% projection applies to the
+  Ghidra-guided paren-expansion subset (already shipped). The durable win is the
+  `is_all_noise` fix (stops silently skipping these functions). See `### C3`.

@@ -227,6 +227,21 @@ def diag_with_fma_addsub_ops() -> Diagnosis:
     return d
 
 
+def diag_with_fpr_commute_swap() -> Diagnosis:
+    """Single-instruction FPR register swap — operand commutation signature.
+
+    A commutative float-op operand swap (a*b vs b*a, a+b vs b+a) keeps the
+    opcode identical, so objdiff reports it as a diff_arg register swap (it
+    lands in reg_swap_pairs, never diff_ops) confined to one instruction.
+    This is the C3 commutation trigger for fma_reorder.
+    """
+    d = _empty_diag()
+    d.reg_swap_pairs = {
+        ("f0", "f10"): SwapInfo(count=2, first_idx=20, last_idx=20),
+    }
+    return d
+
+
 def diag_always() -> Diagnosis:
     """Empty diagnosis — for patterns whose relevant() always returns True."""
     return _empty_diag()

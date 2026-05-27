@@ -27,6 +27,23 @@ Example:
     float r = p3 - (p2 * 3.0f - p1x3m0);
     ->
     float r = p1x3m0 - p2 * 3.0f + p3;
+
+C3 extension — operand commutation (multiply / flat-add):
+    The compiler chooses an operand order for commutative float ops that our
+    source's textual order does not always match. This surfaces in objdiff NOT
+    as an opcode mismatch but as an FPR register-swap confined to a single
+    instruction:
+        fmuls  f0, f10, f0   (target)   vs   fmuls  f0, f0, f10   (ours)
+        fmadds f9, f12, f6, f9 (target) vs   fmadds f9, f6, f12, f9 (ours)
+        fadds  f0, f0, f13   (target)   vs   fadds  f0, f13, f0    (ours)
+    The fix is to commute the operands of the multiply or the flat add:
+        a * b  ->  b * a            (fmuls / fmadds multiplicand swap)
+        a + b  ->  b + a            (fadds operand swap, both sides non-multiply)
+    The pre-existing reorder/expansion machinery never touches the internal
+    multiplicands or a plain add (it only swaps the +/- top-level operands when
+    one side is a multiply), so these single-instruction FPR swaps went
+    uncovered. Proven on Normalize(Plane)/Normalize(Quat) (one fmuls swap ->
+    100%) and the Box::Volume `x*y*z` chain.
 """
 
 from __future__ import annotations
@@ -41,6 +58,14 @@ from ..types import Diagnosis, FunctionContext, Variant
 _FMA_OPCODES = {"fmadds", "fmsubs", "fnmadds", "fnmsubs",
                 "fmadd", "fmsub", "fnmadd", "fnmsub"}
 _ADDSUB_OPCODES = {"fadds", "fsubs", "fadd", "fsub"}
+# Multiply opcodes — pure commutation candidates (a*b -> b*a). Not in
+# diff_ops (objdiff reports the operand difference as a diff_arg reg-swap,
+# same opcode both sides), so relevance for these is driven by FPR swap pairs.
+_FMUL_OPCODES = {"fmuls", "fmul"}
+
+# Cap on commutation variants per function — keep the synthesis bounded and
+# deterministic rather than a blind swap of every product in the body.
+_MAX_COMMUTATION_VARIANTS = 4
 
 
 class FmaReorderPattern(Pattern):
@@ -54,6 +79,10 @@ class FmaReorderPattern(Pattern):
             pair = {d.target_opcode, d.base_opcode}
             if pair & _ADDSUB_OPCODES:
                 return True
+        # C3: commutation candidates appear as single-instruction FPR swaps,
+        # not opcode diffs. A multiply/flat-add operand swap is the likely fix.
+        if _has_commutation_swap(diagnosis):
+            return True
         return False
 
     def priority(self, diagnosis: Diagnosis) -> float:
@@ -65,6 +94,10 @@ class FmaReorderPattern(Pattern):
                 return 0.9  # one FMA op replaced by another
             if pair & _FMA_OPCODES and pair & _ADDSUB_OPCODES:
                 return 0.85  # FMA vs separate add/sub — paren expansion candidate
+        # C3: single-instruction FPR swap with no opcode diff — operand
+        # commutation. High confidence when it's the dominant remaining issue.
+        if _has_commutation_swap(diagnosis):
+            return 0.75
         return 0.6
 
     def generate(self, ctx: FunctionContext) -> Iterator[Variant]:
@@ -89,6 +122,20 @@ class FmaReorderPattern(Pattern):
                 for variant in _generate_paren_expansions(binop, ctx, counter):
                     yield variant
                     counter += 1
+
+        # C3: operand commutation (a*b -> b*a, flat a+b -> b+a). Bounded and
+        # deterministic — one swap per commutable product/sum, capped overall.
+        emitted = 0
+        for stmt in ctx.statements:
+            if emitted >= _MAX_COMMUTATION_VARIANTS:
+                break
+            for binop in _find_commutable_candidates(stmt):
+                if emitted >= _MAX_COMMUTATION_VARIANTS:
+                    break
+                for variant in _generate_commutations(binop, ctx, counter):
+                    yield variant
+                    counter += 1
+                    emitted += 1
 
     def _try_ghidra_guided(
         self, ctx: FunctionContext, start_counter: int
@@ -141,6 +188,145 @@ class FmaReorderPattern(Pattern):
                 f"  Ghidra-guided FMA: {counter - start_counter} variant(s) "
                 f"from {len(diffs)} structural diff(s)",
                 file=sys.stderr,
+            )
+
+
+def _is_fpr(reg: str) -> bool:
+    """True for a PowerPC floating-point register name (f0..f31)."""
+    return len(reg) >= 2 and reg[0] == "f" and reg[1:].isdigit()
+
+
+def _has_commutation_swap(diagnosis: Diagnosis) -> bool:
+    """Detect the operand-commutation signature in a diagnosis.
+
+    A commutative float-op operand swap (a*b vs b*a, a+b vs b+a) does NOT
+    change the opcode, so objdiff reports it as a `diff_arg` register swap —
+    it lands in `reg_swap_pairs`, never in `diff_ops`. The distinguishing
+    signature versus a callee-saved variable regswap is:
+      * the swapped registers are FPRs (f-prefixed), and
+      * the swap is confined to a single instruction (first_idx == last_idx).
+    A callee-saved allocation swap instead spans many instructions across the
+    function body and is GPR-based; those belong to declaration_reorder.
+    """
+    for (r0, r1), info in diagnosis.reg_swap_pairs.items():
+        if _is_fpr(r0) and _is_fpr(r1) and info.first_idx == info.last_idx:
+            return True
+    return False
+
+
+def _find_commutable_candidates(node: Node) -> Iterator[Node]:
+    """Find commutative binary_expression nodes worth swapping operands of.
+
+    Two shapes, complementary to _find_fma_candidates (which only handles a
+    +/- where one side is already a multiply):
+      1. A multiply `a * b`            -> swap to `b * a`  (fmuls / fmadds)
+      2. A flat add `a + b` with NEITHER side a multiply -> `b + a` (fadds)
+
+    Plain adds where one side IS a multiply are intentionally left to
+    _find_fma_candidates / _generate_reorders so we do not emit duplicates.
+    """
+    if node.type == "binary_expression":
+        op = node.child_by_field_name("operator")
+        left = node.child_by_field_name("left")
+        right = node.child_by_field_name("right")
+        if op is not None and left is not None and right is not None:
+            if op.text == b"*":
+                yield node
+            elif op.text == b"+":
+                left_is_mul = (left.type == "binary_expression"
+                               and _has_op(left, b"*"))
+                right_is_mul = (right.type == "binary_expression"
+                                and _has_op(right, b"*"))
+                if not left_is_mul and not right_is_mul:
+                    yield node
+
+    for child in node.children:
+        yield from _find_commutable_candidates(child)
+
+
+def _parenthesize_if_binary(node: Node, text: bytes) -> bytes:
+    """Wrap an operand in parens iff it is an un-parenthesized binary expr.
+
+    Keeps a commuted operand's internal grouping intact so the rewrite stays a
+    pure commutation. Already-parenthesized operands and atoms pass through.
+    """
+    if node.type == "binary_expression":
+        return b"(" + text + b")"
+    return text
+
+
+def _generate_commutations(
+    binop: Node, ctx: FunctionContext, counter: int
+) -> Iterator[Variant]:
+    """Emit the operand-commuted variant of a multiply or flat add.
+
+    Deterministic: exactly one variant per commutable node — swap left/right
+    around the operator. No-op swaps (identical operand text) are skipped.
+    """
+    source = ctx.file_source
+    op_node = binop.child_by_field_name("operator")
+    left = binop.child_by_field_name("left")
+    right = binop.child_by_field_name("right")
+    if op_node is None or left is None or right is None:
+        return
+
+    left_text = source[left.start_byte:left.end_byte]
+    right_text = source[right.start_byte:right.end_byte]
+    if left_text == right_text:
+        return  # swapping a*a / a+a changes nothing
+
+    # Preserve grouping when an operand is itself a binary expression, so the
+    # rewrite is a pure commutation (a OP b -> b OP a) and never a silent
+    # re-association. `(x * y) * z` must become `z * (x * y)`, not `z * x * y`
+    # (which would regroup as `(z * x) * y`).
+    op_text = op_node.text
+    new_left = _parenthesize_if_binary(left, left_text)
+    new_right = _parenthesize_if_binary(right, right_text)
+    kind = "multiply" if op_text == b"*" else "add"
+    new_source = (
+        source[:left.start_byte]
+        + new_right
+        + source[left.end_byte:right.start_byte]
+        + new_left
+        + source[right.end_byte:]
+    )
+    yield Variant(
+        name=f"fma_{counter}",
+        pattern_name="fma_reorder",
+        description=(
+            f"Commute {kind} operands: "
+            f"{left_text.decode('utf-8', errors='replace')[:20]} "
+            f"{op_text.decode()} "
+            f"{right_text.decode('utf-8', errors='replace')[:20]} -> swapped"
+        ),
+        source=new_source,
+    )
+
+    # Reassociate a left-leaning multiply chain: (a*b)*c -> a*(b*c). Unlike
+    # commutation, the compiler does NOT normalize associativity (it changes
+    # which product is fused and the rounding order), so this is the lever that
+    # can actually move fmuls/fmadds chains. Bounded to this one regrouping.
+    if (op_text == b"*" and left.type == "binary_expression"
+            and _has_op(left, b"*")):
+        inner_l = left.child_by_field_name("left")
+        inner_r = left.child_by_field_name("right")
+        if inner_l is not None and inner_r is not None:
+            a_text = source[inner_l.start_byte:inner_l.end_byte]
+            b_text = source[inner_r.start_byte:inner_r.end_byte]
+            reassoc = a_text + b" * (" + b_text + b" * " + right_text + b")"
+            reassoc_source = (
+                source[:left.start_byte]
+                + reassoc
+                + source[binop.end_byte:]
+            )
+            yield Variant(
+                name=f"fma_{counter}r",
+                pattern_name="fma_reorder",
+                description=(
+                    "Reassociate multiply chain: (a*b)*c -> a*(b*c) "
+                    f"[{a_text.decode('utf-8', errors='replace')[:12]}...]"
+                ),
+                source=reassoc_source,
             )
 
 
