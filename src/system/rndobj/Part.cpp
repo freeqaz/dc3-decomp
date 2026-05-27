@@ -1152,16 +1152,21 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
         mRelativeXfm.m.z.x * forceX_dt + mRelativeXfm.m.z.y * forceY_dt
         + mRelativeXfm.m.z.z * forceZ_dt;
 
-    // TODO: target calls WorldXfm twice via a shared branch point (bl+b pattern).
-    // Our compiler generates a different call sequence (diff_op at idx 126).
-    float planeNx, planeNy, planeNz, planeD;
-    if (mBounce != NULL) {
+    // Bounce plane is a stack-allocated Plane in the target binary; matches
+    // RB3 source layout (Plane bouncePlane local, populated from mBounce->WorldXfm()).
+    // Use Plane constructor with Vector3 refs — target emits addi+stw at idx 138/144
+    // to compute &bxf.v and &bxf2.m.z, then passes them via address.
+    Plane bouncePlane;
+    bool bounce = (mBounce != NULL);
+    if (bounce) {
         const Transform &bxf = mBounce->WorldXfm();
-        planeNy = bxf.m.z.y;
-        planeNz = bxf.m.z.z;
-        planeNx = bxf.m.z.x;
         const Transform &bxf2 = mBounce->WorldXfm();
-        planeD = -(bxf2.v.x * planeNx + bxf2.v.z * planeNz + bxf2.v.y * planeNy);
+        bouncePlane.a = bxf2.m.z.x;
+        bouncePlane.b = bxf2.m.z.y;
+        bouncePlane.c = bxf2.m.z.z;
+        float dot = bouncePlane.a * bxf.v.x + bouncePlane.b * bxf.v.y
+                    + bouncePlane.c * bxf.v.z;
+        bouncePlane.d = -dot;
     }
 
     RndParticle *p = mActiveParticles;
@@ -1223,26 +1228,27 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
                 p->pos.z += frameSpan * p->vel.z;
 
                 // Bounce plane reflection
-                if (mBounce != NULL) {
-                    float dist = planeNx * p->pos.x + planeNy * p->pos.y + planeNz * p->pos.z
-                        + planeD;
+                if (bounce) {
+                    float dist = bouncePlane.a * p->pos.x + bouncePlane.b * p->pos.y
+                        + bouncePlane.c * p->pos.z + bouncePlane.d;
                     if (dist < 0.0f) {
                         float velDotN =
-                            planeNy * p->vel.y + p->vel.x * planeNx + planeNz * p->vel.z;
+                            bouncePlane.b * p->vel.y + p->vel.x * bouncePlane.a
+                            + bouncePlane.c * p->vel.z;
                         if (velDotN < 0.0f) {
                             // TODO: target uses fmuls+fsubs (separate), our compiler
                             // generates fnmsubs (fused negate-multiply-subtract).
                             float reflect = velDotN * two;
-                            p->vel.z -= planeNz * reflect;
-                            p->vel.x -= reflect * planeNx;
-                            p->vel.y -= planeNy * reflect;
+                            p->vel.z -= bouncePlane.c * reflect;
+                            p->vel.x -= reflect * bouncePlane.a;
+                            p->vel.y -= bouncePlane.b * reflect;
                         }
                     }
                 }
 
-                // Attractors
-                unsigned int numAttractors = mAttractors.size();
-                for (unsigned int i = 0; i < numAttractors; i++) {
+                // Attractors. Target recomputes mAttractors.size() each iteration
+                // (loop condition calls .size() rather than caching it).
+                for (unsigned int i = 0; i < mAttractors.size(); i++) {
                     Attractor &a = mAttractors[i];
                     if (a.mAttractor != NULL) {
                         const Transform &axf = a.mAttractor->WorldXfm();
