@@ -495,17 +495,16 @@ void RndFont::UpdateChars() {
             if (mMaterialOffsets.size() != mMats.size()) {
                 mMaterialOffsets.resize(mMats.size());
             }
-            float posX = 0;
-            float posY = 0;
+            Vector2 pos(0, 0);
             mMaterialOffsets[0].x = mCellSize.x / (float)bmap->Width();
             mMaterialOffsets[0].y = mCellSize.y / (float)bmap->Height();
             for (unsigned int i = 0; i < mChars.size(); i++) {
                 unsigned short curChar = mChars[i];
-                if (posX + mCellSize.x > (float)bmap->Width()) {
-                    posY += mCellSize.y;
-                    posX = 0;
+                if (pos.x + mCellSize.x > (float)bmap->Width()) {
+                    pos.y += mCellSize.y;
+                    pos.x = 0;
                 }
-                if (posY + mCellSize.y > (float)bmap->Height()) {
+                if (pos.y + mCellSize.y > (float)bmap->Height()) {
                     pageIdx++;
                     if (pageIdx >= (int)mMats.size()) {
                         MILO_NOTIFY(
@@ -514,18 +513,15 @@ void RndFont::UpdateChars() {
                         mChars.resize(i);
                         break;
                     }
-                    posX = 0;
-                    posY = 0;
                     locker.LoadPage(pageIdx);
-                    mMaterialOffsets[pageIdx].x =
-                        mCellSize.x / (float)locker.mBitmapPtr->Width();
-                    mMaterialOffsets[pageIdx].y =
-                        mCellSize.y / (float)locker.mBitmapPtr->Height();
                     bmap = locker.mBitmapPtr;
+                    pos.x = 0;
+                    pos.y = 0;
+                    mMaterialOffsets[pageIdx].x = mCellSize.x / (float)bmap->Width();
+                    mMaterialOffsets[pageIdx].y = mCellSize.y / (float)bmap->Height();
                 }
-                Vector2 pos(posX, posY);
                 SetCharInfo(&mCharInfoMap[curChar], *bmap, pos, pageIdx);
-                posX += mCellSize.x;
+                pos.x += mCellSize.x;
                 if (curChar == 0x20) {
                     mCharInfoMap[curChar].mCharWidth = 0;
                 } else if (curChar == 9) {
