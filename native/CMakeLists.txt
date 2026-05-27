@@ -1137,6 +1137,7 @@ list(REMOVE_ITEM DC3_NATIVE_CORE_SOURCES_ENGINE
     src/platform/Keygen_Stub.cpp
     src/platform/MapFile_Stub.cpp
     src/platform/MaterialSetup.cpp
+    src/platform/Memory_Native.cpp
     src/platform/MeshGpuCache.cpp
     src/platform/Mesh_Wgpu.cpp
     src/platform/Net_Stub.cpp
@@ -1148,6 +1149,7 @@ list(REMOVE_ITEM DC3_NATIVE_CORE_SOURCES_ENGINE
     src/platform/Synth_Stub.cpp
     src/platform/SynthCommon_Stub.cpp
     src/platform/Tex_Wgpu.cpp
+    src/platform/ThreadCall_Native.cpp
     src/platform/TransparentQueue.cpp
     src/platform/VirtualKeyboard_Stub.cpp
 )
