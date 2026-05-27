@@ -242,3 +242,155 @@ def extract_call_order(code: str) -> list[str]:
             seen.add(name)
             order.append(name)
     return order
+
+
+# ------------------------------------------------------------------
+# Variable first-use order (m2c fallback for Ghidra-only path)
+# ------------------------------------------------------------------
+
+# Matches typical m2c local-variable declarations:
+#   "    s32 temp_r0;"
+#   "    f64 var_ft1_2;"
+#   "    void *sp8;"
+#   "    s32 var_v0;"
+#   "    struct Foo *p;"
+# Captures (type, ptr_after_type, ptr_before_name, name). The pointer parts
+# are joined back into the type for downstream type-prefix classification.
+_M2C_DECL_RE = re.compile(
+    r"^\s*((?:const\s+|volatile\s+|signed\s+|unsigned\s+|struct\s+|union\s+)?"
+    r"[A-Za-z_][\w]*)"          # base type token (group 1)
+    r"(\s*\*+)?\s+"             # optional ptr asterisks adjacent to the type (group 2)
+    r"(\*+\s*)?"                # optional ptr asterisks adjacent to the name (group 3)
+    r"([A-Za-z_]\w*)\s*;\s*$",  # variable name (group 4)
+    re.MULTILINE,
+)
+
+# m2c local-name conventions (cf. m2c README):
+#   sp<N>      stack slot
+#   temp_<reg> short-lived temporary in <reg>
+#   var_<reg>  longer-lived variable in <reg>
+#   arg<N>     argument (parameter — excluded)
+# Plus user-named locals when DWARF/PDB info is present.
+_M2C_PARAM_PREFIXES = ("arg",)
+
+
+def _m2c_type_prefix(decl_type: str) -> str:
+    """Map an m2c type token to a Ghidra-style type prefix.
+
+    Returns 'f' for float types, 'i' for ints, 'p' for pointers, '' otherwise.
+    Used to populate VarInfo.type_prefix when feeding ghidra_guided_reorder.
+    """
+    t = decl_type.lower().strip()
+    if "*" in t:
+        return "p"
+    if t in ("f32", "f64", "float", "double", "long double"):
+        return "f"
+    if t in (
+        "s8", "s16", "s32", "s64",
+        "u8", "u16", "u32", "u64",
+        "int", "long", "short", "char",
+        "size_t", "ssize_t", "ptrdiff_t",
+        "bool", "_bool",
+    ):
+        return "u" if t.startswith("u") else "i"
+    return ""
+
+
+def extract_variable_first_use_order_from_text(m2c_code: str):
+    """Extract local variable first-use order from m2c output text.
+
+    Mirrors `ghidra_ast.extract_variable_first_use_order` but operates on raw
+    m2c text (no tree-sitter parse). Returns a list of `VarInfo` ordered by
+    first appearance after the declaration preamble — same shape as the Ghidra
+    extractor so it can be fed straight into `ghidra_guided_reorder`.
+
+    Used as a redundant source for variable order when Ghidra is unavailable.
+    Returns [] on malformed input or when no locals are found.
+    """
+    # Imported here to avoid a hard dependency on tree-sitter at import time.
+    from .ghidra_ast import VarInfo
+
+    if not m2c_code or "{" not in m2c_code:
+        return []
+
+    # Body is everything after the first opening brace (the function body).
+    body_start = m2c_code.find("{") + 1
+    body = m2c_code[body_start:]
+
+    # 1. Collect local declarations from the preamble.
+    #    m2c emits all locals up-front before any statements, so the first
+    #    non-decl line ends the preamble.
+    local_names: list[str] = []
+    name_to_type: dict[str, str] = {}
+    preamble_end = 0
+    for line in body.splitlines(keepends=True):
+        stripped = line.strip()
+        if not stripped:
+            preamble_end += len(line)
+            continue
+        # Hit a brace, label, or non-decl statement -> preamble done.
+        m = _M2C_DECL_RE.match(line)
+        if m is None:
+            break
+        # Stitch the base type and any pointer asterisks back together so
+        # _m2c_type_prefix sees `void*` (returns 'p') rather than just `void`.
+        base_type = m.group(1).strip()
+        ptr_after_type = (m.group(2) or "").strip()
+        ptr_before_name = (m.group(3) or "").strip()
+        ptr_part = ptr_after_type + ptr_before_name
+        decl_type = (base_type + ptr_part).strip()
+        name = m.group(4).strip()
+        # Skip parameters; they shouldn't appear in the preamble but be safe.
+        if any(name.startswith(p) and name[len(p):].isdigit()
+               for p in _M2C_PARAM_PREFIXES):
+            preamble_end += len(line)
+            continue
+        local_names.append(name)
+        name_to_type[name] = decl_type
+        preamble_end += len(line)
+
+    if not local_names:
+        return []
+
+    # 2. Walk the rest of the body and record first-use position of each local.
+    after_preamble = body[preamble_end:]
+    after_preamble_offset = body_start + preamble_end
+    targets = set(local_names)
+    first_use: dict[str, tuple[int, int]] = {}
+
+    # Identifier-boundary regex: match each occurrence of each target name.
+    # Build one alternation to scan once.
+    sorted_names = sorted(targets, key=len, reverse=True)
+    name_pattern = re.compile(
+        r"\b(" + "|".join(re.escape(n) for n in sorted_names) + r")\b"
+    )
+
+    for match in name_pattern.finditer(after_preamble):
+        name = match.group(1)
+        if name in first_use:
+            continue
+        byte_off = after_preamble_offset + match.start()
+        # Line number relative to the full m2c_code (0-based, like Ghidra extractor).
+        line_no = m2c_code[:byte_off].count("\n")
+        first_use[name] = (byte_off, line_no)
+        if len(first_use) == len(targets):
+            break
+
+    if not first_use:
+        return []
+
+    # 3. Build VarInfo list in first-use order.
+    result = []
+    for name in sorted(first_use, key=lambda n: first_use[n]):
+        byte_off, line_no = first_use[name]
+        decl_type = name_to_type.get(name, "")
+        result.append(VarInfo(
+            name=name,
+            first_use_line=line_no,
+            first_use_byte=byte_off,
+            type_prefix=_m2c_type_prefix(decl_type),
+            is_param=False,
+            decl_type=decl_type,
+        ))
+
+    return result

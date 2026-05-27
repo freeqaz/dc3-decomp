@@ -106,21 +106,25 @@ def ghidra_guided_reorder(
     Algorithm:
     1. Ghidra var order -> target register allocation (1st var -> r31, etc.)
     2. Source decl order -> our register allocation (same rule)
-    3. For each swap pair, identify which source vars need to swap positions
-    4. Generate only those targeted swaps
+    3. Emit Ghidra-order-driven candidates (independent of objdiff swap_pairs)
+       that re-shape the source decl order toward Ghidra's first-use order.
+    4. If swap_pairs are present, also emit targeted swaps and neighbor variants.
 
     Falls back gracefully if mapping confidence is too low.
 
     Args:
         ghidra_vars: Variables from Ghidra in first-use order
         source_decl_names: Our source variable names in declaration order
-        swap_pairs: Register swap pairs from objdiff
+        swap_pairs: Register swap pairs from objdiff (may be empty)
         gpr_save_count: GPR save count from Ghidra __savegprlr_N
 
     Returns:
         List of candidate declaration orderings.
     """
-    if len(source_decl_names) < 2 or not swap_pairs:
+    # Note: do NOT early-return on empty swap_pairs — the Ghidra-order-driven
+    # candidate path below is meant to fire exactly when swap detection is
+    # noisy/empty but Ghidra's order is reliable (C2 fix).
+    if len(source_decl_names) < 2:
         return []
 
     # Infer target register assignments from Ghidra
@@ -147,6 +151,50 @@ def ghidra_guided_reorder(
             seen.add(key)
             candidates.append(candidate)
 
+    # ------------------------------------------------------------------
+    # Ghidra-order-driven candidates (additive; fires with no swap_pairs)
+    # ------------------------------------------------------------------
+    # When objdiff swap-pair detection is empty/noisy (>=3-way rotations,
+    # mixed GPR/FPR, partial diffs) Ghidra's first-use order is often still
+    # reliable. Without a Ghidra-name-to-source-name map, we can't pick the
+    # exact permutation, but we can emit a small set of plausible "Ghidra
+    # disagrees with our order" reorders, scoped to as many positions as
+    # Ghidra inferred mappings for (typically a callee-saved prefix).
+    #
+    # target_reg_to_pos has rXX keys mapping to int-position indices and fXX
+    # keys mapping to float-position indices. We use the *count* of int-keys
+    # to decide how many leading source positions are reasonable to permute
+    # (since callee-saved GPRs are r31, r30, ... allocated in source decl
+    # order; only those positions can be re-shuffled to change the binding).
+    int_reg_count = sum(1 for reg in target_reg_to_pos if reg.startswith("r"))
+    permute_window = min(int_reg_count, n_vars)
+    if permute_window >= 2:
+        # Candidate A: reverse the leading window. Highest-signal "opposite
+        # order" guess — covers the most common regswap shape.
+        rev_order = list(base_order)
+        rev_window = list(reversed(rev_order[:permute_window]))
+        rev_order[:permute_window] = rev_window
+        _add_candidate(rev_order)
+
+        # Candidate B-set: adjacent-pair swaps in the leading window. These
+        # cover localized "two-adjacent-vars are mis-ordered" shapes that
+        # the swap_pairs path normally handles, when swap_pairs is empty.
+        for i in range(permute_window - 1):
+            adj_order = list(base_order)
+            adj_order[i], adj_order[i + 1] = adj_order[i + 1], adj_order[i]
+            _add_candidate(adj_order)
+
+        # Candidate C: rotate left by 1 (everyone shifts down a register).
+        # Helps when source has one *extra* leading decl vs Ghidra.
+        if permute_window >= 3:
+            rot_order = list(base_order)
+            head = rot_order[:permute_window]
+            rot_order[:permute_window] = head[1:] + head[:1]
+            _add_candidate(rot_order)
+
+    # ------------------------------------------------------------------
+    # Swap-pair-driven candidates (existing logic; unchanged behavior)
+    # ------------------------------------------------------------------
     # For each swap pair (rA, rB), find which position indices to swap
     targeted_swaps: list[tuple[int, int]] = []
 
@@ -165,7 +213,7 @@ def ghidra_guided_reorder(
                     targeted_swaps.append(pair)
 
     if not targeted_swaps:
-        return []
+        return candidates  # may be empty or only contain Ghidra-order candidates
 
     # Generate targeted swaps
     for i, j in targeted_swaps:

@@ -42,7 +42,7 @@ def extract_constraints(ctx: FunctionContext) -> ConstraintSet:
     """
     cs = ConstraintSet()
 
-    # Ghidra-based constraints
+    # Ghidra-based constraints (preferred)
     if ctx.ghidra_ast is not None:
         cs.ghidra_available = True
         ast = ctx.ghidra_ast
@@ -61,6 +61,15 @@ def extract_constraints(ctx: FunctionContext) -> ConstraintSet:
         if ctx.ghidra_code:
             cs.target_gpr_saves = extract_savegpr_count(ctx.ghidra_code)
             cs.target_fpr_saves = extract_savefpr_count(ctx.ghidra_code)
+
+    # m2c fallback: when Ghidra is absent but m2c text is available, use m2c's
+    # variable first-use order. Ghidra has gaps; m2c is less readable but often
+    # closer to the original code's intent — valuable redundancy for hard cases.
+    elif ctx.m2c_code:
+        from .m2c import extract_variable_first_use_order_from_text
+        m2c_order = extract_variable_first_use_order_from_text(ctx.m2c_code)
+        if m2c_order:
+            cs.decl_order = [v.name for v in m2c_order]
 
     # Diagnosis-based constraints
     if ctx.diagnosis is not None:
@@ -110,9 +119,13 @@ def resolve_to_edits(constraints: ConstraintSet, ctx: FunctionContext) -> list[R
     edits: list[ResolvedEdit] = []
 
     # 1. Declaration reorder (highest priority)
+    # Fires when we have a decl_order constraint (from Ghidra or m2c fallback)
+    # AND either a Ghidra AST or m2c text to drive the var-order extraction in
+    # _resolve_decl_order. swap_pairs is no longer required — the C2 fix in
+    # ghidra_guided_reorder emits Ghidra-order-driven candidates when swap_pairs
+    # is empty.
     if (constraints.decl_order is not None
-            and constraints.swap_pairs
-            and ctx.ghidra_ast is not None):
+            and (ctx.ghidra_ast is not None or ctx.m2c_code)):
         decl_edits = _resolve_decl_order(constraints, ctx)
         edits.extend(decl_edits)
 
@@ -264,6 +277,9 @@ def _resolve_decl_order(
 
     Uses ghidra_var_match.ghidra_guided_reorder() to compute target orderings,
     then translates the best reorder to byte-level edits.
+
+    Prefers Ghidra's variable first-use order, falling back to m2c's when
+    Ghidra is unavailable but m2c text is present (C2 fix).
     """
     try:
         from .ghidra_var_match import ghidra_guided_reorder
@@ -271,7 +287,15 @@ def _resolve_decl_order(
     except ImportError:
         return []
 
-    ghidra_vars = extract_variable_first_use_order(ctx.ghidra_ast)
+    ghidra_vars = []
+    if ctx.ghidra_ast is not None:
+        ghidra_vars = extract_variable_first_use_order(ctx.ghidra_ast)
+
+    # m2c fallback when Ghidra produced nothing.
+    if not ghidra_vars and ctx.m2c_code:
+        from .m2c import extract_variable_first_use_order_from_text
+        ghidra_vars = extract_variable_first_use_order_from_text(ctx.m2c_code)
+
     if not ghidra_vars:
         return []
 
