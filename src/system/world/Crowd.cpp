@@ -715,11 +715,12 @@ void WorldCrowd::AssignRandomColors(bool incrementStamp) {
     }
     FOREACH (it, mCharacters) {
         if (it->mDef.mChar && it->mMMesh && it->m3DChars.size() > 0) {
-            it->mDef.mUseRandomColor = false;
             std::vector<ColorPalette *> colorPaletteList;
+            it->mDef.mUseRandomColor = false;
             for (int i = 0; i < 3; ++i) {
+                auto _tmp1 = MakeString("random%d.pal", i + 1);
                 ColorPalette *randPal = it->mDef.mChar->Find<ColorPalette>(
-                    MakeString("random%d.pal", i + 1), false
+                    _tmp1, false
                 );
                 if (randPal) {
                     colorPaletteList.push_back(randPal);
@@ -1101,8 +1102,9 @@ static const char *sCollideNames[] = {
 };
 
 void WorldCrowd::DrawShowing() {
+    auto& _ref0 = mPlacementMesh;
     START_AUTO_TIMER("crowd_draw");
-    if (!mPlacementMesh) return;
+    if (!_ref0) return;
     Draw3DChars();
     if (Rnd::kDrawOcclusionDepth == TheRnd.GetDrawMode()) return;
     MILO_ASSERT(!dynamic_cast<RndMat*>(gImpostorMat->NextPass()), 0x3A0);
@@ -1144,7 +1146,7 @@ void WorldCrowd::DrawShowing() {
                     float halfHeight = charIt->mDef.mHeight * 0.5f;
 
                     // Position impostor camera at distance along camera's -Y axis
-                    const Transform &placementXfm = mPlacementMesh->WorldXfm();
+                    const Transform &placementXfm = _ref0->WorldXfm();
                     const Transform &curCamXfm = curCam->WorldXfm();
                     float dx = curCamXfm.v.x - placementXfm.v.x;
                     float dy = curCamXfm.v.y - placementXfm.v.y;
@@ -1165,9 +1167,9 @@ void WorldCrowd::DrawShowing() {
                     // Orient character based on crowd rotation mode
                     Transform charXfm;
                     if (mCrowdRotate == kCrowdRotateNone) {
-                        memcpy(&charXfm, &mPlacementMesh->WorldXfm(), 0x30);
+                        memcpy(&charXfm, &_ref0->WorldXfm(), 0x30);
                     } else {
-                        const Transform &meshXfm = mPlacementMesh->WorldXfm();
+                        const Transform &meshXfm = _ref0->WorldXfm();
                         float upX = meshXfm.m.z.x;
                         float upY = meshXfm.m.z.y;
                         float upZ = meshXfm.m.z.z;
@@ -1249,7 +1251,7 @@ void WorldCrowd::DrawShowing() {
                 float halfWidth = halfHeight * 0.5f;
 
                 // --- Set up impostor camera: position at -dist along camera's Y axis ---
-                const Transform &placementXfm = mPlacementMesh->WorldXfm();
+                const Transform &placementXfm = _ref0->WorldXfm();
                 const Transform &curCamXfm = curCam->WorldXfm();
                 float dx = curCamXfm.v.x - placementXfm.v.x;
                 float dy = curCamXfm.v.y - placementXfm.v.y;
@@ -1271,10 +1273,10 @@ void WorldCrowd::DrawShowing() {
                 // --- Compute character orientation based on crowd rotation mode ---
                 Transform charXfm;
                 if (mCrowdRotate == kCrowdRotateNone) {
-                    const Transform &meshXfm = mPlacementMesh->WorldXfm();
+                    const Transform &meshXfm = _ref0->WorldXfm();
                     memcpy(&charXfm, &meshXfm, 0x30);
                 } else {
-                    const Transform &meshXfm2 = mPlacementMesh->WorldXfm();
+                    const Transform &meshXfm2 = _ref0->WorldXfm();
                     float upX = meshXfm2.m.z.x;
                     float upY = meshXfm2.m.z.y;
                     float upZ = meshXfm2.m.z.z;

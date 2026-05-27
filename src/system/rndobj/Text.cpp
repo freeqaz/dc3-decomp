@@ -1048,8 +1048,6 @@ void RndText::BuildFontMaps(bool b1) {
         }
     }
     if (mFontMaps.empty()) {
-#ifdef HX_NATIVE
-#endif
         for (int i = 0; i < mStyles.size(); i++) {
             RndFontBase *font = mStyles[i].mFont;
             if (font) {
@@ -1060,6 +1058,8 @@ void RndText::BuildFontMaps(bool b1) {
                 }
             }
         }
+#ifdef HX_NATIVE
+#endif
     }
 }
 
@@ -1281,17 +1281,19 @@ int RndText::OnComputeCharWidths(const unsigned short *wideChars, float *widths,
     }
 #endif
     StyleState styleState(this, 1.0f);
-    std::vector<RndFontBase *> missingFonts;
     unsigned short prevChar = 0;
     std::vector<unsigned short> negWidthChars;
+    std::vector<RndFontBase *> missingFonts;
     std::vector<unsigned short> missingChars;
     float cumWidth = 0.0f;
     widths[0] = 0.0f;
     const unsigned short *p = wideChars;
     float *w = widths + 1;
+    auto _e0 = missingChars.end();
     for (;;) {
         if (*p == 0) {
-            if (!missingChars.empty()) {
+            bool _cond = !missingChars.empty();
+            if (_cond) {
                 auto pathStr = PathName(this);
                 String msg = MakeString("%s:%s '", pathStr, ClassName().Str());
                 String hexMsg;
@@ -1368,7 +1370,7 @@ process_char:
                     if (mFitType == kFitScrollMarqueeWrapAlways && ch == '\n') {
                         if (!marqueeWrap) {
                             mNumLines++;
-                            float lw = (float)((double)mNumLines * (double)mIndentation + (double)cumWidth);
+                            float lw = (float)((double)cumWidth + (double)mNumLines * (double)mIndentation);
                             mLineWidths.insert(mLineWidths.end(), lw);
                             float lo = (float)((double)mNumLines * (double)mIndentation + (double)cumWidth);
                             mLineOffsets.insert(mLineOffsets.end(), lo);
@@ -1384,7 +1386,7 @@ process_char:
                         bool found = font->CharAdvance(prevChar, ch, charWidth);
                         if (!found) {
                             if (ch != '\n') {
-                                if (std::find(missingChars.begin(), missingChars.end(), ch) == missingChars.end()) {
+                                if (std::find(missingChars.begin(), _e0, ch) == _e0) {
                                     missingChars.push_back(ch);
                                 }
                                 if (std::find(missingFonts.begin(), missingFonts.end(), font) == missingFonts.end()) {
@@ -1675,15 +1677,15 @@ void RndText::FitTextJust() {
     HX_VECTOR(unsigned short) wideChars;
     HX_VECTOR(Line) lines;
     int numChars = ConvertTextToWide(mText.c_str(), wideChars);
-    float *charWidths = (float *)_alloca((numChars + 2) * sizeof(float));
+    float *charWidths = (float *)_alloca(sizeof(float) * (numChars + 2));
     OnComputeCharWidths(&wideChars[0], charWidths, false);
 
     Hmx::Rect bounds;
     float scale = 1.0f;
     WrapText(&wideChars[0], numChars, charWidths, lines, bounds, scale);
 
-    float lo = 0.2f;
     float hi = mStyles[0].mSize;
+    float lo = 0.2f;
     float cur = hi;
 
     if ((mWidth != 0.0f && mWidth < bounds.w) || (mHeight != 0.0f && mHeight < bounds.h)) {
@@ -1732,10 +1734,10 @@ void RndText::FitTextEllipsis() {
 
         // Binary search for how many chars fit
         int lo = 1;
-        int hi = numChars;
         if (numChars > 2) {
-            int tmpLo = lo;
+            int hi = numChars;
             do {
+                int tmpLo = lo;
                 int mid = ((int)tmpLo + (int)hi) >> 1;
                 lo = mid;
                 if (charWidths[mid] >= mWidth) {
@@ -2297,7 +2299,9 @@ void RndText::DrawShowing() {
         FontMapBase *fontMap = *it;
         for (int i = 0; i < fontMap->NumMaterials(); i++) {
             RndMat *mat = fontMap->Material(i);
-            savedColors[vlaIdx] = mat->GetColor();
+                        savedColors[vlaIdx].red = mat->GetColor().red;
+            savedColors[vlaIdx].green = mat->GetColor().green;
+            savedColors[vlaIdx].blue = mat->GetColor().blue;
             vlaIdx++;
         }
     }
@@ -2335,11 +2339,11 @@ void RndText::DrawShowing() {
         for (int i = 0; i < numMeshes; i++) {
             RndMesh *mesh = fontMap->Mesh(i);
             if (mesh) {
-                if (!sBlacklightModeEnabled || !fontMap->mBlacklight ||
-                    TheUI->DisableScreenBlacklight()) {
-                    DrawMesh(mesh, mStyles[0].mSize, 0);
-                } else {
+                if (!(!sBlacklightModeEnabled || !fontMap->mBlacklight ||
+                    TheUI->DisableScreenBlacklight())) {
                     QueueBlacklightPacket(mesh, mStyles[0].mSize, 0);
+                } else {
+                    DrawMesh(mesh, mStyles[0].mSize, 0);
                 }
             }
         }
@@ -2349,7 +2353,7 @@ void RndText::DrawShowing() {
     if (hasOverride) {
         vlaIdx = 0;
         auto fontMapsEnd = mFontMaps.end();
-        for (auto it = mFontMaps.begin(); it != fontMapsEnd; ++it) {
+        for (auto it = mFontMaps.begin(); fontMapsEnd != it; ++it) {
             FontMapBase *fontMap = *it;
             auto numMaterials = fontMap->NumMaterials();
             for (int i = 0; i < numMaterials; i++) {
@@ -2592,9 +2596,9 @@ void RndText::FontMap::SetupCharacter(
 
     float z0 = yPos + state.mZOffset * state.mSize;
     auto _tmp1 = mFont->AspectRatio();
-    float italics = state.mItalics * state.mSize;
     float x = xPos;
-    float z1 = z0 - _tmp1 * state.mSize;
+    float italics = state.mItalics * state.mSize;
+    float z1 = _tmp1 * state.mSize - z0;
 
     pg.mVertStart[0].pos.Set(italics + scaledCenter + x, 0.0f, z0);
     pg.mVertStart[1].pos.Set(scaledCenter + x - italics, 0.0f, z1);
@@ -2634,6 +2638,7 @@ void RndText::FontMap::SetupCharacter(
     xPos = advW * state.mSize + xPos;
 }
 
+static const float _kFloat0_0 = 0.0f;
 void RndText::FontMap3d::SetupCharacter(
     unsigned short charCode,
     float &xPos,
@@ -2653,20 +2658,19 @@ void RndText::FontMap3d::SetupCharacter(
     xPos += (mFont->Kerning(prevChar, charCode) + state.mKerning) * state.mSize;
 
     // Use advance as display width if width <= 0
-    if (width <= 0.0f) {
+    if (width <= _kFloat0_0) {
         width = advance;
     }
 
     // Monospace centering
-    float centerOffset = 0.0f;
+    float centerOffset = _kFloat0_0;
     if (mFont->IsMonospace()) {
-        centerOffset = Max((advance - width) * 0.5f, 0.0f);
+        centerOffset = Max((advance - width) * 0.5f, _kFloat0_0);
     }
 
-    float scaledWidth = state.mSize * width;
     float scaledCenter = state.mSize * centerOffset;
 
-    if (scaledWidth <= 0.0f)
+    if ((state.mSize * width) <= _kFloat0_0)
         return;
 
     yPos += state.mZOffset * state.mSize;
@@ -2687,12 +2691,12 @@ void RndText::FontMap3d::SetupCharacter(
 
         // Scale matrix by cell height
         float cellHeight = mFont->FontUnitInverse() * state.mSize;
-        xfm.m.x.Set(cellHeight, 0.0f, 0.0f);
-        xfm.m.y.Set(0.0f, cellHeight, 0.0f);
-        xfm.m.z.Set(0.0f, 0.0f, cellHeight);
+        xfm.m.x.Set(cellHeight, _kFloat0_0, _kFloat0_0);
+        xfm.m.y.Set(_kFloat0_0, cellHeight, _kFloat0_0);
+        xfm.m.z.Set(_kFloat0_0, _kFloat0_0, cellHeight);
 
-        if (size != 0.0f) {
-            float circlePos = scaledWidth * 0.5f + xfm.v.x;
+        if (size != _kFloat0_0) {
+            float circlePos = (state.mSize * width) * 0.5f + xfm.v.x;
             Transform circleXfm = XfmOnCircleEdge(circlePos, size);
             xfm.v.x -= circlePos;
             Multiply(xfm, circleXfm, xfm);
