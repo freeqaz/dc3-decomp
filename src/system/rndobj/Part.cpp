@@ -1208,6 +1208,11 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
                     }
                 }
 
+                // Hoist references to p->pos / p->vel so the compiler keeps
+                // their addresses in callee-saved registers across the loop body.
+                Vector4 &pos = p->pos;
+                Vector4 &vel = p->vel;
+
                 // Birth momentum (fancy only). Route through scalar temps so
                 // the compiler emits fmuls+fadds (separate) rather than fmadds.
                 if (isFancy && mBirthMomentum) {
@@ -1216,27 +1221,27 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
                     float bvX = fp->mRPMVelocity * momentumScale;
                     float bvY = fp->mPitchAngularVel * momentumScale;
                     float bvZ = fp->mBirthVelocityX * momentumScale;
-                    p->pos.x += bvX;
-                    p->pos.y += bvY;
-                    p->pos.z += bvZ;
+                    pos.x += bvX;
+                    pos.y += bvY;
+                    pos.z += bvZ;
                 }
 
                 // Position integration. Route through temps to force fmuls+fadds.
-                float dx_pos = frameSpan * p->vel.x;
-                float dy_pos = p->vel.y * frameSpan;
-                float dz_pos = frameSpan * p->vel.z;
-                p->pos.x += dx_pos;
-                p->pos.y += dy_pos;
-                p->pos.z += dz_pos;
+                float dx_pos = frameSpan * vel.x;
+                float dy_pos = vel.y * frameSpan;
+                float dz_pos = frameSpan * vel.z;
+                pos.x += dx_pos;
+                pos.y += dy_pos;
+                pos.z += dz_pos;
 
                 // Bounce plane reflection
                 if (bounce) {
-                    float dist = bouncePlane.a * p->pos.x + bouncePlane.b * p->pos.y
-                        + bouncePlane.c * p->pos.z + bouncePlane.d;
+                    float dist = bouncePlane.a * pos.x + bouncePlane.b * pos.y
+                        + bouncePlane.c * pos.z + bouncePlane.d;
                     if (dist < 0.0f) {
                         float velDotN =
-                            bouncePlane.b * p->vel.y + p->vel.x * bouncePlane.a
-                            + bouncePlane.c * p->vel.z;
+                            bouncePlane.b * vel.y + vel.x * bouncePlane.a
+                            + bouncePlane.c * vel.z;
                         if (velDotN < 0.0f) {
                             // Route through scalar temps to emit fmuls+fsubs
                             // (separate) rather than the fused fnmsubs.
@@ -1244,9 +1249,9 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
                             float rx = bouncePlane.a * reflect;
                             float ry = bouncePlane.b * reflect;
                             float rz = bouncePlane.c * reflect;
-                            p->vel.x -= rx;
-                            p->vel.y -= ry;
-                            p->vel.z -= rz;
+                            vel.x -= rx;
+                            vel.y -= ry;
+                            vel.z -= rz;
                         }
                     }
                 }
@@ -1257,10 +1262,10 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
                     Attractor &a = mAttractors[i];
                     if (a.mAttractor != NULL) {
                         const Transform &axf = a.mAttractor->WorldXfm();
-                        float dz = axf.v.z - p->pos.z;
-                        float dy = axf.v.y - p->pos.y;
+                        float dz = axf.v.z - pos.z;
+                        float dy = axf.v.y - pos.y;
                         float strength = a.mStrength;
-                        float dx = axf.v.x - p->pos.x;
+                        float dx = axf.v.x - pos.x;
 
                         // TODO: target uses beq (to special case) + dead code after,
                         // ours uses bne (skip special case). diff_op at idx 340.
@@ -1288,20 +1293,20 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
                         float vx_inc = scale * dx;
                         float vy_inc = scale * dy;
                         float vz_inc = scale * dz;
-                        p->vel.x += vx_inc;
-                        p->vel.z += vz_inc;
-                        p->vel.y += vy_inc;
+                        vel.x += vx_inc;
+                        vel.z += vz_inc;
+                        vel.y += vy_inc;
                     }
                 }
 
-                p->vel.x += relForceRow0;
-                p->vel.z += relForceRow2;
-                p->vel.y += relForceRow1;
+                vel.x += relForceRow0;
+                vel.z += relForceRow2;
+                vel.y += relForceRow1;
 
                 if (isFancy) {
-                    p->vel.y *= dragFactor;
-                    p->vel.z *= dragFactor;
-                    p->vel.x *= dragFactor;
+                    vel.y *= dragFactor;
+                    vel.z *= dragFactor;
+                    vel.x *= dragFactor;
 
                     RndFancyParticle *fp = (RndFancyParticle *)p;
 
@@ -1311,9 +1316,9 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
                         float sinVal =
                             FastSin(fp->bubbleFreq * dt + fp->bubblePhase + halfPi);
                         float bubbleScale = fp->bubbleFreq * sinVal * frameSpan;
-                        p->pos.x += fp->bubbleDir.x * bubbleScale;
-                        p->pos.y += fp->bubbleDir.y * bubbleScale;
-                        p->pos.z += fp->bubbleDir.z * bubbleScale;
+                        pos.x += fp->bubbleDir.x * bubbleScale;
+                        pos.y += fp->bubbleDir.y * bubbleScale;
+                        pos.z += fp->bubbleDir.z * bubbleScale;
                     }
 
                     // RPM rotation and swing arm — uses RPF/swingArmVel
@@ -1330,7 +1335,7 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
                     float colorScale;
                     float cr, cg, cb, ca;
                     if (dt < fp->midcolFrame) {
-                        float t = (dt - p->birthFrame) * p->vel.w;
+                        float t = (dt - p->birthFrame) * vel.w;
                         colorScale = (1.0f - t) * t * frameSpan * sixf;
                         ca = fp->midcolVel.alpha * colorScale;
                         cb = fp->midcolVel.blue * colorScale;
@@ -1383,7 +1388,7 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
                     // Basic particle: single-phase color/size update.
                     // Route through scalar temps so the compiler emits
                     // fmuls+fadds (separate) rather than fmadds.
-                    float t = (dt - p->birthFrame) * p->pos.w;
+                    float t = (dt - p->birthFrame) * pos.w;
                     float scale = (1.0f - t) * t * frameSpan * sixf;
                     float dr = p->colVel.red * scale;
                     float dg = p->colVel.green * scale;
