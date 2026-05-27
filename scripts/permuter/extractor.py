@@ -122,6 +122,10 @@ class OffsetNode:
         return OffsetNode(p, self._offset) if p is not None else None
 
     @property
+    def is_named(self) -> bool:
+        return self._inner.is_named
+
+    @property
     def id(self) -> int:
         return self._inner.id
 
@@ -460,6 +464,57 @@ def _find_all_function_defs(node: Node) -> list[Node]:
     return result
 
 
+def _find_all_function_defs_with_namespace(
+    node: Node, ancestors: tuple[str, ...] = (),
+) -> list[tuple[Node, tuple[str, ...]]]:
+    """Walk the tree returning (function_definition, namespace_ancestors).
+
+    ``ancestors`` is the chain of enclosing ``namespace_definition`` names
+    (outermost first). This lets callers reconstruct fully-qualified names
+    for inline definitions written as ``Class::Method`` inside
+    ``namespace Foo { ... }``.
+
+    Class names are NOT included in ancestors here: the function_definition's
+    own declarator already carries ``Class::`` when the method is defined
+    out-of-class, and inline-in-class methods don't typically need namespace
+    qualification anyway (their class lookup handles it).
+    """
+    result: list[tuple[Node, tuple[str, ...]]] = []
+    if node.type == "function_definition":
+        result.append((node, ancestors))
+    if node.type == "namespace_definition":
+        name_node = node.child_by_field_name("name")
+        ns_name: str | None = None
+        if name_node is not None and name_node.text:
+            ns_name = name_node.text.decode("utf-8", errors="replace")
+        # An anonymous namespace contributes no name segment but should still
+        # recurse with the existing ancestor chain unchanged.
+        new_ancestors = ancestors + (ns_name,) if ns_name else ancestors
+        for child in node.children:
+            result.extend(_find_all_function_defs_with_namespace(child, new_ancestors))
+        return result
+    for child in node.children:
+        result.extend(_find_all_function_defs_with_namespace(child, ancestors))
+    return result
+
+
+def _qualified_candidates(name: str, ancestors: tuple[str, ...]) -> list[str]:
+    """Return the candidate qualified names this function may be referred to as.
+
+    Always includes the raw ``name`` (what the source wrote). When namespace
+    ancestors are present, also emits the ancestor-prefixed form, plus
+    progressively-prefixed variants (so a caller looking up ``A::B::Class::M``
+    matches a function declared as ``Class::M`` inside ``namespace A::B``).
+    """
+    candidates: list[str] = [name]
+    if ancestors:
+        # Build prefix variants: ("A",), ("A","B"), ...
+        for i in range(len(ancestors)):
+            prefix = "::".join(ancestors[i:])
+            candidates.append(f"{prefix}::{name}")
+    return candidates
+
+
 def extract_function(file_path: Path, func_name: str) -> FunctionContext:
     """Extract a function from a C++ source file by its qualified name.
 
@@ -477,32 +532,60 @@ def extract_function(file_path: Path, func_name: str) -> FunctionContext:
     tree = _cached_parse(source)
 
     available: list[str] = []
+    # (qualified_candidate, func_node) pairs for the suffix-fallback pass
+    candidates: list[tuple[str, Node]] = []
 
     # Search all function definitions, including those nested due to macro
     # confusion (tree-sitter can't resolve preprocessor macros, so constructs
     # like BEGIN_COPYING_MEMBERS cause it to swallow subsequent functions as
     # children of an earlier node).
-    for func_node in _find_all_function_defs(tree.root_node):
+    #
+    # Namespace-aware walk: track enclosing namespace_definition names so
+    # inline-in-namespace methods can be looked up via their fully-qualified
+    # form. Callers may pass either ``DSP::SynapseAPO::X`` or ``SynapseAPO::X``
+    # for a function written as ``void SynapseAPO::X() {}`` inside
+    # ``namespace DSP {...}``; both should resolve.
+    for func_node, ancestors in _find_all_function_defs_with_namespace(tree.root_node):
         name = _get_function_name(func_node)
-        if name is not None:
-            available.append(name)
+        if name is None:
+            continue
 
-        if name == func_name:
-            body = func_node.child_by_field_name("body")
-            if body is None:
-                raise ValueError(f"Function {func_name} has no body")
+        # Build the candidate set: raw name + namespace-prefixed forms.
+        for cand in _qualified_candidates(name, ancestors):
+            available.append(cand)
+            candidates.append((cand, func_node))
+            if cand == func_name:
+                return _build_context(file_path, source, func_node)
 
-            statements = [c for c in body.named_children]
-            func_range = (func_node.start_byte, func_node.end_byte)
-            return FunctionContext(
-                file_path=file_path,
-                file_source=source,
-                func_node=func_node,
-                body_node=body,
-                statements=statements,
-                func_byte_range=func_range,
-                preproc_regions=_find_function_preproc_regions(source, func_range),
-            )
+    # Suffix fallback: callers sometimes have a longer/shorter qualified name
+    # than what the source declares. Accept the unique candidate whose name
+    # ends with ``::func_name`` (or vice versa) — this catches both
+    # ``namespace::Class::M`` ↔ ``Class::M`` mismatches that the explicit
+    # prefix enumeration above didn't anticipate (e.g. funky nested classes).
+    suffix_key = f"::{func_name}"
+    func_suffix_key = f"::{func_name.split('::')[-1]}"
+    suffix_matches: list[tuple[str, Node]] = []
+    for cand, fn in candidates:
+        if cand.endswith(suffix_key):
+            suffix_matches.append((cand, fn))
+        elif func_name.endswith(f"::{cand}"):
+            suffix_matches.append((cand, fn))
+        elif cand.endswith(func_suffix_key) and cand.split("::")[-1] == func_name.split("::")[-1]:
+            # Both end with the same leaf name — last-resort match. Only useful
+            # when there's exactly one such candidate (handled by the dedupe
+            # below); ambiguous matches fall through to the not-found error.
+            suffix_matches.append((cand, fn))
+    # Dedup by function node identity (same node may show up under multiple
+    # candidate names — raw + namespace-prefixed).
+    seen_ids: set[int] = set()
+    unique_matches: list[tuple[str, Node]] = []
+    for cand, fn in suffix_matches:
+        if fn.id in seen_ids:
+            continue
+        seen_ids.add(fn.id)
+        unique_matches.append((cand, fn))
+    if len(unique_matches) == 1:
+        return _build_context(file_path, source, unique_matches[0][1])
 
     # Fallback: try macro extraction (BEGIN_LOADS, BEGIN_HANDLERS, etc.)
     result = _try_macro_extraction(source, file_path, func_name)
@@ -518,4 +601,24 @@ def extract_function(file_path: Path, func_name: str) -> FunctionContext:
         f"the demangled symbol.\n"
         f"Available functions ({len(all_names)}):\n"
         + "\n".join(f"  - {name}" for name in all_names)
+    )
+
+
+def _build_context(
+    file_path: Path, source: bytes, func_node: Node,
+) -> FunctionContext:
+    """Construct a FunctionContext from a matched function_definition node."""
+    body = func_node.child_by_field_name("body")
+    if body is None:
+        raise ValueError(f"Function at {file_path} has no body")
+    statements = [c for c in body.named_children]
+    func_range = (func_node.start_byte, func_node.end_byte)
+    return FunctionContext(
+        file_path=file_path,
+        file_source=source,
+        func_node=func_node,
+        body_node=body,
+        statements=statements,
+        func_byte_range=func_range,
+        preproc_regions=_find_function_preproc_regions(source, func_range),
     )
