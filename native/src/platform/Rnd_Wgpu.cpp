@@ -26,9 +26,10 @@
 #include "obj/DirLoader.h"
 #include "obj/Utl.h"
 #include "ui/UI.h"
-#include "hamobj/HamDirector.h"
-#include "hamobj/HamCharacter.h"
-#include "hamobj/HamGameData.h"
+// Phase 0.2a: game-specific draw passes (HamDirector overlay, HamCharacter
+// impostor RTT loop) are dispatched through GameRenderHook so the renderer
+// stays engine-clean. DC3 registers a HamRenderHook in dc3_render_hook.cpp.
+#include "platform/GameRenderHook.h"
 #include "world/Dir.h"
 #include "char/Character.h"
 #include "math/Utl.h"
@@ -585,6 +586,13 @@ void WgpuRnd::FlushPostProcessingForOverlay() {
     mLastSceneCam = nullptr;
     // Mark post-proc as already done so EndDrawing doesn't run it again
     mPostProcFlushed = true;
+
+    // Game-supplied HUD/overlay draw pass (DC3 HamDirector overlay, RB3 band
+    // HUD). The overlay pass is now active on the framebuffer at 1x with no
+    // depth; the hook issues whatever draws it needs.
+    if (GameRenderHook* hook = GetGameRenderHook()) {
+        hook->DrawGameOverlay(this);
+    }
 }
 
 void FlushPostProcessingForOverlay() {
@@ -1016,6 +1024,13 @@ void WgpuRnd::BeginDrawing() {
     // TexRenderer::DrawPreClear() calls SelectRenderTarget() which creates
     // temporary texture passes, then FinishDrawTarget() restores state.
     DrawPreClear();
+
+    // Game-supplied off-screen render passes (DC3 character impostor RTTs,
+    // RB3-anything-equivalent). The hook iterates its own game objects and
+    // opens/closes its own render passes via the renderer API.
+    if (GameRenderHook* hook = GetGameRenderHook()) {
+        hook->RenderCharacterImpostors(this);
+    }
 
     BeginFramePass(true);
 }

@@ -1144,6 +1144,7 @@ list(REMOVE_ITEM DC3_NATIVE_CORE_SOURCES_ENGINE
     src/platform/NetworkSocket_Stub.cpp
     src/platform/Part_Wgpu.cpp
     src/platform/RndTex_Native.cpp
+    src/platform/Rnd_Wgpu.cpp  # Phase 0.2a: moved into milo-engine behind GameRenderHook
     src/platform/SampleInst_Native.cpp
     src/platform/StreamReceiver_Native.cpp
     src/platform/Synth_Stub.cpp
@@ -1386,6 +1387,7 @@ add_executable(dc3-native
     ${DC3_ENGINE_SOURCES}
     src/main_native.cpp
     ${DC3_NATIVE_CORE_SOURCES_ENGINE}
+    src/dc3_render_hook.cpp       # Phase 0.2a: HamRenderHook (registers with milo-engine)
     src/platform/DebugPanel.cpp   # deferred glue (pairs with HttpServer/DC3_HTTP_SERVER)
     # gfx set + ImGuiBackend.cpp now provided by milo-engine
 )
@@ -1510,6 +1512,7 @@ add_executable(milo-viewer
     src/viewer/ViewerScene.cpp
     src/viewer/ViewerAnimation.cpp
     src/viewer/ViewerCapture.cpp
+    src/dc3_render_hook.cpp       # Phase 0.2a: HamRenderHook (registers with milo-engine)
     src/platform/DebugPanel.cpp   # deferred glue (pairs with HttpServer)
     ${DC3_ENGINE_SOURCES}
     ${DC3_NATIVE_CORE_SOURCES_ENGINE}
@@ -1568,6 +1571,7 @@ target_precompile_headers(milo-viewer PRIVATE
 add_executable(render-test
     src/render_test/render_test_main.cpp
     src/render_test/test_scene.cpp
+    src/dc3_render_hook.cpp       # Phase 0.2a: HamRenderHook (registers with milo-engine)
     ${DC3_ENGINE_SOURCES}
     ${DC3_NATIVE_CORE_SOURCES_ENGINE}
     # gfx set -> milo-engine
@@ -1730,6 +1734,7 @@ if(BUILD_TESTS)
         tests/test_movegraph.cpp
         tests/test_dta_flow.cpp
         tests/test_foot_bone_invariants.cpp
+        src/dc3_render_hook.cpp       # Phase 0.2a: HamRenderHook (registers with milo-engine)
         ${DC3_ENGINE_SOURCES}
         ${DC3_NATIVE_CORE_SOURCES_ENGINE}
         # CharTwistSolver + gfx set -> milo-engine
