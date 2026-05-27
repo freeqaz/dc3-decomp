@@ -266,26 +266,50 @@ off-switch is the deliverable of B1. The data-quality fix is a separate task.
 
 **Owner:** — · **Effort:** 1 day (flag done; DB fix is ~0.5d more) · **Risk:** low
 
-### B2 — diff-inspect signals as hard filters `[ ]`
+### B2 — diff-inspect signals as hard filters `[x]` · **Implemented 2026-05-27, default OFF (inert on bench)**
 
-`RoundHints` (`types.py:553`) re-weights *softly* today (`priority_floor`,
+`RoundHints` (`types.py`) re-weights *softly* today (`priority_floor`,
 `suppression_factor`, `adaptive_priority_boost`) feeding
-`generator._pattern_priorities`. Promote strong signals (e.g. "only register
-swaps in cluster K") to **hard filters** that drop patterns outright.
+`generator._pattern_priorities`. Promote strong signals (e.g. an atlas
+`negative` suppression at 0.9 confidence) to **hard filters** that drop
+patterns outright (priority 0 → 0 budget in `allocate_budgets`).
 
-- [ ] Source the strong signals from `target_facts.pattern_recommendations()`
-      (`target_facts.py:79`, returns boost/suppress sets) and the fact-agreement
-      check in `validator.check_fact_agreement` (`validator.py:221`) /
-      `beam_search._compute_fact_agreement` (`beam_search.py:331`).
-      (Note: there is **no** `target_facts.fact_agreement` symbol — the original
-      draft's path was wrong; `fact_agreement` is a `BeamState` field at
-      `types.py:789`.)
-- [ ] Apply the hard drop in `generator._pattern_priorities`.
+- [x] Source the strong signals from `target_facts.pattern_recommendations()`
+      (`target_facts.py`, returns boost/suppress sets) and the fact-agreement
+      check (`validator.check_fact_agreement`, `beam_search._compute_fact_agreement`
+      — both test suppress-set membership; the hard filter escalates that same
+      membership to a drop only above a confidence bar).
+- [x] Apply the hard drop in `generator._pattern_priorities`, gated behind
+      `PERMUTER_HARD_FILTERS` (default OFF, `generator.hard_filters_enabled()`).
 
-**Risk:** medium — could over-prune. The A0 harness is the regression gate;
-require no win-rate regression on the bench set before merge.
+**What "strong enough" means.** New `TargetFacts.hard_suppress_patterns(threshold=0.85)`:
+a pattern is hard-dropped only when (a) some fact suppresses it at **>= 0.85
+confidence** (catches the 0.9 atlas-`negative` tier; excludes the 0.7/0.8
+heuristic-shape tier, which stays on the soft path) **and** (b) **no** fact
+boosts it (a boost conflict keeps it on soft re-weighting). `RoundHints.hard_drop`
+additionally never drops an atlas-`force_pattern` boost.
 
-**Owner:** — · **Effort:** 1 day · **Risk:** medium (could over-prune)
+**A/B (A0 harness, `--adaptive`, fresh cache, 8 low-band fns, sandbox off):**
+
+| metric | OFF | ON |
+|--------|-----|----|
+| wins / 100 | 12.5 | 12.5 |
+| functions improved | 1 | 1 |
+| variants compiled | 344 | 344 |
+| per-function results | — | bit-identical |
+
+**Zero win regression (gate passed) but zero compile reduction** — because the
+bench set is regswap/structural-dominated and `pattern_recommendations()`
+produced **no** suppress patterns at >= 0.85 confidence on any of these
+functions (only `no_touch_zone` facts with empty `suppress_patterns`). The
+filter was inert. A standalone check confirms the mechanism *does* prune when a
+strong signal is present (a 0.9 suppress fact takes the pattern's budget
+48 → 0). **Default left OFF**: the payoff is fewer compiles, and we measured
+none on the bench, so flipping the default isn't justified yet. Re-evaluate on a
+switch/tail-call-heavy subset (where shape suppressions fire) before default-on.
+
+**Owner:** — · **Effort:** 1 day · **Risk:** medium (could over-prune) ·
+**Branch:** `perf/b2-hard-filters`
 
 ### B3 — Source canonicalization dedup `[-]` · **Parked 2026-05-27: measured 0 benefit**
 
@@ -720,3 +744,24 @@ Append a dated line each time this doc is reviewed or an item changes state.
   codegen artifact, not a source-shape gap. The ~80% projection applies to the
   Ghidra-guided paren-expansion subset (already shipped). The durable win is the
   `is_all_noise` fix (stops silently skipping these functions). See `### C3`.
+- **2026-05-27** — **B2 implemented + A/B run** (branch `perf/b2-hard-filters`).
+  New `TargetFacts.hard_suppress_patterns(threshold=0.85)` extracts the strong
+  suppress signals (confidence >= 0.85 → catches the 0.9 atlas-`negative` tier;
+  the 0.7/0.8 heuristic-shape tier stays soft) with a boost-conflict guard.
+  `RoundHints.hard_suppress_patterns` + `RoundHints.hard_drop` carry the decision;
+  `generator._pattern_priorities` drops those patterns to priority 0 (→ 0 budget)
+  when `PERMUTER_HARD_FILTERS` is on (default OFF, `generator.hard_filters_enabled()`).
+  Wired in both `hill_climber.py` and `beam_search.py`. **16 new
+  `test_hard_filters.py` tests pass** (threshold boundary, boost-conflict,
+  force-pattern override, flag on/off budget). Added a `--adaptive` passthrough
+  to the A0 bench harness (default off; needed because the pinned bench runs
+  `round_hints=None`, so neither soft nor hard re-weighting fires otherwise —
+  same gap B1 hit). **A/B (8 low-band fns, `--adaptive`, fresh cache, sandbox
+  off): OFF 12.5 wins/100, 344 variants · ON 12.5 wins/100, 344 variants —
+  bit-identical per function.** Zero win regression (**gate passed**) but zero
+  compile reduction: `pattern_recommendations()` produced no >= 0.85 suppress
+  on any bench function (regswap/structural-dominated; `no_touch_zone` facts had
+  empty `suppress_patterns`), so the filter was inert. A standalone check
+  confirms the prune *does* fire when a strong signal exists (0.9 suppress fact
+  → pattern budget 48→0). **Default left OFF** — the payoff is fewer compiles and
+  we measured none here; re-evaluate on a switch/tail-call-heavy subset.

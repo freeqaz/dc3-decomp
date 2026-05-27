@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import os
 import sys
 from typing import Iterator
 
@@ -33,6 +34,18 @@ _BAYESIAN_BETA = 10    # Prior pseudo-total (strength of prior)
 _BASELINE_P = _BAYESIAN_ALPHA / (_BAYESIAN_ALPHA + _BAYESIAN_BETA)  # ~0.091
 _LEARNED_MULTIPLIER_MIN = 0.3
 _LEARNED_MULTIPLIER_MAX = 2.0
+
+
+def hard_filters_enabled() -> bool:
+    """Whether B2 hard pattern filters are active (env-gated, off by default).
+
+    Default OFF: the live permuter sweep runs against main, so a regression
+    from over-pruning would silently cost wins. Enable via PERMUTER_HARD_FILTERS
+    once the A/B bench shows no win-rate regression and fewer variants compiled.
+    """
+    return os.environ.get("PERMUTER_HARD_FILTERS", "").strip().lower() in (
+        "1", "true", "yes", "on",
+    )
 
 
 def _winner_domains(round_hints: RoundHints | None) -> set[str]:
@@ -74,8 +87,20 @@ def _pattern_priorities(
     """
     priorities: dict[str, float] = {}
     winner_domains = _winner_domains(round_hints)
+    hard_filter = hard_filters_enabled()
+    hard_dropped: list[str] = []
 
     for pattern in patterns:
+        # B2 hard filter: a strong "this pattern is wrong here" signal drops
+        # the pattern from generation entirely (priority 0 -> 0 budget in
+        # allocate_budgets), instead of merely down-weighting it. Gated by the
+        # env flag and by RoundHints.hard_drop (which itself defers to any
+        # boost-force conflict), so it only fires on the most confident signals.
+        if hard_filter and round_hints and round_hints.hard_drop(pattern.name):
+            priorities[pattern.name] = 0.0
+            hard_dropped.append(pattern.name)
+            continue
+
         if diagnosis and ctx is not None:
             # Patterns that subclass our Pattern base inherit context_priority;
             # tests / external duck-typed patterns may not. Fall back safely.
@@ -126,6 +151,13 @@ def _pattern_priorities(
                     priority *= multiplier
 
         priorities[pattern.name] = priority
+
+    if hard_dropped:
+        print(
+            f"Hard filter: dropped {len(hard_dropped)} pattern(s) "
+            f"({', '.join(sorted(hard_dropped))})",
+            file=sys.stderr,
+        )
 
     # Log when learned priorities are applied
     if round_hints and round_hints.learned_effectiveness:

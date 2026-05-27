@@ -613,6 +613,11 @@ class RoundHints:
     # Atlas-derived pattern boost/suppress (from compiler_atlas lookups)
     atlas_boost_patterns: set[str] = field(default_factory=set)
     atlas_suppress_patterns: set[str] = field(default_factory=set)
+    # Roadmap B2: patterns the system is confident enough to DROP outright
+    # (not just down-weight). Populated only from strong signals — see
+    # TargetFacts.hard_suppress_patterns. Acted on by generator only when the
+    # PERMUTER_HARD_FILTERS env flag is enabled (default off until validated).
+    hard_suppress_patterns: set[str] = field(default_factory=set)
     # IL-analysis feedback from previous rounds/depths
     il_duplicate_patterns: set[str] = field(default_factory=set)
     il_unique_patterns: set[str] = field(default_factory=set)
@@ -636,6 +641,20 @@ class RoundHints:
         if self.force_pattern(pattern_name):
             return 0.35
         return 0.0
+
+    def hard_drop(self, pattern_name: str) -> bool:
+        """Whether a strong signal says to drop this pattern from generation.
+
+        Conservative: only fires when the pattern is in hard_suppress_patterns
+        AND nothing is forcing it (an atlas boost / force_pattern always wins,
+        so a conflicted pattern stays on the soft re-weighting path). The
+        caller (generator._pattern_priorities) gates this on the
+        PERMUTER_HARD_FILTERS env flag.
+        """
+        if pattern_name not in self.hard_suppress_patterns:
+            return False
+        # A boost-forced pattern is never hard-dropped — defer to soft path.
+        return not self.force_pattern(pattern_name)
 
     def record_round(
         self,

@@ -574,6 +574,9 @@ def _expand_state(
             boost, suppress = target_facts.pattern_recommendations()
             round_hints.atlas_boost_patterns |= boost
             round_hints.atlas_suppress_patterns |= suppress
+            # B2: strong-confidence suppress -> hard-drop candidates. Acted on
+            # by the generator only when PERMUTER_HARD_FILTERS is enabled.
+            round_hints.hard_suppress_patterns |= target_facts.hard_suppress_patterns()
         except Exception:
             pass
 

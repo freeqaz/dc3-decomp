@@ -88,6 +88,34 @@ class TargetFacts:
             suppress.update(f.payload.get("suppress_patterns", []))
         return boost, suppress
 
+    def hard_suppress_patterns(self, threshold: float = 0.85) -> set[str]:
+        """Patterns the facts are confident enough about to drop entirely.
+
+        This is the conservative basis for roadmap item B2's *hard* filter
+        (vs. the soft re-weighting done by ``pattern_recommendations``). A
+        pattern qualifies only when:
+
+          * at least one fact recommends suppressing it at >= ``threshold``
+            confidence (e.g. an atlas ``negative`` entry at 0.9), and
+          * NO fact recommends boosting it.
+
+        The boost-conflict guard is what keeps this from over-pruning: if any
+        evidence still thinks the pattern might help, we fall back to the soft
+        down-weight rather than removing it from generation. The 0.85 default
+        sits just below the 0.9 atlas-negative confidence and above the 0.7/
+        0.8 heuristic-shape confidences, so only the strongest, explicitly
+        "this pattern is wrong here" signals clear the bar.
+        """
+        boost: set[str] = set()
+        strong_suppress: set[str] = set()
+        for f in self.facts:
+            boost.update(f.payload.get("boost_patterns", []))
+            if f.confidence >= threshold:
+                strong_suppress.update(f.payload.get("suppress_patterns", []))
+        # Never hard-drop a pattern that any fact also wants to boost — keep
+        # the conflicted case on the soft path.
+        return strong_suppress - boost
+
     def summary_lines(self, max_shapes: int = 4) -> list[str]:
         """Return compact human-readable summary lines for debugging/reporting."""
         if not self.facts:

@@ -63,6 +63,11 @@ def parse_args() -> argparse.Namespace:
                              "fresh temp cache so every variant exercises the "
                              "real compile+objdiff path — the only honest input "
                              "to the profiling breakdown)")
+    parser.add_argument("--adaptive", action="store_true",
+                        help="Enable adaptive per-round suppression/boosting "
+                             "(round_hints). Off by default to keep the pinned "
+                             "baseline stable; needed to exercise the B2 hard "
+                             "filter A/B (PERMUTER_HARD_FILTERS).")
     return parser.parse_args()
 
 
@@ -155,6 +160,7 @@ def main() -> int:
                 unit=fn["unit"],
                 workers=seed_cfg["workers"],
                 validate=False,
+                adaptive=args.adaptive,
             )
         except Exception as exc:  # keep the sweep alive
             error = f"{type(exc).__name__}: {exc}"

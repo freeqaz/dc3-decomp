@@ -746,6 +746,16 @@ def hill_climb(
                         round_hints.atlas_boost_patterns.update(result_fact_boosts)
                     if result_fact_suppresses:
                         round_hints.atlas_suppress_patterns.update(result_fact_suppresses)
+                    # B2: strong-confidence suppress -> hard-drop candidates.
+                    # Populated unconditionally; generator only acts on it when
+                    # PERMUTER_HARD_FILTERS is enabled.
+                    if ctx.target_facts is not None:
+                        try:
+                            round_hints.hard_suppress_patterns.update(
+                                ctx.target_facts.hard_suppress_patterns()
+                            )
+                        except Exception:
+                            pass
 
                     # Apply strategy DB boosts (graceful fallback if DB missing)
                     try:
