@@ -524,7 +524,7 @@ void CharBonesSamples::EvaluateChannel(void *dest, int byteOffset, int sample, f
             *(float *)dest = val;
             return;
         }
-        int comp = mCompression;
+        short comp = mCompression;
         if (byteOffset >= mOffsets[TYPE_QUAT]) {
             if (comp >= kCompressQuats) {
                 ((const ByteQuat *)src)->ToQuat(*(Hmx::Quat *)dest);
