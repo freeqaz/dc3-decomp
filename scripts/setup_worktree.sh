@@ -84,7 +84,13 @@ BASE_BRANCH="$(git -C "$MAIN_REPO" rev-parse --abbrev-ref HEAD 2>/dev/null || ec
 
 # ---- tool sanity (everything lives under MAIN_REPO) -------------------------
 DTK="$MAIN_REPO/build/tools/dtk"
-WIBO="$MAIN_REPO/build/tools/wibo"
+# Prefer the wibo recorded in the main repo's build.ninja (typically a newer
+# build at a sibling path) over the in-repo build/tools/wibo, which can be
+# stale and lack inline-env-var support. Fall back to the in-repo binary.
+WIBO="$(grep -oE '/(home|usr|opt|root|var|mnt)/[^ "]*/wibo/build/release/wibo' "$MAIN_REPO/build.ninja" 2>/dev/null | head -n1)"
+if [ -z "$WIBO" ] || [ ! -x "$WIBO" ]; then
+    WIBO="$MAIN_REPO/build/tools/wibo"
+fi
 COMPILERS="$MAIN_REPO/build/compilers"
 # Resolve objdiff-cli to a real absolute path (it's typically a symlink chain).
 OBJDIFF="$(readlink -f "$MAIN_REPO/bin/objdiff-cli" 2>/dev/null || echo "$MAIN_REPO/bin/objdiff-cli")"
