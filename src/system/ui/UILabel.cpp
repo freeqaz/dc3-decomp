@@ -951,7 +951,7 @@ DataNode UILabel::OnSetTimeHMS(const DataArray *da) {
 DataNode UILabel::OnSetHeightFromText(DataArray *a) {
     if (mFitType == 0 && Style(0).mFont) {
         float fl;
-        mHeight = ComputeHeight(mCurScrollChars, 1.0f, fl);
+        mHeight = ComputeHeight(mNumLinesRendered, 1.0f, fl);
     } else {
         MILO_NOTIFY(
             "Could not set height, either no default font set, or fit type is not kFitWrap"

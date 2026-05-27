@@ -50,11 +50,13 @@ public:
     float bubblePhase; // 0xac
     float RPF; // 0xb0
     float swingArmVel; // 0xb4
+    // 16-byte block written via memcpy(&mRPMVelocity, &mMotionParentDelta, 16)
+    // in InitParticle. The first three floats double as the birth-momentum
+    // velocity applied in MoveParticles. The struct ends at 0xc8 (size 200).
     float mRPMVelocity; // 0xb8
     float mPitchAngularVel; // 0xbc
     float mBirthVelocityX; // 0xc0
     float mBirthVelocityY; // 0xc4
-    float mBirthVelocityZ; // 0xc8
 };
 
 class ParticleCommonPool {
@@ -70,7 +72,7 @@ public:
     MEM_OVERLOAD(ParticleCommonPool, 0x254)
 
 private:
-    RndParticle *mPoolParticles; // 0x0
+    RndFancyParticle *mPoolParticles; // 0x0
     RndParticle *mPoolFreeParticles; // 0x4
     int mNumActiveParticles; // 0x8
     int mHighWaterMark; // 0xc

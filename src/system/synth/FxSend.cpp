@@ -41,7 +41,7 @@ BEGIN_PROPSYNCS(FxSend)
 END_PROPSYNCS
 
 BEGIN_SAVES(FxSend)
-    SAVE_REVS(8, 7)
+    SAVE_REVS(7, 8)
     SAVE_SUPERCLASS(Hmx::Object)
     bs << mNextSend;
     bs << mStage;

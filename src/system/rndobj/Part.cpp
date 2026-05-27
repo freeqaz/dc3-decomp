@@ -1207,9 +1207,11 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
                 if (isFancy && mBirthMomentum) {
                     RndFancyParticle *fp = (RndFancyParticle *)p;
                     float momentumScale = mBirthMomentumAmount * frameSpan * oneOverThirty;
-                    p->pos.x += momentumScale * fp->mBirthVelocityX;
-                    p->pos.z += fp->mBirthVelocityZ * momentumScale;
-                    p->pos.y += fp->mBirthVelocityY * momentumScale;
+                    // Birth velocity is the first three floats of the 16-byte
+                    // motion-parent-delta block (0xb8/0xbc/0xc0).
+                    p->pos.x += momentumScale * fp->mRPMVelocity;
+                    p->pos.z += fp->mBirthVelocityX * momentumScale;
+                    p->pos.y += fp->mPitchAngularVel * momentumScale;
                 }
 
                 // Position integration

@@ -90,7 +90,7 @@ void CharUpperTwist::Poll() {
 void CharUpperTwist::PollDeps(
     std::list<Hmx::Object *> &changedBy, std::list<Hmx::Object *> &change
 ) {
-    changedBy.push_back(mUpperArm);
+    changedBy.push_back(mTwist2);
+    change.push_back(mUpperArm);
     change.push_back(mTwist1);
-    change.push_back(mTwist2);
 }
