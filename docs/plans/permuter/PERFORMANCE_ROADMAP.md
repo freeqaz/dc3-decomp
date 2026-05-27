@@ -247,16 +247,31 @@ require no win-rate regression on the bench set before merge.
 
 **Owner:** — · **Effort:** 1 day · **Risk:** medium (could over-prune)
 
-### B3 — Source canonicalization dedup `[ ]`
+### B3 — Source canonicalization dedup `[-]` · **Parked 2026-05-27: measured 0 benefit**
 
-Many textually-different variants compile to identical preprocessed output.
-Existing dedup (`scorer._variant_source_md5` at `scorer.py:203`, persistent
-SQLite cache, plus `generator.py` byte-identity `seen_sources`) keys on **raw
-bytes**. Add `_canonicalize(source)` (whitespace/spacing normalize,
-deterministic decl-group sort), hash *that* before the existing source-md5
-dedup, skip the compile. `_canonicalize` does not exist yet — genuine new work.
+Original idea: many textually-different variants compile to identical
+preprocessed output; key dedup on a canonicalized form (whitespace normalize +
+decl sort) instead of raw bytes, to skip the compile.
 
-**Owner:** — · **Effort:** 1 day · **Risk:** low
+**Prototyped and measured (branch `perf/b3-canon-dedup`, unmerged) — parked:**
+- **Measured hit rate: 0 / 162 variants (8 batches, high+mid bench functions).**
+  Even the *aggressive* canonicalizer (collapsing blank lines) never fired — the
+  permuter's patterns emit token-level edits with consistent formatting, so no
+  two variants differ only by whitespace. It would add a `_canonicalize`+md5 on
+  the hot path for every variant for **zero** measured payoff.
+- **Correctness hazard:** the "decl-group sort" in the original sketch is unsafe
+  here — declaration order changes codegen (it's a permuter *win* mechanism).
+  And collapsing/removing lines shifts `__LINE__`, which changes codegen in the
+  ~40 `__LINE__` sites (`curl/`, `oggvorbis/`, `XLSPConnection.cpp`) — a silent
+  false-dedup. (`MILO_ASSERT` is immune: it takes the line as an explicit arg.)
+  The provably-safe normalization set is nearly empty.
+- **Redundant:** the existing obj-hash dedup (`score_batch` Phase 3, md5 of the
+  compiled `.obj`) already collapses variants that compile to identical objects.
+
+Revisit only if a future change starts generating whitespace-divergent variants
+and a re-measure shows a non-trivial hit rate.
+
+**Owner:** — · **Effort:** 1 day · **Risk:** low · **Status:** parked (0 measured benefit)
 
 ### B4 — Variant outcome predictor `[-]`
 
