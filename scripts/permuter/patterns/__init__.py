@@ -106,6 +106,7 @@ from . import abs_empty_else_negate  # noqa: F401  # if(x>0){}else{x=-x} -> x=Ab
 from . import store_then_compound_add  # noqa: F401  # member = base + call() -> member = base; member += call();
 from . import compound_or_widening_drop  # noqa: F401  # u16 |= int <-> u16 = u16 | int (drop clrlwi on narrow-type compound assign)
 from . import reference_elimination_chain  # noqa: F401  # Chain 2-4 reference eliminations in one shot (multi-round refelim)
+from . import loop_body_assign_hoist  # noqa: F401  # Hoist post-call assignment to before call in loop body (register scheduling)
 
 from .base import get_all_patterns, get_pattern, list_patterns
 
