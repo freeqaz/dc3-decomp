@@ -329,7 +329,7 @@ bool AccomplishmentProgress::AddAccomplishment(Symbol s) {
     if (!IsAccomplished(s)) {
         Accomplishment *pAcc = TheAccomplishmentMgr->GetAccomplishment(s);
         if (!pAcc) {
-            MILO_LOG("No Accomplishment for %s", s.Str());
+            MILO_NOTIFY("No Accomplishment for %s", s.Str());
             return false;
         } else {
             NotifyPlayerOfAccomplishment(s, pAcc->GetIconArt());
