@@ -421,14 +421,15 @@ void HamSkeletonConverter::SetLeg(
 }
 
 void HamSkeletonConverter::Set(const BaseSkeleton *skel) {
+    auto& _ref0 = mCharacter;
     if (skel && skel->IsTracked()) {
         if (!unk751) {
             unk751 = true;
         }
-        if (mCharacter) {
-            unk40.m.x.Set(1.0f, 0.0f, 0.0f);
+        if (_ref0) {
             unk40.m.y.Set(0.0f, 1.0f, 0.0f);
             unk40.m.z.Set(0.0f, 0.0f, 1.0f);
+            unk40.m.x.Set(1.0f, 0.0f, 0.0f);
             unk40.v.Zero();
 
             Transform flipX;
@@ -456,7 +457,7 @@ void HamSkeletonConverter::Set(const BaseSkeleton *skel) {
             unk40.v.x = pelvisOffset.x;
             unk40.v.y = pelvisOffset.y * 39.37008f;
 
-            Multiply(unk40, mCharacter->WorldXfm(), unk40);
+            Multiply(unk40, _ref0->WorldXfm(), unk40);
 
             PaddedJointPos worldJoints[kNumJoints];
             for (int i = 0; i < kNumJoints; i++) {
@@ -471,7 +472,7 @@ void HamSkeletonConverter::Set(const BaseSkeleton *skel) {
             mPelvisTransform.v.z = (worldJoints[kJointHipLeft].z + worldJoints[kJointHipRight].z) * 0.5f;
 
             Transform invCharXfm;
-            Invert(mCharacter->WorldXfm(), invCharXfm);
+            Invert(_ref0->WorldXfm(), invCharXfm);
 
             Vector3 pelvisLocal;
             Multiply(mPelvisTransform.v, invCharXfm, pelvisLocal);
