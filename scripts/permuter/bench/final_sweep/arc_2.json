@@ -1,0 +1,63 @@
+{
+  "schema": "permuter-flag-ab/1",
+  "label": "arc_det_2",
+  "timestamp": "2026-05-27T07:07:44.293417+00:00",
+  "on_env": {
+    "PERMUTER_PREDICTOR": "1",
+    "PERMUTER_PREDICTOR_BUDGET": "40"
+  },
+  "off_env": {},
+  "adaptive": false,
+  "n_functions": 1,
+  "wall_seconds": 11.52,
+  "off": {
+    "wins": 1,
+    "errors": 0,
+    "variants_scored": 34,
+    "wall_seconds": 5.99,
+    "mean_rounds_to_win": 1.0,
+    "n": 1,
+    "wins_per_100": 100.0
+  },
+  "on": {
+    "wins": 1,
+    "errors": 0,
+    "variants_scored": 34,
+    "wall_seconds": 5.53,
+    "mean_rounds_to_win": 1.0,
+    "n": 1,
+    "wins_per_100": 100.0
+  },
+  "win_regression": false,
+  "new_crashes": false,
+  "verdict": "NO_EFFECT",
+  "rows": [
+    {
+      "id": 30,
+      "qualified_name": "ArcDetector::GetSwipeAmount",
+      "band": "low",
+      "off": {
+        "arm": "off",
+        "improved": true,
+        "reached_100": false,
+        "rounds_to_first_win": 1,
+        "best_discovered": 82.561,
+        "initial_percent": 79.065,
+        "variants_scored": 34,
+        "wall_seconds": 5.989,
+        "error": null
+      },
+      "on": {
+        "arm": "on",
+        "improved": true,
+        "reached_100": false,
+        "rounds_to_first_win": 1,
+        "best_discovered": 82.561,
+        "initial_percent": 79.065,
+        "variants_scored": 34,
+        "wall_seconds": 5.526,
+        "error": null
+      }
+    }
+  ]
+}

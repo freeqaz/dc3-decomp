@@ -1,0 +1,144 @@
+{
+  "schema": "permuter-flag-ab/1",
+  "label": "winners_b25",
+  "timestamp": "2026-05-27T07:07:05.204922+00:00",
+  "on_env": {
+    "PERMUTER_PREDICTOR": "1",
+    "PERMUTER_PREDICTOR_BUDGET": "25"
+  },
+  "off_env": {},
+  "adaptive": false,
+  "n_functions": 4,
+  "wall_seconds": 185.64,
+  "off": {
+    "wins": 4,
+    "errors": 0,
+    "variants_scored": 118,
+    "wall_seconds": 99.82,
+    "mean_rounds_to_win": 1.0,
+    "n": 4,
+    "wins_per_100": 100.0
+  },
+  "on": {
+    "wins": 4,
+    "errors": 0,
+    "variants_scored": 94,
+    "wall_seconds": 85.82,
+    "mean_rounds_to_win": 1.0,
+    "n": 4,
+    "wins_per_100": 100.0
+  },
+  "win_regression": false,
+  "new_crashes": false,
+  "verdict": "SAFE",
+  "rows": [
+    {
+      "id": 15,
+      "qualified_name": "HamDirector::OnFileLoaded",
+      "band": "mid",
+      "off": {
+        "arm": "off",
+        "improved": true,
+        "reached_100": false,
+        "rounds_to_first_win": 1,
+        "best_discovered": 95.5364,
+        "initial_percent": 94.8966,
+        "variants_scored": 36,
+        "wall_seconds": 49.242,
+        "error": null
+      },
+      "on": {
+        "arm": "on",
+        "improved": true,
+        "reached_100": false,
+        "rounds_to_first_win": 1,
+        "best_discovered": 95.5364,
+        "initial_percent": 94.8966,
+        "variants_scored": 25,
+        "wall_seconds": 40.432,
+        "error": null
+      }
+    },
+    {
+      "id": 16,
+      "qualified_name": "MetagameRank::AwardForRankUp",
+      "band": "mid",
+      "off": {
+        "arm": "off",
+        "improved": true,
+        "reached_100": false,
+        "rounds_to_first_win": 1,
+        "best_discovered": 98.9,
+        "initial_percent": 94.8909,
+        "variants_scored": 29,
+        "wall_seconds": 42.569,
+        "error": null
+      },
+      "on": {
+        "arm": "on",
+        "improved": true,
+        "reached_100": false,
+        "rounds_to_first_win": 1,
+        "best_discovered": 98.9,
+        "initial_percent": 94.8909,
+        "variants_scored": 25,
+        "wall_seconds": 38.119,
+        "error": null
+      }
+    },
+    {
+      "id": 22,
+      "qualified_name": "WavReader::Poll",
+      "band": "mid",
+      "off": {
+        "arm": "off",
+        "improved": true,
+        "reached_100": false,
+        "rounds_to_first_win": 1,
+        "best_discovered": 94.8543,
+        "initial_percent": 94.7682,
+        "variants_scored": 19,
+        "wall_seconds": 2.251,
+        "error": null
+      },
+      "on": {
+        "arm": "on",
+        "improved": true,
+        "reached_100": false,
+        "rounds_to_first_win": 1,
+        "best_discovered": 94.8543,
+        "initial_percent": 94.7682,
+        "variants_scored": 19,
+        "wall_seconds": 2.254,
+        "error": null
+      }
+    },
+    {
+      "id": 30,
+      "qualified_name": "ArcDetector::GetSwipeAmount",
+      "band": "low",
+      "off": {
+        "arm": "off",
+        "improved": true,
+        "reached_100": false,
+        "rounds_to_first_win": 1,
+        "best_discovered": 82.561,
+        "initial_percent": 79.065,
+        "variants_scored": 34,
+        "wall_seconds": 5.754,
+        "error": null
+      },
+      "on": {
+        "arm": "on",
+        "improved": true,
+        "reached_100": false,
+        "rounds_to_first_win": 1,
+        "best_discovered": 86.3415,
+        "initial_percent": 79.065,
+        "variants_scored": 25,
+        "wall_seconds": 5.011,
+        "error": null
+      }
+    }
+  ]
+}
