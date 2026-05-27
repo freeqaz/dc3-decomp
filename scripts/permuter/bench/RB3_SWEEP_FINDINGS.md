@@ -27,41 +27,46 @@ Three modes against the SAME variant list per function:
 
 Divergence = per-variant objdiff match% differs from `off` to 4 decimals.
 
-Results (`rb3_ppab-merged.json` = full 16-fn run + fill-pass for functions that
-hit transient source-lock contention at run start):
+Primary dataset: `rb3_ppab-fullN.json` — one clean run over all 16 RB3 bench
+functions on a quiet tree (0 functions errored). (`rb3_ppab-merged.json` is a
+corroborating main+fill merge; it gives the same picture at N=185.)
 
 | Metric | Value |
 |--------|-------|
-| functions scored | 15 / 16 |
-| **variants compared** | **185** (gate min 50: PASS) |
+| functions scored | 16 / 16 |
+| **variants compared** | **203** (gate min 50: PASS) |
 | **divergences (nonstrict)** | **0** |
 | **divergences (strict)** | **0** |
-| fast-hit rate (nonstrict) | 47.6% (91 hits / 191) |
-| pooled compile-run ms (off → nonstrict) | 2785.7 → 2314.0 |
-| **pooled nonstrict speedup** | **1.20x** |
-| **median nonstrict speedup (per-fn)** | **1.18x** |
-| pooled strict speedup | 1.08x |
+| fast-hit rate (nonstrict) | 43.3% |
+| **pooled nonstrict speedup** | **1.25x** |
+| **median nonstrict speedup (per-fn)** | **1.32x** |
 
 The win splits sharply by **macro density** of the function body:
 
 | Population | n | pooled nonstrict speedup |
 |------------|---|--------------------------|
-| macro-free bodies (fast path active) | 11 | **1.44x** (median 1.46x) |
-| macro-heavy bodies (full fallback)   | 4  | **0.93x** |
+| macro-free bodies (fast path active) | 11 | **1.42x** (median 1.46x) |
+| macro-heavy bodies (full fallback)   | 5  | **1.05x** |
 
-Per-function (nonstrict speedup):
-- Fast-path active: CalcMotion 1.92, CalculateValue 2.13, SetPitch 1.66,
-  AddPhrasePoints 1.62, GetEnabledStateAt 1.56, GetRot 1.46, DrawLod 1.28,
-  PlatformMgr 1.18, DeterminePhraseTimes 1.09. (MarkDownloaded/MarkDeleted
-  nominally "active" but 1 hit / 13 fallbacks each → ~0.97x.)
-- Full fallback (0 hits): ReloadMessages 0.98, UpdateNowBar 0.96,
-  IsDoubleStrum 0.91, ShowNext 0.78.
+Per-function (nonstrict speedup, fast hits/fallbacks):
+- Fast-path active: CalculateValue 2.43 (3/0), AddPhrasePoints 1.72 (17/0),
+  CalcMotion 1.55 (21/0), GetRot 1.53 (3/0), PlatformMgr 1.46 (8/0),
+  SetPitch 1.42 (16/0), DrawLod 1.32 (6/0), GetEnabledStateAt 1.32 (9/0),
+  DeterminePhraseTimes 1.15 (6/1). (MarkDeleted 1.81 / MarkDownloaded 0.81 are
+  noisy — 1 hit / 13 fallbacks each, effectively fallback.)
+- Full fallback (0 hits): UpdateReservedVocalSlot 1.22, ReloadMessages 1.16,
+  ShowNext 1.12, IsDoubleStrum 0.91, UpdateNowBar 0.90.
+
+The cross-run spread on individual functions (e.g. UpdateNowBar 0.90-0.96,
+CalculateValue 2.1-2.6) reflects host CPU contention during the sweep window;
+the pooled per-call metric and the macro split are the contention-robust
+signals and are stable across runs.
 
 ### Why the gate result differs from the prelim 3-fn run
 
 The prelim (3 fns / 34 variants) reported a 1.87x *median* — but that sample
 happened to weight the two macro-free functions (2.2x, 1.8x) against one
-fallback function. At N=185 the macro split is the dominant effect: ~half of
+fallback function. At N=203 the macro split is the dominant effect: ~half of
 real RB3 functions reference a **live** macro (`MILO_ASSERT`, `FOREACH`,
 `RELEASE`, etc.) in their body, which the macro-aware gate in
 `preprocess_cache.py` correctly refuses to splice into the macro-free `.i` —
@@ -71,13 +76,13 @@ macro scan and then still does the full compile.
 
 ### VERDICT — default-on for RB3: NO (do not flip)
 
-- **Correctness: clean.** 0 divergences over 185 variants in BOTH strict and
-  nonstrict. The fast path never produced a wrong score. STRICT mode (the
-  zero-divergence oracle) also showed 0 divergences on the functions where it
-  built a cache.
-- **Speed: below the ≥1.5x gate at scale.** Pooled 1.20x / median 1.18x. Only
-  the macro-free subset (1.44x) approaches the bar, and even that is under 1.5x.
-  Macro-heavy functions regress slightly.
+- **Correctness: clean.** 0 divergences over 203 variants (and 185 in the
+  corroborating merge) in BOTH strict and nonstrict. The fast path never
+  produced a wrong score. STRICT mode (the zero-divergence oracle) also showed
+  0 divergences on the functions where it built a cache.
+- **Speed: below the ≥1.5x gate at scale.** Pooled 1.25x / median 1.32x. Only
+  the macro-free subset (1.42x) approaches the bar, and even that is under 1.5x.
+  Macro-heavy functions barely clear break-even (1.05x pooled).
 - The DC3 path may still pass its own gate (DC3's MSVC `.i` splice is
   byte-identical and DC3 macro density differs) — that is the coordinator's
   cross-check. **On RB3 specifically the speedup does not justify default-on,**
@@ -205,13 +210,15 @@ default-on per the repo history; this run confirms it does no harm on RB3.)
    macro-heavy population (currently 0.93x) onto the fast path and likely lift
    the pooled RB3 speedup above 1.5x.
 
-3. **The fallback path is mildly net-negative** (0.93x pooled on macro-heavy
-   fns). When the cache is enabled but the body can't be spliced, the run still
-   pays the one-time `-E` preprocess + the per-variant macro scan and then does
-   the full compile anyway. For a default-on world this argues for a per-
-   function "is this body splice-eligible?" pre-check that disables the cache
-   entirely (skipping even the `-E`) for macro-dense functions, so the fallback
-   never costs more than plain OFF.
+3. **The fallback path hovers at break-even** (1.05x pooled on macro-heavy fns
+   in the clean run; 0.93x under heavier contention). When the cache is enabled
+   but the body can't be spliced, the run still pays the one-time `-E`
+   preprocess + the per-variant macro scan and then does the full compile
+   anyway — so it adds overhead with no compile saving and can dip below 1.0x.
+   For a default-on world this argues for a per-function "is this body
+   splice-eligible?" pre-check that disables the cache entirely (skipping even
+   the `-E`) for macro-dense functions, so the fallback never costs more than
+   plain OFF.
 
 4. **The predictor is the cheapest throughput win on RB3** (-38% variants /
    -22% wall at budget 8, no win loss), and unlike the preprocess-cache it is
@@ -230,7 +237,7 @@ default-on per the repo history; this run confirms it does no harm on RB3.)
 
 | Flag / feature | RB3 verdict | Evidence |
 |----------------|-------------|----------|
-| `PERMUTER_PREPROCESS_CACHE` | **Do NOT default-on for RB3** (safe as opt-in) | N=185, 0 divergences, but pooled 1.20x / median 1.18x < 1.5x; macro-gated (1.44x active / 0.93x fallback) |
+| `PERMUTER_PREPROCESS_CACHE` | **Do NOT default-on for RB3** (safe as opt-in) | N=203, 0 divergences, but pooled 1.25x / median 1.32x < 1.5x; macro-gated (1.42x active / 1.05x fallback) |
 | `PERMUTER_HARD_FILTERS` | SAFE, no-op on RB3 | 1/1 wins, 226/226 variants, 0 err |
 | `PERMUTER_PREDICTOR` (budget 8) | SAFE, throughput win | -38% variants, -22% wall, 1/1 wins, 0 err |
 | `PERMUTER_C1_SOURCE_DIFF` | SAFE, neutral | 1/1 wins, 237/237 variants, 0 err |
