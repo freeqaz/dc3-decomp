@@ -105,6 +105,7 @@ from . import symbol_str_compare  # noqa: F401  # Add .Str()/.mStr to Symbol ope
 from . import abs_empty_else_negate  # noqa: F401  # if(x>0){}else{x=-x} -> x=Abs(x); kills mfcr/cror boolean materialization
 from . import store_then_compound_add  # noqa: F401  # member = base + call() -> member = base; member += call();
 from . import compound_or_widening_drop  # noqa: F401  # u16 |= int <-> u16 = u16 | int (drop clrlwi on narrow-type compound assign)
+from . import reference_elimination_chain  # noqa: F401  # Chain 2-4 reference eliminations in one shot (multi-round refelim)
 
 from .base import get_all_patterns, get_pattern, list_patterns
 
