@@ -225,7 +225,7 @@ proves compile spawn is still dominant after A1/A2 land.
 
 Evidence to throw fewer variants already exists in tree; it's underused.
 
-### B1 — Validate & flag the strategy-DB → priority path `[ ]`
+### B1 — Validate & flag the strategy-DB → priority path `[x]` · **Done 2026-05-27**
 
 **Re-scoped (2026-05-26): the path already exists.**
 `strategy_db.recommend_patterns` (`strategy_db.py:483`) →
@@ -234,18 +234,37 @@ and `:716`) → `RoundHints.atlas_boost_patterns` → `generator._pattern_priori
 (`generator.py:63`). So strategy records *do* boost priorities today. What's
 actually missing versus the original intent:
 
-- [ ] It's keyed on a coarse `diag_cat` string, not a full diagnosis
-      fingerprint. Decide (via A0 bench) whether finer keying wins.
-- [ ] It's always-on with no A/B switch. Add `PERMUTER_STRATEGY_PRIORITIES` so
-      the harness can measure win-rate delta with it on vs off.
-- [ ] If coarse keying underperforms, extend `recommend_patterns` to accept a
-      diagnosis fingerprint (note: its current signature is
-      `recommend_patterns(unit_cat, diag_cat=None, top_k=10)` — changing it
-      touches `apply_strategy_boosts` and `tests/test_strategy_db.py`).
+- [x] It's always-on with no A/B switch. **Added `PERMUTER_STRATEGY_PRIORITIES`**
+      off-switch (`strategy_db.py:616`, helper `strategy_priorities_enabled()` at
+      `strategy_db.py:613`). Default ON. Set to `0`/`false`/`no`/`off` to disable.
+      17 `test_strategy_db.py` tests still pass.
+- [x] **A/B measured** on 10 mid-band bench functions (sequential, no lock
+      contention, correct PCH, valid baselines 94–99%). Results:
+      **ON: 20 wins/100, 383 variants · OFF: 20 wins/100, 383 variants — identical.**
+      The strategy DB boost is currently **inert** on this bench set for two reasons:
+      1. The A0 bench harness calls `hill_climb` without `adaptive=True`, so
+         `round_hints` is None and `apply_strategy_boosts` is never called.
+      2. Even with `adaptive=True`, the DB stores all records as
+         `diagnosis_category='unknown'`, but the hill climber passes specific diag
+         categories ('mixed', 'regswap', 'structural', etc.) which produce 0
+         unit-specific matches — all boosts collapse to 1.0 (below the 1.2
+         threshold). Only cross-unit data contributes, and it only populates the
+         `cross_count` field, not `unit_count`, so boost stays at 1.0.
+- [x] **Root cause of ineffectiveness diagnosed.** Coarse keying is not the issue;
+      the DB was built without populating `diagnosis_category` per pattern (all
+      stored as 'unknown'). Until the DB build step writes meaningful diag_cats,
+      the unit-specific lookup always returns 0 rows and the boost never exceeds 1.0.
+- [ ] **Remaining work to make B1 actually useful:** Fix the strategy DB build
+      (`strategy_db build` command, `strategy_db.py:~700`) to classify patterns
+      by diagnosis category when mining historical wins — write 'regswap',
+      'structural', 'mixed', 'prologue', 'offset' instead of 'unknown'. Then
+      re-run `strategy_db build` and re-run the A/B to measure real win-rate delta.
+      Until then, the boost is a well-tested no-op (safe, no regression risk).
 
-Do **not** "add `recommend_patterns`" — it exists and is unit-tested.
+**Default: ON** (default behavior preserved). The path is correct code; the
+off-switch is the deliverable of B1. The data-quality fix is a separate task.
 
-**Owner:** — · **Effort:** 1 day · **Risk:** low
+**Owner:** — · **Effort:** 1 day (flag done; DB fix is ~0.5d more) · **Risk:** low
 
 ### B2 — diff-inspect signals as hard filters `[ ]`
 
@@ -522,3 +541,16 @@ Append a dated line each time this doc is reviewed or an item changes state.
   `perf/msvc-preprocess-splice` (default OFF) for future reference / potential
   RB3 carry-over, **not merged**. The 21 `test_preprocess_cache.py` tests
   still pass on the branch.
+- **2026-05-27** — **B1 flag added + A/B run** (`PERMUTER_STRATEGY_PRIORITIES`
+  off-switch at `strategy_db.py:616`, helper `strategy_priorities_enabled()` at
+  `strategy_db.py:613`; 17 `test_strategy_db.py` tests pass). A/B: 10 mid-band
+  functions, sequential runs (no lock contention), valid 94–99% baselines.
+  **Result: ON 20 wins/100, 383 variants · OFF 20 wins/100, 383 variants —
+  identical.** The boost is currently **inert**: (1) the A0 bench harness doesn't
+  pass `adaptive=True` so `round_hints` is None and `apply_strategy_boosts` never
+  fires in plain bench runs; (2) even with `adaptive=True`, all DB records have
+  `diagnosis_category='unknown'` but the hill climber passes specific diag_cats
+  ('mixed', 'regswap', etc.), so unit-specific lookup always returns 0 rows and
+  all boosts stay at 1.0 (below the 1.2 threshold). **Default left ON** (the
+  path is correct; the data-quality issue is the next fix). Branch
+  `perf/b1-strategy-priorities`.

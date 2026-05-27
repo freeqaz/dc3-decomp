@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import sqlite3
 import sys
 from collections import Counter, defaultdict
@@ -613,6 +614,16 @@ class StrategyDB:
 # Integration with beam search
 # ---------------------------------------------------------------------------
 
+def strategy_priorities_enabled() -> bool:
+    """Whether the strategy-DB → pattern-priority boost is active (default ON).
+
+    Set PERMUTER_STRATEGY_PRIORITIES=0 (or false/no/off) to disable so the A0
+    bench harness can measure the win-rate delta with priorities on vs off.
+    """
+    val = os.environ.get("PERMUTER_STRATEGY_PRIORITIES", "").strip().lower()
+    return val not in ("0", "false", "no", "off")
+
+
 def apply_strategy_boosts(
     round_hints: "RoundHints",
     unit_cat: str,
@@ -624,6 +635,10 @@ def apply_strategy_boosts(
     Call this before pattern generation in beam search or hill climber.
     Returns the recommendations applied for logging.
     """
+    # B1: off-switch so the A0 harness can A/B this path.
+    if not strategy_priorities_enabled():
+        return []
+
     if not db_path.exists():
         return []
 
