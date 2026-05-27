@@ -850,3 +850,26 @@ Append a dated line each time this doc is reviewed or an item changes state.
   passed / 14 pre-existing env failures / zero new.** Behavioral check
   (direct `synthesize()`): agree→1 candidate, disagree→2. Additive/widening
   only — never narrows the search, no new flag (pure synthesis).
+- **2026-05-27** — **Synthesis-engine + optimization validation (DC3 + RB3 stress sweeps).**
+  Goal: validate the engine at scale, measure throughput, flip safe flags to defaults,
+  and make Ghidra + m2c work *together*. Outcome:
+  - **Ghidra+m2c combined** (not fallback) shipped (`2efb0957`): `combine_var_orders`
+    verdict — agreement→high-confidence single order, disagreement→both hypotheses;
+    applied to var-order + control-flow synthesis.
+  - **Stability: validated on both codebases** — 0 crashes/exceptions/hangs across the
+    full DC3 sweep (36 climbs) AND ~1700 RB3/mwcceppc compiles.
+  - **Throughput:** DC3 1.47 (A0) → 1.81–1.93 var/s; RB3 2.14 var/s (objdiff ~10× cheaper
+    there, 25.6 ms vs DC3 263 ms — optimize compile, not diff, on RB3).
+  - **Flags flipped to default-ON (validated lossless / no-regression):** `HARD_FILTERS`,
+    `PERMUTER_C1_SOURCE_DIFF=both`, `PERMUTER_SYNTAX_PROBE`, `PERMUTER_VAREXT_MACRO_FILTER`.
+    Integrated stack even found a NEW +4% win (MetagameRank 94.89→98.90).
+  - **`PERMUTER_PREDICTOR`: validated NOT safe to default-on → kept OFF.** At any culling
+    budget it drops real reproducible wins (winner at queue pos 16–18 culled); the
+    win-preserving budget is function-dependent and unknowable on thin history. Revisit
+    once `climb_variant` accumulates real history. Stays opt-in.
+  - **`PERMUTER_PREPROCESS_CACHE`: kept opt-in.** RB3 N=203: 0 divergence but median 1.32×
+    (macro-free 1.42×, macro-heavy 1.05× — ~half of RB3 fns macro-gated) < 1.5× gate.
+  - **Follow-up levers identified:** widen RB3 preprocess fast-path past macro bodies
+    (pre-expand safe object-like macros); build the 32-bit debug wibo (BSF tracing falls
+    back → degrades reg-swap synthesis); investigate ArcDetector parallel-scoring
+    nondeterminism. Confirmed (again) A2/A4 not worth building (spawn <0.4%).
