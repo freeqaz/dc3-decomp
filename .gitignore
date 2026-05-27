@@ -79,6 +79,7 @@ generated-patches/
 
 # Scratch workspace for patch triage
 scratch/
+cl_temp_files/
 
 # One-off analysis scripts
 tools/retriage_85_100.py

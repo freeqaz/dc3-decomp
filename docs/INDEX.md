@@ -58,6 +58,7 @@ Tool-specific deep docs live in subdirectories:
 
 | Doc | Description |
 |-----|-------------|
+| [plans/permuter/PERFORMANCE_ROADMAP.md](plans/permuter/PERFORMANCE_ROADMAP.md) | Permuter speed & power roadmap — throughput, search quality, synthesis revival (living tracker) |
 | [plans/custom-graphics-engine/PLAN.md](plans/custom-graphics-engine/PLAN.md) | Native port master plan — rendering/audio/input/motion |
 | [plans/dc3-native/STATUS.md](plans/dc3-native/STATUS.md) | Native port status — boot flow, error handling, env vars |
 | [plans/dc3-native/PLATFORM_HACKS_ANALYSIS.md](plans/dc3-native/PLATFORM_HACKS_ANALYSIS.md) | HX_NATIVE hacks audit — 298 guards categorized, DTA handler root cause, screen flow reference |

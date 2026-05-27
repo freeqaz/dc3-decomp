@@ -14,6 +14,7 @@ SkeletonExtentTracker::SkeletonExtentTracker() : mTrackingID(-1) {
 }
 
 BEGIN_HANDLERS(SkeletonExtentTracker)
+    char _slotpad[96]; (void)_slotpad;
     HANDLE_ACTION(start_tracking, StartTracking(_msg->Int(2)))
     HANDLE_ACTION(stop_tracking, mTrackingID = -1)
     HANDLE_ACTION(

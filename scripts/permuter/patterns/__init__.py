@@ -102,6 +102,9 @@ from . import positive_branch_invert  # noqa: F401  # if(c)return F; mid; return
 from . import member_readback  # noqa: F401  # Replace arg bool-read with stored member (clrlwi. vs cmpwi)
 from . import cache_repeated_call  # noqa: F401  # Hoist repeated identical call expr into local (v.end() 2x)
 from . import symbol_str_compare  # noqa: F401  # Add .Str()/.mStr to Symbol operands in == / != (cmplw vs strcmp)
+from . import abs_empty_else_negate  # noqa: F401  # if(x>0){}else{x=-x} -> x=Abs(x); kills mfcr/cror boolean materialization
+from . import store_then_compound_add  # noqa: F401  # member = base + call() -> member = base; member += call();
+from . import compound_or_widening_drop  # noqa: F401  # u16 |= int <-> u16 = u16 | int (drop clrlwi on narrow-type compound assign)
 
 from .base import get_all_patterns, get_pattern, list_patterns
 

@@ -78,14 +78,14 @@ void WavReader::Poll(float dt) {
     }
     if (mEnableReads) {
         while (mSamplesLeft != 0) {
-            if (mSamplesLeft >= mNumChannels) {
+            if (!(mNumChannels <= mSamplesLeft)) {
+                mBufNumSamples = 0;
+            } else {
                 int tmp = mSamplesLeft / mNumChannels;
                 if (tmp > 0x1000) {
                     tmp = 0x1000;
                 }
                 mBufNumSamples = tmp;
-            } else {
-                mBufNumSamples = 0;
             }
             mInWaveFileData->Read(mRawInputBuffer, mNumChannels * mBufNumSamples * 2);
             mBufOffset = 0;

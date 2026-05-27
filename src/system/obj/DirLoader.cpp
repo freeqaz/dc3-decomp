@@ -717,8 +717,8 @@ bool DirLoader::SetupDir(Symbol sym) {
 }
 
 void DirLoader::LoadObjs() {
-    FilePathTracker tracker(mRoot.c_str());
     EofType t;
+    FilePathTracker tracker(mRoot.c_str());
     while (!mObjects.empty()) {
         t = mStream->Eof();
         if (t != NotEof) {

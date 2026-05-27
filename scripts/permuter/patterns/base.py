@@ -55,6 +55,20 @@ class Pattern(ABC):
         """
         return 1.0 if self.relevant(diagnosis) else 0.0
 
+    def context_priority(
+        self, diagnosis: "Diagnosis", ctx: "FunctionContext"
+    ) -> float:
+        """Optional AST-aware priority hook.
+
+        Default implementation falls back to ``priority(diagnosis)``.
+        Patterns that have a high-confidence AST fast-path should override
+        this to bump priority when the function-level source shape matches.
+
+        Callers (budget allocator) prefer this when they have a parsed
+        FunctionContext; otherwise they call ``priority(diagnosis)``.
+        """
+        return self.priority(diagnosis)
+
     def metadata(self) -> dict[str, object]:
         """Return lightweight declarative metadata for orchestration/tests."""
         return {

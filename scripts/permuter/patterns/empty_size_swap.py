@@ -18,16 +18,43 @@ Example:
     if (mList.empty())
     ->
     if (mList.size() == 0)
+
+Exclusions:
+    * Calls inside MILO_ASSERT / MILO_ASSERT_MSG / MILO_ASSERT_RANGE /
+      MILO_ASSERT_RANGE_EQ macros are NOT swapped — the macro stringifies
+      its condition for the assert pool, and changing the source text
+      shifts the pool slot, which can regress codegen elsewhere.
 """
 
 from __future__ import annotations
 
+import re
 from typing import Iterator
 
 from tree_sitter import Node
 
 from .base import Pattern
 from ..types import Diagnosis, FunctionContext, Variant
+
+# Assertion-family macros that stringify their argument; calls inside these
+# must not be rewritten or the assert pool slot shifts and regresses codegen
+# elsewhere in the TU. See feedback_milo_assert_pool_shift.md.
+_MILO_ASSERT_MACROS = (
+    b"MILO_ASSERT",
+    b"MILO_ASSERT_MSG",
+    b"MILO_ASSERT_RANGE",
+    b"MILO_ASSERT_RANGE_EQ",
+    b"MILO_ASSERT_FMT",
+    b"MILO_ASSERT_NOT_NULL",
+)
+
+# Pre-compiled regex for fast line-text matching. A call site is "inside"
+# a MILO_ASSERT macro if the same source line (or any line in a wrapped
+# macro invocation) opens with one of these macros followed by ``(``.
+_MILO_ASSERT_RE = re.compile(
+    rb"\b(?:MILO_ASSERT|MILO_ASSERT_MSG|MILO_ASSERT_RANGE|"
+    rb"MILO_ASSERT_RANGE_EQ|MILO_ASSERT_FMT|MILO_ASSERT_NOT_NULL)\s*\("
+)
 
 
 class EmptySizeSwapPattern(Pattern):
@@ -134,6 +161,12 @@ def _find_swaps(
 ) -> Iterator[Variant]:
     """Find empty()/size() swap opportunities recursively."""
     source = ctx.file_source
+
+    # Block-out: skip nodes inside MILO_ASSERT family macros. Rewriting a
+    # call inside such a macro shifts the stringified assert pool slot and
+    # has been observed to regress codegen at other sites in the TU.
+    if _node_inside_milo_assert(node, source):
+        return
 
     # Pattern 1: x.empty() -> x.size() == 0
     # Pattern 2: !x.empty() -> x.size() != 0 / x.size() > 0
@@ -291,6 +324,38 @@ def _find_swaps(
             counter += 1
 
 
+def _node_inside_milo_assert(node: Node, source: bytes) -> bool:
+    """Return True if ``node`` is inside a MILO_ASSERT-family macro call.
+
+    Two-stage check:
+      1. Fast: scan ancestor call_expression nodes for a function name in
+         ``_MILO_ASSERT_MACROS``.
+      2. Fallback (line-text): if the line containing this node has a
+         MILO_ASSERT match BEFORE the node start, treat it as inside —
+         this catches multi-line macro invocations the AST parser may
+         not fully resolve as a single call_expression in C++ source.
+    """
+    # Stage 1: ancestor call_expression check
+    cur = node.parent
+    while cur is not None:
+        if cur.type == "call_expression":
+            func = cur.child_by_field_name("function")
+            if func is not None:
+                fn_text = source[func.start_byte:func.end_byte]
+                if fn_text in _MILO_ASSERT_MACROS:
+                    return True
+        cur = cur.parent
+
+    # Stage 2: line-text fallback. Walk back to the line start for `node`
+    # and search the line region for the macro name.
+    start = node.start_byte
+    line_start = source.rfind(b"\n", 0, start) + 1
+    # Scan only up to the node start; we want to detect the opening macro.
+    if _MILO_ASSERT_RE.search(source, line_start, start):
+        return True
+    return False
+
+
 def _arg_count(args_node: Node) -> int:
     """Count non-punctuation children in an argument_list."""
     return sum(1 for c in args_node.named_children)
@@ -313,3 +378,38 @@ def _get_unary_op(node: Node) -> bytes | None:
     """Get the operator of a unary_expression."""
     op = node.child_by_field_name("operator")
     return op.text if op is not None else None
+
+
+# ---------------------------------------------------------------------------
+# TODO: post-apply regression guard
+# ---------------------------------------------------------------------------
+# Desired behavior: after a variant produced by this pattern is APPLIED to
+# the workspace and the next objdiff run shows a LOWER match% than the
+# baseline at apply time, the orchestrator should auto-revert the edit and
+# mark the (file, line, swap-kind) site as exhausted so the same swap is
+# not re-attempted on subsequent rounds.
+#
+# Pattern infrastructure today is generation-only: Pattern.generate() yields
+# Variant() objects with no callback hook for "apply succeeded / regressed".
+# The natural place to add this guard is in the orchestrator loop where
+# variants are scored, not here in the pattern. The required hook is:
+#
+#   scripts/permuter/hill_climber.py (or scripts/permuter/beam_search.py)
+#     after `score = run_objdiff(variant)`:
+#       if score < baseline_score and variant.pattern_name == "empty_size_swap":
+#           record_exhausted_site(
+#               ctx.file_path,
+#               line=variant_first_edit_line(variant),
+#               kind="empty_size_swap",
+#           )
+#           # Already-reverted via the climber's "don't keep regressions" path.
+#
+#   scripts/permuter/types.py: add `RoundHints.exhausted_sites: set[tuple]`
+#   read at generation time. Then this pattern's generate() can consult
+#   ctx.round_hints (currently absent from FunctionContext) to skip
+#   previously-exhausted sites.
+#
+# Until the hook exists, this pattern's only safeguard is the MILO_ASSERT
+# block-out above. A round-level suppression_factor in RoundHints already
+# exists for the WHOLE pattern, but per-site exhaustion would be finer-
+# grained and is what's needed here.

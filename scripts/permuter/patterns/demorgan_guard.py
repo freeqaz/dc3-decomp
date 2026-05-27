@@ -69,6 +69,25 @@ class DeMorganGuardPattern(Pattern):
             return 0.3
         return 0.15
 
+    def context_priority(
+        self, diagnosis: Diagnosis, ctx: FunctionContext
+    ) -> float:
+        """AST fast-path: `if (A && B && C) { body }` wrapping whole body.
+
+        Per feedback_demorgan_early_return_guard.md the real signal is the
+        function-level shape, not opcode flavor. When the body is a single
+        if-without-else whose condition is an &&-chain of ≥2 conjuncts and
+        whose consequence is non-trivial, upgrade priority to ≥0.8.
+
+        Also matches the reverse case where the leading statement is a
+        DeMorgan early-return guard (`if (!A || !B) return;`) followed by
+        body — both directions are explored by ``generate()``.
+        """
+        base_priority = self.priority(diagnosis)
+        if _matches_demorgan_shape(ctx):
+            return max(base_priority, 0.85)
+        return base_priority
+
     def generate(self, ctx: FunctionContext) -> Iterator[Variant]:
         counter = 0
         stmts = ctx.statements
@@ -88,6 +107,93 @@ class DeMorganGuardPattern(Pattern):
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _matches_demorgan_shape(ctx: FunctionContext) -> bool:
+    """AST fast-path for the &&-guard whole-body shape (or its inverse).
+
+    Forward: top-level body is a single `if (A && B && ...) { body }` with
+      - no else
+      - >=2 conjuncts in the &&-chain
+      - body of >=1 statement (non-trivial)
+
+    Reverse: first statement is a DeMorgan early-return guard
+      `if (!A || !B || ...) return;` with >=2 disjuncts, followed by body.
+
+    Either direction returns True; ``generate()`` explores both.
+    """
+    stmts = [s for s in ctx.statements if s.type != "comment"]
+    if not stmts:
+        return False
+
+    source = ctx.file_source
+
+    # Forward: single if-statement wrapping body
+    if _matches_forward_demorgan(stmts, source):
+        return True
+
+    # Forward (looser): leading if with >=2 conjuncts wrapping >=2 stmts
+    if len(stmts) >= 2 and _matches_leading_demorgan_wrapper(stmts[0], source):
+        return True
+
+    # Reverse: leading DeMorgan early-return guard
+    if len(stmts) >= 2 and _extract_guard_early_return(stmts[0], source) is not None:
+        return True
+
+    return False
+
+
+def _matches_forward_demorgan(stmts: list[Node], source: bytes) -> bool:
+    """Single top-level statement = `if (A && B && ...) { body }`."""
+    if len(stmts) != 1:
+        return False
+    candidate = stmts[0]
+    if candidate.type != "if_statement":
+        return False
+    if candidate.child_by_field_name("alternative") is not None:
+        return False
+    condition = candidate.child_by_field_name("condition")
+    consequence = candidate.child_by_field_name("consequence")
+    if condition is None or consequence is None:
+        return False
+    inner = _get_condition_inner(condition)
+    if inner is None:
+        return False
+    operands = _collect_and_operands(inner, source)
+    if len(operands) < 2:
+        return False
+    # Consequence must be a non-empty compound or a single statement
+    if consequence.type == "compound_statement":
+        inner_stmts = [c for c in consequence.named_children if c.type != "comment"]
+        if not inner_stmts:
+            return False
+    return True
+
+
+def _matches_leading_demorgan_wrapper(candidate: Node, source: bytes) -> bool:
+    """First stmt is `if (A && B && ...) { >=2 stmts }`, more stmts follow.
+
+    This is the Case-2 generate() variant — supports a leading guard-block
+    that wraps most (but not all) of the function body.
+    """
+    if candidate.type != "if_statement":
+        return False
+    if candidate.child_by_field_name("alternative") is not None:
+        return False
+    condition = candidate.child_by_field_name("condition")
+    consequence = candidate.child_by_field_name("consequence")
+    if condition is None or consequence is None:
+        return False
+    if consequence.type != "compound_statement":
+        return False
+    inner_stmts = [c for c in consequence.named_children if c.type != "comment"]
+    if len(inner_stmts) < 2:
+        return False
+    inner = _get_condition_inner(condition)
+    if inner is None:
+        return False
+    operands = _collect_and_operands(inner, source)
+    return len(operands) >= 2
+
 
 def _get_condition_inner(condition: Node) -> Node | None:
     """Unwrap condition_clause / parenthesized_expression to the inner expr."""

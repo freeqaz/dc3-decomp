@@ -94,10 +94,11 @@ ChallengeSortByScore::NewHeaderNode(NavListItemNode *item) const {
     } else if (type == 1) {
         name = dlc_challenge;
     } else {
-        name = Symbol(static_cast<ChallengeSortNode *>(item)
+        auto _tmp0 = Symbol(static_cast<ChallengeSortNode *>(item)
                           ->GetChallengeRecord()
                           ->GetSongTitle()
                           .Str());
+        name = _tmp0;
     }
 
     ChallengeScoreCmp *newCmp =

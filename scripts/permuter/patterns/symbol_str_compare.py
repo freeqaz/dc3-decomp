@@ -45,6 +45,23 @@ _MILO_MACROS = {
     b"MILO_ASSERT", b"MILO_ASSERT_FMT", b"MILO_NOTIFY_ONCE",
 }
 
+# bl-target names that indicate Symbol/strcmp equality. Per
+# feedback_symbol_ptr_compare.md and feedback_strcmp_bool_materialization.md,
+# only these are the canonical signal — a generic ``bl`` mismatch is too broad.
+# Includes both the raw libc strcmp and known Symbol::operator== mangles.
+_SYMBOL_EQ_BL_TARGETS = frozenset({
+    "strcmp",
+    # Symbol::operator==(const Symbol&) and char* overloads (MWCC mangling)
+    "__eq__6SymbolFRC6Symbol",
+    "__eq__6SymbolFPCc",
+    "__ne__6SymbolFRC6Symbol",
+    "__ne__6SymbolFPCc",
+    "eq__6SymbolFPCc",
+    "eq__6SymbolFRC6Symbol",
+    # Symbol::Str() — also indicates Symbol-handling site
+    "Str__C6SymbolFv",
+})
+
 # Known null Symbol names
 _NULL_SYMBOL_NAMES = {b"gNullStr", b"Symbol()", b"kNoStr", b"kNullStr"}
 
@@ -62,28 +79,40 @@ class SymbolStrComparePattern(Pattern):
     name = "symbol_str_compare"
 
     def relevant(self, diagnosis: Diagnosis) -> bool:
-        # bl in target where base has cmplw (strcmp call vs pointer compare)
+        # Sharpened gate: only fire when the specific bl-target symbol is one
+        # we recognize as strcmp or Symbol equality (see _SYMBOL_EQ_BL_TARGETS).
+        # A generic ``bl`` mismatch is far too broad — the previous gate
+        # triggered on EVERY call mismatch in the function.
         for d in diagnosis.diff_ops:
-            if d.target_opcode == "bl" and d.base_opcode in ("cmplw", "cmplwi", "cmpw", "cmpwi"):
+            if d.target_opcode == "bl" and _is_symbol_eq_target(d.target_arg):
+                if d.base_opcode in ("cmplw", "cmplwi", "cmpw", "cmpwi"):
+                    return True
+                # Allow paired with another bl that ISN'T a Symbol-eq (we
+                # emit a strcmp but target uses a direct cmplw nearby).
                 return True
-            if d.base_opcode == "bl" and d.target_opcode in ("cmplw", "cmplwi", "cmpw", "cmpwi"):
+            if d.base_opcode == "bl" and _is_symbol_eq_target(d.base_arg):
+                if d.target_opcode in ("cmplw", "cmplwi", "cmpw", "cmpwi"):
+                    return True
                 return True
-        # Extra real replacements often indicate different comparison shapes
-        if diagnosis.replace_real > 0:
-            return True
-        # Clusters with bl suggest inlined strcmp
+        # Clusters with bl whose argument is a Symbol-eq target also count
         for cluster in diagnosis.clusters:
-            if "bl" in cluster.target_opcodes or "bl" in cluster.base_opcodes:
-                return True
+            if "bl" not in cluster.target_opcodes and "bl" not in cluster.base_opcodes:
+                continue
+            # We don't have per-cluster bl-target info; fall back to checking
+            # any diff_op bl with a Symbol-eq target. Already handled above.
         return False
 
     def priority(self, diagnosis: Diagnosis) -> float:
         for d in diagnosis.diff_ops:
-            if d.target_opcode == "bl" and d.base_opcode in ("cmplw", "cmplwi"):
-                return 0.8
-            if d.base_opcode == "bl" and d.target_opcode in ("cmplw", "cmplwi"):
-                return 0.8
-        return 0.4 if self.relevant(diagnosis) else 0.0
+            if d.target_opcode == "bl" and _is_symbol_eq_target(d.target_arg):
+                if d.base_opcode in ("cmplw", "cmplwi"):
+                    return 0.8
+                return 0.5
+            if d.base_opcode == "bl" and _is_symbol_eq_target(d.base_arg):
+                if d.target_opcode in ("cmplw", "cmplwi"):
+                    return 0.8
+                return 0.5
+        return 0.0
 
     def generate(self, ctx: FunctionContext) -> Iterator[Variant]:
         source = ctx.file_source
@@ -182,6 +211,18 @@ class SymbolStrComparePattern(Pattern):
                     source=new_source,
                 )
                 counter += 1
+
+
+def _is_symbol_eq_target(arg: str) -> bool:
+    """Return True when a ``bl``-target argument names a Symbol/strcmp equality.
+
+    Conservative: requires an exact match against ``_SYMBOL_EQ_BL_TARGETS``.
+    Tolerates a leading ``@`` (objdiff sometimes prefixes mangled names).
+    """
+    if not arg:
+        return False
+    cleaned = arg.lstrip("@").rstrip(",")
+    return cleaned in _SYMBOL_EQ_BL_TARGETS
 
 
 def _inside_milo_macro(node: Node, source: bytes) -> bool:

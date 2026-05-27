@@ -235,11 +235,12 @@ END_LOADS
 void RndTexRenderer::DrawToTexture() {
     if (TheRnd.GetDrawMode() != 0)
         return;
-    if (((Hmx::Object *)Dir() == (Hmx::Object *)mDrawable) || !Showing())
+    ObjPtr<RndDrawable> &_ref0 = mDrawable;
+    if (((Hmx::Object *)Dir() == (Hmx::Object *)_ref0) || !Showing())
         return;
     if (mDrawWorldOnly && !(TheRnd.ProcCmds() & kProcessWorld))
         return;
-    if (mDirty && mDrawable && mOutputTexture) {
+    if (mDirty && _ref0 && mOutputTexture) {
         if (!(mOutputTexture->GetType() & kProcessPost)) {
             MILO_NOTIFY_ONCE("%s not renderable", mOutputTexture->Name());
             return;
@@ -252,7 +253,7 @@ void RndTexRenderer::DrawToTexture() {
             HandleType(preRender);
         }
         RndCam *cam;
-        RndDir *rdir = dynamic_cast<RndDir *>((RndDrawable *)mDrawable);
+        RndDir *rdir = dynamic_cast<RndDir *>((RndDrawable *)_ref0);
         if (mImpostorHeight != 0.0f && rdir) {
             cam = RndCam::Current();
             tf98 = cam->WorldXfm();
@@ -279,7 +280,7 @@ void RndTexRenderer::DrawToTexture() {
         } else {
             cam = mCamera;
             if (!cam)
-                cam = mDrawable->CamOverride();
+                cam = _ref0->CamOverride();
             if (rdir && !cam)
                 cam = dynamic_cast<RndCam *>(rdir->CurCam());
             if (!cam)
@@ -437,7 +438,7 @@ void RndTexRenderer::DrawToTexture() {
                 if (rdir && rdir->ClassName() == "WorldDir") {
                     rdir->RndDir::DrawShowing();
                 } else
-                    mDrawable->DrawShowing();
+                    _ref0->DrawShowing();
                 DrawAfter();
                 j--;
             } while (j != 0);

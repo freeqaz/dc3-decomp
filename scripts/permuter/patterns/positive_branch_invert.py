@@ -80,6 +80,23 @@ class PositiveBranchInvertPattern(Pattern):
             return 0.3
         return 0.15
 
+    def context_priority(
+        self, diagnosis: Diagnosis, ctx: FunctionContext
+    ) -> float:
+        """AST fast-path: shape `if (cond) return false; ...; return true;`.
+
+        Per feedback_invert_early_return_positive_branch.md the high-confidence
+        trigger is the function-level AST shape, not opcode flavor. When the
+        body matches (small body, leading guard-return of a falsy literal,
+        trailing return of a truthy literal), upgrade to >=0.8.
+
+        Falls back to the regular `priority()` if the shape doesn't match.
+        """
+        base_priority = self.priority(diagnosis)
+        if _matches_positive_branch_shape(ctx):
+            return max(base_priority, 0.85)
+        return base_priority
+
     def generate(self, ctx: FunctionContext) -> Iterator[Variant]:
         counter = 0
         stmts = ctx.statements
@@ -101,6 +118,52 @@ class PositiveBranchInvertPattern(Pattern):
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _matches_positive_branch_shape(ctx: FunctionContext) -> bool:
+    """AST fast-path for: `if (cond) return false; ...; return true;`
+
+    True when the function body has:
+      - first statement = `if (cond) return <falsy>;` (no else)
+      - last statement  = `return <truthy>;`
+      - middle is non-trivial OR shape matches even with no middle (degenerate)
+      - body is small enough to be plausibly a returns-bool helper (<= ~30 stmts)
+
+    Either polarity (falsy-guard/truthy-final or truthy-guard/falsy-final)
+    counts — the transform applies in both directions.
+    """
+    stmts = [s for s in ctx.statements if s.type != "comment"]
+    if len(stmts) < 2:
+        return False
+    if len(stmts) > 30:
+        return False
+
+    source = ctx.file_source
+    first = stmts[0]
+    last = stmts[-1]
+
+    guard = _is_guard_return(first, source)
+    if guard is None:
+        return False
+    _guard_cond, guard_ret_val = guard
+
+    if last.type != "return_statement":
+        return False
+    final_ret_val = _get_return_value(last, source)
+    if final_ret_val is None:
+        return False
+
+    gv = guard_ret_val.strip()
+    fv = final_ret_val.strip()
+    if gv == fv:
+        return False
+
+    # The high-confidence shape: one side falsy, the other truthy.
+    falsy_truthy = (
+        (gv in _FALSY_VALUES and fv in _TRUTHY_VALUES)
+        or (gv in _TRUTHY_VALUES and fv in _FALSY_VALUES)
+    )
+    return falsy_truthy
+
 
 def _get_condition_inner(condition: Node) -> Node | None:
     """Unwrap condition_clause to the inner expression."""

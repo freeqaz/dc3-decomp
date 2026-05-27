@@ -1,0 +1,5386 @@
+[
+ {
+  "symbol": "yylex",
+  "unit": "default/system/obj/DataFlex",
+  "raw": 88.67066,
+  "norm": 88.67066,
+  "surface": {
+   "branch": 2
+  },
+  "cats": {
+   "constant": 6,
+   "reloc_target": 6,
+   "addr_const": 2
+  },
+  "other_mt": {
+   "replace": 60
+  },
+  "severity": 96,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "constant",
+    "cmpwi cr6, r8, 0x7d",
+    "cmpwi cr6, r8, 0x7b"
+   ],
+   [
+    "constant",
+    "cmplwi cr6, r11, 0x266",
+    "cmplwi cr6, r11, 0x1db"
+   ],
+   [
+    "reloc_target",
+    "lis r12, jumptable_82078DB0",
+    "lis r12, $T2066"
+   ],
+   [
+    "reloc_target",
+    "addi r12, r12, jumptable_82078DB0",
+    "addi r12, r12, $T2066"
+   ],
+   [
+    "reloc_target",
+    "lhzx r0, r12, r0, jumptable_82078DB0",
+    "lhzx r0, r12, r0, $T2066"
+   ],
+   [
+    "addr_const",
+    "subi r10, r11, 0x7c",
+    "subi r10, r11, 0x7a"
+   ],
+   [
+    "constant",
+    "cmpwi cr6, r8, 0x7d",
+    "cmpwi cr6, r8, 0x7b"
+   ],
+   [
+    "constant",
+    "cmplwi cr6, r11, 0x266",
+    "cmplwi cr6, r11, 0x1db"
+   ],
+   [
+    "reloc_target",
+    "lis r12, jumptable_82078DB0",
+    "lis r12, $T2066"
+   ],
+   [
+    "reloc_target",
+    "addi r12, r12, jumptable_82078DB0",
+    "addi r12, r12, $T2066"
+   ],
+   [
+    "reloc_target",
+    "lhzx r0, r12, r0, jumptable_82078DB0",
+    "lhzx r0, r12, r0, $T2066"
+   ],
+   [
+    "addr_const",
+    "subi r10, r11, 0x7c",
+    "subi r10, r11, 0x7a"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "constant",
+    "cmpwi cr6, r8, 0x7d",
+    "cmpwi cr6, r8, 0x7b"
+   ],
+   [
+    "constant",
+    "cmplwi cr6, r11, 0x266",
+    "cmplwi cr6, r11, 0x1db"
+   ],
+   [
+    "reloc_target",
+    "lis r12, jumptable_82078DB0",
+    "lis r12, $T2066"
+   ],
+   [
+    "reloc_target",
+    "addi r12, r12, jumptable_82078DB0",
+    "addi r12, r12, $T2066"
+   ],
+   [
+    "reloc_target",
+    "lhzx r0, r12, r0, jumptable_82078DB0",
+    "lhzx r0, r12, r0, $T2066"
+   ],
+   [
+    "addr_const",
+    "subi r10, r11, 0x7c",
+    "subi r10, r11, 0x7a"
+   ],
+   [
+    "constant",
+    "cmpwi cr6, r8, 0x7d",
+    "cmpwi cr6, r8, 0x7b"
+   ],
+   [
+    "constant",
+    "cmplwi cr6, r11, 0x266",
+    "cmplwi cr6, r11, 0x1db"
+   ],
+   [
+    "reloc_target",
+    "lis r12, jumptable_82078DB0",
+    "lis r12, $T2066"
+   ],
+   [
+    "reloc_target",
+    "addi r12, r12, jumptable_82078DB0",
+    "addi r12, r12, $T2066"
+   ],
+   [
+    "reloc_target",
+    "lhzx r0, r12, r0, jumptable_82078DB0",
+    "lhzx r0, r12, r0, $T2066"
+   ],
+   [
+    "addr_const",
+    "subi r10, r11, 0x7c",
+    "subi r10, r11, 0x7a"
+   ]
+  ],
+  "cats_kept": {
+   "constant": 4,
+   "reloc_target": 6,
+   "addr_const": 2
+  },
+  "severity_kept": 86,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?OnPostLink@KinectSharePanel@@AAA?AVDataNode@@PAVDataArray@@@Z",
+  "unit": "default/lazer/meta_ham/KinectSharePanel",
+  "raw": 98.40304,
+  "norm": 98.40304,
+  "surface": {
+   "reg": 8
+  },
+  "cats": {
+   "reloc_target": 24
+  },
+  "other_mt": {},
+  "severity": 240,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "reloc_target",
+    "lis r29, ?$S8@?6??OnPostLink@KinectSharePanel@@AAA?AVDataNode@@PAVDataArray@@@Z@4IA",
+    "lis r29, ?$S7@?M@??OnPostLink@KinectSharePanel@@AAA?AVDataNode@@PAVDataArray@@@Z@4IA"
+   ],
+   [
+    "reloc_target",
+    "lwz r11, ?$S8@?6??OnPostLink@KinectSharePanel@@AAA?AVDataNode@@PAVDataArray@@@Z@4IA, r29",
+    "lwz r11, ?$S7@?M@??OnPostLink@KinectSharePanel@@AAA?AVDataNode@@PAVDataArray@@@Z@4IA, r29"
+   ],
+   [
+    "reloc_target",
+    "stw r11, ?$S8@?6??OnPostLink@KinectSharePanel@@AAA?AVDataNode@@PAVDataArray@@@Z@4IA, r29",
+    "stw r11, ?$S7@?M@??OnPostLink@KinectSharePanel@@AAA?AVDataNode@@PAVDataArray@@@Z@4IA, r29"
+   ],
+   [
+    "reloc_target",
+    "bl ?Parent@Node@?$ObjPtrVec@VRndTransformable@@VObjectDir@@@@UBAPAVObjRefOwner@@XZ",
+    "bl ?GetPadNum@Profile@@QBAHXZ"
+   ],
+   [
+    "reloc_target",
+    "lis r29, ?$S8@?6??OnPostLink@KinectSharePanel@@AAA?AVDataNode@@PAVDataArray@@@Z@4IA",
+    "lis r29, ?$S7@?M@??OnPostLink@KinectSharePanel@@AAA?AVDataNode@@PAVDataArray@@@Z@4IA"
+   ],
+   [
+    "reloc_target",
+    "lwz r11, ?$S8@?6??OnPostLink@KinectSharePanel@@AAA?AVDataNode@@PAVDataArray@@@Z@4IA, r29",
+    "lwz r11, ?$S7@?M@??OnPostLink@KinectSharePanel@@AAA?AVDataNode@@PAVDataArray@@@Z@4IA, r29"
+   ],
+   [
+    "reloc_target",
+    "stw r11, ?$S8@?6??OnPostLink@KinectSharePanel@@AAA?AVDataNode@@PAVDataArray@@@Z@4IA, r29",
+    "stw r11, ?$S7@?M@??OnPostLink@KinectSharePanel@@AAA?AVDataNode@@PAVDataArray@@@Z@4IA, r29"
+   ],
+   [
+    "reloc_target",
+    "bl ?Parent@Node@?$ObjPtrVec@VRndTransformable@@VObjectDir@@@@UBAPAVObjRefOwner@@XZ",
+    "bl ?GetPadNum@Profile@@QBAHXZ"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "reloc_target",
+    "lis r29, ?$S8@?6??OnPostLink@KinectSharePanel@@AAA?AVDataNode@@PAVDataArray@@@Z@4IA",
+    "lis r29, ?$S7@?M@??OnPostLink@KinectSharePanel@@AAA?AVDataNode@@PAVDataArray@@@Z@4IA"
+   ],
+   [
+    "reloc_target",
+    "lwz r11, ?$S8@?6??OnPostLink@KinectSharePanel@@AAA?AVDataNode@@PAVDataArray@@@Z@4IA, r29",
+    "lwz r11, ?$S7@?M@??OnPostLink@KinectSharePanel@@AAA?AVDataNode@@PAVDataArray@@@Z@4IA, r29"
+   ],
+   [
+    "reloc_target",
+    "stw r11, ?$S8@?6??OnPostLink@KinectSharePanel@@AAA?AVDataNode@@PAVDataArray@@@Z@4IA, r29",
+    "stw r11, ?$S7@?M@??OnPostLink@KinectSharePanel@@AAA?AVDataNode@@PAVDataArray@@@Z@4IA, r29"
+   ],
+   [
+    "reloc_target",
+    "bl ?Parent@Node@?$ObjPtrVec@VRndTransformable@@VObjectDir@@@@UBAPAVObjRefOwner@@XZ",
+    "bl ?GetPadNum@Profile@@QBAHXZ"
+   ],
+   [
+    "reloc_target",
+    "lis r29, ?$S8@?6??OnPostLink@KinectSharePanel@@AAA?AVDataNode@@PAVDataArray@@@Z@4IA",
+    "lis r29, ?$S7@?M@??OnPostLink@KinectSharePanel@@AAA?AVDataNode@@PAVDataArray@@@Z@4IA"
+   ],
+   [
+    "reloc_target",
+    "lwz r11, ?$S8@?6??OnPostLink@KinectSharePanel@@AAA?AVDataNode@@PAVDataArray@@@Z@4IA, r29",
+    "lwz r11, ?$S7@?M@??OnPostLink@KinectSharePanel@@AAA?AVDataNode@@PAVDataArray@@@Z@4IA, r29"
+   ],
+   [
+    "reloc_target",
+    "stw r11, ?$S8@?6??OnPostLink@KinectSharePanel@@AAA?AVDataNode@@PAVDataArray@@@Z@4IA, r29",
+    "stw r11, ?$S7@?M@??OnPostLink@KinectSharePanel@@AAA?AVDataNode@@PAVDataArray@@@Z@4IA, r29"
+   ],
+   [
+    "reloc_target",
+    "bl ?Parent@Node@?$ObjPtrVec@VRndTransformable@@VObjectDir@@@@UBAPAVObjRefOwner@@XZ",
+    "bl ?GetPadNum@Profile@@QBAHXZ"
+   ]
+  ],
+  "cats_kept": {
+   "reloc_target": 8
+  },
+  "severity_kept": 80,
+  "scope": "IN-lazer"
+ },
+ {
+  "symbol": "?AddAccomplishment@AccomplishmentProgress@@QAA_NVSymbol@@@Z",
+  "unit": "default/lazer/meta_ham/AccomplishmentProgress",
+  "raw": 99.15135,
+  "norm": 99.15135,
+  "surface": {
+   "reg": 6
+  },
+  "cats": {
+   "reloc_target": 8
+  },
+  "other_mt": {},
+  "severity": 80,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "reloc_target",
+    "bl ?Notify@Debug@@QAAXPBD@Z",
+    "bl ??6TextStream@@QAAAAV0@PBD@Z"
+   ],
+   [
+    "reloc_target",
+    "bl ?Parent@Node@?$ObjPtrVec@VRndTransformable@@VObjectDir@@@@UBAPAVObjRefOwner@@XZ",
+    "bl ?GetPadNum@Profile@@QBAHXZ"
+   ],
+   [
+    "reloc_target",
+    "bl ?GetGroup@AccomplishmentCategory@@QBA?AVSymbol@@XZ",
+    "bl ?GetAward@AccomplishmentGroup@@QBA?AVSymbol@@XZ"
+   ],
+   [
+    "reloc_target",
+    "bl ?PostDownload@NetLoader@@IAAXXZ",
+    "bl ?MakeDirty@Profile@@QAAXXZ"
+   ],
+   [
+    "reloc_target",
+    "bl ?Notify@Debug@@QAAXPBD@Z",
+    "bl ??6TextStream@@QAAAAV0@PBD@Z"
+   ],
+   [
+    "reloc_target",
+    "bl ?Parent@Node@?$ObjPtrVec@VRndTransformable@@VObjectDir@@@@UBAPAVObjRefOwner@@XZ",
+    "bl ?GetPadNum@Profile@@QBAHXZ"
+   ],
+   [
+    "reloc_target",
+    "bl ?GetGroup@AccomplishmentCategory@@QBA?AVSymbol@@XZ",
+    "bl ?GetAward@AccomplishmentGroup@@QBA?AVSymbol@@XZ"
+   ],
+   [
+    "reloc_target",
+    "bl ?PostDownload@NetLoader@@IAAXXZ",
+    "bl ?MakeDirty@Profile@@QAAXXZ"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "reloc_target",
+    "bl ?Notify@Debug@@QAAXPBD@Z",
+    "bl ??6TextStream@@QAAAAV0@PBD@Z"
+   ],
+   [
+    "reloc_target",
+    "bl ?Parent@Node@?$ObjPtrVec@VRndTransformable@@VObjectDir@@@@UBAPAVObjRefOwner@@XZ",
+    "bl ?GetPadNum@Profile@@QBAHXZ"
+   ],
+   [
+    "reloc_target",
+    "bl ?GetGroup@AccomplishmentCategory@@QBA?AVSymbol@@XZ",
+    "bl ?GetAward@AccomplishmentGroup@@QBA?AVSymbol@@XZ"
+   ],
+   [
+    "reloc_target",
+    "bl ?PostDownload@NetLoader@@IAAXXZ",
+    "bl ?MakeDirty@Profile@@QAAXXZ"
+   ],
+   [
+    "reloc_target",
+    "bl ?Notify@Debug@@QAAXPBD@Z",
+    "bl ??6TextStream@@QAAAAV0@PBD@Z"
+   ],
+   [
+    "reloc_target",
+    "bl ?Parent@Node@?$ObjPtrVec@VRndTransformable@@VObjectDir@@@@UBAPAVObjRefOwner@@XZ",
+    "bl ?GetPadNum@Profile@@QBAHXZ"
+   ],
+   [
+    "reloc_target",
+    "bl ?GetGroup@AccomplishmentCategory@@QBA?AVSymbol@@XZ",
+    "bl ?GetAward@AccomplishmentGroup@@QBA?AVSymbol@@XZ"
+   ],
+   [
+    "reloc_target",
+    "bl ?PostDownload@NetLoader@@IAAXXZ",
+    "bl ?MakeDirty@Profile@@QAAXXZ"
+   ]
+  ],
+  "cats_kept": {
+   "reloc_target": 8
+  },
+  "severity_kept": 80,
+  "scope": "IN-lazer"
+ },
+ {
+  "symbol": "mdct_backward",
+  "unit": "default/system/oggvorbis/mdct",
+  "raw": 99.66507,
+  "norm": 99.66507,
+  "surface": {
+   "reg": 4
+  },
+  "cats": {
+   "addr_const": 8,
+   "member": 12
+  },
+  "other_mt": {},
+  "severity": 120,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "addr_const",
+    "subi r10, r10, 0x10",
+    "subi r10, r10, 0xc"
+   ],
+   [
+    "member",
+    "lfs f13, 0x1c, r10",
+    "lfs f13, 0x14, r10"
+   ],
+   [
+    "member",
+    "lfs f13, 0x1c, r10",
+    "lfs f13, 0x14, r10"
+   ],
+   [
+    "addr_const",
+    "addi r11, r28, 0x8",
+    "addi r11, r28, 0xc"
+   ],
+   [
+    "addr_const",
+    "subi r10, r10, 0x8",
+    "subi r10, r10, 0x4"
+   ],
+   [
+    "member",
+    "lfs f12, 0x24, r10",
+    "lfs f12, 0x1c, r10"
+   ],
+   [
+    "addr_const",
+    "subi r10, r10, 0x10",
+    "subi r10, r10, 0xc"
+   ],
+   [
+    "member",
+    "lfs f13, 0x14, r10",
+    "lfs f13, 0xc, r10"
+   ],
+   [
+    "member",
+    "lfs f13, 0x0, r10",
+    "lfs f13, 0x4, r10"
+   ],
+   [
+    "addr_const",
+    "addi r11, r28, 0x8",
+    "addi r11, r28, 0xc"
+   ],
+   [
+    "addr_const",
+    "subi r10, r10, 0x8",
+    "subi r10, r10, 0x4"
+   ],
+   [
+    "member",
+    "lfs f12, -0x8, r11",
+    "lfs f12, -0xc, r11"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "addr_const",
+    "subi r10, r10, 0x10",
+    "subi r10, r10, 0xc"
+   ],
+   [
+    "member",
+    "lfs f13, 0x1c, r10",
+    "lfs f13, 0x14, r10"
+   ],
+   [
+    "member",
+    "lfs f13, 0x1c, r10",
+    "lfs f13, 0x14, r10"
+   ],
+   [
+    "addr_const",
+    "addi r11, r28, 0x8",
+    "addi r11, r28, 0xc"
+   ],
+   [
+    "addr_const",
+    "subi r10, r10, 0x8",
+    "subi r10, r10, 0x4"
+   ],
+   [
+    "member",
+    "lfs f12, 0x24, r10",
+    "lfs f12, 0x1c, r10"
+   ],
+   [
+    "addr_const",
+    "subi r10, r10, 0x10",
+    "subi r10, r10, 0xc"
+   ],
+   [
+    "member",
+    "lfs f13, 0x14, r10",
+    "lfs f13, 0xc, r10"
+   ],
+   [
+    "member",
+    "lfs f13, 0x0, r10",
+    "lfs f13, 0x4, r10"
+   ],
+   [
+    "addr_const",
+    "addi r11, r28, 0x8",
+    "addi r11, r28, 0xc"
+   ],
+   [
+    "addr_const",
+    "subi r10, r10, 0x8",
+    "subi r10, r10, 0x4"
+   ],
+   [
+    "member",
+    "lfs f12, -0x8, r11",
+    "lfs f12, -0xc, r11"
+   ]
+  ],
+  "cats_kept": {
+   "addr_const": 6,
+   "member": 6
+  },
+  "severity_kept": 66,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?InitPool@ParticleCommonPool@@QAAXXZ",
+  "unit": "default/system/rndobj/Part",
+  "raw": 99.37736,
+  "norm": 99.37736,
+  "surface": {},
+  "cats": {
+   "constant": 8,
+   "addr_const": 4,
+   "member": 4
+  },
+  "other_mt": {},
+  "severity": 84,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "constant",
+    "lis r11, 0x147",
+    "lis r11, 0x141"
+   ],
+   [
+    "constant",
+    "ori r11, r11, 0xae14",
+    "ori r11, r11, 0x4141"
+   ],
+   [
+    "constant",
+    "mulli r3, r3, 0xc8",
+    "mulli r3, r3, 0xcc"
+   ],
+   [
+    "addr_const",
+    "addi r6, r9, 0xc8",
+    "addi r6, r9, 0x68"
+   ],
+   [
+    "member",
+    "stw r8, -0x70, r10",
+    "stw r8, -0x10, r10"
+   ],
+   [
+    "member",
+    "stw r8, -0x6c, r11",
+    "stw r8, -0xc, r11"
+   ],
+   [
+    "constant",
+    "lis r11, 0x147",
+    "lis r11, 0x141"
+   ],
+   [
+    "constant",
+    "ori r11, r11, 0xae14",
+    "ori r11, r11, 0x4141"
+   ],
+   [
+    "constant",
+    "mulli r3, r3, 0xc8",
+    "mulli r3, r3, 0xcc"
+   ],
+   [
+    "addr_const",
+    "addi r6, r9, 0xc8",
+    "addi r6, r9, 0x68"
+   ],
+   [
+    "constant",
+    "mulli r11, r30, 0xc8",
+    "mulli r11, r30, 0x68"
+   ],
+   [
+    "member",
+    "stw r8, -0x70, r10",
+    "stw r8, -0x10, r10"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "constant",
+    "lis r11, 0x147",
+    "lis r11, 0x141"
+   ],
+   [
+    "constant",
+    "ori r11, r11, 0xae14",
+    "ori r11, r11, 0x4141"
+   ],
+   [
+    "constant",
+    "mulli r3, r3, 0xc8",
+    "mulli r3, r3, 0xcc"
+   ],
+   [
+    "addr_const",
+    "addi r6, r9, 0xc8",
+    "addi r6, r9, 0x68"
+   ],
+   [
+    "member",
+    "stw r8, -0x70, r10",
+    "stw r8, -0x10, r10"
+   ],
+   [
+    "member",
+    "stw r8, -0x6c, r11",
+    "stw r8, -0xc, r11"
+   ],
+   [
+    "constant",
+    "lis r11, 0x147",
+    "lis r11, 0x141"
+   ],
+   [
+    "constant",
+    "ori r11, r11, 0xae14",
+    "ori r11, r11, 0x4141"
+   ],
+   [
+    "constant",
+    "mulli r3, r3, 0xc8",
+    "mulli r3, r3, 0xcc"
+   ],
+   [
+    "addr_const",
+    "addi r6, r9, 0xc8",
+    "addi r6, r9, 0x68"
+   ],
+   [
+    "constant",
+    "mulli r11, r30, 0xc8",
+    "mulli r11, r30, 0x68"
+   ],
+   [
+    "member",
+    "stw r8, -0x70, r10",
+    "stw r8, -0x10, r10"
+   ]
+  ],
+  "cats_kept": {
+   "constant": 7,
+   "addr_const": 2,
+   "member": 3
+  },
+  "severity_kept": 65,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?UpdateLocal@RndCam@@IAAXXZ",
+  "unit": "default/system/rndobj/Cam",
+  "raw": 99.94643,
+  "norm": 99.94643,
+  "surface": {},
+  "cats": {
+   "member": 12
+  },
+  "other_mt": {},
+  "severity": 96,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "member",
+    "stfs f0, 0x158, r31",
+    "stfs f0, 0x160, r31"
+   ],
+   [
+    "member",
+    "stfs f13, 0x124, r31",
+    "stfs f13, 0x130, r31"
+   ],
+   [
+    "member",
+    "stfs f0, 0x118, r31",
+    "stfs f0, 0x120, r31"
+   ],
+   [
+    "member",
+    "stfs f0, 0x164, r31",
+    "stfs f0, 0x170, r31"
+   ],
+   [
+    "member",
+    "stfs f0, 0x158, r31",
+    "stfs f0, 0x160, r31"
+   ],
+   [
+    "member",
+    "stfs f13, 0x124, r31",
+    "stfs f13, 0x130, r31"
+   ],
+   [
+    "member",
+    "stfs f0, 0x118, r31",
+    "stfs f0, 0x120, r31"
+   ],
+   [
+    "member",
+    "stfs f0, 0x164, r31",
+    "stfs f0, 0x170, r31"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "member",
+    "stfs f0, 0x158, r31",
+    "stfs f0, 0x160, r31"
+   ],
+   [
+    "member",
+    "stfs f13, 0x124, r31",
+    "stfs f13, 0x130, r31"
+   ],
+   [
+    "member",
+    "stfs f0, 0x118, r31",
+    "stfs f0, 0x120, r31"
+   ],
+   [
+    "member",
+    "stfs f0, 0x164, r31",
+    "stfs f0, 0x170, r31"
+   ],
+   [
+    "member",
+    "stfs f0, 0x158, r31",
+    "stfs f0, 0x160, r31"
+   ],
+   [
+    "member",
+    "stfs f13, 0x124, r31",
+    "stfs f13, 0x130, r31"
+   ],
+   [
+    "member",
+    "stfs f0, 0x118, r31",
+    "stfs f0, 0x120, r31"
+   ],
+   [
+    "member",
+    "stfs f0, 0x164, r31",
+    "stfs f0, 0x170, r31"
+   ]
+  ],
+  "cats_kept": {
+   "member": 8
+  },
+  "severity_kept": 64,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?CreateSongSelectGrammar@VoiceInputPanel@@QBAXVSymbol@@@Z",
+  "unit": "default/lazer/meta_ham/VoiceInputPanel",
+  "raw": 88.417725,
+  "norm": 88.417725,
+  "surface": {
+   "reg": 32
+  },
+  "cats": {
+   "reloc_target": 16
+  },
+  "other_mt": {
+   "insert": 13,
+   "diff_op": 1,
+   "delete": 11
+  },
+  "severity": 160,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "reloc_target",
+    "lis r27, ?$S3@?N@??CreateSongSelectGrammar@VoiceInputPanel@@QBAXVSymbol@@@Z@4IA",
+    "lis r27, ?$S2@?N@??CreateSongSelectGrammar@VoiceInputPanel@@QBAXVSymbol@@@Z@4IA"
+   ],
+   [
+    "reloc_target",
+    "lwz r11, ?$S3@?N@??CreateSongSelectGrammar@VoiceInputPanel@@QBAXVSymbol@@@Z@4IA, r27",
+    "lwz r11, ?$S2@?N@??CreateSongSelectGrammar@VoiceInputPanel@@QBAXVSymbol@@@Z@4IA, r27"
+   ],
+   [
+    "reloc_target",
+    "stw r11, ?$S3@?N@??CreateSongSelectGrammar@VoiceInputPanel@@QBAXVSymbol@@@Z@4IA, r27",
+    "stw r11, ?$S2@?N@??CreateSongSelectGrammar@VoiceInputPanel@@QBAXVSymbol@@@Z@4IA, r27"
+   ],
+   [
+    "reloc_target",
+    "lis r27, ?$S3@?N@??CreateSongSelectGrammar@VoiceInputPanel@@QBAXVSymbol@@@Z@4IA",
+    "lis r27, ?$S2@?N@??CreateSongSelectGrammar@VoiceInputPanel@@QBAXVSymbol@@@Z@4IA"
+   ],
+   [
+    "reloc_target",
+    "lwz r11, ?$S3@?N@??CreateSongSelectGrammar@VoiceInputPanel@@QBAXVSymbol@@@Z@4IA, r27",
+    "lwz r11, ?$S2@?N@??CreateSongSelectGrammar@VoiceInputPanel@@QBAXVSymbol@@@Z@4IA, r27"
+   ],
+   [
+    "reloc_target",
+    "stw r11, ?$S3@?N@??CreateSongSelectGrammar@VoiceInputPanel@@QBAXVSymbol@@@Z@4IA, r27",
+    "stw r11, ?$S2@?N@??CreateSongSelectGrammar@VoiceInputPanel@@QBAXVSymbol@@@Z@4IA, r27"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "reloc_target",
+    "lis r27, ?$S3@?N@??CreateSongSelectGrammar@VoiceInputPanel@@QBAXVSymbol@@@Z@4IA",
+    "lis r27, ?$S2@?N@??CreateSongSelectGrammar@VoiceInputPanel@@QBAXVSymbol@@@Z@4IA"
+   ],
+   [
+    "reloc_target",
+    "lwz r11, ?$S3@?N@??CreateSongSelectGrammar@VoiceInputPanel@@QBAXVSymbol@@@Z@4IA, r27",
+    "lwz r11, ?$S2@?N@??CreateSongSelectGrammar@VoiceInputPanel@@QBAXVSymbol@@@Z@4IA, r27"
+   ],
+   [
+    "reloc_target",
+    "stw r11, ?$S3@?N@??CreateSongSelectGrammar@VoiceInputPanel@@QBAXVSymbol@@@Z@4IA, r27",
+    "stw r11, ?$S2@?N@??CreateSongSelectGrammar@VoiceInputPanel@@QBAXVSymbol@@@Z@4IA, r27"
+   ],
+   [
+    "reloc_target",
+    "lis r27, ?$S3@?N@??CreateSongSelectGrammar@VoiceInputPanel@@QBAXVSymbol@@@Z@4IA",
+    "lis r27, ?$S2@?N@??CreateSongSelectGrammar@VoiceInputPanel@@QBAXVSymbol@@@Z@4IA"
+   ],
+   [
+    "reloc_target",
+    "lwz r11, ?$S3@?N@??CreateSongSelectGrammar@VoiceInputPanel@@QBAXVSymbol@@@Z@4IA, r27",
+    "lwz r11, ?$S2@?N@??CreateSongSelectGrammar@VoiceInputPanel@@QBAXVSymbol@@@Z@4IA, r27"
+   ],
+   [
+    "reloc_target",
+    "stw r11, ?$S3@?N@??CreateSongSelectGrammar@VoiceInputPanel@@QBAXVSymbol@@@Z@4IA, r27",
+    "stw r11, ?$S2@?N@??CreateSongSelectGrammar@VoiceInputPanel@@QBAXVSymbol@@@Z@4IA, r27"
+   ]
+  ],
+  "cats_kept": {
+   "reloc_target": 6
+  },
+  "severity_kept": 60,
+  "scope": "IN-lazer"
+ },
+ {
+  "symbol": "?OnMsg@Automator@@AAA?AVDataNode@@ABVButtonDownMsg@@@Z",
+  "unit": "default/system/ui/UI",
+  "raw": 99.39091,
+  "norm": 99.39091,
+  "surface": {},
+  "cats": {
+   "reloc_target": 6
+  },
+  "other_mt": {},
+  "severity": 60,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "reloc_target",
+    "lis r10, ??_B?4??OnMsg@Automator@@AAA?AVDataNode@@ABVButtonDownMsg@@@Z@54",
+    "lis r10, ?$S11@?4??OnMsg@Automator@@AAA?AVDataNode@@ABVButtonDownMsg@@@Z@4IA"
+   ],
+   [
+    "reloc_target",
+    "lwz r11, ??_B?4??OnMsg@Automator@@AAA?AVDataNode@@ABVButtonDownMsg@@@Z@54, r10",
+    "lwz r11, ?$S11@?4??OnMsg@Automator@@AAA?AVDataNode@@ABVButtonDownMsg@@@Z@4IA, r10"
+   ],
+   [
+    "reloc_target",
+    "stw r11, ??_B?4??OnMsg@Automator@@AAA?AVDataNode@@ABVButtonDownMsg@@@Z@54, r10",
+    "stw r11, ?$S11@?4??OnMsg@Automator@@AAA?AVDataNode@@ABVButtonDownMsg@@@Z@4IA, r10"
+   ],
+   [
+    "reloc_target",
+    "lis r10, ??_B?4??OnMsg@Automator@@AAA?AVDataNode@@ABVButtonDownMsg@@@Z@54",
+    "lis r10, ?$S11@?4??OnMsg@Automator@@AAA?AVDataNode@@ABVButtonDownMsg@@@Z@4IA"
+   ],
+   [
+    "reloc_target",
+    "lwz r11, ??_B?4??OnMsg@Automator@@AAA?AVDataNode@@ABVButtonDownMsg@@@Z@54, r10",
+    "lwz r11, ?$S11@?4??OnMsg@Automator@@AAA?AVDataNode@@ABVButtonDownMsg@@@Z@4IA, r10"
+   ],
+   [
+    "reloc_target",
+    "stw r11, ??_B?4??OnMsg@Automator@@AAA?AVDataNode@@ABVButtonDownMsg@@@Z@54, r10",
+    "stw r11, ?$S11@?4??OnMsg@Automator@@AAA?AVDataNode@@ABVButtonDownMsg@@@Z@4IA, r10"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "reloc_target",
+    "lis r10, ??_B?4??OnMsg@Automator@@AAA?AVDataNode@@ABVButtonDownMsg@@@Z@54",
+    "lis r10, ?$S11@?4??OnMsg@Automator@@AAA?AVDataNode@@ABVButtonDownMsg@@@Z@4IA"
+   ],
+   [
+    "reloc_target",
+    "lwz r11, ??_B?4??OnMsg@Automator@@AAA?AVDataNode@@ABVButtonDownMsg@@@Z@54, r10",
+    "lwz r11, ?$S11@?4??OnMsg@Automator@@AAA?AVDataNode@@ABVButtonDownMsg@@@Z@4IA, r10"
+   ],
+   [
+    "reloc_target",
+    "stw r11, ??_B?4??OnMsg@Automator@@AAA?AVDataNode@@ABVButtonDownMsg@@@Z@54, r10",
+    "stw r11, ?$S11@?4??OnMsg@Automator@@AAA?AVDataNode@@ABVButtonDownMsg@@@Z@4IA, r10"
+   ],
+   [
+    "reloc_target",
+    "lis r10, ??_B?4??OnMsg@Automator@@AAA?AVDataNode@@ABVButtonDownMsg@@@Z@54",
+    "lis r10, ?$S11@?4??OnMsg@Automator@@AAA?AVDataNode@@ABVButtonDownMsg@@@Z@4IA"
+   ],
+   [
+    "reloc_target",
+    "lwz r11, ??_B?4??OnMsg@Automator@@AAA?AVDataNode@@ABVButtonDownMsg@@@Z@54, r10",
+    "lwz r11, ?$S11@?4??OnMsg@Automator@@AAA?AVDataNode@@ABVButtonDownMsg@@@Z@4IA, r10"
+   ],
+   [
+    "reloc_target",
+    "stw r11, ??_B?4??OnMsg@Automator@@AAA?AVDataNode@@ABVButtonDownMsg@@@Z@54, r10",
+    "stw r11, ?$S11@?4??OnMsg@Automator@@AAA?AVDataNode@@ABVButtonDownMsg@@@Z@4IA, r10"
+   ]
+  ],
+  "cats_kept": {
+   "reloc_target": 6
+  },
+  "severity_kept": 60,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?Play@MoggClip@@UAAXM@Z",
+  "unit": "default/system/synth/MoggClip",
+  "raw": 99.439026,
+  "norm": 99.439026,
+  "surface": {
+   "reg": 3
+  },
+  "cats": {
+   "member": 6
+  },
+  "other_mt": {},
+  "severity": 48,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "member",
+    "lwz r3, 0x48, r30",
+    "lwz r3, 0x1c, r31"
+   ],
+   [
+    "member",
+    "stfs f0, 0x40, r30",
+    "stfs f0, 0x18, r31"
+   ],
+   [
+    "member",
+    "lfs f13, 0x44, r30",
+    "lfs f13, 0x14, r31"
+   ],
+   [
+    "member",
+    "lwz r3, 0x48, r30",
+    "lwz r3, 0x1c, r31"
+   ],
+   [
+    "member",
+    "lfs f0, 0x14, r31",
+    "lfs f0, 0x18, r31"
+   ],
+   [
+    "member",
+    "stfs f0, 0x40, r30",
+    "stfs f0, 0x18, r31"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "member",
+    "lwz r3, 0x48, r30",
+    "lwz r3, 0x1c, r31"
+   ],
+   [
+    "member",
+    "stfs f0, 0x40, r30",
+    "stfs f0, 0x18, r31"
+   ],
+   [
+    "member",
+    "lfs f13, 0x44, r30",
+    "lfs f13, 0x14, r31"
+   ],
+   [
+    "member",
+    "lwz r3, 0x48, r30",
+    "lwz r3, 0x1c, r31"
+   ],
+   [
+    "member",
+    "lfs f0, 0x14, r31",
+    "lfs f0, 0x18, r31"
+   ],
+   [
+    "member",
+    "stfs f0, 0x40, r30",
+    "stfs f0, 0x18, r31"
+   ]
+  ],
+  "cats_kept": {
+   "member": 6
+  },
+  "severity_kept": 48,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?OnMsg@OptionsPanel@@IAA?AVDataNode@@ABVRCJobCompleteMsg@@@Z",
+  "unit": "default/lazer/meta_ham/OptionsPanel",
+  "raw": 92.56215,
+  "norm": 92.56215,
+  "surface": {
+   "reg": 23,
+   "branch": 3
+  },
+  "cats": {
+   "reloc_target": 68,
+   "constant": 6
+  },
+  "other_mt": {
+   "replace": 32
+  },
+  "severity": 710,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "reloc_target",
+    "lis r28, ?$S2@?4??OnMsg@OptionsPanel@@IAA?AVDataNode@@ABVRCJobCompleteMsg@@@Z@4IA",
+    "lis r28, ?$S1@?4??OnMsg@OptionsPanel@@IAA?AVDataNode@@ABVRCJobCompleteMsg@@@Z@4IA"
+   ],
+   [
+    "reloc_target",
+    "lwz r11, ?$S2@?4??OnMsg@OptionsPanel@@IAA?AVDataNode@@ABVRCJobCompleteMsg@@@Z@4IA, r28",
+    "lwz r11, ?$S1@?4??OnMsg@OptionsPanel@@IAA?AVDataNode@@ABVRCJobCompleteMsg@@@Z@4IA, r28"
+   ],
+   [
+    "reloc_target",
+    "stw r11, ?$S2@?4??OnMsg@OptionsPanel@@IAA?AVDataNode@@ABVRCJobCompleteMsg@@@Z@4IA, r28",
+    "stw r11, ?$S1@?4??OnMsg@OptionsPanel@@IAA?AVDataNode@@ABVRCJobCompleteMsg@@@Z@4IA, r28"
+   ],
+   [
+    "constant",
+    "lis r10, 0xa",
+    "lis r10, 0x800a"
+   ],
+   [
+    "constant",
+    "ori r10, r10, 0x2",
+    "ori r10, r10, 0x3"
+   ],
+   [
+    "constant",
+    "cmplwi cr6, r11, 0x1",
+    "cmplwi cr6, r11, 0x4"
+   ],
+   [
+    "reloc_target",
+    "lwz r11, 0x0, r30, ?leaderboard_no_net@?4??OnMsg@OptionsPanel@@IAA?AVDataNode@@ABVRCJobCompleteMsg@@@Z@4VSymbol@@A",
+    "lwz r11, 0x0, r23, ?token_redemption_error@?4??OnMsg@OptionsPanel@@IAA?AVDataNode@@ABVRCJobCompleteMsg@@@Z@4VSymbol@@A"
+   ],
+   [
+    "reloc_target",
+    "lwz r11, 0x0, r26, ?token_redemption_purchased@?4??OnMsg@OptionsPanel@@IAA?AVDataNode@@ABVRCJobCompleteMsg@@@Z@4VSymbol@@A",
+    "lwz r11, 0x0, r30, ?token_redemption_too_late@?4??OnMsg@OptionsPanel@@IAA?AVDataNode@@ABVRCJobCompleteMsg@@@Z@4VSymbol@@A"
+   ],
+   [
+    "reloc_target",
+    "lwz r11, 0x0, r22, ?token_redemption_ready@?4??OnMsg@OptionsPanel@@IAA?AVDataNode@@ABVRCJobCompleteMsg@@@Z@4VSymbol@@A",
+    "lwz r11, 0x0, r25, ?token_redemption_other_player@?4??OnMsg@OptionsPanel@@IAA?AVDataNode@@ABVRCJobCompleteMsg@@@Z@4VSymbol@@A"
+   ],
+   [
+    "reloc_target",
+    "bl merged_825D6BB8",
+    "bl ?SetSuccess@TokenRedeemedMsg@@QAAX_N@Z"
+   ],
+   [
+    "reloc_target",
+    "bl merged_82946770",
+    "bl ?SetOfferString@TokenRedeemedMsg@@QAAXABVString@@@Z"
+   ],
+   [
+    "reloc_target",
+    "lis r28, ?$S2@?4??OnMsg@OptionsPanel@@IAA?AVDataNode@@ABVRCJobCompleteMsg@@@Z@4IA",
+    "lis r28, ?$S1@?4??OnMsg@OptionsPanel@@IAA?AVDataNode@@ABVRCJobCompleteMsg@@@Z@4IA"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "constant",
+    "lis r10, 0xa",
+    "lis r10, 0x800a"
+   ],
+   [
+    "constant",
+    "ori r10, r10, 0x2",
+    "ori r10, r10, 0x3"
+   ],
+   [
+    "constant",
+    "cmplwi cr6, r11, 0x1",
+    "cmplwi cr6, r11, 0x4"
+   ],
+   [
+    "reloc_target",
+    "lwz r11, 0x0, r30, ?leaderboard_no_net@?4??OnMsg@OptionsPanel@@IAA?AVDataNode@@ABVRCJobCompleteMsg@@@Z@4VSymbol@@A",
+    "lwz r11, 0x0, r23, ?token_redemption_error@?4??OnMsg@OptionsPanel@@IAA?AVDataNode@@ABVRCJobCompleteMsg@@@Z@4VSymbol@@A"
+   ],
+   [
+    "reloc_target",
+    "lwz r11, 0x0, r26, ?token_redemption_purchased@?4??OnMsg@OptionsPanel@@IAA?AVDataNode@@ABVRCJobCompleteMsg@@@Z@4VSymbol@@A",
+    "lwz r11, 0x0, r30, ?token_redemption_too_late@?4??OnMsg@OptionsPanel@@IAA?AVDataNode@@ABVRCJobCompleteMsg@@@Z@4VSymbol@@A"
+   ],
+   [
+    "reloc_target",
+    "lwz r11, 0x0, r22, ?token_redemption_ready@?4??OnMsg@OptionsPanel@@IAA?AVDataNode@@ABVRCJobCompleteMsg@@@Z@4VSymbol@@A",
+    "lwz r11, 0x0, r25, ?token_redemption_other_player@?4??OnMsg@OptionsPanel@@IAA?AVDataNode@@ABVRCJobCompleteMsg@@@Z@4VSymbol@@A"
+   ]
+  ],
+  "cats_kept": {
+   "constant": 3,
+   "reloc_target": 3
+  },
+  "severity_kept": 45,
+  "scope": "IN-lazer"
+ },
+ {
+  "symbol": "?HandleNetCacheLoaderFailure@StorePanel@@QAAXH@Z",
+  "unit": "default/system/meta/StorePanel",
+  "raw": 99.12162,
+  "norm": 99.12162,
+  "surface": {
+   "reg": 7
+  },
+  "cats": {
+   "reloc_target": 4
+  },
+  "other_mt": {},
+  "severity": 40,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "reloc_target",
+    "bl ?GetHostName@DingoServer@@UBAPBDXZ",
+    "bl ?GetFailType@NetCacheMgr@@QBA?AW4NetCacheMgrFailType@@XZ"
+   ],
+   [
+    "reloc_target",
+    "bl ?Parent@Node@?$ObjPtrVec@VRndTransformable@@VObjectDir@@@@UBAPAVObjRefOwner@@XZ",
+    "bl ?GetPadNum@Profile@@QBAHXZ"
+   ],
+   [
+    "reloc_target",
+    "bl ?GetHostName@DingoServer@@UBAPBDXZ",
+    "bl ?GetFailType@NetCacheMgr@@QBA?AW4NetCacheMgrFailType@@XZ"
+   ],
+   [
+    "reloc_target",
+    "bl ?Parent@Node@?$ObjPtrVec@VRndTransformable@@VObjectDir@@@@UBAPAVObjRefOwner@@XZ",
+    "bl ?GetPadNum@Profile@@QBAHXZ"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "reloc_target",
+    "bl ?GetHostName@DingoServer@@UBAPBDXZ",
+    "bl ?GetFailType@NetCacheMgr@@QBA?AW4NetCacheMgrFailType@@XZ"
+   ],
+   [
+    "reloc_target",
+    "bl ?Parent@Node@?$ObjPtrVec@VRndTransformable@@VObjectDir@@@@UBAPAVObjRefOwner@@XZ",
+    "bl ?GetPadNum@Profile@@QBAHXZ"
+   ],
+   [
+    "reloc_target",
+    "bl ?GetHostName@DingoServer@@UBAPBDXZ",
+    "bl ?GetFailType@NetCacheMgr@@QBA?AW4NetCacheMgrFailType@@XZ"
+   ],
+   [
+    "reloc_target",
+    "bl ?Parent@Node@?$ObjPtrVec@VRndTransformable@@VObjectDir@@@@UBAPAVObjRefOwner@@XZ",
+    "bl ?GetPadNum@Profile@@QBAHXZ"
+   ]
+  ],
+  "cats_kept": {
+   "reloc_target": 4
+  },
+  "severity_kept": 40,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?UpdateExtendedEntries@UIList@@IAAXABVUIListState@@@Z",
+  "unit": "default/system/ui/UIList",
+  "raw": 99.56463,
+  "norm": 99.56463,
+  "surface": {},
+  "cats": {
+   "reloc_target": 2,
+   "constant": 8
+  },
+  "other_mt": {},
+  "severity": 60,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "reloc_target",
+    "bl merged_Get0x20",
+    "bl ?Provider@UIListState@@QBAPAVUIListProvider@@XZ"
+   ],
+   [
+    "constant",
+    "li r11, 0x3ef",
+    "li r11, 0x3fd"
+   ],
+   [
+    "constant",
+    "li r11, 0x3f6",
+    "li r11, 0x404"
+   ],
+   [
+    "constant",
+    "li r11, 0x401",
+    "li r11, 0x40f"
+   ],
+   [
+    "constant",
+    "li r11, 0x40c",
+    "li r11, 0x41a"
+   ],
+   [
+    "reloc_target",
+    "bl merged_Get0x20",
+    "bl ?Provider@UIListState@@QBAPAVUIListProvider@@XZ"
+   ],
+   [
+    "constant",
+    "li r11, 0x3ef",
+    "li r11, 0x3fd"
+   ],
+   [
+    "constant",
+    "li r11, 0x3f6",
+    "li r11, 0x404"
+   ],
+   [
+    "constant",
+    "li r11, 0x401",
+    "li r11, 0x40f"
+   ],
+   [
+    "constant",
+    "li r11, 0x40c",
+    "li r11, 0x41a"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "constant",
+    "li r11, 0x3ef",
+    "li r11, 0x3fd"
+   ],
+   [
+    "constant",
+    "li r11, 0x3f6",
+    "li r11, 0x404"
+   ],
+   [
+    "constant",
+    "li r11, 0x401",
+    "li r11, 0x40f"
+   ],
+   [
+    "constant",
+    "li r11, 0x40c",
+    "li r11, 0x41a"
+   ],
+   [
+    "constant",
+    "li r11, 0x3ef",
+    "li r11, 0x3fd"
+   ],
+   [
+    "constant",
+    "li r11, 0x3f6",
+    "li r11, 0x404"
+   ],
+   [
+    "constant",
+    "li r11, 0x401",
+    "li r11, 0x40f"
+   ],
+   [
+    "constant",
+    "li r11, 0x40c",
+    "li r11, 0x41a"
+   ]
+  ],
+  "cats_kept": {
+   "constant": 8
+  },
+  "severity_kept": 40,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?Poll@StreamRecorder@@UAAXXZ",
+  "unit": "default/system/gesture/StreamRecorder",
+  "raw": 99.766235,
+  "norm": 99.766235,
+  "surface": {},
+  "cats": {
+   "member": 4,
+   "addr_const": 2
+  },
+  "other_mt": {},
+  "severity": 38,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "member",
+    "lwz r10, 0x1ac, r11",
+    "lwz r10, 0x9c, r11"
+   ],
+   [
+    "addr_const",
+    "addi r3, r11, 0x1ac",
+    "addi r3, r11, 0x9c"
+   ],
+   [
+    "member",
+    "lwz r11, 0x4, r10",
+    "lwz r11, 0x18, r10"
+   ],
+   [
+    "member",
+    "lwz r10, 0x1ac, r11",
+    "lwz r10, 0x9c, r11"
+   ],
+   [
+    "addr_const",
+    "addi r3, r11, 0x1ac",
+    "addi r3, r11, 0x9c"
+   ],
+   [
+    "member",
+    "lwz r11, 0x4, r10",
+    "lwz r11, 0x18, r10"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "member",
+    "lwz r10, 0x1ac, r11",
+    "lwz r10, 0x9c, r11"
+   ],
+   [
+    "addr_const",
+    "addi r3, r11, 0x1ac",
+    "addi r3, r11, 0x9c"
+   ],
+   [
+    "member",
+    "lwz r11, 0x4, r10",
+    "lwz r11, 0x18, r10"
+   ],
+   [
+    "member",
+    "lwz r10, 0x1ac, r11",
+    "lwz r10, 0x9c, r11"
+   ],
+   [
+    "addr_const",
+    "addi r3, r11, 0x1ac",
+    "addi r3, r11, 0x9c"
+   ],
+   [
+    "member",
+    "lwz r11, 0x4, r10",
+    "lwz r11, 0x18, r10"
+   ]
+  ],
+  "cats_kept": {
+   "member": 4,
+   "addr_const": 2
+  },
+  "severity_kept": 38,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?PlayCrowdAnimation@HamWardrobe@@QAAXVSymbol@@H_N@Z",
+  "unit": "default/system/hamobj/HamWardrobe",
+  "raw": 99.22564,
+  "norm": 99.22564,
+  "surface": {},
+  "cats": {
+   "member": 2,
+   "reloc_target": 4
+  },
+  "other_mt": {},
+  "severity": 56,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "member",
+    "lwz r11, 0x8, r11",
+    "lwz r11, 0xc, r11"
+   ],
+   [
+    "reloc_target",
+    "bl fn_829A1AD0",
+    "bl _snprintf"
+   ],
+   [
+    "member",
+    "lwz r11, 0x8, r11",
+    "lwz r11, 0xc, r11"
+   ],
+   [
+    "reloc_target",
+    "bl fn_829A1AD0",
+    "bl _snprintf"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "member",
+    "lwz r11, 0x8, r11",
+    "lwz r11, 0xc, r11"
+   ],
+   [
+    "reloc_target",
+    "bl fn_829A1AD0",
+    "bl _snprintf"
+   ],
+   [
+    "member",
+    "lwz r11, 0x8, r11",
+    "lwz r11, 0xc, r11"
+   ],
+   [
+    "reloc_target",
+    "bl fn_829A1AD0",
+    "bl _snprintf"
+   ]
+  ],
+  "cats_kept": {
+   "member": 2,
+   "reloc_target": 2
+  },
+  "severity_kept": 36,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?FixClassName@DirLoader@@AAA?AVSymbol@@V2@@Z",
+  "unit": "default/system/obj/DirLoader",
+  "raw": 97.43363,
+  "norm": 98.21239,
+  "surface": {
+   "reg": 6
+  },
+  "cats": {
+   "reloc_target": 194
+  },
+  "other_mt": {},
+  "severity": 1940,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "reloc_target",
+    "lis r30, ?$S3@?4??FixClassName@DirLoader@@AAA?AVSymbol@@V3@@Z@4IA",
+    "lis r30, ?$S2@?3??FixClassName@DirLoader@@AAA?AVSymbol@@V3@@Z@4IA"
+   ],
+   [
+    "reloc_target",
+    "lwz r11, ?$S3@?4??FixClassName@DirLoader@@AAA?AVSymbol@@V3@@Z@4IA, r30",
+    "lwz r11, ?$S2@?3??FixClassName@DirLoader@@AAA?AVSymbol@@V3@@Z@4IA, r30"
+   ],
+   [
+    "reloc_target",
+    "stw r11, ?$S3@?4??FixClassName@DirLoader@@AAA?AVSymbol@@V3@@Z@4IA, r30",
+    "stw r11, ?$S2@?3??FixClassName@DirLoader@@AAA?AVSymbol@@V3@@Z@4IA, r30"
+   ],
+   [
+    "reloc_target",
+    "lis r10, ?CompositeTexture@?BF@??FixClassName@DirLoader@@AAA?AVSymbol@@V3@@Z@4V3@A",
+    "lis r10, ?TexRenderer@?BA@??FixClassName@DirLoader@@AAA?AVSymbol@@V3@@Z@4V3@A"
+   ],
+   [
+    "reloc_target",
+    "addi r26, r10, ?CompositeTexture@?BF@??FixClassName@DirLoader@@AAA?AVSymbol@@V3@@Z@4V3@A",
+    "addi r26, r10, ?TexRenderer@?BA@??FixClassName@DirLoader@@AAA?AVSymbol@@V3@@Z@4V3@A"
+   ],
+   [
+    "reloc_target",
+    "mr r3, r26, ?CompositeTexture@?BF@??FixClassName@DirLoader@@AAA?AVSymbol@@V3@@Z@4V3@A",
+    "mr r3, r26, ?TexRenderer@?BA@??FixClassName@DirLoader@@AAA?AVSymbol@@V3@@Z@4V3@A"
+   ],
+   [
+    "reloc_target",
+    "lwz r10, 0x0, r27, lbl_82F64980",
+    "lwz r10, 0x0, r27, ?RenderedTex@?BA@??FixClassName@DirLoader@@AAA?AVSymbol@@V3@@Z@4V3@A"
+   ],
+   [
+    "reloc_target",
+    "lwz r25, 0x0, r28, lbl_82F6497C",
+    "lwz r25, 0x0, r26, ?TexRenderer@?BA@??FixClassName@DirLoader@@AAA?AVSymbol@@V3@@Z@4V3@A"
+   ],
+   [
+    "reloc_target",
+    "lwz r25, 0x0, r29, lbl_82F64978",
+    "lwz r25, 0x0, r29, ?LayerDir@?BA@??FixClassName@DirLoader@@AAA?AVSymbol@@V3@@Z@4V3@A"
+   ],
+   [
+    "reloc_target",
+    "lwz r10, 0x0, r29, lbl_82F64970",
+    "lwz r10, 0x0, r28, ?BandFx@?BH@??FixClassName@DirLoader@@AAA?AVSymbol@@V3@@Z@4V3@A"
+   ],
+   [
+    "reloc_target",
+    "lwz r11, 0x0, r28, lbl_82F64974",
+    "lwz r11, 0x0, r29, ?WorldFx@?BH@??FixClassName@DirLoader@@AAA?AVSymbol@@V3@@Z@4V3@A"
+   ],
+   [
+    "reloc_target",
+    "lwz r10, 0x0, r28, lbl_82F6496C",
+    "lwz r10, 0x0, r28, ?Slider@?BL@??FixClassName@DirLoader@@AAA?AVSymbol@@V3@@Z@4V3@A"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "reloc_target",
+    "lis r10, ?CompositeTexture@?BF@??FixClassName@DirLoader@@AAA?AVSymbol@@V3@@Z@4V3@A",
+    "lis r10, ?TexRenderer@?BA@??FixClassName@DirLoader@@AAA?AVSymbol@@V3@@Z@4V3@A"
+   ],
+   [
+    "reloc_target",
+    "addi r26, r10, ?CompositeTexture@?BF@??FixClassName@DirLoader@@AAA?AVSymbol@@V3@@Z@4V3@A",
+    "addi r26, r10, ?TexRenderer@?BA@??FixClassName@DirLoader@@AAA?AVSymbol@@V3@@Z@4V3@A"
+   ],
+   [
+    "reloc_target",
+    "mr r3, r26, ?CompositeTexture@?BF@??FixClassName@DirLoader@@AAA?AVSymbol@@V3@@Z@4V3@A",
+    "mr r3, r26, ?TexRenderer@?BA@??FixClassName@DirLoader@@AAA?AVSymbol@@V3@@Z@4V3@A"
+   ]
+  ],
+  "cats_kept": {
+   "reloc_target": 3
+  },
+  "severity_kept": 30,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?UpdateScore@MetagameRank@@QAAXHPBVHamPlayerData@@PBVSongStatusMgr@@HH@Z",
+  "unit": "default/lazer/meta_ham/MetagameRank",
+  "raw": 98.2564,
+  "norm": 98.2564,
+  "surface": {
+   "reg": 6
+  },
+  "cats": {
+   "reloc_target": 139,
+   "member": 1
+  },
+  "other_mt": {},
+  "severity": 1398,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "reloc_target",
+    "bl __savegprlr",
+    "bl __savegprlr_14"
+   ],
+   [
+    "reloc_target",
+    "lwz r11, ?$S11@?4??UpdateScore@MetagameRank@@QAAXHPBVHamPlayerData@@PBVSongStatusMgr@@HH@Z@4IA, r30",
+    "lwz r11, ?$S10@?4??UpdateScore@MetagameRank@@QAAXHPBVHamPlayerData@@PBVSongStatusMgr@@HH@Z@4IA, r30"
+   ],
+   [
+    "reloc_target",
+    "stw r11, ?$S11@?4??UpdateScore@MetagameRank@@QAAXHPBVHamPlayerData@@PBVSongStatusMgr@@HH@Z@4IA, r30",
+    "stw r11, ?$S10@?4??UpdateScore@MetagameRank@@QAAXHPBVHamPlayerData@@PBVSongStatusMgr@@HH@Z@4IA, r30"
+   ],
+   [
+    "reloc_target",
+    "lis r14, ?$S12@?7??UpdateScore@MetagameRank@@QAAXHPBVHamPlayerData@@PBVSongStatusMgr@@HH@Z@4IA",
+    "lis r14, ?$S11@?7??UpdateScore@MetagameRank@@QAAXHPBVHamPlayerData@@PBVSongStatusMgr@@HH@Z@4IA"
+   ],
+   [
+    "reloc_target",
+    "lwz r11, ?$S12@?7??UpdateScore@MetagameRank@@QAAXHPBVHamPlayerData@@PBVSongStatusMgr@@HH@Z@4IA, r14",
+    "lwz r11, ?$S11@?7??UpdateScore@MetagameRank@@QAAXHPBVHamPlayerData@@PBVSongStatusMgr@@HH@Z@4IA, r14"
+   ],
+   [
+    "reloc_target",
+    "stw r11, ?$S12@?7??UpdateScore@MetagameRank@@QAAXHPBVHamPlayerData@@PBVSongStatusMgr@@HH@Z@4IA, r14",
+    "stw r11, ?$S11@?7??UpdateScore@MetagameRank@@QAAXHPBVHamPlayerData@@PBVSongStatusMgr@@HH@Z@4IA, r14"
+   ],
+   [
+    "member",
+    "stw r11, -0x7c28, r14",
+    "stw r11, ?$S11@?7??UpdateScore@MetagameRank@@QAAXHPBVHamPlayerData@@PBVSongStatusMgr@@HH@Z@4IA, r14"
+   ],
+   [
+    "reloc_target",
+    "bl ?GetCacheName@CacheXbox@@UAAPBDXZ",
+    "bl ?GetSongStatusMgr@HamProfile@@QBAPAVSongStatusMgr@@XZ"
+   ],
+   [
+    "reloc_target",
+    "bl fn_829A2760",
+    "bl sprintf"
+   ],
+   [
+    "reloc_target",
+    "b __restgprlr",
+    "b __restgprlr_14"
+   ],
+   [
+    "reloc_target",
+    "bl __savegprlr",
+    "bl __savegprlr_14"
+   ],
+   [
+    "reloc_target",
+    "lis r30, ?$S10@?4??UpdateScore@MetagameRank@@QAAXHPBVHamPlayerData@@PBVSongStatusMgr@@HH@Z@4IA",
+    "lis r30, ?$S9@?4??UpdateScore@MetagameRank@@QAAXHPBVHamPlayerData@@PBVSongStatusMgr@@HH@Z@4IA"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "member",
+    "stw r11, -0x7c28, r14",
+    "stw r11, ?$S11@?7??UpdateScore@MetagameRank@@QAAXHPBVHamPlayerData@@PBVSongStatusMgr@@HH@Z@4IA, r14"
+   ],
+   [
+    "reloc_target",
+    "bl ?GetCacheName@CacheXbox@@UAAPBDXZ",
+    "bl ?GetSongStatusMgr@HamProfile@@QBAPAVSongStatusMgr@@XZ"
+   ],
+   [
+    "reloc_target",
+    "bl fn_829A2760",
+    "bl sprintf"
+   ]
+  ],
+  "cats_kept": {
+   "member": 1,
+   "reloc_target": 2
+  },
+  "severity_kept": 28,
+  "scope": "IN-lazer"
+ },
+ {
+  "symbol": "?Load@RndFlare@@UAAXAAVBinStream@@@Z",
+  "unit": "default/system/rndobj/Flare",
+  "raw": 99.74468,
+  "norm": 99.74468,
+  "surface": {},
+  "cats": {
+   "reloc_target": 12,
+   "addr_const": 2
+  },
+  "other_mt": {},
+  "severity": 126,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "reloc_target",
+    "lis r10, lbl_820ADDB0",
+    "lis r10, gRev"
+   ],
+   [
+    "reloc_target",
+    "addi r28, r10, lbl_820ADDB0",
+    "addi r28, r10, gRev"
+   ],
+   [
+    "reloc_target",
+    "mr r7, r28, lbl_820ADDB0",
+    "mr r7, r28, gRev"
+   ],
+   [
+    "reloc_target",
+    "bl ??$?5M@@YAAAVBinStream@@AAV0@AAV?$Key@M@@@Z",
+    "bl ??5@YAAAVBinStream@@AAV0@AAVVector2@@@Z"
+   ],
+   [
+    "addr_const",
+    "subi r4, r31, 0x5c",
+    "subi r4, r31, 0x60"
+   ],
+   [
+    "reloc_target",
+    "lis r10, lbl_820ADDB0",
+    "lis r10, gRev"
+   ],
+   [
+    "reloc_target",
+    "addi r28, r10, lbl_820ADDB0",
+    "addi r28, r10, gRev"
+   ],
+   [
+    "reloc_target",
+    "mr r7, r28, lbl_820ADDB0",
+    "mr r7, r28, gRev"
+   ],
+   [
+    "reloc_target",
+    "addi r7, r28, 0x4, lbl_820ADDB0",
+    "addi r7, r28, 0x4, gAltRev"
+   ],
+   [
+    "reloc_target",
+    "bl ??$?5M@@YAAAVBinStream@@AAV0@AAV?$Key@M@@@Z",
+    "bl ??5@YAAAVBinStream@@AAV0@AAVVector2@@@Z"
+   ],
+   [
+    "addr_const",
+    "subi r4, r31, 0x5c",
+    "subi r4, r31, 0x60"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "reloc_target",
+    "bl ??$?5M@@YAAAVBinStream@@AAV0@AAV?$Key@M@@@Z",
+    "bl ??5@YAAAVBinStream@@AAV0@AAVVector2@@@Z"
+   ],
+   [
+    "addr_const",
+    "subi r4, r31, 0x5c",
+    "subi r4, r31, 0x60"
+   ],
+   [
+    "reloc_target",
+    "bl ??$?5M@@YAAAVBinStream@@AAV0@AAV?$Key@M@@@Z",
+    "bl ??5@YAAAVBinStream@@AAV0@AAVVector2@@@Z"
+   ],
+   [
+    "addr_const",
+    "subi r4, r31, 0x5c",
+    "subi r4, r31, 0x60"
+   ]
+  ],
+  "cats_kept": {
+   "reloc_target": 2,
+   "addr_const": 2
+  },
+  "severity_kept": 26,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "??1HamVisDir@@UAA@XZ",
+  "unit": "default/system/hamobj/HamVisDir",
+  "raw": 99.27143,
+  "norm": 99.27143,
+  "surface": {},
+  "cats": {
+   "member": 2,
+   "addr_const": 2
+  },
+  "other_mt": {},
+  "severity": 22,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "member",
+    "lwz r10, 0x10, r11",
+    "lwz r10, 0x8, r11"
+   ],
+   [
+    "addr_const",
+    "addi r3, r11, 0x10",
+    "addi r3, r11, 0x8"
+   ],
+   [
+    "member",
+    "lwz r10, 0x10, r11",
+    "lwz r10, 0x8, r11"
+   ],
+   [
+    "addr_const",
+    "addi r3, r11, 0x10",
+    "addi r3, r11, 0x8"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "member",
+    "lwz r10, 0x10, r11",
+    "lwz r10, 0x8, r11"
+   ],
+   [
+    "addr_const",
+    "addi r3, r11, 0x10",
+    "addi r3, r11, 0x8"
+   ],
+   [
+    "member",
+    "lwz r10, 0x10, r11",
+    "lwz r10, 0x8, r11"
+   ],
+   [
+    "addr_const",
+    "addi r3, r11, 0x10",
+    "addi r3, r11, 0x8"
+   ]
+  ],
+  "cats_kept": {
+   "member": 2,
+   "addr_const": 2
+  },
+  "severity_kept": 22,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?NumItems@HamNavList@@ABAHXZ",
+  "unit": "default/system/hamobj/HamNavList",
+  "raw": 98.72093,
+  "norm": 98.72093,
+  "surface": {
+   "reg": 9
+  },
+  "cats": {
+   "reloc_target": 2
+  },
+  "other_mt": {},
+  "severity": 20,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "reloc_target",
+    "bl ?gathering@CUgtFilter@NUISPEECH@@QAA_NXZ",
+    "bl ?ScrollPastMinDisplay@UIListState@@QBA_NXZ"
+   ],
+   [
+    "reloc_target",
+    "bl ?gathering@CUgtFilter@NUISPEECH@@QAA_NXZ",
+    "bl ?ScrollPastMinDisplay@UIListState@@QBA_NXZ"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "reloc_target",
+    "bl ?gathering@CUgtFilter@NUISPEECH@@QAA_NXZ",
+    "bl ?ScrollPastMinDisplay@UIListState@@QBA_NXZ"
+   ],
+   [
+    "reloc_target",
+    "bl ?gathering@CUgtFilter@NUISPEECH@@QAA_NXZ",
+    "bl ?ScrollPastMinDisplay@UIListState@@QBA_NXZ"
+   ]
+  ],
+  "cats_kept": {
+   "reloc_target": 2
+  },
+  "severity_kept": 20,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?Load@CharBone@@UAAXAAVBinStream@@@Z",
+  "unit": "default/system/char/CharBone",
+  "raw": 99.213196,
+  "norm": 99.213196,
+  "surface": {
+   "reg": 23
+  },
+  "cats": {
+   "reloc_target": 10
+  },
+  "other_mt": {},
+  "severity": 100,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "reloc_target",
+    "lis r10, lbl_8201C2E0",
+    "lis r10, gRev"
+   ],
+   [
+    "reloc_target",
+    "addi r27, r10, lbl_8201C2E0",
+    "addi r28, r10, gRev"
+   ],
+   [
+    "reloc_target",
+    "mr r7, r27, lbl_8201C2E0",
+    "mr r7, r28, gRev"
+   ],
+   [
+    "reloc_target",
+    "bl ??_DRndTransformable@@QAAXXZ",
+    "bl ??_DRndTransformableRemover@@QAAXXZ"
+   ],
+   [
+    "reloc_target",
+    "lis r10, lbl_8201C2E0",
+    "lis r10, gRev"
+   ],
+   [
+    "reloc_target",
+    "addi r27, r10, lbl_8201C2E0",
+    "addi r28, r10, gRev"
+   ],
+   [
+    "reloc_target",
+    "mr r7, r27, lbl_8201C2E0",
+    "mr r7, r28, gRev"
+   ],
+   [
+    "reloc_target",
+    "addi r7, r27, 0x4, lbl_8201C2E0",
+    "addi r7, r28, 0x4, gAltRev"
+   ],
+   [
+    "reloc_target",
+    "bl ??_DRndTransformable@@QAAXXZ",
+    "bl ??_DRndTransformableRemover@@QAAXXZ"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "reloc_target",
+    "bl ??_DRndTransformable@@QAAXXZ",
+    "bl ??_DRndTransformableRemover@@QAAXXZ"
+   ],
+   [
+    "reloc_target",
+    "bl ??_DRndTransformable@@QAAXXZ",
+    "bl ??_DRndTransformableRemover@@QAAXXZ"
+   ]
+  ],
+  "cats_kept": {
+   "reloc_target": 2
+  },
+  "severity_kept": 20,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?GetDisabledCount@HamNavList@@ABAHH@Z",
+  "unit": "default/system/hamobj/HamNavList",
+  "raw": 98.75,
+  "norm": 98.75,
+  "surface": {
+   "reg": 9
+  },
+  "cats": {
+   "reloc_target": 6
+  },
+  "other_mt": {},
+  "severity": 60,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "reloc_target",
+    "bl merged_Get0x20",
+    "bl ?Provider@UIListState@@QBAPAVUIListProvider@@XZ"
+   ],
+   [
+    "reloc_target",
+    "bl ?gathering@CUgtFilter@NUISPEECH@@QAA_NXZ",
+    "bl ?IsScrolling@UIListState@@QBA_NXZ"
+   ],
+   [
+    "reloc_target",
+    "bl merged_Get0x20",
+    "bl ?Provider@UIListState@@QBAPAVUIListProvider@@XZ"
+   ],
+   [
+    "reloc_target",
+    "bl ?gathering@CUgtFilter@NUISPEECH@@QAA_NXZ",
+    "bl ?IsScrolling@UIListState@@QBA_NXZ"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "reloc_target",
+    "bl ?gathering@CUgtFilter@NUISPEECH@@QAA_NXZ",
+    "bl ?IsScrolling@UIListState@@QBA_NXZ"
+   ],
+   [
+    "reloc_target",
+    "bl ?gathering@CUgtFilter@NUISPEECH@@QAA_NXZ",
+    "bl ?IsScrolling@UIListState@@QBA_NXZ"
+   ]
+  ],
+  "cats_kept": {
+   "reloc_target": 2
+  },
+  "severity_kept": 20,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?Poll@AccomplishmentManager@@QAAXXZ",
+  "unit": "default/lazer/meta_ham/AccomplishmentManager",
+  "raw": 99.117645,
+  "norm": 99.117645,
+  "surface": {
+   "reg": 4
+  },
+  "cats": {
+   "reloc_target": 4
+  },
+  "other_mt": {},
+  "severity": 40,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "reloc_target",
+    "bl merged_828DC218",
+    "bl ?GetSignedInProfiles@ProfileMgr@@QAA?AV?$vector@PAVHamProfile@@V?$StlNodeAlloc@PAVHamProfile@@@stlpmtx_std@@@stlpmtx_std@@XZ"
+   ],
+   [
+    "reloc_target",
+    "bl ?GetAccomplishmentProgress@HamProfile@@QBAABVAccomplishmentProgress@@XZ",
+    "bl ?AccessAccomplishmentProgress@HamProfile@@QAAAAVAccomplishmentProgress@@XZ"
+   ],
+   [
+    "reloc_target",
+    "bl merged_828DC218",
+    "bl ?GetSignedInProfiles@ProfileMgr@@QAA?AV?$vector@PAVHamProfile@@V?$StlNodeAlloc@PAVHamProfile@@@stlpmtx_std@@@stlpmtx_std@@XZ"
+   ],
+   [
+    "reloc_target",
+    "bl ?GetAccomplishmentProgress@HamProfile@@QBAABVAccomplishmentProgress@@XZ",
+    "bl ?AccessAccomplishmentProgress@HamProfile@@QAAAAVAccomplishmentProgress@@XZ"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "reloc_target",
+    "bl ?GetAccomplishmentProgress@HamProfile@@QBAABVAccomplishmentProgress@@XZ",
+    "bl ?AccessAccomplishmentProgress@HamProfile@@QAAAAVAccomplishmentProgress@@XZ"
+   ],
+   [
+    "reloc_target",
+    "bl ?GetAccomplishmentProgress@HamProfile@@QBAABVAccomplishmentProgress@@XZ",
+    "bl ?AccessAccomplishmentProgress@HamProfile@@QAAAAVAccomplishmentProgress@@XZ"
+   ]
+  ],
+  "cats_kept": {
+   "reloc_target": 2
+  },
+  "severity_kept": 20,
+  "scope": "IN-lazer"
+ },
+ {
+  "symbol": "?Visualize@SkeletonViz@@QAAXABVCameraInput@@ABVBaseSkeleton@@PAV?$vector@PAVSkeletonCallback@@V?$StlNodeAlloc@PAVSkeletonCallback@@@stlpmtx_std@@@stlpmtx_std@@_N@Z",
+  "unit": "default/system/gesture/SkeletonViz",
+  "raw": 99.23837,
+  "norm": 99.23837,
+  "surface": {
+   "reg": 10,
+   "branch": 2
+  },
+  "cats": {
+   "reloc_target": 6
+  },
+  "other_mt": {},
+  "severity": 60,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "reloc_target",
+    "bl __savegprlr_21",
+    "bl __savegprlr_22"
+   ],
+   [
+    "reloc_target",
+    "bl ?what@__Named_exception@stlpmtx_std@@UBAPBDXZ",
+    "bl ?CachedFrame@CameraInput@@QBAABUSkeletonFrame@@XZ"
+   ],
+   [
+    "reloc_target",
+    "b __restgprlr_21",
+    "b __restgprlr_22"
+   ],
+   [
+    "reloc_target",
+    "bl __savegprlr_21",
+    "bl __savegprlr_22"
+   ],
+   [
+    "reloc_target",
+    "bl ?what@__Named_exception@stlpmtx_std@@UBAPBDXZ",
+    "bl ?CachedFrame@CameraInput@@QBAABUSkeletonFrame@@XZ"
+   ],
+   [
+    "reloc_target",
+    "b __restgprlr_21",
+    "b __restgprlr_22"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "reloc_target",
+    "bl ?what@__Named_exception@stlpmtx_std@@UBAPBDXZ",
+    "bl ?CachedFrame@CameraInput@@QBAABUSkeletonFrame@@XZ"
+   ],
+   [
+    "reloc_target",
+    "bl ?what@__Named_exception@stlpmtx_std@@UBAPBDXZ",
+    "bl ?CachedFrame@CameraInput@@QBAABUSkeletonFrame@@XZ"
+   ]
+  ],
+  "cats_kept": {
+   "reloc_target": 2
+  },
+  "severity_kept": 20,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?Poll@ProfileMgr@@QAAXXZ",
+  "unit": "default/lazer/meta_ham/ProfileMgr",
+  "raw": 98.53571,
+  "norm": 98.53571,
+  "surface": {
+   "reg": 10
+  },
+  "cats": {
+   "reloc_target": 4,
+   "pool": 2
+  },
+  "other_mt": {},
+  "severity": 40,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "reloc_target",
+    "lis r11, lbl_8210E3D0",
+    "lis r11, __real@447a0000"
+   ],
+   [
+    "reloc_target",
+    "lfs f0, lbl_8210E3D0, r11",
+    "lfs f0, __real@447a0000, r11"
+   ],
+   [
+    "reloc_target",
+    "bl ?Parent@Node@?$ObjPtrVec@VRndTransformable@@VObjectDir@@@@UBAPAVObjRefOwner@@XZ",
+    "bl ?GetPadNum@Profile@@QBAHXZ"
+   ],
+   [
+    "reloc_target",
+    "bl ?Parent@Node@?$ObjPtrVec@VRndTransformable@@VObjectDir@@@@UBAPAVObjRefOwner@@XZ",
+    "bl ?GetPadNum@Profile@@QBAHXZ"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "reloc_target",
+    "bl ?Parent@Node@?$ObjPtrVec@VRndTransformable@@VObjectDir@@@@UBAPAVObjRefOwner@@XZ",
+    "bl ?GetPadNum@Profile@@QBAHXZ"
+   ],
+   [
+    "reloc_target",
+    "bl ?Parent@Node@?$ObjPtrVec@VRndTransformable@@VObjectDir@@@@UBAPAVObjRefOwner@@XZ",
+    "bl ?GetPadNum@Profile@@QBAHXZ"
+   ]
+  ],
+  "cats_kept": {
+   "reloc_target": 2
+  },
+  "severity_kept": 20,
+  "scope": "IN-lazer"
+ },
+ {
+  "symbol": "??1DataArray@@AAA@XZ",
+  "unit": "default/system/obj/DataArray",
+  "raw": 99.51613,
+  "norm": 99.51613,
+  "surface": {
+   "reg": 2
+  },
+  "cats": {
+   "reloc_target": 2
+  },
+  "other_mt": {},
+  "severity": 20,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "reloc_target",
+    "bl ??_GVocalEvent@MidiParser@@QAAPAXI@Z",
+    "bl ??_GDataNode@@QAAPAXI@Z"
+   ],
+   [
+    "reloc_target",
+    "bl ??_GVocalEvent@MidiParser@@QAAPAXI@Z",
+    "bl ??_GDataNode@@QAAPAXI@Z"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "reloc_target",
+    "bl ??_GVocalEvent@MidiParser@@QAAPAXI@Z",
+    "bl ??_GDataNode@@QAAPAXI@Z"
+   ],
+   [
+    "reloc_target",
+    "bl ??_GVocalEvent@MidiParser@@QAAPAXI@Z",
+    "bl ??_GDataNode@@QAAPAXI@Z"
+   ]
+  ],
+  "cats_kept": {
+   "reloc_target": 2
+  },
+  "severity_kept": 20,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?OnUpload@KinectSharePanel@@AAA?AVDataNode@@PAVDataArray@@@Z",
+  "unit": "default/lazer/meta_ham/KinectSharePanel",
+  "raw": 98.51643,
+  "norm": 98.821594,
+  "surface": {
+   "reg": 10
+  },
+  "cats": {
+   "reloc_target": 14
+  },
+  "other_mt": {},
+  "severity": 140,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "reloc_target",
+    "lwz r11, lbl_8311A960, r29",
+    "lwz r11, ?$S8@?M@??OnUpload@KinectSharePanel@@AAA?AVDataNode@@PAVDataArray@@@Z@4IA, r29"
+   ],
+   [
+    "reloc_target",
+    "stw r11, lbl_8311A960, r29",
+    "stw r11, ?$S8@?M@??OnUpload@KinectSharePanel@@AAA?AVDataNode@@PAVDataArray@@@Z@4IA, r29"
+   ],
+   [
+    "reloc_target",
+    "bl ?Parent@Node@?$ObjPtrVec@VRndTransformable@@VObjectDir@@@@UBAPAVObjRefOwner@@XZ",
+    "bl ?GetPadNum@Profile@@QBAHXZ"
+   ],
+   [
+    "reloc_target",
+    "lwz r11, lbl_8311A960, r29",
+    "lwz r11, ?$S8@?M@??OnUpload@KinectSharePanel@@AAA?AVDataNode@@PAVDataArray@@@Z@4IA, r29"
+   ],
+   [
+    "reloc_target",
+    "stw r11, lbl_8311A960, r29",
+    "stw r11, ?$S8@?M@??OnUpload@KinectSharePanel@@AAA?AVDataNode@@PAVDataArray@@@Z@4IA, r29"
+   ],
+   [
+    "reloc_target",
+    "bl ?Parent@Node@?$ObjPtrVec@VRndTransformable@@VObjectDir@@@@UBAPAVObjRefOwner@@XZ",
+    "bl ?GetPadNum@Profile@@QBAHXZ"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "reloc_target",
+    "bl ?Parent@Node@?$ObjPtrVec@VRndTransformable@@VObjectDir@@@@UBAPAVObjRefOwner@@XZ",
+    "bl ?GetPadNum@Profile@@QBAHXZ"
+   ],
+   [
+    "reloc_target",
+    "bl ?Parent@Node@?$ObjPtrVec@VRndTransformable@@VObjectDir@@@@UBAPAVObjRefOwner@@XZ",
+    "bl ?GetPadNum@Profile@@QBAHXZ"
+   ]
+  ],
+  "cats_kept": {
+   "reloc_target": 2
+  },
+  "severity_kept": 20,
+  "scope": "IN-lazer"
+ },
+ {
+  "symbol": "?DrawGestureMgr@@YAXAAVGestureMgr@@W4BufferType@LiveCameraInput@@M@Z",
+  "unit": "default/system/gesture/DrawUtl",
+  "raw": 99.29578,
+  "norm": 99.43662,
+  "surface": {
+   "reg": 4
+  },
+  "cats": {
+   "reloc_target": 2
+  },
+  "other_mt": {},
+  "severity": 20,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "reloc_target",
+    "bl ?SongBlock@SongMetadata@@QBAPAVSongInfo@@XZ",
+    "bl ?GetLiveCameraInput@GestureMgr@@QBAPAVLiveCameraInput@@XZ"
+   ],
+   [
+    "reloc_target",
+    "bl ?SongBlock@SongMetadata@@QBAPAVSongInfo@@XZ",
+    "bl ?GetLiveCameraInput@GestureMgr@@QBAPAVLiveCameraInput@@XZ"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "reloc_target",
+    "bl ?SongBlock@SongMetadata@@QBAPAVSongInfo@@XZ",
+    "bl ?GetLiveCameraInput@GestureMgr@@QBAPAVLiveCameraInput@@XZ"
+   ],
+   [
+    "reloc_target",
+    "bl ?SongBlock@SongMetadata@@QBAPAVSongInfo@@XZ",
+    "bl ?GetLiveCameraInput@GestureMgr@@QBAPAVLiveCameraInput@@XZ"
+   ]
+  ],
+  "cats_kept": {
+   "reloc_target": 2
+  },
+  "severity_kept": 20,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?PopulatePlaylistSongProvider@MetaPerformer@@QBAXPAVHamNavProvider@@@Z",
+  "unit": "default/lazer/meta_ham/MetaPerformer",
+  "raw": 99.23077,
+  "norm": 99.32692,
+  "surface": {
+   "reg": 9
+  },
+  "cats": {
+   "reloc_target": 12
+  },
+  "other_mt": {},
+  "severity": 120,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "reloc_target",
+    "bl __savegprlr",
+    "bl __savegprlr_14"
+   ],
+   [
+    "reloc_target",
+    "bl ?GetRequest@HttpReqCurl@@UAAPAXXZ",
+    "bl ?Title@HamSongMetadata@@QBAPBDXZ"
+   ],
+   [
+    "reloc_target",
+    "lwz r11, lbl_83118EF4, r20",
+    "lwz r11, ?$S20@?O@??PopulatePlaylistSongProvider@MetaPerformer@@QBAXPAVHamNavProvider@@@Z@4IA, r20"
+   ],
+   [
+    "reloc_target",
+    "stw r11, lbl_83118EF4, r20",
+    "stw r11, ?$S20@?O@??PopulatePlaylistSongProvider@MetaPerformer@@QBAXPAVHamNavProvider@@@Z@4IA, r20"
+   ],
+   [
+    "reloc_target",
+    "lwz r3, 0x0, r22, lbl_83118EF8",
+    "lwz r3, 0x0, r22, ?song_unknown@?O@??PopulatePlaylistSongProvider@MetaPerformer@@QBAXPAVHamNavProvider@@@Z@4VSymbol@@A"
+   ],
+   [
+    "reloc_target",
+    "b __restgprlr",
+    "b __restgprlr_14"
+   ],
+   [
+    "reloc_target",
+    "bl __savegprlr",
+    "bl __savegprlr_14"
+   ],
+   [
+    "reloc_target",
+    "bl ?GetRequest@HttpReqCurl@@UAAPAXXZ",
+    "bl ?Title@HamSongMetadata@@QBAPBDXZ"
+   ],
+   [
+    "reloc_target",
+    "lwz r11, lbl_83118EF4, r20",
+    "lwz r11, ?$S20@?O@??PopulatePlaylistSongProvider@MetaPerformer@@QBAXPAVHamNavProvider@@@Z@4IA, r20"
+   ],
+   [
+    "reloc_target",
+    "stw r11, lbl_83118EF4, r20",
+    "stw r11, ?$S20@?O@??PopulatePlaylistSongProvider@MetaPerformer@@QBAXPAVHamNavProvider@@@Z@4IA, r20"
+   ],
+   [
+    "reloc_target",
+    "lwz r3, 0x0, r22, lbl_83118EF8",
+    "lwz r3, 0x0, r22, ?song_unknown@?O@??PopulatePlaylistSongProvider@MetaPerformer@@QBAXPAVHamNavProvider@@@Z@4VSymbol@@A"
+   ],
+   [
+    "reloc_target",
+    "b __restgprlr",
+    "b __restgprlr_14"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "reloc_target",
+    "bl ?GetRequest@HttpReqCurl@@UAAPAXXZ",
+    "bl ?Title@HamSongMetadata@@QBAPBDXZ"
+   ],
+   [
+    "reloc_target",
+    "bl ?GetRequest@HttpReqCurl@@UAAPAXXZ",
+    "bl ?Title@HamSongMetadata@@QBAPBDXZ"
+   ]
+  ],
+  "cats_kept": {
+   "reloc_target": 2
+  },
+  "severity_kept": 20,
+  "scope": "IN-lazer"
+ },
+ {
+  "symbol": "?Load@CamShot@@UAAXAAVBinStream@@@Z",
+  "unit": "default/system/world/CameraShot",
+  "raw": 99.59466,
+  "norm": 99.618935,
+  "surface": {},
+  "cats": {
+   "reloc_target": 20
+  },
+  "other_mt": {},
+  "severity": 200,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "reloc_target",
+    "lis r10, lbl_820E34C8",
+    "lis r10, gRev"
+   ],
+   [
+    "reloc_target",
+    "addi r28, r10, lbl_820E34C8",
+    "addi r28, r10, gRev"
+   ],
+   [
+    "reloc_target",
+    "mr r7, r28, lbl_820E34C8",
+    "mr r7, r28, gRev"
+   ],
+   [
+    "reloc_target",
+    "bl ??$?5M@@YAAAVBinStream@@AAV0@AAV?$Key@M@@@Z",
+    "bl ??5@YAAAVBinStream@@AAV0@AAVVector2@@@Z"
+   ],
+   [
+    "reloc_target",
+    "lwz r11, lbl_83116910, r10",
+    "lwz r11, ?$S5@?JP@??Load@CamShot@@UAAXAAVBinStream@@@Z@4IA, r10"
+   ],
+   [
+    "reloc_target",
+    "stw r11, lbl_83116910, r10",
+    "stw r11, ?$S5@?JP@??Load@CamShot@@UAAXAAVBinStream@@@Z@4IA, r10"
+   ],
+   [
+    "reloc_target",
+    "lwz r11, 0x0, r29, lbl_8311690C",
+    "lwz r11, 0x0, r29, ?none@?JP@??Load@CamShot@@UAAXAAVBinStream@@@Z@4VSymbol@@A"
+   ],
+   [
+    "reloc_target",
+    "lis r10, lbl_820E34C8",
+    "lis r10, gRev"
+   ],
+   [
+    "reloc_target",
+    "addi r28, r10, lbl_820E34C8",
+    "addi r28, r10, gRev"
+   ],
+   [
+    "reloc_target",
+    "mr r7, r28, lbl_820E34C8",
+    "mr r7, r28, gRev"
+   ],
+   [
+    "reloc_target",
+    "addi r7, r28, 0x4, lbl_820E34C8",
+    "addi r7, r28, 0x4, gAltRev"
+   ],
+   [
+    "reloc_target",
+    "bl ??$?5M@@YAAAVBinStream@@AAV0@AAV?$Key@M@@@Z",
+    "bl ??5@YAAAVBinStream@@AAV0@AAVVector2@@@Z"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "reloc_target",
+    "bl ??$?5M@@YAAAVBinStream@@AAV0@AAV?$Key@M@@@Z",
+    "bl ??5@YAAAVBinStream@@AAV0@AAVVector2@@@Z"
+   ],
+   [
+    "reloc_target",
+    "bl ??$?5M@@YAAAVBinStream@@AAV0@AAV?$Key@M@@@Z",
+    "bl ??5@YAAAVBinStream@@AAV0@AAVVector2@@@Z"
+   ]
+  ],
+  "cats_kept": {
+   "reloc_target": 2
+  },
+  "severity_kept": 20,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?DrawSnapshot@@YAXABVGestureMgr@@H@Z",
+  "unit": "default/system/gesture/DrawUtl",
+  "raw": 98.78049,
+  "norm": 99.02439,
+  "surface": {
+   "branch": 1
+  },
+  "cats": {
+   "reloc_target": 4
+  },
+  "other_mt": {},
+  "severity": 40,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "reloc_target",
+    "bl ?SongBlock@SongMetadata@@QBAPAVSongInfo@@XZ",
+    "bl ?GetLiveCameraInput@GestureMgr@@QBAPAVLiveCameraInput@@XZ"
+   ],
+   [
+    "reloc_target",
+    "bl ?SongBlock@SongMetadata@@QBAPAVSongInfo@@XZ",
+    "bl ?GetLiveCameraInput@GestureMgr@@QBAPAVLiveCameraInput@@XZ"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "reloc_target",
+    "bl ?SongBlock@SongMetadata@@QBAPAVSongInfo@@XZ",
+    "bl ?GetLiveCameraInput@GestureMgr@@QBAPAVLiveCameraInput@@XZ"
+   ],
+   [
+    "reloc_target",
+    "bl ?SongBlock@SongMetadata@@QBAPAVSongInfo@@XZ",
+    "bl ?GetLiveCameraInput@GestureMgr@@QBAPAVLiveCameraInput@@XZ"
+   ]
+  ],
+  "cats_kept": {
+   "reloc_target": 2
+  },
+  "severity_kept": 20,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?IsAvailable@AccomplishmentManager@@QBA_NVSymbol@@@Z",
+  "unit": "default/lazer/meta_ham/AccomplishmentManager",
+  "raw": 99.17647,
+  "norm": 99.17647,
+  "surface": {
+   "reg": 2
+  },
+  "cats": {
+   "reloc_target": 2
+  },
+  "other_mt": {},
+  "severity": 20,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "reloc_target",
+    "bl ?GetMaxProcess@CFEWaveStreamDecoder@NUISPEECH@@UAAIXZ",
+    "bl ?GetDynamicPrereqsNumSongs@Accomplishment@@QBAHXZ"
+   ],
+   [
+    "reloc_target",
+    "bl ?GetMaxProcess@CFEWaveStreamDecoder@NUISPEECH@@UAAIXZ",
+    "bl ?GetDynamicPrereqsNumSongs@Accomplishment@@QBAHXZ"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "reloc_target",
+    "bl ?GetMaxProcess@CFEWaveStreamDecoder@NUISPEECH@@UAAIXZ",
+    "bl ?GetDynamicPrereqsNumSongs@Accomplishment@@QBAHXZ"
+   ],
+   [
+    "reloc_target",
+    "bl ?GetMaxProcess@CFEWaveStreamDecoder@NUISPEECH@@UAAIXZ",
+    "bl ?GetDynamicPrereqsNumSongs@Accomplishment@@QBAHXZ"
+   ]
+  ],
+  "cats_kept": {
+   "reloc_target": 2
+  },
+  "severity_kept": 20,
+  "scope": "IN-lazer"
+ },
+ {
+  "symbol": "?Load@WorldCrowd@@UAAXAAVBinStream@@@Z",
+  "unit": "default/system/world/Crowd",
+  "raw": 99.72149,
+  "norm": 99.72149,
+  "surface": {
+   "reg": 5
+  },
+  "cats": {
+   "reloc_target": 10
+  },
+  "other_mt": {},
+  "severity": 100,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "reloc_target",
+    "lis r10, lbl_820E8570",
+    "lis r10, gRev"
+   ],
+   [
+    "reloc_target",
+    "addi r29, r10, lbl_820E8570",
+    "addi r29, r10, gRev"
+   ],
+   [
+    "reloc_target",
+    "mr r7, r29, lbl_820E8570",
+    "mr r7, r29, gRev"
+   ],
+   [
+    "reloc_target",
+    "bl ?OnGetOccluded@CamShot@@IAA?AVDataNode@@PAVDataArray@@@Z",
+    "bl ?OnRebuild@WorldCrowd@@IAA?AVDataNode@@PAVDataArray@@@Z"
+   ],
+   [
+    "reloc_target",
+    "lis r10, lbl_820E8570",
+    "lis r10, gRev"
+   ],
+   [
+    "reloc_target",
+    "addi r29, r10, lbl_820E8570",
+    "addi r29, r10, gRev"
+   ],
+   [
+    "reloc_target",
+    "mr r7, r29, lbl_820E8570",
+    "mr r7, r29, gRev"
+   ],
+   [
+    "reloc_target",
+    "addi r7, r29, 0x4, lbl_820E8570",
+    "addi r7, r29, 0x4, gAltRev"
+   ],
+   [
+    "reloc_target",
+    "bl ?OnGetOccluded@CamShot@@IAA?AVDataNode@@PAVDataArray@@@Z",
+    "bl ?OnRebuild@WorldCrowd@@IAA?AVDataNode@@PAVDataArray@@@Z"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "reloc_target",
+    "bl ?OnGetOccluded@CamShot@@IAA?AVDataNode@@PAVDataArray@@@Z",
+    "bl ?OnRebuild@WorldCrowd@@IAA?AVDataNode@@PAVDataArray@@@Z"
+   ],
+   [
+    "reloc_target",
+    "bl ?OnGetOccluded@CamShot@@IAA?AVDataNode@@PAVDataArray@@@Z",
+    "bl ?OnRebuild@WorldCrowd@@IAA?AVDataNode@@PAVDataArray@@@Z"
+   ]
+  ],
+  "cats_kept": {
+   "reloc_target": 2
+  },
+  "severity_kept": 20,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?Load@Spotlight@@UAAXAAVBinStream@@@Z",
+  "unit": "default/system/world/Spotlight",
+  "raw": 99.71849,
+  "norm": 99.71849,
+  "surface": {},
+  "cats": {
+   "reloc_target": 18
+  },
+  "other_mt": {},
+  "severity": 180,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "reloc_target",
+    "lis r10, lbl_820E68F0",
+    "lis r10, gRev"
+   ],
+   [
+    "reloc_target",
+    "addi r28, r10, lbl_820E68F0",
+    "addi r28, r10, gRev"
+   ],
+   [
+    "reloc_target",
+    "mr r7, r28, lbl_820E68F0",
+    "mr r7, r28, gRev"
+   ],
+   [
+    "reloc_target",
+    "bl merged_SetObjConcrete",
+    "bl ?SetObjConcrete@?$ObjRefConcrete@VRndMat@@VObjectDir@@@@QAAXPAVRndMat@@@Z"
+   ],
+   [
+    "reloc_target",
+    "bl ??$?5M@@YAAAVBinStream@@AAV0@AAV?$Key@M@@@Z",
+    "bl ??5@YAAAVBinStream@@AAV0@AAVVector2@@@Z"
+   ],
+   [
+    "reloc_target",
+    "lis r10, lbl_820E68F0",
+    "lis r10, gRev"
+   ],
+   [
+    "reloc_target",
+    "addi r28, r10, lbl_820E68F0",
+    "addi r28, r10, gRev"
+   ],
+   [
+    "reloc_target",
+    "mr r7, r28, lbl_820E68F0",
+    "mr r7, r28, gRev"
+   ],
+   [
+    "reloc_target",
+    "addi r7, r28, 0x4, lbl_820E68F0",
+    "addi r7, r28, 0x4, gAltRev"
+   ],
+   [
+    "reloc_target",
+    "bl merged_SetObjConcrete",
+    "bl ?SetObjConcrete@?$ObjRefConcrete@VRndMat@@VObjectDir@@@@QAAXPAVRndMat@@@Z"
+   ],
+   [
+    "reloc_target",
+    "bl ??$?5M@@YAAAVBinStream@@AAV0@AAV?$Key@M@@@Z",
+    "bl ??5@YAAAVBinStream@@AAV0@AAVVector2@@@Z"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "reloc_target",
+    "bl ??$?5M@@YAAAVBinStream@@AAV0@AAV?$Key@M@@@Z",
+    "bl ??5@YAAAVBinStream@@AAV0@AAVVector2@@@Z"
+   ],
+   [
+    "reloc_target",
+    "bl ??$?5M@@YAAAVBinStream@@AAV0@AAV?$Key@M@@@Z",
+    "bl ??5@YAAAVBinStream@@AAV0@AAVVector2@@@Z"
+   ]
+  ],
+  "cats_kept": {
+   "reloc_target": 2
+  },
+  "severity_kept": 20,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?Save@FxSend@@UAAXAAVBinStream@@@Z",
+  "unit": "default/system/synth/FxSend",
+  "raw": 99.9054,
+  "norm": 99.9054,
+  "surface": {},
+  "cats": {
+   "constant": 4,
+   "reloc_target": 2
+  },
+  "other_mt": {},
+  "severity": 40,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "constant",
+    "lis r11, 0x8",
+    "lis r11, 0x7"
+   ],
+   [
+    "constant",
+    "ori r11, r11, 0x7",
+    "ori r11, r11, 0x8"
+   ],
+   [
+    "reloc_target",
+    "bl ??$?6VCharEyeDartRuleset@@@@YAAAVBinStream@@AAV0@ABV?$ObjRefConcrete@VCharEyeDartRuleset@@VObjectDir@@@@@Z",
+    "bl ??$?6VFxSend@@@@YAAAVBinStream@@AAV0@ABV?$ObjOwnerPtr@VFxSend@@@@@Z"
+   ],
+   [
+    "constant",
+    "lis r11, 0x8",
+    "lis r11, 0x7"
+   ],
+   [
+    "constant",
+    "ori r11, r11, 0x7",
+    "ori r11, r11, 0x8"
+   ],
+   [
+    "reloc_target",
+    "bl ??$?6VCharEyeDartRuleset@@@@YAAAVBinStream@@AAV0@ABV?$ObjRefConcrete@VCharEyeDartRuleset@@VObjectDir@@@@@Z",
+    "bl ??$?6VFxSend@@@@YAAAVBinStream@@AAV0@ABV?$ObjOwnerPtr@VFxSend@@@@@Z"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "constant",
+    "lis r11, 0x8",
+    "lis r11, 0x7"
+   ],
+   [
+    "constant",
+    "ori r11, r11, 0x7",
+    "ori r11, r11, 0x8"
+   ],
+   [
+    "constant",
+    "lis r11, 0x8",
+    "lis r11, 0x7"
+   ],
+   [
+    "constant",
+    "ori r11, r11, 0x7",
+    "ori r11, r11, 0x8"
+   ]
+  ],
+  "cats_kept": {
+   "constant": 4
+  },
+  "severity_kept": 20,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?CacheObjects@BustAMovePanel@@AAAXXZ",
+  "unit": "default/lazer/game/BustAMovePanel",
+  "raw": 99.48409,
+  "norm": 99.48409,
+  "surface": {
+   "reg": 2
+  },
+  "cats": {
+   "reloc_target": 4
+  },
+  "other_mt": {},
+  "severity": 40,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "reloc_target",
+    "bl merged_SetObjConcrete",
+    "bl ?SetObjConcrete@?$ObjRefConcrete@VRndTex@@VObjectDir@@@@QAAXPAVRndTex@@@Z"
+   ],
+   [
+    "reloc_target",
+    "bl ?GetContainerName@MemcardXbox@@UAAPBDXZ",
+    "bl ?GetColor@UIColor@@QBAABVColor@Hmx@@XZ"
+   ],
+   [
+    "reloc_target",
+    "bl merged_SetObjConcrete",
+    "bl ?SetObjConcrete@?$ObjRefConcrete@VRndTex@@VObjectDir@@@@QAAXPAVRndTex@@@Z"
+   ],
+   [
+    "reloc_target",
+    "bl ?GetContainerName@MemcardXbox@@UAAPBDXZ",
+    "bl ?GetColor@UIColor@@QBAABVColor@Hmx@@XZ"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "reloc_target",
+    "bl ?GetContainerName@MemcardXbox@@UAAPBDXZ",
+    "bl ?GetColor@UIColor@@QBAABVColor@Hmx@@XZ"
+   ],
+   [
+    "reloc_target",
+    "bl ?GetContainerName@MemcardXbox@@UAAPBDXZ",
+    "bl ?GetColor@UIColor@@QBAABVColor@Hmx@@XZ"
+   ]
+  ],
+  "cats_kept": {
+   "reloc_target": 2
+  },
+  "severity_kept": 20,
+  "scope": "IN-lazer"
+ },
+ {
+  "symbol": "?Generate@Spotlight@@IAAXXZ",
+  "unit": "default/system/world/Spotlight",
+  "raw": 99.22727,
+  "norm": 99.22727,
+  "surface": {
+   "reg": 7
+  },
+  "cats": {
+   "member": 2
+  },
+  "other_mt": {},
+  "severity": 16,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "member",
+    "lbz r11, 0x4, r30",
+    "lbz r11, 0x1f8, r31"
+   ],
+   [
+    "member",
+    "lbz r11, 0x4, r30",
+    "lbz r11, 0x1f8, r31"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "member",
+    "lbz r11, 0x4, r30",
+    "lbz r11, 0x1f8, r31"
+   ],
+   [
+    "member",
+    "lbz r11, 0x4, r30",
+    "lbz r11, 0x1f8, r31"
+   ]
+  ],
+  "cats_kept": {
+   "member": 2
+  },
+  "severity_kept": 16,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?SetProperty@PropertyTask@@IAAXAAVDataNode@@@Z",
+  "unit": "default/system/flow/FlowSetProperty",
+  "raw": 99.46154,
+  "norm": 99.46154,
+  "surface": {
+   "reg": 1
+  },
+  "cats": {
+   "member": 2
+  },
+  "other_mt": {},
+  "severity": 16,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "member",
+    "lwz r11, 0x78, r3",
+    "lwz r11, 0x4, r4"
+   ],
+   [
+    "member",
+    "lwz r11, 0x78, r3",
+    "lwz r11, 0x4, r4"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "member",
+    "lwz r11, 0x78, r3",
+    "lwz r11, 0x4, r4"
+   ],
+   [
+    "member",
+    "lwz r11, 0x78, r3",
+    "lwz r11, 0x4, r4"
+   ]
+  ],
+  "cats_kept": {
+   "member": 2
+  },
+  "severity_kept": 16,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?PollLoaders@NetCacheMgr@@IAAXXZ",
+  "unit": "default/system/utl/NetCacheMgr",
+  "raw": 99.1647,
+  "norm": 99.1647,
+  "surface": {
+   "reg": 1
+  },
+  "cats": {
+   "member": 2
+  },
+  "other_mt": {},
+  "severity": 16,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "member",
+    "lwz r11, 0x8, r31",
+    "lwz r11, 0x10, r30"
+   ],
+   [
+    "member",
+    "lwz r11, 0x8, r31",
+    "lwz r11, 0x10, r30"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "member",
+    "lwz r11, 0x8, r31",
+    "lwz r11, 0x10, r30"
+   ],
+   [
+    "member",
+    "lwz r11, 0x8, r31",
+    "lwz r11, 0x10, r30"
+   ]
+  ],
+  "cats_kept": {
+   "member": 2
+  },
+  "severity_kept": 16,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?PollDeps@CharUpperTwist@@UAAXAAV?$list@PAVObject@Hmx@@V?$StlNodeAlloc@PAVObject@Hmx@@@stlpmtx_std@@@stlpmtx_std@@0@Z",
+  "unit": "default/system/char/CharUpperTwist",
+  "raw": 99.94546,
+  "norm": 99.94546,
+  "surface": {},
+  "cats": {
+   "member": 2
+  },
+  "other_mt": {},
+  "severity": 16,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "member",
+    "lwz r11, 0x14, r31",
+    "lwz r11, 0x28, r31"
+   ],
+   [
+    "member",
+    "lwz r11, 0x28, r31",
+    "lwz r11, 0x3c, r31"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "member",
+    "lwz r11, 0x14, r31",
+    "lwz r11, 0x28, r31"
+   ],
+   [
+    "member",
+    "lwz r11, 0x28, r31",
+    "lwz r11, 0x3c, r31"
+   ]
+  ],
+  "cats_kept": {
+   "member": 2
+  },
+  "severity_kept": 16,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?ApplyLoop@MoggClip@@AAAX_NHH@Z",
+  "unit": "default/system/synth/MoggClip",
+  "raw": 99.96296,
+  "norm": 99.96296,
+  "surface": {},
+  "cats": {
+   "member": 2
+  },
+  "other_mt": {},
+  "severity": 16,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "member",
+    "lwz r11, 0xdc, r11",
+    "lwz r11, 0xd8, r11"
+   ],
+   [
+    "member",
+    "lwz r11, 0xdc, r11",
+    "lwz r11, 0xd8, r11"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "member",
+    "lwz r11, 0xdc, r11",
+    "lwz r11, 0xd8, r11"
+   ],
+   [
+    "member",
+    "lwz r11, 0xdc, r11",
+    "lwz r11, 0xd8, r11"
+   ]
+  ],
+  "cats_kept": {
+   "member": 2
+  },
+  "severity_kept": 16,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?IsSuccess@XboxEnumeration@@UBA_NXZ",
+  "unit": "default/system/meta/StoreEnumeration",
+  "raw": 99.27586,
+  "norm": 99.27586,
+  "surface": {},
+  "cats": {
+   "member": 2
+  },
+  "other_mt": {},
+  "severity": 16,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "member",
+    "lbz r3, 0x1c, r31",
+    "lbz r3, 0x24, r31"
+   ],
+   [
+    "member",
+    "lbz r3, 0x1c, r31",
+    "lbz r3, 0x24, r31"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "member",
+    "lbz r3, 0x1c, r31",
+    "lbz r3, 0x24, r31"
+   ],
+   [
+    "member",
+    "lbz r3, 0x1c, r31",
+    "lbz r3, 0x24, r31"
+   ]
+  ],
+  "cats_kept": {
+   "member": 2
+  },
+  "severity_kept": 16,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?OnSetHeightFromText@UILabel@@IAA?AVDataNode@@PAVDataArray@@@Z",
+  "unit": "default/system/ui/UILabel",
+  "raw": 99.589745,
+  "norm": 99.589745,
+  "surface": {},
+  "cats": {
+   "member": 2
+  },
+  "other_mt": {},
+  "severity": 16,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "member",
+    "lwz r4, 0xc4, r31",
+    "lwz r4, 0x90, r31"
+   ],
+   [
+    "member",
+    "lwz r4, 0xc4, r31",
+    "lwz r4, 0x90, r31"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "member",
+    "lwz r4, 0xc4, r31",
+    "lwz r4, 0x90, r31"
+   ],
+   [
+    "member",
+    "lwz r4, 0xc4, r31",
+    "lwz r4, 0x90, r31"
+   ]
+  ],
+  "cats_kept": {
+   "member": 2
+  },
+  "severity_kept": 16,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?Suspend@Splash@@QAAXXZ",
+  "unit": "default/system/movie/Splash",
+  "raw": 99.52041,
+  "norm": 99.52041,
+  "surface": {},
+  "cats": {
+   "member": 4
+  },
+  "other_mt": {},
+  "severity": 32,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "member",
+    "lwz r11, 0x13c, r11",
+    "lwz r11, 0x138, r11"
+   ],
+   [
+    "member",
+    "lwz r11, 0x13c, r11",
+    "lwz r11, 0x138, r11"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "member",
+    "lwz r11, 0x13c, r11",
+    "lwz r11, 0x138, r11"
+   ],
+   [
+    "member",
+    "lwz r11, 0x13c, r11",
+    "lwz r11, 0x138, r11"
+   ]
+  ],
+  "cats_kept": {
+   "member": 2
+  },
+  "severity_kept": 16,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?Save@MoggClip@@UAAXAAVBinStream@@@Z",
+  "unit": "default/system/synth/MoggClip",
+  "raw": 99.88461,
+  "norm": 99.88461,
+  "surface": {},
+  "cats": {
+   "member": 2
+  },
+  "other_mt": {},
+  "severity": 16,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "member",
+    "lfs f0, 0x40, r30",
+    "lfs f0, 0x44, r30"
+   ],
+   [
+    "member",
+    "lfs f0, 0x40, r30",
+    "lfs f0, 0x44, r30"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "member",
+    "lfs f0, 0x40, r30",
+    "lfs f0, 0x44, r30"
+   ],
+   [
+    "member",
+    "lfs f0, 0x40, r30",
+    "lfs f0, 0x44, r30"
+   ]
+  ],
+  "cats_kept": {
+   "member": 2
+  },
+  "severity_kept": 16,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?Draw@DrawPtrVec@@QBAXXZ",
+  "unit": "default/system/char/Character",
+  "raw": 99.97436,
+  "norm": 99.97436,
+  "surface": {},
+  "cats": {
+   "member": 2
+  },
+  "other_mt": {},
+  "severity": 16,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "member",
+    "lwz r11, 0x14, r11",
+    "lwz r11, 0x18, r11"
+   ],
+   [
+    "member",
+    "lwz r11, 0x14, r11",
+    "lwz r11, 0x18, r11"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "member",
+    "lwz r11, 0x14, r11",
+    "lwz r11, 0x18, r11"
+   ],
+   [
+    "member",
+    "lwz r11, 0x14, r11",
+    "lwz r11, 0x18, r11"
+   ]
+  ],
+  "cats_kept": {
+   "member": 2
+  },
+  "severity_kept": 16,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?Resume@Splash@@QAAXXZ",
+  "unit": "default/system/movie/Splash",
+  "raw": 99.349205,
+  "norm": 99.349205,
+  "surface": {},
+  "cats": {
+   "member": 4
+  },
+  "other_mt": {},
+  "severity": 32,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "member",
+    "lwz r11, 0x138, r11",
+    "lwz r11, 0x13c, r11"
+   ],
+   [
+    "member",
+    "lwz r11, 0x138, r11",
+    "lwz r11, 0x13c, r11"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "member",
+    "lwz r11, 0x138, r11",
+    "lwz r11, 0x13c, r11"
+   ],
+   [
+    "member",
+    "lwz r11, 0x138, r11",
+    "lwz r11, 0x13c, r11"
+   ]
+  ],
+  "cats_kept": {
+   "member": 2
+  },
+  "severity_kept": 16,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?Draw@UIListSubList@@UAAXABUUIListWidgetDrawState@@ABVUIListState@@ABVTransform@@W4State@UIComponent@@PAVBox@@W4DrawCommand@@@Z",
+  "unit": "default/system/ui/UIListSubList",
+  "raw": 99.98529,
+  "norm": 99.98529,
+  "surface": {},
+  "cats": {
+   "member": 2
+  },
+  "other_mt": {},
+  "severity": 16,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "member",
+    "lwz r11, 0x28, r11",
+    "lwz r11, 0x2c, r11"
+   ],
+   [
+    "member",
+    "lwz r11, 0x28, r11",
+    "lwz r11, 0x2c, r11"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "member",
+    "lwz r11, 0x28, r11",
+    "lwz r11, 0x2c, r11"
+   ],
+   [
+    "member",
+    "lwz r11, 0x28, r11",
+    "lwz r11, 0x2c, r11"
+   ]
+  ],
+  "cats_kept": {
+   "member": 2
+  },
+  "severity_kept": 16,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?EndSplasher@Splash@@QAAXXZ",
+  "unit": "default/system/movie/Splash",
+  "raw": 99.045456,
+  "norm": 99.045456,
+  "surface": {},
+  "cats": {
+   "member": 2
+  },
+  "other_mt": {},
+  "severity": 16,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "member",
+    "lwz r11, 0x13c, r11",
+    "lwz r11, 0x138, r11"
+   ],
+   [
+    "member",
+    "lwz r11, 0x13c, r11",
+    "lwz r11, 0x138, r11"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "member",
+    "lwz r11, 0x13c, r11",
+    "lwz r11, 0x138, r11"
+   ],
+   [
+    "member",
+    "lwz r11, 0x13c, r11",
+    "lwz r11, 0x138, r11"
+   ]
+  ],
+  "cats_kept": {
+   "member": 2
+  },
+  "severity_kept": 16,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?UpdateThread@Splash@@IAAXXZ",
+  "unit": "default/system/movie/Splash",
+  "raw": 99.20786,
+  "norm": 99.20786,
+  "surface": {},
+  "cats": {
+   "member": 2
+  },
+  "other_mt": {},
+  "severity": 16,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "member",
+    "lwz r11, 0x138, r11",
+    "lwz r11, 0x13c, r11"
+   ],
+   [
+    "member",
+    "lwz r11, 0x138, r11",
+    "lwz r11, 0x13c, r11"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "member",
+    "lwz r11, 0x138, r11",
+    "lwz r11, 0x13c, r11"
+   ],
+   [
+    "member",
+    "lwz r11, 0x138, r11",
+    "lwz r11, 0x13c, r11"
+   ]
+  ],
+  "cats_kept": {
+   "member": 2
+  },
+  "severity_kept": 16,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?ShowGamercard@Leaderboards@@QAA?AVSymbol@@HPAVHamProfile@@@Z",
+  "unit": "default/lazer/meta_ham/Leaderboards",
+  "raw": 98.211006,
+  "norm": 98.66972,
+  "surface": {
+   "reg": 11
+  },
+  "cats": {
+   "reloc_target": 28
+  },
+  "other_mt": {},
+  "severity": 280,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "reloc_target",
+    "addi r23, r11, lbl_83117E14",
+    "addi r24, r11, ?display_gamercard_pad_error@?1??ShowGamercard@Leaderboards@@QAA?AVSymbol@@HPAVHamProfile@@@Z@4V3@A"
+   ],
+   [
+    "reloc_target",
+    "lwz r11, lbl_83117E18, r29",
+    "lwz r11, ?$S7@?1??ShowGamercard@Leaderboards@@QAA?AVSymbol@@HPAVHamProfile@@@Z@4IA, r29"
+   ],
+   [
+    "reloc_target",
+    "stw r11, lbl_83117E18, r29",
+    "stw r11, ?$S7@?1??ShowGamercard@Leaderboards@@QAA?AVSymbol@@HPAVHamProfile@@@Z@4IA, r29"
+   ],
+   [
+    "reloc_target",
+    "mr r3, r23, lbl_83117E14",
+    "mr r3, r24, ?display_gamercard_pad_error@?1??ShowGamercard@Leaderboards@@QAA?AVSymbol@@HPAVHamProfile@@@Z@4V3@A"
+   ],
+   [
+    "reloc_target",
+    "bl ?Parent@Node@?$ObjPtrVec@VRndTransformable@@VObjectDir@@@@UBAPAVObjRefOwner@@XZ",
+    "bl ?GetPadNum@Profile@@QBAHXZ"
+   ],
+   [
+    "reloc_target",
+    "lwz r11, 0x0, r30, lbl_83117E10",
+    "lwz r11, 0x0, r30, ?display_gamercard_privilege_error@?O@??ShowGamercard@Leaderboards@@QAA?AVSymbol@@HPAVHamProfile@@@Z@4V3@A"
+   ],
+   [
+    "reloc_target",
+    "lwz r11, 0x0, r23, lbl_83117E14",
+    "lwz r11, 0x0, r24, ?display_gamercard_pad_error@?1??ShowGamercard@Leaderboards@@QAA?AVSymbol@@HPAVHamProfile@@@Z@4V3@A"
+   ],
+   [
+    "reloc_target",
+    "lwz r11, 0x0, r30, lbl_83117E0C",
+    "lwz r11, 0x0, r30, ?on_select_gamertag_error@?BG@??ShowGamercard@Leaderboards@@QAA?AVSymbol@@HPAVHamProfile@@@Z@4V3@A"
+   ],
+   [
+    "reloc_target",
+    "addi r23, r11, lbl_83117E14",
+    "addi r24, r11, ?display_gamercard_pad_error@?1??ShowGamercard@Leaderboards@@QAA?AVSymbol@@HPAVHamProfile@@@Z@4V3@A"
+   ],
+   [
+    "reloc_target",
+    "lwz r11, lbl_83117E18, r29",
+    "lwz r11, ?$S7@?1??ShowGamercard@Leaderboards@@QAA?AVSymbol@@HPAVHamProfile@@@Z@4IA, r29"
+   ],
+   [
+    "reloc_target",
+    "stw r11, lbl_83117E18, r29",
+    "stw r11, ?$S7@?1??ShowGamercard@Leaderboards@@QAA?AVSymbol@@HPAVHamProfile@@@Z@4IA, r29"
+   ],
+   [
+    "reloc_target",
+    "mr r3, r23, lbl_83117E14",
+    "mr r3, r24, ?display_gamercard_pad_error@?1??ShowGamercard@Leaderboards@@QAA?AVSymbol@@HPAVHamProfile@@@Z@4V3@A"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "reloc_target",
+    "bl ?Parent@Node@?$ObjPtrVec@VRndTransformable@@VObjectDir@@@@UBAPAVObjRefOwner@@XZ",
+    "bl ?GetPadNum@Profile@@QBAHXZ"
+   ]
+  ],
+  "cats_kept": {
+   "reloc_target": 1
+  },
+  "severity_kept": 10,
+  "scope": "IN-lazer"
+ },
+ {
+  "symbol": "?SelectConfig@RndShader@@SAXPAVRndMat@@W4ShaderType@@_N@Z",
+  "unit": "default/system/rndobj/Shader",
+  "raw": 99.21359,
+  "norm": 99.21359,
+  "surface": {
+   "reg": 7
+  },
+  "cats": {
+   "constant": 2
+  },
+  "other_mt": {},
+  "severity": 10,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "constant",
+    "li r10, 0x0",
+    "li r11, 0x1"
+   ],
+   [
+    "constant",
+    "li r10, 0x0",
+    "li r11, 0x1"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "constant",
+    "li r10, 0x0",
+    "li r11, 0x1"
+   ],
+   [
+    "constant",
+    "li r10, 0x0",
+    "li r11, 0x1"
+   ]
+  ],
+  "cats_kept": {
+   "constant": 2
+  },
+  "severity_kept": 10,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?SyncProperty@Object@Hmx@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z",
+  "unit": "default/system/obj/Object",
+  "raw": 99.0,
+  "norm": 99.0,
+  "surface": {},
+  "cats": {
+   "reloc_target": 14,
+   "constant": 2
+  },
+  "other_mt": {},
+  "severity": 150,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "reloc_target",
+    "lis r30, ?$S9@?6??SyncProperty@Object@Hmx@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@4IA",
+    "lis r30, ?$S2@?6??SyncProperty@Object@Hmx@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@4IA"
+   ],
+   [
+    "reloc_target",
+    "lwz r11, ?$S9@?6??SyncProperty@Object@Hmx@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@4IA, r30",
+    "lwz r11, ?$S2@?6??SyncProperty@Object@Hmx@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@4IA, r30"
+   ],
+   [
+    "reloc_target",
+    "stw r11, ?$S9@?6??SyncProperty@Object@Hmx@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@4IA, r30",
+    "stw r11, ?$S2@?6??SyncProperty@Object@Hmx@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@4IA, r30"
+   ],
+   [
+    "constant",
+    "ori r11, r11, 0x8",
+    "ori r11, r11, 0x4"
+   ],
+   [
+    "reloc_target",
+    "lis r30, ?$S9@?6??SyncProperty@Object@Hmx@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@4IA",
+    "lis r30, ?$S2@?6??SyncProperty@Object@Hmx@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@4IA"
+   ],
+   [
+    "reloc_target",
+    "lwz r11, ?$S9@?6??SyncProperty@Object@Hmx@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@4IA, r30",
+    "lwz r11, ?$S2@?6??SyncProperty@Object@Hmx@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@4IA, r30"
+   ],
+   [
+    "reloc_target",
+    "stw r11, ?$S9@?6??SyncProperty@Object@Hmx@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@4IA, r30",
+    "stw r11, ?$S2@?6??SyncProperty@Object@Hmx@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@4IA, r30"
+   ],
+   [
+    "constant",
+    "ori r11, r11, 0x4",
+    "ori r11, r11, 0x2"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "constant",
+    "ori r11, r11, 0x8",
+    "ori r11, r11, 0x4"
+   ],
+   [
+    "constant",
+    "ori r11, r11, 0x4",
+    "ori r11, r11, 0x2"
+   ]
+  ],
+  "cats_kept": {
+   "constant": 2
+  },
+  "severity_kept": 10,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "yy_get_previous_state",
+  "unit": "default/system/obj/DataFlex",
+  "raw": 88.935486,
+  "norm": 88.935486,
+  "surface": {},
+  "cats": {
+   "constant": 2
+  },
+  "other_mt": {
+   "replace": 11
+  },
+  "severity": 10,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "constant",
+    "cmpwi cr6, r7, 0x7d",
+    "cmpwi cr6, r7, 0x7b"
+   ],
+   [
+    "constant",
+    "cmpwi cr6, r7, 0x7d",
+    "cmpwi cr6, r7, 0x7b"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "constant",
+    "cmpwi cr6, r7, 0x7d",
+    "cmpwi cr6, r7, 0x7b"
+   ],
+   [
+    "constant",
+    "cmpwi cr6, r7, 0x7d",
+    "cmpwi cr6, r7, 0x7b"
+   ]
+  ],
+  "cats_kept": {
+   "constant": 2
+  },
+  "severity_kept": 10,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?Save@RndPostProc@@UAAXAAVBinStream@@@Z",
+  "unit": "default/system/rndobj/PostProc",
+  "raw": 99.632866,
+  "norm": 99.632866,
+  "surface": {},
+  "cats": {
+   "reloc_target": 18
+  },
+  "other_mt": {},
+  "severity": 180,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "reloc_target",
+    "bl ??$?6M@@YAAAVBinStream@@AAV0@ABV?$Key@M@@@Z",
+    "bl ??6@YAAAVBinStream@@AAV0@ABVVector2@@@Z"
+   ],
+   [
+    "reloc_target",
+    "bl ??$?6VCharEyeDartRuleset@@@@YAAAVBinStream@@AAV0@ABV?$ObjRefConcrete@VCharEyeDartRuleset@@VObjectDir@@@@@Z",
+    "bl ??$?6VRndTex@@@@YAAAVBinStream@@AAV0@ABV?$ObjRefConcrete@VRndTex@@VObjectDir@@@@@Z"
+   ],
+   [
+    "reloc_target",
+    "bl ??6@YAAAVBinStream@@AAV0@ABVVector4@@@Z",
+    "bl ??6@YAAAVBinStream@@AAV0@ABVColor@Hmx@@@Z"
+   ],
+   [
+    "reloc_target",
+    "bl ??$?6VCharEyeDartRuleset@@@@YAAAVBinStream@@AAV0@ABV?$ObjRefConcrete@VCharEyeDartRuleset@@VObjectDir@@@@@Z",
+    "bl ??$?6VRndTex@@@@YAAAVBinStream@@AAV0@ABV?$ObjRefConcrete@VRndTex@@VObjectDir@@@@@Z"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "reloc_target",
+    "bl ??$?6M@@YAAAVBinStream@@AAV0@ABV?$Key@M@@@Z",
+    "bl ??6@YAAAVBinStream@@AAV0@ABVVector2@@@Z"
+   ]
+  ],
+  "cats_kept": {
+   "reloc_target": 1
+  },
+  "severity_kept": 10,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?PopulateOffersInCart@HamStoreProvider@@AAAXXZ",
+  "unit": "default/lazer/meta_ham/HamStoreProvider",
+  "raw": 99.24107,
+  "norm": 99.24107,
+  "surface": {
+   "reg": 2
+  },
+  "cats": {
+   "reloc_target": 14
+  },
+  "other_mt": {},
+  "severity": 140,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "reloc_target",
+    "lis r10, lbl_8311B164",
+    "lis r10, ?song@?O@??PopulateOffersInCart@HamStoreProvider@@AAAXXZ@4VSymbol@@A"
+   ],
+   [
+    "reloc_target",
+    "lis r27, lbl_8311B160",
+    "lis r23, ?TheNetCacheMgr@@3PAVNetCacheMgr@@A"
+   ],
+   [
+    "reloc_target",
+    "addi r28, r10, lbl_8311B164",
+    "addi r28, r10, ?song@?O@??PopulateOffersInCart@HamStoreProvider@@AAAXXZ@4VSymbol@@A"
+   ],
+   [
+    "reloc_target",
+    "lwz r11, lbl_8311B160, r27",
+    "lwz r11, ?$S8@?O@??PopulateOffersInCart@HamStoreProvider@@AAAXXZ@4IA, r27"
+   ],
+   [
+    "reloc_target",
+    "stw r11, lbl_8311B160, r27",
+    "stw r11, ?$S8@?O@??PopulateOffersInCart@HamStoreProvider@@AAAXXZ@4IA, r27"
+   ],
+   [
+    "reloc_target",
+    "mr r3, r28, lbl_8311B164",
+    "mr r3, r28, ?song@?O@??PopulateOffersInCart@HamStoreProvider@@AAAXXZ@4VSymbol@@A"
+   ],
+   [
+    "reloc_target",
+    "lwz r11, 0x0, r28, lbl_8311B164",
+    "lwz r11, 0x0, r28, ?song@?O@??PopulateOffersInCart@HamStoreProvider@@AAAXXZ@4VSymbol@@A"
+   ],
+   [
+    "reloc_target",
+    "lis r10, lbl_8311B164",
+    "lis r10, ?song@?O@??PopulateOffersInCart@HamStoreProvider@@AAAXXZ@4VSymbol@@A"
+   ],
+   [
+    "reloc_target",
+    "lis r23, ?TheNetCacheMgr@@3PAVNetCacheMgr@@A",
+    "lis r27, ?$S8@?O@??PopulateOffersInCart@HamStoreProvider@@AAAXXZ@4IA"
+   ],
+   [
+    "reloc_target",
+    "addi r28, r10, lbl_8311B164",
+    "addi r28, r10, ?song@?O@??PopulateOffersInCart@HamStoreProvider@@AAAXXZ@4VSymbol@@A"
+   ],
+   [
+    "reloc_target",
+    "lwz r11, lbl_8311B160, r27",
+    "lwz r11, ?$S8@?O@??PopulateOffersInCart@HamStoreProvider@@AAAXXZ@4IA, r27"
+   ],
+   [
+    "reloc_target",
+    "stw r11, lbl_8311B160, r27",
+    "stw r11, ?$S8@?O@??PopulateOffersInCart@HamStoreProvider@@AAAXXZ@4IA, r27"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "reloc_target",
+    "lis r23, ?TheNetCacheMgr@@3PAVNetCacheMgr@@A",
+    "lis r27, ?$S8@?O@??PopulateOffersInCart@HamStoreProvider@@AAAXXZ@4IA"
+   ]
+  ],
+  "cats_kept": {
+   "reloc_target": 1
+  },
+  "severity_kept": 10,
+  "scope": "IN-lazer"
+ },
+ {
+  "symbol": "?SynthPoll@SampleInst@@UAAXXZ",
+  "unit": "default/system/synth/SampleInst",
+  "raw": 99.431816,
+  "norm": 99.431816,
+  "surface": {
+   "reg": 2
+  },
+  "cats": {
+   "reloc_target": 36
+  },
+  "other_mt": {},
+  "severity": 360,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "reloc_target",
+    "bl ?GetMaxProcess@CFEWaveStreamDecoder@NUISPEECH@@UAAIXZ",
+    "bl ?GetSampleRate@SynthSample@@QBAHXZ"
+   ],
+   [
+    "reloc_target",
+    "lis r10, lbl_830E3280",
+    "lis r10, ?$S1@?4??SynthPoll@SampleInst@@UAAXXZ@4IA"
+   ],
+   [
+    "reloc_target",
+    "lwz r11, lbl_830E3280, r10",
+    "lwz r11, ?$S1@?4??SynthPoll@SampleInst@@UAAXXZ@4IA, r10"
+   ],
+   [
+    "reloc_target",
+    "lis r9, lbl_830E3278",
+    "lis r9, ?msg@?4??SynthPoll@SampleInst@@UAAXXZ@4VMessage@@A"
+   ],
+   [
+    "reloc_target",
+    "addi r29, r9, lbl_830E3278",
+    "addi r29, r9, ?msg@?4??SynthPoll@SampleInst@@UAAXXZ@4VMessage@@A"
+   ],
+   [
+    "reloc_target",
+    "stw r11, lbl_830E3280, r10",
+    "stw r11, ?$S1@?4??SynthPoll@SampleInst@@UAAXXZ@4IA, r10"
+   ],
+   [
+    "reloc_target",
+    "mr r3, r29, lbl_830E3278",
+    "mr r3, r29, ?msg@?4??SynthPoll@SampleInst@@UAAXXZ@4VMessage@@A"
+   ],
+   [
+    "reloc_target",
+    "lwz r3, 0x4, r29, lbl_830E3278",
+    "lwz r3, 0x4, r29, ?msg@?4??SynthPoll@SampleInst@@UAAXXZ@4VMessage@@A"
+   ],
+   [
+    "reloc_target",
+    "lis r11, lbl_830E3270",
+    "lis r11, ?msg@?BC@??SynthPoll@SampleInst@@UAAXXZ@4VMessage@@A"
+   ],
+   [
+    "reloc_target",
+    "addi r29, r11, lbl_830E3270",
+    "addi r29, r11, ?msg@?BC@??SynthPoll@SampleInst@@UAAXXZ@4VMessage@@A"
+   ],
+   [
+    "reloc_target",
+    "mr r3, r29, lbl_830E3270",
+    "mr r3, r29, ?msg@?BC@??SynthPoll@SampleInst@@UAAXXZ@4VMessage@@A"
+   ],
+   [
+    "reloc_target",
+    "lwz r5, 0x4, r29, lbl_830E3270",
+    "lwz r5, 0x4, r29, ?msg@?BC@??SynthPoll@SampleInst@@UAAXXZ@4VMessage@@A"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "reloc_target",
+    "bl ?GetMaxProcess@CFEWaveStreamDecoder@NUISPEECH@@UAAIXZ",
+    "bl ?GetSampleRate@SynthSample@@QBAHXZ"
+   ]
+  ],
+  "cats_kept": {
+   "reloc_target": 1
+  },
+  "severity_kept": 10,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?Activate@FlowDistance@@UAA_NXZ",
+  "unit": "default/system/flow/FlowDistance",
+  "raw": 99.71774,
+  "norm": 99.71774,
+  "surface": {},
+  "cats": {
+   "constant": 2
+  },
+  "other_mt": {},
+  "severity": 10,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "constant",
+    "li r4, 0x4",
+    "li r4, 0x5"
+   ],
+   [
+    "constant",
+    "li r4, 0x4",
+    "li r4, 0x5"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "constant",
+    "li r4, 0x4",
+    "li r4, 0x5"
+   ],
+   [
+    "constant",
+    "li r4, 0x4",
+    "li r4, 0x5"
+   ]
+  ],
+  "cats_kept": {
+   "constant": 2
+  },
+  "severity_kept": 10,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?PropSync@@YA_NAAHAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z",
+  "unit": "default/system/char/CharLipSync",
+  "raw": 99.57143,
+  "norm": 99.57143,
+  "surface": {},
+  "cats": {
+   "constant": 2
+  },
+  "other_mt": {},
+  "severity": 10,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "constant",
+    "li r11, 0x44",
+    "li r11, 0x2c"
+   ],
+   [
+    "constant",
+    "li r11, 0x44",
+    "li r11, 0x2c"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "constant",
+    "li r11, 0x44",
+    "li r11, 0x2c"
+   ],
+   [
+    "constant",
+    "li r11, 0x44",
+    "li r11, 0x2c"
+   ]
+  ],
+  "cats_kept": {
+   "constant": 2
+  },
+  "severity_kept": 10,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?StartScroll@UIListDir@@QAAXABVUIListState@@AAV?$vector@PAVUIListWidget@@V?$StlNodeAlloc@PAVUIListWidget@@@stlpmtx_std@@@stlpmtx_std@@H_N@Z",
+  "unit": "default/system/ui/UIListDir",
+  "raw": 99.5,
+  "norm": 99.5,
+  "surface": {},
+  "cats": {
+   "constant": 2
+  },
+  "other_mt": {},
+  "severity": 10,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "constant",
+    "li r11, 0x1ed",
+    "li r11, 0x1f3"
+   ],
+   [
+    "constant",
+    "li r11, 0x1ed",
+    "li r11, 0x1f3"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "constant",
+    "li r11, 0x1ed",
+    "li r11, 0x1f3"
+   ],
+   [
+    "constant",
+    "li r11, 0x1ed",
+    "li r11, 0x1f3"
+   ]
+  ],
+  "cats_kept": {
+   "constant": 2
+  },
+  "severity_kept": 10,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?OnMovePassed@CampaignPerformer@@UAAXHPAVHamMove@@HM@Z",
+  "unit": "default/lazer/meta_ham/CampaignPerformer",
+  "raw": 99.40061,
+  "norm": 99.40061,
+  "surface": {},
+  "cats": {
+   "reloc_target": 34
+  },
+  "other_mt": {},
+  "severity": 340,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "reloc_target",
+    "bl ?GetCampaignProgress@HamProfile@@QBAABVCampaignProgress@@W4Difficulty@@@Z",
+    "bl ?AccessCampaignProgress@HamProfile@@QAAAAVCampaignProgress@@W4Difficulty@@@Z"
+   ],
+   [
+    "reloc_target",
+    "lis r30, lbl_831196D8",
+    "lis r30, ?$S7@?BO@??OnMovePassed@CampaignPerformer@@UAAXHPAVHamMove@@HM@Z@4IA"
+   ],
+   [
+    "reloc_target",
+    "lis r11, lbl_831196D4",
+    "lis r11, ?gameplay_mode@?BO@??OnMovePassed@CampaignPerformer@@UAAXHPAVHamMove@@HM@Z@4VSymbol@@A"
+   ],
+   [
+    "reloc_target",
+    "addi r28, r11, lbl_831196D4",
+    "addi r28, r11, ?gameplay_mode@?BO@??OnMovePassed@CampaignPerformer@@UAAXHPAVHamMove@@HM@Z@4VSymbol@@A"
+   ],
+   [
+    "reloc_target",
+    "lwz r11, lbl_831196D8, r30",
+    "lwz r11, ?$S7@?BO@??OnMovePassed@CampaignPerformer@@UAAXHPAVHamMove@@HM@Z@4IA, r30"
+   ],
+   [
+    "reloc_target",
+    "stw r11, lbl_831196D8, r30",
+    "stw r11, ?$S7@?BO@??OnMovePassed@CampaignPerformer@@UAAXHPAVHamMove@@HM@Z@4IA, r30"
+   ],
+   [
+    "reloc_target",
+    "mr r3, r28, lbl_831196D4",
+    "mr r3, r28, ?gameplay_mode@?BO@??OnMovePassed@CampaignPerformer@@UAAXHPAVHamMove@@HM@Z@4VSymbol@@A"
+   ],
+   [
+    "reloc_target",
+    "lis r10, lbl_831196D0",
+    "lis r10, ?perform@?BO@??OnMovePassed@CampaignPerformer@@UAAXHPAVHamMove@@HM@Z@4VSymbol@@A"
+   ],
+   [
+    "reloc_target",
+    "addi r29, r10, lbl_831196D0",
+    "addi r29, r10, ?perform@?BO@??OnMovePassed@CampaignPerformer@@UAAXHPAVHamMove@@HM@Z@4VSymbol@@A"
+   ],
+   [
+    "reloc_target",
+    "mr r3, r29, lbl_831196D0",
+    "mr r3, r29, ?perform@?BO@??OnMovePassed@CampaignPerformer@@UAAXHPAVHamMove@@HM@Z@4VSymbol@@A"
+   ],
+   [
+    "reloc_target",
+    "lwz r4, 0x0, r28, lbl_831196D4",
+    "lwz r4, 0x0, r28, ?gameplay_mode@?BO@??OnMovePassed@CampaignPerformer@@UAAXHPAVHamMove@@HM@Z@4VSymbol@@A"
+   ],
+   [
+    "reloc_target",
+    "lwz r11, 0x0, r29, lbl_831196D0",
+    "lwz r11, 0x0, r29, ?perform@?BO@??OnMovePassed@CampaignPerformer@@UAAXHPAVHamMove@@HM@Z@4VSymbol@@A"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "reloc_target",
+    "bl ?GetCampaignProgress@HamProfile@@QBAABVCampaignProgress@@W4Difficulty@@@Z",
+    "bl ?AccessCampaignProgress@HamProfile@@QAAAAVCampaignProgress@@W4Difficulty@@@Z"
+   ]
+  ],
+  "cats_kept": {
+   "reloc_target": 1
+  },
+  "severity_kept": 10,
+  "scope": "IN-lazer"
+ },
+ {
+  "symbol": "?OnNewTrack@MidiParserMgr@@UAAXH@Z",
+  "unit": "default/system/midi/MidiParserMgr",
+  "raw": 99.258064,
+  "norm": 99.258064,
+  "surface": {},
+  "cats": {
+   "constant": 2
+  },
+  "other_mt": {},
+  "severity": 10,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "constant",
+    "li r10, -0x1",
+    "li r10, 0x0"
+   ],
+   [
+    "constant",
+    "li r10, -0x1",
+    "li r10, 0x0"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "constant",
+    "li r10, -0x1",
+    "li r10, 0x0"
+   ],
+   [
+    "constant",
+    "li r10, -0x1",
+    "li r10, 0x0"
+   ]
+  ],
+  "cats_kept": {
+   "constant": 2
+  },
+  "severity_kept": 10,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?GetDirClass@DirLoader@@SA?AVSymbol@@PBD@Z",
+  "unit": "default/system/obj/DirLoader",
+  "raw": 99.530304,
+  "norm": 99.530304,
+  "surface": {},
+  "cats": {
+   "constant": 2
+  },
+  "other_mt": {},
+  "severity": 10,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "constant",
+    "li r11, 0xc3",
+    "li r11, 0x199"
+   ],
+   [
+    "constant",
+    "li r11, 0xc3",
+    "li r11, 0x199"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "constant",
+    "li r11, 0xc3",
+    "li r11, 0x199"
+   ],
+   [
+    "constant",
+    "li r11, 0xc3",
+    "li r11, 0x199"
+   ]
+  ],
+  "cats_kept": {
+   "constant": 2
+  },
+  "severity_kept": 10,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "??0SpotDrawParams@@QAA@PAVSpotlightDrawer@@@Z",
+  "unit": "default/system/world/SpotlightDrawer",
+  "raw": 99.86747,
+  "norm": 99.86747,
+  "surface": {},
+  "cats": {
+   "constant": 2
+  },
+  "other_mt": {},
+  "severity": 10,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "constant",
+    "li r11, 0x351",
+    "li r11, 0x37c"
+   ],
+   [
+    "constant",
+    "li r11, 0x351",
+    "li r11, 0x37c"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "constant",
+    "li r11, 0x351",
+    "li r11, 0x37c"
+   ],
+   [
+    "constant",
+    "li r11, 0x351",
+    "li r11, 0x37c"
+   ]
+  ],
+  "cats_kept": {
+   "constant": 2
+  },
+  "severity_kept": 10,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?CreateElement@UIListLabel@@MAAPAVUIListSlotElement@@PAVUIList@@@Z",
+  "unit": "default/system/ui/UIListLabel",
+  "raw": 99.51428,
+  "norm": 99.51428,
+  "surface": {},
+  "cats": {
+   "constant": 2
+  },
+  "other_mt": {},
+  "severity": 10,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "constant",
+    "li r5, 0x1",
+    "li r5, 0x0"
+   ],
+   [
+    "constant",
+    "li r5, 0x1",
+    "li r5, 0x0"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "constant",
+    "li r5, 0x1",
+    "li r5, 0x0"
+   ],
+   [
+    "constant",
+    "li r5, 0x1",
+    "li r5, 0x0"
+   ]
+  ],
+  "cats_kept": {
+   "constant": 2
+  },
+  "severity_kept": 10,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?PreLoad@CharClipSet@@UAAXAAVBinStream@@@Z",
+  "unit": "default/system/char/CharClipSet",
+  "raw": 99.64655,
+  "norm": 99.64655,
+  "surface": {},
+  "cats": {
+   "reloc_target": 8,
+   "constant": 2
+  },
+  "other_mt": {},
+  "severity": 90,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "reloc_target",
+    "lis r10, lbl_82018AA8",
+    "lis r10, gRev"
+   ],
+   [
+    "reloc_target",
+    "addi r29, r10, lbl_82018AA8",
+    "addi r29, r10, gRev"
+   ],
+   [
+    "reloc_target",
+    "mr r7, r29, lbl_82018AA8",
+    "mr r7, r29, gRev"
+   ],
+   [
+    "constant",
+    "li r11, 0x97",
+    "li r11, 0x4e"
+   ],
+   [
+    "reloc_target",
+    "lis r10, lbl_82018AA8",
+    "lis r10, gRev"
+   ],
+   [
+    "reloc_target",
+    "addi r29, r10, lbl_82018AA8",
+    "addi r29, r10, gRev"
+   ],
+   [
+    "reloc_target",
+    "mr r7, r29, lbl_82018AA8",
+    "mr r7, r29, gRev"
+   ],
+   [
+    "reloc_target",
+    "addi r7, r29, 0x4, lbl_82018AA8",
+    "addi r7, r29, 0x4, gAltRev"
+   ],
+   [
+    "constant",
+    "li r11, 0x97",
+    "li r11, 0x4e"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "constant",
+    "li r11, 0x97",
+    "li r11, 0x4e"
+   ],
+   [
+    "constant",
+    "li r11, 0x97",
+    "li r11, 0x4e"
+   ]
+  ],
+  "cats_kept": {
+   "constant": 2
+  },
+  "severity_kept": 10,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?PropSync@@YA_NAAVSymbol@@AAVDataNode@@PAVDataArray@@HW4PropOp@@@Z",
+  "unit": "default/system/char/Character",
+  "raw": 99.98113,
+  "norm": 99.98113,
+  "surface": {},
+  "cats": {
+   "constant": 2
+  },
+  "other_mt": {},
+  "severity": 10,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "constant",
+    "li r11, 0x58",
+    "li r11, 0x4a"
+   ],
+   [
+    "constant",
+    "li r11, 0x58",
+    "li r11, 0x4a"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "constant",
+    "li r11, 0x58",
+    "li r11, 0x4a"
+   ],
+   [
+    "constant",
+    "li r11, 0x58",
+    "li r11, 0x4a"
+   ]
+  ],
+  "cats_kept": {
+   "constant": 2
+  },
+  "severity_kept": 10,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?OnInsertIdle@MidiParser@@AAA?AVDataNode@@PAVDataArray@@@Z",
+  "unit": "default/system/midi/MidiParser",
+  "raw": 99.75397,
+  "norm": 99.75397,
+  "surface": {},
+  "cats": {
+   "constant": 2
+  },
+  "other_mt": {},
+  "severity": 10,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "constant",
+    "li r11, 0x383",
+    "li r11, 0x38c"
+   ],
+   [
+    "constant",
+    "li r11, 0x383",
+    "li r11, 0x38c"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "constant",
+    "li r11, 0x383",
+    "li r11, 0x38c"
+   ],
+   [
+    "constant",
+    "li r11, 0x383",
+    "li r11, 0x38c"
+   ]
+  ],
+  "cats_kept": {
+   "constant": 2
+  },
+  "severity_kept": 10,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "??$InterpVertData@VVector3@@UGetVertPoint@@@@YAXABV?$vector@VVector3@@V?$StlNodeAlloc@VVector3@@@stlpmtx_std@@@stlpmtx_std@@0MAAVVertVector@RndMesh@@M@Z",
+  "unit": "default/system/rndobj/MeshAnim",
+  "raw": 99.854164,
+  "norm": 99.854164,
+  "surface": {},
+  "cats": {
+   "constant": 2
+  },
+  "other_mt": {},
+  "severity": 10,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "constant",
+    "li r11, 0x135",
+    "li r11, 0x133"
+   ],
+   [
+    "constant",
+    "li r11, 0x135",
+    "li r11, 0x133"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "constant",
+    "li r11, 0x135",
+    "li r11, 0x133"
+   ],
+   [
+    "constant",
+    "li r11, 0x135",
+    "li r11, 0x133"
+   ]
+  ],
+  "cats_kept": {
+   "constant": 2
+  },
+  "severity_kept": 10,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "??$InterpVertData@VVector2@@UGetVertTex@@@@YAXABV?$vector@VVector2@@V?$StlNodeAlloc@VVector2@@@stlpmtx_std@@@stlpmtx_std@@0MAAVVertVector@RndMesh@@M@Z",
+  "unit": "default/system/rndobj/MeshAnim",
+  "raw": 99.87647,
+  "norm": 99.87647,
+  "surface": {},
+  "cats": {
+   "constant": 2
+  },
+  "other_mt": {},
+  "severity": 10,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "constant",
+    "li r11, 0x135",
+    "li r11, 0x133"
+   ],
+   [
+    "constant",
+    "li r11, 0x135",
+    "li r11, 0x133"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "constant",
+    "li r11, 0x135",
+    "li r11, 0x133"
+   ],
+   [
+    "constant",
+    "li r11, 0x135",
+    "li r11, 0x133"
+   ]
+  ],
+  "cats_kept": {
+   "constant": 2
+  },
+  "severity_kept": 10,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?PostLoadInlined@ObjectDir@@IAA?AV?$ObjDirPtr@VObjectDir@@@@XZ",
+  "unit": "default/system/obj/Dir",
+  "raw": 99.40426,
+  "norm": 99.40426,
+  "surface": {},
+  "cats": {
+   "constant": 2
+  },
+  "other_mt": {},
+  "severity": 10,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "constant",
+    "li r11, 0x28d",
+    "li r11, 0x296"
+   ],
+   [
+    "constant",
+    "li r11, 0x28d",
+    "li r11, 0x296"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "constant",
+    "li r11, 0x28d",
+    "li r11, 0x296"
+   ],
+   [
+    "constant",
+    "li r11, 0x28d",
+    "li r11, 0x296"
+   ]
+  ],
+  "cats_kept": {
+   "constant": 2
+  },
+  "severity_kept": 10,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "??$InterpVertData@VVector3@@UGetVertNormal@@@@YAXABV?$vector@VVector3@@V?$StlNodeAlloc@VVector3@@@stlpmtx_std@@@stlpmtx_std@@0MAAVVertVector@RndMesh@@M@Z",
+  "unit": "default/system/rndobj/MeshAnim",
+  "raw": 99.86793,
+  "norm": 99.86793,
+  "surface": {},
+  "cats": {
+   "constant": 2
+  },
+  "other_mt": {},
+  "severity": 10,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "constant",
+    "li r11, 0x135",
+    "li r11, 0x133"
+   ],
+   [
+    "constant",
+    "li r11, 0x135",
+    "li r11, 0x133"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "constant",
+    "li r11, 0x135",
+    "li r11, 0x133"
+   ],
+   [
+    "constant",
+    "li r11, 0x135",
+    "li r11, 0x133"
+   ]
+  ],
+  "cats_kept": {
+   "constant": 2
+  },
+  "severity_kept": 10,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "??$InterpVertData@VColor@Hmx@@UGetVertColor@@@@YAXABV?$vector@VColor@Hmx@@V?$StlNodeAlloc@VColor@Hmx@@@stlpmtx_std@@@stlpmtx_std@@0MAAVVertVector@RndMesh@@M@Z",
+  "unit": "default/system/rndobj/MeshAnim",
+  "raw": 99.910255,
+  "norm": 99.910255,
+  "surface": {},
+  "cats": {
+   "constant": 2
+  },
+  "other_mt": {},
+  "severity": 10,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "constant",
+    "li r11, 0x135",
+    "li r11, 0x133"
+   ],
+   [
+    "constant",
+    "li r11, 0x135",
+    "li r11, 0x133"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "constant",
+    "li r11, 0x135",
+    "li r11, 0x133"
+   ],
+   [
+    "constant",
+    "li r11, 0x135",
+    "li r11, 0x133"
+   ]
+  ],
+  "cats_kept": {
+   "constant": 2
+  },
+  "severity_kept": 10,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?PostLoad@ObjectDir@@UAAXAAVBinStream@@@Z",
+  "unit": "default/system/obj/Dir",
+  "raw": 99.57568,
+  "norm": 99.62531,
+  "surface": {},
+  "cats": {
+   "constant": 2,
+   "reloc_target": 10
+  },
+  "other_mt": {},
+  "severity": 110,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "constant",
+    "li r11, 0x45d",
+    "li r11, 0x466"
+   ],
+   [
+    "reloc_target",
+    "lwz r11, lbl_82F64598, r10",
+    "lwz r11, ?$S7@?ED@??PostLoad@ObjectDir@@UAAXAAVBinStream@@@Z@4IA, r10"
+   ],
+   [
+    "reloc_target",
+    "stw r11, lbl_82F64598, r10",
+    "stw r11, ?$S7@?ED@??PostLoad@ObjectDir@@UAAXAAVBinStream@@@Z@4IA, r10"
+   ],
+   [
+    "reloc_target",
+    "lis r11, ??__Fmsg@?DL@??PostLoad@ObjectDir@@UAAXAAVBinStream@@@Z@YAXXZ",
+    "lis r11, ??__Fchange_proxies@?ED@??PostLoad@ObjectDir@@UAAXAAVBinStream@@@Z@YAXXZ"
+   ],
+   [
+    "reloc_target",
+    "addi r3, r11, ??__Fmsg@?DL@??PostLoad@ObjectDir@@UAAXAAVBinStream@@@Z@YAXXZ",
+    "addi r3, r11, ??__Fchange_proxies@?ED@??PostLoad@ObjectDir@@UAAXAAVBinStream@@@Z@YAXXZ"
+   ],
+   [
+    "reloc_target",
+    "lwz r5, 0x4, r29, lbl_82F64590",
+    "lwz r5, 0x4, r29, ?change_proxies@?ED@??PostLoad@ObjectDir@@UAAXAAVBinStream@@@Z@4VMessage@@A"
+   ],
+   [
+    "constant",
+    "li r11, 0x45d",
+    "li r11, 0x466"
+   ],
+   [
+    "reloc_target",
+    "lwz r11, lbl_82F64598, r10",
+    "lwz r11, ?$S7@?ED@??PostLoad@ObjectDir@@UAAXAAVBinStream@@@Z@4IA, r10"
+   ],
+   [
+    "reloc_target",
+    "stw r11, lbl_82F64598, r10",
+    "stw r11, ?$S7@?ED@??PostLoad@ObjectDir@@UAAXAAVBinStream@@@Z@4IA, r10"
+   ],
+   [
+    "reloc_target",
+    "lis r11, ??__Fmsg@?DL@??PostLoad@ObjectDir@@UAAXAAVBinStream@@@Z@YAXXZ",
+    "lis r11, ??__Fchange_proxies@?ED@??PostLoad@ObjectDir@@UAAXAAVBinStream@@@Z@YAXXZ"
+   ],
+   [
+    "reloc_target",
+    "addi r3, r11, ??__Fmsg@?DL@??PostLoad@ObjectDir@@UAAXAAVBinStream@@@Z@YAXXZ",
+    "addi r3, r11, ??__Fchange_proxies@?ED@??PostLoad@ObjectDir@@UAAXAAVBinStream@@@Z@YAXXZ"
+   ],
+   [
+    "reloc_target",
+    "lwz r5, 0x4, r29, lbl_82F64590",
+    "lwz r5, 0x4, r29, ?change_proxies@?ED@??PostLoad@ObjectDir@@UAAXAAVBinStream@@@Z@4VMessage@@A"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "constant",
+    "li r11, 0x45d",
+    "li r11, 0x466"
+   ],
+   [
+    "constant",
+    "li r11, 0x45d",
+    "li r11, 0x466"
+   ]
+  ],
+  "cats_kept": {
+   "constant": 2
+  },
+  "severity_kept": 10,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?AddCrowdChars@CamShotCrowd@@QAAXPBV?$list@U?$pair@PAVRndMultiMesh@@U?$_List_iterator@UInstance@RndMultiMesh@@U?$_Nonconst_traits@UInstance@RndMultiMesh@@@stlpmtx_std@@@stlpmtx_std@@@stlpmtx_std@@V?$StlNodeAlloc@U?$pair@PAVRndMultiMesh@@U?$_List_iterator@UInstance@RndMultiMesh@@U?$_Nonconst_traits@UInstance@RndMultiMesh@@@stlpmtx_std@@@stlpmtx_std@@@stlpmtx_std@@@2@@stlpmtx_std@@@Z",
+  "unit": "default/system/world/CameraShot",
+  "raw": 99.760414,
+  "norm": 99.760414,
+  "surface": {},
+  "cats": {
+   "constant": 2
+  },
+  "other_mt": {},
+  "severity": 10,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "constant",
+    "li r11, 0xa58",
+    "li r11, 0xbe1"
+   ],
+   [
+    "constant",
+    "li r11, 0xa58",
+    "li r11, 0xbe1"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "constant",
+    "li r11, 0xa58",
+    "li r11, 0xbe1"
+   ],
+   [
+    "constant",
+    "li r11, 0xa58",
+    "li r11, 0xbe1"
+   ]
+  ],
+  "cats_kept": {
+   "constant": 2
+  },
+  "severity_kept": 10,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?PostLoad@WorldDir@@UAAXAAVBinStream@@@Z",
+  "unit": "default/system/world/Dir",
+  "raw": 99.453125,
+  "norm": 99.38616,
+  "surface": {
+   "reg": 22
+  },
+  "cats": {
+   "reloc_target": 20,
+   "frame": 1,
+   "member": 1
+  },
+  "other_mt": {},
+  "severity": 208,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "reloc_target",
+    "bl __savegprlr",
+    "bl __savegprlr_14"
+   ],
+   [
+    "reloc_target",
+    "addi r29, r11, lbl_831160DC",
+    "addi r27, r11, ?gOldChars@@3V?$vector@VFilePath@@V?$StlNodeAlloc@VFilePath@@@stlpmtx_std@@@stlpmtx_std@@A"
+   ],
+   [
+    "reloc_target",
+    "lwz r4, lbl_831160DC, r11",
+    "lwz r4, ?gOldChars@@3V?$vector@VFilePath@@V?$StlNodeAlloc@VFilePath@@@stlpmtx_std@@@stlpmtx_std@@A, r11"
+   ],
+   [
+    "reloc_target",
+    "mr r3, r29, lbl_831160DC",
+    "mr r3, r27, ?gOldChars@@3V?$vector@VFilePath@@V?$StlNodeAlloc@VFilePath@@@stlpmtx_std@@@stlpmtx_std@@A"
+   ],
+   [
+    "reloc_target",
+    "stw r11, lbl_831160D8, r10",
+    "stw r11, ?gOldTexDir@@3PAVObjectDir@@A, r10"
+   ],
+   [
+    "reloc_target",
+    "b __restgprlr",
+    "b __restgprlr_14"
+   ],
+   [
+    "reloc_target",
+    "bl __savegprlr",
+    "bl __savegprlr_14"
+   ],
+   [
+    "reloc_target",
+    "addi r29, r11, lbl_831160DC",
+    "addi r27, r11, ?gOldChars@@3V?$vector@VFilePath@@V?$StlNodeAlloc@VFilePath@@@stlpmtx_std@@@stlpmtx_std@@A"
+   ],
+   [
+    "reloc_target",
+    "lwz r4, lbl_831160DC, r11",
+    "lwz r4, ?gOldChars@@3V?$vector@VFilePath@@V?$StlNodeAlloc@VFilePath@@@stlpmtx_std@@@stlpmtx_std@@A, r11"
+   ],
+   [
+    "member",
+    "lwz r3, 0xa8, r31",
+    "lwz r3, 0x0, r3"
+   ],
+   [
+    "reloc_target",
+    "mr r3, r29, lbl_831160DC",
+    "mr r3, r27, ?gOldChars@@3V?$vector@VFilePath@@V?$StlNodeAlloc@VFilePath@@@stlpmtx_std@@@stlpmtx_std@@A"
+   ],
+   [
+    "reloc_target",
+    "stw r11, lbl_831160D8, r10",
+    "stw r11, ?gOldTexDir@@3PAVObjectDir@@A, r10"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "member",
+    "lwz r3, 0xa8, r31",
+    "lwz r3, 0x0, r3"
+   ]
+  ],
+  "cats_kept": {
+   "member": 1
+  },
+  "severity_kept": 8,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?OnToggleAutoplay@@YA?AVDataNode@@PAVDataArray@@@Z",
+  "unit": "default/lazer/game/Game",
+  "raw": 99.51852,
+  "norm": 99.51852,
+  "surface": {
+   "reg": 1
+  },
+  "cats": {
+   "frame": 1,
+   "member": 1
+  },
+  "other_mt": {},
+  "severity": 8,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "member",
+    "lwz r11, 0x50, r1",
+    "lwz r11, 0x0, r3"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "member",
+    "lwz r11, 0x50, r1",
+    "lwz r11, 0x0, r3"
+   ]
+  ],
+  "cats_kept": {
+   "member": 1
+  },
+  "severity_kept": 8,
+  "scope": "IN-lazer"
+ },
+ {
+  "symbol": "?SyncProperty@MoggClip@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z",
+  "unit": "default/system/synth/MoggClip",
+  "raw": 99.156715,
+  "norm": 99.156715,
+  "surface": {},
+  "cats": {
+   "reloc_target": 38,
+   "member": 2
+  },
+  "other_mt": {},
+  "severity": 396,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "reloc_target",
+    "lis r30, lbl_830E206C",
+    "lis r30, ?$S4@?6??SyncProperty@MoggClip@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@4IA"
+   ],
+   [
+    "reloc_target",
+    "lis r11, lbl_830E2068",
+    "lis r11, ?_s@?6??SyncProperty@MoggClip@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@4VSymbol@@A"
+   ],
+   [
+    "reloc_target",
+    "addi r29, r11, lbl_830E2068",
+    "addi r29, r11, ?_s@?6??SyncProperty@MoggClip@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@4VSymbol@@A"
+   ],
+   [
+    "reloc_target",
+    "lwz r11, lbl_830E206C, r30",
+    "lwz r11, ?$S4@?6??SyncProperty@MoggClip@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@4IA, r30"
+   ],
+   [
+    "reloc_target",
+    "stw r11, lbl_830E206C, r30",
+    "stw r11, ?$S4@?6??SyncProperty@MoggClip@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@4IA, r30"
+   ],
+   [
+    "reloc_target",
+    "mr r3, r29, lbl_830E2068",
+    "mr r3, r29, ?_s@?6??SyncProperty@MoggClip@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@4VSymbol@@A"
+   ],
+   [
+    "reloc_target",
+    "lwz r10, 0x0, r29, lbl_830E2068",
+    "lwz r10, 0x0, r29, ?_s@?6??SyncProperty@MoggClip@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@4VSymbol@@A"
+   ],
+   [
+    "reloc_target",
+    "lis r10, lbl_830E2064",
+    "lis r10, ?_s@?BC@??SyncProperty@MoggClip@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@4VSymbol@@A"
+   ],
+   [
+    "reloc_target",
+    "addi r29, r10, lbl_830E2064",
+    "addi r29, r10, ?_s@?BC@??SyncProperty@MoggClip@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@4VSymbol@@A"
+   ],
+   [
+    "reloc_target",
+    "mr r3, r29, lbl_830E2064",
+    "mr r3, r29, ?_s@?BC@??SyncProperty@MoggClip@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@4VSymbol@@A"
+   ],
+   [
+    "reloc_target",
+    "lwz r10, 0x0, r29, lbl_830E2064",
+    "lwz r10, 0x0, r29, ?_s@?BC@??SyncProperty@MoggClip@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@4VSymbol@@A"
+   ],
+   [
+    "member",
+    "stfs f1, 0x40, r26",
+    "stfs f1, 0x44, r26"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "member",
+    "stfs f1, 0x40, r26",
+    "stfs f1, 0x44, r26"
+   ]
+  ],
+  "cats_kept": {
+   "member": 1
+  },
+  "severity_kept": 8,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?DetermineSubModeSong@PartyModeMgr@@AAAXPAVSymbol@@PAH@Z",
+  "unit": "default/lazer/game/PartyModeMgr",
+  "raw": 98.03896,
+  "norm": 98.03896,
+  "surface": {
+   "reg": 23
+  },
+  "cats": {
+   "addr_const": 2
+  },
+  "other_mt": {},
+  "severity": 6,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "addr_const",
+    "addi r4, r11, 0x148",
+    "addi r4, r11, 0x15c"
+   ],
+   [
+    "addr_const",
+    "addi r4, r11, 0x148",
+    "addi r4, r11, 0x15c"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "addr_const",
+    "addi r4, r11, 0x148",
+    "addi r4, r11, 0x15c"
+   ],
+   [
+    "addr_const",
+    "addi r4, r11, 0x148",
+    "addi r4, r11, 0x15c"
+   ]
+  ],
+  "cats_kept": {
+   "addr_const": 2
+  },
+  "severity_kept": 6,
+  "scope": "IN-lazer"
+ },
+ {
+  "symbol": "?SyncProperty@FlowMultiSetProperty@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z",
+  "unit": "default/system/flow/FlowMultiSetProperty",
+  "raw": 99.1,
+  "norm": 99.48889,
+  "surface": {},
+  "cats": {
+   "reloc_target": 12,
+   "addr_const": 2
+  },
+  "other_mt": {},
+  "severity": 126,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "reloc_target",
+    "lwz r11, lbl_82F5F6AC, r30",
+    "lwz r11, ?$S1@?6??SyncProperty@FlowMultiSetProperty@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@4IA, r30"
+   ],
+   [
+    "reloc_target",
+    "stw r11, lbl_82F5F6AC, r30",
+    "stw r11, ?$S1@?6??SyncProperty@FlowMultiSetProperty@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@4IA, r30"
+   ],
+   [
+    "reloc_target",
+    "lwz r10, 0x0, r27, lbl_82F5F6A8",
+    "lwz r10, 0x0, r27, ?_s@?6??SyncProperty@FlowMultiSetProperty@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@4VSymbol@@A"
+   ],
+   [
+    "reloc_target",
+    "lwz r11, 0x0, r27, lbl_82F5F6A4",
+    "lwz r11, 0x0, r27, ?_s@?BD@??SyncProperty@FlowMultiSetProperty@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@4VSymbol@@A"
+   ],
+   [
+    "addr_const",
+    "subi r3, r25, 0xc",
+    "subi r3, r25, 0x14"
+   ],
+   [
+    "reloc_target",
+    "lwz r11, lbl_82F5F6AC, r30",
+    "lwz r11, ?$S1@?6??SyncProperty@FlowMultiSetProperty@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@4IA, r30"
+   ],
+   [
+    "reloc_target",
+    "stw r11, lbl_82F5F6AC, r30",
+    "stw r11, ?$S1@?6??SyncProperty@FlowMultiSetProperty@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@4IA, r30"
+   ],
+   [
+    "reloc_target",
+    "lwz r10, 0x0, r27, lbl_82F5F6A8",
+    "lwz r10, 0x0, r27, ?_s@?6??SyncProperty@FlowMultiSetProperty@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@4VSymbol@@A"
+   ],
+   [
+    "addr_const",
+    "subi r3, r25, 0xc",
+    "subi r3, r25, 0x14"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "addr_const",
+    "subi r3, r25, 0xc",
+    "subi r3, r25, 0x14"
+   ],
+   [
+    "addr_const",
+    "subi r3, r25, 0xc",
+    "subi r3, r25, 0x14"
+   ]
+  ],
+  "cats_kept": {
+   "addr_const": 2
+  },
+  "severity_kept": 6,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?PreLoad@MoggClip@@UAAXAAVBinStream@@@Z",
+  "unit": "default/system/synth/MoggClip",
+  "raw": 99.75926,
+  "norm": 99.75926,
+  "surface": {},
+  "cats": {
+   "reloc_target": 8,
+   "addr_const": 2
+  },
+  "other_mt": {},
+  "severity": 86,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "reloc_target",
+    "lis r10, lbl_820BA4F8",
+    "lis r10, gRev"
+   ],
+   [
+    "reloc_target",
+    "addi r27, r10, lbl_820BA4F8",
+    "addi r27, r10, gRev"
+   ],
+   [
+    "reloc_target",
+    "mr r7, r27, lbl_820BA4F8",
+    "mr r7, r27, gRev"
+   ],
+   [
+    "addr_const",
+    "addi r4, r31, 0x40",
+    "addi r4, r31, 0x44"
+   ],
+   [
+    "reloc_target",
+    "lis r10, lbl_820BA4F8",
+    "lis r10, gRev"
+   ],
+   [
+    "reloc_target",
+    "addi r27, r10, lbl_820BA4F8",
+    "addi r27, r10, gRev"
+   ],
+   [
+    "reloc_target",
+    "mr r7, r27, lbl_820BA4F8",
+    "mr r7, r27, gRev"
+   ],
+   [
+    "reloc_target",
+    "addi r7, r27, 0x4, lbl_820BA4F8",
+    "addi r7, r27, 0x4, gAltRev"
+   ],
+   [
+    "addr_const",
+    "addi r4, r31, 0x40",
+    "addi r4, r31, 0x44"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "addr_const",
+    "addi r4, r31, 0x40",
+    "addi r4, r31, 0x44"
+   ],
+   [
+    "addr_const",
+    "addi r4, r31, 0x40",
+    "addi r4, r31, 0x44"
+   ]
+  ],
+  "cats_kept": {
+   "addr_const": 2
+  },
+  "severity_kept": 6,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?FillSpotPresetData@LightPreset@@IAAXPAVSpotlight@@AAUSpotlightEntry@1@H@Z",
+  "unit": "default/system/world/LightPreset",
+  "raw": 99.916664,
+  "norm": 99.916664,
+  "surface": {},
+  "cats": {
+   "addr_const": 2
+  },
+  "other_mt": {},
+  "severity": 6,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "addr_const",
+    "addi r4, r30, 0x48",
+    "addi r4, r30, 0x88"
+   ],
+   [
+    "addr_const",
+    "addi r4, r30, 0x48",
+    "addi r4, r30, 0x88"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "addr_const",
+    "addi r4, r30, 0x48",
+    "addi r4, r30, 0x88"
+   ],
+   [
+    "addr_const",
+    "addi r4, r30, 0x48",
+    "addi r4, r30, 0x88"
+   ]
+  ],
+  "cats_kept": {
+   "addr_const": 2
+  },
+  "severity_kept": 6,
+  "scope": "IN-system"
+ },
+ {
+  "symbol": "?SyncProperty@CharBonesSamples@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z",
+  "unit": "default/system/char/CharBonesSamples",
+  "raw": 98.94768,
+  "norm": 98.94768,
+  "surface": {},
+  "cats": {
+   "reloc_target": 62,
+   "constant": 2
+  },
+  "other_mt": {},
+  "severity": 630,
+  "verdict": "REVIEW",
+  "concerns": [
+   [
+    "reloc_target",
+    "lis r30, lbl_82F5F2A4",
+    "lis r30, ?$S2@?6??SyncProperty@CharBonesSamples@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@4IA"
+   ],
+   [
+    "reloc_target",
+    "lis r11, lbl_82F5F2A0",
+    "lis r11, ?_s@?6??SyncProperty@CharBonesSamples@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@4VSymbol@@A"
+   ],
+   [
+    "reloc_target",
+    "addi r29, r11, lbl_82F5F2A0",
+    "addi r29, r11, ?_s@?6??SyncProperty@CharBonesSamples@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@4VSymbol@@A"
+   ],
+   [
+    "reloc_target",
+    "lwz r11, lbl_82F5F2A4, r30",
+    "lwz r11, ?$S2@?6??SyncProperty@CharBonesSamples@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@4IA, r30"
+   ],
+   [
+    "reloc_target",
+    "stw r11, lbl_82F5F2A4, r30",
+    "stw r11, ?$S2@?6??SyncProperty@CharBonesSamples@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@4IA, r30"
+   ],
+   [
+    "reloc_target",
+    "mr r3, r29, lbl_82F5F2A0",
+    "mr r3, r29, ?_s@?6??SyncProperty@CharBonesSamples@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@4VSymbol@@A"
+   ],
+   [
+    "reloc_target",
+    "lwz r10, 0x0, r29, lbl_82F5F2A0",
+    "lwz r10, 0x0, r29, ?_s@?6??SyncProperty@CharBonesSamples@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@4VSymbol@@A"
+   ],
+   [
+    "reloc_target",
+    "lis r10, lbl_82F5F29C",
+    "lis r10, ?_s@?9??SyncProperty@CharBonesSamples@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@4VSymbol@@A"
+   ],
+   [
+    "reloc_target",
+    "addi r29, r10, lbl_82F5F29C",
+    "addi r29, r10, ?_s@?9??SyncProperty@CharBonesSamples@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@4VSymbol@@A"
+   ],
+   [
+    "reloc_target",
+    "mr r3, r29, lbl_82F5F29C",
+    "mr r3, r29, ?_s@?9??SyncProperty@CharBonesSamples@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@4VSymbol@@A"
+   ],
+   [
+    "reloc_target",
+    "lwz r10, 0x0, r29, lbl_82F5F29C",
+    "lwz r10, 0x0, r29, ?_s@?9??SyncProperty@CharBonesSamples@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@4VSymbol@@A"
+   ],
+   [
+    "constant",
+    "cmpwi cr6, r24, 0x40",
+    "cmpwi cr6, r24, 0x10"
+   ]
+  ],
+  "concerns_kept": [
+   [
+    "constant",
+    "cmpwi cr6, r24, 0x40",
+    "cmpwi cr6, r24, 0x10"
+   ]
+  ],
+  "cats_kept": {
+   "constant": 1
+  },
+  "severity_kept": 5,
+  "scope": "IN-system"
+ }
+]
