@@ -1125,32 +1125,22 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
         rpmDragFactor = 1.0f;
     }
 
-    // Force direction scaled by frameSpan
-    float forceX_dt = mForceDir.x * frameSpan;
-    float forceZ_dt = mForceDir.z * frameSpan;
-    float forceY_dt = mForceDir.y * frameSpan;
-
-    // Individual matrix components needed for fmadds sequence in pre-computation.
-    // Removing these and using mRelativeXfm.m.x.x etc. directly drops match by ~0.4%.
-    float m_yx = mRelativeXfm.m.y.x;
-    bool isRotate = mRotate;
-    float m_yy = mRelativeXfm.m.y.y;
     bool isFancy = (mType == kFancy);
-    float m_yz = mRelativeXfm.m.y.z;
-    float m_xx = mRelativeXfm.m.x.x;
-    float m_xz = mRelativeXfm.m.x.z;
-    float m_xy = mRelativeXfm.m.x.y;
+    bool isRotate = mRotate;
     bool isBubble = mBubble;
 
-    // Pre-compute all 3 transformed force rows (target does this before bounce check).
-    // Row 2 uses mRelativeXfm.m.z directly (not cached into locals) to match target.
-    float relForceRow0 =
-        (m_xx * forceX_dt + (m_xy * forceY_dt + m_xz * forceZ_dt));
-    float relForceRow1 =
-        m_yx * forceX_dt + m_yy * forceY_dt + m_yz * forceZ_dt;
-    float relForceRow2 =
-        mRelativeXfm.m.z.x * forceX_dt + mRelativeXfm.m.z.y * forceY_dt
-        + mRelativeXfm.m.z.z * forceZ_dt;
+    // Force direction scaled by frameSpan, then transformed through the
+    // relative-space matrix. Target emits the addi+stw pointer-passing pattern
+    // characteristic of the inlined Multiply(Vector3, Matrix3, Vector3 &) call.
+    Vector3 deltaForce;
+    deltaForce.x = mForceDir.x * frameSpan;
+    deltaForce.y = mForceDir.y * frameSpan;
+    deltaForce.z = mForceDir.z * frameSpan;
+    Vector3 relForce;
+    Multiply(deltaForce, mRelativeXfm.m, relForce);
+    float relForceRow0 = relForce.x;
+    float relForceRow1 = relForce.y;
+    float relForceRow2 = relForce.z;
 
     // Bounce plane is a stack-allocated Plane in the target binary; matches
     // RB3 source layout (Plane bouncePlane local, populated from mBounce->WorldXfm()).
