@@ -25,6 +25,30 @@ from scripts.analysis.diff_inspect import (
 )
 
 
+def _extract_first_symbolic_arg(side_data: dict) -> str:
+    """Return the first symbolic argument (e.g. ``bl`` target name) or ``""``.
+
+    Looks at ``typed_args`` then ``arguments`` then the raw ``args`` string.
+    Returns the first string-valued arg encountered. Used by patterns that
+    need to distinguish, e.g., ``bl strcmp`` from ``bl Foo``.
+    """
+    if not isinstance(side_data, dict):
+        return ""
+    for key in ("typed_args", "arguments"):
+        args = side_data.get(key) or []
+        for arg in args:
+            if isinstance(arg, dict):
+                val = arg.get("value")
+                if isinstance(val, str) and val:
+                    return val
+    raw = side_data.get("args")
+    if isinstance(raw, str) and raw:
+        # First whitespace/comma-separated token
+        first = raw.strip().split()[0] if raw.strip() else ""
+        return first.rstrip(",")
+    return ""
+
+
 def _extract_prologue_saves(
     instrs: list[dict], side: str
 ) -> tuple[int | None, int | None]:
@@ -124,6 +148,8 @@ def diagnose_baseline(objdiff_json: dict) -> Diagnosis:
                 index=ins["index"],
                 target_opcode=t_op,
                 base_opcode=b_op,
+                target_arg=_extract_first_symbolic_arg(t),
+                base_arg=_extract_first_symbolic_arg(b),
             ))
 
     # Insert/delete clusters

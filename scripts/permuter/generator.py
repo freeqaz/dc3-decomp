@@ -64,13 +64,27 @@ def _pattern_priorities(
     patterns: list[Pattern],
     diagnosis: Diagnosis | None,
     round_hints: RoundHints | None = None,
+    ctx: FunctionContext | None = None,
 ) -> dict[str, float]:
-    """Compute effective per-pattern priorities for the current round."""
+    """Compute effective per-pattern priorities for the current round.
+
+    If ``ctx`` is provided, patterns that override ``context_priority`` can
+    consult AST shape for a confidence bump (e.g. positive_branch_invert,
+    demorgan_guard upgrade to >=0.8 when the function body matches).
+    """
     priorities: dict[str, float] = {}
     winner_domains = _winner_domains(round_hints)
 
     for pattern in patterns:
-        if diagnosis:
+        if diagnosis and ctx is not None:
+            # Patterns that subclass our Pattern base inherit context_priority;
+            # tests / external duck-typed patterns may not. Fall back safely.
+            ctx_priority_fn = getattr(pattern, "context_priority", None)
+            if callable(ctx_priority_fn):
+                priority = ctx_priority_fn(diagnosis, ctx)
+            else:
+                priority = pattern.priority(diagnosis)
+        elif diagnosis:
             priority = pattern.priority(diagnosis)
         else:
             priority = 1.0
@@ -135,6 +149,7 @@ def allocate_budgets(
     total_budget: int,
     diagnosis: Diagnosis | None,
     round_hints: RoundHints | None = None,
+    ctx: FunctionContext | None = None,
 ) -> dict[str, int]:
     """Allocate variant budget proportionally by pattern priority.
 
@@ -160,6 +175,7 @@ def allocate_budgets(
         patterns,
         diagnosis,
         round_hints=round_hints,
+        ctx=ctx,
     )
     relevant: list[Pattern] = []
 
@@ -275,12 +291,13 @@ def generate_variants(
 
     budgets = allocate_budgets(
         patterns, independent_budget, ctx.diagnosis,
-        round_hints=round_hints,
+        round_hints=round_hints, ctx=ctx,
     )
     priorities = _pattern_priorities(
         patterns,
         ctx.diagnosis,
         round_hints=round_hints,
+        ctx=ctx,
     )
 
     total = 0
@@ -425,7 +442,7 @@ def generate_variants(
         blind_ctx = dataclasses.replace(ctx, blind_generation_mode=True)
         blind_budgets = allocate_budgets(
             patterns, blind_budget, blind_ctx.diagnosis,
-            round_hints=round_hints,
+            round_hints=round_hints, ctx=blind_ctx,
         )
         blind_count = 0
         for pattern in ordered_patterns:
