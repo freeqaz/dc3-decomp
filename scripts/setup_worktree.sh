@@ -199,6 +199,27 @@ if [ -L "$WT_BUILD" ]; then
     exit 1
 fi
 
+# ---- prime ninja state : trigger SPLIT + configure.py regeneration ----------
+# Without this, the worktree's first `ninja -t commands <obj>` query (used by
+# the permuter, MCP orchestrator, and objdiff scripts) can return commands
+# derived from a not-yet-fully-consistent build.ninja, leading to baseline
+# match% returning 0.00% on the first invocation of every function in the
+# unit. Running ninja once here re-runs SPLIT (regenerates config.json from
+# config.yml) and the configure.py edge inside build.ninja, leaving the build
+# graph fully consistent. With the warm reflinked object cache, this is a
+# no-op rebuild (touches no .obj files) but updates `.ninja_log` and
+# `.ninja_deps` so subsequent queries are deterministic.
+echo "==> Priming ninja state (regenerates config.json + warms .ninja_log)"
+(
+    cd "$WORKTREE_PATH"
+    # `ninja -d explain` would be noisy; just run silently and assert success.
+    # Cap output so the warmup doesn't dump the full progress report.
+    if ! ninja 2>&1 | tail -5; then
+        echo "FATAL: priming ninja failed — see output above" >&2
+        exit 1
+    fi
+)
+
 echo ""
 echo "Worktree ready:  $WORKTREE_PATH"
 echo "  branch:        $BRANCH  (from $BASE_COMMIT on $BASE_BRANCH)"
