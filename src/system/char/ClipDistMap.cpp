@@ -197,7 +197,7 @@ bool ClipDistMap::FindBestNode(float maxError, float startBeat, float endBeat, C
             int rowCount = rowIdx + 1;
             do {
                 float currentError = node.err;
-                float cellError = mDists(startCol, rowIdx);
+                float cellError = mDists(rowIdx, startCol);
                 float newError = (currentError - cellError >= 0.0f) ? cellError : currentError;
                 node.err = newError;
                 bool foundBetter = newError != currentError;
@@ -545,15 +545,15 @@ void ClipDistMap::Draw(float x, float y, CharDriver *driver) {
     beat = (float)ceil((double)mBStart);
     for (; (float)beat < (float)((float)mDists.mHeight / (float)mSamplesPerBeat + mBStart); beat = (float)((float)beat + 1.0f)) {
         rect.x = x;
-        rect.y = ((float)(mDists.mHeight - 1) - (beat - mBStart) * (float)mSamplesPerBeat) * 2.0f + y;
+        rect.y = ((beat - mBStart) * (float)mSamplesPerBeat - (float)(mDists.mHeight - 1)) * 2.0f + y;
         rect.w = (float)(mDists.mWidth * 2);
         rect.h = 1.0f;
         TheRnd.DrawRect(rect, gridColor2, nullptr, nullptr, nullptr);
     }
 
     // Draw distance map cells
-    Hmx::Rect cellRect;
     Hmx::Color cellColor;
+    Hmx::Rect cellRect;
     cellRect.w = 2.0f;
     cellRect.h = 2.0f;
     for (int col = 0; col < mDists.mWidth; col++) {
