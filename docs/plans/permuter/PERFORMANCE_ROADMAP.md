@@ -133,10 +133,31 @@ Consumes the A0 harness.
       The env off-switch is unchanged. To actually land A1, validate on an RB3
       worktree (`PERMUTER_PROJECT=rb3` + RB3 build present) where the fast path
       runs, or first extend/validate the splice path for the DC3/MSVC toolchain.
+- [x] **MSVC /E + splice extension** (derisking experiment, 2026-05-27): impl
+      added on `perf/msvc-preprocess-splice` (`preprocess_cache.py`:
+      `derive_preprocess_command_msvc`, `strip_msvc_pch_flags`,
+      `normalize_coff_timestamp`; `scorer.py`: `_build_preprocess_cache` accepts
+      DC3, `_validate_msvc` byte+score oracle, `_redirect_source_path_msvc`,
+      `_msvc_compile_cwd`). A/B run (31 fns / 709 variants compared, STRICT
+      oracle): **0 score divergences, 0 build-parity breaks (the splice is
+      sound)** but **27 fast hits / 340 fallbacks (7.4% coverage)** and
+      **median per-call compile-run speedup 0.995× (pooled 0.990×)**. On the
+      one function that hit 100% splice coverage (RndShaderSimple::CalcShaderOpts)
+      the splice was 196 ms/call vs 158 ms/call PCH — **0.805× (slower)**.
+      **Root cause:** splice requires no-PCH compilation, but DC3's PCH already
+      eliminates the header-parse cost the splice was designed to skip. Splice
+      + PCH are mutually exclusive features; PCH wins on MSVC.
+      **Verdict: DEAD END on DC3** — gate impossible to meet because the lever
+      is structurally absorbed by PCH. Implementation preserved on
+      `perf/msvc-preprocess-splice` (default OFF, env-gated, conservative
+      fallback) for future reference / RB3 carry-over. Not merging to main.
 
 **Owner:** — · **Effort:** 1.5 days · **Risk:** low (silent fallback)
 **Blocker:** feature is RB3-only; no RB3 toolchain present in the DC3 worktree,
 so the A0/A1 bench set (all DC3) cannot exercise or validate it.
+**Update 2026-05-27:** MSVC extension implemented + validated on DC3 — see
+above; correct but architecturally inert because of PCH. A1 remains
+RB3-only-meaningful.
 
 ### A2 — objdiff daemon mode `[-]` · **A0 profiling says: not worth it**
 
@@ -483,3 +504,21 @@ Append a dated line each time this doc is reviewed or an item changes state.
   `preprocess_cache.py:51` left OFF.** A1 cannot be validated/landed from a
   DC3-only worktree — it needs an RB3 build present, or the splice path extended
   to the DC3/MSVC toolchain first. 21 `test_preprocess_cache.py` tests still pass.
+- **2026-05-27** — **MSVC /E + splice derisking experiment** (branch
+  `perf/msvc-preprocess-splice`, NOT merged to main). Implementation extends
+  the preprocess-cache fast path to cl.exe: `/E` to stdout, PCH flag stripping,
+  COFF-timestamp normalization, bare-basename source token + cwd-switched
+  invocation. A/B run (31 fns / **709 variants**, STRICT oracle, fresh isolated
+  score caches): **0 score divergences, 0 build-parity breaks** — the splice
+  is sound on every function where it engages. Coverage low: **27/367 cache
+  attempts = 7.4% fast hit rate** (DC3's pervasive MILO_NOTIFY/MILO_ASSERT/NULL
+  usage trips the macro-aware gate). Speed: **median per-call compile-run
+  speedup 0.995× (pooled 0.990×) — no win**. On the one function with full
+  splice coverage (RndShaderSimple::CalcShaderOpts) the splice was 196 ms/call
+  vs 158 ms/call PCH = **0.805× (slower)**. **Verdict: dead-end on DC3.** Root
+  cause: splice requires no-PCH compile, but DC3's PCH already eliminates the
+  header-parse cost the splice was designed to skip — splice + PCH are
+  mutually exclusive, and PCH wins on MSVC. Implementation preserved on
+  `perf/msvc-preprocess-splice` (default OFF) for future reference / potential
+  RB3 carry-over, **not merged**. The 21 `test_preprocess_cache.py` tests
+  still pass on the branch.
