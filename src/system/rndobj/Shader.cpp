@@ -218,11 +218,9 @@ void RndShader::SelectConfig(RndMat *mat, ShaderType shader_type, bool b3) {
     if (!b3 && (TheLoadMgr.EditMode() || !UsingCD())) {
 #endif
         if (!DisplayMatShaderFlagsError(mat, shader_type)) {
-            bool doError = true;
-            void *metaMat;
+            bool doError = false;
             if (mat && TheShaderMgr.ShowMetaMatErrors()) {
-                metaMat = mat->GetMetaMaterial();
-                doError = doError && (metaMat == nullptr);
+                doError = (mat->GetMetaMaterial() == nullptr);
             }
             if (!doError) {
                 goto done;

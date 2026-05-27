@@ -3,6 +3,7 @@
 #include "SpotlightDrawer.h"
 #include "math/Color.h"
 #include "math/Geo.h"
+#include "math/Key.h"
 #include "math/Mtx.h"
 #include "math/Rot.h"
 #include "math/Utl.h"
@@ -340,6 +341,9 @@ BinStreamRev &operator>>(BinStreamRev &d, Spotlight::BeamDef &bd) {
 INIT_REVS(0x21, 0)
 
 BEGIN_LOADS(Spotlight)
+    char bufSpot[0x80];
+    char bufFlare[0x80];
+    char bufLens[0x80];
     LOAD_REVS(bs)
     ASSERT_REVS(0x21, 0)
     if (d.rev < 9) {
@@ -386,10 +390,9 @@ BEGIN_LOADS(Spotlight)
         }
         d >> mSpotMaterial;
         if (d.rev > 0x11 && d.rev < 0x13) {
-            char buf[0x80];
-            bs.ReadString(buf, 0x80);
-            if (!mSpotMaterial && buf[0] != '\0') {
-                mSpotMaterial = LookupOrCreateMat(buf, Dir());
+            bs.ReadString(bufSpot, 0x80);
+            if (!mSpotMaterial && bufSpot[0] != '\0') {
+                mSpotMaterial = LookupOrCreateMat(bufSpot, Dir());
             }
         }
         d >> mDampingConstant;
@@ -402,15 +405,14 @@ BEGIN_LOADS(Spotlight)
             d >> mat;
             mFlare->SetMat(mat);
             if (d.rev > 0x11 && d.rev < 0x13) {
-                char buf[0x80];
-                bs.ReadString(buf, 0x80);
-                if (!mat && buf[0] != '\0') {
-                    mat = LookupOrCreateMat(buf, Dir());
+                bs.ReadString(bufFlare, 0x80);
+                if (!mat && bufFlare[0] != '\0') {
+                    mat = LookupOrCreateMat(bufFlare, Dir());
                     mFlare->SetMat(mat);
                 }
             }
-            d >> mFlare->Sizes();
-            d >> mFlare->Range();
+            bs >> (Key<float> &)mFlare->Sizes();
+            bs >> (Key<float> &)mFlare->Range();
             int steps;
             d >> steps;
             mFlare->SetSteps(steps);
@@ -429,10 +431,9 @@ BEGIN_LOADS(Spotlight)
             d >> mLensMaterial;
         }
         if (d.rev > 0x11 && d.rev < 0x13) {
-            char buf[0x80];
-            bs.ReadString(buf, 0x80);
-            if (!mLensMaterial && buf[0] != '\0') {
-                mLensMaterial = LookupOrCreateMat(buf, Dir());
+            bs.ReadString(bufLens, 0x80);
+            if (!mLensMaterial && bufLens[0] != '\0') {
+                mLensMaterial = LookupOrCreateMat(bufLens, Dir());
             }
         }
         if (d.rev > 0xC) {
