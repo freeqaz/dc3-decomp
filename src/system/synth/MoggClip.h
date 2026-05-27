@@ -61,6 +61,12 @@ public:
     void SetFile(const char *);
     void SetPan(int, float);
     void SetupPanInfo(float, float, bool);
+    void SetControllerVolume(float vol) {
+        mControllerVolume = vol;
+        if (mStream) {
+            mStream->Stream::SetVolume(mControllerVolume + mVolume);
+        }
+    }
     void AddFader(Fader *);
     const FilePath Path() const { return mMoggFile; }
     StandardStream *GetStream() const { return mStream; }

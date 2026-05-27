@@ -59,7 +59,7 @@ END_HANDLERS
 
 BEGIN_PROPSYNCS(MoggClip)
     SYNC_PROP_SET(file, mMoggFile, SetFile(_val.Str()))
-    SYNC_PROP_SET(volume, mVolume, MoggClip::SetVolume(_val.Float()))
+    SYNC_PROP_SET(volume, mControllerVolume, SetControllerVolume(_val.Float()))
     SYNC_PROP(buf_secs, mBufSecs)
     SYNC_SUPERCLASS(Hmx::Object)
 END_PROPSYNCS
@@ -67,7 +67,7 @@ END_PROPSYNCS
 BEGIN_SAVES(MoggClip)
     SAVE_REVS(3, 2)
     SAVE_SUPERCLASS(Hmx::Object)
-    bs << mMoggFile << mVolume;
+    bs << mMoggFile << mControllerVolume;
     bs << mBufSecs;
     bool loading = IsLoadingMusicMogg(mMoggFile.c_str());
     if (bs.Cached() && !loading) {
@@ -97,7 +97,7 @@ void MoggClip::PreLoad(BinStream &bs) {
     ASSERT_REVS(3, 2)
     LOAD_SUPERCLASS(Hmx::Object)
     bs >> mMoggFile;
-    bs >> mVolume;
+    bs >> mControllerVolume;
     if (d.rev <= 2) {
         bool b60;
         d >> b60;
@@ -171,7 +171,7 @@ void MoggClip::Play(float f1) {
 #endif
             mFader->SetVolume(0);
             SetVolume(f1);
-            MoggClip::SetVolume(mVolume);
+            SetControllerVolume(mControllerVolume);
             UpdateFaders();
             UpdatePanInfo();
             ApplyLoop(mLoop, mLoopStartSample, mLoopEndSample);
