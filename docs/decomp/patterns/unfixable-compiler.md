@@ -4,6 +4,22 @@ These patterns are caused by compiler optimizations or heuristics that resist si
 
 **Action:** Confirm the pattern actually applies (and that no fixable issues are mixed in). Try the documented fixes before moving on. For patterns requiring c2.dll patching, see [compiler-instrumentation.md](../../plans/compiler-instrumentation.md).
 
+## Two Categories: Source-Immune vs Permuter-Class
+
+Before reading the per-pattern detail below, be clear about which of two categories you are looking at. Most "unfixable" labels on this page mean the second one.
+
+**Source-immune patterns.** No source mutation can move them, because the difference is decided by something downstream of the C++ source: linker layout, symbol mangling derived from the on-disk path, or linker-merged identical-code folding. These genuinely cannot be cracked from C++ — only from build-environment or linker changes (and sometimes not even then). On this page:
+
+- Anonymous Namespace Hash Mismatch (`?A0x<hash>@@` is hashed from the source file path)
+- Address Relocation Noise (`.text` size delta shifts every global address)
+- Static Guard Naming Convention (`??_B` vs `$S` is a wibo-MSVC vs original-MSVC behavior difference)
+- Branch Offsets (recomputed from layout; objdiff already ignores)
+- ICF / linker-merged duplicates (covered separately in [verifiable-icf.md](verifiable-icf.md))
+
+**Permuter-class patterns.** These look unfixable from hand-edits — a hand-rewrite either does nothing or moves the swap somewhere else — but the source permuter routinely cracks them by mutating across many AST shapes at once and scoring each candidate's `.obj` against the target. The "hand-edit conversion rate ~30%" numbers below are exactly the territory where the permuter is the right tool. On this page these include: Register Allocation, fsel Register Pressure, Boolean Negation (subfic vs subic), fmadds vs Separate Ops, Commutative Register Swap, Stack Spill Scheduling, Store-then-Reload Scheduling, Dead Store Elimination, Self-Copy 16-byte Member, Virtual Base Block Sinking, BEGIN_HANDLERS Static-Init Guard Elision, and 64-bit Extraction. For these, the primary handle is the permuter, not the c2.dll patch. The permuter lives at `/home/free/code/milohax/dc3-decomp/scripts/permuter/`; ROI per pattern (and which mismatch signals it targets) is tracked in [PERMUTER_ROI_ANALYSIS.md](PERMUTER_ROI_ANALYSIS.md).
+
+c2.dll binary patching remains a last-resort escape hatch for the permuter-class patterns: when a full permuter sweep returns zero gains AND the remaining mismatches are still permuter-class (not source-immune), the residual is a property of the c2.dll allocator/scheduler itself. Do not jump to it without first running the sweep.
+
 ---
 
 ## ASSERT_REVS / INIT_REVS Scheduling
@@ -35,8 +51,9 @@ Two related issues:
 
 ### What Would Fix It
 
-- c2.dll instruction scheduler patch to match the original compiler's scheduling priority
-- All Load functions with ASSERT_REVS/INIT_REVS will have ~0.8-0.9% gap from this alone
+- Hand-edit exhausts on the `subi 4` / `addi 4` flip and scheduling delta.
+- **Permuter handle:** scheduling-shape mismatches are a documented permuter target — see [PERMUTER_ROI_ANALYSIS.md](PERMUTER_ROI_ANALYSIS.md). Run a sweep before declaring AT_LIMIT.
+- Last-resort: c2.dll instruction scheduler patch to match the original compiler's scheduling priority. All Load functions with ASSERT_REVS/INIT_REVS will have ~0.8-0.9% gap from this alone if the residual is purely scheduling.
 
 ### Real Examples
 
@@ -82,11 +99,13 @@ Before accepting this gap, try the source-level fixes documented in **[fixable-f
 **Mixed-direction FMA**: Same function needs both ON and OFF. Source-level options:
 - Split into helper functions with different pragma settings
 - Use `volatile float` intermediates to selectively block fusion
-- c2.dll binary patch to match per-expression fusion heuristic
+- **Permuter handle:** FMA fusion choice is permuter territory (`fma_reorder`, `pragma_fp_contract` and related — see [PERMUTER_ROI_ANALYSIS.md](PERMUTER_ROI_ANALYSIS.md)). Run a sweep before declaring AT_LIMIT.
+- Last-resort: c2.dll binary patch to match per-expression fusion heuristic
 
 **Pragma ignored**: Compiler overrides `#pragma fp_contract(off)` under `/O1` for some expressions. Options:
 - `volatile` intermediate variable to force separation
-- c2.dll binary patch to respect the pragma unconditionally
+- Run the permuter — see [PERMUTER_ROI_ANALYSIS.md](PERMUTER_ROI_ANALYSIS.md)
+- Last-resort: c2.dll binary patch to respect the pragma unconditionally
 
 ---
 
@@ -108,8 +127,9 @@ After adding fsel-based code, the prologue changes from 2 callee-saved FPRs to 4
 ### What Would Fix It
 
 - Restructure surrounding code to reduce live float variables before/after the fsel
-- c2.dll register allocator binary patch (see [Register Allocation](#register-allocation) for mechanism)
 - Find an alternative expression form that achieves fsel with fewer simultaneously-live floats
+- **Permuter handle:** FPR pressure and live-range shape are exactly what the permuter mutates across — see [PERMUTER_ROI_ANALYSIS.md](PERMUTER_ROI_ANALYSIS.md) (notably the `fsel_template`, `declaration_reorder`, and pressure-shifting patterns). Hand-edit exhausts here; run a sweep before accepting.
+- Last-resort: c2.dll register allocator binary patch (see [Register Allocation](#register-allocation) for mechanism)
 
 ### Real Example
 
@@ -123,7 +143,7 @@ After adding fsel-based code, the prologue changes from 2 callee-saved FPRs to 4
 
 **Prevalence:** ~250 AT_LIMIT functions with REGISTER_SWAP as dominant blocker
 **Typical Gap:** 1-3%
-**Status:** Mechanism fully understood (Experiments 1-9). Source-level fixes work ~30% of the time. Binary patching of c2.dll coloring loop is a viable path to fix the remaining 70%.
+**Status:** Mechanism fully understood (Experiments 1-9). Hand-edit declaration reorder works ~30% of the time. The remaining ~70% is the source permuter's primary domain — it mutates declaration order, scope, branch shape, and many other axes simultaneously and scores each variant's `.obj` against the target. Binary patching of c2.dll's coloring loop is a last-resort escape hatch when a full permuter sweep returns zero gains.
 
 ### Symptom
 
@@ -170,8 +190,8 @@ The MSVC Xbox 360 backend (c2.dll) uses graph-coloring register allocation:
 **Key insight**: Each variable gets a **deterministic color** based on interference constraints — colors are consistent regardless of declaration order. But the **color→register mapping** depends on allocation ORDER (= declaration order). Swapping declaration order of two variables swaps which color maps to which register, but the colors themselves don't change.
 
 This is why:
-- **Source reordering works ~30% of the time**: When interference constraints allow, reordering declarations changes the color→register mapping to match the target.
-- **Source reordering fails ~70% of the time**: When interference constraints force the same colors regardless of order, or when the correct mapping requires a specific symbol ID sequence that doesn't correspond to any valid declaration order.
+- **Hand declaration-reordering works ~30% of the time**: When interference constraints allow, reordering declarations changes the color→register mapping to match the target.
+- **Hand declaration-reordering fails ~70% of the time**: When interference constraints force the same colors regardless of order, or when the correct mapping requires a specific symbol ID sequence that doesn't correspond to any single declaration order. **This is exactly where the source permuter takes over** — it composes declaration reorder with scope changes, branch-shape rewrites, and other mutations that a hand-edit cannot try in combination. See [PERMUTER_ROI_ANALYSIS.md](PERMUTER_ROI_ANALYSIS.md) for the relevant patterns and their conversion rates.
 
 ### Evidence
 
@@ -227,9 +247,9 @@ float z, y, x;  // Instead of x, y, z
 
 ### What To Do
 
-Try [Variable Declaration Order](fixable-declarations.md#variable-declaration-order) with the heuristics above. If 10+ reordering attempts don't help, the register assignment is fixed by interference constraints.
-
-**Future**: Binary patching of c2.dll's coloring loop (RVA `0x026780`) could reverse the BSF scan direction or reorder the color assignment, fixing all register swap functions at once. See [compiler-instrumentation.md](../../plans/compiler-instrumentation.md) for the full mechanism and address map.
+1. Try [Variable Declaration Order](fixable-declarations.md#variable-declaration-order) with the heuristics above. If 5-10 hand reorderings don't help, the residual is interference-constrained beyond what a single-axis hand-edit can move.
+2. **Run the source permuter** on the function before declaring AT_LIMIT — see [PERMUTER_ROI_ANALYSIS.md](PERMUTER_ROI_ANALYSIS.md). The permuter at `/home/free/code/milohax/dc3-decomp/scripts/permuter/` composes declaration reorder with many other mutation classes and routinely cracks register-swap residuals that hand-edits cannot. A zero-gain sweep is the real AT_LIMIT signal for this pattern.
+3. **Last-resort:** Binary patching of c2.dll's coloring loop (RVA `0x026780`) could reverse the BSF scan direction or reorder the color assignment, fixing all register swap functions at once. See [compiler-instrumentation.md](../../plans/compiler-instrumentation.md) for the full mechanism and address map.
 
 ### Statistical Analysis (1,288 functions scanned)
 
@@ -307,9 +327,11 @@ if (id > 0) skel0 = GetSkeletonByTrackingID(id);  // implicit ptr->bool
 if (!skel0) ...  // subic: bool - 1
 ```
 
-### Why It's Unfixable
+### Why Hand-Edit Exhausts Here
 
 Changing the variable type from `bool` to pointer changes the entire code generation pattern — not just the negation. The compiler makes different choices for initialization, conditional branches, and register allocation with pointer types vs bools. In practice, switching to pointer type often makes things worse overall even though it fixes the specific `subfic`/`subic` mismatch.
+
+**Permuter handle:** boolean-materialization shape is one of the permuter's well-covered axes (`bool_return_expr`, `bool_cast`, `bitwise_accumulator`, and the comparison-equivalence family — see [PERMUTER_ROI_ANALYSIS.md](PERMUTER_ROI_ANALYSIS.md)). A hand-edit can only try one type swap at a time and watches the cascade; the permuter tries the type swap composed with the surrounding shape changes that *would* keep the cascade from regressing. Run a sweep before accepting the gap.
 
 ### Real Examples
 
@@ -340,8 +362,9 @@ Same mathematical result, different register order. The compiler's expression ev
 
 ### What Would Fix It
 
-- c2.dll expression evaluator patch to reverse operand canonicalization for commutative FP ops
 - Sometimes swapping the source-level operand order helps (see [fixable-operators.md](fixable-operators.md#commutative-operand-order))
+- **Permuter handle:** the swap is a regalloc artifact at the consuming op (see the Wave 1 note below), so the lever is upstream — reordering the variables that feed the op. The permuter mutates this axis along with declaration order and scope; see [PERMUTER_ROI_ANALYSIS.md](PERMUTER_ROI_ANALYSIS.md). Note that the dedicated `commutative_swap` pattern has a 0/143 win rate on its own — deprioritized in the ROI table — but the upstream regalloc patterns are the productive route.
+- Last-resort: c2.dll expression evaluator patch to reverse operand canonicalization for commutative FP ops
 
 ### Source-Level Operand Reordering Is Almost Always A No-Op (Wave 1 / F1)
 
@@ -368,7 +391,8 @@ Compiler optimization choice for how to extract 16-bit slices from 64-bit values
 
 ### What Would Fix It
 
-- c2.dll codegen patch to prefer `lhz` (load halfword) over `ld` + bit masking for 16-bit extracts from 64-bit values
+- **Permuter handle:** extraction-mode choice is a permuter target — see [PERMUTER_ROI_ANALYSIS.md](PERMUTER_ROI_ANALYSIS.md) (the signed/unsigned cast and bit-test families compose with this). Run a sweep before accepting.
+- Last-resort: c2.dll codegen patch to prefer `lhz` (load halfword) over `ld` + bit masking for 16-bit extracts from 64-bit values
 
 ---
 
@@ -417,7 +441,8 @@ Stack spill decisions are made by the register allocator based on register press
 ### What Would Fix It
 
 - Restructure code to reduce register pressure in the hot region (reduce live variables)
-- c2.dll spill heuristic patch to match the original compiler's spill/reload cost model
+- **Permuter handle:** spill decisions follow live ranges, and live ranges follow declaration/scope/branch shape — all permuter axes. See [PERMUTER_ROI_ANALYSIS.md](PERMUTER_ROI_ANALYSIS.md) (the `declaration_reorder`, `hoist_sret`, scope, and pressure-shifting patterns are the relevant ones). A zero-gain sweep is what justifies "no source-level workaround"; hand-edits alone don't.
+- Last-resort: c2.dll spill heuristic patch to match the original compiler's spill/reload cost model
 
 ### Real Example
 
@@ -497,8 +522,9 @@ bl   Select                   ; call with original register
 
 ### What Would Fix It
 
-- c2.dll instruction scheduler patch
-- Source-level reordering does NOT fix this — tested moving the global store before/after the call, using the global directly (`sDefault->Select()` instead of `ptr->Select()`) — all attempts either don't change the pattern or make things worse
+- Hand-edit reordering does NOT fix this in the cases tested — moving the global store before/after the call, using the global directly (`sDefault->Select()` instead of `ptr->Select()`) — all attempts either don't change the pattern or make things worse.
+- **Permuter handle:** scheduling and alias-fence shape are permuter-class. Run a sweep before declaring AT_LIMIT — see [PERMUTER_ROI_ANALYSIS.md](PERMUTER_ROI_ANALYSIS.md). Hand-edits cannot try the combinations the permuter can.
+- Last-resort: c2.dll instruction scheduler patch
 
 ### Real Examples
 
@@ -532,6 +558,8 @@ Our `.text` section is ~18KB larger than the original (0xBBB4D4 vs 0xBB6B14), so
 ### Impact
 
 These mismatches are **cosmetic** — the machine code is functionally identical, just referencing the same globals at different addresses. They inflate the mismatch count but don't represent real code differences.
+
+**Source-immune.** The differing immediates come from the linker, not from C++ — no source mutation can change them as long as our `.text` size differs from the target. Do not run the permuter on this; it will burn cycles on a pattern it structurally cannot move. (The permuter is for register/scheduling/codegen shape; not for linker layout.)
 
 ### Detection
 
@@ -592,6 +620,8 @@ The `??_B` guards don't consume `$S` slots in the target, so our `$S` numbering 
 ### Why Reordering Doesn't Help
 
 The shift is caused by a compiler behavior difference (guard type selection), not by function ordering. No amount of function reordering can change which guard type the compiler chooses. Adding dummy statics would shift numbers but create other mismatches.
+
+**Source-immune.** The differing symbol is emitted by the toolchain (wibo's MSVC vs original-MSVC guard-type selection) based on the count of static locals, not on any C++ expression the permuter can mutate. Do not sweep this pattern.
 
 ### What Would Fix It
 
@@ -675,8 +705,9 @@ gDecompressionCritSec.Exit();
 
 ### What Would Fix It
 
-- c2.dll dead store elimination patch
-- No source-level workaround — removing the null causes the destructor to double-Exit
+- Removing the null directly causes the destructor to double-Exit — so the *literal* edit is unsafe.
+- **Permuter handle:** dead-store-elimination shape is reachable indirectly via RAII-shape and scope rewrites that change what the destructor does or whether it's emitted at all (e.g. early-return-for-destructor-path is on the manual side, but the surrounding scope/branch-shape permuter patterns can move it). Run a sweep before accepting — see [PERMUTER_ROI_ANALYSIS.md](PERMUTER_ROI_ANALYSIS.md).
+- Last-resort: c2.dll dead store elimination patch.
 
 ### Real Example
 
@@ -709,6 +740,8 @@ The Xbox 360 MSVC compiler uses a hash of the source file path for anonymous nam
 ### Impact
 
 These mismatches are **purely cosmetic** — the machine bytes are identical, only the linker relocation symbol names differ. They inflate the `diff_arg` count but don't represent real code differences.
+
+**Source-immune.** The hash is derived from the on-disk source file path, not from any C++ construct. No source mutation can change it. Do not run the permuter on this pattern.
 
 ### What Would Fix It
 
@@ -749,8 +782,9 @@ The compiler's register allocation is sensitive to the total compilation context
 ### What Would Fix It
 
 - Reverting the header changes (may not be desirable)
-- c2.dll register allocator patch
-- Sometimes: find the specific header change that triggered the flip and find an alternative formulation
+- Find the specific header change that triggered the flip and find an alternative formulation
+- **Permuter handle:** once the surrounding context has flipped the allocator, the residual is just a regalloc/scheduling mismatch on the function itself — same as [Register Allocation](#register-allocation). Run a sweep on the regressed function before reverting the header. See [PERMUTER_ROI_ANALYSIS.md](PERMUTER_ROI_ANALYSIS.md).
+- Last-resort: c2.dll register allocator patch
 
 ### Real Example
 
@@ -766,12 +800,12 @@ This pattern is insidious because the regression appears to have no cause. Alway
 
 ## Requires Tooling (c2.dll Patching or Custom Pragmas)
 
-These patterns resist source-level changes but are fixable with compiler binary modifications or custom tooling.
+These patterns resist obvious source-level changes. **Run the source permuter before reaching for tooling** — see [PERMUTER_ROI_ANALYSIS.md](PERMUTER_ROI_ANALYSIS.md). Each of these is a codegen-shape mismatch (addressing mode, dtor wrapping, compare-instruction selection) and the permuter has documented wins on each shape family. Compiler binary modification is a last-resort escape hatch when a full sweep returns zero gains.
 
 ### Large Offset Addressing (lis+ori+lwzx vs addis+subi)
 
 **Typical Gap:** ~30%
-**Status:** Hard — no known source fix, may yield to compiler binary patching
+**Status:** Hand-edit exhausts. Primary handle is the source permuter (addressing-mode selection is shape-sensitive to surrounding live ranges); last-resort is c2.dll binary patching.
 
 When struct members are at offsets > 0x7FFF from the base pointer, the compiler must use multi-instruction addressing. The target compiler chose `lis+ori+lwzx` (build address in register, indexed load), while ours uses `addis+subi` (adjusted base, displacement load). Both reach the same memory, different instruction sequence.
 
@@ -782,7 +816,7 @@ When struct members are at offsets > 0x7FFF from the base pointer, the compiler 
 ### Scalar Deleting Destructor (??_G vs ~T + operator delete)
 
 **Typical Gap:** ~10%
-**Status:** Hard — compiler-generated function pattern
+**Status:** Hand-edit exhausts. Primary handle is the source permuter on the surrounding scope/RAII shape (which controls whether the compiler emits a `??_G` wrapper); last-resort is c2.dll patching.
 
 The target generates a "scalar deleting destructor" (??_G) wrapper for `delete obj`, while our compiler emits separate `~T()` + `operator delete()` calls. This is a compiler code generation choice for polymorphic delete expressions.
 
@@ -793,9 +827,9 @@ The target generates a "scalar deleting destructor" (??_G) wrapper for `delete o
 ### cmplwi vs cmpwi for Pointer Null Checks
 
 **Typical Gap:** ~1.5%
-**Status:** Hard — compiler type-sensitivity for pointer comparisons
+**Status:** Hand-edit exhausts (explicit `(unsigned int)` casts do not flip the compare). Primary handle is the source permuter on the comparison-equivalence and bool-materialization families; last-resort is c2.dll patching.
 
-The target uses `cmplwi` (unsigned compare) for pointer null checks, while our compiler generates `cmpwi` (signed compare). Explicit casts to `(unsigned int)` do not affect the compare instruction selection. May require compiler-level changes.
+The target uses `cmplwi` (unsigned compare) for pointer null checks, while our compiler generates `cmpwi` (signed compare). Explicit casts to `(unsigned int)` do not affect the compare instruction selection.
 
 | Function | Match | Root Cause |
 |----------|-------|------------|
@@ -866,9 +900,9 @@ The `if (!obj)` pattern produces **identical instructions** to the target — th
 
 ### What Would Fix It
 
-- c2.dll block layout pass that sinks large else-blocks past the function return
-- This optimization appears to trigger only when the else-block exceeds a size threshold (vbase conversion = 5 insns triggers it; simple pointer copy = 2 insns does not)
-- No source-level, optimization flag, or goto pattern can replicate this behavior
+- Hand-edits, optimization flags, and goto patterns have all been exhausted — none replicate the block-sinking layout (the MSVC front-end normalizes structured-goto patterns back to if/else before IL, see above).
+- **Permuter handle:** block layout depends on size threshold and live-range shape entering the conversion. Multi-axis permuter mutations (changing the else-block size by hoisting/sinking adjacent code, plus declaration reorder to shift the live ranges) are the right next step. Run a sweep before declaring AT_LIMIT — see [PERMUTER_ROI_ANALYSIS.md](PERMUTER_ROI_ANALYSIS.md). Note: this is one of the lower-probability targets because the block-sinking decision is coarse-grained; if a sweep returns zero, this is a strong c2.dll-patching candidate.
+- Last-resort: c2.dll block layout pass that sinks large else-blocks past the function return. This optimization appears to trigger only when the else-block exceeds a size threshold (vbase conversion = 5 insns triggers it; simple pointer copy = 2 insns does not).
 
 ### Real Examples
 
@@ -898,7 +932,9 @@ The interference graph is identical in both forms, but BSF coloring at c2.dll RV
 
 ### Detection
 
-Orchestrator classifies as `REGISTER_SWAP (Unfixable) + AtLimit (High)`. If two source-level rewrites both regress, accept and move on.
+Orchestrator classifies as `REGISTER_SWAP (Unfixable) + AtLimit (High)`. Two hand-edits regressing is a signal, not a conclusion — both moves swap the cluster to a new site (the interference graph "rotates" but doesn't shrink).
+
+**Permuter handle:** this is exactly the multi-axis-cascade case where the permuter beats hand-edits — it can compose a declaration reorder with a scope or branch-shape change that *together* reduce the cluster without rotating it elsewhere. Run a sweep before accepting — see [PERMUTER_ROI_ANALYSIS.md](PERMUTER_ROI_ANALYSIS.md). A zero-gain sweep is the real AT_LIMIT signal.
 
 ### Real Example
 
@@ -927,12 +963,14 @@ Each `static Symbol _s("name");` inside a function gets a static-init guard vari
 
 Target was compiled at a point in the codebase's history with slightly different surrounding handlers; the alias-analysis decision differs.
 
-### Why It's Unfixable
+### Why Hand-Edit Exhausts Here
 
 - No `#pragma` or `__declspec` disables this specific elision in MSVC.
 - Reordering handlers shifts the elision to a different `_s` symbol (the gap moves but doesn't shrink).
 - Adding handlers can shift the elision in or out, but DC3 handlers are DTA-load-bearing and can't be removed.
 - RB3 controlled this via MetroWerks `#pragma dont_inline on` — no MSVC equivalent.
+
+**Permuter handle:** the elision decision depends on the alias-analysis state at the dispatch point, which is shape-sensitive to the surrounding handler bodies. The permuter can mutate handler-body shapes (without changing semantics) in combinations a hand-edit cannot try. Run a sweep before accepting — see [PERMUTER_ROI_ANALYSIS.md](PERMUTER_ROI_ANALYSIS.md). This is a low-probability target (1-instruction gap, narrow alias-analysis trigger) but the sweep is cheap relative to the function size.
 
 ### Detection
 
@@ -952,8 +990,20 @@ The function has many `_NEW_STATIC_SYMBOL` / `HANDLE_*` macros (DC3 norm: 20+).
 
 ---
 
+## When To Truly Accept
+
+A function is at-limit — meaning further work is wasted cycles, not a defensible default — only when one of the following holds. "I tried two hand-edits and they regressed" is not sufficient; that's the entry condition for running the permuter, not the exit condition for declaring at-limit.
+
+- **(a) Source-immune residual.** `verdict.classification == AT_LIMIT` AND every remaining mismatch falls in one of the source-immune categories listed in the intro above (anonymous-namespace hash, address relocation noise, static-guard naming, ICF, branch offsets). These cannot be moved from C++; do not sweep.
+- **(b) Permuter exhausted.** A full source-permuter sweep (`/home/free/code/milohax/dc3-decomp/scripts/permuter/`) returned zero improvements AND the remaining mismatches are still in permuter-class categories. The zero-gain sweep is the disqualifying evidence. Without it, "permuter-class AT_LIMIT" is a guess.
+- **(c) Out-of-scope by policy.** The remainder requires c2.dll binary patching and the project hasn't enabled that path. Mark as AT_LIMIT with the c2.dll mechanism noted so it can be picked up if the policy changes; do not keep dispatching agents at it.
+- **(d) Cost ceiling reached.** Function is large, sweep was run, gain per sweep-hour has dropped below the project's threshold. This is a budget call, not a technical claim that the function cannot improve — record it as such.
+
+Condition (b) requires an actually-completed sweep with the run noted (date, sweep config, result). Condition (a) requires per-mismatch classification — if even one mismatch is `REGISTER_SWAP`, `STACK_SPILL`, `FMA`, `DSE`, or `SCHEDULING`, you are in permuter territory, not source-immune.
+
 ## See Also
 
 - [verifiable-icf.md](verifiable-icf.md) - ICF/linker-side verifiable patterns
 - [fixable-declarations.md](fixable-declarations.md#variable-declaration-order) - When register issues are fixable
 - [fixable-control-flow.md](fixable-control-flow.md#branch-polarity-steering-beqbne-blebge) - Branch-shape steering tactics
+- [PERMUTER_ROI_ANALYSIS.md](PERMUTER_ROI_ANALYSIS.md) - Per-pattern permuter conversion rates and detection signals
