@@ -212,12 +212,28 @@ fi
 echo "==> Priming ninja state (regenerates config.json + warms .ninja_log)"
 (
     cd "$WORKTREE_PATH"
-    # `ninja -d explain` would be noisy; just run silently and assert success.
-    # Cap output so the warmup doesn't dump the full progress report.
-    if ! ninja 2>&1 | tail -5; then
-        echo "FATAL: priming ninja failed — see output above" >&2
-        exit 1
-    fi
+    # The first prime can fail transiently under heavy concurrent activity
+    # (e.g., other worktrees running permuter sweeps that touch shared
+    # toolchain symlinks). Retry once before giving up. Both runs leave
+    # the graph in a consistent state, so a successful second run is fine.
+    # Under heavy concurrent activity (other worktrees running permuter
+    # sweeps), parallel wibo invocations sporadically fail with code=287.
+    # Strategy: try full-parallel first (fast), then back off to -j 4, then
+    # finally -j 1 which serializes wibo and reliably succeeds.
+    prime_log="$(mktemp)"
+    declare -a attempts=("ninja" "ninja -j 4" "ninja -j 1")
+    for cmd in "${attempts[@]}"; do
+        if $cmd >"$prime_log" 2>&1; then
+            tail -5 "$prime_log"
+            rm -f "$prime_log"
+            exit 0
+        fi
+        echo "WARN: '$cmd' failed; trying lower parallelism..." >&2
+    done
+    echo "FATAL: ninja prime failed at all parallelism levels — full output:" >&2
+    cat "$prime_log" >&2
+    rm -f "$prime_log"
+    exit 1
 )
 
 echo ""
