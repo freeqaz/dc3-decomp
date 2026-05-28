@@ -29,10 +29,10 @@ int MESH_REV_SEP_COLOR = 0x25;
 Vector3 TransformNormal(const Vector3 &normal, const Hmx::Matrix3 &mat) {
     Hmx::Matrix3 inv;
     FastInvert(mat, inv);
-    float nz = normal.z;
-    float ny = normal.y;
-    float nx = normal.x;
     Vector3 result;
+    float nx = normal.x;
+    float ny = normal.y;
+    float nz = normal.z;
     result.y = ny * inv.y.y + nz * inv.z.y + nx * inv.x.y;
     result.x = ny * inv.y.x + nz * inv.z.x + nx * inv.x.x;
     result.z = ny * inv.y.z + nz * inv.z.z + nx * inv.x.z;
