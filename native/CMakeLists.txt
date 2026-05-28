@@ -133,22 +133,9 @@ if(NOT EMSCRIPTEN)
     )
     target_link_libraries(imgui PUBLIC glfw dawn::webgpu_dawn)
     target_compile_definitions(imgui PUBLIC IMGUI_IMPL_WEBGPU_BACKEND_DAWN)
-else()
-    # Web: WebGPU backend only (input handled by ImGuiBackend_Web.cpp via Emscripten HTML5 API)
-    add_library(imgui STATIC
-        ${imgui_SOURCE_DIR}/imgui.cpp
-        ${imgui_SOURCE_DIR}/imgui_draw.cpp
-        ${imgui_SOURCE_DIR}/imgui_tables.cpp
-        ${imgui_SOURCE_DIR}/imgui_widgets.cpp
-        ${imgui_SOURCE_DIR}/backends/imgui_impl_wgpu.cpp
-    )
-    target_include_directories(imgui PUBLIC
-        ${imgui_SOURCE_DIR}
-        ${imgui_SOURCE_DIR}/backends
-    )
-    target_compile_options(imgui PUBLIC "SHELL:--use-port=emdawnwebgpu")
-    target_compile_definitions(imgui PUBLIC IMGUI_IMPL_WEBGPU_BACKEND_DAWN)
 endif()
+# Under EMSCRIPTEN the engine's MILO_BUILD_WEB block stands up the `imgui`
+# target (WebGPU backend only, --use-port=emdawnwebgpu). DC3 just links it.
 
 # FFmpeg — used for Bink video/audio decoding (replaces RAD Bink SDK)
 option(ENABLE_FFMPEG "Enable FFmpeg for Bink video/audio decoding" ON)
@@ -237,7 +224,7 @@ endif()
 # ============================================================================
 set(MILO_ENGINE_PATH "${CMAKE_SOURCE_DIR}/../../milo-native-engine"
     CACHE PATH "Path to milo-native-engine checkout")
-set(MILO_ENGINE_PIN "9ad4e13"
+set(MILO_ENGINE_PIN "37ec3339303ababfdb9339ba9e54b8c60caac8f3"
     CACHE STRING "Engine commit SHA verified against")
 if(EXISTS "${MILO_ENGINE_PATH}/.git")
     execute_process(COMMAND git rev-parse HEAD
@@ -263,6 +250,34 @@ set(MILO_ENGINE_DECOMP_INCLUDE_DIRS
 set(MILO_ENGINE_DECOMP_COMPAT_FLAGS
     ${DC3_MSVC_COMPAT_FLAGS} ${DC3_ATOMIC_COMPAT_FLAGS} ${DC3_DECOMP_FLAGS})
 set(MILO_ENGINE_DECOMP_PCH ${CMAKE_SOURCE_DIR}/../src/system/decomp_pch.h)
+# GPU backend flavor: DC3's WgpuRnd : NgRnd + the rndobj-coupled gfx TUs. This is
+# the engine's default when a consumer names no backend, but set it explicitly
+# (the engine now also ships a `rb3` BandRnd flavor — see the engine CMakeLists
+# MILO_ENGINE_GPU_BACKEND option).
+set(MILO_ENGINE_GPU_BACKEND dc3 CACHE STRING "DC3: WgpuRnd : NgRnd GPU backend" FORCE)
+# Web build: opt into the engine's MILO_BUILD_WEB platform layer (sources
+# live in milo-native-engine/src/{platform,audio,gfx}/*_Web.cpp, plus the
+# engine-side EMSCRIPTEN imgui target and audio-worklet.js / missing_stubs.js
+# assets). The helper milo_engine_apply_web_target_options() exists too
+# but we don't call it (CMAKE_CURRENT_SOURCE_DIR-inside-function bug —
+# see dc3-web target_link_options block below for the inlined workaround).
+#
+# We exclude the *_Web.cpp sources from libmilo-engine.a because dc3-web
+# compiles them DIRECTLY (via DC3_WEB_LIFTED_ENGINE_SOURCES) with the
+# DC3-target compile flags + force-included header. Building them twice
+# (once in the library, once in dc3-web) would emit duplicate symbols at
+# link time, and the library version fails to compile under the engine's
+# PCH because the PCH locks in <sys/stat.h>'s st_mtime macro state.
+if(EMSCRIPTEN)
+    set(MILO_BUILD_WEB ON CACHE BOOL "Engine web platform layer (lifted from DC3 in W0)" FORCE)
+    list(APPEND MILO_ENGINE_DECOMP_PLATFORM_EXCLUDE
+        File_Web.cpp
+        CDReader_Web.cpp
+        WebAssets.cpp
+        GpuDevice_Web.cpp
+        AudioDevice_Web.cpp
+        ImGuiBackend_Web.cpp)
+endif()
 add_subdirectory(${MILO_ENGINE_PATH} ${CMAKE_BINARY_DIR}/milo-engine)
 
 # ============================================================================
@@ -1213,10 +1228,9 @@ set(DC3_WEB_CORE_SOURCES
     src/platform/DingoSvr_Native.cpp
     src/platform/SongSortMgr_Native.cpp
     src/platform/System_Native.cpp
-    src/platform/File_Web.cpp
+    # File_Web.cpp / CDReader_Web.cpp / WebAssets.cpp lifted to milo-engine
+    # (MILO_BUILD_WEB platform layer, W0).
     src/platform/AsyncFile_Native.cpp
-    src/platform/CDReader_Web.cpp
-    src/platform/WebAssets.cpp
     src/platform/ThreadCall_Native.cpp
     src/platform/Joypad_Native.cpp
     src/platform/Keyboard_Native.cpp
@@ -1227,7 +1241,7 @@ set(DC3_WEB_CORE_SOURCES
     $<$<BOOL:${ENABLE_NCNN}>:src/pose/PoseTracker.cpp>
     $<$<BOOL:${ENABLE_NCNN}>:src/pose/CameraCapture.cpp>
     $<$<BOOL:${ENABLE_NCNN}>:src/pose/InternalPoseProvider.cpp>
-    src/audio/AudioDevice_Web.cpp
+    # AudioDevice_Web.cpp lifted to milo-engine (MILO_BUILD_WEB, W0).
     src/platform/StreamReceiver_Native.cpp
     src/platform/SampleInst_Native.cpp
     src/platform/FxSendNative.cpp
@@ -1265,9 +1279,10 @@ set(DC3_WEB_CORE_SOURCES
     src/thunk_stubs.cpp
 )
 
-# Web GFX sources — use GpuDevice_Web.cpp instead of GpuDevice.cpp
+# Web GFX sources. GpuDevice_Web.cpp was lifted to milo-engine
+# (MILO_BUILD_WEB platform layer, W0); the remaining sources live on as
+# DC3-side gfx helpers.
 set(DC3_WEB_GFX_SOURCES
-    src/platform/GpuDevice_Web.cpp
     src/gfx/Screenshot.cpp
     src/gfx/TextureConvert.cpp
     src/gfx/VertexFormats.cpp
@@ -1294,11 +1309,24 @@ list(REMOVE_ITEM DC3_WEB_ENGINE_SOURCES
     ${CMAKE_SOURCE_DIR}/../src/system/oggvorbis/framing.c
 )
 
+## dc3-web compiles the engine sources inline (no libmilo-engine.a link),
+## so the W0-lifted engine web TUs are pulled in directly from the engine
+## tree. These are kept aligned with milo-native-engine/CMakeLists.txt's
+## MILO_ENGINE_WEB_PLATFORM_SOURCES / _WEB_GFX_SOURCES sets.
+set(DC3_WEB_LIFTED_ENGINE_SOURCES
+    ${MILO_ENGINE_PATH}/src/platform/WebAssets.cpp
+    ${MILO_ENGINE_PATH}/src/platform/File_Web.cpp
+    ${MILO_ENGINE_PATH}/src/platform/CDReader_Web.cpp
+    ${MILO_ENGINE_PATH}/src/platform/GpuDevice_Web.cpp
+    ${MILO_ENGINE_PATH}/src/audio/AudioDevice_Web.cpp
+    ${MILO_ENGINE_PATH}/src/gfx/ImGuiBackend_Web.cpp
+)
+
 add_executable(dc3-web
     src/main_web.cpp
     src/platform/WebSvcMgr_Stub.cpp
-    src/gfx/ImGuiBackend_Web.cpp
     src/platform/DebugPanel.cpp
+    ${DC3_WEB_LIFTED_ENGINE_SOURCES}
     ${DC3_WEB_ENGINE_SOURCES}
     ${DC3_WEB_CORE_SOURCES}
     ${DC3_WEB_GFX_SOURCES}
@@ -1328,6 +1356,11 @@ target_include_directories(dc3-web PRIVATE
     ${CMAKE_SOURCE_DIR}/../src/system
     ${CMAKE_SOURCE_DIR}/../src/lazer
     ${CMAKE_SOURCE_DIR}/../include
+    # Engine's src/ root — for the headers backing the W0 lift (WebAssets.h
+    # etc.). dc3-web doesn't link libmilo-engine.a (it compiles the engine
+    # source set directly via DC3_WEB_ENGINE_SOURCES), so we have to add the
+    # engine PUBLIC include manually.
+    ${MILO_ENGINE_PATH}/src
 )
 
 ## Non-blocking file loading via JSPI (JavaScript Promise Integration).
@@ -1336,50 +1369,77 @@ target_include_directories(dc3-web PRIVATE
 ## JSPI uses the browser's native stack switching — zero code size overhead
 ## vs old ASYNCIFY which instrumented every function (~50% bloat).
 ## Requires Chrome 137+ / Firefox 139+.
-## Set DC3_WEB_ASYNC=OFF to fall back to blocking synchronous XHR.
-option(DC3_WEB_ASYNC "Use JSPI for non-blocking on-demand file fetches" ON)
-
+## Toggle via the engine's MILO_WEB_ASYNC option (default ON); set
+## -DMILO_WEB_ASYNC=OFF on the emcmake line to fall back to blocking XHR.
+##
+## NOTE: we inline the flag set instead of calling
+## milo_engine_apply_web_target_options(dc3-web). The engine helper hard-
+## codes `${CMAKE_CURRENT_SOURCE_DIR}/src/platform/web/assets/...` for the
+## --pre-js missing_stubs.js path and the audio-worklet.js POST_BUILD copy.
+## CMake resolves CMAKE_CURRENT_SOURCE_DIR inside a function to the CALLER's
+## source dir (DC3's native/), not the engine's — so the helper's paths
+## point at non-existent files in this repo. The W0 prompt explicitly
+## allows inlining as a workaround. To re-enable the helper, fix the
+## engine to use its own PROJECT_SOURCE_DIR (or a saved variable) instead
+## of CMAKE_CURRENT_SOURCE_DIR and bump MILO_ENGINE_PIN.
+target_compile_options(dc3-web PRIVATE
+    "SHELL:--use-port=emdawnwebgpu"
+    -fwasm-exceptions
+)
 target_link_options(dc3-web PRIVATE
     "SHELL:--use-port=emdawnwebgpu"
     -sALLOW_MEMORY_GROWTH=1
     -sMAXIMUM_MEMORY=512MB
     -sSTACK_SIZE=4194304
     -sENVIRONMENT=web,node
-    -sEXPORTED_FUNCTIONS=["_main","_dc3MainLoopTick"]
-    -sEXPORTED_RUNTIME_METHODS=["ccall","cwrap"]
-    # Allow undefined symbols — engine stubs use asm-labels that wasm-ld can't resolve.
     -sERROR_ON_UNDEFINED_SYMBOLS=0
-    # Make missing function calls log instead of abort (many Xbox-specific funcs not needed)
-    --pre-js ${CMAKE_CURRENT_SOURCE_DIR}/web/missing_stubs.js
     -sUSE_ZLIB=1
     -sUSE_OGG=1
     -sUSE_VORBIS=1
     -sFETCH=1
-    # Demangled C++ names in stack traces
-    -g2
-    # Catches invalid function pointers, memory allocation failures, stack overflow
     -sASSERTIONS=1
-    # Deep deserialization call chains during milo loading can overflow the stack
     -sSTACK_OVERFLOW_CHECK=2
-    # Native Wasm exception instructions — smaller and faster than JS-based exceptions
+    -sEXPORTED_FUNCTIONS=["_main","_dc3MainLoopTick"]
+    -sEXPORTED_RUNTIME_METHODS=["ccall","cwrap"]
     -fwasm-exceptions
+    -g2
+    --pre-js ${MILO_ENGINE_PATH}/src/platform/web/assets/missing_stubs.js
 )
-
-target_compile_options(dc3-web PRIVATE
-    "SHELL:--use-port=emdawnwebgpu"
-    -fwasm-exceptions
-)
-
-target_link_libraries(dc3-web PRIVATE imgui)
-
-## JSPI — zero-overhead async yielding
-if(DC3_WEB_ASYNC)
-    target_compile_definitions(dc3-web PRIVATE DC3_WEB_ASYNCIFY=1)
+if(MILO_WEB_ASYNC)
+    target_compile_definitions(dc3-web PRIVATE MILO_WEB_ASYNCIFY=1)
     target_link_options(dc3-web PRIVATE
         -sJSPI
         -sJSPI_EXPORTS=["_main","_dc3MainLoopTick","dc3MainLoopTick"]
     )
 endif()
+# Deploy the AudioWorklet JS next to dc3-web.wasm at build time. Mirrors
+# the engine helper's POST_BUILD copy, but anchored on the engine path
+# (avoids the CMAKE_CURRENT_SOURCE_DIR-inside-function bug noted above).
+add_custom_command(TARGET dc3-web POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${MILO_ENGINE_PATH}/src/platform/web/assets/audio-worklet.js
+        $<TARGET_FILE_DIR:dc3-web>/audio-worklet.js
+    COMMENT "dc3-web: deploying audio-worklet.js (from milo-engine)")
+# Per-consumer parameterisation: canvas DOM selector + audio JS namespace.
+#
+# CANVAS_SELECTOR has a `#` in the value, which CMake refuses to put on a
+# compiler command line (the make/ninja generator either strips the macro
+# entirely or mangles the quoting — see CMake's "definitions containing '#'"
+# warning). Route the macro through a configured header that's force-
+# included into every dc3-web TU, matching the recommended workaround.
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/dc3_web_config.h.in
+    ${CMAKE_CURRENT_BINARY_DIR}/dc3_web_config.h @ONLY)
+target_include_directories(dc3-web PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+target_compile_options(dc3-web PRIVATE
+    "SHELL:-include ${CMAKE_CURRENT_BINARY_DIR}/dc3_web_config.h")
+
+# AUDIO_NS is an unquoted identifier — passes cleanly via -D.
+target_compile_definitions(dc3-web PRIVATE
+    MILO_WEB_AUDIO_NS=dc3
+)
+
+target_link_libraries(dc3-web PRIVATE imgui)
 
 else() # NOT EMSCRIPTEN — native targets
 

@@ -46,9 +46,11 @@ fi
 echo "Building dc3-web..."
 cmake --build "$BUILD_DIR" --target dc3-web -j$(nproc) 2>&1
 
-# Copy web assets to build dir
+# Copy web assets to build dir. audio-worklet.js is now copied next to
+# dc3-web.wasm by the engine's milo_engine_apply_web_target_options() helper
+# (POST_BUILD step), so we don't ship the in-repo file anymore (it was
+# deleted in W0 — lifted to milo-native-engine).
 cp "$SCRIPT_DIR/index.html" "$BUILD_DIR/index.html"
-cp "$SCRIPT_DIR/audio-worklet.js" "$BUILD_DIR/audio-worklet.js"
 touch "$BUILD_DIR/favicon.ico"
 
 echo ""

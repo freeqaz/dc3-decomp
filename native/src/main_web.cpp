@@ -147,7 +147,7 @@ void dc3MainLoopTick() {
 
 int main(int argc, char **argv) {
     printf("DC3 Web Port — Initializing\n");
-#ifdef DC3_WEB_ASYNCIFY
+#ifdef MILO_WEB_ASYNCIFY
     // JSPI mode: JS drives the frame loop via requestAnimationFrame + await.
     // Each tick calls dc3MainLoopTick() which can yield to the browser
     // (via emscripten_sleep) during synchronous file loads, letting the
