@@ -8,6 +8,7 @@ Usage:
 """
 
 import argparse
+import sqlite3
 import sys
 from pathlib import Path
 
@@ -37,12 +38,43 @@ def main():
         action="store_true",
         help="Skip updating existing functions (only insert new)",
     )
+    parser.add_argument(
+        "--build-safe",
+        action="store_true",
+        help="Quiet, one-line output and never fail: if the DB is locked by "
+        "the live fleet, warn and exit 0. For use as a ninja build step.",
+    )
 
     args = parser.parse_args()
 
     if not args.report_path.exists():
+        # Build-safe: a missing report just means nothing to ingest yet.
+        if args.build_safe:
+            print(f"[db-sync] report not found ({args.report_path}); skipping")
+            return
         print(f"Error: Report file not found: {args.report_path}")
         sys.exit(1)
+
+    if args.build_safe:
+        # Best-effort metadata sync as a ninja step. WAL connections have no
+        # busy_timeout, so a concurrent fleet writer can raise SQLITE_BUSY —
+        # treat that (or any sqlite error) as "skip this run", never a build
+        # failure. Verdicts are owned by sync_objdiff.py, not this step.
+        try:
+            init_database(args.db)
+            result = ingest_report(
+                args.report_path,
+                db_path=args.db,
+                update_existing=not args.no_update,
+            )
+        except sqlite3.OperationalError as e:
+            print(f"[db-sync] DB busy ({e}); skipping (fleet will catch up)")
+            return
+        print(
+            f"[db-sync] report.json -> {args.db}: "
+            f"+{result['inserted']} new, {result['updated']} metadata-updated"
+        )
+        return
 
     print(f"Initializing database: {args.db}")
     init_database(args.db)

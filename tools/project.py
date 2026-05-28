@@ -476,6 +476,8 @@ def generate_build_ninja(
     build_path = config.out_path()
     report_path = build_path / "report.json"
     raw_report_path = build_path / "report_raw.json"
+    # Stamp for the build-safe report.json -> orchestrator DB metadata sync.
+    db_sync_stamp = build_path / "report_db_synced.stamp"
     build_tools_path = config.build_dir / "tools"
     download_tool = config.tools_dir / "download_tool.py"
     n.rule(
@@ -1504,6 +1506,7 @@ def generate_build_ninja(
                 python_lib,
                 report_path,
                 raw_report_path,
+                str(db_sync_stamp),
             ],
             order_only="post-build",
         )
@@ -1532,6 +1535,29 @@ def generate_build_ninja(
             outputs=raw_report_path,
             rule="report_raw",
             implicit=[objdiff, "objdiff.json", "all_source"],
+            order_only="post-build",
+        )
+
+        ###
+        # Sync report.json into the orchestrator DB (metadata + new symbols).
+        # Build-safe: best-effort, never fails the build, skips if the DB is
+        # locked by the live fleet. Verdicts are NOT set here — those are owned
+        # by sync_objdiff.py (real diffs), per the orchestrator's design.
+        ###
+        n.comment("Sync report.json metadata into the orchestrator DB (build-safe)")
+        n.rule(
+            name="sync_db",
+            command=(
+                f"$python scripts/ingest_report.py {report_path} "
+                f"--db decomp.db --build-safe && echo > $out"
+            ),
+            description="SYNC DB",
+        )
+        n.build(
+            outputs=str(db_sync_stamp),
+            rule="sync_db",
+            inputs=[str(report_path)],
+            implicit=["scripts/ingest_report.py"],
             order_only="post-build",
         )
 
