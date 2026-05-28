@@ -30,6 +30,11 @@ SRC_DIR = PROJECT_ROOT / "build" / "373307D9" / "src"
 IMAGE_SYM_CLASS_EXTERNAL = 2
 IMAGE_SYM_CLASS_STATIC = 3
 
+# Minimum size of a COFF file header. We read the symbol-table pointer and
+# count at offsets 8 and 12 (4 bytes each), so anything shorter than the full
+# 20-byte header is not a parseable COFF object.
+COFF_HEADER_SIZE = 20
+
 
 def patch_obj(path, apply=False, verbose=False):
     """Find ??__E STATIC symbols in a COFF .obj and promote to EXTERNAL.
@@ -38,6 +43,15 @@ def patch_obj(path, apply=False, verbose=False):
     """
     with open(path, 'rb') as f:
         data = bytearray(f.read())
+
+    # Skip empty/truncated orphan .obj files. Reflinked worktrees can pick up
+    # zero-byte orphan objects (e.g. a build/.../system/utl/StreamRecorder.obj
+    # with no ninja rule), and struct.unpack_from would crash on them. Anything
+    # smaller than a full COFF header has no symbols to patch — skip it cleanly.
+    if len(data) < COFF_HEADER_SIZE:
+        if verbose:
+            print(f"  SKIP (empty/short, {len(data)} bytes): {path}", file=sys.stderr)
+        return []
 
     # COFF header
     sym_offset = struct.unpack_from('<I', data, 8)[0]

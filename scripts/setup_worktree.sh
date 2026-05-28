@@ -199,6 +199,19 @@ if [ -L "$WT_BUILD" ]; then
     exit 1
 fi
 
+# ---- prune zero-byte orphan .obj files --------------------------------------
+# The main build dir can accumulate zero-byte orphan objects with no ninja rule
+# (e.g. build/$VERSION/src/system/utl/StreamRecorder.obj — the real source is
+# system/gesture/StreamRecorder.cpp). Reflinking them into the worktree breaks
+# the post-build .obj patchers (obj_dynamic_init_patcher.py et al. tried to
+# struct.unpack_from a COFF header out of an empty buffer). The patchers now
+# skip short/empty files defensively, but deleting the orphans here keeps the
+# worktree clean and avoids the warning spam.
+if [ -d "$WT_BUILD/src" ]; then
+    pruned=$(find "$WT_BUILD/src" -name '*.obj' -type f -size 0 -print -delete 2>/dev/null | wc -l)
+    [ "$pruned" -gt 0 ] && echo "==> Pruned $pruned zero-byte orphan .obj file(s)"
+fi
+
 # ---- prime ninja state : trigger SPLIT + configure.py regeneration ----------
 # Without this, the worktree's first `ninja -t commands <obj>` query (used by
 # the permuter, MCP orchestrator, and objdiff scripts) can return commands
