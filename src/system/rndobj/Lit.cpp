@@ -83,14 +83,16 @@ bool RndLight::Replace(ObjRef *ref, Hmx::Object *obj) {
 
 Transform RndLight::Projection() {
     Transform result;
+    static bool sInit;
+    static Transform sBias;
     if (mRange == 0.0f) {
         result.Reset();
     } else {
         Vector3 xRow = WorldXfm().m.x;
 
         const Transform &wz = WorldXfm();
-        float nzy = -wz.m.z.y;
         float nzx = -wz.m.z.x;
+        float nzy = -wz.m.z.y;
         float nzz = -wz.m.z.z;
 
         Vector3 yRow = WorldXfm().m.y;
@@ -101,13 +103,19 @@ Transform RndLight::Projection() {
         float slope = (mBotRadius - topR) / mRange;
 
         result.m.x.y = nzx;
-        result.m.y.z = yRow.y * slope;
-        result.m.z.z = yRow.z * slope;
-        result.m.x.z = yRow.x * slope;
+        float _fpr0 = yRow.y;
+        float _fpr1 = yRow.z;
+        float _fpr2 = yRow.x;
+        float _fpr3 = pos.z;
+        float _fpr4 = pos.y;
+        float _fpr5 = pos.x;
+        result.m.y.z = _fpr0 * slope;
+        result.m.z.z = _fpr1 * slope;
+        result.m.x.z = _fpr2 * slope;
 
-        result.v.x = -(pos.x * xRow.x + pos.y * xRow.y + pos.z * xRow.z);
-        result.v.y = -(pos.x * nzx + pos.y * nzy + pos.z * nzz);
-        result.v.z = topR - (pos.x * yRow.x * slope + pos.y * yRow.y * slope + pos.z * yRow.z * slope);
+        result.v.x = -((_fpr3 * xRow.z + (_fpr4 * xRow.y + _fpr5 * xRow.x)));
+        result.v.y = -((_fpr5 * nzx + (_fpr4 * nzy + _fpr3 * nzz)));
+        result.v.z = topR - _fpr5 * _fpr2 * slope - _fpr4 * _fpr0 * slope - _fpr3 * _fpr1 * slope;
 
         result.m.x.x = xRow.x;
         result.m.y.x = xRow.y;
@@ -117,8 +125,6 @@ Transform RndLight::Projection() {
 
         Multiply(result, mTextureXfm, result);
 
-        static bool sInit;
-        static Transform sBias;
         if (!sInit) {
             sInit = true;
             sBias.m.x.Set(0.5f, 0.0f, 0.0f);
