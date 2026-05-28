@@ -11,7 +11,16 @@ splitter emits each as an unnamed `fn_<addr>` symbol because the binary
 loses the funclet's name at link time, which inflates the workable count.
 We treat any `fn_<addr>` whose address appears as an `__unwind$` or
 `__catch$` entry in the original linker map (orig/373307D9/ham_xbox_r.map)
-as a build artifact, not workable.
+as a build artifact, not orchestrator-tracked work.
+
+objdiff v4.2.0 now *pairs* these funclets by byte signature, so they DO
+score in report.json (~1,297 at 100% normalized). The orchestrator DB
+(decomp.db, which this script reads) is a separate data plane and does not
+ingest those matches, so the exclusion above stays correct for the
+DB-derived "remaining" count. As a cross-check we read report.json and
+warn if funclet pairing has regressed (the agreed sanity check that
+replaced a blind denominator skip) — if that warning fires, objdiff's
+funclet pairing broke and the exclusion is masking real numbers.
 
 Usage:
     python3 scripts/get_progress.py
@@ -28,6 +37,14 @@ from orchestrator.database import get_connection, get_stats
 
 DB_PATH = str(PROJECT_ROOT / "decomp.db")
 MAP_PATH = PROJECT_ROOT / "orig" / "373307D9" / "ham_xbox_r.map"
+REPORT_PATH = PROJECT_ROOT / "build" / "373307D9" / "report.json"
+
+# A funclet counts as "paired" in report.json once objdiff matches it past
+# this normalized %. Below it (or absent) means pairing failed for it.
+FUNCLET_PAIRED_THRESHOLD = 99.0
+# Warn if more than this fraction of funclets present in report.json are
+# unpaired — signals an objdiff funclet-pairing regression.
+FUNCLET_UNPAIRED_WARN_FRAC = 0.05
 
 
 def _load_funclet_addrs(map_path: Path = MAP_PATH) -> set[str]:
@@ -58,6 +75,35 @@ def _funclet_filter_sql(funclet_addrs: set[str]) -> str:
     # quoted lowercase 'fn_<addr>' literals
     quoted = ",".join(f"'fn_{a}'" for a in sorted(funclet_addrs))
     return f"LOWER(symbol) NOT IN ({quoted})"
+
+
+def _funclet_pairing_health(funclet_addrs: set[str]):
+    """Cross-check report.json: of the funclet `fn_<addr>` symbols objdiff
+    enumerates, how many pair to >= FUNCLET_PAIRED_THRESHOLD. Returns
+    (present, paired, unpaired_samples) or None if report.json is absent."""
+    import json
+    if not REPORT_PATH.exists() or not funclet_addrs:
+        return None
+    try:
+        report = json.loads(REPORT_PATH.read_text())
+    except (OSError, ValueError):
+        return None
+    present = paired = 0
+    unpaired_samples: list[str] = []
+    for unit in report.get("units", []):
+        for fn in unit.get("functions", []):
+            name = fn.get("name", "")
+            if not name.startswith("fn_"):
+                continue
+            if name[3:].lower() not in funclet_addrs:
+                continue
+            present += 1
+            pct = fn.get("match_percent_normalized")
+            if pct is not None and pct >= FUNCLET_PAIRED_THRESHOLD:
+                paired += 1
+            elif len(unpaired_samples) < 10:
+                unpaired_samples.append(f"{name} ({pct}%)")
+    return present, paired, unpaired_samples
 
 
 def get_progress() -> str:
@@ -110,6 +156,27 @@ def get_progress() -> str:
     output += f"| **Remaining (real, post-funclet)** | **{remaining_real:,}** | — |\n"
     output += f"| Done (COMPLETE + AT_LIMIT), raw non-excluded | {complete + at_limit:,} | {done_pct:.1f}% |\n"
     output += f"| **Done (COMPLETE + AT_LIMIT), real surface** | **{complete + at_limit:,}** | **{real_done_pct:.1f}%** |\n"
+
+    # Sanity check: confirm objdiff (v4.2.0+) is still pairing the excluded
+    # funclets in report.json. If pairing regressed, the exclusion above is
+    # hiding real unmatched work — surface it loudly.
+    health = _funclet_pairing_health(funclet_addrs)
+    if health is not None:
+        present, paired, unpaired_samples = health
+        if present:
+            frac_unpaired = (present - paired) / present
+            pct_paired = paired / present * 100
+            output += (
+                f"\n_EH funclet pairing (objdiff): {paired:,}/{present:,} "
+                f"({pct_paired:.1f}%) matched in report.json._\n"
+            )
+            if frac_unpaired > FUNCLET_UNPAIRED_WARN_FRAC:
+                output += (
+                    f"\n> ⚠️ **{frac_unpaired * 100:.1f}% of funclets are unpaired** "
+                    f"(threshold {FUNCLET_UNPAIRED_WARN_FRAC * 100:.0f}%). objdiff "
+                    f"funclet pairing may have regressed — the funclet exclusion is "
+                    f"masking real unmatched work. Samples: {', '.join(unpaired_samples)}\n"
+                )
 
     # Pattern counts
     pattern_keys = [
