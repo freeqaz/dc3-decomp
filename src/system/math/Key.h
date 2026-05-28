@@ -1,4 +1,5 @@
 #pragma once
+#include "math/Color.h"
 #include "math/Utl.h"
 #include "math/Vec.h"
 #include "os/Debug.h"
@@ -57,6 +58,35 @@ BinStream &operator>>(BinStream &bs, Key<T> &key) {
 template <class T>
 BinStreamRev &operator>>(BinStreamRev &bs, Key<T> &key) {
     bs >> key.value >> key.frame;
+    return bs;
+}
+
+// For Key<T> whose value reads through a BinStream& (not BinStreamRev&) overload,
+// the original streamed via bs.stream directly so the compiler caches the BinStream
+// pointer across both reads instead of reloading bs.stream for the frame read.
+// __declspec(noinline) keeps these out-of-line so the vector<Key<T>> readers call
+// them (matching the target) instead of inlining a divergent body.
+template <>
+__declspec(noinline) inline BinStreamRev &operator>><Vector3>(BinStreamRev &bs, Key<Vector3> &key) {
+    bs.stream >> key.value >> key.frame;
+    return bs;
+}
+
+template <>
+__declspec(noinline) inline BinStreamRev &operator>><Vector2>(BinStreamRev &bs, Key<Vector2> &key) {
+    bs.stream >> key.value >> key.frame;
+    return bs;
+}
+
+template <>
+__declspec(noinline) inline BinStreamRev &operator>><Hmx::Color>(BinStreamRev &bs, Key<Hmx::Color> &key) {
+    bs.stream >> key.value >> key.frame;
+    return bs;
+}
+
+template <>
+__declspec(noinline) inline BinStreamRev &operator>><Weight>(BinStreamRev &bs, Key<Weight> &key) {
+    bs.stream >> (Vector3 &)key.value >> key.frame;
     return bs;
 }
 
