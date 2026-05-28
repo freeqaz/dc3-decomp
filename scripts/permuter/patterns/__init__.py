@@ -109,6 +109,7 @@ from . import reference_elimination_chain  # noqa: F401  # Chain 2-4 reference e
 from . import loop_body_assign_hoist  # noqa: F401  # Hoist post-call assignment to before call in loop body (register scheduling)
 from . import signed_unsigned_cast_polarity  # noqa: F401  # Targeted casts for bge<->ble / blt<->bgt branch polarity flips
 from . import mwcc_regorder_probe  # noqa: F401  # Probe MWCC callee-saved reg order via this->member hoisting permutations
+from . import bool_materialize_guard  # noqa: F401  # Wrap bool in !! to force materialize before arithmetic (!!gather + sel - ...)
 
 from .base import get_all_patterns, get_pattern, list_patterns
 
