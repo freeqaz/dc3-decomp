@@ -2,6 +2,21 @@
 
 New permuter patterns shipped this session and proposal-stage candidates harvested from sweep agents' reflections. Companion to the broader [INDEX.md](INDEX.md) catalogue.
 
+## Update 2026-05-28 — proposals graduated to shipped
+
+Six of the proposal-stage candidates below were implemented (parallel Opus subagents) and committed to DC3 main. 152 new tests, all passing. Each was given a tight relevance gate to avoid overlapping existing patterns.
+
+| Proposal | Shipped as | Commit | Tests | Notes |
+|---|---|---|---|---|
+| #2 bool_materialize_guard | `bool_materialize_guard` | `65f44a13` | 29 | Wraps bool in `!!` to force li/beq/li/clrlwi materialize before arithmetic. No overlap with `bool_materialize` (that targets `&&`/`&`) or `bool_cast`. |
+| #3 pointer_reuse_alias_guard | folded into `reference_elimination_chain` | `b8fe69bc` | 17 | Drops chain variants producing always-true `x==x`, self-assign, or dangling `&ref`. Catches the BandPatchMesh::FindXfm `foundFace==foundFace` bug. `dropped_alias_guard` counter. |
+| #5 int_to_float_batch_reorder | `int_to_float_split` | `1c4027ee` | 27 | Splits `(float)((short*)p)[i]` into `int tmp; (float)tmp` (+ inverse collapse). Tighter than `variable_extraction` (only int→float load+convert). |
+| #6 loop_var_hoist | `loop_var_hoist` | `da6483c6` | 25 | Hoists loop-invariant decls out of loop bodies + inverse sink. |
+| #8 bool_pointer_normalize_suppressor | `bool_pointer_normalize_suppressor` | `d6856845` | 30 | Swaps `(long)ptr & mask` cast styles (reinterpret_cast/uintptr_t/unsigned) to suppress cntlzw/extrwi normalization. |
+| #10/#11 stack_frame_local_array_hoisting / nested_scope_register_pressure | `stack_array_hoist` | `f8f4ebe3` | 24 | Hoists large arrays/structs (N≥4 or non-primitive) from inner scope to function scope + inverse sink. Restricted vs `scope_widening` to arrays/structs only. |
+
+Still open from the proposal list: #1 (shelved — see `mwcc_regorder_probe`), #4 (already covered by `fabs_variant`), #7 `virtual_call_force`, #9 `spill_promoting`, #12–#15 (diagnostic-only classifiers).
+
 ## Tooling fixes that landed today
 
 These are not patterns themselves but unblock other patterns. All in main.
