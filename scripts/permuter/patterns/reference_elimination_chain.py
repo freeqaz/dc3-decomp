@@ -24,6 +24,7 @@ Overlap audit:
 
 from __future__ import annotations
 
+import re
 from typing import Iterator
 
 from .base import Pattern
@@ -33,8 +34,9 @@ from .reference_elimination import (
     _find_identifier_uses,
     _has_address_of_use,
 )
+from ..ast_queries import walk
 from ..editor import SourceEditor
-from ..extractor import reparse_variant
+from ..extractor import _PARSER, reparse_variant
 from ..types import Diagnosis, FunctionContext, Variant
 
 # Maximum chain depth — avoid combinatorial explosion
@@ -42,12 +44,24 @@ _MAX_CHAIN_DEPTH = 4
 # Minimum chain depth — single-elimination is already handled by reference_elimination
 _MIN_CHAIN_DEPTH = 2
 
+# Whitespace-normalization regex for comparing operand text.
+_WS_RE = re.compile(rb"\s+")
+
+# Self-comparison operators that, if both sides match, indicate a logic bug
+# introduced by the elimination (always-true / always-false comparison).
+_SELF_CMP_OPS = (b"==", b"!=", b"<", b"<=", b">", b">=")
+
 
 class ReferenceEliminationChainPattern(Pattern):
     name = "reference_elimination_chain"
     safety_tier = "moderate"
     structural_domain = "general"
     follow_ups = ("reference_elimination",)
+
+    # Counter incremented each time pointer_reuse_alias_guard drops a candidate
+    # variant. Class-level so callers / tests can observe sweep-wide totals;
+    # tests reset this in setUp() to isolate runs.
+    dropped_alias_guard: int = 0
 
     def relevant(self, diagnosis: Diagnosis) -> bool:
         # Same signals as reference_elimination: callee-saved swaps or clusters
@@ -114,15 +128,19 @@ class ReferenceEliminationChainPattern(Pattern):
                 # Depth-2 variant
                 desc1 = first_elim[0].decode("utf-8", errors="replace")
                 desc2 = second_elim[0].decode("utf-8", errors="replace")
-                yield Variant(
-                    name=f"refelim_chain_{counter}",
-                    pattern_name=self.name,
-                    description=f"Eliminate refs '{desc1}' then '{desc2}'",
-                    source=source_after_2,
-                )
-                counter += 1
-                if counter >= 6:
-                    break
+                eliminated_2 = {first_elim[0], second_elim[0]}
+                if _pointer_reuse_alias_guard(source_after_2, eliminated_2):
+                    type(self).dropped_alias_guard += 1
+                else:
+                    yield Variant(
+                        name=f"refelim_chain_{counter}",
+                        pattern_name=self.name,
+                        description=f"Eliminate refs '{desc1}' then '{desc2}'",
+                        source=source_after_2,
+                    )
+                    counter += 1
+                    if counter >= 6:
+                        break
 
                 # Try depth-3 if budget allows
                 if counter < 6:
@@ -143,18 +161,29 @@ class ReferenceEliminationChainPattern(Pattern):
                             continue
 
                         desc3 = third_elim[0].decode("utf-8", errors="replace")
-                        yield Variant(
-                            name=f"refelim_chain_{counter}",
-                            pattern_name=self.name,
-                            description=(
-                                f"Eliminate refs '{desc1}', '{desc2}', '{desc3}'"
-                            ),
-                            source=source_after_3,
+                        eliminated_3 = {
+                            first_elim[0], second_elim[0], third_elim[0]
+                        }
+                        depth3_dropped = _pointer_reuse_alias_guard(
+                            source_after_3, eliminated_3
                         )
-                        counter += 1
+                        if depth3_dropped:
+                            type(self).dropped_alias_guard += 1
+                        else:
+                            yield Variant(
+                                name=f"refelim_chain_{counter}",
+                                pattern_name=self.name,
+                                description=(
+                                    f"Eliminate refs '{desc1}', '{desc2}', '{desc3}'"
+                                ),
+                                source=source_after_3,
+                            )
+                            counter += 1
 
-                        # Try depth-4
-                        if counter < 6:
+                        # Try depth-4 — but only if depth-3 source is sound.
+                        # Building deeper on top of a guard-tripped depth-3
+                        # source would inherit the same alias bug.
+                        if counter < 6 and not depth3_dropped:
                             try:
                                 ctx4 = reparse_variant(ctx3, source_after_3)
                             except ValueError:
@@ -174,6 +203,15 @@ class ReferenceEliminationChainPattern(Pattern):
                                 except ValueError:
                                     continue
                                 desc4 = fourth_elim[0].decode("utf-8", errors="replace")
+                                eliminated_4 = {
+                                    first_elim[0], second_elim[0],
+                                    third_elim[0], fourth_elim[0],
+                                }
+                                if _pointer_reuse_alias_guard(
+                                    source_after_4, eliminated_4
+                                ):
+                                    type(self).dropped_alias_guard += 1
+                                    continue
                                 yield Variant(
                                     name=f"refelim_chain_{counter}",
                                     pattern_name=self.name,
@@ -311,3 +349,111 @@ def _find_node_at_byte(root, byte_offset: int):
         if found is None:
             return node
         node = found
+
+
+# ---------------------------------------------------------------------------
+# pointer_reuse_alias_guard
+# ---------------------------------------------------------------------------
+#
+# After a chain elimination, the substituted text may collapse two distinct
+# references into the SAME expression, producing logic bugs such as:
+#
+#     foundFace == &endFace            (before — comparing distinct pointers)
+#     foundFace == foundFace           (after  — always true!)
+#
+# The single-step reference_elimination pass is normally safe because it bails
+# when it sees `&ref` (address-of). Chained elimination can still introduce
+# the bug if a LATER step inlines the OTHER side of a pre-existing comparison
+# in a way that makes both operands lexically identical, OR if it leaves a
+# stray `&IDENT` referring to a now-deleted local.
+#
+# The guard is a post-substitution syntactic check on the produced source:
+#   1. Always-true / always-false binary comparison: both operands lex-equal.
+#   2. Self-assignment: `X = X` (post-whitespace-normalization).
+#   3. Dangling reference: `&IDENT` where IDENT is a name we just eliminated.
+#
+# Any one of these tripping causes the variant to be dropped.
+
+def _normalize_ws(text: bytes) -> bytes:
+    """Collapse all runs of whitespace to a single space, strip ends."""
+    return _WS_RE.sub(b" ", text).strip()
+
+
+def _pointer_reuse_alias_guard(
+    source: bytes,
+    eliminated_names: set[bytes],
+) -> bool:
+    """Return True if ``source`` exhibits an alias-introduced logic bug.
+
+    Performs three syntactic safety checks on the post-elimination source:
+
+    1. **Always-true/false comparison** — any ``binary_expression`` whose
+       operator is one of ``== != < <= > >=`` and whose LHS text equals its
+       RHS text (after whitespace normalization). This catches the
+       ``foundFace == &endFace`` -> ``foundFace == foundFace`` shape.
+    2. **Self-assignment** — any ``assignment_expression`` with operator
+       ``=`` and lex-equal LHS/RHS. Catches ``X = X`` shapes.
+    3. **Dangling reference** — any ``&IDENT`` where IDENT is in
+       ``eliminated_names`` (the source identifier has been deleted, so a
+       stray address-of of it would not even compile cleanly).
+
+    Returns True to indicate the variant SHOULD BE DROPPED.
+    """
+    # Check #3 first — cheap byte-level scan for dangling `&IDENT`.
+    for name in eliminated_names:
+        # Match `&NAME` not preceded/followed by an identifier character.
+        # E.g. `&endFace` should trip; `&endFaceSomething` (different name)
+        # should not.
+        idx = 0
+        while True:
+            idx = source.find(b"&" + name, idx)
+            if idx < 0:
+                break
+            # Char after `&NAME` must not be an identifier-continuation char.
+            after = idx + 1 + len(name)
+            if after < len(source):
+                nxt = source[after:after + 1]
+                if (b"a" <= nxt.lower() <= b"z" or b"0" <= nxt <= b"9"
+                        or nxt == b"_"):
+                    idx = after
+                    continue
+            # Char before `&` must not be `&` (avoid `&&`) — that's logical AND.
+            if idx > 0 and source[idx - 1:idx] == b"&":
+                idx = after
+                continue
+            return True
+
+    # Checks #1 & #2 — walk the AST.
+    try:
+        tree = _PARSER.parse(source)
+    except Exception:
+        # If parsing fails outright, treat as unsafe.
+        return True
+
+    for n in walk(tree.root_node):
+        if n.type == "binary_expression":
+            op = n.child_by_field_name("operator")
+            lhs = n.child_by_field_name("left")
+            rhs = n.child_by_field_name("right")
+            if op is None or lhs is None or rhs is None:
+                continue
+            if op.text not in _SELF_CMP_OPS:
+                continue
+            lhs_t = _normalize_ws(source[lhs.start_byte:lhs.end_byte])
+            rhs_t = _normalize_ws(source[rhs.start_byte:rhs.end_byte])
+            if lhs_t and lhs_t == rhs_t:
+                return True
+        elif n.type == "assignment_expression":
+            op = n.child_by_field_name("operator")
+            lhs = n.child_by_field_name("left")
+            rhs = n.child_by_field_name("right")
+            if op is None or lhs is None or rhs is None:
+                continue
+            if op.text != b"=":
+                continue
+            lhs_t = _normalize_ws(source[lhs.start_byte:lhs.end_byte])
+            rhs_t = _normalize_ws(source[rhs.start_byte:rhs.end_byte])
+            if lhs_t and lhs_t == rhs_t:
+                return True
+
+    return False
