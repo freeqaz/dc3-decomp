@@ -1988,9 +1988,9 @@ void RndScaleObject(Hmx::Object *obj, float scale, float fovScale) {
     }
     RndLine *line = dynamic_cast<RndLine *>(obj);
     if (line) {
+        Vector3 vec;
         line->SetWidth(line->GetWidth() * scale);
         for (int i = 0; i < line->NumPoints(); i++) {
-            Vector3 vec;
             Scale(line->PointAt(i).point, scale, vec);
             line->SetPointPos(i, vec);
         }
@@ -2062,6 +2062,9 @@ void RndScaleObject(Hmx::Object *obj, float scale, float fovScale) {
     }
     RndParticleSys *partsys = dynamic_cast<RndParticleSys *>(obj);
     if (partsys) {
+        partsys->SetEmitRate(
+            partsys->EmitRate().x / fovScale, partsys->EmitRate().y / fovScale
+        );
         partsys->SetBubbleSize(
             partsys->BubbleSize().x * scale, partsys->BubbleSize().y * scale
         );
@@ -2069,9 +2072,6 @@ void RndScaleObject(Hmx::Object *obj, float scale, float fovScale) {
             partsys->BubblePeriod().x * fovScale, partsys->BubblePeriod().y * fovScale
         );
         partsys->SetLife(partsys->Life().x * fovScale, partsys->Life().y * fovScale);
-        partsys->SetEmitRate(
-            partsys->EmitRate().x / fovScale, partsys->EmitRate().y / fovScale
-        );
         Vector3 vb = partsys->ForceDir();
         vb *= (scale / fovScale) / fovScale;
         partsys->SetForceDir(vb);
