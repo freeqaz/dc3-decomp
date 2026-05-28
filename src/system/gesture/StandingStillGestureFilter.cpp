@@ -39,7 +39,8 @@ void StandingStillGestureFilter::Update(const Skeleton &skeleton, int ms) {
         return;
 
     SkeletonQualityFilter &filter = TheGestureMgr->GetSkeletonQualityFilter(idx);
-    filter.Update(skeleton, TheGestureMgr->mInShellMode);
+    if (TheGestureMgr)
+        filter.Update(skeleton, TheGestureMgr->mInShellMode);
 
     if (!skeleton.IsTracked() && !TheGestureMgr->IsTrackingAllSkeletons()) {
         TheGestureMgr->unk30[idx] = 2;
@@ -69,7 +70,8 @@ void StandingStillGestureFilter::Update(const Skeleton &skeleton, int ms) {
             Normalize(shoulderDiff, shoulderDiff);
             float shoulderFacing =
                 ((shoulderDiff.y + shoulderDiff.x) * 0.0f) + shoulderDiff.z;
-            if (std::fabs(shoulderFacing) > mForwardFacingCutoff) {
+            auto _tmp0 = std::fabs(shoulderFacing);
+            if (_tmp0 > mForwardFacingCutoff) {
                 state = 6;
             } else {
                 Vector2 handLeftPos, handRightPos;
@@ -86,23 +88,21 @@ void StandingStillGestureFilter::Update(const Skeleton &skeleton, int ms) {
                     } else {
                         const TrackedJoint *joints = skeleton.TrackedJoints();
                         Vector3 v1, v2, v3, v4;
-                        const Vector3 &kneeR = joints[kJointKneeRight].mJointPos[0];
-                        v1.x = kneeR.x - joints[kJointHipRight].mJointPos[0].x;
-                        v1.y = kneeR.y - joints[kJointHipRight].mJointPos[0].y;
-                        v1.z = kneeR.z - joints[kJointHipRight].mJointPos[0].z;
-                        v2.x = kneeR.x - joints[kJointAnkleRight].mJointPos[0].x;
-                        v2.y = kneeR.y - joints[kJointAnkleRight].mJointPos[0].y;
-                        v2.z = kneeR.z - joints[kJointAnkleRight].mJointPos[0].z;
+                        v1.x = joints[kJointKneeRight].mJointPos[0].x - joints[kJointHipRight].mJointPos[0].x;
+                        v1.y = joints[kJointKneeRight].mJointPos[0].y - joints[kJointHipRight].mJointPos[0].y;
+                        v1.z = joints[kJointKneeRight].mJointPos[0].z - joints[kJointHipRight].mJointPos[0].z;
+                        v2.x = joints[kJointKneeRight].mJointPos[0].x - joints[kJointAnkleRight].mJointPos[0].x;
+                        v2.y = joints[kJointKneeRight].mJointPos[0].y - joints[kJointAnkleRight].mJointPos[0].y;
+                        v2.z = joints[kJointKneeRight].mJointPos[0].z - joints[kJointAnkleRight].mJointPos[0].z;
                         Normalize(v1, v1);
                         Normalize(v2, v2);
 
-                        const Vector3 &kneeL = joints[kJointKneeLeft].mJointPos[0];
-                        v3.x = kneeL.x - joints[kJointHipLeft].mJointPos[0].x;
-                        v3.y = kneeL.y - joints[kJointHipLeft].mJointPos[0].y;
-                        v3.z = kneeL.z - joints[kJointHipLeft].mJointPos[0].z;
-                        v4.x = kneeL.x - joints[kJointAnkleLeft].mJointPos[0].x;
-                        v4.y = kneeL.y - joints[kJointAnkleLeft].mJointPos[0].y;
-                        v4.z = kneeL.z - joints[kJointAnkleLeft].mJointPos[0].z;
+                        v3.x = joints[kJointKneeLeft].mJointPos[0].x - joints[kJointHipLeft].mJointPos[0].x;
+                        v3.y = joints[kJointKneeLeft].mJointPos[0].y - joints[kJointHipLeft].mJointPos[0].y;
+                        v3.z = joints[kJointKneeLeft].mJointPos[0].z - joints[kJointHipLeft].mJointPos[0].z;
+                        v4.x = joints[kJointKneeLeft].mJointPos[0].x - joints[kJointAnkleLeft].mJointPos[0].x;
+                        v4.y = joints[kJointKneeLeft].mJointPos[0].y - joints[kJointAnkleLeft].mJointPos[0].y;
+                        v4.z = joints[kJointKneeLeft].mJointPos[0].z - joints[kJointAnkleLeft].mJointPos[0].z;
                         Normalize(v3, v3);
                         Normalize(v4, v4);
 
