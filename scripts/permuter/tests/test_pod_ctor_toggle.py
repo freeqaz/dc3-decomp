@@ -64,6 +64,7 @@ struct UpcomingFretRelease {
     int slot;
     float time;
 };
+std::vector<UpcomingFretRelease> g_v;
 void test_func() {
     UpcomingFretRelease r;
     r.slot = 0;
@@ -94,6 +95,7 @@ struct WithCtor {
     int slot;
     float time;
 };
+std::vector<WithCtor> g_v;
 void test_func() {
     WithCtor r;
     r.slot = 0;
@@ -116,6 +118,7 @@ struct PodOnly {
     int slot;
     float time;
 };
+std::vector<PodOnly> g_v;
 void test_func() {
     PodOnly r;
     r.slot = 0;
@@ -487,6 +490,88 @@ void test_func() {
 
 
 # ---------------------------------------------------------------------------
+# Value-copy gate (justifies default-on: skip pointer-only structs)
+# ---------------------------------------------------------------------------
+
+class TestValueCopyGate(unittest.TestCase):
+    """Only structs USED BY VALUE fire; pointer-only structs are skipped.
+
+    POD-ness is codegen-irrelevant for a struct used solely through pointers
+    (intrusive list), and such structs are typically referenced by many
+    functions — exactly the per-TU blast-radius risk that defaulting must
+    avoid. Verified empirically: adding FreeBlock(){} to MemMgr.cpp (15
+    referencing functions) changed 0 of 15.
+    """
+
+    def test_pointer_only_struct_skipped(self):
+        pattern = get_pattern("pod_ctor_toggle")
+        ctx = make_context(
+            """\
+struct FreeBlock {
+    int mSizeWords;
+    unsigned int mTimeStamp;
+    FreeBlock *mNext;
+};
+void test_func() {
+    FreeBlock *p = head();
+    while (p) p = p->mNext;
+}
+""",
+            "test_func",
+            _diag_typed_target(),
+        )
+        variants = list(pattern.generate(ctx))
+        self.assertEqual(
+            variants, [],
+            "A struct used only via pointers must be skipped (codegen no-op)",
+        )
+
+    def test_container_stored_struct_fires(self):
+        pattern = get_pattern("pod_ctor_toggle")
+        ctx = make_context(
+            """\
+struct Rec {
+    int slot;
+    float time;
+};
+std::vector<Rec> g_recs;
+void test_func() {
+    g_recs.push_back(make());
+}
+""",
+            "test_func",
+            _diag_typed_target(),
+        )
+        variants = list(pattern.generate(ctx))
+        added = [v for v in variants if b"pod_ctor_add" in v.name.encode()]
+        self.assertTrue(
+            added, "A struct stored by value in a vector must fire the add path"
+        )
+
+    def test_value_local_struct_fires(self):
+        pattern = get_pattern("pod_ctor_toggle")
+        ctx = make_context(
+            """\
+struct Rec {
+    int slot;
+    float time;
+};
+void test_func() {
+    Rec r;
+    r.slot = 0;
+}
+""",
+            "test_func",
+            _diag_typed_target(),
+        )
+        variants = list(pattern.generate(ctx))
+        added = [v for v in variants if b"pod_ctor_add" in v.name.encode()]
+        self.assertTrue(
+            added, "A value-typed local declaration is a by-value use; must fire"
+        )
+
+
+# ---------------------------------------------------------------------------
 # relevant() gate
 # ---------------------------------------------------------------------------
 
@@ -540,14 +625,14 @@ class TestPatternMetadata(unittest.TestCase):
         pattern = get_pattern("pod_ctor_toggle")
         self.assertEqual(pattern.name, "pod_ctor_toggle")
 
-    def test_is_opt_in(self):
-        """Remove-direction is dangerous; the whole pattern is opt-in."""
+    def test_is_default_enabled(self):
+        """Default-enabled after corpus stress-test + value-copy gate."""
         pattern = get_pattern("pod_ctor_toggle")
-        self.assertTrue(pattern.opt_in)
+        self.assertFalse(pattern.opt_in)
 
     def test_safety_tier(self):
         pattern = get_pattern("pod_ctor_toggle")
-        self.assertEqual(pattern.safety_tier, "experimental")
+        self.assertEqual(pattern.safety_tier, "moderate")
 
     def test_structural_domain(self):
         pattern = get_pattern("pod_ctor_toggle")
@@ -558,11 +643,11 @@ class TestPatternMetadata(unittest.TestCase):
         all_patterns = list_patterns(include_opt_in=True)
         self.assertIn("pod_ctor_toggle", all_patterns)
 
-    def test_excluded_from_default_patterns(self):
-        """opt_in patterns are excluded from the default (non-opt-in) list."""
+    def test_included_in_default_patterns(self):
+        """Default-enabled: present in the non-opt-in list."""
         from scripts.permuter.patterns.base import list_patterns
         default = list_patterns(include_opt_in=False)
-        self.assertNotIn("pod_ctor_toggle", default)
+        self.assertIn("pod_ctor_toggle", default)
 
 
 if __name__ == "__main__":

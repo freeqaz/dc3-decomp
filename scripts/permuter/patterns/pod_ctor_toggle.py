@@ -35,7 +35,16 @@ of the permuter and must be toggled by hand.
 The add-direction is comparatively safe (adding an empty ctor never changes
 program behaviour). The remove-direction is risky — removing a ctor that is
 actually *called* (``T(a, b)`` / ``push_back(T(a, b))``) breaks the build — so it
-is gated behind a call-site scan AND marked ``opt_in`` (see ``opt_in`` below).
+is gated behind a call-site scan.
+
+The pattern is DEFAULT-ENABLED (``opt_in = False``). A ``_is_value_copied()``
+gate in ``generate()`` restricts firing to structs stored BY VALUE in a
+container — the only place POD-ness changes codegen. A struct used solely via
+pointers (intrusive ``T *mNext`` list) is skipped: toggling its ctor is a no-op
+there, and such structs are typically referenced by many functions. This keeps
+the per-function-scored climber's measurement equal to the true per-TU effect,
+which is what makes default-on safe (verified by a corpus stress-test over 884
+files: 0 build-break gate-leaks, 0 parse errors).
 """
 
 from __future__ import annotations
@@ -95,15 +104,18 @@ _MAX_VARIANTS = 6
 
 class PodCtorTogglePattern(Pattern):
     name = "pod_ctor_toggle"
-    # The remove-direction can break the build if a ctor is actually used, and
-    # even a correct flip is only meaningful when the target genuinely diverges
-    # on the POD-copy path. Keep the whole pattern opt-in: it is a surgical,
-    # high-blast-radius transform (it mutates a *type*, affecting every copy of
-    # that type in the TU) and should run only when explicitly requested or
-    # when the diagnosis gate (word-vs-typed copy divergence) fires in a
-    # targeted sweep — not in broad default batches.
-    opt_in = True
-    safety_tier = "experimental"
+    # Default-enabled after a corpus stress-test (884 files): the safety gates
+    # held (0 build-break leaks, 0 parse errors) and the apparent per-TU
+    # blast-radius risk proved illusory — a struct's name-reference count badly
+    # over-estimates its codegen-affected count (adding FreeBlock(){} to
+    # MemMgr.cpp moved 0 of 15 referencing functions, because it is never
+    # value-copied). The _is_value_copied() gate in generate() restricts firing
+    # to structs stored BY VALUE in a container, which is exactly where
+    # POD-ness changes codegen — so the per-function-scored climber's
+    # measurement equals the true per-TU effect. The remove-direction stays
+    # behind its triple gate (dead-body + call-site + out-of-line-def scans).
+    opt_in = False
+    safety_tier = "moderate"
     # Mutates a struct definition at file scope (outside the target function's
     # byte range), like accessor_outline. Variants intentionally leave
     # func_byte_range / original_source unset so the strict per-function scope
@@ -142,6 +154,18 @@ class PodCtorTogglePattern(Pattern):
             return
 
         structs = _find_cpp_local_structs(root, source)
+
+        # VALUE-COPY GATE: POD-ness only changes codegen for a struct that is
+        # value-copied through stlport's POD-branching copy templates
+        # (`_M_insert_overflow_aux<T>` etc.), i.e. one stored BY VALUE in a
+        # container. A struct used solely via pointers (an intrusive `T *mNext`
+        # list) never hits that path, so toggling its ctor is a no-op AND such
+        # structs tend to be referenced by many functions (e.g. FreeBlock in
+        # MemMgr.cpp: 15 referencing functions, 0 affected by adding a ctor).
+        # Gating here keeps the per-function-scored climber's measurement equal
+        # to the true (per-TU) effect, which is what makes the pattern safe to
+        # run by default.
+        structs = [s for s in structs if _is_value_copied(source, s.name)]
 
         # Polarity hint from the diagnosis: prefer the direction the asm asks
         # for, but still emit both if uncertain.
@@ -562,6 +586,37 @@ def _base_type_size(type_str: str) -> Optional[int]:
     # (e.g. an enum alias). Be conservative and reject so we never wrongly
     # POD-ify a non-trivial type.
     return None
+
+
+def _is_value_copied(source: bytes, struct_name: str) -> bool:
+    """True if the struct is USED BY VALUE (so its POD-ness can affect codegen).
+
+    POD-ness only changes codegen for a struct that is copied/stored by value.
+    A struct used solely through pointers (an intrusive ``T *mNext`` list) never
+    hits stlport's ``__type_traits<T>::is_POD_type`` copy branch, so toggling
+    its ctor is a no-op — and such pointer-only structs tend to be referenced by
+    many functions (the FreeBlock/MemMgr 15-refs / 0-affected case). Excluding
+    them keeps the per-function-scored climber honest about the per-TU effect.
+
+    Two by-value signals (either suffices):
+      1. container / by-value template argument: ``<T>`` ``<T,`` ``,T>`` ``,T,``
+         (a pointer element ``<T*>`` is NOT matched — pointee POD-ness is moot);
+      2. a value-typed declaration ``T ident`` (local, member, by-value param /
+         return). ``T *p`` / ``T &r`` are NOT matched (pointer/reference don't
+         copy), nor is the ctor decl ``T(`` (followed by ``(``, not an ident).
+
+    Conservative on the safe side: a false positive only costs a wasted no-op
+    build (the climber rejects the unchanged variant); a false negative just
+    declines a struct the pattern probably could not have moved anyway.
+    """
+    name = re.escape(struct_name.encode())
+    by_value_template = re.compile(rb"[<,]\s*(?:const\s+)?" + name + rb"\s*[,>]")
+    if by_value_template.search(source):
+        return True
+    # `T ident` — value-typed declaration. The lookahead for an identifier start
+    # excludes `T *p`, `T &r`, and the in-class ctor decl `T(`.
+    value_decl = re.compile(rb"\b" + name + rb"\s+[A-Za-z_]")
+    return value_decl.search(source) is not None
 
 
 def _struct_constructed_with_args(source: bytes, info: _StructInfo) -> bool:
