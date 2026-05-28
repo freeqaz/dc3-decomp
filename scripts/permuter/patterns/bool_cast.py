@@ -157,6 +157,22 @@ def _generate_bool_casts(
                 if _is_bool_cast(right):
                     continue
 
+                # Fix (Wave F3): only wrap when the LHS plausibly accepts a
+                # bool. `bool(X)` returns a bool that implicitly converts to
+                # arithmetic types, but it does NOT convert to record/class
+                # lvalues — so `arr[i] = bool(RGGemInfo(...))` is a hard
+                # compile error. Without libclang we can't always check the
+                # LHS type, so reject the dangerous shapes by syntax:
+                #   - LHS is a subscript_expression (arr[i])  -> record-likely
+                #   - LHS is a field_expression (a.b / a->b) -> record-likely
+                # Keep LHS == identifier (simple local/parameter), which is
+                # the win shape the pattern was authored for (bool flag = X).
+                # See Wave E2c BUILD FAILED sweep on
+                # SongParser::HandleRGGemStart.
+                left = child.child_by_field_name("left")
+                if left is None or not _bool_assignable_lvalue(left):
+                    continue
+
                 right_text = source[right.start_byte:right.end_byte]
                 new_source = (
                     source[:right.start_byte]
@@ -170,6 +186,23 @@ def _generate_bool_casts(
                     source=new_source,
                 )
                 counter += 1
+
+
+def _bool_assignable_lvalue(node: Node) -> bool:
+    """True if *node* (an assignment LHS) plausibly accepts an implicit bool RHS.
+
+    Wave-F3 syntactic filter: ``bool(X)`` returns a bool which converts to
+    arithmetic types but NEVER to record/class lvalues. Without libclang we
+    can't always know the field's true type, but we CAN reject the shapes
+    that are overwhelmingly non-bool by syntax — subscript and member access.
+    Plain identifiers (local/parameter assignments to a ``bool flag`` are
+    the win-shape this pattern was authored for) are allowed through.
+    """
+    if node.type == "identifier":
+        return True
+    # Anything else (subscript_expression, field_expression, pointer_expression,
+    # parenthesized_expression, etc.) is rejected — too risky without types.
+    return False
 
 
 def _is_bool_cast(node: Node) -> bool:

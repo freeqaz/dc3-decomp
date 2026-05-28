@@ -125,6 +125,29 @@ class VariableExtractionPattern(Pattern):
                 and return_type is not None
                 and _int_decl_is_doomed(return_type)
             )
+            # Fix (Wave F3): when libclang couldn't resolve a return type
+            # (return_type is None — either compdb missing or TU parse failed)
+            # AND the call is the RHS of an assignment whose LHS is NOT a
+            # simple identifier (so the LHS type is unknown, could be any
+            # record/pointer/etc.) AND the call's callee looks syntactically
+            # like a constructor (PascalCase, no scalar-prefix), the untyped
+            # ``int _tmp = X(...)`` form is almost certainly a hard compile
+            # error and the variant is dispatched to the build queue only to
+            # BUILD FAILED. The pre-existing typed-resolution guard only fires
+            # when libclang IS available; without a compdb that's never. The
+            # narrow shape (assignment to a non-identifier LHS) is the high-
+            # confidence bug class — broader contexts (returns, arithmetic,
+            # condition clauses) imply scalar so we leave them alone.
+            # Triggered by ``info.mRGGemsInfo[uc - 24] = RGGemInfo(...)`` in
+            # SongParser (Wave E2c BUILD FAILED sweep on HandleRGGemStart).
+            if (
+                emit_untyped
+                and dialect != "msvc"
+                and return_type is None
+                and _is_assignment_rhs_to_complex_lvalue(call_node)
+                and _syntactic_record_return(call_node)
+            ):
+                emit_untyped = False
 
             if emit_untyped:
                 var_name_str = _unique_tmp_name(counter, ctx.file_source, used_names)
@@ -216,6 +239,77 @@ def _resolve_return_type(call_node: Node, ctx: FunctionContext):
     return clang_types.resolve_call_return_type(
         ctx.file_path, call_node.start_byte, ctx.file_source
     )
+
+
+# PascalCase identifier that does NOT begin with a common int-returning
+# accessor prefix. A bare `Foo(args)` callee whose name matches this is
+# almost always a constructor (record return) or a factory returning a
+# record — extracting it into `int _tmp = ...` is a hard compile error.
+# Prefixes intentionally allow-listed because they overwhelmingly return
+# scalars in this codebase (Get, Find, Compute, Count, Has, Is, Should,
+# Can, To, Make-when-followed-by-Int, Read, Size, Length, Num, Total).
+_INT_RETURNING_PREFIXES = (
+    "Get", "Find", "Compute", "Calc", "Count", "Has", "Is", "Should",
+    "Can", "Read", "Size", "Length", "Num", "Total", "Index", "Hash",
+)
+_PASCAL_NAME_RE = re.compile(rb"^[A-Z][A-Za-z0-9_]*$")
+
+
+def _is_assignment_rhs_to_complex_lvalue(call_node: Node) -> bool:
+    """True if *call_node* is the direct ``right`` of an assignment whose
+    ``left`` is NOT a plain identifier.
+
+    This is the narrow shape where ``int _tmp = X(...)`` is most likely to
+    BUILD FAILED without libclang: the LHS is something like ``arr[i]``,
+    ``obj.field`` or ``ptr->member`` whose true type can be anything. When
+    the LHS *is* a plain identifier we trust the existing wider behaviour
+    (locals are usually scalar in our codebase, and a header pattern bridge
+    test depends on this shape — see test_header_variable_extraction_bridge).
+    """
+    parent = call_node.parent
+    if parent is None or parent.type != "assignment_expression":
+        return False
+    right = parent.child_by_field_name("right")
+    # tree-sitter returns a fresh Python wrapper per lookup, so `is`
+    # comparison is unreliable — compare the byte range instead.
+    if right is None or (
+        right.start_byte != call_node.start_byte
+        or right.end_byte != call_node.end_byte
+    ):
+        return False
+    left = parent.child_by_field_name("left")
+    if left is None:
+        return False
+    return left.type != "identifier"
+
+
+def _syntactic_record_return(call_node: Node) -> bool:
+    """Heuristic: True if the call's bare callee identifier looks like a type
+    name (constructor/factory call), so `int _tmp = X(...)` would be wrong.
+
+    Fires only when the function field is a simple identifier matching
+    ``^[A-Z]...$`` AND the identifier does NOT start with a known scalar-
+    returning prefix (Get/Find/Compute/...). Methods like ``obj.GetFret(...)``
+    have a field_expression as function (not a bare identifier) and are
+    therefore NOT flagged — they keep going through the existing untyped
+    path. Built-in casts (`int(x)`, `float(x)`) have lowercase callees so
+    they aren't matched either.
+
+    Returns False on anything that doesn't clearly look like a constructor —
+    we never want to over-block (the goal is to drop true positives that
+    were certain BUILD FAILs in the Wave E2c sweep).
+    """
+    func = call_node.child_by_field_name("function")
+    if func is None or func.type != "identifier" or func.text is None:
+        return False
+    name = func.text
+    if not _PASCAL_NAME_RE.match(name):
+        return False
+    name_str = name.decode("ascii", errors="replace")
+    for prefix in _INT_RETURNING_PREFIXES:
+        if name_str.startswith(prefix):
+            return False
+    return True
 
 
 def _int_decl_is_doomed(ti) -> bool:

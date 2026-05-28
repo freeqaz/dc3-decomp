@@ -409,6 +409,19 @@ def parse_args() -> argparse.Namespace:
         help="Disable constraint-directed synthesis",
     )
     parser.add_argument(
+        "--loop-constraints", action="store_true", default=True,
+        help=(
+            "Re-fire constraint_solver every round (not just round 1). "
+            "Lets new asm state after each round's edits inform subsequent "
+            "Ghidra/m2c synthesis (default: True). "
+            "Override via env: PERMUTER_LOOP_CONSTRAINTS=0 disables."
+        ),
+    )
+    parser.add_argument(
+        "--no-loop-constraints", action="store_false", dest="loop_constraints",
+        help="Run constraint_solver only at round 1 (legacy behavior)",
+    )
+    parser.add_argument(
         "--evolutionary", action="store_true", default=False,
         help="Use evolutionary optimizer instead of greedy hill climbing",
     )
@@ -481,6 +494,7 @@ def hill_climb(
     chain_depth: int = 3,
     adaptive: bool = False,
     constrained: bool = False,
+    loop_constraints: bool = True,
     validate: bool = True,
     no_learned_priority: bool = False,
 ) -> HillClimbResult:
@@ -502,6 +516,13 @@ def hill_climb(
         chain_depth: Maximum chain depth for N-stage composition.
         adaptive: Enable adaptive per-round pattern suppression/boosting.
         constrained: Enable constraint-directed synthesis pre-pass.
+        loop_constraints: When True (default), re-fire constraint_solver every
+            round (not just round 1). Each round re-extracts the FunctionContext
+            from the newly-applied source, so subsequent synthesis runs can
+            exploit fresh Ghidra/m2c oracle output and updated diagnosis state.
+            Variants whose source-bytes we've already attempted are skipped
+            locally before reaching the scorer (saves the score-batch round-trip
+            for identical synth output). Override via env PERMUTER_LOOP_CONSTRAINTS=0.
         validate: Show per-variant validation tiers in output.
         no_learned_priority: Disable Bayesian priority adjustment from DB.
 
@@ -514,6 +535,19 @@ def hill_climb(
     # --chain implies --compose
     if chain:
         compose = True
+
+    # Env-var override: PERMUTER_LOOP_CONSTRAINTS=0 forces legacy round-1-only
+    # constraint synthesis even when the CLI / caller asked to loop. Useful as
+    # a kill-switch if the loop ever regresses without forcing a code edit.
+    if os.environ.get("PERMUTER_LOOP_CONSTRAINTS") == "0":
+        loop_constraints = False
+
+    # Track every source we've already fed through constraint synthesis, so
+    # rounds 2+ never re-score identical synth output. Scorer-level MD5 dedup
+    # would also catch this, but skipping it here avoids the score_batch
+    # round-trip + worker spin-up entirely. Seeded with the original source
+    # inside the loop (original_source is read below).
+    synth_seen_sources: set[bytes] = set()
     # compose_pairs are now generated dynamically per round (see below)
 
     # Create adaptive hints tracker when chain or adaptive is enabled
@@ -577,6 +611,11 @@ def hill_climb(
         source_path.resolve(): original_source,
     }
     applied_file_paths: set[Path] = {source_path.resolve()}
+
+    # Seed synth dedup with the baseline source so synthesis never re-yields
+    # an unchanged variant — constraint_solver._emit already filters this for
+    # one call, but cross-round we need our own check.
+    synth_seen_sources.add(original_source)
 
     # Cache RB3 source once before the round loop (avoids per-round file I/O)
     _rb3_source_cache: str | None = None
@@ -911,12 +950,32 @@ def hill_climb(
                     except Exception:
                         pass  # Non-critical diagnostic
 
-                # Constraint-directed synthesis pre-pass (round 1 only)
-                if constrained and round_num == 1 and ctx.ghidra_ast is not None:
+                # Constraint-directed synthesis pre-pass.
+                #
+                # When `loop_constraints` is True (default), this fires every
+                # round — not just round 1. Each round re-extracts ctx from the
+                # newly-applied source, so the synth pipeline sees fresh
+                # diagnosis state and may resolve var-order / condition tags /
+                # null-guards differently than it did at round 1. The
+                # `synth_seen_sources` cross-round set skips synth output that
+                # we've already scored, so re-firing on a stable source costs
+                # only the synthesize() call itself (Ghidra + m2c results are
+                # cached). When `loop_constraints` is False, behavior reverts
+                # to the legacy round-1-only path.
+                run_synth = (
+                    constrained
+                    and ctx.ghidra_ast is not None
+                    and (loop_constraints or round_num == 1)
+                )
+                if run_synth:
                     from .constraint_solver import synthesize
                     synthesis = synthesize(ctx)
 
-                    if synthesis.skip_reason:
+                    # skip_reason ("unfixable") is only honored on round 1 —
+                    # post-round-1 the source has already mutated, and an
+                    # unfixable signal on a partially-permuted source is
+                    # unreliable (and would prematurely abort a productive run).
+                    if synthesis.skip_reason and round_num == 1:
                         print(
                             f"  [SYNTH] Unfixable: {synthesis.skip_reason}",
                             file=sys.stderr,
@@ -924,15 +983,28 @@ def hill_climb(
                         stopped_reason = "unfixable"
                         break
 
-                    if synthesis.variants:
+                    # Filter to variants we have not already attempted across
+                    # any prior round. Without this, a stable-source rerun
+                    # would re-score identical bytes; the scorer would catch
+                    # it as source_dedup but we save the round-trip.
+                    fresh_variants = [
+                        v for v in synthesis.variants
+                        if v.source not in synth_seen_sources
+                    ]
+                    for v in fresh_variants:
+                        synth_seen_sources.add(v.source)
+
+                    if fresh_variants:
+                        skipped = len(synthesis.variants) - len(fresh_variants)
+                        skip_note = f" ({skipped} dup-skipped)" if skipped else ""
                         print(
-                            f"  [SYNTH] {len(synthesis.variants)} candidates "
+                            f"  [SYNTH] {len(fresh_variants)} candidates "
                             f"({synthesis.deterministic_edit_count} resolved, "
-                            f"{synthesis.free_variable_count} free)",
+                            f"{synthesis.free_variable_count} free){skip_note}",
                             file=sys.stderr,
                         )
                         synth_results = scorer.score_batch(
-                            synthesis.variants, workers=workers,
+                            fresh_variants, workers=workers,
                         )
                         synth_best = max(
                             synth_results, key=lambda r: r.match_percent,
@@ -949,13 +1021,13 @@ def hill_climb(
                                 stopped_reason = "perfect"
                                 current_percent = 100.0
                                 rounds.append(RoundResult(
-                                    round_num=0,
+                                    round_num=round_num,
                                     baseline=baseline,
                                     best_name=synth_best.variant.name,
                                     best_pattern="constraint_solver",
                                     best_score=100.0,
                                     delta=100.0 - baseline,
-                                    num_variants=len(synthesis.variants),
+                                    num_variants=len(fresh_variants),
                                     improved=True,
                                 ))
                                 break
@@ -967,6 +1039,14 @@ def hill_climb(
                                 f"  [SYNTH] No improvement from synthesis",
                                 file=sys.stderr,
                             )
+                    elif synthesis.variants and round_num > 1:
+                        # All produced variants are duplicates of prior attempts —
+                        # log so the round summary makes that visible.
+                        print(
+                            f"  [SYNTH] {len(synthesis.variants)} candidates "
+                            f"all duplicate (skipping)",
+                            file=sys.stderr,
+                        )
 
                 # Perfect match check
                 if baseline >= 100.0:
@@ -1633,6 +1713,7 @@ def main():
             chain_depth=args.chain_depth,
             adaptive=args.adaptive,
             constrained=args.constrained,
+            loop_constraints=args.loop_constraints,
             validate=args.validate,
             no_learned_priority=args.no_learned_priority,
         )

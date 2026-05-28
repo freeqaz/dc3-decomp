@@ -109,6 +109,12 @@ from . import reference_elimination_chain  # noqa: F401  # Chain 2-4 reference e
 from . import loop_body_assign_hoist  # noqa: F401  # Hoist post-call assignment to before call in loop body (register scheduling)
 from . import signed_unsigned_cast_polarity  # noqa: F401  # Targeted casts for bge<->ble / blt<->bgt branch polarity flips
 from . import mwcc_regorder_probe  # noqa: F401  # Probe MWCC callee-saved reg order via this->member hoisting permutations
+from . import return_this_op_assign  # noqa: F401  # Append `return *this;` to ref-returning operator= missing it (pins this to r3, kills r3<->r4 cascade)
+from . import makestring_wrap_literal  # noqa: F401  # Wrap TheDebug << "lit" in MakeString() to allocate FormatString in caller frame (~0x82C frame growth)
+from . import lwzu_idiom  # noqa: F401  # *(uint*)p; p+=4; -> *((uint*&)p)++ for lwzu / lhzu / lbzu emission
+from . import pragma_pool_data_wrap  # noqa: F401  # Wrap a function in #pragma pool_data off/on / reset (opt-in; surgical regalloc cascade fix)
+from . import inline_lerp_collapse  # noqa: F401  # Collapse split-form per-field lerps (d/r intermediates) into inline f*(e-t)+t
+from . import switch_case_reorder  # noqa: F401  # Reorder source case clauses to match MWCC target body-emission order (asm jump-table guided + permutation fallback)
 from . import bool_materialize_guard  # noqa: F401  # Wrap bool in !! to force materialize before arithmetic (!!gather + sel - ...)
 from . import bool_pointer_normalize_suppressor  # noqa: F401  # Swap (long)ptr & mask cast styles to suppress cntlzw/extrwi normalization
 from . import loop_var_hoist  # noqa: F401  # Hoist loop-invariant computations out of loop body (bidirectional)
