@@ -113,6 +113,7 @@ from . import bool_materialize_guard  # noqa: F401  # Wrap bool in !! to force m
 from . import bool_pointer_normalize_suppressor  # noqa: F401  # Swap (long)ptr & mask cast styles to suppress cntlzw/extrwi normalization
 from . import loop_var_hoist  # noqa: F401  # Hoist loop-invariant computations out of loop body (bidirectional)
 from . import stack_array_hoist  # noqa: F401  # Hoist large local arrays/structs from inner scope to function scope (frame-slot reordering)
+from . import int_to_float_split  # noqa: F401  # Split (float)((short*)p)[i] into int tmp + (float)tmp to reorder load+convert ops
 
 from .base import get_all_patterns, get_pattern, list_patterns
 
