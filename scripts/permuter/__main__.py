@@ -10,6 +10,7 @@ from pathlib import Path
 
 from .diagnosis import format_diagnosis_summary, is_all_noise
 from .extractor import extract_function
+from .file_util import atomic_write_bytes
 from .generator import generate_variants
 from .scorer import Scorer
 from .patterns import get_all_patterns, get_pattern, list_patterns
@@ -374,7 +375,9 @@ def main():
         improved = [r for r in results if r.build_success and r.match_percent > baseline]
         if improved:
             best = improved[0]
-            args.source.write_bytes(best.variant.source)
+            # Route through atomic_write_bytes so the HX_NATIVE / preprocessor
+            # directive guard protects this single-shot CLI apply too.
+            atomic_write_bytes(args.source, best.variant.source)
             print(f"\nApplied: {best.variant.name} ({best.variant.description})", file=sys.stderr)
             print(f"New match: {best.match_percent:.2f}% (was {baseline:.2f}%)", file=sys.stderr)
             _print_diff(original_source, best.variant.source, args.source)

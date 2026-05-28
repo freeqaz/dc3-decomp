@@ -27,6 +27,7 @@ from typing import Optional
 from .file_util import (
     apply_file_updates,
     atomic_write_bytes,
+    DirectivePreservationError,
     restore_tracked_files,
     SourceFileLock,
 )
@@ -782,7 +783,13 @@ class Scorer:
             for idx, variant in enumerate(variants[:limit]):
                 # IL capture extracts its own compile commands from ninja,
                 # so it needs the source at the real path.
-                self._apply_variant_files(variant, to_disk=True)
+                try:
+                    self._apply_variant_files(variant, to_disk=True)
+                except DirectivePreservationError:
+                    # Variant would wipe a preprocessor fork (e.g. #ifdef
+                    # HX_NATIVE) — skip it for IL analysis; never reachable by
+                    # the real apply path, which rejects it the same way.
+                    continue
                 try:
                     il_base = self._il_capture(
                         str(self.source_path),
