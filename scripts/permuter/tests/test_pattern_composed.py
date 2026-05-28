@@ -55,6 +55,8 @@ COMPOSED_FIXTURES: list[ComposedFixture] = [
         description="extract call into auto, then reorder declarations",
         func_name="test_func",
         diagnosis=_compose_diag(),
+        # variable_extraction emits `auto _tmp0 = ...`, so this is msvc-only.
+        compiler_dialect="msvc",
         seeded_source="""\
 void test_func() {
     int a = 1;
@@ -154,6 +156,7 @@ def _make_composed_test(fixture: ComposedFixture):
 
         # Build context from seeded source
         ctx = make_context(fixture.seeded_source, fixture.func_name, fixture.diagnosis)
+        ctx.compiler_dialect = fixture.compiler_dialect
 
         # Stage A: generate variants, find one containing intermediate text
         a_variants = list(pattern_a.generate(ctx))

@@ -37,19 +37,19 @@ _LEARNED_MULTIPLIER_MAX = 2.0
 
 
 def hard_filters_enabled() -> bool:
-    """Whether B2 hard pattern filters are active (env-gated, off by default).
+    """Whether B2 hard pattern filters are active (env-gated, ON by default).
 
-    Default OFF: the live permuter sweep runs against main, so a regression
-    from over-pruning would silently cost wins. Enable via PERMUTER_HARD_FILTERS
-    once the A/B bench shows no win-rate regression and fewer variants compiled.
+    Default ON (2026-05-27): DC3 + RB3 stress sweeps showed it is lossless — it
+    only drops patterns a fact suppresses at >=0.85 confidence (with a
+    boost-conflict guard), never fired a false drop, zero win regression, zero
+    crashes on either codebase.
+
+    Disable by setting PERMUTER_HARD_FILTERS to a falsy value (``0``/``false``/
+    ``no``/``off``) or to empty (``PERMUTER_HARD_FILTERS=``). Only an *unset*
+    variable keeps the default-on behaviour.
     """
-    # Default ON (2026-05-27): DC3 + RB3 stress sweeps showed it is lossless —
-    # it only drops patterns a fact suppresses at >=0.85 confidence (with a
-    # boost-conflict guard), never fired a false drop, zero win regression, zero
-    # crashes on either codebase. Set PERMUTER_HARD_FILTERS=0 to disable.
-    return os.environ.get("PERMUTER_HARD_FILTERS", "on").strip().lower() not in (
-        "0", "false", "no", "off",
-    )
+    val = os.environ.get("PERMUTER_HARD_FILTERS", "on").strip().lower()
+    return val not in ("", "0", "false", "no", "off")
 
 
 def syntax_probe_enabled() -> bool:

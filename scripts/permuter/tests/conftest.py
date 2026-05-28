@@ -46,6 +46,9 @@ class PatternFixture:
     func_name: str              # For make_context()
     diagnosis: Diagnosis        # Mock diagnosis for relevant() checks
     match_mode: str = "normalized"  # "exact", "normalized", "contains"
+    # Some patterns emit C++11 (`auto`) and are msvc-only; such fixtures must
+    # declare "msvc" so the runner sets ctx.compiler_dialect accordingly.
+    compiler_dialect: str = "mwcc"
 
 
 @dataclass
@@ -60,6 +63,7 @@ class ComposedFixture:
     func_name: str
     diagnosis: Diagnosis
     match_mode: str = "normalized"
+    compiler_dialect: str = "mwcc"
 
 
 # ---------------------------------------------------------------------------

@@ -75,7 +75,10 @@ def _diag_bl_cmplw() -> Diagnosis:
         match_counts={},
         reg_swap_pairs={},
         offset_deltas={},
-        diff_ops=[DiffOp(0, "bl", "cmplw")],
+        # relevant() was sharpened to require the bl target be a recognized
+        # Symbol-equality / strcmp symbol (not any generic bl mismatch), so the
+        # diff_op must carry that arg.
+        diff_ops=[DiffOp(0, "bl", "cmplw", target_arg="strcmp")],
         clusters=[Cluster(5, 10, 5, 2, 3, ("bl",), ())],
         noise_explained=0,
         noise_total=3,

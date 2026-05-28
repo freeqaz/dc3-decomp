@@ -56,6 +56,9 @@ class PatternFixture:
     func_name: str              # For make_context()
     diagnosis: Diagnosis        # Mock diagnosis for relevant() checks
     match_mode: str = "normalized"  # "exact", "normalized", "contains"
+    # Some patterns emit C++11 (`auto`) and are msvc-only; such fixtures must
+    # declare "msvc" so the runner sets ctx.compiler_dialect accordingly.
+    compiler_dialect: str = "mwcc"
 
 
 # ---------------------------------------------------------------------------
@@ -1866,9 +1869,10 @@ void test_func(float x) {
     # ===================== milo_log_swap =====================
 
     PatternFixture(
-        id="logswap_warn_to_notify",
+        id="logswap_warn_to_log",
         pattern_name="milo_log_swap",
-        description="Swap MILO_WARN to MILO_NOTIFY",
+        description="Swap MILO_WARN to MILO_LOG (NOTIFY is DC3-only; filtered "
+        "out in the no-project fallback set {LOG,WARN,FAIL})",
         func_name="test_func",
         diagnosis=diag_with_insert_delete(),
         seeded_source="""\
@@ -1878,9 +1882,10 @@ void test_func(int x) {
 """,
         expected_source="""\
 void test_func(int x) {
-    MILO_NOTIFY("value is %d", x);
+    MILO_LOG("value is %d", x);
 }
 """,
+        match_mode="contains",
     ),
 
     PatternFixture(
@@ -2388,6 +2393,8 @@ int test_func(int mFoo, int y) {
         func_name="test_func",
         diagnosis=diag_with_callee_saved_swaps(),
         match_mode="contains",
+        # Emits `auto&`, so the pattern is msvc-only (mwcc is C++98).
+        compiler_dialect="msvc",
         seeded_source="""\
 void process(int x, int y);
 void test_func(int* mDirs, int n) {
@@ -3647,6 +3654,7 @@ class ComposedFixture:
     func_name: str
     diagnosis: Diagnosis
     match_mode: str = "normalized"
+    compiler_dialect: str = "mwcc"
 
 
 def _compose_diag() -> Diagnosis:
@@ -3774,6 +3782,7 @@ def _make_composed_test(fixture: ComposedFixture):
 
         # Build context from seeded source
         ctx = make_context(fixture.seeded_source, fixture.func_name, fixture.diagnosis)
+        ctx.compiler_dialect = fixture.compiler_dialect
 
         # Stage A: generate variants, find one containing intermediate text
         a_variants = list(pattern_a.generate(ctx))
@@ -3918,6 +3927,7 @@ def _make_fixture_test(fixture: PatternFixture):
 
         # Build context from seeded source
         ctx = make_context(fixture.seeded_source, fixture.func_name, fixture.diagnosis)
+        ctx.compiler_dialect = fixture.compiler_dialect
 
         # Verify relevant() agrees this pattern applies
         self.assertTrue(
@@ -4014,6 +4024,7 @@ def _run_cli():
         try:
             pattern = get_pattern(fixture.pattern_name)
             ctx = make_context(fixture.seeded_source, fixture.func_name, fixture.diagnosis)
+            ctx.compiler_dialect = fixture.compiler_dialect
 
             if not pattern.relevant(fixture.diagnosis):
                 errors.append((fixture.id, "relevant() returned False"))

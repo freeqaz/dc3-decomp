@@ -33,6 +33,10 @@ void test_func() {
             "test_func",
             diag_with_gpr_swaps(),
         )
+        # The `auto`-based ref2val form is msvc-only; under mwcc an `auto&` ref
+        # has no concrete type to reuse and is skipped (the concrete-type mwcc
+        # path is covered by test_ref_to_value_with_typed_ref).
+        ctx.compiler_dialect = "msvc"
 
         variants = list(pattern.generate(ctx))
         # Should produce at least one ref-to-value variant
@@ -176,7 +180,8 @@ void test_func() {
         variants = list(pattern.generate(ctx))
         val2ref = [v for v in variants if v.name.startswith("val2ref_")]
         self.assertTrue(len(val2ref) > 0, "Expected at least one value-to-ref variant")
-        # Check the variant adds auto&
+        # Under mwcc (the RB3/DC3 target) the pattern reuses the source's
+        # concrete type, emitting `int & _ref0` rather than `auto&`.
         self.assertTrue(
             any(
                 match_variant(
@@ -185,7 +190,7 @@ void test_func() {
 struct Obj { int GetVal(); };
 void test_func() {
     Obj obj;
-    auto& _ref0 = obj.GetVal();
+    int & _ref0 = obj.GetVal();
     int a = _ref0 + 1;
     int b = _ref0 + 2;
 }
@@ -241,6 +246,8 @@ void test_func() {
             "test_func",
             diag_with_gpr_swaps(),
         )
+        # inline-to-cached introduces `auto _cached = ...`, so it is msvc-only.
+        ctx.compiler_dialect = "msvc"
 
         variants = list(pattern.generate(ctx))
         cache = [v for v in variants if v.name.startswith("cache_")]
