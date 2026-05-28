@@ -853,10 +853,10 @@ void WorldCrowd::Apply3DCharXfm(
         return;
     }
 
-    const Transform &environXfm = environ->WorldXfm();
-    float envY_x = environXfm.m.y.x;
-    float envY_y = environXfm.m.y.y;
-    float envY_z = environXfm.m.y.z;
+    auto _val0 = environ->WorldXfm();
+    float envY_x = _val0.m.y.x;
+    float envY_y = _val0.m.y.y;
+    float envY_z = _val0.m.y.z;
 
     float forwardDir_x, forwardDir_y, forwardDir_z;
 
