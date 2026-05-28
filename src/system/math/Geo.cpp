@@ -696,9 +696,9 @@ void Sphere::GrowToContain(const Sphere &s) {
         radius = s.radius;
         return;
     }
-    float dx = s.center.x - center.x;
     float dy = s.center.y - center.y;
     float dz = s.center.z - center.z;
+    float dx = s.center.x - center.x;
     float dist = std::sqrt((dy * dy + (dz * dz + dx * dx)));
     if (s.radius + dist > radius) {
         if (radius + dist < s.radius) {
@@ -710,12 +710,13 @@ void Sphere::GrowToContain(const Sphere &s) {
             return;
         float invDist = 1.0f / dist;
         Vector3 a, b;
+        float _fpr0 = s.radius;
         a.x = center.x - (radius * (invDist * dx));
         a.z = center.z - dz * invDist * radius;
-        b.x = s.center.x + s.radius * (dx * invDist);
-        b.y = s.center.y + s.radius * (invDist * dy);
+        b.x = _fpr0 * (dx * invDist) + s.center.x;
+        b.y = s.center.y + _fpr0 * (invDist * dy);
         a.y = center.y - radius * (invDist * dy);
-        b.z = s.center.z + dz * invDist * s.radius;
+        b.z = s.center.z + dz * invDist * _fpr0;
         Interp(a, b, 0.5f, center);
         radius = (dist + s.radius + radius) * 0.5f;
         return;
