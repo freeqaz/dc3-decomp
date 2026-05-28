@@ -162,7 +162,7 @@ const RndSpline::CtrlPoint &RndSpline::GetDeformedCtrlPointOrDummy(int iIndex) c
 void RndSpline::SyncPristineCtrlPoints() {
     bool foundNew = false;
     int size = mCtrlPoints.size();
-    for (int i = size - 1; i >= 0; i--) {
+    for (int i = size - 1; 0 <= i; i--) {
         CtrlPoint &pt = mCtrlPoints[i];
         if (pt.mDirtyPosition) {
             MILO_ASSERT(!foundNew, 0x227);
@@ -197,18 +197,12 @@ void RndSpline::SyncPristineCtrlPoints() {
             }
         }
     }
-    int count = mCtrlPoints.size();
-    if (count < 2) {
-        mStartCtrlPoint = -1;
-        mEndCtrlPoint = -1;
-    } else {
+    if (mCtrlPoints.size() >= 2) {
         if (mEndCtrlPoint != -1) {
-            int maxIdx = count - 1;
+            int maxIdx = mCtrlPoints.size() - 1;
             if (mEndCtrlPoint > maxIdx) {
                 mEndCtrlPoint = maxIdx;
-            } else if (mEndCtrlPoint < 1) {
-                mEndCtrlPoint = 1;
-            }
+            } else mEndCtrlPoint = Max(mEndCtrlPoint, 1);
         }
         if (mStartCtrlPoint != -1) {
             int maxStart = mEndCtrlPoint - 1;
@@ -218,6 +212,9 @@ void RndSpline::SyncPristineCtrlPoints() {
                 mStartCtrlPoint = 0;
             }
         }
+    } else {
+        mStartCtrlPoint = -1;
+        mEndCtrlPoint = -1;
     }
     mDeformedCtrlPoints = mCtrlPoints;
     unk144 = true;
