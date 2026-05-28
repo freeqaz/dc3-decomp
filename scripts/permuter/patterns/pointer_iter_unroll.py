@@ -144,6 +144,25 @@ class PointerIterUnrollPattern(Pattern):
             if ptr_name is None or update_node is None:
                 continue
 
+            # The live-after-loop signal is only meaningful when the pointer is
+            # declared in an OUTER scope. If it is (re)declared INSIDE the loop
+            # (a `for (T *p = x; ...)` initializer, or a shadowing body decl),
+            # the "used outside" hits are a DIFFERENT same-named variable. The
+            # loop's own induction var would be left in the init/condition and
+            # never advanced (we'd increment only the fresh local) -> infinite
+            # loop, and the inserted `T *_it = p;` binds to the wrong `p`. Skip.
+            if _declared_inside_loop(loop, ptr_name):
+                continue
+
+            # The transform leaves the loop CONDITION referencing the original
+            # pointer (only the update + body are retargeted to the fresh local,
+            # so the trip count stays pinned). That is correct ONLY for a
+            # counter-driven loop (`i > 0`) where the pointer is a passenger.
+            # If the pointer IS the loop terminator (`p != end`), not advancing
+            # it makes the condition invariant -> infinite loop. Skip those.
+            if _used_in_condition(loop, ptr_name):
+                continue
+
             # Resolve the pointer's declared type so we can declare the fresh
             # local. Prefer a real type; fall back to __typeof__ only for msvc
             # (C++11). For mwcc (default) we skip when the type is unknown
@@ -353,6 +372,47 @@ def _used_outside_loop(func_body: Node, loop: Node, ptr_name: str) -> bool:
         if _is_declarator_identifier(n):
             continue
         return True
+    return False
+
+
+def _used_in_condition(loop: Node, ptr_name: str) -> bool:
+    """True if ptr_name appears in the for-loop's condition clause.
+
+    A pointer in the condition is the loop terminator (`p != end`); since the
+    transform retargets only the update + body and leaves the condition pinned
+    to the original pointer, not advancing it would make the condition
+    invariant (infinite loop). Counter-driven loops (`i > 0`, pointer only in
+    the update) are unaffected and still fire.
+    """
+    cond = loop.child_by_field_name("condition")
+    if cond is None:
+        return False
+    target = ptr_name.encode("utf-8")
+    for n in walk(cond):
+        if n.type == "identifier" and n.text == target:
+            return True
+    return False
+
+
+def _declared_inside_loop(loop: Node, ptr_name: str) -> bool:
+    """True if ptr_name has a declaration anywhere inside the loop subtree.
+
+    Two unsafe shapes the live-after-loop heuristic otherwise misreads:
+      1. the pointer is declared in the for-initializer
+         (``for (T *p = x; ...)``) — it is loop-scoped, so any "outside" use is
+         a different variable of the same name, and
+      2. the pointer is shadowed by an inner declaration in the body.
+
+    In both cases the original ``p`` stays in the loop's init/condition while we
+    only advance the fresh local, leaving ``p`` un-incremented (infinite loop),
+    and the inserted ``T *_it = p;`` captures the wrong ``p``.
+    """
+    target = ptr_name.encode("utf-8")
+    for n in walk(loop):
+        if n.type != "identifier" or n.text != target:
+            continue
+        if _is_declarator_identifier(n):
+            return True
     return False
 
 

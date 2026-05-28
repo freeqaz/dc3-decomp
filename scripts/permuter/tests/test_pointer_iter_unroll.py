@@ -230,6 +230,66 @@ void test_func() {
         variants = list(pattern.generate(ctx))
         self.assertEqual(len(variants), 0)
 
+    def test_pointer_declared_in_for_initializer(self):
+        """A pointer declared in the for-initializer must NOT transform.
+
+        `for (T *p = x; ...)` makes `p` loop-scoped. An unrelated same-named
+        `p` in an outer scope can fool the live-after-loop check, but inserting
+        `T *_it = p;` would bind to the wrong `p` and leave the loop's own `p`
+        un-advanced (infinite loop). Regression for the corpus-audit finding.
+        """
+        pattern = get_pattern("pointer_iter_unroll")
+        ctx = make_context(
+            """\
+struct Vert { int pos; };
+void test_func() {
+    Vert *src = outer_begin();
+    Use(src);
+    for (Vert *src = begin(); src != end(); ++src, ++out) {
+        out->pos = src->pos;
+    }
+}
+""",
+            "test_func",
+            _diag_with_unroll_cluster(),
+        )
+        variants = list(pattern.generate(ctx))
+        # `out` has no declared type here and `src` is loop-declared; neither
+        # should yield a variant.
+        for v in variants:
+            self.assertNotIn("for 'src'", v.description)
+
+    def test_pointer_in_loop_condition(self):
+        """A pointer used in the loop CONDITION must NOT transform.
+
+        `for (; p != end; ++p)` — the pointer is the terminator. The transform
+        leaves the condition pinned to `p` while advancing only the fresh
+        local, so `p != end` becomes invariant -> infinite loop. The pattern
+        must decline. Regression for the corpus-audit finding.
+        """
+        pattern = get_pattern("pointer_iter_unroll")
+        ctx = make_context(
+            """\
+struct Rec { char file[4]; };
+void test_func() {
+    Rec *sum;
+    for (outer(); cond();) {
+        sum = head();
+        for (; sum != sumEnd; ++sum) {
+            if (match(sum->file)) return;
+        }
+    }
+}
+""",
+            "test_func",
+            _diag_with_unroll_cluster(),
+        )
+        variants = list(pattern.generate(ctx))
+        self.assertEqual(
+            len(variants), 0,
+            "Pointer in the loop condition is the terminator; must not transform",
+        )
+
 
 # ---------------------------------------------------------------------------
 # Relevance tests
