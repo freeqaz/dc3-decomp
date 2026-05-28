@@ -13,6 +13,7 @@ Architecture:
 
 from __future__ import annotations
 
+import os
 import sys
 from itertools import product
 
@@ -143,16 +144,77 @@ def extract_constraints(ctx: FunctionContext) -> ConstraintSet:
             file_path=ctx.file_path,
         )
 
+    # 8. Stack-slot oracle (MWCC DWARF ground truth).
+    #
+    # When the target and base disagree on stack-slot ordering, the base build's
+    # own DWARF gives us the *name* of each spilled local. The oracle maps the
+    # SWAPPED slot pairs back to those names and yields concrete declaration
+    # swaps — a ground-truth signal for stack-layout mismatches that first-use
+    # ordering (Ghidra/m2c) only stumbles into. Gated by env var; a missing /
+    # empty DWARF extraction is a clean no-op (never raises). The expensive
+    # recompile is cached per-symbol, so re-firing every hill-climb round is
+    # free after the first.
+    cs.oracle_swap_pairs = _extract_stack_slot_swaps(ctx)
+
     return cs
+
+
+def _stack_slot_oracle_enabled() -> bool:
+    """Whether the stack-slot oracle should run.
+
+    Controlled by PERMUTER_STACK_SLOT_ORACLE: "0"/"off"/"false" disables it.
+    Default ON — the oracle is a clean no-op whenever DWARF names or a slot
+    mismatch are unavailable, so leaving it on costs only the (cached) probe.
+    """
+    val = os.environ.get("PERMUTER_STACK_SLOT_ORACLE", "1").strip().lower()
+    return val not in ("0", "off", "false", "no")
+
+
+def _extract_stack_slot_swaps(ctx: FunctionContext) -> list:
+    """Query the stack-slot oracle; return ground-truth decl-swap name pairs.
+
+    Returns [] on any failure or when disabled. Never raises — the oracle's
+    driver already swallows its own exceptions, and we wrap the import too.
+    """
+    if not _stack_slot_oracle_enabled():
+        return []
+    if not ctx.symbol:
+        return []
+    try:
+        from .stack_slot_oracle import stack_slot_recommendations
+    except Exception:
+        return []
+    try:
+        # Cache per (symbol, source-hash) so a mutated source re-probes rather
+        # than returning a stale layout. Source changes between rounds.
+        cache_key = f"{ctx.symbol}:{hash(ctx.file_source)}"
+        result = stack_slot_recommendations(
+            ctx.symbol,
+            unit=ctx.unit,
+            project_dir=ctx.project_dir,
+            objdiff_json=ctx.objdiff_json,
+            cache_key=cache_key,
+        )
+    except SystemExit:
+        # A sub-tool (objdiff) may sys.exit on error; never let that abort the
+        # solver — the oracle is strictly best-effort.
+        return []
+    except Exception:
+        return []
+    return result.swap_pairs
 
 
 def _non_decl_resolved_edits(
     constraints: ConstraintSet, ctx: FunctionContext,
 ) -> list[ResolvedEdit]:
-    """Compute the non-decl-order deterministic edits (cf direction, null guard).
+    """Compute hypothesis-independent deterministic edits.
 
-    These are shared across all decl-order hypotheses, so they're computed once
-    and recombined per hypothesis in synthesize().
+    Covers cf direction, null guard, and the stack-slot oracle's name-based
+    decl swaps. All three are independent of the Ghidra/m2c first-use ordering,
+    so they're computed once and recombined per decl-order hypothesis in
+    synthesize(). The oracle swaps are ground-truth name pairs that apply
+    identically regardless of which var-order hypothesis is active, which is
+    why they live here rather than in _decl_order_edit_sets.
     """
     edits: list[ResolvedEdit] = []
 
@@ -163,6 +225,12 @@ def _non_decl_resolved_edits(
     # Null guard removal
     if constraints.null_checks_to_remove:
         edits.extend(_resolve_null_guards(constraints, ctx))
+
+    # Stack-slot oracle decl swaps (ground-truth, name-based — independent of
+    # the Ghidra/m2c first-use ordering, so they fire even when neither
+    # decompiler produced a usable var order).
+    if constraints.oracle_swap_pairs:
+        edits.extend(_resolve_oracle_swaps(constraints, ctx))
 
     return edits
 
@@ -536,6 +604,61 @@ def _resolve_decl_order(
     """
     edit_sets = _decl_order_edit_sets(constraints, ctx)
     return edit_sets[0] if edit_sets else []
+
+
+def _resolve_oracle_swaps(
+    constraints: ConstraintSet, ctx: FunctionContext,
+) -> list[ResolvedEdit]:
+    """Turn the stack-slot oracle's (name_a, name_b) pairs into decl swaps.
+
+    The oracle reports source-local *names* whose stack slots are exchanged
+    between target and base — i.e. swapping their declaration order should
+    align the layout. We locate each named declaration's byte range and emit a
+    pair of swap edits per pair. Names not found as a top-level decl (params,
+    members, temps the oracle should have filtered, or locals declared inside a
+    nested scope our flat scan misses) are skipped — a clean partial.
+
+    Ground-truth and conflict-free: each name is touched in at most one pair
+    (later pairs referencing an already-swapped name are dropped), and
+    overlapping edits are resolved downstream by _resolve_conflicts (decl_order
+    priority).
+    """
+    source_decls = _extract_source_decl_names(ctx)
+    if len(source_decls) < 2:
+        return []
+
+    # name -> (start, end). Top-level decls only.
+    by_name: dict[str, tuple[int, int]] = {}
+    for name, start, end in source_decls:
+        by_name.setdefault(name, (start, end))
+
+    edits: list[ResolvedEdit] = []
+    touched: set[str] = set()
+    for name_a, name_b in constraints.oracle_swap_pairs:
+        if name_a in touched or name_b in touched:
+            continue
+        ra = by_name.get(name_a)
+        rb = by_name.get(name_b)
+        if ra is None or rb is None or ra == rb:
+            continue
+        start_a, end_a = ra
+        start_b, end_b = rb
+        text_a = ctx.file_source[start_a:end_a]
+        text_b = ctx.file_source[start_b:end_b]
+        edits.append(ResolvedEdit(
+            category="decl_order",
+            description=f"oracle swap {name_a} <-> {name_b}",
+            start=start_a, end=end_a, replacement=text_b,
+        ))
+        edits.append(ResolvedEdit(
+            category="decl_order",
+            description=f"oracle swap {name_a} <-> {name_b}",
+            start=start_b, end=end_b, replacement=text_a,
+        ))
+        touched.add(name_a)
+        touched.add(name_b)
+
+    return edits
 
 
 def _extract_source_decl_names(ctx: FunctionContext) -> list[tuple[str, int, int]]:

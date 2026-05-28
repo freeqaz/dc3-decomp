@@ -679,6 +679,10 @@ def hill_climb(
 
                 # Wire symbol, diagnosis, and Ghidra data into context
                 ctx.symbol = symbol
+                ctx.unit = unit
+                # Reuse the baseline objdiff JSON for the stack-slot oracle so
+                # it need not re-invoke objdiff (the slot diff comes free).
+                ctx.objdiff_json = getattr(scorer, "_baseline_objdiff_data", None)
                 ctx.rb3_source = _rb3_source_cache
                 ctx.m2c_code = scorer.m2c_code
                 if scorer.ghidra_code:

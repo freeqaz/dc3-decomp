@@ -273,6 +273,14 @@ class FunctionContext:
     func_byte_range: tuple[int, int]  # (start_byte, end_byte)
     diagnosis: Optional[Diagnosis] = None
     symbol: Optional[str] = None  # Mangled symbol name for BSF isolation
+    # objdiff unit for the symbol (disambiguation when re-running objdiff).
+    unit: Optional[str] = None
+    # Raw parsed objdiff diff JSON (with "instructions") from the baseline run.
+    # The stack-slot oracle reuses this to avoid re-invoking objdiff.
+    objdiff_json: Optional[dict] = None
+    # Project root path (for tools that recompile, e.g. the stack-slot oracle's
+    # DWARF extraction). When None, helpers infer it from the repo layout.
+    project_dir: Optional[str] = None
     # Ghidra-guided fields (populated when --ghidra is enabled)
     ghidra_code: Optional[str] = None  # Raw Ghidra decompilation text
     ghidra_ast: Optional[object] = None  # Parsed GhidraAST
@@ -967,6 +975,12 @@ class ConstraintSet:
     base_gpr_saves: int | None = None
     base_fpr_saves: int | None = None
     swap_pairs: list = field(default_factory=list)
+    # Stack-slot oracle: ground-truth (name_a, name_b) declaration-swap pairs
+    # derived from the base build's MWCC DWARF + the target/base slot-layout
+    # diff. Distinct from `swap_pairs` (register swaps from objdiff) because
+    # these are source-local *names*, not registers — the decl-order resolver
+    # can act on them directly. Empty when the oracle is off / unavailable.
+    oracle_swap_pairs: list = field(default_factory=list)
 
     # Preflight
     preflight: object | None = None  # PreflightResult
