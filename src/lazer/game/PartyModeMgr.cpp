@@ -1296,23 +1296,23 @@ void PartyModeMgr::SetSongAndDefaults(Symbol song, Symbol mode, bool force_crew_
 }
 
 PartyModeMgr::SubMode *PartyModeMgr::CreateEventA() {
-    Symbol mode;
     Symbol submode;
+    Symbol mode;
     DetermineSubMode(&mode, &submode);
     int flags = 0;
-    std::vector<int> vec;
     int numPlayers = 0;
+    std::vector<int> vec;
     DetermineSubModePlayers(mode, &flags, &numPlayers, &vec);
     int songID = 0;
     Symbol shortname;
     DetermineSubModeSong(&shortname, &songID);
     SubMode *event = new SubMode();
-    event->mNumPlayers = numPlayers;
-    event->mPlayerFlags = flags;
-    event->mSongID = songID;
-    event->mSongName = shortname;
-    event->mSubModeName = submode;
     event->mModeName = mode;
+    event->mSubModeName = submode;
+    event->mSongName = shortname;
+    event->mSongID = songID;
+    event->mPlayerFlags = flags;
+    event->mNumPlayers = numPlayers;
     event->mPlayerIndices.insert(event->mPlayerIndices.begin(), vec.begin(), vec.end());
     DataArray *a = new DataArray(numPlayers);
     for (int i = 0; i < numPlayers; i++) {
@@ -1687,8 +1687,9 @@ DataNode PartyModeMgr::OnSetSongAndDefaults(DataArray *_msg) {
         song = _msg->Sym(2);
         SetSongAndDefaults(song, mode, rawForce != 0);
     } else {
-        mode = Symbol(gNullStr);
+        auto _tmp6 = Symbol(gNullStr);
         song = Symbol(gNullStr);
+        mode = _tmp6;
         SetSongAndDefaults(song, mode, false);
     }
     return DataNode(0);
@@ -1727,8 +1728,8 @@ void PartyModeMgr::ReadPartySongQueue() {
     mGetPartySongQueueJob = nullptr;
     if (mPartySongQueue.size() != 0) {
         mCurrSyncedSongID = 0;
-        Symbol shortname;
         while (mPartySongQueue.size() != 0) {
+                        Symbol shortname;
                         shortname = TheHamSongMgr.GetShortNameFromSongID(mPartySongQueue.front().mSongID, false);
             if (!shortname.Null()) {
                 break;
@@ -1743,8 +1744,8 @@ void PartyModeMgr::ReadPartySongQueue() {
         }
     } else {
         mCurrSyncedSongID = 0;
-        const Symbol& updated = ("song_queue_updated");
-        BroadcastSyncMsg(updated);
+        auto _val0 = ("song_queue_updated");
+        BroadcastSyncMsg(_val0);
     }
 }
 
