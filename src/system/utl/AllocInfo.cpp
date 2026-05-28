@@ -14,7 +14,7 @@ Trie *s_pTrie;
 bool AllocInfo::bPrintCsv;
 
 Pool &GetPool() {
-    static void *sMem;
+    static char sMem[4];
     static Pool sPool(4, sMem, 4);
     return sPool;
 }
