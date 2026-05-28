@@ -66,8 +66,11 @@ def extract_qualified_name(demangled: str) -> str | None:
 
     Handles operator overloads like operator(), operator==, etc.
     Also handles free functions like op50, PropSync, etc.
-    Returns None if no qualified name found.
+    Returns None if no qualified name found, or if ``demangled`` is not a
+    string (e.g. a NULL ``demangled`` column from decomp.db).
     """
+    if not isinstance(demangled, str):
+        return None
     m = _QUALIFIED_NAME_RE.search(demangled)
     if m:
         name = m.group(1)

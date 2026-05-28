@@ -12,7 +12,10 @@ Verifies the Wave H1 fix to pattern_scan.py:
 
 from __future__ import annotations
 
+import json
+import sqlite3
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -20,10 +23,16 @@ _PROJECT_ROOT = Path(__file__).resolve().parents[3]
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
+from scripts.permuter import pattern_scan
 from scripts.permuter.pattern_scan import (
+    _build_diff_index,
+    _load_diagnosis_for_symbol,
+    _load_match_info_multi,
     _resolve_hit_candidate,
+    _scan_file,
     _unit_matches_source,
 )
+from scripts.permuter.patterns import get_pattern
 
 
 class TestUnitMatchesSource(unittest.TestCase):
@@ -178,6 +187,188 @@ class TestResolveHitCandidate(unittest.TestCase):
         self.assertIsNotNone(chosen)
         self.assertFalse(ambig)
         self.assertAlmostEqual(chosen[0], 100.0)
+
+
+class TestLoadMatchInfoMultiNullDemangled(unittest.TestCase):
+    """Regression: a NULL ``demangled`` row must not nuke the whole dict.
+
+    decomp.db legitimately contains rows whose ``demangled`` column is NULL
+    (static-init ``__sinit_*`` thunks, bare ``main``, asm-only symbols). The
+    original loader called ``extract_qualified_name(row['demangled'])`` with
+    no None guard; the resulting TypeError was swallowed by a broad
+    ``except Exception: return {}`` so EVERY entry was discarded. That left
+    ``_scan_file`` with no candidates → every hit serialized with empty
+    ``symbol`` and ``match_percent=None`` → the asm-signal gate had nothing
+    to look up → all hits fell through to ``confidence=unknown``.
+    """
+
+    def _make_db(self, path: Path, rows):
+        conn = sqlite3.connect(str(path))
+        conn.execute(
+            "CREATE TABLE functions ("
+            "symbol TEXT, demangled TEXT, unit TEXT, current_percent REAL)"
+        )
+        conn.executemany(
+            "INSERT INTO functions (symbol, demangled, unit, current_percent) "
+            "VALUES (?, ?, ?, ?)",
+            rows,
+        )
+        conn.commit()
+        conn.close()
+
+    def test_null_demangled_row_does_not_empty_dict(self):
+        with tempfile.TemporaryDirectory() as td:
+            db_path = Path(td) / "decomp.db"
+            self._make_db(
+                db_path,
+                [
+                    # A NULL-demangled row interleaved with good rows — this
+                    # is the row that used to crash extract_qualified_name.
+                    ("__sinit_\\App_cpp", None, "main/App", 0.0),
+                    ("main", None, "main/Main", 100.0),
+                    ("__ct__3AppFiPPc", "App::App(int, char**)",
+                     "main/App", 98.0),
+                    ("Bar__3FooFv", "Foo::Bar()",
+                     "main/system/obj/Foo", 90.5),
+                ],
+            )
+            orig = pattern_scan.DECOMP_DB
+            try:
+                pattern_scan.DECOMP_DB = db_path
+                multi = _load_match_info_multi()
+            finally:
+                pattern_scan.DECOMP_DB = orig
+
+        # The two good rows must survive despite the two NULL-demangled rows.
+        self.assertIn("App::App", multi)
+        self.assertIn("Foo::Bar", multi)
+        self.assertAlmostEqual(multi["App::App"][0][0], 98.0)
+        self.assertEqual(multi["App::App"][0][1], "__ct__3AppFiPPc")
+
+
+# ── Minimal C++ TU that triggers the return_this_op_assign pattern. ──
+# A ref-returning operator= whose body lacks a trailing `return *this;` is
+# exactly what return_this_op_assign.generate() emits a variant for.
+_OP_ASSIGN_SRC = b"""\
+struct Foo {
+    int x;
+    Foo& operator=(const Foo& o) {
+        x = o.x;
+    }
+};
+"""
+
+
+class TestScanFilePopulatesHitFields(unittest.TestCase):
+    """A produced hit must carry real ``source_path`` and ``symbol``.
+
+    This is the user-visible symptom of the regression: hits serialized
+    with ``symbol=''`` and ``match_percent=None``.
+    """
+
+    def test_hit_carries_source_and_symbol(self):
+        with tempfile.TemporaryDirectory() as td:
+            src_path = Path(td) / "Foo.cpp"
+            src_path.write_bytes(_OP_ASSIGN_SRC)
+
+            # match_info_multi keyed by the name the extractor produces for
+            # the function (a bare ``operator=`` here — the AST-level name,
+            # which is what _scan_file looks up against the candidate dict).
+            qname = "operator="
+            unit = "main/system/obj/Foo"
+            match_info_multi = {
+                qname: [(90.5, "__as__3FooFRC3Foo", unit)],
+            }
+
+            hits = _scan_file(
+                src_path,
+                [get_pattern("return_this_op_assign")],
+                unit_name=unit,
+                match_info={},
+                show_variants=False,
+                match_info_multi=match_info_multi,
+            )
+
+        self.assertTrue(hits, "expected at least one pattern hit")
+        hit = hits[0]
+        self.assertEqual(hit.source_path, str(src_path))
+        self.assertEqual(hit.symbol, "__as__3FooFRC3Foo",
+                         "hit must carry the resolved symbol, not ''")
+        self.assertIsNotNone(hit.match_percent,
+                             "hit must carry a match_percent, not None")
+        self.assertAlmostEqual(hit.match_percent, 90.5)
+
+
+class TestAsmSignalGatingProducesNonUnknown(unittest.TestCase):
+    """End-to-end gating: a matching cached diff yields a non-unknown verdict.
+
+    Builds a synthetic ``diff_*.json`` whose instructions diagnose to a
+    diff_op the ``return_this_op_assign`` pattern's ``relevant()`` accepts,
+    indexes it, then runs the same lookup + gate ``pattern_scan.main`` uses
+    and asserts the confidence resolves to ``asm_signal_match`` (NOT unknown).
+    """
+
+    SYMBOL = "__as__3FooFRC3Foo"
+
+    def _write_diff(self, cache_dir: Path):
+        # match_type "replace" with target/base opcodes -> a diff_op; an `mr`
+        # target opcode satisfies return_this_op_assign.relevant().
+        diff = {
+            "symbol": self.SYMBOL,
+            "unit": "main/system/obj/Foo",
+            "fuzzy_match_percent": 90.5,
+            "instructions": [
+                {
+                    "index": 0,
+                    "match_type": "replace",
+                    "target": {"opcode": "mr", "args": ["r3", "r4"]},
+                    "base": {"opcode": "addi", "args": ["r3", "r4", "0"]},
+                },
+            ],
+        }
+        # Filename slug is irrelevant — _build_diff_index keys off the
+        # in-file "symbol" field, not the name.
+        path = cache_dir / "diff_foo_deadbeef0000.json"
+        path.write_text(json.dumps(diff))
+        return path
+
+    def test_cached_diff_yields_asm_signal_match(self):
+        with tempfile.TemporaryDirectory() as td:
+            cache_dir = Path(td)
+            self._write_diff(cache_dir)
+
+            diff_index = _build_diff_index(cache_dir)
+            self.assertIn(self.SYMBOL, diff_index,
+                          "diff index must key off the in-file symbol field")
+
+            diag, _ = _load_diagnosis_for_symbol(
+                self.SYMBOL, diff_index, cache_dir,
+                fresh_objdiff=False, fresh_attempted=set(),
+            )
+            self.assertIsNotNone(diag,
+                                 "a cached diff with instructions must "
+                                 "produce a diagnosis (not None)")
+
+            pattern = get_pattern("return_this_op_assign")
+            is_rel = pattern.relevant(diag)
+            confidence = "asm_signal_match" if is_rel else "excluded"
+            self.assertEqual(
+                confidence, "asm_signal_match",
+                "an mr-opcode diff_op must gate to asm_signal_match, "
+                "not unknown/excluded",
+            )
+
+    def test_missing_symbol_is_unknown(self):
+        # Sanity check the other side of the gate: a symbol absent from the
+        # cache yields no diagnosis (-> the caller marks it unknown).
+        with tempfile.TemporaryDirectory() as td:
+            cache_dir = Path(td)
+            diff_index = _build_diff_index(cache_dir)  # empty cache
+            diag, _ = _load_diagnosis_for_symbol(
+                "Nonexistent__3FooFv", diff_index, cache_dir,
+                fresh_objdiff=False, fresh_attempted=set(),
+            )
+            self.assertIsNone(diag)
 
 
 if __name__ == "__main__":

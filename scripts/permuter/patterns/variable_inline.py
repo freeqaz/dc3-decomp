@@ -82,6 +82,16 @@ class VariableInlinePattern(Pattern):
             line_end = _line_end(ctx.file_source, decl.end_byte)
             ed.delete_range(line_start, line_end)
 
+            # Fix (Wave J4): skip this candidate if any use node falls inside the
+            # declaration line range.  This happens when two statements share the same
+            # source line (e.g. "float x = GetX(); Use(x);") — _line_start/_line_end
+            # extends the delete region to cover the whole line, which includes the use
+            # node.  Applying both edits would produce overlapping ranges that either
+            # crash SourceEditor.apply() or silently corrupt the output.  The variant is
+            # semantically invalid in this layout, so we skip it entirely.
+            if any(line_start <= use_node.start_byte < line_end for use_node in use_nodes):
+                continue
+
             # Replace each use of the variable with the init expression
             # Wrap in parens if the init expr contains operators (to preserve precedence)
             needs_parens = _needs_parens(init_expr)

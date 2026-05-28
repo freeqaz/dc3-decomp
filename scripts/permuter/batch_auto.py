@@ -44,6 +44,13 @@ DECOMP_DB = get_decomp_db_path()
 
 from .types import extract_qualified_name
 
+# STL namespace prefixes used to identify STL-internal functions.
+# A function IS an STL internal when its *own* scope starts with one of these
+# prefixes (the scope is the demangled name up to the first '(' argument list).
+# User functions that merely accept STL types as parameters do NOT match this
+# because the STL namespace only appears inside the '(...)' argument list.
+_STL_NAMESPACES = ("stlpmtx_std::", "std::")
+
 # Mismatch types that are unlikely to be fixable by the permuter
 SKIP_PATTERNS = frozenset([
     "merged_",     # ICF merged symbols
@@ -186,7 +193,6 @@ def query_workable(
           {verdict_clause}
           AND symbol NOT LIKE 'merged_%'
           AND symbol NOT LIKE 'fn_%'
-          AND demangled NOT LIKE '%stlpmtx_std::%'
     """
     params: list = [min_pct, max_pct]
 
@@ -210,6 +216,18 @@ def query_workable(
 
         # Skip boilerplate symbols
         if any(symbol.startswith(p) or symbol.startswith("?" + p) for p in SKIP_PATTERNS):
+            continue
+
+        # Skip STL-internal functions — those whose own scope starts with an STL
+        # namespace prefix.  The old SQL `NOT LIKE '%stlpmtx_std::%'` was too
+        # broad: it also excluded user functions whose *parameter types* mention
+        # STL types (e.g. ChordShapeGenerator::BuildSpan takes a stlpmtx_std::map).
+        # Instead, extract the scope portion (everything before the first '(' that
+        # opens the argument list) and test for an STL-namespace prefix only there.
+        _dem = demangled or ""
+        _paren = _dem.find("(")
+        _scope = _dem[:_paren] if _paren != -1 else _dem
+        if any(_scope.startswith(ns) for ns in _STL_NAMESPACES):
             continue
 
         # Must have a source path

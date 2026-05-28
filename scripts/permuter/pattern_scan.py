@@ -248,7 +248,15 @@ def _load_match_info_multi() -> dict[str, list[tuple[float, str, str]]]:
         from .types import extract_qualified_name
         result: dict[str, list[tuple[float, str, str]]] = {}
         for row in rows:
-            qname = extract_qualified_name(row["demangled"])
+            demangled = row["demangled"]
+            # Skip rows with no demangled name. decomp.db contains many such
+            # rows (static-init `__sinit_*`, bare `main`, asm-only symbols).
+            # Passing None to extract_qualified_name raises TypeError, and the
+            # broad except below would then discard EVERY entry — silently
+            # returning {} and breaking asm-signal attribution for all hits.
+            if not isinstance(demangled, str):
+                continue
+            qname = extract_qualified_name(demangled)
             if qname:
                 result.setdefault(qname, []).append(
                     (row["match_percent"], row["symbol"], row["unit"] or "")
