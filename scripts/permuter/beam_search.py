@@ -119,6 +119,34 @@ def _reparse_context(
         atomic_write_bytes(source_path, original)
 
 
+def _is_fpr_swap_only(diagnosis: Diagnosis) -> bool:
+    """Cheap guard: remaining mismatch is ONLY a multi-instruction FPR swap.
+
+    True iff there are no diff_ops / clusters / replaces and at least one
+    FPR/FPR ``reg_swap`` pair spans multiple instructions
+    (``first_idx != last_idx``) — the exact class that
+    fpr_cascade_operand_hoist targets. Used to avoid parsing the function for
+    the AST detector unless this signature is present.
+    """
+    if diagnosis.diff_ops or diagnosis.clusters:
+        return False
+    if diagnosis.replace_real > 0 or diagnosis.replace_noise > 0:
+        return False
+    if not diagnosis.reg_swap_pairs:
+        return False
+    found_multi_fpr = False
+    for (r0, r1), info in diagnosis.reg_swap_pairs.items():
+        is_fpr = (
+            r0[:1] in ("f", "F") and r0[1:].isdigit()
+            and r1[:1] in ("f", "F") and r1[1:].isdigit()
+        )
+        if not is_fpr:
+            return False  # any GPR / mixed swap → not this class
+        if info.first_idx != info.last_idx:
+            found_multi_fpr = True
+    return found_multi_fpr
+
+
 def _compute_guidance_agreement(
     state: BeamState,
     ghidra_code: str | None,
@@ -744,8 +772,28 @@ def beam_search(
                 il_pattern_metrics=result_il_pattern_metrics,
             )
 
-        # Check for all-noise early exit
-        if scorer.diagnosis and is_all_noise(scorer.diagnosis):
+        # Check for all-noise early exit. When the ONLY remaining mismatch is a
+        # multi-instruction FPR swap (cheap guard below), confirm via the
+        # fpr_cascade_operand_hoist AST detector before deciding it's noise —
+        # the pattern can sometimes recover those by hoisting/permuting float
+        # operands. The detector only parses the function when that guard fires.
+        fpr_cascade_candidate = False
+        if scorer.diagnosis and _is_fpr_swap_only(scorer.diagnosis):
+            try:
+                from .patterns.fpr_cascade_operand_hoist import (
+                    has_fpr_cascade_hoist_candidate,
+                )
+                cand_ctx = _reparse_context(
+                    original_source, source_path, function_name
+                )
+                if cand_ctx is not None:
+                    fpr_cascade_candidate = has_fpr_cascade_hoist_candidate(cand_ctx)
+            except Exception:
+                fpr_cascade_candidate = False
+
+        if scorer.diagnosis and is_all_noise(
+            scorer.diagnosis, fpr_cascade_candidate=fpr_cascade_candidate
+        ):
             print("All mismatches are noise — stopping.", file=sys.stderr)
             stopped_reason = "noise_only"
             return _build_result(

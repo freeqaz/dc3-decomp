@@ -248,10 +248,20 @@ def diagnose_baseline(objdiff_json: dict) -> Diagnosis:
     )
 
 
-def is_all_noise(diagnosis: Diagnosis) -> bool:
+def is_all_noise(diagnosis: Diagnosis, fpr_cascade_candidate: bool = False) -> bool:
     """Return True if all mismatches are noise (nothing to permute).
 
     Noise = no real diff_ops, no clusters, no unexplained diff_arg, and no GPR swaps.
+
+    ``fpr_cascade_candidate`` defaults to False so that EVERY existing caller
+    that does not opt in gets behavior byte-identical to before this parameter
+    existed. When a caller has cheaply confirmed (via the
+    ``fpr_cascade_operand_hoist`` pattern's lightweight AST detector) that the
+    remaining FPR-swap-only mismatch is reachable by hoisting/permuting the
+    float operands feeding the cascade, it passes True. That ONLY unlocks the
+    one fall-through below (multi-instruction FPR swap), which is otherwise
+    classified as an unfixable allocation artifact. GPR handling and the
+    single-instruction FPR case are unaffected.
     """
     # diff_ops now includes replaces — check if any are non-noise
     if diagnosis.replace_real > 0:
@@ -273,6 +283,15 @@ def is_all_noise(diagnosis: Diagnosis) -> bool:
         # (typically unfixable), so it stays classified as noise.
         if (r0.startswith("f") and r1.startswith("f")
                 and info.first_idx == info.last_idx):
+            return False
+        # Multi-instruction FPR swap (first_idx != last_idx) is normally an
+        # allocation cascade that stays classified as noise. But when a caller
+        # has confirmed the function's source shape is a hoist/permute candidate
+        # (fpr_cascade_operand_hoist), unlock it so the pattern gets a chance.
+        # Gated behind the opt-in flag so the default path is unchanged.
+        if (fpr_cascade_candidate
+                and r0.startswith("f") and r1.startswith("f")
+                and info.first_idx != info.last_idx):
             return False
 
     # Check for unexplained diff_arg

@@ -719,8 +719,23 @@ def hill_climb(
                                 file=sys.stderr,
                             )
 
-                    # Early exit: all noise
-                    if is_all_noise(scorer.diagnosis):
+                    # Early exit: all noise. When the residual is a
+                    # multi-instruction FPR swap, confirm via the
+                    # fpr_cascade_operand_hoist AST detector (cheap — ctx is
+                    # parsed) before treating it as noise.
+                    _fpr_cand = False
+                    try:
+                        from .beam_search import _is_fpr_swap_only
+                        from .patterns.fpr_cascade_operand_hoist import (
+                            has_fpr_cascade_hoist_candidate,
+                        )
+                        if _is_fpr_swap_only(scorer.diagnosis):
+                            _fpr_cand = has_fpr_cascade_hoist_candidate(ctx)
+                    except Exception:
+                        _fpr_cand = False
+                    if is_all_noise(
+                        scorer.diagnosis, fpr_cascade_candidate=_fpr_cand
+                    ):
                         print(
                             "All mismatches are noise — stopping.",
                             file=sys.stderr,

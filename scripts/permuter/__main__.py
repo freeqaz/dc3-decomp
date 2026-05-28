@@ -259,8 +259,22 @@ def main():
             ctx.diagnosis = scorer.diagnosis
             print(format_diagnosis_summary(scorer.diagnosis), file=sys.stderr)
 
-            # Early skip: if all mismatches are noise, nothing to permute
-            if is_all_noise(scorer.diagnosis) and not args.no_guided:
+            # Early skip: if all mismatches are noise, nothing to permute.
+            # When the residual is a multi-instruction FPR swap, confirm via
+            # the fpr_cascade_operand_hoist AST detector (cheap — ctx is
+            # already parsed) before treating it as noise.
+            _fpr_cand = False
+            try:
+                from .beam_search import _is_fpr_swap_only
+                from .patterns.fpr_cascade_operand_hoist import (
+                    has_fpr_cascade_hoist_candidate,
+                )
+                if _is_fpr_swap_only(scorer.diagnosis):
+                    _fpr_cand = has_fpr_cascade_hoist_candidate(ctx)
+            except Exception:
+                _fpr_cand = False
+            if (is_all_noise(scorer.diagnosis, fpr_cascade_candidate=_fpr_cand)
+                    and not args.no_guided):
                 print(
                     "All mismatches are noise (offset/symbol/branch reloc). "
                     "Nothing to permute.",
