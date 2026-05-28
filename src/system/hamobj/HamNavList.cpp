@@ -1566,7 +1566,7 @@ void HamNavList::DrawDebug() const {
     static float sRectY = 0.1f;
     static float sRectW = 0.95f;
     static float sRectH = 0.95f;
-    Hmx::Rect rect(sRectX, sRectY - 0.05f, sRectW, sRectH + 0.05f);
+    Hmx::Rect rect(sRectX, 0.05f - sRectY, sRectW, sRectH + 0.05f);
     TheRnd.DrawRectScreen(rect, sRectColor, nullptr, nullptr, nullptr);
 
     char buf[50];
@@ -1604,6 +1604,7 @@ void HamNavList::LinkRibbonDrawState(
     std::vector<HamListRibbonDrawState> &ribbonStates,
     UIListWidgetDrawState &widgetState
 ) {
+auto& _ref0 = mListState;
 #ifdef HX_NATIVE
     // LP64-safe version: use proper struct access instead of raw pointer arithmetic
     int widgetElemCount = (int)widgetState.mElements.size();
@@ -1612,17 +1613,17 @@ void HamNavList::LinkRibbonDrawState(
         ribbonStates.resize(widgetElemCount, defaultState);
     }
     for (int i = 0; i < widgetElemCount; i++) {
-        ribbonStates[i].mSelected = (mListState.SelectedDisplay() == i);
+        ribbonStates[i].mSelected = (_ref0.SelectedDisplay() == i);
 
-        int numShowing = mListState.NumShowing();
+        int numShowing = _ref0.NumShowing();
         bool scrollable = mListRibbonResource && mListRibbonResource->IsScrollable(numShowing);
 
         if (scrollable) {
-            ribbonStates[i].mActive = mListState.Provider()->IsHeader(
-                mListState.FirstShowing() + i - mListState.MinDisplay()
+            ribbonStates[i].mActive = _ref0.Provider()->IsHeader(
+                _ref0.FirstShowing() + i - _ref0.MinDisplay()
             );
         } else {
-            ribbonStates[i].mActive = mListState.Provider()->IsHeader(i);
+            ribbonStates[i].mActive = _ref0.Provider()->IsHeader(i);
         }
 
         ribbonStates[i].mBigScale = (float)IsElementBig(i);
@@ -1656,14 +1657,14 @@ void HamNavList::LinkRibbonDrawState(
         ribbonStates.resize(widgetElemCount, defaultState);
     }
     for (int i = 0; i < (int)widgetElemCount; i++) {
-        ribbonStates[i].mSelected = (mListState.SelectedDisplay() == i);
+        ribbonStates[i].mSelected = (_ref0.SelectedDisplay() == i);
 
-        int numShowing = mListState.NumShowing();
+        int numShowing = _ref0.NumShowing();
         bool scrollable = mListRibbonResource->IsScrollable(numShowing);
 
-                ribbonStates[i].mActive = scrollable ? mListState.Provider()->IsHeader(
-                mListState.FirstShowing() + i - mListState.MinDisplay()
-            ) : mListState.Provider()->IsHeader(i);
+                ribbonStates[i].mActive = scrollable ? _ref0.Provider()->IsHeader(
+                _ref0.FirstShowing() + i - _ref0.MinDisplay()
+            ) : _ref0.Provider()->IsHeader(i);
 
         ribbonStates[i].mBigScale = (float)IsElementBig(i);
         ribbonStates[i].mElemDrawState = (unsigned int)&widgetState.mElements[i];
