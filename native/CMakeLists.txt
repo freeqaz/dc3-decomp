@@ -224,7 +224,7 @@ endif()
 # ============================================================================
 set(MILO_ENGINE_PATH "${CMAKE_SOURCE_DIR}/../../milo-native-engine"
     CACHE PATH "Path to milo-native-engine checkout")
-set(MILO_ENGINE_PIN "37ec3339303ababfdb9339ba9e54b8c60caac8f3"
+set(MILO_ENGINE_PIN "cfaaa5bc3ddbaaed84f9db6fe6d9517f77e8729c"
     CACHE STRING "Engine commit SHA verified against")
 if(EXISTS "${MILO_ENGINE_PATH}/.git")
     execute_process(COMMAND git rev-parse HEAD
@@ -258,9 +258,12 @@ set(MILO_ENGINE_GPU_BACKEND dc3 CACHE STRING "DC3: WgpuRnd : NgRnd GPU backend" 
 # Web build: opt into the engine's MILO_BUILD_WEB platform layer (sources
 # live in milo-native-engine/src/{platform,audio,gfx}/*_Web.cpp, plus the
 # engine-side EMSCRIPTEN imgui target and audio-worklet.js / missing_stubs.js
-# assets). The helper milo_engine_apply_web_target_options() exists too
-# but we don't call it (CMAKE_CURRENT_SOURCE_DIR-inside-function bug —
-# see dc3-web target_link_options block below for the inlined workaround).
+# assets). dc3-web now consumes the engine helpers
+# milo_engine_apply_web_target_options() + milo_engine_set_web_canvas_selector()
+# instead of the inlined link/compile workaround from W0 (engine fixed the
+# CMAKE_CURRENT_SOURCE_DIR-inside-function bug + added a canvas-selector
+# header-routing helper so `#dc3-canvas` no longer needs a per-consumer
+# configure_file).
 #
 # We exclude the *_Web.cpp sources from libmilo-engine.a because dc3-web
 # compiles them DIRECTLY (via DC3_WEB_LIFTED_ENGINE_SOURCES) with the
@@ -1372,69 +1375,29 @@ target_include_directories(dc3-web PRIVATE
 ## Toggle via the engine's MILO_WEB_ASYNC option (default ON); set
 ## -DMILO_WEB_ASYNC=OFF on the emcmake line to fall back to blocking XHR.
 ##
-## NOTE: we inline the flag set instead of calling
-## milo_engine_apply_web_target_options(dc3-web). The engine helper hard-
-## codes `${CMAKE_CURRENT_SOURCE_DIR}/src/platform/web/assets/...` for the
-## --pre-js missing_stubs.js path and the audio-worklet.js POST_BUILD copy.
-## CMake resolves CMAKE_CURRENT_SOURCE_DIR inside a function to the CALLER's
-## source dir (DC3's native/), not the engine's — so the helper's paths
-## point at non-existent files in this repo. The W0 prompt explicitly
-## allows inlining as a workaround. To re-enable the helper, fix the
-## engine to use its own PROJECT_SOURCE_DIR (or a saved variable) instead
-## of CMAKE_CURRENT_SOURCE_DIR and bump MILO_ENGINE_PIN.
-target_compile_options(dc3-web PRIVATE
-    "SHELL:--use-port=emdawnwebgpu"
-    -fwasm-exceptions
-)
+## Engine helper applies the canonical emdawnwebgpu/JSPI/stack/memory/FETCH
+## flag set + a base -sEXPORTED_FUNCTIONS=["_main"] and (when MILO_WEB_ASYNC)
+## -sJSPI_EXPORTS=["_main"]. The subsequent target_link_options() block below
+## extends those export lists with DC3's tick symbol — repeated
+## -sEXPORTED_FUNCTIONS / -sJSPI_EXPORTS entries to wasm-ld replace earlier
+## ones (last occurrence wins). asset_dest = native/web/build (the path
+## scripts/web/server.py serves wasm/.js/.data from).
+milo_engine_apply_web_target_options(dc3-web ${CMAKE_CURRENT_SOURCE_DIR}/web/build)
 target_link_options(dc3-web PRIVATE
-    "SHELL:--use-port=emdawnwebgpu"
-    -sALLOW_MEMORY_GROWTH=1
-    -sMAXIMUM_MEMORY=512MB
-    -sSTACK_SIZE=4194304
-    -sENVIRONMENT=web,node
-    -sERROR_ON_UNDEFINED_SYMBOLS=0
-    -sUSE_ZLIB=1
-    -sUSE_OGG=1
-    -sUSE_VORBIS=1
-    -sFETCH=1
-    -sASSERTIONS=1
-    -sSTACK_OVERFLOW_CHECK=2
     -sEXPORTED_FUNCTIONS=["_main","_dc3MainLoopTick"]
-    -sEXPORTED_RUNTIME_METHODS=["ccall","cwrap"]
-    -fwasm-exceptions
-    -g2
-    --pre-js ${MILO_ENGINE_PATH}/src/platform/web/assets/missing_stubs.js
 )
 if(MILO_WEB_ASYNC)
-    target_compile_definitions(dc3-web PRIVATE MILO_WEB_ASYNCIFY=1)
     target_link_options(dc3-web PRIVATE
-        -sJSPI
         -sJSPI_EXPORTS=["_main","_dc3MainLoopTick","dc3MainLoopTick"]
     )
 endif()
-# Deploy the AudioWorklet JS next to dc3-web.wasm at build time. Mirrors
-# the engine helper's POST_BUILD copy, but anchored on the engine path
-# (avoids the CMAKE_CURRENT_SOURCE_DIR-inside-function bug noted above).
-add_custom_command(TARGET dc3-web POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        ${MILO_ENGINE_PATH}/src/platform/web/assets/audio-worklet.js
-        $<TARGET_FILE_DIR:dc3-web>/audio-worklet.js
-    COMMENT "dc3-web: deploying audio-worklet.js (from milo-engine)")
-# Per-consumer parameterisation: canvas DOM selector + audio JS namespace.
-#
-# CANVAS_SELECTOR has a `#` in the value, which CMake refuses to put on a
-# compiler command line (the make/ninja generator either strips the macro
-# entirely or mangles the quoting — see CMake's "definitions containing '#'"
-# warning). Route the macro through a configured header that's force-
-# included into every dc3-web TU, matching the recommended workaround.
-configure_file(
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/dc3_web_config.h.in
-    ${CMAKE_CURRENT_BINARY_DIR}/dc3_web_config.h @ONLY)
-target_include_directories(dc3-web PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
-target_compile_options(dc3-web PRIVATE
-    "SHELL:-include ${CMAKE_CURRENT_BINARY_DIR}/dc3_web_config.h")
 
-# AUDIO_NS is an unquoted identifier — passes cleanly via -D.
+# Per-consumer parameterisation: canvas DOM selector + audio JS namespace.
+# CANVAS_SELECTOR has `#` in the value, so it goes through the engine's
+# header-routing helper (configure_file'd milo_web_config_<tgt>.h, force-
+# included into every dc3-web TU). AUDIO_NS is an unquoted identifier and
+# passes cleanly via -D.
+milo_engine_set_web_canvas_selector(dc3-web "#dc3-canvas")
 target_compile_definitions(dc3-web PRIVATE
     MILO_WEB_AUDIO_NS=dc3
 )
