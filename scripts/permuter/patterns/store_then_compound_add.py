@@ -32,6 +32,7 @@ from tree_sitter import Node
 
 from .base import Pattern
 from ..ast_queries import find_by_type, get_indent
+from ..classifier import is_fpr_cascade_dominated
 from ..editor import SourceEditor
 from ..types import Diagnosis, FunctionContext, Variant
 
@@ -51,6 +52,12 @@ class StoreThenCompoundAddPattern(Pattern):
 
     def relevant(self, diagnosis: Diagnosis) -> bool:
         if not diagnosis.diff_ops and not diagnosis.clusters:
+            return False
+        # Dominant-cascade veto: this transform changes a single expression's
+        # store/reload ordering around a `bl`. It is powerless against a wall of
+        # floating-point register swaps (e.g. GetNoteSliceWeight: 13 multi-instr
+        # FPR pairs — the store_compound_0 sweep returned exactly baseline).
+        if is_fpr_cascade_dominated(diagnosis):
             return False
         # Look for store/load/add mismatches near where a `bl` might sit.
         for d in diagnosis.diff_ops:

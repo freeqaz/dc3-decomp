@@ -45,6 +45,70 @@ _FP_SINGLE = {"fdivs", "fmuls", "fadds", "fsubs", "fmadds", "fmsubs", "fnmsubs",
 # FP double-precision opcodes
 _FP_DOUBLE = {"fdiv", "fmul", "fadd", "fsub", "fmadd", "fmsub", "fnmsub", "fnmadd"}
 
+# All floating-point registers (volatile + callee-saved).
+_ALL_FPR = _VOLATILE_FPR | _CALLEE_SAVED_FPR
+_ALL_GPR = _VOLATILE_GPR | _CALLEE_SAVED_GPR
+
+# Dominant-cascade veto threshold (see ``is_fpr_cascade_dominated``).
+#
+# Chosen from two confirmed false-positive cases vs four confirmed wins:
+#   VETO:  VocalPart::GetNoteSliceWeight  multi-instr FPR swap pairs = 13
+#          CharSleeve::Poll               multi-instr FPR swap pairs = 31
+#   KEEP:  Color::MakeColor               multi-instr FPR swap pairs = 8
+#          BandWardrobe::FindBestScoringHint = 0
+#          CharClipDriver::AlignToBeat    = 1
+#          CharClipDriver::PreEvaluate    = 2
+# A threshold of 10 sits above the highest KEEP (MakeColor=8, the genuine
+# switch-reorder win that is also FPR-churn-heavy) and below the lowest VETO
+# (GetNoteSliceWeight=13). The margin is deliberate: MakeColor proves a
+# structural fix can land *despite* heavy FPR churn, so we do NOT veto on raw
+# FPR ratio or fixability score (MakeColor's fixability 0.028 is LOWER than
+# GetNoteSliceWeight's 0.209 — a fixability gate would wrongly kill the win).
+_FPR_CASCADE_PAIR_THRESHOLD = 10
+
+
+def count_multi_instruction_fpr_swap_pairs(diagnosis: "Diagnosis") -> int:
+    """Count FPR<->FPR register-swap pairs that span multiple instructions.
+
+    A *multi-instruction* FPR swap (``first_idx != last_idx``) is the
+    signature of a floating-point register-allocation / scheduling cascade —
+    the same value is colored to different FPRs across a span of code. Unlike
+    a single-instruction FPR swap (commutative ``a*b`` vs ``b*a``, addressable
+    by ``fma_reorder``), a multi-instruction cascade is generally immune to
+    high-level source transforms. This count is the principled signal behind
+    ``is_fpr_cascade_dominated``.
+    """
+    count = 0
+    for (r0, r1), info in diagnosis.reg_swap_pairs.items():
+        if r0 in _ALL_FPR and r1 in _ALL_FPR and info.first_idx != info.last_idx:
+            count += 1
+    return count
+
+
+def is_fpr_cascade_dominated(
+    diagnosis: "Diagnosis",
+    pair_threshold: int = _FPR_CASCADE_PAIR_THRESHOLD,
+) -> bool:
+    """Return True when the function's mismatch is dominated by an FPR
+    register-allocation/scheduling cascade that no source transform can fix.
+
+    This is a *veto* helper for structural patterns: a pattern's ``relevant()``
+    may key off a weak opcode/structural hint (an ``fadds`` diff_op, a ``bl``,
+    a ``switch``) and fire ``asm_signal_match`` even though the real and
+    overwhelming blocker is a wall of floating-point register swaps. Splitting
+    an expression, hoisting a call, or DeMorgan-rewriting a guard cannot move
+    such a function — they waste a sweep.
+
+    We gate on the count of *multi-instruction* FPR swap pairs (see
+    ``count_multi_instruction_fpr_swap_pairs``) rather than on a fixability
+    score or an FPR-instruction ratio. Both of those alternatives mis-rank the
+    known ``Color::MakeColor`` win (lower fixability AND a high FPR ratio than
+    the functions we must veto), so they would suppress a real win. The
+    multi-instruction-pair count is the one signal that cleanly separates the
+    confirmed false positives from the confirmed wins.
+    """
+    return count_multi_instruction_fpr_swap_pairs(diagnosis) >= pair_threshold
+
 
 @dataclass
 class MismatchClassification:

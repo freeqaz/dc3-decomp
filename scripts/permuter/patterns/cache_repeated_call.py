@@ -32,6 +32,7 @@ from tree_sitter import Node
 
 from .base import Pattern
 from ..ast_queries import walk, get_indent, get_line_start
+from ..classifier import is_fpr_cascade_dominated
 from ..editor import SourceEditor
 from ..types import Diagnosis, FunctionContext, Variant
 
@@ -41,6 +42,13 @@ class CacheRepeatedCallPattern(Pattern):
     follow_ups = ("temp_elimination",)
 
     def relevant(self, diagnosis: Diagnosis) -> bool:
+        # Dominant-cascade veto: caching a repeated call removes one recomputed
+        # `bl`/cluster. When the function is buried under an FPR allocation
+        # cascade (e.g. CharSleeve::Poll: 31 multi-instr FPR pairs) the clusters
+        # are byproducts of that churn, not a memoization opportunity —
+        # cachercall_0 BUILD FAILED there. Skip before the broad `bl`/cluster gate.
+        if is_fpr_cascade_dominated(diagnosis):
+            return False
         # Extra bl (call overhead) or clusters caused by recomputed call
         if diagnosis.clusters:
             return True

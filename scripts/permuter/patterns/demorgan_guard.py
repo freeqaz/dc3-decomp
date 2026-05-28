@@ -34,6 +34,7 @@ from tree_sitter import Node
 
 from .base import Pattern
 from ..ast_queries import get_indent
+from ..classifier import is_fpr_cascade_dominated
 from ..types import Diagnosis, FunctionContext, Variant
 
 _BRANCH_OPCODES = frozenset({
@@ -50,6 +51,12 @@ class DeMorganGuardPattern(Pattern):
     follow_ups = ("branch_polarity", "early_return_merge", "guard_to_nested")
 
     def relevant(self, diagnosis: Diagnosis) -> bool:
+        # Dominant-cascade veto: a DeMorgan guard rewrite shifts branch polarity
+        # / one early-return block. It cannot touch a function dominated by an
+        # FPR allocation cascade (e.g. CharSleeve::Poll: 31 multi-instr volatile
+        # FPR pairs from inlined Vec.h/Mtx.h math — demorgan_wrap_0 gave no gain).
+        if is_fpr_cascade_dominated(diagnosis):
+            return False
         for d in diagnosis.diff_ops:
             if d.target_opcode in _BRANCH_OPCODES or d.base_opcode in _BRANCH_OPCODES:
                 return True
