@@ -121,6 +121,8 @@ from . import loop_var_hoist  # noqa: F401  # Hoist loop-invariant computations 
 from . import stack_array_hoist  # noqa: F401  # Hoist large local arrays/structs from inner scope to function scope (frame-slot reordering)
 from . import int_to_float_split  # noqa: F401  # Split (float)((short*)p)[i] into int tmp + (float)tmp to reorder load+convert ops
 from . import fpr_cascade_operand_hoist  # noqa: F401  # Hoist/permute float operands feeding an FPR-allocation cascade (multi-instr FPR swap)
+from . import pointer_iter_unroll  # noqa: F401  # Introduce fresh disposable iterator so MWCC can 8-way unroll a pointer loop whose start is referenced later
+from . import pod_ctor_toggle  # noqa: F401  # Add/remove small-struct ctor to flip stlport POD-copy path (word <-> typed member copies)
 
 from .base import get_all_patterns, get_pattern, list_patterns
 
