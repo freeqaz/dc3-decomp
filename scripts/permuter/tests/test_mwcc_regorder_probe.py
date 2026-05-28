@@ -275,14 +275,14 @@ class TestMwccRegorderProbe(unittest.TestCase):
     # -----------------------------------------------------------------------
 
     def test_priority_pure_callee_saved(self):
-        """priority() returns 0.6 for pure callee-saved swaps."""
+        """priority() returns 0.1 (experimental) for pure callee-saved swaps."""
         p = get_pattern("mwcc_regorder_probe")
-        self.assertAlmostEqual(p.priority(_diag_callee_saved_gpr()), 0.6, places=5)
+        self.assertAlmostEqual(p.priority(_diag_callee_saved_gpr()), 0.1, places=5)
 
     def test_priority_mixed(self):
-        """priority() returns 0.3 for mixed callee-saved + volatile."""
+        """priority() returns 0.1 (experimental) for mixed callee-saved + volatile."""
         p = get_pattern("mwcc_regorder_probe")
-        self.assertAlmostEqual(p.priority(_diag_mixed_callee_volatile()), 0.3, places=5)
+        self.assertAlmostEqual(p.priority(_diag_mixed_callee_volatile()), 0.1, places=5)
 
     def test_priority_volatile_only_zero(self):
         """priority() returns 0.0 for volatile-only swaps."""

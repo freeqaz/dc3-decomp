@@ -1,5 +1,18 @@
 """mwcc_regorder_probe — probe callee-saved register order via this->member alias-and-replace.
 
+⚠️ EXPERIMENTAL / LOW PRIORITY — validation 2026-05-28 produced 0 wins across
+3 iterations on the RB3 band3 functions it was designed for (GemManager,
+VocalTrack, VocalPart). Mechanism works (mwcc DOES respond to alias-replace),
+but the introduced references consume registers themselves, *increasing* pressure
+rather than reordering the existing slot assignments. Every generated variant
+scored 3–30% BELOW baseline. Kept in registry for future redesign or specialised
+use; default priority is low enough that it rarely fires in production sweeps.
+
+If you find a function where this pattern wins, please update this docstring
+and bump priority back to 0.6/0.3.
+
+---
+
 MWCC (CodeWarrior) assigns callee-saved registers (r14-r31 / f14-f31) in roughly
 the order that long-lived values first appear. Specifically, the *first* time each
 callee-saved register is demanded, the live-variable that lives longest in that
@@ -29,7 +42,7 @@ Detection gate:
 - Not already saturated with reference bindings (less than half of candidate
   members already bound at top level).
 
-Priority: 0.6 for pure callee-saved-only regswap; 0.3 for mixed.
+Priority: 0.1 (experimental; was 0.6 / 0.3 pre-validation).
 """
 
 from __future__ import annotations
@@ -102,10 +115,12 @@ class MwccRegorderProbePattern(Pattern):
         return has_callee_saved and not has_volatile_only
 
     def priority(self, diagnosis: Diagnosis) -> float:
-        """0.6 for pure callee-saved, 0.3 for mixed."""
+        """Experimental — flat 0.1 priority pending redesign (see module docstring)."""
         if not self.relevant(diagnosis):
             return 0.0
+        return 0.1
 
+        # Original priority logic, preserved for the eventual redesign:
         has_volatile = any(
             _is_volatile(r0) or _is_volatile(r1)
             for (r0, r1) in diagnosis.reg_swap_pairs
