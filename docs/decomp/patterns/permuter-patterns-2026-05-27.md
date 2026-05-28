@@ -17,6 +17,15 @@ Six of the proposal-stage candidates below were implemented (parallel Opus subag
 
 Still open from the proposal list: #1 (shelved — see `mwcc_regorder_probe`), #4 (already covered by `fabs_variant`), #7 `virtual_call_force`, #9 `spill_promoting`, #12–#15 (diagnostic-only classifiers).
 
+### `fpr_cascade_operand_hoist` — commit `375e1dea` (2026-05-28)
+
+- **File**: `scripts/permuter/patterns/fpr_cascade_operand_hoist.py` (+ opt-in change to `diagnosis.py::is_all_noise` wired in `beam_search.py`/`__main__.py`/`hill_climber.py`).
+- **Why it exists**: the `is_all_noise()` gate classifies *multi-instruction* FPR register swaps (`first_idx != last_idx`, f0-f31) as unfixable spill noise and short-circuits BEFORE any pattern runs. But the RB3 `Rot::RotateAboutX` and `Geo::Intersect` wins (hand-found this session) proved some are fixable by hoisting/reordering the float operands feeding the cascade.
+- **Gate change (safety-critical, conservative)**: `is_all_noise` gains `fpr_cascade_candidate: bool = False` — default is byte-identical to before. Callers compute it only when the remaining mismatch is FPR-swap-only (a cheap `_is_fpr_swap_only` guard) and the pattern's lightweight AST detector `has_fpr_cascade_hoist_candidate()` confirms a hoistable shape. `batch_triage.classify()` left at default-False (no source access).
+- **Generator (cap 6)**: Family A hoists repeated float member-load operands (`min.x.z`, `n->plane.d`) into `_fprN` locals before the consuming run, in identity + reverse orderings. Family B folds `dst = -local` store negation into the backing `float n = -E;` decl, in identity + store-reverse orderings. Restricted to `field_expression` leaves so integer cascades don't fire. Distinct from `variable_extraction` (extracts *calls*) and `loop_var_hoist` (moves whole decls in/out of loops).
+- **Relevance/priority**: fires only on multi-instruction FPR/FPR swap (the class `fma_reorder` excludes); priority 0.55.
+- **Validated end-to-end**: 31 unit tests; reverting `RotateAboutX` to pre-win and running the full beam loop re-discovered 99.37→**99.80%** (`winning_pattern=fpr_cascade_operand_hoist`, no `noise_only` early-stop), while the genuinely-dead `RndMesh::UpdateSphere` still bailed `noise_only` in 1.2s (gate stayed conservative).
+
 ## Tooling fixes that landed today
 
 These are not patterns themselves but unblock other patterns. All in main.
