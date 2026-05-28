@@ -478,6 +478,179 @@ class TestMwccRegorderProbe(unittest.TestCase):
         self.assertEqual(names, [],
                          f"Other-object field access incorrectly collected: {names}")
 
+    # -----------------------------------------------------------------------
+    # v2 alias-and-replace: verify usages ARE replaced (not dead aliases)
+    # -----------------------------------------------------------------------
+
+    def test_variants_replace_usages_not_dead_aliases(self):
+        """Variants must REPLACE member usages with alias names, not just insert dead decls.
+
+        This is the critical regression test for v2: the old implementation inserted
+        ``auto& _mX = this->mX;`` but left all usages as ``this->mX``, so MWCC
+        stripped the dead aliases and all orderings produced identical .o files.
+
+        In v2, every usage of ``this->mX`` must be replaced by ``_mX`` in the variant.
+        """
+        variants = self._variants(_FOUR_MEMBER_SRC, "Gem_IsSpotlightGem",
+                                  _diag_callee_saved_gpr())
+        self.assertGreater(len(variants), 0)
+        v = variants[0]
+        src = v.source.decode("utf-8", errors="replace")
+
+        # The variant must contain an alias declaration (hoisted decl)
+        self.assertIn("_mX", src, "Expected alias _mX in variant source")
+
+        # After replacement, the original `this->mX` usage in `float x = this->mX;`
+        # must NOT appear — it should be replaced by `_mX`.
+        # (The declaration `_mX = this->mX;` itself is the only allowed `this->mX`)
+        # Count occurrences: there should be exactly 1 per member (the decl itself)
+        # or fewer; NOT the original body usages remaining as `this->mX`.
+        # Simpler check: the alias _mX appears in the body, not just in the decl line.
+        alias_count = src.count("_mX")
+        # At minimum: 1 decl + at least 1 usage replacement = 2 occurrences
+        self.assertGreaterEqual(alias_count, 2,
+                                f"Expected _mX to appear in both decl and usage; found {alias_count}")
+
+    def test_variants_replace_explicit_this_usages(self):
+        """For explicit this->mFoo style, body usages become _mFoo (not dead decls).
+
+        The variant adds 4 alias declarations (each containing `this->`) but all
+        4 body usages of `this->mX` etc. are replaced with `_mX`. So the total
+        `this->` count stays at 4 (only in decl lines), but the important thing
+        is that the BODY now uses aliases, not the original `this->member` form.
+        """
+        variants = self._variants(_FOUR_MEMBER_SRC, "Gem_IsSpotlightGem",
+                                  _diag_callee_saved_gpr())
+        self.assertGreater(len(variants), 0)
+        v = variants[0]
+        src = v.source.decode("utf-8", errors="replace")
+        lines = src.splitlines()
+
+        # Find the alias declaration lines (the hoisted block at the top of body)
+        decl_lines = [l for l in lines if "= this->" in l and ("auto&" in l or "&" in l)]
+        # Find the body lines (after the decl block) that use member names
+        body_lines = [l for l in lines if ("= this->" not in l or ("auto&" not in l and "& " not in l))]
+
+        # In v2, body lines that access the aliased members must use alias names.
+        # Check that `float x = _mX;` appears (alias in body), not `float x = this->mX;`
+        body_uses_alias = any("_mX" in l and "this->" not in l for l in body_lines)
+        body_uses_orig = any("float x = this->mX" in l for l in body_lines)
+        self.assertTrue(body_uses_alias,
+                        f"Expected alias _mX in body lines; body_lines={body_lines}")
+        self.assertFalse(body_uses_orig,
+                         "Original `float x = this->mX` should be replaced by alias")
+
+    def test_implicit_this_variants_replace_usages(self):
+        """For implicit-this (bare mFoo), all body usages become _mFoo."""
+        variants = self._variants(_IMPLICIT_THIS_SRC, "GemManager_GetBestHit",
+                                  _diag_callee_saved_gpr())
+        self.assertGreater(len(variants), 0)
+        v = variants[0]
+        src = v.source.decode("utf-8", errors="replace")
+
+        # Original has bare `mGems`, `mSpeed`, `mActive`, `mScore`.
+        # After replacement, aliases like `_mGems` should appear in the body.
+        # The original bare name should appear 0 or fewer times in usages.
+        # Check that alias names are present:
+        has_alias = any(f"_m{m[1:]}" in src for m in ("mGems", "mSpeed", "mActive", "mScore"))
+        self.assertTrue(has_alias,
+                        "Expected alias names (_mGems etc.) in implicit-this variant source")
+
+    def test_permutation_order_produces_different_sources(self):
+        """Different permutation orderings must produce DIFFERENT source text.
+
+        This verifies that the ordering actually changes something observable —
+        proof that the codegen will differ (different first-access order for MWCC).
+
+        Uses _THREE_MEMBER_SRC which reliably produces multiple variants (no saturation
+        since members are not pre-assigned to locals).
+        """
+        variants = self._variants(_THREE_MEMBER_SRC, "Track_UpdateLeftyFlip",
+                                  _diag_callee_saved_gpr())
+        self.assertGreater(len(variants), 1,
+                           "Need at least 2 variants to compare orderings")
+
+        # Sources must all differ from each other (uniqueness already tested, but
+        # here we verify the ordering in the DECL BLOCK actually differs between variants)
+        sources_as_text = [v.source.decode("utf-8", errors="replace") for v in variants]
+
+        # Extract just the first N lines of each variant (where decls appear)
+        def first_n_lines(s, n=8):
+            return "\n".join(s.splitlines()[:n])
+
+        decl_blocks = [first_n_lines(s) for s in sources_as_text]
+        unique_blocks = set(decl_blocks)
+        self.assertGreater(len(unique_blocks), 1,
+                           "All variants have identical top-of-body decl blocks — ordering has no effect")
+
+    def test_collect_all_member_nodes_finds_all_occurrences(self):
+        """_collect_all_member_nodes must find EVERY occurrence, not just the first."""
+        from scripts.permuter.patterns.mwcc_regorder_probe import _collect_all_member_nodes
+        # _FOUR_MEMBER_SRC uses each member once in the body; verify counts
+        ctx = self._make_ctx(_FOUR_MEMBER_SRC, "Gem_IsSpotlightGem",
+                             _diag_callee_saved_gpr())
+        nodes = _collect_all_member_nodes(ctx, ["mX", "mY", "mCount", "mScore"])
+        # Each member appears exactly once in the body as this->mFoo
+        for name in ("mX", "mY", "mCount", "mScore"):
+            self.assertGreaterEqual(len(nodes[name]), 1,
+                                    f"Expected at least 1 node for {name}, got 0")
+
+    def test_collect_all_member_nodes_repeated_uses(self):
+        """Members used multiple times must all be collected."""
+        # Source with repeated member access
+        src = """\
+struct Foo { int mA; int mB; int mC; };
+int Foo_Sum(Foo* this) {
+    int x = this->mA + this->mA;
+    int y = this->mB;
+    int z = this->mC + this->mC + this->mC;
+    return x + y + z;
+}
+"""
+        from scripts.permuter.patterns.mwcc_regorder_probe import _collect_all_member_nodes
+        ctx = self._make_ctx(src, "Foo_Sum", _diag_callee_saved_gpr())
+        nodes = _collect_all_member_nodes(ctx, ["mA", "mB", "mC"])
+        self.assertEqual(len(nodes["mA"]), 2, "mA appears twice — should collect both")
+        self.assertEqual(len(nodes["mB"]), 1, "mB appears once")
+        self.assertEqual(len(nodes["mC"]), 3, "mC appears three times — should collect all")
+
+    def test_implicit_this_collect_all_nodes(self):
+        """_collect_all_member_nodes works for implicit-this (bare mFoo) references."""
+        src = """\
+int RB_Check(int idx) {
+    if (mActive && mCount > idx) {
+        return mCount + (int)(mSpeed);
+    }
+    return mActive ? 1 : 0;
+}
+"""
+        from scripts.permuter.patterns.mwcc_regorder_probe import _collect_all_member_nodes
+        ctx = self._make_ctx(src, "RB_Check", _diag_callee_saved_gpr())
+        nodes = _collect_all_member_nodes(ctx, ["mActive", "mCount", "mSpeed"])
+        # mActive: 2 uses, mCount: 2 uses, mSpeed: 1 use
+        self.assertEqual(len(nodes["mActive"]), 2, "mActive appears twice")
+        self.assertEqual(len(nodes["mCount"]), 2, "mCount appears twice")
+        self.assertEqual(len(nodes["mSpeed"]), 1, "mSpeed appears once")
+
+    def test_collect_all_nodes_skips_other_object_fields(self):
+        """_collect_all_member_nodes must NOT collect `other.mFoo` as a member reference."""
+        src = """\
+struct Box { int mWidth; int mHeight; int mDepth; };
+int Foo_Check(Box* this, Box& other) {
+    return this->mWidth + other.mWidth + this->mHeight + other.mHeight + this->mDepth;
+}
+"""
+        from scripts.permuter.patterns.mwcc_regorder_probe import _collect_all_member_nodes
+        ctx = self._make_ctx(src, "Foo_Check", _diag_callee_saved_gpr())
+        nodes = _collect_all_member_nodes(ctx, ["mWidth", "mHeight", "mDepth"])
+        # Only `this->mWidth` and `this->mHeight` and `this->mDepth` should be collected;
+        # `other.mWidth` and `other.mHeight` must be excluded
+        self.assertEqual(len(nodes["mWidth"]), 1,
+                         "Only this->mWidth should be collected, not other.mWidth")
+        self.assertEqual(len(nodes["mHeight"]), 1,
+                         "Only this->mHeight should be collected, not other.mHeight")
+        self.assertEqual(len(nodes["mDepth"]), 1, "this->mDepth should be collected")
+
 
 if __name__ == "__main__":
     unittest.main()

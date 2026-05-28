@@ -1,4 +1,4 @@
-"""mwcc_regorder_probe — probe callee-saved register order via this->member hoisting.
+"""mwcc_regorder_probe — probe callee-saved register order via this->member alias-and-replace.
 
 MWCC (CodeWarrior) assigns callee-saved registers (r14-r31 / f14-f31) in roughly
 the order that long-lived values first appear. Specifically, the *first* time each
@@ -10,12 +10,17 @@ drive which member names bind to which callee-saved registers.  Reordering the
 *sequence* of first ``this->member`` reads changes the binding order and can fix
 register-swap mismatches without altering semantics.
 
-This pattern:
-1. Collects the first N distinct ``this->member`` accesses in the function body
-   (limited to the top portion, where the allocator is most sensitive).
-2. Generates permutations of that access sequence by hoisting ``Type& m = this->member;``
-   reference declarations to the function top in different orders.
-3. Caps permutations at 10 to avoid combinatorial blowup.
+This pattern (redesigned v2):
+1. Collects the first N distinct ``this->member`` accesses in the function body.
+2. Finds ALL nodes referencing each member throughout the body.
+3. For each permutation ordering, emits a variant that:
+   a) Hoists ``Type& _mFoo = this->mFoo;`` declarations in that order
+   b) REPLACES all usages of those members with the alias names
+   This is "multi-member member_ref_bind with ordering search".
+4. Caps permutations at 10 to avoid combinatorial blowup.
+
+The replacement step is critical — without it, aliases are dead and MWCC strips
+them, producing identical .o files for every permutation.
 
 Detection gate:
 - diagnosis must have callee-saved-only GPR or FPR register swap pairs
@@ -56,6 +61,9 @@ _MAX_VARIANTS = 10
 # Maximum number of distinct members to collect for permutation
 _MAX_MEMBERS = 5
 
+# Hmx/Milo member naming: m + uppercase letter (mFoo, mLines, mStream, etc.)
+_MEMBER_NAME_RE = re.compile(r"^m[A-Z]")
+
 
 def _is_callee_saved(reg: str) -> bool:
     """True if *reg* is a callee-saved GPR or FPR."""
@@ -70,7 +78,7 @@ def _is_volatile(reg: str) -> bool:
 
 
 class MwccRegorderProbePattern(Pattern):
-    """Probe MWCC callee-saved register order by hoisting this->member accesses."""
+    """Probe MWCC callee-saved register order via alias-and-replace of this->member accesses."""
 
     name = "mwcc_regorder_probe"
     safety_tier = "conservative"
@@ -105,7 +113,14 @@ class MwccRegorderProbePattern(Pattern):
         return 0.3 if has_volatile else 0.6
 
     def generate(self, ctx: FunctionContext) -> Iterator[Variant]:
-        """Emit permutation variants of top-of-function this->member reference order."""
+        """Emit alias-and-replace variants in different member hoisting orders.
+
+        For each permutation of the top-N member references:
+        1. Build hoisted alias declarations in that order (drives MWCC reg alloc order).
+        2. Replace ALL usages of those members with the alias names (makes aliases live).
+
+        This is essentially "multi-member member_ref_bind with ordering search".
+        """
         # Gate: skip when not relevant (caller may not check relevant() first)
         if ctx.diagnosis is None or not self.relevant(ctx.diagnosis):
             return
@@ -134,7 +149,12 @@ class MwccRegorderProbePattern(Pattern):
 
         member_names = [m for m, _ in members]
 
-        # Step 4: find insertion point — beginning of function body
+        # Step 4: collect ALL nodes for each member throughout the function body.
+        # This is the critical step missing from v1 — we must find every usage
+        # so we can replace them all, making the aliases live (not dead).
+        all_nodes: dict[str, list[Node]] = _collect_all_member_nodes(ctx, member_names)
+
+        # Step 5: find insertion point — beginning of function body
         body = ctx.body_node
         first_stmt = None
         for child in body.named_children:
@@ -147,7 +167,7 @@ class MwccRegorderProbePattern(Pattern):
         indent = get_indent(ctx.file_source, first_stmt)
         insert_pos = get_line_start(ctx.file_source, first_stmt)
 
-        # Step 5: generate permutations (cap at _MAX_VARIANTS)
+        # Step 6: generate permutations (cap at _MAX_VARIANTS)
         counter = 0
         seen: set[tuple[str, ...]] = set()
         identity = tuple(range(len(member_names)))
@@ -194,32 +214,46 @@ class MwccRegorderProbePattern(Pattern):
 
             reordered_names = [member_names[i] for i in order]
 
-            # Build the reference declarations block in the new order
-            decl_lines = _build_ref_decls(
-                reordered_names, members, member_types, indent,
-                ctx.compiler_dialect
+            # Build the alias declarations block AND the alias name map.
+            # decl_lines is the block to insert at top of body.
+            # alias_map maps member_name -> alias_bytes (e.g. "mFoo" -> b"_mFoo").
+            decl_lines, alias_map = _build_ref_decls_with_aliases(
+                reordered_names, member_types, indent, ctx.compiler_dialect
             )
             if not decl_lines:
+                # mwcc mode couldn't find types — skip
                 continue
 
-            # Emit variant: insert the block at the top of the function body
+            # Build editor: insert decls at top, then replace all usages.
             ed = SourceEditor(ctx.file_source)
             ed.insert_at(insert_pos, decl_lines)
+
+            # Gather all (node, alias_bytes) replacement pairs and sort descending
+            # by start_byte. SourceEditor requires non-overlapping edits applied
+            # in reverse order (which it handles internally after sorting).
+            all_replacements: list[tuple[Node, bytes]] = []
+            for name in member_names:
+                alias = alias_map.get(name)
+                if alias is None:
+                    continue
+                for node in all_nodes.get(name, []):
+                    all_replacements.append((node, alias))
+
+            # Sort descending by start_byte so reverse-order application works
+            all_replacements.sort(key=lambda t: t[0].start_byte, reverse=True)
+
             try:
+                for node, alias in all_replacements:
+                    ed.replace_node(node, alias)
                 new_source = ed.apply()
             except ValueError:
-                continue
+                continue  # Overlapping edits — skip this variant
 
             if new_source == ctx.file_source:
                 continue
 
-            # Describe which members moved relative to original order
-            moved = [
-                f"{member_names[i]}->{reordered_names[i]}"
-                for i in range(n)
-                if reordered_names[i] != member_names[i]
-            ]
-            desc = f"Regorder probe: hoist this->member refs in order [{', '.join(reordered_names[:4])}]"
+            desc = (f"Regorder probe: alias-and-replace "
+                    f"[{', '.join(reordered_names[:4])}]")
 
             yield Variant(
                 name=f"regorder_{counter}",
@@ -232,11 +266,146 @@ class MwccRegorderProbePattern(Pattern):
 
 
 # ---------------------------------------------------------------------------
-# AST helpers
+# Core new helper: collect ALL nodes for each member (for replacement)
 # ---------------------------------------------------------------------------
 
-_MEMBER_NAME_RE = re.compile(r"^m[A-Z]")
+def _collect_all_member_nodes(
+    ctx: FunctionContext, member_names: list[str]
+) -> dict[str, list[Node]]:
+    """Collect ALL AST nodes that reference each member in the function body.
 
+    For explicit this->mFoo: collect the field_expression node (full ``this->mFoo``).
+    For implicit mFoo: collect the identifier node.
+
+    Applies the same filtering as _collect_this_members to avoid false positives
+    (e.g. ``x.mFoo`` where mFoo is a field of another object).
+
+    Returns {member_name: [node, ...]} ordered by appearance in source.
+    """
+    source = ctx.file_source
+    body = ctx.body_node
+    name_set = set(member_names)
+    locals_set = _collect_local_names(ctx)
+
+    result: dict[str, list[Node]] = {n: [] for n in member_names}
+
+    for node in walk(body):
+        # Case 1: explicit this->mFoo field expression — replace the WHOLE node
+        if node.type == "field_expression":
+            arg = node.child_by_field_name("argument")
+            if arg is None:
+                continue
+            arg_text = source[arg.start_byte:arg.end_byte]
+            if arg_text not in (b"this", b"(*this)") and arg.type != "this":
+                continue
+            field = node.child_by_field_name("field")
+            if field is None:
+                continue
+            field_name = source[field.start_byte:field.end_byte].decode("utf-8", errors="replace")
+            if field_name not in name_set:
+                continue
+            result[field_name].append(node)
+            continue
+
+        # Case 2: bare identifier matching m[A-Z] (implicit-this member access)
+        if node.type != "identifier":
+            continue
+        name = source[node.start_byte:node.end_byte].decode("utf-8", errors="replace")
+        if name not in name_set:
+            continue
+        if name in locals_set:
+            continue
+
+        parent = node.parent
+        if parent is None:
+            continue
+
+        # Skip if this identifier is the field of a field_expression (e.g. `x.mFoo`)
+        if parent.type == "field_expression":
+            field = parent.child_by_field_name("field")
+            if field is not None and field.start_byte == node.start_byte:
+                continue
+
+        # Skip if this is the function being called (e.g. `mFoo(...)`)
+        if parent.type == "call_expression":
+            func = parent.child_by_field_name("function")
+            if func is not None and func.start_byte == node.start_byte:
+                continue
+
+        # Skip if this is the declarator side of an init_declarator (LHS of `T mFoo = ...`)
+        if parent.type == "init_declarator":
+            decl = parent.child_by_field_name("declarator")
+            if decl is not None and decl.start_byte == node.start_byte:
+                continue
+
+        # Skip parameter declaration names
+        if parent.type == "parameter_declaration":
+            decl = parent.child_by_field_name("declarator")
+            if decl is not None and decl.start_byte == node.start_byte:
+                continue
+
+        result[name].append(node)
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Alias declaration builder — returns both the block bytes AND the alias map
+# ---------------------------------------------------------------------------
+
+def _build_ref_decls_with_aliases(
+    ordered_names: list[str],
+    member_types: dict[str, bytes],
+    indent: bytes,
+    compiler_dialect: str,
+) -> tuple[bytes, dict[str, bytes]]:
+    """Build alias declarations in the given order and return the alias-name map.
+
+    For mwcc (C++98): emit ``TypeName& _mFoo = this->mFoo;`` using concrete types.
+    For msvc (C++11): emit ``auto& _mFoo = this->mFoo;``.
+
+    Returns (decl_block_bytes, {member_name: alias_bytes}).
+    Returns (b"", {}) if any required type is missing for mwcc.
+    """
+    lines: list[bytes] = []
+    alias_map: dict[str, bytes] = {}
+    use_auto = (compiler_dialect == "msvc")
+
+    for name in ordered_names:
+        # Generate alias name: prefix m -> _m  (e.g. mFoo -> _mFoo)
+        if name.startswith("m"):
+            local_name = ("_" + name).encode("utf-8")
+        else:
+            local_name = (f"_ref_{name}").encode("utf-8")
+
+        name_bytes = name.encode("utf-8")
+        alias_map[name] = local_name
+
+        if use_auto:
+            line = indent + b"auto& " + local_name + b" = this->" + name_bytes + b";\n"
+        else:
+            type_bytes = member_types.get(name)
+            if type_bytes is None:
+                # Can't emit concrete type for mwcc — abort entire variant
+                return b"", {}
+            stripped = type_bytes.rstrip()
+            if stripped.endswith(b"*"):
+                # Pointer member: ``T* _mFoo = this->mFoo;``
+                line = indent + stripped + b" " + local_name + b" = this->" + name_bytes + b";\n"
+            elif stripped.endswith(b"&"):
+                # Reference member: already a reference, bind without extra &
+                line = indent + stripped + b" " + local_name + b" = this->" + name_bytes + b";\n"
+            else:
+                # Value member: ``T& _mFoo = this->mFoo;``
+                line = indent + type_bytes + b"& " + local_name + b" = this->" + name_bytes + b";\n"
+        lines.append(line)
+
+    return b"".join(lines), alias_map
+
+
+# ---------------------------------------------------------------------------
+# AST helpers (unchanged from v1)
+# ---------------------------------------------------------------------------
 
 def _collect_local_names(ctx: FunctionContext) -> set[str]:
     """Collect identifier names that are declared as locals/params in the body.
@@ -398,56 +567,6 @@ def _is_saturated(ctx: FunctionContext, member_names: list[str]) -> bool:
     return bound_count > len(member_names) // 2
 
 
-def _build_ref_decls(
-    ordered_names: list[str],
-    members: list[tuple[str, Node]],
-    member_types: dict[str, bytes],
-    indent: bytes,
-    compiler_dialect: str,
-) -> bytes:
-    """Build a block of reference declarations for the given member order.
-
-    For mwcc (C++98): emit ``TypeName& _mX = this->mX;`` using concrete types.
-    For msvc (C++11): emit ``auto& _mX = this->mX;``.
-
-    Returns empty bytes if any required type is missing (mwcc only).
-    """
-    lines: list[bytes] = []
-    use_auto = (compiler_dialect == "msvc")
-
-    for name in ordered_names:
-        # Generate a local variable name: prefix m -> _m  (e.g. mFoo -> _mFoo)
-        if name.startswith("m"):
-            local_name = ("_" + name).encode("utf-8")
-        else:
-            local_name = (f"_ref_{name}").encode("utf-8")
-
-        name_bytes = name.encode("utf-8")
-
-        if use_auto:
-            line = indent + b"auto& " + local_name + b" = this->" + name_bytes + b";\n"
-        else:
-            type_bytes = member_types.get(name)
-            if type_bytes is None:
-                # Can't emit concrete type — skip this variant
-                return b""
-            # Detect if member is a pointer (type ends with *) or reference (ends with &)
-            stripped = type_bytes.rstrip()
-            if stripped.endswith(b"*"):
-                # Pointer member: ``T* local = this->mFoo;``
-                line = indent + stripped + b" " + local_name + b" = this->" + name_bytes + b";\n"
-            elif stripped.endswith(b"&"):
-                # Reference member (e.g. ``const T &mFoo``): already a reference type.
-                # Emit ``const T& local = this->mFoo;`` without adding another &.
-                line = indent + stripped + b" " + local_name + b" = this->" + name_bytes + b";\n"
-            else:
-                # Value member: emit ``T& local = this->mFoo;``
-                line = indent + type_bytes + b"& " + local_name + b" = this->" + name_bytes + b";\n"
-        lines.append(line)
-
-    return b"".join(lines)
-
-
 # ---------------------------------------------------------------------------
 # Header / type lookup (mirrors member_ref_bind helpers)
 # ---------------------------------------------------------------------------
@@ -562,8 +681,6 @@ def _collect_field_types(body: Node, source: bytes, out: dict[str, bytes]) -> No
                     sub = inner.child_by_field_name("declarator")
                     if sub is None:
                         # tree-sitter may put field_identifier directly as a child
-                        # (e.g. ``&mFoo`` has field_identifier as direct child, not
-                        # under a "declarator" named field).
                         for ch in inner.children:
                             if ch.type == "field_identifier":
                                 inner = ch
