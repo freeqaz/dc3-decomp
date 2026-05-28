@@ -212,25 +212,20 @@ fi
 echo "==> Priming ninja state (regenerates config.json + warms .ninja_log)"
 (
     cd "$WORKTREE_PATH"
-    # The first prime can fail transiently under heavy concurrent activity
-    # (e.g., other worktrees running permuter sweeps that touch shared
-    # toolchain symlinks). Retry once before giving up. Both runs leave
-    # the graph in a consistent state, so a successful second run is fine.
-    # Under heavy concurrent activity (other worktrees running permuter
-    # sweeps), parallel wibo invocations sporadically fail with code=287.
-    # Strategy: try full-parallel first (fast), then back off to -j 4, then
-    # finally -j 1 which serializes wibo and reliably succeeds.
+    # The historical `code=287` failures under heavy concurrent ninja load
+    # were a wibo bug: `resolveCaseInsensitive` discarded parent-directory
+    # case fixes when the leaf file did not yet exist, so cl.exe wrote the
+    # PCH/.obj at one casing and then failed to reopen it. Fixed upstream
+    # in wibo commit 6a7c37e ("files: fix case-insensitive path resolution
+    # for not-yet-created leaves"). One unconditional prime is now enough;
+    # if it fails the error is real and worth surfacing.
     prime_log="$(mktemp)"
-    declare -a attempts=("ninja" "ninja -j 4" "ninja -j 1")
-    for cmd in "${attempts[@]}"; do
-        if $cmd >"$prime_log" 2>&1; then
-            tail -5 "$prime_log"
-            rm -f "$prime_log"
-            exit 0
-        fi
-        echo "WARN: '$cmd' failed; trying lower parallelism..." >&2
-    done
-    echo "FATAL: ninja prime failed at all parallelism levels — full output:" >&2
+    if ninja >"$prime_log" 2>&1; then
+        tail -5 "$prime_log"
+        rm -f "$prime_log"
+        exit 0
+    fi
+    echo "FATAL: ninja prime failed — full output:" >&2
     cat "$prime_log" >&2
     rm -f "$prime_log"
     exit 1
