@@ -4,10 +4,36 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from scripts.permuter.header_pattern_bridge import (
     discover_header_pattern_variants,
     supported_header_patterns,
 )
+
+
+@pytest.fixture(autouse=True)
+def _force_msvc_dialect(monkeypatch):
+    """Pin the compiler dialect to msvc for these bridge tests.
+
+    ``discover_header_pattern_variants`` -> ``extract_function`` stamps each
+    FunctionContext with the project's compiler dialect, resolved from the
+    INVOKING checkout's config (``extractor._project_compiler_dialect`` ->
+    ``project_config.get_compiler()``). ``scripts/permuter`` is shared (via
+    symlink) between a DC3 (msvc) and an RB3 (mwcc) checkout, so running this
+    shared test from the RB3 checkout would resolve mwcc and emit ``int`` /
+    no extraction — failing ``variable_extraction``'s ``auto _tmp0`` /
+    ``return _tmp0 > 0;`` assertions (``auto`` is msvc/C++11-only). These tests
+    assert the msvc form, so force it deterministically regardless of cwd. The
+    dialect-agnostic bridge tests in this file are unaffected. Clear the parse
+    cache so the dialect change is reflected, not a stale tree.
+    """
+    from scripts.permuter import extractor
+
+    monkeypatch.setattr(extractor, "_project_compiler_dialect", lambda: "msvc")
+    extractor.ast_cache_clear()
+    yield
+    extractor.ast_cache_clear()
 
 
 def test_header_return_call_merge_bridge(tmp_path: Path):

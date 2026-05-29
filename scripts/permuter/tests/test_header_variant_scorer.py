@@ -2,12 +2,31 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from pathlib import Path
 
 from scripts.permuter.header_impact import HeaderImpact
 from scripts.permuter.header_variant_scorer import HeaderVariantScorer
 from scripts.permuter.types import AuxiliaryFile, Variant
+
+
+def _write_synth_config(root: Path) -> None:
+    """Pin the per-instance project config rooted at the test tmp_path so it
+    deterministically resolves the same build id (373307D9), obj extension
+    (.obj) and toolchain (msvc) the fake build dir below assumes — regardless
+    of any DECOMP_SYNTH_PROJECT/PERMUTER_PROJECT env var in the environment."""
+    (root / "decomp-synth.json").write_text(
+        json.dumps(
+            {
+                "name": "dc3",
+                "compiler": "msvc",
+                "build_id": "373307D9",
+                "obj_extension": ".obj",
+            }
+        ),
+        encoding="utf-8",
+    )
 
 
 def _make_db(path: Path) -> None:
@@ -35,6 +54,7 @@ def _make_db(path: Path) -> None:
 
 
 def test_header_variant_scorer_only_rescores_changed_objects(tmp_path: Path):
+    _write_synth_config(tmp_path)
     db_path = tmp_path / "decomp.db"
     _make_db(db_path)
 
@@ -103,6 +123,7 @@ def test_header_variant_scorer_only_rescores_changed_objects(tmp_path: Path):
 
 
 def test_header_variant_scorer_refreshes_baseline_when_requested(tmp_path: Path):
+    _write_synth_config(tmp_path)
     db_path = tmp_path / "decomp.db"
     _make_db(db_path)
 
@@ -168,6 +189,7 @@ def test_header_variant_scorer_refreshes_baseline_when_requested(tmp_path: Path)
 
 
 def test_header_variant_scorer_restores_files_on_build_failure(tmp_path: Path):
+    _write_synth_config(tmp_path)
     db_path = tmp_path / "decomp.db"
     _make_db(db_path)
 

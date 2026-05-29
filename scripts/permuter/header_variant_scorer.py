@@ -92,6 +92,12 @@ class HeaderVariantScorer:
     ) -> None:
         self.project_root = project_root.resolve()
         self.db_path = (db_path or get_decomp_db_path()).resolve()
+        # Resolve a per-instance project config rooted at this scorer's
+        # project_root rather than the module-global `_project` (which is
+        # computed once at import time against the real repo root). In
+        # production project_root IS the real repo root, so behaviour is
+        # unchanged; this only lets callers (and tests) inject a root.
+        self._project = _get_project_config(self.project_root)
 
     def evaluate_variant(
         self,
@@ -217,8 +223,8 @@ class HeaderVariantScorer:
 
     def _obj_target_for_source(self, source_path: Path) -> Path:
         """Map a source file to its build output object file."""
-        obj_target = _project.obj_target_for_source(source_path)
-        return _project.repo_root / obj_target
+        obj_target = self._project.obj_target_for_source(source_path)
+        return self.project_root / obj_target
 
     def _snapshot_object_hashes(self, targets: tuple[Path, ...]) -> dict[Path, str | None]:
         """Hash existing object files so unchanged units can be skipped."""

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 import tempfile
 import unittest
@@ -28,6 +29,23 @@ _REAL_FIXTURE_DIR = _PROJECT_ROOT / "msvc-src" / "analysis" / "il-fixtures" / "i
 
 
 class TestIlBundleHelpers(unittest.TestCase):
+    # ``resolve_bundle_base`` returns a path relative to the repo root and
+    # ``ILFile`` reads the IL files relative to the CURRENT working directory.
+    # The real-fixture tests below therefore assume cwd == the repo root that
+    # holds ``msvc-src/`` (this checkout, _PROJECT_ROOT). ``scripts/permuter``
+    # is shared via symlink with an RB3 checkout, so running this test from
+    # there leaves cwd pointing at a tree with no ``msvc-src/`` and the fixture
+    # reads nothing (``functions == []``). Pin cwd to _PROJECT_ROOT so the
+    # relative bundle path resolves regardless of where pytest was invoked.
+    # (The tempdir-based tests use absolute paths + explicit run_cwd, so the
+    # chdir is a harmless no-op for them.)
+    def setUp(self):
+        self._prev_cwd = os.getcwd()
+        os.chdir(_PROJECT_ROOT)
+
+    def tearDown(self):
+        os.chdir(self._prev_cwd)
+
     def test_build_manifest_reports_existing_files(self):
         with tempfile.TemporaryDirectory() as td:
             td_path = Path(td)
