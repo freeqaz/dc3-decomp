@@ -107,7 +107,7 @@ These patterns affect register allocation:
 
 ```bash
 # For each REGSWAP_ONLY function from triage:
-python -m scripts.permuter \
+python -m decomp_synth \
     --symbol "$SYMBOL" \
     --source "$SOURCE" \
     --function "$FUNC" \

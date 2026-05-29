@@ -837,7 +837,7 @@ where pattern chains have more room to explore.
 Deliverables:
 
 - ~~fixed target list checked into the repo~~ — PASS
-- ~~one reproducible benchmark command~~ — PASS: `python -m scripts.permuter.tests.benchmark_beam`
+- ~~one reproducible benchmark command~~ — PASS: `python -m decomp_synth.tests.benchmark_beam`
 - ~~one machine-readable results artifact~~ — PASS
 - ~~one short findings summary with wins, losses, and neutral outcomes~~ — PASS (above)
 

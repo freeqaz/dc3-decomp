@@ -139,6 +139,6 @@ behavior, matching __FILE__ paths exactly, etc.) rather than source-level change
 - `mcp__orchestrator__query_functions` — Find candidates by match range and verdict
 - `mcp__orchestrator__run_diff_inspect` (diagnose mode) — Root cause analysis
 - `mcp__orchestrator__run_diff_inspect` (mismatches mode) — Instruction-level diff
-- `scripts.permuter` — Automated source variation testing (11 runs, 0 improvements)
+- `decomp_synth` — Automated source variation testing (11 runs, 0 improvements)
 - Ghidra decompile skill — Ground truth for assignment order in HamAudio
 - `mcp__orchestrator__run_objdiff` — Build + diff after each source change

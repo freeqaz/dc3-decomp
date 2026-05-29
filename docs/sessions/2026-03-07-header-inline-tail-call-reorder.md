@@ -254,19 +254,19 @@ class VariantReport:
 
 ```bash
 # Scan for candidates (no changes)
-python -m scripts.permuter.header_tail_call scan
+python -m decomp_synth.header_tail_call scan
 
 # Test a specific header inline
-python -m scripts.permuter.header_tail_call test --header src/system/math/Mtx.h --function Multiply
+python -m decomp_synth.header_tail_call test --header src/system/math/Mtx.h --function Multiply
 
 # Test all candidates in a header
-python -m scripts.permuter.header_tail_call test --header src/system/math/Mtx.h
+python -m decomp_synth.header_tail_call test --header src/system/math/Mtx.h
 
 # Full scan + test (slow but thorough)
-python -m scripts.permuter.header_tail_call scan --test
+python -m decomp_synth.header_tail_call scan --test
 
 # Apply a confirmed-good change
-python -m scripts.permuter.header_tail_call apply --header src/system/math/Mtx.h --function Multiply --variant 0
+python -m decomp_synth.header_tail_call apply --header src/system/math/Mtx.h --function Multiply --variant 0
 ```
 
 ## Build Integration

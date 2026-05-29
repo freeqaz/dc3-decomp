@@ -254,7 +254,7 @@ def extract_function_source(source_path: Path, function_name: str) -> str | None
                 f"""
 import sys
 sys.path.insert(0, '.')
-from scripts.permuter.extractor import extract_function
+from decomp_synth.extractor import extract_function
 from pathlib import Path
 ctx = extract_function(Path({json.dumps(str(source_path))}), {json.dumps(function_name)})
 start, end = ctx.func_byte_range
@@ -811,7 +811,7 @@ def run_advisor(
     current_percent = func_info["current_percent"]
 
     # Extract qualified name from demangled
-    from scripts.permuter.types import extract_qualified_name
+    from decomp_synth.types import extract_qualified_name
     function_name = extract_qualified_name(demangled) or demangled
 
     print(

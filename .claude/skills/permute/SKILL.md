@@ -23,7 +23,7 @@ are **on by default**. You only need `--no-*` flags to disable them.
 ### Single function (most common)
 
 ```bash
-venv/bin/python -m scripts.permuter.scan_and_permute --symbol '$0' --max-rounds 10 --max-variants 100 --plateau-limit 3 --chain-depth 5
+venv/bin/python -m decomp_synth.scan_and_permute --symbol '$0' --max-rounds 10 --max-variants 100 --plateau-limit 3 --chain-depth 5
 ```
 
 Accepts mangled symbols, qualified names, or partial names:
@@ -34,13 +34,13 @@ Accepts mangled symbols, qualified names, or partial names:
 ### Unit scan
 
 ```bash
-venv/bin/python -m scripts.permuter.scan_and_permute --unit 'system/obj/*'
+venv/bin/python -m decomp_synth.scan_and_permute --unit 'system/obj/*'
 ```
 
 ### Bulk scan (all functions)
 
 ```bash
-venv/bin/python -m scripts.permuter.scan_and_permute --jobs 16 --limit 200
+venv/bin/python -m decomp_synth.scan_and_permute --jobs 16 --limit 200
 ```
 
 ## Key flags

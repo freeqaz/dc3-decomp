@@ -205,13 +205,13 @@ After normal extraction fails, call `_try_macro_extraction()` before raising Val
 
 1. **Dry-run** on a Load function:
    ```bash
-   python -m scripts.permuter --source src/system/char/CharBone.cpp \
+   python -m decomp_synth --source src/system/char/CharBone.cpp \
      --function CharBone::Load --symbol <sym> --dry-run
    ```
 
 2. **Dry-run** on a Handler function:
    ```bash
-   python -m scripts.permuter --source src/system/char/CharBone.cpp \
+   python -m decomp_synth --source src/system/char/CharBone.cpp \
      --function CharBone::Handle --symbol <sym> --dry-run
    ```
 

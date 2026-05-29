@@ -137,7 +137,7 @@ bundled Flow.cpp, audit Wave 3, and permuter-dev scripts.
 
 3. **Run the sub-90% permuter sweep** (task #15). The 90-95% sweep landed
    +48.7% (32 wins) — the band is productive, contrary to the mid-run guess.
-   Command: `venv/bin/python -m scripts.permuter.batch_auto --target workable
+   Command: `venv/bin/python -m decomp_synth.batch_auto --target workable
    --include-at-limit --min-pct 80 --max-pct 90 --limit 0 --json 2>&1 | tee
    cl_temp_files/permuter/sweep_80_90.log`. Run to completion before judging.
 
@@ -162,7 +162,7 @@ ls /home/free/code/milohax/og-dc3-decomp/src/system/<subsys>/<File>.cpp
 diff -u <our> <og-dc3> | head -80
 
 # Resume the 90-95% sweep (low priority)
-venv/bin/python -m scripts.permuter.batch_auto --target workable \
+venv/bin/python -m decomp_synth.batch_auto --target workable \
     --include-at-limit --min-pct 90 --max-pct 95 --limit 0 --json \
     --resume cl_temp_files/permuter/sweep_90_95_logs/
 

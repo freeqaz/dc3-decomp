@@ -17,17 +17,17 @@ pip install tree-sitter tree-sitter-cpp
 
 ```bash
 # List available patterns
-python -m scripts.permuter --list-patterns
+python -m decomp_synth --list-patterns
 
 # Dry run - show variants without building
-python -m scripts.permuter \
+python -m decomp_synth \
     --symbol "?BurnXfm@RndMesh@@QAAXXZ" \
     --source src/system/rndobj/Mesh.cpp \
     --function "RndMesh::BurnXfm" \
     --dry-run
 
 # Run and score all variants (stops on 100% match, auto-applies best improvement)
-python -m scripts.permuter \
+python -m decomp_synth \
     --symbol "?BurnXfm@RndMesh@@QAAXXZ" \
     --source src/system/rndobj/Mesh.cpp \
     --function "RndMesh::BurnXfm"
@@ -338,16 +338,16 @@ intermediate rewrite opens a better later path.
 
 ```bash
 # Default (beam search)
-python -m scripts.permuter.scan_and_permute \
+python -m decomp_synth.scan_and_permute \
     --symbol "?Poll@LabelNumberTicker@@UAAXXZ"
 
 # Customize beam parameters
-python -m scripts.permuter.scan_and_permute \
+python -m decomp_synth.scan_and_permute \
     --symbol "?Poll@LabelNumberTicker@@UAAXXZ" \
     --beam-width 12 --beam-depth 6
 
 # Standalone beam search CLI (single function, no scanning)
-python -m scripts.permuter.beam_search \
+python -m decomp_synth.beam_search \
     --symbol "?Poll@LabelNumberTicker@@UAAXXZ" \
     --beam-width 8 --beam-depth 4 --json
 ```
@@ -381,13 +381,13 @@ Greedy single-state iterative search. Simpler and faster per function, but can
 get stuck in local optima.
 
 ```bash
-python -m scripts.permuter.scan_and_permute \
+python -m decomp_synth.scan_and_permute \
     --strategy hill_climb \
     --symbol "?Poll@LabelNumberTicker@@UAAXXZ" \
     --max-rounds 10 --compose
 
 # Standalone hill climber CLI
-python -m scripts.permuter.hill_climber \
+python -m decomp_synth.hill_climber \
     --symbol "?Poll@LabelNumberTicker@@UAAXXZ" \
     --source src/system/ui/LabelNumberTicker.cpp \
     --function "LabelNumberTicker::Poll" \
@@ -401,7 +401,7 @@ Stops on: 100% match, plateau (N rounds without improvement), max rounds, or all
 Population-based optimizer using crossover and mutation.
 
 ```bash
-python -m scripts.permuter.scan_and_permute \
+python -m decomp_synth.scan_and_permute \
     --strategy evolutionary \
     --symbol "?Poll@LabelNumberTicker@@UAAXXZ" \
     --population-size 50 --generations 20
@@ -413,22 +413,22 @@ Sweep functions automatically with `scan_and_permute`:
 
 ```bash
 # Sweep all functions 40-98% match (beam search, default)
-python -m scripts.permuter.scan_and_permute \
+python -m decomp_synth.scan_and_permute \
     --min-pct 40 --max-pct 98 --jobs 8 --limit 100
 
 # Sweep specific unit
-python -m scripts.permuter.scan_and_permute \
+python -m decomp_synth.scan_and_permute \
     --unit "system/rndobj/*" --jobs 4
 
 # Use hill climbing for faster sweeps
-python -m scripts.permuter.scan_and_permute \
+python -m decomp_synth.scan_and_permute \
     --strategy hill_climb --min-pct 40 --max-pct 98 --jobs 8 --limit 100
 
 # Dry run — scan only, show what would be permuted
-python -m scripts.permuter.scan_and_permute --dry-run
+python -m decomp_synth.scan_and_permute --dry-run
 
 # Legacy batch_auto (deprecated, use scan_and_permute)
-python -m scripts.permuter.batch_auto --target workable --max-rounds 5
+python -m decomp_synth.batch_auto --target workable --max-rounds 5
 ```
 
 Features: parallel jobs by source file, Ghidra-guided patterns, pattern composition, score caching.

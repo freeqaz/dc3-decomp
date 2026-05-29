@@ -333,7 +333,7 @@ def _extract_declaration_names(source: Path, function_name: str) -> list[str]:
     Returns names in declaration order (which maps to symbol ID order).
     """
     try:
-        from scripts.permuter.extractor import extract_function
+        from decomp_synth.extractor import extract_function
         ctx = extract_function(source, function_name)
         names = []
         for stmt in ctx.statements:
@@ -649,7 +649,7 @@ def ghidra_guided_search(
     Returns:
         List of candidate declaration orderings.
     """
-    from scripts.permuter.ghidra_var_match import ghidra_guided_reorder
+    from decomp_synth.ghidra_var_match import ghidra_guided_reorder
     return ghidra_guided_reorder(
         ghidra_vars=ghidra_var_order,
         source_decl_names=decl_names,

@@ -227,7 +227,7 @@ fundamental differences in how we structured the code.
 **Goal**: One command to process all fixable AT_LIMIT functions.
 
 ```bash
-python -m scripts.permuter.batch_auto \
+python -m decomp_synth.batch_auto \
     --include-at-limit \
     --min-pct 90 --max-pct 100 \
     --max-rounds 5 --compose \

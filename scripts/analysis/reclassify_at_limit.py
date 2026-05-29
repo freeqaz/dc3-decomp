@@ -22,8 +22,8 @@ import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-from scripts.permuter.diagnosis import diagnose_baseline, is_all_noise
-from scripts.permuter.batch_triage import (
+from decomp_synth.diagnosis import diagnose_baseline, is_all_noise
+from decomp_synth.batch_triage import (
     classify,
     build_object,
     run_objdiff,

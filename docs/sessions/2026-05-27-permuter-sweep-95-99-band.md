@@ -96,7 +96,7 @@ diff with `run_diff_inspect`.
 
 1. **Verify the 2 perfects** with a clean rebuild.
 2. **Run the 90-95% band sweep** — task #14, ~212 functions.
-   Command: `venv/bin/python -m scripts.permuter.batch_auto --target workable --include-at-limit --min-pct 90 --max-pct 95 --limit 0 --json 2>&1 | tee cl_temp_files/permuter/sweep_90_95.log`
+   Command: `venv/bin/python -m decomp_synth.batch_auto --target workable --include-at-limit --min-pct 90 --max-pct 95 --limit 0 --json 2>&1 | tee cl_temp_files/permuter/sweep_90_95.log`
 3. **Skip the 99%+ band** — wave 1 proved it's saturated noise (0/20).
 4. After 90-95%, sweep **<90% AT_LIMIT** for full coverage. Expect
    lower per-function hit rate (more structural / missing-impl cases).

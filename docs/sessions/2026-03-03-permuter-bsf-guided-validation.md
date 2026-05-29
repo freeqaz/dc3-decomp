@@ -28,14 +28,14 @@ So BSF validation must run with escalated permissions (outside sandbox). Without
 We ran dry-run declaration reorder on real symbols with and without BSF guidance:
 
 ```bash
-python3 -m scripts.permuter \
+python3 -m decomp_synth \
   --symbol '<SYMBOL>' \
   --patterns declaration_reorder \
   --max-variants 20 \
   --dry-run --no-apply --no-compose
 
 # compare with:
-python3 -m scripts.permuter ... --no-bsf-guided
+python3 -m decomp_synth ... --no-bsf-guided
 ```
 
 ## Results

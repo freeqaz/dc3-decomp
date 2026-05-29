@@ -16,7 +16,7 @@ decomp-permuter automatically permutes C code to find variations that better mat
 ## Use the C++ Permuter Instead
 
 ```bash
-python -m scripts.permuter \
+python -m decomp_synth \
     --symbol "?BurnXfm@RndMesh@@QAAXXZ" \
     --source src/system/rndobj/Mesh.cpp \
     --function "RndMesh::BurnXfm" \
