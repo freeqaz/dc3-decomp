@@ -95,7 +95,7 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Compiler dialect target (mwcc=C++98 CodeWarrior, msvc=modern). "
              "Patterns emitting C++11+ syntax check this. "
-             "Overrides permuter.json (default: mwcc).",
+             "Overrides decomp-synth.json (default: mwcc).",
     )
     parser.add_argument(
         "--list-patterns",
@@ -234,7 +234,7 @@ def main():
     print(f"Extracting {args.function} from {args.source}...", file=sys.stderr)
     ctx = extract_function(args.source, args.function)
 
-    # Resolve compiler dialect: --compiler flag > permuter.json > "mwcc"
+    # Resolve compiler dialect: --compiler flag > decomp-synth.json > "mwcc"
     from .project_config import get_compiler
     ctx.compiler_dialect = args.compiler or get_compiler()
 

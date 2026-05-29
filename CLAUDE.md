@@ -12,6 +12,8 @@ scripts/measure_progress.sh --functions --detailed HEAD  # Progress vs commit
 scripts/measure_progress.sh --current-dir /path/to/worktree HEAD  # Worktree vs commit
 scripts/clean_stale_objects.sh     # Fix stale .obj files (older than PCH)
 scripts/dc3-agent-test.sh          # Launch native port with HTTP debug server + fast boot + telemetry
+# Re-sync decomp.db after permuter wins land on main (run from repo root, ~2-3 min):
+python3 scripts/sync_match_percent.py --build --promote   # rebuilds report.json + updates current_percent/verdict
 ```
 
 To interact with a running native engine instance, use `scripts/dc3-agent-test.sh` (sets `DC3_HTTP=1 DC3_FAST_BOOT=1 DC3_TEL=1`). Then `curl localhost:9090/api/health`, `/api/dta/eval`, `/api/screenshot`, etc. See `docs/tools/HTTP_DEBUG_SERVER.md`.

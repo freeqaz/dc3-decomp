@@ -1,0 +1,11 @@
+{
+  "name": "dc3",
+  "compiler": "msvc",
+  "build_id": "373307D9",
+  "obj_extension": ".obj",
+  "output_flag": "/Fo",
+  "uses_cd_prefix": true,
+  "obj_layout": "mirror",
+  "objdiff_cli": "bin/objdiff-cli",
+  "m2c_target": "ppc"
+}

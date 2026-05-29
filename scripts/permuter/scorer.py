@@ -37,7 +37,7 @@ from .preprocess_cache import (
     fast_path_enabled,
 )
 from .profiling import get_profiler
-from .project import get_project_config, get_project_for_path, ProjectConfig, ProjectType
+from .project import get_project_config, get_project_for_path, ProjectConfig
 from .score_cache import ScoreCache, compute_dep_hash, md5_bytes, md5_file
 from .types import (
     Diagnosis,
@@ -343,10 +343,11 @@ class Scorer:
 
     def _build_preprocess_cache(self) -> Optional[PreprocessCache]:
         """Run the one-time ``-E`` preprocess + macro-liveness probe."""
-        # The fast path only applies to the mwcceppc (RB3) toolchain. MSVC's
+        # The fast path only applies to the mwcceppc toolchain. MSVC's
         # /E + splice has not been validated and the splice-region byte
-        # identity is toolchain-specific.
-        if self._project.project_type != ProjectType.RB3:
+        # identity is toolchain-specific. (Keys on toolchain, not game: this
+        # correctly excludes rb3-xenon, which is RB3 built with MSVC.)
+        if self._project.toolchain != "mwcc":
             return None
         if self._original_source is None:
             return None

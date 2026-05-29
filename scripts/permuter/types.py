@@ -302,7 +302,7 @@ class FunctionContext:
     blind_generation_mode: bool = False
     # Compiler dialect (mwcc | msvc). Patterns that emit C++11+ syntax (`auto`,
     # `decltype`, etc.) must check this — mwcc is C++98 and rejects them.
-    # Populated by __main__ / batch entry points from CLI flag / permuter.json.
+    # Populated by __main__ / batch entry points from CLI flag / decomp-synth.json.
     compiler_dialect: str = "mwcc"
 
     def source_text(self, node: Node) -> str:

@@ -17,7 +17,7 @@ _PARSER = Parser(CPP_LANGUAGE)
 
 
 def _project_compiler_dialect() -> str:
-    """Resolve the project's compiler dialect (mwcc | msvc) from permuter.json.
+    """Resolve the project's compiler dialect (mwcc | msvc) from decomp-synth.json.
 
     Lazily imported to avoid an import cycle. Every FunctionContext built here
     must carry the project dialect so dialect-gated patterns (e.g. varext's

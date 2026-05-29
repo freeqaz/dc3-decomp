@@ -1,66 +1,38 @@
-"""Per-project permuter configuration (permuter.json).
+"""Per-project source-synthesis settings (decomp-synth.json).
 
-Lets each decomp project pin defaults like compiler dialect. CLI flags
-override config; config overrides built-in defaults.
+The compiler/toolchain now lives in the unified project descriptor
+(``project.ProjectConfig``, loaded from ``decomp-synth.json`` with a
+``permuter.json`` fallback).  This module is a thin compatibility layer so
+existing callers keep using ``get_compiler()`` while there is a single source
+of truth.
 
-Example permuter.json at repo root:
+CLI flags override config; config overrides built-in defaults.
+
+Example decomp-synth.json at repo root:
     {
-      "compiler": "mwcc",
-      "max_variants_default": 50
+      "name": "dc3",
+      "compiler": "msvc",
+      "build_id": "373307D9"
     }
 """
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
-from typing import Optional
-
 from .project import get_project_config as _get_proj
-
-_DEFAULTS = {
-    "compiler": "mwcc",  # mwcc | msvc
-}
-
-
-_CACHED: Optional[dict] = None
-
-
-def load_config() -> dict:
-    """Read permuter.json from the project root.
-
-    Returns a dict merged with built-in defaults. Missing file = defaults only.
-    """
-    global _CACHED
-    if _CACHED is not None:
-        return _CACHED
-
-    root = _get_proj().repo_root
-    path = root / "permuter.json"
-    cfg = dict(_DEFAULTS)
-    if path.exists():
-        try:
-            data = json.loads(path.read_text())
-            if isinstance(data, dict):
-                cfg.update(data)
-        except (OSError, json.JSONDecodeError):
-            pass
-
-    # Normalize compiler value
-    c = str(cfg.get("compiler", "mwcc")).lower()
-    if c not in ("mwcc", "msvc"):
-        c = "mwcc"
-    cfg["compiler"] = c
-
-    _CACHED = cfg
-    return _CACHED
+from .project import _get_project_config_cached as _cached
 
 
 def get_compiler() -> str:
-    return load_config()["compiler"]
+    """Return the project's compiler/toolchain dialect ("mwcc" | "msvc")."""
+    return _get_proj().toolchain
+
+
+def load_config() -> dict:
+    """Back-compat shim returning a dict with at least the ``compiler`` key."""
+    proj = _get_proj()
+    return {"compiler": proj.toolchain, "name": proj.name, "build_id": proj.build_id}
 
 
 def reset_cache() -> None:
-    """Used by tests to force re-read of permuter.json."""
-    global _CACHED
-    _CACHED = None
+    """Used by tests to force re-read of the project config."""
+    _cached.cache_clear()

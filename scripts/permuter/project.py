@@ -1,21 +1,31 @@
-"""Project detection and configuration for multi-project permuter support.
+"""Project detection and configuration for multi-project source synthesis.
 
-Detects whether we're running inside the DC3 or RB3 decomp project and
-provides project-specific paths, build configuration, and compile command
-handling.
+Detects which decomp project we're running inside and provides project-specific
+paths, build configuration, and compile-command handling.  **All target-specific
+facts come from a ``decomp-synth.json`` file at the repo root** (legacy name:
+``permuter.json``, still read as a fallback).  The on-disk marker detection below
+only supplies defaults for fields the config omits.
 
-Supported projects:
-    - DC3 (Dance Central 3): Xbox 360, MSVC PPC cl.exe, .obj files
-    - RB3 (Rock Band 3): Wii, MetroWerks mwcceppc, .o files
+Known in-house targets (each ships a decomp-synth.json):
+    - dc3       (Dance Central 3, Xbox 360):  MSVC PPC,  .obj, build/373307D9
+    - rb3       (Rock Band 3, Wii):           MetroWerks mwcceppc, .o, build/SZBE69_B8
+    - rb3-xenon (Rock Band 3, Xbox 360):      MSVC PPC,  .obj, build/45410914, flat obj layout
 
-Detection order:
-    1. PERMUTER_PROJECT env var ("dc3" or "rb3")
-    2. Repo root directory name heuristic
-    3. Presence of config/SZBE69_B8/ (RB3) vs build/373307D9/ (DC3)
+The two axes that used to be fused into a single ``ProjectType`` enum are now
+independent and read from config:
+    * toolchain  -- "msvc" | "mwcc" (drives compile-command parsing + obj naming)
+    * build_id   -- the per-target build directory / title id
+Plus a third axis, ``obj_layout``, for how the target .obj is located:
+    * "mirror"      -- target mirrors the src subtree (dc3, rb3)
+    * "objdiff_map" -- consult objdiff.json's base_path -> target_path (rb3-xenon)
+
+Config resolution order for each field: decomp-synth.json > legacy permuter.json
+> value derived from the detected toolchain > on-disk marker default.
 """
 
 from __future__ import annotations
 
+import json
 import os
 import re
 from dataclasses import dataclass
@@ -23,32 +33,46 @@ from enum import Enum, auto
 from functools import lru_cache
 from pathlib import Path
 
+# New config filename first, legacy name second (read as a fallback during the
+# permuter -> decomp-synth transition).
+_CONFIG_FILENAMES = ("decomp-synth.json", "permuter.json")
+
 
 class ProjectType(Enum):
+    """Legacy coarse project label.  Retained for backward compatibility and
+    logging only — no behaviour branches on it anymore (use ``toolchain``)."""
+
     DC3 = auto()
     RB3 = auto()
 
 
 @dataclass(frozen=True)
 class ProjectConfig:
-    """Immutable project-specific configuration."""
+    """Immutable project-specific configuration, sourced from decomp-synth.json."""
 
-    project_type: ProjectType
+    project_type: ProjectType  # legacy label; derived from toolchain
+    name: str                  # config "name", e.g. "dc3" / "rb3" / "rb3-xenon"
     repo_root: Path
 
+    # Toolchain axis — the real driver of compile-command + obj behaviour.
+    toolchain: str             # "msvc" | "mwcc"
+
     # Build paths
-    build_id: str            # "373307D9" (DC3) or "SZBE69_B8" (RB3)
-    obj_extension: str       # ".obj" (DC3) or ".o" (RB3)
+    build_id: str              # "373307D9" / "SZBE69_B8" / "45410914"
+    obj_extension: str         # ".obj" (msvc) or ".o" (mwcc)
 
     # Compile command format
-    uses_cd_prefix: bool     # DC3's ninja emits "cd dir && ..."
-    output_flag: str         # "/Fo" (MSVC) or "-o" (mwcceppc)
+    uses_cd_prefix: bool       # whether ninja emits "cd dir && ..." (dc3 only)
+    output_flag: str           # "/Fo" (msvc) or "-o" (mwcc)
+
+    # How the target (original) .obj is located from the compiled (base) .obj.
+    obj_layout: str            # "mirror" | "objdiff_map"
 
     # objdiff
-    objdiff_cli: str         # relative path to objdiff-cli
+    objdiff_cli: str           # repo-relative path to objdiff-cli
 
     # m2c
-    m2c_target: str          # "ppc" for both, but kept for extensibility
+    m2c_target: str            # "ppc" for current targets, kept for extensibility
 
     @property
     def build_prefix(self) -> str:
@@ -70,18 +94,33 @@ class ProjectConfig:
         return f"{self.build_prefix}/{obj_path}"
 
     def target_obj_for_base_obj(self, base_obj: Path) -> Path:
-        """Derive the original (target) .obj path from the compiled (base) .obj path.
+        """Derive the original (target) .obj path from the compiled (base) .obj.
 
-        The base lives under build/<id>/src/... and the target under build/<id>/obj/...
-        Both layouts are the same for DC3 and RB3.  Works for both relative and
-        absolute base_obj paths.
+        Two layouts, selected by ``obj_layout``:
 
-        DC3: build/373307D9/src/system/rndobj/Foo.obj -> build/373307D9/obj/system/rndobj/Foo.obj
+        * "mirror" (dc3, rb3): base lives under build/<id>/src/... and the target
+          mirrors that subtree under build/<id>/obj/...
+            build/373307D9/src/system/rndobj/Foo.obj
+              -> build/373307D9/obj/system/rndobj/Foo.obj
+
+        * "objdiff_map" (rb3-xenon): the dtk split emits a *flat* obj/ keyed by
+          basename, so consult objdiff.json's authoritative base_path ->
+          target_path map, falling back to flat obj/<basename>.
+            build/45410914/src/system/beatmatch/MasterAudio.obj
+              -> build/45410914/obj/MasterAudio.obj
+
+        Works for both relative and absolute base_obj paths.
         """
-        # Handle both absolute and relative paths.  _obj_path is typically
-        # relative (e.g. "build/373307D9/src/Foo.obj"), so resolve to absolute
-        # first so relative_to comparisons work against the absolute repo_root.
         abs_base = base_obj if base_obj.is_absolute() else self.repo_root / base_obj
+
+        if self.obj_layout == "objdiff_map":
+            mapped = self._objdiff_target_for_base(abs_base)
+            if mapped is not None:
+                return mapped
+            # Fallback: flat obj/ layout keyed by basename.
+            return self.repo_root / "build" / self.build_id / "obj" / abs_base.name
+
+        # "mirror": target mirrors the src subtree.
         src_prefix = self.repo_root / "build" / self.build_id / "src"
         obj_prefix = self.repo_root / "build" / self.build_id / "obj"
         try:
@@ -92,6 +131,20 @@ class ProjectConfig:
             # so callers at least get something (objdiff will report a mismatch).
             return abs_base
 
+    def _objdiff_target_for_base(self, abs_base: Path) -> Path | None:
+        """Look up the target obj for a base obj via objdiff.json's unit map."""
+        mapping = dict(_objdiff_base_to_target(self.repo_root))
+        if not mapping:
+            return None
+        try:
+            rel_base = str(abs_base.relative_to(self.repo_root))
+        except ValueError:
+            rel_base = str(abs_base)
+        target_rel = mapping.get(rel_base) or mapping.get(str(abs_base))
+        if target_rel:
+            return self.repo_root / target_rel
+        return None
+
     def obj_path_for_unit(self, unit: str) -> Path:
         """Convert a unit name to its built object path.
 
@@ -99,11 +152,7 @@ class ProjectConfig:
         RB3: system/rndobj/Foo -> build/SZBE69_B8/obj/system/rndobj/Foo.o
         """
         normalized = unit[len("default/"):] if unit.startswith("default/") else unit
-        if self.project_type == ProjectType.DC3:
-            return self.repo_root / "build" / self.build_id / "obj" / f"{normalized}{self.obj_extension}"
-        else:
-            # RB3 uses build/SZBE69_B8/obj/<unit>.o
-            return self.repo_root / "build" / self.build_id / "obj" / f"{normalized}{self.obj_extension}"
+        return self.repo_root / "build" / self.build_id / "obj" / f"{normalized}{self.obj_extension}"
 
     def baselines_dir(self) -> Path:
         """Directory for baseline storage."""
@@ -112,10 +161,10 @@ class ProjectConfig:
     def extract_compile_output_path(self, compile_cmd: str) -> str | None:
         """Extract the output object path from a compile command.
 
-        DC3 (MSVC): looks for /FoPath
-        RB3 (mwcceppc): looks for -o dir (output directory, not full path)
+        MSVC: looks for /FoPath
+        mwcceppc: looks for -o dir (output directory, not full path)
         """
-        if self.project_type == ProjectType.DC3:
+        if self.toolchain == "msvc":
             m = re.search(r'/Fo(\S+)', compile_cmd)
             return m.group(1) if m else None
         else:
@@ -127,10 +176,10 @@ class ProjectConfig:
     def replace_output_path(self, compile_cmd: str, old_path: str, new_path: str) -> str:
         """Replace the output path in a compile command.
 
-        DC3: /FoOldPath -> /FoNewPath
-        RB3: -o old_dir -> -o new_dir (or replace the full -o path)
+        MSVC: /FoOldPath -> /FoNewPath
+        mwcceppc: -o old_dir -> -o new_dir
         """
-        if self.project_type == ProjectType.DC3:
+        if self.toolchain == "msvc":
             return compile_cmd.replace(f"/Fo{old_path}", f"/Fo{new_path}")
         else:
             return compile_cmd.replace(f"-o {old_path}", f"-o {new_path}")
@@ -138,11 +187,14 @@ class ProjectConfig:
     def parse_ninja_command(self, ninja_output: str) -> tuple[str | None, str]:
         """Parse ninja -t commands output into (cwd, shell_cmd).
 
-        DC3: Multiple lines, last "cd dir && cmd" line is the compile.
-        RB3: Single line with no cd prefix; may have && chain with dep transform.
+        MSVC (dc3 / rb3-xenon): may have a "cd dir && cmd" line (dc3) or a plain
+            command run from the repo root (rb3-xenon).  Both are handled: we take
+            the last "cd " line if present, else the last command line with no cwd.
+        mwcceppc (rb3): single line with no cd prefix; may have an && chain with a
+            dep transform that we strip.
         """
-        if self.project_type == ProjectType.DC3:
-            # DC3: look for last "cd " line
+        if self.toolchain == "msvc":
+            # Look for the last "cd " line (dc3); fall back to the last line.
             cmd_line = None
             for line in ninja_output.strip().splitlines():
                 if line.startswith("cd "):
@@ -161,7 +213,7 @@ class ProjectConfig:
             return None, cmd_line
 
         else:
-            # RB3: the compile command is typically the last line,
+            # mwcceppc: the compile command is typically the last line,
             # may be "wibo mwcceppc ... -c src.cpp -o dir && python transform_dep.py ..."
             lines = ninja_output.strip().splitlines()
             # Skip download_tool lines
@@ -185,21 +237,21 @@ class ProjectConfig:
                 else:
                     cmd_line = parts[0].strip()
 
-            # RB3 commands run from repo root (no cd prefix)
+            # mwcceppc commands run from repo root (no cd prefix)
             return None, cmd_line
 
     def redirect_source_in_cmd(self, cmd: str, src_name: str, work_name: str) -> str:
         """Redirect the source file in a compile command to a working copy.
 
-        DC3 (MSVC): source is the last token on the command line.
-        RB3 (mwcceppc): source follows the -c flag.
+        MSVC: source is the last token on the command line.
+        mwcceppc: source follows the -c flag.
         """
-        if self.project_type == ProjectType.DC3:
+        if self.toolchain == "msvc":
             if cmd.endswith(src_name):
                 return cmd[:-len(src_name)] + work_name
             return cmd.replace(src_name, work_name)
         else:
-            # RB3: replace "source.cpp" wherever it appears, but be careful
+            # mwcceppc: replace "source.cpp" wherever it appears, but be careful
             # to only replace the source path (after -c flag typically)
             return cmd.replace(src_name, work_name)
 
@@ -210,12 +262,12 @@ class ProjectConfig:
 
         For parallel builds, each variant needs its own output path.
         """
-        if self.project_type == ProjectType.DC3:
+        if self.toolchain == "msvc":
             if compile_fo_path:
                 return cmd.replace(f"/Fo{compile_fo_path}", f"/Fo{obj_output}")
             return cmd.replace(str(obj_path), str(obj_output))
         else:
-            # RB3: mwcceppc accepts "-o file_path" directly (not just dir).
+            # mwcceppc accepts "-o file_path" directly (not just dir).
             # Replace "-o dir" with "-o /path/to/variant_N.o".
             if compile_fo_path:
                 return cmd.replace(f"-o {compile_fo_path}", f"-o {obj_output}")
@@ -223,76 +275,119 @@ class ProjectConfig:
 
     @property
     def has_il_tools(self) -> bool:
-        """Whether this project has IL capture tools (DC3 only currently)."""
-        if self.project_type == ProjectType.DC3:
-            return (self.repo_root / "msvc-src" / "tools").is_dir()
-        return False
+        """Whether this project has MSVC IL capture tools (msvc + tools present)."""
+        return self.toolchain == "msvc" and (self.repo_root / "msvc-src" / "tools").is_dir()
 
     @property
     def has_unicorn_runner(self) -> bool:
-        """Whether this project has unicorn execution comparison."""
-        if self.project_type == ProjectType.DC3:
+        """Whether a unicorn execution-comparison runner is importable."""
+        try:
+            import importlib
+            importlib.import_module("scripts.unicorn_runner.run")
+            return True
+        except ImportError:
+            return False
+
+
+# ── Config loading + detection ────────────────────────────────────────────────
+
+def _load_project_json(repo_root: Path) -> dict:
+    """Read decomp-synth.json (or legacy permuter.json) from the repo root.
+
+    Returns an empty dict when no config file is present or it can't be parsed.
+    """
+    for fname in _CONFIG_FILENAMES:
+        path = repo_root / fname
+        if path.is_file():
             try:
-                import importlib
-                importlib.import_module("scripts.unicorn_runner.run")
-                return True
-            except ImportError:
-                return False
-        return False
+                data = json.loads(path.read_text())
+                if isinstance(data, dict):
+                    return data
+            except (OSError, ValueError):
+                pass
+    return {}
 
 
-# ── Detection ───────────────────────────────────────────────────────────────
+def _detect_defaults(repo_root: Path) -> tuple[str | None, str]:
+    """Infer (build_id, toolchain) defaults from env + on-disk markers.
 
-def _detect_project_type(repo_root: Path) -> ProjectType:
-    """Detect project type from repo root."""
-    # 1. Environment variable override
-    env = os.environ.get("PERMUTER_PROJECT", "").lower().strip()
+    Only used to fill fields the config omits.  Mirrors the historical detection
+    order (env override, then build/config dir markers), defaulting to the
+    DC3/msvc profile for backward compatibility when nothing else matches.
+    """
+    env = os.environ.get("DECOMP_SYNTH_PROJECT") or os.environ.get("PERMUTER_PROJECT") or ""
+    env = env.lower().strip()
     if env == "rb3":
-        return ProjectType.RB3
+        return "SZBE69_B8", "mwcc"
     if env == "dc3":
-        return ProjectType.DC3
+        return "373307D9", "msvc"
 
-    # 2. Check for project-specific directories
     if (repo_root / "config" / "SZBE69_B8").is_dir():
-        return ProjectType.RB3
+        return "SZBE69_B8", "mwcc"
     if (repo_root / "build" / "373307D9").is_dir():
-        return ProjectType.DC3
+        return "373307D9", "msvc"
 
-    # 3. Directory name heuristic
+    # Last-resort directory-name heuristic, kept only as a default for build_id;
+    # an explicit decomp-synth.json always wins over this (and is the reason the
+    # old "rb3 in path -> mwcc" misdetection no longer bites rb3-xenon).
     name = repo_root.name.lower()
-    if "rb3" in name:
-        return ProjectType.RB3
     if "dc3" in name:
-        return ProjectType.DC3
+        return "373307D9", "msvc"
+    if "rb3" in name:
+        return "SZBE69_B8", "mwcc"
 
-    # Default to DC3 for backward compatibility
-    return ProjectType.DC3
+    # Default to the DC3/msvc profile for backward compatibility.
+    return "373307D9", "msvc"
 
 
-def _make_config(project_type: ProjectType, repo_root: Path) -> ProjectConfig:
-    """Create a ProjectConfig for the given project type."""
-    if project_type == ProjectType.DC3:
-        return ProjectConfig(
-            project_type=ProjectType.DC3,
-            repo_root=repo_root,
-            build_id="373307D9",
-            obj_extension=".obj",
-            uses_cd_prefix=True,
-            output_flag="/Fo",
-            objdiff_cli="bin/objdiff-cli",
-            m2c_target="ppc",
-        )
-    else:
-        return ProjectConfig(
-            project_type=ProjectType.RB3,
-            repo_root=repo_root,
-            build_id="SZBE69_B8",
-            obj_extension=".o",
-            uses_cd_prefix=False,
-            output_flag="-o",
-            objdiff_cli="bin/objdiff-cli",
-            m2c_target="ppc",
-        )
+def _legacy_project_type(toolchain: str) -> ProjectType:
+    """Map a toolchain to the coarse legacy label (informational only)."""
+    return ProjectType.RB3 if toolchain == "mwcc" else ProjectType.DC3
+
+
+_KNOWN_NAMES = {
+    ("msvc", "373307D9"): "dc3",
+    ("mwcc", "SZBE69_B8"): "rb3",
+    ("msvc", "45410914"): "rb3-xenon",
+}
+
+
+def _make_config(repo_root: Path) -> ProjectConfig:
+    """Build a ProjectConfig from decomp-synth.json, with detected defaults."""
+    cfg = _load_project_json(repo_root)
+    det_build_id, det_toolchain = _detect_defaults(repo_root)
+
+    # toolchain: config "compiler"/"toolchain" > detected default.
+    toolchain = str(cfg.get("compiler") or cfg.get("toolchain") or det_toolchain).lower()
+    if toolchain not in ("msvc", "mwcc"):
+        toolchain = det_toolchain
+
+    is_msvc = toolchain == "msvc"
+
+    build_id = str(cfg.get("build_id") or det_build_id or "373307D9")
+    obj_extension = str(cfg.get("obj_extension") or (".obj" if is_msvc else ".o"))
+    output_flag = str(cfg.get("output_flag") or ("/Fo" if is_msvc else "-o"))
+    uses_cd_prefix = cfg.get("uses_cd_prefix")
+    if uses_cd_prefix is None:
+        uses_cd_prefix = is_msvc  # dc3 emits "cd dir && ..."; rb3-xenon sets false
+    objdiff_cli = str(cfg.get("objdiff_cli") or "bin/objdiff-cli")
+    m2c_target = str(cfg.get("m2c_target") or "ppc")
+    obj_layout = str(cfg.get("obj_layout") or "mirror")
+    name = str(cfg.get("name") or _KNOWN_NAMES.get((toolchain, build_id)) or f"{toolchain}-{build_id}")
+
+    return ProjectConfig(
+        project_type=_legacy_project_type(toolchain),
+        name=name,
+        repo_root=repo_root,
+        toolchain=toolchain,
+        build_id=build_id,
+        obj_extension=obj_extension,
+        uses_cd_prefix=bool(uses_cd_prefix),
+        output_flag=output_flag,
+        obj_layout=obj_layout,
+        objdiff_cli=objdiff_cli,
+        m2c_target=m2c_target,
+    )
 
 
 def _resolve_repo_root() -> Path:
@@ -304,6 +399,8 @@ def _resolve_repo_root() -> Path:
     """
     cwd = Path.cwd().resolve()
     for candidate in [cwd] + list(cwd.parents):
+        if any((candidate / f).is_file() for f in _CONFIG_FILENAMES):
+            return candidate
         if (candidate / "config" / "SZBE69_B8").is_dir():
             return candidate
         if (candidate / "build" / "373307D9").is_dir():
@@ -317,8 +414,7 @@ def _resolve_repo_root() -> Path:
 @lru_cache(maxsize=4)
 def _get_project_config_cached(repo_root: Path) -> ProjectConfig:
     """Cached project config creation."""
-    project_type = _detect_project_type(repo_root)
-    return _make_config(project_type, repo_root)
+    return _make_config(repo_root)
 
 
 def get_project_config(repo_root: Path | None = None) -> ProjectConfig:
@@ -341,6 +437,8 @@ def get_project_for_path(source_path: Path) -> ProjectConfig:
     """
     path = source_path.resolve()
     for parent in [path] + list(path.parents):
+        if any((parent / f).is_file() for f in _CONFIG_FILENAMES):
+            return get_project_config(parent)
         if (parent / "config" / "SZBE69_B8").is_dir():
             return get_project_config(parent)
         if (parent / "build" / "373307D9").is_dir():
@@ -352,9 +450,24 @@ def get_project_for_path(source_path: Path) -> ProjectConfig:
 
 
 @lru_cache(maxsize=4)
+def _objdiff_base_to_target(repo_root: Path) -> tuple[tuple[str, str], ...]:
+    """Cache objdiff.json's base_path -> target_path map for objdiff_map layout."""
+    try:
+        data = json.loads((repo_root / "objdiff.json").read_text())
+    except (OSError, ValueError):
+        return ()
+    mapping: dict[str, str] = {}
+    for unit in data.get("units", []):
+        base = unit.get("base_path")
+        target = unit.get("target_path")
+        if base and target:
+            mapping[base] = target
+    return tuple(mapping.items())
+
+
+@lru_cache(maxsize=4)
 def _load_objdiff_unit_names(objdiff_path: Path) -> tuple[str, ...]:
     """Load and cache the set of unit names from a project's objdiff.json."""
-    import json
     try:
         with open(objdiff_path) as fp:
             data = json.load(fp)
