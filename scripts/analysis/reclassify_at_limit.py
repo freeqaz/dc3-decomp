@@ -23,12 +23,12 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from decomp_synth.diagnosis import diagnose_baseline, is_all_noise
+from decomp_synth.types import extract_qualified_name
 from decomp_synth.batch_triage import (
     classify,
     build_object,
     run_objdiff,
     load_unit_source_map,
-    QUALIFIED_NAME_RE,
 )
 
 # Repo root
@@ -141,12 +141,12 @@ def query_at_limit_functions(
         if not Path(REPO_ROOT / source_path).exists():
             continue
 
-        m = QUALIFIED_NAME_RE.search(demangled or "")
-        if not m:
+        qualified_name = extract_qualified_name(demangled or "")
+        if not qualified_name:
             continue
 
         row_dict["source_path"] = source_path
-        row_dict["qualified_name"] = m.group(1)
+        row_dict["qualified_name"] = qualified_name
         candidates.append(row_dict)
 
     if limit > 0:
