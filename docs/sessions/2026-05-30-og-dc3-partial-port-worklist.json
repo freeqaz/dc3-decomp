@@ -1,0 +1,3412 @@
+[
+ {
+  "symbol": "?DebugModal@@YAXAAW4ModalType@Debug@@AAVFixedString@@_N@Z",
+  "unit": "App",
+  "demangled": "void __cdecl DebugModal(enum Debug::ModalType &, class FixedString &, bool)",
+  "our": 65.784485,
+  "og": 100.0,
+  "gain": 34.215514999999996,
+  "size": 464,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?AnimateFlashcard@BustAMovePanel@@AAAXH@Z",
+  "unit": "lazer/game/BustAMovePanel",
+  "demangled": "private: void __cdecl BustAMovePanel::AnimateFlashcard(int)",
+  "our": 99.53668,
+  "og": 100.0,
+  "gain": 0.46331999999999596,
+  "size": 1036,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?ShowMoveRating@BustAMovePanel@@AAAXW4MoveRating@@H@Z",
+  "unit": "lazer/game/BustAMovePanel",
+  "demangled": "private: void __cdecl BustAMovePanel::ShowMoveRating(enum MoveRating, int)",
+  "our": 90.2621,
+  "og": 100.0,
+  "gain": 9.737899999999996,
+  "size": 992,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?SetFlashcardImage@BustAMovePanel@@AAAXHHH@Z",
+  "unit": "lazer/game/BustAMovePanel",
+  "demangled": "private: void __cdecl BustAMovePanel::SetFlashcardImage(int, int, int)",
+  "our": 98.72881,
+  "og": 100.0,
+  "gain": 1.2711900000000043,
+  "size": 944,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?SetUpSongStructure@BustAMovePanel@@QAAXVSymbol@@@Z",
+  "unit": "lazer/game/BustAMovePanel",
+  "demangled": "public: void __cdecl BustAMovePanel::SetUpSongStructure(class Symbol)",
+  "our": 89.01492,
+  "og": 100.0,
+  "gain": 10.985079999999996,
+  "size": 536,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?SetFlashcardName@BustAMovePanel@@AAAXHHH@Z",
+  "unit": "lazer/game/BustAMovePanel",
+  "demangled": "private: void __cdecl BustAMovePanel::SetFlashcardName(int, int, int)",
+  "our": 96.87671,
+  "og": 99.9315,
+  "gain": 3.054789999999997,
+  "size": 292,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?SetFlashcardText@BustAMovePanel@@AAAXHHVSymbol@@@Z",
+  "unit": "lazer/game/BustAMovePanel",
+  "demangled": "private: void __cdecl BustAMovePanel::SetFlashcardText(int, int, class Symbol)",
+  "our": 96.254234,
+  "og": 100.0,
+  "gain": 3.7457660000000033,
+  "size": 236,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Handle@Game@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+  "unit": "lazer/game/Game",
+  "demangled": "public: virtual class DataNode __cdecl Game::Handle(class DataArray *, bool)",
+  "our": 99.345406,
+  "og": 100.0,
+  "gain": 0.654594000000003,
+  "size": 4308,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?LoadSong@Game@@QAAXXZ",
+  "unit": "lazer/game/Game",
+  "demangled": "public: void __cdecl Game::LoadSong(void)",
+  "our": 92.5,
+  "og": 98.35,
+  "gain": 5.849999999999994,
+  "size": 800,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "??0Game@@QAA@XZ",
+  "unit": "lazer/game/Game",
+  "demangled": "public: __cdecl Game::Game(void)",
+  "our": 90.65641,
+  "og": 100.0,
+  "gain": 9.343590000000006,
+  "size": 780,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?HandleWait@Game@@AAA_NXZ",
+  "unit": "lazer/game/Game",
+  "demangled": "private: bool __cdecl Game::HandleWait(void)",
+  "our": 97.185394,
+  "og": 100.0,
+  "gain": 2.8146059999999977,
+  "size": 712,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?LoadNewSongAudio@Game@@QAAXVSymbol@@@Z",
+  "unit": "lazer/game/Game",
+  "demangled": "public: void __cdecl Game::LoadNewSongAudio(class Symbol)",
+  "our": 86.4,
+  "og": 98.45,
+  "gain": 12.049999999999997,
+  "size": 400,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?OnCycleAutoplay@@YA?AVDataNode@@PAVDataArray@@@Z",
+  "unit": "lazer/game/Game",
+  "demangled": "class DataNode __cdecl OnCycleAutoplay(class DataArray *)",
+  "our": 91.954025,
+  "og": 97.06896,
+  "gain": 5.114935000000003,
+  "size": 348,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?OnToggleAutoplay@@YA?AVDataNode@@PAVDataArray@@@Z",
+  "unit": "lazer/game/Game",
+  "demangled": "class DataNode __cdecl OnToggleAutoplay(class DataArray *)",
+  "our": 99.98148,
+  "og": 100.0,
+  "gain": 0.018519999999995207,
+  "size": 216,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0PartyModeMgr@@QAA@XZ",
+  "unit": "lazer/game/PartyModeMgr",
+  "demangled": "public: __cdecl PartyModeMgr::PartyModeMgr(void)",
+  "our": 99.805824,
+  "og": 100.0,
+  "gain": 0.1941759999999988,
+  "size": 2060,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?FinalizeParty@PartyModeMgr@@QAAXXZ",
+  "unit": "lazer/game/PartyModeMgr",
+  "demangled": "public: void __cdecl PartyModeMgr::FinalizeParty(void)",
+  "our": 92.84185,
+  "og": 100.0,
+  "gain": 7.158150000000006,
+  "size": 1644,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?OnMsg@PartyModeMgr@@AAA?AVDataNode@@ABVRCJobCompleteMsg@@@Z",
+  "unit": "lazer/game/PartyModeMgr",
+  "demangled": "private: class DataNode __cdecl PartyModeMgr::OnMsg(class RCJobCompleteMsg const &)",
+  "our": 99.20755,
+  "og": 100.0,
+  "gain": 0.7924500000000023,
+  "size": 636,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?CreateEventA@PartyModeMgr@@AAAPAUSubMode@1@XZ",
+  "unit": "lazer/game/PartyModeMgr",
+  "demangled": "private: struct PartyModeMgr::SubMode * __cdecl PartyModeMgr::CreateEventA(void)",
+  "our": 89.968994,
+  "og": 96.62791,
+  "gain": 6.658916000000005,
+  "size": 516,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?ResetModes@PartyModeMgr@@AAAX_N@Z",
+  "unit": "lazer/game/PartyModeMgr",
+  "demangled": "private: void __cdecl PartyModeMgr::ResetModes(bool)",
+  "our": 98.28333,
+  "og": 100.0,
+  "gain": 1.7166699999999935,
+  "size": 480,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?SetSongsFromPlaylist@PartyModeMgr@@AAAXXZ",
+  "unit": "lazer/game/PartyModeMgr",
+  "demangled": "private: void __cdecl PartyModeMgr::SetSongsFromPlaylist(void)",
+  "our": 0.33898306,
+  "og": 100.0,
+  "gain": 99.66101694,
+  "size": 472,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?DetermineSubModeSong@PartyModeMgr@@AAAXPAVSymbol@@PAH@Z",
+  "unit": "lazer/game/PartyModeMgr",
+  "demangled": "private: void __cdecl PartyModeMgr::DetermineSubModeSong(class Symbol *, int *)",
+  "our": 99.987015,
+  "og": 100.0,
+  "gain": 0.012985000000000468,
+  "size": 308,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?OnSetSongAndDefaults@PartyModeMgr@@AAA?AVDataNode@@PAVDataArray@@@Z",
+  "unit": "lazer/game/PartyModeMgr",
+  "demangled": "private: class DataNode __cdecl PartyModeMgr::OnSetSongAndDefaults(class DataArray *)",
+  "our": 88.24286,
+  "og": 100.0,
+  "gain": 11.757140000000007,
+  "size": 280,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?UseSelectedPlaylist@PartyModeMgr@@AAAX_N@Z",
+  "unit": "lazer/game/PartyModeMgr",
+  "demangled": "private: void __cdecl PartyModeMgr::UseSelectedPlaylist(bool)",
+  "our": 96.296295,
+  "og": 100.0,
+  "gain": 3.7037049999999994,
+  "size": 216,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?ShufflePlaylist@PartyModeMgr@@AAAX_N@Z",
+  "unit": "lazer/game/PartyModeMgr",
+  "demangled": "private: void __cdecl PartyModeMgr::ShufflePlaylist(bool)",
+  "our": 93.41304,
+  "og": 100.0,
+  "gain": 6.586960000000005,
+  "size": 184,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?GetItem@?$PseudoRandomPicker@H@@QAA?BHH@Z",
+  "unit": "lazer/game/PartyModeMgr",
+  "demangled": "public: int const __cdecl PseudoRandomPicker<int>::GetItem(int)",
+  "our": 97.82609,
+  "og": 100.0,
+  "gain": 2.1739100000000064,
+  "size": 184,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?GetItem@?$PseudoRandomPicker@VSymbol@@@@QAA?BVSymbol@@H@Z",
+  "unit": "lazer/game/PartyModeMgr",
+  "demangled": "public: class Symbol const __cdecl PseudoRandomPicker<class Symbol>::GetItem(int)",
+  "our": 97.72727,
+  "og": 100.0,
+  "gain": 2.2727299999999957,
+  "size": 176,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?SetPlaylist@PartyModeMgr@@QAAXPAVPlaylist@@@Z",
+  "unit": "lazer/game/PartyModeMgr",
+  "demangled": "public: void __cdecl PartyModeMgr::SetPlaylist(class Playlist *)",
+  "our": 93.93939,
+  "og": 100.0,
+  "gain": 6.060609999999997,
+  "size": 132,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?DoNext@SongSequence@@QAA_N_N0@Z",
+  "unit": "lazer/game/SongSequence",
+  "demangled": "public: bool __cdecl SongSequence::DoNext(bool, bool)",
+  "our": 86.2514,
+  "og": 99.03511,
+  "gain": 12.78371,
+  "size": 2848,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?AddAccomplishment@AccomplishmentProgress@@QAA_NVSymbol@@@Z",
+  "unit": "lazer/meta_ham/AccomplishmentProgress",
+  "demangled": "public: bool __cdecl AccomplishmentProgress::AddAccomplishment(class Symbol)",
+  "our": 99.98919,
+  "og": 100.0,
+  "gain": 0.010810000000006426,
+  "size": 740,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?CheatWinDiff@CampaignDiffSelectPanel@@QAAXH@Z",
+  "unit": "lazer/meta_ham/CampaignDiffSelectPanel",
+  "demangled": "public: void __cdecl CampaignDiffSelectPanel::CheatWinDiff(int)",
+  "our": 99.973404,
+  "og": 100.0,
+  "gain": 0.026595999999997844,
+  "size": 752,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Poll@CursorPanel@@UAAXXZ",
+  "unit": "lazer/meta_ham/CursorPanel",
+  "demangled": "public: virtual void __cdecl CursorPanel::Poll(void)",
+  "our": 80.47212,
+  "og": 95.31227,
+  "gain": 14.840149999999994,
+  "size": 1076,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?QueueCmdChangeProfileOnlineID@FitnessGoalMgr@@AAAXVString@@@Z",
+  "unit": "lazer/meta_ham/FitnessGoalMgr",
+  "demangled": "private: void __cdecl FitnessGoalMgr::QueueCmdChangeProfileOnlineID(class String)",
+  "our": 99.97222,
+  "og": 100.0,
+  "gain": 0.02778000000000702,
+  "size": 144,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Handle@HamStorePanel@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+  "unit": "lazer/meta_ham/HamStorePanel",
+  "demangled": "public: virtual class DataNode __cdecl HamStorePanel::Handle(class DataArray *, bool)",
+  "our": 99.68937,
+  "og": 100.0,
+  "gain": 0.3106300000000033,
+  "size": 3348,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Handle@MainMenuPanel@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+  "unit": "lazer/meta_ham/MainMenuPanel",
+  "demangled": "public: virtual class DataNode __cdecl MainMenuPanel::Handle(class DataArray *, bool)",
+  "our": 99.98165,
+  "og": 100.0,
+  "gain": 0.01834999999999809,
+  "size": 1308,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?AwardPointsForTask@MetagameRank@@QAAXVSymbol@@@Z",
+  "unit": "lazer/meta_ham/MetagameRank",
+  "demangled": "public: void __cdecl MetagameRank::AwardPointsForTask(class Symbol)",
+  "our": 99.945946,
+  "og": 100.0,
+  "gain": 0.05405399999999361,
+  "size": 444,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?QueueCmdChangeProfileOnlineID@PlaylistSortMgr@@AAAXVString@@@Z",
+  "unit": "lazer/meta_ham/PlaylistSortMgr",
+  "demangled": "private: void __cdecl PlaylistSortMgr::QueueCmdChangeProfileOnlineID(class String)",
+  "our": 99.97222,
+  "og": 100.0,
+  "gain": 0.02778000000000702,
+  "size": 144,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?GetAlternateOutfit@ProfileMgr@@QAA?AVSymbol@@V2@@Z",
+  "unit": "lazer/meta_ham/ProfileMgr",
+  "demangled": "public: class Symbol __cdecl ProfileMgr::GetAlternateOutfit(class Symbol)",
+  "our": 99.97561,
+  "og": 100.0,
+  "gain": 0.024389999999996803,
+  "size": 328,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Poll@SaveLoadManager@@QAAXXZ",
+  "unit": "lazer/meta_ham/SaveLoadManager",
+  "demangled": "public: void __cdecl SaveLoadManager::Poll(void)",
+  "our": 98.75804,
+  "og": 100.0,
+  "gain": 1.241960000000006,
+  "size": 3108,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Poll@ShellInput@@QAAXXZ",
+  "unit": "lazer/meta_ham/ShellInput",
+  "demangled": "public: void __cdecl ShellInput::Poll(void)",
+  "our": 99.64539,
+  "og": 100.0,
+  "gain": 0.3546099999999939,
+  "size": 2256,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?BuildItemList@SongSort@@UAAXXZ",
+  "unit": "lazer/meta_ham/SongSort",
+  "demangled": "public: virtual void __cdecl SongSort::BuildItemList(void)",
+  "our": 96.75633,
+  "og": 100.0,
+  "gain": 3.2436699999999945,
+  "size": 1264,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?BuildTree@SongSort@@UAAXXZ",
+  "unit": "lazer/meta_ham/SongSort",
+  "demangled": "public: virtual void __cdecl SongSort::BuildTree(void)",
+  "our": 92.81765,
+  "og": 97.117645,
+  "gain": 4.299994999999996,
+  "size": 680,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?OnMsg@VoiceControlPanel@@QAA?AVDataNode@@ABVSpeechRecoMessage@@@Z",
+  "unit": "lazer/meta_ham/VoiceControlPanel",
+  "demangled": "public: class DataNode __cdecl VoiceControlPanel::OnMsg(class SpeechRecoMessage const &)",
+  "our": 99.60185,
+  "og": 100.0,
+  "gain": 0.3981500000000011,
+  "size": 3024,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?CreateSongSelectGrammar@VoiceInputPanel@@QBAXVSymbol@@@Z",
+  "unit": "lazer/meta_ham/VoiceInputPanel",
+  "demangled": "public: void __cdecl VoiceInputPanel::CreateSongSelectGrammar(class Symbol) const",
+  "our": 89.81013,
+  "og": 99.95781,
+  "gain": 10.147679999999994,
+  "size": 948,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?GetBadgeInfo@@YAXAAVJsonConverter@@PBVJsonObject@@AAV?$map@VString@@VChallengeBadgeInfo@@U?$less@VString@@@stlpmtx_std@@V?$StlNodeAlloc@U?$pair@$$CBVString@@VChallengeBadgeInfo@@@stlpmtx_std@@@4@@stlpmtx_std@@@Z",
+  "unit": "lazer/net_ham/ChallengeSystemJobs",
+  "demangled": "void __cdecl GetBadgeInfo(class JsonConverter &, class JsonObject const *, class stlpmtx_std::map<class String, class ChallengeBadgeInfo, struct stlpmtx_std::less<class String>, class stlpmtx_std::StlNodeAlloc<struct stlpmtx_std::pair<class String const, class ChallengeBadgeInfo> > > &)",
+  "our": 99.98649,
+  "og": 100.0,
+  "gain": 0.01350999999999658,
+  "size": 888,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??$sort@$$A6A_NPAVCharBone@@0@Z@?$ObjPtrList@VCharBone@@VObjectDir@@@@QAAXA6A_NPAVCharBone@@0@Z@Z",
+  "unit": "system/char/CharBoneDir",
+  "demangled": "public: void __cdecl ObjPtrList<class CharBone, class ObjectDir>::sort<bool __cdecl (class CharBone *, class CharBone *)>(bool (__cdecl &)(class CharBone *, class CharBone *))",
+  "our": 95.710526,
+  "og": 100.0,
+  "gain": 4.2894739999999985,
+  "size": 152,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?ScaleAdd@CharBones@@QBAXAAV1@M@Z",
+  "unit": "system/char/CharBones",
+  "demangled": "public: void __cdecl CharBones::ScaleAdd(class CharBones &, float) const",
+  "our": 77.69752,
+  "og": 98.07901,
+  "gain": 20.38149,
+  "size": 1772,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?RotateTo@CharBones@@QBAXAAV1@M@Z",
+  "unit": "system/char/CharBones",
+  "demangled": "public: void __cdecl CharBones::RotateTo(class CharBones &, float) const",
+  "our": 80.08959,
+  "og": 99.830505,
+  "gain": 19.740915,
+  "size": 1652,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?RotateBy@CharBones@@QBAXAAV1@@Z",
+  "unit": "system/char/CharBones",
+  "demangled": "public: void __cdecl CharBones::RotateBy(class CharBones &) const",
+  "our": 80.83753,
+  "og": 97.29412,
+  "gain": 16.456590000000006,
+  "size": 1428,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?ScaleDown@CharBones@@QBAXAAV1@M@Z",
+  "unit": "system/char/CharBones",
+  "demangled": "public: void __cdecl CharBones::ScaleDown(class CharBones &, float) const",
+  "our": 99.55731,
+  "og": 100.0,
+  "gain": 0.4426899999999989,
+  "size": 1012,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Blend@CharBones@@QBAXAAV1@@Z",
+  "unit": "system/char/CharBones",
+  "demangled": "public: void __cdecl CharBones::Blend(class CharBones &) const",
+  "our": 96.34375,
+  "og": 100.0,
+  "gain": 3.65625,
+  "size": 896,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?AddBoneInternal@CharBones@@IAAXABUBone@1@@Z",
+  "unit": "system/char/CharBones",
+  "demangled": "protected: void __cdecl CharBones::AddBoneInternal(struct CharBones::Bone const &)",
+  "our": 98.542854,
+  "og": 100.0,
+  "gain": 1.4571459999999945,
+  "size": 280,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Save@CharBonesSamples@@QAAXAAVBinStream@@@Z",
+  "unit": "system/char/CharBonesSamples",
+  "demangled": "public: void __cdecl CharBonesSamples::Save(class BinStream &)",
+  "our": 94.62034,
+  "og": 100.0,
+  "gain": 5.379660000000001,
+  "size": 1180,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?EvaluateChannel@CharBonesSamples@@QAAXPAXHHM@Z",
+  "unit": "system/char/CharBonesSamples",
+  "demangled": "public: void __cdecl CharBonesSamples::EvaluateChannel(void *, int, int, float)",
+  "our": 85.48729,
+  "og": 100.0,
+  "gain": 14.512709999999998,
+  "size": 944,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?FracToSample@CharBonesSamples@@QBAHPAM@Z",
+  "unit": "system/char/CharBonesSamples",
+  "demangled": "public: int __cdecl CharBonesSamples::FracToSample(float *) const",
+  "our": 96.52439,
+  "og": 100.0,
+  "gain": 3.475610000000003,
+  "size": 656,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Load@CharClip@@UAAXAAVBinStream@@@Z",
+  "unit": "system/char/CharClip",
+  "demangled": "public: virtual void __cdecl CharClip::Load(class BinStream &)",
+  "our": 99.34386,
+  "og": 100.0,
+  "gain": 0.6561399999999935,
+  "size": 2280,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Load@Transitions@CharClip@@QAAXAAVBinStreamRev@@H@Z",
+  "unit": "system/char/CharClip",
+  "demangled": "public: void __cdecl CharClip::Transitions::Load(class BinStreamRev &, int)",
+  "our": 89.39565,
+  "og": 99.847824,
+  "gain": 10.452174,
+  "size": 920,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?DrawBlend@CharClipDisplay@@QAAXMM@Z",
+  "unit": "system/char/CharClipDisplay",
+  "demangled": "public: void __cdecl CharClipDisplay::DrawBlend(float, float)",
+  "our": 99.95238,
+  "og": 100.0,
+  "gain": 0.04761999999999489,
+  "size": 336,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?DrawCursor@CharClipDisplay@@QAAXXZ",
+  "unit": "system/char/CharClipDisplay",
+  "demangled": "public: void __cdecl CharClipDisplay::DrawCursor(void)",
+  "our": 99.93651,
+  "og": 100.0,
+  "gain": 0.0634900000000016,
+  "size": 252,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0CharClipDriver@@QAA@PAVObject@Hmx@@PAVCharClip@@HMPAV0@MM_N@Z",
+  "unit": "system/char/CharClipDriver",
+  "demangled": "public: __cdecl CharClipDriver::CharClipDriver(class Hmx::Object *, class CharClip *, int, float, class CharClipDriver *, float, float, bool)",
+  "our": 93.16456,
+  "og": 100.0,
+  "gain": 6.8354400000000055,
+  "size": 632,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?HasClip@CharClipGroup@@QBA_NPAVCharClip@@@Z",
+  "unit": "system/char/CharClipGroup",
+  "demangled": "public: bool __cdecl CharClipGroup::HasClip(class CharClip *) const",
+  "our": 56.8125,
+  "og": 100.0,
+  "gain": 43.1875,
+  "size": 128,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?ListDrawChildren@CharClipSet@@UAAXAAV?$list@PAVRndDrawable@@V?$StlNodeAlloc@PAVRndDrawable@@@stlpmtx_std@@@stlpmtx_std@@@Z",
+  "unit": "system/char/CharClipSet",
+  "demangled": "public: virtual void __cdecl CharClipSet::ListDrawChildren(class stlpmtx_std::list<class RndDrawable *, class stlpmtx_std::StlNodeAlloc<class RndDrawable *> > &)",
+  "our": 71.70588,
+  "og": 100.0,
+  "gain": 28.294120000000007,
+  "size": 68,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Highlight@CharCollide@@UAAXXZ",
+  "unit": "system/char/CharCollide",
+  "demangled": "public: virtual void __cdecl CharCollide::Highlight(void)",
+  "our": 98.190475,
+  "og": 100.0,
+  "gain": 1.8095249999999936,
+  "size": 672,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Handle@CharDriver@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+  "unit": "system/char/CharDriver",
+  "demangled": "public: virtual class DataNode __cdecl CharDriver::Handle(class DataArray *, bool)",
+  "our": 98.40952,
+  "og": 100.0,
+  "gain": 1.5904799999999994,
+  "size": 2520,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?OnMidiParserGroup@CharDriverMidi@@IAA?AVDataNode@@PAVDataArray@@@Z",
+  "unit": "system/char/CharDriverMidi",
+  "demangled": "protected: class DataNode __cdecl CharDriverMidi::OnMidiParserGroup(class DataArray *)",
+  "our": 98.19643,
+  "og": 100.0,
+  "gain": 1.8035699999999935,
+  "size": 448,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??_GCharDriverMidi@@UAAPAXI@Z",
+  "unit": "system/char/CharDriverMidi",
+  "demangled": "public: virtual void * __cdecl CharDriverMidi::`scalar deleting destructor'(unsigned int)",
+  "our": 59.954544,
+  "og": 100.0,
+  "gain": 40.045456,
+  "size": 88,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Highlight@CharEyes@@UAAXXZ",
+  "unit": "system/char/CharEyes",
+  "demangled": "public: virtual void __cdecl CharEyes::Highlight(void)",
+  "our": 68.08791,
+  "og": 100.0,
+  "gain": 31.912090000000006,
+  "size": 2184,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Load@CharEyes@@UAAXAAVBinStream@@@Z",
+  "unit": "system/char/CharEyes",
+  "demangled": "public: virtual void __cdecl CharEyes::Load(class BinStream &)",
+  "our": 98.608925,
+  "og": 100.0,
+  "gain": 1.3910750000000007,
+  "size": 1524,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?PollDeps@CharEyes@@UAAXAAV?$list@PAVObject@Hmx@@V?$StlNodeAlloc@PAVObject@Hmx@@@stlpmtx_std@@@stlpmtx_std@@0@Z",
+  "unit": "system/char/CharEyes",
+  "demangled": "public: virtual void __cdecl CharEyes::PollDeps(class stlpmtx_std::list<class Hmx::Object *, class stlpmtx_std::StlNodeAlloc<class Hmx::Object *> > &, class stlpmtx_std::list<class Hmx::Object *, class stlpmtx_std::StlNodeAlloc<class Hmx::Object *> > &)",
+  "our": 94.68376,
+  "og": 100.0,
+  "gain": 5.316239999999993,
+  "size": 468,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?_M_fill_insert_aux@?$vector@UCharInterestState@CharEyes@@V?$StlNodeAlloc@UCharInterestState@CharEyes@@@stlpmtx_std@@@stlpmtx_std@@AAAXPAUCharInterestState@CharEyes@@IABU34@ABU__false_type@2@@Z",
+  "unit": "system/char/CharEyes",
+  "demangled": "private: void __cdecl stlpmtx_std::vector<struct CharEyes::CharInterestState, class stlpmtx_std::StlNodeAlloc<struct CharEyes::CharInterestState> >::_M_fill_insert_aux(struct CharEyes::CharInterestState *, unsigned int, struct CharEyes::CharInterestState const &, struct stlpmtx_std::__false_type const &)",
+  "our": 99.0991,
+  "og": 100.0,
+  "gain": 0.9008999999999929,
+  "size": 444,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?EyesOnTarget@CharEyes@@IAA_NM@Z",
+  "unit": "system/char/CharEyes",
+  "demangled": "protected: bool __cdecl CharEyes::EyesOnTarget(float)",
+  "our": 97.75281,
+  "og": 100.0,
+  "gain": 2.2471900000000034,
+  "size": 356,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?EnforceMinimumTargetDistance@CharEyes@@IAAXABVVector3@@0AAV2@@Z",
+  "unit": "system/char/CharEyes",
+  "demangled": "protected: void __cdecl CharEyes::EnforceMinimumTargetDistance(class Vector3const &, class Vector3const &, class Vector3&)",
+  "our": 99.87037,
+  "og": 100.0,
+  "gain": 0.1296300000000059,
+  "size": 216,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??5@YAXAAVBinStreamRev@@AAUPoint@CharHair@@@Z",
+  "unit": "system/char/CharHair",
+  "demangled": "void __cdecl operator>>(class BinStreamRev &, struct CharHair::Point &)",
+  "our": 97.41007,
+  "og": 100.0,
+  "gain": 2.5899299999999954,
+  "size": 556,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?SimulateZeroTime@CharHair@@IAAXXZ",
+  "unit": "system/char/CharHair",
+  "demangled": "protected: void __cdecl CharHair::SimulateZeroTime(void)",
+  "our": 90.09402,
+  "og": 100.0,
+  "gain": 9.90598,
+  "size": 468,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??$PropSync@VStrand@CharHair@@@@YA_NAAV?$ObjVector@VStrand@CharHair@@@@AAVDataNode@@PAVDataArray@@HW4PropOp@@@Z",
+  "unit": "system/char/CharHair",
+  "demangled": "bool __cdecl PropSync<class CharHair::Strand>(class ObjVector<class CharHair::Strand> &, class DataNode &, class DataArray *, int, enum PropOp)",
+  "our": 98.181816,
+  "og": 100.0,
+  "gain": 1.8181840000000022,
+  "size": 440,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?SetCloth@CharHair@@IAAX_N@Z",
+  "unit": "system/char/CharHair",
+  "demangled": "protected: void __cdecl CharHair::SetCloth(bool)",
+  "our": 92.91011,
+  "og": 100.0,
+  "gain": 7.089889999999997,
+  "size": 356,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?FreezePoseRaw@CharHair@@QAAXXZ",
+  "unit": "system/char/CharHair",
+  "demangled": "public: void __cdecl CharHair::FreezePoseRaw(void)",
+  "our": 95.3125,
+  "og": 100.0,
+  "gain": 4.6875,
+  "size": 256,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??$sort@USortCollides@CharHair@@@?$ObjPtrList@VCharCollide@@VObjectDir@@@@QAAXABUSortCollides@CharHair@@@Z",
+  "unit": "system/char/CharHair",
+  "demangled": "public: void __cdecl ObjPtrList<class CharCollide, class ObjectDir>::sort<struct CharHair::SortCollides>(struct CharHair::SortCollides const &)",
+  "our": 95.82051,
+  "og": 100.0,
+  "gain": 4.179490000000001,
+  "size": 156,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?GetFPS@CharHair@@IAAMXZ",
+  "unit": "system/char/CharHair",
+  "demangled": "protected: float __cdecl CharHair::GetFPS(void)",
+  "our": 96.666664,
+  "og": 100.0,
+  "gain": 3.3333360000000027,
+  "size": 120,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?resize@?$ObjVector@VStrand@CharHair@@@@QAAXI@Z",
+  "unit": "system/char/CharHair",
+  "demangled": "public: void __cdecl ObjVector<class CharHair::Strand>::resize(unsigned int)",
+  "our": 57.64706,
+  "og": 100.0,
+  "gain": 42.35294,
+  "size": 68,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Invert@@YAXABVTransform@@AAV1@@Z",
+  "unit": "system/char/CharIKFingers",
+  "demangled": "void __cdecl Invert(class Transform const &, class Transform &)",
+  "our": 99.90909,
+  "og": 100.0,
+  "gain": 0.09090999999999383,
+  "size": 176,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Load@CharIKFoot@@UAAXAAVBinStream@@@Z",
+  "unit": "system/char/CharIKFoot",
+  "demangled": "public: virtual void __cdecl CharIKFoot::Load(class BinStream &)",
+  "our": 99.02439,
+  "og": 100.0,
+  "gain": 0.9756100000000032,
+  "size": 492,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?ComputeScore@CharInterest@@QAAMABVVector3@@00MH_N@Z",
+  "unit": "system/char/CharInterest",
+  "demangled": "public: float __cdecl CharInterest::ComputeScore(class Vector3const &, class Vector3const &, class Vector3const &, float, int, bool)",
+  "our": 96.655846,
+  "og": 99.902596,
+  "gain": 3.246750000000006,
+  "size": 616,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?Finish@Generator@CharLipSync@@QAAXXZ",
+  "unit": "system/char/CharLipSync",
+  "demangled": "public: void __cdecl CharLipSync::Generator::Finish(void)",
+  "our": 98.20225,
+  "og": 100.0,
+  "gain": 1.7977499999999935,
+  "size": 712,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Print@CharLipSync@@QAAXAAVTextStream@@@Z",
+  "unit": "system/char/CharLipSync",
+  "demangled": "public: void __cdecl CharLipSync::Print(class TextStream &)",
+  "our": 94.38372,
+  "og": 100.0,
+  "gain": 5.616280000000003,
+  "size": 688,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?PropSync@@YA_NAAHAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z",
+  "unit": "system/char/CharLipSync",
+  "demangled": "bool __cdecl PropSync(int &, class DataNode &, class DataArray *, int, enum PropOp)",
+  "our": 99.97959,
+  "og": 100.0,
+  "gain": 0.020409999999998263,
+  "size": 196,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??$fill@U?$_Bit_iter@U_Bit_reference@stlpmtx_std@@PAU12@@stlpmtx_std@@_N@stlpmtx_std@@YAXU?$_Bit_iter@U_Bit_reference@stlpmtx_std@@PAU12@@0@0AB_N@Z",
+  "unit": "system/char/CharLipSync",
+  "demangled": "void __cdecl stlpmtx_std::fill<struct stlpmtx_std::_Bit_iter<struct stlpmtx_std::_Bit_reference, struct stlpmtx_std::_Bit_reference *>, bool>(struct stlpmtx_std::_Bit_iter<struct stlpmtx_std::_Bit_reference, struct stlpmtx_std::_Bit_reference *>, struct stlpmtx_std::_Bit_iter<struct stlpmtx_std::_Bit_reference, struct stlpmtx_std::_Bit_reference *>, bool const &)",
+  "our": 99.85714,
+  "og": 100.0,
+  "gain": 0.14285999999999888,
+  "size": 140,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?SetLipSync@CharLipSyncDriver@@QAA_NPAVCharLipSync@@@Z",
+  "unit": "system/char/CharLipSyncDriver",
+  "demangled": "public: bool __cdecl CharLipSyncDriver::SetLipSync(class CharLipSync *)",
+  "our": 95.03425,
+  "og": 98.11644,
+  "gain": 3.082189999999997,
+  "size": 584,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?UpdatePlayback@CharLipSyncDriver@@IAAXPAVPlayBack@CharLipSync@@MM@Z",
+  "unit": "system/char/CharLipSyncDriver",
+  "demangled": "protected: void __cdecl CharLipSyncDriver::UpdatePlayback(class CharLipSync::PlayBack *, float, float)",
+  "our": 96.50485,
+  "og": 100.0,
+  "gain": 3.4951499999999953,
+  "size": 412,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?SortPolls@CharPollGroup@@QAAXXZ",
+  "unit": "system/char/CharPollGroup",
+  "demangled": "public: void __cdecl CharPollGroup::SortPolls(void)",
+  "our": 89.081635,
+  "og": 100.0,
+  "gain": 10.918364999999994,
+  "size": 392,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Poll@CharServoBone@@UAAXXZ",
+  "unit": "system/char/CharServoBone",
+  "demangled": "public: virtual void __cdecl CharServoBone::Poll(void)",
+  "our": 99.457016,
+  "og": 100.0,
+  "gain": 0.5429840000000041,
+  "size": 884,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?DoRegulate@CharServoBone@@IAAXPAVCharacter@@PAVWaypoint@@PAVCharClipDriver@@MM@Z",
+  "unit": "system/char/CharServoBone",
+  "demangled": "protected: void __cdecl CharServoBone::DoRegulate(class Character *, class Waypoint *, class CharClipDriver *, float, float)",
+  "our": 99.98572,
+  "og": 100.0,
+  "gain": 0.014279999999999404,
+  "size": 280,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?PollDeps@CharSignalApplier@@UAAXAAV?$list@PAVObject@Hmx@@V?$StlNodeAlloc@PAVObject@Hmx@@@stlpmtx_std@@@stlpmtx_std@@0@Z",
+  "unit": "system/char/CharSignalApplier",
+  "demangled": "public: virtual void __cdecl CharSignalApplier::PollDeps(class stlpmtx_std::list<class Hmx::Object *, class stlpmtx_std::StlNodeAlloc<class Hmx::Object *> > &, class stlpmtx_std::list<class Hmx::Object *, class stlpmtx_std::StlNodeAlloc<class Hmx::Object *> > &)",
+  "our": 72.796295,
+  "og": 82.44444,
+  "gain": 9.648145,
+  "size": 216,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "??$__uninitialized_fill_n@PAUBoneOp@CharSignalApplier@@IU12@@stlpmtx_std@@YAPAUBoneOp@CharSignalApplier@@PAU12@IABU12@ABU__false_type@0@@Z",
+  "unit": "system/char/CharSignalApplier",
+  "demangled": "struct CharSignalApplier::BoneOp * __cdecl stlpmtx_std::__uninitialized_fill_n<struct CharSignalApplier::BoneOp *, unsigned int, struct CharSignalApplier::BoneOp>(struct CharSignalApplier::BoneOp *, unsigned int, struct CharSignalApplier::BoneOp const &, struct stlpmtx_std::__false_type const &)",
+  "our": 62.96154,
+  "og": 73.0,
+  "gain": 10.03846,
+  "size": 104,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?Load@CharUpperTwist@@UAAXAAVBinStream@@@Z",
+  "unit": "system/char/CharUpperTwist",
+  "demangled": "public: virtual void __cdecl CharUpperTwist::Load(class BinStream &)",
+  "our": 99.971695,
+  "og": 100.0,
+  "gain": 0.028305000000003133,
+  "size": 424,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?SyncProperty@CharUpperTwist@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z",
+  "unit": "system/char/CharUpperTwist",
+  "demangled": "public: virtual bool __cdecl CharUpperTwist::SyncProperty(class DataNode &, class DataArray *, int, enum PropOp)",
+  "our": 99.96907,
+  "og": 100.0,
+  "gain": 0.030929999999997904,
+  "size": 388,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?CalcBoundingSphere@Character@@UAAXXZ",
+  "unit": "system/char/Character",
+  "demangled": "public: virtual void __cdecl Character::CalcBoundingSphere(void)",
+  "our": 98.05932,
+  "og": 100.0,
+  "gain": 1.9406800000000004,
+  "size": 1416,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Sort@CharPollableSorter@@QAAXAAV?$vector@PAVRndPollable@@V?$StlNodeAlloc@PAVRndPollable@@@stlpmtx_std@@@stlpmtx_std@@@Z",
+  "unit": "system/char/Character",
+  "demangled": "public: void __cdecl CharPollableSorter::Sort(class stlpmtx_std::vector<class RndPollable *, class stlpmtx_std::StlNodeAlloc<class RndPollable *> > &)",
+  "our": 94.43662,
+  "og": 100.0,
+  "gain": 5.563379999999995,
+  "size": 1136,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?DrawLodOrShadow@Character@@QAAXHW4DrawMode@1@@Z",
+  "unit": "system/char/Character",
+  "demangled": "public: void __cdecl Character::DrawLodOrShadow(int, enum Character::DrawMode)",
+  "our": 93.41053,
+  "og": 100.0,
+  "gain": 6.589470000000006,
+  "size": 380,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Multiply@@YAXABVVector3@@ABVTransform@@AAV1@@Z",
+  "unit": "system/char/Character",
+  "demangled": "void __cdecl Multiply(class Vector3const &, class Transform const &, class Vector3&)",
+  "our": 94.52941,
+  "og": 100.0,
+  "gain": 5.470590000000001,
+  "size": 272,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?PropSync@@YA_NAAVSymbol@@AAVDataNode@@PAVDataArray@@HW4PropOp@@@Z",
+  "unit": "system/char/Character",
+  "demangled": "bool __cdecl PropSync(class Symbol &, class DataNode &, class DataArray *, int, enum PropOp)",
+  "our": 99.98113,
+  "og": 100.0,
+  "gain": 0.018870000000006826,
+  "size": 212,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Normalize@@YAXABVMatrix3@Hmx@@AAV12@@Z",
+  "unit": "system/char/Character",
+  "demangled": "void __cdecl Normalize(class Hmx::Matrix3const &, class Hmx::Matrix3&)",
+  "our": 97.408165,
+  "og": 100.0,
+  "gain": 2.591835000000003,
+  "size": 196,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?FastInvert@@YAXABVTransform@@AAV1@@Z",
+  "unit": "system/char/Character",
+  "demangled": "void __cdecl FastInvert(class Transform const &, class Transform &)",
+  "our": 99.90909,
+  "og": 100.0,
+  "gain": 0.09090999999999383,
+  "size": 176,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?DrawLod@Character@@QAAXH@Z",
+  "unit": "system/char/Character",
+  "demangled": "public: void __cdecl Character::DrawLod(int)",
+  "our": 92.32353,
+  "og": 100.0,
+  "gain": 7.676469999999995,
+  "size": 136,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Sync@CharacterTest@@IAAXXZ",
+  "unit": "system/char/CharacterTest",
+  "demangled": "protected: void __cdecl CharacterTest::Sync(void)",
+  "our": 98.77358,
+  "og": 100.0,
+  "gain": 1.2264200000000045,
+  "size": 848,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Poll@CharacterTest@@QAAXXZ",
+  "unit": "system/char/CharacterTest",
+  "demangled": "public: void __cdecl CharacterTest::Poll(void)",
+  "our": 97.98245,
+  "og": 100.0,
+  "gain": 2.01755,
+  "size": 684,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?TestClips@ClipCollide@@IAAXXZ",
+  "unit": "system/char/ClipCollide",
+  "demangled": "protected: void __cdecl ClipCollide::TestClips(void)",
+  "our": 95.49254,
+  "og": 100.0,
+  "gain": 4.507459999999995,
+  "size": 268,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?GenerateDistEntry@ClipDistMap@@IAAXAAVCharBonesMeshes@@AAUDistEntry@@MPAVCharClip@@ABV?$vector@PAVRndTransformable@@V?$StlNodeAlloc@PAVRndTransformable@@@stlpmtx_std@@@stlpmtx_std@@@Z",
+  "unit": "system/char/ClipDistMap",
+  "demangled": "protected: void __cdecl ClipDistMap::GenerateDistEntry(class CharBonesMeshes &, struct DistEntry &, float, class CharClip *, class stlpmtx_std::vector<class RndTransformable *, class stlpmtx_std::StlNodeAlloc<class RndTransformable *> > const &)",
+  "our": 99.19463,
+  "og": 100.0,
+  "gain": 0.8053699999999964,
+  "size": 596,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?FindNodes@ClipDistMap@@QAAXMMM@Z",
+  "unit": "system/char/ClipDistMap",
+  "demangled": "public: void __cdecl ClipDistMap::FindNodes(float, float, float)",
+  "our": 99.06422,
+  "og": 100.0,
+  "gain": 0.9357799999999941,
+  "size": 436,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0ClipDistMap@@QAA@PAVCharClip@@0MMHPBVDataArray@@@Z",
+  "unit": "system/char/ClipDistMap",
+  "demangled": "public: __cdecl ClipDistMap::ClipDistMap(class CharClip *, class CharClip *, float, float, int, class DataArray const *)",
+  "our": 70.53333,
+  "og": 93.746666,
+  "gain": 23.213335999999998,
+  "size": 300,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?NotifyFileLoaded@FileMerger@@IAAPAUMerger@1@PAVLoader@@PAVDirLoader@@@Z",
+  "unit": "system/char/FileMerger",
+  "demangled": "protected: struct FileMerger::Merger * __cdecl FileMerger::NotifyFileLoaded(class Loader *, class DirLoader *)",
+  "our": 97.42927,
+  "og": 100.0,
+  "gain": 2.5707299999999975,
+  "size": 820,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?LaunchNextLoader@FileMerger@@IAAXXZ",
+  "unit": "system/char/FileMerger",
+  "demangled": "protected: void __cdecl FileMerger::LaunchNextLoader(void)",
+  "our": 98.7013,
+  "og": 100.0,
+  "gain": 1.2986999999999966,
+  "size": 616,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?FindNearest@Waypoint@@SAPAV1@ABVVector3@@H@Z",
+  "unit": "system/char/Waypoint",
+  "demangled": "public: static class Waypoint * __cdecl Waypoint::FindNearest(class Vector3const &, int)",
+  "our": 84.396225,
+  "og": 100.0,
+  "gain": 15.603774999999999,
+  "size": 212,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Load@DrivenPropertyEntry@@QAAXAAVBinStream@@PAVFlowNode@@@Z",
+  "unit": "system/flow/DrivenPropertyEntry",
+  "demangled": "public: void __cdecl DrivenPropertyEntry::Load(class BinStream &, class FlowNode *)",
+  "our": 88.433334,
+  "og": 100.0,
+  "gain": 11.566665999999998,
+  "size": 480,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Apply@FlowMathOp@@QAAMM@Z",
+  "unit": "system/flow/DrivenPropertyMathOps",
+  "demangled": "public: float __cdecl FlowMathOp::Apply(float)",
+  "our": 88.57407,
+  "og": 98.05324,
+  "gain": 9.479169999999996,
+  "size": 1728,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?Load@FlowMathOp@@QAAXAAVBinStream@@PAVObjectDir@@@Z",
+  "unit": "system/flow/DrivenPropertyMathOps",
+  "demangled": "public: void __cdecl FlowMathOp::Load(class BinStream &, class ObjectDir *)",
+  "our": 91.246475,
+  "og": 100.0,
+  "gain": 8.753524999999996,
+  "size": 568,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?OnAnimEvent@FlowAnimate@@IAAXVSymbol@@@Z",
+  "unit": "system/flow/FlowAnimate",
+  "demangled": "protected: void __cdecl FlowAnimate::OnAnimEvent(class Symbol)",
+  "our": 98.86389,
+  "og": 100.0,
+  "gain": 1.1361100000000022,
+  "size": 2116,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Execute@FlowAnimate@@UAAXW4QueueState@FlowNode@@@Z",
+  "unit": "system/flow/FlowAnimate",
+  "demangled": "public: virtual void __cdecl FlowAnimate::Execute(enum FlowNode::QueueState)",
+  "our": 98.74653,
+  "og": 100.0,
+  "gain": 1.253469999999993,
+  "size": 1152,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Activate@FlowAnimate@@UAA_NXZ",
+  "unit": "system/flow/FlowAnimate",
+  "demangled": "public: virtual bool __cdecl FlowAnimate::Activate(void)",
+  "our": 98.20359,
+  "og": 100.0,
+  "gain": 1.7964099999999945,
+  "size": 668,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Load@FlowAnimate@@UAAXAAVBinStream@@@Z",
+  "unit": "system/flow/FlowAnimate",
+  "demangled": "public: virtual void __cdecl FlowAnimate::Load(class BinStream &)",
+  "our": 99.981705,
+  "og": 100.0,
+  "gain": 0.018294999999994843,
+  "size": 656,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Load@FlowMultiSetProperty@@UAAXAAVBinStream@@@Z",
+  "unit": "system/flow/FlowMultiSetProperty",
+  "demangled": "public: virtual void __cdecl FlowMultiSetProperty::Load(class BinStream &)",
+  "our": 87.0,
+  "og": 95.91228,
+  "gain": 8.912279999999996,
+  "size": 456,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?SyncProperty@FlowMultiSetProperty@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z",
+  "unit": "system/flow/FlowMultiSetProperty",
+  "demangled": "public: virtual bool __cdecl FlowMultiSetProperty::SyncProperty(class DataNode &, class DataArray *, int, enum PropOp)",
+  "our": 99.98889,
+  "og": 100.0,
+  "gain": 0.011110000000002174,
+  "size": 360,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Activate@FlowQueueable@@UAA_NPAVObject@Hmx@@@Z",
+  "unit": "system/flow/FlowQueueable",
+  "demangled": "public: virtual bool __cdecl FlowQueueable::Activate(class Hmx::Object *)",
+  "our": 84.69535,
+  "og": 100.0,
+  "gain": 15.304649999999995,
+  "size": 1720,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Activate@FlowSequence@@UAA_NXZ",
+  "unit": "system/flow/FlowSequence",
+  "demangled": "public: virtual bool __cdecl FlowSequence::Activate(void)",
+  "our": 87.55924,
+  "og": 97.65403,
+  "gain": 10.094790000000003,
+  "size": 844,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?Execute@FlowSetProperty@@UAAXW4QueueState@FlowNode@@@Z",
+  "unit": "system/flow/FlowSetProperty",
+  "demangled": "public: virtual void __cdecl FlowSetProperty::Execute(enum FlowNode::QueueState)",
+  "our": 91.29358,
+  "og": 100.0,
+  "gain": 8.706419999999994,
+  "size": 1744,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Load@FlowSetProperty@@UAAXAAVBinStream@@@Z",
+  "unit": "system/flow/FlowSetProperty",
+  "demangled": "public: virtual void __cdecl FlowSetProperty::Load(class BinStream &)",
+  "our": 94.357414,
+  "og": 100.0,
+  "gain": 5.642585999999994,
+  "size": 1052,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Execute@FlowSound@@UAAXW4QueueState@FlowNode@@@Z",
+  "unit": "system/flow/FlowSound",
+  "demangled": "public: virtual void __cdecl FlowSound::Execute(enum FlowNode::QueueState)",
+  "our": 98.34404,
+  "og": 100.0,
+  "gain": 1.6559599999999932,
+  "size": 872,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?IsValidCase@FlowSwitchCase@@QAA_NPAVFlowNode@@PAVDataNode@@PBV3@_N@Z",
+  "unit": "system/flow/FlowSwitchCase",
+  "demangled": "public: bool __cdecl FlowSwitchCase::IsValidCase(class FlowNode *, class DataNode *, class DataNode const *, bool)",
+  "our": 72.78788,
+  "og": 85.0101,
+  "gain": 12.222219999999993,
+  "size": 1188,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?Execute@FlowTimer@@UAAXW4QueueState@FlowNode@@@Z",
+  "unit": "system/flow/FlowTimer",
+  "demangled": "public: virtual void __cdecl FlowTimer::Execute(enum FlowNode::QueueState)",
+  "our": 98.176765,
+  "og": 100.0,
+  "gain": 1.8232349999999968,
+  "size": 792,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0EventTask@@QAA@PAVFlowTimer@@PAV?$ObjPtrVec@VFlowNode@@VObjectDir@@@@W4TaskUnits@@M@Z",
+  "unit": "system/flow/FlowTimer",
+  "demangled": "public: __cdecl EventTask::EventTask(class FlowTimer *, class ObjPtrVec<class FlowNode, class ObjectDir> *, enum TaskUnits, float)",
+  "our": 97.875,
+  "og": 100.0,
+  "gain": 2.125,
+  "size": 192,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0ArcDetector@@QAA@XZ",
+  "unit": "system/gesture/ArcDetector",
+  "demangled": "public: __cdecl ArcDetector::ArcDetector(void)",
+  "our": 86.295456,
+  "og": 90.681816,
+  "gain": 4.386359999999996,
+  "size": 176,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?JointScreenPos@@YAXABUTrackedJoint@@AAVVector3@@@Z",
+  "unit": "system/gesture/JointUtl",
+  "demangled": "void __cdecl JointScreenPos(struct TrackedJoint const &, class Vector3&)",
+  "our": 73.061226,
+  "og": 88.755104,
+  "gain": 15.693877999999998,
+  "size": 196,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?Update@SkeletonQualityFilter@@QAAXABVSkeleton@@_N@Z",
+  "unit": "system/gesture/SkeletonQualityFilter",
+  "demangled": "public: void __cdecl SkeletonQualityFilter::Update(class Skeleton const &, bool)",
+  "our": 96.8421,
+  "og": 100.0,
+  "gain": 3.157899999999998,
+  "size": 380,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?PlayNormal@ClipPlayer@@IAAXMPAULayerArray@HamDriver@@PBD@Z",
+  "unit": "system/hamobj/ClipPlayer",
+  "demangled": "protected: void __cdecl ClipPlayer::PlayNormal(float, struct HamDriver::LayerArray *, char const *)",
+  "our": 89.33112,
+  "og": 93.50331,
+  "gain": 4.1721900000000005,
+  "size": 604,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?ClipStart@?A0x8e038fa7@@YAMPAVCharClip@@MAAM1@Z",
+  "unit": "system/hamobj/ClipPlayer",
+  "demangled": "float __cdecl `anonymous namespace'::ClipStart(class CharClip *, float, float &, float &)",
+  "our": 99.93104,
+  "og": 100.0,
+  "gain": 0.06896000000000413,
+  "size": 232,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Init@ClipPlayer@@QAA_NH@Z",
+  "unit": "system/hamobj/ClipPlayer",
+  "demangled": "public: bool __cdecl ClipPlayer::Init(int)",
+  "our": 93.75,
+  "og": 100.0,
+  "gain": 6.25,
+  "size": 64,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?PostMoveFinished@DanceRemixer@@UAAXXZ",
+  "unit": "system/hamobj/DanceRemixer",
+  "demangled": "public: virtual void __cdecl DanceRemixer::PostMoveFinished(void)",
+  "our": 91.46809,
+  "og": 95.819145,
+  "gain": 4.351055000000002,
+  "size": 376,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?OnFileLoaded@HamDirector@@IAA?AVDataNode@@PAVDataArray@@@Z",
+  "unit": "system/hamobj/HamDirector",
+  "demangled": "protected: class DataNode __cdecl HamDirector::OnFileLoaded(class DataArray *)",
+  "our": 96.27969,
+  "og": 99.99234,
+  "gain": 3.7126499999999965,
+  "size": 1044,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?SetBone@HamIKSkeleton@@IAAXPAVRndTransformable@@0@Z",
+  "unit": "system/hamobj/HamIKSkeleton",
+  "demangled": "protected: void __cdecl HamIKSkeleton::SetBone(class RndTransformable *, class RndTransformable *)",
+  "our": 92.64557,
+  "og": 98.974686,
+  "gain": 6.329115999999999,
+  "size": 316,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?insert_unique@?$_Rb_tree@VCRC@Hmx@@U?$less@VCRC@Hmx@@@stlpmtx_std@@U?$pair@$$CBVCRC@Hmx@@M@4@U?$_Select1st@U?$pair@$$CBVCRC@Hmx@@M@stlpmtx_std@@@4@U?$_MapTraitsT@U?$pair@$$CBVCRC@Hmx@@M@stlpmtx_std@@@priv@4@V?$StlNodeAlloc@U?$pair@$$CBVCRC@Hmx@@M@stlpmtx_std@@@4@@stlpmtx_std@@QAA?AU?$_Rb_tree_iterator@U?$pair@$$CBVCRC@Hmx@@M@stlpmtx_std@@U?$_MapTraitsT@U?$pair@$$CBVCRC@Hmx@@M@stlpmtx_std@@@priv@2@@2@U32@ABU?$pair@$$CBVCRC@Hmx@@M@2@@Z",
+  "unit": "system/hamobj/HamMove",
+  "demangled": "public: struct stlpmtx_std::_Rb_tree_iterator<struct stlpmtx_std::pair<class Hmx::CRC const, float>, struct stlpmtx_std::priv::_MapTraitsT<struct stlpmtx_std::pair<class Hmx::CRC const, float> > > __cdecl stlpmtx_std::_Rb_tree<class Hmx::CRC, struct stlpmtx_std::less<class Hmx::CRC>, struct stlpmtx_std::pair<class Hmx::CRC const, float>, struct stlpmtx_std::_Select1st<struct stlpmtx_std::pair<class Hmx::CRC const, float> >, struct stlpmtx_std::priv::_MapTraitsT<struct stlpmtx_std::pair<class Hmx::CRC const, float> >, class stlpmtx_std::StlNodeAlloc<struct stlpmtx_std::pair<class Hmx::CRC const, float> > >::insert_unique(struct stlpmtx_std::_Rb_tree_iterator<struct stlpmtx_std::pair<class Hmx::CRC const, float>, struct stlpmtx_std::priv::_MapTraitsT<struct stlpmtx_std::pair<class Hmx::CRC const, float> > >, struct stlpmtx_std::pair<class Hmx::CRC const, float> const &)",
+  "our": 99.96722,
+  "og": 100.0,
+  "gain": 0.032780000000002474,
+  "size": 488,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?InsertMoveInSong@MoveMgr@@QAAXPBVMoveVariant@@HH@Z",
+  "unit": "system/hamobj/MoveMgr",
+  "demangled": "public: void __cdecl MoveMgr::InsertMoveInSong(class MoveVariant const *, int, int)",
+  "our": 97.95918,
+  "og": 100.0,
+  "gain": 2.0408199999999965,
+  "size": 588,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?InFatality@PoseFatalities@@QBA_NH@Z",
+  "unit": "system/hamobj/PoseFatalities",
+  "demangled": "public: bool __cdecl PoseFatalities::InFatality(int) const",
+  "our": 90.65,
+  "og": 96.5,
+  "gain": 5.849999999999994,
+  "size": 240,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?Handle@RhythmBattle@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+  "unit": "system/hamobj/RhythmBattle",
+  "demangled": "public: virtual class DataNode __cdecl RhythmBattle::Handle(class DataArray *, bool)",
+  "our": 99.663864,
+  "og": 100.0,
+  "gain": 0.3361359999999962,
+  "size": 1428,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Init@SongCollision@@SAXXZ",
+  "unit": "system/hamobj/SongCollision",
+  "demangled": "public: static void __cdecl SongCollision::Init(void)",
+  "our": 96.49123,
+  "og": 100.0,
+  "gain": 3.5087699999999984,
+  "size": 228,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Gaussian@Rand@@QAAMXZ",
+  "unit": "system/math/Rand",
+  "demangled": "public: float __cdecl Rand::Gaussian(void)",
+  "our": 55.0,
+  "og": 96.25,
+  "gain": 41.25,
+  "size": 224,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?Float@Rand@@QAAMMM@Z",
+  "unit": "system/math/Rand",
+  "demangled": "public: float __cdecl Rand::Float(float, float)",
+  "our": 66.583336,
+  "og": 100.0,
+  "gain": 33.416664,
+  "size": 96,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Handle@HAQManager@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+  "unit": "system/meta/HAQManager",
+  "demangled": "public: virtual class DataNode __cdecl HAQManager::Handle(class DataArray *, bool)",
+  "our": 97.520836,
+  "og": 100.0,
+  "gain": 2.4791639999999973,
+  "size": 768,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Handle@StoreOffer@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+  "unit": "system/meta/StoreOffer",
+  "demangled": "public: virtual class DataNode __cdecl StoreOffer::Handle(class DataArray *, bool)",
+  "our": 97.86965,
+  "og": 100.0,
+  "gain": 2.130350000000007,
+  "size": 2056,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0StoreOffer@@QAA@PAVDataArray@@PAVSongMgr@@@Z",
+  "unit": "system/meta/StoreOffer",
+  "demangled": "public: __cdecl StoreOffer::StoreOffer(class DataArray *, class SongMgr *)",
+  "our": 99.20468,
+  "og": 100.0,
+  "gain": 0.7953200000000038,
+  "size": 684,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Handle@StorePanel@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+  "unit": "system/meta/StorePanel",
+  "demangled": "public: virtual class DataNode __cdecl StorePanel::Handle(class DataArray *, bool)",
+  "our": 99.55601,
+  "og": 100.0,
+  "gain": 0.44398999999999944,
+  "size": 1964,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?OnMsg@StorePanel@@IAA?AVDataNode@@ABVSingleItemEnumCompleteMsg@@@Z",
+  "unit": "system/meta/StorePanel",
+  "demangled": "protected: class DataNode __cdecl StorePanel::OnMsg(class SingleItemEnumCompleteMsg const &)",
+  "our": 97.517006,
+  "og": 100.0,
+  "gain": 2.482994000000005,
+  "size": 588,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?MultipleItemsCheckout@StorePanel@@QAAXPAV?$list@PAVStoreOffer@@V?$StlNodeAlloc@PAVStoreOffer@@@stlpmtx_std@@@stlpmtx_std@@@Z",
+  "unit": "system/meta/StorePanel",
+  "demangled": "public: void __cdecl StorePanel::MultipleItemsCheckout(class stlpmtx_std::list<class StoreOffer *, class stlpmtx_std::StlNodeAlloc<class StoreOffer *> > *)",
+  "our": 99.13793,
+  "og": 100.0,
+  "gain": 0.8620700000000028,
+  "size": 464,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?CheckOut@StorePanel@@QAAXPAVStorePurchaseable@@@Z",
+  "unit": "system/meta/StorePanel",
+  "demangled": "public: void __cdecl StorePanel::CheckOut(class StorePurchaseable *)",
+  "our": 94.38202,
+  "og": 100.0,
+  "gain": 5.617980000000003,
+  "size": 356,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Unload@StorePanel@@UAAXXZ",
+  "unit": "system/meta/StorePanel",
+  "demangled": "public: virtual void __cdecl StorePanel::Unload(void)",
+  "our": 95.35384,
+  "og": 99.84615,
+  "gain": 4.492309999999989,
+  "size": 260,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?OnMsg@StorePanel@@IAA?AVDataNode@@ABVSigninChangedMsg@@@Z",
+  "unit": "system/meta/StorePanel",
+  "demangled": "protected: class DataNode __cdecl StorePanel::OnMsg(class SigninChangedMsg const &)",
+  "our": 90.38095,
+  "og": 98.45238,
+  "gain": 8.071430000000007,
+  "size": 168,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?Handle@StorePreviewMgr@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+  "unit": "system/meta/StorePreviewMgr",
+  "demangled": "public: virtual class DataNode __cdecl StorePreviewMgr::Handle(class DataArray *, bool)",
+  "our": 99.98969,
+  "og": 100.0,
+  "gain": 0.010310000000004038,
+  "size": 1164,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Poll@StorePreviewMgr@@QAAXXZ",
+  "unit": "system/meta/StorePreviewMgr",
+  "demangled": "public: void __cdecl StorePreviewMgr::Poll(void)",
+  "our": 89.125626,
+  "og": 100.0,
+  "gain": 10.874374000000003,
+  "size": 796,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?OnNewTrack@MidiParserMgr@@UAAXH@Z",
+  "unit": "system/midi/MidiParserMgr",
+  "demangled": "public: virtual void __cdecl MidiParserMgr::OnNewTrack(int)",
+  "our": 99.98387,
+  "og": 100.0,
+  "gain": 0.016130000000003974,
+  "size": 248,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?ReadMetaEvent@MidiReader@@AAAXHEAAVBinStream@@@Z",
+  "unit": "system/midi/MidiReader",
+  "demangled": "private: void __cdecl MidiReader::ReadMetaEvent(int, unsigned char, class BinStream &)",
+  "our": 99.759636,
+  "og": 100.0,
+  "gain": 0.24036399999999958,
+  "size": 1764,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Show@Splash@@IAA_NXZ",
+  "unit": "system/movie/Splash",
+  "demangled": "protected: bool __cdecl Splash::Show(void)",
+  "our": 75.220184,
+  "og": 100.0,
+  "gain": 24.779815999999997,
+  "size": 436,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0Splash@@QAA@XZ",
+  "unit": "system/movie/Splash",
+  "demangled": "public: __cdecl Splash::Splash(void)",
+  "our": 89.49533,
+  "og": 100.0,
+  "gain": 10.504670000000004,
+  "size": 428,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?PrepareNext@Splash@@QAA_NXZ",
+  "unit": "system/movie/Splash",
+  "demangled": "public: bool __cdecl Splash::PrepareNext(void)",
+  "our": 98.666664,
+  "og": 100.0,
+  "gain": 1.3333360000000027,
+  "size": 360,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Enter@TexMovie@@UAAXXZ",
+  "unit": "system/movie/TexMovie",
+  "demangled": "public: virtual void __cdecl TexMovie::Enter(void)",
+  "our": 98.28571,
+  "og": 100.0,
+  "gain": 1.7142900000000054,
+  "size": 280,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?DoBeginMovieFromFile@TexMovie@@IAAXPAVBinStream@@W4LoaderPos@@@Z",
+  "unit": "system/movie/TexMovie",
+  "demangled": "protected: void __cdecl TexMovie::DoBeginMovieFromFile(class BinStream *, enum LoaderPos)",
+  "our": 98.125,
+  "og": 100.0,
+  "gain": 1.875,
+  "size": 256,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Copy@TexMovie@@UAAXPBVObject@Hmx@@W4CopyType@23@@Z",
+  "unit": "system/movie/TexMovie",
+  "demangled": "public: virtual void __cdecl TexMovie::Copy(class Hmx::Object const *, enum Hmx::Object::CopyType)",
+  "our": 97.27273,
+  "og": 100.0,
+  "gain": 2.7272700000000043,
+  "size": 176,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?DrawToTexture@TexMovie@@QAAXXZ",
+  "unit": "system/movie/TexMovie",
+  "demangled": "public: void __cdecl TexMovie::DrawToTexture(void)",
+  "our": 97.0,
+  "og": 100.0,
+  "gain": 3.0,
+  "size": 160,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0BinkMovieImpl@@QAA@XZ",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "public: __cdecl BinkMovieImpl::BinkMovieImpl(void)",
+  "our": 60.09302,
+  "og": 100.0,
+  "gain": 39.90698,
+  "size": 344,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??1MovieInternalBuffers@@QAA@XZ",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "public: __cdecl MovieInternalBuffers::~MovieInternalBuffers(void)",
+  "our": 92.35211,
+  "og": 100.0,
+  "gain": 7.647890000000004,
+  "size": 284,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??1BinkMovieImpl@@UAA@XZ",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "public: virtual __cdecl BinkMovieImpl::~BinkMovieImpl(void)",
+  "our": 95.90909,
+  "og": 100.0,
+  "gain": 4.090909999999994,
+  "size": 176,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Init@BinkMovieSys@@UAAXXZ",
+  "unit": "system/moviebink/BinkMovieSys",
+  "demangled": "public: virtual void __cdecl BinkMovieSys::Init(void)",
+  "our": 91.849205,
+  "og": 100.0,
+  "gain": 8.150795000000002,
+  "size": 504,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Terminate@BinkMovieSys@@UAAXXZ",
+  "unit": "system/moviebink/BinkMovieSys",
+  "demangled": "public: virtual void __cdecl BinkMovieSys::Terminate(void)",
+  "our": 95.07317,
+  "og": 100.0,
+  "gain": 4.926829999999995,
+  "size": 164,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?StartSending@HttpPost@@MAAXXZ",
+  "unit": "system/net/HttpGet",
+  "demangled": "protected: virtual void __cdecl HttpPost::StartSending(void)",
+  "our": 81.2,
+  "og": 86.416664,
+  "gain": 5.216663999999994,
+  "size": 240,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?Load@DataArray@@QAAXAAVBinStream@@@Z",
+  "unit": "system/obj/DataArray",
+  "demangled": "public: void __cdecl DataArray::Load(class BinStream &)",
+  "our": 94.61702,
+  "og": 97.91186,
+  "gain": 3.2948400000000078,
+  "size": 1316,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?ReadEmbeddedFile@@YAPAVDataArray@@PBD_N@Z",
+  "unit": "system/obj/DataFile",
+  "demangled": "class DataArray * __cdecl ReadEmbeddedFile(char const *, bool)",
+  "our": 94.41538,
+  "og": 98.92308,
+  "gain": 4.5077,
+  "size": 260,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?DataReadStream@@YAPAVDataArray@@PAVBinStream@@@Z",
+  "unit": "system/obj/DataFile",
+  "demangled": "class DataArray * __cdecl DataReadStream(class BinStream *)",
+  "our": 80.9375,
+  "og": 100.0,
+  "gain": 19.0625,
+  "size": 256,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?PushBack@@YAXABVDataNode@@@Z",
+  "unit": "system/obj/DataFile",
+  "demangled": "void __cdecl PushBack(class DataNode const &)",
+  "our": 96.734695,
+  "og": 100.0,
+  "gain": 3.265304999999998,
+  "size": 196,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?ParseArray@@YAPAVDataArray@@XZ",
+  "unit": "system/obj/DataFile",
+  "demangled": "class DataArray * __cdecl ParseArray(void)",
+  "our": 95.64286,
+  "og": 100.0,
+  "gain": 4.357140000000001,
+  "size": 168,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?LoadObjs@DirLoader@@AAAXXZ",
+  "unit": "system/obj/DirLoader",
+  "demangled": "private: void __cdecl DirLoader::LoadObjs(void)",
+  "our": 95.97661,
+  "og": 100.0,
+  "gain": 4.023390000000006,
+  "size": 1368,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?SetupDir@DirLoader@@AAA_NVSymbol@@@Z",
+  "unit": "system/obj/DirLoader",
+  "demangled": "private: bool __cdecl DirLoader::SetupDir(class Symbol)",
+  "our": 97.25792,
+  "og": 100.0,
+  "gain": 2.7420800000000014,
+  "size": 884,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0DirLoader@@QAA@ABVFilePath@@W4LoaderPos@@PAVCallback@Loader@@PAVBinStream@@PAVObjectDir@@_N4@Z",
+  "unit": "system/obj/DirLoader",
+  "demangled": "public: __cdecl DirLoader::DirLoader(class FilePath const &, enum LoaderPos, class Loader::Callback *, class BinStream *, class ObjectDir *, bool, class ObjectDir *)",
+  "our": 98.77095,
+  "og": 100.0,
+  "gain": 1.2290500000000009,
+  "size": 716,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?WriteTypeMemDump@DirLoader@@SAXPAVTextFileStream@@@Z",
+  "unit": "system/obj/DirLoader",
+  "demangled": "public: static void __cdecl DirLoader::WriteTypeMemDump(class TextFileStream *)",
+  "our": 95.93671,
+  "og": 100.0,
+  "gain": 4.063289999999995,
+  "size": 316,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?GetDirClass@DirLoader@@SA?AVSymbol@@PBD@Z",
+  "unit": "system/obj/DirLoader",
+  "demangled": "public: static class Symbol __cdecl DirLoader::GetDirClass(char const *)",
+  "our": 99.98485,
+  "og": 100.0,
+  "gain": 0.015150000000005548,
+  "size": 264,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?AddPropertySink@MsgSinks@@QAAXPAVObject@Hmx@@PAVDataArray@@VSymbol@@@Z",
+  "unit": "system/obj/Msg",
+  "demangled": "public: void __cdecl MsgSinks::AddPropertySink(class Hmx::Object *, class DataArray *, class Symbol)",
+  "our": 95.977776,
+  "og": 100.0,
+  "gain": 4.022223999999994,
+  "size": 360,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?MergeSinks@MsgSinks@@QAAXPAVObject@Hmx@@@Z",
+  "unit": "system/obj/Msg",
+  "demangled": "public: void __cdecl MsgSinks::MergeSinks(class Hmx::Object *)",
+  "our": 95.53333,
+  "og": 100.0,
+  "gain": 4.4666699999999935,
+  "size": 180,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?ReplaceRefsFrom@Object@Hmx@@QAAXPAV12@0@Z",
+  "unit": "system/obj/Object",
+  "demangled": "public: void __cdecl Hmx::Object::ReplaceRefsFrom(class Hmx::Object *, class Hmx::Object *)",
+  "our": 97.43077,
+  "og": 100.0,
+  "gain": 2.5692300000000046,
+  "size": 260,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??1MessageTask@@UAA@XZ",
+  "unit": "system/obj/Task",
+  "demangled": "public: virtual __cdecl MessageTask::~MessageTask(void)",
+  "our": 92.5,
+  "og": 100.0,
+  "gain": 7.5,
+  "size": 160,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??1ScriptTask@@UAA@XZ",
+  "unit": "system/obj/Task",
+  "demangled": "public: virtual __cdecl ScriptTask::~ScriptTask(void)",
+  "our": 92.5,
+  "og": 100.0,
+  "gain": 7.5,
+  "size": 160,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?MergeObjectsRecurse@@YAXPAVObjectDir@@0AAVMergeFilter@@_N@Z",
+  "unit": "system/obj/Utl",
+  "demangled": "void __cdecl MergeObjectsRecurse(class ObjectDir *, class ObjectDir *, class MergeFilter &, bool)",
+  "our": 71.17333,
+  "og": 98.5,
+  "gain": 27.326669999999993,
+  "size": 600,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?NextName@@YAPBDPBDPAVObjectDir@@@Z",
+  "unit": "system/obj/Utl",
+  "demangled": "char const * __cdecl NextName(char const *, class ObjectDir *)",
+  "our": 99.02913,
+  "og": 100.0,
+  "gain": 0.970870000000005,
+  "size": 412,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?ReloadObjectType@@YAXPAVObject@Hmx@@PAVDataArray@@@Z",
+  "unit": "system/obj/Utl",
+  "demangled": "void __cdecl ReloadObjectType(class Hmx::Object *, class DataArray *)",
+  "our": 94.347824,
+  "og": 100.0,
+  "gain": 5.652175999999997,
+  "size": 368,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "vorbis_book_decodevs_add",
+  "unit": "system/oggvorbis/codebook",
+  "demangled": "vorbis_book_decodevs_add",
+  "our": 84.02702,
+  "og": 100.0,
+  "gain": 15.972980000000007,
+  "size": 296,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "mapping0_forward",
+  "unit": "system/oggvorbis/mapping0",
+  "demangled": "mapping0_forward",
+  "our": 89.32042,
+  "og": 100.0,
+  "gain": 10.679580000000001,
+  "size": 2684,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "mapping0_inverse",
+  "unit": "system/oggvorbis/mapping0",
+  "demangled": "mapping0_inverse",
+  "our": 94.48425,
+  "og": 100.0,
+  "gain": 5.515749999999997,
+  "size": 1016,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "mdct_forward",
+  "unit": "system/oggvorbis/mdct",
+  "demangled": "mdct_forward",
+  "our": 91.23841,
+  "og": 99.986755,
+  "gain": 8.748345,
+  "size": 604,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "setup_tone_curves",
+  "unit": "system/oggvorbis/psy",
+  "demangled": "setup_tone_curves",
+  "our": 98.37241,
+  "og": 100.0,
+  "gain": 1.6275899999999979,
+  "size": 2320,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "bark_noise_hybridmp",
+  "unit": "system/oggvorbis/psy",
+  "demangled": "bark_noise_hybridmp",
+  "our": 91.32667,
+  "og": 100.0,
+  "gain": 8.673330000000007,
+  "size": 1200,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "_vp_tonemask",
+  "unit": "system/oggvorbis/psy",
+  "demangled": "_vp_tonemask",
+  "our": 95.07843,
+  "og": 100.0,
+  "gain": 4.921570000000003,
+  "size": 408,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "_vp_quantize_couple_sort",
+  "unit": "system/oggvorbis/psy",
+  "demangled": "_vp_quantize_couple_sort",
+  "our": 93.79762,
+  "og": 100.0,
+  "gain": 6.202380000000005,
+  "size": 336,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "_vp_noisemask",
+  "unit": "system/oggvorbis/psy",
+  "demangled": "_vp_noisemask",
+  "our": 92.4625,
+  "og": 100.0,
+  "gain": 7.537499999999994,
+  "size": 320,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "_vp_noise_normalize_sort",
+  "unit": "system/oggvorbis/psy",
+  "demangled": "_vp_noise_normalize_sort",
+  "our": 87.59649,
+  "og": 100.0,
+  "gain": 12.403509999999997,
+  "size": 228,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "_01inverse",
+  "unit": "system/oggvorbis/res0",
+  "demangled": "_01inverse",
+  "our": 91.888115,
+  "og": 100.0,
+  "gain": 8.111885000000001,
+  "size": 572,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "vorbis_book_init_decode",
+  "unit": "system/oggvorbis/sharedbook",
+  "demangled": "vorbis_book_init_decode",
+  "our": 97.6855,
+  "og": 100.0,
+  "gain": 2.3144999999999953,
+  "size": 1628,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?ReadError@?A0xd12e7047@@YAHXZ",
+  "unit": "system/os/BlockMgr",
+  "demangled": "int __cdecl `anonymous namespace'::ReadError(void)",
+  "our": 96.47059,
+  "og": 100.0,
+  "gain": 3.5294099999999986,
+  "size": 68,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?DeleteContent@XboxContentMgr@@UAA_NVSymbol@@@Z",
+  "unit": "system/os/ContentMgr_Xbox",
+  "demangled": "public: virtual bool __cdecl XboxContentMgr::DeleteContent(class Symbol)",
+  "our": 99.978264,
+  "og": 100.0,
+  "gain": 0.021736000000004196,
+  "size": 184,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?NewFile@@YAPAVFile@@PBDH@Z",
+  "unit": "system/os/File",
+  "demangled": "class File * __cdecl NewFile(char const *, int)",
+  "our": 78.68794,
+  "og": 98.950356,
+  "gain": 20.262416,
+  "size": 564,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?OnToggleFakeFileErrors@@YA?AVDataNode@@PAVDataArray@@@Z",
+  "unit": "system/os/File",
+  "demangled": "class DataNode __cdecl OnToggleFakeFileErrors(class DataArray *)",
+  "our": 79.59091,
+  "og": 100.0,
+  "gain": 20.409090000000006,
+  "size": 352,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?DirListCB@@YAXPBD0@Z",
+  "unit": "system/os/File",
+  "demangled": "void __cdecl DirListCB(char const *, char const *)",
+  "our": 93.333336,
+  "og": 100.0,
+  "gain": 6.666663999999997,
+  "size": 72,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?HolmesClientInitOpcode@@YA_N_N@Z",
+  "unit": "system/os/HolmesClient",
+  "demangled": "bool __cdecl HolmesClientInitOpcode(bool)",
+  "our": 99.681816,
+  "og": 100.0,
+  "gain": 0.31818400000000224,
+  "size": 792,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?CheckForResponse@?A0x49b544a7@@YA_NW4Protocol@Holmes@@_N@Z",
+  "unit": "system/os/HolmesClient",
+  "demangled": "bool __cdecl `anonymous namespace'::CheckForResponse(enum Holmes::Protocol, bool)",
+  "our": 92.24031,
+  "og": 100.0,
+  "gain": 7.759690000000006,
+  "size": 516,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?WaitForAnyResponse@?A0x49b544a7@@YAXW4Protocol@Holmes@@@Z",
+  "unit": "system/os/HolmesClient",
+  "demangled": "void __cdecl `anonymous namespace'::WaitForAnyResponse(enum Holmes::Protocol)",
+  "our": 90.86869,
+  "og": 100.0,
+  "gain": 9.13131,
+  "size": 396,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?HolmesClientEnumerate@@YAXPBDP6AX00@Z_N02@Z",
+  "unit": "system/os/HolmesClient",
+  "demangled": "void __cdecl HolmesClientEnumerate(char const *, void (__cdecl *)(char const *, char const *), bool, char const *, bool)",
+  "our": 99.97959,
+  "og": 100.0,
+  "gain": 0.020409999999998263,
+  "size": 392,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?HolmesClientWrite@@YAXHHHPBX@Z",
+  "unit": "system/os/HolmesClient",
+  "demangled": "void __cdecl HolmesClientWrite(int, int, int, void const *)",
+  "our": 91.141304,
+  "og": 100.0,
+  "gain": 8.858695999999995,
+  "size": 368,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?HolmesClientTruncate@@YAXHH@Z",
+  "unit": "system/os/HolmesClient",
+  "demangled": "void __cdecl HolmesClientTruncate(int, int)",
+  "our": 93.6076,
+  "og": 100.0,
+  "gain": 6.392399999999995,
+  "size": 316,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?HolmesClientRead@@YAXHHHPAXPAVFile@@@Z",
+  "unit": "system/os/HolmesClient",
+  "demangled": "void __cdecl HolmesClientRead(int, int, int, void *, class File *)",
+  "our": 99.84615,
+  "og": 100.0,
+  "gain": 0.1538500000000056,
+  "size": 312,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?HolmesClientCacheResource@@YA?AW4CacheResourceResult@@PBD0@Z",
+  "unit": "system/os/HolmesClient",
+  "demangled": "enum CacheResourceResult __cdecl HolmesClientCacheResource(char const *, char const *)",
+  "our": 1.2987013,
+  "og": 100.0,
+  "gain": 98.7012987,
+  "size": 308,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?HolmesClientTerminate@@YAXXZ",
+  "unit": "system/os/HolmesClient",
+  "demangled": "void __cdecl HolmesClientTerminate(void)",
+  "our": 96.9403,
+  "og": 100.0,
+  "gain": 3.0597000000000065,
+  "size": 268,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?EndCmd@?A0x49b544a7@@YAXW4Protocol@Holmes@@@Z",
+  "unit": "system/os/HolmesClient",
+  "demangled": "void __cdecl `anonymous namespace'::EndCmd(enum Holmes::Protocol)",
+  "our": 96.969696,
+  "og": 100.0,
+  "gain": 3.030304000000001,
+  "size": 264,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?HolmesClientSendMessage@@YAXABVMessage@@@Z",
+  "unit": "system/os/HolmesClient",
+  "demangled": "void __cdecl HolmesClientSendMessage(class Message const &)",
+  "our": 94.983604,
+  "og": 100.0,
+  "gain": 5.016396,
+  "size": 244,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?DtaToJsonHelper@?A0x8a9ffbf2@@YAXPAUHJSONWRITER__@@PBVDataArray@@@Z",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "void __cdecl `anonymous namespace'::DtaToJsonHelper(struct HJSONWRITER__*, class DataArray const *)",
+  "our": 71.28972,
+  "og": 100.0,
+  "gain": 28.710279999999997,
+  "size": 428,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?OnCompletion@MultipleItemsEnumJob@@UAAXPAVObject@Hmx@@@Z",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: virtual void __cdecl MultipleItemsEnumJob::OnCompletion(class Hmx::Object *)",
+  "our": 98.252426,
+  "og": 100.0,
+  "gain": 1.7475740000000002,
+  "size": 412,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0PlatformMgr@@QAA@XZ",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: __cdecl PlatformMgr::PlatformMgr(void)",
+  "our": 87.441864,
+  "og": 96.27907,
+  "gain": 8.837206000000009,
+  "size": 344,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "??0SmartGlassMsg@@QAA@HPAVDataArray@@@Z",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: __cdecl SmartGlassMsg::SmartGlassMsg(int, class DataArray *)",
+  "our": 95.789474,
+  "og": 100.0,
+  "gain": 4.2105260000000015,
+  "size": 152,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0MultipleItemsEnumJob@@QAA@PAVObject@Hmx@@HAAV?$vector@_KV?$StlNodeAlloc@_K@stlpmtx_std@@@stlpmtx_std@@@Z",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: __cdecl MultipleItemsEnumJob::MultipleItemsEnumJob(class Hmx::Object *, int, class stlpmtx_std::vector<unsigned __int64, class stlpmtx_std::StlNodeAlloc<unsigned __int64> > &)",
+  "our": 77.666664,
+  "og": 100.0,
+  "gain": 22.333336000000003,
+  "size": 144,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?SmartGlassInit@?A0x8a9ffbf2@@YAXXZ",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "void __cdecl `anonymous namespace'::SmartGlassInit(void)",
+  "our": 76.1875,
+  "og": 100.0,
+  "gain": 23.8125,
+  "size": 128,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?PreInitSystem@@YAXPBD@Z",
+  "unit": "system/os/System",
+  "demangled": "void __cdecl PreInitSystem(char const *)",
+  "our": 96.859375,
+  "og": 99.885414,
+  "gain": 3.0260389999999973,
+  "size": 768,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?InitSystem@@YAXPBD@Z",
+  "unit": "system/os/System",
+  "demangled": "void __cdecl InitSystem(char const *)",
+  "our": 92.06579,
+  "og": 99.947365,
+  "gain": 7.881574999999998,
+  "size": 304,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?GetSongTitlePronunciationLanguage@@YA?AVSymbol@@XZ",
+  "unit": "system/os/System",
+  "demangled": "class Symbol __cdecl GetSongTitlePronunciationLanguage(void)",
+  "our": 97.0,
+  "og": 100.0,
+  "gain": 3.0,
+  "size": 268,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?SystemTerminate@@YAXXZ",
+  "unit": "system/os/System",
+  "demangled": "void __cdecl SystemTerminate(void)",
+  "our": 98.14815,
+  "og": 100.0,
+  "gain": 1.8518499999999989,
+  "size": 216,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?NormalizeSystemArgs@@YAXXZ",
+  "unit": "system/os/System",
+  "demangled": "void __cdecl NormalizeSystemArgs(void)",
+  "our": 98.42105,
+  "og": 100.0,
+  "gain": 1.578950000000006,
+  "size": 152,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?SystemMs@@YAHXZ",
+  "unit": "system/os/System",
+  "demangled": "int __cdecl SystemMs(void)",
+  "our": 92.258064,
+  "og": 99.935486,
+  "gain": 7.677421999999993,
+  "size": 124,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?CheckForArchive@?A0x8038bdc3@@YAXXZ",
+  "unit": "system/os/System",
+  "demangled": "void __cdecl `anonymous namespace'::CheckForArchive(void)",
+  "our": 87.85714,
+  "og": 92.5,
+  "gain": 4.642859999999999,
+  "size": 112,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?Handle@DxRnd@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+  "unit": "system/rnddx9/Rnd",
+  "demangled": "public: virtual class DataNode __cdecl DxRnd::Handle(class DataArray *, bool)",
+  "our": 99.9899,
+  "og": 100.0,
+  "gain": 0.010099999999994225,
+  "size": 396,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Terminate@DxRnd@@UAAXXZ",
+  "unit": "system/rnddx9/Rnd_Xbox",
+  "demangled": "public: virtual void __cdecl DxRnd::Terminate(void)",
+  "our": 99.98039,
+  "og": 100.0,
+  "gain": 0.019610000000000127,
+  "size": 204,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?SetSync@DxRnd@@UAAXH@Z",
+  "unit": "system/rnddx9/Rnd_Xbox",
+  "demangled": "public: virtual void __cdecl DxRnd::SetSync(int)",
+  "our": 99.97561,
+  "og": 100.0,
+  "gain": 0.024389999999996803,
+  "size": 164,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?insert_unique@?$_Rb_tree@VCRC@Hmx@@U?$less@VCRC@Hmx@@@stlpmtx_std@@U?$pair@$$CBVCRC@Hmx@@V?$RefRes@X@@@4@U?$_Select1st@U?$pair@$$CBVCRC@Hmx@@V?$RefRes@X@@@stlpmtx_std@@@4@U?$_MapTraitsT@U?$pair@$$CBVCRC@Hmx@@V?$RefRes@X@@@stlpmtx_std@@@priv@4@V?$StlNodeAlloc@U?$pair@$$CBVCRC@Hmx@@V?$RefRes@X@@@stlpmtx_std@@@4@@stlpmtx_std@@QAA?AU?$_Rb_tree_iterator@U?$pair@$$CBVCRC@Hmx@@V?$RefRes@X@@@stlpmtx_std@@U?$_MapTraitsT@U?$pair@$$CBVCRC@Hmx@@V?$RefRes@X@@@stlpmtx_std@@@priv@2@@2@U32@ABU?$pair@$$CBVCRC@Hmx@@V?$RefRes@X@@@2@@Z",
+  "unit": "system/rnddx9/TexMgr",
+  "demangled": "public: struct stlpmtx_std::_Rb_tree_iterator<struct stlpmtx_std::pair<class Hmx::CRC const, class RefRes<void> >, struct stlpmtx_std::priv::_MapTraitsT<struct stlpmtx_std::pair<class Hmx::CRC const, class RefRes<void> > > > __cdecl stlpmtx_std::_Rb_tree<class Hmx::CRC, struct stlpmtx_std::less<class Hmx::CRC>, struct stlpmtx_std::pair<class Hmx::CRC const, class RefRes<void> >, struct stlpmtx_std::_Select1st<struct stlpmtx_std::pair<class Hmx::CRC const, class RefRes<void> > >, struct stlpmtx_std::priv::_MapTraitsT<struct stlpmtx_std::pair<class Hmx::CRC const, class RefRes<void> > >, class stlpmtx_std::StlNodeAlloc<struct stlpmtx_std::pair<class Hmx::CRC const, class RefRes<void> > > >::insert_unique(struct stlpmtx_std::_Rb_tree_iterator<struct stlpmtx_std::pair<class Hmx::CRC const, class RefRes<void> >, struct stlpmtx_std::priv::_MapTraitsT<struct stlpmtx_std::pair<class Hmx::CRC const, class RefRes<void> > > >, struct stlpmtx_std::pair<class Hmx::CRC const, class RefRes<void> > const &)",
+  "our": 99.96722,
+  "og": 100.0,
+  "gain": 0.032780000000002474,
+  "size": 488,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Load@RndAmbientOcclusion@@UAAXAAVBinStream@@@Z",
+  "unit": "system/rndobj/AmbientOcclusion",
+  "demangled": "public: virtual void __cdecl RndAmbientOcclusion::Load(class BinStream &)",
+  "our": 99.055115,
+  "og": 100.0,
+  "gain": 0.9448849999999993,
+  "size": 508,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??1kdTreeNode@?$kdTree@VTriangle@@@@QAA@XZ",
+  "unit": "system/rndobj/AmbientOcclusion",
+  "demangled": "public: __cdecl kdTree<class Triangle>::kdTreeNode::~kdTreeNode(void)",
+  "our": 97.5,
+  "og": 100.0,
+  "gain": 2.5,
+  "size": 96,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Load@RndFont@@UAAXAAVBinStream@@@Z",
+  "unit": "system/rndobj/Font",
+  "demangled": "public: virtual void __cdecl RndFont::Load(class BinStream &)",
+  "our": 95.748184,
+  "og": 99.19505,
+  "gain": 3.446866,
+  "size": 2748,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?SetKerning@KerningTable@@QAAXABV?$vector@VKernInfo@RndFontBase@@V?$StlNodeAlloc@VKernInfo@RndFontBase@@@stlpmtx_std@@@stlpmtx_std@@PAVRndFontBase@@@Z",
+  "unit": "system/rndobj/Font",
+  "demangled": "public: void __cdecl KerningTable::SetKerning(class stlpmtx_std::vector<class RndFontBase::KernInfo, class stlpmtx_std::StlNodeAlloc<class RndFontBase::KernInfo> > const &, class RndFontBase *)",
+  "our": 99.978264,
+  "og": 100.0,
+  "gain": 0.021736000000004196,
+  "size": 368,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Load@RndGenerator@@UAAXAAVBinStream@@@Z",
+  "unit": "system/rndobj/Gen",
+  "demangled": "public: virtual void __cdecl RndGenerator::Load(class BinStream &)",
+  "our": 99.671234,
+  "og": 100.0,
+  "gain": 0.32876600000000167,
+  "size": 1460,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Terminate@RndGraph@@SAXXZ",
+  "unit": "system/rndobj/Graph",
+  "demangled": "public: static void __cdecl RndGraph::Terminate(void)",
+  "our": 93.10345,
+  "og": 100.0,
+  "gain": 6.896550000000005,
+  "size": 116,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?LoadOld@RndMat@@IAAXAAVBinStreamRev@@@Z",
+  "unit": "system/rndobj/Mat",
+  "demangled": "protected: void __cdecl RndMat::LoadOld(class BinStreamRev &)",
+  "our": 99.25325,
+  "og": 100.0,
+  "gain": 0.7467500000000058,
+  "size": 2464,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Load@RndMesh@@UAAXAAVBinStream@@@Z",
+  "unit": "system/rndobj/Mesh",
+  "demangled": "public: virtual void __cdecl RndMesh::Load(class BinStream &)",
+  "our": 96.3456,
+  "og": 99.99516,
+  "gain": 3.649559999999994,
+  "size": 4132,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?LoadVertices@RndMesh@@UAAXAAVBinStreamRev@@@Z",
+  "unit": "system/rndobj/Mesh",
+  "demangled": "public: virtual void __cdecl RndMesh::LoadVertices(class BinStreamRev &)",
+  "our": 92.61194,
+  "og": 97.25373,
+  "gain": 4.64179,
+  "size": 804,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?SaveCompressedVertex@@YAXABUCompressedVertex_Xbox@@AAVBinStream@@@Z",
+  "unit": "system/rndobj/Mesh",
+  "demangled": "void __cdecl SaveCompressedVertex(struct CompressedVertex_Xbox const &, class BinStream &)",
+  "our": 86.35821,
+  "og": 100.0,
+  "gain": 13.64179,
+  "size": 268,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Replace@RndMesh@@UAA_NPAVObjRef@@PAVObject@Hmx@@@Z",
+  "unit": "system/rndobj/Mesh",
+  "demangled": "public: virtual bool __cdecl RndMesh::Replace(class ObjRef *, class Hmx::Object *)",
+  "our": 80.91892,
+  "og": 86.21622,
+  "gain": 5.297300000000007,
+  "size": 148,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?Load@RndParticleSys@@UAAXAAVBinStream@@@Z",
+  "unit": "system/rndobj/Part",
+  "demangled": "public: virtual void __cdecl RndParticleSys::Load(class BinStream &)",
+  "our": 79.33161,
+  "og": 99.49677,
+  "gain": 20.16516,
+  "size": 3100,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?InitParticle@RndParticleSys@@IAAXMPAVRndParticle@@PBVTransform@@AAVPartOverride@@@Z",
+  "unit": "system/rndobj/Part",
+  "demangled": "protected: void __cdecl RndParticleSys::InitParticle(float, class RndParticle *, class Transform const *, class PartOverride &)",
+  "our": 67.64422,
+  "og": 98.59883,
+  "gain": 30.954610000000002,
+  "size": 2732,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?CheckBursts@RndParticleSys@@IAAMM@Z",
+  "unit": "system/rndobj/Part",
+  "demangled": "protected: float __cdecl RndParticleSys::CheckBursts(float)",
+  "our": 95.06173,
+  "og": 100.0,
+  "gain": 4.938270000000003,
+  "size": 324,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?MsgToPostProc@RndPostProcMgr@@AAAPAVRndPostProc@@PAVDataArray@@@Z",
+  "unit": "system/rndobj/PostProcMgr",
+  "demangled": "private: class RndPostProc * __cdecl RndPostProcMgr::MsgToPostProc(class DataArray *)",
+  "our": 93.82716,
+  "og": 100.0,
+  "gain": 6.172839999999994,
+  "size": 324,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?DoVelocity@NgPostProc@@IAAXXZ",
+  "unit": "system/rndobj/PostProc_NG",
+  "demangled": "protected: void __cdecl NgPostProc::DoVelocity(void)",
+  "our": 91.07143,
+  "og": 100.0,
+  "gain": 8.928569999999993,
+  "size": 224,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0BloomTextureSet@NgPostProc@@QAA@XZ",
+  "unit": "system/rndobj/PostProc_NG",
+  "demangled": "public: __cdecl NgPostProc::BloomTextureSet::BloomTextureSet(void)",
+  "our": 87.25,
+  "og": 100.0,
+  "gain": 12.75,
+  "size": 32,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Handle@RndPropAnim@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+  "unit": "system/rndobj/PropAnim",
+  "demangled": "public: virtual class DataNode __cdecl RndPropAnim::Handle(class DataArray *, bool)",
+  "our": 99.90851,
+  "og": 100.0,
+  "gain": 0.09148999999999319,
+  "size": 4372,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??4ObjKeys@@QAAXABV0@@Z",
+  "unit": "system/rndobj/PropAnim",
+  "demangled": "public: void __cdecl ObjKeys::operator=(class ObjKeys const &)",
+  "our": 88.27586,
+  "og": 100.0,
+  "gain": 11.724140000000006,
+  "size": 232,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?OnReplaceFrame@RndPropAnim@@QAA?AVDataNode@@PAVDataArray@@@Z",
+  "unit": "system/rndobj/PropAnim",
+  "demangled": "public: class DataNode __cdecl RndPropAnim::OnReplaceFrame(class DataArray *)",
+  "our": 87.52381,
+  "og": 100.0,
+  "gain": 12.476190000000003,
+  "size": 84,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??$swap@V?$Key@VObjectStage@@@@@stlpmtx_std@@YAXAAV?$Key@VObjectStage@@@@0@Z",
+  "unit": "system/rndobj/PropKeys",
+  "demangled": "void __cdecl stlpmtx_std::swap<class Key<class ObjectStage> >(class Key<class ObjectStage> &, class Key<class ObjectStage> &)",
+  "our": 68.542854,
+  "og": 72.51428,
+  "gain": 3.971425999999994,
+  "size": 140,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "??$sort@$$A6A_NPAVRndDrawable@@0@Z@?$ObjPtrList@VRndDrawable@@VObjectDir@@@@QAAXA6A_NPAVRndDrawable@@0@Z@Z",
+  "unit": "system/rndobj/Rnd",
+  "demangled": "public: void __cdecl ObjPtrList<class RndDrawable, class ObjectDir>::sort<bool __cdecl (class RndDrawable *, class RndDrawable *)>(bool (__cdecl &)(class RndDrawable *, class RndDrawable *))",
+  "our": 95.710526,
+  "og": 100.0,
+  "gain": 4.2894739999999985,
+  "size": 152,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?CompressThread@@YAKPAX@Z",
+  "unit": "system/rndobj/Rnd",
+  "demangled": "unsigned long __cdecl CompressThread(void *)",
+  "our": 35.92,
+  "og": 100.0,
+  "gain": 64.08,
+  "size": 100,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Select@RndShaderSyncTrack@@MAAXPAVRndMat@@W4ShaderType@@_N@Z",
+  "unit": "system/rndobj/Shader",
+  "demangled": "protected: virtual void __cdecl RndShaderSyncTrack::Select(class RndMat *, enum ShaderType, bool)",
+  "our": 86.03488,
+  "og": 100.0,
+  "gain": 13.965119999999999,
+  "size": 344,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?SetColorWriteMask@@YAXABUShaderOptions@@PAVRndMat@@@Z",
+  "unit": "system/rndobj/Shader",
+  "demangled": "void __cdecl SetColorWriteMask(struct ShaderOptions const &, class RndMat *)",
+  "our": 58.444443,
+  "og": 63.11111,
+  "gain": 4.666666999999997,
+  "size": 180,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?PrepareShader@RndSpline@@QBAXMM@Z",
+  "unit": "system/rndobj/Spline",
+  "demangled": "public: void __cdecl RndSpline::PrepareShader(float, float) const",
+  "our": 73.23313,
+  "og": 97.975464,
+  "gain": 24.742334,
+  "size": 652,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?Load@RndSpline@@UAAXAAVBinStream@@@Z",
+  "unit": "system/rndobj/Spline",
+  "demangled": "public: virtual void __cdecl RndSpline::Load(class BinStream &)",
+  "our": 99.10448,
+  "og": 100.0,
+  "gain": 0.8955200000000048,
+  "size": 536,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?DrawBlendList@RndTexBlender@@IAAXABV?$vector@U?$pair@PAVRndTexBlendController@@M@stlpmtx_std@@V?$StlNodeAlloc@U?$pair@PAVRndTexBlendController@@M@stlpmtx_std@@@2@@stlpmtx_std@@W4TexState@1@@Z",
+  "unit": "system/rndobj/TexBlender",
+  "demangled": "protected: void __cdecl RndTexBlender::DrawBlendList(class stlpmtx_std::vector<struct stlpmtx_std::pair<class RndTexBlendController *, float>, class stlpmtx_std::StlNodeAlloc<struct stlpmtx_std::pair<class RndTexBlendController *, float> > > const &, enum RndTexBlender::TexState)",
+  "our": 93.00552,
+  "og": 97.26519,
+  "gain": 4.25967,
+  "size": 724,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?DrawToTexture@TexProc@@IAAXXZ",
+  "unit": "system/rndobj/TexProc",
+  "demangled": "protected: void __cdecl TexProc::DrawToTexture(void)",
+  "our": 93.24476,
+  "og": 100.0,
+  "gain": 6.755240000000001,
+  "size": 572,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Handle@RndTexRenderer@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+  "unit": "system/rndobj/TexRenderer",
+  "demangled": "public: virtual class DataNode __cdecl RndTexRenderer::Handle(class DataArray *, bool)",
+  "our": 93.07735,
+  "og": 100.0,
+  "gain": 6.922650000000004,
+  "size": 724,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?GetXfms@RndXfmCache@@ABA_NPIBVRndMesh@@IIAAPBM@Z",
+  "unit": "system/rndobj/VelocityBuffer",
+  "demangled": "private: bool __cdecl RndXfmCache::GetXfms(unsigned int *, class RndMesh &volatile, unsigned int, unsigned int, float const *&) const",
+  "our": 85.0,
+  "og": 100.0,
+  "gain": 15.0,
+  "size": 96,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Poll@BinkReader@@UAAXM@Z",
+  "unit": "system/synth/BinkReader",
+  "demangled": "public: virtual void __cdecl BinkReader::Poll(float)",
+  "our": 98.24675,
+  "og": 100.0,
+  "gain": 1.7532499999999942,
+  "size": 1232,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?SynthPoll@Fader@@UAAXXZ",
+  "unit": "system/synth/Faders",
+  "demangled": "public: virtual void __cdecl Fader::SynthPoll(void)",
+  "our": 91.46667,
+  "og": 100.0,
+  "gain": 8.533330000000007,
+  "size": 360,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Load@FxSendChorus@@UAAXAAVBinStream@@@Z",
+  "unit": "system/synth/FxSendChorus",
+  "demangled": "public: virtual void __cdecl FxSendChorus::Load(class BinStream &)",
+  "our": 99.92701,
+  "og": 100.0,
+  "gain": 0.07299000000000433,
+  "size": 548,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Handle@MidiInstrument@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+  "unit": "system/synth/MidiInstrument",
+  "demangled": "public: virtual class DataNode __cdecl MidiInstrument::Handle(class DataArray *, bool)",
+  "our": 98.344826,
+  "og": 100.0,
+  "gain": 1.6551740000000024,
+  "size": 580,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0NoteVoiceInst@@QAA@PAVMidiInstrument@@PAVSampleZone@@EEHHM@Z",
+  "unit": "system/synth/MidiInstrument",
+  "demangled": "public: __cdecl NoteVoiceInst::NoteVoiceInst(class MidiInstrument *, class SampleZone *, unsigned char, unsigned char, int, int, float)",
+  "our": 98.757576,
+  "og": 100.0,
+  "gain": 1.2424239999999998,
+  "size": 396,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?ApplyLoop@MoggClip@@AAAX_NHH@Z",
+  "unit": "system/synth/MoggClip",
+  "demangled": "private: void __cdecl MoggClip::ApplyLoop(bool, int, int)",
+  "our": 99.96296,
+  "og": 100.0,
+  "gain": 0.037040000000004625,
+  "size": 108,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?IsRunning@SfxInst@@UAA_NXZ",
+  "unit": "system/synth/Sfx",
+  "demangled": "public: virtual bool __cdecl SfxInst::IsRunning(void)",
+  "our": 98.53658,
+  "og": 100.0,
+  "gain": 1.4634199999999993,
+  "size": 164,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?SynthPoll@Sound@@UAAXXZ",
+  "unit": "system/synth/Sound",
+  "demangled": "public: virtual void __cdecl Sound::SynthPoll(void)",
+  "our": 66.65101,
+  "og": 79.31544,
+  "gain": 12.664429999999996,
+  "size": 596,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?SetJump@StandardStream@@UAAXMMPBD@Z",
+  "unit": "system/synth/StandardStream",
+  "demangled": "public: virtual void __cdecl StandardStream::SetJump(float, float, char const *)",
+  "our": 87.21212,
+  "og": 100.0,
+  "gain": 12.787880000000001,
+  "size": 396,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?SynthPreInit@@YAXXZ",
+  "unit": "system/synth/Synth",
+  "demangled": "void __cdecl SynthPreInit(void)",
+  "our": 86.14893,
+  "og": 100.0,
+  "gain": 13.851070000000007,
+  "size": 376,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?DrawMeterScale@Synth@@QAAXAAM@Z",
+  "unit": "system/synth/Synth",
+  "demangled": "public: void __cdecl Synth::DrawMeterScale(float &)",
+  "our": 98.666664,
+  "og": 100.0,
+  "gain": 1.3333360000000027,
+  "size": 360,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?PreLoad@SynthSample@@UAAXAAVBinStream@@@Z",
+  "unit": "system/synth/SynthSample",
+  "demangled": "public: virtual void __cdecl SynthSample::PreLoad(class BinStream &)",
+  "our": 99.53846,
+  "og": 100.0,
+  "gain": 0.4615399999999994,
+  "size": 520,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?TryDecode@VorbisReader@@AAA_NXZ",
+  "unit": "system/synth/VorbisReader",
+  "demangled": "private: bool __cdecl VorbisReader::TryDecode(void)",
+  "our": 87.30085,
+  "og": 100.0,
+  "gain": 12.699150000000003,
+  "size": 944,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?DoRawSeek@VorbisReader@@IAAXH@Z",
+  "unit": "system/synth/VorbisReader",
+  "demangled": "protected: void __cdecl VorbisReader::DoRawSeek(int)",
+  "our": 95.6579,
+  "og": 100.0,
+  "gain": 4.342100000000002,
+  "size": 608,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??1VorbisReader@@UAA@XZ",
+  "unit": "system/synth/VorbisReader",
+  "demangled": "public: virtual __cdecl VorbisReader::~VorbisReader(void)",
+  "our": 97.72152,
+  "og": 100.0,
+  "gain": 2.278480000000002,
+  "size": 316,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?TryReadHeader@VorbisReader@@AAA_NXZ",
+  "unit": "system/synth/VorbisReader",
+  "demangled": "private: bool __cdecl VorbisReader::TryReadHeader(void)",
+  "our": 99.94805,
+  "og": 100.0,
+  "gain": 0.05195000000000505,
+  "size": 308,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?eval@@YA?AUcomplex@@QAU1@HU1@@Z",
+  "unit": "system/synth/complex",
+  "demangled": "struct complex __cdecl eval(struct complex *const, int, struct complex)",
+  "our": 97.781815,
+  "og": 100.0,
+  "gain": 2.2181850000000054,
+  "size": 220,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?evaluate@@YA?AUcomplex@@QAU1@H0HU1@@Z",
+  "unit": "system/synth/complex",
+  "demangled": "struct complex __cdecl evaluate(struct complex *const, int, struct complex *const, int, struct complex)",
+  "our": 99.92,
+  "og": 100.0,
+  "gain": 0.0799999999999983,
+  "size": 200,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?csqrt@@YA?AUcomplex@@U1@@Z",
+  "unit": "system/synth/complex",
+  "demangled": "struct complex __cdecl csqrt(struct complex)",
+  "our": 92.17391,
+  "og": 100.0,
+  "gain": 7.8260899999999936,
+  "size": 184,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?compute_z_mzt@@YAXXZ",
+  "unit": "system/synth/filterdesign",
+  "demangled": "void __cdecl compute_z_mzt(void)",
+  "our": 77.59259,
+  "og": 100.0,
+  "gain": 22.40741,
+  "size": 216,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "rijndael_test",
+  "unit": "system/synth/tomcrypt/aes",
+  "demangled": "rijndael_test",
+  "our": 93.67164,
+  "og": 100.0,
+  "gain": 6.3283600000000035,
+  "size": 1608,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?RequirePushToTalk@MicManagerXbox@@QAAX_NH@Z",
+  "unit": "system/synth_xbox/Mic",
+  "demangled": "public: void __cdecl MicManagerXbox::RequirePushToTalk(bool, int)",
+  "our": 86.29269,
+  "og": 100.0,
+  "gain": 13.707310000000007,
+  "size": 164,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?SetFxSend@MicXbox@@UAAXPAVFxSend@@@Z",
+  "unit": "system/synth_xbox/Mic",
+  "demangled": "public: virtual void __cdecl MicXbox::SetFxSend(class FxSend *)",
+  "our": 94.05882,
+  "og": 100.0,
+  "gain": 5.941180000000003,
+  "size": 136,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Init@Voice@@QAAX_N@Z",
+  "unit": "system/synth_xbox/Voice",
+  "demangled": "public: void __cdecl Voice::Init(bool)",
+  "our": 98.208954,
+  "og": 100.0,
+  "gain": 1.7910459999999944,
+  "size": 1072,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Pause@Voice@@QAAX_N@Z",
+  "unit": "system/synth_xbox/Voice",
+  "demangled": "public: void __cdecl Voice::Pause(bool)",
+  "our": 98.60465,
+  "og": 100.0,
+  "gain": 1.3953499999999934,
+  "size": 344,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?blockingStart@Voice@@QAAX_N@Z",
+  "unit": "system/synth_xbox/Voice",
+  "demangled": "public: void __cdecl Voice::blockingStart(bool)",
+  "our": 92.72727,
+  "og": 100.0,
+  "gain": 7.272729999999996,
+  "size": 220,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??1Voice@@QAA@XZ",
+  "unit": "system/synth_xbox/Voice",
+  "demangled": "public: __cdecl Voice::~Voice(void)",
+  "our": 80.8,
+  "og": 100.0,
+  "gain": 19.200000000000003,
+  "size": 180,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?HasPendingVoices@Voice@@SA_NXZ",
+  "unit": "system/synth_xbox/Voice",
+  "demangled": "public: static bool __cdecl Voice::HasPendingVoices(void)",
+  "our": 94.88372,
+  "og": 100.0,
+  "gain": 5.116280000000003,
+  "size": 172,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Poll@Automator@@QAAXXZ",
+  "unit": "system/ui/UI",
+  "demangled": "public: void __cdecl Automator::Poll(void)",
+  "our": 99.60526,
+  "og": 100.0,
+  "gain": 0.39473999999999876,
+  "size": 608,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?OnMsg@Automator@@AAA?AVDataNode@@ABVButtonDownMsg@@@Z",
+  "unit": "system/ui/UI",
+  "demangled": "private: class DataNode __cdecl Automator::OnMsg(class ButtonDownMsg const &)",
+  "our": 99.98182,
+  "og": 100.0,
+  "gain": 0.018180000000000973,
+  "size": 440,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Save@UIListDir@@UAAXAAVBinStream@@@Z",
+  "unit": "system/ui/UIListDir",
+  "demangled": "public: virtual void __cdecl UIListDir::Save(class BinStream &)",
+  "our": 99.783134,
+  "og": 100.0,
+  "gain": 0.216865999999996,
+  "size": 332,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Draw@UIListMeshElement@@UAAXABVTransform@@MPAVUIColor@@PAVBox@@@Z",
+  "unit": "system/ui/UIListMesh",
+  "demangled": "public: virtual void __cdecl UIListMeshElement::Draw(class Transform const &, float, class UIColor *, class Box *)",
+  "our": 82.26415,
+  "og": 100.0,
+  "gain": 17.73585,
+  "size": 424,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?BinkFileIdle@@YAIPAUBINKIO@@@Z",
+  "unit": "system/utl/BinkIntegration",
+  "demangled": "unsigned int __cdecl BinkFileIdle(struct BINKIO *)",
+  "our": 73.034485,
+  "og": 100.0,
+  "gain": 26.965514999999996,
+  "size": 116,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Draw@DebugGraph@@QAAXXZ",
+  "unit": "system/utl/DebugGraph",
+  "demangled": "public: void __cdecl DebugGraph::Draw(void)",
+  "our": 72.7326,
+  "og": 100.0,
+  "gain": 27.267399999999995,
+  "size": 1092,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Encrypt@XTEABlockEncrypter@@QAAXPBUXTEABlock@@PAU2@@Z",
+  "unit": "system/utl/EncryptXTEA",
+  "demangled": "public: void __cdecl XTEABlockEncrypter::Encrypt(struct XTEABlock const *, struct XTEABlock *)",
+  "our": 95.0,
+  "og": 100.0,
+  "gain": 5.0,
+  "size": 96,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?MemOrPoolAllocSTL@@YAPAXHPBDH0@Z",
+  "unit": "system/utl/MemMgr",
+  "demangled": "void * __cdecl MemOrPoolAllocSTL(int, char const *, int, char const *)",
+  "our": 96.70968,
+  "og": 100.0,
+  "gain": 3.290319999999994,
+  "size": 124,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?_MemAllocTemp@@YAPAXHPBDH0H@Z",
+  "unit": "system/utl/MemMgr",
+  "demangled": "void * __cdecl _MemAllocTemp(int, char const *, int, char const *, int)",
+  "our": 95.14286,
+  "og": 100.0,
+  "gain": 4.857140000000001,
+  "size": 84,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?MemTrackInit@@YAXHH_N@Z",
+  "unit": "system/utl/MemTrack",
+  "demangled": "void __cdecl MemTrackInit(int, int, bool)",
+  "our": 73.647484,
+  "og": 88.42446,
+  "gain": 14.77697599999999,
+  "size": 556,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?SyncState@Song@@QAAXXZ",
+  "unit": "system/utl/Song",
+  "demangled": "public: void __cdecl Song::SyncState(void)",
+  "our": 97.651726,
+  "og": 100.0,
+  "gain": 2.3482740000000035,
+  "size": 1160,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?OnSyncState@BeatClock@@IAA?AVDataNode@@PAVDataArray@@@Z",
+  "unit": "system/world/BeatClock",
+  "demangled": "protected: class DataNode __cdecl BeatClock::OnSyncState(class DataArray *)",
+  "our": 92.03846,
+  "og": 95.38461,
+  "gain": 3.3461499999999944,
+  "size": 1144,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?UpdateSongPos@BeatClock@@IAAXXZ",
+  "unit": "system/world/BeatClock",
+  "demangled": "protected: void __cdecl BeatClock::UpdateSongPos(void)",
+  "our": 85.60262,
+  "og": 100.0,
+  "gain": 14.397379999999998,
+  "size": 916,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Shake@CamShot@@IAAXMMABVVector2@@AAVVector3@@1@Z",
+  "unit": "system/world/CameraShot",
+  "demangled": "protected: void __cdecl CamShot::Shake(float, float, class Vector2const &, class Vector3&, class Vector3&)",
+  "our": 95.912895,
+  "og": 99.79094,
+  "gain": 3.878045,
+  "size": 1148,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?SetPos@CamShot@@QAA_NAAVCamShotFrame@@PAVRndCam@@@Z",
+  "unit": "system/world/CameraShot",
+  "demangled": "public: bool __cdecl CamShot::SetPos(class CamShotFrame &, class RndCam *)",
+  "our": 85.831276,
+  "og": 97.44856,
+  "gain": 11.617283999999998,
+  "size": 972,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?SetFrame@CamShot@@UAAXMM@Z",
+  "unit": "system/world/CameraShot",
+  "demangled": "public: virtual void __cdecl CamShot::SetFrame(float, float)",
+  "our": 99.4709,
+  "og": 100.0,
+  "gain": 0.5290999999999997,
+  "size": 756,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0AutoPrepTarget@@QAA@AAVCamShotFrame@@@Z",
+  "unit": "system/world/CameraShot",
+  "demangled": "public: __cdecl AutoPrepTarget::AutoPrepTarget(class CamShotFrame &)",
+  "our": 99.878784,
+  "og": 100.0,
+  "gain": 0.12121600000000399,
+  "size": 264,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0WorldCrowd@@IAA@XZ",
+  "unit": "system/world/Crowd",
+  "demangled": "protected: __cdecl WorldCrowd::WorldCrowd(void)",
+  "our": 90.77033,
+  "og": 100.0,
+  "gain": 9.229669999999999,
+  "size": 836,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Apply3DCharXfm@WorldCrowd@@QAAXABU?$_List_iterator@UCharData@WorldCrowd@@U?$_Nonconst_traits@UCharData@WorldCrowd@@@stlpmtx_std@@@stlpmtx_std@@HPAVRndCam@@@Z",
+  "unit": "system/world/Crowd",
+  "demangled": "public: void __cdecl WorldCrowd::Apply3DCharXfm(struct stlpmtx_std::_List_iterator<struct WorldCrowd::CharData, struct stlpmtx_std::_Nonconst_traits<struct WorldCrowd::CharData> > const &, int, class RndCam *)",
+  "our": 65.03553,
+  "og": 99.84772,
+  "gain": 34.81219,
+  "size": 788,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "??1WorldCrowd@@UAA@XZ",
+  "unit": "system/world/Crowd",
+  "demangled": "public: virtual __cdecl WorldCrowd::~WorldCrowd(void)",
+  "our": 96.457146,
+  "og": 100.0,
+  "gain": 3.5428540000000055,
+  "size": 700,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?AssignRandomColors@WorldCrowd@@IAAX_N@Z",
+  "unit": "system/world/Crowd",
+  "demangled": "protected: void __cdecl WorldCrowd::AssignRandomColors(bool)",
+  "our": 83.48485,
+  "og": 100.0,
+  "gain": 16.515150000000006,
+  "size": 528,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Draw3DChars@WorldCrowd@@IAAXXZ",
+  "unit": "system/world/Crowd",
+  "demangled": "protected: void __cdecl WorldCrowd::Draw3DChars(void)",
+  "our": 87.57273,
+  "og": 98.07273,
+  "gain": 10.5,
+  "size": 440,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?BuildBillboard@WorldCrowd@@IAAPAVRndMesh@@PAVCharacter@@M@Z",
+  "unit": "system/world/Crowd",
+  "demangled": "protected: class RndMesh * __cdecl WorldCrowd::BuildBillboard(class Character *, float)",
+  "our": 96.57143,
+  "og": 100.0,
+  "gain": 3.4285699999999935,
+  "size": 420,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Set3DCharXfm@WorldCrowd@@QAAXABU?$_List_iterator@UCharData@WorldCrowd@@U?$_Nonconst_traits@UCharData@WorldCrowd@@@stlpmtx_std@@@stlpmtx_std@@HABVTransform@@@Z",
+  "unit": "system/world/Crowd",
+  "demangled": "public: void __cdecl WorldCrowd::Set3DCharXfm(struct stlpmtx_std::_List_iterator<struct WorldCrowd::CharData, struct stlpmtx_std::_Nonconst_traits<struct WorldCrowd::CharData> > const &, int, class Transform const &)",
+  "our": 61.22472,
+  "og": 100.0,
+  "gain": 38.77528,
+  "size": 356,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Reset3DCrowd@WorldCrowd@@IAAXXZ",
+  "unit": "system/world/Crowd",
+  "demangled": "protected: void __cdecl WorldCrowd::Reset3DCrowd(void)",
+  "our": 97.51852,
+  "og": 100.0,
+  "gain": 2.481480000000005,
+  "size": 324,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?GetMeshShaderFlags@?A0xfe071329@@YAXPAVRndMat@@AAV?$list@IV?$StlNodeAlloc@I@stlpmtx_std@@@stlpmtx_std@@@Z",
+  "unit": "system/world/Crowd",
+  "demangled": "void __cdecl `anonymous namespace'::GetMeshShaderFlags(class RndMat *, class stlpmtx_std::list<unsigned int, class stlpmtx_std::StlNodeAlloc<unsigned int> > &)",
+  "our": 84.35185,
+  "og": 100.0,
+  "gain": 15.648150000000001,
+  "size": 216,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?SetMatAndCameraLod@WorldCrowd@@IAAXXZ",
+  "unit": "system/world/Crowd",
+  "demangled": "protected: void __cdecl WorldCrowd::SetMatAndCameraLod(void)",
+  "our": 63.42857,
+  "og": 100.0,
+  "gain": 36.57143,
+  "size": 112,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?PostLoad@WorldDir@@UAAXAAVBinStream@@@Z",
+  "unit": "system/world/Dir",
+  "demangled": "public: virtual void __cdecl WorldDir::PostLoad(class BinStream &)",
+  "our": 99.93304,
+  "og": 100.0,
+  "gain": 0.06695999999999458,
+  "size": 1792,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Poll@WorldDir@@UAAXXZ",
+  "unit": "system/world/Dir",
+  "demangled": "public: virtual void __cdecl WorldDir::Poll(void)",
+  "our": 99.96532,
+  "og": 100.0,
+  "gain": 0.03467999999999449,
+  "size": 692,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?SyncObjects@WorldDir@@UAAXXZ",
+  "unit": "system/world/Dir",
+  "demangled": "public: virtual void __cdecl WorldDir::SyncObjects(void)",
+  "our": 98.83495,
+  "og": 100.0,
+  "gain": 1.1650499999999937,
+  "size": 412,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Poll@FreeCamera@@QAAXXZ",
+  "unit": "system/world/FreeCamera",
+  "demangled": "public: void __cdecl FreeCamera::Poll(void)",
+  "our": 91.35599,
+  "og": 100.0,
+  "gain": 8.644009999999994,
+  "size": 1236,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?SyncDir@WorldInstance@@AAAXXZ",
+  "unit": "system/world/Instance",
+  "demangled": "private: void __cdecl WorldInstance::SyncDir(void)",
+  "our": 90.05725,
+  "og": 99.38931,
+  "gain": 9.332059999999998,
+  "size": 2096,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?SavePersistentObjects@WorldInstance@@AAAXAAVBinStream@@@Z",
+  "unit": "system/world/Instance",
+  "demangled": "private: void __cdecl WorldInstance::SavePersistentObjects(class BinStream &)",
+  "our": 93.03077,
+  "og": 100.0,
+  "gain": 6.969229999999996,
+  "size": 780,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?DeleteTransientObjects@WorldInstance@@AAAXXZ",
+  "unit": "system/world/Instance",
+  "demangled": "private: void __cdecl WorldInstance::DeleteTransientObjects(void)",
+  "our": 77.320984,
+  "og": 99.59876,
+  "gain": 22.277776000000003,
+  "size": 648,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?TryEnter@SharedGroup@@QAAXPAVWorldInstance@@@Z",
+  "unit": "system/world/Instance",
+  "demangled": "public: void __cdecl SharedGroup::TryEnter(class WorldInstance *)",
+  "our": 80.78,
+  "og": 100.0,
+  "gain": 19.22,
+  "size": 200,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Sync@LightHue@@AAAXXZ",
+  "unit": "system/world/LightHue",
+  "demangled": "private: void __cdecl LightHue::Sync(void)",
+  "our": 94.76166,
+  "og": 100.0,
+  "gain": 5.238339999999994,
+  "size": 772,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Load@LightPreset@@UAAXAAVBinStream@@@Z",
+  "unit": "system/world/LightPreset",
+  "demangled": "public: virtual void __cdecl LightPreset::Load(class BinStream &)",
+  "our": 99.54122,
+  "og": 100.0,
+  "gain": 0.4587800000000044,
+  "size": 2232,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Poll@LightPresetManager@@QAAXXZ",
+  "unit": "system/world/LightPresetManager",
+  "demangled": "public: void __cdecl LightPresetManager::Poll(void)",
+  "our": 95.41284,
+  "og": 100.0,
+  "gain": 4.587159999999997,
+  "size": 436,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?HarvestCollidables@PhysicsManager@@AAAXPAVObjectDir@@@Z",
+  "unit": "system/world/PhysicsManager",
+  "demangled": "private: void __cdecl PhysicsManager::HarvestCollidables(class ObjectDir *)",
+  "our": 98.657715,
+  "og": 100.0,
+  "gain": 1.342285000000004,
+  "size": 596,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?HasKeepMeshData@?A0xe8afe2fc@@YA_NPBVRndMesh@@@Z",
+  "unit": "system/world/PhysicsManager",
+  "demangled": "bool __cdecl `anonymous namespace'::HasKeepMeshData(class RndMesh const *)",
+  "our": 92.0,
+  "og": 100.0,
+  "gain": 8.0,
+  "size": 60,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?SyncProperty@PhysicsVolume@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z",
+  "unit": "system/world/PhysicsVolume",
+  "demangled": "public: virtual bool __cdecl PhysicsVolume::SyncProperty(class DataNode &, class DataArray *, int, enum PropOp)",
+  "our": 97.97298,
+  "og": 100.0,
+  "gain": 2.027019999999993,
+  "size": 1184,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Load@SpotDrawParams@@QAAXAAVBinStreamRev@@@Z",
+  "unit": "system/world/SpotlightDrawer",
+  "demangled": "public: void __cdecl SpotDrawParams::Load(class BinStreamRev &)",
+  "our": 92.07921,
+  "og": 100.0,
+  "gain": 7.920789999999997,
+  "size": 404,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0SpotDrawParams@@QAA@PAVSpotlightDrawer@@@Z",
+  "unit": "system/world/SpotlightDrawer",
+  "demangled": "public: __cdecl SpotDrawParams::SpotDrawParams(class SpotlightDrawer *)",
+  "our": 99.98795,
+  "og": 100.0,
+  "gain": 0.012050000000002115,
+  "size": 332,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?DrawAdditional@SpotlightDrawer@@MAAXPAVSpotlightEntry@1@ABQAV21@@Z",
+  "unit": "system/world/SpotlightDrawer",
+  "demangled": "protected: virtual void __cdecl SpotlightDrawer::DrawAdditional(class SpotlightDrawer::SpotlightEntry *, class SpotlightDrawer::SpotlightEntry *const &)",
+  "our": 85.85246,
+  "og": 100.0,
+  "gain": 14.147540000000006,
+  "size": 244,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?_M_erase@?$vector@VSpotMeshEntry@SpotlightDrawer@@V?$StlNodeAlloc@VSpotMeshEntry@SpotlightDrawer@@@stlpmtx_std@@@stlpmtx_std@@IAAPAVSpotMeshEntry@SpotlightDrawer@@PAV34@ABU__false_type@2@@Z",
+  "unit": "system/world/SpotlightDrawer",
+  "demangled": "protected: class SpotlightDrawer::SpotMeshEntry * __cdecl stlpmtx_std::vector<class SpotlightDrawer::SpotMeshEntry, class stlpmtx_std::StlNodeAlloc<class SpotlightDrawer::SpotMeshEntry> >::_M_erase(class SpotlightDrawer::SpotMeshEntry *, struct stlpmtx_std::__false_type const &)",
+  "our": 86.96429,
+  "og": 100.0,
+  "gain": 13.035709999999995,
+  "size": 112,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?_M_fill_insert_aux@?$vector@VSpotMeshEntry@SpotlightDrawer@@V?$StlNodeAlloc@VSpotMeshEntry@SpotlightDrawer@@@stlpmtx_std@@@stlpmtx_std@@AAAXPAVSpotMeshEntry@SpotlightDrawer@@IABV34@ABU__false_type@2@@Z",
+  "unit": "system/world/SpotlightDrawer_NG",
+  "demangled": "private: void __cdecl stlpmtx_std::vector<class SpotlightDrawer::SpotMeshEntry, class stlpmtx_std::StlNodeAlloc<class SpotlightDrawer::SpotMeshEntry> >::_M_fill_insert_aux(class SpotlightDrawer::SpotMeshEntry *, unsigned int, class SpotlightDrawer::SpotMeshEntry const &, struct stlpmtx_std::__false_type const &)",
+  "our": 97.92929,
+  "og": 100.0,
+  "gain": 2.0707100000000054,
+  "size": 396,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?_M_erase@?$vector@VSpotMeshEntry@SpotlightDrawer@@V?$StlNodeAlloc@VSpotMeshEntry@SpotlightDrawer@@@stlpmtx_std@@@stlpmtx_std@@IAAPAVSpotMeshEntry@SpotlightDrawer@@PAV34@0ABU__false_type@2@@Z",
+  "unit": "system/world/SpotlightDrawer_NG",
+  "demangled": "protected: class SpotlightDrawer::SpotMeshEntry * __cdecl stlpmtx_std::vector<class SpotlightDrawer::SpotMeshEntry, class stlpmtx_std::StlNodeAlloc<class SpotlightDrawer::SpotMeshEntry> >::_M_erase(class SpotlightDrawer::SpotMeshEntry *, class SpotlightDrawer::SpotMeshEntry *, struct stlpmtx_std::__false_type const &)",
+  "our": 87.5,
+  "og": 100.0,
+  "gain": 12.5,
+  "size": 96,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Poll@ThreeDSoundManager@@QAAXXZ",
+  "unit": "system/world/ThreeDSoundManager",
+  "demangled": "public: void __cdecl ThreeDSoundManager::Poll(void)",
+  "our": 94.821785,
+  "og": 99.38119,
+  "gain": 4.559404999999998,
+  "size": 808,
+  "tag": "GAIN"
+ }
+]
