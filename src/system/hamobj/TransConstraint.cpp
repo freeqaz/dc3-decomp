@@ -208,7 +208,7 @@ void TransConstraint::Poll() {
                 float hi = parentPos[i] + halfCube;
 
                 if (childPos[i] < lo || childPos[i] > hi) {
-                    float step = dir[i] * mSpeed;
+                    float step = mSpeed * dir[i];
 
                     if (childPos[i] < lo) {
                         childPos[i] += step * dt;

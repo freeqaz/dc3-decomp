@@ -430,10 +430,7 @@ bool SongCollision::IsCollision(
 
     bool anyCollision = false;
     int beat = startBeat;
-    do {
-        if (beat >= endBeat) {
-            return anyCollision;
-        }
+    while (beat < endBeat) {
         SongCollisionOutput out;
         CheckCollision(beat, diffs, localXfms, out);
         if (out.Colliding()) {
@@ -450,9 +447,10 @@ bool SongCollision::IsCollision(
         for (int i = 0; i < 2; i++) {
             const BeatCollisionData *bd = BeatData(beat, diffs[i]);
             if (bd) {
-                localXfms[i].v += bd->mOffset;
+                Add(localXfms[i].v, bd->mOffset, localXfms[i].v);
             }
         }
         beat++;
-    } while (true);
+    }
+    return anyCollision;
 }
