@@ -1700,9 +1700,12 @@ def generate_build_ninja(
     n.comment("Split XEX into relocatable objects")
     n.comment("write_if_changed: only update config.json mtime when content changes,")
     n.comment("preventing unnecessary generator re-runs that invalidate ninja deps.")
+    n.comment("`cp -p` is load-bearing: plain cp stamps .prev with *now*, so the")
+    n.comment("touch -r below would advance config.json's mtime anyway and the guard")
+    n.comment("would be a no-op. -p preserves the original mtime so it's truly restored.")
     n.rule(
         name="split",
-        command=f"cp $out_dir/config.json $out_dir/config.json.prev 2>/dev/null; "
+        command=f"cp -p $out_dir/config.json $out_dir/config.json.prev 2>/dev/null; "
                 f"{dtk} xex split $in $out_dir && "
                 f"if cmp -s $out_dir/config.json $out_dir/config.json.prev; then "
                 f"touch -r $out_dir/config.json.prev $out_dir/config.json; fi; "
