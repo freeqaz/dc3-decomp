@@ -248,13 +248,13 @@ static int mapping0_forward(vorbis_block *vb){
   int                    n=vb->pcmend;
   int i,j,k;
 
+  int    *nonzero    = alloca(sizeof(*nonzero)*vi->channels);
   float  **gmdct     = _vorbis_block_alloc(vb,vi->channels*sizeof(*gmdct));
   int    **ilogmaskch= _vorbis_block_alloc(vb,vi->channels*sizeof(*ilogmaskch));
   int ***floor_posts = _vorbis_block_alloc(vb,vi->channels*sizeof(*floor_posts));
-  int    *nonzero    = alloca(sizeof(*nonzero)*vi->channels);
-  float *local_ampmax=alloca(sizeof(*local_ampmax)*vi->channels);
 
   float global_ampmax=vbi->ampmax;
+  float *local_ampmax=alloca(sizeof(*local_ampmax)*vi->channels);
   int blocktype=vbi->blocktype;
 
   int modenumber=vb->W;
@@ -504,10 +504,10 @@ static int mapping0_forward(vorbis_block *vb){
   /* iterate over the many masking curve fits we've created */
 
   {
-    int **sortindex=alloca(sizeof(*sortindex)*vi->channels);
-    int *zerobundle=alloca(sizeof(*zerobundle)*vi->channels);
-    float **couple_bundle=alloca(sizeof(*couple_bundle)*vi->channels);
     float **res_bundle=alloca(sizeof(*res_bundle)*vi->channels);
+    float **couple_bundle=alloca(sizeof(*couple_bundle)*vi->channels);
+    int *zerobundle=alloca(sizeof(*zerobundle)*vi->channels);
+    int **sortindex=alloca(sizeof(*sortindex)*vi->channels);
     float **mag_memo;
     int **mag_sort;
 
@@ -771,17 +771,8 @@ static int mapping0_inverse_poll(vorbis_block *vb,vorbis_info_mapping *l){
   void **floormemo=alloca(sizeof(*floormemo)*vi->channels);
   int                   ret=-50;
 
-  if(vb->synthesis_state==vss_mdct){
-    /* transform the PCM data; takes PCM vector, vb; modifies PCM vector */
-    /* only MDCT right now.... */
-    for(i=0;i<vi->channels;i++){
-      float *pcm=vb->pcm[i];
-      mdct_backward(b->transform[vb->W][0],pcm,pcm);
-    }
-
-    ret=0;
-  }else if(vb->synthesis_state==vss_decode){
-
+  switch(vb->synthesis_state){
+  case vss_decode:
     /* recover the spectral envelope; store it in the PCM vector for now */
     for(i=0;i<vi->channels;i++){
       int submap=info->chmuxlist[i];
@@ -859,8 +850,19 @@ static int mapping0_inverse_poll(vorbis_block *vb,vorbis_info_mapping *l){
     }
 
     vb->synthesis_state=vss_mdct;
-  }else{
+    break;
+  case vss_mdct:
+    /* transform the PCM data; takes PCM vector, vb; modifies PCM vector */
+    /* only MDCT right now.... */
+    for(i=0;i<vi->channels;i++){
+      float *pcm=vb->pcm[i];
+      mdct_backward(b->transform[vb->W][0],pcm,pcm);
+    }
+    ret=0;
+    break;
+  default:
     ret=-1;
+    break;
   }
 
   return(ret);
