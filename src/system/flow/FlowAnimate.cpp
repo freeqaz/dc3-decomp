@@ -82,168 +82,133 @@ BEGIN_COPYS(FlowAnimate)
     END_COPYING_MEMBERS
 END_COPYS
 
-void FlowAnimate::Load(BinStream &bs) {
-    int revs;
-    bs >> revs;
-    BinStreamRev d(bs, revs);
-    static const unsigned short gRevs[4] = { 3, 0, 0, 0 };
-    if (d.rev > 3) {
-        MILO_FAIL(
-            "%s can't load new %s version %d > %d",
-            PathName(this),
-            ClassName(),
-            d.rev,
-            gRevs[0]
-        );
-    }
-    if (d.altRev > 0) {
-        MILO_FAIL(
-            "%s can't load new %s alt version %d > %d",
-            PathName(this),
-            ClassName(),
-            d.altRev,
-            gRevs[2]
-        );
-    }
+INIT_REVS(3, 0)
 
-    FlowNode::Load(d.stream);
-
+BEGIN_LOADS(FlowAnimate)
+    LOAD_REVS(bs)
+    ASSERT_REVS(3, 0)
+    LOAD_SUPERCLASS(FlowNode)
     if (d.rev < 3) {
-        RndAnimatable *anim = mAnim.LoadFromMainOrDir(d.stream);
-        mAnim = anim;
+        mAnim = mAnim.LoadFromMainOrDir(d.stream);
     } else {
         mAnim.LoadFromMainOrDir(d.stream);
     }
-
     d >> mBlend >> mWait >> mDelay;
-    d >> (int&)mStopMode >> mEnable
-      >> (int&)mRate >> mStart;
+    d >> (int &)mStopMode >> mEnable >> (int &)mRate >> mStart;
     d >> mEnd >> mPeriod;
-    d >> mType;
-    d >> mScale;
+    d >> mType >> mScale;
     if (d.rev > 0) {
-        d >> (int &)mEase >> mEasePower;
-        d >> mWrap;
+        d >> (int &)mEase >> mEasePower >> mWrap;
     }
     if (d.rev > 1) {
         d >> mImmediateRelease;
     }
-}
+END_LOADS
 
 bool FlowAnimate::Activate() {
     FLOW_LOG("Activate\n");
     mStopRequested = false;
     PushDrivenProperties();
-    RndAnimatable *anim = (RndAnimatable *)mAnim;
-    if (anim) {
+    if (mAnim) {
         if (mImmediateRelease) {
             mAnimTask = nullptr;
             if (mEnable) {
-                float period = mPeriod;
-                bool wrap = mWrap;
-                int ease = mEase;
-                Symbol type = mType;
-                int rate = mRate;
-                if (!(period == 0.0f)) {
-                    float easePower = mEasePower;
-                    float end = mEnd;
-                    float start = mStart;
-                    float delay = mDelay;
-                    float blend = mBlend;
+                if (mPeriod) {
                     mAnim->Animate(
-                        blend, mWait, delay, (RndAnimatable::Rate)rate, start, end,
-                        period, 1.0f, type, this, (EaseType)ease, easePower, wrap
+                        mBlend,
+                        mWait,
+                        mDelay,
+                        mRate,
+                        mStart,
+                        mEnd,
+                        mPeriod,
+                        1,
+                        mType,
+                        this,
+                        mEase,
+                        mEasePower,
+                        mWrap
                     );
                 } else {
-                    float easePower = mEasePower;
-                    float scale = mScale;
-                    float end = mEnd;
-                    float start = mStart;
-                    float delay = mDelay;
-                    float blend = mBlend;
                     mAnim->Animate(
-                        blend, mWait, delay, (RndAnimatable::Rate)rate, start, end,
-                        0.0f, scale, type, this, (EaseType)ease, easePower, wrap
+                        mBlend,
+                        mWait,
+                        mDelay,
+                        mRate,
+                        mStart,
+                        mEnd,
+                        0,
+                        mScale,
+                        mType,
+                        this,
+                        mEase,
+                        mEasePower,
+                        mWrap
                     );
                 }
             } else {
-                float delay = mDelay;
-                float blend = mBlend;
-                mAnim->Animate(blend, mWait, delay, this, kEaseLinear, 0.0f, false);
+                mAnim->Animate(mBlend, mWait, mDelay, this);
             }
-        } else {
-            if (mRunningNodes.empty()) {
-                TheFlowMgr->QueueCommand(this, kQueue);
-                return true;
-            }
+        } else if (!FlowNode::IsRunning()) {
+            TheFlowMgr->QueueCommand(this, kQueue);
+            return true;
         }
     }
     return false;
 }
 
 void FlowAnimate::Execute(QueueState state) {
-    FLOW_LOG("Execute: state = %i\n", state);
+    FLOW_LOG("Execute: state = %i\n", (int)state);
     if (IsRunning()) {
-        if (mAnimTask && kIgnore == (int)state) {
-            mAnimTask->mListener = NULL;
-            if (mStopMode != kReleaseAndContinue) {
-                AnimTask *task = mAnimTask;
-                if (task) {
-                    delete task;
-                }
+        if (mAnimTask && state == kIgnore) {
+            mAnimTask->SetListener(nullptr);
+            if (mStopMode != 4) {
+                delete mAnimTask;
             }
             mAnimTask = nullptr;
-            FLOW_LOG("Timed Release From Parent \n");
-            Timer timer;
-            timer.Reset();
-            timer.Start();
-            mFlowParent->ChildFinished(this);
-            timer.Stop();
-            TheFlowMgr->AddMs(timer.Ms());
+            FLOW_TIMED_RELEASE_FROM_PARENT;
         }
     } else {
         if (state == kQueue) {
             mStopDeferred = false;
             mDeferredStopMode = 0;
-#ifdef HX_NATIVE
-            if (!mAnim) {
-                mFlowParent->ChildFinished(this);
-                return;
-            }
-#endif
             Task *task;
             if (mEnable) {
-                float period = mPeriod;
-                bool wrap = mWrap;
-                int ease = mEase;
-                Symbol type = mType;
-                int rate = mRate;
-                if (!(period == 0.0f)) {
-                    float easePower = mEasePower;
-                    float end = mEnd;
-                    float start = mStart;
-                    float delay = mDelay;
-                    float blend = mBlend;
+                if (mPeriod) {
                     task = mAnim->Animate(
-                        blend, mWait, delay, (RndAnimatable::Rate)rate, start, end,
-                        period, 1.0f, type, this, (EaseType)ease, easePower, wrap
+                        mBlend,
+                        mWait,
+                        mDelay,
+                        mRate,
+                        mStart,
+                        mEnd,
+                        mPeriod,
+                        1,
+                        mType,
+                        this,
+                        mEase,
+                        mEasePower,
+                        mWrap
                     );
                 } else {
-                    float easePower = mEasePower;
-                    float scale = mScale;
-                    float end = mEnd;
-                    float start = mStart;
-                    float delay = mDelay;
-                    float blend = mBlend;
                     task = mAnim->Animate(
-                        blend, mWait, delay, (RndAnimatable::Rate)rate, start, end,
-                        0.0f, scale, type, this, (EaseType)ease, easePower, wrap
+                        mBlend,
+                        mWait,
+                        mDelay,
+                        mRate,
+                        mStart,
+                        mEnd,
+                        0,
+                        mScale,
+                        mType,
+                        this,
+                        mEase,
+                        mEasePower,
+                        mWrap
                     );
                 }
             } else {
-                float delay = mDelay;
-                float blend = mBlend;
-                task = mAnim->Animate(blend, mWait, delay, this, kEaseLinear, 0.0f, false);
+                task = mAnim->Animate(mBlend, mWait, mDelay, this);
             }
             mAnimTask = static_cast<AnimTask *>(task);
         } else if (state == kIgnore) {
@@ -267,80 +232,53 @@ void FlowAnimate::ChildFinished(FlowNode *node) {
 }
 
 void FlowAnimate::OnAnimEvent(Symbol sym) {
-    FLOW_LOG("Event: %s\n", (char *)sym.Str());
-
+    FLOW_LOG("Event: %s\n", sym.Str());
     FOREACH (it, mChildNodes) {
-        FlowNode *child = it->Obj();
-        if (child->ClassName() == FlowLabel::StaticClassName()
-            && ((FlowLabel *)child)->Label() == sym) {
-            ActivateLabel((FlowLabel *)child);
-            break;
+        FlowNode *cur = *it;
+        if (cur->ClassName() == FlowLabel::StaticClassName()) {
+            FlowLabel *label = static_cast<FlowLabel *>((FlowNode *)*it);
+            if (label->Label() == sym) {
+                ActivateLabel(label);
+                break;
+            }
         }
     }
-
     static Symbol sEnded("ended");
     static Symbol sStop("stop");
     static Symbol sNoStop("no_stop");
     static Symbol sInterrupted("interrupted");
     static Symbol sLooped("looped");
-
     if (sym == sInterrupted) {
         mAnimTask = nullptr;
         if (mRunningNodes.empty() && !mImmediateRelease) {
-            FLOW_LOG("Timed Release From Parent \n");
-            Timer timer;
-            timer.Reset();
-            timer.Start();
-            mFlowParent->ChildFinished(this);
-            timer.Stop();
-            TheFlowMgr->AddMs(timer.Ms());
+            FLOW_TIMED_RELEASE_FROM_PARENT;
         }
     }
-
     if (sym == sEnded) {
         if (mAnimTask) {
-            mAnimTask->mListener = NULL;
+            mAnimTask->SetListener(nullptr);
         }
         mAnimTask = nullptr;
         if (mRunningNodes.empty() && !mImmediateRelease) {
-            FLOW_LOG("Timed Release From Parent \n");
-            Timer timer;
-            timer.Reset();
-            timer.Start();
-            mFlowParent->ChildFinished(this);
-            timer.Stop();
-            TheFlowMgr->AddMs(timer.Ms());
+            FLOW_TIMED_RELEASE_FROM_PARENT;
         }
-    } else {
-        if (sym == sStop) {
-            if (mDeferredStopMode == kStopOnMarker || mDeferredStopMode == kStopBetweenMarkers) {
-                TheFlowMgr->QueueCommand(this, kIgnore);
-            }
-            mDeferredStopMode = 0;
-            mBetweenStopMarkers = true;
-            return;
+    } else if (sym == sStop) {
+        if (mDeferredStopMode == 2 || mDeferredStopMode == 3) {
+            TheFlowMgr->QueueCommand(this, kIgnore);
         }
-        if (sym == sNoStop) {
-            mDeferredStopMode = 0;
-        } else {
-            if (sym != sLooped) {
-                return;
-            }
-            if (mStopDeferred && mAnimTask) {
-                AnimTask *task = mAnimTask;
-                task->mListener = NULL;
-                delete (AnimTask *)mAnimTask;
-                FLOW_LOG("Timed Release From Parent \n");
-                Timer timer;
-                timer.Reset();
-                timer.Start();
-                mFlowParent->ChildFinished(this);
-                timer.Stop();
-                TheFlowMgr->AddMs(timer.Ms());
-                return;
-            }
-        }
+        mDeferredStopMode = 0;
+        mBetweenStopMarkers = true;
+    } else if (sym == sNoStop) {
+        mDeferredStopMode = 0;
         mBetweenStopMarkers = false;
+    } else if (sym == sLooped) {
+        if (mStopDeferred && mAnimTask) {
+            mAnimTask->SetListener(nullptr);
+            delete mAnimTask;
+            FLOW_TIMED_RELEASE_FROM_PARENT;
+        } else {
+            mBetweenStopMarkers = false;
+        }
     }
 }
 
