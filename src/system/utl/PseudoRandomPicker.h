@@ -14,6 +14,11 @@ public:
     void AddItem(const T item) { mItems.push_back(item); }
     void SetNumGets(int i) { mNumGets = i; }
 
+    void ResetModes() {
+        mNumGets = 0;
+        mMode = 2;
+    }
+
     void AddItems(const std::vector<T> &itemVec) {
         for (int i = 0; i < itemVec.size(); i++) {
             T cur = itemVec[i];
@@ -24,13 +29,11 @@ public:
     void Randomize() {
         MILO_ASSERT(Size() > 0, 0x83);
         int size = Size();
-        for (int n = Size(); n != 0; n--) {
-            // Pop the first element
+        for (int n = mItems.size(); n != 0; n--) {
             typename std::list<T>::iterator first = mItems.begin();
             T val = *first;
-            mItems.erase(first);
-            Size();
-            // Pick a random position and insert there
+            mItems.pop_front();
+            mItems.size();
             int idx = rand() % size;
             typename std::list<T>::iterator it = mItems.begin();
             if (idx != 0) {
@@ -39,7 +42,7 @@ public:
                 }
             }
             mItems.insert(it, val);
-            Size();
+            mItems.size();
         }
     }
 
@@ -48,14 +51,8 @@ public:
 
     const T GetItem(int idx) {
         if (idx >= 0) {
-            // Count list size
-            int size = 0;
-            typename std::list<T>::iterator it = mItems.begin();
-            for (; it != mItems.end(); ++it) {
-                size++;
-            }
-            if ((unsigned int)idx <= (unsigned int)size) {
-                // Walk to idx-th node
+            typename std::list<T>::iterator it;
+            if (idx <= (unsigned int)mItems.size()) {
                 it = mItems.begin();
                 if (idx != 0) {
                     for (int i = idx; i != 0; i--) {
@@ -64,7 +61,7 @@ public:
                 }
                 T val = *it;
                 mItems.erase(it);
-                mItems.insert(mItems.end(), val);
+                mItems.push_back(val);
                 return val;
             }
         }

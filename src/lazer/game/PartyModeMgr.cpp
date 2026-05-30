@@ -202,11 +202,9 @@ PartyModeMgr::PartyModeMgr() : mFrameSmoothers() {
     mPerSongDifficulty = false;
     mCustomParty = false;
     mUsingPerSongOptions = false;
-    mSetPartyOptionsJob = nullptr;
-    mGetPartyOptionsJob = nullptr;
-    mGetPartySongQueueJob = nullptr;
-    mAddSongToPartySongQueueJob = nullptr;
-    mDeleteSongFromPartySongQueueJob = nullptr;
+    for (int i = 0; i < 5; i++) {
+        (&mSetPartyOptionsJob)[i] = nullptr;
+    }
     mQueueStateValid = false;
     mPlaytestEventSequences = nullptr;
 }
@@ -940,35 +938,36 @@ void PartyModeMgr::DetermineSubMode(Symbol *pMode, Symbol *pSubMode) {
 }
 
 void PartyModeMgr::DetermineSubModePlayers(
-    Symbol mode, int *pFlags, int *pNumPlayers, std::vector<int> *pPlayerIndices
+    Symbol mode, int *pPlayerFlags, int *pNumPlayers, std::vector<int> *vec
 ) {
     static Symbol showdown("showdown");
-    if (mode == showdown) {
-        return;
-    }
-    int totalPlayers = (int)mPlayers.size();
-    int minPlayers = TheGameMode->MinPlayers(mode);
-    int maxPlayers = TheGameMode->MaxPlayers(mode);
-    if (minPlayers != 0) {
-        totalPlayers -= minPlayers;
-        maxPlayers -= minPlayers;
-        do {
-            int player = PickNextPlayer();
-            *pFlags = *pFlags | (1 << player);
-            pPlayerIndices->push_back(player);
-            *pNumPlayers = *pNumPlayers + 1;
-            minPlayers--;
-        } while (minPlayers != 0);
-    }
-    if (totalPlayers > 0) {
-        while (maxPlayers != 0) {
-            if (totalPlayers == 0) break;
-            int player = PickNextPlayer();
-            *pFlags = *pFlags | (1 << player);
-            pPlayerIndices->push_back(player);
-            maxPlayers--;
-            totalPlayers--;
-            *pNumPlayers = *pNumPlayers + 1;
+    if (mode != showdown) {
+        int totalplayers = mPlayers.size();
+        int minplayers = TheGameMode->MinPlayers(mode);
+        int maxplayers = TheGameMode->MaxPlayers(mode);
+        if (minplayers != 0) {
+            totalplayers -= minplayers;
+            maxplayers -= minplayers;
+            while (minplayers != 0) {
+                int player = PickNextPlayer();
+                *pPlayerFlags |= 1 << player;
+                vec->push_back(player);
+                minplayers--;
+                ++*pNumPlayers;
+            }
+        }
+        if (0 < totalplayers && maxplayers != 0) {
+            while (maxplayers != 0) {
+                if (totalplayers == 0) {
+                    return;
+                }
+                int player = PickNextPlayer();
+                *pPlayerFlags |= 1 << player;
+                vec->push_back(player);
+                maxplayers--;
+                totalplayers--;
+                ++*pNumPlayers;
+            }
         }
     }
 }
@@ -979,20 +978,22 @@ void PartyModeMgr::DetermineSubModeSong(Symbol *pShortName, int *pSongID) {
         if (arr) {
             int rank = arr->Int(rand() % arr->Size());
             MILO_ASSERT_FMT(
-                rank >= 1 && rank <= 4, "0x%08X is an invalid DJ logic intensity rank\n", (int)rank
+                rank >= 1 && rank <= 4, "%d is an invalid DJ logic intensity rank\n", rank
             );
-            *pShortName = mSubModeSongPickers[rank].GetNext();
+            *pShortName = mSubModeSongPickers[rank - 1].GetNext();
             *pSongID = TheHamSongMgr.GetSongIDFromShortName(*pShortName);
-            return;
         } else {
             MILO_NOTIFY(
-                "DJ logic data doesn't contain enough information for 0x%08X rounds, picking random song instead",
-                (int)mRoundsPlayed
+                "DJ logic data doesn't contain enough information for %d rounds, picking random song instead",
+                mRoundsPlayed
             );
+            *pShortName = mSubModeSongPicker.GetNext();
+            *pSongID = TheHamSongMgr.GetSongIDFromShortName(*pShortName);
         }
+    } else {
+        *pShortName = mSubModeSongPicker.GetNext();
+        *pSongID = TheHamSongMgr.GetSongIDFromShortName(*pShortName);
     }
-    *pShortName = mSubModeSongPicker.GetNext();
-    *pSongID = TheHamSongMgr.GetSongIDFromShortName(*pShortName);
 }
 
 bool PartyModeMgr::IsTeamSignedIn(int i1) {
@@ -1116,10 +1117,10 @@ int PartyModeMgr::PickNextPlayer() {
 void PartyModeMgr::ShufflePlaylist(bool b1) {
     MILO_ASSERT(IsUsingPlaylist(), 0x731);
     if (b1) {
-        mSubModeSongPicker.mMode = 2;
-        mSubModeSongPicker.mNumGets = 0;
+        mSubModeSongPicker.SetMode(2);
+        mSubModeSongPicker.SetNumGets(0);
     } else if (mIsPlaylistShuffled) {
-        mSubModeSongPicker.mMode = 0;
+        mSubModeSongPicker.SetMode(0);
         SetSongsFromPlaylist();
     }
     mIsPlaylistShuffled = b1;
@@ -1296,8 +1297,8 @@ void PartyModeMgr::SetSongAndDefaults(Symbol song, Symbol mode, bool force_crew_
 }
 
 PartyModeMgr::SubMode *PartyModeMgr::CreateEventA() {
-    Symbol submode;
     Symbol mode;
+    Symbol submode;
     DetermineSubMode(&mode, &submode);
     int flags = 0;
     int numPlayers = 0;
@@ -1316,8 +1317,7 @@ PartyModeMgr::SubMode *PartyModeMgr::CreateEventA() {
     event->mPlayerIndices.insert(event->mPlayerIndices.begin(), vec.begin(), vec.end());
     DataArray *a = new DataArray(numPlayers);
     for (int i = 0; i < numPlayers; i++) {
-        auto playerNode = a->Node(i);
-        playerNode = event->mPlayerIndices[i];
+        a->Node(i) = event->mPlayerIndices[i];
     }
     event->mPlayers = a;
     return event;
@@ -1418,96 +1418,77 @@ void PartyModeMgr::FinalizePlaytestParty() {
 }
 
 DataNode PartyModeMgr::OnMsg(const RCJobCompleteMsg &msg) {
-    // Handle job failure - cancel all pending party mode jobs
+    bool b;
     if (!msg.Success()) {
         MILO_LOG("[PartyModeMgr::OnMsg] Party net API failed.\n");
-        // Iterate through all 5 job pointers and cancel the failed one
-        SetPartyOptionsJob **pJob = &mSetPartyOptionsJob;
-        int count = 5;
-        do {
-            if (*pJob == msg.Job()) {
-                (*pJob)->Cancel(false);
-                *pJob = 0;
+        for (int i = 0; i < 5; i++) {
+            if ((&mSetPartyOptionsJob)[i] == msg.Job()) {
+                (&mSetPartyOptionsJob)[i]->Cancel(false);
+                (&mSetPartyOptionsJob)[i] = nullptr;
             }
-            count--;
-            pJob++;
-        } while (count != 0);
+        }
         BroadcastSyncMsg("skipped_sync");
         return 1;
     }
-
-    // Track whether we need to notify SmartGlass of updates
-    bool b = false;
-
-    // Handle successful job completion - dispatch based on job type
+    b = false;
     if (msg.Job() == mSetPartyOptionsJob) {
         BroadcastSyncMsg("options_sent");
-        mSetPartyOptionsJob = 0;
+        mSetPartyOptionsJob = nullptr;
         b = true;
-    } else {
-        if (msg.Job() == mGetPartyOptionsJob) {
-            ReadPartyOptions();
+    } else if (msg.Job() == mGetPartyOptionsJob) {
+        ReadPartyOptions();
+    } else if (msg.Job() == mGetPartySongQueueJob) {
+        ReadPartySongQueue();
+    } else if (msg.Job() == mDeleteSongFromPartySongQueueJob) {
+        mDeleteSongFromPartySongQueueJob = nullptr;
+        BroadcastSyncMsg("song_queue_updated");
+        b = true;
+    } else if (msg.Job() == mAddSongToPartySongQueueJob) {
+        mAddSongToPartySongQueueJob = nullptr;
+        mPartySongQueue.pop_front();
+        if (!mPartySongQueue.empty()) {
+            AddNextSongToRCPartySongQueue();
         } else {
-            if (msg.Job() == mGetPartySongQueueJob) {
-                ReadPartySongQueue();
-            } else {
-                if (msg.Job() == mDeleteSongFromPartySongQueueJob) {
-                    mDeleteSongFromPartySongQueueJob = 0;
-                } else {
-                    if (msg.Job() != mAddSongToPartySongQueueJob) {
-                        goto leave;
-                    }
-                    mAddSongToPartySongQueueJob = 0;
-                    mPartySongQueue.pop_front();
-                    if (!mPartySongQueue.empty()) {
-                        AddNextSongToRCPartySongQueue();
-                        b = true;
-                    } else {
-                        mAddSongToPartySongQueueJob = 0;
-                        mQueueStateValid = false;
-                    }
-                }
-                BroadcastSyncMsg("song_queue_updated");
-                b = true;
-            }
+            mAddSongToPartySongQueueJob = nullptr;
+            mQueueStateValid = false;
+            BroadcastSyncMsg("song_queue_updated");
         }
+        b = true;
     }
-leave:
-    // Notify SmartGlass app if party data changed
     if (b) {
-        DataNode party("party");
-        DataNode updated("updated");
-        ThePlatformMgr.SmartGlassSend(0, DataArrayPtr(updated, party));
+        ThePlatformMgr.SmartGlassSend(0, DataArrayPtr("updated", "party"));
     }
     return 1;
 }
 
 void PartyModeMgr::FinalizeTeam(int team) {
-    std::vector<PartyModePlayer *> *teamPlayers;
-    PseudoRandomPicker<int> *teamPicker;
+    std::vector<PartyModePlayer *> *players;
+    PseudoRandomPicker<int> *picker;
     switch (team) {
     case 1:
-        teamPlayers = &mTeam1Players;
-        teamPicker = &mTeam1PlayerPicker;
+        players = &mTeam1Players;
+        picker = &mTeam1PlayerPicker;
         break;
     case 2:
-        teamPlayers = &mTeam2Players;
-        teamPicker = &mTeam2PlayerPicker;
+        players = &mTeam2Players;
+        picker = &mTeam2PlayerPicker;
         break;
+
     default:
-        MILO_ASSERT(team == 1 || team == 2, 0x1EE);
+        MILO_ASSERT(team == 1 || team == 2, 0x1ee);
         break;
     }
-    std::vector<int> indices;
-    int numTeamPlayers = teamPlayers->size();
-    int offset = mPlayers.size() - numTeamPlayers;
-    indices.resize(numTeamPlayers);
-    for (int i = 0; i < numTeamPlayers; i++) {
-        indices[i] = i + offset;
+
+    std::vector<int> vals;
+    int numPlayers = players->size();
+    int offset = mPlayers.size() - numPlayers;
+    vals.resize(numPlayers);
+    for (int i = 0; i < numPlayers; i++) {
+        vals[i] = i + offset;
     }
-    teamPicker->AddItems(indices);
-    teamPicker->mNumGets = 0;
-    teamPicker->mMode = 2;
+    picker->AddItems(vals);
+    picker->SetNumGets(0);
+    picker->SetMode(2);
 }
 
 void PartyModeMgr::FinalizeParty() {
@@ -1525,66 +1506,54 @@ void PartyModeMgr::FinalizeParty() {
     static Symbol use_events_per_player("use_events_per_player");
     static Symbol events_per_player("events_per_player");
     static Symbol total_events("total_events");
-    DataArray *numEventsArr = mPartyModeCfg->FindArray(crew_showdown_num_events, true);
-    int team2Size = mTeam2Players.size();
+    DataArray *numEventArray = mPartyModeCfg->FindArray(crew_showdown_num_events);
     int team1Size = mTeam1Players.size();
-    int maxTeamSize = team2Size;
-    if (team2Size <= team1Size) {
-        maxTeamSize = team1Size;
-    }
-    DataArray *usePerPlayerArr = numEventsArr->FindArray(use_events_per_player, true);
-    int usePerPlayer = usePerPlayerArr->Node(1).Int(usePerPlayerArr);
-    if (usePerPlayer != 0) {
-        DataArray *perPlayerArr = numEventsArr->FindArray(events_per_player, true);
-        int perPlayer = perPlayerArr->Node(1).Int(perPlayerArr);
-        mRoundsTotal = perPlayer * maxTeamSize;
+    int team2Size = mTeam2Players.size();
+    int pickSize = Max(team1Size, team2Size);
+    int perPlayerVal = numEventArray->FindArray(use_events_per_player)->Int(1);
+    if (perPlayerVal != 0) {
+        mRoundsTotal = numEventArray->FindArray(events_per_player)->Int(1) * pickSize;
     } else {
-        DataArray *totalArr = numEventsArr->FindArray(total_events, true);
-        mRoundsTotal = totalArr->Node(maxTeamSize).Int(totalArr);
+        mRoundsTotal = numEventArray->FindArray(total_events)->Int(pickSize);
     }
     mRoundsUntilShowdown = mRoundsTotal;
-    mMaxPointsPerEvent = (float)mRoundsTotal + 1.0f;
-    static Symbol six_star_bonus("six_star_bonus");
-    DataArray *sixStarArr = mEventScoring->FindArray(six_star_bonus, true);
-    mSixStarBonus = sixStarArr->Node(1).Float(sixStarArr);
+    mMaxPointsPerEvent = mRoundsTotal + 1.0f;
+    mSixStarBonus = mEventScoring->FindArray("six_star_bonus")->Float(1);
     static Symbol player_sequences("player_sequences");
-    DataArray *playerSeqArr = mPartyModeCfg->FindArray(player_sequences, true);
-    char buf[8];
-    int minTeam = team2Size;
-    int maxTeam = team1Size;
-    if (team1Size <= team2Size) {
-        minTeam = team1Size;
-        maxTeam = team2Size;
-    }
-    sprintf(buf, "%dv%d", minTeam, maxTeam);
-    mPlayerSequences = playerSeqArr->FindArray(Symbol(buf), true);
-    if (mPlayerSequences != nullptr) {
-        TheDebug << FormatString("There is a player sequence. There will be no problems.\n").Str();
+    DataArray *playerSeqArray = mPartyModeCfg->FindArray(player_sequences);
+    char buf[4] = { 0 };
+    sprintf(
+        buf,
+        "%dv%d",
+        team1Size <= team2Size ? team1Size : team2Size,
+        team1Size <= team2Size ? team2Size : team1Size
+    );
+    Symbol bufSym(buf);
+    mPlayerSequences = playerSeqArray->FindArray(bufSym);
+    if (mPlayerSequences) {
+        MILO_LOG("There is a player sequence. There will be no problems.\n");
     } else {
-        FormatString fmt("Not enough player sequence. There will be problems.");
-        TheDebug.Notify(fmt.Str());
+        MILO_NOTIFY("Not enough player sequence. There will be problems.");
     }
     static Symbol dj_logic("dj_logic");
     static Symbol number_of_songs("number_of_songs");
     static Symbol intensity_sequence("intensity_sequence");
     static Symbol bucket_sequence("bucket_sequence");
-    DataArray *djLogicArr = mPartyModeCfg->FindArray(dj_logic, true);
-    DataArray *numSongsArr = djLogicArr->FindArray(number_of_songs, true);
-    DataArray *roundsArr = numSongsArr->FindArray(mRoundsTotal, false);
-    if (roundsArr != nullptr) {
-        mPlaytestEventSequences = roundsArr->FindArray(intensity_sequence, true);
-        if (mPlaytestEventSequences != nullptr) {
-            TheDebug << FormatString("There is enough DJ logic. There will be no problems.\n").Str();
+    DataArray *djArray = mPartyModeCfg->FindArray(dj_logic);
+    DataArray *numSongsArray = djArray->FindArray(number_of_songs);
+    DataArray *roundsTotalArray = numSongsArray->FindArray(mRoundsTotal, false);
+    if (roundsTotalArray) {
+        mPlaytestEventSequences = roundsTotalArray->FindArray(intensity_sequence);
+        if (mPlaytestEventSequences) {
+            MILO_LOG("There is enough DJ logic. There will be no problems.\n");
         } else {
-            FormatString fmt("Not enough DJ logic. There will be problems.");
-            TheDebug.Notify(fmt.Str());
+            MILO_NOTIFY("Not enough DJ logic. There will be problems.");
         }
-        mEventBucketSequences = roundsArr->FindArray(bucket_sequence, true);
-        if (mEventBucketSequences != nullptr) {
-            TheDebug << FormatString("There is mode bucket. There will be no problems.\n").Str();
+        mEventBucketSequences = roundsTotalArray->FindArray(bucket_sequence);
+        if (mEventBucketSequences) {
+            MILO_LOG("There is mode bucket. There will be no problems.\n");
         } else {
-            FormatString fmt("Not enough mode bucket. There will be problems.");
-            TheDebug.Notify(fmt.Str());
+            MILO_NOTIFY("Not enough mode bucket. There will be problems.");
         }
     } else {
         mPlaytestEventSequences = nullptr;
@@ -1597,11 +1566,16 @@ void PartyModeMgr::FinalizeParty() {
     static Symbol difficulty("difficulty");
     SendDataPoint(
         "crew_throwdown/finalize",
-        team_1_size, team1Size,
-        team_2_size, team2Size,
-        team_1_crew, mLeftTeamCrew,
-        team_2_crew, mRightTeamCrew,
-        difficulty, (int)mDifficulty
+        team_1_size,
+        team1Size,
+        team_2_size,
+        team2Size,
+        team_1_crew,
+        Symbol(mLeftTeamCrew),
+        team_2_crew,
+        Symbol(mRightTeamCrew),
+        difficulty,
+        (int)mDifficulty
     );
     SetCurrEvent();
 }
@@ -1669,50 +1643,37 @@ void PartyModeMgr::PruneHistory() {
     }
 }
 
-DataNode PartyModeMgr::OnSetSongAndDefaults(DataArray *_msg) {
-    int sz = _msg->Size();
-    Symbol mode;
-    Symbol song;
-    if (sz == 3) {
-        mode = Symbol(gNullStr);
-        song = _msg->Sym(2);
-        SetSongAndDefaults(song, mode, false);
-    } else if (sz == 4) {
-        mode = _msg->Sym(3);
-        song = _msg->Sym(2);
-        SetSongAndDefaults(song, mode, false);
-    } else if (sz == 5) {
-        int rawForce = _msg->Node(4).Int(_msg);
-        mode = _msg->Sym(3);
-        song = _msg->Sym(2);
-        SetSongAndDefaults(song, mode, rawForce != 0);
+DataNode PartyModeMgr::OnSetSongAndDefaults(DataArray *arr) {
+    int size = arr->Size();
+    if (size == 3) {
+        SetSongAndDefaults(arr->Sym(2), gNullStr, false);
+    } else if (size == 4) {
+        SetSongAndDefaults(arr->Sym(2), arr->Sym(3), false);
+    } else if (size == 5) {
+        SetSongAndDefaults(arr->Sym(2), arr->Sym(3), arr->Int(4) != 0);
     } else {
-        auto _tmp6 = Symbol(gNullStr);
-        song = Symbol(gNullStr);
-        mode = _tmp6;
-        SetSongAndDefaults(song, mode, false);
+        SetSongAndDefaults(gNullStr, gNullStr, false);
     }
-    return DataNode(0);
+    return 0;
 }
 
 void PartyModeMgr::ResetSongs() {
-    int count = (int)mRandomSongPool.size();
-    Symbol shortname;
-    std::vector<Symbol> songNames(count, Symbol());
-    mSubModeSongPicker.mItems.resize(0, Symbol());
-    for (int i = 0; i < count; i++) {
-        songNames[i] = TheHamSongMgr.GetShortNameFromSongID(mRandomSongPool[i]);
+    int size = (int)mRandomSongPool.size();
+    std::vector<Symbol> songs(size, Symbol());
+    mSubModeSongPicker.Clear();
+    for (int i = 0; i < size; i++) {
+        songs[i] = TheHamSongMgr.GetShortNameFromSongID(mRandomSongPool[i]);
     }
-    mSubModeSongPicker.AddItems(songNames);
+    mSubModeSongPicker.AddItems(songs);
     mSubModeSongPicker.Randomize();
     for (int i = 0; i < 4; i++) {
-        mSubModeSongPickers[i].mItems.resize(0, Symbol());
+        mSubModeSongPickers[i].Clear();
     }
-    for (int i = 0; i < count; i++) {
+    for (int i = 0; i < size; i++) {
         const HamSongMetadata *data = TheHamSongMgr.Data(mRandomSongPool[i]);
-        int rank = data->DJIntensityRank();
-        shortname = TheHamSongMgr.GetShortNameFromSongID(mRandomSongPool[i]);
-        mSubModeSongPickers[rank - 1].mItems.push_back(shortname);
+        mSubModeSongPickers[data->DJIntensityRank() - 1].AddItem(
+            TheHamSongMgr.GetShortNameFromSongID(mRandomSongPool[i])
+        );
     }
     for (int i = 0; i < 4; i++) {
         if (mSubModeSongPickers[i].Size() > 0) {
@@ -1763,38 +1724,37 @@ toggle:
     ToggleIncludedMode(mode);
 }
 
-void PartyModeMgr::ResetModes(bool resetAll) {
+void PartyModeMgr::ResetModes(bool b) {
     unk40 = true;
-    PseudoRandomPicker<Symbol> &_ref0 = mModePicker;
-    _ref0.mItems.resize(0, Symbol());
-    int isPartyMode = TheHamProvider->Property(("is_in_party_mode"))->Int();
-    DataArray *cfgArr;
+    mModePicker.Clear();
+    int isPartyMode = TheHamProvider->Property("is_in_party_mode")->Int();
+    DataArray *eventArr;
     if (isPartyMode) {
-        cfgArr = mPartyModeCfg->FindArray(Symbol("crew_showdown_weighted_event_types"));
+        eventArr = mPartyModeCfg->FindArray("crew_showdown_weighted_event_types");
     } else {
-        cfgArr = mPartyModeCfg->FindArray(Symbol("party_mode_weighted_event_types"));
+        eventArr = mPartyModeCfg->FindArray("party_mode_weighted_event_types");
     }
-    if (resetAll) {
+
+    if (b) {
         for (int i = 0; i < 5; i++) {
             ToggleIncludedModeOn(GetModeNameFromEnum(i), false);
         }
     }
-    for (int i = 1; i < cfgArr->Size(); i++) {
-        DataArray *subArr = cfgArr->Node(i).Array(cfgArr);
-        if (subArr) {
-            Symbol sym = subArr->Sym(0);
-            int weight = subArr->Node(2).Int(subArr);
-            if ((resetAll && weight != 0) || IsModeIncluded(sym)) {
-                int count = subArr->Node(1).Int(subArr);
-                for (int j = 0; j < count; j++) {
-                    _ref0.mItems.insert(_ref0.mItems.end(), sym);
+    for (int i = 1; i < eventArr->Size(); i++) {
+        DataArray *arr = eventArr->Array(i);
+        if (arr) {
+            Symbol s = arr->Sym(0);
+            int val = arr->Int(2);
+            if ((b && val != 0) || IsModeIncluded(s)) {
+                int size = arr->Int(1);
+                for (int j = 0; j < size; j++) {
+                    mModePicker.AddItem(s);
                 }
-                ToggleIncludedModeOn(sym, true);
+                ToggleIncludedModeOn(s, true);
             }
         }
     }
-    _ref0.mNumGets = 0;
-    _ref0.mMode = 2;
+    mModePicker.ResetModes();
     unk40 = false;
 }
 
@@ -1890,5 +1850,26 @@ void PartyModeMgr::UpdateScores() {
     }
 }
 
-// TODO: implement SetSongsFromPlaylist
-void PartyModeMgr::SetSongsFromPlaylist() {}
+void PartyModeMgr::SetSongsFromPlaylist() {
+    MILO_ASSERT(IsUsingPlaylist(), 0x70d);
+    mSubModeSongPicker.Clear();
+    int numSongs = mPlaylist->GetNumSongs();
+    std::vector<int> songs(numSongs);
+    bool b = true;
+    for (int i = 0; i < numSongs; i++) {
+        int songID = mPlaylist->GetSong(i);
+        Symbol shortname = TheHamSongMgr.GetShortNameFromSongID(songID, false);
+        if (!shortname.Null()) {
+            mSubModeSongPicker.AddItem(shortname);
+            b = b && mCurrEvent && mCurrEvent->mSongID != songID;
+        }
+    }
+    mSubModeSongPicker.SetMode(0);
+    if (b) {
+        Symbol s;
+        int songID;
+        DetermineSubModeSong(&s, &songID);
+        mCurrEvent->mSongName = s;
+        mCurrEvent->mSongID = songID;
+    }
+}
