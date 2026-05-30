@@ -31,26 +31,24 @@ inline double __fsel(double a, double b, double c) { return a >= 0.0 ? b : c; }
 #include "xdk/LIBCMT/ppcintrinsics.h"
 #endif
 
-RndTex *gImpostorTex[kNumLods];
-RndCam *gImpostorCamera;
-RndMat *gImpostorMat;
-int gNumCrowd;
-WorldCrowd *gParent;
+static RndTex *gImpostorTex[kNumLods] = { nullptr };
+static RndCam *gImpostorCamera = nullptr;
+static RndMat *gImpostorMat = nullptr;
+static int gNumCrowd = 0;
+static WorldCrowd *gParent = nullptr;
 #ifdef HX_NATIVE
 static std::unordered_map<Character *, RndTex *> sImpostorCache;
 #endif
 
 namespace {
     void GetMeshShaderFlags(RndMat *mat, std::list<unsigned int> &flags) {
-        ObjRef::iterator it = mat->Refs().begin();
-        ObjRef::iterator itEnd = mat->Refs().end();
-        for (; it != itEnd; ++it) {
-            RndMesh *mesh = dynamic_cast<RndMesh *>(it->RefOwner());
-            if (mesh) {
-                unsigned int flag = 0;
-                flag |= mesh->IsSkinned();
-                flag |= -(mesh->HasAOCalc()) & 2;
-                flags.push_back(flag);
+        FOREACH (it, mat->Refs()) {
+            RndMesh *cur = dynamic_cast<RndMesh *>(it->RefOwner());
+            if (cur) {
+                // bit 1 = skinned
+                // bit 2 = ao calc
+                unsigned int mask = cur->IsSkinned() | (cur->HasAOCalc() ? 2 : 0);
+                flags.push_back(mask);
             }
         }
         flags.sort();
@@ -105,14 +103,13 @@ BinStreamRev &operator>>(BinStreamRev &d, WorldCrowd::CharData &cd) {
 #pragma region WorldCrowd
 
 WorldCrowd::WorldCrowd()
-    : mPlacementMesh(this), mCharacters(this), mNum(0), mCrowdRotate((CrowdRotate)0), mForce3DCrowd(0),
+    : mPlacementMesh(this), mCharacters(this), mNum(0), mCrowdRotate(), mForce3DCrowd(0),
       mShow3DOnly(0), mCharFullness(1), mFlatFullness(1), mLod(0), mEnviron(this),
-      mEnviron3D(this), mFocus(this), mCharForceLod(kLODPerFrame), unkd0(0),
+      mEnviron3D(this), mFocus(this), mCharForceLod(kLODPerFrame), unkd0(1),
       mModifyStamp(0) {
     if (gNumCrowd++ == 0) {
         int w, h, bpp;
-        auto _tmp0 = GetGfxMode();
-        if (_tmp0 == kNewGfx) {
+        if (GetGfxMode() == kNewGfx) {
             w = 256;
             h = 512;
             bpp = 32;
@@ -121,15 +118,16 @@ WorldCrowd::WorldCrowd()
             h = 256;
             bpp = 16;
         }
-        for (int i = 0; i < kNumLods; i++) {
-            gImpostorTex[i] = Hmx::Object::New<RndTex>();
-            gImpostorTex[i]->SetBitmap(w, h, bpp, RndTex::kRendered, true, nullptr);
+        for (int i = 0; i < kNumLods; i++, w >>= 1, h >>= 1) {
+            RndTex *tex = Hmx::Object::New<RndTex>();
+            tex->SetBitmap(w, h, bpp, RndTex::kRendered, true, nullptr);
+            gImpostorTex[i] = tex;
         }
         RELEASE(gImpostorMat);
         RndMat *mat = Hmx::Object::New<RndMat>();
         gImpostorMat = mat;
-        mat->SetUseEnv(true);
         mat->SetPreLit(false);
+        mat->SetUseEnv(true);
         mat->SetBlend(RndMat::kBlendSrc);
         mat->SetZMode(kZModeNormal);
         mat->SetAlphaCut(true);
@@ -137,8 +135,8 @@ WorldCrowd::WorldCrowd()
         mat->SetTexWrap(kTexWrapClamp);
         mat->SetPerPixelLit(false);
         mat->SetPointLights(true);
-        gImpostorCamera = Hmx::Object::New<RndCam>();
         CreateAndSetMetaMat(mat);
+        gImpostorCamera = Hmx::Object::New<RndCam>();
         SetMatAndCameraLod();
     }
 }
@@ -548,9 +546,8 @@ bool WorldCrowd::Crowd3DExists() {
 }
 
 void WorldCrowd::SetMatAndCameraLod() {
-    RndTex *tex = gImpostorTex[mLod];
-    gImpostorCamera->SetTargetTex(tex);
-    gImpostorMat->SetDiffuseTex(tex);
+    gImpostorCamera->SetTargetTex(gImpostorTex[mLod]);
+    gImpostorMat->SetDiffuseTex(gImpostorTex[mLod]);
 }
 
 void WorldCrowd::CreateMeshes() {
@@ -653,90 +650,89 @@ RndMesh *WorldCrowd::BuildBillboard(Character *c, float height) {
 void SetMatColorFlags(ObjPtrList<RndMat, ObjectDir> &, BaseMaterial::ColorModFlags, std::vector<Hmx::Color> *);
 
 void WorldCrowd::Draw3DChars() {
-    if (!Crowd3DExists()) return;
-    // Use mEnviron3D if it has a pointer, else mEnviron
-    RndEnviron *env;
-    env = mEnviron3D ? mEnviron3D : mEnviron;
-    // Save and clear the environ's use-approx-global flag
-    bool savedApprox = true;
-    if (env) {
-        savedApprox = env->UsesApproxGlobal();
-        env->SetUseApproxGlobal(false);
-    }
-    RndEnvironTracker tracker(env, nullptr);
-    ObjList<CharData>::iterator charIt = mCharacters.begin();
-    auto charsEnd = mCharacters.end();
-    for (; charIt != charsEnd; ++charIt) {
-        Character *curChar = charIt->mDef.mChar;
-        if (!curChar || !charIt->mMMesh) continue;
-        int numChars = (int)charIt->m3DChars.size();
-        for (int i = 0; (unsigned int)i < numChars; i++) {
-            Apply3DCharXfm(charIt, i, RndCam::Current());
-#ifdef HX_NATIVE
-            // 3D crowd characters not used in normal rendering —
-            // Force3DCrowd is always false on native, so m3DChars is empty.
-            // The impostor billboard path in DrawShowing handles all crowd rendering.
-            (void)i;
-            break;
-#else
-            if (charIt->mDef.mUseRandomColor) {
-                SetMatColorFlags(charIt->mDef.mMats, RndMat::kColorModModulate, &charIt->m3DChars[i].mColors);
-            }
-            bool savedSelfShadow = curChar->SelfShadow();
-            bool savedUnk252 = *(bool *)((char *)curChar + 0x252);
-            bool savedUnk251 = *(bool *)((char *)curChar + 0x251);
-            bool isInGame = *(bool *)((char *)&TheRnd + 0x143);
-            if (isInGame) {
-                curChar->SetSelfShadow(false);
-                *(bool *)((char *)curChar + 0x252) = false;
-                *(bool *)((char *)curChar + 0x251) = false;
-            }
-            if (mCharForceLod != kLODPerFrame) {
-                curChar->SetLodType(mCharForceLod);
-            }
-            curChar->DrawShowing();
-            if (mCharForceLod != kLODPerFrame) {
-                curChar->SetLodType(kLODPerFrame);
-            }
-            curChar->SetSelfShadow(savedSelfShadow);
-            *(bool *)((char *)curChar + 0x252) = savedUnk252;
-            *(bool *)((char *)curChar + 0x251) = savedUnk251;
-#endif
+    if (Crowd3DExists()) {
+        RndEnviron *env = mEnviron3D ? mEnviron3D : mEnviron;
+        bool global = true;
+        if (env) {
+            global = env->UsesApproxGlobal();
+            env->SetUseApproxGlobal(false);
         }
-    }
-    if (env) {
-        env->SetUseApproxGlobal(savedApprox);
+        RndEnvironTracker tracker(env, nullptr);
+        FOREACH (it, mCharacters) {
+            Character *curChar = it->mDef.mChar;
+            RndMultiMesh *curMMesh = it->mMMesh;
+            if (curChar && curMMesh) {
+                for (int i = 0; i != it->m3DChars.size(); i++) {
+                    auto _tmp0 = RndCam::Current();
+                    Apply3DCharXfm(it, i, _tmp0);
+#ifdef HX_NATIVE
+                    // 3D crowd characters not used in normal rendering —
+                    // Force3DCrowd is always false on native, so m3DChars is empty.
+                    // The impostor billboard path in DrawShowing handles all crowd rendering.
+                    (void)i;
+                    break;
+#else
+                    if (it->mDef.mUseRandomColor) {
+                        SetMatColorFlags(
+                            it->mDef.mMats,
+                            RndMat::kColorModModulate,
+                            &it->m3DChars[i].mColors
+                        );
+                    }
+                    bool selfShadow = curChar->SelfShadow();
+                    bool floorShadow = curChar->FloorShadow();
+                    bool spotCutout = curChar->SpotCutout();
+                    if (TheRnd.InGame()) {
+                        curChar->SetSelfShadow(false);
+                        curChar->SetFloorShadow(false);
+                        curChar->SetSpotCutout(false);
+                    }
+                    if (mCharForceLod != kLODPerFrame) {
+                        curChar->SetLodType(mCharForceLod);
+                    }
+                    curChar->Draw();
+                    if (mCharForceLod != kLODPerFrame) {
+                        curChar->SetLodType(kLODPerFrame);
+                    }
+                    curChar->SetSelfShadow(selfShadow);
+                    curChar->SetFloorShadow(floorShadow);
+                    curChar->SetSpotCutout(spotCutout);
+#endif
+                }
+            }
+        }
+        if (env) {
+            env->SetUseApproxGlobal(global);
+        }
     }
 }
 
-void WorldCrowd::AssignRandomColors(bool incrementStamp) {
-    if (incrementStamp) {
-        mModifyStamp++;
+void WorldCrowd::AssignRandomColors(bool b1) {
+    if (b1) {
+        unkd0++;
     }
     FOREACH (it, mCharacters) {
-        if (it->mDef.mChar && it->mMMesh && it->m3DChars.size() > 0) {
-            std::vector<ColorPalette *> colorPaletteList;
+        if (it->mDef.mChar && it->mMMesh && !it->m3DChars.empty()) {
+            std::vector<ColorPalette *> colorPalettes;
             it->mDef.mUseRandomColor = false;
-            for (int i = 0; i < 3; ++i) {
-                auto _tmp1 = MakeString("random%d.pal", i + 1);
-                ColorPalette *randPal = it->mDef.mChar->Find<ColorPalette>(
-                    _tmp1, false
-                );
-                if (randPal) {
-                    colorPaletteList.push_back(randPal);
+            for (int i = 0; i < 3; i++) {
+                const char *str = MakeString("random%d.pal", i + 1);
+                ColorPalette *p = it->mDef.mChar->Find<ColorPalette>(str, false);
+                if (p) {
+                    colorPalettes.push_back(p);
                 }
             }
-            if (colorPaletteList.size() > 0) {
-                for (unsigned int i = 0; i < it->m3DChars.size(); ++i) {
-                    CharData::Char3D &char3D = it->m3DChars[i];
-                    char3D.mColors.clear();
+            if (colorPalettes.size() == 3) {
+                for (int i = 0; i != it->m3DChars.size(); i++) {
+                    CharData::Char3D &curChar3D = it->m3DChars[i];
+                    curChar3D.mColors.clear();
+                    Rand rand(curChar3D.mIdx + unkd0);
                     it->mDef.mUseRandomColor = true;
-                    while (char3D.mColors.size() < 3) {
-                        ColorPalette *randPal =
-                            colorPaletteList[RandomInt(0, colorPaletteList.size())];
-                        Hmx::Color randColor =
-                            randPal->GetColor(RandomInt(0, randPal->NumColors()));
-                        char3D.mColors.push_back(randColor);
+                    for (int j = 0; j < 3; j++) {
+                        ColorPalette *curPalette = colorPalettes[j];
+                        Hmx::Color c =
+                            curPalette->GetColor(rand.Int(0, curPalette->NumColors()));
+                        curChar3D.mColors.push_back(c);
                     }
                 }
             }
@@ -745,23 +741,18 @@ void WorldCrowd::AssignRandomColors(bool incrementStamp) {
 }
 
 void WorldCrowd::Reset3DCrowd() {
-    SetFullness(1.0f, mCharFullness);
+    SetFullness(1, mCharFullness);
     FOREACH (it, mCharacters) {
-        RndMultiMesh *multiMesh = it->mMMesh;
-        if (multiMesh) {
-            InstanceList &instances = multiMesh->Instances();
-            InstanceList::iterator instIt = instances.begin();
-            int curInstIdx = 0;
-            for (int i = 0; (unsigned int)i != it->m3DCharsCreated.size(); i++) {
-                int targetInstIdx = it->m3DCharsCreated[i].mIdx;
-                while (curInstIdx != targetInstIdx) {
-                    ++instIt;
-                    curInstIdx++;
+        if (it->mMMesh) {
+            InstanceList &insts = it->mMMesh->Instances();
+            int i6 = 0;
+            InstanceList::iterator inst = insts.begin();
+            for (int i = 0; i != it->m3DCharsCreated.size(); i++) {
+                int cap = it->m3DCharsCreated[i].mIdx;
+                for (; i6 != cap; i6++) {
+                    ++inst;
                 }
-                RndMultiMesh::Instance inst(it->m3DCharsCreated[i].mXfm);
-                instIt = instances.insert(instIt, inst);
-                ++instIt;
-                curInstIdx++;
+                inst = insts.insert(inst, it->m3DCharsCreated[i].mXfm);
             }
         }
         it->m3DCharsCreated.clear();
@@ -816,96 +807,51 @@ void WorldCrowd::SetFullness(float flatFullness, float charFullness) {
 }
 
 void WorldCrowd::Set3DCharXfm(
-    const std::list<CharData>::iterator &charItr, int charIdx, const Transform &xfm
+    const std::list<CharData>::iterator &charItr, int char3DIdx, const Transform &xfm
 ) {
-    MILO_ASSERT(charIdx >= 0 && charIdx < (int)charItr->m3DChars.size(), 0x289);
-    CharData::Char3D &char3D = charItr->m3DChars[charIdx];
-    char3D.mXfm = xfm;
-    // Also update the matching entry in m3DCharsCreated (matched by handle)
-    WorldCrowd3DCharHandle *handle = char3D.mHandle;
-    for (int i = 0; i < (int)charItr->m3DCharsCreated.size(); i++) {
-        if (charItr->m3DCharsCreated[i].mHandle == handle) {
+    MILO_ASSERT_RANGE(char3DIdx, 0, charItr->m3DChars.size(), 0x289);
+    charItr->m3DChars[char3DIdx].mXfm = xfm;
+    bool foundCreated = false;
+    for (int i = 0; i < charItr->m3DCharsCreated.size(); i++) {
+        if (charItr->m3DChars[char3DIdx].mIdx == charItr->m3DCharsCreated[i].mIdx) {
             charItr->m3DCharsCreated[i].mXfm = xfm;
+            foundCreated = true;
             break;
         }
     }
-    MILO_ASSERT(true, 0x297); // always passes - just for line number
+    MILO_ASSERT(foundCreated, 0x297);
 }
 
 void WorldCrowd::Apply3DCharXfm(
-    const std::list<CharData>::iterator &charItr, int charIdx, RndCam *cam
+    const std::list<CharData>::iterator &charItr, int char3DIdx, RndCam *cam
 ) {
-    MILO_ASSERT(charIdx >= 0 && charIdx < (int)charItr->m3DChars.size(), 0x29d);
-    int charHandle = (int)charItr->m3DChars[charIdx].mHandle;
-    if (charHandle == 0) return;
-    RndTransformable *environ = mEnviron;
-    if (environ == 0) return;
-
-    float charPosX = charItr->m3DChars[charIdx].mXfm.v.x;
-    float charPosY = charItr->m3DChars[charIdx].mXfm.v.y;
-    float charPosZ = charItr->m3DChars[charIdx].mXfm.v.z;
-    float charRadiusAdjust = -(charItr->mDef.mRadius * 0.5f - charItr->m3DChars[charIdx].mXfm.m.z.z);
-
-    bool useCam = (mCrowdRotate != 0) && (cam != 0);
-    if ((!useCam) && (!mFocus)) {
-        Transform newXfm = environ->WorldXfm();
-        ((WorldCrowd3DCharHandle *)charHandle)->SetWorldXfm(newXfm);
-        return;
+    MILO_ASSERT_RANGE(char3DIdx, 0, charItr->m3DChars.size(), 0x29D);
+    Character *itrChar = charItr->mDef.mChar;
+    if (itrChar && mPlacementMesh) {
+        Transform xfm;
+        xfm.v = charItr->m3DChars[char3DIdx].mXfm.v;
+        xfm.v.z -= charItr->mDef.mHeight / 2;
+        bool b8 = mCrowdRotate != kCrowdRotateNone && cam;
+        if (!b8 && !mFocus) {
+            xfm.m = mPlacementMesh->WorldXfm().m;
+            itrChar->SetWorldXfm(xfm);
+            return;
+        }
+        // else...
+        xfm.m.z = mPlacementMesh->WorldXfm().m.z;
+        if (mCrowdRotate == kCrowdRotateFace) {
+            Cross(xfm.m.z, cam->WorldXfm().m.y, xfm.m.x);
+        } else if (mCrowdRotate == kCrowdRotateAway) {
+            Cross(cam->WorldXfm().m.y, xfm.m.z, xfm.m.x);
+        } else {
+            const Vector3 &v = mFocus->WorldXfm().v;
+            Vector3 diff(v.x - xfm.v.x, v.y - xfm.v.y, 0);
+            Cross(diff, xfm.m.z, xfm.m.x);
+        }
+        Normalize(xfm.m.x, xfm.m.x);
+        Cross(xfm.m.z, xfm.m.x, xfm.m.y);
+        itrChar->SetWorldXfm(xfm);
     }
-
-    auto _val0 = environ->WorldXfm();
-    float envY_x = _val0.m.y.x;
-    float envY_y = _val0.m.y.y;
-    float envY_z = _val0.m.y.z;
-
-    float forwardDir_x, forwardDir_y, forwardDir_z;
-
-    if (mCrowdRotate == 1) {
-        const Transform &camXfm = cam->WorldXfm();
-        forwardDir_x = camXfm.m.z.y * envY_x - camXfm.m.z.x * envY_y;
-        forwardDir_y = camXfm.m.z.x * envY_z - camXfm.m.z.z * envY_x;
-        forwardDir_z = camXfm.m.z.z * envY_y - camXfm.m.z.y * envY_z;
-    } else if (mCrowdRotate == 2) {
-        const Transform &camXfm = cam->WorldXfm();
-        forwardDir_x = camXfm.m.z.x * envY_y - camXfm.m.z.y * envY_x;
-        forwardDir_y = camXfm.m.z.z * envY_x - camXfm.m.z.x * envY_z;
-        forwardDir_z = camXfm.m.z.y * envY_z - camXfm.m.z.z * envY_y;
-    } else {
-        const Transform &focusXfm = mFocus->WorldXfm();
-        forwardDir_x = focusXfm.v.x - charPosX;
-        forwardDir_y = focusXfm.v.y - charPosY;
-        forwardDir_z = focusXfm.v.y * envY_z - envY_y * 0.0f;
-        float fx = forwardDir_x, fy = forwardDir_y;
-        forwardDir_x = fy * envY_z - envY_y * 0.0f;
-        forwardDir_y = envY_z * fx - envY_x * 0.0f;
-        forwardDir_z = envY_y * fx - fy * envY_x;
-    }
-
-    Vector3 forwardVec;
-    forwardVec.x = forwardDir_x;
-    forwardVec.y = forwardDir_y;
-    forwardVec.z = forwardDir_z;
-    Normalize(forwardVec, forwardVec);
-
-    float rightDir_x = forwardVec.z * envY_y - forwardVec.y * envY_z;
-    float rightDir_y = forwardVec.x * envY_z - forwardVec.z * envY_x;
-    float rightDir_z = forwardVec.y * envY_x - forwardVec.x * envY_y;
-
-    Transform newXfm;
-    newXfm.m.x.x = forwardVec.x;
-    newXfm.m.x.y = forwardVec.y;
-    newXfm.m.x.z = forwardVec.z;
-    newXfm.m.y.x = envY_x;
-    newXfm.m.y.y = envY_y;
-    newXfm.m.y.z = envY_z;
-    newXfm.m.z.x = rightDir_x;
-    newXfm.m.z.y = rightDir_y;
-    newXfm.m.z.z = rightDir_z;
-    newXfm.v.x = charPosX;
-    newXfm.v.y = charPosY;
-    newXfm.v.z = charPosZ;
-
-    ((WorldCrowd3DCharHandle *)charHandle)->SetWorldXfm(newXfm);
 }
 
 void WorldCrowd::Set3DCharList(
