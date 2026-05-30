@@ -287,26 +287,24 @@ void CharBones::ScaleAdd(CharClip *clip, float f1, float f2, float f3) {
 }
 
 void CharBones::AddBoneInternal(const Bone &bone) {
-    Type type = TypeOf(bone.name);
-    int end = mCounts[type + 1];
-    int start = mCounts[type];
-    int pos = start;
-    if (start < end) {
-        const char *name = bone.name.Str();
-        do {
-            const char *existing = mBones[pos].name.Str();
-            if (existing == name) return;
-            if (strcmp(existing, name) >= 0) break;
-            pos++;
-        } while (pos < end);
+    CharBones::Type t = TypeOf(bone.name);
+    int idx;
+    for (idx = mCounts[t]; idx < mCounts[t + 1]; idx++) {
+        if (mBones[idx].name == bone.name) {
+            return;
+        }
+        if (strcmp(mBones[idx].name.Str(), bone.name.Str()) >= 0) {
+            break;
+        }
     }
-    mBones.insert(mBones.begin() + pos, 1, bone);
-    int size = TypeSize(type);
-    for (int i = type + 1; i < NUM_TYPES; i++) {
-        mCounts[i]++;
-        mOffsets[i] += size;
+    mBones.insert(mBones.begin() + idx, bone);
+    int size = TypeSize(t);
+    for (t = (Type)(t + 1); t < CharBones::NUM_TYPES; t = (Type)(t + 1)) {
+        mCounts[t]++;
+        mOffsets[t] += size;
     }
-    mTotalSize = (mOffsets[TYPE_END] + 0xFU) & 0xFFFFFFF0;
+    mTotalSize = mOffsets[TYPE_END] + 0xFU & 0xFFFFFFF0; // round up to the nearest 0x10,
+                                                         // alignment moment
 }
 
 const char *CharBones::StringVal(Symbol s) {
@@ -377,943 +375,999 @@ void CharBones::ScaleAddIdentity() {
 }
 
 // MARK: ScaleDown
-void CharBones::ScaleDown(CharBones &dst, float f) const {
-    const Bone *src = mBones.begin();
-    if (src == mBones.end())
-        return;
-
-    if (f == 0.0f) {
-        if (mCounts[TYPE_QUAT] > mCounts[TYPE_POS]) {
-            Bone *db_begin = dst.mBones.begin();
-            Vector3 *data = (Vector3 *)dst.mStart;
-            Bone *db = db_begin + dst.mCounts[TYPE_POS];
-            Bone *db_end = db_begin + dst.mCounts[TYPE_QUAT];
-            const Bone *src_end = src + mCounts[TYPE_QUAT];
-            while (true) {
-                while (db->name != src->name) {
-                    db++;
-                    if (db >= db_end) {
-                        TestDstComplain(src->name);
+void CharBones::ScaleDown(CharBones &bones, float f2) const {
+    if (!mBones.empty()) {
+        Bone *myBonesItr = (Bone *)&mBones[0];
+        if (f2 == 0) {
+            if (mCounts[TYPE_QUAT] > mCounts[TYPE_POS]) {
+                Bone *otherBonesItr = (Bone *)&bones.mBones[bones.mCounts[TYPE_POS]];
+                Bone *otherBonesEnd = (Bone *)&bones.mBones[bones.mCounts[TYPE_QUAT]];
+                Bone *myBonesEnd = (Bone *)&mBones[mCounts[TYPE_QUAT]];
+                Vector3 *otherVecItr = (Vector3 *)bones.mStart;
+                while (true) {
+                    while (otherBonesItr->name != myBonesItr->name) {
+                        otherBonesItr++;
+                        if (otherBonesItr >= otherBonesEnd) {
+                            TestDstComplain(myBonesItr->name);
+                            return;
+                        }
+                        otherVecItr++;
+                    }
+                    myBonesItr++;
+                    otherVecItr->Zero();
+                    otherBonesItr->weight = 0;
+                    if (myBonesItr == myBonesEnd) {
+                        break;
+                    }
+                    otherBonesItr++;
+                    if (otherBonesItr >= otherBonesEnd) {
+                        TestDstComplain(myBonesItr->name);
                         return;
                     }
-                    data++;
+                    otherVecItr++;
                 }
-                src++;
-                data->z = 0.0f;
-                data->y = 0.0f;
-                data->x = 0.0f;
-                db->weight = 0.0f;
-                if (src == src_end) goto zero_quat;
-                db++;
-                if (db >= db_end) {
-                    TestDstComplain(src->name);
-                    return;
-                }
-                data++;
             }
-        }
-    zero_quat:
-        if (mCounts[TYPE_ROTX] > mCounts[TYPE_QUAT]) {
-            Bone *db_begin = dst.mBones.begin();
-            Hmx::Quat *qdata = (Hmx::Quat *)(dst.mStart + dst.mOffsets[TYPE_QUAT]);
-            Bone *db = db_begin + dst.mCounts[TYPE_QUAT];
-            Bone *db_end = db_begin + dst.mCounts[TYPE_ROTX];
-            const Bone *src_end = mBones.begin() + mCounts[TYPE_ROTX];
-            while (true) {
-                while (db->name != src->name) {
-                    db++;
-                    if (db >= db_end) {
-                        TestDstComplain(src->name);
+            if (mCounts[TYPE_ROTX] > mCounts[TYPE_QUAT]) {
+                Bone *otherBonesItr = (Bone *)&bones.mBones[bones.mCounts[TYPE_QUAT]];
+                Bone *otherBonesEnd = (Bone *)&bones.mBones[bones.mCounts[TYPE_ROTX]];
+                Bone *myBonesEnd = (Bone *)&mBones[mCounts[TYPE_ROTX]];
+                Hmx::Quat *otherQuatItr =
+                    (Hmx::Quat *)(bones.mStart + bones.mOffsets[TYPE_QUAT]);
+                while (true) {
+                    while (otherBonesItr->name != myBonesItr->name) {
+                        otherBonesItr++;
+                        if (otherBonesItr >= otherBonesEnd) {
+                            TestDstComplain(myBonesItr->name);
+                            return;
+                        }
+                        otherQuatItr++;
+                    }
+                    myBonesItr++;
+                    otherQuatItr->Set(0, 0, 0, 0);
+                    otherBonesItr->weight = 0;
+                    if (myBonesItr == myBonesEnd) {
+                        break;
+                    }
+                    otherBonesItr++;
+                    if (otherBonesItr >= otherBonesEnd) {
+                        TestDstComplain(myBonesItr->name);
                         return;
                     }
-                    qdata++;
+                    otherQuatItr++;
                 }
-                src++;
-                qdata->x = 0.0f;
-                qdata->y = 0.0f;
-                qdata->z = 0.0f;
-                qdata->w = 0.0f;
-                db->weight = 0.0f;
-                if (src == src_end) goto zero_rot;
-                db++;
-                if (db >= db_end) {
-                    TestDstComplain(src->name);
-                    return;
-                }
-                qdata++;
             }
-        }
-    zero_rot:
-        if (mCounts[TYPE_END] > mCounts[TYPE_ROTX]) {
-            Bone *db_begin = dst.mBones.begin();
-            float *fdata = (float *)(dst.mStart + dst.mOffsets[TYPE_ROTX]);
-            Bone *db = db_begin + dst.mCounts[TYPE_ROTX];
-            Bone *db_end = db_begin + dst.mCounts[TYPE_END];
-            const Bone *src_end = mBones.begin() + mCounts[TYPE_END];
-            while (true) {
-                while (db->name != src->name) {
-                    db++;
-                    if (db >= db_end) {
-                        TestDstComplain(src->name);
+            if (mCounts[TYPE_END] > mCounts[TYPE_ROTX]) {
+                Bone *otherBonesItr = (Bone *)&bones.mBones[bones.mCounts[TYPE_ROTX]];
+                Bone *otherBonesEnd = (Bone *)&bones.mBones[bones.mCounts[TYPE_END]];
+                Bone *myBonesEnd = (Bone *)&mBones[mCounts[TYPE_END]];
+                float *otherRotItr = (float *)(bones.mStart + bones.mOffsets[TYPE_ROTX]);
+                while (true) {
+                    while (otherBonesItr->name != myBonesItr->name) {
+                        otherBonesItr++;
+                        if (otherBonesItr >= otherBonesEnd) {
+                            TestDstComplain(myBonesItr->name);
+                            return;
+                        }
+                        otherRotItr++;
+                    }
+                    myBonesItr++;
+                    *otherRotItr = 0;
+                    otherBonesItr->weight = 0;
+                    if (myBonesItr == myBonesEnd) {
                         return;
                     }
-                    fdata++;
+                    otherBonesItr++;
+                    if (otherBonesItr >= otherBonesEnd) {
+                        TestDstComplain(myBonesItr->name);
+                        return;
+                    }
+                    otherRotItr++;
                 }
-                src++;
-                *fdata = 0.0f;
-                db->weight = 0.0f;
-                if (src == src_end) return;
-                db++;
-                if (db >= db_end) {
-                    TestDstComplain(src->name);
-                    return;
-                }
-                fdata++;
             }
-        }
-    } else {
-        if (mCounts[TYPE_QUAT] > mCounts[TYPE_POS]) {
-            Bone *db_begin = dst.mBones.begin();
-            Vector3 *data = (Vector3 *)dst.mStart;
-            Bone *db = db_begin + dst.mCounts[TYPE_POS];
-            Bone *db_end = db_begin + dst.mCounts[TYPE_QUAT];
-            const Bone *src_end = src + mCounts[TYPE_QUAT];
-            while (true) {
-                while (db->name != src->name) {
-                    db++;
-                    if (db >= db_end) {
-                        TestDstComplain(src->name);
+        } else {
+            if (mCounts[TYPE_QUAT] > mCounts[TYPE_POS]) {
+                Bone *otherBonesItr = (Bone *)&bones.mBones[bones.mCounts[TYPE_POS]];
+                Bone *otherBonesEnd = (Bone *)&bones.mBones[bones.mCounts[TYPE_QUAT]];
+                Bone *myBonesEnd = (Bone *)&mBones[mCounts[TYPE_QUAT]];
+                Vector3 *otherVecItr = (Vector3 *)bones.mStart;
+                while (true) {
+                    while (otherBonesItr->name != myBonesItr->name) {
+                        otherBonesItr++;
+                        if (otherBonesItr >= otherBonesEnd) {
+                            TestDstComplain(myBonesItr->name);
+                            return;
+                        }
+                        otherVecItr++;
+                    }
+                    myBonesItr++;
+                    *otherVecItr *= f2;
+                    if (myBonesItr == myBonesEnd) {
+                        break;
+                    }
+                    otherBonesItr++;
+                    if (otherBonesItr >= otherBonesEnd) {
+                        TestDstComplain(myBonesItr->name);
                         return;
                     }
-                    data++;
+                    otherVecItr++;
                 }
-                src++;
-                data->x *= f;
-                data->y *= f;
-                data->z *= f;
-                if (src == src_end) goto scale_quat;
-                db++;
-                if (db >= db_end) {
-                    TestDstComplain(src->name);
-                    return;
-                }
-                data++;
             }
-        }
-    scale_quat:
-        if (mCounts[TYPE_ROTX] > mCounts[TYPE_QUAT]) {
-            Bone *db_begin = dst.mBones.begin();
-            Hmx::Quat *qdata = (Hmx::Quat *)(dst.mStart + dst.mOffsets[TYPE_QUAT]);
-            Bone *db = db_begin + dst.mCounts[TYPE_QUAT];
-            Bone *db_end = db_begin + dst.mCounts[TYPE_ROTX];
-            const Bone *src_end = mBones.begin() + mCounts[TYPE_ROTX];
-            while (true) {
-                while (db->name != src->name) {
-                    db++;
-                    if (db >= db_end) {
-                        TestDstComplain(src->name);
+            if (mCounts[TYPE_ROTX] > mCounts[TYPE_QUAT]) {
+                Bone *otherBonesItr = (Bone *)&bones.mBones[bones.mCounts[TYPE_QUAT]];
+                Bone *otherBonesEnd = (Bone *)&bones.mBones[bones.mCounts[TYPE_ROTX]];
+                Bone *myBonesEnd = (Bone *)&mBones[mCounts[TYPE_ROTX]];
+                Hmx::Quat *otherQuatItr =
+                    (Hmx::Quat *)(bones.mStart + bones.mOffsets[TYPE_QUAT]);
+                while (true) {
+                    while (otherBonesItr->name != myBonesItr->name) {
+                        otherBonesItr++;
+                        if (otherBonesItr >= otherBonesEnd) {
+                            TestDstComplain(myBonesItr->name);
+                            return;
+                        }
+                        otherQuatItr++;
+                    }
+                    myBonesItr++;
+                    otherQuatItr->Set(
+                        otherQuatItr->x * f2,
+                        otherQuatItr->y * f2,
+                        otherQuatItr->z * f2,
+                        otherQuatItr->w * f2
+                    );
+                    if (myBonesItr == myBonesEnd) {
+                        break;
+                    }
+                    otherBonesItr++;
+                    if (otherBonesItr >= otherBonesEnd) {
+                        TestDstComplain(myBonesItr->name);
                         return;
                     }
-                    qdata++;
+                    otherQuatItr++;
                 }
-                src++;
-                qdata->x *= f;
-                qdata->y *= f;
-                qdata->z *= f;
-                qdata->w *= f;
-                if (src == src_end) goto scale_rot;
-                db++;
-                if (db >= db_end) {
-                    TestDstComplain(src->name);
-                    return;
-                }
-                qdata++;
             }
-        }
-    scale_rot:
-        if (mCounts[TYPE_END] > mCounts[TYPE_ROTX]) {
-            Bone *db_begin = dst.mBones.begin();
-            float *fdata = (float *)(dst.mStart + dst.mOffsets[TYPE_ROTX]);
-            Bone *db = db_begin + dst.mCounts[TYPE_ROTX];
-            Bone *db_end = db_begin + dst.mCounts[TYPE_END];
-            const Bone *src_end = mBones.begin() + mCounts[TYPE_END];
-            while (true) {
-                while (db->name != src->name) {
-                    db++;
-                    if (db >= db_end) {
-                        TestDstComplain(src->name);
+            if (mCounts[TYPE_END] > mCounts[TYPE_ROTX]) {
+                Bone *otherBonesItr = (Bone *)&bones.mBones[bones.mCounts[TYPE_ROTX]];
+                Bone *otherBonesEnd = (Bone *)&bones.mBones[bones.mCounts[TYPE_END]];
+                Bone *myBonesEnd = (Bone *)&mBones[mCounts[TYPE_END]];
+                float *otherRotItr = (float *)(bones.mStart + bones.mOffsets[TYPE_ROTX]);
+                while (true) {
+                    while (otherBonesItr->name != myBonesItr->name) {
+                        otherBonesItr++;
+                        if (otherBonesItr >= otherBonesEnd) {
+                            TestDstComplain(myBonesItr->name);
+                            return;
+                        }
+                        otherRotItr++;
+                    }
+                    myBonesItr++;
+                    *otherRotItr *= f2;
+                    if (myBonesItr == myBonesEnd) {
                         return;
                     }
-                    fdata++;
+                    otherBonesItr++;
+                    if (otherBonesItr >= otherBonesEnd) {
+                        TestDstComplain(myBonesItr->name);
+                        return;
+                    }
+                    otherRotItr++;
                 }
-                src++;
-                *fdata *= f;
-                if (src == src_end) return;
-                db++;
-                if (db >= db_end) {
-                    TestDstComplain(src->name);
-                    return;
-                }
-                fdata++;
             }
         }
     }
 }
 
 // MARK: Blend
-void CharBones::Blend(CharBones &dst) const {
-    MILO_ASSERT(!mCompression && !dst.mCompression, 0x311);
-    const Bone *src = mBones.begin();
-    if (src == mBones.end()) return;
-
-
-    auto& counts = mCounts;
-    if (counts[TYPE_QUAT] > counts[TYPE_POS]) {
-        Vector3 *sdata = (Vector3 *)mStart;
-        Vector3 *ddata = (Vector3 *)dst.mStart;
-        Bone *db = dst.mBones.begin() + dst.mCounts[TYPE_POS];
-        Bone *db_end = dst.mBones.begin() + dst.mCounts[TYPE_QUAT];
-        const Bone *src_end = src + counts[TYPE_QUAT];
-        while (true) {
-            while (db->name != src->name) {
-                db++;
-                if (db >= db_end) goto complain;
-                ddata++;
+void CharBones::Blend(CharBones &bones) const {
+    MILO_ASSERT(!mCompression && !bones.mCompression, 0x311);
+    if (!mBones.empty()) {
+        Bone *myBonesItr = (Bone *)&mBones[0];
+        if (mCounts[TYPE_QUAT] > mCounts[TYPE_POS]) {
+            Bone *otherBonesItr = (Bone *)&bones.mBones[bones.mCounts[TYPE_POS]];
+            Bone *otherBonesEnd = (Bone *)&bones.mBones[bones.mCounts[TYPE_QUAT]];
+            Bone *myBonesEnd = (Bone *)&mBones[mCounts[TYPE_QUAT]];
+            Vector3 *myVecItr = (Vector3 *)mStart;
+            Vector3 *otherVecItr = (Vector3 *)bones.mStart;
+            while (true) {
+                while (otherBonesItr->name != myBonesItr->name) {
+                    otherBonesItr++;
+                    if (otherBonesItr >= otherBonesEnd) {
+                        TestDstComplain(myBonesItr->name);
+                        return;
+                    }
+                    otherVecItr++;
+                }
+                *otherVecItr *= 1 - myBonesItr->weight;
+                *otherVecItr += *myVecItr;
+                myBonesItr++;
+                if (myBonesItr == myBonesEnd) {
+                    break;
+                }
+                otherBonesItr++;
+                if (otherBonesItr >= otherBonesEnd) {
+                    TestDstComplain(myBonesItr->name);
+                    return;
+                }
+                otherVecItr++;
+                myVecItr++;
             }
-            float wt = 1.0f - src->weight;
-            ddata->x *= wt;
-            ddata->y *= wt;
-            ddata->z *= wt;
-            ddata->x += sdata->x;
-            ddata->y += sdata->y;
-            ddata->z += sdata->z;
-            src++;
-            if (src >= src_end) goto blend_quat;
-            db++;
-            if (db >= db_end) goto complain;
-            ddata++;
-            sdata++;
+        }
+        if (mCounts[TYPE_ROTX] > mCounts[TYPE_QUAT]) {
+            Bone *otherBonesItr = (Bone *)&bones.mBones[bones.mCounts[TYPE_QUAT]];
+            Bone *otherBonesEnd = (Bone *)&bones.mBones[bones.mCounts[TYPE_ROTX]];
+            Bone *myBonesEnd = (Bone *)&mBones[mCounts[TYPE_ROTX]];
+            Hmx::Quat *otherQuatItr = (Hmx::Quat *)(bones.mStart + bones.mOffsets[TYPE_QUAT]);
+            Hmx::Quat *myQuatItr = (Hmx::Quat *)(mStart + mOffsets[TYPE_QUAT]);
+            while (true) {
+                while (otherBonesItr->name != myBonesItr->name) {
+                    otherBonesItr++;
+                    if (otherBonesItr >= otherBonesEnd) {
+                        TestDstComplain(myBonesItr->name);
+                        return;
+                    }
+                    otherQuatItr++;
+                }
+                float scalar = 1 - myBonesItr->weight;
+                otherQuatItr->x *= scalar;
+                otherQuatItr->y *= scalar;
+                otherQuatItr->z *= scalar;
+                otherQuatItr->w *= scalar;
+                float abs = fabsf(myBonesItr->weight);
+                Hmx::Quat q(
+                    myQuatItr->x * abs,
+                    myQuatItr->y * abs,
+                    myQuatItr->z * abs,
+                    myQuatItr->w * myBonesItr->weight
+                );
+                if (q * *otherQuatItr < 0) {
+                    otherQuatItr->x -= q.x;
+                    otherQuatItr->y -= q.y;
+                    otherQuatItr->z -= q.z;
+                    otherQuatItr->w -= q.w;
+                } else {
+                    otherQuatItr->x += q.x;
+                    otherQuatItr->y += q.y;
+                    otherQuatItr->z += q.z;
+                    otherQuatItr->w += q.w;
+                }
+                myBonesItr++;
+                if (myBonesItr == myBonesEnd) {
+                    break;
+                }
+                otherBonesItr++;
+                if (otherBonesItr >= otherBonesEnd) {
+                    TestDstComplain(myBonesItr->name);
+                    return;
+                }
+                otherQuatItr++;
+                myQuatItr++;
+            }
+        }
+        if (mCounts[TYPE_END] > mCounts[TYPE_ROTX]) {
+            Bone *otherBonesItr = (Bone *)&bones.mBones[bones.mCounts[TYPE_ROTX]];
+            Bone *otherBonesEnd = (Bone *)&bones.mBones[bones.mCounts[TYPE_END]];
+            Bone *myBonesEnd = (Bone *)&mBones[mCounts[TYPE_END]];
+            float *otherRotItr = (float *)(bones.mStart + bones.mOffsets[TYPE_ROTX]);
+            float *myRotItr = (float *)(mStart + mOffsets[TYPE_ROTX]);
+            while (true) {
+                while (otherBonesItr->name != myBonesItr->name) {
+                    otherBonesItr++;
+                    if (otherBonesItr >= otherBonesEnd) {
+                        TestDstComplain(myBonesItr->name);
+                        return;
+                    }
+                    otherRotItr++;
+                }
+                *otherRotItr *= 1 - myBonesItr->weight;
+                *otherRotItr += *myRotItr * myBonesItr->weight;
+                myBonesItr++;
+                if (myBonesItr == myBonesEnd) {
+                    return;
+                }
+                otherBonesItr++;
+                if (otherBonesItr >= otherBonesEnd) {
+                    TestDstComplain(myBonesItr->name);
+                    return;
+                }
+                otherRotItr++;
+                myRotItr++;
+            }
         }
     }
-blend_quat:
-    if (counts[TYPE_ROTX] > counts[TYPE_QUAT]) {
-        Bone *db = dst.mBones.begin() + dst.mCounts[TYPE_QUAT];
-        Bone *db_end = dst.mBones.begin() + dst.mCounts[TYPE_ROTX];
-        Hmx::Quat *dquat = (Hmx::Quat *)(dst.mStart + dst.mOffsets[TYPE_QUAT]);
-        Hmx::Quat *squat = (Hmx::Quat *)(mStart + mOffsets[TYPE_QUAT]);
-        const Bone *src_end = mBones.data() + counts[TYPE_ROTX];
-        while (true) {
-            while (db->name != src->name) {
-                db++;
-                if (db >= db_end) goto complain;
-                dquat++;
-            }
-            float wt = 1.0f - src->weight;
-            dquat->w *= wt;
-            dquat->x *= wt;
-            dquat->y *= wt;
-            dquat->z *= wt;
-            float abs_wt = fabsf(src->weight);
-            float sy = squat->y * abs_wt;
-            float sx = squat->x * abs_wt;
-            float sz = squat->z * abs_wt;
-            float sw = src->weight * squat->w;
-            if (((dquat->x * sx + (dquat->y * sy + (dquat->w * sw + dquat->z * sz)))) < 0.0f) {
-                dquat->x -= sx;
-                dquat->y -= sy;
-                dquat->z -= sz;
-                dquat->w -= sw;
-            } else {
-                dquat->x += sx;
-                dquat->y += sy;
-                dquat->z += sz;
-                dquat->w += sw;
-            }
-            src++;
-            if (src >= src_end) goto blend_rot;
-            db++;
-            if (db >= db_end) goto complain;
-            dquat++;
-            squat++;
-        }
-    }
-blend_rot:
-    if (counts[TYPE_END] > counts[TYPE_ROTX]) {
-        Bone *db = dst.mBones.begin() + dst.mCounts[TYPE_ROTX];
-        Bone *db_end = dst.mBones.begin() + dst.mCounts[TYPE_END];
-        float *dfdata = (float *)(dst.mStart + dst.mOffsets[TYPE_ROTX]);
-        float *sfdata = (float *)(mStart + mOffsets[TYPE_ROTX]);
-        const Bone *src_end = mBones.data() + counts[TYPE_END];
-        while (true) {
-            while (db->name != src->name) {
-                db++;
-                if (db >= db_end) goto complain;
-                dfdata++;
-            }
-            *dfdata *= (1.0f - src->weight);
-            float wt = src->weight;
-            src++;
-            *dfdata += wt * *sfdata;
-            if (src >= src_end) return;
-            db++;
-            if (db >= db_end) goto complain;
-            dfdata++;
-            sfdata++;
-        }
-    }
-    return;
-
-complain:
-    TestDstComplain(src->name);
 }
 
 // MARK: ScaleAdd (CharBones)
-void CharBones::ScaleAdd(CharBones &dst, float f) const {
-    const Bone *src = mBones.begin();
-    if (src == mBones.end()) return;
-
-    if (mCounts[TYPE_QUAT] > mCounts[TYPE_POS]) {
-        Vector3 *ddata = (Vector3 *)dst.mStart;
-        Bone *db_end = dst.mBones.begin() + dst.mCounts[TYPE_QUAT];
-        Bone *db = dst.mBones.begin() + dst.mCounts[TYPE_POS];
-        const Bone *src_end = src + mCounts[TYPE_QUAT];
-        if (mCompression >= kCompressVects) {
-            short *sdata = (short *)mStart;
-            while (true) {
-                short sz = sdata[2];
-                short sy = sdata[1];
-                while (db->name != src->name) {
-                    db++;
-                    if (db >= db_end) goto complain;
-                    ddata++;
+void CharBones::ScaleAdd(CharBones &bones, float f2) const {
+    if (!mBones.empty()) {
+        Bone *myBonesItr = (Bone *)&mBones[0];
+        if (mCounts[TYPE_QUAT] > mCounts[TYPE_POS]) {
+            Bone *otherBonesItr = (Bone *)&bones.mBones[bones.mCounts[TYPE_POS]];
+            Bone *otherBonesEnd = (Bone *)&bones.mBones[bones.mCounts[TYPE_QUAT]];
+            Bone *myBonesEnd = (Bone *)&mBones[mCounts[TYPE_QUAT]];
+            Vector3 *otherVecItr = (Vector3 *)bones.mStart;
+            if (mCompression >= kCompressVects) {
+                ShortVector3 *myVecItr = (ShortVector3 *)mStart;
+                while (true) {
+                    Vector3 v;
+                    myVecItr->ToVector3(v);
+                    while (otherBonesItr->name != myBonesItr->name) {
+                        otherBonesItr++;
+                        if (otherBonesItr >= otherBonesEnd) {
+                            TestDstComplain(myBonesItr->name);
+                            return;
+                        }
+                        otherVecItr++;
+                    }
+                    ScaleAddEq(*otherVecItr, v, f2);
+                    otherBonesItr->weight += myBonesItr->weight * f2;
+                    myBonesItr++;
+                    if (myBonesItr == myBonesEnd) {
+                        break;
+                    }
+                    otherBonesItr++;
+                    if (otherBonesItr >= otherBonesEnd) {
+                        TestDstComplain(myBonesItr->name);
+                        return;
+                    }
+                    otherVecItr++;
+                    myVecItr++;
                 }
-                ddata->x += (float)sdata[0] * 0.039674062f * f;
-                ddata->z += (float)sz * 0.039674062f * f;
-                ddata->y += (float)sy * 0.039674062f * f;
-                db->weight += src->weight * f;
-                src++;
-                if (src == src_end) goto add_quat;
-                db++;
-                if (db >= db_end) goto complain;
-                ddata++;
-                sdata += 3;
+            } else {
+                Vector3 *myVecItr = (Vector3 *)mStart;
+                while (true) {
+                    while (otherBonesItr->name != myBonesItr->name) {
+                        otherBonesItr++;
+                        if (otherBonesItr >= otherBonesEnd) {
+                            TestDstComplain(myBonesItr->name);
+                            return;
+                        }
+                        otherVecItr++;
+                    }
+                    ScaleAddEq(*otherVecItr, *myVecItr, f2);
+                    otherBonesItr->weight += myBonesItr->weight * f2;
+                    myBonesItr++;
+                    if (myBonesItr == myBonesEnd) {
+                        break;
+                    }
+                    otherBonesItr++;
+                    if (otherBonesItr >= otherBonesEnd) {
+                        TestDstComplain(myBonesItr->name);
+                        return;
+                    }
+                    otherVecItr++;
+                    myVecItr++;
+                }
             }
-        } else {
-            Vector3 *sdata = (Vector3 *)mStart;
-            while (true) {
-                while (db->name != src->name) {
-                    db++;
-                    if (db >= db_end) goto complain;
-                    ddata++;
+        }
+        if (mCounts[TYPE_ROTX] > mCounts[TYPE_QUAT]) {
+            float f2abs = fabsf(f2);
+            Bone *otherBonesItr = (Bone *)&bones.mBones[bones.mCounts[TYPE_QUAT]];
+            Bone *otherBonesEnd = (Bone *)&bones.mBones[bones.mCounts[TYPE_ROTX]];
+            Bone *myBonesEnd = (Bone *)&mBones[mCounts[TYPE_ROTX]];
+            Hmx::Quat *otherQuatItr = (Hmx::Quat *)(bones.mStart + bones.mOffsets[TYPE_QUAT]);
+            if (mCompression >= kCompressQuats) {
+                float absConstant = f2abs * 0.007874016f;
+                float notAbsConstant = f2 * 0.007874016f;
+                ByteQuat *myQuatItr = (ByteQuat *)(mStart + mOffsets[TYPE_QUAT]);
+                while (true) {
+                    while (otherBonesItr->name != myBonesItr->name) {
+                        otherBonesItr++;
+                        if (otherBonesItr >= otherBonesEnd) {
+                            TestDstComplain(myBonesItr->name);
+                            return;
+                        }
+                        otherQuatItr++;
+                    }
+                    Hmx::Quat q;
+                    q.Set(
+                        myQuatItr->x * absConstant,
+                        myQuatItr->y * absConstant,
+                        myQuatItr->z * absConstant,
+                        myQuatItr->w * notAbsConstant
+                    );
+                    if (q * *otherQuatItr < 0) {
+                        otherQuatItr->x -= q.x;
+                        otherQuatItr->y -= q.y;
+                        otherQuatItr->z -= q.z;
+                        otherQuatItr->w -= q.w;
+                    } else {
+                        otherQuatItr->x += q.x;
+                        otherQuatItr->y += q.y;
+                        otherQuatItr->z += q.z;
+                        otherQuatItr->w += q.w;
+                    }
+                    otherBonesItr->weight += myBonesItr->weight * f2;
+                    myBonesItr++;
+                    if (myBonesItr == myBonesEnd) {
+                        break;
+                    }
+                    otherBonesItr++;
+                    if (otherBonesItr >= otherBonesEnd) {
+                        TestDstComplain(myBonesItr->name);
+                        return;
+                    }
+                    otherQuatItr++;
+                    myQuatItr++;
                 }
-                ddata->x += sdata->x * f;
-                ddata->y += sdata->y * f;
-                ddata->z += sdata->z * f;
-                db->weight += src->weight * f;
-                src++;
-                if (src == src_end) goto add_quat;
-                db++;
-                if (db >= db_end) goto complain;
-                ddata++;
-                sdata++;
+            } else if (mCompression != kCompressNone) {
+                float absConstant = f2abs * 0.000030518509f;
+                float notAbsConstant = f2 * 0.000030518509f;
+                ShortQuat *myQuatItr = (ShortQuat *)(mStart + mOffsets[TYPE_QUAT]);
+                while (true) {
+                    while (otherBonesItr->name != myBonesItr->name) {
+                        otherBonesItr++;
+                        if (otherBonesItr >= otherBonesEnd) {
+                            TestDstComplain(myBonesItr->name);
+                            return;
+                        }
+                        otherQuatItr++;
+                    }
+                    Hmx::Quat q;
+                    q.Set(
+                        myQuatItr->x * absConstant,
+                        myQuatItr->y * absConstant,
+                        myQuatItr->z * absConstant,
+                        myQuatItr->w * notAbsConstant
+                    );
+                    if (q * *otherQuatItr < 0) {
+                        otherQuatItr->x -= q.x;
+                        otherQuatItr->y -= q.y;
+                        otherQuatItr->z -= q.z;
+                        otherQuatItr->w -= q.w;
+                    } else {
+                        otherQuatItr->x += q.x;
+                        otherQuatItr->y += q.y;
+                        otherQuatItr->z += q.z;
+                        otherQuatItr->w += q.w;
+                    }
+                    otherBonesItr->weight += myBonesItr->weight * f2;
+                    myBonesItr++;
+                    if (myBonesItr == myBonesEnd) {
+                        break;
+                    }
+                    otherBonesItr++;
+                    if (otherBonesItr >= otherBonesEnd) {
+                        TestDstComplain(myBonesItr->name);
+                        return;
+                    }
+                    otherQuatItr++;
+                    myQuatItr++;
+                }
+            } else {
+                Hmx::Quat *myQuatItr = (Hmx::Quat *)(mStart + mOffsets[TYPE_QUAT]);
+                while (true) {
+                    while (otherBonesItr->name != myBonesItr->name) {
+                        otherBonesItr++;
+                        if (otherBonesItr >= otherBonesEnd) {
+                            TestDstComplain(myBonesItr->name);
+                            return;
+                        }
+                        otherQuatItr++;
+                    }
+                    Hmx::Quat q;
+                    q.Set(
+                        myQuatItr->x * f2abs,
+                        myQuatItr->y * f2abs,
+                        myQuatItr->z * f2abs,
+                        myQuatItr->w * f2
+                    );
+                    if (q * *otherQuatItr < 0) {
+                        otherQuatItr->x -= q.x;
+                        otherQuatItr->y -= q.y;
+                        otherQuatItr->z -= q.z;
+                        otherQuatItr->w -= q.w;
+                    } else {
+                        otherQuatItr->x += q.x;
+                        otherQuatItr->y += q.y;
+                        otherQuatItr->z += q.z;
+                        otherQuatItr->w += q.w;
+                    }
+                    otherBonesItr->weight += myBonesItr->weight * f2;
+                    myBonesItr++;
+                    if (myBonesItr == myBonesEnd) {
+                        break;
+                    }
+                    otherBonesItr++;
+                    if (otherBonesItr >= otherBonesEnd) {
+                        TestDstComplain(myBonesItr->name);
+                        return;
+                    }
+                    otherQuatItr++;
+                    myQuatItr++;
+                }
+            }
+        }
+        if (mCounts[TYPE_END] > mCounts[TYPE_ROTX]) {
+            Bone *otherBonesItr = (Bone *)&bones.mBones[bones.mCounts[TYPE_ROTX]];
+            Bone *otherBonesEnd = (Bone *)&bones.mBones[bones.mCounts[TYPE_END]];
+            Bone *myBonesEnd = (Bone *)&mBones[mCounts[TYPE_END]];
+            float *otherRotItr = (float *)(bones.mStart + bones.mOffsets[TYPE_ROTX]);
+            if (mCompression != kCompressNone) {
+                float shortConstant = f2 * 0.00061035156f;
+                short *myRotItr = (short *)(mStart + mOffsets[TYPE_ROTX]);
+                while (true) {
+                    while (otherBonesItr->name != myBonesItr->name) {
+                        otherBonesItr++;
+                        if (otherBonesItr >= otherBonesEnd) {
+                            TestDstComplain(myBonesItr->name);
+                            return;
+                        }
+                        otherRotItr++;
+                    }
+                    *otherRotItr += *myRotItr * shortConstant;
+                    otherBonesItr->weight += myBonesItr->weight * f2;
+                    myBonesItr++;
+                    if (myBonesItr == myBonesEnd) {
+                        return;
+                    }
+                    otherBonesItr++;
+                    if (otherBonesItr >= otherBonesEnd) {
+                        TestDstComplain(myBonesItr->name);
+                        return;
+                    }
+                    otherRotItr++;
+                    myRotItr++;
+                }
+            } else {
+                float *myRotItr = (float *)(mStart + mOffsets[TYPE_ROTX]);
+                while (true) {
+                    while (otherBonesItr->name != myBonesItr->name) {
+                        otherBonesItr++;
+                        if (otherBonesItr >= otherBonesEnd) {
+                            TestDstComplain(myBonesItr->name);
+                            return;
+                        }
+                        otherRotItr++;
+                    }
+                    *otherRotItr += *myRotItr * f2;
+                    otherBonesItr->weight += myBonesItr->weight * f2;
+                    myBonesItr++;
+                    if (myBonesItr == myBonesEnd) {
+                        return;
+                    }
+                    otherBonesItr++;
+                    if (otherBonesItr >= otherBonesEnd) {
+                        TestDstComplain(myBonesItr->name);
+                        return;
+                    }
+                    otherRotItr++;
+                    myRotItr++;
+                }
             }
         }
     }
-add_quat:
-    if (mCounts[TYPE_ROTX] > mCounts[TYPE_QUAT]) {
-        Bone *db_end = dst.mBones.begin() + dst.mCounts[TYPE_ROTX];
-        const Bone *src_end = mBones.begin() + mCounts[TYPE_ROTX];
-        Bone *db = dst.mBones.begin() + dst.mCounts[TYPE_QUAT];
-        Hmx::Quat *dquat = (Hmx::Quat *)(dst.mStart + dst.mOffsets[TYPE_QUAT]);
-        float abs_f = fabs(f);
-        if (mCompression >= kCompressQuats) {
-            char *sdata = (char *)(mStart + mOffsets[TYPE_QUAT]);
-            float scale = abs_f * 0.0078740157f;
-            while (true) {
-                while (db->name != src->name) {
-                    db++;
-                    if (db >= db_end) goto complain;
-                    dquat++;
-                }
-                float dy = dquat->y;
-                float dx = dquat->x;
-                float dz = dquat->z;
-                float dw = dquat->w;
-                float sy = (float)(long long)sdata[1] * scale;
-                float sx = (float)(long long)sdata[0] * scale;
-                float sz = (float)(long long)sdata[2] * scale;
-                float sw = (float)(long long)sdata[3] * (f * 0.0078740157f);
-                if (dw * sw + dz * sz + dx * sx + dy * sy < 0.0f) {
-                    dquat->y = dy - sy;
-                    dquat->z = dz - sz;
-                    dquat->x = dx - sx;
-                    dquat->w = dw - sw;
-                } else {
-                    dquat->y = dy + sy;
-                    dquat->z = dz + sz;
-                    dquat->x = dx + sx;
-                    dquat->w = dw + sw;
-                }
-                db->weight += src->weight * f;
-                src++;
-                if (src == src_end) goto add_rot;
-                db++;
-                if (db >= db_end) goto complain;
-                dquat++;
-                sdata += 4;
-            }
-        } else if (mCompression != kCompressNone) {
-            short *sdata = (short *)(mStart + mOffsets[TYPE_QUAT]);
-            float scale = abs_f * 3.051851e-05f;
-            while (true) {
-                while (db->name != src->name) {
-                    db++;
-                    if (db >= db_end) goto complain;
-                    dquat++;
-                }
-                float dz = dquat->z;
-                float dy = dquat->y;
-                float dw = dquat->w;
-                float dx = dquat->x;
-                float sx = (float)(long long)sdata[0] * scale;
-                float sz = (float)(long long)sdata[2] * scale;
-                float sy = (float)(long long)sdata[1] * scale;
-                float sw = (float)(long long)sdata[3] * (f * 3.051851e-05f);
-                if (dx * sx + dy * sy + dz * sz + dw * sw < 0.0f) {
-                    dquat->z = dz - sz;
-                    dquat->x = dx - sx;
-                    dquat->y = dy - sy;
-                    dquat->w = dw - sw;
-                } else {
-                    dquat->z = sz + dz;
-                    dquat->x = dx + sx;
-                    dquat->y = sy + dy;
-                    dquat->w = sw + dw;
-                }
-                db->weight += src->weight * f;
-                src++;
-                if (src == src_end) goto add_rot;
-                db++;
-                if (db >= db_end) goto complain;
-                dquat++;
-                sdata += 4;
-            }
-        } else {
-            Hmx::Quat *squat = (Hmx::Quat *)(mStart + mOffsets[TYPE_QUAT]);
-            while (true) {
-                while (db->name != src->name) {
-                    db++;
-                    if (db >= db_end) goto complain;
-                    dquat++;
-                }
-                float sy = squat->y * abs_f;
-                float dy = dquat->y;
-                float sx = squat->x * abs_f;
-                float dx = dquat->x;
-                float sz = squat->z * abs_f;
-                float dz = dquat->z;
-                float sw = squat->w * f;
-                float dw = dquat->w;
-                if (sx * dx + sy * dy + sz * dz + sw * dw < 0.0f) {
-                    dquat->y = dy - sy;
-                    dquat->z = dz - sz;
-                    dquat->x = dx - sx;
-                    dquat->w = dw - sw;
-                } else {
-                    dquat->y = sy + dy;
-                    dquat->z = sz + dz;
-                    dquat->x = sx + dx;
-                    dquat->w = sw + dw;
-                }
-                db->weight += src->weight * f;
-                src++;
-                if (src == src_end) goto add_rot;
-                db++;
-                if (db >= db_end) goto complain;
-                dquat++;
-                squat++;
-            }
-        }
-    }
-add_rot:
-    if (mCounts[TYPE_END] > mCounts[TYPE_ROTX]) {
-        Bone *db_end = dst.mBones.begin() + dst.mCounts[TYPE_END];
-        float *dfdata = (float *)(dst.mStart + dst.mOffsets[TYPE_ROTX]);
-        Bone *db = dst.mBones.begin() + dst.mCounts[TYPE_ROTX];
-        const Bone *src_end = mBones.begin() + mCounts[TYPE_END];
-        float *sfdata = (float *)(mStart + mOffsets[TYPE_ROTX]);
-        if (mCompression != kCompressNone) {
-            while (true) {
-                while (db->name != src->name) {
-                    db++;
-                    if (db >= db_end) goto complain;
-                    dfdata++;
-                }
-                *dfdata += (float)*(short *)sfdata * (f * 0.0006103515625f);
-                db->weight += src->weight * f;
-                src++;
-                if (src == src_end) return;
-                db++;
-                if (db >= db_end) goto complain;
-                dfdata++;
-                sfdata = (float *)((char *)sfdata + 2);
-            }
-        } else {
-            while (true) {
-                while (db->name != src->name) {
-                    db++;
-                    if (db >= db_end) goto complain;
-                    dfdata++;
-                }
-                *dfdata += *sfdata * f;
-                db->weight += src->weight * f;
-                src++;
-                if (src == src_end) return;
-                db++;
-                if (db >= db_end) goto complain;
-                dfdata++;
-                sfdata++;
-            }
-        }
-    }
-    return;
-
-complain:
-    TestDstComplain(src->name);
 }
 
 // MARK: RotateBy
-void CharBones::RotateBy(CharBones &dst) const {
-    const Bone *src = mBones.begin();
-    if (src == mBones.end()) return;
-
-    // Position section
-    auto& _ref1 = mCounts;
-    if (_ref1[TYPE_QUAT] > _ref1[TYPE_POS]) {
-        Bone *db_end = dst.mBones.begin() + dst.mCounts[TYPE_QUAT];
-        Vector3 *ddata = (Vector3 *)dst.mStart;
-        Bone *db = dst.mBones.begin() + dst.mCounts[TYPE_POS];
-        const Bone *src_end = src + _ref1[TYPE_QUAT];
-        if (db != nullptr && mCompression >= kCompressVects) {
-            short *sdata = (short *)mStart;
-            while (true) {
-                long long sz = (long long)sdata[2];
-                short sy = sdata[1];
-                while (db->name != src->name) {
-                    db++;
-                    if (db >= db_end) goto complain;
-                    ddata++;
+void CharBones::RotateBy(CharBones &bones) const {
+    if (!mBones.empty()) {
+        Bone *myBonesItr = (Bone *)&mBones[0];
+        if (mCounts[TYPE_QUAT] > mCounts[TYPE_POS]) {
+            Bone *otherBonesItr = (Bone *)&bones.mBones[bones.mCounts[TYPE_POS]];
+            Bone *otherBonesEnd = (Bone *)&bones.mBones[bones.mCounts[TYPE_QUAT]];
+            Bone *myBonesEnd = (Bone *)&mBones[mCounts[TYPE_QUAT]];
+            Vector3 *otherVecItr = (Vector3 *)bones.mStart;
+            if (mCompression >= kCompressVects) {
+                ShortVector3 *myVecItr = (ShortVector3 *)mStart;
+                while (true) {
+                    Vector3 v;
+                    myVecItr->ToVector3(v);
+                    while (otherBonesItr->name != myBonesItr->name) {
+                        otherBonesItr++;
+                        if (otherBonesItr >= otherBonesEnd) {
+                            TestDstComplain(myBonesItr->name);
+                            return;
+                        }
+                        otherVecItr++;
+                    }
+                    *otherVecItr += v;
+                    myBonesItr++;
+                    if (myBonesItr == myBonesEnd) {
+                        break;
+                    }
+                    otherBonesItr++;
+                    if (otherBonesItr >= otherBonesEnd) {
+                        TestDstComplain(myBonesItr->name);
+                        return;
+                    }
+                    otherVecItr++;
+                    myVecItr++;
                 }
-                src++;
-                ddata->x += (float)(long long)sdata[0] * 0.039674062f;
-                ddata->y += (float)(long long)sy * 0.039674062f;
-                ddata->z += (float)sz * 0.039674062f;
-                if (src_end == src) goto rotate_quat;
-                db++;
-                if (db >= db_end) goto complain;
-                ddata++;
-                sdata += 3;
+            } else {
+                Vector3 *myVecItr = (Vector3 *)mStart;
+                while (true) {
+                    while (otherBonesItr->name != myBonesItr->name) {
+                        otherBonesItr++;
+                        if (otherBonesItr >= otherBonesEnd) {
+                            TestDstComplain(myBonesItr->name);
+                            return;
+                        }
+                        otherVecItr++;
+                    }
+                    *otherVecItr += *myVecItr;
+                    myBonesItr++;
+                    if (myBonesItr == myBonesEnd) {
+                        break;
+                    }
+                    otherBonesItr++;
+                    if (otherBonesItr >= otherBonesEnd) {
+                        TestDstComplain(myBonesItr->name);
+                        return;
+                    }
+                    otherVecItr++;
+                    myVecItr++;
+                }
             }
-        } else {
-            Vector3 *sdata = (Vector3 *)mStart;
-            while (true) {
-                while (db->name != src->name) {
-                    db++;
-                    if (db >= db_end) goto complain;
-                    ddata++;
+        }
+        if (mCounts[TYPE_ROTX] > mCounts[TYPE_QUAT]) {
+            Bone *otherBonesItr = (Bone *)&bones.mBones[bones.mCounts[TYPE_QUAT]];
+            Bone *otherBonesEnd = (Bone *)&bones.mBones[bones.mCounts[TYPE_ROTX]];
+            Bone *myBonesEnd = (Bone *)&mBones[mCounts[TYPE_ROTX]];
+            Hmx::Quat *otherQuatItr = (Hmx::Quat *)(bones.mStart + bones.mOffsets[TYPE_QUAT]);
+            if (mCompression >= kCompressQuats) {
+                ByteQuat *myQuatItr = (ByteQuat *)(mStart + mOffsets[TYPE_QUAT]);
+                while (true) {
+                    while (otherBonesItr->name != myBonesItr->name) {
+                        otherBonesItr++;
+                        if (otherBonesItr >= otherBonesEnd) {
+                            TestDstComplain(myBonesItr->name);
+                            return;
+                        }
+                        otherQuatItr++;
+                    }
+                    Hmx::Quat q;
+                    myQuatItr->ToQuat(q);
+                    Multiply(q, *otherQuatItr, *otherQuatItr);
+                    myBonesItr++;
+                    if (myBonesItr == myBonesEnd) {
+                        break;
+                    }
+                    otherBonesItr++;
+                    if (otherBonesItr >= otherBonesEnd) {
+                        TestDstComplain(myBonesItr->name);
+                        return;
+                    }
+                    otherQuatItr++;
+                    myQuatItr++;
                 }
-                src++;
-                ddata->x += sdata->x;
-                ddata->y += sdata->y;
-                ddata->z += sdata->z;
-                if (src == src_end) goto rotate_quat;
-                db++;
-                if (db >= db_end) goto complain;
-                ddata++;
-                sdata++;
+            } else if (mCompression != kCompressNone) {
+                ShortQuat *myQuatItr = (ShortQuat *)(mStart + mOffsets[TYPE_QUAT]);
+                while (true) {
+                    while (otherBonesItr->name != myBonesItr->name) {
+                        otherBonesItr++;
+                        if (otherBonesItr >= otherBonesEnd) {
+                            TestDstComplain(myBonesItr->name);
+                            return;
+                        }
+                        otherQuatItr++;
+                    }
+                    Hmx::Quat q;
+                    myQuatItr->ToQuat(q);
+                    Multiply(q, *otherQuatItr, *otherQuatItr);
+                    myBonesItr++;
+                    if (myBonesItr == myBonesEnd) {
+                        break;
+                    }
+                    otherBonesItr++;
+                    if (otherBonesItr >= otherBonesEnd) {
+                        TestDstComplain(myBonesItr->name);
+                        return;
+                    }
+                    otherQuatItr++;
+                    myQuatItr++;
+                }
+            } else {
+                Hmx::Quat *myQuatItr = (Hmx::Quat *)(mStart + mOffsets[TYPE_QUAT]);
+                while (true) {
+                    while (otherBonesItr->name != myBonesItr->name) {
+                        otherBonesItr++;
+                        if (otherBonesItr >= otherBonesEnd) {
+                            TestDstComplain(myBonesItr->name);
+                            return;
+                        }
+                        otherQuatItr++;
+                    }
+                    Multiply(*myQuatItr, *otherQuatItr, *otherQuatItr);
+                    myBonesItr++;
+                    if (myBonesItr == myBonesEnd) {
+                        break;
+                    }
+                    otherBonesItr++;
+                    if (otherBonesItr >= otherBonesEnd) {
+                        TestDstComplain(myBonesItr->name);
+                        return;
+                    }
+                    otherQuatItr++;
+                    myQuatItr++;
+                }
+            }
+        }
+        if (mCounts[TYPE_END] > mCounts[TYPE_ROTX]) {
+            Bone *otherBonesItr = (Bone *)&bones.mBones[bones.mCounts[TYPE_ROTX]];
+            Bone *otherBonesEnd = (Bone *)&bones.mBones[bones.mCounts[TYPE_END]];
+            Bone *myBonesEnd = (Bone *)&mBones[mCounts[TYPE_END]];
+            float *otherRotItr = (float *)(bones.mStart + bones.mOffsets[TYPE_ROTX]);
+            if (mCompression != kCompressNone) {
+                short *myRotItr = (short *)(mStart + mOffsets[TYPE_ROTX]);
+                while (true) {
+                    while (otherBonesItr->name != myBonesItr->name) {
+                        otherBonesItr++;
+                        if (otherBonesItr >= otherBonesEnd) {
+                            TestDstComplain(myBonesItr->name);
+                            return;
+                        }
+                        otherRotItr++;
+                    }
+                    *otherRotItr += *myRotItr * 0.00061035156f;
+                    myBonesItr++;
+                    if (myBonesItr == myBonesEnd) {
+                        return;
+                    }
+                    otherBonesItr++;
+                    if (otherBonesItr >= otherBonesEnd) {
+                        TestDstComplain(myBonesItr->name);
+                        return;
+                    }
+                    otherRotItr++;
+                    myRotItr++;
+                }
+            } else {
+                float *myRotItr = (float *)(mStart + mOffsets[TYPE_ROTX]);
+                while (true) {
+                    while (otherBonesItr->name != myBonesItr->name) {
+                        otherBonesItr++;
+                        if (otherBonesItr >= otherBonesEnd) {
+                            TestDstComplain(myBonesItr->name);
+                            return;
+                        }
+                        otherRotItr++;
+                    }
+                    *otherRotItr += *myRotItr;
+                    myBonesItr++;
+                    if (myBonesItr == myBonesEnd) {
+                        return;
+                    }
+                    otherBonesItr++;
+                    if (otherBonesItr >= otherBonesEnd) {
+                        TestDstComplain(myBonesItr->name);
+                        return;
+                    }
+                    otherRotItr++;
+                    myRotItr++;
+                }
             }
         }
     }
-rotate_quat:
-    if (_ref1[TYPE_ROTX] > _ref1[TYPE_QUAT]) {
-        Bone *db_end = dst.mBones.begin() + dst.mCounts[TYPE_ROTX];
-        Bone *db = dst.mBones.begin() + dst.mCounts[TYPE_QUAT];
-        Hmx::Quat *dquat = (Hmx::Quat *)(dst.mStart + dst.mOffsets[TYPE_QUAT]);
-        int src_quat_off = mOffsets[TYPE_QUAT];
-        const Bone *src_end = mBones.begin() + _ref1[TYPE_ROTX];
-        if (mCompression >= kCompressQuats) {
-            char *sqdata = (char *)(src_quat_off + mStart);
-            while (true) {
-                while (db->name != src->name) {
-                    db++;
-                    if (db >= db_end) goto complain;
-                    dquat++;
-                }
-                Hmx::Quat sq;
-                ((ByteQuat *)sqdata)->ToQuat(sq);
-                float dw = dquat->w;
-                float dx = dquat->x;
-                src++;
-                float dz = dquat->z;
-                float dy = dquat->y;
-#ifdef HX_NATIVE
-                float nw = sq.w*dw - sq.x*dx - sq.y*dy - sq.z*dz;
-                float nx = sq.w*dx + sq.x*dw + sq.y*dz - sq.z*dy;
-                float ny = sq.w*dy - sq.x*dz + sq.y*dw + sq.z*dx;
-                float nz = sq.w*dz + sq.x*dy - sq.y*dx + sq.z*dw;
-                dquat->x = nx; dquat->y = ny; dquat->z = nz; dquat->w = nw;
-#else
-                dquat->w = -(-(dy * sq.y - (dw * sq.w - dx * sq.x)) - dz * sq.z);
-                dquat->z = -(dx * sq.y - ((dy * sq.x + (dz * sq.w + dw * sq.z))));
-                dquat->y = -(dz * sq.x - (dw * sq.y + dy * sq.w + dx * sq.z));
-                dquat->x = -(dy * sq.z - (dw * sq.x + dz * sq.y + dx * sq.w));
-#endif
-                if (src == src_end) goto rotate_rot;
-                db++;
-                if (db >= db_end) goto complain;
-                dquat++;
-                sqdata += 4;
-            }
-        } else if (mCompression != kCompressNone) {
-            char *sqdata = (char *)(src_quat_off + mStart);
-            while (true) {
-                while (db->name != src->name) {
-                    db++;
-                    if (db >= db_end) goto complain;
-                    dquat++;
-                }
-                Hmx::Quat sq;
-                ((ShortQuat *)sqdata)->ToQuat(sq);
-                float dw = dquat->w;
-                float dx = dquat->x;
-                src++;
-                float dz = dquat->z;
-                float dy = dquat->y;
-#ifdef HX_NATIVE
-                float nw = sq.w*dw - sq.x*dx - sq.y*dy - sq.z*dz;
-                float nx = sq.w*dx + sq.x*dw + sq.y*dz - sq.z*dy;
-                float ny = sq.w*dy - sq.x*dz + sq.y*dw + sq.z*dx;
-                float nz = sq.w*dz + sq.x*dy - sq.y*dx + sq.z*dw;
-                dquat->x = nx; dquat->y = ny; dquat->z = nz; dquat->w = nw;
-#else
-                dquat->w = -(-(dy * sq.y - (dw * sq.w - dx * sq.x)) - dz * sq.z);
-                dquat->z = -(dx * sq.y - (dy * sq.x + dz * sq.w + dw * sq.z));
-                dquat->y = -(dz * sq.x - (dw * sq.y + dy * sq.w + dx * sq.z));
-                dquat->x = -(dy * sq.z - (dw * sq.x + dz * sq.y + dx * sq.w));
-#endif
-                if (src == src_end) goto rotate_rot;
-                db++;
-                if (db >= db_end) goto complain;
-                dquat++;
-                sqdata += 8;
-            }
-        } else {
-            Hmx::Quat *squat = (Hmx::Quat *)(src_quat_off + mStart);
-            while (true) {
-                while (db->name != src->name) {
-                    db++;
-                    if (db >= db_end) goto complain;
-                    dquat++;
-                }
-                float sy = squat->y;
-                src++;
-                float sz = squat->z;
-                float dw = dquat->w;
-                float sx = squat->x;
-                float dx = dquat->x;
-                float sw = squat->w;
-                float dz = dquat->z;
-                float dy = dquat->y;
-                // dst = src * dst (quaternion multiply)
-                dquat->y = -(sx * dz - (dy * sw + dx * sz + sy * dw));
-                dquat->z = (sy * dx - (dy * sx + sw * dz + dw * sz));
-                dquat->z = -dquat->z;
-                dquat->w = -(dz * sz - -(dy * sy - (dw * sw - sx * dx)));
-                dquat->x = -(dy * sz - (sy * dz + sx * dw + dx * sw));
-                if (src == src_end) goto rotate_rot;
-                db++;
-                if (db >= db_end) goto complain;
-                dquat++;
-                squat++;
-            }
-        }
-    }
-rotate_rot:
-    if (_ref1[TYPE_END] > _ref1[TYPE_ROTX]) {
-        Bone *db_end = dst.mBones.begin() + dst.mCounts[TYPE_END];
-        const Bone *src_end = mBones.begin() + _ref1[TYPE_END];
-        Bone *db = dst.mBones.begin() + dst.mCounts[TYPE_ROTX];
-        float *dfdata = (float *)(dst.mStart + dst.mOffsets[TYPE_ROTX]);
-        float *sfdata = (float *)(mStart + mOffsets[TYPE_ROTX]);
-        if (mCompression != kCompressNone) {
-            while (true) {
-                while (db->name != src->name) {
-                    db++;
-                    if (db >= db_end) goto complain;
-                    dfdata++;
-                }
-                src++;
-                *dfdata += (float)(long long)*(short *)sfdata * 0.00061035156f;
-                if (src == src_end) return;
-                db++;
-                if (db >= db_end) goto complain;
-                dfdata++;
-                sfdata = (float *)((char *)sfdata + 2);
-            }
-        } else {
-            while (true) {
-                while (db->name != src->name) {
-                    db++;
-                    if (db >= db_end) goto complain;
-                    dfdata++;
-                }
-                src++;
-                *dfdata += *sfdata;
-                if (src == src_end) return;
-                db++;
-                if (db >= db_end) goto complain;
-                dfdata++;
-                sfdata++;
-            }
-        }
-    }
-    return;
-
-complain:
-    TestDstComplain(src->name);
 }
 
 // MARK: RotateTo
-void CharBones::RotateTo(CharBones &dst, float f) const {
-    const Bone *src = mBones.begin();
-    if (src == mBones.end()) return;
-
-    // Position section
-    if (mCounts[TYPE_QUAT] > mCounts[TYPE_POS]) {
-        const Bone *src_end = src + mCounts[TYPE_QUAT];
-        Vector3 *ddata = (Vector3 *)dst.mStart;
-        Bone *db_end = dst.mBones.begin() + dst.mCounts[TYPE_QUAT];
-        Bone *db = dst.mBones.begin() + dst.mCounts[TYPE_POS];
-        if (db != nullptr && mCompression >= kCompressVects) {
-            short *sdata = (short *)mStart;
-            while (true) {
-                long long sz = (long long)sdata[2];
-                short sy = sdata[1];
-                while (db->name != src->name) {
-                    db++;
-                    if (db >= db_end) goto complain;
-                    ddata++;
+void CharBones::RotateTo(CharBones &bones, float f2) const {
+    if (!mBones.empty()) {
+        Bone *myBonesItr = (Bone *)&mBones[0];
+        if (mCounts[TYPE_QUAT] > mCounts[TYPE_POS]) {
+            Bone *otherBonesItr = (Bone *)&bones.mBones[bones.mCounts[TYPE_POS]];
+            Bone *otherBonesEnd = (Bone *)&bones.mBones[bones.mCounts[TYPE_QUAT]];
+            Bone *myBonesEnd = (Bone *)&mBones[mCounts[TYPE_QUAT]];
+            Vector3 *otherVecItr = (Vector3 *)bones.mStart;
+            if (mCompression >= kCompressVects) {
+                ShortVector3 *myVecItr = (ShortVector3 *)mStart;
+                while (true) {
+                    Vector3 v;
+                    myVecItr->ToVector3(v);
+                    while (otherBonesItr->name != myBonesItr->name) {
+                        otherBonesItr++;
+                        if (otherBonesItr >= otherBonesEnd) {
+                            TestDstComplain(myBonesItr->name);
+                            return;
+                        }
+                        otherVecItr++;
+                    }
+                    ScaleAddEq(*otherVecItr, v, f2);
+                    myBonesItr++;
+                    if (myBonesItr == myBonesEnd) {
+                        break;
+                    }
+                    otherBonesItr++;
+                    if (otherBonesItr >= otherBonesEnd) {
+                        TestDstComplain(myBonesItr->name);
+                        return;
+                    }
+                    otherVecItr++;
+                    myVecItr++;
                 }
-                src++;
-                ddata->x += (float)(long long)sdata[0] * 0.039674062f * f;
-                ddata->y += (float)(long long)sy * 0.039674062f * f;
-                ddata->z += (float)sz * 0.039674062f * f;
-                if (src == src_end) goto rotateto_quat;
-                db++;
-                if (db >= db_end) goto complain;
-                ddata++;
-                sdata += 3;
+            } else {
+                Vector3 *myVecItr = (Vector3 *)mStart;
+                while (true) {
+                    while (otherBonesItr->name != myBonesItr->name) {
+                        otherBonesItr++;
+                        if (otherBonesItr >= otherBonesEnd) {
+                            TestDstComplain(myBonesItr->name);
+                            return;
+                        }
+                        otherVecItr++;
+                    }
+                    ScaleAddEq(*otherVecItr, *myVecItr, f2);
+                    myBonesItr++;
+                    if (myBonesItr == myBonesEnd) {
+                        break;
+                    }
+                    otherBonesItr++;
+                    if (otherBonesItr >= otherBonesEnd) {
+                        TestDstComplain(myBonesItr->name);
+                        return;
+                    }
+                    otherVecItr++;
+                    myVecItr++;
+                }
             }
-        } else {
-            Vector3 *sdata = (Vector3 *)mStart;
-            while (true) {
-                while (db->name != src->name) {
-                    db++;
-                    if (db >= db_end) goto complain;
-                    ddata++;
+        }
+        if (mCounts[TYPE_ROTX] > mCounts[TYPE_QUAT]) {
+            Bone *otherBonesItr = (Bone *)&bones.mBones[bones.mCounts[TYPE_QUAT]];
+            Bone *otherBonesEnd = (Bone *)&bones.mBones[bones.mCounts[TYPE_ROTX]];
+            Bone *myBonesEnd = (Bone *)&mBones[mCounts[TYPE_ROTX]];
+            Hmx::Quat *otherQuatItr = (Hmx::Quat *)(bones.mStart + bones.mOffsets[TYPE_QUAT]);
+            if (mCompression >= kCompressQuats) {
+                ByteQuat *myQuatItr = (ByteQuat *)(mStart + mOffsets[TYPE_QUAT]);
+                while (true) {
+                    while (otherBonesItr->name != myBonesItr->name) {
+                        otherBonesItr++;
+                        if (otherBonesItr >= otherBonesEnd) {
+                            TestDstComplain(myBonesItr->name);
+                            return;
+                        }
+                        otherQuatItr++;
+                    }
+                    Hmx::Quat q;
+                    myQuatItr->ToQuat(q);
+                    q.x *= f2;
+                    q.y *= f2;
+                    q.z *= f2;
+                    if (q.w < 0) {
+                        q.w = (q.w * f2) - (1 - f2);
+                    } else {
+                        q.w = (q.w * f2) + (1 - f2);
+                    }
+                    Multiply(*otherQuatItr, q, *otherQuatItr);
+                    myBonesItr++;
+                    if (myBonesItr == myBonesEnd) {
+                        break;
+                    }
+                    otherBonesItr++;
+                    if (otherBonesItr >= otherBonesEnd) {
+                        TestDstComplain(myBonesItr->name);
+                        return;
+                    }
+                    otherQuatItr++;
+                    myQuatItr++;
                 }
-                src++;
-                ddata->x += sdata->x * f;
-                ddata->y += sdata->y * f;
-                ddata->z += sdata->z * f;
-                if (src == src_end) goto rotateto_quat;
-                db++;
-                if (db >= db_end) goto complain;
-                ddata++;
-                sdata++;
+            } else if (mCompression != kCompressNone) {
+                ShortQuat *myQuatItr = (ShortQuat *)(mStart + mOffsets[TYPE_QUAT]);
+                while (true) {
+                    while (otherBonesItr->name != myBonesItr->name) {
+                        otherBonesItr++;
+                        if (otherBonesItr >= otherBonesEnd) {
+                            TestDstComplain(myBonesItr->name);
+                            return;
+                        }
+                        otherQuatItr++;
+                    }
+                    Hmx::Quat q;
+                    myQuatItr->ToQuat(q);
+                    q.x *= f2;
+                    q.y *= f2;
+                    q.z *= f2;
+                    if (q.w < 0) {
+                        q.w = (q.w * f2) - (1 - f2);
+                    } else {
+                        q.w = (q.w * f2) + (1 - f2);
+                    }
+                    Multiply(*otherQuatItr, q, *otherQuatItr);
+                    myBonesItr++;
+                    if (myBonesItr == myBonesEnd) {
+                        break;
+                    }
+                    otherBonesItr++;
+                    if (otherBonesItr >= otherBonesEnd) {
+                        TestDstComplain(myBonesItr->name);
+                        return;
+                    }
+                    otherQuatItr++;
+                    myQuatItr++;
+                }
+            } else {
+                Hmx::Quat *myQuatItr = (Hmx::Quat *)(mStart + mOffsets[TYPE_QUAT]);
+                while (true) {
+                    while (otherBonesItr->name != myBonesItr->name) {
+                        otherBonesItr++;
+                        if (otherBonesItr >= otherBonesEnd) {
+                            TestDstComplain(myBonesItr->name);
+                            return;
+                        }
+                        otherQuatItr++;
+                    }
+                    Hmx::Quat q;
+                    q.Set(
+                        myQuatItr->x * f2,
+                        myQuatItr->y * f2,
+                        myQuatItr->z * f2,
+                        myQuatItr->w * f2
+                    );
+                    if (myQuatItr->w < 0) {
+                        q.w -= (1 - f2);
+                    } else {
+                        q.w += (1 - f2);
+                    }
+                    Multiply(*otherQuatItr, q, *otherQuatItr);
+                    myBonesItr++;
+                    if (myBonesItr == myBonesEnd) {
+                        break;
+                    }
+                    otherBonesItr++;
+                    if (otherBonesItr >= otherBonesEnd) {
+                        TestDstComplain(myBonesItr->name);
+                        return;
+                    }
+                    otherQuatItr++;
+                    myQuatItr++;
+                }
+            }
+        }
+        if (mCounts[TYPE_END] > mCounts[TYPE_ROTX]) {
+            Bone *otherBonesItr = (Bone *)&bones.mBones[bones.mCounts[TYPE_ROTX]];
+            Bone *otherBonesEnd = (Bone *)&bones.mBones[bones.mCounts[TYPE_END]];
+            Bone *myBonesEnd = (Bone *)&mBones[mCounts[TYPE_END]];
+            float *otherRotItr = (float *)(bones.mStart + bones.mOffsets[TYPE_ROTX]);
+            if (mCompression != kCompressNone) {
+                float shortConstant = f2 * 0.00061035156f;
+                short *myRotItr = (short *)(mStart + mOffsets[TYPE_ROTX]);
+                while (true) {
+                    while (otherBonesItr->name != myBonesItr->name) {
+                        otherBonesItr++;
+                        if (otherBonesItr >= otherBonesEnd) {
+                            TestDstComplain(myBonesItr->name);
+                            return;
+                        }
+                        otherRotItr++;
+                    }
+                    *otherRotItr += *myRotItr * shortConstant;
+                    myBonesItr++;
+                    if (myBonesItr == myBonesEnd) {
+                        return;
+                    }
+                    otherBonesItr++;
+                    if (otherBonesItr >= otherBonesEnd) {
+                        TestDstComplain(myBonesItr->name);
+                        return;
+                    }
+                    otherRotItr++;
+                    myRotItr++;
+                }
+            } else {
+                float *myRotItr = (float *)(mStart + mOffsets[TYPE_ROTX]);
+                while (true) {
+                    while (otherBonesItr->name != myBonesItr->name) {
+                        otherBonesItr++;
+                        if (otherBonesItr >= otherBonesEnd) {
+                            TestDstComplain(myBonesItr->name);
+                            return;
+                        }
+                        otherRotItr++;
+                    }
+                    *otherRotItr += *myRotItr * f2;
+                    myBonesItr++;
+                    if (myBonesItr == myBonesEnd) {
+                        return;
+                    }
+                    otherBonesItr++;
+                    if (otherBonesItr >= otherBonesEnd) {
+                        TestDstComplain(myBonesItr->name);
+                        return;
+                    }
+                    otherRotItr++;
+                    myRotItr++;
+                }
             }
         }
     }
-rotateto_quat:
-    if (mCounts[TYPE_ROTX] > mCounts[TYPE_QUAT]) {
-        auto dstBonesBegin = dst.mBones.begin();
-        Bone *db_end = dstBonesBegin + dst.mCounts[TYPE_ROTX];
-        Bone *db = dst.mBones.begin() + dst.mCounts[TYPE_QUAT];
-        Hmx::Quat *dquat = (Hmx::Quat *)(dst.mStart + dst.mOffsets[TYPE_QUAT]);
-        int src_quat_off = mOffsets[TYPE_QUAT];
-        const Bone *src_end = mBones.begin() + mCounts[TYPE_ROTX];
-        if (mCompression >= kCompressQuats) {
-            char *sqdata = (char *)(src_quat_off + mStart);
-            while (true) {
-                while (db->name != src->name) {
-                    db++;
-                    if (db >= db_end) goto complain;
-                    dquat++;
-                }
-                Hmx::Quat sq;
-                ((ByteQuat *)sqdata)->ToQuat(sq);
-                float sx = sq.x * f;
-                float sy = sq.y * f;
-                sq.z *= f;
-                if (sq.w < 0.0f) {
-                    sq.w = sq.w * f - (1.0f - f);
-                } else {
-                    sq.w = sq.w * f + (1.0f - f);
-                }
-                float dx = dquat->x;
-                src++;
-                float dz = dquat->z;
-                float dw = dquat->w;
-                float dy = dquat->y;
-#ifdef HX_NATIVE
-                { float sw_ = sq.w, sx_ = sx, sy_ = sy, sz_ = sq.z;
-                float nw = sw_*dw - sx_*dx - sy_*dy - sz_*dz;
-                float nx = sw_*dx + sx_*dw + sy_*dz - sz_*dy;
-                float ny = sw_*dy - sx_*dz + sy_*dw + sz_*dx;
-                float nz = sw_*dz + sx_*dy - sy_*dx + sz_*dw;
-                dquat->x = nx; dquat->y = ny; dquat->z = nz; dquat->w = nw; }
-#else
-                dquat->w = -(dz * sq.z - -(dy * sy - (dw * sq.w - dx * sq.x)));
-                dquat->z = -(dy * sx - (dw * sq.z + dz * sq.w + dx * sy));
-                dquat->y = -(dx * sq.z - ((dz * sx + (dy * sq.w + dw * sy))));
-                dquat->x = -(dz * sy - (dw * sx + dy * sq.z + dx * sq.w));
-#endif
-                if (src == src_end) goto rotateto_rot;
-                db++;
-                if (db >= db_end) goto complain;
-                dquat++;
-                sqdata += 4;
-            }
-        } else if (mCompression != kCompressNone) {
-            char *sqdata = (char *)(src_quat_off + mStart);
-            while (true) {
-                while (db->name != src->name) {
-                    db++;
-                    if (db >= db_end) goto complain;
-                    dquat++;
-                }
-                Hmx::Quat sq;
-                ((ShortQuat *)sqdata)->ToQuat(sq);
-                float sx = sq.x * f;
-                float sy = sq.y * f;
-                sq.z *= f;
-                if (sq.w < 0.0f) {
-                    sq.w = sq.w * f - (1.0f - f);
-                } else {
-                    sq.w = sq.w * f + (1.0f - f);
-                }
-                float dx = dquat->x;
-                src++;
-                float dz = dquat->z;
-                float dw = dquat->w;
-                float dy = dquat->y;
-#ifdef HX_NATIVE
-                { float sw_ = sq.w, sx_ = sx, sy_ = sy, sz_ = sq.z;
-                float nw = sw_*dw - sx_*dx - sy_*dy - sz_*dz;
-                float nx = sw_*dx + sx_*dw + sy_*dz - sz_*dy;
-                float ny = sw_*dy - sx_*dz + sy_*dw + sz_*dx;
-                float nz = sw_*dz + sx_*dy - sy_*dx + sz_*dw;
-                dquat->x = nx; dquat->y = ny; dquat->z = nz; dquat->w = nw; }
-#else
-                dquat->w = -(dz * sq.z - -(dy * sy - (dx * sq.x - sq.w * dw)));
-                dquat->z = -(dy * sx - (sq.z * dw + dz * sq.w + dx * sy));
-                dquat->y = -(dx * sq.z - (sy * dw + dy * sq.w + dz * sx));
-                dquat->x = -(dz * sy - (dw * sx + dy * sq.z + dx * sq.w));
-#endif
-                if (src == src_end) goto rotateto_rot;
-                db++;
-                if (db >= db_end) goto complain;
-                dquat++;
-                sqdata += 8;
-            }
-        } else {
-            Hmx::Quat *squat = (Hmx::Quat *)(src_quat_off + mStart);
-            while (true) {
-                while (db->name != src->name) {
-                    db++;
-                    if (db >= db_end) goto complain;
-                    dquat++;
-                }
-                float sw = squat->w * f;
-                float sx = f * squat->x;
-                float sy = squat->y * f;
-                float sz = f * squat->z;
-                if (squat->w < 0.0f) {
-                    sw = sw - (1.0f - f);
-                } else {
-                    sw = (1.0f - f) + sw;
-                }
-                float dx = dquat->x;
-                src++;
-                float dz = dquat->z;
-                float dw = dquat->w;
-                float dy = dquat->y;
-#ifdef HX_NATIVE
-                // Native fix: PPC decomp has cross-product terms negated in x/y/z
-                // (same decompiler register swap class as compressed paths above).
-                // Correct quaternion multiply: result = (sw,sx,sy,sz) * (dw,dx,dy,dz)
-                { float nw = sw*dw - sx*dx - sy*dy - sz*dz;
-                float nx = sw*dx + sx*dw + sy*dz - sz*dy;
-                float ny = sw*dy - sx*dz + sy*dw + sz*dx;
-                float nz = sw*dz + sx*dy - sy*dx + sz*dw;
-                dquat->x = nx; dquat->y = ny; dquat->z = nz; dquat->w = nw; }
-#else
-                dquat->z = -(sx * dy - (sw * dz + sy * dx + sz * dw));
-                dquat->w = -(sz * dz - -(sy * dy - (sw * dw - sx * dx)));
-                dquat->y = -(sz * dx - (sw * dy + sx * dz + sy * dw));
-                dquat->x = -(sy * dz - (sw * dx + sz * dy + sx * dw));
-#endif
-                if (src == src_end) goto rotateto_rot;
-                db++;
-                if (db >= db_end) goto complain;
-                dquat++;
-                squat++;
-            }
-        }
-    }
-rotateto_rot:
-    if (mCounts[TYPE_END] > mCounts[TYPE_ROTX]) {
-        Bone *db_end = dst.mBones.begin() + dst.mCounts[TYPE_END];
-        const Bone *src_end = mBones.begin() + mCounts[TYPE_END];
-        Bone *db = dst.mBones.begin() + dst.mCounts[TYPE_ROTX];
-        float *dfdata = (float *)(dst.mStart + dst.mOffsets[TYPE_ROTX]);
-        float *sfdata = (float *)(mStart + mOffsets[TYPE_ROTX]);
-        if (mCompression != kCompressNone) {
-            while (true) {
-                while (db->name != src->name) {
-                    db++;
-                    if (db >= db_end) goto complain;
-                    dfdata++;
-                }
-                src++;
-                *dfdata += (float)*(short *)sfdata * (f * 0.00061035156f);
-                if (src == src_end) return;
-                db++;
-                if (db >= db_end) goto complain;
-                dfdata++;
-                sfdata = (float *)((char *)sfdata + 2);
-            }
-        } else {
-            while (true) {
-                while (db->name != src->name) {
-                    db++;
-                    if (db >= db_end) goto complain;
-                    dfdata++;
-                }
-                src++;
-                *dfdata += *sfdata * f;
-                if (src == src_end) return;
-                db++;
-                if (db >= db_end) goto complain;
-                dfdata++;
-                sfdata++;
-            }
-        }
-    }
-    return;
-
-complain:
-    TestDstComplain(src->name);
 }
 
 CharBonesAlloc::~CharBonesAlloc() {
