@@ -93,12 +93,13 @@ void DxMovie::SetTex(RndTex *tex) {
 
 void DxMovie::Update() {
     DxTex *tex = static_cast<DxTex *>(mTex.Ptr());
-    D3DSurface *surface = tex->GetMovieSurface();
     tex->SwapMovieSurface();
+    D3DSurface *surface = tex->GetMovieSurface();
     if (surface) {
         D3DLOCKED_RECT lock;
+        int width = mVideo.Width();
         int bpp = mVideo.Bpp();
-        int srcPitch = bpp * mVideo.Width() * 4;
+        int srcPitch = (bpp * width * 4) >> 3;
         D3DSurface_LockRect(surface, &lock, nullptr, 0);
         if (srcPitch == lock.Pitch) {
             memcpy(lock.pBits, mReadPtr, mVideo.FrameSize());

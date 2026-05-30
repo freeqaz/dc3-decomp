@@ -422,8 +422,10 @@ void StorePanel::PopulateOffers(DataArray *arr, bool b) {
             DeleteAll(mOffers);
         }
 
-        std::vector<StoreOffer *> *offerVec = &mPendingOffers;
-        if (!b) {
+        std::vector<StoreOffer *> *offerVec;
+        if (b) {
+            offerVec = &mPendingOffers;
+        } else {
             offerVec = &mOffers;
         }
 
@@ -436,13 +438,19 @@ void StorePanel::PopulateOffers(DataArray *arr, bool b) {
                     DataArray *child_arr = arr->Array(i);
                     StoreOffer *offer = MakeNewOffer(child_arr);
 
-                    if ((mShowTestOffers == 0) && offer->IsTest()) {
-                        delete offer;
-                    } else if (!offer->ValidTitle()) {
+                    if (mShowTestOffers == 0) {
+                        if (offer->IsTest()) {
+                            delete offer;
+                            goto offer_done;
+                        }
+                    }
+                    if (!offer->ValidTitle()) {
                         delete offer;
                     } else {
                         offerVec->push_back(offer);
                     }
+
+                offer_done:
 
                     i++;
                 } while (i < arr->Size());

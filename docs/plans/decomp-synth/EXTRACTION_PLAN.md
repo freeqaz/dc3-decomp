@@ -15,12 +15,30 @@ do not embed or symlink it (see §6).
 > monkeypatch shim in production proving it. See §1 and the
 > [audit appendix](#appendix-audit-findings).
 >
-> **Progress (2026-05-28):** ✅ **§1 landed in-place** — the project model is now
-> fully config-driven from `decomp-synth.json` (renamed from `permuter.json`),
-> game×toolchain split, `obj_layout` added, `scorer.py` re-keyed to `toolchain`.
-> All three `decomp-synth.json` files written; `permuter_rb3xenon.py` shim deleted;
-> validated (dc3 byte-identical at 100%, rb3-xenon resolves flat objs via
-> `objdiff_map` with no shim). Remaining workstreams (§2–§8) not yet started.
+> **Progress (2026-05-29): extraction complete.** The standalone repo lives at
+> `../decomp-synth` (fresh git history). All workstreams landed:
+> - **§1** project model config-driven from `decomp-synth.json` (game×toolchain
+>   split, `obj_layout`, `scorer.py` re-keyed to `toolchain`); shim deleted;
+>   dc3 byte-identical, rb3-xenon resolves flat objs with no shim.
+> - **§2** decoupled: vendored `diff_inspect`, host hooks optional, `decomp_synth`
+>   package imports standalone in a clean tree-sitter-only venv.
+> - **§3/§4** `pyproject.toml` (MIT, tree-sitter trio, `decomp-synth` console
+>   script), tool paths config/env-driven, `$DECOMP_SYNTH_REPO`/`--repo-root`.
+> - **§5** 2 game-specific patterns dropped (114→112), Milo vocab centralized in
+>   `dialect.py`, DBs schema-only (auto-create, no seed).
+> - **§7** LICENSE + README + examples; game symbols / machine paths scrubbed.
+> - **§8** portable lane green (`pytest -m "not integration"`: 1875 passed, 86
+>   integration-marked); GitHub Actions CI.
+> - **§6** installed editable into the shared venv; all three repos verified
+>   consuming it.
+>
+> **Cutover complete (2026-05-29).** All three repos now consume the installed
+> `decomp_synth` (editable in the shared venv); the in-tree `scripts/permuter/`
+> was removed from dc3 and `decomp_synth` is the sole source. Commits: dc3
+> `855f3582` (inbound consumers + skill + docs flipped off `scripts.permuter`) and
+> `03960f53` (in-tree deletion), rb3-xenon `eed3c94`, rb3 `93439c5` (symlinks
+> removed). The extraction is **done** — this doc is retained for posterity; the
+> canonical copy lives in the `../decomp-synth` repo.
 
 ## Why "decomp-synth"
 

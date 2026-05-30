@@ -125,4 +125,4 @@ python3 msvc-src/tools/il_diff.py variant_a.cpp variant_b.cpp -f FunctionName
 
 | Tool | Description | Doc |
 |------|-------------|-----|
-| C++ Permuter | Tree-sitter based source permutation for register allocation issues | [../permuter/INDEX.md](../permuter/INDEX.md) |
+| C++ Permuter (`decomp_synth`, now in [`../decomp-synth`](../../../decomp-synth)) | Tree-sitter based source permutation for register allocation issues. Run via `python -m decomp_synth.scan_and_permute` or the `/permute` skill | [../permuter/INDEX.md](../permuter/INDEX.md) |

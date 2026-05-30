@@ -196,6 +196,7 @@ void HamSkeletonConverter::SetPosBoneValue(String s, Vector3 v) {
 void HamSkeletonConverter::CalcQuatBone(
     SkeletonJoint joint, SkeletonJoint from, SkeletonJoint to
 ) {
+    Hmx::Quat q;
     Vector3 dir;
     Subtract(mJointPositions[to], mJointPositions[from], dir);
     Normalize(dir, dir);
@@ -207,23 +208,24 @@ void HamSkeletonConverter::CalcQuatBone(
     GetParentWorldXfm(mesh, parentXfm, joint);
     Multiply(xfm, parentXfm, xfm);
 
-    Hmx::Quat q;
     MakeRotQuat(xfm.m.x, dir, q);
 
-    Hmx::Matrix3 mat;
-    Multiply(xfm.m.x, q, mat.x);
-    Multiply(xfm.m.y, q, mat.y);
-    Multiply(xfm.m.z, q, mat.z);
-    Normalize(mat, mat);
-
-    auto& boneXfm = mBoneTransforms[from];
-    memcpy(&boneXfm.m, &mat, sizeof(Hmx::Matrix3));
+    Transform boneXfm;
+    Multiply(xfm.m.x, q, boneXfm.m.x);
+    Multiply(xfm.m.y, q, boneXfm.m.y);
+    Multiply(xfm.m.z, q, boneXfm.m.z);
+    Normalize(boneXfm.m, boneXfm.m);
     boneXfm.v = xfm.v;
 
-    Invert(parentXfm, parentXfm);
-    Multiply(boneXfm, parentXfm, xfm);
+    memcpy(&mBoneTransforms[from].m, &boneXfm.m, sizeof(Hmx::Matrix3));
+    mBoneTransforms[from].v = xfm.v;
 
-    q.Set(xfm.m);
+    Transform invParentXfm;
+    Invert(parentXfm, invParentXfm);
+    Transform finalXfm;
+    Multiply(boneXfm, invParentXfm, finalXfm);
+
+    q.Set(finalXfm.m);
     SetQuatBoneValue(String(CharBoneName(from)), q);
 }
 
@@ -238,7 +240,10 @@ void HamSkeletonConverter::CalcRotzBone(
     Subtract(mJointPositions[to], mJointPositions[from], dir2);
     Normalize(dir2, dir2);
 
-    float angle = acos(Dot(dir1, dir2));
+    float dot = dir1.z * dir2.z;
+    dot += dir1.y * dir2.y;
+    dot += dir1.x * dir2.x;
+    float angle = acos(dot);
     angle = -angle;
     int isNaN = (angle != angle) ? 1 : 0;
     if ((isNaN & 0xFF) == 0) {

@@ -134,11 +134,12 @@ void FillCompressedVertex(
     CompressedVertex_Xbox &compressed, const RndMesh::Vert &vert, bool normalize
 ) {
     // Pack color (ARGB D3DCOLOR format)
+    u32 green = (u32)(vert.color.green * 255.0f);
     u32 blue = (u32)(vert.color.blue * 255.0f);
+    u32 alpha = (u32)(vert.color.alpha * 255.0f);
     u32 red = (u32)(vert.color.red * 255.0f);
-    compressed.mColor =
-        (((((u32)(vert.color.alpha * 255.0f) << 8) | (red & 0xFF)) << 8)
-        | ((u32)(vert.color.green * 255.0f) & 0xFF)) << 8
+    compressed.mColor = ((((alpha << 8) | (red & 0xFF)) << 8) | (green & 0xFF))
+            << 8
         | (blue & 0xFF);
 
     // Pack bone weights as UDEC4N
@@ -157,7 +158,9 @@ void FillCompressedVertex(
     compressed.mNormal = (halfU << 16) | halfV;
 
     // Pack normal as DEC4N
-    Vector4 normVec(vert.norm.x, vert.norm.y, vert.norm.z, 0.0f);
+    float normZ = vert.norm.z;
+    float normY = vert.norm.y;
+    Vector4 normVec(vert.norm.x, normY, normZ, 0.0f);
     PackVector((unsigned int &)compressed.mTangent, normVec, 10, 10, 10, 2, true);
 
     // Pack tangent as DEC4N

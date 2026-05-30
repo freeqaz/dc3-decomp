@@ -1,74 +1,22 @@
-# Synthesis Engine
+# Synthesis Engine → moved to `decomp-synth`
 
-The synthesis engine is the long-term vision for closing the gap on DC3's 4,403 AT_LIMIT
-functions (12.9%). Rather than treating the compiler as a black box and brute-forcing source
-variations, we reverse-engineer the compiler itself to understand *why* it makes specific
-codegen decisions, then use that knowledge to either:
+The synthesis-engine **design and architecture** docs were part of the source
+permuter, which has been extracted into the standalone open-source tool
+**[`decomp-synth`](../../../../decomp-synth)**. They now live (cleaned) under
+[`../../../../decomp-synth/docs/architecture/`](../../../../decomp-synth/docs/architecture/):
 
-1. **Fix source** — knowing the exact heuristic, write source that triggers the desired path
-2. **Patch binaries** — for truly unfixable patterns, generate targeted .obj patches
-3. **Synthesize from spec** — given a target instruction sequence, work backwards through
-   the compiler's decision tree to find source that produces it
+- `README.md`, `ROADMAP.md` — engine overview & execution roadmap
+- `COMPILER_ATLAS.md`, `PATTERN_MINING.md` — compiler RE & transfer learning
+- `INSTRUCTION_ATTRIBUTION.md`, `TARGET_FACTS.md` — evidence layers
+- `DIFFERENTIAL_TESTING.md` — black-box compiler testing
+- `IL_PERMUTER.md`, `IL_TYPE_CONTROL.md` — IL-level design
+- `DEEP_ANALYSIS_PLAN.md`, `MSVC_ROADMAP.md` — compiler back-end reverse-engineering
 
-## Architecture
+See [`../../../../decomp-synth/docs/README.md`](../../../../decomp-synth/docs/README.md) for the full index.
 
-```
-                    +---------------------------+
-                    |   Synthesis Engine         |
-                    |                           |
-                    |  +---------------------+  |
-                    |  | Compiler Model      |  | <- RE'd from c2.dll
-                    |  |  * Regalloc rules   |  |
-                    |  |  * Inline thresh    |  |
-                    |  |  * Peephole table   |  |
-                    |  |  * Pass ordering    |  |
-                    |  +---------+-----------+  |
-                    |            |               |
-                    |  +---------v-----------+  |
-                    |  | Decision Oracle     |  | <- predicts codegen choices
-                    |  |  * Will this inline?|  |
-                    |  |  * Which register?  |  |
-                    |  |  * Which peephole?  |  |
-                    |  +---------+-----------+  |
-                    |            |               |
-                    |  +---------v-----------+  |
-                    |  | Source Synthesizer   |  | <- generates candidate source
-                    |  |  * Guided permuter  |  |
-                    |  |  * Pattern library  |  |
-                    |  |  * Constraint SAT   |  |
-                    |  +---------------------+  |
-                    +---------------------------+
-```
+## Stays here (DC3-specific)
 
-## Components
+These document concrete results against DC3's binary and remain project-side:
 
-| Component | Status | Doc |
-|-----------|--------|-----|
-| MSVC Compiler RE | Exploration | [MSVC_ROADMAP.md](MSVC_ROADMAP.md) |
-| Differential Testing | Not started | [DIFFERENTIAL_TESTING.md](DIFFERENTIAL_TESTING.md) |
-| Decision Oracle | Design phase | — |
-| Guided Permuter | Existing (scripts/permuter/) | — |
-| Binary Patching | Existing (obj_*_patcher.py) | — |
-
-## How It Connects
-
-The synthesis engine sits between the existing permuter and the existing objdiff pipeline:
-
-```
-Current workflow:
-  Source -> permuter (brute force) -> compile -> objdiff -> score
-
-Synthesis engine workflow:
-  Target asm -> compiler model (predict decisions) -> oracle (constrain search) ->
-  guided permuter (targeted mutations) -> compile -> objdiff -> score
-```
-
-The compiler model dramatically prunes the search space. Instead of trying all possible
-source mutations, we only try mutations that the model predicts will change the specific
-codegen decision causing the mismatch.
-
-## Roadmap
-
-See individual component docs for detailed plans:
-- [MSVC_ROADMAP.md](MSVC_ROADMAP.md) — Compiler RE plan and timeline
-- [DIFFERENTIAL_TESTING.md](DIFFERENTIAL_TESTING.md) — Empirical codegen mapping
+- [HEADER_LEVEL_CLUSTERING.md](HEADER_LEVEL_CLUSTERING.md) — catalog of DC3 header-level fixes (1,500+ function improvements)
+- [OG_REGRESSION_ANALYSIS.md](OG_REGRESSION_ANALYSIS.md) — impact analysis of header changes vs the upstream fork

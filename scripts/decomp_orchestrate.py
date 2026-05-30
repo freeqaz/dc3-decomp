@@ -1049,9 +1049,9 @@ def cmd_rb3_merge(args):
 
 def cmd_permute(args):
     """Run the source permuter on a function (automated pattern search)."""
-    from permuter.__main__ import resolve_from_db
-    from permuter.hill_climber import hill_climb, install_signal_handler
-    from permuter.patterns import get_all_patterns, get_pattern
+    from decomp_synth.__main__ import resolve_from_db
+    from decomp_synth.hill_climber import hill_climb, install_signal_handler
+    from decomp_synth.patterns import get_all_patterns, get_pattern
 
     # Resolve symbol from DB
     resolved = resolve_from_db(args.symbol)

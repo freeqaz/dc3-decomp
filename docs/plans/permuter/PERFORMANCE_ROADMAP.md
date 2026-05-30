@@ -401,7 +401,7 @@ an A/B sweep) once climb runs accumulate enough `climb_variant` rows.
 Already largely built. `constraint_solver.synthesize()` (`constraint_solver.py:191`)
 runs as a default pre-pass (round-1 in `hill_climber.py:851`, gated
 `hill_climber.py:849`; per-beam-state in `beam_search.py:546`, gated `:539`).
-See companion roadmap: [../synthesis-engine/ROADMAP.md](../synthesis-engine/ROADMAP.md).
+See companion roadmap: [decomp-synth synthesis-engine ROADMAP](../../../../decomp-synth/docs/architecture/ROADMAP.md).
 
 **Module status (corrected against code 2026-05-26):**
 
@@ -676,7 +676,7 @@ Other existing `PERMUTER_*` flags (for reference): `PERMUTER_DB_ROOT`,
 
 ## Companion Docs
 
-- [../synthesis-engine/ROADMAP.md](../synthesis-engine/ROADMAP.md) — evidence-quality roadmap (Workstream C builds on this)
+- [decomp-synth synthesis-engine ROADMAP](../../../../decomp-synth/docs/architecture/ROADMAP.md) — evidence-quality roadmap (Workstream C builds on this)
 - [ARCHITECTURE_ROADMAP.md](ARCHITECTURE_ROADMAP.md) — permuter architecture
 - [BEAM_SOLVER.md](BEAM_SOLVER.md) — beam search design
 

@@ -205,7 +205,7 @@ namespace {
             loopOffset = Mod(beat - clip->StartBeat(), (float)loopCount);
         }
         outClipBeat = beat - loopOffset;
-        outEndBeat = clip->LengthBeats() + (beat - loopOffset);
+        outEndBeat = clip->LengthBeats() + outClipBeat;
         return clip->StartBeat() + loopOffset;
     }
 }

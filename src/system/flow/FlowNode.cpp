@@ -354,30 +354,30 @@ void FlowNode::PushDrivenProperties() {
             const_cast<ObjVector<FlowMathOp> &>(entry.MathOps());
         DataNode targetValue(0);
 
-        FlowMathOp &firstOp = mathOps[0];
-        Hmx::Object *drivenObj = firstOp.DrivenObj();
+        FlowMathOp *op = &mathOps[0];
+        Hmx::Object *drivenObj = op->DrivenObj();
 
         if (drivenObj) {
-            DataArray *propPath = firstOp.Rhs().Array(NULL);
+            DataArray *propPath = op->Rhs().Array(NULL);
             const DataNode *prop = drivenObj->Property(propPath, false);
             if (prop) {
                 targetValue = *prop;
             } else {
-                targetValue = DataNode(firstOp.Default());
+                targetValue = DataNode(op->Default());
             }
         } else {
-            targetValue = DataNode(firstOp.Default());
+            targetValue = DataNode(op->Default());
         }
 
-        if (&*mathOps.end() == &mathOps[0] + 1) {
+        op++;
+        if (op == mathOps.end()) {
             SetProperty(entry.Node().Array(NULL), targetValue);
         } else {
             if (targetValue.CompatibleType(kDataFloat)) {
-                FlowMathOp *op = &mathOps[0];
                 float val = targetValue.LiteralFloat(NULL);
-                auto opEnd = mathOps.end();
-                while (op++, op != opEnd) {
+                while (op != mathOps.end()) {
                     val = op->Apply(val);
+                    op++;
                 }
                 targetValue = DataNode(val);
             }
@@ -469,8 +469,9 @@ void FlowNode::ActivateLabel(FlowLabel *label) {
 }
 
 static ObjectDir *FlowParentDir(Flow *flow) {
-    if (flow->Loader()) {
-        return flow->Loader()->ProxyDir();
+    DirLoader *loader = flow->Loader();
+    if (loader != nullptr) {
+        return loader->ProxyDir();
     }
     return flow->Dir();
 }
@@ -483,19 +484,19 @@ Hmx::Object *FlowNode::LoadObjectFromMainOrDir(BinStream &bs, ObjectDir *dir) {
 
     // Try main dir first
     Hmx::Object *obj = ObjectDir::Main()->Find<Hmx::Object>(sym.Str(), false);
-    if (obj == 0)
+    if (obj == nullptr)
         obj = dir->Find<Hmx::Object>(sym.Str(), false);
-    if (obj == 0) {
+    if (obj == nullptr) {
         Flow *flow = dynamic_cast<Flow *>(dir);
-        if (flow) {
+        if (flow != nullptr) {
             ObjectDir *parentDir = FlowParentDir(flow);
-            if (parentDir) {
+            if (parentDir != nullptr) {
                 obj = FlowParentDir(flow)->Find<Hmx::Object>(sym.Str(), false);
-                if (obj == 0) {
+                if (obj == nullptr) {
                     Flow *parentFlow = dynamic_cast<Flow *>(FlowParentDir(flow));
-                    if (parentFlow) {
+                    if (parentFlow != nullptr) {
                         ObjectDir *gpDir = FlowParentDir(parentFlow);
-                        if (gpDir) {
+                        if (gpDir != nullptr) {
                             obj = FlowParentDir(parentFlow)->Find<Hmx::Object>(sym.Str(), false);
                         }
                     }

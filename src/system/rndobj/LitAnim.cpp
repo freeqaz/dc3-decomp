@@ -10,13 +10,15 @@
 RndLightAnim::RndLightAnim() : mLight(this), mKeysOwner(this, this) {}
 
 bool RndLightAnim::Replace(ObjRef *from, Hmx::Object *to) {
-    if (&mLight == from) {
-        if (!(mKeysOwner != this)) {
-            RndLightAnim *litTo = dynamic_cast<RndLightAnim *>(to);
-            if (litTo) {
-                mKeysOwner = litTo;
+    if (&mKeysOwner == from) {
+        if (mKeysOwner != this) {
+            RndLightAnim *litOwner = dynamic_cast<RndLightAnim *>(to);
+            RndLightAnim *newOwner = litOwner;
+            if (newOwner) {
+                newOwner = litOwner->mKeysOwner.Ptr();
             } else
-                mKeysOwner = this;
+                newOwner = this;
+            mKeysOwner = newOwner;
         } else {
             mKeysOwner = this;
         }
