@@ -50,41 +50,39 @@
 
 const char *gNullStr = "";
 
-GfxMode gGfxMode;
+static GfxMode gGfxMode;
+
 bool gHostConfig;
 bool gHostLogging;
 bool gHostCached;
 
-DataArray *gSystemConfig;
-DataArray *gSystemTitles;
-
-int gUsingCD;
-int gSystemMs;
-float gSystemFrac;
+static DataArray *gSystemConfig;
+static DataArray *gSystemTitles;
+static int gUsingCD;
+static int gSystemMs;
+static float gSystemFrac;
 const char *gHostFile;
+static Symbol gSystemLanguage;
 
-Symbol gSystemLanguage;
-Symbol gSystemLocale;
+std::vector<char *> TheSystemArgs;
 
-Timer gSystemTimer;
+static Symbol gSystemLocale;
+static std::vector<char *> gPristineSystemArgs;
+static Timer gSystemTimer;
 bool gNetUseTimedSleep;
 bool(__cdecl *ParseStack)(char const *, struct StackData *, int, class FixedString &) =
     XboxMapFile::ParseStack;
 
-std::vector<char *> TheSystemArgs;
-std::vector<char *> gPristineSystemArgs;
-
 namespace {
     bool gPreconfigOverride;
-    bool gHasPreconfig;
+    bool gHasPreconfig = true;
 
     void CheckForArchive() {
         gUsingCD = true;
-        if (FileGetStat(
-                MakeString("gen/main_%s.hdr", PlatformSymbol(TheLoadMgr.GetPlatform()))
-            ) < 0) {
-            gUsingCD = false;
-        }
+        FileStat buffer;
+        Symbol plat = PlatformSymbol(TheLoadMgr.GetPlatform());
+        int ret = FileGetStat(MakeString("gen/main_%s.hdr", plat), &buffer);
+        gUsingCD &= ((unsigned)ret >> 31) - 1;
     }
 }
 
@@ -149,7 +147,7 @@ Symbol SystemLocale() { return gSystemLocale; }
 DataArray *SystemTitles() { return gSystemTitles; }
 
 Symbol GetSongTitlePronunciationLanguage() {
-    Symbol lang = HongKongExceptionMet() ? "eng" : gSystemLanguage;
+    Symbol lang = HongKongExceptionMet() ? "eng" : SystemLanguage();
     static Symbol fre("fre");
     static Symbol frc("frc");
     static Symbol can("can");
@@ -405,6 +403,7 @@ bool GenericMapFile::ParseStack(
 void InitSystem(const char *config) {
     if (!gPreconfigOverride && config) {
         bool oldCD = UsingCD();
+        Archive *oldArchive = TheArchive;
         if (gHostConfig) {
             gUsingCD = false;
             TheArchive = nullptr;
@@ -417,13 +416,14 @@ void InitSystem(const char *config) {
         gSystemConfig = systemConfig;
         DataVariable("syscfg") = gSystemConfig;
         gUsingCD = oldCD;
-        TheArchive = TheArchive;
+        TheArchive = oldArchive;
         StripEditorData();
     }
     FinishDataRead();
 }
 
 void PreInitSystem(const char *config) {
+    Archive *oldArchive = TheArchive;
     bool oldCD = UsingCD();
     if (gHostConfig) {
         gUsingCD = false;
@@ -444,10 +444,11 @@ void PreInitSystem(const char *config) {
         config = cfgStr;
     }
     BeginDataRead();
-        MILO_ASSERT(gSystemConfig = ReadSystemConfig(config), 0x1FF);
+    gSystemConfig = ReadSystemConfig(config);
+    MILO_ASSERT(gSystemConfig, 0x1FF);
     DataVariable("syscfg") = gSystemConfig;
     gUsingCD = oldCD;
-    TheArchive = TheArchive;
+    TheArchive = oldArchive;
     DataRegisterFunc("system_language", OnSystemLanguage);
     DataRegisterFunc("system_locale", OnSystemLocale);
     DataRegisterFunc("system_exec", OnSystemExec);
@@ -560,25 +561,17 @@ void SetSystemArgs(const char *commandLine) {
 }
 
 void NormalizeSystemArgs() {
-    unsigned int i = 0;
-    if (TheSystemArgs.size() == 0)
-        return;
-
-    do {
-        char *p = TheSystemArgs[i];
-        char c = *p;
-        while (c != '\0') {
+    for (int i = 0; i < TheSystemArgs.size(); i++) {
+        char *cur = TheSystemArgs[i];
+        for (char *p = cur; *p != '\0'; p++) {
             if (*p == (char)0x96) {
                 *p = '-';
             }
             if (*p == (char)0x93 || *p == (char)0x94) {
                 *p = '"';
             }
-            p++;
-            c = *p;
         }
-        i++;
-    } while (i < TheSystemArgs.size());
+    }
 }
 
 void SystemPreInit(const char *config) {
@@ -670,12 +663,13 @@ void SystemPreInit(const char *cmdLine, const char *cfg) {
 
 void SystemTerminate() {
     TheDebug.RemoveExitCallback(SystemTerminate);
+    SpewTerminate();
     TheVirtualKeyboard.Terminate();
     CacheMgrTerminate();
     NetCacheMgrTerminate();
     FileCache::Terminate();
     TheLocale.Terminate();
-    TheMC.Memcard::Terminate();
+    TheMC.Terminate();
     CheatsTerminate();
     KeyboardTerminate();
     JoypadTerminate();
@@ -689,7 +683,7 @@ void SystemTerminate() {
     DataTerminate();
     Symbol::Terminate();
     AppChild::Terminate();
-    TheSystemArgs.erase(TheSystemArgs.begin(), TheSystemArgs.end());
+    TheSystemArgs.clear();
     TerminateMakeString();
 }
 

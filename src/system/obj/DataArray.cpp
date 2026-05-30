@@ -14,6 +14,7 @@
 #include "utl/Str.h"
 
 #ifdef HX_NATIVE
+#include "os/System.h"
 #include <cstdlib>
 #include <cstdio>
 #include <cstring>
@@ -48,12 +49,12 @@ void DataArray_InitDtaValidate() {
 // Resolve a dotted context path to the actual DataArray node in gSystemConfig.
 // Returns nullptr if the path cannot be resolved.
 static DataArray *ResolveContextPath(const char *path) {
-    extern DataArray *gSystemConfig;
-    if (!gSystemConfig || !path || !*path) return nullptr;
+    DataArray *cfg = SystemConfig();
+    if (!cfg || !path || !*path) return nullptr;
 
     // Parse dotted path: "rank.tasks.one_time" ->
     //   FindArray("rank")->FindArray("tasks")->FindArray("one_time")
-    DataArray *node = gSystemConfig;
+    DataArray *node = cfg;
 
     // Copy path to mutable buffer for tokenization
     char buf[256];
