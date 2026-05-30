@@ -62,39 +62,37 @@ BEGIN_COPYS(WorldInstance)
 END_COPYS
 
 void WorldInstance::SavePersistentObjects(BinStream &bs) {
-    if (!IsProxy())
-        return;
-    int hashUsed = HashTableUsedSize();
-    int strUsed = StrTableUsedSize();
-    DeleteTransientObjects();
-    for (ObjDirItr<Hmx::Object> it(this, false); it != nullptr; ++it) {
-        if (it != this) {
-            MILO_ASSERT(dynamic_cast<ObjectDir *>((Hmx::Object *)it) == NULL, 0x12F);
-            it->PreSave(bs);
+    if (IsProxy()) {
+        int hashSize = HashTableUsedSize();
+        int strSize = StrTableUsedSize();
+        DeleteTransientObjects();
+        for (ObjDirItr<Hmx::Object> i(this, false); i != nullptr; ++i) {
+            if (i != this) {
+                MILO_ASSERT(dynamic_cast<ObjectDir*>((Hmx::Object*)i) == NULL, 0x12F);
+                i->PreSave(bs);
+            }
         }
-    }
-    bs.WriteEndian(&hashUsed, 4);
-    bs.WriteEndian(&strUsed, 4);
-    std::list<Hmx::Object *> objects;
-    for (ObjDirItr<Hmx::Object> it(this, false); it != nullptr; ++it) {
-        if (it != this) {
-            objects.push_back(it);
+        bs << hashSize;
+        bs << strSize;
+        std::list<Hmx::Object *> objects;
+        for (ObjDirItr<Hmx::Object> it(this, false); it != nullptr; ++it) {
+            if (it != this) {
+                objects.push_back(it);
+            }
         }
-    }
-    DirLoader::ClassAndNameSort sorter;
-    objects.sort(sorter);
-    int count = objects.size();
-    bs.WriteEndian(&count, 4);
-    for (std::list<Hmx::Object *>::iterator it = objects.begin(); it != objects.end(); ++it) {
-        bs << (*it)->ClassName();
-        bs << (*it)->Name();
-    }
-    for (std::list<Hmx::Object *>::iterator it = objects.begin(); it != objects.end(); ++it) {
-        (*it)->Save(bs);
-    }
-    if (!bs.Cached()) {
-        for (std::list<Hmx::Object *>::iterator it = objects.begin(); it != objects.end(); ++it) {
-            (*it)->PostSave(bs);
+        DirLoader::ClassAndNameSort sorter;
+        objects.sort(sorter);
+        bs << objects.size();
+        FOREACH_CONST_POST (it, objects) {
+            bs << (*it)->ClassName() << (*it)->Name();
+        }
+        FOREACH (it, objects) {
+            (*it)->Save(bs);
+        }
+        if (!bs.Cached()) {
+            FOREACH (it, objects) {
+                (*it)->PostSave(bs);
+            }
         }
     }
 }
@@ -246,22 +244,20 @@ void WorldInstance::LoadPersistentObjects(BinStreamRev &bs) {
 }
 
 void WorldInstance::DeleteTransientObjects() {
-    if (!(!Dir() || Dir() == DirLoader::TopSaveDir()
-        || Dir()->InlineSubDirType() != kInlineAlways)) {
+    if (Dir() && Dir() != DirLoader::TopSaveDir()
+        && Dir()->InlineSubDirType() == kInlineAlways) {
         for (ObjDirItr<Hmx::Object> obj(this, false); obj != nullptr; ++obj) {
-            if (this != obj) {
-                auto refs = obj->Refs();
-                ObjectDir *dir_ref = Dir();
-                Hmx::Object *to = mDir->Find<Hmx::Object>(obj->Name(), true);
-                MILO_ASSERT(obj->ClassName() == to->ClassName(), 0x1CB);
-                {
-                    MemDoTempAllocations m(true, false);
-                    for (ObjRef::iterator it = refs.begin(); it != refs.end(); ++it) {
-                        if ((*it).RefOwner() && (*it).RefOwner()->Dir() == this) {
-                            (*it).Replace(to);
-                        }
+            if (obj != this && !dynamic_cast<RndMesh *>((Hmx::Object*)obj)) {
+                Hmx::Object *to = mDir->Find<Hmx::Object>(obj->Name());
+                MILO_ASSERT(obj->ClassName() == to->ClassName(), 0x1C7);
+                ObjRef refs;
+                refs.DetachSelf();
+                FOREACH (it, obj->Refs()) {
+                    if (it->RefOwner() && it->RefOwner()->Dir() == this) {
+                        it = it->MoveBefore(&refs);
                     }
                 }
+                refs.ReplaceList(to);
                 delete obj;
             }
         }
@@ -306,7 +302,7 @@ void WorldInstance::SyncDir() {
                 mDir->mSharedGroup2 = new SharedGroup(grp);
             }
             mSharedGroup = mDir->mSharedGroup2;
-            Sphere sphere = mDir->mSphere;
+            Sphere sphere = mDir->GetSphere();
             Vector3 v98;
             MakeScale(WorldXfm().m, v98);
             float f21 = Max(v98.y, v98.z);
@@ -314,48 +310,43 @@ void WorldInstance::SyncDir() {
             if (f21 > 1.0f)
                 sphere.radius *= f21;
             SetSphere(sphere);
-            static Symbol grpSym("Group");
-            static Symbol texSym("Tex");
-            static Symbol cubeSym("CubeTex");
-            static Symbol movieSym("Movie");
-            static Symbol synthSym("SynthSample");
+            static Symbol Group("Group");
+            static Symbol Tex("Tex");
+            static Symbol CubeTex("CubeTex");
+            static Symbol Movie("Movie");
+            static Symbol SynthSample("SynthSample");
             std::list<ObjPair> objPairs;
             objPairs.push_back(ObjPair(mDir, this));
+
             for (ObjDirItr<Hmx::Object> it(mDir, false); it != nullptr; ++it) {
-                bool curMesh = NULL != dynamic_cast<RndMesh *>(&*it);
+                bool curMesh = dynamic_cast<RndMesh *>(&*it); // mismatch here
                 if (!grp || (it != grp && !GroupedUnder(grp, it))) {
-                    // not in shared group - fall through to iterate
-                } else if (!(curMesh)) {
-                    continue;
-                } else {
-                    grp->RemoveObject(it);
-                    // fall through to iterate
-                }
-                if (it->ClassName() == texSym
-                    || it->ClassName() == cubeSym
-                    || it->ClassName() == synthSym
-                    || it->ClassName() == movieSym)
-                    continue;
-                if (it == mDir)
-                    continue;
-                EventTrigger *trig = dynamic_cast<EventTrigger *>(&*it);
-                if (trig && trig->HasTriggerEvents()) {
-                    MILO_NOTIFY("%s must be in shared.grp", PathName(it));
-                } else {
-                    Hmx::Object *foundObj = FindObject(it->Name(), false, true);
-                    if (!foundObj) {
-                        foundObj = Hmx::Object::NewObject(it->ClassName());
-                        bool deep = true;
-                        if (it->ClassName() == grpSym || curMesh)
-                            deep = false;
-                        CopyObject(it, foundObj, (Hmx::Object::CopyType)deep, true);
+                lmao:
+                    if (it->ClassName() != Tex && it->ClassName() != CubeTex
+                        && it->ClassName() != SynthSample && it->ClassName() != Movie
+                        && it != mDir) {
+                        EventTrigger *trig = dynamic_cast<EventTrigger *>(&*it);
+                        if (trig && trig->HasTriggerEvents()) {
+                            MILO_NOTIFY("%s must be in shared.grp", PathName(it));
+                        } else {
+                            Hmx::Object *foundObj = FindObject(it->Name(), false, true);
+                            if (!foundObj) {
+                                foundObj = Hmx::Object::NewObject(it->ClassName());
+                                Hmx::Object::CopyType ty = kCopyShallow;
+                                if (it->ClassName() == Group || curMesh)
+                                    ty = kCopyDeep;
+                                CopyObject(it, foundObj, ty, true);
+                            }
+                            objPairs.push_back(ObjPair(it, foundObj));
+                        }
                     }
-                    objPairs.push_back(ObjPair(foundObj, it));
+
+                } else if (curMesh) {
+                    grp->RemoveObject(it);
+                    goto lmao;
                 }
             }
-
-            std::list<ObjPair>::const_iterator p = objPairs.begin();
-            for (; p != objPairs.end(); ++p) {
+            FOREACH (p, objPairs) {
                 if (!p->from->Dir()) {
                     MILO_FAIL(
                         "%s %s->Dir() is null, to is %s",
@@ -364,13 +355,20 @@ void WorldInstance::SyncDir() {
                         p->to->Name()
                     );
                 }
-                const_cast<ObjRef &>(p->from->Refs()).ReplaceList(p->to);
+                ObjRef refs;
+                refs.DetachSelf();
+                Hmx::Object *pFrom = p->from;
+                FOREACH (it, pFrom->Refs()) {
+                    if (it->RefOwner() && !it->RefOwner()->Dir()) {
+                        it = it->MoveBefore(&refs);
+                    }
+                }
+                refs.ReplaceList(p->to);
             }
 
             Reserve(mDir->HashTableSize(), mDir->StrTableSize());
 
-            p = objPairs.begin();
-            for (; p != objPairs.end(); ++p) {
+            FOREACH (p, objPairs) {
                 if (p->to != this) {
                     p->to->SetName(p->from->Name(), this);
                 }
@@ -435,11 +433,12 @@ void SharedGroup::TryEnter(WorldInstance *inst) {
         (*it)->Enter();
     }
 
-    Hmx::Object *src = dynamic_cast<Hmx::Object *>(mPollMaster->Dir());
-    if (src) {
-        Hmx::Object *src2 = dynamic_cast<Hmx::Object *>(mGroup->Dir());
-        if (src2)
-            src2->ChainSource(src, 0);
+    ObjectDir *pollDir = mPollMaster->Dir();
+    if (pollDir) {
+        Hmx::Object *groupDir = mGroup->Dir();
+        if (groupDir) {
+            groupDir->ChainSource(pollDir, nullptr);
+        }
     }
 }
 
