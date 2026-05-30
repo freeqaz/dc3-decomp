@@ -519,7 +519,7 @@ void Character::Teleport(Waypoint *wp) {
 }
 
 void Character::CalcBoundingSphere() {
-    Transform tf50(mLocalXfm);
+    Transform tf50(LocalXfm());
     DirtyLocalXfm().Reset();
     mBounding.Zero();
     static const char *boneNames[5] = { "bone_head.mesh",
@@ -527,10 +527,10 @@ void Character::CalcBoundingSphere() {
                                         "bone_L-ankle.mesh",
                                         "bone_R-toe.mesh",
                                         "bone_L-toe.mesh" };
-    for (int i = 0; i <= 4; i++) {
+    for (int i = 0; i < 5; i++) {
         RndTransformable *t = Find<RndTransformable>(boneNames[i], false);
         if (t) {
-            mBounding.GrowToContain(Sphere(t->WorldXfm().v, 0.1));
+            mBounding.GrowToContain(Sphere(t->WorldXfm().v, 0.1f));
         }
     }
 
@@ -539,8 +539,9 @@ void Character::CalcBoundingSphere() {
         RndTransformable *transLHand = CharUtlFindBoneTrans("bone_L-hand", this);
         if (transLHand) {
             Vector3 vClavicle = transLClavicle->WorldXfm().v;
-            vClavicle.z += Distance(vClavicle, transLHand->WorldXfm().v);
-            mBounding.GrowToContain(Sphere(vClavicle, 7.0f));
+            float dist = Distance(vClavicle, transLHand->WorldXfm().v);
+            vClavicle.z += dist;
+            mBounding.GrowToContain(Sphere(vClavicle, dist / 2.0f));
         }
     }
     RndTransformable *transRClavicle = CharUtlFindBoneTrans("bone_R-clavicle", this);
@@ -548,25 +549,22 @@ void Character::CalcBoundingSphere() {
         RndTransformable *transRHand = CharUtlFindBoneTrans("bone_R-hand", this);
         if (transRHand) {
             Vector3 vClavicle = transRClavicle->WorldXfm().v;
-            auto dist = Distance(vClavicle, transRHand->WorldXfm().v);
+            float dist = Distance(vClavicle, transRHand->WorldXfm().v);
             vClavicle.z += dist;
-            mBounding.GrowToContain(Sphere(vClavicle, 7.0f));
+            mBounding.GrowToContain(Sphere(vClavicle, dist / 2.0f));
         }
     }
-    if (mBounding.GetRadius() == 0) {
+    if (mBounding.radius == 0) {
         for (ObjDirItr<RndTransformable> it(this, true); it != nullptr; ++it) {
             if (strneq(it->Name(), "bone_", 5) || strneq(it->Name(), "spot_", 5)) {
-                mBounding.GrowToContain(Sphere(it->WorldXfm().v, 0.1));
+                mBounding.GrowToContain(Sphere(it->WorldXfm().v, 0.1f));
             }
             RndMesh *mesh = dynamic_cast<RndMesh *>(&*it);
-            if (mesh) {
-                if (mesh->Showing()) {
+            if (mesh && mesh->Showing()) {
                 for (int i = 0; i < mesh->Verts().size(); i++) {
-                    mBounding.GrowToContain(
-                        Sphere(mesh->SkinVertex(mesh->Verts(i), nullptr), 0.001f)
-                    );
+                    Vector3 vec = mesh->SkinVertex(mesh->Verts(i), nullptr);
+                    mBounding.GrowToContain(Sphere(vec, 0.001f));
                 }
-            }
             }
         }
     }
@@ -914,30 +912,14 @@ void Character::SyncShadow() {
 }
 
 void Character::DrawLod(int lod) {
-    int rndDrawMode = TheRnd.GetDrawMode();
-    unsigned char opaqueBit = mDrawMode & 1;
-    if (rndDrawMode == 5)
-        return;
-    if (rndDrawMode == 3) {
-        if (!mSpotCutout)
-            return;
-        if (!opaqueBit)
-            return;
+    unsigned char drawMode = mDrawMode & 1;
+    if (TheRnd.GetDrawMode() != 5
+        && (TheRnd.GetDrawMode() != 3 || (mSpotCutout && drawMode))
+        && (TheRnd.GetDrawMode() != 4 || mFloorShadow && drawMode)) {
+        bool cond = TheRnd.GetDrawMode() == 3 || TheRnd.GetDrawMode() == 4
+            || TheRnd.GetDrawMode() == 2;
+        DrawLodOrShadow(lod, cond ? (DrawMode)4 : mDrawMode);
     }
-    if (rndDrawMode == 4) {
-        if (!mFloorShadow)
-            return;
-        if (!opaqueBit)
-            return;
-    }
-    DrawMode charDrawMode;
-    if (rndDrawMode == 3 || rndDrawMode == 4) {
-        charDrawMode = (DrawMode)4;
-    } else {
-        bool isExtrude = (rndDrawMode == 2);
-        charDrawMode = isExtrude ? kCharDrawTranslucent : mDrawMode;
-    }
-    DrawLodOrShadow(lod, charDrawMode);
 }
 
 void Character::DrawLodOrShadow(int lod, DrawMode drawMode) {
@@ -984,13 +966,13 @@ void Character::DrawLodOrShadow(int lod, DrawMode drawMode) {
     if (drawMode == 4) {
         if (mShadow.size() != 0) {
             mShadow.Draw();
-            return;
+        } else {
+            DrawOpaque();
         }
     } else {
-        bool drawNormal = (drawMode & 1) != 0;
-        if (drawNormal) {
+        if (drawMode & 1) {
             RndEnvironTracker tracker(mEnv, &WorldXfm().v);
-            DrawShowing();
+            DrawOpaque();
             if (drawMode == 1) {
                 unk2a0 = RndEnviron::Current();
                 unk2b4 = RndEnviron::CurrentPos();
@@ -999,14 +981,12 @@ void Character::DrawLodOrShadow(int lod, DrawMode drawMode) {
         if (drawMode & 2) {
             if (drawMode == 2) {
                 RndEnvironTracker tracker(unk2a0, unk2b4);
-                DrawShowing();
-                return;
+                DrawTranslucent();
+            } else {
+                DrawTranslucent();
             }
-            DrawShowing();
-            return;
         }
     }
-    DrawShowing();
 #endif
 }
 
@@ -1041,50 +1021,50 @@ RndDrawable *DrawPtrVec::CollideShowing(const Segment &s, float &dist, Plane &pl
 int CharPollableSorter::sSearchID = 0;
 
 void CharPollableSorter::AddDeps(
-    Dep *dep,
-    const std::list<Hmx::Object *> &objs,
-    std::list<Dep *> &deps,
-    bool isChangedBy
+    Dep *me, const std::list<Hmx::Object *> &odeps, std::list<Dep *> &toDo, bool changedBy
 ) {
-    for (std::list<Hmx::Object *>::const_iterator it = objs.begin(); it != objs.end();
-         ++it) {
+    FOREACH (it, odeps) {
         Hmx::Object *cur = *it;
         if (cur) {
             Dep *mapDep = &mDeps[cur];
             if (!mapDep->obj) {
                 mapDep->obj = cur;
-                deps.push_back(mapDep);
+                toDo.push_back(mapDep);
             }
-            if (isChangedBy) {
-                dep->changedBy.push_back(mapDep);
+            if (changedBy) {
+                me->changedBy.push_back(mapDep);
             } else {
-                mapDep->changedBy.push_back(dep);
+                mapDep->changedBy.push_back(me);
             }
         }
     }
 }
 
-bool CharPollableSorter::ChangedByRecurse(Dep *dep) {
-    if (!dep)
+bool CharPollableSorter::ChangedByRecurse(Dep *d) {
+    if (!d)
         return false;
-    if (dep == mTarget)
+    else if (d == mTarget)
         return true;
-    if (dep->searchID == sSearchID)
+    else if (d->searchID == sSearchID)
         return false;
-    dep->searchID = sSearchID;
-    for (std::list<Dep *>::iterator it = dep->changedBy.begin();
-         it != dep->changedBy.end();
-         ++it) {
-        if (ChangedByRecurse(*it))
-            return true;
+    else {
+        d->searchID = sSearchID;
+        FOREACH (it, d->changedBy) {
+            if (ChangedByRecurse(*it))
+                return true;
+        }
+        return false;
     }
-    return false;
 }
 
-bool CharPollableSorter::ChangedBy(Dep *a, Dep *b) {
-    mTarget = b;
-    sSearchID++;
-    return ChangedByRecurse(a);
+bool CharPollableSorter::ChangedBy(Dep *d1, Dep *d2) {
+    if (d1 == d2) {
+        return false;
+    } else {
+        sSearchID++;
+        mTarget = d1;
+        return ChangedByRecurse(d2);
+    }
 }
 
 void CharPollableSorter::Sort(std::vector<RndPollable *> &polls) {
@@ -1103,46 +1083,47 @@ void CharPollableSorter::Sort(std::vector<RndPollable *> &polls) {
     }
     if (deps.empty())
         return;
-
-    std::sort(deps.begin(), deps.end(), CharPollableSorter::AlphaSort());
-    std::list<Dep *> depList;
-    for (int i = 0; i < deps.size(); i++)
-        depList.push_back(deps[i]);
-    while (!depList.empty()) {
-        Dep *curDep = depList.back();
-        depList.pop_back();
-        CharPollable *c = dynamic_cast<CharPollable *>(curDep->obj);
-        if (c) {
-            std::list<Hmx::Object *> depList1;
-            std::list<Hmx::Object *> depList2;
-            c->PollDeps(depList1, depList2);
-            AddDeps(curDep, depList1, depList, true);
-            AddDeps(curDep, depList2, depList, false);
+    else {
+        std::sort(deps.begin(), deps.end(), CharPollableSorter::AlphaSort());
+        std::list<Dep *> depList;
+        for (int i = 0; i < deps.size(); i++)
+            depList.push_back(deps[i]);
+        while (!depList.empty()) {
+            Dep *curDep = depList.front();
+            depList.pop_front();
+            CharPollable *c = dynamic_cast<CharPollable *>(curDep->obj);
+            if (c) {
+                std::list<Hmx::Object *> depList1;
+                std::list<Hmx::Object *> depList2;
+                c->PollDeps(depList1, depList2);
+                AddDeps(curDep, depList1, depList, true);
+                AddDeps(curDep, depList2, depList, false);
+            }
+            RndTransformable *t = dynamic_cast<RndTransformable *>(curDep->obj);
+            if (t) {
+                std::list<Hmx::Object *> tDepList;
+                tDepList.push_back(t->TransParent());
+                AddDeps(curDep, tDepList, depList, true);
+            }
         }
-        RndTransformable *t = dynamic_cast<RndTransformable *>(curDep->obj);
-        if (t) {
-            std::list<Hmx::Object *> tDepList;
-            tDepList.push_back(t->TransParent());
-            AddDeps(curDep, tDepList, depList, true);
-        }
-    }
 
-    std::list<Dep *> otherDepList;
-    for (int i = 0; i < deps.size(); i++) {
-        Dep *curDep = deps[i];
-        std::list<Dep *>::iterator it = otherDepList.begin();
-        for (; it != otherDepList.end(); ++it) {
-            if (ChangedBy(curDep, *it))
-                break;
+        std::list<Dep *> otherDepList;
+        for (int i = 0; i < deps.size(); i++) {
+            Dep *curDep = deps[i];
+            std::list<Dep *>::iterator it = otherDepList.begin();
+            for (; it != otherDepList.end(); ++it) {
+                if (ChangedBy(curDep, *it))
+                    break;
+            }
+            otherDepList.insert(it, curDep);
         }
-        otherDepList.insert(it, curDep);
-    }
 
-    int idx = 0;
-    for (std::list<Dep *>::iterator it = otherDepList.begin();
-         it != otherDepList.end();
-         ++it) {
-        polls[idx++] = (*it)->poll;
+        int idx = 0;
+        for (std::list<Dep *>::iterator it = otherDepList.begin();
+             it != otherDepList.end();
+             ++it) {
+            polls[idx++] = (*it)->poll;
+        }
     }
 }
 #endif // HX_NATIVE
