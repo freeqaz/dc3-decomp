@@ -193,14 +193,14 @@ MoveRating BustAMovePanel::GetMoveRating(float f1) {
 void BustAMovePanel::SetFlashcardText(int side, int index, Symbol s3) {
     HamLabel *label =
         mBAMColumns[side]->Find<HamLabel>(MakeString("flashcard_%d.lbl", index));
-    if (label)
-        label->SetTextToken(s3);
-    label = mBAMColumns[side == 0]->Find<HamLabel>(MakeString("flashcard_%d.lbl", index));
+    label->SetTextToken(s3);
+    HamLabel *label2 =
+        mBAMColumns[side == 0]->Find<HamLabel>(MakeString("flashcard_%d.lbl", index));
     if (mState == kBAMState_ShowMoveSequence
         || mState == kBAMState_ShowMoveSequenceSetup) {
-        label->SetTextToken(s3);
+        label2->SetTextToken(s3);
     } else {
-        label->SetTextToken(gNullStr);
+        label2->SetTextToken(gNullStr);
     }
 }
 
@@ -236,23 +236,24 @@ void BustAMovePanel::ResetScores() {
 }
 
 void BustAMovePanel::SetFlashcardName(int side, int index, int i3) {
+    int flashCardIdx = index;
     Symbol s(gNullStr);
     if (i3 >= 0) {
-        auto moveName = GetMoveNameData(i3)->Sym(1);
+        Symbol moveName = GetMoveNameData(i3)->Sym(1);
         s = moveName;
     }
-    HamLabel *label =
-        mBAMColumns[side]->Find<HamLabel>(MakeString("flashcard_name_%d.lbl", index));
-    if (label)
-        label->SetTextToken(s);
-    label = mBAMColumns[side == 0]->Find<HamLabel>(
-        MakeString("flashcard_name_%d.lbl", index)
+    HamLabel *label = mBAMColumns[side]->Find<HamLabel>(
+        MakeString("flashcard_name_%d.lbl", flashCardIdx)
+    );
+    label->SetTextToken(s);
+    HamLabel *label2 = mBAMColumns[side == 0]->Find<HamLabel>(
+        MakeString("flashcard_name_%d.lbl", flashCardIdx)
     );
     if (mState == kBAMState_ShowMoveSequence
         || mState == kBAMState_ShowMoveSequenceSetup) {
-        label->SetTextToken(s);
+        label2->SetTextToken(s);
     } else {
-        label->SetTextToken(gNullStr);
+        label2->SetTextToken(gNullStr);
     }
 }
 
@@ -275,19 +276,18 @@ void BustAMovePanel::ShowMoveRating(MoveRating mr, int side) {
     static Message moveFinishedMsg("move_finished", 0, 0);
     moveFinishedMsg[0] = side;
     if (mr == kMoveRatingSuperPerfect) {
-        RndAnimatable *anim =
-            feedbackDir->Find<RndAnimatable>("move_flawless_right.anim");
-        anim->Animate(0, 0, 0, nullptr, kEaseLinear, 0, false);
+        feedbackDir->Find<RndAnimatable>("move_flawless_right.anim")->Animate(0, 0, 0);
         moveFinishedMsg[1] = move_perfect;
-    } else if (mr == kMoveRatingPerfect) {
-        RndAnimatable *anim = feedbackDir->Find<RndAnimatable>("move_nice_right.anim");
-        anim->Animate(0, 0, 0, nullptr, kEaseLinear, 0, false);
+    }
+    if (mr == kMoveRatingPerfect) {
+        feedbackDir->Find<RndAnimatable>("move_nice_right.anim")->Animate(0, 0, 0);
         moveFinishedMsg[1] = move_awesome;
-    } else if (mr == kMoveRatingAwesome) {
-        RndAnimatable *anim = feedbackDir->Find<RndAnimatable>("move_okay_right.anim");
-        anim->Animate(0, 0, 0, nullptr, kEaseLinear, 0, false);
+    }
+    if (mr == kMoveRatingAwesome) {
+        feedbackDir->Find<RndAnimatable>("move_okay_right.anim")->Animate(0, 0, 0);
         moveFinishedMsg[1] = move_ok;
-    } else if (mr == kMoveRatingOk) {
+    }
+    if (mr == kMoveRatingOk) {
         moveFinishedMsg[1] = move_bad;
     }
     TheHamProvider->Handle(moveFinishedMsg, false);
@@ -448,50 +448,39 @@ void BustAMovePanel::PollCaptureFlashcard() {
     }
 }
 
-void BustAMovePanel::AnimateFlashcard(int index) {
-    int slot = index + 1;
-    UIColor *uiColor = DataDir()->Find<UIColor>(MakeString("color%d.color", slot), true);
-    Hmx::Color color = uiColor->GetColor();
+void BustAMovePanel::AnimateFlashcard(int i) {
+    UIColor *pColor = DataDir()->Find<UIColor>(MakeString("color%d.color", i + 1));
+    const Hmx::Color color = pColor->GetColor();
 
-    // Set flashcard.mat texture
-    RndMat *flashcardMat = DataDir()->Find<RndMat>("flashcard.mat", true);
-    String texName(MakeString("flashcard%i.tex", index));
-    RndTex *tex = DataDir()->Find<RndTex>(texName.c_str(), true);
-    flashcardMat->SetDiffuseTex(tex);
+    RndMat *pFlashcardMat = DataDir()->Find<RndMat>("flashcard.mat");
+    String flashcardStrMakeString(MakeString("flashcard%i.tex", i));
+    RndTex *pFlashcardTex = DataDir()->Find<RndTex>(flashcardStrMakeString.c_str());
+    pFlashcardMat->SetDiffuseTex(pFlashcardTex);
 
-    // Set flashcard_capture_background.mat color
-    RndMat *capBgMat =
-        DataDir()->Find<RndMat>("flashcard_capture_background.mat", true);
-    capBgMat->SetColor(color.red, color.green, color.blue);
+    RndMat *pFlashcardCapBgMat =
+        DataDir()->Find<RndMat>("flashcard_capture_background.mat");
+    pFlashcardCapBgMat->SetColor(color.red, color.green, color.blue);
 
-    // Set flashcard_capture.lbl text
-    HamLabel *capLabel = DataDir()->Find<HamLabel>("flashcard_capture.lbl", true);
-    auto moveSym = GetMoveNameData(index)->Sym(1);
-    capLabel->SetTextToken(moveSym);
+    HamLabel *pFlashcardCapLabel = DataDir()->Find<HamLabel>("flashcard_capture.lbl");
+    Symbol moveDataSym = GetMoveNameData(i)->Sym(1);
+    pFlashcardCapLabel->SetTextToken(moveDataSym);
 
-    // Set flashcard_slot mat and texture
-    String slotMatName(MakeString("flashcard_slot%i.mat", index));
-    RndMat *slotMat = DataDir()->Find<RndMat>(slotMatName.c_str(), true);
-    RndTex *slotTex = DataDir()->Find<RndTex>(texName.c_str(), true);
-    slotMat->SetDiffuseTex(slotTex);
+    String flashcardSlotStr(MakeString("flashcard_slot%i.mat", i));
+    RndMat *pFlashcardSlot = DataDir()->Find<RndMat>(flashcardSlotStr.c_str());
+    RndTex *pFlashcardSlotTex = DataDir()->Find<RndTex>(flashcardStrMakeString.c_str());
+    pFlashcardSlot->SetDiffuseTex(pFlashcardSlotTex);
 
-    // Set flashcard_slot_background mat color
-    auto slotBg_str = MakeString("flashcard_slot_background%i.mat", index);
-    String slotBgName(slotBg_str);
-    RndMat *slotBgMat = DataDir()->Find<RndMat>(slotBgName.c_str(), true);
-    slotBgMat->SetColor(color.red, color.green, color.blue);
+    String flashcardSlotBgStr = MakeString("flashcard_slot_background%i.mat", i);
+    RndMat *pFlashcardSlotBg = DataDir()->Find<RndMat>(flashcardSlotBgStr.c_str());
+    pFlashcardSlotBg->SetColor(color.red, color.green, color.blue);
 
-    // Set flashcard_slot label text
-    auto slotLbl_str = MakeString("flashcard_slot%i.lbl", index);
-    String slotLblName(slotLbl_str);
-    HamLabel *slotLabel = DataDir()->Find<HamLabel>(slotLblName.c_str(), true);
-    auto slotMoveSym = GetMoveNameData(index)->Sym(1);
-    slotLabel->SetTextToken(slotMoveSym);
+    String flashcardSlotLblStr = MakeString("flashcard_slot%i.lbl", i);
+    HamLabel *pFlashcardSlotLabel =
+        DataDir()->Find<HamLabel>(flashcardSlotLblStr.c_str());
+    Symbol moveData = GetMoveNameData(i)->Sym(1);
+    pFlashcardSlotLabel->SetTextToken(moveData);
 
-    // Play capture animation
-    RndPropAnim *captureAnim =
-        DataDir()->Find<RndPropAnim>("capture_flashcard.anim", true);
-    captureAnim->Animate(0.0f, false, 0.0f, nullptr, kEaseLinear, 0.0f, false);
+    DataDir()->Find<RndPropAnim>("capture_flashcard.anim")->Animate(0.0f, false, 0.0f);
 }
 
 void BustAMovePanel::AdvanceFlashcards() {
@@ -590,23 +579,22 @@ calc_total:;
 }
 
 void BustAMovePanel::SetFlashcardImage(int side, int index, int i3) {
+    RndMat *flashcardMat =
+        mBAMColumns[side]->Find<RndMat>(MakeString("flashcard%d.mat", index));
     RndMat *flashcardBgMat =
         mBAMColumns[side]->Find<RndMat>(MakeString("flashcard_background%d.mat", index));
-    auto flashcardMatName = MakeString("flashcard%d.mat", index);
-    RndTex *flashcardTex;
-
-    RndMat *flashcardMat =
-        mBAMColumns[side]->Find<RndMat>(flashcardMatName);
-    RndTex *bgTex;
     RndTex *blankTex = DataDir()->Find<RndTex>("blank.tex");
+
+    RndTex *flashcardTex;
+    RndTex *bgTex;
     if (i3 >= 0) {
         flashcardTex = DataDir()->Find<RndTex>(MakeString("flashcard%i.tex", i3));
+        bgTex = mBAMColumns[side]->Find<RndTex>("blank_bustamove.tex");
     } else if (i3 == -2) {
         flashcardTex = blankTex;
         bgTex = mBAMColumns[side]->Find<RndTex>("blank_bustamove.tex");
     } else {
-        auto blankTex2 = DataDir()->Find<RndTex>("blank.tex");
-        flashcardTex = blankTex2;
+        flashcardTex = DataDir()->Find<RndTex>("blank.tex");
         bgTex = flashcardTex;
     }
 
@@ -627,10 +615,12 @@ void BustAMovePanel::SetFlashcardImage(int side, int index, int i3) {
     // Handle the other side
     RndMat *otherFlashcardMat =
         mBAMColumns[side == 0]->Find<RndMat>(MakeString("flashcard%d.mat", index));
-    RndMat *otherBgMat =
-        mBAMColumns[side == 0]->Find<RndMat>(MakeString("flashcard_background%d.mat", index));
+    RndMat *otherBgMat = mBAMColumns[side == 0]->Find<RndMat>(
+        MakeString("flashcard_background%d.mat", index)
+    );
 
-    if (mState == kBAMState_ShowMoveSequence || mState == kBAMState_ShowMoveSequenceSetup) {
+    if (mState == kBAMState_ShowMoveSequence
+        || mState == kBAMState_ShowMoveSequenceSetup) {
         otherFlashcardMat->SetDiffuseTex(flashcardTex);
         otherBgMat->SetColor(color.red, color.green, color.blue);
         otherBgMat->SetDiffuseTex(bgTex);
@@ -1470,42 +1460,31 @@ end_handling:
 
 void BustAMovePanel::SetUpSongStructure(Symbol s) {
     mSongStructure.clear();
-    BustAMoveData *bamData =
+    BustAMoveData *pBAMData =
         TheGame->GetMoveDir()->Find<BustAMoveData>("BustAMoveData.bam", false);
-    if (bamData != NULL) {
-        for (int i = 0; (int)(int)(unsigned long)i < (int)bamData->mPhrases.size(); i++) {
-            for (int j = 0; j < bamData->mPhrases[i].count; j++) {
-                mSongStructure.push_back(bamData->mPhrases[i].bars);
+    if (pBAMData) {
+        for (int i = 0; i < pBAMData->PhraseSize(); i++) {
+            for (int j = 0; j < pBAMData->PhraseAt(i)->count; j++) {
+                int bars = pBAMData->PhraseAt(i)->bars;
+                mSongStructure.push_back(bars);
             }
         }
     } else {
-        int reps = 8;
-        int val = 4;
-        do {
-            mSongStructure.push_back(val);
-            reps--;
-        } while (reps != 0);
-        TheKnownIssues.Display(String("bustamove_wrong_song"), 5.0f);
+        for (int i = 0; i < 8; i++) {
+            mSongStructure.push_back(4);
+        }
+        TheKnownIssues.Display("bustamove_wrong_song", 5.0f);
     }
-    MILO_ASSERT(mSongStructure.size() >= 2, 0x62C);
-    int *data = &mSongStructure[0];
-    int firstVal = *data;
-    mRepsRemaining = firstVal + 4;
-    mCountInLength = firstVal;
-    unsigned int size = mSongStructure.size();
-    float totalBeats = 0.0f;
-    if (size >= 2) {
-        unsigned int idx = 1;
-        do {
-            int val = data[idx];
-            idx++;
-            totalBeats += (float)val;
-            size--;
-        } while (1 < size);
+    MILO_ASSERT(mSongStructure.size() >= 2, 0x62c);
+    mCountInLength = mSongStructure[0];
+    mRepsRemaining = mCountInLength + 4;
+    float total = 0.0f;
+    for (int i = 1; i < mSongStructure.size(); i++) {
+        total += mSongStructure[i];
     }
-    float startBeat = (float)(mCountInLength * 4);
-    mLoopStartBeat = startBeat;
-        TheMaster->GetAudio()->SetLoop(mLoopStartBeat, mLoopEndBeat = (totalBeats * 4.0f) + startBeat);
+    mLoopStartBeat = mCountInLength * 4.0f;
+    mLoopEndBeat = total * 4.0f + mLoopStartBeat;
+    TheMaster->GetAudio()->SetLoop(mLoopStartBeat, mLoopEndBeat);
 }
 
 #pragma fp_contract(off)
