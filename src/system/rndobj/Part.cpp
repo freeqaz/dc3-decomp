@@ -264,7 +264,23 @@ BEGIN_PROPSYNCS(RndParticleSys)
     SYNC_PROP(end_alpha_high, mEndColorHigh.alpha)
     SYNC_PROP(preserve, mPreserveParticles)
     SYNC_PROP_SET(fancy, mType, SetPool(mMaxParticles, (Type)_val.Int()))
-    SYNC_PROP_SET(grow_ratio, mGrowRatio, SetGrowRatio(_val.Float()))
+    // SYNC_PROP_SET(grow_ratio, mGrowRatio,SetGrowRatio(_val.Float()))
+    {
+        static Symbol _s("grow_ratio");
+        if (sym == _s) {
+            if (_op == kPropSet) {
+                float f = _val.Float();
+                if (f >= 0 && f <= mShrinkRatio) {
+                    mGrowRatio = f;
+                }
+            } else {
+                if (_op == (PropOp)0x40)
+                    return false;
+                _val = mGrowRatio;
+            }
+            return true;
+        }
+    }
     SYNC_PROP_SET(shrink_ratio, mShrinkRatio, SetShrinkRatio(_val.Float()))
     SYNC_PROP(drag, mDrag)
     SYNC_PROP(mid_color_ratio, mMidColorRatio)
@@ -898,8 +914,9 @@ void RndParticleSys::SetPersistentPool(int max, Type ty) {
 void RndParticleSys::SetTileHoldTime(float f1) {
     mTileHoldTime = f1;
     mTotalTileTime = mNumTilesTotal * mTileHoldTime;
-    mTotalTileTime = Max(mTotalTileTime, 0.0001f);
-    mInvTotalTileTime = 1.0f / mTotalTileTime;
+    float &fref = mTotalTileTime;
+    mTotalTileTime = Max(fref, 0.0001f);
+    mInvTotalTileTime = 1.0f / fref;
 }
 
 void RndParticleSys::SetNumTiles(int num) {
