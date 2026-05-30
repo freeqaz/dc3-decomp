@@ -91,9 +91,7 @@ bool RndMesh::PatchOkay(int numVerts, int numFaces) {
 }
 
 void SaveCompressedVertex(const CompressedVertex_Xbox &cv, BinStream &bs) {
-    bs << cv.mPosX;
-    bs << cv.mPosY;
-    bs << cv.mPosZ;
+    bs << cv.mPosX << cv.mPosY << cv.mPosZ;
     bs << cv.mColor;
     bs << cv.mNormal;
     bs << cv.mTangent;
@@ -415,21 +413,19 @@ BEGIN_LOADS(RndMesh)
     LOAD_REVS(bs)
     ASSERT_REVS(0x26, 0)
     if (d.rev > 0x19) {
-        Hmx::Object::Load(d.stream);
+        LOAD_SUPERCLASS(Hmx::Object)
     }
-    RndTransformable::Load(d.stream);
-    RndDrawable::Load(d.stream);
+    LOAD_SUPERCLASS(RndTransformable)
+    LOAD_SUPERCLASS(RndDrawable)
     if (d.rev < 15) {
         ObjPtrList<Hmx::Object> oList(this);
         int dummy;
-        d.stream >> dummy;
-        d.stream >> oList;
+        d >> dummy >> oList;
     }
     int i22 = 0;
     if (d.rev < 0x14) {
         int ib8, ie8;
-        d.stream >> ib8;
-        d.stream >> ie8;
+        d >> ib8 >> ie8;
         if (ib8 == 0 || ie8 == 0) {
             i22 = 0;
         } else if (ib8 == 1) {
@@ -442,9 +438,9 @@ BEGIN_LOADS(RndMesh)
     }
     if (d.rev < 3) {
         int dummy;
-        d.stream >> dummy;
+        d >> dummy;
     }
-    d.stream >> mMat;
+    d >> mMat;
     if (d.rev > 0x1A && d.rev < 0x1C) {
         char buf[0x80];
         d.stream.ReadString(buf, 0x80);
@@ -452,7 +448,7 @@ BEGIN_LOADS(RndMesh)
             mMat = LookupOrCreateMat(buf, Dir());
         }
     }
-    d.stream >> mGeomOwner;
+    d >> mGeomOwner;
     if (!mGeomOwner) {
         mGeomOwner = this;
     }
@@ -461,14 +457,14 @@ BEGIN_LOADS(RndMesh)
     }
     if (d.rev < 0xD) {
         ObjOwnerPtr<RndMesh> mesh(this);
-        d.stream >> mesh;
+        d >> mesh;
         if (mesh != mGeomOwner) {
             MILO_NOTIFY("Combining face and vert owner of %s", Name());
         }
     }
     if (d.rev < 0xF) {
         ObjPtr<RndTransformable> trans(this);
-        d.stream >> trans;
+        d >> trans;
         SetTransParent(trans, false);
         SetTransConstraint((Constraint)2, nullptr, false);
     }
@@ -479,11 +475,11 @@ BEGIN_LOADS(RndMesh)
     }
     if (d.rev < 3) {
         Vector3 v;
-        d.stream >> v;
+        d >> v;
     }
     if (d.rev < 0xF) {
         Sphere s;
-        d.stream >> s;
+        d >> s;
         SetSphere(s);
     }
     if (d.rev > 4 && d.rev < 8) {
@@ -493,22 +489,21 @@ BEGIN_LOADS(RndMesh)
     if (d.rev > 5 && d.rev < 0x15) {
         String str;
         int x;
-        d.stream >> str;
-        d.stream >> x;
+        d >> str >> x;
     }
     if (d.rev > 0xF) {
-        d.stream >> mMutable;
+        d >> mMutable;
     } else if (d.rev > 0xB) {
         bool b;
         d >> b;
         mMutable = b ? 31 : 0;
     }
     if (d.rev > 0x11) {
-        d.stream >> (int &)mVolume;
+        d >> (int &)mVolume;
     }
     if (d.rev > 0x12) {
         RELEASE(mBSPTree);
-        d.stream >> mBSPTree;
+        d >> mBSPTree;
     }
     if (d.rev > 6 && d.rev < 8) {
         bool b;
@@ -516,7 +511,7 @@ BEGIN_LOADS(RndMesh)
     }
     if (d.rev > 8 && d.rev < 0xB) {
         int x;
-        d.stream >> x;
+        d >> x;
     }
     LoadVertices(d);
     if (d.stream.Cached()) {
@@ -527,10 +522,9 @@ BEGIN_LOADS(RndMesh)
     if (d.rev > 4 && d.rev < 0x18) {
         int count;
         unsigned short s1, s2;
-        d.stream >> count;
+        d >> count;
         for (; count != 0; count--) {
-            d.stream >> s1;
-            d.stream >> s2;
+            d >> s1 >> s2;
         }
     }
     if (d.rev > 0x17) {
@@ -543,7 +537,7 @@ BEGIN_LOADS(RndMesh)
         mPatches.clear();
         int count;
         unsigned int ui;
-        bs >> count;
+        d >> count;
         for (; count != 0; count--) {
             std::vector<unsigned short> usvec;
             std::vector<unsigned int> uivec;
@@ -554,8 +548,7 @@ BEGIN_LOADS(RndMesh)
         d >> mPatches;
     if (d.rev > 0x1C) {
         d >> mBones;
-        int max = MaxBones();
-        if (mBones.size() > max) {
+        if (mBones.size() > MaxBones()) {
             MILO_NOTIFY(
                 "%s: exceeds bone limit (%d of %d)",
                 PathName(this),
@@ -566,18 +559,18 @@ BEGIN_LOADS(RndMesh)
         }
     } else if (d.rev > 0xD) {
         ObjPtr<RndTransformable> trans(this);
-        d.stream >> trans;
+        d >> trans;
         if (trans) {
             mBones.resize(4);
             if (d.rev > 0x16) {
                 mBones[0].mBone = trans;
-                bs >> mBones[1].mBone >> mBones[2].mBone >> mBones[3].mBone;
-                bs >> mBones[0].mOffset >> mBones[1].mOffset >> mBones[2].mOffset
+                d.stream >> mBones[1].mBone >> mBones[2].mBone >> mBones[3].mBone;
+                d.stream >> mBones[0].mOffset >> mBones[1].mOffset >> mBones[2].mOffset
                     >> mBones[3].mOffset;
                 if (d.rev < 0x19) {
-                    for (auto it = mVerts.begin(); it != mVerts.end(); ++it) {
+                    for (Vert *it = mVerts.begin(); it != mVerts.end(); ++it) {
                         it->boneWeights.Set(
-                            ((1.0f - it->boneWeights.x) - it->boneWeights.y)
+                            1.0f - it->boneWeights.x - it->boneWeights.y
                                 - it->boneWeights.z,
                             it->boneWeights.x,
                             it->boneWeights.y,
@@ -587,14 +580,13 @@ BEGIN_LOADS(RndMesh)
                 }
             } else {
                 if (TransConstraint() == RndTransformable::kConstraintParentWorld) {
-                    ObjPtr<RndTransformable> &bone = mBones[0].mBone;
-                    bone = TransParent();
+                    mBones[0].mBone = TransParent();
                 } else {
                     mBones[0].mBone = this;
                 }
                 mBones[0].mOffset.Reset();
                 mBones[1].mBone = trans;
-                bs >> mBones[2].mBone >> mBones[1].mOffset >> mBones[2].mOffset;
+                d.stream >> mBones[2].mBone >> mBones[1].mOffset >> mBones[2].mOffset;
                 mBones[3].mBone = nullptr;
             }
             for (int i = 0; i < 4; i++) {
@@ -617,20 +609,14 @@ BEGIN_LOADS(RndMesh)
         d >> bd4 >> ic0 >> ic4 >> ic8;
         d >> icc;
     }
-    if (d.rev == 0x12) {
-        if (mGeomOwner == this) {
-            SetVolume(mVolume);
-            goto yes;
+    if (d.rev == 0x12 && mGeomOwner == this) {
+        SetVolume(mVolume);
+    }
+    if (d.rev < 0x1E) {
+        if (mMat && mMat->NormalMap()) {
+            MakeTangentsLate(this);
         }
-    } else {
-    yes:
-        if (d.rev >= 0x1E)
-            goto next;
     }
-    if (mMat && mMat->NormalMap()) {
-        MakeTangentsLate(this);
-    }
-next:
     if (d.rev < 0x1F) {
         SetZeroWeightBones();
     }
@@ -638,11 +624,12 @@ next:
         d >> mKeepMeshData;
     }
     if (d.rev < MESH_REV_SEP_COLOR && IsSkinned()) {
-        for (auto it = mVerts.begin(); it != mVerts.end(); ++it) {
-            it->boneWeights.Set(
-                it->color.red, it->color.green, it->color.blue, it->color.alpha
-            );
-            it->color.Zero();
+        for (Vert *it = mVerts.begin(); it != mVerts.end(); ++it) {
+            it->boneWeights.x = it->color.red;
+            it->boneWeights.y = it->color.green;
+            it->boneWeights.z = it->color.blue;
+            it->boneWeights.w = it->color.alpha;
+            it->color.Set(1, 1, 1, 1);
         }
     }
     if (d.rev > 0x25) {
@@ -918,18 +905,20 @@ void RndMesh::ClearCompressedVerts() {
     mNumCompressedVerts = 0;
 }
 
-bool RndMesh::Replace(ObjRef *ref, Hmx::Object *obj) {
-    if (&mGeomOwner == ref) {
-        RndMesh *meshObj;
-        if (mGeomOwner == this
-            || (meshObj = dynamic_cast<RndMesh *>(obj)) == nullptr) {
-            mGeomOwner = this;
+bool RndMesh::Replace(ObjRef *from, Hmx::Object *to) {
+    if (&mGeomOwner == from) {
+        if (mGeomOwner == this) {
+            RndMesh *mesh = dynamic_cast<RndMesh *>(to);
+            if (mesh) {
+                mGeomOwner = mesh;
+            }
         } else {
-            mGeomOwner = meshObj->mGeomOwner;
+            mGeomOwner = this;
         }
         return true;
+    } else {
+        return RndTransformable::Replace(from, to);
     }
-    return RndTransformable::Replace(ref, obj);
 }
 
 void RndMesh::SetMat(RndMat *mat) { mMat = mat; }
@@ -1632,38 +1621,19 @@ static inline unsigned short FloatToHalf(float value) {
     return (unsigned short)(sign | ((((iValue >> 13) & 1) + iValue + 0xFFF) >> 13));
 }
 
-void FillCompressedVertex(CompressedVertex_Xbox &compressed, const RndMesh::Vert &vert, bool normalize) {
-    // Pack color (ARGB D3DCOLOR format)
-    u32 blue = (u32)(vert.color.blue * 255.0f);
-    u32 red = (u32)(vert.color.red * 255.0f);
-    compressed.mColor =
-        (((((u32)(vert.color.alpha * 255.0f) << 8) | (red & 0xFF)) << 8)
-        | ((u32)(vert.color.green * 255.0f) & 0xFF)) << 8
-        | (blue & 0xFF);
-
-    // Pack bone weights as UDEC4N (field name is misleading — mBoneIndices stores weights)
-    PackVector(
-        (unsigned int &)compressed.mBoneIndices, vert.boneWeights, 10, 10, 10, 2, false
-    );
-
-    // Copy position as float bit patterns
-    *(f32 *)(&compressed.mPosX) = vert.pos.x;
-    *(f32 *)(&compressed.mPosY) = vert.pos.y;
-    *(f32 *)(&compressed.mPosZ) = vert.pos.z;
-
-    // Pack UV as FLOAT16_2 (field name is misleading — mNormal stores UVs)
-    unsigned short halfU = FloatToHalf(vert.tex.x);
-    unsigned short halfV = FloatToHalf(vert.tex.y);
-    compressed.mNormal = (halfU << 16) | halfV;
-
-    // Pack normal as DEC4N (field name is misleading — mTangent stores normals)
-    Vector4 normVec(vert.norm.x, vert.norm.y, vert.norm.z, 0.0f);
-    PackVector((unsigned int &)compressed.mTangent, normVec, 10, 10, 10, 2, true);
-
-    // Pack tangent as DEC4N (field name is misleading — mBinormal stores tangents)
-    PackVector((unsigned int &)compressed.mBinormal, vert.tangent, 10, 10, 10, 2, true);
-
-    // Pack bone indices as UBYTE4 (field name is misleading — mBoneWeights stores indices)
+void FillCompressedVertex(CompressedVertex_Xbox &compressed, const RndMesh::Vert &vert, bool b3) {
+    compressed.mColor = vert.color.PackAlpha();
+    PackVector(compressed.mBoneIndices, vert.boneWeights, 10, 10, 10, 2, false);
+    compressed.mPosX = vert.pos.x;
+    compressed.mPosY = vert.pos.y;
+    compressed.mPosZ = vert.pos.z;
+    unsigned short texX = vert.tex.x;
+    unsigned short texY = vert.tex.y;
+    compressed.mNormal = (texX << 0x10) | texY;
+    Vector4 norm(vert.norm.x, vert.norm.y, vert.norm.z, 0);
+    PackVector(compressed.mTangent, norm, 10, 10, 10, 2, true);
+    PackVector(compressed.mBinormal, vert.tangent, 10, 10, 10, 2, true);
+    // pack bone indices
     compressed.mBoneWeights = (((int)vert.boneIndices[3] * 0x100
         + (int)vert.boneIndices[2]) * 0x100
         + (int)vert.boneIndices[1]) * 0x100
@@ -1671,132 +1641,77 @@ void FillCompressedVertex(CompressedVertex_Xbox &compressed, const RndMesh::Vert
 }
 
 void RndMesh::LoadVertices(BinStreamRev &d) {
-    int count;
-    d.stream.ReadEndian(&count, 4);
-    bool b58;
+    int numVerts;
+    d >> numVerts;
+    bool c8;
     if (d.rev > 0x22) {
-        d >> b58;
+        bool b;
+        d >> b;
+        c8 = b;
     } else {
-        b58 = false;
+        c8 = false;
     }
-#ifdef HX_NATIVE
-    // Native: preserve Xbox compressed vertex blobs and let the native renderer
-    // unpack them during GPU upload. The older eager decompression path lost
-    // skinned bone data on character meshes.
-    if (b58) {
-        unsigned int loadedCompressedSize = 0;
-        unsigned int loadedVersion = 0;
-        d.stream.ReadEndian(&loadedCompressedSize, 4);
-        d.stream.ReadEndian(&loadedVersion, 4);
-
-        if (loadedCompressedSize == sizeof(CompressedVertex_Xbox) && loadedVersion == 1) {
-            mNumCompressedVerts = count;
-            mVerts.resize(0);
-            if (mNumCompressedVerts != 0) {
-                unsigned int totalSize = loadedCompressedSize * count;
-                MILO_ASSERT(totalSize > 0, 0x2D4);
-                MemPushTemp();
-                mCompressedVerts = new unsigned char[totalSize];
-                MemPopTemp();
-                ReadChunks(d.stream, mCompressedVerts, totalSize, loadedCompressedSize << 9);
-            }
-        } else if (count > 0 && loadedCompressedSize > 0) {
-            unsigned int totalSize = loadedCompressedSize * count;
-            MILO_NOTIFY(
-                "%s: unsupported native compressed vertex format size=%u version=%u",
-                PathName(this),
-                loadedCompressedSize,
-                loadedVersion
-            );
-            MILO_ASSERT(totalSize > 0, 0x2E7);
-            d.stream.Seek(totalSize, BinStream::kSeekCur);
-        } else if (count > 0) {
-            // loadedCompressedSize == 0 but count > 0: skip (shouldn't happen)
-            mVerts.resize(0);
-        }
-    } else {
-        mVerts.resize(count);
-        int i = 0;
-        for (Vert *it = mVerts.begin(); it != mVerts.end(); ++it) {
-            d >> *it;
-            i++;
-            if (!(i & 0x1FF)) {
-#ifdef HX_NATIVE
-                d.stream.WaitUntilReady();
-#else
-                while (d.stream.Eof() == TempEof)
-                    Timer::Sleep(0);
-#endif
-            }
-        }
-    }
-#else
     unsigned int loadedCompressedSize = 0;
     unsigned int loadedVersion = 0;
-    unsigned int compressedSize = 0;
-    bool b4 = false;
-    if (b58) {
-        d.stream.ReadEndian(&loadedCompressedSize, 4);
-        d.stream.ReadEndian(&loadedVersion, 4);
+    unsigned int i8c = 0;
+    unsigned int i88 = 0;
+    unsigned int i9 = 0;
+    bool b3 = false;
+    if (c8) {
+        d >> loadedCompressedSize;
+        d >> loadedVersion;
         MILO_ASSERT(IsVertexCompressionSupported(TheLoadMgr.GetPlatform()), 0x29C);
         if (TheLoadMgr.GetPlatform() != kPlatformXBox) {
-            TheDebug.Fail(FormatString("Unsupported platform for vertex compression").Str(), 0);
-            b4 = false;
+            MILO_FAIL("Unsupported platform for vertex compression");
         } else {
-            compressedSize = 0x24;
-            b4 = true;
+            i9 = 36;
+            i8c = 36;
+            i88 = 1;
         }
-                unsigned int versionCheck;
-        if ((TheLoadMgr.GetPlatform() == kPlatformXBox)) {
-            versionCheck = 1U;
-        } else {
-            versionCheck = 0U;
-        }
-        if (compressedSize != loadedCompressedSize || versionCheck != loadedVersion) {
-            b4 = false;
-        }
-        if (!b4) {
-            TheDebug.Notify(MakeString(
-                "Loaded stale compressed vertex data, resave mesh file \"%s\""
-                "(loaded size = %d, current = %d; loaded ver = %d, current = %d",
-                d.stream.Name(), loadedCompressedSize, compressedSize,
-                loadedVersion, (unsigned int)b4
-            ));
+        b3 = i9 == loadedCompressedSize && i88 == loadedVersion;
+        if (!b3) {
+            MILO_NOTIFY(
+                "Loaded stale compressed vertex data, resave mesh file \"%s\"(loaded size = %d, current = %d; loaded ver = %d, current = %d",
+                d.stream.Name(),
+                loadedCompressedSize,
+                i8c,
+                loadedVersion,
+                i88
+            );
         }
     }
-    if (b58) {
-        if (b4) {
-            mNumCompressedVerts = count;
+    if (c8) {
+        if (b3) {
+            mNumCompressedVerts = numVerts;
             if (mNumCompressedVerts != 0) {
-                unsigned int totalSize = compressedSize * count;
-                MILO_ASSERT(totalSize > 0, 0x2D4);
-                MemPushTemp();
-                mCompressedVerts = new unsigned char[totalSize];
-                MemPopTemp();
-                ReadChunks(d.stream, mCompressedVerts, totalSize, compressedSize << 9);
+                unsigned int compressedSize = mNumCompressedVerts * i9;
+                unsigned int i99 = i9 << 9;
+                MILO_ASSERT(compressedSize > 0, 0x2D4);
+                {
+                    MemPushTemp();
+                    mCompressedVerts = new unsigned char[compressedSize];
+                    MemPopTemp();
+                }
+                ReadChunks(d.stream, mCompressedVerts, compressedSize, i99);
             }
         } else {
-            loadedCompressedSize *= count;
+            loadedCompressedSize *= numVerts;
             MILO_ASSERT(loadedCompressedSize > 0, 0x2E7);
             d.stream.Seek(loadedCompressedSize, BinStream::kSeekCur);
         }
     } else {
-        mVerts.resize(count);
-        int i = 0;
+        mVerts.resize(numVerts);
+        int i5 = 0;
         for (Vert *it = mVerts.begin(); it != mVerts.end(); ++it) {
             d >> *it;
-            i++;
-            if (!(i & 0x1FF)) {
-#ifdef HX_NATIVE
-                d.stream.WaitUntilReady();
-#else
-                while (d.stream.Eof() != 0)
+            i5++;
+            if ((i5 & 0x1FF) == 0) {
+                while (d.stream.Eof() != NotEof) {
                     Timer::Sleep(0);
-#endif
+                }
             }
         }
     }
-#endif
 }
 
 void RndMesh::SaveVertices(BinStream &bs) {
