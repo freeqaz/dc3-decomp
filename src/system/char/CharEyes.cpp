@@ -106,132 +106,135 @@ void CharEyes::Exit() {
 }
 
 void CharEyes::Highlight() {
-#ifdef MILO_DEBUG
     if (GetHead()) {
         RndGraph *oneframe = RndGraph::GetOneFrame();
-        RndTransformable *trans = 0;
+        RndTransformable *trans = nullptr;
         for (ObjVector<EyeDesc>::iterator it = mEyes.begin(); it != mEyes.end(); ++it) {
-            if (it->mEye) {
-                trans = it->mEye->GetSource();
-                if (trans) {
-                    const Transform &tf = trans->WorldXfm();
-                    Vector3 v100(
-                        tf.m.y.x * 3.0f + tf.v.x,
-                        tf.m.y.y * 3.0f + tf.v.y,
-                        tf.m.y.z * 3.0f + tf.v.z
+            trans = it->mEye->GetSource();
+            if (trans) {
+                const Transform &tf1 = trans->WorldXfm();
+                const Transform &tf2 = trans->WorldXfm();
+                Vector3 v100;
+                ScaleAdd(tf2.v, tf1.m.y, 3, v100);
+                if (it->mEye->mDisableRoll)
+                    oneframe->AddLine(
+                        trans->WorldXfm().v, v100, Hmx::Color(1.0f, 0.0f, 0.0f), true
                     );
-                    if (it->mEye->mDisableRoll)
-                        oneframe->AddLine(
-                            trans->WorldXfm().v, v100, Hmx::Color(1.0f, 0.0f, 0.0f), true
-                        );
-                    else
-                        oneframe->AddLine(
-                            trans->WorldXfm().v, v100, Hmx::Color(0.0f, 1.0f, 0.0f), true
-                        );
-                }
+                else
+                    oneframe->AddLine(
+                        trans->WorldXfm().v, v100, Hmx::Color(0.0f, 1.0f, 0.0f), true
+                    );
             }
         }
-        Vector3 headPos(GetHead()->WorldXfm().v);
+        Vector3 v10c(GetHead()->WorldXfm().v);
         if (trans) {
-            float f2 = mLastBlinkWeight;
-            float f1 = mCurrentInterest ? mCurrentInterest->mMaxViewAngleCos : mMaxEyeCang;
+            bool fcmp = mLastCang
+                >= (mCurrentInterest ? mCurrentInterest->MaxViewAngleCos() : mMaxEyeCang);
             if (mDartEnabled) {
-                oneframe->AddSphere(
-                    mTarget, mData.mMaxRadius, Hmx::Color(0.9f, 0.9f, 0.9f)
-                );
-                Vector3 dartTarget(
-                    mTarget.x + mCurrentDartOffsetX,
-                    mTarget.y + mCurrentDartOffsetY,
-                    mTarget.z + mCurrentDartOffsetZ
-                );
-                EnforceMinimumTargetDistance(headPos, dartTarget, dartTarget);
-                oneframe->AddSphere(dartTarget, 0.5f, Hmx::Color(0.0f, 0.0f, 1.0f));
+                oneframe->AddSphere(mTarget, mData.mMaxRadius, Hmx::Color(0.9f, 0.9f, 0.9f));
+                Vector3 v118;
+                Add(mTarget, *(Vector3 *)&mCurrentDartOffsetX, v118);
+                EnforceMinimumTargetDistance(v10c, v118, v118);
+                oneframe->AddSphere(v118, 0.5f, Hmx::Color(0.0f, 0.0f, 1.0f));
                 oneframe->AddLine(
                     trans->WorldXfm().v,
-                    dartTarget,
-                    f2 < f1 ? Hmx::Color(1.0f, 0.0f, 0.0f) : Hmx::Color(0.2f, 0.2f, 1.0f),
+                    v118,
+                    fcmp ? Hmx::Color(0.2f, 0.2f, 1.0f) : Hmx::Color(1, 0, 0),
                     true
                 );
             } else {
                 oneframe->AddLine(
                     trans->WorldXfm().v,
                     mTarget,
-                    f2 < f1 ? Hmx::Color(1.0f, 0.0f, 0.0f) : Hmx::Color(1.0f, 1.0f, 1.0f),
+                    fcmp ? Hmx::Color(1, 1, 1) : Hmx::Color(1, 0, 0),
                     true
                 );
             }
             if (mBlinkEnabled) {
                 oneframe->AddString3D(
-                    "p blink!", trans->WorldXfm().v, Hmx::Color(1.0f, 1.0f, 1.0f)
+                    "p blink!", trans->WorldXfm().v, Hmx::Color(1, 1, 1)
                 );
             }
         }
+
         if (mFocusInterest) {
             if (mFocusInterest != mCurrentInterest) {
                 const char *nametouse = mCurrentInterest ? mCurrentInterest->Name() : "GENERATED";
                 oneframe->AddString3D(
                     MakeString("focus = '%s' (looking at %s)", mFocusInterest->Name(), nametouse),
-                    headPos,
-                    Hmx::Color(1.0f, 0.0f, 0.0f)
+                    v10c,
+                    Hmx::Color(1, 0, 0)
                 );
             } else {
                 oneframe->AddString3D(
-                    MakeString("focus = '%s'", mFocusInterest->Name()),
-                    headPos,
-                    Hmx::Color(0.0f, 1.0f, 0.0f)
+                    MakeString("focus = '%s'", mFocusInterest->Name()), v10c, Hmx::Color(0, 1, 0)
                 );
             }
         } else {
             if (mCurrentInterest) {
                 oneframe->AddString3D(
                     MakeString("interest = '%s'", mCurrentInterest->Name()),
-                    headPos,
-                    Hmx::Color(0.0f, 1.0f, 0.0f)
+                    v10c,
+                    Hmx::Color(0, 1, 0)
                 );
             }
         }
+
         if (mInterests.size() != 0) {
-            RndTransformable *head = GetHead();
-            const Transform &headxfm = head->WorldXfm();
-            Vector3 headFwd(headxfm.m.y);
-            Normalize(headFwd, headFwd);
-            float sphereSize = 2.0f;
+            const Transform &headXfm = GetHead()->WorldXfm();
+            Vector3 headMY = headXfm.m.y;
+            Normalize(headMY, headMY);
+            Vector3 va0 = headXfm.v;
             for (ObjVector<CharInterestState>::iterator it = mInterests.begin();
                  it != mInterests.end();
                  ++it) {
-                CharInterest *interest = it->mInterest;
-                bool matchesFilter = interest->IsMatchingFilterFlags(mInterestFilterFlags);
-                if (!matchesFilter && (mInterestFilterFlags != mDefaultFilterFlags ||
-                    interest->mMaxViewAngleCos != 0)) {
-                    continue;
-                }
-
-                if (interest == mCurrentInterest) {
-                    oneframe->AddSphere(headxfm.v, sphereSize, Hmx::Color(1.0f, 0.0f, 0.0f));
-                    if (interest->mMaxViewAngleCos != 0) {
+                bool b7 = it->mInterest->IsMatchingFilterFlags(mInterestFilterFlags)
+                    || ((mInterestFilterFlags == mDefaultFilterFlags)
+                        && !it->mInterest->CategoryFlags());
+                if (mCurrentInterest == it->mInterest) {
+                    oneframe->AddSphere(
+                        it->mInterest->WorldXfm().v, 2, Hmx::Color(0, 1, 0)
+                    );
+                    Vector2 v2;
+                    if (RndCam::Current()->WorldToScreen(it->mInterest->WorldXfm().v, v2)
+                        > 0) {
+                        v2.x *= TheRnd.Width();
+                        v2.y *= TheRnd.Height();
+                        v2.y += 15.0;
+                        v2.x -= 30.0;
+                        oneframe->AddString(
+                            MakeString("%s", it->mInterest->Name()),
+                            v2,
+                            Hmx::Color(1, 1, 1)
+                        );
                     }
                 } else {
-                    if (interest->IsWithinViewCone(headxfm.v, headFwd) &&
-                        interest->IsWithinViewCone(headxfm.v, headFwd)) {
-                        if (!matchesFilter) {
-                        } else {
-                            oneframe->AddSphere(interest->WorldXfm().v, sphereSize, Hmx::Color(0.3f, 0.3f, 1.0f));
-                        }
-                    } else if (!matchesFilter) {
+                    if (it->mInterest->IsWithinViewCone(va0, mDartOffset)
+                        && it->mInterest->IsWithinViewCone(va0, headMY)) {
+                        oneframe->AddSphere(
+                            it->mInterest->WorldXfm().v,
+                            2,
+                            b7 ? Hmx::Color(1, 1, 0) : Hmx::Color(1, 0.64705884f, 0)
+                        );
                     } else {
-                        oneframe->AddSphere(interest->WorldXfm().v, sphereSize, Hmx::Color(0.313f, 0.313f, 1.0f));
+                        oneframe->AddSphere(
+                            it->mInterest->WorldXfm().v,
+                            2,
+                            b7 ? Hmx::Color(1, 0, 0)
+                               : Hmx::Color(0.6901961f, 0.1882353f, 0.3764706f)
+                        );
                     }
                 }
-
                 if (it->IsInRefractoryPeriod()) {
-                    float refTime = it->RefractoryTimeRemaining();
-                    if (interest->mMaxViewAngleCos != 0) {
-                    }
+                    oneframe->AddString3D(
+                        MakeString("r=%f", it->RefractoryTimeRemaining()),
+                        it->mInterest->WorldXfm().v,
+                        Hmx::Color(1, 1, 1)
+                    );
                 }
             }
         }
     }
-#endif
 }
 
 DECOMP_FORCEACTIVE(CharEyes, "%s", "r=%f")
@@ -407,75 +410,80 @@ END_SAVES
 
 BEGIN_LOADS(CharEyes)
     LOAD_REVS(bs)
-    int gRev = d.rev;
-    int gAltRev = d.altRev;
-    ASSERT_REVS(0x12, 0)
+    ASSERT_REVS(18, 0)
     LOAD_SUPERCLASS(Hmx::Object)
-    if (gRev > 5)
+    if (d.rev > 5) {
         LOAD_SUPERCLASS(CharWeightable)
-    if (gRev > 4)
+    }
+    if (d.rev > 4) {
         d >> mEyes;
-    else {
-        ObjPtrList<CharLookAt> pList(this, kObjListNoNull);
-        d.stream >> pList;
-        mEyes.resize(pList.size());
+    } else {
+        ObjPtrList<CharLookAt> lookats(this);
+        d >> lookats;
+        mEyes.resize(lookats.size());
         int idx = 0;
-        for (ObjPtrList<CharLookAt>::iterator it = pList.begin(); it != pList.end();
+        for (ObjPtrList<CharLookAt>::iterator it = lookats.begin(); it != lookats.end();
              ++it) {
             mEyes[idx].mEye = *it;
-            mEyes[idx].mUpperLid = 0;
-            mEyes[idx].mLowerLid = 0;
-            mEyes[idx].mUpperLidBlink = 0;
-            mEyes[idx].mLowerLidBlink = 0;
-            idx++;
+            mEyes[idx].mUpperLid = nullptr;
+            mEyes[idx].mLowerLid = nullptr;
+            mEyes[idx].mUpperLidBlink = nullptr;
+            mEyes[idx].mLowerLidBlink = nullptr;
+            ++idx;
         }
     }
-    if (gRev > 2 && gRev < 5) {
-        ObjPtr<RndTransformable> tPtr(this);
-        d.stream >> tPtr;
+    if (d.rev > 2 && d.rev < 5) {
+        ObjPtr<RndTransformable> trans(this);
+        d >> trans;
     }
     mInterests.clear();
-    if (gRev > 3 && gRev <= 8) {
-        ObjPtr<RndTransformable> tPtr(this);
-        int cnt;
-        d.stream >> cnt;
-        for (int i = 0; i < cnt; i++) {
-            d.stream >> tPtr;
+    if (d.rev > 3 && d.rev <= 8) {
+        ObjPtr<RndTransformable> trans(this);
+        int count;
+        d >> count;
+        for (int i = 0; i < count; i++) {
+            d >> trans;
             int x;
-            d.stream >> x;
+            d >> x;
         }
-    } else if (gRev > 8)
+    } else if (d.rev > 8) {
         d >> mInterests;
-    if (gRev > 4)
-        d.stream >> mFaceServo;
-    else
-        mFaceServo = 0;
-    if (gRev > 7)
-        d.stream >> mCamWeight;
-    if (gRev > 9)
-        d.stream >> mDefaultFilterFlags;
-    if (gRev > 10)
-        d.stream >> mViewDirection;
-    if (gRev > 0xB)
-        d.stream >> mHeadLookAt;
-    if (gRev > 0xC)
-        d.stream >> mMaxExtrapolation;
-    if (gRev > 0xD)
-        d.stream >> mMinTargetDist;
-    if (gRev > 0xE) {
-        d.stream >> mUpperLidTrackUp;
-        d.stream >> mUpperLidTrackDown;
-        d.stream >> mLowerLidTrackUp;
-        if (gRev < 0x11) {
-            int x, y;
-            d.stream >> x;
-            d.stream >> mLowerLidTrackDown;
-            d.stream >> y;
-        } else
-            d.stream >> mLowerLidTrackDown;
     }
-    if (gRev > 0x11)
+    if (d.rev > 4) {
+        d >> mFaceServo;
+    } else {
+        mFaceServo = nullptr;
+    }
+    if (d.rev > 7) {
+        d >> mCamWeight;
+    }
+    if (d.rev > 9) {
+        d >> mDefaultFilterFlags;
+    }
+    if (d.rev > 10) {
+        d >> mViewDirection;
+    }
+    if (d.rev > 11) {
+        d >> mHeadLookAt;
+    }
+    if (d.rev > 12) {
+        d >> mMaxExtrapolation;
+    }
+    if (d.rev > 13) {
+        d >> mMinTargetDist;
+    }
+    if (d.rev > 14) {
+        d >> mUpperLidTrackUp >> mUpperLidTrackDown >> mLowerLidTrackUp;
+        if (d.rev < 17) {
+            int x, y;
+            d >> x >> mLowerLidTrackDown >> y;
+        } else {
+            d >> mLowerLidTrackDown;
+        }
+    }
+    if (d.rev > 17) {
         d >> mLowerLidTrackRotate;
+    }
 END_LOADS
 
 BEGIN_COPYS(CharEyes)
@@ -589,8 +597,8 @@ void CharEyes::PollDeps(
     for (ObjVector<CharInterestState>::iterator it = mInterests.begin();
          it != mInterests.end();
          ++it) {
-        auto interestDir = it->mInterest->Dir();
-        if (it->mInterest && Dir() == interestDir) {
+        ObjectDir *dir = it->mInterest->Dir();
+        if (dir == Dir()) {
             changedBy.push_back(it->mInterest);
         }
     }
@@ -675,21 +683,18 @@ void CharEyes::AddInterestObject(CharInterest *interest) {
 
 bool CharEyes::EyesOnTarget(float f) {
     for (ObjVector<EyeDesc>::iterator it = mEyes.begin(); it != mEyes.end(); ++it) {
-        CharLookAt *eye = it->mEye;
-        if (eye) {
-            RndTransformable *src = eye->GetSource();
-            if (src) {
-                Vector3 diff;
-                Subtract(mTarget, src->WorldXfm().v, diff);
-                Vector3 fwd(src->WorldXfm().m.y);
-                Vector3 diff2d(diff);
-                diff2d.z = 0;
-                fwd.z = 0;
-                float dot = Dot(fwd, diff2d);
-                float angle = std::acos(Clamp<float>(-1, 1, dot / (Length(fwd) * Length(diff2d))));
-                if (angle * 57.295776f > f) {
-                    return false;
-                }
+        RndTransformable *src = it->mEye->GetSource();
+        if (src) {
+            Vector3 diff;
+            Subtract(mTarget, src->WorldXfm().v, diff);
+            Vector3 fwd(src->WorldXfm().m.y);
+            Vector3 diff2d(diff);
+            diff2d.z = 0;
+            fwd.z = 0;
+            float dot = Dot(fwd, diff2d);
+            float angle = std::acos(Clamp<float>(-1, 1, dot / (Length(fwd) * Length(diff2d))));
+            if (angle * 57.295776f > f) {
+                return false;
             }
         }
     }
