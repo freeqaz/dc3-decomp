@@ -66,16 +66,17 @@ Game::Game()
     : mSongDB(new SongDB()), mSongInfo(0), mGameInput(0), mRestartCount(0), unk5c(false),
       mUseMoveGraph(false), mPaused(true), mTimePaused(false), mRealTime(false), unk64(0),
       unk68(false), mMusicSpeed(1), mNeverAllowInput(false), mPauseRequested(false), mOvershell(0), mMoveDir(this),
-      mLoadState(0), mShuttle(new Shuttle()), mLoadedSongAudio(gNullStr), mWaitState(0), unka8(0), mAltTempoMap(0) {
+      mLoadState(0), mShuttle(new Shuttle()), mWaitState(0), unka8(0), mAltTempoMap(0) {
     if (TheSongDB) {
         RELEASE(TheSongDB);
     }
     TheSongDB = mSongDB;
     TheGame = this;
+    mLoadedSongAudio = 0;
     SetName("game", ObjectDir::Main());
     MidiParserMgr *lol = new MidiParserMgr(nullptr, "biteme");
-    TheMaster = new HamMaster(mSongDB->SongData(), TheMidiParserMgr);
-    mMaster = TheMaster;
+    mMaster = new HamMaster(mSongDB->SongData(), TheMidiParserMgr);
+    TheMaster = mMaster;
     TheMaster->SetName("master", ObjectDir::Main());
     TheMaster->GetAudio()->SetName("audio", ObjectDir::Main());
     SetBackgroundVolume(TheProfileMgr.GetMusicVolumeDb());
@@ -139,7 +140,7 @@ BEGIN_HANDLERS(Game)
     HANDLE_EXPR(using_serial_sequences, RandomGroupSeq::UsingSerialSequences())
     HANDLE(reset_detection, OnResetDetection)
     HANDLE_ACTION(set_cur_move, SetHamMove(_msg->Int(2), _msg->Obj<HamMove>(3), true))
-    HANDLE_EXPR(get_cur_move, mMoveDir ? mMoveDir->CurrentMove(_msg->Int(2)) : (Hmx::Object*)0)
+    HANDLE_EXPR(get_cur_move, mMoveDir->CurrentMove(_msg->Int(2)))
     HANDLE_ACTION(reload_song, ReloadSong())
     HANDLE_EXPR(is_ready, IsReady())
     HANDLE_ACTION(
@@ -248,19 +249,21 @@ void Game::LoadNewSongAudio(Symbol s) {
             MILO_LOG("new_songaudio_name = '%s'\n", s.Str());
             int songID = TheHamSongMgr.GetSongIDFromShortName(s);
             const HamSongMetadata *pMetadata = TheHamSongMgr.Data(songID);
-            if (pMetadata && pMetadata->IsOnDisc()) {
+            if (pMetadata->IsOnDisc()) {
                 hsvd = (HamSongDataValidate)2;
             }
         }
         RELEASE(mSongInfo);
-        SongInfo *audioData = TheHamSongMgr.SongMgr::SongAudioData(s);
 #ifdef HX_NATIVE
+        SongInfo *audioData = TheHamSongMgr.SongMgr::SongAudioData(s);
         if (!audioData) {
             MILO_WARN("Game::LoadNewSongAudio: no audio data for '%s'\n", s.Str());
             return;
         }
-#endif
         mSongInfo = new SongInfoCopy(audioData);
+#else
+        mSongInfo = new SongInfoCopy(TheHamSongMgr.SongMgr::SongAudioData(s));
+#endif
         mMaster->Load(mSongInfo, false, 0, false, hsvd, nullptr);
         Fader *fader = TheSynth->Find<Fader>("per_song_sfx_level.fade", false);
         if (fader) {
@@ -624,9 +627,10 @@ void Game::LoadSong() {
         || TheGameMode->Property("battle_mode")->Sym() == cascade) {
         mUseMoveGraph = true;
     }
-    const HamSongMetadata *data = TheHamSongMgr.Data(TheHamSongMgr.GetSongIDFromShortName(song));
+    const HamSongMetadata *data =
+        TheHamSongMgr.Data(TheHamSongMgr.GetSongIDFromShortName(song));
     HamSongDataValidate v = (HamSongDataValidate)0;
-    if (data && data->IsOnDisc()) {
+    if (data->IsOnDisc()) {
         v = (HamSongDataValidate)2;
     }
     Fader *fader = TheSynth->Find<Fader>("per_song_sfx_level.fade", false);
@@ -643,20 +647,20 @@ void Game::LoadSong() {
         }
     }
     RELEASE(mSongInfo);
-    SongInfo *songAudioData = TheHamSongMgr.SongMgr::SongAudioData(song);
 #ifdef HX_NATIVE
+    SongInfo *songAudioData = TheHamSongMgr.SongMgr::SongAudioData(song);
     if (!songAudioData) {
         MILO_WARN("Game::LoadSong: no audio data for '%s', skipping load\n", song.Str());
         return;
     }
-#endif
     mSongInfo = new SongInfoCopy(songAudioData);
-#ifdef HX_NATIVE
     if (mMaster && mMaster->GetAudio()) {
         mMaster->GetAudio()->SetPracticeMode(false);
     }
+#else
+    mSongInfo = new SongInfoCopy(TheHamSongMgr.SongMgr::SongAudioData(song));
 #endif
-    mMaster->Load(mSongInfo, false, 0, false, v, nullptr);
+    mMaster->Load(mSongInfo, false, 0, false, v, 0);
 }
 
 void Game::SetPaused(bool b1, bool b2) {
@@ -935,13 +939,13 @@ DataNode OnToggleAutoplay(DataArray *a) {
     HamPlayerData *player_data = TheGameData->Player(a->Int(1));
     MILO_ASSERT(player_data, 0x6F);
     Symbol s;
-    if (player_data->Autoplay().Null()) {
+    if (!player_data->IsAutoplaying()) {
         s = sAutoplayStates[0];
     } else {
-        s = Symbol(gNullStr);
+        s = gNullStr;
     }
     player_data->SetAutoplay(s);
-    return !s.Null();
+    return player_data->IsAutoplaying();
 }
 
 bool Game::HandleWait() {
@@ -953,7 +957,7 @@ bool Game::HandleWait() {
     }
     // State 3 early return: still in intro countdown
     if (mWaitState == 3) {
-        if (mHasIntro && TheTaskMgr.Seconds(TaskMgr::kRealTime) < 0.0f) {
+        if (mRealTime && TheTaskMgr.Seconds(TaskMgr::kRealTime) < 0.0f) {
             return true;
         }
     }
@@ -987,7 +991,7 @@ bool Game::HandleWait() {
     switch (mWaitState) {
     case 0:
         MILO_ASSERT(false, 0x555);
-        // fall through
+        break;
     case 1:
         PostWaitStart();
         break;
@@ -1003,10 +1007,10 @@ bool Game::HandleWait() {
         break;
     case 5: {
         // Full song load wait — check all subsystems
-        if (!HamSongData::sInstance->GetTempoMap()) {
+        if (!TheMaster->SongData()->GetTempoMap()) {
             return false;
         }
-        if (!mMaster->GetAudio()->IsReady()) {
+        if (!TheMaster->GetAudio()->IsReady()) {
             return false;
         }
         if (!TheHamDirector->IsWorldLoaded()) {
@@ -1054,29 +1058,33 @@ bool Game::HandleWait() {
     return true;
 }
 
-DataNode OnCycleAutoplay(DataArray *arr) {
-    HamPlayerData *player_data = TheGameData->Player(arr->Int(1));
+DataNode OnCycleAutoplay(DataArray *a) {
+    HamPlayerData *player_data = TheGameData->Player(a->Int(1));
     MILO_ASSERT(player_data, 0x7e);
-    Symbol newState;
-    if (!player_data->IsAutoplaying()) {
-        newState = sAutoplayStates.back();
+    Symbol autoplay = player_data->Autoplay();
+    if (autoplay.Null()) {
+        autoplay = sAutoplayStates.back();
     } else {
+        int idx = 0;
         int size = sAutoplayStates.size();
-        int i = 0;
-        for (; (unsigned)i < (unsigned)size; i++) {
-            if (sAutoplayStates[i] == player_data->Autoplay()) {
+        for (; (unsigned int)idx < (unsigned int)size; idx++) {
+            if (sAutoplayStates[idx] == autoplay) {
                 break;
             }
         }
-        if (size != 0) {
-            i = (i + 1) % size;
+        if (size == 0) {
+            idx = 0;
         } else {
-            i = 0;
+            int mod = (idx + 1) % size;
+            if (mod < 0) {
+                mod += size;
+            }
+            idx = mod;
         }
-        newState = sAutoplayStates[i];
+        autoplay = sAutoplayStates[idx];
     }
-    player_data->SetAutoplay(newState);
-    return DataNode(newState);
+    player_data->SetAutoplay(autoplay);
+    return autoplay;
 }
 
 DataNode OnToggleCharFeedback(DataArray *a) {
