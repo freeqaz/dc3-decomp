@@ -279,6 +279,12 @@ public:
     float GetSY() const { return mSensors[1]; }
     float GetSZ() const { return mSensors[2]; }
     bool IsButtonInMask(int i) const { return (mButtons & 1 << i); }
+    float LX() const { return mSticks[0][0]; }
+    float LY() const { return mSticks[0][1]; }
+    float RX() const { return mSticks[1][0]; }
+    float RY() const { return mSticks[1][1]; }
+    bool Pressed(JoypadButton btn) const { return mButtons & 1 << btn; }
+    bool NewPressed(JoypadButton btn) const { return mNewPressed & 1 << btn; }
 
 private:
     int FloatToBucket(float) const;
