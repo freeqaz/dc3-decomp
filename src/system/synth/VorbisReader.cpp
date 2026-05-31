@@ -28,6 +28,7 @@ namespace {
                                   0x38, 0x81, 0x08, 0xEA, 0x36, 0x23, 0xDB, 0xE4 };
     HANDLE gEvent = INVALID_HANDLE_VALUE;
 
+#ifndef HX_NATIVE
     DWORD DecodeThreadEntry(HANDLE) {
         // this thread is meant to run forever
         while (true) {
@@ -55,6 +56,7 @@ namespace {
         }
         return 0;
     }
+#endif
 }
 
 #define VORBIS_FAIL(name, err)                                                           \
@@ -76,6 +78,7 @@ VorbisReader::VorbisReader(File *file, bool expectMap, StandardStream *stream, b
     mOggSync = new ogg_sync_state;
     ogg_sync_init(mOggSync);
     unk24 = false;
+#ifndef HX_NATIVE
     if (gEvent == INVALID_HANDLE_VALUE) {
         gEvent = CreateEventA(nullptr, false, false, nullptr);
         MILO_ASSERT(gEvent, 0xFE);
@@ -88,14 +91,17 @@ VorbisReader::VorbisReader(File *file, bool expectMap, StandardStream *stream, b
     }
     CritSecTracker tracker(&gLock);
     gNewReaders.push_front(this);
+#endif
 }
 
 VorbisReader::~VorbisReader() {
+#ifndef HX_NATIVE
     unk24 = true;
     unked = false;
     while (unk24) {
         SetEvent(gEvent);
     }
+#endif
     delete[] mHdrBuf;
     mHdrBuf = nullptr;
     if (mOggStream) {
@@ -122,6 +128,8 @@ VorbisReader::~VorbisReader() {
     RELEASE(mOggSync);
     RELEASE(mCtrState);
 }
+
+#ifndef HX_NATIVE
 
 void VorbisReader::Poll(float until) {
     START_AUTO_TIMER("vorbis_reader_poll");
@@ -190,6 +198,8 @@ void VorbisReader::Poll(float until) {
     }
 }
 
+#endif // !HX_NATIVE
+
 void VorbisReader::Seek(int sample) {
     CritSecTracker tracker(this);
     MILO_ASSERT(mHeadersRead == 3, 0x1BD);
@@ -218,18 +228,26 @@ int VorbisReader::ConsumeData(void **pcm, int samples, int startSamp) {
 }
 
 void VorbisReader::setupCypher(int moggVersion) {
+    char script[256];
+    unsigned char masterKey[256];
+#ifdef HX_NATIVE
+    // On native, bypass the DTA obfuscation for masterKey initialization.
+    // Xbox uses DTA scripting with (int)masterKey pointer math (32-bit only)
+    // to copy masher data into masterKey as an anti-tamper measure.
+    // On 64-bit this truncates the pointer. Just call getMasher directly.
+    KeyChain::getMasher(masterKey);
+#else
     DataArray *arr = DataReadString("{Na 42 'O32'}");
     unsigned int iEval = arr->Evaluate(0).Int();
     arr->Release();
 
     char i6 = (iEval % 13);
     i6 = i6 + 'A';
-    char script[256];
-    unsigned char masterKey[256];
     sprintf(script, "{%c %d %c}", i6, (int)masterKey ^ iEval, i6);
     DataArray *buf118Arr = DataReadString(script);
     buf118Arr->Evaluate(0);
     buf118Arr->Release();
+#endif
     KeyChain::getKey(mKeyIndex, gKey, masterKey);
     TheSynth->Grinder().GrindArray(mMagicA, mMagicB, gKey, 0x10, moggVersion);
     for (int i = 0; i < 16; i++) {
@@ -239,6 +257,13 @@ void VorbisReader::setupCypher(int moggVersion) {
     memset(gKey, 0, gKeySize);
     MILO_ASSERT(ret == 0, 0xB0);
 
+#ifdef HX_NATIVE
+    // On native, replace the DTA {ha <magic> <mode>} hash evaluation with a
+    // direct C implementation provided by the native App layer.
+    extern int magicNumberGeneratorNative(int idx, int mode);
+    mMagicHashA = magicNumberGeneratorNative(mMagicA, 1);
+    mMagicHashB = magicNumberGeneratorNative(mMagicB, 2);
+#else
     sprintf(script, "{ha %d 1}", mMagicA);
     DataArray *magicGenA = DataReadString(script);
     mMagicHashA = magicGenA->Evaluate(0).Int();
@@ -248,14 +273,23 @@ void VorbisReader::setupCypher(int moggVersion) {
     DataArray *magicGenB = DataReadString(script);
     mMagicHashB = magicGenB->Evaluate(0).Int();
     magicGenB->Release();
+#endif
 }
 
 bool VorbisReader::TryReadHeader() {
     if (!mOggStream) {
         ogg_page page;
         int pageOut = ogg_sync_pageout(mOggSync, &page);
-        if (pageOut < 0)
+        if (pageOut < 0) {
             VORBIS_FAIL("StreamInit", pageOut);
+#ifdef HX_NATIVE
+            // Persistent page sync failure means data is corrupt (likely bad
+            // mogg decryption). Mark the reader as failed so the native Poll
+            // loop can break out instead of blocking forever.
+            mFail = true;
+            return false;
+#endif
+        }
         if (pageOut > 0) {
             mOggStream = new ogg_stream_state;
             ogg_stream_init(mOggStream, ogg_page_serialno(&page));
@@ -483,6 +517,8 @@ bool VorbisReader::CheckHmxHeader() {
     }
 }
 
+#ifndef HX_NATIVE
+
 void VorbisReader::Decrypt(unsigned char *data, int bytes) {
     unsigned char in[0x4000];
     unsigned char out[0x4000];
@@ -585,3 +621,127 @@ bool VorbisReader::DecodeThreadPoll() {
         // more
     }
 }
+
+#else // HX_NATIVE
+
+// Native AES-CTR decrypt + HMXA anti-tamper reversal. On Xbox the background
+// decode thread calls the VorbisReader::Decrypt member; on native there is no
+// decode thread, so DoFileRead decrypts inline through this helper. Named
+// distinctly from the member Decrypt so member name lookup doesn't shadow it.
+static void NativeDecrypt(VorbisReader *reader, unsigned char *data, int bytes,
+                          symmetric_CTR *ctrState, long magicHashA, long magicHashB) {
+    if (!ctrState)
+        return;
+
+    // Step 1: Decrypt the entire buffer in-place using AES-CTR (stream cipher)
+    unsigned char *tmp = new unsigned char[bytes];
+    ctr_decrypt(data, tmp, bytes, ctrState);
+    memcpy(data, tmp, bytes);
+    delete[] tmp;
+
+    // Step 2: Scan for all HMXA page headers and apply anti-tamper reversal.
+    // v0xE encryption replaces OggS with HMXA and XORs bytes 12-15 and 20-23
+    // with magicHash values. The XOR was designed for big-endian (Xbox 360),
+    // so we must byte-swap the hash values on little-endian before XORing.
+    if (magicHashA != 0 || magicHashB != 0) {
+        unsigned int xorA = __builtin_bswap32((unsigned int)magicHashA);
+        unsigned int xorB = __builtin_bswap32((unsigned int)magicHashB);
+        for (int i = 0; i <= bytes - 4; i++) {
+            if (data[i] == 'H' && data[i+1] == 'M'
+                && data[i+2] == 'X' && data[i+3] == 'A') {
+                data[i]   = 'O';
+                data[i+1] = 'g';
+                data[i+2] = 'g';
+                data[i+3] = 'S';
+                if (i + 16 <= bytes) {
+                    unsigned int *ui = (unsigned int *)&data[i + 12];
+                    *ui ^= xorA;
+                }
+                if (i + 24 <= bytes) {
+                    unsigned int *ui = (unsigned int *)&data[i + 20];
+                    *ui ^= xorB;
+                }
+            }
+        }
+    }
+}
+
+bool VorbisReader::DoFileRead() {
+    bool ret = false;
+    if (mFail)
+        return false;
+
+    int queuedBytes = mOggSync->fill - mOggSync->returned;
+    if (mEnableReads && !mReadBuffer && !mFile->Eof() && queuedBytes < 0x10000) {
+        mReadBuffer = (unsigned char *)ogg_sync_buffer(mOggSync, 0x4000);
+        mFile->ReadAsync(mReadBuffer, 0x4000);
+        mFail = mFile->Fail();
+        ret = true;
+    }
+
+    int bytes = 0;
+    if (!mFail && mReadBuffer && mFile->ReadDone(bytes) && mDecryptBytes == 0) {
+        mFail = mFile->Fail();
+        if (mFail)
+            return false;
+        MILO_ASSERT(bytes > 0, 0x1F9);
+        NativeDecrypt(this, (unsigned char *)mReadBuffer, bytes, mCtrState, mMagicHashA, mMagicHashB);
+        ogg_sync_wrote(mOggSync, bytes);
+        mReadBuffer = 0;
+        ret = true;
+    }
+    mFail = mFile->Fail();
+    return ret;
+}
+
+void VorbisReader::Poll(float until) {
+    if (!mFail && !mNeedInitDecoder && CheckHmxHeader() && !mDone
+        && (mSeekTarget < 0 || DoSeek())) {
+        DoFileRead();
+        mEof = mFile->Eof();
+        if (mHeadersRead < 3) {
+            while (TryReadHeader())
+                ;
+            if (mHeadersRead >= 3) {
+                mNumChannels = mVorbisInfo->channels;
+                mSampleRate = mVorbisInfo->rate;
+                unkf4.resize(mNumChannels);
+                Init();
+                InitDecoder();
+            }
+        } else {
+            Timer timer;
+            timer.Start();
+            bool first = !unkec;
+            while (timer.Ms() < until || first) {
+                first = false;
+                // Step 1: Push any decoded PCM to ring buffers
+                {
+                    float **pcm;
+                    int pcmAvail = vorbis_synthesis_pcmout(mVorbisDsp, &pcm);
+                    if (pcmAvail > 0) {
+                        int consumed = ConsumeData((void **)pcm, pcmAvail,
+                                                   mVorbisDsp->granulepos - pcmAvail);
+                        vorbis_synthesis_read(mVorbisDsp, consumed);
+                        if (consumed == 0)
+                            break; // Ring buffer full — wait for audio callback to drain
+                    }
+                }
+                // Step 2: Decode more Vorbis blocks
+                if (!TryDecode()) {
+                    // No packet available — on native there's no background decode
+                    // thread, so read more file data and retry before giving up.
+                    if (!DoFileRead())
+                        break; // Can't read more (EOF, error, or ogg buffer full)
+                    if (!TryDecode())
+                        break; // Still no packet — give up this poll cycle
+                }
+                // Step 3: Feed raw data for next iteration
+                DoFileRead();
+                timer.Split();
+            }
+        }
+    }
+}
+
+#endif // HX_NATIVE
