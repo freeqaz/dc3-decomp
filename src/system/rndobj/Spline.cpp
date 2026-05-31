@@ -342,49 +342,37 @@ void RndSpline::SyncDeformedCtrlPoints(int startIdx, int endIdx) const {
     }
 }
 
-void RndSpline::PrepareShader(float farg0, float farg1) const {
-    int tempIdx = mCtrlPoints.size();
-    int endIdx = mEndCtrlPoint;
-    int startIdx = mStartCtrlPoint;
-    if ((unsigned int)((int)(mDeformedCtrlPoints.capacity() - mDeformedCtrlPoints.size()) / 88) >= 2U) {
-        int temp = 0 - (startIdx + 1);
-        int actualStart = ((temp - temp) - !1) & startIdx;
-        if (endIdx == -1) {
-            endIdx = (((int)(mCtrlPoints.capacity() - mCtrlPoints.size()) / 88) - 1);
+void RndSpline::PrepareShader(float f1, float f2) const {
+    if (mDeformedCtrlPoints.size() >= 2) {
+        int endCtrlPt = mEndCtrlPoint;
+        int startCtrlPt = Max(mStartCtrlPoint, 0);
+        if (endCtrlPt == -1) {
+            endCtrlPt = mCtrlPoints.size() - 1;
         }
-        SyncDeformedCtrlPoints(actualStart, endIdx);
-        int count = endIdx - actualStart;
-        int idx = actualStart;
-        if ((count + 1) >= 0xC) {
-            MILO_ASSERT(false, 0x1C1);
+        SyncDeformedCtrlPoints(startCtrlPt, endCtrlPt);
+        MILO_ASSERT(((endCtrlPt - startCtrlPt) + 1) < 0xC, 0x1C1);
+        int shaderConstant = 0xAE;
+        for (int i = startCtrlPt; i <= endCtrlPt; i++, shaderConstant += 4) {
+            const CtrlPoint &pt = GetDeformedCtrlPoint(i);
+            MILO_ASSERT(!pt.mDirtyConstants, 0x1CF);
+            TheShaderMgr.SetVConstant((VShaderConstant)(shaderConstant - 1), pt.mCoeff0);
+            TheShaderMgr.SetVConstant((VShaderConstant)(shaderConstant), pt.mCoeff1);
+            TheShaderMgr.SetVConstant((VShaderConstant)(shaderConstant + 1), pt.mCoeff2);
+            TheShaderMgr.SetVConstant((VShaderConstant)(shaderConstant + 2), pt.mCoeff3);
         }
-        if (actualStart <= endIdx) {
-            int constIdx = 0xAF;
-            do {
-                const CtrlPoint &pt = GetDeformedCtrlPoint(idx);
-                if ((unsigned char)pt.mDirtyConstants != 0) {
-                    MILO_ASSERT(false, 0x1CF);
-                }
-                TheShaderMgr.SetVConstant((VShaderConstant)(constIdx - 2), pt.mCoeff0);
-                TheShaderMgr.SetVConstant((VShaderConstant)(constIdx - 1), pt.mCoeff1);
-                TheShaderMgr.SetVConstant((VShaderConstant)constIdx, pt.mCoeff2);
-                TheShaderMgr.SetVConstant((VShaderConstant)(constIdx + 1), pt.mCoeff3);
-                idx++;
-                constIdx += 4;
-            } while (idx <= endIdx);
-        }
-        float zero = 0.0f;
-        float invFarg1 = 1.0f / farg1;
-        float countAsFloat = (float)(double)count;
-        Vector4 shader1(countAsFloat, invFarg1, 0.0f, zero);
-        TheShaderMgr.SetVConstant(kVS_SplineData1, shader1);
-        if ((unsigned char)mPulseDrawing != 0) {
-            float startAsFloat = (float)(double)actualStart;
-            float amp = mPulseAmplitude;
-            float offset = mPulseOffset - startAsFloat;
-            float perPt = (mYPerCtrlPoint / mPulseLength) * 2.0f;
-            Vector4 shader2(offset, amp, perPt, zero);
-            TheShaderMgr.SetVConstant(kVS_SplineData2, shader2);
+        TheShaderMgr.SetVConstant(
+            kVS_SplineData1, Vector4(endCtrlPt - startCtrlPt, f1, 1.0f / f2, 0)
+        );
+        if (mPulseDrawing) {
+            TheShaderMgr.SetVConstant(
+                kVS_SplineData2,
+                Vector4(
+                    mPulseOffset - startCtrlPt,
+                    (mYPerCtrlPoint / mPulseLength) * 2.0f,
+                    mPulseAmplitude,
+                    0
+                )
+            );
         }
     }
 }
