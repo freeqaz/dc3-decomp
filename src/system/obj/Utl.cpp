@@ -134,34 +134,37 @@ int SubDirStringUsed(ObjectDir *dir) {
 }
 
 const char *NextName(const char *old_name, ObjectDir *dir) {
-    if (!dir->FindObject(old_name, false, true))
-        return old_name;
-    const char *base = FileGetBase(old_name);
-    const char *ext = FileGetExt(old_name);
-    int len = (int)strlen(base);
-    char *ptr;
-    for (ptr = (char *)base + len; (ptr > base && ptr[-1] >= '0' && ptr[-1] <= '9'); ptr--)
-        ;
-    int numDigits = (int)(base + len - ptr);
-    int atoied = 0;
-    if (numDigits <= 1)
-        numDigits = 1;
-    if (*ptr != '\0')
-        atoied = atoi(ptr);
-    char buf[128];
-    do {
-        char fmt[] = "%02d";
-        atoied++;
-        fmt[2] = '0' + numDigits;
-        sprintf(ptr, fmt, atoied);
-        if (*ext != '\0') {
-            sprintf(buf, "%s.%s", base, ext);
-        } else {
-            strcpy(buf, base);
+    if (dir->FindObject(old_name, false, true)) {
+        const char *base = FileGetBase(old_name);
+        const char *ext = FileGetExt(old_name);
+        char *ptr;
+        int baselen = strlen(base);
+        for (ptr = (char *)&base[baselen];
+             (ptr > base && ptr[-1] >= '0' && ptr[-1] <= '9');
+             ptr--)
+            ;
+        int atoied = 0;
+        int numChar = Max<int>(1, base + baselen - ptr);
+        if (*ptr != '\0') {
+            atoied = atoi(ptr);
         }
-    } while (dir->FindObject(buf, false, true));
-
-    return MakeString(buf);
+        char buf[128];
+        do {
+            char numbuf[8];
+            strcpy(numbuf, "%02d");
+            atoied++;
+            numbuf[2] = numChar + 0x30;
+            sprintf(ptr, numbuf, atoied);
+            if (*ext != '\0') {
+                sprintf(buf, "%s.%s", base, ext);
+            } else {
+                strcpy(buf, base);
+            }
+        } while (dir->FindObject(buf, false, true));
+        return MakeString(buf);
+    } else {
+        return old_name;
+    }
 }
 
 bool PathCompare(DataArray *arr1, DataArray *arr2) {
@@ -265,18 +268,20 @@ void ReloadObjectType(Hmx::Object *obj, DataArray *arr) {
     if (obj) {
         DataArray *def = obj->TypeDef();
         if (def) {
+            DataArray *file = nullptr;
+            bool noarr = !arr;
             std::list<DataArray *> arrs;
             if (!arr) {
-                DataArray *file = DataReadFile(SystemConfig()->File(), true);
+                file = DataReadFile(SystemConfig()->File(), true);
                 arr = file->FindArray("objects");
             }
-            arrs.push_back(arr);
+            arrs.push_back(def);
             static Symbol types("types");
-            DataArray *objArr = arr->FindArray(obj->ClassName(), types, obj->Type());
-            DataUpdateArray(def, objArr);
+            DataUpdateArray(def, arr->FindArray(obj->ClassName(), types, obj->Type()));
             obj->SetTypeDef(def);
-            if ((long)arr & 0xFF)
-                arr->Release();
+            if (noarr) {
+                file->Release();
+            }
         }
     }
 }
@@ -356,67 +361,50 @@ void ListProperties(
     }
 }
 
-void MergeObjectsRecurse(ObjectDir *fromDir, ObjectDir *toDir, MergeFilter &filt, bool b) {
-    if (!b) {
-        switch (filt.FilterSubdir(fromDir, toDir)) {
-        case MergeFilter::kMergeReplace:
+void MergeObjectsRecurse(
+    ObjectDir *fromDir, ObjectDir *toDir, MergeFilter &filter, bool b4
+) {
+    if (!b4) {
+        switch (filter.FilterSubdir(fromDir, toDir)) {
+        case 1:
             if (!toDir->HasSubDir(fromDir)) {
-                ObjDirPtr<ObjectDir> dirPtr(fromDir);
-                toDir->AppendSubDir(dirPtr);
+                ObjDirPtr<ObjectDir> ptr(fromDir);
+                toDir->AppendSubDir(ptr);
             }
             return;
-        case MergeFilter::kMergeKeep:
+        case 2:
             return;
-        default:
+        default: {
+            ObjRef refs;
+            refs.DetachSelf();
+            FOREACH (it, fromDir->Refs()) {
+                Hmx::Object *owner = it->RefOwner();
+                if (owner && owner->Dir() == fromDir) {
+                    it = it->MoveBefore(&refs);
+                }
+            }
+            refs.ReplaceList(toDir);
             break;
         }
-        ObjRef tempRefs;
-        tempRefs.Clear();
-        for (ObjRef *it = fromDir->mRefs.next; it != &fromDir->mRefs;) {
-            Hmx::Object *owner = it->RefOwner();
-            if (owner && owner->Dir() == fromDir) {
-                ObjRef *prevRef = it->prev;
-                it->Release(nullptr);
-                it->AddRef(&tempRefs);
-                it = prevRef;
-            }
-            it = it->next;
         }
-        tempRefs.ReplaceList(toDir);
     }
-
-    for (ObjectDir::Entry *entry = fromDir->mHashTable.Begin(); entry != 0;
-         entry = fromDir->mHashTable.Next(entry)) {
-        Hmx::Object *curObj = entry->obj;
+    auto &table = fromDir->HashTable();
+    for (auto it = table.Begin(); it != nullptr; it = table.Next(it)) {
+        Hmx::Object *curObj = it->obj;
         if (curObj) {
             Hmx::Object *foundObj = toDir->FindObject(curObj->Name(), false, true);
             if (foundObj != curObj) {
-                MergeObject(curObj, foundObj, toDir, filt.Filter(curObj, foundObj, toDir));
+                MergeObject(
+                    curObj, foundObj, toDir, filter.Filter(curObj, foundObj, toDir)
+                );
             }
         }
     }
-
-    std::vector<ObjDirPtr<ObjectDir> > &subDirs = fromDir->mSubDirs;
-    for (int i = 0; i < subDirs.size();) {
-        ObjectDir *sd = subDirs[i];
-        if (sd) {
-            switch (filt.FilterSubdir(sd, toDir)) {
-            case MergeFilter::kMergeKeep:
-                break;
-            case MergeFilter::kMergeReplace: {
-                if (!toDir->HasSubDir(sd)) {
-                    toDir->AppendSubDir(subDirs[i]);
-                }
-                fromDir->RemovingSubDir(subDirs[i]);
-                subDirs.erase(subDirs.begin() + i);
-                continue;
-            }
-            default:
-                MergeObjectsRecurse(sd, toDir, filt, false);
-                break;
-            }
+    for (int i = 0; i < fromDir->SubDirs().size(); i++) {
+        ObjectDir *cur = fromDir->SubDirs()[i];
+        if (cur) {
+            MergeObjectsRecurse(cur, toDir, filter, false);
         }
-        i++;
     }
 }
 
