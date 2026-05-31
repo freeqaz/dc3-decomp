@@ -1372,59 +1372,67 @@ void CamShot::EndAnim() {
 
 void CamShot::SetFrame(float frame, float blend) {
     START_AUTO_TIMER("camera");
-    if (mSetFrameActive)
-        return;
 #ifdef HX_NATIVE
     // Guard: reject NaN/inf frame values that would poison camera transforms
     if (frame != frame || frame > 1e15f || frame < -1e15f)
         return;
 #endif
-    RndAnimatable::SetFrame(frame, blend);
-    RndCam *cam = GetCam();
-    if (!cam)
+    if (mSetFrameActive) {
         return;
-    SetFrames(mAnims, frame);
-    if (mKeyframes.empty())
-        return;
-    mSetFrameActive = true;
-    mPathFrame = -1;
-    EndFrame();
-    static CamShotFrame nullFrame(nullptr);
-    nullFrame.mCamShot = this;
-    CamShotFrame *frame4c = nullptr;
-    CamShotFrame *frame50 = nullptr;
-    float f48 = 1.0f;
-    GetKey(frame, frame4c, frame50, f48);
-    if (mDisabled != 0) {
-        frame50->UpdateTarget();
-        if (frame4c)
-            frame4c->UpdateTarget();
-        mSetFrameActive = false;
     } else {
-        if (frame50 != mLastNext) {
-            frame50->UpdateTarget();
-        }
-        if (!frame4c) {
-            nullFrame.Interp(*frame50, 1.0f, blend, cam);
+        RndAnimatable::SetFrame(frame, blend);
+        RndCam *cam = GetCam();
+        if (!cam) {
+            return;
         } else {
-            if (frame4c != mLastPrev) {
-                if (frame4c != mLastNext) {
-                    frame4c->UpdateTarget();
+            SetFrames(mAnims, frame);
+            if (mKeyframes.empty()) {
+                return;
+            } else {
+                mSetFrameActive = true;
+                mPathFrame = -1;
+                EndFrame();
+                static CamShotFrame nullFrame(nullptr);
+                nullFrame.mCamShot = this;
+                float f48 = 1.0f;
+                CamShotFrame *frame50 = nullptr;
+                CamShotFrame *frame54 = nullptr;
+                GetKey(frame, frame50, frame54, f48);
+                if (mDisabled != 0) {
+                    frame54->UpdateTarget();
+                    if (frame50) {
+                        frame50->UpdateTarget();
+                    }
+                    mSetFrameActive = false;
+                    return;
+                } else {
+                    if (frame54 != mLastNext) {
+                        frame54->UpdateTarget();
+                    }
+                    if (!frame50) {
+                        nullFrame.Interp(*frame54, 1.0f, blend, cam);
+                    } else {
+                        if (frame50 != mLastPrev) {
+                            if (frame50 != mLastNext) {
+                                frame50->UpdateTarget();
+                            }
+                            mLastPrev = frame50;
+                        }
+                        frame50->Interp(*frame54, f48, blend, cam);
+                    }
+                    mLastNext = frame54;
+                    if (CheckShotStarted()) {
+                        static Message msg("shot_started");
+                        HandleType(msg);
+                        mShotStarted = false;
+                    }
+                    if (CheckShotOver(frame)) {
+                        SetShotOver();
+                    }
+                    mSetFrameActive = false;
                 }
-                mLastPrev = frame4c;
             }
-            frame4c->Interp(*frame50, f48, blend, cam);
         }
-        mLastNext = frame50;
-        if (CheckShotStarted()) {
-            static Message msg("shot_started");
-            HandleType(msg);
-            mShotStarted = false;
-        }
-        if (CheckShotOver(frame)) {
-            SetShotOver();
-        }
-        mSetFrameActive = false;
     }
 }
 
@@ -1619,57 +1627,59 @@ void CamShot::Shake(float freq, float amp, const Vector2 &maxAngle, Vector3 &off
     angOffset = mLastShakeAngOffset;
 }
 
-bool CamShot::SetPos(CamShotFrame &frame, RndCam *cam) {
-    cam = cam ? cam : GetCam();
-    if (!cam)
+// why does ~AutoPrepTarget even inline this?
+__declspec(noinline) bool CamShot::SetPos(CamShotFrame &frame, RndCam *cam) {
+    if (!cam) {
+        cam = GetCam();
+    }
+    if (!cam) {
         return false;
-
-    Transform tf(cam->WorldXfm());
-    if (frame.HasTargets()) {
-        Vector3 targetPos;
-        frame.GetCurrentTargetPosition(targetPos);
-        cam->WorldToScreen(targetPos, frame.mScreenOffset);
-        frame.mScreenOffset += Vector2(-0.5f, -0.5f);
-        frame.mScreenOffset.x *= 2.0f;
-        frame.mScreenOffset.y *= -2.0f;
-
-        Vector3 camToTarget;
-        Subtract(targetPos, tf.v, camToTarget);
-        Vector3 yComponent(cam->WorldXfm().m.y);
-        yComponent *= Dot(camToTarget, cam->WorldXfm().m.y);
-        Vector3 projectedCamPos;
-        ::Add(cam->WorldXfm().v, yComponent, projectedCamPos);
-        Vector3 targetOffset;
-        Subtract(targetPos, projectedCamPos, targetOffset);
-        ::Add(tf.v, targetOffset, tf.v);
     } else {
-        frame.mScreenOffset.Zero();
-    }
-
-    frame.mFOV = cam->YFov();
-
-    RndTransformable *frameParent = frame.mParent;
-    if (frameParent) {
-        Transform parentXfm(frameParent->WorldXfm());
-        if (!frame.mUseParentRotation) {
-            parentXfm.m.Identity();
+        frame.mWorldOffset = cam->WorldXfm();
+        if (frame.HasTargets()) {
+            Vector3 ve0;
+            frame.GetCurrentTargetPosition(ve0);
+            cam->WorldToScreen(ve0, frame.mScreenOffset);
+            frame.mScreenOffset += Vector2(-0.5f, -0.5f);
+            frame.mScreenOffset.x *= 2.0f;
+            frame.mScreenOffset.y *= -2.0f;
+            Vector3 vec;
+            Subtract(ve0, frame.mWorldOffset.v, vec);
+            Vector3 vf8(cam->WorldXfm().m.y);
+            vf8 *= Dot(vec, cam->WorldXfm().m.y);
+            Vector3 v104;
+            Add(cam->WorldXfm().v, vf8, v104);
+            Vector3 v110;
+            Subtract(ve0, v104, v110);
+            Add(frame.mWorldOffset.v, v110, frame.mWorldOffset.v);
+        } else {
+            frame.mScreenOffset.Zero();
         }
-        Transform invParent;
-        FastInvert(parentXfm, invParent);
-        Multiply(tf, invParent, tf);
-    }
-
-    if (mPath && &mKeyframes[0] == &frame) {
-        Transform pathXfm;
-        mPath->MakeTransform(0, pathXfm, true, 1.0f);
-        tf.v -= pathXfm.v;
-        if (!frame.HasTargets()) {
-            tf.m.Identity();
+        frame.mFOV = cam->YFov();
+        RndTransformable *frameParent = frame.mParent;
+        if (frameParent) {
+            Transform tf70(frameParent->WorldXfm());
+            if (!frame.mUseParentRotation) {
+                tf70.m.Identity();
+            }
+            Transform tfa0;
+            FastInvert(tf70, tfa0);
+            Multiply(frame.mWorldOffset, tfa0, frame.mWorldOffset);
         }
-    }
+        Transform lol;
+        FastInvert(WorldXfm(), lol);
+        Multiply(frame.mWorldOffset, lol, frame.mWorldOffset);
 
-    frame.mWorldOffset = tf;
-    return true;
+        if (mPath && &mKeyframes[0] == &frame) {
+            Transform tfd0;
+            mPath->MakeTransform(0, tfd0, true, 1.0f);
+            frame.mWorldOffset.v -= tfd0.v;
+            if (!frame.HasTargets()) {
+                frame.mWorldOffset.m.Identity();
+            }
+        }
+        return true;
+    }
 }
 
 DataNode CamShot::OnHasTargets(DataArray *da) {
