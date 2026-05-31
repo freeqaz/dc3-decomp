@@ -1,13 +1,8 @@
 #include "DebugGraph.h"
 #include "rndobj/Graph.h"
 #include "utl/MakeString.h"
-#ifdef HX_NATIVE
-inline double __fsel(double a, double b, double c) { return a >= 0.0 ? b : c; }
-#else
-#include "xdk/LIBCMT/ppcintrinsics.h"
-#endif
 
-void DebugGraph::AddData(float data, bool b)  {
+void DebugGraph::AddData(float data, bool b) {
     Sample sample;
     sample.data = data;
     sample.b = b;
@@ -18,72 +13,91 @@ void DebugGraph::AddData(float data, bool b)  {
     }
 }
 
+inline float clamp(float val) {
+    float c = -val >= 0.0f ? 0.0f : val;
+    return c - 1.0f >= 0.0f ? 1.0f : c;
+}
+
 void DebugGraph::Draw() {
-    RndGraph *graph = RndGraph::GetOneFrame();
+    RndGraph *rnd = RndGraph::GetOneFrame();
+
     Hmx::Rect rect(mRect.x, mRect.y, mRect.w, mRect.h);
-    graph->AddRectFilled2D(rect, mColorB);
+    rnd->AddRectFilled2D(rect, mColorB);
 
     if (mIsVisible) {
-        Vector2 minPos(mRect.x, (mRect.y + mRect.h) - 0.02f);
-        graph->AddScreenString(MakeString("%.3f", mMinValue), minPos, mColorA);
+        Vector2 minPos(mRect.x, mRect.y + mRect.h - 0.02f);
+        rnd->AddScreenString(MakeString("%.3f", mMinValue), minPos, mColorA);
+
         Vector2 maxPos(mRect.x, mRect.y);
-        graph->AddScreenString(MakeString("%.3f", mMaxValue), maxPos, mColorA);
+        rnd->AddScreenString(MakeString("%.3f", mMaxValue), maxPos, mColorA);
     }
 
-    float range = mMaxValue - mMinValue;
     if (mThresholdValue != FLT_MAX) {
-        float normThresh = (mThresholdValue - mMinValue) / range;
-        // Clamp to [0, 1] using __fsel to reduce register pressure
-        float clamped = (float)__fsel(-normThresh, normThresh, 0.0f);
-        float cx = (float)__fsel(clamped - 1.0f, 1.0f, clamped);
-        float cy = cx;
-        Vector2 lineStart(mRect.x, (1.0f - cx) * mRect.h + mRect.y);
-        Vector2 lineEnd(mRect.x + mRect.w, (1.0f - cy) * mRect.h + mRect.y);
-        Hmx::Color white(1.0f, 1.0f, 1.0f, 1.0f);
-        graph->AddScreenLine(lineStart, lineEnd, white, false);
+        Hmx::Color color(1.0f, 1.0f, 1.0f, 1.0f);
 
-        Vector2 labelPos(mRect.x, 0.0f);
-        labelPos.y = (1.0f - cx) * mRect.h + mRect.y;
-        Hmx::Color white2(1.0f, 1.0f, 1.0f, 1.0f);
-        auto thresholdStr = MakeString("%.3f", mThresholdValue);
-        graph->AddScreenString(thresholdStr, labelPos, white2);
+        Vector2 p2(
+            mRect.w + mRect.x,
+            mRect.y + mRect.h * (1.0f - clamp((mThresholdValue - mMinValue) / (mMaxValue - mMinValue)))
+        );
+
+        Vector2 p1(
+            mRect.x, mRect.y + mRect.h * (1.0f - clamp((mThresholdValue - mMinValue) / (mMaxValue - mMinValue)))
+        );
+
+        rnd->AddScreenLine(p1, p2, color, false);
+
+        Vector2 textPos(
+            mRect.x, mRect.y + mRect.h * (1.0f - clamp((mThresholdValue - mMinValue) / (mMaxValue - mMinValue)))
+        );
+
+        rnd->AddScreenString(
+            MakeString("%.3f", mThresholdValue), textPos, Hmx::Color(1.0f, 1.0f, 1.0f, 1.0f)
+        );
     }
 
-    Hmx::Color white3(1.0f, 1.0f, 1.0f, 1.0f);
-    Vector2 namePos(mRect.x + 0.1f, mRect.y);
-    graph->AddScreenString(mGraphName.c_str(), namePos, white3);
+    Vector2 titlePos;
 
-    std::list<Sample>::iterator it = mSamples.begin();
-    if (it != mSamples.end()) {
+    titlePos.y = mRect.y;
+    Hmx::Color color(1.0f, 1.0f, 1.0f, 1.0f);
+    titlePos.x = mRect.x + 0.1f;
+
+    rnd->AddScreenString(mGraphName.c_str(), titlePos, color);
+
+    if (!mSamples.empty()) {
+        auto it = mSamples.begin();
         int idx = 1;
-        float normVal = (it->data - mMinValue) / range;
-        float normIdx = 0.0f;
-        // Clamp to [0, 1] using __fsel
-        float clampedVal = (float)__fsel(-normVal, normVal, 0.0f);
-        float clampedIdx = (float)__fsel(-normIdx, normIdx, 0.0f);
-        float cv = (float)__fsel(clampedVal - 1.0f, 1.0f, clampedVal);
-        float ci = (float)__fsel(clampedIdx - 1.0f, 1.0f, clampedIdx);
-        Vector2 prevPt((1.0f - ci) * mRect.w + mRect.x, (1.0f - cv) * mRect.h + mRect.y);
+        Vector2 prevPos(
+            mRect.x + mRect.w * (1.0f - clamp(0.0f / (float)(mMaxSamples - 1))),
+            mRect.y + mRect.h * (1.0f - clamp((it->data - mMinValue) / (mMaxValue - mMinValue)))
+        );
+
         ++it;
-        while (it != mSamples.end()) {
-            float normVal2 = (it->data - mMinValue) / range;
-            float normIdx2 = (float)idx / (float)(mMaxSamples - 1);
-            // Clamp to [0, 1] using __fsel
-            float clampedVal2 = (float)__fsel(-normVal2, normVal2, 0.0f);
-            float clampedIdx2 = (float)__fsel(-normIdx2, normIdx2, 0.0f);
-            float cv2 = (float)__fsel(clampedVal2 - 1.0f, 1.0f, clampedVal2);
-            float ci2 = (float)__fsel(clampedIdx2 - 1.0f, 1.0f, clampedIdx2);
-            Vector2 curPt((1.0f - ci2) * mRect.w + mRect.x, (1.0f - cv2) * mRect.h + mRect.y);
+
+        for (; it != mSamples.end(); ++it) {
+            Vector2 curPos(
+                mRect.x + mRect.w * (1.0f - clamp((float)idx / (float)(mMaxSamples - 1))),
+                mRect.y + mRect.h * (1.0f - clamp((it->data - mMinValue) / (mMaxValue - mMinValue)))
+            );
+
             if (it->b) {
-                Vector2 topPt(curPt.x, mRect.y);
-                Vector2 botPt(curPt.x, mRect.h + mRect.y);
-                Hmx::Color white4(1.0f, 1.0f, 1.0f, 1.0f);
-                graph->AddScreenLine(topPt, botPt, white4, false);
+                rnd->AddScreenLine(
+                    Vector2(
+                        mRect.x
+                            + mRect.w * (1.0f - clamp((float)idx / (float)(mMaxSamples - 1))),
+                        mRect.y
+                    ),
+                    Vector2(
+                        mRect.x
+                            + mRect.w * (1.0f - clamp((float)idx / (float)(mMaxSamples - 1))),
+                        mRect.y + mRect.h
+                    ),
+                    Hmx::Color(1.0f, 1.0f, 1.0f, 1.0f),
+                    false
+                );
             }
-            graph->AddScreenLine(curPt, prevPt, mColorA, false);
-            prevPt = curPt;
+            rnd->AddScreenLine(curPos, prevPos, mColorA, false);
+            prevPos = curPos;
             idx++;
-            ++it;
         }
     }
 }
