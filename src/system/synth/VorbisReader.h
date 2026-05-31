@@ -12,13 +12,16 @@ class VorbisReader : public StreamReader, public CriticalSection {
 public:
     VorbisReader(File *, bool, StandardStream *, bool);
     virtual ~VorbisReader();
-    virtual void Poll(float);
-    virtual void Seek(int);
+    virtual void Poll(float until);
+    virtual void Seek(int sample);
     virtual void EnableReads(bool enable) { mEnableReads = enable; }
     virtual bool Done() { return mDone; }
     virtual bool Fail() { return mFail; }
 
     static void SignalDecodeThread();
+
+    bool DecodeThreadPoll();
+    bool Unk24() const { return unk24; }
 
 private:
     bool TryReadHeader();
@@ -29,26 +32,30 @@ private:
     int QueuedOutputSamples();
     bool TryDecode();
     bool CheckHmxHeader();
+    void Decrypt(unsigned char *, int);
 
 protected:
     virtual void Init();
-    virtual int ConsumeData(void **, int, int);
+    virtual int ConsumeData(void **pcm, int samples, int startSamp);
     virtual void EndData() {}
 
     void setupCypher(int);
-    void DoRawSeek(int);
+    void DoRawSeek(int byte);
 
-    volatile bool mTerminating;  // set true in destructor to signal decode thread to drop this reader
-    int mNumChannels;   // number of audio channels (from vorbis_info)
-    int mSampleRate;    // sample rate in Hz (from vorbis_info)
+    // volatile so the dtor matches.
+    // doesn't seem to affect any other function so i guess it's fine
+    volatile bool unk24;
+    int mNumChannels; // 0x28
+    int mSampleRate; // 0x2c
+private:
     File *mFile; // 0x30
     int mHeadersRead; // 0x34
-    char *mReadBuffer; // 0x38
+    unsigned char *mReadBuffer; // 0x38
     bool mEnableReads; // 0x3c
-    int unk40; // 0x40
-    bool unk44; // 0x44
+    int mDecryptBytes; // 0x40
+    bool mNeedInitDecoder; // 0x44
     bool mDone; // 0x45
-    int unk48; // 0x48
+    float mStartMs; // 0x48
     StandardStream *mStream; // 0x4c
     ogg_sync_state *mOggSync; // 0x50
     ogg_stream_state *mOggStream; // 0x54
@@ -56,14 +63,13 @@ protected:
     vorbis_comment *mVorbisComment; // 0x5c
     vorbis_dsp_state *mVorbisDsp; // 0x60
     vorbis_block *mVorbisBlock; // 0x64
-    int mMagicA; // 0x68 - byte grinder seed A
-    int mMagicB; // 0x6c - byte grinder seed B
-    int mKeyIndex; // 0x70
-    int mMagicHashA; // 0x74
-    int mMagicHashB; // 0x78
-    int unk7c; // 0x7c
+    long mMagicA; // 0x68 - byte grinder seed A
+    long mMagicB; // 0x6c - byte grinder seed B
+    long mKeyIndex; // 0x70
+    long mMagicHashA; // 0x74
+    long mMagicHashB; // 0x78
     ogg_packet mPendingPacket; // 0x80
-    bool mHasPendingPacket;
+    bool mDecodePending; // 0xa0
     int mSeekTarget; // 0xa4
     int mSamplesToSkip; // 0xa8
     OggMap mOggMap; // 0xac
@@ -76,8 +82,9 @@ protected:
     bool unked; // 0xed
     bool mEof; // 0xee
     bool mFail; // 0xef
-    int mVersion; // 0xf0 - mogg version?
-    std::vector<std::vector<short> > mPcmBuffers; // 0xf4 - per-channel PCM sample buffers
-    s64 mLastGranulePos; // 0x100
-    int mPcmReadPos; // 0x108
+    /** The mogg's encryption version. */
+    int mVersion; // 0xf0
+    std::vector<std::vector<short> > unkf4; // 0xf4
+    s64 unk100;
+    int unk108;
 };
