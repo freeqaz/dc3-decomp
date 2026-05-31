@@ -346,9 +346,8 @@ void WorldDir::PostLoad(BinStream &bs) {
     }
     if (d.rev < 8) {
         for (int i = 0; i < gOldChars.size(); i++) {
-            RndDir *p = dynamic_cast<RndDir *>(
-                Hmx::Object::NewObject(DirLoader::GetDirClass(gOldChars[i].c_str()))
-            );
+            Symbol classSym = DirLoader::GetDirClass(gOldChars[i].c_str());
+            RndDir *p = dynamic_cast<RndDir *>(Hmx::Object::NewObject(classSym));
             MILO_ASSERT(p, 0x1AA);
             p->SetProxyFile(gOldChars[i], false);
             char buf[0x80];
@@ -459,15 +458,15 @@ void WorldDir::SyncObjects() {
     }
     m3DSoundMgr.SyncObjects();
     mLightPresetMgr.SyncObjects();
-    if (!mPhysicsMgr) {
-        if (CreatePhysicsManager) {
-            mPhysicsMgr = CreatePhysicsManager(this);
-            if (mNeedPhysicsEnter) {
-                mPhysicsMgr->Enter();
-            }
+    if (mPhysicsMgr) {
+        mPhysicsMgr->SyncObjects(false);
+    } else if (CreatePhysicsManager) {
+        mPhysicsMgr = CreatePhysicsManager(this);
+        if (mNeedPhysicsEnter) {
+            mPhysicsMgr->Enter();
         }
+        mPhysicsMgr->SyncObjects(false);
     }
-    mPhysicsMgr->SyncObjects(false);
     if (mHUD) {
         VectorRemove(mDraws, mHUD);
     }
