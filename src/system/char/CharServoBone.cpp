@@ -80,11 +80,8 @@ void CharServoBone::Poll() {
                 } else {
                     MoveToFacing(mPelvis->DirtyLocalXfm());
                 }
-                for (ObjDirItr<CharBone> it(
-                         CharBoneDir::FindResourceFromClipType(mClipType), false
-                     );
-                     it != nullptr;
-                     ++it) {
+                CharBoneDir *dir = CharBoneDir::FindResourceFromClipType(mClipType);
+                for (ObjDirItr<CharBone> it(dir, false); it != nullptr; ++it) {
                     if (it->BakeOutAsTopLevel()) {
                         String str(it->Name());
                         if (str.find(".cb") != String::npos) {
