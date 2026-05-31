@@ -146,12 +146,12 @@ void CharHair::PollDeps(
 
 void CharHair::SetCloth(bool b) {
     for (int i = 0; i < mStrands.size(); i++) {
-        Strand &strand = mStrands[i];
-        Strand &modidx = mStrands[Mod(i + 1, mStrands.size())];
-        for (int j = 0; j < strand.Points().size(); j++) {
-            Point &point = strand.Points()[j];
-            bool b1 = b && j < modidx.Points().size();
-            point.sideLength = b1 ? Distance(point.pos, modidx.Points()[j].pos) : -1.0f;
+        int mod = Mod(i + 1, mStrands.size());
+        Strand &modidx = mStrands[mod];
+        for (int j = 0; j < (unsigned int)mStrands[i].NumPoints(); j++) {
+            Point &point = mStrands[i].PointAt(j);
+            bool cond = b && j < (unsigned int)modidx.NumPoints();
+            point.sideLength = cond ? Distance(point.pos, modidx.PointAt(j).pos) : -1.0f;
         }
     }
 }
@@ -170,12 +170,13 @@ void CharHair::Hookup() {
 void CharHair::FreezePoseRaw() {
     for (int i = 0; i < mStrands.size(); i++) {
         Strand &strand = mStrands[i];
-        if (strand.Root() && strand.Root()->TransParent()) {
+        RndTransformable *root = strand.Root();
+        if ((int)root && root->TransParent()) {
             ObjVector<Point> &pts = strand.Points();
-            Transform parentXfm(strand.Root()->TransParent()->WorldXfm());
-            Invert(parentXfm, parentXfm);
+            Transform tf48(root->TransParent()->WorldXfm());
+            Invert(tf48, tf48);
             for (int j = 0; j < pts.size(); j++) {
-                Multiply(pts[j].pos, parentXfm, pts[j].unk78);
+                Multiply(pts[j].pos, tf48, pts[j].unk78);
             }
         }
     }
@@ -490,11 +491,9 @@ float CharHair::GetFPS() {
     if (mUsePostProc && RndPostProc::Current()
         && RndPostProc::Current()->EmulateFPS() > 0) {
         float fps = RndPostProc::Current()->EmulateFPS();
-        if (fps != 60.0f)
-            fps = 60.0f - fps;
-        return fps;
-    }
-    return 60.0f;
+        return fps != 60 ? 60 - fps : fps;
+    } else
+        return 60;
 }
 
 void CharHair::SimulateZeroTime() {
@@ -504,7 +503,7 @@ void CharHair::SimulateZeroTime() {
             RndTransformable *root = curStrand.Root();
             if (root && curStrand.Root()->TransParent()) {
                 Transform tf50;
-                Vector3 v2c = curStrand.Root()->WorldXfm().v;
+                tf50.v = curStrand.Root()->WorldXfm().v;
                 Multiply(
                     curStrand.RootMat(),
                     curStrand.Root()->TransParent()->WorldXfm().m,
@@ -514,13 +513,13 @@ void CharHair::SimulateZeroTime() {
                 for (int j = 0; j < points.size(); j++) {
                     Point &curPoint = points[j];
                     Hmx::Matrix3 m78;
-                    Subtract(curPoint.pos, v2c, m78.y);
+                    Subtract(curPoint.pos, tf50.v, m78.y);
                     m78.z = curPoint.lastZ;
                     Normalize(m78, tf50.m);
                     if (curPoint.bone) {
                         curPoint.bone->SetWorldXfm(tf50);
                     }
-                    v2c = curPoint.pos;
+                    tf50.v = curPoint.pos;
                 }
             }
         }
@@ -587,46 +586,48 @@ BinStream &operator>>(BinStream &bs, CharHair::Point &pt) {
 }
 
 void operator>>(BinStreamRev &d, CharHair::Point &pt) {
-    char buf[0x100];
-    char buf2[0x100];
     d >> pt.pos;
     d >> pt.bone;
     d >> pt.length;
     if (d.rev < 3) {
-        int i;
-        d.stream >> i;
-        d.stream.ReadString(buf, 0xFF);
+        int x;
+        char buf[0x100];
+        d >> x;
+        d.stream.ReadString(buf, 0xff);
     } else if (d.rev == 3) {
-        int i;
-        d.stream >> i;
+        int x;
+        d >> x;
     }
     d >> pt.radius;
-    if (d.rev > 1)
+    if (d.rev > 1) {
         d >> pt.outerRadius;
-    else
+    } else {
         pt.outerRadius = 0;
-    if (d.rev < 9 && d.rev > 5) {
-        float f;
-        d >> f;
-        pt.radius += f;
-        pt.outerRadius += f;
     }
+    if (d.rev < 9 && d.rev > 5) {
+        float x;
+        d >> x;
+        pt.radius += x;
+        pt.outerRadius += x;
+    }
+    char buf[0x100];
     if (d.rev == 6) {
-        d.stream.ReadString(buf2, 0xFF);
+        d.stream.ReadString(buf, 0xff);
     }
     if (d.rev < 8) {
-        pt.sideLength = -1.0f;
+        pt.sideLength = -1;
         if (d.rev > 5) {
-            int i;
-            d.stream >> i >> i;
+            int x;
+            d >> x >> x;
         }
     } else {
         bool b = false;
-        if (d.rev < 9)
+        if (d.rev < 9) {
             d >> b;
+        }
         d >> pt.sideLength;
         if (d.rev < 9 && !b) {
-            pt.sideLength = -1.0f;
+            pt.sideLength = -1;
         }
     }
     if (d.rev > 9) {
@@ -768,11 +769,6 @@ void CharHair::Strand::Save(BinStream &bs) const {
 
 #pragma endregion CharHair::Strand
 #pragma region ObjVector_Strand
-
-template<>
-void ObjVector<CharHair::Strand>::resize(unsigned int n) {
-    std::vector<CharHair::Strand>::resize(n, CharHair::Strand(mOwner));
-}
 
 void operator>>(BinStreamRev &bsrev, CharHair::Strand &strand) {
     strand.Load(bsrev);
