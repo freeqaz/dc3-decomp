@@ -1285,14 +1285,13 @@ DataNode HamDirector::OnFileLoaded(DataArray *a) {
     static Symbol viz("viz");
     static Symbol game_hud("game_hud");
     Symbol sym = a->Sym(2);
-    auto _arg0 = mCharacterOutfits[0];
-    if (mMerger) {
+    if (sym != game_hud || mMerger) {
         mAsyncLoaded = mMerger->AsyncLoad();
         if (sym == song) {
             if (!TheGameData->Venue().Null()) {
                 if (TheHamWardrobe) {
                     TheHamWardrobe->LoadCharacters(
-                        _arg0,
+                        mCharacterOutfits[0],
                         mCharacterOutfits[1],
                         mCrews[0],
                         mCrews[1],
@@ -1313,15 +1312,6 @@ DataNode HamDirector::OnFileLoaded(DataArray *a) {
                 if (mGameModeMerger) {
                     static Message load_game_hud("load_game_hud", 0, 0, 0, 0);
                     mGameModeMerger->HandleType(load_game_hud);
-#ifdef HX_NATIVE
-                    // Force proxy mode on game_hud merger so the loaded HUD PanelDir
-                    // stays intact as a subdir (preserving DTA type handlers for
-                    // $hud_panel initialization, animation flows, and score display).
-                    // Without proxy, MergeDirs flattens objects and loses type info.
-                    // No proxy override needed — the game_hud merger's MergerDir
-                    // is already a PanelDir (from director.milo). HUD content merges
-                    // flat into it, giving us a PanelDir with draw list + camera + flows.
-#endif
                     mGameModeMerger->StartLoad(mAsyncLoaded);
                 }
             }
@@ -1330,14 +1320,6 @@ DataNode HamDirector::OnFileLoaded(DataArray *a) {
             ObjectDir *dir = a->Obj<ObjectDir>(3);
             if (sym == venue && dir) {
                 mVenue = dynamic_cast<WorldDir *>(dir);
-#ifdef HX_NATIVE
-                // DTA scripts expect video_recorder.srec in the venue world
-                // (Kinect video recording). Register a no-op stub so find_obj succeeds.
-                if (mVenue && !mVenue->FindObject("video_recorder.srec", false, false)) {
-                    Hmx::Object *stub = Hmx::Object::NewObject("Object");
-                    stub->SetName("video_recorder.srec", mVenue);
-                }
-#endif
             } else if (sym == viz && dir) {
                 mVisualizer = dynamic_cast<HamVisDir *>(dir);
             }
