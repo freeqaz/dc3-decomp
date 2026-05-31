@@ -33,7 +33,8 @@ BEGIN_COPYS(TexMovie)
     COPY_SUPERCLASS(RndPollable)
     CREATE_COPY(TexMovie)
     BEGIN_COPYING_MEMBERS
-        COPY_MEMBER(mTex)
+        mTex = c->mTex.Ptr();
+        COPY_MEMBER(mLoop)
         COPY_MEMBER(sRoot)
         COPY_MEMBER(mIsLocalized)
     END_COPYING_MEMBERS
@@ -160,8 +161,7 @@ void TexMovie::Poll() {
 void TexMovie::Enter() {
     mEntered = true;
     RndPollable::Enter();
-    bool b = (mTex && mTex->Width() && mTex->Height());
-    if (b) {
+    if (HasTex()) {
         mTex->MakeDrawTarget();
         Hmx::Rect r(0, 0, 1, 1);
         Hmx::Color c(0, 0, 0, 1);
@@ -199,9 +199,7 @@ void TexMovie::Reset() {
 bool TexMovie::IsEmpty() const { return sRoot.empty(); }
 
 void TexMovie::DrawToTexture() {
-    bool b = (mTex != nullptr && mTex->Width() && mTex->Height());
-
-    if (b) {
+    if (HasTex()) {
 #if defined(HX_NATIVE) && !defined(__EMSCRIPTEN__)
         // Native: check for decoded frame BEFORE Draw() clears the flag,
         // then upload RGBA pixels directly to GPU texture
@@ -250,10 +248,10 @@ void TexMovie::DoBeginMovieFromFile(BinStream *stream, LoaderPos lp) {
         mMovie.SetWidthHeight(mTex->Width(), mTex->Height());
         mMovie.BeginFromFile(
             FileRelativePath(FileRoot(), sRoot.c_str()),
-            0.0f,
             0,
-            true,
+            0,
             mLoop,
+            true,
             false,
             i,
             stream,

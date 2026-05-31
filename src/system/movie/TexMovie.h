@@ -45,6 +45,10 @@ public:
     void AddFader(Fader *f) { mMovie.Faders()->Add(f); }
     bool IsOpen() const { return mMovie.IsOpen(); }
     Movie &GetMovie() { return mMovie; }
+    bool HasTex() const {
+        RndTex *tex = mTex;
+        return tex && tex->Width() && tex->Height();
+    }
 
 protected:
     ObjOwnerPtr<RndTex> mTex; // 0x48 ObjOwnerPtr | 0x54, RndTex
