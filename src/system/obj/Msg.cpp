@@ -186,14 +186,14 @@ void MsgSinks::AddSink(
 }
 
 void MsgSinks::AddPropertySink(Hmx::Object *o, DataArray *a, Symbol s) {
-    GetPropSyncHandler(a);
-    Symbol path = PathToEventName(a);
+    Symbol path = GetPropSyncHandler(a);
+    path = PathToEventName(a);
     if (!mPropSyncHandlers) {
         mPropSyncHandlers = new DataArray(2);
     } else {
         mPropSyncHandlers->Resize(mPropSyncHandlers->Size() + 2);
     }
-    mPropSyncHandlers->Node(mPropSyncHandlers->Size() - 2) = DataNode(a->Clone(true, false, 0), kDataArray);
+    mPropSyncHandlers->Node(mPropSyncHandlers->Size() - 2) = a->Clone(true, false, 0);
     mPropSyncHandlers->Node(mPropSyncHandlers->Size() - 2).LiteralArray()->Release();
     mPropSyncHandlers->Node(mPropSyncHandlers->Size() - 1) = path;
     AddSink(o, path, s, Hmx::Object::kHandle, false);
@@ -295,15 +295,16 @@ void MsgSinks::RemoveSink(Hmx::Object *obj, Symbol ev) {
     }
 }
 
-void MsgSinks::MergeSinks(Hmx::Object *o) {
-    MsgSinks *from = o->Sinks();
-    if ((int)from) {
-        FOREACH (it, from->mSinks) {
+void MsgSinks::MergeSinks(Hmx::Object *from) {
+    if (from->Sinks()) {
+        auto &objSinks = from->Sinks()->mSinks;
+        FOREACH (it, objSinks) {
             AddSink(it->obj, Symbol(), Symbol(), it->mode);
         }
-        FOREACH (it, from->mEventSinks) {
-            FOREACH (elemIt, it->sinks) {
-                AddSink(elemIt->obj, it->event, elemIt->handler, elemIt->mode);
+        auto &objEventSinks = from->Sinks()->mEventSinks;
+        FOREACH (sink, objEventSinks) {
+            FOREACH (elem, sink->sinks) {
+                AddSink(elem->obj, sink->event, elem->handler, elem->mode);
             }
         }
     }
