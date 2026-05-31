@@ -21,6 +21,9 @@ void Rand::Seed(int seed) {
     mRandIndex2 = 0x67;
 }
 
+float Rand::Float() { return ((Int() & 0xFFFF) / 65536.0f); }
+float Rand::Float(float f1, float f2) { return ((f2 - f1) * Float() + f1); }
+
 int Rand::Int() {
     unsigned int u3 = mRandTable[mRandIndex1];
     unsigned int u1 = mRandTable[mRandIndex2];
@@ -57,9 +60,6 @@ float RandomFloat(float f1, float f2) {
     return Rand::sRand.Float(f1, f2);
 }
 
-float Rand::Float() { return ((Int() & 0xFFFF) / 65536.0f); }
-float Rand::Float(float f1, float f2) { return ((f2 - f1) * Float() + f1); }
-
 int Rand::FastInt(int low, int high) {
     MILO_ASSERT(high > low, 0x33);
 #ifdef HX_NATIVE
@@ -73,7 +73,7 @@ int Rand::FastInt(int low, int high) {
 }
 
 float Rand::Gaussian() {
-    float f2, f3, f4, f5;
+    float f2, f3, f5;
 
     if (mSpareGaussianAvailable) {
         mSpareGaussianAvailable = false;
@@ -86,8 +86,7 @@ float Rand::Gaussian() {
                 f5 = f2 * f2 + f3 * f3;
             } while (f5 >= 1.0f);
         } while (0 == f5);
-        f4 = std::log(f5);
-        f5 = std::sqrt(-2.0f * f4 / f5);
+        f5 = sqrtf((-2.0f * logf(f5)) / f5);
         mSpareGaussianValue = f2 * f5;
         mSpareGaussianAvailable = true;
         return f3 * f5;
