@@ -25,6 +25,7 @@ public:
     class Array2d {
     public:
         Array2d() : mWidth(0), mHeight(0), mData(0) {}
+        Array2d(int w, int h) : mWidth(0), mHeight(0), mData(0) { Resize(w, h); }
         ~Array2d() { delete mData; }
         void Resize(int, int);
         int CalcWidth();
@@ -74,6 +75,18 @@ public:
     std::vector<Node> mNodes; // 0x44
 
 protected:
+    int Offset(int x) const {
+        int period = mBeatAlignPeriod;
+        if (period == 0) {
+            return 0;
+        } else {
+            int tmp = x % period;
+            if (tmp < 0) {
+                tmp += period;
+            }
+            return tmp;
+        }
+    }
     bool BeatAligned(int, int);
     void DrawDot(float, float, float, float, Hmx::Color const &);
     bool LocalMin(int, int);

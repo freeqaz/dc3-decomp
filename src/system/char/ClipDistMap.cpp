@@ -1,4 +1,5 @@
 #include "char/ClipDistMap.h"
+#include "char/CharBoneDir.h"
 #include "char/CharBonesMeshes.h"
 #include "char/CharClip.h"
 #include "char/CharUtl.h"
@@ -6,11 +7,16 @@
 #include "math/Utl.h"
 #include "obj/Data.h"
 #include "obj/Dir.h"
+#include "os/Debug.h"
 #include "rndobj/Rnd.h"
 #include "rndobj/Trans.h"
+#include "string.h"
+#include "utl/Std.h"
 #include <cmath>
 
 extern "C" void OnlyReturns() {}
+
+static const float sLargeFloat = kHugeFloat;
 
 struct DistMapNodeSort {
     bool operator()(const ClipDistMap::Node &n1, const ClipDistMap::Node &n2) const {
@@ -54,44 +60,37 @@ DistEntry::DistEntry(const DistEntry &entry) : beat(entry.beat), bones(entry.bon
 }
 
 void ClipDistMap::GenerateDistEntry(
-    CharBonesMeshes &meshes, DistEntry &entry, float beat, CharClip *clip,
-    const std::vector<RndTransformable *> &transes
+    CharBonesMeshes &boneMeshes,
+    DistEntry &e,
+    float beat,
+    CharClip *clip,
+    const std::vector<RndTransformable *> &bones
 ) {
-    if (!entry.bones.empty())
-        return;
-
-    entry.beat = beat;
-
-    float step = mBlendWidth * 0.25f;
-    float sampleBeat = step * 0.5f + beat;
-    void *channel = clip->GetChannel(Symbol("bone_facing.rotz"));
-
-    for (int i = 0; i < 4; i++) {
-        entry.facing[i] = 0.0f;
-        if (channel) {
-            clip->EvaluateChannel(&entry.facing[i], channel, sampleBeat);
+    if (e.bones.empty()) {
+        e.beat = beat;
+        float blendWidth = mBlendWidth / 4.0f;
+        float f14 = blendWidth / 2.0f + beat;
+        void *facingChannel = clip->GetChannel("bone_facing.rotz");
+        for (int i = 0; i < 4; i++, f14 += blendWidth) {
+            e.facing[i] = 0;
+            if (facingChannel) {
+                clip->EvaluateChannel(&e.facing[i], facingChannel, f14);
+            }
+            e.facing[i] = LimitAng(e.facing[i]);
         }
-        entry.facing[i] = LimitAng(entry.facing[i]);
-        sampleBeat += step;
-    }
-
-    entry.bones.resize(transes.size() * mNumSamples);
-
-    int boneIdx = 0;
-    float beatStep = mBlendWidth / (float)mNumSamples;
-    sampleBeat = beatStep * 0.5f + entry.beat;
-    for (int s = 0; s < mNumSamples; s++) {
-        sampleBeat = (float)sampleBeat;
-        CharBoneDir *rsrc = clip->GetResource();
-        CharUtlResetTransform(rsrc);
-        meshes.Zero();
-        clip->ScaleAdd(meshes, 1.0f, sampleBeat, 0.0f);
-        meshes.PoseMeshes();
-        for (unsigned int t = 0; t < transes.size(); t++) {
-            entry.bones[boneIdx] = transes[t]->WorldXfm().v;
-            boneIdx++;
+        e.bones.resize(bones.size() * mNumSamples);
+        int eBonesIdx = 0;
+        blendWidth = mBlendWidth / (float)mNumSamples;
+        f14 = blendWidth / 2.0f + e.beat;
+        for (int i = 0; i < mNumSamples; i++, f14 += blendWidth) {
+            CharUtlResetTransform(clip->GetResource());
+            boneMeshes.Zero();
+            clip->ScaleAdd(boneMeshes, 1, f14, 0);
+            boneMeshes.PoseMeshes();
+            for (int j = 0; j < bones.size(); j++) {
+                e.bones[eBonesIdx++] = bones[j]->WorldXfm().v;
+            }
         }
-        sampleBeat += beatStep;
     }
 }
 
@@ -99,22 +98,15 @@ ClipDistMap::ClipDistMap(
     CharClip *clip1, CharClip *clip2, float f1, float f2, int i, const DataArray *a
 )
     : mClipA(clip1), mClipB(clip2), mWeightData(a), mSamplesPerBeat(8),
-      mLastMinErr(kHugeFloat), mBeatAlign(f1), mBeatAlignOffset(0), mBlendWidth(f2),
-      mNumSamples(i) {
-    int height = CalcHeight();
-    int width = CalcWidth();
-    mDists.Resize(width, height);
-
-    mBeatAlignPeriod = (int)((double)(mBeatAlign * mSamplesPerBeat) + 0.5);
-
+      mLastMinErr(sLargeFloat), mBeatAlign(f1), mBeatAlignOffset(0), mBlendWidth(f2),
+      mNumSamples(i), mDists(CalcWidth(), CalcHeight()) {
+    mBeatAlignPeriod = mBeatAlign * (float)mSamplesPerBeat + 0.5;
     if (mBeatAlignPeriod != 0) {
-        float negB = -mBStart;
-        float negA = -mAStart;
-        int diff = (int)(negB * mSamplesPerBeat) - (int)(negA * mSamplesPerBeat);
-        diff = diff - (diff / mBeatAlignPeriod) * mBeatAlignPeriod;
-        if (diff < 0)
-            diff += mBeatAlignPeriod;
-        mBeatAlignOffset = diff;
+        float spb = (float)mSamplesPerBeat;
+        float fNegB = -mBStart;
+        float fNegA = -mAStart;
+        int tmp = (int)(fNegA * spb) - (int)(fNegB * spb);
+        mBeatAlignOffset = Offset(tmp);
     }
 }
 
@@ -247,56 +239,33 @@ void ClipDistMap::FindBestNodeRecurse(
     }
 }
 
-// Find transition nodes between clips based on error threshold and distance constraints.
-// Nodes represent points where animation transitions can occur.
-// Parameters:
-//   maxError: Maximum acceptable error threshold for a valid node
-//   maxDist: Maximum distance between adjacent nodes
-//   endDist: Minimum distance from clip end where final node can be placed
-void ClipDistMap::FindNodes(float maxError, float maxDist, float endDist) {
+void ClipDistMap::FindNodes(float minErr, float maxDist, float endDist) {
     mNodes.clear();
-    mLastMinErr = maxError;
+    mLastMinErr = minErr;
 
-    // searchRadius is 45% of maxDist to create overlap regions for better transitions
-    float searchRadius = maxDist * 0.45f;
-    if (maxDist == 0.0f) {
-        searchRadius = kHugeFloat;
-        endDist = searchRadius;
-    } else if (endDist == 0.0f) {
+    float f7 = maxDist * 0.45f;
+    if (maxDist == 0) {
+        f7 = sLargeFloat;
+        endDist = f7;
+    } else if (endDist == 0) {
         endDist = maxDist;
     }
 
-    // Recursively find all candidate nodes within the clip range
-    FindBestNodeRecurse(maxError, searchRadius, maxDist - searchRadius * 2.0f, mAStart, mAEnd);
-
-    // Sort nodes by position (curBeat field)
+    FindBestNodeRecurse(minErr, f7, -(f7 * 2.0f - maxDist), mAStart, mAEnd);
     std::sort(mNodes.begin(), mNodes.end(), DistMapNodeSort());
-
-    // Ensure we have a node near the end of the clip if needed
-    if (!mNodes.empty() && endDist > 0.0f) {
-        float lastNodeDist = mAEnd - mNodes.back().curBeat;
-        if (lastNodeDist > endDist) {
-            ClipDistMap::Node node;
-            if (FindBestNode(maxError, mAEnd - endDist, mAEnd, node)) {
+    if (!mNodes.empty() && endDist > 0) {
+        if (mAEnd - mNodes.back().curBeat > endDist) {
+            Node node;
+            if (FindBestNode(minErr, mAEnd - endDist, mAEnd, node)) {
                 mNodes.push_back(node);
                 std::sort(mNodes.begin(), mNodes.end(), DistMapNodeSort());
             }
         }
     }
-
-    // Filter out nodes that are too close together
-    // Maintains minimum spacing of maxDist between nodes
-    int limit = mNodes.size() - 1;
-    int i = 1;
-    if (limit > 1) {
-        for (; i < limit;) {
-            float dist = mNodes[i + 1].curBeat - mNodes[i].curBeat;
-            if (dist < maxDist) {
-                mNodes.erase(mNodes.begin() + (i + 1));
-                i--;
-            }
-            i++;
-            limit = mNodes.size() - 1;
+    for (int i = 1; i < (int)mNodes.size() - 1; i++) {
+        if (mNodes[i + 1].curBeat - mNodes[i - 1].curBeat < maxDist) {
+            mNodes.erase(mNodes.begin() + i);
+            i--;
         }
     }
 }
