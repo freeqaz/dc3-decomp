@@ -67,10 +67,9 @@ VorbisReader::VorbisReader(File *file, bool expectMap, StandardStream *stream, b
 VorbisReader::~VorbisReader() {
 
 #ifndef HX_NATIVE
-    auto& terminating = mTerminating;
-    terminating = true;
+    mTerminating = true;
     unked = false;
-    while (terminating) {
+    while (mTerminating) {
         SetEvent(gEvent);
     }
 #endif
@@ -201,10 +200,8 @@ bool VorbisReader::TryReadHeader() {
         } else
             return false;
     }
-    if (mHeadersRead == 3)
-        return false;
-    else {
-        ogg_packet packet;
+    ogg_packet packet;
+    if (mHeadersRead != 3) {
         if (TryReadPacket(packet)) {
             int vorbisErr =
                 vorbis_synthesis_headerin(mVorbisInfo, mVorbisComment, &packet);
@@ -212,10 +209,9 @@ bool VorbisReader::TryReadHeader() {
                 VORBIS_FAIL("HeaderIn", vorbisErr);
             mHeadersRead++;
             return true;
-        } else {
-            return false;
         }
     }
+    return false;
 }
 
 void VorbisReader::InitDecoder() {
@@ -278,15 +274,20 @@ bool VorbisReader::TryDecode() {
         mHasPendingPacket = true;
     }
     if (mHasPendingPacket) {
-        START_AUTO_TIMER("vorbis_synthesis_poll_cpu");
-        if (mVorbisBlock->synthesis_state == vorbis_block::vss_init) {
-            START_AUTO_TIMER("vorbis_synthesis_vssinit_cpu");
-        } else if (mVorbisBlock->synthesis_state == vorbis_block::vss_decode) {
-            START_AUTO_TIMER("vorbis_synthesis_vssdecode_cpu");
-        } else {
-            START_AUTO_TIMER("vorbis_synthesis_vssmdct_cpu");
+        int pollErr;
+        {
+            START_AUTO_TIMER("vorbis_synthesis_poll_cpu");
+            if (mVorbisBlock->synthesis_state == vorbis_block::vss_init) {
+                START_AUTO_TIMER("vorbis_synthesis_vssinit_cpu");
+                pollErr = vorbis_synthesis_poll(mVorbisBlock, &mPendingPacket);
+            } else if (mVorbisBlock->synthesis_state == vorbis_block::vss_decode) {
+                START_AUTO_TIMER("vorbis_synthesis_vssdecode_cpu");
+                pollErr = vorbis_synthesis_poll(mVorbisBlock, &mPendingPacket);
+            } else {
+                START_AUTO_TIMER("vorbis_synthesis_vssmdct_cpu");
+                pollErr = vorbis_synthesis_poll(mVorbisBlock, &mPendingPacket);
+            }
         }
-        int pollErr = vorbis_synthesis_poll(mVorbisBlock, &mPendingPacket);
         if (pollErr == OV_ENOTAUDIO) {
             mHasPendingPacket = false;
         } else {
@@ -305,7 +306,8 @@ bool VorbisReader::TryDecode() {
                 return true;
             }
         }
-    } else if (mEof && !mReadBuffer && QueuedOutputSamples() == 0 && !mDone) {
+    } else if (mEof && !mReadBuffer && QueuedOutputSamples() == 0 && !mDone
+               && mPcmReadPos >= mPcmBuffers[0].size()) {
         EndData();
         mDone = true;
     }
@@ -345,7 +347,7 @@ void VorbisReader::DoRawSeek(int byte) {
     mFile->Seek(byte + mHdrSize, 0);
     if (mCtrState) {
         MILO_ASSERT(byte%16 == 0, 0x3F4);
-        *(int *)mNonce = bool(EndianSwap((unsigned int)byte));
+        *(int *)mNonce = EndianSwap((unsigned int)(byte / 16));
         int ret = ctr_reinit(gCipher, mNonce, mCtrState);
         MILO_ASSERT(ret == 0, 0x3F7);
     }

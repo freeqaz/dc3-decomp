@@ -38,7 +38,7 @@ protected:
     void setupCypher(int);
     void DoRawSeek(int);
 
-    bool mTerminating;  // set true in destructor to signal decode thread to drop this reader
+    volatile bool mTerminating;  // set true in destructor to signal decode thread to drop this reader
     int mNumChannels;   // number of audio channels (from vorbis_info)
     int mSampleRate;    // sample rate in Hz (from vorbis_info)
     File *mFile; // 0x30
