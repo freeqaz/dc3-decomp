@@ -5,82 +5,71 @@
 #include "NavListSort.h"
 #include "SongRecord.h"
 #include "SongSortMgr.h"
-#include "SongSortNode.h"
 #include "game/GameMode.h"
 #include "macros.h"
 #include "meta_ham/NavListNode.h"
+#include "meta_ham/SongRecord.h"
 #include "meta_ham/SongSortMgr.h"
 #include "meta_ham/SongSortNode.h"
 #include "os/Debug.h"
-#include "stl/_algo.h"
 #include "ui/UILabel.h"
 #include "ui/UIListLabel.h"
 #include "utl/Std.h"
+#include "utl/Symbol.h"
 
 SongSort::SongSort() {};
 
 void SongSort::BuildTree() {
-    DeleteTree();
+    NavListSort::DeleteTree();
     Init();
+    std::vector<NavListItemNode *> nodes;
 
-    // Build a sorted list of song nodes, grouped by header type
-    std::vector<NavListItemNode *> sortedNodes;
-    auto _tmp2 = CompareHeaders();
-    FOREACH (songEntry, TheSongSortMgr->mSongRecordMap) {
-        NavListItemNode *songNode = NewItemNode(&songEntry->second);
-        auto insertPos =
-            std::lower_bound(sortedNodes.begin(), sortedNodes.end(), songNode, _tmp2);
-        sortedNodes.insert(insertPos, songNode);
+    auto &map = TheSongSortMgr->GetUnk78();
+    FOREACH (it, map) {
+        SongRecord *record = &it->second;
+        NavListItemNode *node = NewItemNode(record);
+        auto _tmp0 = nodes.begin();
+        auto _tmp1 = nodes.end();
+        auto bound = std::lower_bound(_tmp0, _tmp1, node, CompareHeaders());
+        nodes.insert(bound, node);
     }
+    int count = 0;
+    bool b = false;
+    auto begin = nodes.begin();
+    auto rangeStart = nodes.begin();
 
-    // Group items into shortcuts with smart header merging.
-    // For "by_song" and "by_artist" sorts, small groups are combined
-    // to avoid too many tiny header sections.
-    bool deferring = false;
-    auto shortcutStart = sortedNodes.begin();
-    int cumulativeCount = 0;
-    auto groupStart = sortedNodes.begin();
+    while (begin != nodes.end()) {
+        auto range =
+            std::equal_range(nodes.begin(), nodes.end(), *rangeStart, CompareHeaders());
+        int rangeSize = range.second - range.first;
+        int remaining = nodes.end() - rangeStart;
+        count += rangeSize;
+        int leftover = remaining - rangeSize;
 
-    if (groupStart != sortedNodes.end()) {
-        do {
-            auto range = std::equal_range(
-                sortedNodes.begin(), sortedNodes.end(), *groupStart, CompareHeaders()
-            );
-            auto rangeEnd = range.second;
-            int groupSize = range.second - range.first;
-            int remaining = sortedNodes.end() - groupStart;
-            cumulativeCount += groupSize;
-            int leftover = remaining - groupSize;
-
-            static Symbol by_song("by_song");
-            static Symbol by_artist("by_artist");
-            if (leftover <= 0 || cumulativeCount >= 4
-                || (mSortName != by_song
-                    && (mSortName != by_artist || TheSongSortMgr->IsInHeaderMode())))
-            {
-                // Flush: determine the end of this shortcut's range
-                auto endPtr = groupStart;
-                if ((deferring && cumulativeCount <= 12) || !deferring) {
-                    endPtr = rangeEnd;
-                }
-
-                NavListShortcutNode *shortcut = NewShortcutNode(*shortcutStart);
-                mShortcutNodes.push_back(shortcut);
-                shortcut->InsertHeaderRange(&*shortcutStart, &*endPtr, this);
-
-                cumulativeCount = 0;
-                deferring = false;
-                shortcutStart = endPtr;
-                groupStart = endPtr;
-            } else {
-                // Defer: accumulate this group with the next one
-                deferring = true;
-                groupStart = rangeEnd;
+        static Symbol by_song("by_song");
+        static Symbol by_artist("by_artist");
+        if (leftover <= 0 || count >= 4
+            || (mSortName != by_song
+                && (mSortName != by_artist || TheSongSortMgr->IsInHeaderMode()))) {
+            auto it = rangeStart;
+            if ((b && count <= 12) || !b) {
+                it = range.second;
             }
-        } while (shortcutStart != sortedNodes.end());
+
+            NavListShortcutNode *shortcut = NewShortcutNode(*begin);
+            mShortcutNodes.push_back(shortcut);
+            shortcut->InsertHeaderRange(begin, it, this);
+
+            count = 0;
+            b = false;
+            begin = it;
+            rangeStart = it;
+        } else {
+            b = true;
+            rangeStart = range.second;
+        }
     }
 
-    // Finalize each shortcut's internal structure
     FOREACH (it, mShortcutNodes) {
         (*it)->FinishSort(this);
     }
@@ -93,8 +82,12 @@ void SongSort::DeleteItemList() {
 
 void SongSort::BuildItemList() {
     Symbol sym = gNullStr;
-    if (mHighlightNode && mHighlightNode->GetType() == kNodeFunction) {
-        sym = mHighlightNode->GetToken();
+    NavListSortNode *sortNode = mHighlightNode;
+    if (sortNode) {
+        NavListNodeType type = sortNode->GetType();
+        if (type == kNodeFunction) {
+            sym = sortNode->GetToken();
+        }
     }
     DeleteItemList();
     static Symbol song_select_mode("song_select_mode");
@@ -111,26 +104,26 @@ void SongSort::BuildItemList() {
 
     if (TheSongSortMgr->HeadersSelectable() && (inPerform || inDanceBattle) && !check) {
         static Symbol random_song("random_song");
-        SongFunctionNode *node = new SongFunctionNode(
+        SongFunctionNode *randomSongNode = new SongFunctionNode(
             nullptr, random_song, "ui/image/song_select_setlist_keep.png"
         );
-        node->SetShortcut(mShortcutNodes.front());
-        mAllNodes.push_back(node);
+        randomSongNode->SetShortcut(mShortcutNodes.front());
+        mAllNodes.insert(mAllNodes.begin(), randomSongNode);
         if (inPerform) {
             static Symbol playlists("playlists");
-            SongFunctionNode *functionNode = new SongFunctionNode(
+            SongFunctionNode *playlistNode = new SongFunctionNode(
                 nullptr, playlists, "ui/image/song_select_setlist_keep.png"
             );
-            functionNode->SetShortcut(mShortcutNodes.front());
-            mAllNodes.push_back(functionNode);
+            playlistNode->SetShortcut(mShortcutNodes.front());
+            mAllNodes.insert(mAllNodes.begin(), playlistNode);
         }
     } else if (check) {
         static Symbol finish_setlist("finish_setlist");
-        SongFunctionNode *node = new SongFunctionNode(
+        SongFunctionNode *finishSetlistNode = new SongFunctionNode(
             nullptr, finish_setlist, "ui/image/song_select_setlist_keep.png"
         );
-        node->SetShortcut(mShortcutNodes.front());
-        mAllNodes.push_back(node);
+        finishSetlistNode->SetShortcut(mShortcutNodes.front());
+        mAllNodes.insert(mAllNodes.begin(), finishSetlistNode);
     }
 
     FOREACH (it, mAllNodes) {
@@ -151,7 +144,7 @@ void SongSort::BuildItemList() {
         (*it)->FinishBuildList(this);
     }
 
-    if (sym.Str() != gNullStr) {
+    if (!sym.Null()) {
         mHighlightNode = GetNode(sym);
     }
 
