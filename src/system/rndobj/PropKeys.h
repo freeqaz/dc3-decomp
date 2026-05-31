@@ -16,16 +16,16 @@ public:
     Hmx::Object *mOwner; // 0x8
 
     void operator=(const ObjKeys &keys) {
-        if (this == &keys)
-            return;
-        resize(keys.size());
-        Hmx::Object *oldowner = ObjectStage::sOwner;
-        ObjKeys::const_iterator keysit = keys.begin();
-        for (ObjKeys::iterator it = begin(); it != end(); ++it) {
-            *it = *keysit;
-            ++keysit;
+        if (this != &keys) {
+            Hmx::Object *oldowner = ObjectStage::sOwner;
+            ObjectStage::sOwner = mOwner;
+            resize(keys.size());
+            ObjKeys::const_iterator keysit = keys.begin();
+            for (ObjKeys::iterator it = begin(); it != end(); it++, keysit++) {
+                *it = *keysit;
+            }
+            ObjectStage::sOwner = oldowner;
         }
-        ObjectStage::sOwner = oldowner;
     }
 
     int Add(Hmx::Object *obj, float f, bool b) {
