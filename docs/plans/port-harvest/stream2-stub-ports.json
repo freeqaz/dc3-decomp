@@ -1,0 +1,3582 @@
+[
+ {
+  "symbol": "?BeginFromFile@BinkMovieImpl@@UAA_NPBDM_N111HPAVBinStream@@W4LoaderPos@@@Z",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "public: virtual bool __cdecl BinkMovieImpl::BeginFromFile(char const *, float, bool, bool, bool, bool, int, class BinStream *, enum LoaderPos)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 952,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Poll@BinkMovieImpl@@UAA_NXZ",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "public: virtual bool __cdecl BinkMovieImpl::Poll(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 908,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?DoFileRead@VorbisReader@@AAA_NXZ",
+  "unit": "system/synth/VorbisReader",
+  "demangled": "private: bool __cdecl VorbisReader::DoFileRead(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 752,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?CheckOpen@BinkMovieImpl@@UAA_N_N@Z",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "public: virtual bool __cdecl BinkMovieImpl::CheckOpen(bool)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 664,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?BeginFromBuffer@BinkMovieImpl@@UAA_NPAXH_NM111H@Z",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "public: virtual bool __cdecl BinkMovieImpl::BeginFromBuffer(void *, int, bool, float, bool, bool, bool, int)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 628,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?End@BinkMovieImpl@@UAAXXZ",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "public: virtual void __cdecl BinkMovieImpl::End(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 596,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?SharedFinishOpen@BinkMovieImpl@@CAX_N@Z",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "private: static void __cdecl BinkMovieImpl::SharedFinishOpen(bool)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 476,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?insert_unique@?$_Rb_tree@PAXU?$less@PAX@stlpmtx_std@@U?$pair@QAXVString@@@2@U?$_Select1st@U?$pair@QAXVString@@@stlpmtx_std@@@2@U?$_MapTraitsT@U?$pair@QAXVString@@@stlpmtx_std@@@priv@2@V?$StlNodeAlloc@U?$pair@QAXVString@@@stlpmtx_std@@@2@@stlpmtx_std@@QAA?AU?$_Rb_tree_iterator@U?$pair@QAXVString@@@stlpmtx_std@@U?$_MapTraitsT@U?$pair@QAXVString@@@stlpmtx_std@@@priv@2@@2@U32@ABU?$pair@QAXVString@@@2@@Z",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "public: struct stlpmtx_std::_Rb_tree_iterator<struct stlpmtx_std::pair<void *const, class String>, struct stlpmtx_std::priv::_MapTraitsT<struct stlpmtx_std::pair<void *const, class String> > > __cdecl stlpmtx_std::_Rb_tree<void *, struct stlpmtx_std::less<void *>, struct stlpmtx_std::pair<void *const, class String>, struct stlpmtx_std::_Select1st<struct stlpmtx_std::pair<void *const, class String> >, struct stlpmtx_std::priv::_MapTraitsT<struct stlpmtx_std::pair<void *const, class String> >, class stlpmtx_std::StlNodeAlloc<struct stlpmtx_std::pair<void *const, class String> > >::insert_unique(struct stlpmtx_std::_Rb_tree_iterator<struct stlpmtx_std::pair<void *const, class String>, struct stlpmtx_std::priv::_MapTraitsT<struct stlpmtx_std::pair<void *const, class String> > >, struct stlpmtx_std::pair<void *const, class String> const &)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 472,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Cleanup@FxSend360@@QAAXXZ",
+  "unit": "system/synth_xbox/FxSend",
+  "demangled": "public: void __cdecl FxSend360::Cleanup(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 432,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?json_escape_str@@YAHPAUprintbuf@@PAD@Z",
+  "unit": "system/net/json-c/json_object",
+  "demangled": "int __cdecl json_escape_str(struct printbuf *, char *)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 424,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?ActivateProcessing@ChatReceiver@@QAAX_N@Z",
+  "unit": "system/synth_xbox/Mic",
+  "demangled": "public: void __cdecl ChatReceiver::ActivateProcessing(bool)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 412,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?DoFrame@BinkMovieImpl@@AAAXXZ",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "private: void __cdecl BinkMovieImpl::DoFrame(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 400,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Decrypt@VorbisReader@@AAAXPAEH@Z",
+  "unit": "system/synth/VorbisReader",
+  "demangled": "private: void __cdecl VorbisReader::Decrypt(unsigned char *, int)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 376,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?QueryXSocialCapabilities@PlatformMgr@@QAA_NXZ",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: bool __cdecl PlatformMgr::QueryXSocialCapabilities(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 352,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Init@PlatformMgr@@QAAXXZ",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: void __cdecl PlatformMgr::Init(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 352,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?add_extra_zero@@YAXXZ",
+  "unit": "system/synth/filterdesign",
+  "demangled": "void __cdecl add_extra_zero(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 352,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?_M_insert_overflow_aux@?$vector@V?$vector@FV?$StlNodeAlloc@F@stlpmtx_std@@@stlpmtx_std@@V?$StlNodeAlloc@V?$vector@FV?$StlNodeAlloc@F@stlpmtx_std@@@stlpmtx_std@@@2@@stlpmtx_std@@IAAXPAV?$vector@FV?$StlNodeAlloc@F@stlpmtx_std@@@2@ABV32@ABU__false_type@2@I_N@Z",
+  "unit": "system/synth/VorbisReader",
+  "demangled": "protected: void __cdecl stlpmtx_std::vector<class stlpmtx_std::vector<short, class stlpmtx_std::StlNodeAlloc<short> >, class stlpmtx_std::StlNodeAlloc<class stlpmtx_std::vector<short, class stlpmtx_std::StlNodeAlloc<short> > > >::_M_insert_overflow_aux(class stlpmtx_std::vector<short, class stlpmtx_std::StlNodeAlloc<short> > *, class stlpmtx_std::vector<short, class stlpmtx_std::StlNodeAlloc<short> > const &, struct stlpmtx_std::__false_type const &, unsigned int, bool)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 348,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?SyncEffectParams@FxSendWah360@@UBAXPAUIXAudio2SubmixVoice@@@Z",
+  "unit": "system/synth_xbox/FxSendWah",
+  "demangled": "public: virtual void __cdecl FxSendWah360::SyncEffectParams(struct IXAudio2SubmixVoice *) const",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 324,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?compute_z_blt@@YAXXZ",
+  "unit": "system/synth/filterdesign",
+  "demangled": "void __cdecl compute_z_blt(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 308,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?multin@@YAXUcomplex@@HQAU1@@Z",
+  "unit": "system/synth/filterdesign",
+  "demangled": "void __cdecl multin(struct complex, int, struct complex *const)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 300,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?_M_fill_insert_aux@?$vector@V?$vector@FV?$StlNodeAlloc@F@stlpmtx_std@@@stlpmtx_std@@V?$StlNodeAlloc@V?$vector@FV?$StlNodeAlloc@F@stlpmtx_std@@@stlpmtx_std@@@2@@stlpmtx_std@@AAAXPAV?$vector@FV?$StlNodeAlloc@F@stlpmtx_std@@@2@IABV32@ABU__true_type@2@@Z",
+  "unit": "system/synth/VorbisReader",
+  "demangled": "private: void __cdecl stlpmtx_std::vector<class stlpmtx_std::vector<short, class stlpmtx_std::StlNodeAlloc<short> >, class stlpmtx_std::StlNodeAlloc<class stlpmtx_std::vector<short, class stlpmtx_std::StlNodeAlloc<short> > > >::_M_fill_insert_aux(class stlpmtx_std::vector<short, class stlpmtx_std::StlNodeAlloc<short> > *, unsigned int, class stlpmtx_std::vector<short, class stlpmtx_std::StlNodeAlloc<short> > const &, struct stlpmtx_std::__true_type const &)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 296,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?_M_erase@?$vector@V?$vector@FV?$StlNodeAlloc@F@stlpmtx_std@@@stlpmtx_std@@V?$StlNodeAlloc@V?$vector@FV?$StlNodeAlloc@F@stlpmtx_std@@@stlpmtx_std@@@2@@stlpmtx_std@@IAAPAV?$vector@FV?$StlNodeAlloc@F@stlpmtx_std@@@2@PAV32@0ABU__true_type@2@@Z",
+  "unit": "system/synth/VorbisReader",
+  "demangled": "protected: class stlpmtx_std::vector<short, class stlpmtx_std::StlNodeAlloc<short> > * __cdecl stlpmtx_std::vector<class stlpmtx_std::vector<short, class stlpmtx_std::StlNodeAlloc<short> >, class stlpmtx_std::StlNodeAlloc<class stlpmtx_std::vector<short, class stlpmtx_std::StlNodeAlloc<short> > > >::_M_erase(class stlpmtx_std::vector<short, class stlpmtx_std::StlNodeAlloc<short> > *, class stlpmtx_std::vector<short, class stlpmtx_std::StlNodeAlloc<short> > *, struct stlpmtx_std::__true_type const &)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 292,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?json_object_object_to_json_string@@YAHPAUjson_object@@PAUprintbuf@@@Z",
+  "unit": "system/net/json-c/json_object",
+  "demangled": "int __cdecl json_object_object_to_json_string(struct json_object *, struct printbuf *)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 292,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?EaseExpoInOut@@YAMMMM@Z",
+  "unit": "link_glue",
+  "demangled": "float __cdecl EaseExpoInOut(float, float, float)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 288,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?SyncEffectParams@FxSend360@@QAAXXZ",
+  "unit": "system/synth_xbox/FxSend",
+  "demangled": "public: void __cdecl FxSend360::SyncEffectParams(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 288,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?expand@@YAXQAUcomplex@@H0@Z",
+  "unit": "system/synth/filterdesign",
+  "demangled": "void __cdecl expand(struct complex *const, int, struct complex *const)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 280,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?SetType@FxSendPitchShift360@@UAAXVSymbol@@@Z",
+  "unit": "system/synth_xbox/Synth",
+  "demangled": "public: virtual void __cdecl FxSendPitchShift360::SetType(class Symbol)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 276,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Start@SingleItemEnumJob@@UAAXXZ",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: virtual void __cdecl SingleItemEnumJob::Start(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 264,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?OnCompletion@SingleItemEnumJob@@UAAXPAVObject@Hmx@@@Z",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: virtual void __cdecl SingleItemEnumJob::OnCompletion(class Hmx::Object *)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 264,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?ShowControllerRequiredUI@PlatformMgr@@QAAXPAVObject@Hmx@@@Z",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: void __cdecl PlatformMgr::ShowControllerRequiredUI(class Hmx::Object *)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 264,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?DiscContentionCheck@BinkMovieImpl@@QAAXPAVLoader@@@Z",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "public: void __cdecl BinkMovieImpl::DiscContentionCheck(class Loader *)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 260,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?PollXSocialCapabilities@PlatformMgr@@QAA_NXZ",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: bool __cdecl PlatformMgr::PollXSocialCapabilities(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 256,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Advance@?$ObjDirItr@VObjectDir@@@@AAAXXZ",
+  "unit": "system/obj/Utl",
+  "demangled": "private: void __cdecl ObjDirItr<class ObjectDir>::Advance(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 256,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?_M_insert_overflow@?$vector@PAFV?$StlNodeAlloc@PAF@stlpmtx_std@@@stlpmtx_std@@IAAXPAPAFABQAFABU__true_type@2@I_N@Z",
+  "unit": "system/synth/VorbisReader",
+  "demangled": "protected: void __cdecl stlpmtx_std::vector<short *, class stlpmtx_std::StlNodeAlloc<short *> >::_M_insert_overflow(short **, short *const &, struct stlpmtx_std::__true_type const &, unsigned int, bool)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 248,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?_M_insert_overflow@?$vector@PAVBinkMovieImpl@@V?$StlNodeAlloc@PAVBinkMovieImpl@@@stlpmtx_std@@@stlpmtx_std@@IAAXPAPAVBinkMovieImpl@@ABQAV3@ABU__true_type@2@I_N@Z",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "protected: void __cdecl stlpmtx_std::vector<class BinkMovieImpl *, class stlpmtx_std::StlNodeAlloc<class BinkMovieImpl *> >::_M_insert_overflow(class BinkMovieImpl **, class BinkMovieImpl *const &, struct stlpmtx_std::__true_type const &, unsigned int, bool)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 248,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Reconnect@FxSend360@@AAAXXZ",
+  "unit": "system/synth_xbox/FxSend",
+  "demangled": "private: void __cdecl FxSend360::Reconnect(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 244,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?SetVolume@BinkMovieImpl@@UAAXM@Z",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "public: virtual void __cdecl BinkMovieImpl::SetVolume(float)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 240,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?SetPaused@BinkMovieImpl@@UAAX_N@Z",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "public: virtual void __cdecl BinkMovieImpl::SetPaused(bool)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 240,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0?$CSampleXAPOBase@VWahEffect@@UParams@1@@ATG@@IAA@XZ",
+  "unit": "system/synth_xbox/FxSendWah",
+  "demangled": "protected: __cdecl ATG::CSampleXAPOBase<class WahEffect, struct WahEffect::Params>::CSampleXAPOBase<class WahEffect, struct WahEffect::Params>(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 240,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?MsPerFrame@BinkMovieImpl@@UBAMXZ",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "public: virtual float __cdecl BinkMovieImpl::MsPerFrame(void) const",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 232,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0?$StandardEffect@VWahEffect@@@@QAA@XZ",
+  "unit": "system/synth_xbox/FxSendWah",
+  "demangled": "public: __cdecl StandardEffect<class WahEffect>::StandardEffect<class WahEffect>(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 232,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0WinSockSocket@@QAA@_N@Z",
+  "unit": "system/os/NetworkSocket_Win",
+  "demangled": "public: __cdecl WinSockSocket::WinSockSocket(bool)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 232,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?XPrivilegeCheck@?A0x8a9ffbf2@@YA_NW4_XPRIVILEGE_TYPE@@0_K@Z",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "bool __cdecl `anonymous namespace'::XPrivilegeCheck(enum _XPRIVILEGE_TYPE, enum _XPRIVILEGE_TYPE, unsigned __int64)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 228,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?MovieClose@BinkMovieImpl@@AAAXXZ",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "private: void __cdecl BinkMovieImpl::MovieClose(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 228,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?insert_unique@?$_Rb_tree@PAXU?$less@PAX@stlpmtx_std@@U?$pair@QAXVString@@@2@U?$_Select1st@U?$pair@QAXVString@@@stlpmtx_std@@@2@U?$_MapTraitsT@U?$pair@QAXVString@@@stlpmtx_std@@@priv@2@V?$StlNodeAlloc@U?$pair@QAXVString@@@stlpmtx_std@@@2@@stlpmtx_std@@QAA?AU?$pair@U?$_Rb_tree_iterator@U?$pair@QAXVString@@@stlpmtx_std@@U?$_MapTraitsT@U?$pair@QAXVString@@@stlpmtx_std@@@priv@2@@stlpmtx_std@@_N@2@ABU?$pair@QAXVString@@@2@@Z",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "public: struct stlpmtx_std::pair<struct stlpmtx_std::_Rb_tree_iterator<struct stlpmtx_std::pair<void *const, class String>, struct stlpmtx_std::priv::_MapTraitsT<struct stlpmtx_std::pair<void *const, class String> > >, bool> __cdecl stlpmtx_std::_Rb_tree<void *, struct stlpmtx_std::less<void *>, struct stlpmtx_std::pair<void *const, class String>, struct stlpmtx_std::_Select1st<struct stlpmtx_std::pair<void *const, class String> >, struct stlpmtx_std::priv::_MapTraitsT<struct stlpmtx_std::pair<void *const, class String> >, class stlpmtx_std::StlNodeAlloc<struct stlpmtx_std::pair<void *const, class String> > >::insert_unique(struct stlpmtx_std::pair<void *const, class String> const &)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 224,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?EasePolyInOut@@YAMMMM@Z",
+  "unit": "link_glue",
+  "demangled": "float __cdecl EasePolyInOut(float, float, float)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 220,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?EasePolyOutIn@@YAMMMM@Z",
+  "unit": "link_glue",
+  "demangled": "float __cdecl EasePolyOutIn(float, float, float)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 220,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?EaseCircInOut@@YAMMMM@Z",
+  "unit": "link_glue",
+  "demangled": "float __cdecl EaseCircInOut(float, float, float)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 220,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Save@BinkMovieImpl@@UAAXPAVBinStream@@@Z",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "public: virtual void __cdecl BinkMovieImpl::Save(class BinStream *)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 220,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0ChatReceiver@@QAA@PAUIXHV2Engine@@H@Z",
+  "unit": "system/synth_xbox/Mic",
+  "demangled": "public: __cdecl ChatReceiver::ChatReceiver(struct IXHV2Engine *, int)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 220,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?StoreCache@?A0xc02ac7af@@YAXPAVRndTex@@@Z",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "void __cdecl `anonymous namespace'::StoreCache(class RndTex *)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 216,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Shutdown@MicManagerXbox@@QAAXXZ",
+  "unit": "system/synth_xbox/Mic",
+  "demangled": "public: void __cdecl MicManagerXbox::Shutdown(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 216,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Refresh@FxSend360@@QAAXAAV?$vector@PAVFxSend@@V?$StlNodeAlloc@PAVFxSend@@@stlpmtx_std@@@stlpmtx_std@@@Z",
+  "unit": "system/synth_xbox/FxSend",
+  "demangled": "public: void __cdecl FxSend360::Refresh(class stlpmtx_std::vector<class FxSend *, class stlpmtx_std::StlNodeAlloc<class FxSend *> > &)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 216,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?EaseElasticInOut@@YAMMMM@Z",
+  "unit": "link_glue",
+  "demangled": "float __cdecl EaseElasticInOut(float, float, float)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 212,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?EaseElasticOutIn@@YAMMMM@Z",
+  "unit": "link_glue",
+  "demangled": "float __cdecl EaseElasticOutIn(float, float, float)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 212,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?EaseBackInOut@@YAMMMM@Z",
+  "unit": "link_glue",
+  "demangled": "float __cdecl EaseBackInOut(float, float, float)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 208,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?EaseBackOutIn@@YAMMMM@Z",
+  "unit": "link_glue",
+  "demangled": "float __cdecl EaseBackOutIn(float, float, float)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 208,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?EaseExpoIn@@YAMMMM@Z",
+  "unit": "link_glue",
+  "demangled": "float __cdecl EaseExpoIn(float, float, float)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 208,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?EaseBounceInOut@@YAMMMM@Z",
+  "unit": "link_glue",
+  "demangled": "float __cdecl EaseBounceInOut(float, float, float)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 204,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?EaseBounceOutIn@@YAMMMM@Z",
+  "unit": "link_glue",
+  "demangled": "float __cdecl EaseBounceOutIn(float, float, float)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 204,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?EaseExpoOutIn@@YAMMMM@Z",
+  "unit": "link_glue",
+  "demangled": "float __cdecl EaseExpoOutIn(float, float, float)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 204,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Ready@BinkMovieImpl@@UBA_NXZ",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "public: virtual bool __cdecl BinkMovieImpl::Ready(void) const",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 204,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?NextFrame@BinkMovieImpl@@AAAXXZ",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "private: void __cdecl BinkMovieImpl::NextFrame(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 204,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?_M_insert@?$_Rb_tree@PAXU?$less@PAX@stlpmtx_std@@U?$pair@QAXVString@@@2@U?$_Select1st@U?$pair@QAXVString@@@stlpmtx_std@@@2@U?$_MapTraitsT@U?$pair@QAXVString@@@stlpmtx_std@@@priv@2@V?$StlNodeAlloc@U?$pair@QAXVString@@@stlpmtx_std@@@2@@stlpmtx_std@@AAA?AU?$_Rb_tree_iterator@U?$pair@QAXVString@@@stlpmtx_std@@U?$_MapTraitsT@U?$pair@QAXVString@@@stlpmtx_std@@@priv@2@@2@PAU_Rb_tree_node_base@2@ABU?$pair@QAXVString@@@2@00@Z",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "private: struct stlpmtx_std::_Rb_tree_iterator<struct stlpmtx_std::pair<void *const, class String>, struct stlpmtx_std::priv::_MapTraitsT<struct stlpmtx_std::pair<void *const, class String> > > __cdecl stlpmtx_std::_Rb_tree<void *, struct stlpmtx_std::less<void *>, struct stlpmtx_std::pair<void *const, class String>, struct stlpmtx_std::_Select1st<struct stlpmtx_std::pair<void *const, class String> >, struct stlpmtx_std::priv::_MapTraitsT<struct stlpmtx_std::pair<void *const, class String> >, class stlpmtx_std::StlNodeAlloc<struct stlpmtx_std::pair<void *const, class String> > >::_M_insert(struct stlpmtx_std::_Rb_tree_node_base *, struct stlpmtx_std::pair<void *const, class String> const &, struct stlpmtx_std::_Rb_tree_node_base *, struct stlpmtx_std::_Rb_tree_node_base *)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 204,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?EaseSineOutIn@@YAMMMM@Z",
+  "unit": "link_glue",
+  "demangled": "float __cdecl EaseSineOutIn(float, float, float)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 200,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?EaseExpoOut@@YAMMMM@Z",
+  "unit": "link_glue",
+  "demangled": "float __cdecl EaseExpoOut(float, float, float)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 200,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?EaseCircOutIn@@YAMMMM@Z",
+  "unit": "link_glue",
+  "demangled": "float __cdecl EaseCircOutIn(float, float, float)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 200,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?_M_insert_overflow_aux@?$vector@V?$vector@FV?$StlNodeAlloc@F@stlpmtx_std@@@stlpmtx_std@@V?$StlNodeAlloc@V?$vector@FV?$StlNodeAlloc@F@stlpmtx_std@@@stlpmtx_std@@@2@@stlpmtx_std@@IAAXPAV?$vector@FV?$StlNodeAlloc@F@stlpmtx_std@@@2@ABV32@ABU__true_type@2@I_N@Z",
+  "unit": "system/synth/VorbisReader",
+  "demangled": "protected: void __cdecl stlpmtx_std::vector<class stlpmtx_std::vector<short, class stlpmtx_std::StlNodeAlloc<short> >, class stlpmtx_std::StlNodeAlloc<class stlpmtx_std::vector<short, class stlpmtx_std::StlNodeAlloc<short> > > >::_M_insert_overflow_aux(class stlpmtx_std::vector<short, class stlpmtx_std::StlNodeAlloc<short> > *, class stlpmtx_std::vector<short, class stlpmtx_std::StlNodeAlloc<short> > const &, struct stlpmtx_std::__true_type const &, unsigned int, bool)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 200,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??1PlatformMgr@@UAA@XZ",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: virtual __cdecl PlatformMgr::~PlatformMgr(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 200,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0InviteAcceptedMsg@@QAA@HI_N@Z",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: __cdecl InviteAcceptedMsg::InviteAcceptedMsg(int, unsigned int, bool)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 200,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?json_object_array_to_json_string@@YAHPAUjson_object@@PAUprintbuf@@@Z",
+  "unit": "system/net/json-c/json_object",
+  "demangled": "int __cdecl json_object_array_to_json_string(struct json_object *, struct printbuf *)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 200,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?blt@@YA?AUcomplex@@U1@@Z",
+  "unit": "system/synth/filterdesign",
+  "demangled": "struct complex __cdecl blt(struct complex)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 200,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??A?$map@PAXVString@@U?$less@PAX@stlpmtx_std@@V?$StlNodeAlloc@U?$pair@QAXVString@@@stlpmtx_std@@@3@@stlpmtx_std@@QAAAAVString@@ABQAX@Z",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "public: class String & __cdecl stlpmtx_std::map<void *, class String, struct stlpmtx_std::less<void *>, class stlpmtx_std::StlNodeAlloc<struct stlpmtx_std::pair<void *const, class String> > >::operator[](void *const &)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 196,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?LoadFile@BinkMovieLoader@@AAAXXZ",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "private: void __cdecl BinkMovieLoader::LoadFile(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 196,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?SyncEffectParams@FxSendEQ360@@UBAXPAUIXAudio2SubmixVoice@@@Z",
+  "unit": "system/synth_xbox/FxSendEQ",
+  "demangled": "public: virtual void __cdecl FxSendEQ360::SyncEffectParams(struct IXAudio2SubmixVoice *) const",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 196,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?GetName@PlatformMgr@@QBAPBDH@Z",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: char const * __cdecl PlatformMgr::GetName(int) const",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 192,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0SingleItemEnumCompleteMsg@@QAA@_N0ABVString@@@Z",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: __cdecl SingleItemEnumCompleteMsg::SingleItemEnumCompleteMsg(bool, bool, class String const &)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 192,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?SignInUsers@PlatformMgr@@QAAXHK@Z",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: void __cdecl PlatformMgr::SignInUsers(int, unsigned long)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 188,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?GetFrame@BinkMovieImpl@@UBAHXZ",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "public: virtual int __cdecl BinkMovieImpl::GetFrame(void) const",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 188,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?OpenFile@BinkMovieLoader@@AAAXXZ",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "private: void __cdecl BinkMovieLoader::OpenFile(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 188,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?OutputVoice@FxSend360@@AAAPAUIXAudio2Voice@@XZ",
+  "unit": "system/synth_xbox/FxSend",
+  "demangled": "private: struct IXAudio2Voice * __cdecl FxSend360::OutputVoice(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 188,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?RemoveOwnerVoice@FxSend360@@UAAXPAVVoice@@@Z",
+  "unit": "system/synth_xbox/FxSend",
+  "demangled": "public: virtual void __cdecl FxSend360::RemoveOwnerVoice(class Voice *)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 188,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?CleanChain@FxSend360@@QAAXXZ",
+  "unit": "system/synth_xbox/FxSend",
+  "demangled": "public: void __cdecl FxSend360::CleanChain(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 188,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0PitchShiftEffect@@QAA@XZ",
+  "unit": "system/synth_xbox/PitchShiftEffect",
+  "demangled": "public: __cdecl PitchShiftEffect::PitchShiftEffect(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 184,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Bind@WinSockSocket@@UAAXG@Z",
+  "unit": "system/os/NetworkSocket_Win",
+  "demangled": "public: virtual void __cdecl WinSockSocket::Bind(unsigned short)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 184,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?EasePolyOut@@YAMMMM@Z",
+  "unit": "link_glue",
+  "demangled": "float __cdecl EasePolyOut(float, float, float)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 180,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?EaseSineInOut@@YAMMMM@Z",
+  "unit": "link_glue",
+  "demangled": "float __cdecl EaseSineInOut(float, float, float)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 180,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?IsLoading@BinkMovieImpl@@UBA_NXZ",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "public: virtual bool __cdecl BinkMovieImpl::IsLoading(void) const",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 180,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?GetHostName@NetworkSocket@@SA?AVString@@XZ",
+  "unit": "system/os/NetworkSocket_Win",
+  "demangled": "public: static class String __cdecl NetworkSocket::GetHostName(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 180,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?SyncEffectParams@FxSendFlanger360@@UBAXPAUIXAudio2SubmixVoice@@@Z",
+  "unit": "system/synth_xbox/FxSendFlanger",
+  "demangled": "public: virtual void __cdecl FxSendFlanger360::SyncEffectParams(struct IXAudio2SubmixVoice *) const",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 176,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?EaseBackOut@@YAMMMM@Z",
+  "unit": "link_glue",
+  "demangled": "float __cdecl EaseBackOut(float, float, float)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 172,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??1SingleItemEnumJob@@UAA@XZ",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: virtual __cdecl SingleItemEnumJob::~SingleItemEnumJob(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 172,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0?$ObjDirItr@VObjectDir@@@@QAA@PAVObjectDir@@_N@Z",
+  "unit": "system/obj/Utl",
+  "demangled": "public: __cdecl ObjDirItr<class ObjectDir>::ObjDirItr<class ObjectDir>(class ObjectDir *, bool)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 172,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?EasePolyIn@@YAMMMM@Z",
+  "unit": "link_glue",
+  "demangled": "float __cdecl EasePolyIn(float, float, float)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 168,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?EaseBounceIn@@YAMMMM@Z",
+  "unit": "link_glue",
+  "demangled": "float __cdecl EaseBounceIn(float, float, float)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 168,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?EaseElasticOut@@YAMMMM@Z",
+  "unit": "link_glue",
+  "demangled": "float __cdecl EaseElasticOut(float, float, float)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 168,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?EaseBackIn@@YAMMMM@Z",
+  "unit": "link_glue",
+  "demangled": "float __cdecl EaseBackIn(float, float, float)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 168,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?NumFrames@BinkMovieImpl@@UBAHXZ",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "public: virtual int __cdecl BinkMovieImpl::NumFrames(void) const",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 168,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?SyncEffectParams@FxSendDelay360@@UBAXPAUIXAudio2SubmixVoice@@@Z",
+  "unit": "system/synth_xbox/FxSendDelay",
+  "demangled": "public: virtual void __cdecl FxSendDelay360::SyncEffectParams(struct IXAudio2SubmixVoice *) const",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 168,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?EaseSineIn@@YAMMMM@Z",
+  "unit": "link_glue",
+  "demangled": "float __cdecl EaseSineIn(float, float, float)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 164,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0SigninChangedMsg@@QAA@KK@Z",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: __cdecl SigninChangedMsg::SigninChangedMsg(unsigned long, unsigned long)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 164,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?ShowControllerRequiredUIThreadedCB@@YAXH@Z",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "void __cdecl ShowControllerRequiredUIThreadedCB(int)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 164,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Terminate@BinkMovieImpl@@QAAXXZ",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "public: void __cdecl BinkMovieImpl::Terminate(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 164,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?EaseSineOut@@YAMMMM@Z",
+  "unit": "link_glue",
+  "demangled": "float __cdecl EaseSineOut(float, float, float)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 160,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?EaseCircIn@@YAMMMM@Z",
+  "unit": "link_glue",
+  "demangled": "float __cdecl EaseCircIn(float, float, float)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 156,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?InviteParty@PlatformMgr@@QAAXH@Z",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: void __cdecl PlatformMgr::InviteParty(int)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 156,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?IsOpen@BinkMovieImpl@@UBA_NXZ",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "public: virtual bool __cdecl BinkMovieImpl::IsOpen(void) const",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 156,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?EaseCircOut@@YAMMMM@Z",
+  "unit": "link_glue",
+  "demangled": "float __cdecl EaseCircOut(float, float, float)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 152,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??1PitchShiftEffect@@UAA@XZ",
+  "unit": "system/synth_xbox/PitchShiftEffect",
+  "demangled": "public: virtual __cdecl PitchShiftEffect::~PitchShiftEffect(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 152,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Int@Rand@@QAAHHH@Z",
+  "unit": "system/char/Waypoint",
+  "demangled": "public: int __cdecl Rand::Int(int, int)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 148,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0MeterEffect@@QAA@XZ",
+  "unit": "system/synth_xbox/MeterEffect",
+  "demangled": "public: __cdecl MeterEffect::MeterEffect(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 148,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0EnvelopeGenerator@@QAA@XZ",
+  "unit": "system/synth_xbox/EnvelopeGenerator",
+  "demangled": "public: __cdecl EnvelopeGenerator::EnvelopeGenerator(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 148,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?SyncEffectParams@FxSendCompress360@@UBAXPAUIXAudio2SubmixVoice@@@Z",
+  "unit": "system/synth_xbox/FxSendCompress",
+  "demangled": "public: virtual void __cdecl FxSendCompress360::SyncEffectParams(struct IXAudio2SubmixVoice *) const",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 148,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?MakeRotMatrixX@@YAXMAAVMatrix3@Hmx@@@Z",
+  "unit": "system/char/CharBonesMeshes",
+  "demangled": "void __cdecl MakeRotMatrixX(float, class Hmx::Matrix3&)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 144,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?MakeRotMatrixY@@YAXMAAVMatrix3@Hmx@@@Z",
+  "unit": "system/char/CharBonesMeshes",
+  "demangled": "void __cdecl MakeRotMatrixY(float, class Hmx::Matrix3&)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 144,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?MakeRotMatrixZ@@YAXMAAVMatrix3@Hmx@@@Z",
+  "unit": "system/char/CharBonesMeshes",
+  "demangled": "void __cdecl MakeRotMatrixZ(float, class Hmx::Matrix3&)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 144,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0?$CSampleXAPOBase@VFlangerEffect@@UParams@1@@ATG@@IAA@XZ",
+  "unit": "system/synth_xbox/FxSendChorus",
+  "demangled": "protected: __cdecl ATG::CSampleXAPOBase<class FlangerEffect, struct FlangerEffect::Params>::CSampleXAPOBase<class FlangerEffect, struct FlangerEffect::Params>(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 144,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0?$CSampleXAPOBase@VBitCrushEffect@@UParams@1@@ATG@@IAA@XZ",
+  "unit": "system/synth_xbox/FxSendBitCrush",
+  "demangled": "protected: __cdecl ATG::CSampleXAPOBase<class BitCrushEffect, struct BitCrushEffect::Params>::CSampleXAPOBase<class BitCrushEffect, struct BitCrushEffect::Params>(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 144,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0?$CSampleXAPOBase@VEQEffect@@UParams@1@@ATG@@IAA@XZ",
+  "unit": "system/synth_xbox/FxSendEQ",
+  "demangled": "protected: __cdecl ATG::CSampleXAPOBase<class EQEffect, struct EQEffect::Params>::CSampleXAPOBase<class EQEffect, struct EQEffect::Params>(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 144,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0?$CSampleXAPOBase@VDistortionEffect@@UParams@1@@ATG@@IAA@XZ",
+  "unit": "system/synth_xbox/FxSendDistortion",
+  "demangled": "protected: __cdecl ATG::CSampleXAPOBase<class DistortionEffect, struct DistortionEffect::Params>::CSampleXAPOBase<class DistortionEffect, struct DistortionEffect::Params>(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 144,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0?$CSampleXAPOBase@VDelayEffect@@UParams@1@@ATG@@IAA@XZ",
+  "unit": "system/synth_xbox/FxSendDelay",
+  "demangled": "protected: __cdecl ATG::CSampleXAPOBase<class DelayEffect, struct DelayEffect::Params>::CSampleXAPOBase<class DelayEffect, struct DelayEffect::Params>(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 144,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0UIChangedMsg@@QAA@_N@Z",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: __cdecl UIChangedMsg::UIChangedMsg(bool)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 136,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0ConnectionStatusChangedMsg@@QAA@_N@Z",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: __cdecl ConnectionStatusChangedMsg::ConnectionStatusChangedMsg(bool)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 136,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0PlatformMgrOpCompleteMsg@@QAA@_N@Z",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: __cdecl PlatformMgrOpCompleteMsg::PlatformMgrOpCompleteMsg(bool)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 136,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0ControllerReqOpCompleteMsg@@QAA@_N@Z",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: __cdecl ControllerReqOpCompleteMsg::ControllerReqOpCompleteMsg(bool)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 136,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0MovieInternalBuffers@@AAA@XZ",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "private: __cdecl MovieInternalBuffers::MovieInternalBuffers(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 136,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?SetWidthHeight@BinkMovieImpl@@UAAXHH@Z",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "public: virtual void __cdecl BinkMovieImpl::SetWidthHeight(int, int)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 136,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0?$StandardEffect@VFlangerEffect@@@@QAA@XZ",
+  "unit": "system/synth_xbox/FxSendChorus",
+  "demangled": "public: __cdecl StandardEffect<class FlangerEffect>::StandardEffect<class FlangerEffect>(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 136,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0?$StandardEffect@VBitCrushEffect@@@@QAA@XZ",
+  "unit": "system/synth_xbox/FxSendBitCrush",
+  "demangled": "public: __cdecl StandardEffect<class BitCrushEffect>::StandardEffect<class BitCrushEffect>(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 136,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0?$StandardEffect@VDistortionEffect@@@@QAA@XZ",
+  "unit": "system/synth_xbox/FxSendDistortion",
+  "demangled": "public: __cdecl StandardEffect<class DistortionEffect>::StandardEffect<class DistortionEffect>(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 136,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0?$StandardEffect@VDelayEffect@@@@QAA@XZ",
+  "unit": "system/synth_xbox/FxSendDelay",
+  "demangled": "public: __cdecl StandardEffect<class DelayEffect>::StandardEffect<class DelayEffect>(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 136,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0XMPStateChangedMsg@@QAA@H@Z",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: __cdecl XMPStateChangedMsg::XMPStateChangedMsg(int)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 132,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0FriendsListChangedMsg@@QAA@H@Z",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: __cdecl FriendsListChangedMsg::FriendsListChangedMsg(int)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 132,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0KinectGuideGestureMsg@@QAA@H@Z",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: __cdecl KinectGuideGestureMsg::KinectGuideGestureMsg(int)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 132,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0KinectHardwareStatusMsg@@QAA@H@Z",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: __cdecl KinectHardwareStatusMsg::KinectHardwareStatusMsg(int)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 132,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0KinectUserBindingChangedMsg@@QAA@H@Z",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: __cdecl KinectUserBindingChangedMsg::KinectUserBindingChangedMsg(int)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 132,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?OnSignInUsers@PlatformMgr@@AAA?AVDataNode@@PBVDataArray@@@Z",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "private: class DataNode __cdecl PlatformMgr::OnSignInUsers(class DataArray const *)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 132,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Process@?$CSampleXAPOBase@VFlangerEffect@@UParams@1@@ATG@@UAAXIPBUXAPO_PROCESS_BUFFER_PARAMETERS@@IPAU3@H@Z",
+  "unit": "system/synth_xbox/FxSendChorus",
+  "demangled": "public: virtual void __cdecl ATG::CSampleXAPOBase<class FlangerEffect, struct FlangerEffect::Params>::Process(unsigned int, struct XAPO_PROCESS_BUFFER_PARAMETERS const *, unsigned int, struct XAPO_PROCESS_BUFFER_PARAMETERS *, int)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 132,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Process@?$CSampleXAPOBase@VEQEffect@@UParams@1@@ATG@@UAAXIPBUXAPO_PROCESS_BUFFER_PARAMETERS@@IPAU3@H@Z",
+  "unit": "system/synth_xbox/FxSendEQ",
+  "demangled": "public: virtual void __cdecl ATG::CSampleXAPOBase<class EQEffect, struct EQEffect::Params>::Process(unsigned int, struct XAPO_PROCESS_BUFFER_PARAMETERS const *, unsigned int, struct XAPO_PROCESS_BUFFER_PARAMETERS *, int)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 132,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?FastInt@Rand@@QAAHHH@Z",
+  "unit": "system/char/CharClipGroup",
+  "demangled": "public: int __cdecl Rand::FastInt(int, int)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 128,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?deallocate@?$StlNodeAlloc@PAF@stlpmtx_std@@QBAXPAPAFI@Z",
+  "unit": "system/synth/VorbisReader",
+  "demangled": "public: void __cdecl stlpmtx_std::StlNodeAlloc<short *>::deallocate(short **, unsigned int) const",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 128,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?resize@?$vector@V?$vector@FV?$StlNodeAlloc@F@stlpmtx_std@@@stlpmtx_std@@V?$StlNodeAlloc@V?$vector@FV?$StlNodeAlloc@F@stlpmtx_std@@@stlpmtx_std@@@2@@stlpmtx_std@@QAAXIABV?$vector@FV?$StlNodeAlloc@F@stlpmtx_std@@@2@@Z",
+  "unit": "system/synth/VorbisReader",
+  "demangled": "public: void __cdecl stlpmtx_std::vector<class stlpmtx_std::vector<short, class stlpmtx_std::StlNodeAlloc<short> >, class stlpmtx_std::StlNodeAlloc<class stlpmtx_std::vector<short, class stlpmtx_std::StlNodeAlloc<short> > > >::resize(unsigned int, class stlpmtx_std::vector<short, class stlpmtx_std::StlNodeAlloc<short> > const &)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 128,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?deallocate@?$StlNodeAlloc@V?$_List_node@PAVFriendEnumRequest@?A0x8a9ffbf2@@@stlpmtx_std@@@stlpmtx_std@@QBAXPAV?$_List_node@PAVFriendEnumRequest@?A0x8a9ffbf2@@@2@I@Z",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: void __cdecl stlpmtx_std::StlNodeAlloc<class stlpmtx_std::_List_node<class `anonymous namespace'::FriendEnumRequest *> >::deallocate(class stlpmtx_std::_List_node<class `anonymous namespace'::FriendEnumRequest *> *, unsigned int) const",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 128,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?deallocate@?$StlNodeAlloc@U?$_Rb_tree_node@U?$pair@$$CBVString@@I@stlpmtx_std@@@stlpmtx_std@@@stlpmtx_std@@QBAXPAU?$_Rb_tree_node@U?$pair@$$CBVString@@I@stlpmtx_std@@@2@I@Z",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: void __cdecl stlpmtx_std::StlNodeAlloc<struct stlpmtx_std::_Rb_tree_node<struct stlpmtx_std::pair<class String const, unsigned int> > >::deallocate(struct stlpmtx_std::_Rb_tree_node<struct stlpmtx_std::pair<class String const, unsigned int> > *, unsigned int) const",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 128,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?EnumerateFriends@PlatformMgr@@QAAXHAAV?$vector@PAVFriend@@V?$StlNodeAlloc@PAVFriend@@@stlpmtx_std@@@stlpmtx_std@@PAVObject@Hmx@@@Z",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: void __cdecl PlatformMgr::EnumerateFriends(int, class stlpmtx_std::vector<class Friend *, class stlpmtx_std::StlNodeAlloc<class Friend *> > &, class Hmx::Object *)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 128,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?deallocate@?$StlNodeAlloc@PAVExternalMic@@@stlpmtx_std@@QBAXPAPAVExternalMic@@I@Z",
+  "unit": "system/synth_xbox/ExternalMic",
+  "demangled": "public: void __cdecl stlpmtx_std::StlNodeAlloc<class ExternalMic *>::deallocate(class ExternalMic **, unsigned int) const",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 128,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?UnlockThread@BinkMovieImpl@@UAAXXZ",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "public: virtual void __cdecl BinkMovieImpl::UnlockThread(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 124,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?RemoveMic@MicManagerXbox@@QAAXPAVMicXbox@@@Z",
+  "unit": "system/synth_xbox/Mic",
+  "demangled": "public: void __cdecl MicManagerXbox::RemoveMic(class MicXbox *)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 124,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??1?$StandardEffect@VFlangerEffect@@@@UAA@XZ",
+  "unit": "system/synth_xbox/FxSendChorus",
+  "demangled": "public: virtual __cdecl StandardEffect<class FlangerEffect>::~StandardEffect<class FlangerEffect>(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 124,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??1?$StandardEffect@VDelayEffect@@@@UAA@XZ",
+  "unit": "system/synth_xbox/FxSendDelay",
+  "demangled": "public: virtual __cdecl StandardEffect<class DelayEffect>::~StandardEffect<class DelayEffect>(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 124,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0?$CSampleXAPOBase@VMeterEffect@@UMeterEffectParams@@@ATG@@IAA@XZ",
+  "unit": "system/synth_xbox/MeterEffect",
+  "demangled": "protected: __cdecl ATG::CSampleXAPOBase<class MeterEffect, struct MeterEffectParams>::CSampleXAPOBase<class MeterEffect, struct MeterEffectParams>(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 120,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?LockThread@BinkMovieImpl@@UAAXXZ",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "public: virtual void __cdecl BinkMovieImpl::LockThread(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 120,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0?$CSampleXAPOBase@VEnvelopeGenerator@@UEnvelopeGeneratorParams@@@ATG@@IAA@XZ",
+  "unit": "system/synth_xbox/EnvelopeGenerator",
+  "demangled": "protected: __cdecl ATG::CSampleXAPOBase<class EnvelopeGenerator, struct EnvelopeGeneratorParams>::CSampleXAPOBase<class EnvelopeGenerator, struct EnvelopeGeneratorParams>(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 120,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0?$CSampleXAPOBase@VPitchShiftEffect@@UPitchShiftEffectParams@@@ATG@@IAA@XZ",
+  "unit": "system/synth_xbox/PitchShiftEffect",
+  "demangled": "protected: __cdecl ATG::CSampleXAPOBase<class PitchShiftEffect, struct PitchShiftEffectParams>::CSampleXAPOBase<class PitchShiftEffect, struct PitchShiftEffectParams>(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 120,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Connect@WinSockSocket@@UAA_NIG@Z",
+  "unit": "system/os/NetworkSocket_Win",
+  "demangled": "public: virtual bool __cdecl WinSockSocket::Connect(unsigned int, unsigned short)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 120,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Accept@WinSockSocket@@UAAPAVNetworkSocket@@XZ",
+  "unit": "system/os/NetworkSocket_Win",
+  "demangled": "public: virtual class NetworkSocket * __cdecl WinSockSocket::Accept(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 120,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0FitnessCalorieSortByCalorie@@QAA@XZ",
+  "unit": "lazer/meta_ham/FitnessCalorieSortMgr",
+  "demangled": "public: __cdecl FitnessCalorieSortByCalorie::FitnessCalorieSortByCalorie(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 120,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?DoProcess@?$StandardEffect@VFlangerEffect@@@@UAAXABUParams@FlangerEffect@@PIAMII@Z",
+  "unit": "system/synth_xbox/FxSendChorus",
+  "demangled": "public: virtual void __cdecl StandardEffect<class FlangerEffect>::DoProcess(struct FlangerEffect::Params const &, unsigned int *, float &, unsigned int, unsigned int)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 116,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?DoProcess@?$StandardEffect@VBitCrushEffect@@@@UAAXABUParams@BitCrushEffect@@PIAMII@Z",
+  "unit": "system/synth_xbox/FxSendBitCrush",
+  "demangled": "public: virtual void __cdecl StandardEffect<class BitCrushEffect>::DoProcess(struct BitCrushEffect::Params const &, unsigned int *, float &, unsigned int, unsigned int)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 116,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?DoProcess@?$StandardEffect@VEQEffect@@@@UAAXABUParams@EQEffect@@PIAMII@Z",
+  "unit": "system/synth_xbox/FxSendEQ",
+  "demangled": "public: virtual void __cdecl StandardEffect<class EQEffect>::DoProcess(struct EQEffect::Params const &, unsigned int *, float &, unsigned int, unsigned int)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 116,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?DoProcess@?$StandardEffect@VWahEffect@@@@UAAXABUParams@WahEffect@@PIAMII@Z",
+  "unit": "system/synth_xbox/FxSendWah",
+  "demangled": "public: virtual void __cdecl StandardEffect<class WahEffect>::DoProcess(struct WahEffect::Params const &, unsigned int *, float &, unsigned int, unsigned int)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 116,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?DoProcess@?$StandardEffect@VDistortionEffect@@@@UAAXABUParams@DistortionEffect@@PIAMII@Z",
+  "unit": "system/synth_xbox/FxSendDistortion",
+  "demangled": "public: virtual void __cdecl StandardEffect<class DistortionEffect>::DoProcess(struct DistortionEffect::Params const &, unsigned int *, float &, unsigned int, unsigned int)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 116,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?DoProcess@?$StandardEffect@VDelayEffect@@@@UAAXABUParams@DelayEffect@@PIAMII@Z",
+  "unit": "system/synth_xbox/FxSendDelay",
+  "demangled": "public: virtual void __cdecl StandardEffect<class DelayEffect>::DoProcess(struct DelayEffect::Params const &, unsigned int *, float &, unsigned int, unsigned int)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 116,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?allocate@?$StlNodeAlloc@V?$vector@FV?$StlNodeAlloc@F@stlpmtx_std@@@stlpmtx_std@@@stlpmtx_std@@QBAPAV?$vector@FV?$StlNodeAlloc@F@stlpmtx_std@@@2@IPBX@Z",
+  "unit": "system/synth/VorbisReader",
+  "demangled": "public: class stlpmtx_std::vector<short, class stlpmtx_std::StlNodeAlloc<short> > * __cdecl stlpmtx_std::StlNodeAlloc<class stlpmtx_std::vector<short, class stlpmtx_std::StlNodeAlloc<short> > >::allocate(unsigned int, void const *) const",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 112,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?allocate@?$StlNodeAlloc@PAF@stlpmtx_std@@QBAPAPAFIPBX@Z",
+  "unit": "system/synth/VorbisReader",
+  "demangled": "public: short ** __cdecl stlpmtx_std::StlNodeAlloc<short *>::allocate(unsigned int, void const *) const",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 112,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0?$vector@FV?$StlNodeAlloc@F@stlpmtx_std@@@stlpmtx_std@@QAA@ABV01@@Z",
+  "unit": "system/synth/VorbisReader",
+  "demangled": "public: __cdecl stlpmtx_std::vector<short, class stlpmtx_std::StlNodeAlloc<short> >::vector<short, class stlpmtx_std::StlNodeAlloc<short> >(class stlpmtx_std::vector<short, class stlpmtx_std::StlNodeAlloc<short> > const &)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 112,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?_M_clear_after_move@?$vector@V?$vector@FV?$StlNodeAlloc@F@stlpmtx_std@@@stlpmtx_std@@V?$StlNodeAlloc@V?$vector@FV?$StlNodeAlloc@F@stlpmtx_std@@@stlpmtx_std@@@2@@stlpmtx_std@@IAAXXZ",
+  "unit": "system/synth/VorbisReader",
+  "demangled": "protected: void __cdecl stlpmtx_std::vector<class stlpmtx_std::vector<short, class stlpmtx_std::StlNodeAlloc<short> >, class stlpmtx_std::StlNodeAlloc<class stlpmtx_std::vector<short, class stlpmtx_std::StlNodeAlloc<short> > > >::_M_clear_after_move(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 112,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?_M_fill_insert@?$vector@V?$vector@FV?$StlNodeAlloc@F@stlpmtx_std@@@stlpmtx_std@@V?$StlNodeAlloc@V?$vector@FV?$StlNodeAlloc@F@stlpmtx_std@@@stlpmtx_std@@@2@@stlpmtx_std@@AAAXPAV?$vector@FV?$StlNodeAlloc@F@stlpmtx_std@@@2@IABV32@@Z",
+  "unit": "system/synth/VorbisReader",
+  "demangled": "private: void __cdecl stlpmtx_std::vector<class stlpmtx_std::vector<short, class stlpmtx_std::StlNodeAlloc<short> >, class stlpmtx_std::StlNodeAlloc<class stlpmtx_std::vector<short, class stlpmtx_std::StlNodeAlloc<short> > > >::_M_fill_insert(class stlpmtx_std::vector<short, class stlpmtx_std::StlNodeAlloc<short> > *, unsigned int, class stlpmtx_std::vector<short, class stlpmtx_std::StlNodeAlloc<short> > const &)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 112,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?allocate@?$StlNodeAlloc@V?$_List_node@PAVFriendEnumRequest@?A0x8a9ffbf2@@@stlpmtx_std@@@stlpmtx_std@@QBAPAV?$_List_node@PAVFriendEnumRequest@?A0x8a9ffbf2@@@2@IPBX@Z",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: class stlpmtx_std::_List_node<class `anonymous namespace'::FriendEnumRequest *> * __cdecl stlpmtx_std::StlNodeAlloc<class stlpmtx_std::_List_node<class `anonymous namespace'::FriendEnumRequest *> >::allocate(unsigned int, void const *) const",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 112,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?allocate@?$StlNodeAlloc@V?$_List_node@PAVBinkMovieImpl@@@stlpmtx_std@@@stlpmtx_std@@QBAPAV?$_List_node@PAVBinkMovieImpl@@@2@IPBX@Z",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "public: class stlpmtx_std::_List_node<class BinkMovieImpl *> * __cdecl stlpmtx_std::StlNodeAlloc<class stlpmtx_std::_List_node<class BinkMovieImpl *> >::allocate(unsigned int, void const *) const",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 112,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?allocate@?$StlNodeAlloc@PAVBinkMovieImpl@@@stlpmtx_std@@QBAPAPAVBinkMovieImpl@@IPBX@Z",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "public: class BinkMovieImpl ** __cdecl stlpmtx_std::StlNodeAlloc<class BinkMovieImpl *>::allocate(unsigned int, void const *) const",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 112,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?allocate@?$StlNodeAlloc@U?$_Rb_tree_node@U?$pair@QAXVString@@@stlpmtx_std@@@stlpmtx_std@@@stlpmtx_std@@QBAPAU?$_Rb_tree_node@U?$pair@QAXVString@@@stlpmtx_std@@@2@IPBX@Z",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "public: struct stlpmtx_std::_Rb_tree_node<struct stlpmtx_std::pair<void *const, class String> > * __cdecl stlpmtx_std::StlNodeAlloc<struct stlpmtx_std::_Rb_tree_node<struct stlpmtx_std::pair<void *const, class String> > >::allocate(unsigned int, void const *) const",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 112,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?push_back@?$vector@PAVBinkMovieImpl@@V?$StlNodeAlloc@PAVBinkMovieImpl@@@stlpmtx_std@@@stlpmtx_std@@QAAXABQAVBinkMovieImpl@@@Z",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "public: void __cdecl stlpmtx_std::vector<class BinkMovieImpl *, class stlpmtx_std::StlNodeAlloc<class BinkMovieImpl *> >::push_back(class BinkMovieImpl *const &)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 112,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?AddMic@MicManagerXbox@@QAAXPAVMicXbox@@@Z",
+  "unit": "system/synth_xbox/Mic",
+  "demangled": "public: void __cdecl MicManagerXbox::AddMic(class MicXbox *)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 112,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?StopPlayback@MicXbox@@UAAXXZ",
+  "unit": "system/synth_xbox/Mic",
+  "demangled": "public: virtual void __cdecl MicXbox::StopPlayback(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 112,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??1?$StandardEffect@VBitCrushEffect@@@@UAA@XZ",
+  "unit": "system/synth_xbox/FxSendBitCrush",
+  "demangled": "public: virtual __cdecl StandardEffect<class BitCrushEffect>::~StandardEffect<class BitCrushEffect>(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 112,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??1?$StandardEffect@VEQEffect@@@@UAA@XZ",
+  "unit": "system/synth_xbox/FxSendEQ",
+  "demangled": "public: virtual __cdecl StandardEffect<class EQEffect>::~StandardEffect<class EQEffect>(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 112,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??1?$StandardEffect@VWahEffect@@@@UAA@XZ",
+  "unit": "system/synth_xbox/FxSendWah",
+  "demangled": "public: virtual __cdecl StandardEffect<class WahEffect>::~StandardEffect<class WahEffect>(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 112,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??1?$StandardEffect@VDistortionEffect@@@@UAA@XZ",
+  "unit": "system/synth_xbox/FxSendDistortion",
+  "demangled": "public: virtual __cdecl StandardEffect<class DistortionEffect>::~StandardEffect<class DistortionEffect>(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 112,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0?$vector@PAVVoice@@V?$StlNodeAlloc@PAVVoice@@@stlpmtx_std@@@stlpmtx_std@@QAA@ABV01@@Z",
+  "unit": "system/synth_xbox/FxSend",
+  "demangled": "public: __cdecl stlpmtx_std::vector<class Voice *, class stlpmtx_std::StlNodeAlloc<class Voice *> >::vector<class Voice *, class stlpmtx_std::StlNodeAlloc<class Voice *> >(class stlpmtx_std::vector<class Voice *, class stlpmtx_std::StlNodeAlloc<class Voice *> > const &)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 112,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?_M_fill_insert@?$vector@PAFV?$StlNodeAlloc@PAF@stlpmtx_std@@@stlpmtx_std@@AAAXPAPAFIABQAF@Z",
+  "unit": "system/synth/VorbisReader",
+  "demangled": "private: void __cdecl stlpmtx_std::vector<short *, class stlpmtx_std::StlNodeAlloc<short *> >::_M_fill_insert(short **, unsigned int, short *const &)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 108,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??$MakeString@PBDPBDHH@@YAPBDPBDABQBD1ABH2@Z",
+  "unit": "system/rndobj/VelocityBuffer",
+  "demangled": "char const * __cdecl MakeString<char const *, char const *, int, int>(char const *, char const *const &, char const *const &, int const &, int const &)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 108,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??1BinkMovieLoader@@UAA@XZ",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "public: virtual __cdecl BinkMovieLoader::~BinkMovieLoader(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 108,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?BroadcastTo@WinSockSocket@@UAAHPBXIG@Z",
+  "unit": "system/os/NetworkSocket_Win",
+  "demangled": "public: virtual int __cdecl WinSockSocket::BroadcastTo(void const *, unsigned int, unsigned short)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 108,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Recv@WinSockSocket@@UAAHPAXI@Z",
+  "unit": "system/os/NetworkSocket_Win",
+  "demangled": "public: virtual int __cdecl WinSockSocket::Recv(void *, unsigned int)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 108,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?choosepole@@YAXUcomplex@@@Z",
+  "unit": "system/synth/filterdesign",
+  "demangled": "void __cdecl choosepole(struct complex)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 108,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0?$_Vector_base@FV?$StlNodeAlloc@F@stlpmtx_std@@@stlpmtx_std@@QAA@IABV?$StlNodeAlloc@F@1@@Z",
+  "unit": "system/synth/VorbisReader",
+  "demangled": "public: __cdecl stlpmtx_std::_Vector_base<short, class stlpmtx_std::StlNodeAlloc<short> >::_Vector_base<short, class stlpmtx_std::StlNodeAlloc<short> >(unsigned int, class stlpmtx_std::StlNodeAlloc<short> const &)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 104,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?SetPadProperty@PlatformMgr@@QBAXHHPBG@Z",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: void __cdecl PlatformMgr::SetPadProperty(int, int, unsigned short const *) const",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 104,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?GetRecentBuf@MicXbox@@UAAPAFAAH@Z",
+  "unit": "system/synth_xbox/Mic",
+  "demangled": "public: virtual short * __cdecl MicXbox::GetRecentBuf(int &)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 104,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?GetContinuousBuf@MicXbox@@UAAPAFAAH@Z",
+  "unit": "system/synth_xbox/Mic",
+  "demangled": "public: virtual short * __cdecl MicXbox::GetContinuousBuf(int &)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 104,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0?$_Vector_base@PAVVoice@@V?$StlNodeAlloc@PAVVoice@@@stlpmtx_std@@@stlpmtx_std@@QAA@IABV?$StlNodeAlloc@PAVVoice@@@1@@Z",
+  "unit": "system/synth_xbox/FxSend",
+  "demangled": "public: __cdecl stlpmtx_std::_Vector_base<class Voice *, class stlpmtx_std::StlNodeAlloc<class Voice *> >::_Vector_base<class Voice *, class stlpmtx_std::StlNodeAlloc<class Voice *> >(unsigned int, class stlpmtx_std::StlNodeAlloc<class Voice *> const &)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 104,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Init@WinSockSocket@@SAXXZ",
+  "unit": "system/os/NetworkSocket_Win",
+  "demangled": "public: static void __cdecl WinSockSocket::Init(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 104,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0WinSockSocket@@AAA@I_N@Z",
+  "unit": "system/os/NetworkSocket_Win",
+  "demangled": "private: __cdecl WinSockSocket::WinSockSocket(unsigned int, bool)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 104,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?json_tokener_reset_level@@YAXPAUjson_tokener@@H@Z",
+  "unit": "system/net/json-c/json_tokener",
+  "demangled": "void __cdecl json_tokener_reset_level(struct json_tokener *, int)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 104,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "OggRealloc",
+  "unit": "system/oggvorbis/VorbisMem",
+  "demangled": "OggRealloc",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 104,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Int@Rand@@QAAHXZ",
+  "unit": "system/char/CharClipGroup",
+  "demangled": "public: int __cdecl Rand::Int(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 100,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0FxSendPitchShift360@@QAA@XZ",
+  "unit": "system/synth_xbox/Synth",
+  "demangled": "public: __cdecl FxSendPitchShift360::FxSendPitchShift360(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 100,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?NormalizeTo@@YAXABVQuat@Hmx@@AAV12@@Z",
+  "unit": "system/char/CharBonesSamples",
+  "demangled": "void __cdecl NormalizeTo(class Hmx::Quat const &, class Hmx::Quat &)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 100,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?SetNotifyUILocation@PlatformMgr@@QAAXW4NotifyLocation@@@Z",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: void __cdecl PlatformMgr::SetNotifyUILocation(enum NotifyLocation)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 100,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?SetOfferID@SingleItemEnumCompleteMsg@@QAAXABVString@@@Z",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: void __cdecl SingleItemEnumCompleteMsg::SetOfferID(class String const &)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 100,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?insert@?$list@PAVFriendEnumRequest@?A0x8a9ffbf2@@V?$StlNodeAlloc@PAVFriendEnumRequest@?A0x8a9ffbf2@@@stlpmtx_std@@@stlpmtx_std@@QAA?AU?$_List_iterator@PAVFriendEnumRequest@?A0x8a9ffbf2@@U?$_Nonconst_traits@PAVFriendEnumRequest@?A0x8a9ffbf2@@@stlpmtx_std@@@2@U32@ABQAVFriendEnumRequest@?A0x8a9ffbf2@@@Z",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: struct stlpmtx_std::_List_iterator<class `anonymous namespace'::FriendEnumRequest *, struct stlpmtx_std::_Nonconst_traits<class `anonymous namespace'::FriendEnumRequest *> > __cdecl stlpmtx_std::list<class `anonymous namespace'::FriendEnumRequest *, class stlpmtx_std::StlNodeAlloc<class `anonymous namespace'::FriendEnumRequest *> >::insert(struct stlpmtx_std::_List_iterator<class `anonymous namespace'::FriendEnumRequest *, struct stlpmtx_std::_Nonconst_traits<class `anonymous namespace'::FriendEnumRequest *> >, class `anonymous namespace'::FriendEnumRequest *const &)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 100,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?insert@?$list@PAVBinkMovieImpl@@V?$StlNodeAlloc@PAVBinkMovieImpl@@@stlpmtx_std@@@stlpmtx_std@@QAA?AU?$_List_iterator@PAVBinkMovieImpl@@U?$_Nonconst_traits@PAVBinkMovieImpl@@@stlpmtx_std@@@2@U32@ABQAVBinkMovieImpl@@@Z",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "public: struct stlpmtx_std::_List_iterator<class BinkMovieImpl *, struct stlpmtx_std::_Nonconst_traits<class BinkMovieImpl *> > __cdecl stlpmtx_std::list<class BinkMovieImpl *, class stlpmtx_std::StlNodeAlloc<class BinkMovieImpl *> >::insert(struct stlpmtx_std::_List_iterator<class BinkMovieImpl *, struct stlpmtx_std::_Nonconst_traits<class BinkMovieImpl *> >, class BinkMovieImpl *const &)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 100,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?GetInstance@MicManagerXbox@@SAPAV1@XZ",
+  "unit": "system/synth_xbox/Mic",
+  "demangled": "public: static class MicManagerXbox * __cdecl MicManagerXbox::GetInstance(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 100,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "OggCalloc",
+  "unit": "system/oggvorbis/VorbisMem",
+  "demangled": "OggCalloc",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 100,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?_M_erase@?$vector@ULevelData@@V?$StlNodeAlloc@ULevelData@@@stlpmtx_std@@@stlpmtx_std@@IAAPAULevelData@@PAU3@0ABU__false_type@2@@Z",
+  "unit": "system/synth_xbox/FxSendMeterEffect",
+  "demangled": "protected: struct LevelData * __cdecl stlpmtx_std::vector<struct LevelData, class stlpmtx_std::StlNodeAlloc<struct LevelData> >::_M_erase(struct LevelData *, struct LevelData *, struct stlpmtx_std::__false_type const &)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 100,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?LookAt@Transform@@QAAXABVVector3@@0@Z",
+  "unit": "system/char/ClipCollide",
+  "demangled": "public: void __cdecl Transform::LookAt(class Vector3const &, class Vector3const &)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 96,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?HolmesClientPollJoypad@@YAIXZ",
+  "unit": "system/os/HolmesClient",
+  "demangled": "unsigned int __cdecl HolmesClientPollJoypad(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 96,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??$__uninitialized_fill_n@PAV?$vector@FV?$StlNodeAlloc@F@stlpmtx_std@@@stlpmtx_std@@IV12@@stlpmtx_std@@YAPAV?$vector@FV?$StlNodeAlloc@F@stlpmtx_std@@@0@PAV10@IABV10@ABU__false_type@0@@Z",
+  "unit": "system/synth/VorbisReader",
+  "demangled": "class stlpmtx_std::vector<short, class stlpmtx_std::StlNodeAlloc<short> > * __cdecl stlpmtx_std::__uninitialized_fill_n<class stlpmtx_std::vector<short, class stlpmtx_std::StlNodeAlloc<short> > *, unsigned int, class stlpmtx_std::vector<short, class stlpmtx_std::StlNodeAlloc<short> > >(class stlpmtx_std::vector<short, class stlpmtx_std::StlNodeAlloc<short> > *, unsigned int, class stlpmtx_std::vector<short, class stlpmtx_std::StlNodeAlloc<short> > const &, struct stlpmtx_std::__false_type const &)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 96,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??$MakeString@MMVString@@@@YAPBDPBDABM1ABVString@@@Z",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "char const * __cdecl MakeString<float, float, class String>(char const *, float const &, float const &, class String const &)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 96,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0BinkMovieLoader@@QAA@ABVFilePath@@W4LoaderPos@@PAVBinkMovieImpl@@@Z",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "public: __cdecl BinkMovieLoader::BinkMovieLoader(class FilePath const &, enum LoaderPos, class BinkMovieImpl *)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 96,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??$MakeString@HHPBD@@YAPBDPBDABH1ABQBD@Z",
+  "unit": "system/char/CharClip",
+  "demangled": "char const * __cdecl MakeString<int, int, char const *>(char const *, int const &, int const &, char const *const &)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 92,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??$MakeString@HVSymbol@@H@@YAPBDPBDABHABVSymbol@@1@Z",
+  "unit": "system/obj/DataFile",
+  "demangled": "char const * __cdecl MakeString<int, class Symbol, int>(char const *, int const &, class Symbol const &, int const &)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 92,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??5@YAAAVBinStream@@AAV0@AAVFilePath@@@Z",
+  "unit": "system/char/CharDriver",
+  "demangled": "class BinStream & __cdecl operator>>(class BinStream &, class FilePath &)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 92,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?erase@?$list@PAVVorbisReader@@V?$StlNodeAlloc@PAVVorbisReader@@@stlpmtx_std@@@stlpmtx_std@@QAA?AU?$_List_iterator@PAVVorbisReader@@U?$_Nonconst_traits@PAVVorbisReader@@@stlpmtx_std@@@2@U32@@Z",
+  "unit": "system/synth/VorbisReader",
+  "demangled": "public: struct stlpmtx_std::_List_iterator<class VorbisReader *, struct stlpmtx_std::_Nonconst_traits<class VorbisReader *> > __cdecl stlpmtx_std::list<class VorbisReader *, class stlpmtx_std::StlNodeAlloc<class VorbisReader *> >::erase(struct stlpmtx_std::_List_iterator<class VorbisReader *, struct stlpmtx_std::_Nonconst_traits<class VorbisReader *> >)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 92,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?clear@?$_List_base@PAVFriendEnumRequest@?A0x8a9ffbf2@@V?$StlNodeAlloc@PAVFriendEnumRequest@?A0x8a9ffbf2@@@stlpmtx_std@@@stlpmtx_std@@QAAXXZ",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: void __cdecl stlpmtx_std::_List_base<class `anonymous namespace'::FriendEnumRequest *, class stlpmtx_std::StlNodeAlloc<class `anonymous namespace'::FriendEnumRequest *> >::clear(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 92,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?erase@?$list@PAVBinkMovieImpl@@V?$StlNodeAlloc@PAVBinkMovieImpl@@@stlpmtx_std@@@stlpmtx_std@@QAA?AU?$_List_iterator@PAVBinkMovieImpl@@U?$_Nonconst_traits@PAVBinkMovieImpl@@@stlpmtx_std@@@2@U32@@Z",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "public: struct stlpmtx_std::_List_iterator<class BinkMovieImpl *, struct stlpmtx_std::_Nonconst_traits<class BinkMovieImpl *> > __cdecl stlpmtx_std::list<class BinkMovieImpl *, class stlpmtx_std::StlNodeAlloc<class BinkMovieImpl *> >::erase(struct stlpmtx_std::_List_iterator<class BinkMovieImpl *, struct stlpmtx_std::_Nonconst_traits<class BinkMovieImpl *> >)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 92,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?_M_create_node@?$_Rb_tree@PAXU?$less@PAX@stlpmtx_std@@U?$pair@QAXVString@@@2@U?$_Select1st@U?$pair@QAXVString@@@stlpmtx_std@@@2@U?$_MapTraitsT@U?$pair@QAXVString@@@stlpmtx_std@@@priv@2@V?$StlNodeAlloc@U?$pair@QAXVString@@@stlpmtx_std@@@2@@stlpmtx_std@@IAAPAU_Rb_tree_node_base@2@ABU?$pair@QAXVString@@@2@@Z",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "protected: struct stlpmtx_std::_Rb_tree_node_base * __cdecl stlpmtx_std::_Rb_tree<void *, struct stlpmtx_std::less<void *>, struct stlpmtx_std::pair<void *const, class String>, struct stlpmtx_std::_Select1st<struct stlpmtx_std::pair<void *const, class String> >, struct stlpmtx_std::priv::_MapTraitsT<struct stlpmtx_std::pair<void *const, class String> >, class stlpmtx_std::StlNodeAlloc<struct stlpmtx_std::pair<void *const, class String> > >::_M_create_node(struct stlpmtx_std::pair<void *const, class String> const &)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 92,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?remove@?$list@PAVBinkMovieImpl@@V?$StlNodeAlloc@PAVBinkMovieImpl@@@stlpmtx_std@@@stlpmtx_std@@QAAXABQAVBinkMovieImpl@@@Z",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "public: void __cdecl stlpmtx_std::list<class BinkMovieImpl *, class stlpmtx_std::StlNodeAlloc<class BinkMovieImpl *> >::remove(class BinkMovieImpl *const &)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 92,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?OnSetParameters@EnvelopeGenerator@@UAAXABUEnvelopeGeneratorParams@@@Z",
+  "unit": "system/synth_xbox/EnvelopeGenerator",
+  "demangled": "public: virtual void __cdecl EnvelopeGenerator::OnSetParameters(struct EnvelopeGeneratorParams const &)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 92,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?GetRemoteIP@WinSockSocket@@UAAXAAIAAG@Z",
+  "unit": "system/os/NetworkSocket_Win",
+  "demangled": "public: virtual void __cdecl WinSockSocket::GetRemoteIP(unsigned int &, unsigned short &)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 92,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?InqBoundPort@WinSockSocket@@UBA_NAAG@Z",
+  "unit": "system/os/NetworkSocket_Win",
+  "demangled": "public: virtual bool __cdecl WinSockSocket::InqBoundPort(unsigned short &) const",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 92,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?CanSend@WinSockSocket@@UBA_NXZ",
+  "unit": "system/os/NetworkSocket_Win",
+  "demangled": "public: virtual bool __cdecl WinSockSocket::CanSend(void) const",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 92,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?CanRead@WinSockSocket@@UBA_NXZ",
+  "unit": "system/os/NetworkSocket_Win",
+  "demangled": "public: virtual bool __cdecl WinSockSocket::CanRead(void) const",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 92,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??4LevelData@@QAAAAU0@ABU0@@Z",
+  "unit": "system/synth_xbox/FxSendMeterEffect",
+  "demangled": "public: struct LevelData & __cdecl LevelData::operator=(struct LevelData const &)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 92,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Type@StorageChangedMsg@@SA?AVSymbol@@XZ",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: static class Symbol __cdecl StorageChangedMsg::Type(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 88,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Type@ContentInstalledMsg@@SA?AVSymbol@@XZ",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: static class Symbol __cdecl ContentInstalledMsg::Type(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 88,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Type@XMPStateChangedMsg@@SA?AVSymbol@@XZ",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: static class Symbol __cdecl XMPStateChangedMsg::Type(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 88,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Type@PartyMembersChangedMsg@@SA?AVSymbol@@XZ",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: static class Symbol __cdecl PartyMembersChangedMsg::Type(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 88,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Type@InviteAcceptedMsg@@SA?AVSymbol@@XZ",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: static class Symbol __cdecl InviteAcceptedMsg::Type(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 88,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Type@FriendsListChangedMsg@@SA?AVSymbol@@XZ",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: static class Symbol __cdecl FriendsListChangedMsg::Type(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 88,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Type@PlatformMgrOpCompleteMsg@@SA?AVSymbol@@XZ",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: static class Symbol __cdecl PlatformMgrOpCompleteMsg::Type(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 88,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Type@ControllerReqOpCompleteMsg@@SA?AVSymbol@@XZ",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: static class Symbol __cdecl ControllerReqOpCompleteMsg::Type(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 88,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Type@KinectGuideGestureMsg@@SA?AVSymbol@@XZ",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: static class Symbol __cdecl KinectGuideGestureMsg::Type(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 88,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Type@SingleItemEnumCompleteMsg@@SA?AVSymbol@@XZ",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: static class Symbol __cdecl SingleItemEnumCompleteMsg::Type(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 88,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0SingleItemEnumJob@@QAA@PAVObject@Hmx@@H_K@Z",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: __cdecl SingleItemEnumJob::SingleItemEnumJob(class Hmx::Object *, int, unsigned __int64)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 88,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?_M_erase@?$_Rb_tree@VString@@U?$less@VString@@@stlpmtx_std@@U?$pair@$$CBVString@@I@3@U?$_Select1st@U?$pair@$$CBVString@@I@stlpmtx_std@@@3@U?$_MapTraitsT@U?$pair@$$CBVString@@I@stlpmtx_std@@@priv@3@V?$StlNodeAlloc@U?$pair@$$CBVString@@I@stlpmtx_std@@@3@@stlpmtx_std@@AAAXPAU_Rb_tree_node_base@2@@Z",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "private: void __cdecl stlpmtx_std::_Rb_tree<class String, struct stlpmtx_std::less<class String>, struct stlpmtx_std::pair<class String const, unsigned int>, struct stlpmtx_std::_Select1st<struct stlpmtx_std::pair<class String const, unsigned int> >, struct stlpmtx_std::priv::_MapTraitsT<struct stlpmtx_std::pair<class String const, unsigned int> >, class stlpmtx_std::StlNodeAlloc<struct stlpmtx_std::pair<class String const, unsigned int> > >::_M_erase(struct stlpmtx_std::_Rb_tree_node_base *)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 88,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??1ChatReceiver@@QAA@XZ",
+  "unit": "system/synth_xbox/Mic",
+  "demangled": "public: __cdecl ChatReceiver::~ChatReceiver(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 88,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??E?$ObjDirItr@VObjectDir@@@@QAAAAV0@XZ",
+  "unit": "system/obj/Utl",
+  "demangled": "public: class ObjDirItr<class ObjectDir> & __cdecl ObjDirItr<class ObjectDir>::operator++(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 88,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Create@NetworkSocket@@SAPAV1@_N@Z",
+  "unit": "system/os/NetworkSocket_Win",
+  "demangled": "public: static class NetworkSocket * __cdecl NetworkSocket::Create(bool)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 88,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?json_object_lh_entry_free@@YAXPAUlh_entry@@@Z",
+  "unit": "system/net/json-c/json_object",
+  "demangled": "void __cdecl json_object_lh_entry_free(struct lh_entry *)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 88,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?SyncEffectParams@FxSendMeterEffect360@@UBAXPAUIXAudio2SubmixVoice@@@Z",
+  "unit": "system/synth_xbox/FxSendMeterEffect",
+  "demangled": "public: virtual void __cdecl FxSendMeterEffect360::SyncEffectParams(struct IXAudio2SubmixVoice *) const",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 88,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??4Playlist@@QAAAAV0@ABV0@@Z",
+  "unit": "lazer/meta_ham/PlaylistSortMgr",
+  "demangled": "public: class Playlist & __cdecl Playlist::operator=(class Playlist const &)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 84,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?json_object_new@@YAPAUjson_object@@W4json_type@@@Z",
+  "unit": "system/net/json-c/json_object",
+  "demangled": "struct json_object * __cdecl json_object_new(enum json_type)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 84,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0StorageChangedMsg@@QAA@XZ",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: __cdecl StorageChangedMsg::StorageChangedMsg(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 80,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0ContentInstalledMsg@@QAA@XZ",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: __cdecl ContentInstalledMsg::ContentInstalledMsg(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 80,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??0PartyMembersChangedMsg@@QAA@XZ",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: __cdecl PartyMembersChangedMsg::PartyMembersChangedMsg(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 80,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?clear@?$_Rb_tree@VString@@U?$less@VString@@@stlpmtx_std@@U?$pair@$$CBVString@@I@3@U?$_Select1st@U?$pair@$$CBVString@@I@stlpmtx_std@@@3@U?$_MapTraitsT@U?$pair@$$CBVString@@I@stlpmtx_std@@@priv@3@V?$StlNodeAlloc@U?$pair@$$CBVString@@I@stlpmtx_std@@@3@@stlpmtx_std@@QAAXXZ",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: void __cdecl stlpmtx_std::_Rb_tree<class String, struct stlpmtx_std::less<class String>, struct stlpmtx_std::pair<class String const, unsigned int>, struct stlpmtx_std::_Select1st<struct stlpmtx_std::pair<class String const, unsigned int> >, struct stlpmtx_std::priv::_MapTraitsT<struct stlpmtx_std::pair<class String const, unsigned int> >, class stlpmtx_std::StlNodeAlloc<struct stlpmtx_std::pair<class String const, unsigned int> > >::clear(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 80,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?OnMovieSetTrack@BinkMovieSys@@CA?AVDataNode@@PAVDataArray@@@Z",
+  "unit": "system/moviebink/BinkMovieSys",
+  "demangled": "private: static class DataNode __cdecl BinkMovieSys::OnMovieSetTrack(class DataArray *)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 80,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Cancel@SingleItemEnumJob@@UAAXPAVObject@Hmx@@@Z",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: virtual void __cdecl SingleItemEnumJob::Cancel(class Hmx::Object *)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 76,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?SetNoDelay@WinSockSocket@@UAA_N_N@Z",
+  "unit": "system/os/NetworkSocket_Win",
+  "demangled": "public: virtual bool __cdecl WinSockSocket::SetNoDelay(bool)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 76,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Disconnect@WinSockSocket@@UAAXXZ",
+  "unit": "system/os/NetworkSocket_Win",
+  "demangled": "public: virtual void __cdecl WinSockSocket::Disconnect(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 76,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??_GWinSockSocket@@UAAPAXI@Z",
+  "unit": "system/os/NetworkSocket_Win",
+  "demangled": "public: virtual void * __cdecl WinSockSocket::`scalar deleting destructor'(unsigned int)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 76,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?json_object_string_to_json_string@@YAHPAUjson_object@@PAUprintbuf@@@Z",
+  "unit": "system/net/json-c/json_object",
+  "demangled": "int __cdecl json_object_string_to_json_string(struct json_object *, struct printbuf *)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 76,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?SyncEffectParams@FxSendPitchShift360@@UBAXPAUIXAudio2SubmixVoice@@@Z",
+  "unit": "system/synth_xbox/FxSendPitchShift",
+  "demangled": "public: virtual void __cdecl FxSendPitchShift360::SyncEffectParams(struct IXAudio2SubmixVoice *) const",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 76,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??1FxSendPitchShift360@@UAA@XZ",
+  "unit": "system/synth_xbox/Synth",
+  "demangled": "public: virtual __cdecl FxSendPitchShift360::~FxSendPitchShift360(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 72,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?IsFinished@SingleItemEnumJob@@UAA_NXZ",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: virtual bool __cdecl SingleItemEnumJob::IsFinished(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 72,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?IsInPartyWithOthers@PlatformMgr@@QAA_NXZ",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: bool __cdecl PlatformMgr::IsInPartyWithOthers(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 72,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?GetServiceID@PlatformMgr@@QAA_NABVString@@AAI@Z",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: bool __cdecl PlatformMgr::GetServiceID(class String const &, unsigned int &)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 72,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?SetLowCut@@YA?AVDataNode@@PAVDataArray@@@Z",
+  "unit": "system/synth_xbox/Mic",
+  "demangled": "class DataNode __cdecl SetLowCut(class DataArray *)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 72,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?SetLocalGain@@YA?AVDataNode@@PAVDataArray@@@Z",
+  "unit": "system/synth_xbox/Mic",
+  "demangled": "class DataNode __cdecl SetLocalGain(class DataArray *)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 72,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?CreateFx@FxSendBitCrush360@@MAAPAUIUnknown@@XZ",
+  "unit": "system/synth_xbox/FxSendBitCrush",
+  "demangled": "protected: virtual struct IUnknown * __cdecl FxSendBitCrush360::CreateFx(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 72,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?CreateFx@FxSendEQ360@@MAAPAUIUnknown@@XZ",
+  "unit": "system/synth_xbox/FxSendEQ",
+  "demangled": "protected: virtual struct IUnknown * __cdecl FxSendEQ360::CreateFx(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 72,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?CreateFx@FxSendWah360@@MAAPAUIUnknown@@XZ",
+  "unit": "system/synth_xbox/FxSendWah",
+  "demangled": "protected: virtual struct IUnknown * __cdecl FxSendWah360::CreateFx(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 72,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?CreateFx@FxSendDistortion360@@MAAPAUIUnknown@@XZ",
+  "unit": "system/synth_xbox/FxSendDistortion",
+  "demangled": "protected: virtual struct IUnknown * __cdecl FxSendDistortion360::CreateFx(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 72,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?CreateFx@FxSendDelay360@@MAAPAUIUnknown@@XZ",
+  "unit": "system/synth_xbox/FxSendDelay",
+  "demangled": "protected: virtual struct IUnknown * __cdecl FxSendDelay360::CreateFx(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 72,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?CreateFx@FxSendCompress360@@MAAPAUIUnknown@@XZ",
+  "unit": "system/synth_xbox/FxSendCompress",
+  "demangled": "protected: virtual struct IUnknown * __cdecl FxSendCompress360::CreateFx(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 72,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?CreateFx@FxSendMeterEffect360@@MAAPAUIUnknown@@XZ",
+  "unit": "system/synth_xbox/FxSendMeterEffect",
+  "demangled": "protected: virtual struct IUnknown * __cdecl FxSendMeterEffect360::CreateFx(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 72,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?CreateFx@FxSendPitchShift360@@MAAPAUIUnknown@@XZ",
+  "unit": "system/synth_xbox/FxSendPitchShift",
+  "demangled": "protected: virtual struct IUnknown * __cdecl FxSendPitchShift360::CreateFx(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 72,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?_M_create_node@?$list@PAVFriendEnumRequest@?A0x8a9ffbf2@@V?$StlNodeAlloc@PAVFriendEnumRequest@?A0x8a9ffbf2@@@stlpmtx_std@@@stlpmtx_std@@IAAPAU_List_node_base@2@ABQAVFriendEnumRequest@?A0x8a9ffbf2@@@Z",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "protected: struct stlpmtx_std::_List_node_base * __cdecl stlpmtx_std::list<class `anonymous namespace'::FriendEnumRequest *, class stlpmtx_std::StlNodeAlloc<class `anonymous namespace'::FriendEnumRequest *> >::_M_create_node(class `anonymous namespace'::FriendEnumRequest *const &)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 68,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?_M_create_node@?$list@PAVBinkMovieImpl@@V?$StlNodeAlloc@PAVBinkMovieImpl@@@stlpmtx_std@@@stlpmtx_std@@IAAPAU_List_node_base@2@ABQAVBinkMovieImpl@@@Z",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "protected: struct stlpmtx_std::_List_node_base * __cdecl stlpmtx_std::list<class BinkMovieImpl *, class stlpmtx_std::StlNodeAlloc<class BinkMovieImpl *> >::_M_create_node(class BinkMovieImpl *const &)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 68,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??1WinSockSocket@@UAA@XZ",
+  "unit": "system/os/NetworkSocket_Win",
+  "demangled": "public: virtual __cdecl WinSockSocket::~WinSockSocket(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 68,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??_H@YAXPAXIHP6APAX0@Z@Z",
+  "unit": "App",
+  "demangled": "void __cdecl `vector constructor iterator'(void *, unsigned int, int, void * (__cdecl *)(void *))",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 64,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?json_object_object_delete@@YAXPAUjson_object@@@Z",
+  "unit": "system/net/json-c/json_object",
+  "demangled": "void __cdecl json_object_object_delete(struct json_object *)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 64,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?json_object_string_delete@@YAXPAUjson_object@@@Z",
+  "unit": "system/net/json-c/json_object",
+  "demangled": "void __cdecl json_object_string_delete(struct json_object *)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 64,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?json_object_array_delete@@YAXPAUjson_object@@@Z",
+  "unit": "system/net/json-c/json_object",
+  "demangled": "void __cdecl json_object_array_delete(struct json_object *)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 64,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?json_object_double_to_json_string@@YAHPAUjson_object@@PAUprintbuf@@@Z",
+  "unit": "system/net/json-c/json_object",
+  "demangled": "int __cdecl json_object_double_to_json_string(struct json_object *, struct printbuf *)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 60,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?json_object_generic_delete@@YAXPAUjson_object@@@Z",
+  "unit": "system/net/json-c/json_object",
+  "demangled": "void __cdecl json_object_generic_delete(struct json_object *)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 56,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?DebugText@BinkMovieLoader@@UAAPBDXZ",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "public: virtual char const * __cdecl BinkMovieLoader::DebugText(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 52,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?GetType@MicXbox@@UBA?AW4Type@Mic@@XZ",
+  "unit": "system/synth_xbox/Mic",
+  "demangled": "public: virtual enum Mic::Type __cdecl MicXbox::GetType(void) const",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 52,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?ClassName@FxSendPitchShift360@@UBA?AVSymbol@@XZ",
+  "unit": "system/synth_xbox/Synth",
+  "demangled": "public: virtual class Symbol __cdecl FxSendPitchShift360::ClassName(void) const",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 48,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?SetGain@MicXbox@@UAAXM@Z",
+  "unit": "system/synth_xbox/Mic",
+  "demangled": "public: virtual void __cdecl MicXbox::SetGain(float)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 48,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?EaseHalfQuarterStairstep@@YAMMMM@Z",
+  "unit": "link_glue",
+  "demangled": "float __cdecl EaseHalfQuarterStairstep(float, float, float)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 40,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?EaseQuarterHalfStairstep@@YAMMMM@Z",
+  "unit": "link_glue",
+  "demangled": "float __cdecl EaseQuarterHalfStairstep(float, float, float)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 40,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?json_object_boolean_to_json_string@@YAHPAUjson_object@@PAUprintbuf@@@Z",
+  "unit": "system/net/json-c/json_object",
+  "demangled": "int __cdecl json_object_boolean_to_json_string(struct json_object *, struct printbuf *)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 40,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??1?$vector@PAFV?$StlNodeAlloc@PAF@stlpmtx_std@@@stlpmtx_std@@QAA@XZ",
+  "unit": "system/synth/VorbisReader",
+  "demangled": "public: __cdecl stlpmtx_std::vector<short *, class stlpmtx_std::StlNodeAlloc<short *> >::~vector<short *, class stlpmtx_std::StlNodeAlloc<short *> >(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 36,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?OnSetParameters@MeterEffect@@UAAXABUMeterEffectParams@@@Z",
+  "unit": "system/synth_xbox/MeterEffect",
+  "demangled": "public: virtual void __cdecl MeterEffect::OnSetParameters(struct MeterEffectParams const &)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 36,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?ptrBegin@FIFOSampleBuffer@soundtouch@@UBAPAMXZ",
+  "unit": "system/synth_xbox/soundtouch/source/SoundTouch/FIFOSampleBuffer",
+  "demangled": "public: virtual float * __cdecl soundtouch::FIFOSampleBuffer::ptrBegin(void) const",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 28,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??1?$CSampleXAPOBase@VMeterEffect@@UMeterEffectParams@@@ATG@@MAA@XZ",
+  "unit": "system/synth_xbox/MeterEffect",
+  "demangled": "protected: virtual __cdecl ATG::CSampleXAPOBase<class MeterEffect, struct MeterEffectParams>::~CSampleXAPOBase<class MeterEffect, struct MeterEffectParams>(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 28,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?IsLoaded@BinkMovieLoader@@UBA_NXZ",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "public: virtual bool __cdecl BinkMovieLoader::IsLoaded(void) const",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 28,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??1?$CSampleXAPOBase@VEnvelopeGenerator@@UEnvelopeGeneratorParams@@@ATG@@MAA@XZ",
+  "unit": "system/synth_xbox/EnvelopeGenerator",
+  "demangled": "protected: virtual __cdecl ATG::CSampleXAPOBase<class EnvelopeGenerator, struct EnvelopeGeneratorParams>::~CSampleXAPOBase<class EnvelopeGenerator, struct EnvelopeGeneratorParams>(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 28,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??1?$CSampleXAPOBase@VFlangerEffect@@UParams@1@@ATG@@MAA@XZ",
+  "unit": "system/synth_xbox/FxSendChorus",
+  "demangled": "protected: virtual __cdecl ATG::CSampleXAPOBase<class FlangerEffect, struct FlangerEffect::Params>::~CSampleXAPOBase<class FlangerEffect, struct FlangerEffect::Params>(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 28,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??1?$CSampleXAPOBase@VBitCrushEffect@@UParams@1@@ATG@@MAA@XZ",
+  "unit": "system/synth_xbox/FxSendBitCrush",
+  "demangled": "protected: virtual __cdecl ATG::CSampleXAPOBase<class BitCrushEffect, struct BitCrushEffect::Params>::~CSampleXAPOBase<class BitCrushEffect, struct BitCrushEffect::Params>(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 28,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??1?$CSampleXAPOBase@VPitchShiftEffect@@UPitchShiftEffectParams@@@ATG@@MAA@XZ",
+  "unit": "system/synth_xbox/PitchShiftEffect",
+  "demangled": "protected: virtual __cdecl ATG::CSampleXAPOBase<class PitchShiftEffect, struct PitchShiftEffectParams>::~CSampleXAPOBase<class PitchShiftEffect, struct PitchShiftEffectParams>(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 28,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??1?$CSampleXAPOBase@VEQEffect@@UParams@1@@ATG@@MAA@XZ",
+  "unit": "system/synth_xbox/FxSendEQ",
+  "demangled": "protected: virtual __cdecl ATG::CSampleXAPOBase<class EQEffect, struct EQEffect::Params>::~CSampleXAPOBase<class EQEffect, struct EQEffect::Params>(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 28,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?RadAlloc@?A0x6dfd0232@@YAPAXI@Z",
+  "unit": "system/moviebink/BinkMovieSys",
+  "demangled": "void * __cdecl `anonymous namespace'::RadAlloc(unsigned int)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 28,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??1?$CSampleXAPOBase@VWahEffect@@UParams@1@@ATG@@MAA@XZ",
+  "unit": "system/synth_xbox/FxSendWah",
+  "demangled": "protected: virtual __cdecl ATG::CSampleXAPOBase<class WahEffect, struct WahEffect::Params>::~CSampleXAPOBase<class WahEffect, struct WahEffect::Params>(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 28,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??1?$CSampleXAPOBase@VDistortionEffect@@UParams@1@@ATG@@MAA@XZ",
+  "unit": "system/synth_xbox/FxSendDistortion",
+  "demangled": "protected: virtual __cdecl ATG::CSampleXAPOBase<class DistortionEffect, struct DistortionEffect::Params>::~CSampleXAPOBase<class DistortionEffect, struct DistortionEffect::Params>(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 28,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??1?$CSampleXAPOBase@VDelayEffect@@UParams@1@@ATG@@MAA@XZ",
+  "unit": "system/synth_xbox/FxSendDelay",
+  "demangled": "protected: virtual __cdecl ATG::CSampleXAPOBase<class DelayEffect, struct DelayEffect::Params>::~CSampleXAPOBase<class DelayEffect, struct DelayEffect::Params>(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 28,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "OggMalloc",
+  "unit": "system/oggvorbis/VorbisMem",
+  "demangled": "OggMalloc",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 28,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??3Task@@SAXPAX@Z",
+  "unit": "system/flow/FlowTimer",
+  "demangled": "public: static void __cdecl Task::operator delete(void *)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 24,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??3ArkFile@@SAXPAX@Z",
+  "unit": "system/os/File",
+  "demangled": "public: static void __cdecl ArkFile::operator delete(void *)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 24,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?ShowControllerRequiredUIThreaded@@YAHXZ",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "int __cdecl ShowControllerRequiredUIThreaded(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 20,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?ptrBegin@FIFOProcessor@soundtouch@@MBAPAMXZ",
+  "unit": "system/synth_xbox/soundtouch/source/SoundTouch/SoundTouch",
+  "demangled": "protected: virtual float * __cdecl soundtouch::FIFOProcessor::ptrBegin(void) const",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 20,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?json_object_int_to_json_string@@YAHPAUjson_object@@PAUprintbuf@@@Z",
+  "unit": "system/net/json-c/json_object",
+  "demangled": "int __cdecl json_object_int_to_json_string(struct json_object *, struct printbuf *)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 20,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?GetChannel@StandardStream@@UBAPAVStreamReceiver@@H@Z",
+  "unit": "system/synth/StandardStream",
+  "demangled": "public: virtual class StreamReceiver * __cdecl StandardStream::GetChannel(int) const",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 16,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?EaseThirdStairstep@@YAMMMM@Z",
+  "unit": "link_glue",
+  "demangled": "float __cdecl EaseThirdStairstep(float, float, float)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 12,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?EaseQuarterStairstep@@YAMMMM@Z",
+  "unit": "link_glue",
+  "demangled": "float __cdecl EaseQuarterStairstep(float, float, float)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 12,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?StateName@BinkMovieLoader@@UBAPBDXZ",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "public: virtual char const * __cdecl BinkMovieLoader::StateName(void) const",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 12,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?PollLoading@BinkMovieLoader@@MAAXXZ",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "protected: virtual void __cdecl BinkMovieLoader::PollLoading(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 12,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?GetName@MicXbox@@UBAABVSymbol@@XZ",
+  "unit": "system/synth_xbox/Mic",
+  "demangled": "public: virtual class Symbol const & __cdecl MicXbox::GetName(void) const",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 12,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Listen@WinSockSocket@@UAAXXZ",
+  "unit": "system/os/NetworkSocket_Win",
+  "demangled": "public: virtual void __cdecl WinSockSocket::Listen(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 12,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??_EFxSendPitchShift360@@WGE@AAPAXI@Z",
+  "unit": "system/synth_xbox/Synth",
+  "demangled": "[thunk]: public: virtual void * __cdecl FxSendPitchShift360::`vector deleting destructor'(unsigned int)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 8,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?OnSetParameters@?$StandardEffect@VFlangerEffect@@@@UAAXABUParams@FlangerEffect@@@Z",
+  "unit": "system/synth_xbox/FxSendChorus",
+  "demangled": "public: virtual void __cdecl StandardEffect<class FlangerEffect>::OnSetParameters(struct FlangerEffect::Params const &)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 8,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?OnSetParameters@?$StandardEffect@VBitCrushEffect@@@@UAAXABUParams@BitCrushEffect@@@Z",
+  "unit": "system/synth_xbox/FxSendBitCrush",
+  "demangled": "public: virtual void __cdecl StandardEffect<class BitCrushEffect>::OnSetParameters(struct BitCrushEffect::Params const &)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 8,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?OnSetParameters@?$StandardEffect@VEQEffect@@@@UAAXABUParams@EQEffect@@@Z",
+  "unit": "system/synth_xbox/FxSendEQ",
+  "demangled": "public: virtual void __cdecl StandardEffect<class EQEffect>::OnSetParameters(struct EQEffect::Params const &)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 8,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?OnSetParameters@?$StandardEffect@VWahEffect@@@@UAAXABUParams@WahEffect@@@Z",
+  "unit": "system/synth_xbox/FxSendWah",
+  "demangled": "public: virtual void __cdecl StandardEffect<class WahEffect>::OnSetParameters(struct WahEffect::Params const &)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 8,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?OnSetParameters@?$StandardEffect@VDistortionEffect@@@@UAAXABUParams@DistortionEffect@@@Z",
+  "unit": "system/synth_xbox/FxSendDistortion",
+  "demangled": "public: virtual void __cdecl StandardEffect<class DistortionEffect>::OnSetParameters(struct DistortionEffect::Params const &)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 8,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?OnSetParameters@?$StandardEffect@VDelayEffect@@@@UAAXABUParams@DelayEffect@@@Z",
+  "unit": "system/synth_xbox/FxSendDelay",
+  "demangled": "public: virtual void __cdecl StandardEffect<class DelayEffect>::OnSetParameters(struct DelayEffect::Params const &)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 8,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?OnParametersChanged@FxSendMeterEffect360@@UAAXXZ",
+  "unit": "system/synth_xbox/FxSendMeterEffect",
+  "demangled": "public: virtual void __cdecl FxSendMeterEffect360::OnParametersChanged(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 8,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Recreate@FxSendMeterEffect360@@UAAXAAV?$vector@PAVFxSend@@V?$StlNodeAlloc@PAVFxSend@@@stlpmtx_std@@@stlpmtx_std@@@Z",
+  "unit": "system/synth_xbox/FxSendMeterEffect",
+  "demangled": "public: virtual void __cdecl FxSendMeterEffect360::Recreate(class stlpmtx_std::vector<class FxSend *, class stlpmtx_std::StlNodeAlloc<class FxSend *> > &)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 8,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?UpdateMix@FxSendMeterEffect360@@UAAXXZ",
+  "unit": "system/synth_xbox/FxSendMeterEffect",
+  "demangled": "public: virtual void __cdecl FxSendMeterEffect360::UpdateMix(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 8,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "??1?$map@PAXVString@@U?$less@PAX@stlpmtx_std@@V?$StlNodeAlloc@U?$pair@QAXVString@@@stlpmtx_std@@@3@@stlpmtx_std@@QAA@XZ",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "public: __cdecl stlpmtx_std::map<void *, class String, struct stlpmtx_std::less<void *>, class stlpmtx_std::StlNodeAlloc<struct stlpmtx_std::pair<void *const, class String> > >::~map<void *, class String, struct stlpmtx_std::less<void *>, class stlpmtx_std::StlNodeAlloc<struct stlpmtx_std::pair<void *const, class String> > >(void)",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 4,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "floor0_free_info",
+  "unit": "link_glue",
+  "demangled": "floor0_free_info",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 4,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "floor0_free_look",
+  "unit": "link_glue",
+  "demangled": "floor0_free_look",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 4,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "floor0_unpack",
+  "unit": "link_glue",
+  "demangled": "floor0_unpack",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 4,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "floor0_look",
+  "unit": "link_glue",
+  "demangled": "floor0_look",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 4,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "floor0_inverse1",
+  "unit": "link_glue",
+  "demangled": "floor0_inverse1",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 4,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "floor0_inverse2",
+  "unit": "link_glue",
+  "demangled": "floor0_inverse2",
+  "our": 0.0,
+  "og": 100.0,
+  "gain": 100.0,
+  "size": 4,
+  "tag": "PRIME"
+ },
+ {
+  "symbol": "?Poll@PlatformMgr@@QAAXXZ",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: void __cdecl PlatformMgr::Poll(void)",
+  "our": 0.0,
+  "og": 34.73163,
+  "gain": 34.73163,
+  "size": 4844,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?New@MovieInternalBuffers@@SAPAU1@V?$vector@PAUBINK@@V?$StlNodeAlloc@PAUBINK@@@stlpmtx_std@@@stlpmtx_std@@@Z",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "public: static struct MovieInternalBuffers * __cdecl MovieInternalBuffers::New(class stlpmtx_std::vector<struct BINK *, class stlpmtx_std::StlNodeAlloc<struct BINK *> >)",
+  "our": 0.0,
+  "og": 99.76152,
+  "gain": 99.76152,
+  "size": 1476,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?Poll@VorbisReader@@UAAXM@Z",
+  "unit": "system/synth/VorbisReader",
+  "demangled": "public: virtual void __cdecl VorbisReader::Poll(float)",
+  "our": 0.0,
+  "og": 98.33603,
+  "gain": 98.33603,
+  "size": 988,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?MovieOpen@BinkMovieImpl@@AAAXPBDI@Z",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "private: void __cdecl BinkMovieImpl::MovieOpen(char const *, unsigned int)",
+  "our": 0.0,
+  "og": 98.778625,
+  "gain": 98.778625,
+  "size": 524,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?expandpoly@@YAXXZ",
+  "unit": "system/synth/filterdesign",
+  "demangled": "void __cdecl expandpoly(void)",
+  "our": 0.0,
+  "og": 99.97561,
+  "gain": 99.97561,
+  "size": 492,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?DecodeThreadPoll@VorbisReader@@QAA_NXZ",
+  "unit": "system/synth/VorbisReader",
+  "demangled": "public: bool __cdecl VorbisReader::DecodeThreadPoll(void)",
+  "our": 0.0,
+  "og": 45.752213,
+  "gain": 45.752213,
+  "size": 904,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?ShowGamercardForPadNum@PlatformMgr@@QAA?AW4ShowGamercardResult@@HPBVOnlineID@@@Z",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: enum ShowGamercardResult __cdecl PlatformMgr::ShowGamercardForPadNum(int, class OnlineID const *)",
+  "our": 0.0,
+  "og": 99.97959,
+  "gain": 99.97959,
+  "size": 392,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?StartPlayback@MicXbox@@UAAXXZ",
+  "unit": "system/synth_xbox/Mic",
+  "demangled": "public: virtual void __cdecl MicXbox::StartPlayback(void)",
+  "our": 0.0,
+  "og": 92.11539,
+  "gain": 92.11539,
+  "size": 416,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?DiscContentionPublish@BinkMovieImpl@@QAAXXZ",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "public: void __cdecl BinkMovieImpl::DiscContentionPublish(void)",
+  "our": 0.0,
+  "og": 97.8866,
+  "gain": 97.8866,
+  "size": 388,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?compute_bpres@@YAXXZ",
+  "unit": "system/synth/filterdesign",
+  "demangled": "void __cdecl compute_bpres(void)",
+  "our": 0.0,
+  "og": 61.52667,
+  "gain": 61.52667,
+  "size": 600,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?Draw@BinkMovieImpl@@UAAXXZ",
+  "unit": "system/moviebink/BinkMovieImpl",
+  "demangled": "public: virtual void __cdecl BinkMovieImpl::Draw(void)",
+  "our": 0.0,
+  "og": 47.430378,
+  "gain": 47.430378,
+  "size": 632,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?HasOnlinePrivilege@PlatformMgr@@QBA_NH@Z",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: bool __cdecl PlatformMgr::HasOnlinePrivilege(int) const",
+  "our": 0.0,
+  "og": 99.92857,
+  "gain": 99.92857,
+  "size": 280,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?GetOwnerOfGuest@PlatformMgr@@QAAHH@Z",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "public: int __cdecl PlatformMgr::GetOwnerOfGuest(int)",
+  "our": 0.0,
+  "og": 93.10667,
+  "gain": 93.10667,
+  "size": 300,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?EaseElasticIn@@YAMMMM@Z",
+  "unit": "link_glue",
+  "demangled": "float __cdecl EaseElasticIn(float, float, float)",
+  "our": 0.0,
+  "og": 89.70238,
+  "gain": 89.70238,
+  "size": 308,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?InitParams@FxSendMeterEffect360@@MAAXPAUIXAudio2SubmixVoice@@H@Z",
+  "unit": "system/synth_xbox/FxSendMeterEffect",
+  "demangled": "protected: virtual void __cdecl FxSendMeterEffect360::InitParams(struct IXAudio2SubmixVoice *, int)",
+  "our": 0.0,
+  "og": 84.46914,
+  "gain": 84.46914,
+  "size": 324,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?Init@MicManagerXbox@@QAAXXZ",
+  "unit": "system/synth_xbox/Mic",
+  "demangled": "public: void __cdecl MicManagerXbox::Init(void)",
+  "our": 0.0,
+  "og": 35.53988,
+  "gain": 35.53988,
+  "size": 652,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?DecodeThreadEntry@?A0xcb0871ef@@YAKPAX@Z",
+  "unit": "system/synth/VorbisReader",
+  "demangled": "unsigned long __cdecl `anonymous namespace'::DecodeThreadEntry(void *)",
+  "our": 0.0,
+  "og": 76.30882,
+  "gain": 76.30882,
+  "size": 272,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?EaseStairstep@@YAMMMM@Z",
+  "unit": "link_glue",
+  "demangled": "float __cdecl EaseStairstep(float, float, float)",
+  "our": 0.0,
+  "og": 96.05769,
+  "gain": 96.05769,
+  "size": 208,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?Poll@SingleItemEnumJob@@IAAXXZ",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "protected: void __cdecl SingleItemEnumJob::Poll(void)",
+  "our": 0.0,
+  "og": 90.72727,
+  "gain": 90.72727,
+  "size": 220,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?GetPadNumFromXuid@?A0x8a9ffbf2@@YAH_K@Z",
+  "unit": "system/os/PlatformMgr_Xbox",
+  "demangled": "int __cdecl `anonymous namespace'::GetPadNumFromXuid(unsigned __int64)",
+  "our": 0.0,
+  "og": 92.69231,
+  "gain": 92.69231,
+  "size": 208,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?RecvFrom@WinSockSocket@@UAAHPAXIAAIAAG@Z",
+  "unit": "system/os/NetworkSocket_Win",
+  "demangled": "public: virtual int __cdecl WinSockSocket::RecvFrom(void *, unsigned int, unsigned int &, unsigned short &)",
+  "our": 0.0,
+  "og": 97.608696,
+  "gain": 97.608696,
+  "size": 184,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "??0?$StandardEffect@VEQEffect@@@@QAA@XZ",
+  "unit": "system/synth_xbox/FxSendEQ",
+  "demangled": "public: __cdecl StandardEffect<class EQEffect>::StandardEffect<class EQEffect>(void)",
+  "our": 0.0,
+  "og": 99.97059,
+  "gain": 99.97059,
+  "size": 136,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?compute_apres@@YAXXZ",
+  "unit": "system/synth/filterdesign",
+  "demangled": "void __cdecl compute_apres(void)",
+  "our": 0.0,
+  "og": 40.567566,
+  "gain": 40.567566,
+  "size": 296,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?Send@WinSockSocket@@UAAHPBXI@Z",
+  "unit": "system/os/NetworkSocket_Win",
+  "demangled": "public: virtual int __cdecl WinSockSocket::Send(void const *, unsigned int)",
+  "our": 0.0,
+  "og": 64.17778,
+  "gain": 64.17778,
+  "size": 180,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?SetNoiseGate@@YA?AVDataNode@@PAVDataArray@@@Z",
+  "unit": "system/synth_xbox/Mic",
+  "demangled": "class DataNode __cdecl SetNoiseGate(class DataArray *)",
+  "our": 0.0,
+  "og": 99.60714,
+  "gain": 99.60714,
+  "size": 112,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?SendTo@WinSockSocket@@UAAHPBXIIG@Z",
+  "unit": "system/os/NetworkSocket_Win",
+  "demangled": "public: virtual int __cdecl WinSockSocket::SendTo(void const *, unsigned int, unsigned int, unsigned short)",
+  "our": 0.0,
+  "og": 50.75,
+  "gain": 50.75,
+  "size": 192,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?Fail@WinSockSocket@@UBA_NXZ",
+  "unit": "system/os/NetworkSocket_Win",
+  "demangled": "public: virtual bool __cdecl WinSockSocket::Fail(void) const",
+  "our": 0.0,
+  "og": 47.5,
+  "gain": 47.5,
+  "size": 168,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?SetRemoteGain@@YA?AVDataNode@@PAVDataArray@@@Z",
+  "unit": "system/synth_xbox/Mic",
+  "demangled": "class DataNode __cdecl SetRemoteGain(class DataArray *)",
+  "our": 0.0,
+  "og": 85.71429,
+  "gain": 85.71429,
+  "size": 84,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "??4FlowMathOp@@QAAAAV0@ABV0@@Z",
+  "unit": "system/flow/FlowNode",
+  "demangled": "public: class FlowMathOp & __cdecl FlowMathOp::operator=(class FlowMathOp const &)",
+  "our": 0.0,
+  "og": 52.846153,
+  "gain": 52.846153,
+  "size": 104,
+  "tag": "GAIN"
+ },
+ {
+  "symbol": "?SetBorderColor@RndRenderState@@QAAXI_N@Z",
+  "unit": "system/rnddx9/RenderState",
+  "demangled": "public: void __cdecl RndRenderState::SetBorderColor(unsigned int, bool)",
+  "our": 0.0,
+  "og": 45.454544,
+  "gain": 45.454544,
+  "size": 88,
+  "tag": "GAIN"
+ }
+]
