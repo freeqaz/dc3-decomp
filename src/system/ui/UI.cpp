@@ -1100,29 +1100,26 @@ void Automator::Poll() {
     static Symbol button_down("button_down");
     static Symbol quick_cheat("quick_cheat");
     static ButtonDownMsg b_msg(nullptr, kPad_NumButtons, kAction_None, -1);
-    if (!mCurScript)
-        return;
-    mFramesSinceAdvance++;
-    DataArray *curEntry = mCurScript->Array(mCurMsgIndex);
-    Symbol sym = curEntry->Sym(0);
-    if (sym == button_down) {
-        FillButtonMsg(b_msg, mCurMsgIndex);
-        static Symbol button_down("button_down");
-        AdvanceScript(button_down);
-        mUIManager.Handle(b_msg, false);
-    } else if (sym == quick_cheat) {
-        DataArray *cheatArr = curEntry->Node(1).Array();
-        AdvanceScript(quick_cheat);
-        CallQuickCheat(cheatArr, nullptr);
-    } else if (mCurMsgIndex > 1) {
-        if (mFramesSinceAdvance > 0x1e) {
-        int prevIdx = mCurMsgIndex - 1;
-        DataArray *prevEntry = mCurScript->Array(prevIdx);
-        if (prevEntry->Sym(0) == button_down) {
-            FillButtonMsg(b_msg, prevIdx);
+    if (mCurScript) {
+        mFramesSinceAdvance++;
+        DataArray *scriptArr = mCurScript->Array(mCurMsgIndex);
+        Symbol s60 = scriptArr->Sym(0);
+        if (s60 == button_down) {
+            FillButtonMsg(b_msg, mCurMsgIndex);
+            static Symbol button_down("button_down");
+            AdvanceScript(button_down);
             mUIManager.Handle(b_msg, false);
+        } else if (s60 == quick_cheat) {
+            DataArray *a = scriptArr->Array(1);
+            AdvanceScript(quick_cheat);
+            CallQuickCheat(a, nullptr);
+        } else if (mCurMsgIndex > 1 && mFramesSinceAdvance > 0x1E) {
+            int prevIdx = mCurMsgIndex - 1;
+            if (mCurScript->Array(prevIdx)->Sym(0) == button_down) {
+                FillButtonMsg(b_msg, prevIdx);
+                mUIManager.Handle(b_msg, false);
+            }
         }
-    }
     }
 }
 
