@@ -1248,97 +1248,105 @@ BEGIN_LOADS(LightPreset)
         mKeyframes.resize(1);
         mKeyframes[0].LegacyLoadP9(d);
     }
-    bs >> mSpotlights;
-    bs >> mEnvironments;
-    bs >> mLights;
+    d >> mSpotlights;
+    d >> mEnvironments;
+    d >> mLights;
     if (d.rev < 5) {
         bool b;
         d >> b;
         if (b) {
             Keyframe k(this);
-            k.Load(d);
+            d >> k;
         }
     }
-    if (d.rev != 0xE)
+    if (d.rev != 0xE) {
         d >> mLooping;
-    bs >> mCategory;
+    }
+    d >> mCategory;
     if (d.rev != 0xE && d.rev < 0x11) {
-        std::vector<Symbol> symvec;
-        d >> symvec;
-        if (symvec.size() > 0) {
-            if (symvec[0] != "") {
-                mCategory = symvec[0];
-            }
+        std::vector<Symbol> syms;
+        d >> syms;
+        if (syms.size() > 0 && syms[0] != "") {
+            mCategory = syms[0];
         }
     }
-    String str(mCategory.Str());
-    str.ToLower();
-    mCategory = Symbol(str.c_str());
+    String cat(mCategory);
+    cat.ToLower();
+    mCategory = cat.c_str();
     if (d.rev < 7) {
-        String str2;
-        bs >> str2;
-        if (!str2.empty()) {
-            TheDebug.Notify(MakeString("%s: %s", Name(), str2));
+        String str;
+        d >> str;
+        if (!str.empty()) {
+            MILO_NOTIFY("%s: %s", Name(), str);
         }
     } else if (d.rev < 0x15) {
-        ObjPtr<EventTrigger> trigPtr(this, 0);
-        bs >> trigPtr;
-        if (trigPtr)
-            mSelectTriggers.push_back(trigPtr);
+        ObjPtr<EventTrigger> trig(this);
+        d >> trig;
+        if (trig) {
+            mSelectTriggers.push_back(trig);
+        }
     } else {
-        bs >> mSelectTriggers;
+        d >> mSelectTriggers;
     }
     if (d.rev < 5) {
-        String strdummy;
-        bs >> strdummy;
+        String str;
+        d >> str;
     }
-    if (d.rev != 0xE && d.rev < 0x16) {
-        int legacyFade;
-        bs >> legacyFade;
-        int dummy;
-        if (d.rev > 0 && d.rev < 0x11)
-            bs >> dummy;
-        if (d.rev > 2 && d.rev < 0x11)
-            bs >> dummy;
+    if (d.rev != 0xE) {
+        if (d.rev < 0x16) {
+            int x;
+            d >> x;
+        }
+        int x;
+        if (d.rev > 0 && d.rev < 0x11) {
+            d >> x;
+        }
+        if (d.rev > 2 && d.rev < 0x11) {
+            d >> x;
+        }
     }
     if (d.rev > 3) {
-        if (d.rev != 0xE)
+        if (d.rev != 0xE) {
             d >> mManual;
+        }
         d >> mLocked;
     }
-    if (d.rev > 0xC)
-        bs >> (int &)mPlatformOnly;
+    if (d.rev > 0xC) {
+        d >> (int &)mPlatformOnly;
+    }
     if (d.rev > 9) {
-        bs >> mSpotlightDrawers;
+        d >> mSpotlightDrawers;
     }
     if (d.rev == 0xB) {
         int dummy;
-        for (int i = 0; i < 8; i++)
-            bs >> dummy;
+        for (int i = 0; i < 8; i++) {
+            d >> dummy;
+        }
     }
     mSpotlightState.resize(mSpotlights.size());
     mEnvironmentState.resize(mEnvironments.size());
     mLightState.resize(mLights.size());
     mSpotlightDrawerState.resize(mSpotlightDrawers.size());
-    for (int i = 0; i != (unsigned)mSpotlights.size(); i++) {
+
+    for (uint i = 0; i != mSpotlights.size(); i++) {
         if (!mSpotlights[i] || !mSpotlights[i]->GetAnimateFromPreset()) {
             RemoveSpotlight(i);
             i--;
         }
     }
-    for (int i = 0; i != (unsigned)mEnvironments.size(); i++) {
+    for (uint i = 0; i != mEnvironments.size(); i++) {
         if (!mEnvironments[i] || !mEnvironments[i]->GetAnimateFromPreset()) {
             RemoveEnvironment(i);
             i--;
         }
     }
-    for (int i = 0; i != (unsigned)mLights.size(); i++) {
+    for (uint i = 0; i != mLights.size(); i++) {
         if (!mLights[i] || !mLights[i]->GetAnimateFromPreset()) {
             RemoveLight(i);
             i--;
         }
     }
-    for (int i = 0; i != (unsigned)mSpotlightDrawers.size(); i++) {
+    for (uint i = 0; i != mSpotlightDrawers.size(); i++) {
         if (!mSpotlightDrawers[i]) {
             RemoveSpotlightDrawer(i);
             i--;
@@ -1346,6 +1354,7 @@ BEGIN_LOADS(LightPreset)
     }
     SyncNewSpotlights();
     CacheFrames();
+    sLoading = false;
 END_LOADS
 
 bool LightPreset::Replace(ObjRef *from, Hmx::Object *to) {
