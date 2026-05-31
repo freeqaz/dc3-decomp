@@ -20,7 +20,9 @@ enum TaskUnits {
 class Task : public Hmx::Object {
 public:
     Task();
+#ifdef HX_NATIVE
     virtual ~Task();
+#endif
     virtual void Poll(float) = 0;
 
 #ifdef HX_NATIVE

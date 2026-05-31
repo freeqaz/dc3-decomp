@@ -23,11 +23,11 @@ Task::Task() {
 #endif
 }
 
-Task::~Task() {
 #ifdef HX_NATIVE
+Task::~Task() {
     LiveTasks().erase(this);
-#endif
 }
+#endif
 
 #ifdef HX_NATIVE
 bool Task::IsLive(Task *t) { return LiveTasks().count(t) > 0; }
