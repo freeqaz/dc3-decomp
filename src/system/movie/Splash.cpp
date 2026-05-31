@@ -23,9 +23,9 @@ const char *kSplashMovie = "splash.tmov";
 const char *kSplashCam = "splash.cam";
 
 Splash::Splash()
-    : mSplashDurationMs(SystemConfig("ui")->FindArray("splash_time")->Float(1) * 1000),
-      mWaitForSplash(SystemConfig("ui")->FindArray("wait_for_splash")->Int(1)), mCurrentDir(0), mCurrentCam(0),
-      mCurrentMovie(0), mCurrentTrigger(0), unk58(-1), mSuspendCount(0), mThreaded(1), mThreadId(-1), mState(0) {
+    : mSplashDurationMs(SystemConfig("ui")->FindFloat("splash_time") * 1000),
+      mWaitForSplash(SystemConfig("ui")->FindInt("wait_for_splash")), mCurrentDir(0), mCurrentCam(0),
+      mCurrentMovie(0), mCurrentTrigger(0), unk58(-1), mSuspendCount(0), mThreaded(1), mThreadId(-1), mState() {
 #ifdef HX_NATIVE
     // No worker thread on native — use non-threaded splash path.
     // Without this, EndSplasher() calls WaitForState(kTerminated) which
@@ -128,9 +128,10 @@ bool Splash::PrepareNext() {
         MILO_FAIL("Missing file %s", sp.fname);
     }
 
-    auto splashMovie = rndDir->Find<TexMovie>(kSplashMovie, false);
+    TexMovie *splashMovie = rndDir->Find<TexMovie>(kSplashMovie, false);
     if (splashMovie) {
-        splashMovie->GetMovie().CheckOpen(false);
+        Movie &movie = splashMovie->GetMovie();
+        movie.CheckOpen(false);
     }
 
     PreparedScreenParams psp;
@@ -421,32 +422,24 @@ bool Splash::Show() {
     {
         CritSecTracker tracker(&mScreenLock);
         MILO_ASSERT(!mPreparedScreens.empty(), 0x283);
-        params = *mPreparedScreens.begin();
+        params = mPreparedScreens.front();
     }
     mCurrentDir = params.dir;
-    mCurrentDir->Enter();
-    mCurrentCam = mCurrentDir->Find<RndCam>(kSplashCam, false);
+    params.dir->Enter();
+    mCurrentCam = mCurrentDir->Find<RndCam>(kSplashCam);
     mCurrentMovie = mCurrentDir->Find<TexMovie>(kSplashMovie, false);
-    if (!mCurrentCam && !mCurrentMovie) {
-        // .milo lacks both camera and movie — skip this splash screen
-        return ShowNext();
-    }
-    auto& _ref3 = mSplashDurationMs;
     if (mCurrentMovie) {
-        Movie &movie = mCurrentMovie->GetMovie();
-        mCurrentMovie->SetShowing(true);
-        movie.SetPaused(false);
         if (mThreaded) {
-            float duration = movie.MsPerFrame() * (float)movie.NumFrames();
-            _ref3 = (int)ceilf(duration);
+            Movie &movie = mCurrentMovie->GetMovie();
+            mCurrentMovie->SetShowing(true);
+            movie.SetPaused(false);
+            int time = ceilf(movie.MsPerFrame() * (float)movie.NumFrames());
+            mSplashDurationMs = time * 2;
         } else {
-            // Non-threaded (native/web): set a generous splash duration.
-            // Poll() drives UpdateThreadLoop() which calls Draw(), and Draw()
-            // polls the movie and renders via BeginDrawing/EndDrawing.
-            _ref3 = 15000; // 15s max — movie will end earlier via Poll()
+            return ShowNext();
         }
     } else {
-        _ref3 = params.durationMs;
+        mSplashDurationMs = params.durationMs;
     }
     mCurrentTrigger = mCurrentDir->Find<EventTrigger>("splash.trig", false);
     if (mCurrentTrigger) {
