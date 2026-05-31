@@ -423,19 +423,13 @@ void FileMerger::LaunchNextLoader() {
     MILO_ASSERT(!mFilesPending.empty(), 0x182);
     MILO_ASSERT(!mCurLoader, 0x183);
     int pos;
-    // Determine loader position based on current loader state
-    if (Dir()->Loader() && !Dir()->Loader()->IsLoaded()) {
-        if (Dir()->Loader()->GetPos() != kLoadStayBack) {
-            if (Dir()->Loader()->GetPos() != kLoadFrontStayBack)
-                goto next;
-        }
+    if (Dir()->Loader() && !Dir()->Loader()->IsLoaded()
+        && (Dir()->Loader()->GetPos() == kLoadStayBack
+            || Dir()->Loader()->GetPos() == kLoadFrontStayBack)) {
         pos = 2;
     } else {
         pos = 0;
     }
-
-// Create the next loader with the determined position
-next:
     FilePath &fp = mFilesPending.front()->loading;
     MemHeapTracker tmp(mHeap);
     if (fp.empty()) {
@@ -507,9 +501,9 @@ bool FileMerger::StartLoadInternal(bool async, bool loading) {
 }
 
 FileMerger::Merger *FileMerger::NotifyFileLoaded(Loader *l, DirLoader *dl) {
-    auto _tmp1 = l->LoaderFile();
+    FilePath firstLoading = mFilesPending.front()->loading;
     MILO_ASSERT_FMT(
-        _tmp1 == mFilesPending.front()->loading,
+        l->LoaderFile() == mFilesPending.front()->loading,
         "%s != %s",
         l->LoaderFile(),
         mFilesPending.front()->loading
