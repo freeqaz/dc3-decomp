@@ -457,121 +457,72 @@ float Song::GetFrameFromMBT(int m, int b, int t) {
 }
 
 void Song::SyncState() {
-    if (!mHxMaster)
-        return;
-
-    HxAudio *audio = mHxMaster->GetHxAudio();
-    bool wasPaused = audio->Paused();
-    float savedVolume = TheSynth->GetMasterVolume();
-    TheSynth->SetMasterVolume(-96.0f);
-
-    LightPresetManager *lightPresetMgr = nullptr;
-    CameraManager *cameraMgr = nullptr;
-    WorldDir *wd = dynamic_cast<WorldDir *>(MainDir());
-    if (wd) {
-        cameraMgr = wd->GetCameraManager();
-        lightPresetMgr = &wd->GetLightPresetMgr();
-        if (GetFrame() == 0.0f) {
-            static_cast<RndPollable *>(wd)->Enter();
-        } else {
-            lightPresetMgr->Enter();
-        }
-    }
-
     if (mHxMaster) {
-        mHxMaster->Reset();
-    }
-
-    std::vector<MidiParser *> parsers;
-    std::list<MidiParser *> parserList(MidiParser::Parsers());
-    auto _tmp4 = parserList.end();
-    for (std::list<MidiParser *>::iterator it = parserList.begin(); it != _tmp4;
-         ++it) {
-        if ((*it)->Sinks()) {
-            auto _tmp0 = (*it)->Sinks()->HasSink(MainDir());
-            if (_tmp0) {
-                parsers.push_back(*it);
-            }
-        }
-    }
-
-    TempoMap *tempoMap;
-    if (mHxSongData) {
-        tempoMap = mHxSongData->GetTempoMap();
-    } else {
-        tempoMap = nullptr;
-    }
-    int targetTick = tempoMap->TimeToTick(GetFrame() * 1000.0f);
-
-    float savedSeconds = TheTaskMgr.Seconds(TaskMgr::kRealTime);
-    float savedDeltaSeconds = TheTaskMgr.DeltaSeconds();
-    float savedDeltaBeat = TheTaskMgr.DeltaBeat();
-
-    int tick = -1920;
-    if (targetTick >= -1920) {
-        unsigned int numParsers = parsers.size();
-        do {
-            if (targetTick - tick < 1920) {
-                tick = targetTick;
-            }
-            TempoMap *tm;
-            if (mHxSongData) {
-                tm = mHxSongData->GetTempoMap();
+        bool paused = mHxMaster->GetHxAudio()->Paused();
+        float vol = TheSynth->GetMasterVolume();
+        TheSynth->SetMasterVolume(kDbSilence);
+        LightPresetManager *lightMgr = nullptr;
+        CameraManager *camMgr = nullptr;
+        WorldDir *worldDir = dynamic_cast<WorldDir *>(MainDir());
+        if (worldDir) {
+            camMgr = worldDir->GetCameraManager();
+            lightMgr = &worldDir->GetLightPresetMgr();
+            if (GetFrame() == 0) {
+                worldDir->Enter();
             } else {
-                tm = nullptr;
+                lightMgr->Enter();
             }
-            float time = tm->TickToTime(tick);
-            TheTaskMgr.SetSeconds(time * 0.001f, false);
-
-            for (unsigned int i = 0; i < numParsers; i++) {
-                parsers[i]->Poll();
-            }
-            if (lightPresetMgr) {
-                lightPresetMgr->Poll();
-            }
-            if (cameraMgr) {
-                cameraMgr->Poll();
-            }
-            tick += 1920;
-        } while (tick <= targetTick);
-    }
-
-    TheTaskMgr.SetSeconds(savedSeconds, true);
-    TheTaskMgr.SetDeltaTime(kTaskSeconds, savedDeltaSeconds);
-    TheTaskMgr.SetDeltaTime(kTaskBeats, savedDeltaBeat);
-
-    if (mHxMaster) {
-        HxAudio *a = mHxMaster->GetHxAudio();
-        a->SetPaused(true);
-        mHxMaster->Jump(GetFrame() * 1000.0f);
-
-        if (!mFastSync) {
-#ifdef HX_NATIVE
-            if (!a->IsReady()) {
-                // Defer completion — PollAsyncState() will finish when ready
-                mSavedWasPaused = wasPaused;
-                mSavedVolume = savedVolume;
-                mAsyncState = kAsyncWaitSync;
-                return;
-            }
-#else
-            while (true) {
-                HxAudio *a2 = mHxMaster->GetHxAudio();
-                if (a2->IsReady())
-                    break;
-                TheSynth->Poll();
-                a2 = mHxMaster->GetHxAudio();
-                a2->Poll();
-            }
-#endif
         }
-
-        SetSpeed();
-        a = mHxMaster->GetHxAudio();
-        a->SetPaused(wasPaused);
+        if (mHxMaster) {
+            mHxMaster->Reset();
+        }
+        std::vector<MidiParser *> midiParsers;
+        std::list<MidiParser *> globalParsers = MidiParser::Parsers();
+        FOREACH (it, globalParsers) {
+            MsgSinks *curSinks = (*it)->Sinks();
+            if (curSinks) {
+                if (curSinks->HasSink(MainDir())) {
+                    midiParsers.push_back(*it);
+                }
+            }
+        }
+        int tick = GetTempoMap()->TimeToTick(GetFrame() * 1000);
+        float seconds = TheTaskMgr.Seconds(TaskMgr::kRealTime);
+        float deltaSecs = TheTaskMgr.DeltaSeconds();
+        float deltaBeat = TheTaskMgr.DeltaBeat();
+        for (int i = -1920; i <= tick; i += 1920) {
+            if (tick - i < 1920) {
+                i = tick;
+            }
+            float time = GetTempoMap()->TickToTime(i);
+            TheTaskMgr.SetSeconds(time / 1000, false);
+            for (int j = 0; j < midiParsers.size(); j++) {
+                midiParsers[j]->Poll();
+            }
+            if (lightMgr) {
+                lightMgr->Poll();
+            }
+            if (camMgr) {
+                camMgr->Poll();
+            }
+        }
+        TheTaskMgr.SetSeconds(seconds, false);
+        TheTaskMgr.SetDeltaTime(kTaskSeconds, deltaSecs);
+        TheTaskMgr.SetDeltaTime(kTaskBeats, deltaBeat);
+        if (mHxMaster) {
+            mHxMaster->GetHxAudio()->SetPaused(true);
+            mHxMaster->Jump(GetFrame() * 1000);
+            if (!mFastSync) {
+                while (!mHxMaster->GetHxAudio()->IsReady()) {
+                    TheSynth->Poll();
+                    mHxMaster->GetHxAudio()->Poll();
+                }
+            }
+            SetSpeed();
+            mHxMaster->GetHxAudio()->SetPaused(paused);
+        }
+        TheSynth->StopAllSfx(false);
+        TheSynth->SetMasterVolume(vol);
+        SetStateDirty(false);
     }
-
-    TheSynth->StopAllSfx(false);
-    TheSynth->SetMasterVolume(savedVolume);
-    SetStateDirty(false);
 }
