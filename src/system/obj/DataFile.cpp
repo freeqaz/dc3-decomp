@@ -23,19 +23,18 @@
 #include "utl/Loader.h"
 #include "utl/MemMgr.h"
 
-CriticalSection gDataReadCrit; // yes these are the bss offsets. this tu sucks
-DataArray *gArray; // 0x28
-int gNode; // 0x2c
-Symbol gFile; // 0x30
-BinStream *gBinStream; // 0x34
-int gOpenArray; // 0x38
-std::list<bool> gConditional; // 0x48
-DataType gDataLine; // 0x50
-std::map<String, DataNode> gReadFiles; // 0x60
-
+static DataArray *gArray = nullptr;
+static int gNode = 0;
+static BinStream *gBinStream = nullptr;
+static int gOpenArray = 0;
+static bool gCachingFile = false;
+static bool gReadingFile = false;
+int gDataLine = 0;
+static CriticalSection gDataReadCrit;
+Symbol gFile;
+static std::list<bool> gConditional;
+static std::map<String, DataNode> gReadFiles;
 // bool gCompressCached;
-bool gCachingFile;
-bool gReadingFile;
 
 #ifdef HX_NATIVE
 static int gParseDepth = 0;
@@ -54,17 +53,16 @@ bool Defined() {
 
 void PushBack(const DataNode &n) {
     if (gNode == gArray->Size()) {
-        int maxLines = 0x7FFF;
+        int max = 0x7FFF;
         if (gNode >= 0x7FFF) {
             MILO_FAIL(
-                "%s(%d): array size > max %d lines", gArray->File(), gArray->Line(), maxLines
+                "%s(%d): array size > max %d lines", gArray->File(), gArray->Line(), max
             );
         }
-        MemPushTemp();
-        int x = gNode << 1;
-        if (x > 0x7FFF) x = 0x7FFF;
-        gArray->Resize(x);
-        MemPopTemp();
+        {
+            MemTemp tmp;
+            gArray->Resize(Min(gNode * 2, 0x7FFF));
+        }
     }
     gArray->Node(gNode++) = n;
 }
@@ -392,7 +390,7 @@ bool ParseNode() {
                     escaped = true;
                 }
             } else if (*c == '\n') {
-                gDataLine = (DataType)((int)gDataLine + 1);
+                gDataLine++;
             }
 
             if (escaped) {
@@ -425,23 +423,21 @@ DataArray *ParseArray() {
         return empty;
     }
 #endif
-    DataArray *sav = gArray;
-    int nod = gNode;
-    DataArray *da = new DataArray(16);
-    gArray = da;
-    da->SetFileLine(gFile, gDataLine);
+    DataArray *arr = gArray;
+    int node = gNode;
+    gArray = new DataArray(16);
+    gArray->SetFileLine(gFile, gDataLine);
     gNode = 0;
-    do
+    while (ParseNode())
         ;
-    while (ParseNode());
     gArray->Resize(gNode);
-    da = gArray;
-    gArray = sav;
-    gNode = nod;
+    DataArray *ret = gArray;
+    gNode = node;
+    gArray = arr;
 #ifdef HX_NATIVE
     gParseDepth--;
 #endif
-    return da;
+    return ret;
 }
 
 int DataInput(void *v, int x) {
@@ -541,8 +537,7 @@ DataArray *DataReadFile(const char *file, bool warn) {
         }
 
         if (node) {
-            auto dataNode = DataNode(ret, kDataArray);
-            *node = dataNode;
+            *node = ret;
         } else {
             FinishDataRead();
         }
@@ -551,26 +546,17 @@ DataArray *DataReadFile(const char *file, bool warn) {
 }
 
 DataArray *DataReadStream(BinStream *bs) {
-    gDataReadCrit.Enter(); // TODO: may cause IAT thunk issues at runtime
-    Symbol stream(bs->Name());
+    CritSecTracker tracker(&gDataReadCrit);
     gBinStream = bs;
-    gNode = 0;
+    gFile = bs->Name();
+    gDataLine = 1;
     gOpenArray = 0;
-    gDataLine = (DataType)1;
-    unsigned int conds1 = 0;
-    gFile = stream;
-    FOREACH(it, gConditional) {
-        conds1++;
-    }
+    unsigned int before = gConditional.size();
     DataArray *parse = ParseArray();
-    unsigned int conds2 = 0;
-    FOREACH(it, gConditional) {
-        conds2++;
-    }
-    if (conds2 != conds1) {
-        MILO_FAIL("DataReadFile: conditional block not closed (file %s)", gFile);
-    }
-    gDataReadCrit.Exit(); // TODO: may cause IAT thunk issues at runtime
+    unsigned int after = gConditional.size();
+    MILO_ASSERT_FMT(
+        after == before, "DataReadFile: conditional block not closed (file %s)", gFile
+    );
     return parse;
 }
 
@@ -617,38 +603,33 @@ void DataFail(const char *msg) {
 }
 
 DataArray *ReadEmbeddedFile(const char *file, bool b) {
-    CritSecTracker cst(&gDataReadCrit);
-    const char *madePath = FileMakePath(FileGetPath(gFile.Str()), file);
+    CritSecTracker tracker(&gDataReadCrit);
+    const char *filepath = FileGetPath(gFile.Str());
+    const char *madePath = FileMakePath(filepath, file);
     Symbol localfile = gFile;
-
+    int dataline = gDataLine;
+    int node = gNode;
     BinStream *bs = gBinStream;
-    DataType savedDataLine = gDataLine;
-    DataArray *savedArray = gArray;
-    int savedOpenArray = gOpenArray;
-#ifdef HX_NATIVE
-    int savedNode = gNode;
-    char savedHoldChar = yyGetHoldChar();
-#endif
-
+    int openArr = gOpenArray;
+    DataArray *arr = gArray;
     yyrestart(nullptr);
-    DataArray *ret = DataReadFile(madePath, b);
-    if (b && !ret) {
-        MILO_FAIL("Couldn\'t open embedded file: %s (file %s, line %d)", madePath, savedArray->File(), savedArray->Line());
+    DataArray *da = DataReadFile(madePath, b);
+    if (b && !da) {
+        MILO_FAIL(
+            "Couldn't open embedded file: %s (file %s, line %d)",
+            madePath,
+            arr->File(),
+            arr->Line()
+        );
     }
+    gNode = node;
     gBinStream = bs;
-    gDataLine = savedDataLine;
+    gDataLine = dataline;
     gFile = localfile;
-    gArray = savedArray;
-    gOpenArray = savedOpenArray;
-#ifdef HX_NATIVE
-    gNode = savedNode;
-#endif
-
+    gArray = arr;
+    gOpenArray = openArr;
     yyrestart(nullptr);
-#ifdef HX_NATIVE
-    yySetHoldChar(savedHoldChar);
-#endif
-    return ret;
+    return da;
 }
 
 DataLoader::DataLoader(const FilePath &fp, LoaderPos pos, bool b3)
