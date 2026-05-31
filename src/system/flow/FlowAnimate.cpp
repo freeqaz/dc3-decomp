@@ -172,6 +172,17 @@ void FlowAnimate::Execute(QueueState state) {
         if (state == kQueue) {
             mStopDeferred = false;
             mDeferredStopMode = 0;
+#ifdef HX_NATIVE
+            // mAnim's target object can be nullified (e.g. ObjectDir delete cascade)
+            // between Activate() queuing this command and Execute() running it. The
+            // matched Xbox build never hits this (objects outlive the flow); release
+            // the node instead of dereferencing a null FlowPtr. Dropped by the
+            // 3b4c94ca og-dc3 port.
+            if (!mAnim) {
+                mFlowParent->ChildFinished(this);
+                return;
+            }
+#endif
             Task *task;
             if (mEnable) {
                 if (mPeriod) {

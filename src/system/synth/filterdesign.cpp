@@ -82,6 +82,11 @@ static void printcoeffs(const char *, int, double[]);
 static void printrat_s(), printrat_z(), printpz(complex *, int), printrecurrence(),
     prcomplex(complex);
 
+// mkfilter standalone CLI entry point. Excluded from the native/web build, where
+// it collides with the engine's main (src/main_web.cpp / main_native.cpp). Kept for
+// the matched Xbox build. (og-dc3 port 9727e50f brought the standalone main into the
+// game library.)
+#ifndef HX_NATIVE
 global int main(int argc, const char *const argv[]) {
     readcmdline(argv);
     checkoptions();
@@ -117,6 +122,7 @@ global int main(int argc, const char *const argv[]) {
     printresults(argv);
     exit(0);
 }
+#endif
 
 static void readcmdline(const char *const argv[]) {
     options = order = polemask = 0;

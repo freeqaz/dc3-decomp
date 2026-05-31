@@ -612,6 +612,14 @@ DataArray *ReadEmbeddedFile(const char *file, bool b) {
     BinStream *bs = gBinStream;
     int openArr = gOpenArray;
     DataArray *arr = gArray;
+#ifdef HX_NATIVE
+    // The native flex lexer NUL-terminates the current token in its buffer and
+    // stashes the overwritten char in yy_hold_char. yyrestart() plus the recursive
+    // embedded-file parse below clobber it; save/restore so the parent file's buffer
+    // isn't corrupted on return (otherwise the rest of the parent mis-parses and
+    // fails with "Array closed incorrectly"). Dropped by the 538a018e port.
+    char savedHoldChar = yyGetHoldChar();
+#endif
     yyrestart(nullptr);
     DataArray *da = DataReadFile(madePath, b);
     if (b && !da) {
@@ -629,6 +637,9 @@ DataArray *ReadEmbeddedFile(const char *file, bool b) {
     gArray = arr;
     gOpenArray = openArr;
     yyrestart(nullptr);
+#ifdef HX_NATIVE
+    yySetHoldChar(savedHoldChar);
+#endif
     return da;
 }
 

@@ -1651,6 +1651,55 @@ void RndMesh::LoadVertices(BinStreamRev &d) {
     } else {
         c8 = false;
     }
+#ifdef HX_NATIVE
+    // Native: preserve Xbox compressed vertex blobs and let the native renderer
+    // unpack them during GPU upload. The older eager decompression path lost
+    // skinned bone data on character meshes.
+    if (c8) {
+        unsigned int loadedCompressedSize = 0;
+        unsigned int loadedVersion = 0;
+        d.stream.ReadEndian(&loadedCompressedSize, 4);
+        d.stream.ReadEndian(&loadedVersion, 4);
+
+        if (loadedCompressedSize == sizeof(CompressedVertex_Xbox) && loadedVersion == 1) {
+            mNumCompressedVerts = numVerts;
+            mVerts.resize(0);
+            if (mNumCompressedVerts != 0) {
+                unsigned int totalSize = loadedCompressedSize * numVerts;
+                MILO_ASSERT(totalSize > 0, 0x2D4);
+                MemPushTemp();
+                mCompressedVerts = new unsigned char[totalSize];
+                MemPopTemp();
+                ReadChunks(d.stream, mCompressedVerts, totalSize, loadedCompressedSize << 9);
+            }
+        } else if (numVerts > 0 && loadedCompressedSize > 0) {
+            unsigned int totalSize = loadedCompressedSize * numVerts;
+            MILO_NOTIFY(
+                "%s: unsupported native compressed vertex format size=%u version=%u",
+                PathName(this),
+                loadedCompressedSize,
+                loadedVersion
+            );
+            MILO_ASSERT(totalSize > 0, 0x2E7);
+            d.stream.Seek(totalSize, BinStream::kSeekCur);
+        } else if (numVerts > 0) {
+            // loadedCompressedSize == 0 but count > 0: skip (shouldn't happen)
+            mVerts.resize(0);
+        }
+    } else {
+        mVerts.resize(numVerts);
+        int i = 0;
+        for (Vert *it = mVerts.begin(); it != mVerts.end(); ++it) {
+            d >> *it;
+            i++;
+            if (!(i & 0x1FF)) {
+                // Already inside the HX_NATIVE branch: web/native async streams need
+                // WaitUntilReady() rather than the Xbox busy-wait on TempEof.
+                d.stream.WaitUntilReady();
+            }
+        }
+    }
+#else
     unsigned int loadedCompressedSize = 0;
     unsigned int loadedVersion = 0;
     unsigned int i8c = 0;
@@ -1712,6 +1761,7 @@ void RndMesh::LoadVertices(BinStreamRev &d) {
             }
         }
     }
+#endif
 }
 
 void RndMesh::SaveVertices(BinStream &bs) {
