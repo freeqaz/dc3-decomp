@@ -372,43 +372,43 @@ void CharacterTest::PlayNew() {
 }
 
 void CharacterTest::Poll() {
-    if (!Clips() || !mClip1)
-        return;
-    if (!gClick) {
-        ObjectDir *clickdir = DirLoader::LoadObjects(
-            FilePath(MakeString("%s/char/chartest.milo", (char *)FileSystemRoot())), 0, 0
-        );
-        gClick = clickdir->Find<Hmx::Object>("click_hi.cue", true);
-    }
-    float beat = TheTaskMgr.Beat();
-    float deltabeat = TheTaskMgr.DeltaBeat();
-    if (mMetronome) {
-        if (floorf(beat - deltabeat) + 1.0f == floorf(beat)) {
-            static Message playMsg("play");
-            gClick->Handle(playMsg, true);
+    if (Clips() && mClip1) {
+        if (!gClick) {
+            ObjectDir *clickdir = DirLoader::LoadObjects(
+                FilePath(MakeString("%s/char/chartest.milo", (char *)FileSystemRoot())), 0, 0
+            );
+            gClick = clickdir->Find<Hmx::Object>("click_hi.cue", true);
         }
-    }
-    CharClipDriver *drivs = mDriver->First();
-    if (drivs) {
-        CharClip *drivclip = drivs->GetClip();
-        if (!mClip2) {
-            if (drivclip != mClip1)
-                PlayNew();
-        } else if ((drivclip != mClip1 && drivclip != mClip2)
-                   || (drivclip == mClip2 && drivs->mBeat > mTransEndBeat)) {
+        float beat = TheTaskMgr.Beat();
+        float deltabeat = TheTaskMgr.DeltaBeat();
+        if (mMetronome) {
+            if (floorf(beat - deltabeat) + 1.0f == floorf(beat)) {
+                static Message playMsg("play");
+                gClick->Handle(playMsg, true);
+            }
+        }
+        CharClipDriver *drivs = mDriver->First();
+        if (!drivs) {
             PlayNew();
+        } else {
+            if (!mClip2) {
+                if (drivs->GetClip() != mClip1) {
+                    PlayNew();
+                }
+            } else if (drivs->GetClip() != mClip1 && drivs->GetClip() != mClip2
+                       || (drivs->GetClip() == mClip2 && drivs->mBeat > mTransEndBeat)) {
+                PlayNew();
+            }
         }
-    } else {
-        PlayNew();
-    }
-    if (mZeroTravel) {
-        Transform xfm = mMe->LocalXfm();
-        xfm.v.Zero();
-        mMe->SetLocalXfm(xfm);
-        if (mMe->BoneServo()) {
-            mMe->BoneServo()->SetRegulateWaypoint(nullptr);
+        if (mZeroTravel) {
+            Transform xfm = mMe->LocalXfm();
+            xfm.v.Zero();
+            mMe->SetLocalXfm(xfm);
+            if (mMe->BoneServo()) {
+                mMe->BoneServo()->SetRegulateWaypoint(nullptr);
+            }
+            Recenter();
         }
-        Recenter();
     }
 }
 
@@ -435,14 +435,14 @@ void CharacterTest::Sync() {
     }
 
     static Symbol none("none");
-    RndGraph::Get(0)->Reset();
+    RndGraph::Get(reinterpret_cast<void *>((char *)this + 0x13F920))->Reset();
     if (!mClip2)
         mTransition = 0;
     if (mDistMap && (mDistMap->ClipA() != mClip1 || mDistMap->ClipB() != mClip2)) {
         SetDistMap(mShowDistMap);
     }
     if (mClip1) {
-        mClip1->AverageBeatsPerSecond();
+        float bps = mClip1->AverageBeatsPerSecond();
         if (mClip2) {
             CharClip::NodeVector *nodes = mClip1->GetTransitions().FindNodes(mClip2);
             if (nodes) {
@@ -456,7 +456,7 @@ void CharacterTest::Sync() {
             } else {
                 mTransition = 0;
             }
-            mClip2->AverageBeatsPerSecond();
+            MinEq(bps, mClip2->AverageBeatsPerSecond());
         }
     }
     if (mClip1 || mClip2) {
