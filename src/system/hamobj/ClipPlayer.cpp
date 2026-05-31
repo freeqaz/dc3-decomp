@@ -75,10 +75,7 @@ bool ClipPlayer::Init(Difficulty d) {
     return Init(TheHamDirector->GetPropAnim(d, "song.anim", false));
 }
 
-bool ClipPlayer::Init(int x) {
-    mPlayerIndex = x;
-    return Init(TheHamDirector->SongAnim(x));
-}
+bool ClipPlayer::Init(int x) { return Init(TheHamDirector->SongAnim(x)); }
 
 bool ClipPlayer::CanUseRestStep() {
     // In non-edit mode (or when transitions are enabled), check if the out clip
@@ -191,22 +188,21 @@ void ClipPlayer::PlayAnims(HamCharacter *c, float f1, float f2, int x) {
 }
 
 namespace {
-    float ClipStart(CharClip *clip, float beat, float &outClipBeat, float &outEndBeat) {
-        float frac = fmodf(beat, 1.0f);
-        if (frac != 0.0f) {
-            float ceiling = ceilf(beat);
-            if (ceiling - beat < 0.0001f) {
-                beat = ceilf(beat);
-            }
+    float ClipStart(CharClip *clip, float beat, float &start, float &end) {
+        if (fmodf(beat, 1.0) != 0.0f && ceilf(beat) - beat < 0.0001f) {
+            beat = ceilf(beat);
         }
-        unsigned int loopCount = (clip->PlayFlags() >> 12) & 0xF;
-        float loopOffset = 0.0f;
-        if ((float)loopCount != 0.0f) {
-            loopOffset = Mod(beat - clip->StartBeat(), (float)loopCount);
+        float offset = 0.0f;
+        float period = (clip->PlayFlags() >> 12) & 0xF;
+
+        if (period != 0.0f) {
+            offset = Mod(beat - clip->StartBeat(), period);
         }
-        outClipBeat = beat - loopOffset;
-        outEndBeat = clip->LengthBeats() + outClipBeat;
-        return clip->StartBeat() + loopOffset;
+
+        start = beat - offset;
+        end = clip->EndBeat() - clip->StartBeat() + start;
+
+        return clip->StartBeat() + offset;
     }
 }
 
@@ -547,7 +543,7 @@ bool ClipPlayer::PushRoutineBuilderClip(int idx, HamDriver::LayerArray *arr) {
 
 void ClipPlayer::PlayNormal(float f1, HamDriver::LayerArray *arr, const char *cc) {
     HamDriver::LayerArray *newArr;
-    if (arr != NULL) {
+    if (arr) {
         newArr = new HamDriver::LayerArray();
         arr->mLayers.push_back(newArr);
         strncpy(newArr->mName, cc, 0x1F);
@@ -557,14 +553,15 @@ void ClipPlayer::PlayNormal(float f1, HamDriver::LayerArray *arr, const char *cc
     newArr->mBeat = f1 - mBeatOffset;
     if (!mClipKeys) {
         if (TheLoadMgr.EditMode()) {
-            const char *msg = "No 'clips' keyframes in your song.anim.  Please don't save this song!";
-            MILO_NOTIFY_ONCE(msg);
+            MILO_NOTIFY_ONCE(
+                "No 'clips' keyframes in your song.anim.  Please don't save this song!"
+            );
         }
     } else {
         static Symbol merge_moves("merge_moves");
         int prop = TheHamProvider->Property(merge_moves, true)->Int();
         float beat = mBeat;
-        if (prop != 0 && TheMoveMgr && TheMoveMgr->HasRoutine()) {
+        if (prop != 0) {
             PushRoutineBuilderClip(mClipKeys->KeyLessEq(BeatToFrame(beat)), newArr);
         } else if (mClipKeys == mMasterClipKeys) {
             PushExpertClip(mClipKeys->KeyLessEq(BeatToFrame(beat)), newArr);
