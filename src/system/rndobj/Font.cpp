@@ -244,9 +244,6 @@ BEGIN_COPYS(RndFont)
     mTextureOwner = obj;
 END_COPYS
 
-static const char theChars[96] =
-    " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~";
-
 struct MatChar {
     float width;
     float height;
@@ -315,11 +312,11 @@ BEGIN_LOADS(RndFont)
     }
     if (d.rev < 1) {
         std::map<char, MatChar> charMap;
-        d.stream >> charMap;
+        d >> charMap;
     } else {
         if (d.altRev < 1) {
-            ObjPtr<RndMat> mat(this, NULL);
-            mat.Load(d.stream, true, NULL);
+            ObjPtr<RndMat> mat(this);
+            d >> mat;
             if (d.rev > 9 && d.rev < 0xc) {
                 char buf[0x80];
                 d.stream.ReadString(buf, 0x80);
@@ -330,17 +327,17 @@ BEGIN_LOADS(RndFont)
             mMats.clear();
             mMats.push_back(mat);
         } else {
-            mMats.Load(d.stream, true, NULL);
+            d >> mMats;
         }
         if (d.rev < 4) {
             float w, h;
             if (d.rev < 2) {
-                int w, h;
-                d.stream >> w >> h;
-                mCellSize.x = h;
-                mCellSize.y = w;
+                int iW, iH;
+                d.stream >> iW >> iH;
+                w = iW;
+                h = iH;
             } else {
-                d.stream >> mCellSize.y >> mCellSize.x;
+                d.stream >> w >> h;
             }
             RndTex *validTex = ValidTexture(0);
             if (validTex) {
@@ -370,14 +367,10 @@ BEGIN_LOADS(RndFont)
             d >> mChars;
         }
     } else {
-        char charBuf[96];
-        memcpy(charBuf, theChars, sizeof(theChars));
-        const char *ptr = charBuf;
-        if (*ptr != '\0') {
-            do {
-                mChars.push_back(*ptr);
-                ptr++;
-            } while (*ptr != '\0');
+        const char theChars[] =
+            " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~";
+        for (const char *ptr = theChars; *ptr != '\0'; ptr++) {
+            mChars.push_back(*ptr);
         }
     }
     if (d.rev > 4 && d.altRev < 2) {
@@ -389,7 +382,7 @@ BEGIN_LOADS(RndFont)
         }
     }
     if (d.rev > 8) {
-        mTextureOwner.Load(d.stream, true, NULL);
+        d >> mTextureOwner;
     }
     if (!mTextureOwner) {
         mTextureOwner = this;
@@ -471,8 +464,8 @@ BEGIN_LOADS(RndFont)
         MILO_LOG("NOTIFY: %s is old version, resave file\n", PathName(this));
     }
     if (d.rev > 0x10 && d.altRev < 1) {
-        ObjPtr<RndFont> nextFont(this, NULL);
-        nextFont.Load(d.stream, true, NULL);
+        ObjPtr<RndFont> nextFont(this);
+        d >> nextFont;
     }
 END_LOADS
 
