@@ -58,6 +58,7 @@ public:
     StoreOffer(DataArray *, SongMgr *);
 
     DataArray *StoreOfferData() const { return mStoreOfferData; }
+    Symbol ShortName() const { return mStoreOfferData->Sym(0); }
 
 protected:
     DataArray *mStoreOfferData; // 0x40
