@@ -138,30 +138,35 @@ void StorePreviewMgr::Poll() {
         if (mNetCacheLoader->IsLoaded()) {
             TheNetCacheMgr->IsLocalFile(mNetCacheLoader->GetRemotePath());
             TheNetCacheMgr->DeleteNetCacheLoader(mNetCacheLoader);
-            mNetCacheLoader = 0;
+            mNetCacheLoader = nullptr;
             if (isCurrentFile) {
                 PlayCurrentPreview();
             }
             static PreviewDownloadCompleteMsg msg(true, false);
             msg[1] = isCurrentFile;
-            Handle(msg, true);
+            Hmx::Object::Handle(msg, false);
         } else if (mNetCacheLoader->HasFailed()) {
             mHasFailure = true;
             mLastFailType = mNetCacheLoader->GetFailType();
             TheNetCacheMgr->DeleteNetCacheLoader(mNetCacheLoader);
-            mNetCacheLoader = 0;
+            mNetCacheLoader = nullptr;
             static PreviewDownloadCompleteMsg msg(false, false);
             msg[1] = isCurrentFile;
-            Handle(msg, true);
+            Hmx::Object::Handle(msg, false);
         }
     }
-    std::list<String>::iterator it = mDownloadQueue.begin();
-    while (it != mDownloadQueue.end() && TheNetCacheMgr->IsLocalFile(it->c_str())) {
-        it = mDownloadQueue.erase(it);
+
+    for (auto it = mDownloadQueue.begin(); it != mDownloadQueue.end()
+         && TheNetCacheMgr->IsLocalFile(mDownloadQueue.front().c_str());
+         it = ++mDownloadQueue.end()) {
+        mDownloadQueue.pop_front();
     }
-    if (!mNetCacheLoader && mDownloadQueue.begin() != mDownloadQueue.end()) {
+
+    if (!mNetCacheLoader && !mDownloadQueue.empty()) {
         MILO_ASSERT(!TheNetCacheMgr->IsLocalFile(mDownloadQueue.front().c_str()), 0xa5);
-        mNetCacheLoader = TheNetCacheMgr->AddNetCacheLoader(mDownloadQueue.front().c_str(), (NetLoaderPos)1);
-        mDownloadQueue.erase(mDownloadQueue.begin());
+        mNetCacheLoader = TheNetCacheMgr->AddNetCacheLoader(
+            mDownloadQueue.front().c_str(), (NetLoaderPos)1
+        );
+        mDownloadQueue.pop_front();
     }
 }
