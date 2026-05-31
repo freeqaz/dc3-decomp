@@ -184,23 +184,23 @@ void CharClip::Transitions::Save(BinStream &bs) {
 
 void CharClip::Transitions::Load(BinStreamRev &d, int oldRev) {
     Clear();
-    static ObjectDir *sDir;
+    static ObjectDir *sDir = nullptr;
+    char buf[0x100];
+    char buf2[0x100];
     if (oldRev < 8) {
-        int num;
-        d >> num;
-        if (num > 0 && mOwner->Dir() != sDir) {
+        int num_nodes, num_node_vectors;
+        d >> num_nodes;
+        if (num_nodes > 0 && mOwner->Dir() != sDir) {
             MILO_LOG(
                 "NOTIFY: %s has old clip format, should resave\n", PathName(mOwner->Dir())
             );
             sDir = mOwner->Dir();
         }
-        for (int i = 0; i < num; i++) {
-            char buf[0x100];
+        for (int i = 0; i < num_nodes; i++) {
             d.stream.ReadString(buf, 0x100);
             CharClip *clip = mOwner->Dir()->Find<CharClip>(buf, false);
-            int num2;
-            d >> num2;
-            for (int j = 0; j < num2; j++) {
+            d >> num_node_vectors;
+            for (int j = 0; j < num_node_vectors; j++) {
                 CharGraphNode node;
                 d >> node.curBeat;
                 d >> node.nextBeat;
@@ -210,28 +210,38 @@ void CharClip::Transitions::Load(BinStreamRev &d, int oldRev) {
             }
         }
     } else {
-        int temp, numNodes;
-        d >> temp;
-        d >> numNodes;
+        int num_nodes, num_node_vectors;
+        d >> num_nodes;
+        d >> num_node_vectors;
         if (d.rev < 0x14) {
-            temp /= 8;
+            num_nodes = ((num_nodes - (num_node_vectors * 8)) / 8) - num_node_vectors;
+        } else {
+            num_nodes = num_nodes - num_node_vectors;
         }
 #ifdef HX_NATIVE
-        // On LP64, NodeVector is ~2x larger (8-byte pointers), need more space
-        // temp from file is Xbox byte count; scale up generously
-        int allocSize = temp < 256 ? 4096 : temp * 4;
+        // On LP64, NodeVector is ~2x larger (8-byte pointers), need more space.
+        // num_nodes/num_node_vectors are Xbox-shaped counts; scale up generously.
+        int allocSize = num_nodes * sizeof(CharGraphNode)
+            + num_node_vectors * sizeof(NodeVector);
+        if (allocSize < 256)
+            allocSize = 4096;
+        else
+            allocSize *= 4;
         NodeVector *start = (NodeVector *)_MemAllocTemp(allocSize, __FILE__, 0x4CB, "CharGraphNode", 0);
         memset(start, 0, allocSize);
 #else
-        NodeVector *start =
-            (NodeVector *)_MemAllocTemp(temp, __FILE__, 0x4CB, "CharGraphNode", 0);
+        NodeVector *start = (NodeVector *)_MemAllocTemp(
+            num_nodes * sizeof(CharGraphNode) + num_node_vectors * sizeof(NodeVector),
+            __FILE__,
+            0x4CB,
+            "CharGraphNode",
+            0
+        );
 #endif
         NodeVector *it = start;
-
-        for (int i = 0; i < numNodes; i++) {
-            char buf[0x100];
-            d.stream.ReadString(buf, 0x100);
-            CharClip *clip = mOwner->Dir()->Find<CharClip>(buf, false);
+        for (int i = 0; i < num_node_vectors; i++) {
+            d.stream.ReadString(buf2, 0x100);
+            CharClip *clip = mOwner->Dir()->Find<CharClip>(buf2, false);
             if (clip) {
                 it->clip = clip;
                 d >> it->size;
@@ -244,9 +254,8 @@ void CharClip::Transitions::Load(BinStreamRev &d, int oldRev) {
                 int count;
                 d >> count;
                 for (int j = 0; j < count; j++) {
-                    int x, y;
-                    d >> x;
-                    d >> y;
+                    CharGraphNode node;
+                    d >> node.curBeat >> node.nextBeat;
                 }
             }
         }
