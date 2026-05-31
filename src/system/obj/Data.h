@@ -177,6 +177,7 @@ public:
     int UncheckedInt() const { return mValue.integer; }
     float UncheckedFloat() const { return mValue.real; }
     const char *UncheckedStr() const { return mValue.symbol; }
+    Symbol UncheckedSym() const { return STR_TO_SYM(mValue.symbol); }
     Hmx::Object *UncheckedObj() const { return mValue.object; }
     DataArray *UncheckedArray() const { return mValue.array; }
     DataNode *UncheckedVar() const { return mValue.var; }

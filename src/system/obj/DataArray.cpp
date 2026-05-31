@@ -494,6 +494,7 @@ void DataArray::Load(BinStream &bs) {
     MemPopTemp();
     bs >> mLine;
     bs >> mDeprecated;
+    DataArray *array = nullptr;
     for (int i = 0; i < size;) {
         DataNode &node = mNodes[i];
         bs >> node;
@@ -504,10 +505,8 @@ void DataArray::Load(BinStream &bs) {
             size--;
             continue;
         }
-        DataArray *array = nullptr;
-        const char *nodeSym = node.UncheckedStr();
         if (node.Type() == kDataSymbol
-            && (array = DataGetMacro(STR_TO_SYM(nodeSym))) != 0) {
+            && (array = DataGetMacro(node.UncheckedSym())) != 0) {
             size += array->Size() - 1;
             MemPushTemp();
             Resize(size);
@@ -525,20 +524,19 @@ void DataArray::Load(BinStream &bs) {
         } else if (node.Type() == kDataDefine) {
             DataNode macro;
             bs >> macro;
-            auto _tmp0 = STR_TO_SYM(nodeSym);
-            DataSetMacro(_tmp0, macro.Array(this));
+            DataSetMacro(node.UncheckedSym(), macro.Array(this));
             size -= 2;
         } else if (node.Type() == kDataUndef) {
-            DataSetMacro(STR_TO_SYM(nodeSym), nullptr);
+            DataSetMacro(node.UncheckedSym(), nullptr);
             size -= 1;
         } else if (node.Type() == kDataIfdef) {
             gDataArrayConditional.push_back(
-                DataGetMacro(STR_TO_SYM(nodeSym)) != nullptr
+                DataGetMacro(node.UncheckedSym()) != nullptr
             );
             size -= 1;
         } else if (node.Type() == kDataIfndef) {
             gDataArrayConditional.push_back(
-                DataGetMacro(STR_TO_SYM(nodeSym)) == nullptr
+                DataGetMacro(node.UncheckedSym()) == nullptr
             );
             size -= 1;
         } else if (node.Type() == kDataElse) {
@@ -564,7 +562,7 @@ void DataArray::Load(BinStream &bs) {
 #endif
             size -= 1;
         } else if (node.Type() == kDataInclude || node.Type() == kDataMerge) {
-            const char *path = nodeSym;
+            const char *path = node.UncheckedStr();
             bool readFile = false;
             DataArray *macro = DataGetMacro(path);
             if (!macro) {
@@ -574,7 +572,7 @@ void DataArray::Load(BinStream &bs) {
                 if (!macro) {
                     MILO_FAIL(
                         "Couldn't open embedded file: %s (file %s, line %d)",
-                        (String &)path,
+                        path,
                         mFile.Str(),
                         mLine
                     );
@@ -585,8 +583,8 @@ void DataArray::Load(BinStream &bs) {
                 MemPushTemp();
                 Resize(size);
                 MemPopTemp();
-                for (int j = 0; j < macro->Size(); j++) {
-                    mNodes[i++] = macro->Node(j);
+                for (int j = 0; j < array->Size(); j++) {
+                    mNodes[i++] = array->Node(j);
                 }
             } else {
                 if (macro->Size() == 0) {
