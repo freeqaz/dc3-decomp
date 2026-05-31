@@ -12,6 +12,9 @@ public:
     virtual void AddOwnerVoice(Voice *);
     virtual void RemoveOwnerVoice(Voice *);
 
+    bool HasVoices() const { return !unk8.empty(); }
+    IXAudio2Voice *GetOutputVoice() const { return (IXAudio2Voice *)unk4; }
+
     FxSend360(FxSend *);
     void SyncEffectParams();
     void UpdateVolumes();

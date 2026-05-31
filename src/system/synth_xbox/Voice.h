@@ -40,7 +40,7 @@ public:
     static bool HasPendingVoices();
     void SetSpeed(float);
 
-    int GetVoice();
+    IXAudio2SourceVoice *GetVoice();
 
     static int sHeadsetTarget;
     void Init(bool);
@@ -82,7 +82,7 @@ private:
     void UpdateSends();
     void SafeRestart();
     void SetSendImpl(FxSend360 *);
-    void dispose(int *, unsigned int);
+    void dispose(PoolVoice *, unsigned int);
     long createOrReuse(PoolVoice *, unsigned int &, tWAVEFORMATEX &, XAUDIO2_VOICE_SENDS *);
 };
 

@@ -55,6 +55,9 @@ public:
     std::vector<FxSend360 *> mFxSends;
     bool unk14c;
 
+    IXAudio2Voice *OutputVoice() const { return (IXAudio2Voice *)unkf0; }
+    IXAudio2Voice *UnkF8() const { return (IXAudio2Voice *)unkf8; }
+
     Synth360();
     void SetGlobalReverbPreset(char const *);
     IXAudio2SubmixVoice *GetHeadsetSubmix(int);

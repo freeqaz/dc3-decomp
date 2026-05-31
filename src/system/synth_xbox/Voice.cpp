@@ -1,4 +1,5 @@
 #include "synth_xbox/Voice.h"
+#include "synth_xbox/EnvelopeGenerator.h"
 #include "synth_xbox/FxSend.h"
 #include "synth_xbox/Synth.h"
 #include "math/Utl.h"
@@ -35,11 +36,8 @@ int gWasCommitTag = 0;
 int rolling = 0;
 void StartSynchronizedVoices();
 
-typedef void (*VoiceCallFunc)(int*, int*);
-typedef void (*PoolVoiceCallFunc)(int*, int, int);
-typedef HRESULT (*EndLoopFunc)(int *, int);
 
-int Voice::GetVoice() { return mSourceVoice; }
+IXAudio2SourceVoice *Voice::GetVoice() { return (IXAudio2SourceVoice *)mSourceVoice; }
 
 Voice::Voice(bool b1, int i, bool b2)
     : mState(0), mBuffer(0), mAudioBytes(0), mNumSamples(0), mSampleRate(0), mStartSamp(0), mLoopStart(-1),
@@ -63,34 +61,37 @@ Voice::Voice(bool b1, int i, bool b2)
 }
 
 Voice::~Voice() {
-    for (;;) {
-        int state = mState;
-        if (state != 2)
-            break;
-
+    while (mState == 2) {
         if (mSynchronized) {
             StartSynchronizedVoices();
         }
         Sleep(0);
     }
-
     if (mFxSend) {
-        int *pVar1 = (int *)mFxSend;
-        int *pVar2 = (int *)(*pVar1);
-        VoiceCallFunc fn = (VoiceCallFunc)(*(int *)(*pVar2 + 0x10));
-        fn(pVar1, (int*)this);
+        mFxSend->RemoveOwnerVoice(this);
     }
-
-    if (mSourceVoice) {
-        int *pVar1 = (int *)mSourceVoice;
-        int *pVar2 = (int *)(*pVar1);
-        PoolVoiceCallFunc fn = (PoolVoiceCallFunc)(*(int *)(*pVar2 + 0x50));
-        fn(pVar1, 0, 0);
-        dispose(pVar1, mState);
+    if (GetVoice()) {
+        GetVoice()->Stop(0, 0);
+        dispose((PoolVoice *)&mSourceVoice, unk0);
     }
 }
 
-void Voice::dispose(int *, unsigned int) {}
+void Voice::dispose(PoolVoice *pv, unsigned int) {
+    IXAudio2SourceVoice *voice = (IXAudio2SourceVoice *)pv->sourceVoice;
+    voice->DestroyVoice();
+    if (unk54) {
+        XAUDIO2_VOICE_STATE state;
+        voice->GetState(&state, 0);
+        unk54 = false;
+    }
+    pv->disposeTick = GetTickCount() - 500000;
+    gVoiceGC.Enter();
+    s_voiceGC.push_back(*pv);
+    gVoiceGC.Exit();
+    pv->eg = 0;
+    pv->egParams = 0;
+    pv->sourceVoice = 0;
+}
 
 void Voice::SetSampleRate(int i) {
     mSampleRate = i;
@@ -142,9 +143,7 @@ void Voice::SetReverbMixDb(float f) {
 }
 
 void Voice::EndLoop() {
-    // Call IXAudio2SourceVoice::ExitLoop(0) via vtable at offset 0x60
-    int *pSourceVoice = (int *)mSourceVoice;
-    HRESULT hr = ((EndLoopFunc)(*(int *)(*(int *)pSourceVoice + 0x60)))(pSourceVoice, 0);
+    HRESULT hr = GetVoice()->ExitLoop(0);
     MILO_ASSERT(SUCCEEDED(hr), 0x2da);
 }
 
@@ -229,35 +228,22 @@ void TerminateVoiceThread() {
 }
 
 bool Voice::HasPendingVoices() {
-    if (gShutdownVoiceThread)
+    if (gShutdownVoiceThread) {
         return false;
-    gLockPendingLists.Enter();
-    int count1 = 0;
-    for (std::list<Voice *>::iterator it = gPendingVoices.begin();
-         it != gPendingVoices.end(); ++it) {
-        count1++;
+    } else {
+        CritSecTracker t(&gLockPendingLists);
+        return gPendingVoices.size() + gPendingSyncVoices.size() != 0;
     }
-    int count2 = 0;
-    for (std::list<Voice *>::iterator it = gPendingSyncVoices.begin();
-         it != gPendingSyncVoices.end(); ++it) {
-        count2++;
-    }
-    bool result = (count1 + count2) > 0;
-    gLockPendingLists.Exit();
-    return result;
 }
 
-void Voice::blockingStart(bool b) {
-    if (gShutdownVoiceThread || (unsigned int)TheXboxSynth->unkf0 == 0)
-        return;
-    gLockPendingLists.Enter();
-    Init(b);
-    int *pVoice = (int *)mSourceVoice;
-    HRESULT hr =
-        ((HRESULT(*)(int *, int, int))(*(int *)(*(int *)pVoice + 0x4c)))(pVoice, 0, mSynchronized != 0);
-    MILO_ASSERT(SUCCEEDED(hr), 0x29b);
-    mState = 3;
-    gLockPendingLists.Exit();
+void Voice::blockingStart(bool b1) {
+    if (!gShutdownVoiceThread && TheXboxSynth->OutputVoice()) {
+        CritSecTracker t(&gLockPendingLists);
+        Init(b1);
+        HRESULT hr = GetVoice()->Start(0, mSynchronized != false);
+        MILO_ASSERT(SUCCEEDED(hr), 0x29B);
+        mState = 3;
+    }
 }
 
 void Voice::Stop(bool immediate) {
@@ -278,22 +264,18 @@ void Voice::Stop(bool immediate) {
     mState = 1;
 }
 
-void Voice::Pause(bool b) {
-    int isPaused = (mState == 4);
-    if (!(b == isPaused) && IsPlaying()) {
-        if (mSynchronized && mState == 2 && b) {
+void Voice::Pause(bool b1) {
+    if (b1 != (mState == 4) && IsPlaying()) {
+        if (mSynchronized && mState == 2 && b1) {
             StartSynchronizedVoices();
         }
         while (mState == 2) {
             Sleep(0);
         }
-        MILO_ASSERT(GetVoice(), 0x2b4);
-        if (b) {
+        MILO_ASSERT(GetVoice(), 0x2B4);
+        if (b1) {
             gHasPendingStopCommits = true;
-            int *pVoice = (int *)mSourceVoice;
-            bool sync = mSynchronized;
-            HRESULT hr =
-                ((HRESULT(*)(int *, int, int))(*(int *)(*(int *)pVoice + 0x50)))(pVoice, 0, sync ? 2 : 0);
+            HRESULT hr = GetVoice()->Stop(0, mSynchronized ? 2 : 0);
             MILO_ASSERT(SUCCEEDED(hr), 700);
             mState = 4;
         } else {
@@ -385,10 +367,11 @@ bool Voice::IsPlaying() {
     return true;
 }
 
-void Voice::Init(bool b) {
+// clang-format off
+void Voice::Init(bool b1) {
     if ((unsigned int)TheXboxSynth->unkf0 == 0)
         return;
-    if (!b) {
+    if (!b1) {
         mState = 1;
     }
     MILO_ASSERT(0 < mSampleRate && mSampleRate <= 48000, 0x160);
@@ -453,22 +436,18 @@ void Voice::Init(bool b) {
     if (voiceSends.SendCount != 0) {
         pSends = &voiceSends;
     }
-    HRESULT hr = createOrReuse((PoolVoice *)&mSourceVoice, (unsigned int &)unk0, fmt.wfx, pSends);
+    HRESULT hr = createOrReuse((PoolVoice *)&mSourceVoice, unk0, fmt.wfx, pSends);
     MILO_ASSERT(SUCCEEDED(hr), 0x19d);
     MILO_ASSERT(GetVoice(), 0x19e);
 
     // Submit source buffer
-    int *pVoice = (int *)mSourceVoice;
-    hr = ((HRESULT(*)(int *, XAUDIO2_BUFFER *, int))(*(int *)(*(int *)pVoice + 0x54)))(
-        pVoice, &audioBuffer, 0
-    );
+    hr = GetVoice()->SubmitSourceBuffer(&audioBuffer, nullptr);
     MILO_ASSERT(SUCCEEDED(hr), 0x1a3);
 
     // Update mix and frequency
     UpdateMix();
-    if (mSourceVoice) {
-        pVoice = (int *)mSourceVoice;
-        ((void (*)(int *, float, int))(*(int *)(*(int *)pVoice + 0x68)))(pVoice, mSpeed, 0);
+    if (GetVoice()) {
+        GetVoice()->SetFrequencyRatio(mSpeed, 0);
     }
 
     // Set envelope parameters
@@ -476,12 +455,10 @@ void Voice::Init(bool b) {
     ((float *)mEnvelopeParams)[1] = mReleaseRate;
     ((float *)mEnvelopeParams)[2] = 0.0f;
     ((float *)mEnvelopeParams)[3] = 0.0f;
-    pVoice = (int *)mSourceVoice;
-    hr = ((HRESULT(*)(int *, int, void *, int, int))(*(int *)(*(int *)pVoice + 0x18)))(
-        pVoice, 0, mEnvelopeParams, 0x10, 0
-    );
+    hr = GetVoice()->SetEffectParameters(0, mEnvelopeParams, 0x10, 0);
     MILO_ASSERT(SUCCEEDED(hr), 0x1b0);
 }
+// clang-format on
 
 void Voice::InitVoiceParameters(XMA2WAVEFORMATEX &fmt, XAUDIO2_BUFFER buf) {
     if (mXMA) {

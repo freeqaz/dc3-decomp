@@ -1,13 +1,17 @@
 #pragma once
 
+// size 0x10
+struct EnvelopeGeneratorParams {
+    float unk0;
+    float unk4;
+    float unk8;
+    float unkc;
+};
+
 namespace ATG {
 
 // Forward declarations
 struct XAPO_REGISTRATION_PROPERTIES;
-
-struct EnvelopeGeneratorParams {
-    char data[0x10];
-};
 
 // Base class for XAPO parameters
 class CXAPOParametersBase {
