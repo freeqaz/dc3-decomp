@@ -14,15 +14,13 @@
 
 namespace {
     __declspec(noinline) bool HasKeepMeshData(const RndMesh *mesh) {
-        while (mesh != 0) {
+        for (; mesh != nullptr; mesh = mesh->GetGeomOwner()) {
             if (mesh->GetKeepMeshData()) {
                 return true;
             }
-            const RndMesh *owner = mesh->GetGeomOwner();
-            if (mesh == owner) {
+            if (mesh == mesh->GetGeomOwner()) {
                 return false;
             }
-            mesh = owner;
         }
         return false;
     }
@@ -60,24 +58,22 @@ void PhysicsManager::HarvestCollidables(ObjectDir *parentProxy) {
     MILO_ASSERT(NULL != parentProxy, 0x86);
     static Symbol collidable("collidable");
     for (ObjDirItr<RndDrawable> it(parentProxy, true); it != nullptr; ++it) {
-        RndDrawable *drawable = it;
-        RndMesh *mesh = dynamic_cast<RndMesh *>(drawable);
+        RndDrawable *cur = it;
+        RndMesh *mesh = dynamic_cast<RndMesh *>(cur);
         if (mesh) {
-            const DataNode *prop = drawable->Property(collidable, false);
+            const DataNode *prop = cur->Property(collidable, false);
             if (prop) {
-                int i5 = prop->Int();
-                if (i5 == 1) {
-                    bool u2 = i5;
+                if (prop->Int() == 1) {
+                    bool u2 = true;
                     if (!mesh->GetKeepMeshData()) {
-                        RndMesh *owner = mesh->GetGeomOwner();
-                        if (mesh != owner) {
-                            u2 = HasKeepMeshData(owner);
+                        if (mesh != mesh->GetGeomOwner()) {
+                            u2 = HasKeepMeshData(mesh->GetGeomOwner());
                         } else {
                             u2 = false;
                         }
                     }
                     if (u2) {
-                        AddCollidable(drawable, parentProxy, mesh->Showing());
+                        AddCollidable(cur, parentProxy, mesh->Showing());
                     } else {
                         MILO_NOTIFY(
                             "Mesh %s in Dir %s is flagged as collidable, but does not have its 'keep mesh data' set to true. Collision object will not be generated!",
@@ -88,12 +84,12 @@ void PhysicsManager::HarvestCollidables(ObjectDir *parentProxy) {
                 }
             }
         } else {
-            PhysicsVolume *pv = dynamic_cast<PhysicsVolume *>(drawable);
+            PhysicsVolume *pv = dynamic_cast<PhysicsVolume *>(cur);
             if (pv) {
                 pv->CreatePhysicsVolume(this);
             }
         }
-        ObjectDir *proxyProxy = dynamic_cast<ObjectDir *>(drawable);
+        ObjectDir *proxyProxy = dynamic_cast<ObjectDir *>(cur);
         if (proxyProxy && proxyProxy->IsProxy()) {
             HarvestCollidables(proxyProxy);
         }
