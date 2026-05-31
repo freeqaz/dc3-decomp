@@ -471,22 +471,18 @@ static complex reflect(complex z) {
 
 /* compute Z-plane pole & zero positions for bandpass resonator */
 static void compute_bpres() {
-    zplane.numpoles = zplane.numzeros = 2;
     zplane.zeros[0] = 1.0;
     zplane.zeros[1] = -1.0;
     /* where we want the peak to be */
+    zplane.numpoles = zplane.numzeros = 2;
     double theta = TWOPI * raw_alpha1;
-    if (infq) { /* oscillator */
-        complex zp = expj(theta);
-        zplane.poles[0] = zp;
-        zplane.poles[1] = cconj(zp);
-    } else { /* must iterate to find exact pole positions */
+    if (!(infq)) { /* must iterate to find exact pole positions */
         complex topcoeffs[MAXPZ + 1];
         expand(zplane.zeros, zplane.numzeros, topcoeffs);
-        double r = exp(-theta / (2.0 * qfactor));
         double thm = theta, th1 = 0.0, th2 = PI;
+        double r = exp(-theta / (2.0 * qfactor));
         bool cvg = false;
-        for (int i = 0; i < 50 && !cvg; i++) {
+        for (int i = 0; 50 > i && !cvg; i++) {
             complex zp = r * expj(thm);
             zplane.poles[0] = zp;
             zplane.poles[1] = cconj(zp);
@@ -506,6 +502,10 @@ static void compute_bpres() {
             thm = 0.5 * (th1 + th2);
         }
         unless(cvg) MILO_NOTIFY("Warning: failed to converge");
+    } else { /* oscillator */
+        complex zp = expj(theta);
+        zplane.poles[0] = zp;
+        zplane.poles[1] = cconj(zp);
     }
 }
 
