@@ -30,6 +30,7 @@
 #endif
 
 static File *gOpenCaptureFile;
+static int gCaptureFileMode;
 static char gRoot[256];
 static char gExecRoot[256];
 static char gSystemRoot[256];
@@ -40,7 +41,6 @@ void *kNoHandle;
 DataArray *gFrameRateArray;
 
 std::vector<File *> gFiles(0x80); // 0x10...?
-int gCaptureFileMode;
 std::vector<String> gDirList;
 const int File::MaxFileNameLen = 0x100;
 
@@ -285,7 +285,7 @@ void OnFrameRateRecurseCB(const char *cc1, const char *cc2) {
     gFrameRateArray->Insert(gFrameRateArray->Size(), str);
 }
 
-void DirListCB(const char *, const char *cc2) { gDirList.push_back(String(cc2)); }
+void DirListCB(const char *, const char *c) { gDirList.push_back(c); }
 
 bool FileExists(const char *iFilename, int iMode, String *str) {
     MILO_ASSERT((iMode & ~FILE_OPEN_NOARK) == 0, 0x2A8);
@@ -337,15 +337,13 @@ DataNode OnFileAbsolutePath(DataArray *da) {
 DataNode OnFileRelativePath(DataArray *da) {
     return FileRelativePath(da->Str(1), da->Str(2));
 }
-DataNode OnToggleFakeFileErrors(DataArray *da) {
+DataNode OnToggleFakeFileErrors(DataArray *a) {
     gFakeFileErrors = !gFakeFileErrors;
-    Hmx::Object *obj = ObjectDir::Main()->Find<Hmx::Object>("cheat_display", true);
-    if (obj) {
-        static Message msg(
-            "cheat_display", DataNode("Fake File errors"), DataNode("show_bool")
-        );
-        msg[2] = gFakeFileErrors;
-        obj->Handle(msg, true);
+    Hmx::Object *cheatDisplay = ObjectDir::Main()->Find<Hmx::Object>("cheat_display");
+    if (cheatDisplay) {
+        static Message msg("show_bool", "Fake File errors", 0);
+        msg[1] = gFakeFileErrors;
+        cheatDisplay->Handle(msg, false);
     }
     return 0;
 }
@@ -598,68 +596,49 @@ bool FileDiscSpinUp() { return TheBlockMgr.SpinUp(); }
 bool FileReadOnly(const char *filepath) { return true; }
 
 File *NewFile(const char *iFilename, int iMode) {
-    const char *filename;
-    int mode;
-    File *result;
-
-    filename = iFilename;
-    mode = iMode;
-    result = nullptr;
-
     if (gNullFiles) {
         return new NullFile();
-    }
-
-    if (!MainThread()) {
-        TheDebug.Notify("NewFile(%s) from MainThread()");
-    }
-
-    if ((iFilename != nullptr) && (*iFilename != '\0')) {
-        char localized[256];
-        if (mode & 0x2) {
-            filename = FileLocalize(iFilename, localized);
+    } else {
+        if (!MainThread()) {
+            MILO_NOTIFY("NewFile(%s) from !MainThread()", iFilename);
         }
-
-        if (FileIsLocal(filename)) {
-            mode |= 0x10000;
-        }
-
-        int mode_check = mode & 0x2;
-        if ((mode_check == 0) || (mode & 0x20000)
-            || ((result = FileCache::GetFileAll(filename)) == nullptr)) {
-            if ((UsingCD() != 0) && (mode_check != 0) && !(mode & 0x10000)) {
-                void *mem = _MemAllocTemp(sizeof(ArkFile), __FILE__, 0x19, "ArkFile", 0);
-                if (mem != nullptr) {
-                    result = new (mem) ArkFile(filename, mode);
-                } else {
-                    result = nullptr;
+        if (iFilename && *iFilename) {
+            char pathBuf[256];
+            char loc[256];
+            if (iMode & 2) {
+                iFilename = FileLocalize(iFilename, loc);
+            }
+            if (FileIsLocal(iFilename)) {
+                iMode |= 0x10000;
+            }
+            if ((iMode & 2) && !(iMode & 0x20000)) {
+                File *all = FileCache::GetFileAll(iFilename);
+                if (all) {
+                    return all;
                 }
+            }
+            File *theFile;
+            if (UsingCD() && (iMode & 2) && !(iMode & 0x10000)) {
+                theFile = new ArkFile(iFilename, iMode);
             } else {
-                mode &= ~0x4000;
-                result = AsyncFile::New(filename, mode);
+                iMode &= ~0x30000;
+                theFile = AsyncFile::New(iFilename, iMode);
             }
-
-            if (result != nullptr) {
-                if (result->Fail()) {
-                    delete result;
-                    return nullptr;
+            if (theFile->Fail()) {
+                delete theFile;
+                return nullptr;
+            } else {
+                if (!gOpenCaptureFile || !(iMode & 2) || 1 <= (unsigned int)(int)gCaptureFileMode) {
+                    return theFile;
                 }
-
-                if ((gOpenCaptureFile != nullptr) && (mode & 0x2) && !(mode & 0x20000)) {
-                    char path_buf[256];
-                    sprintf(path_buf, "./%s", FileMakePath(".", filename));
-                    const char *ptr = path_buf;
-                    while (*ptr != '\0') {
-                        ptr++;
-                    }
-                    gOpenCaptureFile->Write(path_buf, (ptr - path_buf) - 1);
-                    gOpenCaptureFile->Flush();
-                }
+                sprintf(pathBuf, "'%s'\n", FileMakePath(".", iFilename));
+                gOpenCaptureFile->Write(pathBuf, strlen(pathBuf));
+                gOpenCaptureFile->Flush();
+                return theFile;
             }
         }
+        return nullptr;
     }
-
-    return result;
 }
 
 void FileRecursePattern(
