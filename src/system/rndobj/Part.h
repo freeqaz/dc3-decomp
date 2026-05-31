@@ -17,6 +17,9 @@ class RndParticle {
 public:
     MEM_ARRAY_OVERLOAD(Particle, 0x1E);
 
+    Vector3 &Pos3() { return reinterpret_cast<Vector3 &>(pos); }
+    Vector3 &Vel3() { return reinterpret_cast<Vector3 &>(vel); }
+
     Hmx::Color col; // 0x0
     Hmx::Color colVel; // 0x10
     Vector4 pos; // 0x20
@@ -36,6 +39,8 @@ public:
 // size 0xcc (target 0xc8 - one field may be wrong)
 class RndFancyParticle : public RndParticle {
 public:
+    Vector3 &Bubble3() { return reinterpret_cast<Vector3 &>(bubbleDir); }
+
     float growFrame; // 0x68
     float growVel; // 0x6c
     float shrinkFrame; // 0x70
@@ -125,7 +130,6 @@ public:
     };
     class Burst {
     public:
-        Burst() : mPeakRate(0), mHalfDuration(0), mInvHalfDuration(0), mRemainingDuration(0) {}
         bool Set(float, float);
         float Emit(float);
         float mPeakRate;
