@@ -1,5 +1,18 @@
 # Stream 3 — decomp-synth Binary-Oracle Phase 2 (design + build)
 
+> **RESOLVED 2026-05-31 — validation experiment NEGATIVE; do not build the source oracle.**
+> The white-box BSF tracer fires perfectly (10/10, no fallback — the "unprovisioned in
+> worktrees" gap is already closed by the worktree-aware `_resolve_wibo_32`). But
+> declaration reorder — blind, ASM-guided, *or* BSF-white-box-guided — improves **0 of 10**
+> representative both-stuck regswap functions (0/30 function×arm runs). The bucket's swaps
+> are FPR (4/10), synthesized-constant/coalescing-phase GPR (3/10), or mislabeled
+> scheduling (3/10) — none declaration-order-controllable. Design directions #1/#2 would
+> not change this. The proposed #4 pivot patterns (`fpr_cascade_operand_hoist`,
+> `pragma_fp_contract`) **do not exist** in decomp-synth (dropped in §5 extraction) — #4 is
+> a build, not a measure, and is itself small (~226 fns across *all* AT_LIMIT, mostly
+> outside this bucket). **Conclusion: accept the both-stuck bucket as the floor.** Full
+> write-up + reproduce: [docs/sessions/2026-05-31-stream3-binary-oracle-validation.md](../../sessions/2026-05-31-stream3-binary-oracle-validation.md).
+
 **Read `docs/plans/port-harvest/WORKFLOW.md`** for worktree/subagent/merge mechanics (used for
 experiments here too). This stream is **design-and-build**, not a port harvest — it extends
 `../decomp-synth` so its rules chase the **target binary** to crack the functions porting can't reach.
