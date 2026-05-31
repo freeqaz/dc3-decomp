@@ -14,37 +14,32 @@
 #include "xdk/xapilibi/winerror.h"
 #include "xdk/xapilibi/xbox.h"
 
-// Forward declarations for merged functions
-extern void* merged_DataArrayNode(void*, int);
-extern void* merged_82610090(const void*, unsigned int*);
-
 struct XSTORAGE_ENUMERATE_RESULTS;
 enum ServiceIdState {};
 
 namespace {
-    int mSigninSameGuest;
-    int gNumSmartGlassClients;
-    unsigned long gSmartGlassClientIDs[XBC_MAX_CLIENTS];
-    int gNumSmartGlassSendsInProgress;
-    void *mFriendsEnum;
-    void *mFriendsBuffer;
-    Hmx::Object *mFriendsCallback;
-    void *mFriendsAsync;
-    std::vector<Friend *> *mFriendsList;
-    void *mListener;
+    DWORD gSmartGlassClientIDs[4];
+    XUID mXuidCache[4];
+    unsigned long mResult;
+    unsigned long mUserID;
+    unsigned long mPathLen;
+    unsigned long mListSize;
+    XSTORAGE_ENUMERATE_RESULTS *mStorageList;
     XOVERLAPPED *mServiceIDOverlapped;
     XOVERLAPPED *mServiceIDOverlapped2;
-    XUID mXuidCache[4];
-    XSTORAGE_ENUMERATE_RESULTS *mStorageList;
-    unsigned long mPathLen;
     ServiceIdState mServiceIdState;
-    unsigned long mListSize;
-    unsigned long mUserID;
-    unsigned long mResult;
+    Hmx::Object *mFriendsCallback;
+    void *mFriendsAsync;
+    void *mFriendsBuffer;
+    void *mFriendsEnum;
+    void *mListener;
+    int mSigninSameGuest;
+    int gNumSmartGlassClients;
+    int gNumSmartGlassSendsInProgress;
+    std::vector<Friend *> *mFriendsList;
 }
 
-PlatformMgr::PlatformMgr() {
-    mSigninMask = 0;
+PlatformMgr::PlatformMgr() : mSigninMask(0) {
     mScreenSaver = true;
     mSigninChangeMask = 0;
     mGuideShowing = false;
@@ -53,30 +48,26 @@ PlatformMgr::PlatformMgr() {
     mRegion = kRegionNone;
     mDiskError = kNoDiskError;
     unk69 = false;
-
     mSigninSameGuest = 0;
-    mFriendsEnum = 0;
-    mFriendsBuffer = 0;
-    mFriendsCallback = 0;
-    mFriendsAsync = 0;
-    mFriendsList = 0;
-    mListener = 0;
-
+    mFriendsEnum = nullptr;
+    mFriendsBuffer = nullptr;
+    mFriendsCallback = nullptr;
+    mFriendsAsync = nullptr;
+    mFriendsList = nullptr;
+    mListener = nullptr;
     mJobMgr = new JobMgr(this);
-
-    mServiceIDOverlapped = 0;
-    mXuidCache[0] = 0;
-    mServiceIDOverlapped2 = 0;
-    mStorageList = 0;
+    for (int i = 0; i < 4; i++) {
+        mXuidCache[i] = 0;
+    }
+    mServiceIDOverlapped = nullptr;
+    mServiceIDOverlapped2 = nullptr;
+    mStorageList = nullptr;
     mPathLen = 0x200;
-    mXuidCache[1] = 0;
-    mXuidCache[2] = 0;
-    mXuidCache[3] = 0;
     mServiceIdState = (ServiceIdState)0;
     mListSize = 0;
     mUserID = -1;
     mResult = 0;
-    mOverlapped.hEvent = 0;
+    mOverlapped.hEvent = nullptr;
 }
 
 bool PlatformMgr::IsEthernetCableConnected() { return XNetGetEthernetLinkStatus() != 0; }
@@ -279,110 +270,71 @@ void PlatformMgr::RegionInit() {
 }
 
 namespace {
-    void DtaToJsonHelper(HJSONWRITER__ *writer, const DataArray *arr);
-    HJSONWRITER__ *DtaToJson(const DataArray *arr);
-    void XbcSendMsg(unsigned long clientID, const DataArray *arr);
-    void SmartGlassPoll();
-    DataArrayPtr JsonToDta(HJSONREADER__ *reader, bool topLevel);
-    void XbcRecieveMsg(unsigned long clientID, HJSONREADER__ *reader);
-    void XbcCallback(long error, _XBC_EVENT_PARAMS *params, void *state);
-    void SmartGlassInit();
-
-    void DtaToJsonHelper(HJSONWRITER__ *writer, const DataArray *arr) {
-        short count = arr->Size();
-        if (count != 0 && count > 0) {
-            for (int i = 0; i < count; i++) {
-                DataNode& nodeRef = arr->Node(i);
-                DataNode* node = &nodeRef;
-                unsigned int type = (unsigned int)node->Type();
-
-                if (type >= 1) {
-                    switch (type) {
-                        case 18: {
-                            const char* str = node->Str();
-                            const char* start = str;
-                            while (*str != 0) {
-                                str++;
-                            }
-                            int len = str - start - 1;
-                            const char* str2 = node->Str();
-                            XJSONWriteStringValue(writer, str2, len);
-                            break;
-                        }
-                        case 16: {
-                            XJSONBeginArray(writer);
-                            DataArray* subArr = node->Array();
-                            DtaToJsonHelper(writer, subArr);
-                            XJSONEndArray(writer);
-                            break;
-                        }
-                        case 5: {
-                            Symbol sym = node->Sym();
-                            const char* symStart = sym.Str();
-                            const char* symStr = symStart;
-                            while (*symStr != 0) {
-                                symStr++;
-                            }
-                            int len = symStr - symStart - 1;
-                            Symbol sym2 = node->Sym();
-                            XJSONWriteStringValue(writer, sym2.Str(), len);
-                            break;
-                        }
-                        case 1: {
-                            double val = node->Float();
-                            XJSONWriteNumberValue(writer, val);
-                            break;
-                        }
-                        default: {
-                            unsigned int t = type;
-                            const char* msg = "DtaToJson can't handle type %d r";
-                            const char* formatted = (const char*)merged_82610090(&msg, &t);
-                            TheDebug.Notify(formatted);
-                            XJSONWriteNullValue(writer);
-                            break;
-                        }
-                    }
-                } else {
-                    int intVal = node->Int();
-                    double dblVal = (double)(long long)intVal;
-                    XJSONWriteNumberValue(writer, dblVal);
+    void DtaToJsonHelper(HJSONWRITER *writer, const DataArray *a) {
+        int aSize = a->Size();
+        if (aSize != 0) {
+            for (int i = 0; i < aSize; i++) {
+                const DataNode &n = a->Node(i);
+                switch (n.Type()) {
+                case kDataInt:
+                    XJSONWriteNumberValue(writer, n.Int());
+                    break;
+                case kDataFloat:
+                    XJSONWriteNumberValue(writer, n.Float());
+                    break;
+                case kDataSymbol:
+                    XJSONWriteStringValue(writer, n.Sym().Str(), strlen(n.Sym().Str()));
+                    break;
+                case kDataArray:
+                    XJSONBeginArray(writer);
+                    DtaToJsonHelper(writer, n.Array());
+                    XJSONEndArray(writer);
+                    break;
+                case kDataString:
+                    XJSONWriteStringValue(writer, n.Str(), strlen(n.Str()));
+                    break;
+                default:
+                    MILO_NOTIFY("DtaToJson can't handle type %d right now", n.Type());
+                    XJSONWriteNullValue(writer);
+                    break;
                 }
             }
         }
     }
 
-    HJSONWRITER__ *DtaToJson(const DataArray *arr) {
-        HJSONWRITER__ *writer = XJSONCreateWriter();
+    HJSONWRITER *DtaToJson(const DataArray *a) {
+        HJSONWRITER *writer = XJSONCreateWriter();
         XJSONBeginArray(writer);
-        DtaToJsonHelper(writer, arr);
+        DtaToJsonHelper(writer, a);
         XJSONEndArray(writer);
         return writer;
     }
 
-    void XbcSendMsg(unsigned long clientID, const DataArray *arr) {
-        HJSONWRITER__ *writer = DtaToJson(arr);
-        if (clientID == 0) {
-            for (int i = 0; i < XBC_MAX_CLIENTS; i++) {
+    void XbcSendMsg(DWORD id, const DataArray *a) {
+        HJSONWRITER *writer = DtaToJson(a);
+        if (id == 0) {
+            // i hate this
+            for (int i = 0; i < 4; i++) {
                 if (gSmartGlassClientIDs[i] != 0) {
-                    XbcSendJSON(XBC_DELIVERY_DEFAULT, gSmartGlassClientIDs[i], writer, 0);
+                    XbcSendJSON(XBC_DELIVERY_RELIABLE, gSmartGlassClientIDs[i], writer, 0);
                     gNumSmartGlassSendsInProgress++;
                 }
             }
         } else {
-            XbcSendJSON(XBC_DELIVERY_DEFAULT, clientID, writer, 0);
+            XbcSendJSON(XBC_DELIVERY_RELIABLE, id, writer, 0);
             gNumSmartGlassSendsInProgress++;
         }
         XJSONCloseWriter(writer);
     }
 
     void SmartGlassPoll() {
-        long result = XbcDoWork();
-        if (result != 0) {
-            MILO_NOTIFY("SmartGlass: error: %d\n", result);
+        HRESULT res = XbcDoWork();
+        if (res != 0) {
+            MILO_NOTIFY("SmartGlass: error: %d\n", res);
         }
     }
 
-    DataArrayPtr JsonToDta(HJSONREADER__ *reader, bool topLevel) {
+    DataArrayPtr JsonToDta(HJSONREADER *reader, bool topLevel) {
         DataArrayPtr container;
         DataArray *fieldName = 0;
         _JSONTokenType tokenType;
@@ -456,51 +408,54 @@ namespace {
         return container;
     }
 
-    void XbcRecieveMsg(unsigned long clientID, HJSONREADER__ *reader) {
+    void XbcRecieveMsg(DWORD id, HJSONREADER *reader) {
         DataArrayPtr dta = JsonToDta(reader, true);
-        SmartGlassMsg msg(clientID, (DataArray *)dta);
-        ThePlatformMgr.Handle(msg.Data(), true);
+        SmartGlassMsg msg(id, dta);
+        ThePlatformMgr.Handle(msg, true);
     }
 
-    void XbcCallback(long error, _XBC_EVENT_PARAMS *params, void *state) {
-        if (error != 0) {
-            MILO_NOTIFY("SmartGlass: Error in cb: 0x%08x", error);
-            return;
-        }
-        unsigned int userIdx = params->userIndex;
-        if (userIdx >= XBC_MAX_CLIENTS) {
-            MILO_NOTIFY("SmartGlass: Error in cb: user index %d (event: %d)", userIdx, params->eventType);
-            return;
-        }
-        switch (params->eventType) {
-        case XBC_EVENT_CLIENT_CONNECTED:
-            gNumSmartGlassClients++;
-            gSmartGlassClientIDs[userIdx] = params->clientID;
-            MILO_ASSERT(gNumSmartGlassClients <= XBC_MAX_CLIENTS, 0x20C);
-            break;
-        case XBC_EVENT_CLIENT_DISCONNECTED:
-            gSmartGlassClientIDs[userIdx] = 0;
-            gNumSmartGlassClients--;
-            MILO_ASSERT(gNumSmartGlassClients >= 0, 0x214);
-            break;
-        case XBC_EVENT_SEND_COMPLETE:
-            gNumSmartGlassSendsInProgress--;
-            break;
-        case XBC_EVENT_DATA_RECEIVED:
-            XbcRecieveMsg(params->clientID, params->jsonReader);
-            break;
-        default:
-            break;
+    void XbcCallback(HRESULT err, XBC_EVENT_PARAMS *params, void *) {
+        if (err != 0) {
+            MILO_NOTIFY("SmartGlass: Error in cb: 0x%08x", err);
+        } else if (params->nUserIndex >= 4) {
+            MILO_NOTIFY(
+                "SmartGlass: Error in cb: user index %d (event: %d)",
+                params->nUserIndex,
+                params->Type
+            );
+        } else {
+            switch (params->Type) {
+            case XBC_EVENT_CLIENT_CONNECTED: {
+                gSmartGlassClientIDs[params->nUserIndex] = params->nClientId;
+                gNumSmartGlassClients++;
+                MILO_ASSERT(gNumSmartGlassClients <= XBC_MAX_CLIENTS, 0x20C);
+                break;
+            }
+            case XBC_EVENT_CLIENT_DISCONNECTED: {
+                gSmartGlassClientIDs[params->nUserIndex] = 0;
+                gNumSmartGlassClients--;
+                MILO_ASSERT(gNumSmartGlassClients >= 0, 0x214);
+                break;
+            }
+            case XBC_EVENT_JSON_SEND_COMPLETE: {
+                gNumSmartGlassSendsInProgress--;
+                break;
+            }
+            case XBC_EVENT_JSON_RECEIVE_COMPLETE: {
+                XbcRecieveMsg(params->nClientId, params->hReader);
+                break;
+            }
+            default:
+                break;
+            }
         }
     }
 
     void SmartGlassInit() {
-        *(unsigned long*)gSmartGlassClientIDs = 0;
-        *(unsigned long*)(gSmartGlassClientIDs + 4) = 0;
-        *(unsigned long*)(gSmartGlassClientIDs + 8) = 0;
-        *(unsigned long*)(gSmartGlassClientIDs + 12) = 0;
-        long result = XbcInitialize(XbcCallback, nullptr);
-        if (result < 0) {
+        for (int i = 0; i < 4; i++) {
+            gSmartGlassClientIDs[i] = 0;
+        }
+        if (XbcInitialize(XbcCallback, nullptr) < 0) {
             MILO_FAIL("Failed to initialize Xbox SmartGlass library.\n");
         }
     }
@@ -551,16 +506,9 @@ unsigned long long SingleItemEnumCompleteMsg::OfferID() const {
     return _strtoui64(mData->Str(4), 0, 16);
 }
 
-MultipleItemsEnumJob::MultipleItemsEnumJob(Hmx::Object *obj, int userIndex, std::vector<u64> &itemIDs)
-    : Job(), mItemIDs(itemIDs), mPurchased() {
-    mObject = obj;
-    mUserIndex = userIndex;
-    mStatus = 0;
-    mSuccess = false;
-    mEnumBuffer = 0;
-    mEnumHandle = 0;
-    memset(&mOverlapped, 0, sizeof(mOverlapped));
-}
+MultipleItemsEnumJob::MultipleItemsEnumJob(Hmx::Object *callback, int pad, std::vector<u64> &ids)
+    : mObject(callback), mUserIndex(pad), mItemIDs(ids), mStatus(0), mSuccess(false),
+      mEnumBuffer(0), mEnumHandle(0) {}
 
 MultipleItemsEnumJob::~MultipleItemsEnumJob() {
     if (mStatus == 1 && mOverlapped.InternalLow == 0x3e5) {
@@ -670,20 +618,19 @@ void MultipleItemsEnumJob::Start() {
     mStatus = 3;
 }
 
-void MultipleItemsEnumJob::OnCompletion(Hmx::Object *obj) {
-    if (mObject != 0) {
-        static MultipleItemsEnumCompleteMsg msg(false, false, (int)mItemIDs.size(), String(gNullStr));
-
+void MultipleItemsEnumJob::OnCompletion(Hmx::Object *) {
+    if (mObject) {
+        static MultipleItemsEnumCompleteMsg msg(false, false, mItemIDs.size(), gNullStr);
         msg.SetSuccess(mStatus == 2);
         msg.SetPurchaseMade(mSuccess);
-        int count = (int)mItemIDs.size();
-        msg.SetNumOfferIDs(count);
-        for (int i = 0; i < count; i++) {
-            String offerStr(MakeString("%016llX", mItemIDs[i]));
-            msg.SetOfferID(i, offerStr);
+        int numIDs = mItemIDs.size();
+        msg.SetNumOfferIDs(numIDs);
+        for (int i = 0; i < numIDs; i++) {
+            String curID = MakeString("%016llX", mItemIDs[i]);
+            msg.SetOfferID(i, curID);
             msg.SetPurchased(i, mPurchased[i]);
         }
-        mObject->Handle(msg.Data(), true);
+        mObject->Handle(msg, true);
     }
 }
 
