@@ -472,43 +472,40 @@ int CharBonesSamples::FracToSample(float *frac) const {
     if (mNumSamples < 2) {
         *frac = 0.0f;
         return 0;
+    } else {
+        float old = *frac;
+        ClampEq(*frac, 0.0f, 1.0f);
+        int total = Max((int)mFrames.size(), mNumSamples);
+        float scaledPos = *frac * (total - 1);
+        *frac = scaledPos;
+        int sampleIdx = scaledPos;
+        if (sampleIdx >= total - 1) {
+            *frac = 0.0f;
+            return mNumSamples - 1;
+        } else {
+            *frac = scaledPos - sampleIdx;
+            if (mFrames.size() != 0) {
+                float interp = Interp(mFrames[sampleIdx], mFrames[sampleIdx + 1], *frac);
+                sampleIdx = interp;
+                *frac = interp - (float)sampleIdx;
+            }
+            if (sampleIdx < 0 || sampleIdx >= mNumSamples) {
+                MILO_NOTIFY_ONCE(
+                    "FracToSample: sample is %d, clip only has %d samples, frac was %g, is %g",
+                    sampleIdx,
+                    mNumSamples,
+                    old,
+                    *frac
+                );
+                sampleIdx = 0;
+            }
+            if (*frac < 0.0f || *frac >= 1.0f) {
+                MILO_NOTIFY_ONCE("FracToSample: frac is %g, outside of 0 and 1", *frac);
+                *frac = 0.0f;
+            }
+            return sampleIdx;
+        }
     }
-    float inputFrac = *frac;
-    float clampedFrac = Clamp(0.0f, 1.0f, inputFrac);
-    *frac = clampedFrac;
-    int total = Max((int)mFrames.size(), mNumSamples);
-    float scaledPos = clampedFrac * (total - 1);
-    *frac = scaledPos;
-    int sampleIdx = scaledPos;
-    if ((unsigned int)sampleIdx >= total - 1) {
-        *frac = 0.0f;
-        return mNumSamples - 1;
-    }
-    float interpFrac = scaledPos - sampleIdx;
-    *frac = interpFrac;
-    int ret = sampleIdx;
-    if (mFrames.size() != 0) {
-        float frame = mFrames[sampleIdx];
-        float nextFrame = mFrames[sampleIdx + 1];
-        float interpFrame = frame + (nextFrame - frame) * interpFrac;
-        ret = interpFrame;
-        *frac = interpFrame - ret;
-    }
-    if (ret < 0 || ret >= mNumSamples) {
-        MILO_NOTIFY_ONCE(
-            "FracToSample: sample is %d, clip only has %d samples, frac was %g, is %g",
-            ret,
-            mNumSamples,
-            inputFrac,
-            *frac
-        );
-        ret = 0;
-    }
-    if (*frac < 0.0f || *frac >= 1.0f) {
-        MILO_NOTIFY_ONCE("FracToSample: frac is %g, outside of 0 and 1", *frac);
-        *frac = 0.0f;
-    }
-    return ret;
 }
 
 void CharBonesSamples::EvaluateChannel(void *dest, int byteOffset, int sample, float frac) {
@@ -604,8 +601,9 @@ void CharBonesSamples::EvaluateChannel(void *dest, int byteOffset, int sample, f
     }
 }
 
+
 void CharBonesSamples::Save(BinStream &bs) {
-    SAVE_REVS(0x10, 0)
+    SAVE_REVS(0x10, 0);
     bs << mBones;
     for (int i = 0; i < NUM_TYPES; i++) {
         bs << mCounts[i];
@@ -613,73 +611,68 @@ void CharBonesSamples::Save(BinStream &bs) {
     bs << (int)mCompression;
     bs << mNumSamples;
     bs << mFrames;
-
-    auto isCached = bs.Cached();
+    bool check =
+        (bs.Cached()
+         && (bs.GetPlatform() == kPlatformPS3 || bs.GetPlatform() == kPlatformXBox));
     int delta = 0;
-    bool cached = isCached && (bs.GetPlatform() == kPlatformPS3 || bs.GetPlatform() == kPlatformXBox);
-    if (cached) {
-        int dataSize = mOffsets[TYPE_END] - mOffsets[TYPE_POS];
-        delta = ((dataSize + 0xF) & ~0xF) - dataSize;
-        MILO_ASSERT(delta >= 0 && delta < 16, 0x24c);
+    if (check) {
+        delta = (mOffsets[6] - mOffsets[0]);
+        delta = (delta + 0xFU & 0xFFFFFFF0) - delta;
+        MILO_ASSERT(delta >= 0 && delta < 16, 0x24C);
     }
-
-    for (unsigned int i = 0; i < (unsigned int)mNumSamples; i++) {
-        mStart = mRawData + mTotalSize * i;
-
+    for (int i = 0; i < mNumSamples; i++) {
+        SetSamplePointers(i);
         if (mCompression >= kCompressVects) {
-            short *quatOffset = (short *)(mStart + mOffsets[TYPE_QUAT]);
-            for (short *p = (short *)mStart; p < quatOffset; p += 3) {
-                bs << p[0] << p[1] << p[2];
+            ShortVector3 *vecEnd = (ShortVector3 *)(mStart + mOffsets[TYPE_QUAT]);
+            for (ShortVector3 *it = (ShortVector3 *)mStart; it < vecEnd; ++it) {
+                bs << it->x << it->y << it->z;
             }
         } else {
-            Vector3 *quatOffset = (Vector3 *)(mStart + mOffsets[TYPE_QUAT]);
-            for (Vector3 *p = (Vector3 *)mStart; p < quatOffset; p++) {
-                bs << *p;
-                if (cached) {
-                    float zero = 0.0f;
-                    bs << zero;
+            Vector3 *vecEnd = (Vector3 *)(mStart + mOffsets[TYPE_QUAT]);
+            for (Vector3 *it = (Vector3 *)mStart; it < vecEnd; ++it) {
+                bs << *it;
+                if (check) {
+                    bs << 0.0f;
                 }
             }
         }
-
         if (mCompression >= kCompressQuats) {
-            char *rotXOffset = mStart + mOffsets[TYPE_ROTX];
-            for (char *p = mStart + mOffsets[TYPE_QUAT]; p < rotXOffset; p += 4) {
-                char b;
-                b = p[0]; bs.Write(&b, 1);
-                b = p[1]; bs.Write(&b, 1);
-                b = p[2]; bs.Write(&b, 1);
-                b = p[3]; bs.Write(&b, 1);
+            ByteQuat *quatEnd = (ByteQuat *)(mStart + mOffsets[TYPE_ROTX]);
+            for (ByteQuat *it = (ByteQuat *)(mStart + mOffsets[TYPE_QUAT]); it < quatEnd;
+                 ++it) {
+                bs << it->x << it->y << it->z << it->w;
             }
         } else if (mCompression != kCompressNone) {
-            short *rotXOffset = (short *)(mStart + mOffsets[TYPE_ROTX]);
-            for (short *p = (short *)(mStart + mOffsets[TYPE_QUAT]); p < rotXOffset; p += 4) {
-                bs << p[0] << p[1] << p[2] << p[3];
+            ShortQuat *quatEnd = (ShortQuat *)(mStart + mOffsets[TYPE_ROTX]);
+            for (ShortQuat *it = (ShortQuat *)(mStart + mOffsets[TYPE_QUAT]); it < quatEnd;
+                 ++it) {
+                bs << it->x << it->y << it->z << it->w;
             }
         } else {
-            Vector4 *rotXOffset = (Vector4 *)(mStart + mOffsets[TYPE_ROTX]);
-            for (Vector4 *p = (Vector4 *)(mStart + mOffsets[TYPE_QUAT]); p < rotXOffset; p++) {
-                bs << *p;
+            Hmx::Quat *quatEnd = (Hmx::Quat *)(mStart + mOffsets[TYPE_ROTX]);
+            for (Hmx::Quat *it = (Hmx::Quat *)(mStart + mOffsets[TYPE_QUAT]); it < quatEnd;
+                 ++it) {
+                bs << *it;
             }
         }
-
         if (mCompression != kCompressNone) {
             short *endOffset = (short *)(mStart + mOffsets[TYPE_END]);
-            for (short *p = (short *)(mStart + mOffsets[TYPE_ROTX]); p < endOffset; p++) {
-                bs << *p;
+            for (short *it = (short *)(mStart + mOffsets[TYPE_ROTX]); it < endOffset;
+                 ++it) {
+                bs << *it;
             }
         } else {
             float *endOffset = (float *)(mStart + mOffsets[TYPE_END]);
-            for (float *p = (float *)(mStart + mOffsets[TYPE_ROTX]); p < endOffset; p++) {
-                bs << *p;
+            for (float *it = (float *)(mStart + mOffsets[TYPE_ROTX]); it < endOffset;
+                 ++it) {
+                bs << *it;
             }
         }
-
-        if (cached) {
-            long long pad = 0;
-            bs.Write(&pad, delta);
+        if (check) {
+            char zero[16];
+            memset(zero, 0, 16);
+            bs.Write(zero, delta);
         }
-
         if (bs.GetPlatform() == kPlatformWii && (i & 0x7F) == 0x7F) {
             MarkChunk(bs);
         }
