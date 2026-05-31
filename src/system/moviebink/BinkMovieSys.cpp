@@ -1,14 +1,13 @@
 #include "moviebink/BinkMovieSys.h"
-#include "movie/MovieSys.h"
 #include "moviebink/BinkMovieImpl.h"
+#include "binkxenon/bink.h"
+#include "movie/MovieSys.h"
 #include "obj/Data.h"
 #include "obj/DataFunc.h"
 #include "os/CritSec.h"
 #include "os/Debug.h"
 #include "os/System.h"
-#include "utl/MakeString.h"
 #include "utl/MemMgr.h"
-#include "utl/Symbol.h"
 
 #ifdef HX_FFMPEG
 #include "platform/FFmpegMovieImpl.h"
@@ -17,8 +16,14 @@
 #endif
 
 BinkMovieSys gBinkMovieSys;
+BinkMovieSys &TheBinkMovieSys = gBinkMovieSys;
 
-extern "C" void *RadAlloc(unsigned int);
+namespace {
+    void *RadAlloc(unsigned int size) {
+        return MemAlloc(size, __FILE__, 0x28, "Movie", 0x80);
+    }
+    void RadFree(void *ptr) { MemFree(ptr); }
+}
 
 BinkMovieSys::BinkMovieSys()
     : MovieSys(), mCriticalSection(0),
@@ -32,71 +37,47 @@ BinkMovieSys::~BinkMovieSys() {
     mCriticalSection = 0;
 }
 
-DataNode BinkMovieSys::OnMovieSetTrack(DataArray *) {
-    return DataNode();
-}
-
 void BinkMovieSys::Init() {
-    bool wasInit = isInitalized;
-
+    bool initial = IsInitialized();
     MovieSys::Init();
-
     MILO_ASSERT(IsInitialized(), 0x67);
-
-    if (mCriticalSection == nullptr) {
-        void *ptr = MemAlloc(sizeof(CriticalSection), __FILE__, __LINE__, "CriticalSection", 0);
-                if (ptr) {
-            mCriticalSection = new (ptr) CriticalSection();
-        } else {
-            mCriticalSection = nullptr;
-        }
+    if (!mCriticalSection) {
+        mCriticalSection = new CriticalSection();
     }
-
-    CriticalSection *sec = mCriticalSection;
-    if (sec != nullptr) {
-        sec->Enter();
-    }
-
-    DataArray *cfg = SystemConfig(Symbol("movie"));
-    cfg->FindData(Symbol("bink_core0"), mBinkCore0, true);
-    cfg->FindData(Symbol("bink_core1"), mBinkCore1, true);
-
-    if (!wasInit) {
+    CritSecTracker tracker(mCriticalSection);
+    DataArray *cfg = SystemConfig("movie");
+    cfg->FindData("bink_core0", mBinkCore0);
+    cfg->FindData("bink_core1", mBinkCore1);
+    if (!initial) {
 #ifndef HX_FFMPEG
-        BinkSetMemory(RadAlloc, operator delete);
-        BinkMovieSys::PlatformInit();
-
-        if (mHasAsyncThread && (BinkStartAsyncThread(mBinkCore0, 0) == 0 || BinkStartAsyncThread(mBinkCore1, 0) == 0)) {
-            TheDebug.Fail(FormatString("Error starting bink async thread").Str(), nullptr);
+        BinkSetMemory(RadAlloc, RadFree);
+        PlatformInit();
+        if (mHasAsyncThread) {
+            MILO_ASSERT_FMT(
+                BinkStartAsyncThread(mBinkCore0, nullptr)
+                    && BinkStartAsyncThread(mBinkCore1, nullptr),
+                "Error starting bink async thread.\n"
+            );
         }
 #endif
     }
-
-    DataRegisterFunc(Symbol("set_bink_track"), OnMovieSetTrack);
-
-    if (sec != nullptr) {
-        sec->Exit();
-    }
+    DataRegisterFunc("set_bink_track", OnMovieSetTrack);
 }
 
 void BinkMovieSys::Terminate() {
-    CriticalSection *cs = mCriticalSection;
-    if (cs) {
-        cs->Enter();
+    {
+        CritSecTracker tracker(mCriticalSection);
+        while (mMovies.size()) {
+            mMovies.back()->Terminate();
+        }
     }
-
-    while (mMovies.size() > 0) {
-        mMovies.back()->Terminate();
-    }
-
-    if (cs) {
-        cs->Exit();
-    }
-
-    delete mCriticalSection;
-    mCriticalSection = 0;
-
+    RELEASE(mCriticalSection);
     MovieSys::Terminate();
+}
+
+DataNode BinkMovieSys::OnMovieSetTrack(DataArray *a) {
+    TheBinkMovieSys.mTrack = a->Int(1);
+    return 0;
 }
 
 MovieImpl* BinkMovieSys::CreateMovieImpl() {
