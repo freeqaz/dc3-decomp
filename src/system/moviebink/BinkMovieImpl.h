@@ -1,98 +1,109 @@
 #pragma once
-
+#include "binkxenon/bink.h"
+#include "math/Geo.h"
 #include "movie/MovieImpl.h"
-#include "os/Timer.h"
+#include "rndobj/Mat.h"
+#include "rndobj/Tex.h"
+#include "utl/BinStream.h"
+#include "utl/Loader.h"
 #include "utl/Str.h"
-#include <vector>
+#include "xdk/win_types.h"
 
-struct BINK {
-    virtual ~BINK();
-};
-
-class MovieInternalBuffers {
-public:
-    MovieInternalBuffers();
-    ~MovieInternalBuffers();
-
+// size 0xC0
+struct MovieInternalBuffers {
 private:
-    // Pointers to BINK structures (offsets 0x0-0x40)
-    BINK* mBinks[17];
+    MovieInternalBuffers();
 
-    // Padding from 0x44 to 0xBC (0x78 bytes)
-    // This is memset to 0 in constructor
-    char mPadding[0x78];  // 0x44
+public:
+    ~MovieInternalBuffers();
+    static MovieInternalBuffers *New(std::vector<BINK *>);
 
-    // Additional field at 0xBC
-    void* mUnknown;  // 0xBC
+    RndTex *YTex[2][2]; // 0x0
+    RndTex *CrTex[2][2]; // 0x10
+    RndTex *CbTex[2][2]; // 0x20
+    RndTex *ATex[2][2]; // 0x30
+    RndMat *unk40; // 0x40
+    BINKFRAMEBUFFERS mBuffers; // 0x44
+    int unkbc; // 0xbc - ref count?
 };
-
-#ifndef HX_NATIVE
-static_assert(sizeof(MovieInternalBuffers) == 0xC0, "MovieInternalBuffers size mismatch");
-#endif
 
 class BinkMovieImpl : public MovieImpl {
 public:
     BinkMovieImpl();
-    virtual ~BinkMovieImpl();
-
-    virtual void SetWidthHeight(int, int);
-    virtual bool Ready() const;
+    virtual ~BinkMovieImpl(); // 0x0
+    virtual void SetWidthHeight(int, int); // 0x4
+    virtual bool Ready() const; // 0x8
     virtual bool BeginFromFile(
         char const *, float, bool, bool, bool, bool, int, BinStream *, LoaderPos
-    );
-    virtual void Draw();
-    virtual bool Poll();
-    virtual void Save(BinStream *);
-    virtual void End();
-    virtual bool IsOpen() const;
-    virtual bool IsLoading() const;
-    virtual bool CheckOpen(bool);
-    virtual bool SetPaused(bool);
-    virtual bool Paused() const;
-    virtual void UnlockThread();
-    virtual void LockThread();
-    virtual int GetFrame() const;
-    virtual float MsPerFrame() const;
-    virtual int NumFrames() const;
-    virtual void SetVolume(float);
+    ); // 0xc
+    virtual bool BeginFromBuffer(void *, int, bool, float, bool, bool, bool, int); // 0x10
+    virtual void Draw(); // 0x14
+    virtual bool Poll(); // 0x18
+    virtual void Save(BinStream *); // 0x1c
+    virtual void End(); // 0x20
+    virtual bool IsOpen() const; // 0x24
+    virtual bool IsLoading() const; // 0x28
+    virtual bool CheckOpen(bool); // 0x2c
+    virtual void SetPaused(bool); // 0x30
+    virtual bool Paused() const { return mPaused; } // 0x34
+    virtual void UnlockThread(); // 0x38
+    virtual void LockThread(); // 0x3c
+    virtual int GetFrame() const; // 0x40
+    virtual float MsPerFrame() const; // 0x44
+    virtual int NumFrames() const; // 0x48
+    virtual void SetVolume(float); // 0x4c
 
     void Terminate();
+    void DiscContentionCheck(Loader *);
+    void DiscContentionPublish();
 
 private:
-    static std::vector<BinkMovieImpl *> sActiveMovies;
-    void SetRect();
-    void BeginFrame();
     bool PlatformCacheFile(const char *);
 
-    void* mLoader;        // 0x04 - async loader, checked in IsLoading/Ready
-    void* mLoader2;       // 0x08 - fallback loader, checked in IsLoading/Ready
-    String mFilename;     // 0x0C
-    int mBink;            // 0x14 - BINK* handle, non-zero when open
-    bool mLoop;           // 0x18
-    int mWidth;           // 0x1C
-    int mHeight;          // 0x20
-    bool mReady;          // 0x24
-    char mRect[0x18];     // 0x28 - uninitialized region (SetRect)
-    int mFrame;           // 0x40
-    int mNumFrames;       // 0x44
-    int mMsPerFrame;      // 0x48
-    bool mPaused;         // 0x4C
-    Timer mPlayTimer;     // 0x50
-    Timer mLoadTimer;     // 0x80
-    int mVolume;          // 0xB0
-    int mVolumeTarget;    // 0xB4
-    void* mHandle;        // 0xB8
-    int mTreeColor;       // 0xBC - RB-tree _M_color
-    int mTreeParent;      // 0xC0 - RB-tree _M_parent
-    void* mTreeLeft;      // 0xC4 - RB-tree _M_left
-    void* mTreeRight;     // 0xC8 - RB-tree _M_right
-    int mTreeCount;       // 0xCC - RB-tree _M_node_count
-    bool mOpen;           // 0xD0
-    char _padD1[3];       // 0xD1 - align to 0xD4
-    bool mEndianSwapped;  // 0xD4
-    bool mHasAudio;       // 0xD5
-    unsigned int mThreadId; // 0xD8
-    int unkDC;            // 0xDC
-    int mBinkVolume;      // 0xE0 - Bink volume level (0x8000 = max)
-    int mBufferOffset;    // 0xE4
+    void SetRect();
+    void BeginFrame();
+    void EndFrame();
+    void NextFrame();
+    void FinishOpen();
+    void DoFrame();
+    void MovieOpen(const char *, unsigned int);
+    void MovieClose();
+
+    static void SharedFinishOpen(bool);
+    static int sActivePending;
+    static BinkMovieImpl *sAsyncMovie;
+    static std::vector<BinkMovieImpl *> sActiveMovies;
+
+    FileLoader *mLoader; // 0x4
+    class BinkMovieLoader *mMovieLoader; // 0x8
+    /** The movie's name. */
+    String mName; // 0xc
+    BINK *mBink; // 0x14
+    bool unk18;
+    void *mPreloadBuf; // 0x1c
+    int mBufferSize; // 0x20
+    bool unk24;
+    bool unk25;
+    bool unk26;
+    bool unk27;
+    bool unk28;
+    float mAspect; // 0x2c
+    Hmx::Rect unk30; // 0x30
+    int unk40;
+    int mWidth; // 0x44
+    int mHeight; // 0x48
+    bool mPaused; // 0x4c
+    Timer unk50;
+    Timer unk80;
+    int unkb0;
+    int unkb4;
+    void *unkb8; // 0xb8 - file handle, retrieved from mName
+    std::map<void *, String> unkbc; // 0xbc - key = loader ptr, val = loader file?
+    bool unkd4;
+    bool unkd5; // 0xd5 - mMidFrame?
+    bool unkd6;
+    DWORD mThreadId; // 0xd8
+    int mLocalizationTrack; // 0xdc
+    int mVolume; // 0xe0
+    MovieInternalBuffers *mInternalBufs; // 0xe4
 };

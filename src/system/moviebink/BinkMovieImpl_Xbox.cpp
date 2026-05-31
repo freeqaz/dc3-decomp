@@ -22,14 +22,14 @@ void MakeDir(const char *path) {
 }
 
 bool BinkMovieImpl::PlatformCacheFile(const char *filename) {
-    if (UsingCD() || mLoop) {
+    if (UsingCD() || unk26) {
         return true;
     }
 
     DmMapDevkitDrive();
 
     FileStat stat;
-    if (FileGetStat(mFilename.c_str(), &stat) < 0) {
+    if (FileGetStat(mName.c_str(), &stat) < 0) {
         return false;
     }
 
@@ -44,7 +44,7 @@ bool BinkMovieImpl::PlatformCacheFile(const char *filename) {
     WIN32_FILE_ATTRIBUTE_DATA attrData;
     if (GetFileAttributesExA(cachePath.c_str(), GetFileExInfoStandard, &attrData) == 0
         || CompareFileTime(&attrData.ftLastWriteTime, &srcTime) < 0) {
-        File *fin = NewFile(mFilename.c_str(), FILE_OPEN_READ);
+        File *fin = NewFile(mName.c_str(), FILE_OPEN_READ);
         MILO_ASSERT(fin, 0x46);
 
         MakeDir(FileGetPath(cachePath.c_str()));
@@ -69,6 +69,6 @@ bool BinkMovieImpl::PlatformCacheFile(const char *filename) {
         delete fin;
     }
 
-    mFilename = cachePath;
+    mName = cachePath;
     return true;
 }

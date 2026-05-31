@@ -13,6 +13,7 @@
 extern bool gNullFiles;
 extern bool gFakeFileErrors;
 extern void *kNoHandle;
+#define kNoThread -1
 
 class File {
 public:

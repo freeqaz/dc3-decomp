@@ -18,13 +18,11 @@
 
 BinkMovieSys gBinkMovieSys;
 
-extern "C" void BinkSetMemory(void *(*)(int), void (*)(void *));
-extern "C" int BinkStartAsyncThread(int, int);
-extern "C" void *RadAlloc(int);
+extern "C" void *RadAlloc(unsigned int);
 
 BinkMovieSys::BinkMovieSys()
     : MovieSys(), mCriticalSection(0),
-      mBinkCore0(-1), mBinkCore1(-1), mMovieCount(0) {
+      mBinkCore0(-1), mBinkCore1(-1), mTrack(0) {
     mHasAsyncThread = true;
     mNumAsyncThreads = 1;
 }
