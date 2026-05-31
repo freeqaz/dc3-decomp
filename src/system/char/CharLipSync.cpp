@@ -80,7 +80,8 @@ void CharLipSync::Print(TextStream &ts) {
     ts << "; song: " << PathName(this) << "\n";
     ts << "(visemes\n";
     for (int i = 0; i < mVisemes.size(); i++) {
-        ts << "   " << mVisemes[i].c_str() << "\n";
+        const String &str = mVisemes[i];
+        ts << "   " << str << "\n";
     }
     ts << ")\n";
     ts << "(frames ; @ 30fps\n";
@@ -193,19 +194,19 @@ void CharLipSync::Generator::Finish() {
     std::vector<bool> bools;
     bools.resize(mLipSync->mVisemes.size());
     for (int i = 0; i < bools.size(); i++) {
-        bools[i] = 0;
+        bools[i] = false;
     }
 
-    std::vector<unsigned char> &data = mLipSync->mData;
+    const std::vector<unsigned char> &data = mLipSync->mData;
     int idx = 0;
     for (int i = 0; i < mLipSync->mFrames; i++) {
-        int count = data[idx++];
+        unsigned char count = data[idx++];
         MILO_ASSERT(count <= mLipSync->mVisemes.size(), 0x6A);
         for (int j = 0; j < count; j++) {
-            int viseme = data[idx++];
+            unsigned char viseme = data[idx++];
             MILO_ASSERT(viseme < mLipSync->mVisemes.size(), 0x6E);
             if (data[idx++] != 0) {
-                bools[viseme] = 1;
+                bools[viseme] = true;
             }
         }
     }
