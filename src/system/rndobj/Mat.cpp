@@ -578,12 +578,11 @@ void RndMat::LoadOld(BinStreamRev &d) {
     d >> mAlphaWrite;
     d >> (int &)mTexGen;
     d >> (int &)mTexWrap;
-    d >> mTexXfm;
-    d >> mDiffuseTex;
+    d >> mTexXfm >> mDiffuseTex;
     d.stream >> mNextPass >> mIntensify;
-    bool cullValue;
-    d >> cullValue;
-    mCull = (Cull)cullValue;
+    bool bCull;
+    d >> bCull;
+    mCull = (Cull)(bCull != 0);
     d >> mEmissiveMultiplier;
     d.stream >> mSpecularRGB >> mNormalMap;
     d.stream >> mEmissiveMap >> mSpecularMap;
@@ -607,15 +606,15 @@ void RndMat::LoadOld(BinStreamRev &d) {
         d >> mPerPixelLit;
     }
     if (d.rev > 0x1A && d.rev < 0x32) {
-        bool unusedValue;
-        d >> unusedValue;
+        bool b150;
+        d >> b150;
     }
     if (d.rev > 0x1B) {
         d >> (int &)mStencilMode;
     }
     if (d.rev < 0x29 && d.rev > 0x1C) {
-        Symbol unusedSymbol;
-        d >> unusedSymbol;
+        Symbol s;
+        d >> s;
     }
     if (d.rev > 0x20) {
         d >> mFur;
@@ -637,9 +636,9 @@ void RndMat::LoadOld(BinStreamRev &d) {
         }
     }
     if (d.rev > 0x21 && d.rev < 0x31) {
-        bool unusedBool;
-        Hmx::Color unusedColor;
-        d >> unusedBool >> unusedColor;
+        bool b150;
+        Hmx::Color c80;
+        d >> b150 >> c80;
         if (d.rev > 0x22) {
             ObjPtr<RndTex> tex(this);
             d >> tex;
@@ -651,16 +650,16 @@ void RndMat::LoadOld(BinStreamRev &d) {
     }
     if (d.rev > 0x26) {
         if (d.rev < 0x2A) {
-            bool unusedValue;
-            d >> unusedValue;
+            bool b150;
+            d >> b150;
         }
         d >> mNormDetailTiling;
         d >> mNormDetailStrength;
         if (d.rev < 0x2A) {
-            int unusedInt;
-            Hmx::Color unusedColor;
-            d >> unusedInt;
-            d >> unusedColor;
+            int x;
+            Hmx::Color c;
+            d >> x;
+            d >> c;
         }
         d >> mNormDetailMap;
         if (d.rev < 0x2A) {
@@ -675,18 +674,18 @@ void RndMat::LoadOld(BinStreamRev &d) {
         if (d.rev > 0x2C) {
             d >> mPointLights;
         } else {
-            int pointLightsValue;
-            d >> pointLightsValue;
-            mPointLights = pointLightsValue > 1;
+            int x;
+            d >> x;
+            mPointLights = x > 1;
         }
         if (d.rev < 0x3F) {
-            bool unusedValue;
-            d >> unusedValue;
+            bool b150;
+            d >> b150;
         }
         d >> mFog >> mFadeout;
         if (d.rev > 0x2B && d.rev < 0x2E) {
-            bool unusedValue;
-            d >> unusedValue;
+            bool b150;
+            d >> b150;
         }
         if (d.rev > 0x2E) {
             d >> mColorAdjust;
@@ -698,8 +697,8 @@ void RndMat::LoadOld(BinStreamRev &d) {
         if (d.rev > 0x39) {
             d >> mRimLightUnder;
         } else {
-            bool unusedValue;
-            d >> unusedValue;
+            bool b150;
+            d >> b150;
             float red = mRimRGB.red * 2.857143f;
             float green = mRimRGB.green * 2.857143f;
             float blue = mRimRGB.blue * 2.857143f;
@@ -717,9 +716,9 @@ void RndMat::LoadOld(BinStreamRev &d) {
         d >> mScreenAligned;
     }
     if (d.rev > 0x31 && d.rev < 0x33) {
-        bool isSkinned;
-        d >> isSkinned;
-        if (isSkinned) {
+        bool b150;
+        d >> b150;
+        if (b150) {
             mShaderVariation = kShaderVariationSkin;
         }
     }
@@ -730,15 +729,15 @@ void RndMat::LoadOld(BinStreamRev &d) {
     if (d.rev > 0x33 && d.rev < 0x44) {
         std::vector<Hmx::Color> colors;
         if (d.rev < 0x35) {
-            bool unusedBool;
-            d >> unusedBool;
+            bool x;
+            d >> x;
         } else {
-            int unusedInt;
-            d >> unusedInt;
+            int x;
+            d >> x;
         }
         if (d.rev > 0x34 && d.rev < 0x3C) {
-            Hmx::Color unusedColor;
-            d >> unusedColor;
+            Hmx::Color c;
+            d >> c;
         }
         if (d.rev >= 0x3C) {
             d >> colors;
@@ -749,13 +748,13 @@ void RndMat::LoadOld(BinStreamRev &d) {
         d >> obj;
     }
     if (d.rev > 0x36 && d.rev < 0x3F) {
-        bool forceTrilinear;
-        d >> forceTrilinear;
-        mPerfSettings.mPS3ForceTrilinear = forceTrilinear;
+        bool b150;
+        d >> b150;
+        mPerfSettings.mPS3ForceTrilinear = b150;
     }
     if (d.rev > 0x37 && d.rev < 0x39) {
-        int unusedX, unusedY;
-        d >> unusedX >> unusedY;
+        int x, y;
+        d >> x >> y;
     }
     if (d.rev > 0x3E) {
         mPerfSettings.LoadOld(d);
