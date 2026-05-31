@@ -193,10 +193,9 @@ void SpotlightDrawer::DrawAdditional(
     SpotlightDrawer::SpotlightEntry *const &spotEnd
 ) {
     MILO_ASSERT(spotIter != spotEnd, 0x298);
-    for (; spotEnd != spotIter; ++spotIter) {
+    for (; spotIter != spotEnd; ++spotIter) {
         Spotlight *sl = spotIter->mSpotlight;
-        auto _tmp0 = sl->GetAdditionalObjects();
-        FOREACH (it, _tmp0) {
+        FOREACH (it, sl->GetAdditionalObjects()) {
             RndDrawable *add = *it;
             MILO_ASSERT(add != sl, 0x2a3);
             if (add != sl)
@@ -413,9 +412,9 @@ void SpotDrawParams::Load(BinStreamRev &d) {
     if (d.rev > 3) {
         d >> mBaseIntensity >> mSmokeIntensity >> mHalfDistance;
     } else {
-        float i, j, k, l;
-        d >> i >> j >> k >> l;
-        if (k < 0.5f) {
+        float x, y, z, w;
+        d >> x >> y >> z >> w;
+        if (z < 0.5f) {
             mSmokeIntensity = 0.5f;
             mBaseIntensity = 0.1f;
         } else {
@@ -425,11 +424,9 @@ void SpotDrawParams::Load(BinStreamRev &d) {
     }
     d >> mColor;
     if (d.rev < 4) {
-        int a;
-        Key<float> b, c;
-        d >> a;
-        d.stream >> b;
-        d.stream >> c;
+        float x;
+        Vector2 vx, vy;
+        d >> x >> vx >> vy;
     }
     d >> mTexture;
     d >> mProxy;
@@ -437,8 +434,9 @@ void SpotDrawParams::Load(BinStreamRev &d) {
         bool b;
         d >> b;
     }
-    if (d.rev > 4)
+    if (d.rev > 4) {
         d >> mLightingInfluence;
+    }
 }
 
 INIT_REVS(6, 0)
@@ -637,14 +635,16 @@ SpotMeshEntry_* vector<SpotMeshEntry_, StlNodeAlloc<SpotMeshEntry_>>::_M_erase(
 ) {
     SpotMeshEntry_* __next = __pos + 1;
     if (__next != this->_M_finish) {
-        int __count = (this->_M_finish - __next) / 0x50;
+        int __count = ((char*)this->_M_finish - (char*)__next) / (int)sizeof(SpotMeshEntry_);
         SpotMeshEntry_* __dst = __pos;
-        do {
-            SpotMeshEntry_* __src = __dst + 1;
-            memcpy(__dst, __src, 0x50);
-            __count--;
-            __dst = __src;
-        } while (__count != 0);
+        if (__count > 0) {
+            do {
+                SpotMeshEntry_* __src = __dst + 1;
+                memcpy(__dst, __src, sizeof(SpotMeshEntry_));
+                __count--;
+                __dst = __src;
+            } while (__count != 0);
+        }
     }
 
     this->_M_finish--;
