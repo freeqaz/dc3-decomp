@@ -371,6 +371,7 @@ def guided_pairwise_search(
     swap_pairs: list[tuple[str, str]],
     decl_names: list[str],
     function_calls: list[BSFCall] | None = None,
+    float_types: list[bool] | None = None,
 ) -> list[list[str]]:
     """Generate candidate declaration orders targeted at specific swap pairs.
 
@@ -385,6 +386,13 @@ def guided_pairwise_search(
         function_calls: Pre-partitioned BSF calls for the target function.
             When provided, colorings are extracted from these calls only,
             isolating the target function from other functions in the TU.
+        float_types: Parallel to ``decl_names`` -- ``float_types[i]`` is True iff
+            the i-th declaration is a float/double/float-aggregate local. Used
+            for the FPR swap-index mapping (Bug-A fix): callee-saved FPRs are
+            allocated by float-declaration order, so an ``f(a)<->f(b)`` swap
+            maps to the k-th and m-th FLOATS, whose all-decls positions are
+            ``float_decl_positions[k/m]``. When None, FPR pairs are skipped to
+            avoid swapping the wrong statements on mixed-locals functions.
 
     Returns a list of candidate orderings (each is a list of variable names).
     """
@@ -401,6 +409,21 @@ def guided_pairwise_search(
     for i, ca in enumerate(colorings):
         if i < n_vars:
             color_to_decl_idx[ca.color] = i
+
+    # Bug-A fix: the FPR sequential allocator counts FLOAT declarations only
+    # (1st float -> f31, 2nd float -> f30, ...), but the swap we emit must
+    # operate on positions in the FULL declaration list (ints/pointers/floats
+    # interleaved). Build float_decl_positions so the k-th float-declaration
+    # index maps to its position among all decls. When float_types is not
+    # provided we cannot tell floats apart, so float_decl_positions stays None
+    # and FPR mapping is conservatively skipped (no silent wrong-statement
+    # swap on mixed-locals functions).
+    float_decl_positions: list[int] | None = None
+    if float_types is not None:
+        float_decl_positions = [
+            i for i in range(len(decl_names))
+            if i < len(float_types) and float_types[i]
+        ]
 
     # For each swap pair, find the declaration indices to swap
     targeted_swaps: list[tuple[int, int]] = []
@@ -423,12 +446,16 @@ def guided_pairwise_search(
             fpr_idxA = fpr_to_decl_index(rA)
             fpr_idxB = fpr_to_decl_index(rB)
             if fpr_idxA is not None and fpr_idxB is not None:
-                # FPR indices are relative to float declarations only,
-                # but we map them to the overall declaration order.
-                # For now, treat as direct swap targets if within range.
-                if fpr_idxA < n_vars and fpr_idxB < n_vars:
-                    idxA = fpr_idxA
-                    idxB = fpr_idxB
+                # FPR indices count FLOAT declarations only. Map each float
+                # index k through float_decl_positions[k] into the all-decls
+                # position space BEFORE swapping (the Bug-A fix). Without a
+                # float-type list, skip FPR mapping rather than swap the wrong
+                # statements (the old behaviour conflated the two index spaces).
+                if (float_decl_positions is not None
+                        and fpr_idxA < len(float_decl_positions)
+                        and fpr_idxB < len(float_decl_positions)):
+                    idxA = float_decl_positions[fpr_idxA]
+                    idxB = float_decl_positions[fpr_idxB]
 
         if idxA is not None and idxB is not None and idxA != idxB:
             pair = (min(idxA, idxB), max(idxA, idxB))
