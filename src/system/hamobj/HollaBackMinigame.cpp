@@ -27,6 +27,11 @@
 #include "utl/Std.h"
 #include "utl/TimeConversion.h"
 
+// Global int (== 4) defined in RhythmDetectorGroup's translation unit (.data:0xF8,
+// 0x82F0E8A4). OnBeat compares subMeasure against it; the original source name is
+// unknown, so reference it as the linker label per the project convention.
+extern int lbl_82F0E8A4;
+
 void JumpToMeasure(float beat) {
     float ms = BeatToMs(beat * 4.0f);
     Hmx::Object *game = ObjectDir::Main()->Find<Hmx::Object>("game", true);
@@ -574,27 +579,35 @@ void HollaBackMinigame::OnBeat() {
     static Symbol exit_instruction("exit_instruction");
     static Symbol exit_win("exit_win");
 
+    HamMaster *master = TheMaster;
+    SongPos *songPos = &master->SongPos1();
     MoveDir *theMoveDir = TheHamDirector->GetMoveDir();
     int loopStart, loopEnd;
-    TheMaster->GetAudio()->GetCurrLoopBeats(loopStart, loopEnd);
+    master->GetAudio()->GetCurrLoopBeats(loopStart, loopEnd);
 
-    float currentBeat = TheMaster->TotalBeat1();
-    if (currentBeat < TheMaster->TotalBeat2()) {
-        // Beat jumped backward - reset midi parsers
-        MidiParser *midiPlayer = TheMidiParserMgr->GetParser("midi_player");
-        midiPlayer->Handle(Message("reset_to_beat", (int)currentBeat), true);
-        MidiParser *countIn = TheMidiParserMgr->GetParser("count_in_player");
-        countIn->Handle(Message("reset_to_beat", (int)currentBeat), true);
+    float currentBeat = songPos->GetTotalBeat();
+    if (currentBeat < master->TotalBeat2()) {
+        // Beat jumped backward - reset the midi parsers to the current beat. The
+        // beat is re-read from memory for each message (the original reloads rather
+        // than reusing currentBeat); the volatile read defeats CSE of the float.
+        {
+            DataNode resetBeat(*(volatile float *)&songPos->AccessTotalBeat());
+            MidiParser *midiPlayer = TheMidiParserMgr->GetParser("midi_player");
+            midiPlayer->Handle(Message("reset_to_beat", resetBeat), true);
+        }
+        {
+            DataNode resetBeat(*(volatile float *)&songPos->AccessTotalBeat());
+            MidiParser *countIn = TheMidiParserMgr->GetParser("count_in_player");
+            countIn->Handle(Message("reset_to_beat", resetBeat), true);
+        }
         theMoveDir->ResetDetection();
     }
 
     int beatInt = (int)currentBeat;
     unk420 = beatInt / 4;
 
-    int stateVal = mState;
-    if (mSpecifyFirstMoveMeasure >= 1 && mState == 1) {
+    if (mSpecifyFirstMoveMeasure > 0 && mState == 1) {
         mSubStateIndex = (4 - mSpecifyFirstMoveMeasure) * 4 + beatInt;
-        stateVal = 1;
     } else if (mState != 0) {
         mSubStateIndex = mSubStateIndex + 1;
     }
@@ -605,42 +618,32 @@ void HollaBackMinigame::OnBeat() {
     int currentBeatInMeasure = beatInt % 4;
 
     if (subStateIdx >= 0 && subBeatInMeasure != currentBeatInMeasure) {
-        mSubStateIndex = subStateIdx + (currentBeatInMeasure - subBeatInMeasure);
+        subStateIdx += currentBeatInMeasure - subBeatInMeasure;
+        mSubStateIndex = subStateIdx;
     }
 
-    if (stateVal == 1) {
+    bool onDownbeat = currentBeatInMeasure == 0;
+
+    if (mState == 1) {
         // Instruction phase
-        if (!mGamePlaying) {
-            if (subMeasure == 3) {
-                if (currentBeatInMeasure == 0) {
-                    mGamePlaying = false;
-                    RndPropAnim *anim = TheHamDirector->GetVenueWorld()->Find<RndPropAnim>(
-                        "bid_start_character_faded_out.anim", true
-                    );
-                    anim->Animate(0, false, 0, nullptr, kEaseLinear, 0, false);
-                    TheHamProvider->Export(Message("show_char_projection"), true);
-                }
-                if (currentBeatInMeasure == 3) {
-                    MidiParser *countIn = TheMidiParserMgr->GetParser("count_in_player");
-                    countIn->SetProperty("active", 0);
-                }
-            }
-        } else {
-            if (subMeasure == 3) {
-                if (currentBeatInMeasure == 3) {
-                    MidiParser *countIn = TheMidiParserMgr->GetParser("count_in_player");
-                    countIn->SetProperty("active", 0);
-                }
-            }
+        if (mGamePlaying && subMeasure == 3 && currentBeatInMeasure == 0) {
+            mGamePlaying = false;
+            WorldDir *venueWorld = TheHamDirector->GetVenueWorld();
+            venueWorld->Find<RndPropAnim>("bid_start_character_faded_out.anim", true)
+                ->Animate(0.0f, false, 0.0f, 0, kEaseLinear, 0.0f, false);
+            TheHamProvider->Export(Message("show_char_projection"), true);
+        }
+        if (subMeasure == 3 && currentBeatInMeasure == 3) {
+            MidiParser *countIn = TheMidiParserMgr->GetParser("count_in_player");
+            countIn->SetProperty("active", 0);
         }
 
-        if ((currentBeatInMeasure == 0 || subMeasure < 0)) {
+        if ((onDownbeat || subMeasure < 0)) {
             if (subMeasure == 1) {
                 MidiParser *countIn = TheMidiParserMgr->GetParser("count_in_player");
                 countIn->SetProperty("active", 1);
                 int sectionEnd = mSpecifyFirstMoveMeasure * 4;
-                int sectionStart = sectionEnd - 4;
-                countIn->Handle(Message("set_section", sectionStart, sectionEnd), true);
+                countIn->Handle(Message("set_section", sectionEnd - 4, sectionEnd), true);
             }
             if (subMeasure == 2) {
                 TheMaster->GetAudio()->SetLoop(
@@ -648,7 +651,7 @@ void HollaBackMinigame::OnBeat() {
                     (float)mLastMoveIdx * 4.0f
                 );
             }
-            if (subMeasure == mMaxRoutineSize) {
+            if (subMeasure == lbl_82F0E8A4) {
                 unk46c = true;
                 TheHamDirector->SetPlayerSpotlightsEnabled(true);
                 TheHamProvider->SetProperty(holla_back_stage, exit_instruction);
@@ -663,8 +666,9 @@ void HollaBackMinigame::OnBeat() {
             if (atEnd) {
                 TheHamDirector->SetPlayerSpotlightsEnabled(false);
                 float pct = NailedMovesInRoutinePct();
-                unk475 = pct >= 1.0f;
-                if (pct >= 1.0f) {
+                bool nailed = pct >= 1.0f;
+                unk475 = nailed;
+                if (nailed) {
                     mScoreLeft->SetShowing(true);
                     mScoreRight->SetShowing(true);
                     WinShoutOut();
@@ -672,7 +676,9 @@ void HollaBackMinigame::OnBeat() {
                     songseq->Handle(Message("load_next_song_audio"), true);
                     for (int i = 0; i < 2; i++) {
                         HamPlayerData *hpd = TheGameData->Player(i);
-                        PropertyEventProvider *provider = hpd->Provider();
+                        // Provider() returns PropertyEventProvider*; the original upcasts to
+                        // Hmx::Object* here so SetProperty/Export dispatch through that vtable.
+                        Hmx::Object *provider = hpd->Provider();
                         provider->SetProperty("start_score_move_index", 1000);
                         provider->Export(Message("hide_hud", 0), true);
                     }
@@ -688,14 +694,15 @@ void HollaBackMinigame::OnBeat() {
                 }
             }
         }
-    } else if (stateVal == 2) {
+    } else if (mState == 2) {
         // Win phase
         if (mSound && mSound->IsPlaying()) {
             return;
         }
         if (mWinShoutouts.size() > 1) {
             const char *sndName = MakeString("%s.snd", mWinShoutouts[1].Str());
-            mSound = TheHamDirector->GetVenueWorld()->Find<Sound>(sndName, false);
+            WorldDir *venueWorld = TheHamDirector->GetVenueWorld();
+            mSound = venueWorld->Find<Sound>(sndName, false);
             if (mSound) {
                 mSound->Play(0, 0, 0, nullptr, 0);
             }

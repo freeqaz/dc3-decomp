@@ -53,6 +53,7 @@ public:
     int GetMeasure() const { return mSongPos.GetMeasure(); }
     float TotalBeat1() const { return mSongPos.GetTotalBeat(); }
     float TotalBeat2() const { return mPrevSongPos.GetTotalBeat(); }
+    SongPos &SongPos1() { return mSongPos; }
     HamAudio *GetAudio() const { return mAudio; }
     HamSongData *SongData() const { return mSongData; }
     MidiParserMgr *GetMidiParserMgr() const { return mMidiParserMgr; }
