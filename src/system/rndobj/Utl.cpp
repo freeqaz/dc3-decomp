@@ -55,10 +55,10 @@ public:
 ResourceFileCacheHelper gResourceFileCacheHelper;
 float gLimitUVRange;
 int gDxtCacher;
-static ObjectDir *sSphereDir;
-static RndMesh *sSphereMesh;
-static ObjectDir *sCylinderDir;
 static RndMesh *sCylinderMesh;
+static ObjectDir *sCylinderDir;
+static RndMesh *sSphereMesh;
+static ObjectDir *sSphereDir;
 std::list<BuildPoly> gChildPolys;
 std::list<BuildPoly> gParentPolys;
 SplashFunc gSplashPoll;
@@ -183,7 +183,7 @@ void RndUtlInit() {
         sSphereMesh = sSphereDir->Find<RndMesh>("sphere.mesh", true);
     }
     if (sCylinderDir) {
-        sCylinderMesh = sSphereDir->Find<RndMesh>("Cylinder.mesh", true);
+        sCylinderMesh = sCylinderDir->Find<RndMesh>("Cylinder.mesh", true);
     }
 }
 
@@ -808,13 +808,12 @@ void SortXfms(RndMultiMesh *mesh, const Vector3 &vec) {
 }
 
 bool XfmSort(RndMultiMesh::Instance &mesh1, RndMultiMesh::Instance &mesh2) {
-    const auto &_ref1 = mesh2;
-    return (mesh1.mXfm.v.z - gUtlXfms.z) * (mesh1.mXfm.v.z - gUtlXfms.z)
-        + (mesh1.mXfm.v.y - gUtlXfms.y) * (mesh1.mXfm.v.y - gUtlXfms.y)
-        + (mesh1.mXfm.v.x - gUtlXfms.x) * (mesh1.mXfm.v.x - gUtlXfms.x)
-        < ((_ref1.mXfm.v.y - gUtlXfms.y) * (_ref1.mXfm.v.y - gUtlXfms.y)
-           + ((_ref1.mXfm.v.x - gUtlXfms.x) * (_ref1.mXfm.v.x - gUtlXfms.x)
-              + (_ref1.mXfm.v.z - gUtlXfms.z) * (_ref1.mXfm.v.z - gUtlXfms.z)));
+    return (mesh1.mXfm.v.y - gUtlXfms.y) * (mesh1.mXfm.v.y - gUtlXfms.y)
+            + ((mesh1.mXfm.v.x - gUtlXfms.x) * (mesh1.mXfm.v.x - gUtlXfms.x)
+               + (mesh1.mXfm.v.z - gUtlXfms.z) * (mesh1.mXfm.v.z - gUtlXfms.z))
+        < (mesh2.mXfm.v.z - gUtlXfms.z) * (mesh2.mXfm.v.z - gUtlXfms.z)
+            + (mesh2.mXfm.v.x - gUtlXfms.x) * (mesh2.mXfm.v.x - gUtlXfms.x)
+            + (mesh2.mXfm.v.y - gUtlXfms.y) * (mesh2.mXfm.v.y - gUtlXfms.y);
 }
 
 void DistributeXfms(RndMultiMesh *mm, int i, float f) {
@@ -1141,34 +1140,35 @@ const char *CacheResource(const char *cc, const Hmx::Object *o) {
     if (!cc || (*cc == '\0'))
         return 0;
     else {
+        strstr(cc, "icons_buttons_xbox_nomip");
         CacheResourceResult res;
         const char *ret = CacheResource(cc, res);
         if (res > kCacheUnnecessary) {
             switch (res) {
             case kCacheUnknownExtension:
                 if (o)
-                    MILO_WARN(
+                    MILO_NOTIFY(
                         "%s: \"%s\" has unrecognized extension \"%s\"",
                         PathName(o),
                         cc,
                         FileGetExt(cc)
                     );
                 else
-                    MILO_WARN(
+                    MILO_NOTIFY(
                         "Unrecognized extension \"%s\" to \"%s\"", FileGetExt(cc), cc
                     );
                 break;
             case kCacheMissingFile:
                 if (o)
-                    MILO_WARN("%s: couldn't find %s", PathName(o), cc);
+                    MILO_NOTIFY("%s: couldn't find %s", PathName(o), cc);
                 else
-                    MILO_WARN("Couldn't find %s", cc);
+                    MILO_NOTIFY("Couldn't find %s", cc);
                 break;
             default:
                 if (o)
-                    MILO_WARN("%s: unknown CacheResource error %s", PathName(o), cc);
+                    MILO_NOTIFY("%s: unknown CacheResource error %s", PathName(o), cc);
                 else
-                    MILO_WARN("Unknown CacheResource error %s", cc);
+                    MILO_NOTIFY("Unknown CacheResource error %s", cc);
                 break;
             }
         }
@@ -1368,23 +1368,23 @@ void TestTexturePaths(ObjectDir *dir) {
         if (strstr(relative.c_str(), "..") == relative.c_str()) {
             const char *normalized = relative.c_str();
             if (strstr(relative.c_str(), "../../system/run") != normalized) {
-                MILO_WARN("%s: %s is outside project path", PathName(it), relative);
+                MILO_NOTIFY("%s: %s is outside project path", PathName(it), relative);
             }
         }
         const char *normalized2 = relative.c_str();
         if (strlen(normalized2) > 2 && normalized2[1] == ':') {
-            MILO_WARN("%s: %s is outside project path", PathName(it), relative);
+            MILO_NOTIFY("%s: %s is outside project path", PathName(it), relative);
         }
     }
     if (dir->Loader()) {
         const char *fpstr = dir->Loader()->LoaderFile().c_str();
-        const char *ng = strstr(fpstr, "/ng/");
-        for (ObjDirItr<RndTex> it(dir, true); it != 0; ++it) {
+        bool ng = strstr(fpstr, "/ng/") != 0;
+        for (ObjDirItr<RndTex> it(dir, false); it != 0; ++it) {
             const char *texStr = it->File().c_str();
-            if (ng == 0 && strstr(texStr, "/ng/") != 0) {
-                MILO_WARN("og %s has ng texture %s", fpstr, texStr);
+            if (!ng && strstr(texStr, "/ng/") != 0) {
+                MILO_NOTIFY("og %s has ng texture %s", fpstr, texStr);
             } else if (ng && strstr(texStr, "/og/") != 0) {
-                MILO_WARN("ng %s has og texture %s", fpstr, texStr);
+                MILO_NOTIFY("ng %s has og texture %s", fpstr, texStr);
             }
         }
     }
@@ -1419,19 +1419,16 @@ void MakeTangentsLate(RndMesh *m) {
 
     Vector4 zeroTangent(0, 0, 0, 0);
     std::vector<Vector4> faceTangents(m->Faces().size(), zeroTangent);
-    double posW = 1.0;
-    double negW = -1.0;
     for (unsigned int i = 0; i < m->Faces().size(); i++) {
         Hmx::Matrix3 basis;
         ComputeFaceTangentBasis(m, i, basis);
-        double w = posW;
-        if ((basis.x.z * basis.z.y - basis.z.z * basis.x.y) * basis.y.x
-                + basis.y.y * (basis.z.z * basis.x.x - basis.x.z * basis.z.x)
-                + basis.y.z * (basis.x.y * basis.z.x - basis.z.y * basis.x.x)
-            < 0.0) {
-            w = negW;
-        }
-        faceTangents[i].w = (float)w;
+        float w = ((basis.x.z * basis.z.y - basis.z.z * basis.x.y) * basis.y.x
+                       + basis.y.y * (basis.z.z * basis.x.x - basis.x.z * basis.z.x)
+                       + basis.y.z * (basis.x.y * basis.z.x - basis.z.y * basis.x.x)
+                   < 0.0f)
+            ? -1.0f
+            : 1.0f;
+        faceTangents[i].w = w;
         Normalize(basis.x, *(Vector3 *)&faceTangents[i]);
     }
 
@@ -2125,6 +2122,7 @@ void FixVertOrder(const RndMesh *src, RndMesh *dst) {
     RndMesh::VertVector &dstVerts = dst->Verts();
     int srcCount = srcVerts.mNumVerts;
     float tolerance = 1e-5f;
+    RndMesh::Vert tmp;
     if (srcCount > 0) {
         unsigned int i = 0;
         do {
@@ -2145,7 +2143,6 @@ void FixVertOrder(const RndMesh *src, RndMesh *dst) {
                 unsigned short ii = (unsigned short)i;
                 unsigned short js = (unsigned short)j;
                 if (js != ii) {
-                    RndMesh::Vert tmp;
                     memcpy(&tmp, &dstVerts.mVerts[js], sizeof(RndMesh::Vert));
                     memcpy(
                         &dstVerts.mVerts[js], &dstVerts.mVerts[ii], sizeof(RndMesh::Vert)
