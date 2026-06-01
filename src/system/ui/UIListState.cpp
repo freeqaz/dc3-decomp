@@ -573,12 +573,8 @@ int UIListState::ScrollToTarget(int target) const {
             adjusted = NumShowing() + diff;
         }
 
-        int sign_adjusted = adjusted >> 31;
-        int sign_diff = diff >> 31;
-        int xor_adj = adjusted ^ sign_adjusted;
-        int xor_dif = diff ^ sign_diff;
-        int absAdjusted = xor_adj - sign_adjusted;
-        int absDiff = xor_dif - sign_diff;
+        int absAdjusted = adjusted < 0 ? -adjusted : adjusted;
+        int absDiff = diff < 0 ? -diff : diff;
 
         if (absAdjusted < absDiff) {
             return adjusted;

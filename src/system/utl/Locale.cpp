@@ -338,7 +338,7 @@ const char *LocalizeSeparatedInt(int num, Locale &locale) {
     int absNum = num;
     bool negative = num < 0;
     if (negative) {
-        absNum = (num ^ (num >> 31)) - (num >> 31);
+        absNum = num < 0 ? -num : num;
     }
     int digitCount = 0;
     while (true) {

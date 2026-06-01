@@ -345,12 +345,12 @@ float RndAmbientOcclusion::DistanceSH(
 ) const {
     float dw = (sh1.w * 2.0f - 1.0f) - (sh2.w * 2.0f - 1.0f);
     float dz = (sh1.z * 2.0f - 1.0f) - (sh2.z * 2.0f - 1.0f);
-    float dy = (sh1.y * 2.0f - 1.0f) - (sh2.y * 2.0f - 1.0f);
+    float dx = sh1.x - sh2.x;
     float dot = n1.x * n2.x + n1.z * n2.z + n1.y * n2.y;
     if (dot <= 0.0f) {
         dot = -dot;
     }
-    float dx = sh1.x - sh2.x;
+    float dy = (sh1.y * 2.0f - 1.0f) - (sh2.y * 2.0f - 1.0f);
     auto dist = sqrtf(dx * dx + dy * dy + dw * dw + dz * dz);
     return dist / (dot + 1.0f);
 }

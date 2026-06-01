@@ -125,8 +125,8 @@ void CharBonesMeshes::PoseMeshes() {
         curMesh = mMeshes.begin() + mCounts[TYPE_QUAT];
 
         // Apply quaternion rotations
-        Hmx::Quat *quat = (Hmx::Quat *)(start + quatOffset);
         Hmx::Quat *quatEnd = (Hmx::Quat *)(start + mOffsets[TYPE_ROTX]);
+        Hmx::Quat *quat = (Hmx::Quat *)(start + quatOffset);
         for (; quat < quatEnd; quat++, ++curMesh) {
             Normalize(*quat, *quat);
             MakeRotMatrix(*quat, (*curMesh)->DirtyLocalXfm().m);

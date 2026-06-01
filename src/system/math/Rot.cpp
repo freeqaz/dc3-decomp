@@ -314,11 +314,11 @@ void Multiply(const Vector3 &vin, const Hmx::Quat &q, Vector3 &vout) {
     float qw = q.w;
 
     // Compute quaternion products interleaved with vector loads
-    float qxqy = qy * qx;
+    float vinx = vin.x;
     float qzqw = qz * qw;
     float viny = vin.y;
     float qyqz = qz * qy;
-    float vinx = vin.x;
+    float qxqy = qy * qx;
     float qxqw = qx * qw;
     float vinz = vin.z;
     float qxqz = qz * qx;

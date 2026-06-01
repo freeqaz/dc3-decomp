@@ -272,11 +272,8 @@ float DanceRemixer::JumpedBeat(float beat) const {
 int DanceRemixer::JumpedMoveIdx(int idx) const { return Round(JumpedBeat(idx * 4)) / 4; }
 
 int DanceRemixer::JumpedMeasureAdd(int measure, int count) const {
-    int step = 1;
-    if (!(count > 0)) {
-        step = -1;
-    }
-    int absCount = (count ^ (count >> 31)) - (count >> 31);
+    int step = count > 0 ? 1 : -1;
+    int absCount = count < 0 ? -count : count;
     for (int i = 0; i < absCount; i++) {
         measure = JumpedMoveIdx(measure + step - 1) + 1;
     }
@@ -288,7 +285,7 @@ int DanceRemixer::JumpedMeasureStepsBetween(int from, int to, int step) const {
     int count = 0;
     while (from != to) {
         count += step;
-        if (((count ^ ((unsigned int)count >> 31)) - ((unsigned int)count >> 31)) > mTotalMeasures * 2) {
+        if ((count < 0 ? -count : count) > mTotalMeasures * 2) {
             TheDebug.Fail(MakeString("JumpedMeasureStepsBetween from %d to %d", from, to), nullptr);
         }
         from = JumpedMeasureAdd(from, step);

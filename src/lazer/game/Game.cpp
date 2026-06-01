@@ -629,8 +629,9 @@ void Game::LoadSong() {
     }
     const HamSongMetadata *data =
         TheHamSongMgr.Data(TheHamSongMgr.GetSongIDFromShortName(song));
+    auto onDisc = data->IsOnDisc();
     HamSongDataValidate v = (HamSongDataValidate)0;
-    if (data->IsOnDisc()) {
+    if (onDisc) {
         v = (HamSongDataValidate)2;
     }
     Fader *fader = TheSynth->Find<Fader>("per_song_sfx_level.fade", false);

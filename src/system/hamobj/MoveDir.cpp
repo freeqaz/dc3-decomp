@@ -1525,12 +1525,12 @@ void MoveDir::EnqueueDetectFrames(
     MILO_ASSERT(mFilterQueue, 0x536);
     MILO_ASSERT_RANGE(player, 0, 2, 0x537);
     MILO_ASSERT(TheHamDirector, 0x538);
-    DetectFrame *best = nullptr;
     std::pair<DetectFrame *, DetectFrame *> range;
     int moveIdx = MoveIdx();
     DetectRange(frames, range, moveIdx - 1, moveIdx + 1);
     CurrentMoveMode();
     if (range.first != range.second) {
+        DetectFrame *best = nullptr;
         float bestError = 1000.0f;
         for (DetectFrame *it = range.first; it != range.second; ++it) {
             float error =

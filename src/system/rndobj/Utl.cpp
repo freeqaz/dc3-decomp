@@ -1828,14 +1828,14 @@ void SetBloomBlurWeightsStreak(
 
     float passF = (float)pass;
     float scale = (float)pow(4.0, (double)passF);
-    float atten = (float)pow((double)attenuation, (double)scale);
+    float initOffset = 0.5f;
 
     float weights[kNumBloomTaps];
     float offsets[kNumBloomTaps];
     int middle = 3;
     float initWeight = 0.333333f;
     weights[middle] = initWeight;
-    float initOffset = 0.5f;
+    float atten = (float)pow((double)attenuation, (double)scale);
     offsets[middle] = initOffset;
 
     float curWeight = atten;

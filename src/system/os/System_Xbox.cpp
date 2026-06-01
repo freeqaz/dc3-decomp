@@ -46,8 +46,8 @@ Symbol GetSystemLanguage(Symbol s) {
     static Symbol rus("rus");
     static Symbol mex("mex");
     static Symbol pol("pol");
-    static Symbol swe("swe");
     static Symbol jpn("jpn");
+    static Symbol swe("swe");
     static Symbol fin("fin");
     static Symbol dut("dut");
     static Symbol dan("dan");
