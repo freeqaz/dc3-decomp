@@ -1,0 +1,1442 @@
+[
+  {
+    "symbol": "?BuildFontMaps@RndText@@IAAX_N@Z",
+    "function_name": "RndText::BuildFontMaps",
+    "unit": "default/system/rndobj/Text",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/rndobj/Text.cpp",
+    "match_percent": 90.614,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?UpdateScores@PartyModeMgr@@AAAXXZ",
+    "function_name": "PartyModeMgr::UpdateScores",
+    "unit": "default/lazer/game/PartyModeMgr",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/lazer/game/PartyModeMgr.cpp",
+    "match_percent": 91.397,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?Process@CompressionEffect@@QAAXPAMHH@Z",
+    "function_name": "CompressionEffect::Process",
+    "unit": "default/system/synth/CompressionEffect",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/synth/CompressionEffect.cpp",
+    "match_percent": 91.456,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?GetScore@FreestyleMoveRecorder@@QAAMPBVBaseSkeleton@@HM_N@Z",
+    "function_name": "FreestyleMoveRecorder::GetScore",
+    "unit": "default/system/hamobj/FreestyleMoveRecorder",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/hamobj/FreestyleMoveRecorder.cpp",
+    "match_percent": 91.483,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?ComputePotentialMoves@MoveMgr@@QAAXAAV?$set@PBVMoveParent@@U?$less@PBVMoveParent@@@stlpmtx_std@@V?$StlNodeAlloc@PBVMoveParent@@@3@@stlpmtx_std@@H@Z",
+    "function_name": "MoveMgr::ComputePotentialMoves",
+    "unit": "default/system/hamobj/MoveMgr",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/hamobj/MoveMgr.cpp",
+    "match_percent": 91.643,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?Process@WahEffect@@QAAXPAMHH@Z",
+    "function_name": "WahEffect::Process",
+    "unit": "default/system/synth/WahEffect",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/synth/WahEffect.cpp",
+    "match_percent": 91.694,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?Smooth@Vector3DESmoother@@QAAXVVector3@@M_N@Z",
+    "function_name": "Vector3DESmoother::Smooth",
+    "unit": "default/system/math/DoubleExponentialSmoother",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/math/DoubleExponentialSmoother.cpp",
+    "match_percent": 92.886,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?JumpedMeasureStepsBetween@DanceRemixer@@QBAHHHH@Z",
+    "function_name": "DanceRemixer::JumpedMeasureStepsBetween",
+    "unit": "default/system/hamobj/DanceRemixer",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/hamobj/DanceRemixer.cpp",
+    "match_percent": 93.0,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?DrawShadow@Character@@UAAXABVTransform@@M@Z",
+    "function_name": "Character::DrawShadow",
+    "unit": "default/system/char/Character",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/char/Character.cpp",
+    "match_percent": 93.238,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?Poll@LightPresetManager@@QAAXXZ",
+    "function_name": "LightPresetManager::Poll",
+    "unit": "default/system/world/LightPresetManager",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/world/LightPresetManager.cpp",
+    "match_percent": 94.037,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?dec_dup_count@Trie@@QAAXI@Z",
+    "function_name": "Trie::dec_dup_count",
+    "unit": "default/system/utl/trie",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/utl/trie.cpp",
+    "match_percent": 94.762,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?CalcShaderOpts@RndShaderSimple@@MAA_KPAVNgMat@@W4ShaderType@@_N@Z",
+    "function_name": "RndShaderSimple::CalcShaderOpts",
+    "unit": "default/system/rndobj/Shader",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/rndobj/Shader.cpp",
+    "match_percent": 94.934,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?Last4BeatsDetectFrac@MoveDetector@@QBAMH@Z",
+    "function_name": "MoveDetector::Last4BeatsDetectFrac",
+    "unit": "default/system/hamobj/MoveAsyncDetector",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/hamobj/MoveAsyncDetector.cpp",
+    "match_percent": 95.648,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?Animate@LightPreset@@IAAXM@Z",
+    "function_name": "LightPreset::Animate",
+    "unit": "default/system/world/LightPreset",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/world/LightPreset.cpp",
+    "match_percent": 96.017,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?NormalizeScale@@YAXABVVector3@@MAAV1@@Z",
+    "function_name": "NormalizeScale",
+    "unit": "default/system/char/CharEyes",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/char/CharEyes.cpp",
+    "match_percent": 96.458,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?OnMsg@HamNavList@@AAA?AVDataNode@@ABVButtonDownMsg@@@Z",
+    "function_name": "HamNavList::OnMsg",
+    "unit": "default/system/hamobj/HamNavList",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/hamobj/HamNavList.cpp",
+    "match_percent": 96.475,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?UpdateFakeArmPos@SkeletonUpdate@@AAAXXZ",
+    "function_name": "SkeletonUpdate::UpdateFakeArmPos",
+    "unit": "default/system/gesture/SkeletonUpdate",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/gesture/SkeletonUpdate.cpp",
+    "match_percent": 96.765,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?Shell@NgFur@@UBA_NHPAVRndMesh@@PAVRndMat@@@Z",
+    "function_name": "NgFur::Shell",
+    "unit": "default/system/rndobj/Fur_NG",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/rndobj/Fur_NG.cpp",
+    "match_percent": 96.804,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?PoseIconMan@HamDirector@@QAAXPAVCharClip@@MPAVRndTex@@_N0MM@Z",
+    "function_name": "HamDirector::PoseIconMan",
+    "unit": "default/system/hamobj/HamDirector",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/hamobj/HamDirector.cpp",
+    "match_percent": 97.135,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?CalcFrameScore@FreestyleMoveRecorder@@QBAXAAUFreestyleFrameScores@@PBUFreestyleMoveFrame@@HPBVBaseSkeleton@@M@Z",
+    "function_name": "FreestyleMoveRecorder::CalcFrameScore",
+    "unit": "default/system/hamobj/FreestyleMoveRecorder",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/hamobj/FreestyleMoveRecorder.cpp",
+    "match_percent": 97.655,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?MakeTransform@RndTransAnim@@QAAXMAAVTransform@@_NM@Z",
+    "function_name": "RndTransAnim::MakeTransform",
+    "unit": "default/system/rndobj/TransAnim",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/rndobj/TransAnim.cpp",
+    "match_percent": 98.074,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?GetAddr@Voice@@QAAHXZ",
+    "function_name": "Voice::GetAddr",
+    "unit": "default/system/synth_xbox/Voice",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/synth_xbox/Voice.cpp",
+    "match_percent": 98.163,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?Process@BitCrushEffect@@QAAXPAMHH@Z",
+    "function_name": "BitCrushEffect::Process",
+    "unit": "default/system/synth/BitCrushEffect",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/synth/BitCrushEffect.cpp",
+    "match_percent": 98.448,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?Poll@CharMirror@@UAAXXZ",
+    "function_name": "CharMirror::Poll",
+    "unit": "default/system/char/CharMirror",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/char/CharMirror.cpp",
+    "match_percent": 98.513,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "??0NoteVoiceInst@@QAA@PAVMidiInstrument@@PAVSampleZone@@EEHHM@Z",
+    "function_name": "NoteVoiceInst::NoteVoiceInst",
+    "unit": "default/system/synth/MidiInstrument",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/synth/MidiInstrument.cpp",
+    "match_percent": 98.556,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "??$_S_sort@VBSPFace@@V?$StlNodeAlloc@VBSPFace@@@stlpmtx_std@@U?$less@VBSPFace@@@3@@stlpmtx_std@@YAXAAV?$list@VBSPFace@@V?$StlNodeAlloc@VBSPFace@@@stlpmtx_std@@@0@U?$less@VBSPFace@@@0@@Z",
+    "function_name": "stlpmtx_std::_S_sort",
+    "unit": "default/system/math/Geo",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/math/Geo.cpp",
+    "match_percent": 98.774,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?Intersect@@YA_NABVVector3@@0ABVTriangle@@AAM@Z",
+    "function_name": "Intersect",
+    "unit": "default/system/math/Geo",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/math/Geo.cpp",
+    "match_percent": 98.784,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?Enter@MoveDir@@UAAXXZ",
+    "function_name": "MoveDir::Enter",
+    "unit": "default/system/hamobj/MoveDir",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/hamobj/MoveDir.cpp",
+    "match_percent": 98.901,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?AddFrame@RhythmDetector@@AAAXABVBaseSkeleton@@@Z",
+    "function_name": "RhythmDetector::AddFrame",
+    "unit": "default/system/hamobj/RhythmDetector",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/hamobj/RhythmDetector.cpp",
+    "match_percent": 98.963,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?SaveData@FileLoader@@SAXAAVBinStream@@PAXH@Z",
+    "function_name": "FileLoader::SaveData",
+    "unit": "default/system/utl/Loader",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/utl/Loader.cpp",
+    "match_percent": 99.068,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?LoadData@CharBonesSamples@@QAAXAAVBinStreamRev@@@Z",
+    "function_name": "CharBonesSamples::LoadData",
+    "unit": "default/system/char/CharBonesSamples",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/char/CharBonesSamples.cpp",
+    "match_percent": 99.184,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?PlayEvents@CharClipDriver@@IAAXM@Z",
+    "function_name": "CharClipDriver::PlayEvents",
+    "unit": "default/system/char/CharClipDriver",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/char/CharClipDriver.cpp",
+    "match_percent": 99.31,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?CompareDisplacementVectors@FreestyleMoveRecorder@@ABAXABVVector3@@H0HAAM1@Z",
+    "function_name": "FreestyleMoveRecorder::CompareDisplacementVectors",
+    "unit": "default/system/hamobj/FreestyleMoveRecorder",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/hamobj/FreestyleMoveRecorder.cpp",
+    "match_percent": 99.333,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?GetBend@HandInvokeGestureFilter@@ABAMABVVector3@@00@Z",
+    "function_name": "HandInvokeGestureFilter::GetBend",
+    "unit": "default/system/gesture/HandInvokeGestureFilter",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/gesture/HandInvokeGestureFilter.cpp",
+    "match_percent": 99.333,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?ScrollToTarget@UIListState@@IBAHH@Z",
+    "function_name": "UIListState::ScrollToTarget",
+    "unit": "default/system/ui/UIListState",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/ui/UIListState.cpp",
+    "match_percent": 99.375,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?DoFancyElbow@HamIKEffector@@IAAXAAVQuatXfm@@M@Z",
+    "function_name": "HamIKEffector::DoFancyElbow",
+    "unit": "default/system/hamobj/HamIKEffector",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/hamobj/HamIKEffector.cpp",
+    "match_percent": 99.451,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?Poll@LabelNumberTicker@@UAAXXZ",
+    "function_name": "LabelNumberTicker::Poll",
+    "unit": "default/system/ui/LabelNumberTicker",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/ui/LabelNumberTicker.cpp",
+    "match_percent": 99.474,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?SetToCurrentVal@ObjectKeys@@UAAXH@Z",
+    "function_name": "ObjectKeys::SetToCurrentVal",
+    "unit": "default/system/rndobj/PropKeys",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/rndobj/PropKeys.cpp",
+    "match_percent": 99.487,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?GetDXQuery@DxRndOcclusionQueryMgr@@AAAPAUD3DQuery@@I@Z",
+    "function_name": "DxRndOcclusionQueryMgr::GetDXQuery",
+    "unit": "default/system/rnddx9/Rnd_Xbox",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/rnddx9/Rnd_Xbox.cpp",
+    "match_percent": 99.551,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?Normalize@@YAXABVVector3@@AAV1@@Z",
+    "function_name": "Normalize",
+    "unit": "default/system/char/Character",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/char/Character.cpp",
+    "match_percent": 99.565,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?InterpTangent@@YAXABVVector3@@000MAAV1@@Z",
+    "function_name": "InterpTangent",
+    "unit": "default/system/math/Key",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/math/Key.cpp",
+    "match_percent": 99.571,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?op0@@YA?AVDataNode@@PAVDataArray@@@Z",
+    "function_name": "op0",
+    "unit": "default/system/synth/ByteGrinder",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/synth/ByteGrinder.cpp",
+    "match_percent": 99.6,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?Normalize@@YAXABVPlane@@AAV1@@Z",
+    "function_name": "Normalize",
+    "unit": "default/system/math/Geo",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/math/Geo.cpp",
+    "match_percent": 99.615,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?op6@@YA?AVDataNode@@PAVDataArray@@@Z",
+    "function_name": "op6",
+    "unit": "default/system/synth/ByteGrinder",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/synth/ByteGrinder.cpp",
+    "match_percent": 99.615,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?MoveToDeltaFacing@CharServoBone@@QAAXAAVTransform@@@Z",
+    "function_name": "CharServoBone::MoveToDeltaFacing",
+    "unit": "default/system/char/CharServoBone",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/char/CharServoBone.cpp",
+    "match_percent": 99.63,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?Poll@CharIKHead@@UAAXXZ",
+    "function_name": "CharIKHead::Poll",
+    "unit": "default/system/char/CharIKHead",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/char/CharIKHead.cpp",
+    "match_percent": 99.655,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?SetBeatScale@CharDriver@@QAAXM_N@Z",
+    "function_name": "CharDriver::SetBeatScale",
+    "unit": "default/system/char/CharDriver",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/char/CharDriver.cpp",
+    "match_percent": 99.688,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?Equals@SongCollision@@QAA_NPAV1@@Z",
+    "function_name": "SongCollision::Equals",
+    "unit": "default/system/hamobj/SongCollision",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/hamobj/SongCollision.cpp",
+    "match_percent": 99.694,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?UpdateCascadeMovePool@MiniGameMgr@@QAAXAAVMoveGraph@@AAV?$vector@PBVMoveVariant@@V?$StlNodeAlloc@PBVMoveVariant@@@stlpmtx_std@@@stlpmtx_std@@1@Z",
+    "function_name": "MiniGameMgr::UpdateCascadeMovePool",
+    "unit": "default/system/hamobj/MiniGameMgr",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/hamobj/MiniGameMgr.cpp",
+    "match_percent": 99.7,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?FastInterp@@YAXABVQuat@Hmx@@0MAAV12@@Z",
+    "function_name": "FastInterp",
+    "unit": "default/system/math/Rot",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/math/Rot.cpp",
+    "match_percent": 99.744,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?CalcScreenHeight@@YA_NMPAVRndMesh@@AAM@Z",
+    "function_name": "CalcScreenHeight",
+    "unit": "default/system/rndobj/Text",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/rndobj/Text.cpp",
+    "match_percent": 99.744,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "??0SfxInst@@QAA@PAVSfx@@@Z",
+    "function_name": "SfxInst::SfxInst",
+    "unit": "default/system/synth/Sfx",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/synth/Sfx.cpp",
+    "match_percent": 99.744,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?SetAttackSmoothing@Synapse@1DSP@@QAAXM@Z",
+    "function_name": "DSP::Synapse::Synapse::SetAttackSmoothing",
+    "unit": "default/system/synth_xbox/Synapse_dsp",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/synth_xbox/Synapse_dsp.cpp",
+    "match_percent": 99.75,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?SetReleaseSmoothing@Synapse@1DSP@@QAAXM@Z",
+    "function_name": "DSP::Synapse::Synapse::SetReleaseSmoothing",
+    "unit": "default/system/synth_xbox/Synapse_dsp",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/synth_xbox/Synapse_dsp.cpp",
+    "match_percent": 99.75,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?CharOriginOffset@RndFont3d@@QBA?AVVector3@@XZ",
+    "function_name": "RndFont3d::CharOriginOffset",
+    "unit": "default/system/rndobj/Font3d",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/rndobj/Font3d.cpp",
+    "match_percent": 99.762,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?BuildSphereStratified@@YAXIAAV?$vector@VVector3@@V?$StlNodeAlloc@VVector3@@@stlpmtx_std@@@stlpmtx_std@@@Z",
+    "function_name": "BuildSphereStratified",
+    "unit": "default/system/rndobj/Utl",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/rndobj/Utl.cpp",
+    "match_percent": 99.765,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?SetClipWeightMap@HamDriver@@QAAXXZ",
+    "function_name": "HamDriver::SetClipWeightMap",
+    "unit": "default/system/hamobj/HamDriver",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/hamobj/HamDriver.cpp",
+    "match_percent": 99.792,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?AcquirePose@CharBonesMeshes@@QAAXXZ",
+    "function_name": "CharBonesMeshes::AcquirePose",
+    "unit": "default/system/char/CharBonesMeshes",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/char/CharBonesMeshes.cpp",
+    "match_percent": 99.806,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?PushClip@ClipPlayer@@IAAXHPAULayerArray@HamDriver@@@Z",
+    "function_name": "ClipPlayer::PushClip",
+    "unit": "default/system/hamobj/ClipPlayer",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/hamobj/ClipPlayer.cpp",
+    "match_percent": 99.829,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?NewMs@DeJitter@@QAAMMAAM@Z",
+    "function_name": "DeJitter::NewMs",
+    "unit": "default/system/utl/DeJitter",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/utl/DeJitter.cpp",
+    "match_percent": 99.833,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?Create@RndBitmap@@QAAXPAX@Z",
+    "function_name": "RndBitmap::Create",
+    "unit": "default/system/rndobj/Bitmap",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/rndobj/Bitmap.cpp",
+    "match_percent": 99.837,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?FastInvert@@YAXABVMatrix3@Hmx@@AAV12@@Z",
+    "function_name": "FastInvert",
+    "unit": "default/system/math/mtx",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/math/mtx.cpp",
+    "match_percent": 99.839,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?Set@Quat@Hmx@@QAAXABVMatrix3@2@@Z",
+    "function_name": "Hmx::Quat::Set",
+    "unit": "default/system/math/Rot",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/math/Rot.cpp",
+    "match_percent": 99.857,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?Normalize@@YAXABVQuat@Hmx@@AAV12@@Z",
+    "function_name": "Normalize",
+    "unit": "default/system/math/Rot",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/math/Rot.cpp",
+    "match_percent": 99.868,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?Score@BoneAngleRangePoseElement@@UBAMABVSkeleton@@@Z",
+    "function_name": "BoneAngleRangePoseElement::Score",
+    "unit": "default/system/hamobj/Pose",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/hamobj/Pose.cpp",
+    "match_percent": 99.87,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?ReFitTextScroll@RndText@@QAAXVString@@@Z",
+    "function_name": "RndText::ReFitTextScroll",
+    "unit": "default/system/rndobj/Text",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/rndobj/Text.cpp",
+    "match_percent": 99.872,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?SetLocalRotIndex@RndTransformable@@QAAXHM@Z",
+    "function_name": "RndTransformable::SetLocalRotIndex",
+    "unit": "default/system/rndobj/Trans",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/rndobj/Trans.cpp",
+    "match_percent": 99.88,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?Poll@HamIKEffector@@UAAXXZ",
+    "function_name": "HamIKEffector::Poll",
+    "unit": "default/system/hamobj/HamIKEffector",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/hamobj/HamIKEffector.cpp",
+    "match_percent": 99.881,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?SetArm@HamSkeletonConverter@@IAAXW4SkeletonJoint@@000@Z",
+    "function_name": "HamSkeletonConverter::SetArm",
+    "unit": "default/system/hamobj/HamSkeletonConverter",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/hamobj/HamSkeletonConverter.cpp",
+    "match_percent": 99.886,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?OnIterateFrac@WorldCrowd@@IAA?AVDataNode@@PAVDataArray@@@Z",
+    "function_name": "WorldCrowd::OnIterateFrac",
+    "unit": "default/system/world/Crowd",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/world/Crowd.cpp",
+    "match_percent": 99.889,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?SetFrame@FloatKeys@@UAAXMMM@Z",
+    "function_name": "FloatKeys::SetFrame",
+    "unit": "default/system/rndobj/PropKeys",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/rndobj/PropKeys.cpp",
+    "match_percent": 99.901,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?SetFrame@RndGenerator@@UAAXMM@Z",
+    "function_name": "RndGenerator::SetFrame",
+    "unit": "default/system/rndobj/Gen",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/rndobj/Gen.cpp",
+    "match_percent": 99.909,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?SetFrame@QuatKeys@@UAAXMMM@Z",
+    "function_name": "QuatKeys::SetFrame",
+    "unit": "default/system/rndobj/PropKeys",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/rndobj/PropKeys.cpp",
+    "match_percent": 99.92,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?GetKey@LightPreset@@IBAXMAAH0AAM@Z",
+    "function_name": "LightPreset::GetKey",
+    "unit": "default/system/world/LightPreset",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/world/LightPreset.cpp",
+    "match_percent": 99.92,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?Draw@RndOverlay@@AAAMM@Z",
+    "function_name": "RndOverlay::Draw",
+    "unit": "default/system/rndobj/Overlay",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/rndobj/Overlay.cpp",
+    "match_percent": 99.937,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?UpdateFloorSpotTransform@Spotlight@@IAAXABVTransform@@@Z",
+    "function_name": "Spotlight::UpdateFloorSpotTransform",
+    "unit": "default/system/world/Spotlight",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/world/Spotlight.cpp",
+    "match_percent": 99.942,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?SynthPoll@SampleInst@@UAAXXZ",
+    "function_name": "SampleInst::SynthPoll",
+    "unit": "default/system/synth/SampleInst",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/synth/SampleInst.cpp",
+    "match_percent": 99.95,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?Hookup@CharHair@@QAAXAAV?$ObjPtrList@VCharCollide@@VObjectDir@@@@@Z",
+    "function_name": "CharHair::Hookup",
+    "unit": "default/system/char/CharHair",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/char/CharHair.cpp",
+    "match_percent": 99.96,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?PostLoad@Character@@UAAXAAVBinStream@@@Z",
+    "function_name": "Character::PostLoad",
+    "unit": "default/system/char/Character",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/char/Character.cpp",
+    "match_percent": 99.97,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  },
+  {
+    "symbol": "?SetFrame@CharClipSet@@UAAXMM@Z",
+    "function_name": "CharClipSet::SetFrame",
+    "unit": "default/system/char/CharClipSet",
+    "source_path": "/home/free/code/milohax/wt/wf-comm/src/system/char/CharClipSet.cpp",
+    "match_percent": 99.97,
+    "qualified_by": [
+      "int_abs_to_ternary",
+      "first_use_reorder"
+    ],
+    "variant_count": 0,
+    "asm_relevant": null,
+    "db_flags": {
+      "has_commutative_op_order": 1,
+      "has_offset_swap": 0,
+      "has_control_flow": 0
+    }
+  }
+]
