@@ -1513,34 +1513,8 @@ void RndText::UpdateScrollOffsets() {
     float widthDiff = fVar3 - mWidth;
 
     switch (iVar9) {
-    case kFitScrollMarqueeWrap: {
-        if (fVar2 < 0.0f) {
-            float fVar13_2 = -widthDiff;
-            if (fVar13 < fVar13_2) {
-                mScrollPos = fVar13_2;
-                mScrollSpeed = -fVar2;
-                bVar10 = true;
-            }
-        } else if ((fVar2 > 0.0f) && (!(fVar13 < 0.0f))) {
-            mScrollSpeed = -fVar2;
-            bVar10 = true;
-        }
-        break;
-    }
-
-    case kFitScrollMarqueeReset:
-        if (mScrollPos < -fVar3) {
-            mScrollPos = 0.0f;
-            bVar10 = true;
-        }
-        mLineHeight = fVar3;
-        break;
-
-    case kFitScrollPingPong:
-        if (mScrollPos < -(fVar3 + 20.0f)) {
-            mScrollPos = 0.0f;
-            bVar10 = true;
-        }
+    default:
+        mScrollPos = 0.0f;
         break;
 
     case kFitScrollMarqueeWrapAlways: {
@@ -1589,9 +1563,35 @@ void RndText::UpdateScrollOffsets() {
         break;
     }
 
-    default:
-        mScrollPos = 0.0f;
+    case kFitScrollPingPong:
+        if (mScrollPos < -(fVar3 + 20.0f)) {
+            mScrollPos = 0.0f;
+            bVar10 = true;
+        }
         break;
+
+    case kFitScrollMarqueeReset:
+        if (mScrollPos < -fVar3) {
+            mScrollPos = 0.0f;
+            bVar10 = true;
+        }
+        mLineHeight = fVar3;
+        break;
+
+    case kFitScrollMarqueeWrap: {
+        if (fVar2 < 0.0f) {
+            float fVar13_2 = -widthDiff;
+            if (fVar13 < fVar13_2) {
+                mScrollPos = fVar13_2;
+                mScrollSpeed = -fVar2;
+                bVar10 = true;
+            }
+        } else if ((fVar2 > 0.0f) && (!(fVar13 < 0.0f))) {
+            mScrollSpeed = -fVar2;
+            bVar10 = true;
+        }
+        break;
+    }
     }
 
     if (bVar10) {

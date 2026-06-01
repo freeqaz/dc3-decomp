@@ -101,7 +101,7 @@ void StreamReceiver::Poll() {
         if (mState == kReady) {
             goto ready;
         }
-        if (mState > kStopped) {
+        if ((unsigned int)mState > kStopped) {
             MILO_FAIL("bad state logic.\n");
             goto ready;
         }

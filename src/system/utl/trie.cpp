@@ -81,11 +81,10 @@ void Trie::inc_dup_count(unsigned int index) {
 
 void Trie::dec_dup_count(unsigned int index) {
     check_index(index);
-    char *node = NodePtr(this, index);
-    unsigned int *cf = &CountField(node);
-    unsigned int dupCount = GetDupCount(CountField(node));
+    unsigned int *cf = &CountField(NodePtr(this, index));
+    unsigned int dupCount = GetDupCount(CountField(NodePtr(this, index)));
     check_index(index);
-    *cf = ((dupCount - 1) << 8) | SiblingCount(node);
+    *cf = ((dupCount - 1) << 8) | SiblingCount(NodePtr(this, index));
 }
 
 unsigned int Trie::get_free_node() {

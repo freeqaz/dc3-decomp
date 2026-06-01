@@ -352,11 +352,12 @@ const MoveVariant *MoveMgr::GetRoutinePreferredVariant(int i1, int i2) const {
 void MoveMgr::LoadSongData() { ImportMoveData("../meta/move_data.dta", true); }
 
 void MoveMgr::ComputePotentialMoves(std::set<const MoveParent *> &moves, int i2) {
-    if (mMoveParents[0].size() < i2 + 1) {
-        mMoveParents[0].resize(i2 + 1);
+    auto &moveParents = mMoveParents;
+    if (moveParents[0].size() < i2 + 1) {
+        moveParents[0].resize(i2 + 1);
     }
-    if (mMoveParents[0][i2]) {
-        moves.insert(mMoveParents[0][i2]);
+    if (moveParents[0][i2]) {
+        moves.insert(moveParents[0][i2]);
     } else {
         if (mChoiceSets.size() < i2 + 1) {
             mChoiceSets.resize(i2 + 1);
@@ -370,7 +371,7 @@ void MoveMgr::ComputePotentialMoves(std::set<const MoveParent *> &moves, int i2)
             }
         } else {
             if (i2 > 0) {
-                const MoveParent *last = mMoveParents[i2].back();
+                const MoveParent *last = moveParents[i2].back();
                 if (last) {
                     FOREACH (adj, last->NextAdjacents()) {
                         if ((*adj)->IsValidForMiniGame()) {

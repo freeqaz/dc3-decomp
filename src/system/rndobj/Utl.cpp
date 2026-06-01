@@ -2608,14 +2608,15 @@ BuildPoly::BuildPoly() : mPoly(), mTransform() {}
 void BuildSphereStratified(unsigned int numSamples, std::vector<Vector3> &dirs) {
     Rand rand(0x29a);
     unsigned int N = (unsigned int)(sqrtf((float)numSamples) + 0.5f);
-    dirs.erase(dirs.begin(), dirs.end());
+    auto dirsBegin = dirs.begin();
+    dirs.erase(dirsBegin, dirs.end());
     dirs.reserve(N * N);
 
     float zStep = (1.0f / (float)N) * 2.0f;
-    float phiStep = (1.0f / (float)N) * 6.2831855f;
-
     float z = -1.0f;
+
     float phi = 0.0f;
+    float phiStep = (1.0f / (float)N) * 6.2831855f;
     if (N == 0)
         return;
     unsigned int i = N;
