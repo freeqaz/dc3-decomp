@@ -330,27 +330,46 @@ Output shows field-by-field comparison with OK / GHIDRA_MISSING / OURS_MISSING s
 
 **Note:** After seeding, data persists to disk and survives restarts. Only need to seed once (or after importing a new binary).
 
-### Pcode Inspection — `tools/ghidra/pcode_inspect.py`
+### Switch/Cast Inspection — `tools/ghidra/switch_cast_inspect.py`
 
-Analyzes Ghidra decompilation output + raw PPC bytes for switch tables and cast operations. Automatically resolves symbol names to the correct function (skips thunks).
+Analyzes Ghidra decompilation output + raw PPC bytes for switch tables and cast operations. Automatically resolves symbol names to the correct function (skips thunks). Despite its former name (`pcode_inspect.py`), this tool does NOT export P-code — it inspects switch/cast patterns. (The old `pcode_inspect.py` name still works as a deprecation shim that delegates here.) For genuine Ghidra P-code, see the P-code Export tool below.
 
 ```bash
 # Full analysis (switches + casts + decompiled output)
-python3 tools/ghidra/pcode_inspect.py "Hmx::Object::Handle"
+python3 tools/ghidra/switch_cast_inspect.py "Hmx::Object::Handle"
 
 # By address (skip symbol search)
-python3 tools/ghidra/pcode_inspect.py "0x82878b58" --address
+python3 tools/ghidra/switch_cast_inspect.py "0x82878b58" --address
 
 # Switch statements only
-python3 tools/ghidra/pcode_inspect.py "DataNode::Handle" --switches
+python3 tools/ghidra/switch_cast_inspect.py "DataNode::Handle" --switches
 
 # Cast/extension operations only
-python3 tools/ghidra/pcode_inspect.py "DataNode::Handle" --casts
+python3 tools/ghidra/switch_cast_inspect.py "DataNode::Handle" --casts
 ```
 
 Detects:
 - **Switch patterns**: PPC jump tables (cmplwi/lwzx/mtctr/bctr) and comparison chains, with case counts
 - **Cast operations**: PPC sign/zero extensions (extsb, extsh, extsw, rlwinm), Ghidra cast patterns ((int), (uint), SUBn(), SEXTn(), ZEXTn())
+
+### P-code Export — `tools/ghidra/pcode_export.py` (`pcode-export.sh`)
+
+Emits **genuine Ghidra P-code** (not hand-decoded bytes) via in-process pyghidra. Run through the wrapper `tools/ghidra/pcode-export.sh`, which sets the JVM/Ghidra env; **the sandbox must be skipped** so the JVM/ICD can load. It uses a private throwaway project under `/tmp/claude/ghidra_projects/`, so it never contends for the service-held `DC3.lock` — no need to stop the pyghidra-mcp service. The first (cold) run imports + auto-analyzes the XEX (several minutes); later runs reuse the analyzed project instantly.
+
+```bash
+# HIGH p-code (decompiler/SSA HighFunction) — the default
+./tools/ghidra/pcode-export.sh "CharBones::PoseMeshes"
+
+# RAW (sleigh, 1:1 with the machine instructions) p-code
+./tools/ghidra/pcode-export.sh "CharBones::PoseMeshes" --raw
+
+# Machine-readable JSON (array of {seq, mnemonic, out, ins[]})
+./tools/ghidra/pcode-export.sh "0x82878b58" --raw --json
+./tools/ghidra/pcode-export.sh "?OnBeat@HollaBackMinigame@@QAAXXZ" --high --json
+```
+
+- `--high` (default): HIGH P-code from the decompiler's HighFunction (SSA/simplified, resolved varnodes) — "what the decompiler thinks the dataflow is".
+- `--raw`: RAW (low) P-code straight from SLEIGH, 1:1 with the function body instructions — the faithful view for lowering questions (sign/zero extension, operand order, etc.).
 
 **When to use:** When a function has switch statements that don't match. When objdiff shows branch structure differences. When signed/unsigned confusion is suspected.
 

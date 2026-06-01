@@ -42,7 +42,7 @@ Decomp services
 ---------------
 
 - **Orchestrator MCP** (`scripts/orchestrator/`) — central tool surface exposed to agents. Wraps objdiff, the build, the Ghidra service, Unicorn, m2c, and the RB3/RB2 cross-reference databases. Sample tools: `run_objdiff`, `run_diff_inspect`, `run_analyze_function`, `query_functions`, `lookup_rb3`, `lookup_struct_offset`, `get_rb2_class_info`, `lookup_merged_symbol`, `mark_patch_result`.
-- **Ghidra MCP service** (`tools/ghidra/`, pyghidra-based) — headless Ghidra over HTTP. Provides decompiled C, switch-table/cast analysis (`pcode_inspect.py`), semantic search across 42k+ functions (`code_search.py`), and DTM-vs-header struct diffs (`struct_check.py`).
+- **Ghidra MCP service** (`tools/ghidra/`, pyghidra-based) — headless Ghidra over HTTP. Provides decompiled C, switch-table/cast analysis (`switch_cast_inspect.py`, formerly `pcode_inspect.py`), genuine HIGH/RAW P-code export (`pcode_export.py` via `pcode-export.sh`), semantic search across 42k+ functions (`code_search.py`), and DTM-vs-header struct diffs (`struct_check.py`).
 - **m2c** — machine-code-to-C decompiler for PPC, called by `run_analyze_function` to seed first-pass C from the original asm.
 - **Unicorn function runner** (`scripts/unicorn_runner/`) — differential execution: runs target and decomp side-by-side on Unicorn PPC32 BE with synthesized inputs, classifies divergences as `logic` / `build_env` / `regalloc`. This is how the agents tell "real bug" from "harmless codegen drift."
 - **Source permuter** (`scripts/permuter/`) — tries signed/unsigned, variable extraction, and other source variations to close the last few percent on stubborn functions.

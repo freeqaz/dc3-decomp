@@ -44,7 +44,8 @@ Require running pyghidra-mcp service (`./tools/ghidra/pyghidra-service.sh start`
 | Tool | Description | Usage | Skill |
 |------|-------------|-------|-------|
 | `struct_check.py` | Compare header struct layouts vs Ghidra DTM | `python3 tools/ghidra/struct_check.py HamDirector` | `/ghidra-struct` |
-| `pcode_inspect.py` | Switch table + cast analysis from decompiled output | `python3 tools/ghidra/pcode_inspect.py "Class::Method" --switches` | `/ghidra-decompile` |
+| `switch_cast_inspect.py` | Switch table + cast analysis from decompiled output (old name `pcode_inspect.py` still works via a deprecation shim) | `python3 tools/ghidra/switch_cast_inspect.py "Class::Method" --switches` | `/ghidra-decompile` |
+| `pcode_export.py` | Genuine Ghidra P-code export (HIGH/RAW) via in-process pyghidra; run via `pcode-export.sh` with the sandbox skipped | `./tools/ghidra/pcode-export.sh "Class::Method" --raw --json` | `/ghidra-decompile` |
 | `code_search.py` | Semantic search over 42K+ decompiled functions (auto-filters `__unwind$` noise) | `python3 tools/ghidra/code_search.py "iterate list delete"` | `/ghidra-search` |
 
 ## Dynamic Analysis
@@ -126,3 +127,9 @@ python3 msvc-src/tools/il_diff.py variant_a.cpp variant_b.cpp -f FunctionName
 | Tool | Description | Doc |
 |------|-------------|-----|
 | C++ Permuter (`decomp_synth`, now in [`../decomp-synth`](../../../decomp-synth)) | Tree-sitter based source permutation for register allocation issues. Run via `python -m decomp_synth.scan_and_permute` or the `/permute` skill | [../permuter/INDEX.md](../permuter/INDEX.md) |
+
+### diff_inspect → permuter region handshake
+
+`diff_inspect.py --attributed --noise-filter --json` emits the `diff_inspect.attributed_regions/v1` region contract: noise-filtered mismatch clusters attributed back to specific source lines. `decomp_synth.scan_and_permute` consumes it to confine its edits to those lines — pass `--regions <file.json>` (the whole contract) or `--near-lines a,b,c` (an explicit line list). This keeps the beam search focused on the divergent region instead of permuting the entire function.
+
+`scan_and_permute` also gates on the BSF (binary-signature/feedback) oracle via: `--no-bsf-guided` (disable BSF guidance entirely), `--bsf-required` (only accept candidates the oracle confirms), and `--bsf-timeout <seconds>` (per-candidate BSF budget).

@@ -601,8 +601,8 @@ class DecompMCPServer:
                             },
                             "mode": {
                                 "type": "string",
-                                "enum": ["diagnose", "clusters", "regswaps", "offsets", "replaces", "compare", "save_baseline", "mismatches", "asm_listing", "stack-layout"],
-                                "description": "Analysis mode: diagnose (root cause), clusters (contiguous insert/delete groups), regswaps (register swap pairs), offsets (offset shift histogram), replaces (categorize noise vs real), compare (delta vs baseline), save_baseline (save current state), mismatches (instruction table), asm_listing (compile with /FAs and return source-annotated assembly), stack-layout (per-slot diff with base-side variable names from a /Z7 CodeView recompile)",
+                                "enum": ["diagnose", "clusters", "regswaps", "offsets", "replaces", "compare", "save_baseline", "mismatches", "asm_listing", "stack-layout", "attributed"],
+                                "description": "Analysis mode: diagnose (root cause), clusters (contiguous insert/delete groups), regswaps (register swap pairs), offsets (offset shift histogram), replaces (categorize noise vs real), compare (delta vs baseline), save_baseline (save current state), mismatches (instruction table), asm_listing (compile with /FAs and return source-annotated assembly), stack-layout (per-slot diff with base-side variable names from a /Z7 CodeView recompile), attributed (NORMALIZED source-line regions: line ranges + per-region real mismatch counts, relocation/static-symbol noise filtered)",
                             },
                             "project_dir": {
                                 "type": "string",
@@ -1994,7 +1994,7 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
         if not mode:
             return [TextContent(type="text", text="Error: No mode provided.")]
 
-        valid_modes = {"diagnose", "clusters", "regswaps", "offsets", "replaces", "compare", "save_baseline", "mismatches", "asm_listing", "stack-layout"}
+        valid_modes = {"diagnose", "clusters", "regswaps", "offsets", "replaces", "compare", "save_baseline", "mismatches", "asm_listing", "stack-layout", "attributed"}
         if mode not in valid_modes:
             return [TextContent(type="text", text=f"Error: Invalid mode '{mode}'. Valid: {', '.join(sorted(valid_modes))}")]
 
@@ -2267,6 +2267,46 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
                     analysis_dir = project_dir / "function_analysis"
                     analysis_dir.mkdir(exist_ok=True, parents=True)
                     output_file = analysis_dir / f"stack_layout_{safe_symbol}.txt"
+                    with open(output_file, "w") as f:
+                        f.write(output)
+                    return [TextContent(type="text", text=f"Output is large ({len(lines)} lines). Written to file.\n\n"
+                                        f"**File:** `{output_file.relative_to(project_dir)}`")]
+
+            # ── attributed mode (NORMALIZED source-line regions) ──
+            #    Like the generic branch but adds --noise-filter so the text
+            #    report is the normalized one (reloc/static-symbol noise dropped
+            #    by WS1 upstream). No --json here: MCP surfaces the human report.
+            elif mode == "attributed":
+                cmd = [
+                    sys.executable, str(diff_inspect_script),
+                    "--symbol", symbol,
+                    "--attributed",
+                    "--noise-filter",
+                    "--project-dir", str(project_dir),
+                ]
+                if unit:
+                    cmd.extend(["--unit", unit])
+                result = subprocess.run(
+                    cmd, capture_output=True, text=True,
+                    timeout=300,
+                )
+
+                output = result.stdout
+                if result.stderr:
+                    filtered_stderr = _filter_build_output(result.stderr)
+                    if filtered_stderr:
+                        output += f"\n\n[stderr]\n{filtered_stderr}"
+
+                if result.returncode != 0:
+                    return [TextContent(type="text", text=f"Error (exit {result.returncode}):\n{output}")]
+
+                lines = output.split("\n")
+                if len(lines) < MAX_INLINE_LINES:
+                    return [TextContent(type="text", text=output)]
+                else:
+                    analysis_dir = project_dir / "function_analysis"
+                    analysis_dir.mkdir(exist_ok=True, parents=True)
+                    output_file = analysis_dir / f"diff_inspect_attributed_{safe_symbol}.txt"
                     with open(output_file, "w") as f:
                         f.write(output)
                     return [TextContent(type="text", text=f"Output is large ({len(lines)} lines). Written to file.\n\n"

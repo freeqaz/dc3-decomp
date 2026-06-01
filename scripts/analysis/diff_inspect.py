@@ -175,6 +175,77 @@ def categorize_replaces(instrs):
     return static_sym, real_replace, real_examples
 
 
+def compute_noise_indices(instrs, drop_regswaps: bool = False) -> set:
+    """Return the set of RAW-instr indices classified as reloc/static-symbol noise.
+
+    Reuses the two existing classifiers rather than reimplementing them:
+
+    (a) match_type=='replace': everything categorize_replaces() does NOT keep as
+        a "real" example is symbol-reloc noise.
+    (b) match_type=='diff_arg': lift the canonical "explained" predicate from
+        cmd_diagnose verbatim — an instruction is explained (noise) when ALL of
+        its diff_breakdown args are symbol/branch_dest, register, or
+        numeric/string immediate.
+
+    CRITICAL default-scope rule: the diff_arg predicate treats register-only
+    diffs as explained(noise).  To protect residuals like OnBeat idx193
+    (commutative add, same registers swapped operand order) which is a
+    register-arg diff, register-only classification is gated behind
+    ``drop_regswaps`` (default False).  With the default, an index whose ONLY
+    explaining arg-type is 'register' is NOT added to the noise set; only
+    symbol/branch_dest/immediate-explained indices are dropped.  This keeps
+    idx193 (register) AND replace residuals (diff_op/replace, not Symbol-count
+    reloc) as REAL.
+    """
+    noise: set = set()
+
+    # (a) replace: noise = all 'replace' indices minus categorize_replaces' real set
+    _static_sym, _real_replace, real_examples = categorize_replaces(instrs)
+    real_replace_idx = {ins["index"] for ins in real_examples}
+    for ins in instrs:
+        if ins.get("match_type") == "replace" and ins["index"] not in real_replace_idx:
+            noise.add(ins["index"])
+
+    # (b) diff_arg: lift the explained_indices predicate from cmd_diagnose verbatim.
+    for ins in instrs:
+        if ins.get("match_type") != "diff_arg":
+            continue
+        bd = ins.get("diff_breakdown")
+        if not bd:
+            continue
+        idx = ins["index"]
+        all_explained = True
+        only_register = True  # True while every explaining arg-type is 'register'
+        for arg in bd.get("arguments", []):
+            at = arg.get("arg_type", "")
+            if at in ("symbol", "branch_dest"):
+                only_register = False
+                continue  # Always noise
+            elif at == "register":
+                continue  # Register alloc noise (gated below by drop_regswaps)
+            elif at == "immediate":
+                only_register = False
+                tv = arg.get("target", {}).get("value")
+                bv = arg.get("base", {}).get("value")
+                if isinstance(tv, (int, float)) and isinstance(bv, (int, float)):
+                    continue  # Offset shift noise
+                elif isinstance(tv, str) or isinstance(bv, str):
+                    continue  # Symbol in immediate
+                else:
+                    all_explained = False
+            else:
+                only_register = False
+                all_explained = False
+        if all_explained:
+            # If the ONLY explaining arg-type is 'register', keep as REAL unless
+            # the caller explicitly opts into dropping register swaps.
+            if only_register and not drop_regswaps:
+                continue
+            noise.add(idx)
+
+    return noise
+
+
 def find_clusters(instrs, match_types=("insert", "delete"), gap=2):
     """Group instructions of given match_types into contiguous clusters."""
     targets = [(i, ins) for i, ins in enumerate(instrs)
@@ -922,15 +993,23 @@ def _compile_with_listing(source_path, project_dir=None):
     return None
 
 
-def _objdiff_to_diff_instructions(instrs):
+def _objdiff_to_diff_instructions(instrs, noise_indices: set | None = None):
     """Convert objdiff JSON instructions to the format expected by attribution.
 
     Maps objdiff's match_type/target/base format to the attribution module's
     index/diff_kind/target_opcode/base_opcode format.
+
+    If ``noise_indices`` is given, any RAW-instr index in that set is skipped
+    entirely (never becomes an attribution 'replace').  The set must be built
+    from RAW instrs (which still carry match_type/typed_args/diff_breakdown)
+    BEFORE conversion — the converted diff_instrs have lost those fields.
+    Default None preserves current output exactly (backward-compatible).
     """
     result = []
     for ins in instrs:
         idx = ins.get("index", -1)
+        if noise_indices is not None and idx in noise_indices:
+            continue
         mt = ins.get("match_type", "equal")
 
         # Map objdiff match_type to diff_kind
@@ -959,7 +1038,107 @@ def _objdiff_to_diff_instructions(instrs):
     return result
 
 
-def cmd_attributed(instrs, symbol, project_dir=None):
+def _repo_relative_path(path: str, project_dir=None) -> str:
+    """Best-effort normalize an absolute source path to a repo-relative one.
+
+    Falls back to the input string unchanged if it cannot be made relative.
+    """
+    if not path:
+        return path
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    repo_root = os.path.dirname(os.path.dirname(script_dir))
+    base = os.path.abspath(project_dir) if project_dir else repo_root
+    try:
+        ap = os.path.abspath(path)
+        rel = os.path.relpath(ap, base)
+        # Only accept if it stays inside the tree (no leading "..")
+        if not rel.startswith(".."):
+            return rel
+    except (ValueError, OSError):
+        pass
+    return path
+
+
+def _region_reason(region) -> str:
+    """Derive the short human 'reason' string for a region from its dominant
+    type plus a hint at the first mismatch's opcode pair."""
+    dom = region.dominant_type or "unknown"
+    if region.mismatches:
+        m = region.mismatches[0]
+        tgt = getattr(m, "target_opcode", "") or "?"
+        base = getattr(m, "base_opcode", "") or "?"
+        if tgt != base:
+            return f"{dom} ({tgt} vs {base})"
+    return dom
+
+
+def regions_to_dict(regions, symbol, source_file, raw_instrs,
+                    noise_filter, real_count, noise_count) -> dict:
+    """Serialize attribution MismatchRegions to the canonical region_contract.
+
+    The headline match_pct/total/equal are always computed from RAW instrs
+    (pre-filter) so the percentage is never misreported after noise filtering.
+    The <unknown> sentinel region (source_file=='<unknown>' or start_line==0)
+    is tagged unattributed=True with reason='unattributed'; consumers MUST skip
+    those when scoping edits.
+    """
+    total = len(raw_instrs)
+    equal_count = sum(1 for i in raw_instrs if i.get("match_type") == "equal")
+    match_pct = round(100.0 * equal_count / total, 1) if total else 0.0
+
+    region_dicts = []
+    for region in regions:
+        is_unattributed = (region.source_file == "<unknown>"
+                           or region.start_line == 0)
+        mismatch_list = []
+        for m in region.mismatches:
+            mismatch_list.append({
+                "instruction_index": m.instruction_index,
+                "target_opcode": m.target_opcode,
+                "base_opcode": m.base_opcode,
+                "mismatch_type": m.mismatch_type,
+                "source_line": m.source_line,
+                "confidence": m.confidence,
+            })
+        if is_unattributed:
+            reason = "unattributed"
+            rel_src = "<unknown>"
+        else:
+            reason = _region_reason(region)
+            rel_src = _repo_relative_path(region.source_file)
+        region_dicts.append({
+            "source_file": rel_src,
+            "start_line": region.start_line,
+            "end_line": region.end_line,
+            "mismatch_count": region.mismatch_count,
+            "total_instructions": region.total_instructions,
+            "match_ratio": round(region.match_ratio, 2),
+            "dominant_type": region.dominant_type,
+            "reason": reason,
+            "unattributed": is_unattributed,
+            "source_lines": list(region.source_lines),
+            "mismatches": mismatch_list,
+        })
+
+    return {
+        "schema": "diff_inspect.attributed_regions/v1",
+        "symbol": symbol,
+        "source_file": source_file,
+        "match_pct": match_pct,
+        "total_instructions": total,
+        "equal_instructions": equal_count,
+        "noise_filtered": bool(noise_filter),
+        "counts": {
+            "nonequal_total": total - equal_count,
+            "real": real_count,
+            "noise": noise_count,
+        },
+        "regions": region_dicts,
+    }
+
+
+def cmd_attributed(instrs, symbol, project_dir=None, noise_filter=False,
+                   json_out=False, min_confidence=0.0, drop_regswaps=False):
     """Source-attributed mismatch analysis.
 
     Compiles the source with /FAs, parses the listing, and joins with
@@ -997,8 +1176,13 @@ def cmd_attributed(instrs, symbol, project_dir=None):
     # The listing uses full mangled names in PROC/ENDP markers
     func_name = symbol
 
-    # 4. Convert objdiff instructions to attribution format
-    diff_instrs = _objdiff_to_diff_instructions(instrs)
+    # 4. Convert objdiff instructions to attribution format.
+    #    Build the noise set from RAW instrs (which still carry
+    #    match_type/typed_args/diff_breakdown) BEFORE conversion, then drop
+    #    those indices so they never become attribution 'replace's.
+    noise_idx = (compute_noise_indices(instrs, drop_regswaps=drop_regswaps)
+                 if noise_filter else None)
+    diff_instrs = _objdiff_to_diff_instructions(instrs, noise_idx)
 
     # 5. Run attribution pipeline
     listing, attributed, regions = attribute_function(listing_text, func_name, diff_instrs)
@@ -1022,9 +1206,32 @@ def cmd_attributed(instrs, symbol, project_dir=None):
         print("Error: could not find function in assembly listing", file=sys.stderr)
         sys.exit(1)
 
-    # 6. Display results
+    # 5b. Optional confidence filter: drop low-confidence AttributedMismatch
+    #     from each region (recompute mismatch_count via the existing property).
+    if min_confidence > 0:
+        for region in regions:
+            region.mismatches = [m for m in region.mismatches
+                                 if m.confidence >= min_confidence]
+        regions = [r for r in regions if r.mismatches]
+
+    # ── Real-vs-noise accounting (always from RAW instrs so the headline % is
+    #    never misreported after noise filtering). ──
     total = len(instrs)
     equal_count = sum(1 for i in instrs if i.get("match_type") == "equal")
+    nonequal_total = total - equal_count
+    noise_count = len(noise_idx) if noise_idx is not None else 0
+    real_count = nonequal_total - noise_count
+
+    # 5c. JSON emit (region_contract) — must come before the text report.
+    if json_out:
+        rel_source = _repo_relative_path(source_path, project_dir)
+        print(json.dumps(
+            regions_to_dict(regions, symbol, rel_source, instrs,
+                            noise_filter, real_count, noise_count),
+            indent=2))
+        return
+
+    # 6. Display results
     match_pct = 100.0 * equal_count / total if total else 0
 
     print()
@@ -1869,6 +2076,19 @@ Filter modes:
         "--attributed", action="store_true",
         help="Source-attributed mismatch regions (compile with /FAs, join with objdiff)")
     parser.add_argument(
+        "--noise-filter", action="store_true",
+        help="Filter relocation/static-symbol noise from attributed regions")
+    parser.add_argument(
+        "--json", dest="json_out", action="store_true",
+        help="Emit machine-readable region JSON (region_contract) instead of text report")
+    parser.add_argument(
+        "--min-confidence", type=float, default=0.0,
+        help="Drop attributed mismatches below this confidence")
+    parser.add_argument(
+        "--drop-regswaps", action="store_true",
+        help="Also treat register-only arg diffs as noise (off by default to "
+             "preserve commutative-swap residuals like OnBeat idx193)")
+    parser.add_argument(
         "--stack-layout", action="store_true",
         help="Stack frame layout comparison (target vs base)")
     parser.add_argument(
@@ -1921,7 +2141,10 @@ Filter modes:
     if args.attributed:
         if not args.symbol:
             parser.error("--attributed requires --symbol")
-        cmd_attributed(instrs, args.symbol, project_dir=args.project_dir)
+        cmd_attributed(instrs, args.symbol, project_dir=args.project_dir,
+                       noise_filter=args.noise_filter, json_out=args.json_out,
+                       min_confidence=args.min_confidence,
+                       drop_regswaps=args.drop_regswaps)
         return
     if args.diagnose:
         cmd_diagnose(instrs)
