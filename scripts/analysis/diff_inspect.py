@@ -246,6 +246,24 @@ def compute_noise_indices(instrs, drop_regswaps: bool = False) -> set:
     return noise
 
 
+def _register_only_diff_arg_indices(instrs) -> set:
+    """Indices of diff_arg instructions whose ONLY differing args are registers
+    (e.g. commutative operand swaps like OnBeat idx193 ``add r11,r11,r10`` vs
+    ``add r11,r10,r11``). Used by --drop-regswaps on top of an already
+    reloc-normalized objdiff run, so genuine offset/immediate diffs (e.g. idx55
+    ``addi ... 0x78`` vs ``0x60``) are NOT dropped.
+    """
+    out: set = set()
+    for ins in instrs:
+        if ins.get("match_type") != "diff_arg":
+            continue
+        bd = ins.get("diff_breakdown") or {}
+        args = bd.get("arguments", [])
+        if args and all(a.get("arg_type") == "register" for a in args):
+            out.add(ins["index"])
+    return out
+
+
 def find_clusters(instrs, match_types=("insert", "delete"), gap=2):
     """Group instructions of given match_types into contiguous clusters."""
     targets = [(i, ins) for i, ins in enumerate(instrs)
@@ -1073,7 +1091,8 @@ def _region_reason(region) -> str:
 
 
 def regions_to_dict(regions, symbol, source_file, raw_instrs,
-                    noise_filter, real_count, noise_count) -> dict:
+                    noise_filter, real_count, noise_count,
+                    match_pct_override=None) -> dict:
     """Serialize attribution MismatchRegions to the canonical region_contract.
 
     The headline match_pct/total/equal are always computed from RAW instrs
@@ -1084,7 +1103,12 @@ def regions_to_dict(regions, symbol, source_file, raw_instrs,
     """
     total = len(raw_instrs)
     equal_count = sum(1 for i in raw_instrs if i.get("match_type") == "equal")
-    match_pct = round(100.0 * equal_count / total, 1) if total else 0.0
+    # Prefer objdiff's authoritative (reloc-normalized) match% when available;
+    # the count-based fallback is only meaningful for an un-normalized run.
+    if match_pct_override is not None:
+        match_pct = round(match_pct_override, 2)
+    else:
+        match_pct = round(100.0 * equal_count / total, 1) if total else 0.0
 
     region_dicts = []
     for region in regions:
@@ -1138,7 +1162,8 @@ def regions_to_dict(regions, symbol, source_file, raw_instrs,
 
 
 def cmd_attributed(instrs, symbol, project_dir=None, noise_filter=False,
-                   json_out=False, min_confidence=0.0, drop_regswaps=False):
+                   json_out=False, min_confidence=0.0, drop_regswaps=False,
+                   objdiff_match_pct=None):
     """Source-attributed mismatch analysis.
 
     Compiles the source with /FAs, parses the listing, and joins with
@@ -1180,8 +1205,17 @@ def cmd_attributed(instrs, symbol, project_dir=None, noise_filter=False,
     #    Build the noise set from RAW instrs (which still carry
     #    match_type/typed_args/diff_breakdown) BEFORE conversion, then drop
     #    those indices so they never become attribution 'replace's.
-    noise_idx = (compute_noise_indices(instrs, drop_regswaps=drop_regswaps)
-                 if noise_filter else None)
+    # When --noise-filter is set, the objdiff run already used
+    # functionRelocDiffs=none, so `instrs` carries only real (reloc-normalized)
+    # mismatches — exactly what run_objdiff reports. We therefore do NOT re-derive
+    # relocation noise heuristically (the old heuristic mislabelled real
+    # offset/register diffs and kept reloc-address near-matches, e.g. OnBeat
+    # showed 51 "real" when there are 3). Optionally drop pure register-swap
+    # diffs when the caller explicitly asks via --drop-regswaps.
+    if noise_filter and drop_regswaps:
+        noise_idx = _register_only_diff_arg_indices(instrs)
+    else:
+        noise_idx = None
     diff_instrs = _objdiff_to_diff_instructions(instrs, noise_idx)
 
     # 5. Run attribution pipeline
@@ -1227,12 +1261,15 @@ def cmd_attributed(instrs, symbol, project_dir=None, noise_filter=False,
         rel_source = _repo_relative_path(source_path, project_dir)
         print(json.dumps(
             regions_to_dict(regions, symbol, rel_source, instrs,
-                            noise_filter, real_count, noise_count),
+                            noise_filter, real_count, noise_count,
+                            match_pct_override=(objdiff_match_pct
+                                                if noise_filter else None)),
             indent=2))
         return
 
     # 6. Display results
-    match_pct = 100.0 * equal_count / total if total else 0
+    match_pct = (objdiff_match_pct if (noise_filter and objdiff_match_pct is not None)
+                 else (100.0 * equal_count / total if total else 0))
 
     print()
     print("=" * 70)
@@ -1941,8 +1978,13 @@ def _resolve_ambiguous_objdiff(output: str, symbol: str) -> str | None:
     return candidates[0]
 
 
-def run_objdiff_for_symbol(symbol, project_dir=None, unit=None):
-    """Run objdiff-cli diff and return path to JSON output."""
+def run_objdiff_for_symbol(symbol, project_dir=None, unit=None, normalize=False):
+    """Run objdiff-cli diff and return path to JSON output.
+
+    When ``normalize`` is True, pass ``-c functionRelocDiffs=none`` so objdiff
+    itself drops relocation-address noise and the JSON's ``instructions`` array
+    marks only real mismatches (matching run_objdiff / the source-of-truth).
+    """
     # Extract param hint for disambiguation: "Class::Method(Hint)" → base + hint
     param_hint = None
     if "(" in symbol and not symbol.startswith("?"):
@@ -1974,9 +2016,14 @@ def run_objdiff_for_symbol(symbol, project_dir=None, unit=None):
     print(f"Running objdiff for: {symbol}", file=sys.stderr)
     print(f"Output: {json_path}", file=sys.stderr)
 
-    cmd = [
-        objdiff_bin, "diff",
-        "-p", str(effective_project_dir),
+    cmd = [objdiff_bin, "diff", "-p", str(effective_project_dir)]
+    if normalize:
+        # Mirror the source-of-truth (run_objdiff / objdiff.json): drop relocation
+        # address noise so the instruction list marks only real, reloc-normalized
+        # mismatches. Without this, same-symbol/different-address loads show as
+        # diff_arg and swamp the report (e.g. OnBeat: 76 nonequal vs the real 3).
+        cmd += ["-c", "functionRelocDiffs=none"]
+    cmd += [
         symbol,
         "--include-instructions", "--build", "--incremental",
         "-f", "json", "-o", json_path
@@ -2125,7 +2172,8 @@ Filter modes:
     # Resolve JSON input
     json_file = args.json_file
     if args.symbol:
-        json_file = run_objdiff_for_symbol(args.symbol, project_dir=args.project_dir, unit=args.unit)
+        json_file = run_objdiff_for_symbol(args.symbol, project_dir=args.project_dir, unit=args.unit,
+                                           normalize=args.noise_filter)
     if not json_file:
         parser.error("Either json_file or --symbol is required")
 
@@ -2144,7 +2192,8 @@ Filter modes:
         cmd_attributed(instrs, args.symbol, project_dir=args.project_dir,
                        noise_filter=args.noise_filter, json_out=args.json_out,
                        min_confidence=args.min_confidence,
-                       drop_regswaps=args.drop_regswaps)
+                       drop_regswaps=args.drop_regswaps,
+                       objdiff_match_pct=data.get("normalized_match_percent"))
         return
     if args.diagnose:
         cmd_diagnose(instrs)
