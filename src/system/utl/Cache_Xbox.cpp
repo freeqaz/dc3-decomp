@@ -453,7 +453,7 @@ int CacheXbox::ThreadRead() {
 bool CacheXbox::DeleteParentDirs(String path) {
     path.ReplaceAll('/', '\\');
     String basePath = mCacheID.GetCachePath("");
-    if (basePath.length() > path.length()) {
+    if (basePath.length() >= path.length()) {
         return true;
     }
     if (RemoveDirectoryA(path.c_str()) == 0) {
