@@ -387,12 +387,8 @@ NetLoaderRef &NetLoaderRef::operator=(const NetLoaderRef &other) {
 
 NetLoaderRef *NetCacheMgr::AddLoaderRef(const char *name, RefType type, NetLoaderPos pos) {
     NetLoaderRef *pNetLoaderRef = NULL;
-    if (*name == '\0') {
+    if (*name == '\0' || !IsReady())
         return NULL;
-    }
-    if (!IsReady()) {
-        return NULL;
-    }
     std::list<NetLoaderRef>::iterator it = mNetLoaderRefs.begin();
     for (; it != mNetLoaderRefs.end(); ++it) {
         NetLoaderRef &ref = *it;

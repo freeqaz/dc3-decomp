@@ -290,7 +290,7 @@ void HamMaster::CheckLevels() {
     }
 
     float rightLevel = (RatioToDb(rightRMS) + 96.0f) / 96.0f;
-    float leftLevel = (RatioToDb(leftRMS) + 96.0f) / 96.0f;
+    float leftLevel = (RatioToDb(leftRMS) + 96.0f) / 96.0;
 
     float rClamped = Clamp(0.0f, 1.0f, rightLevel);
     float lClamped = Clamp(0.0f, 1.0f, leftLevel);

@@ -953,7 +953,7 @@ void CharBones::RotateBy(CharBones &bones) const {
                     myVecItr->ToVector3(v);
                     while (otherBonesItr->name != myBonesItr->name) {
                         otherBonesItr++;
-                        if (otherBonesItr >= otherBonesEnd) {
+                        if (myBonesItr && otherBonesItr >= otherBonesEnd) {
                             TestDstComplain(myBonesItr->name);
                             return;
                         }

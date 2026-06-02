@@ -2510,20 +2510,18 @@ void HamDirector::UnloadMergers() {
         mMoveMerger->Clear();
         ObjVector<FileMerger::Merger>& mergers = mMoveMerger->Mergers();
         mergers.erase(mergers.begin(), mergers.end());
-        HamWardrobe *wardrobe = TheHamWardrobe;
-        if (wardrobe) {
+        if (TheHamWardrobe) {
             for (int i = 0; i < 2; i++) {
-                HamCharacter *hc = wardrobe->GetCharacter(i);
+                HamCharacter *hc = TheHamWardrobe->GetCharacter(i);
                 if (hc) {
                     hc->UnloadAll();
                 }
             }
             int i = 0;
             while (true) {
-                HamWardrobe *curWardrobe = TheHamWardrobe;
                 HamCharacter *hc;
-                if (curWardrobe) {
-                    hc = curWardrobe->GetBackup(i);
+                if (TheHamWardrobe) {
+                    hc = TheHamWardrobe->GetBackup(i);
                 } else {
                     hc = 0;
                 }
@@ -2532,7 +2530,7 @@ void HamDirector::UnloadMergers() {
                     break;
                 hc->UnloadAll();
             }
-            wardrobe->ClearCrowdClips();
+            TheHamWardrobe->ClearCrowdClips();
         }
         mRoutineBuilderObjects.clear();
     }
@@ -3102,7 +3100,8 @@ found:
                 loopAdjust = Mod(beat1 - clipStartBeat, (float)loopCount);
             }
             float adjust = beat1 - loopAdjust;
-            startBeat = SecondsToBeat((*practiceSymbols)[foundIdx].frame * (1.0f / 30.0f)) - adjust + clipStartBeat;
+            startBeat = clipStartBeat;
+            startBeat += SecondsToBeat((*practiceSymbols)[foundIdx].frame * (1.0f / 30.0f)) - adjust;
             endBeat = SecondsToBeat((*practiceSymbols)[foundIdx + 1].frame * (1.0f / 30.0f)) - adjust + clipStartBeat;
             if (range) {
                 range->first = SecondsToBeat((*practiceSymbols)[foundIdx].frame * (1.0f / 30.0f));

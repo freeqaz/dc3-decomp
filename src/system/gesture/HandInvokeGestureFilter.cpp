@@ -34,6 +34,7 @@ bool HandInvokeGestureFilter::UpdateBodyPlane(const Skeleton &skel, float dt) {
         valid = true;
     }
 
+    bool _result = false;
     if (valid) {
         // Cross(yAxis, shoulderVec) = body forward normal in XZ plane
         Vector3 bodyNormal(dz - dy * 0.0f, dx * 0.0f - dz * 0.0f, dy * 0.0f - dx);
@@ -56,10 +57,10 @@ bool HandInvokeGestureFilter::UpdateBodyPlane(const Skeleton &skel, float dt) {
         Normalize(projected, projected);
         float angle = std::acos((projected.x + projected.y) * 0.0f + projected.z);
         if (angle < 32.0f * DEG2RAD) {
-            return true;
+            _result = true;
         }
     }
-    return false;
+    return _result;
 }
 
 bool HandInvokeGestureFilter::CalcInPose(const Skeleton &skel, float dt) {

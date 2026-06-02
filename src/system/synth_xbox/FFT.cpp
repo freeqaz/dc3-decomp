@@ -410,8 +410,6 @@ int fft_matrix_inverse_columnwise(float *data, long size, float *scratch) {
             XMVECTOR w_re2 = v_cos_merged;
             XMVECTOR w_im2 = __vmaddfp(v_sign, v_sin_merged, v_zero);
 
-            float *dst1 = temp;
-            float *dst2 = temp2;
             char *src_data = (char *)data_ptr;
             int k = 0;
 
@@ -463,10 +461,10 @@ int fft_matrix_inverse_columnwise(float *data, long size, float *scratch) {
                     XMVECTOR out_lo = __vperm(r1, r2, pm_lo_v);
                     XMVECTOR out_hi = __vperm(r1, r2, pm_hi_v);
 
-                    __stvx(out_lo, dst1, 0);
-                    dst1 += 4;
-                    __stvx(out_hi, dst2, 0);
-                    dst2 += 4;
+                    __stvx(out_lo, temp, 0);
+                    temp += 4;
+                    __stvx(out_hi, temp2, 0);
+                    temp2 += 4;
                     src_data += data_stride;
                 } while (k < half_cols);
             }

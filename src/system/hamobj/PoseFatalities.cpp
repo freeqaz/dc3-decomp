@@ -869,16 +869,15 @@ void PoseFatalities::UpdateMatchingPose(int player) {
         }
     }
 
-    float *progress = &mFatalityProgress[player];
     if (matching) {
-        *progress = *progress + clampedDelta;
+        mFatalityProgress[player] = mFatalityProgress[player] + clampedDelta;
     } else {
         float holdDecay = TheOSCMessenger.GetFloat("/holddecay", 0.0f);
         float decayAmount = Clamp(0.0f, 1.0f, holdDecay * clampedDelta);
-        *progress = *progress * (1.0f - decayAmount);
+        mFatalityProgress[player] = mFatalityProgress[player] * (1.0f - decayAmount);
     }
 
-    float displayFrac = *progress / mHoldDuration;
+    float displayFrac = mFatalityProgress[player] / mHoldDuration;
     float clampedFrac = Clamp(0.0f, 1.0f, displayFrac);
 
     ObjectDir *venueWorld = TheHamDirector->GetVenueWorld();

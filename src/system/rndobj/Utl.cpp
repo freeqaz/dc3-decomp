@@ -736,8 +736,9 @@ void TransformKeys(RndTransAnim *tanim, const Transform &tf) {
          ++it) {
         Multiply(it->value, tf, it->value);
     }
+    auto _tmp3 = tanim->ScaleKeys().end();
     for (Keys<Vector3, Vector3>::iterator it = tanim->ScaleKeys().begin();
-         it != tanim->ScaleKeys().end();
+         it != _tmp3;
          ++it) {
         Scale(it->value, v48.x, it->value);
     }

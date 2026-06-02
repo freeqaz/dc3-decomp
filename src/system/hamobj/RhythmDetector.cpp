@@ -883,9 +883,7 @@ void RhythmDetector::ProcessFrames() {
         static UIPanel *panel = ObjectDir::Main()->Find<UIPanel>("rhythm_detector_panel", false);
 
         float windowSize;
-        if (panel == nullptr) {
-            windowSize = 0.0f;
-        } else {
+        if (!(panel == nullptr)) {
             DataArray *typeDef = panel->TypeDef();
             static Symbol analyzeBeatFrequency("analyze_beat_frequency");
             DataArray *cfg = typeDef->FindArray(analyzeBeatFrequency, true);
@@ -895,6 +893,8 @@ void RhythmDetector::ProcessFrames() {
             cfg->Node(cfg->Size() - 1).Int();
             int beatFreq = cfg->Node(cfg->Size() - 1).Int();
             windowSize = (float)beatFreq * (float)(periodCount - 1) * 2.0f;
+        } else {
+            windowSize = 0.0f;
         }
 
         // Trim old frames outside the analysis window

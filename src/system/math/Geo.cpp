@@ -986,7 +986,7 @@ void BSPFace::Update() {
         const Vector2 *nextPt;
         do {
             nextPt = v2 + 1;
-            area += (v1->y * anchor->x - v1->x * anchor->y +
+            area += (-(v1->x * anchor->y - v1->y * anchor->x) +
                      v2->x * anchor->y - v2->y * anchor->x +
                      v2->y * v1->x - v2->x * v1->y) * 0.5f;
             v1 = v2;

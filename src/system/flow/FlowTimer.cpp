@@ -34,7 +34,7 @@ void EventTask::Poll(float time) {
             ++mCurNode;
         } while (mCurNode != mChildNodes->end());
     }
-    if (time >= mDuration) {
+    if (mOwner && time >= mDuration) {
         mOwner->OnTimerEnd();
         delete this;
     }

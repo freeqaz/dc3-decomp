@@ -434,10 +434,7 @@ BaseSkeleton *FreestyleMoveRecorder::GetLiveSkeleton() {
 
         return (BaseSkeleton *)((char *)mClipFrames + idx * 0x2dc);
     }
-    if (mSkeletonIndex >= 0) {
-        return &TheGestureMgr->GetSkeleton(mSkeletonIndex);
-    }
-    return NULL;
+    return mSkeletonIndex >= 0 ? &TheGestureMgr->GetSkeleton(mSkeletonIndex) : NULL;
 }
 
 void FreestyleMoveRecorder::UpdateRecordingAttempt(

@@ -523,7 +523,7 @@ void XboxContentMgr::PollRefresh() {
                 (*it)->Unmount();
                 allDone = false;
             } else {
-                allDone = (state != Content::kNeedsMounting) && allDone;
+                allDone = (state != Content::kNeedsMounting) & allDone;
             }
         }
         if (allDone) {

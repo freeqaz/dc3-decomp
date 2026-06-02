@@ -229,17 +229,15 @@ void ThreeDSound::CalculateFaderVolume() {
     } else if (unk20c <= mMinFalloffDistance) {
         vol = 0.0f;
     } else {
-        switch (mShape) {
-        case 1:
+                if (mShape == 1) {
             if (unk210 > mRadius) {
                 vol = -96.0f;
                 goto done;
             }
-        case 0:
-            break;
-        default:
+        } else if (mShape == 0) {
+
+        } else {
             MILO_FAIL("Calculating volume for unknown shape %d\n", mShape);
-            break;
         }
         float invRange = 1.0f / (mMinFalloffDistance - mSilenceDistance);
         float t = invRange * unk20c + (1.0f - mMinFalloffDistance * invRange);

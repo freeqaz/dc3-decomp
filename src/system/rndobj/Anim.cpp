@@ -413,7 +413,7 @@ void AnimTask::Poll(float time) {
                 frame = fmod(frame - mMin, mMax - mMin) + mMin;
             }
         }
-        frame = Clamp<float>(mMin, mMax, frame);
+        frame = frame < mMin ? mMin : frame > mMax ? mMax : frame;
         mAnim->SetFrame(frame, blend);
     }
 
