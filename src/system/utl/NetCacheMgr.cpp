@@ -389,8 +389,9 @@ NetLoaderRef *NetCacheMgr::AddLoaderRef(const char *name, RefType type, NetLoade
     NetLoaderRef *pNetLoaderRef = NULL;
     if (*name == '\0' || !IsReady())
         return NULL;
+    std::list<NetLoaderRef>::iterator listEnd = mNetLoaderRefs.end();
     std::list<NetLoaderRef>::iterator it = mNetLoaderRefs.begin();
-    for (; it != mNetLoaderRefs.end(); ++it) {
+    for (; it != listEnd; ++it) {
         NetLoaderRef &ref = *it;
         if (stricmp(ref.mName.c_str(), name) == 0) {
             if ((RefType)0 == type && ref.mCacheLoader) {

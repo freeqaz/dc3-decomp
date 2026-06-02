@@ -745,7 +745,7 @@ void RhythmBattlePlayer::AnimateBoxyState(int state, bool transition, bool bad) 
     if (mRhythmBattleAnim) {
         float delay = 0.0f;
         static Symbol none("none");
-        if (state > 0) {
+        if (mRhythmBattleAnim && state > 0) {
             if (transition) {
                 mRhythmBattleAnim->Animate(
                     0.0f, false, 0.0f, RndAnimatable::k30_fps,

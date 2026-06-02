@@ -176,10 +176,10 @@ void NgSpotlightDrawer::RenderSphere(Spotlight *sl) {
 
     Spotlight *colorOwner = sl->mColorOwner;
     float intensity = (colorOwner->mIntensity * (sl->mBeam.mBrighten * sBeamBrighten));
-    float r = colorOwner->mColor.red * intensity;
     float g = colorOwner->mColor.green * intensity;
-    float b = colorOwner->mColor.blue * intensity;
     float a = colorOwner->mColor.alpha * intensity;
+    float r = colorOwner->mColor.red * intensity;
+    float b = colorOwner->mColor.blue * intensity;
 
     if (!sl->mAnimateColorFromPreset && sl->mBeam.mMat) {
         r = r * sl->mBeam.mMat->GetColor().red;

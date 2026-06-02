@@ -1171,10 +1171,10 @@ void RndText::ReplaceMissingCharacters(HX_VECTOR(unsigned short) &wideChars) {
 
                 if (curChar == 0) {
                     std::vector<unsigned short> fontChars(font->mChars);
-                    unsigned int j = 0;
                     unsigned int count = fontChars.size();
                     unsigned short c = curChar;
                     if (count != 0) {
+                        unsigned int j = 0;
                         unsigned short *fp = &fontChars[0];
                         do {
                             c = *fp;

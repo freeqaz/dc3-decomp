@@ -881,10 +881,11 @@ void PoseFatalities::UpdateMatchingPose(int player) {
     float clampedFrac = Clamp(0.0f, 1.0f, displayFrac);
 
     ObjectDir *venueWorld = TheHamDirector->GetVenueWorld();
+    float ratingFrac = Clamp(0.0f, 1.0f, clampedFrac);
     HamPhraseMeter *meter = venueWorld->Find<HamPhraseMeter>(
         MakeString("phrase_meter%i", player), true
     );
-    meter->SetRatingFrac(Clamp(0.0f, 1.0f, clampedFrac), -1.0f);
+    meter->SetRatingFrac(ratingFrac, -1.0f);
     meter->SetShowing(true);
     RndAnimatable *feedbackAnim =
         meter->Find<RndAnimatable>("perimeter_feedback_color.anim", true);
