@@ -1646,7 +1646,7 @@ __declspec(noinline) bool CamShot::SetPos(CamShotFrame &frame, RndCam *cam) {
             Vector3 vec;
             Subtract(ve0, frame.mWorldOffset.v, vec);
             Vector3 vf8(cam->WorldXfm().m.y);
-            vf8 *= Dot(vec, cam->WorldXfm().m.y);
+            vf8 *= Dot(cam->WorldXfm().m.y, vec);
             Vector3 v104;
             Add(cam->WorldXfm().v, vf8, v104);
             Vector3 v110;
