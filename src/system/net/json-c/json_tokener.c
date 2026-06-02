@@ -193,7 +193,7 @@ json_tokener_parse_ex(struct json_tokener *tok, const char *str, int len)
                 if ((!ADVANCE_CHAR(str, tok, c2)) || (!POP_CHAR(c, tok)))
                     goto out;
             }
-            if (c == '/') {
+            if (tok && c == '/') {
                 printbuf_reset(tok->pb);
                 printbuf_memappend_fast(tok->pb, &c, 1);
                 state = json_tokener_state_comment_start;
