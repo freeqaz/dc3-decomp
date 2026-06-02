@@ -323,12 +323,12 @@ void StreamRenderer::SetCrewPhotoPlayerCenters() {
             for (int j = 0; j < kNumJoints; j++) {
                 Vector2 screenPos;
                 skel->ScreenPos((SkeletonJoint)j, screenPos);
-                float depth = skel->TrackedJoints()[j].mSmoothedPos.z;
-                minZ = (minZ - depth >= 0) ? depth : minZ;
                 minX = (minX - screenPos.x >= 0) ? screenPos.x : minX;
                 maxX = (maxX - screenPos.x >= 0) ? maxX : screenPos.x;
                 minY = (minY - screenPos.y >= 0) ? screenPos.y : minY;
                 maxY = (maxY - screenPos.y >= 0) ? maxY : screenPos.y;
+                float depth = skel->TrackedJoints()[j].mSmoothedPos.z;
+                minZ = (minZ - depth >= 0) ? depth : minZ;
                 maxZ = (maxZ - depth >= 0) ? maxZ : depth;
             }
             Vector3 center(
