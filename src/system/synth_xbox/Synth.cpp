@@ -17,8 +17,17 @@
 #include "math/Decibels.h"
 #include "obj/Data.h"
 #include "obj/Object.h"
+#include "os/BufFile.h"
 #include "os/Debug.h"
+#include "os/File.h"
 #include "os/System.h"
+#include "synth/BinkReader.h"
+#include "synth/StandardStream.h"
+#include "synth/StreamNull.h"
+#include "synth/VorbisReader.h"
+#include "synth/WavReader.h"
+#include "utl/MakeString.h"
+#include "utl/Str.h"
 #include "stl/_algobase.h"
 #include "synth/Synth.h"
 #include "synth_xbox/ExternalMic.h"
@@ -36,6 +45,8 @@ public:
 };
 
 Synth360 *TheXboxSynth;
+
+Synth *Synth::New() { return new Synth360(); }
 
 Synth360::Synth360()
     : unke8(0), unkec(0), unkf0(0), unkf4(0), unkf8(0), unkfc(0), mDolbyEnabled(true),
@@ -188,6 +199,33 @@ void Synth360::SetupHeadsetSubmixes() {
     }
 }
 
+int Synth360::GetNumConnectedMics() { return ExternalMic::NumConnectedMics(); }
+
+void Synth360::EnableLevels(bool enable) {
+    if (!OutputVoice())
+        return;
+    if (enable) {
+        OutputVoice()->EnableEffect(0, 0);
+    } else {
+        OutputVoice()->DisableEffect(0, 0);
+    }
+}
+
+bool Synth360::IsUsingDolby() const {
+    DWORD speakerConfig;
+    XAudioGetSpeakerConfig(&speakerConfig);
+    return (speakerConfig >> 16) & 1;
+}
+
+void Synth360::UpdateDolby() {
+    DWORD speakerConfig;
+    XAudioGetSpeakerConfig(&speakerConfig);
+    DWORD mask = mDolbyEnabled ? 0x10000 : 0x80000000;
+    if ((speakerConfig & mask) != mask) {
+        XAudioOverrideSpeakerConfig(mask);
+    }
+}
+
 void Synth360::SetDolby(bool b1, bool b2) {
     if (b2) {
         mDolbyEnabled = b1;
@@ -196,5 +234,58 @@ void Synth360::SetDolby(bool b1, bool b2) {
         mDolbyTimer.Restart();
         mDolbyEnabled = b1;
         mDolbyPending = true;
+    }
+}
+
+void Synth360::NewStreamFile(const char *name, File *&file, Symbol &sym) {
+    String bikPath(MakeString("%s.bik", name));
+    String moggPath(MakeString("%s.mogg", name));
+    String wavPath(MakeString("%s.wav", name));
+    file = NewFile(bikPath.c_str(), 2);
+    if (file) {
+        static Symbol bik("bik");
+        sym = bik;
+    } else {
+        file = NewFile(moggPath.c_str(), 2);
+        if (file) {
+            static Symbol mogg("mogg");
+            sym = mogg;
+        } else {
+            file = NewFile(wavPath.c_str(), 2);
+            if (file) {
+                static Symbol wav("wav");
+                sym = wav;
+            } else {
+                Synth::NewStreamFile(name, file, sym);
+            }
+        }
+    }
+}
+
+Stream *Synth360::NewStream(const char *name, float volume, float pan, bool b) {
+    File *file;
+    Symbol sym;
+    NewStreamFile(name, file, sym);
+    if (file) {
+        return new StandardStream(file, volume, pan, sym, b, true, false);
+    }
+    TheDebug.Notify(MakeString("couldn't find stream %s", name));
+    return new StreamNull(volume);
+}
+
+Stream *Synth360::NewBufStream(const void *buf, int size, Symbol ext, float startMs, bool b) {
+    return new StandardStream(new BufFile(buf, size), startMs, 0.0f, ext, false, b, false);
+}
+
+StreamReader *Synth360::NewStreamDecoder(File *file, StandardStream *stream, Symbol ext) {
+    if (ext == "bik") {
+        return new BinkReader(file, stream);
+    } else if (ext == "mogg") {
+        return new VorbisReader(file, true, stream, true);
+    } else if (ext == "wav") {
+        return new WavReader(file, stream);
+    } else {
+        TheDebug.Fail(MakeString("bad decoder type: %s", ext), nullptr);
+        return nullptr;
     }
 }

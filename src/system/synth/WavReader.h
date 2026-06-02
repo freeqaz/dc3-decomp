@@ -12,10 +12,9 @@ public:
     virtual ~WavReader();
     virtual void Poll(float);
     virtual void Seek(int);
-   // virtual void EnableReads(bool enable) { mEnableReads = enable; }
+    virtual void EnableReads(bool enable) { mEnableReads = enable; }
     virtual bool Done() { return mSamplesLeft == 0; }
-    //virtual bool Fail() { return false; }
-    //virtual void EndData() {}
+    virtual bool Fail() { return false; }
 
     int mNumChannels; // 0x4
     int mSampleRate; // 0x8
