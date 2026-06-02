@@ -184,8 +184,8 @@ void FreestyleMoveRecorder::Poll() {
             streamTex->TexelsLock(texels);
             if (texels) {
                 int playerIdx = mSkeletonIndex;
-                mTakes[mCurrentTakeIndex].unkc = playerIdx;
                 unsigned short *src = (unsigned short *)texels;
+                mTakes[mCurrentTakeIndex].unkc = playerIdx;
                 char *dst = depthDst - 0x50;
                 int col = 0;
                 do {

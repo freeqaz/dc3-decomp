@@ -341,9 +341,9 @@ void UIManager::Terminate() {
 
 bool UIManager::IsGameScreenActive() {
     bool ret = BottomScreen() && streq(BottomScreen()->Name(), "game_screen");
-    auto& _ref0 = mCurrentScreen;
-    if (_ref0)
-        ret &= BottomScreen() != _ref0;
+    auto _val0 = mCurrentScreen;
+    if (_val0)
+        ret &= BottomScreen() != _val0;
     return ret;
 }
 
