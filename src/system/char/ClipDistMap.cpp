@@ -393,7 +393,8 @@ void ClipDistMap::FindDists(float maxFacing, DataArray *arr) {
     float interpB = Interp(mClipB->StartBeat(), mClipB->EndBeat(), 0.5f);
     mWorstErr = 0;
 
-    for (int i = 0; i < mDists.mWidth; i++) {
+    int _width = mDists.mWidth;
+    for (int i = 0; i < _width; i++) {
         float beatA = (float)i / (float)mSamplesPerBeat + mAStart;
         DistEntry newDistEntry;
         for (int j = 0; j < mDists.mHeight; j++) {

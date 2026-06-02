@@ -391,7 +391,7 @@ void LiveCameraInput::TextureStore::UpdateFromDepthBufferClip(
                     do {
                         unsigned short color = 0;
                         unsigned short depthPixel =
-                            *(unsigned short *)(((int)(x >> 1) + (unsigned int)((int)x < 0 && (x & 1) != 0)) * 2 + srcBase);
+                            *(unsigned short *)(((int)(x >> 1) + (unsigned int)((int)x < 0 & (x & 1) != 0)) * 2 + srcBase);
                         if (depthPixel & 3) {
                             int depth = 0x1f - ((depthPixel >> 10) & 0x1f);
                             color = ((depth * 0x20 | depth) << 6) | depth;

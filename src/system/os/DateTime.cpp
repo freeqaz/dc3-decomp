@@ -276,15 +276,18 @@ unsigned int DateTime::ToSeconds() {
 }
 
 void DateTime::FromUtcToLocal() {
+    auto& _mMin = this->mMin;
+    auto& _mHour = this->mHour;
+    auto& _mSec = this->mSec;
     long bias;
     GetTimeZoneBias(bias);
     unsigned int secs = ToSeconds() - bias * 60;
     int days = secs / 86400;
     secs -= days * 86400;
-    mHour = secs / 3600;
-    secs -= mHour * 3600;
-    mMin = secs / 60;
-    mSec = secs - mMin * 60;
+    _mHour = secs / 3600;
+    secs -= _mHour * 3600;
+    _mMin = secs / 60;
+    _mSec = secs - _mMin * 60;
     FromDayNumber(days);
 }
 

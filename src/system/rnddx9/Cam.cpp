@@ -18,10 +18,9 @@ DxCam::DxCam() {}
 
 void DxCam::Select() {
     TheNgStats->mCams++;
-    auto& _ref0 = mTargetTex;
     RndCam::Select();
-    if (_ref0 != nullptr) {
-        _ref0->MakeDrawTarget();
+    if (mTargetTex != nullptr) {
+        mTargetTex->MakeDrawTarget();
     } else {
         TheDxRnd.MakeDrawTarget();
     }
@@ -30,8 +29,8 @@ void DxCam::Select() {
     GetViewProjectXfms(view, proj);
     SetViewport();
     auto _tmp1 = GetGfxMode();
-    if (_ref0 != nullptr) {
-        RndTex::Type type = _ref0->GetType();
+    if (mTargetTex != nullptr) {
+        RndTex::Type type = mTargetTex->GetType();
         bool isShadowMap = false;
         float depth = 1.0f;
         if (type == RndTex::kShadowMap) {

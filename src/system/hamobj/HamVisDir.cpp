@@ -278,10 +278,10 @@ void HamVisDir::PostUpdate(const SkeletonUpdateData *data) {
                     if (player_data->IsPlaying()) {
                         Skeleton *cur = data->mSkeletonsLeft[i];
                         if (cur && cur->IsTracked()) {
+                            mYPoses[i].pose->Update(*cur);
                             UpdateGestureFilter(*cur, i);
                             mSquatPoses[i].pose->Update(*cur);
                             mSquatPoses[i].holder->Update(*cur);
-                            mYPoses[i].pose->Update(*cur);
                             mYPoses[i].holder->Update(*cur);
                             CheckPose(i, mSquatPoses[i]);
                             CheckPose(i, mYPoses[i]);

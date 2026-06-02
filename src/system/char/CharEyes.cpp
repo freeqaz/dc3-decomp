@@ -742,8 +742,9 @@ Vector3 CharEyes::GenerateDartOffset() {
 }
 
 bool CharEyes::Replace(ObjRef *ref, Hmx::Object *obj) {
-    EyeDesc *eyeEnd = mEyes.end();
-    EyeDesc *eyeBegin = mEyes.begin();
+    auto& _ref0 = mEyes;
+    EyeDesc *eyeEnd = _ref0.end();
+    EyeDesc *eyeBegin = _ref0.begin();
     int eyeCount = (int)((char *)eyeEnd - (char *)eyeBegin) / (int)sizeof(EyeDesc);
     if (eyeCount != 0) {
         int eyeOff = (int)((char *)ref - (char *)eyeBegin);
@@ -753,9 +754,9 @@ bool CharEyes::Replace(ObjRef *ref, Hmx::Object *obj) {
                 int eyeIdx = eyeOff / (int)sizeof(EyeDesc);
                 if (eyeOff == eyeIdx * (int)sizeof(EyeDesc)) {
                     EyeDesc *desc = eyeBegin + eyeIdx;
-                    if (desc != mEyes.end()) {
+                    if (desc != _ref0.end()) {
                         if (!desc->mEye.SetObj(obj))
-                            mEyes.erase(mEyes.begin() + eyeIdx);
+                            _ref0.erase(_ref0.begin() + eyeIdx);
                         return true;
                     }
                 }

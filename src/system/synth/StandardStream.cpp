@@ -591,14 +591,19 @@ void StandardStream::Init(float f1, float f2, Symbol s, bool b4) {
 }
 
 void StandardStream::InitInfo(int i1, int sampleRate, bool floatSamples, int i4) {
+    auto& _mInfoChannels = this->mInfoChannels;
+    auto& _mVirtualChans = this->mVirtualChans;
+    auto& _mSampleRate = this->mSampleRate;
+    auto& _mGetInfoOnly = this->mGetInfoOnly;
+    auto& _mFloatSamples = this->mFloatSamples;
     unk154 = i4;
-    int numChannels = mVirtualChans + i1;
-    unkec = (mInfoChannels / sampleRate);
-    mInfoChannels = numChannels;
-    auto& _ref2 = mSampleRate;
-    if (!mGetInfoOnly) {
+    int numChannels = _mVirtualChans + i1;
+    unkec = (_mInfoChannels / sampleRate);
+    _mInfoChannels = numChannels;
+    auto& _ref2 = _mSampleRate;
+    if (!_mGetInfoOnly) {
         if (_ref2 == 0) {
-            mFloatSamples = floatSamples;
+            _mFloatSamples = floatSamples;
             _ref2 = sampleRate;
             int bufBytes = mBufSecs * sampleRate * 2.0f;
 #ifndef HX_NATIVE
@@ -622,9 +627,9 @@ void StandardStream::InitInfo(int i1, int sampleRate, bool floatSamples, int i4)
 #ifdef HX_WEB
             UpdateWebDebugLabels();
 #endif
-            for (int i = 0; i < mVirtualChans; i++) {
+            for (int i = 0; i < _mVirtualChans; i++) {
                 void *buf = MemAlloc(
-                    mFloatSamples ? 0x1000 : 0x800, __FILE__, 0x159, "stream mVirtBufs"
+                    _mFloatSamples ? 0x1000 : 0x800, __FILE__, 0x159, "stream mVirtBufs"
                 );
                 mVirtBufs.push_back(buf);
             }
@@ -632,7 +637,7 @@ void StandardStream::InitInfo(int i1, int sampleRate, bool floatSamples, int i4)
         } else {
             MILO_ASSERT(numChannels == mChannels.size(), 0x161);
             MILO_ASSERT(_ref2 == sampleRate, 0x162);
-            MILO_ASSERT(mFloatSamples == floatSamples, 0x163);
+            MILO_ASSERT(_mFloatSamples == floatSamples, 0x163);
         }
         if (mJumpSamplesInvalid) {
             setJumpSamplesFromMs(mJumpFromMs, mJumpToMs);
