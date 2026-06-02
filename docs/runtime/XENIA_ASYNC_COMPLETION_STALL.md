@@ -285,3 +285,59 @@ new entry in the `dc3_hack_pack.cc` import-stopgap / host-override table (the es
 pattern for the ~183 unresolved xboxkrnl imports), NOT a core-threading change. Use the GDB-RSP
 server (`--dc3_gdb_rsp_host`) to read the caller's stack and the polled flag, or trace which
 `RtlEnterCriticalSection` callsite at `0x825E47xx` is hot.
+
+---
+
+## 2026-06-02 (cont.) — All-black fixed; render reaches game_screen; gameplay crash root-caused
+
+The all-black / async-stall blockers above are RESOLVED for the render path. DC3 now boots
+**deterministically** to `game_screen` under headless Xenia and renders all 9 screens (986 deferred
+draws). Two distinct problems now gate a *playing song* (the telemetry goal):
+
+### #2 Boot determinism — SOLVED (commit `5084c6acd`, headless-vulkan-linux)
+`MoviePanel::IsLoaded` (0x82E0EFE8) → true + a gated `UIManager::GotoFirstScreen` (0x8277B140)
+re-nav to `attract_screen`. Empirically: **4/4 GPU boots reach `wait_screen 'game_screen' SATISFIED`,
+0 attract stalls** (was ~4/5 stuck). The old stuck signature was repeated `DC3 Script: observed stuck
+UI transition cur=00000000 ... trans='attract_screen'`.
+
+### Gameplay crash — DETERMINISTIC, in the song-anim map, INDEPENDENT of the host beat-drive
+At the instant `game_screen` is reached (`load=3 wait=3 paused=1`), tid=6 SIGSEGVs (rc=139). A
+beat-drive `mPaused==0` gate was added to xenia `emulator.cc` + `hid/nop/nop_input_driver.cc`
+(offsets binary-verified, below); with it the beat-drive correctly does NOT activate while paused —
+**yet the crash still happens at the same point** → the crash is NOT the beat/audio-resync path that
+was previously hypothesized.
+
+Core-dump forensics (both gated and ungated boots identical: host `rip=0xa0000c44`, target
+`rax=0xa0000c40` = uncached-mirror of phys ~0 = garbage fn ptr):
+- Xenia x64 ctx ptr = `rsi`, membase = `rdi` (0x100000000). PPCContext: `lr@+0x10, r3@+0x38, r12@+0x80`.
+- `r12` = `HamDirector::SongAnimByDifficulty(Difficulty)` (0x82473e58); `r3` = the map.
+- Crash is inside `SongAnimByDifficulty` = `return mSongAnims[diff];` →
+  `std::map<Difficulty,AnimPtr>::operator[]` (0x82471b28) doing a non-linking indirect branch to
+  garbage. (`lr=0x82471b30` is the `__savegprlr_28` prologue-helper return — a red herring.)
+- `mSongAnims` is `HamDirector+0x5c`, populated by `HamDirector::SetupAnims()` (HamDirector.cpp:571,
+  `mSongAnims[d] = GetPropAnim(d, "song.anim", true)`). Map header node_count=3 but tree nodes at
+  0x4b02xxxx held code-like garbage → **song.anim content did not load cleanly headless.**
+
+### The game cannot self-unpause headless (4-agent workflow, binary-verified)
+`mPaused=0` is set ONLY by `Game::PostWaitStart` (Game.cpp:342), reached only via `Game::HandleWait`,
+gated on `HamAudio::IsReady()`. Audio never goes ready headless (the `.mogg` async-read completions
+never land). Every HX_NATIVE escape (audio-fail wall-clock unpause, 120-poll `IsLoaded` timeout,
+DC3_FAST_TIME, sync PollStream pump) is `#ifdef HX_NATIVE` → compiled OUT of debug.xex. Time is also
+dead (TaskMgr.Seconds ← LiveInput::CurrentMs → dead stream or frozen `__mftb()`).
+
+**Verified offsets** (RB2-DWARF Game layout is WRONG for DC3 — do not use it): TheGamePanel
+`0x83117410`, TheGame `0x83116ec8`; GamePanel.mGame +0x38, .mState +0x80, .unkf8 +0xF8;
+Game.mMaster +0x50, .mPaused +0x5E, .mTimePaused +0x5F, .mRealTime +0x60, .mHasIntro +0x62,
+.mLoadState +0x90, .mWaitState +0xA4; TaskMgr `0x82F64A58` .mTimelines +0x2C, TaskTimeline mTime
++0x10 / mLastTime +0x14, stride 0x1C.
+
+### Convergence + real next step
+Both the crash (corrupt `mSongAnims`) and the unpause deadlock (audio never ready) trace to the SAME
+durable root cause: **headless async file-load completion doesn't land**, so song content (anim/move
+data + audio stream) loads incompletely. For REAL telemetry the `song.anim` MUST load (it *is* the
+skeleton animation we want to capture) → there is no host-poke shortcut to valid ground truth. The
+real next step remains: resolve the async-completion stall (the `0x825E4794` spin / unresolved import
+thunk `0x83A00964`) so `.mogg`/`.milo` reads complete — then audio reaches `IsReady`, the game
+unpauses itself, `SetupAnims` populates a valid map, and the dancer animates. A binary-verified
+5-step host-nudge (wait=0, unkf8=0, mRealTime=1, mPaused=0, host-drive TaskMgr clock) exists as a
+fallback to force the unpause, but it is moot until the song-anim crash (content load) is fixed.
