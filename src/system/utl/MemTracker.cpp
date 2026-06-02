@@ -47,9 +47,9 @@ void DiffTblReport(const char *name, BlockStatTable &curTable, BlockStatTable &p
     curTable.SortByName();
     prevTable.SortByName();
 
-    std::vector<MemDiffEntry> diffs;
     int curNum = curTable.GetNumStats();
     int prevNum = prevTable.GetNumStats();
+    std::vector<MemDiffEntry> diffs;
     diffs.reserve(curNum + prevNum);
 
     int curIdx = 0;

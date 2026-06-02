@@ -178,9 +178,9 @@ void FreestyleMoveRecorder::Poll() {
         }
         RndTex *streamTex = camInput->GetStreamTex(LiveCameraInput::kBufferDepth);
         if (streamTex) {
-            void *texels = nullptr;
             char *depthDst =
                 (char *)mTakes[mCurrentTakeIndex].mDepthFrames + recordFrame * 0x12c0;
+            void *texels = nullptr;
             streamTex->TexelsLock(texels);
             if (texels) {
                 int playerIdx = mSkeletonIndex;
