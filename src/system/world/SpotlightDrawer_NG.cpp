@@ -137,11 +137,10 @@ bool NgSpotlightDrawer::CheckCam() {
         cam = RndCam::Current();
     } else if (TheWorld && TheWorld->Cam()) {
         cam = TheWorld->Cam();
-    } else {
+    } else if (RndCam::Current()) {
         cam = RndCam::Current();
-        if (!cam) {
-            cam = TheRnd.GetDefaultCam();
-        }
+    } else {
+        cam = TheRnd.GetDefaultCam();
     }
     mSpotCam->Copy(cam, Hmx::Object::kCopyShallow);
     mSpotCam->SetTransParent(nullptr, false);
