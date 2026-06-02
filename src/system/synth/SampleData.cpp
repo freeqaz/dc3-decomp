@@ -11,6 +11,13 @@
 #ifdef HX_FFMPEG
 #include "platform/XmaSampleDecoder.h"
 #endif
+#ifdef HX_NATIVE
+// Offline XMA->PCM sidecar bridge: native (HX_FFMPEG) WRITES sidecars as a
+// byproduct of the runtime decode; web (no ffmpeg) READS them. Closes the
+// web-audio XMA gap with no emscripten ffmpeg port. Invisible to the matched
+// Wii build (HX_NATIVE undefined there).
+#include "platform/XmaPcmSidecar.h"
+#endif
 
 SampleDataAllocFunc SampleData::sAlloc = nullptr;
 SampleDataFreeFunc SampleData::sFree = nullptr;
@@ -198,6 +205,18 @@ void SampleData::Load(BinStream &bs, const FilePath &fp) {
 #ifdef HX_FFMPEG
     // Decode XMA to PCM at load time so SampleInstNative can play it
     if (mFormat == kXMA && mData && mSizeBytes > 0) {
+        // Compute the sidecar key from the RAW XMA payload before Dealloc frees
+        // it, so a native run can persist the decoded PCM for the (ffmpeg-less)
+        // web build to consume. Key = content hash matching rb3-xma-convert.
+        int rawXmaSize = mSizeBytes, rawRate = mSampleRate;
+        unsigned long long sideKey =
+            dc3_xma::PayloadKey(mData, rawXmaSize, rawRate);
+        (void)sideKey; // key embedded in the sidecar filename below
+        // Keep a copy of the raw bytes for the sidecar filename hash (Dealloc
+        // releases mData). Small relative to PCM, freed right after.
+        void* rawCopy = malloc(rawXmaSize);
+        if (rawCopy) memcpy(rawCopy, mData, rawXmaSize);
+
         void* pcm = nullptr;
         int pcmSize = 0;
         if (DecodeXMAToPCM(mData, mSizeBytes, mNumSamples, mSampleRate, mNumChannels,
@@ -210,10 +229,40 @@ void SampleData::Load(BinStream &bs, const FilePath &fp) {
             else
                 mData = malloc(pcmSize);
             memcpy(mData, pcm, pcmSize);
-            free(pcm);
             mSizeBytes = pcmSize;
             mFormat = kPCM;
             mNumSamples = pcmSize / (2 * mNumChannels);
+            // Persist the decoded PCM as a web sidecar (no-op unless
+            // DC3_SFX_PCM_DIR / RB3_SFX_PCM_DIR points at a writable dir).
+            if (rawCopy)
+                dc3_xma::WriteSidecar(rawCopy, rawXmaSize, rawRate, pcm,
+                                      mNumSamples, mNumChannels);
+            free(pcm);
+        }
+        if (rawCopy) free(rawCopy);
+    }
+#elif defined(HX_NATIVE)
+    // Web (HX_NATIVE, no ffmpeg): load the offline-converted PCM sidecar for a
+    // kXMA sample so the existing PCM playback path plays it. Sidecars are
+    // produced by a native run (above) or rb3-xma-convert. Only mCRC==0 samples
+    // hold raw XMA in mData (the WavMgr path is native-decode only).
+    if (mFormat == kXMA && mData && mSizeBytes > 0) {
+        dc3_xma::SidecarPCM side =
+            dc3_xma::TryLoad(mData, mSizeBytes, mSampleRate);
+        if (side.data) {
+            Dealloc();
+            int bytes = side.byteSize;
+            if (sAlloc)
+                mData = sAlloc(bytes, "SampleData.cpp", 0x6f, "SampleData", 0);
+            else
+                mData = malloc(bytes);
+            memcpy(mData, side.data, bytes);
+            free(side.data);
+            mSizeBytes = bytes;
+            mFormat = kPCM;
+            mNumChannels = side.numChannels;
+            mNumSamples = side.numSamples;
+            if (side.sampleRate > 0) mSampleRate = side.sampleRate;
         }
     }
 #endif
