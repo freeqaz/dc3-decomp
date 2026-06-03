@@ -9,7 +9,23 @@ sudo pacman -S chromium
 npm install playwright
 ```
 
-WebGPU requires a real GPU context. The test scripts use Playwright to launch system Chromium (not Playwright's bundled browser) in **headed** mode against the existing display (`DISPLAY` env var).
+WebGPU needs a real GPU context, but you do **NOT** need a display, xvfb, headed
+mode, or system Chromium for it. Playwright's **bundled** Chromium, launched
+**headless** with `--use-angle=vulkan --enable-features=Vulkan`, reaches the real
+GPU through the Vulkan driver + the `/dev/dri/renderD*` render node with **no
+`DISPLAY`**. This is exactly what `scripts/web/lib/core.mjs` already does
+(`headless: !process.env.DISPLAY`).
+
+Validated 2026-06-03 (rb3, identical launch config): the WebGPU adapter reports
+`vendor=nvidia arch=ampere isFallback=false` (the real RTX 3090), not SwiftShader.
+To check the adapter yourself, query `navigator.gpu.requestAdapter()` then
+`adapter.requestAdapterInfo()` / `adapter.info` from the page; `vendor=google
+arch=swiftshader` means you fell back to software (usually a missing GPU flag or
+no render-node access). Claude Code agents: run the Bash tool with
+`dangerouslyDisableSandbox: true` — Chromium needs the `/dev/dri` GPU device.
+
+(Earlier guidance here said "system Chromium in headed mode against `DISPLAY`";
+that was unnecessary and inconsistent with the actual scripts — corrected.)
 
 ## Architecture Overview
 
