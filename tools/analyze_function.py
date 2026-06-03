@@ -551,8 +551,13 @@ class MCPClient:
             error_text = content[0].get("text", "Unknown error") if content else "Unknown error"
             raise ValueError(error_text)
 
-        # Try structuredContent first
+        # Try structuredContent first. decompile_function is a batch API
+        # returning list[DecompiledFunction]; MCP wraps a bare list in
+        # structuredContent as {"result": [...]}. Unwrap to the first entry.
         structured = inner_result.get("structuredContent", {})
+        if isinstance(structured, dict) and isinstance(structured.get("result"), list):
+            results = structured["result"]
+            structured = results[0] if results else {}
         if structured and "code" in structured:
             # Extract function name, removing any address suffix
             # "Function_828654D0-828654d0" -> "Function_828654D0"
@@ -577,6 +582,8 @@ class MCPClient:
         # Try to parse as JSON
         try:
             data = json.loads(text)
+            if isinstance(data, list):
+                data = data[0] if data else {}
             if "code" in data:
                 # Extract function name, removing any address suffix
                 # "Function_828654D0-828654d0" -> "Function_828654D0"
@@ -649,7 +656,8 @@ class MCPClient:
         Get cross-references for a function.
         Returns (callers, callees).
         """
-        result = self.call_tool("list_cross_references", {
+        # Tool renamed list_cross_references -> list_xrefs.
+        result = self.call_tool("list_xrefs", {
             "binary_name": self.binary_name,
             "name_or_address": name_or_address
         })
@@ -663,20 +671,23 @@ class MCPClient:
         if inner_result.get("isError"):
             return [], []
 
-        # Try structuredContent first
+        # Try structuredContent first. list_xrefs is a batch API returning
+        # list[CrossReferenceInfos]; MCP wraps the bare list as {"result": [...]}.
+        # Unwrap to the single target's entry.
         structured = inner_result.get("structuredContent", {})
+        if isinstance(structured, dict) and isinstance(structured.get("result"), list):
+            results = structured["result"]
+            structured = results[0] if results else {}
         if structured and "cross_references" in structured:
+            # list_xrefs reports references TO the target (callers); each xref's
+            # function_name is the calling function. Callees are no longer
+            # returned by this tool (use decompile_function include_callees).
             callers = []
-            callees = []
             for xref in structured["cross_references"]:
-                direction = xref.get("direction", "inbound")
-                func_name = xref.get("function_name", "")
+                func_name = xref.get("function_name") or ""
                 if func_name:
-                    if direction == "inbound":
-                        callers.append(func_name)
-                    elif direction == "outbound":
-                        callees.append(func_name)
-            return callers, callees
+                    callers.append(func_name)
+            return callers, []
 
         # Fall back to text parsing
         content = inner_result.get("content", [])

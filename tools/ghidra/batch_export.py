@@ -217,10 +217,9 @@ def batch_export(
 
         if do_decomp:
             try:
-                result = client.call_tool("decompile_function", {
-                    "binary_name": client.binary,
-                    "name": lookup_key,
-                })
+                # Use the client helper: it sends name_or_address and unwraps
+                # the server's list[DecompiledFunction] to a single dict.
+                result = client.decompile_function(lookup_key)
                 decomp_code = result.get("code", "") if isinstance(result, dict) else str(result)
                 decomp_sig = result.get("signature") if isinstance(result, dict) else None
                 consecutive_errors = 0
