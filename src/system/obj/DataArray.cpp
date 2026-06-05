@@ -583,8 +583,8 @@ void DataArray::Load(BinStream &bs) {
                 MemPushTemp();
                 Resize(size);
                 MemPopTemp();
-                for (int j = 0; j < array->Size(); j++) {
-                    mNodes[i++] = array->Node(j);
+                for (int j = 0; j < macro->Size(); j++) {
+                    mNodes[i++] = macro->Node(j);
                 }
             } else {
                 if (macro->Size() == 0) {
