@@ -591,3 +591,24 @@ would DIVERGE from Xbox — Xbox doesn't survive-IK either. Do not pursue it as 
 `DC3_IK_FOOTPLANT` (CharIKFoot), `DC3_IK_NEUTRAL=local` (HamIKSkeleton), and `DC3_IK_DIAG Facing`
 (CharServoBone::MoveToFacing). Plus the pre-existing `ChainZ` / `PARENTCHAIN` / `BackXform` / `FCHAIN`
 probes (gated on `DC3_IK_DIAG`; ChainZ needs director-frame > 3000 ⇒ MILO_MAX_FRAMES ≈ 20000).
+
+---
+
+## ⚠️ 2026-06-08 (re-verify) — the "toe channel decode" conclusion above is PARTLY OVERTURNED
+
+A fresh adversarial re-verification (4-agent workflow + the `DC3_IK_FOOT_SKIP`/`CHARFOOT_SKIP`
+experiments) corrected the specifics above. See **`docs/sessions/2026-06-08-feet-reverify-data.md`**
+for the full data. Summary of what changed:
+
+- **STILL TRUE:** the bug is a native divergence in the rendered POSE, not a localized matched-code
+  edit; the sink is in the raw `PoseMeshes` output, IK-independent (IK-skip is byte-identical).
+- **OVERTURNED:** "it's the **toe** channel decode." The toe is NOT independently mis-decoded — it
+  tracks the ankle by the correct rest offset (gameplay 3.89 ≈ rest 4.38). It is the **leg/ankle**
+  that is lowered ~4u below player0's own rest height (7.40 → 0.45). New lead: the leg/pelvis bone
+  *local lengths* change between rest and live (shin 15.39→18.48, pelvis-Z 90.64→34.49), pointing at
+  leg/pelvis translation channels or a skeleton-bind/LP64 decode — never the toe.
+- **OVERTURNED:** "IK is irrelevant (proven by invariance)." Invariance is trivial because the
+  foot-plant IK applies **zero weight** (`constraintCount=0` on 9920/9920 samples) — it computes a
+  planted effector (effZ≈0.45≈ground, HamIKEffector.cpp:686) but never applies it to the skeleton.
+  Whether that no-apply is matched-Xbox-behavior (⇒ decode bug) or a native divergence (⇒ IK-apply
+  bug) is the ONE remaining fork, and it needs a reliable Xbox/Xenia ankle-Z capture (P0).
