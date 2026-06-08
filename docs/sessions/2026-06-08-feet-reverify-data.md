@@ -119,7 +119,12 @@ Live gameplay (ChainZ): pelvis 33.73 -> knee 16.85 -> ankle 0.45 -> toe -3.93.
 Drop vs player0 rest: pelvis -5.7, knee -5.9, ankle -6.95, toe -7.88. The leg drops MORE
 than the pelvis -> a deep crouch (or an over-extending leg channel on the port).
 
-### NEW LEAD: bone LOCAL lengths change between rest and live (should be rigid!)
+### NEW LEAD [REFUTED in Push 2 below — red herring]: bone LOCAL lengths "change"
+> ⚠️ This lead is REFUTED by the Push-2 decode test. The "neutral L" column is the
+> `neutral.iks` IK-reference skeleton; the "live L" is the *rendered char* skeleton —
+> two DIFFERENT skeleton instances, not one bone changing length. The decode never
+> changes a rigid bone's local translation (proven: drift 0.000). See Push 2.
+
 | bone (local len)        | neutral L | live L  |
 |-------------------------|-----------|---------|
 | bone_L-ankle.mesh (shin, X) | 15.39 | 18.48 |
@@ -161,3 +166,71 @@ docs/plans/custom-graphics-engine/BONE_GROUND_TRUTH_AND_CLIP_VALIDATION_PLAN.md.
 
 Do NOT relax the gate or ship a native-only foot clamp until the fork is resolved — a
 "survivable plant" that diverges from Xbox is the wrong fix.
+
+---
+
+# PUSH 2 (2026-06-08, ultracode) — decode EXONERATED; bug is in the IK foot-plant pathway
+
+Goal: get firmer evidence + try Xenia. Built a Xenia-free decode test and ran a Xenia
+capture. Result: the pose-channel DECODE is faithful; the leading suspect flips to the
+IK foot-plant.
+
+## FIRM #1 — pose-channel decode is FAITHFUL (new test, Xenia-free)
+New test `ClipPoseFixture.LegBoneDecodeChannelTypesAndLocalStability`
+(native/tests/test_bone_ground_truth.cpp) loads the `crouching_great_01` crouch clip on
+the shared skeleton and checks every leg bone across beats. **PASSES**, `max LOCAL-
+translation drift on a ROTATION-ONLY leg bone = 0.000`. Output:
+- Channel types: `bone_pelvis` = `.pos`+`.quat` (hasPos=1); `bone_L-thigh/ankle` = `.quat`;
+  `bone_L-knee/toe` = `.rotz`. **The leg bones are ROTATION-ONLY; only the pelvis translates.**
+- Rotation-only leg bones keep their bind local translation EXACTLY across all beats
+  (shin X=18.034, femur X=20.273, … constant) — no stride/LP64 corruption.
+- The crouch clip decodes to a SANE, non-sunk foot on the shared skeleton (ankle worldZ
+  +2.45, toe +2.7 — ABOVE floor) even at a deep crouch (pelvis local Z 12.6–18.9).
+- The existing green test `WeightedPosAndQuatChannelsMatchLocalPose` already proves the
+  POS *and* QUAT channel→local-pose decode match (within tol) — so rotation decode is
+  faithful too, not just translation.
+
+## FIRM #2 — the "bone-length-change" NEW LEAD is a RED HERRING
+The rest "neutral L" values (shin 15.39, pelvis-Z 90.64) came from the `neutral.iks`
+IK-reference skeleton; the live values (18.48 / 34.49) from the *rendered char* skeleton.
+Different skeleton instances. The decode never changes a rigid bone's length (FIRM #1).
+
+## FIRM #3 — the sink does NOT correlate with crouch depth
+Isolated crowd crouch: pelvis drops ~30u → feet stay ABOVE floor (+2.7).
+Gameplay song frame: pelvis drops only ~5.7u → feet SINK to -4. A *shallower* pelvis
+crouch sinks the feet MORE. So the gameplay sink is not produced by the leg FK of the
+crouch; it is added by the gameplay-specific IK/compositing.
+
+## FIRM #4 — Xenia live capture is BLOCKED (confirmed empirically)
+Ran `xenia-headless` (debug.xex, vulkan, fake_kinect, dc3_ik_telemetry, ymca script,
+120s). Reached game_screen (stable, no crash), captured **516 bone records — ALL
+`world=(0,0,~5.0)`** = the dancer skeleton is collapsed/unposed (async stall: song.anim
+never loads). The capture mechanism is correct (per-bone, byte-swapped, valid=1) but there
+is no real Xbox pose to read. Live-dance ground truth needs the async-stall fix (spin-poll
+on unresolved thunk 0x83A00964) — weeks of work, out of scope.
+
+## SHARPENED ROOT CAUSE — the IK foot-plant pathway, not the decode
+Decode is exonerated. The gameplay sink is the leg FK NOT bending the knee enough to keep
+the foot planted during the (shallow) crouch, and the foot-plant IK that should catch it
+is INERT on native:
+- The foot-plant CLAMP never engages: `clampFactor = (neutralZ - groundH - 5.0)*0.0909`,
+  and gameplay `AnkleClamp` shows **neutralZ = 0.111** (≈ ground) so clampFactor < 0 → 0.
+  With a CORRECT neutral ankle height (rest ankle ≈ 7.4) it would be ≈ 0.2 → the clamp
+  WOULD engage and Interp toward the floor-planted eff. So the IK NEUTRAL ankle is
+  collapsed to ground (0.111) instead of rest (~7.4) — this re-opens the "neutral skeleton"
+  thread the prior session dismissed, now as the clamp-disabler (HamIKEffector.cpp:600-602).
+- AND/OR constraints are empty (constraintCount=0) — the other foot-plant path.
+- AND the IK world-write is discarded by the recompute (the apply path).
+
+This is the family of hypothesis (ii) (IK-apply), with the decode (iii) now refuted.
+
+## NEXT PROBE (Xenia-free, testable via the gate)
+1. Find WHY the IK neutral ankle is 0.111 not ~7.4 — dump `mSkeleton->NeutralWorldXfm`
+   for bone_L-ankle vs its rest. Is the neutral skeleton collapsed on native?
+2. HX_NATIVE-gated experiment: feed the clamp the correct rest-relative neutral so
+   clampFactor engages, and/or apply the planted eff to the rendered ankle as a LOCAL
+   write (survives recompute). Measure the gate (FeetNotBelowFloorDuringGameplay).
+   If the foot plants and the gate passes → confirms (ii). Keep it OFF by default until
+   matched-safe; this would be the first candidate FIX, not just a diagnostic.
+3. (Optional) confirm char/main decode parity by running the FIRM-#1 test against
+   char/main + a song clip, to fully close (iii'').

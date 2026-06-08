@@ -794,6 +794,97 @@ TEST_F(ClipPoseFixture, KeyBoneWorldDeltasAreFiniteAcrossBeats) {
 }
 
 // ============================================================================
+// Gate 3b: Leg-bone pose-channel DECODE parity (feet-in-floor re-verify 2026-06-08)
+//
+// The feet-in-floor re-verification found the dancer's leg/pelvis bone LOCAL
+// translations change between rest and live (shin local X 15.39->18.48, pelvis
+// local Z 90.64->34.49). A rigid bone's local translation CANNOT change unless
+// it has a POSITION (.pos) channel. This test settles the question WITHOUT any
+// Xbox/Xenia ground truth:
+//   (1) inventory which channel types each leg/pelvis bone has in the clip;
+//   (2) verify a rotation-only leg bone's LOCAL translation stays == bind across
+//       all beats. A drift on a rotation-only bone = a pose-channel decode bug
+//       (the LP64/stride divergence we are hunting).
+// ============================================================================
+
+TEST_F(ClipPoseFixture, LegBoneDecodeChannelTypesAndLocalStability) {
+    // Prefer a crouch clip (best repro of the foot-sink); else use the fixture clip.
+    CharClip *clip = sClip;
+    for (ObjDirItr<CharClip> it(sClipDir, true); it; ++it) {
+        if (strcmp(it->Name(), "crouching_great_01") == 0) { clip = it; break; }
+    }
+    printf("  clip='%s' frames=%d start=%.2f len=%.2f\n",
+           clip->Name(), clip->NumFrames(), clip->StartBeat(), clip->LengthBeats());
+
+    const char *legPrefixes[] = {
+        "bone_pelvis", "bone_L-thigh", "bone_L-knee", "bone_L-ankle", "bone_L-toe", nullptr
+    };
+
+    // (1) Channel-type inventory per leg bone.
+    std::list<CharBones::Bone> bones;
+    clip->ListBones(bones);
+    bool hasPosChannel[8] = { false };
+    for (int i = 0; legPrefixes[i]; i++) {
+        printf("  %-14s channels:", legPrefixes[i]);
+        size_t plen = strlen(legPrefixes[i]);
+        for (const auto &b : bones) {
+            const char *n = b.name.Str();
+            if (strncmp(n, legPrefixes[i], plen) == 0 && n[plen] == '.') {
+                CharBones::Type ty = CharBones::TypeOf(b.name);
+                printf(" %s[t=%d,w=%.2f]", n + plen, (int)ty, b.weight);
+                if (ty == CharBones::TYPE_POS) hasPosChannel[i] = true;
+            }
+        }
+        printf("  hasPos=%d\n", (int)hasPosChannel[i]);
+    }
+
+    // (2) Local-translation stability across beats.
+    struct LegBone { RndTransformable *mesh; Vector3 bindLocal; int idx; };
+    std::vector<LegBone> legs;
+    for (int i = 0; legPrefixes[i]; i++) {
+        char nm[64];
+        snprintf(nm, sizeof(nm), "%s.mesh", legPrefixes[i]);
+        RndTransformable *m = FindBone(nm);
+        if (m) legs.push_back({ m, m->LocalXfm().v, i });
+        else printf("  (no mesh bone for %s)\n", legPrefixes[i]);
+    }
+
+    float beats[3] = {
+        clip->StartBeat(),
+        clip->StartBeat() + clip->LengthBeats() * 0.5f,
+        clip->EndBeat(),
+    };
+
+    float maxBadDelta = 0.0f;
+    const char *worstBone = "(none)";
+    for (float beat : beats) {
+        clip->PoseMeshes(sDir, beat);
+        printf("  --- beat %.2f ---\n", beat);
+        for (auto &lb : legs) {
+            const Vector3 &lv = lb.mesh->LocalXfm().v;
+            float dx = lv.x - lb.bindLocal.x;
+            float dy = lv.y - lb.bindLocal.y;
+            float dz = lv.z - lb.bindLocal.z;
+            float d = std::sqrt(dx * dx + dy * dy + dz * dz);
+            printf("    %-16s local=(%.3f,%.3f,%.3f) dFromBind=%.3f worldZ=%.3f %s\n",
+                   lb.mesh->Name(), lv.x, lv.y, lv.z, d, lb.mesh->WorldXfm().v.z,
+                   hasPosChannel[lb.idx] ? "[hasPos]" : "[ROT-ONLY]");
+            if (!hasPosChannel[lb.idx] && d > maxBadDelta) {
+                maxBadDelta = d; worstBone = lb.mesh->Name();
+            }
+        }
+    }
+
+    printf("  >>> max LOCAL-translation drift on a ROTATION-ONLY leg bone: %.3f (%s)\n",
+           maxBadDelta, worstBone);
+    // A rotation-only bone's local translation must equal its bind value.
+    EXPECT_LT(maxBadDelta, 0.05f)
+        << "A rotation-only leg bone's LOCAL translation drifted " << maxBadDelta
+        << " units from bind (" << worstBone << "). Rigid bones with no .pos channel "
+        << "must not change length — this is a pose-channel decode divergence.";
+}
+
+// ============================================================================
 // Gate 4: Foot Orientation Invariants
 //
 // Validates that the ankle-to-toe bone relationship is geometrically correct
