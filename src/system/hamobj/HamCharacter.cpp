@@ -629,6 +629,18 @@ DataNode HamCharacter::OnCamTeleport(DataArray *a) {
 
 ObjectDir *HamCharacter::GetNeutralSkeleton() {
 #ifdef HX_NATIVE
+    {
+        static int sEntryLog = 0;
+        const char *p = PathName(this);
+        if (sEntryLog < 6 && p && strstr(p, "main.milo") && !strstr(p, "backup")) {
+            sEntryLog++;
+            fprintf(stderr,
+                "DC3_IK_DIAG GetNeutralSkelEntry[%d]: char=%s skelBones=%p "
+                "neutralDir=%p self=%d\n",
+                sEntryLog, p, (void*)mSkeletonBones, (void*)mNeutralSkelDir,
+                (int)(mNeutralSkelDir == (ObjectDir *)this));
+        }
+    }
     // Skeleton blending requires mSkeletonBones (set via skeleton_path config).
     // If not configured, skip computation and return the dir/self fallback.
     if (!mSkeletonBones) {
@@ -706,6 +718,48 @@ zero_and_scale:
         }
         mSkeletonBones->Poll();
     }
+#ifdef HX_NATIVE
+    {
+        // Diagnostic: confirm the neutral skeleton is a SEPARATE posed dir (not
+        // a collapse onto `this`), and read its neutral ankle Z after posing.
+        // If the neutral ankle is planted (~+4) the IK clamp anchor is good;
+        // if it tracks the dropped live pose the foot will sink.
+        extern int HamDirector_NativeSetFrameCount();
+        static int sNeutralLog = 0;
+        const char *p = PathName(this);
+        bool isMain = p && strstr(p, "main.milo") && !strstr(p, "backup");
+        // Sample during gameplay (frame>3000) AND only the on-screen dancer
+        // (player0), so the neutral-anchor values correlate with the sunk
+        // dancer's ChainZ trace.
+        if (sNeutralLog < 30 && isMain && p && strstr(p, "player0")
+            && HamDirector_NativeSetFrameCount() > 3000) {
+            sNeutralLog++;
+            ObjectDir *nd = mNeutralSkelDir;
+            RndTransformable *nAnkle = nd ?
+                nd->Find<RndTransformable>("bone_L-ankle.mesh", true) : nullptr;
+            RndTransformable *nPelvis = nd ?
+                nd->Find<RndTransformable>("bone_pelvis.mesh", true) : nullptr;
+            RndTransformable *nToe = nd ?
+                nd->Find<RndTransformable>("bone_L-toe.mesh", true) : nullptr;
+            // Live (this) pelvis/toe for the same char.
+            RndTransformable *lPelvis =
+                Find<RndTransformable>("bone_pelvis.mesh", true);
+            RndTransformable *lToe =
+                Find<RndTransformable>("bone_L-toe.mesh", true);
+            fprintf(stderr,
+                "DC3_IK_DIAG GetNeutralSkel[%d] f=%d: char=%s neutralDir=%s "
+                "neutralAnkleWorldZ=%.3f neutralPelvisWorldZ=%.3f "
+                "neutralToeWorldZ=%.3f | livePelvisZ=%.3f liveToeZ=%.3f\n",
+                sNeutralLog, HamDirector_NativeSetFrameCount(), p,
+                nd ? nd->Name() : "(null)",
+                nAnkle ? nAnkle->WorldXfm().v.z : -999.0f,
+                nPelvis ? nPelvis->WorldXfm().v.z : -999.0f,
+                nToe ? nToe->WorldXfm().v.z : -999.0f,
+                lPelvis ? lPelvis->WorldXfm().v.z : -999.0f,
+                lToe ? lToe->WorldXfm().v.z : -999.0f);
+        }
+    }
+#endif
     return mNeutralSkelDir;
 }
 

@@ -80,6 +80,44 @@ void HamDriver::Poll() {
     }
 }
 
+#ifdef HX_NATIVE
+void HamDriver::PreEvalClipWeights() {
+    // The IK ankle/hand effectors read HamCharacter::GetNeutralSkeleton() during
+    // the character poll. On a song-anim character that path calls
+    // song.hdrv->SetClipWeightMap(), which builds the clip-weight map from the
+    // per-clip LayerClip::mWeight values. Those leaf weights are computed by
+    // mLayers.Eval() inside HamDriver::Poll().
+    //
+    // Every frame, HamDirector::Poll() calls ClipPlayer::PlayAnims(), which does
+    // mDriver->Clear() and rebuilds the layer tree from scratch — the fresh
+    // LayerClip objects start with mWeight == 0. The clip weights only become
+    // non-zero once this driver's own Poll() runs mLayers.Eval(). On Xbox the
+    // per-character pollable sort happens to poll song.hdrv before the IK
+    // effectors, so by the time the IK reads GetNeutralSkeleton the weights are
+    // already evaluated. On native the pollable sort orders the IK effectors
+    // first (a separate sorter-ordering divergence), so GetNeutralSkeleton sees
+    // an all-zero clip map, returns `this`, and the neutral skeleton collapses
+    // onto the live (crouch-sunk) pose — the IK ankle clamp then loses its
+    // planted anchor and the feet sink through the floor.
+    //
+    // Fix (HamDirector::Poll, native only): after PlayAnims rebuilds the layers
+    // and before the characters are polled, evaluate just the clip *weights*
+    // (NOT the bone posing in Poll's ScaleDown/Play) so the clip-weight map is
+    // populated before any IK effector reads it. LayerArray/LayerClip::Eval are
+    // pure, idempotent weight computations, so this neither poses bones nor
+    // double-applies anything when the driver's real Poll() runs later this
+    // frame. This deliberately does NOT reorder the per-character pollable sort
+    // (doing so corrupts the bone-chain SetWorldXfm cascade on native), and does
+    // NOT re-pose the skeleton mid-IK.
+    if (mBones && mLayers.mWeight <= 0.0f && !mLayers.mLayers.empty()) {
+        mLayers.Eval(1.0f);
+    }
+    if (mBones && mLayers.mWeight > 0.0f) {
+        mLayers.Eval(mLayers.mWeight);
+    }
+}
+#endif
+
 float HamDriver::DisplayRecurse(Layer *layer, int indent, float y) {
     LayerArray *arr = dynamic_cast<LayerArray *>(layer);
     if (arr) {

@@ -31,6 +31,7 @@
 #include "xdk/XAPILIB.h"
 
 std::vector<BinkMovieImpl *> BinkMovieImpl::sActiveMovies;
+int BinkMovieImpl::sActivePending;
 
 namespace {
     void StoreCache(RndTex *t) {

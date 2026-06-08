@@ -85,6 +85,16 @@ public:
     LayerArray &Layers() { return mLayers; }
     void SetClipWeightMap();
 
+#ifdef HX_NATIVE
+    // Native-only: evaluate just the layer/clip *weights* (no bone posing), so
+    // the clip-weight map is populated before the IK effectors read it via
+    // HamCharacter::GetNeutralSkeleton(). See HamDriver::PreEvalClipWeights in
+    // HamDriver.cpp for the full rationale. This is a behaviour-neutral subset
+    // of Poll() (LayerArray::Eval is a pure weight computation), called from
+    // HamDirector::Poll after the per-frame PlayAnims clip rebuild.
+    void PreEvalClipWeights();
+#endif
+
     friend class HamCharacter;
 
 protected:

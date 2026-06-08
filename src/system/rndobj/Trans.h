@@ -21,6 +21,14 @@ class RndTransformable : public virtual RndHighlightable {
     friend class CharUpperTwist;
     friend class HamIKEffector;
     friend class RndAmbientOcclusion;
+#ifdef HX_NATIVE
+    // Native-only: lets the per-character IK re-root the bone subtree to the
+    // world origin (and composite the venue placement back at render) so the
+    // matched ankle/pelvis IK runs character-local, exactly as on Xbox. See
+    // CharLocalIKScope in HamIKEffector.cpp. Header-only friend grant — no
+    // layout / matched-codegen impact (the match build omits HX_NATIVE).
+    friend class CharLocalIKScope;
+#endif
 public:
     enum Constraint {
         /** "no constraint" */

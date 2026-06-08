@@ -228,7 +228,7 @@ BEGIN_HANDLERS(PlatformMgr)
 END_HANDLERS
 
 #ifdef HX_NATIVE
-DataNode PlatformMgr::OnSignInUsers(DataArray *) {
+DataNode PlatformMgr::OnSignInUsers(const DataArray *) {
     return DataNode(0);
 }
 #endif

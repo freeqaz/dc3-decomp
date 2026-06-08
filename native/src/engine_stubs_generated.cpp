@@ -67,6 +67,7 @@ int json_tokener_parse() { return 0; }
 #endif
 extern "C" float lbl_82F0BE80 = 2.0f;
 int lbl_82F14008 = 0;
+int lbl_82F0E8A4 = 4;  // RhythmDetectorGroup .data:0xF8 (0x82F0E8A4); HollaBackMinigame OnBeat compares subMeasure against it
 DataArray *lbl_830A4100 = nullptr;
 int lbl_830A4104 = 0;
 unsigned int lbl_82F1AB98 = 60;     // seconds per minute

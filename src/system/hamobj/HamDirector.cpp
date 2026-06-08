@@ -24,6 +24,7 @@
 #include "hamobj/Difficulty.h"
 #include "hamobj/HamCamShot.h"
 #include "hamobj/HamCharacter.h"
+#include "hamobj/HamDriver.h"
 #include "hamobj/HamWardrobe.h"
 #include "hamobj/HamGameData.h"
 #include "hamobj/HamMaster.h"
@@ -3212,6 +3213,30 @@ void HamDirector::Poll() {
 #endif
         }
         mPoseFatalities->Poll();
+#ifdef HX_NATIVE
+        // Pre-evaluate each song driver's clip *weights* before polling the
+        // characters. PlayAnims (above) just rebuilt every song.hdrv layer tree
+        // with all leaf weights == 0; on native the per-character pollable sort
+        // polls the IK effectors before song.hdrv, so without this the IK's
+        // GetNeutralSkeleton read would see an empty clip-weight map and collapse
+        // the neutral skeleton onto the live (sunk) pose, sinking the feet.
+        // PreEvalClipWeights only computes weights (no bone posing) and is
+        // idempotent with the driver's own Poll() later this frame.
+        // See HamDriver::PreEvalClipWeights for the full rationale.
+        if (player0 && player0->SongDriver()) {
+            player0->SongDriver()->PreEvalClipWeights();
+        }
+        if (player1 && player1->SongDriver()) {
+            player1->SongDriver()->PreEvalClipWeights();
+        }
+        for (int backupIdx = 0;; backupIdx++) {
+            HamCharacter *backup =
+                TheHamWardrobe ? TheHamWardrobe->GetBackup(backupIdx) : nullptr;
+            if (!backup) break;
+            HamDriver *backupDriver = backup->SongDriver();
+            if (backupDriver) backupDriver->PreEvalClipWeights();
+        }
+#endif
         if (mVenue) {
             mVenue->Poll();
         }

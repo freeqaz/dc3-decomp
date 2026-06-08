@@ -15,6 +15,117 @@
 #include "utl/BinStream.h"
 #include "utl/Str.h"
 
+#ifdef HX_NATIVE
+#include <vector>
+#endif
+
+
+#ifdef HX_NATIVE
+// ---------------------------------------------------------------------------
+// CharLocalIKScope — run the matched ankle/pelvis IK in CHARACTER-LOCAL space.
+//
+// The matched ankle clamp (HamIKEffector::Poll, below) forms
+//     q.v = neutral + eff          (empty constraints => totalWeight == 0)
+// then back-transforms  finalXfm = (effW . fingerW^-1) . q  to the ankle bone.
+// That identity is only well-behaved when `neutral`/`eff` are SMALL,
+// character-local bone worlds: then  neutral + eff ~= eff  and the
+// back-transform collapses to the clean planted effector world. The residual
+// error of the back-transform is proportional to the character's distance from
+// the world origin (verified: iconman at the origin lands the foot cleanly;
+// venue dancers placed at world X ~= +/-37 by Character::Teleport /
+// HamRegulate::Poll get q.v.x ~= 110 (doubled) and the ankle world Z explodes
+// to ~60-348, which the render-time WorldXfm_Force recompute then discards ->
+// the foot drops to the sunk anim pose).
+//
+// On Xbox the per-character IK runs character-local (Xbox ankle clamp ground
+// truth neutralZ=0.017, effZ=0.882 — same scale as native's origin-rooted
+// iconman, NOT native's venue dancer); the venue placement is composited AFTER
+// the IK, at render. Native bakes the venue offset into the IK-read bone worlds
+// (the bones are children of the venue-placed character root) BEFORE the IK
+// polls, which is the divergence.
+//
+// This scope replicates Xbox's flow WITHOUT touching the matched IK math: on
+// construction it re-roots the character to the world origin (saves the root's
+// world, sets it to identity, and dirties the bone subtree so every bone the
+// matched body reads recomputes character-local). On destruction it restores
+// the venue placement and composites it back onto exactly the bones the body
+// recomputed (clean) — touched-by-IK and merely-read bones alike map by
+// W_venue = W_charlocal . R, which sends untouched bones back to their original
+// venue world and IK-written bones to the IK result placed at the venue. Bones
+// never read during the body stay dirty and recompute venue-from-local on the
+// next access. HamIKEffector is a friend of RndTransformable, so the world /
+// dirty fields are reachable directly.
+//
+// No-op when the character is already at the origin (e.g. iconman) — that path
+// already matches Xbox.
+class CharLocalIKScope {
+public:
+    CharLocalIKScope(Character *character) : mRoot(character), mActive(false) {
+        // FORENSIC-NEUTRALIZED: the prior agent's re-root-to-origin workaround
+        // is disabled so the consecutive-frame chain trace below observes the
+        // RAW native bug (no state mutation). Compiles, runs as a pure no-op.
+        return;
+        if (!mRoot)
+            return;
+        const Transform &rootWorld = mRoot->WorldXfm();
+        // Cheap "is this character venue-placed?" test: any non-trivial root
+        // world translation. Origin-rooted characters (iconman) skip the
+        // re-root entirely and run exactly as before.
+        if (fabsf(rootWorld.v.x) < 0.01f && fabsf(rootWorld.v.y) < 0.01f
+            && fabsf(rootWorld.v.z) < 0.01f)
+            return;
+        mActive = true;
+        mSavedRoot = rootWorld;
+
+        // Snapshot the bone subtree so we can re-place it afterwards.
+        Collect(mRoot);
+
+        // Re-root to the world origin: the matched body now reads
+        // character-local bone worlds.
+        mRoot->mWorldXfm.Reset();
+        mRoot->mDirty = false;
+        for (std::list<RndTransformable *>::iterator it = mRoot->mChildren.begin();
+             it != mRoot->mChildren.end(); ++it) {
+            (*it)->SetDirty_Force();
+        }
+    }
+
+    ~CharLocalIKScope() {
+        if (!mActive)
+            return;
+        // Restore the venue placement on the root...
+        mRoot->mWorldXfm = mSavedRoot;
+        mRoot->mDirty = false;
+        // ...then composite it back onto every bone the body recomputed
+        // (clean) while we were rooted at the origin. Touched and untouched
+        // recomputed bones both map by W_venue = W_charlocal . R. Bones that
+        // stayed dirty (never read) recompute venue-from-local on next access.
+        for (size_t i = 0; i < mBones.size(); i++) {
+            RndTransformable *t = mBones[i];
+            if (t->mDirty)
+                continue;
+            Transform venue;
+            Multiply(t->mWorldXfm, mSavedRoot, venue);
+            t->mWorldXfm = venue;
+        }
+    }
+
+private:
+    void Collect(RndTransformable *t) {
+        for (std::list<RndTransformable *>::iterator it = t->mChildren.begin();
+             it != t->mChildren.end(); ++it) {
+            mBones.push_back(*it);
+            Collect(*it);
+        }
+    }
+
+    RndTransformable *mRoot;
+    Transform mSavedRoot;
+    std::vector<RndTransformable *> mBones;
+    bool mActive;
+};
+#endif
+
 
 HamIKEffector::HamIKEffector()
     : mSkeleton(this), mEffector(this), mFinger(this), mGround(this), mMore(this),
@@ -313,6 +424,12 @@ void HamIKEffector::Poll() {
                     (tDbg >= 0 && tDbg <= 5) ? typeNames[tDbg] : "?");
         }
     }
+    // Run the matched IK in CHARACTER-LOCAL space (re-rooted to the world
+    // origin), then composite the venue placement back on at render — exactly
+    // as Xbox does. See CharLocalIKScope above. No-op for origin-rooted
+    // characters (iconman), which already match. This replicates the Xbox flow
+    // WITHOUT touching the byte-matched IK math below.
+    CharLocalIKScope ikScope(mCharacter.Ptr());
 #endif
     if (mSkeleton) {
         EffectorType t = GetType();
@@ -338,6 +455,36 @@ void HamIKEffector::Poll() {
                 q.q.w = 0.0f;
                 float totalWeight = ApplyConstraints(q, neutral, this);
 #ifdef HX_NATIVE
+                // ===================================================================
+                // FORENSIC FULL-CHAIN TRACE (player0 bone_L-ankle.ikf)
+                // One consolidated line per frame, capturing the entire IK chain:
+                // inputs -> blend -> back-transform -> SetWorldXfm output -> result.
+                // Capture vars are filled as the chain executes (below) and the
+                // line is emitted after the final SetWorldXfm.
+                // ===================================================================
+                bool fcTrace = false;
+                {
+                    const char *fp = PathName(this);
+                    extern int HamDirector_NativeSetFrameCount();
+                    static int sFCCount = 0;
+                    bool fcMain = fp && strstr(fp, "main.milo") && !strstr(fp, "backup");
+                    bool fcLA = fp && strstr(fp, "bone_L-ankle.ikf");
+                    if (sFCCount < 40 && fcMain && fcLA && t == kEffectorTypeAnkle
+                        && HamDirector_NativeSetFrameCount() > 800) {
+                        sFCCount++;
+                        fcTrace = true;
+                    }
+                }
+                // chain capture slots
+                float fcNeutralX = neutralQ.v.x, fcNeutralY = neutralQ.v.y, fcNeutralZ = neutralQ.v.z;
+                float fcEffX = 0, fcEffY = 0, fcEffZ = 0;
+                float fcFingerX = 0, fcFingerY = 0, fcFingerZ = 0;
+                float fcClampFactor = -999, fcQvX = 0, fcQvY = 0, fcQvZ = 0;
+                float fcEffWX = 0, fcEffWY = 0, fcEffWZ = 0;
+                float fcFingerWX = 0, fcFingerWY = 0, fcFingerWZ = 0;
+                float fcInvX = 0, fcInvY = 0, fcInvZ = 0;
+                float fcFinalX = 0, fcFinalY = 0, fcFinalZ = 0;
+                float fcTotalWeightIn = totalWeight;  // raw ApplyConstraints result (input)
                 {
                     // Capture only main.milo (the actual player character),
                     // not backup.milo. Filter by ankle Z below 1.5 (gameplay pose).
@@ -365,25 +512,28 @@ void HamIKEffector::Poll() {
                                 (void*)n, n ? (int)n->Type() : -1);
                         }
                     }
-                    if (sTotalWeightLog < 20
+                    extern int HamDirector_NativeSetFrameCount();
+                    if (sTotalWeightLog < 60
                         && t == kEffectorTypeAnkle
                         && isMain
-                        && mEffector->WorldXfm().v.z < 1.5f) {
+                        && HamDirector_NativeSetFrameCount() > 3000
+                        && strstr(path, "bone_L-ankle.ikf")) {
                         sTotalWeightLog++;
                         const Transform &fingW = finger->WorldXfm();
                         const Transform &effW = mEffector->WorldXfm();
                         fprintf(stderr,
-                            "DC3_IK_DIAG IkSnap[%d]: effPath=%s "
+                            "DC3_IK_DIAG IkSnap[%d] f=%d: effPath=%s "
                             "fingerW.v=(%.2f,%.2f,%.2f) effW.v=(%.2f,%.2f,%.2f) "
                             "neutral.v=(%.2f,%.2f,%.2f) "
-                            "fingerW.m.x=(%.2f,%.2f,%.2f) "
+                            "fingerDirty=%d effDirty=%d "
                             "totalWeight=%.3f constraintCount=%d\n",
                             sTotalWeightLog,
+                            HamDirector_NativeSetFrameCount(),
                             PathName(this),
                             fingW.v.x, fingW.v.y, fingW.v.z,
                             effW.v.x, effW.v.y, effW.v.z,
                             neutral.v.x, neutral.v.y, neutral.v.z,
-                            fingW.m.x.x, fingW.m.x.y, fingW.m.x.z,
+                            (int)finger->Dirty(), (int)mEffector->Dirty(),
                             totalWeight,
                             (int)mConstraints.size());
                     }
@@ -402,6 +552,16 @@ void HamIKEffector::Poll() {
                             goto done;
 
                         QuatXfm effQ(finger->WorldXfm());
+#ifdef HX_NATIVE
+                        if (fcTrace) {
+                            fcEffX = effQ.v.x; fcEffY = effQ.v.y; fcEffZ = effQ.v.z;
+                            const Transform &fcfw = finger->WorldXfm();
+                            fcFingerX = fcfw.v.x; fcFingerY = fcfw.v.y; fcFingerZ = fcfw.v.z;
+                            const Transform &fcew = mEffector->WorldXfm();
+                            fcEffWX = fcew.v.x; fcEffWY = fcew.v.y; fcEffWZ = fcew.v.z;
+                            fcFingerWX = fcfw.v.x; fcFingerWY = fcfw.v.y; fcFingerWZ = fcfw.v.z;
+                        }
+#endif
                         if (t == kEffectorTypeAnkle || t == kEffectorTypePelvis) {
                             Character *character = mCharacter.Ptr();
                             RndTransformable *ground =
@@ -441,6 +601,86 @@ void HamIKEffector::Poll() {
                                     (neutralQ.v.z - groundHeight - 5.0f) * 0.09090909f;
                                 clampFactor = Max(0.0f, clampFactor);
                                 clampFactor = Min(clampFactor, 1.0f);
+#ifdef HX_NATIVE
+                                if (fcTrace) fcClampFactor = clampFactor;
+                                {
+                                    // Clamp-internals diagnostic: the ankle
+                                    // plant lever. neutralZ should be the
+                                    // un-dropped (~+4) planted ankle; if it has
+                                    // collapsed onto effZ (the sunk live ankle),
+                                    // Interp returns the sunk pose regardless.
+                                    static int sClampLog = 0;
+                                    const char *p = PathName(this);
+                                    bool isMain = p && strstr(p, "main.milo")
+                                                  && !strstr(p, "backup");
+                                    if (sClampLog < 24 && isMain) {
+                                        sClampLog++;
+                                        fprintf(stderr,
+                                            "DC3_IK_DIAG AnkleClamp[%d]: eff=%s "
+                                            "neutralZ=%.3f effZ=%.3f groundH=%.3f "
+                                            "clampFactor=%.4f neutralV=(%.2f,%.2f,%.2f) "
+                                            "effV=(%.2f,%.2f,%.2f)\n",
+                                            sClampLog, p,
+                                            neutralQ.v.z, effQ.v.z, groundHeight,
+                                            clampFactor,
+                                            neutralQ.v.x, neutralQ.v.y, neutralQ.v.z,
+                                            effQ.v.x, effQ.v.y, effQ.v.z);
+                                    }
+
+                                    // SAME-INSTANT CHAIN TRACE: frame-correlated.
+                                    // Restrict to ONE effector (bone_L-ankle.ikf)
+                                    // so consecutive samples track the same chain
+                                    // across frames. Logs frame#, the eff source
+                                    // (finger == spot_L-toe.trans), and the live
+                                    // L-leg chain via Dir(). Resolves whether the
+                                    // finger / toe is planted (+0.1) or sunk
+                                    // (-4) at the exact clamp instant, and how it
+                                    // tracks frame-to-frame.
+                                    extern int HamDirector_NativeSetFrameCount();
+                                    static int sChainLog = 0;
+                                    bool isLeftAnkle = p && strstr(p, "bone_L-ankle.ikf");
+                                    if (sChainLog < 60 && isMain && isLeftAnkle
+                                        && HamDirector_NativeSetFrameCount() > 3000) {
+                                        sChainLog++;
+                                        ObjectDir *d = Dir();
+                                        const char *names[] = {
+                                            "bone_L-toe.mesh",
+                                            "spot_L-toe.trans",
+                                            "bone_L-ankle.mesh",
+                                            "bone_L-knee.mesh",
+                                            "bone_L-thigh.mesh",
+                                            "bone_pelvis.mesh",
+                                        };
+                                        fprintf(stderr,
+                                            "DC3_IK_DIAG ChainZ[%d] f=%d eff=%s:",
+                                            sChainLog,
+                                            HamDirector_NativeSetFrameCount(), p);
+                                        for (int ci = 0; ci < 6; ci++) {
+                                            RndTransformable *bt =
+                                                d ? d->Find<RndTransformable>(
+                                                        names[ci], false)
+                                                  : nullptr;
+                                            if (bt) {
+                                                const Transform &w = bt->WorldXfm();
+                                                fprintf(stderr, " %s.z=%.2f(d=%d)",
+                                                    names[ci], w.v.z,
+                                                    (int)bt->Dirty());
+                                            } else {
+                                                fprintf(stderr, " %s=<null>",
+                                                    names[ci]);
+                                            }
+                                        }
+                                        // finger == the eff source for the clamp
+                                        const Transform &fw = finger->WorldXfm();
+                                        fprintf(stderr,
+                                            " | FINGER=%s effZ_used=%.3f"
+                                            " fingerW.z=%.3f neutralZ=%.3f"
+                                            " clampF=%.3f\n",
+                                            finger->Name(), effQ.v.z,
+                                            fw.v.z, neutralQ.v.z, clampFactor);
+                                    }
+                                }
+#endif
                                 Interp(neutralQ.v, effQ.v, clampFactor, q.v);
                                 Interp(neutralQ.q, effQ.q, clampFactor, q.q);
                                 if (effQ.v.z < groundHeight) {
@@ -465,19 +705,95 @@ void HamIKEffector::Poll() {
                     q.v.z *= invWeight;
                     Normalize(q.q, q.q);
 
+#ifdef HX_NATIVE
+                    if (fcTrace) { fcQvX = q.v.x; fcQvY = q.v.y; fcQvZ = q.v.z; }
+#endif
                     finalXfm.v = q.v;
                     MakeRotMatrix(q.q, finalXfm.m);
 
+#ifdef HX_NATIVE
+                    Transform dbgFinalBefore = finalXfm;
+                    bool dbgBackXform = false;
+                    Transform dbgInv;
+                    bool dbgFingerIsChild = false;
+#endif
                     if (finger != mEffector.Ptr()) {
                         Transform inv;
                         if (finger->TransParent() == mEffector.Ptr()) {
                             FastInvert(finger->LocalXfm(), inv);
+#ifdef HX_NATIVE
+                            dbgFingerIsChild = true;
+#endif
                         } else {
                             FastInvert(finger->WorldXfm(), inv);
                             Multiply(mEffector->WorldXfm(), inv, inv);
                         }
                         Multiply(inv, finalXfm, finalXfm);
+#ifdef HX_NATIVE
+                        dbgBackXform = true;
+                        dbgInv = inv;
+                        if (fcTrace) { fcInvX = inv.v.x; fcInvY = inv.v.y; fcInvZ = inv.v.z; }
+#endif
                     }
+#ifdef HX_NATIVE
+                    if (fcTrace) {
+                        fcFinalX = finalXfm.v.x; fcFinalY = finalXfm.v.y; fcFinalZ = finalXfm.v.z;
+                    }
+#endif
+#ifdef HX_NATIVE
+                    {
+                        extern int HamDirector_NativeSetFrameCount();
+                        static int sBackLog = 0;
+                        const char *bp = PathName(this);
+                        bool bMain = bp && strstr(bp, "main.milo") && !strstr(bp, "backup");
+                        bool bLA = bp && strstr(bp, "bone_L-ankle.ikf");
+                        if (sBackLog < 40 && bMain && bLA
+                            && HamDirector_NativeSetFrameCount() > 800) {
+                            sBackLog++;
+                            const Transform &fingW = finger->WorldXfm();
+                            const Transform &fingL = finger->LocalXfm();
+                            const Transform &effW = mEffector->WorldXfm();
+                            RndTransformable *fp = finger->TransParent();
+                            fprintf(stderr,
+                                "DC3_IK_DIAG BackXform[%d] f=%d eff=%s\n"
+                                "  q.v=(%.3f,%.3f,%.3f) finalBefore.v=(%.3f,%.3f,%.3f)\n"
+                                "  finger=%s fingerW.v=(%.3f,%.3f,%.3f) fingerL.v=(%.3f,%.3f,%.3f)\n"
+                                "  fingerParent=%s isEffChild=%d backXform=%d\n"
+                                "  effW.v=(%.3f,%.3f,%.3f)\n"
+                                "  inv.v=(%.3f,%.3f,%.3f) inv.m.x=(%.3f,%.3f,%.3f)\n"
+                                "  finalAfter.v=(%.3f,%.3f,%.3f)\n",
+                                sBackLog, HamDirector_NativeSetFrameCount(), bp,
+                                q.v.x, q.v.y, q.v.z,
+                                dbgFinalBefore.v.x, dbgFinalBefore.v.y, dbgFinalBefore.v.z,
+                                finger->Name(),
+                                fingW.v.x, fingW.v.y, fingW.v.z,
+                                fingL.v.x, fingL.v.y, fingL.v.z,
+                                fp ? fp->Name() : "<null>",
+                                (int)dbgFingerIsChild, (int)dbgBackXform,
+                                effW.v.x, effW.v.y, effW.v.z,
+                                dbgInv.v.x, dbgInv.v.y, dbgInv.v.z,
+                                dbgInv.m.x.x, dbgInv.m.x.y, dbgInv.m.x.z,
+                                finalXfm.v.x, finalXfm.v.y, finalXfm.v.z);
+                            // Walk the effector's parent chain to find where the
+                            // large venue-world placement (X~55) enters. Xbox
+                            // ground truth: ankle effector world ~(0.1,0,0) i.e.
+                            // CHARACTER-LOCAL; native is venue-world (X~55).
+                            fprintf(stderr, "  PARENTCHAIN:");
+                            RndTransformable *pc = mEffector.Ptr();
+                            for (int depth = 0; pc && depth < 10; depth++) {
+                                const Transform &pw = pc->WorldXfm();
+                                const Transform &pl = pc->LocalXfm();
+                                fprintf(stderr,
+                                    " [%s W=(%.2f,%.2f,%.2f) L=(%.2f,%.2f,%.2f)]",
+                                    pc->Name() ? pc->Name() : "?",
+                                    pw.v.x, pw.v.y, pw.v.z,
+                                    pl.v.x, pl.v.y, pl.v.z);
+                                pc = pc->TransParent();
+                            }
+                            fprintf(stderr, "\n");
+                        }
+                    }
+#endif
 
                     if (mOther) {
                         mEffector->SetWorldXfm(finalXfm);
@@ -491,6 +807,51 @@ void HamIKEffector::Poll() {
 
 
                     mEffector->SetWorldXfm(finalXfm);
+#ifdef HX_NATIVE
+                    if (fcTrace) {
+                        extern int HamDirector_NativeSetFrameCount();
+                        // Post-write world Z of the ankle and toe (the rendered result).
+                        // mEffector is the L-ankle bone here. Toe via Dir() lookup,
+                        // matching the ChainZ diag bone names.
+                        float wroteAnkleZ = mEffector->WorldXfm().v.z;
+                        float wroteAnkleX = mEffector->WorldXfm().v.x;
+                        float wroteAnkleY = mEffector->WorldXfm().v.y;
+                        ObjectDir *fcd = Dir();
+                        float toeZ = -999, toeX = -999, toeY = -999;
+                        RndTransformable *toe = fcd
+                            ? fcd->Find<RndTransformable>("bone_L-toe.mesh", false)
+                            : nullptr;
+                        if (toe) {
+                            const Transform &tw = toe->WorldXfm();
+                            toeZ = tw.v.z; toeX = tw.v.x; toeY = tw.v.y;
+                        }
+                        // ONE consolidated, frame-tagged line: the full chain.
+                        fprintf(stderr,
+                            "DC3_FCHAIN f=%d"
+                            " neutral=(%.3f,%.3f,%.3f)"
+                            " eff=(%.3f,%.3f,%.3f)"
+                            " finger=(%.3f,%.3f,%.3f)"
+                            " clampF=%.4f totWin=%.4f totWout=%.4f"
+                            " q.v=(%.3f,%.3f,%.3f)"
+                            " effW=(%.3f,%.3f,%.3f)"
+                            " fingerW=(%.3f,%.3f,%.3f)"
+                            " inv=(%.3f,%.3f,%.3f)"
+                            " finalXfm=(%.3f,%.3f,%.3f)"
+                            " => ankleW=(%.3f,%.3f,%.3f) toeW=(%.3f,%.3f,%.3f)\n",
+                            HamDirector_NativeSetFrameCount(),
+                            fcNeutralX, fcNeutralY, fcNeutralZ,
+                            fcEffX, fcEffY, fcEffZ,
+                            fcFingerX, fcFingerY, fcFingerZ,
+                            fcClampFactor, fcTotalWeightIn, totalWeight,
+                            fcQvX, fcQvY, fcQvZ,
+                            fcEffWX, fcEffWY, fcEffWZ,
+                            fcFingerWX, fcFingerWY, fcFingerWZ,
+                            fcInvX, fcInvY, fcInvZ,
+                            fcFinalX, fcFinalY, fcFinalZ,
+                            wroteAnkleX, wroteAnkleY, wroteAnkleZ,
+                            toeX, toeY, toeZ);
+                    }
+#endif
                 }
             }
         }
