@@ -152,7 +152,7 @@ Select an object from the left sidebar to begin diffing. Changes to source files
 Native Port
 ===========
 
-A native x86_64 Linux port lives in `native/`. It renders the game via WebGPU (Dawn) instead of Xbox 360 DX9, with real audio playback, DTA script execution, and the full UI flow. An Emscripten/WASM build is also wired up (`scripts/build/web.sh`).
+A native x86_64 Linux port lives in `native/`. It renders the game via WebGPU (Dawn) instead of Xbox 360 DX9, with real audio playback, DTA script execution, and the full UI flow. An Emscripten/WASM build is also wired up (`scripts/web/build.sh`).
 
 Building
 --------
@@ -167,8 +167,8 @@ Requires extracted game assets in `orig-assets/` (see [native port status](docs/
 Web build:
 
 ```sh
-scripts/build/web.sh
-python3 native/web/server.py --port 8421
+scripts/web/build.sh                       # dual release/debug deploy
+python3 native/web/server.py --port 8420   # / = release, /?debug=true = debug
 ```
 
 Debug Overlay

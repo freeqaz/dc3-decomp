@@ -57,14 +57,14 @@ Use `scripts/setup_worktree.sh <path> <branch>` to create worktrees with a worki
 - `include/` - Headers
 - `native/` - Native port (x86_64 Linux, WebGPU renderer)
   - Note: You must skip the sandbox for GPU access.
-  - **Web build**: `scripts/build/web.sh` — builds the Emscripten/WASM port and deploys to `native/web/build/`. Dev server: `python3 native/web/server.py --port 8421`
+  - **Web build**: `scripts/web/build.sh` — the one canonical web build script (mirrors rb3's). Builds the Emscripten/WASM port and dual-deploys `release/` (`-g0` stripped, cached immutable) + `debug/` (`-g2`, no-store) to `native/web/build/`. Flags: `--release`/`--debug`/`--both`/`--reconfigure`. (`scripts/build/web.sh` and `native/web/build.sh` are back-compat delegators.) Dev server: `python3 native/web/server.py --port 8420`; `http://localhost:8420/` loads release, `?debug=true` loads debug.
 - `objdiff.json` - Project config for objdiff
 
 ## Shared Engine
 
 DC3's native port consumes the shared **`../milo-native-engine`** repo (sibling at `/home/free/code/milohax/milo-native-engine`) — a game-agnostic LP64 modern-C++ runtime that owns gfx (WebGPU), audio (miniaudio/FFmpeg), input, file I/O, the host-STL shim, and POSIX impls of the `os/` interfaces. As of Phase 0, **all four native consumers — `dc3-native`, `milo-viewer`, `render-test`, `milo-tests` — link `libmilo-engine.a`** (built via `add_subdirectory(${MILO_ENGINE_PATH})`). `milo-tests` passes **371/371** against the engine.
 
-The engine is pulled in with a soft SHA pin: `MILO_ENGINE_PIN` in **`native/CMakeLists.txt`** (currently `9a58e86`); a mismatch with the engine's `git HEAD` warns but never fails. Bump it via `scripts/bump-engine.sh` when an engine change lands canonical. Engine roadmap/status: `../milo-native-engine/README.md` and `rb3/docs/native/NATIVE_PORT_ROADMAP.md`.
+The engine is pulled in with a soft SHA pin: `MILO_ENGINE_PIN` in **`native/CMakeLists.txt`** (currently `8282103`); a mismatch with the engine's `git HEAD` warns but never fails. Bump it via `scripts/bump-engine.sh` when an engine change lands canonical. Engine roadmap/status: `../milo-native-engine/README.md` and `rb3/docs/native/NATIVE_PORT_ROADMAP.md`.
 
 ## Assets
 ./orig-assets/ and ./orig-assets/extracted/ contain DC3 game assets.

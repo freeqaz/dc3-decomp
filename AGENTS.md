@@ -55,7 +55,7 @@ Use `scripts/setup_worktree.sh <path> <branch>` to create worktrees with a worki
 - `include/` - Headers
 - `native/` - Native port (x86_64 Linux, WebGPU renderer)
   - Note: You must skip the sandbox for GPU access.
-  - **Web build**: `scripts/build/web.sh` — builds the Emscripten/WASM port and deploys to `native/web/build/`. Dev server: `python3 native/web/server.py --port 8421`
+  - **Web build**: `scripts/web/build.sh` — the one canonical web build script (mirrors rb3's). Builds the Emscripten/WASM port and dual-deploys `release/` (`-g0` stripped, cached immutable) + `debug/` (`-g2`, no-store) to `native/web/build/`. Flags: `--release`/`--debug`/`--both`/`--reconfigure`. (`scripts/build/web.sh` and `native/web/build.sh` are back-compat delegators.) Dev server: `python3 native/web/server.py --port 8420`; `http://localhost:8420/` loads release, `?debug=true` loads debug.
 - `objdiff.json` - Project config for objdiff
 
 ## Assets

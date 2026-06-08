@@ -404,7 +404,7 @@ def main():
 
     if not os.path.isdir(BUILD_DIR):
         print(f"Build directory not found: {BUILD_DIR}")
-        print("Run native/web/build.sh first.")
+        print("Run scripts/web/build.sh first.")
         sys.exit(1)
 
     print("DC3 Web Dev Server")

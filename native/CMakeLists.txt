@@ -224,7 +224,7 @@ endif()
 # ============================================================================
 set(MILO_ENGINE_PATH "${CMAKE_SOURCE_DIR}/../../milo-native-engine"
     CACHE PATH "Path to milo-native-engine checkout")
-set(MILO_ENGINE_PIN "12455b0afd678f9610216f9ef2b29b58378e57f5"
+set(MILO_ENGINE_PIN "828210378b5aad199d561c323767346d24f90250"
     CACHE STRING "Engine commit SHA verified against")
 if(EXISTS "${MILO_ENGINE_PATH}/.git")
     execute_process(COMMAND git rev-parse HEAD
@@ -1423,6 +1423,33 @@ target_compile_definitions(dc3-web PRIVATE
 )
 
 target_link_libraries(dc3-web PRIVATE imgui)
+
+# ============================================================================
+# Web release/debug split (mirrors rb3's RB3_WEB_RELEASE). Default OFF = debug:
+# the engine helper's -O0 -g2 gives debug-friendly stack traces / DWARF, served
+# no-store. `scripts/web/build.sh --release` configures a SEPARATE
+# native/build-web-release/ dir with this ON, which appends -g0 to strip debug
+# info (the major size win) — served immutable + version-busted for fast reloads.
+#
+# Order matters in emcc: later -O / -g override earlier ones, so we append to
+# both compile and link AFTER milo_engine_apply_web_target_options()'s -g2. We
+# keep its -sASSERTIONS=1 / -sSTACK_OVERFLOW_CHECK=2 in place (the matched-fork's
+# missing-stub abort hooks rely on them).
+#
+# DC3_WEB_OPT_LEVEL is opt-in: any -O>0 currently risks the matched-fork's
+# optimizer-driven exception-edge codegen (same brittleness rb3 documents), so
+# the default is O0 — i.e. -g0 strip only, the safe win. No --closure knob: dc3
+# has no pre-js abort-patcher to break (it uses the engine's missing_stubs.js).
+# ============================================================================
+option(DC3_WEB_RELEASE "Size-optimised web release build (strip debug info)" OFF)
+set(DC3_WEB_OPT_LEVEL "O0" CACHE STRING
+    "emcc -O level for dc3-web release builds (O0/Oz/Os/O3/O2/O1)")
+set_property(CACHE DC3_WEB_OPT_LEVEL PROPERTY STRINGS O0 Oz Os O3 O2 O1)
+if(DC3_WEB_RELEASE)
+    message(STATUS "dc3-web: RELEASE strip + opt build (-${DC3_WEB_OPT_LEVEL} -g0)")
+    target_compile_options(dc3-web PRIVATE -${DC3_WEB_OPT_LEVEL} -g0)
+    target_link_options(dc3-web PRIVATE -${DC3_WEB_OPT_LEVEL} -g0)
+endif()
 
 else() # NOT EMSCRIPTEN — native targets
 

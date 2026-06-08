@@ -42,7 +42,7 @@ The web port compiles the same codebase as the desktop native port, with platfor
 | File I/O | Disk reads | MEMFS (assets bundled at build) |
 | Main loop | `while (!shouldClose)` in `App::Run()` | `emscripten_set_main_loop(mainLoop, 0, true)` (rAF-synced) |
 | Threading | `std::thread` (reader thread for skeleton) | Single-threaded (stubs) |
-| Build | `cmake --build native/build` | `scripts/build/web.sh` (emcmake) |
+| Build | `cmake --build native/build` | `scripts/web/build.sh` (emcmake) |
 
 Both desktop and web define `HX_NATIVE`. Platform-specific code uses `#ifdef __EMSCRIPTEN__`.
 
@@ -307,20 +307,22 @@ grep -E "skeleton|gesture|dummy|FillDummy|InControllerMode" log.txt
 ## Web Build System
 
 ```bash
-# Full build (configure + compile + deploy)
-scripts/build/web.sh
-
-# Manual steps
-emcmake cmake -S native -B native/build-web
-cmake --build native/build-web -- -j$(nproc)
-cp native/build-web/dc3-web.{js,wasm} native/web/build/
+# Full build (configure + compile + dual deploy). One canonical script; mirrors
+# rb3's scripts/web/build.sh. (scripts/build/web.sh + native/web/build.sh delegate here.)
+scripts/web/build.sh                # build BOTH release + debug (default)
+scripts/web/build.sh --debug        # debug only (-g2, fast iteration / DWARF)
+scripts/web/build.sh --release      # release only (-g0 stripped, brotli/gzip)
+scripts/web/build.sh --reconfigure  # force a fresh cmake configure
 
 # Dev server
 python3 native/web/server.py --port 8420
-# Opens at http://localhost:8420
+# http://localhost:8420/            → release (cached immutable — fast reloads)
+# http://localhost:8420/?debug=true → debug (no-store)
 ```
 
-Build output: `native/build-web/dc3-web.js` + `dc3-web.wasm`, deployed to `native/web/build/`.
+Build dirs: `native/build-web/` (debug, `DC3_WEB_RELEASE=OFF`) and
+`native/build-web-release/` (release, `DC3_WEB_RELEASE=ON`). Output deploys to
+`native/web/build/{release,debug}/dc3-web.{js,wasm}` (+ `.br`/`.gz`).
 
 ## Known Divergences from Desktop
 
