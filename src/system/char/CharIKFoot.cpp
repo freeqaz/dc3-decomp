@@ -76,6 +76,19 @@ void CharIKFoot::PollDeps(std::list<Hmx::Object *> &l1, std::list<Hmx::Object *>
 void CharIKFoot::Poll() {
 #ifdef HX_NATIVE
     {
+        // EXPERIMENT (DC3_IK_CHARFOOT_SKIP=1): skip CharIKFoot entirely. DoFSM
+        // writes the foot bone LOCAL z = mFinger (toe-target) world z, and a local
+        // write SURVIVES the render recompute (unlike HamIKEffector's SetWorldXfm).
+        // So this is the proximate driver of the rendered foot Z. Disambiguates
+        // whether CharIKFoot (fed a sunk toe-target) sinks the foot, vs the raw
+        // anim. Remove before shipping.
+        static int sCharFootSkip = -1;
+        if (sCharFootSkip < 0)
+            sCharFootSkip = getenv("DC3_IK_CHARFOOT_SKIP") ? 1 : 0;
+        if (sCharFootSkip)
+            return;
+    }
+    {
         static int sCharIKFootPollLog = 0;
         if (sCharIKFootPollLog < 5) {
             sCharIKFootPollLog++;

@@ -795,6 +795,24 @@ void HamIKEffector::Poll() {
                     }
 #endif
 
+#ifdef HX_NATIVE
+                    // EXPERIMENT (DC3_IK_FOOT_SKIP=1): skip the ankle IK write
+                    // entirely so the ankle keeps its PoseMeshes (animation) world.
+                    // Disambiguates: does the IK SINK an anim-planted foot, or is
+                    // the anim pose itself sunk? Remove before shipping.
+                    {
+                        static int sFootSkip = -1;
+                        if (sFootSkip < 0)
+                            sFootSkip = getenv("DC3_IK_FOOT_SKIP") ? 1 : 0;
+                        static int sPelvisSkip = -1;
+                        if (sPelvisSkip < 0)
+                            sPelvisSkip = getenv("DC3_IK_PELVIS_SKIP") ? 1 : 0;
+                        if (sFootSkip && t == kEffectorTypeAnkle)
+                            goto done;
+                        if (sPelvisSkip && t == kEffectorTypePelvis)
+                            goto done;
+                    }
+#endif
                     if (mOther) {
                         mEffector->SetWorldXfm(finalXfm);
                         mOther->Poll();

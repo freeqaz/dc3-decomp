@@ -440,3 +440,89 @@ Both require Xbox X/Y ground truth on the neutral frame (current Xenia bone-walk
 to verify. Left as diagnosis; `HamIKEffector::Poll` confirmed unchanged at 99.9% (HX_NATIVE probes
 only). New reusable probes: `DC3_IK_DIAG BackXform` / `PARENTCHAIN` (HamIKEffector.cpp), `NEUTRALCHAIN`
 + vec NeutralWXfm (HamIKSkeleton.cpp).
+
+---
+
+## 2026-06-08 — DECISIVE: feet-in-floor is an ANIMATION-pose bug, NOT an IK bug (whole prior theory REFUTED)
+
+**The single most important result in this doc.** Every theory above (empty constraints, dirty
+cascade, neutral-frame contamination, back-transform explosion, the two candidate fixes
+CharLocalIKScope + re-derive-neutral) was chasing a computation the renderer **throws away**. The
+rendered foot does not depend on the IK at all.
+
+### Method — the validation gate
+
+`native/tests/test_gameplay_telemetry.cpp::FeetNotBelowFloorDuringGameplay` runs the full headless
+boot→YMCA-gameplay path (`DC3_GAMEPLAY_TESTS=1 native/build/milo-tests`), parses `DC3_TEL`, and
+asserts every gameplay sample has toe world Z ≥ −2.0. Baseline: **L-toe −4.20 (ankle 0.20),
+R-toe −4.10; ~700/737 samples below floor.** No GPU/Xenia needed. (Other 47 GameplayTelemetryTest
+cases pass.) This is a far faster, deterministic gate than the Xenia GPU loop.
+
+### The kill shot — toe Z is INVARIANT under every IK on/off combination
+
+Added off-by-default `#ifdef HX_NATIVE` skip switches and measured worst toe Z (one build, env-switched):
+
+| config | env | worst toe Z |
+|---|---|---|
+| baseline (matched stamp) | `DC3_IK_NEUTRAL=stamp` | −4.10 |
+| neutral re-rooted char-local (cand #2, X/Y-zero) | `DC3_IK_NEUTRAL=local` | −4.20 |
+| skip ankle HamIKEffector write | `DC3_IK_FOOT_SKIP=1` | −4.20 |
+| skip pelvis HamIKEffector write | `DC3_IK_PELVIS_SKIP=1` | −4.20 |
+| skip BOTH leg HamIKEffectors | `DC3_IK_FOOT_SKIP=1 DC3_IK_PELVIS_SKIP=1` | −4.20 |
+| skip CharIKFoot::Poll | `DC3_IK_CHARFOOT_SKIP=1` | −4.20 |
+| **skip ALL foot IK (pure anim)** | all three =1 | **−4.20** |
+
+**Toe Z is identical (−4.2) whether the IK computes a sane value, a garbage value, or runs not at
+all.** The foot follows the **animation/skinning pose**, period. This includes `CharIKFoot`, whose
+`DoFSM` writes the foot bone's *local* xfm (`CharIKFoot.cpp:95,109` — a local write that *would*
+survive render) — and even disabling it changes nothing, because it just copies the already-sunk
+toe-target (`mFinger`) Z onto the foot.
+
+### Why the IK can't matter — `SetWorldXfm` never writes the local (confirmed)
+
+`RndTransformable::SetWorldXfm` (`Trans.cpp:408-415`) sets `mWorldXfm`, clears `mDirty`, cascades
+`SetDirty` to children — but does **not** update `mLocalXfm`. The pelvis HamIKEffector polls LAST
+and re-dirties the ankle subtree; at render `WorldXfm_Force` (`Trans.cpp:655`) recomputes the ankle
+from its **stale anim `mLocalXfm`**, discarding every `mEffector->SetWorldXfm(finalXfm)` the IK
+wrote. Captured live (`DC3_FCHAIN`, frame 801): the IK writes an exploded ankle/toe world (~150–220)
+yet telemetry reads the sane sunk anim value (−4.2). The doc's earlier hope that "fixing the input
+frame lets the same cascade preserve a sane ankle" is **false**: the cascade discards the IK write
+unconditionally (sane or not), because the local is never reconciled.
+
+### Corrected root cause
+
+The animated/skinned foot is ~4u too low in gameplay: rest ankle 4.39 / toe 0.01 → gameplay ankle
+~0.2 / toe ~−4.2 (a uniform ~4.2 drop; pelvis drops 42.5→34.8, knee absorbs ~3.5). The IK is
+*supposed* to plant the foot during the crouch but its world-write is structurally discarded on
+native. Xbox clamp-cave ground truth still holds and is now the key asymmetry: **Xbox's toe-target
+(`eff`) sits at the floor (effZ ≈ 0.88) while native's sinks to −4.** So the divergence lives in the
+**animated foot / toe-target itself**, upstream of all IK.
+
+This strongly resembles the **rb3 char-skinning fix** (wrong skeleton/bind → mis-posed bones;
+`rb3 acc'd` + engine `12455b0`, `RebindOutfitBonesToOwnSkeleton`) — the same shared Milo char engine,
+the same class of native skeleton/bind/LP64 divergence. That is the leading hypothesis for the next
+pass.
+
+### What changed in the tree (this session) — diagnostics only, ZERO default behavior change
+
+All `#ifdef HX_NATIVE`, all off by default (default native behavior byte-identical to baseline; Wii/Xbox
+match build untouched):
+- `HamIKEffector.cpp`: `DC3_IK_FOOT_SKIP` / `DC3_IK_PELVIS_SKIP` — skip the ankle/pelvis IK world-write
+  (`goto done`) to prove IK-irrelevance.
+- `CharIKFoot.cpp`: `DC3_IK_CHARFOOT_SKIP` — early-return `Poll`.
+- `HamIKSkeleton.cpp`: `DC3_IK_NEUTRAL=local` — opt-in char-local re-root of the neutral (kills the
+  q.v=neutral+eff doubling / back-transform explosion; makes the *discarded* IK computation sane —
+  no rendered effect). Default = the original matched stamp.
+
+### Next steps (next pass)
+
+1. **Trace the sunk toe-target/foot on native.** Why is `spot_*-toe.trans` / `bone_*-toe.mesh` world
+   Z = −4 in gameplay? Walk its parent chain + bind; check the skeleton/bind path against the rb3
+   `RebindOutfitBonesToOwnSkeleton` fix and the gender-bind investigation (same engine).
+2. **Confirm vs Xbox** whether the pelvis genuinely crouches to ~35 on Xbox (then the feet must be
+   planted by surviving IK) or stays ~42 (then native's anim over-crouches). This is the only place
+   the **Xenia bone-world-Z read offset (P0 blocker)** still matters — the clamp-cave already gives
+   the toe-target (floor) but not the live leg chain.
+3. If the anim is faithful and Xbox relies on foot IK that survives, the native fix is a *survivable*
+   foot-plant (write the ankle **local**, fed a floor toe-target) — NOT any of the world-write IK
+   tweaks tried so far.

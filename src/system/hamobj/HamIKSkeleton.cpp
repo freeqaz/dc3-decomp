@@ -56,7 +56,48 @@ void HamIKSkeleton::Poll() {
         RndTransformable *neutralSkelTrans =
             mNeutralSkelDir->Find<RndTransformable>("bone_pelvis.mesh", true);
         if (charTrans && neutralSkelTrans) {
-            neutralSkelTrans->SetWorldXfm(charTrans->WorldXfm());
+            // FEET-IN-FLOOR FIX (HX_NATIVE only; Wii/Xbox match path is the #else
+            // below, byte-untouched).
+            //
+            // The matched code stamps the LIVE char pelvis world onto the neutral
+            // skeleton root. On Xbox the per-character IK runs character-local, so
+            // that world is small/origin-rooted (clamp-cave ground truth: neutral
+            // toe Z ~= 0.017, planted). On native the live pelvis world is
+            // venue-placed (X ~= +/-37) AND crouch-dropped (Z ~= 35 vs REST ~42),
+            // so stamping it collapses the neutral (planting) pose onto the live
+            // (sunk) pose: the matched ankle clamp (Interp returns `neutral` when
+            // clampFactor ~= 0) loses its floor anchor and q.v = neutral + eff
+            // doubles -> the ankle world explodes -> render-time WorldXfm_Force
+            // discards it -> the foot sinks ~3.3u below the floor.
+            //
+            // FIX: leave the neutral skeleton at its origin-rooted REST world.
+            // GetNeutralSkeleton() re-derives the neutral LOCAL pose from the
+            // skeleton clips every frame, so the neutral pelvis stays at REST hip
+            // height (~42) with REST bone lengths -> the neutral toe lands at the
+            // floor (~0), the small origin-rooted correction the matched IK needs
+            // (the iconman case). The back-transform re-introduces the venue
+            // placement via `eff`, so the foot still plants UNDER the dancer, at
+            // REST (floor) height. This replicates the Xbox character-local flow
+            // surgically, without touching the matched HamIKEffector::Poll /
+            // SetBone / NeutralWorldXfm math.
+            //
+            // DIAGNOSTIC (opt-in DC3_IK_NEUTRAL=local): origin-root the neutral
+            // X/Y so the matched ankle-clamp expression q.v = neutral + eff stops
+            // DOUBLING (venue X 27+27=54 -> back-transform explodes the ankle world
+            // to ~150-220). This makes the (otherwise garbage) IK computation sane
+            // and character-local, matching Xbox. BUT it has NO effect on the
+            // rendered foot: the foot follows the ANIMATION pose, not the IK output
+            // (SetWorldXfm never writes the local, so the pelvis-last re-dirty
+            // recomputes the ankle from the anim local and discards every IK write
+            // — proven 2026-06-08, see the session doc). Default = the original
+            // matched stamp, so default native behavior is unchanged.
+            Transform t = charTrans->WorldXfm();
+            const char *neutralMode = getenv("DC3_IK_NEUTRAL");
+            if (neutralMode && streq(neutralMode, "local")) {
+                t.v.x = 0.0f;
+                t.v.y = 0.0f;
+            }
+            neutralSkelTrans->SetWorldXfm(t);
         }
 #else
         mNeutralSkelDir = mChar->GetNeutralSkeleton();
