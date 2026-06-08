@@ -324,6 +324,44 @@ Build dirs: `native/build-web/` (debug, `DC3_WEB_RELEASE=OFF`) and
 `native/build-web-release/` (release, `DC3_WEB_RELEASE=ON`). Output deploys to
 `native/web/build/{release,debug}/dc3-web.{js,wasm}` (+ `.br`/`.gz`).
 
+### HTTP caching & cache-busting
+
+The goal: a reload of an **unchanged** release build is instant — the browser
+reuses the already-downloaded *and* already-compiled wasm — but the instant you
+rebuild, the next load fetches the fresh bytes, with no manual cache clear. Three
+pieces (`server.py` + `index.html`) make that work:
+
+1. **`release/*` is served immutable** — `Cache-Control: public, max-age=31536000,
+   immutable` (`server.py:_cache_control_for_path`). The browser caches the 16 MB
+   wasm for a year and won't even revalidate on reload (served `fromDiskCache`).
+   Because browsers key their *compiled* WebAssembly module cache on the URL too,
+   this also skips recompiling the module — the big reload win.
+
+2. **The cache key is the URL, which carries a content-derived version token.**
+   Before loading release, `index.html` does `fetch('/api/version')` and appends
+   `?v=<token>` to the wasm + js URLs (`loadBuild('release/', version)` →
+   `release/dc3-web.wasm?v=<token>`). Since `immutable` means "this exact URL's
+   bytes never change," a *different* `?v=` is a *different* cache entry.
+
+3. **The token is `<assets-mtime>-<release-wasm-mtime>`** (`server.py:_serve_version`,
+   served `no-store` so the token itself is never stale). Rebuilding the release
+   wasm bumps its mtime → new token → new `?v=` → a URL the browser has never
+   seen → it downloads + compiles the new build. Rebuild nothing → same mtime →
+   same URL → instant from cache. (Re-extracting game assets busts it too, via the
+   first token component.)
+
+So **busting is automatic and content-driven**: `scripts/web/build.sh` overwrites
+`release/dc3-web.wasm`, its mtime moves, `/api/version` returns a new token, and
+the next page load requests a URL nothing has cached. No version to bump by hand,
+no `Ctrl-Shift-R`. It's the standard fingerprinted-asset pattern, with an mtime
+in place of a content hash (cheaper, monotonic; a no-op rebuild or a bare `touch`
+also busts — fine for a local dev server).
+
+**`debug/` needs no busting** — it's served `no-store` (never cached), so
+`?debug=true` always gets the freshest bytes (right for fast iteration); no `?v=`
+is appended. The `.br`/`.gz` precompressed variants still work under busting: the
+server strips the `?v=` query before matching the `.br`/`.gz` suffix.
+
 ## Known Divergences from Desktop
 
 | Area | Desktop | Web | Impact |

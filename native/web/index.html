@@ -284,7 +284,7 @@
                         return;
                     }
                     console.error('WASM_JS_ERROR: ' + e);
-                    status.textContent = 'No build deployed — run native/web/build.sh';
+                    status.textContent = 'No build deployed — run scripts/web/build.sh';
                     status.className = 'error';
                 };
                 document.body.appendChild(script);
