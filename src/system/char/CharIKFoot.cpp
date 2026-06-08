@@ -120,6 +120,18 @@ void CharIKFoot::DoFSM(Character *mMe, Transform &tf) {
         deltasecs = 0.0f;
     tf.m = mFinger->WorldXfm().m;
     tf.v.z = mFinger->WorldXfm().v.z;
+#ifdef HX_NATIVE
+    // EXPERIMENT (DC3_IK_FOOTPLANT=1): clamp the foot IK GOAL Z to the floor.
+    // CharIKHand::Poll (called from CharIKFoot::Poll) solves the leg to reach this
+    // target and writes the leg bone LOCALs (which SURVIVE render, unlike
+    // HamIKEffector's SetWorldXfm). Tests whether a floor-clamped goal re-plants
+    // the rendered foot during the dance crouch (the toe-target sinks to -4 with
+    // the over-extended leg). Remove before shipping.
+    if (getenv("DC3_IK_FOOTPLANT")) {
+        if (tf.v.z < 0.0f)
+            tf.v.z = 0.0f;
+    }
+#endif
     mFootPosition.z = tf.v.z;
     float f10;
     bool b2 = false;

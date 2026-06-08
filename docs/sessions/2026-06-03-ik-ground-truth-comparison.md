@@ -526,3 +526,68 @@ match build untouched):
 3. If the anim is faithful and Xbox relies on foot IK that survives, the native fix is a *survivable*
    foot-plant (write the ankle **local**, fed a floor toe-target) — NOT any of the world-write IK
    tweaks tried so far.
+
+---
+
+## 2026-06-08 (cont.) — AIRTIGHT: ALL foot-IK is world-write (discarded on BOTH platforms) ⇒ it's a NATIVE ANIM-POSE divergence
+
+Pushed the 2026-06-08 finding to a complete, self-consistent root cause. Three new experiments, all
+off-by-default `#ifdef HX_NATIVE` diagnostics (default behavior byte-identical; GameplayTelemetryTest
+47/48 unchanged):
+
+### (a) The pelvis-drop is in `bone_pelvis.mesh` LOCAL Z, not the facing channel
+`PARENTCHAIN` (HamIKEffector.cpp:781) walked the full leg→root chain in gameplay (director f=801):
+| bone (local Z) | iconman (CLEAN, planted) | player0/1 (SUNK) |
+|---|---|---|
+| root (iconman / playerN) | 0.00 | 0.11 (on floor ✓) |
+| **bone_pelvis.mesh** | **42.51** | **34.49** |
+| → ankle.mesh world Z | 4.39 | ~0.0 |
+| → toe world Z | 0.01 | ~−4 |
+
+The dancer's `bone_pelvis.mesh` local Z is ~8u lower than iconman's, and the leg then over-extends
+straight down (knee local rotation barely flexes) so ankle→0, toe→−4. `CharServoBone::MoveToFacing`
+was RULED OUT: probed `*mFacingPos` = (small X, small Y, **Z=0.000**) for every char — the facing
+channel only nudges X/Y on-stage, it does not drop the pelvis. (Note: `CharServoBone`'s `mPelvis`
+"bone_pelvis" servo node is a *different* transform at local Z=0 than the skeleton `bone_pelvis.mesh`
+in the render chain.)
+
+### (b) The ENTIRE foot-IK subsystem is world-write ⇒ discarded; confirmed by skip + clamp tests
+- `HamIKEffector::Poll` writes `mEffector->SetWorldXfm(finalXfm)`.
+- `CharIKHand::Poll` (the leg solver behind `CharIKFoot`) writes `mHand->SetWorldXfm(...)` **4× and
+  zero local writes** (CharIKHand.cpp:131,160,164,167).
+- `RndTransformable::SetWorldXfm` (Trans.cpp:408) never writes `mLocalXfm`; the pelvis effector polls
+  LAST and re-dirties the leg; render `WorldXfm_Force` (Trans.cpp:655) recomputes every bone from its
+  stale anim local ⇒ every IK write is discarded.
+- Confirmed empirically: clamping the `CharIKFoot::DoFSM` foot GOAL to the floor
+  (`DC3_IK_FOOTPLANT=1`, CharIKFoot.cpp) changes the rendered toe by **0.0** — the leg solver's
+  world-write does not survive, so even a perfect floor goal can't plant the foot.
+
+### (c) THE LOGICAL KILL SHOT — it must be a native ANIM divergence
+This engine is matched (Wii/Xbox decomp): `SetWorldXfm` (no local writeback), the pelvis-last poll
+order, and the `WorldXfm_Force` recompute-from-local cascade are all the SAME on the real Xbox 360.
+**So the IK is discarded on Xbox too** — yet Xbox's foot is planted (visual ground truth). Therefore
+**Xbox plants the foot via its ANIMATION POSE**, and **native's animation pose diverges** (sinks).
+There is no surviving IK on either platform to "fix"; the bug is that native's animated dancer pose
+puts the pelvis ~8u low with an unbent, over-extended leg, where Xbox's keeps the foot on the floor.
+(Corollary: the earlier "make the foot IK survive / survivable foot-plant" idea is a band-aid that
+would DIVERGE from Xbox — Xbox doesn't survive-IK either. Do not pursue it as the faithful fix.)
+
+### Corrected next steps (supersede the previous list)
+1. **Verify the dancer's POSE-channel decompression on native** — specifically the `bone_pelvis.mesh`
+   POSITION channel and the `bone_*-knee`/leg ROTATION channels (CharBonesSamples::EvaluateChannel,
+   CharBones::ScaleAdd, CharBonesMeshes::PoseMeshes). The doc earlier verified only the *ankle
+   rotation* channel as bit-exact; the pelvis-position and knee-rotation channels are UNVERIFIED and
+   are the prime suspects (a position/rotation channel-stride or LP64 read divergence would drop the
+   pelvis and straighten the leg). The dancer's pelvis local Z is ~constant 34.5 (barely animated),
+   which is itself suspicious — a real dance crouch would bounce.
+2. **Xbox ground truth (the one place the Xenia P0 bone-world-Z read still matters):** the dancer's
+   `bone_pelvis.mesh` / `bone_*-knee` LOCAL during the crouch. If Xbox pelvis ≈ 42 → native
+   over-drops the pelvis (position-channel bug). If Xbox pelvis ≈ 34.5 with a bent knee → native's
+   knee-rotation channel fails to flex (rotation-channel bug). Either way it is a pose-channel fix.
+3. The fix will be in the native pose/skinning pipeline (a faithful channel decode), NOT in any IK.
+
+### Diagnostics added this session (committed; all `#ifdef HX_NATIVE`, off by default)
+`DC3_IK_FOOT_SKIP` / `DC3_IK_PELVIS_SKIP` (HamIKEffector), `DC3_IK_CHARFOOT_SKIP` +
+`DC3_IK_FOOTPLANT` (CharIKFoot), `DC3_IK_NEUTRAL=local` (HamIKSkeleton), and `DC3_IK_DIAG Facing`
+(CharServoBone::MoveToFacing). Plus the pre-existing `ChainZ` / `PARENTCHAIN` / `BackXform` / `FCHAIN`
+probes (gated on `DC3_IK_DIAG`; ChainZ needs director-frame > 3000 ⇒ MILO_MAX_FRAMES ≈ 20000).

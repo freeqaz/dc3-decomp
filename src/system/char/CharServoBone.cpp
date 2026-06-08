@@ -209,6 +209,24 @@ void CharServoBone::MoveToFacing(Transform &tf) {
         Normalize(tf.m, tf.m);
     }
     tf.v += *mFacingPos;
+#ifdef HX_NATIVE
+    // DIAG (DC3_IK_DIAG): the facing channel positions the char on stage; its Z
+    // should be ~0 (floor plane). If facingPos.z is large-negative on dancers it
+    // is the pelvis-drop root cause (the ~-10u sink). Compare main.milo dancers
+    // vs the clean iconman.
+    if (getenv("DC3_IK_DIAG")) {
+        static int sFacingLog = 0;
+        const char *p = PathName(this);
+        if (sFacingLog < 18 && p && mFacingPos) {
+            sFacingLog++;
+            fprintf(stderr,
+                "DC3_IK_DIAG Facing[%d] self=%s facingPos=(%.3f,%.3f,%.3f) "
+                "facingRot=%.3f pelvisLocalAfter=(%.2f,%.2f,%.2f)\n",
+                sFacingLog, p, mFacingPos->x, mFacingPos->y, mFacingPos->z,
+                mFacingRot ? *mFacingRot : -999.0f, tf.v.x, tf.v.y, tf.v.z);
+        }
+    }
+#endif
 }
 
 void CharServoBone::PollDeps(
