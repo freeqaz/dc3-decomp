@@ -224,7 +224,7 @@ endif()
 # ============================================================================
 set(MILO_ENGINE_PATH "${CMAKE_SOURCE_DIR}/../../milo-native-engine"
     CACHE PATH "Path to milo-native-engine checkout")
-set(MILO_ENGINE_PIN "cfaaa5bc3ddbaaed84f9db6fe6d9517f77e8729c"
+set(MILO_ENGINE_PIN "12455b0afd678f9610216f9ef2b29b58378e57f5"
     CACHE STRING "Engine commit SHA verified against")
 if(EXISTS "${MILO_ENGINE_PATH}/.git")
     execute_process(COMMAND git rev-parse HEAD
@@ -1226,7 +1226,8 @@ if(EMSCRIPTEN)
 # Web-specific platform sources (replace native platform files)
 set(DC3_WEB_CORE_SOURCES
     src/xdk_shims.cpp
-    src/platform/Memory_Native.cpp
+    # Memory_Native.cpp lifted to milo-engine (engine 0.2b drop-xdk graduation);
+    # compiled via DC3_WEB_LIFTED_ENGINE_SOURCES below.
     src/platform/PlatformMgr_Native.cpp
     src/platform/DingoSvr_Native.cpp
     src/platform/SongSortMgr_Native.cpp
@@ -1234,12 +1235,13 @@ set(DC3_WEB_CORE_SOURCES
     # File_Web.cpp / CDReader_Web.cpp / WebAssets.cpp lifted to milo-engine
     # (MILO_BUILD_WEB platform layer, W0).
     src/platform/AsyncFile_Native.cpp
-    src/platform/ThreadCall_Native.cpp
     src/platform/Joypad_Native.cpp
     src/platform/Keyboard_Native.cpp
     src/platform/Synth_Stub.cpp
     src/platform/Skeleton_Native.cpp
     src/platform/GestureMgr_Native.cpp
+    # ThreadCall_Native.cpp lifted to milo-engine (engine 0.2b drop-xdk POSIX
+    # graduation); compiled via DC3_WEB_LIFTED_ENGINE_SOURCES below.
     $<$<BOOL:${ENABLE_NCNN}>:src/pose/PoseEstimator.cpp>
     $<$<BOOL:${ENABLE_NCNN}>:src/pose/PoseTracker.cpp>
     $<$<BOOL:${ENABLE_NCNN}>:src/pose/CameraCapture.cpp>
@@ -1248,10 +1250,10 @@ set(DC3_WEB_CORE_SOURCES
     src/platform/StreamReceiver_Native.cpp
     src/platform/SampleInst_Native.cpp
     src/platform/FxSendNative.cpp
-    src/platform/Rnd_Wgpu.cpp
+    # Rnd_Wgpu.cpp / MeshGpuCache.cpp lifted to milo-engine; compiled via
+    # DC3_WEB_LIFTED_ENGINE_SOURCES below.
     src/platform/MeshFilter.cpp
     src/platform/BoneSetup.cpp
-    src/platform/MeshGpuCache.cpp
     src/platform/MaterialSetup.cpp
     src/platform/Mesh_Wgpu.cpp
     src/platform/TransparentQueue.cpp
@@ -1323,6 +1325,15 @@ set(DC3_WEB_LIFTED_ENGINE_SOURCES
     ${MILO_ENGINE_PATH}/src/platform/GpuDevice_Web.cpp
     ${MILO_ENGINE_PATH}/src/audio/AudioDevice_Web.cpp
     ${MILO_ENGINE_PATH}/src/gfx/ImGuiBackend_Web.cpp
+    # Platform TUs that diverged from the DC3-local copies: source them from the
+    # engine (single source of truth) instead of the stale local duplicates,
+    # which are now deleted. Absolute ${MILO_ENGINE_PATH}/src/... paths are
+    # required — the engine's ${MILO_ENGINE_*_SOURCES} sets are plain set()s in
+    # the engine subdir (no PARENT_SCOPE) and use engine-relative paths.
+    ${MILO_ENGINE_PATH}/src/platform/Memory_Native.cpp
+    ${MILO_ENGINE_PATH}/src/platform/ThreadCall_Native.cpp
+    ${MILO_ENGINE_PATH}/src/platform/MeshGpuCache.cpp
+    ${MILO_ENGINE_PATH}/src/platform/Rnd_Wgpu.cpp
 )
 
 add_executable(dc3-web
@@ -1353,17 +1364,26 @@ target_compile_definitions(dc3-web PRIVATE
     _LIBCPP_ENABLE_CXX17_REMOVED_UNARY_BINARY_FUNCTION
 )
 
+# Engine's src/ root wins FIRST (SYSTEM BEFORE). dc3-web doesn't link
+# libmilo-engine.a (it compiles the engine source set directly via
+# DC3_WEB_ENGINE_SOURCES), so the engine's PUBLIC src include is added here
+# manually. Putting it ahead of ${CMAKE_SOURCE_DIR}/src means any header shared
+# by both trees resolves to the engine's (superset) version — so a stale local
+# copy can never shadow the engine again (the AudioDevice.h break). The diverged
+# shared headers (AudioDevice.h / GpuDevice.h / MeshGpuCache.h / Rnd_Wgpu.h) are
+# additive supersets, so this reorder is behavior-neutral for the byte-identical
+# dups. NOTE: only the engine src/ root is moved to SYSTEM BEFORE (not its
+# include/ STL-shim dir) — dc3-web builds under Emscripten/libc++ and never had
+# the engine include/ on its path; the AudioDevice fix lives entirely in src/.
+target_include_directories(dc3-web SYSTEM BEFORE PRIVATE
+    ${MILO_ENGINE_PATH}/src
+)
 target_include_directories(dc3-web PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/../src
     ${CMAKE_SOURCE_DIR}/../src/system
     ${CMAKE_SOURCE_DIR}/../src/lazer
     ${CMAKE_SOURCE_DIR}/../include
-    # Engine's src/ root — for the headers backing the W0 lift (WebAssets.h
-    # etc.). dc3-web doesn't link libmilo-engine.a (it compiles the engine
-    # source set directly via DC3_WEB_ENGINE_SOURCES), so we have to add the
-    # engine PUBLIC include manually.
-    ${MILO_ENGINE_PATH}/src
 )
 
 ## Non-blocking file loading via JSPI (JavaScript Promise Integration).
@@ -1639,10 +1659,15 @@ target_precompile_headers(render-test PRIVATE
 # ============================================================================
 
 # Common sources/options for export tools (same as milo-viewer minus VideoEncoder and GLFW rendering)
+# Export tools now follow the proven engine-link recipe (dc3-native/milo-viewer/
+# render-test): use the engine-filtered core (_ENGINE drops the 30 platform dups
+# + audio + DataParser), drop the local gfx set entirely, and LINK milo-engine
+# (which provides those gfx/platform TUs). This removes the last consumer of the
+# local platform/gfx .cpp duplicates on the native side, so an engine header
+# change can no longer break these tools via a stale local .cpp body.
 set(DC3_EXPORT_TOOL_SOURCES
     ${DC3_ENGINE_SOURCES}
-    ${DC3_NATIVE_CORE_SOURCES}
-    ${DC3_GFX_SOURCES}
+    ${DC3_NATIVE_CORE_SOURCES_ENGINE}
     ${DC3_EXPORT_SOURCES}
 )
 
@@ -1654,9 +1679,14 @@ set(DC3_EXPORT_TOOL_INCLUDES
     ${CMAKE_SOURCE_DIR}/../src/lazer
     ${CMAKE_SOURCE_DIR}/../include
     ${CMAKE_SOURCE_DIR}/include
+    # Export tools now LINK milo-engine (see DC3_EXPORT_TOOL_SOURCES above); it
+    # provides the gfx/platform TUs and propagates its PUBLIC include dirs. This
+    # explicit engine-src add is redundant but harmless (kept for decomp-header
+    # resolution edge cases, e.g. Rnd_Wgpu.h's `#include "gfx/UniformStructs.h"`).
+    ${MILO_ENGINE_PATH}/src
 )
 
-set(DC3_EXPORT_TOOL_LIBS ${DC3_PLATFORM_LIBS})
+set(DC3_EXPORT_TOOL_LIBS milo-engine imgui ${DC3_PLATFORM_LIBS})
 
 # --- milo-tex-export ---
 add_executable(milo-tex-export
