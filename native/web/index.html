@@ -225,18 +225,80 @@
             // Safety: dismiss after 20s even if video stalls
             setTimeout(function() { if (splashVid) dismissSplash(); }, 20000);
 
-            console.log('LOADING_WASM_JS');
-            var script = document.createElement('script');
-            script.src = 'dc3-web.js';
-            script.onload = function() {
-                console.log('WASM_JS_LOADED');
-            };
-            script.onerror = function(e) {
-                console.error('WASM_JS_ERROR: ' + e);
-                status.textContent = 'Failed to load dc3-web.js — build first (native/web/build.sh)';
-                status.className = 'error';
-            };
-            document.body.appendChild(script);
+            // ── Build selection: release (default, cached) vs debug ──────────
+            // build.sh deploys two variants into sibling subdirs:
+            //   release/ — debug-info stripped + brotli/gzip, served immutable
+            //   debug/   — full -g2 wasm, served no-store (fast iteration)
+            // ?debug=true (or ?debug=1) loads debug and bypasses the HTTP cache;
+            // anything else loads release. Release URLs are version-stamped with
+            // ?v=<token> from /api/version so a rebuilt release wasm busts the
+            // immutable cache (the server keys caching off the /release/ path,
+            // ignoring the query). Falls back to the other variant if one isn't
+            // deployed. No pre-js here, so Module.locateFile is what redirects
+            // emscripten's wasm fetch into the chosen subdir.
+            var dbgParam = new URLSearchParams(location.search).get('debug');
+            var wantDebug = dbgParam !== null &&
+                            dbgParam !== '0' && dbgParam !== 'false' && dbgParam !== 'off';
+
+            function loadBuild(dir, version, isFallback) {
+                var q = (dir === 'release/' && version) ? ('?v=' + encodeURIComponent(version)) : '';
+                var wasmUrl = dir + 'dc3-web.wasm' + q;
+                Module.locateFile = function(path) { return dir + path + q; };
+                // Explicit streaming instantiation (mirrors RB3's rb3_pre.js) of
+                // the version-stamped wasm URL, so a reload of the immutable
+                // release build reuses the cached + already-compiled wasm instead
+                // of re-downloading it (verified fromDiskCache on reload with a
+                // persistent browser profile). Imports pass through unchanged —
+                // emscripten's abort-stubs for --allow-undefined imports stay
+                // intact (DC3 instantiates fine without patching).
+                Module.instantiateWasm = function(imports, successCallback) {
+                    var t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : 0;
+                    function viaArrayBuffer() {
+                        return fetch(wasmUrl)
+                            .then(function(r) { return r.arrayBuffer(); })
+                            .then(function(bytes) { return WebAssembly.instantiate(bytes, imports); })
+                            .then(function(res) { successCallback(res.instance, res.module); });
+                    }
+                    if (typeof WebAssembly.instantiateStreaming === 'function') {
+                        return WebAssembly.instantiateStreaming(fetch(wasmUrl), imports)
+                            .then(function(res) {
+                                console.log('[dc3] wasm instantiateStreaming ' + ((performance.now() - t0) | 0) + 'ms');
+                                successCallback(res.instance, res.module);
+                            })
+                            .catch(function(err) {
+                                console.warn('[dc3] instantiateStreaming failed (' + err + '); arrayBuffer fallback');
+                                return viaArrayBuffer();
+                            });
+                    }
+                    return viaArrayBuffer().catch(function(err) { console.error('[dc3] instantiateWasm failed: ' + err); });
+                };
+                console.log('LOADING_WASM_JS (' + dir + (q || '') + ')');
+                var script = document.createElement('script');
+                script.src = dir + 'dc3-web.js' + q;
+                script.onload = function() { console.log('WASM_JS_LOADED (' + dir + ')'); };
+                script.onerror = function(e) {
+                    if (!isFallback) {
+                        var other = (dir === 'release/') ? 'debug/' : 'release/';
+                        console.warn('[dc3] ' + dir + ' build not deployed — falling back to ' + other);
+                        loadBuild(other, version, true);
+                        return;
+                    }
+                    console.error('WASM_JS_ERROR: ' + e);
+                    status.textContent = 'No build deployed — run native/web/build.sh';
+                    status.className = 'error';
+                };
+                document.body.appendChild(script);
+            }
+
+            var primaryDir = wantDebug ? 'debug/' : 'release/';
+            if (wantDebug) {
+                loadBuild(primaryDir, '', false);
+            } else {
+                fetch('/api/version')
+                    .then(function(r) { return r.json(); })
+                    .then(function(j) { loadBuild(primaryDir, (j && j.version) ? String(j.version) : '', false); })
+                    .catch(function() { loadBuild(primaryDir, '', false); });
+            }
         }
 
         // Pause / step controls
