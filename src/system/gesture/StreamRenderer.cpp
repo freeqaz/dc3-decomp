@@ -622,8 +622,8 @@ void StreamRenderer::DrawToTexture() {
             dstTex->MakeDrawTarget();
             blurMat->SetDiffuseTex(srcTex);
             blurMat->MarkDirty(2);
-            Hmx::Rect blurRect(0, 0, (float)dstTex->Width(), (float)dstTex->Height());
             if (primaryTex) {
+                Hmx::Rect blurRect(0, 0, (float)dstTex->Width(), (float)dstTex->Height());
                 SetBloomBlurWeights(
                     (bool)(blurIdx & 1), (float)dstTex->Width(), (float)dstTex->Height()
                 );
@@ -642,7 +642,11 @@ void StreamRenderer::DrawToTexture() {
                 if (streamData) {
                     void *lagData = nullptr;
                     bool newIdx = unk154 == 0;
-                    unk154 = newIdx ? 1 : 0;
+                    if (newIdx) {
+                        unk154 = 1;
+                    } else {
+                        unk154 = 0;
+                    }
                     mLaggedPrimaryTexture[unk154]->TexelsLock(lagData);
                     void *srcData = nullptr;
                     streamTex->TexelsLock(srcData);
