@@ -747,3 +747,21 @@ thigh-tilted+knee-straight. Options (all #ifdef HX_NATIVE + opt-in):
    knee-only bend reverts to anim, not a fling) — caps the worst case at the anim (−3.3) not −11.8.
 Verify: DC3_FEET_PLANT_FIX=1 DC3_FEET_CLEAN_PLANT=1 gate, watch the named beats, confirm plant-time
 toe ≈ 0 AND render rToe ≥ −2. Full agent reports: workflow wf_0eaf267d-b2b.
+
+### PUSH 16b (2026-06-09, autonomous) — two more dead-ends ruled out
+- **ROT-loop guard is HARMFUL** (re-tested WITH the hip guard, contra Push-15's pre-hip test):
+  adding the `Dc3PlantGuarded` skip to PoseMeshes' ROTX/Y/Z loops regressed R 22→62. Reverted.
+  So the right knee/ankle bend is NOT reverted via an unguarded ROT channel.
+- **The "knee/ankle revert to rest" reading was a MISREAD**: `rKneeLocalX=17.56` is the knee's
+  LocalXfm.v.x = the femur LENGTH (bone offset, constant every frame by construction), NOT the
+  rotation. So it is not evidence the knee ROTATION reverted. The knee `.m` (a .pos/QUAT bone,
+  guarded) likely survives.
+- Net ruled out for the residual ~22 right frames: identity gap (plant guards player-0's render
+  ankle, frame-1 guarded=1), MoveToFacing (facingPos.z==0), reach clamp (never entered), QUAT
+  overwrite (guarded), ROT-loop overwrite (refuted), POS overwrite (guarded).
+- REMAINING DIAGNOSTIC (Push 17): a per-frame WORLD-component trace for player-0's right foot at a
+  single failing beat (e.g. 13.0) — capture char-root(me)/pelvis/thigh/knee/ankle/toe WORLD at the
+  re-run (plant time) vs at render — to see which segment's WORLD drifts ~7u between plant and
+  render. The foot is at -11.9 with all leg LOCALs apparently planted+guarded, so the drift is a
+  WORLD recompose against a moved ancestor that the guard doesn't cover (char-root `me`, or a
+  recompose ordering). State unchanged: R22/L11 (~95%), default OFF stable.
