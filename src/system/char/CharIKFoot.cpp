@@ -260,7 +260,10 @@ void CharIKFoot::Poll() {
     // Run the leg IK ONCE, from HamDirector::Poll after the move pose (gDc3DirectorIKReRun), where
     // the FSM-lock gives a fixed floor target -> stable solve. Skipping the normal char poll avoids
     // the double-apply and the char-poll IK's intermittent un-composed-leg spike.
-    if (Dc3FeetPlantFix() && !gDc3DirectorIKReRun)
+    // Clean plant runs in BOTH the normal char poll (feetandhands.pgrp, sorts last [28]) AND the
+    // HamDirector re-run, so whichever fires later wins (covers an overwrite between them). The
+    // diverging CharIKHand path only runs in the re-run.
+    if (Dc3FeetPlantFix() && !gDc3DirectorIKReRun && !getenv("DC3_FEET_CLEAN_PLANT"))
         return;
 #endif
     if (mFinger && mHand && mData) {
