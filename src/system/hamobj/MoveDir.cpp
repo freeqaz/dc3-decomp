@@ -1670,8 +1670,8 @@ namespace {
         float rangeScale;
     };
 
-    extern const BeatLineData gBeatLineData = { 0.05f, 0.95f, 0.25f, 0.25f };
-    extern const float gFourPointZero = 4.0f;
+    BeatLineData gBeatLineData = { 0.05f, 0.95f, 0.25f, 0.25f };
+    float gFourPointZero = 4.0f;
     static float sOverlayWidth = gBeatLineData.maxValue - gBeatLineData.minValue;
 
     void DrawBeatLine(float x, float y, float z, const Hmx::Color& color) {
@@ -1733,8 +1733,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
     MILO_ASSERT(TheHamDirector, 0x797);
 
     MoveFrame *closest = ClosestMoveFrame();
-    MoveMirrored mirroredEnum = move->Mirrored();
-    bool mirrored = (mirroredEnum != kMirroredNo);
+    int mirrored = (move->Mirrored() != kMirroredNo);
 
     // Cache character width for overlay column spacing
     if (sCharWidth == 0.0f) {
@@ -1763,15 +1762,13 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
         float thresh;
         RatingStateThreshold(i, ratingName, thresh, move->RatingOverride());
         float xRight = sCharWidth + y;
-        float range = gBeatLineData.maxValue - gBeatLineData.minValue;
-        float denominator =
-            (beatScale4 + (gBeatLineData.rangeOffset + gBeatLineData.rangeScale));
-        float xPos = gBeatLineData.minValue + range * (gBeatLineData.rangeOffset / denominator);
+        float xPos = (gBeatLineData.maxValue - gBeatLineData.minValue)
+            * (gBeatLineData.rangeOffset
+               / (gBeatLineData.rangeScale + gBeatLineData.rangeOffset
+                  + beatScale4))
+            + gBeatLineData.minValue;
         float threshPos = (0.99f - xPos) * thresh + xPos;
-        Hmx::Color threshColor(0.3, 0.3, 0.3, 0.8);
-        UtilDrawLine(
-            Vector2(threshPos, y), Vector2(threshPos, xRight), threshColor
-        );
+        UtilDrawLine(Vector2(threshPos, y), Vector2(threshPos, xRight), sGray);
         const char *colon = strstr(ratingName.Str(), ":");
         if (colon) {
             TheRnd.DrawStringScreen(
@@ -1782,27 +1779,24 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
 
     // Compute overlay positioning
     float xRight = sCharWidth + y;
-    float range = gBeatLineData.maxValue - gBeatLineData.minValue;
-    float denominator =
-        gBeatLineData.rangeScale + gBeatLineData.rangeOffset + beatScale4;
-    float xMin = range * (gBeatLineData.rangeOffset / denominator)
+    float xMin = (gBeatLineData.maxValue - gBeatLineData.minValue)
+        * (gBeatLineData.rangeOffset
+           / (gBeatLineData.rangeScale + gBeatLineData.rangeOffset + beatScale4))
         + gBeatLineData.minValue;
+    float barRange = 0.99f - xMin;
 
     // Draw detected bar
-    float detectFrac;
-    detectFrac = move->IsRest() ? 0.0f : DetectFrac(0, -1);
-    const char *mirroredStr = mirrored ? "(mirror)" : gNullStr;
+    float detectFrac = move->IsRest() ? 0.0f : DetectFrac(0, -1);
+    const char *mirroredStr = mirrored == 1 ? "(mirror)" : gNullStr;
     y = DrawDetectedBar(xRight, MakeString(
         "%i %s %s", TheTaskMgr.CurrentMeasure(),
         move->Name() + (move->Name()[0] == '/' ? 1 : 0), mirroredStr
-    ), detectFrac, xMin, 0.99f, mirrored, false);
+    ), detectFrac, xMin, 0.99f, false, true);
 
     // Draw smoothed overlay bar
-    DrawOverlayBar(y, xMin, 0.99f, sLightGray, sCharWidth);
+    DrawOverlayBar(y, xMin, 0.99f, sDarkGray, sCharWidth);
     DrawOverlayBar(
-        y, xMin,
-        mCurMoveSmoothers[0].Level() * 0.0625f * (0.99f - xMin) + xMin, sLightGray,
-        sCharWidth
+        y, xMin, mLastPollMs * 0.0625f * barRange + xMin, sGreen, sCharWidth
     );
 
     // Timer text
@@ -1818,50 +1812,56 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
 
     // Node-count background rect
     if (fv->mType == kFilterVersionHam1) {
-        height = (float)(numNodes + 1) * sCharWidth;
+        height = ((float)numNodes + 1.0f) * sCharWidth;
     } else if (fv->mType == kFilterVersionHam2) {
         height = sCharWidth * 2.0f;
     }
     {
-        float bgXMin = gBeatLineData.minValue;
-        float bgBottom = range * (0.0f / denominator) + gBeatLineData.minValue;
+        float bgBottom = (gBeatLineData.maxValue - gBeatLineData.minValue)
+            * (0.0f
+               / (gBeatLineData.rangeScale + gBeatLineData.rangeOffset
+                  + beatScale4))
+            + gBeatLineData.minValue;
         TheRnd.DrawRectScreen(
-            Hmx::Rect(bgXMin, yBase, 0.0f, height), Hmx::Color(0.3, 0.3, 0.3, 1),
-            nullptr, nullptr, nullptr
+            Hmx::Rect(0.0f, yBase, bgBottom, height),
+            Hmx::Color(0.3, 0.3, 0.3, 0.9), nullptr, nullptr, nullptr
         );
         float totalRange = gBeatLineData.rangeScale + gBeatLineData.rangeOffset
             + beatScale4;
         TheRnd.DrawRectScreen(
-            Hmx::Rect(bgBottom, yBase, (range * (totalRange / totalRange)
-                + gBeatLineData.minValue) - bgBottom, height),
+            Hmx::Rect(bgBottom, yBase,
+                ((gBeatLineData.maxValue - gBeatLineData.minValue)
+                     * (totalRange / totalRange) + gBeatLineData.minValue)
+                    - bgBottom,
+                height),
             sDarkGray, nullptr, nullptr, nullptr
         );
     }
 
     // Draw Ham1 node column headers
     if (fv->mType == kFilterVersionHam1) {
-        float startX = gBeatLineData.minValue;
-        if (numNodes > 0) {
-            float columnX = sCharWidth + yBase;
-            for (int n = 0; n < numNodes; n++) {
-                const char *nodeName = fv->mErrorNodes[n]->NodeName().Str();
-                Vector2 pos(startX, columnX);
-                Vector2 result = TheRnd.DrawStringScreen(
-                    nodeName, pos, sLightGray, false
-                );
-                float mirrored2 = result.x - pos.x;
-                TheRnd.DrawStringScreen(
-                    nodeName, Vector2(startX - mirrored2, columnX), sLightGray, true
-                );
-                columnX += sCharWidth;
-            }
+        Vector2 pos(gBeatLineData.minValue, sCharWidth + yBase);
+        for (int n = 0; n < numNodes; n++) {
+            const ErrorNode *node = fv->mErrorNodes[n];
+            Vector2 result = TheRnd.DrawStringScreen(
+                node->NodeName().Str(), pos, sLightGray, false
+            );
+            float width = result.x - pos.x;
+            TheRnd.DrawStringScreen(
+                node->NodeName().Str(), Vector2(pos.x - width, pos.y), sLightGray,
+                true
+            );
+            pos.y += sCharWidth;
         }
     }
 
     // Draw beat lines (0 through 4)
     for (int i = 0; i < 5; i++) {
-        float beatX = range * ((float)i + gBeatLineData.rangeOffset)
-            / denominator + gBeatLineData.minValue;
+        float beatX = (gBeatLineData.maxValue - gBeatLineData.minValue)
+            * (((float)i + gBeatLineData.rangeOffset)
+               / (gBeatLineData.rangeScale + gBeatLineData.rangeOffset
+                  + beatScale4))
+            + gBeatLineData.minValue;
         TheRnd.DrawStringScreen(
             MakeString("%i", i), Vector2(beatX, yBase), sGray, true
         );
@@ -1872,26 +1872,26 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
     float totalBeatF = TheTaskMgr.TotalBeat();
     int measureStart = TheTaskMgr.CurrentMeasure() * 4;
     float beatOffset = totalBeatF - (float)measureStart;
-    float halfWidth = TheRnd.Width() * sCharWidth * 0.5f;
+    float halfWidth = TheRnd.YRatio() * sCharWidth * 0.5f;
     MoveMode mode = CurrentMoveMode();
 
     const std::vector<MoveFrame> &moveFrames =
         static_cast<const HamMove *>(move)->GetMoveFrames();
     for (unsigned int fi = 0; fi < moveFrames.size(); fi++) {
         const MoveFrame &frame = moveFrames[fi];
-        const Ham2FrameWeight &weight = frame.FrameWeight(mirroredEnum);
+        const Ham2FrameWeight &weight = frame.FrameWeight((MoveMirrored)mirrored);
         if (weight.mWeight == 0.0f)
             continue;
 
-        float frameBeatX = range * ((frame.GetBeat() + gBeatLineData.rangeOffset)
-            / denominator) + gBeatLineData.minValue;
+        float frameBeatX = (gBeatLineData.maxValue - gBeatLineData.minValue)
+            * ((frame.GetBeat() + gBeatLineData.rangeOffset)
+               / (gBeatLineData.rangeScale + gBeatLineData.rangeOffset
+                  + beatScale4))
+            + gBeatLineData.minValue;
 
-        Hmx::Color markerColor;
-        if (!(&frame == closest)) {
-            markerColor.Set(0.8, 0.8, 0.8, 1.0);
-        } else {
-            markerColor.Set(0.8, 0.8, 0.0, 1.0);
-        }
+        Hmx::Color markerColor = (&frame == closest)
+            ? Hmx::Color(0.8, 0.8, 0.0, 1.0)
+            : Hmx::Color(0.8, 0.8, 0.8, 1.0);
 
         DrawBeatLine(yBase, height, frame.GetBeat(), markerColor);
 
@@ -1922,28 +1922,34 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
     DetectRange(_ref0[0].mDetectFrames, detectRange, TheTaskMgr.CurrentMeasure(), TheTaskMgr.CurrentMeasure());
 
     if (fv->mType == kFilterVersionHam1 && detectRange.first != detectRange.second) {
-        float colWidth = sCharWidth;
         for (DetectFrame *df = detectRange.first; df != detectRange.second; df++) {
             MoveFrame *mf = (MoveFrame *)df->GetMoveFrame();
-            for (int n = 0; n < numNodes; n++) {
-                float colY = colWidth + yBase;
-                float frameBeatX = range * ((mf->GetBeat() + gBeatLineData.rangeOffset)
-                    / denominator) + gBeatLineData.minValue;
-                float bx1 = frameBeatX - halfWidth;
+            float colY = sCharWidth + yBase;
+            float frameBeatX = (gBeatLineData.maxValue - gBeatLineData.minValue)
+                * ((mf->GetBeat() + gBeatLineData.rangeOffset)
+                   / (gBeatLineData.rangeScale + gBeatLineData.rangeOffset
+                      + beatScale4))
+                + gBeatLineData.minValue;
+            float bx1 = frameBeatX - halfWidth;
+            if (numNodes > 0) {
                 float bx2 = frameBeatX + halfWidth;
-                float cellH = colY + sCharWidth;
-                const Ham1NodeWeight &nw =
-                    mf->NodeWeightHam1(n, mode, mirroredEnum);
-                if (nw.mActive) {
-                    const Vector3 &bestErr = df->BestNodeError(n);
-                    float errFrac = 1.0f - bestErr.x;
-                    Hmx::Color errColor(errFrac, 0.0f, errFrac * -1.0f + 1.0f, 0.5f);
-                    TheRnd.DrawRectScreen(
-                        Hmx::Rect(bx1, colY, bx2 - bx1, cellH - colY), errColor,
-                        nullptr, nullptr, nullptr
-                    );
+                for (int n = 0; n < numNodes; n++) {
+                    float cellH = colY + sCharWidth;
+                    Hmx::Rect cellRect(bx1, colY, bx2 - bx1, cellH - colY);
+                    const Ham1NodeWeight &nw =
+                        mf->NodeWeightHam1(n, mode, (MoveMirrored)mirrored);
+                    if (nw.mActive) {
+                        const Vector3 &bestErr = df->BestNodeError(n);
+                        float errFrac = 1.0f - bestErr.x;
+                        Hmx::Color errColor(
+                            errFrac * -1.0f + 1.0f, errFrac, errFrac * 0.0f, 0.5f
+                        );
+                        TheRnd.DrawRectScreen(
+                            cellRect, errColor, nullptr, nullptr, nullptr
+                        );
+                    }
+                    colY += sCharWidth;
                 }
-                colY += sCharWidth;
             }
         }
     }
@@ -1957,18 +1963,18 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
     BaseSkeleton *vizSkeleton = nullptr;
     mShowErrorFrames = nullptr;
 
-    if (!(mergeVal == 0)) {
+    if (mergeVal != 0) {
         // Merged: use DancerSequence frames
         DancerSequence *seq = move->GetDancerSequence();
         if (seq) {
             const std::vector<DancerFrame> &dancerFrames = seq->GetDancerFrames();
             float frameF =
-                (float)(dancerFrames.size() - 1) * beatOffset * 0.25f;
+                (float)(dancerFrames.size() - 1) * (beatOffset * 0.25f);
             int frameIdx;
-            if (frameF <= 0.0f) {
-                frameIdx = (int)(frameF - 0.5f);
-            } else {
+            if (frameF > 0.0f) {
                 frameIdx = (int)(frameF + 0.5f);
+            } else {
+                frameIdx = (int)(frameF - 0.5f);
             }
             vizSkeleton =
                 (BaseSkeleton *)&dancerFrames[frameIdx].mSkeleton;
@@ -1988,9 +1994,8 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
             while (it < endFrame) {
                 if (it->Seconds() >= endSeconds)
                     break;
-                bool inRange = (it >= detectRange.first && it < detectRange.second);
                 Hmx::Color lineColor;
-                if (!(!inRange)) {
+                if (it >= detectRange.first && it < detectRange.second) {
                     lineColor.Set(1, 1, 1, 1);
                     if (it->GetMoveFrame() == closest) {
                         mShowErrorFrames = it;
@@ -2000,12 +2005,16 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
                     lineColor.Set(0.6, 0.6, 0.6, 1);
                 }
                 const Ham2FrameWeight &fw =
-                    it->GetMoveFrame()->FrameWeight(mirroredEnum);
+                    it->GetMoveFrame()->FrameWeight((MoveMirrored)mirrored);
                 if (fw.mWeight != 0.0f) {
                     // Draw error curve for this detect frame
                     float step = 1.0f / 30.0f;
                     Vector2 prevPt(
-                        range * (0.0f / denominator) + gBeatLineData.minValue,
+                        (gBeatLineData.maxValue - gBeatLineData.minValue)
+                            * (0.0f
+                               / (gBeatLineData.rangeScale
+                                  + gBeatLineData.rangeOffset + beatScale4))
+                            + gBeatLineData.minValue,
                         vizY
                     );
                     if (startSeconds < endSeconds) {
@@ -2016,26 +2025,25 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
                                 fabsf(currentTime - it->Seconds())
                             );
                             float beat = SecondsToBeat(currentTime);
-                            float beatX = range
+                            float beatX = (gBeatLineData.maxValue
+                                - gBeatLineData.minValue)
                                 * ((beat - (float)measureStart
                                        + gBeatLineData.rangeOffset)
-                                    / denominator)
+                                    / (gBeatLineData.rangeScale
+                                       + gBeatLineData.rangeOffset + beatScale4))
                                 + gBeatLineData.minValue;
-                            if (error >= 1.0f) {
-                                if (prevPt.y < vizY) {
-                                    UtilDrawLine(
-                                        prevPt, Vector2(beatX, vizY),
-                                        lineColor
-                                    );
-                                    prevPt.y = vizY;
-                                }
-                            } else {
+                            if (error < 1.0f) {
                                 float errorY = error * height + yBase;
                                 UtilDrawLine(
                                     prevPt, Vector2(beatX, errorY),
                                     lineColor
                                 );
                                 prevPt.y = errorY;
+                            } else if (prevPt.y < vizY) {
+                                UtilDrawLine(
+                                    prevPt, Vector2(beatX, vizY), lineColor
+                                );
+                                prevPt.y = vizY;
                             }
                             currentTime += step;
                             prevPt.x = beatX;
@@ -2047,10 +2055,11 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
                 float frameBeat2 = SecondsToBeat(it->Seconds());
                 const BaseSkeleton *skel =
                     &it->GetDancerFrame()->mSkeleton;
-                float fbx2 = range
+                float fbx2 = (gBeatLineData.maxValue - gBeatLineData.minValue)
                     * (((frameBeat2 - (float)measureStart)
                            + gBeatLineData.rangeOffset)
-                        / denominator)
+                        / (gBeatLineData.rangeScale + gBeatLineData.rangeOffset
+                           + beatScale4))
                     + gBeatLineData.minValue;
                 int errorIdx = skel->ElapsedMs();
                 if (errorIdx != -1) {
@@ -2072,8 +2081,10 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
 
     // Draw song beat position text
     {
-        float beatPosX = range
-            * ((beatOffset + gBeatLineData.rangeOffset) / denominator)
+        float beatPosX = (gBeatLineData.maxValue - gBeatLineData.minValue)
+            * ((beatOffset + gBeatLineData.rangeOffset)
+               / (gBeatLineData.rangeScale + gBeatLineData.rangeOffset
+                  + beatScale4))
             + gBeatLineData.minValue;
         TheRnd.DrawStringScreen(
             MakeString("%.2f", totalBeatF), Vector2(beatPosX, yBase), yellowColor,
@@ -2098,24 +2109,20 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
     }
 
     // Clamp min height
-    float minHeight = 0.2f;
-    if (minHeight < 1.0f - y) {
-        minHeight = 1.0f - y;
-    }
+    float minHeight = Max(0.2f, 1.0f - y);
 
     // Draw skeleton visualization area
-    float rndWidth = TheRnd.Width();
-    float vizWidth = rndWidth * minHeight;
-    float vizHeight = vizWidth;
+    float vizWidth = TheRnd.YRatio() * minHeight;
+    float vizHeight = minHeight;
 
     Hmx::Rect vizRect(gBeatLineData.minValue, y, vizWidth, vizHeight);
+    Vector2 textPos(gBeatLineData.minValue, y);
     TheRnd.DrawRectScreen(vizRect, sLightGray, nullptr, nullptr, nullptr);
 
-    if (!(!closest)) {
+    if (closest) {
         // Draw closest frame beat
         TheRnd.DrawStringScreen(
-            MakeString("%.2f", closest->GetBeat()),
-            Vector2(gBeatLineData.minValue, y), sLightGray, true
+            MakeString("%.2f", closest->GetBeat()), textPos, sLightGray, true
         );
         mSkeletonViz->SetUsePhysicalCam(true);
         mSkeletonViz->SetPhysicalCamScreenRect(vizRect);
@@ -2123,9 +2130,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
             StubCameraInput camInput;
             camInput.PollTracking();
             std::vector<SkeletonCallback *> callbacks;
-            if (this) {
-                callbacks.push_back(this);
-            }
+            callbacks.push_back(this);
             unk414 = (DancerSkeleton *)vizSkeleton;
             mSkeletonViz->Visualize(camInput, *vizSkeleton, &callbacks, false);
             unk414 = nullptr;
@@ -2134,21 +2139,21 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
         // No closest frame - draw async detector count
         int asyncCount = (int)unkf88.size();
         TheRnd.DrawStringScreen(
-            MakeString("asyc: %d", asyncCount),
-            Vector2(gBeatLineData.minValue, y), sLightGray, true
+            MakeString("asyc: %d", asyncCount), textPos, sLightGray, true
         );
         if (asyncCount != 0) {
             mSkeletonViz->SetUsePhysicalCam(true);
             // Grid visualization of multiple skeletons from unkf88
             int setSize = asyncCount;
             if (setSize > 0) {
-                int gridSize = (int)std::ceil(std::sqrt((float)setSize));
-                float cellW = vizHeight / (float)gridSize;
-                float cellH = vizWidth / (float)gridSize;
+                float gridF = std::ceil(std::sqrt((float)setSize));
+                int gridSize = (int)gridF;
+                float invGrid = 1.0f / (float)gridSize;
+                float cellW = invGrid * vizHeight;
+                float cellH = vizWidth * invGrid;
                 int idx = 0;
                 for (std::set<DetectFrame *>::iterator sit = unkf88.begin();
                      sit != unkf88.end(); ++sit) {
-                    DetectFrame *df = *sit;
                     int row = idx / gridSize;
                     int col = idx % gridSize;
                     Hmx::Rect cellRect(
@@ -2158,13 +2163,12 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
                     mSkeletonViz->SetPhysicalCamScreenRect(cellRect);
                     StubCameraInput camInput;
                     camInput.PollTracking();
-                    std::vector<SkeletonCallback *> callbacks;
-                    if (this) {
-                        callbacks.push_back(this);
-                    }
+                    DetectFrame *df = *sit;
                     const DancerFrame *dancerFrame = df->GetDancerFrame();
                     BaseSkeleton *skel =
                         (BaseSkeleton *)&dancerFrame->mSkeleton;
+                    std::vector<SkeletonCallback *> callbacks;
+                    callbacks.push_back(this);
                     unk414 = (DancerSkeleton *)skel;
                     mSkeletonViz->Visualize(
                         camInput, *skel, &callbacks, false
@@ -2178,12 +2182,9 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
     // Draw debug skeleton in remaining area
     {
         std::vector<SkeletonCallback *> callbacks;
-        if (this) {
-            callbacks.push_back(this);
-        }
-        Hmx::Rect debugRect(
-            vizRect.x + vizWidth + 0.01f, vizRect.y, vizWidth, vizHeight
-        );
+        callbacks.push_back(this);
+        Hmx::Rect debugRect = vizRect;
+        debugRect.x = vizRect.x + vizRect.w + 0.01f;
         TheRnd.DrawRectScreen(debugRect, sLightGray, nullptr, nullptr, nullptr);
         mSkeletonViz->SetUsePhysicalCam(true);
         mSkeletonViz->SetPhysicalCamScreenRect(debugRect);
