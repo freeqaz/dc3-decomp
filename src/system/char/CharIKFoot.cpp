@@ -52,6 +52,102 @@ static void Dc3RecomposeChain(RndTransformable *t) {
     for (int i = n - 1; i >= 0; i--)
         (void)chain[i]->WorldXfm();
 }
+
+// CLEAN STATELESS 2-BONE FOOT PLANT (DC3_FEET_CLEAN_PLANT). Bypasses the diverging
+// CharIKHand solver (its thigh pure-Z-rotation assumes a rest frame that bends the leg
+// ~horizontal on native). Works entirely in world space on the FK-composed leg, writes
+// bone LOCALs at the end (survives render), and is ONE-DIRECTIONAL (only lifts a foot
+// whose toe is below the floor) so it can't oscillate. Preserves the ankle's WORLD
+// rotation so the rigid foot's toe rises exactly with the ankle.
+//   ankle=mHand, knee=ankle parent (shin), thigh=knee parent, hip=thigh parent (pelvis).
+static bool Dc3CleanPlant(RndTransformable *ankle, RndTransformable *toe) {
+    if (!ankle || !toe)
+        return false;
+    RndTransformable *knee = ankle->TransParent();
+    RndTransformable *thigh = knee ? knee->TransParent() : 0;
+    RndTransformable *hip = thigh ? thigh->TransParent() : 0;
+    if (!knee || !thigh || !hip)
+        return false;
+
+    Transform ankleW0 = ankle->WorldXfm();          // foot orientation to preserve
+    Vector3 H = thigh->WorldXfm().v;                 // hip joint (fixed)
+    Vector3 Kc = knee->WorldXfm().v;                 // current knee joint
+    Vector3 A = ankleW0.v;                           // current ankle joint
+    Vector3 T = toe->WorldXfm().v;                   // current toe (foot tip)
+
+    const float kFloor = 0.0f, kMargin = 0.6f;
+    float deficit = (kFloor + kMargin) - T.z;
+    if (deficit <= 0.0f)
+        return true;                                 // foot already clear; leave anim pose
+
+    Vector3 Atarget(A.x, A.y, A.z + deficit);        // lift ankle by the toe's deficit
+
+    Vector3 femurV; Subtract(Kc, H, femurV);  float a = Length(femurV);
+    Vector3 shinV;  Subtract(A, Kc, shinV);   float b = Length(shinV);
+    Vector3 dV;     Subtract(Atarget, H, dV); float d = Length(dV);
+    if (a < 1e-3f || b < 1e-3f || d < 1e-3f)
+        return false;
+    float reach = a + b - 0.02f;
+    if (d > reach) {                                 // clamp target onto max reach
+        Vector3 dir; Normalize(dV, dir); Scale(dir, reach, dV); Add(H, dV, Atarget); d = reach;
+    }
+
+    // Knee position: planar 2-bone IK; pole preserves the anim bend plane (current knee).
+    Vector3 hToA; Normalize(dV, hToA);
+    float l = (a * a - b * b + d * d) / (2.0f * d);
+    float hsq = a * a - l * l; float hgt = hsq > 0.0f ? std::sqrt(hsq) : 0.0f;
+    Vector3 kRel; Subtract(Kc, H, kRel);
+    float dp = Dot(kRel, hToA);
+    Vector3 proj; Scale(hToA, dp, proj);
+    Vector3 perp; Subtract(kRel, proj, perp);
+    if (Length(perp) < 1e-3f) {                      // degenerate: pick forward as pole
+        Vector3 fwd(0.0f, 1.0f, 0.0f);
+        float dp2 = Dot(fwd, hToA); Vector3 pr2; Scale(hToA, dp2, pr2); Subtract(fwd, pr2, perp);
+        if (Length(perp) < 1e-3f) { perp = Vector3(1.0f, 0.0f, 0.0f); }
+    }
+    Normalize(perp, perp);
+    Vector3 Kp; { Vector3 t1; Scale(hToA, l, t1); Vector3 t2; Scale(perp, hgt, t2);
+                  Add(H, t1, Kp); Add(Kp, t2, Kp); }
+
+    // Aim the THIGH so its child (knee) lands at Kp.
+    {
+        Vector3 curDir; Normalize(femurV, curDir);
+        Vector3 wantV; Subtract(Kp, H, wantV); Vector3 wantDir; Normalize(wantV, wantDir);
+        Hmx::Quat q; MakeRotQuat(curDir, wantDir, q);
+        Hmx::Matrix3 dR; MakeRotMatrix(q, dR);
+        Hmx::Matrix3 wmNew; Multiply(dR, thigh->WorldXfm().m, wmNew);
+        Hmx::Matrix3 hipInv; Invert(hip->WorldXfm().m, hipInv);
+        Hmx::Matrix3 lmNew; Multiply(hipInv, wmNew, lmNew);
+        thigh->DirtyLocalXfm().m = lmNew;            // keep local .v (bone offset)
+    }
+    (void)thigh->WorldXfm();                         // recompose; knee now near Kp
+    Vector3 Kw = knee->WorldXfm().v;
+
+    // Aim the KNEE so its child (ankle) lands at Atarget.
+    {
+        Vector3 curV; Subtract(A, Kc, curV); Vector3 curDir; Normalize(curV, curDir);
+        // recompute current world shin dir after the thigh moved
+        Vector3 ankNow = ankle->WorldXfm().v; Vector3 curNow; Subtract(ankNow, Kw, curNow);
+        Normalize(curNow, curDir);
+        Vector3 wantV; Subtract(Atarget, Kw, wantV); Vector3 wantDir; Normalize(wantV, wantDir);
+        Hmx::Quat q; MakeRotQuat(curDir, wantDir, q);
+        Hmx::Matrix3 dR; MakeRotMatrix(q, dR);
+        Hmx::Matrix3 wmNew; Multiply(dR, knee->WorldXfm().m, wmNew);
+        Hmx::Matrix3 thInv; Invert(thigh->WorldXfm().m, thInv);
+        Hmx::Matrix3 lmNew; Multiply(thInv, wmNew, lmNew);
+        knee->DirtyLocalXfm().m = lmNew;
+    }
+    (void)knee->WorldXfm();
+
+    // Preserve the foot orientation: set ankle LOCAL so its world rotation == original.
+    {
+        Hmx::Matrix3 knInv; Invert(knee->WorldXfm().m, knInv);
+        Hmx::Matrix3 lmNew; Multiply(knInv, ankleW0.m, lmNew);
+        ankle->DirtyLocalXfm().m = lmNew;
+    }
+    (void)ankle->WorldXfm();
+    return true;
+}
 #endif
 
 CharIKFoot::CharIKFoot() : mFootBone(this), mFootFsmState(0), mData(this), mDataIndex(0) {
@@ -190,11 +286,36 @@ void CharIKFoot::Poll() {
             }
         }
 #endif
+#ifdef HX_NATIVE
+        // CLEAN PLANT path (DC3_FEET_CLEAN_PLANT): replace the diverging CharIKHand solve with
+        // a stateless world-space 2-bone plant on the FK-composed leg (mHand=ankle). Find the
+        // actual toe bone (child of the ankle) for the floor check.
+        if (Dc3FeetPlantFix() && getenv("DC3_FEET_CLEAN_PLANT")) {
+            RndTransformable *toe = 0;
+            for (std::list<RndTransformable *>::const_iterator it = mHand->Children().begin();
+                 it != mHand->Children().end(); ++it) {
+                if (*it && (*it)->Name() && std::strstr((*it)->Name(), "toe")) { toe = *it; break; }
+            }
+            if (toe) {
+                static int sCP = 0;
+                bool ok = Dc3CleanPlant(mHand, toe);
+                if (getenv("DC3_IK_DIAG2") && sCP < 30) {
+                    sCP++;
+                    Vector3 tw = toe->WorldXfm().v; Vector3 aw = mHand->WorldXfm().v;
+                    fprintf(stderr, "DC3_IK_DIAG CleanPlant %s ok=%d toe=(%.2f,%.2f,%.2f) ankle=(%.2f,%.2f,%.2f)\n",
+                            (mDataIndex == 0) ? "L" : "R", ok ? 1 : 0, tw.x, tw.y, tw.z, aw.x, aw.y, aw.z);
+                }
+            }
+        } else {
+#endif
         mTargets.clear();
         mTargets.push_back(IKTarget(mFootBone, 0));
         DoFSM(Character::Current(), mFootBone->DirtyLocalXfm());
         CharIKHand::Poll();
         mTargets.clear();
+#ifdef HX_NATIVE
+        }
+#endif
     }
 #ifdef HX_NATIVE
     {
