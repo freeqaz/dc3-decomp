@@ -9,6 +9,11 @@
 #include "os/Timer.h"
 #include "utl/ChunkStream.h"
 #include "utl/MemMgr.h"
+#ifdef HX_NATIVE
+#include <cstdlib> // getenv (DC3_CLIP_SWAP_LEGACY / DC3_CLIP_SWAP_DIAG)
+#include <cstring> // strstr
+#include <cstdio>  // fprintf
+#endif
 #line 8 "CharBonesSamples.cpp"
 CharBonesSamples::CharBonesSamples()
     : mNumSamples(0), mPreviewSample(0), mRawData(nullptr) {}
@@ -104,6 +109,27 @@ void CharBonesSamples::LoadHeader(BinStreamRev &d) {
     );
 }
 
+#ifdef HX_NATIVE
+// Byte-swap one raw clip sample's big-endian channel section to native LE.
+// compWidth is the section's per-component element width and MUST mirror
+// CharBones::TypeSize for the active compression: 4=float, 2=short, 1=byte
+// (ByteQuat is byte-addressable, so width 1 = no swap). Shared by LoadData's
+// cached and ReadChunks paths so both stay consistent.
+static void SwapBE_Section(char *base, int len, int compWidth) {
+    if (compWidth == 2) {
+        for (char *p = base; p < base + len; p += 2) {
+            unsigned short *u = (unsigned short *)p;
+            *u = __builtin_bswap16(*u);
+        }
+    } else if (compWidth == 4) {
+        for (char *p = base; p < base + len; p += 4) {
+            unsigned int *u = (unsigned int *)p;
+            *u = __builtin_bswap32(*u);
+        }
+    }
+}
+#endif
+
 void CharBonesSamples::LoadData(BinStreamRev &d) {
     if (d.rev == 0xE) {
         bool x;
@@ -112,6 +138,23 @@ void CharBonesSamples::LoadData(BinStreamRev &d) {
     bool cached = d.stream.Cached();
     auto& _sub1 = mOffsets[TYPE_QUAT];
     auto& _sub0 = mOffsets[TYPE_END];
+#ifdef HX_NATIVE
+    if (getenv("DC3_CLIP_SWAP_DIAG")) {
+        bool toeQ = false, toeR = false;
+        for (int bi = 0; bi < (int)mBones.size(); ++bi) {
+            const char *nm = mBones[bi].name.Str();
+            if (strstr(nm, "toe.quat")) toeQ = true;
+            if (strstr(nm, "toe.rotz")) toeR = true;
+        }
+        fprintf(stderr,
+            "DC3_CLIPDIAG: comp=%d nSamp=%d nBones=%d rev=%d cached=%d path=%s "
+            "off[POS=%d QUAT=%d ROTX=%d END=%d] total=%d toeQuat=%d toeRotz=%d\n",
+            (int)mCompression, mNumSamples, (int)mBones.size(), d.rev, (int)cached,
+            (!cached || d.rev <= 0xE) ? "inline" : "readchunks",
+            mOffsets[TYPE_POS], _sub1, mOffsets[TYPE_ROTX], _sub0, mTotalSize,
+            (int)toeQ, (int)toeR);
+    }
+#endif
     if (!cached || d.rev <= 0xE) {
         for (int i = 0; i < mNumSamples; i++) {
             auto _tmp0 = Min(i, mNumSamples - 1);
@@ -120,39 +163,25 @@ void CharBonesSamples::LoadData(BinStreamRev &d) {
             if (cached) {
                 d.stream.Read(mStart, _sub0 - mOffsets[TYPE_POS]);
 #ifdef HX_NATIVE
-                // Cached .milo_xbox files store raw big-endian data.
-                // Byte-swap floats (4 bytes) in POS/SCALE sections and
-                // shorts (2 bytes) in QUAT/ROT sections to native LE order.
+                // Cached .milo_xbox files store raw big-endian data. Swap each
+                // section using its true component width (mirrors TypeSize):
+                //   POS/SCALE: short(2) when >=kCompressVects, else float(4)
+                //   QUAT: byte(1,no swap) when >=kCompressQuats, short(2) when
+                //         compressed, else float(4)
+                //   ROTX..ROTZ: short(2) when compressed, else float(4)
+                // (Pre-fix code swapped QUAT as short for >=kCompressRots, which
+                // corrupted ByteQuat at kCompressQuats/All, and always swapped POS
+                // as float. DC3_CLIP_SWAP_LEGACY restores that for A/B.)
                 if (!d.stream.LittleEndian()) {
-                    // POS + SCALE sections: float data (4 bytes each)
-                    for (char *p = mStart; p < mStart + _sub1; p += 4) {
-                        unsigned int *u = (unsigned int *)p;
-                        *u = __builtin_bswap32(*u);
-                    }
-                    // QUAT section: shorts (2 bytes each) when compressed, floats when not
-                    if (mCompression >= kCompressRots) {
-                        for (char *p = mStart + _sub1; p < mStart + mOffsets[TYPE_ROTX]; p += 2) {
-                            unsigned short *u = (unsigned short *)p;
-                            *u = __builtin_bswap16(*u);
-                        }
-                    } else {
-                        for (char *p = mStart + _sub1; p < mStart + mOffsets[TYPE_ROTX]; p += 4) {
-                            unsigned int *u = (unsigned int *)p;
-                            *u = __builtin_bswap32(*u);
-                        }
-                    }
-                    // ROT sections: shorts (2 bytes each) when compressed, floats when not
-                    if (mCompression != kCompressNone) {
-                        for (char *p = mStart + mOffsets[TYPE_ROTX]; p < mStart + _sub0; p += 2) {
-                            unsigned short *u = (unsigned short *)p;
-                            *u = __builtin_bswap16(*u);
-                        }
-                    } else {
-                        for (char *p = mStart + mOffsets[TYPE_ROTX]; p < mStart + _sub0; p += 4) {
-                            unsigned int *u = (unsigned int *)p;
-                            *u = __builtin_bswap32(*u);
-                        }
-                    }
+                    bool legacy = getenv("DC3_CLIP_SWAP_LEGACY") != nullptr;
+                    int posW  = legacy ? 4 : ((mCompression >= kCompressVects) ? 2 : 4);
+                    int quatW = legacy ? ((mCompression >= kCompressRots) ? 2 : 4)
+                                       : ((mCompression >= kCompressQuats) ? 1
+                                          : (mCompression != kCompressNone) ? 2 : 4);
+                    int rotW  = (mCompression != kCompressNone) ? 2 : 4;
+                    SwapBE_Section(mStart, _sub1 - mOffsets[TYPE_POS], posW);
+                    SwapBE_Section(mStart + _sub1, mOffsets[TYPE_ROTX] - _sub1, quatW);
+                    SwapBE_Section(mStart + mOffsets[TYPE_ROTX], _sub0 - mOffsets[TYPE_ROTX], rotW);
                 }
 #endif
             } else {
@@ -220,39 +249,22 @@ void CharBonesSamples::LoadData(BinStreamRev &d) {
         mStart = mRawData;
         ReadChunks(d.stream, mRawData, mNumSamples * mTotalSize, mTotalSize << 7);
 #ifdef HX_NATIVE
-        // ReadChunks reads raw big-endian data — byte-swap all samples
-        // NOTE: this branch is extremely parity-sensitive. Channel finiteness
-        // failures in ClipPoseFixture usually indicate an endian/swap issue
-        // here (or stale native test binaries).
+        // ReadChunks reads raw big-endian data — byte-swap all samples using
+        // each section's true component width (see SwapBE_Section above; mirrors
+        // CharBones::TypeSize). DC3_CLIP_SWAP_LEGACY restores the pre-fix widths
+        // for A/B (always-float POS + short-QUAT corrupted ByteQuat clips).
         if (!d.stream.LittleEndian()) {
+            bool legacy = getenv("DC3_CLIP_SWAP_LEGACY") != nullptr;
+            int posW  = legacy ? 4 : ((mCompression >= kCompressVects) ? 2 : 4);
+            int quatW = legacy ? ((mCompression >= kCompressRots) ? 2 : 4)
+                               : ((mCompression >= kCompressQuats) ? 1
+                                  : (mCompression != kCompressNone) ? 2 : 4);
+            int rotW  = (mCompression != kCompressNone) ? 2 : 4;
             for (int i = 0; i < mNumSamples; i++) {
                 char *s = mRawData + mTotalSize * i;
-                for (char *p = s; p < s + _sub1; p += 4) {
-                    unsigned int *u = (unsigned int *)p;
-                    *u = __builtin_bswap32(*u);
-                }
-                if (mCompression >= kCompressRots) {
-                    for (char *p = s + _sub1; p < s + mOffsets[TYPE_ROTX]; p += 2) {
-                        unsigned short *u = (unsigned short *)p;
-                        *u = __builtin_bswap16(*u);
-                    }
-                } else {
-                    for (char *p = s + _sub1; p < s + mOffsets[TYPE_ROTX]; p += 4) {
-                        unsigned int *u = (unsigned int *)p;
-                        *u = __builtin_bswap32(*u);
-                    }
-                }
-                if (mCompression != kCompressNone) {
-                    for (char *p = s + mOffsets[TYPE_ROTX]; p < s + _sub0; p += 2) {
-                        unsigned short *u = (unsigned short *)p;
-                        *u = __builtin_bswap16(*u);
-                    }
-                } else {
-                    for (char *p = s + mOffsets[TYPE_ROTX]; p < s + _sub0; p += 4) {
-                        unsigned int *u = (unsigned int *)p;
-                        *u = __builtin_bswap32(*u);
-                    }
-                }
+                SwapBE_Section(s, _sub1 - mOffsets[TYPE_POS], posW);
+                SwapBE_Section(s + _sub1, mOffsets[TYPE_ROTX] - _sub1, quatW);
+                SwapBE_Section(s + mOffsets[TYPE_ROTX], _sub0 - mOffsets[TYPE_ROTX], rotW);
             }
         }
 #endif
