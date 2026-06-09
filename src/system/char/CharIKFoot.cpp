@@ -186,6 +186,20 @@ void CharIKFoot::DoFSM(Character *mMe, Transform &tf) {
             }
         }
     }
+#ifdef HX_NATIVE
+    if (gDc3DirectorIKReRun && getenv("DC3_IK_DIAG")) {
+        static int sFsmLog = 0;
+        if (sFsmLog < 40) {
+            sFsmLog++;
+            const Transform &fw = mFinger->WorldXfm();
+            fprintf(stderr, "DC3_IK_DIAG DoFSM[%d] %s fsm=%d vecat=%.3f b2=%d "
+                    "fingerW=(%.2f,%.2f,%.2f) tf.v=(%.2f,%.2f,%.2f) footPos=(%.2f,%.2f,%.2f)\n",
+                    sFsmLog, PathName(this), mFootFsmState, vecat, b2 ? 1 : 0,
+                    fw.v.x, fw.v.y, fw.v.z, tf.v.x, tf.v.y, tf.v.z,
+                    mFootPosition.x, mFootPosition.y, mFootPosition.z);
+        }
+    }
+#endif
     if (mFootFsmState == 0) {
         const Transform &wt = mFinger->WorldXfm();
         tf.v.x = wt.v.x;

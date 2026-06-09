@@ -317,3 +317,31 @@ Target: knee ~−58° STABLE, toe ∈ [~0, small], gate FeetNotBelowFloorDuringG
 
 Logs: /tmp/dc3-feet-fix/{single_ik,hamdir_fix,default_off}.log. Gate:
 `DC3_FEET_PLANT_FIX=1 DC3_GAMEPLAY_TESTS=1 native/build/milo-tests --gtest_filter='GameplayTelemetryTest.FeetNotBelowFloorDuringGameplay'`.
+
+## PUSH 12b (2026-06-09) — divergence pinned: IK SOLVE wild from a SANE target + FSM never locks
+
+Instrumented CharIKFoot::DoFSM (DC3_IK_DIAG, during the director re-run). For player0's
+left.ikfoot:
+- **The IK target is SANE**: `mFinger`(toe-target) world z ≈ 0.11–0.61 (near floor), tracking the
+  move; x/y track the dancing foot. NOT sunk, NOT flying. (The ±71 values in the log are the
+  spread-out BACKUP dancers, a different char — not divergence.)
+- **The foot-plant FSM NEVER locks**: `vecat = mData->LocalXfm().v[mDataIndex] = 0.000` every
+  frame → `b2=0` → `mFootFsmState` stuck at 0. The move's foot-plant DATA channel (`mData`) is
+  not driven on native, so the FSM can't enter the planted/locked state.
+- Yet the RENDERED player0 foot is wild (toe −7..+66, ankle +71). So **`CharIKHand::Poll` produces
+  a wild foot from a sane (~floor) target** — the IK SOLVE itself is the remaining bug, not the
+  target and not (directly) the FSM.
+
+### Remaining (Push 13) — two coupled native IK bugs
+1. **IK solve overshoots**: with a ~floor target, CharIKHand::Poll drives the ankle/foot wild.
+   Suspect the `mHand->SetWorldXfm(handXfm)` ankle world-write (handXfm.v=mWorldDst) and/or the
+   law-of-cosines reach from `MeasureLengths` (mAAPlusBB/mInv2ab/mAABB). NEXT: instrument
+   CharIKHand::Poll — mWorldDst, destPos, mAAPlusBB, and the ankle world before/after — for
+   player0; find why a ~floor target yields a wild ankle. (IKElbow alone bent the knee sanely to
+   −36°, so isolate whether the wild is the SetWorldXfm path vs the elbow path.)
+2. **FSM never locks** (vecat=0): the move's foot-plant data channel must drive `mData` so the
+   FSM enters the planted state (locks `mFootPosition`, breaks any feedback). Xbox has vecat vary.
+
+Status: fix is OPT-IN (DC3_FEET_PLANT_FIX, default OFF — verified the default is the unchanged
+stable original, toe −4.3..3.9). The survival mechanism (mMoveElbow + re-run after move pose) is
+correct and lands the knee bend; the IK SOLVE stabilization is the final piece.
