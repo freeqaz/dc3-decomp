@@ -18,8 +18,12 @@
 #include "char/Character.h"
 #ifdef HX_NATIVE
 #include "char/CharIKFoot.h"
+#include <cstdlib>
+#include <cstdio>
+#include <cmath>
 extern bool Dc3FeetPlantFix();
 extern bool gDc3DirectorIKReRun;
+int gDc3PollSeq = 0;
 #endif
 #include "char/FileMerger.h"
 #include "flow/Flow.h"
@@ -3121,7 +3125,31 @@ found:
 }
 
 
+#ifdef HX_NATIVE
+// Per-event trace of player0's left-knee LOCAL rotZ (DC3_IK_DIAG): shows the exact poll order
+// and which pass bends (IK) vs resets (pose) the knee through one gameplay frame.
+void Dc3KneeLog(const char *evt) {
+    if (!getenv("DC3_IK_DIAG") || gDc3PollSeq >= 60)
+        return;
+    HamCharacter *p0 = TheHamWardrobe ? TheHamWardrobe->GetCharacter(0) : nullptr;
+    RndTransformable *kn = p0 ? p0->Find<RndTransformable>("bone_L-knee.mesh", false) : nullptr;
+    RndTransformable *an = p0 ? p0->Find<RndTransformable>("bone_L-ankle.mesh", false) : nullptr;
+    RndTransformable *to = p0 ? p0->Find<RndTransformable>("bone_L-toe.mesh", false) : nullptr;
+    float rz = -999.f;
+    if (kn) {
+        const Hmx::Matrix3 &m = kn->LocalXfm().m;
+        rz = 57.29578f * std::atan2(m.x.y, m.x.x);
+    }
+    std::fprintf(stderr, "DC3_SEQ %d %s kneeRotZ=%.1f ankleZ=%.2f toeZ=%.2f\n",
+                 gDc3PollSeq++, evt, rz, an ? an->WorldXfm().v.z : -999.f,
+                 to ? to->WorldXfm().v.z : -999.f);
+}
+#endif
+
 void HamDirector::Poll() {
+#ifdef HX_NATIVE
+    Dc3KneeLog("HamDir-ENTRY");
+#endif
     if (TheHamWardrobe) {
         TheHamWardrobe->UpdateOverlay();
     }
@@ -3311,12 +3339,27 @@ void HamDirector::Poll() {
                                            : TheHamWardrobe->GetBackup(d - 2);
             if (!dancer)
                 continue;
+            if (d == 0 && getenv("DC3_IK_DIAG")) {
+                static int sLegLog = 0;
+                if (sLegLog < 8) {
+                    sLegLog++;
+                    RndTransformable *a = dancer->Find<RndTransformable>("bone_L-ankle.mesh", false);
+                    RndTransformable *kn = dancer->Find<RndTransformable>("bone_L-knee.mesh", false);
+                    RndTransformable *th = dancer->Find<RndTransformable>("bone_L-thigh.mesh", false);
+                    RndTransformable *pv = dancer->Find<RndTransformable>("bone_pelvis.mesh", false);
+                    fprintf(stderr,
+                        "DC3_IK_DIAG ReRunLeg[%d] ankleZ=%.2f kneeZ=%.2f thighZ=%.2f pelvisZ=%.2f\n",
+                        sLegLog, a ? a->WorldXfm().v.z : -999.f, kn ? kn->WorldXfm().v.z : -999.f,
+                        th ? th->WorldXfm().v.z : -999.f, pv ? pv->WorldXfm().v.z : -999.f);
+                }
+            }
             for (int k = 0; k < 2; k++) {
                 CharIKFoot *ik = dancer->Find<CharIKFoot>(kIKNames[k], false);
                 if (ik)
-                    ik->ReapplyCachedElbow();  // re-apply the cached char-poll bend (no re-solve)
+                    ik->ReapplyCachedElbow();  // re-apply the char-poll bend (plants in good frames)
             }
         }
     }
+    Dc3KneeLog("HamDir-EXIT");
 #endif
 }

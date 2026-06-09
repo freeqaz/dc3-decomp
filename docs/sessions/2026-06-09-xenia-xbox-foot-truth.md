@@ -403,3 +403,38 @@ order; native also loads mMoveElbow=false). A correct, surviving, STABLE applica
 native is blocked by the FK-composition/timing of the re-run point — the open Push-13 problem. Fix
 remains OPT-IN (DC3_FEET_PLANT_FIX, default OFF = verified-stable original sink). Diagnostics
 (DC3_IK_DIAG: IKHand/DoFSM/poll-order/SortOrder) are in place for the next attempt.
+
+## PUSH 12e (2026-06-09) — the re-run PLANTS the foot in good frames; consistent plant blocked by FK entanglement
+
+Definitive per-event poll trace (DC3_SEQ: HamDir-ENTRY/EXIT, CharIKFoot-POST, ServoPose-POST,
+each logging player0's left knee rotZ + ankle/toe world Z). KEY POSITIVE: at **HamDir-EXIT (the
+leg-IK re-run) the foot is PLANTED** — kneeRotZ −36.4, ankleZ 7.56, **toeZ 1.71** — and it
+persists across the following polls. So the re-run mechanism (re-assert the leg IK after the
+move pose) genuinely plants the foot. The failures are intermittent:
+- The **char-poll IK (the normal poll) spikes** wild on some frames (a CharIKFoot-POST showed
+  ankleZ 160.6, toeZ 154.7) — it reads an un-composed leg during HamDirector's interleaved char
+  poses and solves wild. That is the +78 max and the per-frame inconsistency.
+
+### The entanglement (why no clean combo works) — all variants tried
+| variant | result |
+|---|---|
+| no-gate + cache-reapply knee+thigh | wild +78 (cached absolute thigh flips the leg) |
+| no-gate + cache-reapply **knee-only** | **plants in good frames (toe 1.71)** + char-poll spikes + some sinks; gate fails (min −5.2) |
+| single-run gate + re-solve | wild (−28/+66): with the char-poll IK gated OFF the leg at the re-run is NOT FK-composed → re-solve diverges |
+| gate + re-solve + floor-clamp | wild (−47/+74) |
+
+The coupling: **the char-poll IK running is what makes the leg FK-composed (rest ~4.2) at the
+re-run point** (so the re-run plants), BUT the same char-poll IK intermittently spikes. Gating it
+removes the spikes but also removes the FK composition → the re-solve at the re-run diverges. So
+the char-poll IK is simultaneously the planter and the spiker; they can't be cleanly separated
+with the hooks tried.
+
+### The real remaining bug (Push 13)
+The **char-poll IK (CharIKFoot via the feetandhands.pgrp) intermittently reads an un-composed leg
+during HamDirector::Poll's interleaved char poses and solves wild.** Fix = make the leg IK always
+solve on a properly FK-composed leg (the FK-composition timing in the HamDirector/char-poll/servo
+pipeline) — OR run the leg IK exactly once, after the final FK composition, on a guaranteed-composed
+leg. The re-run mechanism (HamDir-EXIT) is the correct injection point IF the leg is composed there
+without the spiky char-poll IK also running. State left as the best variant (no-gate + cache-reapply
+knee-only: plants in good frames). Fix OPT-IN (DC3_FEET_PLANT_FIX, default OFF = verified stable
+original). Full diagnostics in place (DC3_IK_DIAG: DC3_SEQ/IKHand/DoFSM/ReRunLeg/poll-order).

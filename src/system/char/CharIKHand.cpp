@@ -35,10 +35,12 @@ extern bool Dc3FeetPlantFix();
 void CharIKHand::ReapplyCachedElbow() {
     if (!Dc3FeetPlantFix() || !mDc3HasCachedElbow)
         return;
+    // Re-apply ONLY the knee bend (a single-axis .rotz flex) on top of the move pose. The
+    // thigh is a full-orientation .quat: re-applying the cached absolute thigh flips the leg
+    // upward (foot flew to +78 ~= leg-straight-up), so keep the move's thigh orientation and
+    // just flex the knee to lift the shin and plant the foot.
     if (mDc3CachedKnee)
         mDc3CachedKnee->DirtyLocalXfm().m = mDc3CachedKneeM;
-    if (mDc3CachedThigh)
-        mDc3CachedThigh->DirtyLocalXfm().m = mDc3CachedThighM;
 }
 #endif
 

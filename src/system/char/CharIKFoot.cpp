@@ -139,6 +139,12 @@ void CharIKFoot::Poll() {
         CharIKHand::Poll();
         mTargets.clear();
     }
+#ifdef HX_NATIVE
+    {
+        extern void Dc3KneeLog(const char *);
+        Dc3KneeLog("CharIKFoot-POST");
+    }
+#endif
 }
 
 void CharIKFoot::DoFSM(Character *mMe, Transform &tf) {

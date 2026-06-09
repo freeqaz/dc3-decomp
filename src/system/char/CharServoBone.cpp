@@ -65,6 +65,12 @@ END_LOADS
 void CharServoBone::Poll() {
     if (!mMeshes.empty()) {
         PoseMeshes();
+#ifdef HX_NATIVE
+        {
+            extern void Dc3KneeLog(const char *);
+            Dc3KneeLog("ServoPose-POST");
+        }
+#endif
         Character *me = Character::Current();
         if (mFacingPosDelta) {
             if (!mMoveSelf) {
