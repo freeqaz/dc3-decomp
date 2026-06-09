@@ -14,6 +14,17 @@
 #include <cstring>
 #include <cmath>
 #include <cstdio>
+// FEET-IN-FLOOR (DC3_IK_MOVEELBOW=1): native loads mMoveElbow=false for the leg
+// *.ikfoot, which both skips the IKElbow knee bend (Poll) AND omits the knee/thigh
+// dependency in PollDeps -> the sorter polls the IK before the skeleton PoseMeshes,
+// so even a forced bend is overwritten. This forces the elbow-move path in BOTH
+// places so the bend runs and the IK sorts after the pose (like Xbox).
+static bool Dc3MoveElbowForced() {
+    static int v = -1;
+    if (v < 0)
+        v = getenv("DC3_IK_MOVEELBOW") ? 1 : 0;
+    return v != 0;
+}
 #endif
 
 #pragma region CharIKHand
@@ -227,7 +238,11 @@ void CharIKHand::PollDeps(
          ++it) {
         changedBy.push_back(it->mTarget);
     }
-    if (mMoveElbow && mHand) {
+    bool moveElbow = mMoveElbow;
+#ifdef HX_NATIVE
+    moveElbow = moveElbow || Dc3MoveElbowForced();
+#endif
+    if (moveElbow && mHand) {
         RndTransformable *handParent = mHand->TransParent();
         if (handParent) {
             change.push_back(handParent);
@@ -331,10 +346,7 @@ void CharIKHand::Poll() {
     // via a discarded SetWorldXfm) and the leg over-extends -> foot sinks. Xbox bends
     // the knee (~-58deg local). Force the elbow-move path to test whether bending the
     // knee re-plants the foot.
-    static int sForceMoveElbow = -1;
-    if (sForceMoveElbow < 0)
-        sForceMoveElbow = getenv("DC3_IK_MOVEELBOW") ? 1 : 0;
-    if (!mMoveElbow && !sForceMoveElbow)
+    if (!mMoveElbow && !Dc3MoveElbowForced())
         shoulderParent = 0;
 #else
     if (!mMoveElbow)

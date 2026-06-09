@@ -230,3 +230,42 @@ Two coupled native divergences, both `#ifdef HX_NATIVE` + opt-out:
 Open: with poll order fixed, verify the IK reaches Xbox's −58° (the foot-plant FSM
 target must clamp to the floor, CharIKFoot::DoFSM / DC3_IK_FOOTPLANT) and the gate passes
 (toe Z >= −2.0). Tools: CharIKHand IKHand diag + GameplayTelemetry FootLocal (committed).
+
+## PUSH 11 (2026-06-09, ultracode) — fix direction CONFIRMED (poll order), partial plant, remaining blocker
+
+`CharIKHand::PollDeps` declares the knee/thigh dependency **only `if (mMoveElbow && mHand)`**
+(CharIKHand.cpp). So native's `mMoveElbow=false` for the leg `*.ikfoot` breaks BOTH the
+knee bend (Poll line 322 zeros shoulderParent) AND the sorter's knowledge that the IK
+touches the knee — so the IK sorts before the skeleton pose and gets overwritten.
+
+Forcing the elbow-move path in BOTH Poll and PollDeps (DC3_IK_MOVEELBOW=1) + clamping the
+foot-plant goal to the floor (DC3_IK_FOOTPLANT=1):
+- **LEFT foot now PLANTS on many frames** (toe −1.7, ankle 4.0) — the IK knee-bend survives.
+- **RIGHT foot still sinks** (toe −3.9); overall min toe still −4.3.
+
+This **L/R asymmetry confirms poll order is the lever**: the name-based AlphaSort
+(`left.ikfoot` vs `right.ikfoot`) + the dependency graph place the two leg IKs at different
+positions relative to the skeleton pose, so one survives and one is overwritten. (Bone
+lengths/decode faithful; charWeight=1.0; the IK bend itself works when it's allowed to run
+and survive.)
+
+### mMoveElbow load: it is the REAL loaded value, not a desync
+CharWeightable/ObjPtr/IKTarget all stream platform-independent byte counts (verified) and
+the bool read is 1 byte — so the stream is in sync and native reads exactly what the .milo
+says (mMoveElbow=false). Either the .milo carries move_elbow=false and Xbox flips it true via
+an inline prop/setup that native skips (SYNC_PROP move_elbow), OR Xbox loads it true — needs
+an Xbox-side read (CharIKHand+0x6b) or a .milo/prop-script check to settle.
+
+### Remaining (Push 12) — make BOTH leg IKs reliably poll after the full pose
+The skeleton pose is applied by `CharServoBone::Poll -> PoseMeshes` (a pollable, sortable)
+AND possibly by driver-side `HamDirector::PoseMeshes` / `HamCharacter` clip->PoseMeshes
+(outside the CharPollGroup sort). The fix must guarantee the leg IK's knee-bend local write
+is the LAST word for both feet:
+- Set mMoveElbow=true for the leg ikfoot the faithful way (find the Xbox mechanism: load vs
+  inline prop), so PollDeps declares the dependency for both feet.
+- Verify the CharPollableSorter::Sort result orders BOTH left/right ikfoot after
+  skeleton_bones.servo; if a driver-side PoseMeshes runs later, address that ordering too.
+- Then the IK bends the knee to the floor-clamped target (~−58°, Xbox) and the gate
+  (toe Z >= −2.0) passes for both feet.
+All current changes are `#ifdef HX_NATIVE` + `DC3_IK_MOVEELBOW`/`DC3_IK_FOOTPLANT` (off by
+default) — the byte-matched build is untouched. Logs: /tmp/dc3-feet-fix/{moveelbow2,me_fp}.log.
