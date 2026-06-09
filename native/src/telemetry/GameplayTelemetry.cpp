@@ -337,6 +337,23 @@ GameplayTelemetry::Snapshot GameplayTelemetry::CaptureSnapshot(int frame) {
                         aboveR ? aboveR->Name() : "null",
                         s.state ? s.state : "null",
                         s.screen ? s.screen : "null");
+                    if (shinR && thighR) {
+                        const Transform &kl = shinR->LocalXfm();
+                        const Transform &tl = thighR->LocalXfm();
+                        fprintf(stderr,
+                            "DC3_IK_DIAG RestLocal[%d]: kneeLv=(%.2f,%.2f,%.2f) "
+                            "kneeLm.x=(%.3f,%.3f,%.3f) kneeLm.y=(%.3f,%.3f,%.3f) "
+                            "kneeLm.z=(%.3f,%.3f,%.3f) | thighLv=(%.2f,%.2f,%.2f) "
+                            "thighLm.x=(%.3f,%.3f,%.3f) thighLm.z=(%.3f,%.3f,%.3f)\n",
+                            sRestGeomLog,
+                            kl.v.x, kl.v.y, kl.v.z,
+                            kl.m.x.x, kl.m.x.y, kl.m.x.z,
+                            kl.m.y.x, kl.m.y.y, kl.m.y.z,
+                            kl.m.z.x, kl.m.z.y, kl.m.z.z,
+                            tl.v.x, tl.v.y, tl.v.z,
+                            tl.m.x.x, tl.m.x.y, tl.m.x.z,
+                            tl.m.z.x, tl.m.z.y, tl.m.z.z);
+                    }
                 }
                 {
                     static int sCharPathLog = 0;
@@ -380,6 +397,23 @@ GameplayTelemetry::Snapshot GameplayTelemetry::CaptureSnapshot(int frame) {
                         aboveP ? aboveP->Name() : "null",
                         la.m.x.x, la.m.x.y, la.m.x.z,
                         la.m.z.x, la.m.z.y, la.m.z.z);
+                    if (shin && thigh) {
+                        const Transform &kl = shin->LocalXfm();
+                        const Transform &tl = thigh->LocalXfm();
+                        fprintf(stderr,
+                            "DC3_IK_DIAG FootLocal[%d]: kneeLv=(%.2f,%.2f,%.2f) "
+                            "kneeLm.x=(%.3f,%.3f,%.3f) kneeLm.y=(%.3f,%.3f,%.3f) "
+                            "kneeLm.z=(%.3f,%.3f,%.3f) | thighLv=(%.2f,%.2f,%.2f) "
+                            "thighLm.x=(%.3f,%.3f,%.3f) thighLm.z=(%.3f,%.3f,%.3f)\n",
+                            sFootGeomLog,
+                            kl.v.x, kl.v.y, kl.v.z,
+                            kl.m.x.x, kl.m.x.y, kl.m.x.z,
+                            kl.m.y.x, kl.m.y.y, kl.m.y.z,
+                            kl.m.z.x, kl.m.z.y, kl.m.z.z,
+                            tl.v.x, tl.v.y, tl.v.z,
+                            tl.m.x.x, tl.m.x.y, tl.m.x.z,
+                            tl.m.z.x, tl.m.z.y, tl.m.z.z);
+                    }
                 }
                 // Toe above ankle by >2 units = inverted
                 s.lFootInverted = (s.lToeZ > s.lAnkleZ + 2.0f);
