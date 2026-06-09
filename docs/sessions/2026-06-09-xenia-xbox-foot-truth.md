@@ -711,3 +711,39 @@ after the FINAL pelvis pose, not just after the leg pose.
    (pelvis drift) vs the plant not reaching (clamp) — add the pelvis Z to the CleanPlant diag.
 State: gate FAILS (needs 0; at L6/R63). The clean plant + guard is the strongest, non-divergent
 foundation; default OFF verified stable (−4.3/−4.3). Commits: dc3 06e8bf79 + 61b97427 + e1457952.
+
+## PUSH 16 (2026-06-09, ultracode workflow) — ROOT of the last ~37 frames: HALF-PLANTED right leg
+
+5-agent read-only workflow (worst-frame trace / pelvis-facing / reachability / deterministic-order
+/ synthesis) converged on the mechanism for the residual right-foot sink (clusters beats 12-14,
+~29-30, 40-41, 71-78 — exactly when the LEFT foot lifts very high, lToe up to +30, and the RIGHT is
+the support leg).
+
+### Decisive measurements
+- Plant-time right toe ≈ 0, ankle ≈ +4 (CleanPlant diag) — the plant SOLVES correctly.
+- Render-time right ankle −6.8, toe −11.8, rAnkleWorldDelta 4.9–8.2 → DRIFT after the plant.
+- Beat-aligned control (DC3_IK_CHARFOOT_SKIP=1, no plant): at these beats the RAW ANIM already has
+  the right ankle ON the floor (+0.7); the PLANT actively drives it to −6.8. (Net the plant is hugely
+  positive: 808→~37 fails; but it injects this deep right-foot spike.)
+- Signature every frame: rAnkleDirty=0, rKneeDirty=0; the right leg's bend is reverted while the
+  THIGH's downward aim (CharIKFoot.cpp:144 DirtyLocalXfm().m) SURVIVES → straight leg off a tilted
+  thigh → ~7u fling below floor. LEFT shows lAnkleDirty=1 (bend survives) → planted.
+- REFUTED: MoveToFacing (facingPos.z==0, only X/Y; DC3_NO_GUARD_HIP made it WORSE 44→55); the
+  d>reach clamp (never entered — target always reachable); the ROTZ-guard gap (player 0's leg bones
+  are .pos-channel = guarded; the unguarded ROTZ knee is only on backup dancers, which the gate
+  doesn't read).
+
+### The fix direction (Push 17) — make the plant ATOMIC / guard-independent / the genuine last write
+The half-planted state is the enemy: the right leg must be EITHER fully planted OR fully anim, never
+thigh-tilted+knee-straight. Options (all #ifdef HX_NATIVE + opt-in):
+1. Re-assert the full thigh+knee+ankle plant as the genuine LAST per-frame write for the leg (after
+   all dancers' CharServoBone::Poll/MoveToFacing), so no later pass reverts the knee/ankle while the
+   thigh survives. The current re-run (HamDirector.cpp:3357) is after PlayAnims but NOT after the
+   dancers' trailing servo passes (DC3_SEQ shows servo after HamDir-EXIT).
+2. Guard-independent atomic re-assert inside Dc3CleanPlant: don't let gDc3PlantGuard (global, frame-
+   keyed, pointer-matched) be the SOLE thing keeping the leg planted — the L/R plants + 6 dancers'
+   PoseMeshes interleave nondeterministically so the right leg races to half-guarded.
+3. Conservative fallback: if the full bend can't be guaranteed, don't aim the thigh down alone (a
+   knee-only bend reverts to anim, not a fling) — caps the worst case at the anim (−3.3) not −11.8.
+Verify: DC3_FEET_PLANT_FIX=1 DC3_FEET_CLEAN_PLANT=1 gate, watch the named beats, confirm plant-time
+toe ≈ 0 AND render rToe ≥ −2. Full agent reports: workflow wf_0eaf267d-b2b.
