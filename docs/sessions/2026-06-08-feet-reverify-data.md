@@ -388,3 +388,49 @@ do not re-derive a "decode bug" from the length comparison.
 (B) first (it's a found, concrete bug): verify HamDriver Layer::mWeight — does the native
 force-eval apply the Xbox-correct weight per layer, or a wrong/forced value that skews the blend?
 Then (A): extend the FIRM-#1 stability/decode test to char/main + a real song move.
+
+---
+
+# PUSH 6 (2026-06-09) — (B) ruled out; char/main+normal-clip PLANTS; bug isolated to the SONG-MOVE path
+
+## (B) HamDriver Layer::mWeight blend — RULED OUT
+Full lifecycle trace: mWeight is uninit in the ctor (HamDriver.h:16-29) but legitimately SET
+before use — `LayerArray::Eval` (HamDriver.cpp:305) zeroes then accumulates; `LayerClip::Eval`
+(:275) = `EaseSigmoid(...)*parentWeight`. The native force-eval bootstrap (Poll :65-73,
+PreEvalClipWeights :84-118) seeds it with parentWeight=1.0 (NOT a forced final weight), then a
+2nd Eval applies the true root weight; `SetClipWeightMap` (:232) runs from GetNeutralSkeleton
+(HamCharacter.cpp:669,684) and normalizes. Verified faithful to Xbox asm (HamDriver.s). The
+per-layer blend weights are correct → (B) is not the bug. (Side note: PreEvalClipWeights exists
+because native polls IK effectors BEFORE song.hdrv — a poll-order divergence — but it only feeds
+the IK neutral, which is discarded; moot for the rendered foot.)
+
+## (A) char/main skeleton — POSES CORRECTLY with a normal clip [bind/decode REFUTED]
+Ran the FIRM-#1 stability test with `MILO_TEST_CHAR=char/main/gen/main.milo_xbox` + the crouch
+clip. Result: leg bones stable (drift 0.000) AND **feet PLANTED** — toe worldZ = +4.17/+4.05/
++3.84 (above floor), ankle +2.9…+3.8. So char/main's skeleton bind + the shared decode produce a
+sane, planted foot for a normal dance clip. char/main bind/decode is NOT the bug.
+
+## THE NARROWING: the sink is specific to the gameplay SONG-MOVE
+char/main + crouch clip → toe +4 (planted). Gameplay char/main + SONG move → toe -4 (sunk).
+Relative to the root the gap is ~8u, and it is NOT root placement (both roots ≈0). So the sink is
+in the pose the GAMEPLAY SONG MOVE produces — either:
+- (A1) the song-move POSE DATA genuinely puts the feet low (choreography authored to be caught by
+  foot-plant IK — but IK is faithful-and-discarded on native AND Xbox ⇒ would sink on Xbox too ⇒
+  premise), OR
+- (A2) the SONG-ANIM APPLICATION PATH (HamDirector song-anim → RndPropAnim → ClipPlayer::PlayAnims
+  multi-layer / additive base-pose) poses differently than a plain `CharClip::PoseMeshes(clip)` —
+  e.g. an additive/base-pose offset, a wrong base frame, or a per-move root/pelvis offset that
+  drops the legs ~8u. This is the last untested application difference.
+
+## State: 8 verifications faithful; bug is the song-move pose, not the engine
+decode(crowd) + decode(char/main) + IK math + transforms + IK no-op + IK-space + placement +
+blend-weights are ALL faithful. A normal clip on char/main plants the feet. The native ENGINE is
+faithful end-to-end; the feet-in-floor is produced by the gameplay SONG-MOVE path specifically.
+
+## NEXT PROBE (Push 7)
+Isolate an actual SONG MOVE (e.g. orig-assets/extracted/songs/<song>/gen/moves.milo_xbox or
+modular_song_data/gen/era0N_moves.milo_xbox — these hold the .move/RndPropAnim choreography) and
+pose char/main with it the SAME way (or via the song-anim path), checking the foot Z. If a song
+move sinks the foot in isolation → (A1) song data (⇒ likely premise: Xbox sinks too / relies on
+a foot-plant that's discarded on both). If it stays planted in isolation but sinks via the
+HamDirector song-anim path → (A2) the application path adds the drop (a real native-fixable bug).
