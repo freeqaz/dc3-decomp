@@ -370,3 +370,36 @@ pose (no re-solve → no bad-ankle-world dependency). Option (c) is likely clean
 (-36° / target -58°) is local and survives; re-applying it avoids the ankle-world read entirely.
 Also drive the foot-plant data channel so the FSM (vecat) locks. Fix stays OPT-IN
 (DC3_FEET_PLANT_FIX, default OFF = verified-stable original) until this lands.
+
+## PUSH 12d (2026-06-09) — Option (c) cache+reapply FAILS too; the IK bend is pose-dependent
+
+Tried Option (c): let the normal char-poll IK solve (FK-composed, sane: knee −36°) and CACHE its
+knee/thigh LOCAL bend, then re-apply just those locals after the move pose (no re-solve, no ankle
+SetWorldXfm). Result: the knee bend survives (FootLocal knee = −36.4°, stable) BUT the foot is STILL
+wild (toe −8.6..+78.5). So re-applying the cached knee/thigh LOCAL is not enough — the **thigh
+bend is an absolute orientation computed for the char-poll's target/pose**, and applying it onto the
+(differently-posed) move skeleton swings the whole leg wildly. IK bends are not transferable across
+poses; the IK must SOLVE on the actual move-posed leg.
+
+### The hard remaining problem (Push 13)
+Both re-solve and cache-reapply fail:
+- Re-solve at the HamDirector re-run point reads a COLLAPSED leg (mHand/ankle WorldXfm ≈ pelvis,
+  z 35.91) → solves to a hip target → wild. So at that point the leg's WORLD is not properly
+  FK-composed with the move pose (even though mHand->WorldXfm() should force a recompute).
+- Cache-reapply transfers a pose-specific bend → wild.
+
+So the fix requires the leg IK to run ONCE, in a context where the leg is correctly FK-composed
+with the gameplay move pose, AND its output is not subsequently overwritten. The native char pose
+pipeline (HamDirector::Poll PlayAnims vs the per-char poll's bone.servo/song.hdrv/feetandhands.pgrp,
+across char/main subdirs + retarget skeletons) sequences these such that no single in-tree hook
+satisfies both. Next directions to investigate: (1) WHY mHand->WorldXfm() reads ankle≈pelvis at the
+HamDirector re-run (parent-chain dirty/stale? wrong skeleton instance? Character::Current() scope?) —
+fixing that makes the existing re-solve work; (2) reorder so the move pose (HamDirector PlayAnims)
+runs BEFORE the per-char poll, so the char-poll IK (which already solves sanely) lands as the single,
+final, FK-correct pass — i.e., fix the HamDirector-vs-char poll ORDER rather than re-running.
+
+STATUS: root cause fully understood (leg foot-plant IK knee-bend is discarded by the move-pose poll
+order; native also loads mMoveElbow=false). A correct, surviving, STABLE application of the IK on
+native is blocked by the FK-composition/timing of the re-run point — the open Push-13 problem. Fix
+remains OPT-IN (DC3_FEET_PLANT_FIX, default OFF = verified-stable original sink). Diagnostics
+(DC3_IK_DIAG: IKHand/DoFSM/poll-order/SortOrder) are in place for the next attempt.

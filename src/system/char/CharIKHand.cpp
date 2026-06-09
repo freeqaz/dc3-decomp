@@ -21,7 +21,26 @@ CharIKHand::CharIKHand()
     : mHand(this), mFinger(this), mTargets(this), mOrientation(true), mStretch(true),
       mScalable(false), mMoveElbow(true), mElbowSwing(0), mAlwaysIKElbow(false),
       mPullShoulder(true), mAAPlusBB(0), mConstraintWrist(false), mWristRadians(0),
-      mElbowCollide(this), mClockwise(false) {}
+      mElbowCollide(this), mClockwise(false)
+#ifdef HX_NATIVE
+      , mDc3CachedKnee(nullptr), mDc3CachedThigh(nullptr), mDc3HasCachedElbow(false)
+#endif
+{}
+
+#ifdef HX_NATIVE
+extern bool Dc3FeetPlantFix();
+// Re-apply the knee/thigh LOCAL bend cached by the normal char-poll IK solve (an FK-composed,
+// faithful solve). Called from HamDirector::Poll AFTER the song-move pose so the bend survives;
+// re-running the full solve there diverges (it reads a collapsed leg, ankle@pelvis).
+void CharIKHand::ReapplyCachedElbow() {
+    if (!Dc3FeetPlantFix() || !mDc3HasCachedElbow)
+        return;
+    if (mDc3CachedKnee)
+        mDc3CachedKnee->DirtyLocalXfm().m = mDc3CachedKneeM;
+    if (mDc3CachedThigh)
+        mDc3CachedThigh->DirtyLocalXfm().m = mDc3CachedThighM;
+}
+#endif
 
 CharIKHand::~CharIKHand() {}
 
@@ -345,6 +364,15 @@ void CharIKHand::Poll() {
         IKElbow(shoulderParent, elbowParent);
     }
 #ifdef HX_NATIVE
+    if (Dc3FeetPlantFix() && shoulderParent) {
+        // Cache the FK-composed char-poll IK bend for HamDirector to re-apply after the move pose.
+        mDc3CachedKnee = shoulderParent;
+        mDc3CachedKneeM = shoulderParent->LocalXfm().m;
+        mDc3CachedThigh = elbowParent;
+        if (elbowParent)
+            mDc3CachedThighM = elbowParent->LocalXfm().m;
+        mDc3HasCachedElbow = true;
+    }
     {
         // FEET-IN-FLOOR DIAG: does the leg foot-plant IK run + bend the knee?
         // shoulderParent == the knee bone (mHand=ankle). IKElbow writes its

@@ -40,6 +40,10 @@ public:
 
     void SetHand(RndTransformable *);
     void MeasureLengths();
+#ifdef HX_NATIVE
+    // FEET-IN-FLOOR FIX: re-apply the cached leg-IK knee/thigh bend after the move pose.
+    void ReapplyCachedElbow();
+#endif
 
 protected:
     CharIKHand();
@@ -85,6 +89,15 @@ protected:
     ObjPtr<CharCollide> mElbowCollide; // 0x98
     /** "Choose the clockwise solution for the collision detection" */
     bool mClockwise; // 0xac
+#ifdef HX_NATIVE
+    // FEET-IN-FLOOR FIX cache: the knee/thigh bones + their LOCAL bend computed by the
+    // normal (FK-composed, faithful) char-poll IK solve, re-applied after the move pose.
+    RndTransformable *mDc3CachedKnee;
+    RndTransformable *mDc3CachedThigh;
+    Hmx::Matrix3 mDc3CachedKneeM;
+    Hmx::Matrix3 mDc3CachedThighM;
+    bool mDc3HasCachedElbow;
+#endif
 };
 
 BinStream &operator>>(BinStream &, CharIKHand::IKTarget &);

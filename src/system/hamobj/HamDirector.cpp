@@ -3306,7 +3306,6 @@ void HamDirector::Poll() {
     // render via WorldXfm_Force.
     if (Dc3FeetPlantFix() && TheHamWardrobe) {
         static const char *kIKNames[2] = { "left.ikfoot", "right.ikfoot" };
-        gDc3DirectorIKReRun = true;
         for (int d = 0; d < 6; d++) {
             HamCharacter *dancer = (d < 2) ? TheHamWardrobe->GetCharacter(d)
                                            : TheHamWardrobe->GetBackup(d - 2);
@@ -3315,10 +3314,9 @@ void HamDirector::Poll() {
             for (int k = 0; k < 2; k++) {
                 CharIKFoot *ik = dancer->Find<CharIKFoot>(kIKNames[k], false);
                 if (ik)
-                    ik->Poll();
+                    ik->ReapplyCachedElbow();  // re-apply the cached char-poll bend (no re-solve)
             }
         }
-        gDc3DirectorIKReRun = false;
     }
 #endif
 }

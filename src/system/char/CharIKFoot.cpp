@@ -131,10 +131,6 @@ void CharIKFoot::Poll() {
                 (void*)mData.Ptr(), (void*)mFootBone.Ptr());
         }
     }
-    // Single-run gate: skip the leg IK during the normal char poll; it is re-run once
-    // from HamDirector::Poll after the move pose (see Dc3FeetPlantFix / gDc3DirectorIKReRun).
-    if (Dc3FeetPlantFix() && !gDc3DirectorIKReRun)
-        return;
 #endif
     if (mFinger && mHand && mData) {
         mTargets.clear();
