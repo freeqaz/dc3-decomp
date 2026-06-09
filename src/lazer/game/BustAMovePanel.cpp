@@ -640,8 +640,7 @@ void BustAMovePanel::OnBeat() {
         return;
 
     // Deduplicate beat events — only process each beat number once
-    Symbol beat("beat");
-    int currentBeat = TheHamProvider->Property(beat, true)->Int();
+    int currentBeat = TheHamProvider->Property(Symbol("beat"), true)->Int();
     static int sLastBeat = -1;
     if (currentBeat == sLastBeat)
         return;
@@ -762,8 +761,7 @@ void BustAMovePanel::OnBeat() {
             break;
         case kBAMState_Playing:
             if (mBeatCount >= 3) {
-                Symbol stay_on_bam_play("stay_on_bam_play");
-                if (DataVariable(stay_on_bam_play).Int() == 0)
+                if (DataVariable(Symbol("stay_on_bam_play")).Int() == 0)
                     nextState = kBAMState_RecordCountIn;
             }
             break;
@@ -854,15 +852,14 @@ void BustAMovePanel::OnBeat() {
             mFlashcardSlots.push_back(-2);
             mFlashcardSlots.push_back(-2);
             mFlashcardSlots.push_back(-2);
-            mFlashcardLabels.push_back(gNullStr);
-            mFlashcardLabels.push_back(gNullStr);
-            mFlashcardLabels.push_back(gNullStr);
-            mFlashcardLabels.push_back(gNullStr);
-            mFlashcardLabels.push_back(gNullStr);
+            mFlashcardLabels.push_back(Symbol(gNullStr));
+            mFlashcardLabels.push_back(Symbol(gNullStr));
+            mFlashcardLabels.push_back(Symbol(gNullStr));
+            mFlashcardLabels.push_back(Symbol(gNullStr));
+            mFlashcardLabels.push_back(Symbol(gNullStr));
             mFlashcardLabels.push_back(Symbol("bam_record1"));
             mFlashcardLabels.push_back(Symbol("bam_record2"));
-            auto bamRecord3 = Symbol("bam_record3");
-            mFlashcardLabels.push_back(bamRecord3);
+            mFlashcardLabels.push_back(Symbol("bam_record3"));
             mFlashcardLabels.push_back(Symbol("bam_record4"));
             CountIn(16);
         }
@@ -1050,8 +1047,7 @@ void BustAMovePanel::OnBeat() {
                     mStatusLabel->SetTextToken(Symbol("bam_matched"));
                 } else if (mMatchCount == 0) {
                     SetRoundFailure();
-                    Symbol failed("bam_failed");
-                    mStatusLabel->SetTextToken(failed);
+                    mStatusLabel->SetTextToken(Symbol("bam_failed"));
                     HamPlayerData *playerData = TheGameData->Player(mActivePlayer);
                     HamProfile *profile =
                         TheProfileMgr.GetProfileFromPad(playerData->PadNum());
@@ -1079,7 +1075,7 @@ void BustAMovePanel::OnBeat() {
             mMoveScore = 0.0f;
             if (mMoveIndex == 4) {
                 mPendingState = kBAMState_ShowMoveSequenceSetup;
-                mFlashcardLabels.push_back(gNullStr);
+                mFlashcardLabels.push_back(Symbol(gNullStr));
             }
             if (mLoopStartBeat != -1.0f) {
                 TheMaster->GetAudio()->SetLoop(mLoopStartBeat, mLoopEndBeat);
@@ -1095,10 +1091,10 @@ void BustAMovePanel::OnBeat() {
             mFlashcardSlots.push_back(-2);
             mFlashcardSlots.push_back(-2);
             mFlashcardSlots.push_back(-2);
-            mFlashcardLabels.push_back(gNullStr);
-            mFlashcardLabels.push_back(gNullStr);
-            mFlashcardLabels.push_back(gNullStr);
-            mFlashcardLabels.push_back(gNullStr);
+            mFlashcardLabels.push_back(Symbol(gNullStr));
+            mFlashcardLabels.push_back(Symbol(gNullStr));
+            mFlashcardLabels.push_back(Symbol(gNullStr));
+            mFlashcardLabels.push_back(Symbol(gNullStr));
             mFlashcardLabels.push_back(Symbol("bam_record1"));
             mFlashcardLabels.push_back(Symbol("bam_record2"));
             mFlashcardLabels.push_back(Symbol("bam_record3"));
@@ -1112,8 +1108,7 @@ void BustAMovePanel::OnBeat() {
         }
         if (mRepsRemaining != 2)
             break;
-        Symbol readySym("get_ready");
-        ShowGetReadyCard(readySym, (SkeletonSide)mCreatorSide);
+        ShowGetReadyCard(Symbol("get_ready"), (SkeletonSide)mCreatorSide);
         break;
     }
     case kBAMState_FailureToBust:
@@ -1162,8 +1157,7 @@ void BustAMovePanel::OnBeat() {
             int winner = -1; // -1 = tie
             if (score0 > score1) {
                 winner = 0;
-            }
-            if (score1 > score0) {
+            } else if (score1 > score0) {
                 winner = 1;
             }
             static Message winnerMessage("bustamove_winner", 0);
@@ -1256,8 +1250,7 @@ void BustAMovePanel::OnBeat() {
             mFlashcardSlots.push_back(-1);
             mFlashcardSlots.push_back(-1);
             mFlashcardSlots.push_back(-1);
-            Symbol bam_final_sequence("bam_final_sequence");
-            mFinalSequenceType = DataVariable(bam_final_sequence).Int();
+            mFinalSequenceType = DataVariable(Symbol("bam_final_sequence")).Int();
             if (mFinalSequenceType == 0) {
                 mFinalSequenceType = 1;
             }
