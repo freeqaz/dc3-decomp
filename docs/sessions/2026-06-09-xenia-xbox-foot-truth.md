@@ -790,3 +790,15 @@ B) FLATTEN the foot when the toe is below the floor but the ankle is at/above it
    the anim ankle.m, rotate the ankle so toe.z >= floor (dorsiflex), matching Xbox. This is the
    missing lever for the toe-down crouch frames.
 Diag committed: GameplayTelemetry LegChk (DC3_IK_DIAG2). State R22/L11 (~95%), default OFF stable.
+
+### PUSH 16d (2026-06-09, autonomous) — the gate is poll-order NOISY; remaining fix = deterministic order (attended)
+The right-foot fail count varies RUN-TO-RUN (R 22 / 57 / 62 / 98 across identical builds) — the
+residual failures are gated by the nondeterministic LP64 poll order itself (which dancer's servo /
+the move's root-crouch lands relative to the plant). So "R22" was a favorable run; the honest residual
+is ~R20-100 noisy (still a large drop from baseline R693). re-run-ONLY (DC3_FEET_RERUN_ONLY, tested)
+was WORSE (R98) — the normal-poll [28] plant does help — reverted. CONCLUSION: closing the last
+extreme-crouch frames requires a DETERMINISTIC fix (the doc's option 1: order the leg foot-plant after
+the final root-crouch + foot-flatten), which means touching shared poll-dependency / scope (regression
+risk to the 6 dancers + the matched build) — best done attended, not by autonomous guard-tweak ticks.
+Committed clean state: clean plant + frame/hip guard, default OFF stable (-4.3). Stop autonomous grind
+here; PUSH 17 (attended) = deterministic plant-after-root-crouch + foot-flatten (B in 16c).
