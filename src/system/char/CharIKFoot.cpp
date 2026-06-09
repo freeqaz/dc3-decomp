@@ -29,6 +29,25 @@ bool Dc3FeetPlantFix() {
 // song-move pose (set true around that re-run). During the normal char poll it is skipped
 // (the move pose would overwrite it, and running it twice destabilizes the foot-plant FSM).
 bool gDc3DirectorIKReRun = false;
+
+// Force a transform's whole parent chain to recompose its cached WorldXfm from LOCAL,
+// top-down. The leg IK intermittently reads a stale/un-composed WorldXfm (a bone whose
+// WorldXfm was SetWorldXfm'd clean by another system, or whose ancestor wasn't recomposed
+// after the move pose) -> the toe-target/ankle reads a wild position (z 150 / -120) and the
+// solver diverges (ankle -22). Walking to the root, marking dirty, then reading WorldXfm
+// top-down rebuilds each cached world from the (correct) posed LOCAL before the IK uses it.
+static void Dc3RecomposeChain(RndTransformable *t) {
+    if (!t)
+        return;
+    RndTransformable *chain[40];
+    int n = 0;
+    for (RndTransformable *p = t; p && n < 40; p = p->TransParent())
+        chain[n++] = p;
+    for (int i = 0; i < n; i++)
+        (void)chain[i]->DirtyLocalXfm(); // public; marks dirty + propagates to children
+    for (int i = n - 1; i >= 0; i--)
+        (void)chain[i]->WorldXfm();
+}
 #endif
 
 CharIKFoot::CharIKFoot() : mFootBone(this), mFootFsmState(0), mData(this), mDataIndex(0) {
@@ -122,15 +141,18 @@ void CharIKFoot::Poll() {
     }
     {
         static int sCharIKFootPollLog = 0;
-        if (sCharIKFootPollLog < 5) {
+        if (getenv("DC3_IK_DIAG2") && sCharIKFootPollLog < 400) {
             sCharIKFootPollLog++;
+            const Vector3 fw = mFinger ? mFinger->WorldXfm().v : Vector3(0,0,0);
+            const Vector3 hw = mHand ? mHand->WorldXfm().v : Vector3(0,0,0);
             fprintf(stderr,
-                "DC3_IK_DIAG CharIKFootPoll[%d]: path=%s mFinger=%p mHand=%p "
-                "mData=%p mFootBone=%p\n",
+                "DC3_IK_DIAG CharIKFootPoll[%d]: path=%s finger='%s'@(%.2f,%.2f,%.2f) "
+                "hand='%s'@(%.2f,%.2f,%.2f) data='%s'\n",
                 sCharIKFootPollLog,
                 PathName(this),
-                (void*)mFinger.Ptr(), (void*)mHand.Ptr(),
-                (void*)mData.Ptr(), (void*)mFootBone.Ptr());
+                mFinger ? mFinger->Name() : "null", fw.x, fw.y, fw.z,
+                mHand ? mHand->Name() : "null", hw.x, hw.y, hw.z,
+                mData ? mData->Name() : "null");
         }
     }
 #endif
@@ -142,6 +164,15 @@ void CharIKFoot::Poll() {
         return;
 #endif
     if (mFinger && mHand && mData) {
+#ifdef HX_NATIVE
+        // Rebuild the toe-target + ankle world transforms from their posed LOCALs before the
+        // IK reads them, so an intermittently un-composed chain can't feed the solver a wild
+        // goal (see Dc3RecomposeChain). Opt-out: DC3_NO_IK_RECOMPOSE.
+        if (Dc3FeetPlantFix() && !getenv("DC3_NO_IK_RECOMPOSE")) {
+            Dc3RecomposeChain(mFinger);
+            Dc3RecomposeChain(mHand);
+        }
+#endif
         mTargets.clear();
         mTargets.push_back(IKTarget(mFootBone, 0));
         DoFSM(Character::Current(), mFootBone->DirtyLocalXfm());
@@ -175,6 +206,23 @@ void CharIKFoot::DoFSM(Character *mMe, Transform &tf) {
     if (Dc3FeetPlantFix() || getenv("DC3_IK_FOOTPLANT")) {
         if (tf.v.z < 0.0f)
             tf.v.z = 0.0f;
+    }
+    // STABLE STATELESS FOOT PLANT (Dc3FeetPlantFix). The original FSM locks/holds/unlocks
+    // mFootPosition based on the footik plant flag (mData->LocalXfm().v[idx] = vecat).
+    // On native that data is 0 (the runtime clips lack the analyze_footik bake), so the
+    // FSM ran on a forged height heuristic and oscillated -> the leg solver diverged
+    // (one foot flung to ankle -25). Replace the FSM with a stateless goal: track the
+    // anim foot world pos, but never let it sink below the floor. Lifted foot -> goal
+    // follows the anim (IK ~no-op); planted/sinking foot -> goal pins to the floor and
+    // CharIKHand::Poll bends the knee to reach it. No state, no feedback, no oscillation.
+    if (Dc3FeetPlantFix() && !getenv("DC3_IK_FOOTPLANT_FSM")) {
+        const Transform &wt = mFinger->WorldXfm();
+        tf.v.x = wt.v.x;
+        tf.v.y = wt.v.y;
+        // tf.v.z already floor-clamped above; tf.m already = anim foot orientation.
+        mFootPosition = tf.v;
+        mFootFsmState = 1;
+        return;
     }
 #endif
     mFootPosition.z = tf.v.z;

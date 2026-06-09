@@ -731,16 +731,22 @@ void CharBones::ScaleAdd(CharBones &bones, float f2) const {
                     {
                         const char *mn = myBonesItr->name.Str();
                         static int sSAlog = 0;
-                        if (getenv("DC3_IK_DIAG") && mn && std::strstr(mn, "footik") && sSAlog < 16) {
+                        if (getenv("DC3_IK_DIAG") && mn && std::strstr(mn, "footik") && sSAlog < 8) {
                             sSAlog++;
-                            const Vector3 *pos0 = (const Vector3 *)mStart;
-                            std::fprintf(stderr, "DC3_IK_DIAG ScaleAddFootik[%d] footikSrc=(%.3f,%.3f,%.3f) "
-                                    "mStart=%p pos[0]=(%.3f,%.3f,%.3f) pos[1]=(%.3f,%.3f,%.3f) "
-                                    "myBone#=%d nClipBones=%d dst=%s f2=%.3f\n",
-                                    sSAlog, myVecItr->x, myVecItr->y, myVecItr->z, (void *)mStart,
-                                    pos0[0].x, pos0[0].y, pos0[0].z, pos0[1].x, pos0[1].y, pos0[1].z,
-                                    (int)(myBonesItr - (Bone *)&mBones[0]), (int)mBones.size(),
-                                    otherBonesItr->name.Str(), f2);
+                            const float *fp = (const float *)mStart;
+                            std::fprintf(stderr,
+                                "DC3_IK_DIAG ScaleAddFootik[%d] myBone#=%d nClipBones=%d nPOS=%d nQUAT=%d "
+                                "comp=%d total=%d offQUAT=%d dst=%s f2=%.3f\n",
+                                sSAlog, (int)(myBonesItr - (Bone *)&mBones[0]), (int)mBones.size(),
+                                mCounts[TYPE_POS] /*=0*/, mCounts[TYPE_QUAT],
+                                (int)mCompression, mTotalSize, mOffsets[TYPE_QUAT],
+                                otherBonesItr->name.Str(), f2);
+                            // Dump first 48 bytes (12 floats) of the sample buffer. If POS is
+                            // 12-byte-packed (native), facing/footik/pelvis = floats[0..2],[3..5],[6..8].
+                            // If 16-byte-packed (Xbox VMX128), they'd be [0..2],[4..6],[8..10].
+                            std::fprintf(stderr, "  raw f[0..11]=");
+                            for (int q = 0; q < 12; ++q) std::fprintf(stderr, "%.3f ", fp[q]);
+                            std::fprintf(stderr, "\n");
                         }
                     }
 #endif
