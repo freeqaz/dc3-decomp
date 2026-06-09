@@ -296,7 +296,13 @@ namespace {
         return true;
     }
 
-    RndMat *SetUpWorkingMat() { return TheShaderMgr.GetWork(); }
+    RndMat *SetUpWorkingMat() {
+        RndMat *mat = TheShaderMgr.GetWork();
+        mat->SetBlend(BaseMaterial::kBlendSrc);
+        mat->SetZMode(kZModeDisable);
+        mat->SetTexWrap(kTexWrapClamp);
+        return mat;
+    }
 
     RndTex *SetPaletteTexture(RndTex *tex, StreamDisplay display) {
         if (tex != nullptr) {
@@ -364,9 +370,9 @@ void StreamRenderer::DrawToTexture() {
     TheDxRnd.SetShaderRegisterAlloc((DxRnd::RegisterAlloc)3);
 
     LiveCameraInput *camInput = TheGestureMgr->GetLiveCameraInput();
-    int streamFlags = DisplayStreams[mDisplay];
-    unsigned int needsDepth = streamFlags & 1;
-    unsigned int needsColor = (streamFlags >> 1) & 1;
+    unsigned int streamFlags = DisplayStreams[mDisplay];
+    bool needsDepth = streamFlags & 1;
+    bool needsColor = (streamFlags >> 1) & 1;
 
     if (needsDepth && !*(bool *)((char *)camInput + 0x11ea)) {
         camInput->PollNewStream(LiveCameraInput::kBufferDepth);
