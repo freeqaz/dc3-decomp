@@ -132,3 +132,61 @@ grep -oE 'IK CLAMP2 \[frame [0-9]+\] name=ankle neutral=\([^)]*\)' /tmp/xenia-ru
 - `nop_input_driver.cc` UNPAUSE NUDGE.
 - `dc3_hack_pack.cc` IK-telemetry rig (this IS the task-#15 measurement tool — extend, don't rewrite).
 - Committed APC fix `4f3a5d8bf` (correct; irrelevant to this; keep).
+
+## PUSH 9 (2026-06-09, ultracode) — FRAME-MATCHED: the feet sink is an UNAPPLIED LEG IK, not the anim pose
+
+Built the native per-segment leg table and the **frame-matched** Xbox leg trajectory
+(per-frame telemetry, corrected VMX128 offsets). This OVERTURNS the prior
+"Xbox plants via the anim pose / IK discarded on both" conclusion.
+
+### Native per-segment (FootGeom/FootLocal diag, GameplayTelemetry.cpp)
+| | rest | gameplay (sunk) |
+|---|---|---|
+| pelvis world Z | 42.51 | 35.2 |
+| thigh world Z | — | 35.28 |
+| knee(shin) world Z | — | 17.83 |
+| ankle world Z | 4.39 | ~0.1 |
+| toe world Z | 0.01 | −3.8 |
+| knee LOCAL v.x (femur) | 20.27 | 17.56 |
+| knee LOCAL rotZ | ~−4° | **−20°** |
+
+### Bone lengths are FAITHFUL — femur "shrink" was a RED HERRING
+Xbox `bone_L-knee.mesh` LOCAL v.x = **17.708, CONSTANT across all 150 gameplay
+frames** (min==max). Native posed femur = 17.56 → matches. The native "rest" 20.27
+is the raw-mesh bind before the skeleton_bones.servo poses it; the posed value is
+~17.6 on BOTH platforms. Tibia (Xbox 18.23 / native ~18.0) and thigh-offset (3.70 /
+3.60) also match. Bone lengths/decode are not the bug.
+
+### Frame-matched knee flex (the decisive datum) — pelvis ≈ 35.2 on both
+| @ pelvis ~35.2 | knee rotZ | ankle world Z | toe world Z |
+|---|---|---|---|
+| **Xbox** | **−58°** | 4.41 | **0.01 (PLANTED)** |
+| **Native** | **−20°** | ~0.1 | **−3.8 (SUNK)** |
+
+(Xbox trajectory: pelvis 33.9–41.0, knee rotZ −9.75°…−115.5°, toe world Z min −0.00
+i.e. never below floor. Native pure-anim knee = −20° at the same beat.)
+
+### Conclusion
+- The knee.rotz DECODE is shared/matched and the BE swap is correct for comp=1
+  (ShortQuat) — verified A/B (DC3_CLIP_SWAP_LEGACY identical). So native's pure-anim
+  knee (−20°, IK discarded) == Xbox's pure-anim knee.
+- Xbox's rendered knee LOCAL is −58° at the matched beat → **Xbox's LEG IK writes
+  ~−38° of extra knee flex INTO THE LOCAL transform (it survives render) to plant
+  the foot.** Native's leg IK contributes ~0 (DC3_IK_CHARFOOT_SKIP byte-identical →
+  CharIKFoot inactive; HamIKEffector clampF=0 + world-write discarded).
+- **The feet-in-floor bug = the leg foot-plant IK is not applied on native.** The
+  prior "Xbox plants via anim, survive-fix would diverge" conclusion is REFUTED by
+  the frame-matched Xbox knee (−58° ≠ anim −20°). A survivable leg-IK foot-plant is
+  exactly what Xbox does.
+
+### NEXT (Push 10): activate the native leg IK
+CharIKFoot (the 2-bone leg solver, writes LOCAL → survives) is inactive on native:
+its `if (mFinger && mHand && mData)` guard fails (CharIKFoot.cpp:105). Find why
+mFinger/mHand/mData are null on native (init gap) and fix so CharIKFoot bends the
+knee (~−58° local) to plant the foot. Gate `#ifdef HX_NATIVE`, opt-out env. Verify
+against GameplayTelemetryTest.FeetNotBelowFloorDuringGameplay (toe Z >= −2.0) and
+re-capture the native knee rotZ → should reach ~−58° at pelvis 35.2.
+
+Tools: native FootLocal/RestLocal diag (committed); Xbox per-frame leg telemetry
+(xenia dc3_hack_pack.cc, committed) + /tmp/xenia-rsp/parse_traj.py (frame-match by
+pelvis). Native run: dc3-native + ymca.txt; Xbox run: xenia + xenia-ymca.txt.
