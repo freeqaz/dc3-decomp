@@ -10,6 +10,27 @@
 #include <cstdlib>
 #include <cstring>
 #include <cstdio>
+#include <set>
+// FRAME-KEYED PLANT GUARD: the leg foot-plant writes leg bone LOCALs, but a later
+// CharBonesMeshes::PoseMeshes in the same frame (nondeterministic LP64 poll order) re-poses
+// the leg from the anim and overwrites the plant. The plant adds its bones here; PoseMeshes
+// skips a guarded bone; the guard clears at each new frame's first PoseMeshes (keyed on
+// TheTaskMgr.UISeconds()) so the legit pose always runs first and only LATER overwrites skip.
+std::set<RndTransformable *> gDc3PlantGuard;
+bool gDc3PlantGuardActive = false;
+static float gDc3PlantGuardFrame = -1.0f;
+void Dc3PlantGuardTick() {
+    if (!gDc3PlantGuardActive)
+        return;
+    float t = TheTaskMgr.UISeconds();
+    if (t != gDc3PlantGuardFrame) {
+        gDc3PlantGuard.clear();
+        gDc3PlantGuardFrame = t;
+    }
+}
+bool Dc3PlantGuarded(RndTransformable *b) {
+    return gDc3PlantGuardActive && gDc3PlantGuard.count(b) != 0;
+}
 // FEET-IN-FLOOR FIX (opt-out: DC3_FEET_PLANT_FIX_OFF=1). The leg foot-plant IK must
 // bend the leg; native loads mMoveElbow=false for the *.ikfoot, which disables the
 // IKElbow knee bend AND drops the knee/thigh dependency from CharIKHand::PollDeps, so
@@ -33,6 +54,8 @@ bool Dc3FeetPlantFix() {
 // song-move pose (set true around that re-run). During the normal char poll it is skipped
 // (the move pose would overwrite it, and running it twice destabilizes the foot-plant FSM).
 bool gDc3DirectorIKReRun = false;
+// Monotonic poll-sequence counter (DC3_IK_DIAG2) to find who writes a leg bone LAST in a frame.
+int gDc3PollSeq = 0;
 
 // Force a transform's whole parent chain to recompose its cached WorldXfm from LOCAL,
 // top-down. The leg IK intermittently reads a stale/un-composed WorldXfm (a bone whose
@@ -146,6 +169,12 @@ static bool Dc3CleanPlant(RndTransformable *ankle, RndTransformable *toe) {
         ankle->DirtyLocalXfm().m = lmNew;
     }
     (void)ankle->WorldXfm();
+
+    // Guard the bend bones so a later PoseMeshes this frame can't overwrite the plant.
+    gDc3PlantGuardActive = true;
+    gDc3PlantGuard.insert(thigh);
+    gDc3PlantGuard.insert(knee);
+    gDc3PlantGuard.insert(ankle);
     return true;
 }
 #endif
@@ -302,11 +331,12 @@ void CharIKFoot::Poll() {
             if (toe) {
                 static int sCP = 0;
                 bool ok = Dc3CleanPlant(mHand, toe);
-                if (getenv("DC3_IK_DIAG2") && sCP < 30) {
+                if (getenv("DC3_IK_DIAG2") && sCP < 60) {
                     sCP++;
                     Vector3 tw = toe->WorldXfm().v; Vector3 aw = mHand->WorldXfm().v;
-                    fprintf(stderr, "DC3_IK_DIAG CleanPlant %s ok=%d toe=(%.2f,%.2f,%.2f) ankle=(%.2f,%.2f,%.2f)\n",
-                            (mDataIndex == 0) ? "L" : "R", ok ? 1 : 0, tw.x, tw.y, tw.z, aw.x, aw.y, aw.z);
+                    fprintf(stderr, "DC3_IK_DIAG CleanPlant seq=%d %s ankleptr=%p ok=%d toe=(%.2f,%.2f,%.2f) ankle=(%.2f,%.2f,%.2f)\n",
+                            ++gDc3PollSeq, (mDataIndex == 0) ? "L" : "R", (void *)mHand, ok ? 1 : 0,
+                            tw.x, tw.y, tw.z, aw.x, aw.y, aw.z);
                 }
             }
         } else {

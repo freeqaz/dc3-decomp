@@ -99,6 +99,10 @@ void CharBonesMeshes::PoseMeshes() {
     ObjPtrVec<RndTransformable>::iterator curMesh = mMeshes.begin();
 
 #ifdef HX_NATIVE
+    // Frame-keyed foot-plant guard (see CharIKFoot.cpp): clears guarded leg bones at each new
+    // frame's first PoseMeshes so the legit pose runs; a LATER PoseMeshes this frame skips a
+    // freshly-planted leg bone (in the QUAT loop below) so the plant survives the poll order.
+    { extern void Dc3PlantGuardTick(); Dc3PlantGuardTick(); }
     { static int sPoseMeshLog = 0;
       if (sPoseMeshLog < 3 && mMeshes.size() > 20) {
         sPoseMeshLog++;
@@ -146,6 +150,11 @@ void CharBonesMeshes::PoseMeshes() {
         Hmx::Quat *quat = (Hmx::Quat *)(start + quatOffset);
         for (; quat < quatEnd; quat++, ++curMesh) {
             Normalize(*quat, *quat);
+#ifdef HX_NATIVE
+            // Skip a leg bone that the foot-plant guarded THIS frame (a later overwrite pose).
+            { extern bool Dc3PlantGuarded(RndTransformable *);
+              if (Dc3PlantGuarded(*curMesh)) continue; }
+#endif
             MakeRotMatrix(*quat, (*curMesh)->DirtyLocalXfm().m);
         }
 
