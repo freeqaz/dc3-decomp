@@ -352,26 +352,23 @@ void CharIKHand::Poll() {
         // local rotZ to the Xbox ground truth (~-58deg planted).
         static int sIKc = 0, sLogged = 0;
         const char *pn = PathName(this);
-        if (pn && std::strstr(pn, "ikfoot")) {
+        if (pn && std::strstr(pn, "ikfoot") && std::strstr(pn, "main.milo")) {
             sIKc++;
-            if (sLogged < 40 && (sIKc % 30 == 0 || sLogged < 6)) {
+            if (sLogged < 40) {
                 sLogged++;
                 float kz = -999.f;
                 if (shoulderParent) {
                     const Hmx::Matrix3 &m = shoulderParent->LocalXfm().m;
                     kz = 57.29578f * std::atan2(m.x.y, m.x.x);
                 }
-                RndTransformable *hp = mHand ? mHand->TransParent() : nullptr;
+                const Vector3 &aw = mHand ? mHand->WorldXfm().v : destPos;
                 std::fprintf(stderr,
-                    "DC3_IK_DIAG IKHand[%d] path=%s charWeight=%.5f alwaysElbow=%d "
-                    "nTargets=%d hand=%s handPath=%s handParent=%s "
-                    "knee=%s kneeLocalRotZ_postIK=%.2f\n",
-                    sLogged, pn, charWeight, mAlwaysIKElbow ? 1 : 0,
-                    (int)mTargets.size(),
-                    mHand ? mHand->Name() : "null",
-                    mHand ? PathName(mHand.Ptr()) : "null",
-                    hp ? hp->Name() : "null",
-                    shoulderParent ? shoulderParent->Name() : "null", kz);
+                    "DC3_IK_DIAG IKHand[%d] %s cw=%.3f kneeRotZ=%.1f reach(AAPlusBB)=%.2f "
+                    "worldDst=(%.2f,%.2f,%.2f) destPos=(%.2f,%.2f,%.2f) ankleW=(%.2f,%.2f,%.2f)\n",
+                    sLogged, pn, charWeight, kz, mAAPlusBB,
+                    mWorldDst.x, mWorldDst.y, mWorldDst.z,
+                    destPos.x, destPos.y, destPos.z,
+                    aw.x, aw.y, aw.z);
             }
         }
     }

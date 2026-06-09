@@ -345,3 +345,28 @@ left.ikfoot:
 Status: fix is OPT-IN (DC3_FEET_PLANT_FIX, default OFF — verified the default is the unchanged
 stable original, toe −4.3..3.9). The survival mechanism (mMoveElbow + re-run after move pose) is
 correct and lands the knee bend; the IK SOLVE stabilization is the final piece.
+
+## PUSH 12c (2026-06-09) — divergence SEED: at re-run time the ankle world reads at the PELVIS
+
+Instrumented CharIKHand::Poll internals (player0). The reach is correct
+(`mAAPlusBB` = 36.04 ≈ femur+tibia). But on the FIRST solve:
+`worldDst = destPos = ankleW = (65.94, -22.28, 35.91)` — all three identical, and **z=35.91 is
+the PELVIS/hip height**. So `mHand->WorldXfm()` (the ankle) reads at the HIP at re-run time
+(the leg is collapsed / not FK-composed with the bent knee), the mFinger retarget then sets the
+IK goal to the hip, and the solve writes the ankle there → the foot flies to hip level → wild.
+
+So the IK re-run (end of HamDirector::Poll) reads an FK state where bone_L-ankle.mesh's world ≈
+bone_pelvis.mesh's world (knee/thigh not yet contributing) — an **FK-composition / re-run-timing
+problem**, not the IK math (reach is right, knee bends -36° fine). Plus the foot-plant FSM never
+locks (vecat = mData = 0, PUSH 12b).
+
+### Remaining (Push 13) — make the re-run read a properly-composed leg
+The re-assert point (end of HamDirector::Poll) is too early / the leg world isn't composed there
+(ankle reads at pelvis). Options to try: (a) force a WorldXfm recompute of the leg chain before the
+IK re-run; (b) re-run the IK at a later, fully-FK-composed point (or hook after the servo's
+WorldXfm_Force); (c) instead of re-running the whole solve, CACHE the IKElbow knee/thigh LOCAL
+bend computed in the normal char poll (correct flow) and just RE-APPLY those locals after the move
+pose (no re-solve → no bad-ankle-world dependency). Option (c) is likely cleanest: the knee bend
+(-36° / target -58°) is local and survives; re-applying it avoids the ankle-world read entirely.
+Also drive the foot-plant data channel so the FSM (vecat) locks. Fix stays OPT-IN
+(DC3_FEET_PLANT_FIX, default OFF = verified-stable original) until this lands.
