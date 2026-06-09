@@ -6,6 +6,28 @@
 #include "obj/Object.h"
 #include "obj/Task.h"
 #include "rndobj/Trans.h"
+#ifdef HX_NATIVE
+#include <cstdlib>
+// FEET-IN-FLOOR FIX (opt-out: DC3_FEET_PLANT_FIX_OFF=1). The leg foot-plant IK must
+// bend the leg; native loads mMoveElbow=false for the *.ikfoot, which disables the
+// IKElbow knee bend AND drops the knee/thigh dependency from CharIKHand::PollDeps, so
+// the sorter polls the IK before the skeleton pose and the bend is overwritten. See
+// CharIKFoot::Load (forces mMoveElbow=true) + Character::SyncObjects (IK sorts last).
+bool Dc3FeetPlantFix() {
+    // OPT-IN (DC3_FEET_PLANT_FIX=1) while WIP: with the fix on, the leg IK survives the
+    // move pose (knee bends ~-36deg, was discarded) BUT the foot-plant solve currently
+    // DIVERGES on native (foot flies/sinks wildly), so it stays OFF by default until the
+    // IK-solve stabilization lands. See docs/sessions/2026-06-09-xenia-xbox-foot-truth.md.
+    static int v = -1;
+    if (v < 0)
+        v = getenv("DC3_FEET_PLANT_FIX") ? 1 : 0;
+    return v != 0;
+}
+// When the fix is on, the leg IK runs ONCE per frame from HamDirector::Poll AFTER the
+// song-move pose (set true around that re-run). During the normal char poll it is skipped
+// (the move pose would overwrite it, and running it twice destabilizes the foot-plant FSM).
+bool gDc3DirectorIKReRun = false;
+#endif
 
 CharIKFoot::CharIKFoot() : mFootBone(this), mFootFsmState(0), mData(this), mDataIndex(0) {
     mFootBone = Hmx::Object::New<RndTransformable>();
@@ -62,6 +84,14 @@ BEGIN_LOADS(CharIKFoot)
         d >> mData;
         d >> mDataIndex;
     }
+#ifdef HX_NATIVE
+    // A foot-plant IK has to move the knee/thigh to plant the foot. Native loads
+    // mMoveElbow=false here (the leg over-extends and the foot sinks); Xbox renders a
+    // bent, planted knee. Force the elbow-move path so IKElbow bends the knee and
+    // PollDeps declares the knee/thigh dep (which the poll-order fix relies on).
+    if (Dc3FeetPlantFix())
+        mMoveElbow = true;
+#endif
 END_LOADS
 
 void CharIKFoot::Enter() {
@@ -101,6 +131,10 @@ void CharIKFoot::Poll() {
                 (void*)mData.Ptr(), (void*)mFootBone.Ptr());
         }
     }
+    // Single-run gate: skip the leg IK during the normal char poll; it is re-run once
+    // from HamDirector::Poll after the move pose (see Dc3FeetPlantFix / gDc3DirectorIKReRun).
+    if (Dc3FeetPlantFix() && !gDc3DirectorIKReRun)
+        return;
 #endif
     if (mFinger && mHand && mData) {
         mTargets.clear();

@@ -1,4 +1,9 @@
 #include "rndobj/Dir.h"
+#ifdef HX_NATIVE
+#include <cstdlib>
+#include <cstring>
+#include <cstdio>
+#endif
 #include "obj/Data.h"
 #include "obj/Dir.h"
 #include "obj/Object.h"
@@ -182,6 +187,53 @@ void RndDir::SyncObjects() {
                 numRemaining * sizeof(RndPollable *)
             );
         }
+#ifdef HX_NATIVE
+        // FEET-IN-FLOOR FIX (opt-out: DC3_FEET_PLANT_FIX_OFF=1). The leg foot-plant IK
+        // (CharIKFoot, inside the feet/hands poll group) bends the knee/thigh via a LOCAL
+        // write, but it must run AFTER the skeleton pose (CharServoBone::PoseMeshes) or
+        // the pose overwrites the bend and the foot sinks. In this flattened poll list the
+        // IK group can precede the pose; move it to the end so the bend is the last word
+        // (Xbox effective order is pose-then-IK; the foot/toe follow via WorldXfm_Force).
+        {
+            static int sFeetFix = -1;
+            if (sFeetFix < 0)
+                sFeetFix = getenv("DC3_FEET_PLANT_FIX_OFF") ? 0 : 1;
+            if (sFeetFix && mPolls.size() > 1) {
+                std::vector<RndPollable *> late;
+                for (int i = 0; i < (int)mPolls.size();) {
+                    const char *n = mPolls[i] ? mPolls[i]->Name() : nullptr;
+                    if (n && (strstr(n, "ikfoot") || strstr(n, "feetandhands"))) {
+                        late.push_back(mPolls[i]);
+                        mPolls.erase(mPolls.begin() + i);
+                    } else {
+                        ++i;
+                    }
+                }
+                for (int i = 0; i < (int)late.size(); i++)
+                    mPolls.push_back(late[i]);
+                static int sFFLog = 0;
+                bool relevant = false;
+                for (int i = 0; i < (int)mPolls.size(); i++) {
+                    const char *n = mPolls[i] ? mPolls[i]->Name() : nullptr;
+                    if (n && (strstr(n, "ikfoot") || strstr(n, "servo") || strstr(n, "feetandhands")))
+                        { relevant = true; break; }
+                }
+                if (getenv("DC3_IK_DIAG") && sFFLog < 6 && relevant) {
+                    sFFLog++;
+                    fprintf(stderr, "DC3_IK_DIAG RndDirFeet[%d] dir=%s moved=%d mPolls(%d):",
+                            sFFLog, Name(), (int)late.size(), (int)mPolls.size());
+                    for (int i = 0; i < (int)mPolls.size(); i++) {
+                        const char *n = mPolls[i] ? mPolls[i]->Name() : "?";
+                        if (n && (strstr(n, "ikfoot") || strstr(n, "servo") || strstr(n, "feetandhands") ||
+                                  strstr(n, "skeleton") || strstr(n, "hdrv") || strstr(n, "director") ||
+                                  strstr(n, "pgrp")))
+                            fprintf(stderr, " [%d]%s", i, n);
+                    }
+                    fprintf(stderr, "\n");
+                }
+            }
+        }
+#endif
         if (IsProxy() && Dir()) {
             ChainSourceSubdir(Dir(), this);
         }

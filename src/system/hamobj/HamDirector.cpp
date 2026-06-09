@@ -16,6 +16,11 @@
 #include "char/CharUpperTwist.h"
 #include "char/CharUtl.h"
 #include "char/Character.h"
+#ifdef HX_NATIVE
+#include "char/CharIKFoot.h"
+extern bool Dc3FeetPlantFix();
+extern bool gDc3DirectorIKReRun;
+#endif
 #include "char/FileMerger.h"
 #include "flow/Flow.h"
 #include "flow/PropertyEventProvider.h"
@@ -3292,4 +3297,28 @@ void HamDirector::Poll() {
             }
         }
     }
+#ifdef HX_NATIVE
+    // FEET-IN-FLOOR FIX (opt-out: DC3_FEET_PLANT_FIX_OFF=1). The song-move pose applied
+    // above (ClipPlayer::PlayAnims) runs after the dancers' char poll and overwrites the
+    // leg foot-plant IK's knee bend, so the leg over-extends and the foot sinks. Re-run
+    // each dancer's leg IK here, after the move pose, so its knee bend is the last word
+    // and the foot plants (matches Xbox's bent, planted knee). The toe/ankle follow at
+    // render via WorldXfm_Force.
+    if (Dc3FeetPlantFix() && TheHamWardrobe) {
+        static const char *kIKNames[2] = { "left.ikfoot", "right.ikfoot" };
+        gDc3DirectorIKReRun = true;
+        for (int d = 0; d < 6; d++) {
+            HamCharacter *dancer = (d < 2) ? TheHamWardrobe->GetCharacter(d)
+                                           : TheHamWardrobe->GetBackup(d - 2);
+            if (!dancer)
+                continue;
+            for (int k = 0; k < 2; k++) {
+                CharIKFoot *ik = dancer->Find<CharIKFoot>(kIKNames[k], false);
+                if (ik)
+                    ik->Poll();
+            }
+        }
+        gDc3DirectorIKReRun = false;
+    }
+#endif
 }

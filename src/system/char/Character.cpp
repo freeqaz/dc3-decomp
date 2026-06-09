@@ -5,6 +5,13 @@
 #include "char/CharEyes.h"
 #include "char/CharPollable.h"
 #include "char/CharServoBone.h"
+#ifdef HX_NATIVE
+#include "char/CharIKFoot.h"
+#include <cstdlib>
+#include <cstdio>
+#include <cstring>
+extern bool Dc3FeetPlantFix();
+#endif
 #include "char/CharacterTest.h"
 #include "char/CharUtl.h"
 #include "char/Waypoint.h"
@@ -473,6 +480,39 @@ void Character::SyncObjects() {
         CharPollableSorter sorter;
         sorter.Sort(mPolls);
     }
+#ifdef HX_NATIVE
+    // FEET-IN-FLOOR FIX (opt-out: DC3_FEET_PLANT_FIX_OFF=1). The leg foot-plant IK
+    // (CharIKFoot, via IKElbow) writes the knee/thigh LOCAL to bend the leg and plant
+    // the foot, but it must poll AFTER the skeleton pose (CharServoBone::PoseMeshes) or
+    // the pose overwrites the bend and the foot sinks. The sorter is skipped for subdirs
+    // (the dancer IS a subdir) and can mis-order the two legs anyway, so deterministically
+    // move every CharIKFoot to the end of the poll list (Xbox effective order is
+    // pose-then-IK; the foot/toe follow at render via WorldXfm_Force).
+    if (Dc3FeetPlantFix()) {
+        std::vector<RndPollable *> feet;
+        for (size_t i = 0; i < mPolls.size();) {
+            if (dynamic_cast<CharIKFoot *>(mPolls[i])) {
+                feet.push_back(mPolls[i]);
+                mPolls.erase(mPolls.begin() + i);
+            } else {
+                ++i;
+            }
+        }
+        for (size_t i = 0; i < feet.size(); ++i)
+            mPolls.push_back(feet[i]);
+        static int sReorderLog = 0;
+        if (getenv("DC3_IK_DIAG") && sReorderLog < 8) {
+            sReorderLog++;
+            fprintf(stderr, "DC3_IK_DIAG FeetReorder[%d] dir=%s feet=%d mPolls(%d):",
+                    sReorderLog, PathName(this), (int)feet.size(), (int)mPolls.size());
+            for (size_t i = 0; i < mPolls.size(); i++) {
+                Hmx::Object *o = dynamic_cast<Hmx::Object *>(mPolls[i]);
+                fprintf(stderr, " %s", o ? o->Name() : "?");
+            }
+            fprintf(stderr, "\n");
+        }
+    }
+#endif
 }
 
 void Character::AddedObject(Hmx::Object *o) {

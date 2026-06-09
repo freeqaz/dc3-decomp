@@ -269,3 +269,51 @@ is the LAST word for both feet:
   (toe Z >= −2.0) passes for both feet.
 All current changes are `#ifdef HX_NATIVE` + `DC3_IK_MOVEELBOW`/`DC3_IK_FOOTPLANT` (off by
 default) — the byte-matched build is untouched. Logs: /tmp/dc3-feet-fix/{moveelbow2,me_fp}.log.
+
+## PUSH 12 (2026-06-09, ultracode) — fix mechanism IMPLEMENTED (IK survives); IK-solve diverges (WIP, opt-in)
+
+Implemented the leg-IK survival fix and confirmed it makes the knee bend survive the move
+pose — but applying the IK reveals a THIRD native bug: the foot-plant solve diverges. Fix is
+gated **opt-in** (`DC3_FEET_PLANT_FIX=1`, default OFF) so the native build is unbroken.
+
+### The full overwrite chain (now mapped end-to-end)
+The dancer's flattened poll order (RndDir::SyncObjects, the world's `!IsSubDir` flatten):
+`[6] bone.servo  [22] song.hdrv  [28] feetandhands.pgrp(leg IK)`. The leg IK lives inside the
+`feetandhands.pgrp` CharPollGroup; the skeleton pose servo (`skeleton_bones.servo`) is in a
+sibling subdir. CRUCIALLY the gameplay move is applied by **`HamDirector::Poll` →
+`ClipPlayer::PlayAnims(player0)`**, a SEPARATE RndPollable that runs AFTER the dancers' char
+poll and re-poses the skeleton — overwriting the IK's knee bend. So no within-dancer reorder
+can win; the IK must re-assert after HamDirector.
+
+### What was implemented (all `#ifdef HX_NATIVE`, opt-in DC3_FEET_PLANT_FIX)
+1. `CharIKFoot::Load` forces `mMoveElbow=true` — native loaded it false, which both skipped
+   the IKElbow knee bend (Poll:322) and dropped the knee/thigh dep from CharIKHand::PollDeps.
+2. `CharIKFoot::Poll` single-run gate (`gDc3DirectorIKReRun`): skip the IK during the normal
+   char poll; run it ONCE from the director re-run after the move pose (running it twice
+   destabilizes the foot-plant FSM).
+3. `HamDirector::Poll` re-asserts each dancer's leg IK (`Find<CharIKFoot>("left/right.ikfoot")
+   ->Poll()`) after PlayAnims, wrapped in `gDc3DirectorIKReRun=true/false`.
+4. `RndDir::SyncObjects` moves `ikfoot`/`feetandhands` poll entries to the end of the flattened
+   list (belt-and-suspenders; the HamDirector re-run is the effective fix).
+   (A redundant no-op reorder also sits in `Character::SyncObjects` — the dancer's CharIKFoot
+   are NOT in a Character's mPolls, they're in the world's flattened RndDir list; clean up.)
+
+### Result: IK survives but DIVERGES
+With the fix on: knee LOCAL is now −36.4° at Sample (survived; was −20° anim). BUT player0's
+foot goes WILD — toe min −28, max +66; ankle up to +71. So when the native leg IK is actually
+applied (single run, after the pose), the **foot-plant solve diverges** (it does NOT just settle
+to a bent, planted leg like Xbox's −58°). Default-OFF confirmed stable (original sink −4.3..3.9).
+
+### Remaining (Push 13) — stabilize the native IK solve
+The divergence is a feedback loop: the IK moves the ankle → moves `mFinger` (toe-target, child
+of ankle) → next frame the target follows → grows. On Xbox the foot-plant FSM
+(`CharIKFoot::DoFSM`) LOCKS the foot at `mFootPosition` when grounded (the `b2` detection on
+`mData->LocalXfm().v[mDataIndex]` + tf.v.z thresholds), breaking the loop. On native the lock
+isn't engaging (suspect: the foot-plant `mData` channel not driven, or `MeasureLengths`
+reach/`mInv2ab`, or the mFinger retarget). Next: instrument DoFSM (vecat/b2/mFootFsmState,
+mFootPosition, mWorldDst, mAAPlusBB) for player0's left ikfoot during the re-run; confirm the
+FSM plant engages; if `mData` is the issue, ensure the move drives the foot-plant data channel.
+Target: knee ~−58° STABLE, toe ∈ [~0, small], gate FeetNotBelowFloorDuringGameplay (toe>=−2).
+
+Logs: /tmp/dc3-feet-fix/{single_ik,hamdir_fix,default_off}.log. Gate:
+`DC3_FEET_PLANT_FIX=1 DC3_GAMEPLAY_TESTS=1 native/build/milo-tests --gtest_filter='GameplayTelemetryTest.FeetNotBelowFloorDuringGameplay'`.
