@@ -74,6 +74,38 @@ void HamDriver::Poll() {
 #endif
     if (mBones && mLayers.mWeight > 0.0f) {
         mLayers.Eval(mLayers.mWeight);
+#ifdef HX_NATIVE
+        // Push 7 diagnostic: is the persistent-base ScaleDown(1-mWeight) leaving a
+        // stale-pose residual (mWeight<1 ⇒ A2) or is mWeight==1 in steady state
+        // (⇒ base is zeroed, A2 inert, sink is in the move data / A1)?
+        {
+            extern int HamDirector_NativeSetFrameCount();
+            static int sWLog = 0;
+            if (getenv("DC3_IK_DIAG") && sWLog < 40
+                && HamDirector_NativeSetFrameCount() > 3000) {
+                sWLog++;
+                fprintf(stderr,
+                    "DC3_IK_DIAG DriverWeight[%d] f=%d mWeight=%.4f scaleDown=%.4f nLayers=%d\n",
+                    sWLog, HamDirector_NativeSetFrameCount(),
+                    mLayers.mWeight, 1.0f - mLayers.mWeight,
+                    (int)mLayers.mLayers.size());
+            }
+        }
+        // Experiment (DC3_DRIVER_ZEROBASE=1): zero the base like CharClip::PoseMeshes
+        // instead of scaling the persistent accumulator. If this plants the foot, the
+        // stale residual (A2) is the bug.
+        {
+            static int sZeroBase = -1;
+            if (sZeroBase < 0)
+                sZeroBase = getenv("DC3_DRIVER_ZEROBASE") ? 1 : 0;
+            if (sZeroBase) {
+                mBones->ScaleDown(*mBones, 0.0f);
+                mLayers.Play(*mBones);
+                mDisplayBeat = TheTaskMgr.Beat();
+                return;
+            }
+        }
+#endif
         mBones->ScaleDown(*mBones, 1.0f - mLayers.mWeight);
         mLayers.Play(*mBones);
         mDisplayBeat = TheTaskMgr.Beat();

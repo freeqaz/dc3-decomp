@@ -434,3 +434,52 @@ pose char/main with it the SAME way (or via the song-anim path), checking the fo
 move sinks the foot in isolation → (A1) song data (⇒ likely premise: Xbox sinks too / relies on
 a foot-plant that's discarded on both). If it stays planted in isolation but sinks via the
 HamDirector song-anim path → (A2) the application path adds the drop (a real native-fixable bug).
+
+---
+
+# PUSH 7 (2026-06-09) — A2 REFUTED; the real divergence is the POLL-ORDER (IK before pose on native)
+
+## A2 (song-anim base/blend residual) — REFUTED by measurement
+Instrumented HamDriver::Poll. In gameplay, **mWeight = 1.0000 every frame** (scaleDown=0.0000,
+nLayers=1). So `ScaleDown(*mBones, 1-mWeight)` = `ScaleDown(*mBones, 0)` = zeros the base, exactly
+like `CharClip::PoseMeshes`. The "stale crossfade residual" mechanism is INERT (single layer,
+full weight). Confirmed: `DC3_DRIVER_ZEROBASE=1` (force PoseMeshes-style zero-base) → foot
+IDENTICAL (-4.02). So the song-anim application path is functionally `PoseMeshes(move, weight=1)`
+— and it sinks the feet, while a normal crouch clip via the same path plants them.
+
+⇒ The sink is in the SONG-MOVE POSE DATA, applied FAITHFULLY (A1). The move poses the feet ~4u
+below the floor; a normal clip doesn't. The move is applied like any full-weight clip.
+
+## THE RESOLUTION — a documented native POLL-ORDER divergence (HamDriver.cpp:95-101)
+The HamDriver comment states the native port's per-character pollable SORT orders the **IK
+effectors BEFORE song.hdrv**, whereas **Xbox polls song.hdrv (the pose) BEFORE the IK effectors**.
+Consequence:
+- **Xbox:** song.hdrv poses the (low) feet → THEN the foot-plant IK effectors run → they clamp/
+  lift the feet to the floor → render reads the IK-lifted pose. Feet planted.
+- **Native:** the IK effectors run FIRST (writing a planted world) → THEN song.hdrv poses the
+  feet low, overwriting/re-dirtying the leg → the IK world-write is discarded → render reads the
+  raw sunk pose. Feet sink. (This is EXACTLY why FOOT_SKIP is a no-op: native's IK is already
+  overwritten by the later pose, so skipping it changes nothing.)
+
+The native port only worked around ONE symptom of this sort-order divergence (PreEvalClipWeights,
+HamDriver.cpp:84-118, so the IK's GetNeutralSkeleton sees a populated clip-weight map). It did NOT
+fix the foot-plant itself, and the comment notes a naive sort reorder "corrupts the bone-chain
+SetWorldXfm cascade on native" — so the ordering was left divergent.
+
+This reconciles EVERYTHING: every engine function is faithful (8 verifications), yet native sinks
+and Xbox plants — because the per-character POLL ORDER (pose-vs-IK) differs. It's not a math/decode
+decomp bug; it's a native scheduler/sort-order divergence in WHEN the foot-plant IK runs relative
+to the pose.
+
+## NEXT PROBE (Push 8) — the fix
+Make the foot-plant IK effective AFTER the pose on native, matching Xbox, WITHOUT the
+SetWorldXfm-cascade corruption the comment warns about. Options:
+1. Re-run the foot-plant IK effectors (or just re-apply their planted result) AFTER song.hdrv
+   poses the bones, as a post-pose pass (HX_NATIVE), so the lift survives to render.
+2. Apply the foot-plant as an IK-side LOCAL back-compute after the pose (cf CharForeTwist/
+   CharUpperTwist) so it persists through the recompute.
+3. Targeted pollable-sort fix (song.hdrv before IK effectors) if the cascade corruption can be
+   contained. Measure each against the gate FeetNotBelowFloorDuringGameplay.
+NOTE: this is the FIRST hypothesis that is both native-specific AND consistent with all 8
+verifications + FOOT_SKIP. Verify the poll order empirically first (log the per-character poll
+sequence: does song.hdrv Poll run before or after the ankle HamIKEffector::Poll on native?).
