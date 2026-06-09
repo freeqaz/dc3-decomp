@@ -9,6 +9,12 @@
 #include "rndobj/Trans.h"
 #include "utl/BinStream.h"
 #include "rndobj/Utl.h"
+#ifdef HX_NATIVE
+#include <cstdlib>
+#include <cstring>
+#include <cmath>
+#include <cstdio>
+#endif
 
 #pragma region CharIKHand
 
@@ -319,8 +325,21 @@ void CharIKHand::Poll() {
     Interp(mHand->WorldXfm().v, destPos, charWeight, mWorldDst);
     RndTransformable *elbowParent = 0;
     RndTransformable *shoulderParent = mHand->TransParent();
+#ifdef HX_NATIVE
+    // FEET-IN-FLOOR TEST (DC3_IK_MOVEELBOW=1): native reads mMoveElbow=false for the
+    // leg ikfoot, so the foot-plant IK never bends the knee (it teleports the ankle
+    // via a discarded SetWorldXfm) and the leg over-extends -> foot sinks. Xbox bends
+    // the knee (~-58deg local). Force the elbow-move path to test whether bending the
+    // knee re-plants the foot.
+    static int sForceMoveElbow = -1;
+    if (sForceMoveElbow < 0)
+        sForceMoveElbow = getenv("DC3_IK_MOVEELBOW") ? 1 : 0;
+    if (!mMoveElbow && !sForceMoveElbow)
+        shoulderParent = 0;
+#else
     if (!mMoveElbow)
         shoulderParent = 0;
+#endif
     if (charWeight != 0 || mAlwaysIKElbow) {
         if (shoulderParent) {
             elbowParent = shoulderParent->TransParent();
@@ -329,6 +348,38 @@ void CharIKHand::Poll() {
         }
         IKElbow(shoulderParent, elbowParent);
     }
+#ifdef HX_NATIVE
+    {
+        // FEET-IN-FLOOR DIAG: does the leg foot-plant IK run + bend the knee?
+        // shoulderParent == the knee bone (mHand=ankle). IKElbow writes its
+        // LOCAL m (a Z-rotation) iff charWeight!=0. Compare the post-IK knee
+        // local rotZ to the Xbox ground truth (~-58deg planted).
+        static int sIKc = 0, sLogged = 0;
+        const char *pn = PathName(this);
+        if (pn && std::strstr(pn, "ikfoot")) {
+            sIKc++;
+            if (sLogged < 40 && (sIKc % 30 == 0 || sLogged < 6)) {
+                sLogged++;
+                float kz = -999.f;
+                if (shoulderParent) {
+                    const Hmx::Matrix3 &m = shoulderParent->LocalXfm().m;
+                    kz = 57.29578f * std::atan2(m.x.y, m.x.x);
+                }
+                RndTransformable *hp = mHand ? mHand->TransParent() : nullptr;
+                std::fprintf(stderr,
+                    "DC3_IK_DIAG IKHand[%d] path=%s charWeight=%.5f alwaysElbow=%d "
+                    "nTargets=%d hand=%s handPath=%s handParent=%s "
+                    "knee=%s kneeLocalRotZ_postIK=%.2f\n",
+                    sLogged, pn, charWeight, mAlwaysIKElbow ? 1 : 0,
+                    (int)mTargets.size(),
+                    mHand ? mHand->Name() : "null",
+                    mHand ? PathName(mHand.Ptr()) : "null",
+                    hp ? hp->Name() : "null",
+                    shoulderParent ? shoulderParent->Name() : "null", kz);
+            }
+        }
+    }
+#endif
     if (charWeight != 0 && (!shoulderParent || mOrientation || mStretch)) {
         Transform handXfm(mHand->WorldXfm());
         if (!shoulderParent || mStretch) {

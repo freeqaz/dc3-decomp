@@ -190,3 +190,43 @@ re-capture the native knee rotZ → should reach ~−58° at pelvis 35.2.
 Tools: native FootLocal/RestLocal diag (committed); Xbox per-frame leg telemetry
 (xenia dc3_hack_pack.cc, committed) + /tmp/xenia-rsp/parse_traj.py (frame-match by
 pelvis). Native run: dc3-native + ymca.txt; Xbox run: xenia + xenia-ymca.txt.
+
+## PUSH 10 (2026-06-09, ultracode) — ROOT CAUSE: leg IK knee-bend overwritten by a later PoseMeshes (poll order)
+
+The feet sink because the **leg foot-plant IK bends the knee via a LOCAL write, but
+the anim PoseMeshes runs AFTER the IK on native and overwrites it** → the IK is 100%
+discarded. Confirmed end-to-end:
+
+1. `CharIKHand::IKElbow` DOES write LOCAL transforms — `elbow->DirtyLocalXfm().m.Set(
+   cos,sin,0,-sin,cos,0,0,0,1)` (CharIKHand.cpp:~399) is a knee Z-rotation written to
+   LOCAL (survives the WorldXfm recompute). The prior "CharIKHand writes only
+   SetWorldXfm, ZERO local writes" claim was WRONG (it missed IKElbow).
+2. `IKElbow` only runs `if (charWeight != 0 || mAlwaysIKElbow)` AND not gated off by
+   `if (!mMoveElbow) shoulderParent = 0` (CharIKHand.cpp:322). On native the leg
+   `*.ikfoot` has **mMoveElbow=false** (ctor default is true), so shoulderParent is
+   zeroed → IKElbow gets null shoulder → skips the knee bend. (Diag: charWeight=1.0,
+   hand=bone_L-ankle.mesh, handParent=bone_L-knee.mesh NON-NULL, but knee/shoulder=null.)
+3. Forcing the elbow path (DC3_IK_MOVEELBOW=1) makes IKElbow run and write the knee
+   LOCAL to **−36.4°** (post-IK diag) — BUT the rendered foot is byte-identical (FootGeom
+   ankle −0.13, toe −4.02) and the knee LOCAL at Sample time is back to **−20° (anim)**
+   (FootLocal m.x=(0.941,−0.338)). So PoseMeshes overwrote the IK's local write.
+4. Poll trace confirms the order: `CharIKFootPoll` (IK) → `POSEMESHES dir='skeleton'`
+   within the frame → PoseMeshes (anim) runs AFTER the IK and re-poses bone_L-knee.mesh.
+
+### Frame-matched proof (PUSH 9): Xbox knee −58° (planted), native −20° (sunk) @ pelvis 35.2.
+Xbox's IK survives (renders the bent knee); native's is discarded (poll order). Bone
+lengths/decode are faithful (femur constant 17.7).
+
+### The fix (Push 11)
+Two coupled native divergences, both `#ifdef HX_NATIVE` + opt-out:
+- **Poll order**: the leg IK (CharIKFoot/CharIKHand) must poll AFTER the skeleton
+  PoseMeshes so its knee-bend local write survives (Xbox order = pose-then-IK). Lives in
+  `CharPollableSorter::Sort` (CharPollGroup.cpp) — LP64 pointer-keyed std::map iteration
+  reorders the pollables vs Xbox. THE primary fix.
+- **mMoveElbow**: the leg ikfoot needs the elbow-move path (DC3_IK_MOVEELBOW proved it
+  re-enables the knee bend). Confirm whether Xbox's *.ikfoot mMoveElbow=true (load/prop
+  divergence) — if so, fix the load; else the env-gated force is the native override.
+
+Open: with poll order fixed, verify the IK reaches Xbox's −58° (the foot-plant FSM
+target must clamp to the floor, CharIKFoot::DoFSM / DC3_IK_FOOTPLANT) and the gate passes
+(toe Z >= −2.0). Tools: CharIKHand IKHand diag + GameplayTelemetry FootLocal (committed).
