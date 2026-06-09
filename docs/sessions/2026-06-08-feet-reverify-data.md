@@ -338,3 +338,53 @@ these must give:
 Asm-audit the PLACEMENT/REGULATION chain (HamRegulate::Poll, CharServoBone, Character::Teleport)
 the same way IK+transforms were audited — that's the only unaudited engine path that reaches the
 raw foot. In parallel, sanity-check (b): does the native dance clip selection match Xbox's.
+
+---
+
+# PUSH 5 (2026-06-09) — placement faithful + native plays REAL choreography; bug cornered to the char/main pose pipeline
+
+Asm-audit + telemetry audit of the two remaining suspects:
+
+## (1) Native plays the REAL YMCA choreography — NOT a placeholder [REFUTED as cause]
+Telemetry (state=playing): mergeMoves=1, routineLoaded=1, activeMoveCount=2, p0SongAnim=12,
+doSongAnim=1, songAnimFrame advancing, lToeZ varying −4.0…+2.3. Pipeline is live:
+HamDirector::Poll → ClipPlayer::PlayAnims (HamDirector.cpp:3143) → HamDriver eval → PoseMeshes.
+The MoveMgr remixer builds the routine (MoveMgr.cpp:146-183,521). At worst a 3×-at-boot
+expert-anim fallback (HamDirector.cpp:666-687) — still real DC3 data. So "wrong/placeholder
+anim" is refuted.
+
+## (2) Placement/regulation chain is FAITHFUL [REFUTED as cause]
+Asm vs Xbox 373307D9: CharServoBone::MoveToFacing/Poll/RegulateInternal 100%, Character::Teleport
+100%, Waypoint::Constrain 100%, HamRegulate::Poll 85.86% / Regulate 85.88% (sub-100% = pure
+r30↔r31 regalloc cascade + commutative fmuls; the `xfm.v += posDelta` write is identical:
+offsets 0x30/0x34/0x38, operands f28/f29/f30). HamRegulate moves only the ROOT, which is
+correctly on the floor (player0 W.z=0.11). The sink is in the bones below the root — untouched
+by regulation. Faithful + can't-be-the-cause.
+
+## NEW concrete native-divergence candidate (B): HamDriver Layer::mWeight uninitialized
+HamDriver.cpp:64-114 — `Layer::mWeight` is NOT initialized in the ctor. On Xbox it gets non-zero
+garbage; native zero-init heap leaves it 0, which would gate `Eval()` OFF. There is a native
+force-eval workaround so layers DO evaluate (the dancer animates) — BUT the blend WEIGHT applied
+to each pose layer may be wrong. A wrong layer-blend weight → wrong blended pose → wrong foot,
+WITHOUT any IK/transform/decode bug. This is a genuine LP64 zero-init divergence in the live
+pose-blend path and is UNVERIFIED for correctness.
+
+## Status: 6 verifications faithful; bug cornered to the char/main pose INPUT
+decode (crowd path) + IK math + transforms + IK no-op + IK-space no-op + placement/regulation are
+ALL faithful. The rendered foot = the raw blended pose. The gap is now ONLY in the gameplay pose
+INPUT, which FIRM-#1 did NOT cover (it tested the crowd skeleton + a single crouch clip, not
+char/main + the multi-layer song-move blend). Two concrete candidates:
+- (A) a char/main- or song-clip-specific pose-channel decode divergence (re-run the FIRM-#1
+  stability test against char/main + a song move, not the crowd clip).
+- (B) the HamDriver Layer::mWeight zero-init blend divergence (verify the force-eval workaround
+  produces the CORRECT per-layer weight vs Xbox).
+
+NOTE: the "pelvis ~8u low + limb local-X lengths differ" observation keeps resurfacing but the
+local-X *length* part is the PUSH-2 RED HERRING (neutral.iks vs rendered skeleton = different
+instances). The pelvis world-height (34.5 live vs 42.5 rest) is real but expected for a crouch;
+do not re-derive a "decode bug" from the length comparison.
+
+## NEXT PROBE (Push 6)
+(B) first (it's a found, concrete bug): verify HamDriver Layer::mWeight — does the native
+force-eval apply the Xbox-correct weight per layer, or a wrong/forced value that skews the blend?
+Then (A): extend the FIRM-#1 stability/decode test to char/main + a real song move.
