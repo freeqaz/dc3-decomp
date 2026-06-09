@@ -541,3 +541,82 @@ source. DECISIVE:
 State: LEFT foot planted via the height heuristic; right foot ~80% improved; footik principled fix
 localized to the clip-load/bake gap. OPT-IN DC3_FEET_PLANT_FIX (default OFF = verified stable). Full
 diagnostics (DC3_IK_DIAG: ScaleAddFootik/FootikPos/DoFSM/IKHand/SortOrder). Gate still fails (right foot).
+
+## PUSH 13 (2026-06-09, ultracode) — the IK approach DIVERGES (left flung up, right sinks); honest reset
+
+Spent this push (a) refuting the clip-stride lead, (b) confirming footik=0 is genuine, (c) reframing the
+geometry, and crucially (d) discovering the active-IK "fix" is **not a real plant — it diverges**.
+
+### Tooling unlock: the gate runs dc3-native as a SUBPROCESS
+`GameplayTelemetryTest` (test_gameplay_telemetry.cpp:57) `popen`s `dc3-native` with the ymca input
+script and parses telemetry from its stdout — it does NOT run the engine in-process. So `DC3_IK_DIAG`
+stderr never reaches a `milo-tests` grep. **Run dc3-native directly to see diags:**
+```
+MILO_HEADLESS=1 MILO_FATAL_FAILS=0 DC3_SHOW_SPLASH=0 DC3_TEL=1 DC3_FAST_BOOT=1 MILO_MAX_FRAMES=9050 \
+  DC3_IK_DIAG2=1 DC3_FEET_PLANT_FIX=1 MILO_INPUT_SCRIPT=scripts/dc3-input-flows/ymca.txt \
+  timeout 180 native/build/dc3-native 2>&1 | grep ...
+```
+The per-frame telemetry line (footDataValid=1 lAnkleZ=.. lToeZ=.. rAnkleZ=.. rToeZ=..) is the
+ground-truth render-time foot position; the gate parses exactly this.
+
+### Stride bug = FALSE LEAD
+A subagent decoded the extracted clips.milo per-sample stride as 320 (vs engine mTotalSize 304) and
+called it the root. Forcing 32-byte stride alignment globally (`DC3_CLIP_STRIDE32`) **broke asset
+loading entirely** (no telemetry, never reached gameplay) — proving the runtime-loaded clips ARE
+16-byte aligned (304). The 320 was the extracted-asset layout, irrelevant to the runtime path. Also:
+a stride/Vector3-padding shift would corrupt facing (POS[0]) and footik (POS[1]) EQUALLY, but facing
+decodes fine while footik is 0 — so footik=0 is genuine clip data, not a decode shift. Reverted.
+(`sizeof(Vector3)`==12 on native, confirmed; TypeSize(POS) uses that; mTotalSize 16-byte aligned.)
+
+### Reframed geometry (rest vs gameplay, native, render-time telemetry)
+| | rest | gameplay native (no fix) | Xbox gameplay |
+|---|---|---|---|
+| ankle world Z | 4.39 | ~0.1 | ~4–5 |
+| toe world Z | 0.01 | −4.2 | ~0 (planted, never <0) |
+Rest foot is flat (ankle ~4.4 above the toe on the floor). In the crouch the native leg straightens/
+sinks the WHOLE foot ~4.3 (foot keeps its rest shape: toe ≈ ankle−4.375). Xbox bends the knee harder
+(anim −20° + IK ≈ −38° = −58°) to hold the ankle up. So the foot-plant IK is genuinely required.
+
+### The active-IK "fix" DIVERGES — gate's one-sided check hid it
+Changes tried (opt-in DC3_FEET_PLANT_FIX, default OFF; build stays stable at baseline −4.2):
+- Stateless floor-clamp goal in DoFSM (replaces the FSM lock/hold/unlock that oscillated on the forged
+  height heuristic since vecat=0). Opt back: DC3_IK_FOOTPLANT_FSM.
+- Dc3RecomposeChain(mFinger/mHand): walk to root, mark dirty via public DirtyLocalXfm(), read WorldXfm
+  top-down to rebuild stale caches before the IK reads. Opt-out DC3_NO_IK_RECOMPOSE.
+
+Gate (DC3_FEET_PLANT_FIX=1): L 0/737 "below floor", R 157/737 (toe −28). **But this is a MIRAGE:**
+- Per-frame render telemetry: the LEFT ankle is at **z≈35 (pelvis height) in ALL 749 playing frames**
+  — the left foot is flung UP every frame, it just never trips the one-sided `toe < −2` check.
+- When the right sinks (−17), the left is at +38: a **coupled divergence** (one leg up, one down),
+  ~21% of frames. The baseline (no fix) is STABLE at −4.2 for BOTH feet. So the fix is WORSE in
+  absolute terms — it trades a stable small sink for a large divergence.
+- Mid-IK, mHand(ankle) reads a sane z≈4–6 (SpotZ diag), but at RENDER the composed ankle is z≈35.
+  So the IK's LOCAL writes COMPOSE WRONG: the rendered leg points ~horizontal (ankle 35.7 ≈ straight-
+  leg length mAAPlusBB from the hip) instead of bent down to z≈4.
+
+### Root of the divergence (localized, not yet fixed)
+- `CharIKHand::IKElbow` writes the thigh LOCAL as a pure Z-rotation (`elbow->DirtyLocalXfm().m.Set(
+  cos,sin,0,-sin,cos,0,0,0,1)`) + moves the knee via `SetWorldXfm` (PullShoulder) then re-DirtyLocalXfm's
+  it. On Xbox the thigh's REST frame makes that Z-rotation bend the leg DOWN; on native the same cos/sin
+  points the leg ~horizontal → ankle renders at pelvis height. Strongly smells like a native bone
+  rest-frame / SetWorldXfm-vs-LOCAL-compose mismatch (cf "skinned-mesh WorldXfm==IDENTITY" trap).
+- `MeasureLengths` is CORRECT: mAAPlusBB≈35.7 = femur 17.7 + shin 18 (matches the doc's constant femur).
+- The recompose dirties the SHARED pelvis (both legs are its children) → couples L/R; recompute-from-LOCAL
+  also discards IKElbow's SetWorldXfm translation. Both feed the instability.
+
+### NEXT (Push 14) — three options, in rough order of soundness
+1. **Make the IK bend the leg DOWN.** Find why the thigh Z-rotation points the native leg horizontal
+   (compare the thigh/knee bone REST LocalXfm.m on native vs Xbox via Xenia; the IK assumes a specific
+   rest frame). Fix the frame/rotation so the composed ankle lands at ~4, not 35. This makes the existing
+   (faithful) IK work for both feet.
+2. **Footik bake + Xbox poll order (most faithful).** Get the real bone_footik.pos plant data into the
+   runtime clips (clip-load/bake gap, Push-12 path) AND fix CharPollableSorter::Sort so the IK polls
+   after the skeleton pose naturally — then the ORIGINAL FSM runs as on Xbox (no heuristic, no re-run).
+3. **Abandon CharIKHand; clean analytic 2-bone plant on the STABLE anim pose.** Compute the knee bend
+   from the anim (stable −4.2) pose with explicit axes, write knee/thigh LOCAL once, no SetWorldXfm, no
+   feedback. Avoids the rest-frame/compose pitfalls but duplicates IK.
+
+State: gate FAILS. The committed active-IK fix is opt-in/default-OFF and is NON-FUNCTIONAL (diverges) —
+do not enable it as-is. Baseline (default) remains stable (−4.2). Diagnostics added: DC3_IK_DIAG2
+(per-frame CharIKFootPoll bone names+positions, SpotZ), ScaleAddFootik raw dump. The honest status is:
+root cause fully understood, but no working plant yet — the IK diverges due to a native bone-frame issue.

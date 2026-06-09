@@ -16,10 +16,14 @@
 // the sorter polls the IK before the skeleton pose and the bend is overwritten. See
 // CharIKFoot::Load (forces mMoveElbow=true) + Character::SyncObjects (IK sorts last).
 bool Dc3FeetPlantFix() {
-    // OPT-IN (DC3_FEET_PLANT_FIX=1) while WIP: with the fix on, the leg IK survives the
-    // move pose (knee bends ~-36deg, was discarded) BUT the foot-plant solve currently
-    // DIVERGES on native (foot flies/sinks wildly), so it stays OFF by default until the
-    // IK-solve stabilization lands. See docs/sessions/2026-06-09-xenia-xbox-foot-truth.md.
+    // OPT-IN (DC3_FEET_PLANT_FIX=1), default OFF, NON-FUNCTIONAL as of Push 13. With the fix
+    // on, the active leg IK DIVERGES: the rendered LEFT leg points ~horizontal (ankle composes
+    // to z~35 = straight-leg length, every frame) and the right sinks — a coupled instability.
+    // The gate's one-sided "toe < -2" check makes the up-flung left look planted (0/737) but it
+    // is NOT. Root: CharIKHand::IKElbow's thigh Z-rotation assumes a rest frame that bends the
+    // leg DOWN on Xbox but ~horizontal on native (bone rest-frame / SetWorldXfm-vs-LOCAL compose
+    // mismatch). Do NOT ship this on; baseline (off) is stable at toe ~-4.2. See Push 13/14 in
+    // docs/sessions/2026-06-09-xenia-xbox-foot-truth.md for the three candidate real fixes.
     static int v = -1;
     if (v < 0)
         v = getenv("DC3_FEET_PLANT_FIX") ? 1 : 0;
@@ -171,6 +175,19 @@ void CharIKFoot::Poll() {
         if (Dc3FeetPlantFix() && !getenv("DC3_NO_IK_RECOMPOSE")) {
             Dc3RecomposeChain(mFinger);
             Dc3RecomposeChain(mHand);
+            if (getenv("DC3_IK_DIAG2")) {
+                const char *pn = PathName(this);
+                if (pn && std::strstr(pn, "main.milo") && std::strstr(pn, ".ikfoot")) {
+                    static int sRC = 0;
+                    if (sRC < 40) {
+                        sRC++;
+                        Vector3 sp = mFinger->WorldXfm().v;
+                        Vector3 an = mHand->WorldXfm().v;
+                        fprintf(stderr, "DC3_IK_DIAG SpotZ %s spot=(%.2f,%.2f,%.2f) ankle=(%.2f,%.2f,%.2f)\n",
+                                std::strstr(pn, "left") ? "L" : "R", sp.x, sp.y, sp.z, an.x, an.y, an.z);
+                    }
+                }
+            }
         }
 #endif
         mTargets.clear();
