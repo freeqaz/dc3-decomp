@@ -3353,11 +3353,14 @@ void HamDirector::Poll() {
                         th ? th->WorldXfm().v.z : -999.f, pv ? pv->WorldXfm().v.z : -999.f);
                 }
             }
+            gDc3DirectorIKReRun = true;
             for (int k = 0; k < 2; k++) {
                 CharIKFoot *ik = dancer->Find<CharIKFoot>(kIKNames[k], false);
                 if (ik)
-                    ik->ReapplyCachedElbow();  // re-apply the char-poll bend (plants in good frames)
+                    ik->Poll();  // re-solve here, after the move pose; the FSM-lock (fsm=1) gives a
+                                 // FIXED floor target so the solve is stable (no feedback divergence)
             }
+            gDc3DirectorIKReRun = false;
         }
     }
     Dc3KneeLog("HamDir-EXIT");

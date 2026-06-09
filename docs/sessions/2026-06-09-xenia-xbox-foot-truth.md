@@ -475,3 +475,41 @@ single in-tree hook that runs the IK once on a composed leg AND survives.
 State: best stable variant kept (FSM-lock + cache-reapply; spikes gone, but sunk). All HX_NATIVE +
 OPT-IN DC3_FEET_PLANT_FIX (default OFF = verified stable original). The complete fix is NOT achieved;
 the gate (toe>=-2) still fails. Diagnostics: DC3_IK_DIAG (DC3_SEQ/IKHand/DoFSM/ReRunLeg/poll-order).
+
+## PUSH 12g (2026-06-09) — BREAKTHROUGH: LEFT foot FIXED (planted); RIGHT foot persists (intrinsic right-leg FK divergence)
+
+The principled fix WORKS for one foot. Mechanism (all opt-in DC3_FEET_PLANT_FIX):
+1. **mMoveElbow=true** for the leg ikfoot (CharIKFoot::Load) — enables the IKElbow knee bend + the
+   PollDeps knee dep.
+2. **FSM-lock** in CharIKFoot::DoFSM: native's foot-plant data channel (bone_footik.pos, which the
+   YMCA move HAS) is NOT applied (mData=bone_footik.mesh local=(0,0,0), so vecat=0 -> the FSM never
+   locks). Substitute height-based ground detection: when the foot is at/near the floor (tf.z<2),
+   force b2 -> the FSM locks mFootPosition at the floor (clamp tf.z>=0) and HOLDS it (stable, no feedback).
+3. **Single-run gate + re-solve** at the end of HamDirector::Poll (after the move pose): the IK runs
+   once, on the FK-composed leg, to the FIXED floor target (fsm=1) -> stable solve (no feedback).
+4. **Bad-read guard**: the native leg FK is intermittently un-composed (toe-target reads up at the
+   hip ~36+); reject those reads and hold at the locked floor pos.
+
+RESULT (DC3_FEET_PLANT_FIX=1, 880 gameplay samples):
+- **LEFT foot: 8/880 below -2 (toe min -6.3) -> essentially PLANTED.** The approach is validated.
+- RIGHT foot: 178/880 below -2 (toe min -32.5, max +39.5) -> still diverges ~20% of frames.
+
+### The right-foot divergence is INTRINSIC to the right leg (not code/order)
+- Reverse foot-solve order (right first) did NOT flip the asymmetry (right still ~231 bad, left ~5) ->
+  NOT cross-corruption / solve order.
+- Same code as the left; the only per-foot difference is mDataIndex (0 vs 1), moot since footik=0.
+- So the right leg's RUNTIME FK diverges intrinsically: its toe-target reads at the hip (un-composed)
+  on ~20% of frames, and the IK then overshoots. The bad-read guard catches the >20 reads (231->178)
+  but not the 10-20 ones / the fsm=0 lock-at-bad-pos cases.
+
+### Remaining (Push 13) — right-leg FK composition
+The right leg's bones are intermittently un-composed when the IK reads them (toe-target at hip),
+~20% of frames; the left's are fine. Investigate why the right leg FK-composes differently
+(per-side bone reference? right-leg-specific dance moves coinciding with an un-composed window?
+the retarget-skeleton bake order for the right side?). OR drive the bone_footik.pos channel
+faithfully (the DESIGNED mechanism) so the FSM locks natively for both feet without the height/guard
+heuristics. With one foot proven planted, this is now a focused right-leg-FK problem.
+
+State: best variant kept (FSM-lock + gate + re-solve + bad-read guard; LEFT planted, RIGHT ~80%
+improved). OPT-IN DC3_FEET_PLANT_FIX (default OFF = verified stable original). Gate still fails on
+the right. Diagnostics: DC3_IK_DIAG (DC3_SEQ/IKHand/DoFSM/ReRunLeg).

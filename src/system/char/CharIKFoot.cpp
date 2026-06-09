@@ -8,6 +8,8 @@
 #include "rndobj/Trans.h"
 #ifdef HX_NATIVE
 #include <cstdlib>
+#include <cstring>
+#include <cstdio>
 // FEET-IN-FLOOR FIX (opt-out: DC3_FEET_PLANT_FIX_OFF=1). The leg foot-plant IK must
 // bend the leg; native loads mMoveElbow=false for the *.ikfoot, which disables the
 // IKElbow knee bend AND drops the knee/thigh dependency from CharIKHand::PollDeps, so
@@ -132,6 +134,13 @@ void CharIKFoot::Poll() {
         }
     }
 #endif
+#ifdef HX_NATIVE
+    // Run the leg IK ONCE, from HamDirector::Poll after the move pose (gDc3DirectorIKReRun), where
+    // the FSM-lock gives a fixed floor target -> stable solve. Skipping the normal char poll avoids
+    // the double-apply and the char-poll IK's intermittent un-composed-leg spike.
+    if (Dc3FeetPlantFix() && !gDc3DirectorIKReRun)
+        return;
+#endif
     if (mFinger && mHand && mData) {
         mTargets.clear();
         mTargets.push_back(IKTarget(mFootBone, 0));
@@ -195,16 +204,27 @@ void CharIKFoot::DoFSM(Character *mMe, Transform &tf) {
     // mFootPosition (at the floor, via the clamp above) and then HOLDS it (stable, no feedback).
     if (Dc3FeetPlantFix() && tf.v.z < 2.0f)
         b2 = true;
-    if (gDc3DirectorIKReRun && getenv("DC3_IK_DIAG")) {
+    // Bad-read guard: the native leg FK is intermittently un-composed (the toe-target/finger reads
+    // up at the hip, z ~36+) -> an unlocked FSM would follow that wild target and the IK diverges
+    // (foot to +/-50). Reject implausible reads: if already planted, hold at the locked floor pos.
+    if (Dc3FeetPlantFix() && mFinger->WorldXfm().v.z > 20.0f) {
+        b2 = true;
+        if (mFootFsmState != 0) {
+            tf.v = mFootPosition;
+            return;
+        }
+    }
+    if (getenv("DC3_IK_DIAG")) {
         static int sFsmLog = 0;
-        if (sFsmLog < 40) {
+        const char *pn = PathName(this);
+        if (sFsmLog < 40 && pn && strstr(pn, "main.milo")) {
             sFsmLog++;
-            const Transform &fw = mFinger->WorldXfm();
-            fprintf(stderr, "DC3_IK_DIAG DoFSM[%d] %s fsm=%d vecat=%.3f b2=%d "
-                    "fingerW=(%.2f,%.2f,%.2f) tf.v=(%.2f,%.2f,%.2f) footPos=(%.2f,%.2f,%.2f)\n",
-                    sFsmLog, PathName(this), mFootFsmState, vecat, b2 ? 1 : 0,
-                    fw.v.x, fw.v.y, fw.v.z, tf.v.x, tf.v.y, tf.v.z,
-                    mFootPosition.x, mFootPosition.y, mFootPosition.z);
+            const Vector3 &dv = mData ? mData->LocalXfm().v : tf.v;
+            fprintf(stderr, "DC3_IK_DIAG DoFSM[%d] %s fsm=%d vecat=%.4f b2=%d dataName=%s "
+                    "dataLocalV=(%.4f,%.4f,%.4f) idx=%d tf.z=%.2f\n",
+                    sFsmLog, pn, mFootFsmState, vecat, b2 ? 1 : 0,
+                    mData ? mData->Name() : "null",
+                    dv.x, dv.y, dv.z, mDataIndex, tf.v.z);
         }
     }
 #endif
