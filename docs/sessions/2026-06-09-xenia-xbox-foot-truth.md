@@ -620,3 +620,52 @@ State: gate FAILS. The committed active-IK fix is opt-in/default-OFF and is NON-
 do not enable it as-is. Baseline (default) remains stable (−4.2). Diagnostics added: DC3_IK_DIAG2
 (per-frame CharIKFootPoll bone names+positions, SpotZ), ScaleAddFootik raw dump. The honest status is:
 root cause fully understood, but no working plant yet — the IK diverges due to a native bone-frame issue.
+
+## PUSH 14 (2026-06-09, ultracode) — CLEAN STATELESS 2-BONE PLANT: 84–87% sink reduction, non-divergent
+
+Abandoned the diverging CharIKHand path (Push 13) for a self-contained world-space plant.
+This is the real foundation; gate not yet passing but the approach is sound and bounded.
+
+### `Dc3CleanPlant()` (CharIKFoot.cpp) — opt-in DC3_FEET_CLEAN_PLANT (under DC3_FEET_PLANT_FIX)
+On the FK-composed leg (mHand=ankle, parent chain knee/thigh/hip=pelvis):
+- ONE-DIRECTIONAL: only lifts a foot whose actual toe bone is below floor+margin; a foot the
+  anim lifts is left alone → no oscillation, no feedback (the killer of every prior variant).
+- Places the knee analytically (law of cosines), pole = the anim's current bend plane (so the
+  knee bends the way the dance intends). Aims thigh→knee→ankle with MakeRotQuat — NO bone-rest-
+  frame assumption (that was Push 13's divergence: IKElbow's pure-Z thigh rotation went horizontal).
+- Preserves the ankle's WORLD rotation (sets ankle.local.m = inv(knee.world.m)·ankleWorld0.m), so
+  the rigid foot's toe rises EXACTLY with the ankle. Writes thigh/knee/ankle LOCAL (survive render).
+Runs in BOTH the normal char poll (feetandhands.pgrp sorts last [28]) and the HamDirector re-run.
+
+### Results (DC3_FEET_PLANT_FIX=1 DC3_FEET_CLEAN_PLANT=1, render-time telemetry)
+| | L below floor | R below floor | shape |
+|---|---|---|---|
+| baseline (off) | 724/744 | 693/744 | both toe ~-4.2 (stable sink) |
+| Push-13 diverging | 0 (MIRAGE, flung to z35) | 157 | left fly-up, right sink |
+| clean plant | **24–30** | **93–115** | toe BOUNDED near floor, no fly-up |
+At PLANT TIME the diag confirms BOTH feet planted (toe ~0–2, ankle ~4–7). So the math is right.
+
+### Remaining blocker — a pose pass OVERWRITES the planted (support) leg after the re-run
+The ~93 right-foot failures are NOT a plant bug: the diag shows the right toe at ~0 at plant
+time, but render shows ~-9. So a pose pass runs AFTER the HamDirector::Poll re-run (which is
+itself after PlayAnims) and re-poses the planted leg. The RIGHT is the YMCA support foot more
+often → it shows the overwrite more (left support frames mostly pass). Running the plant in
+both the normal poll and the re-run only helped 114→93, so the overwriter is later than both.
+- HamDirector::ListPollChildren lists only mVenue; the dancers (HamCharacters) are polled by the
+  World pollable list, NOT as HamDirector children → their Character::Poll order vs HamDirector
+  is set by the World sort, unknown here.
+- HamCharacter poses TWO skeletons: the render char bones (bone_*-ankle.mesh, what the IK + gate
+  use) and a neutral retarget skeleton (mSkeletonBones = skeleton_bones.servo in
+  neutral_skeleton.milo, HamCharacter.cpp:69-72/682/700/719). The render-bone overwriter is one
+  of: a 2nd char poll after HamDirector, the servo PoseMeshes re-running, or a retarget bake.
+
+### NEXT (Push 15) — pin & beat the final overwrite
+1. Frame-poll-order trace: a global monotonic counter logged at PlayAnims, the re-run plant, the
+   right-ankle CharBonesMeshes::PoseMeshes write, and the telemetry read → see which is LAST for
+   player-0's right leg in one frame. Then run the clean plant after that pass (or make that pass
+   poll-order-after the move so it doesn't overwrite).
+2. If the overwriter is the World polling the dancer after HamDirector: hook the clean plant into
+   the dancer's own last poll stage (after its servo+driver), or fix the World/CharPollableSorter
+   order so the leg IK is the dancer's final pose pass.
+Gate still FAILS (needs 0). Default OFF verified stable (-4.2/-4.1, 15 focused foot tests green).
+Commits: dc3 06e8bf79 (clean plant) + 61b97427 (both-passes) + this doc.
