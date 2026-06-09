@@ -163,7 +163,7 @@ void CharIKFoot::DoFSM(Character *mMe, Transform &tf) {
     // HamIKEffector's SetWorldXfm). Tests whether a floor-clamped goal re-plants
     // the rendered foot during the dance crouch (the toe-target sinks to -4 with
     // the over-extended leg). Remove before shipping.
-    if (getenv("DC3_IK_FOOTPLANT")) {
+    if (Dc3FeetPlantFix() || getenv("DC3_IK_FOOTPLANT")) {
         if (tf.v.z < 0.0f)
             tf.v.z = 0.0f;
     }
@@ -189,6 +189,12 @@ void CharIKFoot::DoFSM(Character *mMe, Transform &tf) {
         }
     }
 #ifdef HX_NATIVE
+    // Native: the foot-plant data (mData/vecat) is not driven, so the FSM never locks and the
+    // foot follows the (sometimes un-composed) finger -> sinks/spikes. Substitute height-based
+    // ground detection: when the foot is at/near the floor, treat it as planted so the FSM locks
+    // mFootPosition (at the floor, via the clamp above) and then HOLDS it (stable, no feedback).
+    if (Dc3FeetPlantFix() && tf.v.z < 2.0f)
+        b2 = true;
     if (gDc3DirectorIKReRun && getenv("DC3_IK_DIAG")) {
         static int sFsmLog = 0;
         if (sFsmLog < 40) {

@@ -438,3 +438,40 @@ leg. The re-run mechanism (HamDir-EXIT) is the correct injection point IF the le
 without the spiky char-poll IK also running. State left as the best variant (no-gate + cache-reapply
 knee-only: plants in good frames). Fix OPT-IN (DC3_FEET_PLANT_FIX, default OFF = verified stable
 original). Full diagnostics in place (DC3_IK_DIAG: DC3_SEQ/IKHand/DoFSM/ReRunLeg/poll-order).
+
+## PUSH 12f (2026-06-09) — FSM-lock stabilizes the spikes; cache-reapply fundamentally sinks (caching is a dead end)
+
+Added a height-based ground detection to CharIKFoot::DoFSM (substituting for the un-driven mData/
+vecat=0): when the foot is at/near the floor, force b2 (planted) so the FSM locks mFootPosition at
+the floor and HOLDS it (stable, clamped follow). Result with the cache-reapply re-run: the wild
+spikes are GONE (toe max 154 -> 2.4) — a real stabilization — BUT the foot is still SUNK
+(toe -5.3, 817/884 frames < -2). So the FSM-lock fixes the feedback/spikes but the cache-reapply
+(knee-only) fundamentally sinks: the cached knee is computed by the char-poll IK reading LAST
+frame's pose (bone.servo[6] applies last-frame mBones; song.hdrv[22] updates mBones after) and is
+re-applied on THIS frame's (different-thigh) leg -> 1-frame-stale, thigh-relative -> sinks. Knee+thigh
+cache flips the leg. So CACHING ANY part of the pose-dependent IK is a dead end.
+
+### Conclusion of the fix attempts (6 variants, all fail on the same root)
+The leg IK must SOLVE on the actual move-posed, FK-composed leg, and survive. But:
+- re-solve at the HamDirector re-run reads an un-composed leg (gated) or double-runs (no-gate) -> diverge;
+- cache+reapply is pose-dependent/stale -> sink or flip;
+- FSM-lock stabilizes but can't fix the cache's staleness.
+The blocker is the native char/retarget-skeleton/HamDirector FK-COMPOSITION TIMING: the char-poll
+leg IK (feetandhands.pgrp) does not reliably read a fully move-posed, composed leg, and there is no
+single in-tree hook that runs the IK once on a composed leg AND survives.
+
+### Recommended next approach (Push 13 — needs architecture study, not more fix-variants)
+1. Map the retarget-skeleton pose pipeline: which servo poses the bones the ikfoot's mHand/mFinger
+   reference, and WHEN, relative to the feetandhands.pgrp poll, during HamDirector::Poll. The ikfoot
+   reads bone_*-ankle/toe.mesh in char/main/skeleton.milo; the move is driven via PlayAnims and the
+   skeleton_bones.servo (neutral_skeleton.milo, a RETARGET skeleton). The leg IK must run after the
+   retarget→skeleton bake completes.
+2. OR faithfully drive the foot-plant data channel (mData) from the move so the FSM locks natively
+   (Xbox has vecat vary; native vecat=0). That is the DESIGNED mechanism and avoids all the above.
+3. A focused gtest (ClipPoseFixture-style) that poses the YMCA move on the FULL retarget pipeline and
+   runs the leg IK once, asserting the planted foot, would let this be iterated without the 9050-frame
+   gameplay boot.
+
+State: best stable variant kept (FSM-lock + cache-reapply; spikes gone, but sunk). All HX_NATIVE +
+OPT-IN DC3_FEET_PLANT_FIX (default OFF = verified stable original). The complete fix is NOT achieved;
+the gate (toe>=-2) still fails. Diagnostics: DC3_IK_DIAG (DC3_SEQ/IKHand/DoFSM/ReRunLeg/poll-order).
