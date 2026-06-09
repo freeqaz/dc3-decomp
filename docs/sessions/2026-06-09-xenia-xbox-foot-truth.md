@@ -802,3 +802,14 @@ the final root-crouch + foot-flatten), which means touching shared poll-dependen
 risk to the 6 dancers + the matched build) — best done attended, not by autonomous guard-tweak ticks.
 Committed clean state: clean plant + frame/hip guard, default OFF stable (-4.3). Stop autonomous grind
 here; PUSH 17 (attended) = deterministic plant-after-root-crouch + foot-flatten (B in 16c).
+
+### PUSH 16e (2026-06-09, autonomous) — foot-flatten alone is NOT a win; remaining is root-drift (attended)
+Tested DC3_FEET_FLATTEN (rotate the ankle so toe.z>=floor when the preserved anim foot points
+toe-down): improved the worst toe (-11.9 → -9.6) but the fail COUNT stayed noisy (R 48-64) AND the
+LEFT foot regressed (6 → 27-33). The deepest frames have the ANKLE itself below the floor (-4, the
+root-crouch drift) which flatten cannot fix (it only rotates the foot about a sunk ankle). Reverted.
+This confirms the residual is dominated by the root-crouch drift, NOT foot orientation → the only
+remaining fix is the deterministic plant-after-final-root-crouch (invasive, attended). AUTONOMOUS-SAFE
+APPROACHES NOW EXHAUSTED (ROT-guard harmful, re-run-only worse, flatten worse-on-left). Ending the
+autonomous grind at the committed clean state (clean plant + frame/hip guard, ~90% sink reduction,
+poll-order-noisy R~20-100, default OFF stable -4.2). PUSH 17 = attended deterministic-order rework.
