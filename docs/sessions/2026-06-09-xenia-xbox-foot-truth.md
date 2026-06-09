@@ -68,6 +68,44 @@ against the native toe. (GDB-RSP read of the toe `mWorldXfm.v` is the fallback i
 slow — RSP client `xenia docs/dc3_rsp_client.py`, stub cvars `--dc3_gdb_rsp_stub=true
 --dc3_gdb_rsp_port=9001 --dc3_gdb_rsp_break_on_connect=true`.)
 
+## DECISIVE — Xbox TOE captured (GDB-RSP, read-only): Xbox plants the foot, native sinks it
+
+Read the live posed skeleton's rendered bone world transforms over the RSP stub (no source edits,
+no rebuild). **Bone-memory layout cracked:** `RndTransformable::mWorldXfm` is a `Transform{Matrix3,
+Vector3}` at `+0x48`, and on **Xbox 360 the Vector3 is 16-byte aligned (VMX128)** → Matrix3 is 0x30
+(not 0x24) → the world translation `v` is at **`+0x78`** (`v.x +0x78, v.y +0x7C, v.z +0x80`). (The
+in-tree IK telemetry's `.mesh` bone-read assumed unpadded 0x0C vectors → read `+0x6C`/`+0xAC` →
+garbage constant (0,0,5); that's why the bone-walk looked "frozen". The matrix at
+`+0x48/+0x58/+0x68` verified as a valid orthonormal rotation.)
+
+Two independent gameplay frames (venue-world, floor at Z=0; `bone_*.mesh` rendered world `v.z`):
+
+| frame | L-toe | R-toe | L-ankle | R-ankle | pelvis |
+|---|---|---|---|---|---|
+| A | **0.025** | **0.021** | 4.10 | 4.27 | 35.9 |
+| B | **0.527** | **0.006** | 5.38 | 4.08 | 39.3 |
+
+**Xbox: toes planted on the floor (Z ∈ [0.006, 0.53], NEVER negative), ankles ~4–5 above, pelvis
+~36–39 (hip height).** A normal standing/dancing skeleton with feet on the ground.
+
+**Native (gate + prior telemetry): toe ≈ −4.2 (below floor), ankle ≈ 0.2 (at floor).**
+
+### Conclusion (answers the months-old gated question)
+- **The feet-in-floor bug is a REAL native divergence, NOT "Xbox sinks too" / accept-premise.**
+  Xbox plants the toe (~0); native sinks it (−4.2). Δtoe ≈ 4.2.
+- **The divergence is in the LEG, not the ankle height per se.** Xbox keeps the ankle ~4.1–5.4
+  ABOVE the floor; native collapses it to ~0.2 (~4 too low). The native pelvis is roughly
+  comparable, so the **lower leg over-extends downward ~4u** (knee too straight) — matching the
+  prior native note "leg over-extends straight, knee barely flexes."
+- Note the apparent tension with the prior "native pose decode is faithful (drift 0.000)" finding:
+  that gtest used a CROUCH/test clip, not the gameplay song-move. Either the gameplay-move leg decode
+  diverges, or something downstream drops the native leg ~4u that Xbox doesn't. **Next:** capture the
+  native gameplay rendered bone world Z (toe/ankle/knee/pelvis) and compare frame-shape to the Xbox
+  table above to pin which leg segment (knee vs ankle vs hip) over-extends → that localizes the fix.
+
+Tools: `/tmp/xenia-rsp/read_bones.py` (offset-finder dump), `/tmp/xenia-rsp/traj.py` (Z trajectory).
+Xbox bone addrs are per-run (heap); parse them from `DC3:IK BONE ... meshBase=` and read `meshBase+0x78`.
+
 ## Reproduction
 ```bash
 # Build (only when xenia src changes; one process at a time on native/build dirs):
