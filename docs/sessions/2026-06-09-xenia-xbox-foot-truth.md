@@ -669,3 +669,45 @@ both the normal poll and the re-run only helped 114→93, so the overwriter is l
    order so the leg IK is the dancer's final pose pass.
 Gate still FAILS (needs 0). Default OFF verified stable (-4.2/-4.1, 15 focused foot tests green).
 Commits: dc3 06e8bf79 (clean plant) + 61b97427 (both-passes) + this doc.
+
+## PUSH 15 (2026-06-09, ultracode) — frame-keyed plant guard beats the PoseMeshes overwrite (~90% fixed)
+
+Poll-order trace (DC3_IK_DIAG2 seq counter at the clean plant + at right-ankle CharBonesMeshes::
+PoseMeshes) PROVED the residual sink: PoseMeshes runs AFTER the clean plant for some dancers
+(nondeterministic LP64 poll order) and re-poses the leg from the anim → overwrites the plant.
+
+### Fix: frame-keyed plant guard (CharIKFoot.cpp gDc3PlantGuard + CharBonesMeshes.cpp)
+Dc3CleanPlant marks thigh/knee/ankle in gDc3PlantGuard; PoseMeshes' QUAT loop skips a guarded
+bone; the guard clears at each new frame's FIRST PoseMeshes (keyed on TheTaskMgr.UISeconds()) so
+the legit pose always runs first and only a LATER same-frame overwrite is skipped. Only active
+once the clean plant runs (gDc3PlantGuardActive) → default build untouched. (Adding the guard to
+the ROTX/Y/Z loops did nothing — the leg bones are QUAT — so kept QUAT-only.)
+
+### Gate trajectory (DC3_FEET_PLANT_FIX=1 DC3_FEET_CLEAN_PLANT=1)
+| stage | L sunk | R sunk |
+|---|---|---|
+| baseline | 724/744 | 693/744 |
+| clean plant | 30 | 115 |
+| + both passes | 24 | 93 |
+| + frame guard | **6** | **63** (~90% reduction overall) |
+
+### Remaining ~46–63 failures: extreme-move pelvis-relative drift (NOT random overwrite)
+The failures cluster at SPECIFIC beats (12.0–14.1, 32.8–33.6, 39.7–40.9) — extreme YMCA moves
+where the LEFT foot lifts very high (lToe up to 18, an anim lift the plant correctly leaves alone)
+and the RIGHT support leg sinks deep (rToe to −10, ankle −6.9). At those frames the pelvis drops
+(~28) and the leg straightens. The plant DOES run and lift at plant time, but the foot is planted
+relative to the pelvis AS IT WAS at the re-run; a later servo/facing pass re-poses the PELVIS
+(which the guard does NOT cover — and should not freeze, it's the dance), so the whole leg drifts
+down with the moved pelvis. I.e., the poll-order problem extends to the pelvis: the plant must run
+after the FINAL pelvis pose, not just after the leg pose.
+
+### NEXT (Push 16)
+1. Make the plant run after the pelvis is final: either (a) order the leg IK after the pelvis/
+   facing pass deterministically (CharPollableSorter / World poll order so the dancer's foot-plant
+   is the dancer's LAST pose), or (b) re-express the plant relative to the pelvis so a later pelvis
+   move carries a correct foot (plant in pelvis-local, or re-run the plant once more after the
+   facing pass).
+2. Confirm via DC3_IK_DIAG2 that for the failing beats the plant-time toe is ~0 but render is −10
+   (pelvis drift) vs the plant not reaching (clamp) — add the pelvis Z to the CleanPlant diag.
+State: gate FAILS (needs 0; at L6/R63). The clean plant + guard is the strongest, non-divergent
+foundation; default OFF verified stable (−4.3/−4.3). Commits: dc3 06e8bf79 + 61b97427 + e1457952.
