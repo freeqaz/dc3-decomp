@@ -15,9 +15,9 @@ public:
         kQuality_Max = 2
     };
     struct Edge {
-        short v0;
-        short v1;
-        short midpoint;
+        unsigned short v0;
+        unsigned short v1;
+        unsigned short midpoint;
         bool operator<(const Edge &) const;
     };
 

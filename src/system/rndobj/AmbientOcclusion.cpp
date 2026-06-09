@@ -343,15 +343,15 @@ void RndAmbientOcclusion::BuildSHCoeff(const Vector3 &inVector, float *fArr) con
 float RndAmbientOcclusion::DistanceSH(
     const Vector4 &sh1, const Vector3 &n1, const Vector4 &sh2, const Vector3 &n2
 ) const {
-    float dw = (sh1.w * 2.0f - 1.0f) - (sh2.w * 2.0f - 1.0f);
-    float dz = (sh1.z * 2.0f - 1.0f) - (sh2.z * 2.0f - 1.0f);
     float dx = sh1.x - sh2.x;
-    float dot = n1.x * n2.x + n1.z * n2.z + n1.y * n2.y;
+    float dot = n1.y * n2.y + n1.z * n2.z + n1.x * n2.x;
+    float dy = (sh1.y * 2.0f - 1.0f) - (sh2.y * 2.0f - 1.0f);
+    float dz = (sh1.z * 2.0f - 1.0f) - (sh2.z * 2.0f - 1.0f);
+    float dw = (sh1.w * 2.0f - 1.0f) - (sh2.w * 2.0f - 1.0f);
+    float dist = sqrtf(dz * dz + dw * dw + dy * dy + dx * dx);
     if (dot <= 0.0f) {
         dot = -dot;
     }
-    float dy = (sh1.y * 2.0f - 1.0f) - (sh2.y * 2.0f - 1.0f);
-    auto dist = sqrtf(dx * dx + dy * dy + dw * dw + dz * dz);
     return dist / (dot + 1.0f);
 }
 
@@ -1060,8 +1060,7 @@ struct FacePriority {
 };
 
 void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
-    bool noTessellate = mObjectsTessellate.empty();
-    if (noTessellate)
+    if (mObjectsTessellate.empty())
         return;
 
     // Clamp triLarge >= triSmall (fsel pattern)
@@ -1076,171 +1075,134 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
     int totalBudget = 0;
     for (std::vector<RndMesh *>::iterator it = mObjectsTessellate.begin();
          it != mObjectsTessellate.end(); ++it) {
-        RndMesh *mesh = *it;
-        totalBudget += mesh->Faces().size() * mTessellateTriLimit;
+        totalBudget += (*it)->Faces().size() * mTessellateTriLimit;
     }
+
+    float negThree = -3.0f;
 
     // Process each mesh
     for (std::vector<RndMesh *>::iterator meshIt = mObjectsTessellate.begin();
          meshIt != mObjectsTessellate.end(); ++meshIt) {
         RndMesh *mesh = *meshIt;
-        char *name = (char *)mesh->Name();
-        TheDebug << MakeString("RndAmbientOcclusion: Tessellating '%s'...\n", name);
+        TheDebug << MakeString(
+            "RndAmbientOcclusion: Tessellating '%s'...\n", (char *)mesh->Name()
+        );
         const Transform &xfm = mesh->WorldXfm();
 
-        unsigned int totalNewFaces = 0;
+        unsigned long totalNewFaces = 0;
         unsigned long passNum = 0;
-        float negThree = -3.0f;
-        int numFaces = mesh->Faces().size();
-        unsigned int maxIter = (unsigned int)(numFaces * 5) / 100;
-        unsigned int halfBudget = (unsigned int)(numFaces * mTessellateTriLimit * 5) >> 1;
-        if (maxIter >= 50)
-            maxIter = 50;
+        unsigned int halfBudget =
+            (unsigned int)(mesh->Faces().size() * mTessellateTriLimit * 5) >> 1;
+        unsigned int maxIter =
+            Min(50u, (unsigned int)(mesh->Faces().size() * 5) / 100);
 
         bool keepGoing = true;
         do {
-            unsigned int newFacesThisIter = 0;
+            unsigned long newFacesThisIter = 0;
             std::set<Edge> edgeSet;
             std::vector<RndMesh::Face> newFaces;
             std::vector<RndMesh::Vert> newVerts;
 
             // Reserve capacity for output
-            RndMesh *geomOwner = mesh->GetGeomOwner();
-            newFaces.reserve(geomOwner->Faces().size() * 3);
-            newVerts.reserve(mesh->GetGeomOwner()->NumVerts() * 3);
+            newFaces.reserve(mesh->Faces().size() * 3);
+            newVerts.reserve(mesh->Verts().size() * 3);
 
+            unsigned int numVerts = mesh->Verts().size();
+            unsigned int numNewVerts = numVerts;
             std::vector<FacePriority> priorities;
-            unsigned int numVerts = mesh->GetGeomOwner()->NumVerts();
-            geomOwner = mesh->GetGeomOwner();
-            priorities.reserve(geomOwner->Faces().size());
+            priorities.reserve(mesh->Faces().size());
 
             // Phase 1: Classify each face by error and perimeter
-            unsigned int faceIdx = 0;
-            RndMesh *geomOwnerClassify = mesh->GetGeomOwner();
-            if ((unsigned int)geomOwnerClassify->Faces().size() != 0) {
-                int faceOffset = 0;
-                do {
-                    geomOwnerClassify = mesh->GetGeomOwner();
-                    RndMesh::Vert *vertsBase = &geomOwnerClassify->Verts(0);
-                    RndMesh::Face *facesBase = &geomOwnerClassify->Faces()[0];
-                    RndMesh::Face *face = (RndMesh::Face *)((char *)facesBase + faceOffset);
-                    unsigned short i0 = face->v1;
-                    unsigned short i1 = face->v2;
-                    unsigned short i2 = face->v3;
+            for (unsigned int faceIdx = 0; faceIdx < mesh->Faces().size();
+                 faceIdx++) {
+                {
+                    RndMesh::Face &face = mesh->Faces(faceIdx);
 
                     // Compute SH error on each edge
-                    float err01 = DistanceSH(
-                        *(const Vector4 *)&vertsBase[i0].color,
-                        vertsBase[i0].norm,
-                        *(const Vector4 *)&vertsBase[i1].color,
-                        vertsBase[i1].norm
-                    );
-                    float err12 = DistanceSH(
-                        *(const Vector4 *)&vertsBase[i1].color,
-                        vertsBase[i1].norm,
-                        *(const Vector4 *)&vertsBase[i2].color,
-                        vertsBase[i2].norm
-                    );
-                    float err20 = DistanceSH(
-                        *(const Vector4 *)&vertsBase[i2].color,
-                        vertsBase[i2].norm,
-                        *(const Vector4 *)&vertsBase[i0].color,
-                        vertsBase[i0].norm
-                    );
-                    float totalError = (float)((double)(float)((double)err20 + (double)err12)
-                                               + (double)err01);
-                    bool smallError = totalError <= mTessellateTriError;
+                    const Vector4 &c0 = *(const Vector4 *)&mesh->Verts(face.v1).color;
+                    const Vector3 &n0 = mesh->Verts(face.v1).norm;
+                    const Vector4 &c1 = *(const Vector4 *)&mesh->Verts(face.v2).color;
+                    const Vector3 &n1 = mesh->Verts(face.v2).norm;
+                    const Vector4 &c2 = *(const Vector4 *)&mesh->Verts(face.v3).color;
+                    const Vector3 &n2 = mesh->Verts(face.v3).norm;
+                    float err01 = DistanceSH(c0, n0, c1, n1);
+                    float err12 = DistanceSH(c1, n1, c2, n2);
+                    float err20 = DistanceSH(c2, n2, c0, n0);
+                    float totalError = err20 + err12 + err01;
+                    bool highError = totalError > mTessellateTriError;
 
                     // Compute world-space perimeter
-                    geomOwnerClassify = mesh->GetGeomOwner();
-                    RndMesh::Vert *vertsPos = &geomOwnerClassify->Verts(0);
                     Vector3 wp0, wp1, wp2;
-                    Multiply(vertsPos[i0].pos, xfm, wp0);
-                    Multiply(vertsPos[i1].pos, xfm, wp1);
-                    Multiply(vertsPos[i2].pos, xfm, wp2);
+                    Multiply(mesh->Verts(face.v1).pos, xfm, wp0);
+                    Multiply(mesh->Verts(face.v2).pos, xfm, wp1);
+                    Multiply(mesh->Verts(face.v3).pos, xfm, wp2);
 
-                    float d12 = sqrtf((wp1.x - wp2.x) * (wp1.x - wp2.x) + (wp1.y - wp2.y) * (wp1.y - wp2.y) + (wp1.z - wp2.z) * (wp1.z - wp2.z));
-                    float d02 = sqrtf((wp0.x - wp2.x) * (wp0.x - wp2.x) + (wp0.y - wp2.y) * (wp0.y - wp2.y) + (wp0.z - wp2.z) * (wp0.z - wp2.z));
-                    float d01 = sqrtf((wp0.x - wp1.x) * (wp0.x - wp1.x) + (wp0.y - wp1.y) * (wp0.y - wp1.y) + (wp0.z - wp1.z) * (wp0.z - wp1.z));
+                    float d01 = sqrtf((wp0.y - wp1.y) * (wp0.y - wp1.y) + (wp0.x - wp1.x) * (wp0.x - wp1.x) + (wp0.z - wp1.z) * (wp0.z - wp1.z));
+                    float d02 = sqrtf((wp0.y - wp2.y) * (wp0.y - wp2.y) + (wp0.x - wp2.x) * (wp0.x - wp2.x) + (wp0.z - wp2.z) * (wp0.z - wp2.z));
+                    float d12 = sqrtf((wp1.y - wp2.y) * (wp1.y - wp2.y) + (wp1.x - wp2.x) * (wp1.x - wp2.x) + (wp1.z - wp2.z) * (wp1.z - wp2.z));
                     float perimeter = d12 + d02 + d01;
+                    bool perimGTsmall = perimeter > mTessellateTriSmall;
+                    bool perimGTlarge = perimeter > mTessellateTriLarge;
 
-                    FacePriority *pFP;
-                    if (smallError || perimeter <= mTessellateTriSmall) {
-                        if (mTessellateTriLarge < perimeter) {
-                            // Large face, low error: priority based on size
-                            FacePriority fp;
-                            fp.priority = (float)((double)mTessellateTriError * (double)negThree
-                                                  - (double)(perimeter - mTessellateTriLarge));
-                            fp.faceIndex = faceIdx;
-                            pFP = &fp;
-                        } else {
-                            // Small face, low error: keep as-is
-                            newFaces.push_back(*face);
-                            goto nextFace;
-                        }
-                    } else {
+                    if (highError && perimGTsmall) {
                         // High error: priority based on error
+                        FacePriority fp;
+                        fp.priority = -totalError;
+                        fp.faceIndex = faceIdx;
+                        priorities.push_back(fp);
+                    } else if (perimGTlarge) {
+                        // Large face, low error: priority based on size
                         FacePriority fp2;
-                        fp2.priority = -totalError;
                         fp2.faceIndex = faceIdx;
-                        pFP = &fp2;
+                        fp2.priority = mTessellateTriError * negThree
+                            - (perimeter - mTessellateTriLarge);
+                        priorities.push_back(fp2);
+                    } else {
+                        // Small face, low error: keep as-is
+                        newFaces.push_back(face);
                     }
-                    priorities.push_back(*pFP);
-                nextFace:
-                    geomOwnerClassify = mesh->GetGeomOwner();
-                    faceIdx++;
-                    faceOffset += 6;
-                } while (faceIdx
-                         < (unsigned int)geomOwnerClassify->Faces().size());
+                }
             }
 
             // Sort priorities (most negative = highest priority first)
-            FacePriority *priEnd = &priorities[0] + priorities.size();
-            FacePriority *priBegin = &priorities[0];
-            std::sort(priEnd, priBegin);
+            Key<float> *priBegin = (Key<float> *)priorities.begin();
+            Key<float> *priEnd = (Key<float> *)priorities.end();
+            std::sort(priBegin, priEnd);
 
             // Phase 2: Process priority faces — split all 3 edges
-            unsigned int priCount = priEnd - priBegin;
-            unsigned int numNewVerts = numVerts;
             unsigned int pi = 0;
+            unsigned int priCount = priEnd - priBegin;
             if (priCount != 0) {
-                FacePriority *pPtr = priBegin;
+                FacePriority *pPtr = (FacePriority *)priBegin;
                 do {
-                    geomOwner = mesh->GetGeomOwner();
-                    RndMesh::Vert *vertBase = &geomOwner->Verts(0);
-                    unsigned short *facePtr =
-                        (unsigned short *)&geomOwner->Faces()[pPtr->faceIndex];
-                    unsigned short fv0 = facePtr[0];
-                    unsigned short fv1 = facePtr[1];
-                    unsigned short fv2 = facePtr[2];
-
-                    RndMesh::Vert *vert0 = &vertBase[fv0];
-                    RndMesh::Vert *vert1 = &vertBase[fv1];
-                    RndMesh::Vert *vert2 = &vertBase[fv2];
+                    RndMesh::Face &face = mesh->Faces(pPtr->faceIndex);
+                    RndMesh::Vert &vert0 = mesh->Verts(face.v1);
+                    RndMesh::Vert &vert1 = mesh->Verts(face.v2);
+                    RndMesh::Vert &vert2 = mesh->Verts(face.v3);
 
                     // Construct 3 midpoint edges
                     Edge edge01, edge12, edge20;
-                    edge01.v0 = (short)fv0;
-                    edge01.v1 = (short)fv1;
-                    edge01.midpoint = (short)0xffff;
-                    edge12.v0 = (short)fv1;
-                    edge12.v1 = (short)fv2;
-                    edge12.midpoint = (short)0xffff;
-                    edge20.v0 = (short)fv2;
-                    edge20.v1 = (short)fv0;
-                    edge20.midpoint = (short)0xffff;
+                    edge01.v0 = face.v1;
+                    edge01.v1 = face.v2;
+                    edge01.midpoint = 0xffff;
+                    edge12.v0 = face.v2;
+                    edge12.v1 = face.v3;
+                    edge12.midpoint = 0xffff;
+                    edge20.v0 = face.v3;
+                    edge20.v1 = face.v1;
+                    edge20.midpoint = 0xffff;
 
                     RndMesh::Vert blendVert01;
                     RndMesh::Vert blendVert12;
                     RndMesh::Vert blendVert20;
-                    BlendVert(*vert0, *vert1, blendVert01);
-                    BlendVert(*vert1, *vert2, blendVert12);
-                    BlendVert(*vert2, *vert0, blendVert20);
+                    BlendVert(vert0, vert1, blendVert01);
+                    BlendVert(vert1, vert2, blendVert12);
+                    BlendVert(vert2, vert0, blendVert20);
 
                     // Edge 0-1
                     std::set<Edge>::iterator it01 = edgeSet.find(edge01);
                     if (it01 == edgeSet.end()) {
-                        edge01.midpoint = (short)numNewVerts;
+                        edge01.midpoint = numNewVerts;
                         numNewVerts++;
                         edgeSet.insert(edge01);
                         Vector3 worldPos, worldNorm;
@@ -1257,7 +1219,7 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
                     // Edge 1-2
                     std::set<Edge>::iterator it12 = edgeSet.find(edge12);
                     if (it12 == edgeSet.end()) {
-                        edge12.midpoint = (short)numNewVerts;
+                        edge12.midpoint = numNewVerts;
                         numNewVerts++;
                         edgeSet.insert(edge12);
                         Vector3 worldPos, worldNorm;
@@ -1274,7 +1236,7 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
                     // Edge 2-0
                     std::set<Edge>::iterator it20 = edgeSet.find(edge20);
                     if (it20 == edgeSet.end()) {
-                        edge20.midpoint = (short)numNewVerts;
+                        edge20.midpoint = numNewVerts;
                         numNewVerts++;
                         edgeSet.insert(edge20);
                         Vector3 worldPos, worldNorm;
@@ -1288,27 +1250,23 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
                         edge20 = *it20;
                     }
 
-                    unsigned short mid01 = edge01.midpoint;
-                    unsigned short mid12 = edge12.midpoint;
-                    unsigned short mid20 = edge20.midpoint;
-
                     // Create 4 new faces
                     RndMesh::Face f1;
-                    f1.v1 = facePtr[0];
-                    f1.v2 = mid01;
-                    f1.v3 = mid20;
+                    f1.v1 = face.v1;
+                    f1.v2 = edge01.midpoint;
+                    f1.v3 = edge20.midpoint;
                     RndMesh::Face f2;
-                    f2.v1 = mid20;
-                    f2.v2 = mid01;
-                    f2.v3 = mid12;
+                    f2.v1 = edge20.midpoint;
+                    f2.v2 = edge01.midpoint;
+                    f2.v3 = edge12.midpoint;
                     RndMesh::Face f3;
-                    f3.v1 = mid01;
-                    f3.v2 = facePtr[1];
-                    f3.v3 = mid12;
+                    f3.v1 = edge01.midpoint;
+                    f3.v2 = face.v2;
+                    f3.v3 = edge12.midpoint;
                     RndMesh::Face f4;
-                    f4.v1 = mid12;
-                    f4.v2 = facePtr[2];
-                    f4.v3 = mid20;
+                    f4.v1 = edge12.midpoint;
+                    f4.v2 = face.v3;
+                    f4.v3 = edge20.midpoint;
                     newFaces.push_back(f1);
                     newFaces.push_back(f2);
                     newFaces.push_back(f3);
@@ -1321,16 +1279,14 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
             }
 
             // Assign Phase 2 faces to mesh geometry
-            RndMesh::Face *savedFaces = &newFaces[0];
-            RndMesh::Face *savedFacesEnd = &newFaces[0] + newFaces.size();
-            geomOwner = mesh->GetGeomOwner();
-            geomOwner->Faces().assign(newFaces.begin(), newFaces.end());
+            RndMesh::Face *savedFaces = newFaces.begin();
+            RndMesh::Face *savedFacesEnd = newFaces.end();
+            mesh->Faces().assign(savedFaces, savedFacesEnd);
 
-            RndMesh::Vert *savedVerts = &newVerts[0];
-            RndMesh::Vert *savedVertsEnd = &newVerts[0] + newVerts.size();
-            geomOwner = mesh->GetGeomOwner();
-            geomOwner->Verts().resize(
-                (savedVertsEnd - savedVerts) + geomOwner->Verts().size()
+            RndMesh::Vert *savedVerts = newVerts.begin();
+            RndMesh::Vert *savedVertsEnd = newVerts.end();
+            mesh->Verts().resize(
+                (savedVertsEnd - savedVerts) + mesh->Verts().size()
             );
 
             // Copy new verts into mesh
@@ -1339,10 +1295,7 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
                 unsigned int count = numNewVerts - numVerts;
                 RndMesh::Vert *src = savedVerts;
                 do {
-                    memcpy(
-                        (char *)&mesh->GetGeomOwner()->Verts(0) + offset,
-                        src, 0x60
-                    );
+                    memcpy((char *)&mesh->Verts(0) + offset, src, 0x60);
                     count--;
                     offset += 0x60;
                     src++;
@@ -1350,42 +1303,31 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
             }
 
             // Clear and re-reserve for Phase 3
-            newFaces.erase(newFaces.begin(), newFaces.end());
-            geomOwner = mesh->GetGeomOwner();
-            newFaces.reserve(geomOwner->Faces().size() * 2);
+            newFaces.erase(savedFaces, savedFacesEnd);
+            newFaces.reserve(mesh->Faces().size() * 2);
 
-            if (savedVerts != savedVertsEnd) {
-                newVerts.erase(newVerts.begin(), newVerts.end());
-            }
-            newVerts.reserve(mesh->GetGeomOwner()->NumVerts());
+            newVerts.erase(savedVerts, savedVertsEnd);
+            newVerts.reserve(mesh->Verts().size());
 
             // Phase 3: Refine remaining faces based on split edges
-            geomOwner = mesh->GetGeomOwner();
-            unsigned int fIdx = 0;
-            unsigned int numVertsPhase3 = geomOwner->NumVerts();
+            unsigned int numVertsPhase3 = mesh->Verts().size();
             unsigned int oldNumVerts3 = numVertsPhase3;
-            if (geomOwner->Faces().size() != 0) {
-                int fOff = 0;
-                do {
-                    int splitCount = 0;
+            for (unsigned int fIdx = 0; fIdx < mesh->Faces().size(); fIdx++) {
+                {
+                    unsigned int splitCount = 0;
                     unsigned int lastSplitEdge = 0;
-                    RndMesh::Face *curFace =
-                        (RndMesh::Face *)((char *)&geomOwner->Faces()[0] + fOff);
-
-                    unsigned short cv0 = curFace->v1;
-                    unsigned short cv1 = curFace->v2;
-                    unsigned short cv2 = curFace->v3;
+                    RndMesh::Face &face = mesh->Faces(fIdx);
 
                     // Set up 3 edges and check which were split
                     Edge edges[3];
-                    edges[0].v0 = cv0;
-                    edges[0].v1 = cv1;
+                    edges[0].v0 = face.v1;
+                    edges[0].v1 = face.v2;
                     edges[0].midpoint = 0xffff;
-                    edges[1].v0 = cv1;
-                    edges[1].v1 = cv2;
+                    edges[1].v0 = face.v2;
+                    edges[1].v1 = face.v3;
                     edges[1].midpoint = 0xffff;
-                    edges[2].v0 = cv2;
-                    edges[2].v1 = cv0;
+                    edges[2].v0 = face.v3;
+                    edges[2].v1 = face.v1;
                     edges[2].midpoint = 0xffff;
 
                     unsigned short mids[3] = {0xffff, 0xffff, 0xffff};
@@ -1405,20 +1347,20 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
                     } while (edgeIdx < 3);
 
                     if (splitCount == 0) {
-                        newFaces.push_back(*curFace);
+                        newFaces.push_back(face);
                     } else if (splitCount == 3) {
                         // All 3 edges split: 4 new faces
                         RndMesh::Face fa;
-                        fa.v1 = cv0;
+                        fa.v1 = face.v1;
                         fa.v2 = mids[0];
                         fa.v3 = mids[2];
                         RndMesh::Face fb;
                         fb.v1 = mids[0];
-                        fb.v2 = cv1;
+                        fb.v2 = face.v2;
                         fb.v3 = mids[1];
                         RndMesh::Face fc;
                         fc.v1 = mids[1];
-                        fc.v2 = cv2;
+                        fc.v2 = face.v3;
                         fc.v3 = mids[2];
                         RndMesh::Face fd;
                         fd.v1 = mids[0];
@@ -1433,41 +1375,51 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
                         unsigned short mid = mids[lastSplitEdge];
                         RndMesh::Face fa, fb;
                         if (lastSplitEdge == 0) {
-                            fa.v1 = cv2;
-                            fa.v2 = cv0;
-                            fa.v3 = mid;
-                            fb.v1 = cv2;
-                            fb.v2 = mid;
-                            fb.v3 = cv1;
-                        } else if (lastSplitEdge != 1) {
-                            fa.v1 = cv1;
-                            fa.v2 = cv2;
-                            fa.v3 = mid;
-                            fb.v1 = cv1;
-                            fb.v2 = mid;
-                            fb.v3 = cv0;
+                            RndMesh::Face tA;
+                            tA.v1 = face.v3;
+                            tA.v2 = face.v1;
+                            tA.v3 = mid;
+                            fa = tA;
+                            RndMesh::Face tB;
+                            tB.v1 = face.v3;
+                            tB.v2 = mid;
+                            tB.v3 = face.v2;
+                            fb = tB;
+                        } else if (lastSplitEdge == 1) {
+                            RndMesh::Face tA;
+                            tA.v1 = face.v1;
+                            tA.v2 = face.v2;
+                            tA.v3 = mid;
+                            fa = tA;
+                            RndMesh::Face tB;
+                            tB.v1 = face.v1;
+                            tB.v2 = mid;
+                            tB.v3 = face.v3;
+                            fb = tB;
                         } else {
-                            fa.v1 = cv0;
-                            fa.v2 = cv1;
-                            fa.v3 = mid;
-                            fb.v1 = cv0;
-                            fb.v2 = mid;
-                            fb.v3 = cv2;
+                            RndMesh::Face tA;
+                            tA.v1 = face.v2;
+                            tA.v2 = face.v3;
+                            tA.v3 = mid;
+                            fa = tA;
+                            RndMesh::Face tB;
+                            tB.v1 = face.v2;
+                            tB.v2 = mid;
+                            tB.v3 = face.v1;
+                            fb = tB;
                         }
                         newFaces.push_back(fa);
                         newFaces.push_back(fb);
                     } else if (splitCount == 2) {
                         // 2 edges split: create blend vert + faces
-                        RndMesh *geomSplit = mesh->GetGeomOwner();
-                        unsigned short uv0 = curFace->v1;
-                        unsigned short uv1 = curFace->v2;
-                        unsigned short uv2 = curFace->v3;
-                        RndMesh::Vert *vBase = &geomSplit->Verts(0);
+                        RndMesh::Vert &vert0 = mesh->Verts(face.v1);
+                        RndMesh::Vert &vert1 = mesh->Verts(face.v2);
+                        RndMesh::Vert &vert2 = mesh->Verts(face.v3);
 
                         RndMesh::Vert blendA;
                         RndMesh::Vert blendB;
-                        BlendVert(vBase[uv0], vBase[uv1], blendA);
-                        BlendVert(vBase[uv2], blendA, blendB);
+                        BlendVert(vert0, vert1, blendA);
+                        BlendVert(vert2, blendA, blendB);
 
                         Vector3 worldPos, worldNorm;
                         Multiply(blendB.pos, xfm, worldPos);
@@ -1479,88 +1431,79 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
                         unsigned short blendIdx = (unsigned short)numVertsPhase3;
 
                         // Edge 0 (v0-v1)
-                        RndMesh::Face *pFace;
                         if (mids[0] == 0xffff) {
                             RndMesh::Face tmpA;
                             tmpA.v1 = blendIdx;
-                            tmpA.v2 = curFace->v1;
-                            tmpA.v3 = curFace->v2;
-                            pFace = &tmpA;
+                            tmpA.v2 = face.v1;
+                            tmpA.v3 = face.v2;
+                            newFaces.push_back(tmpA);
                         } else {
                             RndMesh::Face tmpA;
                             tmpA.v1 = blendIdx;
-                            tmpA.v2 = curFace->v1;
+                            tmpA.v2 = face.v1;
                             tmpA.v3 = mids[0];
                             newFaces.push_back(tmpA);
                             RndMesh::Face tmpB;
                             tmpB.v1 = blendIdx;
                             tmpB.v2 = mids[0];
-                            tmpB.v3 = curFace->v2;
-                            pFace = &tmpB;
+                            tmpB.v3 = face.v2;
+                            newFaces.push_back(tmpB);
                         }
-                        newFaces.push_back(*pFace);
 
                         // Edge 1 (v1-v2)
                         if (mids[1] == 0xffff) {
                             RndMesh::Face tmpA;
                             tmpA.v1 = blendIdx;
-                            tmpA.v2 = curFace->v2;
-                            tmpA.v3 = curFace->v3;
-                            pFace = &tmpA;
+                            tmpA.v2 = face.v2;
+                            tmpA.v3 = face.v3;
+                            newFaces.push_back(tmpA);
                         } else {
                             RndMesh::Face tmpA;
                             tmpA.v1 = blendIdx;
-                            tmpA.v2 = curFace->v2;
+                            tmpA.v2 = face.v2;
                             tmpA.v3 = mids[1];
                             newFaces.push_back(tmpA);
                             RndMesh::Face tmpB;
                             tmpB.v1 = blendIdx;
                             tmpB.v2 = mids[1];
-                            tmpB.v3 = curFace->v3;
-                            pFace = &tmpB;
+                            tmpB.v3 = face.v3;
+                            newFaces.push_back(tmpB);
                         }
-                        newFaces.push_back(*pFace);
 
                         // Edge 2 (v2-v0)
                         if (mids[2] == 0xffff) {
                             RndMesh::Face tmpA;
                             tmpA.v1 = blendIdx;
-                            tmpA.v2 = curFace->v3;
-                            tmpA.v3 = curFace->v1;
-                            pFace = &tmpA;
+                            tmpA.v2 = face.v3;
+                            tmpA.v3 = face.v1;
+                            newFaces.push_back(tmpA);
                         } else {
                             RndMesh::Face tmpA;
                             tmpA.v1 = blendIdx;
-                            tmpA.v2 = curFace->v3;
+                            tmpA.v2 = face.v3;
                             tmpA.v3 = mids[2];
                             newFaces.push_back(tmpA);
                             RndMesh::Face tmpB;
                             tmpB.v1 = blendIdx;
                             tmpB.v2 = mids[2];
-                            tmpB.v3 = curFace->v1;
-                            pFace = &tmpB;
+                            tmpB.v3 = face.v1;
+                            newFaces.push_back(tmpB);
                         }
-                        newFaces.push_back(*pFace);
 
                         newVerts.push_back(blendB);
                         numVertsPhase3++;
                     }
 
-                    geomOwner = mesh->GetGeomOwner();
-                    fIdx++;
-                    fOff += 6;
-                } while (fIdx < (unsigned int)geomOwner->Faces().size());
+                }
             }
 
             // Assign Phase 3 faces to mesh
-            savedFaces = &newFaces[0];
-            geomOwner = mesh->GetGeomOwner();
-            geomOwner->Faces().assign(newFaces.begin(), newFaces.end());
+            savedFaces = newFaces.begin();
+            mesh->Faces().assign(savedFaces, newFaces.end());
 
-            savedVerts = &newVerts[0];
-            geomOwner = mesh->GetGeomOwner();
-            geomOwner->Verts().resize(
-                (int)newVerts.size() + geomOwner->Verts().size()
+            savedVerts = newVerts.begin();
+            mesh->Verts().resize(
+                (newVerts.end() - savedVerts) + mesh->Verts().size()
             );
 
             // Copy Phase 3 new verts into mesh
@@ -1569,10 +1512,7 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
                 unsigned int count = numVertsPhase3 - oldNumVerts3;
                 RndMesh::Vert *src = savedVerts;
                 do {
-                    memcpy(
-                        (char *)&mesh->GetGeomOwner()->Verts(0) + offset,
-                        src, 0x60
-                    );
+                    memcpy((char *)&mesh->Verts(0) + offset, src, 0x60);
                     count--;
                     offset += 0x60;
                     src++;
@@ -1581,18 +1521,22 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
 
             // Budget tracking and convergence check
             totalNewFaces += newFacesThisIter;
-            if (newFacesThisIter <= maxIter || halfBudget < totalNewFaces
-                || (unsigned int)totalBudget <= newFacesThisIter) {
+            if (newFacesThisIter <= maxIter || totalNewFaces > halfBudget
+                || newFacesThisIter >= (unsigned int)totalBudget) {
                 keepGoing = false;
             }
-            totalBudget = (unsigned int)totalBudget < newFacesThisIter ? 0 : totalBudget - newFacesThisIter;
+            if (newFacesThisIter <= (unsigned int)totalBudget) {
+                totalBudget = totalBudget - newFacesThisIter;
+            } else {
+                totalBudget = 0;
+            }
 
             // Debug output
             if (newFacesThisIter != 0) {
                 passNum++;
                 TheDebug << MakeString(
-                    "RndAmbientOcclusion: Tessellation pass %d: %d new faces, %d total\n",
-                    (unsigned long)passNum, (unsigned long)newFacesThisIter, (long)totalNewFaces
+                    "RndAmbientOcclusion: Tessellation pass %d complete, added %d faces (%d total).\n",
+                    passNum, newFacesThisIter, totalNewFaces
                 );
             }
         } while (keepGoing);
