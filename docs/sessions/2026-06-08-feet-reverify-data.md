@@ -234,3 +234,63 @@ This is the family of hypothesis (ii) (IK-apply), with the decode (iii) now refu
    matched-safe; this would be the first candidate FIX, not just a diagnostic.
 3. (Optional) confirm char/main decode parity by running the FIRM-#1 test against
    char/main + a song clip, to fully close (iii'').
+
+---
+
+# PUSH 3 (2026-06-09, ultracode) — DECOMP-BUG hypothesis tested vs Xbox asm: REFUTED
+
+User hypothesis: maybe the IK clamp/apply C++ "is just writing to the wrong place" — a
+DECOMPILATION accuracy bug (C++ diverges from the Xbox-360 asm) that would manifest in BOTH
+the matched build and the native port. Two independent subagents diffed the suspect code
+instruction-by-instruction against the real Xbox obj (`build/373307D9/obj/system/...`) via
+DC3's objdiff fork.
+
+## Audit A — IK math (HamIKEffector) = 100% FAITHFUL
+| fn | match% | verdict |
+|----|--------|---------|
+| Poll | 99.7% | faithful (addr-reloc + stack-shift + 2 commutative fmuls) |
+| ApplyConstraints / ApplyPosConstraints | 99.7-99.8% | faithful (label-reloc only) |
+| IKElbow | 100.0% | byte-identical |
+| GetGroundHeight | 100.0% | byte-identical |
+| ComputeHandPullAndQuat / DoFancyElbow | 93-99% | faithful (regswap/commutative) |
+- The `q.v += remaining*effQ.v` "doubling" → asm `fmadds` (faithful; Xbox adds-on-top too).
+- The ground clamp `if (effQ.v.z<groundHeight) effQ.v.z=groundHeight` → correct dir/field/cmp.
+- Back-transform `Multiply(inv, finalXfm, finalXfm)` → faithful operand order; FastInvert targets correct.
+- IKElbow `grandparent/parent->SetWorldXfm` bone targets → byte-identical.
+
+## Audit B — transform persistence (Trans.cpp) = FAITHFUL
+| fn | match% | verdict |
+|----|--------|---------|
+| SetWorldXfm (408) | 93.87% | faithful (vtable-load/mDirty-store schedule reorder; NO behavioral diff) |
+| WorldXfm_Force (655) | 99.65% | faithful (recomputes world from mLocalXfm every branch) |
+| ComputeLocalXfm (506) | 100% | byte-identical |
+| SetWorldPos / SetDirty_Force / SetTransParent | 100/100/99.6% | faithful |
+- **KEY ANSWER:** Xbox `SetWorldXfm` writes ONLY mWorldXfm (0x48) + clears mDirty (0xbd) +
+  vcall + dirty-children. It does **NOT** back-compute mLocalXfm — and the decomp reproduces
+  this exactly (asm has no store to 0x8). So the IK's SetWorldXfm IS discarded on Xbox too,
+  by design. The hypothesis "a dropped local-writeback" is REFUTED by the asm.
+- The only world→local persist path is `ComputeLocalXfm` (via the `world_xfm` SYNC_PROP),
+  NOT plain SetWorldXfm. CharForeTwist/CharUpperTwist already back-compute the local on the
+  IK side to survive (docs/sessions/2026-03-24-forearm-twist-fix.md); the foot IK does not.
+  (That session also notes back-computing inside SetWorldXfm caused stretched geometry — so
+  the global fix is off the table; any survive-fix must be IK-side and local.)
+
+## What this means (4 independent verifications now agree the engine is faithful)
+decode (PUSH 2 test) + IK math (Audit A) + transform persistence (Audit B) are ALL faithful
+to Xbox. So the native ENGINE MATH is not the bug. The feet-sink must come from one of:
+- **INPUTS / SPACE** — native bakes the venue-world placement into the bone worlds BEFORE the
+  IK Poll, whereas Xbox runs the IK CHARACTER-LOCAL and composites venue placement at render
+  (see the `CharLocalIKScope` comment, HamIKEffector.cpp:23-60, and the HX_NATIVE scope at
+  :432 — an attempted-but-maybe-incomplete fix). BOTH audit agents independently flagged this.
+- **PLACEMENT** — the character ROOT Z. Gameplay player0 root W.z=0.11 (on floor) but the pose
+  puts feet ~4u BELOW the root; an isolated crouch on the shared skeleton puts feet ABOVE the
+  (origin) root. So ~7u of "feet vs root" is added by the gameplay placement/servo, not the pose.
+- (Or the premise: does Xbox actually plant here? Only confirmable with the blocked live capture.)
+
+## NEXT PROBE (Push 4)
+Audit the INPUTS, not the math: (1) does `CharLocalIKScope` actually re-root the character to
+origin for the IK, or does the venue offset leak in? Dump the bone worlds with/without the
+scope. (2) Is the character ROOT/servo Z (0.11) correct, or should it lift the body ~4u so the
+feet reach the floor? Dump the CharServoBone/placement transform vs the pose's lowest foot.
+The fix is an input/space/placement fix (or an IK-side local back-compute like CharForeTwist),
+NOT a correction to the audited IK/transform math.
