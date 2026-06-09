@@ -341,3 +341,78 @@ thunk `0x83A00964`) so `.mogg`/`.milo` reads complete — then audio reaches `Is
 unpauses itself, `SetupAnims` populates a valid map, and the dancer animates. A binary-verified
 5-step host-nudge (wait=0, unkf8=0, mRealTime=1, mPaused=0, host-drive TaskMgr clock) exists as a
 fallback to force the unpause, but it is moot until the song-anim crash (content load) is fixed.
+
+---
+
+## 2026-06-09 — REFRAME: the async stall is SOLVED; the dance ANIMATES; live Xbox bone telemetry achieved
+
+> **This supersedes the entire doc above.** The "import thunk `0x83A00964` / song-load CS spin"
+> framing was a **misdiagnosis** (see the CORRECTION block at the end of this section). The async
+> file-load completion stall is already solved in the working tree; DC3 boots, renders, plays the
+> song, and the dancer animates under headless Xenia. We now read live Xbox IK/foot telemetry.
+
+Re-ran the YMCA flow on the current `xenia-headless` (built Jun 5, includes ~2,211 lines of
+uncommitted working-tree work beyond commit `5084c6acd`). Log: `/tmp/xenia-stall-baseline/run.log`
+(88,925 lines; clean exit rc=0 at the 200 s timeout). **The picture has moved a lot vs the
+2026-06-02 section above — that section is now partially STALE.**
+
+What is now WORKING (was broken before):
+- **NtReadFile reaches #2000** (vs reads stopping at ~log line 3055 before).
+- **`FlushDeferredDraws: executing N` fires 37×** (was 0) → real GPU draws.
+- **Full screen flow reached**: `title → main → choose_mode → song_select → game_screen`
+  (all `wait_screen '…' SATISFIED`).
+- **gpState=2, paused=0, load=3, wait=0 (PLAYING)** for ~130 beats; host beat-drive advances
+  `sec≈133→139, beat≈266→287`; then flips to `gpState=3 paused=1 realTime=1` (song-end/restart).
+- **No SIGSEGV** the entire run (the old `SongAnimByDifficulty` crash is GONE).
+- **74 captured frames, all-distinct md5** (was 1 identical black frame). IK telemetry is LIVE
+  (`DC3:IK CLAMP/EFF/BONE/OUT` fire every gameplay frame).
+
+**THE DANCE ANIMATES — live Xbox foot ground truth captured.** The `DC3:IK CLAMP` telemetry
+advances smoothly **frame 990 → 5280** (every 30 frames) with the ankle position moving in
+venue-world every sample. The Xbox raw-animated ("neutral") **ankle Z trajectory** over the dance:
+median **0.049** (= floor; `groundHeight=0`), range −0.35 → 10.6, with **23/144 samples slightly
+below floor**, 85 near floor [0,0.6], 30 lifted (dance steps). Verdict tally: 288 `PLANTED(z~floor)`,
+143 `PLANTED(neutral!=eff)`. The foot-plant **IK is near-inert on Xbox** — `clampF=0.0000` on every
+sample (the clamp only engages for feet lifted >5u). **This matches native** (native: ankle raw-pose
+at floor, IK inert/discarded) → confirms the native pose pipeline is faithful at the ANKLE.
+
+CORRECTION to my first read of this run (do not repeat the error): the
+`bone_*.mesh world=(0,0,5.00xx)` "BONE" telemetry is a **broken read** (wrong field offset / it
+returns a near-constant value while the SAME object's effector read animates), NOT a frozen
+skeleton. The skeleton is fully posed and dancing. Likewise the `RtlEnterCS` 32M count + thunk
+`0x83A00964` "all-zeros" are NOT a song-load blocker:
+
+### CORRECTION — the import-thunk/song-load framing was WRONG (5-agent recon + symbol confirmation)
+- **`0x83A00964` is guest BSS/data, not a thunk** (it's above the whole XEX image
+  0x82000000–0x83250000; in the `0x83A00000–0x83B20000` BSS scan range). The "all-zeros / NOT
+  FOUND / Indirection=0" came from a **buggy diagnostic** (`xenia emulator_headless.cc:1444-1470`)
+  that deref's a host pointer for a guest VA and `QueryFunction`s a data address. `RtlEnterCriticalSection`
+  (ord 0x125) is fully resolved (IAT `0x82000900`, thunk `0x82EE5884`) and implemented
+  (`xboxkrnl_rtl.cc:471`). **Do NOT write an import override or touch threading/APC code.**
+- **The `0x825E4794` spin = the Kinect `SkeletonUpdate` gesture poll, not the file loader.**
+  `0x825E4794` is inside `CriticalSection::Enter` (0x825E4778, confirmed in symbols.txt); the CS
+  object `0x82F5F888` is `SkeletonUpdateHandle::sCritSec` (confirmed). It's the `App` main-loop
+  per-frame `SkeletonUpdateHandle` RAII waiting on `SkeletonUpdate::sSkeletonUpdatedEvent`
+  (`0x82F5F884`), set only after `NuiSkeletonGetNextFrame` (real Kinect) — never fires headless.
+  The 32M Enter/Exit count is genuine guest-loop churn (gesture subsystem), **and it does NOT stop
+  the dance from animating** (the dance plainly advances 990→5280). It's CPU waste / cosmetic, not
+  the gate. Same family as already-landed fix `07b11d791`.
+- **The async file-load stall is SOLVED in the uncommitted working tree** via the `merge_busy`
+  HOLD gate (`emulator.cc`: latch `TheFileMergerOrganizer` `*0x82f5ef44`→`mActiveOrg +0x38`, hold
+  the loading→game_screen transition until merge done, then real `GotoScreen`, then unpause nudge
+  in `nop_input_driver.cc`) + supporting patches (`Game::PauseForSkeletonLoss 0x82866D50→blr`,
+  `HamDirector::SongAnim 0x82475578→b 0x82473E58`, `SaveLoadManager::Activate 0x82894A10→blr`).
+  My run confirms it: `merge_busy=0 seenBusy=1` throughout, no crash, song plays.
+
+**Real remaining gap (small):** the only missing datum is the **Xbox TOE Z** (and knee) — the toe
+is not an IK effector so it's not in the CLAMP data, and the `.mesh` bone read is broken. Fixing
+that read (correct offset/instance for `bone_*-toe.mesh` / `bone_*-knee` world Z) gives the decisive
+Xbox-vs-native toe comparison: if Xbox toe ≈ 0 (flat foot) while native toe ≈ −4 with matching
+ankles, the native bug is a **foot/ankle-rotation or knee** divergence, not ankle height. See the
+feet investigation doc (`docs/sessions/2026-06-09-xenia-xbox-foot-truth.md`).
+
+**Optional polish (not blocking):** tame the gesture spin by stubbing `SkeletonUpdate::PostUpdate`
+(live `0x8242E2B0`) / `InstanceHandle` (`0x8242CDB0`) — the in-tree gesture stubs target WRONG
+addresses for `debug.xex` (manifest is decomp-layout; fallback literals like `0x827D0EC0` don't
+exist in `debug.xex`). Live addrs: `GestureMgr::Poll=0x82428F40`, `GetSkeleton=0x824293F8`,
+`UpdateTrackedSkeletons=0x82429810`. Re-pin to these only if the CPU churn matters.
