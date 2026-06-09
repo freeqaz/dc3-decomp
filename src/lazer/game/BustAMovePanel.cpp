@@ -1509,18 +1509,10 @@ void BustAMovePanel::Poll() {
 
     HamPanel::Poll();
 
-    HamPlayerData *player1 = TheGameData->Player(1);
     HamPlayerData *player0 = TheGameData->Player(0);
-    {
-        PropertyEventProvider *prov = player0->Provider();
-        Message hideHudMsg("hide_hud", 0);
-        prov->Handle(hideHudMsg, true);
-    }
-    {
-        PropertyEventProvider *prov = player1->Provider();
-        Message hideHudMsg("hide_hud", 0);
-        prov->Handle(hideHudMsg, true);
-    }
+    HamPlayerData *player1 = TheGameData->Player(1);
+    player0->Provider()->Export(Message("hide_hud", 0), true);
+    player1->Provider()->Export(Message("hide_hud", 0), true);
 
     mRecorder->Poll();
 
@@ -1543,15 +1535,14 @@ void BustAMovePanel::Poll() {
 
     if (mState == kBAMState_Recording && mBeatCount >= 3) {
         mDancerTakeScore = mRecorder->GetScore(skelIdx, 0, mRecordScore, true);
-        mCurrentMoveScore = mRecorder->GetScore(skelIdx, 1, mRecordScore, true);
+        mCurrentMoveScore = mRecorder->GetScore(skelIdx, 1, mRecordScore, false);
         mRecordScore += TheTaskMgr.DeltaUISeconds();
     }
 
     if (mState == kBAMState_Playing) {
         auto currentMoveScore = mRecorder->GetScore(skelIdx, 0, -1.0f, false);
         mMoveScore = currentMoveScore;
-        auto &phraseMeter = mPhraseMeters[mCreatorSide];
-        phraseMeter->SetShowing(true);
+        mPhraseMeters[mCreatorSide]->SetShowing(true);
         float base = mMoveScore;
         unsigned int e = 2;
         float scoreSq = 1.0f;
@@ -1561,7 +1552,7 @@ void BustAMovePanel::Poll() {
             if (e == 0) break;
             base *= base;
         } while (true);
-        phraseMeter->SetRatingFrac(
+        mPhraseMeters[mCreatorSide]->SetRatingFrac(
             scoreSq * 1.4f, 4.0f - MsToBeat(mRecordScore * 1000.0f)
         );
         forceSkelIdx = mRecordSkelIdx;
@@ -1617,9 +1608,8 @@ void BustAMovePanel::Poll() {
         }
         mDepthBufPlayer = -1;
     } else if (mDepthBufPlayer != activePlayer) {
-        Symbol colorSym = GetPlayerColor(activePlayer);
         const char *texName;
-        if (colorSym == "pink") {
+        if (GetPlayerColor(activePlayer) == "pink") {
             texName = "gradient_pink.tex";
         } else {
             texName = "gradient_blue.tex";
@@ -1707,15 +1697,9 @@ void BustAMovePanel::Poll() {
         }
         if ((unsigned int)songSize != 0) {
             for (int i = 0; i < songSize; i++) {
-                Hmx::Color color;
-                if ((int)currentPhrase == i) {
-                    // Keep channel-wise assignment for closer PPC codegen.
-                    color.red = Hmx::Color(0.0f, 1.0f, 0.0f, 1.0f).red;
-                    color.green = Hmx::Color(0.0f, 1.0f, 0.0f, 1.0f).green;
-                    color.blue = Hmx::Color(0.0f, 1.0f, 0.0f, 1.0f).blue;
-                } else {
-                    color = Hmx::Color(1.0f, 1.0f, 1.0f, 1.0f);
-                }
+                Hmx::Color color = ((int)currentPhrase == i)
+                    ? Hmx::Color(0.0f, 1.0f, 0.0f, 1.0f)
+                    : Hmx::Color(1.0f, 1.0f, 1.0f, 1.0f);
                 Vector2 elemPos((float)i * 0.02f + 0.1f, 0.08f);
                 graph->AddScreenString(
                     MakeString("%d", data[i]), elemPos, color
