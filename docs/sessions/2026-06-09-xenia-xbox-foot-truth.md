@@ -513,3 +513,31 @@ heuristics. With one foot proven planted, this is now a focused right-leg-FK pro
 State: best variant kept (FSM-lock + gate + re-solve + bad-read guard; LEFT planted, RIGHT ~80%
 improved). OPT-IN DC3_FEET_PLANT_FIX (default OFF = verified stable original). Gate still fails on
 the right. Diagnostics: DC3_IK_DIAG (DC3_SEQ/IKHand/DoFSM/ReRunLeg).
+
+## PUSH 12h (2026-06-09) — footik root: the runtime clip's footik POS data is 0 (clip-load/bake gap), facing decodes fine
+
+Subagent + ScaleAdd instrumentation traced the FSM's plant input (bone_footik.pos via mData) to its
+source. DECISIVE:
+- `CharBones::ScaleAdd` POS loop, gameplay: the clip's POS section is `[bone_facing.pos, bone_footik.pos]`.
+  **pos[0]=facing=(2.739,20.520,0) decodes NON-ZERO; pos[1]=footik=(0,0,0)** — adjacent Vector3s, same
+  16-byte-stride decode, same f2=1.0. So the decode/accumulation is fine (facing works); the **runtime
+  clip's footik DATA is genuinely 0**. mData (bone_footik.mesh) ptr == the posed footik (not wrong-instance).
+- So `vecat=0` every frame because the played clips carry footik=0 — even though the subagent decoded the
+  EXTRACTED `clips.milo` footik as (1,1,~2), varying (73/75 non-zero). I.e. native loads/plays clips
+  WITHOUT the `analyze_footik` foot-plant bake (process_clips_func.dta authors bone_footik.pos at build
+  time). NOT a decode-stride bug, NOT accumulation, NOT wrong-instance.
+
+### Two deep remaining paths (Push 13) — pick one
+1. **Footik clip-load/bake gap (principled).** Find why the runtime-played clips have footik=0 while the
+   extracted clips.milo has it baked (1,1,~2): does native load a different/pre-bake clip source via the
+   FileMerger/mClipDir? Is the footik bake applied at load (analyze_footik) and native skips it? Are the
+   small layer clips (10/21 bones) the ones played, and do THEY carry the bake? Make the runtime footik
+   reflect the baked (1,1) data -> vecat varies -> the FSM locks natively for BOTH feet (no heuristics,
+   no L/R asymmetry). cf the subagent's full decode-path map (this session).
+2. **Right-leg FK (heuristic path).** Keep the height-based FSM-lock (LEFT foot already planted, 8/880)
+   and fix why the RIGHT leg's toe-target intermittently reads un-composed (at the hip) ~20% of frames,
+   causing the right IK to overshoot.
+
+State: LEFT foot planted via the height heuristic; right foot ~80% improved; footik principled fix
+localized to the clip-load/bake gap. OPT-IN DC3_FEET_PLANT_FIX (default OFF = verified stable). Full
+diagnostics (DC3_IK_DIAG: ScaleAddFootik/FootikPos/DoFSM/IKHand/SortOrder). Gate still fails (right foot).

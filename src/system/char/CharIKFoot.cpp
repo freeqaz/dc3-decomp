@@ -220,10 +220,10 @@ void CharIKFoot::DoFSM(Character *mMe, Transform &tf) {
         if (sFsmLog < 40 && pn && strstr(pn, "main.milo")) {
             sFsmLog++;
             const Vector3 &dv = mData ? mData->LocalXfm().v : tf.v;
-            fprintf(stderr, "DC3_IK_DIAG DoFSM[%d] %s fsm=%d vecat=%.4f b2=%d dataName=%s "
+            fprintf(stderr, "DC3_IK_DIAG DoFSM[%d] %s fsm=%d vecat=%.4f b2=%d dataName=%s dataPtr=%p "
                     "dataLocalV=(%.4f,%.4f,%.4f) idx=%d tf.z=%.2f\n",
                     sFsmLog, pn, mFootFsmState, vecat, b2 ? 1 : 0,
-                    mData ? mData->Name() : "null",
+                    mData ? mData->Name() : "null", (void *)mData.Ptr(),
                     dv.x, dv.y, dv.z, mDataIndex, tf.v.z);
         }
     }

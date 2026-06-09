@@ -1,4 +1,9 @@
 #include "char/CharBonesMeshes.h"
+#ifdef HX_NATIVE
+#include <cstdlib>
+#include <cstring>
+#include <cstdio>
+#endif
 #include "char/CharUtl.h"
 #include "math/Rot.h"
 #include "obj/Object.h"
@@ -117,6 +122,18 @@ void CharBonesMeshes::PoseMeshes() {
     Vector3 *scaleOff = (Vector3 *)(start + scaleOffset);
     for (; pos < scaleOff; pos++, ++curMesh) {
         (*curMesh)->SetLocalPos(*pos);
+#ifdef HX_NATIVE
+        {
+            static int sFootikLog = 0;
+            const char *nm = (*curMesh) ? (*curMesh)->Name() : nullptr;
+            if (getenv("DC3_IK_DIAG") && sFootikLog < 24 && nm && strstr(nm, "footik")) {
+                sFootikLog++;
+                fprintf(stderr, "DC3_IK_DIAG FootikPos[%d] dir=%s mesh=%s ptr=%p pos=(%.4f,%.4f,%.4f)\n",
+                        sFootikLog, Dir() ? Dir()->Name() : "?", nm, (void *)(*curMesh),
+                        pos->x, pos->y, pos->z);
+            }
+        }
+#endif
     }
 
     // Handle quaternions and rotations if we have enough meshes

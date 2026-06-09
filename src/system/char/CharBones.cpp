@@ -1,4 +1,9 @@
 #include "char/CharBones.h"
+#ifdef HX_NATIVE
+#include <cstdlib>
+#include <cstring>
+#include <cstdio>
+#endif
 #include "char/CharClip.h"
 #include "math/Mtx.h"
 #include "math/Rot.h"
@@ -722,6 +727,23 @@ void CharBones::ScaleAdd(CharBones &bones, float f2) const {
                         }
                         otherVecItr++;
                     }
+#ifdef HX_NATIVE
+                    {
+                        const char *mn = myBonesItr->name.Str();
+                        static int sSAlog = 0;
+                        if (getenv("DC3_IK_DIAG") && mn && std::strstr(mn, "footik") && sSAlog < 16) {
+                            sSAlog++;
+                            const Vector3 *pos0 = (const Vector3 *)mStart;
+                            std::fprintf(stderr, "DC3_IK_DIAG ScaleAddFootik[%d] footikSrc=(%.3f,%.3f,%.3f) "
+                                    "mStart=%p pos[0]=(%.3f,%.3f,%.3f) pos[1]=(%.3f,%.3f,%.3f) "
+                                    "myBone#=%d nClipBones=%d dst=%s f2=%.3f\n",
+                                    sSAlog, myVecItr->x, myVecItr->y, myVecItr->z, (void *)mStart,
+                                    pos0[0].x, pos0[0].y, pos0[0].z, pos0[1].x, pos0[1].y, pos0[1].z,
+                                    (int)(myBonesItr - (Bone *)&mBones[0]), (int)mBones.size(),
+                                    otherBonesItr->name.Str(), f2);
+                        }
+                    }
+#endif
                     ScaleAddEq(*otherVecItr, *myVecItr, f2);
                     otherBonesItr->weight += myBonesItr->weight * f2;
                     myBonesItr++;
