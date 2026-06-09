@@ -125,6 +125,10 @@ void CharBonesMeshes::PoseMeshes() {
     auto& scaleOffset = mOffsets[TYPE_SCALE];
     Vector3 *scaleOff = (Vector3 *)(start + scaleOffset);
     for (; pos < scaleOff; pos++, ++curMesh) {
+#ifdef HX_NATIVE
+        { extern bool Dc3PlantGuarded(RndTransformable *);
+          if (Dc3PlantGuarded(*curMesh)) continue; }
+#endif
         (*curMesh)->SetLocalPos(*pos);
 #ifdef HX_NATIVE
         {

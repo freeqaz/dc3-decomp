@@ -171,10 +171,14 @@ static bool Dc3CleanPlant(RndTransformable *ankle, RndTransformable *toe) {
     (void)ankle->WorldXfm();
 
     // Guard the bend bones so a later PoseMeshes this frame can't overwrite the plant.
+    // Also guard the hip (pelvis): a later pose dropping the pelvis would drag the whole
+    // planted leg down (the extreme-move drift). DC3_NO_GUARD_HIP keeps the pelvis poseable.
     gDc3PlantGuardActive = true;
     gDc3PlantGuard.insert(thigh);
     gDc3PlantGuard.insert(knee);
     gDc3PlantGuard.insert(ankle);
+    if (!getenv("DC3_NO_GUARD_HIP"))
+        gDc3PlantGuard.insert(hip);
     return true;
 }
 #endif
