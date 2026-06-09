@@ -765,3 +765,28 @@ toe ≈ 0 AND render rToe ≥ −2. Full agent reports: workflow wf_0eaf267d-b2b
   render. The foot is at -11.9 with all leg LOCALs apparently planted+guarded, so the drift is a
   WORLD recompose against a moved ancestor that the guard doesn't cover (char-root `me`, or a
   recompose ordering). State unchanged: R22/L11 (~95%), default OFF stable.
+
+### PUSH 16c (2026-06-09, autonomous) — DECISIVE render-chain trace: deep frames = root-crouch drift + toe-down foot
+Render-time leg-chain dump (GameplayTelemetry LegChk, DC3_IK_DIAG2, on rToe<-3 frames) overturns the
+"pelvis stable ~39" claim and pins the deepest ~22 frames to TWO compounding causes:
+1. **The char ROOT crouches ~14u AFTER the plant.** Render pelvisW≈25-27 (NOT ~39); thighW≈25-27,
+   kneeW≈10-12. The knee IS bent (kneeLocalRot.x rotated, e.g. (0.293,0.017,0.956)) — the plant's
+   bend SURVIVED. But the whole chain is ~14u low because the Character root (`me`) dropped after the
+   plant baked the (pelvis-relative) leg. The hip guard covers the pelvis BONE local, NOT the
+   Character root transform (moved by CharServoBone MoveToFacing/MoveToDeltaFacing/RegulateInternal on
+   `me`). So the plant baked the leg for a high root; the crouch drops the root; the foot rides down.
+2. **The foot points TOE-DOWN.** On the shallower failing frames the ANKLE is at the floor (rAnkleZ
+   -0.21) but the TOE is at -5.14 — i.e. the foot is plantar-flexed and the plant PRESERVES that anim
+   orientation (ankle.m = anim) instead of flattening the foot. The no-plant control confirms the raw
+   anim also fails (toe -3.3, ankle +0.7) — Xbox's foot-plant FLATTENS the foot (rotates the ankle so
+   the toe clears); my lift-the-leg approach can't fix a toe-down foot whose ankle is already planted.
+
+### Push 17 — the two-part fix (both #ifdef HX_NATIVE + opt-in; needs attended build/test iteration)
+A) Run the plant against / after the FINAL char-root crouch (the plant must read the post-crouch root,
+   or re-assert after the last CharServoBone pass that moves `me`), so the pelvis-relative leg isn't
+   baked for a stale-high root. (The normal-poll [28] plant runs after the char's own servo [6] but
+   the re-run bakes after PlayAnims; the late drop is a dancer servo after HamDirector.)
+B) FLATTEN the foot when the toe is below the floor but the ankle is at/above it: instead of preserving
+   the anim ankle.m, rotate the ankle so toe.z >= floor (dorsiflex), matching Xbox. This is the
+   missing lever for the toe-down crouch frames.
+Diag committed: GameplayTelemetry LegChk (DC3_IK_DIAG2). State R22/L11 (~95%), default OFF stable.

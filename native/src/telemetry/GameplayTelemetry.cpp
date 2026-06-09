@@ -311,6 +311,28 @@ GameplayTelemetry::Snapshot GameplayTelemetry::CaptureSnapshot(int frame) {
                 s.lFootZAxisZ = lAnkle->WorldXfm().m.z.z;
                 s.rFootZAxisZ = rAnkle->WorldXfm().m.z.z;
 
+                // PUSH 17 DIAG (DC3_IK_DIAG2): on a FAILING right-foot frame, is the right knee
+                // LOCAL bent (plant survived) or ~straight (overwritten)? Walk the render chain.
+                if (getenv("DC3_IK_DIAG2") && s.rToeZ < -3.0f) {
+                    static int sLegChk = 0;
+                    if (sLegChk < 8) { sLegChk++;
+                        RndTransformable *rKnee = rAnkle->TransParent();
+                        RndTransformable *rThigh = rKnee ? rKnee->TransParent() : nullptr;
+                        RndTransformable *rPelvis = rThigh ? rThigh->TransParent() : nullptr;
+                        // knee LOCAL rotation x-axis: identity-ish = straight; rotated = bent.
+                        const Hmx::Matrix3 &km = rKnee ? rKnee->LocalXfm().m : rAnkle->LocalXfm().m;
+                        int kneeDirty = rKnee ? (rKnee->Dirty() ? 1 : 0) : -1;
+                        fprintf(stderr,
+                            "DC3_IK_DIAG LegChk rToe=%.2f rAnkleZ=%.2f rKneeW=(%.1f) rThighW=(%.1f) rPelvisW=(%.1f) "
+                            "kneeLocalRot.x=(%.3f,%.3f,%.3f) rKneeDirty=%d\n",
+                            s.rToeZ, s.rAnkleZ,
+                            rKnee ? rKnee->WorldXfm().v.z : -999.f,
+                            rThigh ? rThigh->WorldXfm().v.z : -999.f,
+                            rPelvis ? rPelvis->WorldXfm().v.z : -999.f,
+                            km.x.x, km.x.y, km.x.z, kneeDirty);
+                    }
+                }
+
                 // One-shot diagnostic: dump toe rest-offset and ankle rotation.
                 // Gate to gameplay only — we already have rest-pose data.
                 static int sFootGeomLog = 0;
