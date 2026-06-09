@@ -1095,6 +1095,68 @@ if (mAlwaysInlineHash.length() > 0) {
 
 ---
 
+## Unnamed Temporary vs Named Local (Ctor Return-Value Reuse)
+
+### Symptom
+
+At a call site that passes a freshly-constructed object (typically `Symbol`, `Message`,
+`DataNode`), the target uses the constructor's return value while our build re-materializes
+the temp's stack address:
+
+```
+TGT: bl   ??0Symbol@@QAA@PBD@Z     SRC: bl   ??0Symbol@@QAA@PBD@Z
+     mr   r6, r3                        addi r6, r31, 0x154
+```
+
+Often accompanied by: structural frame-size delta (each named local pins a distinct slot
+for the whole scope; unnamed temps die at end of full-expression and their slots get
+reused), a large offset-shift cascade, and BASE_ONLY slots in `mode=stack-layout` named
+after the locals.
+
+### Why It Works
+
+MSVC ctors return `this` in r3. For an **explicit unnamed temporary** (`f(Symbol("x"))`),
+the only handle to the object is the ctor's return value, so the compiler forwards r3
+directly and lets the slot die. For a **named local** (`Symbol s("x"); f(s)`) — or an
+**implicit conversion** (`f("x")` / `push_back(gNullStr)` through a converting ctor) —
+the compiler refers to the variable's home slot with `addi` and keeps the slot alive to
+end of scope.
+
+### Fix
+
+```cpp
+// BAD — named single-use local: addi form + pinned slot
+Symbol readySym("get_ready");
+ShowGetReadyCard(readySym, side);
+
+// BAD — implicit conversion (const char* -> Symbol): addi form
+mFlashcardLabels.push_back(gNullStr);
+
+// GOOD — explicit unnamed temp: mr r6, r3 form, slot reused
+ShowGetReadyCard(Symbol("get_ready"), side);
+mFlashcardLabels.push_back(Symbol(gNullStr));
+```
+
+### Detection
+
+`mode=stack-layout`: BASE_ONLY slots named after single-use locals, frame Δ a multiple of
+the locals' sizes. In the instruction diff: repeated `mr rN, r3` (TGT) vs
+`addi rN, r31, <off>` (SRC) immediately after ctor calls.
+
+### Real Example
+
+| Function | Before | After | Delta | Notes |
+|----------|--------|-------|-------|-------|
+| BustAMovePanel::OnBeat | 96.2% | 97.5% | +1.3% | 6 named single-use Symbol locals inlined + 10 `push_back(gNullStr)` sites made explicit `Symbol(gNullStr)`; killed a 93-instruction offset cascade (commit `b4eb50e4`) |
+
+### Related Patterns
+
+- decomp-synth `variable_inline` spans the named-local half of this move; the
+  implicit-vs-explicit-conversion half (`push_back(gNullStr)` → `push_back(Symbol(gNullStr))`)
+  needs `cast_insertion`-style explicitization.
+
+---
+
 ## See Also
 
 - [fixable-operators.md](fixable-operators.md) - Assignment patterns
