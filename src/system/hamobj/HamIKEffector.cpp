@@ -61,10 +61,16 @@
 class CharLocalIKScope {
 public:
     CharLocalIKScope(Character *character) : mRoot(character), mActive(false) {
-        // FORENSIC-NEUTRALIZED: the prior agent's re-root-to-origin workaround
-        // is disabled so the consecutive-frame chain trace below observes the
-        // RAW native bug (no state mutation). Compiles, runs as a pure no-op.
-        return;
+        // Disabled by default (pure no-op) so chain traces observe the RAW native
+        // bug. Re-enable with DC3_IK_LOCALSCOPE=1 to test the character-local
+        // re-root + venue re-composite (Push 4 experiment, 2026-06-09).
+        {
+            static int sLocalScope = -1;
+            if (sLocalScope < 0)
+                sLocalScope = getenv("DC3_IK_LOCALSCOPE") ? 1 : 0;
+            if (!sLocalScope)
+                return;
+        }
         if (!mRoot)
             return;
         const Transform &rootWorld = mRoot->WorldXfm();

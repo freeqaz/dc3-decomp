@@ -294,3 +294,47 @@ scope. (2) Is the character ROOT/servo Z (0.11) correct, or should it lift the b
 feet reach the floor? Dump the CharServoBone/placement transform vs the pose's lowest foot.
 The fix is an input/space/placement fix (or an IK-side local back-compute like CharForeTwist),
 NOT a correction to the audited IK/transform math.
+
+---
+
+# PUSH 4 (2026-06-09) — CharLocalIKScope re-enable: EMPIRICALLY a NO-OP
+
+Recon found `CharLocalIKScope` (the character-local re-root that should match Xbox's IK space)
+was DISABLED by a `return;` at HamIKEffector.cpp:67 (a prior session "forensically neutralized"
+it). A read-only agent's PRIMARY hypothesis: re-enabling it fixes the sink (the venue offset
+leaks into the IK and "doubles"). Its dtor (lines 103-110) directly re-composites every bone's
+mWorldXfm — a persistence path that bypasses the SetWorldXfm-discard, so it was worth testing.
+
+EXPERIMENT: env-gated the re-enable (`DC3_IK_LOCALSCOPE=1`, default still no-op,
+HamIKEffector.cpp:63-72), rebuilt dc3-native, A/B'd the FootGeom toe Z:
+| config | toe Z |
+|--------|-------|
+| baseline | -4.02 |
+| DC3_IK_LOCALSCOPE=1 | **-4.02** (identical; X/Y wobble ~0.05 only) |
+
+**REFUTED.** Re-enabling the character-local re-root does NOT move the rendered foot. This
+empirically confirms (3rd independent way now) that the IK — in ANY space — does not affect the
+rendered foot: it is discarded, and even the dtor's direct bone re-composite doesn't change the
+result (the bones re-dirty/recompute from anim local before render). The recon agent's H1/H2
+(IK-space, neutral-stamping) are IK-internal and therefore moot. **The rendered foot = the raw
+anim pose, full stop.**
+
+## Where this leaves it (the paradox, stated honestly)
+Five independent verifications now agree the native engine is faithful/irrelevant to the rendered
+foot: (1) decode faithful, (2) IK math faithful to Xbox asm, (3) transform persistence faithful,
+(4) IK is a no-op (FOOT_SKIP), (5) IK-space re-root is a no-op (LOCALSCOPE). So the raw anim
+places the toe at -4.02 AND the IK can't/doesn't lift it AND that IK behavior is matched-to-Xbox.
+If all that is faithful, Xbox would sink too — yet the user reports Xbox feet are planted. One of
+these must give:
+- **(a) UNAUDITED placement** — HamRegulate::Poll adds `xfm.v.z += posDelta.z` during gameplay
+  (HamRegulate.cpp:205-214); Character::Teleport/waypoint + CharServoBone set the root. The root
+  is at venue Z=0.11 (on floor) and the pose puts feet ~4u below it — is a body-lift / regulation
+  Z-delta a native divergence? NOT yet asm-audited. (facing channel already ruled out: facingPos.z=0.)
+- **(b) DATA difference** — native loads a different clip/skeleton/waypoint than Xbox for this dance.
+- **(c) PREMISE** — does Xbox actually plant for THIS specific YMCA dance/frame, or was the user's
+  "planted" inspection a different song/character? Only the (blocked) live capture settles this.
+
+## NEXT PROBE (Push 5)
+Asm-audit the PLACEMENT/REGULATION chain (HamRegulate::Poll, CharServoBone, Character::Teleport)
+the same way IK+transforms were audited — that's the only unaudited engine path that reaches the
+raw foot. In parallel, sanity-check (b): does the native dance clip selection match Xbox's.
