@@ -483,3 +483,38 @@ SetWorldXfm-cascade corruption the comment warns about. Options:
 NOTE: this is the FIRST hypothesis that is both native-specific AND consistent with all 8
 verifications + FOOT_SKIP. Verify the poll order empirically first (log the per-character poll
 sequence: does song.hdrv Poll run before or after the ankle HamIKEffector::Poll on native?).
+
+## PUSH 7b (2026-06-09) — CORRECTION: poll-order claim is UNCONFIRMED; but the IK discard is now PINNED in time
+I checked the execution order empirically (fprintf order = exec order) in /tmp/dc3_wlog.log f=3001
+and must walk back the confident poll-order "resolution" above:
+- The pose passes (`DriverWeight`, HamDriver::Poll) appear BOTH before AND after the IK
+  (`IkSnap`/`ChainZ`, HamIKEffector::Poll) within one frame: DriverWeight[1,2] → IkSnap[1] →
+  DriverWeight[3] → IkSnap[2] → DriverWeight[4] → IkSnap[3]. Without a driver→character mapping I
+  CANNOT yet conclude "IK before pose" — for player0 a pose pass (DriverWeight[1/2]) ran BEFORE
+  its IK, which is the Xbox-like order, partially CONTRADICTING the HamDriver:95-101 comment.
+  ⇒ the poll-order hypothesis is PLAUSIBLE but UNCONFIRMED; do not treat it as resolved.
+
+- NEW FIRM DATUM (regardless of poll order): the IK's effect on the ankle is REAL at poll time but
+  GONE by render:
+    ChainZ f=3001 (during the IK poll): bone_L-ankle.mesh.z = **0.27** (= effW.z, the planted effector)
+    FootGeom (post-everything telemetry):  bone_L-ankle.mesh.z = **-0.13** (the raw anim)
+  So the IK write IS applied to the rendered ankle during its poll, then DISCARDED before render —
+  a later pass (a pose/SetWorldXfm that re-dirties the leg) recomputes the ankle from its stale
+  anim local. This pins the discard to BETWEEN the IK poll and render. (Also: the IK only nudges
+  the ankle ~0.4u even at poll time — clampFactor=0, constraints=0 — so even un-discarded it would
+  not plant the foot; the ankle sits at ~floor with a DOWN-pointing foot, so the toe is ~4 below.)
+
+- Clean contrast (iconman, ChainZ[3]): ankle 4.39, toe 0.01 (planted), neutralZ=2.297 — its raw
+  pose has the ankle HIGH so the down-foot toe lands at the floor. player0's dance move poses the
+  ankle at ~floor (0/-0.13) with the same down-foot → toe -4. So the foot height is set by the raw
+  move pose; the IK neither sinks nor meaningfully lifts it.
+
+## CORRECTED NEXT PROBE (Push 8)
+1. Add driver→character path to the DriverWeight log AND log player0's ankle Z right after its IK
+   poll vs at end-of-frame — DEFINITIVELY establish whether a pose pass re-dirties player0's leg
+   AFTER its IK (the discard mechanism) and whether the order diverges from Xbox.
+2. Separately, the IK is near-inert (clampFactor=0, constraints=0) so even surviving it wouldn't
+   plant a down-foot whose ankle is at the floor — so the deeper question stands: SHOULD player0's
+   dance-move raw pose put the ankle at ~floor (toe under) or ~4 up (toe on floor)? That is the
+   move-data-vs-Xbox question that ultimately needs the (blocked) live capture or a matched-build
+   pose dump of the same move+frame.
