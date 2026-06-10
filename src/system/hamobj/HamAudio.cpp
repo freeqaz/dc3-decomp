@@ -277,7 +277,7 @@ void HamAudio::SetCrossfadeJump(float startTime, float endTime, float fadeDurati
     mCrossfadePending = 1;
 
     float halfFade = 0.5f;
-    bool crossfadeInvalid = startTime >= fadeDuration * halfFade;
+    bool crossfadeInvalid = startTime - fadeDuration * halfFade > 0.0f;
 
     if (crossfadeInvalid) {
         MILO_NOTIFY(

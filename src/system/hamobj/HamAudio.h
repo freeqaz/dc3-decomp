@@ -36,6 +36,15 @@ public:
     bool GetCurrLoopMarkers(float &, float &) const;
     bool GetCurrLoopBeats(int &, int &) const;
     void SetCrossfadeJump(float, float, float);
+    // Whether a crossfade is queued. Exposed for the crossfade-boundary
+    // regression test (SetCrossfadeJump clears this when the crossfade is
+    // judged invalid).
+    bool CrossfadePending() const { return mCrossfadePending != 0; }
+    void SetStreamsForTest(Stream *a, Stream *b) {
+        mStreams[0] = a;
+        mStreams[1] = b;
+    }
+    void SetCrossfadeStateForTest(int s) { mCrossfadeState = s; }
 
     void SetBackgroundVolume(float);
     void SetForegroundVolume(float);
