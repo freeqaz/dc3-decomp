@@ -13,6 +13,7 @@
 #   scripts/measure_progress.sh --functions c8d98a # Show function-level changes
 #   scripts/measure_progress.sh --regressions      # Only show regressions
 #   scripts/measure_progress.sh --current-dir /path/to/worktree HEAD  # Use worktree as "current"
+#   scripts/measure_progress.sh --authorable       # Print authorable-denominator metrics (no baseline needed)
 #
 set -euo pipefail
 
@@ -27,6 +28,17 @@ CURRENT_DIR=""
 # --- Parse arguments ---
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --authorable)
+            # Delegate to progress_metrics.py; no baseline worktree needed.
+            REPORT_PATH="${MAIN_REPO}/${REPORT_REL}"
+            if [[ ! -f "${REPORT_PATH}" ]]; then
+                echo "Error: report.json not found: ${REPORT_PATH}"
+                echo "Run 'ninja build/373307D9/report.json' first."
+                exit 1
+            fi
+            exec python3 "${MAIN_REPO}/scripts/progress_metrics.py" \
+                --report "${REPORT_PATH}" "${@:2}"
+            ;;
         --worktree)
             WORKTREE_DIR="$2"
             shift 2
