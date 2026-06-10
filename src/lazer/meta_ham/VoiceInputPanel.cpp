@@ -155,7 +155,11 @@ void VoiceInputPanel::OnConfidenceChange(float conf) {
 }
 
 void VoiceInputPanel::CreateSongSelectGrammar(Symbol language) const {
+#ifdef HX_NATIVE
     if (!TheSpeechMgr || !TheSpeechMgr->Enabled()) {
+#else
+    if (!TheSpeechMgr->Enabled()) {
+#endif
         MILO_NOTIFY(
             "----- VoiceInputPanel::CreateSongSelectGrammar() - speechMgr not enabled\n"
         );

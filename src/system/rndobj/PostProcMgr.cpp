@@ -129,10 +129,11 @@ RndPostProc *RndPostProcMgr::MsgToPostProc(DataArray *iMsg) {
             const char *name = iMsg->Str(2);
             result = Dir()->Find<RndPostProc>(name, false);
             if (!result) {
-                MILO_NOTIFY("could not find post-proc %s", (char *)name);
+                MILO_NOTIFY("could not find post-proc %s", name);
             }
         } else {
-            MILO_NOTIFY("unexpected post-proc data type %d", t);
+            DataType t2 = t;
+            MILO_NOTIFY("unexpected post-proc data type %d", t2);
         }
     } else {
         MILO_NOTIFY("not enough arguments supplied to OnSetPostProc");

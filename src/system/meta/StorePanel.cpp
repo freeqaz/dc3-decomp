@@ -276,8 +276,6 @@ void StorePanel::LoadArt(const char *cc, UIPanel *panel) {
 }
 
 void StorePanel::CheckOut(StorePurchaseable *p) {
-    StorePurchaser *purchaser;
-
     MILO_ASSERT(p->IsAvailable(), 0x2c0);
     MILO_ASSERT(!mPurchaser, 0x2c1);
     Profile *profile = StoreProfile();
@@ -285,31 +283,9 @@ void StorePanel::CheckOut(StorePurchaseable *p) {
 
     mCheckoutItem = p;
     mCheckoutProfile = (int)profile;
-
-    // Allocate and construct XboxPurchaser
-    void *mem = operator new(sizeof(XboxPurchaser));
-    if (mem) {
-        purchaser = new (mem) XboxPurchaser(
-            profile->GetPadNum(),
-            p->songID,
-            0,
-            0,
-            mPurchaseSource,
-            0
-        );
-    } else {
-        purchaser = 0;
-    }
-    mPurchaser = purchaser;
-
-    // Manual vtable dispatch: Call Initiate() at vtable offset 1
-    // Note: mPurchaser is typed as StorePurchaser*, which lacks Initiate() in its interface.
-    // This raw vtable access is required to match the original binary's codegen.
-    typedef void (*VirtFunc)(void*);
-    void** vptr = (void**)mPurchaser;
-    void** vfunc_addr = (void**)*vptr;
-    VirtFunc vf = (VirtFunc)vfunc_addr[1];
-    vf(mPurchaser);
+    mPurchaser =
+        new XboxPurchaser(profile->GetPadNum(), p->SongID(), 0, 0, mPurchaseSource, 0);
+    mPurchaser->Initiate();
 }
 
 void StorePanel::ExitError(StoreError e) {

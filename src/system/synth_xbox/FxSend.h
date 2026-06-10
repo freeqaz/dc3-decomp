@@ -13,7 +13,7 @@ public:
     virtual void RemoveOwnerVoice(Voice *);
 
     bool HasVoices() const { return !unk8.empty(); }
-    IXAudio2Voice *GetOutputVoice() const { return (IXAudio2Voice *)unk4; }
+    IXAudio2Voice *GetOutputVoice() const { return mOutputVoice; }
 
     FxSend360(FxSend *);
     void SyncEffectParams();
@@ -22,7 +22,7 @@ public:
     void CleanChain();
     void Refresh(std::vector<FxSend *> &);
 
-    int unk4;
+    IXAudio2Voice *mOutputVoice; // 0x4
     std::vector<IXAudio2SubmixVoice *> unk8;
     std::vector<int> unk14;
     std::vector<IUnknown *> unk20;

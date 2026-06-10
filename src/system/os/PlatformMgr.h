@@ -53,7 +53,7 @@ private:
     bool mHasXSocialPhotoPost; // 0x2c
     bool mHasXSocialLinkPost; // 0x2d
     XOVERLAPPED mOverlapped; // 0x30
-    int unk4c; // 0x4c - ptr to something
+    void *mSocialCapabilities; // 0x4c
     int mSigninMask; // 0x50
     int mSigninChangeMask; // 0x54
     bool mGuideShowing; // 0x58

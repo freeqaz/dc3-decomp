@@ -33,39 +33,26 @@ void FlowMathOp::Save(BinStream &bs) {
 INIT_REVS(6, 0)
 
 void FlowMathOp::Load(BinStream &bs, ObjectDir *dir) {
-    int revs;
-    bs >> revs;
-    BinStreamRev d(bs, revs);
-
-    if (d.rev > gRev) {
-        const char *dirPath = dir ? PathName(dir) : "";
-        TheDebug.Fail(
-            MakeString(
-                "%s can't load new %s version %d > %d",
-                dirPath,
-                "FlowMathOp",
-                d.rev,
-                gRev
-            ),
-            nullptr
+    LOAD_REVS(bs)
+    if (d.rev > 6) {
+        MILO_FAIL(
+            "%s can't load new %s version %d > %d",
+            PathName(dir),
+            "FlowMathOp",
+            d.rev,
+            gRev
         );
     }
-    if (d.altRev > gAltRev) {
-        const char *dirPath = dir ? PathName(dir) : "";
-        TheDebug.Fail(
-            MakeString(
-                "%s can't load new %s alt version %d > %d",
-                dirPath,
-                "FlowMathOp",
-                d.altRev,
-                gAltRev
-            ),
-            nullptr
+    if (d.altRev > 0) {
+        MILO_FAIL(
+            "%s can't load new %s alt version %d > %d",
+            PathName(dir),
+            "FlowMathOp",
+            d.altRev,
+            gAltRev
         );
     }
-
-    bs >> (int &)mOp;
-
+    d >> (int &)mOp;
     if (d.rev < 1 && mOp == 8) {
         mOp = (MathOpType)-1;
     }
@@ -76,32 +63,27 @@ void FlowMathOp::Load(BinStream &bs, ObjectDir *dir) {
             mOp = (MathOpType)((int)mOp - 1);
         }
     }
-    if (d.rev < 3) {
-        if (mOp > 2) {
-            mOp = (MathOpType)((int)mOp + 1);
-        }
+    if (d.rev < 3 && mOp > 2) {
+        mOp = (MathOpType)((int)mOp + 1);
     }
-
-    bs >> mDefault;
-
+    d >> mDefault;
     if (d.rev < 6) {
-        bool has_obj;
-        d >> has_obj;
-        Hmx::Object *obj = has_obj ? FlowNode::LoadObjectFromMainOrDir(bs, dir) : nullptr;
-        mDrivenObj = obj;
-        mRhs.Load(bs);
-        Symbol sym = gNullStr;
+        bool b;
+        d >> b;
+        mDrivenObj = b ? FlowNode::LoadObjectFromMainOrDir(bs, dir) : nullptr;
+        d >> mRhs;
+        Symbol s;
         if (d.rev > 3) {
-            bs >> sym;
+            d >> s;
         }
-        if (d.rev < 5) {
-            return;
+        if (d.rev > 4) {
+            d >> mLhs;
         }
     } else {
-        bs >> mDrivenObj;
-        mRhs.Load(bs);
+        d >> mDrivenObj;
+        d >> mRhs;
+        d >> mLhs;
     }
-    mLhs.Load(bs);
 }
 
 FlowMathOp::FlowMathOp(Hmx::Object *obj)

@@ -1391,19 +1391,19 @@ void RndShaderFur::Select(RndMat *mat, ShaderType s, bool b) {
 void RndShaderSyncTrack::Select(RndMat *mat, ShaderType shader_type, bool b) {
     if (!mat) mat = TheRnd.DefaultMat();
     TheRenderState.SetFillMode((RndRenderState::FillMode)0);
-    bool skinned = TheShaderMgr.BoneCount() != 0;
-    if (!RedundantState(mat, shader_type, skinned, TheShaderMgr.UseAO(), b)) {
+    if (!RedundantState(mat, shader_type, TheShaderMgr.BoneCount() != 0, TheShaderMgr.UseAO(), b)) {
         TheNgStats->mMats++;
-        ((NgMat *)mat)->SetupShader(TheShaderMgr.AllowPerPixel(), true);
+        NgMat *ngMat = static_cast<NgMat *>(mat);
+        ngMat->SetupShader(TheShaderMgr.AllowPerPixel(), true);
         CheckShadow();
-        u64 optsVal = CalcShaderOpts((NgMat *)mat, shader_type, b);
-        MILO_ASSERT((shader_type == kSyncTrackShader || shader_type == kSyncTrackChargeEffectShader), 0x749);
+        ShaderOptions opts(CalcShaderOpts(ngMat, shader_type, b));
+        MILO_ASSERT((shader_type == kSyncTrackShader) || (shader_type == kSyncTrackChargeEffectShader), 0x749);
         if (shader_type == kSyncTrackChargeEffectShader) {
             shader_type = kSyncTrackShader;
         }
-        SetColorWriteMask(ShaderOptions(optsVal), mat);
+        SetColorWriteMask(opts, mat);
         CheckExtrude();
         CheckForceCull(shader_type);
-        Cache(shader_type, ShaderOptions(optsVal), mat);
+        Cache(shader_type, opts, mat);
     }
 }

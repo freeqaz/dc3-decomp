@@ -43,10 +43,7 @@ void ThreeDSoundManager::HarvestSounds(ObjectDir *dir, ObjPtrList<ThreeDSound> &
 
 void ThreeDSoundManager::Poll() {
     START_AUTO_TIMER("sound_mgr_poll");
-    RndTransformable *listener = mListener;
-    if (!listener) {
-        listener = mParent->Cam();
-    }
+    RndTransformable *listener = mListener.Ptr() ? mListener.Ptr() : mParent->Cam();
     if (listener) {
         const Transform &listenerXfm = listener->WorldXfm();
         bool listenerMoved = listenerXfm != mLastListenerXfm;

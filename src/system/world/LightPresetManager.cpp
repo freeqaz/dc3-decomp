@@ -130,36 +130,37 @@ void LightPresetManager::Poll() {
 
     if (mPresetOverride) {
         float time = TheTaskMgr.Time(mPresetOverride->Units());
-        float f7 = 1.0f;
+        float f7;
         if (mOverrideDuration > 0.0f) {
             f7 = (time - mTimeOverride) / mOverrideDuration;
+        } else {
+            f7 = 1;
         }
-        float t = Clamp<float>(0.0f, 1.0f, f7);
+        f7 = Clamp(0.0f, 1.0f, f7);
         if (mOverrideMode == 1) {
-            t = 1.0f - t;
+            f7 = 1.0f - f7;
         }
-        if (t > 0.0f) {
+        if (f7 > 0.0f) {
             pprev = pnew;
             pnew = mPresetOverride;
             u34 = u30;
             u30 = mTimeOverride;
-            blend = t;
+            blend = f7;
         } else if (mOverrideMode == 1) {
             mPresetOverride = 0;
-            mTimeOverride = 0.0f;
-            mOverrideDuration = 0.0f;
+            mTimeOverride = 0;
+            mOverrideDuration = 0;
             mOverrideMode = 0;
         }
     }
-
     if (pnew) {
         float time = TheTaskMgr.Time(pnew->Units());
         float fpu = pnew->FramesPerUnit();
-        float max = (0.0f > -((time - u30) * fpu)) ? (time - u30) * fpu : 0.0f;
-        if (pprev != 0 && pprev != pnew) {
+        float max = Max(0.0f, (time - u30) * fpu);
+        if (pprev && pprev != pnew) {
             float time2 = TheTaskMgr.Time(pprev->Units());
             float fpu2 = pprev->FramesPerUnit();
-            float max2 = (0.0f > -((time2 - u34) * fpu2)) ? (time2 - u34) * fpu2 : 0.0f;
+            float max2 = Max(0.0f, (time2 - u34) * fpu2);
             pprev->SetFrameEx(max2, 1.0f - blend, false);
             pnew->SetFrameEx(max, blend, false);
             mSingleBlend = false;

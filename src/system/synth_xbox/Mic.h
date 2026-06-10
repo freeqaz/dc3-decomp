@@ -11,14 +11,28 @@
 #include "xdk/xapilibi/xbase.h"
 #include "xdk/xvh2/xvh2.h"
 
+class MemStream;
+
 class ChatReceiver {
 public:
     ~ChatReceiver();
     ChatReceiver(IXHV2Engine *, int);
-    bool ActivateProcessing(bool);
+    void ActivateProcessing(bool);
 
 private:
     void ProcessChatData(void *, unsigned int, int *);
+
+    IXHV2Engine *mXHV; // 0x0
+    DWORD unk4; // 0x4
+    bool unk8; // 0x8
+    bool unk9; // 0x9
+    float unkc;
+    float unk10;
+    int unk14;
+    int unk18;
+    Timer unk20;
+    MemStream *unk50;
+    int unk54;
 };
 
 class MicXbox : public Mic {

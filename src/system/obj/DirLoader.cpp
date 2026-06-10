@@ -717,8 +717,8 @@ bool DirLoader::SetupDir(Symbol sym) {
 }
 
 void DirLoader::LoadObjs() {
-    EofType t;
     FilePathTracker tracker(mRoot.c_str());
+    EofType t;
     while (!mObjects.empty()) {
         t = mStream->Eof();
         if (t != NotEof) {
@@ -745,60 +745,61 @@ void DirLoader::LoadObjs() {
 #endif
             if (obj) {
                 if (!mPostLoad) {
-                    MemPoint begin(MemPoint::kInitType0);
+                    MemPoint pt(MemPoint::kInitType0);
                     if (sObjectMemDumpFile || sTypeMemDumpFile) {
-                        begin = MemPoint(MemPoint::kInitType1);
+                        pt = MemPoint(MemPoint::kInitType1);
                     }
-                    const char *name = obj->Name();
-                    if (!strcmp(name, ""))
-                        name = mProxyName;
-                    BeginMemTrackObjectName(name);
+                    if (streq(obj->Name(), "")) {
+                        BeginMemTrackObjectName(mProxyName);
+                    } else {
+                        BeginMemTrackObjectName(obj->Name());
+                    }
                     if (mDir) {
                         BeginMemTrackFileName(mDir->GetPathName());
                     }
                     obj->PreLoad(*mStream);
                     mPostLoad = true;
                     if (sObjectMemDumpFile) {
-                        MemPoint end(MemPoint::kInitType1);
-                        DumpObjectMemDelta(obj, end - begin);
+                        MemPoint start;
+                        DumpObjectMemDelta(obj, start - pt);
                     }
                     if (sTypeMemDumpFile) {
-                        MemPoint end(MemPoint::kInitType1);
-                        AddTypeObjectMemDelta(obj, end - begin);
+                        MemPoint start;
+                        AddTypeObjectMemDelta(obj, start - pt);
                     }
                     EndMemTrackFileName();
                     EndMemTrackObjectName();
                 }
-                std::list<Loader *> &loaders = TheLoadMgr.Loading();
-                Loader *firstLoader = loaders.empty() ? nullptr : loaders.front();
-                if (firstLoader != this) {
+                if (TheLoadMgr.GetFirstLoading() == this) {
+                    MemPoint pt(MemPoint::kInitType0);
+                    if (sObjectMemDumpFile || sTypeMemDumpFile) {
+                        pt = MemPoint(MemPoint::kInitType1);
+                    }
+                    if (streq(obj->Name(), "")) {
+                        BeginMemTrackObjectName(mProxyName);
+                    } else {
+                        BeginMemTrackObjectName(obj->Name());
+                    }
+                    if (mDir) {
+                        BeginMemTrackFileName(mDir->GetPathName());
+                    }
+                    obj->PostLoad(*mStream);
+                    mPostLoad = false;
+                    if (sObjectMemDumpFile) {
+                        MemPoint start;
+                        DumpObjectMemDelta(obj, start - pt);
+                    }
+                    if (sTypeMemDumpFile) {
+                        MemPoint start;
+                        AddTypeObjectMemDelta(obj, start - pt);
+                    }
+                    EndMemTrackFileName();
+                    EndMemTrackObjectName();
+                    if (mRev > 1) {
+                        ReadDead(*mStream);
+                    }
+                } else {
                     return;
-                }
-                MemPoint begin(MemPoint::kInitType0);
-                if (sObjectMemDumpFile || sTypeMemDumpFile) {
-                    begin = MemPoint(MemPoint::kInitType1);
-                }
-                const char *name = obj->Name();
-                if (!strcmp(name, ""))
-                    name = mProxyName;
-                BeginMemTrackObjectName(name);
-                if (mDir) {
-                    BeginMemTrackFileName(mDir->GetPathName());
-                }
-                obj->PostLoad(*mStream);
-                mPostLoad = false;
-                if (sObjectMemDumpFile) {
-                    MemPoint end(MemPoint::kInitType1);
-                    DumpObjectMemDelta(obj, end - begin);
-                }
-                if (sTypeMemDumpFile) {
-                    MemPoint end(MemPoint::kInitType1);
-                    AddTypeObjectMemDelta(obj, end - begin);
-                }
-                EndMemTrackFileName();
-                EndMemTrackObjectName();
-                if (mRev > 1) {
-                    ReadDead(*mStream);
                 }
             } else {
                 MILO_ASSERT(mRev > 1, 0x507);
@@ -806,33 +807,27 @@ void DirLoader::LoadObjs() {
             }
             mObjects.pop_front();
         }
-        if (TheLoadMgr.CheckSplit()) {
+        if (TheLoadMgr.CheckSplit() || TheLoadMgr.GetFirstLoading() != this) {
             return;
         }
-        std::list<Loader *> &loaders = TheLoadMgr.Loading();
-        Loader *firstLoader = loaders.empty() ? nullptr : loaders.front();
-        if (firstLoader != this)
-            return;
     }
     mState = &DirLoader::DoneLoading;
-    if (mRev > 0x1d) {
-        if (mRev == 0x1e) {
-            t = mStream->Eof();
-            MILO_ASSERT(t == TempEof, 0x524);
-            if (mStream->Eof() == NotEof) {
-                ReadDead(*mStream);
+    if (mRev > 0x1D) {
+        if (mRev == 0x1E) {
+            EofType t;
+            while ((t = mStream->Eof()) != NotEof) {
+                MILO_ASSERT(t == TempEof, 0x524);
             }
-        } else if (mRev == 0x1f) {
+            ReadDead(*mStream);
+        } else if (mRev == 0x1F) {
             ReadEditorDirDead(*mStream);
         }
-        if (mHasEditorDir && mRev > 0x1f) {
+        if (mHasEditorDir && mRev > 0x1F) {
             ReadEditorDirDead(*mStream);
         }
     }
-    Cleanup(nullptr);
-    std::list<Loader *> &loaders = TheLoadMgr.Loading();
-    Loader *firstLoader = loaders.empty() ? nullptr : loaders.front();
-    if (firstLoader != this)
+    Cleanup(0);
+    if (TheLoadMgr.GetFirstLoading() != this)
         return;
     if (mCallback)
         mCallback->FinishLoading(this);

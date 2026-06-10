@@ -624,39 +624,40 @@ ShowGamercardResult PlatformMgr::ShowGamercardForPadNum(int padNum, const Online
 }
 
 bool PlatformMgr::QueryXSocialCapabilities() {
-    unk4c = 0;
+    mSocialCapabilities = 0;
     mOverlapped.InternalContext = 0;
     mOverlapped.InternalHigh = 0;
     mOverlapped.InternalLow = 0;
     mOverlapped.hEvent = CreateEventA(0, 1, 0, "QueryXSocialCapabilities");
-    if (mOverlapped.hEvent == 0) {
+    if (!mOverlapped.hEvent) {
         TheDebug << MakeString("mOverlapped.hEvent is null");
         return false;
-    }
-    mOverlapped.pCompletionRoutine = 0;
-    mOverlapped.dwCompletionContext = 0;
-    mOverlapped.dwExtendedError = 0;
-    DWORD result = XSocialGetCapabilities((DWORD *)&unk4c, &mOverlapped);
-    if (result == 0) {
-        TheDebug << MakeString("XSocialGetCapabilities() returns success - %x\n", (unsigned int &)unk4c);
-        int privResult = 0;
-        mHasXSocialPhotoPost = (unsigned int)unk4c & 1;
-        mHasXSocialLinkPost = ((unsigned int)unk4c >> 1) & 1;
-        if (XUserCheckPrivilege(0xFF, XPRIVILEGE_SOCIAL_NETWORK_SHARING, &privResult) != 0 || privResult == 0) {
-            mHasXSocialPhotoPost = false;
-            mHasXSocialLinkPost = false;
+    } else {
+        mOverlapped.pCompletionRoutine = 0;
+        mOverlapped.dwCompletionContext = 0;
+        mOverlapped.dwExtendedError = 0;
+        DWORD result = XSocialGetCapabilities((DWORD *)&mSocialCapabilities, &mOverlapped);
+        if (result == 0) {
+            TheDebug << MakeString("XSocialGetCapabilities() returns success - %x\n", mSocialCapabilities);
+            BOOL privResult = 0;
+            mHasXSocialPhotoPost = (unsigned char)(unsigned int)mSocialCapabilities & 1;
+            mHasXSocialLinkPost = ((unsigned char)(unsigned int)mSocialCapabilities >> 1) & 1;
+            if (XUserCheckPrivilege(0xFF, XPRIVILEGE_SOCIAL_NETWORK_SHARING, &privResult) != 0 || privResult == 0) {
+                mHasXSocialPhotoPost = false;
+                mHasXSocialLinkPost = false;
+            }
+            return true;
+        } else if (result == 0x3e5) {
+            TheDebug << MakeString("XSocialGetCapabilities() returns ERROR_IO_PENDING\n");
+            return true;
+        } else {
+            if (mOverlapped.hEvent != 0) {
+                CloseHandle(mOverlapped.hEvent);
+                mOverlapped.hEvent = 0;
+            }
+            return false;
         }
-        return true;
     }
-    if (result != 0x3e5) {
-        if (mOverlapped.hEvent != 0) {
-            CloseHandle(mOverlapped.hEvent);
-            mOverlapped.hEvent = 0;
-        }
-        return false;
-    }
-    TheDebug << MakeString("XSocialGetCapabilities() returns ERROR_IO_PENDING\n");
-    return true;
 }
 
 bool PlatformMgr::PollXSocialCapabilities() {
@@ -666,8 +667,8 @@ bool PlatformMgr::PollXSocialCapabilities() {
     CloseHandle(mOverlapped.hEvent);
     int result = 0;
     mOverlapped.hEvent = 0;
-    mHasXSocialPhotoPost = (unsigned int)unk4c & 1;
-    mHasXSocialLinkPost = ((unsigned int)unk4c >> 1) & 1;
+    mHasXSocialPhotoPost = (unsigned int)mSocialCapabilities & 1;
+    mHasXSocialLinkPost = ((unsigned int)mSocialCapabilities >> 1) & 1;
     if (XUserCheckPrivilege(0xFF, XPRIVILEGE_SOCIAL_NETWORK_SHARING, &result) != 0 || result == 0) {
         mHasXSocialPhotoPost = false;
         mHasXSocialLinkPost = false;

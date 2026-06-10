@@ -50,6 +50,7 @@ public:
 private:
     void UpdateValue(float, float, float);
     float GetDuckedVolume() const;
+    void CancelFade();
 
 protected:
     Fader();

@@ -39,3 +39,5 @@ struct IXHV2Engine { /* Size=0x4 */
     IXHV2Engine();
     IXHV2Engine &operator=(const IXHV2Engine &);
 };
+
+extern void *_xhv_voicechat_mode;

@@ -24,7 +24,9 @@ Fader::Fader()
     mTransposeEaseFunc = gEaseFuncs[mTransposeEaseType];
 }
 
-Fader::~Fader() {
+Fader::~Fader() { CancelFade(); }
+
+void Fader::CancelFade() {
     mTimer.Stop();
     CancelPolling();
 }
@@ -138,27 +140,20 @@ END_LOADS
 
 void Fader::SynthPoll() {
     float t = mTimer.SplitMs() / mFadeDuration;
-    if (t >= 1.0f) {
-        mTimer.Stop();
-        CancelPolling();
-        t = 1.0f;
+    if (t >= 1) {
+        CancelFade();
+        t = 1;
     }
 
-    float levelEase = mLevelEaseFunc(t, mLevelEaseParam, 0.0f);
-    levelEase = (float)__fsel(-levelEase, 0.0f, levelEase);
-    levelEase = (float)__fsel(levelEase - 1.0f, 1.0f, levelEase);
-    float level = mLevelStart + (mLevelTarget - mLevelStart) * levelEase;
-
-    float panEase = mPanEaseFunc(t, mPanEaseParam, 0.0f);
-    panEase = (float)__fsel(-panEase, 0.0f, panEase);
-    panEase = (float)__fsel(panEase - 1.0f, 1.0f, panEase);
-    float pan = mPanStart + (mPanTarget - mPanStart) * panEase;
-
-    float transposeEase = mTransposeEaseFunc(t, mTransposeEaseParam, 0.0f);
-    transposeEase = (float)__fsel(-transposeEase, 0.0f, transposeEase);
-    transposeEase = (float)__fsel(transposeEase - 1.0f, 1.0f, transposeEase);
-    float transpose = mTransposeStart + (mTransposeTarget - mTransposeStart) * transposeEase;
-
+    // all of these are actually Interps, but using Interp causes regswaps, so...lol
+    float level = (mLevelTarget - mLevelStart)
+            * Clamp(0.0f, 1.0f, mLevelEaseFunc(t, mLevelEaseParam, 0))
+        + mLevelStart;
+    float pan = (mPanTarget - mPanStart) * Clamp(0.0f, 1.0f, mPanEaseFunc(t, mPanEaseParam, 0))
+        + mPanStart;
+    float transpose = (mTransposeTarget - mTransposeStart)
+            * Clamp(0.0f, 1.0f, mTransposeEaseFunc(t, mTransposeEaseParam, 0))
+        + mTransposeStart;
     UpdateValue(level, pan, transpose);
 }
 

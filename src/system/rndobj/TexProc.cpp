@@ -195,48 +195,42 @@ void TexProc::Poll() {
 }
 
 void TexProc::DrawToTexture() {
-    if (TheRnd.GetDrawMode() != 0)
-        return;
-    if (!Showing() || !mInputTex || !mOutputTex)
-        return;
-
-    RndMat *mat = SetUpWorkingMat();
-
-    ShaderType shaderType = kKillAlphaShader;
-    if ((unsigned int)mShaderType < 1u || mShaderType != kShaderKillAlpha) {
-        shaderType = kTwirlShader;
+    if (TheRnd.GetDrawMode() == Rnd::kDrawNormal && Showing() && mInputTex && mOutputTex) {
+        RndMat *mat = SetUpWorkingMat();
+        ShaderType shaderType;
+        switch (mShaderType) {
+        case 0:
+            shaderType = kTwirlShader;
+            break;
+        case 1:
+            shaderType = kKillAlphaShader;
+            break;
+        default:
+            shaderType = kTwirlShader;
+            break;
+        }
+        RndCam *prevCam = RndCam::Current();
+        RndTex *targetTex = RndCam::Current()->TargetTex();
+        if (targetTex) {
+            MILO_NOTIFY_ONCE(
+                "%s: Cannot render to texture (%s) while already rendering to texture (%s).",
+                PathName(targetTex),
+                PathName(this),
+                PathName(targetTex)
+            );
+        }
+        mCam->SetTargetTex(mOutputTex);
+        mCam->Select();
+        mat->SetDiffuseTex(mInputTex);
+        mat->SetNormalMap(mInputTex);
+        Poll();
+        SetRegisters();
+        Hmx::Rect rect(0, 0, mOutputTex->Width(), mOutputTex->Height());
+        Hmx::Color color;
+        TheNgRnd.DrawRect(rect, mat, shaderType, color, nullptr, nullptr);
+        mCam->SetTargetTex(nullptr);
+        prevCam->Select();
     }
-
-    RndCam *prevCam = RndCam::Current();
-    RndTex *targetTex = prevCam->TargetTex();
-    if (targetTex != 0) {
-        MILO_NOTIFY_ONCE(
-            "%s: Cannot render to texture (%s) while already rendering to texture (%s).",
-            PathName(targetTex),
-            PathName(this),
-            PathName(targetTex)
-        );
-    }
-
-    mCam->SetTargetTex(mOutputTex);
-    mCam->Select();
-
-    mat->SetDiffuseTex(mInputTex);
-    mat->SetNormalMap(mInputTex);
-
-    Poll();
-    SetRegisters();
-
-    int h = mOutputTex->Height();
-    Hmx::Rect rect;
-    rect.x = 0;
-    rect.y = 0;
-    rect.w = (float)mOutputTex->Width();
-    rect.h = (float)h;
-    TheNgRnd.DrawRect(rect, mat, shaderType, Hmx::Color(1, 1, 1), nullptr, nullptr);
-
-    mCam->SetTargetTex(nullptr);
-    prevCam->Select();
 }
 
 void TexProc::SetParams(DataArray *a1, DataArray *a2) {

@@ -6,6 +6,7 @@
 #include "os/CritSec.h"
 #include "os/Debug.h"
 #include "os/System.h"
+#include "rnddx9/Rnd.h"
 #include "utl/Symbol.h"
 #include <cstring>
 
@@ -25,6 +26,24 @@ struct HeadsetConfig {
 
 extern "C" {
 extern HeadsetConfig lbl_82F474C8;
+}
+
+void ChatReceiver::ActivateProcessing(bool b1) {
+    if (b1 != unk9) {
+        unk9 = b1;
+        void *mode = _xhv_voicechat_mode;
+        if (b1) {
+            HRESULT hr = mXHV->RegisterLocalTalker(unk4);
+            DX_ASSERT_CODE(hr, 0x40D);
+            hr = mXHV->StartLocalProcessingModes(unk4, &mode, 1);
+            DX_ASSERT_CODE(hr, 0x40E);
+        } else {
+            HRESULT hr = mXHV->StopLocalProcessingModes(unk4, &mode, 1);
+            DX_ASSERT_CODE(hr, 0x412);
+            hr = mXHV->UnregisterLocalTalker(unk4);
+            DX_ASSERT_CODE(hr, 0x413);
+        }
+    }
 }
 
 #pragma region MicXbox
