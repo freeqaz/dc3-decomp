@@ -167,7 +167,7 @@ void FlowSound::RequestStopCancel() {
 }
 
 void FlowSound::Execute(QueueState qs) {
-    FLOW_LOG("Execute: state = %i\n", qs);
+    FLOW_LOG("Execute: state = %i\n", (int)qs);
     if (IsRunning()) {
         if (qs == kIgnore) {
             mIsPlaying = false;
@@ -177,14 +177,7 @@ void FlowSound::Execute(QueueState qs) {
                 mSound->Stop(this, true);
             }
             if (!mImmediateRelease) {
-                FLOW_LOG("Timed Release From Parent \n");
-                Timer timer;
-                timer.Reset();
-                timer.Start();
-                mFlowParent->ChildFinished(this);
-                timer.Stop();
-                auto elapsedMs = timer.Ms();
-                TheFlowMgr->AddMs(elapsedMs);
+                FLOW_TIMED_RELEASE_FROM_PARENT;
             }
             FlowNode::Deactivate(false);
         }

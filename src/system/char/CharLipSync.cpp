@@ -80,8 +80,8 @@ void CharLipSync::Print(TextStream &ts) {
     ts << "; song: " << PathName(this) << "\n";
     ts << "(visemes\n";
     for (int i = 0; i < mVisemes.size(); i++) {
-        auto _val0 = mVisemes[i];
-        ts << "   " << _val0 << "\n";
+        String str = mVisemes[i];
+        ts << "   " << str << "\n";
     }
     ts << ")\n";
     ts << "(frames ; @ 30fps\n";

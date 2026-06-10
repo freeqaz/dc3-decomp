@@ -56,7 +56,7 @@ DirLoader::DirLoader(
         DataArray *arr = SystemConfig()->FindArray("force_milo_inline", false);
         if (arr) {
             for (int i = 1; i < arr->Size(); i++) {
-                char *str = (char *)arr->Str(i);
+                const char *str = arr->Str(i);
                 if (FileMatch(fp.c_str(), str)) {
                     MILO_FAIL("Can't dynamically load milo files matching %s", str);
                 }
@@ -66,12 +66,11 @@ DirLoader::DirLoader(
     if (fp.empty()) {
         mRoot = FilePath::Root();
     } else {
-        const char *filePath = FileGetPath(mFile.c_str());
         char buf[256];
-        strcpy(buf, filePath);
-        int bufLen = strlen(buf);
-        if (bufLen > 4 && streq("/gen", buf + bufLen - 4)) {
-            buf[bufLen - 4] = '\0';
+        strcpy(buf, FileGetPath(mFile.c_str()));
+        int bufLen = strlen(buf) - 4;
+        if (bufLen > 0 && streq("/gen", &buf[bufLen])) {
+            buf[bufLen] = 0;
         }
         mRoot = FileMakePath(FileRoot(), buf);
     }
@@ -670,28 +669,27 @@ bool DirLoader::SetupDir(Symbol sym) {
     }
     if (mDir) {
         if (mDir->ClassName() != sym) {
-            if (mDir != mDir->Dir()) {
-                MILO_NOTIFY(
+            if (mDir->IsProxy()) {
+                MILO_NOTIFY(MakeString(
                     "%s: Proxy %s class %s not %s, converting",
                     PathName(mDir->Dir()),
-                    mFile.c_str(),
+                    LoaderFile().c_str(),
                     mDir->ClassName(),
                     sym
-                );
+                ));
             } else {
-                MILO_NOTIFY(
+                MILO_NOTIFY(MakeString(
                     "%s: Proxy class %s not %s, converting",
-                    mFile.c_str(),
+                    LoaderFile().c_str(),
                     mDir->ClassName(),
                     sym
-                );
+                ));
             }
-            ObjectDir *newDir =
-                dynamic_cast<ObjectDir *>(Hmx::Object::NewObject(sym));
+            ObjectDir *newDir = dynamic_cast<ObjectDir *>(Hmx::Object::NewObject(sym));
             if (!newDir) {
                 Cleanup(MakeString(
-                    "%s: Trying to make non ObjectDir proxy class %s %s",
-                    mFile.c_str(),
+                    "%s: Trying to make non ObjectDir proxy class %s s",
+                    LoaderFile().c_str(),
                     mDir->ClassName(),
                     sym
                 ));
@@ -704,14 +702,14 @@ bool DirLoader::SetupDir(Symbol sym) {
     } else {
         mDir = dynamic_cast<ObjectDir *>(Hmx::Object::NewObject(sym));
     }
-    mDir->SetPathName(mFile.c_str());
+    mDir->SetPathName(LoaderFile().c_str());
     if (sObjectMemDumpFile) {
-        MemPoint end(MemPoint::kInitType1);
-        DumpObjectMemDelta(mDir, end - begin);
+        MemPoint dumpPt;
+        DumpObjectMemDelta(mDir, dumpPt - begin);
     }
     if (sTypeMemDumpFile) {
-        MemPoint end(MemPoint::kInitType1);
-        AddTypeObjectMemDelta(mDir, end - begin);
+        MemPoint dumpPt;
+        AddTypeObjectMemDelta(mDir, dumpPt - begin);
     }
     return true;
 }
@@ -900,7 +898,6 @@ void DirLoader::LoadResources() {
 
 void DirLoader::CreateObjects() {
     while (mCounter-- != 0) {
-        Hmx::Object *obj = nullptr;
         Symbol classSym;
         *mStream >> classSym;
         classSym = FixClassName(classSym);
@@ -910,46 +907,49 @@ void DirLoader::CreateObjects() {
         if (mRev > 0 && mRev < 8) {
             *mStream >> b8;
         }
+        Hmx::Object *obj;
         if (!Hmx::Object::RegisteredFactory(classSym)) {
             MILO_NOTIFY("%s: Can't make %s", mFile.c_str(), classSym);
-            goto release_obj;
+            obj = nullptr;
         } else {
-            MemPoint begin(MemPoint::kInitType0);
+            MemPoint pt(MemPoint::kInitType0);
             if (sObjectMemDumpFile || sTypeMemDumpFile) {
-                begin = MemPoint(MemPoint::kInitType1);
+                pt = MemPoint(MemPoint::kInitType1);
             }
             BeginMemTrackObjectName(buf);
             obj = Hmx::Object::NewObject(classSym);
             EndMemTrackObjectName();
 #ifdef HX_NATIVE
+            bool nativeStub = false;
             if (!obj) {
                 MILO_NOTIFY("DirLoader: NewObject returned null for class %s in %s",
                             classSym.Str(), mFile.c_str());
-                goto release_obj;
-            }
-            {
+                nativeStub = true;
+            } else {
                 void **vptr = *(void ***)obj;
                 if (!vptr || !vptr[0]) {
                     MILO_NOTIFY("DirLoader: STUB vtable for class %s in %s",
                                 classSym.Str(), mFile.c_str());
                     obj = nullptr;
-                    goto release_obj;
+                    nativeStub = true;
                 }
             }
+            if (nativeStub) {
+                RELEASE(obj);
+            } else
 #endif
-            if (mRev == 0x16 && dynamic_cast<ObjectDir *>(obj)) {
-            release_obj:
+                if (mRev == 0x16 && dynamic_cast<class ObjectDir *>(obj)) {
                 RELEASE(obj);
             } else {
                 obj->SetName(buf, mDir);
-            }
-            if (sObjectMemDumpFile) {
-                MemPoint end(MemPoint::kInitType1);
-                DumpObjectMemDelta(obj, end - begin);
-            }
-            if (sTypeMemDumpFile) {
-                MemPoint end(MemPoint::kInitType1);
-                AddTypeObjectMemDelta(obj, end - begin);
+                if (sObjectMemDumpFile) {
+                    MemPoint start;
+                    DumpObjectMemDelta(obj, start - pt);
+                }
+                if (sTypeMemDumpFile) {
+                    MemPoint start;
+                    AddTypeObjectMemDelta(obj, start - pt);
+                }
             }
         }
         mObjects.push_back(obj);

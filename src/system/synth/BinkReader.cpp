@@ -148,11 +148,11 @@ void BinkReader::Poll(float) {
             MILO_ASSERT(hBinkTrack->Bits == 16, 0x73);
             MILO_ASSERT(hBinkTrack->Frequency == 44100, 0x74);
             MILO_ASSERT(hBinkTrack->Channels == 1, 0x75);
-
-            void *buf =
-                MemAlloc(hBinkTrack->MaxSize, "BinkReader.cpp", 0x78, "Bink Audio", 0x80);
-            mPCMOffsets[i] = buf;
-            mPCMBuffers[i] = buf;
+            unsigned char *mem = (unsigned char *)MemAlloc(
+                hBinkTrack->MaxSize, __FILE__, 0x78, "Bink Audio", 0x80
+            );
+            mPCMOffsets[i] = mem;
+            mPCMBuffers[i] = mem;
         }
         mState = kSetup;
         break;

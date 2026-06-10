@@ -133,27 +133,20 @@ void FlowTimer::RequestStopCancel() {
 }
 
 void FlowTimer::Execute(FlowNode::QueueState state) {
-    FLOW_LOG("Execute: state = %i\n", state);
-
+    FLOW_LOG("Execute: state = %i\n", (int)state);
     if (IsRunning()) {
         if (state == kIgnore) {
-            delete mTask;
-            FLOW_LOG("Timed Release From Parent \n");
-            Timer timer;
-            timer.Reset();
-            timer.Start();
-            mFlowParent->ChildFinished(this);
-            timer.Stop();
-            TheFlowMgr->AddMs(timer.Ms());
+            if (mTask) {
+                delete mTask;
+            }
+            FLOW_TIMED_RELEASE_FROM_PARENT;
         }
     } else {
         if (state == kQueue) {
-            EventTask *task = new EventTask(
+            mTask = new EventTask(
                 this, &mChildNodes,
-                RndAnimatable::RateToTaskUnits((RndAnimatable::Rate)mRate),
-                mTotalTime
+                RndAnimatable::RateToTaskUnits((RndAnimatable::Rate)mRate), mTotalTime
             );
-            mTask = task;
         } else if (state == kIgnore) {
             mFlowParent->ChildFinished(this);
         }

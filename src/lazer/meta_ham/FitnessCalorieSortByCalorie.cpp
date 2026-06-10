@@ -22,11 +22,6 @@ int FitnessCalorieSortCmp::Compare(
     return diff ? 0 : -1;
 }
 
-FitnessCalorieSortByCalorie::FitnessCalorieSortByCalorie() {
-    static Symbol by_calorie("by_calorie");
-    mSortName = by_calorie;
-}
-
 NavListShortcutNode *
 FitnessCalorieSortByCalorie::NewShortcutNode(NavListItemNode *node) const {
     CamShotFrame::BlendEaseMode calories =

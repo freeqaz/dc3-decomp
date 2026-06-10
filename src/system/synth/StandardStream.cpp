@@ -924,7 +924,7 @@ void StandardStream::setJumpSamplesFromMs(float fromMs, float toMs) {
     }
 }
 
-bool StandardStream::IsPastStreamJumpPointOfNoReturn() {
+__declspec(noinline) bool StandardStream::IsPastStreamJumpPointOfNoReturn() {
     if (mJumpFromSamples == 0)
         return false;
     if (mChannels.empty())

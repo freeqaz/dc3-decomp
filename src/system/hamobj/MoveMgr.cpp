@@ -152,8 +152,8 @@ void MoveMgr::InsertMoveInSong(const MoveVariant *var, int measure, int player) 
         float beat = measure * 4;
         float f4 = BeatToFrame(beat);
         float f6 = BeatToFrame(measure > 0 ? beat - 1 : 0);
-        RndPropAnim *anim = nullptr;
 #ifdef HX_NATIVE
+        RndPropAnim *anim = nullptr;
         static Symbol merge_moves("merge_moves");
         if (TheHamDirector && TheHamProvider
             && TheHamProvider->Property(merge_moves, true)->Int()) {
@@ -170,15 +170,18 @@ void MoveMgr::InsertMoveInSong(const MoveVariant *var, int measure, int player) 
                 );
             }
         }
-#endif
         if (!anim) {
             anim = TheHamDirector->SongAnim(player);
         }
-        if (!anim) return;
-        DataArrayPtr ptr90(clip);
-        DataArrayPtr ptr88(move);
-        anim->SetKeyVal(TheHamDirector, ptr90, f6, name, true);
-        anim->SetKeyVal(TheHamDirector, ptr88, f4, var->HamMoveName(), true);
+#else
+        RndPropAnim *anim = TheHamDirector->SongAnim(player);
+#endif
+        if (anim) {
+            DataArrayPtr ptr90(clip);
+            DataArrayPtr ptr88(move);
+            anim->SetKeyVal(TheHamDirector, ptr90, f6, name, true);
+            anim->SetKeyVal(TheHamDirector, ptr88, f4, var->HamMoveName(), true);
+        }
     }
 }
 

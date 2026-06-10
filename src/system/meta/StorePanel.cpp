@@ -360,34 +360,16 @@ void StorePanel::MultipleItemsCheckout(std::list<StoreOffer *> *offers) {
     Profile *profile = StoreProfile();
     MILO_ASSERT(profile, 0x2ea);
 
-    std::vector<u64> songIds;
-
-    FOREACH(it, *offers) {
+    std::vector<unsigned long long> songIDs;
+    FOREACH (it, *offers) {
         MILO_ASSERT((*it)->IsAvailable(), 0x2ef);
-
-        u64 songId = (*it)->songID;
-        songIds.push_back(songId);
-
-        std::pair<StorePurchaseable*, const Profile*> pair;
-        pair.first = *it;
-        pair.second = profile;
-        mCartOffers.push_back(pair);
-    }
-
-    void* mem = operator new(sizeof(XboxMultipleItemsPurchaser));
-    StorePurchaser *purchaser;
-    if (mem) {
-        purchaser = new (mem) XboxMultipleItemsPurchaser(
-            profile->GetPadNum(),
-            songIds,
-            mPurchaseSource,
-            0
+        songIDs.push_back((*it)->SongID());
+        mCartOffers.push_back(
+            std::pair<StorePurchaseable *, const Profile *>(*it, profile)
         );
-    } else {
-        purchaser = 0;
     }
-    mPurchaser = purchaser;
-
+    mPurchaser =
+        new XboxMultipleItemsPurchaser(profile->GetPadNum(), songIDs, mPurchaseSource, 0);
     mPurchaser->Initiate();
 }
 
@@ -613,19 +595,12 @@ DataNode StorePanel::OnMsg(SigninChangedMsg const &msg) {
 DataNode StorePanel::OnMsg(ProfileSwappedMsg const &) { return 0; }
 
 DataNode StorePanel::OnMsg(SingleItemEnumCompleteMsg const &msg) {
-    bool hasOffer = false;
-    if (msg.Success()) {
-        if (msg.HasOfferID()) {
-            hasOffer = true;
-        }
-    }
-
-    if (hasOffer) {
-        u64 offerId = msg.OfferID();
-        for (std::vector<StoreOffer *>::iterator it = mOffers.begin(); it != mOffers.end();
-             ++it) {
+    bool ok = msg.Success() && msg.HasOfferID();
+    if (ok) {
+        unsigned long long id = msg.OfferID();
+        FOREACH (it, mOffers) {
             StoreOffer *offer = *it;
-            if (offer->songID == offerId) {
+            if (offer->SongID() == id) {
                 offer->isPurchased = true;
                 static Message enumMsg("enum_finished");
                 HandleType(enumMsg);
@@ -635,10 +610,10 @@ DataNode StorePanel::OnMsg(SingleItemEnumCompleteMsg const &msg) {
         }
     }
 
-    static Message doneMsg("reenum_finished", DataNode(0));
-    doneMsg->Node(2) = DataNode((int)hasOffer);
+    static Message doneMsg("reenum_finished", 0);
+    doneMsg[0] = ok;
     TheUI->Handle(doneMsg, false);
-    return DataNode(0);
+    return 0;
 }
 
 void StorePanel::ValidateOffers(std::vector<StoreOffer *> &offers) {
