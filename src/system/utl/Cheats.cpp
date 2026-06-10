@@ -213,45 +213,63 @@ void CheatsManager::CallCheatScript(bool b1, DataArray *da, LocalUser *lu, bool 
              ++it) {
             if ((*it)->GetPadNum() == -1)
                 break;
-            JoypadData *padData = JoypadGetPadData((*it)->GetPadNum());
-            if (b1 && b2 && padData->mType - 1U > 2 && padData->mType - 0x13U > 2) {
+            JoypadType ty = JoypadGetPadData((*it)->GetPadNum())->mType;
+            if (!b1 || !b2 || ty == kJoypadDigital || ty == kJoypadAnalog
+                || ty == kJoypadWiiCore || ty == kJoypadWiiFS || ty == kJoypadWiiClassic
+                || ty == kJoypadDualShock) {
                 lu = *it;
                 break;
             }
         }
     }
     if (lu) {
-        switch (JoypadGetPadData(lu->GetPadNum())->mType) {
-        case kJoypadDigital:
-        case kJoypadAnalog:
-        case kJoypadDualShock:
-        case kJoypadWiiCore:
-        case kJoypadWiiFS:
-        case kJoypadWiiClassic:
-            DataVariable("cheat_pad") = lu ? lu->GetPadNum() : 0;
-            LogCheat(lu ? lu->GetPadNum() : -1, b1, da);
-            if (b1) {
-                int i = 2;
-                for (; da->Node(i).Type() != kDataCommand && i < da->Size(); i++)
-                    ;
-                if (i < da->Size()) {
-                    da->ExecuteScript(i, nullptr, nullptr, 1);
-                }
-            } else {
-                da->Execute();
-            }
-            {
-                Hmx::Object *uiObj = ObjectDir::Main()->Find<Hmx::Object>("ui", true);
-                static Message msg("cheat_invoked", 0, 0);
-                msg[0] = b1;
-                msg[1] = DataNode(da, kDataArray);
-                uiObj->Handle(msg, false);
-            }
-            break;
-        default:
-            break;
+        JoypadType ty = JoypadGetPadData(lu->GetPadNum())->mType;
+        if (b1 && b2 && ty != kJoypadDigital && ty != kJoypadAnalog && ty != kJoypadWiiCore
+            && ty != kJoypadWiiFS && ty != kJoypadWiiClassic && ty != kJoypadDualShock
+            && ty != kJoypad3ds && ty != kJoypad3dsDebug) {
+            return;
         }
     }
+    DataVariable("cheat_pad") = lu ? lu->GetPadNum() : 0;
+    LogCheat(lu ? lu->GetPadNum() : -1, b1, da);
+    bool safeCheat = false;
+    MILO_TRY {
+        if (b1) {
+            static Symbol filters("filters");
+            static Symbol safe("safe");
+            int i = 2;
+            for (; da->Node(i).Type() != kDataCommand && i < da->Size(); i++) {
+                if (da->Node(i).Type() == kDataArray) {
+                    DataArray *arr = da->Node(i).Array(da);
+                    if (arr->Size() > 1 && arr->Node(0).Type() == kDataSymbol
+                        && arr->Sym(0) == filters) {
+                        for (int j = 1; j < arr->Size(); j++) {
+                            if (arr->Sym(j) == safe) {
+                                safeCheat = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            if (i < da->Size()) {
+                da->ExecuteScript(i, nullptr, nullptr, 1);
+            }
+        } else {
+            da->Execute(true);
+        }
+    }
+    MILO_CATCH(e) {
+        MILO_NOTIFY("Bad script in cheat: %s", e);
+    }
+    if (!safeCheat) {
+        mUnsafeCheatsUsed = true;
+    }
+    Hmx::Object *uiObj = ObjectDir::Main()->Find<Hmx::Object>("ui", true);
+    static Message msg("cheat_invoked", 0, 0);
+    msg[0] = b1;
+    msg[1] = DataNode(da, kDataArray);
+    uiObj->Handle(msg, false);
 }
 
 void CheatsManager::RebuildKeyCheatsForMode() {
