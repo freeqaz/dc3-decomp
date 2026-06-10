@@ -1135,8 +1135,14 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
             }
 
             // Sort priorities (most negative = highest priority first)
+#ifdef HX_NATIVE
+            // libstdc++ vector iterators are not raw pointers; cast through data().
+            Key<float> *priBegin = (Key<float> *)priorities.data();
+            Key<float> *priEnd = (Key<float> *)(priorities.data() + priorities.size());
+#else
             Key<float> *priBegin = (Key<float> *)priorities.begin();
             Key<float> *priEnd = (Key<float> *)priorities.end();
+#endif
             std::sort(priBegin, priEnd);
 
             // Phase 2: Process priority faces — split all 3 edges
@@ -1273,11 +1279,20 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
             }
 
             // Clear and re-reserve for Phase 3
+#ifdef HX_NATIVE
+            // erase() needs container iterators, not raw pointers, on libstdc++.
+            newFaces.erase(newFaces.begin(), newFaces.begin() + (savedFacesEnd - savedFaces));
+            newFaces.reserve(mesh->Faces().size() * 2);
+
+            newVerts.erase(newVerts.begin(), newVerts.begin() + (savedVertsEnd - savedVerts));
+            newVerts.reserve(mesh->Verts().size());
+#else
             newFaces.erase(savedFaces, savedFacesEnd);
             newFaces.reserve(mesh->Faces().size() * 2);
 
             newVerts.erase(savedVerts, savedVertsEnd);
             newVerts.reserve(mesh->Verts().size());
+#endif
 
             // Phase 3: Refine remaining faces based on split edges
             unsigned int numVertsPhase3 = mesh->Verts().size();
@@ -1469,7 +1484,12 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
 
             // Assign Phase 3 faces to mesh
             savedFaces = newFaces.begin();
+#ifdef HX_NATIVE
+            // assign() needs both ends as the same iterator/pointer kind.
+            mesh->Faces().assign(savedFaces, savedFaces + newFaces.size());
+#else
             mesh->Faces().assign(savedFaces, newFaces.end());
+#endif
 
             savedVerts = newVerts.begin();
             mesh->Verts().resize(

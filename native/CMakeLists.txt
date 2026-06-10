@@ -715,6 +715,17 @@ set(DC3_ENGINE_SOURCES
     ${CMAKE_SOURCE_DIR}/../src/system/net/HttpReqCurl.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/net/JsonMemory.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/net/JsonUtils.cpp
+    # json-c (C) — real implementation so online JSON (RockCentral/leaderboards/
+    # MOTD/store) parses instead of resolving to the return-0 stubs.
+    ${CMAKE_SOURCE_DIR}/../src/system/net/json-c/arraylist.c
+    ${CMAKE_SOURCE_DIR}/../src/system/net/json-c/debug.c
+    ${CMAKE_SOURCE_DIR}/../src/system/net/json-c/json_object.c
+    ${CMAKE_SOURCE_DIR}/../src/system/net/json-c/json_tokener.c
+    # json_util.c (json_object_from_file/_to_file) is pure file I/O the game never
+    # calls and uses the zero-arg MC_ERROR variadic form that trips standard C —
+    # omitted from the native build.
+    ${CMAKE_SOURCE_DIR}/../src/system/net/json-c/linkhash.c
+    ${CMAKE_SOURCE_DIR}/../src/system/net/json-c/printbuf.c
     ${CMAKE_SOURCE_DIR}/../src/system/net/WebSvcMgr.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/net/WebSvcMgrCurl.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/net/WebSvcReq.cpp
@@ -1119,6 +1130,7 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/DataParser_Native.cpp
     $<$<NOT:$<BOOL:${EMSCRIPTEN}>>:src/platform/HttpServer.cpp>
     src/engine_stubs_generated.cpp
+    src/StubTrace.cpp
     src/native_link_glue.cpp
     src/native_job_stubs.cpp
     src/thunk_stubs.cpp
@@ -1279,6 +1291,7 @@ set(DC3_WEB_CORE_SOURCES
     src/platform/RndTex_Native.cpp
     src/platform/RenderState_Native.cpp
     src/engine_stubs_generated.cpp
+    src/StubTrace.cpp
     src/native_link_glue.cpp
     src/native_job_stubs.cpp
     src/thunk_stubs.cpp
@@ -1513,6 +1526,21 @@ target_link_libraries(dc3-native PRIVATE
 set_source_files_properties(
     ${CMAKE_SOURCE_DIR}/../src/system/obj/DataFlex.c
     PROPERTIES LANGUAGE C
+)
+
+# json-c third-party C sources: compile as C, skip the C++ PCH, and disable
+# -fms-compatibility (its __sigbits/global-inline quirk plus the win_types.h
+# shim breaks these vendor TUs the same way it breaks tomcrypt).
+set_source_files_properties(
+    ${CMAKE_SOURCE_DIR}/../src/system/net/json-c/arraylist.c
+    ${CMAKE_SOURCE_DIR}/../src/system/net/json-c/debug.c
+    ${CMAKE_SOURCE_DIR}/../src/system/net/json-c/json_object.c
+    ${CMAKE_SOURCE_DIR}/../src/system/net/json-c/json_tokener.c
+    ${CMAKE_SOURCE_DIR}/../src/system/net/json-c/linkhash.c
+    ${CMAKE_SOURCE_DIR}/../src/system/net/json-c/printbuf.c
+    PROPERTIES LANGUAGE C
+               SKIP_PRECOMPILE_HEADERS ON
+               COMPILE_OPTIONS "-fno-ms-extensions;-fno-ms-compatibility"
 )
 
 # macOS: files that include macOS SDK/framework headers (ObjC++, GLFW native,
@@ -1814,6 +1842,8 @@ if(BUILD_TESTS)
         tests/test_movegraph.cpp
         tests/test_dta_flow.cpp
         tests/test_foot_bone_invariants.cpp
+        tests/test_json_parse.cpp
+        tests/test_stub_trace.cpp
         src/dc3_render_hook.cpp       # Phase 0.2a: HamRenderHook (registers with milo-engine)
         ${DC3_ENGINE_SOURCES}
         ${DC3_NATIVE_CORE_SOURCES_ENGINE}
