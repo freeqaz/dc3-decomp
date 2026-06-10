@@ -58,7 +58,7 @@ protected:
     ObjOwnerPtr<Task> unk_0xCC; // 0xcc
     int mEase; // 0xE0
     f32 mEasePower; // 0xE4
-    u8 unk_0xE8; // 0xe8
+    bool unk_0xE8; // 0xe8
     int mStopMode; // 0xEC
 
     void OnTargetChanged(void);

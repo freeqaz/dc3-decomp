@@ -138,64 +138,74 @@ void FlowQueueable::ChildFinished(FlowNode *node) {
     }
 }
 
-bool FlowQueueable::Activate(Hmx::Object *listener) {
+bool FlowQueueable::Activate(Hmx::Object *obj) {
     FLOW_LOG("Activate\n");
     mStopRequested = false;
     if (mRunningNodes.empty()) {
-        // Not running - start immediately
-#ifdef HX_NATIVE
-        mListeners.insert(mListeners.begin(), listener);
-#else
-        mListeners.push_front(listener);
-#endif
-        bool active = ActivateTrigger();
-        if (!active) {
+        if (obj) {
+            mListeners.push_back(obj);
+        } else {
+            mListeners.push_back(nullptr);
+        }
+        if (ActivateTrigger()) {
+            return true;
+        } else {
             mListeners.clear();
             return false;
         }
-        return true;
-    }
-
-    // Already running, handle based on mInterrupt
-    switch (mInterrupt) {
-    case kIgnore:
-        FLOW_LOG("Ignoring re-trigger\n");
-        ReleaseListener(listener);
-        return false;
-    case kQueue:
-        FLOW_LOG("Queuing re-trigger\n");
-        mListeners.push_back(listener);
-        return true;
-    case kQueueOne:
-        FLOW_LOG("Queue-one re-trigger\n");
-        // Keep at most 1 item queued beyond the active one
-        if (mListeners.size() > 1) {
-            Hmx::Object *old = mListeners.back();
-            mListeners.pop_back();
-            ReleaseListener(old);
+    } else {
+        switch (mInterrupt) {
+        case kIgnore:
+            FLOW_LOG("Ignoring trigger\n");
+            ReleaseListener(obj);
+            return false;
+        case kQueue:
+            FLOW_LOG("Queueing trigger\n");
+            if (obj) {
+                mListeners.push_back(obj);
+            } else {
+                mListeners.push_back(nullptr);
+            }
+            return true;
+        case kQueueOne:
+            FLOW_LOG("Queue One\n");
+            while (mListeners.size() > 1) {
+                ReleaseListener(mListeners.back());
+                mListeners.pop_back();
+            }
+            if (obj) {
+                mListeners.push_back(obj);
+            } else {
+                mListeners.push_back(nullptr);
+            }
+            return true;
+        case kImmediate:
+            FLOW_LOG("Immediate Interrupt\n");
+            FlowQueueable::Deactivate(false);
+            if (obj) {
+                mListeners.push_back(obj);
+            } else {
+                mListeners.push_back(nullptr);
+            }
+            ActivateTrigger();
+            return !mRunningNodes.empty();
+        case kWhenAble:
+            FLOW_LOG("When Able Interruption\n");
+            while (mListeners.size() > 1) {
+                ReleaseListener(mListeners.back());
+                mListeners.pop_back();
+            }
+            if (obj) {
+                mListeners.push_back(obj);
+            } else {
+                mListeners.push_back(nullptr);
+            }
+            RequestStop();
+            return true;
+        default:
+            MILO_NOTIFY_ONCE("FlowQueueable: bad interupt value");
+            return false;
         }
-        mListeners.push_back(listener);
-        return true;
-    case kImmediate:
-        FLOW_LOG("Immediate re-trigger\n");
-        Deactivate(false);
-        mListeners.push_back(listener);
-        ActivateTrigger();
-        return !mRunningNodes.empty();
-    case kWhenAble:
-        FLOW_LOG("When-able re-trigger\n");
-        // Trim to at most 1 queued item, then add
-        while (mListeners.size() > 1) {
-            Hmx::Object *old = mListeners.back();
-            mListeners.pop_back();
-            ReleaseListener(old);
-        }
-        mListeners.push_back(listener);
-        return true;
-    default:
-        MILO_NOTIFY_ONCE("Bad FlowQueueable interrupt mode!");
-        ReleaseListener(listener);
-        return false;
     }
 }
 

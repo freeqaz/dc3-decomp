@@ -185,30 +185,27 @@ void Sound::SynthPoll() {
     }
     for (auto it = mSamples.begin(); it != mSamples.end();) {
         PlayableSample *cur = *it;
+        it++;
         if (mIsSynthSample || mMoggClip) {
             if (cur->DonePlaying()) {
-                it = mSamples.erase(it);
-                continue;
+                mSamples.erase(it);
             }
         } else {
             mDuckers.Unduck();
             CancelPolling();
         }
-        it++;
     }
     if (mFaders.Dirty()) {
         FOREACH (it, mSamples) {
             float faderVol, faderPan, faderTranspose;
             mFaders.GetVal(faderVol, faderPan, faderTranspose);
             (*it)->SetVolume(mVolume + faderVol);
-            auto clampedPan = Clamp(-4.0f, sSpeedCaps[1], mPan + faderPan);
-            (*it)->SetPan(clampedPan);
-            auto clampedSpeed = Clamp(
+            (*it)->SetPan(Clamp(-4.0f, sSpeedCaps[1], mPan + faderPan));
+            (*it)->SetSpeed(Clamp(
                 sSpeedCaps[0],
                 sSpeedCaps[1],
                 CalcSpeedFromTranspose(faderTranspose) * mSpeed
-            );
-            (*it)->SetSpeed(clampedSpeed);
+            ));
         }
         mFaders.ClearDirty();
     }

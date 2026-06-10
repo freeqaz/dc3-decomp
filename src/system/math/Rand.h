@@ -1,4 +1,5 @@
 #pragma once
+#include "os/Debug.h"
 #include "utl/MemMgr.h"
 
 class Rand {
@@ -6,16 +7,41 @@ public:
     Rand(int);
     void Seed(int);
 
-    int Int();
-    int Int(int, int);
-    int FastInt(int, int);
+    int Int() {
+        unsigned int ret = mRandTable[mRandIndex1] ^ mRandTable[mRandIndex2];
+        mRandTable[mRandIndex1] = ret;
+        mRandIndex1++;
+        mRandIndex2++;
+        if (0xF9 <= mRandIndex1) {
+            mRandIndex1 = 0;
+        }
+        if (0xF9 <= mRandIndex2) {
+            mRandIndex2 = 0;
+        }
+        return ret;
+    }
+
+    int Int(int low, int high) {
+        MILO_ASSERT(high > low, 0x3A);
+        return (Int() % (high - low)) + low;
+    }
+
+    int FastInt(int low, int high) {
+        MILO_ASSERT(high > low, 0x33);
+        // og's masked form is bounds-safe (Int() masked to 16 bits before the
+        // multiply, so no 32-bit overflow corruption) — matches target and is
+        // correct on native. Native sign-off pending; if native semantics must
+        // differ, re-add an #ifdef HX_NATIVE modulo variant here.
+        return ((Int() & 0xFFFF) * (high - low) >> 16) + low;
+    }
+
     float Float();
-    __declspec(noinline) float Float(float, float);
+    float Float(float, float);
     float Gaussian();
 
-    MEM_OVERLOAD(Rand, 0x16);
-
     static Rand sRand;
+
+    MEM_OVERLOAD(Rand, 0x16)
 
 private:
     unsigned int mRandIndex1;

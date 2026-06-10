@@ -108,7 +108,7 @@ UIListMeshElement::Draw(const Transform &tf, float f, UIColor *col, Box *box) {
     MILO_ASSERT(mesh, 0x1B);
     mesh->SetWorldXfm(tf);
     if (box != nullptr) {
-        Box localbox = *box;
+        Box localbox(box->mMin, box->mMax);
         CalcBox(mesh, localbox);
         box->GrowToContain(localbox.mMin, false);
         box->GrowToContain(localbox.mMax, false);
@@ -155,15 +155,15 @@ UIListMeshElement::Draw(const Transform &tf, float f, UIColor *col, Box *box) {
             sChooseModeMeshDiag++;
         }
 #endif
-        bool restoreShowing = false;
 #ifdef HX_NATIVE
+        bool restoreShowing = false;
         if (!mesh->Showing()) {
             mesh->SetShowing(true);
             restoreShowing = true;
         }
 #endif
         mesh->SetMat(mMat);
-        mMat->SetAlpha(f * alpha);
+        mMat->SetAlpha(alpha * f);
         if (col != nullptr) {
             const Hmx::Color &c = col->GetColor();
             mMat->SetColor(c.red, c.green, c.blue);

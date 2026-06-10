@@ -46,8 +46,10 @@ BEGIN_LOADS(FlowMultiSetProperty)
     LOAD_REVS(bs)
     ASSERT_REVS(0, 0)
     LOAD_SUPERCLASS(FlowNode)
-    mTargets.Load(bs, true, Dir());
-    bs >> mProperty >> mPropertyValue;
+    DirLoader *dl = Dir()->Loader();
+    ObjectDir *dir = dl ? dl->ProxyDir() : Dir()->Dir();
+    mTargets.Load(d.stream, true, dir);
+    d >> mProperty >> mPropertyValue;
 END_LOADS
 
 bool FlowMultiSetProperty::Activate() {

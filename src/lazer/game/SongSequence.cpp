@@ -149,26 +149,27 @@ void SongSequence::LoadNextSongAudio() {
 
 bool SongSequence::DoNext(bool b1, bool b2) {
     static Symbol midi_player("midi_player");
-    static Symbol active("active");
-    static Symbol perform("perform");
-    static Symbol gameplay_mode("gameplay_mode");
     static Symbol holla_back_config("holla_back_config");
+    static Symbol active("active");
+    static Symbol gameplay_mode("gameplay_mode");
+    static Symbol perform("perform");
     static Symbol in_campaign_era_intro("in_campaign_era_intro");
-    static Symbol mind_control("mind_control");
     static Symbol holla_back("holla_back");
+    static Symbol mind_control("mind_control");
     mVenueEntered = false;
-    bool isEmpty = mEntries.empty();
-    if (isEmpty)
+    int numEntries = mEntries.size();
+    if (numEntries == 0)
         return true;
     bool isLoaded = TheGame->IsLoaded();
     if (!b1 && !isLoaded) {
-        return (int)mEntries.size() <= mCurrentIndex;
+        return numEntries <= mCurrentIndex;
     }
     if (!b1) {
+        float ui = TheTaskMgr.UISeconds();
         float old = mPrevSongPosition;
-        mPrevSongPosition = TheTaskMgr.UISeconds();
+        mPrevSongPosition = ui;
         if (mPrevSongPosition - old < 0.5f) {
-            return mEntries.size() <= mCurrentIndex;
+            return numEntries <= mCurrentIndex;
         }
     }
     if (!b2 && mCurrentIndex >= 0) {
@@ -182,22 +183,25 @@ bool SongSequence::DoNext(bool b1, bool b2) {
                 stars = 0;
             }
             mEntries[mCurrentIndex].mStarCount = stars;
-            HamPlayerData *p0 = TheGameData->Player(0);
-            HamPlayerData *p1 = TheGameData->Player(1);
-            static Symbol score("score");
-            int p0Score = p0->Provider()->Property(score)->Int();
-            int p1Score = p1->Provider()->Property(score)->Int();
-            mEntries[mCurrentIndex].mTotalScore = p0Score + p1Score;
-            auto currentPerformer = MetaPerformer::Current();
-            CampaignPerformer *cp = static_cast<CampaignPerformer *>(currentPerformer);
-            Entry &entry = mEntries[mCurrentIndex];
-            cp->UpdateEraSong(cp->GetDifficulty(), entry.mSongLongName, entry.mSongLongName, stars);
-            cp->TriggerSongCompletion(entry.mTotalScore, (float)entry.mStarCount);
+            PropertyEventProvider *p0 = TheGameData->Player(0)->Provider();
+            PropertyEventProvider *p1 = TheGameData->Player(1)->Provider();
+            mEntries[mCurrentIndex].mTotalScore =
+                p0->Property("score")->Int() + p1->Property("score")->Int();
+            CampaignPerformer *campaignPerf =
+                static_cast<CampaignPerformer *>(MetaPerformer::Current());
+            campaignPerf->UpdateEraSong(
+                campaignPerf->GetDifficulty(),
+                campaignPerf->Era(),
+                mEntries[0].mSongLongName,
+                mEntries[0].mStarCount
+            );
+            campaignPerf->TriggerSongCompletion(mEntries[0].mTotalScore, mEntries[0].mStarCount);
         }
     }
     if (!b2 && mEntries[mCurrentIndex].mGameplayMode == mind_control) {
-        CampaignPerformer *cp = static_cast<CampaignPerformer *>(MetaPerformer::Current());
-        cp->SetCampaignMindControlComplete(true);
+        CampaignPerformer *campaignPerf =
+            static_cast<CampaignPerformer *>(MetaPerformer::Current());
+        campaignPerf->SetCampaignMindControlComplete(true);
     }
     if (++mCurrentIndex < (int)mEntries.size() && !b2) {
         Entry &nextEntry = mEntries[mCurrentIndex];
@@ -205,25 +209,24 @@ bool SongSequence::DoNext(bool b1, bool b2) {
         if (*nextEntry.mCrew1Symbol.Str() != '\0') {
             loadCrew = true;
             HamPlayerData *hpd = TheGameData->Player(0);
-            hpd->SetOutfit(Symbol(""));
+            hpd->SetOutfit("");
             hpd->SetCrew(nextEntry.mCrew1Symbol);
-            if (nextEntry.mGameplayMode == mind_control) {
-                hpd->SetOutfit(Symbol("lima06"));
+            if (nextEntry.mGameplayMode == Symbol("mind_control")) {
+                hpd->SetOutfit("lima06");
             }
         }
         if (*nextEntry.mCrew2Symbol.Str() != '\0') {
             loadCrew = true;
             HamPlayerData *hpd = TheGameData->Player(1);
-            hpd->SetOutfit(Symbol(""));
+            hpd->SetOutfit("");
             hpd->SetCrew(nextEntry.mCrew2Symbol);
-            if (nextEntry.mGameplayMode == mind_control) {
-                hpd->SetOutfit(Symbol("rasa06"));
+            if (nextEntry.mGameplayMode == Symbol("mind_control")) {
+                hpd->SetOutfit("rasa06");
             }
         }
         if (loadCrew && isLoaded) {
-            auto crew = TheGameData->Player(0)->Crew();
             TheHamDirector->LoadCrew(
-                crew, TheGameData->Player(1)->Crew()
+                TheGameData->Player(0)->Crew(), TheGameData->Player(1)->Crew()
             );
         }
         static Symbol hud_panel("hud_panel");
@@ -231,7 +234,7 @@ bool SongSequence::DoNext(bool b1, bool b2) {
         static Symbol clear_all_flashcard_campaign_status(
             "clear_all_flashcard_campaign_status"
         );
-        TheMidiParserMgr->GetParser(midi_player)->SetProperty(nextEntry.mModeConfig, active);
+        TheMidiParserMgr->GetParser(midi_player)->SetProperty(active, 0);
         TheHamProvider->SetProperty(holla_back_config, nextEntry.mModeConfig);
         if (isLoaded) {
             ObjectDir *hudPanel = DataVariable(hud_panel).Obj<ObjectDir>();
@@ -247,14 +250,11 @@ bool SongSequence::DoNext(bool b1, bool b2) {
         TheGameMode->SetGameplayMode(nextEntry.mGameplayMode, nextEntry.mGameplayMode == perform);
         TheGame->LoadNewSong(nextEntry.mSongLongName, nextEntry.mSongShortName);
         mCurrentPlaybackPosition = TheTaskMgr.UISeconds();
-        if (isLoaded) {
-            static Symbol deinit("deinit");
-            UIPanel *gamePanel = ObjectDir::Main()->Find<UIPanel>("game_panel", true);
-            gamePanel->Handle(Message(deinit), true);
-        }
+        static Symbol deinit("deinit");
+        UIPanel *gamePanel = ObjectDir::Main()->Find<UIPanel>("game_panel");
+        gamePanel->Handle(Message(deinit), true);
         if (nextEntry.mGameplayMode == "holla_back") {
-            static Symbol hide_venue("hide_venue");
-            TheHamProvider->SetProperty(hide_venue, true);
+            TheHamProvider->SetProperty("hide_venue", true);
         }
         return false;
     } else {
@@ -283,8 +283,8 @@ bool SongSequence::DoNext(bool b1, bool b2) {
 void SongSequence::OnSongLoaded() {
     if (!Done()) {
         static Symbol reset("reset");
-        static Symbol set_type("set_type");
         static Symbol init("init");
+        static Symbol set_type("set_type");
         static Symbol start_song_now("start_song_now");
         static Symbol show_hud("show_hud");
         static Symbol hide_hud("hide_hud");

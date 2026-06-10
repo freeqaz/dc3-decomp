@@ -292,12 +292,12 @@ bool RndShaderParticles::CheckError(MatFlagErrorType type) {
 }
 
 void SetColorWriteMask(const ShaderOptions &opts, RndMat *mat) {
-    bool writeAlpha = mat->mAlphaWrite;
-    if (!mat->mForceAlphaWrite
-        && ((opts.flags & 0x400000) != 0 || TheNgRnd.Offscreen() || writeAlpha)) {
-        writeAlpha = true;
+    bool offscreen = TheNgRnd.Offscreen();
+    bool alpha = mat->mAlphaWrite;
+    if (!mat->mForceAlphaWrite && opts.flags & 0x400000 || offscreen || alpha) {
+        alpha = true;
     }
-    TheRenderState.SetColorWriteMask((-(unsigned int)writeAlpha & 8) + 7);
+    TheRenderState.SetColorWriteMask(alpha ? 7 : 8);
 }
 
 void CheckDistortionOpts(RndMat *mat, ShaderOptions &opts) {

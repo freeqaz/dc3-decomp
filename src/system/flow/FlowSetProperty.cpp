@@ -11,6 +11,7 @@
 #include "obj/Object.h"
 #include "obj/Task.h"
 #include "obj/Utl.h"
+#include "rndobj/Anim.h"
 #include "utl/MakeString.h"
 #include "utl/Str.h"
 #include <cstdlib>
@@ -237,51 +238,52 @@ BEGIN_LOADS(FlowSetProperty)
     if (d.rev < 2) {
         mTarget = mTarget.LoadFromMainOrDir(bs);
     } else {
-        bs >> mTarget;
+        d >> mTarget;
     }
-    unk_0x98.Load(bs);
+    d >> unk_0x98;
     if (d.rev < 1) {
-        DataNode node;
-        node.Load(bs);
-        mValue = node;
+        DataNode n;
+        d >> n;
+        mValue = n;
     } else if (d.rev == 2) {
-        unsigned int type;
-        bs >> type;
-        if (type == kDataObject) {
-            Flow *owner = GetOwnerFlow();
-            DirLoader *loader = owner->Loader();
-            ObjectDir *dir = loader ? loader->ProxyDir() : owner->Dir();
-            mValue = LoadObjectFromMainOrDir(bs, dir);
+        DataType t;
+        d >> (int &)t;
+        if (t == kDataObject) {
+            Flow *flow = GetOwnerFlow();
+            DirLoader *dl = flow->Loader();
+            ObjectDir *dir = dl ? dl->ProxyDir() : flow->Dir();
+            mValue = FlowNode::LoadObjectFromMainOrDir(bs, dir);
         } else {
-            DataNode node;
-            node.Load(bs);
-            mValue = node;
+            DataNode n;
+            d >> n;
+            mValue = n;
         }
     } else {
-        int type;
-        bs >> type;
-        if (type == kDataObject) {
-            Flow *owner = GetOwnerFlow();
-            if (!owner) {
-                owner = dynamic_cast<Flow *>(this);
+        DataType t;
+        d >> (int &)t;
+        if (t == kDataObject) {
+            Flow *flow = GetOwnerFlow();
+            if (!flow) {
+                flow = dynamic_cast<Flow *>(this);
             }
-            DirLoader *loader = owner->Loader();
-            ObjectDir *dir = loader ? loader->ProxyDir() : owner->Dir();
-            mValue = LoadObjectFromMainOrDir(bs, dir);
+            DirLoader *dl = flow->Loader();
+            ObjectDir *dir = dl ? dl->ProxyDir() : flow->Dir();
+            mValue = FlowNode::LoadObjectFromMainOrDir(bs, dir);
         } else {
-            DataNode node;
-            node.Load(bs);
-            mValue = node;
+            DataNode n;
+            d >> n;
+            mValue = n;
         }
     }
-    bs >> mRate;
-    bs >> mBlendTime;
-    bs >> mChangePerUnit;
-    bs >> mEase;
-    bs >> mEasePower;
-    bs >> unk_0xE8;
-    bs >> mPersistent;
-    bs >> mStopMode;
+    d >> (BinStreamEnum<RndAnimatable::Rate> &)mRate;
+    d >> mBlendTime;
+    d >> mChangePerUnit;
+    d >> (BinStreamEnum<EaseType> &)mEase;
+    d >> mEasePower;
+    d >> unk_0xE8;
+    d >> mPersistent;
+    d >> (BinStreamEnum<FlowNode::StopMode> &)mStopMode;
+    GenerateAutoNames(this, true);
 END_LOADS
 
 void FlowSetProperty::MoveIntoDir(ObjectDir *r4, ObjectDir *r5) {
@@ -363,73 +365,68 @@ void FlowSetProperty::Execute(QueueState qs) {
             if (mEventsRegistered) {
                 UnregisterEvents(this);
             }
-            if (unk_0xCC != nullptr) {
-                auto *task = unk_0xCC.Ptr();
+            if (unk_0xCC) {
+                Task *task = unk_0xCC;
                 unk_0xCC = nullptr;
                 delete task;
             }
+            mFlowParent->ChildFinished(this);
         }
-        if (qs == kQueue) {
-            float durationTime = mBlendTime;
-
-            if (mChangePerUnit != 0.0f && !unk_0xE8) {
-                const DataNode *node = mTarget->Property(unk_0x98.Array(), true);
-                int propType = node->Type();
-
-                if (propType == kDataFloat) {
-                    durationTime = (mValue.Node().Float() - node->Float()) / mChangePerUnit;
-                    if (durationTime < 0.0f) {
-                        durationTime = -durationTime;
-                    }
-                } else if (propType == kDataInt) {
-                    durationTime = (float)(mValue.Node().Int() - node->Int()) / mChangePerUnit;
-                    if (durationTime < 0.0f) {
-                        durationTime = -durationTime;
-                    }
-                } else {
-                    StackString<32> ss;
-                    DataNode valueNode = mValue.Node();
-                    valueNode.Print(ss, false, 0);
-                    MILO_NOTIFY(
-                        "%s has bad property %s for %s",
-                        PathName(this),
-                        ss,
-                        PrintPropertyPath(unk_0x98.Array())
-                    );
-                    durationTime = 0.0f;
+    } else if (qs == kQueue) {
+        float time = mBlendTime;
+        if (mChangePerUnit && !unk_0xE8) {
+            const DataNode *prop = mTarget->Property(unk_0x98.Array());
+            if (prop->Type() == kDataFloat) {
+                time = (mValue.Node().Float() - prop->Float()) / mChangePerUnit;
+                if (time < 0.0f) {
+                    time = -time;
                 }
-            }
-
-            if (durationTime > 0.0f) {
-                Hmx::Object *target = mTarget;
-                DataNode valueNode = mValue.Node();
-                FLOW_LOG("Spawning Ramp Task on %s\n", target->Name())
-                PropertyTask *task = new PropertyTask(
-                    target,
-                    unk_0x98,
-                    valueNode,
-                    (TaskUnits)mRate,
-                    durationTime,
-                    (EaseType)mEase,
-                    mEasePower,
-                    unk_0xE8,
-                    this
-                );
-                unk_0xCC = task;
+            } else if (prop->Type() == kDataInt) {
+                time = (float)(mValue.Node().Int() - prop->Int()) / mChangePerUnit;
+                if (time < 0.0f) {
+                    time = -time;
+                }
             } else {
-                FLOW_LOG("Setting Value on %s\n", mTarget->Name())
-                mTarget->SetProperty(unk_0x98.Array(), mValue.Node());
-                if (mEventsRegistered) {
-                    return;
-                }
-                FLOW_LOG("Releasing\n")
+                StackString<32> str;
+                mValue.Node().Print(str, false, 0);
+                MILO_NOTIFY(
+                    "%s has bad property %s for %s",
+                    PathName(this),
+                    str,
+                    PrintPropertyPath(unk_0x98.Array())
+                );
+                time = 0.0f;
+            }
+        }
+        if (time > 0) {
+            static TaskUnits sRateUnits[] = {
+                kTaskSeconds, kTaskBeats, kTaskUISeconds, kTaskBeats, kTaskTutorialSeconds
+            };
+
+            Hmx::Object *target = mTarget;
+            DataNode val = mValue.Node();
+            FLOW_LOG("Spawning Ramp Task on %s\n", target->Name());
+            unk_0xCC = new PropertyTask(
+                target,
+                unk_0x98,
+                val,
+                sRateUnits[mRate],
+                time,
+                (EaseType)mEase,
+                mEasePower,
+                unk_0xE8,
+                this
+            );
+        } else {
+            FLOW_LOG("Setting Value on %s\n", mTarget->Name());
+            mTarget->SetProperty(unk_0x98.Array(), mValue.Node());
+            if (!mEventsRegistered) {
+                FLOW_LOG("Releasing\n");
                 mFlowParent->ChildFinished(this);
             }
         }
-    } else {
-        if (qs == kIgnore) {
-            mFlowParent->ChildFinished(this);
-        }
+    } else if (qs == kIgnore) {
+        mFlowParent->ChildFinished(this);
     }
 }
 
