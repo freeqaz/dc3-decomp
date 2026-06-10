@@ -42,33 +42,19 @@ void RndAmbientOcclusion::BlendVert(
     const RndMesh::Vert &v1, const RndMesh::Vert &v2, RndMesh::Vert &out
 ) {
     memcpy(&out, &v1, sizeof(RndMesh::Vert));
-    out.pos.z = out.pos.z + v2.pos.z;
-    out.pos.y = out.pos.y + v2.pos.y;
-    out.pos.x = out.pos.x + v2.pos.x;
-    out.tex.x = out.tex.x + v2.tex.x;
-    out.tex.y = out.tex.y + v2.tex.y;
-    out.color.green = out.color.green + v2.color.green;
-    out.color.red = out.color.red + v2.color.red;
-    out.color.alpha = out.color.alpha + v2.color.alpha;
-    out.color.blue = out.color.blue + v2.color.blue;
-    out.norm.x = out.norm.x + v2.norm.x;
-    out.norm.y = out.norm.y + v2.norm.y;
-    out.norm.z = out.norm.z + v2.norm.z;
-    Vector3 tang;
-    tang.x = v2.tangent.x + out.tangent.x;
-    tang.y = v2.tangent.y + out.tangent.y;
-    tang.z = v2.tangent.z + out.tangent.z;
-    out.pos.x = out.pos.x * 0.5f;
-    out.pos.y = out.pos.y * 0.5f;
-    out.pos.z = out.pos.z * 0.5f;
-    out.tex.x = out.tex.x * 0.5f;
-    out.tex.y = out.tex.y * 0.5f;
-    out.color.blue = out.color.blue * 0.5f;
-    out.color.red = out.color.red * 0.5f;
-    out.color.green = out.color.green * 0.5f;
-    out.color.alpha = out.color.alpha * 0.5f;
+    Add(v2.pos, out.pos, out.pos);
+    out.tex += v2.tex;
+    Add(v2.color, out.color, out.color);
+    Add(v2.norm, out.norm, out.norm);
+    Vector4 tang = out.tangent;
+    tang.x = v2.tangent.x + tang.x;
+    out.pos *= 0.5f;
+    out.tex *= 0.5f;
+    Multiply(out.color, 0.5f, out.color);
+    tang.z = v2.tangent.z + tang.z;
+    tang.y = v2.tangent.y + tang.y;
     Normalize(out.norm, out.norm);
-    Normalize(tang, tang);
+    Normalize((Vector3 &)tang, (Vector3 &)tang);
     out.tangent.x = tang.x;
     out.tangent.y = tang.y;
     out.tangent.z = tang.z;
@@ -381,9 +367,9 @@ void RndAmbientOcclusion::BuildObjectLists() {
     MILO_ASSERT(mObjectsTessellate.empty(), 0x19B);
     std::vector<RndMesh *> meshes;
     GatherObjectsFromDir(myDir, meshes);
-    std::unique_copy(meshes.begin(), meshes.end(), meshes.begin());
-    std::vector<RndMesh *> dontReceiveMeshes;
+    std::unique(meshes.begin(), meshes.end());
     std::vector<RndMesh *> dontCastMeshes;
+    std::vector<RndMesh *> dontReceiveMeshes;
     std::vector<RndMesh *> tessellateMeshes;
     FOREACH (it, mDontCastAO) {
         GatherObject(*it, dontCastMeshes);
@@ -394,9 +380,9 @@ void RndAmbientOcclusion::BuildObjectLists() {
     FOREACH (it, mTessellate) {
         GatherObject(*it, tessellateMeshes);
     }
-    std::unique_copy(dontCastMeshes.begin(), dontCastMeshes.end(), meshes.end());
-    std::unique_copy(dontReceiveMeshes.begin(), dontReceiveMeshes.end(), meshes.end());
-    std::unique_copy(tessellateMeshes.begin(), tessellateMeshes.end(), meshes.end());
+    std::unique(dontCastMeshes.begin(), dontCastMeshes.end());
+    std::unique(dontReceiveMeshes.begin(), dontReceiveMeshes.end());
+    std::unique(tessellateMeshes.begin(), tessellateMeshes.end());
     FOREACH (it, meshes) {
         RndMesh *cur = *it;
         if (IsValid_AOCast(cur)
@@ -584,34 +570,32 @@ void RndAmbientOcclusion::BurnTransform(
     RndMesh *mesh, std::list<RndMesh *> &meshes
 ) const {
     // Find and remove mesh from the work list
-    std::list<RndMesh *>::iterator found = meshes.end();
-    for (std::list<RndMesh *>::iterator it = meshes.begin(); it != meshes.end(); ++it) {
-        if (*it == mesh) {
-            found = it;
-            break;
-        }
-    }
+    std::list<RndMesh *>::iterator found =
+        std::find(meshes.begin(), meshes.end(), mesh);
     if (found == meshes.end())
         return;
     meshes.erase(found);
 
-    float det = Det(mesh->WorldXfm().m);
-    bool canBurn = false;
+    const Transform &meshXfm = mesh->WorldXfm();
+    float det = Det(meshXfm.m);
+    bool overThreshold = Abs(1.0f - det) > 0.0001f;
+    bool canBurn;
     if (mQuality == 0) {
         canBurn = CanBurnXfm(mesh);
     } else {
-        if (Abs(1.0f - det) > 0.0001f) {
+        if (overThreshold) {
             MILO_NOTIFY_ONCE(
                 "%s: Mesh has scale or mirroring applied. Re-export mesh to ensure accurate AO calculation.",
                 PathName(mesh)
             );
         }
+        canBurn = false;
     }
 
     if (canBurn) {
         // Build a zero-translation copy of parent world rotation matrix
         Transform parentRot;
-        memcpy(&parentRot, &mesh->WorldXfm(), 0x30);
+        memcpy(&parentRot, &meshXfm, 0x30);
         parentRot.v.Set(0.0f, 0.0f, 0.0f);
 
         const std::list<RndTransformable *> &children = mesh->Children();
@@ -727,14 +711,11 @@ bool kdTree<Triangle>::Intersect(
     int stackDepth = 0;
     hitDist = FLT_MAX;
     kdTreeNode *nodes = mNodes;
-    if (tFar - maxDist < 0.0f) {
-        maxDist = tFar;
-    }
-    tFar = maxDist;
+    tFar = (tFar - maxDist >= 0.0f) ? maxDist : tFar;
 
+    kdTreeNode *node = nodes;
     if (nodes) {
         static kdTreeNode::Stack nodeStack[128];
-        kdTreeNode *node = nodes;
         do {
                 if (hitDist < tNear)
                     break;
@@ -747,11 +728,11 @@ bool kdTree<Triangle>::Intersect(
                     children[0] = &nodes[(node->mFlags & 0x7FFF) * 2 + 1];
                     children[1] = &nodes[(node->mFlags & 0x7FFF) * 2 + 2];
 
-                    bool isAbove = splitVal < origin[axis];
+                    bool isAbove = origin[axis] > splitVal;
 
-                    if (tSplit < 0.0f || tFar < tSplit) {
+                    if (tSplit < 0.0f || tSplit > tFar) {
                         node = children[isAbove];
-                    } else if (tNear <= tSplit) {
+                    } else if (tSplit >= tNear) {
                         nodeStack[stackDepth].tFar = tFar;
                         nodeStack[stackDepth].tNear = tSplit;
                         tFar = tSplit;
@@ -770,9 +751,7 @@ bool kdTree<Triangle>::Intersect(
                                 = ::Intersect(origin, direction, *triList->GetItem(), dist);
                             if (triHit) {
                                 found = true;
-                                if (hitDist - dist < 0.0f)
-                                    dist = hitDist;
-                                hitDist = dist;
+                                hitDist = (hitDist - dist >= 0.0f) ? dist : hitDist;
                             }
                             triList++;
                         } while (!triList->IsEnd());
@@ -843,18 +822,15 @@ void RndAmbientOcclusion::CalculateAOAtPoint(
 }
 
 void RndAmbientOcclusion::SmoothResults(RndMesh *mesh) const {
-    int numVerts = mesh->Verts().size();
     const Transform &xfm = mesh->WorldXfm();
-    int numFaces = mesh->Faces().size();
 
     // Phase 1: Compute AO at each face center
     Hmx::Color aoResult;
-    std::vector<Hmx::Color> faceAO(numFaces, aoResult);
+    std::vector<Hmx::Color> faceAO(mesh->Faces().size(), aoResult);
     unsigned int f = 0;
-    if (numFaces != 0) {
+    if (mesh->Faces().size() != 0) {
         float oneThird = 1.0f / 3.0f;
         do {
-            RndMesh::Vert *verts = &mesh->Verts(0);
             RndMesh::Face &face = mesh->Faces(f);
             unsigned short i0 = face.v1;
             unsigned short i1 = face.v2;
@@ -862,15 +838,24 @@ void RndAmbientOcclusion::SmoothResults(RndMesh *mesh) const {
 
             // Average position of the 3 face vertices
             Vector3 center;
-            center.z = ((verts[i2].pos.z + (verts[i1].pos.z + verts[i0].pos.z))) * oneThird;
-            center.y = ((verts[i2].pos.y + (verts[i1].pos.y + verts[i0].pos.y))) * oneThird;
-            center.x = ((verts[i2].pos.x + (verts[i1].pos.x + verts[i0].pos.x))) * oneThird;
+            center.z = ((mesh->Verts(i2).pos.z
+                         + (mesh->Verts(i1).pos.z + mesh->Verts(i0).pos.z)))
+                * oneThird;
+            center.y = ((mesh->Verts(i2).pos.y
+                         + (mesh->Verts(i1).pos.y + mesh->Verts(i0).pos.y)))
+                * oneThird;
+            center.x = ((mesh->Verts(i2).pos.x
+                         + (mesh->Verts(i1).pos.x + mesh->Verts(i0).pos.x)))
+                * oneThird;
 
             // Average normal of the 3 face vertices
             Vector3 faceNorm;
-            faceNorm.z = verts[i2].norm.z + verts[i1].norm.z + verts[i0].norm.z;
-            faceNorm.y = verts[i2].norm.y + verts[i1].norm.y + verts[i0].norm.y;
-            faceNorm.x = verts[i2].norm.x + verts[i1].norm.x + verts[i0].norm.x;
+            faceNorm.z = mesh->Verts(i2).norm.z + mesh->Verts(i1).norm.z
+                + mesh->Verts(i0).norm.z;
+            faceNorm.y = mesh->Verts(i2).norm.y + mesh->Verts(i1).norm.y
+                + mesh->Verts(i0).norm.y;
+            faceNorm.x = mesh->Verts(i2).norm.x + mesh->Verts(i1).norm.x
+                + mesh->Verts(i0).norm.x;
             Normalize(faceNorm, faceNorm);
 
             // Transform to world space and calculate AO
@@ -882,21 +867,20 @@ void RndAmbientOcclusion::SmoothResults(RndMesh *mesh) const {
 
             faceAO[f] = aoResult;
             f++;
-        } while (f < (unsigned int)numFaces);
+        } while (f < (unsigned int)mesh->Faces().size());
     }
 
     // Phase 2: Build vertex equivalence map (weld coincident vertices)
-    std::vector<int> vertMap(numVerts);
+    std::vector<int> vertMap(mesh->Verts().size());
     int v = 0;
-    if (0 < numVerts) {
+    if (0 < mesh->Verts().size()) {
         do {
             int equiv = 0;
             if (0 < v) {
-                RndMesh::Vert *verts = &mesh->Verts(0);
                 do {
-                    float dx = verts[v].pos.x - verts[equiv].pos.x;
-                    float dy = verts[v].pos.y - verts[equiv].pos.y;
-                    float dz = verts[v].pos.z - verts[equiv].pos.z;
+                    float dx = mesh->Verts(v).pos.x - mesh->Verts(equiv).pos.x;
+                    float dy = mesh->Verts(v).pos.y - mesh->Verts(equiv).pos.y;
+                    float dz = mesh->Verts(v).pos.z - mesh->Verts(equiv).pos.z;
                     if (dx * dx + dy * dy + dz * dz <= 0.001f)
                         break;
                     equiv++;
@@ -904,19 +888,17 @@ void RndAmbientOcclusion::SmoothResults(RndMesh *mesh) const {
             }
             vertMap[v] = equiv;
             v++;
-        } while (v < numVerts);
+        } while (v < mesh->Verts().size());
     }
 
     // Phase 3: Smooth AO by accumulating angle-weighted face AO per vertex
     v = 0;
-    if (0 < numVerts) {
+    if (0 < mesh->Verts().size()) {
         int vertOffset = 0;
         int *mapPtr = &vertMap[0];
         do {
             unsigned int fNum = 0;
-            if (numFaces != 0) {
-                int faceOffset = 0;
-                int colorOffset = 0;
+            if (mesh->Faces().size() != 0) {
                 float accR = 0.0f;
                 float accG = 0.0f;
                 float accB = 0.0f;
@@ -924,22 +906,18 @@ void RndAmbientOcclusion::SmoothResults(RndMesh *mesh) const {
                 float totalAngle = 0.0f;
                 do {
                     int j = 0;
-                    unsigned short *faceVerts =
-                        (unsigned short *)((char *)&mesh->Faces(0) + faceOffset);
-                    Hmx::Color *faceColor =
-                        (Hmx::Color *)((char *)&faceAO[0] + colorOffset);
+                    unsigned short *faceVerts = (unsigned short *)&mesh->Faces(fNum);
+                    Hmx::Color *faceColor = &faceAO[fNum];
                     unsigned short *fvPtr = faceVerts;
                     do {
                         if (vertMap[*fvPtr] == *mapPtr) {
-                            RndMesh::Vert *verts = &mesh->Verts(0);
-
                             // Get the two edges adjacent to this vertex
                             int cur = j % 3;
                             int next = (j + 1) % 3;
                             int prev = (j + 2) % 3;
-                            RndMesh::Vert *vCur = &verts[faceVerts[cur]];
-                            RndMesh::Vert *vNext = &verts[faceVerts[next]];
-                            RndMesh::Vert *vPrev = &verts[faceVerts[prev]];
+                            RndMesh::Vert *vCur = &mesh->Verts(faceVerts[cur]);
+                            RndMesh::Vert *vNext = &mesh->Verts(faceVerts[next]);
+                            RndMesh::Vert *vPrev = &mesh->Verts(faceVerts[prev]);
 
                             Vector3 edge1;
                             edge1.x = vNext->pos.x - vCur->pos.x;
@@ -968,29 +946,22 @@ void RndAmbientOcclusion::SmoothResults(RndMesh *mesh) const {
                         fvPtr++;
                     } while (j < 3);
                     fNum++;
-                    colorOffset += 0x10;
-                    faceOffset += 6;
-                } while (fNum < (unsigned int)numFaces);
+                } while (fNum < (unsigned int)mesh->Faces().size());
 
                 // Blend smoothed AO with existing vertex color
                 if (totalAngle > 0.0f) {
                     float invAngle = 1.0f / totalAngle;
-                    RndMesh::Vert *verts = &mesh->Verts(0);
-                    RndMesh::Vert &vert = verts[v];
-                    vert.color.alpha =
-                        (float)((double)(accA * invAngle + vert.color.alpha) * 0.5);
-                    vert.color.red =
-                        (float)((double)(invAngle * accR + vert.color.red) * 0.5);
-                    vert.color.blue =
-                        (float)((double)(accB * invAngle + vert.color.blue) * 0.5);
-                    vert.color.green =
-                        (float)((double)(accG * invAngle + vert.color.green) * 0.5);
+                    RndMesh::Vert &vert = mesh->Verts(v);
+                    vert.color.alpha = (accA * invAngle + vert.color.alpha) * 0.5f;
+                    vert.color.red = (invAngle * accR + vert.color.red) * 0.5f;
+                    vert.color.blue = (accB * invAngle + vert.color.blue) * 0.5f;
+                    vert.color.green = (accG * invAngle + vert.color.green) * 0.5f;
                 }
             }
             v++;
             mapPtr++;
             vertOffset += 0x60;
-        } while (v < numVerts);
+        } while (v < mesh->Verts().size());
     }
 }
 
@@ -1022,8 +993,7 @@ void RndAmbientOcclusion::CalculateAO(float *outTime) {
         RndMesh *mesh = *it;
         const Transform &xfm = mesh->WorldXfm();
         RndMesh *geomOwner = mesh->GetGeomOwner();
-        unsigned int numVerts = geomOwner->NumVerts();
-        for (unsigned int v = 0; v < numVerts; v++) {
+        for (unsigned int v = 0; v < (unsigned int)geomOwner->Verts().size(); v++) {
             RndMesh::Vert &vert = geomOwner->Verts(v);
             Vector3 worldPos;
             Multiply(vert.pos, xfm, worldPos);
