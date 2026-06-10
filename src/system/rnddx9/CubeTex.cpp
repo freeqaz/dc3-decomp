@@ -23,8 +23,9 @@ void DxCubeTex::Reset() {
 void DxCubeTex::Sync() {
     PhysMemTypeTracker tracker("D3D(phys):CubeTex");
 
-        DX_ASSERT(mTex = D3DDevice_CreateTexture(
-        props.mWidth, props.mWidth, 6, props.mNumMips + 1, 0,
+    int numMips = props.mNumMips + 1;
+    DX_ASSERT(mTex = D3DDevice_CreateTexture(
+        props.mWidth, props.mWidth, 6, numMips, 0,
         TheDxRnd.D3DFormatForBitmap(mBitmap[kCubeFaceRight]), 0,
         D3DRTYPE_CUBETEXTURE
     ), 0x38);
@@ -33,31 +34,35 @@ void DxCubeTex::Sync() {
     XGGetTextureDesc(mTex, 0, &desc);
 
     NgMat::SetCurrent(nullptr);
-    int numMips = props.mNumMips + 1;
 
     for (int face = 0; face < 6; face++) {
         RndBitmap bitmap;
-        bitmap.Reset();
 
         RndBitmap *pWork = &mBitmap[face];
 
-        if (pWork->Width() != 0 && pWork->Height() != 0) {
-            if (pWork->Buffer() != nullptr || pWork->Bpp() == 0x18) {
-                bitmap.Create(*pWork, 0x20, pWork->NumMips(), nullptr);
-                pWork = &bitmap;
+        if (pWork->Width() == 0 || pWork->Height() == 0) {
+            MILO_NOTIFY("%s face %d width or height == 0", PathName(this), face);
+        } else {
+            RndBitmap *bmp = pWork;
+            if (pWork->Palette() != nullptr || pWork->Bpp() == 0x18) {
+                bitmap.Create(*pWork, 0x20, pWork->Order(), nullptr);
+                bmp = &bitmap;
             }
 
-            if (numMips > 0) {
-                int mipIdx = 0;
-                do {
-                    if (pWork != nullptr) {
-                        u32 rowPitch = pWork->DxtRowBytes();
-                        XGTileTextureLevel(desc.Width, desc.Height, mipIdx, 0, 0, nullptr, nullptr,
-                                         pWork->Buffer(), rowPitch, nullptr);
-                    }
-                    pWork = pWork->nextMip();
-                    mipIdx++;
-                } while (mipIdx < numMips);
+            for (int mip = 0; mip < numMips; mip++) {
+                MILO_ASSERT(bmp, 0x53);
+                D3DLOCKED_RECT locked;
+                D3DCubeTexture_LockRect(
+                    (D3DCubeTexture *)mTex, (D3DCUBEMAP_FACES)face, mip, &locked, nullptr, 0
+                );
+                XGTileTextureLevel(
+                    desc.Width, desc.Height, mip, desc.Format & 0x3f, 0, locked.pBits,
+                    nullptr, bmp->Pixels(), bmp->DxtRowBytes(), nullptr
+                );
+                D3DCubeTexture_UnlockRect(
+                    (D3DCubeTexture *)mTex, (D3DCUBEMAP_FACES)face, mip
+                );
+                bmp = bmp->nextMip();
             }
 
             mBitmap[face].Reset();
@@ -65,5 +70,4 @@ void DxCubeTex::Sync() {
 
         bitmap.Reset();
     }
-
 }

@@ -1059,10 +1059,7 @@ __declspec(noinline) auto _outline_Int(_T* _obj) -> decltype(_obj->Int()) {
 float Rnd::DrawTimers(float f) {
     if (0 == (lbl_830A4104 & 1)) {
         lbl_830A4104 = lbl_830A4104 | 1;
-        Symbol timerSym("timer_script");
-        Symbol rndSym("rnd");
-        DataArray *rndCfg = SystemConfig(rndSym);
-        lbl_830A4100 = rndCfg->FindArray(timerSym, false);
+        lbl_830A4100 = SystemConfig(Symbol("rnd"))->FindArray(Symbol("timer_script"), false);
     }
 
     if (lbl_830A4100) {

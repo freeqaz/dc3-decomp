@@ -23,16 +23,16 @@ FlowSetProperty::FlowSetProperty()
       mPersistent(0), mRate(0), mBlendTime(0), mChangePerUnit(0), unk_0xCC(this, nullptr),
       mEase(0), mEasePower(2), unk_0xE8(0), mStopMode(1) {}
 
-PropertyTask::PropertyTask(Hmx::Object *obj, DataNode &prop, DataNode &val, TaskUnits units, float dur, EaseType t, float power, bool flag, Hmx::Object *listener)
+PropertyTask::PropertyTask(Hmx::Object *target, DataNode &prop, DataNode &val, TaskUnits units, float dur, EaseType t, float power, bool flag, Hmx::Object *listener)
     : mTarget(this, nullptr), mProperty(prop), mValue(val), mStartValue(0),
       mDuration(dur), mEasePower(power), mIsColorInterp(flag),
-      mListener(this, nullptr), mEaseFunc(gEaseFuncs[t]) {
-    auto refsEnd = obj->Refs().end();
-    MILO_ASSERT(obj, 0x4D);
+      mListener(this, nullptr), mEaseFunc(GetEaseFunction(t)) {
+    auto refsEnd = target->Refs().end();
+    MILO_ASSERT(target, 0x4D);
     MILO_ASSERT(t >= kEaseLinear && t <= kEaseQuarterHalfStairstep, 0x16B);
 
     // Loop through target's refs to find existing PropertyTasks with same property
-    for (ObjRef::iterator it = obj->Refs().begin(); it != refsEnd; ++it) {
+    for (ObjRef::iterator it = target->Refs().begin(); it != refsEnd; ++it) {
         Hmx::Object *refOwner = it->RefOwner();
         if (refOwner != nullptr && refOwner->ClassName() == PropertyTask::StaticClassName()) {
             PropertyTask *task = static_cast<PropertyTask *>(refOwner);
@@ -55,8 +55,8 @@ PropertyTask::PropertyTask(Hmx::Object *obj, DataNode &prop, DataNode &val, Task
     }
 
     mListener = listener;
-    mTarget = obj;
-    mStartValue = *obj->Property(mProperty.Array(), true);
+    mTarget = target;
+    mStartValue = *target->Property(mProperty.Array(), true);
 
     // Cache the original start value type so SetProperty can decide whether
     // to format-as-string when assigning the (possibly interpolated) value
