@@ -23,12 +23,12 @@ void DxCubeTex::Reset() {
 void DxCubeTex::Sync() {
     PhysMemTypeTracker tracker("D3D(phys):CubeTex");
 
-    int numMips = props.mNumMips + 1;
     DX_ASSERT(mTex = D3DDevice_CreateTexture(
-        props.mWidth, props.mWidth, 6, numMips, 0,
+        props.mWidth, props.mWidth, 6, props.mNumMips + 1, 0,
         TheDxRnd.D3DFormatForBitmap(mBitmap[kCubeFaceRight]), 0,
         D3DRTYPE_CUBETEXTURE
     ), 0x38);
+    int numMips = props.mNumMips + 1;
 
     XGTEXTURE_DESC desc;
     XGGetTextureDesc(mTex, 0, &desc);

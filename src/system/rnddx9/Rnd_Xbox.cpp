@@ -473,8 +473,8 @@ void CreateBackBuffers(
     D3DSurface *&colorSurface,
     D3DSurface *&depthSurface
 ) {
-    UINT depthSize = XGSurfaceSize(width, height, D3DFMT_D24FS8, multisample);
     UINT colorSize = XGSurfaceSize(width, height, D3DFMT_A8R8G8B8, multisample);
+    UINT depthSize = XGSurfaceSize(width, height, D3DFMT_D24FS8, multisample);
 
     unsigned int adjustedWidth = width;
     unsigned int adjustedHeight = height;
@@ -488,17 +488,17 @@ void CreateBackBuffers(
     edramBase = 0x800;
     edramHzBase = 0xE10;
 
-    edramBase -= colorSize;
+    edramBase -= depthSize;
 
     edramHzBase -= (((adjustedWidth + 0x1F) >> 5) * ((adjustedHeight + 0xF) >> 4)) & 0x7FFFFF;
 
-    D3DSURFACE_PARAMETERS params;
+    D3DSURFACE_PARAMETERS params = {0};
     params.Base = edramBase;
     params.HierarchicalZBase = edramHzBase;
     depthSurface = D3DDevice_CreateSurface(width, height, D3DFMT_D24FS8, multisample, &params);
     DX_ASSERT(depthSurface, 0x2CE);
 
-    edramBase -= depthSize;
+    edramBase -= colorSize;
 
     params.Base = edramBase;
     params.HierarchicalZBase = -1;

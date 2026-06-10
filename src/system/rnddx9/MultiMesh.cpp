@@ -143,9 +143,9 @@ void DxMultiMesh::UpdateGeometryBuffers() {
     temp_r11 = (void *)((char *)temp_r11_2 + 0x110);
 
     if (*(void **)((char *)this + temp_r28_2) == nullptr) {
-        s32 indexSize = ((*(s32 *)((char *)temp_r11_2 + 0x114) -
-                          *(s32 *)((char *)temp_r11_2 + 0x110)) / 6) * 0xC;
-        void *vb2Ptr = D3DDevice_CreateVertexBuffer(indexSize, 0, (D3DPOOL)0);
+        s32 indexCount = ((*(s32 *)((char *)temp_r11_2 + 0x114) -
+                          *(s32 *)((char *)temp_r11_2 + 0x110)) / 6) * 3;
+        void *vb2Ptr = D3DDevice_CreateVertexBuffer(indexCount * 4, 0, (D3DPOOL)0);
         *(void **)((char *)this + temp_r28_2) = vb2Ptr;
     }
 
