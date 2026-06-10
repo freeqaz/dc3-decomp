@@ -1,7 +1,6 @@
-# 2026-06-10 — ASM-Archaeology Waves 1–2 (orchestrated)
+# 2026-06-10 — ASM-Archaeology Waves 1–3 (orchestrated)
 
-> **Wave 2 appended below** (see "Wave 2 results"). Wave 3 in flight
-> (SkeletonViz, Spline, GamePanel, scanner lever-mix, og-port 2, residue pass).
+> Waves 2 and 3 appended below. All three waves landed on main.
 
 Follow-on to [2026-06-09-large-function-asm-archaeology.md](2026-06-09-large-function-asm-archaeology.md).
 First fully-orchestrated run of the playbook: per-cluster **intel → Opus implementer →
@@ -176,6 +175,64 @@ verifier-proven against target asm — kept our pointer-store loop).
   A/B one site before committing.
 - New floors: MSVC EH-frame DataNode temp ordering (try/catch scopes), early-return
   block placement, optimizer-coalesced redundant copies.
+
+---
+
+# Wave 3 results (commits `081c27c1` … `328e88f6`)
+
+6 lanes, 18 agents, ~41 min. All harvestable.
+
+| Function | Before | After | Notes |
+|---|---|---|---|
+| `DrawPlayClip@MoveDir` | 81.7% | **100%** | rect width 0.9f bug + disguised int param |
+| `GamePanel::DeJitter` | 87.9% | **100%** | |
+| `SynthPreInit` | 85.9% | **100%** | og port (+Synth.h friend) |
+| `RndMesh::DeleteBones` | 57.7% | **99.3%** | real `dynamic_cast<RndDir*>` root-walk bug ×4 sites |
+| `RndParticleSys::InitParticle` | 94.5% | **98.9%** | missing shrink/grow f11 recompute (particle motion) |
+| `BustAMovePanel::Poll` | 92.5% | **97.7%** | literal_remat lever CONFIRMED as a fix (+5.2) |
+| `FlowMathOp::Apply` | 87.8% | **97.4%** | missing MILO_TRY/CATCH on script case |
+| `SkeletonViz::DrawJoints` | 68.7% | **94.1%** | static_ptr_walk lever CONFIRMED; 3 behavioral fixes |
+| `FlowSequence::Activate` | 87.2% | 93.3% | NOTIFY %s used wrong name source |
+| `LoopVizCallback::UpdateOverlay` | 81.6% | **92.9%** | loop-viz colors all wrong + endMarker timer bug |
+| `RndSpline::SyncPristineCtrlPoints` | 74.3% | 92.2% | |
+| `Rnd::DrawTimers` | 90.9% | 92.4% | unnamed-temp Symbol (scanner hit was mislabeled) |
+| `RndMesh::InstanceGeomOwnerBones` | 73.6% | 88.1% | same RndDir root-walk bug |
+| `MoveDir::UpdateOverlay` | 86.1% | 87.2% | |
+| `DxCubeTex::Sync` | 58.5% | **79.2%** | **mip upload missing the whole Lock/Tile/Unlock cycle** + Order()/Palette() field bugs |
+| `CursorPanel::Poll` | 78.3% | 78.3% | og diverges; skipped |
+
+### Scanner calibration (the levermix lane's purpose)
+
+| Scanner hit | Verdict |
+|---|---|
+| static_ptr_walk @ DrawJoints | **TRUE positive** — the lever was the fix (+25.4 with it) |
+| literal_remat @ Poll | **TRUE positive** — re-materializing literals landed +5.2 |
+| global_reload @ MoveDir idx 130 | partially confirmed (small wins inside +1.1) |
+| cached_stack_addr @ DrawTimers | MISLABELED — r1↔r31 was whole-frame r31-base mode, not a deletable local; a different (unnamed-temp) lever was found there |
+| split_fma @ GrowToContain | FALSE positive — formal gate (no TGT_ONLY spill slot) confirms backend floor |
+| static_ptr_walk @ ThreadMemStack | FALSE positive — static-anchor addressing, walk already matches |
+
+**Scanner roadmap:** add the TGT_ONLY-spill-slot gate to split_fma; distinguish
+frame-base-mode (whole-function subi r31,r1) from deletable cached-stack-addr;
+the two confirmed-fix levers (ptr-walk, literal-remat) deserve priority weighting.
+
+### Known unlanded real bugs (need a dedicated pass — landing regresses match)
+
+- `VelocityBuffer::Draw`: `cam != nullptr & cam == mCam` uses bitwise `&`
+  (target short-circuits); `AdvanceFrame(cam)` should be unconditional before
+  `PreDepthTexture()`. Landing either regresses 74.8→47.4 via regalloc cascade.
+  Recorded in commit `90697f58`.
+- `SkeletonViz::DrawJoints` first-iteration uninitialized `shadedColor.alpha`
+  is binary-faithful (commented in source) — HX_NATIVE init only if native misrenders.
+
+### New floors (wave 3)
+
+- Counted-loop-vs-pointer (compile-time-constant trip count → downcount li/subic./bne).
+- Whole-frame r31-base mode (subi r31,r1,N): no source trigger.
+- MSVC loop-invariant hoist of vector loads (lvx128) above loops.
+- Position-sum CSE into callee-saved FPR vs inline fmadds recompute.
+- Virtual-dispatch global+vtable hoist before bl (TheShaderMgr).
+- `__forceinline` to force-match MSVC inlining: catastrophic, never.
 
 ### Tooling landed (decomp-synth `243e2e3`)
 
