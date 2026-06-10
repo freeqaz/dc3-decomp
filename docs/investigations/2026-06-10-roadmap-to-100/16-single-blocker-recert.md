@@ -126,3 +126,125 @@ differences in the lane's worktree — ironically the same artifact class as thi
 own EstimateDraw finding. **Do not promote the 9 from this table.** Wave-3 follow-up:
 re-measure all 20 blockers on main and reconcile run_objdiff-vs-report scoring before
 trusting either plane for this cohort.
+
+---
+
+## WAVE-3 RECONCILIATION (2026-06-10, Lane D re-measurement)
+
+**All 20 blockers re-measured on main** (`project_dir=/home/free/code/milohax/dc3-decomp`,
+sequential `run_objdiff` calls). Build plane: **main repo**. Results:
+
+### Corrected 20-row table (main-plane measurements)
+
+| Unit | Blocker function | Report norm% | Wave-2 live% | Main current% | Verdict | Notes |
+|---|---|---|---|---|---|---|
+| `default/system/net/curl/lib/parsedate` | `parsedate` | 100.00% | 100.0% | **99.8%** | LikelyFixable | 1 diff_arg: `subi` addend 0x50 vs 0x4c+weekday |
+| `default/system/os/UsbMidiGuitar` | `Poll` | 99.99% | 100.0% | **100.0%** | COMPLETE | Confirmed on main |
+| `default/system/moviebink/BinkMovieImpl_Xbox` | `PlatformCacheFile` | 99.99% | 100.0% | **100.0%** | COMPLETE | Confirmed on main |
+| `default/system/ui/UIListSlot` | `Draw` | 99.99% | 100.0% | **100.0%** | COMPLETE | Confirmed on main |
+| `default/system/char/CharServoBone` | `DoRegulate` | 99.99% | 100.0% | **100.0%** | COMPLETE | Confirmed on main |
+| `default/system/net/curl/lib/http` | `Curl_http_readwrite_headers` | 99.99% | 100.0% | **100.0%** | COMPLETE | Confirmed on main |
+| `default/system/net/curl/lib/http_proxy` | `Curl_proxyCONNECT` | 99.98% | 100.0% | **100.0%** | COMPLETE | Confirmed on main |
+| `default/lazer/meta_ham/CampaignPerformer` | `OnMovePassed` | 99.98% | 100.0% | **100.0%** | COMPLETE | Confirmed on main |
+| `default/lazer/meta_ham/FitnessGoalMgr` | `QueueCmdChangeProfileOnlineID` | 99.97% | 100.0% | **100.0%** | COMPLETE | Confirmed on main |
+| `default/system/net/HttpReqCurl` | `WriteMemoryCallback` | 99.97% | 99.80% | **99.8%** | LikelyFixable | Offset swap (0x0,0x4) + commutative reg swap |
+| `default/system/obj/PropSync` | `PropSync` | 99.94% | 99.80% | **99.8%** | MaybeFixable | FPR regswap f0-f13 (26 mismatches); permuter target |
+| `default/system/rndobj/Rnd_NG` | `EstimateDraw` | 99.94% | 97.60% | **99.6%** | MaybeFixable | +2.0% from wave-2: Rnd_NG.h vtable fix (5aed1dca) landed after wave-2 |
+| `default/system/synth/FxSendChorus` | `FxSendChorus::Load` | 99.93% | 99.90% | **99.9%** | NeedsInvestigation | Stack layout 3 DIFFER slots; uniform -4 offset |
+| `default/system/midi/DataEventList` | `InsertEvent` | 99.91% | 99.90% | **99.9%** | NeedsInvestigation | Frame delta -0x10; extra local |
+| `default/lazer/meta_ham/HamSongMgr` | `InitializePlaylists` | 99.86% | 99.90% | **99.9%** | NeedsInvestigation | Stack 12 DIFFER; systematic +0x10 offset |
+| `default/system/char/CharIKRod` | `Copy` | 99.75% | 99.30% | **99.3%** | LikelyFixable | 2 addi/subi sign flips |
+| `default/system/gesture/IdentityInfo` | `Identified` | 99.75% | 99.60% | **99.6%** | LikelyFixable | 2 branch polarity inversions (beq/blt/ble) |
+| `default/system/char/CharIKHead` | `Poll` | 99.74% | 99.70% | **99.7%** | LikelyFixable | FPR regswap f3-f4 + commutative fadds |
+| `default/system/char/CharBone` | `StuffBones` | 99.70% | 99.70% | **99.7%** | NeedsInvestigation | Stack SHIFTED+DIFFER; uniform -8 offset |
+| `default/system/utl/Cheats` | `CallCheatScript` | 99.55% | 99.50% | **99.5%** | LikelyFixable | Extra `mr` insert + offset mismatch |
+
+### Corrected summary
+
+| Result | Wave-2 count | Main count | Notes |
+|---|---|---|---|
+| COMPLETE (main norm == 100.0%) | 9 | **8** | parsedate demoted: 99.8% on main |
+| LikelyFixable | 7 | **6** | parsedate moved here from COMPLETE |
+| MaybeFixable | 1 | **2** | Rnd_NG promoted from NeedsInvestigation |
+| NeedsInvestigation | 4 | **4** | FxSendChorus, DataEventList, HamSongMgr, CharBone |
+
+**8 of 20 units confirmed 100% normalized on main** — promotable via
+`sync_match_percent.py --promote`. **parsedate is NOT promotable** (99.8% requires a
+source fix to the addend value or the data symbol reference).
+
+---
+
+## Worktree-vs-main divergence mechanism (obj-level evidence)
+
+**Root cause for `parsedate` and similar `.c`-sourced units:**
+
+objdiff compares two objects:
+- **target** (`build/373307D9/obj/...parsedate.obj`): extracted from the original binary,
+  never rebuilt.
+- **base** (`build/373307D9/src/...parsedate.obj`): compiled from our source via ninja.
+
+When setup_worktree.sh runs `ninja` during worktree initialization, it detects that the
+PCH (`system.pch`, last rebuilt Jun 2 18:55) is **newer** than the reflinked base objects
+(Mar 18 23:01), and rebuilds them. The rebuilt `.c`-sourced objects may produce **different
+compiled output** compared to main's older base objects — different enough to change the
+normalized score.
+
+**Concrete byte evidence for `parsedate`:**
+
+| File | Size | Date | Description |
+|---|---|---|---|
+| `build/373307D9/obj/.../parsedate.obj` (TARGET) | 11,177 B | Mar 18 | Original binary — never changes |
+| `build/373307D9/src/.../parsedate.obj` (MAIN BASE) | 11,273 B | May 12 | Compiled, current main |
+| `wt-wave3/.../src/.../parsedate.obj` (WORKTREE BASE) | 11,289 B | Jun 10 | Rebuilt during setup_worktree.sh |
+
+The wave-2 worktree reflinked main's base object at a time when that version produced
+100.0% normalized (the addend difference was categorized as address-reloc noise by
+`functionRelocDiffs=none` and excluded). After the PCH was rebuilt (Jun 2), the newly
+compiled base encodes the addend as a raw literal (0x50) rather than as a
+symbol-relative expression, so the mismatch is now a real `diff_arg` not excluded by
+normalization — giving 99.8%.
+
+**Why `clean_stale_objects.sh` did not catch this:**
+
+The script scans `build/373307D9/src/` for `.obj` files older than the PCH, then maps
+`.obj` path to `.cpp` source path and checks `if [ -f "${cpp}" ]`. For `.c` sources
+(curl/lib, json-c, etc.) there is no matching `.cpp` file, so the check silently fails
+and the stale object is not invalidated. This is a bug in the script: `.c` source files
+should also be handled. Impact: main's `src/*.c.obj` files may be stale relative to the
+PCH and score differently from a fresh-built worktree.
+
+**The `Rnd_NG` score change is a different mechanism (genuine improvement):**
+
+The +2.0% improvement for `EstimateDraw` (97.6% wave-2 → 99.6% main) is NOT a worktree
+artifact. Commit `5aed1dca` (Jun 10 12:58, landed before our measurement) swapped the
+DxRnd Resume/Suspend vtable slots in `Rnd_NG.h`, rebuilding `Rnd_NG.obj` and reducing
+the mismatch count from 10 to 7. Updated verdict: MaybeFixable (was NeedsInvestigation).
+
+---
+
+## Blast-radius statement: which prior worktree-measured claims need re-measurement
+
+1. **This document's "9 COMPLETE" entries** — re-measured: 8/9 confirmed on main.
+   parsedate reverted to 99.8% LikelyFixable. The 8 confirmed COMPLETE units are
+   promotable.
+2. **Any wave-1/wave-2 worktree measurement of a `.c`-sourced unit** — if setup_worktree.sh
+   ran a full ninja that rebuilt `.c` objects against a newer PCH, the resulting score
+   may differ from main's score for that unit. The curl/lib and json-c units are the main
+   risk pool. In this cohort (parsedate, Curl_http, Curl_proxy) only parsedate was
+   affected; the other two confirm 100% on main.
+3. **Wave-2 `EstimateDraw` NeedsInvestigation label** — updated to MaybeFixable (99.6%,
+   see above). Not a worktree artifact; a genuine improvement from a post-wave-2 commit.
+4. **report.json** scores are computed from main's current base objects and are stable.
+   No re-measurement of report.json needed.
+
+---
+
+## Promote recommendation (updated)
+
+**8 of 20 units are confirmed COMPLETE on main** and safe to promote:
+UsbMidiGuitar, BinkMovieImpl_Xbox, UIListSlot, CharServoBone,
+Curl_http_readwrite_headers, Curl_proxyCONNECT, CampaignPerformer, FitnessGoalMgr.
+
+Run: `python3 scripts/sync_match_percent.py --build --promote`
+
+**parsedate: do NOT promote** — 99.8% on main (source fix required).
