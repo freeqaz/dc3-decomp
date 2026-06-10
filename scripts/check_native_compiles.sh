@@ -87,6 +87,7 @@ if [[ $CONFIGURE -eq 1 || ! -f "${BUILD_DIR}/build.ninja" ]]; then
           -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
           -DCMAKE_C_COMPILER=clang \
           -DCMAKE_CXX_COMPILER=clang++ \
+          -DDawn_DIR="${DAWN_DIR:-/home/free/code/milohax/dc3-decomp-deps/dawn/lib/cmake/Dawn}" \
           2>&1
 fi
 

@@ -111,3 +111,18 @@ Doc 06 F7 estimated **~71** single-blocker rounding-100 units. The real count is
 - The 42-unit fuzzy-≥99.5% cohort is larger but the normalized-≥99.5% is the correct gate
 
 This is a corrective finding, not a blocker.
+
+---
+
+## ORCHESTRATOR CORRECTION (2026-06-10, post-merge)
+
+The **"9/20 already 100% live"** claim does NOT reproduce on main. Spot-check:
+`parsedate` scores **99.8% normalized** via `run_objdiff` against the canonical main
+build (1 mismatch: `subi r29,r21,0x50` vs `subi r29,r21,0x4c, weekday` — a data-symbol
+addend diff), and `sync_match_percent.py --promote` after a fresh report regeneration
+(rebuilt objdiff binary, forced report rebuild) promoted **0** of the 9. The worktree
+"Live norm 100.00%" readings most likely reflect reflinked-/freshly-rebuilt-obj
+differences in the lane's worktree — ironically the same artifact class as this doc's
+own EstimateDraw finding. **Do not promote the 9 from this table.** Wave-3 follow-up:
+re-measure all 20 blockers on main and reconcile run_objdiff-vs-report scoring before
+trusting either plane for this cohort.
