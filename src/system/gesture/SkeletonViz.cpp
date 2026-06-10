@@ -333,67 +333,67 @@ void SkeletonViz::DrawPoint3D(
 void SkeletonViz::DrawJoints(
     const BaseSkeleton &skeleton, Vector3 *camPos, Vector3 *drawPos, bool faded
 ) {
-    float tint = 1.0f;
+    float tint;
     if (faded) {
         tint = 0.5f;
+    } else {
+        tint = 1.0f;
     }
     Hmx::Color tintColor(tint, tint, tint, 1.0f);
 
     float len4 = skeleton.BoneLength((SkeletonBone)4, kCoordCamera);
     float len3 = skeleton.BoneLength((SkeletonBone)3, kCoordCamera);
-    len3 += len4;
+    float boneSum = len4 + len3;
     float len2 = skeleton.BoneLength((SkeletonBone)2, kCoordCamera);
+    float depthSpan = len2 + boneSum;
 
     float minZ = 1.0e30f;
-    Vector3 *camIt = camPos - 1;
     for (int i = 0; i < kNumBones; i++) {
-        camIt++;
-        float z = camIt->z;
-        minZ = Min(minZ, z);
+        minZ = Min(minZ, camPos[i].z);
     }
 
-    float maxDepth = minZ + len2 + len3;
+    float maxDepth = minZ + depthSpan;
     float invRange = 1.0f / (minZ - maxDepth);
 
     Hmx::Color shadedColor;
+    // Walk a cursor over sBones[].joint2, so jointPair[-1] is the bone's joint1
+    // and jointPair[0] is its joint2 (BoneJoints = {bone, joint1, joint2}).
+    const SkeletonJoint *jointPair = &BaseSkeleton::sBones[0].joint2;
     RndLine **lineIt = mBoneLines - 1;
-    const BoneJoints *boneIt = BaseSkeleton::sBones + 1;
-    const BoneJoints *boneEnd = BaseSkeleton::sBones + kNumBones;
-    while (boneIt <= boneEnd) {
-        const BoneJoints &bone = boneIt[-1];
-
-        float c0 = (camPos[bone.joint1].z - maxDepth) * invRange;
+    while (jointPair < &BaseSkeleton::sBones[kNumBones].joint2) {
+        // Endpoint 0 receives the unscaled tint; only endpoint 1 is depth-shaded.
+        shadedColor.alpha = shadedColor.alpha * tintColor.alpha;
+        float c0 = (camPos[jointPair[-1]].z - maxDepth) * invRange;
         c0 = Clamp(0.0f, 1.0f, c0);
         c0 = c0 * 0.8f + 0.2f;
-
-        RndLine *line = lineIt[1];
         shadedColor.red = tintColor.red * c0;
         shadedColor.green = tintColor.green * c0;
         shadedColor.blue = tintColor.blue * c0;
-        shadedColor.alpha = tintColor.alpha;
-        line->SetPointColor(0, shadedColor, true);
+        lineIt[1]->SetPointColor(0, tintColor, true);
 
-        float c1 = (camPos[bone.joint2].z - maxDepth) * invRange;
+        shadedColor.alpha = shadedColor.alpha * tintColor.alpha;
+        float c1 = (camPos[jointPair[0]].z - maxDepth) * invRange;
         c1 = Clamp(0.0f, 1.0f, c1);
         c1 = c1 * 0.8f + 0.2f;
         shadedColor.red = tintColor.red * c1;
         shadedColor.green = tintColor.green * c1;
         shadedColor.blue = tintColor.blue * c1;
-        line->SetPointColor(1, shadedColor, true);
+        lineIt[1]->SetPointColor(1, shadedColor, true);
 
-        line->SetPointPos(0, drawPos[bone.joint1]);
-        line->SetPointPos(1, drawPos[bone.joint2]);
-        float baseWidth = line->GetWidth();
-        line->SetWidth(mLineWidthScale * baseWidth);
-        line->DrawShowing();
+        lineIt[1]->SetPointPos(0, drawPos[jointPair[-1]]);
+        lineIt[1]->SetPointPos(1, drawPos[jointPair[0]]);
+        float baseWidth = lineIt[1]->GetWidth();
+        lineIt[1]->SetWidth(mLineWidthScale * baseWidth);
+        lineIt[1]->DrawShowing();
         lineIt++;
         lineIt[0]->SetWidth(baseWidth);
-        boneIt++;
+        jointPair = (const SkeletonJoint *)((const char *)jointPair + sizeof(BoneJoints));
     }
 
     float baseScaleZ = mJointMesh->LocalXfm().m.z.z;
     float baseScaleY = mJointMesh->LocalXfm().m.y.y;
     float baseScaleX = mJointMesh->LocalXfm().m.x.x;
+    Vector3 baseScale(baseScaleX, baseScaleY, baseScaleZ);
     Vector3 scaledScale(
         mLineWidthScale * baseScaleX,
         mLineWidthScale * baseScaleY,
@@ -423,7 +423,6 @@ void SkeletonViz::DrawJoints(
         jointIt++;
     }
 
-    Vector3 baseScale(baseScaleX, baseScaleY, baseScaleZ);
     SetLocalScale(mJointMesh, baseScale);
 
     int clippingFlags = skeleton.QualityFlags();
@@ -463,6 +462,9 @@ void SkeletonViz::DrawJoints(
         Multiply(axesXfm, unk1d4, worldXfm);
         Multiply(worldXfm, WorldXfm(), worldXfm);
         Hmx::Color white(1.0f, 1.0f, 1.0f, 1.0f);
+        Vector3 tmp = worldXfm.m.y;
+        worldXfm.m.y = worldXfm.m.z;
+        worldXfm.m.z = tmp;
         UtilDrawAxes(worldXfm, mLineWidthScale * 0.25f, white);
     }
 }
