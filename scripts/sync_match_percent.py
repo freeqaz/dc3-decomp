@@ -47,15 +47,12 @@ DEFAULT_REPORT = REPO_ROOT / "build" / "373307D9" / "report.json"
 DEFAULT_DB = REPO_ROOT / "decomp.db"
 DEFAULT_OBJECTS = REPO_ROOT / "config" / "373307D9" / "objects.json"
 
-SDK_UNIT_PREFIXES = [
-    "default/xdk/",
-]
-# NOTE: this is the canonical SDK/non-authorable unit-prefix list for the sync
-# plane. reconcile_db.py imports it from here; Lane B's authorable-denominator
-# work is expected to reconcile this with progress_metrics.py's exclusion set
-# (the audit notes default/lib/* may also be non-authorable for byte metrics,
-# but for the *report.json function sync* only default/xdk/ functions are
-# skipped, matching report-generation scope).
+# Single source of truth for the non-authorable unit-prefix list lives in
+# scripts/authorable.py (shared with progress_metrics.py). Importing it here
+# adds default/lib/binkxenon/ to the sync skip set — deliberate: all 187
+# binkxenon rows are excluded=1 vendor code, never promoted/demoted.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from authorable import SDK_UNIT_PREFIXES  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:

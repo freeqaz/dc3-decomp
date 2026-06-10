@@ -27,9 +27,9 @@ they cannot be confused.
 
 | Metric | Value | Notes |
 |--------|-------|-------|
-| **XDK-diluted fuzzy** | 44.01 % | `matched_code_percent` in report.json measures root node; counts vendor bytes in denominator |
-| **Authorable fuzzy** | 78.86 % | Raw matched-code bytes over authorable-only total; best apples-to-apples byte signal |
-| **Authorable normalized %** ✅ | **91.60 %** | **CANONICAL.** Functions where `match_percent_normalized == 100` over authorable total. Forgives register permutation / benign reloc-addend, but NOT wrong constants, offsets, or vtable slots |
+| **XDK-diluted fuzzy** | 43.95 % | `matched_code_percent` in report.json measures root node; counts vendor bytes in denominator |
+| **Authorable fuzzy** | 78.75 % | Raw matched-code bytes over authorable-only total; best apples-to-apples byte signal |
+| **Authorable normalized %** ✅ | **90.73 %** | **CANONICAL.** Functions where `match_percent_normalized == 100` over authorable total. Forgives register permutation / benign reloc-addend, but NOT wrong constants, offsets, or vtable slots |
 | Strict reloc (pending Lane C) | TBD | Would use name-only reloc mode; expected to differ only for benign addend diffs |
 
 ## Relocation-mode caveat
@@ -51,22 +51,22 @@ risk is bounded but currently unquantified.
 | | Value |
 |---|---|
 | Total authorable code | 6,349,080 bytes (6.35 MB) |
-| Matched code (raw bytes) | 5,006,772 bytes → **78.86 %** |
-| Matched fns (fuzzy == 100) | 29,339 / 32,253 → 90.97 % |
-| **Matched fns (normalized == 100)** | **29,545 / 32,253 → 91.60 %** |
-| Complete units (all fns norm==100) | 425 / 967 → 43.95 % |
-| Remaining fns (norm < 100) | 2,708 |
-| Remaining bytes (norm < 100) | 1,231,516 bytes (1.23 MB) |
+| Matched code (raw bytes) | 4,999,980 bytes → **78.75 %** |
+| Matched fns (fuzzy == 100) | 29,058 / 32,253 → 90.09 % |
+| **Matched fns (normalized == 100)** | **29,264 / 32,253 → 90.73 %** |
+| Complete units (all fns norm==100) | 403 / 967 → 41.68 % |
+| Remaining fns (norm < 100) | 2,989 |
+| Remaining bytes (norm < 100) | 1,238,308 bytes (1.24 MB) |
 
 ### Full XEX (XDK-diluted, for reference only)
 
 | | Value |
 |---|---|
-| Total code | 11,379,340 bytes (11.38 MB) |
-| Matched code (raw bytes) | 5,007,660 bytes → 44.01 % |
-| Matched fns (fuzzy == 100) | 29,353 / 48,417 → 60.63 % |
-| Matched fns (normalized == 100) | 29,559 / 48,417 → 61.05 % |
-| Complete units | 425 / 2055 → 20.68 % |
+| Total code | 11,379,348 bytes (11.38 MB) |
+| Matched code (raw bytes) | 5,000,868 bytes → 43.95 % |
+| Matched fns (fuzzy == 100) | 29,072 / 48,413 → 60.05 % |
+| Matched fns (normalized == 100) | 29,278 / 48,413 → 60.48 % |
+| Complete units | 403 / 2055 → 19.61 % |
 
 ## How to re-compute
 
