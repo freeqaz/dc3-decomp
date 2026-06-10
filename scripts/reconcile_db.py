@@ -13,6 +13,10 @@ Checks (roadmap 0.7, audit docs 03/04):
   (c) is_stub=1 AND current_percent >= 100                       (stale stub; doc 04 F3: 1,728)
   (d) symbols in db but absent from report (authorable only)     +  report-only symbols
                                                                   (jeff boundary churn; doc 03 F1)
+  (e) stale floor certificates: floor_certificate set but match_percent_normalized has
+      moved away from floor_cert_pct (or is now >=100). The cosmetic-floor proof no
+      longer applies, so the cert must be re-evaluated by certify_floor.py. Only checked
+      when the floor_cert_* columns exist (added by certify_floor.py, Lane B / doc 08).
 
 `--fix` corrections (the subset sync owns; keyed off the DB's own current_percent so
 db-only rows the report can't see are still handled):
@@ -21,6 +25,7 @@ db-only rows the report can't see are still handled):
         under the normalized scorer — these are the ~206 fuzzy<100/norm==100 fns
         that sync --promote keeps COMPLETE; demoting them would re-introduce drift).
   - (c) is_stub=1 & current_percent>=100 -> is_stub=0
+  - (e) clears floor_cert_* columns for stale certs (certify_floor.py re-adds them).
 Check (a) and the percent values themselves are NOT fixed here — re-run
 `sync_match_percent.py` to repair percents from report.json.
 
@@ -116,6 +121,7 @@ def reconcile(args: argparse.Namespace) -> int:
     has_norm = has_column(conn, "functions", "match_percent_normalized")
     has_stub = has_column(conn, "functions", "is_stub")
     has_excluded = has_column(conn, "functions", "excluded")
+    has_cert = has_column(conn, "functions", "floor_certificate")
 
     sel = ["id", "symbol", "unit", "current_percent", "verdict"]
     if has_norm:
@@ -124,6 +130,8 @@ def reconcile(args: argparse.Namespace) -> int:
         sel.append("is_stub")
     if has_excluded:
         sel.append("excluded")
+    if has_cert:
+        sel += ["floor_certificate", "floor_cert_pct"]
     rows = conn.execute(f"SELECT {', '.join(sel)} FROM functions").fetchall()
 
     def is_authorable(r: sqlite3.Row) -> bool:
@@ -178,6 +186,28 @@ def reconcile(args: argparse.Namespace) -> int:
     db_symbols = {r["symbol"] for r in rows}
     d_report_only = [s for s in report_symbols if s not in db_symbols]
 
+    # (e) STALE FLOOR CERTIFICATES (added by certify_floor.py, Lane B).
+    # A cert stores floor_cert_pct = the match_percent_normalized at cert time.
+    # If the function's normalized percent has since moved (the source changed and
+    # rebuilt), the cosmetic-floor proof no longer applies and the cert must be
+    # invalidated so certify_floor.py re-evaluates it. Two invalidation triggers:
+    #   - normalized now >= 100  -> function is matched; cert no longer needed
+    #   - |normalized - floor_cert_pct| >= threshold -> percent moved; re-certify
+    # Read-only signal; --fix clears the floor_cert_* columns (certify owns re-add).
+    e_stale_cert: list[sqlite3.Row] = []
+    if has_cert and has_norm:
+        for r in rows:
+            if not r["floor_certificate"]:
+                continue
+            norm = r["match_percent_normalized"]
+            cert_pct = r["floor_cert_pct"]
+            if norm is None:
+                e_stale_cert.append(r)  # lost its percent -> can't trust the cert
+            elif norm >= 100:
+                e_stale_cert.append(r)  # now fully matched -> cert obsolete
+            elif cert_pct is None or abs(norm - cert_pct) >= DRIFT_THRESHOLD:
+                e_stale_cert.append(r)  # percent moved since cert -> re-evaluate
+
     # --- Report ---
     print(f"Reconcile: db={args.db}")
     print(f"           report={args.report}  ({len(report)} non-SDK functions)")
@@ -195,10 +225,14 @@ def reconcile(args: argparse.Namespace) -> int:
     print(f"  (d) db authorable symbols absent from report:         {len(d_db_only)}")
     print(f"      report-only symbols (in report, not db):          {len(d_report_only)}")
     _sample(args.verbose, "report-only", d_report_only)
+    if has_cert:
+        print(f"  (e) stale floor certificates (percent moved/matched): {len(e_stale_cert)}")
+        _sample(args.verbose, "stale floor certs", [r["symbol"] for r in e_stale_cert])
 
     # Real drift excludes the legitimately-complete (norm>=100) COMPLETE rows:
     # those are the ~206 fuzzy<100/norm==100 functions and are CORRECT, not drift.
-    total_drift = len(a_drift) + len(b_demote) + len(c_stub) + len(d_report_only)
+    total_drift = (len(a_drift) + len(b_demote) + len(c_stub)
+                   + len(d_report_only) + len(e_stale_cert))
 
     if args.fix:
         fixed_demote = 0
@@ -215,11 +249,22 @@ def reconcile(args: argparse.Namespace) -> int:
                 [(r["id"],) for r in c_stub],
             )
             fixed_stub = len(c_stub)
+        fixed_cert = 0
+        if has_cert and e_stale_cert:
+            conn.executemany(
+                "UPDATE functions SET floor_certificate=NULL, floor_cert_pct=NULL, "
+                "floor_cert_build=NULL, floor_cert_at=NULL, floor_cert_evidence=NULL, "
+                "updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                [(r["id"],) for r in e_stale_cert],
+            )
+            fixed_cert = len(e_stale_cert)
         conn.commit()
         print()
         print("=== Applied --fix corrections ===")
         print(f"  (b) demoted COMPLETE->NULL (norm<100):  {fixed_demote}")
         print(f"  (c) cleared stale is_stub:              {fixed_stub}")
+        if has_cert:
+            print(f"  (e) cleared stale floor certs:          {fixed_cert} (re-run certify_floor.py --apply)")
         print("  (a) percent drift is NOT auto-fixed here — re-run sync_match_percent.py.")
         print("  (d) report-only symbols are NOT auto-fixed — investigate jeff boundary churn.")
         # After fix, the remaining drift that --fix owns should be 0; (a)/(d) may persist.
@@ -237,8 +282,9 @@ def reconcile(args: argparse.Namespace) -> int:
         print("OK: no drift detected.")
         return 0
     print(f"DRIFT DETECTED: {total_drift} total items "
-          f"(a={len(a_drift)}, b={len(b_stale)}, c={len(c_stub)}, report-only={len(d_report_only)}).")
-    print("Run with --fix to apply sync-owned corrections (b/c), "
+          f"(a={len(a_drift)}, b={len(b_demote)}, c={len(c_stub)}, "
+          f"report-only={len(d_report_only)}, stale-certs={len(e_stale_cert)}).")
+    print("Run with --fix to apply sync-owned corrections (b/c/e), "
           "or re-run sync_match_percent.py for percent/promotion drift (a).")
     return 1
 
