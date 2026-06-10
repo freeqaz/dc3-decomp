@@ -42,6 +42,8 @@ public:
 
 private:
     ID3DXBuffer *mBuffer; // 0x4
+
+    friend class DxShader;
 };
 
 class DxShaderInclude : public ID3DXInclude {

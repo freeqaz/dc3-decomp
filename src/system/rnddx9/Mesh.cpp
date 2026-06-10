@@ -69,6 +69,17 @@ u32 DxMesh::VertFVF() const {
 
 static const unsigned int kBitsOutput = 32;
 
+void ScaleAddEq(Hmx::Matrix3 &m1, const Hmx::Matrix3 &m2, float f) {
+    ScaleAdd(m1.x, m2.x, f, m1.x);
+    ScaleAddEq(m1.y, m2.y, f);
+    ScaleAddEq(m1.z, m2.z, f);
+}
+
+void ScaleAddEq(Transform &tf1, const Transform &tf2, float f) {
+    ScaleAddEq(tf1.m, tf2.m, f);
+    ScaleAdd(tf1.v, tf2.v, f, tf1.v);
+}
+
 void PackVector(
     unsigned int &output,
     const Vector4 &vec,

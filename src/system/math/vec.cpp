@@ -12,13 +12,18 @@ Vector4 Vector4::sW(0, 0, 0, 1);
 Vector3 Vector3::sZero(0, 0, 0);
 Vector4 Vector4::sZero(0, 0, 0, 0);
 
+#ifdef HX_NATIVE
+// On the Xbox 360 target these are emitted only in rnddx9/Mesh.obj (see
+// src/system/rnddx9/Mesh.cpp), but the native port excludes rnddx9/, so
+// provide the definitions here for native callers (rndobj/Mesh, tests).
 void ScaleAddEq(Hmx::Matrix3 &m1, const Hmx::Matrix3 &m2, float f) {
     ScaleAdd(m1.x, m2.x, f, m1.x);
-    ScaleAdd(m1.y, m2.y, f, m1.y);
-    ScaleAdd(m1.z, m2.z, f, m1.z);
+    ScaleAddEq(m1.y, m2.y, f);
+    ScaleAddEq(m1.z, m2.z, f);
 }
 
 void ScaleAddEq(Transform &tf1, const Transform &tf2, float f) {
     ScaleAddEq(tf1.m, tf2.m, f);
     ScaleAdd(tf1.v, tf2.v, f, tf1.v);
 }
+#endif // HX_NATIVE

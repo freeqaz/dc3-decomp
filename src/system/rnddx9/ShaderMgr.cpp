@@ -125,11 +125,10 @@ bool DxShader::Compile(
     }
 
     buf1 = new DxShaderBuffer();
-    buf2 = new DxShaderBuffer();
 
     defines[0].Value = "0";
-    ID3DXBuffer *vShader = nullptr;
     ID3DXBuffer *vError = nullptr;
+    ID3DXConstantTable *constantTable = nullptr;
     HRESULT vRes = D3DXCompileShaderExA(
         data,
         bytes,
@@ -138,14 +137,15 @@ bool DxShader::Compile(
         "vshader",
         "vs_3_0",
         0,
-        vShader,
-        vError,
-        nullptr,
+        &static_cast<DxShaderBuffer *>(buf1)->mBuffer,
+        &vError,
+        &constantTable,
         nullptr
     );
 
+    buf2 = new DxShaderBuffer();
+
     defines[0].Value = "1";
-    ID3DXBuffer *pShader = nullptr;
     ID3DXBuffer *pError = nullptr;
     HRESULT pRes = D3DXCompileShaderExA(
         data,
@@ -155,25 +155,26 @@ bool DxShader::Compile(
         "pshader",
         "ps_3_0",
         0,
-        pShader,
-        pError,
-        nullptr,
+        &static_cast<DxShaderBuffer *>(buf2)->mBuffer,
+        &pError,
+        &constantTable,
         nullptr
     );
 
-    if (vRes < 0 || pRes < 0) {
+    bool failed = vRes < 0 || pRes < 0;
+    if (failed) {
         if (vRes < 0) {
-            if (vError == nullptr) {
-                TheDebug.Notify(MakeString("VShader '%s' compile failure: %d", shaderName, vRes));
+            if (vError != nullptr) {
+                TheDebug.Notify(MakeString((char *)vError->GetBufferPointer()));
             } else {
-                TheDebug.Notify((char *)vError->GetBufferPointer());
+                TheDebug.Notify(MakeString("VShader '%s' compile failure: %d", shaderName, vRes));
             }
         }
         if (pRes < 0) {
-            if (pError == nullptr) {
-                TheDebug.Notify(MakeString("PShader '%s' compile failure: %d", shaderName, pRes));
+            if (pError != nullptr) {
+                TheDebug.Notify(MakeString((char *)pError->GetBufferPointer()));
             } else {
-                TheDebug.Notify((char *)pError->GetBufferPointer());
+                TheDebug.Notify(MakeString("PShader '%s' compile failure: %d", shaderName, pRes));
             }
         }
     }
@@ -189,7 +190,7 @@ bool DxShader::Compile(
 
     TheDxShaderInclude.Close(data);
 
-    return (vRes >= 0) && (pRes >= 0);
+    return !failed;
 }
 
 void DxShader::CreateVertexShader(RndShaderBuffer &buffer) {
