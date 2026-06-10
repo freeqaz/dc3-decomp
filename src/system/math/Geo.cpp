@@ -848,15 +848,31 @@ bool Intersect(const Segment &seg, const BSPNode *n, float &t, Plane &p) {
 
     Segment seg1;
     seg1.start = seg.start;
-    seg1.end = seg.end;
+    seg1.end = mid;
     Segment seg2;
     seg2.start = mid;
     seg2.end = seg.end;
 
-    if (startDot <= endDot) {
-        if (!n->right) {
+    if (startDot > endDot) {
+        if (n->left && Intersect(seg1, n->left, t2, p)) {
+            t = frac * t2;
+        } else if (!n->right) {
             t = frac;
-            goto done_neg;
+        } else if (Intersect(seg2, n->right, t2, p)) {
+            t = (1.0f - frac) * t2 + frac;
+        } else {
+            return false;
+        }
+        if (t2 == 0.0f && t != 0.0f) {
+            p.a = n->plane.a;
+            p.b = n->plane.b;
+            p.c = n->plane.c;
+            p.d = n->plane.d;
+        }
+    } else {
+        if (!n->right) {
+            t = 0.0f;
+            return true;
         }
         if (Intersect(seg1, n->right, t2, p)) {
             t = frac * t2;
@@ -865,41 +881,11 @@ bool Intersect(const Segment &seg, const BSPNode *n, float &t, Plane &p) {
                 return false;
             t = (1.0f - frac) * t2 + frac;
         }
-        t = frac;
-    done_neg:
         if (t2 == 0.0f && t != 0.0f) {
             p.a = -n->plane.a;
             p.b = -n->plane.b;
             p.c = -n->plane.c;
             p.d = -n->plane.d;
-        }
-    } else {
-        if (!n->left) {
-            if (!n->right || !Intersect(seg2, n->right, t2, p))
-                return false;
-            t = (1.0f - frac) * t2 + frac;
-            t = frac;
-            if (t2 == 0.0f && t != 0.0f) {
-                p.a = n->plane.a;
-                p.b = n->plane.b;
-                p.c = n->plane.c;
-                p.d = n->plane.d;
-            }
-        } else {
-            if (Intersect(seg1, n->left, t2, p)) {
-                t = frac * t2;
-            } else {
-                if (!n->right || !Intersect(seg2, n->right, t2, p))
-                    return false;
-                t = (1.0f - frac) * t2 + frac;
-            }
-            t = frac;
-            if (t2 == 0.0f && t != 0.0f) {
-                p.a = n->plane.a;
-                p.b = n->plane.b;
-                p.c = n->plane.c;
-                p.d = n->plane.d;
-            }
         }
     }
     return true;

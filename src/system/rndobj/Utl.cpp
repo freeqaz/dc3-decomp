@@ -910,20 +910,28 @@ void RandomPointOnMesh(RndMesh *m, Vector3 &v1, Vector3 &v2) {
     }
 }
 
-void UtilDrawSphere(const Vector3 &v, float f, const Hmx::Color &col, RndMat *) {
+void UtilDrawSphere(const Vector3 &v, float f, const Hmx::Color &col, RndMat *mat) {
     if (!sSphereMesh) {
         MILO_NOTIFY_ONCE("Sphere mesh is not loaded");
     } else {
+        RndMat *oldMat = sSphereMesh->Mat();
         Transform tf58;
         tf58.Reset();
-        Scale(Vector3(f, f, f), tf58.m, tf58.m);
         tf58.v = v;
-        sSphereMesh->Mat()->SetColor(col.red, col.green, col.blue);
-        sSphereMesh->Mat()->SetAlpha(0.2f);
-        sSphereMesh->Mat()->SetCull(kCullNone);
+        Scale(Vector3(f, f, f), tf58.m, tf58.m);
+        if (mat) {
+            sSphereMesh->SetMat(mat);
+        } else {
+            sSphereMesh->Mat()->SetColor(col.red, col.green, col.blue);
+            sSphereMesh->Mat()->SetAlpha(0.2f);
+            sSphereMesh->Mat()->SetCull(kCullNone);
+        }
         sSphereMesh->SetLocalXfm(tf58);
         sSphereMesh->SetSphere(Sphere(Vector3(0, 0, 0), f));
         sSphereMesh->Draw();
+        if (mat) {
+            sSphereMesh->SetMat(oldMat);
+        }
     }
 }
 
@@ -1182,8 +1190,8 @@ const char *CacheResource(const char *cc, CacheResourceResult &res) {
     res = kCacheUnnecessary;
     char buf[320];
     const char *localized = FileLocalize(cc, buf);
-    const char *ext = FileGetExt(localized);
     bool isLocal = FileIsLocal(localized);
+    const char *ext = FileGetExt(localized);
 
     if (stricmp(ext, "bmp") != 0 && stricmp(ext, "png") != 0) {
         const char *movieExt = MovieExtension(ext, thisPlatform);
@@ -1195,44 +1203,42 @@ const char *CacheResource(const char *cc, CacheResourceResult &res) {
             res = kCacheUnknownExtension;
             return nullptr;
         }
-    } else {
-        if (TheLoadMgr.GetPlatform() == kPlatformPS3) {
-            const char *xboxStr = strstr(localized, "_xbox");
-            if (xboxStr) {
-                static char ps3File[320];
-                strcpy(ps3File, localized);
-                int ps3Idx = xboxStr - localized;
-                strcpy(ps3File + ps3Idx, "_ps3");
-                strcpy(ps3File + ps3Idx + 4, xboxStr + 5);
-                localized = ps3File;
-            }
-        }
-        const char *filePath = FileGetPath(localized);
-        const char *fileBase = FileGetBase(localized);
-        const char *fileExt = FileGetExt(localized);
-        static char cacheFile[320];
-        strcpy(
-            cacheFile,
-            MakeString(
-                "%s/gen/%s.%s_%s",
-                filePath,
-                fileBase,
-                fileExt,
-                PlatformSymbol(thisPlatform)
-            )
-        );
-        if (!UsingCD() && !isLocal) {
-            String qualifiedPath;
-            FileQualifiedFilename(qualifiedPath, localized);
-            CacheResourceResult cacheRes =
-                HolmesClientCacheResource(qualifiedPath.c_str(), cacheFile);
-            res = cacheRes;
-            if (cacheRes > 0) {
-                return nullptr;
-            }
-        }
-        return cacheFile;
     }
+
+    if (TheLoadMgr.GetPlatform() == kPlatformPS3) {
+        int len = strlen(localized);
+        const char *xboxStr = localized + len - 5;
+        if (xboxStr >= localized && strcmp("_xbox", xboxStr) == 0) {
+            char ps3File[256];
+            strcpy(ps3File, localized);
+            int ps3Idx = xboxStr - localized;
+            strcpy(ps3File + ps3Idx, "_ps3");
+            strcpy(ps3File + ps3Idx + 4, xboxStr + 5);
+            localized = ps3File;
+        }
+    }
+    static char cacheFile[256];
+    strcpy(
+        cacheFile,
+        MakeString(
+            "%s/gen/%s.%s_%s",
+            FileGetPath(localized),
+            FileGetBase(localized),
+            FileGetExt(localized),
+            PlatformSymbol(thisPlatform)
+        )
+    );
+    if (!UsingCD() && !isLocal) {
+        String qualifiedPath;
+        FileQualifiedFilename(qualifiedPath, localized);
+        CacheResourceResult cacheRes =
+            HolmesClientCacheResource(qualifiedPath.c_str(), cacheFile);
+        res = cacheRes;
+        if (cacheRes > 0) {
+            return nullptr;
+        }
+    }
+    return cacheFile;
 }
 
 DataNode GetNormalMapTextures(ObjectDir *dir) {
@@ -1410,16 +1416,12 @@ void TestMaterialTextures(ObjectDir *dir) {
 void ComputeFaceTangentBasis(RndMesh *m, int faceIdx, Hmx::Matrix3 &outBasis);
 
 void MakeTangentsLate(RndMesh *m) {
-    if (!m)
-        return;
-    RndMesh *geom = m->GetGeomOwner();
-    if (geom != m || geom->Verts().size() == 0)
+    if (!m || m->GetGeomOwner() != m || m->Verts().size() == 0)
         return;
     if (GetGfxMode() == kOldGfx)
         return;
 
-    Vector4 zeroTangent(0, 0, 0, 0);
-    std::vector<Vector4> faceTangents(m->Faces().size(), zeroTangent);
+    std::vector<Vector4> faceTangents(m->Faces().size(), Vector4());
     for (unsigned int i = 0; i < m->Faces().size(); i++) {
         Hmx::Matrix3 basis;
         ComputeFaceTangentBasis(m, i, basis);
@@ -1450,11 +1452,10 @@ void MakeTangentsLate(RndMesh *m) {
                     v.tangent = faceTangents[f];
                 } else {
                     if ((double)(faceTangents[f].w * v.tangent.w) < zeroThresh) {
-                        String notifyMsg = MakeString(
+                        TheDebug << MakeString(
                             "NOTIFY: %s has previously welded vertex tangents with opposite handedness; re-export from Max for more accurate normal mapping.\n",
                             PathName(m)
                         );
-                        TheDebug << notifyMsg;
                     } else {
                         v.tangent.x += faceTangents[f].x;
                         v.tangent.y += faceTangents[f].y;
@@ -1509,11 +1510,15 @@ void ComputeFaceTangentBasis(RndMesh *m, int faceIdx, Hmx::Matrix3 &outBasis) {
             float du31 = vert3.tex.x - vert1.tex.x;
             float dv31 = vert3.tex.y - vert1.tex.y;
 
-            if (dx21 != 0.0f || dy21 != 0.0f || dz21 != 0.0f) {
+            bool zero21 = dx21 == 0.0f && dy21 == 0.0f && dz21 == 0.0f;
+            if (!zero21) {
                 float dx31 = vert3.pos.x - vert1.pos.x;
-                if (dx31 != 0.0f || dy31 != 0.0f || dz31 != 0.0f) {
-                    if (du21 != 0.0f || dv21 != 0.0f) {
-                        if (du31 != 0.0f || dv31 != 0.0f) {
+                bool zero31 = dx31 == 0.0f && dy31 == 0.0f && dz31 == 0.0f;
+                if (!zero31) {
+                    bool zeroUV21 = du21 == 0.0f && dv21 == 0.0f;
+                    if (!zeroUV21) {
+                        bool zeroUV31 = du31 == 0.0f && dv31 == 0.0f;
+                        if (!zeroUV31) {
                             float crossX = dz31 * dy21 - dy31 * dz21;
                             float crossY = dz31 * dx21 - dx31 * dz21;
                             float crossZ = dy31 * dx21 - dx31 * dy21;
@@ -1564,7 +1569,7 @@ void MakeNormals(RndMesh *m) {
     for (int i = 0; i < m->Verts().size(); i++) {
         const Vector3 &pos = m->Verts()[i].pos;
         int rep = i;
-        for (int j = 0; (unsigned int)j < i; j++) {
+        for (int j = 0; j < i; j++) {
             const Vector3 &otherPos = m->Verts()[j].pos;
             if (fabsf(pos.x - otherPos.x) <= 0.001f && fabs(pos.y - otherPos.y) <= 0.001f
                 && fabs(pos.z - otherPos.z) <= 0.001f) {
@@ -1583,7 +1588,7 @@ void MakeNormals(RndMesh *m) {
             RndMesh::Face &face = m->Faces()[f];
             int k;
             for (k = 0; k < 3; k++) {
-                if ((unsigned int)repVerts[face[k]] == rep)
+                if (repVerts[face[k]] == rep)
                     break;
             }
             if (k != 3) {
@@ -1594,9 +1599,12 @@ void MakeNormals(RndMesh *m) {
                 Vector3 e1(v1.pos.x - v0.pos.x, v1.pos.y - v0.pos.y, v1.pos.z - v0.pos.z);
                 Vector3 e2(v2.pos.x - v0.pos.x, v2.pos.y - v0.pos.y, v2.pos.z - v0.pos.z);
 
-                if (e1.x != 0 || e1.y != 0 || e1.z != 0) {
-                    if (e2.x != 0 || e2.y != 0 || e2.z != 0) {
-                        if (e1.x != e2.x || e1.y != e2.y || e1.z != e2.z) {
+                bool e1Zero = e1.x == 0.0f && e1.y == 0.0f && e1.z == 0.0f;
+                if (!e1Zero) {
+                    bool e2Zero = e2.x == 0.0f && e2.y == 0.0f && e2.z == 0.0f;
+                    if (!e2Zero) {
+                        bool eEqual = e1.x == e2.x && e1.y == e2.y && e1.z == e2.z;
+                        if (!eEqual) {
                             Vector3 crossProd(
                                 e2.z * e1.y - e2.y * e1.z,
                                 e2.x * e1.z - e2.z * e1.x,
@@ -1608,9 +1616,12 @@ void MakeNormals(RndMesh *m) {
                             float angle = (float)acos((double)(e2.x * e1.x + e2.y * e1.y
                                                                + e2.z * e1.z));
 
-                            m->Verts()[i].norm.x += crossProd.x * angle;
-                            m->Verts()[i].norm.y += crossProd.y * angle;
-                            m->Verts()[i].norm.z += crossProd.z * angle;
+                            crossProd.x *= angle;
+                            crossProd.y *= angle;
+                            crossProd.z *= angle;
+                            m->Verts()[i].norm.x += crossProd.x;
+                            m->Verts()[i].norm.y += crossProd.y;
+                            m->Verts()[i].norm.z += crossProd.z;
                         }
                     }
                 }
@@ -1619,9 +1630,10 @@ void MakeNormals(RndMesh *m) {
         Normalize(m->Verts()[i].norm, m->Verts()[i].norm);
 
         if (leftHanded) {
-            m->Verts()[i].norm.x = -m->Verts()[i].norm.x;
-            m->Verts()[i].norm.y = -m->Verts()[i].norm.y;
-            m->Verts()[i].norm.z = -m->Verts()[i].norm.z;
+            Vector3 &norm = m->Verts()[i].norm;
+            norm.x = -norm.x;
+            norm.y = -norm.y;
+            norm.z = -norm.z;
         }
     }
     m->Sync(0x1F);
@@ -1631,9 +1643,8 @@ void ResetNormals(RndMesh *m) {
     if (!m || m->GetGeomOwner() != m || m->Verts().size() == 0)
         return;
 
-    Vector4 zeroVec(0, 0, 0, 0);
     bool leftHanded = LeftHanded(m->WorldXfm().m);
-    std::vector<Vector4> faceTangents(m->Faces().size(), zeroVec);
+    std::vector<Vector4> faceTangents(m->Faces().size(), Vector4());
 
     for (int i = 0; i < m->Faces().size(); i++) {
         Hmx::Matrix3 basis;
@@ -1671,13 +1682,13 @@ void ResetNormals(RndMesh *m) {
         Vector3 *pNorm = &v.norm;
         Vector4 *pTangent = &v.tangent;
         pNorm->Zero();
-        pTangent->Set(0, 0, 0, 0);
+        ((Vector3 *)pTangent)->Zero();
 
         int rep = repVerts[i];
         for (int f = 0; f < m->Faces().size(); f++) {
             RndMesh::Face &face = m->Faces()[f];
             for (int k = 0; k <= 2; k++) {
-                if ((unsigned int)repVerts[face[k]] != rep)
+                if (repVerts[face[k]] != rep)
                     continue;
 
                 const RndMesh::Vert &v0 = m->Verts()[face[k]];
@@ -1687,11 +1698,14 @@ void ResetNormals(RndMesh *m) {
                 Vector3 d1(v1.pos.x - v0.pos.x, v1.pos.y - v0.pos.y, v1.pos.z - v0.pos.z);
                 Vector3 d2(v2.pos.x - v0.pos.x, v2.pos.y - v0.pos.y, v2.pos.z - v0.pos.z);
 
-                if (d1.x == 0.0f && d1.y == 0.0f && d1.z == 0.0f)
+                bool d1Zero = d1.x == 0.0f && d1.y == 0.0f && d1.z == 0.0f;
+                if (d1Zero)
                     continue;
-                if (d2.x == 0.0f && d2.y == 0.0f && d2.z == 0.0f)
+                bool d2Zero = d2.x == 0.0f && d2.y == 0.0f && d2.z == 0.0f;
+                if (d2Zero)
                     continue;
-                if (d1.x == d2.x && d1.y == d2.y && d1.z == d2.z)
+                bool dEqual = d1.x == d2.x && d1.y == d2.y && d1.z == d2.z;
+                if (dEqual)
                     continue;
 
                 Vector3 crossProd(
@@ -1706,14 +1720,20 @@ void ResetNormals(RndMesh *m) {
                     (double)(d2.x * d1.x + d2.y * d1.y + d2.z * d1.z)
                 );
 
-                pNorm->x = crossProd.x * angle + pNorm->x;
-                pNorm->y = crossProd.y * angle + pNorm->y;
-                pNorm->z = crossProd.z * angle + pNorm->z;
+                crossProd.x *= angle;
+                crossProd.y *= angle;
+                crossProd.z *= angle;
+                pNorm->x = pNorm->x + crossProd.x;
+                pNorm->y = pNorm->y + crossProd.y;
+                pNorm->z = pNorm->z + crossProd.z;
 
-                Vector4 &ft = faceTangents[f];
-                pTangent->x = ft.x * angle + pTangent->x;
-                pTangent->y = ft.y * angle + pTangent->y;
-                pTangent->z = ft.z * angle + pTangent->z;
+                Vector4 ft = faceTangents[f];
+                ft.x *= angle;
+                ft.y *= angle;
+                ft.z *= angle;
+                pTangent->x = pTangent->x + ft.x;
+                pTangent->y = pTangent->y + ft.y;
+                pTangent->z = pTangent->z + ft.z;
             }
         }
         Normalize(*pNorm, *pNorm);
@@ -2360,7 +2380,6 @@ void BuildVisit(BSPNode *node) {
         return;
 
     BuildPoly newPoly;
-    newPoly.mPoly.points.clear();
     gParentPolys.push_back(newPoly);
 
     std::list<BuildPoly>::iterator lastIt = gParentPolys.end();
@@ -2368,22 +2387,22 @@ void BuildVisit(BSPNode *node) {
     BuildPoly &poly = *lastIt;
 
     Plane &plane = node->plane;
-    float lenSq = plane.a * plane.a + plane.b * plane.b + plane.c * plane.c;
+    float lenSq = plane.b * plane.b + plane.a * plane.a + plane.c * plane.c;
     float invDist = -(plane.d / lenSq);
 
-    poly.mTransform.v.y = plane.b * invDist;
-    poly.mTransform.v.x = plane.a * invDist;
-    poly.mTransform.v.z = plane.c * invDist;
+    Vector3 origin;
+    origin.y = plane.b * invDist;
+    origin.x = plane.a * invDist;
+    origin.z = plane.c * invDist;
+    poly.mTransform.v = origin;
 
-    poly.mTransform.m.z.y = plane.b;
-    poly.mTransform.m.z.x = plane.a;
-    poly.mTransform.m.z.z = plane.c;
+    poly.mTransform.m.z = *(Vector3 *)&plane;
 
     poly.mTransform.m.y.Set(0, 1, 0);
 
     if (fabsf(
-            poly.mTransform.m.z.x * 0.0f + poly.mTransform.m.z.z * 0.0f
-            + poly.mTransform.m.z.y * 1.0f
+            poly.mTransform.m.z.x * 0.0f
+            + (poly.mTransform.m.z.z * 0.0f + poly.mTransform.m.z.y * 1.0f)
         )
         > 0.9f) {
         poly.mTransform.m.y.Set(1, 0, 0);
@@ -2408,14 +2427,15 @@ void BuildVisit(BSPNode *node) {
         - poly.mTransform.m.z.y * poly.mTransform.m.x.x;
 
     // Add large quad
-    Vector2 p0(-10000.0f, 10000.0f);
-    Vector2 p1(-10000.0f, -10000.0f);
-    Vector2 p2(10000.0f, -10000.0f);
-    Vector2 p3(10000.0f, 10000.0f);
-    poly.mPoly.points.push_back(p0);
-    poly.mPoly.points.push_back(p1);
-    poly.mPoly.points.push_back(p2);
-    poly.mPoly.points.push_back(p3);
+    Vector2 pt;
+    pt.Set(-10000.0f, 10000.0f);
+    poly.mPoly.points.push_back(pt);
+    pt.Set(-10000.0f, -10000.0f);
+    poly.mPoly.points.push_back(pt);
+    pt.Set(10000.0f, -10000.0f);
+    poly.mPoly.points.push_back(pt);
+    pt.Set(10000.0f, 10000.0f);
+    poly.mPoly.points.push_back(pt);
 
     if (node->left == NULL) {
         // Leaf: clip parents against plane (front), recurse right
