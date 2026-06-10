@@ -3,6 +3,7 @@
 
 #include "App.h"
 #include "os/Debug.h"
+#include "StubTrace.h"
 #include <cstdio>
 #include <cstdlib>
 #include <csignal>
@@ -37,6 +38,22 @@ static void SignalHandler(int sig, siginfo_t *info, void *) {
     void *bt[64];
     int n = backtrace(bt, 64);
     backtrace_symbols_fd(bt, n, STDERR_FILENO);
+
+    // If stub tracing is on and DC3_STUB_TRACE_DUMP names a file, persist the
+    // ranked stub-hit worklist accumulated up to this crash. dc3-native currently
+    // crashes in a downstream Flow/ObjRef cascade on the first UI poll (a separate
+    // pre-existing native bug), so /api/stubs cannot be polled from a live boot;
+    // this captures the real boot-path stub hits anyway. Not strictly
+    // async-signal-safe (it allocates), but this is a terminal crash-dump path —
+    // losing the data is the only alternative.
+    const char* dumpPath = getenv("DC3_STUB_TRACE_DUMP");
+    if (dumpPath && dumpPath[0] && ::dc3::gStubTraceEnabled) {
+        long ndistinct = ::dc3::StubTraceDump::DumpToFile(dumpPath);
+        char dbuf[256];
+        int dlen = snprintf(dbuf, sizeof(dbuf),
+            "DC3 Native: wrote %ld distinct stub hits to %s\n", ndistinct, dumpPath);
+        write(STDERR_FILENO, dbuf, dlen);
+    }
 
     _exit(128 + sig);
 }

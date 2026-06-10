@@ -190,6 +190,10 @@ void CameraManager::RandomizeCategory(ObjPtrList<CamShot> &camlist) {
     }
     std::sort(camshots.begin(), camshots.end(), NameSort());
     for (int i = 0; i < camshots.size(); i++) {
+        // Rand::Int(low, high) is guaranteed in [low, high) on the host (its
+        // signed-modulo footgun is fixed at the root in Rand.h under HX_NATIVE);
+        // on the Xbox it is the unchanged matched form. randIdx is always a valid
+        // [i, size) index here either way.
         int randIdx = sRand.Int(i, camshots.size());
         std::swap(camshots[i], camshots[randIdx]);
     }

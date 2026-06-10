@@ -120,4 +120,26 @@ std::string StubTraceDump::ToJson(uint64_t* total, uint64_t* distinct) {
     return out;
 }
 
+long StubTraceDump::DumpToFile(const char* path) {
+    uint64_t total = 0, distinct = 0;
+    std::string json = ToJson(&total, &distinct);
+    // Wrap the array in a small object so the file is self-describing.
+    std::string out = "{\"total_hits\":";
+    char buf[32];
+    snprintf(buf, sizeof(buf), "%llu", (unsigned long long)total);
+    out += buf;
+    out += ",\"distinct_stubs\":";
+    snprintf(buf, sizeof(buf), "%llu", (unsigned long long)distinct);
+    out += buf;
+    out += ",\"stubs\":";
+    out += json;
+    out += "}\n";
+
+    FILE* f = fopen(path, "w");
+    if (!f) return -1;
+    fwrite(out.data(), 1, out.size(), f);
+    fclose(f);
+    return (long)distinct;
+}
+
 }  // namespace dc3

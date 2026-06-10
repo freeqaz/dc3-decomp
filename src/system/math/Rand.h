@@ -23,7 +23,23 @@ public:
 
     int Int(int low, int high) {
         MILO_ASSERT(high > low, 0x3A);
+#ifdef HX_NATIVE
+        // ROOT FIX (Wave 2 Lane A): the target lowers `Int() % (high - low)` with a
+        // SIGNED divide (PPC `divw`; see the Rand::Int target asm). `Int()` returns
+        // its unsigned table draw reinterpreted as a signed int, so when the top
+        // bit is set the remainder is NEGATIVE and the result falls outside
+        // [low, high). On the Xbox a small out-of-range index hits tolerated scratch
+        // heap (benign); on the host, callers that use the result to index a
+        // std::vector / ObjPtrVec (e.g. Fisher-Yates shuffles, FlowPickOne's random
+        // child pick) get an out-of-bounds access that corrupts the heap and crashes
+        // (it took down dc3-native's boot twice). Fold the same single draw into
+        // [low, high) with UNSIGNED modulo so every index-from-random caller is
+        // safe. Consumes exactly one Int() draw, matching the Xbox call count. The
+        // PPC build path below is byte-identical to the original (guarded).
+        return low + (int)((unsigned)Int() % (unsigned)(high - low));
+#else
         return (Int() % (high - low)) + low;
+#endif
     }
 
     int FastInt(int low, int high) {

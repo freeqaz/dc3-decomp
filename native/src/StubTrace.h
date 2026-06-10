@@ -37,6 +37,12 @@ bool StubTraceInit();
 class StubTraceDump {
 public:
     static std::string ToJson(uint64_t* total = nullptr, uint64_t* distinct = nullptr);
+
+    // Writes the ranked JSON (ToJson) to `path`. Returns the number of distinct
+    // stubs written, or -1 on file-open failure. Used to capture the stub-hit
+    // worklist even when the engine crashes during boot before /api/stubs can be
+    // polled (the crash signal handler calls this when DC3_STUB_TRACE_DUMP is set).
+    static long DumpToFile(const char* path);
 };
 
 }  // namespace dc3

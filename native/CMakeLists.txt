@@ -1844,6 +1844,7 @@ if(BUILD_TESTS)
         tests/test_foot_bone_invariants.cpp
         tests/test_json_parse.cpp
         tests/test_stub_trace.cpp
+        tests/test_native_boot_crashes.cpp
         src/dc3_render_hook.cpp       # Phase 0.2a: HamRenderHook (registers with milo-engine)
         ${DC3_ENGINE_SOURCES}
         ${DC3_NATIVE_CORE_SOURCES_ENGINE}
@@ -1889,6 +1890,33 @@ if(BUILD_TESTS)
     # Ensure the tmp directory exists for ASSERT_EXIT tests (GTest needs writable TMPDIR)
     file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/tmp")
 
+    # Asset-aware working directory: the engine resolves game assets (gen/*.hdr,
+    # config/*.dta, char/*.milo_xbox, ...) relative to the process CWD. Without a
+    # WORKING_DIRECTORY, gtest_discover_tests spawns each test subprocess with
+    # cwd = the build dir, so EVERY asset load fails ("Can't read gen/main_xbox.hdr")
+    # and ~half the suite reports spurious failures. Resolve the assets dir at
+    # configure time: prefer the in-tree orig-assets (a real dir in the main repo,
+    # a symlink in worktrees), then fall back to the canonical main-repo path.
+    set(MILO_TEST_ASSET_DIR "")
+    foreach(_candidate
+            "${CMAKE_SOURCE_DIR}/../orig-assets"
+            "/home/free/code/milohax/dc3-decomp/orig-assets")
+        if(EXISTS "${_candidate}/gen/main_xbox.hdr")
+            get_filename_component(MILO_TEST_ASSET_DIR "${_candidate}" ABSOLUTE)
+            break()
+        endif()
+    endforeach()
+    if(MILO_TEST_ASSET_DIR STREQUAL "")
+        # No assets found; fall back to the source-relative dir so the path is
+        # at least stable. Asset-backed tests will SKIP/FAIL loudly, not silently.
+        get_filename_component(MILO_TEST_ASSET_DIR "${CMAKE_SOURCE_DIR}/../orig-assets" ABSOLUTE)
+        message(WARNING "milo-tests: orig-assets/gen/main_xbox.hdr not found; "
+                        "asset-backed tests will fail. Looked under "
+                        "${CMAKE_SOURCE_DIR}/../orig-assets and the main-repo path.")
+    else()
+        message(STATUS "milo-tests asset dir (ctest WORKING_DIRECTORY): ${MILO_TEST_ASSET_DIR}")
+    endif()
+
     # Each CTest test spawns a separate milo-tests process that initializes
     # Dawn/WebGPU + audio (miniaudio). Running 32+ simultaneously exhausts GPU
     # device handles, file descriptors, and shared memory — causing spurious
@@ -1901,6 +1929,7 @@ if(BUILD_TESTS)
     # CTest include context, so we apply unconditionally and tolerate warnings
     # for tests that don't exist in a given configuration).
     gtest_discover_tests(milo-tests
+        WORKING_DIRECTORY "${MILO_TEST_ASSET_DIR}"
         PROPERTIES
             ENVIRONMENT "TMPDIR=${CMAKE_CURRENT_BINARY_DIR}/tmp"
     )
