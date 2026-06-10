@@ -1,6 +1,7 @@
-# 2026-06-10 — ASM-Archaeology Waves 1–3 (orchestrated)
+# 2026-06-10 — ASM-Archaeology Waves 1–5 (orchestrated)
 
-> Waves 2 and 3 appended below. All three waves landed on main.
+> Waves 2–4 appended below; wave 5 (permres retry, MakeString mechanism,
+> og-port 4, platform cluster) in flight at time of writing.
 
 Follow-on to [2026-06-09-large-function-asm-archaeology.md](2026-06-09-large-function-asm-archaeology.md).
 First fully-orchestrated run of the playbook: per-cluster **intel → Opus implementer →
@@ -233,6 +234,41 @@ the two confirmed-fix levers (ptr-walk, literal-remat) deserve priority weightin
 - Position-sum CSE into callee-saved FPR vs inline fmadds recompute.
 - Virtual-dispatch global+vtable hoist before bl (TheShaderMgr).
 - `__forceinline` to force-match MSVC inlining: catastrophic, never.
+
+---
+
+# Wave 4 results (commits `587de53d` … `a7c335c4`)
+
+6 lanes (permres agent crashed pre-worktree — retried in wave 5), 15 agents, ~44 min.
+DB sync: 31 improvements, 1 licensed regression, **18 promotions to COMPLETE**.
+
+| Function | Before | After | Notes |
+|---|---|---|---|
+| `DxShader::Compile` | 58.4% | **82.4%** | **out-param signature bug: shader bytecode silently dropped + whole error path DCE'd** |
+| `QueryXSocialCapabilities` + 11 more og-ports | 68.9–94.5% | **100%** ×12 | incl. FxSend360::Cleanup + ChatReceiver (stubs→100), StorePanel fabricated-vtable hack removed |
+| `CursorPanel::Poll` | 78.3% | **94.6%** | **crown flicker bug** (always-true reset condition) |
+| `RndRenderState::Init` (+2 authored fns) | 84.2% | **94.7%** | RenderState unit +22% |
+| `CacheXbox::ThreadWrite` | 89.5% | 93.0% | 2 I/O bugs (ungated CreateFileA; err<2 routing) |
+| `SkeletonChooser::ShouldWaitForRecovery` | 92.2% | 94.1% | recon's logic-bug hypothesis refuted — shape only |
+| `CreateBackBuffers` | 91.1% | 92.0% | **EDRAM placement bug** (depth/color sizes swapped) |
+| `ScaleAddEq(Matrix3)` | (mis-homed) | **100%** | re-homed to rnddx9/Mesh TU, vec.cpp keeps HX_NATIVE copy |
+| `VelocityBuffer::Draw` | 74.8% | 74.2% | **licensed trade**: AdvanceFrame made unconditional (real fix); `&`→`&&` proven behaviorally neutral AND a −27pp match trap |
+
+### Wave-4 calibration
+
+- **Header TYPE bugs are a recurring lever**: `int` members that are really pointers
+  (cmpwi vs cmplwi tell; `MakeString<void*>` instantiation proof) — PlatformMgr,
+  FxSend360, ChatReceiver signature.
+- **MakeString mixed inline/out-of-line discovered**: target inlines single-arg
+  MakeString at ~480 sites but `bl`s out-of-line at ~11–20 (HxGuid::Generate 89.8→100
+  behind it). A global header toggle = 488 regressions (rejected at harvest by the
+  verifier's decomposition test). Wave 5 hunts the overload-resolution mechanism.
+- The bughunt lane's full patch was split: harvested only the function-local fixes.
+  Verifier decomposition testing (transient revert + rebuild + re-measure) is now a
+  proven harvest technique for cross-cutting header edits.
+- New floors: STLport vector-init address-temp pattern; MSVC tail-merge of dual
+  Fail tails (D3DFormatForBitmap MILO_FAIL is behaviorally right but −13pp — recorded
+  unlanded); MultiMesh combined-static-table (0x70 alignment gap unrepresentable).
 
 ### Tooling landed (decomp-synth `243e2e3`)
 
