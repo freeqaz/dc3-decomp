@@ -24,13 +24,11 @@ HxGuid::HxGuid() { Clear(); }
 void HxGuid::Clear() { mData[0] = mData[1] = mData[2] = mData[3] = 0; }
 
 void HxGuid::Generate() {
-    while (true) {
-        Clear();
-        XNetRandom((unsigned char *)mData, sizeof(mData));
-        if (IsNull()) {
-            MILO_NOTIFY("Generated HxGuid is Null.  Will try again...");
-        } else
-            break;
+    Clear();
+    XNetRandom((unsigned char *)mData, sizeof(mData));
+    if (IsNull()) {
+        MILO_NOTIFY("Generated HxGuid is Null.  Will try again...");
+        Generate();
     }
 }
 

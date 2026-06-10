@@ -19,6 +19,8 @@ static void HolmesClientSendMessage(const Message&) {}
 
 static RndConsole *gConsole = nullptr;
 
+DataNode DataBreak(DataArray *da);
+
 #pragma region DataOps
 
 DataNode DataContinue(DataArray *) {
@@ -50,11 +52,6 @@ DataNode DataBreakpoints(DataArray *) {
 
 DataNode DataList(DataArray *) {
     gConsole->List();
-    return 0;
-}
-
-DataNode DataBreak(DataArray *da) {
-    gConsole->Break(da);
     return 0;
 }
 
@@ -373,14 +370,9 @@ void RndConsole::SetBreak(DataArray *arr) {
     MILO_FAIL("Can't insert break");
 }
 
-static __declspec(noinline) const char *_MakeString(const char *c) {
-    FormatString fs(c);
-    return fs.Str();
-}
-
 void RndConsole::Break(DataArray *arr) {
     if (mDebugging)
-        TheDebugFailer << _MakeString("Can't break while debugging, did you mean set_break?");
+        MILO_FAIL("Can't break while debugging, did you mean set_break?");
     if (arr->UncheckedFunc(0) != DataNop) {
         bool drawing = TheRnd.Drawing();
         bool showing = mShowing;
@@ -414,6 +406,11 @@ void RndConsole::Break(DataArray *arr) {
         if (drawing)
             TheRnd.BeginDrawing();
     }
+}
+
+DataNode DataBreak(DataArray *da) {
+    gConsole->Break(da);
+    return 0;
 }
 
 void RndConsole::ExecuteLine() {

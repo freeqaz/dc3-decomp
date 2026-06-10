@@ -369,74 +369,6 @@ bool ClipPlayer::GetClipRange(
     return false;
 }
 
-void ClipPlayer::PushClip(int idx, HamDriver::LayerArray *arr) {
-    if (idx < 0) return;
-    if (mClipKeys->empty()) return;
-
-    int maxIdx = (int)mClipKeys->size() - 1;
-    if (maxIdx < idx) idx = maxIdx;
-
-    Key<Symbol> &key = mClipKeys->at(idx);
-
-    CharClip *transClip;
-    float offset;
-    float beat = FrameToBeat(key.frame);
-    if (mBeat < beat + 1.0f) {
-        transClip = GetTransitionBefore(&key);
-    } else {
-        transClip = nullptr;
-    }
-
-    if (transClip) {
-        offset = ClipLength(transClip) - 2.0f;
-    } else {
-        offset = 0.0f;
-    }
-
-    if (mBeat < beat - offset) {
-        PushClip(idx - 1, arr);
-    }
-
-    float blendBeat;
-    if (transClip) {
-        float transLen = ClipLength(transClip);
-        float transStart = (beat - transLen) + 1.0f;
-        PlayClip(transClip, transStart, transStart, arr);
-        blendBeat = beat;
-    } else {
-        blendBeat = beat - 1.0f;
-    }
-
-    if (mBeat > blendBeat) {
-        Key<Symbol> *practiceKey = TheHamDirector->GetMasterPracticeFrame(Symbol(key.value.Str()));
-        if (practiceKey) {
-            Keys<Symbol, Symbol> *savedKeys = mClipKeys;
-            mClipKeys = mMasterClipKeys;
-
-            float practBeat = FrameToBeat(practiceKey->frame);
-            float beatDiff = practBeat - beat;
-
-            mBeatOffset += beatDiff;
-            mBeat += beatDiff;
-            mPracticeStart += beatDiff;
-            mPracticeEnd += beatDiff;
-
-            PlayNormal(mBeatOffset + blendBeat, arr, key.value.Str());
-
-            mBeat -= beatDiff;
-            mPracticeStart -= beatDiff;
-            mClipKeys = savedKeys;
-            mPracticeEnd -= beatDiff;
-            mBeatOffset -= beatDiff;
-        } else {
-            MILO_NOTIFY_ONCE(
-                "%s: can't find %s in expert practice track",
-                TheGameData->GetSong(), key.value.Str()
-            );
-        }
-    }
-}
-
 bool ClipPlayer::PushRoutineBuilderClip(int idx, HamDriver::LayerArray *arr) {
     if (idx < 0 || mClipKeys->size() < 1) return false;
 
@@ -567,6 +499,74 @@ void ClipPlayer::PlayNormal(float f1, HamDriver::LayerArray *arr, const char *cc
             PushExpertClip(mClipKeys->KeyLessEq(BeatToFrame(beat)), newArr);
         } else {
             PushClip(mClipKeys->KeyGreaterEq(BeatToFrame(beat)), newArr);
+        }
+    }
+}
+
+void ClipPlayer::PushClip(int idx, HamDriver::LayerArray *arr) {
+    if (idx < 0) return;
+    if (mClipKeys->empty()) return;
+
+    int maxIdx = (int)mClipKeys->size() - 1;
+    if (maxIdx < idx) idx = maxIdx;
+
+    Key<Symbol> &key = mClipKeys->at(idx);
+
+    CharClip *transClip;
+    float offset;
+    float beat = FrameToBeat(key.frame);
+    if (mBeat < beat + 1.0f) {
+        transClip = GetTransitionBefore(&key);
+    } else {
+        transClip = nullptr;
+    }
+
+    if (transClip) {
+        offset = ClipLength(transClip) - 2.0f;
+    } else {
+        offset = 0.0f;
+    }
+
+    if (mBeat < beat - offset) {
+        PushClip(idx - 1, arr);
+    }
+
+    float blendBeat;
+    if (transClip) {
+        float transLen = ClipLength(transClip);
+        float transStart = (beat - transLen) + 1.0f;
+        PlayClip(transClip, transStart, transStart, arr);
+        blendBeat = beat;
+    } else {
+        blendBeat = beat - 1.0f;
+    }
+
+    if (mBeat > blendBeat) {
+        Key<Symbol> *practiceKey = TheHamDirector->GetMasterPracticeFrame(Symbol(key.value.Str()));
+        if (practiceKey) {
+            Keys<Symbol, Symbol> *savedKeys = mClipKeys;
+            mClipKeys = mMasterClipKeys;
+
+            float practBeat = FrameToBeat(practiceKey->frame);
+            float beatDiff = practBeat - beat;
+
+            mBeatOffset += beatDiff;
+            mBeat += beatDiff;
+            mPracticeStart += beatDiff;
+            mPracticeEnd += beatDiff;
+
+            PlayNormal(mBeatOffset + blendBeat, arr, key.value.Str());
+
+            mBeat -= beatDiff;
+            mPracticeStart -= beatDiff;
+            mClipKeys = savedKeys;
+            mPracticeEnd -= beatDiff;
+            mBeatOffset -= beatDiff;
+        } else {
+            MILO_NOTIFY_ONCE(
+                "%s: can't find %s in expert practice track",
+                TheGameData->GetSong(), key.value.Str()
+            );
         }
     }
 }

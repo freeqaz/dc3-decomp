@@ -782,7 +782,7 @@ void HamCharacter::SetFaceOverrideClip(Symbol clipName, bool notify) {
                 }
             }
             if (!found && notify) {
-                MILO_NOTIFY(MakeString(
+                TheDebug.Notify(MakeString(
                     "HamCharacter::SetFaceOverrideClip couldn't find clip named %s for %s",
                     clipName.Str(),
                     Name()
@@ -795,7 +795,7 @@ void HamCharacter::SetFaceOverrideClip(Symbol clipName, bool notify) {
         return;
     if (!notify)
         return;
-    MILO_NOTIFY(MakeString("HamCharacter::SetFaceOverrideClip couldnt find lip sync driver for %s", Name()));
+    TheDebug.Notify(MakeString("HamCharacter::SetFaceOverrideClip couldnt find lip sync driver for %s", (char*)Name()));
 }
 
 void HamCharacter::BlendInFaceOverrideClip(Symbol clipName, float blendIn, float blendOut) {

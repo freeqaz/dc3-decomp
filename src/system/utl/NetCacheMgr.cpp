@@ -210,38 +210,34 @@ NetCacheLoader *NetCacheMgr::AddNetCacheLoader(const char *cc, NetLoaderPos pos)
 
 void NetCacheMgr::SetState(NetCacheMgrState state) {
     if (mState != state) {
-        while (true) {
-            if (mState == kNCMS_UnloadWaitForWrite) {
-                mHasFailed = false;
-            }
-            if (mState == kNCMS_Nil && state == kNCMS_UnloadWaitForWrite) {
-                TheDebug.Fail(
-                    MakeString("NetCacheMgr attempted to move straight from kNCMS_Nil to kNCMS_Unload!\n"),
-                    0
-                );
-            }
-            mState = state;
-            if (state != kNCMS_Nil)
-                break;
-            MILO_ASSERT(mNetLoaderRefs.empty(), 0x28B);
-            if (mLoadCount <= 0)
-                return;
-            state = kNCMS_Load;
-            if (mState == kNCMS_Load)
-                return;
+        if (mState == kNCMS_UnloadWaitForWrite) {
+            mHasFailed = false;
         }
-        switch (state) {
-        case kNCMS_Load:
-            EnterLoadState();
-            break;
-        case kNCMS_Ready:
-            ReadyInit();
-            break;
-        case kNCMS_UnloadWaitForWrite:
-            EnterUnloadState();
-            break;
-        default:
-            break;
+        if (mState == kNCMS_Nil && state == kNCMS_UnloadWaitForWrite) {
+            TheDebug.Fail(
+                MakeString("NetCacheMgr attempted to move straight from kNCMS_Nil to kNCMS_Unload!\n"),
+                0
+            );
+        }
+        mState = state;
+        if (state == kNCMS_Nil) {
+            MILO_ASSERT(mNetLoaderRefs.empty(), 0x28B);
+            if (mLoadCount > 0 && mState != kNCMS_Load)
+                SetState(kNCMS_Load);
+        } else {
+            switch (state) {
+            case kNCMS_Load:
+                EnterLoadState();
+                break;
+            case kNCMS_Ready:
+                ReadyInit();
+                break;
+            case kNCMS_UnloadWaitForWrite:
+                EnterUnloadState();
+                break;
+            default:
+                break;
+            }
         }
     }
 }
