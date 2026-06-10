@@ -1607,13 +1607,12 @@ void BustAMovePanel::Poll() {
         }
         mDepthBufPlayer = -1;
     } else if (mDepthBufPlayer != activePlayer) {
-        const char *texName;
+        RndTex *tex;
         if (GetPlayerColor(activePlayer) == "pink") {
-            texName = "gradient_pink.tex";
+            tex = mBAMVisualizerPanel->DataDir()->Find<RndTex>("gradient_pink.tex", true);
         } else {
-            texName = "gradient_blue.tex";
+            tex = mBAMVisualizerPanel->DataDir()->Find<RndTex>("gradient_blue.tex", true);
         }
-        RndTex *tex = mBAMVisualizerPanel->DataDir()->Find<RndTex>(texName, true);
         for (ObjDirItr<DepthBuffer3D> it(mBAMVisualizerPanel->DataDir(), true);
              it != nullptr; ++it) {
             it->SetPlayerPalette(tex);
@@ -1678,32 +1677,21 @@ void BustAMovePanel::Poll() {
         graph->AddScreenString(
             MakeString("State: %s  Reps left: %d", stateName, mRepsRemaining), pos, white
         );
-        int *data = &mSongStructure[0];
         unsigned int currentPhrase = 0;
-        int beatInt = (int)(TheTaskMgr.Beat() + 0.5f);
-        int songSize = (int)(mSongStructure.end() - mSongStructure.begin());
-        int remainingBeat = beatInt;
-        if (songSize != 0) {
-            do {
-                remainingBeat -= data[currentPhrase] * 4;
-                if (remainingBeat >= 0) {
-                    currentPhrase++;
-                    if (currentPhrase < (unsigned int)songSize)
-                        continue;
-                }
+        int remainingBeat = (int)(TheTaskMgr.Beat() + 0.5f);
+        while (currentPhrase < mSongStructure.size()) {
+            remainingBeat -= mSongStructure[currentPhrase] * 4;
+            if (remainingBeat < 0)
                 break;
-            } while (true);
+            currentPhrase++;
         }
-        if ((unsigned int)songSize != 0) {
-            for (int i = 0; i < songSize; i++) {
-                Hmx::Color color = ((int)currentPhrase == i)
-                    ? Hmx::Color(0.0f, 1.0f, 0.0f, 1.0f)
-                    : Hmx::Color(1.0f, 1.0f, 1.0f, 1.0f);
-                Vector2 elemPos((float)i * 0.02f + 0.1f, 0.08f);
-                graph->AddScreenString(
-                    MakeString("%d", data[i]), elemPos, color
-                );
-            }
+        for (int i = 0; i < (int)mSongStructure.size(); i++) {
+            graph->AddScreenString(
+                MakeString("%d", mSongStructure[i]),
+                Vector2((float)i * 0.02f + 0.1f, 0.08f),
+                (int)currentPhrase == i ? Hmx::Color(0.0f, 1.0f, 0.0f, 1.0f)
+                                        : Hmx::Color(1.0f, 1.0f, 1.0f, 1.0f)
+            );
         }
     }
 }

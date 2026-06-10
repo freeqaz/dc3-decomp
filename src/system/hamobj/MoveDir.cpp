@@ -120,26 +120,23 @@ namespace {
 
     void DrawBeatLine(float, float, float, const Hmx::Color &);
 
-    float DrawPlayClip(float y, SkeletonClip *portClip, intptr_t clipAsInt) {
-        SkeletonClip *clip = (SkeletonClip *)clipAsInt;
+    float DrawPlayClip(float y, SkeletonClip *clip, int ratingIdx) {
         MILO_ASSERT(clip, 0x762);
         String str(clip->Name());
-        int ratingIdx = TheTaskMgr.CurrentMeasure();
         if (ratingIdx < clip->NumMoveRatings()) {
             const SkeletonClip::MoveRating &rating = clip->GetMoveRating(ratingIdx);
-            Symbol expected = rating.mExpected;
-            if (expected.Null()) {
-                expected = Symbol("<none>");
-            }
-            str += MakeString(" (bar %i: expected=%s)", ratingIdx, expected);
+            str += MakeString(
+                " (bar %i: expected=%s)", ratingIdx,
+                rating.mExpected.Null() ? Symbol("<none>") : rating.mExpected
+            );
         } else {
             str += " (no rating overrides)";
         }
-        Hmx::Rect rect(0.01f, y, sCharWidth, sCharWidth);
+        Hmx::Rect rect(0.01f, y, 0.9f, sCharWidth);
         TheRnd.DrawRectScreen(rect, sDarkGray, nullptr, nullptr, nullptr);
-        Vector2 result =
-            TheRnd.DrawStringScreen(str.c_str(), Vector2(0.01f, y), sLightGray, true);
-        return result.y;
+        return TheRnd
+            .DrawStringScreen(str.c_str(), Vector2(0.01f, y), sLightGray, true)
+            .y;
     }
 
     struct DetectFrameSecondsCmp {
@@ -1745,14 +1742,14 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
     // Draw play clip overlay if present
     SkeletonClip *playClip = mPlayClip;
     if (playClip) {
-        y = DrawPlayClip(y, playClip, (intptr_t)(SkeletonClip *)mPlayClip);
+        y = DrawPlayClip(y, playClip, TheTaskMgr.CurrentMeasure());
     }
 
     // Draw filter version name
     {
-        float nameX = gBeatLineData.minValue - 0.05f;
+        Vector2 namePos(gBeatLineData.minValue - 0.05f, y);
         const char *fvName = MakeString("%s", fv->mVersionSym);
-        TheRnd.DrawStringScreen(fvName, Vector2(nameX, y), sLightGray, true);
+        TheRnd.DrawStringScreen(fvName, namePos, sLightGray, true);
     }
 
     // Draw 4 rating state threshold lines
@@ -1904,15 +1901,13 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
         if (fv->mType == kFilterVersionHam1) {
             float colY = sCharWidth + yBase;
             float bx1 = frameBeatX - halfWidth;
-            if (numNodes > 0) {
-                float bx2 = frameBeatX + halfWidth;
-                for (int n = 0; n < numNodes; n++) {
-                    float cellH = colY + sCharWidth;
-                    UtilDrawRect2D(
-                        Vector2(bx1, bx2), Vector2(cellH, colY), markerColor
-                    );
-                    colY += sCharWidth;
-                }
+            float bx2 = frameBeatX + halfWidth;
+            for (int n = 0; n < numNodes; n++) {
+                float cellH = colY + sCharWidth;
+                UtilDrawRect2D(
+                    Vector2(bx1, bx2), Vector2(cellH, colY), markerColor
+                );
+                colY += sCharWidth;
             }
         }
     }

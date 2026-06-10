@@ -406,18 +406,19 @@ void StreamRenderer::DrawToTexture() {
             primaryTex = camInput->GetStreamTex(bufType);
         }
 
-        RndCam *currentCam = RndCam::Current();
         RndTex *targetRT = mBlurRT[0];
         if (mNumBlurs == 0) {
             targetRT = mOutputTex;
         }
+        RndCam *currentCam = RndCam::Current();
 
-        if (currentCam->TargetTex()) {
+        RndTex *existingTarget = currentCam->TargetTex();
+        if (existingTarget) {
             MILO_NOTIFY_ONCE(
                 "%s: Cannot render to texture (%s) while already rendering to texture (%s).",
-                PathName(currentCam->TargetTex()),
+                PathName(existingTarget),
                 PathName(this),
-                PathName(currentCam->TargetTex())
+                PathName(existingTarget)
             );
         }
 
