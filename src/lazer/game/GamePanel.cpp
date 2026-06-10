@@ -156,25 +156,25 @@ float LoopVizCallback::UpdateOverlay(RndOverlay *o, float y) {
 
     mDebugMeter1.Draw();
     float loopRangeNorm = loopEndNorm - loopStartNorm;
-    mDebugMeter1.DrawBar(loopStartNorm, loopRangeNorm, Hmx::Color(0.8f, 0.8f, 0.8f));
-    mDebugMeter1.DrawBar(loopStartNorm, loopRangeNorm * loopProgress, Hmx::Color(0.8f, 0.8f, 0.8f));
+    mDebugMeter1.DrawBar(loopStartNorm, loopRangeNorm, Hmx::Color(0.0f, 0.0f, 0.8f));
+    mDebugMeter1.DrawBar(loopStartNorm, loopRangeNorm * loopProgress, Hmx::Color(0.0f, 0.8f, 0.0f));
 
     if (!stream->IsPastStreamJumpPointOfNoReturn()) {
         mDebugMeter1.DrawBar(
             loopStartNorm + loopRangeNorm * loopProgress,
             bufferAheadProgress * loopRangeNorm,
-            Hmx::Color(0.5f, 1.0f, 1.0f)
+            Hmx::Color(1.0f, 0.0f, 0.0f), 0.5f
         );
     } else {
         mDebugMeter1.DrawBar(
             loopStartNorm + loopRangeNorm * loopProgress,
             loopEndNorm - (loopStartNorm + loopRangeNorm * loopProgress),
-            Hmx::Color(1.0f, 1.0f, 1.0f)
+            Hmx::Color(1.0f, 0.0f, 0.0f), 0.5f
         );
         mDebugMeter1.DrawBar(
             loopStartNorm,
             ((bufferAheadBeat - (float)(int)loopStart) / (float)(int)(loopEnd - loopStart)) * loopRangeNorm,
-            Hmx::Color(0.5f, 1.0f, 1.0f)
+            Hmx::Color(1.0f, 0.0f, 0.0f), 0.5f
         );
     }
 
@@ -183,10 +183,10 @@ float LoopVizCallback::UpdateOverlay(RndOverlay *o, float y) {
         Hmx::Color(1.0f, 1.0f, 1.0f), 1.0f, 0.0f
     );
 
-    Hmx::Color startColor = mLoopStartChangeTimer > 0.0f ? Hmx::Color(0, 0, 0) : Hmx::Color(1.0f, 1.0f, 1.0f);
+    Hmx::Color startColor = mLoopStartChangeTimer > 0.0f ? Hmx::Color(1.0f, 1.0f, 0.0f) : Hmx::Color(1.0f, 1.0f, 1.0f);
     mDebugMeter1.DrawText(MakeString("%d", loopStart), loopStartNorm, 0.0f, startColor);
 
-    Hmx::Color endColor = mLoopStartChangeTimer > 0.0f ? Hmx::Color(0, 0, 0) : Hmx::Color(1.0f, 1.0f, 1.0f);
+    Hmx::Color endColor = mLoopStartChangeTimer > 0.0f ? Hmx::Color(1.0f, 1.0f, 0.0f) : Hmx::Color(1.0f, 1.0f, 1.0f);
     mDebugMeter1.DrawText(MakeString("%d", loopEnd), loopEndNorm, 0.0f, endColor);
 
     mDebugMeter1.DrawText(
@@ -205,30 +205,31 @@ float LoopVizCallback::UpdateOverlay(RndOverlay *o, float y) {
     );
 
     mDebugMeter2.Draw();
-    mDebugMeter2.DrawBar(0.0f, loopProgress, Hmx::Color(0, 0, 0.8f));
+    mDebugMeter2.DrawBar(0.0f, loopProgress, Hmx::Color(0.0f, 0.8f, 0.0f));
 
     if (!stream->IsPastStreamJumpPointOfNoReturn()) {
-        mDebugMeter2.DrawBar(loopProgress, bufferAheadProgress, Hmx::Color(0.5f, 1.0f, 1.0f));
+        mDebugMeter2.DrawBar(loopProgress, bufferAheadProgress, Hmx::Color(1.0f, 0.0f, 0.0f), 0.5f);
     } else {
-        mDebugMeter2.DrawBar(loopProgress, 1.0f - loopProgress, Hmx::Color(1.0f, 1.0f, 1.0f));
+        mDebugMeter2.DrawBar(loopProgress, 1.0f - loopProgress, Hmx::Color(1.0f, 0.0f, 0.0f), 0.5f);
         mDebugMeter2.DrawBar(
             0.0f,
             (bufferAheadBeat - (float)(int)loopStart) / (float)(int)(loopEnd - loopStart),
-            Hmx::Color(0.5f, 1.0f, 1.0f)
+            Hmx::Color(1.0f, 0.0f, 0.0f), 0.5f
         );
     }
 
-    float latency = SecondsToBeat(1.0f) / (float)(int)(loopEnd - loopStart);
+    mDebugMeter2.DrawLine(
+        loopProgress + SecondsToBeat(1.0f) / (float)(int)(loopEnd - loopStart),
+        Hmx::Color(1.0f, 0.0f, 0.0f), 0.5f, -0.5f
+    );
+    mDebugMeter2.DrawLine(loopProgress, Hmx::Color(1.0f, 1.0f, 1.0f), 1.0f, 0.0f);
 
-    mDebugMeter2.DrawLine(loopProgress, Hmx::Color(0.5f, 0.5f, 0.5f), 0.5f, -0.5f);
-    mDebugMeter2.DrawLine(loopProgress + latency, Hmx::Color(1.0f, 1.0f, 1.0f), 1.0f, 0.0f);
-
-    Hmx::Color startColor2 = mLoopStartChangeTimer > 0.0f ? Hmx::Color(0, 0, 0) : Hmx::Color(1.0f, 1.0f, 1.0f);
+    Hmx::Color startColor2 = mLoopStartChangeTimer > 0.0f ? Hmx::Color(1.0f, 1.0f, 0.0f) : Hmx::Color(1.0f, 1.0f, 1.0f);
     char startMarker = mLoopStartChangeTimer > 0.0f ? '*' : ' ';
     mDebugMeter2.DrawText(MakeString("%d%c", loopStart, startMarker), 0.0f, 0.0f, startColor2);
 
-    Hmx::Color endColor2 = mLoopStartChangeTimer > 0.0f ? Hmx::Color(0, 0, 0) : Hmx::Color(1.0f, 1.0f, 1.0f);
-    char endMarker = mLoopStartChangeTimer > 0.0f ? '*' : ' ';
+    Hmx::Color endColor2 = mLoopStartChangeTimer > 0.0f ? Hmx::Color(1.0f, 1.0f, 0.0f) : Hmx::Color(1.0f, 1.0f, 1.0f);
+    char endMarker = mLoopEndChangeTimer > 0.0f ? '*' : ' ';
     mDebugMeter2.DrawText(MakeString("%d%c", loopEnd, endMarker), 1.0f, 0.0f, endColor2);
 
     mDebugMeter2.DrawText(MakeString("%d", (int)currentBeat), loopProgress, 1.0f, Hmx::Color(1.0f, 1.0f, 1.0f));
@@ -245,7 +246,7 @@ float LoopVizCallback::UpdateOverlay(RndOverlay *o, float y) {
     if (mLoopStartChangeTimer > 0.0f) {
         TheRnd.DrawStringScreen(
             MakeString("Loop start changed from %d to %d", mPrevLoopStart, loopStart),
-            Vector2(0.1f, 0.25f),
+            Vector2(0.15f, 0.25f),
             Hmx::Color(1.0f, 1.0f, 1.0f, 1.0f),
             true
         );
@@ -256,7 +257,7 @@ float LoopVizCallback::UpdateOverlay(RndOverlay *o, float y) {
     if (mLoopEndChangeTimer > 0.0f) {
         TheRnd.DrawStringScreen(
             MakeString("Loop end changed from %d to %d", mPrevLoopEnd, loopEnd),
-            Vector2(0.1f, 0.27f),
+            Vector2(0.15f, 0.27f),
             Hmx::Color(1.0f, 1.0f, 1.0f, 1.0f),
             true
         );
@@ -598,8 +599,8 @@ void GamePanel::ResetJitter() {
 
 float GamePanel::DeJitter(float ms) {
     float sentinel = 1.0000000150474662e+30f;
-    static DataNode &noJitter = DataVariable("no_jitter");
     float result = sentinel;
+    static DataNode &noJitter = DataVariable("no_jitter");
     if (noJitter.Int() == 0 && mJitterBufferIndex > 8) {
         int prevPos = (mJitterSampleCount - 1) & 0x1F;
         int historyPos = (prevPos - mJitterBufferIndex) & 0x1F;
