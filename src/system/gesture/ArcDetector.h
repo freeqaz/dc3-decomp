@@ -29,10 +29,7 @@ private:
     bool IsPathAcceptable() const;
     void SwipeFailed(const Skeleton &);
     void CullPath();
-    void DrawPath(const std::list<Vector3> &, class SkeletonViz &, class Hmx::Color, const Vector3 &) const;
-
-    static float _swipeRetentionFactor;
-    static float _acceptablePathErrorRatio;
+    void DrawPath(std::list<Vector3>, class SkeletonViz &, class Hmx::Color, const Vector3 &) const;
 
     SkeletonSide mSide; // 0x4
     SkeletonJoint mPrimaryJoint; // 0x8
