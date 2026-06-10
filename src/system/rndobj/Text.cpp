@@ -14,6 +14,7 @@
 #include "rndobj/Rnd.h"
 #include "math/Trig.h"
 #include "utl/BinStream.h"
+#include "utl/FilePath.h"
 #include "utl/MemMgr.h"
 #include "utl/UTF8.h"
 #include "wordwrap.h"
@@ -68,14 +69,12 @@ Transform XfmOnCircleEdge(float circumference, float pos) {
     xfm.m.y.x = cosA * negSign;
     xfm.m.y.z = 0.0f * negSign;
 
-    xfm.m.x.z = -(xfm.m.y.x * xfm.m.z.y - xfm.m.z.x * xfm.m.y.y);
-    xfm.m.x.x = -(xfm.m.y.z * xfm.m.z.y - xfm.m.z.z * xfm.m.y.y);
+    xfm.m.x.z = xfm.m.y.x * xfm.m.z.y - xfm.m.z.x * xfm.m.y.y;
+    xfm.m.x.x = xfm.m.z.z * xfm.m.y.y - xfm.m.y.z * xfm.m.z.y;
     xfm.m.x.y = xfm.m.y.z * xfm.m.z.x - xfm.m.z.z * xfm.m.y.x;
 
     float radius = (sign * (circumference * 0.15915494f));
-    xfm.v.y *= radius;
-    xfm.v.x *= radius;
-    xfm.v.z *= radius;
+    xfm.v *= radius;
 
     return xfm;
 }
@@ -1283,8 +1282,8 @@ int RndText::OnComputeCharWidths(const unsigned short *wideChars, float *widths,
     StyleState styleState(this, 1.0f);
     unsigned short prevChar = 0;
     std::vector<unsigned short> negWidthChars;
-    std::vector<RndFontBase *> missingFonts;
     std::vector<unsigned short> missingChars;
+    std::vector<RndFontBase *> missingFonts;
     float cumWidth = 0.0f;
     widths[0] = 0.0f;
     const unsigned short *p = wideChars;
@@ -1292,52 +1291,63 @@ int RndText::OnComputeCharWidths(const unsigned short *wideChars, float *widths,
     auto _e0 = missingChars.end();
     for (;;) {
         if (*p == 0) {
-            bool _cond = !missingChars.empty();
-            if (_cond) {
+            if (missingChars.size()) {
                 auto pathStr = PathName(this);
-                String msg = MakeString("%s:%s '", pathStr, ClassName().Str());
-                String hexMsg;
+                String msg = MakeString("%s:%s '", pathStr, ClassName());
+                FilePath hexMsg;
+                unsigned short tmp[2];
+                tmp[1] = 0;
                 for (unsigned int i = 0; i < missingChars.size(); i++) {
-                    unsigned short tmp[2] = {missingChars[i], 0};
+                    tmp[0] = missingChars[i];
                     msg += MakeString("%s", WideCharToChar(tmp));
                     hexMsg += MakeString("0x%02x ", missingChars[i]);
                 }
-                msg += MakeString("' (%s", hexMsg.c_str());
+                msg += MakeString("' (%s", hexMsg);
                 String fontNames;
                 for (unsigned int i = 0; i < missingFonts.size(); i++) {
                     fontNames += MakeString("%s ", PathName(missingFonts[i]));
                 }
                 msg += MakeString(") missing from font(s) (%s) in string \"", fontNames.c_str());
                 const unsigned short *q = wideChars;
+                tmp[1] = 0;
                 while (*q != 0) {
-                    unsigned short tmp[2] = {*q, 0};
+                    tmp[0] = *q;
                     msg += MakeString("%s", WideCharToChar(tmp));
                     q++;
                 }
                 msg += "\"";
-                MILO_NOTIFY("%s", msg.c_str());
+                for (unsigned int i = 0; i < msg.length(); i++) {
+                    if (msg[i] == '%') {
+                        msg.replace(i, 1, "<PCNT>");
+                        i++;
+                    }
+                }
+                MILO_NOTIFY(msg.c_str());
             }
-            if (!negWidthChars.empty()) {
+            if (negWidthChars.size()) {
                 String msg = MakeString("%s: '", PathName(this));
-                String hexMsg;
+                FilePath hexMsg;
+                unsigned short tmp[2];
+                tmp[1] = 0;
                 for (unsigned int i = 0; i < negWidthChars.size(); i++) {
-                    unsigned short tmp[2] = {negWidthChars[i], 0};
+                    tmp[0] = negWidthChars[i];
                     msg += MakeString("%s", WideCharToChar(tmp));
                     hexMsg += MakeString("0x%02x ", negWidthChars[i]);
                 }
-                msg += MakeString("' (%s", hexMsg.c_str());
+                msg += MakeString("' (%s", hexMsg);
                 if (styleState.mFontMapIdx != -1) {
                     RndFontBase *font = mFontMaps[styleState.mFontMapIdx]->Font();
                     msg += MakeString(") have negative widths from %s in string \"", PathName(font));
                 }
                 const unsigned short *q = wideChars;
+                tmp[1] = 0;
                 while (*q != 0) {
-                    unsigned short tmp[2] = {*q, 0};
+                    tmp[0] = *q;
                     msg += MakeString("%s", WideCharToChar(tmp));
                     q++;
                 }
                 msg += "\"";
-                MILO_NOTIFY("%s", msg.c_str());
+                MILO_NOTIFY(msg.c_str());
             }
             *w = cumWidth;
             return (int)(w - widths) - 1;
@@ -1346,7 +1356,7 @@ int RndText::OnComputeCharWidths(const unsigned short *wideChars, float *widths,
         if (ch == '<' && mMarkup) {
             unsigned short replaceChar = 0;
             const unsigned short *next = ParseMarkup(p, styleState, replaceChar);
-            if (next > p) {
+            if (p < next) {
                 *w = cumWidth;
                 int numSkipped = (int)(next - p);
                 for (int i = 1; i < numSkipped; i++) {
@@ -1822,8 +1832,8 @@ void RndText::FitTextEllipsis() {
 void RndText::FitTextScroll() {
     BuildFontMaps(true);
 
-    HX_VECTOR(unsigned short) wideChars;
     HX_VECTOR(Line) lines;
+    HX_VECTOR(unsigned short) wideChars;
     int numChars = ConvertTextToWide(mText.c_str(), wideChars);
     float *charWidths = (float *)_alloca((numChars + 2) * sizeof(float));
 
@@ -1842,16 +1852,12 @@ void RndText::FitTextScroll() {
         mWrapEnabled = true;
 
         RndFontBase *font = mStyles[0].mFont;
-        if (font == nullptr) {
-            TheDebug.Fail(
-                MakeString(kAssertStr, "Text.cpp", 2718, "font"),
-                nullptr
-            );
-        } else {
-            unsigned short charCode = 0;
-            DecodeUTF8(charCode, "8");
-            scrollCharWidth = (mStyles[0].mKerning + scrollCharWidth) * mStyles[0].mSize;
-        }
+        MILO_ASSERT(font, 2718);
+        unsigned short charCode = 0;
+        DecodeUTF8(charCode, "8");
+        float w = 0.0f;
+        mStyles[0].mFont->CharAdvance(charCode, charCode, w);
+        scrollCharWidth = (mStyles[0].mKerning + w) * mStyles[0].mSize;
     }
 
     WrapText(&wideChars[0], numChars, charWidths, lines, bounds, 1.0f);
@@ -1874,12 +1880,10 @@ void RndText::FitTextScroll() {
             mLineOffsets.push_back(scrollCharWidth);
             mLineHeight = mTotalWidth;
 
-            if (scrollCharWidth < mTotalWidth) {
-                float f = mTotalWidth;
-                while (!(f > mWidth)) {
-                    f += mTotalWidth;
-                    mScrollCopies += 1;
-                }
+            float f = mTotalWidth;
+            while (mTotalWidth > 0.0f && !(f > mWidth)) {
+                mScrollCopies += 1;
+                f += mTotalWidth;
             }
             mCurScrollChars = -1;
             mScrollOutIndex = -1;
@@ -2299,7 +2303,7 @@ void RndText::DrawShowing() {
         FontMapBase *fontMap = *it;
         for (int i = 0; i < fontMap->NumMaterials(); i++) {
             RndMat *mat = fontMap->Material(i);
-                        savedColors[vlaIdx].red = mat->GetColor().red;
+            savedColors[vlaIdx].red = mat->GetColor().red;
             savedColors[vlaIdx].green = mat->GetColor().green;
             savedColors[vlaIdx].blue = mat->GetColor().blue;
             vlaIdx++;
