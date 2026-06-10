@@ -197,7 +197,8 @@ MCResult MCContainerXbox::Mount(CreateType ct) {
     );
     if (res == ERROR_SUCCESS) {
         BOOL b = false;
-        if (XContentGetCreator(Cid().mUserIndex, &data, &b, nullptr, nullptr) == 0) {
+        res = XContentGetCreator(Cid().mUserIndex, &data, &b, nullptr, nullptr);
+        if (res == ERROR_SUCCESS) {
             if (!b) {
                 XContentClose(mDriveName.c_str(), nullptr);
                 res = ERROR_FILE_CORRUPT;

@@ -318,19 +318,17 @@ int CacheXbox::ThreadGetFileSize() {
     } else {
         int ret = 0;
         DWORD fileSize = 0;
+        DWORD err;
         DWORD res = GetFileSize(file, &fileSize);
-        if (!(res != -1)) {
+        if (res == -1 && (err = GetLastError()) != 0) {
+            MILO_NOTIFY(
+                "CacheXbox::GetFileSizeAsync() - Unhandled error from GetFileSize(): %d\n",
+                err
+            );
+            ret = -1;
+        } else {
             int *data = (int *)mData;
             *data = res;
-        } else {
-            DWORD err = GetLastError();
-            if (err != 0) {
-                MILO_NOTIFY(
-                    "CacheXbox::GetFileSizeAsync() - Unhandled error from GetFileSize(): %d\n",
-                    err
-                );
-                ret = -1;
-            }
         }
         CloseHandle(file);
         return !IsDeviceConnected(mCacheID.DeviceID()) ? 8 : ret;

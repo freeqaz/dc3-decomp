@@ -53,10 +53,9 @@ void UsbMidiKeyboard::Poll() {
 
             int slotCounter = 1;
             for (int note = 0x30; note < 73; note++) {
-                int keyIndex = note - 0x30;
-                int byteIdx = keyIndex / 8;
-                int bitIdx = 7 - (keyIndex % 8);
-                bool pressed = (proData->unk0[byteIdx] >> bitIdx) & 1;
+                bool pressed = (proData->unk0[(note - 0x30) / 8]
+                                >> (7 - (note - 0x30) % 8))
+                    & 1;
 
                 bool storedPressed = TheKeyboard->GetKeyPressed(i, note);
 
