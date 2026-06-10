@@ -214,13 +214,16 @@ bool RndVelocityBuffer::Draw(RndCam *cam, ObjPtrList<RndDrawable> &drawList) {
         int cacheIdx = mActiveXfmCacheIndex;
         memcpy(&unk36bec[cacheIdx], &mViewProjXfm, 0x40);
 
-
+        // AdvanceFrame must run unconditionally here (before PreDepthTexture),
+        // not inside the if(depthTex) block: the frame counter / cache-index swap
+        // has to advance every Draw even when there is no depth texture (native
+        // path). frameReady is then applied to mFrameAdvanced only inside the block.
+        bool frameReady = AdvanceFrame(cam);
         RndTex *depthTex = TheNgRnd.PreDepthTexture();
         if (depthTex != nullptr) {
             cam->SetTargetTex(mVelocityTex);
             cam->Select();
             TheShaderMgr.SetPConstant((PShaderConstant)9, depthTex);
-            bool frameReady = AdvanceFrame(cam);
             TheRenderState.SetTextureFilter(9, (RndRenderState::FilterMode)0, false);
             TheRenderState.SetTextureClamp(9, (RndRenderState::ClampMode)2);
             TheShaderMgr.SetVConstant(kVS_ViewProjMatrix, mViewProjXfm);

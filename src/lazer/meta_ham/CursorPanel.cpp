@@ -54,7 +54,7 @@ void CursorPanel::Poll() {
         if (check && sCrownPlayerIndex == -1) {
             sCrownPlayerIndex = i;
         }
-        if ((i == sCrownPlayerIndex && !check) || check) {
+        if (i == sCrownPlayerIndex ? !check : check) {
             MILO_LOG("player %d lost his crown\n", sCrownPlayerIndex);
             sCrownPlayerIndex = -1;
             TheHamProvider->SetProperty(ui_crown_player, -1);
@@ -70,7 +70,8 @@ void CursorPanel::Poll() {
             v128.x = v120.x - v128.x;
             v128.y = v120.y - v128.y;
             float tanned = atan2(v128.y, v128.x);
-            Vector3 v110(0, 0, tanned + (PI / 2));
+            float angle = tanned + (PI / 2);
+            Vector3 v110(0, 0, angle);
             MakeRotMatrix(v110, trans.m, true);
             trans.m.x *= 4;
             trans.m.y *= 4;
