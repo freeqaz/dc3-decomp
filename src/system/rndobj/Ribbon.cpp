@@ -268,201 +268,152 @@ void RndRibbon::UpdateMesh() {
 #endif // !HX_NATIVE
 }
 
+#pragma fp_contract(off)
 void RndRibbon::UpdateChase() {
 #ifndef HX_NATIVE
-    if (!mFollowA)
+    if (!mFollowA) {
         return;
-
-    float currentTime = TheTaskMgr.Seconds(TaskMgr::kRealTime);
-
-    if (currentTime < mLastTime) {
-        auto _tmp2 = mTransforms.end();
-        auto _tmp1 = mTransforms.begin();
-        if (_tmp1 != _tmp2) {
-            mTransforms.erase(_tmp1, _tmp2);
-        }
     }
-    int newSegCount = 0;
 
-    Vector3 followPos;
+    float now = TheTaskMgr.Seconds(TaskMgr::kRealTime);
+    float &lastTime = mLastTime;
+    if (now < lastTime) {
+        Keys<Transform, Transform>::iterator firstKey = mTransforms.begin();
+        mTransforms.erase(firstKey, mTransforms.end());
+    }
+
+    int added = 0;
     if (mActive) {
-        const Transform *xfmA = &mFollowA->WorldXfm();
-        followPos = xfmA->v;
+        Vector3 followed = mFollowA->WorldXfm().v;
         if (mFollowB) {
-            const Transform *xfmB = &mFollowB->WorldXfm();
-            Interp(followPos, (const Vector3 &)xfmB->v, mFollowWeight, followPos);
+            Interp(followed, mFollowB->WorldXfm().v, mFollowWeight, followed);
         }
 
-        int numTransforms = ((intptr_t)&*mTransforms.end() - (intptr_t)&*mTransforms.begin()) / 0x44;
+        unsigned int numKeys = mTransforms.size();
         unsigned int removeCount = 0;
-        if (numTransforms != 0) {
-            unsigned int k = 0;
+        if (numKeys != 0) {
+            float cutoff = now - mDecay;
+            unsigned int i = 0;
             do {
-                if (*(float *)(((intptr_t)&*mTransforms.begin() + (k + 0x40))) >= currentTime - mDecay)
+                if (mTransforms[i].frame >= cutoff) {
                     break;
+                }
                 removeCount++;
-                k += 0x44;
-            } while (removeCount < (unsigned int)numTransforms);
+                i++;
+            } while (i < numKeys);
         }
 
-        if (removeCount < (unsigned int)numTransforms) {
-            unsigned int srcIdx = removeCount;
+        Key<Transform> key;
+        unsigned int srcIdx = removeCount;
+        if (removeCount < numKeys) {
             unsigned int dstIdx = 0;
             do {
-                memcpy(&mTransforms[dstIdx], &mTransforms[srcIdx], 0x44);
+                memcpy(&mTransforms[dstIdx], &mTransforms[srcIdx], sizeof(Key<Transform>));
                 srcIdx++;
                 dstIdx++;
-                numTransforms = ((intptr_t)&*mTransforms.end() - (intptr_t)&*mTransforms.begin()) / 0x44;
-            } while (srcIdx < (unsigned int)numTransforms);
+            } while (srcIdx < mTransforms.size());
         }
-
-        Key<Transform> newKey;
-        newKey.frame = 0.0f;
-        mTransforms.resize(numTransforms - (int)removeCount, newKey);
-
-        newKey.frame = 0.0f;
-
-        numTransforms = ((intptr_t)&*mTransforms.end() - (intptr_t)&*mTransforms.begin()) / 0x44;
-        memcpy(&newKey, &Transform::IDXfm(), 0x40);
-        if (numTransforms == 0) {
-            newKey.frame = currentTime;
-            newKey.value.v = followPos;
-            mTransforms.push_back(newKey);
+        key.frame = 0.0f;
+        mTransforms.resize(numKeys - removeCount, key);
+        key.value = Transform::IDXfm();
+        key.frame = 0.0f;
+        if (mTransforms.size() == 0) {
+            key.value.v = followed;
+            key.frame = now;
+            mTransforms.push_back(key);
         } else {
-            long long numSegs = (long long)mNumSegments;
+            float step = mDecay / mNumSegments;
             float minDistSq = mWidth * mWidth * 0.125f;
-            float segInterval = mDecay / (float)numSegs;
-            float nextTime = mTransforms.back().frame + segInterval;
-            while (nextTime < currentTime) {
-                Transform *backXfm = &mTransforms.back().value;
-                newKey.frame = mTransforms.back().frame + segInterval;
-                Interp((const Vector3 &)backXfm->v, followPos,
-                       segInterval / (currentTime - mTransforms.back().frame),
-                       (Vector3 &)newKey.value.v);
-                float dx = backXfm->v.z - newKey.value.v.z;
-                float dy = backXfm->v.x - newKey.value.v.x;
-                float dz = backXfm->v.y - newKey.value.v.y;
-                if (minDistSq <= dz * dz + (dy * dy + dx * dx)) {
-                    mTransforms.push_back(newKey);
-                    newSegCount++;
+            float nextTime = mTransforms.back().frame + step;
+            while (now > nextTime) {
+                key.frame = mTransforms.back().frame + step;
+                Interp(
+                    mTransforms.back().value.v,
+                    followed,
+                    step / (now - mTransforms.back().frame),
+                    key.value.v
+                );
+                Vector3 delta;
+                Subtract(mTransforms.back().value.v, key.value.v, delta);
+                if (LengthSquared(delta) < minDistSq) {
+                    mTransforms.back().frame = key.frame;
                 } else {
-                    mTransforms.back().frame = newKey.frame;
+                    mTransforms.push_back(key);
+                    added++;
                 }
-                nextTime = mTransforms.back().frame + segInterval;
+                nextTime = mTransforms.back().frame + step;
             }
         }
     }
 
-    // Orient each transform
-    int numTransforms = ((intptr_t)&*mTransforms.end() - (intptr_t)&*mTransforms.begin()) / 0x44;
-    int startIdx = numTransforms - newSegCount;
-    if ((unsigned int)startIdx < (unsigned int)numTransforms) {
-        float slerpFwdX = 0.0f;
-        float slerpFwdY = 0.0f;
-        float slerpFwdZ = 0.0f;
+    int firstDirty = mTransforms.size() - added;
+    if (firstDirty < mTransforms.size()) {
         float prevAngle = -1.0f;
+        for (int i = firstDirty; i < mTransforms.size(); ++i) {
+            if (i != 0) {
+                Key<Transform> &cur = mTransforms[i];
+                Key<Transform> &prev = mTransforms[i - 1];
+                Vector3 dir;
+                Subtract(cur.value.v, prev.value.v, dir);
+                Normalize(dir, dir);
 
-        static int sUpVecFlag;
-        static Vector3 sUpVec;
-
-        unsigned int curIdx = (unsigned int)startIdx;
-        do {
-            float curAngle = prevAngle;
-            if (curIdx != 0) {
-                Transform &curXfm = mTransforms[curIdx].value;
-                Transform &prevXfm = mTransforms[curIdx - 1].value;
-                Vector3 forward;
-                forward.x = curXfm.v.x - prevXfm.v.x;
-                forward.y = curXfm.v.y - prevXfm.v.y;
-                forward.z = curXfm.v.z - prevXfm.v.z;
-                Normalize(forward, forward);
-
-                if ((int)curIdx >= 3) {
-                    Transform &prevPrevXfm = mTransforms[curIdx - 2].value;
-                    float pdx = curXfm.v.x - prevPrevXfm.v.x;
-                    float pdy = curXfm.v.y - prevPrevXfm.v.y;
-                    float pdz = curXfm.v.z - prevPrevXfm.v.z;
-                    float dot = pdy * forward.y + pdx * forward.x + pdz * forward.z;
-                    float clampedDot = 0.0f;
-                    if (-dot < 0.0f)
-                        clampedDot = dot;
-                    float clampedDot2 = 1.0f;
-                    if (clampedDot - 1.0f < 0.0f)
-                        clampedDot2 = clampedDot;
-                    auto _tmp0 = std::acos(clampedDot2);
-                    curAngle = _tmp0;
-                    Vector3 newSlerpFwd;
-                    Interp(forward, followPos, 0.5f, newSlerpFwd);
-                    Normalize(newSlerpFwd, newSlerpFwd);
-                    slerpFwdX = newSlerpFwd.x;
-                    slerpFwdY = newSlerpFwd.y;
-                    slerpFwdZ = newSlerpFwd.z;
+                Vector3 smoothDir;
+                float angle = -1.0f;
+                if (2 < i) {
+                    Vector3 prevDir;
+                    Subtract(prev.value.v, mTransforms[i - 2].value.v, prevDir);
+                    float dot = Clamp(0.0f, 1.0f, Dot(prevDir, dir));
+                    angle = std::acos(dot);
+                    Vector3 scaledPrev = prevDir;
+                    scaledPrev *= prevAngle;
+                    Interp(dir, scaledPrev, 0.5f, smoothDir);
+                    Normalize(smoothDir, smoothDir);
                 }
 
-                if ((sUpVecFlag & 1) == 0) {
-                    sUpVecFlag |= 1;
-                    sUpVec.x = 0.0f;
-                    sUpVec.y = 0.0f;
-                    sUpVec.z = 1.0f;
-                }
-
+                static Vector3 up(0.0f, 0.0f, 1.0f);
                 Transform invPrev;
-                Invert(prevXfm, invPrev);
-                Vector3 localVec;
-                Multiply(curXfm.v, invPrev, localVec);
-                Transform lookAt;
-                memcpy(&lookAt, &Transform::IDXfm(), 0x40);
-                lookAt.LookAt(localVec, sUpVec);
+                Invert(prev.value, invPrev);
+                Vector3 localPos;
+                Multiply(cur.value.v, invPrev, localPos);
+                Transform tf = Transform::IDXfm();
+                tf.LookAt(localPos, up);
                 Transform result;
-                Multiply(lookAt, prevXfm.m, result);
+                Multiply(tf, prev.value.m, result);
                 Normalize(result.m, result.m);
+                result.v = cur.value.v;
 
-                float sv_y = curXfm.v.y;
-                float sv_z = curXfm.v.z;
-
-                if (curAngle != prevAngle) {
-                    Invert(result.m, invPrev.m);
-                    float sdotX = invPrev.m.z.x * slerpFwdZ +
-                                  (invPrev.m.x.x * slerpFwdX +
-                                   invPrev.m.y.x * slerpFwdY);
-                    slerpFwdY = invPrev.m.z.y * slerpFwdZ +
-                                (invPrev.m.x.y * slerpFwdX +
-                                 slerpFwdY * invPrev.m.y.y);
-                    slerpFwdZ = invPrev.m.z.z * slerpFwdZ +
-                                (invPrev.m.x.z * slerpFwdX +
-                                 invPrev.m.y.z * slerpFwdY);
-
-                    float newAcosIn = 0.0f;
-                    if (-sdotX < 0.0f)
-                        newAcosIn = sdotX;
-                    float newAcosIn2 = 1.0f;
-                    if (newAcosIn - 1.0f < 0.0f)
-                        newAcosIn2 = newAcosIn;
-                    float newSlerpAngle = std::acos(newAcosIn2);
-                    float cosHalfCur = std::cos(curAngle * 0.5f);
-                    float halfNew2 = newSlerpAngle * 2.0f;
-                    float invCosHalfCur = 1.0f / cosHalfCur;
-                    float cosHN2 = std::cos(halfNew2);
-                    float sinHN2 = std::sin(halfNew2);
-                    float mXX = (cosHN2 + 1.0f) * (invCosHalfCur - 1.0f) * 0.5f + 1.0f;
-                    float mXZ = sinHN2 * (1.0f - invCosHalfCur) * 0.5f;
-                    float mZZ = (1.0f - cosHN2) * (invCosHalfCur - 1.0f) * 0.5f + 1.0f;
-                    lookAt.m.x.x = mXX; lookAt.m.x.y = 0.0f; lookAt.m.x.z = mXZ;
-                    lookAt.m.y.x = 0.0f; lookAt.m.y.y = 1.0f; lookAt.m.y.z = 0.0f;
-                    lookAt.m.z.x = mXZ;  lookAt.m.z.y = 0.0f; lookAt.m.z.z = mZZ;
-                    Multiply(lookAt.m, result.m, result.m);
+                if (angle != -1.0f) {
+                    Hmx::Matrix3 inv;
+                    Invert(result.m, inv);
+                    Vector3 localSmooth;
+                    Multiply(smoothDir, inv, localSmooth);
+                    float clamped = Clamp(0.0f, 1.0f, localSmooth.x);
+                    float a = std::acos(clamped);
+                    float cosHalf = std::cos(angle * 0.5f);
+                    float invCos = 1.0f / cosHalf;
+                    float c = std::cos(a * 2.0f);
+                    float s = std::sin(a * 2.0f);
+                    Hmx::Matrix3 bend(
+                        ((c + 1.0f) * (invCos - 1.0f)) * 0.5f + 1.0f,
+                        (s * (1.0f - invCos)) * 0.5f,
+                        0.0f,
+                        (s * (1.0f - invCos)) * 0.5f,
+                        ((1.0f - c) * (invCos - 1.0f)) * 0.5f + 1.0f,
+                        0.0f,
+                        0.0f,
+                        0.0f,
+                        1.0f
+                    );
+                    Multiply(bend, result.m, result.m);
                 }
 
-                memcpy(&curXfm, &result, 0x30);
-                curXfm.v.y = sv_y;
-                curXfm.v.z = sv_z;
+                cur.value.m = result.m;
+                prevAngle = angle;
             }
-            curIdx++;
-            prevAngle = curAngle;
-        } while (curIdx < (unsigned int)(((intptr_t)&*mTransforms.end() - (intptr_t)&*mTransforms.begin()) / 0x44));
+        }
     }
 
     UpdateMesh();
-    mLastTime = currentTime;
+    lastTime = now;
 #endif // !HX_NATIVE
 }

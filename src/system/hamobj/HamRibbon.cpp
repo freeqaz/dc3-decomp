@@ -160,20 +160,22 @@ void HamRibbon::UpdateChase() {
         unsigned int removeCount = 0;
         if (numKeys != 0) {
             float cutoff = now - mDecay;
-            while (removeCount < numKeys) {
-                if (mChaseKeys[removeCount].frame >= cutoff) {
+            unsigned int i = 0;
+            do {
+                if (mChaseKeys[i].frame >= cutoff) {
                     break;
                 }
                 removeCount++;
-            }
+                i++;
+            } while (i < numKeys);
         }
 
         Key<Transform> key;
-        key.frame = 0.0f;
 #ifdef HX_NATIVE
         // Native: copy elements down first, then resize.
         // STLport doesn't bounds-check operator[], libstdc++ does —
         // the original code accesses past-end-of-vector after resize.
+        key.frame = 0.0f;
         key.value = Transform::IDXfm();
         if (removeCount > 0 && removeCount < numKeys) {
             for (int i = 0; i < numKeys - removeCount; ++i) {
@@ -182,11 +184,16 @@ void HamRibbon::UpdateChase() {
         }
         mChaseKeys.resize(numKeys - removeCount, key);
 #else
+        unsigned int srcIdx = removeCount;
         if (removeCount < numKeys) {
-            for (unsigned int i = removeCount; i < mChaseKeys.size(); i++) {
-                memcpy(&mChaseKeys[i - removeCount], &mChaseKeys[i], sizeof(Key<Transform>));
-            }
+            unsigned int dstIdx = 0;
+            do {
+                memcpy(&mChaseKeys[dstIdx], &mChaseKeys[srcIdx], sizeof(Key<Transform>));
+                srcIdx++;
+                dstIdx++;
+            } while (srcIdx < mChaseKeys.size());
         }
+        key.frame = 0.0f;
         mChaseKeys.resize(numKeys - removeCount, key);
         key.value = Transform::IDXfm();
         key.frame = 0.0f;
@@ -225,35 +232,36 @@ void HamRibbon::UpdateChase() {
         float prevAngle = -1.0f;
         for (int i = firstDirty; i < mChaseKeys.size(); ++i) {
             if (i != 0) {
+                Key<Transform> &cur = mChaseKeys[i];
+                Key<Transform> &prev = mChaseKeys[i - 1];
                 Vector3 dir;
-                Subtract(mChaseKeys[i].value.v, mChaseKeys[i - 1].value.v, dir);
+                Subtract(cur.value.v, prev.value.v, dir);
                 Normalize(dir, dir);
 
                 Vector3 smoothDir;
                 float angle = -1.0f;
                 if (2 < i) {
                     Vector3 prevDir;
-                    Subtract(
-                        mChaseKeys[i - 1].value.v, mChaseKeys[i - 2].value.v, prevDir
-                    );
+                    Subtract(prev.value.v, mChaseKeys[i - 2].value.v, prevDir);
                     float dot = Clamp(0.0f, 1.0f, Dot(prevDir, dir));
                     angle = std::acos(dot);
-                    prevDir *= prevAngle;
-                    Interp(dir, prevDir, 0.5f, smoothDir);
+                    Vector3 scaledPrev = prevDir;
+                    scaledPrev *= prevAngle;
+                    Interp(dir, scaledPrev, 0.5f, smoothDir);
                     Normalize(smoothDir, smoothDir);
                 }
 
                 static Vector3 up(0.0f, 0.0f, 1.0f);
                 Transform invPrev;
-                Invert(mChaseKeys[i - 1].value, invPrev);
+                Invert(prev.value, invPrev);
                 Vector3 localPos;
-                Multiply(mChaseKeys[i].value.v, invPrev, localPos);
+                Multiply(cur.value.v, invPrev, localPos);
                 Transform tf = Transform::IDXfm();
                 tf.LookAt(localPos, up);
                 Transform result;
-                Multiply(tf, mChaseKeys[i - 1].value.m, result);
+                Multiply(tf, prev.value.m, result);
                 Normalize(result.m, result.m);
-                result.v = mChaseKeys[i].value.v;
+                result.v = cur.value.v;
 
                 if (angle != -1.0f) {
                     Hmx::Matrix3 inv;
@@ -280,7 +288,7 @@ void HamRibbon::UpdateChase() {
                     Multiply(bend, result.m, result.m);
                 }
 
-                mChaseKeys[i].value.m = result.m;
+                cur.value.m = result.m;
                 prevAngle = angle;
             }
         }
