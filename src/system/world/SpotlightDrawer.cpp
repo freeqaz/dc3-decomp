@@ -286,58 +286,55 @@ void SpotlightDrawer::DrawLight(Spotlight *spot) {
     float baseG = color.green * intensity * 255.0f;
     float baseB = color.blue * intensity * 255.0f;
 
-    uint packedColor = ((uint)baseB & 0xff) << 16 | ((uint)baseG & 0xff) << 8 | (uint)baseR & 0xff;
+    uint packedColor = ((int)baseR & 0xff) | ((int)baseG & 0xff) << 8 | ((int)baseB & 0xff) << 16;
 
-    bool shouldProcess = (baseR > 5) || ((baseG > 3) || (baseB > 7));
+    bool shouldProcess =
+        ((packedColor & 0xff) > 5) || (((packedColor >> 8) & 0xff) > 3) || (((packedColor >> 16) & 0xff) > 7);
 
-    if (shouldProcess && spot->GetTarget()) {
-        GfxMode gfxMode = GetGfxMode();
-
-        if (gfxMode == kOldGfx && spot->TargetShadow()) {
+    if (shouldProcess && spot->mTargetLoaded && spot->Showing()) {
+        if (GetGfxMode() == kOldGfx && spot->GetTarget() && spot->TargetShadow()) {
             sShadowSpots.push_back(spot);
         }
 
         SpotlightEntry entry;
-        entry.mColorKey = packedColor;
         entry.mSpotlight = spot;
+        entry.mColorKey = packedColor;
         sLights.push_back(entry);
 
-        auto _tmp1 = spot->GetAdditionalObjects().size();
-        if (sHaveAdditionals || _tmp1 > 0) {
-            sHaveAdditionals = true;
-        }
+        sHaveAdditionals = sHaveAdditionals || (int)spot->GetAdditionalObjects().size() > 0;
 
-        if (sHaveFlares && (!spot->GetFlare() || spot->mFlareOffset == 0)) {
-            sHaveFlares = false;
-        } else {
-            sHaveFlares = true;
-        }
+        sHaveFlares = sHaveFlares || (spot->mFlareEnabled && spot->mFlare);
 
-        if (sHaveLenses || spot->LensMesh()) {
-            sHaveLenses = true;
-        }
+        sHaveLenses = sHaveLenses || spot->LensMesh();
 
-        if (sNeedBoxMap == (int)TheRnd.GetFrameID()) {
-            static bool boxMapLogged = false;
-            if (!boxMapLogged) {
-                boxMapLogged = true;
-                const char* objName = PathName(spot);
-                MILO_WARN("%s drawn after SpotlightEnder", objName);
-            }
+        if ((unsigned int)sNeedBoxMap == TheRnd.GetFrameID()) {
+            MILO_NOTIFY_ONCE("%s drawn after SpotlightEnder", PathName(spot));
         }
 
         sNeedDraw = true;
     }
 
-    if (spot->mLightCanMesh && !spot->mLightCanSort) {
-        const Transform& xfm = spot->WorldXfm();
-        float nearDist = spot->mLightCanOffset;
-        if (nearDist <= 0.0f) {
+    RndMesh *canMesh = spot->mLightCanMesh;
+    if (canMesh && !spot->mLightCanSort) {
+        const Transform &canXfm = spot->mLightCanXfm;
+        bool visible;
+        if (!canMesh->Showing()) {
+            visible = false;
+        } else {
+            Sphere sphere = canMesh->GetSphere();
+            if (sphere.radius > 0.0f) {
+                Multiply(sphere, canXfm, sphere);
+                visible = !(sphere > RndCam::Current()->WorldFrustum());
+            } else {
+                visible = true;
+            }
+        }
+        if (visible) {
             SpotMeshEntry meshEntry;
             meshEntry.mCanMesh = spot->mLightCanMesh;
-            meshEntry.mEnvMesh = nullptr;
+            meshEntry.mEnvMesh = reinterpret_cast<RndMesh *>(RndEnviron::sCurrent);
             meshEntry.mSpotlight = spot;
-            meshEntry.mTransform = xfm;
+            meshEntry.mTransform = canXfm;
             sCans.push_back(meshEntry);
             sNeedDraw = true;
         }

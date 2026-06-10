@@ -298,21 +298,15 @@ void NgSpotlightDrawer::RenderConeDefs(Spotlight *sl, const Hmx::Color &color) {
         SetupXSection(sl, sl->mBeam);
 
         const Transform &camXfm = mSpotCam->WorldXfm();
+        Vector3 camPos = camXfm.v;
         const Transform &camXfm2 = mSpotCam->WorldXfm();
+        Vector3 camUp = camXfm2.m.y;
 
-        float camPosX = camXfm.v.x;
-        float camPosY = camXfm.v.y;
-        float camPosZ = camXfm.v.z;
+        Vector4 camPosVec(camPos.x, camPos.y, camPos.z, 1.0f);
+        TheShaderMgr.SetPConstant((PShaderConstant)0xa, camPosVec);
 
-        float camUpX = camXfm2.m.y.x;
-        float camUpY = camXfm2.m.y.y;
-        float camUpZ = camXfm2.m.y.z;
-
-        Vector4 camPos(camPosX, camPosY, camPosZ, 1.0f);
-        TheShaderMgr.SetPConstant((PShaderConstant)0xa, camPos);
-
-        float dotProduct = -(camUpX * camPosX + camUpY * camPosY + camUpZ * camPosZ);
-        Vector4 camPlane(camUpX, camUpY, camUpZ, dotProduct);
+        float dotProduct = -(camUp.x * camPos.x + camUp.y * camPos.y + camUp.z * camPos.z);
+        Vector4 camPlane(camUp.x, camUp.y, camUp.z, dotProduct);
         TheShaderMgr.SetPConstant((PShaderConstant)0x1e, camPlane);
 
         float farPlane = mSpotCam->FarPlane();
@@ -359,13 +353,11 @@ void NgSpotlightDrawer::RenderConeDefs(Spotlight *sl, const Hmx::Color &color) {
         TheShaderMgr.SetPConstant((PShaderConstant)0x1a, direction);
 
         const Transform &camXfm3 = mSpotCam->WorldXfm();
-        float vx = camXfm3.v.x;
-        float vy = camXfm3.v.y;
-        float vz = camXfm3.v.z;
+        Vector3 relCam = camXfm3.v;
 
-        float relX = vx - apexX;
-        float relY = vy - apexY;
-        float relZ = vz - apexZ;
+        float relX = relCam.x - apexX;
+        float relY = relCam.y - apexY;
+        float relZ = relCam.z - apexZ;
 
         Vector4 relCamPos(relX, relY, relZ, 1.0f);
         TheShaderMgr.SetPConstant((PShaderConstant)0x1b, relCamPos);
