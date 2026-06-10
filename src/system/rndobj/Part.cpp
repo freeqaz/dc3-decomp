@@ -1710,6 +1710,9 @@ void RndParticleSys::InitParticle(
         if (mGrowRatio != 0) {
             fancyParticle->size = 0;
         }
+        if (fancyParticle->shrinkFrame != fancyParticle->growFrame) {
+            f11 = 1.0f / (fancyParticle->shrinkFrame - fancyParticle->growFrame);
+        }
         fancyParticle->midcolFrame =
             Interp(fancyParticle->birthFrame, fancyParticle->deathFrame, mMidColorRatio);
         if (partOverride.mask & 0x20) {
@@ -1744,9 +1747,11 @@ void RndParticleSys::InitParticle(
             Subtract(
                 fancyParticle->midcolVel, fancyParticle->col, fancyParticle->midcolVel
             );
-            float scalar =
-                1.0f / (fancyParticle->midcolFrame - fancyParticle->birthFrame);
-            Multiply(fancyParticle->midcolVel, scalar, fancyParticle->midcolVel);
+            if (fancyParticle->midcolFrame != fancyParticle->birthFrame) {
+                float scalar =
+                    1.0f / (fancyParticle->midcolFrame - fancyParticle->birthFrame);
+                Multiply(fancyParticle->midcolVel, scalar, fancyParticle->midcolVel);
+            }
         }
     } else {
         Subtract(particle->colVel, particle->col, particle->colVel);

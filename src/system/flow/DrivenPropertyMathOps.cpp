@@ -119,31 +119,26 @@ float FlowMathOp::Apply(float val) {
     switch ((int)mOp) {
     case kMathOp_Script:
         if (mLhs.Type() == kDataString) {
-            String str(mLhs.Str(0));
-            DataNode scriptHolder;
-            if (*str.c_str() != '\0') {
-                DataVariable("val") = DataNode(val);
-                float result = val;
-                TheDebug.SetTry(true);
-                DataArray *parsed = DataReadString(str.c_str());
-                {
-                    DataNode temp(parsed, kDataArray);
-                    scriptHolder = temp;
+            String str = mLhs.Str(0);
+            DataNode n;
+            if (!str.empty()) {
+                DataVariable("val") = val;
+                MILO_TRY {
+                    n = DataReadString(str.c_str());
+                    n.Array(0)->Release();
+                    if (n.Array(0)->Type(0) == kDataCommand && n.Array(0)->Size() == 1) {
+                        val = n.Array(0)->Command(0)->Execute().Float(0);
+                    } else {
+                        val = n.Array(0)->Execute().Float(0);
+                    }
                 }
-                scriptHolder.Array(0)->Release();
-                if (scriptHolder.Array(0)->Node(0).Type() == kDataCommand
-                    && scriptHolder.Array(0)->Size() == 1) {
-                    DataArray *arr = scriptHolder.Array(0);
-                    DataNode execResult = arr->Node(0).Command(arr)->Execute(true);
-                    result = execResult.Float(0);
-                } else {
-                    DataNode execResult = scriptHolder.Array(0)->Execute(true);
-                    result = execResult.Float(0);
+                MILO_CATCH(msg) {
+                    MILO_NOTIFY(
+                        "Bad script expression in mathop : %s, expression is: %s", n.Str(0)
+                    );
                 }
-                TheDebug.SetTry(false);
-                rhs = result;
             }
-            break;
+            return val;
         }
         // fall through to lookup
     case 100: {

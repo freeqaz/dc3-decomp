@@ -617,11 +617,11 @@ void SynthPreInit() {
 #ifdef HX_NATIVE
         TheSynth = CreateNativeSynth();
 #else
-        // TheSynth = Synth::New();
+        TheSynth = Synth::New();
 #endif
     }
     if (TheSynth->Fail()) {
-        // RELEASE(TheSynth);
+        RELEASE(TheSynth);
         TheSynth = new Synth();
     }
     TheSynth->PreInit();

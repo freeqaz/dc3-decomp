@@ -38,6 +38,7 @@ class StreamReader;
 class TranscodableMixerOutput;
 
 class Synth : public Hmx::Object, public RndOverlay::Callback {
+    friend void SynthPreInit();
     friend void SynthTerminate();
 
 public:

@@ -1,5 +1,6 @@
 #include "flow/FlowSequence.h"
 #include "flow/FlowNode.h"
+#include "flow/Flow.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
 #include "utl/MakeString.h"
@@ -46,9 +47,9 @@ bool FlowSequence::Activate() {
                 return false;
         }
         MILO_NOTIFY_ONCE(
-            "Instant looping sequence in %s! Stopping Sequence", FindPathName()
+            "Instant looping sequence in %s! Stopping Sequence", GetOwnerFlow()->Name()
         );
-        return mRunningNodes.size() > 0;
+        return !mRunningNodes.empty();
     }
     return true;
 }
