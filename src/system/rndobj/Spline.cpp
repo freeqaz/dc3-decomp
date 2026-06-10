@@ -168,28 +168,28 @@ void RndSpline::SyncPristineCtrlPoints() {
             MILO_ASSERT(!foundNew, 0x227);
             foundNew = true;
             pt.mDirtyPosition = false;
-            if (size == 2) {
+            if (mCtrlPoints.size() == 2) {
                 if (i == 0) {
-                    mCtrlPoints[0] = mCtrlPoints[1];
-                    mCtrlPoints[0].mPos.y -= 10.0f;
+                    pt = mCtrlPoints[1];
+                    pt.mPos.y -= 10.0f;
                 } else {
-                    mCtrlPoints[i] = mCtrlPoints[i - 1];
-                    mCtrlPoints[i].mPos.y += 10.0f;
+                    pt = mCtrlPoints[i - 1];
+                    pt.mPos.y += 10.0f;
                 }
-            } else if (size > 2) {
+            } else if (mCtrlPoints.size() > 2) {
                 if (i == 0) {
                     CtrlPoint &p1 = mCtrlPoints[1];
                     CtrlPoint &p2 = mCtrlPoints[2];
-                    pt.mPos.x = p1.mPos.x + (p1.mPos.x - p2.mPos.x);
-                    pt.mPos.y = p1.mPos.y + (p1.mPos.y - p2.mPos.y);
-                    pt.mPos.z = p1.mPos.z + (p1.mPos.z - p2.mPos.z);
+                    Vector3 d;
+                    Subtract(p1.mPos, p2.mPos, d);
+                    Add(p1.mPos, d, pt.mPos);
                     pt.mRoll = p1.mRoll;
                 } else if (i == size - 1) {
                     CtrlPoint &pPrev = mCtrlPoints[i - 1];
                     CtrlPoint &pPrev2 = mCtrlPoints[i - 2];
-                    pt.mPos.x = pPrev.mPos.x + (pPrev.mPos.x - pPrev2.mPos.x);
-                    pt.mPos.y = pPrev.mPos.y + (pPrev.mPos.y - pPrev2.mPos.y);
-                    pt.mPos.z = pPrev.mPos.z + (pPrev.mPos.z - pPrev2.mPos.z);
+                    Vector3 d;
+                    Subtract(pPrev.mPos, pPrev2.mPos, d);
+                    Add(pPrev.mPos, d, pt.mPos);
                     pt.mRoll = pPrev.mRoll;
                 } else {
                     pt.Interp(mCtrlPoints[i - 1], mCtrlPoints[i + 1], 0.5f);
@@ -199,10 +199,7 @@ void RndSpline::SyncPristineCtrlPoints() {
     }
     if (mCtrlPoints.size() >= 2) {
         if (mEndCtrlPoint != -1) {
-            int maxIdx = mCtrlPoints.size() - 1;
-            if (mEndCtrlPoint > maxIdx) {
-                mEndCtrlPoint = maxIdx;
-            } else mEndCtrlPoint = Max(mEndCtrlPoint, 1);
+            mEndCtrlPoint = Clamp(1, (int)mCtrlPoints.size() - 1, mEndCtrlPoint);
         }
         if (mStartCtrlPoint != -1) {
             int maxStart = mEndCtrlPoint - 1;
@@ -222,8 +219,8 @@ void RndSpline::SyncPristineCtrlPoints() {
 }
 
 void RndSpline::SyncDeformedDummyCtrlPoints(int startIdx, int endIdx) const {
-    MILO_ASSERT_RANGE(startIdx, 0, mDeformedCtrlPoints.size(), 0x2C5);
-    MILO_ASSERT_RANGE(endIdx, 0, mDeformedCtrlPoints.size(), 0x2C6);
+    MILO_ASSERT_RANGE(startIdx, 0, (int)mDeformedCtrlPoints.size(), 0x2C5);
+    MILO_ASSERT_RANGE(endIdx, 0, (int)mDeformedCtrlPoints.size(), 0x2C6);
     MILO_ASSERT(startIdx <= endIdx, 0x2C7);
     if ((unsigned int)mDeformedCtrlPoints.size() >= 2) {
         if (unk144 && startIdx == 0) {
@@ -265,8 +262,8 @@ void RndSpline::SyncDeformedDummyCtrlPoints(int startIdx, int endIdx) const {
 }
 
 void RndSpline::SyncDeformedCtrlPoints(int startIdx, int endIdx) const {
-    MILO_ASSERT_RANGE(startIdx, 0, mDeformedCtrlPoints.size(), 0x278);
-    MILO_ASSERT_RANGE(endIdx, 0, mDeformedCtrlPoints.size(), 0x279);
+    MILO_ASSERT_RANGE(startIdx, 0, (int)mDeformedCtrlPoints.size(), 0x278);
+    MILO_ASSERT_RANGE(endIdx, 0, (int)mDeformedCtrlPoints.size(), 0x279);
     MILO_ASSERT(startIdx <= endIdx, 0x27A);
     if ((unsigned int)mDeformedCtrlPoints.size() >= 2) {
         SyncDeformedDummyCtrlPoints(startIdx, endIdx);

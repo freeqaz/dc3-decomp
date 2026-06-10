@@ -10,6 +10,7 @@
 #include "os/Debug.h"
 #include "os/System.h"
 #include "rndobj/BaseMaterial.h"
+#include "rndobj/Dir.h"
 #include "rndobj/Draw.h"
 #include "rndobj/Mat.h"
 #include "rndobj/MultiMesh.h"
@@ -1247,7 +1248,8 @@ void RndMesh::DeleteBones(bool findRoot) {
     if (bones.empty())
         return;
 
-    std::vector<RndTransformable *> boneTransforms(bones.size(), NULL);
+    std::vector<RndTransformable *> boneTransforms;
+    boneTransforms.insert(boneTransforms.begin(), bones.size(), NULL);
     for (unsigned int i = 0; i < boneTransforms.size(); i++) {
         boneTransforms[i] = bones[i].mBone;
     }
@@ -1256,10 +1258,11 @@ void RndMesh::DeleteBones(bool findRoot) {
     if (findRoot) {
         RndTransformable *parent = bones[0].mBone;
         while (parent) {
-            RndTransformable *transParent = dynamic_cast<RndTransformable *>(parent->TransParent());
-            root = parent;
-            if (transParent)
+            RndDir *transParent = dynamic_cast<RndDir *>(parent->TransParent());
+            if (transParent) {
+                root = parent;
                 break;
+            }
             MILO_ASSERT(parent != parent->TransParent(), 0x5a1);
             parent = parent->TransParent();
         }
@@ -1268,9 +1271,7 @@ void RndMesh::DeleteBones(bool findRoot) {
     bones.erase(bones.begin(), bones.end());
 
     for (unsigned int i = 0; i < boneTransforms.size(); i++) {
-        if (boneTransforms[i]) {
-            delete boneTransforms[i];
-        }
+        delete boneTransforms[i];
     }
 
     if (root) {
@@ -1280,11 +1281,11 @@ void RndMesh::DeleteBones(bool findRoot) {
 
 void RndMesh::InstanceGeomOwnerBones() {
     if (!mGeomOwner) {
-        MILO_WARN("Cannot duplicate bones if mesh is not a Geom Owner!");
+        MILO_NOTIFY("Cannot duplicate bones if mesh is not a Geom Owner!");
         return;
     }
 
-    ObjectDir *dir = dynamic_cast<ObjectDir *>(Dir());
+    RndDir *dir = dynamic_cast<RndDir *>(Dir());
     if (!dir) {
         MILO_NOTIFY("Cannot duplicate bones if parent Dir is not a RndDir.");
         return;
@@ -1296,7 +1297,7 @@ void RndMesh::InstanceGeomOwnerBones() {
     bool needsCopy = mGeomOwner && mGeomOwner->mBones[0].mBone != mBones[0].mBone;
     if (needsCopy) {
         DeleteBones(true);
-        if (!(!mGeomOwner)) {
+        if (mGeomOwner) {
             mBones = mGeomOwner->mBones;
         } else {
             mBones.erase(mBones.begin(), mBones.end());
@@ -1307,8 +1308,7 @@ void RndMesh::InstanceGeomOwnerBones() {
     RndTransformable *oldRoot = nullptr;
     for (RndTransformable *parent = mGeomOwner->mBones[0].mBone; nullptr != parent;
          parent = parent->TransParent()) {
-        RndTransformable *transParent =
-            dynamic_cast<RndTransformable *>(parent->TransParent());
+        RndDir *transParent = dynamic_cast<RndDir *>(parent->TransParent());
         oldRoot = parent;
         if (transParent)
             break;
@@ -1321,7 +1321,7 @@ void RndMesh::InstanceGeomOwnerBones() {
     newRoot->Copy(oldRoot, Hmx::Object::kCopyDeep);
 
     // Parent new root under the RndDir
-    RndTransformable *dirTrans = dynamic_cast<RndTransformable *>(Dir());
+    RndTransformable *dirTrans = dynamic_cast<RndDir *>(Dir());
     newRoot->SetTransParent(dirTrans, false);
 
     // Create new bone transforms for each bone
@@ -1333,8 +1333,7 @@ void RndMesh::InstanceGeomOwnerBones() {
 
         // Find parent in owner hierarchy and reparent
         int parentIdx = mGeomOwner->GetBoneIndex(mGeomOwner->mBones[i].mBone->TransParent());
-        RndTransformable *parent;
-        parent = !((parentIdx != -1)) ? newRoot : (RndTransformable *)mBones[parentIdx].mBone;
+        RndTransformable *parent = parentIdx == -1 ? newRoot : mBones[parentIdx].mBone;
         newBone->SetTransParent(parent, false);
     }
 }
