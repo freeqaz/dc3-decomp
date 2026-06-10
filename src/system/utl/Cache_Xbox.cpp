@@ -358,26 +358,25 @@ int CacheXbox::ThreadWrite() {
         nextPos = mThreadStr.find('\\', nextPos + 1);
     }
 
-    HANDLE hFile = CreateFileA(
-        mThreadStr.c_str(),
-        0x40000000,  // GENERIC_WRITE
-        0,           // No sharing
-        nullptr,     // No security
-        2,           // CREATE_ALWAYS
-        0x80,        // FILE_ATTRIBUTE_NORMAL
-        nullptr      // No template
-    );
+    HANDLE hFile = (HANDLE)-1;
+    if (success != 0) {
+        hFile = CreateFileA(
+            mThreadStr.c_str(),
+            0x40000000,  // GENERIC_WRITE
+            0,           // No sharing
+            nullptr,     // No security
+            2,           // CREATE_ALWAYS
+            0x80,        // FILE_ATTRIBUTE_NORMAL
+            nullptr      // No template
+        );
+    }
 
     if (hFile == (HANDLE)-1) {
         DWORD err = GetLastError();
-        if (err >= 2) {
-            if (err <= 3) {
-                return 8;
-            } else if (err != 0x15) {
-                if (IsDeviceConnected(mCacheID.DeviceID())) {
-                    MILO_NOTIFY("CacheXbox::WriteAsync() - Unhandled error from CreateFile(): %d\n", err);
-                    return -1;
-                }
+        if (err < 2 || (err > 3 && err != 0x15)) {
+            if (IsDeviceConnected(mCacheID.DeviceID())) {
+                MILO_NOTIFY("CacheXbox::WriteAsync() - Unhandled error from CreateFile(): %d\n", err);
+                return -1;
             }
         }
         return 8;

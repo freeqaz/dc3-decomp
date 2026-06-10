@@ -1570,9 +1570,6 @@ void HamNavList::DrawDebug() const {
     TheRnd.DrawRectScreen(rect, sRectColor, nullptr, nullptr, nullptr);
 
     char buf[50];
-    float lineStep = 0.05f;
-    float startX = 0.0f;
-    float startY = sRectY;
     unsigned int i = 0;
     do {
         sprintf_s(buf, "");
@@ -1593,7 +1590,7 @@ void HamNavList::DrawDebug() const {
             sprintf_s(buf, "Num selectable items: %d", NumItems());
             break;
         }
-        Vector2 pos(startX, startY + i * lineStep);
+        Vector2 pos(0.0f, sRectY + (int)i * 0.05f);
         TheRnd.DrawStringScreen(buf, pos, sTextColor, true);
         i++;
     } while ((int)i < 5);
