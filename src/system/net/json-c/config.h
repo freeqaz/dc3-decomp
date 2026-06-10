@@ -124,4 +124,31 @@
 /* Define to `unsigned int' if <sys/types.h> does not define. */
 #undef size_t
 
+/* ---------------------------------------------------------------------------
+ * Native (HX_NATIVE) POSIX host configuration.
+ *
+ * The block above is the unconfigured autoheader template (all HAVE_* #undef'd),
+ * which is correct for the Xbox/MSVC decomp build. On the modern POSIX host that
+ * builds the native port these headers/functions DO exist; without this, the
+ * #undef's leave <fcntl.h>/<unistd.h> uncluded (open/O_RDONLY undeclared) and the
+ * json-c-local static vasprintf collides with glibc's declaration.
+ * Guarded by HX_NATIVE so the Xbox build is byte-for-byte unchanged.
+ * ------------------------------------------------------------------------- */
+#if defined(HX_NATIVE) && !defined(WIN32) && !defined(_WIN32)
+#undef HAVE_FCNTL_H
+#define HAVE_FCNTL_H 1
+#undef HAVE_UNISTD_H
+#define HAVE_UNISTD_H 1
+#undef HAVE_SYS_STAT_H
+#define HAVE_SYS_STAT_H 1
+#undef HAVE_SYS_TYPES_H
+#define HAVE_SYS_TYPES_H 1
+#undef HAVE_OPEN
+#define HAVE_OPEN 1
+#undef HAVE_VASPRINTF
+#define HAVE_VASPRINTF 1
+#undef HAVE_STRERROR
+#define HAVE_STRERROR 1
+#endif
+
 // clang-format enable

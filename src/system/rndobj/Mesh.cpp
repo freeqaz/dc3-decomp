@@ -1333,7 +1333,15 @@ void RndMesh::InstanceGeomOwnerBones() {
 
         // Find parent in owner hierarchy and reparent
         int parentIdx = mGeomOwner->GetBoneIndex(mGeomOwner->mBones[i].mBone->TransParent());
+#ifdef HX_NATIVE
+        // Clang sees the ?: as ambiguous (ObjPtr<RndTransformable> <-> RndTransformable*
+        // convert both directions); make the ObjPtr branch an explicit pointer. Same
+        // conversion MSVC picks implicitly — no PPC-side change.
+        RndTransformable *parent =
+            parentIdx == -1 ? newRoot : (RndTransformable *)mBones[parentIdx].mBone;
+#else
         RndTransformable *parent = parentIdx == -1 ? newRoot : mBones[parentIdx].mBone;
+#endif
         newBone->SetTransParent(parent, false);
     }
 }

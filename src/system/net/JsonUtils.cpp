@@ -65,7 +65,12 @@ JsonObject *JsonConverter::LoadFromString(const String &str) {
     printbuf_memappend(buf, str.c_str(), str.length());
     json_object *obj = json_tokener_parse(buf->buf);
 #ifdef HX_NATIVE
-    if (!obj) {
+    // json_tokener_parse returns NULL or, on parse error, error_ptr(-err) — a
+    // small-magnitude "negative" pointer (json-c bits.h is_error). The old
+    // `if (!obj)` only caught NULL, so a malformed payload slipped an error
+    // sentinel through and crashed on deref. LP64-correct is_error: the original
+    // Xbox `(int)obj > 0xfffff060` is the 32-bit form of (uintptr)obj > -4000.
+    if (!obj || (unsigned long)obj > (unsigned long)-4000L) {
 #else
     if ((int)obj > 0xfffff060) { // ???
 #endif

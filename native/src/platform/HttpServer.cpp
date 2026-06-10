@@ -18,6 +18,7 @@
 #include "rndobj/Trans.h"
 #include "rndobj/Draw.h"
 #include "ui/UI.h"
+#include "StubTrace.h"
 
 #include <httplib.h>
 #include <cstdio>
@@ -744,6 +745,20 @@ void HttpServer::RegisterEndpoints() {
         snprintf(buf, sizeof(buf),
             "{\"status\":\"ok\",\"frame\":%d,\"uptime_s\":%.1f}", frame, uptime);
         res.set_content(JsonOk(buf), "application/json");
+    });
+
+    // GET /api/stubs — ranked native stub-hit counts (roadmap N.2).
+    // Returns which engine_stubs_generated.cpp stubs actually fired this run.
+    // Empty unless the process was started with DC3_STUB_TRACE=1.
+    svr->Get("/api/stubs", [](const httplib::Request&, httplib::Response& res) {
+        uint64_t total = 0, distinct = 0;
+        std::string ranked = dc3::StubTraceDump::ToJson(&total, &distinct);
+        char head[160];
+        snprintf(head, sizeof(head),
+            "{\"enabled\":%s,\"totalHits\":%llu,\"distinctStubs\":%llu,\"stubs\":",
+            dc3::gStubTraceEnabled ? "true" : "false",
+            (unsigned long long)total, (unsigned long long)distinct);
+        res.set_content(JsonOk(std::string(head) + ranked + "}"), "application/json");
     });
 
     // GET /api/telemetry
