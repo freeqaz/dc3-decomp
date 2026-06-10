@@ -1,7 +1,9 @@
 # 2026-06-10 — ASM-Archaeology Waves 1–5 (orchestrated)
 
-> Waves 2–4 appended below; wave 5 (permres retry, MakeString mechanism,
-> og-port 4, platform cluster) in flight at time of writing.
+> All five waves landed on main. **Session totals vs `7a30ad8c`:
+> +50 matched functions, 17 subsystems improved, ~80 real logic bugs fixed,
+> 33 match commits, zero report-plane regressions** (the one licensed
+> VelocityBuffer trade aside).
 
 Follow-on to [2026-06-09-large-function-asm-archaeology.md](2026-06-09-large-function-asm-archaeology.md).
 First fully-orchestrated run of the playbook: per-cluster **intel → Opus implementer →
@@ -269,6 +271,50 @@ DB sync: 31 improvements, 1 licensed regression, **18 promotions to COMPLETE**.
 - New floors: STLport vector-init address-temp pattern; MSVC tail-merge of dual
   Fail tails (D3DFormatForBitmap MILO_FAIL is behaviorally right but −13pp — recorded
   unlanded); MultiMesh combined-static-table (0x70 alignment gap unrepresentable).
+
+---
+
+# Wave 5 results (commits `8710d72a` … `c0ad4a96`)
+
+3 of 4 lanes landed (permres crashed pre-worktree a second time — see follow-ups).
+
+| Function | Before | After | Notes |
+|---|---|---|---|
+| `HxGuid::Generate` | 89.8% | **100%** | MakeString mechanism found |
+| `RequirePushToTalk` / `SetFxSend@MicXbox` | 84.5/92.0 | **100%** ×2 | |
+| 10 og-ports (FlowSound/FlowTimer Execute, CharClipDriver ctor, DirLoader ×3, StorePanel ×2, SetJump, Fitness ctor) | 93–98.8% | **100%** ×10 | |
+| `UsbMidiKeyboard::Poll` | 83.9% | 92.0% | |
+| `SetFaceOverrideClip` / `PlayNormal` | 90/94.5 | 96.5/97.3 | MakeString sites |
+| 8 more og-ports | 84–98% | 95.8–98.7% | |
+| `CacheXbox::ThreadGetFileSize` | 84.2% | 86.5% | **stored size on FAILURE, GetLastError on SUCCESS** |
+| `MCContainerXbox::Mount` | 88.4% | 88.2% | licensed: discarded XContentGetCreator result → corrupt mounts reported success |
+
+**The MakeString mechanism** (no header edits, the 488-regression global toggle and
+the overload-resolution hypothesis both refuted): the inline/out-of-line split is
+per-TU code structure — e.g. function definition order making a static call cycle
+visible (Console's DataBreak↔Break) naturally produces the out-of-line
+`bl ?MakeString@@YAPBDPBD@Z`. Console's `__declspec(noinline)` hack removed at 100%.
+
+**Vtable bug**: DxRnd `Resume`/`Suspend` slots were SWAPPED in Rnd_NG.h — virtual
+dispatch invoked the wrong function. Declaration order fixed, zero fallout.
+
+### Open follow-ups (next session)
+
+1. **permres lane crashed twice pre-worktree** — debug the decomp-synth permuter
+   entry point manually before re-delegating (likely the venv/python discovery or
+   scan_and_permute invocation fails immediately). The 90–99 band target list is in
+   the wave-5 workflow script.
+2. **Unlanded real bugs** (behavior right, match-regressing): HolmesClientOpen
+   filename-dropping MILO_FAIL (77.2→64.4 frame-spill floor), D3DFormatForBitmap
+   MILO_WARN→MILO_FAIL (75.9→62.6 tail-merge floor), VelocityBuffer `&&` codegen form.
+3. **og pool**: ~120 og=100% candidates remain (waves 2–5 landed ~56).
+4. **ShaderProgram::Cache** (74.3, 442-instr structural) — out of scope for
+   MakeString lane, needs its own archaeology pass.
+5. **Native-port review flags accumulated**: DrawLight light-can tail, UtilDrawSphere
+   mat restore, CubeTex lock/unlock upload, AdvanceFrame unconditional, gesture
+   thresholds, DxShader compile errors, Kinect basis/pelvis scale, crown HUD,
+   Resume/Suspend dispatch.
+6. ~21 `wt/arch*` worktrees left intact (CoW-cheap); `git worktree remove` when stale.
 
 ### Tooling landed (decomp-synth `243e2e3`)
 
