@@ -109,3 +109,89 @@ reaches `main_screen` and then aborts in `Sound::SynthPoll` (`free(): invalid
 pointer`, the iterator-erase bug above). That is a fourth, audio-subsystem bug
 outside this lane's two-crash scope; it is the gate to a gameplay-path stub capture
 and is the top item in the fix order.
+
+---
+
+# Wave 3 Lane A — `Sound::SynthPoll` fixed; boot now reaches `game_screen` (gameplay)
+
+**Date:** 2026-06-10. **Lane:** Wave 3 Lane A. **Branch:** `wave3/a-gameplay-feet`.
+**Worktree:** `/home/free/code/milohax/wt-wave3-a-gameplay-feet`.
+
+The `Sound::SynthPoll` blocker named above is **FIXED** (see §SynthPoll fix). With it
+gone, `dc3-native` boots cleanly through the **entire** UI chain to **`game_screen`**
+and runs `state=playing` with `worldLoaded=1 venuePresent=1 doSongAnim=1` and live foot
+telemetry — strictly further than the Wave-2 `main_screen` frontier.
+
+## New boot reach (Wave 3)
+
+Driven by `scripts/dc3-input-flows/ymca.txt` (headless, `DC3_FAST_BOOT=1 DC3_FAST_TIME=1`):
+
+```
+attract_screen -> autosave_warning_screen -> title_screen
+  -> wait_main_after_saveload_screen -> main_screen -> choose_mode_screen
+  -> song_select_screen -> multiuser_screen -> loading_screen
+  -> preloading_screen -> real_loading_screen -> game_screen   (state=playing)
+```
+
+Clean `EXIT=0` over 5,000 frames (no SIGSEGV/SIGABRT). Verified twice (one-shot run +
+a live background run polled over HTTP).
+
+## How the gameplay table was captured (live, at `game_screen`)
+
+```bash
+cd native/build
+DC3_DATA=/home/free/code/milohax/dc3-decomp/orig-assets \
+  DC3_HTTP=1 DC3_HTTP_PORT=9093 DC3_FAST_BOOT=1 DC3_TEL=1 DC3_STUB_TRACE=1 \
+  MILO_HEADLESS=1 DC3_FAST_TIME=1 MILO_FATAL_FAILS=0 MILO_MAX_FRAMES=100000 \
+  MILO_INPUT_SCRIPT=.../scripts/dc3-input-flows/ymca.txt ./dc3-native &
+# once /api/telemetry shows screen=game_screen state=playing:
+curl localhost:9093/api/stubs
+curl localhost:9093/api/health    # {"ok":true,"data":{"status":"ok","frame":2567,...}}
+```
+
+(Worktrees have no reflinked `orig-assets`, so `DC3_DATA` must point at the main repo's
+copy. The binary's own cwd-relative fallback only works from the main repo.)
+
+## Ranked stub worklist (live, boot -> `game_screen` gameplay)
+
+| Rank | Stub symbol | Hits | Class | Notes |
+|-----:|-------------|-----:|-------|-------|
+| 1 | `OutputDebugStringA` | 2011 | XDK debug | Debug-print shim. No-op, zero functional impact. Not worth implementing. |
+| 2 | `vorbis_synthesis_poll` | 290 | Audio (Vorbis) | Hit every audio poll. Now that `Sound::SynthPoll` no longer crashes, this is the remaining audio stub — still the highest-value REAL stub if/when audio output is wanted. Boot is no longer gated on it. |
+| 3 | `NuiIdentityAbort` | 1 | Kinect (NUI) | **NEW on the gameplay path** (absent from the boot-only table). Kinect identity-tracking abort; called once when entering gameplay. Fake-Kinect/headless skeleton path. Low impact (returns once). |
+| 4 | `DmGetSystemInfo` | 1 | XDK devkit | Devkit system-info, once at boot. Low impact. |
+| 5 | `DmMapDevkitDrive` | 1 | XDK devkit | Maps devkit drive, once at boot. Low impact. |
+
+Total: **2,304 hits across 5 distinct stubs** through a full boot->gameplay session.
+The only NEW stub the gameplay path exercises beyond the boot table is `NuiIdentityAbort`
+(Kinect). No new high-value functional stub appeared — the audit's expectation that
+gameplay would surface many new stubs is **not borne out**; the gameplay path is served
+by the same handful, dominated by no-op debug/devkit shims. The one real candidate
+(`vorbis_synthesis_poll`) is unchanged from boot.
+
+## `Sound::SynthPoll` fix (the named Wave-2 blocker)
+
+Two real decomp bugs, both found by reverse-engineering the Xbox asm for
+`?SynthPoll@Sound@@UAAXXZ` (`run_objdiff`, full instruction listing), pinned with a new
+gtest (`native/tests/test_sound_synthpoll.cpp`) that crashes/fails on the old code:
+
+1. **`mSamples` wrong-erase / `erase(end())` (the double-free).** Source did
+   `cur = *it; it++; if (cur->DonePlaying()) mSamples.erase(it);` — erasing the element
+   AFTER `cur`, and `erase(end())` when `cur` was the last node. The Xbox asm saves the
+   pre-increment iterator (idx 57 `mr r29,r31`, idx 59 advance) and erases THAT node
+   (idx 78 `stw r29,0x50,r1` -> erase). **Fix:** save `auto curIt = it;` before `it++`
+   and `mSamples.erase(curIt)`.
+2. **`mDelayArgs` delayed-play forwarded `this` as the event receiver.** Source passed
+   `this` as `Play(...)`'s `obj`; the target loads `cur->mEventReceiver` (idx 26
+   `lwz r7, 0xc, r31` — `obj` is the 4th arg in r7 with 3 leading float args).
+   **Fix:** `Play(cur->mVolume, cur->mPan, cur->mTranspose, cur->mEventReceiver, 0)`.
+   Also cached `DelayArgs *cur = *it;` (target reads all fields from one register) and
+   used the `mDelayArgs.erase(it++)` idiom (target advances before erase) — both close
+   the remaining lowering diffs.
+
+**PPC match (measured in this worktree via `run_objdiff`): 79.3% -> 91.7% normalized**
+(+12.4). Behavioral bugs eliminated; residual is FPR/scheduling noise (commutative
+`fadds`, fader GetVal stack-slot order, SetPan/SetSpeed scheduling). Final certification
+is on main post-merge. The PPC `#else` path is unaffected — these are pure source-logic
+corrections that improve BOTH host behavior and the PPC match (a real decomp bug, not an
+HX_NATIVE guard).

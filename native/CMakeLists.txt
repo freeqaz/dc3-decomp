@@ -1845,6 +1845,7 @@ if(BUILD_TESTS)
         tests/test_json_parse.cpp
         tests/test_stub_trace.cpp
         tests/test_native_boot_crashes.cpp
+        tests/test_sound_synthpoll.cpp
         src/dc3_render_hook.cpp       # Phase 0.2a: HamRenderHook (registers with milo-engine)
         ${DC3_ENGINE_SOURCES}
         ${DC3_NATIVE_CORE_SOURCES_ENGINE}

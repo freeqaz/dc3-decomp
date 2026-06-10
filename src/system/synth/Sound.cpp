@@ -174,21 +174,23 @@ const char *Sound::GetSoundDisplayName() { return MakeString("Sequence: %s", Nam
 void Sound::SynthPoll() {
     float deltaMs = TheTaskMgr.DeltaSeconds() * 1000.0f;
     for (auto it = mDelayArgs.begin(); it != mDelayArgs.end();) {
-        (*it)->mDelayMs -= deltaMs;
-        if ((*it)->mDelayMs <= 0) {
-            Play((*it)->mVolume, (*it)->mPan, (*it)->mTranspose, this, 0);
-            delete *it;
-            it = mDelayArgs.erase(it);
+        DelayArgs *cur = *it;
+        cur->mDelayMs -= deltaMs;
+        if (cur->mDelayMs <= 0) {
+            Play(cur->mVolume, cur->mPan, cur->mTranspose, cur->mEventReceiver, 0);
+            delete cur;
+            mDelayArgs.erase(it++);
         } else {
             it++;
         }
     }
     for (auto it = mSamples.begin(); it != mSamples.end();) {
         PlayableSample *cur = *it;
+        auto curIt = it;
         it++;
         if (mIsSynthSample || mMoggClip) {
             if (cur->DonePlaying()) {
-                mSamples.erase(it);
+                mSamples.erase(curIt);
             }
         } else {
             mDuckers.Unduck();
