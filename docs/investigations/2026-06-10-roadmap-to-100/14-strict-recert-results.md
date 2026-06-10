@@ -17,7 +17,7 @@ forgives **all** relocation targets (a `bl wrong_function` scores 100% as long a
 
   | class | functions | authorable | bytes |
   |---|---:|---:|---:|
-  | **genuine_wrong_target** (different symbol NAME) | **2,408** | **2,405** | 742,728 |
+  | **genuine_wrong_target** (different symbol NAME) | **2,408** | **2,405** | 680,384 |
   | template_instantiation_variant (same method, different type params — ICF-equivalent) | 2,992 | 2,992 | 862,700 |
   | target_split_label (jeff `fn_`/`merged_`/`lbl_`/`$T`/EH-record artifacts) | 3,096 | 3,096 | 1,004,664 |
   | benign_string_path (`??_C@` __FILE__ build-path text) | 1,321 | 1,321 | 152,008 |
