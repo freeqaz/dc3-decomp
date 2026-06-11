@@ -411,7 +411,7 @@ u64 RndShaderSimple::CalcShaderOpts(NgMat *mat, ShaderType s, bool b) {
         int boneCount = TheShaderMgr.BoneCount();
         bool displayError = TheShaderMgr.GetShaderErrorDisplay();
         u64 bc = (u64)(bool)boneCount & 1;
-        u64 de = (u64)displayError;
+        u64 de = (u64)displayError & 1;
         opts = (de << 23 | bc) << 12;
         break;
     }
@@ -444,19 +444,20 @@ u64 RndShaderDrawRect::CalcShaderOpts(NgMat *mat, ShaderType s, bool b) {
     int hasDiffuse = mat->GetDiffuseTex() != nullptr;
     bool prelit = mat->Prelit();
     bool offscreen;
-    if (!b) {
-        offscreen = TheNgRnd.Offscreen();
-    } else {
-        offscreen = TheShaderMgr.GetUnk41();
-    }
+    u64 matBits = ((u64)(hasDiffuse & 1) | (u64)(prelit & 1) << 4) << 4;
     u64 pseudoHDR = 0;
+    if (b) {
+        offscreen = TheShaderMgr.GetUnk41();
+    } else {
+        offscreen = TheNgRnd.Offscreen();
+    }
     if (!offscreen && mat->AllowHDR()) {
         pseudoHDR = 1;
     }
     return ((((u64)(TheHiResScreen.IsActive() & 1) << 2
         | (u64)(TheRnd.ResourceCached() & 1)) << 28
         | pseudoHDR) << 22)
-        | (((u64)(prelit & 1) << 4 | (u64)hasDiffuse) << 4);
+        | matBits;
 }
 
 u64 RndShaderParticles::CalcShaderOpts(NgMat *mat, ShaderType s, bool b) {

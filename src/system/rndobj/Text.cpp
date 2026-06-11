@@ -1075,24 +1075,21 @@ void RndText::SetTextASCII(const char *cstr) {
 
 int RndText::ConvertTextToWide(const char *str, HX_VECTOR(unsigned short) &wideChars) {
     char emptyStr = 0;
-    const char *p = str;
     if (str == 0) {
-        p = &emptyStr;
+        str = &emptyStr;
     }
 
     // Manual strlen to match target inline loop
-    const char *s = p;
+    const char *s = str;
     while ('\0' != *s++) {}
+    wideChars.resize(((s - str) - 1) * 2 + 1, (0));
     MemPushTemp();
-    unsigned short zero = 0;
-    unsigned short ssChar;
-    wideChars.resize(((s - p) - 1) * 2 + 1, zero);
     MemPopTemp();
 
     unsigned short *out = &wideChars[0];
-    int capsMode = mCapsMode;
 
-    if (capsMode == kForceUpper) {
+    if (mCapsMode == kForceUpper) {
+        unsigned short ssChar;
         DecodeUTF8(ssChar, "\xC3\x9F");
         int fixedLen = mFixedLength;
         unsigned short *limit;
@@ -1101,10 +1098,10 @@ int RndText::ConvertTextToWide(const char *str, HX_VECTOR(unsigned short) &wideC
         } else {
             limit = 0;
         }
-        while (*p != '\0') {
+        while (*str != '\0') {
             if (out == limit) break;
             unsigned short ch;
-            p += DecodeUTF8(ch, p);
+            str += DecodeUTF8(ch, str);
             if (ch == ssChar) {
                 *out = 0x53;
                 out++;
@@ -1115,16 +1112,16 @@ int RndText::ConvertTextToWide(const char *str, HX_VECTOR(unsigned short) &wideC
             }
             out++;
         }
-    } else if (capsMode == kForceLower) {
-        while (*p != '\0') {
+    } else if (mCapsMode == kForceLower) {
+        while (*str != '\0') {
             unsigned short ch;
-            p += DecodeUTF8(ch, p);
+            str += DecodeUTF8(ch, str);
             *out = WToLower(ch);
             out++;
         }
     } else {
-        while (*p != '\0') {
-            p += DecodeUTF8(*out, p);
+        while (*str != '\0') {
+            str += DecodeUTF8(*out, str);
             out++;
         }
     }
