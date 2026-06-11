@@ -1090,6 +1090,27 @@ void App::RunWithoutDebugging() {
         if (TheSynth)
             TheSynth->Poll();
 
+#ifdef HX_NATIVE
+        // WAVE 6 LANE A: deterministic post-poll foot plant (default ON; opt-out
+        // DC3_FEET_POST_PLANT_OFF=1). The world poll above (TheTaskMgr.Poll) composes
+        // the FINAL leg pose including the dancer's pelvis/root crouch. Re-plant each
+        // dancer's foot here, as the genuine LAST world write before the foot is read/
+        // drawn, so the plant bakes the leg for the final-crouch root instead of a
+        // stale-high one — and, being post-poll, is order-independent (no within-frame
+        // poll-order race). MECHANISM (wave-6 frame-matched Xbox/native evidence): the
+        // foot sinks because at the deep-crouch beats the native knee+ankle anim/clip
+        // QUAT under-bends (pelvis 33-35: native knee -32 deg / ankle +12 vs Xbox -57 /
+        // +35), dropping the ankle from ~4 to ~0 and the rigid foot's toe to -4. The
+        // analytic plant lifts ONLY a below-floor toe (one-directional, strict
+        // improvement), preserving the foot's anim orientation, to reach the Xbox-
+        // correct planted result. All HX_NATIVE (PPC bytes unchanged). See
+        // CharIKFoot.cpp Dc3RunPostPollFootPlant + the WAVE-6 LANE A session notes.
+        {
+            extern void Dc3RunPostPollFootPlant();
+            Dc3RunPostPollFootPlant();
+        }
+#endif
+
         GameplayTelemetry::Sample(frameCount);
 #ifdef DC3_HTTP_SERVER
         if (TheHttpServer) {

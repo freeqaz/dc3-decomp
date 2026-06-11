@@ -333,6 +333,44 @@ GameplayTelemetry::Snapshot GameplayTelemetry::CaptureSnapshot(int frame) {
                     }
                 }
 
+                // WAVE 6 LANE A (DC3_KNEE_LOCAL): read bone_L-knee.mesh LOCAL m.x and
+                // compute localRotZ = atan2(m.x.y, m.x.x), exactly matching the Xbox
+                // Xenia rig (dc3_hack_pack.cc reads the same local m.x). Xbox knee local
+                // rotZ ranges -13..-75 (planted beats ~-58); native anim-only ~-20. This
+                // tells us whether native's knee LOCAL ever reaches the Xbox bend.
+                if (getenv("DC3_KNEE_LOCAL")) {
+                    static int sKneeLocal = 0;
+                    if (sKneeLocal < 9050) {
+                        RndTransformable *lKnee =
+                            charDir->Find<RndTransformable>("bone_L-knee.mesh", true);
+                        RndTransformable *lThighK =
+                            charDir->Find<RndTransformable>("bone_L-thigh.mesh", true);
+                        RndTransformable *pelvK =
+                            charDir->Find<RndTransformable>("bone_pelvis.mesh", true);
+                        if (lKnee) {
+                            sKneeLocal++;
+                            const Hmx::Matrix3 &km = lKnee->LocalXfm().m;
+                            float rotz = 57.29578f * std::atan2(km.x.y, km.x.x);
+                            // Ankle local rotZ (foot orientation) — Xbox median +14.7.
+                            float ankRotZ = -999.f, ankLocalVx = -999.f;
+                            if (lAnkle) {
+                                const Hmx::Matrix3 &am = lAnkle->LocalXfm().m;
+                                ankRotZ = 57.29578f * std::atan2(am.x.y, am.x.x);
+                                ankLocalVx = lAnkle->LocalXfm().v.x;
+                            }
+                            fprintf(stderr,
+                                "DC3_KNEE_LOCAL[%d] kneeRotZ=%.2f kneeVx=%.3f "
+                                "ankRotZ=%.2f ankVx=%.3f "
+                                "pelvisZ=%.2f thighZ=%.2f kneeZ=%.2f ankleZ=%.2f toeZ=%.2f\n",
+                                sKneeLocal, rotz, lKnee->LocalXfm().v.x,
+                                ankRotZ, ankLocalVx,
+                                pelvK ? pelvK->WorldXfm().v.z : -999.f,
+                                lThighK ? lThighK->WorldXfm().v.z : -999.f,
+                                lKnee->WorldXfm().v.z, s.lAnkleZ, s.lToeZ);
+                        }
+                    }
+                }
+
                 // One-shot diagnostic: dump toe rest-offset and ankle rotation.
                 // Gate to gameplay only — we already have rest-pose data.
                 static int sFootGeomLog = 0;

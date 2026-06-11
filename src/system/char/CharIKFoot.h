@@ -30,6 +30,14 @@ public:
     RndTransformable *GetData() const { return mData; }
     int GetDataIndex() const { return mDataIndex; }
 
+#ifdef HX_NATIVE
+    // WAVE 6 LANE A: deterministic post-poll foot plant (DC3_FEET_POST_PLANT).
+    // Runs the stateless 2-bone clean plant on this foot's FK-composed leg as the
+    // genuine last per-frame world write (called from the main loop after the full
+    // world poll, when the pelvis/root crouch is final). See CharIKFoot.cpp.
+    void Dc3PostPollPlant();
+#endif
+
 protected:
     CharIKFoot();
 

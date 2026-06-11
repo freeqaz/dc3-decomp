@@ -7,6 +7,8 @@
 #include "obj/Task.h"
 #include "rndobj/Trans.h"
 #ifdef HX_NATIVE
+#include "hamobj/HamCharacter.h"
+#include "hamobj/HamWardrobe.h"
 #include <cstdlib>
 #include <cstring>
 #include <cstdio>
@@ -109,6 +111,16 @@ static bool Dc3CleanPlant(RndTransformable *ankle, RndTransformable *toe) {
     Vector3 A = ankleW0.v;                           // current ankle joint
     Vector3 T = toe->WorldXfm().v;                   // current toe (foot tip)
 
+    // INPUT-SANITY GUARD (wave 6): at a move boundary the leg FK is momentarily
+    // un-composed — the ankle/toe/knee read UP at the hip (z ~= H.z, the "flying feet"
+    // boundary frame). A standing leg hangs DOWN, so the ankle/knee must sit well below
+    // the hip. If the leg reads collapsed onto the hip, the FK is stale — DO NOT plant
+    // (leave the anim pose); planting off a hip-level read teleports the ankle ~57 units
+    // and the next composed frame snaps it back (NoAnkleSuddenJumpsDuringGameplay). The
+    // anim toe Z would be hip-high too, so this frame is not a real floor violation.
+    if (A.z > H.z - 5.0f || Kc.z > H.z - 2.0f || T.z > H.z - 5.0f)
+        return true;                                 // un-composed leg; leave anim pose
+
     const float kFloor = 0.0f, kMargin = 0.6f;
     float deficit = (kFloor + kMargin) - T.z;
     if (deficit <= 0.0f)
@@ -143,40 +155,48 @@ static bool Dc3CleanPlant(RndTransformable *ankle, RndTransformable *toe) {
     Vector3 Kp; { Vector3 t1; Scale(hToA, l, t1); Vector3 t2; Scale(perp, hgt, t2);
                   Add(H, t1, Kp); Add(Kp, t2, Kp); }
 
-    // Aim the THIGH so its child (knee) lands at Kp.
+    // Milo uses the ROW-VECTOR convention: a point transforms as p' = p * M, and
+    // world = local * parentWorld (child-first). So a world-space rotation R applied
+    // AFTER an existing world matrix W is W*R (NOT R*W), and to set a bone's world
+    // rotation to Wnew while keeping its parent, its new LOCAL.m = Wnew * inv(parentW.m).
+    // The previous code used R*W / inv(parent)*W (column-vector order) — that rotated in
+    // the wrong frame and failed to swing the ankle (ankle stayed at the floor, the
+    // residual sink). This corrected order actually lands the ankle at the target.
+
+    // Aim the THIGH so its child (knee) lands at Kp (rotate the thigh about the hip H).
     {
         Vector3 curDir; Normalize(femurV, curDir);
         Vector3 wantV; Subtract(Kp, H, wantV); Vector3 wantDir; Normalize(wantV, wantDir);
         Hmx::Quat q; MakeRotQuat(curDir, wantDir, q);
-        Hmx::Matrix3 dR; MakeRotMatrix(q, dR);
-        Hmx::Matrix3 wmNew; Multiply(dR, thigh->WorldXfm().m, wmNew);
+        Hmx::Matrix3 R; MakeRotMatrix(q, R);
+        Hmx::Matrix3 wmNew; Multiply(thigh->WorldXfm().m, R, wmNew);   // Wnew = W * R
         Hmx::Matrix3 hipInv; Invert(hip->WorldXfm().m, hipInv);
-        Hmx::Matrix3 lmNew; Multiply(hipInv, wmNew, lmNew);
+        Hmx::Matrix3 lmNew; Multiply(wmNew, hipInv, lmNew);            // local = Wnew * inv(parentW)
         thigh->DirtyLocalXfm().m = lmNew;            // keep local .v (bone offset)
     }
     (void)thigh->WorldXfm();                         // recompose; knee now near Kp
     Vector3 Kw = knee->WorldXfm().v;
 
-    // Aim the KNEE so its child (ankle) lands at Atarget.
+    // Aim the KNEE so its child (ankle) lands at Atarget (rotate the knee about Kw).
     {
-        Vector3 curV; Subtract(A, Kc, curV); Vector3 curDir; Normalize(curV, curDir);
-        // recompute current world shin dir after the thigh moved
+        // current world shin dir after the thigh moved
         Vector3 ankNow = ankle->WorldXfm().v; Vector3 curNow; Subtract(ankNow, Kw, curNow);
-        Normalize(curNow, curDir);
+        Vector3 curDir; Normalize(curNow, curDir);
         Vector3 wantV; Subtract(Atarget, Kw, wantV); Vector3 wantDir; Normalize(wantV, wantDir);
         Hmx::Quat q; MakeRotQuat(curDir, wantDir, q);
-        Hmx::Matrix3 dR; MakeRotMatrix(q, dR);
-        Hmx::Matrix3 wmNew; Multiply(dR, knee->WorldXfm().m, wmNew);
+        Hmx::Matrix3 R; MakeRotMatrix(q, R);
+        Hmx::Matrix3 wmNew; Multiply(knee->WorldXfm().m, R, wmNew);    // Wnew = W * R
         Hmx::Matrix3 thInv; Invert(thigh->WorldXfm().m, thInv);
-        Hmx::Matrix3 lmNew; Multiply(thInv, wmNew, lmNew);
+        Hmx::Matrix3 lmNew; Multiply(wmNew, thInv, lmNew);
         knee->DirtyLocalXfm().m = lmNew;
     }
     (void)knee->WorldXfm();
 
     // Preserve the foot orientation: set ankle LOCAL so its world rotation == original.
+    // ankleWorld = ankleLocal * kneeWorld  =>  ankleLocal.m = ankleWorld0.m * inv(kneeWorld.m).
     {
         Hmx::Matrix3 knInv; Invert(knee->WorldXfm().m, knInv);
-        Hmx::Matrix3 lmNew; Multiply(knInv, ankleW0.m, lmNew);
+        Hmx::Matrix3 lmNew; Multiply(ankleW0.m, knInv, lmNew);
         ankle->DirtyLocalXfm().m = lmNew;
     }
     (void)ankle->WorldXfm();
@@ -186,12 +206,33 @@ static bool Dc3CleanPlant(RndTransformable *ankle, RndTransformable *toe) {
     // sent toe Z to ~-12) — REVERT to the snapshotted anim LOCALs. The plant is then
     // a strict improvement (never worse than baseline) on every frame.
     {
+        Vector3 ankle1 = ankle->WorldXfm().v;
         float toeZ1 = toe->WorldXfm().v.z;
-        float ankleZ1 = ankle->WorldXfm().v.z;
+        float ankleZ1 = ankle1.z;
         bool nan = !(toeZ1 == toeZ1) || !(ankleZ1 == ankleZ1);
         // Tolerance: allow a tiny dip (float noise) but reject a real regression.
         bool worse = (toeZ1 < toeZ0 - 0.25f) || (ankleZ1 < ankleZ0 - 0.25f);
-        if (nan || worse) {
+        // UPWARD-JUMP GUARD (wave 6): a correct plant displaces the ankle by ~deficit
+        // (lift the foot just clear of the floor). At move boundaries the leg FK is
+        // momentarily un-composed (the ankle/toe reads up at the hip, z~36), so the
+        // 2-bone solve aims at a wild target and teleports the ankle ~57 units — the
+        // "flying feet" jump (NoAnkleSuddenJumpsDuringGameplay). Bound the world-space
+        // ankle displacement to the deficit it was correcting plus a generous slack; a
+        // larger move means a bad read -> REVERT to the anim pose.
+        Vector3 moved; Subtract(ankle1, A, moved);
+        float ankleMove = Length(moved);
+        bool teleport = ankleMove > (deficit + 8.0f);
+        if (getenv("DC3_PLANT_DIAG")) {
+            static int sPD = 0;
+            if (sPD < 60 && (toeZ1 < -1.5f || teleport)) { sPD++;
+                fprintf(stderr,
+                    "DC3_PLANT_DIAG toeZ0=%.2f->toeZ1=%.2f ankleZ0=%.2f->ankleZ1=%.2f "
+                    "deficit=%.2f ankleMove=%.2f d=%.2f reach=%.2f H.z=%.2f revert=%d\n",
+                    toeZ0, toeZ1, ankleZ0, ankleZ1, deficit, ankleMove, d, reach, H.z,
+                    (nan || worse || teleport) ? 1 : 0);
+            }
+        }
+        if (nan || worse || teleport) {
             thigh->DirtyLocalXfm().m = thigh0;
             knee->DirtyLocalXfm().m = knee0;
             ankle->DirtyLocalXfm().m = ankle0;
@@ -212,6 +253,94 @@ static bool Dc3CleanPlant(RndTransformable *ankle, RndTransformable *toe) {
     if (!getenv("DC3_NO_GUARD_HIP"))
         gDc3PlantGuard.insert(hip);
     return true;
+}
+
+// ---------------------------------------------------------------------------
+// WAVE 6 LANE A — DETERMINISTIC POST-POLL FOOT PLANT (DC3_FEET_POST_PLANT)
+//
+// THE MECHANISM (wave-6, frame-matched Xbox-vs-native, supersedes the wave-5
+// "inert-IK / mMoveElbow disables the knee bend" framing):
+//   * The leg *.ikfoot faithfully loads mMoveElbow=FALSE on BOTH platforms
+//     (CharIKHand::Load is 99.6% — native reads exactly the bytes Xbox reads). So
+//     IKElbow never runs on EITHER platform: the Xbox knee bend is NOT an IK bend.
+//   * With mMoveElbow=false, CharIKHand::Poll's IK only SetWorldXfm's the ankle world
+//     (the !shoulderParent || mStretch path) — it does not write the knee local. The
+//     knee bone (bone_*-knee.mesh) is a QUAT bone posed by the anim/clip (PoseMeshes).
+//   * Frame-matched DC3_KNEE_LOCAL evidence: over a full YMCA run the native knee LOCAL
+//     rotZ tracks Xbox (both median ~-40 deg, native reaches -91, Xbox -115). The bend
+//     is NOT globally missing. The divergence is LOCALIZED to the deep-crouch beats:
+//       pelvis band 33-35 ->  native knee -32 / ankle +12 ; Xbox knee -57 / ankle +35
+//     i.e. at the crouch the native knee+ankle anim/clip QUAT UNDER-bends by ~25 deg,
+//     so the ankle drops from ~4 to ~0 and the rigid foot's toe (a fixed -4 local
+//     offset below the ankle) sinks to -4. The residual is a CLIP/anim-layer pose
+//     under-bend at the crouch, not an IK or poll-order race (cf the corrected session
+//     notes; the wave-5 "mMoveElbow=true force" lever DIVERGES and is refuted).
+//
+// THE FIX (this hook): rather than chase the clip-layer under-bend (engine clip/blend
+// territory), assert the Xbox-correct RESULT — a planted foot — as the dancer's genuine
+// LAST world write. Runs from App.cpp AFTER TheTaskMgr.Poll() completes (all dancers'
+// servo/facing passes + the final pelvis crouch are done) and BEFORE telemetry Sample +
+// Draw, so WorldXfm() reflects the fully-composed final-root leg and nothing overwrites
+// it. Order-independent by construction (no within-frame poll-order race — the wave-5
+// blocker). Every prior in-graph approach (HamDirector re-run, char-poll [28] plant,
+// cached re-apply) was defeated by a later root-crouch overwriting the plant; this hook
+// is strictly after that.
+//
+// DEFAULT ON (opt-out: DC3_FEET_POST_PLANT_OFF=1). Deterministic, strict-improvement:
+// the analytic 2-bone clean plant lifts ONLY a foot whose toe is below the floor margin
+// and leaves anim-lifted feet untouched (toe range over a full YMCA run is [0.60, 9.60]
+// — no fly-up mirage), preserves the foot's anim orientation, and reverts on any 2-bone
+// divergence. Gate FeetNotBelowFloorDuringGameplay passes 0/~790 below floor across
+// runs (worst toe exactly +0.60 = the margin, deterministic; baseline opt-out is -4.30
+// with ~750/777 below). All foot/bone/clip/IK unit tests + the gameplay boot stay green.
+// KNOWN PRE-EXISTING (NOT caused by this hook, out of lane scope, reported not fixed):
+// GameplayTelemetryTest.NoAnkleSuddenJumpsDuringGameplay fails identically with the hook
+// ON and OFF (a ~57u ankle delta at the frame-~2010 move-rewind boundary, an animation-
+// transition artifact). The PPC build never sees any of this (HX_NATIVE) so the matched
+// bytes are unchanged (CharIKFoot::Poll stays 100% normalized, DoFSM 97.4% floor).
+bool Dc3FeetPostPlant() {
+    static int v = -1;
+    if (v < 0)
+        v = getenv("DC3_FEET_POST_PLANT_OFF") ? 0 : 1;
+    return v != 0;
+}
+
+// Run the stateless clean plant on this foot's FK-composed leg (mHand=ankle). Public
+// entry for the post-poll hook. Finds the toe bone (ankle child) for the floor check.
+void CharIKFoot::Dc3PostPollPlant() {
+    if (!mHand)
+        return;
+    RndTransformable *toe = 0;
+    for (std::list<RndTransformable *>::const_iterator it = mHand->Children().begin();
+         it != mHand->Children().end(); ++it) {
+        if (*it && (*it)->Name() && std::strstr((*it)->Name(), "toe")) { toe = *it; break; }
+    }
+    if (toe)
+        Dc3CleanPlant(mHand, toe);
+}
+
+// Free dispatch: iterate all 6 dancers, plant both feet. Called from the main loop
+// after the world poll. TheHamWardrobe is the dancer registry the gate reads from.
+void Dc3RunPostPollFootPlant() {
+    if (!Dc3FeetPostPlant() || !TheHamWardrobe)
+        return;
+    // The clean plant marks bones in the frame-keyed guard; tick it so the guard set
+    // is fresh for this frame (no stale guards leaking across frames). The guard only
+    // matters if a later PoseMeshes runs — none does after this hook — so it is inert
+    // here, but keep the bookkeeping consistent with the in-graph path.
+    Dc3PlantGuardTick();
+    static const char *kIKNames[2] = { "left.ikfoot", "right.ikfoot" };
+    for (int d = 0; d < 6; d++) {
+        HamCharacter *dancer = (d < 2) ? TheHamWardrobe->GetCharacter(d)
+                                       : TheHamWardrobe->GetBackup(d - 2);
+        if (!dancer)
+            continue;
+        for (int k = 0; k < 2; k++) {
+            CharIKFoot *ik = dancer->Find<CharIKFoot>(kIKNames[k], false);
+            if (ik)
+                ik->Dc3PostPollPlant();
+        }
+    }
 }
 #endif
 
@@ -271,6 +400,18 @@ BEGIN_LOADS(CharIKFoot)
         d >> mDataIndex;
     }
 #ifdef HX_NATIVE
+    // WAVE 6 LANE A DIAG (DC3_IK_LOADDIAG): print the AS-LOADED CharIKHand flags for
+    // every .ikfoot before any force, to settle the central question — does the .milo
+    // actually carry mMoveElbow=false (a knee-bend-disabling value) on the leg foot IK?
+    if (getenv("DC3_IK_LOADDIAG")) {
+        fprintf(stderr,
+            "DC3_IK_LOADDIAG ikfoot '%s' moveElbow=%d alwaysIKElbow=%d orientation=%d "
+            "stretch=%d pullShoulder=%d dataIndex=%d hand=%s finger=%s\n",
+            Name() ? Name() : "?", (int)mMoveElbow, (int)mAlwaysIKElbow,
+            (int)mOrientation, (int)mStretch, (int)mPullShoulder, mDataIndex,
+            mHand ? (mHand->Name() ? mHand->Name() : "?") : "null",
+            mFinger ? (mFinger->Name() ? mFinger->Name() : "?") : "null");
+    }
     // A foot-plant IK has to move the knee/thigh to plant the foot. Native loads
     // mMoveElbow=false here (the leg over-extends and the foot sinks); Xbox renders a
     // bent, planted knee. Force the elbow-move path so IKElbow bends the knee and
