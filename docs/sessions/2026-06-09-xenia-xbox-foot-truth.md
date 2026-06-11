@@ -813,3 +813,82 @@ remaining fix is the deterministic plant-after-final-root-crouch (invasive, atte
 APPROACHES NOW EXHAUSTED (ROT-guard harmful, re-run-only worse, flatten worse-on-left). Ending the
 autonomous grind at the committed clean state (clean plant + frame/hip guard, ~90% sink reduction,
 poll-order-noisy R~20-100, default OFF stable -4.2). PUSH 17 = attended deterministic-order rework.
+
+---
+
+# WAVE-5 LANE A (2026-06-11, attended) — architectural verdict on the IK-before-pose discard: NO clean deterministic poll-order lever; the residual is the anim's intended root-crouch, not a fixable within-frame race
+
+Goal (wave-5 plan, lane A): (1) root-cause the pelvis/leg over-extension; (2) **decide the
+architecturally correct fix for the IK-before-pose discard — find WHERE the order is established
+and pin it deterministically rather than papering with clean-plant**; (3) deliver gate-green OR
+worst-toe before/after + the mechanism named with evidence. Fresh independent reproduction on the
+wave-4 landing (build plane: dc3-native worktree wt-wave5-a-feet-overextension, RelWithDebInfo/clang,
+all numbers from the GameplayTelemetryTest gate + DC3_IK_DIAG/DIAG2 on dc3-native run from
+orig-assets/).
+
+## (1) Over-extension mechanism — NAMED with fresh evidence (confirms Push 9-13)
+Default-OFF baseline FootGeom (gameplay, player0): `ankleW.z=-0.13 toeW.z=-4.02 pelvisWZ=35.20
+abovePWZ=0.11 (root on floor) ankleM.x=(0,0,-1)`. The foot points straight DOWN off an
+over-extended leg; `toeLocal=(3.89,5.03,0.00)` (rigid, zero vertical local offset) so the toe's 4u
+world-drop is purely the down-pointing ankle world rotation. **IKHand diag: kneeRotZ=-999 (sentinel)
+= the knee bone is NULL when IKElbow's logging fires** because `mMoveElbow=false` zeroes
+`shoulderParent` (CharIKHand.cpp:354-355) → IKElbow never runs → the knee never bends. Xbox renders
+the knee at -58° (frame-matched, Push 9) = anim -20° + ~-38° of surviving foot-plant IK flex. So the
+over-extension = **the leg foot-plant IK is INERT on native** (mMoveElbow=false disables the knee
+bend AND drops the knee/thigh dep from CharIKHand::PollDeps:250, so the sort places the IK before the
+pose, so even a forced bend is overwritten). The pelvis at 35.2 with a straight, down-pointing leg
+puts the ankle at the floor and drags the rigid foot's toe to -4.
+
+## (2) Architectural decision — the deterministic poll-order fix DOES NOT EXIST within acceptable risk
+Three deterministic levers tested/audited this wave; all rejected with evidence:
+- **Within-CharPollGroup order is ALREADY deterministic.** `CharPollableSorter::Sort`
+  (CharPollGroup.cpp:198) sorts the dep vector by UNIQUE bone NAME (`AlphaSort`, strcmp, no ties)
+  and the final topological insertion (line 239) iterates that name-sorted vector — implementation-
+  independent. The `std::map<Hmx::Object*,Dep> mDeps` pointer-keying only affects edge-discovery
+  order, not the name-ordered output. So the LP64 nondeterminism is NOT in this sort; "pin the dirty
+  sort keys" has nothing to pin (already pinned by name).
+- **The principled `mMoveElbow=true` IK path DIVERGES on native (reproduced).** DC3_FEET_PLANT_FIX=1
+  (no clean-plant): L-toe flung to **+21.3** (left leg points UP — the "mirage"), R-toe **-24.9** —
+  strictly WORSE than baseline. IKElbow writes the thigh as a pure-Z rotation
+  (`elbow->DirtyLocalXfm().m.Set(cos,sin,...)`, CharIKHand.cpp:472) that bends the leg DOWN off the
+  Xbox rest frame but ~horizontal/UP off the native composed frame. This is a native bone
+  rest-frame / SetWorldXfm-vs-LOCAL-compose mismatch, NOT a poll-order bug — fixing the order would
+  not make this path plant. So the in-engine, matched-faithful IK cannot be the native fix as-is.
+- **The clean-plant residual is the anim's INTENDED root-crouch, not a within-frame race.** Fresh
+  LegChk evidence at failing frames: `rToe=-3.1..-3.25 rAnkleZ=0.65..0.73 (ankle AT floor)
+  rPelvisW=25..27 kneeLocalRot.x=real-rotation (knee IS bent) rKneeDirty=0`. The plant solved
+  correctly (CleanPlant diag: plant-time toe ~0-2, ankle ~4-7) but the pelvis CROUCHED to ~25 (from
+  ~35 at plant time) AFTER the plant baked the pelvis-relative leg — the whole leg rides ~10u down
+  with the deep dance crouch. abovePWZ (char root) stays ~0 for player0; the drop is the bone_pelvis
+  POS channel (legit dance crouch), so freezing it would break the choreography. A plant-time MARGIN
+  cannot anticipate a 10u future crouch.
+
+## (3) Margin sweep — REFUTES the over-lift lever (new this wave, A/B'd then reverted)
+Made the clean-plant lift target tunable (DC3_FEET_PLANT_MARGIN) and swept 0.6/1.6/2.5/3.5, 2 runs
+each: fail counts stayed ~L95-164 / R147-193 with NO trend (higher margins slightly HURT by floating
+the non-crouch feet). The residual is genuinely the post-plant crouch drift, immune to a plant-time
+over-lift. Reverted (net non-win); default behavior left byte-identical.
+
+## Worst-toe before/after (gate, this wave, build plane = wt-wave5-a-feet-overextension dc3-native)
+| config | L worst toe | R worst toe | L<floor | R<floor |
+|---|---|---|---|---|
+| baseline (default OFF) | -4.2..-4.3 | -4.1 | ~714-756/~770 | ~690-731/~770 |
+| DC3_FEET_PLANT_FIX=1 (principled IK) | **+21.3 (FLUNG UP)** | -24.9 | 0 (mirage) | 188 |
+| + DC3_FEET_CLEAN_PLANT=1 | -4.0 (bounded) | -4.0 (bounded) | 95-150 (noisy) | 147-193 (noisy) |
+The clean-plant is strictly improve-or-bounded (never worse than the anim -4.0, no fly-up) but
+poll-order noisy; the principled IK is worse. Neither passes the gate (needs 0).
+
+## VERDICT (lane A acceptance, fallback path MET; gate-green NOT met by design)
+The IK-before-pose discard has **no clean deterministic poll-order fix**: the per-group sort is
+already name-deterministic, the matched in-engine IK diverges on the native bone frame, and the
+residual is the anim's real root-crouch (cross-pass: the dancer's CharServoBone/pelvis-POS crouch
+runs after the plant) — closing it needs an invasive cross-character/engine post-World-poll hook to
+make the foot-plant the dancer's genuine LAST world write, which risks the matched build + the other
+5 dancers and is engine-side (out of the dc3-src lane scope). The honest deliverable is the named
+mechanism + before/after; **default native behavior is left byte-identical to the wave-4 landing**
+(zero source diff; all IK code is `#ifdef HX_NATIVE` opt-in; matched DoFSM@CharIKFoot 97.4% /
+Poll@HamDriver 97.4% / Poll@HamIKEffector 99.9% unchanged at their floors; 32/32 regression suite +
+gameplay boot to game_screen state=playing green). The clean-plant stays the strongest opt-in
+foundation (default OFF). The remaining true fix = a deterministic plant-after-final-root-crouch hook
+(engine post-poll) + an in-engine IK bone-frame fix so mMoveElbow=true bends DOWN — both attended,
+cross-component, and properly a Wave-6+ engine task, not a dc3-src edit.
