@@ -71,25 +71,27 @@ TEST(RandIntSignedModulo, PositiveDrawStaysInRange) {
     EXPECT_LT(idx, 9);
 }
 
-TEST(RandIntSignedModulo, RawSignedModuloLeavesRange) {
-    // Drive the RAW signed-modulo formula (the unfixed target math) with the
-    // engine's real Int() draws and confirm it DOES leave [low, high) for a small
-    // span — the precondition that crashed the boot. This proves the bug exists in
-    // the underlying math; the fix lives in Rand::Int(low, high) (below).
-    Rand r(0);
+TEST(RandIntSignedModulo, FixedSeedDrawsAreNeverNegative) {
+    // Wave-4 understanding (supersedes the wave-2 "RawSignedModuloLeavesRange"
+    // expectation): Seed() masks every table word with 0x7FFF0000|low16, so bit 31
+    // is ALWAYS clear, and Int() only XORs table words — a correctly-seeded
+    // generator can never produce a negative draw. The wave-2 boot crash happened
+    // only because the buggy native Seed (signed `>> 16` sign-extension) poisoned
+    // the table with 0xFFFFxxxx words. With Seed fixed, the raw signed modulo
+    // stays in range; the Int(low, high) HX_NATIVE guard remains as defense in
+    // depth against any other table corruption.
     const int low = 0, high = 4;
-    bool sawRawOutOfRange = false;
-    for (int i = 0; i < 100000; i++) {
-        int raw = r.Int();                       // signed draw, may be negative
-        int idx = SignedModInt(raw, low, high);  // low + raw % (high-low), SIGNED
-        if (idx < low || idx >= high) {
-            sawRawOutOfRange = true;
-            break;
+    for (unsigned int seed = 0; seed < 16; seed++) {
+        Rand r(seed);
+        for (int i = 0; i < 100000; i++) {
+            int raw = r.Int();
+            ASSERT_GE(raw, 0) << "negative draw at seed " << seed << " iter " << i
+                              << " — Seed() table-poisoning has regressed";
+            int idx = SignedModInt(raw, low, high);
+            ASSERT_GE(idx, low);
+            ASSERT_LT(idx, high);
         }
     }
-    EXPECT_TRUE(sawRawOutOfRange)
-        << "the raw signed-modulo form never left [0,4) in 100k draws — if the RNG "
-           "changed, re-verify the Rand::Int native fix is still warranted.";
 }
 
 TEST(RandIntNativeFix, RandIntStaysInRangeOnHost) {
