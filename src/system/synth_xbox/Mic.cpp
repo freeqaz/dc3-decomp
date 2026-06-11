@@ -1,12 +1,18 @@
 #include "synth_xbox/Mic.h"
 #include "macros.h"
 #include "math/Decibels.h"
+#include "math/Utl.h"
 #include "obj/Data.h"
 #include "obj/DataFunc.h"
 #include "os/CritSec.h"
 #include "os/Debug.h"
 #include "os/System.h"
 #include "rnddx9/Rnd.h"
+#include "synth_xbox/ExternalMic.h"
+#include "synth_xbox/FxSend.h"
+#include "synth_xbox/Voice.h"
+#include "utl/MemStream.h"
+#include "utl/Std.h"
 #include "utl/Symbol.h"
 #include <cstring>
 
@@ -16,16 +22,27 @@ namespace GainEffect {
 static float sGain;
 }
 
-struct HeadsetConfig {
-    float noiseThreshold;
-    float pad;
-    float lowCut;
-    float localGain;
-    float remoteGain;
-};
+// Headset config values. The target lays these out as 5 separate statics that
+// the linker places contiguously at lbl_82F474C8 (noiseThreshold@0x0,
+// gNoiseInt@0x4, lowCut@0x8, localGain@0xc, remoteGain@0x10). The single-store
+// Set* helpers reference each by its own label (e.g. lbl_82F474D0 for lowCut),
+// while the ctor's consecutive FindData calls address them as base+offset — both
+// behaviours fall out of the separate-static model (verified vs target asm).
+static float gNoiseThreshold = -10;
+static int gNoiseInt = 5;
+static float gLowCut = 800;
+static float gLocalGain = -3;
+static float gRemoteGain = 3;
 
-extern "C" {
-extern HeadsetConfig lbl_82F474C8;
+ChatReceiver::ChatReceiver(IXHV2Engine *engine, int i2)
+    : mXHV(engine), unk4(i2), unk8(0), unk9(0), unkc(0), unk10(0), unk14(0), unk18(0),
+      unk50(new MemStream(true)) {
+    MILO_ASSERT(mXHV, 0x3F2);
+}
+
+ChatReceiver::~ChatReceiver() {
+    ActivateProcessing(false);
+    RELEASE(unk50);
 }
 
 void ChatReceiver::ActivateProcessing(bool b1) {
@@ -76,7 +93,13 @@ float MicXbox::GetOutputGain() const { return mOutputGain; }
 
 float MicXbox::GetSensitivity() const { return mSensitivity; }
 
-Symbol &MicXbox::GetName() const { return (Symbol &)mDeviceName; }
+const Symbol &MicXbox::GetName() const { return mDeviceName; }
+
+void MicXbox::SetGain(float gain) { mGain = Clamp(0.0f, 1.0f, gain); }
+
+Mic::Type MicXbox::GetType() const {
+    return ExternalMicClientMgr::ConnectedForClient(this) ? kUSBMic : kDisconnected;
+}
 
 void MicXbox::ClearBuffers() {
     unk302c.Reset();
@@ -130,6 +153,48 @@ void MicXbox::SetFxSend(FxSend *fx) {
     }
 }
 
+void MicXbox::StartPlayback() {
+    CritSecTracker t(&MicManagerXbox::GetInstance()->unk68);
+    if (mPlaybackVoice) {
+        return;
+    }
+    Start();
+    mMute = false;
+    if (unkc) {
+        unk9058 = 2700;
+    } else {
+        unk9058 = 1800;
+    }
+    unk905c = 0;
+    unk9054 = 1;
+    mPlaybackVoice = new Voice(false, 1, false);
+    mPlaybackVoice->SetSampleRate(48000);
+    mPlaybackVoice->SetData(unk1c, sizeof(unk1c), 0);
+    mPlaybackVoice->SetLoopRegion(0, -1);
+    mPlaybackVoice->SetSend(dynamic_cast<FxSend360 *>(mFxSend));
+    mPlaybackVoice->Start();
+    mPlaybackVoice->SetVolume(0);
+}
+
+void MicXbox::StopPlayback() {
+    CritSecTracker t(&MicManagerXbox::GetInstance()->unk68);
+    RELEASE(mPlaybackVoice);
+    memset(unk1c, 0, sizeof(unk1c));
+}
+
+short *MicXbox::GetRecentBuf(int &iref) {
+    CritSecTracker t(&MicManagerXbox::GetInstance()->unk68);
+    unk302c.Peek(unk3054, 0xC00);
+    iref = 0x600;
+    return (short *)unk3054;
+}
+
+short *MicXbox::GetContinuousBuf(int &iref) {
+    CritSecTracker t(&MicManagerXbox::GetInstance()->unk68);
+    iref = unk3040.Read(unk3054, 0x6000) / sizeof(short);
+    return (short *)unk3054;
+}
+
 bool MicXbox::IsRunning() const { return mRunning; }
 void MicXbox::SetDMA(bool b) {}
 bool MicXbox::GetDMA() const { return false; }
@@ -156,28 +221,47 @@ void MicXbox::OnMicDisconnected() {
 #pragma endregion MicXbox
 #pragma region MicManagerXbox
 
+DataNode SetNoiseGate(DataArray *a) {
+    gNoiseThreshold = a->Float(1);
+    if (a->Size() >= 3) {
+        gNoiseInt = a->Int(2);
+    }
+    return 0;
+}
+
+DataNode SetLowCut(DataArray *a) {
+    gLowCut = a->Float(1);
+    return 0;
+}
+
+DataNode SetLocalGain(DataArray *a) {
+    gLocalGain = a->Float(1);
+    return 0;
+}
+
+DataNode SetRemoteGain(DataArray *a) {
+    gRemoteGain = a->Float(1);
+    GainEffect::sGain = DbToRatio(gRemoteGain);
+    return 0;
+}
+
 MicManagerXbox::MicManagerXbox()
-    : unk18(-1), unk1c(0), unk2c(0), mMicsChanged(false), mPushToTalkPad(-1) {
+    : unk18(-1), mXHVEngine(0), unk2c(0), mMicsChanged(false), mPushToTalkPad(-1) {
     for (int i = 0; i < 4; i++) {
         unkc.push_back(0);
     }
     unk20.reserve(4);
 
-    // Register data functions for headset configuration
-    DataRegisterFunc(Symbol("set_noise_gate"), SetNoiseGate);
-    DataRegisterFunc(Symbol("set_low_cut"), SetLowCut);
-    DataRegisterFunc(Symbol("set_local_gain"), SetLocalGain);
-    DataRegisterFunc(Symbol("set_remote_gain"), SetRemoteGain);
-
-    // Load headset configuration from system config
-    DataArray *arr = SystemConfig(Symbol("synth"), Symbol("xbox_headset"));
-    arr->FindData(Symbol("noise_threshold"), lbl_82F474C8.noiseThreshold, true);
-    arr->FindData(Symbol("low_cut"), lbl_82F474C8.lowCut, true);
-    arr->FindData(Symbol("local_gain"), lbl_82F474C8.localGain, true);
-    arr->FindData(Symbol("remote_gain"), lbl_82F474C8.remoteGain, true);
-
-    // Convert remote gain from dB to linear ratio
-    GainEffect::sGain = DbToRatio(lbl_82F474C8.remoteGain);
+    DataRegisterFunc("set_noise_gate", SetNoiseGate);
+    DataRegisterFunc("set_low_cut", SetLowCut);
+    DataRegisterFunc("set_local_gain", SetLocalGain);
+    DataRegisterFunc("set_remote_gain", SetRemoteGain);
+    DataArray *synthConfig = SystemConfig("synth", "xbox_headset");
+    synthConfig->FindData("noise_threshold", gNoiseThreshold);
+    synthConfig->FindData("low_cut", gLowCut);
+    synthConfig->FindData("local_gain", gLocalGain);
+    synthConfig->FindData("remote_gain", gRemoteGain);
+    GainEffect::sGain = DbToRatio(gRemoteGain);
 }
 
 MicManagerXbox::~MicManagerXbox() {}
@@ -190,6 +274,46 @@ void MicManagerXbox::RequirePushToTalk(bool b, int pad) {
     } else {
         mPushToTalkPad = -1;
     }
+}
+
+void MicManagerXbox::AddMic(MicXbox *mic) {
+    FOREACH (it, unk0) {
+        if (*it == mic) {
+            return;
+        }
+    }
+    unk0.push_back(mic);
+    mic->SetChangeNotify(true);
+}
+
+void MicManagerXbox::RemoveMic(MicXbox *mic) {
+    FOREACH (it, unk0) {
+        if (*it == mic) {
+            unk0.erase(it);
+            mic->SetChangeNotify(false);
+            return;
+        }
+    }
+}
+
+void MicManagerXbox::Shutdown() {
+    MILO_ASSERT(this == sInstance, 0xF0);
+    for (int i = 0; i < 4; i++) {
+        RELEASE(unkc[i]);
+    }
+    if (mXHVEngine) {
+        mXHVEngine->Release();
+        mXHVEngine = nullptr;
+    }
+    sInstance = nullptr;
+    delete this;
+}
+
+MicManagerXbox *MicManagerXbox::GetInstance() {
+    if (!sInstance) {
+        sInstance = new MicManagerXbox();
+    }
+    return sInstance;
 }
 
 #pragma endregion MicManagerXbox

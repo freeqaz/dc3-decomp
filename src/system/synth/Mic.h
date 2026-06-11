@@ -8,6 +8,9 @@ class DataArray;
 class Mic {
 public:
     enum Type {
+        kDisconnected = 0,
+        kHeadset = 1,
+        kUSBMic = 2,
         kMicNull = 2
     };
     Mic() : mInUse(0), unk8(1.0f) {}

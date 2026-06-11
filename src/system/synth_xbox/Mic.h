@@ -48,7 +48,7 @@ public:
     virtual void SetSensitivity(float);
     virtual float GetOutputGain() const;
     virtual float GetSensitivity() const;
-    virtual Symbol &GetName() const;
+    virtual const Symbol &GetName() const;
     virtual void SetVolume(float);
     virtual void SetChangeNotify(bool);
     virtual void SetMute(bool);
@@ -135,7 +135,7 @@ public:
     std::vector<MicXbox *> unk0;
     std::vector<ChatReceiver *> unkc;
     int unk18;
-    int unk1c;
+    IXHV2Engine *mXHVEngine; // 0x1c
     std::vector<MicManagerXbox::ChatBuffer> unk20;
     int unk2c;
     bool mMicsChanged;
