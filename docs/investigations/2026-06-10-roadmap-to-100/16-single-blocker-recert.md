@@ -248,3 +248,60 @@ Curl_http_readwrite_headers, Curl_proxyCONNECT, CampaignPerformer, FitnessGoalMg
 Run: `python3 scripts/sync_match_percent.py --build --promote`
 
 **parsedate: do NOT promote** — 99.8% on main (source fix required).
+
+---
+
+## WAVE-4 RECONCILIATION (2026-06-11, Lane D re-measurement)
+
+**Re-measured the 12 non-COMPLETE rows on main** (build plane: **main repo**,
+`project_dir=/home/free/code/milohax/dc3-decomp`, sequential `run_objdiff` calls
+post-`.c`-rebuild; `clean_stale_objects.sh` was run before measurement).
+
+> **parsedate lesson applied:** Any row with a `.c`-sourced unit was re-measured
+> from scratch. The Wave-3 `.c`-rebuild fix (clean_stale_objects.sh now handles
+> `.c` sources) was already applied to main before these measurements.
+
+### Updated 12-row table (main-plane, Wave-4)
+
+| Unit | Blocker function | Wave-3 main% | Wave-4 main% | Delta | Verdict | Notes |
+|---|---|---|---|---|---|---|
+| `default/system/net/curl/lib/parsedate` | `parsedate` | 99.8% | **99.8%** | 0 | LikelyFixable | `subi` addend 0x50 vs 0x4c+weekday; still not 100 post-rebuild |
+| `default/system/net/HttpReqCurl` | `WriteMemoryCallback` | 99.8% | **99.8%** | 0 | LikelyFixable | offset swap (0x0,0x4) + commutative reg swap; 3 mismatches |
+| `default/system/obj/PropSync` | `PropSync` | 99.8% | **99.8%** | 0 | MaybeFixable | FPR regswap f0↔f13, 26 mismatches; permuter target |
+| `default/system/rndobj/Rnd_NG` | `EstimateDraw` | 99.6% | **99.6%** | 0 | MaybeFixable | ADDRESS_RELOCATION_NOISE + FPR f0↔f13; permuter target |
+| `default/system/synth/FxSendChorus` | `FxSendChorus::Load` | 99.9% | **99.9%** | 0 | NeedsInvestigation | stack 3 DIFFER; uniform -4 offset; extra local |
+| `default/system/midi/DataEventList` | `InsertEvent` | 99.9% | **99.9%** | 0 | NeedsInvestigation | frame Δ -0x10; extra local causing frame shift |
+| `default/lazer/meta_ham/HamSongMgr` | `InitializePlaylists` | 99.9% | **99.9%** | 0 | NeedsInvestigation | stack 12 DIFFER; +0x16-range systematic offset drift |
+| `default/system/char/CharIKRod` | `Copy` | 99.3% | **99.3%** | 0 | LikelyFixable | 2 addi/subi sign flips (diff_op) |
+| `default/system/gesture/IdentityInfo` | `Identified` | 99.6% | **99.6%** | 0 | LikelyFixable | 2 branch polarity inversions (beq↔blt/ble) |
+| `default/system/char/CharIKHead` | `Poll` | 99.7% | **99.7%** | 0 | LikelyFixable | FPR f3↔f4 + commutative fadds; 13 mismatches |
+| `default/system/char/CharBone` | `StuffBones` | 99.7% | **99.7%** | 0 | NeedsInvestigation | stack SHIFTED+DIFFER; uniform -8 offset |
+| `default/system/utl/Cheats` | `CallCheatScript` | 99.5% | **99.5%** | 0 | LikelyFixable | extra `mr` insert + offset mismatch; 11 mismatches |
+
+### Wave-4 summary
+
+| Result | Wave-3 count | Wave-4 count | Notes |
+|---|---|---|---|
+| COMPLETE (norm == 100.0%) | 8 | **8** | unchanged — the 8 COMPLETE units from Wave-3 remain COMPLETE |
+| LikelyFixable | 6 | **6** | parsedate, HttpReqCurl, CharIKRod, IdentityInfo, CharIKHead, Cheats |
+| MaybeFixable | 2 | **2** | PropSync (FPR permuter), Rnd_NG (reloc noise + FPR permuter) |
+| NeedsInvestigation | 4 | **4** | FxSendChorus, DataEventList, HamSongMgr, CharBone |
+
+**No movement** in this cohort: the `.c`-rebuild fix in clean_stale_objects.sh has been
+applied to main before these measurements; all 12 rows score the same as Wave-3.
+The parsedate addend mismatch (`0x50` vs `0x4c+weekday`) persists and confirms the
+Wave-3 finding.
+
+### Newly promotable units
+
+None — no new COMPLETE rows in this measurement pass. The 8 COMPLETE rows confirmed
+in Wave-3 are still the only promotable units.
+
+### Fix route summary for LikelyFixable tier (recommended for Wave-4 Lane C / Wave-5)
+
+1. **CharIKRod::Copy** — 2 `addi`↔`subi` diff_op; sign flip on 2 stack loads. Easiest fix.
+2. **IdentityInfo::Identified** — 2 branch polarity inversions; `beq` → `blt`/`ble` (CONTROL_FLOW).
+3. **Cheats::CallCheatScript** — extra `mr` insert + stack offset shift; likely temp variable reorder.
+4. **CharIKHead::Poll** — FPR f3↔f4 regswap + commutative fadds; try permuter or float decl reorder.
+5. **HttpReqCurl::WriteMemoryCallback** — offset swap (0x0,0x4) + commutative add; struct member reorder.
+6. **parsedate** — `subi` addend 0x50 vs 0x4c+weekday; requires fixing the weekday data symbol reference.

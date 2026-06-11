@@ -1,27 +1,56 @@
 #!/usr/bin/env bash
 # nightly_measurement_guard.sh — nightly drift detector for decomp metrics.
 #
-# Runs in two layers:
+# Runs in three layers:
 #   (a) [always] python3 scripts/reconcile_db.py  — exits nonzero if DB drifts
 #       from report.json (percent mismatch, stale COMPLETE, stale is_stub).
 #   (b) [--strict] regenerate report_strict.json with the objdiff fork's NameOnly
 #       mode, then run scripts/analysis/reloc_strict_classify.py --jobs 30 and
 #       alert if genuine_wrong_target (authorable) grew vs a checked-in baseline.
+#   (c) [--unicorn] run the unicorn behavioral refresh cadence (Wave-3 Lane B,
+#       Wave-4 Lane D). After any sync that moves percents, the unicorn verdicts
+#       should be refreshed so floor certs never go stale. Steps:
+#         1. refresh_frontier.py --run   (~33s) — re-emulates the authorable
+#            partial frontier, writes a worktree-local results DB + flip list.
+#         2. apply_refresh.py --only-fresh-source  — updates only rows whose
+#            unicorn_source_hash changed (skips unchanged codegen, safe to run
+#            after every sync).
+#         3. reconcile_db.py --fix  — clear any now-stale floor certs and
+#            verdict drift introduced by the new verdicts.
+#         4. certify_floor.py --apply  — re-cert from fresh unicorn evidence.
+#
+#       DRY-RUN SUPPORT: pass --unicorn --dry-run to run steps 1 (emulate) and
+#       preview steps 2-4 WITHOUT writing the live decomp.db. All writes go to a
+#       temporary copy under /tmp/nightly_guard_XXXXXX/decomp_dryrun.db.
+#
+#       SAFETY: steps 2-4 are single-writer operations intended for the
+#       orchestrator on main. Do NOT run --unicorn --apply in a worktree that
+#       shares the main decomp.db if other agents may be writing concurrently.
+#       The flag --unicorn-apply enables writes; without it the unicorn stage is
+#       always a dry-run (preview only).
+#
+#       Do NOT install a crontab for --unicorn — trigger it manually after each
+#       merge + sync cycle (scripts/sync_match_percent.py --build --promote must
+#       run first; the unicorn source_hash gates off match_percent_normalized).
 #
 # WIRING INSTRUCTIONS (do NOT install a crontab — reference only):
-#   Cron/nightly:
+#   Cron/nightly (reconcile + strict only):
 #     0 4 * * * cd /path/to/dc3-decomp && bash scripts/nightly_measurement_guard.sh --strict 2>&1 | tee /tmp/dc3-nightly.log
+#   Post-merge unicorn cadence (run manually after sync, orchestrator only):
+#     bash scripts/nightly_measurement_guard.sh --unicorn --unicorn-apply
+#   Pre-merge CI check:
+#     bash scripts/nightly_measurement_guard.sh   # (no --strict; fast, read-only)
+#   Unicorn dry-run preview (safe in any worktree):
+#     bash scripts/nightly_measurement_guard.sh --unicorn
 #   Ninja post-build (add to build.ninja phony "post-build" edge):
 #     rule reconcile
 #       command = python3 $root/scripts/reconcile_db.py
 #       description = RECONCILE DB
 #     build reconcile_db.stamp: reconcile build/373307D9/report.json | scripts/reconcile_db.py
-#   Pre-merge CI check:
-#     bash scripts/nightly_measurement_guard.sh   # (no --strict; fast, read-only)
 #
 # Exit codes:
 #   0  clean — no drift
-#   1  drift detected or strict alert
+#   1  drift detected, strict alert, or unicorn flip-list has candidate bugs
 #   2  missing prerequisite (report.json, DB, objdiff binary, etc.)
 
 set -euo pipefail
@@ -53,14 +82,20 @@ STRICT_BASELINE="${STRICT_BASELINE_DIR}/genuine_wrong_target_baseline.txt"
 OBJDIFF_FORK="${REPO_ROOT}/bin/objdiff-cli"
 
 STRICT=0
+UNICORN=0
+UNICORN_APPLY=0
 VERBOSE=0
 for arg in "$@"; do
     case "$arg" in
         --strict) STRICT=1 ;;
+        --unicorn) UNICORN=1 ;;
+        --unicorn-apply) UNICORN_APPLY=1 ;;
         -v|--verbose) VERBOSE=1 ;;
         -h|--help)
-            echo "Usage: $0 [--strict] [-v]"
-            echo "  --strict  also regenerate report_strict.json and check genuine_wrong_target"
+            echo "Usage: $0 [--strict] [--unicorn] [--unicorn-apply] [-v]"
+            echo "  --strict         regenerate report_strict.json and check genuine_wrong_target"
+            echo "  --unicorn        run unicorn refresh cadence (dry-run preview)"
+            echo "  --unicorn-apply  write results to live decomp.db (orchestrator only)"
             exit 0
             ;;
     esac
@@ -167,13 +202,156 @@ PYEOF
 fi
 
 # ────────────────────────────────────────────────────────────────────────────
+# Layer (c): unicorn refresh cadence (only with --unicorn)
+#
+# Steps:
+#   1. refresh_frontier.py --run  (~33s, writes results to a temp dir)
+#   2. apply_refresh.py --only-fresh-source [--apply if --unicorn-apply]
+#   3. reconcile_db.py --fix [only if --unicorn-apply]
+#   4. certify_floor.py --apply [only if --unicorn-apply]
+#
+# Without --unicorn-apply: steps 2-4 are previewed against a DB copy (dry-run).
+# The DB copy is created in a temp dir and discarded at script exit.
+# ────────────────────────────────────────────────────────────────────────────
+UNICORN_EXIT=0
+if [[ $UNICORN -eq 1 ]]; then
+    echo ""
+    echo "=== [unicorn] Unicorn behavioral refresh cadence ==="
+
+    # Determine the DB target for apply steps:
+    # dry-run → a temp copy; --unicorn-apply → the live decomp.db
+    UNICORN_TMPDIR=""
+    if [[ $UNICORN_APPLY -eq 1 ]]; then
+        UNICORN_DB="${DECOMP_DB}"
+        echo "[unicorn] APPLY mode — writes will go to LIVE decomp.db: ${UNICORN_DB}"
+        echo "          (orchestrator single-writer gate: ensure no concurrent writers)"
+    else
+        UNICORN_TMPDIR="$(mktemp -d /tmp/nightly_guard_XXXXXX)"
+        UNICORN_DB="${UNICORN_TMPDIR}/decomp_dryrun.db"
+        cp "${DECOMP_DB}" "${UNICORN_DB}"
+        echo "[unicorn] DRY-RUN mode — writes go to temp copy: ${UNICORN_DB}"
+        echo "          (pass --unicorn-apply to write the live decomp.db)"
+    fi
+
+    # Results DB lives in the temp dir (or a fixed location if UNICORN_OUT_DB is set).
+    UNICORN_RESULTS_DB="${UNICORN_TMPDIR:-${REPO_ROOT}/build/373307D9}/unicorn_refresh_nightly.db"
+    UNICORN_RESULTS_JSON="${UNICORN_TMPDIR:-${REPO_ROOT}/build/373307D9}/unicorn_refresh_nightly.json"
+
+    # Step 1: refresh_frontier.py --run
+    echo ""
+    echo "=== [unicorn step 1] refresh_frontier.py --run (~33s) ==="
+    UNICORN_REFRESH_EXIT=0
+    if python3 "${SCRIPT_DIR}/unicorn/refresh_frontier.py" \
+            --run \
+            --live-db "${DECOMP_DB}" \
+            --out-db  "${UNICORN_RESULTS_DB}" \
+            --json    "${UNICORN_RESULTS_JSON}"; then
+        echo "[unicorn step 1] Refresh complete. Results: ${UNICORN_RESULTS_DB}"
+    else
+        echo "[unicorn step 1] FAILED — refresh_frontier.py returned non-zero." >&2
+        UNICORN_REFRESH_EXIT=1
+        UNICORN_EXIT=1
+    fi
+
+    if [[ $UNICORN_REFRESH_EXIT -eq 0 ]]; then
+        # Emit flip-list summary (candidate bugs are the key signal).
+        CANDIDATE_BUGS=$(python3 - <<PYEOF 2>/dev/null || echo "?"
+import json
+with open("${UNICORN_RESULTS_JSON}") as f:
+    d = json.load(f)
+print(d["summary"].get("flip_cause_candidate_bug", "?"))
+PYEOF
+)
+        echo "[unicorn step 1] candidate_bug flips in this run: ${CANDIDATE_BUGS}"
+        if [[ "${CANDIDATE_BUGS}" != "?" && "${CANDIDATE_BUGS}" -gt 0 ]]; then
+            echo "[unicorn step 1] ALERT: ${CANDIDATE_BUGS} new candidate bug(s) found." \
+                 "Review ${UNICORN_RESULTS_JSON} (flip_cause=candidate_bug rows)." >&2
+            UNICORN_EXIT=1
+        fi
+
+        # Step 2: apply_refresh.py --only-fresh-source [--apply]
+        echo ""
+        echo "=== [unicorn step 2] apply_refresh.py --only-fresh-source ==="
+        APPLY_ARGS=(
+            --results "${UNICORN_RESULTS_DB}"
+            --db      "${UNICORN_DB}"
+            --only-fresh-source
+        )
+        if [[ $UNICORN_APPLY -eq 1 ]]; then
+            APPLY_ARGS+=(--apply)
+            echo "[unicorn step 2] APPLY mode — writing to ${UNICORN_DB}"
+        else
+            echo "[unicorn step 2] DRY-RUN — preview only (no writes)"
+        fi
+        if python3 "${SCRIPT_DIR}/unicorn/apply_refresh.py" "${APPLY_ARGS[@]}"; then
+            echo "[unicorn step 2] apply_refresh.py complete."
+        else
+            echo "[unicorn step 2] FAILED — apply_refresh.py returned non-zero." >&2
+            UNICORN_EXIT=1
+        fi
+
+        # Step 3: reconcile_db.py --fix (only in apply mode; dry-run in preview)
+        echo ""
+        echo "=== [unicorn step 3] reconcile_db.py --fix ==="
+        RECON_ARGS=(--db "${UNICORN_DB}" --report "${REPORT_JSON}")
+        if [[ $UNICORN_APPLY -eq 1 ]]; then
+            RECON_ARGS+=(--fix)
+            echo "[unicorn step 3] APPLY mode — fixing drift in ${UNICORN_DB}"
+        else
+            echo "[unicorn step 3] DRY-RUN — checking drift only (no writes)"
+        fi
+        if [[ $VERBOSE -eq 1 ]]; then
+            RECON_ARGS+=(-v)
+        fi
+        if python3 "${SCRIPT_DIR}/reconcile_db.py" "${RECON_ARGS[@]}"; then
+            echo "[unicorn step 3] reconcile_db.py: clean."
+        else
+            echo "[unicorn step 3] reconcile_db.py: drift detected (expected after refresh)." >&2
+            # In apply mode this is a real problem; in dry-run it is just a preview.
+            if [[ $UNICORN_APPLY -eq 1 ]]; then
+                UNICORN_EXIT=1
+            fi
+        fi
+
+        # Step 4: certify_floor.py --apply (only in apply mode)
+        echo ""
+        echo "=== [unicorn step 4] certify_floor.py ==="
+        CERT_ARGS=(--db "${UNICORN_DB}")
+        if [[ $UNICORN_APPLY -eq 1 ]]; then
+            CERT_ARGS+=(--apply)
+            echo "[unicorn step 4] APPLY mode — writing floor certs to ${UNICORN_DB}"
+        else
+            echo "[unicorn step 4] DRY-RUN — previewing cert changes (no writes)"
+        fi
+        if python3 "${SCRIPT_DIR}/certify_floor.py" "${CERT_ARGS[@]}"; then
+            echo "[unicorn step 4] certify_floor.py complete."
+        else
+            echo "[unicorn step 4] FAILED — certify_floor.py returned non-zero." >&2
+            UNICORN_EXIT=1
+        fi
+    fi
+
+    # Cleanup temp dir (dry-run only — the copy is no longer needed)
+    if [[ -n "${UNICORN_TMPDIR}" && -d "${UNICORN_TMPDIR}" ]]; then
+        rm -rf "${UNICORN_TMPDIR}"
+        echo "[unicorn] Temp DB copy discarded."
+    fi
+
+    if [[ $UNICORN_EXIT -eq 0 ]]; then
+        echo "[unicorn] Cadence complete — no candidate bugs found."
+    else
+        echo "[unicorn] Cadence finished with alerts (see above)." >&2
+    fi
+fi
+
+# ────────────────────────────────────────────────────────────────────────────
 # Final exit
 # ────────────────────────────────────────────────────────────────────────────
 echo ""
-if [[ $RECONCILE_EXIT -eq 0 && $STRICT_EXIT -eq 0 ]]; then
+if [[ $RECONCILE_EXIT -eq 0 && $STRICT_EXIT -eq 0 && $UNICORN_EXIT -eq 0 ]]; then
     echo "nightly_measurement_guard: ALL CHECKS PASSED."
     exit 0
 else
-    echo "nightly_measurement_guard: CHECKS FAILED (reconcile=${RECONCILE_EXIT} strict=${STRICT_EXIT})." >&2
+    echo "nightly_measurement_guard: CHECKS FAILED (reconcile=${RECONCILE_EXIT} strict=${STRICT_EXIT} unicorn=${UNICORN_EXIT})." >&2
     exit 1
 fi
