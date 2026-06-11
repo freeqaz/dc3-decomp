@@ -473,30 +473,27 @@ void CamShotFrame::BuildTransform(RndCam *cam, Transform &tf, bool b3) const {
 
 void CamShotFrame::Interp(const CamShotFrame &other, float f1, float f2, RndCam *cam) {
     float blendT = f1;
-    if (mBlendEase) {
+    if (mBlendEase != 0) {
+        float easeEnd = 1;
         float easeOffset = 0;
-        float easeEnd = 1.0f;
-        if (mBlendEaseMode) {
-            switch (mBlendEaseMode) {
-            case kBlendEaseIn:
-                easeEnd = 2.0f;
-                break;
-            case kBlendEaseOut:
-                easeOffset = -1.0f;
-                break;
-            default:
-                MILO_NOTIFY("Invalid mBlendEaseMode: %d", mBlendEaseMode);
-                break;
-            }
+        switch (mBlendEaseMode) {
+        case kBlendEaseInAndOut:
+            break;
+        case kBlendEaseIn:
+            easeEnd = 2;
+            break;
+        case kBlendEaseOut:
+            easeOffset = -1;
+            break;
+        default:
+            MILO_NOTIFY("Invalid mBlendEaseMode: %d", mBlendEaseMode);
+            break;
         }
         ATanInterpolator aint("", "");
-        auto _tmp0 = Vector2(easeOffset, easeOffset);
         aint.Reset(
-            _tmp0,
-            Vector2(easeEnd, easeEnd),
-            mBlendEase
+            Vector2(easeOffset, easeOffset), Vector2(easeEnd, easeEnd), mBlendEase
         );
-        blendT = aint.Eval(f1);
+        blendT = aint.Eval(blendT);
     }
 
     // Interpolate FOV
@@ -1583,14 +1580,14 @@ void CamShot::Shake(float freq, float amp, const Vector2 &maxAngle, Vector3 &off
             Normalize(mLastDesiredShakeOffset, mLastDesiredShakeOffset);
             mLastDesiredShakeOffset *= amp - lenamp;
         }
-        float fabs1 = std::fabs(mLastDesiredShakeAngOffset.x) - localAng.x;
+        float fabs1 = fabsf(mLastDesiredShakeAngOffset.x) - localAng.x;
         if (fabs1 > 0) {
             if (mLastDesiredShakeAngOffset.x > 0) {
                 fabs1 *= -1.0f;
             }
             mLastDesiredShakeAngOffset.x += fabs1;
         }
-        float fabs2 = std::fabs(mLastDesiredShakeAngOffset.z) - localAng.y;
+        float fabs2 = fabsf(mLastDesiredShakeAngOffset.z) - localAng.y;
         if (fabs2 > 0) {
             if (mLastDesiredShakeAngOffset.z > 0) {
                 fabs2 *= -1.0f;
