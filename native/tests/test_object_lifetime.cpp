@@ -649,6 +649,15 @@ TEST_F(ObjectLifetimeUnitTest, CascadeDeleteNamedSubdirsNullsExternalDirPtrsWith
         fclose(f);
         remove("/tmp/.gtest_write_check");
     }
+    // By the time this test runs, EngineTestFixture suites have spun up ~7 live
+    // WebGPU/audio threads for the process lifetime. The default "fast" death-test
+    // style forks WITHOUT exec, so the child inherits mutexes locked by threads
+    // that no longer exist post-fork → the child deadlocks and the whole bare
+    // milo-tests run hangs here (gtest itself warns about exactly this). The
+    // documented fix is the "threadsafe" style, which re-execs the test binary
+    // with a single-test filter instead of relying on a clean fork, so no parent
+    // mutex state is inherited. Scope the override to this test only.
+    GTEST_FLAG_SET(death_test_style, "threadsafe");
     ASSERT_EXIT(
         RunCascadeDeleteNamedSubdirRingRepro(),
         ::testing::ExitedWithCode(0),
