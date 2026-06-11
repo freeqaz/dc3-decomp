@@ -480,10 +480,16 @@ def done_summary(conn: sqlite3.Connection) -> dict:
     sdk = " AND ".join(
         f"(unit IS NULL OR unit NOT LIKE '{p}%')" for p in SDK_UNIT_PREFIXES)
     art = " AND ".join(f"symbol NOT LIKE '{p}%'" for p in ARTIFACT_PREFIXES)
+    has_norm_col = "match_percent_normalized" in existing_columns(conn, "functions")
+    has_stub_col = "is_stub" in existing_columns(conn, "functions")
+    has_excl_col = "excluded" in existing_columns(conn, "functions")
+    norm_sel = "match_percent_normalized" if has_norm_col else "NULL AS match_percent_normalized"
+    stub_sel = "is_stub" if has_stub_col else "0 AS is_stub"
     cert_sel = "floor_certificate" if has_cert_col else "NULL AS floor_certificate"
+    excl_clause = "excluded=0 AND" if has_excl_col else ""
     rows2 = conn.execute(
-        f"SELECT size, match_percent_normalized, is_stub, {cert_sel} "
-        f"FROM functions WHERE excluded=0 AND {sdk} AND {art}"
+        f"SELECT size, {norm_sel}, {stub_sel}, {cert_sel} "
+        f"FROM functions WHERE {excl_clause} {sdk} AND {art}"
     ).fetchall()
 
     total_fns = len(rows2)
