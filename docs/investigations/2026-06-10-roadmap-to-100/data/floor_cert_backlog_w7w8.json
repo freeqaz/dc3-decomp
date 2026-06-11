@@ -1,0 +1,14 @@
+[
+  {"symbol_like": "?ConvertBonesToTranses@%", "cert": "artifact:codegen", "expect_pct": 99.5,
+   "evidence": {"source_doc": "99e-WAVE-7-RESULTS.md", "diagnosis": "single dead Refs().end()-addr precompute"}},
+  {"symbol_like": "?Free@MemHeap@@%", "cert": "permuter_exhausted", "expect_pct": 95.1,
+   "evidence": {"source_doc": "99e-WAVE-7-RESULTS.md", "diagnosis": "0xDEADDEAD loop-invariant constant-hoist scheduling; permuter 0 improvement"}},
+  {"symbol_like": "?DrawDetectedBar@%", "cert": "artifact:const_table_placement", "expect_pct": 86.9,
+   "evidence": {"source_doc": "99g-WAVE-8-RESULTS.md", "diagnosis": "float-constant-table placement: TGT lfs from lbl_* const-table via pointer regs vs SRC frame-slot reloads + volatile FPR cascade; re-verified via diagnose 2026-06-11 @ f01cc201 (doc pct 83.4 was the live-objdiff plane)"}},
+  {"symbol_like": "?ScaleAddEq@@YAXAAVTransform@@ABV1@M@Z", "cert": "permuter_exhausted", "expect_pct": 63.3,
+   "evidence": {"source_doc": "99g-WAVE-8-RESULTS.md", "diagnosis": "frame delta +/-16 + r3/r31 + f1/f31 volatile cascade; wave-8 lane A permuter exhausted; re-verified via diagnose 2026-06-11 @ f01cc201 (doc pct 60.4 was the live-objdiff plane)"}},
+  {"symbol_like": "?CompressThread@@YAKPAX@Z", "cert": "artifact:build_env", "expect_pct": 35.9,
+   "evidence": {"source_doc": "99g-WAVE-8-RESULTS.md", "diagnosis": "single-base-reg sharing of contiguous BSS globals (TGT stb r11,0x0,r31+lbl_830A3FB0 vs SRC direct ?sCompressDone addressing; prologue savegprlr form follows); re-verified via diagnose 2026-06-11 @ f01cc201 (doc pct 30.4 was the live-objdiff plane)"}},
+  {"symbol_like": "?HolmesSetFileShare@@YAXPBD0@Z", "cert": "artifact:build_env", "expect_pct": 49.4,
+   "evidence": {"source_doc": "99g-WAVE-8-RESULTS.md", "diagnosis": "gShareName-0x40=gMachineName adjacent-global base sharing; NOTE: re-verify expect_pct post-wave-9 merge — lane B edits HolmesClient.cpp (HolmesClientOpen)"}}
+]

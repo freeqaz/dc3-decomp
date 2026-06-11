@@ -116,6 +116,20 @@ STALE_DAYS = 60
 # Artifact-name prefixes that are never authorable / never certifiable.
 ARTIFACT_PREFIXES = ("merged_", "lbl_", "fn_", "??_")
 
+
+def like_prefix_clause(column: str, prefix: str, negate: bool = True) -> str:
+    """LIKE-prefix SQL with wildcards in the prefix ESCAPED.
+
+    SQL LIKE treats '_' as a single-char wildcard, so a naive
+    ``symbol NOT LIKE '??_%'`` excludes EVERY '??'-prefixed symbol —
+    ctors (??0), dtors (??1), operators (??4...) — not just the literal
+    '??_' artifact prefix. That bug hid 6,835 authorable fns (~1.0 MB,
+    112 of them open) from the authorable_done view and the cert census
+    until 2026-06-11."""
+    esc = prefix.replace("~", "~~").replace("_", "~_").replace("%", "~%")
+    op = "NOT LIKE" if negate else "LIKE"
+    return f"{column} {op} '{esc}%' ESCAPE '~'"
+
 # Valid floor_certificate enum values (for validation / docs).
 CERT_EQUIVALENT = "equivalent"
 CERT_ICF = "icf_merged"
@@ -195,10 +209,10 @@ def migrate(conn: sqlite3.Connection, apply: bool) -> list[str]:
     #   3. certified:  floor_certificate IS NOT NULL
     #   else: open
     sdk_clause = " AND ".join(
-        f"(unit IS NULL OR unit NOT LIKE '{p}%')" for p in SDK_UNIT_PREFIXES
+        f"(unit IS NULL OR {like_prefix_clause('unit', p)})" for p in SDK_UNIT_PREFIXES
     )
     artifact_clause = " AND ".join(
-        f"symbol NOT LIKE '{p}%'" for p in ARTIFACT_PREFIXES
+        like_prefix_clause("symbol", p) for p in ARTIFACT_PREFIXES
     )
     view_sql = f"""
     CREATE VIEW {AUTHORABLE_DONE_VIEW} AS
@@ -248,9 +262,9 @@ def migrate(conn: sqlite3.Connection, apply: bool) -> list[str]:
 def is_authorable_sql() -> str:
     """SQL WHERE-fragment selecting the authorable, certifiable frontier."""
     sdk = " AND ".join(
-        f"(unit IS NULL OR unit NOT LIKE '{p}%')" for p in SDK_UNIT_PREFIXES
+        f"(unit IS NULL OR {like_prefix_clause('unit', p)})" for p in SDK_UNIT_PREFIXES
     )
-    art = " AND ".join(f"symbol NOT LIKE '{p}%'" for p in ARTIFACT_PREFIXES)
+    art = " AND ".join(like_prefix_clause("symbol", p) for p in ARTIFACT_PREFIXES)
     return (
         f"excluded=0 AND is_stub=0 AND {sdk} AND {art} "
         "AND match_percent_normalized IS NOT NULL "
@@ -426,6 +440,97 @@ def certify(conn: sqlite3.Connection, apply: bool, verbose: bool) -> dict:
     }
 
 
+def manual_certify(conn: sqlite3.Connection, path: Path, apply: bool) -> int:
+    """Write orchestrator-supplied certificates from a backlog JSON file.
+
+    This is the manual path the evidence model reserves for floors proven
+    outside the DB (worktree permuter runs, per-wave diagnosis docs) whose
+    evidence never landed in the attempts table. Entry format:
+
+        [{"symbol_like": "?CheckBSPTree@@%",      -- must resolve to EXACTLY 1 row
+          "unit_like": "%math/Geo%",              -- optional disambiguator
+          "cert": "permuter_exhausted",           -- or artifact:<class> etc.
+          "expect_pct": 99.0,                     -- doc-recorded normalized pct
+          "tolerance": 2.0,                       -- max |norm - expect_pct| (default 2.0)
+          "force": false,                         -- write despite pct drift
+          "evidence": {"source_doc": "...", "diagnosis": "..."}}, ...]
+
+    Rules: never overwrites an existing cert; refuses ambiguous/missing
+    symbols; refuses norm>=100 / norm<=0 / NULL rows; records the CURRENT
+    normalized pct (reconcile_db check (e) contract), not expect_pct.
+    Returns the number of entries that failed to resolve cleanly."""
+    entries = json.loads(Path(path).read_text())
+    build = git_short_rev()
+    stamp = now_iso()
+    sdk = " AND ".join(
+        f"(unit IS NULL OR {like_prefix_clause('unit', p)})" for p in SDK_UNIT_PREFIXES
+    )
+    art = " AND ".join(like_prefix_clause("symbol", p) for p in ARTIFACT_PREFIXES)
+    to_write: list[tuple] = []
+    problems = 0
+    print(f"=== Manual certification ({path}) ===")
+    print(f"  build: {build}   mode: {'APPLY' if apply else 'DRY-RUN'}")
+    for e in entries:
+        pat = e["symbol_like"]
+        cert = e["cert"]
+        q = (
+            "SELECT id, symbol, unit, match_percent_normalized, floor_certificate "
+            f"FROM functions WHERE symbol LIKE ? AND excluded=0 AND is_stub=0 "
+            f"AND {sdk} AND {art}"
+        )
+        params: list = [pat]
+        if e.get("unit_like"):
+            q += " AND unit LIKE ?"
+            params.append(e["unit_like"])
+        rows = conn.execute(q, params).fetchall()
+        if len(rows) != 1:
+            names = ", ".join(r["symbol"][:60] for r in rows[:4])
+            print(f"  ERROR  {pat}: {len(rows)} matches ({names})")
+            problems += 1
+            continue
+        r = rows[0]
+        norm = r["match_percent_normalized"]
+        if norm is None or norm <= 0 or norm >= 100:
+            print(f"  SKIP   {r['symbol']}: not certifiable (norm={norm})")
+            problems += 1
+            continue
+        if r["floor_certificate"]:
+            print(f"  KEEP   {r['symbol']}: already certified "
+                  f"({r['floor_certificate']})")
+            continue
+        exp = e.get("expect_pct")
+        tol = e.get("tolerance", 2.0)
+        if exp is not None and abs(norm - exp) > tol and not e.get("force"):
+            print(f"  DRIFT  {r['symbol']}: norm {norm:.1f} vs doc {exp:.1f} "
+                  f"(>±{tol}) — re-diagnose or set force:true")
+            problems += 1
+            continue
+        ev = dict(e.get("evidence", {}))
+        ev.setdefault("evidence", "manual_backlog")
+        if exp is not None:
+            ev["doc_pct"] = exp
+        to_write.append((
+            cert, round(norm, 2), build, stamp,
+            json.dumps(ev, separators=(",", ":")), r["id"],
+        ))
+        print(f"  {'WRITE' if apply else 'DRY'}  {r['symbol']}  "
+              f"{cert} @ {norm:.1f}%  [{r['unit'] or '-'}]")
+    if apply and to_write:
+        if "floor_certificate" not in existing_columns(conn, "functions"):
+            raise SystemExit("Refusing to --apply: floor_certificate column "
+                             "missing. Run with --migrate --apply first.")
+        conn.executemany(
+            "UPDATE functions SET floor_certificate=?, floor_cert_pct=?, "
+            "floor_cert_build=?, floor_cert_at=?, floor_cert_evidence=? "
+            "WHERE id=?",
+            to_write,
+        )
+        conn.commit()
+    print(f"  {len(to_write)} cert(s) {'written' if apply else 'resolvable'}, "
+          f"{problems} problem(s)")
+    return problems
+
+
 # --- Summary / done-view ------------------------------------------------------
 
 def done_summary(conn: sqlite3.Connection) -> dict:
@@ -478,8 +583,8 @@ def done_summary(conn: sqlite3.Connection) -> dict:
     # Fallback: view not yet migrated — use inline query with the old logic
     # (does not include the COMPLETE+current>=100+normalized NULL rule).
     sdk = " AND ".join(
-        f"(unit IS NULL OR unit NOT LIKE '{p}%')" for p in SDK_UNIT_PREFIXES)
-    art = " AND ".join(f"symbol NOT LIKE '{p}%'" for p in ARTIFACT_PREFIXES)
+        f"(unit IS NULL OR {like_prefix_clause('unit', p)})" for p in SDK_UNIT_PREFIXES)
+    art = " AND ".join(like_prefix_clause("symbol", p) for p in ARTIFACT_PREFIXES)
     has_norm_col = "match_percent_normalized" in existing_columns(conn, "functions")
     has_stub_col = "is_stub" in existing_columns(conn, "functions")
     has_excl_col = "excluded" in existing_columns(conn, "functions")
@@ -540,6 +645,9 @@ def parse_args() -> argparse.Namespace:
                    help="Add cert columns + authorable_done view (idempotent).")
     p.add_argument("--summary", action="store_true",
                    help="Print the authorable done-view headline (read-only) and exit.")
+    p.add_argument("--manual-file", type=Path, metavar="JSON",
+                   help="Write orchestrator-supplied certs from a backlog JSON "
+                        "(see manual_certify docstring). Skips the auto census.")
     p.add_argument("--verbose", "-v", action="store_true",
                    help="Show per-class certifiable samples + no-evidence sample.")
     return p.parse_args()
@@ -593,6 +701,11 @@ def main() -> int:
               f"{dwb:,}/{tb:,} bytes ({100*dwb/tb:.2f}%)")
         conn.close()
         return 0
+
+    if args.manual_file:
+        problems = manual_certify(conn, args.manual_file, apply=args.apply)
+        conn.close()
+        return 1 if problems else 0
 
     # Certification census (dry-run unless --apply)
     res = certify(conn, apply=args.apply, verbose=args.verbose)
