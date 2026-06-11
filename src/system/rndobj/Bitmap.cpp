@@ -996,8 +996,9 @@ void RndBitmap::DxtColor(
 void RndBitmap::PixelColor(
     int x, int y, unsigned char &r, unsigned char &g, unsigned char &b, unsigned char &a
 ) const {
-    if (mPalette) {
-        PaletteColor(PixelIndex(x, y), r, g, b, a);
+    u8 *palette = mPalette;
+    if (palette) {
+        ConvertColor(palette + PaletteOffset(PixelIndex(x, y)) * 4, r, g, b, a);
     } else if (mOrder & 0x38) {
         DxtColor(x, y, r, g, b, a);
     } else {
