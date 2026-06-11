@@ -229,8 +229,8 @@ activate:
     if (!(!(active == 1))) {
         // skip
     } else {
-        detector->mLastDetectFracs[0] = 0.0f;
-        detector->mLastDetectFracs[1] = 0.0f;
+        *(int *)&detector->mLastDetectFracs[0] = 0;
+        *(int *)&detector->mLastDetectFracs[1] = 0;
         detector->mDetectFrameOffset = -1;
         detector->mLastDetectFrameIdx = -1;
         detector->mActive = true;

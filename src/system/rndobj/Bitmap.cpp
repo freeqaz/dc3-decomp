@@ -920,99 +920,47 @@ void DecodeDxt3Alpha(unsigned char *uc, int i, int j, unsigned char &alpha) {
 }
 
 void DecodeDxt5Alpha(unsigned char *uc, int i, int j, unsigned char &alpha) {
-    // Stack-allocated lookup tables matching target's exact initialization order
-    unsigned char local_60[32];
-
-    // Initialize in the exact order shown in Ghidra
-    local_60[0] = 0;
-    local_60[1] = 0;
-    local_60[2] = 0;
-    local_60[3] = 1;
-    local_60[4] = 1;
-    local_60[5] = 1;
-    local_60[6] = 2;
-    local_60[7] = 2;
-    local_60[8] = 3;
-    local_60[9] = 3;
-    local_60[10] = 3;
-    local_60[11] = 4;
-    local_60[12] = 4;
-    local_60[13] = 4;
-    local_60[14] = 5;
-    local_60[15] = 5;
-
-    local_60[16] = 0;
-    local_60[17] = 3;
-    local_60[18] = 6;
-    local_60[19] = 1;
-    local_60[20] = 4;
-    local_60[21] = 7;
-    local_60[22] = 2;
-    local_60[23] = 5;
-    local_60[24] = 0;
-    local_60[25] = 3;
-    local_60[26] = 6;
-    local_60[27] = 1;
-    local_60[28] = 4;
-    local_60[29] = 7;
-    local_60[30] = 2;
-    local_60[31] = 5;
-
-    // Read alpha values - order matches target: alpha1 first, alpha0 second
-    unsigned char alpha1 = uc[1];
-    unsigned char alpha0 = uc[0];
-
-    int iVar3 = j << 2;
-    unsigned char byteOff = local_60[iVar3 + i];
-    unsigned char bitPos = local_60[i + iVar3 + 16];
-
-    // Calculate adjusted offset
-    unsigned int adjustedOff;
-                                adjustedOff = (!(!((int)(byteOff & 1) == 0))) == 0 ? byteOff + 0xFF : byteOff + 1;
-
-    unsigned int index;
-    if (bitPos < 6) {
-        index = (uc[adjustedOff + 2] >> bitPos) & 7;
+    unsigned char a0 = uc[0];
+    int code;
+    unsigned char byteOffsets[16] = {
+        0, 0, 0, 1, 1, 1, 2, 2,
+        3, 3, 3, 4, 4, 4, 5, 5,
+    };
+    unsigned char a1 = uc[1];
+    unsigned int byte = byteOffsets[i + (j << 2)];
+    unsigned char bitOffsets[16] = {
+        0, 3, 6, 1, 4, 7, 2, 5,
+        0, 3, 6, 1, 4, 7, 2, 5,
+    };
+    unsigned int bit = bitOffsets[i + (j << 2)];
+    // Xbox 360 stores the DXT5 alpha index bytes byte-swapped within each
+    // 16-bit word, so even/odd byte indices are swapped before the read.
+    unsigned int swizByte = (byte & 1) ? byte - 1 : byte + 1;
+    if (bit < 6) {
+        code = (uc[swizByte + 2] >> bit) & 7;
     } else {
-        unsigned int off2 = byteOff + 1;
-        unsigned int adjustedOff2;
-        if (!((off2 & 1) == 0)) {
-            adjustedOff2 = off2 + 1;
+        unsigned int next = byte + 1;
+        unsigned int nextSwizByte = (next & 1) ? next - 1 : next + 1;
+        if (bit == 6) {
+            code = ((uc[nextSwizByte + 2] & 1) << 2) | ((uc[swizByte + 2] >> 6) & 3);
         } else {
-            adjustedOff2 = off2 + 2;
-        }
-        if (bitPos == 6) {
-            index = ((uc[adjustedOff2 + 2] & 1) << 2) | (uc[adjustedOff + 2] >> 6);
-        } else {
-            index = ((uc[adjustedOff2 + 2] & 3) << 1) | (uc[adjustedOff + 2] >> 7);
+            code = ((uc[nextSwizByte + 2] & 3) << 1) | ((uc[swizByte + 2] >> 7) & 1);
         }
     }
-
-    if (index == 0) {
-        alpha = alpha1;
-    } else if (index == 1) {
-        alpha = alpha0;
-    } else if (!(alpha1 > alpha0)) {
-        if ((int)index == 6) {
+    if (code == 0) {
+        alpha = a0;
+    } else if (code == 1) {
+        alpha = a1;
+    } else if (a0 <= a1) {
+        if (code == 6) {
             alpha = 0;
-            return;
-        } else if (index == 7) {
+        } else if (code == 7) {
             alpha = 0xFF;
         } else {
-            alpha = ((6 - index) * (unsigned int)alpha1
-                     + (index - 1) * (unsigned int)alpha0 + 2)
-                / 5;
+            alpha = (unsigned char)(((unsigned int)(6 - code) * a0 + (unsigned int)(code - 1) * a1 + 2U) / 5U);
         }
     } else {
-        if ((int)index == 6) {
-            alpha = 0;
-        } else if (index == 7) {
-            alpha = 0xFF;
-        } else {
-            alpha = ((8 - index) * (unsigned int)alpha1
-                     + (index - 1) * (unsigned int)alpha0 + 3)
-                / 7;
-        }
+        alpha = (unsigned char)(((unsigned int)(8 - code) * a0 + (unsigned int)(code - 1) * a1 + 3U) / 7U);
     }
 }
 

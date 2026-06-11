@@ -9,7 +9,20 @@ static Licenses sLicense("system/src/math/SHA1.h", Licenses::kRequirementNotific
 // shoutouts to clibs' implementation of sha1: https://github.com/clibs/sha1
 
 #define rol(value, bits) (((value) << (bits)) | ((value) >> (32 - (bits))))
+#ifdef HX_NATIVE
+// The Xbox 360 target is big-endian: a 32-bit word memcpy'd from the message
+// buffer is read in big-endian order, which is the byte order SHA1 expects. The
+// little-endian native/web host reads those bytes reversed, so byteswap the raw
+// word on first use (blk0) to recover the big-endian view. blk() then operates
+// on already-corrected words. Without this every CSHA1 digest is wrong on host.
+static inline unsigned int Sha1Bswap32(unsigned int v) {
+    return ((v & 0x000000FFu) << 24) | ((v & 0x0000FF00u) << 8) |
+           ((v & 0x00FF0000u) >> 8) | ((v & 0xFF000000u) >> 24);
+}
+#define blk0(i) (m_block->l[i] = Sha1Bswap32(m_block->l[i]))
+#else
 #define blk0(i) m_block->l[i]
+#endif
 #define blk(i)                                                                           \
     (m_block->l[i & 15] =                                                                \
          rol(m_block->l[i & 15] ^ m_block->l[(i + 2) & 15]                               \
@@ -34,11 +47,23 @@ static Licenses sLicense("system/src/math/SHA1.h", Licenses::kRequirementNotific
     w = rol(w, 30);
 
 void CSHA1::Transform(unsigned int *pState, const unsigned char *pBuffer) {
+#ifdef HX_NATIVE
+    // `unsigned long` is 64-bit on the LP64 host, so rol()/blk() would not wrap
+    // these round-state words at 32 bits and the digest would be wrong. The Xbox
+    // 360 target's `unsigned long` is 32-bit, so pin a 32-bit word type here. The
+    // PPC source keeps the original `unsigned long` declarations for matching.
+    unsigned int e;
+    unsigned int d;
+    unsigned int c;
+    unsigned int b;
+    unsigned int a;
+#else
     unsigned long e;
     unsigned long d;
     unsigned long c;
     unsigned long b;
     unsigned long a;
+#endif
     c = pState[2];
 
     b = pState[1];
