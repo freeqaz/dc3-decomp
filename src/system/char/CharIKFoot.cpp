@@ -57,7 +57,8 @@ bool Dc3FeetPlantFix() {
 // (the move pose would overwrite it, and running it twice destabilizes the foot-plant FSM).
 bool gDc3DirectorIKReRun = false;
 // Monotonic poll-sequence counter (DC3_IK_DIAG2) to find who writes a leg bone LAST in a frame.
-int gDc3PollSeq = 0;
+// Defined in HamDirector.cpp (also uses it); declared extern here to avoid WASM duplicate-symbol error.
+extern int gDc3PollSeq;
 
 // Force a transform's whole parent chain to recompose its cached WorldXfm from LOCAL,
 // top-down. The leg IK intermittently reads a stale/un-composed WorldXfm (a bone whose

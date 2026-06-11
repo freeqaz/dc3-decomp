@@ -1,6 +1,32 @@
 #include "gfx/PipelineManager.h"
 #include "gfx/GpuDevice.h"
 #include "gfx/VertexFormats.h"
+#ifdef HX_WEB
+// FrameTraceCounters (engine 8fb669d): WebAssets.cpp now references these
+// per-frame telemetry counters. The engine's PipelineManager.cpp provides weak
+// definitions, but dc3-web compiles WebAssets.cpp directly without linking
+// libmilo-engine.a, so we need strong definitions here. These are DC3's
+// authoritative definitions — dc3 has no Loader.cpp (like rb3) to own them.
+#include "platform/FrameTraceCounters.h"
+bool   gFrameTraceActive           = false;
+float  gFetchSyncMsThisFrame       = 0.0f;
+int    gFetchSyncCountThisFrame    = 0;
+double gFetchSyncBytesThisFrame    = 0.0;
+float  gDtaParseMsThisFrame        = 0.0f;
+float  gObjLoadMsThisFrame         = 0.0f;
+float  gObjLoadWorstMs             = 0.0f;
+char   gObjLoadWorstName[64]       = {0};
+float  gAudioPrimeMsThisFrame      = 0.0f;
+float  gTexUploadMsThisFrame       = 0.0f;
+int    gTexUploadCountThisFrame    = 0;
+float  gMeshUploadMsThisFrame      = 0.0f;
+int    gMeshUploadCountThisFrame   = 0;
+float  gVertUnpackMsThisFrame      = 0.0f;
+int    gVertUnpackCountThisFrame   = 0;
+float  gPipelineCreateMsThisFrame  = 0.0f;
+int    gPipelineCreateCountThisFrame = 0;
+float  gStreamReadMsThisFrame      = 0.0f;
+#endif
 
 #include <cstdlib>
 #include <cstdio>
