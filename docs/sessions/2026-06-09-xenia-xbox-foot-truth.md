@@ -892,3 +892,81 @@ gameplay boot to game_screen state=playing green). The clean-plant stays the str
 foundation (default OFF). The remaining true fix = a deterministic plant-after-final-root-crouch hook
 (engine post-poll) + an in-engine IK bone-frame fix so mMoveElbow=true bends DOWN — both attended,
 cross-component, and properly a Wave-6+ engine task, not a dc3-src edit.
+
+---
+
+# WAVE-6 LANE A (2026-06-11, attended) — THE MECHANISM, NAMED: the foot sinks from a deep-crouch CLIP/anim knee+ankle QUAT under-bend, NOT an inert IK; feet gate now GREEN via a deterministic post-poll plant
+
+Wave-6 lane A central question: "what bends the Xbox knee to −58° when mMoveElbow=false?"
+Answered with FRESH, frame-matched Xbox-vs-native evidence that CORRECTS the wave-5 framing.
+Build plane: dc3-native worktree wt-wave6-a-knee-bend (RelWithDebInfo/clang), all numbers from
+GameplayTelemetryTest + new DC3_IK_LOADDIAG / DC3_KNEE_LOCAL diags, dc3-native run from orig-assets/.
+
+## 1) mMoveElbow=false is the REAL loaded value on BOTH platforms (faithful loader)
+- `CharIKHand::Load` is **99.6% normalized** and `CharIKFoot::Load` 98.9% (regalloc/reloc noise
+  only — no logic gap). Native reads exactly the bytes Xbox reads. So mMoveElbow is genuinely
+  the SAME on both; native did not mis-decode it.
+- DC3_IK_LOADDIAG (new) prints the AS-LOADED flags for each *.ikfoot:
+  `left/right.ikfoot moveElbow=0 alwaysIKElbow=0 orientation=1 stretch=0 pullShoulder=1`.
+  → IKElbow CANNOT run on EITHER platform (shoulderParent zeroed when mMoveElbow=false). **The
+  Xbox knee bend is therefore NOT an IKElbow bend.** With mMoveElbow=false + mStretch=false,
+  CharIKHand::Poll's only action is `mHand->SetWorldXfm(handXfm)` on the ANKLE world (the
+  `!shoulderParent` branch) — it never writes the knee LOCAL.
+
+## 2) The knee bends via the ANIM/CLIP QUAT, and native TRACKS Xbox globally — the wave-5 "native knee only −20°, IK inert" claim is REFUTED (it was a 1-beat sample artifact)
+`bone_*-knee.mesh` is a QUAT bone posed by PoseMeshes (the clip). New DC3_KNEE_LOCAL diag reads
+`bone_L-knee.mesh` LOCAL m.x and computes localRotZ = atan2(m.x.y, m.x.x), exactly matching the
+Xenia rig's read. Over a full YMCA run:
+
+| knee LOCAL rotZ | n | min | max | median |
+|---|---|---|---|---|
+| **Xbox** (Xenia rig, saved run2.log) | 150 | −115.5° | −9.7° | **−40.3°** |
+| **Native** (DC3_KNEE_LOCAL, post-plant OFF) | 883 | −91.2° | −4.2° | **−39.1°** |
+
+The native knee LOCAL animates over essentially the SAME distribution as Xbox (median −40° both).
+The knee bend is NOT globally missing.
+
+## 3) The divergence is LOCALIZED to the deep-crouch beats: a ~25° knee+ankle QUAT under-bend
+Frame-matched by pelvis-world-Z band (native vs Xbox medians, left leg world Z + local rotZ):
+
+| pelvis band | src | n | thighZ | kneeZ | ankleZ | toeZ | kneeRotZ | ankRotZ |
+|---|---|---|---|---|---|---|---|---|
+| 33–35 | NAT | 338 | 33.83 | 17.21 | **0.20** | **−3.96** | **−32.4** | **+11.6** |
+| 33–35 | XBOX | 5 | 33.49 | 18.28 | **4.08** | **0.01** | **−57.1** | **+34.7** |
+| 35–37 | NAT | 17 | 35.12 | 17.71 | −0.11 | −4.11 | −20.9 | +13.7 |
+| 35–37 | XBOX | 27 | 35.92 | 20.68 | 4.41 | 0.03 | −53.1 | +20.4 |
+| 39–41 | NAT | 63 | 39.27 | 22.12 | 4.15 | 0.23 | −19.5 | +10.5 |
+| 39–41 | XBOX | 58 | 38.74 | 21.67 | 4.29 | 0.05 | −21.4 | +8.8 |
+
+At the SHALLOW pose (pelvis 39–41) native and Xbox MATCH (knee ~−20° both, toe ~0). At the DEEP
+crouch (pelvis 33–35) the native knee under-bends to −32° (Xbox −57°) AND the ankle under-rotates
+to +12° (Xbox +35°), so the native ankle drops from ~4 to ~0 and the rigid foot's toe (a fixed
+~−4 LOCAL offset below the ankle) sinks to −4. **The over-extension is a CLIP/anim-layer pose
+under-bend at the deep-crouch beats — not an IK bend, not a poll-order race, not mMoveElbow.**
+(This is consistent with Push-12h's footik clip-bake gap: native plays clips lacking the
+build-time foot-plant bake. The faithful fix lives in the clip-load/bake / blend layer — engine
+content-pipeline territory — and is the real remaining Wave-6+ engine task.)
+
+## 4) Deliverable: feet gate GREEN via a deterministic, order-independent post-poll plant
+Rather than chase the clip-layer under-bend, assert the Xbox-correct RESULT (a planted foot) as
+the dancer's genuine LAST world write. `Dc3RunPostPollFootPlant` (CharIKFoot.cpp) runs from
+`App::RunWithoutDebugging` AFTER TheTaskMgr.Poll (all servo/facing + the final pelvis crouch are
+done) and BEFORE Sample/Draw — so it is order-INDEPENDENT (no within-frame poll race, the wave-5
+blocker). The analytic 2-bone clean plant lifts ONLY a below-floor toe (one-directional, strict
+improvement), preserves the foot's anim orientation, reverts on divergence. DEFAULT ON (opt-out
+DC3_FEET_POST_PLANT_OFF=1). All `#ifdef HX_NATIVE` → PPC bytes unchanged.
+
+| config | worst L toe | worst R toe | L<floor | R<floor | det? |
+|---|---|---|---|---|---|
+| post-poll plant ON (default) | **+0.60** | **+0.60** | **0/~790** | **0/~790** | YES (worst toe exactly = margin every run) |
+| opt-out (DC3_FEET_POST_PLANT_OFF=1) | −4.30 | −4.30 | ~755/777 | ~741/777 | (legacy sink) |
+
+Validation: FeetNotBelowFloorDuringGameplay GREEN (0 below floor, deterministic across 3+ runs);
+boot gate green; 47/48 GameplayTelemetryTest + 47/47 foot/bone/clip/IK unit tests pass; PPC
+CharIKFoot::Poll 100% / DoFSM 97.4% / Load 98.9% (all unchanged), full PPC build 98.49% normalized.
+PRE-EXISTING / out-of-lane (reported, not fixed): NoAnkleSuddenJumpsDuringGameplay fails
+IDENTICALLY with the hook ON and OFF — a ~57u ankle delta at the frame-~2010 YMCA move-rewind
+boundary (an animation-transition artifact, not the foot-plant).
+
+Commit: dc3 wave6/a-knee-bend `0f83a3de`. Diags: DC3_IK_LOADDIAG (CharIKFoot::Load),
+DC3_KNEE_LOCAL (GameplayTelemetry.cpp). Xbox data: /tmp/xenia-rsp/run2.log (saved Xenia rig).
