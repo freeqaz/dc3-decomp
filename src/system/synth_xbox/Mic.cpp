@@ -160,11 +160,7 @@ void MicXbox::StartPlayback() {
     }
     Start();
     mMute = false;
-    if (unkc) {
-        unk9058 = 2700;
-    } else {
-        unk9058 = 1800;
-    }
+    unk9058 = unkc ? 2700.0f : 1800.0f;
     unk905c = 0;
     unk9054 = 1;
     mPlaybackVoice = new Voice(false, 1, false);
