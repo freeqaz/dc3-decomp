@@ -132,26 +132,25 @@ const char *FileGetDrive(const char *file) {
     return FileGetDriveBuf(file, drive);
 }
 
-const char *FileGetPathBuf(const char *file, char *path) {
-    MILO_ASSERT(path, 0x3F6);
-    if (file != 0) {
-        if (file != path)
-            strcpy(path, file);
-        char *p2 = path + strlen(path) - 1;
-        while (p2 >= path && *p2 != '/' && *p2 != '\\') {
+const char *FileGetPathBuf(const char *iBuf, char *oBuf) {
+    MILO_ASSERT(oBuf, 0x3F6);
+    if (iBuf != 0) {
+        strcpy(oBuf, iBuf);
+        char *p2 = oBuf + strlen(oBuf) - 1;
+        while (p2 >= oBuf && *p2 != '/' && *p2 != '\\') {
             p2--;
         }
-        if (p2 >= path) {
-            if ((p2 == path) || (p2[-1] == ':'))
+        if (p2 >= oBuf) {
+            if ((p2 == oBuf) || (p2[-1] == ':'))
                 p2[1] = '\0';
             else
                 *p2 = '\0';
-            return path;
+            return oBuf;
         }
     }
-    path[0] = '.';
-    path[1] = '\0';
-    return path;
+    oBuf[0] = '.';
+    oBuf[1] = '\0';
+    return oBuf;
 }
 
 const char *FileGetPath(const char *file) {

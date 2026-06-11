@@ -69,7 +69,7 @@ void DingoServer::ManageJob(DingoJob *job) {
                 authSucceeded = false;
             }
         }
-        if (authSucceeded && !job->GetHttpReq()) {
+        if (authSucceeded && !(job->mHttpReq)) {
             shouldSendFailureCallback = !InitAndAddJob(job, false, justAuthenticated);
         }
     }

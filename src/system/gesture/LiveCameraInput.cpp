@@ -635,7 +635,10 @@ void LiveCameraInput::ClearSnapshots() {
     }
     mSnapshots.erase(mSnapshots.begin(), mSnapshots.end());
     mNumSnapshots = 0;
-    mSnapshotBatches.erase(mSnapshotBatches.begin(), mSnapshotBatches.end());
+    // Bind mSnapshotBatches to a reference so its address is materialized once,
+    // matching the target's register selection for the erase() call.
+    std::vector<int> &batches = mSnapshotBatches;
+    batches.erase(batches.begin(), batches.end());
     TheDxRnd.ReleaseAutoRelease();
 }
 

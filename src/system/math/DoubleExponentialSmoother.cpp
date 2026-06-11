@@ -66,17 +66,20 @@ void Vector2DESmoother::Smooth(Vector2 v, float dt, bool normalize) {
 }
 
 void Vector3DESmoother::Smooth(Vector3 v, float dt, bool normalize) {
+    // Binding mY to a reference keeps its &this->mY address live in a register
+    // across the body, matching the target's instruction selection.
+    DoubleExponentialSmoother &smootherY = mY;
+    smootherY.Smooth(v.y, dt);
     mX.Smooth(v.x, dt);
-    mY.Smooth(v.y, dt);
     mZ.Smooth(v.z, dt);
     if (normalize) {
-        Vector3 val(mX.mLevel, mY.mLevel, mZ.mLevel);
+        Vector3 val(mX.mLevel, smootherY.mLevel, mZ.mLevel);
         Normalize(val, val);
+        smootherY.mLevel = val.y;
         mX.mLevel = val.x;
-        mY.mLevel = val.y;
-        mZ.mLevel = val.z;
         mX.mTrend = 0;
-        mY.mTrend = 0;
+        mZ.mLevel = val.z;
+        smootherY.mTrend = 0;
         mZ.mTrend = 0;
     }
 }
