@@ -208,7 +208,7 @@ void CharFeedback::Poll() {
                 fadeStep *= -1.0f;
             }
             limb.unk8 += fadeStep;
-            limb.unk8 = Clamp<float>(0.0f, 1.0f, limb.unk8);
+            ClampEq(limb.unk8, 0.0f, 1.0f);
         } else {
             limb.unk8 = 0.0f;
         }

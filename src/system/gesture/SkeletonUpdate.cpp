@@ -225,13 +225,11 @@ void SkeletonUpdate::UpdateFakeArmPos() {
     JoypadData *padData = JoypadGetPadData(0);
     float fVar1 = padData->mSticks[1][1];
     float fVar4 = TheTaskMgr.DeltaUISeconds();
-    float fVar11 = fVar4;
-    fVar11 *= lbl_82F0BE80;
-    float fVar12 = -(fVar11 * fVar1 - unk5398);
-    unk5398 = fVar12;
+    float fVar11 = fVar4 * lbl_82F0BE80;
+    unk5398 = -(fVar11 * fVar1 - unk5398);
 
     float fVar0 = -0.25f;
-    fVar0 = (-0.25f - fVar12 >= 0.0f) ? -0.25f : fVar12;
+    fVar0 = (-0.25f - unk5398 >= 0.0f) ? -0.25f : unk5398;
     unk5398 = (fVar0 - 0.6f >= 0.0f) ? 0.6f : fVar0;
 }
 

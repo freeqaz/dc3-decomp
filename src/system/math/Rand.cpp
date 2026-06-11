@@ -15,7 +15,22 @@ void Rand::Seed(int seed) {
     for (int i = 0; i < 0x100; i++) {
         int j = s * 0x41C64E6D + 0x3039;
         s = j * 0x41C64E6D + 0x3039;
+#ifdef HX_NATIVE
+        // ROOT FIX (Wave 4 Lane B, unicorn flip-list object_memory bug): the target
+        // lowers `j >> 16` with a LOGICAL right shift (PPC `srwi`), so the high 16
+        // bits of the shifted draw are zero and the OR with `(s & 0x7FFF0000)` keeps
+        // bit 31 clear (orig table words are `0x5665xxxx`-class, never `0xFFFFxxxx`).
+        // Our `int j >> 16` is a SIGNED shift (`srawi`): when bit 31 of the draw is
+        // set it sign-extends to `0xFFFFxxxx` and poisons the high word of the MT
+        // state table (unicorn: 20 memory diffs, decomp `0xFFFFxxxx` vs orig
+        // `0x5665xxxx`). Masking the shifted value to 16 bits reproduces the logical
+        // shift exactly. The PPC build path keeps the original `int` shift verbatim
+        // (byte-identical, guarded) — the host compiler will not emit `srwi` for any
+        // unsigned spelling here (it fuses to `rlwimi`), so the fix is host-only.
+        mRandTable[i] = (s & 0x7FFF0000) | ((j >> 16) & 0xFFFF);
+#else
         mRandTable[i] = (s & 0x7FFF0000) | (j >> 16);
+#endif
     }
     mRandIndex1 = 0;
     mRandIndex2 = 0x67;
