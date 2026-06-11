@@ -351,8 +351,7 @@ void RndLine::MapVerts(int idx, VertsMap &vmap) {
                 vmap.t = 1;
                 vmap.v = &mMesh->Verts()[0];
             } else {
-                int lastIdx = (int)mPoints.size() - 1;
-                if ((unsigned int)idx == lastIdx) {
+                if ((unsigned int)(idx + 1) == mPoints.size()) {
                     vmap.t = 2;
                     vmap.v = &mMesh->Verts()[(int)mMesh->Verts().size() - 4];
                 } else {

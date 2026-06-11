@@ -362,10 +362,14 @@ void SetupFrame(
     float invDelta = 1.0f / deltaTime;
     for (int i = 0; i < 20; i++) {
         int joint = kAnalyzeJoints[i];
-        Vector3 vel;
-        Subtract(curJoints[joint], prevJoints[joint], vel);
-        Scale(vel, invDelta, vel);
-        frame.mJointVelocities[i] = vel;
+        const Vector3 &cur = curJoints[joint];
+        const Vector3 &prev = prevJoints[joint];
+        float dx = cur.x - prev.x;
+        float dy = cur.y - prev.y;
+        float dz = cur.z - prev.z;
+        frame.mJointVelocities[i].x = invDelta * dx;
+        frame.mJointVelocities[i].y = invDelta * dy;
+        frame.mJointVelocities[i].z = invDelta * dz;
     }
     frame.mTime = frameCount + beatDiff;
 }

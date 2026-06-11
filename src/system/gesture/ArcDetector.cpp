@@ -132,10 +132,11 @@ void ArcDetector::DrawPath(
     std::list<Vector3>::const_iterator it = path.begin();
     Vector3 prev = *it;
     prev.z = prev.z + offset.z;
-    prev.x = prev.x + offset.x;
     prev.y = prev.y + offset.y;
+    prev.x = prev.x + offset.x;
+    Vector3 cur;
     for (++it; it != path.end(); ++it) {
-        Vector3 cur = *it;
+        cur = *it;
         cur.x = cur.x + offset.x;
         cur.y = cur.y + offset.y;
         cur.z = cur.z + offset.z;
@@ -198,7 +199,8 @@ float ArcDetector::GetPathLength() const {
 
 float ArcDetector::GetPathError() const {
     std::list<Vector3>::const_iterator it = mJointPath.begin();
-    if (it == mJointPath.end()) {
+    std::list<Vector3>::const_iterator pathEnd = mJointPath.end();
+    if (it == pathEnd) {
         return 0.0f;
     }
     float error = 0.0f;
@@ -211,17 +213,17 @@ float ArcDetector::GetPathError() const {
         float arcZBase = mArcOffset.z - pt.z;
         float comp = mSwipeExtentX * dx * 2.0f - dx * dx;
         float arcY;
-        if (comp > 0.0f) {
-            arcY = sqrtf(comp);
-        } else {
+        if (!(comp > 0.0f)) {
             arcY = 0.0f;
+        } else {
+            arcY = sqrtf(comp);
         }
         float errY = arcZBase - arcY;
         float errZ = (1.0f / sZErrorScale) * (pt.y - mSwipeExtentY);
         float dz = 0.0f;
         error = errZ * errZ + (errY * errY + dz * dz) + error;
         ++it;
-    } while (it != mJointPath.end());
+    } while (it != pathEnd);
     return error;
 }
 
@@ -273,27 +275,30 @@ bool ArcDetector::IsLockedIn() const {
 }
 
 bool ArcDetector::IsPathAcceptable() const {
-    static float sSlopeRatioThreshold = 0.5f;
-    std::list<Vector3>::const_iterator it = mJointPath.begin();
     unsigned int count = 0;
-    if (it != mJointPath.end()) {
+    const std::list<Vector3> &jointPath = mJointPath;
+    std::list<Vector3>::const_iterator it = jointPath.begin();
+    static float sSlopeRatioThreshold = 0.5f;
+    if (it != jointPath.end()) {
         do {
             ++it;
             count++;
-        } while (it != mJointPath.end());
+        } while (it != jointPath.end());
     }
     if (count <= 1) {
         return true;
     }
     if (!IsLockedIn()) {
-        Vector3 front = mJointPath.front();
-        const Vector3 &back = mJointPath.back();
+        Vector3 front = jointPath.front();
+        const Vector3 &back = jointPath.back();
         float sign = (float)(mSide != 0 ? 1 : -1);
-        float dx = sign * (front.x - back.x);
+        float diffX = front.x - back.x;
+        float dy = -(back.y - front.y);
+        float diffZ = front.z - back.z;
+        float dx = sign * diffX;
         if (dx < 0.0f) {
             return false;
         }
-        float dy = front.y - back.y;
         if (dy == 0.0f) {
             return true;
         }
@@ -301,7 +306,7 @@ bool ArcDetector::IsPathAcceptable() const {
         if (invDy * dx >= sSlopeRatioThreshold) {
             return true;
         }
-        if (invDy * (front.z - back.z) >= sSlopeRatioThreshold) {
+        if (invDy * diffZ >= sSlopeRatioThreshold) {
             return true;
         }
         return false;

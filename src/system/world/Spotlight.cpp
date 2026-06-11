@@ -1111,8 +1111,7 @@ void Spotlight::BuildBeam(BeamDef &def) {
 void Spotlight::BuildCone(BeamDef &def) {
     MILO_ASSERT(!SpotlightDrawer::DrawNGSpotlights(), 0x5B6);
     def.mIsCone = true;
-    auto _tmp0 = Hmx::Object::New<RndMesh>();
-    def.mBeam = _tmp0;
+    def.mBeam = Hmx::Object::New<RndMesh>();
     RndMesh::VertVector &verts = def.mBeam->Verts();
     std::vector<RndMesh::Face> &faces = def.mBeam->Faces();
 

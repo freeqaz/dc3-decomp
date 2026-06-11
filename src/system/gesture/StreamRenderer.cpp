@@ -286,7 +286,49 @@ void StreamRenderer::SetCrewPhotoPlayerCenters() {}
 namespace {
     int DisplayStreams[] = { 2, 1, 1, 1, 1, 2, 3, 3, 3 };
 
-    void GetPlayerIndexes(int indexes[6]);
+    void GetPlayerIndexes(int indexes[6]) {
+        bool used[6];
+        used[0] = true;
+        used[1] = true;
+        used[2] = true;
+        used[3] = true;
+        used[4] = true;
+        used[5] = true;
+        for (int i = 0; i < 6; i++) {
+            indexes[i] = -1;
+        }
+        Skeleton *skel0 = TheGestureMgr->GetSkeletonByTrackingID(
+            TheGameData->Player(0)->GetSkeletonTrackingID());
+        if (skel0) {
+            int v = skel0->SkeletonIndex() + 1;
+            indexes[0] = v;
+            used[v - 1] = false;
+        } else {
+            indexes[0] = 0;
+            used[0] = false;
+        }
+        Skeleton *skel1 = TheGestureMgr->GetSkeletonByTrackingID(
+            TheGameData->Player(1)->GetSkeletonTrackingID());
+        if (skel1) {
+            int v = skel1->SkeletonIndex() + 1;
+            indexes[1] = v;
+            used[v - 1] = false;
+        } else {
+            indexes[1] = 0;
+            used[1] = false;
+        }
+        for (int i = 0; i < 6; i++) {
+            if (indexes[i] == -1) {
+                for (int j = 0; j < 6; j++) {
+                    if (used[j]) {
+                        used[j] = false;
+                        indexes[i] = j + 1;
+                        break;
+                    }
+                }
+            }
+        }
+    }
 
     bool CheckTexType(RndTex *tex) {
         if (!(tex->GetType() & 2)) {

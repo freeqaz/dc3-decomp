@@ -389,17 +389,18 @@ void RndPostProc::LoadRev(BinStreamRev &d) {
         } else {
             Hmx::Color c;
             d >> c;
-            float minVal = c.red;
+            float red = c.red;
+            float minVal = red;
             if (minVal > c.green)
                 minVal = c.green;
             if (minVal > c.blue)
                 minVal = c.blue;
             if (minVal < 4.0f) {
                 float range = 4.0f - minVal;
-                mBloomThreshold = c.alpha;
-                c.red = (4.0f - c.red) / range;
+                c.red = (4.0f - red) / range;
                 c.green = (4.0f - c.green) / range;
                 c.blue = (4.0f - c.blue) / range;
+                mBloomThreshold = c.alpha;
                 c.alpha = 0.0f;
                 mBloomColor = c;
             } else {
@@ -413,7 +414,8 @@ void RndPostProc::LoadRev(BinStreamRev &d) {
             d >> dummy;
             d >> mBloomIntensity;
             mBloomIntensity = sqrtf(mBloomIntensity);
-            d >> dummy;
+            int dummy2;
+            d >> dummy2;
         }
     }
     if (d.rev > 5 && d.altRev < 1) {
