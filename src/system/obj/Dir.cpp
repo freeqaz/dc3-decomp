@@ -76,6 +76,46 @@ static bool ShouldSkipCascadeNullify(Hmx::Object *obj, const std::vector<ObjectD
     ObjectDir *asDir = dynamic_cast<ObjectDir *>(obj);
     return asDir && HasExternalDirPtrs(asDir, cascade);
 }
+
+// Compute the set of dirs that SURVIVE this cascade. A dir survives when it has
+// external DirPtrs (it was reparented into a dir outside the cascade tree). The
+// set is TRANSITIVE: every dir reachable from a survivor (via SubDirs or child
+// ObjectDirs) also survives, because the survivor still owns that whole subtree.
+//
+// Without the transitive closure a reparented subdir whose ONLY DirPtr owner is
+// itself inside the cascade tree (e.g. a kMergeReplace'd dir's own nested subdir)
+// looks "internal-only" and gets nullified — severing the survivor's link to its
+// descendants. (See test NonProxyPipelinePreservesNestedReplaceSubdirScope.)
+static void CollectSurvivorClosure(
+    const std::vector<ObjectDir *> &cascade, std::vector<ObjectDir *> &survivors
+) {
+    // Seed: every cascade dir that has truly-external DirPtrs.
+    for (size_t i = 0; i < cascade.size(); i++) {
+        if (HasExternalDirPtrs(cascade[i], cascade)
+            && std::find(survivors.begin(), survivors.end(), cascade[i]) == survivors.end()) {
+            survivors.push_back(cascade[i]);
+        }
+    }
+    // Closure: pull in everything a survivor still owns.
+    for (size_t i = 0; i < survivors.size(); i++) {
+        ObjectDir *dir = survivors[i];
+        for (int s = 0; s < dir->SubDirs().size(); s++) {
+            ObjectDir *sub = dir->SubDirs()[s];
+            if (sub && std::find(survivors.begin(), survivors.end(), sub) == survivors.end())
+                survivors.push_back(sub);
+        }
+        for (ObjDirItr<Hmx::Object> it(dir, false); it != nullptr; ++it) {
+            ObjectDir *asDir = dynamic_cast<ObjectDir *>(&*it);
+            if (asDir && asDir != dir
+                && std::find(survivors.begin(), survivors.end(), asDir) == survivors.end())
+                survivors.push_back(asDir);
+        }
+    }
+}
+
+static bool IsSurvivor(ObjectDir *dir, const std::vector<ObjectDir *> &survivors) {
+    return dir && std::find(survivors.begin(), survivors.end(), dir) != survivors.end();
+}
 #endif
 
 #pragma region Virtual Methods
@@ -101,10 +141,16 @@ ObjectDir::~ObjectDir() {
     if (sDeleteObjectsDepth == 1 && !TheLoadMgr.AsyncUnload()) {
         std::vector<ObjectDir *> allDirs;
         CollectCascadeDirs(this, allDirs);
+        // Dirs reparented out of this tree survive — and so does everything they
+        // still own (transitive closure). Skip the whole survivor subtree so we
+        // never sever a survivor's link to its own descendants.
+        std::vector<ObjectDir *> survivors;
+        CollectSurvivorClosure(allDirs, survivors);
         for (size_t i = 0; i < allDirs.size(); i++) {
-            // Skip dirs that have EXTERNAL DirPtrs — they were reparented
-            // and will survive. Nullifying their refs would break external code.
-            if (allDirs[i] != this && ShouldSkipCascadeNullify(allDirs[i], allDirs))
+            // Skip dirs that survive (reparented, or owned by something that was).
+            // Nullifying their refs would break external code or sever the
+            // survivor's ownership of this subtree.
+            if (allDirs[i] != this && IsSurvivor(allDirs[i], survivors))
                 continue;
             if (allDirs[i]->IsRefAlive())
                 allDirs[i]->NullifyAllRefs();
@@ -112,11 +158,13 @@ ObjectDir::~ObjectDir() {
                 Hmx::Object *obj = it;
                 if (obj == allDirs[i])
                     continue;
-                // Skip objects that have EXTERNAL DirPtrs. They will
-                // survive this dir's destruction and need their refs intact.
-                // Detach them from this dir so ~Object::RemoveFromDir()
-                // won't access freed memory when they are eventually deleted.
-                if (ShouldSkipCascadeNullify(obj, allDirs)) {
+                // Skip objects that survive (external DirPtrs, or living inside a
+                // survivor subtree). They keep their refs intact. Detach them from
+                // THIS dir so ~Object::RemoveFromDir() won't touch freed memory
+                // when they are eventually deleted.
+                ObjectDir *objAsDir = dynamic_cast<ObjectDir *>(obj);
+                if (IsSurvivor(objAsDir, survivors)
+                    || ShouldSkipCascadeNullify(obj, allDirs)) {
                     obj->DetachFromDir();
                     continue;
                 }

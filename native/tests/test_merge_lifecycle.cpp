@@ -489,4 +489,61 @@ TEST_F(MergeLifecycleTest, CascadeSkipsObjectsWithExternalDirPtrs) {
     externalRef = nullptr;
 }
 
+// ============================================================================
+// Test 9: ReparentedSubdirSubtreeSurvivesSourceDeletion
+//
+// TRANSITIVE-SURVIVOR cascade test. After a kMergeReplace (kMoveAllSubdirs)
+// merge, a subdir is SHARED into the target (append-only, both dirs reference
+// it). When the source dir is deleted, the ~ObjectDir cascade must spare not
+// only the directly-reparented subdir but its ENTIRE nested subtree — because
+// the surviving subdir still owns its descendants.
+//
+// Bug (pre-fix): the survivor predicate was non-transitive. A nested subdir
+// whose only ObjDirPtr owner is itself inside the cascade tree looked
+// "internal-only" and was nullified, severing the survivor's link to its
+// descendants (sharedSub->SubDirs()[0] became null; deep objects unreachable).
+// ============================================================================
+
+TEST_F(MergeLifecycleTest, ReparentedSubdirSubtreeSurvivesSourceDeletion) {
+    ObjectDir *source = Hmx::Object::New<ObjectDir>();
+    source->SetName("xform_source", ObjectDir::Main());
+
+    ObjectDir *target = Hmx::Object::New<ObjectDir>();
+    target->SetName("xform_target", ObjectDir::Main());
+
+    // shared subdir under source, with a NESTED subdir holding a deep object
+    ObjectDir *sharedSub = Hmx::Object::New<ObjectDir>();
+    sharedSub->SetName("shared_root", source);
+    source->AppendSubDir(ObjDirPtr<ObjectDir>(sharedSub));
+
+    ObjectDir *nestedSub = Hmx::Object::New<ObjectDir>();
+    nestedSub->SetName("nested_fx", sharedSub);
+    sharedSub->AppendSubDir(ObjDirPtr<ObjectDir>(nestedSub));
+
+    Hmx::Object *deepObj = Hmx::Object::New<Hmx::Object>();
+    deepObj->SetName("deep.sparkle", nestedSub);
+
+    // kMergeReplace shares sharedSub into target (append-only).
+    MergeFilter filt((MergeFilter::Action)1, MergeFilter::kMoveAllSubdirs);
+    MergeDirs(source, target, filt);
+
+    ASSERT_TRUE(target->HasSubDir(sharedSub));
+    ASSERT_NE(target->FindObject("deep.sparkle", false, true), nullptr);
+
+    // PostMerge: delete the source. The cascade must spare the whole subtree.
+    delete source;
+
+    // CORE ASSERTIONS: the surviving subdir keeps its nested children.
+    EXPECT_TRUE(target->HasSubDir(sharedSub))
+        << "shared subdir killed in target by source deletion";
+    EXPECT_TRUE(sharedSub->HasSubDir(nestedSub))
+        << "nested subdir link severed by cascade (transitive-survivor bug)";
+    EXPECT_NE(sharedSub->SubDirs().empty() ? nullptr : (ObjectDir *)sharedSub->SubDirs()[0], nullptr)
+        << "survivor's SubDirs ObjDirPtr was nullified";
+    EXPECT_NE(target->FindObject("deep.sparkle", false, true), nullptr)
+        << "deep object under reparented subtree became unreachable after source deletion";
+
+    delete target;
+}
+
 } // namespace
