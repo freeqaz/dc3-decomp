@@ -50,31 +50,57 @@ namespace {
         }
     }
 }
-// Check whether an ObjectDir has DirPtrs from OUTSIDE the cascade tree.
-// Internal DirPtrs (from parent dir's mSubDirs within the cascade) don't
-// count — those will be destroyed. Only external DirPtrs (from dirs not
-// in the cascade) indicate the object should survive.
-static bool HasExternalDirPtrs(ObjectDir *candidate, const std::vector<ObjectDir *> &cascade) {
+// Compute the set of cascade dirs that will SURVIVE deletion (have external
+// DirPtrs). This is done iteratively: a dir survives if it has DirPtrs from
+// dirs outside the cascade OR from cascade dirs that themselves survive.
+// A surviving dir's SubDirs DirPtrs count as "external" for its children
+// because the surviving dir keeps those children alive.
+static void ComputeSurvivors(
+    const std::vector<ObjectDir *> &cascade,
+    std::vector<ObjectDir *> &survivors
+) {
     auto &counts = DirPtrRefCounts();
-    auto it = counts.find((const void *)candidate);
-    if (it == counts.end() || it->second <= 0)
-        return false;
-    int totalDirPtrs = it->second;
-    // Count internal DirPtrs: appearances in cascade dirs' SubDirs lists
-    int internalDirPtrs = 0;
-    for (size_t ci = 0; ci < cascade.size(); ci++) {
-        for (int si = 0; si < (int)cascade[ci]->SubDirs().size(); si++) {
-            if ((ObjectDir *)cascade[ci]->SubDirs()[si] == candidate)
-                internalDirPtrs++;
+    // Seed: find dirs with DirPtrs entirely outside the cascade
+    bool changed = true;
+    while (changed) {
+        changed = false;
+        for (size_t ci = 0; ci < cascade.size(); ci++) {
+            ObjectDir *candidate = cascade[ci];
+            if (std::find(survivors.begin(), survivors.end(), candidate) != survivors.end())
+                continue;
+            auto it = counts.find((const void *)candidate);
+            if (it == counts.end() || it->second <= 0)
+                continue;
+            int totalDirPtrs = it->second;
+            // Count DirPtrs that are "internal" = from cascade dirs that are
+            // NOT survivors (i.e., will be destroyed). DirPtrs from survivors
+            // count as external since the survivor keeps them alive.
+            int internalFromDestroyed = 0;
+            for (size_t cj = 0; cj < cascade.size(); cj++) {
+                if (std::find(survivors.begin(), survivors.end(), cascade[cj]) != survivors.end())
+                    continue; // cj is a survivor → its SubDir DirPtrs are external
+                for (int si = 0; si < (int)cascade[cj]->SubDirs().size(); si++) {
+                    if ((ObjectDir *)cascade[cj]->SubDirs()[si] == candidate)
+                        internalFromDestroyed++;
+                }
+            }
+            if (totalDirPtrs > internalFromDestroyed) {
+                survivors.push_back(candidate);
+                changed = true;
+            }
         }
     }
-    return totalDirPtrs > internalDirPtrs;
 }
 
-// Check whether an object should be excluded from the cascade.
-static bool ShouldSkipCascadeNullify(Hmx::Object *obj, const std::vector<ObjectDir *> &cascade) {
+// Check whether an object should be excluded from the cascade nullify pass.
+// Uses the precomputed survivor set.
+static bool ShouldSkipCascadeNullify(
+    Hmx::Object *obj,
+    const std::vector<ObjectDir *> &cascade,
+    const std::vector<ObjectDir *> &survivors
+) {
     ObjectDir *asDir = dynamic_cast<ObjectDir *>(obj);
-    return asDir && HasExternalDirPtrs(asDir, cascade);
+    return asDir && std::find(survivors.begin(), survivors.end(), asDir) != survivors.end();
 }
 #endif
 
@@ -101,10 +127,16 @@ ObjectDir::~ObjectDir() {
     if (sDeleteObjectsDepth == 1 && !TheLoadMgr.AsyncUnload()) {
         std::vector<ObjectDir *> allDirs;
         CollectCascadeDirs(this, allDirs);
+        // Compute which cascade dirs survive (have DirPtrs from outside the
+        // destroyed subtree, including from other surviving dirs transitively).
+        // This handles nested subdirs that were moved to an external dir along
+        // with their parent: the children inherit the parent's survivor status.
+        std::vector<ObjectDir *> survivors;
+        ComputeSurvivors(allDirs, survivors);
         for (size_t i = 0; i < allDirs.size(); i++) {
             // Skip dirs that have EXTERNAL DirPtrs — they were reparented
             // and will survive. Nullifying their refs would break external code.
-            if (allDirs[i] != this && ShouldSkipCascadeNullify(allDirs[i], allDirs))
+            if (allDirs[i] != this && ShouldSkipCascadeNullify(allDirs[i], allDirs, survivors))
                 continue;
             if (allDirs[i]->IsRefAlive())
                 allDirs[i]->NullifyAllRefs();
@@ -116,7 +148,7 @@ ObjectDir::~ObjectDir() {
                 // survive this dir's destruction and need their refs intact.
                 // Detach them from this dir so ~Object::RemoveFromDir()
                 // won't access freed memory when they are eventually deleted.
-                if (ShouldSkipCascadeNullify(obj, allDirs)) {
+                if (ShouldSkipCascadeNullify(obj, allDirs, survivors)) {
                     obj->DetachFromDir();
                     continue;
                 }
