@@ -42,6 +42,8 @@ public:
 
     FxSend *NextSend() const { return mNextSend; }
     int Stage() const { return mStage; }
+    bool UpdatesEnabled() const { return mEnableUpdates; }
+    SendChannels GetChannels() const { return mChannels; }
     void SetChannels(SendChannels);
     void EnableUpdates(bool);
     /** "Attach microphone to this send, for testing" */

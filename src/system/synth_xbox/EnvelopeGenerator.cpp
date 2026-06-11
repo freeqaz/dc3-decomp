@@ -1,31 +1,21 @@
-#include "EnvelopeGenerator.h"
+#include "synth_xbox/EnvelopeGenerator.h"
 
-// Forward declarations
-extern "C" void XMemSet(void* dst, int val, int size);
-
-namespace ATG {
-
-// Define XAPO_REGISTRATION_PROPERTIES struct
-struct XAPO_REGISTRATION_PROPERTIES {
-    char data[0x58];  // Size from assembly analysis
-};
-
-// Define static member for the template instantiation
-template <>
-XAPO_REGISTRATION_PROPERTIES CSampleXAPOBase<EnvelopeGenerator, EnvelopeGeneratorParams>::m_regProps = {};
-
-// Template constructor implementation
-template <typename Derived, typename Params>
-CSampleXAPOBase<Derived, Params>::CSampleXAPOBase()
-    : CXAPOParametersBase(&m_regProps, &mParams, sizeof(Params), 0) {
-    XMemSet(&mParams, 0, sizeof(Params));
+EnvelopeGenerator::EnvelopeGenerator() : unk8c(0) {
+    EnvelopeGeneratorParams p;
+    p.unk0 = 0;
+    p.unk4 = 0;
+    p.unk8 = 0;
+    p.unkc = 0;
+    unk84 = 0;
+    unk88 = 0;
+    unk90 = 0;
+    SetParameters(&p, sizeof(EnvelopeGeneratorParams));
 }
 
-// Explicit instantiation for EnvelopeGenerator
-template class CSampleXAPOBase<EnvelopeGenerator, EnvelopeGeneratorParams>;
-
-// EnvelopeGenerator constructor
-EnvelopeGenerator::EnvelopeGenerator() : CSampleXAPOBase<EnvelopeGenerator, EnvelopeGeneratorParams>() {
+void EnvelopeGenerator::OnSetParameters(const EnvelopeGeneratorParams &p) {
+    unk84 = p.unk0 * 48000;
+    unk88 = p.unk4 * 48000;
+    if (p.unk8 > 0.5f && unk90 != 3) {
+        unk90 = 2;
+    }
 }
-
-}  // namespace ATG

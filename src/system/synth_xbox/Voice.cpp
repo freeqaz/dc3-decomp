@@ -379,7 +379,7 @@ void Voice::Init(bool b1) {
 
     // If FxSend360 has no submix voices, rebuild the FxSend chain
     if (mFxSend) {
-        if (mFxSend->unk8.empty()) {
+        if (!mFxSend->HasVoices()) {
             FxSend *fs = dynamic_cast<FxSend *>(mFxSend);
             fs->RebuildChain();
         }

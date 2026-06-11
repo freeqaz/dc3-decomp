@@ -20,4 +20,7 @@ public:
     NEW_OBJ(FxSendFlanger360)
 
     FxSendFlanger360();
+
+protected:
+    virtual IUnknown *CreateFx();
 };

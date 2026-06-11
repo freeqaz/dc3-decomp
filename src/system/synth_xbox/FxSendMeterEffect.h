@@ -6,6 +6,8 @@
 #include "synth/FxSendMeterEffect.h"
 #include "xdk/xapilibi/xbase.h"
 
+struct MeterEffectParams;
+
 class FxSendMeterEffect360 : public FxSendMeterEffect, public FxSend360 {
 public:
     virtual ~FxSendMeterEffect360();
@@ -20,7 +22,7 @@ public:
 
     FxSendMeterEffect360();
 
-    int *unkb0;
+    MeterEffectParams *mParams; // 0xb0
 
 protected:
     virtual IUnknown *CreateFx();

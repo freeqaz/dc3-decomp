@@ -1,17 +1,11 @@
 #pragma once
 
 #include "xdk/win_types.h"
+#include "xdk/unknwn.h"
 #include "xdk/xapilibi/xbase.h"
-
-struct IUnknown { /* Size=0x4 */
-
-    virtual DWORD QueryInterface(const _GUID &, void **);
-    virtual ULONG AddRef();
-    virtual ULONG Release();
-    IUnknown(const IUnknown &);
-    IUnknown();
-    IUnknown &operator=(const IUnknown &);
-};
+// tWAVEFORMATEX / WAVEFORMATEX are owned by xapo.h (matches og include wiring); pulling
+// it here keeps a single definition regardless of include order across TUs.
+#include "xdk/xaudio2/xapo.h"
 
 struct XAUDIO2_BUFFER { /* Size=0x24 */
     /* 0x0000 */ UINT32 Flags;
@@ -26,16 +20,6 @@ struct XAUDIO2_BUFFER { /* Size=0x24 */
 };
 
 #pragma pack(push, 1)
-struct tWAVEFORMATEX { /* Size=0x12 */
-    /* 0x0000 */ WORD wFormatTag;
-    /* 0x0002 */ WORD nChannels;
-    /* 0x0004 */ DWORD nSamplesPerSec;
-    /* 0x0008 */ DWORD nAvgBytesPerSec;
-    /* 0x000c */ WORD nBlockAlign;
-    /* 0x000e */ WORD wBitsPerSample;
-    /* 0x0010 */ WORD cbSize;
-};
-
 struct XMA2WAVEFORMATEX { /* Size=0x34 */
     /* 0x0000 */ tWAVEFORMATEX wfx;
     /* 0x0012 */ WORD NumStreams;

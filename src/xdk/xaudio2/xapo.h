@@ -18,6 +18,11 @@ struct XAPO_REGISTRATION_PROPERTIES { /* Size=0x42c */
 };
 
 // https://learn.microsoft.com/en-us/windows/win32/api/mmeapi/ns-mmeapi-waveformatex
+// Size MUST be 0x12: this definition replaced the one inside xaudio2.h's
+// #pragma pack(push,1) region, and XMA2WAVEFORMATEX embeds it at offset 0
+// with NumStreams at 0x12. Unpacked it pads to 0x14 and consumer TUs
+// disagree on layout (og's copy carries the same latent bug).
+#pragma pack(push, 1)
 typedef struct tWAVEFORMATEX { /* Size=0x12 */
     /* 0x0000 */ WORD wFormatTag;
     /* 0x0002 */ WORD nChannels;
@@ -27,6 +32,7 @@ typedef struct tWAVEFORMATEX { /* Size=0x12 */
     /* 0x000e */ WORD wBitsPerSample;
     /* 0x0010 */ WORD cbSize;
 } WAVEFORMATEX, *PWAVEFORMATEX, *NPWAVEFORMATEX, *LPWAVEFORMATEX;
+#pragma pack(pop)
 
 enum XAPO_BUFFER_FLAGS {
     XAPO_BUFFER_SILENT = 0x0000,

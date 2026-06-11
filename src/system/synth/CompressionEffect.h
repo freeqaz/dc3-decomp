@@ -4,7 +4,8 @@
 class CompressionEffect {
 public:
     struct Params {
-        bool unk0;
+        Params() : unk0(false) {}
+        bool unk0; // 0x0 (bypass)
         float mThresholdDb;
         float mRatio;
         float mOutputGainDb;

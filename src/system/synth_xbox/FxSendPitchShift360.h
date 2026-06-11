@@ -5,14 +5,16 @@
 
 class FxSendPitchShift360 : public FxSendPitchShift, public FxSend360 {
 public:
-    virtual ~FxSendPitchShift360();
+    FxSendPitchShift360() : FxSend360(this) {}
+    virtual ~FxSendPitchShift360() {}
     OBJ_CLASSNAME(FxSendPitchShift360)
     OBJ_SET_TYPE(FxSendPitchShift360)
+    virtual void Recreate(std::vector<FxSend *> &);
+    virtual void UpdateMix();
+    virtual void OnParametersChanged();
     virtual void SyncEffectParams(IXAudio2SubmixVoice *) const;
 
     NEW_OBJ(FxSendPitchShift360)
-
-    FxSendPitchShift360();
 
 protected:
     virtual IUnknown *CreateFx();
