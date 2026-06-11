@@ -504,6 +504,7 @@ BinStream &operator>>(BinStream &bs, ObjPtrVec<T1, ObjectDir> &vec);
 template <class T1, class T2 = class ObjectDir>
 class ObjPtrList : public ObjRefOwner {
     friend class RndGroup;
+    friend class ThreadTask;
 public:
     ObjPtrList(ObjRefOwner *, ObjListMode = kObjListNoNull);
     ObjPtrList(const ObjPtrList &);
