@@ -568,49 +568,45 @@ bool HolmesClientOpen(const char *filename, int mode, unsigned int &fileSize, in
 
     // Handle gHostLogging mode: read/write access checks
     if (gHostLogging) {
-        if (mode & 1) {
-            if (gHolmesStream == NULL) {
+        if (mode & 1U) {
+            if (!gHolmesStream) {
                 return false;
             }
-        } else {
-            if (!gHostConfig) {
-                MILO_FAIL("gHostLogging tried to read file");
-            }
+        } else if (!gHostConfig) {
+            MILO_FAIL("gHostLogging tried to read file: %s", filename);
         }
     }
 
-    if (gHolmesStream == NULL) {
-        MILO_ASSERT(gHolmesStream, 866);
-    }
-
+    MILO_ASSERT(gHolmesStream, 0x36A);
     if (gHolmesStream->Fail()) {
         return false;
+    } else {
+        BeginCmd(Holmes::kOpenFile, true);
+        unsigned char val = 3;
+        *gStreamBuffer << val << filename;
+        val = (mode >> 1) & 1;
+        *gStreamBuffer << val;
+        *gStreamBuffer << (unsigned char)((mode >> 0x12) & 1); // truncate flag
+        if (val == 0) {
+            *gStreamBuffer << (unsigned char)((mode >> 8) & 1); // write mode
+            val = (mode >> 9) & 1; // create flag
+            *gStreamBuffer << val;
+        }
+        HolmesFlushStreamBuffer();
+        WaitForResponse(Holmes::kOpenFile);
+        int result;
+        *gHolmesStream >> result;
+        if (result != -1) {
+            *gHolmesStream >> fd;
+            fileSize = result;
+        }
+        gPendingResponse = Holmes::kInvalidOpcode;
+        EndCmd(Holmes::kOpenFile);
+        if (result != -1) {
+            return true;
+        }
     }
-
-    BeginCmd(Holmes::kOpenFile, true);
-    auto cmd = u8(Holmes::kOpenFile);
-    *gStreamBuffer << cmd;
-    *gStreamBuffer << filename;
-    if (!((mode >> 1) & 1)) {
-        *gStreamBuffer << u8((mode >> 8) & 1); // write mode
-        *gStreamBuffer << u8((mode >> 9) & 1); // create flag
-    }
-    auto readFlag = u8((mode >> 1) & 1);
-    *gStreamBuffer << u8((mode >> 0x12) & 1); // truncate flag
-    *gStreamBuffer << readFlag; // read mode
-
-    HolmesFlushStreamBuffer();
-    WaitForResponse(Holmes::kOpenFile);
-    *gHolmesStream >> fd;
-
-    if (fd != -1) {
-        *gHolmesStream >> fileSize;
-    }
-
-    gPendingResponse = Holmes::kInvalidOpcode;
-    EndCmd(Holmes::kOpenFile);
-
-    return fd > 0;
+    return false;
 }
 
 void HolmesClientWrite(int i1, int i2, int i3, const void *v) {

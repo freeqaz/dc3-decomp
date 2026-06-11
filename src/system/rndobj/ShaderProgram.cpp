@@ -115,10 +115,11 @@ bool RndShaderProgram::Cache(
     Platform platform = TheLoadMgr.GetPlatform();
     if (platform != kPlatformNone && platform != kPlatformWii && GetGfxMode() != kOldGfx) {
         PhysMemTypeTracker tracker("D3D(phys):Shader");
-        bool needsCompile =
-            (vsBuffer == nullptr || vsBuffer->Size() == 0) ||
-            (psBuffer == nullptr || psBuffer->Size() == 0);
-        if (needsCompile) {
+        if (vsBuffer != nullptr && vsBuffer->Size() != 0 && psBuffer != nullptr &&
+            psBuffer->Size() != 0) {
+            CreateVertexShader(*vsBuffer);
+            CreatePixelShader(*psBuffer, shaderType);
+        } else {
             if (!TheShaderMgr.CacheShaders()) {
                 CopyErrorShader(shaderType, opts);
                 String optsStr;
@@ -182,19 +183,12 @@ bool RndShaderProgram::Cache(
             } else {
                 psModTime = 0;
             }
-            if (psModTime < gModTime) {
+            if (gModTime > psModTime) {
                 static DataNode *sCompileVerbose;
                 if (!sCompileVerbose) {
                     sCompileVerbose = &DataVariable("shader_compile_print_opts");
                 }
-                if (sCompileVerbose->Int(nullptr) == 0) {
-                    MILO_LOG(
-                        "Compiling shader: %s_%llx (%s)\n",
-                        ShaderTypeName(shaderType),
-                        (s64)opts.flags,
-                        PlatformSymbol(platform)
-                    );
-                } else {
+                if (sCompileVerbose->Int(nullptr) != 0) {
                     String optsStr;
                     ShaderMakeOptionsString(shaderType, opts, optsStr);
                     MILO_LOG(
@@ -203,6 +197,13 @@ bool RndShaderProgram::Cache(
                         (s64)opts.flags,
                         PlatformSymbol(platform),
                         optsStr.c_str()
+                    );
+                } else {
+                    MILO_LOG(
+                        "Compiling shader: %s_%llx (%s)\n",
+                        ShaderTypeName(shaderType),
+                        (s64)opts.flags,
+                        PlatformSymbol(platform)
                     );
                 }
                 if (!MainThread() || !Compile(shaderType, opts, vsBuffer, psBuffer)) {
@@ -223,9 +224,6 @@ bool RndShaderProgram::Cache(
             if (psBuffer) {
                 psBuffer->~RndShaderBuffer();
             }
-        } else {
-            CreateVertexShader(*vsBuffer);
-            CreatePixelShader(*psBuffer, shaderType);
         }
     }
     return true;
