@@ -644,8 +644,7 @@ void LinearizeKeys(
     RndTransAnim *anim, float f2, float f3, float f4, float firstFrame, float lastFrame
 ) {
     int firstFrameIdx, lastFrameIdx;
-    if (f2) {
-        if (anim->TransKeys().size() > 2) {
+    if (f2 && anim->TransKeys().size() > 2) {
             Keys<Vector3, Vector3> vecKeys;
             anim->TransKeys().FindBounds(
                 firstFrame, lastFrame, firstFrameIdx, lastFrameIdx
@@ -670,9 +669,7 @@ void LinearizeKeys(
                 }
             }
         }
-    }
-    if (f3) {
-        if (anim->RotKeys().size() > 2) {
+    if (f3 && anim->RotKeys().size() > 2) {
             Keys<Hmx::Quat, Hmx::Quat> quatKeys;
             anim->RotKeys().FindBounds(firstFrame, lastFrame, firstFrameIdx, lastFrameIdx);
             for (int i = firstFrameIdx + 1; i < lastFrameIdx - quatKeys.size();) {
@@ -692,9 +689,7 @@ void LinearizeKeys(
                 }
             }
         }
-    }
-    if (f4) {
-        if (anim->ScaleKeys().size() > 2) {
+    if (f4 && anim->ScaleKeys().size() > 2) {
             Keys<Vector3, Vector3> vecKeys;
             anim->ScaleKeys().FindBounds(
                 firstFrame, lastFrame, firstFrameIdx, lastFrameIdx
@@ -719,7 +714,6 @@ void LinearizeKeys(
                 }
             }
         }
-    }
 }
 
 void TransformKeys(RndTransAnim *tanim, const Transform &tf) {
