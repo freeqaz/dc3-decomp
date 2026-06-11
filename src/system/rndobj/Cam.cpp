@@ -465,7 +465,11 @@ void RndCam::GetViewProjectXfms(Transform &viewXfm, Hmx::Matrix4 &projMtx) const
 
     projMtx.z.z = farRatio;
     projMtx.x.x = (mScreenRect.w * mLocalProjectXfm.m.x.x * 2.0f) / width;
-    projMtx.y.y = (-(mScreenRect.h * mLocalProjectXfm.v.x) * 2.0f) / height;
+    // mLocalProjectXfm.m.z.y holds the vertical FOV factor:
+    //   perspective: m.z.y = -1/tan(yFov/2)   -> y.y = +1/tan(yFov/2)
+    //   orthographic: m.z.y = -1/ratio         -> y.y = +1/ratio
+    // (was incorrectly mLocalProjectXfm.v.x, which is always zero)
+    projMtx.y.y = (-(mScreenRect.h * mLocalProjectXfm.m.z.y) * 2.0f) / height;
     projMtx.z.y = (t + b) / height;
     projMtx.z.x = -((r + l) / width);
     projMtx.w.z = -(nearPlane * farRatio);
