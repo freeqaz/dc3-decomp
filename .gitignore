@@ -128,3 +128,12 @@ imgui.ini
 # Native ML models and third-party installs
 native/models/
 native/third_party/
+
+# Wave-3 Lane B unicorn-refresh worktree artifacts (results, not source)
+/unicorn_refresh.db
+/unicorn_refresh.json
+/smoke_refresh.db
+/smoke_refresh.json
+/refresh_sweep.log
+/decomp_copy.db
+/decomp_before.db
