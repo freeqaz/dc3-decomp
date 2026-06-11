@@ -369,10 +369,13 @@ bool Intersect(const Plane &plane, const Box &box) {
     float hx = (box.mMax.x - box.mMin.x) * 0.5f;
     float hy = (box.mMax.y - box.mMin.y) * 0.5f;
     float hz = (box.mMax.z - box.mMin.z) * 0.5f;
+    float cx = box.mMin.x + hx;
+    float cy = box.mMin.y + hy;
+    float cz = box.mMin.z + hz;
     Vector3 halfExtent;
-    halfExtent.x = box.mMax.x - (box.mMin.x + hx);
-    halfExtent.y = box.mMax.y - (box.mMin.y + hy);
-    halfExtent.z = box.mMax.z - (box.mMin.z + hz);
+    halfExtent.x = box.mMax.x - cx;
+    halfExtent.y = box.mMax.y - cy;
+    halfExtent.z = box.mMax.z - cz;
 
     Vector3 pMin, pMax;
     for (unsigned int i = 0; i < 3; i++) {
