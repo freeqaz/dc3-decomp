@@ -299,8 +299,10 @@ void DirectionGestureFilterDoubleUser::Update(const Skeleton &skeleton, int ms) 
     }
     int i1, i2;
     GetValidSkeletons(i1, i2);
-    mFilter1->Update(TheGestureMgr->GetSkeleton(i1), ms);
-    mFilter2->Update(TheGestureMgr->GetSkeleton(i2), ms);
+    int s1 = i1 == -1 ? 0 : i1;
+    int s2 = i2 == -1 ? 0 : i2;
+    mFilter1->Update(TheGestureMgr->GetSkeleton(s1), ms);
+    mFilter2->Update(TheGestureMgr->GetSkeleton(s2), ms);
 }
 
 void DirectionGestureFilterDoubleUser::Draw(const Skeleton &skeleton, SkeletonViz &viz) {
