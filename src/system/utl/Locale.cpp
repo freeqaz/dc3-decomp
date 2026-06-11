@@ -49,8 +49,8 @@ void LocaleChunkSort::Sort(OrderedLocaleChunk *chunks, int count) {
 namespace LocaleChunkSort {
 template <int N>
 int FastSort(const void *a, const void *b) {
-    int offset = (int)a - (int)b;
     int i = 0;
+    int offset = (int)a - (int)b;
     do {
         int valA = *(int *)((char *)b + offset);
         int valB = *(int *)b;

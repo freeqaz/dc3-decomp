@@ -656,14 +656,11 @@ template <class T1, class T2>
 template <class S>
 void ObjPtrList<T1, T2>::sort(const S &cmp) {
     if (mNodes && mNodes->next) {
-        Node *sentinel = mNodes;
 #ifdef HX_NATIVE
         // Native Link() creates NULL-terminated forward links (last->next = nullptr).
         // PPC Link() creates circular links (last->next = sentinel).
+        Node *sentinel = mNodes;
         for (Node *outer = sentinel->next; outer != nullptr; outer = outer->next) {
-#else
-        for (Node *outer = sentinel->next; outer != sentinel; outer = outer->next) {
-#endif
             for (Node *inner = outer; inner != sentinel; inner = inner->prev) {
                 Node *prev = inner->prev;
                 if (cmp(inner->Obj(), prev->Obj())) {
@@ -675,6 +672,21 @@ void ObjPtrList<T1, T2>::sort(const S &cmp) {
                 }
             }
         }
+#else
+        Node *last = mNodes->prev;
+        for (Node *n = last->prev; n != last; n = n->prev) {
+            for (Node *x = n; x != last; x = x->next) {
+                Node *nextX = x->next;
+                if (cmp(nextX->Obj(), x->Obj())) {
+                    T1 *tmp = x->Obj();
+                    x->SetObjConcrete(nextX->Obj());
+                    nextX->SetObjConcrete(tmp);
+                } else {
+                    break;
+                }
+            }
+        }
+#endif
     }
 }
 
