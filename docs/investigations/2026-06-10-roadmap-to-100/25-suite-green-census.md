@@ -12,14 +12,23 @@ main-repo `orig-assets/`. PPC neutrality verified on the wibo/MSVC plane (see §
 **A BARE `milo-tests` run is now FULLY GREEN — no `--gtest_filter` required.**
 
 ```
-[==========] 415 tests from 65 test suites ran. (10604 ms total)
-[  PASSED  ] 324 tests.
-[  SKIPPED ] 91 tests.
+[==========] 415 tests from 65 test suites ran.
+[  PASSED  ] 330 tests.       (326 if milo-viewer/render-test siblings absent)
+[  SKIPPED ] 85 tests.        (89 if siblings absent — they self-skip)
 [  FAILED  ] 0 tests.   EXIT=0
 ```
 
 This is the wave-6 Lane C deliverable: a one-command, fully-green suite invocation
 (§3) and the honest skip census that defines the CI gate (§5).
+
+> **Re-verified 2026-06-11 (wave-6 Lane C, this worktree plane).** The PASS/SKIP
+> *split* is environment-dependent (whether the `milo-viewer` / `dc3-native` sibling
+> binaries are built and whether a GPU is present — the sibling-binary/GPU tests
+> self-skip vs run accordingly). Measured here: **330/85/0** with siblings+GPU,
+> **326/89/0** with only `milo-tests` and no GPU. The wave-6 invariant — and the
+> actual CI gate — is **0 FAILED and EXIT 0** in every environment. (The prior
+> revision's exact `324/91` was a different-environment reading of the same green
+> result; the split is not a fixed number, the 0-FAIL/EXIT-0 is.)
 
 Three pre-existing problems blocked a clean bare run before this lane; two were
 ROOT-FIXED, one was correctly conditioned and reported (it is an out-of-lane engine
@@ -54,6 +63,15 @@ and bone *indices* via `UnpackUBYTE4_BE(LoadBE32(rec + kCV_BoneWeight))`
 (`milo-native-engine/src/gfx/VertexFormats.cpp:366-369`). They were always read as
 proper host words (integer-packed fields, never float-punned), so they carry **no
 BE-truncation sibling bug**. Item 1 needed no further code change — verified, not fixed.
+
+> **Re-verified independently (wave-6 Lane C, 2026-06-11):** `MeshVertexLoading.*` is
+> **7/7 PASS in isolation** on this worktree plane, and the engine source at
+> `VertexFormats.cpp:366` (`UnpackUDEC4N_BE(LoadBE32(rec + kCV_BoneIdx))` → `gv.boneWeights`)
+> / `:369` (`UnpackUBYTE4_BE(LoadBE32(rec + kCV_BoneWeight))` → `gv.boneIndices`) was
+> re-read end-to-end: every skinning field flows through `LoadBE32` (host-endian-agnostic
+> byte reassembly) into integer unpack helpers — there is no float→int pun anywhere in the
+> skinning path, so the position-truncation class of bug provably cannot recur for
+> weights/indices. The engine pin (`f75339a`) carries this; the test passes with it.
 
 ---
 
@@ -112,11 +130,14 @@ null so the path is never taken (hence "passes alone, crashes after the suite").
 # From the main repo (assets resolve via orig-assets/):
 cd /home/free/code/milohax/dc3-decomp/orig-assets
 <build>/native/build/milo-tests
-# => 415 ran, 324 PASSED, 91 SKIPPED, 0 FAILED, EXIT 0
+# => 415 ran, 330 PASSED, 85 SKIPPED, 0 FAILED, EXIT 0  (siblings+GPU)
+# => 415 ran, 326 PASSED, 89 SKIPPED, 0 FAILED, EXIT 0  (milo-tests only, no GPU)
 ```
 
-No filter is needed. This is the CI gate. The 91 SKIPs are all *legitimate conditional*
-skips (§5); none is a stale-disabled test that should be running. Opt-in supersets:
+No filter is needed. This is the CI gate. **The gate is `0 FAILED && EXIT 0`** (the
+PASS/SKIP split is environment-dependent — sibling binaries + GPU; see Headline). The
+~85–89 SKIPs are all *legitimate conditional* skips (§5); none is a stale-disabled test
+that should be running. Opt-in supersets:
 - `DC3_AUDIO_TESTS=1` — audio-device tests (device contention under ctest -j)
 - `DC3_DTA_FLOW_TESTS=1` — heavy DTA-flow integration (needs game assets)
 - `DC3_GAMEPLAY_TESTS=1` — full boot→gameplay telemetry (needs GPU + assets; this is
@@ -144,9 +165,15 @@ source and is not caused by this change.)
 
 ---
 
-## §5 — Item 3: the 91-skip honest census
+## §5 — Item 3: the honest skip census
 
-All 91 skips are legitimate conditional skips. Classification (by skip site):
+The skip count is environment-dependent: **91** (milo-tests only, no GPU, no sibling
+binaries), **89** (milo-tests only, no GPU — slightly different asset state), **85**
+(siblings `milo-viewer`/`dc3-native` built + GPU present — the MiloViewer/HeadlessBoot
+tests then RUN and PASS instead of skipping). The classification below is for the
+maximal-skip (`milo-tests`-only) case; building the siblings + a GPU moves ~6 of these
+from SKIP to PASS. **Every skip in every configuration is a legitimate conditional skip
+— none is a stale-disabled test that should be running.** Classification (by skip site):
 
 | Category | Count | Suites | Why skipped / can it run here? |
 |---|---:|---|---|
@@ -200,12 +227,62 @@ suppressed-erase-during-ReplaceList path leaves the list non-empty.
 
 ## §7 — Do-not-break gates (GREEN before/after)
 
-- **Full bare suite:** 324 PASS / 91 SKIP / **0 FAIL**, EXIT 0.
-- **Regression filter** (`MergeScopeParity*`, `ObjectLifetime*`, `MergeLifecycle*`,
-  `RndCamProjection*`, `MeshVertexLoading*`): **77/77 PASS, 0 FAIL** — includes the
-  now-fixed death test and the wave-5 defining cascade/cam/mesh tests.
+- **Full bare suite:** 330 PASS / 85 SKIP / **0 FAIL**, EXIT 0 (siblings+GPU; the gate).
+  Reproduced twice back-to-back; 326/89/0 without siblings/GPU.
+- **Wave-5 defining tests** (run in a non-adjacency grouping —
+  `MergeScopeParityUnitTest.*:RndCamProjectionTest.*:MeshVertexLoading.*`): **21/21 PASS**;
+  `ObjectLifetimeTest.MergeDirsMoveAllSubdirsTransfersOwnership` (Lane-B oracle): **PASS**.
+  Each also passes inside the green bare run.
+- **Death-test determinism:** `ObjectLifetimeUnitTest.*` + the post-suite AssetLoading
+  crash-repro (`LoadWorldMasterFile:LoadDirectorSubdir`) run together **3× in a row → 3/3
+  PASS** (threadsafe death test + PanelDir null-guard both robust).
 - **Gameplay boot gate** (`DC3_GAMEPLAY_TESTS=1`, GPU): `EngineReachesGameScreen` PASS,
-  `GameplayEntersPlayingState` PASS, EXIT 0.
+  `GameplayEntersPlayingState` PASS, EXIT 0 (full 62 s boot to playing state — confirms the
+  `PanelDir::SendTransition` null-guard, which is in the live boot path, did not break boot).
+- **PPC neutrality:** `?SendTransition@PanelDir@@IAAXABVMessage@@VSymbol@@1@Z` =
+  **100.0% normalized, 59/59 instructions equal** (`run_objdiff`, this worktree plane).
+
+> **Correction (wave-6 Lane C, 2026-06-11):** the prior revision's "Regression filter …
+> **77/77 PASS**" for the combined filter
+> `MergeScopeParity*:ObjectLifetime*:MergeLifecycle*:RndCamProjection*:MeshVertexLoading*`
+> is **NOT reproducible** — that *specific filter ordering* SIGSEGVs (see §9). The
+> wave-5 defining tests are all green when they are NOT run immediately adjacent to the
+> full `ObjectLifetimeTest.*` suite (the grouping above), and all green inside the bare
+> run. The honest gate is the bare run, not that filter.
+
+---
+
+## §9 — REPORTED (out of lane scope): pre-existing cascade test-ordering UAF
+
+Running the combined filter
+`--gtest_filter='ObjectLifetimeTest.*:MergeLifecycleTest.*'` (or any filter that places
+the full `ObjectLifetimeTest.*` suite immediately before `MergeLifecycleTest.*`) **SIGSEGVs
+deterministically** at `MergeLifecycleTest.CascadeSkipsObjectsWithExternalDirPtrs`. gdb
+backtrace:
+
+```
+#0 ObjectDir::HasDirPtrs (this=<freed>) at src/system/obj/Dir.cpp:640  (sDeleting == this)
+#1 ObjDirPtr<ObjectDir>::operator= (dir=0x0)   at src/system/obj/Dir.h:103
+#2 MergeLifecycleTest_CascadeSkipsObjectsWithExternalDirPtrs_Test::TestBody
+                                               at native/tests/test_merge_lifecycle.cpp:489
+```
+
+`delete parent` (line 482) frees `hudLeft`; the test's `EXPECT_NE((ObjectDir*)externalRef,
+nullptr)` (485) passes on the *raw* dangling read, then `externalRef = nullptr` (489)
+dereferences the freed `hudLeft` through `HasDirPtrs` → UAF. The crash needs the full
+`ObjectLifetimeTest.*` suite to run first (it leaks `ObjectDir::Main()`/`sDeleting` static
+state); in isolation, or preceded only by the death test, `CascadeSkips` passes.
+
+**This is PRE-EXISTING and out of suite-green scope.** It reproduces *identically* on the
+**main** binary at HEAD `46570183` (same filter → SIGSEGV at the same line), so it is not
+introduced by this lane. It is a `src/system/obj/Dir.cpp` cascade-lifetime / test-state-leak
+bug (the same cascade subsystem wave-5 Lane B owns) — per the single-owner rule it is
+**reported, not fixed here**. It does **not** affect the bare-run gate (the natural test
+order separates the two suites by ~5000 lines, and `CascadeSkips` is green in the bare run).
+Route to the obj/Dir cascade owner. Suggested direction: either reset `ObjectDir`
+global/static lifetime state between suites in `EngineTestFixture::TearDown`, or have the
+cascade-skip predicate honor the external `ObjDirPtr` so `hudLeft` is not freed by
+`delete parent` even under leaked-Main state.
 
 ---
 
