@@ -48,7 +48,10 @@ void Splash::Suspend() {
         if (mThreaded) {
             if (SetMutableState(kSuspending)) {
                 WaitForState(kSuspended);
-                TheNgRnd.Suspend();
+                // Cross-dispatch is intentional: the splash thread owns the
+                // device while suspended, so the main renderer RESUMES here
+                // (target dispatches vtable+0x13c = DxRnd::Resume).
+                TheNgRnd.Resume();
                 if (mCurrentMovie != NULL) {
                     mCurrentMovie->SetShowing(true);
                     mCurrentMovie->GetMovie().LockThread();
@@ -57,7 +60,7 @@ void Splash::Suspend() {
                 Draw();
             } else {
                 MILO_ASSERT(mState == kWaitingForTerminating, 0xeb);
-                TheNgRnd.Suspend();
+                TheNgRnd.Resume();
                 if (mCurrentMovie != NULL) {
                     mCurrentMovie->SetShowing(true);
                     mCurrentMovie->GetMovie().LockThread();
@@ -82,7 +85,9 @@ void Splash::Resume() {
                     mCurrentMovie->SetShowing(false);
                     mCurrentMovie->GetMovie().UnlockThread();
                 }
-                TheNgRnd.Resume();
+                // Cross-dispatch: splash resumes -> main renderer SUSPENDS
+                // (target dispatches vtable+0x138 = DxRnd::Suspend).
+                TheNgRnd.Suspend();
                 MILO_ASSERT(SetMutableState(kResuming), 0x11c);
                 WaitForState(kResumed);
             } else {
@@ -91,7 +96,7 @@ void Splash::Resume() {
                     mCurrentMovie->SetShowing(false);
                     mCurrentMovie->GetMovie().UnlockThread();
                 }
-                TheNgRnd.Resume();
+                TheNgRnd.Suspend();
             }
         } else {
             // Non-threaded mode: resume drawing immediately
