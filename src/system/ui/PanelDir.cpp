@@ -526,7 +526,21 @@ DataNode PanelDir::OnEnableComponent(DataArray const *da) {
 
 void PanelDir::SendTransition(Message const &msg, Symbol forward, Symbol back) {
     static Message dirMsg = Message("");
+#ifdef HX_NATIVE
+    // TheUI is the global UIManager, assigned only in the full App boot
+    // (App.cpp: TheUI = &TheHamUI). Headless/standalone loads (milo-viewer, the
+    // milo-tests AssetLoading suite that loads director.milo_xbox directly) never
+    // run App boot, so TheUI is null here. Loading a PanelDir-bearing file fires
+    // HamDirector::OnFileMerged -> PanelDir::Enter -> SendTransition during
+    // FileMerger PostMerge, which dereferenced the null TheUI and SIGSEGV'd.
+    // Default to the "forward" transition (i.e. !WentBack) when there is no
+    // UIManager — the natural enter direction. This block is HX_NATIVE-only so
+    // the PPC build is byte-identical (the function is at 100% match; on Xbox
+    // TheUI is always set, so this path is never taken).
+    dirMsg.SetType((TheUI && TheUI->WentBack()) ? back : forward);
+#else
     dirMsg.SetType(TheUI->WentBack() ? back : forward);
+#endif
     RndDir::Handle(msg, false);
     RndDir::Handle(dirMsg, false);
 }
