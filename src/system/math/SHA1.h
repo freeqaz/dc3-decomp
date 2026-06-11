@@ -27,7 +27,15 @@ public:
 private:
     union SHA1_WORKSPACE_BLOCK {
         unsigned char c[64];
+#ifdef HX_NATIVE
+        // On the LP64 native/web host `unsigned long` is 64-bit, which both
+        // overruns the 64-byte union (l[16] would be 128 bytes) and breaks the
+        // 32-bit-word SHA1 arithmetic. The Xbox 360 (ILP32-long PPC) target uses
+        // a 32-bit `unsigned long`, so pin a 32-bit word type for the host.
+        unsigned int l[16];
+#else
         unsigned long l[16];
+#endif
     };
     void Transform(unsigned int *, const unsigned char *);
 
