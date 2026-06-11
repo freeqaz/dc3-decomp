@@ -445,15 +445,12 @@ u64 RndShaderDrawRect::CalcShaderOpts(NgMat *mat, ShaderType s, bool b) {
     bool prelit = mat->Prelit();
     bool offscreen;
     u64 matBits = ((u64)(hasDiffuse & 1) | (u64)(prelit & 1) << 4) << 4;
-    u64 pseudoHDR = 0;
     if (b) {
         offscreen = TheShaderMgr.GetUnk41();
     } else {
         offscreen = TheNgRnd.Offscreen();
     }
-    if (!offscreen && mat->AllowHDR()) {
-        pseudoHDR = 1;
-    }
+    u64 pseudoHDR = (!offscreen && mat->AllowHDR()) ? 1 : 0;
     return ((((u64)(TheHiResScreen.IsActive() & 1) << 2
         | (u64)(TheRnd.ResourceCached() & 1)) << 28
         | pseudoHDR) << 22)
