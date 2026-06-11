@@ -1851,6 +1851,7 @@ if(BUILD_TESTS)
         tests/test_enable_detector.cpp
         tests/test_sha1.cpp
         tests/test_rand_seed.cpp
+        tests/test_threadtask_replace.cpp
         src/dc3_render_hook.cpp       # Phase 0.2a: HamRenderHook (registers with milo-engine)
         ${DC3_ENGINE_SOURCES}
         ${DC3_NATIVE_CORE_SOURCES_ENGINE}

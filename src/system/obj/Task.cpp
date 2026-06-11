@@ -173,7 +173,9 @@ ThreadTask::ThreadTask(DataArray *script, DataArray *updateVarsObjs)
 bool ThreadTask::Replace(ObjRef *from, Hmx::Object *to) {
     if (mExecuting) {
         if (&mObjects == from->Parent() && from) {
-            mObjects.remove(to);
+            mObjects.erase(ObjPtrList<Hmx::Object>::iterator(
+                static_cast<ObjPtrList<Hmx::Object>::Node *>(from)
+            ));
             return true;
         }
     }
