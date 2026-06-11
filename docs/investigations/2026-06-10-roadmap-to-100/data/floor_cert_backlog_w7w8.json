@@ -10,5 +10,22 @@
   {"symbol_like": "?CompressThread@@YAKPAX@Z", "cert": "artifact:build_env", "expect_pct": 35.9,
    "evidence": {"source_doc": "99g-WAVE-8-RESULTS.md", "diagnosis": "single-base-reg sharing of contiguous BSS globals (TGT stb r11,0x0,r31+lbl_830A3FB0 vs SRC direct ?sCompressDone addressing; prologue savegprlr form follows); re-verified via diagnose 2026-06-11 @ f01cc201 (doc pct 30.4 was the live-objdiff plane)"}},
   {"symbol_like": "?HolmesSetFileShare@@YAXPBD0@Z", "cert": "artifact:build_env", "expect_pct": 49.4,
-   "evidence": {"source_doc": "99g-WAVE-8-RESULTS.md", "diagnosis": "gShareName-0x40=gMachineName adjacent-global base sharing; NOTE: re-verify expect_pct post-wave-9 merge — lane B edits HolmesClient.cpp (HolmesClientOpen)"}}
+   "evidence": {"source_doc": "99g-WAVE-8-RESULTS.md", "diagnosis": "gShareName-0x40=gMachineName adjacent-global base sharing; NOTE: re-verify expect_pct post-wave-9 merge — lane B edits HolmesClient.cpp (HolmesClientOpen)"}},
+
+  {"symbol_like": "??$PropSync@VWaypoint@@@@YA_NAAV?$ObjPtrVec%", "unit_like": "%char/Waypoint", "cert": "artifact:stack_layout", "expect_pct": 95.1,
+   "evidence": {"source_doc": "wave-9 lane H 2026-06-11", "diagnosis": "by-value iterator stack-spill ordering across GetObj/RTTI cast; helper-call + named-temp restructures both regressed"}},
+  {"symbol_like": "??$DrawAccessories@VLensExtract@%", "unit_like": "%world/SpotlightDrawer", "cert": "permuter_exhausted", "expect_pct": 93.1,
+   "evidence": {"source_doc": "wave-9 lane H 2026-06-11", "diagnosis": "r21/r25 + r22/r24 callee-saved regswap cascade; permuter 0 proposals"}},
+  {"symbol_like": "??O%Sphere%Frustum%", "unit_like": "%math/Geo", "cert": "permuter_exhausted", "expect_pct": 98.1,
+   "evidence": {"source_doc": "wave-9 lane H 2026-06-11", "diagnosis": "fmadds commutative operand swap + bool-mask tail; permuter 0 proposals; return-r/single-exit forms regressed"}},
+  {"symbol_like": "??4Skeleton@@%", "unit_like": "%gesture/GestureMgr", "cert": "artifact:codegen", "expect_pct": 97.8,
+   "evidence": {"source_doc": "wave-9 lane H 2026-06-11", "diagnosis": "compiler-generated copy-assign; single commutative add operand swap (known backend floor class)"}},
+  {"symbol_like": "??0EventTask@@%FlowTimer%", "unit_like": "%flow/FlowTimer", "cert": "permuter_exhausted", "expect_pct": 95.9,
+   "evidence": {"source_doc": "wave-9 lane H 2026-06-11", "diagnosis": "r27/r28 callee-saved regswap cascade; permuter plateaus 95.9"}},
+  {"symbol_like": "??0Skeleton@@QAA@XZ", "unit_like": "%gesture/Skeleton", "cert": "permuter_exhausted", "expect_pct": 88.2,
+   "evidence": {"source_doc": "wave-9 lane H 2026-06-11", "diagnosis": "std::vector-ctor address-hoist scheduling; member_init_reorder plateaus 88.16"}},
+  {"symbol_like": "??4?$FlowPtr@VObject@Hmx@@@@%", "unit_like": "%flow/FlowNode", "cert": "artifact:codegen", "expect_pct": 93.2,
+   "evidence": {"source_doc": "wave-9 lane H 2026-06-11", "diagnosis": "Symbol-ctor-return reuse (mr r11,r3) scheduling; og-port + temp-collapse regressed (broke merged SetObjConcrete)"}},
+  {"symbol_like": "%FastSort%", "unit_like": "%utl/Locale", "cert": "artifact:regalloc", "expect_pct": 90.6,
+   "evidence": {"source_doc": "wave-9 lane H 2026-06-11", "diagnosis": "residual after decl-order win (79.7->90.6, commit 62b6bd82): r8/r9 volatile regswap floor"}}
 ]
