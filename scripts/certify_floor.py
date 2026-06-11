@@ -170,8 +170,30 @@ def migrate(conn: sqlite3.Connection, apply: bool) -> list[str]:
             conn.execute(f"ALTER TABLE functions ADD COLUMN {name} {typ}")
 
     # The authorable_done view. Authorable = non-SDK unit AND not an artifact
-    # symbol AND not excluded/stub-by-prefix; "done" = normalized==100 OR
-    # is_stub=1 OR has a (non-null) floor certificate.
+    # symbol AND not excluded/stub-by-prefix.
+    #
+    # "done" rule — three tiers, in precedence order:
+    #   1. matched:    match_percent_normalized >= 100  (canonical normalized scorer)
+    #                  OR (verdict='COMPLETE' AND current_percent >= 100 AND
+    #                      match_percent_normalized IS NULL)
+    #                  The second branch covers the ~170 "db-only" functions whose
+    #                  fuzzy_match_percent is NULL in the current report.json (they
+    #                  are target-only ICF/template instantiations or jeff-boundary
+    #                  relocated symbols).  sync_match_percent.py skips them because
+    #                  it requires fuzzy_match_percent != NULL to update
+    #                  match_percent_normalized, so their normalized score is never
+    #                  written.  They ARE real done rows — COMPLETE verdict + 100%
+    #                  fuzzy from a prior sync + unicorn EQUIVALENT evidence on many —
+    #                  and should not inflate the open count.  (Wave 6 Lane D
+    #                  investigation: 135/170 are in report.json with norm=0 / no
+    #                  fuzzy; 35/170 are absent from report entirely due to jeff
+    #                  boundary churn.  Both sub-populations are verified done.)
+    #                  reconcile_db.py check (d) is the right tool to flag these for
+    #                  eventual cleanup — this view rule means they are counted as done
+    #                  today without requiring a DB write.
+    #   2. stub:       is_stub = 1
+    #   3. certified:  floor_certificate IS NOT NULL
+    #   else: open
     sdk_clause = " AND ".join(
         f"(unit IS NULL OR unit NOT LIKE '{p}%')" for p in SDK_UNIT_PREFIXES
     )
@@ -186,12 +208,16 @@ def migrate(conn: sqlite3.Connection, apply: bool) -> list[str]:
         verdict, is_stub, floor_certificate, floor_cert_pct,
         CASE
             WHEN match_percent_normalized >= 100 THEN 'matched'
+            WHEN verdict = 'COMPLETE' AND current_percent >= 100
+                 AND match_percent_normalized IS NULL THEN 'matched'
             WHEN is_stub = 1                      THEN 'stub'
             WHEN floor_certificate IS NOT NULL    THEN 'certified'
             ELSE 'open'
         END AS done_state,
         CASE
             WHEN match_percent_normalized >= 100
+              OR (verdict = 'COMPLETE' AND current_percent >= 100
+                  AND match_percent_normalized IS NULL)
               OR is_stub = 1
               OR floor_certificate IS NOT NULL THEN 1 ELSE 0
         END AS is_done
@@ -413,38 +439,69 @@ def done_summary(conn: sqlite3.Connection) -> dict:
     has_cert_col = "floor_certificate" in existing_columns(conn, "functions")
 
     if have_view:
-        src = AUTHORABLE_DONE_VIEW
+        # Use the view's done_state column directly — it is the single source of
+        # truth for the done/open classification and includes the COMPLETE+current>=100
+        # +normalized NULL rule for the ~170 db-only matched functions.
         rows = conn.execute(
-            f"SELECT size, match_percent_normalized, is_stub, "
-            f"floor_certificate, done_state FROM {src}"
-        ).fetchall()
-    else:
-        sdk = " AND ".join(
-            f"(unit IS NULL OR unit NOT LIKE '{p}%')" for p in SDK_UNIT_PREFIXES)
-        art = " AND ".join(f"symbol NOT LIKE '{p}%'" for p in ARTIFACT_PREFIXES)
-        cert_sel = "floor_certificate" if has_cert_col else "NULL AS floor_certificate"
-        rows = conn.execute(
-            f"SELECT size, match_percent_normalized, is_stub, {cert_sel} "
-            f"FROM functions WHERE excluded=0 AND {sdk} AND {art}"
+            f"SELECT size, done_state FROM {AUTHORABLE_DONE_VIEW}"
         ).fetchall()
 
-    total_fns = len(rows)
-    total_bytes = sum((r["size"] or 0) for r in rows)
+        total_fns = len(rows)
+        total_bytes = sum((r["size"] or 0) for r in rows)
+
+        def agg_state(state: str):
+            rs = [r for r in rows if r["done_state"] == state]
+            return len(rs), sum((r["size"] or 0) for r in rs)
+
+        matched_t = agg_state("matched")
+        stubs_t = agg_state("stub")
+        certified_t = agg_state("certified")
+        open_t = agg_state("open")
+
+        done_nocert_count = matched_t[0] + stubs_t[0]
+        done_nocert_bytes = matched_t[1] + stubs_t[1]
+        done_withcert_count = done_nocert_count + certified_t[0]
+        done_withcert_bytes = done_nocert_bytes + certified_t[1]
+
+        return {
+            "total_fns": total_fns,
+            "total_bytes": total_bytes,
+            "matched": matched_t,
+            "stubs": stubs_t,
+            "certified": certified_t,
+            "done_nocert": (done_nocert_count, done_nocert_bytes),
+            "done_withcert": (done_withcert_count, done_withcert_bytes),
+            "open": open_t,
+            "view": True,
+        }
+
+    # Fallback: view not yet migrated — use inline query with the old logic
+    # (does not include the COMPLETE+current>=100+normalized NULL rule).
+    sdk = " AND ".join(
+        f"(unit IS NULL OR unit NOT LIKE '{p}%')" for p in SDK_UNIT_PREFIXES)
+    art = " AND ".join(f"symbol NOT LIKE '{p}%'" for p in ARTIFACT_PREFIXES)
+    cert_sel = "floor_certificate" if has_cert_col else "NULL AS floor_certificate"
+    rows2 = conn.execute(
+        f"SELECT size, match_percent_normalized, is_stub, {cert_sel} "
+        f"FROM functions WHERE excluded=0 AND {sdk} AND {art}"
+    ).fetchall()
+
+    total_fns = len(rows2)
+    total_bytes = sum((r["size"] or 0) for r in rows2)
 
     def bnorm(r):
         return r["match_percent_normalized"] is not None and r["match_percent_normalized"] >= 100
 
-    matched = [r for r in rows if bnorm(r)]
-    stubs = [r for r in rows if not bnorm(r) and r["is_stub"]]
+    matched = [r for r in rows2 if bnorm(r)]
+    stubs = [r for r in rows2 if not bnorm(r) and r["is_stub"]]
     certified = [
-        r for r in rows
+        r for r in rows2
         if not bnorm(r) and not r["is_stub"] and r["floor_certificate"] is not None
     ]
-    # done WITHOUT certs = matched + stubs
     done_nocert = matched + stubs
     done_withcert = matched + stubs + certified
     open_rows = [
-        r for r in rows
+        r for r in rows2
         if not bnorm(r) and not r["is_stub"] and r["floor_certificate"] is None
     ]
 
@@ -460,7 +517,7 @@ def done_summary(conn: sqlite3.Connection) -> dict:
         "done_nocert": agg(done_nocert),
         "done_withcert": agg(done_withcert),
         "open": agg(open_rows),
-        "view": bool(have_view),
+        "view": False,
     }
 
 
@@ -515,7 +572,8 @@ def main() -> int:
         print(f"  authorable functions: {s['total_fns']:,}   "
               f"bytes: {s['total_bytes']:,}")
         print()
-        print(f"  matched (norm==100):      {s['matched'][0]:>6,} fns   {s['matched'][1]:>12,} bytes")
+        print(f"  matched (done):           {s['matched'][0]:>6,} fns   {s['matched'][1]:>12,} bytes"
+              f"  (norm==100 OR COMPLETE+current>=100+norm NULL)")
         print(f"  stubs (is_stub=1):        {s['stubs'][0]:>6,} fns   {s['stubs'][1]:>12,} bytes")
         print(f"  certified (floor cert):   {s['certified'][0]:>6,} fns   {s['certified'][1]:>12,} bytes")
         print(f"  open (no cert, <100):     {s['open'][0]:>6,} fns   {s['open'][1]:>12,} bytes")

@@ -83,6 +83,8 @@ def make_db(path: Path) -> None:
         ("F_realbug",       "default/system/a", 100, 70.0, 70.0, None, 0, 0, 0, "DIVERGENT", "call_arg", old, 70.0),      # NOT certifiable (real bug)
         ("F_untested",      "default/system/a", 100, 85.0, 85.0, None, 0, 0, 0, None, None, None, 85.0),                  # NOT certifiable (no evidence)
         ("F_matched",       "default/system/a", 100, 100.0,100.0,"COMPLETE", 0, 0, 0, "EQUIVALENT", None, old, 100.0),    # 100 -> not on frontier
+        # Wave-6 Lane D: COMPLETE + current=100 + normalized NULL -> counts as 'matched' in view
+        ("F_db_only",       "default/system/a", 100, 100.0,100.0,"COMPLETE", 0, 0, 0, None, None, None, None),             # db-only: no norm score
         ("F_stub",          "default/system/a", 100, 0.0,  0.0,  None, 0, 1, 0, None, None, None, 0.0),                   # stub -> not certifiable
         ("merged_deadbeef", "default/system/a", 100, 80.0, 80.0, None, 0, 0, 0, "EQUIVALENT", None, old, 80.0),          # artifact symbol -> excluded
         ("F_sdk",           "default/xdk/lib",  100, 90.0, 90.0, None, 0, 0, 0, "EQUIVALENT", None, old, 90.0),          # SDK -> excluded
@@ -203,11 +205,19 @@ def main() -> int:
         conn = sqlite3.connect(str(db))
         view_rows = conn.execute("SELECT done_state, count(*) FROM authorable_done GROUP BY done_state").fetchall()
         states = dict(view_rows)
-        # 11 authorable rows (merged_ + sdk excluded): matched1, stub1, certified7, open2
-        check(states.get("matched") == 1, f"view: 1 matched ({states})")
+        # 12 authorable rows (merged_ + sdk excluded):
+        #   matched=2 (F_matched norm==100 + F_db_only COMPLETE+cur=100+norm NULL)
+        #   stub=1, certified=6, open=3
+        check(states.get("matched") == 2, f"view: 2 matched ({states})")
         check(states.get("stub") == 1, f"view: 1 stub ({states})")
         check(states.get("certified") == 6, f"view: 6 certified ({states})")
         check(states.get("open") == 3, f"view: 3 open (callcount+realbug+untested) ({states})")
+        # Specifically verify the db-only pattern
+        db_only_state = conn.execute(
+            "SELECT done_state FROM authorable_done WHERE symbol='F_db_only'"
+        ).fetchone()
+        check(db_only_state and db_only_state[0] == "matched",
+              f"F_db_only (COMPLETE+cur=100+norm NULL) -> matched (got {db_only_state})")
         conn.close()
         p = run([sys.executable, str(CERTIFY), "--summary", "--db", str(db)])
         check(p.returncode == 0, "summary exits 0")

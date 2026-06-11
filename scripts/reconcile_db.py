@@ -13,6 +13,16 @@ Checks (roadmap 0.7, audit docs 03/04):
   (c) is_stub=1 AND current_percent >= 100                       (stale stub; doc 04 F3: 1,728)
   (d) symbols in db but absent from report (authorable only)     +  report-only symbols
                                                                   (jeff boundary churn; doc 03 F1)
+      NOTE — the ~170 "db-only COMPLETE" symbols (Wave 6 Lane D investigation):
+        135 are in report.json but with match_percent_normalized=0 and no
+        fuzzy_match_percent (target-only ICF/template instantiations — sync skips
+        them), and 35 are fully absent (jeff boundary churn).  Both sub-populations
+        have verdict=COMPLETE and current_percent=100 from an earlier sync and are
+        real done rows.  The authorable_done view in certify_floor.py counts them as
+        'matched' via its COMPLETE+current>=100+normalized NULL rule, so they do not
+        inflate the open count.  The d_db_only count below WILL include them; that
+        is correct — they are a known class that an orchestrator clean-up pass may
+        optionally delete (but they do no harm).
   (e) stale floor certificates: floor_certificate set but match_percent_normalized has
       moved away from floor_cert_pct (or is now >=100). The cosmetic-floor proof no
       longer applies, so the cert must be re-evaluated by certify_floor.py. Only checked
