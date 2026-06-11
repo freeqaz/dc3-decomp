@@ -134,31 +134,27 @@ void QuatSpline(
         qout = prev->value;
     } else {
         int idx = prev - &keys.front();
-        Hmx::Quat prevQuat = prev->value;
-        Hmx::Quat nextQuat = next->value;
-        Hmx::Quat q88 = idx == 0 ? prevQuat : keys[idx - 1].value;
-        Hmx::Quat q58 = idx + 1 == keys.size() - 1 ? nextQuat : keys[idx + 2].value;
-        NormalizeTo(q88, prevQuat);
-        NormalizeTo(nextQuat, prevQuat);
+        float fsq = ref * ref;
+        float fcubed = fsq * ref;
+        int idx1 = idx + 1;
+        Hmx::Quat q58;
+        Hmx::Quat nextQuat;
+        Hmx::Quat prevQuat;
+        Hmx::Quat q88;
+        prevQuat = prev->value;
+        nextQuat = next->value;
+        q88 = idx == 0 ? prevQuat : keys[idx - 1].value;
+        q58 = idx1 == keys.size() - 1 ? nextQuat : keys[idx1 + 1].value;
+        NormalizeTo(prevQuat, q88);
+        NormalizeTo(prevQuat, nextQuat);
         NormalizeTo(prevQuat, q58);
         int i = 0;
         while (i < 4) {
-            float prev_val = prevQuat[i];
-            float next_val = nextQuat[i];
-            float prev_prev_val = q88[i];
-            float next_next_val = q58[i];
-
-            float twice_prev = prev_val * 2.0f;
-            float five_prev = prev_val * 5.0f;
-            float three_next = next_val * 3.0f;
-            float four_next = next_val * 4.0f;
-
-            float difference = next_val - prev_prev_val;
-            float c1 = difference * 0.5f;
-            float c3 = (three_next - prev_prev_val) - difference;
-            float c2 = (four_next - five_prev + twice_prev) - next_next_val;
-
-            qout[i] = ((c3 * ref + c2) * ref + c1) * ref + twice_prev;
+            float p = prevQuat[i];
+            float pp = q88[i];
+            float n = nextQuat[i];
+            float nn = q58[i];
+            qout[i] = 0.5f * ((fcubed * (nn - (3.0f * n - (3.0f * p - pp))) + (fsq * ((4.0f * n + (2.0f * pp - 5.0f * p)) - nn) + (2.0f * p + ref * (n - pp)))));
             i++;
         }
         Normalize(qout, qout);

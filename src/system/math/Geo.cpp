@@ -867,10 +867,7 @@ bool Intersect(const Segment &seg, const BSPNode *n, float &t, Plane &p) {
             return false;
         }
         if (t2 == 0.0f && t != 0.0f) {
-            p.a = n->plane.a;
-            p.b = n->plane.b;
-            p.c = n->plane.c;
-            p.d = n->plane.d;
+            p = n->plane;
         }
     } else {
         if (!n->right) {

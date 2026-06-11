@@ -529,7 +529,7 @@ bool RndText::MakeWorldSphere(Sphere &s, bool b) {
             }
         }
     }
-    return s.GetRadius() != 0.0f;
+    return s.GetRadius();
 }
 
 void RndText::Init() {
