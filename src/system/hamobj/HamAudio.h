@@ -40,11 +40,14 @@ public:
     // regression test (SetCrossfadeJump clears this when the crossfade is
     // judged invalid).
     bool CrossfadePending() const { return mCrossfadePending != 0; }
+#ifdef HX_NATIVE
+    // Test-only seams (milo-tests crossfade regression); never compiled on Xbox.
     void SetStreamsForTest(Stream *a, Stream *b) {
         mStreams[0] = a;
         mStreams[1] = b;
     }
     void SetCrossfadeStateForTest(int s) { mCrossfadeState = s; }
+#endif
 
     void SetBackgroundVolume(float);
     void SetForegroundVolume(float);

@@ -149,7 +149,7 @@ sequential `run_objdiff` calls). Build plane: **main repo**. Results:
 | `default/lazer/meta_ham/FitnessGoalMgr` | `QueueCmdChangeProfileOnlineID` | 99.97% | 100.0% | **100.0%** | COMPLETE | Confirmed on main |
 | `default/system/net/HttpReqCurl` | `WriteMemoryCallback` | 99.97% | 99.80% | **99.8%** | LikelyFixable | Offset swap (0x0,0x4) + commutative reg swap |
 | `default/system/obj/PropSync` | `PropSync` | 99.94% | 99.80% | **99.8%** | MaybeFixable | FPR regswap f0-f13 (26 mismatches); permuter target |
-| `default/system/rndobj/Rnd_NG` | `EstimateDraw` | 99.94% | 97.60% | **99.6%** | MaybeFixable | +2.0% from wave-2: Rnd_NG.h vtable fix (5aed1dca) landed after wave-2 |
+| `default/system/rndobj/Rnd_NG` | `EstimateDraw` | 99.94% | 97.60% | **99.6%** | MaybeFixable | +2.0% from wave-2: Rnd_NG.h vtable fix (c0ad4a96) landed after wave-2 |
 | `default/system/synth/FxSendChorus` | `FxSendChorus::Load` | 99.93% | 99.90% | **99.9%** | NeedsInvestigation | Stack layout 3 DIFFER slots; uniform -4 offset |
 | `default/system/midi/DataEventList` | `InsertEvent` | 99.91% | 99.90% | **99.9%** | NeedsInvestigation | Frame delta -0x10; extra local |
 | `default/lazer/meta_ham/HamSongMgr` | `InitializePlaylists` | 99.86% | 99.90% | **99.9%** | NeedsInvestigation | Stack 12 DIFFER; systematic +0x10 offset |
@@ -216,7 +216,7 @@ PCH and score differently from a fresh-built worktree.
 **The `Rnd_NG` score change is a different mechanism (genuine improvement):**
 
 The +2.0% improvement for `EstimateDraw` (97.6% wave-2 → 99.6% main) is NOT a worktree
-artifact. Commit `5aed1dca` (Jun 10 12:58, landed before our measurement) swapped the
+artifact. Commit `c0ad4a96` (Jun 10 12:58, landed before our measurement) swapped the
 DxRnd Resume/Suspend vtable slots in `Rnd_NG.h`, rebuilding `Rnd_NG.obj` and reducing
 the mismatch count from 10 to 7. Updated verdict: MaybeFixable (was NeedsInvestigation).
 

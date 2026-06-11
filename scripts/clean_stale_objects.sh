@@ -81,6 +81,10 @@ while IFS= read -r -d '' obj; do
         rel="${obj#"${BUILD_DIR}/"}"    # src/system/foo/Bar.obj
         cpp="${SRC_DIR}/${rel#src/}"     # full path, still .obj
         cpp="${cpp%.obj}.cpp"
+        # .c-sourced units (curl/lib, json-c, ...) have no .cpp — fall back to .c
+        if [[ ! -f "${cpp}" && -f "${cpp%.cpp}.c" ]]; then
+            cpp="${cpp%.cpp}.c"
+        fi
 
         if [[ -f "${cpp}" ]]; then
             stale=$((stale + 1))
