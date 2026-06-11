@@ -56,7 +56,8 @@ void MemOrPoolFreeSTL(
 extern "C" {
 
 // -- Ogg/Vorbis --
-void OggFree(void *) {}
+// OggFree is now defined in src/system/oggvorbis/VorbisMem.cpp (Xbox/PPC body);
+// keeping a stub here would cause a duplicate definition at link time.
 void _vp_global_look(void) {}
 float _vp_ampmax_decay(float a, void *) { return 0; }
 void vorbis_lpc_predict(float *, float *, int) {}

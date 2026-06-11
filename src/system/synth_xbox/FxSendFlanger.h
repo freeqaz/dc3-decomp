@@ -10,6 +10,9 @@ public:
     virtual ~FxSendFlanger360();
     OBJ_CLASSNAME(FxSendFlanger360)
     OBJ_SET_TYPE(FxSendFlanger360)
+    virtual void Recreate(std::vector<FxSend *> &);
+    virtual void UpdateMix();
+    virtual void OnParametersChanged();
 
     // FxSendFlanger
     virtual void SyncEffectParams(IXAudio2SubmixVoice *) const;
@@ -17,7 +20,4 @@ public:
     NEW_OBJ(FxSendFlanger360)
 
     FxSendFlanger360();
-
-protected:
-    virtual void OnParametersChanged(void);
 };

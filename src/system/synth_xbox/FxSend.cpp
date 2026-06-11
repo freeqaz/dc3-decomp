@@ -2,6 +2,7 @@
 #include "Synth.h"
 #include "os/Debug.h"
 #include "synth/FxSend.h"
+#include "utl/Std.h"
 
 FxSend360::FxSend360(FxSend *fx) : mOutputVoice(0), mThis(fx), unk30(true) {
     TheXboxSynth->AddFxSend(this);
@@ -15,6 +16,17 @@ FxSend360::~FxSend360() {
 }
 
 void FxSend360::AddOwnerVoice(Voice *v) { mOwnerVoices.push_back(v); }
+
+void FxSend360::RemoveOwnerVoice(Voice *v) {
+    std::vector<Voice *>::iterator itFind = mOwnerVoices.end();
+    FOREACH (it, mOwnerVoices) {
+        if (*it == v) {
+            itFind = it;
+        }
+    }
+    MILO_ASSERT(itFind != mOwnerVoices.end(), 0x265);
+    mOwnerVoices.erase(itFind);
+}
 
 void FxSend360::Cleanup() {
     std::vector<Voice *> voices(mOwnerVoices);

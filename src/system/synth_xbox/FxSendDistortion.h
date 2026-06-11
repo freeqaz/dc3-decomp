@@ -9,6 +9,9 @@ public:
     virtual ~FxSendDistortion360();
     OBJ_CLASSNAME(FxSendDistortion360)
     OBJ_SET_TYPE(FxSendDistortion360)
+    virtual void Recreate(std::vector<FxSend *> &);
+    virtual void UpdateMix();
+    virtual void OnParametersChanged();
 
     NEW_OBJ(FxSendDistortion360)
 
