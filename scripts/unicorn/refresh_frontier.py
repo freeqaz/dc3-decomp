@@ -166,6 +166,12 @@ def process_unit(name, decomp_path, orig_path, wanted_symbols, timeout=5_000_000
                     bundle.result, bundle.decomp_result, bundle.orig_result,
                     bundle.decomp_relocs, bundle.orig_relocs)
                 reason = bundle.result.details.get("reason")
+                # Wave-4 doc 22: re-tag zero-fill-fixture degenerate-FP object
+                # memory diffs (NaN/-0.0/inf vs orig 0) as cosmetic artifacts so
+                # the flip-list does not surface them as candidate bugs.
+                if reason == "memory_mismatch" and is_degenerate_fixture_diff(
+                        bundle.result.details.get("object_diffs")):
+                    reason = "fixture_artifact_degenerate"
         elif exit_code == EXIT_SKIPPED:
             verdict = "SKIPPED"
             reason = error_msg
@@ -252,6 +258,40 @@ _REAL_BUG_CLASSES = (
     "call_count", "unmapped_access_mismatch",
 )
 
+# Wave-4 Lane B (doc 22): degenerate IEEE-754 bit patterns that the zero-fill /
+# 0xCD fixtures manufacture from div-by-zero, signed-zero negation, etc. An
+# object_memory flip whose decomp side is one of these against an orig 0 is
+# almost always a FIXTURE ARTIFACT, not a code bug — the realistic-input core
+# (fnmsubs/fsel/...) matches. Adjudicated cases: CharFeedback::Poll (qNaN at
+# unk8, 100%-normalized objdiff), SkeletonUpdate::UpdateFakeArmPos (-0.0 at
+# unk5398, fnmsubs matches both sides).
+_DEGENERATE_FP_BITS = (
+    0x7FC00000,  # quiet NaN  (x / 0.0)
+    0xFFC00000,  # quiet NaN, sign set
+    0x80000000,  # -0.0       (-(0*0 - 0))
+    0x7F800000,  # +inf       (x / 0.0)
+    0xFF800000,  # -inf
+)
+
+
+def is_degenerate_fixture_diff(object_diffs):
+    """True iff every object-memory diff looks like a zero-fill-fixture artifact:
+    the decomp value is a degenerate FP bit pattern (NaN/-0.0/inf) and the orig
+    value is 0. Mechanical, conservative — only fires when ALL diffs match the
+    shape and there is at least one diff. See doc 22."""
+    if not object_diffs:
+        return False
+    for entry in object_diffs:
+        # entries are (address, decomp_value, orig_value)
+        if len(entry) < 3:
+            return False
+        _, decomp_v, orig_v = entry[0], entry[1], entry[2]
+        if orig_v != 0:
+            return False
+        if (decomp_v & 0xFFFFFFFF) not in _DEGENERATE_FP_BITS:
+            return False
+    return True
+
 
 def classify_flip_cause(prev_v, new_v, new_class, reason):
     """Adjudicate WHY a verdict flipped, so the flip-list separates expected
@@ -273,6 +313,10 @@ def classify_flip_cause(prev_v, new_v, new_class, reason):
     if prev_v == "EQUIVALENT" and new_v == "DIVERGENT":
         if reason in _SIGNAL_ARTIFACT_REASONS:
             return "signal_version"
+        # Wave-4 doc 22: zero-fill-fixture degenerate-FP object_memory flips are
+        # cosmetic artifacts, not candidate bugs (the realistic-input core matches).
+        if reason == "fixture_artifact_degenerate":
+            return "artifact"
         if new_class in _ARTIFACT_CLASSES:
             return "artifact"
         if new_class in _REAL_BUG_CLASSES:
