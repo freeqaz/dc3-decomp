@@ -45,9 +45,11 @@ static std::vector<uint8_t> MakeCompressedVertexRecord(
 static std::vector<uint8_t> SerializeCompressedVertexBE(const CompressedVertex_Xbox &cv) {
     std::vector<uint8_t> buf;
     buf.reserve(sizeof(CompressedVertex_Xbox));
-    PutBE32(buf, (uint32_t)cv.mPosX);
-    PutBE32(buf, (uint32_t)cv.mPosY);
-    PutBE32(buf, (uint32_t)cv.mPosZ);
+    // mPosX/Y/Z are IEEE-754 floats on disc — serialize their bit pattern, not a
+    // truncated integer cast. (The remaining fields are genuine packed ints.)
+    PutBEFloat(buf, cv.mPosX);
+    PutBEFloat(buf, cv.mPosY);
+    PutBEFloat(buf, cv.mPosZ);
     PutBE32(buf, (uint32_t)cv.mColor);
     PutBE32(buf, (uint32_t)cv.mNormal);
     PutBE32(buf, (uint32_t)cv.mTangent);
@@ -115,6 +117,64 @@ TEST_F(MeshVertexLoading, CompressedSkinnedDecodePreservesBoneWeightsAndIndices)
     EXPECT_EQ(out.boneIndices[1], 3);
     EXPECT_EQ(out.boneIndices[2], 4);
     EXPECT_EQ(out.boneIndices[3], 5);
+}
+
+// Regression for the big-endian position-unpack bug: the compressed-vertex blob
+// stores mPosX/Y/Z as big-endian IEEE-754 floats. The old loader reinterpret-cast
+// the byte blob as CompressedVertex_Xbox and passed its FLOAT members to a helper
+// taking `int`, silently truncating the position to 0 on every compressed mesh.
+// This pins the raw big-endian byte->float decode directly (host-endian agnostic).
+TEST_F(MeshVertexLoading, CompressedPositionDecodesBigEndianFloatBytes) {
+    // -1.5f == 0xBFC00000; BE on disc = bytes {0xBF, 0xC0, 0x00, 0x00}.
+    // 256.0f == 0x43800000; 0.125f == 0x3E000000.
+    std::vector<uint8_t> record;
+    PutBEFloat(record, -1.5f);   // mPosX
+    PutBEFloat(record, 256.0f);  // mPosY
+    PutBEFloat(record, 0.125f);  // mPosZ
+    PutBE32(record, 0xFF7F3F1F); // mColor
+    PutBE32(record, 0);          // mNormal (UV)
+    PutBE32(record, 0);          // mTangent
+    PutBE32(record, 0);          // mBinormal
+    PutBE32(record, 0);          // mBoneIndices (weights)
+    PutBE32(record, 0);          // mBoneWeights (indices)
+    ASSERT_EQ(record.size(), sizeof(CompressedVertex_Xbox));
+
+    // Raw position bytes must be exactly the big-endian IEEE pattern.
+    EXPECT_EQ(record[0], 0xBF);
+    EXPECT_EQ(record[1], 0xC0);
+
+    GpuVertex out{};
+    ASSERT_EQ(VertexFormats::UnpackCompressedVertices(record.data(), 1, &out, 1), 1);
+    EXPECT_FLOAT_EQ(out.pos[0], -1.5f);
+    EXPECT_FLOAT_EQ(out.pos[1], 256.0f);
+    EXPECT_FLOAT_EQ(out.pos[2], 0.125f);
+}
+
+// Pin the per-record stride arithmetic: a 2-vertex blob must decode each vertex
+// from its own 36-byte record (offset = i * sizeof(CompressedVertex_Xbox)).
+TEST_F(MeshVertexLoading, CompressedDecodeWalksRecordStrideForMultipleVerts) {
+    std::vector<uint8_t> blob;
+    auto appendVert = [&](float x, float y, float z) {
+        PutBEFloat(blob, x);
+        PutBEFloat(blob, y);
+        PutBEFloat(blob, z);
+        PutBE32(blob, 0); // color
+        PutBE32(blob, 0); // normal
+        PutBE32(blob, 0); // tangent
+        PutBE32(blob, 0); // binormal
+        PutBE32(blob, 0); // bone indices
+        PutBE32(blob, 0); // bone weights
+    };
+    appendVert(10.0f, 11.0f, 12.0f);
+    appendVert(-20.0f, -21.0f, -22.0f);
+    ASSERT_EQ(blob.size(), 2 * sizeof(CompressedVertex_Xbox));
+
+    GpuVertex out[2]{};
+    ASSERT_EQ(VertexFormats::UnpackCompressedVertices(blob.data(), 2, out, 2), 2);
+    EXPECT_FLOAT_EQ(out[0].pos[0], 10.0f);
+    EXPECT_FLOAT_EQ(out[0].pos[2], 12.0f);
+    EXPECT_FLOAT_EQ(out[1].pos[0], -20.0f);
+    EXPECT_FLOAT_EQ(out[1].pos[2], -22.0f);
 }
 
 TEST_F(MeshVertexLoading, UncompressedVertRev26ReadsWeightsAndIndices) {
