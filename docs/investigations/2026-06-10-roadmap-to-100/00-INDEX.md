@@ -59,11 +59,52 @@ excluded from the live-bug set, but as an undecompiled-Xbox-allocator (native ma
 is behaviorally correct), not as guard-bypassed. The 53/100/153 funnel and 43,364-byte
 sum are VERIFIED. See `13-verification-log.md` #15.
 
+## Waves 1–6 execution
+
+The roadmap has been executed across six orchestrated waves (2026-06-10 through 2026-06-11).
+Each wave ran in isolated worktrees; branches are merged to `main` by the orchestrator.
+
+| Wave | Plan | Results | Summary |
+|------|------|---------|---------|
+| **Wave 1** | `91-EXECUTION-WAVE-1.md` | `92-WAVE-1-RESULTS.md` | Measurement sync core, authorable-denominator metrics, strict-reloc recert, reconcile_db, stale-object cleanup, open-residual classification |
+| **Wave 2** | `93-EXECUTION-WAVE-2.md` | `94-WAVE-2-RESULTS.md` | Floor-cert tooling (certify_floor.py), unicorn evidence refresh, native-stub intersection, single-blocker recert |
+| **Wave 3** | `95-EXECUTION-WAVE-3.md` | `96-WAVE-3-RESULTS.md` | IK feet investigation (CharIKFoot/CharIKLeg), asm-archaeology grind wave 1, strict-reloc promotion, suite green pass 1 |
+| **Wave 4** | `97-EXECUTION-WAVE-4.md` | `98-WAVE-4-RESULTS.md` | Flip-list adjudication, unicorn refresh wave 2, asm-archaeology wave 2, suite regression set established (45 tests) |
+| **Wave 5** | `99-EXECUTION-WAVE-5.md` | `99-WAVE-5-RESULTS.md` | IK root-cause named (mMoveElbow=false / IK inert), ~ObjectDir NullifyAllRefs cascade fix, vertex-unpack bswap engine bug fixed, open-residual census (459 fns / 213,648 bytes) |
+| **Wave 6** | `99b-EXECUTION-WAVE-6.md` | *(in progress)* | Knee-bend mechanism (A), residual asm-archaeology grind (B), suite to fully green (C), done-view definition + small tooling (D) |
+
+### Current headline numbers (post-wave-5, pre-wave-6 merge)
+
+| Metric | Value |
+|--------|-------|
+| **authorable_done with certs** | **97.80%** fns / **95.66%** bytes |
+| **Open functions** | **289** fns / **194,848** bytes (post-wave-6 Lane D view fix) |
+| **Open pre-view-fix** | 459 fns / 213,648 bytes (170 were COMPLETE+100% promotion artifacts) |
+| **cap_exhausted family** (certified floor) | 178 fns / 145,748 bytes |
+| **Genuinely routable residual** | ~111 fns / ~49K bytes |
+| **Gameplay boot** | PASSES (`game_screen`, EXIT=0) |
+| **Regression suite** | 45 tests green |
+| **Feet gate** | NOT GREEN — mechanism named (IK inert, knee −58° Xbox vs −20° native); engine-side fix needed |
+
+### Key Wave outcomes
+
+- **Wave 5 Lane C engine fix:** vertex-unpack bswap in `milo-native-engine` (compressed
+  mesh positions were collapsing to origin); branch `wave5/vertex-unpack-bswap`
+  (`f75339a`) pending engine-main merge + `MILO_ENGINE_PIN` bump.
+- **Wave 5 Lane B:** `~ObjectDir` transitive survivor-closure fix (HX_NATIVE) — 59/59
+  object-lifetime tests pass.
+- **Wave 6 Lane D view fix:** `authorable_done` CASE rule updated to count
+  `verdict=COMPLETE AND current_percent>=100 AND match_percent_normalized IS NULL` as
+  `matched`, clearing 170 spuriously-open promotion artifacts without any DB writes.
+  See `scripts/certify_floor.py` and the tracing note in `scripts/reconcile_db.py`
+  check (d).
+
 ## Start here
 
 - **What's the real state?** → `90-ROADMAP.md` "Definition of done" + this index's
   headline numbers.
 - **Can I trust the percentages?** → `13-verification-log.md` net trust statement.
 - **What do I do next?** → `90-ROADMAP.md` Phase 0 + Tooling backlog Tier 1.
+- **Wave execution history** → the table above; results docs for each wave.
 
 
