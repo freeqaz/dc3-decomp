@@ -430,6 +430,22 @@ void HamIKEffector::Poll() {
                     (tDbg >= 0 && tDbg <= 5) ? typeNames[tDbg] : "?");
         }
     }
+    // Wave-4 Lane A: emit a frame-local sequence number for the foot-plant IK on
+    // main.milo so it can be ordered vs the POSE(hdrv) line (g_ikPollSeq).
+    {
+        extern int g_ikPollSeq;
+        extern int HamDirector_NativeSetFrameCount();
+        static int sIkSeqLog = 0;
+        const char *pp = PathName(this);
+        bool isMain = pp && strstr(pp, "main.milo") && !strstr(pp, "backup");
+        bool isAnkle = pp && strstr(pp, "ankle.ikf");
+        if (getenv("DC3_IK_DIAG") && sIkSeqLog < 40 && isMain && isAnkle
+            && HamDirector_NativeSetFrameCount() > 3000) {
+            sIkSeqLog++;
+            fprintf(stderr, "DC3_IK_DIAG PollSeq[%d] f=%d seq=%d IK(ankle) %s\n",
+                    sIkSeqLog, HamDirector_NativeSetFrameCount(), ++g_ikPollSeq, pp);
+        }
+    }
     // Run the matched IK in CHARACTER-LOCAL space (re-rooted to the world
     // origin), then composite the venue placement back on at render — exactly
     // as Xbox does. See CharLocalIKScope above. No-op for origin-rooted

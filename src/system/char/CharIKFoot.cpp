@@ -92,6 +92,17 @@ static bool Dc3CleanPlant(RndTransformable *ankle, RndTransformable *toe) {
     if (!knee || !thigh || !hip)
         return false;
 
+    // Wave-4 Lane A: snapshot the leg LOCAL matrices so we can REVERT to the
+    // faithful anim pose if the 2-bone solve diverges. The clean-plant must be
+    // strictly improve-or-no-op: at move boundaries (activeMoveCount==0, mid-blend
+    // pose) the solve was flinging a foot to toe Z ~= -12 (worse than the baseline
+    // -4). Reverting on divergence keeps those frames at the (sane) anim pose.
+    Hmx::Matrix3 thigh0 = thigh->LocalXfm().m;
+    Hmx::Matrix3 knee0 = knee->LocalXfm().m;
+    Hmx::Matrix3 ankle0 = ankle->LocalXfm().m;
+    float toeZ0 = toe->WorldXfm().v.z;              // anim toe Z (pre-solve)
+    float ankleZ0 = ankle->WorldXfm().v.z;          // anim ankle Z (pre-solve)
+
     Transform ankleW0 = ankle->WorldXfm();          // foot orientation to preserve
     Vector3 H = thigh->WorldXfm().v;                 // hip joint (fixed)
     Vector3 Kc = knee->WorldXfm().v;                 // current knee joint
@@ -169,6 +180,27 @@ static bool Dc3CleanPlant(RndTransformable *ankle, RndTransformable *toe) {
         ankle->DirtyLocalXfm().m = lmNew;
     }
     (void)ankle->WorldXfm();
+
+    // Wave-4 Lane A: validate the solve. If it DIVERGED — produced NaN, or pushed
+    // the ankle/toe LOWER than the faithful anim pose (the move-boundary fling that
+    // sent toe Z to ~-12) — REVERT to the snapshotted anim LOCALs. The plant is then
+    // a strict improvement (never worse than baseline) on every frame.
+    {
+        float toeZ1 = toe->WorldXfm().v.z;
+        float ankleZ1 = ankle->WorldXfm().v.z;
+        bool nan = !(toeZ1 == toeZ1) || !(ankleZ1 == ankleZ1);
+        // Tolerance: allow a tiny dip (float noise) but reject a real regression.
+        bool worse = (toeZ1 < toeZ0 - 0.25f) || (ankleZ1 < ankleZ0 - 0.25f);
+        if (nan || worse) {
+            thigh->DirtyLocalXfm().m = thigh0;
+            knee->DirtyLocalXfm().m = knee0;
+            ankle->DirtyLocalXfm().m = ankle0;
+            (void)thigh->WorldXfm();
+            (void)knee->WorldXfm();
+            (void)ankle->WorldXfm();
+            return true;                            // leave the anim pose; no guard
+        }
+    }
 
     // Guard the bend bones so a later PoseMeshes this frame can't overwrite the plant.
     // Also guard the hip (pelvis): a later pose dropping the pelvis would drag the whole

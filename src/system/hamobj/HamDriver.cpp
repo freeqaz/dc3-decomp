@@ -61,8 +61,28 @@ void HamDriver::PreLoad(BinStream &bs) {
 
 void HamDriver::PostLoad(BinStream &) {}
 
+#ifdef HX_NATIVE
+// Wave-4 Lane A: shared frame-local poll sequence counter, so HamDriver::Poll
+// (the pose) and HamIKEffector::Poll (the foot-plant IK) can be ordered within
+// one frame for a SPECIFIC character path. Resolves the HamDriver:95-101
+// poll-order claim (UNCONFIRMED per Push 7b) empirically.
+int g_ikPollSeq = 0;
+#endif
+
 void HamDriver::Poll() {
 #ifdef HX_NATIVE
+    {
+        extern int HamDirector_NativeSetFrameCount();
+        static int sSeqLog = 0;
+        const char *pp = PathName(this);
+        bool isMain = pp && strstr(pp, "main.milo") && !strstr(pp, "backup");
+        if (getenv("DC3_IK_DIAG") && sSeqLog < 40 && isMain
+            && HamDirector_NativeSetFrameCount() > 3000) {
+            sSeqLog++;
+            fprintf(stderr, "DC3_IK_DIAG PollSeq[%d] f=%d seq=%d POSE(hdrv) %s\n",
+                    sSeqLog, HamDirector_NativeSetFrameCount(), ++g_ikPollSeq, pp);
+        }
+    }
     // Bootstrap: Layer::mWeight is uninitialized (no initializer in ctor).
     // On Xbox, garbage heap memory provides a non-zero initial value.
     // On native, zero-initialized heap keeps mWeight at 0, so the guard
