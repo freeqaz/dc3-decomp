@@ -408,8 +408,20 @@ TEST_F(ObjectLifetimeTest, MergeKeepCharClipSetRootDoesNotCorruptRefs) {
     delete toDir;
 }
 
-// Parity-oracle: kMoveAllSubdirs should transfer subdir ownership from source
-// to destination (source no longer reports the moved subdir).
+// Parity-oracle: kMoveAllSubdirs (kMergeReplace) SHARES the subdir into the
+// destination. On Xbox / shared Milo engine, MergeObjectsRecurse case kReplace
+// is APPEND-ONLY — it does `toDir->AppendSubDir(fromDir)` and does NOT erase the
+// subdir from the source. (Verified: DC3 MergeObjectsRecurse matches the target
+// at 98.5% with only regalloc/stack-store diffs and no logic divergence; the RB3
+// reference `src/system/obj/Utl.cpp:250` is byte-identical append-only.) The
+// duplicate reference goes away only when the source dir is later deleted by the
+// merge pipeline (FileMerger PostMerge). After that deletion the subdir must
+// SURVIVE in the destination — that is the real ownership-transfer invariant.
+//
+// The earlier expectation `EXPECT_FALSE(fromDir->HasSubDir(movedSubdir))` BEFORE
+// the source deletion asserted behavior the engine never had (an immediate
+// source-side erase) and was a mis-authored oracle; corrected here to the
+// verified Xbox semantics.
 TEST_F(ObjectLifetimeTest, MergeDirsMoveAllSubdirsTransfersOwnership) {
     ObjectDir *toDir = Hmx::Object::New<ObjectDir>();
     ObjectDir *fromDir = Hmx::Object::New<ObjectDir>();
@@ -422,11 +434,26 @@ TEST_F(ObjectLifetimeTest, MergeDirsMoveAllSubdirsTransfersOwnership) {
     MergeFilter filt((MergeFilter::Action)1, MergeFilter::kMoveAllSubdirs);
     MergeDirs(fromDir, toDir, filt);
 
+    // The subdir is now shared into the destination...
     EXPECT_TRUE(toDir->HasSubDir(movedSubdir));
-    EXPECT_FALSE(fromDir->HasSubDir(movedSubdir));
+    // ...and (append-only) is still referenced by the source until it is deleted.
+    EXPECT_TRUE(fromDir->HasSubDir(movedSubdir));
 
+    // Source deletion (PostMerge) transfers sole ownership to the destination.
+    // The cascade must keep the reparented subdir alive in the target.
     delete fromDir;
-    EXPECT_NE(movedSubdir, nullptr);
+
+    EXPECT_TRUE(toDir->HasSubDir(movedSubdir))
+        << "moved subdir was killed in target when source dir was deleted";
+    // Pointer identity preserved in target's SubDirs vector.
+    bool foundInSubDirs = false;
+    for (int i = 0; i < (int)toDir->SubDirs().size(); i++) {
+        if ((ObjectDir *)toDir->SubDirs()[i] == movedSubdir) {
+            foundInSubDirs = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(foundInSubDirs) << "moved subdir not found in target SubDirs after source deletion";
     delete toDir;
 }
 
