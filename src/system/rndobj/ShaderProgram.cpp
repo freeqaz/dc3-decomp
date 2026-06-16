@@ -124,17 +124,15 @@ bool RndShaderProgram::Cache(
                 CopyErrorShader(shaderType, opts);
                 String optsStr;
                 ShaderMakeOptionsString(shaderType, opts, optsStr);
-                const char *envName =
-                    RndEnviron::Current()
-                        ? PathName(static_cast<Hmx::Object *>(RndEnviron::Current()))
-                        : nullptr;
                 const char *matPath = PathName(NgMat::Current());
                 MILO_NOTIFY(
                     "Missing shader %s_%llx\n(material: %s)\n(environment: %s)\n(compile options: %s)",
                     ShaderTypeName(shaderType),
                     opts.flags,
                     matPath,
-                    envName,
+                    RndEnviron::Current()
+                        ? PathName(static_cast<Hmx::Object *>(RndEnviron::Current()))
+                        : nullptr,
                     optsStr.c_str()
                 );
                 if (UsingCD()) {
