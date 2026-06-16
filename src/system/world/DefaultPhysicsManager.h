@@ -14,8 +14,8 @@ public:
     virtual DetectionVolume *MakeDetectionVolume(
         DetectionVolumeListener *, const Transform &, PhysicsVolumeType, CollisionFilter
     );
-    virtual void CastRays(RayCast *, int);
     virtual void CastRays(const Segment *, RayCastListener *, int, unsigned int);
+    virtual void CastRays(RayCast *, int);
 
 protected:
     virtual void ActivateCollidable(Hmx::Object *);

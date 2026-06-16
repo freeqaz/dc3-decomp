@@ -54,8 +54,8 @@ public:
     virtual DetectionVolume *MakeDetectionVolume(
         DetectionVolumeListener *, const Transform &, PhysicsVolumeType, CollisionFilter
     ) = 0;
-    virtual void CastRays(RayCast *, int) = 0;
     virtual void CastRays(const Segment *, RayCastListener *, int, unsigned int) = 0;
+    virtual void CastRays(RayCast *, int) = 0;
     virtual bool
     CastVolume(const Segment *, float, unsigned int, Hmx::Object *&, ObjectDir *&, Vector3 &, Vector3 &) {
         return false;

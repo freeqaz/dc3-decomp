@@ -258,7 +258,7 @@ void DxShaderMgr::Terminate() {
     RndShaderMgr::Terminate();
 }
 
-void DxShaderMgr::SetVConstant(VShaderConstant, const float *, unsigned int) {}
+void DxShaderMgr::SetVConstant(VShaderConstant, const float *__restrict, unsigned int) {}
 
 void DxShaderMgr::SetVConstant(VShaderConstant vsc, RndTex *tex) {
     if (tex) {

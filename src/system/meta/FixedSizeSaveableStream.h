@@ -6,8 +6,8 @@ class FixedSizeSaveableStream : public BufStream {
 public:
     FixedSizeSaveableStream(void *, int, bool);
     virtual ~FixedSizeSaveableStream();
-    virtual bool FinishWrite() { return 0; }
-    virtual bool FinishStream() { return 0; }
+    bool FinishWrite() { return 0; }
+    bool FinishStream() { return 0; }
 
     bool HasSymbol(Symbol) const;
     bool HasID(int) const;

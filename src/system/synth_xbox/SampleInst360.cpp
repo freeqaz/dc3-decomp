@@ -18,7 +18,7 @@ SampleInst360::~SampleInst360() {
     }
 }
 
-bool SampleInst360::IsPlaying() const { return false; }
+bool SampleInst360::IsPlaying() const { return mVoice->IsPlaying(); }
 
 void SampleInst360::SetFXCore(FXCore core) {}
 

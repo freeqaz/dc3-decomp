@@ -8,7 +8,7 @@ public:
     virtual void Terminate();
     virtual void SetVConstant(VShaderConstant, bool);
     virtual void SetVConstant(VShaderConstant, int);
-    virtual void SetVConstant(VShaderConstant, const float *, unsigned int);
+    virtual void SetVConstant(VShaderConstant, const float *__restrict, unsigned int);
     virtual void SetVConstant(VShaderConstant, const Vector4 &); // 0x24
     virtual void SetVConstant(VShaderConstant, RndTex *);
     virtual void SetVConstant4x3(VShaderConstant, const Hmx::Matrix4 &);

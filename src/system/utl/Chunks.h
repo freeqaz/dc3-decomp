@@ -69,7 +69,7 @@ public:
     virtual void ReadImpl(void *, int);
     virtual void WriteImpl(const void *, int) {}
     virtual void SeekImpl(int, SeekType);
-    virtual ChunkHeader *Header() { return mHeader; }
+    ChunkHeader *Header() { return mHeader; }
 
 private:
     IListChunk *mParent; // 0x10
