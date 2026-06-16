@@ -309,7 +309,15 @@ void MoggClip::LoadNumChannels() {
         TheLoadMgr.PollUntilLoaded(mLoader, nullptr);
     }
 
-    // Poll to initialize stream
+    // Poll to initialize stream.
+    // NOTE: the target binary calls Play(0) here (PlayableSample vtable slot 0xc,
+    // float 0.0 arg) rather than SynthPoll() (slot 0x8). Play(0) is the PPC-correct
+    // form (og-dc3 verified) and would take this function to 100%, but on the native
+    // port it drives a real StandardStream init through StreamReceiver::New, whose
+    // engine-side factory (StreamReceiver::sFactory, milo-native-engine
+    // StreamReceiver_Native.cpp:44) is unregistered in the asset-loading test harness
+    // -> NULL-pointer SegFault in 27 native tests. Until the engine registers the
+    // factory in that harness, SynthPoll() is kept so the native suite stays 418/418.
     SynthPoll();
     if (!mStream) {
         mNumChannels = -1;
@@ -322,15 +330,15 @@ void MoggClip::LoadNumChannels() {
     while ((int)retries < 200) {
         Timer::Sleep(1);
         TheSynth->Poll();
-        numChannels = mStream->GetNumChannels();
-        if (numChannels >= 1) {
+        numChannels = mStream->NumInfoChannels();
+        if (numChannels > 0) {
             break;
         }
         retries++;
     }
 
     mNumChannels = numChannels;
-    Pause(0);
+    Stop(false);
 
     // Log error if channel count retrieval failed
     if (mNumChannels < 0) {
