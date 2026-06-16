@@ -77,10 +77,24 @@ _SCHEDULE_HASH = compute_schedule_hash(_SCHEDULE)
 ARTIFACT_PREFIXES = ("merged_", "lbl_", "fn_", "??_")
 
 
+def _like_prefix_clause(column: str, prefix: str, negate: bool = True) -> str:
+    """LIKE-prefix SQL with the '_'/'%'/'~' wildcards in the prefix ESCAPED.
+
+    SQL LIKE treats '_' as a single-char wildcard, so a naive
+    ``symbol NOT LIKE '??_%'`` excludes EVERY '??'-prefixed symbol (ctors ??0,
+    dtors ??1, operators ??4...), not just the literal '??_' artifact prefix.
+    That is the wave-9 measurement bug — it hid 108 authorable '??' partial
+    functions from the unicorn frontier here. Mirror certify_floor.like_prefix_clause.
+    """
+    esc = prefix.replace("~", "~~").replace("_", "~_").replace("%", "~%")
+    op = "NOT LIKE" if negate else "LIKE"
+    return f"{column} {op} '{esc}%' ESCAPE '~'"
+
+
 def is_authorable_sql() -> str:
     sdk = " AND ".join(
-        f"(unit IS NULL OR unit NOT LIKE '{p}%')" for p in SDK_UNIT_PREFIXES)
-    art = " AND ".join(f"symbol NOT LIKE '{p}%'" for p in ARTIFACT_PREFIXES)
+        f"(unit IS NULL OR {_like_prefix_clause('unit', p)})" for p in SDK_UNIT_PREFIXES)
+    art = " AND ".join(_like_prefix_clause("symbol", p) for p in ARTIFACT_PREFIXES)
     return (
         f"excluded=0 AND is_stub=0 AND {sdk} AND {art} "
         "AND match_percent_normalized IS NOT NULL "

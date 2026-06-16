@@ -88,6 +88,11 @@ def make_db(path: Path) -> None:
         ("F_stub",          "default/system/a", 100, 0.0,  0.0,  None, 0, 1, 0, None, None, None, 0.0),                   # stub -> not certifiable
         ("merged_deadbeef", "default/system/a", 100, 80.0, 80.0, None, 0, 0, 0, "EQUIVALENT", None, old, 80.0),          # artifact symbol -> excluded
         ("F_sdk",           "default/xdk/lib",  100, 90.0, 90.0, None, 0, 0, 0, "EQUIVALENT", None, old, 90.0),          # SDK -> excluded
+        # A '??'-prefixed ctor: AUTHORABLE (must be COUNTED). The wave-9 bug
+        # ('??_%' unescaped) would wrongly EXCLUDE it; the escaped path + the
+        # Python startswith path both keep it. This is the row that makes the
+        # two-path denominator self-check actually exercise the wildcard bug.
+        ("??0Foo@@QAA@XZ",  "default/system/a", 100, 100.0,100.0,"COMPLETE", 0, 0, 0, "EQUIVALENT", None, old, 100.0),  # ctor -> matched/authorable
     ]
     conn.executemany(
         "INSERT INTO functions (symbol,unit,size,current_percent,best_percent,verdict,"
@@ -205,10 +210,11 @@ def main() -> int:
         conn = sqlite3.connect(str(db))
         view_rows = conn.execute("SELECT done_state, count(*) FROM authorable_done GROUP BY done_state").fetchall()
         states = dict(view_rows)
-        # 12 authorable rows (merged_ + sdk excluded):
-        #   matched=2 (F_matched norm==100 + F_db_only COMPLETE+cur=100+norm NULL)
+        # 13 authorable rows (merged_ + sdk excluded; ??0Foo ctor INCLUDED):
+        #   matched=3 (F_matched norm==100 + F_db_only COMPLETE+cur=100+norm NULL
+        #              + ??0Foo ctor COMPLETE+cur=100+norm==100)
         #   stub=1, certified=6, open=3
-        check(states.get("matched") == 2, f"view: 2 matched ({states})")
+        check(states.get("matched") == 3, f"view: 3 matched ({states})")
         check(states.get("stub") == 1, f"view: 1 stub ({states})")
         check(states.get("certified") == 6, f"view: 6 certified ({states})")
         check(states.get("open") == 3, f"view: 3 open (callcount+realbug+untested) ({states})")
@@ -222,6 +228,37 @@ def main() -> int:
         p = run([sys.executable, str(CERTIFY), "--summary", "--db", str(db)])
         check(p.returncode == 0, "summary exits 0")
         check("DONE with certs" in p.stdout, "summary prints DONE-with-certs line")
+
+        print("== two-path denominator self-check ==")
+        # Healthy DB: the SQL view WHERE and the Python startswith filter must agree
+        # (12 authorable rows: 14 total minus merged_deadbeef + F_sdk).
+        p = run([sys.executable, str(CERTIFY), "--check-denominator", "--db", str(db)])
+        check(p.returncode == 0, f"check-denominator exits 0 when consistent (rc={p.returncode})\n{p.stderr}")
+        check("AGREE" in p.stdout, "check-denominator reports AGREE on a healthy DB")
+        check("13 fns" in p.stdout, f"both paths count 13 authorable fns\n{p.stdout}")
+
+        # Inject the wave-9 bug: recreate the view with an UNESCAPED '??_%'-style
+        # artifact clause and confirm the self-check fails LOUDLY (nonzero).
+        sys.path.insert(0, str(SCRIPTS))
+        import certify_floor as cf  # noqa: E402
+        conn = sqlite3.connect(str(db))
+        sdk = " AND ".join(
+            f"(unit IS NULL OR unit NOT LIKE '{pfx}%')" for pfx in cf.SDK_UNIT_PREFIXES)
+        art_buggy = " AND ".join(
+            f"symbol NOT LIKE '{pfx}%'" for pfx in cf.ARTIFACT_PREFIXES)  # UNESCAPED bug
+        conn.execute("DROP VIEW IF EXISTS authorable_done")
+        conn.execute(
+            "CREATE VIEW authorable_done AS SELECT id, symbol, demangled, unit, size, "
+            "current_percent, match_percent_normalized, verdict, is_stub, "
+            "floor_certificate, floor_cert_pct, 'open' AS done_state, 0 AS is_done "
+            f"FROM functions WHERE excluded=0 AND {sdk} AND {art_buggy}")
+        conn.commit(); conn.close()
+        p = run([sys.executable, str(CERTIFY), "--check-denominator", "--db", str(db)])
+        check(p.returncode == 1, f"check-denominator exits 1 on wave-9-style undercount (rc={p.returncode})")
+        check("DISAGREE" in p.stderr, "check-denominator prints DISAGREE on undercount")
+        # restore the correct view so downstream tests are unaffected
+        p = run([sys.executable, str(CERTIFY), "--migrate", "--apply", "--db", str(db)])
+        check(p.returncode == 0, "view restored after denominator-bug test")
 
         print("== reconcile (e): cert invalidated when normalized moves ==")
         # baseline: no stale certs

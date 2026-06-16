@@ -415,8 +415,8 @@ def main():
         query += " AND unit NOT LIKE ?"
         params.append(f"{prefix}%")
 
-    # Exclude merged symbols
-    query += " AND symbol NOT LIKE 'merged_%'"
+    # Exclude merged symbols (ESCAPE the literal '_'; SQL LIKE '_' is a wildcard)
+    query += " AND symbol NOT LIKE 'merged\\_%' ESCAPE '\\'"
 
     if args.unit:
         pattern = args.unit

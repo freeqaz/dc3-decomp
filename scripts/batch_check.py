@@ -43,7 +43,7 @@ def batch_check(unit_pattern: str, dry_run: bool = False, skip_boilerplate: bool
         FROM functions
         WHERE unit GLOB ?
           AND (verdict IS NULL OR verdict NOT IN ('COMPLETE', 'AT_LIMIT'))
-          AND symbol NOT LIKE 'merged_%'
+          AND symbol NOT LIKE 'merged~_%' ESCAPE '~'
     """
     params: list = [norm_pattern]
 
@@ -53,8 +53,14 @@ def batch_check(unit_pattern: str, dry_run: bool = False, skip_boilerplate: bool
         params.append(norm_ep)
 
     if skip_boilerplate:
+        # ESCAPE the '_' in boilerplate prefixes (??__F, ??__E, ??_9, ??_E,
+        # ??_G): SQL LIKE treats '_' as a single-char wildcard, so an
+        # unescaped '??__E%' over-matches operator overloads (??Y..., ??A...)
+        # and hid 146 real authorable rows here (wave-9 measurement bug).
+        # Mirror orchestrator.database.query_functions's escaped form.
         for prefix in BOILERPLATE_SYMBOL_PREFIXES:
-            query += f" AND symbol NOT LIKE '{prefix}%'"
+            escaped = prefix.replace("_", r"\_")
+            query += f" AND symbol NOT LIKE '{escaped}%' ESCAPE '\\'"
 
     rows = conn.execute(query, params).fetchall()
     functions = [dict(row) for row in rows]

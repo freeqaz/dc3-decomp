@@ -105,9 +105,9 @@ def query_at_limit_functions(
         FROM functions
         WHERE verdict = 'AT_LIMIT'
           AND current_percent >= ? AND current_percent <= ?
-          AND symbol NOT LIKE 'merged_%'
-          AND symbol NOT LIKE 'fn_%'
-          AND demangled NOT LIKE '%stlpmtx_std::%'
+          AND symbol NOT LIKE 'merged\\_%' ESCAPE '\\'
+          AND symbol NOT LIKE 'fn\\_%' ESCAPE '\\'
+          AND demangled NOT LIKE '%stlpmtx\\_std::%' ESCAPE '\\'
     """
     params: list = [min_pct, max_pct]
 

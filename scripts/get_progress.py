@@ -133,7 +133,7 @@ def get_progress() -> str:
     funclet_filter = _funclet_filter_sql(funclet_addrs)
     funclet_remaining = conn.execute(
         f"SELECT COUNT(*) FROM functions WHERE verdict IS NULL "
-        f"AND unit NOT LIKE '%xdk%' AND symbol LIKE 'fn_%' "
+        f"AND unit NOT LIKE '%xdk%' AND symbol LIKE 'fn\\_%' ESCAPE '\\' "
         f"AND NOT ({funclet_filter})"
     ).fetchone()[0]
     remaining_real = remaining - funclet_remaining
@@ -217,8 +217,8 @@ def get_progress() -> str:
         FROM functions
         WHERE verdict IS NULL
           AND unit NOT LIKE '%xdk%'
-          AND symbol NOT LIKE 'merged_%'
-          AND demangled NOT LIKE '%stlpmtx_std::%'
+          AND symbol NOT LIKE 'merged\\_%' ESCAPE '\\'
+          AND demangled NOT LIKE '%stlpmtx\\_std::%' ESCAPE '\\'
           AND ({funclet_filter})
         GROUP BY unit
         ORDER BY cnt DESC

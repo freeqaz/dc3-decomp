@@ -655,8 +655,8 @@ def get_next_function(
         query += " AND locked_by IS NULL"
 
     # Exclude ICF artifacts and linker stubs (not real decomp targets)
-    query += " AND symbol NOT LIKE 'merged_%'"
-    query += " AND symbol NOT LIKE 'fn_%'"
+    query += f" AND {_EXCLUDE_MERGED}"
+    query += f" AND {_EXCLUDE_FN}"
     query += " AND symbol != 'OnlyReturns'"
 
     if min_size > 0:
@@ -778,6 +778,29 @@ BOILERPLATE_SYMBOL_PREFIXES = [
 ]
 
 
+def like_prefix_clause(column: str, prefix: str, negate: bool = True) -> str:
+    """``column [NOT] LIKE '<prefix>%'`` with the '_'/'%'/'\\' wildcards ESCAPED.
+
+    SQL LIKE treats '_' as a single-char wildcard. A naive
+    ``symbol NOT LIKE 'merged_%'`` therefore also matches ``mergedX...`` (and
+    a naive ``'??_%'`` matches EVERY ``??``-prefixed ctor/dtor/operator). That
+    is the wave-9 measurement bug. Escaping the literal underscore makes the
+    clause match exactly the intended prefix. Behaviour-preserving for the
+    artifact prefixes (merged_, fn_) whose '_' always coincides with a real
+    underscore today, and corrective for any future symbol that would alias.
+    """
+    esc = prefix.replace("\\", "\\\\").replace("_", "\\_").replace("%", "\\%")
+    op = "NOT LIKE" if negate else "LIKE"
+    return f"{column} {op} '{esc}%' ESCAPE '\\'"
+
+
+# Pre-built artifact/STL exclusion fragments used by several query builders.
+# (merged_<addr> ICF stubs, fn_<addr> EH funclets, stlpmtx STL instantiations.)
+_EXCLUDE_MERGED = like_prefix_clause("symbol", "merged_")
+_EXCLUDE_FN = like_prefix_clause("symbol", "fn_")
+_EXCLUDE_STLPMTX = "demangled NOT LIKE '%stlpmtx\\_std::%' ESCAPE '\\'"
+
+
 def query_functions(
     pattern: str | list[str] = "*",
     min_percent: float = 0,
@@ -845,13 +868,12 @@ def query_functions(
             placeholders = ", ".join(f"'{v}'" for v in excluded_verdicts)
             query += f" AND (verdict IS NULL OR verdict NOT IN ({placeholders}))"
 
-    query += " AND symbol NOT LIKE 'merged_%'"
-    query += " AND demangled NOT LIKE '%stlpmtx_std::%'"
+    query += f" AND {_EXCLUDE_MERGED}"
+    query += f" AND {_EXCLUDE_STLPMTX}"
 
     if skip_boilerplate:
         for prefix in BOILERPLATE_SYMBOL_PREFIXES:
-            escaped = prefix.replace("_", r"\_")
-            query += f" AND symbol NOT LIKE '{escaped}%' ESCAPE '\\'"
+            query += f" AND {like_prefix_clause('symbol', prefix)}"
 
     # Stub filter
     if is_stub is not None:
@@ -1176,8 +1198,8 @@ def query_batch_stats(
 
     # Symbol filters matching get_next_function
     symbol_filter = (
-        " AND symbol NOT LIKE 'merged_%'"
-        " AND symbol NOT LIKE 'fn_%'"
+        f" AND {_EXCLUDE_MERGED}"
+        f" AND {_EXCLUDE_FN}"
         " AND symbol != 'OnlyReturns'"
     )
 
@@ -1630,8 +1652,8 @@ def query_functions_by_priority(
     if exclude_locked:
         query += " AND locked_by IS NULL"
 
-    query += " AND symbol NOT LIKE 'merged_%'"
-    query += " AND demangled NOT LIKE '%stlpmtx_std::%'"
+    query += f" AND {_EXCLUDE_MERGED}"
+    query += f" AND {_EXCLUDE_STLPMTX}"
 
     # Exclude functions that have been tried too many times
     if max_attempts is not None:
@@ -1716,8 +1738,8 @@ def query_functions_for_unit_completion(
     if exclude_locked:
         query += " AND f.locked_by IS NULL"
 
-    query += " AND f.symbol NOT LIKE 'merged_%'"
-    query += " AND f.demangled NOT LIKE '%stlpmtx_std::%'"
+    query += f" AND {like_prefix_clause('f.symbol', 'merged_')}"
+    query += " AND f.demangled NOT LIKE '%stlpmtx\\_std::%' ESCAPE '\\'"
 
     # Exclude functions that have been tried too many times
     if max_attempts is not None:

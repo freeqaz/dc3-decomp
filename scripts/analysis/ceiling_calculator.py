@@ -332,7 +332,7 @@ def load_at_limit_functions(db_path: str, min_pct: float = 0.0,
         WHERE verdict = 'AT_LIMIT'
           AND excluded = 0
           AND current_percent IS NOT NULL
-          AND symbol NOT LIKE 'merged_%'
+          AND symbol NOT LIKE 'merged\\_%' ESCAPE '\\'
     """
     params = []
 

@@ -47,7 +47,7 @@ def find_stale_verdicts(conn: sqlite3.Connection, threshold: float = 80.0) -> li
         FROM functions
         WHERE verdict = 'COMPLETE' AND excluded = 0
         AND current_percent IS NOT NULL AND current_percent < ?
-        AND symbol NOT LIKE 'merged_%'
+        AND symbol NOT LIKE 'merged\\_%' ESCAPE '\\'
         ORDER BY current_percent ASC
     """, (threshold,)).fetchall()
     return [dict(r) for r in rows]
@@ -60,7 +60,7 @@ def find_stale_at_limit(conn: sqlite3.Connection, threshold: float = 60.0) -> li
         FROM functions
         WHERE verdict = 'AT_LIMIT' AND excluded = 0
         AND current_percent IS NOT NULL AND current_percent < ?
-        AND symbol NOT LIKE 'merged_%'
+        AND symbol NOT LIKE 'merged\\_%' ESCAPE '\\'
         ORDER BY current_percent ASC
     """, (threshold,)).fetchall()
     return [dict(r) for r in rows]
@@ -135,7 +135,7 @@ def main():
             SELECT count(*) FROM functions
             WHERE verdict = 'COMPLETE' AND excluded = 0
             AND current_percent >= ? AND current_percent < ?
-            AND symbol NOT LIKE 'merged_%'
+            AND symbol NOT LIKE 'merged\\_%' ESCAPE '\\'
         """, (lo, hi)).fetchone()[0]
         if cnt > 0:
             print(f"  {lo:3d}-{hi:3d}%: {cnt:5d} functions")

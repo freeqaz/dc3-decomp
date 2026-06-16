@@ -85,7 +85,7 @@ DEFAULT_DB = REPO_ROOT / "decomp.db"
 
 # Single source of truth for the SDK exclusion prefixes.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from authorable import SDK_UNIT_PREFIXES  # noqa: E402
+from authorable import SDK_UNIT_PREFIXES, is_authorable  # noqa: E402
 
 # --- Evidence configuration ---------------------------------------------------
 
@@ -632,6 +632,98 @@ def done_summary(conn: sqlite3.Connection) -> dict:
     }
 
 
+# --- Two-path denominator self-check ------------------------------------------
+
+# Artifact symbol prefixes whose '_' must be treated LITERALLY (these match the
+# SQL ARTIFACT_PREFIXES). The Python path below uses str.startswith — a genuinely
+# independent implementation from the SQL LIKE path, so a future SQL filter bug
+# (like wave-9's unescaped '??_%' wildcard) makes the two totals DISAGREE instead
+# of silently undercounting in lockstep.
+_PY_ARTIFACT_PREFIXES = ARTIFACT_PREFIXES  # ("merged_", "lbl_", "fn_", "??_")
+
+
+def _py_is_authorable_row(unit: str | None, symbol: str | None,
+                          excluded: int | None) -> bool:
+    """Pure-Python predicate mirroring the authorable_done view's WHERE.
+
+    Deliberately uses str.startswith (NOT SQL LIKE) so it can never share a
+    wildcard-escaping bug with the SQL path."""
+    if excluded:
+        return False
+    if unit is not None and not is_authorable(unit):
+        return False
+    sym = symbol or ""
+    if any(sym.startswith(p) for p in _PY_ARTIFACT_PREFIXES):
+        return False
+    return True
+
+
+def denominator_self_check(conn: sqlite3.Connection) -> dict:
+    """Compute the authorable function/byte denominator TWO independent ways and
+    report whether they agree.
+
+    Path A (SQL):    the authorable_done view's WHERE (the SQL LIKE/ESCAPE path).
+                     Falls back to the inline is_authorable_sql() fragment when
+                     the view is not migrated.
+    Path B (Python): SELECT every row, filter with str.startswith in Python.
+
+    Returns a dict with both totals and an ``agree`` bool. Read-only; no writes.
+
+    This is the guard against the wave-9 class of bug: a filter that silently
+    drops authorable rows (the '??_%' wildcard hid 6,835 fns / ~1.0 MB) would now
+    make A and B diverge and fail LOUDLY."""
+    # --- Path A: SQL view WHERE (or inline fallback) ---
+    have_view = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='view' AND name=?",
+        (AUTHORABLE_DONE_VIEW,),
+    ).fetchone()
+    if have_view:
+        row = conn.execute(
+            f"SELECT COUNT(*), COALESCE(SUM(size),0) FROM {AUTHORABLE_DONE_VIEW}"
+        ).fetchone()
+        a_fns, a_bytes = int(row[0]), int(row[1])
+        a_src = "authorable_done view"
+    else:
+        row = conn.execute(
+            f"SELECT COUNT(*), COALESCE(SUM(size),0) "
+            f"FROM functions WHERE {is_authorable_sql_denominator(conn)}"
+        ).fetchone()
+        a_fns, a_bytes = int(row[0]), int(row[1])
+        a_src = "is_authorable_sql() inline fragment"
+
+    # --- Path B: Python startswith filter over every row ---
+    b_fns = 0
+    b_bytes = 0
+    has_excl = "excluded" in existing_columns(conn, "functions")
+    excl_sel = "excluded" if has_excl else "0 AS excluded"
+    for r in conn.execute(f"SELECT unit, symbol, size, {excl_sel} FROM functions"):
+        if _py_is_authorable_row(r["unit"], r["symbol"], r["excluded"]):
+            b_fns += 1
+            b_bytes += (r["size"] or 0)
+
+    agree = (a_fns == b_fns) and (a_bytes == b_bytes)
+    return {
+        "a_fns": a_fns, "a_bytes": a_bytes, "a_src": a_src,
+        "b_fns": b_fns, "b_bytes": b_bytes,
+        "agree": agree,
+        "delta_fns": a_fns - b_fns,
+        "delta_bytes": a_bytes - b_bytes,
+    }
+
+
+def is_authorable_sql_denominator(conn: sqlite3.Connection) -> str:
+    """The DENOMINATOR WHERE (authorable, regardless of done state) for the inline
+    Path-A fallback — mirrors the view's WHERE, NOT the partial-frontier filter in
+    is_authorable_sql() (which also bounds 0<norm<100)."""
+    sdk = " AND ".join(
+        f"(unit IS NULL OR {like_prefix_clause('unit', p)})" for p in SDK_UNIT_PREFIXES
+    )
+    art = " AND ".join(like_prefix_clause("symbol", p) for p in ARTIFACT_PREFIXES)
+    has_excl = "excluded" in existing_columns(conn, "functions")
+    excl = "excluded=0 AND " if has_excl else ""
+    return f"{excl}{sdk} AND {art}"
+
+
 # --- CLI ----------------------------------------------------------------------
 
 def parse_args() -> argparse.Namespace:
@@ -645,6 +737,10 @@ def parse_args() -> argparse.Namespace:
                    help="Add cert columns + authorable_done view (idempotent).")
     p.add_argument("--summary", action="store_true",
                    help="Print the authorable done-view headline (read-only) and exit.")
+    p.add_argument("--check-denominator", action="store_true",
+                   help="Compute the authorable fn/byte denominator two independent "
+                        "ways (SQL view WHERE vs Python startswith) and exit nonzero "
+                        "if they disagree. Read-only; no DB writes.")
     p.add_argument("--manual-file", type=Path, metavar="JSON",
                    help="Write orchestrator-supplied certs from a backlog JSON "
                         "(see manual_certify docstring). Skips the auto census.")
@@ -678,7 +774,33 @@ def main() -> int:
         print(f"  ({'APPLIED' if args.apply else 'dry-run — no changes'})")
         print()
 
+    if args.check_denominator:
+        chk = denominator_self_check(conn)
+        print("=== denominator two-path self-check (read-only) ===")
+        print(f"  Path A (SQL: {chk['a_src']}): {chk['a_fns']:,} fns   {chk['a_bytes']:,} bytes")
+        print(f"  Path B (Python startswith):        {chk['b_fns']:,} fns   {chk['b_bytes']:,} bytes")
+        if chk["agree"]:
+            print("  AGREE — authorable denominator is consistent across both paths.")
+            conn.close()
+            return 0
+        print(f"  !! DISAGREE by {chk['delta_fns']:+,} fns / {chk['delta_bytes']:+,} bytes !!",
+              file=sys.stderr)
+        print("  A SQL filter is silently mis-counting the authorable denominator "
+              "(wave-9 '??_%' wildcard class). Investigate before trusting any band "
+              "query or cert census.", file=sys.stderr)
+        conn.close()
+        return 1
+
     if args.summary:
+        # Self-validate the denominator first: if the two paths disagree, the
+        # headline below is built on a mis-counted total — fail loudly.
+        chk = denominator_self_check(conn)
+        if not chk["agree"]:
+            print(f"WARNING: denominator self-check DISAGREES "
+                  f"(SQL {chk['a_fns']:,} fns vs Python {chk['b_fns']:,} fns; "
+                  f"delta {chk['delta_fns']:+,}). The headline below may be "
+                  f"undercounting — run --check-denominator to investigate.",
+                  file=sys.stderr)
         s = done_summary(conn)
         print("=== authorable_done — canonical done view ===")
         src = "view" if s["view"] else "inline (view not yet migrated)"
@@ -700,7 +822,7 @@ def main() -> int:
         print(f"  DONE with certs:    {dw:,}/{tf:,} fns ({100*dw/tf:.2f}%)   "
               f"{dwb:,}/{tb:,} bytes ({100*dwb/tb:.2f}%)")
         conn.close()
-        return 0
+        return 0 if chk["agree"] else 1
 
     if args.manual_file:
         problems = manual_certify(conn, args.manual_file, apply=args.apply)

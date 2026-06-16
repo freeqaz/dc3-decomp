@@ -40,6 +40,33 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 NATIVE_DIR="${REPO_ROOT}/native"
 BUILD_DIR="${NATIVE_DIR}/build"
 
+# ─── Resolve milo-native-engine path absolutely ─────────────────────────────
+# native/CMakeLists.txt defaults MILO_ENGINE_PATH to
+# "${CMAKE_SOURCE_DIR}/../../milo-native-engine". That is correct only for the
+# MAIN repo: from a git worktree under wt/<name>, CMAKE_SOURCE_DIR is the
+# worktree's native/, so the default resolves to the non-existent
+# wt/milo-native-engine and the configure fails (wave-9 lane A had to work
+# around it with an explicit -DMILO_ENGINE_PATH).
+#
+# The engine is a sibling of the MAIN checkout, regardless of which worktree we
+# run from. `git rev-parse --git-common-dir` always points at the main repo's
+# .git (worktrees share it), so its parent is the main repo root and the engine
+# is one level above that. Honor an explicit MILO_ENGINE_PATH env override.
+if [[ -z "${MILO_ENGINE_PATH:-}" ]]; then
+    # `git rev-parse --git-common-dir` may return a RELATIVE path (".git") when
+    # run in the main checkout, or an ABSOLUTE one in a worktree. Resolve it to an
+    # absolute path from within REPO_ROOT either way; its parent is the main repo.
+    if _GCD="$(git -C "${REPO_ROOT}" rev-parse --git-common-dir 2>/dev/null)"; then
+        GIT_COMMON_DIR="$(cd "${REPO_ROOT}" && cd "${_GCD}" && pwd)"
+        MAIN_REPO_ROOT="$(cd "${GIT_COMMON_DIR}/.." && pwd)"
+        MILO_ENGINE_PATH="$(cd "${MAIN_REPO_ROOT}/.." && pwd)/milo-native-engine"
+    else
+        # Not a git checkout (e.g. tarball) — fall back to the CMake default
+        # relative to the actual source dir.
+        MILO_ENGINE_PATH="$(cd "${REPO_ROOT}/.." && pwd)/milo-native-engine"
+    fi
+fi
+
 BUILD_TYPE="RelWithDebInfo"
 TARGETS=(dc3-native milo-tests)
 JOBS="${NPROC:-$(nproc 2>/dev/null || echo 8)}"
@@ -78,6 +105,28 @@ if ! command -v clang++ &>/dev/null; then
     exit 2
 fi
 
+if [[ ! -d "${MILO_ENGINE_PATH}" ]]; then
+    echo "ERROR: milo-native-engine not found at ${MILO_ENGINE_PATH}" >&2
+    echo "       Set MILO_ENGINE_PATH=/abs/path/to/milo-native-engine to override." >&2
+    exit 2
+fi
+echo "=== milo-native-engine: ${MILO_ENGINE_PATH} ==="
+
+# If an existing build dir was configured with a DIFFERENT engine path (e.g. the
+# broken worktree default baked into the CMake cache), force a reconfigure so the
+# corrected absolute path takes effect. Compare RESOLVED paths so a cache holding
+# the un-normalized but equivalent default (.../native/../../milo-native-engine)
+# in an already-configured main checkout does NOT trigger a needless full rebuild.
+if [[ $CONFIGURE -eq 0 && -f "${BUILD_DIR}/CMakeCache.txt" ]]; then
+    CACHED_ENGINE="$(sed -n 's/^MILO_ENGINE_PATH:[^=]*=//p' "${BUILD_DIR}/CMakeCache.txt" | head -1)"
+    CACHED_REAL="$( [[ -d "${CACHED_ENGINE}" ]] && (cd "${CACHED_ENGINE}" && pwd) || echo "${CACHED_ENGINE}")"
+    WANT_REAL="$( [[ -d "${MILO_ENGINE_PATH}" ]] && (cd "${MILO_ENGINE_PATH}" && pwd) || echo "${MILO_ENGINE_PATH}")"
+    if [[ -n "${CACHED_ENGINE}" && "${CACHED_REAL}" != "${WANT_REAL}" ]]; then
+        echo "=== Cached MILO_ENGINE_PATH (${CACHED_ENGINE}) differs — reconfiguring ==="
+        CONFIGURE=1
+    fi
+fi
+
 # ─── Configure (if needed) ──────────────────────────────────────────────────
 if [[ $CONFIGURE -eq 1 || ! -f "${BUILD_DIR}/build.ninja" ]]; then
     echo "=== Configuring native build (${BUILD_TYPE}) ==="
@@ -87,6 +136,7 @@ if [[ $CONFIGURE -eq 1 || ! -f "${BUILD_DIR}/build.ninja" ]]; then
           -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
           -DCMAKE_C_COMPILER=clang \
           -DCMAKE_CXX_COMPILER=clang++ \
+          -DMILO_ENGINE_PATH="${MILO_ENGINE_PATH}" \
           -DDawn_DIR="${DAWN_DIR:-/home/free/code/milohax/dc3-decomp-deps/dawn/lib/cmake/Dawn}" \
           2>&1
 fi
