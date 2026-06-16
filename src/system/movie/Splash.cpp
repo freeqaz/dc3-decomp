@@ -270,7 +270,6 @@ void Splash::Draw() {
                     mCurrentDir->DrawShowing();
                     TheRnd.EndDrawing();
                 }
-#endif
             } else if (mCurrentCam) {
                 int i = 0;
                 do {
@@ -281,9 +280,38 @@ void Splash::Draw() {
                     if (mCurrentMovie != NULL) break;
                 } while (mCurrentTrigger == NULL && ++i < 2);
                 if (mCurrentMovie == NULL && mCurrentTrigger == NULL) {
-                    TheNgRnd.Resume();
+                    // Cross-dispatch (same class as the wave-9 Suspend/Resume fix):
+                    // once the splash has drawn its final cam frame and has no
+                    // movie/trigger, the splash hands the device back to the main
+                    // renderer, which SUSPENDS here
+                    // (target dispatches vtable+0x138 = DxRnd::Suspend).
+                    TheNgRnd.Suspend();
                 }
             }
+#else
+            }
+            // The cam-draw loop runs unconditionally after the movie block in
+            // the original (non-native) build: when a movie is present and its
+            // Poll() succeeds, control falls THROUGH into this loop (the target
+            // `bne` after Movie::Poll jumps into the loop head, not past it), and
+            // there is no `mCurrentCam` null-guard before the loop.
+            {
+                int i = 0;
+                do {
+                    TheRnd.BeginDrawing();
+                    mCurrentCam->Select();
+                    mCurrentDir->DrawShowing();
+                    TheRnd.EndDrawing();
+                    if (mCurrentMovie != NULL) break;
+                } while (mCurrentTrigger == NULL && ++i < 2);
+                if (mCurrentMovie == NULL && mCurrentTrigger == NULL) {
+                    // Cross-dispatch (same class as the wave-9 Suspend/Resume fix):
+                    // splash hands the device back to the main renderer, which
+                    // SUSPENDS here (target dispatches vtable+0x138 = DxRnd::Suspend).
+                    TheNgRnd.Suspend();
+                }
+            }
+#endif
             mHasDrawn = 1;
         }
         if (!MainThread()) {

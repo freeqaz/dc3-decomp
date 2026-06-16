@@ -555,7 +555,12 @@ void NgSpotlightDrawer::RenderScene() {
     sActiveFrame = false;
 
     int numLights = sLights.end() - sLights.begin();
-    if (numLights != 0 && Showing() && CheckSharedResources() && CheckFogTexture()) {
+    if (numLights == 0) {
+        // No lights this frame: reset post-process state and bail. The target
+        // checks the light count separately from the showing/resource checks
+        // (numLights==0 short-circuits to its own inline ClearPostProc + return).
+        ClearPostProc();
+    } else if (Showing() && CheckSharedResources() && CheckFogTexture()) {
         MILO_ASSERT(sEnviron->GetUseApprox() == false, 0x595);
 
         sEnviron->Select(0);
@@ -597,7 +602,11 @@ void NgSpotlightDrawer::RenderScene() {
         TheHiResScreen.mOverride = false;
         SetupForPostProcess();
     } else {
-        ClearPostDraw();
+        // Target dispatches the virtual at vtable+0x60 = ClearPostProc (clears the
+        // light/shadow/can vectors), not +0x5c = ClearPostDraw (which only clears
+        // sNeedDraw). When there are no lights to render (or the showing/resource
+        // checks fail) the spotlight post-process state is fully reset here.
+        ClearPostProc();
     }
 }
 

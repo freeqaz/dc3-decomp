@@ -37,7 +37,11 @@ bool NgFur::Shell(int layerIdx, RndMesh *mesh, RndMat *mat) const {
         gravStretch * fShell,
         gravSlide * curveVal
     );
-    TheShaderMgr.SetPConstant(kPS_FurGeometry, furGeom);
+    // Fur geometry (stretch/slide) drives vertex displacement, so it is set as a
+    // VERTEX-shader constant: target dispatches vtable+0x24 = SetVConstant(Vector4&),
+    // not +0x40 = SetPConstant(Vector4&). The register index value is shared between
+    // the VS/PS constant enums (0x32).
+    TheShaderMgr.SetVConstant((VShaderConstant)kPS_FurGeometry, furGeom);
 
     // Constant 0xc: color interpolation between roots and ends tints
     float diffRed = (mEndsTint.red - mRootsTint.red);
@@ -75,7 +79,9 @@ bool NgFur::Shell(int layerIdx, RndMesh *mesh, RndMat *mat) const {
     }
 
     Vector4 furShell(shellThickness, vertCount, zeroVal, zeroVal);
-    TheShaderMgr.SetPConstant(kPS_FurShell, furShell);
+    // Fur shell thickness/vertex-count is a VERTEX-shader constant (target dispatches
+    // vtable+0x24 = SetVConstant(Vector4&), not +0x40 = SetPConstant(Vector4&)).
+    TheShaderMgr.SetVConstant((VShaderConstant)kPS_FurShell, furShell);
 
     // Constant 0xb: alpha processing params
     float alphaExp = mAlphaFalloff * 2.0f + oneVal;
