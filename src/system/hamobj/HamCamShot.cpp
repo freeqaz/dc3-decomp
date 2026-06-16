@@ -111,7 +111,7 @@ void HamCamShot::SetPreFrame(float frame, float blend) {
         }
     }
     if (mCurrentShot != this) {
-        mCurrentShot->SetFrame(frame, 1.0f);
+        mCurrentShot->SetPreFrame(frame, 1.0f);
     }
 }
 

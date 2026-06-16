@@ -1229,7 +1229,7 @@ void CharEyes::Poll() {
 
     float dt = TheTaskMgr.DeltaSeconds();
     if (dt < 0.0f) {
-        Exit();
+        Enter();
         return;
     }
 

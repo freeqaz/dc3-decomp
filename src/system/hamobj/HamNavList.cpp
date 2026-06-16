@@ -1422,12 +1422,12 @@ void HamNavList::UpdateGestures(const Skeleton *skeleton) {
 
             if (mScrollBehavior.IsScrolling()) {
                 mDirectionGestureFilter->Clear();
-                mDirectionGestureFilter->ClearSwipe();
+                mDirectionGestureFilter->ResetHoverTimer();
             }
 
             int numItems = NumItems();
             if (numItems == 1) {
-                mDirectionGestureFilter->ClearSwipe();
+                mDirectionGestureFilter->ResetHoverTimer();
                 mDirectionGestureFilter->SetAllowAboveShoulder(false);
             } else {
                 mDirectionGestureFilter->SetAllowAboveShoulder(true);
