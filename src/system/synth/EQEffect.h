@@ -24,7 +24,10 @@
 class EQEffect {
 public:
     struct Params {
-        u32 mActiveBands;
+        // Field-0 is a 1-byte bool "bypass" slot in the DC3 target layout (SyncEffectParams
+        // emits `stb` at Params+0x0; SetParameters never reads offset 0x0). Named `unk0` to
+        // match every other effect's Params and the StandardEffect<T> template's bypass slot.
+        bool unk0;
         float mBand1Freq;
         float mBand1Gain;
         float mBand1Q;
@@ -38,7 +41,6 @@ public:
         float mBand4Gain;
         float mBand4Q;
         float mBand5Freq;
-        float mBand5Q;
     };
 
     EQEffect(IXAudioBatchAllocator *);
