@@ -52,6 +52,8 @@ BEGIN_HANDLERS(Synth360)
     HANDLE_SUPERCLASS(Synth)
 END_HANDLERS
 
+void Synth360::PreInit() {}
+
 void Synth360::Init() {
     Synth::Init();
     SynthSample360::Init();

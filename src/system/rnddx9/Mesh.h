@@ -26,8 +26,11 @@ public:
     virtual void DrawFacesInRange(int, int);
     virtual int NumFaces() const { return mNumFaces; }
     virtual int NumVerts() const { return mNumVerts; }
+
+protected:
     virtual void OnSync(int);
 
+public:
     D3DVertexBuffer *GetMultimeshFaces();
     u32 VertFVF() const;
 

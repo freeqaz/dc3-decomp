@@ -21,6 +21,7 @@ public:
     // RndAnimatable
     virtual void SetFrame(float, float);
     virtual float EndFrame();
+    virtual Hmx::Object *AnimTarget() { return mMesh; }
 
     int NumVerts();
     void ShrinkVerts(int);

@@ -18,7 +18,11 @@ public:
     virtual bool TexelsLock(void *&);
     virtual unsigned int TexelsPitch() const;
     virtual void Select(int);
+
+protected:
     virtual void SyncBitmap();
+
+public:
     virtual void PreDeviceReset();
     virtual void PostDeviceReset();
 

@@ -14,6 +14,7 @@ class FxSend360;
 
 class Synth360 : public Synth {
 public:
+    virtual void PreInit();
     virtual DataNode Handle(DataArray *, bool);
     virtual bool IsUsingDolby() const;
     virtual bool HasPendingVoices();
