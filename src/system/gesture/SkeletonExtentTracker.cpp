@@ -70,7 +70,7 @@ void SkeletonExtentTracker::ApplyToMeshVerts(RndMesh *mesh, bool mirrored) const
     int direction = (-(unsigned int)mirrored & 0xFFFFFFFEu) + 1;
     float dir = (float)(long long)direction;
     for (unsigned int i = 0; (int)i < 4; i++) {
-        float yFrac = i >= 1 ? (i == 1 ? 0.2f : (i < 3 ? 0.8f : 1.0f)) : 0.0f;
+        float yFrac = i > 0 ? (i == 1 ? 0.2f : (i < 3 ? 0.8f : 1.0f)) : 0.0f;
         float texY = (box.h * yFrac + box.y) * dir;
 
         for (unsigned int j = 0; j < 4; j++) {
