@@ -18,7 +18,7 @@ public:
 
 private:
     soundtouch::SoundTouch *mSoundTouch; // 0x60
-    int unk64;
+    bool mPrimed;                        // 0x64
     float unk68;
     int unk6c; // 0x6c - num channels
 };
