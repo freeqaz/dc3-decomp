@@ -205,6 +205,7 @@ public:
 
     friend void FaceCenter(RndMesh *, Face *, Vector3 &);
     friend class RndVelocityBuffer;
+    friend class DepthBuffer3D;
 
 protected:
     RndMesh();

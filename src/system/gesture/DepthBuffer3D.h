@@ -56,6 +56,7 @@ protected:
     DepthBuffer3D();
 
     void UpdateAttachment(DepthBuffer3DAttachment &, const Vector4 &, const Vector4 &);
+    void DrawMesh();
 
     static LargeQuadRenderData mQuad;
 

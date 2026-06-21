@@ -10,6 +10,7 @@
 #include "rnddx9/Rnd.h"
 #include "rndobj/Draw.h"
 #include "rndobj/Rnd_NG.h"
+#include "rndobj/ShaderMgr.h"
 #include "rndobj/Tex.h"
 #include "rndobj/Trans.h"
 
@@ -44,7 +45,13 @@ namespace {
         pos.z = xfm.m.x.z * x + xfm.m.y.z * y + xfm.m.z.z * z;
     }
 
-    RndMat *SetUpWorkingMat();
+    RndMat *SetUpWorkingMat() {
+        RndMat *mat = TheShaderMgr.GetWork();
+        mat->SetBlend(BaseMaterial::kBlendSrc);
+        mat->SetZMode(kZModeDisable);
+        mat->SetTexWrap(kTexWrapClamp);
+        return mat;
+    }
 }
 
 DepthBuffer3D::DepthBuffer3D()
@@ -104,20 +111,21 @@ void DepthBuffer3D::Init() {
 void DepthBuffer3D::UpdateAttachment(
     DepthBuffer3DAttachment &attachment, const Vector4 &v1, const Vector4 &v2
 ) {
-    bool b5 = false;
-    Vector3 newPos;
     int skelIdx = TheGestureMgr->GetSkeletonIndexByTrackingID(
         TheGameData->Player(attachment.player)->GetSkeletonTrackingID()
     );
+    Vector3 newPos;
+    bool b5 = false;
     if (skelIdx + 1 > 0) {
+        const Transform &localXfm = LocalXfm();
         Skeleton &skeleton = TheGestureMgr->GetSkeleton(skelIdx);
-        Vector3 localPos = LocalXfm().v;
+        Vector3 localPos = localXfm.v;
         Vector3 pos;
         JointToVertexData(pos, skeleton, (SkeletonJoint)attachment.mJoint, v1);
-        VertexToWorld(pos, LocalXfm(), mStretchNearCamera, v2);
+        VertexToWorld(pos, localXfm, mStretchNearCamera, v2);
         Add(pos, localPos, newPos);
         attachment.obj->SetTransConstraint(mConstraint, nullptr, false);
-        Normalize(mWorldXfm.m, attachment.obj->DirtyLocalXfm().m);
+        Normalize(localXfm.m, attachment.obj->DirtyLocalXfm().m);
         b5 = true;
     }
     if (!b5) {
@@ -178,6 +186,26 @@ void DepthBuffer3D::ListDrawChildren(std::list<RndDrawable *> &out) {
     if (mMesh.Ptr() != nullptr) {
         out.push_back(mMesh.Ptr());
     }
+}
+
+void DepthBuffer3D::DrawMesh() {
+    mMesh->SetShowing(true);
+    Transform savedXfm = mMesh->LocalXfm();
+    mMesh->SetLocalXfm(WorldXfm());
+    int savedVersion = mMesh->mMeshVersion;
+    mMesh->mMeshVersion = 0x1d;
+    Vector4 v(mTile.x, mTile.y, 0.0f, 0.0f);
+    for (float i = 0.0f; i < v.x; i += 1.0f) {
+        v.z = i;
+        for (float j = 0.0f; j < v.y; j += 1.0f) {
+            v.w = j;
+            TheShaderMgr.SetVConstant((VShaderConstant)0x44, v);
+            mMesh->DrawShowing();
+        }
+    }
+    mMesh->mMeshVersion = savedVersion;
+    mMesh->SetLocalXfm(savedXfm);
+    mMesh->SetShowing(false);
 }
 
 #ifdef HX_NATIVE
