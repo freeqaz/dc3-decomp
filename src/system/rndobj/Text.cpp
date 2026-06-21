@@ -52,7 +52,12 @@ float SegmentLength(
 
 Transform XfmOnCircleEdge(float circumference, float pos) {
     Transform xfm;
-    float sign = circumference >= 0.0f ? 1.0f : -1.0f;
+    float sign;
+    if (circumference >= 0.0f) {
+        sign = 1.0f;
+    } else {
+        sign = -1.0f;
+    }
 
     xfm.m.z.Set(0.0f, 0.0f, 1.0f);
 
@@ -62,10 +67,9 @@ Transform XfmOnCircleEdge(float circumference, float pos) {
     float cosA = Cosine(angle);
     float sinA = Sine(angle);
 
-    xfm.v.Set(cosA, sinA, 0.0f);
-
     float negSign = -sign;
     xfm.m.y.y = sinA * negSign;
+    xfm.v.Set(cosA, sinA, 0.0f);
     xfm.m.y.x = cosA * negSign;
     xfm.m.y.z = 0.0f * negSign;
 
@@ -1208,13 +1212,14 @@ void RndText::ReplaceMissingCharacters(HX_VECTOR(unsigned short) &wideChars) {
         if (mapIt != missingMap.end()) {
         unsigned int origSize = origChars.size();
         do {
-            RndFontBase *font = mapIt->first;
             const char *pluralS = "s";
             if (mapIt->second.size() <= 1) {
                 pluralS = "";
             }
+            auto headerMsg = MakeString("%s:%s char%s (", PathName(this), TextToken(), pluralS);
             {
-                String msg(MakeString("%s:%s char%s (", PathName(this), TextToken(), pluralS));
+                RndFontBase *font = mapIt->first;
+                String msg(headerMsg);
 
                 for (std::set<unsigned short>::iterator setIt = mapIt->second.begin();
                      setIt != mapIt->second.end(); ++setIt) {

@@ -181,10 +181,10 @@ DataNode BeatClock::OnSyncState(DataArray *a) {
             break;
         }
         float mdiff =
-            (float)(mSongPos.GetMeasure() - mySongPos.GetMeasure()) * mBeatsPerMeasure;
+            (float)((mSongPos.GetMeasure() - mySongPos.GetMeasure()) * mBeatsPerMeasure);
         float bdiff = mSongPos.GetBeat() - mySongPos.GetBeat();
         float tdiff = (float)(mSongPos.GetTick() - mySongPos.GetTick()) * 0.0020833334f;
-        float f5 = mdiff + bdiff + tdiff;
+        float f5 = (mdiff + (bdiff + tdiff));
         if (!NearlyZero(f5)) {
             mSongPos.AccessTotalBeat() += f5;
             mSongPos.AccessTotalTick() = mSongPos.AccessTotalBeat() * 480.0f;
