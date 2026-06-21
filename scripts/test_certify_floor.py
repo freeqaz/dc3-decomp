@@ -82,6 +82,16 @@ def make_db(path: Path) -> None:
         ("F_callcount",     "default/system/a", 100, 95.0, 95.0, None, 0, 0, 0, "DIVERGENT", "call_count", old, 95.0),    # NOT certifiable (routable)
         ("F_realbug",       "default/system/a", 100, 70.0, 70.0, None, 0, 0, 0, "DIVERGENT", "call_arg", old, 70.0),      # NOT certifiable (real bug)
         ("F_untested",      "default/system/a", 100, 85.0, 85.0, None, 0, 0, 0, None, None, None, 85.0),                  # NOT certifiable (no evidence)
+        # native_divergence: target-only symbol the engine forced a different
+        # signature for. is_stub=1 (base_size==0 heuristic) + norm=0, yet our
+        # source IS correct. Only native_divergence may cert this row.
+        ("F_native_div",    "default/system/a", 100, 0.0,  0.0,  None, 0, 1, 0, None, None, None, 0.0),
+        # native_divergence at the *NULL-norm* symbol-mismatch floor: the target
+        # symbol has NO base counterpart at all, so report.json leaves fuzzy NULL
+        # and sync never writes a normalized score (norm IS NULL). is_stub=1.
+        # This is the SampleInst360::IsPlaying (UAA vs our UBA) shape — the cert
+        # must accept NULL norm for native_divergence (and ONLY that class).
+        ("F_native_div_null","default/system/a", 100, 0.0,  0.0,  None, 0, 1, 0, None, None, None, None),
         ("F_matched",       "default/system/a", 100, 100.0,100.0,"COMPLETE", 0, 0, 0, "EQUIVALENT", None, old, 100.0),    # 100 -> not on frontier
         # Wave-6 Lane D: COMPLETE + current=100 + normalized NULL -> counts as 'matched' in view
         ("F_db_only",       "default/system/a", 100, 100.0,100.0,"COMPLETE", 0, 0, 0, None, None, None, None),             # db-only: no norm score
@@ -210,12 +220,14 @@ def main() -> int:
         conn = sqlite3.connect(str(db))
         view_rows = conn.execute("SELECT done_state, count(*) FROM authorable_done GROUP BY done_state").fetchall()
         states = dict(view_rows)
-        # 13 authorable rows (merged_ + sdk excluded; ??0Foo ctor INCLUDED):
+        # 15 authorable rows (merged_ + sdk excluded; ??0Foo ctor INCLUDED):
         #   matched=3 (F_matched norm==100 + F_db_only COMPLETE+cur=100+norm NULL
         #              + ??0Foo ctor COMPLETE+cur=100+norm==100)
-        #   stub=1, certified=6, open=3
+        #   stub=3 (F_stub + F_native_div(0%) + F_native_div_null(NULL norm),
+        #           none certified at this point),
+        #   certified=6, open=3
         check(states.get("matched") == 3, f"view: 3 matched ({states})")
-        check(states.get("stub") == 1, f"view: 1 stub ({states})")
+        check(states.get("stub") == 3, f"view: 3 stub (F_stub + uncertified F_native_div + F_native_div_null) ({states})")
         check(states.get("certified") == 6, f"view: 6 certified ({states})")
         check(states.get("open") == 3, f"view: 3 open (callcount+realbug+untested) ({states})")
         # Specifically verify the db-only pattern
@@ -231,11 +243,11 @@ def main() -> int:
 
         print("== two-path denominator self-check ==")
         # Healthy DB: the SQL view WHERE and the Python startswith filter must agree
-        # (12 authorable rows: 14 total minus merged_deadbeef + F_sdk).
+        # (15 authorable rows: 17 total minus merged_deadbeef + F_sdk).
         p = run([sys.executable, str(CERTIFY), "--check-denominator", "--db", str(db)])
         check(p.returncode == 0, f"check-denominator exits 0 when consistent (rc={p.returncode})\n{p.stderr}")
         check("AGREE" in p.stdout, "check-denominator reports AGREE on a healthy DB")
-        check("13 fns" in p.stdout, f"both paths count 13 authorable fns\n{p.stdout}")
+        check("15 fns" in p.stdout, f"both paths count 15 authorable fns\n{p.stdout}")
 
         # Inject the wave-9 bug: recreate the view with an UNESCAPED '??_%'-style
         # artifact clause and confirm the self-check fails LOUDLY (nonzero).
@@ -279,6 +291,141 @@ def main() -> int:
         conn = sqlite3.connect(str(db))
         check(col(conn, "F_equiv_stale", "floor_certificate") is None,
               "stale cert columns NULLed by --fix")
+        conn.close()
+
+        print("== manual --manual-file: native_divergence (manual-only class) ==")
+        # F_untested is an open frontier row (norm 85, no auto-evidence). The
+        # native_divergence class is MANUAL-ONLY (no DB flag auto-fires it), so it
+        # can only land via --manual-file. Use it to certify F_untested.
+        nd_backlog = tdp / "nd_backlog.json"
+        nd_backlog.write_text(json.dumps([{
+            "symbol_like": "F_untested",
+            "cert": "native_divergence",
+            "expect_pct": 85.0,
+            "evidence": {"source_doc": "test", "diagnosis": "engine override forces const base"},
+        }]))
+        # dry-run: resolves but writes nothing
+        p = run([sys.executable, str(CERTIFY), "--manual-file", str(nd_backlog), "--db", str(db)])
+        check(p.returncode == 0, f"manual native_divergence dry-run exits 0 (rc={p.returncode})\n{p.stderr}")
+        check("1 cert(s) resolvable" in p.stdout,
+              f"manual native_divergence dry-run reports 1 resolvable\n{p.stdout}")
+        conn = sqlite3.connect(str(db))
+        check(col(conn, "F_untested", "floor_certificate") is None,
+              "manual dry-run did NOT write native_divergence cert")
+        conn.close()
+        # apply: lands the native_divergence cert
+        p = run([sys.executable, str(CERTIFY), "--manual-file", str(nd_backlog),
+                 "--apply", "--db", str(db)])
+        check(p.returncode == 0, f"manual native_divergence apply exits 0 (rc={p.returncode})\n{p.stderr}")
+        conn = sqlite3.connect(str(db))
+        check(col(conn, "F_untested", "floor_certificate") == "native_divergence",
+              "F_untested -> native_divergence (manual-only class landed)")
+        check(col(conn, "F_untested", "floor_cert_pct") == 85.0,
+              "native_divergence cert captured CURRENT norm (85.0), not expect_pct")
+        ev_nd = json.loads(col(conn, "F_untested", "floor_cert_evidence"))
+        check(ev_nd.get("diagnosis", "").startswith("engine override"),
+              "native_divergence evidence diagnosis recorded")
+        # view counts it as 'certified' (done) — closes the open count
+        st = conn.execute("SELECT done_state FROM authorable_done WHERE symbol='F_untested'").fetchone()
+        check(st and st[0] == "certified",
+              f"native_divergence cert makes F_untested 'certified' (done) (got {st})")
+        conn.close()
+        print("== manual native_divergence at norm==0 + is_stub=1 (symbol-mismatch floor) ==")
+        # F_native_div is the canonical native_divergence: target-only symbol
+        # (norm=0, is_stub=1) the engine forced a different signature for. ONLY
+        # native_divergence may cert it (0% + stub are the symptoms of the
+        # divergence, not an un-implemented function).
+        nd0 = tdp / "nd0_backlog.json"
+        nd0.write_text(json.dumps([{
+            "symbol_like": "F_native_div", "cert": "native_divergence", "expect_pct": 0.0,
+            "evidence": {"diagnosis": "target UAA vs our UBA; engine override needs const base"},
+        }]))
+        p = run([sys.executable, str(CERTIFY), "--manual-file", str(nd0), "--apply", "--db", str(db)])
+        check(p.returncode == 0, f"native_divergence@0%+stub applies (rc={p.returncode})\n{p.stdout}\n{p.stderr}")
+        conn = sqlite3.connect(str(db))
+        check(col(conn, "F_native_div", "floor_certificate") == "native_divergence",
+              "F_native_div (norm=0, is_stub=1) -> native_divergence cert landed")
+        check(col(conn, "F_native_div", "floor_cert_pct") == 0.0,
+              "native_divergence@0% captured norm=0.0")
+        conn.close()
+        # other classes must STILL refuse a norm==0 / is_stub=1 row
+        bad0 = tdp / "bad0_backlog.json"
+        bad0.write_text(json.dumps([{
+            "symbol_like": "F_native_div", "cert": "permuter_exhausted", "expect_pct": 0.0, "force": True,
+        }]))
+        # reset the cert so the class-gate is what's tested, not the KEEP path
+        conn = sqlite3.connect(str(db))
+        conn.execute("UPDATE functions SET floor_certificate=NULL WHERE symbol='F_native_div'")
+        conn.commit(); conn.close()
+        p = run([sys.executable, str(CERTIFY), "--manual-file", str(bad0), "--apply", "--db", str(db)])
+        check(p.returncode == 1, "permuter_exhausted refuses norm==0/is_stub=1 row (rc=1)")
+        conn = sqlite3.connect(str(db))
+        check(col(conn, "F_native_div", "floor_certificate") is None,
+              "non-native_divergence class did NOT cert the 0%/stub row")
+        conn.close()
+        # re-apply the native_divergence cert so the row is 'done' for downstream
+        run([sys.executable, str(CERTIFY), "--manual-file", str(nd0), "--apply", "--db", str(db)])
+
+        print("== manual native_divergence at norm IS NULL + is_stub=1 (no base counterpart) ==")
+        # F_native_div_null is the SampleInst360::IsPlaying shape: the target
+        # symbol has NO base counterpart at all, so norm IS NULL (not 0). The
+        # native_divergence class must accept NULL norm (pinning cert_pct=0.0);
+        # every other class must still refuse it.
+        ndN = tdp / "ndnull_backlog.json"
+        ndN.write_text(json.dumps([{
+            "symbol_like": "F_native_div_null", "cert": "native_divergence", "expect_pct": 0.0,
+            "evidence": {"diagnosis": "target UAA symbol has no base counterpart; engine override needs const base"},
+        }]))
+        # dry-run resolves the NULL-norm row (the regression this guards against)
+        p = run([sys.executable, str(CERTIFY), "--manual-file", str(ndN), "--db", str(db)])
+        check(p.returncode == 0, f"native_divergence@NULL dry-run exits 0 (rc={p.returncode})\n{p.stdout}\n{p.stderr}")
+        check("1 cert(s) resolvable" in p.stdout,
+              f"native_divergence@NULL norm resolves in dry-run\n{p.stdout}")
+        # apply lands it with cert_pct pinned to 0.0
+        p = run([sys.executable, str(CERTIFY), "--manual-file", str(ndN), "--apply", "--db", str(db)])
+        check(p.returncode == 0, f"native_divergence@NULL applies (rc={p.returncode})\n{p.stdout}\n{p.stderr}")
+        conn = sqlite3.connect(str(db))
+        check(col(conn, "F_native_div_null", "floor_certificate") == "native_divergence",
+              "F_native_div_null (norm IS NULL, is_stub=1) -> native_divergence cert landed")
+        check(col(conn, "F_native_div_null", "floor_cert_pct") == 0.0,
+              "native_divergence@NULL captured cert_pct pinned to 0.0")
+        # The view's done_state precedence is matched > stub > certified, so an
+        # is_stub=1 native_divergence row reports 'stub' — BOTH stub and certified
+        # are "done", so the contract is is_done=1 (the cert + the stub flag both
+        # count it out of the open bucket).
+        st = conn.execute(
+            "SELECT done_state, is_done FROM authorable_done WHERE symbol='F_native_div_null'"
+        ).fetchone()
+        check(st and st[1] == 1,
+              f"native_divergence cert keeps F_native_div_null DONE (is_done=1, state={st[0] if st else None})")
+        conn.close()
+        # other classes must STILL refuse a NULL-norm row
+        badN = tdp / "badnull_backlog.json"
+        badN.write_text(json.dumps([{
+            "symbol_like": "F_native_div_null", "cert": "permuter_exhausted", "expect_pct": 0.0, "force": True,
+        }]))
+        conn = sqlite3.connect(str(db))
+        conn.execute("UPDATE functions SET floor_certificate=NULL WHERE symbol='F_native_div_null'")
+        conn.commit(); conn.close()
+        p = run([sys.executable, str(CERTIFY), "--manual-file", str(badN), "--apply", "--db", str(db)])
+        check(p.returncode == 1, "permuter_exhausted refuses NULL-norm row (rc=1)")
+        conn = sqlite3.connect(str(db))
+        check(col(conn, "F_native_div_null", "floor_certificate") is None,
+              "non-native_divergence class did NOT cert the NULL-norm row")
+        conn.close()
+
+        # invalid cert class is rejected (not written)
+        bad_backlog = tdp / "bad_backlog.json"
+        bad_backlog.write_text(json.dumps([{
+            "symbol_like": "F_callcount", "cert": "totally_made_up", "expect_pct": 95.0,
+        }]))
+        p = run([sys.executable, str(CERTIFY), "--manual-file", str(bad_backlog),
+                 "--apply", "--db", str(db)])
+        check(p.returncode == 1, f"invalid cert class -> rc=1 (rc={p.returncode})")
+        check("invalid cert class" in p.stdout, "invalid cert class reported as ERROR")
+        conn = sqlite3.connect(str(db))
+        check(col(conn, "F_callcount", "floor_certificate") is None,
+              "invalid cert class NOT written")
         conn.close()
 
     print()

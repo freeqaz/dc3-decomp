@@ -52,6 +52,16 @@ NOT auto-certified (kept in the enum for manual/orchestrator use):
   pgo_block_sink      the 361-function PGO block-sinking floor (at-limit-systemic.md
                       §7) is not queryable from a DB flag, so it is never
                       auto-fired here. Supply it manually if needed.
+  native_divergence   our source is provably NATIVE-CORRECT — it matches the
+                      milo-native-engine's required signature/layout (override
+                      const-ness, overloaded-virtual hoisting order, sub-object
+                      vtable shape) — but the PPC target diverges in a way we
+                      CANNOT match without breaking the native/web build. A
+                      legitimate, PERMANENT floor distinct from regalloc/
+                      equivalent/permuter: the residual byte diff is a forced
+                      cross-platform trade, not an un-fixed bug. There is no DB
+                      flag for it (it requires reading the engine's required
+                      signature), so it is MANUAL-ONLY and never auto-fired.
 
 Caveats baked in (from doc 08):
   - primary_pattern is STALE/noisy (ADDRESS_RELOCATION_NOISE shows on 100% fns)
@@ -135,6 +145,26 @@ CERT_EQUIVALENT = "equivalent"
 CERT_ICF = "icf_merged"
 CERT_PERMUTER = "permuter_exhausted"
 CERT_PGO = "pgo_block_sink"  # manual only; never auto-fired
+CERT_NATIVE_DIVERGENCE = "native_divergence"  # manual only; never auto-fired
+
+# Cert classes that may ONLY be supplied via --manual-file (no DB flag exists to
+# auto-fire them; they require evidence proven outside the DB).
+MANUAL_ONLY_CERTS = frozenset({CERT_PGO, CERT_NATIVE_DIVERGENCE})
+
+# Every accepted floor_certificate value. The four auto classes (equivalent,
+# icf_merged, permuter_exhausted, and artifact:<class> for each ARTIFACT_CLASSES)
+# plus the manual-only classes. manual_certify() validates the supplied `cert`
+# string against this set so a typo can't write an un-queryable certificate.
+VALID_CERT_CLASSES = frozenset(
+    {CERT_EQUIVALENT, CERT_ICF, CERT_PERMUTER}
+    | MANUAL_ONLY_CERTS
+    | {f"artifact:{c}" for c in ARTIFACT_CLASSES}
+)
+
+
+def is_valid_cert(cert: str) -> bool:
+    """True iff `cert` is an accepted floor_certificate enum value."""
+    return cert in VALID_CERT_CLASSES
 
 
 def git_short_rev() -> str:
@@ -449,15 +479,22 @@ def manual_certify(conn: sqlite3.Connection, path: Path, apply: bool) -> int:
 
         [{"symbol_like": "?CheckBSPTree@@%",      -- must resolve to EXACTLY 1 row
           "unit_like": "%math/Geo%",              -- optional disambiguator
-          "cert": "permuter_exhausted",           -- or artifact:<class> etc.
+          "cert": "permuter_exhausted",           -- or artifact:<class> /
+                                                  --   pgo_block_sink /
+                                                  --   native_divergence etc.
           "expect_pct": 99.0,                     -- doc-recorded normalized pct
           "tolerance": 2.0,                       -- max |norm - expect_pct| (default 2.0)
           "force": false,                         -- write despite pct drift
           "evidence": {"source_doc": "...", "diagnosis": "..."}}, ...]
 
-    Rules: never overwrites an existing cert; refuses ambiguous/missing
-    symbols; refuses norm>=100 / norm<=0 / NULL rows; records the CURRENT
-    normalized pct (reconcile_db check (e) contract), not expect_pct.
+    Rules: validates `cert` against VALID_CERT_CLASSES (a typo can't write an
+    un-queryable certificate); never overwrites an existing cert; refuses
+    ambiguous/missing symbols; refuses norm>=100 / NULL rows; refuses norm<=0
+    EXCEPT for native_divergence (which legitimately sits at 0% — its target
+    symbol has no base counterpart because the engine forced a different
+    signature — and is also exempt from the is_stub=0 filter for the same
+    reason); records the CURRENT normalized pct (reconcile_db check (e)
+    contract), not expect_pct.
     Returns the number of entries that failed to resolve cleanly."""
     entries = json.loads(Path(path).read_text())
     build = git_short_rev()
@@ -473,9 +510,20 @@ def manual_certify(conn: sqlite3.Connection, path: Path, apply: bool) -> int:
     for e in entries:
         pat = e["symbol_like"]
         cert = e["cert"]
+        if not is_valid_cert(cert):
+            print(f"  ERROR  {pat}: invalid cert class {cert!r} "
+                  f"(valid: {', '.join(sorted(VALID_CERT_CLASSES))})")
+            problems += 1
+            continue
+        # native_divergence target-only symbols are flagged is_stub=1 by the
+        # byte-size heuristic (base_size==0 because our build emits the OTHER
+        # mangled name) even though the function IS implemented. The stub flag is
+        # itself the symptom of the divergence, so this class alone may cert an
+        # is_stub=1 row; every other class still requires is_stub=0.
+        stub_clause = "" if cert == CERT_NATIVE_DIVERGENCE else " AND is_stub=0"
         q = (
             "SELECT id, symbol, unit, match_percent_normalized, floor_certificate "
-            f"FROM functions WHERE symbol LIKE ? AND excluded=0 AND is_stub=0 "
+            f"FROM functions WHERE symbol LIKE ? AND excluded=0{stub_clause} "
             f"AND {sdk} AND {art}"
         )
         params: list = [pat]
@@ -490,8 +538,28 @@ def manual_certify(conn: sqlite3.Connection, path: Path, apply: bool) -> int:
             continue
         r = rows[0]
         norm = r["match_percent_normalized"]
-        if norm is None or norm <= 0 or norm >= 100:
-            print(f"  SKIP   {r['symbol']}: not certifiable (norm={norm})")
+        is_nd = cert == CERT_NATIVE_DIVERGENCE
+        # native_divergence is the one class that legitimately sits at the
+        # symbol-mismatch floor: when the engine forces a different signature
+        # (e.g. const base), our build emits a DIFFERENTLY-MANGLED symbol, so the
+        # PPC target's symbol has NO base counterpart. objdiff therefore scores
+        # it 0% — and report.json leaves fuzzy NULL so sync never writes a
+        # normalized score either, leaving norm IS NULL. BOTH norm==0 and
+        # norm IS NULL are the same valid symbol-mismatch floor for this class
+        # (and only this class). Its captured floor_cert_pct is pinned to 0.0
+        # (reconcile_db check (e) compares against this, and a NULL norm has no
+        # number to compare). Every OTHER class still requires a genuine partial
+        # match (0 < norm < 100) — NULL/0 is "not certifiable" for them.
+        # A 100%-matched function is NEVER a floor, so norm>=100 is refused for
+        # ALL classes.
+        if is_nd:
+            bad_low = (norm is not None) and (norm < 0)
+            bad_high = (norm is not None) and (norm >= 100)
+        else:
+            bad_low = (norm is None) or (norm <= 0)
+            bad_high = (norm is not None) and (norm >= 100)
+        if bad_low or bad_high:
+            print(f"  SKIP   {r['symbol']}: not certifiable (norm={norm}, cert={cert})")
             problems += 1
             continue
         if r["floor_certificate"]:
@@ -500,7 +568,11 @@ def manual_certify(conn: sqlite3.Connection, path: Path, apply: bool) -> int:
             continue
         exp = e.get("expect_pct")
         tol = e.get("tolerance", 2.0)
-        if exp is not None and abs(norm - exp) > tol and not e.get("force"):
+        # native_divergence at the symbol-mismatch floor has no comparable norm
+        # (NULL/0), so skip the drift check for it; pin its cert_pct to 0.0.
+        cert_pct = round(norm, 2) if norm is not None else 0.0
+        if (not is_nd) and exp is not None and abs(norm - exp) > tol \
+                and not e.get("force"):
             print(f"  DRIFT  {r['symbol']}: norm {norm:.1f} vs doc {exp:.1f} "
                   f"(>±{tol}) — re-diagnose or set force:true")
             problems += 1
@@ -510,11 +582,13 @@ def manual_certify(conn: sqlite3.Connection, path: Path, apply: bool) -> int:
         if exp is not None:
             ev["doc_pct"] = exp
         to_write.append((
-            cert, round(norm, 2), build, stamp,
+            cert, cert_pct, build, stamp,
             json.dumps(ev, separators=(",", ":")), r["id"],
         ))
         print(f"  {'WRITE' if apply else 'DRY'}  {r['symbol']}  "
-              f"{cert} @ {norm:.1f}%  [{r['unit'] or '-'}]")
+              f"{cert} @ {cert_pct:.1f}%  [{r['unit'] or '-'}]"
+              + ("  (symbol-mismatch floor: norm IS NULL)"
+                 if is_nd and norm is None else ""))
     if apply and to_write:
         if "floor_certificate" not in existing_columns(conn, "functions"):
             raise SystemExit("Refusing to --apply: floor_certificate column "
