@@ -44,6 +44,7 @@ private:
     static bool sEDRamChecksEnabled;
 
     void ResetSurfaces();
+    void ResolveMipChain();
     D3DSurface *GetSurfaceLevel(int);
 
 protected:

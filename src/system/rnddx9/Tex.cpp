@@ -6,18 +6,30 @@
 #include "rnddx9/TexMgr.h"
 #include "rndobj/Mat_NG.h"
 #include "rndobj/Rnd.h"
+#include "rndobj/ShaderMgr.h"
 #include "rndobj/Tex.h"
 #include "utl/MemMgr.h"
 #include "xdk/d3d9i/d3d9.h"
 #include "xdk/d3d9i/d3d9types.h"
+#include "xdk/xgraphics/xgraphics.h"
+#include "obj/Data.h"
+#include "obj/DataFunc.h"
+#include "obj/Dir.h"
+#include "utl/MakeString.h"
+#include "utl/TextStream.h"
+
+DataNode DebugPrintAllTextures(DataArray *);
 
 std::vector<DxTex *> gAllTextures;
+int gTexDumpCalls;
 
 struct CompressLevel {
     D3DSurface *scratchSurface; // 0x0
-    char pad[0x2c - 0x4];
+    D3DLOCKED_RECT scratchLock; // 0x4
+    D3DSURFACE_DESC scratchDesc; // 0xc
     D3DSurface *textureSurface; // 0x2c
-    char pad2[0x58 - 0x30];
+    D3DLOCKED_RECT textureLock; // 0x30
+    D3DSURFACE_DESC textureDesc; // 0x38
 };
 
 struct CompressDesc {
@@ -49,6 +61,47 @@ void DxTex::Compress(AlphaCompress a) {
     void *v = StartCompress(a);
     DoCompress(v);
     FinishCompress(v);
+}
+
+void *DxTex::StartCompress(AlphaCompress alpha) {
+    MILO_ASSERT(mTexture, 0x15A);
+    for (int i = 0; i < 16; i++) {
+        TheShaderMgr.SetPConstant((PShaderConstant)i, (RndTex *)nullptr);
+    }
+    CompressDesc *desc;
+    {
+        MemTemp tmp;
+        desc = (CompressDesc *)MemAlloc(0x594, __FILE__, 0x14B, "CompressDesc");
+    }
+    desc->alpha = alpha;
+    desc->format = ((int)alpha == 2) ? D3DFMT_LIN_DXT5 : D3DFMT_LIN_DXT1;
+    desc->unk8 = 0;
+    int numLevels = D3DBaseTexture_GetLevelCount(mTexture);
+    desc->texture = (D3DTexture *)D3DDevice_CreateTexture(
+        mWidth, mHeight, 1, numLevels, 0, desc->format, 0, (D3DRESOURCETYPE)3
+    );
+    DX_ASSERT(desc->texture, 0x16C);
+    MILO_ASSERT(numLevels < 16, 0x16F);
+    for (int i = 0; i < numLevels; i++) {
+        desc->levels[i].scratchSurface = D3DTexture_GetSurfaceLevel(mTexture, i);
+        DX_ASSERT(desc->levels[i].scratchSurface, 0x174);
+        D3DSurface_LockRect(desc->levels[i].scratchSurface, &desc->levels[i].scratchLock, nullptr, 0x10);
+        D3DSurface_GetDesc(desc->levels[i].scratchSurface, &desc->levels[i].scratchDesc);
+        desc->levels[i].textureSurface = D3DTexture_GetSurfaceLevel(desc->texture, i);
+        DX_ASSERT(desc->levels[i].textureSurface, 0x179);
+        D3DSurface_LockRect(desc->levels[i].textureSurface, &desc->levels[i].textureLock, nullptr, 0);
+        D3DSurface_GetDesc(desc->levels[i].textureSurface, &desc->levels[i].textureDesc);
+    }
+    {
+        MemTemp tmp;
+        desc->tiledBuffer = MemAlloc(
+            desc->levels[0].scratchDesc.Height * (desc->levels[0].scratchDesc.Width * 4),
+            __FILE__,
+            0x183,
+            "compress"
+        );
+    }
+    return desc;
 }
 
 void DxTex::FinishCompress(void *p) {
@@ -85,6 +138,104 @@ void DxTex::FinishCompress(void *p) {
     mType = kRegular;
     mBpp = ((int)desc->alpha == 2) ? 8 : 4;
     MemFree(desc, __FILE__, 0x14B, "CompressDesc");
+}
+
+DataNode DebugPrintAllTextures(DataArray *) {
+    TheDebug << MakeString("tex_dump_%d: %s\n", gTexDumpCalls);
+    FormatString fmt(
+        "ObjName, dir, mTexture, size, width, height, bpp, mips, type, file\n"
+    );
+    TheDebug << fmt.Str();
+    int count = 0;
+    for (std::vector<DxTex *>::iterator it = gAllTextures.begin();
+         it != gAllTextures.end();
+         ++it) {
+        DxTex *tex = *it;
+        const char *name = tex->Name();
+        if (name && *name) {
+            const char *dirName = tex->Dir() ? tex->Dir()->Name() : "";
+            TheDebug << MakeString(
+                "%s, %s, %x, %d, %d, %d, %d, %d, %d, %s\n",
+                name,
+                dirName,
+                tex->Tex(),
+                tex->SizeKb() * 1024,
+                tex->Width(),
+                tex->Height(),
+                tex->Bpp(),
+                tex->NumMips(),
+                tex->GetType(),
+                tex->File().c_str()
+            );
+            count++;
+        }
+    }
+    gTexDumpCalls++;
+    return DataNode(count);
+}
+
+void DxTex::Init() { DataRegisterFunc("dump_tex", DebugPrintAllTextures); }
+
+void DxTex::UnlockBitmap() {
+    if (mTexture) {
+        if (unka4) {
+            D3DSurface_UnlockRect(unka4);
+            if (unka4) {
+                D3DResource_Release(unka4);
+                unka4 = nullptr;
+            }
+            if ((unka8 & 0x4) > 0) {
+                DX_ASSERT_CODE(D3DXFilterTexture(mTexture, nullptr, -1, -1), 0x618);
+            }
+        }
+        mLockedRect.Pitch = 0;
+        mLockedRect.pBits = nullptr;
+        unka4 = nullptr;
+        unka8 = 0;
+    }
+}
+
+void DxTex::Select(int x) {
+    D3DTexture *tex = mTexture;
+    if (!tex) {
+        tex = static_cast<DxTex *>(TheRnd.GetNullTexture())->mTexture;
+    }
+    if (mType & 0x8) {
+        if (mType == kFrontBuffer) {
+            tex = TheDxRnd.FrontBuffer();
+        } else {
+            D3DDevice_Resolve(
+                TheDxRnd.Device(), 0, nullptr, mTexture, nullptr, 0, 0, nullptr, 1.0f,
+                0, nullptr
+            );
+        }
+    }
+    D3DDevice_SetTexture(TheDxRnd.Device(), x, tex, (1ULL << 63) >> (unsigned int)(x + 32));
+}
+
+void DxTex::FinishDrawTarget() {
+    MILO_ASSERT(mType & kRendered, 0x122);
+    ResolveMipChain();
+    D3DDevice_SetPredication(TheDxRnd.Device(), 0);
+    TheDxRnd.SetReverseZ(true);
+}
+
+bool DxTex::TexelsLock(void *&p) {
+    void *texels = nullptr;
+    bool result;
+    if (mTexture) {
+        UINT baseData;
+        XGGetTextureLayout(
+            mTexture, &baseData, nullptr, nullptr, nullptr, 0, nullptr, nullptr,
+            nullptr, nullptr, 0
+        );
+        texels = (void *)baseData;
+        result = true;
+    } else {
+        result = false;
+    }
+    p = texels;
+    return result;
 }
 
 void DxTex::MakeDrawTarget() {

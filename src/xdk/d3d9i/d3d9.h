@@ -298,6 +298,9 @@ VOID D3DTexture_LockRect(
     DWORD Flags
 );
 VOID D3DTexture_UnlockRect(struct D3DTexture *pTexture, UINT Level);
+HRESULT D3DXFilterTexture(
+    struct D3DBaseTexture *pBaseTexture, const void *pPalette, UINT SrcLevel, DWORD MipFilter
+);
 
 struct D3DTexture : public D3DBaseTexture { /* Size=0x34 */
     /* 0x0000: fields for D3DBaseTexture */
