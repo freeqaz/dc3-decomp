@@ -14,6 +14,7 @@
 #include "synth/Synth.h"
 #include "synth_xbox/ExternalMic.h"
 #include "synth_xbox/FxSend.h"
+#include "synth_xbox/GainEffect.h"
 #include "synth_xbox/Voice.h"
 #include "utl/MemStream.h"
 #include "utl/Std.h"
@@ -25,9 +26,7 @@ extern "C" void XMemCpy(void *, const void *, int);
 
 MicManagerXbox *sInstance;
 
-namespace GainEffect {
-static float sGain;
-}
+float GainEffect::sGain;
 
 // Headset config values. The target lays these out as 5 separate statics that
 // the linker places contiguously at lbl_82F474C8 (noiseThreshold@0x0,
@@ -431,6 +430,68 @@ void MicManagerXbox::RemoveMic(MicXbox *mic) {
             return;
         }
     }
+}
+
+void MicManagerXbox::Poll() {
+    FOREACH (it, unk0) {
+        (*it)->Poll();
+    }
+    FOREACH (it, unkc) {
+        ChatReceiver *receiver = *it;
+        if (receiver->unk18 >= 2) {
+            receiver->unk18--;
+        } else {
+            receiver->unk18 = 0;
+        }
+    }
+    FOREACH (it, unk20) {
+        ChatBuffer &cb = *it;
+        if (cb.unk8[250] != 0) {
+            UINT32 count = cb.unk8[250];
+            mXHVEngine->SubmitIncomingChatData(*(UINT64 *)&cb, (unsigned char *)cb.unk8, &count);
+            cb.unk8[250] -= count;
+            memcpy(cb.unk8, (char *)cb.unk8 + count, cb.unk8[250]);
+        } else if (!TheXboxSynth->mHeadsetSubmixes.empty() &&
+                   *(UINT64 *)&cb == 0x00DEADBEEFFACEF0ULL) {
+            unk38.Split();
+            if (!unk38.Running() || unk38.Ms() > 2000.0f) {
+                unsigned char buf[0x14];
+                memset(buf, 0, sizeof(buf));
+                UINT32 count = sizeof(buf);
+                mXHVEngine->SubmitIncomingChatData(*(UINT64 *)&cb, buf, &count);
+                unk38.Restart();
+            }
+        }
+    }
+}
+
+void MicManagerXbox::AddRemoteMic(unsigned long long const &xuid,
+                                 XAUDIO2_EFFECT_CHAIN *chain) {
+    bool noChain = chain == 0;
+    GainEffect *gainEffect = new GainEffect();
+
+    XAUDIO2_EFFECT_DESCRIPTOR desc;
+    desc.OutputChannels = 1;
+    desc.pEffect = (IUnknown *)gainEffect;
+    XAUDIO2_EFFECT_CHAIN effectChain;
+    effectChain.EffectCount = 1;
+    effectChain.pEffectDescriptors = &desc;
+    desc.InitialState = 0;
+
+    HRESULT hr = mXHVEngine->RegisterRemoteTalker(
+        xuid, noChain ? &effectChain : 0, chain, 0);
+    DX_ASSERT_CODE(hr, 0x150);
+
+    void *mode = _xhv_voicechat_mode;
+    hr = mXHVEngine->StartRemoteProcessingModes(xuid, &mode, 1);
+    DX_ASSERT_CODE(hr, 0x155);
+
+    ChatBuffer chatBuffer;
+    *(unsigned long long *)&chatBuffer = xuid;
+    chatBuffer.unk8[250] = 0;
+    unk20.push_back(chatBuffer);
+
+    gainEffect->Release();
 }
 
 void MicManagerXbox::Shutdown() {

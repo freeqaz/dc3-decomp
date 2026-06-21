@@ -9,8 +9,8 @@ struct IXHV2Engine { /* Size=0x4 */
     virtual DWORD Lock(UINT32);
     virtual DWORD StartLocalProcessingModes(UINT32, void **, UINT32);
     virtual DWORD StopLocalProcessingModes(UINT32, void **, UINT32);
-    virtual DWORD StartRemoteProcessingModes(UINT32, void **, UINT32);
-    virtual DWORD StopRemoteProcessingModes(UINT32, void **, UINT32);
+    virtual DWORD StartRemoteProcessingModes(UINT64, void **, UINT32);
+    virtual DWORD StopRemoteProcessingModes(UINT64, void **, UINT32);
     virtual DWORD SetMaxDecodePackets(UINT32);
     virtual DWORD RegisterLocalTalker(UINT32);
     virtual DWORD UnregisterLocalTalker(UINT32);
