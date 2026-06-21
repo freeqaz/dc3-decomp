@@ -246,7 +246,7 @@ void VoiceInputPanel::ActivateVoiceContext(Symbol sym) {
     if (!sym.Null()) {
         it = mVoiceContexts.begin();
         VoiceContext **end = mVoiceContexts.end();
-        if (it != end) {
+        if (end != it) {
             do {
                 if ((*it)->mName == sym)
                     break;
@@ -269,10 +269,11 @@ found:
         TheDebug << MakeString(
             "----- Deactivating voice context %s\n", mActiveVoiceContext->mName
         );
-        if (TheSpeechMgr->Overlay()->Showing()) {
-            TheSpeechMgr->Overlay()->Print(
-                MakeString("Deactivating voice context %s\n", mActiveVoiceContext->mName)
-            );
+        bool showing = TheSpeechMgr->Overlay()->Showing();
+        if (showing) {
+            const char *deactivateMsg =
+                MakeString("Deactivating voice context %s\n", mActiveVoiceContext->mName);
+            TheSpeechMgr->Overlay()->Print(deactivateMsg);
         }
         int numGrammars =
             mActiveVoiceContext->mActiveConfig->mGrammars.size();

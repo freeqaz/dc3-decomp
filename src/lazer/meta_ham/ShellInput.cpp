@@ -281,7 +281,7 @@ void ShellInput::Poll() {
     if (TheGestureMgr->InControllerMode() && unk_0x68.SplitMs() >= unk_0x98) {
         ExitControllerMode(true);
     }
-    if (mHandsUpGestureFilter && mHandsUpGestureFilter->GetHandsUp()
+    if (mHandsUpGestureFilter->GetHandsUp()
         && TheHamUI.EventDialogPanel()
         && TheHamUI.EventDialogPanel()->GetState() != UIPanel::kUp
         && !TheHamUI.InTransition()) {

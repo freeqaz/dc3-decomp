@@ -103,9 +103,9 @@ void NavListSort::DeleteTree() {
 
 bool NavListSort::SetHighlightID(DataArray *a) {
     NavListSortNode *tmp = mHighlightNode;
-    mHighlightNode = nullptr;
     mPrevHighlightNode = tmp;
     int aSize = a->Size();
+    mHighlightNode = nullptr;
     if (aSize == 0) {
         return false;
     }
