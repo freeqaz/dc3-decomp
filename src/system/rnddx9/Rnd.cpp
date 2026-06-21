@@ -20,6 +20,17 @@
 
 DxRnd TheDxRnd;
 
+void Multiply(const Vector4 &a, const Hmx::Matrix4 &m, Vector4 &out) {
+    float x = m.x.x * a.x + m.y.x * a.y + m.z.x * a.z + m.w.x * a.w;
+    float w = m.x.w * a.x + m.y.w * a.y + m.z.w * a.z + m.w.w * a.w;
+    float z = m.x.z * a.x + m.y.z * a.y + m.z.z * a.z + m.w.z * a.w;
+    float y = m.x.y * a.x + m.y.y * a.y + m.z.y * a.z + m.w.y * a.w;
+    out.x = x;
+    out.w = w;
+    out.z = z;
+    out.y = y;
+}
+
 int D3DFORMAT_BitsPerPixel(D3DFORMAT fmt) {
     switch (fmt) {
     case D3DFMT_LIN_DXT1:
@@ -183,6 +194,52 @@ void DxRnd::DrawLargeQuad(
     D3DDevice_SetIndices(mD3DDevice, nullptr);
     D3DDevice_SetStreamSource(mD3DDevice, 0, nullptr, 0, 0, 1);
     D3DDevice_SetTexture(mD3DDevice, 0x10, nullptr, 0x8000);
+}
+
+void DxRnd::CreateLargeQuad(int width, int height, LargeQuadRenderData &data) {
+    int w1 = width - 1;
+    int h1 = height - 1;
+    BeginMemTrackObjectName("DxRnd::CreateLargeQuad");
+    D3DIndexBuffer *ib =
+        D3DDevice_CreateIndexBuffer(h1 * w1 << 4, 0, D3DFMT_INDEX32, D3DPOOL_DEFAULT);
+    DX_ASSERT(ib, 0x2E3);
+    EndMemTrackObjectName();
+    int *indices = (int *)D3DIndexBuffer_Lock(ib, 0, 0, 0);
+    for (unsigned int y = 0; y < (unsigned int)h1; y++) {
+        for (unsigned int x = 0; x < (unsigned int)w1; x++) {
+            int *quad = indices + (y * w1 + x) * 4;
+            quad[0] = y * width + x;
+            quad[1] = y * width + x + 1;
+            quad[2] = (y + 1) * width + x + 1;
+            quad[3] = (y + 1) * width + x;
+        }
+    }
+    D3DIndexBuffer_Unlock(ib);
+
+    BeginMemTrackObjectName("DxRnd::CreateLargeQuad");
+    int vbSize = width * height * 0x14;
+    D3DVertexBuffer *vb = D3DDevice_CreateVertexBuffer(vbSize, 0, D3DPOOL_DEFAULT);
+    DX_ASSERT(vb, 0x2FB);
+    EndMemTrackObjectName();
+    char *verts = (char *)D3DVertexBuffer_Lock(vb, 0, vbSize, 0);
+    float invW = 1.0f / (float)width;
+    float invH = 1.0f / (float)height;
+    for (unsigned int y = 0; y < (unsigned int)height; y++) {
+        for (unsigned int x = 0; x < (unsigned int)width; x++) {
+            float *v = (float *)(verts + (y * width + x) * 0x14);
+            v[1] = (float)y;
+            v[2] = 0.0f;
+            v[4] = (float)y * invH;
+            v[0] = (float)x;
+            v[3] = (float)x * invW;
+        }
+    }
+    D3DVertexBuffer_Unlock(vb);
+
+    data.mIndexBuffer = ib;
+    data.mVertexBuffer = vb;
+    data.mWidth = width;
+    data.mHeight = height;
 }
 
 void DxRnd::SetVertShaderTex(RndTex *tex, int sampler) {
