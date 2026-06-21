@@ -104,13 +104,13 @@ bool DingoJob::CheckReqResult() {
     JsonObject *response = nullptr;
     ParseResponse(&converter, &response, nullptr);
     if (mResult == -3) {
-        if (!TheServer.IsAuthenticated()) {
-            TheServer.Poll();
+        if (!TheServer.IsAuthenticating()) {
+            int padnum = TheServer.mAuthedPadNum;
+            TheServer.Logout();
+            TheServer.Authenticate(padnum);
         }
-        if (TheServer.IsAuthenticated()) {
-            TheServer.DelayJob(this);
-            return false;
-        }
+        TheServer.DelayJob(this);
+        return false;
     }
     return true;
 }

@@ -185,7 +185,9 @@ bool DingoServer::InitAndAddJob(DingoJob *job, bool immediate, bool delay) {
 
 DataNode DingoServer::OnMsg(const DingoJobCompleteMsg &msg) {
     if (mAuthState != kServerAuthenticating) {
-        MILO_NOTIFY("Got auth response in wrong state: %d.", mAuthState);
+        AuthState state = mAuthState;
+        MILO_NOTIFY("Got auth response in wrong state: %d.", state);
+        return DataNode(1);
     } else {
         if (msg.Data()->Int(3) != 0) {
             AuthenticateReqJob *job = dynamic_cast<AuthenticateReqJob *>(msg.Data()->Obj<DingoJob>(2));
@@ -196,7 +198,7 @@ DataNode DingoServer::OnMsg(const DingoJobCompleteMsg &msg) {
                 mAuthState = kServerAuthed;
                 OnAuthSuccess();
                 AddDelayedCalls();
-                Handle(ServerStatusChangedMsg(kServerStatusConnected).Data(), false);
+                Export(ServerStatusChangedMsg(kServerStatusConnected).Data(), false);
                 DoAdditionalLogin();
             } else {
                 DataPoint pt("svr_sent_non_success_on_auth");
@@ -210,16 +212,16 @@ DataNode DingoServer::OnMsg(const DingoJobCompleteMsg &msg) {
                 TheDataPointMgr.RecordDebugDataPoint(pt);
                 CancelDelayedCalls();
                 TheWebSvcMgr.CancelOutstandingCalls();
-                Disconnect();
-                Handle(ServerStatusChangedMsg(kServerStatusDisconnected).Data(), false);
+                Logout();
+                Export(ServerStatusChangedMsg(kServerStatusDisconnected).Data(), false);
                 return DataNode(0);
             }
         } else {
             SendDebugDataPoint("auth_msg_send_failure", "location", "DingoSvr::OnMsg2", "severity", "warn", "project", "sync");
             CancelDelayedCalls();
             TheWebSvcMgr.CancelOutstandingCalls();
-            Disconnect();
-            Handle(ServerStatusChangedMsg(kServerStatusDisconnected).Data(), false);
+            Logout();
+            Export(ServerStatusChangedMsg(kServerStatusDisconnected).Data(), false);
             return DataNode(0);
         }
     }
