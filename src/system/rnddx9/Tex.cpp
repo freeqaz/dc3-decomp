@@ -222,7 +222,6 @@ void DxTex::FinishDrawTarget() {
 
 bool DxTex::TexelsLock(void *&p) {
     void *texels = nullptr;
-    bool result;
     if (mTexture) {
         UINT baseData;
         XGGetTextureLayout(
@@ -230,12 +229,11 @@ bool DxTex::TexelsLock(void *&p) {
             nullptr, nullptr, 0
         );
         texels = (void *)baseData;
-        result = true;
-    } else {
-        result = false;
+        p = texels;
+        return true;
     }
     p = texels;
-    return result;
+    return false;
 }
 
 void DxTex::MakeDrawTarget() {
