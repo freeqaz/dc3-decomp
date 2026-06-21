@@ -90,7 +90,7 @@ namespace {
     }
     char *ParseHeader(char *p, int lineLen, std::vector<String> *pHeader) {
         MILO_ASSERT(pHeader, 0x83);
-        int count = (((int **)pHeader)[1] - ((int **)pHeader)[0]) >> 3;
+        int count = (((char **)pHeader)[1] - ((char **)pHeader)[0]) >> 3;
         if (count > 0) {
             int idx = 0;
             while (count != 0) {
@@ -99,9 +99,9 @@ namespace {
                 (*pHeader)[idx].resize(len + 1);
                 strncpy((char *)(*pHeader)[idx].c_str(), p, len);
                 (*pHeader)[idx].erase(len);
-                count = count - 1;
                 p = GetNextLine(p, &lineLen);
                 idx = idx + 1;
+                count = count - 1;
             }
         }
         return p;
