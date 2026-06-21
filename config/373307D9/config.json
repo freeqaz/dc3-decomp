@@ -65,6 +65,7 @@
         "net_xbox": {
             "base": "base",
             "flags": [
+                "/TP",
                 "/GS"
             ]
         }

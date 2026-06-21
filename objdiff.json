@@ -5479,7 +5479,7 @@
       "scratch": {
         "platform": "xbox360",
         "compiler": "msvc_ppc_16.00.11886.00",
-        "c_flags": "/nologo /wd4355 /wd4164 /c /GR /O1 /Oi /EHsc /GS /TP",
+        "c_flags": "/nologo /wd4355 /wd4164 /c /GR /O1 /Oi /EHsc /TP /GS",
         "ctx_path": "build/373307D9/src/system/net/HttpGet.ctx",
         "build_ctx": true
       },
@@ -5690,7 +5690,7 @@
       "scratch": {
         "platform": "xbox360",
         "compiler": "msvc_ppc_16.00.11886.00",
-        "c_flags": "/nologo /wd4355 /wd4164 /c /GR /O1 /Oi /EHsc /GS /TP",
+        "c_flags": "/nologo /wd4355 /wd4164 /c /GR /O1 /Oi /EHsc /TP /GS",
         "ctx_path": "build/373307D9/src/system/net/DingoSvr_Xbox.ctx",
         "build_ctx": true
       },
@@ -6206,7 +6206,7 @@
       "scratch": {
         "platform": "xbox360",
         "compiler": "msvc_ppc_16.00.11886.00",
-        "c_flags": "/nologo /wd4355 /wd4164 /c /GR /O1 /Oi /EHsc /GS /TP",
+        "c_flags": "/nologo /wd4355 /wd4164 /c /GR /O1 /Oi /EHsc /TP /GS",
         "ctx_path": "build/373307D9/src/system/net/HttpReqCurl.ctx",
         "build_ctx": true
       },
@@ -8289,7 +8289,7 @@
       "scratch": {
         "platform": "xbox360",
         "compiler": "msvc_ppc_16.00.11886.00",
-        "c_flags": "/nologo /wd4355 /wd4164 /c /GR /O1 /Oi /EHsc /GS /TP",
+        "c_flags": "/nologo /wd4355 /wd4164 /c /GR /O1 /Oi /EHsc /TP /GS",
         "ctx_path": "build/373307D9/src/system/net/HttpReq.ctx",
         "build_ctx": true
       },
@@ -9038,7 +9038,7 @@
       "scratch": {
         "platform": "xbox360",
         "compiler": "msvc_ppc_16.00.11886.00",
-        "c_flags": "/nologo /wd4355 /wd4164 /c /GR /O1 /Oi /EHsc /GS /TP",
+        "c_flags": "/nologo /wd4355 /wd4164 /c /GR /O1 /Oi /EHsc /TP /GS",
         "ctx_path": "build/373307D9/src/system/net/SessionJobs_Xbox.ctx",
         "build_ctx": true
       },
@@ -14235,7 +14235,7 @@
       "scratch": {
         "platform": "xbox360",
         "compiler": "msvc_ppc_16.00.11886.00",
-        "c_flags": "/nologo /wd4355 /wd4164 /c /GR /O1 /Oi /EHsc /GS /TP",
+        "c_flags": "/nologo /wd4355 /wd4164 /c /GR /O1 /Oi /EHsc /TP /GS",
         "ctx_path": "build/373307D9/src/system/net/DingoSvr.ctx",
         "build_ctx": true
       },
@@ -14256,7 +14256,7 @@
       "scratch": {
         "platform": "xbox360",
         "compiler": "msvc_ppc_16.00.11886.00",
-        "c_flags": "/nologo /wd4355 /wd4164 /c /GR /O1 /Oi /EHsc /GS /TP",
+        "c_flags": "/nologo /wd4355 /wd4164 /c /GR /O1 /Oi /EHsc /TP /GS",
         "ctx_path": "build/373307D9/src/system/net/XLSPConnection.ctx",
         "build_ctx": true
       },
@@ -14277,7 +14277,7 @@
       "scratch": {
         "platform": "xbox360",
         "compiler": "msvc_ppc_16.00.11886.00",
-        "c_flags": "/nologo /wd4355 /wd4164 /c /GR /O1 /Oi /EHsc /GS /TP",
+        "c_flags": "/nologo /wd4355 /wd4164 /c /GR /O1 /Oi /EHsc /TP /GS",
         "ctx_path": "build/373307D9/src/system/net/WebSvcMgr.ctx",
         "build_ctx": true
       },
@@ -14298,7 +14298,7 @@
       "scratch": {
         "platform": "xbox360",
         "compiler": "msvc_ppc_16.00.11886.00",
-        "c_flags": "/nologo /wd4355 /wd4164 /c /GR /O1 /Oi /EHsc /GS /TP",
+        "c_flags": "/nologo /wd4355 /wd4164 /c /GR /O1 /Oi /EHsc /TP /GS",
         "ctx_path": "build/373307D9/src/system/net/WebSvcReq.ctx",
         "build_ctx": true
       },
@@ -14319,7 +14319,7 @@
       "scratch": {
         "platform": "xbox360",
         "compiler": "msvc_ppc_16.00.11886.00",
-        "c_flags": "/nologo /wd4355 /wd4164 /c /GR /O1 /Oi /EHsc /GS /TP",
+        "c_flags": "/nologo /wd4355 /wd4164 /c /GR /O1 /Oi /EHsc /TP /GS",
         "ctx_path": "build/373307D9/src/system/net/WebSvcMgrCurl.ctx",
         "build_ctx": true
       },
@@ -14340,7 +14340,7 @@
       "scratch": {
         "platform": "xbox360",
         "compiler": "msvc_ppc_16.00.11886.00",
-        "c_flags": "/nologo /wd4355 /wd4164 /c /GR /O1 /Oi /EHsc /GS /TP",
+        "c_flags": "/nologo /wd4355 /wd4164 /c /GR /O1 /Oi /EHsc /TP /GS",
         "ctx_path": "build/373307D9/src/system/net/DingoAuthJob.ctx",
         "build_ctx": true
       },
@@ -14361,7 +14361,7 @@
       "scratch": {
         "platform": "xbox360",
         "compiler": "msvc_ppc_16.00.11886.00",
-        "c_flags": "/nologo /wd4355 /wd4164 /c /GR /O1 /Oi /EHsc /GS /TP",
+        "c_flags": "/nologo /wd4355 /wd4164 /c /GR /O1 /Oi /EHsc /TP /GS",
         "ctx_path": "build/373307D9/src/system/net/DingoJob.ctx",
         "build_ctx": true
       },
@@ -14456,7 +14456,7 @@
       "scratch": {
         "platform": "xbox360",
         "compiler": "msvc_ppc_16.00.11886.00",
-        "c_flags": "/nologo /wd4355 /wd4164 /c /GR /O1 /Oi /EHsc /GS /TP",
+        "c_flags": "/nologo /wd4355 /wd4164 /c /GR /O1 /Oi /EHsc /TP /GS",
         "ctx_path": "build/373307D9/src/system/net/JsonUtils.ctx",
         "build_ctx": true
       },
@@ -14813,7 +14813,7 @@
       "scratch": {
         "platform": "xbox360",
         "compiler": "msvc_ppc_16.00.11886.00",
-        "c_flags": "/nologo /wd4355 /wd4164 /c /GR /O1 /Oi /EHsc /GS /TC",
+        "c_flags": "/nologo /wd4355 /wd4164 /c /GR /O1 /Oi /EHsc /TP /GS",
         "ctx_path": "build/373307D9/src/system/net/json-c/json_object.ctx",
         "build_ctx": true
       },
@@ -14866,7 +14866,7 @@
       "scratch": {
         "platform": "xbox360",
         "compiler": "msvc_ppc_16.00.11886.00",
-        "c_flags": "/nologo /wd4355 /wd4164 /c /GR /O1 /Oi /EHsc /GS /TC",
+        "c_flags": "/nologo /wd4355 /wd4164 /c /GR /O1 /Oi /EHsc /TP /GS",
         "ctx_path": "build/373307D9/src/system/net/json-c/printbuf.ctx",
         "build_ctx": true
       },
@@ -14887,7 +14887,7 @@
       "scratch": {
         "platform": "xbox360",
         "compiler": "msvc_ppc_16.00.11886.00",
-        "c_flags": "/nologo /wd4355 /wd4164 /c /GR /O1 /Oi /EHsc /GS /TC",
+        "c_flags": "/nologo /wd4355 /wd4164 /c /GR /O1 /Oi /EHsc /TP /GS",
         "ctx_path": "build/373307D9/src/system/net/json-c/json_tokener.ctx",
         "build_ctx": true
       },
@@ -14908,7 +14908,7 @@
       "scratch": {
         "platform": "xbox360",
         "compiler": "msvc_ppc_16.00.11886.00",
-        "c_flags": "/nologo /wd4355 /wd4164 /c /GR /O1 /Oi /EHsc /GS /TC",
+        "c_flags": "/nologo /wd4355 /wd4164 /c /GR /O1 /Oi /EHsc /TP /GS",
         "ctx_path": "build/373307D9/src/system/net/json-c/linkhash.ctx",
         "build_ctx": true
       },
@@ -15580,7 +15580,7 @@
       "scratch": {
         "platform": "xbox360",
         "compiler": "msvc_ppc_16.00.11886.00",
-        "c_flags": "/nologo /wd4355 /wd4164 /c /GR /O1 /Oi /EHsc /GS /TP",
+        "c_flags": "/nologo /wd4355 /wd4164 /c /GR /O1 /Oi /EHsc /TP /GS",
         "ctx_path": "build/373307D9/src/system/net/JsonMemory.ctx",
         "build_ctx": true
       },
@@ -15601,7 +15601,7 @@
       "scratch": {
         "platform": "xbox360",
         "compiler": "msvc_ppc_16.00.11886.00",
-        "c_flags": "/nologo /wd4355 /wd4164 /c /GR /O1 /Oi /EHsc /GS /TC",
+        "c_flags": "/nologo /wd4355 /wd4164 /c /GR /O1 /Oi /EHsc /TP /GS",
         "ctx_path": "build/373307D9/src/system/net/json-c/arraylist.ctx",
         "build_ctx": true
       },

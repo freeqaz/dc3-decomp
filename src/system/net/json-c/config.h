@@ -49,8 +49,16 @@
 /* Define to 1 if you have the <string.h> header file. */
 #undef HAVE_STRING_H
 
-/* Define to 1 if you have the `strncasecmp' function. */
+/* Define to 1 if you have the `strncasecmp' function.
+   MSVC (the Xbox target toolchain) does not declare the POSIX name when the
+   translation unit is compiled as C++ (/TP); it only provides `_strnicmp`, so
+   json_tokener.c remaps strncasecmp->_strnicmp when HAVE_STRNCASECMP is 0 and
+   _MSC_VER is defined. POSIX hosts (native/clang) keep the real function. */
+#ifdef _MSC_VER
+#define HAVE_STRNCASECMP 0
+#else
 #define HAVE_STRNCASECMP 1
+#endif
 
 /* Define to 1 if you have the `strndup' function. */
 #undef HAVE_STRNDUP
