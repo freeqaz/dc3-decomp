@@ -1,5 +1,6 @@
 #include "synth_xbox/SampleInst360.h"
 #include "synth_xbox/Voice.h"
+#include "synth_xbox/FxSend.h"
 
 SampleInst360::SampleInst360(SynthSample360 *sample, bool loop, int startSample, int endSample)
     : SampleInst(sample) {
@@ -64,3 +65,11 @@ float SampleInst360::ElapsedTime() {
     float samples = (double)state.SamplesPlayed;
     return samples / (float)mSample->GetSampleRate();
 }
+
+void SampleInst360::SetSendImpl(FxSend *send) {
+    mVoice->SetSend(dynamic_cast<FxSend360 *>(send));
+}
+
+void SampleInst360::SetReverbMixDbImpl(float db) { mVoice->SetReverbMixDb(db); }
+
+void SampleInst360::SetReverbEnableImpl(bool enable) { mVoice->SetReverbEnable(enable); }

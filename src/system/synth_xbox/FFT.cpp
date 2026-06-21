@@ -10,6 +10,19 @@
 
 // External declarations
 int FFTComplex(float* data, long size, long inverse, float* context);
+int fft_pingpong(float* data, unsigned long size, long sign, float* context);
+int fft_square_matrix(float* data, long size, long inverse, float* context);
+int fft_recursive(float* data, unsigned long size, long sign, float* context);
+int fft_scalar(float* a, float* b, unsigned long size, long sign, float* twiddle);
+int fft_altivec(float* a, float* b, unsigned long size, long sign, float* twiddle);
+int fft_real_forward_altivec(float* data, long size, float* context);
+
+// Lazily-grown ping-pong scratch buffer shared by fft_pingpong / fft_recursive.
+struct FftScratch {
+    void* buf;
+    unsigned long size;
+};
+static FftScratch g_fftScratch;
 
 // Real-input forward FFT (scalar). Computes a half-length complex FFT then
 // recombines the bins. data holds size real samples (treated as size/2 complex
@@ -85,6 +98,100 @@ int fft_real_forward_scalar(float* data, unsigned long size, float* context) {
 // a/b are the two scratch buffers of size complex pairs; sign is +/-1 to pick
 // the transform direction; twiddle is a precomputed cos/sin table. The final
 // pass divides by size when sign > 0 (inverse normalization).
+// Builds a quarter-symmetric cos/sin twiddle table. table holds n/2 complex
+// (cos,sin) pairs; only the first quarter is computed via trig, the rest filled
+// by the (-sin, cos) symmetry. Small-n cases (n < 4) are special-cased.
+int CalculateSinCosTable(long n, float* table) {
+    if (n < 4) {
+        table[0] = 1.0f;
+        table[1] = 0.0f;
+        if (n == 2) {
+            table[3] = 0.0f;
+            table[2] = -1.0f;
+        }
+        return 0;
+    }
+
+    long count = n / 4;
+    if (count <= 0) {
+        return 0;
+    }
+    long half = n / 2;
+    double twoPi = 6.2831854820251465;
+    float* p = table - 1;
+    long j = 0;
+    for (long i = 0; i < count; ++i) {
+        float angle = (float)((double)i * twoPi / (double)n);
+        float cv = (float)cos(angle);
+        float sv = (float)sin(angle);
+        p[1] = cv;
+        p += 2;
+        p[0] = sv;
+        table[j + half] = -sv;
+        table[j + half + 1] = cv;
+        j += 2;
+    }
+    return 0;
+}
+
+// Runs a complex FFT through the shared ping-pong scratch buffer, growing it on
+// demand. Small transforms (< 16 pts) use the scalar kernel; larger ones the
+// AltiVec kernel. Returns 0xc on allocation failure.
+int fft_pingpong(float* data, unsigned long size, long sign, float* context) {
+    int err = 0;
+    if (g_fftScratch.size < size) {
+        void* old = g_fftScratch.buf;
+        g_fftScratch.size = size;
+        if (old != 0) {
+            free(old);
+        }
+        void* p = malloc(size << 3);
+        g_fftScratch.buf = p;
+        if (p == 0) {
+            err = 0xc;
+            g_fftScratch.buf = 0;
+            g_fftScratch.size = 0;
+        }
+    }
+    float* buf = (float*)g_fftScratch.buf;
+    int result = err;
+    if (err == 0) {
+        if (size < 0x10) {
+            result = fft_scalar(data, buf, size, sign, context);
+        } else {
+            result = fft_altivec(data, buf, size, sign, context);
+        }
+    }
+    return result;
+}
+
+// Top-level complex FFT dispatcher. Sizes above 0x8000 are decomposed by
+// transform length parity: even log2 -> square-matrix path, odd log2 ->
+// recursive path. Small sizes go straight through the ping-pong buffer.
+int FFTComplex(float* data, long size, long inverse, float* context) {
+    if (size <= 0x8000) {
+        return fft_pingpong(data, (unsigned long)size, inverse, context);
+    }
+
+    long power = 1;
+    if (size == 1) {
+        power = 0;
+    } else {
+        long p2 = 2;
+        if (size > 2) {
+            do {
+                p2 *= 2;
+                power += 1;
+            } while (p2 < size);
+        }
+    }
+
+    if ((power & 1) == 0) {
+        return fft_square_matrix(data, size, inverse, context);
+    }
+    return fft_recursive(data, (unsigned long)size, inverse, context);
+}
+
 int fft_scalar(float* a, float* b, unsigned long size, long sign, float* twiddle) {
     float* src = a;
     float* dst = b;
@@ -727,3 +834,12 @@ cleanup:
     return ret;
 }
 #pragma float_control(pop)
+
+// Real-input forward FFT dispatcher: small transforms (< 32) use the scalar
+// kernel, larger ones the AltiVec kernel.
+int FFTRealForward(float* data, unsigned long size, float* context) {
+    if (size < 0x20) {
+        return fft_real_forward_scalar(data, size, context);
+    }
+    return fft_real_forward_altivec(data, (long)size, context);
+}

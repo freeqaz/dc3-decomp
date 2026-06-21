@@ -2,6 +2,19 @@
 #include "GranularSynth.h"
 #ifndef HX_NATIVE
 #include "../stlport/stl/_uninitialized.h"
+#include <math.h>
+
+// Synapse natural-log helper with a small-magnitude clamp (avoids log(0)).
+namespace Util {
+template <class T>
+T Log(const T &x) {
+    if (x < 1.0000000359391298e-36f && x > -1.0000000359391298e-36f) {
+        return -1.0000000409184788e+35f;
+    }
+    return (T)log(x);
+}
+template float Log<float>(const float &);
+} // namespace Util
 
 namespace DSP {
 namespace Synapse {

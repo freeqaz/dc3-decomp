@@ -8,6 +8,12 @@ namespace Util {
 template <class T> T Log(const T &);
 }
 
+DSP::Synapse::PitchCorrectedVoice::PitchCorrectedVoice()
+    : mFreq0(0.0f), mFreq1(0.0f), mSmoothedCorrection(0.0f), mAttackSmoothing(0.0f),
+      mAttackCoeff(0.0f), mReleaseSmoothing(0.0f), mTransposition(0.0f), mAmount(1.0f),
+      mProximityEffect(0.0f), mProximityFocus(0.5f), mField_0x28(0.0f), mFreqCounter(0.0f),
+      mPrevFreq(0.0f), mAbsPitchDeviation(0.0f) {}
+
 float DSP::Synapse::PitchCorrectedVoice::GetCorrection() {
     // Interval between the two target frequencies, in semitones.
     float interval = Util::Log<float>(mFreq1) - Util::Log<float>(mFreq0);

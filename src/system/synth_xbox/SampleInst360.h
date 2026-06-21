@@ -29,6 +29,9 @@ protected:
     virtual void SetVolumeImpl(float);
     virtual void SetPanImpl(float);
     virtual void SetSpeedImpl(float);
+    virtual void SetSendImpl(FxSend *);
+    virtual void SetReverbMixDbImpl(float);
+    virtual void SetReverbEnableImpl(bool);
 
 private:
     Voice *mVoice; // 0xa8
