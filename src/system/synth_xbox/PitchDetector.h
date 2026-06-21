@@ -26,6 +26,7 @@ public:
     std::vector<float, XboxAllocator<float> > mCosTable; // 0xB8
     std::vector<float, XboxAllocator<float> > mData4; // 0xC4
     std::vector<float, XboxAllocator<float> > mData5; // 0xD0
+    double mAccum;          // 0xE0 (running phase accumulator, used by Analyze)
 };
 
 namespace Synapse {
