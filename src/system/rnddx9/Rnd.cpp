@@ -329,6 +329,56 @@ int DxRnd::BitmapOrderForD3DFormat(D3DFORMAT fmt) {
     }
 }
 
+namespace {
+    struct DepthRectVert {
+        float sx, sy, sz; // screen-space corner (0x00)
+        float pad0, pad1, pad2; // 0x0c
+        float nx, ny, nz; // 0x18 (normal)
+        float px, py, pz; // 0x24 (corner pos)
+    };
+    DepthRectVert sDepthRectVerts[4] = {
+        {-1.0f, 1.0f, 1.0f, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+        {-1.0f, -1.0f, 1.0f, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+        {1.0f, 1.0f, 1.0f, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+        {1.0f, -1.0f, 1.0f, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    };
+    const D3DVERTEXELEMENT9 sDepthRectDecl[] = {
+        {0, 0x00, D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0},
+        {0, 0x0C, D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 0},
+        {0, 0x18, D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 1},
+        {0, 0x24, D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 2},
+        D3DDECL_END()
+    };
+}
+
+void DxRnd::DrawRectDepth(
+    const Vector3 &normal,
+    const Vector3 (&corners)[4],
+    const Vector4 &v4,
+    RndMat *mat,
+    ShaderType shader
+) {
+    TheShaderMgr.SetPConstant((PShaderConstant)0x59, v4);
+    for (int i = 0; i < 4; i++) {
+        sDepthRectVerts[i].nx = normal.x;
+        sDepthRectVerts[i].ny = normal.y;
+        sDepthRectVerts[i].nz = normal.z;
+        sDepthRectVerts[i].px = corners[i].x;
+        sDepthRectVerts[i].py = corners[i].y;
+        sDepthRectVerts[i].pz = corners[i].z;
+    }
+    RndShader::SelectConfig(mat, shader, false);
+    static D3DVertexDeclaration *sDecl;
+    if (!sDecl) {
+        sDecl = D3DDevice_CreateVertexDeclaration(sDepthRectDecl);
+        DX_ASSERT(sDecl, 0x2C3);
+    }
+    D3DDevice_SetRenderState_HalfPixelOffset(TheDxRnd.Device(), 1);
+    D3DDevice_SetVertexDeclaration(mD3DDevice, sDecl);
+    D3DDevice_DrawVerticesUP(mD3DDevice, D3DPT_TRIANGLESTRIP, 4, sDepthRectVerts, sizeof(DepthRectVert));
+    D3DDevice_SetRenderState_HalfPixelOffset(TheDxRnd.Device(), 0);
+}
+
 void DxRnd::ResetDevice() {
     PreDeviceReset();
     HRESULT res = D3DDevice_Reset(mD3DDevice, &mPresentParams);

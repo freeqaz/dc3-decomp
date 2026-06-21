@@ -850,6 +850,8 @@ D3DBaseTexture *D3DDevice_CreateTexture(
 D3DVertexDeclaration *
 D3DDevice_CreateVertexDeclaration(const D3DVERTEXELEMENT9 *pVertexElements);
 
+void D3DDevice_SetVertexDeclaration(D3DDevice *pDevice, D3DVertexDeclaration *pDecl);
+
 void D3DDevice_SetFVF(D3DDevice *pDevice, DWORD FVF);
 void D3DDevice_DrawVerticesUP(
     D3DDevice *pDevice,

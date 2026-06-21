@@ -11,6 +11,8 @@ public:
     virtual void DrawShowing();
     virtual void SetPool(int x, Type t) { RndParticleSys::SetPool(x, t); }
 
+    NEW_OBJ(DxParticleSys)
+
     static void Init();
 
 protected:
