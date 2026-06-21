@@ -22,9 +22,11 @@ CSampleXAPOBase<Derived, Params>::CSampleXAPOBase()
 // Explicit template instantiation for HeadsetXferEffect
 template class CSampleXAPOBase<HeadsetXferEffect, HeadsetXferEffectParams>;
 
-// HeadsetXferEffect constructor
+}  // namespace ATG
+
+// HeadsetXferEffect constructor (global namespace)
 // Initializes effect state and audio buffer, then configures parameters
-HeadsetXferEffect::HeadsetXferEffect() : CSampleXAPOBase<HeadsetXferEffect, HeadsetXferEffectParams>() {
+HeadsetXferEffect::HeadsetXferEffect() : ATG::CSampleXAPOBase<HeadsetXferEffect, HeadsetXferEffectParams>() {
     // Initialize effect state
     mState = 0;
 
@@ -33,7 +35,5 @@ HeadsetXferEffect::HeadsetXferEffect() : CSampleXAPOBase<HeadsetXferEffect, Head
 
     // Configure initial parameters through IXAPOParameters interface (at offset 0x20)
     int initialParam = 0;
-    ((IXAPOParameters*)((char*)this + 0x20))->SetParameters(&initialParam, sizeof(initialParam));
+    ((ATG::IXAPOParameters*)((char*)this + 0x20))->SetParameters(&initialParam, sizeof(initialParam));
 }
-
-}  // namespace ATG

@@ -350,21 +350,30 @@ int Voice::GetAddr() {
 }
 
 bool Voice::IsPlaying() {
+    START_AUTO_TIMER("voice_is_playing");
     if (mState == 2)
         return true;
-    if (!mSourceVoice || mState == 1)
+    IXAudio2SourceVoice *voice = GetVoice();
+    if (!voice)
+        return false;
+    if (mState == 1)
         return false;
     if (mState == 4)
         return true;
 
-    int state[4] = {0, 0, 0, 0};
-    int *pVoice = (int *)mSourceVoice;
-    ((void (*)(int *, int *, int))(*(int *)(*(int *)pVoice + 100)))(pVoice, state, 0);
-
-    if (state[0] == 0 && state[1] == 0 && state[2] == 0)
+    XAUDIO2_VOICE_STATE state;
+    voice->GetState(&state, 0);
+    if (state.BuffersQueued == 0 && state.SamplesPlayed == 0)
         return false;
 
-    return true;
+    EnvelopeGeneratorParams params;
+    params.unkc = 0.0f;
+    if (TheXboxSynth->unkb0.TryEnter()) {
+        HRESULT hr = GetVoice()->GetEffectParameters(0, &params, 0x10);
+        TheXboxSynth->unkb0.Exit();
+        MILO_ASSERT(SUCCEEDED(hr), 0x2ff);
+    }
+    return params.unkc == 0.0f;
 }
 
 // clang-format off

@@ -41,6 +41,8 @@
 
 Synth360 *TheXboxSynth;
 
+static unsigned char sHeadsetSilence[0x100];
+
 Synth *Synth::New() { return new Synth360(); }
 
 Synth360::Synth360()
@@ -173,27 +175,79 @@ int Synth360::GetNextAvailableMicID() const {
 
 void Synth360::SetupHeadsetSubmixes() {
     // Ensure mHeadsetSubmixes has exactly 4 entries
-    if (mHeadsetSubmixes.size() > 4) {
-        mHeadsetSubmixes.erase(mHeadsetSubmixes.begin() + 4, mHeadsetSubmixes.end());
+    std::vector<IXAudio2SubmixVoice *> &submixes = mHeadsetSubmixes;
+    if (submixes.size() > 4) {
+        submixes.erase(submixes.begin() + 4, submixes.end());
     } else {
-        mHeadsetSubmixes.resize(4, 0);
+        submixes.resize(4, 0);
     }
 
+    // Create a submix voice (with a headset transfer effect) for each headset.
     for (int i = 0; i < 4; i++) {
-        // Build send descriptors for this headset submix
-        std::vector<XAUDIO2_SEND_DESCRIPTOR> sendDescs;
-        XAUDIO2_SEND_DESCRIPTOR desc;
-        memset(&desc, 0, sizeof(desc));
-        desc.Flags = 0;
-        desc.pOutputVoice = 0;
-        sendDescs.push_back(desc);
+        HeadsetXferEffect *effect = new HeadsetXferEffect();
 
-        XAUDIO2_VOICE_SENDS voiceSends;
-        voiceSends.SendCount = sendDescs.size();
-        voiceSends.pSends = &sendDescs[0];
+        XAUDIO2_EFFECT_DESCRIPTOR effectDesc;
+        effectDesc.pEffect = (IUnknown *)effect;
+        effectDesc.InitialState = 0;
+        effectDesc.OutputChannels = 1;
 
-        MILO_ASSERT(mHeadsetSubmixes[i] == 0, 0);
+        XAUDIO2_EFFECT_CHAIN effectChain;
+        effectChain.EffectCount = 1;
+        effectChain.pEffectDescriptors = &effectDesc;
+
+        int *pEngine = (int *)unkec;
+        ((HRESULT(*)(int *, IXAudio2SubmixVoice **, int, int, int, int, int, XAUDIO2_EFFECT_CHAIN *)
+        )(*(int *)(*(int *)pEngine + 0x24)))(
+            pEngine, &submixes[i], 1, 48000, 0, 0, 0, &effectChain
+        );
     }
+
+    // Build the send list that routes everything to the headset submixes.
+    std::vector<XAUDIO2_SEND_DESCRIPTOR> sendDescs;
+
+    WAVEFORMATEX format;
+    format.wFormatTag = 1;
+    for (int i = 0; i < 4; i++) {
+        XAUDIO2_SEND_DESCRIPTOR desc;
+        desc.Flags = 0;
+        desc.pOutputVoice = submixes[i];
+        sendDescs.push_back(desc);
+    }
+    format.cbSize = 0;
+    format.nBlockAlign = 2;
+    format.nAvgBytesPerSec = 96000;
+    format.wBitsPerSample = 16;
+    format.nSamplesPerSec = 48000;
+    format.nChannels = 1;
+
+    XAUDIO2_VOICE_SENDS voiceSends;
+    voiceSends.pSends = &sendDescs[0];
+    voiceSends.SendCount = sendDescs.size();
+
+    IXAudio2SourceVoice *headsetVoice;
+    int *pEngine = (int *)unkec;
+    HRESULT hr = ((HRESULT(*)(
+        int *, IXAudio2SourceVoice **, WAVEFORMATEX *, int, float, int, XAUDIO2_VOICE_SENDS *, int
+    ))(*(int *)(*(int *)pEngine + 0x20)))(
+        pEngine, &headsetVoice, &format, 0, 2.0f, 0, &voiceSends, 0
+    );
+    MILO_ASSERT(SUCCEEDED(hr), 0x30a);
+
+    XAUDIO2_BUFFER buffer;
+    memset(&buffer.AudioBytes, 0, sizeof(buffer) - 4);
+    buffer.LoopCount = 0xff;
+    buffer.AudioBytes = 0x100;
+    buffer.pAudioData = (const BYTE *)sHeadsetSilence;
+    buffer.Flags = 0;
+    int *pSourceVoice = (int *)unke8;
+    hr = ((HRESULT(*)(int *, XAUDIO2_BUFFER *, int))(*(int *)(*(int *)pSourceVoice + 0x54)))(
+        pSourceVoice, &buffer, 0
+    );
+    MILO_ASSERT(SUCCEEDED(hr), 0x319);
+
+    pSourceVoice = (int *)unke8;
+    hr = ((HRESULT(*)(int *, int, int))(*(int *)(*(int *)pSourceVoice + 0x4c)))(pSourceVoice, 0, 0);
+    MILO_ASSERT(SUCCEEDED(hr), 0x31c);
 }
 
 int Synth360::GetNumConnectedMics() { return ExternalMic::NumConnectedMics(); }
