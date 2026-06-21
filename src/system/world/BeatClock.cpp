@@ -186,8 +186,9 @@ DataNode BeatClock::OnSyncState(DataArray *a) {
         float tdiff = (float)(mSongPos.GetTick() - mySongPos.GetTick()) * 0.0020833334f;
         float f5 = (mdiff + (bdiff + tdiff));
         if (!NearlyZero(f5)) {
-            mSongPos.AccessTotalBeat() += f5;
-            mSongPos.AccessTotalTick() = mSongPos.AccessTotalBeat() * 480.0f;
+            float newTotalBeat = mSongPos.AccessTotalBeat() + f5;
+            mSongPos.AccessTotalBeat() = newTotalBeat;
+            mSongPos.AccessTotalTick() = newTotalBeat * 480.0f;
             BroadcastPropertyChange("total_beat");
             mTotalSeconds += (60.0f / mBeatsPerMinute) * f5;
             BroadcastPropertyChange("seconds");
