@@ -87,6 +87,7 @@ private:
 };
 
 unsigned long StartVoiceThreadEntry(void *);
+void StartSynchronizedVoices();
 void StopSynchronizedVoices();
 void TerminateVoiceThread();
 

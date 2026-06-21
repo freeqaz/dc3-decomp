@@ -33,13 +33,70 @@
 #include "synth_xbox/ExternalMic.h"
 #include "synth_xbox/FxSend.h"
 #include "synth_xbox/Mic.h"
+#include "synth_xbox/Voice.h"
 #include "synth_xbox/StreamReceiver360.h"
 #include "synth_xbox/SynthSample.h"
 #include "utl/Std.h"
 #include "xdk/xapilibi/xbox.h"
 #include "xdk/xaudio2/xaudio2.h"
+#include "xdk/xaudio2/xaudio2fx.h"
+#include "xdk/LIBCMT/math.h"
 
 Synth360 *TheXboxSynth;
+
+void ReverbConvertI3DL2ToNative(
+    const XAUDIO2FX_REVERB_I3DL2_PARAMETERS *pI3DL2, XAUDIO2FX_REVERB_PARAMETERS *pNative
+) {
+    pNative->PositionMatrixLeft = 27;
+    pNative->PositionMatrixRight = 27;
+    pNative->PositionLeft = 6;
+    pNative->PositionRight = 6;
+    pNative->HighEQCutoff = 6;
+    pNative->RoomSize = 100.0f;
+    pNative->RearDelay = 5;
+    pNative->LowEQCutoff = 4;
+    pNative->RoomFilterMain = pI3DL2->Room * 0.01f;
+    pNative->RoomFilterHF = pI3DL2->RoomHF * 0.01f;
+
+    if (pI3DL2->DecayHFRatio >= 1.0f) {
+        int gain = (int)((float)log10(pI3DL2->DecayHFRatio) * -4.0);
+        if (gain < -8)
+            gain = -8;
+        pNative->LowEQGain = (gain < 0) ? gain + 8 : 8;
+        pNative->HighEQGain = 8;
+        pNative->DecayTime = pI3DL2->DecayTime * pI3DL2->DecayHFRatio;
+    } else {
+        int gain = (int)((float)log10(pI3DL2->DecayHFRatio) * 4.0);
+        if (gain < -8)
+            gain = -8;
+        pNative->LowEQGain = 8;
+        pNative->HighEQGain = (gain < 0) ? gain + 8 : 8;
+        pNative->DecayTime = pI3DL2->DecayTime;
+    }
+
+    float reflectionsDelay = pI3DL2->ReflectionsDelay * 1000.0f;
+    if (reflectionsDelay >= 300.0f) {
+        reflectionsDelay = 299.0f;
+    } else if (reflectionsDelay <= 1.0f) {
+        reflectionsDelay = 1.0f;
+    }
+    pNative->ReflectionsDelay = (unsigned int)reflectionsDelay;
+
+    float reverbDelay = pI3DL2->ReverbDelay * 1000.0f;
+    if (reverbDelay >= 85.0f) {
+        reverbDelay = 84.0f;
+    }
+    pNative->ReverbDelay = (BYTE)reverbDelay;
+
+    pNative->ReflectionsGain = pI3DL2->Reflections * 0.01f;
+    pNative->ReverbGain = pI3DL2->Reverb * 0.01f;
+    pNative->EarlyDiffusion = (BYTE)(pI3DL2->Diffusion * 0.15f);
+    pNative->LateDiffusion = pNative->EarlyDiffusion;
+    pNative->Density = pI3DL2->Density;
+    pNative->RoomFilterFreq = pI3DL2->HFReference;
+    pNative->WetDryMixPct = 0;
+    pNative->WetDryMix = pI3DL2->WetDryMix;
+}
 
 static unsigned char sHeadsetSilence[0x100];
 
@@ -55,6 +112,104 @@ BEGIN_HANDLERS(Synth360)
 END_HANDLERS
 
 void Synth360::PreInit() {}
+
+void Synth360::Poll() {
+    START_AUTO_TIMER("synth");
+
+    ((IXAudio2Voice *)unkf0)->SetEffectParameters(1, (const void *)unk13c, 4, 0);
+
+    static float gainCenter = DbToRatio(-3.0f);
+    static float gainSide = DbToRatio(-1.2f);
+    static float gainRear = DbToRatio(-6.2f);
+
+    mLevelData[7].mRMS = mLevelData[2].mRMS * gainCenter +
+        (mLevelData[5].mRMS * gainRear + mLevelData[4].mRMS * gainSide) + mLevelData[0].mRMS;
+    mLevelData[7].mPeak = mLevelData[2].mPeak * gainCenter +
+        (mLevelData[5].mPeak * gainRear + mLevelData[4].mPeak * gainSide) + mLevelData[0].mPeak;
+    mLevelData[8].mRMS = mLevelData[2].mRMS * gainCenter +
+        (mLevelData[5].mRMS * gainSide + mLevelData[4].mRMS * gainRear) + mLevelData[1].mRMS;
+    mLevelData[8].mPeak = mLevelData[2].mPeak * gainCenter +
+        (mLevelData[5].mPeak * gainSide + mLevelData[4].mPeak * gainRear) + mLevelData[1].mPeak;
+
+    Synth::Poll();
+
+    if (!mMics.empty()) {
+        MicManagerXbox::GetInstance()->Poll();
+    }
+
+    if (mDolbyTimer.Running()) {
+        float ms = mDolbyTimer.SplitMs();
+        float volume;
+        if (ms < 300.0f) {
+            volume = ms * -0.32f;
+        } else if (ms < 600.0f) {
+            volume = -96.0f;
+        } else if (mDolbyPending) {
+            UpdateDolby();
+            mDolbyPending = false;
+            volume = -96.0f;
+        } else if (ms < 900.0f) {
+            volume = -96.0f;
+        } else if (ms < 1800.0f) {
+            volume = (1800.0f - ms) * -0.10662958f;
+        } else {
+            mDolbyTimer.Reset();
+            volume = 0.0f;
+        }
+        SetMasterVolume(volume);
+    }
+
+    StartSynchronizedVoices();
+    StopSynchronizedVoices();
+    VorbisReader::SignalDecodeThread();
+}
+
+void Synth360::Terminate() {
+    for (unsigned int i = 0; i < mFxSends.size(); i++) {
+        mFxSends[i]->CleanChain();
+    }
+    TerminateVoiceThread();
+    TheXboxSynth = nullptr;
+    Synth::Terminate();
+    ExternalMic::Terminate();
+
+    std::for_each(mMics.begin(), mMics.end(), Delete());
+    if (!mMics.empty()) {
+        MicManagerXbox::GetInstance()->Shutdown();
+    }
+
+    if (!mHeadsetSubmixes.empty()) {
+        ((IXAudio2SourceVoice *)unke8)->Stop(0, 0);
+        ((IXAudio2SourceVoice *)unke8)->DestroyVoice();
+        unke8 = 0;
+        for (unsigned int i = 0; i < mHeadsetSubmixes.size(); i++) {
+            mHeadsetSubmixes[i]->DestroyVoice();
+        }
+        mHeadsetSubmixes.erase(mHeadsetSubmixes.begin(), mHeadsetSubmixes.end());
+    }
+
+    if ((IXAudio2Voice *)unkf8) {
+        ((IXAudio2Voice *)unkf8)->DestroyVoice();
+        unkf8 = 0;
+    }
+    if ((IXAudio2Voice *)unkf4) {
+        ((IXAudio2Voice *)unkf4)->DestroyVoice();
+        unkf4 = 0;
+    }
+    if ((IXAudio2Voice *)unkfc) {
+        ((IXAudio2Voice *)unkfc)->DestroyVoice();
+        unkfc = 0;
+    }
+    if ((IXAudio2Voice *)unkf0) {
+        ((IXAudio2Voice *)unkf0)->DestroyVoice();
+        unkf0 = 0;
+    }
+    if ((IUnknown *)unkec) {
+        ((IUnknown *)unkec)->Release();
+    }
+    delete (int *)unk13c;
+    unk13c = 0;
+}
 
 void Synth360::Init() {
     Synth::Init();

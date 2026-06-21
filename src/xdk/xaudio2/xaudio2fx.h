@@ -6,6 +6,8 @@
 // Only the reverb declarations the engine references are mirrored here; the
 // implementations live in the XDK (xdk/xaudio2/reverb).
 
+#pragma pack(push, 1)
+
 // I3DL2 environmental reverb parameters (size 0x34). Matches the DirectX SDK layout.
 struct XAUDIO2FX_REVERB_I3DL2_PARAMETERS { /* Size=0x34 */
     /* 0x0000 */ float WetDryMix;
@@ -49,6 +51,8 @@ struct XAUDIO2FX_REVERB_PARAMETERS { /* Size=0x38 */
     /* 0x0030 */ float RoomSize;
     /* 0x0034 */ UINT32 WetDryMixPct;
 };
+
+#pragma pack(pop)
 
 // Creates the XAudio2 reverb XAPO effect (returns its IUnknown*). XDK-provided.
 // Undecorated (extern "C") symbol — matches the XDK leapfxlib export.
