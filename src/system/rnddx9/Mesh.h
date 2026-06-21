@@ -6,6 +6,8 @@
 #include "utl/PoolAlloc.h"
 #include "xdk/D3D9.h"
 
+class DxMat;
+
 class DxMesh : public RndMesh, public DxObject {
 public:
     struct VertexBufferData {
@@ -32,6 +34,11 @@ protected:
     virtual void OnSync(int);
     unsigned int VertSize() const;
     void FillCompressedVerts();
+    bool CanDraw() const;
+    void SetTransforms();
+    DxMat *DrawFur(DxMat *);
+    float FurWeight(RndMat *);
+    void CacheFurTransform(const Transform &, int, float);
 
 public:
     D3DVertexBuffer *GetMultimeshFaces();

@@ -5,6 +5,7 @@
 #include "os/Debug.h"
 #include "os/System.h"
 #include "rndobj/Bitmap.h"
+#include "rndobj/Cam.h"
 #include "rndobj/Mat.h"
 #include "rndobj/Mat_NG.h"
 #include "rndobj/Rnd_NG.h"
@@ -18,6 +19,43 @@
 #include "xdk/d3d9i/d3d9types.h"
 
 DxRnd TheDxRnd;
+
+int D3DFORMAT_BitsPerPixel(D3DFORMAT fmt) {
+    switch (fmt) {
+    case D3DFMT_LIN_DXT1:
+    case D3DFMT_DXT1:
+        return 4;
+    case D3DFMT_LIN_DXT3:
+    case D3DFMT_LIN_DXT5:
+    case D3DFMT_DXT3:
+    case D3DFMT_DXT5:
+    case D3DFMT_L8:
+        return 8;
+    case D3DFMT_LIN_A1R5G5B5:
+    case D3DFMT_LE_LIN_UYVY:
+    case D3DFMT_A1R5G5B5:
+    case D3DFMT_X1R5G5B5:
+    case D3DFMT_D16:
+    case D3DFMT_LIN_D16:
+    case D3DFMT_LIN_R5G6B5:
+    case D3DFMT_R5G6B5:
+    case D3DFMT_LIN_X1R5G5B5:
+        return 16;
+    case D3DFMT_LIN_A8R8G8B8:
+    case D3DFMT_D24FS8:
+    case D3DFMT_A8R8G8B8:
+    case D3DFMT_A2R10G10B10:
+    case D3DFMT_X8R8G8B8:
+    case D3DFMT_LIN_X8R8G8B8:
+    case (D3DFORMAT)0x28287eb2:
+    case D3DFMT_LIN_D24S8:
+    case D3DFMT_D24S8:
+        return 32;
+    default:
+        MILO_FAIL("Currently unsupported D3DFORMAT: %d", fmt);
+        return 0;
+    }
+}
 
 BEGIN_HANDLERS(DxRnd)
     HANDLE_ACTION(suspend, Suspend())
@@ -180,6 +218,49 @@ void DxRnd::PostDeviceReset() {
     }
     MakeDrawTarget();
     InitRenderState();
+}
+void DxRnd::PushClipPlanesInternal(ObjPtrVec<RndTransformable> &planes) {
+    int enableMask = 0;
+    for (int i = 0; i < unk408; i++) {
+        enableMask |= 1 << i;
+    }
+    for (int i = 0; i < planes.size(); i++) {
+        if (i * 0x14 >= 0x78) {
+            break;
+        }
+        RndTransformable *trans = planes[i];
+        if (trans) {
+            const Transform &xfm = trans->WorldXfm();
+            float nx = xfm.m.z.x * -1.0f;
+            float ny = xfm.m.z.y * -1.0f;
+            float nz = xfm.m.z.z * -1.0f;
+            float d = -(nx * xfm.v.x + (nz * xfm.v.z + ny * xfm.v.y));
+            Vector4 planeClip(nx, ny, nz, d);
+            Vector4 planeObj(nx, ny, nz, d);
+            Multiply(planeObj, RndCam::Current()->GetInvViewProjMatrix(), planeObj);
+            planeClip = planeObj;
+            D3DDevice_SetClipPlane(mD3DDevice, unk408, &planeClip.x);
+            enableMask |= 1 << unk408;
+            unk408++;
+        }
+    }
+    D3DDevice_SetRenderState_ClipPlaneEnable(TheDxRnd.mD3DDevice, enableMask);
+}
+
+void DxRnd::PopClipPlanesInternal(ObjPtrVec<RndTransformable> &planes) {
+    for (int i = 0; i < planes.size(); i++) {
+        if (i * 0x14 >= 0x78) {
+            break;
+        }
+        if (planes[i]) {
+            unk408--;
+        }
+    }
+    int enableMask = 0;
+    for (int i = 0; i < unk408; i++) {
+        enableMask |= 1 << i;
+    }
+    D3DDevice_SetRenderState_ClipPlaneEnable(TheDxRnd.mD3DDevice, enableMask);
 }
 
 D3DFORMAT DxRnd::D3DFormatForBitmap(const RndBitmap &bitmap) {

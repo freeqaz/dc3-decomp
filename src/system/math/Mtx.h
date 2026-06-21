@@ -366,6 +366,7 @@ float Det(const Hmx::Matrix3 &m);
 void Invert(const Hmx::Matrix3 &, Hmx::Matrix3 &);
 void FastInvert(const Hmx::Matrix3 &, Hmx::Matrix3 &);
 void Multiply(const Transform &, const Transform &, Transform &);
+void Multiply(const Vector4 &, const Hmx::Matrix4 &, Vector4 &);
 float Det(const Hmx::Matrix4 &);
 void Invert(const Hmx::Matrix4 &, Hmx::Matrix4 &);
 

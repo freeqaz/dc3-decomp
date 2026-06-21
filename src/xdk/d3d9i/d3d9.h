@@ -785,6 +785,9 @@ void D3DDevice_SetRenderState_PresentImmediateThreshold(D3DDevice *pDevice, DWOR
 void D3DDevice_SetRenderState_PointSize(D3DDevice *pDevice, DWORD Value);
 void D3DDevice_SetRenderState_ViewportEnable(D3DDevice *pDevice, DWORD Value);
 void D3DDevice_SetRenderState_HalfPixelOffset(D3DDevice *pDevice, DWORD Value);
+void D3DDevice_SetRenderState_ClipPlaneEnable(D3DDevice *pDevice, DWORD Value);
+
+void D3DDevice_SetClipPlane(D3DDevice *pDevice, DWORD Index, const float *pPlane);
 
 DWORD D3DDevice_InsertFence(D3DDevice *pDevice);
 void D3DDevice_BlockOnFence(DWORD fence);

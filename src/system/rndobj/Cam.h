@@ -74,6 +74,7 @@ public:
     static float DefaultNearPlane() { return sDefaultNearPlane; }
     static float MaxFarNearPlaneRatio() { return sMaxFarNearPlaneRatio; }
     const Hmx::Matrix4 &GetViewProjMatrix() const { return mViewProjMatrix; }
+    const Hmx::Matrix4 &GetInvViewProjMatrix() const { return mInvViewProjMatrix; }
 
 protected:
     RndCam();

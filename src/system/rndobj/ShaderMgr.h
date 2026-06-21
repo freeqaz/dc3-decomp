@@ -114,6 +114,7 @@ public:
     int NumTaps() const { return unk14; }
     void SetNumTaps(int n) { unk14 = n; }
     void UpdateCache(const Transform &, int);
+    float *ConstantCache() const { return mConstantCache; }
     void SetMeshInfo(int, bool);
     void SetShaderErrorDisplay(bool);
     bool GetShaderErrorDisplay();

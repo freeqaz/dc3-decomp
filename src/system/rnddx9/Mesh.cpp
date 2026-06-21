@@ -1,8 +1,15 @@
 #include "Mesh.h"
+#include "Mat.h"
 #include "Rnd.h"
 #include "os/Debug.h"
 #include "rndobj/MeshVertCompress.h"
+#include "rndobj/Rnd.h"
+#include "rndobj/Shader.h"
+#include "rndobj/ShaderMgr.h"
+#include "rndobj/Stats_NG.h"
+#include "rndobj/VelocityBuffer.h"
 #include "rnddx9/Utl.h"
+#include "math/Mtx.h"
 #include "xdk/D3D9.h"
 #include "xdk/d3d9i/d3d9.h"
 
@@ -244,6 +251,88 @@ void DxMesh::FillCompressedVerts() {
 }
 
 void DxMesh::OnSync(int) {}
+
+void DxMesh::SetTransforms() {
+    bool shouldCache = mMotionCache.mShouldCache;
+    int numProcessed = 0;
+    mMotionCache.mShouldCache = false;
+    unsigned int boneCount = mBones.size();
+    TheShaderMgr.SetMeshInfo(boneCount, HasAOCalc());
+    float fw = FurWeight(Mat());
+    bool hasFur = fw > 0.0f;
+    if (boneCount == 0) {
+        TheShaderMgr.UpdateCache(WorldXfm(), 0);
+        if (hasFur) {
+            CacheFurTransform(WorldXfm(), 0, fw);
+        }
+    } else {
+        RndBone *bone = mBones.begin();
+        if (bone != mBones.end()) {
+            do {
+                Transform local;
+                Multiply(bone->mOffset, bone->mBone->WorldXfm(), local);
+                TheShaderMgr.UpdateCache(local, numProcessed);
+                if (hasFur) {
+                    CacheFurTransform(local, numProcessed, fw);
+                }
+                bone++;
+                numProcessed++;
+            } while (bone != mBones.end());
+        }
+        TheNgStats->mBones += numProcessed - 1;
+        if (boneCount >= 1) {
+            goto upload;
+        }
+    }
+    boneCount = 1;
+upload:
+    TheShaderMgr.SetVConstant(
+        kVS_WorldTransform, TheShaderMgr.ConstantCache(), boneCount * 3
+    );
+    if (shouldCache) {
+        RndVelocityBuffer::Singleton().CacheTransform(
+            this, TheShaderMgr.ConstantCache(), boneCount
+        );
+    }
+}
+
+void DxMesh::DrawShowing() {
+    DxMesh *geom = static_cast<DxMesh *>(GetGeomOwner());
+    if (!geom->CanDraw()) {
+        return;
+    }
+    if (geom->Verts().unkc) {
+        geom->Sync(0x1f);
+    }
+    if (TheRnd.GetDrawMode() == Rnd::kDrawVelocity) {
+        RndVelocityBuffer::Singleton().DrawMesh(this);
+        return;
+    }
+    SetTransforms();
+    RndMat *mat = Mat();
+    RndMat *next;
+    do {
+        if (mat) {
+            if (mat->GetFur()) {
+                mat = DrawFur(static_cast<DxMat *>(mat));
+                continue;
+            }
+            next = dynamic_cast<RndMat *>(mat->NextPass());
+        } else {
+            next = nullptr;
+        }
+        ShaderType st = kStandardShader;
+        if (mMeshVersion != kMaxShaderTypes) {
+            st = (ShaderType)mMeshVersion;
+        }
+        if (TheRnd.GetDrawMode() == 9) {
+            st = kAllWhiteShader;
+        }
+        RndShader::SelectConfig(mat, st, false);
+        geom->DrawFacesInRange(0, -1);
+        mat = next;
+    } while (mat);
+}
 
 void _fake(void) {
     BufLock<struct D3DVertexBuffer> buf(nullptr, 0);
