@@ -822,6 +822,13 @@ HRESULT D3DDevice_SetStreamSource(
 void D3DDevice_SetTexture(
     D3DDevice *pDevice, DWORD Sampler, D3DBaseTexture *pTexture, UINT64 PendingMask3
 );
+void D3DDevice_SetVertexShaderConstantFN(
+    D3DDevice *pDevice,
+    UINT StartRegister,
+    const float *pConstantData,
+    DWORD Vector4fCount,
+    UINT64 PendingMask3
+);
 D3DSurface *D3DDevice_GetRenderTarget(D3DDevice *pDevice, DWORD RenderTargetIndex);
 D3DBaseTexture *D3DDevice_CreateTexture(
     UINT Width,

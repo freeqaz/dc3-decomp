@@ -258,7 +258,12 @@ void DxShaderMgr::Terminate() {
     RndShaderMgr::Terminate();
 }
 
-void DxShaderMgr::SetVConstant(VShaderConstant, const float *__restrict, unsigned int) {}
+void DxShaderMgr::SetVConstant(VShaderConstant vsc, const float *__restrict data, unsigned int count) {
+    unsigned int start = (unsigned int)vsc >> 2;
+    unsigned int span = ((vsc + count - 1) >> 2) - start;
+    UINT64 mask = (UINT64)((INT64)0x8000000000000000 >> span) >> start;
+    D3DDevice_SetVertexShaderConstantFN(TheDxRnd.Device(), vsc, data, count, mask);
+}
 
 void DxShaderMgr::SetVConstant(VShaderConstant vsc, RndTex *tex) {
     if (tex) {
