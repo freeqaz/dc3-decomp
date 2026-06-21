@@ -856,6 +856,7 @@ void D3DDevice_SetRenderTarget_External(
     D3DDevice *pDevice, UINT RenderTargetIndex, D3DSurface *pRenderTarget
 );
 void D3DDevice_SetDepthStencilSurface(D3DDevice *pDevice, D3DSurface *pZStencilSurface);
+void D3DDevice_SetPredication(D3DDevice *pDevice, DWORD PredicationMask);
 void D3DDevice_SetViewport(D3DDevice *pDevice, const D3DVIEWPORT9 *pViewport);
 void D3DDevice_SetIndices(D3DDevice *pDevice, D3DIndexBuffer *pIndexData);
 void D3DDevice_DrawIndexedVertices(

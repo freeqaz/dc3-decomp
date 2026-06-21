@@ -12,6 +12,7 @@ public:
         VertexBufferData() : buffer(0), size(0) {}
         ~VertexBufferData() { Release(); }
         void Release();
+        void SetData(D3DVertexBuffer *buf, unsigned int sz);
 
         D3DVertexBuffer *buffer;
         unsigned int size;
@@ -29,6 +30,8 @@ public:
 
 protected:
     virtual void OnSync(int);
+    unsigned int VertSize() const;
+    void FillCompressedVerts();
 
 public:
     D3DVertexBuffer *GetMultimeshFaces();

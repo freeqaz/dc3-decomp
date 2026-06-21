@@ -116,6 +116,7 @@ public:
     }
 
     u8 ReverseZ() const { return mReverseZ; }
+    void SetReverseZ(u8 r) { mReverseZ = r; }
     D3DSurface *BackBuffer() const;
     void PreInit(HWND__ *);
     void Init(HWND__ *);

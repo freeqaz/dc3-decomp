@@ -4,12 +4,30 @@
 #include "os/Debug.h"
 #include "rnddx9/Rnd.h"
 #include "rnddx9/TexMgr.h"
+#include "rndobj/Mat_NG.h"
 #include "rndobj/Rnd.h"
 #include "rndobj/Tex.h"
+#include "utl/MemMgr.h"
 #include "xdk/d3d9i/d3d9.h"
 #include "xdk/d3d9i/d3d9types.h"
 
 std::vector<DxTex *> gAllTextures;
+
+struct CompressLevel {
+    D3DSurface *scratchSurface; // 0x0
+    char pad[0x2c - 0x4];
+    D3DSurface *textureSurface; // 0x2c
+    char pad2[0x58 - 0x30];
+};
+
+struct CompressDesc {
+    D3DTexture *texture; // 0x0
+    RndTex::AlphaCompress alpha; // 0x4
+    int unk8; // 0x8
+    D3DFORMAT format; // 0xc
+    void *tiledBuffer; // 0x10
+    CompressLevel levels[16]; // 0x14
+};
 
 DxTex::DxTex()
     : mFormat((D3DFORMAT)-1), mTexture(0), unk84(0), mRenderTarget(0), mDepthRT(0),
@@ -31,6 +49,56 @@ void DxTex::Compress(AlphaCompress a) {
     void *v = StartCompress(a);
     DoCompress(v);
     FinishCompress(v);
+}
+
+void DxTex::FinishCompress(void *p) {
+    CompressDesc *desc = (CompressDesc *)p;
+    MemFree(desc->tiledBuffer);
+    int numLevels = D3DBaseTexture_GetLevelCount(mTexture);
+    for (int i = 0; i < numLevels; i++) {
+        CompressLevel &level = desc->levels[i];
+        D3DSurface_UnlockRect(level.scratchSurface);
+        D3DSurface_UnlockRect(level.textureSurface);
+        if (level.textureSurface) {
+            D3DResource_Release(level.textureSurface);
+            level.textureSurface = nullptr;
+        }
+        if (level.scratchSurface) {
+            D3DResource_Release(level.scratchSurface);
+            level.scratchSurface = nullptr;
+        }
+    }
+    if (mTexture) {
+        D3DResource_Release(mTexture);
+        mTexture = nullptr;
+    }
+    mFormat = desc->format;
+    mTexture = desc->texture;
+    if (mRenderTarget) {
+        D3DResource_Release(mRenderTarget);
+        mRenderTarget = nullptr;
+    }
+    if (mDepthRT) {
+        D3DResource_Release(mDepthRT);
+        mDepthRT = nullptr;
+    }
+    mType = kRegular;
+    mBpp = ((int)desc->alpha == 2) ? 8 : 4;
+    MemFree(desc, __FILE__, 0x14B, "CompressDesc");
+}
+
+void DxTex::MakeDrawTarget() {
+    MILO_ASSERT(mType & kRendered, 0xF0);
+    if (mTexture) {
+        TheDxRnd.Resume();
+        D3DDevice_SetPredication(TheDxRnd.Device(), 3);
+        D3DDevice_SetRenderTarget_External(TheDxRnd.Device(), 0, mRenderTarget);
+        D3DDevice_SetDepthStencilSurface(
+            TheDxRnd.Device(), mType == kDepthVolumeMap ? nullptr : mDepthRT
+        );
+        NgMat::SetCurrent(nullptr);
+        TheDxRnd.SetReverseZ(mType != kShadowMap);
+    }
 }
 
 void DxTex::SetDeviceTex(D3DTexture *tex) {

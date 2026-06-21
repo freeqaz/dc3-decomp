@@ -184,6 +184,65 @@ void FillCompressedVertex(
         + (int)vert.boneIndices[0];
 }
 
+void DxMesh::VertexBufferData::Release() {
+    TheDxRnd.AutoRelease((D3DResource *)buffer);
+    buffer = nullptr;
+    size = 0;
+}
+
+void DxMesh::VertexBufferData::SetData(D3DVertexBuffer *buf, unsigned int sz) {
+    MILO_ASSERT(buf, 0x1E);
+    MILO_ASSERT(sz, 0x1F);
+    buffer = buf;
+    size = sz;
+}
+
+void DxMesh::Copy(const Hmx::Object *src, Hmx::Object::CopyType ty) {
+    RndMesh::Copy(src, ty);
+    const DxMesh *other = dynamic_cast<const DxMesh *>(src);
+    if (other && this == GetGeomOwner() && !mMutable) {
+        PhysMemTypeTracker tracker("D3D(phys):Mesh");
+        unk1a4.Release();
+        mNumVerts = other->mNumVerts;
+        if (mNumVerts) {
+            D3DVertexBuffer *clone = CloneVertexBuffer(other->unk1a4.buffer);
+            unk1a4.SetData(clone, other->unk1a4.size);
+        }
+        TheDxRnd.AutoRelease(unk1ac);
+        unk1ac = nullptr;
+        mNumFaces = other->mNumFaces;
+        if (mNumFaces) {
+            unk1ac = (D3DResource *)CloneIndexBuffer((D3DIndexBuffer *)other->unk1ac);
+        }
+    }
+}
+
+D3DVertexBuffer *DxMesh::GetMultimeshFaces() {
+    MILO_ASSERT(!Mutable(), 0x1A7);
+    if (!unk1b0) {
+        unsigned int numIndices = mNumFaces * 3;
+        D3DVertexBuffer *vb =
+            D3DDevice_CreateVertexBuffer(numIndices * 4, 0, (D3DPOOL)0);
+        unk1b0 = (D3DResource *)vb;
+        unsigned int *dst = (unsigned int *)D3DVertexBuffer_Lock(vb, 0, 0, 0);
+        unsigned short *src =
+            (unsigned short *)D3DIndexBuffer_Lock((D3DIndexBuffer *)unk1ac, 0, 0, 0x10);
+        for (unsigned int i = 0; i < numIndices; i++) {
+            *dst++ = *src++;
+        }
+        D3DIndexBuffer_Unlock((D3DIndexBuffer *)unk1ac);
+        D3DVertexBuffer_Unlock((D3DVertexBuffer *)unk1b0);
+    }
+    return (D3DVertexBuffer *)unk1b0;
+}
+
+void DxMesh::FillCompressedVerts() {
+    MILO_ASSERT(mNumCompressedVerts > 0, 0x115);
+    MILO_ASSERT(mCompressedVerts != NULL, 0x116);
+    VBLock<CompressedVertex_Xbox> lock(unk1a4.buffer, 0);
+    memcpy(lock.mDataAddr, mCompressedVerts, VertSize() * mNumCompressedVerts);
+}
+
 void DxMesh::OnSync(int) {}
 
 void _fake(void) {

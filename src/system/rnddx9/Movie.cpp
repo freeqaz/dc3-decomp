@@ -2,6 +2,7 @@
 #include "Tex.h"
 #include "os/Debug.h"
 #include "os/File.h"
+#include "os/Timer.h"
 #include "rndobj/Movie.h"
 #include "rndobj/Tex.h"
 #include "utl/BufStream.h"
@@ -20,6 +21,30 @@ DxMovie::~DxMovie() {
     if (mFrameBuf) {
         MemFree(mFrameBuf, __FILE__, 0x1F);
         mFrameBuf = nullptr;
+    }
+}
+
+void DxMovie::SetFrame(float frame, float blend) {
+    START_AUTO_TIMER("movie");
+    RndAnimatable::SetFrame(frame, blend);
+    if ((!RndMovie::mStream || mFrameBuf) && mTex && mVideo.NumFrames()) {
+        int frameIdx = (int)frame % mVideo.NumFrames();
+        int delta = frameIdx - mNumFrames;
+        if (delta != 0) {
+            mNumFrames = frameIdx;
+            if (RndMovie::mStream) {
+                if (delta < 0 || delta > 1) {
+                    StreamRestart(frameIdx);
+                } else {
+                    StreamReadFinish();
+                    mReadPtr = (char *)mFrameBuf + mBufOffset;
+                    StreamNextBuffer();
+                }
+            } else {
+                mReadPtr = mVideo.Frame(frameIdx);
+            }
+            Update();
+        }
     }
 }
 
