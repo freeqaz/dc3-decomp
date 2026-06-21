@@ -20,8 +20,12 @@ enum SendChannels {
     kSendAllXMix = 3
 };
 
+class FxSend360;
+
 /** "Base class for all sound FX processors" */
 class FxSend : public Hmx::Object {
+    friend class FxSend360;
+
 public:
     // Hmx::Object
     virtual ~FxSend() {}

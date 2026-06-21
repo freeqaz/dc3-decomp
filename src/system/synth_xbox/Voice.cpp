@@ -5,13 +5,16 @@
 #include "math/Utl.h"
 #include "os/CritSec.h"
 #include "os/Debug.h"
+#include "os/System.h"
 #include "os/Timer.h"
+#include "utl/MemMgr.h"
 #include <deque>
 #include <list>
 #include <vector>
 #include "xdk/win_types.h"
 #include "xdk/xapilibi/processthreadsapi.h"
 #include "xdk/xapilibi/synchapi.h"
+#include "xdk/xapilibi/winbase.h"
 #include "xdk/xapilibi/xbase.h"
 #include "xdk/xapilibi/xbox.h"
 
@@ -32,6 +35,7 @@ bool gCommitSyncVoices = false;
 int gCommitTag = 0;
 bool gHasPendingStopCommits = false;
 bool gWasCommitSyncVoices = false;
+static int gVoiceCounters[2];
 int gWasCommitTag = 0;
 int rolling = 0;
 void StartSynchronizedVoices();
@@ -77,20 +81,138 @@ Voice::~Voice() {
 }
 
 void Voice::dispose(PoolVoice *pv, unsigned int) {
-    IXAudio2SourceVoice *voice = (IXAudio2SourceVoice *)pv->sourceVoice;
-    voice->DestroyVoice();
+    ((IXAudio2SourceVoice *)pv->sourceVoice)->FlushSourceBuffers();
     if (unk54) {
-        XAUDIO2_VOICE_STATE state;
-        voice->GetState(&state, 0);
+        XAUDIO2_VOICE_SENDS emptySends;
+        emptySends.SendCount = 0;
+        emptySends.pSends = 0;
+        ((IXAudio2SourceVoice *)pv->sourceVoice)->SetOutputVoices(&emptySends);
         unk54 = false;
     }
     pv->disposeTick = GetTickCount() - 500000;
     gVoiceGC.Enter();
     s_voiceGC.push_back(*pv);
+    gVoiceCounters[0]--;
+    gVoiceCounters[1]++;
     gVoiceGC.Exit();
     pv->eg = 0;
     pv->egParams = 0;
     pv->sourceVoice = 0;
+}
+
+long Voice::createOrReuse(
+    PoolVoice *pPoolVoice, unsigned int &, tWAVEFORMATEX &wfx, XAUDIO2_VOICE_SENDS *sends
+) {
+    long result;
+    if (!TheXboxSynth->OutputVoice()) {
+        result = 0;
+    } else {
+        MILO_ASSERT(pPoolVoice->eg == 0, 0x1c1);
+        pPoolVoice->eg = (int)new EnvelopeGenerator();
+        MILO_ASSERT(mEnvelopeParams == 0, 0x1c3);
+        pPoolVoice->egParams = (int)new EnvelopeGeneratorParams;
+
+        XAUDIO2_EFFECT_DESCRIPTOR effectDesc;
+        XAUDIO2_EFFECT_CHAIN effectChain;
+        effectDesc.InitialState = 0;
+        effectChain.EffectCount = 1;
+        effectDesc.pEffect = (IUnknown *)pPoolVoice->eg;
+        effectDesc.OutputChannels = mChannels;
+        effectChain.pEffectDescriptors = &effectDesc;
+
+        MemPushTemp();
+
+        CriticalSection *cs = &TheXboxSynth->unkb0;
+        if (cs) {
+            cs->Enter();
+        }
+
+        int *pEngine = (int *)TheXboxSynth->unkec;
+        HRESULT hr = ((HRESULT(*)(
+            int *,
+            IXAudio2SourceVoice **,
+            tWAVEFORMATEX *,
+            int,
+            float,
+            int,
+            XAUDIO2_VOICE_SENDS *,
+            XAUDIO2_EFFECT_CHAIN *
+        ))(*(int *)(*(int *)pEngine + 0x20)))(
+            pEngine,
+            (IXAudio2SourceVoice **)pPoolVoice,
+            &wfx,
+            0,
+            4.0f,
+            0,
+            sends,
+            &effectChain
+        );
+
+        if (hr) {
+            char buf[0x800] = "";
+            MEMORYSTATUS memStatus;
+            GlobalMemoryStatus(&memStatus);
+            Hx_snprintf(buf, 0x800, "XAudio2: CreateSourceVoice failed with 0x%X\n", hr);
+            MemPrintOverview(kNoHeap, buf + strlen(buf));
+            MILO_FAIL(buf);
+            if (cs) {
+                cs->Exit();
+            }
+            result = hr;
+        } else {
+            if (cs) {
+                cs->Exit();
+            }
+            gVoiceCounters[0]++;
+            memcpy(&pPoolVoice->wfx, &wfx, 0x12);
+            unk54 = (sends == nullptr || sends->SendCount > 0);
+            result = 0;
+        }
+        MemPopTemp();
+    }
+    return result;
+}
+
+void Voice::UpdateSends() {
+    IXAudio2SourceVoice *voice = (IXAudio2SourceVoice *)mSourceVoice;
+    if (mSourceVoice != 0) {
+        XAUDIO2_VOICE_SENDS voiceSends;
+        XAUDIO2_SEND_DESCRIPTOR mainDesc;
+        XAUDIO2_SEND_DESCRIPTOR reverbDesc;
+        mainDesc.Flags = 0;
+        IXAudio2Voice *targetVoice =
+            mFxSend ? mFxSend->GetOutputVoice() : TheXboxSynth->OutputVoice();
+        mainDesc.pOutputVoice = targetVoice;
+        voiceSends.SendCount = 1;
+        voiceSends.pSends = &mainDesc;
+        if (mReverbEnabled) {
+            reverbDesc.Flags = 0;
+            reverbDesc.pOutputVoice = TheXboxSynth->UnkF8();
+            voiceSends.SendCount = 1;
+            voiceSends.pSends = &reverbDesc;
+            IXAudio2Voice *target2 =
+                mFxSend ? mFxSend->GetOutputVoice() : TheXboxSynth->OutputVoice();
+            if (target2) {
+                voiceSends.SendCount = 2;
+            }
+        }
+        HRESULT hr;
+        if (targetVoice == 0 && !mReverbEnabled) {
+            reverbDesc.Flags = 0;
+            reverbDesc.pOutputVoice = 0;
+            hr = voice->SetOutputVoices((XAUDIO2_VOICE_SENDS *)&reverbDesc);
+            unk54 = false;
+            unk48 = false;
+        } else {
+            hr = voice->SetOutputVoices(&voiceSends);
+            unk54 = true;
+            if (mReverbEnabled) {
+                unk48 = true;
+            }
+        }
+        MILO_ASSERT(SUCCEEDED(hr), 0x462);
+        UpdateMix();
+    }
 }
 
 void Voice::SetSampleRate(int i) {
