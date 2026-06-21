@@ -9,6 +9,11 @@
 class DxMat;
 
 class DxMesh : public RndMesh, public DxObject {
+    // DxMultiMesh (RndMultiMesh-derived, not a DxMesh subclass) calls the
+    // protected VertFVF() on DxMesh* instances — the target binary compiles
+    // MultiMesh.cpp against the protected ?VertFVF@DxMesh@@IBAIXZ symbol, so
+    // the original source declared this friend.
+    friend class DxMultiMesh;
 public:
     struct VertexBufferData {
         VertexBufferData() : buffer(0), size(0) {}
@@ -39,10 +44,12 @@ protected:
     DxMat *DrawFur(DxMat *);
     float FurWeight(RndMat *);
     void CacheFurTransform(const Transform &, int, float);
+    bool CheckFurTransformCache();
+    void Fill(RndMesh::Vert *, RndMesh::Vert *);
+    unsigned int VertFVF() const;
 
 public:
     D3DVertexBuffer *GetMultimeshFaces();
-    u32 VertFVF() const;
 
     NEW_OBJ(DxMesh)
 
@@ -55,7 +62,7 @@ protected:
     static D3DVertexDeclaration *sMutableVertexDecl;
     static D3DVertexDeclaration *sMutableSkinnedVertexDecl;
 
-    std::vector<Transform> unk190;
+    std::vector<Transform> mTransformCache; // 0x190
     int mNumVerts; // 0x19c
     int mNumFaces; // 0x1a0
     VertexBufferData unk1a4;

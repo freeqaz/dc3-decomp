@@ -21,6 +21,8 @@ public:
 
     bool LoadOld(BinStreamRev &);
     RndTex* GetFurDetail() const { return mFurDetail; }
+    RndWind* GetWind() const { return mWind; }
+    float GetFluidity() const { return mFluidity; }
 
     OBJ_MEM_OVERLOAD(0x1A)
     NEW_OBJ(RndFur)

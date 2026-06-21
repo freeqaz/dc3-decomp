@@ -1,8 +1,12 @@
 #include "Mesh.h"
 #include "Mat.h"
 #include "Rnd.h"
+#include "obj/Task.h"
 #include "os/Debug.h"
+#include "rndobj/BaseMaterial.h"
+#include "rndobj/Fur.h"
 #include "rndobj/MeshVertCompress.h"
+#include "rndobj/Wind.h"
 #include "rndobj/Rnd.h"
 #include "rndobj/Shader.h"
 #include "rndobj/ShaderMgr.h"
@@ -70,8 +74,18 @@ DxMesh::~DxMesh() {
     unk1b0 = nullptr;
 }
 
-u32 DxMesh::VertFVF() const {
-    return 0;
+unsigned int DxMesh::VertSize() const {
+    if (GetGfxMode() == kNewGfx) {
+        return 0x24;
+    }
+    return IsSkinned() ? 0x30 : 0x24;
+}
+
+unsigned int DxMesh::VertFVF() const {
+    if (GetGfxMode() == kNewGfx) {
+        return 0;
+    }
+    return IsSkinned() ? 0x15A : 0x152;
 }
 
 static const unsigned int kBitsOutput = 32;
@@ -250,7 +264,153 @@ void DxMesh::FillCompressedVerts() {
     memcpy(lock.mDataAddr, mCompressedVerts, VertSize() * mNumCompressedVerts);
 }
 
-void DxMesh::OnSync(int) {}
+void DxMesh::Fill(RndMesh::Vert *begin, RndMesh::Vert *end) {
+    VBLock<CompressedVertex_Xbox> lock(unk1a4.buffer, 0);
+    if (begin != end) {
+        CompressedVertex_Xbox *dst = (CompressedVertex_Xbox *)lock.mDataAddr;
+        do {
+            FillCompressedVertex(*dst, *begin, false);
+            begin++;
+            dst++;
+        } while (begin != end);
+    }
+}
+
+bool DxMesh::CanDraw() const {
+    bool hasBuffers = (int)unk1a4.buffer && unk1ac != NULL;
+    return hasBuffers || mMutable;
+}
+
+void DxMesh::CacheFurTransform(const Transform &xfm, int i, float weight) {
+    MILO_ASSERT(mTransformCache.size() > i, 0x1ee);
+    Transform &cached = mTransformCache[i];
+    float dz = cached.v.z - xfm.v.z;
+    float dy = cached.v.y - xfm.v.y;
+    float dx = cached.v.x - xfm.v.x;
+    if (Dot(xfm.m.y, cached.m.y) >= 0.8660254f
+        && dx * dx + dy * dy + dz * dz < 2500.0f) {
+        float invWeight = 1.0f - weight;
+        cached.m.x *= invWeight;
+        cached.m.y *= invWeight;
+        cached.m.z *= invWeight;
+        cached.v *= invWeight;
+        ScaleAddEq(cached, xfm, weight);
+    } else {
+        cached.m = xfm.m;
+        cached.v = xfm.v;
+    }
+    RndWind *wind = Mat()->GetFur()->GetWind();
+    if (wind) {
+        Vector3 windForce;
+        float windTime = TheTaskMgr.Seconds(TaskMgr::kRealTime);
+        wind->GetWind(xfm.v, windTime, windForce);
+        cached.v.x += windForce.x * 0.05f;
+        cached.v.y += windForce.y * 0.05f;
+        cached.v.z += windForce.z * 0.05f;
+    }
+}
+
+bool DxMesh::CheckFurTransformCache() {
+    int numBones = mBones.size();
+    if (numBones == 0) {
+        numBones = 1;
+    }
+    if ((unsigned int)numBones != mTransformCache.size()) {
+        mTransformCache.resize(numBones);
+        for (int i = 0; i < numBones; i++) {
+            mTransformCache[i].Reset();
+        }
+        return true;
+    }
+    return false;
+}
+
+float DxMesh::FurWeight(RndMat *mat) {
+    while (mat) {
+        if (mat->GetFur()) {
+            if (CheckFurTransformCache()) {
+                return 1.0f;
+            }
+            return 1.0f / (mat->GetFur()->GetFluidity() * 6.5f + 1.0f);
+        }
+        mat = dynamic_cast<RndMat *>(mat->NextPass());
+    }
+    return -1.0f;
+}
+
+void DxMesh::OnSync(int flags) {
+    PhysMemTypeTracker tracker("D3D(phys):Mesh");
+    RndMesh *geom = GetGeomOwner();
+    if (this != geom) {
+        if (Mutable() & 0x1f) {
+            geom->Sync(flags);
+        }
+        return;
+    }
+    RndMesh::OnSync(flags);
+    if (mMutable) {
+        return;
+    }
+    geom = GetGeomOwner();
+    if (flags & 0x1f) {
+        int numVerts = Verts().size();
+        mNumVerts = numVerts;
+        unsigned int vertSize;
+        bool fromCompressed = false;
+        if (numVerts != 0) {
+            vertSize = VertSize();
+        } else if (mNumCompressedVerts != 0) {
+            mNumVerts = numVerts = mNumCompressedVerts;
+            vertSize = VertSize();
+            fromCompressed = true;
+        } else {
+            unk1a4.Release();
+            vertSize = 0;
+        }
+        if (unk1a4.buffer == NULL || unk1a4.size != vertSize * numVerts) {
+            unk1a4.Release();
+            if (numVerts != 0) {
+                D3DVertexBuffer *vb =
+                    MakeVertexBuffer(numVerts, vertSize, VertFVF(), false);
+                unk1a4.SetData(vb, vertSize * numVerts);
+            }
+        }
+        if (unk1a4.buffer != NULL) {
+            if (fromCompressed) {
+                FillCompressedVerts();
+            } else {
+                Fill(Verts().begin(), Verts().end());
+            }
+        }
+    }
+    if (flags & 0x20) {
+        TheDxRnd.AutoRelease(unk1ac);
+        unk1ac = NULL;
+        mNumFaces = Faces().size();
+        if (mNumFaces != 0) {
+            MILO_ASSERT(mNumFaces <= 0xFFFF, 0x17e);
+            unk1ac = (D3DResource *)MakeIndexBuffer(mNumFaces, 6, D3DFMT_INDEX16);
+            IBLock<> lock((D3DIndexBuffer *)unk1ac, 0);
+            unsigned short *dst = (unsigned short *)lock.mDataAddr;
+            for (int i = 0; i < mNumFaces; i++) {
+                RndMesh::Face &face = Faces()[i];
+                dst[0] = face.v1;
+                dst[1] = face.v2;
+                dst[2] = face.v3;
+                dst += 3;
+            }
+        }
+    }
+    if ((flags & 0x200) == 0) {
+        if ((mMutable & 0x1f) == 0) {
+            Verts().resize(0);
+            ClearCompressedVerts();
+        }
+        if ((mMutable & 0x20) == 0) {
+            std::vector<RndMesh::Face>().swap(Faces());
+        }
+    }
+}
 
 void DxMesh::SetTransforms() {
     bool shouldCache = mMotionCache.mShouldCache;
