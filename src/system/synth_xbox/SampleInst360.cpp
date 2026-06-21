@@ -26,6 +26,21 @@ bool SampleInst360::IsPlaying() { return mVoice->IsPlaying(); }
 
 void SampleInst360::SetFXCore(FXCore core) {}
 
+float SampleInst360::GetProgress() {
+    XAUDIO2_VOICE_STATE state;
+    ((IXAudio2SourceVoice *)mVoice->mSourceVoice)->GetState(&state, 0);
+    Voice *voice = mVoice;
+    int pos = (unsigned int)state.SamplesPlayed;
+    if (voice->mLoopStart >= 0) {
+        int offset = pos - voice->mStartSamp;
+        int len = voice->mLoopEnd == -1 ? voice->mNumSamples - voice->mLoopStart
+                                        : voice->mLoopEnd;
+        pos = offset % len + voice->mStartSamp;
+    }
+    SynthSample360 *sample = (SynthSample360 *)mSample.Ptr();
+    return pos * 1000.0f / (sample->LengthMs() * sample->GetNumSamples());
+}
+
 void SampleInst360::StartImpl() { mVoice->Start(); }
 
 void SampleInst360::StopImpl(bool b) { mVoice->Stop(b); }
@@ -41,4 +56,11 @@ void SampleInst360::Pause(bool b) { mVoice->Pause(b); }
 void SampleInst360::SetADSR(const ADSRImpl &adsr) {
     mVoice->mAttackRate = adsr.GetAttackRate();
     mVoice->mReleaseRate = adsr.GetReleaseRate();
+}
+
+float SampleInst360::ElapsedTime() {
+    XAUDIO2_VOICE_STATE state;
+    ((IXAudio2SourceVoice *)mVoice->mSourceVoice)->GetState(&state, 0);
+    float samples = (double)state.SamplesPlayed;
+    return samples / (float)mSample->GetSampleRate();
 }

@@ -16,8 +16,10 @@ public:
     virtual bool IsPlaying();
 #endif
     virtual void SetFXCore(FXCore);
+    virtual float GetProgress();
     virtual void Pause(bool);
     virtual void SetADSR(const ADSRImpl &);
+    virtual float ElapsedTime();
 
     POOL_OVERLOAD(SampleInst360, 0x16)
 
