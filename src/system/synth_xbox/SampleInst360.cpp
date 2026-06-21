@@ -18,7 +18,11 @@ SampleInst360::~SampleInst360() {
     }
 }
 
+#ifdef HX_NATIVE
 bool SampleInst360::IsPlaying() const { return mVoice->IsPlaying(); }
+#else
+bool SampleInst360::IsPlaying() { return mVoice->IsPlaying(); }
+#endif
 
 void SampleInst360::SetFXCore(FXCore core) {}
 

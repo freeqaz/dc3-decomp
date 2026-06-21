@@ -10,7 +10,11 @@ public:
     virtual ~SampleInst360();
 
     // SampleInst pure virtuals
+#ifdef HX_NATIVE
     virtual bool IsPlaying() const;
+#else
+    virtual bool IsPlaying();
+#endif
     virtual void SetFXCore(FXCore);
     virtual void Pause(bool);
     virtual void SetADSR(const ADSRImpl &);

@@ -1,0 +1,28 @@
+{
+  "wave": "15-constsplit",
+  "lane": "A",
+  "note": "Backlog (NOT decomp.db writes — orchestrator single-writer). Two SampleInst360 virtuals are UNPAIRED but are MISSING IMPLEMENTATIONS, NOT const-mismatches. The const-split does not and cannot create them; they need explicit overrides with full bodies. Captured here for a follow-up function-decomp lane.",
+  "functions": [
+    {
+      "symbol": "?GetProgress@SampleInst360@@UAAMXZ",
+      "size": 268,
+      "unit": "default/system/synth_xbox/SampleInst360",
+      "status": "unpaired (mp=0); not in our source; base SampleInst::GetProgress default {return 0;} is what we currently emit",
+      "decode": "Reads mVoice (this+0xa8); srcVoice=mVoice->mSourceVoice (Voice+0x58); calls GetState(srcVoice,&state,0) via vtable+0x64; reads state.SamplesPlayed (sp+0x68). Then loop-wrap math using mVoice fields: mLoopStart(0x1c), mStartSamp(0x18), mLoopEnd(0x20), mNumSamples(0x10): if mLoopStart>=0 { len = (mLoopEnd==-1 ? mNumSamples : mLoopEnd) - mLoopStart; pos = ((SamplesPlayed - mStartSamp) % len) + mStartSamp }. Then calls a virtual on this (vtable+0x5c) returning a value, and ?GetMaxProcess@CFEWaveStreamDecoder@NUISPEECH (ICF-merged stub = real virtual returning unsigned int, ~total length). Final: float = (max * 32000.0f? __real@447a0000=1000.0f) / (this_virt_result * something). Returns fdivs f0/f13 as float ratio. NEEDS: vtable slot 0x5c and 0x64-on-mVoice resolution + the two new virtual decls on SampleInst360 (GetProgress override + the helper virtual at slot 0x5c).",
+      "risk": "HIGH — multi-step RE: ICF-merged virtual target resolution + XAUDIO2 GetState + loop modulo + FP ratio. Native engine does NOT use it (synth_xbox excluded). Separate decomp task, out of const-signature family."
+    },
+    {
+      "symbol": "?ElapsedTime@SampleInst360@@UAAMXZ",
+      "size": 124,
+      "unit": "default/system/synth_xbox/SampleInst360",
+      "status": "unpaired (mp=0); not in our source",
+      "decode": "mVoice=this->0x7c? NO — this+0x7c is read but that's likely the inlined this offset; actually lwz r11,0x7c,r3 then lwz r3,0x58,r11 -> wait this reads this+0x7c as a pointer then +0x58. Re-decode needed: calls GetState via vtable+0x64 (same srcVoice path); state.SamplesPlayed (sp+0x58); __u64tod converts SamplesPlayed to double -> f31; then mVoice->mSampleRate (Voice+0x18 = r3 to GetMaxProcess ICF stub); fdivs f31/sampleRate = elapsed seconds. NEEDS same virtual-decl + ICF resolution as GetProgress.",
+      "risk": "HIGH — same family of unknowns as GetProgress. Separate decomp task."
+    }
+  ],
+  "scan_finding_dataarray_node": {
+    "symbol_we_emit": "?Node@DataArray@@QBAAAVDataNode@@H@Z (const overload)",
+    "target_twin": "?Node@DataArray@@QAAAAVDataNode@@H@Z (non-const, 100% paired)",
+    "disposition": "not-a-bug / ICF artifact. DataArray declares both Node(int) and Node(int) const (Data.h:501,506). The target ICF-folded the const overload into the non-const address (identical bodies). The const overload is REQUIRED for compilation (const accessors UncheckedInt(int) const etc. call Node(i) from const context). The matched QAA is already 100%. Removing the const overload would break compilation. Leave as-is."
+  }
+}

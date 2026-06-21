@@ -9,7 +9,14 @@ class SampleInst : public Hmx::Object, public PlayableSample {
 public:
     SampleInst(SynthSample *);
     virtual ~SampleInst();
+#ifdef HX_NATIVE
+    // The native engine override (SampleInstNative) binds a const IsPlaying().
+    // The original Xbox target declares this virtual NON-const (UAA); see the
+    // HX_NATIVE const-split here and in SampleInst360.h.
     virtual bool IsPlaying() const = 0;
+#else
+    virtual bool IsPlaying() = 0;
+#endif
     virtual void SetFXCore(FXCore) = 0;
     virtual float GetProgress() { return 0; }
     virtual void SetStartProgress(float) {}
