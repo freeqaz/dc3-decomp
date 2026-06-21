@@ -946,8 +946,7 @@ void StandardStream::DoJump() {
         ClearJump();
     } else {
         if (mJumpFromSamples != mJumpToSamples) {
-            if (mRdr)
-                mRdr->Seek(mJumpToSamples);
+            mRdr->Seek(mJumpToSamples);
         }
         mCurrentSamp = mJumpToSamples;
     }
@@ -959,7 +958,7 @@ void StandardStream::DoJump() {
         ji.unk8 = mJumpFromMs;
     } else {
         ji.unkc = (mJumpToMs - mJumpFromMs) + mJumpInstances.back().unkc;
-        ji.unk8 = (mJumpFromMs - mJumpInstances.back().unk0) + mJumpInstances.back().unk4;
+        ji.unk8 = (mJumpFromMs - mJumpInstances.back().unk4) + mJumpInstances.back().unk8;
     }
     mJumpInstances.push_back(ji);
 }

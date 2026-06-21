@@ -71,7 +71,7 @@ void NgDOFProc::Set(const RndCam *cam, float focalPlane, float blurDepth, float 
     float farFocal = focalPlane - focalPlane * mBlurDepth;
 
     float bias = 0.0f;
-    if (nearPlane <= farFocal) {
+    if (farFocal >= nearPlane) {
         bias = (farPlane - farPlane / farFocal * nearPlane) / (farPlane - nearPlane)
             * (cam->ZRange().y - cam->ZRange().x) + cam->ZRange().x;
     }
