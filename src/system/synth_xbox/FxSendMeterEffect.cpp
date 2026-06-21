@@ -24,7 +24,29 @@ void FxSendMeterEffect360::SyncEffectParams(IXAudio2SubmixVoice *voice) const {
     voice->SetEffectParameters(0, &p, sizeof(p), 0);
 }
 
-void FxSendMeterEffect360::InitParams(IXAudio2SubmixVoice *, int) {}
+void FxSendMeterEffect360::InitParams(IXAudio2SubmixVoice *voice, int numChannels) {
+    std::vector<LevelData> &channels = mChannels;
+    channels.clear();
+    switch (numChannels) {
+    case 1:
+        channels.push_back("center");
+        break;
+    case 2: {
+        LevelData left("left");
+        LevelData right("right");
+        channels.push_back(left);
+        channels.push_back(right);
+        break;
+    }
+    default:
+        MILO_NOTIFY("InitParams only supports up to 2 channels");
+        break;
+    }
+    RELEASE(mParams);
+    mParams = new MeterEffectParams();
+    mParams->unk0 = (void *)&channels[0];
+    voice->SetEffectParameters(0, mParams, sizeof(MeterEffectParams), 0);
+}
 
 IUnknown *FxSendMeterEffect360::CreateFx() {
     return static_cast<CXAPOBase *>(new MeterEffect());

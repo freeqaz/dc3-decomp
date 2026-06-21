@@ -925,11 +925,21 @@ void StandardStream::setJumpSamplesFromMs(float fromMs, float toMs) {
 }
 
 __declspec(noinline) bool StandardStream::IsPastStreamJumpPointOfNoReturn() {
-    if (mJumpFromSamples == 0)
+    if (mState == kInit)
         return false;
-    if (mChannels.empty())
+    float fromTime = 0.0f;
+    if (mSampleRate != 0)
+        fromTime = SampToMs(mCurrentSamp);
+    float curTime = GetInSongTime();
+    if (curTime <= 0.0f)
         return false;
-    return mCurrentSamp >= mJumpFromSamples;
+    if (fromTime < curTime)
+        return true;
+    if (curTime >= mJumpFromMs)
+        return false;
+    if (mJumpFromMs >= fromTime)
+        return false;
+    return true;
 }
 
 void StandardStream::DoJump() {
