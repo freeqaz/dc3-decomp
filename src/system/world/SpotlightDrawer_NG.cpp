@@ -160,10 +160,11 @@ void NgSpotlightDrawer::RenderCone(Spotlight *sl) {
         colorOwner->mColor.alpha * scale
     );
     if (!sl->mAnimateColorFromPreset && sl->mBeam.mMat) {
-        color.red = sl->mBeam.mMat->GetColor().red * color.red;
-        color.green = sl->mBeam.mMat->GetColor().green * color.green;
-        color.blue = sl->mBeam.mMat->GetColor().blue * color.blue;
-        color.alpha = sl->mBeam.mMat->GetColor().alpha * color.alpha;
+        const Hmx::Color &matColor = sl->mBeam.mMat->GetColor();
+        color.red = matColor.red * color.red;
+        color.green = matColor.green * color.green;
+        color.blue = matColor.blue * color.blue;
+        color.alpha = matColor.alpha * color.alpha;
     }
     RenderConeDefs(sl, color);
 }
@@ -182,10 +183,11 @@ void NgSpotlightDrawer::RenderSphere(Spotlight *sl) {
     float b = colorOwner->mColor.blue * intensity;
 
     if (!sl->mAnimateColorFromPreset && sl->mBeam.mMat) {
-        r = r * sl->mBeam.mMat->GetColor().red;
-        g = sl->mBeam.mMat->GetColor().green * g;
-        b = sl->mBeam.mMat->GetColor().blue * b;
-        a = sl->mBeam.mMat->GetColor().alpha * a;
+        const Hmx::Color &matColor = sl->mBeam.mMat->GetColor();
+        r = r * matColor.red;
+        g = matColor.green * g;
+        b = matColor.blue * b;
+        a = matColor.alpha * a;
     }
 
     TheShaderMgr.mCullModeOverride = 1;
