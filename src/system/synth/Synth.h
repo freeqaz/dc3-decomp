@@ -123,6 +123,7 @@ public:
     void PlaySound(const char *, float, float, float);
     void AddZombie(SampleInst *);
     int GetNumMics() const;
+    MicClientMapper *GetMicClientMapper() { return mMicClientMapper; }
     void DrawMeter(float &, float, float, const char *);
 
     template <class T>

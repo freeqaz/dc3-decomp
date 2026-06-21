@@ -6,15 +6,22 @@
 #include "obj/DataFunc.h"
 #include "os/CritSec.h"
 #include "os/Debug.h"
+#include "os/Joypad.h"
 #include "os/System.h"
 #include "rnddx9/Rnd.h"
+#include "synth/MicClientMapper.h"
+#include "synth/MicManagerInterface.h"
+#include "synth/Synth.h"
 #include "synth_xbox/ExternalMic.h"
 #include "synth_xbox/FxSend.h"
 #include "synth_xbox/Voice.h"
 #include "utl/MemStream.h"
 #include "utl/Std.h"
 #include "utl/Symbol.h"
+#include <cmath>
 #include <cstring>
+
+extern "C" void XMemCpy(void *, const void *, int);
 
 MicManagerXbox *sInstance;
 
@@ -60,6 +67,67 @@ void ChatReceiver::ActivateProcessing(bool b1) {
             hr = mXHV->UnregisterLocalTalker(unk4);
             DX_ASSERT_CODE(hr, 0x413);
         }
+    }
+}
+
+void ChatReceiver::ProcessChatData(void *data, unsigned int size, int *flag) {
+    float w = gLowCut * 0.000392699f;
+    float b1 = Sine(w + 1.5707964f) * -2.0f;
+    float a1 = -b1;
+    float disc = b1 * b1 - (Sine(w + 1.5707964f) * 8.0f - 7.0f) * 4.0f;
+    float coef = (a1 - sqrtf(disc)) * 0.5f;
+    float gain = (coef + 1.0f) * 0.5f;
+
+    float z1 = unkc;
+    float z2 = unk10;
+    unsigned int samps = size >> 1;
+    if (samps != 0) {
+        short *p = (short *)data - 1;
+        for (unsigned int i = 0; i != samps; i++) {
+            float in = (float)p[1];
+            float out = (in - z1) * gain * 2.0f + z2 * coef;
+            z1 = in;
+            out = Clamp(-32767.0f, 32767.0f, out);
+            p++;
+            *p = (short)out;
+            z2 = (float)(short)out;
+        }
+    }
+    unk10 = z2;
+    unkc = z1;
+
+    short maxSamp = 0;
+    short minSamp = 0;
+    *flag = 1;
+    float localRatio = DbToRatio(gLocalGain);
+    if (samps != 0) {
+        short *p = (short *)data - 1;
+        for (unsigned int i = 0; i < samps; i++) {
+            short s = p[1];
+            if (s >= maxSamp) {
+                maxSamp = s;
+            }
+            if (s < minSamp) {
+                minSamp = s;
+            }
+            p++;
+            p[0] = (short)((float)s * localRatio);
+        }
+    }
+
+    int newCount;
+    if ((float)maxSamp * (1.0f / 32767.0f) > DbToRatio(gNoiseThreshold) ||
+        (float)minSamp * (1.0f / 32767.0f) < -DbToRatio(gNoiseThreshold)) {
+        newCount = gNoiseInt;
+    } else if (unk14 > 0) {
+        newCount = unk14 - 1;
+    } else {
+        *flag = 0;
+        return;
+    }
+    unk14 = newCount;
+    if (*flag != 0) {
+        unk18 = 5;
     }
 }
 
@@ -214,6 +282,79 @@ void MicXbox::OnMicDisconnected() {
     x->mMicsChanged = true;
 }
 
+void MicXbox::AddData(void *data, int bytes) {
+    CritSecTracker t(&MicManagerXbox::GetInstance()->unk68);
+    MILO_ASSERT((bytes & 1) == 0, 0x344);
+    if (mOutputGain != 1.0f) {
+        int n = bytes / 2;
+        if (n > 0) {
+            short *p = (short *)data;
+            do {
+                float prod = (float)*p * mOutputGain;
+                float rounded = (float)floor(prod + 0.5f);
+                *p = (short)Clamp(-32767.0f, 32767.0f, rounded);
+                p++;
+            } while (--n);
+        }
+    }
+    if (mPlaybackVoice) {
+        short *bufEnd = unk1c + 6144;
+        if ((char *)unk301c + bytes <= (char *)bufEnd) {
+            XMemCpy(unk301c, data, bytes);
+            unk301c = (short *)((char *)unk301c + bytes);
+        } else {
+            int firstPart = (char *)bufEnd - (char *)unk301c;
+            XMemCpy(unk301c, data, firstPart);
+            int remaining = bytes - firstPart;
+            XMemCpy(unk1c, (char *)data + firstPart, remaining);
+            unk301c = (short *)((char *)unk1c + remaining);
+        }
+        if (!mPlaybackVoice->IsPlaying() &&
+            (char *)unk301c - (char *)unk1c >= 0xf00) {
+            mPlaybackVoice->SetVolume(mVolume);
+        }
+    }
+    AddToBuffer(unk3020, data, bytes, 0);
+    unk302c.Write(data, bytes);
+    mDroppedSamples = unk3040.Write(data, bytes);
+}
+
+void MicXbox::ReadChatBuffer(void *data, unsigned int bytes) {
+    MILO_ASSERT(bytes < 0x3000, 0x2d6);
+    if (ExternalMicClientMgr::ConnectedForClient(this)) {
+        unsigned int samps = bytes / 2;
+        if ((int)(unk3020.size()) >= samps * 3) {
+            short *out = (short *)data;
+            for (unsigned int i = 0; i < samps; i++) {
+                out[i] = unk3020[i * 3];
+            }
+            unk3020.erase(unk3020.begin(), unk3020.begin() + samps * 3);
+        }
+    }
+}
+
+bool MicXbox::AddToBuffer(std::vector<short> &buf, void *data, int bytes, int *dropped) {
+    int samps = bytes / 2;
+    bool overflowed = false;
+    MILO_ASSERT((unsigned int)samps <= buf.capacity(), 0x3ac);
+    if (buf.size() + samps > buf.capacity()) {
+        if (dropped) {
+            *dropped += buf.size();
+        }
+        buf.erase(buf.begin(), buf.end());
+        overflowed = true;
+    }
+    short zero = 0;
+    unsigned int oldSize = buf.size();
+    if (oldSize + samps < oldSize) {
+        buf.erase(buf.begin() + (oldSize + samps), buf.end());
+    } else {
+        buf.insert(buf.end(), (oldSize + samps) - oldSize, zero);
+    }
+    XMemCpy(&buf[oldSize], data, bytes);
+    return overflowed;
+}
+
 #pragma endregion MicXbox
 #pragma region MicManagerXbox
 
@@ -310,6 +451,58 @@ MicManagerXbox *MicManagerXbox::GetInstance() {
         sInstance = new MicManagerXbox();
     }
     return sInstance;
+}
+
+void MicManagerXbox::DataReadyCallback(unsigned long userIndex, void *data,
+                                       unsigned long dataSize, int *flag) {
+    MILO_ASSERT(sInstance, 0x183);
+    sInstance->OnDataReady(userIndex, data, dataSize, flag);
+}
+
+void MicManagerXbox::OnDataReady(unsigned long userIndex, void *data, unsigned long dataSize,
+                                 int *flag) {
+    MILO_ASSERT(userIndex >= 0 && userIndex < 4, 0x18a);
+    CritSecTracker t(&unk68);
+    ChatReceiver *receiver = unkc[userIndex];
+    MILO_ASSERT(receiver, 0x191);
+    if (receiver->unk8) {
+        if ((int)receiver->mXHV->IsHeadsetPresent(receiver->unk4)) {
+            if ((unsigned int)unk18 == userIndex) {
+                unk18 = -1;
+            }
+        } else {
+            if (unk18 == -1) {
+                unk18 = userIndex;
+            }
+            if ((unsigned int)unk18 == userIndex) {
+                if (mPushToTalkPad == -1 ||
+                    (JoypadGetPadData(mPushToTalkPad)->mButtons & 1) ||
+                    JoypadGetPadData(mPushToTalkPad)->Pressed(kPad_R2)) {
+                    MicClientMapper *mapper = TheSynth->GetMicClientMapper();
+                    for (int i = 0; i < 4; i++) {
+                        MicClientID id(i, -1);
+                        int micID = mapper->GetMicIDForClientID(id);
+                        if (micID != -1) {
+                            MicXbox *mic = (MicXbox *)TheSynth->GetMic(micID);
+                            if (mic) {
+                                mic->ReadChatBuffer(data, dataSize);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if ((int)receiver->mXHV->IsSharedMicPresent(receiver->unk4) == 0) {
+        receiver->ProcessChatData(data, dataSize, flag);
+    } else {
+        MicXbox *mic = (MicXbox *)TheSynth->GetMic(0);
+        if (mic) {
+            mic->AddData(data, dataSize);
+        }
+        *flag = 1;
+    }
 }
 
 #pragma endregion MicManagerXbox

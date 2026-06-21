@@ -14,6 +14,8 @@
 class MemStream;
 
 class ChatReceiver {
+    friend class MicManagerXbox;
+
 public:
     ~ChatReceiver();
     ChatReceiver(IXHV2Engine *, int);
@@ -36,6 +38,8 @@ private:
 };
 
 class MicXbox : public Mic {
+    friend class MicManagerXbox;
+
 public:
     virtual ~MicXbox();
     virtual float GetGain() const;
