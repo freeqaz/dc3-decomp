@@ -2,6 +2,27 @@
 
 Consolidated report of stub functions across the decomp, categorized by type and grouped by source file. Generated 2026-03-12, updated 2026-03-17.
 
+> **2026-06-22 RE-VERIFICATION (wave 24):** This document's per-function STUB
+> labels below (esp. Tier 4 Audio, lines ~108-126, and the "Implementable Stubs
+> by Source File" §) are **STALE**. A read-only sweep re-checked 41 named
+> non-Xbox functions against current source — **all 41 are fully implemented;
+> ZERO remain stubs.** Specifically DONE (still labelled STUB below):
+> `SampleData::Load/LoadWAV/SizeAs/SampleMarker::Load`, `Synth::DrawMeter`,
+> `Mic::RingBuffer::Write/Read`, `MicNull::GetContinuousBuf`, `complex::eval`,
+> `RndLine::UpdateLine`×3 / `UpdateLinePair`, `RndPropAnim::ForeachKeyframe`,
+> `Rnd::Modal`, `RndPostProc::Interp`, `WorldDir::BitmapOverride::Sync`, all
+> `Geo.cpp` Intersect/BSPFace helpers, `mtx.cpp` Det/Invert,
+> `DoubleExponentialSmoother::Smooth`×2, all `obj/Utl.cpp` file helpers,
+> `ScriptTask::UpdateVarsObjects/Replace`, `Game::HandleWait`,
+> `GamePanel::UpdateNowBar/DeJitter`. The "~8 remaining audio stubs" claim is
+> false — the mogg/wav SFX pipeline is live. The **only** stub-like markers left
+> in these files are two deliberate Kinect-gated TODOs (Game.cpp:468 move_passed
+> scoring, GamePanel.cpp:448 autoplay scoring) — Xbox/gesture domain, not missing
+> C++ bodies. **Treat the lists below as historical; the native-relevant stub
+> lever is EMPTY.** Also fixed this wave: the `FileMerger::Merger::Clear`
+> sync-reload infinite loop (see DECOMP_GAPS.md) — 6 outfit-reload tests
+> re-enabled.
+
 **2026-03-17 status**: All core engine subsystems (rndobj, char, synth, math, flow, world, ui, obj, os) have zero workable stubs remaining. Every function is either COMPLETE or AT_LIMIT. Remaining workable functions are Kinect/gameplay-specific (FreestyleMoveRecorder, MoveDetector) or template instantiations. Audio DSP effects, SampleInst, Sound, WavReader, Sequence are all implemented.
 
 **2026-03-17 linker stub cleanup**: Removed 1,063 dead weak stubs from `engine_stubs_generated.cpp` (4192 → 1058 lines). These were auto-generated safety nets from early native port development that were silently overridden by strong symbols as decomp source files were added.

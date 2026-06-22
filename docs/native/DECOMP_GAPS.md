@@ -2,7 +2,21 @@
 
 Inventory of decomp gaps affecting the native build. Prioritized by impact on rendering and UI.
 
-**Last updated**: 2026-03-15
+**Last updated**: 2026-06-22
+
+> **2026-06-22 (wave 24):** Fixed a real native runtime bug — `FileMerger::Merger::Clear`
+> spun in an **infinite loop** during synchronous outfit reloads
+> (`HamCharacter::StartLoad(false)`). Native `ObjPtrList::Node::NullifyObj` only
+> auto-unlinks a node when `!gInReplaceList`, but `Clear`'s `while(!empty) delete
+> front()` drain runs inside a `ReplaceList` ring-walk, so `front()` never
+> advanced. Fixed with a `#ifdef HX_NATIVE` `pop_front()`-before-`delete` drain
+> (zero PPC impact; objdiff unchanged at 98.4%), re-enabling **6 outfit-reload
+> tests** (`test_asset_loading.cpp`) that were previously skipped behind
+> `SKIP_IF_OUTFIT_RELOAD_BROKEN`. Also re-verified the Tier-4 audio + misc
+> "remaining stubs" lists in STUB_BURNDOWN.md: **all 41 checked non-Xbox
+> functions are implemented; the native-relevant stub lever is empty.** The
+> Priority-1/2/3 AT_LIMIT % tables below remain PPC decomp-accuracy targets (most
+> are register-allocation floors), not native blockers.
 
 ## Current State
 
