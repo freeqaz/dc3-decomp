@@ -235,7 +235,7 @@ void RndSpline::SyncDeformedDummyCtrlPoints(int startIdx, int endIdx) const {
             mDummyBefore.mRoll = p0[4];
             mDeformedCtrlPoints[0].mDirtyConstants = true;
         }
-        int numPts = (mDeformedCtrlPoints.end() - mDeformedCtrlPoints.begin());
+        int numPts = (int)mDeformedCtrlPoints.size();
         if (unk145 && endIdx >= numPts - 2) {
             int lastOff = (numPts - 1) * 0x58;
             unk145 = false;
