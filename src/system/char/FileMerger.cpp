@@ -70,10 +70,42 @@ void FileMerger::Merger::Clear(bool shouldDraw) {
     } else
 #endif
     {
+#ifdef HX_NATIVE
+        // Native-only: drain by explicitly popping the front node out of the
+        // list BEFORE deleting the object, so loop progress does NOT depend on
+        // the object's destructor auto-erasing its own list node.
+        //
+        // The PPC loop (#else branch) relies on `delete front` -> ~Object ->
+        // ReplaceRefs -> ObjPtrList::Node::NullifyObj unlinking + self-deleting
+        // the front node (and on that running while gInReplaceList is false).
+        // On native, ReplaceRefs sets gInReplaceList=true for the duration of
+        // its snapshot ring-walk (Object.cpp), and a synchronous outfit reload
+        // (HamCharacter::StartLoad(false)) can also run Clear() with an outer
+        // ReplaceList ring-walk already in progress. In both cases the node's
+        // erase is SUPPRESSED ("ObjPtrList::ReplaceNode: suppressed erase during
+        // ReplaceList"), so the node is never removed: front() never advances,
+        // mSize never decrements, and the loop spins forever (infinite loop).
+        //
+        // pop_front() detaches the Node from BOTH the list (Unlink) and the
+        // object's ObjRef ring (~Node -> ~ObjRefConcrete calls mObject->Release
+        // while the object is still alive), so the subsequent `delete front`
+        // walks a ring that no longer contains the freed node — no UAF / double
+        // free. Mirrors the established drain idiom in synth/Faders.cpp.
+        //
+        // The root-level gInReplaceList protection is intentionally left intact:
+        // it guards every other ring-walk against heap corruption, so scoping it
+        // would be both broader and riskier than this narrow drain fix.
+        while (!mLoadedObjects.empty()) {
+            Hmx::Object *front = mLoadedObjects.front();
+            mLoadedObjects.pop_front();
+            delete front;
+        }
+#else
         while (!mLoadedObjects.empty()) {
             Hmx::Object *front = mLoadedObjects.front();
             delete front;
         }
+#endif
     }
 #ifdef HX_NATIVE
     if (ObjectDir::InDeleteObjects()) {
