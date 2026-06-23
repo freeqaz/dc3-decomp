@@ -180,8 +180,22 @@ void SuperEasyRemixer::SaveSuperEasyMoveParents() {
             if (curMeasure.preferred.Null() && curMeasure.first.Null()) {
                 mSuperEasyVariants.push_back(nullptr);
             } else {
+#ifdef HX_NATIVE
+                // altRev-0 songs (e.g. macarena) never read `preferred` during load,
+                // so it stays empty even for measures with a real move. The original
+                // would MILO_FAIL on FindMoveByVariantName("") here; mirror the
+                // sibling LoadAllVariants() fallback (preferred -> first -> second).
+                Symbol lookupName = curMeasure.preferred;
+                if (lookupName.Null())
+                    lookupName = curMeasure.first;
+                if (lookupName.Null())
+                    lookupName = curMeasure.second;
+                const MoveVariant *mv =
+                    TheMoveMgr->Graph().FindMoveByVariantName(lookupName);
+#else
                 const MoveVariant *mv =
                     TheMoveMgr->Graph().FindMoveByVariantName(curMeasure.preferred);
+#endif
                 if (!mv) {
                     MILO_FAIL(
                         "'%s' HamSupereasyData has move '%s' at index %d not found in move graph",
