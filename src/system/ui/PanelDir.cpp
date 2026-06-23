@@ -113,6 +113,18 @@ bool ShouldActivateNativeFlow(const char *dirName, const char *flowPath) {
         if (dir == *d) return false;
     }
 
+    // Game-code-triggered nested sub-panels (e.g. the XP toaster) live in sub-dirs
+    // reached by the recursive ObjDirItr in PanelDir::Enter. Their flows
+    // (test_init.flow -> FlowRun "l1" etc.) are fired by game code when the toast
+    // is shown, NOT by an ancestor panel's enter. Blanket-activating them on every
+    // panel enter double-activates a shared FlowSequence, tripping its
+    // <=1-running-node asserts on perform_endgame_screen. Match by flow path so we
+    // only skip the nested sub-panel, never the entering panel's own flows.
+    static const char *kGameTriggeredFlowPaths[] = { "xptoaster", nullptr };
+    if (ContainsAny(flow, kGameTriggeredFlowPaths)) {
+        return false;
+    }
+
     if (mode == kNativeFlowFilterMenuOnly) {
         if (dir == "letterbox" || dir == "newskeletondir") {
             return false;
