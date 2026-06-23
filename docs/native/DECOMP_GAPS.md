@@ -18,6 +18,21 @@ Inventory of decomp gaps affecting the native build. Prioritized by impact on re
 > Priority-1/2/3 AT_LIMIT % tables below remain PPC decomp-accuracy targets (most
 > are register-allocation floors), not native blockers.
 
+> **2026-06-23 (wave 25):** (1) **Native scoring TODOs resolved** (`1a4d0db0`): the
+> fake-autoplay-points hack in `GamePanel::Poll` (100-500 pts/beat written into the
+> real provider `score` property + HUD) is **removed** — native score is now honestly
+> **0** (no gesture detection is wired into `MoveDir`'s scoring frames: native never
+> instantiates `SkeletonUpdate`, so `DetectFrac` returns 0). `gameplay_mode` is now
+> defaulted on TheGameMode (`GameMode.cpp`) for crash-safety. The real `move_passed`
+> handler is re-enabled but gated behind `DC3_REAL_MOVE_PASSED` (off — it destabilizes
+> the move graph: activeMoveCount 2→0 + intermittent `SymbolKeys::SetFrame` null-deref;
+> root-cause TBD, the gateway to real native scoring). (2) `FileMerger::Merger::Clear`
+> is a confirmed **MSVC backend floor** (98.4%, not source-fixable) and its native
+> infinite-loop is **not** a decomp bug and does **not** affect the original Xbox game
+> (native-only `gInReplaceList` erase-suppression; og-dc3 has unconditional erase). (3)
+> **High-relevance Xbox-stub lever is empirically EMPTY** — a runtime stub-trace of a
+> full 5000-frame gameplay run hits only no-op/already-implemented/Kinect stubs.
+
 ## Current State
 
 - **Track A (Engine Boot → Gameplay)**: Boots through full menu flow to `game_screen` with 3D venue rendering via scripted button input (see "Scripted Input" section below). Current checkout reaches stable YMCA gameplay through frame 4500+. Roller rink venue with full geometry (dance floor, railing, arcade machines, neon signs), character model, HUD, and visualizer all render. 415 mesh draw calls on game_screen. The multiuser_screen DTA `enter` handler now drives the game start flow naturally — no auto-skip needed.
