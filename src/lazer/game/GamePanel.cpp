@@ -445,81 +445,17 @@ void GamePanel::Poll() {
             StartGame();
         }
 #ifdef HX_NATIVE
-        // TODO(native): autoplay scoring — remove when real move detection is implemented
-        // Without Kinect, no move_passed events fire, so score stays 0.
-        // Simulate scoring by awarding points on each beat during gameplay.
-        if (mState == kGamePlaying) {
-            static int sLastBeat = -1;
-            static int sNativeScore = 0;
-            int curBeat = (int)TheTaskMgr.Beat();
-            if (curBeat != sLastBeat && curBeat >= 0) {
-                sLastBeat = curBeat;
-                // Award 100-500 points per beat depending on beat position
-                int points = 100 + (curBeat % 5) * 100;
-                sNativeScore += points;
-                // Update player provider score (this is what the DTA flow reads)
-                for (int p = 0; p < 2; p++) {
-                    HamPlayerData *pd = TheGameData->Player(p);
-                    if (pd && pd->IsPlaying() && pd->Provider()) {
-                        static Symbol scoreSym("score");
-                        pd->Provider()->SetProperty(scoreSym, DataNode(sNativeScore));
-                    }
-                }
-                // Update score labels directly on HUD panel subdirs.
-                // The DTA set_score handler is an empty stub in the ark DTB,
-                // so we set score1.lbl inside score_left/score_right from C++.
-                static UILabel *sScoreLabels[2] = {nullptr, nullptr};
-                static UILabel *sShadowLabels[2] = {nullptr, nullptr};
-                if (!sScoreLabels[0]) {
-                    DataNode &hp = DataVariable("hud_panel");
-                    if (hp.Type() == kDataObject && hp.GetObj()) {
-                        ObjectDir *hd = dynamic_cast<ObjectDir *>(hp.GetObj());
-                        if (hd) {
-                            const char *sides[] = {"score_left", "score_right"};
-                            for (int s = 0; s < 2; s++) {
-                                RndDir *sd = hd->Find<RndDir>(sides[s], false);
-                                if (sd) {
-                                    sScoreLabels[s] =
-                                        sd->Find<UILabel>("score1.lbl", false);
-                                    sShadowLabels[s] =
-                                        sd->Find<UILabel>("score2.lbl", false);
-                                    sd->SetShowing(true);
-                                }
-                            }
-                        }
-                    }
-                }
-                if (sScoreLabels[0] || sScoreLabels[1]) {
-                    // Format score with comma separators
-                    char buf[32];
-                    if (sNativeScore >= 1000000)
-                        snprintf(buf, sizeof(buf), "%d,%03d,%03d",
-                                 sNativeScore / 1000000,
-                                 (sNativeScore / 1000) % 1000,
-                                 sNativeScore % 1000);
-                    else if (sNativeScore >= 1000)
-                        snprintf(buf, sizeof(buf), "%d,%03d",
-                                 sNativeScore / 1000,
-                                 sNativeScore % 1000);
-                    else
-                        snprintf(buf, sizeof(buf), "%d", sNativeScore);
-                    for (int s = 0; s < 2; s++) {
-                        if (sScoreLabels[s]) {
-                            sScoreLabels[s]->RndText::SetText(buf);
-                            sScoreLabels[s]->UpdateText();
-                            sScoreLabels[s]->SetShowing(true);
-                            // Negate X scale to counter parent mirror flip
-                            Transform lx = sScoreLabels[s]->LocalXfm();
-                            lx.m.x.x = -std::abs(lx.m.x.x);
-                            sScoreLabels[s]->SetLocalXfm(lx);
-                        }
-                        // Hide score2.lbl (shadow) to prevent overlap
-                        if (sShadowLabels[s])
-                            sShadowLabels[s]->SetShowing(false);
-                    }
-                }
-            }
-        }
+        // (Removed) Former native autoplay-scoring hack: it fabricated 100-500
+        // points/beat, wrote them into the REAL player provider `score` property
+        // and pushed them into the HUD labels/screenshots, which lied to anyone
+        // validating gameplay/HUD against Xbox. With no real gesture detection
+        // wired on native (DetectFrac is ~0), the honest score is 0 until real
+        // move detection lands, so the provider `score` is left untouched here
+        // and the HUD numeric label stays truthfully 0. The genuine Xbox scoring
+        // pipeline (Game::SetHamMove -> move_passed DTA handler ->
+        // MetaPerformer::OnMovePassed) is gated behind DC3_REAL_MOVE_PASSED in
+        // Game::SetHamMove (off by default; it currently destabilizes the move
+        // graph — see the note there).
 #endif
         for (int i = 0; i < 2; i++) {
             FitnessFilter *filt = GetFitnessFilter(i);

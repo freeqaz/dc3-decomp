@@ -465,10 +465,34 @@ void Game::SetHamMove(int i1, HamMove *move, bool b3) {
             MILO_ASSERT(player_data, 0x2CA);
             if (player_data->IsPlaying()) {
 #ifdef HX_NATIVE
-                // TODO(native): Skip move_passed scoring — no gesture detection system.
-                // DetectFrac returns 0 (no skeleton data), and the move_passed DTA handler
-                // accesses scoring pipeline objects that crash without Kinect input.
-                // Flashcard display still works because set_cur_move fires separately.
+                // Native scoring is honest, not fabricated. There is no gesture
+                // detection wired into MoveDir's scoring frames on native
+                // (SkeletonUpdate is never instantiated, so MoveDir is never a
+                // SkeletonUpdate callback and EnqueueDetectFrames never runs), so
+                // DetectFrac safely returns 0. The former GamePanel::Poll hack
+                // that fabricated 100-500 points/beat and wrote them into the
+                // real provider `score` property + HUD/screenshots has been
+                // removed: with no real detection the truthful score is 0.
+                //
+                // The genuine Xbox move_passed scoring path (DTA move_passed ->
+                // MetaPerformer::OnMovePassed) is reachable but NOT enabled by
+                // default. The one known fatal in that path (TheGameMode
+                // gameplay_mode unset) is made crash-safe by the HX_NATIVE
+                // default in GameModeInit(); however, driving the full DTA
+                // handler every beat was observed to destabilize the move graph
+                // (active move count collapses to 0 and the song-anim PropAnim
+                // path intermittently null-derefs in SymbolKeys::SetFrame). Until
+                // that interaction is root-caused, gate the real path behind an
+                // env flag so default headless/gameplay stays stable and honest.
+                if (getenv("DC3_REAL_MOVE_PASSED")) {
+                    float frac = mMoveDir->DetectFrac(i1, i5);
+                    static Message move_passed("move_passed", -1, 0, 0, 0);
+                    move_passed[0] = i1;
+                    move_passed[1] = current;
+                    move_passed[2] = frac;
+                    move_passed[3] = b3;
+                    TheGamePanel->Handle(move_passed, false);
+                }
 #else
                 float frac = mMoveDir->DetectFrac(i1, i5);
                 static Message move_passed("move_passed", -1, 0, 0, 0);

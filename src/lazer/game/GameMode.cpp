@@ -235,6 +235,22 @@ void GameModeInit() {
     MILO_ASSERT(TheGameMode == NULL, 0x35);
     TheGameMode = new GameMode();
     g_LoaderModeCallback = IsInLoaderMode;
+#ifdef HX_NATIVE
+    // Crash-safety insurance: several gameplay-only readers call
+    // TheGameMode->Property(gameplay_mode) with fail=true (e.g.
+    // MetaPerformer::OnMovePassed, SongSequence::OnSongLoaded). On Xbox the
+    // value is established by GameMode::SetGameplayMode during song load; on
+    // native that path normally runs too, but if the move_passed scoring path
+    // is reached before SetGameplayMode (or in a mode that never set it) the
+    // unset property fatally MILO_FAIL_DTAs. Default it to "perform" so the
+    // real scoring pipeline runs to completion instead of asserting. The real
+    // value (perform/practice/dance_battle/...) overwrites this once
+    // SetGameplayMode runs. Mirrors the EnsureHamProvider defaults in Ham.cpp.
+    static Symbol gameplay_mode("gameplay_mode");
+    static Symbol perform("perform");
+    if (!TheGameMode->Property(gameplay_mode, false))
+        TheGameMode->SetProperty(gameplay_mode, DataNode(perform));
+#endif
 }
 
 void GameModeTerminate() {
