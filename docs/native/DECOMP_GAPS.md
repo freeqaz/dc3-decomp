@@ -44,11 +44,13 @@ Inventory of decomp gaps affecting the native build. Prioritized by impact on re
 > (the asserts run before the `mIsAdvancing` guard). This is an instance of the **native blanket-Flow
 > "smoking gun" below (~line 143)** — `PanelDir::Enter` activates flows Xbox drives via targeted DTA,
 > with a different synchronous order. A first fix attempt (`a80e1b0b`: skip nested/recurse flows +
-> `'1'`-suffix dedup) was **runtime-proven ineffective and REVERTED (`2c95ca22`)** — it targeted the
-> wrong layer. **DEFERRED**: the correct fix is the broad native flow-activation semantic-content filter
-> (match Xbox's targeted DTA activation set), a known-unresolved effort; silencing the matched
-> FlowSequence asserts is disallowed. Same root as the contradictory-SIBLING over-activation on
-> main_screen/choose_mode (select+enter1+exit, show+hide game_mode_icon).
+> `'1'`-suffix dedup) was runtime-proven ineffective and reverted; a `recurse=false` attempt was
+> rejected (stripped menu chrome, caught by screenshot diff). **FIXED `28ed44cf`**:
+> `ShouldActivateNativeFlow` skips flows whose path is in a game-code-triggered nested sub-panel
+> (xptoaster) — those fire on XP-award, not panel enter. Asserts 6→0 (runtime-verified to endgame),
+> menus unchanged, PPC-neutral, suite 418/418. **Still open (non-fatal, separate mechanism):** the
+> contradictory-SIBLING over-activation on main_screen/choose_mode (select+enter1+exit, show+hide
+> game_mode_icon) — top-level duplicate flows, not nested; lower priority.
 
 ## Current State
 

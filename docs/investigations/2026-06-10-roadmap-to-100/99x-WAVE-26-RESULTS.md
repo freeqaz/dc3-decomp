@@ -20,7 +20,17 @@ on Xbox) → fixed `#ifdef HX_NATIVE` with a `preferred`→`first`→`second` fa
 (objdiff 78.2% unchanged). Runtime-verified: macarena FAIL gone, supereasy no longer wrongly degrades to
 the easy track. Adversarially reviewed → CONFIRMED.
 
-## Bug 2 — FlowSequence 2-running-nodes asserts on endgame (ROOT-CAUSED, fix reverted, DEFERRED)
+## Bug 2 — FlowSequence 2-running-nodes asserts on endgame (FIXED `28ed44cf`)
+**RESOLVED (follow-up):** `ShouldActivateNativeFlow` now skips flows whose path is in a
+game-code-triggered nested sub-panel (the XP-toaster, `ui/hud/xptoaster*.milo`) — those are
+triggered on XP-award, not panel enter, so blanket-activating them double-activated the shared
+`FlowRun "l1"` FlowSequence. Runtime-verified: endgame asserts **6→0** (endgame+results reached),
+`choose_mode` menu chrome **unchanged vs baseline** (the `recurse=false` approach was tried first and
+rejected — it stripped menu chrome, caught by screenshot diff before merge), `PanelDir::Enter` stays
+100% normalized (PPC-neutral), suite 418/418. The investigation history below (two reverted attempts →
+runtime-instrumented root-cause) stands as the record.
+
+### Original (root-cause journey)
 `FlowSequence.cpp` `MILO_ASSERT(mRunningNodes.empty(), 0x74)` + `MILO_ASSERT(mRunningNodes.size()<2,
 0xA6)` fire ~6× entering `perform_endgame_screen` (NON-FATAL — engine recovers; endgame→results
 completes cleanly).
