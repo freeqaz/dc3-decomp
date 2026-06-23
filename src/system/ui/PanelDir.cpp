@@ -18,7 +18,6 @@
 #include <cctype>
 #include <cstdlib>
 #include <cstring>
-#include <list>
 #include <string>
 #include "flow/Flow.h"
 extern void FlushTransparentDraws();
@@ -435,27 +434,7 @@ void PanelDir::Enter() {
     // DTA enter scripts on Xbox. Flows with startMode>0 auto-start through the
     // normal Flow::Enter() path (called by RndDir::Enter above) and don't need
     // blanket activation here.
-    //
-    // ObjDirItr(this, true) recurses into every subdir, so it yields BOTH the
-    // panel's top-level Flows AND the Flows nested inside them. A nested Flow is
-    // already driven through its owner Flow's normal Activate()/ChildFinished
-    // cascade (the "ran in full immediately" synchronous FlowIf->FlowSwitch->
-    // FlowSequence path). Independently blanket-activating it on top of that
-    // pushes the same shared FlowSequence child onto mRunningNodes twice — two
-    // children running in one strictly-sequential FlowSequence — which trips
-    // FlowSequence::ChildFinished's mRunningNodes.empty()/size()<2 asserts on
-    // perform_endgame_screen (enter.flow + enter1.flow + their nested flows all
-    // firing together). The original Xbox PanelDir::Enter() never auto-activates
-    // flows at all (DTA enter scripts pick exactly one), so this whole loop is
-    // native-only; restricting it to top-level, panel-owned Flows keeps the
-    // intended menu-enter animation while avoiding the duplicate activation.
-    std::list<std::string> activatedBaseNames;
     for (ObjDirItr<Flow> it(this, true); it != nullptr; ++it) {
-        // Only blanket-activate top-level Flows directly owned by this panel.
-        // Nested Flows (those with a parent FlowNode) run via their owner's
-        // cascade; activating them again here is the duplicate-running-node bug.
-        if (it->GetParent() != nullptr)
-            continue;
         if (it->GetStartMode() > 0) {
             // Event-triggered flows with "enter" in the name need explicit
             // activation on native — the DTA enter script message that would
@@ -464,40 +443,11 @@ void PanelDir::Enter() {
             if (name.find("enter") == std::string::npos)
                 continue;
         }
-        // Skip the duplicated "1"-suffixed sibling of a flow we already
-        // activated this pass (e.g. enter1.flow vs enter.flow). The suffixed
-        // copy is a proxy/duplicate that shares node references; activating both
-        // double-pushes shared FlowSequence children.
-        std::string baseName = LowerString(it->Name());
-        if (!baseName.empty()) {
-            std::string canonical = baseName;
-            size_t dot = canonical.find('.');
-            std::string stem =
-                (dot == std::string::npos) ? canonical : canonical.substr(0, dot);
-            std::string ext =
-                (dot == std::string::npos) ? std::string() : canonical.substr(dot);
-            if (!stem.empty() && stem[stem.size() - 1] == '1') {
-                std::string sibling = stem.substr(0, stem.size() - 1) + ext;
-                bool already = false;
-                for (std::list<std::string>::iterator a = activatedBaseNames.begin();
-                     a != activatedBaseNames.end(); ++a) {
-                    if (*a == sibling) {
-                        already = true;
-                        break;
-                    }
-                }
-                if (already)
-                    continue;
-            }
-        }
         const char *flowPath = PathName((Hmx::Object *)it);
         if (!ShouldActivateNativeFlow(Name(), flowPath))
             continue;
-        if (!it->IsRunning()) {
+        if (!it->IsRunning())
             it->Activate();
-            if (!baseName.empty())
-                activatedBaseNames.push_back(baseName);
-        }
     }
 #endif
 }
