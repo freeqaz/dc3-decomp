@@ -33,6 +33,23 @@ Inventory of decomp gaps affecting the native build. Prioritized by impact on re
 > **High-relevance Xbox-stub lever is empirically EMPTY** — a runtime stub-trace of a
 > full 5000-frame gameplay run hits only no-op/already-implemented/Kinect stubs.
 
+> **2026-06-23 (wave 26 — gameplay bug-hunt):** A full boot→gameplay→endgame headless run
+> (betteroffalone) surfaced exactly 2 real code bugs, both fixed: (1) `HamSupereasyData`
+> empty-`preferred` move-graph FAIL on altRev-0 songs (macarena) — `SaveSuperEasyMoveParents`
+> now falls back `preferred`→`first`→`second` under HX_NATIVE (`d03901e3`); (2) `FlowSequence`
+> 2-running-nodes asserts on `perform_endgame_screen` (×6, NON-FATAL) — ROOT-CAUSED via runtime
+> instrumentation to the **XP-toaster `test_init.flow`** (`ui/hud/gen/xptoaster*.milo_xbox`, active
+> on the endgame `xp_overlay_panel`): its `FlowSequence` double-activates a `FlowRun` child `l1` via
+> synchronous re-entrancy in the `FlowIf→FlowSwitch→FlowSequence` "ran in full immediately" cascade
+> (the asserts run before the `mIsAdvancing` guard). This is an instance of the **native blanket-Flow
+> "smoking gun" below (~line 143)** — `PanelDir::Enter` activates flows Xbox drives via targeted DTA,
+> with a different synchronous order. A first fix attempt (`a80e1b0b`: skip nested/recurse flows +
+> `'1'`-suffix dedup) was **runtime-proven ineffective and REVERTED (`2c95ca22`)** — it targeted the
+> wrong layer. **DEFERRED**: the correct fix is the broad native flow-activation semantic-content filter
+> (match Xbox's targeted DTA activation set), a known-unresolved effort; silencing the matched
+> FlowSequence asserts is disallowed. Same root as the contradictory-SIBLING over-activation on
+> main_screen/choose_mode (select+enter1+exit, show+hide game_mode_icon).
+
 ## Current State
 
 - **Track A (Engine Boot → Gameplay)**: Boots through full menu flow to `game_screen` with 3D venue rendering via scripted button input (see "Scripted Input" section below). Current checkout reaches stable YMCA gameplay through frame 4500+. Roller rink venue with full geometry (dance floor, railing, arcade machines, neon signs), character model, HUD, and visualizer all render. 415 mesh draw calls on game_screen. The multiuser_screen DTA `enter` handler now drives the game start flow naturally — no auto-skip needed.
