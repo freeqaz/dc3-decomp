@@ -475,15 +475,19 @@ void Game::SetHamMove(int i1, HamMove *move, bool b3) {
                 // removed: with no real detection the truthful score is 0.
                 //
                 // The genuine Xbox move_passed scoring path (DTA move_passed ->
-                // MetaPerformer::OnMovePassed) is reachable but NOT enabled by
-                // default. The one known fatal in that path (TheGameMode
-                // gameplay_mode unset) is made crash-safe by the HX_NATIVE
-                // default in GameModeInit(); however, driving the full DTA
-                // handler every beat was observed to destabilize the move graph
-                // (active move count collapses to 0 and the song-anim PropAnim
-                // path intermittently null-derefs in SymbolKeys::SetFrame). Until
-                // that interaction is root-caused, gate the real path behind an
-                // env flag so default headless/gameplay stays stable and honest.
+                // MetaPerformer::OnMovePassed) is reachable and now CRASH-SAFE, but
+                // still NOT enabled by default. Crash-safety landed: (1) TheGameMode
+                // gameplay_mode is defaulted in GameModeInit(); (2) the SIGSEGV in
+                // the move_passed -> active_detector_result -> MoveAsyncDetector::
+                // MoveRatingFrac -> MoveDetector::Poll path (null DetectFrame::
+                // mMoveFrame, because native has no SkeletonUpdate feed to populate
+                // the async detect frames) is fixed by gating MoveRatingFrac on
+                // SkeletonUpdate::HasInstance(). With DC3_REAL_MOVE_PASSED=1 the
+                // pipeline now runs through gameplay without crashing. It stays
+                // gated because (a) MoveRatingFrac/DetectFrac honestly return 0
+                // until skeleton detection is wired, so scores would be 0 anyway,
+                // and (b) the move-graph behavior under per-beat move_passed is not
+                // yet verified. Flip the default once detection is wired.
                 if (getenv("DC3_REAL_MOVE_PASSED")) {
                     float frac = mMoveDir->DetectFrac(i1, i5);
                     static Message move_passed("move_passed", -1, 0, 0, 0);

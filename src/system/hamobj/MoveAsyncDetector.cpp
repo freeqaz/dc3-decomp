@@ -8,6 +8,9 @@
 #include "hamobj/MoveDetector.h"
 #include "os/Debug.h"
 #include "stl/_pair.h"
+#ifdef HX_NATIVE
+#include "gesture/SkeletonUpdate.h"
+#endif
 #include "utl/TimeConversion.h"
 
 MoveDetector::MoveDetector(
@@ -288,6 +291,15 @@ float MoveAsyncDetector::MoveRatingFrac(int player, RatingBar bar, const HamMove
             MILO_NOTIFY_ONCE("MoveRatingFrac for %s called, but it's disabled", move->Name());
             return 0.0f;
         }
+#ifdef HX_NATIVE
+        // Native has no SkeletonUpdate/Kinect feed, so MoveDetector::mPlayerDetectFrames
+        // are never populated by EnqueueDetectFrames; their DetectFrame::mMoveFrame stay
+        // null and detector->Poll() would deref null in GetMoveFrame()->GetBeat()
+        // (MoveAsyncDetector.cpp:98). Report no rating — consistent with the native
+        // DetectFrac()==0 contract — instead of polling unpopulated detect frames.
+        if (!SkeletonUpdate::HasInstance())
+            return 0.0f;
+#endif
         MoveDir *dir = mDir;
         int beat = dir->MoveBeat();
         int idx = mDir->MoveIdx();
