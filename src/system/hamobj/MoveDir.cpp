@@ -2184,9 +2184,15 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
         mSkeletonViz->SetUsePhysicalCam(true);
         mSkeletonViz->SetPhysicalCamScreenRect(debugRect);
         CameraInput *camInput = handle.GetCameraInput();
-        mSkeletonViz->Visualize(
-            *camInput, mDebugSkeleton, &callbacks, false
-        );
+#ifdef HX_NATIVE
+        // No SkeletonUpdate instance on native -> GetCameraInput() is null, and
+        // SkeletonViz::Visualize dereferences it (input.NatalToWorld). Skip the
+        // debug draw rather than bind a reference to null.
+        if (camInput)
+#endif
+            mSkeletonViz->Visualize(
+                *camInput, mDebugSkeleton, &callbacks, false
+            );
 
         // Latency offset text
         const char *offsetStr = mDebugLatencyOffset ? "ON" : "OFF";

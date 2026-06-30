@@ -1849,6 +1849,7 @@ if(BUILD_TESTS)
         tests/test_dxt5_alpha.cpp
         tests/test_crossfade_jump.cpp
         tests/test_enable_detector.cpp
+        tests/test_skeleton_callbacks_guard.cpp
         tests/test_sha1.cpp
         tests/test_rand_seed.cpp
         tests/test_threadtask_replace.cpp

@@ -33,6 +33,13 @@ SkeletonUpdateHandle::SkeletonUpdateHandle(SkeletonUpdate *update) : mInst(updat
 SkeletonUpdateHandle::~SkeletonUpdateHandle() { sCritSec.Exit(); }
 
 std::vector<SkeletonCallback *> &SkeletonUpdateHandle::Callbacks() {
+#ifdef HX_NATIVE
+    // Native never creates sInstance (CreateInstance only runs in the Xbox
+    // LiveCameraInput path), so InstanceHandle() hands back a handle wrapping a
+    // null mInst. Mirror every sibling accessor's null-guard instead of deref'ing.
+    static std::vector<SkeletonCallback *> sEmpty;
+    if (!mInst) return sEmpty;
+#endif
     return mInst->mCallbacks;
 }
 CameraInput *SkeletonUpdateHandle::GetCameraInput() const {

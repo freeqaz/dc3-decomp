@@ -3098,6 +3098,12 @@ found:
         if ((unsigned int)clipKeyIdx >= clipSymbols->size()) {
 #ifndef HX_NATIVE
             stlpmtx_std::__stl_throw_out_of_range("vector");
+#else
+            // KeyLessEq returns -1 when the practice frame precedes the first
+            // clip key; without the throw, falling through would index the
+            // vector with (size_t)-1. Bail like the function's other not-found
+            // paths instead of an OOB read.
+            return nullptr;
 #endif
         }
         CharClip *clip = mClipDir->Find<CharClip>((*clipSymbols)[clipKeyIdx].value.Str(), true);
