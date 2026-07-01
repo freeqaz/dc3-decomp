@@ -216,8 +216,23 @@ void UIManager::Draw() {
     RndEnviron* savedEnv = RndEnviron::Current();
     if (mCam) {
         switch (GetNativeUICamMode()) {
-        case kNativeUICamDefault:
+        case kNativeUICamDefault: {
+            // Bug 1A: the [ui.cam] plane (help-bar A/Select, "Exit Controller
+            // Mode" prompts) sits at world-Z ~ +370..+520, which falls below the
+            // stock 34.5deg frustum (frames only world-Z ~[-238,+238]) → off the
+            // bottom of the viewport. Widen the FOV + recenter Z so the whole
+            // [ui.cam] span (low-Z nav ~ -160 .. high-Z prompts ~ +520) fits one
+            // frame. near/far unchanged so RndCam::SetFrustum's far<=1000*near
+            // clamp (Cam.cpp) never trips. (311e3b75 dropped the old
+            // unconditional Z=387 shove because it pushed low-Z nav off the top;
+            // the FOV-widen keeps both ends in frame.)
+            const float kUiCenterZ = 160.0f;
+            const float kUiCamDist = 850.0f;
+            const float kUiYFov = 0.919f; // 52.7deg; dist 850 frames Z ~[-260,+580]
+            mCam->SetFrustum(mCam->NearPlane(), mCam->FarPlane(), kUiYFov, 1.0f);
+            mCam->SetLocalPos(Vector3(0, -kUiCamDist, kUiCenterZ));
             break;
+        }
         case kNativeUICamOriginal:
             break;
         case kNativeUICamZHack:

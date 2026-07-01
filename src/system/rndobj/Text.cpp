@@ -2345,6 +2345,38 @@ void RndText::DrawShowing() {
         for (int i = 0; i < numMeshes; i++) {
             RndMesh *mesh = fontMap->Mesh(i);
             if (mesh) {
+#ifdef HX_NATIVE
+                if (getenv("DC3_TEXT_DIAG")) {
+                    static int sTD = 0;
+                    String ascii = TextASCII();
+                    if (sTD < 500 && ascii.length() > 0 && mesh->Verts().size() >= 4) {
+                        sTD++;
+                        RndCam *cc = RndCam::Current();
+                        Vector2 scr(0, 0);
+                        Vector3 wv;
+                        Multiply(mesh->Verts()[0].pos, mesh->WorldXfm(), wv);
+                        if (cc) cc->WorldToScreen(wv, scr);
+                        Vector3 bbMin = mesh->Verts()[0].pos, bbMax = bbMin;
+                        int nv = mesh->Verts().size();
+                        for (int vi = 1; vi < nv; vi++) {
+                            const Vector3 &p = mesh->Verts()[vi].pos;
+                            bbMin.x = p.x < bbMin.x ? p.x : bbMin.x;
+                            bbMin.y = p.y < bbMin.y ? p.y : bbMin.y;
+                            bbMin.z = p.z < bbMin.z ? p.z : bbMin.z;
+                            bbMax.x = p.x > bbMax.x ? p.x : bbMax.x;
+                            bbMax.y = p.y > bbMax.y ? p.y : bbMax.y;
+                            bbMax.z = p.z > bbMax.z ? p.z : bbMax.z;
+                        }
+                        RndMat *mat = mesh->Mat();
+                        fprintf(stderr,
+                                "DC3_TEXT_DIAG '%.24s' cam=%s scr=(%.3f,%.3f) nv=%d "
+                                "bbox=(%.2f,%.2f,%.2f) mat=%s\n",
+                                ascii.c_str(), cc ? PathName(cc) : "<null>", scr.x, scr.y,
+                                nv, bbMax.x - bbMin.x, bbMax.y - bbMin.y, bbMax.z - bbMin.z,
+                                mat ? PathName(mat) : "<null>");
+                    }
+                }
+#endif
                 if (!(!sBlacklightModeEnabled || !fontMap->mBlacklight ||
                     TheUI->DisableScreenBlacklight())) {
                     QueueBlacklightPacket(mesh, mStyles[0].mSize, 0);
@@ -2604,7 +2636,14 @@ void RndText::FontMap::SetupCharacter(
     auto _tmp1 = mFont->AspectRatio();
     float x = xPos;
     float italics = state.mItalics * state.mSize;
-    float z1 = _tmp1 * state.mSize - z0;
+    // NOTE (bug 1B fix): keep glyph height CONSTANT (z0 - z1 == aspect*size)
+    // regardless of yPos. Permuter sweep f5f704d6 flipped this subtraction to
+    // `_tmp1*state.mSize - z0`, which reflects the quad about aspect*size/2 and
+    // COLLAPSES it to zero height for vertically-centered text (yPos == th/2 ==
+    // aspect*size/2 for a single centered line) — making all menu/HUD text
+    // invisible. Subtraction is not commutative; the swap was match-neutral
+    // (objdiff 83.8% either way) but behaviorally wrong. Reverted to og form.
+    float z1 = z0 - _tmp1 * state.mSize;
 
     pg.mVertStart[0].pos.Set(italics + scaledCenter + x, 0.0f, z0);
     pg.mVertStart[1].pos.Set(scaledCenter + x - italics, 0.0f, z1);
