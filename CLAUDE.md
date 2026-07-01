@@ -39,6 +39,7 @@ Use the `mcp__orchestrator__` tools for all decomp analysis. Do not call `objdif
 - **Merged symbols**: `merged_<addr>` names indicate Identical COMDAT Folding (ICF) where the linker merged functions with identical machine code to a single address
 - **Automatic header tracking**: Ninja tracks all header dependencies via `/showIncludes` + wibo path rewriting. Touching any header automatically rebuilds only the affected .obj files. No manual `touch` needed.
 - **Stale object diagnosis**: `scripts/clean_stale_objects.sh --dry-run` finds .obj files older than the PCH. Use `--all` to force-touch every .cpp for a full rebuild.
+- **No cargo depfile**: the `cargo` rule (only emitted if `--dtk`/`--objdiff` point at a *source dir*; this repo defaults to the prebuilt `../jeff` / `../objdiff` binaries, so no cargo edges exist) intentionally has no depfile — cargo's depfile uses an absolute target path that ninja rejects, making the tool perpetually dirty and re-firing CARGO (and potentially a re-SPLIT cascade) on every build. If you ever build the forks through ninja, `.rs` edits need `touch ../jeff/Cargo.toml && ninja` (dtk) or `touch ../objdiff/Cargo.toml && ninja` (objdiff-cli). Rebuilding a fork manually with cargo still works as before — ninja tracks the prebuilt binary's mtime. Same fix as rb3-xenon (2026-06-30).
 For a complete collection of patterns, find then under ./docs/decomp/patterns/ -- these are incredibly helpful for identifying 'hard' fixes when decompiling.
 
 ## Git Actions **important**

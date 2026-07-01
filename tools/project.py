@@ -502,13 +502,27 @@ def generate_build_ninja(
         nonlocal cargo_rule_written
         if not cargo_rule_written:
             n.pool("cargo", 1)
+            # NO depfile on purpose. Cargo emits a depfile whose TARGET line
+            # is an absolute path (e.g. "/home/.../build/tools/release/dtk:")
+            # while ninja's build edge declares the output with a relative
+            # path, so ninja rejects the depfile and treats the tool as
+            # perpetually dirty -- CARGO re-fires on every ninja pass and can
+            # cascade into a full re-SPLIT + reconfigure. (Bug found live in
+            # rb3-xenon, 2026-06-30; fixed identically there.)
+            # Ninja therefore tracks the tool only via its explicit input
+            # (Cargo.toml) + implicit input (Cargo.lock). TRADE-OFF: edits to
+            # the tool's *Rust sources* are NOT auto-detected -- after
+            # changing them, force the rebuild with e.g.
+            # `touch ../jeff/Cargo.toml && ninja` (dtk) or
+            # `touch ../objdiff/Cargo.toml && ninja` (objdiff-cli).
             n.rule(
                 name="cargo",
                 command="cargo build --release --manifest-path $in --bin $bin --target-dir $target",
                 description="CARGO $bin",
                 pool="cargo",
-                depfile=Path("$target") / "release" / "$bin.d",
-                deps="gcc",
+                # No deps="gcc" either -- ninja's binary deps cache is unsafe
+                # under concurrent ninja invocations.
+                restat=True,
             )
             cargo_rule_written = True
 
