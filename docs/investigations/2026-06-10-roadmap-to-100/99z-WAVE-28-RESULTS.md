@@ -81,12 +81,35 @@ dormant by design — `unk2c`/`Activate` never fired). Method note: each blocker
 gate → pad=-1 → grant) was found by an env-gated `DC3_EARN_PROBE` trace, fixed at root, re-run — five
 build/trace iterations, all PPC-neutral.
 
-## In flight
-- **Rank 6 / #37 (native move-scoring pipeline dead, DetectFrac≡0):** the highest-value finding but
-  multi-part/hard. Concrete 3-step SkeletonCallback fan-out wiring plan + a camera-free headless
-  perfect-mimicry self-test (`DC3_POSE_SELFTEST` inject at FilterQueue.cpp:85, feed the choreography's
-  own DancerSkeleton as the player). Terminal `DC3_REAL_MOVE_PASSED` gate must NOT flip until the
-  self-test passes. Deferred behind rank 4.
+## Rank 6 / #37 (native move-scoring) — WIRED + runtime-proven (`68d404dd`)
+The pipeline was inert — `DetectFrac≡0`, every dance move a miss. An Opus subagent wired STEP 1-4 in a
+worktree (native SkeletonCallback registry + driver fan-out + self-test inject, PPC-verified); the
+orchestrator drove 9 build/trace/fix iterations (env-gated probes down `GestureMgr::Poll` → driver →
+`FilterQueue::Poll` → `DetectFrac`) to find + fix the blockers GPU runtime revealed:
+1. **The scoring callbacks never registered** — `SkeletonUpdate::sInstance` is never created on native
+   (ctor needs Xbox `LiveCameraInput`). Added an HX_NATIVE static native-callback registry; MoveDir/Game
+   register into it; `GestureMgr_NativePoll` fans out `Update()`→`PostUpdate()` (mirrors Xbox).
+2. **The driver itself was NEVER CALLED** — the native App loops (`RunWithoutDebugging` headless loop +
+   `RunOneFrame`) both omitted the per-frame `TheGestureMgr->Poll()` that `App::Run` drives on Xbox. So
+   the *entire* native pose→skeleton→scoring pipeline was dead. Added it (before `TheUI->Poll`).
+3. Enabling the driver activated dormant native skeleton paths; guarded each GPU-exposed crash at root:
+   `SkeletonChooser::DoesRequireHandRaise` (null DataNode — no Kinect properties off the perform path),
+   `MoveDir::PostUpdateFilters` async-detector write side (null `DetectFrame::mMoveFrame`), and HamVisDir
+   NOT registering (its `FreestyleMotionFilter` reads skeleton velocity from the NUI history archive,
+   unfed on native → `SkeletonHistory::PrevFromArchive` null-deref).
+
+**Runtime proof:** camera-free self-test (`DC3_POSE_SELFTEST` feeds the choreography's own reference
+DancerSkeleton as the player at `FilterQueue::Poll` → perfect mimicry → PSNR max → `DetectFrac`=1.0).
+betteroffalone→macarena scores **27990 non-zero move fracs** (was identically 0), boot→gameplay→results
+clean, exit 0. All edits `#ifdef HX_NATIVE` → PPC byte-identical (run_objdiff unchanged on
+DoesRequireHandRaise 100%, PostUpdateFilters 97.2%, ResetDetection/HamVisDir ctor+dtor 100%,
+FilterQueue::Poll 93.4%, RunWithoutDebugging 99.5% — all pre-existing baselines).
+
+**Gated behind `DC3_NATIVE_SCORING`/`DC3_POSE_SELFTEST` (opt-in)** so DEFAULT gameplay is unchanged
+(driver dormant) — verified crash-free, suite 419/419. **Terminal step (task #41, deferred):** real
+live-pose scoring needs the native skeleton-history displacement path finished (the real/dummy skeleton
+hits the `PrevFromArchive` null-deref the self-test's reference avoids) + real pose input, then flip the
+default. The wiring + the self-test proof are the hard part; those are done.
 
 ## Process
 Subagents find + root-cause + rank (GPU-blocked); orchestrator runtime-verifies + merges. This wave:
