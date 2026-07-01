@@ -463,12 +463,28 @@ void CamShotFrame::BuildTransform(RndCam *cam, Transform &tf, bool b3) const {
     }
 
     Multiply(tf, mCamShot->WorldXfm(), tf);
+#ifdef HX_NATIVE
+    float diag3_afterWorld = tf.m.z.z;
+#endif
 
     mCamShot->ApplyDynamicOffsetPreLookAt(tf, HasTargets());
     if (b3) {
         ApplyScreenOffset(tf, cam);
     }
     mCamShot->ApplyDynamicOffsetPostLookAt(tf);
+#ifdef HX_NATIVE
+    if (std::getenv("DC3_CAM_DIAG3")) {
+        fprintf(stderr,
+            "DC3_CAM_DIAG3 shot=%s hT=%d b3=%d hasParent=%d "
+            "woUpZ=%.3f afterWorldUpZ=%.3f finalUpZ=%.3f "
+            "tgt=(%.1f,%.1f,%.1f) lastTgt=(%.1f,%.1f,%.1f) pos=(%.1f,%.1f,%.1f)\n",
+            mCamShot ? mCamShot->Name() : "<null>", (int)HasTargets(), (int)b3,
+            (int)(mParent != nullptr), mWorldOffset.m.z.z, diag3_afterWorld, tf.m.z.z,
+            targetPos.x, targetPos.y, targetPos.z,
+            mLastTargetPos.x, mLastTargetPos.y, mLastTargetPos.z,
+            tf.v.x, tf.v.y, tf.v.z);
+    }
+#endif
 }
 
 void CamShotFrame::Interp(const CamShotFrame &other, float f1, float f2, RndCam *cam) {
@@ -645,6 +661,24 @@ void CamShotFrame::Interp(const CamShotFrame &other, float f1, float f2, RndCam 
     Multiply(resultTf.m, rotMtx, resultTf.m);
 
     mCamShot->ApplyFinalCamTransform(resultTf);
+#ifdef HX_NATIVE
+    if (std::getenv("DC3_CAM_DIAG2")) {
+        // Pin down where camera roll enters: keyframe transforms (thisTf/otherTf),
+        // LookAt targets (mLastTargetPos), or the blend. upZ = m.z.z (world-up
+        // component of cam up axis); goes negative when rolled/inverted.
+        fprintf(stderr,
+            "DC3_CAM_DIAG2 shot=%s f1=%.3f f2=%.3f blendT=%.3f "
+            "hT=%d thT=%d same=%d thisUpZ=%.3f otherUpZ=%.3f resUpZ=%.3f "
+            "thisTgt=(%.1f,%.1f,%.1f) otherTgt=(%.1f,%.1f,%.1f) "
+            "resPos=(%.1f,%.1f,%.1f)\n",
+            mCamShot ? mCamShot->Name() : "<null>", f1, f2, blendT,
+            (int)HasTargets(), (int)other.HasTargets(), (int)SameTargets(other),
+            thisTf.m.z.z, otherTf.m.z.z, resultTf.m.z.z,
+            mLastTargetPos.x, mLastTargetPos.y, mLastTargetPos.z,
+            other.mLastTargetPos.x, other.mLastTargetPos.y, other.mLastTargetPos.z,
+            resultTf.v.x, resultTf.v.y, resultTf.v.z);
+    }
+#endif
     cam->SetLocalXfm(resultTf);
 }
 
@@ -1395,6 +1429,22 @@ void CamShot::SetFrame(float frame, float blend) {
                 CamShotFrame *frame50 = nullptr;
                 CamShotFrame *frame54 = nullptr;
                 GetKey(frame, frame50, frame54, f48);
+#ifdef HX_NATIVE
+                if (std::getenv("DC3_CAM_DIAG2")) {
+                    int prevIdx = frame50 && !mKeyframes.empty()
+                        ? (int)(frame50 - &mKeyframes[0]) : -1;
+                    int nextIdx = frame54 && !mKeyframes.empty()
+                        ? (int)(frame54 - &mKeyframes[0]) : -1;
+                    fprintf(stderr,
+                        "DC3_CAM_DIAG2_KEY shot=%s frame=%.2f nKeys=%d prevIdx=%d "
+                        "nextIdx=%d keyBlend=%.3f lastPrevIdx=%d lastNextIdx=%d\n",
+                        Name(), frame, (int)mKeyframes.size(), prevIdx, nextIdx, f48,
+                        mLastPrev && !mKeyframes.empty()
+                            ? (int)(mLastPrev - &mKeyframes[0]) : -1,
+                        mLastNext && !mKeyframes.empty()
+                            ? (int)(mLastNext - &mKeyframes[0]) : -1);
+                }
+#endif
                 if (mDisabled != 0) {
                     frame54->UpdateTarget();
                     if (frame50) {

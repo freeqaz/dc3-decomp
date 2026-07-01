@@ -149,8 +149,14 @@ void FastInvert(const Hmx::Matrix3 &min, Hmx::Matrix3 &mout) {
 QuatXfm::QuatXfm(const Transform &tf) : v(tf.v), q(tf.m) {}
 
 void Transform::LookAt(const Vector3 &target, const Vector3 &up) {
-    m.z.Set(target.x - v.x, target.y - v.y, target.z - v.z);
-    m.y = up;
+    // Engine camera convention: m.y = forward (view direction toward target),
+    // m.z = up. The previous decomp wrote these rows swapped AND aliased the
+    // up-hint (callers pass xfm.m.z as `up`); writing m.z first made m.y == the
+    // just-computed forward vector -> degenerate basis -> chaotic camera roll.
+    // Target asm (?LookAt@Transform@@QAAXABVVector3@@0@Z) stores (target - v) at
+    // m.y (0x10) and copies up into m.z (0x20), matching og-dc3.
+    Subtract(target, v, m.y);
+    m.z = up;
     Normalize(m, m);
 }
 

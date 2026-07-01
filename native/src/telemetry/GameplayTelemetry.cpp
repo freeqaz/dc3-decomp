@@ -22,6 +22,8 @@
 #include "ui/UIScreen.h"
 #include "ui/UIPanel.h"
 #include "world/Dir.h"
+#include "world/CameraShot.h"
+#include "rndobj/Cam.h"
 #include "flow/PropertyEventProvider.h"
 
 // Forward declarations for globals we read
@@ -281,6 +283,47 @@ GameplayTelemetry::Snapshot GameplayTelemetry::CaptureSnapshot(int frame) {
                     if (rShin) s.rKneeDirty = rShin->Dirty();
                     RndTransformable *pelvisD = charDir->Find<RndTransformable>("bone_pelvis.mesh", true);
                     if (pelvisD) s.pelvisDirty = pelvisD->Dirty();
+#ifdef HX_NATIVE
+                    if (pelvisD && getenv("DC3_ROOT_DIAG")) {
+                        const Transform &pwx = pelvisD->WorldXfm();
+                        RndTransformable *root = pelvisD;
+                        int guard = 0;
+                        while (root->TransParent() && guard++ < 40) root = root->TransParent();
+                        const Transform &rwx = root->WorldXfm();
+                        // pelvisUpZ ~ +1 upright; flips toward -1 when the dancer is inverted.
+                        fprintf(stderr,
+                            "DC3_ROOT_DIAG f=%d pelvisUpY=%.3f pelvisUpZ=%.3f pelvisFwdZ=%.3f "
+                            "pelvisPos=(%.1f,%.1f,%.1f) root=%s rootUpY=%.3f rootUpZ=%.3f "
+                            "rootPos=(%.1f,%.1f,%.1f)\n",
+                            frame, pwx.m.y.y, pwx.m.y.z, pwx.m.z.z,
+                            pwx.v.x, pwx.v.y, pwx.v.z,
+                            root->Name(), rwx.m.y.y, rwx.m.y.z,
+                            rwx.v.x, rwx.v.y, rwx.v.z);
+                    }
+                    if (getenv("DC3_CAM_DIAG")) {
+                        WorldDir *wd = TheHamDirector ? TheHamDirector->GetWorld() : nullptr;
+                        CameraManager *cm = wd ? wd->GetCameraManager() : nullptr;
+                        CamShot *shot = cm ? cm->CurrentShot() : nullptr;
+                        RndCam *wcam = shot ? shot->GetCam() : nullptr;
+                        if (wcam) {
+                            const Transform &cx = wcam->WorldXfm();
+                            // det<0 => improper (mirrored) basis; upZ = m.z.z (world up
+                            // component of the cam's up axis) goes negative when flipped.
+                            const Vector3 &X = cx.m.x, &Y = cx.m.y, &Z = cx.m.z;
+                            float det = X.x * (Y.y * Z.z - Y.z * Z.y)
+                                - X.y * (Y.x * Z.z - Y.z * Z.x)
+                                + X.z * (Y.x * Z.y - Y.y * Z.x);
+                            fprintf(stderr,
+                                "DC3_CAM_DIAG f=%d shot=%s shotFrame=%.2f cam=%s upZ=%.3f "
+                                "fwdZ=%.3f det=%.3f pos=(%.1f,%.1f,%.1f)\n",
+                                frame, shot->Name(), shot->GetFrame(), wcam->Name(), Z.z,
+                                Y.z, det, cx.v.x, cx.v.y, cx.v.z);
+                        } else if (cm) {
+                            fprintf(stderr, "DC3_CAM_DIAG f=%d shot=%s cam=<null>\n", frame,
+                                shot ? shot->Name() : "<null>");
+                        }
+                    }
+#endif
 
                     // Also check thigh (shin's parent) to narrow down cascade source
                     RndTransformable *lThigh = lShin ? lShin->TransParent() : nullptr;

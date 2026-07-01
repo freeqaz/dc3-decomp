@@ -712,6 +712,22 @@ bool RndPropAnim::ChangePropPath(Hmx::Object *o, DataArray *a1, DataArray *a2) {
 }
 
 DataNode RndPropAnim::ForeachKeyframe(const DataArray *da) {
+#ifdef HX_NATIVE
+    // DIAGNOSTIC (dc3-camerafix worktree): bisect the 3f654b92 regression —
+    // DC3_FEK_STUB=1 restores the pre-3f654b92 no-op stub to test whether this
+    // handler's key rewriting is what corrupts camera-shot anims at song load.
+    if (getenv("DC3_FEK_DIAG") || getenv("DC3_FEK_STUB")) {
+        DataArray *diagArr = da->Array(3);
+        fprintf(stderr, "DC3_FEK anim=%s target=%s prop=%s stub=%d\n", PathName(this),
+            da->Obj<Hmx::Object>(2) ? PathName(da->Obj<Hmx::Object>(2)) : "<null>",
+            (diagArr && diagArr->Size() > 0 && diagArr->Node(0).Type() == kDataSymbol)
+                ? diagArr->Sym(0).Str()
+                : "<?>",
+            getenv("DC3_FEK_STUB") != nullptr);
+        if (getenv("DC3_FEK_STUB"))
+            return DataNode(0);
+    }
+#endif
     Hmx::Object *obj2 = da->Obj<Hmx::Object>(2);
     DataArray *arr3 = da->Array(3);
     DataNode *var4 = da->Var(4);
