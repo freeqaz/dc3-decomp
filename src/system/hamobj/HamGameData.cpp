@@ -475,6 +475,15 @@ bool HamGameData::SetAssociatedPadNum(int player, int padnum) {
     MILO_ASSERT_RANGE(player, 0, 2, 0x2CD);
     HamPlayerData *pPlayer = mPlayers[player];
     MILO_ASSERT(pPlayer, 0x2D0);
+#ifdef HX_NATIVE
+    // Native has no signin (IsSignedIn always false), so the Xbox path below
+    // would always reject a real pad and force -1. Associate the local player
+    // with the pad directly so per-profile scoring/rewards resolve. Scoped here
+    // (not via global mSigninMask) to avoid rippling into ShellInput/SigninScreen.
+    if (padnum >= 0) {
+        return pPlayer->SetAssociatedPadNum(padnum, ThePlatformMgr.GetName(padnum));
+    }
+#endif
     if (padnum >= 0 && ThePlatformMgr.IsSignedIn(padnum)) {
         if (pPlayer->PadNum() == padnum) {
             pPlayer->SetAssociatedPadNum(-1, gNullStr);

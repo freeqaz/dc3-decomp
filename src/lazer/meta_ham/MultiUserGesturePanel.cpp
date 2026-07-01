@@ -77,6 +77,14 @@ void MultiUserGesturePanel::Poll() {
         // (on Xbox, this fires from DTA once skeleton assignment completes)
         if (mNativeEnterPending) {
             mNativeEnterPending = false;
+            // Xbox assigns player pads during Kinect skeleton enrollment (via
+            // SkeletonIdentifier) before enter_gameplay fires; native has no
+            // enrollment, so the local player would keep PadNum()==-1 and its
+            // per-profile scoring / accomplishment rewards (which resolve through
+            // GetProfileFromPad(PadNum())) would silently no-op. Associate the
+            // local player with pad 0 here — the native single-player equivalent
+            // of enrollment completing.
+            TheGameData->SetAssociatedPadNum(0, 0);
             static Symbol enter_gameplay("enter_gameplay");
             static DataArrayPtr dataPtr(enter_gameplay);
             dataPtr->Execute();
