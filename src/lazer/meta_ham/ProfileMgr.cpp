@@ -302,6 +302,29 @@ float ProfileMgr::GetExcessVideoLag() const {
 
 void ProfileMgr::SetVenuePreference(Symbol venue) { mVenuePreference = venue; }
 
+#ifdef HX_NATIVE
+// Native-only lightweight init. The full Init() below is skipped on native
+// (its call in MetaPanel::Init is #ifndef HX_NATIVE) because of heavy Xbox
+// side-effects: TheGameData Player(0/1) asserts, MemcardMgr save-buffer alloc,
+// MILO_ASSERT(TheSynth)/Dolby, RndOverlay::Find, weight-units/region. This
+// creates the profile objects + minimal sinks so per-profile unlock/award
+// state can populate, and marks pad-0 loaded so HasValidSaveData() is true.
+// NO save buffer, NO signin machinery, NO GameData/Synth dependencies.
+void ProfileMgr::InitNative() {
+    for (int i = 0; i < 4; i++) {
+        mProfiles.push_back(new HamProfile(i));
+    }
+    SetName("profile_mgr", ObjectDir::Main());
+    ThePlatformMgr.AddSink(this, SigninChangedMsg::Type());
+    InitSliders();
+    // Mark the local pad-0 profile as loaded so HasValidSaveData() reports true
+    // and endgame EarnXForAll grants land on a real, valid profile. ctor left
+    // mState = kMetaProfileUnloaded (0), so the SetSaveState assert
+    // (mState != kMetaProfileUnchanged) does not fire.
+    mProfiles[0]->SetSaveState(kMetaProfileLoaded);
+}
+#endif
+
 void ProfileMgr::Init() {
     for (int i = 0; i < 4; i++) {
         mProfiles.push_back(new HamProfile(i));
@@ -372,6 +395,16 @@ std::vector<HamProfile *> ProfileMgr::GetSignedIn() {
 std::vector<HamProfile *> ProfileMgr::GetSignedInProfiles() {
     std::vector<HamProfile *> profiles;
     FOREACH (it, mProfiles) {
+#ifdef HX_NATIVE
+        // Native has no signin (mSigninMask stays 0), so the endgame's
+        // EarnXForAll would grant to nobody. Scope a "signed in" fiction to the
+        // local pad-0 profile ONLY here — this does NOT touch global
+        // mSigninMask, so ShellInput/UI/nav are unaffected.
+        if ((*it)->GetPadNum() == 0) {
+            profiles.push_back(*it);
+            continue;
+        }
+#endif
         if (ThePlatformMgr.IsSignedIn((*it)->GetPadNum())) {
             profiles.push_back(*it);
         }
@@ -883,6 +916,12 @@ void ProfileMgr::UpdateUsingFitnessState() {
 }
 
 void ProfileMgr::UploadDeferredFitnessGoal() {
+#ifdef HX_NATIVE
+    // TheFitnessGoalMgr is null on native (FitnessGoalMgr::Init is #ifndef
+    // HX_NATIVE), so UpdateFitnessGoal(profile) would be a vtable call through
+    // null. No fitness-goal upload is meaningful on native — bail early.
+    return;
+#endif
     if (mPendingFitnessGoalUpload) {
         mPendingFitnessGoalUpload = false;
         FOREACH (it, mProfiles) {
@@ -929,6 +968,13 @@ HamProfile *ProfileMgr::GetActiveProfile(bool b) const {
 }
 
 void ProfileMgr::UpdateFriendsList() {
+#ifdef HX_NATIVE
+    // GetSignedInProfiles is now non-empty on native (pad-0 fiction), so this
+    // would heap-allocate an UpdateFriendsListJob per profile whose
+    // EnumerateFriends() -> ThePlatformMgr.EnumerateFriends() is a native no-op
+    // ({}), leaking the job. No friends-list has meaning on native — bail early.
+    return;
+#endif
     std::vector<HamProfile *> profiles = GetSignedInProfiles();
     FOREACH (it, profiles) {
         HamProfile *profile = *it;

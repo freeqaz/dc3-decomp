@@ -85,6 +85,11 @@ public:
     float GetExcessVideoLag() const;
     void SetSongToTaskMgrMsRaw(float);
     void Init();
+#ifdef HX_NATIVE
+    // Native-only lightweight profile init (see ProfileMgr.cpp). Not compiled
+    // for the Xbox/PPC build, so the class ABI is byte-identical there.
+    void InitNative();
+#endif
     void InitSliders();
     void SetVenuePreference(Symbol);
     bool GetDisableVoiceCommander() const;

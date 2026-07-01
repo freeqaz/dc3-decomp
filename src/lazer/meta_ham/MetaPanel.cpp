@@ -197,6 +197,11 @@ void MetaPanel::Init() {
     // surfaces all content as unlocked-and-not-new and short-circuits those
     // asserts. Read-only — no grant/save/signin machinery is touched.
     sUnlockAll = true;
+    // Create native profiles BEFORE anything queries them. The full
+    // ProfileMgr::Init() is Xbox-only (heavy side-effects); InitNative() creates
+    // the profile objects + marks pad-0 loaded so completing a song can register
+    // an accomplishment/award to a valid local profile. No save/signin machinery.
+    TheProfileMgr.InitNative();
 #endif
     // Challenges reads DTA config only (no Xbox Live calls) — safe on native.
     // Without this, TheChallenges is null and MainMenuProvider::Text() crashes
