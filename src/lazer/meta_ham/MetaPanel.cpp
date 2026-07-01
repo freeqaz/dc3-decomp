@@ -186,6 +186,18 @@ void MetaPanel::Init() {
     Leaderboards::Init();
     FitnessGoalMgr::Init();
 #endif
+#ifdef HX_NATIVE
+    // ProfileMgr::Init() above is #ifndef HX_NATIVE, so on native mProfiles is
+    // empty and per-profile unlock state never populates. Direct C++ callers of
+    // HamProfile::IsContentUnlockedForProfile / IsContentNew /
+    // CampaignSongProvider::IsSongAvailable bypass the DTA stub
+    // (App.cpp is_content_unlocked->1) and would otherwise hit
+    // MILO_ASSERT(pProfile) on the null native profile. sUnlockAll is the
+    // engine's own read-side override (see ToggleUnlockAll / UnlockAll): it
+    // surfaces all content as unlocked-and-not-new and short-circuits those
+    // asserts. Read-only — no grant/save/signin machinery is touched.
+    sUnlockAll = true;
+#endif
     // Challenges reads DTA config only (no Xbox Live calls) — safe on native.
     // Without this, TheChallenges is null and MainMenuProvider::Text() crashes
     // when the main menu "challenges" item renders its "new" badge.
