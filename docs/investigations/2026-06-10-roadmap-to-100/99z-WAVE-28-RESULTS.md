@@ -53,12 +53,35 @@ The audit's cosmetic, existence-UNPROVEN finding (choose_mode/main enter blanket
   (audio regression). No change made; probe reverted. Probing first prevented a regression — the
   runtime-verify discipline paying off again ([[feedback_runtime_verify_native_fixes]]).
 
+## Rank 4 (reward/unlock) — LANDED, real earning works on native (`9c98fbef`, `b2e80335`, `65045f6b`)
+A design workflow (`wf_11ff7e2c`) CORRECTED the audit's premise: `TheProfileMgr.Init()` is
+`#ifndef HX_NATIVE` (MetaPanel.cpp:185), so native `mProfiles` is **empty** — there was nothing to
+"earn" into, and flipping `HasValidSaveData()` would have been a no-op + risked null-profile asserts.
+User chose "#1 then #2 then push through (#3)". Landed in three PPC-neutral (all `#ifdef HX_NATIVE`),
+runtime-verified stages:
+1. **sUnlockAll (`9c98fbef`)** — `MetaPanel::sUnlockAll=true` surfaces all content unlocked on the dev
+   port + short-circuits the null-profile `MILO_ASSERT(pProfile)` surface. (MetaPanel::Init 100%.)
+2. **Profiles + scoped signin (`b2e80335`)** — `ProfileMgr::InitNative()` (side-effect-free subset of
+   the Xbox Init: 4 HamProfiles, SetName, AddSink, InitSliders, pad-0 `kMetaProfileLoaded`);
+   `GetSignedInProfiles` HX_NATIVE branch treats pad-0 as signed in (NOT global mSigninMask, to avoid
+   ShellInput ripple); `UploadDeferredFitnessGoal`/`UpdateFriendsList` HX_NATIVE early-returns (null
+   `TheFitnessGoalMgr` vtable-deref + job leak). All 5 touched fns run_objdiff 100% unchanged.
+3. **Pad enrollment (`65045f6b`)** — the real blocker, found by runtime tracing: the local player kept
+   `HamPlayerData::PadNum()==-1` (Xbox assigns pads in Kinect `SkeletonIdentifier` enrollment, which
+   native bypasses) → `GetProfileFromPad(-1)==null` → every grant no-op'd. Fix: `MultiUserGesturePanel::
+   Poll` assigns the local player pad 0 in the native `enter_gameplay` block (the native enrollment
+   equivalent); `HamGameData::SetAssociatedPadNum` gets an HX_NATIVE branch because the Xbox path gates
+   the pad on `IsSignedIn` (false on native) and would force -1.
+
+**Runtime proof (headless betteroffalone→macarena):** `*** ACCOMPLISHMENT COMPLETED: acc_synchronicity
+pad=0 ***` — a real accomplishment earned to the pad-0 profile. All `HandleSongCompleted` gates pass
+(pad=0, profile valid, `update_leaderboards`=1); player 1 correctly stays unassigned (single-player);
+exit 0, no crashes; suite 419/419. In-session earning; persistence stays deferred (native save machine
+dormant by design — `unk2c`/`Activate` never fired). Method note: each blocker (empty profiles → signin
+gate → pad=-1 → grant) was found by an env-gated `DC3_EARN_PROBE` trace, fixed at root, re-run — five
+build/trace iterations, all PPC-neutral.
+
 ## In flight
-- **Rank 4 (reward/unlock chain, `HasValidSaveData()`):** design workflow `wf_11ff7e2c` running — maps
-  every save-data/autosave/profile/unlock consumer + the inverse-crash exposure of flipping save-state,
-  synthesizes ONE minimal safe HX_NATIVE plan (weighing savestate-flip vs narrow HasValidSaveData
-  override vs unlock-all path) + runtime-verify recipe + crash watch list. Design-only; orchestrator
-  reviews + implements + GPU-gates.
 - **Rank 6 / #37 (native move-scoring pipeline dead, DetectFrac≡0):** the highest-value finding but
   multi-part/hard. Concrete 3-step SkeletonCallback fan-out wiring plan + a camera-free headless
   perfect-mimicry self-test (`DC3_POSE_SELFTEST` inject at FilterQueue.cpp:85, feed the choreography's
