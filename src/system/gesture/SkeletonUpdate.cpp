@@ -104,6 +104,7 @@ HANDLE SkeletonUpdate::sNewSkeletonEvent;
 HANDLE SkeletonUpdate::sSkeletonUpdatedEvent;
 #ifdef HX_NATIVE
 const SkeletonHistory *SkeletonUpdate::sNativeHistoryFallback = nullptr;
+std::vector<SkeletonCallback *> SkeletonUpdate::sNativeCallbacks;
 #endif
 
 DWORD SkeletonUpdateThread(LPVOID) {
@@ -192,6 +193,30 @@ void SkeletonUpdate::CreateInstance() {
 void SkeletonUpdate::Terminate() { RELEASE(sInstance); }
 bool SkeletonUpdate::HasInstance() { return sInstance; }
 void *SkeletonUpdate::NewSkeletonEvent() { return sNewSkeletonEvent; }
+
+#ifdef HX_NATIVE
+std::vector<SkeletonCallback *> &SkeletonUpdate::NativeCallbacks() {
+    return sNativeCallbacks;
+}
+
+bool SkeletonUpdate::HasNativeCallback(SkeletonCallback *cb) {
+    return VectorFind(sNativeCallbacks, cb);
+}
+
+void SkeletonUpdate::AddNativeCallback(SkeletonCallback *cb) {
+    if (!VectorFind(sNativeCallbacks, cb)) {
+        sNativeCallbacks.push_back(cb);
+    }
+}
+
+void SkeletonUpdate::RemoveNativeCallback(SkeletonCallback *cb) {
+    std::vector<SkeletonCallback *>::iterator it =
+        std::find(sNativeCallbacks.begin(), sNativeCallbacks.end(), cb);
+    if (it != sNativeCallbacks.end()) {
+        sNativeCallbacks.erase(it);
+    }
+}
+#endif
 
 void SkeletonUpdate::Update() {
     LONGLONG prevFrame = mNUISkeletonFrame->liTimeStamp.QuadPart;

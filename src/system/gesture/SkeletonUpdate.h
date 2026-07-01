@@ -62,6 +62,18 @@ public:
     static HANDLE SkeletonUpdatedEvent() { return sSkeletonUpdatedEvent; }
     static SkeletonUpdateHandle InstanceHandle();
 
+#ifdef HX_NATIVE
+    // Native never instantiates sInstance (its ctor needs Xbox LiveCameraInput),
+    // so the SkeletonUpdateHandle-based callback list is never populated. These
+    // static members provide a parallel registry that the native GestureMgr
+    // driver fans out to (see GestureMgr_NativePoll). Static/non-virtual: no
+    // effect on the PPC class ABI or layout.
+    static void AddNativeCallback(SkeletonCallback *cb);
+    static void RemoveNativeCallback(SkeletonCallback *cb);
+    static bool HasNativeCallback(SkeletonCallback *cb);
+    static std::vector<SkeletonCallback *> &NativeCallbacks();
+#endif
+
 private:
     SkeletonUpdate();
 
@@ -77,6 +89,10 @@ private:
     static SkeletonUpdate *sInstance;
     static HANDLE sNewSkeletonEvent;
     static HANDLE sSkeletonUpdatedEvent;
+
+#ifdef HX_NATIVE
+    static std::vector<SkeletonCallback *> sNativeCallbacks;
+#endif
 
 #ifdef HX_NATIVE
     // Native-only fallback: provides SkeletonHistory when sInstance is null

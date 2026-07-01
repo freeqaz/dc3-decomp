@@ -236,12 +236,16 @@ MoveDir::~MoveDir() {
         }
     }
     delete mSkeletonViz;
+#ifdef HX_NATIVE
+    SkeletonUpdate::RemoveNativeCallback(this);
+#else
     if (SkeletonUpdate::HasInstance()) {
         SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
         if (handle.HasCallback(this)) {
             handle.RemoveCallback(this);
         }
     }
+#endif
 }
 
 BEGIN_HANDLERS(MoveDir)
@@ -1158,12 +1162,20 @@ void MoveDir::ReloadScoring() {
 
 void MoveDir::ResetDetection() {
     if (TheHamDirector) {
+#ifdef HX_NATIVE
+        // sInstance is never created on native, so register into the native
+        // callback registry that GestureMgr_NativePoll fans out to instead.
+        if (!SkeletonUpdate::HasNativeCallback(this)) {
+            SkeletonUpdate::AddNativeCallback(this);
+        }
+#else
         if (SkeletonUpdate::HasInstance()) {
             SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
             if (!handle.HasCallback(this)) {
                 handle.AddCallback(this);
             }
         }
+#endif
         MILO_ASSERT(TheGameData, 0x642);
         for (int i = 0; i < 2; i++) {
             HamPlayerData *player_data = TheGameData->Player(i);
@@ -2252,12 +2264,21 @@ void MoveDir::PostUpdateFilters() {
                             move->FilterVer()
                         );
                     }
+#ifndef HX_NATIVE
                     if (mAsyncDetector) {
                         mAsyncDetector->EnqueueDetectFrames(
                             TheTaskMgr.CurrentMeasure(),
                             TheTaskMgr.CurrentBeat(), adjustedSecs, i
                         );
                     }
+#else
+                    // The async (Ham1) detector is never fed on native (no
+                    // Kinect skeleton feed), so its mPlayerDetectFrames keep a
+                    // null DetectFrame::mMoveFrame and MoveDetector::Poll would
+                    // deref null. Its read side (MoveRatingFrac) is already gated
+                    // to 0 via SkeletonUpdate::HasInstance(); skip the write side
+                    // too. Native scores via the FilterQueue/Ham2 DetectFrac path.
+#endif
                 }
                 mFilterQueue->StartJob();
             }

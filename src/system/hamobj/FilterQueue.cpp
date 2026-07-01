@@ -2,6 +2,9 @@
 #include "os/Debug.h"
 #include "os/Timer.h"
 #include "utl/Loader.h"
+#ifdef HX_NATIVE
+#include <cstdlib> // getenv (self-test only)
+#endif
 
 FilterQueue::FilterQueue() : mJobFinished(false), mLastPollMs(0.0f) {}
 
@@ -83,8 +86,29 @@ void FilterQueue::Poll(const SkeletonUpdateData &skelData) {
         FilterInputFrame *inFrame = it->mInputFrame;
         const FilterVersion *filterVer = inFrame->mFilterVersion;
         BaseSkeleton *skel = skelData.mSkeletonsLeft[inFrame->mSlot];
+#ifdef HX_NATIVE
+        // Camera-free self-test: feed the choreography's OWN reference pose (the
+        // same DancerSkeleton CalcError compares against below) as the player
+        // skeleton, and bypass the IsTracked() gate (the reference pose reports
+        // untracked). Perfect self-mimicry -> ~0 error -> high PSNR -> DetectFrac->1.
+        // Only the fed skeleton + the tracked-gate change; the scoring math is
+        // untouched. This whole block compiles out on PPC.
+        bool selfTest = false;
+        if (getenv("DC3_POSE_SELFTEST")) {
+            selfTest = true;
+            skel = const_cast<BaseSkeleton *>(
+                static_cast<const BaseSkeleton *>(
+                    &inFrame->mDetectFrame->GetDancerFrame()->mSkeleton
+                )
+            );
+        }
+#endif
         int numNodes = filterVer->NumNodes();
+#ifdef HX_NATIVE
+        if (!selfTest && (skel == nullptr || !skel->IsTracked())) {
+#else
         if (skel == nullptr || !skel->IsTracked()) {
+#endif
             for (int n = 0; n < numNodes; n++) {
                 it->mErrors[n].Set(1.0f, 1.0f, 1.0f);
             }

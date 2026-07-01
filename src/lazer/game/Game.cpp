@@ -86,13 +86,25 @@ Game::Game()
     mDeferredPausePending = false;
     mDeferredPauseSoundArg = false;
     mDeferredPauseGameArg = true;
+#ifdef HX_NATIVE
+    // sInstance is never created on native; register into the native callback
+    // registry that GestureMgr_NativePoll fans out to instead.
+    if (!SkeletonUpdate::HasNativeCallback(this)) {
+        SkeletonUpdate::AddNativeCallback(this);
+    }
+#else
     SkeletonUpdateHandle h = SkeletonUpdate::InstanceHandle();
     h.AddCallback(this);
+#endif
 }
 
 Game::~Game() {
+#ifdef HX_NATIVE
+    SkeletonUpdate::RemoveNativeCallback(this);
+#else
     SkeletonUpdateHandle h = SkeletonUpdate::InstanceHandle();
     h.RemoveCallback(this);
+#endif
     SetHamMove(0, nullptr, false);
     TheSongSequence.Clear();
     RELEASE(mGameInput);

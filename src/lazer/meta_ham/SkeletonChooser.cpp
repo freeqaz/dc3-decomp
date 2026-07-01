@@ -335,6 +335,15 @@ bool SkeletonChooser::IsAutoplaying() const {
 }
 
 bool SkeletonChooser::DoesRequireHandRaise() const {
+#ifdef HX_NATIVE
+    // Hand-raise-to-join is a Kinect enrollment gesture; native has no Kinect.
+    // The gameplay-only properties this reads (raise_hand_to_join /
+    // is_in_campaign_work_it / doing_stupid_kinect_trick) aren't set outside a
+    // performance, so — now that the skeleton poll runs every frame and this is
+    // reached from the attract/menu SkeletonChooser::Poll path — reading them
+    // would deref a null DataNode. Native never requires a hand raise.
+    return false;
+#endif
     static Symbol ui_nav_mode("ui_nav_mode");
     static Symbol game("game");
     static Symbol loading("loading");

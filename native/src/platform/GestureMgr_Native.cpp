@@ -3,9 +3,11 @@
 #include "Skeleton_Native.h"
 #include "gesture/CameraInput.h"
 #include "gesture/GestureMgr.h"
+#include "gesture/Skeleton.h" // SkeletonCallback
 #include "gesture/SkeletonHistory.h"
 #include "gesture/SkeletonUpdate.h"
 #include "obj/Task.h"
+#include <vector>
 #ifdef ENABLE_NCNN
 #include "pose/InternalPoseProvider.h"
 #endif
@@ -213,6 +215,18 @@ void GestureMgr_NativePoll(GestureMgr *mgr) {
     data.mCameraInput = sNativeCameraInput;
 
     mgr->PostUpdate(&data);
+
+    // Drive the SkeletonUpdate scoring callbacks (MoveDir/Game/HamVisDir) that
+    // Xbox runs from SkeletonUpdate::UpdateCallbacks/PostUpdate. Update() must
+    // run before PostUpdate() (PostUpdateFilters reads the FilterQueue::Poll
+    // output produced by Update). mgr->PostUpdate above (GestureMgr identity
+    // tracking) is orthogonal and intentionally kept.
+    std::vector<SkeletonCallback *> cbs =
+        SkeletonUpdate::NativeCallbacks(); // copy: callbacks may register/unregister
+    for (size_t i = 0; i < cbs.size(); i++)
+        cbs[i]->Update(data);
+    for (size_t i = 0; i < cbs.size(); i++)
+        cbs[i]->PostUpdate(&data);
 }
 
 #endif // HX_NATIVE
