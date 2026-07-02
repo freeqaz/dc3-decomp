@@ -23,8 +23,28 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <sys/stat.h> // mkdir (native sidecar-write path)
+
+#ifdef __EMSCRIPTEN__
+// Web: a sidecar MEMFS miss is filled by one synchronous JSPI fetch into MEMFS
+// (WebAssetsFetchSync), the same miss-then-retry ordering AsyncFile_Native and
+// native_file.cpp use. Compiled out on non-web builds.
+#include "platform/WebAssets.h"
+#endif
 
 namespace dc3_xma {
+
+// Recursively create the parent directories of `path` (mkdir -p over the
+// directory components; the trailing filename component is not created). POSIX;
+// used by the native asset-prep write path (HX_FFMPEG). EEXIST is ignored.
+inline void MakeParentDirs(const std::string &path) {
+    for (size_t i = 1; i < path.size(); ++i) {
+        if (path[i] == '/') {
+            std::string sub = path.substr(0, i);
+            if (!sub.empty()) mkdir(sub.c_str(), 0755); // ignore errors (EEXIST)
+        }
+    }
+}
 
 // FNV-1a over the raw XMA payload + size + sample rate. MUST match RB3's
 // rb3_xma::PayloadKey and the offline converter's milo_scan::payload_key.
@@ -68,8 +88,22 @@ inline bool WriteSidecar(const void *rawXma, int xmaSize, int sampleRate,
                          const void *pcm, int numSamples, int numChannels) {
     if (getenv("DC3_NO_SIDECAR_WRITE")) return false; // opt-out
     std::string path = SidecarPath(rawXma, xmaSize, sampleRate);
+    // Ensure the sidecar directory exists before opening for write — a fresh
+    // native run has no sfx/gen/xma_pcm/ tree, so fopen(wb) would otherwise fail
+    // and no sidecars would ever be produced.
+    MakeParentDirs(path);
     FILE *f = std::fopen(path.c_str(), "wb");
-    if (!f) return false; // dir may not exist (set DC3_SFX_PCM_DIR); silent no-op
+    if (!f) {
+        static bool warned = false;
+        if (!warned) {
+            warned = true;
+            std::fprintf(stderr,
+                         "[dc3_xma] WriteSidecar: cannot open '%s' for write "
+                         "(set DC3_SFX_PCM_DIR to a writable dir)\n",
+                         path.c_str());
+        }
+        return false;
+    }
     std::fwrite("RB3PCM01", 1, 8, f);
     put_le32(f, (uint32_t)sampleRate);
     put_le32(f, (uint32_t)numSamples);
@@ -94,7 +128,36 @@ inline SidecarPCM TryLoad(const void *xmaData, int sizeBytes, int sampleRate) {
     SidecarPCM out;
     if (!xmaData || sizeBytes <= 0) return out;
     std::string path = SidecarPath(xmaData, sizeBytes, sampleRate);
+#ifdef __EMSCRIPTEN__
+    // WebAssetsFetchSync writes bytes to its argument path VERBATIM
+    // (FS.writeFile(memfsPath, ...)) and the default SidecarDir() is relative
+    // ("sfx/gen/xma_pcm"). DC3's web boot does NOT chdir("/data") (unlike RB3),
+    // so Emscripten's cwd stays "/". A relative open would therefore resolve to
+    // "/sfx/..." while the fetch writes the ABSOLUTE "/data/sfx/...". Anchor
+    // BOTH the fetch and every fopen under /data so they agree on one location.
+    std::string openPath = path;
+    if (!openPath.empty() && openPath[0] != '/')
+        openPath = "/data/" + openPath;
+    FILE *f = std::fopen(openPath.c_str(), "rb");
+    if (!f) {
+        // MEMFS miss: the sidecar has not been fetched yet. Pull it from the dev
+        // server into MEMFS with one synchronous JSPI fetch, then retry the open
+        // at the SAME absolute path. A 404 (no sidecar for this key) returns
+        // false → f stays null → miss.
+        static bool warnedMiss = false;
+        if (WebAssetsFetchSync(openPath.c_str())) {
+            f = std::fopen(openPath.c_str(), "rb");
+        } else if (!warnedMiss) {
+            warnedMiss = true;
+            std::fprintf(stderr,
+                         "[dc3_xma] TryLoad: no PCM sidecar on server for "
+                         "'%s' (kXMA SFX will be silent)\n",
+                         openPath.c_str());
+        }
+    }
+#else
     FILE *f = std::fopen(path.c_str(), "rb");
+#endif
     if (!f) return out;
     uint8_t hdr[24];
     if (std::fread(hdr, 1, sizeof(hdr), f) != sizeof(hdr) ||
