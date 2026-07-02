@@ -9,6 +9,28 @@ Quick reference for all documented decompilation patterns in DC3 (Dance Central 
 
 - [permuter-patterns-2026-05-27.md](permuter-patterns-2026-05-27.md) — 3 new patterns (reference_elimination_chain, loop_body_assign_hoist, signed_unsigned_cast_polarity), 15 proposal-stage patterns, tooling fixes (libclang+guards), validated wins on both DC3 and RB3.
 
+## Behavioral divergence (metric-invisible bugs) — read first when a "matched" function misbehaves at runtime
+
+The class objdiff % **cannot see**: wrong-behavior defects at neutral/near-neutral
+match (some at 0% as unpaired stubs). Several were *introduced* by match-neutral
+"wins" (permuter sweeps, ports, archaeology). See
+**[behavioral-divergence.md](behavioral-divergence.md)**.
+
+| Sub-class | Metric effect | DC3 case | Detection |
+|-----------|---------------|----------|-----------|
+| Non-commutative operand swap (`a-b`→`b-a`, `/`, `%`, `<<`) | neutral | `SetupCharacter` z1 (all text invisible) | `diff_arg` on non-commutative op ≠ commutative-swap floor |
+| Non-commutative argument swap `f(a,b)`→`f(b,a)` | ~neutral | `FontMap3d` `XfmOnCircleEdge` | commit greps; `scan_behavioral_idioms.py` |
+| Comparison direction / boundary `<=`↔`>=` | neutral | `SetPausedHelper` | branch-polarity vs body mismatch |
+| Float reassociation `(k+1)*x` vs `k*x+x` | neutral | `Interp` DOF rounding | fadds/fmuls ↔ fmadds swap; split into temp |
+| Spurious/missing guard, dropped block | small | `InsertMoveInSong`, `ForeachKeyframe` | insert/delete cluster w/ polarity row |
+| Aliased self-clobber | 0% (stub) | `Transform::LookAt` | `foo.Method(…, foo.member)`; nondeterministic runtime |
+| Reversed container args `erase(end,begin)` | small | `ResetDetectFrames` (**UB**) | `scan_behavioral_idioms.py` (exact) |
+| Stale iterator across realloc | small | `OnComputeCharWidths` (**UB**) | iterator used after push_back |
+| Wrong body of 0%-stub | invisible | `Transform::LookAt` | unpaired COMDAT; audit vs target asm |
+
+Includes the **"regalloc floor" false-certification** anti-pattern + the floor-cert
+standard, and the instrument→stub-test→audit→retry→runtime-verify workflow.
+
 ## Fixable Patterns
 
 These patterns can often be fixed with source changes. Sorted by ROI (impact x success rate).
@@ -307,4 +329,5 @@ From 143 successful fine-tuning attempts (90%+ start, 100% end):
 - [TECHNICAL_NOTES.md: MSVC Encoding](../TECHNICAL_NOTES.md#msvc-mangled-number-encoding) — Decode MakeString template sizes
 - [verifiable-icf.md](verifiable-icf.md) — ICF, LTCG, float constant pooling
 - [harmful-avoid.md](harmful-avoid.md) — Member aliasing, child pointer in loop
+- [behavioral-divergence.md](behavioral-divergence.md) — **Metric-invisible bugs**: non-commutative swaps, float reassociation, dropped guards, aliased self-clobber, reversed container args, wrong 0%-stub bodies; the "regalloc floor" false-cert anti-pattern
 - [PERMUTER_ROI_ANALYSIS.md](PERMUTER_ROI_ANALYSIS.md) — Pattern automation ROI rankings, permuter coverage gaps
