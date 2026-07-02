@@ -21,6 +21,28 @@
 
 MetaMusic *TheMetaMusic;
 
+#ifdef HX_NATIVE
+extern bool SoundAudioTraceOn(); // Sound.cpp, DC3_AUDIO_TRACE gate
+#define METAMUSIC_TRACE(...)                                                           \
+    do {                                                                               \
+        if (SoundAudioTraceOn())                                                       \
+            MILO_LOG(__VA_ARGS__);                                                     \
+    } while (0)
+
+void MetaMusic::TraceState(const char *tag) {
+    if (!SoundAudioTraceOn())
+        return;
+    Stream *stream = GetStream();
+    MILO_LOG("AUDIOTRACE MetaMusic state[%s]: playing=%d started=%d stream=%p "
+             "streamPlaying=%d fader=%.1f fading=%d\n",
+             tag, (int)mPlaying, (int)mStarted, (void *)stream,
+             stream ? (int)stream->IsPlaying() : 0, mFader->DuckedValue(),
+             (int)mFader->IsFading());
+}
+#else
+#define METAMUSIC_TRACE(...)
+#endif
+
 MetaMusic::MetaMusic(HxMaster *hx, const char *filename)
     : mPlaying(0), mLoop(0), mElapsedTime(0), mFadeTime(1), mMuteFadeTime(1), mVolume(0),
       mExtraFaders(this), mShellFxPath(filename), mStarted(0), mPreMix(0), mRestartEnabled(1), mMuted(0),
@@ -104,6 +126,8 @@ bool MetaMusic::Loaded() {
 bool MetaMusic::IsActive() const { return GetStream() && mFader->IsFading(); }
 
 void MetaMusic::Start() {
+    METAMUSIC_TRACE("AUDIOTRACE MetaMusic::Start playing=%d started=%d\n",
+                    (int)mPlaying, (int)mStarted);
     if (Loaded()) {
         Stream *stream = GetStream();
         if (stream && stream->IsPlaying()) {
@@ -141,6 +165,8 @@ void MetaMusic::Start() {
 
 void MetaMusic::Stop() {
     Stream *stream = GetStream();
+    METAMUSIC_TRACE("AUDIOTRACE MetaMusic::Stop stream=%p streamPlaying=%d\n",
+                    (void *)stream, stream ? (int)stream->IsPlaying() : 0);
     if (stream) {
         if (!stream->IsPlaying()) {
             UnloadStreamFx();
@@ -152,20 +178,6 @@ void MetaMusic::Stop() {
     }
 }
 
-#ifdef HX_NATIVE
-void MetaMusic::Kill() {
-    Stream *stream = GetStream();
-    if (stream) {
-        mFader->SetVolume(kDbSilence);
-        if (stream->IsPlaying()) {
-            stream->Stop();
-        }
-        UnloadStreamFx();
-    }
-    mPlaying = false;
-    mStarted = false;
-}
-#endif
 
 int MetaMusic::NumChans() const {
     const auto *pStream = GetStream();
@@ -204,6 +216,8 @@ void MetaMusic::Poll() {
             float time = stream->GetTime();
             mMaster->Poll(time);
             if (!mFader->IsFading() && mFader->DuckedValue() == kDbSilence) {
+                METAMUSIC_TRACE("AUDIOTRACE MetaMusic::Poll finalize-stop stream=%p\n",
+                                (void *)stream);
                 stream->Stop();
                 UnloadStreamFx();
                 mPlaying = false;

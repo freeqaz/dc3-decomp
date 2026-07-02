@@ -28,7 +28,7 @@ public:
     void Load(float, bool, bool);
     void Poll();
 #ifdef HX_NATIVE
-    void Kill(); // Immediate stop — no fade, no Poll() needed
+    void TraceState(const char *tag); // DC3_AUDIO_TRACE state dump
 #endif
     bool IsActive() const;
     void SetQuietVolume(float);

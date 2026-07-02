@@ -342,13 +342,11 @@ void MetaPanel::Enter() {
 #endif
     sHamMaster->SetMaps();
     TheTaskMgr.SetAutoSecondsBeats(true);
-#ifdef HX_NATIVE
-    // On Xbox, DTA script fires {metamusic start} during screen transitions.
-    // Native doesn't execute those scripts, so start shell music explicitly.
-    if (TheMetaMusic && TheMetaMusic->Loaded()) {
-        TheMetaMusic->Start();
-    }
-#endif
+    // (An HX_NATIVE hack here used to call TheMetaMusic->Start() on every enter,
+    // claiming "Native doesn't execute those scripts". It does: the per-screen
+    // DTA enter scripts fire {meta music_start} on native — the DC3_AUDIO_TRACE
+    // A/B run (2026-07-02) shows shell music starting via the DTA path with the
+    // hack disabled, and the hack was double-starting it. Removed.)
 }
 
 void MetaPanel::Exit() {

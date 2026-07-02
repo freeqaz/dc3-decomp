@@ -367,13 +367,14 @@ void GamePanel::Enter() {
     JoypadWebClearKeys();
 #endif
 #ifdef HX_NATIVE
-    // On Xbox, DTA scripts fire {metamusic stop} during screen transitions.
-    // MetaPanel is shared between menu and game_screen, so its Exit() is
-    // never called by the panel lifecycle. Kill() immediately stops the
-    // stream — Stop() only fades, and MetaMusic::Poll() (which finalizes
-    // the stop) is suppressed during game_screen.
+    // No metamusic hack needed here: the faithful path already silences shell
+    // music before game enter. loading_panel's DTA enter fires {meta music_stop}
+    // -> MetaMusic::Stop() fades to kDbSilence; the DC3_AUDIO_TRACE A/B run
+    // (2026-07-02) shows fader=-96.0 fading=0 by GamePanel::Enter with the old
+    // Kill() disabled, and MetaPanel::Poll's game_screen suppression + endgame
+    // finalize-stop is the same sequence Xbox runs (Xbox has no Kill either).
     if (TheMetaMusic) {
-        TheMetaMusic->Kill();
+        TheMetaMusic->TraceState("GamePanel::Enter");
     }
 #endif
     UIPanel::Enter();
