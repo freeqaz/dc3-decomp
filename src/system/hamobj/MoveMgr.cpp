@@ -173,15 +173,18 @@ void MoveMgr::InsertMoveInSong(const MoveVariant *var, int measure, int player) 
         if (!anim) {
             anim = TheHamDirector->SongAnim(player);
         }
+        // The original PPC binary does not null-check anim here; SongAnim
+        // never returns null on Xbox. Native SongAnim/Find can, so guard it.
+        if (!anim) {
+            return;
+        }
 #else
         RndPropAnim *anim = TheHamDirector->SongAnim(player);
 #endif
-        if (anim) {
-            DataArrayPtr ptr90(clip);
-            DataArrayPtr ptr88(move);
-            anim->SetKeyVal(TheHamDirector, ptr90, f6, name, true);
-            anim->SetKeyVal(TheHamDirector, ptr88, f4, var->HamMoveName(), true);
-        }
+        DataArrayPtr ptr90(clip);
+        DataArrayPtr ptr88(move);
+        anim->SetKeyVal(TheHamDirector, ptr90, f6, name, true);
+        anim->SetKeyVal(TheHamDirector, ptr88, f4, var->HamMoveName(), true);
     }
 }
 

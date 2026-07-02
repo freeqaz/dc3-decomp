@@ -808,8 +808,7 @@ void GamePanel::SetPausedHelper(bool paused, bool pauseSound) {
                 mPauseCountInTimer->Start();
             } else {
                 // No count-in configured, unpause immediately
-                bool isIntroOrPlaying = (mState <= kGamePlaying);
-                mGame->SetGamePaused(paused, isIntroOrPlaying, pauseSound);
+                mGame->SetGamePaused(paused, mState >= kGamePlaying, pauseSound);
 
                 // Pause/unpause venue movie textures
                 WorldDir *dir = TheHamDirector->GetVenueWorld();

@@ -234,8 +234,8 @@ activate:
     } else {
         *(int *)&detector->mLastDetectFracs[0] = 0;
         *(int *)&detector->mLastDetectFracs[1] = 0;
-        detector->mDetectFrameOffset = -1;
         detector->mLastDetectFrameIdx = -1;
+        detector->mDetectFrameOffset = -1;
         detector->mActive = true;
     }
     mActiveDetectors.insert(detector);
