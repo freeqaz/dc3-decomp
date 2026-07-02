@@ -76,14 +76,27 @@ void Multiply(const Hmx::Matrix3 &a, const Hmx::Matrix3 &b, Hmx::Matrix3 &out) {
 
 void Multiply(const Transform &a, const Transform &b, Transform &out) {
 #ifdef HX_NATIVE
-    // Native fix: the PPC decomp below has decompiler mis-mappings in the translation
-    // computation (b.m.y.y/b.m.z.y swapped, b.m.y.z/b.m.z.y swapped, b.v.y/b.v.z swapped).
-    // These produce identical PPC assembly but wrong x86 results for non-trivial rotations.
-    // Use the mathematically correct formula: out.v = a.v * b.m + b.v
+    // Native path: out.v = a.v * b.m + b.v (same math as the PPC path below).
+    //
+    // ALIASING (2026-07-02, feet ankle-solve round 2): callers routinely pass
+    // `out` aliased to `b` — e.g. HamIKEffector::Poll's back-transform does
+    // `Multiply(effW, inv, inv)` then `Multiply(inv, finalXfm, finalXfm)`.
+    // The original PPC code below is carefully alias-safe: it computes the
+    // TRANSLATION first (with an explicit `&b != &out` branch) and only then
+    // the matrix product. A previous native rewrite computed `out.m` FIRST,
+    // so aliased calls formed the translation from the already-clobbered
+    // product matrix — a venue-offset-scale corruption of every aliased
+    // Transform compose (ankle IK targets flung to +/-200 for venue-placed
+    // dancers; near-origin characters only mildly off). Compute the
+    // translation into temporaries BEFORE any write; Multiply(Matrix3) is
+    // itself alias-safe (evaluates all products before writing via Set).
+    float vx = a.v.x * b.m.x.x + a.v.y * b.m.y.x + a.v.z * b.m.z.x + b.v.x;
+    float vy = a.v.x * b.m.x.y + a.v.y * b.m.y.y + a.v.z * b.m.z.y + b.v.y;
+    float vz = a.v.x * b.m.x.z + a.v.y * b.m.y.z + a.v.z * b.m.z.z + b.v.z;
     Multiply(a.m, b.m, out.m);
-    out.v.x = a.v.x * b.m.x.x + a.v.y * b.m.y.x + a.v.z * b.m.z.x + b.v.x;
-    out.v.y = a.v.x * b.m.x.y + a.v.y * b.m.y.y + a.v.z * b.m.z.y + b.v.y;
-    out.v.z = a.v.x * b.m.x.z + a.v.y * b.m.y.z + a.v.z * b.m.z.z + b.v.z;
+    out.v.x = vx;
+    out.v.y = vy;
+    out.v.z = vz;
 #else
     float fVar1 = a.v.y;
     float fVar2 = a.v.x;

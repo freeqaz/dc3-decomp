@@ -299,13 +299,18 @@ void MakeRotQuatUnitX(const Vector3 &vec, Hmx::Quat &q) {
 void Multiply(const Vector3 &vin, const Hmx::Quat &q, Vector3 &vout) {
 #ifdef HX_NATIVE
     // Standard quaternion rotation formula: v' = v * R(q)
+    // Alias-safe: read vin into locals BEFORE writing vout (callers may pass
+    // vout aliased to vin; the PPC path below loads all inputs up front).
+    // Same hazard class as the Transform Multiply aliasing bug (mtx.cpp,
+    // 2026-07-02 feet ankle-solve round 2).
     float qx = q.x, qy = q.y, qz = q.z, qw = q.w;
     float xx = qx * qx, yy = qy * qy, zz = qz * qz;
     float xy = qx * qy, xz = qx * qz, xw = qx * qw;
     float yz = qy * qz, yw = qy * qw, zw = qz * qw;
-    vout.x = vin.x * (1 - 2*(yy+zz)) + vin.y * 2*(xy-zw)     + vin.z * 2*(yw+xz);
-    vout.y = vin.x * 2*(xy+zw)        + vin.y * (1 - 2*(xx+zz)) + vin.z * 2*(yz-xw);
-    vout.z = vin.x * 2*(xz-yw)        + vin.y * 2*(yz+xw)     + vin.z * (1 - 2*(xx+yy));
+    float vx = vin.x, vy = vin.y, vz = vin.z;
+    vout.x = vx * (1 - 2*(yy+zz)) + vy * 2*(xy-zw)      + vz * 2*(yw+xz);
+    vout.y = vx * 2*(xy+zw)       + vy * (1 - 2*(xx+zz)) + vz * 2*(yz-xw);
+    vout.z = vx * 2*(xz-yw)       + vy * 2*(yz+xw)      + vz * (1 - 2*(xx+yy));
 #else
     // Load quaternion components
     float qx = q.x;

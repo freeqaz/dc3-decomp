@@ -416,12 +416,15 @@ float HamIKEffector::ApplyPosConstraints(
 float HamIKEffector::GetGroundHeight(RndTransformable *t) {
     HamIKEffector *it = this;
     while (true) {
+        // NOTE: were `(int)ground != 0` / `(int)it == 0` — LP64-unsafe pointer
+        // truncation on native. intptr_t keeps the SIGNED compare the target
+        // codegen needs (cmpwi, not cmplwi) while staying 64-bit-safe.
         RndTransformable *ground = it->mGround;
-        if ((int)ground != 0) {
+        if ((intptr_t)ground != 0) {
             return ground->WorldXfm().v.z;
         }
         it = it->mMore;
-        if ((int)it == 0)
+        if ((intptr_t)it == 0)
             break;
     }
     return t->WorldXfm().v.z;
@@ -596,7 +599,7 @@ void HamIKEffector::Poll() {
             float weight = Weight();
             if (mEffector && weight != 0.0f) {
                 ObjPtr<RndTransformable> &fingerRef =
-                    (int)mFinger.Ptr() != 0 ? mFinger : mEffector;
+                    (intptr_t)mFinger.Ptr() != 0 ? mFinger : mEffector;
                 RndTransformable *finger = fingerRef.Ptr();
 
                 Transform neutral;
@@ -840,8 +843,17 @@ void HamIKEffector::Poll() {
                                     }
                                 }
 #endif
-                                Interp(neutralQ.v, effQ.v, clampFactor, q.v);
-                                Interp(neutralQ.q, effQ.q, clampFactor, q.q);
+                                // Blend the live foot toward the NEUTRAL (planted)
+                                // pose IN PLACE. The Interp destination is effQ,
+                                // NOT q — confirmed against the target assembly
+                                // (Interp out-args r6 = effQ.v / effQ.q slots;
+                                // writing into q produced the mis-decomped
+                                // q.v = neutral + eff sum of two absolute
+                                // positions, which doubles the venue offset and
+                                // flings the ankle — the native feet-in-floor
+                                // ankle-solve divergence, 2026-07-02).
+                                Interp(neutralQ.v, effQ.v, clampFactor, effQ.v);
+                                Interp(neutralQ.q, effQ.q, clampFactor, effQ.q);
                                 if (effQ.v.z < groundHeight) {
                                     effQ.v.z = groundHeight;
                                 }
