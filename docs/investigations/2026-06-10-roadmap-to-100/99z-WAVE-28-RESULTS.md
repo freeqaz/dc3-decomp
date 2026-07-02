@@ -111,6 +111,27 @@ live-pose scoring needs the native skeleton-history displacement path finished (
 hits the `PrevFromArchive` null-deref the self-test's reference avoids) + real pose input, then flip the
 default. The wiring + the self-test proof are the hard part; those are done.
 
+## #41 step 1 LANDED (2026-07-02, main `5a02adb8`): live-pose displacement path fixed
+
+The "PrevFromArchive null-deref" was diagnosed by a 5-agent research workflow + live repro: **not a
+missing archive** — `NativeSkeletonHistory` existed and was populated. The real defects: native skeleton
+fills (`FillSkeleton`/`FillDummySkeleton`) never did `Skeleton::Poll`'s bookkeeping, so `mSkeletonIdx`
+stayed **-1** (→ `mHistories[-1]` wild OOB read; the range MILO_ASSERT is non-fatal on native),
+`mElapsedMs` was garbage (poisoning the archive time-walk), and the `mCamDisplacements` memo cache was
+never cleared (would have frozen first-frame displacements forever). Fix (Opus impl + Sonnet adversarial
+review, approve/0-confirmed-issues): `FinalizeSkeletonFrame`/`MarkUntracked` helpers mirroring Poll's
+tracked/untracked halves; archive loop moved BEFORE fills (Xbox `UpdateCallbacks` order); real
+steady_clock frame delta; finalize keyed to actual-fill per branch; dummy fallback only when NO provider
+runs (transient 0-person frames mark untracked instead of poisoning history); HX_NATIVE bounds guards in
+`PrevFromArchive`/`GetArchive` (asserts untouched; PPC 93.7%/100.0% baselines unchanged).
+
+**Runtime gates (all headless betteroffalone, 12-18k frames):** scoring run EXIT=0 + zero
+SkeletonHistory FAILs (previously SIGSEGV on first move frame); **archive lookups ~98% hit rate**
+(`DC3_SCORING_DEBUG` counters: 7129 calls/6977 hits worktree, 5211/5128 on main — misses = authentic
+cold-start); self-test clean; default gameplay unchanged; gesture/skeleton suite 31/31 (3 suite
+failures are pre-existing missing milo-rnd-library assets, identical on main). **Step 2 in flight:**
+stable trackId→slot mapping + provider new-frame gating, then the live-pose run + default-on decision.
+
 ## Process
 Subagents find + root-cause + rank (GPU-blocked); orchestrator runtime-verifies + merges. This wave:
 3 fixes runtime/suite-verified before merge; 1 speculative finding (rank 5) runtime-DISPROVEN before
