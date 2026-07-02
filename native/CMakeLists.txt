@@ -1096,6 +1096,7 @@ set(DC3_NATIVE_CORE_SOURCES
     src/audio/AudioDevice.cpp
     src/platform/StreamReceiver_Native.cpp
     src/platform/SampleInst_Native.cpp
+    src/platform/StbVorbisImpl.cpp
     src/platform/FxSendNative.cpp
     src/platform/Rnd_Wgpu.cpp
     src/platform/MeshFilter.cpp
@@ -1261,6 +1262,7 @@ set(DC3_WEB_CORE_SOURCES
     # AudioDevice_Web.cpp lifted to milo-engine (MILO_BUILD_WEB, W0).
     src/platform/StreamReceiver_Native.cpp
     src/platform/SampleInst_Native.cpp
+    src/platform/StbVorbisImpl.cpp
     src/platform/FxSendNative.cpp
     # Rnd_Wgpu.cpp / MeshGpuCache.cpp lifted to milo-engine; compiled via
     # DC3_WEB_LIFTED_ENGINE_SOURCES below.

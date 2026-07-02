@@ -89,6 +89,25 @@ static bool ScreenBundlesEnabled() {
     return s != 0;
 }
 
+// SFX sidecar bundle prefetch (default ON; DC3_SFX_BUNDLE_OFF=1 disables).
+// One async fetch of every .ogg kXMA sidecar (/api/bundle/sfx_pcm, ~18 MB) so
+// bank loads find warm MEMFS instead of paying a blocking per-key sync XHR per
+// distinct SFX (measured: 514 fetches / 82.8 MB raw PCM in one boot).
+static bool SfxBundleEnabled() {
+    static int s = -1;
+    if (s < 0) {
+        const char *e = ::getenv("DC3_SFX_BUNDLE_OFF");
+        s = (e && e[0] && e[0] != '0') ? 0 : 1; // truthy OFF flag => disabled
+        // The bundle carries .ogg sidecars; when the ogg load path is disabled
+        // (DC3_SFX_OGG_OFF A/B arm, XmaPcmSidecar.h) the runtime would never
+        // read them, so skip the download too.
+        const char *ogg = ::getenv("DC3_SFX_OGG_OFF");
+        if (ogg && ogg[0] && ogg[0] != '0')
+            s = 0;
+    }
+    return s != 0;
+}
+
 // Resolve the bundle name(s) to fetch when entering `fromScreen`, or "" if
 // none. Parsed once from DC3_SCREEN_BUNDLE_NEXT (or the default). Keys are
 // UIScreen object names; values name server bundles (screen-<name>.manifest).
@@ -189,6 +208,14 @@ static void mainLoop() {
     }
 
     case BOOT_ENGINE_INIT: {
+        // Fired AFTER the BOOT_FETCHING AllDone gate so this 18 MB fetch never
+        // blocks engine init; it downloads while App boots. Sidecars a bank
+        // load wins the race against still fall back to the per-key sync fetch
+        // in XmaPcmSidecar.h (now the compact .ogg, so a lost race is cheap).
+        if (SfxBundleEnabled()) {
+            printf("DC3 Web: prefetching SFX sidecar bundle (/api/bundle/sfx_pcm)\n");
+            WebAssetsFetchBundle("/api/bundle/sfx_pcm");
+        }
         printf("DC3 Web: initializing engine via App...\n");
         NativeSetDataDir("/data");
         sApp = new App(0, nullptr);

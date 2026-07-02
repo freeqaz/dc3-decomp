@@ -13,6 +13,9 @@ API endpoints:
   GET /api/bundle/screen/<name>  — per-screen dependency bundle from
                                    native/web/screen-<name>.manifest (missing
                                    manifest → harmless empty bundle)
+  GET /api/bundle/sfx_pcm        — every .ogg kXMA SFX sidecar in one bundle
+                                   (walks <assets>/sfx/gen/xma_pcm dynamically;
+                                   see scripts/web/gen_sfx_ogg.py)
   GET /                          — index.html (build artifacts)
   GET /dc3-web.{js,wasm}         — WASM build output
 """
@@ -412,6 +415,8 @@ class DC3Handler(http.server.SimpleHTTPRequestHandler):
             self._serve_bundle()
         elif path.startswith("/api/bundle/screen/"):
             self._serve_screen_bundle(path[len("/api/bundle/screen/"):])
+        elif path == "/api/bundle/sfx_pcm":
+            self._serve_sfx_bundle()
         elif path.startswith("/api/file/"):
             rel = path[len("/api/file/"):]
             self._serve_asset_file(rel)
@@ -530,6 +535,33 @@ class DC3Handler(http.server.SimpleHTTPRequestHandler):
         # cache_name is per-screen so each screen's compressed artifact is
         # distinct; the fingerprint inside _emit_bundle rebuilds on drift.
         self._emit_bundle(entries, cache_name=f"screen-{name}")
+
+    def _serve_sfx_bundle(self):
+        """Every .ogg kXMA SFX sidecar as one compressed bundle (the format
+        _emit_bundle produces). The web XmaPcmSidecar bridge otherwise pays one
+        blocking per-key sync XHR per distinct SFX as its bank loads (measured:
+        514 fetches / 82.8 MB raw PCM during one boot->song_select run); the
+        boot state machine async-prefetches this instead.
+
+        Walks the sidecar dir dynamically — the .ogg set is DERIVED, gitignored
+        content (scripts/web/gen_sfx_ogg.py over a native run's .pcm output), so
+        a checked-in manifest would only go stale. An absent/empty dir emits an
+        empty bundle; the per-key sync fetch remains the backstop."""
+        if not ASSETS_DIR:
+            self._json_error(503, "No assets directory configured")
+            return
+        side_rel = "sfx/gen/xma_pcm"
+        side_dir = os.path.join(ASSETS_DIR, side_rel)
+        entries = []
+        if os.path.isdir(side_dir):
+            for fname in sorted(os.listdir(side_dir)):
+                if not fname.endswith(".ogg"):
+                    continue
+                with open(os.path.join(side_dir, fname), "rb") as fh:
+                    entries.append((f"{side_rel}/{fname}", fh.read()))
+        total = sum(len(d) for _r, d in entries)
+        self.log_message("sfx-bundle: %d oggs, %.1f MB", len(entries), total / 1e6)
+        self._emit_bundle(entries, cache_name="sfx_pcm")
 
     def _emit_bundle(self, entries, cache_name=None):
         """Write `entries` ([(rel, bytes), ...]) as the binary bundle the

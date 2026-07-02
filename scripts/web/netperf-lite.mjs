@@ -28,6 +28,7 @@ const opts = parseArgs({
     debug:    { type: 'flag' },
     json:     { type: 'string' },
     verbose:  { type: 'flag' },
+    env:      { type: 'string' },   // forwarded as ?env=... (dc3_pre.js bridge)
 });
 
 const PROFILES = {
@@ -76,7 +77,8 @@ try {
         if (m) screens.push({ name: m[1], t: Date.now() - t0 });
     });
 
-    const url = `http://127.0.0.1:${opts.port}/?fast_boot=1${opts.debug ? '&debug=true' : ''}`;
+    const url = `http://127.0.0.1:${opts.port}/?fast_boot=1${opts.debug ? '&debug=true' : ''}`
+        + (opts.env ? `&env=${encodeURIComponent(opts.env)}` : '');
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
     await navigateTo(page, cap, opts.target);
