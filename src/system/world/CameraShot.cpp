@@ -485,16 +485,20 @@ void CamShotFrame::BuildTransform(RndCam *cam, Transform &tf, bool b3) const {
 void CamShotFrame::Interp(const CamShotFrame &other, float f1, float f2, RndCam *cam) {
     float blendT = f1;
     if (mBlendEase != 0) {
-        float easeEnd = 1;
         float easeOffset = 0;
+        float easeEnd = 1;
         switch (mBlendEaseMode) {
         case kBlendEaseInAndOut:
+            easeOffset = 0;
+            easeEnd = 1;
             break;
         case kBlendEaseIn:
+            easeOffset = 0;
             easeEnd = 2;
             break;
         case kBlendEaseOut:
             easeOffset = -1;
+            easeEnd = 1;
             break;
         default:
             MILO_NOTIFY("Invalid mBlendEaseMode: %d", mBlendEaseMode);
@@ -508,8 +512,7 @@ void CamShotFrame::Interp(const CamShotFrame &other, float f1, float f2, RndCam 
     }
 
     // Interpolate FOV
-    float interpFOV = ::Interp(mFOV, other.mFOV, blendT);
-    float blendedFOV = ::Interp(cam->YFov(), interpFOV, f2);
+    float blendedFOV = ::Interp(cam->YFov(), ::Interp(mFOV, other.mFOV, blendT), f2);
     cam->SetFrustum(mCamShot->mNearPlane, mCamShot->mFarPlane, blendedFOV, 1.0f);
 
     bool hasTarget = HasTargets();
@@ -582,9 +585,10 @@ void CamShotFrame::Interp(const CamShotFrame &other, float f1, float f2, RndCam 
     // Depth of field
     RndTransformable *focus = mFocalTarget;
     RndTransformable *towardFocus = other.mFocalTarget;
-    if (mCamShot->mUseDepthOfField
+    bool doDOF = mCamShot->mUseDepthOfField
         && (focus || hasTarget || towardFocus || thasTarget)
-        && TheUI->IsGameScreenActive()) {
+        && TheUI->IsGameScreenActive();
+    if (doDOF) {
         float blurDepth;
         float focusMult;
         ::Interp(mBlurDepth, other.mBlurDepth, blendT, blurDepth);
@@ -595,7 +599,7 @@ void CamShotFrame::Interp(const CamShotFrame &other, float f1, float f2, RndCam 
         ::Interp(mFocusBlurMultiplier, other.mFocusBlurMultiplier, blendT, focusMult);
 
         float thisFocalDist = 0;
-        float otherFocalDist;
+        float otherFocalDist = 0;
         if (focus) {
             thisFocalDist = Distance(focus->WorldXfm().v, resultTf.v);
         } else {
@@ -605,7 +609,6 @@ void CamShotFrame::Interp(const CamShotFrame &other, float f1, float f2, RndCam 
         if (towardFocus) {
             otherFocalDist = Distance(towardFocus->WorldXfm().v, resultTf.v);
         } else {
-            otherFocalDist = 0;
             if (thasTarget)
                 otherFocalDist = Distance(other.mLastTargetPos, resultTf.v);
         }
@@ -618,8 +621,9 @@ void CamShotFrame::Interp(const CamShotFrame &other, float f1, float f2, RndCam 
             otherFocalDist = thisFocalDist;
         }
         float focalDist = ::Interp(thisFocalDist, otherFocalDist, blendT);
+        float scaledFocalDist = focalDist * focusMult;
         TheDOFProc->Set(
-            cam, focusMult * focalDist + focalDist, blurDepth, maxBlur, minBlur
+            cam, scaledFocalDist + focalDist, blurDepth, maxBlur, minBlur
         );
     } else {
         TheDOFProc->UnSet();
