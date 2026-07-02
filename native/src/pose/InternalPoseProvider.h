@@ -35,6 +35,11 @@ public:
     // Access results (after Poll)
     int NumPersons() const { return mNumPersons; }
 
+    // Worker-frame generation snapshotted by the last Poll(). The worker runs at
+    // camera rate (slower than the game loop); scoring gates archive/fill on this
+    // changing so a single camera frame is not integrated multiple times.
+    unsigned Generation() const { return mGenerationFront; }
+
     // Fill NativeSkeletonProvider::PersonData from our detections
     void FillPersonData(NativeSkeletonProvider::PersonData *outPersons,
                         int maxPersons, int &outCount) const;
@@ -54,6 +59,10 @@ private:
     std::vector<PoseDetection> mFrontDetections;
     std::vector<PoseDetection> mBackDetections;
     int mNumPersons = 0;
+
+    // Worker bumps mGenerationBack per produced frame; Poll() latches Front.
+    unsigned mGenerationBack = 0;
+    unsigned mGenerationFront = 0;
 
     // COCO-to-DC3 mapping reuse (same as NativeSkeletonProvider)
     void MapDetectionToPersonData(const PoseDetection &det,

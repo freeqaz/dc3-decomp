@@ -73,6 +73,7 @@ void InternalPoseProvider::WorkerThread() {
         {
             std::lock_guard<std::mutex> lock(mSwapMutex);
             mBackDetections = std::move(detections);
+            mGenerationBack++;
         }
     }
 
@@ -83,6 +84,7 @@ void InternalPoseProvider::Poll() {
     std::lock_guard<std::mutex> lock(mSwapMutex);
     mFrontDetections = mBackDetections;
     mNumPersons = (int)mFrontDetections.size();
+    mGenerationFront = mGenerationBack;
 }
 
 void InternalPoseProvider::FillPersonData(

@@ -60,9 +60,23 @@ static NativeCameraInput *sNativeCameraInput = nullptr;
 static InternalPoseProvider *sInternalPose = nullptr;
 #endif
 
+// Persistent trackId -> skeleton-slot assignment (index = slot, value = owning
+// trackId, -1 = free). A new trackId claims the lowest free slot and keeps it
+// while it persists; when a trackId stops appearing the slot is released so a
+// later person cannot inherit the departed person's archive history. Reset when
+// no provider runs. Shared by both live branches (dummy always uses slot 0).
+static int sSlotTrackId[NUM_SKELETONS] = {-1, -1, -1, -1, -1, -1};
+
+static void ResetSlotMap() {
+    for (int s = 0; s < NUM_SKELETONS; s++)
+        sSlotTrackId[s] = -1;
+}
+
 // Native implementation of GestureMgr::Init — replaces the early return stub.
 // Called from game startup to initialize skeleton tracking via webcam + YOLO pose.
 void GestureMgr_NativeInit() {
+    ResetSlotMap();
+
     // Always create the camera input stub -- needed for PostUpdate pipeline.
     if (!sNativeCameraInput)
         sNativeCameraInput = new NativeCameraInput();
@@ -77,7 +91,9 @@ void GestureMgr_NativeInit() {
     // In headless mode (tests, CLI tools), skip the pose server entirely.
     // The dummy skeleton in GestureMgr_NativePoll provides a neutral standing
     // pose so skeleton-gated paths still work without a real camera.
-    if (getenv("MILO_HEADLESS")) {
+    // An explicit DC3_POSE overrides the skip so headless CI can exercise the
+    // live-provider path against a synthetic pose server.
+    if (getenv("MILO_HEADLESS") && !getenv("DC3_POSE")) {
         printf("Native: headless mode, using dummy skeleton (no pose server)\n");
         if (TheGestureMgr) {
             TheGestureMgr->SetInControllerMode(true);
@@ -147,100 +163,243 @@ void GestureMgr_NativeTerminate() {
         TheSkeletonProvider = nullptr;
     }
     SkeletonUpdate::SetNativeHistoryFallback(nullptr);
+    ResetSlotMap();
     delete sNativeHistory;
     sNativeHistory = nullptr;
     delete sNativeCameraInput;
     sNativeCameraInput = nullptr;
 }
 
+// Resolve stable slot assignments for this frame's persons. trackIds[k] is the
+// identity of the k-th valid person (k in [0,numValid)); on return
+// personForSlot[slot] is the person index k filling that slot, or -1. Slots
+// whose owner departed are released here (caller MarkUntracked's them). A slot
+// that changes occupants drops its archived poses immediately (see step 3).
+// Returns the number of newly-assigned slots (slot reassignments this frame).
+static int AssignSlots(const int *trackIds, int numValid, int *personForSlot) {
+    for (int s = 0; s < NUM_SKELETONS; s++)
+        personForSlot[s] = -1;
+
+    bool placed[NUM_SKELETONS];
+    for (int k = 0; k < numValid; k++)
+        placed[k] = false;
+
+    // 1. Persisting trackIds keep their slot.
+    for (int k = 0; k < numValid; k++) {
+        if (trackIds[k] < 0) continue;
+        for (int s = 0; s < NUM_SKELETONS; s++) {
+            if (sSlotTrackId[s] == trackIds[k]) {
+                personForSlot[s] = k;
+                placed[k] = true;
+                break;
+            }
+        }
+    }
+
+    // 2. Release slots whose owner is no longer present.
+    for (int s = 0; s < NUM_SKELETONS; s++) {
+        if (sSlotTrackId[s] >= 0 && personForSlot[s] < 0)
+            sSlotTrackId[s] = -1;
+    }
+
+    // 3. New trackIds claim the lowest free slot. A slot changing occupants must
+    //    drop its archived poses HERE, not rely on MarkUntracked's next-frame
+    //    ClearHistory: ArchivePrevFrame already ran this accepted frame, so a
+    //    same-frame free+reclaim (person A leaves, person B enters, both in one
+    //    accepted frame) would otherwise leave A's history under B and corrupt B's
+    //    displacement lookback. ClearHistory is idempotent, so clearing a slot that
+    //    was already free (empty history) is harmless. trackId < 0 is a transient
+    //    untracked detection and never claims a persistent slot (mirrors step 1).
+    int reassignments = 0;
+    for (int k = 0; k < numValid; k++) {
+        if (placed[k] || trackIds[k] < 0) continue;
+        for (int s = 0; s < NUM_SKELETONS; s++) {
+            if (sSlotTrackId[s] < 0 && personForSlot[s] < 0) {
+                sSlotTrackId[s] = trackIds[k];
+                personForSlot[s] = k;
+                if (sNativeHistory) sNativeHistory->ClearHistory(s);
+                reassignments++;
+                break;
+            }
+        }
+    }
+    return reassignments;
+}
+
+// Archive each slot's PREVIOUS finalized pose before it is overwritten, matching
+// Xbox SkeletonUpdate::UpdateCallbacks archive-then-poll ordering. Untracked
+// slots ClearHistory (the Xbox tracking-gap contract). Called once per ACCEPTED
+// frame -- per new provider frame, or every game frame for the static dummy.
+static void ArchivePrevFrame(GestureMgr *mgr) {
+    if (!sNativeHistory) return;
+    for (int i = 0; i < NUM_SKELETONS; i++) {
+        Skeleton &skel = mgr->GetSkeleton(i);
+        if (skel.IsTracked()) {
+            sNativeHistory->AddToHistory(i, skel);
+        } else {
+            sNativeHistory->ClearHistory(i);
+        }
+    }
+}
+
+// Wall-clock ms since the previous ACCEPTED frame (Xbox gets this from
+// NUI_SKELETON_FRAME). Displacement scoring integrates these, so a garbage value
+// poisons it; clamped to [1,200], first accepted frame returns 33.
+static int AcceptedFrameElapsed() {
+    static std::chrono::steady_clock::time_point sPrevTime;
+    static bool sHavePrevTime = false;
+    std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+    int elapsedMs;
+    if (sHavePrevTime) {
+        long ms =
+            std::chrono::duration_cast<std::chrono::milliseconds>(now - sPrevTime).count();
+        if (ms < 1) ms = 1;
+        if (ms > 200) ms = 200;
+        elapsedMs = (int)ms;
+    } else {
+        elapsedMs = 33;
+        sHavePrevTime = true;
+    }
+    sPrevTime = now;
+    return elapsedMs;
+}
+
+// DC3_SCORING_DEBUG=1: once-per-second frame-gating liveness counters, matching
+// the PrevSkeleton counter style. accepted/skipped are per-call increments;
+// reassigns accumulates the AssignSlots reassignment count.
+static void ScoringDebugTick(bool accepted, bool skipped, int reassigns) {
+    static bool sDebug = getenv("DC3_SCORING_DEBUG") != nullptr;
+    if (!sDebug) return;
+    static unsigned sAccepted = 0, sSkipped = 0, sReassign = 0;
+    static std::chrono::steady_clock::time_point sLastPrint;
+    if (accepted) sAccepted++;
+    if (skipped) sSkipped++;
+    sReassign += reassigns;
+    std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+    if (now - sLastPrint > std::chrono::seconds(1)) {
+        sLastPrint = now;
+        fprintf(stderr, "DC3 SCORING: newFrames=%u skipped=%u slotReassigns=%u\n",
+            sAccepted, sSkipped, sReassign);
+    }
+}
+
 // Called each frame by GestureMgr::Poll() to update skeleton slots
 // from the YOLO pose server (or a dummy skeleton), then run the
 // filtering pipeline.
 void GestureMgr_NativePoll(GestureMgr *mgr) {
-    // Archive the PREVIOUS frame's finalized pose before it is overwritten
-    // this frame, matching Xbox SkeletonUpdate::UpdateCallbacks archive-then-poll
-    // ordering. On the first frame every slot is untracked (ctor) -> ClearHistory,
-    // so nothing garbage is archived.
-    if (sNativeHistory) {
-        for (int i = 0; i < NUM_SKELETONS; i++) {
-            Skeleton &skel = mgr->GetSkeleton(i);
-            if (skel.IsTracked()) {
-                sNativeHistory->AddToHistory(i, skel);
-            } else {
-                sNativeHistory->ClearHistory(i);
-            }
-        }
-    }
-
-    // Real per-frame elapsed delta (Xbox gets this from NUI_SKELETON_FRAME).
-    // Displacement scoring integrates these, so a garbage value poisons it.
-    static std::chrono::steady_clock::time_point sPrevTime;
-    static bool sHavePrevTime = false;
-    int elapsedMs;
-    {
-        std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
-        if (sHavePrevTime) {
-            long ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - sPrevTime)
-                          .count();
-            if (ms < 1) ms = 1;
-            if (ms > 200) ms = 200;
-            elapsedMs = (int)ms;
-        } else {
-            elapsedMs = 33;
-            sHavePrevTime = true;
-        }
-        sPrevTime = now;
-    }
-
     bool providerRunning = false;
 
 #ifdef ENABLE_NCNN
-    // Try internal pose pipeline first
+    // Try internal pose pipeline first. Gate the archive+fill+finalize block on
+    // a NEW worker frame: the worker runs at camera rate, so re-integrating the
+    // same generation at game rate would dilute the displacement lookback. When
+    // no new frame arrived, tracked slots keep their pose+history untouched
+    // (the camera is just slower than the game loop -- nobody disappeared).
     if (sInternalPose && sInternalPose->IsRunning()) {
         providerRunning = true;
         sInternalPose->Poll();
 
-        NativeSkeletonProvider::PersonData persons[NativeSkeletonProvider::kMaxPersons];
-        int numPersons = 0;
-        sInternalPose->FillPersonData(persons, NativeSkeletonProvider::kMaxPersons, numPersons);
+        static unsigned sNcnnLastGen = 0;
+        static bool sNcnnHaveGen = false;
+        unsigned gen = sInternalPose->Generation();
+        bool newFrame = !sNcnnHaveGen || gen != sNcnnLastGen;
+        sNcnnHaveGen = true;
+        sNcnnLastGen = gen;
 
-        // Use a temporary NativeSkeletonProvider to access FillSkeleton
-        // (which has friend access to Skeleton's protected members)
-        static NativeSkeletonProvider sFillHelper;
-        for (int i = 0; i < NUM_SKELETONS; i++) {
-            Skeleton &skel = mgr->GetSkeleton(i);
-            if (i < numPersons && persons[i].valid) {
-                sFillHelper.FillSkeleton(skel, persons[i]);
-                NativeSkeletonProvider::FinalizeSkeletonFrame(skel, i, elapsedMs);
-            } else if (skel.IsTracked()) {
-                NativeSkeletonProvider::MarkUntracked(skel);
+        if (newFrame) {
+            int elapsedMs = AcceptedFrameElapsed();
+            ArchivePrevFrame(mgr);
+
+            NativeSkeletonProvider::PersonData persons[NativeSkeletonProvider::kMaxPersons];
+            int numPersons = 0;
+            sInternalPose->FillPersonData(persons, NativeSkeletonProvider::kMaxPersons, numPersons);
+
+            int trackIds[NUM_SKELETONS], origIdx[NUM_SKELETONS], numValid = 0;
+            for (int i = 0; i < numPersons && numValid < NUM_SKELETONS; i++) {
+                if (persons[i].valid) {
+                    trackIds[numValid] = persons[i].trackId;
+                    origIdx[numValid] = i;
+                    numValid++;
+                }
             }
+            int personForSlot[NUM_SKELETONS];
+            int reassigns = AssignSlots(trackIds, numValid, personForSlot);
+
+            // Use a temporary NativeSkeletonProvider to access FillSkeleton
+            // (which has friend access to Skeleton's protected members)
+            static NativeSkeletonProvider sFillHelper;
+            for (int s = 0; s < NUM_SKELETONS; s++) {
+                Skeleton &skel = mgr->GetSkeleton(s);
+                int k = personForSlot[s];
+                if (k >= 0) {
+                    sFillHelper.FillSkeleton(skel, persons[origIdx[k]]);
+                    NativeSkeletonProvider::FinalizeSkeletonFrame(skel, s, elapsedMs);
+                } else if (skel.IsTracked()) {
+                    NativeSkeletonProvider::MarkUntracked(skel);
+                }
+            }
+            ScoringDebugTick(true, false, reassigns);
+        } else {
+            ScoringDebugTick(false, true, 0);
         }
     }
 #endif
 
-    // Fall back to external pose server
+    // Fall back to external pose server. Same new-frame gating on the socket
+    // packet frame_id.
     if (!providerRunning && TheSkeletonProvider && TheSkeletonProvider->IsRunning()) {
         providerRunning = true;
         TheSkeletonProvider->Poll();
-        int numPersons = TheSkeletonProvider->NumPersons();
-        for (int i = 0; i < NUM_SKELETONS; i++) {
-            Skeleton &skel = mgr->GetSkeleton(i);
-            if (i < numPersons && TheSkeletonProvider->GetPerson(i).valid) {
-                TheSkeletonProvider->FillSkeleton(skel, i);
-                NativeSkeletonProvider::FinalizeSkeletonFrame(skel, i, elapsedMs);
-            } else if (skel.IsTracked()) {
-                NativeSkeletonProvider::MarkUntracked(skel);
+
+        static uint32_t sExtLastFrameId = 0;
+        static bool sExtHaveFrame = false;
+        uint32_t frameId = TheSkeletonProvider->FrameId();
+        bool newFrame = !sExtHaveFrame || frameId != sExtLastFrameId;
+        sExtHaveFrame = true;
+        sExtLastFrameId = frameId;
+
+        if (newFrame) {
+            int elapsedMs = AcceptedFrameElapsed();
+            ArchivePrevFrame(mgr);
+
+            int numPersons = TheSkeletonProvider->NumPersons();
+            int trackIds[NUM_SKELETONS], origIdx[NUM_SKELETONS], numValid = 0;
+            for (int i = 0; i < numPersons && numValid < NUM_SKELETONS; i++) {
+                if (TheSkeletonProvider->GetPerson(i).valid) {
+                    trackIds[numValid] = TheSkeletonProvider->GetPerson(i).trackId;
+                    origIdx[numValid] = i;
+                    numValid++;
+                }
             }
+            int personForSlot[NUM_SKELETONS];
+            int reassigns = AssignSlots(trackIds, numValid, personForSlot);
+
+            for (int s = 0; s < NUM_SKELETONS; s++) {
+                Skeleton &skel = mgr->GetSkeleton(s);
+                int k = personForSlot[s];
+                if (k >= 0) {
+                    TheSkeletonProvider->FillSkeleton(skel, origIdx[k]);
+                    NativeSkeletonProvider::FinalizeSkeletonFrame(skel, s, elapsedMs);
+                } else if (skel.IsTracked()) {
+                    NativeSkeletonProvider::MarkUntracked(skel);
+                }
+            }
+            ScoringDebugTick(true, false, reassigns);
+        } else {
+            ScoringDebugTick(false, true, 0);
         }
     }
 
     if (!providerRunning) {
         // No pose provider running at all — provide a dummy skeleton in slot 0
         // so skeleton-gated code paths (scroll behavior, enter anims) still run.
-        // Remaining slots stay untracked. A transient 0-person dropout from a
-        // running provider intentionally does NOT reach here (see MarkUntracked
-        // above) so slot 0 history is never poisoned with dummy poses.
+        // The static dummy pose treats every game frame as a new frame (harmless
+        // -- it never moves). Remaining slots stay untracked. A transient
+        // 0-person dropout from a running provider intentionally does NOT reach
+        // here (see MarkUntracked above) so slot 0 history is never poisoned.
+        ResetSlotMap();
+        int elapsedMs = AcceptedFrameElapsed();
+        ArchivePrevFrame(mgr);
         Skeleton &slot0 = mgr->GetSkeleton(0);
         NativeSkeletonProvider::FillDummySkeleton(slot0);
         NativeSkeletonProvider::FinalizeSkeletonFrame(slot0, 0, elapsedMs);

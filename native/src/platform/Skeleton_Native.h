@@ -2,6 +2,7 @@
 
 #include "gesture/BaseSkeleton.h"
 #include "gesture/Skeleton.h"
+#include <cstdint>
 #include <string>
 #include <thread>
 #include <mutex>
@@ -37,6 +38,12 @@ public:
     // Access tracked persons (thread-safe snapshot from last Poll)
     int NumPersons() const { return mNumPersons; }
     const PersonData &GetPerson(int idx) const { return mPersons[idx]; }
+
+    // frame_id of the pose packet snapshotted by the last Poll(). The pose
+    // server runs at camera rate (slower than the game loop); scoring gates the
+    // archive/fill on this changing so a single camera frame is not integrated
+    // multiple times.
+    uint32_t FrameId() const { return mFrameIdFront; }
 
     // Find person by BOTSORT track ID, returns -1 if not found
     int FindByTrackId(int trackId) const;
@@ -79,6 +86,10 @@ private:
     int mNumPersonsBack = 0;
     int mNumPersons = 0;
     PersonData mPersons[kMaxPersons]; // Snapshot for game thread
+
+    // Latest packet frame_id (reader writes mFrameIdBack, Poll() latches Front)
+    uint32_t mFrameIdBack = 0;
+    uint32_t mFrameIdFront = 0;
 
     // Coordinate mapping: approximate camera FOV to meter space
     // Default assumes ~2m viewing distance, 1.2m horizontal FOV
