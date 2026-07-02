@@ -464,6 +464,15 @@ void Flow::Deactivate(bool b1) { FlowQueueable::Deactivate(b1); }
 
 void Flow::Enter() {
     FlowQueueable *q = this;
+#ifdef HX_NATIVE
+    {
+        extern bool SoundAudioTraceOn(); // Sound.cpp, DC3_AUDIO_TRACE gate
+        if (SoundAudioTraceOn() && mStartMode > 0) {
+            MILO_LOG("AUDIOTRACE Flow::Enter(faithful) '%s' startMode=%d proxy=%d\n",
+                     PathName(this), mStartMode, (int)!ProxyFile().empty());
+        }
+    }
+#endif
     if (ProxyFile().empty() && mStartMode > 0) {
         if (mStartMode == 1) {
             q->Execute(kQueue);
@@ -474,6 +483,15 @@ void Flow::Enter() {
 }
 
 void Flow::Exit() {
+#ifdef HX_NATIVE
+    {
+        extern bool SoundAudioTraceOn();
+        if (SoundAudioTraceOn() && IsRunning()) {
+            MILO_LOG("AUDIOTRACE Flow::Exit(faithful) '%s' hardStop=%d\n",
+                     PathName(this), (int)mHardStop);
+        }
+    }
+#endif
     if (IsRunning() && ProxyFile().empty()) {
         if (mHardStop) {
             Deactivate(false);

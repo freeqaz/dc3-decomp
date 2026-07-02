@@ -456,10 +456,32 @@ void PanelDir::Enter() {
                 continue;
         }
         const char *flowPath = PathName((Hmx::Object *)it);
+        // Never blanket-activate flows living in the shared sound banks
+        // (sfx/common_bank.milo, sfx/loc/*/vo_bank_*.milo, foley...). On Xbox
+        // those flows are only ever chain-activated (FlowRun from a screen's
+        // own flows — e.g. ui/title/title.milo enter.flow chains into
+        // common_bank's titlescreen_amb.flow) or fired by game code on events
+        // (UI select pips, VO win-talks). The recursive ObjDirItr walk reaches
+        // the banks because every panel lists them as shared subdirs, and
+        // blanket activation here re-started the title ambience from gameplay
+        // HUD panels (flashcard_dock) right AFTER Game::Restart's faithful
+        // StopAllSounds — menu footsteps under the whole song — and sprayed
+        // one-shot UI/VO sounds on every screen transition.
+        // (DC3_AUDIO_TRACE attribution run, 2026-07-02.)
+        if (strstr(flowPath, "(sfx/"))
+            continue;
         if (!ShouldActivateNativeFlow(Name(), flowPath))
             continue;
-        if (!it->IsRunning())
+        if (!it->IsRunning()) {
+            {
+                extern bool SoundAudioTraceOn(); // Sound.cpp, DC3_AUDIO_TRACE gate
+                if (SoundAudioTraceOn()) {
+                    MILO_LOG("AUDIOTRACE PanelDirHack activate '%s' startMode=%d "
+                             "(panel '%s')\n", flowPath, it->GetStartMode(), Name());
+                }
+            }
             it->Activate();
+        }
     }
 #endif
 }

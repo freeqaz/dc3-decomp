@@ -488,6 +488,21 @@ void Hmx::Object::ChainSource(Hmx::Object *source, Hmx::Object *o2) {
 }
 
 void Hmx::Object::ExportPropertyChange(DataArray *a, Symbol s) {
+#ifdef HX_NATIVE
+    // Opt-in DC3_AUDIO_TRACE probe (gate lives in Sound.cpp): does a
+    // game_stage change have a registered propsync sink handler, and export?
+    {
+        extern bool SoundAudioTraceOn();
+        if (SoundAudioTraceOn() && a && a->Size() > 0
+            && a->Node(0).Type() == kDataSymbol) {
+            static Symbol game_stage("game_stage");
+            if (a->Sym(0) == game_stage) {
+                MILO_LOG("AUDIOTRACE PropChange %s.game_stage handler='%s' sinks=%d\n",
+                         PathName(this), s.Str(), mSinks ? 1 : 0);
+            }
+        }
+    }
+#endif
     if (!s.Null()) {
         MILO_ASSERT(mSinks, 0x17F);
         static Message msg("blah", 0);

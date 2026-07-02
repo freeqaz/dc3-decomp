@@ -217,9 +217,31 @@ void Sound::SynthPoll() {
     }
 }
 
+#ifdef HX_NATIVE
+// Opt-in audio attribution tracing (DC3_AUDIO_TRACE=1): logs every Sound
+// play/stop with its object path so the console shows WHICH milo/flow starts
+// and stops each clip. Companion probes: FlowSound::Activate, Flow::Enter/
+// Exit, PanelDir::Enter blanket activation, ExportPropertyChange(game_stage).
+// This is how the ambience-under-song bug was attributed (2026-07-02).
+bool SoundAudioTraceOn() {
+    static int sOn = -1;
+    if (sOn < 0) {
+        const char *e = getenv("DC3_AUDIO_TRACE");
+        sOn = (e && e[0] && e[0] != '0') ? 1 : 0;
+    }
+    return sOn != 0;
+}
+#endif
+
 void Sound::Play(
     float volume, float pan, float transpose, Hmx::Object *obj, float delayMs
 ) {
+#ifdef HX_NATIVE
+    if (SoundAudioTraceOn()) {
+        MILO_LOG("AUDIOTRACE Sound::Play '%s' recv=%s delay=%.0f\n", PathName(this),
+                 obj ? PathName(obj) : "(null)", delayMs);
+    }
+#endif
     if (Name() && strstr(Name(), "camp_gameplay_failure")) {
         MILO_LOG(
             "[EH] BZ-64344 Playing sound with camp_gameplay_failure in it: '%s'\n", Name()
@@ -281,6 +303,13 @@ void Sound::Play(
 }
 
 void Sound::Stop(Hmx::Object *obj, bool b2) {
+#ifdef HX_NATIVE
+    if (SoundAudioTraceOn()) {
+        MILO_LOG("AUDIOTRACE Sound::Stop '%s' recv=%s hard=%d stoppable=%d samples=%d\n",
+                 PathName(this), obj ? PathName(obj) : "(null)", (int)b2, (int)unk3d,
+                 (int)mSamples.size());
+    }
+#endif
     for (auto it = mDelayArgs.begin(); it != mDelayArgs.end();) {
         delete *it;
         mDelayArgs.erase(it++);

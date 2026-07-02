@@ -95,7 +95,10 @@ export async function launchBrowser(port) {
     });
     const page = await context.newPage();
 
-    await page.goto(`http://127.0.0.1:${port}?fast_boot=1`, {
+    // DC3_WEB_URL_EXTRA appends query params, e.g. "&debug=true&env=DC3_AUDIO_TRACE=1"
+    // (the ?env= bridge in dc3_pre.js turns env=K=V into a wasm-side env var).
+    const extra = process.env.DC3_WEB_URL_EXTRA || '';
+    await page.goto(`http://127.0.0.1:${port}?fast_boot=1${extra}`, {
         waitUntil: 'domcontentloaded',
         timeout: 30000,
     });

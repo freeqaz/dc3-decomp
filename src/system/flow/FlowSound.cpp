@@ -84,6 +84,18 @@ void FlowSound::Copy(const Hmx::Object *o, CopyType ty) {
 
 bool FlowSound::Activate() {
     FLOW_LOG("Activate\n");
+#ifdef HX_NATIVE
+    {
+        extern bool SoundAudioTraceOn(); // Sound.cpp, DC3_AUDIO_TRACE gate
+        if (SoundAudioTraceOn()) {
+            Sound *snd = mSound;
+            MILO_LOG("AUDIOTRACE FlowSound::Activate node='%s' sound='%s' "
+                     "immRelease=%d forceStop=%d\n",
+                     PathName(this), snd ? PathName(snd) : "(none)",
+                     (int)mImmediateRelease, (int)mForceStop);
+        }
+    }
+#endif
     if (!mSound)
         return false;
     else {
