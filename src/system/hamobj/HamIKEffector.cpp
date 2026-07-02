@@ -427,6 +427,122 @@ float HamIKEffector::GetGroundHeight(RndTransformable *t) {
     return t->WorldXfm().v.z;
 }
 
+#ifdef HX_NATIVE
+// ---------------------------------------------------------------------------
+// POST-POLL PELVIS RETARGET (feet-in-floor ship path, 2026-07-02).
+//
+// Move clips are authored on a normalized rig (raw bone_pelvis z ~= 31). Xbox
+// rescales pelvis-height-above-ground at runtime in the kEffectorTypePelvis
+// branch of Poll() below: ratio = live leg length / neutral leg length,
+// blended by leg extension (angel04: 31 * ~1.23 ~= 38 = the measured Xbox
+// pelvis). Native computes the SAME lift in Poll(), but the reversed
+// per-character poll order lets the servo's PoseMeshes recompute the pelvis
+// from the anim afterwards, stomping it — the effector's SetWorldXfm is never
+// backed into the local, so any later dirty-recompute discards it (Trans.cpp,
+// see docs/sessions/2026-07-02-feet-faithful-root-SOLVED-pelvis-retarget-stomped.md).
+//
+// This entry re-applies the EXACT matched formula strictly post-poll (called
+// from Dc3RunPostPollFootPlant after TheTaskMgr.Poll() and before Draw, so
+// nothing re-poses afterwards) and writes the pelvis LOCAL translation
+// (durable across recomputes, unlike a world write). DirtyLocalXfm propagates
+// dirty to the child subtree, so the legs recompose from the lifted pelvis and
+// the post-poll 2-bone foot plant then solves from the correct height.
+//
+// Returns true when this effector IS the character's pelvis effector (whether
+// or not a lift was written) so the caller stops scanning the dir.
+bool HamIKEffector::Dc3PostPollPelvisRetarget(int charIdx) {
+    if (!mSkeleton || !mEffector || GetType() != kEffectorTypePelvis)
+        return false;
+    if (Weight() == 0.0f)
+        return true; // pelvis effector disabled — matched Poll() skips it too
+
+    // Matched Poll(): the moved bone is mFinger, falling back to mEffector.
+    RndTransformable *pelvis = mFinger ? mFinger.Ptr() : mEffector.Ptr();
+    Character *character = mCharacter.Ptr();
+    RndTransformable *ground = character ? (RndTransformable *)character : nullptr;
+    if (!ground && !mGround)
+        return true; // GetGroundHeight would dereference a null fallback
+    float groundHeight = GetGroundHeight(ground);
+
+    RndTransformable *knee = CharUtlFindBoneTrans("bone_L-knee", Dir());
+    RndTransformable *ankle = CharUtlFindBoneTrans("bone_L-ankle", Dir());
+    if (!knee || !ankle)
+        return true;
+
+    // ratio = live leg length / neutral leg length (bone x-offsets, as matched).
+    // If the neutral skeleton isn't resolved, NeutralLocalPos falls back to the
+    // live local -> ratio == 1 -> the write below is a no-op (safe pre-outfit).
+    Vector3 localPos;
+    mSkeleton->NeutralLocalPos(ankle, localPos);
+    float ankleLen = localPos.x;
+    mSkeleton->NeutralLocalPos(knee, localPos);
+    float kneeLen = localPos.x;
+    float neutralLen = kneeLen + ankleLen;
+    if (kneeLen < 0.001f || neutralLen < 0.001f)
+        return true; // degenerate skeleton: blend/ratio denominators vanish
+    float liveLen = ankle->LocalXfm().v.x + knee->LocalXfm().v.x;
+    float ratio = liveLen / neutralLen;
+    // Defensive (not in the matched code, which runs on trusted mid-frame
+    // state): a half-loaded rig can read garbage bone offsets; a wild ratio
+    // would teleport the dancer vertically. Real rigs sit near 1.0-1.3.
+    if (!(ratio > 0.25f && ratio < 4.0f))
+        return true;
+
+    // Extension blend + lift, verbatim from the kEffectorTypePelvis branch
+    // (there effQ.v.z is the pelvis finger's live world z = pelvisZ here).
+    float lowerBound = kneeLen * 0.3f + ankleLen;
+    float upperBound = kneeLen * 0.8f + ankleLen;
+    float pelvisZ = pelvis->WorldXfm().v.z;
+    float blend = (pelvisZ - groundHeight - lowerBound) / (upperBound - lowerBound);
+    blend = Max(0.0f, blend);
+    blend = Min(blend, 1.0f);
+    float liftedZ =
+        (((ratio - 1.0f) * blend) + 1.0f) * (pelvisZ - groundHeight) + groundHeight;
+
+    float worldDz = liftedZ - pelvisZ;
+    if (fabsf(worldDz) > 0.001f) {
+        // World-z delta -> pelvis LOCAL delta through the parent world rotation
+        // (row-vector convention: worldV = localV * parentW.m + parentW.v).
+        Vector3 localDelta(0.0f, 0.0f, worldDz);
+        RndTransformable *parent = pelvis->TransParent();
+        if (parent) {
+            Hmx::Matrix3 parentInv;
+            Invert(parent->WorldXfm().m, parentInv);
+            Vector3 worldDelta(0.0f, 0.0f, worldDz);
+            Multiply(worldDelta, parentInv, localDelta);
+        }
+        Transform &local = pelvis->DirtyLocalXfm(); // dirties the child subtree
+        Add(local.v, localDelta, local.v);
+        (void)pelvis->WorldXfm(); // recompose now; children recompose lazily
+    }
+
+    // Runtime-verification probe (DC3_IK_DIAG or DC3_KNEE_LOCAL): ~1 line per
+    // 30 frames per character, 200 lines total.
+    static int sDiag = -1;
+    if (sDiag < 0)
+        sDiag = (getenv("DC3_IK_DIAG") || getenv("DC3_KNEE_LOCAL")) ? 1 : 0;
+    if (sDiag) {
+        extern int HamDirector_NativeSetFrameCount();
+        static int sLogCount = 0;
+        static int sLastFrame[8] = { -1000, -1000, -1000, -1000,
+                                     -1000, -1000, -1000, -1000 };
+        int slot = (charIdx >= 0 && charIdx < 8) ? charIdx : 7;
+        int frame = HamDirector_NativeSetFrameCount();
+        if (sLogCount < 200 && frame - sLastFrame[slot] >= 30) {
+            sLogCount++;
+            sLastFrame[slot] = frame;
+            fprintf(stderr,
+                "DC3_IK_DIAG PelvisRetarget[%d] f=%d char=%d/%s ratio=%.3f "
+                "blend=%.3f ground=%.2f zBefore=%.2f zAfter=%.2f\n",
+                sLogCount, frame, charIdx,
+                character ? (character->Name() ? character->Name() : "?") : "?",
+                ratio, blend, groundHeight, pelvisZ, pelvis->WorldXfm().v.z);
+        }
+    }
+    return true;
+}
+#endif
+
 void HamIKEffector::Poll() {
 #ifdef HX_NATIVE
     // Log the poll ORDER to determine if pelvis runs before or after ankle.

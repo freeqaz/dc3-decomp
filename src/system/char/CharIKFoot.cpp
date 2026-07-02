@@ -8,7 +8,9 @@
 #include "rndobj/Trans.h"
 #ifdef HX_NATIVE
 #include "hamobj/HamCharacter.h"
+#include "hamobj/HamIKEffector.h"
 #include "hamobj/HamWardrobe.h"
+#include "obj/Dir.h"
 #include <cstdlib>
 #include <cstring>
 #include <cstdio>
@@ -306,6 +308,24 @@ bool Dc3FeetPostPlant() {
     return v != 0;
 }
 
+// POST-POLL PELVIS RETARGET (feet-in-floor ship path, 2026-07-02). The dancer
+// rides ~6-7 units too low because the pelvis-height retarget computed by the
+// matched HamIKEffector pelvis effector is stomped same-frame by the servo's
+// PoseMeshes (reversed native poll order; the effector's SetWorldXfm is never
+// backed into the local). Re-apply the exact matched lift here, post-poll,
+// as a durable pelvis LOCAL write BEFORE the 2-bone plant, so the plant solves
+// the feet from the Xbox-correct pelvis height. Math + durability rationale:
+// HamIKEffector::Dc3PostPollPelvisRetarget and the 2026-07-02 session doc.
+// ON whenever the post-plant hook is on; kill separately: DC3_FEET_PELVIS_OFF=1.
+// Also skipped under DC3_POLL_ORDER_FIX=1: with producer-first poll order the
+// in-graph effector lift already survives — retargeting again would double-lift.
+bool Dc3FeetPelvisRetarget() {
+    static int v = -1;
+    if (v < 0)
+        v = (getenv("DC3_FEET_PELVIS_OFF") || getenv("DC3_POLL_ORDER_FIX")) ? 0 : 1;
+    return v != 0;
+}
+
 // Run the stateless clean plant on this foot's FK-composed leg (mHand=ankle). Public
 // entry for the post-poll hook. Finds the toe bone (ankle child) for the floor check.
 void CharIKFoot::Dc3PostPollPlant() {
@@ -336,6 +356,16 @@ void Dc3RunPostPollFootPlant() {
                                        : TheHamWardrobe->GetBackup(d - 2);
         if (!dancer)
             continue;
+        // Pelvis retarget FIRST (lifts the whole body to the Xbox height and
+        // dirties the leg subtree), then the 2-bone plant re-plants the feet
+        // from the lifted pelvis. One pelvis effector per dancer: stop at the
+        // first one found (Dc3PostPollPelvisRetarget self-filters by type).
+        if (Dc3FeetPelvisRetarget()) {
+            for (ObjDirItr<HamIKEffector> eff(dancer, true); eff != nullptr; ++eff) {
+                if (eff->Dc3PostPollPelvisRetarget(d))
+                    break;
+            }
+        }
         for (int k = 0; k < 2; k++) {
             CharIKFoot *ik = dancer->Find<CharIKFoot>(kIKNames[k], false);
             if (ik)

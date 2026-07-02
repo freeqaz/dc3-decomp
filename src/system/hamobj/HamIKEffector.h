@@ -54,6 +54,14 @@ public:
     virtual void ListPollChildren(std::list<RndPollable *> &) const;
     virtual void PollDeps(std::list<Hmx::Object *> &, std::list<Hmx::Object *> &);
 
+#ifdef HX_NATIVE
+    // Feet-in-floor ship path: re-apply the matched pelvis height retarget
+    // post-poll, writing the pelvis LOCAL so the lift survives to render.
+    // Called from Dc3RunPostPollFootPlant (CharIKFoot.cpp). Returns true if
+    // this effector is the character's pelvis effector (caller stops searching).
+    bool Dc3PostPollPelvisRetarget(int charIdx);
+#endif
+
     OBJ_MEM_OVERLOAD(0x19)
     NEW_OBJ(HamIKEffector)
 
