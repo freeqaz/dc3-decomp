@@ -1290,7 +1290,6 @@ int RndText::OnComputeCharWidths(const unsigned short *wideChars, float *widths,
     widths[0] = 0.0f;
     const unsigned short *p = wideChars;
     float *w = widths + 1;
-    auto _e0 = missingChars.end();
     for (;;) {
         if (*p == 0) {
             if (missingChars.size()) {
@@ -1398,7 +1397,7 @@ process_char:
                         bool found = font->CharAdvance(prevChar, ch, charWidth);
                         if (!found) {
                             if (ch != '\n') {
-                                if (std::find(missingChars.begin(), _e0, ch) == _e0) {
+                                if (std::find(missingChars.begin(), missingChars.end(), ch) == missingChars.end()) {
                                     missingChars.push_back(ch);
                                 }
                                 if (std::find(missingFonts.begin(), missingFonts.end(), font) == missingFonts.end()) {
@@ -2742,7 +2741,7 @@ void RndText::FontMap3d::SetupCharacter(
 
         if (size != _kFloat0_0) {
             float circlePos = (state.mSize * width) * 0.5f + xfm.v.x;
-            Transform circleXfm = XfmOnCircleEdge(circlePos, size);
+            Transform circleXfm = XfmOnCircleEdge(size, circlePos);
             xfm.v.x -= circlePos;
             Multiply(xfm, circleXfm, xfm);
         }
