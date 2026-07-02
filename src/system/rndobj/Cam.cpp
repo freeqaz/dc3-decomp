@@ -472,7 +472,15 @@ void RndCam::GetViewProjectXfms(Transform &viewXfm, Hmx::Matrix4 &projMtx) const
     projMtx.y.y = (-(mScreenRect.h * mLocalProjectXfm.m.z.y) * 2.0f) / height;
     projMtx.z.y = (t + b) / height;
     projMtx.z.x = -((r + l) / width);
+    // The Xbox build reloads mNearPlane here (a member reload forced after the
+    // ScreenRect call) rather than caching it in a callee-saved FPR; matching
+    // that keeps FPR pressure down (f29-f31, no __savefpr_28). Native keeps the
+    // overridable local so the near-plane tuning knob still applies.
+#ifdef HX_NATIVE
     projMtx.w.z = -(nearPlane * farRatio);
+#else
+    projMtx.w.z = -(mNearPlane * farRatio);
+#endif
 
 #ifdef HX_NATIVE
     // Apply FOV scale — scales the projection matrix elements that encode FOV.

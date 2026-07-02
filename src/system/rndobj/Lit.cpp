@@ -81,10 +81,17 @@ bool RndLight::Replace(ObjRef *ref, Hmx::Object *obj) {
     return RndTransformable::Replace(ref, obj);
 }
 
+static Transform MakeShadowBias() {
+    Transform bias;
+    bias.m.x.Set(0.5f, 0.0f, 0.0f);
+    bias.m.y.Set(0.0f, 0.5f, 0.0f);
+    bias.m.z.Set(0.5f, 0.5f, 1.0f);
+    bias.v.Set(0.0f, 0.0f, 0.0f);
+    return bias;
+}
+
 Transform RndLight::Projection() {
     Transform result;
-    static bool sInit;
-    static Transform sBias;
     if (mRange == 0.0f) {
         result.Reset();
     } else {
@@ -125,13 +132,7 @@ Transform RndLight::Projection() {
 
         Multiply(result, mTextureXfm, result);
 
-        if (!sInit) {
-            sInit = true;
-            sBias.m.x.Set(0.5f, 0.0f, 0.0f);
-            sBias.m.y.Set(0.0f, 0.5f, 0.0f);
-            sBias.m.z.Set(0.5f, 0.5f, 1.0f);
-            sBias.v.Set(0.0f, 0.0f, 0.0f);
-        }
+        static const Transform sBias = MakeShadowBias();
         Multiply(result, sBias, result);
     }
     return result;

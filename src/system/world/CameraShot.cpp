@@ -411,21 +411,16 @@ void CamShotFrame::BuildTransform(RndCam *cam, Transform &tf, bool b3) const {
                 pathFrame = 0.0f;
             }
         }
-        RndTransAnim *path = mCamShot->mPath;
-        float endFrame = path->EndFrame();
-        path->MakeTransform(endFrame * pathFrame, tf, true, 1.0f);
+        mCamShot->mPath->MakeTransform(
+            mCamShot->mPath->EndFrame() * pathFrame, tf, true, 1.0f
+        );
         Multiply(mCamShot->mKeyframes[0].mWorldOffset, tf, tf);
     } else {
         tf = mWorldOffset;
     }
 
     if (mParent) {
-        bool useLiveParent;
-        if (!mParentFirstFrame || mCamShot->mShotStarted) {
-            useLiveParent = true;
-        } else {
-            useLiveParent = false;
-        }
+        bool useLiveParent = !mParentFirstFrame || mCamShot->mShotStarted;
 
         const Transform *parentXfm;
         if (useLiveParent) {
@@ -448,7 +443,7 @@ void CamShotFrame::BuildTransform(RndCam *cam, Transform &tf, bool b3) const {
         if (mUseParentRotation) {
             Multiply(tf, localParent, tf);
         } else {
-            Add(tf.v, localParent.v, tf.v);
+            tf.v += localParent.v;
         }
 
         if (0.0f < mCamShot->mClampHeight && mTargets.size() == 1) {
@@ -1676,12 +1671,16 @@ void CamShot::Shake(float freq, float amp, const Vector2 &maxAngle, Vector3 &off
 
 // why does ~AutoPrepTarget even inline this?
 __declspec(noinline) bool CamShot::SetPos(CamShotFrame &frame, RndCam *cam) {
-    if (!cam) {
-        cam = GetCam();
+    RndCam *c;
+    if (cam) {
+        c = cam;
+    } else {
+        c = GetCam();
     }
-    if (!cam) {
+    if (!c) {
         return false;
     } else {
+        cam = c;
         frame.mWorldOffset = cam->WorldXfm();
         if (frame.HasTargets()) {
             Vector3 ve0;
