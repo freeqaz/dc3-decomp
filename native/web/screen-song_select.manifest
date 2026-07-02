@@ -1,0 +1,9 @@
+# screen-song_select.manifest — choose_mode + song_select working set.
+#
+# What the main_screen → choose_mode → song_select transitions sync-fetch
+# (measured: 4 requests, 9.3 MB raw). Prefetched as one compressed async bundle
+# while the user dwells on main_screen. Regen: see screen-title_flow.manifest.
+ui/choose_mode/gen/choose_mode.milo_xbox
+ui/song_select/gen/song_select.milo_xbox
+ui/gen/song_info.milo_xbox
+ui/image/gen/dc_logo_keep.png_xbox

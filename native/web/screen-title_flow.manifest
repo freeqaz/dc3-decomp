@@ -1,0 +1,39 @@
+# screen-title_flow.manifest — the shell/title/main-menu working set.
+#
+# Everything the attract → title → main_screen flow sync-fetches one file at a
+# time (measured: 26 requests, 82.5 MB raw; the big milos froze the wasm thread
+# 7.7 s + 6.3 s per transition at 50 Mbit). Prefetched as ONE compressed async
+# bundle (/api/bundle/screen/title_flow) while the user dwells on the attract
+# screen, so the panel loaders find warm MEMFS instead of issuing sync XHRs.
+#
+# Ported from rb3's screen-bundle system (rb3 46a59614). Regen recipe:
+#   node scripts/web/netperf-lite.mjs --target song_select_screen --json out.json
+#   then extract /api/file/* requests between attract_screen and main_screen.
+ui/title/gen/autosave_warning.milo_xbox
+ui/background/gen/background.milo_xbox
+ui/endgame/gen/perform_nextsong.milo_xbox
+ui/endgame/gen/fitness_keepmoving.milo_xbox
+sfx/loc/eng/gen/vo_fitness_keepmoving.milo_xbox
+ui/endgame/gen/empty_screen.milo_xbox
+ui/flashcard_dock/gen/flashcard_dock.milo_xbox
+sfx/samples/shell/shellmusic_loop_01.mid
+sfx/gen/shell_fx.milo_xbox
+# shellmusic_loop_01.mogg DELIBERATELY EXCLUDED: title music is requested
+# before the bundle unpack can land (measured: sync fetch at t=19.7s vs unpack
+# t=20.9s @50Mbit), so bundling it double-fetches 4.86 incompressible MB.
+ui/multiuser/gen/multiuser.milo_xbox
+sfx/loc/eng/gen/campaign_crew_sounds.milo_xbox
+ui/tutorial/gen/tutorial_nav.milo_xbox
+ui/title/gen/title.milo_xbox
+ui/resource/ham_list_ribbon/gen/main_ribbon.milo_xbox
+ui/hud/gen/fitness_hud_panel.milo_xbox
+ui/rhythm_detector/gen/rhythm_detector.milo_xbox
+ui/endgame/gen/perform_endgame.milo_xbox
+ui/unlocks/gen/locked_content_popup.milo_xbox
+ui/gen/dialog.milo_xbox
+ui/background/gen/background_pause.milo_xbox
+ui/pause/gen/pause.milo_xbox
+ui/correct_identity/gen/correct_identity.milo_xbox
+ui/resource/lists/gen/list_gamertag.milo_xbox
+ui/main/gen/main.milo_xbox
+sfx/loc/eng/gen/motd_shell_vo.milo_xbox

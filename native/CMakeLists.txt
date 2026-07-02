@@ -224,7 +224,7 @@ endif()
 # ============================================================================
 set(MILO_ENGINE_PATH "${CMAKE_SOURCE_DIR}/../../milo-native-engine"
     CACHE PATH "Path to milo-native-engine checkout")
-set(MILO_ENGINE_PIN "8fb669d91b428bbda31e79728360aa5d56666570"
+set(MILO_ENGINE_PIN "77eb428b1c8a05c8abcead3a1062dfbcbca49973"
     CACHE STRING "Engine commit SHA verified against")
 if(EXISTS "${MILO_ENGINE_PATH}/.git")
     execute_process(COMMAND git rev-parse HEAD
@@ -1418,6 +1418,9 @@ target_include_directories(dc3-web PRIVATE
 milo_engine_apply_web_target_options(dc3-web ${CMAKE_CURRENT_SOURCE_DIR}/web/build)
 target_link_options(dc3-web PRIVATE
     -sEXPORTED_FUNCTIONS=["_main","_dc3MainLoopTick"]
+    # dc3-local pre-js (URL ?env= → ENV bridge). Stacks with the engine's
+    # missing_stubs.js pre-js from milo_engine_apply_web_target_options.
+    "SHELL:--pre-js ${CMAKE_CURRENT_SOURCE_DIR}/web/dc3_pre.js"
 )
 if(MILO_WEB_ASYNC)
     target_link_options(dc3-web PRIVATE
