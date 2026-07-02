@@ -36,6 +36,7 @@ enum NativeFlowFilterMode {
     kNativeFlowFilterAll = 0,
     kNativeFlowFilterCurated = 1,
     kNativeFlowFilterMenuOnly = 2,
+    kNativeFlowFilterNone = 3, // blanket activation disabled (the DEFAULT)
 };
 
 bool DebugPanelFlowNames(const char *dirName) {
@@ -51,11 +52,27 @@ bool DebugPanelFlowNames(const char *dirName) {
         || std::strcmp(dirName, "letterbox") == 0 || std::strcmp(dirName, "background") == 0;
 }
 
+// DEFAULT IS none (blanket activation disabled). The hack's premise — "DTA
+// enter scripts don't run on native, so flows need synthetic activation" —
+// no longer holds: DTA screen/panel enter scripts fire on native (proven for
+// {meta music_start}/{meta music_stop} and the title enter.flow chain,
+// DC3_AUDIO_TRACE runs 2026-07-02), and a screenshot A/B walk of
+// title/main/choose_mode/song_select/gameplay (scripts/web/_flowab_menus.mjs)
+// showed IDENTICAL content and positioning with the hack off — while the hack
+// itself was double-activating already-entered transition flows, leaving a
+// stuck full-screen wash over the menus and covering the helpbar. The curated
+// filter machinery is kept as an escape hatch: MILO_NATIVE_FLOW_FILTER=
+// curated|all|menu_only re-enables it if some untested screen regresses.
 NativeFlowFilterMode GetNativeFlowFilterMode() {
     static int mode = -1;
     if (mode == -1) {
         const char *env = std::getenv("MILO_NATIVE_FLOW_FILTER");
-        if (!env || !env[0] || std::strcmp(env, "curated") == 0 || std::strcmp(env, "1") == 0) {
+        if (!env || !env[0] || std::strcmp(env, "none") == 0
+            || std::strcmp(env, "off") == 0) {
+            mode = kNativeFlowFilterNone;
+        } else if (
+            std::strcmp(env, "curated") == 0 || std::strcmp(env, "1") == 0
+        ) {
             mode = kNativeFlowFilterCurated;
         } else if (
             std::strcmp(env, "all") == 0 || std::strcmp(env, "0") == 0
@@ -66,7 +83,7 @@ NativeFlowFilterMode GetNativeFlowFilterMode() {
         ) {
             mode = kNativeFlowFilterMenuOnly;
         } else {
-            mode = kNativeFlowFilterCurated;
+            mode = kNativeFlowFilterNone;
         }
     }
     return (NativeFlowFilterMode)mode;
@@ -96,6 +113,9 @@ bool ContainsAny(const std::string &text, const char *const *tokens) {
 
 bool ShouldActivateNativeFlow(const char *dirName, const char *flowPath) {
     NativeFlowFilterMode mode = GetNativeFlowFilterMode();
+    if (mode == kNativeFlowFilterNone) {
+        return false;
+    }
     if (mode == kNativeFlowFilterAll) {
         return true;
     }
@@ -442,10 +462,13 @@ void PanelDir::Enter() {
     static Symbol ui_enter_back("ui_enter_back");
     SendTransition(ui_enter, ui_enter_forward, ui_enter_back);
 #ifdef HX_NATIVE
-    // Activate game-code-triggered Flows (startMode==0) that normally fire from
-    // DTA enter scripts on Xbox. Flows with startMode>0 auto-start through the
-    // normal Flow::Enter() path (called by RndDir::Enter above) and don't need
-    // blanket activation here.
+    // Legacy synthetic panel entry — INERT by default (see
+    // GetNativeFlowFilterMode: the default filter mode is `none`, so
+    // ShouldActivateNativeFlow rejects everything). Kept only as the
+    // MILO_NATIVE_FLOW_FILTER=curated|all|menu_only escape hatch. Flows with
+    // startMode>0 auto-start through the normal Flow::Enter() path (called by
+    // RndDir::Enter above); startMode==0 flows are fired by the DTA enter
+    // scripts, which DO run on native (2026-07-02 A/B).
     for (ObjDirItr<Flow> it(this, true); it != nullptr; ++it) {
         if (it->GetStartMode() > 0) {
             // Event-triggered flows with "enter" in the name need explicit
