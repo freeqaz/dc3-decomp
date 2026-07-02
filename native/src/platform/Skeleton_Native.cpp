@@ -398,3 +398,14 @@ void NativeSkeletonProvider::FillDummySkeleton(Skeleton &skel) {
     skel.mTracking = kSkeletonTracked;
     skel.mTrackingID = 1;
 }
+
+void NativeSkeletonProvider::FinalizeSkeletonFrame(Skeleton &skel, int skelIdx, int elapsedMs) {
+    skel.mSkeletonIdx = skelIdx;
+    skel.mElapsedMs = elapsedMs;
+    skel.mCamDisplacements.clear();
+}
+
+void NativeSkeletonProvider::MarkUntracked(Skeleton &skel) {
+    skel.Init();
+    skel.mTrackingID = -1;
+}

@@ -49,6 +49,16 @@ public:
     // Used as fallback when no pose server is connected.
     static void FillDummySkeleton(Skeleton &skel);
 
+    // Apply Skeleton::Poll's per-frame bookkeeping to a slot that had its pose
+    // filled this frame (mirrors Skeleton.cpp Poll: mSkeletonIdx/mElapsedMs set,
+    // mCamDisplacements cache cleared). Required so PrevTrackedSkeleton /
+    // displacement scoring index the correct history slot instead of -1.
+    static void FinalizeSkeletonFrame(Skeleton &skel, int skelIdx, int elapsedMs);
+
+    // Reset a slot to the untracked contract (Init + mTrackingID = -1) so
+    // tracking-ID rotation can't resolve a dead slot. Call only on tracked slots.
+    static void MarkUntracked(Skeleton &skel);
+
 private:
     void ReaderThread();
     void MapCOCOToDC3(const float cocoKpts[][3], PersonData &out);

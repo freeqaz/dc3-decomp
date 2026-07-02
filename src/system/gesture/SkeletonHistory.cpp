@@ -10,6 +10,12 @@ SkeletonHistoryArchive::SkeletonHistoryArchive() {
 
 const std::vector<ArchiveSkeleton> &SkeletonHistoryArchive::GetArchive(int skel_idx) const {
     MILO_ASSERT((0) <= (skel_idx) && (skel_idx) < (6), 0x36);
+#ifdef HX_NATIVE
+    if (skel_idx < 0 || skel_idx >= 6) {
+        static const std::vector<ArchiveSkeleton> sEmpty;
+        return sEmpty;
+    }
+#endif
     return mHistories[skel_idx];
 }
 
@@ -22,6 +28,9 @@ bool SkeletonHistory::PrevFromArchive(
 ) const {
     int skel_idx = skeleton.SkeletonIndex();
     MILO_ASSERT((0) <= (skel_idx) && (skel_idx) < (6), 0x13);
+#ifdef HX_NATIVE
+    if (skel_idx < 0 || skel_idx >= 6) return false;
+#endif
     const std::vector<ArchiveSkeleton> &archive = archives.GetArchive(skel_idx);
     std::vector<ArchiveSkeleton>::const_iterator it = archive.begin();
     std::vector<ArchiveSkeleton>::const_iterator itEnd;
