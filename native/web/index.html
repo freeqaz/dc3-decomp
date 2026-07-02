@@ -339,15 +339,41 @@
             if (e.key === 'p' || e.key === 'P') { e.preventDefault(); togglePause(); }
             if (e.key === '.' && paused) { e.preventDefault(); stepFrame(); }
         });
-        // Canvas resize — match canvas resolution to display size
+        // Canvas sizing — pin the BUFFER to the engine's virtual 1280x720.
+        //
+        // WHY: the game renders at a fixed virtual resolution. RndCam::Select
+        // (src/system/rndobj/Cam.cpp, HX_NATIVE block) programs a PIXEL
+        // viewport from TheRnd.Width()/Height() = 1280x720 on every cam select.
+        // So the drawable buffer MUST be 1280x720. If the canvas buffer is any
+        // other size, the fixed 720p viewport corner-pins the frame (buffer
+        // bigger than 720p) or crops it (buffer smaller). Keeping the buffer at
+        // 1280x720 and letting CSS scale the bitmap (`#dc3-canvas { width/height:
+        // 100% }`) gives correct fullscreen — the browser stretches the 720p
+        // bitmap to the displayed box. So the resize handler must NOT touch
+        // canvas.width/height and must NOT call _dc3_resize_canvas.
+        //
+        // Escape hatch: ?nativeres=1 restores the old behavior (buffer = CSS px
+        // + _dc3_resize_canvas) so hi-res rendering can be re-tested without a
+        // rebuild.
         (function() {
             var canvas = document.getElementById('dc3-canvas');
+            var nativeRes = /(?:^|[?&])nativeres=1(?:&|$)/.test(location.search);
+
+            if (!nativeRes) {
+                // Pinned-buffer path (default). Make 1280x720 explicit in JS so a
+                // stale/absent width/height attribute can't corner-pin the frame.
+                canvas.width = 1280;
+                canvas.height = 720;
+                return;
+            }
+
+            // nativeres=1: legacy path — buffer tracks CSS pixel size and the
+            // engine reconfigures its surface + viewport to the new resolution.
             var pending = false;
             function resizeCanvas() {
                 var rect = canvas.getBoundingClientRect();
-                // Use CSS pixels, not device pixels — the engine's Rnd
-                // dimensions stay at 1280x720 so scaling by DPR creates
-                // a surface larger than the viewport (black bars).
+                // CSS pixels, not device pixels — scaling by DPR would create a
+                // surface larger than the viewport (black bars).
                 var w = Math.round(rect.width);
                 var h = Math.round(rect.height);
                 if (w <= 0 || h <= 0) return;

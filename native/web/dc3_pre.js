@@ -11,6 +11,9 @@
 Module.preRun = Module.preRun || [];
 Module.preRun.push(function () {
     try {
+        // dc3 registers no WebMusicStem; off-main mode breaks the adaptive-latency heartbeat (engine Bug-4) — default off until dc3 ports the stem bridge.
+        if (ENV['RB3_WEB_OFFMAIN_MIX'] === undefined) ENV['RB3_WEB_OFFMAIN_MIX'] = '0';
+
         var spec = new URLSearchParams(self.location.search).get('env');
         if (!spec) return;
         spec.split(';').forEach(function (pair) {
