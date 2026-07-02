@@ -104,6 +104,10 @@ void ShellInput::Init() {
     mSkelChooser = new SkeletonChooser;
     static Symbol reset_controller_mode_timeout("reset_controller_mode_timeout");
     TheHamUI.AddSink(this, reset_controller_mode_timeout);
+    // Primary boot hook: runs after HamInit() (TheGestureMgr exists, in controller
+    // mode) and after UIManager::Init() (helpbar dir loaded), so this normally wins
+    // the one-shot and activates controller_mode.flow before the first screen shows.
+    NativeBootControllerModeOnce();
 #else
     SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
     handle.AddCallback(this);
@@ -425,9 +429,13 @@ void ShellInput::SyncVoiceControl() { // almost done
 
 void ShellInput::EnterControllerMode(bool b) {
 #ifdef HX_NATIVE
-    // Native stays permanently in controller mode — skip helpbar/Kinect logic.
-    // GestureMgr already has mInControllerMode=true set in init.
+    // Native stays permanently in controller mode — skip the RockCentral/profile/
+    // skeleton-chooser Xbox body. Route helpbar controller_mode.flow activation
+    // through the shared one-shot guard so the boot hook, HamScreen::Enter's
+    // sControllerModeForced path, and repeat enter_controller_mode messages all
+    // share the single sActivated latch — the flow activates exactly once.
     TheGestureMgr->SetInControllerMode(true);
+    NativeBootControllerModeOnce();
     return;
 #endif
     HelpBarPanel *pHelpbarPanel = TheHamUI.GetHelpBarPanel();

@@ -137,8 +137,27 @@ void HelpBarPanel::FinishLoad() {
     TheWaveToTurnOnLight->AddSink(this, "wave_gesture_disabled");
 #ifdef HX_NATIVE
     }
+    // Fallback boot hook: the dir is loaded here, but TheGestureMgr may still be
+    // null this early — NativeBootControllerModeOnce() no-ops until gesture exists,
+    // at which point the ShellInput::Init hook fires it instead.
+    NativeBootControllerModeOnce();
 #endif
 }
+
+#ifdef HX_NATIVE
+void NativeBootControllerModeOnce() {
+    static bool sActivated = false;
+    if (sActivated)
+        return;
+    HelpBarPanel *hbp = HelpBarPanel::sInstance;
+    if (!hbp || !hbp->CheckIsLoaded() || !hbp->DataDir())
+        return;
+    if (!TheGestureMgr || !TheGestureMgr->InControllerMode())
+        return;
+    hbp->EnterControllerMode();
+    sActivated = true;
+}
+#endif
 
 void HelpBarPanel::EnterControllerMode() {
     Flow *f = DataDir()->Find<Flow>("controller_mode.flow", false);

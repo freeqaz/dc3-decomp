@@ -71,3 +71,12 @@ private:
     Timer mWriteIconTimer;
     UIPanel *mSyncedPanel;
 };
+
+#ifdef HX_NATIVE
+// Native never enters controller mode via gesture, so controller_mode.flow never
+// gets activated and the EXIT CONTROLLER MODE band stays at its authored off-screen
+// rest position. Activate it exactly once at boot, from the earliest hook where the
+// helpbar dir is loaded and TheGestureMgr exists. Idempotent (function-local once
+// guard); no-ops until both preconditions hold, so safe to call from multiple hooks.
+void NativeBootControllerModeOnce();
+#endif
