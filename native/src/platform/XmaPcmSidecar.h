@@ -86,6 +86,18 @@ inline uint64_t PayloadKey(const void *data, int sizeBytes, int sampleRate) {
 inline std::string SidecarDir() {
     if (const char *d = getenv("DC3_SFX_PCM_DIR")) return std::string(d);
     if (const char *d = getenv("RB3_SFX_PCM_DIR")) return std::string(d);
+#ifndef __EMSCRIPTEN__
+    // Anchor sidecars at the assets dir so a desktop-native run's decoded PCM
+    // lands where the web server serves from (native/web/server.py walks
+    // <assets>/sfx/gen/xma_pcm). The old cwd-relative default silently forked
+    // the sidecar set per launch directory — a repo-root run accumulated 289
+    // song-SFX sidecars the web build then 404'd on during song load.
+    // Web keeps the relative default: OpenSidecarFile anchors it under /data.
+    extern const char *NativeGetDataDir();
+    const char *dataDir = NativeGetDataDir();
+    if (dataDir && dataDir[0] && !(dataDir[0] == '.' && dataDir[1] == '\0'))
+        return std::string(dataDir) + "/sfx/gen/xma_pcm";
+#endif
     return std::string("sfx/gen/xma_pcm");
 }
 

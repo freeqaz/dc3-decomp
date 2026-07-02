@@ -50,6 +50,8 @@
 #include "rndobj/Overlay.h"
 #include "rndobj/PostProc.h"
 #include "rndobj/Rnd.h"
+#include "synth/MoggClip.h"
+#include "synth/Pollable.h"
 #include "synth/Sound.h"
 #include "synth/StandardStream.h"
 #include "synth/Synth.h"
@@ -597,6 +599,23 @@ void GamePanel::StartGame() {
     // the intro sequence may be skipped — set it explicitly as a fallback.
     TheHamProvider->SetProperty("game_stage", Symbol("playing"));
     fprintf(stderr, "DC3 Native: StartGame() — game_stage set to 'playing'\n");
+    // On Xbox the game_stage->playing flow transition stops the shell/venue
+    // ambience MoggClips (shell_dciambience gets RE-started by the game_screen
+    // enter flow after the Enter() stop above; venue beds like rollerrink_amb /
+    // foley beat*.mogg linger too). Those stop nodes live in binary milo Flow
+    // graphs that don't fire on native, so the ambience plays on under the
+    // whole song. The song itself streams via HamAudio, not a MoggClip, so
+    // stopping every still-playing MoggClip at the moment the song starts is
+    // surgical; anything gameplay starts afterwards is untouched.
+    for (std::list<SynthPollable *>::iterator it = SynthPollable::Pollables().begin();
+         it != SynthPollable::Pollables().end(); ++it) {
+        MoggClip *clip = dynamic_cast<MoggClip *>(*it);
+        if (clip && clip->IsPlaying()) {
+            fprintf(stderr, "DC3 Native: StartGame() stopping lingering ambience %s\n",
+                    clip->GetSoundDisplayName());
+            clip->Stop(true);
+        }
+    }
 #endif
 }
 

@@ -715,13 +715,23 @@ void VorbisReader::Poll(float until) {
             bool first = !unkec;
             while (timer.Ms() < until || first) {
                 first = false;
-                // Step 1: Push any decoded PCM to ring buffers
+                // Step 1: Push any decoded PCM to ring buffers.
+                // startSamp = -1 ("sequential, no position claim"), matching the
+                // Xbox reader: its unk100 stays -1 except in an unused edge path,
+                // so StandardStream::mCurrentSamp accumulates monotonically and
+                // DoJump()/Play() alone reposition it. We used to pass
+                // granulepos - pcmAvail here, but granulepos resets on every
+                // loop-wrap DoRawSeek (vorbis_synthesis_restart) and jumps to
+                // absolute file positions after seeks, so looping MoggClips
+                // (shell/venue ambience, crowd beds) snapped mCurrentSamp
+                // backward/forward every wrap ("sample mismatch" spam) and a
+                // bogus snap can fire or starve the SetLoop jump logic
+                // (mJumpFromSamples - mCurrentSamp) => audible glitches.
                 {
                     float **pcm;
                     int pcmAvail = vorbis_synthesis_pcmout(mVorbisDsp, &pcm);
                     if (pcmAvail > 0) {
-                        int consumed = ConsumeData((void **)pcm, pcmAvail,
-                                                   mVorbisDsp->granulepos - pcmAvail);
+                        int consumed = ConsumeData((void **)pcm, pcmAvail, -1);
                         vorbis_synthesis_read(mVorbisDsp, consumed);
                         if (consumed == 0)
                             break; // Ring buffer full — wait for audio callback to drain
