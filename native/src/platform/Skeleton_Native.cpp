@@ -69,46 +69,53 @@ bool NativeSkeletonProvider::Start(
 
     mSocketPath = socketPath;
 
-    // Launch pose_server.py as child process
-    // Resolve script path relative to the executable location
-    std::string scriptPath;
-    {
-        char exePath[PATH_MAX] = {};
-        ssize_t len = readlink("/proc/self/exe", exePath, sizeof(exePath) - 1);
-        if (len > 0) {
-            exePath[len] = '\0';
-            // Walk up from executable (native/build/milo-viewer) to project root
-            std::string dir(exePath);
-            // Strip executable name
-            size_t slash = dir.rfind('/');
-            if (slash != std::string::npos) dir = dir.substr(0, slash);
-            // Strip "build" directory
-            slash = dir.rfind('/');
-            if (slash != std::string::npos) dir = dir.substr(0, slash);
-            scriptPath = dir + "/scripts/pose_server.py";
-        } else {
-            scriptPath = "native/scripts/pose_server.py";
+    // DC3_POSE_NO_SPAWN=1: connect-only mode — attach to an already-running
+    // pose server (e.g. a synthetic one in CI) instead of forking pose_server.py.
+    if (getenv("DC3_POSE_NO_SPAWN")) {
+        printf("DC3_POSE_NO_SPAWN: connecting to existing pose server at %s\n",
+            socketPath.c_str());
+    } else {
+        // Launch pose_server.py as child process
+        // Resolve script path relative to the executable location
+        std::string scriptPath;
+        {
+            char exePath[PATH_MAX] = {};
+            ssize_t len = readlink("/proc/self/exe", exePath, sizeof(exePath) - 1);
+            if (len > 0) {
+                exePath[len] = '\0';
+                // Walk up from executable (native/build/milo-viewer) to project root
+                std::string dir(exePath);
+                // Strip executable name
+                size_t slash = dir.rfind('/');
+                if (slash != std::string::npos) dir = dir.substr(0, slash);
+                // Strip "build" directory
+                slash = dir.rfind('/');
+                if (slash != std::string::npos) dir = dir.substr(0, slash);
+                scriptPath = dir + "/scripts/pose_server.py";
+            } else {
+                scriptPath = "native/scripts/pose_server.py";
+            }
         }
-    }
 
-    mServerPid = fork();
-    if (mServerPid == 0) {
-        // Child process
-        execlp("python3", "python3",
-               scriptPath.c_str(),
-               "--socket", socketPath.c_str(),
-               "--model", modelPath.c_str(),
-               "--camera", std::to_string(cameraIndex).c_str(),
-               nullptr);
-        // If exec fails
-        perror("Failed to launch pose_server.py");
-        _exit(1);
-    } else if (mServerPid < 0) {
-        perror("fork failed");
-        return false;
-    }
+        mServerPid = fork();
+        if (mServerPid == 0) {
+            // Child process
+            execlp("python3", "python3",
+                   scriptPath.c_str(),
+                   "--socket", socketPath.c_str(),
+                   "--model", modelPath.c_str(),
+                   "--camera", std::to_string(cameraIndex).c_str(),
+                   nullptr);
+            // If exec fails
+            perror("Failed to launch pose_server.py");
+            _exit(1);
+        } else if (mServerPid < 0) {
+            perror("fork failed");
+            return false;
+        }
 
-    printf("Launched pose_server.py (pid %d)\n", mServerPid);
+        printf("Launched pose_server.py (pid %d)\n", mServerPid);
+    }
 
     // Wait for socket to appear, then connect
     for (int attempt = 0; attempt < 50; attempt++) {
@@ -230,6 +237,7 @@ void NativeSkeletonProvider::ReaderThread() {
             std::lock_guard<std::mutex> lock(mSwapMutex);
             memcpy(mBack, newBack, sizeof(mBack));
             mNumPersonsBack = numPersons;
+            mFrameIdBack = frameId;
         }
     }
 }
@@ -238,6 +246,7 @@ void NativeSkeletonProvider::Poll() {
     std::lock_guard<std::mutex> lock(mSwapMutex);
     memcpy(mPersons, mBack, sizeof(mPersons));
     mNumPersons = mNumPersonsBack;
+    mFrameIdFront = mFrameIdBack;
 }
 
 int NativeSkeletonProvider::FindByTrackId(int trackId) const {
