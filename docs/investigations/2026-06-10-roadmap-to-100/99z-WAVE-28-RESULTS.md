@@ -129,8 +129,33 @@ runs (transient 0-person frames mark untracked instead of poisoning history); HX
 SkeletonHistory FAILs (previously SIGSEGV on first move frame); **archive lookups ~98% hit rate**
 (`DC3_SCORING_DEBUG` counters: 7129 calls/6977 hits worktree, 5211/5128 on main — misses = authentic
 cold-start); self-test clean; default gameplay unchanged; gesture/skeleton suite 31/31 (3 suite
-failures are pre-existing missing milo-rnd-library assets, identical on main). **Step 2 in flight:**
-stable trackId→slot mapping + provider new-frame gating, then the live-pose run + default-on decision.
+failures are pre-existing missing milo-rnd-library assets, identical on main).
+
+## #41 step 2 LANDED (2026-07-02, main `fa2e842a` / `2f1776d3`): live-provider correctness
+
+Two designed fixes for real pose providers, all native-only (zero src/ changes): **stable
+trackId→slot map** (a departing person can no longer bequeath their archive history to whoever
+shifts into their array slot; the Sonnet review caught a HIGH bug in the first cut — a slot freed
+and reclaimed in the SAME accepted frame skipped `ClearHistory` because the archive loop runs before
+`AssignSlots`, re-introducing the exact contamination being fixed; repaired with ClearHistory-on-claim)
+and **provider new-frame gating** (both providers expose a frame generation latched at `Poll()`; the
+archive+fill+finalize+disappearance block runs only on NEW ~20Hz camera frames, not every 60+Hz game
+frame — no duplicate archive entries diluting the displacement lookback; skip-frames leave tracked
+slots untouched).
+
+**Runtime-proven WITHOUT a camera** via new CI tooling: `DC3_POSE` now overrides the headless
+provider skip, `DC3_POSE_NO_SPAWN` attaches to an existing server, and
+`native/scripts/pose_server_synthetic.py` scripts a deterministic enter/leave/same-frame-handoff/
+dropout scenario. 18000-frame run: 2615 provider frames accepted / 15345 game frames skipped
+(camera-rate gating), **exactly 9 slot reassignments = the scripted handoff count**, archive lookups
+98% hit, zero SkeletonHistory FAILs. Regression gates (dummy scoring / self-test / default) all
+clean; re-proven on main post-merge.
+
+**Remaining for #41 close-out:** (a) a live run with a real camera (pose_server.py or ncnn — needs a
+human/recorded input, can't be driven headless); (b) the default-on decision: flipping
+`DC3_NATIVE_SCORING` on by default means headless CI scores the static dummy pose (deterministic low
+DetectFrac — signal or noise?), plus the `DC3_REAL_MOVE_PASSED` flip in Game.cpp. 2-player scoring +
+HamVisDir freestyle (needs the same history discipline) remain out of scope.
 
 ## Process
 Subagents find + root-cause + rank (GPU-blocked); orchestrator runtime-verifies + merges. This wave:
