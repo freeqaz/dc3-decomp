@@ -303,8 +303,20 @@ static bool Dc3CleanPlant(RndTransformable *ankle, RndTransformable *toe) {
 // bytes are unchanged (CharIKFoot::Poll stays 100% normalized, DoFSM 97.4% floor).
 bool Dc3FeetPostPlant() {
     static int v = -1;
-    if (v < 0)
-        v = getenv("DC3_FEET_POST_PLANT_OFF") ? 0 : 1;
+    if (v < 0) {
+        // Under the (now default) producer-first poll order the game's own
+        // effector stack plants the feet Xbox-exactly (toe med 0.10 vs the
+        // clamp's fixed +0.60) — the clamp would only degrade it. It remains
+        // the fallback whenever the order fix is opted out, or force it back
+        // with DC3_FEET_POST_PLANT=1.
+        extern bool Dc3PollOrderFixActive();
+        if (getenv("DC3_FEET_POST_PLANT_OFF"))
+            v = 0;
+        else if (getenv("DC3_FEET_POST_PLANT"))
+            v = 1;
+        else
+            v = Dc3PollOrderFixActive() ? 0 : 1;
+    }
     return v != 0;
 }
 
@@ -317,12 +329,15 @@ bool Dc3FeetPostPlant() {
 // the feet from the Xbox-correct pelvis height. Math + durability rationale:
 // HamIKEffector::Dc3PostPollPelvisRetarget and the 2026-07-02 session doc.
 // ON whenever the post-plant hook is on; kill separately: DC3_FEET_PELVIS_OFF=1.
-// Also skipped under DC3_POLL_ORDER_FIX=1: with producer-first poll order the
-// in-graph effector lift already survives — retargeting again would double-lift.
+// Also skipped whenever the producer-first poll order is active (the default):
+// there the in-graph effector lift already survives — retargeting again would
+// double-lift.
 bool Dc3FeetPelvisRetarget() {
     static int v = -1;
-    if (v < 0)
-        v = (getenv("DC3_FEET_PELVIS_OFF") || getenv("DC3_POLL_ORDER_FIX")) ? 0 : 1;
+    if (v < 0) {
+        extern bool Dc3PollOrderFixActive();
+        v = (getenv("DC3_FEET_PELVIS_OFF") || Dc3PollOrderFixActive()) ? 0 : 1;
+    }
     return v != 0;
 }
 

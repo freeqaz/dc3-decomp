@@ -189,26 +189,33 @@ bool CharPollableSorter::ChangedByRecurse(Dep *dep) {
     return false;
 }
 
+#ifdef HX_NATIVE
+// Producer-first poll order (2026-07-02 feet-in-floor faithful root): DEFAULT
+// ON native; opt out with DC3_POLL_ORDER_FIX=0. Producer-first polarity makes
+// the per-character order song.hdrv (buffer) -> bone.servo (pose meshes) ->
+// IK effectors — the order Xbox's rendered pose requires. With the PPC
+// polarity below the order comes out reversed, so every effector write
+// (pelvis retarget lift, ankle plants) is computed and then stomped by the
+// servo's PoseMeshes in the same frame. RB3's matched sorter uses
+// producer-first (rb3 Character.cpp ChangedBy: mTarget=d1, recurse(d2));
+// DC3's Sort byte-matches the polarity below, so the PPC branch stays
+// untouched. Was opt-in while the ankle solve diverged; with the
+// HamIKEffector Interp mis-decomp + alias-unsafe Transform Multiply fixed
+// (00c9b165) the faithful stack is Xbox-exact and gate-clean 48/48, so it is
+// now the default. CharIKFoot.cpp keys its fallback clamps off this too.
+bool Dc3PollOrderFixActive() {
+    static int v = -1;
+    if (v < 0) {
+        const char *e = getenv("DC3_POLL_ORDER_FIX");
+        v = (e && e[0] == '0') ? 0 : 1;
+    }
+    return v != 0;
+}
+#endif
+
 bool CharPollableSorter::ChangedBy(Dep *a, Dep *b) {
 #ifdef HX_NATIVE
-    // Poll-order experiment (DC3_POLL_ORDER_FIX=1, 2026-07-02 feet-in-floor
-    // faithful root): producer-first polarity makes the per-character order
-    // song.hdrv (buffer) -> bone.servo (pose meshes) -> IK effectors — the
-    // order Xbox's rendered pose requires. With the default polarity below the
-    // order comes out reversed (effectors -> servo -> driver), so the
-    // HamIKEffector pelvis retarget lift (31.7 -> 38.9 = the exact Xbox pelvis
-    // height) is computed and then stomped by the servo's PoseMeshes in the
-    // same frame (DC3_SEQ trace, docs/sessions/2026-07-02). RB3's matched
-    // sorter uses producer-first (rb3 Character.cpp ChangedBy: mTarget=d1,
-    // recurse(d2)); DC3's Sort byte-matches with the polarity below, so the
-    // PPC-facing branch stays untouched. OPT-IN until the ankle IK solve is
-    // stabilized: with the fixed order the effectors' output SURVIVES, which
-    // exposes the native CharIKHand divergence (feet fling to +/-300 — see
-    // Push 12/13, docs/sessions/2026-06-09-xenia-xbox-foot-truth.md).
-    static int sOrderFix = -1;
-    if (sOrderFix < 0)
-        sOrderFix = getenv("DC3_POLL_ORDER_FIX") ? 1 : 0;
-    if (sOrderFix) {
+    if (Dc3PollOrderFixActive()) {
         if (a == b)
             return false;
         sSearchID++;
