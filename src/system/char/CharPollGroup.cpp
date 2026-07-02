@@ -4,6 +4,10 @@
 #include "obj/Object.h"
 #include "rndobj/Trans.h"
 #include <algorithm>
+#ifdef HX_NATIVE
+#include <cstdio>
+#include <cstring>
+#endif
 
 CharPollGroup::CharPollGroup() : mPolls(this), mChangedBy(this), mChanges(this) {}
 
@@ -117,6 +121,29 @@ void CharPollGroup::SortPolls() {
     for (int i = 0; i < polls.size(); i++) {
         mPolls.push_back(dynamic_cast<CharPollable *>(polls[i]));
     }
+#ifdef HX_NATIVE
+    if (getenv("DC3_IK_DIAG")) {
+        bool hasIK = false;
+        for (int i = 0; i < (int)polls.size(); i++) {
+            Hmx::Object *o = dynamic_cast<Hmx::Object *>(polls[i]);
+            const char *n = o ? PathName(o) : nullptr;
+            if (n && std::strstr(n, "ikfoot")) { hasIK = true; break; }
+        }
+        static int sSortLog = 0;
+        if (hasIK && sSortLog < 4) {
+            sSortLog++;
+            std::fprintf(stderr, "DC3_IK_DIAG SortOrder[%d] (%d polls):", sSortLog, (int)polls.size());
+            for (int i = 0; i < (int)polls.size(); i++) {
+                Hmx::Object *o = dynamic_cast<Hmx::Object *>(polls[i]);
+                const char *n = o ? PathName(o) : nullptr;
+                if (n && (std::strstr(n, "ikfoot") || std::strstr(n, "servo") ||
+                          std::strstr(n, "skeleton") || std::strstr(n, "driver")))
+                    std::fprintf(stderr, " [%d]%s", i, n);
+            }
+            std::fprintf(stderr, "\n");
+        }
+    }
+#endif
 }
 
 int CharPollableSorter::sSearchID = 0;
@@ -163,6 +190,32 @@ bool CharPollableSorter::ChangedByRecurse(Dep *dep) {
 }
 
 bool CharPollableSorter::ChangedBy(Dep *a, Dep *b) {
+#ifdef HX_NATIVE
+    // Poll-order experiment (DC3_POLL_ORDER_FIX=1, 2026-07-02 feet-in-floor
+    // faithful root): producer-first polarity makes the per-character order
+    // song.hdrv (buffer) -> bone.servo (pose meshes) -> IK effectors — the
+    // order Xbox's rendered pose requires. With the default polarity below the
+    // order comes out reversed (effectors -> servo -> driver), so the
+    // HamIKEffector pelvis retarget lift (31.7 -> 38.9 = the exact Xbox pelvis
+    // height) is computed and then stomped by the servo's PoseMeshes in the
+    // same frame (DC3_SEQ trace, docs/sessions/2026-07-02). RB3's matched
+    // sorter uses producer-first (rb3 Character.cpp ChangedBy: mTarget=d1,
+    // recurse(d2)); DC3's Sort byte-matches with the polarity below, so the
+    // PPC-facing branch stays untouched. OPT-IN until the ankle IK solve is
+    // stabilized: with the fixed order the effectors' output SURVIVES, which
+    // exposes the native CharIKHand divergence (feet fling to +/-300 — see
+    // Push 12/13, docs/sessions/2026-06-09-xenia-xbox-foot-truth.md).
+    static int sOrderFix = -1;
+    if (sOrderFix < 0)
+        sOrderFix = getenv("DC3_POLL_ORDER_FIX") ? 1 : 0;
+    if (sOrderFix) {
+        if (a == b)
+            return false;
+        sSearchID++;
+        mTarget = a;
+        return ChangedByRecurse(b);
+    }
+#endif
     mTarget = b;
     sSearchID++;
     return ChangedByRecurse(a);
@@ -225,5 +278,29 @@ void CharPollableSorter::Sort(std::vector<RndPollable *> &polls) {
              ++it) {
             polls[idx++] = (*it)->poll;
         }
+#ifdef HX_NATIVE
+        if (getenv("DC3_IK_DIAG")) {
+            bool hasIK = false;
+            for (int i = 0; i < (int)polls.size(); i++) {
+                Hmx::Object *o = dynamic_cast<Hmx::Object *>(polls[i]);
+                const char *n = o ? PathName(o) : nullptr;
+                if (n && std::strstr(n, "ikfoot")) { hasIK = true; break; }
+            }
+            static int sSortLog = 0;
+            if (hasIK && sSortLog < 4) {
+                sSortLog++;
+                std::fprintf(stderr, "DC3_IK_DIAG SortOrder[%d] (%d):", sSortLog, (int)polls.size());
+                for (int i = 0; i < (int)polls.size(); i++) {
+                    Hmx::Object *o = dynamic_cast<Hmx::Object *>(polls[i]);
+                    const char *n = o ? PathName(o) : nullptr;
+                    if (n && (std::strstr(n, "ikfoot") || std::strstr(n, "servo") ||
+                              std::strstr(n, "skeleton") || std::strstr(n, "driver") ||
+                              std::strstr(n, "bone")))
+                        std::fprintf(stderr, " [%d]%s", i, n);
+                }
+                std::fprintf(stderr, "\n");
+            }
+        }
+#endif
     }
 }

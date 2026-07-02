@@ -27,6 +27,12 @@ public:
     void LoadData(BinStreamRev &);
     void Set(const std::vector<CharBones::Bone> &, int, CharBones::CompressionType);
     void LoadHeader(BinStreamRev &);
+#ifdef HX_NATIVE
+    // 2026-07-02 pelvis-sink diagnostic: dump every POS-section channel of one
+    // sample (name, offset, raw shorts, decoded vec3) to distinguish "clip data
+    // really encodes a low pelvis" from a runtime decode/alignment bug.
+    void Dc3DumpPosChannels(int sample, const char *tag) const;
+#endif
 
 protected:
     void ReadCounts(BinStream &, int);

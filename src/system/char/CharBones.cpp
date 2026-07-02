@@ -270,7 +270,26 @@ void CharBones::ClearBones() {
     ReallocateInternal();
 }
 
+#ifdef HX_NATIVE
+// Knee .rotz instrumentation (DC3_KNEE_CLIP=1) — see HamDriver.cpp and
+// docs/sessions/2026-07-02-feet-web-loop-plant-gap.md. A TestDstComplain punt
+// returns out of ScaleAdd and silently drops ALL remaining channels in the
+// section, so it is a prime under-accumulation suspect: count every punt and
+// print the first ones unconditionally (MILO_NOTIFY_ONCE fires once per site).
+long g_dc3ScaleAddCalls = 0;
+long g_dc3DstPuntCount = 0;
+#endif
+
 void TestDstComplain(Symbol s) {
+#ifdef HX_NATIVE
+    g_dc3DstPuntCount++;
+    static int sPuntLog = 0;
+    if (sPuntLog < 100) {
+        sPuntLog++;
+        fprintf(stderr, "DC3_DST_PUNT[%d/%ld] src %s not in dst, section rest dropped\n",
+            sPuntLog, g_dc3DstPuntCount, s.Str());
+    }
+#endif
     MILO_NOTIFY_ONCE("src %s not in dst, punting animation", s);
 }
 
@@ -689,6 +708,11 @@ void CharBones::Blend(CharBones &bones) const {
 
 // MARK: ScaleAdd (CharBones)
 void CharBones::ScaleAdd(CharBones &bones, float f2) const {
+#ifdef HX_NATIVE
+    // dead-probe canary: unconditional, so a zero count in a run proves the
+    // instrumentation (not the pipeline) is broken — see July-1 probe artifact
+    g_dc3ScaleAddCalls++;
+#endif
     if (!mBones.empty()) {
         Bone *myBonesItr = (Bone *)&mBones[0];
         if (mCounts[TYPE_QUAT] > mCounts[TYPE_POS]) {

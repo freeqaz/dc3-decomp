@@ -68,7 +68,9 @@ void CharServoBone::Poll() {
 #ifdef HX_NATIVE
         {
             extern void Dc3KneeLog(const char *);
-            Dc3KneeLog("ServoPose-POST");
+            char evt[192];
+            snprintf(evt, sizeof(evt), "ServoPose-POST %s", PathName(this));
+            Dc3KneeLog(evt);
         }
 #endif
         Character *me = Character::Current();

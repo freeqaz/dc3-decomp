@@ -401,12 +401,24 @@ GameplayTelemetry::Snapshot GameplayTelemetry::CaptureSnapshot(int frame) {
                                 ankRotZ = 57.29578f * std::atan2(am.x.y, am.x.x);
                                 ankLocalVx = lAnkle->LocalXfm().v.x;
                             }
+                            // Thigh LOCAL matrix m.x — same two elements the Xbox Xenia rig
+                            // logs (mxx/mxy), so thigh orientation is directly comparable.
+                            // 2026-07-02: segment-drop analysis shows the sink is a thigh
+                            // orientation offset (native ~96% vertical vs Xbox ~82-85%),
+                            // NOT knee under-bend (mesh knee == blend knee, ratio 1.00).
+                            float thMxx = -999.f, thMxy = -999.f, thMxz = -999.f;
+                            if (lThighK) {
+                                const Hmx::Matrix3 &tm = lThighK->LocalXfm().m;
+                                thMxx = tm.x.x; thMxy = tm.x.y; thMxz = tm.x.z;
+                            }
                             fprintf(stderr,
                                 "DC3_KNEE_LOCAL[%d] kneeRotZ=%.2f kneeVx=%.3f "
                                 "ankRotZ=%.2f ankVx=%.3f "
+                                "thighMxx=%.5f thighMxy=%.5f thighMxz=%.5f "
                                 "pelvisZ=%.2f thighZ=%.2f kneeZ=%.2f ankleZ=%.2f toeZ=%.2f\n",
                                 sKneeLocal, rotz, lKnee->LocalXfm().v.x,
                                 ankRotZ, ankLocalVx,
+                                thMxx, thMxy, thMxz,
                                 pelvK ? pelvK->WorldXfm().v.z : -999.f,
                                 lThighK ? lThighK->WorldXfm().v.z : -999.f,
                                 lKnee->WorldXfm().v.z, s.lAnkleZ, s.lToeZ);

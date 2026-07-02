@@ -795,6 +795,16 @@ void App::RunOneFrame() {
     if (TheSynth)
         TheSynth->Poll();
 
+    // Deterministic post-poll foot plant (default ON; opt-out DC3_FEET_POST_PLANT_OFF=1).
+    // Same hook as the desktop loop below (App.cpp RunWithoutDebugging): must run after
+    // TheTaskMgr.Poll() composes the final leg pose and BEFORE BeginDrawing, or the web
+    // build renders the unplanted deep-crouch under-bend (feet in the floor as soon as
+    // the song's routine starts). See CharIKFoot.cpp Dc3RunPostPollFootPlant.
+    {
+        extern void Dc3RunPostPollFootPlant();
+        Dc3RunPostPollFootPlant();
+    }
+
 #ifdef __EMSCRIPTEN__
     AudioDevice::GetInstance().PumpAudio();
 #endif

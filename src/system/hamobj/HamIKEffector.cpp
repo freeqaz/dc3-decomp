@@ -87,12 +87,25 @@ public:
         Collect(mRoot);
 
         // Re-root to the world origin: the matched body now reads
-        // character-local bone worlds.
+        // character-local bone worlds. Remap every CLEAN cached bone world by
+        // W_charlocal = W_venue . R^-1 instead of force-dirtying the subtree —
+        // dirtying would make bones recompute from their LOCALS, discarding
+        // SetWorldXfm results from EARLIER effectors this frame (the pelvis
+        // retarget lift, 31.7 -> 38.2, was erased by the very next effector's
+        // scope; DC3_SEQ trace 2026-07-02). Bones that are already dirty keep
+        // their fresh servo-posed locals and recompute through the remapped
+        // (clean) parents, which is equivalent and correct.
+        Transform invRoot;
+        FastInvert(mSavedRoot, invRoot);
         mRoot->mWorldXfm.Reset();
         mRoot->mDirty = false;
-        for (std::list<RndTransformable *>::iterator it = mRoot->mChildren.begin();
-             it != mRoot->mChildren.end(); ++it) {
-            (*it)->SetDirty_Force();
+        for (size_t i = 0; i < mBones.size(); i++) {
+            RndTransformable *t = mBones[i];
+            if (t->mDirty)
+                continue;
+            Transform charlocal;
+            Multiply(t->mWorldXfm, invRoot, charlocal);
+            t->mWorldXfm = charlocal;
         }
     }
 
@@ -452,6 +465,14 @@ void HamIKEffector::Poll() {
     // characters (iconman), which already match. This replicates the Xbox flow
     // WITHOUT touching the byte-matched IK math below.
     CharLocalIKScope ikScope(mCharacter.Ptr());
+    struct Dc3SeqTail {
+        char evt[192];
+        ~Dc3SeqTail() {
+            extern void Dc3KneeLog(const char *);
+            Dc3KneeLog(evt);
+        }
+    } dc3SeqTail;
+    snprintf(dc3SeqTail.evt, sizeof(dc3SeqTail.evt), "IKEffPoll-POST %s", PathName(this));
 #endif
     if (mSkeleton) {
         EffectorType t = GetType();

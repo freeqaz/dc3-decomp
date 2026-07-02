@@ -3135,20 +3135,27 @@ found:
 // Per-event trace of player0's left-knee LOCAL rotZ (DC3_IK_DIAG): shows the exact poll order
 // and which pass bends (IK) vs resets (pose) the knee through one gameplay frame.
 void Dc3KneeLog(const char *evt) {
-    if (!getenv("DC3_IK_DIAG") || gDc3PollSeq >= 60)
+    // 2026-07-02: gate to GAMEPLAY frames (>3000) so the trace shows the real
+    // in-song poll order (pose vs IK vs servo), and add pelvis Z — the sink is
+    // a pelvis-height retarget (HamIKEffector pelvis effector) being stomped.
+    if (!getenv("DC3_IK_DIAG") || gDc3PollSeq >= 120
+        || HamDirector_NativeSetFrameCount() <= 3000)
         return;
     HamCharacter *p0 = TheHamWardrobe ? TheHamWardrobe->GetCharacter(0) : nullptr;
     RndTransformable *kn = p0 ? p0->Find<RndTransformable>("bone_L-knee.mesh", false) : nullptr;
     RndTransformable *an = p0 ? p0->Find<RndTransformable>("bone_L-ankle.mesh", false) : nullptr;
     RndTransformable *to = p0 ? p0->Find<RndTransformable>("bone_L-toe.mesh", false) : nullptr;
+    RndTransformable *pv = p0 ? p0->Find<RndTransformable>("bone_pelvis.mesh", false) : nullptr;
     float rz = -999.f;
     if (kn) {
         const Hmx::Matrix3 &m = kn->LocalXfm().m;
         rz = 57.29578f * std::atan2(m.x.y, m.x.x);
     }
-    std::fprintf(stderr, "DC3_SEQ %d %s kneeRotZ=%.1f ankleZ=%.2f toeZ=%.2f\n",
-                 gDc3PollSeq++, evt, rz, an ? an->WorldXfm().v.z : -999.f,
-                 to ? to->WorldXfm().v.z : -999.f);
+    std::fprintf(stderr, "DC3_SEQ %d f=%d %s kneeRotZ=%.1f ankleZ=%.2f toeZ=%.2f pelvisZ=%.2f\n",
+                 gDc3PollSeq++, HamDirector_NativeSetFrameCount(), evt, rz,
+                 an ? an->WorldXfm().v.z : -999.f,
+                 to ? to->WorldXfm().v.z : -999.f,
+                 pv ? pv->WorldXfm().v.z : -999.f);
 }
 #endif
 

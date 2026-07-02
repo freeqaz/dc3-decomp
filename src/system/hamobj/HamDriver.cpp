@@ -67,6 +67,21 @@ void HamDriver::PostLoad(BinStream &) {}
 // one frame for a SPECIFIC character path. Resolves the HamDriver:95-101
 // poll-order claim (UNCONFIRMED per Push 7b) empirically.
 int g_ikPollSeq = 0;
+
+// Knee .rotz instrumentation (DC3_KNEE_CLIP=1): splits the faithful-root
+// hypotheses — (a) clip selection/weight vs (b) accumulation loss — by logging
+// every LayerClip::Play's contribution to the bone_L-knee.rotz channel plus the
+// post-blend final value. The knee is a .rotz SCALAR (not a quat); see
+// docs/sessions/2026-07-02-feet-web-loop-plant-gap.md. LayerClip::Play has no
+// driver identity, so Poll stashes it here for the frame.
+static const char *g_dc3KneeDrvPath = nullptr;
+static bool g_dc3KneeLogThis = false;
+static bool Dc3KneeClipEnv() {
+    static int e = -1;
+    if (e < 0)
+        e = getenv("DC3_KNEE_CLIP") ? 1 : 0;
+    return e != 0;
+}
 #endif
 
 void HamDriver::Poll() {
@@ -95,6 +110,16 @@ void HamDriver::Poll() {
     if (mBones && mLayers.mWeight > 0.0f) {
         mLayers.Eval(mLayers.mWeight);
 #ifdef HX_NATIVE
+        if (Dc3KneeClipEnv()) {
+            extern int HamDirector_NativeSetFrameCount();
+            const char *pp = PathName(this);
+            int f = HamDirector_NativeSetFrameCount();
+            g_dc3KneeDrvPath = pp;
+            // main-dancer drivers only, every 5th frame once gameplay is warm,
+            // so the per-clip log stays readable across the whole routine
+            g_dc3KneeLogThis = pp && strstr(pp, "main.milo") && !strstr(pp, "backup")
+                && f > 3000 && (f % 5 == 0);
+        }
         // Push 7 diagnostic: is the persistent-base ScaleDown(1-mWeight) leaving a
         // stale-pose residual (mWeight<1 ⇒ A2) or is mWeight==1 in steady state
         // (⇒ base is zeroed, A2 inert, sink is in the move data / A1)?
@@ -128,6 +153,35 @@ void HamDriver::Poll() {
 #endif
         mBones->ScaleDown(*mBones, 1.0f - mLayers.mWeight);
         mLayers.Play(*mBones);
+#ifdef HX_NATIVE
+        if (g_dc3KneeLogThis) {
+            static int sFinLog = 0;
+            if (sFinLog < 800) {
+                sFinLog++;
+                extern int HamDirector_NativeSetFrameCount();
+                extern long g_dc3ScaleAddCalls;
+                extern long g_dc3DstPuntCount;
+                float *knee = (float *)mBones->FindPtr(Symbol("bone_L-knee.rotz"));
+                Vector3 *pel = (Vector3 *)mBones->FindPtr(Symbol("bone_pelvis.pos"));
+                float kv = knee ? *knee : -999.0f;
+                float pz = pel ? pel->z : -999.0f;
+                fprintf(stderr,
+                    "DC3_KNEE_FINAL[%d] f=%d drv=%s knee=%.4f (%.1fdeg) pelZ=%.2f "
+                    "kneeMiss=%d pelMiss=%d scaleAdds=%ld punts=%ld nLayers=%d w=%.3f\n",
+                    sFinLog, HamDirector_NativeSetFrameCount(), g_dc3KneeDrvPath,
+                    kv, kv * 57.29578f, pz, knee == nullptr, pel == nullptr,
+                    g_dc3ScaleAddCalls, g_dc3DstPuntCount,
+                    (int)mLayers.mLayers.size(), mLayers.mWeight);
+            }
+            g_dc3KneeLogThis = false;
+        }
+        {
+            extern void Dc3KneeLog(const char *);
+            char evt[192];
+            snprintf(evt, sizeof(evt), "HamDriverPoll-POST %s", PathName(this));
+            Dc3KneeLog(evt);
+        }
+#endif
         mDisplayBeat = TheTaskMgr.Beat();
     }
 }
@@ -331,7 +385,67 @@ void HamDriver::LayerClip::Play(CharBones &bones) {
     if (mWeight > 0.0f) {
         float beat = mClip->StartBeat();
         float deltaBeat = (TheTaskMgr.Beat() - mClipBeat) + beat;
+#ifdef HX_NATIVE
+        float *kneeDst = nullptr;
+        float kneeBefore = 0.0f;
+        if (g_dc3KneeLogThis) {
+            kneeDst = (float *)bones.FindPtr(Symbol("bone_L-knee.rotz"));
+            if (kneeDst) {
+                kneeBefore = *kneeDst;
+            } else {
+                // dst missing the knee channel = every clip's knee is punted →
+                // this alone would be the under-accumulation root
+                static int sMissLog = 0;
+                if (sMissLog < 20) {
+                    sMissLog++;
+                    fprintf(stderr, "DC3_KNEE_CLIP dst-missing bone_L-knee.rotz drv=%s clip=%s\n",
+                        g_dc3KneeDrvPath, mClip ? mClip->Name() : "?");
+                }
+            }
+        }
+#endif
         bones.ScaleAdd(mClip, mWeight, deltaBeat, TheTaskMgr.DeltaBeat());
+#ifdef HX_NATIVE
+        if (g_dc3KneeLogThis && mClip) {
+            // one-shot per run: raw POS-channel dump of the playing clip's data
+            // at the current sample — is the low pelvis IN the clip bytes?
+            static int sPosDump = 0;
+            if (sPosDump < 6) {
+                sPosDump++;
+                CharClip *c = mClip;
+                float frac = 0.0f;
+                int samp = c->BeatToSample(deltaBeat, &frac);
+                fprintf(stderr,
+                    "DC3_CLIP_POS clip=%s relative=%s beat=%.2f samp=%d frac=%.3f\n",
+                    c->Name(), c->Relative() ? c->Relative()->Name() : "(none)",
+                    deltaBeat, samp, frac);
+                c->GetFull().Dc3DumpPosChannels(samp, "FULL");
+                c->GetOne().Dc3DumpPosChannels(0, "ONE");
+            }
+        }
+        if (g_dc3KneeLogThis && kneeDst) {
+            static int sClipLog = 0;
+            if (sClipLog < 4000) {
+                sClipLog++;
+                extern int HamDirector_NativeSetFrameCount();
+                fprintf(stderr,
+                    "DC3_KNEE_CLIP[%d] f=%d drv=%s clip=%s w=%.3f beat=%.2f "
+                    "rotz %.4f->%.4f d=%.4f (deg %.1f->%.1f)\n",
+                    sClipLog, HamDirector_NativeSetFrameCount(), g_dc3KneeDrvPath,
+                    mClip ? mClip->Name() : "?", mWeight, deltaBeat,
+                    kneeBefore, *kneeDst, *kneeDst - kneeBefore,
+                    kneeBefore * 57.29578f, *kneeDst * 57.29578f);
+            }
+        }
+    } else if (g_dc3KneeLogThis) {
+        // a zero-weight clip contributes nothing — clip-selection/weight evidence
+        static int sZeroLog = 0;
+        if (sZeroLog < 300) {
+            sZeroLog++;
+            fprintf(stderr, "DC3_KNEE_CLIP skip-w0 drv=%s clip=%s\n",
+                g_dc3KneeDrvPath, mClip ? mClip->Name() : "?");
+        }
+#endif
     }
 }
 

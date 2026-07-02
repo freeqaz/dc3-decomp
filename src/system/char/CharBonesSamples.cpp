@@ -287,6 +287,36 @@ void CharBonesSamples::RotateTo(CharBones &bones, float f1, int i, float f2) {
     }
 }
 
+#ifdef HX_NATIVE
+void CharBonesSamples::Dc3DumpPosChannels(int sample, const char *tag) const {
+    if (sample < 0)
+        sample = 0;
+    if (mNumSamples > 0 && sample >= mNumSamples)
+        sample = mNumSamples - 1;
+    fprintf(stderr,
+        "DC3_CLIP_POS %s: comp=%d totalSize=%d numSamples=%d posBones=[%d,%d) sample=%d\n",
+        tag, (int)mCompression, mTotalSize, mNumSamples,
+        mCounts[TYPE_POS], mCounts[TYPE_SCALE], sample);
+    if (!mRawData)
+        return;
+    const char *base = mRawData + mTotalSize * sample;
+    for (int i = mCounts[TYPE_POS]; i < mCounts[TYPE_SCALE]; i++) {
+        int off = FindOffset(mBones[i].name);
+        if (mCompression >= kCompressVects) {
+            const short *s = (const short *)(base + off);
+            fprintf(stderr,
+                "DC3_CLIP_POS %s [%d] %s off=%d raw=(%d,%d,%d) dec=(%.2f,%.2f,%.2f)\n",
+                tag, i, mBones[i].name.Str(), off, s[0], s[1], s[2],
+                s[0] * 0.039674062f, s[1] * 0.039674062f, s[2] * 0.039674062f);
+        } else {
+            const float *f = (const float *)(base + off);
+            fprintf(stderr, "DC3_CLIP_POS %s [%d] %s off=%d dec=(%.2f,%.2f,%.2f)\n",
+                tag, i, mBones[i].name.Str(), off, f[0], f[1], f[2]);
+        }
+    }
+}
+#endif
+
 void CharBonesSamples::ScaleAddSample(CharBones &bones, float f1, int i, float f2) {
     mStart = &mRawData[mTotalSize * i];
     CharBones::ScaleAdd(bones, (1.0f - f2) * f1);
