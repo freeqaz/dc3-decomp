@@ -261,12 +261,16 @@ void RndPropAnim::LoadPre7(BinStreamRev &bs) {
             ty = (PropKeys::AnimKeysType)animtype;
             bs >> floatKeys;
             bs >> colorKeys;
-            Hmx::Object *oldowner = ObjectStage::sOwner;
             if (bs.rev > 3) {
+                Hmx::Object *oldowner = ObjectStage::sOwner;
                 ObjectStage::sOwner = this;
-                bs >> objKeys;
+                // Read via the Keys<> base so the BinStreamRev operator>> chain
+                // is selected (for the derived ObjKeys type, BinStreamRev's
+                // member template would win overload resolution and route the
+                // read through the plain BinStream chain instead).
+                bs >> (Keys<ObjectStage, Hmx::Object *> &)objKeys;
+                ObjectStage::sOwner = oldowner;
             }
-            ObjectStage::sOwner = oldowner;
             if (bs.rev > 4)
                 bs >> boolKeys;
             if (bs.rev > 5)
@@ -757,11 +761,11 @@ DataNode RndPropAnim::ForeachKeyframe(const DataArray *da) {
                 *var5 = curBool.value;
             } break;
             case PropKeys::kQuat: {
-                const Hmx::Quat &curQuat = (*theKeys->AsQuatKeys())[keyIdx].value;
+                Hmx::Quat curQuat = (*theKeys->AsQuatKeys())[keyIdx].value;
                 *var5 = DataArrayPtr(curQuat.x, curQuat.y, curQuat.z, curQuat.w);
             } break;
             case PropKeys::kVector3: {
-                const Vector3 &curVector = (*theKeys->AsVector3Keys())[keyIdx].value;
+                Vector3 curVector = (*theKeys->AsVector3Keys())[keyIdx].value;
                 *var5 = DataArrayPtr(curVector.x, curVector.y, curVector.z);
             } break;
             case PropKeys::kSymbol: {
@@ -771,17 +775,22 @@ DataNode RndPropAnim::ForeachKeyframe(const DataArray *da) {
                 *var5 = 0;
                 break;
             }
+            sRemoveFrame = false;
             sReplaceKey = false;
             sReplaceFrame = false;
             for (int j = 6; j < da->Size(); j++) {
                 da->Command(j)->Execute();
             }
+            if (sRemoveFrame) {
+                MILO_ASSERT(!sReplaceKey && !sReplaceFrame, 0x2d8);
+                theKeys->RemoveKey(i);
+                i--;
+            } else {
             if (sReplaceKey) {
                 sReplaceKey = false;
                 switch (theKeys->KeysType()) {
                 case PropKeys::kFloat: {
-                    Key<float> &curFloatKey = (*theKeys->AsFloatKeys())[keyIdx];
-                    curFloatKey.value = sKeyReplace.Float();
+                    (*theKeys->AsFloatKeys())[keyIdx].value = sKeyReplace.Float();
                 } break;
                 case PropKeys::kColor: {
                     (*theKeys->AsColorKeys())[keyIdx].value.Unpack(sKeyReplace.Int());
@@ -792,24 +801,13 @@ DataNode RndPropAnim::ForeachKeyframe(const DataArray *da) {
                     curObjKeys.value = objStage;
                 } break;
                 case PropKeys::kBool: {
-                    Key<bool> &curBoolKey = (*theKeys->AsBoolKeys())[keyIdx];
-                    curBoolKey.value = sKeyReplace.Int();
+                    (*theKeys->AsBoolKeys())[keyIdx].value = sKeyReplace.Int();
                 } break;
                 case PropKeys::kSymbol: {
-#ifdef HX_NATIVE
-                    // DataNode::Sym() returns by value on host STL; can't take the
-                    // address of the temporary. Assign the value directly.
-                    Symbol replaceSym = sKeyReplace.Sym();
-                    Key<Symbol> &curSymKey = (*theKeys->AsSymbolKeys())[i];
-                    curSymKey.value = replaceSym;
-#else
-                    Symbol *replaceSym = &sKeyReplace.Sym();
-                    Key<Symbol> &curSymKey = (*theKeys->AsSymbolKeys())[i];
-                    curSymKey.value = *replaceSym;
-#endif
+                    (*theKeys->AsSymbolKeys())[i].value = sKeyReplace.Sym();
                 } break;
                 default:
-                    MILO_WARN("%s can not replace key, unknown type", PathName(this));
+                    MILO_NOTIFY("%s can not replace key, unknown type", PathName(this));
                     break;
                 }
             }
@@ -817,10 +815,11 @@ DataNode RndPropAnim::ForeachKeyframe(const DataArray *da) {
                 theMap[i] = sFrameReplace;
                 sReplaceFrame = false;
             }
+            }
         }
         for (std::map<int, float>::const_iterator it = theMap.begin(); it != theMap.end();
              ++it) {
-            const float &mapF = it->second;
+            float mapF = it->second;
             theKeys->ChangeFrame(it->first, mapF, false);
         }
         if (theMap.size() != 0) {
