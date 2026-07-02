@@ -1199,15 +1199,13 @@ void MoveDir::ResetDetectFrames(int player, Difficulty diff) {
     MovePlayerData &mpd = mMovePlayerData[player];
     mDebugLoopMarker = -1.0f;
     mpd.mFeedbackMode = 0;
-    if (mpd.mDetectFrames.begin() != mpd.mDetectFrames.end()) {
-        mpd.mDetectFrames.erase(mpd.mDetectFrames.end(), mpd.mDetectFrames.begin());
-    }
+    mpd.mDetectFrames.clear();
     if (diff != kDifficultyBeginner) {
         DancerSequence *seq;
         if (TheHamDirector->InPracticeMode()) {
-            seq = SkillsSequence(
-                diff, TheHamDirector->mPracticeStart, TheHamDirector->mPracticeEnd
-            );
+            Symbol practiceStart = TheHamDirector->mPracticeStart;
+            Symbol practiceEnd = TheHamDirector->mPracticeEnd;
+            seq = SkillsSequence(diff, practiceStart, practiceEnd);
         } else {
             seq = PerformanceSequence(diff);
         }
@@ -1224,70 +1222,63 @@ void MoveDir::ResetDetectFrames(int player, Difficulty diff) {
             );
         } else {
             const std::vector<DancerFrame> &dancerFrames = seq->GetDancerFrames();
-            const DancerFrame *dfIt = &*dancerFrames.begin();
-            if (dfIt == &*dancerFrames.end()) {
+            const DancerFrame *dfBegin = &*dancerFrames.begin();
+            if (dfBegin == &*dancerFrames.end()) {
                 TheDebug << MakeString(
                     "%s %s: could not reset detect frames, no DancerFrames\n",
                     PathName(this), DifficultyToSym(diff)
                 );
             } else {
-                unsigned int prevCapacity = mpd.mMoveKeys.capacity();
+                const DancerFrame *dfIt = dfBegin;
+                int prevCapacity = mpd.mMoveKeys.capacity();
                 TheHamDirector->MoveKeys(diff, this, mpd.mMoveKeys);
-                unsigned int newSize = mpd.mMoveKeys.size();
-                if (newSize > prevCapacity) {
+                if (mpd.mMoveKeys.size() > prevCapacity) {
                     MILO_NOTIFY(
                         "%s move keys size (%i) above capacity (%i)",
-                        PathName(this), newSize, prevCapacity
+                        PathName(this), mpd.mMoveKeys.size(), prevCapacity
                     );
                 }
-                unsigned int detectCapacity = mpd.mDetectFrames.capacity();
+                int detectCapacity = mpd.mDetectFrames.capacity();
                 for (int moveKeyIdx = 0;
-                     moveKeyIdx < (int)mpd.mMoveKeys.size();
+                     moveKeyIdx < mpd.mMoveKeys.size();
                      moveKeyIdx++) {
                     if (dfIt->mMoveIdx == moveKeyIdx) {
-                        HamMove *curMove = mpd.mMoveKeys[moveKeyIdx].move;
+                        const HamMoveKey &key = mpd.mMoveKeys[moveKeyIdx];
+                        HamMove *curMove = key.move;
                         const std::vector<MoveFrame> &moveFrames =
                             ((const HamMove *)curMove)->GetMoveFrames();
-                        MoveMirrored mirrored = curMove->Mirrored();
-                        unsigned int numMoveFrames = (unsigned int)moveFrames.size();
-                        if (numMoveFrames != 0) {
-                            for (unsigned int j = 0;
-                                 j < (unsigned int)moveFrames.size();
-                                 j++) {
-                                if (dfIt->mMoveFrameIdx == (int)j) {
-                                    DetectFrame df;
-                                    float secs =
-                                        moveFrames[j].QuantizedSeconds(
-                                            mpd.mMoveKeys[moveKeyIdx].beat
+                        MoveMirrored mirrored =
+                            (MoveMirrored)(curMove->Mirrored() != kMirroredNo);
+                        for (unsigned int j = 0;
+                             j < (unsigned int)moveFrames.size();
+                             j++) {
+                            if (dfIt->mMoveFrameIdx == (int)j) {
+                                DetectFrame df;
+                                const MoveFrame &mf = moveFrames[j];
+                                float secs = mf.QuantizedSeconds(key.beat);
+                                df.Reset(mFilterVer, secs, &mf, dfIt, mirrored);
+                                mpd.mDetectFrames.push_back(df);
+                                dfIt++;
+                                if (dfIt == &*dancerFrames.end()) {
+                                    if (mpd.mDetectFrames.size() > detectCapacity) {
+                                        MILO_NOTIFY(
+                                            "%s detect frames size (%i) "
+                                            "above capacity (%i)",
+                                            PathName(this),
+                                            mpd.mDetectFrames.size(),
+                                            detectCapacity
                                         );
-                                    df.Reset(
-                                        mFilterVer, secs, &moveFrames[j],
-                                        dfIt, mirrored
-                                    );
-                                    mpd.mDetectFrames.push_back(df);
-                                    dfIt++;
-                                    if (dfIt == &*dancerFrames.end()) {
-                                        unsigned int detectSize =
-                                            mpd.mDetectFrames.size();
-                                        if (detectSize > detectCapacity) {
-                                            MILO_NOTIFY(
-                                                "%s detect frames size (%i) "
-                                                "above capacity (%i)",
-                                                PathName(this), detectSize,
-                                                detectCapacity
-                                            );
-                                        }
-                                        return;
                                     }
-                                } else {
-                                    TheDebug << MakeString(
-                                        "%s %s: invalid DancerFrame at move "
-                                        "%i frame %i\n",
-                                        PathName(this),
-                                        DifficultyToSym(diff), moveKeyIdx,
-                                        dfIt->mMoveFrameIdx
-                                    );
+                                    return;
                                 }
+                            } else {
+                                TheDebug << MakeString(
+                                    "%s %s: invalid DancerFrame at move "
+                                    "%i frame %i\n",
+                                    PathName(this),
+                                    DifficultyToSym(diff), moveKeyIdx,
+                                    dfIt->mMoveFrameIdx
+                                );
                             }
                         }
                     }
@@ -1703,26 +1694,23 @@ float MoveDir::DetectFrac(int player, int beat) {
     if (beat == -1) {
         beat = curMeasure;
     }
-    std::vector<HamMoveKey> &keys = mMovePlayerData[player].mMoveKeys;
-    if (beat < 0 || (unsigned int)beat >= keys.size()) {
-        goto ret_zero;
-    }
-    {
-        HamMove *move = keys[beat].move;
-        if (!move) {
-            goto ret_zero;
-        }
+    MovePlayerData &mpd = mMovePlayerData[player];
+    std::vector<HamMoveKey> &keys = mpd.mMoveKeys;
+    HamMove *move;
+    float frac = 0.0f;
+    if (beat >= 0 && (unsigned int)beat < keys.size()
+        && (move = keys[beat].move) != nullptr) {
         std::pair<DetectFrame *, DetectFrame *> range(nullptr, nullptr);
-        DetectRange(mMovePlayerData[player].mDetectFrames, range, beat, beat);
+        DetectRange(mpd.mDetectFrames, range, beat, beat);
         if (range.first == range.second) {
-            return mAsyncDetector->MoveRatingFrac(
+            frac = mAsyncDetector->MoveRatingFrac(
                 player, (MoveAsyncDetector::RatingBar)(curMeasure != beat), move
             );
+        } else {
+            frac = DetectFrac(player, move, range);
         }
-        return DetectFrac(player, move, range);
     }
-ret_zero:
-    return 0.0f;
+    return frac;
 }
 
 float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
