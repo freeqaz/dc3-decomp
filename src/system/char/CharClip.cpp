@@ -243,6 +243,7 @@ void CharClip::Transitions::Load(BinStreamRev &d, int oldRev) {
             d.stream.ReadString(buf2, 0x100);
             CharClip *clip = mOwner->Dir()->Find<CharClip>(buf2, false);
             if (clip) {
+                new (&it->clip) ObjOwnerPtr<CharClip>(mOwner, (CharClip *)NULL);
                 it->clip = clip;
                 d >> it->size;
                 for (int j = 0; j < it->size; j++) {
@@ -300,7 +301,7 @@ void CharClip::Transitions::Load(BinStreamRev &d, int oldRev) {
         Resize((intptr_t)it - (intptr_t)start, nullptr);
         memcpy(mNodeStart, start, BytesInMemory());
         for (NodeVector *it = mNodeStart; it < mNodeEnd; it = it->Next()) {
-            it->clip->Release(nullptr);
+            it->clip.AddSelf();
         }
 #endif
         MemFree(start);

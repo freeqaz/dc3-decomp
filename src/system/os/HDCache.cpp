@@ -335,7 +335,17 @@ void HDCache::Init() {
                 int numDwords = (_tmp6 + 0x1F) / 32;
                 int *blockMem = new int[numDwords];
                 memcpy(blockMem, blockBuf, blockSize);
+#ifdef HX_NATIVE
+                // Native/safe: byte-offset dest clears exactly the tail of the
+                // numDwords*4-byte block.
                 memset((char *)blockMem + blockSize, 0, numDwords * 4 - blockSize);
+#else
+                // Retail-matching (byte-exact): shipped uses int* arithmetic, so
+                // the dest advances blockSize*4 bytes and this memset overruns the
+                // allocation whenever blockSize > numDwords (latent heap overflow in
+                // the original game on truncated cache headers). Kept for fidelity.
+                memset(blockMem + blockSize, 0, numDwords * 4 - blockSize);
+#endif
                 mBlockState[i] = blockMem;
             } else {
                 mBlockState[i] = NULL;

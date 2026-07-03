@@ -926,7 +926,7 @@ void RhythmDetector::ProcessFrames() {
                 emptySym,
                 false,
                 nullptr,
-                gLog,
+                -1,
                 nullptr
             );
         }

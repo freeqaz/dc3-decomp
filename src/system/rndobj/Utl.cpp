@@ -734,7 +734,7 @@ void TransformKeys(RndTransAnim *tanim, const Transform &tf) {
     for (Keys<Vector3, Vector3>::iterator it = tanim->ScaleKeys().begin();
          it != _tmp3;
          ++it) {
-        Scale(it->value, v48.x, it->value);
+        Scale(it->value, v48, it->value);
     }
     for (Keys<Hmx::Quat, Hmx::Quat>::iterator it = tanim->RotKeys().begin();
          it != tanim->RotKeys().end();

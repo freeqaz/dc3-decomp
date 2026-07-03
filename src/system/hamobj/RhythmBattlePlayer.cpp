@@ -744,11 +744,12 @@ void RhythmBattlePlayer::AnimateBoxyState(int state, bool transition, bool bad) 
     bool useBadFlow = (mInTheZone != -1) & bad;
     if (mRhythmBattleAnim) {
         float delay = 0.0f;
+        RndAnimatable::Rate rate = mRhythmBattleAnim->GetRate();
         static Symbol none("none");
         if (mRhythmBattleAnim && state > 0) {
             if (transition) {
                 mRhythmBattleAnim->Animate(
-                    0.0f, false, 0.0f, RndAnimatable::k30_fps,
+                    0.0f, false, 0.0f, rate,
                     8.0f, 12.0f, 0.0f, 1.0f,
                     none, nullptr, kEaseLinear, 0.0f, false
                 );
@@ -756,7 +757,7 @@ void RhythmBattlePlayer::AnimateBoxyState(int state, bool transition, bool bad) 
             }
             static Symbol loop("loop");
             mRhythmBattleAnim->Animate(
-                0.0f, false, delay, RndAnimatable::k30_fps,
+                0.0f, false, delay, rate,
                 12.0f, 20.0f, 0.0f, 1.0f,
                 loop, nullptr, kEaseLinear, 0.0f, false
             );
@@ -764,13 +765,13 @@ void RhythmBattlePlayer::AnimateBoxyState(int state, bool transition, bool bad) 
             if (transition) {
                 if (mInTheZone == -1) {
                     mRhythmBattleAnim->Animate(
-                        0.0f, false, 0.0f, RndAnimatable::k30_fps,
+                        0.0f, false, 0.0f, rate,
                         36.0f, 40.0f, 0.0f, 1.0f,
                         none, nullptr, kEaseLinear, 0.0f, false
                     );
                 } else if (mInTheZone == 1) {
                     mRhythmBattleAnim->Animate(
-                        0.0f, false, 0.0f, RndAnimatable::k30_fps,
+                        0.0f, false, 0.0f, rate,
                         20.0f, 24.0f, 0.0f, 1.0f,
                         none, nullptr, kEaseLinear, 0.0f, false
                     );
@@ -779,7 +780,7 @@ void RhythmBattlePlayer::AnimateBoxyState(int state, bool transition, bool bad) 
             }
             static Symbol loop("loop");
             mRhythmBattleAnim->Animate(
-                0.0f, false, delay, RndAnimatable::k30_fps,
+                0.0f, false, delay, rate,
                 0.0f, 8.0f, 0.0f, 1.0f,
                 loop, nullptr, kEaseLinear, 0.0f, false
             );
@@ -787,13 +788,13 @@ void RhythmBattlePlayer::AnimateBoxyState(int state, bool transition, bool bad) 
             if (transition) {
                 if (mInTheZone == 0) {
                     mRhythmBattleAnim->Animate(
-                        0.0f, false, 0.0f, RndAnimatable::k30_fps,
+                        0.0f, false, 0.0f, rate,
                         24.0f, 28.0f, 0.0f, 1.0f,
                         none, nullptr, kEaseLinear, 0.0f, false
                     );
                 } else if (mInTheZone == 1) {
                     mRhythmBattleAnim->Animate(
-                        0.0f, false, 0.0f, RndAnimatable::k30_fps,
+                        0.0f, false, 0.0f, rate,
                         20.0f, 28.0f, 0.0f, 2.0f,
                         none, nullptr, kEaseLinear, 0.0f, false
                     );
@@ -802,7 +803,7 @@ void RhythmBattlePlayer::AnimateBoxyState(int state, bool transition, bool bad) 
             }
             static Symbol loop("loop");
             mRhythmBattleAnim->Animate(
-                0.0f, false, delay, RndAnimatable::k30_fps,
+                0.0f, false, delay, rate,
                 28.0f, 36.0f, 0.0f, 1.0f,
                 loop, nullptr, kEaseLinear, 0.0f, false
             );

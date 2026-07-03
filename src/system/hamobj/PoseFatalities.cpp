@@ -839,20 +839,21 @@ void PoseFatalities::UpdateMatchingPose(int player) {
         HamPlayerData *playerData = TheGameData->Player(player);
         const Skeleton *playerSkel = playerData->GetSkeleton();
 
-        float errorWeight = TheOSCMessenger.GetFloat("/fatalposeerrorweight", 0.0f);
+        float errorWeight = TheOSCMessenger.GetFloat("/fatalposeerrorweight", 1.0f);
         float rawScore = mRecorder.CompareSkeletonPositions(
             playerSkel, &mPlayerSkeletons[player], errorWeight
         );
 
-        float thresh = TheOSCMessenger.GetFloat("/fatalposethresh", 0.0f);
+        float thresh = TheOSCMessenger.GetFloat("/fatalposethresh", 0.5f);
         unk1710[player] = rawScore / thresh;
+        if (unk1710[player] != unk1710[player]) {
+            unk1710[player] = 0.0f;
+        }
         unk1710[player] = Clamp(0.0f, 1.0f, unk1710[player]);
 
-        if (unk1710[player] >= 1.0f && mFatalityProgress[player] >= 0.0f) {
-            matching = true;
-        }
+        matching = (unk1710[player] >= 1.0f && unk1718[player] >= 0.0f);
 
-        if (mFatalityProgress[player] >= 0.0f) {
+        if (unk1718[player] >= 0.0f) {
             JoypadData *jData = JoypadGetPadData(0);
             if (player == 0) {
                 if (jData->GetRT() > 0.5f
@@ -872,7 +873,7 @@ void PoseFatalities::UpdateMatchingPose(int player) {
     if (matching) {
         mFatalityProgress[player] = mFatalityProgress[player] + clampedDelta;
     } else {
-        float holdDecay = TheOSCMessenger.GetFloat("/holddecay", 0.0f);
+        float holdDecay = TheOSCMessenger.GetFloat("/holddecay", 1.0f);
         float decayAmount = Clamp(0.0f, 1.0f, holdDecay * clampedDelta);
         mFatalityProgress[player] = mFatalityProgress[player] * (1.0f - decayAmount);
     }
@@ -881,7 +882,7 @@ void PoseFatalities::UpdateMatchingPose(int player) {
     float clampedFrac = Clamp(0.0f, 1.0f, displayFrac);
 
     ObjectDir *venueWorld = TheHamDirector->GetVenueWorld();
-    float ratingFrac = Clamp(0.0f, 1.0f, clampedFrac);
+    float ratingFrac = clampedFrac;
     HamPhraseMeter *meter = venueWorld->Find<HamPhraseMeter>(
         MakeString("phrase_meter%i", player), true
     );

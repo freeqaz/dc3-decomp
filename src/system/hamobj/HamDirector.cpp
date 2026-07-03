@@ -2433,8 +2433,7 @@ void HamDirector::Reteleport() {
     Vector3 v = Vector3::ZeroVec();
     if (clip) {
         if (frameIdx > 0) {
-            ClipPredict predict;
-            predict.SetClip(clip);
+            ClipPredict predict(clip, Vector3::ZeroVec(), 0);
             predict.PredictDeltaPos(beat - 4.0f, beat);
             v = predict.mPos;
         }
@@ -3082,11 +3081,11 @@ CharClip *HamDirector::GetClipStartAndEndBeats(
 
     Keys<Symbol, Symbol> *practiceSymbols = practiceKeys->AsSymbolKeys();
     unsigned int size = practiceSymbols->size();
-    unsigned int foundIdx = 0xffffffff;
+    unsigned int foundIdx = 0;
     if (size != 0) {
         int byteOff = 0;
         do {
-            if ((*practiceSymbols)[foundIdx + 1].value == clipName) goto found;
+            if ((*practiceSymbols)[foundIdx].value == clipName) goto found;
             foundIdx++;
             byteOff += 8;
         } while (foundIdx < size);
