@@ -1,5 +1,5 @@
 #include "synth/DelayEffect.h"
-#include "Common_Xbox.h"
+#include "synth/Common_Xbox.h"
 #include "math/Decibels.h"
 #include "os/Debug.h"
 #include "xdk/xaudio2/xaudio2.h"

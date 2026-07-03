@@ -284,7 +284,7 @@ config.progress_all = False
 config.pch_header = "decomp_pch.h"
 config.pch_source = Path("src/system/decomp_pch.cpp")
 config.pch_eligible_dirs = {
-    "rndobj", "hamobj", "char", "synth", "ui", "flow", "gesture",
+    "rndobj", "hamobj", "char", "synth", "dsp", "ui", "flow", "gesture",
     "world", "meta", "obj", "os", "utl", "movie",
 }
 

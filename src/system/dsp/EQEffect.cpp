@@ -10,6 +10,7 @@ inline double __fsel(double a, double b, double c) { return a >= 0.0 ? b : c; }
 #include "xdk/LIBCMT/ppcintrinsics.h"
 #endif
 
+#line 13 "dsp\\EQEffect.cpp"
 // Filter design types for crossover computation
 enum FilterType { kFilterButterworth = 1 };
 enum FilterBand { kFilterLowpass = 0, kFilterHighpass = 1, kFilterBandpass = 2 };

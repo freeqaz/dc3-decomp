@@ -1,10 +1,11 @@
 #include "synth/FlangerEffect.h"
-#include "Common_Xbox.h"
+#include "synth/Common_Xbox.h"
 #include "math/Rot.h"
 #include "os/Debug.h"
 #include "types.h"
 #include "xdk/xaudio2/xaudio2.h"
 
+#line 8 "dsp\\FlangerEffect.cpp"
 FlangerEffect::FlangerEffect(IXAudioBatchAllocator *ix)
     : mWritePos(0), mDelaySamples(100), mDepthFrac(0), unk1c(0), mFeedbackFrac(0.5f), unk24(0), mRateRadians(0), unk2c(0),
       mWetFrac(0.1f) {

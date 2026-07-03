@@ -410,7 +410,7 @@ system/synth/StreamReceiver.cpp
 system/synth_xbox/GainEffect.cpp
 system/synth_xbox/FxSendEQ.cpp
 system/synth_xbox/HeadsetXferEffect.cpp
-system/synth/DistortionEffect.cpp
+system/dsp/DistortionEffect.cpp
 system/hamobj/HamGameData.cpp
 xdk/nuiapi/muscletracking.cpp
 xdk/d3dx9/cinstruction.cpp
@@ -446,7 +446,7 @@ lazer/meta_ham/Leaderboards.cpp
 system/meta/Achievements_Xbox.cpp
 lazer/meta_ham/SongStatusMgr.cpp
 system/synth_xbox/FxSendWah.cpp
-system/synth/BitCrushEffect.cpp
+system/dsp/BitCrushEffect.cpp
 system/meta/HeldButtonPanel.cpp
 system/utl/MemMgr.cpp
 system/synth_xbox/FxSendDistortion.cpp
@@ -589,7 +589,7 @@ lazer/meta_ham/MultiUserGesturePanel.cpp
 system/utl/TextStream.cpp
 system/rndobj/PostProc_NG.cpp
 system/rndobj/ShaderProgram.cpp
-system/synth/DelayEffect.cpp
+system/dsp/DelayEffect.cpp
 system/obj/Object.cpp
 lazer/meta_ham/PlaylistSongProvider.cpp
 system/utl/SuperFormatString.cpp
@@ -674,7 +674,7 @@ system/math/Easing.cpp
 lazer/meta_ham/VenueProvider.cpp
 lazer/meta_ham/Playlist.cpp
 lazer/meta_ham/Award.cpp
-system/synth/FlangerEffect.cpp
+system/dsp/FlangerEffect.cpp
 lazer/meta_ham/CalibrationPanel.cpp
 system/os/NetworkSocket_Win.cpp
 lazer/meta_ham/Campaign.cpp
@@ -1871,11 +1871,11 @@ system/synth_xbox/Biquad.cpp
 system/synth_xbox/FftIpp.cpp
 system/synth_xbox/FFT.cpp
 system/synth/CompressionEffect.cpp
-system/synth/EQEffect.cpp
-system/synth/WahEffect.cpp
+system/dsp/EQEffect.cpp
+system/dsp/WahEffect.cpp
 system/synth/OggMap.cpp
 system/synth/tomcrypt/ctr.c
-system/synth/Common_Xbox.cpp
+system/dsp/Common_Xbox.cpp
 system/synth/filterdesign.cpp
 system/synth/complex.cpp
 system/utl/Profiler.cpp

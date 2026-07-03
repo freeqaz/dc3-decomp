@@ -3,6 +3,7 @@
 #include "xdk/xaudio2/xaudio2.h"
 #include <cmath>
 
+#line 6 "dsp\\DistortionEffect.cpp"
 DistortionEffect::DistortionEffect(IXAudioBatchAllocator *) : mDrive(0) {}
 
 // Waveshaper distortion: f(x) = x * (amount+1) / (|x| * amount + 1)

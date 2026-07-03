@@ -3,6 +3,7 @@
 #include "math/Utl.h"
 #include <cmath>
 
+#line 6 "dsp\\WahEffect.cpp"
 WahEffect::WahEffect(IXAudioBatchAllocator *) {
     mSampleRate = 96000;
     mGain = 7;
