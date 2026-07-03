@@ -169,8 +169,8 @@ BEGIN_HANDLERS(RndMesh)
     HANDLE_SUPERCLASS(Hmx::Object)
 END_HANDLERS
 
-bool RndMesh::HasInstancedBones() {
-    return mGeomOwner && !mBones.empty() && mGeomOwner->mBones.Owner() == mBones.Owner();
+__forceinline bool RndMesh::HasInstancedBones() {
+    return mGeomOwner && !mBones.empty() && mGeomOwner->mBones[0].mBone != mBones[0].mBone;
 }
 
 BEGIN_CUSTOM_PROPSYNC(RndMesh::Vert)

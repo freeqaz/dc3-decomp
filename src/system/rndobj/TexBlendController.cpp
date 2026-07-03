@@ -81,9 +81,7 @@ bool RndTexBlendController::IsValid() const {
         } else {
             distValid = false;
         }
-        if (!mObject1 || !mObject2 || refDist <= 0 || !distValid) {
-            return false;
-        }
+        return mObject1 && mObject2 && refDist > 0 && distValid;
     }
     return true;
 }

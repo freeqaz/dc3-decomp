@@ -260,11 +260,14 @@ void LiveCameraInput::TextureStore::UpdateFromDepthBuffer(LiveCameraInput *cam) 
             unsigned short *destRow = (unsigned short *)(destBase - 2);
             do {
                 unsigned short depthPixel =
-                    *(unsigned short *)(((int)(x >> 1) + (unsigned int)((unsigned int)(int)x < 0 && (x & 1) != 0)) * 2 + srcBase);
+                    *(unsigned short *)(((int)x / 2) * 2 + srcBase);
                 unsigned short color = 0;
                 unsigned short playerIdx = depthPixel & 7;
                 if (playerIdx <= 7) {
                     switch (playerIdx) {
+                    case 0:
+                        color = 0;
+                        break;
                     case 1:
                         color = 0xf800;
                         break;
@@ -282,9 +285,6 @@ void LiveCameraInput::TextureStore::UpdateFromDepthBuffer(LiveCameraInput *cam) 
                         break;
                     case 6:
                         color = 0xffe0;
-                        break;
-                    case 0:
-                        color = 0;
                         break;
                     default:
                         color = 0xffff;

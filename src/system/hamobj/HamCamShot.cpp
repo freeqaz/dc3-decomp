@@ -860,19 +860,16 @@ RndDrawable *HamCamShot::GetFlipCharacter(RndDrawable *draw) {
     Symbol name(endIt);
     if (!TheHamDirector)
         return draw;
-    HamCharacter *c;
     if (name == player0) {
-        c = TheHamDirector->GetCharacter(1);
+        return TheHamDirector->GetCharacter(1);
     } else if (name == player1) {
-        c = TheHamDirector->GetCharacter(0);
+        return TheHamDirector->GetCharacter(0);
     } else if (name == backup0) {
-        c = TheHamDirector->GetBackup(1);
+        return TheHamDirector->GetBackup(1);
     } else if (name == backup1) {
-        c = TheHamDirector->GetBackup(0);
-    } else {
-        return draw;
+        return TheHamDirector->GetBackup(0);
     }
-    return c;
+    return draw;
 }
 
 HamCharacter *CharacterNameToCharacter(Symbol s) {

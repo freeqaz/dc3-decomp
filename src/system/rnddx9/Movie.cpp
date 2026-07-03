@@ -27,25 +27,25 @@ DxMovie::~DxMovie() {
 void DxMovie::SetFrame(float frame, float blend) {
     START_AUTO_TIMER("movie");
     RndAnimatable::SetFrame(frame, blend);
-    if ((!RndMovie::mStream || mFrameBuf) && mTex && mVideo.NumFrames()) {
-        int frameIdx = (int)frame % mVideo.NumFrames();
-        int delta = frameIdx - mNumFrames;
-        if (delta != 0) {
-            mNumFrames = frameIdx;
-            if (RndMovie::mStream) {
-                if (delta < 0 || delta > 1) {
-                    StreamRestart(frameIdx);
-                } else {
-                    StreamReadFinish();
-                    mReadPtr = (char *)mFrameBuf + mBufOffset;
-                    StreamNextBuffer();
-                }
-            } else {
-                mReadPtr = mVideo.Frame(frameIdx);
-            }
-            Update();
+    if (!((!RndMovie::mStream || mFrameBuf) && mTex && mVideo.NumFrames()))
+        return;
+    int frameIdx = (int)frame % mVideo.NumFrames();
+    int delta = frameIdx - mNumFrames;
+    if (delta == 0)
+        return;
+    mNumFrames = frameIdx;
+    if (RndMovie::mStream) {
+        if (delta < 0 || delta > 1) {
+            StreamRestart(frameIdx);
+        } else {
+            StreamReadFinish();
+            mReadPtr = (char *)mFrameBuf + mBufOffset;
+            StreamNextBuffer();
         }
+    } else {
+        mReadPtr = mVideo.Frame(frameIdx);
     }
+    Update();
 }
 
 void DxMovie::StreamReadFinish() {

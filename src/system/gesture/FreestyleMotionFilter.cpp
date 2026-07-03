@@ -37,8 +37,8 @@ bool FreestyleMotionFilter::Detected() { return 0 < mMoveTime; }
 void FreestyleMotionFilter::UpdateFilters(SkeletonUpdateData const &skeletonData) {
     HamPlayerData *player = TheGameData->Player(0);
     MILO_ASSERT(player, 0x44);
-    if (player->IsPlaying() && skeletonData.mSkeletonsLeft) {
-        Skeleton *skeleton = *skeletonData.mSkeletonsLeft;
+    Skeleton *skeleton;
+    if (player->IsPlaying() && (skeleton = *skeletonData.mSkeletonsLeft) != 0) {
         mMoveTime = 0.0f;
         for (int i = 0; i < 20; i++) {
             Vector3 velocity;
