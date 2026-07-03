@@ -112,7 +112,7 @@ void UIListLabelElement::Draw(const Transform &tf, float f, UIColor *col, Box *b
     label->SetWorldXfm(tf);
     if (box) {
         Vector3 minPt(label->mBoundsLeft, 0.0f, label->mBoundsTop);
-        Box localbox = *box;
+        Box localbox(box->mMin, box->mMax);
         Vector3 maxPt(label->mBoundsLeft + label->mBoundsRight, 0.0f, label->mBoundsTop + label->mBoundsBottom);
         localbox.GrowToContain(minPt, false);
         localbox.GrowToContain(maxPt, false);

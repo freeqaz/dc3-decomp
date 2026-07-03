@@ -2249,9 +2249,9 @@ void TessellateMesh(RndMesh *mesh) {
     typedef RndAmbientOcclusion::Edge Edge;
     std::set<Edge> edges;
     RndMesh *geomOwner = mesh->GetGeomOwner();
-    std::vector<RndMesh::Vert> newVerts;
-
     std::vector<RndMesh::Face> newFaces;
+
+    std::vector<RndMesh::Vert> newVerts;
 
     auto _tmp0 = geomOwner->Faces().size();
     newFaces.reserve(_tmp0 * 4);

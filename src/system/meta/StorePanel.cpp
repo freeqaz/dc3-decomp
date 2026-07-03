@@ -499,7 +499,7 @@ StoreError StorePanel::UpdateOffers(std::list<EnumProduct> const &enumList, bool
         result = kStoreErrorSuccess;
     } else if (offers->size() == 0) {
         // Empty list - format error message
-        FormatString fmt("This metadata contained no offer");
+        FormatString fmt("This metadata contained no offers!");
         TheDebug.Notify(fmt.Str());
         result = kStoreErrorSignedOut;
     } else {
@@ -613,8 +613,8 @@ DataNode StorePanel::OnMsg(SingleItemEnumCompleteMsg const &msg) {
 }
 
 void StorePanel::ValidateOffers(std::vector<StoreOffer *> &offers) {
-    std::vector<StoreOffer *> song_offers;
     std::vector<Symbol> song_names;
+    std::vector<StoreOffer *> song_offers;
 
     static Symbol pack_sym("pack");
     static Symbol album_sym("album");

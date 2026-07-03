@@ -64,12 +64,13 @@ namespace {
         int sz;
         char *buffer = loader.GetBuffer(&sz);
         if (sz != 0) {
-            MILO_ASSERT(sz == 320 * 240 * 2, 0x5a);
+            int mWidth = 320, mHeight = 240, mBpp = 16;
+            MILO_ASSERT(sz == mWidth * mHeight * mBpp / 8, 0x5a);
             DxTex *tex = Hmx::Object::New<DxTex>();
             D3DTexture *d3dTex = new D3DTexture();
             int texSize =
                 XGSetTextureHeader(
-                    0x140, 0xf0, 1, 4, (D3DFORMAT)0x1a220058, 0, 0, -1, d3dTex
+                    mWidth, mHeight, 1, 4, (D3DFORMAT)0x1a220058, 0, 0, -1, d3dTex
                 );
             void *ptr = PhysicalAllocTracked(
                 (texSize + 0xFFF) & 0xFFFFF000, 4, "LiveCameraInput.cpp", 0x66,

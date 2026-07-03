@@ -129,7 +129,7 @@ void WebSvcMgrCurl::FindAndFinish(void *handle, bool success, unsigned int http_
         ++it;
     }
 
-    TheDebug.Notify(MakeString("WSMC::FindAndFinish: Handle not found"));
+    TheDebug.Notify(MakeString("WSMC::FindAndFinish: Handle not found!"));
     return;
 
 found:

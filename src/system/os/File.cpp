@@ -553,8 +553,8 @@ const char *FileLocalize(const char *iFilename, char *buffer) {
                         buffer = mybuffer;
                     strcpy(buffer, iFilename);
                     if (!HongKongExceptionMet()
-                        || (strstr(iFilename, "locale") == 0
-                            && strstr(iFilename, "ui/eng") == 0)) {
+                        || (strstr(iFilename, "sfx/loc/") == 0
+                            && strstr(iFilename, "barks.milo") == 0)) {
                         Symbol lang3 = SystemLanguage();
                         const char *langStr = lang3.Str();
                         buffer[p + 1 - iFilename] = langStr[0];
@@ -649,21 +649,21 @@ void FileRecursePattern(
 #ifndef HX_NATIVE
 // PPC (Xbox 360) implementation — logic derived from Ghidra decompile
 void RecursePatternInternal(
-    const char *pattern,
+    const char *pttn,
     void (*cb)(const char *, const char *),
     bool recurse,
     bool recurse_dirs
 ) {
-    MILO_ASSERT(pattern && pattern[0], 0x5B8);
-    String pttn(pattern);
+    MILO_ASSERT(pttn && pttn[0], 0x5B8);
+    String pttnStr(pttn);
 
     // Find split point: first '&', or end-of-string if absent
-    unsigned int ampPos = pttn.find_first_of("&", 0);
-    unsigned int wildcardPos = pttn.find_first_of("?*", 0);
+    unsigned int ampPos = pttnStr.find_first_of("&", 0);
+    unsigned int wildcardPos = pttnStr.find_first_of("?*", 0);
 
     int splitPos;
     if (ampPos == FixedString::npos) {
-        splitPos = (int)pttn.length() - 1;
+        splitPos = (int)pttnStr.length() - 1;
     } else {
         splitPos = ampPos;
     }
@@ -673,11 +673,11 @@ void RecursePatternInternal(
 
     // If recurse enabled and no & wildcard: check for path-separator past splitPos
     if (recurse && ampPos == (int)FixedString::npos) {
-        int pttnLen = (int)pttn.length() - 1;
+        int pttnLen = (int)pttnStr.length() - 1;
         // Walk forward from splitPos looking for path separator
         int forwardPos = splitPos;
-        while (forwardPos < pttnLen && pttn[forwardPos] != '/'
-               && pttn[forwardPos] != '\\') {
+        while (forwardPos < pttnLen && pttnStr[forwardPos] != '/'
+               && pttnStr[forwardPos] != '\\') {
             forwardPos++;
         }
         if (forwardPos == pttnLen) {
@@ -685,11 +685,11 @@ void RecursePatternInternal(
             recurse = false;
         } else {
             // Path separator found: we need to recurse into subdirectories
-            String subPattern = pttn.substr((unsigned int)forwardPos);
-            pttn = pttn.substr(0);
+            String subPattern = pttnStr.substr((unsigned int)forwardPos);
+            pttnStr = pttnStr.substr(0, (unsigned int)forwardPos);
 
             // Enumerate subdirectories at this level
-            RecursePatternInternal(pttn.c_str(), DirListCB, false, true);
+            RecursePatternInternal(pttnStr.c_str(), DirListCB, false, true);
             std::vector<String> dirs(gDirList);
             if (gDirList.begin() != gDirList.end()) {
                 gDirList.erase(gDirList.begin(), gDirList.end());
@@ -697,13 +697,13 @@ void RecursePatternInternal(
 
             MainThread();
             static char pathBuf[256];
-            const char *dirBase = FileGetPathBuf(pttn.c_str(), pathBuf);
-            pttn = dirBase;
+            const char *dirBase = FileGetPathBuf(pttnStr.c_str(), pathBuf);
+            pttnStr = dirBase;
 
             unsigned int numDirs = dirs.size();
             for (unsigned int i = 0; i < numDirs; i++) {
                 const char *combined = MakeString(
-                    "%s/%s%s", pttn, dirs[i], subPattern
+                    "%s/%s%s", pttnStr, dirs[i], subPattern
                 );
                 RecursePatternInternal(combined, cb, recurse, recurse_dirs);
             }
@@ -715,17 +715,17 @@ void RecursePatternInternal(
     String dirStr;
     if (splitPos > 0) {
         int pos = splitPos;
-        while (pos >= 0 && pttn[pos] != '/' && pttn[pos] != '\\') {
+        while (pos >= 0 && pttnStr[pos] != '/' && pttnStr[pos] != '\\') {
             pos--;
         }
         if (pos > 0) {
-            dirStr = pttn.substr(0, (unsigned int)pos);
+            dirStr = pttnStr.substr(0, (unsigned int)pos);
         } else {
             dirStr = ".";
         }
     } else {
         dirStr = ".";
     }
-    FileEnumerate(dirStr.c_str(), cb, recurse, pttn.c_str(), recurse_dirs);
+    FileEnumerate(dirStr.c_str(), cb, recurse, pttnStr.c_str(), recurse_dirs);
 }
 #endif

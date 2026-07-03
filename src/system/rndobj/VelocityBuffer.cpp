@@ -156,8 +156,7 @@ void RndVelocityBuffer::CacheTransform(
 
 void RndVelocityBuffer::DrawMesh(RndMesh *mesh) const {
     MILO_ASSERT(mesh, 0x123);
-    auto _tmp2 = mesh->Showing();
-    MILO_ASSERT(_tmp2, 0x124);
+    MILO_ASSERT(mesh->Showing(), 0x124);
     MILO_ASSERT(TheRnd.GetDrawMode() == Rnd::kDrawVelocity, 0x125);
 
     RndMat *mat = mesh->Mat();

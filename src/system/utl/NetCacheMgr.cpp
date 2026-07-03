@@ -335,7 +335,7 @@ bool NetLoaderRef::IsLoadedOrFailed() {
 
     if (!mCacheLoader) {
         if (mNetLoader) {
-            return true;
+            return mNetLoader->IsLoaded();
         }
         return false;
     }

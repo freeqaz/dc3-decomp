@@ -38,7 +38,7 @@ public:
     size_type max_size() const { return size_type(-1) / sizeof(T); }
 
     pointer allocate(size_type count, const void *hint = 0) {
-        return (pointer)MemAlloc(count * sizeof(T), __FILE__, __LINE__, "unknown", 0);
+        return (pointer)MemAlloc(count * sizeof(T), "e:\\lazer_build_gmc1\\system\\src\\synth360\\synapse_apo\\common_vector.h", __LINE__, "synapse", 0);
     }
 
     void deallocate(pointer ptr, size_type) {

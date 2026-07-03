@@ -84,9 +84,11 @@ extern "C" {
 #define SOCK_STREAM 1
 #define SOCK_DGRAM 2
 #define IPPROTO_UDP 17
+#define IPPROTO_TCP 6
 
 #define SOL_SOCKET 0xffff
 #define SO_SNDBUF 0x1001
+#define TCP_NODELAY 0x0001
 
 #define WSABASEERR 10000
 #define WSAEINTR WSABASEERR + 4

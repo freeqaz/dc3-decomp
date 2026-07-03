@@ -49,9 +49,9 @@ public:
     int mUnusedF4;              // 0xF4
     int mUnusedF8;              // 0xF8
     int mUnusedFC;              // 0xFC
-    std::vector<float, XboxAllocator<float> > mSpectrum; // 0x100
-    std::vector<float, XboxAllocator<float> > mWindow;   // 0x10C
-    std::vector<float, XboxAllocator<float> > mWeight;   // 0x118
+    stlpmtx_std::vector<float, stlpmtx_std::StlNodeAlloc<float> > mSpectrum; // 0x100
+    stlpmtx_std::vector<float, stlpmtx_std::StlNodeAlloc<float> > mWindow;   // 0x10C
+    stlpmtx_std::vector<float, stlpmtx_std::StlNodeAlloc<float> > mWeight;   // 0x118
 };
 
 } // namespace Synapse

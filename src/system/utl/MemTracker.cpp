@@ -209,12 +209,12 @@ void MemTracker::Alloc(
         if (pooled || gMemLogType != gNullStr || gMemLogType == type) {
             if (pooled || mHeap != -1 && heap != mHeap) {
                 if (mLog) {
-                    *mLog << " ((com new) " << "(mem " << memory << ") " << info << ")\n";
+                    *mLog << " ((com new) " << "(mem " << memory << ") " << *info << ")\n";
                 }
                 if (mSpew) {
                     TheDebug << "::Alloc::" << info->mType << " Allocated "
                              << info->mActSize << " Requested " << info->mReqSize
-                             << " Address " << info->mMem << " Heap " << info->mHeap
+                             << " Address " << (unsigned int)info->mMem << " Heap " << info->mHeap
                              << str1.c_str() << ":" << str2.c_str() << "\n";
                 }
             }

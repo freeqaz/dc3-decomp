@@ -666,7 +666,9 @@ unsigned long StartVoiceThreadEntry(void *) {
             int *pMasterVoice = (int *)TheXboxSynth->unkec;
             HRESULT hr =
                 ((HRESULT(*)(int *, int))(*(int *)(*(int *)pMasterVoice + 0x34)))(pMasterVoice, 0);
-            MILO_ASSERT(SUCCEEDED(hr), 0x76);
+            if (!(SUCCEEDED(hr))) {
+                TheDebugFailer << MakeString(kAssertStr, "Voice.cpp", 0x76, "SUCCEEDED(hr)");
+            }
         }
 
         // Process voice garbage collection

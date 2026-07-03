@@ -142,7 +142,7 @@ void DingoJob::AddContent(HttpReq *httpReq) {
     int size = (scan - str2.c_str() - 1) + 7;
 
     // Allocate buffer for the complete request body
-    char *buf = (char *)_MemAllocTemp(size + 1, __FILE__, 0x6D, "", 0);
+    char *buf = new char[size + 1];
     mContentBuffer = buf;
 
     // Copy the "params=" prefix into the buffer

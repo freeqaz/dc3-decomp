@@ -1686,8 +1686,8 @@ static const wchar_t kBreakChars[] = L" \t\n";
 void RndText::FitTextJust() {
     BuildFontMaps(true);
 
-    HX_VECTOR(unsigned short) wideChars;
     HX_VECTOR(Line) lines;
+    HX_VECTOR(unsigned short) wideChars;
     int numChars = ConvertTextToWide(mText.c_str(), wideChars);
     float *charWidths = (float *)_alloca(sizeof(float) * (numChars + 2));
     OnComputeCharWidths(&wideChars[0], charWidths, false);

@@ -424,15 +424,15 @@ float ArcDetector::UpdateOverlay(RndOverlay *overlay, float y) {
             UtilDrawCircle2D(Vector2(scaledX, arcY), 0.01f, Hmx::Color(0.0f, 0.0f, 0.0f, 1.0f), 4);
             UtilDrawCircle2D(Vector2(pt.x, pt.y), 0.004f, Hmx::Color(0.0f, 0.0f, 0.0f, 1.0f), 4);
 
-            Vector2 errPt(scaledX, (mArcOffset.y - pt.y) + 0.75f);
-            UtilDrawCircle2D(errPt, 0.01f, Hmx::Color(0.0f, 0.0f, 0.0f, 1.0f), 4);
-
-            Vector2 arcPt(scaledX, (mArcOffset.y - pt.y) + 0.75f);
-            UtilDrawCircle2D(arcPt, 0.01f, Hmx::Color(0.0f, 0.0f, 0.0f, 1.0f), 4);
-
             if (pt.x != jointPathCopy.front().x || pt.y != jointPathCopy.front().y || pt.z != jointPathCopy.front().z) {
                 UtilDrawLine(prevScaled, Vector2(scaledX, arcY), Hmx::Color(0.0f, 0.0f, 0.0f, 1.0f));
             }
+
+            Vector2 refPt(scaledX, 0.75f);
+            UtilDrawCircle2D(refPt, 0.01f, Hmx::Color(0.0f, 0.0f, 0.0f, 1.0f), 4);
+
+            Vector2 errPt(scaledX, (mArcOffset.y - pt.y) + 0.75f);
+            UtilDrawCircle2D(errPt, 0.01f, Hmx::Color(0.0f, 0.0f, 0.0f, 1.0f), 4);
 
             prevScaled = Vector2(scaledX, arcY);
             drawY = drawY + 0.03125f;

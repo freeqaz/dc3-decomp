@@ -41,7 +41,7 @@ void DxCubeTex::Sync() {
         RndBitmap *pWork = &mBitmap[face];
 
         if (pWork->Width() == 0 || pWork->Height() == 0) {
-            MILO_NOTIFY("%s face %d width or height == 0", PathName(this), face);
+            MILO_NOTIFY("%s face %d width or height == 0 ", PathName(this), face);
         } else {
             RndBitmap *bmp = pWork;
             if (pWork->Palette() != nullptr || pWork->Bpp() == 0x18) {

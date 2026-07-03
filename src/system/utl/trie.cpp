@@ -248,164 +248,162 @@ void Trie::remove(unsigned int index) {
     }
 
     check_index(curIdx);
-    unsigned int counts = CountField(curNode);
-    if ((counts && 0xFFFFFF00) == 0) {
+    if ((CountField(curNode) & 0xFFFFFF00) == 0) {
         return;
     }
 
     check_index(curIdx);
-    bool hasRefs = (counts & 0xFFFFFF00) != 0;
-    if ((hasRefs) != 0x100) {
-        // More than one reference, just decrement
-        dec_dup_count(curIdx);
-        return;
-    }
+    if ((CountField(curNode) & 0xFFFFFF00) == 0x100) {
+        // Single reference - remove the node chain
+    loop_start:
+        if (curIdx != 0) {
+            check_index(curIdx);
+            unsigned int parentIdx = Parent(curNode);
+            if (parentIdx != 0) {
+                check_index(parentIdx);
+                unsigned int parentFirstChild = FirstChild(NodePtr(this, parentIdx));
+                check_index(parentFirstChild);
+                char *firstChildNode = NodePtr(this, parentFirstChild);
+                if (SiblingCount(firstChildNode) == 1) {
+                    // Single child - merge upward
+                    check_index(curIdx);
+                    unsigned int toDelete = curIdx;
+                    curIdx = Parent(curNode);
+                    delete_node(toDelete);
+                    goto update_node;
+                }
+            }
+        }
 
-    // Single reference - remove the node chain
-loop_start:
-    if (curIdx != 0) {
+        // Find the first child in the sibling chain
         check_index(curIdx);
-        unsigned int parentIdx = Parent(curNode);
-        if (parentIdx != 0) {
+        unsigned int firstChildIdx;
+        if (Parent(curNode) == 0) {
+            firstChildIdx = 1;
+        } else {
+            check_index(curIdx);
+            unsigned int parentIdx = Parent(curNode);
             check_index(parentIdx);
-            unsigned int parentFirstChild = FirstChild(NodePtr(this, parentIdx));
-            check_index(parentFirstChild);
-            char *firstChildNode = NodePtr(this, parentFirstChild);
-            if (SiblingCount(firstChildNode) == 1) {
-                // Single child - merge upward
-                check_index(curIdx);
-                unsigned int toDelete = curIdx;
-                curIdx = Parent(curNode);
-                delete_node(toDelete);
+            firstChildIdx = FirstChild(NodePtr(this, parentIdx));
+        }
+
+        unsigned int sibIdx = firstChildIdx;
+        check_index(firstChildIdx);
+        unsigned char sibCount = SiblingCount(NodePtr(this, firstChildIdx));
+        unsigned int prevSib = 0;
+        unsigned int traverseCount = 0;
+
+        if (sibCount == 0) {
+            goto update_node;
+        }
+
+        // Find this node in sibling chain
+        while (sibIdx != curIdx) {
+            prevSib = sibIdx;
+            check_index(sibIdx);
+            traverseCount++;
+            sibIdx = NextSibling(NodePtr(this, sibIdx));
+            if (traverseCount >= sibCount) {
                 goto update_node;
             }
         }
-    }
 
-    // Find the first child in the sibling chain
-    check_index(curIdx);
-    unsigned int firstChildIdx;
-    if (Parent(curNode) == 0) {
-        firstChildIdx = 1;
-    } else {
-        check_index(curIdx);
-        unsigned int parentIdx = Parent(curNode);
-        check_index(parentIdx);
-        firstChildIdx = FirstChild(NodePtr(this, parentIdx));
-    }
-
-    unsigned int sibIdx = firstChildIdx;
-    check_index(firstChildIdx);
-    unsigned char sibCount = SiblingCount(NodePtr(this, firstChildIdx));
-    unsigned int prevSib = 0;
-    unsigned int traverseCount = 0;
-
-    if (sibCount == 0) {
-        goto update_node;
-    }
-
-    // Find this node in sibling chain
-    while (sibIdx != curIdx) {
-        prevSib = sibIdx;
-        check_index(sibIdx);
-        traverseCount++;
-        sibIdx = NextSibling(NodePtr(this, sibIdx));
-        if (traverseCount >= sibCount) {
-            goto update_node;
-        }
-    }
-
-    // Found the node - unlink from chain
-    if (prevSib != 0) {
-        check_index(curIdx);
-        check_index(prevSib);
-        NextSibling(NodePtr(this, prevSib)) = NextSibling(curNode);
-        delete_node(curIdx);
-        dec_count(firstChildIdx);
-        return;
-    }
-
-    // Node is first in chain
-    if (curIdx == 1) {
-        // Root level special handling
-        unsigned int scanCount = 0;
-#ifdef HX_NATIVE
-        unsigned char rootCount = SiblingCount(NodePtr(this, 1));
-#else
-        unsigned char rootCount = *(unsigned char *)((char *)this + 0x20);
-#endif
-
-        while (scanCount < rootCount - 1) {
+        // Found the node - unlink from chain
+        if (prevSib != 0) {
             check_index(curIdx);
-            scanCount++;
-            curIdx = NextSibling(curNode);
-            curNode = NodePtr(this, curIdx);
-        }
-
-        if (curIdx == 1) {
-            delete_node(1);
+            check_index(prevSib);
+            NextSibling(NodePtr(this, prevSib)) = NextSibling(curNode);
+            delete_node(curIdx);
+            dec_count(firstChildIdx);
             return;
         }
 
-        // Move last sibling to position 1
-        check_index(curIdx);
-        FirstChild(NodePtr(this, 1)) = FirstChild(curNode);
-        check_index(curIdx);
+        // Node is first in chain
+        if (curIdx == 1) {
+            // Root level special handling
+            unsigned int scanCount = 0;
 #ifdef HX_NATIVE
-        Character(NodePtr(this, 1)) = Character(curNode);
+            unsigned char rootCount = SiblingCount(NodePtr(this, 1));
 #else
-        *(unsigned char *)((char *)this + 0x21) = Character(curNode);
+            unsigned char rootCount = *(unsigned char *)((char *)this + 0x20);
 #endif
-        delete_node(curIdx);
-        dec_count(firstChildIdx);
 
-        // Update parent pointers of children
-        unsigned int updateCount = 0;
-        auto _tmp2 = NodePtr(this, 1);
-        unsigned int updateIdx = FirstChild(_tmp2);
-
-        while (true) {
-            unsigned int childIdx = FirstChild(NodePtr(this, 1));
-            check_index(childIdx);
-            if (updateCount >= SiblingCount(NodePtr(this, childIdx))) {
-                break;
+            while (scanCount < rootCount - 1) {
+                check_index(curIdx);
+                scanCount++;
+                curIdx = NextSibling(curNode);
+                curNode = NodePtr(this, curIdx);
             }
-            check_index(updateIdx);
-            char *updateNode = NodePtr(this, updateIdx);
-            Parent(updateNode) = 1;
-            check_index(updateIdx);
-            updateCount++;
-            updateIdx = NextSibling(updateNode);
+
+            if (curIdx == 1) {
+                delete_node(1);
+                return;
+            }
+
+            // Move last sibling to position 1
+            check_index(curIdx);
+            FirstChild(NodePtr(this, 1)) = FirstChild(curNode);
+            check_index(curIdx);
+#ifdef HX_NATIVE
+            Character(NodePtr(this, 1)) = Character(curNode);
+#else
+            *(unsigned char *)((char *)this + 0x21) = Character(curNode);
+#endif
+            delete_node(curIdx);
+            dec_count(firstChildIdx);
+
+            // Update parent pointers of children
+            unsigned int updateCount = 0;
+            auto _tmp2 = NodePtr(this, 1);
+            unsigned int updateIdx = FirstChild(_tmp2);
+
+            while (true) {
+                unsigned int childIdx = FirstChild(NodePtr(this, 1));
+                check_index(childIdx);
+                if (updateCount >= SiblingCount(NodePtr(this, childIdx))) {
+                    break;
+                }
+                check_index(updateIdx);
+                char *updateNode = NodePtr(this, updateIdx);
+                Parent(updateNode) = 1;
+                check_index(updateIdx);
+                updateCount++;
+                updateIdx = NextSibling(updateNode);
+            }
+            return;
         }
+
+        // Not root - update parent's first child
+        check_index(curIdx);
+        check_index(curIdx);
+        unsigned int parentIdx2 = Parent(curNode);
+        check_index(parentIdx2);
+        FirstChild(NodePtr(this, parentIdx2)) = NextSibling(curNode);
+
+        // Update sibling count
+        check_index(curIdx);
+        unsigned char newSibCount = SiblingCount(curNode) - 1;
+        check_index(curIdx);
+        unsigned int parentIdx3 = Parent(curNode);
+        check_index(parentIdx3);
+        unsigned int newFirstChild = FirstChild(NodePtr(this, parentIdx3));
+        check_index(newFirstChild);
+        char *newFirstChildNode = NodePtr(this, newFirstChild);
+        CountField(newFirstChildNode) = (CountField(newFirstChildNode) & 0xFFFFFF00) | newSibCount;
+
+        delete_node(curIdx);
         return;
+
+    update_node:
+        check_index(curIdx);
+        curNode = NodePtr(this, curIdx);
+        if (Character(curNode) == 0) {
+            return;
+        }
+        goto loop_start;
     }
 
-    // Not root - update parent's first child
-    check_index(curIdx);
-    check_index(curIdx);
-    unsigned int parentIdx2 = Parent(curNode);
-    check_index(parentIdx2);
-    FirstChild(NodePtr(this, parentIdx2)) = NextSibling(curNode);
-
-    // Update sibling count
-    check_index(curIdx);
-    unsigned char newSibCount = SiblingCount(curNode) - 1;
-    check_index(curIdx);
-    unsigned int parentIdx3 = Parent(curNode);
-    check_index(parentIdx3);
-    unsigned int newFirstChild = FirstChild(NodePtr(this, parentIdx3));
-    check_index(newFirstChild);
-    char *newFirstChildNode = NodePtr(this, newFirstChild);
-    CountField(newFirstChildNode) = (CountField(newFirstChildNode) & 0xFFFFFF00) | newSibCount;
-
-    delete_node(curIdx);
+    // More than one reference, just decrement
+    dec_dup_count(curIdx);
     return;
-
-update_node:
-    check_index(curIdx);
-    curNode = NodePtr(this, curIdx);
-    if (Character(curNode) == 0) {
-        return;
-    }
-    goto loop_start;
 }
