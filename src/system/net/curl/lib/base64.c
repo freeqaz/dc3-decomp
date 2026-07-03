@@ -214,11 +214,6 @@ CURLcode Curl_base64_encode(struct SessionHandle *data,
     obuf[3] = (unsigned char)   (ibuf[2] & 0x3F);
 
     switch(inputparts) {
-    case 1: /* only one byte read */
-      snprintf(output, 5, "%c%c==",
-               table64[obuf[0]],
-               table64[obuf[1]]);
-      break;
     case 2: /* two bytes read */
       snprintf(output, 5, "%c%c%c=",
                table64[obuf[0]],
@@ -231,6 +226,11 @@ CURLcode Curl_base64_encode(struct SessionHandle *data,
                table64[obuf[1]],
                table64[obuf[2]],
                table64[obuf[3]] );
+      break;
+    case 1: /* only one byte read */
+      snprintf(output, 5, "%c%c==",
+               table64[obuf[0]],
+               table64[obuf[1]]);
       break;
     }
     output += 4;

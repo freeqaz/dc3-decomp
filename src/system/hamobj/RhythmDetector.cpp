@@ -343,16 +343,16 @@ namespace {
 
 void SetupFrame(
     RhythmDetector::Frame &frame,
-    float frameCount,
-    float beatDiff,
-    const Vector3 *prevJoints,
-    const Vector3 *curJoints,
+    float prev_beat,
+    float delt_beat,
+    const Vector3 *prev,
+    const Vector3 *pos,
     float deltaTime
 ) {
-    MILO_ASSERT(frameCount >= 0, 0x4d7);
-    MILO_ASSERT(beatDiff >= 0, 0x4d8);
-    MILO_ASSERT(prevJoints, 0x4d9);
-    MILO_ASSERT(curJoints, 0x4da);
+    MILO_ASSERT(prev_beat >= 0, 0x4d7);
+    MILO_ASSERT(delt_beat >= 0, 0x4d8);
+    MILO_ASSERT(prev, 0x4d9);
+    MILO_ASSERT(pos, 0x4da);
 
     static UIPanel *panel =
         ObjectDir::Main()->Find<UIPanel>("rhythm_detector_panel", false);
@@ -362,16 +362,16 @@ void SetupFrame(
     float invDelta = 1.0f / deltaTime;
     for (int i = 0; i < 20; i++) {
         int joint = kAnalyzeJoints[i];
-        const Vector3 &cur = curJoints[joint];
-        const Vector3 &prev = prevJoints[joint];
-        float dx = cur.x - prev.x;
-        float dy = cur.y - prev.y;
-        float dz = cur.z - prev.z;
+        const Vector3 &curJoint = pos[joint];
+        const Vector3 &prevJoint = prev[joint];
+        float dx = curJoint.x - prevJoint.x;
+        float dy = curJoint.y - prevJoint.y;
+        float dz = curJoint.z - prevJoint.z;
         frame.mJointVelocities[i].x = invDelta * dx;
         frame.mJointVelocities[i].y = invDelta * dy;
         frame.mJointVelocities[i].z = invDelta * dz;
     }
-    frame.mTime = frameCount + beatDiff;
+    frame.mTime = prev_beat + delt_beat;
 }
 
 RhythmDetector::Frame BlendFrameDataToBeat(

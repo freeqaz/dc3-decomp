@@ -42,19 +42,16 @@ void ObjPtrVec<T1, T2>::swap(int a, int b) {
 template <class T1, class T2>
 template <class S>
 void ObjPtrVec<T1, T2>::sort(const S &cmp) {
-    MemPushTemp();
-    {
-        std::vector<T1 *> ptrs;
-        ptrs.insert(ptrs.begin(), size(), (T1 *)0);
-        for (unsigned int i = 0; i < size(); i++) {
-            ptrs[i] = mNodes[i].Obj();
-        }
-        std::sort(ptrs.begin(), ptrs.end(), cmp);
-        for (unsigned int i = 0; i < size(); i++) {
-            mNodes[i].SetObjConcrete(ptrs[i]);
-        }
+    MemDoTempAllocations doTemp(true, true);
+    std::vector<T1 *> ptrs;
+    ptrs.insert(ptrs.begin(), size(), (T1 *)0);
+    for (unsigned int i = 0; i < size(); i++) {
+        ptrs[i] = mNodes[i].Obj();
     }
-    MemPopTemp();
+    std::sort(ptrs.begin(), ptrs.end(), cmp);
+    for (unsigned int i = 0; i < size(); i++) {
+        mNodes[i].SetObjConcrete(ptrs[i]);
+    }
 }
 
 template <class T1, class T2>

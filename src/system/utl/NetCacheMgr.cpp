@@ -357,15 +357,16 @@ void NetCacheMgr::PollLoaders() {
     bool firstDownload = true;
     std::list<NetLoaderRef>::iterator it = mNetLoaderRefs.begin();
     while (it != mNetLoaderRefs.end()) {
-        MILO_ASSERT(it->IsValid(), 0xE9);
-        if (!it->NeedsToDownload() || it->IsLoadedOrFailed()) {
-            it->Poll();
+        NetLoaderRef &netLoaderRef = *it;
+        MILO_ASSERT(netLoaderRef.IsValid(), 0xE9);
+        if (!netLoaderRef.NeedsToDownload() || netLoaderRef.IsLoadedOrFailed()) {
+            netLoaderRef.Poll();
         } else if (firstDownload) {
-            it->Poll();
+            netLoaderRef.Poll();
             firstDownload = false;
         }
-        if (it->mRefCount < 1 && it->IsSafeToDelete()) {
-            it->DeleteLoader();
+        if (netLoaderRef.mRefCount < 1 && netLoaderRef.IsSafeToDelete()) {
+            netLoaderRef.DeleteLoader();
             it = mNetLoaderRefs.erase(it);
         } else {
             ++it;

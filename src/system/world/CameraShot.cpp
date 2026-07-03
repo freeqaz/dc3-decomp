@@ -880,14 +880,14 @@ void CamShotCrowd::AddCrowdChars(
                 charIdx++;
             }
             if (charIdx != mCrowd->mCharacters.size()) {
-                int instIdx = 0;
+                int ki = 0;
                 for (RndMultiMesh::InstanceList::iterator mmit =
                          mmesh->Instances().begin();
                      mmit != mmesh->Instances().end() && mmit != it->second;
-                     ++mmit, ++instIdx)
+                     ++mmit, ++ki)
                     ;
-                MILO_ASSERT(instIdx != mmesh->Instances().size(), 0xBE1);
-                std::pair<int, int> iPair = std::make_pair(charIdx, instIdx);
+                MILO_ASSERT(ki != mmesh->Instances().size(), 0xBE1);
+                std::pair<int, int> iPair = std::make_pair(charIdx, ki);
                 if (std::find(m3DCharIndices.begin(), m3DCharIndices.end(), iPair)
                     == m3DCharIndices.end()) {
                     m3DCharIndices.push_back(iPair);

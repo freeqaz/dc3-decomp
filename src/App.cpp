@@ -1269,11 +1269,6 @@ void App::RunWithoutDebugging() {
             TheUI->TransitionScreen() ? TheUI->TransitionScreen()->Name() : "none";
 
         switch (TheUI->GetTransitionState()) {
-        case UIManager::kTransitionNone: {
-            glitchStr =
-                MakeString("GLITCH: %g ms, ACTIVE %s", glitchTime, currentScreenName);
-            break;
-        }
         case UIManager::kTransitionTo: {
             glitchStr = MakeString(
                 "GLITCH: %g ms, %s TRANS TO %s",
@@ -1295,6 +1290,11 @@ void App::RunWithoutDebugging() {
         case UIManager::kTransitionPop: {
             glitchStr =
                 MakeString("GLITCH: %g ms, POPPING %s", glitchTime, transitionScreenName);
+            break;
+        }
+        case UIManager::kTransitionNone: {
+            glitchStr =
+                MakeString("GLITCH: %g ms, ACTIVE %s", glitchTime, currentScreenName);
             break;
         }
         }

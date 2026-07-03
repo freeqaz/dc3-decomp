@@ -194,7 +194,7 @@ void Debug::Fail(const char *msg, void *v) {
 #endif
     if (!mNoDebug && !mFailing) {
         mFailing = true;
-        StackString<256> msgStr(msg);
+        StackString<128> msgStr(msg);
         StackString<4096> stackTrace;
         DataAppendStackTrace(stackTrace);
         MILO_LOG(stackTrace.c_str());
