@@ -1156,7 +1156,7 @@ void LiveCameraInput::LockStream(const void *buf, LockedRect &rect) {
 
 void LiveCameraInput::UnlockStream(const void *buf) {
     if (buf != nullptr) {
-        D3DCubeTexture_UnlockRect((D3DCubeTexture *)buf, (D3DCUBEMAP_FACES)0, 0);
+        D3DLineTexture_UnlockRect((D3DLineTexture *)buf, 0);
     }
 }
 
