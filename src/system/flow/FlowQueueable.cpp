@@ -107,7 +107,7 @@ void FlowQueueable::ChildFinished(FlowNode *node) {
 #endif
         if (mFlowParent && mRunningNodes.empty()
             && mFlowParent->HasRunningNode(this)) {
-            FLOW_LOG("Stopped\n");
+            FLOW_LOG("Releasing\n");
             mFlowParent->ChildFinished(this);
         }
     } else {

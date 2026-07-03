@@ -49,8 +49,8 @@ END_LOADS
 void CharMirror::Poll() {
     static Symbol x("x");
     static Symbol xy("xy");
-    static Symbol mirror_x("mirror_x");
     static Symbol zw("zw");
+    static Symbol mirror_x("mirror_x");
 
     auto _tmp0 = mBones.TotalSize();
     float w = Weight();

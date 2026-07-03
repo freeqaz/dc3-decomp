@@ -280,15 +280,15 @@ int DanceRemixer::JumpedMeasureAdd(int measure, int count) const {
     return measure;
 }
 
-int DanceRemixer::JumpedMeasureStepsBetween(int from, int to, int step) const {
-    MILO_ASSERT(step == 1 || step == -1, 0x1bd);
+int DanceRemixer::JumpedMeasureStepsBetween(int from, int to, int direction) const {
+    MILO_ASSERT(direction == 1 || direction == -1, 0x1bd);
     int count = 0;
     while (from != to) {
-        count += step;
+        count += direction;
         if ((count < 0 ? -count : count) > mTotalMeasures * 2) {
-            TheDebug.Fail(MakeString("JumpedMeasureStepsBetween from %d to %d", from, to), nullptr);
+            TheDebug.Fail(MakeString("JumpedMeasureDifference: can't get from measure %d to measure %d\n", from, to), nullptr);
         }
-        from = JumpedMeasureAdd(from, step);
+        from = JumpedMeasureAdd(from, direction);
     }
     return count;
 }

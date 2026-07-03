@@ -28,6 +28,7 @@ enum VShaderConstant {
     kVS_RimColor = 0x3d,
     kVS_BoxMapLight0 = 0x50,
     kVS_WorldTransform = 0x5c,
+    kVShader_SplineMaxCtrlPoints = 0xC,
 };
 
 // pixel shader constant register indices

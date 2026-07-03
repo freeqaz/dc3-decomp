@@ -287,9 +287,9 @@ void CharClipDisplay::DrawCursor() {
     TheRnd.DrawRect(rect, yellow, nullptr, nullptr, nullptr);
     const char *text;
     if (!(mBlendWeight >= 1.0f)) {
-        text = MakeString("%.1f", mCursorBeat);
-    } else {
         text = MakeString("%.1f (%.2f)", mCursorBeat, mBlendWeight);
+    } else {
+        text = MakeString("%.1f", mCursorBeat);
     }
     DrawBeatString(text, mCursorBeat, yellow);
 }

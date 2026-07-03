@@ -457,45 +457,45 @@ const char *FileRelativePath(const char *root, const char *filepath) {
     return FileRelativePathBuf(root, filepath, relative);
 }
 
-const char *FileMakePathBuf(const char *root, const char *file, char *buffer) {
-    MILO_ASSERT(root, 0x300);
-    MILO_ASSERT(file, 0x301);
-    MILO_ASSERT(buffer, 0x302);
+const char *FileMakePathBuf(const char *iRoot, const char *iFilepath, char *oBuf) {
+    MILO_ASSERT(iRoot, 0x300);
+    MILO_ASSERT(iFilepath, 0x301);
+    MILO_ASSERT(oBuf, 0x302);
     char buf[256];
-    if (file >= buffer && file < buffer + File::MaxFileNameLen) {
-        strcpy(buf, file);
-        file = buf;
-    } else if (root >= buffer && root < buffer + File::MaxFileNameLen) {
-        strcpy(buf, root);
-        root = buf;
+    if (iFilepath >= oBuf && iFilepath < oBuf + File::MaxFileNameLen) {
+        strcpy(buf, iFilepath);
+        iFilepath = buf;
+    } else if (iRoot >= oBuf && iRoot < oBuf + File::MaxFileNameLen) {
+        strcpy(buf, iRoot);
+        iRoot = buf;
     }
     char driveBuf[256];
-    const char *fileDrive = FileGetDriveBuf(file, driveBuf);
+    const char *fileDrive = FileGetDriveBuf(iFilepath, driveBuf);
     if (*fileDrive != '\0') {
-        file += strlen(fileDrive) + 1;
+        iFilepath += strlen(fileDrive) + 1;
     }
-    char *c = buffer;
-    if (*file == '/' || *file == '\\' || *file == '\0') {
+    char *c = oBuf;
+    if (*iFilepath == '/' || *iFilepath == '\\' || *iFilepath == '\0') {
         if (*fileDrive != '\0') {
-            sprintf(buffer, "%s:%s", fileDrive, file);
-            c = buffer + strlen(fileDrive) + 1;
+            sprintf(oBuf, "%s:%s", fileDrive, iFilepath);
+            c = oBuf + strlen(fileDrive) + 1;
         } else {
-            const char *rootDrive = FileGetDriveBuf(root, driveBuf);
+            const char *rootDrive = FileGetDriveBuf(iRoot, driveBuf);
             if (*rootDrive != '\0') {
-                sprintf(buffer, "%s:%s", rootDrive, file);
-                c = buffer + strlen(rootDrive) + 1;
+                sprintf(oBuf, "%s:%s", rootDrive, iFilepath);
+                c = oBuf + strlen(rootDrive) + 1;
             } else {
-                strcpy(buffer, file);
+                strcpy(oBuf, iFilepath);
             }
         }
     } else {
-        sprintf(buffer, "%s/%s", root, file);
-        const char *rootDrive = FileGetDriveBuf(root, driveBuf);
+        sprintf(oBuf, "%s/%s", iRoot, iFilepath);
+        const char *rootDrive = FileGetDriveBuf(iRoot, driveBuf);
         if (*rootDrive != '\0') {
-            c = buffer + strlen(rootDrive) + 1;
+            c = oBuf + strlen(rootDrive) + 1;
         }
     }
-    FileNormalizePath(buffer);
+    FileNormalizePath(oBuf);
     bool curSlash = (*c == '/');
     const char *dirs[32];
     const char **endDir = &dirs[0];
@@ -528,9 +528,9 @@ const char *FileMakePathBuf(const char *root, const char *file, char *buffer) {
             }
         }
     }
-    MILO_ASSERT(c - buffer < File::MaxFileNameLen, 0x372);
+    MILO_ASSERT(c - oBuf < File::MaxFileNameLen, 0x372);
     *c = '\0';
-    return buffer;
+    return oBuf;
 }
 
 const char *FileMakePath(const char *root, const char *file) {

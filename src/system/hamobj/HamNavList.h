@@ -136,6 +136,7 @@ private:
     bool ShouldSkipSelectSound(DataNode &) const;
     int NumItems() const;
     int GetDisabledCount(int) const;
+    bool IsScrollable() const;
     int GetHighlightItem(void) const;
     bool IsElementBig(int) const;
     void DetermineHighlightedItem();
@@ -206,5 +207,5 @@ protected:
     bool mHighButtonMode;
     /** "Elements that match these will be bigger than the other elements" */
     std::vector<Symbol> mBigElements; // 0x200
-    std::vector<unsigned int> mBigElementIndices; // 0x20c
+    std::vector<int> mBigElementIndices; // 0x20c
 };

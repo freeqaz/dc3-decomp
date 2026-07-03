@@ -10,7 +10,11 @@ void BitCrushEffect::SetParameters(BitCrushEffect::Params const &params) {
 }
 
 void BitCrushEffect::Process(float *f, int numSamples, int numChans) {
-    MILO_ASSERT(numChans <= 2, 0x1e);
+    do {
+        if (!(numChans <= 2)) {
+            TheDebugFailer << MakeString(kAssertStr, "dsp\\BitCrushEffect.cpp", 0x1e, "numChans <= 2");
+        }
+    } while (0);
 
     if (numSamples > 0) {
         float *left;

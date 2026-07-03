@@ -565,7 +565,7 @@ void Rnd::TestPoint(const Vector3 &pos, RndFlare *flare) {
         return;
     RndCam *cam = RndCam::Current();
     if (cam->TargetTex()) {
-        MILO_NOTIFY_ONCE("Flare %s can't be drawn in render to texture mode", (char *)flare->Name());
+        MILO_NOTIFY_ONCE("Flare %s can't be drawn in rendered texture", (char *)flare->Name());
         flare->SetVisible(false);
     } else {
         Vector2 screen;

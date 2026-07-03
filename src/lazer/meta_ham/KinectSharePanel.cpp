@@ -105,8 +105,7 @@ void KinectSharePanel::Poll() {
 
 void KinectSharePanel::ConvertImages() {
     int iref;
-    auto texPtr = mTex.Ptr();
-    MILO_ASSERT(texPtr, 0x2B);
+    MILO_ASSERT(mTex.Ptr(), 0x2B);
     RndBitmap bitmapa0;
     RndBitmap bitmap80;
     mTex->LockBitmap(bitmapa0, true);

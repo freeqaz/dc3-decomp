@@ -121,7 +121,7 @@ void BaseSkeleton::LimbNormPos(
         bone2 = right ? kBoneArmLowerRight : kBoneArmLowerLeft;
         bone3 = right ? kBoneHandRight : kBoneHandLeft;
     } else {
-        MILO_ASSERT(cs == kCoordLeftLeg || cs == kCoordRightLeg, 0x10E);
+        MILO_ASSERT(cs == kCoordLeftArm || cs == kCoordRightArm || cs == kCoordLeftLeg || cs == kCoordRightLeg, 0x10E);
         bool right = cs == kCoordRightLeg;
         rootJoint = right ? kJointHipRight : kJointHipLeft;
         joint1 = right ? kJointKneeRight : kJointKneeLeft;

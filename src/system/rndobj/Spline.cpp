@@ -346,7 +346,7 @@ void RndSpline::PrepareShader(float f1, float f2) const {
             endCtrlPt = mCtrlPoints.size() - 1;
         }
         SyncDeformedCtrlPoints(startCtrlPt, endCtrlPt);
-        MILO_ASSERT(((endCtrlPt - startCtrlPt) + 1) < 0xC, 0x1C1);
+        MILO_ASSERT(((endCtrlPt - startCtrlPt) + 1) < kVShader_SplineMaxCtrlPoints, 0x1C1);
         int shaderConstant = 0xAE;
         for (int i = startCtrlPt; i <= endCtrlPt; i++, shaderConstant += 4) {
             const CtrlPoint &pt = GetDeformedCtrlPoint(i);

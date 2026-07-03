@@ -48,6 +48,8 @@
 #include "FIRFilter.h"
 #include "cpu_detect.h"
 
+#line 1 "soundtouch\\FIRFilter.cpp"
+
 float pow(float, int);
 
 using namespace soundtouch;

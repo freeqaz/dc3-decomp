@@ -734,7 +734,7 @@ void BustAMovePanel::OnBeat() {
                 }
                 mRecorder->StopPlayback();
                 TheDebug << MakeString(
-                    "1: %f(%d)  2: %f(%d)\n",
+                    "1: %f(%d)   2: %f(%d)\n",
                     mDancerTakeScore,
                     mRecorder->GetDancerTakeFrameCount(),
                     mCurrentMoveScore,
@@ -964,7 +964,9 @@ void BustAMovePanel::OnBeat() {
         }
         mRecorder->StopRecording();
         mRecorder->StartPlayback(false);
-        MILO_ASSERT(mBeatCount == 0, 0x328);
+#define mReps mRepsRemaining
+        MILO_ASSERT(mReps == 0, 0x328);
+#undef mReps
         mFlashcardLabels.push_back(gNullStr);
         break;
     }

@@ -343,7 +343,7 @@ void MoggClip::LoadNumChannels() {
     // Log error if channel count retrieval failed
     if (mNumChannels < 0) {
         TheDebug.Notify(
-            MakeString("[GetNumChannels] Ret = %d.  Unable to get num channels from '%s'.\n",
+            MakeString("[GetNumChannels] Ret = %d.  Unable to get the number of channels from mogg: %s!",
                        mNumChannels, mMoggFile));
         mNumChannels = -1;
     }

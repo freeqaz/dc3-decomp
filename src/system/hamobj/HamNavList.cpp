@@ -921,6 +921,8 @@ void HamNavList::Disengage() {
     }
 }
 
+bool HamNavList::IsScrollable() const { return mListState.IsScrolling(); }
+
 int HamNavList::GetDisabledCount(int count) const {
     int disabled = 0;
     for (int i = 0; i < count; i++) {
@@ -935,8 +937,7 @@ int HamNavList::GetDisabledCount(int count) const {
         disabled++;
         count++;
     }
-    bool scrollable = mListState.IsScrolling();
-    MILO_ASSERT(!scrollable || disabled == 0, 0x313);
+    MILO_ASSERT(!IsScrollable() || count == 0, 0x313);
     return disabled;
 }
 
