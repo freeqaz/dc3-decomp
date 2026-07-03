@@ -322,13 +322,9 @@ RndTex *RndMat::GetRefractNormalMap() {
 }
 
 bool RndMat::GetRefractEnabled(bool b) {
-    if (mRefractEnabled == 1 && mRefractStrength > 0.0f) {
-        RndTex *tex = mRefractNormalMap ? mRefractNormalMap : mNormalMap;
-        if (tex && (b || TheRnd.GetCurrentFrameTex(false))) {
-            return true;
-        }
-    }
-    return false;
+    return mRefractEnabled == 1 && mRefractStrength > 0.0f
+        && (mRefractNormalMap ? mRefractNormalMap : mNormalMap)
+        && (b || TheRnd.GetCurrentFrameTex(false));
 }
 
 MatPropEditAction RndMat::GetMetaMatPropAction(Symbol s) {

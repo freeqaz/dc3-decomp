@@ -438,9 +438,10 @@ void UIListState::Scroll(int direction, bool skipActive) {
                 if (step == 1) {
                     auto _tmp1 = MaxFirstShowing();
                     if (state.mFirstShowing == _tmp1) {
-                        hitBoundary = (state.mSelectedDisplay == ScrollMaxDisplay());
-                        if (hitBoundary)
+                        if (state.mSelectedDisplay == ScrollMaxDisplay()) {
+                            hitBoundary = true;
                             goto retry;
+                        }
                     }
                 } else {
                     bool atZero = state.mFirstShowing == 0;
@@ -448,9 +449,10 @@ void UIListState::Scroll(int direction, bool skipActive) {
                     curSel = state.mSelectedDisplay;
                     if (mScrollPastMinDisplay) {
                         if (atZero) {
-                            hitBoundary = (curSel == mMinDisplay);
-                            if (hitBoundary)
+                            if (curSel == mMinDisplay) {
+                                hitBoundary = true;
                                 continue;
+                            }
                         }
                     } else {
                         if (atZero && curSel == 0) {

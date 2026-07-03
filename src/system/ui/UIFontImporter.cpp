@@ -97,7 +97,7 @@ BEGIN_PROPSYNCS(UIFontImporter)
     )
     SYNC_PROP_MODIFY(weight, mFontWeight, GenerateBitmapFilename())
     SYNC_PROP_SET(
-        bold, std::abs(mFontWeight), mFontWeight = 0 != _val.Int() ? 800 : 400;
+        bold, mFontWeight > 500, mFontWeight = 0 != _val.Int() ? 800 : 400;
         GenerateBitmapFilename()
     )
     SYNC_PROP_MODIFY(italics, mItalics, GenerateBitmapFilename())

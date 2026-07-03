@@ -26,11 +26,11 @@ bool FlowSwitchCase::IsValidCase(
         if (mUseLastValue) {
             mFromValue = *lastValue;
         }
-        if (curValue->Type() != mFromValue.Node().Type()
-            || lastValue->Type() != mToValue.Node().Type()) {
+        if (curValue->Type() != mToValue.Node().Type()
+            || curValue->Type() != mFromValue.Node().Type()) {
             return false;
-        } else if (curValue->Equal(mFromValue.Node(), nullptr, true)
-                   && lastValue->Equal(mToValue.Node(), nullptr, true)) {
+        } else if (curValue->Equal(mToValue.Node(), nullptr, true)
+                   && lastValue->Equal(mFromValue.Node(), nullptr, true)) {
             return true;
         } else {
             return false;
