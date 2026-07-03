@@ -186,8 +186,8 @@ DataNode SetBSPParams(DataArray *da) {
 void GeoInit() {
     DataArray *cfg = SystemConfig("math");
     auto _tmp4 = cfg->FindArray("bsp_check_scale")->Float(1);
-    auto _tmp2 = cfg->FindArray("bsp_max_depth")->Int(1);
-    SetBSPParams(cfg->FindArray("bsp_pos_tol")->Float(1), cfg->FindArray("bsp_dir_tol")->Float(1), _tmp2, cfg->FindArray("bsp_max_candidates")->Int(1), _tmp4);
+    auto _tmp2 = cfg->FindArray("bsp_max_candidates")->Int(1);
+    SetBSPParams(cfg->FindArray("bsp_pos_tol")->Float(1), cfg->FindArray("bsp_dir_tol")->Float(1), _tmp2, cfg->FindArray("bsp_max_depth")->Int(1), _tmp4);
     DataRegisterFunc("set_bsp_params", SetBSPParams);
 }
 

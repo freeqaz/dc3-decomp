@@ -795,7 +795,7 @@ void HamCharacter::SetFaceOverrideClip(Symbol clipName, bool notify) {
         return;
     if (!notify)
         return;
-    TheDebug.Notify(MakeString("HamCharacter::SetFaceOverrideClip couldnt find lip sync driver for %s", (char*)Name()));
+    TheDebug.Notify(MakeString("HamCharacter::SetFaceOverrideClip couldn't find  lip sync driver for %s", (char*)Name()));
 }
 
 void HamCharacter::BlendInFaceOverrideClip(Symbol clipName, float blendIn, float blendOut) {

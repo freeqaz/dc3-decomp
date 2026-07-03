@@ -56,7 +56,7 @@ void CamShotVOData(
     bool hasIntros = DataGetMacro(INTRO_CAM_CATS)->Contains(s);
     bool hasOutros = DataGetMacro(OUTRO_CAM_CATS)->Contains(s);
     if (hasIntros || hasOutros) {
-        String str(s);
+        String str(s.Str());
         std::vector<String> subStrings;
         str.split("_", subStrings);
         if (hasIntros) {

@@ -434,7 +434,8 @@ void Debug::Modal(ModalType &type, const char *msg, void *addr) {
         mModalCallback(type, modalMsg, true);
     } else {
         const char *typeNames[] = { "WARN", "NOTIFY", "FAIL" };
-        MILO_LOG("%s: %s\n", typeNames[type], modalMsg);
+        const char *typeName = typeNames[type];
+        MILO_LOG("%s: %s\n", typeName, modalMsg);
     }
     if (type == kModalFail) {
         if (mModalCallback) {
@@ -460,7 +461,7 @@ void Debug::DoCrucible(ModalType type, const char *msg, void *addr) {
     }
     DataPoint mainPoint;
     DataPoint detailPoint;
-    mainPoint.AddPair("msg", DataNode(msg));
+    mainPoint.AddPair("message", DataNode(msg));
     const char *typeStr;
     if (type == kModalFail) {
         typeStr = "crash";
@@ -469,7 +470,7 @@ void Debug::DoCrucible(ModalType type, const char *msg, void *addr) {
     } else {
         typeStr = "warn";
     }
-    mainPoint.AddPair("type", DataNode(typeStr));
+    mainPoint.AddPair("severity", DataNode(typeStr));
     mainPoint.AddPair("project", DataNode(mCrucibleProject.c_str()));
     mainPoint.AddPair("platform", DataNode(PlatformSymbol(TheLoadMgr.GetPlatform())));
     mainPoint.AddPair("source", DataNode(mHostName));
@@ -482,7 +483,7 @@ void Debug::DoCrucible(ModalType type, const char *msg, void *addr) {
         } else {
             config = "<unknown>";
         }
-        detailPoint.AddPair("config", DataNode(config));
+        detailPoint.AddPair("config_name", DataNode(config));
         mainPoint.AddPair("version", DataNode(version));
     }
     detailPoint.AddPair("uptime", DataNode(SystemMs()));
@@ -515,7 +516,7 @@ void Debug::DoCrucible(ModalType type, const char *msg, void *addr) {
     }
     detailPoint.AddPair("args", DataNode(argsStr.c_str()));
     detailPoint.AddPair("opsys", DataNode(mKernelVersion));
-    mainPoint.AddPair("user", DataNode(""));
+    mainPoint.AddPair("extra", DataNode(""));
     if (type == kModalFail) {
         StackString<512> dataCallstack;
         DataAppendStackTrace(dataCallstack);
@@ -525,7 +526,7 @@ void Debug::DoCrucible(ModalType type, const char *msg, void *addr) {
         stackTrace += "\r\n";
         stackTrace += callstack.c_str();
         stackTrace += dataCallstack.c_str();
-        detailPoint.AddPair("stacktrace", DataNode(stackTrace.c_str()));
+        detailPoint.AddPair("stack", DataNode(stackTrace.c_str()));
     }
     StackString<256> cheatsMsg;
     AppendCheatsLog(cheatsMsg);

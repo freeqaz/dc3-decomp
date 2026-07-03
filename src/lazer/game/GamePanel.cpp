@@ -903,15 +903,15 @@ DataNode GamePanel::OnMsg(const EndGameMsg &msg) {
         mEndGameResult = msg.Result();
         switch (mEndGameResult) {
         case 1: {
-            Export(Message("game_won"), true);
+            Export(Message("game_over"), true);
             break;
         }
         case 2: {
-            Export(Message("game_won_finale"), true);
+            Export(Message("game_won"), true);
             break;
         }
         case 3: {
-            Export(Message("game_over"), true);
+            Export(Message("game_won_finale"), true);
             break;
         }
         default:

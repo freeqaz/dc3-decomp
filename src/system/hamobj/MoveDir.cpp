@@ -803,7 +803,7 @@ void MoveDir::Draw(const BaseSkeleton &baseSkeleton, SkeletonViz &skeletonViz) {
                 unk414->Displacement(
                     nullptr, kCoordCamera, (SkeletonJoint)i, actual_ms, vdisp, disp_ms
                 );
-                MILO_ASSERT(actual_ms == disp_ms, 0x50F);
+                MILO_ASSERT(disp_ms == actual_ms, 0x50F);
                 Vector3 camJointPos = unk414->CamJointPos((SkeletonJoint)i);
                 Vector3 vdiff;
                 Subtract(camJointPos, vdisp, vdiff);

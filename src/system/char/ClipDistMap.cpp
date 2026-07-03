@@ -361,7 +361,7 @@ void ClipDistMap::FindDists(float maxFacing, DataArray *arr) {
     rsrcA->StuffBones(meshes, mClipA->GetContext());
     std::vector<RndTransformable *> transes;
     for (ObjDirItr<RndTransformable> it(rsrcA, true); it != nullptr; ++it) {
-        if (strnicmp(it->Name(), "bone", 4) == 0) {
+        if (strnicmp(it->Name(), "bone_", 5) == 0) {
             transes.push_back(it);
         }
     }

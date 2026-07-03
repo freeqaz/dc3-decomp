@@ -4,6 +4,7 @@
 #include "os/Debug.h"
 #include "xdk/xaudio2/xaudio2.h"
 
+#line 7 "dsp\\DelayEffect.cpp"
 DelayEffect::DelayEffect(IXAudioBatchAllocator *ix)
     : mDelaySamples(24000), mWritePos(0), mDecay(0.3f), mWetAmount(0.5f) {
     DspAllocate(mBuffer, 0x2ee00, ix);

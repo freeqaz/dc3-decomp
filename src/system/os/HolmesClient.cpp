@@ -321,7 +321,7 @@ DataNode DumpHolmesLog(DataArray *) {
             *log << Holmes::ProtocolDebugString(i) << ", ";
             *log << count << ", ";
             *log << wait << ", ";
-            *log << work << ", ";
+            *log << work << "\n";
         }
         fs.Flush();
     }

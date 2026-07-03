@@ -1752,7 +1752,7 @@ void RndMesh::LoadVertices(BinStreamRev &d) {
             }
         } else {
             loadedCompressedSize *= numVerts;
-            MILO_ASSERT(loadedCompressedSize > 0, 0x2E7);
+            MILO_ASSERT(loadedCompressedSize> 0, 0x2E7);
             d.stream.Seek(loadedCompressedSize, BinStream::kSeekCur);
         }
     } else {

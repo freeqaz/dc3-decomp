@@ -537,9 +537,9 @@ DataNode HamWardrobe::OnSetVenue(DataArray *a) {
         DataArray *venuesArr = SystemConfig()->FindArray("venues", false);
         if (venuesArr) {
             for (int i = 1; i < venuesArr->Size(); i++) {
-                DataArray *venueEntry = venuesArr->Node(i).Array(venuesArr);
-                MILO_ASSERT(venueEntry, 0x27d);
-                Symbol entryName = venueEntry->Sym(0);
+                DataArray *venueEntryArray = venuesArr->Node(i).Array(venuesArr);
+                MILO_ASSERT(venueEntryArray, 0x27d);
+                Symbol entryName = venueEntryArray->Sym(0);
                 if (worldPath.contains(entryName.Str())) {
                     venue = entryName;
                     break;
@@ -549,7 +549,7 @@ DataNode HamWardrobe::OnSetVenue(DataArray *a) {
     }
 
     LoadCharacters(
-        Symbol("mo01"), Symbol("emilia01"), Symbol("crew01"), Symbol("crew02"),
+        Symbol("mo01"), Symbol("emilia01"), Symbol("crew02"), Symbol("crew01"),
         kBackupDancersOutfit, unk34, venue, false
     );
     return 0;

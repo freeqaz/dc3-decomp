@@ -228,12 +228,12 @@ SuperFormatString::SuperFormatString(
                             tempFmtPos += snResult;
                             continue;
                         }
-                        MILO_WARN(
-                            "parameter for placeholder '%s' was the wrong type\n", phInfo
+                        MILO_NOTIFY(
+                            "parameter for placeholder '%s' was the wrong type", phInfo
                         );
                     } else {
-                        MILO_WARN(
-                            "couldn't find parameter for placeholder '%s'\n", phInfo
+                        MILO_NOTIFY(
+                            "couldn't find parameter for placeholder '%s'", phInfo
                         );
                     }
                     tempFmtPos += Hx_snprintf(
@@ -250,7 +250,7 @@ SuperFormatString::SuperFormatString(
 
         if (state != 0) {
             *phInfoPos = '\0';
-            MILO_WARN("bad formatting for placeholder '%s'\n", phInfo);
+            MILO_NOTIFY("bad formatting for placeholder '%s'", phInfo);
             tempFmtPos +=
                 Hx_snprintf(tempFmtPos, tempFmtEnd - tempFmtPos, "{badfmt:%s", phInfo);
         }

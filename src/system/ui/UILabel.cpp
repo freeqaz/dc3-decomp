@@ -547,7 +547,7 @@ void UILabel::SetInt(int i, bool b) {
 }
 
 void UILabel::DrawShowing() {
-    if (Style(0).mFontColor.alpha > 0) {
+    if (((const UILabel *)this)->Style(0).mFontColor.alpha > 0) {
         if (mDirty && !sDeferUpdate) {
             LabelUpdate(false);
         }

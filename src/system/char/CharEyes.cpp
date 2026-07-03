@@ -1051,7 +1051,7 @@ void CharEyes::LidTrackAndClampingUpdate(EyeDesc &desc, float blinkWeight) {
             <= 0.0f;
 
         if (!sDisableEyeClamping) {
-            DataNode &clampCheat = DataVariable("disable_clamping");
+            DataNode &clampCheat = DataVariable("eyes.disable_clamping");
             if (!clampCheat.Int(0) && !lidsOK) {
                 float midX =
                     (upperBlinkPos.x - lowerBlinkPos.x) * 0.5f + lowerBlinkPos.x;
@@ -1099,7 +1099,7 @@ void CharEyes::LidTrackAndClampingUpdate(EyeDesc &desc, float blinkWeight) {
             }
         }
 
-        DataNode &drawCheat = DataVariable("debug_clamping");
+        DataNode &drawCheat = DataVariable("eyes.debug_clamping");
         if (drawCheat.Int(0)) {
             RndGraph *graph = RndGraph::GetOneFrame();
 
@@ -1164,7 +1164,7 @@ void CharEyes::LidTrackAndClampingUpdate(EyeDesc &desc, float blinkWeight) {
         }
     }
 
-    if (!DataVariable("disable_llidnorm").Int(0) && !mLowerLidTrackRotate && 0.0f < dist) {
+    if (!DataVariable("eyes.disable_llidnorm").Int(0) && !mLowerLidTrackRotate && 0.0f < dist) {
         Vector3 srcPos = source->WorldXfm().v;
         Vector3 lidPos = lowerLid->WorldXfm().v;
         Vector3 dir(
