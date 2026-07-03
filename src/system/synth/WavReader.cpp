@@ -17,7 +17,7 @@ WavReader::WavReader(File *file, StandardStream *stream) {
     for (int i = 0; i < mInWaveFile->NumMarkers(); i++) {
         WaveFileMarker &wfm = mInWaveFile->Markers()[i];
         int frame = wfm.mFrame;
-        float posMS = (float)frame * 1000.0f / (float)mInWaveFile->mSamplesPerSec;
+        float posMS = (float)frame * 1000.0f / (float)(int)mInWaveFile->mSamplesPerSec;
         Marker marker(wfm.mName);
         marker.position = frame;
         marker.posMS = posMS;

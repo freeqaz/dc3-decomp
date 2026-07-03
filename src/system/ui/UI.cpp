@@ -1147,9 +1147,9 @@ DataNode Automator::OnMsg(ButtonDownMsg const &msg) {
         static Symbol button_down("button_down");
         DataArrayPtr ptr(
             button_down,
-            DataGetMacroByInt(msg.GetPadNum(), "kPad_"),
+            DataGetMacroByInt(msg.GetButton(), "kPad_"),
             DataGetMacroByInt(msg.GetAction(), "kAction_"),
-            msg.GetButton()
+            msg.GetPadNum()
         );
         AddRecord(screenName, ptr);
     }

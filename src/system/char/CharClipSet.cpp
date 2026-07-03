@@ -308,10 +308,7 @@ void CharClipSet::DrawShowing() {
 }
 
 void CharClipSet::ListDrawChildren(std::list<RndDrawable *> &draws) {
-    if (mPreviewChar) {
-        RndDir *ptr = mPreviewChar;
-        draws.insert(draws.end(), ptr);
-    }
+    draws.insert(draws.end(), this);
 }
 
 void CharClipSet::ResetEditorState() {

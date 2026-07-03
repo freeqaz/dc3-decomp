@@ -585,8 +585,9 @@ void MoveMgr::SaveRoutineVariants(DataArray *a) const {
     FOREACH (it, mRoutineMeasures[0]) {
         if (it->first) {
             Symbol first_name = it->first->Name();
-            a->Node(idx) =
-                DataArrayPtr(first_name, it->second ? it->second->Name() : first_name);
+            const Symbol &second_name =
+                it->second ? it->second->Name() : first_name;
+            a->Node(idx) = DataArrayPtr(first_name, second_name);
         } else {
             a->Node(idx) = DataArrayPtr(0, 0);
         }

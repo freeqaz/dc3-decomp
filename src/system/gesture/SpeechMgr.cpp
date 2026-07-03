@@ -585,9 +585,10 @@ void SpeechMgr::AddDynamicRuleWord(
         }
     }
     if (createSuccess) {
+        wchar_t buffer2[1024];
         wchar_t buffer[1024];
         size_t ret;
-        mbstowcs_s(&ret, buffer, 1024, c3, strlen(c3));
+        mbstowcs_s(&ret, buffer2, 1024, c3, strlen(c3));
         UTF8toWChar_t(buffer, c2);
         NUI_SPEECH_SEMANTIC s;
         HRESULT res = NuiSpeechAddWordTransition(

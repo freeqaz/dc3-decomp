@@ -454,12 +454,10 @@ CharClip *HamDriver::LayerClip::FirstClip() { return mClip; }
 bool HamDriver::LayerClip::Replace(ObjRef *ref, Hmx::Object *obj) {
     if (&mClip == ref) {
         if (!mClip.SetObj(obj)) {
-            CharClip *ptr = mClip.Ptr();
-            if (ptr) {
-                delete ptr;
-            }
+            delete this;
+            return true;
         }
-        return true;
+        return false;
     }
     return false;
 }

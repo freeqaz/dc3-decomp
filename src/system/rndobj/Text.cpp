@@ -1600,6 +1600,7 @@ void RndText::UpdateScrollOffsets() {
             }
         } else if ((fVar2 > 0.0f) && (!(fVar13 < 0.0f))) {
             mScrollSpeed = -fVar2;
+            mScrollPos = 0.0f;
             bVar10 = true;
         }
         break;
@@ -1686,8 +1687,8 @@ static const wchar_t kBreakChars[] = L" \t\n";
 void RndText::FitTextJust() {
     BuildFontMaps(true);
 
-    HX_VECTOR(Line) lines;
     HX_VECTOR(unsigned short) wideChars;
+    HX_VECTOR(Line) lines;
     int numChars = ConvertTextToWide(mText.c_str(), wideChars);
     float *charWidths = (float *)_alloca(sizeof(float) * (numChars + 2));
     OnComputeCharWidths(&wideChars[0], charWidths, false);
@@ -1931,23 +1932,25 @@ RndText::FontMapBase *RndText::AcquireFontMap(RndFontBase *font) {
         fontMapClassName = FontMap::StaticClassName();
     }
 
+    FontMapBase *result = nullptr;
+
     for (auto it = sFontMapCache.begin(); it != sFontMapCache.end(); ++it) {
-        if ((*it)->Font() == font) {
-            FontMapBase *cached = *it;
+        if ((*it)->ClassName() == fontMapClassName) {
+            result = *it;
             sFontMapCache.erase(it);
-            return cached;
+            break;
         }
     }
 
-    FontMapBase *result;
-
-    if (fontMapClassName == FontMap::StaticClassName()) {
-        result = new FontMap();
-    } else if (fontMapClassName == FontMap3d::StaticClassName()) {
-        result = new FontMap3d();
-    } else {
-        TheDebug.Fail(MakeString("Unknown FontMap type: %s", fontMapClassName), 0);
-        result = new FontMap();
+    if (!result) {
+        if (fontMapClassName == FontMap::StaticClassName()) {
+            result = new FontMap();
+        } else if (fontMapClassName == FontMap3d::StaticClassName()) {
+            result = new FontMap3d();
+        } else {
+            TheDebug.Fail(MakeString("Unknown FontMap type: %s", fontMapClassName), 0);
+            result = new FontMap();
+        }
     }
 
     if (result) {
