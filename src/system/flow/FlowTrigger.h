@@ -58,4 +58,7 @@ inline BinStream &operator<<(BinStream &bs, const FlowTrigger::PropTriggerDefn &
     return bs;
 }
 
-BinStream &operator>>(BinStream &, FlowTrigger::PropTriggerDefn &);
+inline BinStream &operator>>(BinStream &bs, FlowTrigger::PropTriggerDefn &defn) {
+    bs >> defn.mProvider >> defn.mProperty;
+    return bs;
+}

@@ -220,7 +220,7 @@ BEGIN_SAVES(RndFont)
         bs << info.mPage;
         bs << info.mU;
         bs << info.mV;
-        bs << info.mCharWidth;
+        bs << info.charWidth;
         bs << info.mAdvance;
     }
 END_SAVES
@@ -419,14 +419,14 @@ BEGIN_LOADS(RndFont)
                 info.mPage = 0;
                 d.stream >> info.mU;
                 d.stream >> info.mV;
-                d.stream >> info.mCharWidth;
-                if (info.mCharWidth < 0) {
-                    info.mCharWidth = 0;
+                d.stream >> info.charWidth;
+                if (info.charWidth < 0) {
+                    info.charWidth = 0;
                 }
                 if (d.rev > 0xe) {
                     d.stream >> info.mAdvance;
                 } else {
-                    info.mAdvance = info.mCharWidth;
+                    info.mAdvance = info.charWidth;
                 }
                 if (info.mAdvance < 0) {
                     info.mAdvance = 0;
@@ -446,7 +446,7 @@ BEGIN_LOADS(RndFont)
                 }
                 d.stream >> info.mU;
                 d.stream >> info.mV;
-                d.stream >> info.mCharWidth;
+                d.stream >> info.charWidth;
                 d.stream >> info.mAdvance;
             }
         }
@@ -516,7 +516,7 @@ void RndFont::UpdateChars() {
                 SetCharInfo(&mCharInfoMap[curChar], *bmap, pos, pageIdx);
                 pos.x += mCellSize.x;
                 if (curChar == 0x20) {
-                    mCharInfoMap[curChar].mCharWidth = 0;
+                    mCharInfoMap[curChar].charWidth = 0;
                 } else if (curChar == 9) {
                     MILO_ASSERT(HasChar(L' ' ), 0x284);
                     mCharInfoMap[curChar] = mCharInfoMap[0x20];
@@ -538,7 +538,7 @@ void RndFont::BleedTest() {
             bool haswrap = ((RndMat *)mMats[curInfo.mPage])->GetTexWrap() == kTexWrapClamp;
             int row_y = Round(curInfo.mV * (float)bmap->Height());
             int col_left = Round(curInfo.mU * (float)bmap->Width());
-            int col_right = Round(curInfo.mCharWidth * mCellSize.x) + col_left;
+            int col_right = Round(curInfo.charWidth * mCellSize.x) + col_left;
             int iptr;
             if (row_y != 0 || !haswrap) {
                 unsigned char row = bmap->RowNonTransparent(col_left, col_right, row_y, &iptr);
@@ -596,7 +596,7 @@ void RndFont::BleedTest() {
 float RndFont::CharWidth(unsigned short c) const {
     MILO_ASSERT(HasChar(c), 0x143);
     CharInfo &info = mTextureOwner->mCharInfoMap[c];
-    float w = info.mCharWidth;
+    float w = info.charWidth;
     MILO_ASSERT(w >= 0, 0x146);
     return w;
 }
@@ -680,7 +680,7 @@ void RndFont::SetCharInfo(CharInfo *info, RndBitmap &bmap, const Vector2 &pos, i
     if (!(!(!(!(mMonospace))))) {
         int width = bmap.Width();
         info->mAdvance = 1.0f;
-        info->mCharWidth = 1.0f;
+        info->charWidth = 1.0f;
         info->mU = pos.x / (float)width;
     } else {
         int left = (int)pos.x;
@@ -721,15 +721,15 @@ void RndFont::SetCharInfo(CharInfo *info, RndBitmap &bmap, const Vector2 &pos, i
             info->mU = leftColF / (float)width;
             float widthFrac = charW / mCellSize.x;
             info->mAdvance = widthFrac;
-            info->mCharWidth = widthFrac;
+            info->charWidth = widthFrac;
         } else {
             info->mU = pos.x / (float)width;
             info->mAdvance = 0.25f;
-            info->mCharWidth = 0.25f;
+            info->charWidth = 0.25f;
         }
     }
     info->mV = pos.y / (float)bmap.Height();
-    MILO_ASSERT(info->mCharWidth >= 0, 0x422);
+    MILO_ASSERT(info->charWidth >= 0, 0x422);
 }
 
 void RndFont::SetBitmapSize(const Vector2 &cs) {
@@ -771,10 +771,10 @@ bool RndFont::CharWidthAdvanceCoords(
     if (it != owner->mCharInfoMap.end()) {
         const CharInfo &info = it->second;
         if (info.mU != 0 || info.mV != 0 || info.mAdvance != 0) {
-            charW = info.mCharWidth;
+            charW = info.charWidth;
             advW = owner->mMonospace ? 1.0f : info.mAdvance;
             uvMin.x = info.mU;
-            uvMax.x = owner->mMaterialOffsets[info.mPage].x * info.mCharWidth + info.mU;
+            uvMax.x = owner->mMaterialOffsets[info.mPage].x * info.charWidth + info.mU;
             uvMin.y = info.mV;
             uvMax.y = owner->mMaterialOffsets[info.mPage].y + info.mV;
             return true;

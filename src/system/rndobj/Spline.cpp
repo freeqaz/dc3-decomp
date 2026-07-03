@@ -217,12 +217,12 @@ void RndSpline::SyncPristineCtrlPoints() {
     unk145 = true;
 }
 
-void RndSpline::SyncDeformedDummyCtrlPoints(int startIdx, int endIdx) const {
-    MILO_ASSERT_RANGE(startIdx, 0, (int)mDeformedCtrlPoints.size(), 0x2C5);
-    MILO_ASSERT_RANGE(endIdx, 0, (int)mDeformedCtrlPoints.size(), 0x2C6);
-    MILO_ASSERT(startIdx <= endIdx, 0x2C7);
+void RndSpline::SyncDeformedDummyCtrlPoints(int iStartIndex, int iEndIndex) const {
+    MILO_ASSERT_RANGE(iStartIndex, 0, (int)mDeformedCtrlPoints.size(), 0x2C5);
+    MILO_ASSERT_RANGE(iEndIndex, 0, (int)mDeformedCtrlPoints.size(), 0x2C6);
+    MILO_ASSERT(iStartIndex <= iEndIndex, 0x2C7);
     if ((unsigned int)mDeformedCtrlPoints.size() >= 2) {
-        if (unk144 && startIdx == 0) {
+        if (unk144 && iStartIndex == 0) {
             float *p0 = (float *)&mDeformedCtrlPoints[0];
             unk144 = false;
             float p0y = p0[1];
@@ -236,7 +236,7 @@ void RndSpline::SyncDeformedDummyCtrlPoints(int startIdx, int endIdx) const {
             mDeformedCtrlPoints[0].mDirtyConstants = true;
         }
         int numPts = (int)mDeformedCtrlPoints.size();
-        if (unk145 && endIdx >= numPts - 2) {
+        if (unk145 && iEndIndex >= numPts - 2) {
             int lastOff = (numPts - 1) * 0x58;
             unk145 = false;
             float *pLast = (float *)(lastOff + (intptr_t)&mDeformedCtrlPoints[0]);

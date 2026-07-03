@@ -811,7 +811,7 @@ void HamCharacter::BlendInFaceOverrideClip(Symbol clipName, float blendIn, float
                 clipDir = driver->mClips;
             }
             for (ObjDirItr<CharClip> it(clipDir, false); it != nullptr; ++it) {
-                if (Symbol(clipName) == Symbol(it->Name())) {
+                if (clipName == it->Name()) {
                     found = true;
                     driver->BlendInOverrideClip(it, blendIn, blendOut);
                 }
@@ -828,7 +828,7 @@ void HamCharacter::BlendInFaceOverrideClip(Symbol clipName, float blendIn, float
     }
     if (found)
         return;
-    TheDebug.Notify(MakeString("HamCharacter::SetFaceOverrideClip couldnt find lip sync driver for %s", (char*)Name()));
+    TheDebug.Notify(MakeString("HamCharacter::SetFaceOverrideClip couldn't find  lip sync driver for %s", (char*)Name()));
 }
 
 DataNode HamCharacter::OnSoundPlay(const DataArray *a) {

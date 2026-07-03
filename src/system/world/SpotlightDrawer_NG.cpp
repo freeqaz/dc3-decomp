@@ -265,11 +265,11 @@ void NgSpotlightDrawer::RenderBeams(const Hmx::Matrix4 &viewProj) {
 
                 int shapeVal = sl->mBeam.mShape;
                 if (shapeVal == 2) {
-                    RenderSheet(sl);
-                } else if (shapeVal < 3 || shapeVal > 4) {
-                    RenderCone(sl);
-                } else {
                     RenderSphere(sl);
+                } else if (shapeVal < 3 || shapeVal > 4) {
+                    RenderSheet(sl);
+                } else {
+                    RenderCone(sl);
                 }
 
                 TheShaderMgr.SetPConstant((PShaderConstant)0xc, sr.unk18);

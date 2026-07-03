@@ -1086,8 +1086,9 @@ int RndText::ConvertTextToWide(const char *str, HX_VECTOR(unsigned short) &wideC
     // Manual strlen to match target inline loop
     const char *s = str;
     while ('\0' != *s++) {}
-    wideChars.resize(((s - str) - 1) * 2 + 1, (0));
     MemPushTemp();
+    wideChars.resize(((s - str) - 1) * 2 + 1, (0));
+    wideChars[0] = 0;
     MemPopTemp();
 
     unsigned short *out = &wideChars[0];
@@ -1644,7 +1645,7 @@ static const unsigned short kTag_sup[] = {'s', 'u', 'p', 0};
 static const unsigned short kTag_gtr[] = {'g', 't', 'r', 0};
 static const unsigned short kTag_it[] = {'i', 't', 0};
 static const unsigned short kTag_color[] = {'c', 'o', 'l', 'o', 'r', 0};
-static const unsigned short kTag_hash[] = {'#', 0};
+static const unsigned short kTag_hash[] = {'&', '#', 0};
 static const unsigned short kTag_nobreak[] = {'n', 'o', 'b', 'r', 'e', 'a', 'k', 0};
 static const unsigned short kTag_alt[] = {'a', 'l', 't', 0};
 
@@ -1940,23 +1941,13 @@ RndText::FontMapBase *RndText::AcquireFontMap(RndFontBase *font) {
 
     FontMapBase *result;
 
-    auto _tmp9 = FontMap3d::StaticClassName();
     if (fontMapClassName == FontMap::StaticClassName()) {
-        result = (FontMapBase *)MemAlloc(sizeof(FontMap), __FILE__, 0xd7, "FontMapBase", 0);
-        if (result) {
-            new (result) FontMap();
-        }
-    } else if (fontMapClassName == _tmp9) {
-        result = (FontMapBase *)MemAlloc(sizeof(FontMap3d), __FILE__, 0xd7, "FontMapBase", 0);
-        if (result) {
-            new (result) FontMap3d();
-        }
+        result = new FontMap();
+    } else if (fontMapClassName == FontMap3d::StaticClassName()) {
+        result = new FontMap3d();
     } else {
         TheDebug.Fail(MakeString("Unknown FontMap type: %s", fontMapClassName), 0);
-        result = (FontMapBase *)MemAlloc(sizeof(FontMap), __FILE__, 0xd7, "FontMapBase", 0);
-        if (result) {
-            new (result) FontMap();
-        }
+        result = new FontMap();
     }
 
     if (result) {
@@ -2131,7 +2122,7 @@ RndText::ParseMarkup(const unsigned short *str, StyleState &state, unsigned shor
 #ifdef HX_NATIVE
     else if (WStrniCmp(cur, kTag_hash, 2) == 0) {
 #else
-    else if (WStrniCmp(cur, (const unsigned short *)L"#", 2) == 0) {
+    else if (WStrniCmp(cur, (const unsigned short *)L"&#", 2) == 0) {
 #endif
         cur += 2;
         int code = 0x3f;

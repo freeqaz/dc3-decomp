@@ -763,7 +763,10 @@ void DxRnd::InitBuffers() {
     PostDeviceReset();
     int temp27 = ((((mHeight + 0x1F) >> 5) * ((mWidth + 0x1F) >> 5)) << 0xC);
     for (int i = 0; i < 2; i++) {
-        memset(mFrontBuffers[i], 0, temp27);
+        D3DLOCKED_RECT rect;
+        D3DTexture_LockRect(mFrontBuffers[i], 0, &rect, nullptr, 0);
+        memset(rect.pBits, 0, temp27);
+        D3DTexture_UnlockRect(mFrontBuffers[i], 0);
     }
     mRegAlloc = (RegisterAlloc)0;
     D3DDevice_SetShaderGPRAllocation(mD3DDevice, 0, 0, 0);

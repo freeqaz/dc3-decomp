@@ -8,7 +8,19 @@ public:
     AsyncFileWin(const char *, int);
     virtual ~AsyncFileWin();
 
-    MEM_OVERLOAD(AsyncFile, 0x17);
+#ifdef HX_NATIVE
+    static void *operator new(size_t s) {
+#else
+    static void *operator new(unsigned int s) {
+#endif
+        return _MemAllocTemp(s, __FILE__, 0x17, "AsyncFile", 0);
+    }
+#ifdef HX_NATIVE
+    static void *operator new(size_t s, void *place) { return place; }
+#else
+    static void *operator new(unsigned int s, void *place) { return place; }
+#endif
+    static void operator delete(void *v) { MemFree(v, __FILE__, 0x17, "AsyncFile"); }
 
 protected:
     virtual bool Truncate(int);

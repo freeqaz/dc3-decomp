@@ -96,7 +96,7 @@ void BinkSetIO(int (*)(BINKIO *, const char *, unsigned int)) {}
 extern void BinkFree(void *);
 extern void BinkSetMemory(void *(*)(unsigned int), void (*)(void *));
 extern void BinkSetIO(int (*)(BINKIO *, const char *, unsigned int));
-extern unsigned int RADTimerRead();
+extern "C" unsigned int RADTimerRead();
 #endif
 
 // Forward declarations for all IO callbacks (referenced by BinkFileBGControl and BinkFileIdle below)

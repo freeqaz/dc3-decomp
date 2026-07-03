@@ -34,15 +34,14 @@ HiResScreen::BmpCache::BmpCache(unsigned int ui1, unsigned int ui2) {
     } while (byte_size > 0x6DDD00);
 
     mRowsPerCacheLine = rows_per;
-    auto& _ref0 = mByteSize;
-    _ref0 = byte_size;
-    MILO_ASSERT(ui2 % rows_per == 0, 0x3B);
-    mTotalNumCacheLines = ui2 / rows_per;
+    mByteSize = byte_size;
+    MILO_ASSERT(mTotalRows % mRowsPerCacheLine == 0, 0x3B);
+    mTotalNumCacheLines = mTotalRows / mRowsPerCacheLine;
     mFileNames = new String[mTotalNumCacheLines];
     for (uint i = 0; i < mTotalNumCacheLines; i++) {
         mFileNames[i] = MakeString("_hires_cache_%.2d.dat", i);
     }
-    mBuffer = (unsigned char *)MemAlloc(_ref0, __FILE__, 0x44, "HiResScreenCache");
+    mBuffer = (unsigned char *)MemAlloc(mByteSize, __FILE__, 0x44, "HiResScreenCache");
     mCurrLoadedIndex = ui2;
     DeleteCache();
 }

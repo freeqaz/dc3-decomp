@@ -46,7 +46,7 @@ public:
         int mPage; // 0x0
         float mU;
         float mV;
-        float mCharWidth; // 0xc
+        float charWidth; // 0xc
         float mAdvance;
     };
     virtual ~RndFont();

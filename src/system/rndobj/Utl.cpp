@@ -933,7 +933,7 @@ void UtilDrawCylinder(
     const Transform &tf, float radius, float height, const Hmx::Color &col, int
 ) {
     if (!sCylinderMesh) {
-        MILO_NOTIFY_ONCE("Cylinder mesh is not loaded");
+        MILO_NOTIFY_ONCE("Sphere mesh is not loaded");
     } else {
         Transform tf58;
         tf58 = tf;

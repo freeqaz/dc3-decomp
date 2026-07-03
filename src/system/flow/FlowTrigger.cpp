@@ -15,11 +15,6 @@ FlowTrigger::FlowTrigger()
       mAutoRegister(0) {}
 FlowTrigger::~FlowTrigger() {}
 
-BinStream &operator>>(BinStream &bs, FlowTrigger::PropTriggerDefn &defn) {
-    bs >> defn.mProvider >> defn.mProperty;
-    return bs;
-}
-
 BEGIN_HANDLERS(FlowTrigger)
     HANDLE_ACTION(activate, ActivateWithParams(nullptr, _msg))
     HANDLE_ACTION(deactivate, Deactivate(false))

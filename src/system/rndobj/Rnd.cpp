@@ -1044,7 +1044,7 @@ void Rnd::UpdateRate() {
         *mRateOverlay << "\n";
         mRateCount = 5;
         mRateTotal = 0.0f;
-        mRateGate = "";
+        mRateGate = "    ";
     }
 }
 

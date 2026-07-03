@@ -23,13 +23,13 @@ FlowSetProperty::FlowSetProperty()
       mPersistent(0), mRate(0), mBlendTime(0), mChangePerUnit(0), unk_0xCC(this, nullptr),
       mEase(0), mEasePower(2), unk_0xE8(0), mStopMode(1) {}
 
-PropertyTask::PropertyTask(Hmx::Object *target, DataNode &prop, DataNode &val, TaskUnits units, float dur, EaseType t, float power, bool flag, Hmx::Object *listener)
+PropertyTask::PropertyTask(Hmx::Object *target, DataNode &prop, DataNode &val, TaskUnits units, float dur, EaseType e, float power, bool flag, Hmx::Object *listener)
     : mTarget(this, nullptr), mProperty(prop), mValue(val), mStartValue(0),
       mDuration(dur), mEasePower(power), mIsColorInterp(flag),
-      mListener(this, nullptr), mEaseFunc(GetEaseFunction(t)) {
+      mListener(this, nullptr), mEaseFunc(GetEaseFunction(e)) {
     auto refsEnd = target->Refs().end();
     MILO_ASSERT(target, 0x4D);
-    MILO_ASSERT(t >= kEaseLinear && t <= kEaseQuarterHalfStairstep, 0x16B);
+    MILO_ASSERT(e >= kEaseLinear && e <= kEaseQuarterHalfStairstep, 0x16B);
 
     // Loop through target's refs to find existing PropertyTasks with same property
     for (ObjRef::iterator it = target->Refs().begin(); it != refsEnd; ++it) {

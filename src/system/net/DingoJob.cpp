@@ -72,7 +72,7 @@ void DingoJob::SendCallback(bool success, bool cancelled) {
                 pt.AddPair("mBaseUrl", _outline_c_str(&mBaseUrl));
                 pt.AddPair("mResponseStatusCode", (int)GetResponseStatusCode());
                 pt.AddPair("mResponseStr", _outline_c_str(&mResponseStr));
-                pt.AddPair("mOnlineId", TheServer.mOnlineId.ToString());
+                pt.AddPair("player", TheServer.mOnlineId.ToString());
                 pt.AddPair("severity", "warn");
                 pt.AddPair("sync", "sync");
                 TheDataPointMgr.RecordDebugDataPoint(pt);

@@ -410,17 +410,22 @@ NetLoaderRef *NetCacheMgr::AddLoaderRef(const char *name, RefType type, NetLoade
     newRef.mCacheLoader = NULL;
 
     if (!pNetLoaderRef) {
-        if ((unsigned int)type == 1) {
-            NetLoader *nl = NetLoader::Create(String(name));
-            String s(name);
-            NetLoaderRef tmp = { String(s), 0, nl, NULL };
-            newRef = tmp;
-        } else if ((unsigned int)type == 0) {
+        switch ((unsigned int)type) {
+        case 0: {
             NetCacheLoader *ncl = new NetCacheLoader(mCache, String(name));
             String s(name);
             NetLoaderRef tmp = { String(s), 0, NULL, ncl };
             newRef = tmp;
-        } else {
+            break;
+        }
+        case 1: {
+            NetLoader *nl = NetLoader::Create(String(name));
+            String s(name);
+            NetLoaderRef tmp = { String(s), 0, nl, NULL };
+            newRef = tmp;
+            break;
+        }
+        default:
             MILO_FAIL("Unknown ref type %d.\n", type);
         }
 

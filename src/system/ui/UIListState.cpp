@@ -411,7 +411,7 @@ void UIListState::Scroll(int direction, bool skipActive) {
         }
         accept_circ:
         mTargetShowing = curFirst;
-        MILO_ASSERT(curSel == mSelectedDisplay, 0x1d6);
+        MILO_ASSERT(state.mSelectedDisplay == mSelectedDisplay, 0x1d6);
     } else {
         bool hitBoundary = false;
         int curFirst = state.mFirstShowing;

@@ -66,7 +66,7 @@ void HamMaster::Poll(float f1) {
                 f10 = mSongPos.GetTotalTick();
             }
             if (mMidiParserMgr) {
-                mMidiParserMgr->Reset();
+                mMidiParserMgr->Reset((int)f10);
             }
             mStreamMsAtJump = mStreamMs;
             static Message msg("stream_jump");

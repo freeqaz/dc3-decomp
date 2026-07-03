@@ -438,13 +438,13 @@ void MemTracker::Report(int threshold, TextStream &ts) {
 int MemTracker::SpitAllocInfo(TextStream *ts) {
     int ret = 1;
     if (gMemTracker != nullptr && gMemTracker->mHashTable != nullptr) {
-        FormatString begin_fmt("----------------------------------------BEGIN MemTracker");
+        FormatString begin_fmt("----------------BEGIN MemTracker::SpitAllocInfo\n");
         *ts << begin_fmt.Str() << "\n";
         for (auto it = gMemTracker->mHashTable->Begin(); it != nullptr; it = gMemTracker->mHashTable->Next(it)) {
             AllocInfo *info = *it;
             info->PrintForReport(*ts);
         }
-        FormatString end_fmt("----------------------------------------END MemTracker:::");
+        FormatString end_fmt("----------------END MemTracker::SpitAllocInfo\n");
         *ts << end_fmt.Str() << "\n";
         ret = 0;
     }
@@ -499,18 +499,18 @@ void MemTracker::DiffDump(TextStream &ts) {
 
         for (; allocIt != allocEnd || freedIt != mFreedInfos.end();) {
             if (allocIt == allocEnd) {
-                ColatedPrint(ts, *freedIt, "free");
+                ColatedPrint(ts, *freedIt, "alloc");
                 freedIt++;
             } else if (freedIt == mFreedInfos.end()) {
-                ColatedPrint(ts, *allocIt, "alloc");
+                ColatedPrint(ts, *allocIt, "free");
                 allocIt++;
             } else {
                 int cmp = (*allocIt)->StackCompare(**freedIt);
                 if (cmp < 0) {
-                    ColatedPrint(ts, *allocIt, "alloc");
+                    ColatedPrint(ts, *allocIt, "free");
                     allocIt++;
                 } else if (cmp > 0) {
-                    ColatedPrint(ts, *freedIt, "free");
+                    ColatedPrint(ts, *freedIt, "alloc");
                     freedIt++;
                 } else {
                     allocIt++;

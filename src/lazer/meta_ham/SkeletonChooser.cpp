@@ -1211,7 +1211,7 @@ void SkeletonChooser::DrawDebug() {
                     switch (j) {
                     case 0: {
                         int activeIdx = TheGestureMgr->GetActiveSkeletonIndex();
-                        const char *c = (activeIdx == skelIdx) ? "active" : "";
+                        const char *c = (activeIdx == skelIdx) ? "(active)" : "";
                         sprintf_s<50>(buf, "Skeleton %d %s", skelIdx, c);
                         break;
                     }

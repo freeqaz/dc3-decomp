@@ -204,7 +204,7 @@ MoveDir::MoveDir()
       mAlternateRecordClip(this), mSkeletonRecordClip(this), unk2e4(0), mReportMove(this), mFiltersEnabled(0),
       mGamePanel(0), unk30c(0), mFilterQueue(0), mAsyncDetector(0), mUpdateLoader(0),
       mFinishingMoveMeasure(10000), mMoveOverlay(RndOverlay::Find("ham_move")),
-      mDancerSeq(this), unk414(0), mSkeletonViz(Hmx::Object::New<SkeletonViz>()),
+      mDancerSeq(this), unk414(0), mDancerViz(Hmx::Object::New<SkeletonViz>()),
       mShowErrorFrames(0), mDebugLatencyOffset(0), mDebugLoop(0), mLastPollMs(0),
       mDebugCollision(0), unkf84(-1) {
     for (int i = 0; i < 2; i++) {
@@ -235,7 +235,7 @@ MoveDir::~MoveDir() {
             mMoveOverlay->SetShowing(false);
         }
     }
-    delete mSkeletonViz;
+    delete mDancerViz;
 #ifdef HX_NATIVE
     SkeletonUpdate::RemoveNativeCallback(this);
 #else
@@ -261,7 +261,7 @@ BEGIN_HANDLERS(MoveDir)
     HANDLE_ACTION(reset_detection, ResetDetection())
     HANDLE(stream_jump, OnStreamJump)
     HANDLE_EXPR(import_clip, ImportClip(_msg->Int(2)))
-    HANDLE_ACTION(debug_rotate, mSkeletonViz->Rotate(_msg->Float(2)))
+    HANDLE_ACTION(debug_rotate, mDancerViz->Rotate(_msg->Float(2)))
     // these don't appear to be inlined methods
     {
         static Symbol _s("disable_all_detectors");
@@ -329,8 +329,8 @@ BEGIN_PROPSYNCS(MoveDir)
     SYNC_PROP(debug_latency_offset, mDebugLatencyOffset)
     SYNC_PROP_SET(
         debug_skeleton_rotation,
-        mSkeletonViz->PhysicalCamRotation(),
-        mSkeletonViz->SetPhysicalCamRotation(_val.Float())
+        mDancerViz->PhysicalCamRotation(),
+        mDancerViz->SetPhysicalCamRotation(_val.Float())
     )
     SYNC_PROP(debug_collision, mDebugCollision)
     SYNC_PROP(debug_node_types, mErrorNodeInfo)
@@ -607,7 +607,7 @@ void MoveDir::PostLoad(BinStream &bs) {
 
 void MoveDir::Poll() {
     SkeletonDir::Poll();
-    mSkeletonViz->Poll();
+    mDancerViz->Poll();
     if (TheHamDirector) {
         int curMeasure = TheTaskMgr.CurrentMeasure();
         for (int i = 0; i < 2; i++) {
@@ -725,7 +725,7 @@ void MoveDir::Enter() {
         mFilterQueue = new FilterQueue();
         RELEASE(mAsyncDetector);
         mAsyncDetector = new MoveAsyncDetector(this);
-        mSkeletonViz->Init();
+        mDancerViz->Init();
         if (TheMaster) {
             static Symbol stream_jump("stream_jump");
             static Symbol beat("beat");
@@ -808,7 +808,7 @@ void MoveDir::Draw(const BaseSkeleton &baseSkeleton, SkeletonViz &skeletonViz) {
                 Vector3 vdiff;
                 Subtract(camJointPos, vdisp, vdiff);
                 Hmx::Color color(0.3f, 0.6f, 0.3f);
-                mSkeletonViz->DrawLine3D(vdiff, camJointPos, 0.01f, color, nullptr);
+                mDancerViz->DrawLine3D(vdiff, camJointPos, 0.01f, color, nullptr);
             }
         }
     } else if (mFiltersEnabled && mShowErrorFrames) {
@@ -1726,7 +1726,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
     int numNodes = fv->NumNodes();
 
     MILO_ASSERT(TheGestureMgr, 0x795);
-    MILO_ASSERT(mSkeletonViz, 0x796);
+    MILO_ASSERT(mDancerViz, 0x796);
     MILO_ASSERT(TheHamDirector, 0x797);
 
     MoveFrame *closest = ClosestMoveFrame();
@@ -1766,7 +1766,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
             + gBeatLineData.minValue;
         float threshPos = (0.99f - xPos) * thresh + xPos;
         UtilDrawLine(Vector2(threshPos, y), Vector2(threshPos, xRight), sGray);
-        const char *colon = strstr(ratingName.Str(), ":");
+        const char *colon = strstr(ratingName.Str(), "_");
         if (colon) {
             TheRnd.DrawStringScreen(
                 colon + 1, Vector2(threshPos, y), sLightGray, true
@@ -2119,15 +2119,15 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
         TheRnd.DrawStringScreen(
             MakeString("%.2f", closest->GetBeat()), textPos, sLightGray, true
         );
-        mSkeletonViz->SetUsePhysicalCam(true);
-        mSkeletonViz->SetPhysicalCamScreenRect(vizRect);
+        mDancerViz->SetUsePhysicalCam(true);
+        mDancerViz->SetPhysicalCamScreenRect(vizRect);
         if (vizSkeleton) {
             StubCameraInput camInput;
             camInput.PollTracking();
             std::vector<SkeletonCallback *> callbacks;
             callbacks.push_back(this);
             unk414 = (DancerSkeleton *)vizSkeleton;
-            mSkeletonViz->Visualize(camInput, *vizSkeleton, &callbacks, false);
+            mDancerViz->Visualize(camInput, *vizSkeleton, &callbacks, false);
             unk414 = nullptr;
         }
     } else {
@@ -2137,7 +2137,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
             MakeString("asyc: %d", asyncCount), textPos, sLightGray, true
         );
         if (asyncCount != 0) {
-            mSkeletonViz->SetUsePhysicalCam(true);
+            mDancerViz->SetUsePhysicalCam(true);
             // Grid visualization of multiple skeletons from unkf88
             int setSize = asyncCount;
             if (setSize > 0) {
@@ -2155,7 +2155,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
                         (float)col * cellH + vizRect.x,
                         (float)row * cellW + vizRect.y, cellH, cellW
                     );
-                    mSkeletonViz->SetPhysicalCamScreenRect(cellRect);
+                    mDancerViz->SetPhysicalCamScreenRect(cellRect);
                     StubCameraInput camInput;
                     camInput.PollTracking();
                     DetectFrame *df = *sit;
@@ -2165,7 +2165,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
                     std::vector<SkeletonCallback *> callbacks;
                     callbacks.push_back(this);
                     unk414 = (DancerSkeleton *)skel;
-                    mSkeletonViz->Visualize(
+                    mDancerViz->Visualize(
                         camInput, *skel, &callbacks, false
                     );
                     idx++;
@@ -2181,8 +2181,8 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
         Hmx::Rect debugRect = vizRect;
         debugRect.x = vizRect.x + vizRect.w + 0.01f;
         TheRnd.DrawRectScreen(debugRect, sLightGray, nullptr, nullptr, nullptr);
-        mSkeletonViz->SetUsePhysicalCam(true);
-        mSkeletonViz->SetPhysicalCamScreenRect(debugRect);
+        mDancerViz->SetUsePhysicalCam(true);
+        mDancerViz->SetPhysicalCamScreenRect(debugRect);
         CameraInput *camInput = handle.GetCameraInput();
 #ifdef HX_NATIVE
         // No SkeletonUpdate instance on native -> GetCameraInput() is null, and
@@ -2190,7 +2190,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
         // debug draw rather than bind a reference to null.
         if (camInput)
 #endif
-            mSkeletonViz->Visualize(
+            mDancerViz->Visualize(
                 *camInput, mDebugSkeleton, &callbacks, false
             );
 
@@ -2200,7 +2200,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
             MakeString("latency offset: %s", offsetStr),
             Vector2(debugRect.x, debugRect.y), sLightGray, true
         );
-        float rotation = mSkeletonViz->PhysicalCamRotation();
+        float rotation = mDancerViz->PhysicalCamRotation();
         TheRnd.DrawStringScreen(
             MakeString("rotation: %.2f", rotation),
             Vector2(debugRect.x, debugRect.y + 0.02f), sLightGray, true

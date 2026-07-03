@@ -132,10 +132,10 @@ void StorePanel::Poll() {
             if (loader == (NetCacheLoader *)mArtLoader) {
                 MILO_ASSERT(mPendingArtCallback, 0x167);
                 int size = loader->GetSize();
-                char *buffer = loader->GetBuffer();
-                MILO_ASSERT(buffer, 0x16d);
+                char *pBuffer = loader->GetBuffer();
+                MILO_ASSERT(pBuffer, 0x16d);
                 RndBitmap bmap;
-                BufStream stream(buffer, size, true);
+                BufStream stream(pBuffer, size, true);
                 bmap.Reset();
                 bmap.Load(stream);
                 bmap.SetMip(0);
@@ -179,9 +179,7 @@ void StorePanel::Poll() {
                         for (size_t i = 0; i < mCartOffers.size(); i++) {
                             songIds.push_back(mCartOffers[i].first->songID);
                         }
-                        void *mem = operator new(sizeof(MultipleItemsPostPurchaseEnumJob));
-                        MultipleItemsPostPurchaseEnumJob *job = 0;
-                        job = new (mem) MultipleItemsPostPurchaseEnumJob(
+                        MultipleItemsPostPurchaseEnumJob *job = new MultipleItemsPostPurchaseEnumJob(
                                 this,
                                 mCheckoutProfile,
                                 songIds,
@@ -203,9 +201,7 @@ void StorePanel::Poll() {
                         } else if (mPurchaser->IsSuccess()) {
                             // purchased
                         } else if (mCheckoutProfile != 0) {
-                            void *mem = operator new(sizeof(PostPurchaseEnumJob));
-                            PostPurchaseEnumJob *job = 0;
-                            job = new (mem) PostPurchaseEnumJob(
+                            PostPurchaseEnumJob *job = new PostPurchaseEnumJob(
                                     this,
                                     mCheckoutProfile,
                                     mCheckoutItem->songID,
