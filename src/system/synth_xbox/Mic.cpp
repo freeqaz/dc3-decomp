@@ -133,14 +133,14 @@ void ChatReceiver::ProcessChatData(void *data, unsigned int size, int *flag) {
 #pragma region MicXbox
 
 MicXbox::MicXbox(int, float volume)
-    : mRunning(false), unk10(0), mChangeNotify(false), mPlaybackVoice(0), unk301c(unk1c),
+    : mRunning(false), unk10(0), mChangeNotify(false), mPlaybackVoice(0), unk301c(mPlaybackBuffer),
       unk9054(1.0f), unk9058(0), unk905c(0), mFxSend(0), mVolume(volume), mMute(false),
       unk906c(0), mGain(1.0f), mOutputGain(1.0f), mSensitivity(1.0f), unk907c(0),
       mDroppedSamples(0), mDeviceName("generic_usb"), mClipping(false) {
     unk302c.Init(0xc00);
     unk3040.Init(0x6000);
     unk3020.reserve(0x1800);
-    memset(unk1c, 0, 0x3000);
+    memset(mPlaybackBuffer, 0, 0x3000);
 }
 
 MicXbox::~MicXbox() {
@@ -193,7 +193,7 @@ bool MicXbox::IsPlaying() { return mPlaybackVoice; }
 
 void MicXbox::Start() {
     if (!mRunning) {
-        unk301c = unk1c;
+        unk301c = mPlaybackBuffer;
         MicManagerXbox *x = MicManagerXbox::GetInstance();
         x->AddMic(this);
         mRunning = true;
@@ -232,7 +232,7 @@ void MicXbox::StartPlayback() {
     unk9054 = 1;
     mPlaybackVoice = new Voice(false, 1, false);
     mPlaybackVoice->SetSampleRate(48000);
-    mPlaybackVoice->SetData(unk1c, sizeof(unk1c), 0);
+    mPlaybackVoice->SetData(mPlaybackBuffer, sizeof(mPlaybackBuffer), 0);
     mPlaybackVoice->SetLoopRegion(0, -1);
     mPlaybackVoice->SetSend(dynamic_cast<FxSend360 *>(mFxSend));
     mPlaybackVoice->Start();
@@ -242,7 +242,7 @@ void MicXbox::StartPlayback() {
 void MicXbox::StopPlayback() {
     CritSecTracker t(&MicManagerXbox::GetInstance()->unk68);
     RELEASE(mPlaybackVoice);
-    memset(unk1c, 0, sizeof(unk1c));
+    memset(mPlaybackBuffer, 0, sizeof(mPlaybackBuffer));
 }
 
 short *MicXbox::GetRecentBuf(int &iref) {
@@ -283,7 +283,7 @@ void MicXbox::OnMicDisconnected() {
 
 void MicXbox::AddData(void *data, int bytes) {
     CritSecTracker t(&MicManagerXbox::GetInstance()->unk68);
-    MILO_ASSERT((bytes & 1) == 0, 0x344);
+    MILO_ASSERT((bytes&1) == 0, 0x344);
     if (mOutputGain != 1.0f) {
         int n = bytes / 2;
         if (n > 0) {
@@ -297,7 +297,7 @@ void MicXbox::AddData(void *data, int bytes) {
         }
     }
     if (mPlaybackVoice) {
-        short *bufEnd = unk1c + 6144;
+        short *bufEnd = mPlaybackBuffer + 6144;
         if ((char *)unk301c + bytes <= (char *)bufEnd) {
             XMemCpy(unk301c, data, bytes);
             unk301c = (short *)((char *)unk301c + bytes);
@@ -305,11 +305,11 @@ void MicXbox::AddData(void *data, int bytes) {
             int firstPart = (char *)bufEnd - (char *)unk301c;
             XMemCpy(unk301c, data, firstPart);
             int remaining = bytes - firstPart;
-            XMemCpy(unk1c, (char *)data + firstPart, remaining);
-            unk301c = (short *)((char *)unk1c + remaining);
+            XMemCpy(mPlaybackBuffer, (char *)data + firstPart, remaining);
+            unk301c = (short *)((char *)mPlaybackBuffer + remaining);
         }
         if (!mPlaybackVoice->IsPlaying() &&
-            (char *)unk301c - (char *)unk1c >= 0xf00) {
+            (char *)unk301c - (char *)mPlaybackBuffer >= 0xf00) {
             mPlaybackVoice->SetVolume(mVolume);
         }
     }
@@ -318,10 +318,10 @@ void MicXbox::AddData(void *data, int bytes) {
     mDroppedSamples = unk3040.Write(data, bytes);
 }
 
-void MicXbox::ReadChatBuffer(void *data, unsigned int bytes) {
-    MILO_ASSERT(bytes < 0x3000, 0x2d6);
+void MicXbox::ReadChatBuffer(void *data, unsigned int size) {
+    MILO_ASSERT(size < DIM(mPlaybackBuffer), 0x2d6);
     if (ExternalMicClientMgr::ConnectedForClient(this)) {
-        unsigned int samps = bytes / 2;
+        unsigned int samps = size / 2;
         if ((int)(unk3020.size()) >= samps * 3) {
             short *out = (short *)data;
             for (unsigned int i = 0; i < samps; i++) {
@@ -333,9 +333,9 @@ void MicXbox::ReadChatBuffer(void *data, unsigned int bytes) {
 }
 
 bool MicXbox::AddToBuffer(std::vector<short> &buf, void *data, int bytes, int *dropped) {
-    int samps = bytes / 2;
+    unsigned int samps = bytes / 2;
     bool overflowed = false;
-    MILO_ASSERT((unsigned int)samps <= buf.capacity(), 0x3ac);
+    MILO_ASSERT(samps <= buf.capacity(), 0x3ac);
     if (buf.size() + samps > buf.capacity()) {
         if (dropped) {
             *dropped += buf.size();

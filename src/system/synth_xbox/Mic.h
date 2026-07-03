@@ -86,7 +86,7 @@ public:
     int unk10;
     bool mChangeNotify; // 0x14
     Voice *mPlaybackVoice;
-    short unk1c[6144];
+    short mPlaybackBuffer[6144];
     short *unk301c;
     std::vector<short> unk3020;
     RingBuffer unk302c;

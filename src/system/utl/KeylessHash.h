@@ -275,7 +275,8 @@ void KeylessHash<T1, T2>::Clear() {
 template <>
 inline void KeylessHash<void *, AllocInfo *>::Remove(AllocInfo **entry) {
     unsigned int idx = (unsigned int)((int)(entry - mEntries) >> 2) >> 2;
-    MILO_ASSERT((int)idx >= 0 && (int)idx < mSize, 0xCF);
+    int i = (int)idx;
+    MILO_ASSERT(i >= 0 && i < mSize, 0xCF);
 
     int next = idx + 1;
     *entry = mRemoved;

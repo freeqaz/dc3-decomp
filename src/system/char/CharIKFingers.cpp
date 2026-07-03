@@ -343,7 +343,8 @@ void CharIKFingers::CalculateFingerDest(FingerNum num) {
                 }
                 finger.mDestFinger02Angle = PI - angle02;
                 finger.mDestFinger03Angle = PI - angle02;
-                Hmx::Quat curl03(f1z, -(angle02 * 2.0f - 2 * PI));
+                Hmx::Quat curl03;
+                curl03.Set(f1z, -(angle02 * 2.0f - 2 * PI));
                 Multiply(f1x, curl03, f1x);
                 Hmx::Quat alignQuat;
                 MakeRotQuat(f1x, toTarget, alignQuat);

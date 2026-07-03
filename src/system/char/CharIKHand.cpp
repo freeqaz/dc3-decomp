@@ -498,7 +498,7 @@ void CharIKHand::IKElbow(RndTransformable *elbow, RndTransformable *shoulder) {
         shoulderXfm2.v += shoulderAdj;
         shoulder->SetWorldXfm(shoulderXfm2);
         if (mElbowCollide->GetShape() != CharCollide::kCollideSphere)
-            MILO_NOTIFY("%s: elbow collision object not sphere.\n", Name());
+            MILO_NOTIFY("%s: elbow collision object not sphere.", Name());
         else {
             Vector3 sphereCenter(mElbowCollide->WorldXfm().v);
             float sphereRadius = mElbowCollide->GetCurRadius();
@@ -526,12 +526,12 @@ void CharIKHand::IKElbow(RndTransformable *elbow, RndTransformable *shoulder) {
                 float midAxisDot = Dot(axisDir, sphereToMid);
                 Scale(axisDir, midAxisDot, sphereToMid);
                 Add(sphereCenter, sphereToMid, sphereToMid);
-                float sDistToAxis = Distance(sphereToMid, sphereCenter);
-                MILO_ASSERT(sDistToAxis <= sphereRadius, 0x1A1);
-                float sPerpDist = std::sqrt(sphereRadius * sphereRadius - sDistToAxis * sDistToAxis);
+                float a = Distance(sphereToMid, sphereCenter);
+                MILO_ASSERT(a <= sphereRadius, 0x1A1);
+                float sPerpDist = std::sqrt(sphereRadius * sphereRadius - a * a);
                 sphereCenter.Set(sphereToMid.x, sphereToMid.y, sphereToMid.z);
                 float sphereToAxisDist = Distance(sphereCenter, axisProj);
-                float d = (sphereToAxisDist * sphereToAxisDist + -(sDistToAxis * sDistToAxis - sPerpDist * sPerpDist)) / (sphereToAxisDist * 2.0f);
+                float d = (sphereToAxisDist * sphereToAxisDist + -(a * a - sPerpDist * sPerpDist)) / (sphereToAxisDist * 2.0f);
                 float sqrtTerm = std::sqrt(-(d * d - sPerpDist * sPerpDist));
                 float tiltAngle = std::asin(sqrtTerm / elbowLen);
                 bool _cond = IsNaN(tiltAngle);

@@ -76,7 +76,7 @@ void DanceRemixer::SetJump(int from, int to) {
     } else {
         float fromMs = BeatToMs((float)fromBeat);
         float toMs = BeatToMs((float)(mToMeasure * 4));
-        float jumpOffset = SystemConfig("dance", "jump")->Node(1).Float(nullptr);
+        float jumpOffset = SystemConfig("synth", "crossfade_beats")->Float(1);
         float crossfadeMs = BeatToMs((float)(fromMeasure * 4) + jumpOffset);
         TheMaster->GetAudio()->SetCrossfadeJump(fromMs, toMs, crossfadeMs - fromMs);
 
@@ -86,15 +86,15 @@ void DanceRemixer::SetJump(int from, int to) {
         }
 
         float curBeat = TheTaskMgr.Beat();
-        int idx = fromMeasure - 1;
-        int count = (int)curBeat / 4 - idx + 5;
+        int moveIdx = fromMeasure - 1;
+        int count = (int)curBeat / 4 - moveIdx + 5;
         if (count > 0 && 0 < (int)count) {
             do {
-                MILO_ASSERT(ValidMoveIdx(idx), 0x16d);
+                MILO_ASSERT(ValidMoveIdx(moveIdx), 0x16d);
                 for (int p = 0; p < 2; p++) {
-                    SelectMove(p, idx);
+                    SelectMove(p, moveIdx);
                 }
-                idx = JumpedMeasureAdd(idx + 1, 1) - 1;
+                moveIdx = JumpedMeasureAdd(moveIdx + 1, 1) - 1;
                 count--;
             } while (count != 0);
         }
@@ -293,9 +293,9 @@ int DanceRemixer::JumpedMeasureStepsBetween(int from, int to, int direction) con
     return count;
 }
 
-const MoveVariant *DanceRemixer::MoveVariantFromHamMove(const HamMove *move) const {
-    MILO_ASSERT(move, 0x1f7);
-    Symbol moveName = move->Name();
+const MoveVariant *DanceRemixer::MoveVariantFromHamMove(const HamMove *aHamMove) const {
+    MILO_ASSERT(aHamMove, 0x1f7);
+    Symbol moveName = aHamMove->Name();
 
     for (int i = 0; i < 2; i++) {
         const auto &measures = TheMoveMgr->mRoutineMeasures[i];

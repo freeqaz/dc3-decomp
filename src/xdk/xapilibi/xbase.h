@@ -158,7 +158,7 @@ typedef struct _XUSER_SIGNIN_INFO { /* Size=0x28 */
     char szUserName[16]; // 0x18
 } XUSER_SIGNIN_INFO;
 
-typedef enum _XCONTENTDEVICEID {
+typedef enum _XCONTENTDEVICEID : DWORD {
     XCONTENTDEVICE_ANY = 0
     // fill in others as you find them out
 } XCONTENTDEVICEID;

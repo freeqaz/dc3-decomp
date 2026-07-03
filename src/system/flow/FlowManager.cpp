@@ -179,13 +179,13 @@ void FlowManager::Poll() {
             if (peakTime > 0 && mFlowPeakOverlay->Showing()) {
                 float pt = arr->Float(1);
                 Symbol s = arr->Sym(0);
-                *mFlowPeakOverlay << MakeString("%s %.1f", s, pt);
+                *mFlowPeakOverlay << MakeString("%s %.3f ms\n", s, pt);
             }
             float peakElapsed = arr->Float(3);
             if (peakElapsed > 0 && mFlowTaskOverlay->Showing()) {
                 float pe = arr->Float(3);
                 Symbol s2 = arr->Sym(2);
-                *mFlowTaskOverlay << MakeString("%s %.1f", s2, pe);
+                *mFlowTaskOverlay << MakeString("%s %.3f ms\n", s2, pe);
             }
         }
     }

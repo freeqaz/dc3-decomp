@@ -15,23 +15,24 @@ namespace {
 
 void URLEncode(char const *input, String &output, bool escapeUnsafe) {
     char const *hexmap = "0123456789ABCDEF";
-    char const *reserved = "$&+,/:;=?@\"<>";
-    char const *unsafe = "#%{}|\\^~[]`";
+    char const *reserved = "$&+,/:;=?@";
+    char const *unsafe = " \"<>#%{}|\\^~[]`";
     int length = strlen(input);
 
     for (int i = 0; i < length; ++i) {
         char c = input[i];
         if (IsCharInString(c, reserved) || IsCharInString(c, unsafe) || c < ' '
             || c > '~') {
-            output += '%';
+            output += "%";
 
             if (escapeUnsafe && (c < ' ' || c > '~')) {
-                output += "2";
+                output += hexmap[2];
+                c = hexmap[0];
             } else {
-                output += hexmap[c >> 4];
+                output += hexmap[(c >> 4) & 0xf];
                 c = hexmap[c & 0xf];
             }
-            output += c;
         }
+        output += c;
     }
 }

@@ -279,21 +279,21 @@ void kdTree<T>::kdTreeNode::Pack(
                     std::list<Triangle *> rightList;
                     bool bContinue = true;
                     for (it = items.begin(); it != items.end();) {
-                        Triangle *pTri = *it;
+                        Triangle *pCurr = *it;
                         ++it;
 
-                        MILO_ASSERT(::Intersect(*pTri, inDimensions), 0x166);
-                        bool bLeftIntersect = ::Intersect(*pTri, minBox);
-                        bool bRightIntersect = ::Intersect(*pTri, maxBox);
+                        MILO_ASSERT(::Intersect(*pCurr, inDimensions), 0x166);
+                        bool bLeftIntersect = ::Intersect(*pCurr, minBox);
+                        bool bRightIntersect = ::Intersect(*pCurr, maxBox);
                         if (!bLeftIntersect && !bRightIntersect) {
                             bContinue = false;
                             break;
                         }
                         if (bLeftIntersect) {
-                            leftList.push_back(pTri);
+                            leftList.push_back(pCurr);
                         }
                         if (bRightIntersect) {
-                            rightList.push_back(pTri);
+                            rightList.push_back(pCurr);
                         }
                     }
 

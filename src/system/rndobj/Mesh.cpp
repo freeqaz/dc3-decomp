@@ -1159,7 +1159,7 @@ void RndMesh::SetVolume(RndMesh::Volume vol) {
                         "Made BSP tree for \"%s\" (nodes:%d depth:%d)\n", Name(), x, y
                     );
                 } else {
-                    MILO_WARN("Couldn't make BSP tree for \"%s\"", Name());
+                    MILO_NOTIFY("Couldn't make BSP tree for \"%s\"", Name());
                     mVolume = kVolumeEmpty;
                 }
             }

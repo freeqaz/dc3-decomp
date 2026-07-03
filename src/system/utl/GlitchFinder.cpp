@@ -162,7 +162,7 @@ void GlitchPoker::Dump(TextStream &stream, int i1) {
     if (smDumpLeaves) {
         float totalTime = smTotalLeafTime;
         float pct = totalTime / (mTimeEnd - mTime);
-        stream << "{ total leaf time: " << totalTime << " (" << pct * 100.0f << "pct)\n";
+        stream << "} total leaf time: " << totalTime << " (" << pct * 100.0f << "pct)";
     } else if (mChildren.size() != 0 || !(mTimeEnd - mTime < f1)) {
         stream << "}" << "\n";
         smLastDumpTime = mTimeEnd;

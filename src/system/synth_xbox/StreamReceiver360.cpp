@@ -12,6 +12,7 @@ extern "C" void XMemCpy(void *, const void *, int);
 extern "C" int lbl_8316C864;
 extern "C" int lbl_8316C860;
 
+#line 15 "StreamReceiver.cpp"
 StreamReceiver360::StreamReceiver360(int sampleRate, int numBuffers, bool slip)
     : StreamReceiver(numBuffers, slip), mStreamBuf(0), mSlipVoice(0), mVoice(0),
       mSampleRate(sampleRate), mNumBufs(numBuffers), mVolume(1.0f), mPan(0.0f), mSpeed(1.0f),

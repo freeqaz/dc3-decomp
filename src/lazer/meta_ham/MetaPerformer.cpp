@@ -1544,7 +1544,7 @@ MetaPerformer *MetaPerformerHook::Current() {
 }
 
 bool MetaPerformer::CheckRecommendedPracticeMove(String name, int player) const {
-    MILO_ASSERT(player >= 0 && player < MULTIPLAYER_SLOTS, 0x4EB);
+    MILO_ASSERT(player>=0 && player < MULTIPLAYER_SLOTS, 0x4EB);
     int total = 0;
     bool _result = true;
     int good = 0;

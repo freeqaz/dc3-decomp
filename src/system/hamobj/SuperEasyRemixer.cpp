@@ -124,8 +124,7 @@ void SuperEasyRemixer::DumpSongLayout() {
         for (Difficulty d = EasiestDifficulty(); d != kNumDifficulties;
              d = DifficultyOneHarder(d)) {
             str += "\t";
-            // there's a string print here
-            str.Print(GetMoveParentsByDifficulty(d)[i]->Name().Str());
+            str += GetMoveParentsByDifficulty(d)[i]->Name();
             Difficulty next = DifficultyOneHarder(d);
             if (next != kNumDifficulties) {
                 str += "\t";

@@ -178,7 +178,7 @@ void Locale::Init() {
 
     if (DmMapDevkitDrive() >= 0) {
         if (FileExists(devkitPath.c_str(), 0, 0)) {
-            MILO_NOTIFY("Using alternate locale file from%s", devkitPath);
+            MILO_NOTIFY("Using alternate locale file from HDD: %s", devkitPath);
             cfg = (DataArray *)altCfg;
         }
     }
@@ -259,7 +259,7 @@ void Locale::Init() {
                 prevSym = curSym;
                 chunkIdx++;
             } else
-                MILO_WARN("Locale symbol '%s' redefined\n", curSym);
+                TheDebug << MakeString("Locale symbol '%s' redefined\n", curSym);
         }
     }
 

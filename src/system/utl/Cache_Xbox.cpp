@@ -432,7 +432,7 @@ int CacheXbox::ThreadRead() {
             return 8;
         }
         MILO_NOTIFY(
-            "CacheXbox::ReadAsync() - Unhandled error from ReadFile(): %d", err
+            "CacheXbox::ReadAsync() - Unhandled error %d from ReadFile()\n", err
         );
         return -1;
     }

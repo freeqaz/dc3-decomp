@@ -88,15 +88,15 @@ GameEndedDataPointJob::GameEndedDataPointJob(
         if (perf->GetMoveScores().size() != 0) {
             MoveDir *moves = TheHamDirector->GetWorld()->Find<MoveDir>("moves", true);
             MILO_ASSERT(moves, 0x5a);
-            PracticeSection *sec = nullptr;
+            PracticeSection *section = nullptr;
             for (ObjDirItr<PracticeSection> itr(moves, true); itr != nullptr; ++itr) {
                 if (itr->GetDifficulty() == TheGameData->Player(0)->GetDifficulty()) {
-                    sec = itr;
+                    section = itr;
                     break;
                 }
             }
-            MILO_ASSERT(sec, 0x64);
-            int num_steps = sec->Steps().size();
+            MILO_ASSERT(section, 0x64);
+            int num_steps = section->Steps().size();
             unsigned long num_scores = perf->GetMoveScores().size();
             if (num_scores > num_steps) {
                 String str(MakeString("(%d/%d)", num_scores, num_steps));

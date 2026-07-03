@@ -276,38 +276,42 @@ int ForceLinkXMemFuncs() {
     return 42;
 }
 
-VOID *XMemAlloc(SIZE_T size, DWORD attrs) {
-    void *ptr;
-    if (!(attrs & 0x80000000) && (attrs & 0x00FF0000) != 0x008C0000) {
-        // Not physical and not the special attribute
-        MILO_ASSERT((attrs & 0x30000000) != 0x20000000, 0xf9);
+#define Attr(x) (*(XALLOC_ATTRIBUTES *)&(x))
 
-        int align = AllocAlign(attrs);
-        const char *type = AllocType(attrs);
-        ptr = _MemAllocTemp(size, __FILE__, 0x107, type, align);
+VOID *XMemAlloc(SIZE_T dwSize, DWORD dwAllocAttributes) {
+    void *ptr;
+    if (!(dwAllocAttributes & 0x80000000) && (dwAllocAttributes & 0x00FF0000) != 0x008C0000) {
+        // Not physical and not the special attribute
+        MILO_ASSERT(Attr(dwAllocAttributes).dwMemoryProtect == XALLOC_MEMPROTECT_READWRITE, 0xf9);
+
+        int align = AllocAlign(dwAllocAttributes);
+        const char *type = AllocType(dwAllocAttributes);
+        ptr = _MemAllocTemp(dwSize, __FILE__, 0x107, type, align);
 
         // Assert allocation succeeded if zero-init requested
-        if (attrs & 0x00004000) {
+        if (dwAllocAttributes & 0x00004000) {
             MILO_ASSERT(ptr, 0x10d);
         }
 
         // Zero-init if requested
-        if ((attrs & 0x40000000) && ptr) {
-            memset(ptr, 0, size);
+        if ((dwAllocAttributes & 0x40000000) && ptr) {
+            memset(ptr, 0, dwSize);
         }
     } else {
         // Physical or special: use default XDK allocator
-        ptr = XMemAllocDefault(size, attrs);
+        ptr = XMemAllocDefault(dwSize, dwAllocAttributes);
         if (!ptr) {
-            MemAllocFailed(size, (bool)(attrs & 0x80000000));
+            MemAllocFailed(dwSize, (bool)(dwAllocAttributes & 0x80000000));
         }
-        int allocSize = XMemSizeDefault(ptr, attrs);
+        int allocSize = XMemSizeDefault(ptr, dwAllocAttributes);
         gPhysicalUsage += allocSize;
-        MemTrackAlloc(size, allocSize, AllocType(attrs), ptr, false, 0, __FILE__, 0xf0);
+        MemTrackAlloc(dwSize, allocSize, AllocType(dwAllocAttributes), ptr, false, 0, __FILE__, 0xf0);
     }
 
     return ptr;
 }
+
+#undef Attr
 
 VOID XMemFree(LPVOID ptr, DWORD attrs) {
     if (!(attrs & 0x80000000) && (attrs & 0x00FF0000) != 0x008C0000) {
