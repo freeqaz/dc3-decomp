@@ -88,7 +88,7 @@ public:
 protected:
     String mProfileName;
     String mOnlineID;
-    std::list<QueueableCommand *> mCommandQueue;
+    std::list<QueueableCommand *> mCommands;
     bool mIsProcessingCommand;
     RCJob *mCurrentRCJob;
     HamProfile *mCurrentProfile;

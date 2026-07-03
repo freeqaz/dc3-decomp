@@ -392,7 +392,7 @@ static int parsedate(const char *date, __time64_t *output)
         secnum = 0;
       }
       else {
-        val = curlx_sltosi(strtol(date, &end, 10));
+        val = curlx_uztosz(strtol(date, &end, 10));
 
         if((tzoff == -1) &&
            ((end - date) == 4) &&

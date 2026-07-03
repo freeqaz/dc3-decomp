@@ -25,7 +25,8 @@ extern complex csqrt(complex), cexp(complex), expj(double);
 // in complex.cpp
 extern complex evaluate(complex[], int, complex[], int, complex);
 
-inline double hypot(complex z) { return ::hypot(z.im, z.re); }
+extern "C" double _hypot(double, double);
+inline double hypot(complex z) { return _hypot(z.im, z.re); }
 inline double atan2(complex z) { return ::atan2(z.im, z.re); }
 
 inline complex cconj(complex z) {

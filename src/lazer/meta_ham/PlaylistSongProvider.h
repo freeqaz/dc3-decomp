@@ -19,6 +19,6 @@ public:
     PlaylistSongProvider();
     void UpdateList(Playlist const *, bool);
 
-    const Playlist *mPlaylist;
+    const Playlist *m_pPlaylist;
     bool unk34;
 };

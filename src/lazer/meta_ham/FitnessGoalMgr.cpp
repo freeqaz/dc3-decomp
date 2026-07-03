@@ -25,7 +25,7 @@ FitnessGoalMgr::FitnessGoalMgr() {
     mOnlineID = gNullStr;
     mIsProcessingCommand = false;
     mCurrentRCJob = nullptr;
-    mCommandQueue.clear();
+    mCommands.clear();
     mCurrentProfile = nullptr;
 }
 
@@ -96,28 +96,28 @@ void FitnessGoalMgr::BroadcastSyncMsg(Symbol s) {
 }
 
 void FitnessGoalMgr::StartCmdSendFitnessGoalToRC() {
-    CmdSendFitnessGoalToRC *cmd = (CmdSendFitnessGoalToRC *)mCommandQueue.front();
+    CmdSendFitnessGoalToRC *cmd = (CmdSendFitnessGoalToRC *)mCommands.front();
     mCurrentRCJob = new SetFitnessGoalJob(this, cmd->mData.profile);
     TheRockCentral.ManageJob(mCurrentRCJob);
 }
 
 void FitnessGoalMgr::StartCmdUpdateFitnessGoalToRC() {
-    CmdUpdateFitnessGoalToRC *cmd = (CmdUpdateFitnessGoalToRC *)mCommandQueue.front();
+    CmdUpdateFitnessGoalToRC *cmd = (CmdUpdateFitnessGoalToRC *)mCommands.front();
     mCurrentRCJob = new UpdateFitnessGoalJob(this, cmd->mData.profile);
     TheRockCentral.ManageJob(mCurrentRCJob);
 }
 
 void FitnessGoalMgr::StartCmdDeleteFitnessGoalFromRC() {
-    CmdDeleteFitnessGoalFromRC *cmd = (CmdDeleteFitnessGoalFromRC *)mCommandQueue.front();
+    CmdDeleteFitnessGoalFromRC *cmd = (CmdDeleteFitnessGoalFromRC *)mCommands.front();
     mCurrentRCJob = new DeleteFitnessGoalJob(this, cmd->mData.profile);
     TheRockCentral.ManageJob(mCurrentRCJob);
 }
 
 void FitnessGoalMgr::HandleCmdChangeProfileOnlineID() {
     MILO_LOG("===== HandleCmdChangeProfileOnlineID\n");
-    mOnlineID = ((CmdChangeProfileOnlineID *)mCommandQueue.front())->mOnlineID;
-    RELEASE(mCommandQueue.front());
-    mCommandQueue.pop_front();
+    mOnlineID = ((CmdChangeProfileOnlineID *)mCommands.front())->mOnlineID;
+    RELEASE(mCommands.front());
+    mCommands.pop_front();
     ProcessNextCommand();
 }
 
@@ -139,8 +139,8 @@ void FitnessGoalMgr::HandleCmdGetFitnessGoalFromRC() {
     BroadcastSyncMsg(Symbol("sync_failed"));
 cleanup:
     mCurrentRCJob = nullptr;
-    RELEASE(mCommandQueue.front());
-    mCommandQueue.pop_front();
+    RELEASE(mCommands.front());
+    mCommands.pop_front();
     ProcessNextCommand();
 }
 
@@ -152,15 +152,15 @@ void FitnessGoalMgr::HandleCmdSendFitnessGoalToRC() {
         DataNode updated("updated");
         ThePlatformMgr.SmartGlassSend(0, DataArrayPtr(updated, fitness));
     }
-    RELEASE(mCommandQueue.front());
-    mCommandQueue.pop_front();
+    RELEASE(mCommands.front());
+    mCommands.pop_front();
     ProcessNextCommand();
 }
 
 void FitnessGoalMgr::HandleCmdDeleteFitnessGoalFromRC() {
     mCurrentRCJob = nullptr;
-    RELEASE(mCommandQueue.front());
-    mCommandQueue.pop_front();
+    RELEASE(mCommands.front());
+    mCommands.pop_front();
     ProcessNextCommand();
 }
 
@@ -173,8 +173,8 @@ void FitnessGoalMgr::HandleCmdUpdateFitnessGoalToRC() {
         DataNode fitness("fitness");
         ThePlatformMgr.SmartGlassSend(0, DataArrayPtr(fitness, updated));
     }
-    RELEASE(mCommandQueue.front());
-    mCommandQueue.pop_front();
+    RELEASE(mCommands.front());
+    mCommands.pop_front();
     if (mCurrentProfile) {
         mCurrentProfile->ClearFitnessGoalNeedUpload();
     }
@@ -188,7 +188,7 @@ void FitnessGoalMgr::HandleCmdUpdateFitnessGoalToRC() {
 
 void FitnessGoalMgr::QueueCmdGetFitnessGoalFromRC() {
     CmdGetFitnessGoalFromRC *cmd = new CmdGetFitnessGoalFromRC();
-    mCommandQueue.push_back(cmd);
+    mCommands.push_back(cmd);
     if (!mIsProcessingCommand) {
         ProcessNextCommand();
     }
@@ -196,7 +196,7 @@ void FitnessGoalMgr::QueueCmdGetFitnessGoalFromRC() {
 
 void FitnessGoalMgr::QueueCmdSendFitnessGoalToRC(HamProfile *profile) {
     CmdSendFitnessGoalToRC *cmd = new CmdSendFitnessGoalToRC(profile);
-    mCommandQueue.push_back(cmd);
+    mCommands.push_back(cmd);
     if (!mIsProcessingCommand) {
         ProcessNextCommand();
     }
@@ -204,7 +204,7 @@ void FitnessGoalMgr::QueueCmdSendFitnessGoalToRC(HamProfile *profile) {
 
 void FitnessGoalMgr::QueueCmdUpdateFitnessGoalToRC(HamProfile *profile) {
     CmdUpdateFitnessGoalToRC *cmd = new CmdUpdateFitnessGoalToRC(profile);
-    mCommandQueue.push_back(cmd);
+    mCommands.push_back(cmd);
     if (!mIsProcessingCommand) {
         ProcessNextCommand();
     }
@@ -212,7 +212,7 @@ void FitnessGoalMgr::QueueCmdUpdateFitnessGoalToRC(HamProfile *profile) {
 
 void FitnessGoalMgr::QueueCmdDeleteFitnessGoalFromRC(HamProfile *profile) {
     CmdDeleteFitnessGoalFromRC *cmd = new CmdDeleteFitnessGoalFromRC(profile);
-    mCommandQueue.push_back(cmd);
+    mCommands.push_back(cmd);
     if (!mIsProcessingCommand) {
         ProcessNextCommand();
     }
@@ -220,7 +220,7 @@ void FitnessGoalMgr::QueueCmdDeleteFitnessGoalFromRC(HamProfile *profile) {
 
 void FitnessGoalMgr::QueueCmdChangeProfileOnlineID(String str) {
     CmdChangeProfileOnlineID *cmd = new CmdChangeProfileOnlineID(str);
-    mCommandQueue.push_back(cmd);
+    mCommands.push_back(cmd);
     if (!mIsProcessingCommand) {
         ProcessNextCommand();
     }
@@ -279,8 +279,8 @@ void FitnessGoalMgr::SendPassiveMsg(Symbol sym) {
 
 DataNode FitnessGoalMgr::OnMsg(const RCJobCompleteMsg &msg) {
     if (!msg.Success()) {
-        MILO_ASSERT(!mCommandQueue.empty(), 0x163);
-        QueueableCommand *cmd = mCommandQueue.front();
+        MILO_ASSERT(!mCommands.empty(), 0x163);
+        QueueableCommand *cmd = mCommands.front();
         switch (cmd->GetType()) {
         case 1:
             MILO_LOG("[FitnessGoalMgr::OnMsg] Fitness Goal net API ==kCmdGetFitnessGoalFromRC== failed.\n");
@@ -297,12 +297,12 @@ DataNode FitnessGoalMgr::OnMsg(const RCJobCompleteMsg &msg) {
         }
         mCurrentRCJob = nullptr;
         BroadcastSyncMsg(Symbol("sync_failed"));
-        RELEASE(mCommandQueue.front());
-        mCommandQueue.pop_front();
+        RELEASE(mCommands.front());
+        mCommands.pop_front();
         ProcessNextCommand();
     } else {
         if (msg.Job() == mCurrentRCJob) {
-            QueueableCommand *cmd = mCommandQueue.front();
+            QueueableCommand *cmd = mCommands.front();
             switch (cmd->GetType()) {
             case 1:
                 HandleCmdGetFitnessGoalFromRC();
@@ -337,11 +337,11 @@ void FitnessGoalMgr::DeleteFitnessGoalFromRC(HamProfile *profile) {
 }
 
 void FitnessGoalMgr::ProcessNextCommand() {
-    if (mCommandQueue.size() == 0) {
+    if (mCommands.size() == 0) {
         mIsProcessingCommand = false;
     } else {
         mIsProcessingCommand = true;
-        QueueableCommand *cmd = mCommandQueue.front();
+        QueueableCommand *cmd = mCommands.front();
         switch (cmd->GetType()) {
         case 0:
             HandleCmdChangeProfileOnlineID();

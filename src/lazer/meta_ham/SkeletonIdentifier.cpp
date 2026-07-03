@@ -429,7 +429,7 @@ DataNode SkeletonIdentifier::OnMsg(const SkeletonIdentifiedMsg &msg) {
         TheGestureMgr->RemoveSink(this, "skeleton_identified");
         int enrollmentIdx = msg.GetVal2();
         int skeletonIndex = msg.GetIndex();
-        MILO_ASSERT(skeletonIndex >= 0 && skeletonIndex < NUM_SKELETONS, 0x9e);
+        MILO_ASSERT(skeletonIndex >=0 && skeletonIndex < NUM_SKELETONS, 0x9e);
         if (mIdentityStatus == 1) {
             bool b3 = false;
             if (enrollmentIdx != -2) {

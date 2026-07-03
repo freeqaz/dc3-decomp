@@ -546,7 +546,7 @@ void AccomplishmentManager::Poll() {
     FOREACH (it, profiles) {
         HamProfile *pProfile = *it;
         MILO_ASSERT(pProfile, 0x88);
-        pProfile->AccessAccomplishmentProgress().Poll();
+        const_cast<AccomplishmentProgress &>(pProfile->GetAccomplishmentProgress()).Poll();
     }
 }
 

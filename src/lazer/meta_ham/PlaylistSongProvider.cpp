@@ -11,23 +11,23 @@
 #include "ui/UIListProvider.h"
 #include "utl/Symbol.h"
 
-PlaylistSongProvider::PlaylistSongProvider() : mPlaylist(0), unk34(false) {}
+PlaylistSongProvider::PlaylistSongProvider() : m_pPlaylist(0), unk34(false) {}
 
 PlaylistSongProvider::~PlaylistSongProvider() {}
 
 PackSongListProvider::~PackSongListProvider() {}
 
 int PlaylistSongProvider::NumData() const {
-    if (mPlaylist == nullptr) {
+    if (m_pPlaylist == nullptr) {
         return 0;
     }
-    return mPlaylist->GetNumSongs();
+    return m_pPlaylist->GetNumSongs();
 }
 
 Symbol PlaylistSongProvider::DataSymbol(int i) const {
-    MILO_ASSERT(mPlaylist, 0x6d);
-    if (i >= 0 && i < NumData() && mPlaylist && mPlaylist->IsValidSong(i)) {
-        int songID = mPlaylist->GetSong(i);
+    MILO_ASSERT(m_pPlaylist, 0x6d);
+    if (i >= 0 && i < NumData() && m_pPlaylist && m_pPlaylist->IsValidSong(i)) {
+        int songID = m_pPlaylist->GetSong(i);
         Symbol shortName = TheHamSongMgr.GetShortNameFromSongID(songID);
         return shortName;
     } else {
@@ -77,7 +77,7 @@ void PlaylistSongProvider::Text(
 
 void PlaylistSongProvider::UpdateList(Playlist const *p, bool b) {
     unk34 = b;
-    mPlaylist = p;
+    m_pPlaylist = p;
 }
 
 BEGIN_HANDLERS(PlaylistSongProvider)

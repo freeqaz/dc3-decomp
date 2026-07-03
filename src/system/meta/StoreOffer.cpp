@@ -191,11 +191,11 @@ DataNode StoreOffer::GetData(DataArray const *data, bool b) const {
     return b ? storeData : storeData->Node(1);
 }
 
-bool StoreOffer::HasSong(StoreOffer const *c) const {
+bool StoreOffer::HasSong(StoreOffer const *o) const {
     MILO_ASSERT(OfferType() == "pack" || OfferType() == "album",0x10c);
-    MILO_ASSERT(OfferType() == "song", 0x10d);
+    MILO_ASSERT(o->OfferType() == "song", 0x10d);
     for (int i = 0; i < NumSongs(); i++) {
-        if (Song(i) == c->GetSingleSongID()) {
+        if (Song(i) == o->GetSingleSongID()) {
             return true;
         }
     }

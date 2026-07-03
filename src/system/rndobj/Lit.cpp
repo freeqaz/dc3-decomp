@@ -23,7 +23,7 @@ void RndLight::Save(BinStream &bs) {
     bs << 0x10;
     SAVE_SUPERCLASS(Hmx::Object)
     SAVE_SUPERCLASS(RndTransformable)
-    bs << mColor << mRange << mType;
+    bs << (Vector4 &)mColor << mRange << mType;
     bs << mFalloffStart;
     bs << mAnimateColorFromPreset << mAnimatePositionFromPreset;
     bs << mTopRadius << mBotRadius;
