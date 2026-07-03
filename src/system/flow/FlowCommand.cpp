@@ -124,8 +124,8 @@ bool FlowCommand::Activate() {
         int size = mTypeProps ? mTypeProps->Size() : 0;
         Message msg(size);
         msg.SetType(mHandler);
-        for (int i = 0, j = 1; i < size; i++, j += 2) {
-            msg[i] = mTypeProps->Map()->Evaluate(j);
+        for (int i = 0; i < size; i++) {
+            msg[i] = mTypeProps->Map()->Evaluate(2 * i + 1);
         }
         mObject->Handle(msg, false);
     }

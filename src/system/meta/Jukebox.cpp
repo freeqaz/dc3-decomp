@@ -26,7 +26,8 @@ int Jukebox::Pick(const std::vector<int> &valid_names) {
         items.push_back(*jit);
     }
     RandomShuffle(items.begin(), items.end());
-    return items[RandomInt(0, items.size())].mName;
+    JukeboxItem* picked = &items[RandomInt(0, items.size())];
+    return picked->mName;
 }
 
 void Jukebox::Play(int x) {

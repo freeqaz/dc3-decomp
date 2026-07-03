@@ -71,9 +71,9 @@ void MQSongSortMgr::UpdateList() {
     FOREACH_CONST (it, rankedSongs) {
         const HamSongMetadata *metadata = TheHamSongMgr.Data(*it);
         Symbol character = GetOutfitCharacter(metadata->Outfit());
-        Symbol crew = GetCrewForCharacter(character);
-        Symbol temp = character;
-        Symbol mqHeader = MakeString("mqheader_%s", temp);
+        Symbol *pchar = &character;
+        Symbol crew = GetCrewForCharacter(*pchar);
+        Symbol mqHeader = MakeString("mqheader_%s", (char *)pchar->Str());
         if (!metadata->IsFake() && crew == mqCrew
             && TheProfileMgr.IsContentUnlocked(metadata->ShortName())) {
             mCharacterSongs[mqHeader].push_back(TheHamSongMgr.GetShortNameFromSongID(*it));

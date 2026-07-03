@@ -776,10 +776,9 @@ void HamNavList::SendHighlightMsg(int i) {
     UIListProvider *provider = mListState.Provider();
     MILO_ASSERT(provider, 0x339);
     bool canSel = provider->CanSelect(i);
-    Symbol dataSym = provider->DataSymbol(i);
-    NavHighlightMsg msg(dataSym, i, this, canSel);
+    NavHighlightMsg msg(provider->DataSymbol(i), i, this, canSel);
     TheUI->Handle(msg, false);
-    Handle(msg, true);
+    Export(msg, true);
     TheHamProvider->Handle(msg, false);
 }
 

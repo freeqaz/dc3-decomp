@@ -28,6 +28,9 @@ KinectShare::KinectShare(
     unka3 = 7;
     FILETIME lpSystemTimeAsFileTime;
     GetSystemTimeAsFileTime(&lpSystemTimeAsFileTime);
+    unka5 = (lpSystemTimeAsFileTime.dwLowDateTime & 0xFFFF) * 0x10000
+            + lpSystemTimeAsFileTime.dwHighDateTime
+        & 0xFFFFFFFF;
     unkdb = 0xF00D;
     unkde = 0xF00D;
     unkcd = false;
@@ -41,9 +44,6 @@ KinectShare::KinectShare(
     unkdd = 3;
     mContentType = etype;
     unkce = mContentLength + mHeaderSize;
-    unka5 = (lpSystemTimeAsFileTime.dwLowDateTime & 0xFFFF) * 0x10000
-            + lpSystemTimeAsFileTime.dwHighDateTime
-        & 0xFFFFFFFF;
     HxGuid hx60;
     hx60.Generate();
     memcpy(unke1, hx60.Data(), sizeof(HxGuid));

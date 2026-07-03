@@ -24,17 +24,16 @@ void EventTask::Poll(float time) {
         delete this;
         return;
     }
-    if (mCurNode != mChildNodes->end()) {
+    FlowValueCase *node;
+    if (mCurNode != mChildNodes->end() &&
+        time >= (node = static_cast<FlowValueCase *>(mCurNode->Obj()))->Value()) {
         do {
-            FlowValueCase *node = static_cast<FlowValueCase *>(mCurNode->Obj());
-            if (time < node->Value()) {
-                break;
-            }
             mOwner->OnKeyframe(node);
             ++mCurNode;
-        } while (mCurNode != mChildNodes->end());
+        } while (mCurNode != mChildNodes->end() &&
+                 time >= (node = static_cast<FlowValueCase *>(mCurNode->Obj()))->Value());
     }
-    if (mOwner && time >= mDuration) {
+    if (time >= mDuration) {
         mOwner->OnTimerEnd();
         delete this;
     }

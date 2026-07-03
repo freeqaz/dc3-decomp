@@ -982,7 +982,7 @@ void ObjectDir::Iterate(DataArray *arr, bool b) {
 }
 
 ObjDirPtr<ObjectDir> ObjectDir::PostLoadInlined() {
-    MILO_ASSERT(mInlinedDirs.size() > 0, 0x296);
+    MILO_ASSERT(mInlinedDirs.size() > 0, 0x28D);
     InlinedDir iDir = mInlinedDirs.back();
     mInlinedDirs.pop_back();
     if (mInlinedDirs.size() == 0) {

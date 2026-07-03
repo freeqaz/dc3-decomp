@@ -137,3 +137,10 @@ native/third_party/
 /refresh_sweep.log
 /decomp_copy.db
 /decomp_before.db
+
+# Generated audio decode cache (xma -> pcm), re-derivable from game assets
+/sfx/
+# objdiff report cache (binary, re-derivable)
+/.objdiff_report_cache
+# Transient permuter lock files (present only while a permuter run is active)
+*.permuter.lock

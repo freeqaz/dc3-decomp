@@ -53,13 +53,15 @@ namespace {
 // Set an audio jump from beat x to beat y (1-indexed)
 void SetJump(int x, int y) {
     ClearJump();
-    if (x - 1 == y - 1) {
-        TheMaster->GetAudio()->SetLoop(y - 1, x - 1);
+    int bx = x - 1;
+    int by = y - 1;
+    if (bx == by) {
+        TheMaster->GetAudio()->SetLoop(by * 4, bx * 4);
     } else {
-        float start = BeatToMs(x - 1);
-        float end = BeatToMs(y - 1);
+        float start = BeatToMs(bx * 4);
+        float end = BeatToMs(by * 4);
         float crossfade_beats = SystemConfig("synth", "crossfade_beats")->Float(1);
-        float crossfade_end = BeatToMs((x - 1) + crossfade_beats);
+        float crossfade_end = BeatToMs(bx * 4 + crossfade_beats);
         TheMaster->GetAudio()->SetCrossfadeJump(start, end, crossfade_end - start);
     }
 }

@@ -558,21 +558,12 @@ DataNode HamWardrobe::OnSetVenue(DataArray *a) {
 DataNode HamWardrobe::OnAddCrowd(DataArray *a) {
     WorldCrowd *crowd = a->Obj<WorldCrowd>(2);
     std::list<WorldCrowd::CharData>& chars = crowd->mCharacters;
-    ObjPtrList<Character> &_ref0 = mCrowdMembers;
     for (std::list<WorldCrowd::CharData>::iterator it = chars.begin();
          it != chars.end(); ++it) {
         Character *c = it->mDef.mChar;
         if (c) {
-            Hmx::Object *cObj = c;
-            ObjPtrList<Character>::iterator mit;
-            for (mit = _ref0.begin(); mit != _ref0.end(); ++mit) {
-                if ((Hmx::Object *)*mit == cObj) {
-                    break;
-                }
-            }
-            if (mit.mNode != nullptr) {
-            } else {
-                _ref0.push_back(c);
+            if (mCrowdMembers.find(c) == mCrowdMembers.end()) {
+                mCrowdMembers.push_back(c);
             }
         }
     }

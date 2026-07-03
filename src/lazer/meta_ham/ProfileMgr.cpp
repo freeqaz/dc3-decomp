@@ -1039,7 +1039,7 @@ void ProfileMgr::Poll() {
 Symbol ProfileMgr::GetAlternateOutfit(Symbol outfit) {
     Symbol altChar = GetAlternateCharacter(GetOutfitCharacter(outfit, true));
 
-    char buf[96];
+    char buf[64];
     strcpy(buf, GetCharacterOutfit(altChar, 0, true).Str());
 
     int origLen = strlen(outfit.Str());

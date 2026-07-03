@@ -71,9 +71,7 @@ void DrawBufferMat(RndMat *mat, Hmx::Rect &rect) {
 }
 
 void DrawSnapshot(const GestureMgr &gm, int index) {
-    if (index >= 0) {
-        MILO_ASSERT(index >= 0 && index < gm.GetLiveCameraInput()->NumSnapshots(), 0xfb);
-    }
+    MILO_ASSERT(index >= 0 && index < gm.GetLiveCameraInput()->NumSnapshots(), 0xfb);
     auto cam = gm.GetLiveCameraInput();
     auto snap = cam->GetSnapshot(index);
     DrawBufferMat(snap, DrawUtlRect);
@@ -100,8 +98,7 @@ void DrawGestureMgr(GestureMgr &gm, LiveCameraInput::BufferType bufferType, floa
     if (bufferType != LiveCameraInput::kBufferNum && bufferType != LiveCameraInput::kBufferPlayer
         && bufferType != LiveCameraInput::kBufferDepth) {
         LiveCameraInput *cam = gm.GetLiveCameraInput();
-        RndTex *displayTex = cam->DisplayTex(bufferType);
-        if (UpdateBufferTex(cam, displayTex, bufferType, &gm)) {
+        if (UpdateBufferTex(cam, cam->DisplayTex(bufferType), bufferType, &gm)) {
             DrawBufferMat(cam->DisplayMat(bufferType), DrawUtlRect);
         }
     }
