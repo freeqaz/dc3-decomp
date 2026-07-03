@@ -70,12 +70,12 @@ void AllocInfo::Validate() const { MILO_ASSERT(mPooled <= 1, 0xA5); }
 void AllocInfo::PrintCsv(TextStream &ts) const {
     ts << MakeString("addr, 0x%lX, %s, bytes, %d ", (unsigned long)mMem, mType, mReqSize);
     MILO_ASSERT(s_pTrie, 0xC6);
-    char buf21[0x80];
     char buf1d[0x80];
+    char buf21[0x80];
+    auto trieStr1d = s_pTrie->get(unk1d, buf1d, 0x80);
     auto trieStr21 = s_pTrie->get(unk21, buf21, 0x80);
     ts << ", actual, " << mActSize << ", heap, " << mHeap << ", " << mFile << ", "
-       << mLine << ", " << trieStr21 << ", "
-       << s_pTrie->get(unk1d, buf1d, 0x80);
+       << mLine << ", " << trieStr1d << ", " << trieStr21;
     if (mPooled) {
         ts << ", pooled";
     }
