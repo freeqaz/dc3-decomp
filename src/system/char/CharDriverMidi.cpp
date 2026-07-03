@@ -10,7 +10,6 @@
 
 CharDriverMidi::CharDriverMidi() : mClipFlags(0), mBlendOverridePct(1.0f) {}
 
-CharDriverMidi::~CharDriverMidi() {}
 
 BEGIN_PROPSYNCS(CharDriverMidi)
     SYNC_PROP(parser, mParser)

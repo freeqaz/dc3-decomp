@@ -92,20 +92,22 @@ bool gFailKeepGoing;
 bool gFailRestartConsole;
 
 struct {
+#ifdef HX_NATIVE
+    void* sTexture;
+#else
+    DxTex* sTexture;
+#endif
+    bool sCompressDone;
+    void* sCompressData;
     HANDLE mThread;
     HANDLE mTextureEvent;
 } gRndHandles;
 
+#define sTexture gRndHandles.sTexture
+#define sCompressDone gRndHandles.sCompressDone
+#define sCompressData gRndHandles.sCompressData
 #define gRndThread gRndHandles.mThread
 #define gRndTextureEvent gRndHandles.mTextureEvent
-
-#ifdef HX_NATIVE
-static void* sTexture = nullptr; // stub — DxTex doesn't exist on native
-#else
-DxTex *sTexture;
-#endif
-bool sCompressDone;
-void *sCompressData;
 
 extern int lbl_82F14008;
 extern DataArray *lbl_830A4100;
@@ -431,8 +433,8 @@ DWORD CompressThread(void *) {
         WaitForSingleObject(gRndTextureEvent, -1);
         if (sTexture == nullptr)
             break;
-        sCompressDone = true;
         sTexture->DoCompress(sCompressData);
+        sCompressDone = true;
     }
     return 0;
 }

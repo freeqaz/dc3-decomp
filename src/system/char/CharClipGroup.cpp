@@ -194,6 +194,7 @@ void CharClipGroup::SetClipFlags(int flags) {
     }
 }
 
+#line 391 "e:\\lazer_build_gmc1\\system\\src\\obj\\ObjPtr_p.h"
 template <>
 BinStream &operator<<(BinStream &bs, const ObjPtrVec<RndMat, ObjectDir> &c) {
     bs << (int)c.size();

@@ -260,13 +260,13 @@ void RndSpline::SyncDeformedDummyCtrlPoints(int iStartIndex, int iEndIndex) cons
     }
 }
 
-void RndSpline::SyncDeformedCtrlPoints(int startIdx, int endIdx) const {
-    MILO_ASSERT_RANGE(startIdx, 0, (int)mDeformedCtrlPoints.size(), 0x278);
-    MILO_ASSERT_RANGE(endIdx, 0, (int)mDeformedCtrlPoints.size(), 0x279);
-    MILO_ASSERT(startIdx <= endIdx, 0x27A);
+void RndSpline::SyncDeformedCtrlPoints(int iStartIndex, int iEndIndex) const {
+    MILO_ASSERT_RANGE(iStartIndex, 0, (int)mDeformedCtrlPoints.size(), 0x278);
+    MILO_ASSERT_RANGE(iEndIndex, 0, (int)mDeformedCtrlPoints.size(), 0x279);
+    MILO_ASSERT(iStartIndex <= iEndIndex, 0x27A);
     if ((unsigned int)mDeformedCtrlPoints.size() >= 2) {
-        SyncDeformedDummyCtrlPoints(startIdx, endIdx);
-        for (int i = startIdx; i <= endIdx; i++) {
+        SyncDeformedDummyCtrlPoints(iStartIndex, iEndIndex);
+        for (int i = iStartIndex; i <= iEndIndex; i++) {
             CtrlPoint &pt = mDeformedCtrlPoints[i];
             if (pt.mDirtyConstants) {
                 pt.mDirtyConstants = false;

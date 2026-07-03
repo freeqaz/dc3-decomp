@@ -33,11 +33,11 @@ MMRESULT mmioSetInfo(HMMIO hmmio, LPCMMIOINFO pmmioinfo, UINT fuInfo) {
 
 FOURCC mmioStringToFOURCCW(LPCSTR sz, UINT uFlags) { return 0; }
 
-MMRESULT mmioFlush(HMMIO hmmio, UINT fuFlush) { return 0; }
+__declspec(noinline) MMRESULT mmioFlush(HMMIO hmmio, UINT fuFlush) { return 0; }
 
 LONG mmioSeek(HMMIO hmmio, LONG lOffset, int iOrigin) { return 0; }
 
-MMRESULT mmioSetBuffer(HMMIO hmmio, LPSTR pchBuffer, LONG cchBuffer, UINT fuBuffer) {
+__declspec(noinline) MMRESULT mmioSetBuffer(HMMIO hmmio, LPSTR pchBuffer, LONG cchBuffer, UINT fuBuffer) {
     return 0;
 }
 

@@ -149,7 +149,7 @@ bool UpdateBufferTex(LiveCameraInput *cam, RndTex *tex, LiveCameraInput::BufferT
         cam->UnlockStream(colorStream);
         cam->UnlockStream(playerStream);
     } else {
-        MILO_ASSERT(gm != nullptr, 0x191);
+        MILO_ASSERT(gm, 0x191);
         void *bufStream = cam->StreamBufferData(bufType);
         LiveCameraInput::LockedRect lockedRect;
         cam->LockStream(bufStream, lockedRect);

@@ -14,29 +14,31 @@ public:
     virtual void SetParameters(const void *, unsigned int) {}
 };
 
-// Base class for XAPO parameters. First vtable at 0x0; instance data spans
-// 0x04-0x1F so the IXAPOParameters subobject vtable lands at 0x20.
-class CXAPOParametersBase {
-public:
-    CXAPOParametersBase(const void* pRegistrationProperties, void* pParameterBlocks, unsigned int uParameterBlockByteSize, unsigned char fProducer);
-    virtual ~CXAPOParametersBase() {}
-
-private:
-    unsigned char mParamBaseData[0x1c]; // 0x04-0x1F
-};
-
-// Base class with multiple inheritance. CXAPOParametersBase at 0x0 (vtable +
-// 0x1c data), IXAPOParameters subobject vtable at 0x20.
-class CXAPOBase : public CXAPOParametersBase, public IXAPOParameters {
+// Base class for XAPO processing. First vtable at 0x0; instance data spans
+// 0x04-0x1F so a subobject vtable placed after it lands at 0x20.
+class CXAPOBase {
 public:
     CXAPOBase();
     virtual ~CXAPOBase() {}
+
+private:
+    unsigned char mCXAPOBaseData[0x1c]; // 0x04-0x1F
+};
+
+// Base class with multiple inheritance. CXAPOBase at 0x0 (vtable + 0x1c
+// data), IXAPOParameters subobject vtable at 0x20. Matches the real XDK
+// CXAPOParametersBase, whose four-arg constructor CSampleXAPOBase calls
+// directly (it is CSampleXAPOBase's immediate base, not CXAPOBase's).
+class CXAPOParametersBase : public CXAPOBase, public IXAPOParameters {
+public:
+    CXAPOParametersBase(const void* pRegistrationProperties, void* pParameterBlocks, unsigned int uParameterBlockByteSize, unsigned char fProducer);
+    virtual ~CXAPOParametersBase() {}
 };
 
 // Template base class for sample XAPOs. Fills 0x24-0x5F so derived effect data
 // starts at 0x60 (matches the original 0x864 HeadsetXferEffect object size).
 template <typename Derived, typename Params>
-class CSampleXAPOBase : public CXAPOBase {
+class CSampleXAPOBase : public CXAPOParametersBase {
 protected:
     CSampleXAPOBase();
     virtual ~CSampleXAPOBase() {}

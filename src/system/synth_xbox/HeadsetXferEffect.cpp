@@ -13,10 +13,12 @@ struct XAPO_REGISTRATION_PROPERTIES {
 template <>
 XAPO_REGISTRATION_PROPERTIES CSampleXAPOBase<HeadsetXferEffect, HeadsetXferEffectParams>::m_regProps = {};
 
-// Base template constructor - delegates to CXAPOBase
+// Base template constructor - delegates to CXAPOParametersBase, wiring up
+// the static registration properties and the derived Params block as the
+// XAPO parameter storage (matches ATG::CSampleXAPOBase in the real XDK).
 template <typename Derived, typename Params>
 CSampleXAPOBase<Derived, Params>::CSampleXAPOBase()
-    : CXAPOBase() {
+    : CXAPOParametersBase(&m_regProps, &mParams, sizeof(Params), 0) {
 }
 
 // Explicit template instantiation for HeadsetXferEffect

@@ -7,7 +7,6 @@
 
 class CharDriverMidi : public CharDriver {
 public:
-    virtual ~CharDriverMidi();
     OBJ_CLASSNAME(CharDriverMidi)
     OBJ_SET_TYPE(CharDriverMidi)
     virtual DataNode Handle(DataArray *, bool);

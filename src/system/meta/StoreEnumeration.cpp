@@ -108,7 +108,7 @@ void XboxEnumeration::Poll() {
             char buf[256];
             String str;
             u8 *entryPtr = (u8 *)mEnumBuffer + offset;
-            WideCharToMultiByte(0, 0, (LPCWSTR)(entryPtr + 0x14), *(int *)(entryPtr + 0x10), buf, 0xFF, 0, 0);
+            WideCharToMultiByte(0, 0, *(LPCWSTR *)(entryPtr + 0x14), *(int *)(entryPtr + 0x10), buf, 0xFF, 0, 0);
             str = buf;
 
             EnumProduct prod;

@@ -873,12 +873,12 @@ static void DebugModal(Debug::ModalType &ty, FixedString &str, bool b3) {
     } else {
         if (ty != Debug::kModalWarn) {
             static DataNode &n = DataVariable("notify_level");
-            switch (n.Int()) {
-            case 2: {
+            int notifyLevel = n.Int();
+            if (notifyLevel == 2) {
                 gRealCallback(ty, str, b3);
                 return;
             }
-            case 1: {
+            if (notifyLevel == 1) {
                 Hmx::Object *cheatDisplay =
                     ObjectDir::Main()->Find<Hmx::Object>("cheat_display", false);
                 if (cheatDisplay) {
@@ -887,7 +887,6 @@ static void DebugModal(Debug::ModalType &ty, FixedString &str, bool b3) {
                     cheatDisplay->Handle(show, false);
                 }
                 return;
-            }
             }
         }
         MILO_LOG("%s\n", str.c_str());

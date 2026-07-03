@@ -301,13 +301,13 @@ void StorePanel::HandleNetCacheMgrFailure() {
     switch (failTy) {
     case kNCMFT_StoreServer:
     case kNCMFT_NoSpace:
-        MILO_WARN("Failure %d in NetCacheMgr.\n", failTy);
+        MILO_NOTIFY("Failure %d in NetCacheMgr.\n", failTy);
         break;
     case kNCMFT_StorageDeviceMissing:
         err = kStoreErrorNoMetadata;
         break;
     default:
-        MILO_WARN("Unknown failure %d in NetCacheMgr.\n", failTy);
+        MILO_NOTIFY("Unknown failure %d in NetCacheMgr.\n", failTy);
         break;
     }
     if (err != kStoreErrorNoMetadata && !ThePlatformMgr.IsEthernetCableConnected()) {
@@ -456,7 +456,7 @@ void StorePanel::FinishEnum(std::list<EnumProduct> const &enumList, bool arg) {
         if (err != 0) {
             if (err == 1) {
                 if (TheNetCacheMgr->IsDebug() == 0) {
-                    FormatString fmt("No offers in this metadata were");
+                    FormatString fmt("No offers in this metadata were found in the enumeration!");
                     TheDebug.Notify(fmt.Str());
                 }
             } else {
