@@ -85,7 +85,7 @@ private:
 
 class PartOverride {
 public:
-    PartOverride();
+    PartOverride() throw();
 
     unsigned int mask; // 0x0
     float life; // 0x4

@@ -152,7 +152,7 @@ void Synapse::SetReleaseSmoothing(float val) {
     if (voiceCount != 0) {
         int offset = 0;
         do {
-            ((PitchCorrectedVoice *)((char *)(*(void **)vp) + offset))->SetReleaseSmoothing(coeff);
+            ((TrueColor::ExposureRecipe *)((char *)(*(void **)vp) + offset))->SetMinIntegrationTime(coeff);
             count++;
             offset += 0x38;
         } while (count < (unsigned int)((int)((int)(*(void **)((char *)vp + 0x4)) - (int)(*(void **)vp)) / 56));

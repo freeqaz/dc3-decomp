@@ -54,7 +54,6 @@ void WahEffect::Process(float *buf, int numSamples, int numChans) {
     float f10 = mFreqLo;
     float f9 = mFreqHi;
     float f8 = mBandwidth;
-    float f13_unk14 = mSweepRate;
 
     // Constants
     float f26 = 2.0f;
@@ -88,6 +87,7 @@ void WahEffect::Process(float *buf, int numSamples, int numChans) {
     stack58[1] = f11_state;
 
     // Compute sweep value based on mSweepRate - comparison happens AFTER state loading
+    float f13_unk14 = mSweepRate;
     float sweepVal;
     if (f13_unk14 < 0.0f) {
         sweepVal = f31;

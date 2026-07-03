@@ -1679,11 +1679,6 @@ static int u16_scan_ints(const unsigned short *s, int *vals, int max_vals) {
 }
 #endif
 
-#ifndef HX_NATIVE
-static const wchar_t kEllipsisStr[] = L"...";
-static const wchar_t kBreakChars[] = L" \t\n";
-#endif
-
 void RndText::FitTextJust() {
     BuildFontMaps(true);
 
@@ -1726,12 +1721,15 @@ void RndText::FitTextJust() {
 void RndText::FitTextEllipsis() {
     BuildFontMaps(true);
 
-    HX_VECTOR(unsigned short) wideChars;
     HX_VECTOR(Line) lines;
+    HX_VECTOR(unsigned short) wideChars;
     auto textStr = mText.c_str();
     int numChars = ConvertTextToWide(textStr, wideChars);
 
-    float *charWidths = (float *)_alloca((numChars + 2) * sizeof(float));
+    // charWidths must also hold widths for the truncated+ellipsis buffer, so
+    // size it numChars + ellipsisLen(3) + 2 to avoid overrunning in the
+    // OnComputeCharWidths pass over buf below.
+    float *charWidths = (float *)_alloca((numChars + 5) * sizeof(float));
     OnComputeCharWidths(&wideChars[0], charWidths, false);
 
     float scale = 1.0f;
@@ -1742,7 +1740,7 @@ void RndText::FitTextEllipsis() {
 #ifdef HX_NATIVE
         int ellipsisLen = u16len(kEllipsisU16);
 #else
-        int ellipsisLen = wcslen(kEllipsisStr);
+        int ellipsisLen = wcslen(L"...");
 #endif
 
         // Binary search for how many chars fit
@@ -1779,7 +1777,7 @@ void RndText::FitTextEllipsis() {
 #ifdef HX_NATIVE
         u16cpy(&buf[truncPos], kEllipsisU16);
 #else
-        wcscpy((wchar_t *)&buf[truncPos], kEllipsisStr);
+        wcscpy((wchar_t *)&buf[truncPos], L"...");
 #endif
 
         BuildFontMaps(true);
@@ -1790,7 +1788,7 @@ void RndText::FitTextEllipsis() {
 #ifdef HX_NATIVE
         auto breakChar = u16chr(kBreakCharsU16, buf[truncPos - 1]);
 #else
-        auto breakChar = wcschr(kBreakChars, (wchar_t)buf[truncPos - 1]);
+        auto breakChar = wcschr(L" .,", (wchar_t)buf[truncPos - 1]);
 #endif
         while (truncPos > 1
             && (lines.size() > 1 || mWidth <= bounds.w
@@ -1818,7 +1816,7 @@ void RndText::FitTextEllipsis() {
 #ifdef HX_NATIVE
             u16cpy(&buf[truncPos], kEllipsisU16);
 #else
-            wcscpy((wchar_t *)&buf[truncPos], kEllipsisStr);
+            wcscpy((wchar_t *)&buf[truncPos], L"...");
 #endif
             BuildFontMaps(true);
             OnComputeCharWidths(buf, charWidths, false);

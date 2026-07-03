@@ -2,6 +2,7 @@
 #include "DancerSkeleton.h"
 #include "gesture/BaseSkeleton.h"
 #include "hamobj/MoveDir.h"
+#include "math/Key.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
 #include "rndobj/Anim.h"
@@ -127,8 +128,8 @@ BEGIN_LOADS(DancerSequence)
                     }
                 }
                 if (skeletonRev < 3) {
-                    std::vector<float> unusedFloats;
-                    d >> unusedFloats;
+                    Key<float> unusedKey;
+                    d.stream >> unusedKey;
                     int unusedVal;
                     d >> unusedVal;
                 } else if (skeletonRev >= 5) {

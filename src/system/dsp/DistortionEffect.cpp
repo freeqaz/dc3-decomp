@@ -40,7 +40,7 @@ void DistortionEffect::Process(float *f, int numSamples, int numChans) {
             }
 
             left += numChans;
-            right += numChans;
+            right += 2;
             count -= 1;
         } while (count != 0);
     }

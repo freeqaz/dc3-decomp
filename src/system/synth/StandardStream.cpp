@@ -591,20 +591,14 @@ void StandardStream::Init(float f1, float f2, Symbol s, bool b4) {
 }
 
 void StandardStream::InitInfo(int i1, int sampleRate, bool floatSamples, int i4) {
-    auto& _mInfoChannels = this->mInfoChannels;
-    auto& _mVirtualChans = this->mVirtualChans;
-    auto& _mSampleRate = this->mSampleRate;
-    auto& _mGetInfoOnly = this->mGetInfoOnly;
-    auto& _mFloatSamples = this->mFloatSamples;
     unk154 = i4;
-    int numChannels = _mVirtualChans + i1;
-    unkec = (_mInfoChannels / sampleRate);
-    _mInfoChannels = numChannels;
-    auto& _ref2 = _mSampleRate;
-    if (!_mGetInfoOnly) {
-        if (_ref2 == 0) {
-            _mFloatSamples = floatSamples;
-            _ref2 = sampleRate;
+    int numChannels = mVirtualChans + i1;
+    unkec = (float)i4 / sampleRate;
+    mInfoChannels = numChannels;
+    if (!mGetInfoOnly) {
+        if (mSampleRate == 0) {
+            mFloatSamples = floatSamples;
+            mSampleRate = sampleRate;
             int bufBytes = mBufSecs * sampleRate * 2.0f;
 #ifndef HX_NATIVE
             MILO_ASSERT(bufBytes % (2*kStreamBufSize) == 0, 0x13F);
@@ -612,32 +606,29 @@ void StandardStream::InitInfo(int i1, int sampleRate, bool floatSamples, int i4)
             bufBytes >>= 0xE;
             SystemConfig("synth", "iop")->FindInt("max_slip");
             for (int i = 0; i < numChannels; i++) {
+                bool slip = mChanParams[i]->mSlipEnabled;
                 if (unk158) {
-                    mChannels.push_back(
-                        new StreamReceiverFile(bufBytes, mChanParams[i]->mSlipEnabled)
-                    );
+                    mChannels.push_back(new StreamReceiverFile(bufBytes, slip));
                 } else {
                     mChannels.push_back(
-                        StreamReceiver::New(
-                            bufBytes, sampleRate, mChanParams[i]->mSlipEnabled, i
-                        )
+                        StreamReceiver::New(bufBytes, sampleRate, slip, i)
                     );
                 }
             }
 #ifdef HX_WEB
             UpdateWebDebugLabels();
 #endif
-            for (int i = 0; i < _mVirtualChans; i++) {
+            for (int i = 0; i < mVirtualChans; i++) {
                 void *buf = MemAlloc(
-                    _mFloatSamples ? 0x1000 : 0x800, __FILE__, 0x159, "stream mVirtBufs"
+                    mFloatSamples ? 0x1000 : 0x800, __FILE__, 0x159, "stream mVirtBufs"
                 );
                 mVirtBufs.push_back(buf);
             }
             mState = kBuffering;
         } else {
             MILO_ASSERT(numChannels == mChannels.size(), 0x161);
-            MILO_ASSERT(_ref2 == sampleRate, 0x162);
-            MILO_ASSERT(_mFloatSamples == floatSamples, 0x163);
+            MILO_ASSERT(mSampleRate == sampleRate, 0x162);
+            MILO_ASSERT(mFloatSamples == floatSamples, 0x163);
         }
         if (mJumpSamplesInvalid) {
             setJumpSamplesFromMs(mJumpFromMs, mJumpToMs);

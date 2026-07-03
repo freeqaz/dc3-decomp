@@ -103,73 +103,72 @@ void Voice::dispose(PoolVoice *pv, unsigned int) {
 long Voice::createOrReuse(
     PoolVoice *pPoolVoice, unsigned int &, tWAVEFORMATEX &wfx, XAUDIO2_VOICE_SENDS *sends
 ) {
-    long result;
     if (!TheXboxSynth->OutputVoice()) {
-        result = 0;
-    } else {
-        MILO_ASSERT(pPoolVoice->eg == 0, 0x1c1);
-        pPoolVoice->eg = (int)new EnvelopeGenerator();
-        MILO_ASSERT(mEnvelopeParams == 0, 0x1c3);
-        pPoolVoice->egParams = (int)new EnvelopeGeneratorParams;
-
-        XAUDIO2_EFFECT_DESCRIPTOR effectDesc;
-        XAUDIO2_EFFECT_CHAIN effectChain;
-        effectDesc.InitialState = 0;
-        effectChain.EffectCount = 1;
-        effectDesc.pEffect = (IUnknown *)pPoolVoice->eg;
-        effectDesc.OutputChannels = mChannels;
-        effectChain.pEffectDescriptors = &effectDesc;
-
-        MemPushTemp();
-
-        CriticalSection *cs = &TheXboxSynth->unkb0;
-        if (cs) {
-            cs->Enter();
-        }
-
-        int *pEngine = (int *)TheXboxSynth->unkec;
-        HRESULT hr = ((HRESULT(*)(
-            int *,
-            IXAudio2SourceVoice **,
-            tWAVEFORMATEX *,
-            int,
-            float,
-            int,
-            XAUDIO2_VOICE_SENDS *,
-            XAUDIO2_EFFECT_CHAIN *
-        ))(*(int *)(*(int *)pEngine + 0x20)))(
-            pEngine,
-            (IXAudio2SourceVoice **)pPoolVoice,
-            &wfx,
-            0,
-            4.0f,
-            0,
-            sends,
-            &effectChain
-        );
-
-        if (hr) {
-            char buf[0x800] = "";
-            MEMORYSTATUS memStatus;
-            GlobalMemoryStatus(&memStatus);
-            Hx_snprintf(buf, 0x800, "XAudio2: CreateSourceVoice failed with 0x%X\n", hr);
-            MemPrintOverview(kNoHeap, buf + strlen(buf));
-            MILO_FAIL(buf);
-            if (cs) {
-                cs->Exit();
-            }
-            result = hr;
-        } else {
-            if (cs) {
-                cs->Exit();
-            }
-            gVoiceCounters[0]++;
-            memcpy(&pPoolVoice->wfx, &wfx, 0x12);
-            unk54 = (sends == nullptr || sends->SendCount > 0);
-            result = 0;
-        }
-        MemPopTemp();
+        return 0;
     }
+    long result;
+    MILO_ASSERT(pPoolVoice->eg == 0, 0x1c1);
+    pPoolVoice->eg = (int)new EnvelopeGenerator();
+    MILO_ASSERT(mEnvelopeParams == 0, 0x1c3);
+    pPoolVoice->egParams = (int)new EnvelopeGeneratorParams;
+
+    XAUDIO2_EFFECT_DESCRIPTOR effectDesc;
+    XAUDIO2_EFFECT_CHAIN effectChain;
+    effectDesc.InitialState = 0;
+    effectChain.EffectCount = 1;
+    effectDesc.pEffect = (IUnknown *)pPoolVoice->eg;
+    effectDesc.OutputChannels = mChannels;
+    effectChain.pEffectDescriptors = &effectDesc;
+
+    MemPushTemp();
+
+    CriticalSection *cs = &TheXboxSynth->unkb0;
+    if (cs) {
+        cs->Enter();
+    }
+
+    int *pEngine = (int *)TheXboxSynth->unkec;
+    HRESULT hr = ((HRESULT(*)(
+        int *,
+        IXAudio2SourceVoice **,
+        tWAVEFORMATEX *,
+        int,
+        float,
+        int,
+        XAUDIO2_VOICE_SENDS *,
+        XAUDIO2_EFFECT_CHAIN *
+    ))(*(int *)(*(int *)pEngine + 0x20)))(
+        pEngine,
+        (IXAudio2SourceVoice **)pPoolVoice,
+        &wfx,
+        0,
+        4.0f,
+        0,
+        sends,
+        &effectChain
+    );
+
+    if (hr) {
+        char buf[0x800] = "";
+        MEMORYSTATUS memStatus;
+        GlobalMemoryStatus(&memStatus);
+        Hx_snprintf(buf, 0x800, "XAudio2: CreateSourceVoice failed with 0x%X\n", hr);
+        MemPrintOverview(kNoHeap, buf + strlen(buf));
+        MILO_FAIL(buf);
+        if (cs) {
+            cs->Exit();
+        }
+        result = hr;
+    } else {
+        if (cs) {
+            cs->Exit();
+        }
+        gVoiceCounters[0]++;
+        memcpy(&pPoolVoice->wfx, &wfx, 0x12);
+        unk54 = (sends == nullptr || sends->SendCount > 0);
+        result = 0;
+    }
+    MemPopTemp();
     return result;
 }
 

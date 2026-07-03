@@ -1,4 +1,5 @@
 #pragma once
+#line 2 "e:\\lazer_build_gmc1\\system\\src\\synth360\\Voice.h"
 #include "types.h"
 #include "xdk/win_types.h"
 #include "xdk/XAPILIB.h"

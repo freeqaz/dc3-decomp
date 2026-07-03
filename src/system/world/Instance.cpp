@@ -68,7 +68,7 @@ void WorldInstance::SavePersistentObjects(BinStream &bs) {
         DeleteTransientObjects();
         for (ObjDirItr<Hmx::Object> i(this, false); i != nullptr; ++i) {
             if (i != this) {
-                MILO_ASSERT(dynamic_cast<ObjectDir*>((Hmx::Object*)i) == NULL, 0x12F);
+                MILO_ASSERT(dynamic_cast<ObjectDir*>(i.Ptr()) == NULL, 0x12F);
                 i->PreSave(bs);
             }
         }

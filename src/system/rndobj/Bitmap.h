@@ -219,6 +219,7 @@ public:
     /** Loads this RndBitmap from a BinStream. */
     void Load(BinStream &);
 
+#line 222 "e:\\lazer_build_gmc1\\system\\src\\rndobj\\Bitmap.h"
     MEM_OVERLOAD(RndBitmap, 0x1A);
 
     int Width() const { return mWidth; }

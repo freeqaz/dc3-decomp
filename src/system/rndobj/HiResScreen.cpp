@@ -162,7 +162,7 @@ void HiResScreen::TakeShot(const char *c, int i) {
     } else {
         mAccumWidth = i * (TheRnd.Width() - 480);
         mAccumHeight = i * TheRnd.Height() - i * 270;
-        if ((int)mAccumWidth < TheRnd.Width() || (int)mAccumHeight < TheRnd.Height()) {
+        if (mAccumWidth < TheRnd.Width() || mAccumHeight < TheRnd.Height()) {
             MILO_NOTIFY(MakeString("HiResScreenshot requires more tiles (%d specified)", i));
             mActive = false;
         } else {

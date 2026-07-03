@@ -412,8 +412,10 @@ int fft_matrix_forward_columnwise(float* data, long size, float* context) {
     }
 
     // Load VMX constants
-    v_zero = *(XMVECTOR *)__vmx_00000000000000000000000000000000;
-    v_sign = *(XMVECTOR *)__vmx_bf8000003f800000bf8000003f800000;
+    XMVECTOR k_zero = { 0.0f, 0.0f, 0.0f, 0.0f };
+    XMVECTOR k_sign = { 1.0f, -1.0f, 1.0f, -1.0f };
+    v_zero = k_zero;
+    v_sign = k_sign;
 
     // Initialize permutation masks - these will be constructed with lis/ori
     perm_lo.u[0] = 0x00010203;
