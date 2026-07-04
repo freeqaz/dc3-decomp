@@ -1036,9 +1036,9 @@ static inline void DrawMultiMeshWithEnviron(RndMultiMesh *mmesh) {
     {
         RndEnvironTracker tracker(curEnv, nullptr);
         mmesh->DrawShowing();
-    }
-    if (curEnv) {
-        curEnv->SetUseApproxGlobal(savedApprox);
+        if (curEnv) {
+            curEnv->SetUseApproxGlobal(savedApprox);
+        }
     }
 }
 
@@ -1222,43 +1222,38 @@ void WorldCrowd::DrawShowing() {
                     const Transform &meshXfm = _ref0->WorldXfm();
                     memcpy(&charXfm, &meshXfm, 0x30);
                 } else {
+                    // Copy the mesh up-row straight into the char transform's
+                    // up-row member, then re-read its components from the stack.
+                    // This keeps the up vector in memory rather than pinning
+                    // three nonvolatile FPRs across the whole block.
                     const Transform &meshXfm2 = _ref0->WorldXfm();
-                    float upX = meshXfm2.m.z.x;
-                    float upY = meshXfm2.m.z.y;
-                    float upZ = meshXfm2.m.z.z;
+                    charXfm.m.z = meshXfm2.m.z;
 
                     // Cross product of camera Y-axis with mesh up vector,
-                    // component swaps determine Face vs Away rotation
-                    float fwdY, fwdZ;
+                    // component swaps determine Face vs Away rotation.
+                    // Only two WorldXfm() expansions: reuse the reference.
                     float tempA, tempB;
+                    const Transform &camWXfm = curCam->WorldXfm();
                     if (mCrowdRotate == kCrowdRotateFace) {
-                        const Transform &camWXfm = curCam->WorldXfm();
-                        fwdZ = camWXfm.m.y.y * upX - camWXfm.m.y.x * upY;
-                        fwdY = camWXfm.m.y.x * upZ - camWXfm.m.y.z * upX;
-                        tempA = upZ;
-                        tempB = upY;
+                        charXfm.m.x.z = camWXfm.m.y.y * charXfm.m.z.x - camWXfm.m.y.x * charXfm.m.z.y;
+                        charXfm.m.x.y = camWXfm.m.y.x * charXfm.m.z.z - camWXfm.m.y.z * charXfm.m.z.x;
+                        tempA = charXfm.m.z.z;
+                        tempB = charXfm.m.z.y;
                     } else {
-                        const Transform &camWXfm = curCam->WorldXfm();
-                        fwdY = camWXfm.m.y.z * upX - camWXfm.m.y.x * upZ;
-                        fwdZ = camWXfm.m.y.x * upY - camWXfm.m.y.y * upX;
-                        tempA = upY;
-                        tempB = upZ;
+                        charXfm.m.x.y = camWXfm.m.y.z * charXfm.m.z.x - camWXfm.m.y.x * charXfm.m.z.z;
+                        charXfm.m.x.z = camWXfm.m.y.x * charXfm.m.z.y - camWXfm.m.y.y * charXfm.m.z.x;
+                        tempA = charXfm.m.z.y;
+                        tempB = charXfm.m.z.z;
                     }
 
                     // Forward (x-row): normalize cross product result
-                    const Transform &camWXfm3 = curCam->WorldXfm();
-                    charXfm.m.x.x = camWXfm3.m.y.y * tempB - camWXfm3.m.y.z * tempA;
-                    charXfm.m.x.y = fwdY;
-                    charXfm.m.x.z = fwdZ;
+                    charXfm.m.x.x = camWXfm.m.y.y * tempB - camWXfm.m.y.z * tempA;
                     Normalize(charXfm.m.x, charXfm.m.x);
 
                     // Right (y-row): forward × up using normalized forward values
-                    charXfm.m.y.x = charXfm.m.x.y * upX - upY * charXfm.m.x.x;
-                    charXfm.m.y.y = upZ * charXfm.m.x.x - charXfm.m.x.z * upX;
-                    charXfm.m.y.z = charXfm.m.x.z * upY - charXfm.m.x.y * upZ;
-                    charXfm.m.z.x = upX;
-                    charXfm.m.z.y = upY;
-                    charXfm.m.z.z = upZ;
+                    charXfm.m.y.x = charXfm.m.x.y * charXfm.m.z.x - charXfm.m.z.y * charXfm.m.x.x;
+                    charXfm.m.y.y = charXfm.m.z.z * charXfm.m.x.x - charXfm.m.x.z * charXfm.m.z.x;
+                    charXfm.m.y.z = charXfm.m.x.z * charXfm.m.z.y - charXfm.m.x.y * charXfm.m.z.z;
                 }
                 charXfm.v.x = 0;
                 charXfm.v.y = 0;
@@ -1351,9 +1346,9 @@ void WorldCrowd::DrawShowing() {
                         if (mCharForceLod != kLODPerFrame) {
                             curChar->SetLodType(kLODPerFrame);
                         }
-                    }
-                    if (env) {
-                        env->SetUseApproxGlobal(savedApprox);
+                        if (env) {
+                            env->SetUseApproxGlobal(savedApprox);
+                        }
                     }
                     curCam->Select();
                 }

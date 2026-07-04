@@ -136,14 +136,13 @@ void StorePanel::Poll() {
                 MILO_ASSERT(pBuffer, 0x16d);
                 RndBitmap bmap;
                 BufStream stream(pBuffer, size, true);
-                bmap.Reset();
                 bmap.Load(stream);
                 bmap.SetMip(0);
                 TheNetCacheMgr->DeleteNetCacheLoader(loader);
                 mAlbumTex->SetBitmap(bmap, 0, false, RndTex::kRegular);
                 if (mPendingArtCallback->GetState() == UIPanel::kUp) {
                     static Message msg("art_loaded");
-                    mPendingArtCallback->HandleType(msg.mData);
+                    mPendingArtCallback->Handle(msg.mData, false);
                 }
                 mArtLoader = 0;
                 mPendingArtCallback = 0;
@@ -163,21 +162,21 @@ void StorePanel::Poll() {
 
     if (!mPurchaser && mNeedsReEnum && mEnumJobID == -1) {
         mNeedsReEnum = false;
-        EnumerateOffers(mPendingOffers.size() != mOffers.size());
+        EnumerateOffers(!mPendingOffers.empty());
     }
 
     if (mPurchaser) {
-        mPurchaser->Initiate();
+        mPurchaser->Poll();
         if (!mPurchaser->IsPurchasing()) {
             bool enumFinished = false;
             bool purchaseMade = false;
-            if (mPurchaser->PurchaseMade()) {
-                if (!(mCartOffers.empty())) {
+            if (mPurchaser->IsSuccess()) {
+                if (mCartOffers.size() != 0) {
                     // Multiple items checkout
-                    if (mPurchaser->IsSuccess()) {
+                    if (mPurchaser->NeedsEnum()) {
                         std::vector<unsigned long long> songIds;
                         for (size_t i = 0; i < mCartOffers.size(); i++) {
-                            songIds.push_back(mCartOffers[i].first->songID);
+                            songIds.push_back(mCartOffers[i].first->SongID());
                         }
                         MultipleItemsPostPurchaseEnumJob *job = new MultipleItemsPostPurchaseEnumJob(
                                 this,
@@ -192,30 +191,32 @@ void StorePanel::Poll() {
                 } else {
                     // Single item checkout
                     if (mCheckoutItem != 0 && !mCheckoutItem->isPurchased) {
-                        if (mPurchaser->IsSuccess()) {
+                        if (mPurchaser->PurchaseMade()) {
                             enumFinished = true;
                             mCheckoutItem->isPurchased = true;
                             static Message msg("enum_finished");
                             HandleType(msg.mData);
                             TheUI->Handle(msg.mData, false);
-                        } else if (mPurchaser->IsSuccess()) {
-                            // purchased
-                        } else if (mCheckoutProfile != 0) {
-                            PostPurchaseEnumJob *job = new PostPurchaseEnumJob(
-                                    this,
-                                    mCheckoutProfile,
-                                    mCheckoutItem->songID,
-                                    mPurchaser->mSource,
-                                    mPurchaser->mUserIndex
-                                );
-                            mPostPurchaseJob = job;
-                            purchaseMade = true;
+                        } else if (mPurchaser->NeedsEnum()) {
+                            if (mCheckoutProfile != 0) {
+                                PostPurchaseEnumJob *job = new PostPurchaseEnumJob(
+                                        this,
+                                        mCheckoutProfile,
+                                        mCheckoutItem->songID,
+                                        mPurchaser->mSource,
+                                        mPurchaser->mUserIndex
+                                    );
+                                mPostPurchaseJob = job;
+                                purchaseMade = true;
+                            }
                         }
                     }
                 }
             }
 
-            static Message msg("checkout_finished", DataNode(enumFinished), DataNode(purchaseMade));
+            static Message msg("checkout_finished", DataNode(0), DataNode(0));
+            msg->Node(2) = DataNode(enumFinished);
+            msg->Node(3) = DataNode(purchaseMade);
             HandleType(msg.mData);
             TheUI->Handle(msg.mData, false);
 
