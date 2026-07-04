@@ -269,7 +269,7 @@ BEGIN_HANDLERS(Rnd)
     HANDLE_EXPR(toggle_all_postprocs, mDisablePostProc = !mDisablePostProc)
     HANDLE_ACTION(recreate_defaults, CreateDefaults())
     HANDLE_ACTION(
-        reload_mat_materials, RndMat::ReloadAndUpdateMat(_msg->Obj<ObjectDir>(2))
+        reload_mat_metaterials, RndMat::ReloadAndUpdateMat(_msg->Obj<ObjectDir>(2))
     )
     HANDLE(toggle_show_metamat_errors, OnToggleShowMetaMatErrors)
     HANDLE(toggle_show_shader_errors, OnToggleShowShaderErrors)

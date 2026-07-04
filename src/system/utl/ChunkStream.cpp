@@ -15,7 +15,7 @@ namespace {
     bool gDecompressionThread = false;
     SynchronizationEvent gDataProcessedEvt;
     SynchronizationEvent gDataReadyEvt;
-    void *mThreadHandle;
+    void *mThreadHandle[1];
 
     unsigned long DecompressionThread(void *v) {
         for (; gDecompressionThread != false;) {
@@ -34,10 +34,12 @@ namespace {
 #ifdef HX_NATIVE
             // Skip threaded decompression on native — runs synchronously
 #else
-            mThreadHandle = CreateThread(nullptr, 0, DecompressionThread, nullptr, 4, nullptr);
-            MILO_ASSERT(mThreadHandle, 0x82);
-            XSetThreadProcessor(mThreadHandle, 3);
-            ResumeThread(mThreadHandle);
+            for (int i = 0; i < 1; i++) {
+                mThreadHandle[i] = CreateThread(nullptr, 0, DecompressionThread, nullptr, 4, nullptr);
+                MILO_ASSERT(mThreadHandle[i], 0x82);
+                XSetThreadProcessor(mThreadHandle[i], 3);
+                ResumeThread(mThreadHandle[i]);
+            }
 #endif
         } else {
             gDataReadyEvt.Set();

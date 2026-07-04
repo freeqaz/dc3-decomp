@@ -11,7 +11,7 @@ struct MeterEffectParams;
 class FxSendMeterEffect360 : public FxSendMeterEffect, public FxSend360 {
 public:
     virtual ~FxSendMeterEffect360();
-    OBJ_CLASSNAME(FxSendMeterEffect360)
+    OBJ_CLASSNAME(FxSendMeterEffect)
     OBJ_SET_TYPE(FxSendMeterEffect360)
     virtual void Recreate(std::vector<FxSend *> &);
     virtual void UpdateMix();

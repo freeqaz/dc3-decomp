@@ -164,7 +164,7 @@ void MainMenuPanel::CleanupNetCacheRelated() {
     mNetCacheActive = false;
 }
 
-void MainMenuPanel::ContentDone() { HandleType(Message("content_refresh_Done")); }
+void MainMenuPanel::ContentDone() { HandleType(Message("content_refresh_done")); }
 
 void MainMenuPanel::DownloadMotdArt() {
     if (mIsEntering) {

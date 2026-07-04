@@ -48,7 +48,7 @@ class MemcardXbox : public Memcard {
 public:
     MemcardXbox() : mSelectorPending(0), mSelectorCallback(0), mSelectedDevice(0) {}
     virtual ~MemcardXbox() {}
-    virtual void Init() { Memcard::Init(); }
+    virtual void Init();
     virtual void Terminate() { Memcard::Terminate(); }
     virtual void Poll();
     virtual void SetContainerName(const char *);

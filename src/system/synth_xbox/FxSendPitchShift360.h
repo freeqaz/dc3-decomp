@@ -7,7 +7,7 @@ class FxSendPitchShift360 : public FxSendPitchShift, public FxSend360 {
 public:
     FxSendPitchShift360() : FxSend360(this) {}
     virtual ~FxSendPitchShift360() {}
-    OBJ_CLASSNAME(FxSendPitchShift360)
+    OBJ_CLASSNAME(FxSendPitchShift)
     OBJ_SET_TYPE(FxSendPitchShift360)
     virtual void Recreate(std::vector<FxSend *> &);
     virtual void UpdateMix();

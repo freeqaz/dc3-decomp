@@ -6,7 +6,7 @@
 class NgEnviron : public RndEnviron {
 public:
     // Hmx::Object
-    OBJ_CLASSNAME(NgEnviron);
+    OBJ_CLASSNAME(Environ);
     OBJ_SET_TYPE(NgEnviron);
     // RndEnviron
     virtual void Select(const Vector3 *);

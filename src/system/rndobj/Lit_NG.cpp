@@ -48,7 +48,7 @@ NgLight::~NgLight() {
     RELEASE(unk188);
 }
 
-NgLight::NgLight() : mShadowRT(0), mShadowMapTex(0), unk188(0), unk18c(-1) {}
+NgLight::NgLight() : mShadowRT(0), mShadowMap(0), unk188(0), unk18c(-1) {}
 
 RndTex *NgLight::CreateShadowTex() {
     PhysMemTypeTracker tracker("D3D(phys):ShadowTex");
@@ -250,14 +250,14 @@ void NgLight::CheckShadowMap() {
                         if (HaveShadows(draws)) {
                             MILO_ASSERT(mShadowRT, 0x81);
                             RenderShadows(draws);
-                            mShadowMapTex = mShadowRT;
+                            mShadowMap = mShadowRT;
                         } else {
-                            mShadowMapTex = TheRnd.GetDefaultTex(Rnd::kDefaultTex_FlatNormal);
-                            MILO_ASSERT(mShadowMapTex, 0x8a);
+                            mShadowMap = TheRnd.GetDefaultTex(Rnd::kDefaultTex_FlatNormal);
+                            MILO_ASSERT(mShadowMap, 0x8a);
                         }
                     } else {
-                        mShadowMapTex = TheRnd.GetDefaultTex(Rnd::kDefaultTex_FlatNormal);
-                        MILO_ASSERT(mShadowMapTex, 0x91);
+                        mShadowMap = TheRnd.GetDefaultTex(Rnd::kDefaultTex_FlatNormal);
+                        MILO_ASSERT(mShadowMap, 0x91);
                     }
                     unk18c = TheRnd.DrawCount();
                     if (tempOverride) {
@@ -265,7 +265,7 @@ void NgLight::CheckShadowMap() {
                     }
                 }
             } else {
-                RELEASE(mShadowMapTex);
+                RELEASE(mShadowMap);
             }
         }
     }

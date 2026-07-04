@@ -383,6 +383,8 @@ MCResult MCContainerXbox::PrintDir(const char *cc, bool b2) {
 #pragma endregion
 #pragma region MemcardXbox
 
+void MemcardXbox::Init() { Memcard::Init(); }
+
 void MemcardXbox::Poll() {
     Memcard::Poll();
     if (mSelectorPending && mXOverlapped.InternalLow != 0x3E5) {

@@ -23,11 +23,11 @@ void HeldButtonPanel::Enter() {
     DataArray *heldButtonsArr = TypeDef()->FindArray(held_buttons, false);
     if (heldButtonsArr) {
         for (int i = 1; i < heldButtonsArr->Size(); i++) {
-            DataArray *elem = heldButtonsArr->Array(i);
-            MILO_ASSERT(elem, 0x27);
-            float holdTime = elem->Float(1);
+            DataArray *el = heldButtonsArr->Array(i);
+            MILO_ASSERT(el, 0x27);
+            float holdTime = el->Float(1);
             if (holdTime > 0) {
-                ActionRec rec((JoypadAction)elem->Int(0), holdTime, TheUserMgr);
+                ActionRec rec((JoypadAction)el->Int(0), holdTime, TheUserMgr);
                 recs.push_back(rec);
             }
         }

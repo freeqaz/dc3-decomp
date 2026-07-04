@@ -7,7 +7,7 @@
 class FxSendCompress360 : public FxSendCompress, public FxSend360 {
 public:
     virtual ~FxSendCompress360();
-    OBJ_CLASSNAME(FxSendCompress360)
+    OBJ_CLASSNAME(FxSendCompress)
     OBJ_SET_TYPE(FxSendCompress360)
     virtual void Recreate(std::vector<FxSend *> &);
     virtual void UpdateMix();

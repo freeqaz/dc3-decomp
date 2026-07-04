@@ -261,7 +261,7 @@ namespace {
 }
 
 CacheResourceResult HolmesClientCacheResource(const char *c1, const char *c2) {
-    AutoSlowFrame frame(__FUNCTION__, 1000);
+    AutoSlowFrame frame("HolmesClientCacheFile", 1000);
     CritSecTracker cst(&gCrit);
     BeginCmd(Holmes::kCacheResource, true);
     gLastCachedResource = c2;

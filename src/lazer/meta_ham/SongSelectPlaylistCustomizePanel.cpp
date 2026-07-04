@@ -121,7 +121,7 @@ BEGIN_HANDLERS(SongSelectPlaylistCustomizePanel)
     HANDLE_EXPR(
         is_valid_song, TheHamSongMgr.GetSongIDFromShortName(_msg->Sym(2), false) != false
     )
-    HANDLE_ACTION(s, Refresh())
+    HANDLE_ACTION(refresh, Refresh())
     HANDLE_ACTION(get_playlist_provider, 0)
     HANDLE_ACTION(swap_songs, m_pPlaylist->SwapSongs(_msg->Int(2), _msg->Int(3)))
     HANDLE_ACTION(insert_song, InsertSong(_msg->Sym(2), _msg->Int(3)))

@@ -40,7 +40,19 @@ public:
     virtual bool IsOutputDrained() const { return true; }
 #endif
 
-    MEM_OVERLOAD(StreamReceiver, 0x23);
+#ifdef HX_NATIVE
+    static void *operator new(size_t s) {
+#else
+    static void *operator new(unsigned int s) {
+#endif
+        return _MemAllocTemp(s, __FILE__, 0x23, "StreamReceiver", 0);
+    }
+#ifdef HX_NATIVE
+    static void *operator new(size_t s, void *place) { return place; }
+#else
+    static void *operator new(unsigned int s, void *place) { return place; }
+#endif
+    static void operator delete(void *v) { MemFree(v, __FILE__, 0x23, "StreamReceiver"); }
 
     int BytesWriteable();
     bool Ready();

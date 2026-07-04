@@ -8,7 +8,7 @@ class FxSendFlanger360 : public FxSendFlanger, public FxSend360 {
 public:
     // Hmx::Object
     virtual ~FxSendFlanger360();
-    OBJ_CLASSNAME(FxSendFlanger360)
+    OBJ_CLASSNAME(FxSendFlanger)
     OBJ_SET_TYPE(FxSendFlanger360)
     virtual void Recreate(std::vector<FxSend *> &);
     virtual void UpdateMix();

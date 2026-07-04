@@ -31,7 +31,7 @@ public:
     NgSpotlightDrawer();
     // Hmx::Object
     virtual ~NgSpotlightDrawer();
-    OBJ_CLASSNAME(NgSpotlightDrawer)
+    OBJ_CLASSNAME(SpotlightDrawer)
     OBJ_SET_TYPE(NgSpotlightDrawer)
 
     // PostProcessor

@@ -68,18 +68,18 @@ u64 StreamReceiver::GetBytesPlayed() {
 #endif
 }
 
-void StreamReceiver::WriteData(const void *data, int size) {
+void StreamReceiver::WriteData(const void *data, int bytes) {
 #ifdef HX_NATIVE
     // On native, forward data directly to the platform receiver's ring buffer
     // via StartSendImpl. The base class mBuffer is not used — audio output
     // reads from StreamReceiverNative::mPCMBuf instead.
-    StartSendImpl((unsigned char *)data, size, 0);
+    StartSendImpl((unsigned char *)data, bytes, 0);
     mSending = true;
     mWantToSend = false;
 #else
-    MILO_ASSERT(size > 0 && size <= BytesWriteable(), 0x51);
-    memcpy(mBuffer + mRingFreeSpace, data, size);
-    mRingFreeSpace += size;
+    MILO_ASSERT(bytes > 0 && bytes <= BytesWriteable(), 0x51);
+    XMemCpy(mBuffer + mRingFreeSpace, data, bytes);
+    mRingFreeSpace += bytes;
 #endif
 }
 

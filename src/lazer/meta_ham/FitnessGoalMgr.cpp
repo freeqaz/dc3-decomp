@@ -169,9 +169,9 @@ void FitnessGoalMgr::HandleCmdUpdateFitnessGoalToRC() {
     mCurrentRCJob = nullptr;
     {
         // Scoped to control DataNode/DataArrayPtr lifetimes and Release order
-        DataNode updated("updated");
         DataNode fitness("fitness");
-        ThePlatformMgr.SmartGlassSend(0, DataArrayPtr(fitness, updated));
+        DataNode updated("updated");
+        ThePlatformMgr.SmartGlassSend(0, DataArrayPtr(updated, fitness));
     }
     RELEASE(mCommands.front());
     mCommands.pop_front();

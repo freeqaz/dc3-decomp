@@ -83,7 +83,7 @@ void DataPoint::AddPair(Symbol name, DataNode value) { AddPair(name.Str(), value
 DataPointMgr::DataPointMgr()
     : mDataPointRecorder(nullptr), mDebugDataPointRecorder(nullptr),
       mCrucibleHostname(nullptr), mCrucibleApp(nullptr), mCrucibleProject(nullptr),
-      mCrucibleVersion(0) {}
+      mCrucibleVersion(nullptr) {}
 
 DataPointMgr::~DataPointMgr() {}
 

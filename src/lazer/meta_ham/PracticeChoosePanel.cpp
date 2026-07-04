@@ -350,7 +350,7 @@ int PracticeChoosePanel::GetStepNumber(const StepMoves &moves) const {
 void PracticeChoosePanel::SetUpCustomSection() {
     int i4 = 0;
     PracticeSection *customSect =
-        TheHamDirector->GetWorld()->Find<PracticeSection>("custom_sect");
+        TheHamDirector->GetWorld()->Find<PracticeSection>("custom.sect");
     customSect->ClearSteps();
     FOREACH (it, mStepMoves) {
         StepMoves cur = *it;

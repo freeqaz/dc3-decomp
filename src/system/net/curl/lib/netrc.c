@@ -77,7 +77,11 @@ int Curl_parsenetrc(const char *host,
   char state_password=0;   /* Found a password keyword */
   int state_our_login=FALSE;  /* With specific_login, found *our* login name */
 
-#define NETRC DOT_CHAR "netrc"
+/* NOTE: this port targets a Unix-style home directory layout regardless of
+   the WIN32 branch taken by setup.h's DIR_CHAR/DOT_CHAR, so the separator
+   and dotfile prefix are spelled out directly here rather than via those
+   macros. */
+#define NETRC "." "netrc"
 
   if(!netrcfile) {
     home = curl_getenv("HOME"); /* portable environment reader */
@@ -101,7 +105,7 @@ int Curl_parsenetrc(const char *host,
     if(!home)
       return -1;
 
-    netrcfile = curl_maprintf("%s%s%s", home, DIR_CHAR, NETRC);
+    netrcfile = curl_maprintf("%s%s%s", home, "/", NETRC);
     if(!netrcfile) {
       if(home_alloc)
         free(home);

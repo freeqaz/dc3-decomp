@@ -184,7 +184,6 @@ void MetaPanel::Init() {
     MetagameRank::Preinit();
     TheProfileMgr.Init();
     Leaderboards::Init();
-    FitnessGoalMgr::Init();
 #endif
 #ifdef HX_NATIVE
     // ProfileMgr::Init() above is #ifndef HX_NATIVE, so on native mProfiles is
@@ -207,6 +206,9 @@ void MetaPanel::Init() {
     // Without this, TheChallenges is null and MainMenuProvider::Text() crashes
     // when the main menu "challenges" item renders its "new" badge.
     Challenges::Init();
+#ifndef HX_NATIVE
+    FitnessGoalMgr::Init();
+#endif
     REGISTER_OBJ_FACTORY(HamStarsDisplay)
     REGISTER_OBJ_FACTORY(WeightInputPanel)
     REGISTER_OBJ_FACTORY(AppNavProvider)

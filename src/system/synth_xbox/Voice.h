@@ -11,7 +11,7 @@ class FxSend360;
 struct PoolVoice {
     int sourceVoice;        // 0x00 - IXAudio2SourceVoice*
     int eg;                 // 0x04 - XAPO envelope generator
-    int egParams;           // 0x08 - envelope effect parameters
+    void *egParams;          // 0x08 - envelope effect parameters
     tWAVEFORMATEX wfx;     // 0x0c - cached wave format (0x12 bytes)
     short pad1e;            // 0x1e - padding
     int disposeTick;        // 0x20 - GetTickCount() timestamp for GC

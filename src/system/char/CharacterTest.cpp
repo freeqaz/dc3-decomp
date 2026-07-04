@@ -1,3 +1,4 @@
+// reloc-fix validation: header-only change (MEM_OVERLOAD class-name string), no .cpp behavior change
 #include "char/CharacterTest.h"
 #include "Character.h"
 #include "char/CharClip.h"

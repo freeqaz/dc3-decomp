@@ -351,7 +351,7 @@ ScreenResJob::ScreenResJob(Hmx::Object *callback, _XVIDEO_MODE *videoMode)
     dataP.AddPair(dwDisplayHeight, videoMode->dwDisplayHeight);
     static Symbol fIsInterlaced("fIsInterlaced");
     dataP.AddPair(fIsInterlaced, videoMode->fIsInterlaced);
-    static Symbol fIsWideScreen("fIsWidescreen");
+    static Symbol fIsWideScreen("fIsWideScreen");
     dataP.AddPair(fIsWideScreen, videoMode->fIsWideScreen);
     static Symbol fIsHiDef("fIsHiDef");
     dataP.AddPair(fIsHiDef, videoMode->fIsHiDef);

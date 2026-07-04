@@ -18,7 +18,7 @@ StorePreviewMgr::StorePreviewMgr()
     : mAttenuation(0.0f), mLoopForever(1), mStreamPlayer(nullptr), mNetCacheLoader(0), mHasFailure(0) {
     mStreamPlayer = new StreamPlayer();
     MILO_ASSERT(mStreamPlayer, 0x1d);
-    DataArray *d = SystemConfig("song_select", "sound");
+    DataArray *d = SystemConfig("sound", "song_select");
     d->FindData("loop_forever", mLoopForever);
     d->FindData("attenuation", mAttenuation);
     SetName("store_preview_mgr", ObjectDir::Main());

@@ -60,17 +60,17 @@ namespace {
         return len > 0 ? buf : 0;
     }
 
-    int LineLength(char *buf, int len) {
-        MILO_ASSERT(buf, 0x54);
-        char *start = buf;
+    int LineLength(char *pBuf, int len) {
+        MILO_ASSERT(pBuf, 0x54);
+        char *start = pBuf;
         if (len > 0) {
             do {
-                if (*buf == '\r' || *buf == '\n') break;
+                if (*pBuf == '\r' || *pBuf == '\n') break;
                 len--;
-                buf++;
+                pBuf++;
             } while (len > 0);
         }
-        return buf - start;
+        return pBuf - start;
     }
 
     bool StrIStartsWith(String const &str, const char *prefix) {

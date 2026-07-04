@@ -27,7 +27,7 @@ private:
     const char *mCrucibleHostname; // 0x8
     const char *mCrucibleApp; // 0xc
     const char *mCrucibleProject; // 0x10
-    int mCrucibleVersion; // 0x14
+    const char *mCrucibleVersion; // 0x14
     String mCrucibleUser; // 0x18
     String mCrucibleConfig; // 0x20
     String mCrucibleWorkingDir; // 0x28

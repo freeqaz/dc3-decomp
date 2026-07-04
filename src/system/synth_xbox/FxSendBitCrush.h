@@ -7,7 +7,7 @@
 class FxSendBitCrush360 : public FxSendBitCrush, public FxSend360 {
 public:
     virtual ~FxSendBitCrush360();
-    OBJ_CLASSNAME(FxSendBitCrush360)
+    OBJ_CLASSNAME(FxSendBitCrush)
     OBJ_SET_TYPE(FxSendBitCrush360)
     virtual void Recreate(std::vector<FxSend *> &);
     virtual void UpdateMix();

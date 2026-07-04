@@ -1186,7 +1186,7 @@ void CameraDump(const char *filename) {
 }
 
 void CameraDumpUnique(const char *name) {
-    String uniqueName = UniqueFilename(name, "data");
+    String uniqueName = UniqueFilename(name, "bmp");
     CameraDump(uniqueName.c_str());
 }
 

@@ -24,6 +24,7 @@
 
 #include "bits.h"
 #include "arraylist.h"
+#include "system/net/JsonMemory.h"
 
 struct array_list *array_list_new(array_list_free_fn *free_fn)
 {
@@ -67,7 +68,7 @@ static int array_list_expand_internal(struct array_list *arr, int max)
     if (max < arr->size)
         return 0;
     new_size = json_max(arr->size << 1, max);
-    if (!(t = realloc(arr->array, new_size * sizeof(void *))))
+    if (!(t = JsonRealloc(arr->array, new_size * sizeof(void *))))
         return -1;
     arr->array = (void **)t;
     (void)memset(

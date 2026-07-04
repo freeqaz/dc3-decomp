@@ -252,7 +252,7 @@ namespace {
         if (gMemTracker && !gMemTracker->GetHeapOnly()) {
             FILE *file = fopen("devkit:\\out_of_mem_alloc_info.csv", "w");
             if (file) {
-                MemTracker::SpitAllocInfo((TextStream *)file);
+                MemTracker::SpitAllocInfo((struct _iobuf *)file);
                 fclose(file);
             }
         }

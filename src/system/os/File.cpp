@@ -159,18 +159,18 @@ const char *FileGetPath(const char *file) {
     return FileGetPathBuf(file, static_path);
 }
 
-const char *FileGetBaseBuf(const char *file, char *base) {
-    MILO_ASSERT(file, 0x458);
-    MILO_ASSERT(base, 0x459);
-    const char *dir = strrchr(file, '/');
-    if ((dir == 0) && (dir = strrchr(file, '\\'), dir == 0))
-        strcpy(base, file);
+const char *FileGetBaseBuf(const char *iFilepath, char *oBuf) {
+    MILO_ASSERT(iFilepath, 0x458);
+    MILO_ASSERT(oBuf, 0x459);
+    const char *dir = strrchr(iFilepath, '/');
+    if ((dir == 0) && (dir = strrchr(iFilepath, '\\'), dir == 0))
+        strcpy(oBuf, iFilepath);
     else
-        strcpy(base, dir + 1);
-    char *ext = strrchr(base, '.');
+        strcpy(oBuf, dir + 1);
+    char *ext = strrchr(oBuf, '.');
     if (ext != 0)
         *ext = 0;
-    return base;
+    return oBuf;
 }
 
 const char *FileGetBase(const char *file) {

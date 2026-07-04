@@ -9,7 +9,7 @@
 class HamSong : public Song {
 public:
     // Hmx::Object
-    OBJ_CLASSNAME(HamSong);
+    OBJ_CLASSNAME(Song);
     OBJ_SET_TYPE(HamSong);
 
     static int mPreferStreaming;

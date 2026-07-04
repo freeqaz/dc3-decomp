@@ -1423,7 +1423,7 @@ static CURLcode loadhostpairs(struct SessionHandle *data)
       struct Curl_dns_entry *dns;
       Curl_addrinfo *addr;
 
-      addr = Curl_str2addr(address, port);
+      addr = Curl_ipv4_resolve_r(address, port);
       if(!addr) {
         infof(data, "Resolve %s found illegal!\n", hostp->data);
         continue;

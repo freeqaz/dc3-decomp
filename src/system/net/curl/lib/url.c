@@ -1968,7 +1968,7 @@ CURLcode Curl_setopt(struct SessionHandle *data, CURLoption option,
     /*
      * Set what local port to bind the socket to when performing an operation.
      */
-    data->set.localport = curlx_sltous(va_arg(param, long));
+    data->set.localport = curlx_ultous(va_arg(param, long));
     break;
   case CURLOPT_LOCALPORTRANGE:
     /*

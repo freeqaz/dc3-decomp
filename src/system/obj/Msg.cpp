@@ -263,14 +263,14 @@ void MsgSinks::Export(DataArray *arr) {
     sCurrentExportEvent = oldExportEvent;
 }
 
-void MsgSinks::RemoveSink(Hmx::Object *obj, Symbol ev) {
-    MILO_ASSERT(obj, 0x10A);
+void MsgSinks::RemoveSink(Hmx::Object *s, Symbol ev) {
+    MILO_ASSERT(s, 0x10A);
     for (ObjList<Sink>::iterator it = mSinks.begin(); it != mSinks.end(); ++it) {
-        if (it->obj == obj) {
+        if (it->obj == s) {
             if (!ev.Null()) {
                 MILO_WARN(
                     "%s: removing global to %s for event %s, all other events will be wiped out",
-                    PathName(mOwner), obj->Name(), ev
+                    PathName(mOwner), s->Name(), ev
                 );
             }
             it->obj = nullptr;
@@ -282,13 +282,13 @@ void MsgSinks::RemoveSink(Hmx::Object *obj, Symbol ev) {
     if (ev.Null()) {
         for (ObjList<EventSink>::iterator it = mEventSinks.begin();
              it != mEventSinks.end(); ++it) {
-            it->Remove(obj, mExporting != 0);
+            it->Remove(s, mExporting != 0);
         }
     } else {
         for (ObjList<EventSink>::iterator it = mEventSinks.begin();
              it != mEventSinks.end(); ++it) {
             if (it->event == ev) {
-                it->Remove(obj, mExporting != 0);
+                it->Remove(s, mExporting != 0);
                 return;
             }
         }

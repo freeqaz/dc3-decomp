@@ -8,8 +8,8 @@
 class RndMultiMeshProxy : public RndTransformable, public RndDrawable {
 public:
     // Hmx::Object
-    OBJ_CLASSNAME(MultiMeshProxy);
-    OBJ_SET_TYPE(MultiMeshProxy);
+    OBJ_CLASSNAME(RndMultiMeshProxy);
+    OBJ_SET_TYPE(RndMultiMeshProxy);
     virtual DataNode Handle(DataArray *, bool);
     virtual bool SyncProperty(DataNode &, DataArray *, int, PropOp);
     virtual void Save(BinStream &);

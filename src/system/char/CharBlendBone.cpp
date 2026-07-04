@@ -12,7 +12,7 @@ CharBlendBone::CharBlendBone()
       mTransZ(false), mRotation(false), mSetLocal(false) {}
 
 BEGIN_PROPSYNCS(CharBlendBone)
-    SYNC_PROP(target, mTargets)
+    SYNC_PROP(targets, mTargets)
     SYNC_PROP(src_one, mSrc1)
     SYNC_PROP(src_two, mSrc2)
     SYNC_PROP(trans_x, mTransX)

@@ -117,7 +117,7 @@ void CharClipDisplay::DrawBeatString(float beat, Hmx::Color const &color) {
     if (beat == (float)std::floor(beat)) {
         text = MakeString("%d", (int)beat);
     } else {
-        text = MakeString("%.2f", beat);
+        text = MakeString("%.1f", beat);
     }
     DrawBeatString(text, beat, color);
 }

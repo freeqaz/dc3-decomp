@@ -1002,3 +1002,4 @@ SpotMeshEntry* vector<SpotMeshEntry, StlNodeAlloc<SpotMeshEntry>>::_M_erase(
 
 }  // namespace stlpmtx_std
 #endif // HX_NATIVE
+

@@ -34,7 +34,7 @@ private:
 
 class FitnessFilterObj : public Hmx::Object {
 public:
-    OBJ_CLASSNAME(FitnessFilterObj)
+    OBJ_CLASSNAME(FitnessFilter)
     OBJ_SET_TYPE(FitnessFilterObj)
     virtual DataNode Handle(DataArray *, bool);
     virtual void Save(BinStream &);

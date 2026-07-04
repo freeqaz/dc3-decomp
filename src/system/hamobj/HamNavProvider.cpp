@@ -39,7 +39,7 @@ BEGIN_HANDLERS(HamNavProvider)
         set_checked,
         SetChecked(_msg->ForceSym(2), _msg->Int(3), _msg->Size() > 4 ? _msg->Int(4) : true)
     )
-    HANDLE_ACTION(select_radio_button, SelectRadioButton(_msg->Sym(2)))
+    HANDLE_ACTION(select_radio_button, SelectRadioButton(_msg->ForceSym(2)))
     HANDLE_ACTION(set_stars, SetStars(_msg->ForceSym(2), _msg->Int(3), _msg->Int(4)))
     HANDLE_ACTION(set_label, SetLabel(_msg->Int(2), _msg->ForceSym(3)))
     HANDLE(set_enabled, OnSetEnabled)

@@ -173,8 +173,7 @@ DataNode UIPanel::OnLoad(DataArray *da) {
     if (da->Size() > 2) {
         if (da->Int(2) && mLoader) {
             TheLoadMgr.PollUntilLoaded(mLoader, 0);
-            bool bLoaded = CheckIsLoaded();
-            MILO_ASSERT(bLoaded, 0x1DB);
+            MILO_ASSERT(CheckIsLoaded(), 0x1DB);
         }
     }
     return 0;

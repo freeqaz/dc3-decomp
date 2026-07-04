@@ -232,7 +232,7 @@ void PoseFatalities::ActivateFatal(int player) {
         }
         mValidPose = true;
         if (!FatalActive()) {
-            static Message fatalityActivateMsg("fatality_active");
+            static Message fatalityActivateMsg("fatality_activate");
             TheHamProvider->Handle(fatalityActivateMsg, false);
         }
         if (player >= 0) {

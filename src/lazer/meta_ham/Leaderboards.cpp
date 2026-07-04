@@ -209,7 +209,7 @@ void Leaderboards::Init() {
 
 void Leaderboards::Poll() {
     if (!mDisconnected && !ThePlatformMgr.IsConnected()) {
-        UIPanel *panel = ObjectDir::Main()->Find<UIPanel>("leaderboards.panel");
+        UIPanel *panel = ObjectDir::Main()->Find<UIPanel>("leaderboards_panel");
         if (panel->GetState() == UIPanel::kUp) {
             static Message ethernetDisconnectedMsg("leaderboards_ethernet_disconnected");
             TheUI->Handle(ethernetDisconnectedMsg, true);

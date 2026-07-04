@@ -46,7 +46,7 @@ public:
         float err;
     };
 
-    MEM_OVERLOAD(ClipDistMap, 0x24);
+    MEM_OVERLOAD(ShadowBone, 0x24);
 
     ClipDistMap(CharClip *, CharClip *, float, float, int, DataArray const *);
     ~ClipDistMap() {}

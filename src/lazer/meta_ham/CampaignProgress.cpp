@@ -110,7 +110,7 @@ void CampaignEraProgress::LoadFixed(FixedSizeSaveableStream &stream, int i) {
 
 int CampaignEraProgress::SaveSize(int i) {
     int savesize = CampaignEraSongProgress::SaveSize(i);
-    REPORT_SIZE("CampaignEraSongProgress", (savesize + 5) * 10);
+    REPORT_SIZE("CampaignEraProgress", (savesize + 5) * 10);
 }
 
 int CampaignEraProgress::GetTotalStarsEarned() const {

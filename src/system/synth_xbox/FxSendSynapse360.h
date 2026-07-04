@@ -7,7 +7,7 @@ class FxSendSynapse360 : public FxSendSynapse, public FxSend360 {
 public:
     FxSendSynapse360() : FxSend360(this) {}
     virtual ~FxSendSynapse360() {}
-    OBJ_CLASSNAME(FxSendSynapse360)
+    OBJ_CLASSNAME(FxSendSynapse)
     OBJ_SET_TYPE(FxSendSynapse360)
     virtual void Recreate(std::vector<FxSend *> &);
     virtual void UpdateMix();
