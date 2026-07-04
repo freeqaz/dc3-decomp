@@ -451,10 +451,9 @@ u64 RndShaderDrawRect::CalcShaderOpts(NgMat *mat, ShaderType s, bool b) {
         offscreen = TheNgRnd.Offscreen();
     }
     u64 pseudoHDR = (!offscreen && mat->AllowHDR()) ? 1 : 0;
-    return ((((u64)(TheHiResScreen.IsActive() & 1) << 2
-        | (u64)(TheRnd.ResourceCached() & 1)) << 28
-        | pseudoHDR) << 22)
-        | matBits;
+    u64 hi = pseudoHDR | ((u64)(TheHiResScreen.IsActive() & 1) << 2
+        | (u64)(TheRnd.ResourceCached() & 1)) << 28;
+    return (hi << 22) | (matBits & (0xAFFFFFFEULL << 22));
 }
 
 u64 RndShaderParticles::CalcShaderOpts(NgMat *mat, ShaderType s, bool b) {

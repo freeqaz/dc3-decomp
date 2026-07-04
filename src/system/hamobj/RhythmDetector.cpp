@@ -276,7 +276,7 @@ namespace {
         // some fruity branchless stuff going on in here
         int size = (vec.size());
         end = size < end ? size : end;
-        start = start < 0 ? 0 : start;
+        start = start > 0 ? start : 0;
         float sum = 0.0f;
         for (int i = start; i < end; i++) {
             sum += vec[i];

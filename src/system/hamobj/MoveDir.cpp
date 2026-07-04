@@ -1392,7 +1392,7 @@ float MoveDir::SongSeconds() {
             Stream *stream = audio->GetSongStream();
             if (stream) {
                 stream = TheMaster->GetAudio()->GetSongStream();
-                seconds += stream->GetJumpBackTotalTime(seconds) * 0.001f;
+                seconds += stream->GetJumpBackTotalTime(seconds * 1000.0f) * 0.001f;
             }
         }
     }
