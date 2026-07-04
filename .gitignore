@@ -88,6 +88,10 @@ scripts/build/inspect_pdata.py
 # Generated databases
 *.db
 *.sqlite
+*.db-shm
+*.db-wal
+*.sqlite-shm
+*.sqlite-wal
 
 # Compiled extensions
 *.so
