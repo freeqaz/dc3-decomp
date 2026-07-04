@@ -50,7 +50,7 @@ bool ClipPlayer::Init(RndPropAnim *anim) {
             if (TheHamDirector->GetPracticeFrames(k2, k1)) {
                 mPracticeStart = Round(FrameToBeat(k1->frame));
                 mPracticeEnd = Round(FrameToBeat(k2->frame)) - 1.0f;
-                String str(k1->value);
+                String str(k1->value.Str());
                 str.ReplaceAll('*', '\0');
                 auto _tmp4 = mClipDir->Find<CharClip>(MakeString("%s_in", str.c_str()), false);
                 mInClip =
