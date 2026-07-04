@@ -408,12 +408,12 @@ void Synth360::SetupHeadsetSubmixes() {
 int Synth360::GetNumConnectedMics() { return ExternalMic::NumConnectedMics(); }
 
 void Synth360::EnableLevels(bool enable) {
-    if (!OutputVoice())
+    if ((unsigned int)unkf0 == 0)
         return;
     if (enable) {
-        OutputVoice()->EnableEffect(0, 0);
+        ((IXAudio2Voice *)unkf0)->EnableEffect(0, 0);
     } else {
-        OutputVoice()->DisableEffect(0, 0);
+        ((IXAudio2Voice *)unkf0)->DisableEffect(0, 0);
     }
 }
 
