@@ -591,11 +591,11 @@ void CharBones::ScaleDown(CharBones &bones, float f2) const {
 void CharBones::Blend(CharBones &bones) const {
     MILO_ASSERT(!mCompression && !bones.mCompression, 0x311);
     if (!mBones.empty()) {
-        Bone *myBonesItr = (Bone *)&mBones[0];
+        Bone *myBonesItr = (Bone *)mBones.data();
         if (mCounts[TYPE_QUAT] > mCounts[TYPE_POS]) {
-            Bone *otherBonesItr = (Bone *)&bones.mBones[bones.mCounts[TYPE_POS]];
-            Bone *otherBonesEnd = (Bone *)&bones.mBones[bones.mCounts[TYPE_QUAT]];
-            Bone *myBonesEnd = (Bone *)&mBones[mCounts[TYPE_QUAT]];
+            Bone *otherBonesItr = (Bone *)(bones.mBones.data() + (bones.mCounts[TYPE_POS]));
+            Bone *otherBonesEnd = (Bone *)(bones.mBones.data() + (bones.mCounts[TYPE_QUAT]));
+            Bone *myBonesEnd = (Bone *)(mBones.data() + (mCounts[TYPE_QUAT]));
             Vector3 *myVecItr = (Vector3 *)mStart;
             Vector3 *otherVecItr = (Vector3 *)bones.mStart;
             while (true) {
@@ -623,9 +623,9 @@ void CharBones::Blend(CharBones &bones) const {
             }
         }
         if (mCounts[TYPE_ROTX] > mCounts[TYPE_QUAT]) {
-            Bone *otherBonesItr = (Bone *)&bones.mBones[bones.mCounts[TYPE_QUAT]];
-            Bone *otherBonesEnd = (Bone *)&bones.mBones[bones.mCounts[TYPE_ROTX]];
-            Bone *myBonesEnd = (Bone *)&mBones[mCounts[TYPE_ROTX]];
+            Bone *otherBonesItr = (Bone *)(bones.mBones.data() + (bones.mCounts[TYPE_QUAT]));
+            Bone *otherBonesEnd = (Bone *)(bones.mBones.data() + (bones.mCounts[TYPE_ROTX]));
+            Bone *myBonesEnd = (Bone *)(mBones.data() + (mCounts[TYPE_ROTX]));
             Hmx::Quat *otherQuatItr = (Hmx::Quat *)(bones.mStart + bones.mOffsets[TYPE_QUAT]);
             Hmx::Quat *myQuatItr = (Hmx::Quat *)(mStart + mOffsets[TYPE_QUAT]);
             while (true) {
@@ -674,9 +674,9 @@ void CharBones::Blend(CharBones &bones) const {
             }
         }
         if (mCounts[TYPE_END] > mCounts[TYPE_ROTX]) {
-            Bone *otherBonesItr = (Bone *)&bones.mBones[bones.mCounts[TYPE_ROTX]];
-            Bone *otherBonesEnd = (Bone *)&bones.mBones[bones.mCounts[TYPE_END]];
-            Bone *myBonesEnd = (Bone *)&mBones[mCounts[TYPE_END]];
+            Bone *otherBonesItr = (Bone *)(bones.mBones.data() + (bones.mCounts[TYPE_ROTX]));
+            Bone *otherBonesEnd = (Bone *)(bones.mBones.data() + (bones.mCounts[TYPE_END]));
+            Bone *myBonesEnd = (Bone *)(mBones.data() + (mCounts[TYPE_END]));
             float *otherRotItr = (float *)(bones.mStart + bones.mOffsets[TYPE_ROTX]);
             float *myRotItr = (float *)(mStart + mOffsets[TYPE_ROTX]);
             while (true) {
@@ -714,11 +714,11 @@ void CharBones::ScaleAdd(CharBones &bones, float f2) const {
     g_dc3ScaleAddCalls++;
 #endif
     if (!mBones.empty()) {
-        Bone *myBonesItr = (Bone *)&mBones[0];
+        Bone *myBonesItr = (Bone *)mBones.data();
         if (mCounts[TYPE_QUAT] > mCounts[TYPE_POS]) {
-            Bone *otherBonesItr = (Bone *)&bones.mBones[bones.mCounts[TYPE_POS]];
-            Bone *otherBonesEnd = (Bone *)&bones.mBones[bones.mCounts[TYPE_QUAT]];
-            Bone *myBonesEnd = (Bone *)&mBones[mCounts[TYPE_QUAT]];
+            Bone *otherBonesItr = (Bone *)(bones.mBones.data() + (bones.mCounts[TYPE_POS]));
+            Bone *otherBonesEnd = (Bone *)(bones.mBones.data() + (bones.mCounts[TYPE_QUAT]));
+            Bone *myBonesEnd = (Bone *)(mBones.data() + (mCounts[TYPE_QUAT]));
             Vector3 *otherVecItr = (Vector3 *)bones.mStart;
             if (mCompression >= kCompressVects) {
                 ShortVector3 *myVecItr = (ShortVector3 *)mStart;
@@ -799,9 +799,9 @@ void CharBones::ScaleAdd(CharBones &bones, float f2) const {
         }
         if (mCounts[TYPE_ROTX] > mCounts[TYPE_QUAT]) {
             float f2abs = fabsf(f2);
-            Bone *otherBonesItr = (Bone *)&bones.mBones[bones.mCounts[TYPE_QUAT]];
-            Bone *otherBonesEnd = (Bone *)&bones.mBones[bones.mCounts[TYPE_ROTX]];
-            Bone *myBonesEnd = (Bone *)&mBones[mCounts[TYPE_ROTX]];
+            Bone *otherBonesItr = (Bone *)(bones.mBones.data() + (bones.mCounts[TYPE_QUAT]));
+            Bone *otherBonesEnd = (Bone *)(bones.mBones.data() + (bones.mCounts[TYPE_ROTX]));
+            Bone *myBonesEnd = (Bone *)(mBones.data() + (mCounts[TYPE_ROTX]));
             Hmx::Quat *otherQuatItr = (Hmx::Quat *)(bones.mStart + bones.mOffsets[TYPE_QUAT]);
             if (mCompression >= kCompressQuats) {
                 float absConstant = f2abs * 0.007874016f;
@@ -936,9 +936,9 @@ void CharBones::ScaleAdd(CharBones &bones, float f2) const {
             }
         }
         if (mCounts[TYPE_END] > mCounts[TYPE_ROTX]) {
-            Bone *otherBonesItr = (Bone *)&bones.mBones[bones.mCounts[TYPE_ROTX]];
-            Bone *otherBonesEnd = (Bone *)&bones.mBones[bones.mCounts[TYPE_END]];
-            Bone *myBonesEnd = (Bone *)&mBones[mCounts[TYPE_END]];
+            Bone *otherBonesItr = (Bone *)(bones.mBones.data() + (bones.mCounts[TYPE_ROTX]));
+            Bone *otherBonesEnd = (Bone *)(bones.mBones.data() + (bones.mCounts[TYPE_END]));
+            Bone *myBonesEnd = (Bone *)(mBones.data() + (mCounts[TYPE_END]));
             float *otherRotItr = (float *)(bones.mStart + bones.mOffsets[TYPE_ROTX]);
             if (mCompression != kCompressNone) {
                 float shortConstant = f2 * 0.00061035156f;
@@ -999,11 +999,11 @@ void CharBones::ScaleAdd(CharBones &bones, float f2) const {
 // MARK: RotateBy
 void CharBones::RotateBy(CharBones &bones) const {
     if (!mBones.empty()) {
-        Bone *myBonesItr = (Bone *)&mBones[0];
+        Bone *myBonesItr = (Bone *)mBones.data();
         if (mCounts[TYPE_QUAT] > mCounts[TYPE_POS]) {
-            Bone *otherBonesItr = (Bone *)&bones.mBones[bones.mCounts[TYPE_POS]];
-            Bone *otherBonesEnd = (Bone *)&bones.mBones[bones.mCounts[TYPE_QUAT]];
-            Bone *myBonesEnd = (Bone *)&mBones[mCounts[TYPE_QUAT]];
+            Bone *otherBonesItr = (Bone *)(bones.mBones.data() + (bones.mCounts[TYPE_POS]));
+            Bone *otherBonesEnd = (Bone *)(bones.mBones.data() + (bones.mCounts[TYPE_QUAT]));
+            Bone *myBonesEnd = (Bone *)(mBones.data() + (mCounts[TYPE_QUAT]));
             Vector3 *otherVecItr = (Vector3 *)bones.mStart;
             if (mCompression >= kCompressVects) {
                 ShortVector3 *myVecItr = (ShortVector3 *)mStart;
@@ -1058,9 +1058,9 @@ void CharBones::RotateBy(CharBones &bones) const {
             }
         }
         if (mCounts[TYPE_ROTX] > mCounts[TYPE_QUAT]) {
-            Bone *otherBonesItr = (Bone *)&bones.mBones[bones.mCounts[TYPE_QUAT]];
-            Bone *otherBonesEnd = (Bone *)&bones.mBones[bones.mCounts[TYPE_ROTX]];
-            Bone *myBonesEnd = (Bone *)&mBones[mCounts[TYPE_ROTX]];
+            Bone *otherBonesItr = (Bone *)(bones.mBones.data() + (bones.mCounts[TYPE_QUAT]));
+            Bone *otherBonesEnd = (Bone *)(bones.mBones.data() + (bones.mCounts[TYPE_ROTX]));
+            Bone *myBonesEnd = (Bone *)(mBones.data() + (mCounts[TYPE_ROTX]));
             Hmx::Quat *otherQuatItr = (Hmx::Quat *)(bones.mStart + bones.mOffsets[TYPE_QUAT]);
             if (mCompression >= kCompressQuats) {
                 ByteQuat *myQuatItr = (ByteQuat *)(mStart + mOffsets[TYPE_QUAT]);
@@ -1141,9 +1141,9 @@ void CharBones::RotateBy(CharBones &bones) const {
             }
         }
         if (mCounts[TYPE_END] > mCounts[TYPE_ROTX]) {
-            Bone *otherBonesItr = (Bone *)&bones.mBones[bones.mCounts[TYPE_ROTX]];
-            Bone *otherBonesEnd = (Bone *)&bones.mBones[bones.mCounts[TYPE_END]];
-            Bone *myBonesEnd = (Bone *)&mBones[mCounts[TYPE_END]];
+            Bone *otherBonesItr = (Bone *)(bones.mBones.data() + (bones.mCounts[TYPE_ROTX]));
+            Bone *otherBonesEnd = (Bone *)(bones.mBones.data() + (bones.mCounts[TYPE_END]));
+            Bone *myBonesEnd = (Bone *)(mBones.data() + (mCounts[TYPE_END]));
             float *otherRotItr = (float *)(bones.mStart + bones.mOffsets[TYPE_ROTX]);
             if (mCompression != kCompressNone) {
                 short *myRotItr = (short *)(mStart + mOffsets[TYPE_ROTX]);
@@ -1201,11 +1201,11 @@ void CharBones::RotateBy(CharBones &bones) const {
 // MARK: RotateTo
 void CharBones::RotateTo(CharBones &bones, float f2) const {
     if (!mBones.empty()) {
-        Bone *myBonesItr = (Bone *)&mBones[0];
+        Bone *myBonesItr = (Bone *)mBones.data();
         if (mCounts[TYPE_QUAT] > mCounts[TYPE_POS]) {
-            Bone *otherBonesItr = (Bone *)&bones.mBones[bones.mCounts[TYPE_POS]];
-            Bone *otherBonesEnd = (Bone *)&bones.mBones[bones.mCounts[TYPE_QUAT]];
-            Bone *myBonesEnd = (Bone *)&mBones[mCounts[TYPE_QUAT]];
+            Bone *otherBonesItr = (Bone *)(bones.mBones.data() + (bones.mCounts[TYPE_POS]));
+            Bone *otherBonesEnd = (Bone *)(bones.mBones.data() + (bones.mCounts[TYPE_QUAT]));
+            Bone *myBonesEnd = (Bone *)(mBones.data() + (mCounts[TYPE_QUAT]));
             Vector3 *otherVecItr = (Vector3 *)bones.mStart;
             if (mCompression >= kCompressVects) {
                 ShortVector3 *myVecItr = (ShortVector3 *)mStart;
@@ -1260,9 +1260,9 @@ void CharBones::RotateTo(CharBones &bones, float f2) const {
             }
         }
         if (mCounts[TYPE_ROTX] > mCounts[TYPE_QUAT]) {
-            Bone *otherBonesItr = (Bone *)&bones.mBones[bones.mCounts[TYPE_QUAT]];
-            Bone *otherBonesEnd = (Bone *)&bones.mBones[bones.mCounts[TYPE_ROTX]];
-            Bone *myBonesEnd = (Bone *)&mBones[mCounts[TYPE_ROTX]];
+            Bone *otherBonesItr = (Bone *)(bones.mBones.data() + (bones.mCounts[TYPE_QUAT]));
+            Bone *otherBonesEnd = (Bone *)(bones.mBones.data() + (bones.mCounts[TYPE_ROTX]));
+            Bone *myBonesEnd = (Bone *)(mBones.data() + (mCounts[TYPE_ROTX]));
             Hmx::Quat *otherQuatItr = (Hmx::Quat *)(bones.mStart + bones.mOffsets[TYPE_QUAT]);
             if (mCompression >= kCompressQuats) {
                 ByteQuat *myQuatItr = (ByteQuat *)(mStart + mOffsets[TYPE_QUAT]);
@@ -1371,9 +1371,9 @@ void CharBones::RotateTo(CharBones &bones, float f2) const {
             }
         }
         if (mCounts[TYPE_END] > mCounts[TYPE_ROTX]) {
-            Bone *otherBonesItr = (Bone *)&bones.mBones[bones.mCounts[TYPE_ROTX]];
-            Bone *otherBonesEnd = (Bone *)&bones.mBones[bones.mCounts[TYPE_END]];
-            Bone *myBonesEnd = (Bone *)&mBones[mCounts[TYPE_END]];
+            Bone *otherBonesItr = (Bone *)(bones.mBones.data() + (bones.mCounts[TYPE_ROTX]));
+            Bone *otherBonesEnd = (Bone *)(bones.mBones.data() + (bones.mCounts[TYPE_END]));
+            Bone *myBonesEnd = (Bone *)(mBones.data() + (mCounts[TYPE_END]));
             float *otherRotItr = (float *)(bones.mStart + bones.mOffsets[TYPE_ROTX]);
             if (mCompression != kCompressNone) {
                 float shortConstant = f2 * 0.00061035156f;
