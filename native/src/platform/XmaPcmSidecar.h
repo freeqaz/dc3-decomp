@@ -53,6 +53,13 @@
 #include "platform/WebAssets.h"
 #endif
 
+// Forward-declared at global scope (not inside namespace dc3_xma) so unqualified
+// lookup in SidecarDir() below resolves to the one real global definition in
+// File_Native.cpp, not a phantom dc3_xma::NativeGetDataDir().
+#ifndef __EMSCRIPTEN__
+extern const char *NativeGetDataDir();
+#endif
+
 namespace dc3_xma {
 
 // Recursively create the parent directories of `path` (mkdir -p over the
@@ -93,7 +100,6 @@ inline std::string SidecarDir() {
     // the sidecar set per launch directory — a repo-root run accumulated 289
     // song-SFX sidecars the web build then 404'd on during song load.
     // Web keeps the relative default: OpenSidecarFile anchors it under /data.
-    extern const char *NativeGetDataDir();
     const char *dataDir = NativeGetDataDir();
     if (dataDir && dataDir[0] && !(dataDir[0] == '.' && dataDir[1] == '\0'))
         return std::string(dataDir) + "/sfx/gen/xma_pcm";
