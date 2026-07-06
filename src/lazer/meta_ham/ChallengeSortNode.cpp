@@ -312,9 +312,9 @@ void ChallengeSortNode::SetBuyIcon(UILabel *label) const {
     MILO_ASSERT(appLabel, 0x2f6);
     if (mChallengeRecord->GetSongContentLockState() == 4 || mChallengeRecord->GetSongContentLockState() == 2
         || mChallengeRecord->GetSongContentLockState() == 3) {
-        appLabel->SetNew(true);
+        appLabel->SetBuy(true);
     } else {
-        appLabel->SetNew(false);
+        appLabel->SetBuy(false);
     }
 }
 
