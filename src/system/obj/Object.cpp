@@ -15,6 +15,10 @@
 
 #ifdef HX_NATIVE
 #include <vector>
+// Declared at global scope: a block-scope extern inside a Hmx::Object member
+// would bind to Hmx::SoundAudioTraceOn (unresolved) instead of the global
+// definition in Sound.cpp.
+extern bool SoundAudioTraceOn();
 Hmx::Object *Hmx::Object::sDeleting;
 bool Hmx::Object::sRingsDirty = false;
 bool gInReplaceList = false;
@@ -492,7 +496,6 @@ void Hmx::Object::ExportPropertyChange(DataArray *a, Symbol s) {
     // Opt-in DC3_AUDIO_TRACE probe (gate lives in Sound.cpp): does a
     // game_stage change have a registered propsync sink handler, and export?
     {
-        extern bool SoundAudioTraceOn();
         if (SoundAudioTraceOn() && a && a->Size() > 0
             && a->Node(0).Type() == kDataSymbol) {
             static Symbol game_stage("game_stage");

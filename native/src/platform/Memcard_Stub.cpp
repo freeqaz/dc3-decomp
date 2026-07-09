@@ -10,6 +10,11 @@ MemcardXbox TheMC;
 
 void MemcardXbox::Poll() {}
 
+// Init moved out-of-line in Memcard_Xbox.h (68973a46), making the Xbox TU the
+// vtable key-function home. Native replaces that TU with this stub, so the
+// definition (and thus the vtable emission) must live here too.
+void MemcardXbox::Init() { Memcard::Init(); }
+
 void MemcardXbox::SetContainerName(const char *name) {
     strncpy(mFileName, name, XCONTENT_MAX_FILENAME_LENGTH - 1);
     mFileName[XCONTENT_MAX_FILENAME_LENGTH - 1] = '\0';
