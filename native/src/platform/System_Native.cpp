@@ -12,7 +12,26 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <sys/stat.h>
+
+// Dc3EnvFlag — value-parsed boolean env gate for native runtime toggles.
+//
+//   unset / empty  -> defaultOn (the compiled default)
+//   "0" "false" "off" "no" (case-insensitive) -> false
+//   anything else  -> true
+//
+// Unlike bare getenv() truthiness (where DC3_FOO=0 still reads as "set" and so
+// ENABLES a feature), this lets a script disable a default-on feature with
+// DC3_FOO=0. Declared in native/src/platform/NativeSettings.h for native TUs and
+// via a local `extern bool Dc3EnvFlag(const char*, bool);` from PPC units inside
+// their #ifdef HX_NATIVE blocks (same idiom as Dc3RunPostPollFootPlant).
+bool Dc3EnvFlag(const char *name, bool defaultOn) {
+    const char *v = getenv(name);
+    if (!v || !*v) return defaultOn;
+    return !(strcmp(v, "0") == 0 || strcasecmp(v, "false") == 0 ||
+             strcasecmp(v, "off") == 0 || strcasecmp(v, "no") == 0);
+}
 
 namespace {
     DiscErrorCallbackFunc *gCallback;
