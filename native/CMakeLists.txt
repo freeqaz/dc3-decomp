@@ -878,15 +878,15 @@ set(DC3_ENGINE_SOURCES
     ${CMAKE_SOURCE_DIR}/../src/system/synth/ADSR.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/synth/AudioDucker.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/synth/BinkReader.cpp
-    ${CMAKE_SOURCE_DIR}/../src/system/synth/BitCrushEffect.cpp
+    ${CMAKE_SOURCE_DIR}/../src/system/dsp/BitCrushEffect.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/synth/ByteGrinder.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/synth/CompressionEffect.cpp
-    ${CMAKE_SOURCE_DIR}/../src/system/synth/DelayEffect.cpp
-    ${CMAKE_SOURCE_DIR}/../src/system/synth/DistortionEffect.cpp
-    ${CMAKE_SOURCE_DIR}/../src/system/synth/EQEffect.cpp
+    ${CMAKE_SOURCE_DIR}/../src/system/dsp/DelayEffect.cpp
+    ${CMAKE_SOURCE_DIR}/../src/system/dsp/DistortionEffect.cpp
+    ${CMAKE_SOURCE_DIR}/../src/system/dsp/EQEffect.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/synth/Emitter.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/synth/Faders.cpp
-    ${CMAKE_SOURCE_DIR}/../src/system/synth/FlangerEffect.cpp
+    ${CMAKE_SOURCE_DIR}/../src/system/dsp/FlangerEffect.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/synth/FxSend.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/synth/FxSendBitCrush.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/synth/FxSendChorus.cpp
@@ -929,7 +929,7 @@ set(DC3_ENGINE_SOURCES
     ${CMAKE_SOURCE_DIR}/../src/system/synth/ThreeDSound.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/synth/Utl.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/synth/VorbisReader.cpp
-    ${CMAKE_SOURCE_DIR}/../src/system/synth/WahEffect.cpp
+    ${CMAKE_SOURCE_DIR}/../src/system/dsp/WahEffect.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/synth/WavMgr.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/synth/WavReader.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/synth/complex.cpp
