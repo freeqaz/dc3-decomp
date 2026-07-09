@@ -477,30 +477,34 @@ void Game::SetHamMove(int i1, HamMove *move, bool b3) {
             MILO_ASSERT(player_data, 0x2CA);
             if (player_data->IsPlaying()) {
 #ifdef HX_NATIVE
-                // Native scoring is honest, not fabricated. There is no gesture
-                // detection wired into MoveDir's scoring frames on native
-                // (SkeletonUpdate is never instantiated, so MoveDir is never a
-                // SkeletonUpdate callback and EnqueueDetectFrames never runs), so
-                // DetectFrac safely returns 0. The former GamePanel::Poll hack
-                // that fabricated 100-500 points/beat and wrote them into the
-                // real provider `score` property + HUD/screenshots has been
-                // removed: with no real detection the truthful score is 0.
+                // Genuine Xbox move_passed scoring path (DTA move_passed ->
+                // MetaPerformer::OnMovePassed), now DEFAULT-ON (opt-out
+                // DC3_REAL_MOVE_PASSED=0). Detection is wired: the live-pose
+                // pipeline landed 2026-07-02, the move_passed gateway crash is
+                // fixed (TheGameMode gameplay_mode defaulted in GameModeInit; the
+                // MoveRatingFrac -> MoveDetector::Poll null DetectFrame::mMoveFrame
+                // SIGSEGV is gated on SkeletonUpdate::HasInstance()). This is
+                // byte-identical to the authentic Xbox #else path below: with a
+                // real provider it scores the live player; with no provider the
+                // static tracked dummy makes DetectFrac ~0 so per-move move_passed
+                // fires with the lowest rating band and end-of-song results are a
+                // real (near-zero) number instead of untouched — the intended,
+                // honest default.
                 //
-                // The genuine Xbox move_passed scoring path (DTA move_passed ->
-                // MetaPerformer::OnMovePassed) is reachable and now CRASH-SAFE, but
-                // still NOT enabled by default. Crash-safety landed: (1) TheGameMode
-                // gameplay_mode is defaulted in GameModeInit(); (2) the SIGSEGV in
-                // the move_passed -> active_detector_result -> MoveAsyncDetector::
-                // MoveRatingFrac -> MoveDetector::Poll path (null DetectFrame::
-                // mMoveFrame, because native has no SkeletonUpdate feed to populate
-                // the async detect frames) is fixed by gating MoveRatingFrac on
-                // SkeletonUpdate::HasInstance(). With DC3_REAL_MOVE_PASSED=1 the
-                // pipeline now runs through gameplay without crashing. It stays
-                // gated because (a) MoveRatingFrac/DetectFrac honestly return 0
-                // until skeleton detection is wired, so scores would be 0 anyway,
-                // and (b) the move-graph behavior under per-beat move_passed is not
-                // yet verified. Flip the default once detection is wired.
-                if (getenv("DC3_REAL_MOVE_PASSED")) {
+                // ARG SEMANTICS (Msg.h operator[](i)=Node(i+2); the handler reads
+                // _msg->Int(4) and _msg->Float(5)): move_passed[2]=frac is consumed
+                // as ratingIndex=(int)frac and move_passed[3]=b3 (a bool) is consumed
+                // as detectFrac=Float(5), stored in HamMoveScore.mDetectFrac. This
+                // mapping is IDENTICAL to the Xbox #else path (513-519) — it is a
+                // faithful port, NOT a native bug, so do not "fix" it. See
+                // MetaPerformer::OnMovePassed / CheckBeginFatal: a low rating on a
+                // final pose activates a fatality only in dance_battle mode; in
+                // perform/perform_legacy that path is mode-gated off.
+                //
+                // Landed as its own commit so it can be reverted independently of
+                // the scoring flip if the runtime gate finds move-graph instability.
+                extern bool Dc3EnvFlag(const char *, bool);
+                if (Dc3EnvFlag("DC3_REAL_MOVE_PASSED", true)) {
                     float frac = mMoveDir->DetectFrac(i1, i5);
                     static Message move_passed("move_passed", -1, 0, 0, 0);
                     move_passed[0] = i1;

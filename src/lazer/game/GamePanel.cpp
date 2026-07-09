@@ -440,14 +440,16 @@ void GamePanel::Poll() {
         // (Removed) Former native autoplay-scoring hack: it fabricated 100-500
         // points/beat, wrote them into the REAL player provider `score` property
         // and pushed them into the HUD labels/screenshots, which lied to anyone
-        // validating gameplay/HUD against Xbox. With no real gesture detection
-        // wired on native (DetectFrac is ~0), the honest score is 0 until real
-        // move detection lands, so the provider `score` is left untouched here
-        // and the HUD numeric label stays truthfully 0. The genuine Xbox scoring
-        // pipeline (Game::SetHamMove -> move_passed DTA handler ->
-        // MetaPerformer::OnMovePassed) is gated behind DC3_REAL_MOVE_PASSED in
-        // Game::SetHamMove (off by default; it currently destabilizes the move
-        // graph — see the note there).
+        // validating gameplay/HUD against Xbox. Native scoring is now honest: the
+        // genuine Xbox scoring pipeline (Game::SetHamMove -> move_passed DTA
+        // handler -> MetaPerformer::OnMovePassed) is DEFAULT-ON via
+        // DC3_REAL_MOVE_PASSED (opt-out DC3_REAL_MOVE_PASSED=0) now that live-pose
+        // detection is wired. The provider `score` and HUD label are driven by the
+        // real move_passed path — with a live pose provider they reflect the
+        // player's performance; with no provider the static tracked dummy yields a
+        // deterministic near-zero score (correct "standing still" signal), so the
+        // HUD label stays truthfully low. This block therefore leaves `score`
+        // untouched (it is written by the genuine OnMovePassed path, not here).
 #endif
         for (int i = 0; i < 2; i++) {
             FitnessFilter *filt = GetFitnessFilter(i);
