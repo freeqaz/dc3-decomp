@@ -111,10 +111,9 @@ float Box::SurfaceArea() const {
 }
 
 float Box::Volume() const {
-    float x = mMax.x - mMin.x;
-    float y = mMax.y - mMin.y;
-    float z = mMax.z - mMin.z;
-    return x * y * z;
+    Vector3 d;
+    Subtract(mMax, mMin, d);
+    return d.x * d.y * d.z;
 }
 
 void Box::GrowToContain(const Vector3 &vec, bool b) {
