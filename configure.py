@@ -290,6 +290,16 @@ config.pch_eligible_dirs = {
 
 # Post-compile patchers: run after all .obj files are compiled, before linking.
 # These patch decomp .obj files to match original binary patterns.
+#
+# The five obj patchers each read-modify-write the SAME build/**/*.obj set, so
+# they MUST be serialized: with only `order_only: all_source` ninja runs them
+# concurrently, and a reader can catch a file another patcher is rewriting
+# (transiently truncated -> string-table read past EOF crashed a fresh build
+# 2026-07-11), or two patchers can lose each other's writes (read/read/write/
+# write -> silently dropped symbol patches, nondeterministic match output).
+# Each stamp is an implicit input of the next, fixing the order: data stubs
+# are generated first (so patchers see a stable file set), then the patchers
+# run one at a time.
 stamp_dir = config.build_dir / config.version
 config.custom_build_rules = [
     {
@@ -301,9 +311,18 @@ config.custom_build_rules = [
 config.custom_build_steps = {
     "post-compile": [
         {
+            "outputs": str(stamp_dir / "data_stubs.stamp"),
+            "rule": "run_script",
+            "variables": {
+                "cmd": "python3 scripts/create_data_stubs.py",
+                "desc": "GEN data-stub .obj files for lbl_* resolution",
+            },
+        },
+        {
             "outputs": str(stamp_dir / "anon_ns_patched.stamp"),
             "rule": "run_script",
             "order_only": "all_source",
+            "implicit": str(stamp_dir / "data_stubs.stamp"),
             "variables": {
                 "cmd": "python3 scripts/obj_anon_ns_patcher.py --batch --apply",
                 "desc": "PATCH anonymous namespace hashes",
@@ -313,6 +332,7 @@ config.custom_build_steps = {
             "outputs": str(stamp_dir / "dynamic_init_patched.stamp"),
             "rule": "run_script",
             "order_only": "all_source",
+            "implicit": str(stamp_dir / "anon_ns_patched.stamp"),
             "variables": {
                 "cmd": "python3 scripts/obj_dynamic_init_patcher.py --batch --apply",
                 "desc": "PATCH ??__E dynamic initializers STATIC->EXTERNAL",
@@ -322,6 +342,7 @@ config.custom_build_steps = {
             "outputs": str(stamp_dir / "guard_patched.stamp"),
             "rule": "run_script",
             "order_only": "all_source",
+            "implicit": str(stamp_dir / "dynamic_init_patched.stamp"),
             "variables": {
                 "cmd": "python3 scripts/obj_guard_patcher.py --batch --apply",
                 "desc": "PATCH $S guard variables to match ??_B naming",
@@ -331,6 +352,7 @@ config.custom_build_steps = {
             "outputs": str(stamp_dir / "bool_mangle_patched.stamp"),
             "rule": "run_script",
             "order_only": "all_source",
+            "implicit": str(stamp_dir / "guard_patched.stamp"),
             "variables": {
                 "cmd": "python3 scripts/obj_bool_mangle_patcher.py --batch --apply",
                 "desc": "PATCH bool parameter back-reference mangling",
@@ -340,17 +362,10 @@ config.custom_build_steps = {
             "outputs": str(stamp_dir / "atexit_scope_patched.stamp"),
             "rule": "run_script",
             "order_only": "all_source",
+            "implicit": str(stamp_dir / "bool_mangle_patched.stamp"),
             "variables": {
                 "cmd": "python3 scripts/obj_atexit_scope_patcher.py --batch --apply",
                 "desc": "PATCH ??__F atexit scope counters (fuzzy match)",
-            },
-        },
-        {
-            "outputs": str(stamp_dir / "data_stubs.stamp"),
-            "rule": "run_script",
-            "variables": {
-                "cmd": "python3 scripts/create_data_stubs.py",
-                "desc": "GEN data-stub .obj files for lbl_* resolution",
             },
         },
     ],
