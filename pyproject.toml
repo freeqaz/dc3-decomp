@@ -1,0 +1,48 @@
+[project]
+name = "dc3-decomp-tooling"
+version = "0.1.0"
+description = "Python tooling for the Dance Central 3 / shared Milo engine decompilation: orchestrator MCP, Ghidra/objdiff analysis, IL permuter, Unicorn behavioral testing."
+requires-python = ">=3.10"
+
+# Direct runtime deps of the DC3 decomp tooling (scripts/, tools/, orchestrator).
+# The heavy ML/vision stack (torch/ultralytics/onnx/ncnn/pnnx/transformers) is NOT
+# a tooling dependency — it belongs to decomp-synth's own env and to the optional
+# extras below. `lldb` (a few scripts) is the system LLVM binding, not pip.
+dependencies = [
+    # shared decomp-workflow core
+    "decomp-synth",        # editable path source below → pulls the tree-sitter trio
+    "mcp",                 # orchestrator MCP server (scripts/orchestrator)
+    "pydantic",
+    "python-dotenv",
+    "click",
+    "requests",
+    "pyghidra",            # Ghidra integration
+    "pcpp",                # C preprocessing
+    # dc3-specific
+    "numpy",
+    "pyyaml",              # yaml config parsing
+    "unicorn",             # behavioral / equivalence testing (3 scripts)
+    "packaging",
+    "pytest",
+]
+
+[project.optional-dependencies]
+# native/scripts/pose_server.py — YOLO pose estimation helper (ultralytics pulls torch).
+pose = ["ultralytics", "opencv-python"]
+# broader ML/analysis research scripts (onnx/pnnx/ncnn export, transformer experiments).
+ml = [
+    "torch", "torchvision", "torchaudio",
+    "onnx", "onnxruntime", "onnxscript",
+    "pnnx", "ncnn", "transformers", "einops",
+]
+# RenderDoc CLI wrapper for GPU debugging (native render work).
+gpu = ["rdc-cli"]
+
+[dependency-groups]
+dev = ["pytest"]
+
+[tool.uv.sources]
+decomp-synth = { path = "../decomp-synth", editable = true }
+
+[tool.uv]
+package = false
