@@ -18,7 +18,7 @@ MoveDetector::MoveDetector(
 )
     : mMove(move), mActive(false), mLastDetectFrameIdx(-1), mDetectFrameOffset(-1) {
     MILO_ASSERT(mMove, 0x18);
-    unsigned char mirrored = (unsigned char)(mMove->Mirrored());
+    MoveMirrored mirrored = move->Mirrored();
     const std::vector<MoveFrame> &moveFrames = mMove->GetMoveFrames();
     mDancerFrames.resize(moveFrames.size());
     for (int i = 0; i < 2; i++) {
@@ -27,18 +27,18 @@ MoveDetector::MoveDetector(
     }
     for (int mf = 0; mf < moveFrames.size(); mf++) {
         if (dancer_frame->mMoveFrameIdx != mf) {
-            const char *path = move ? PathName(move) : "NULL";
+            char *path = move ? (char *)PathName(move) : (char *)"NULL";
             MILO_FAIL("HamMove '%s': dancer_frame->mMoveFrameIdx != mf", path);
-            DancerFrame &cur = mDancerFrames[mf];
-            cur.mMoveIdx = -1;
-            cur.mMoveFrameIdx = mf;
-            cur.mSkeleton = dancer_frame->mSkeleton;
-            for (int i = 0; i < 2; i++) {
-                mPlayerDetectFrames[i][mf].Reset(
-                    fv, -1, &moveFrames[i], &cur, (MoveMirrored)mirrored
-                );
-            }
         }
+        DancerFrame &cur = mDancerFrames[mf];
+        cur.mMoveIdx = -1;
+        cur.mMoveFrameIdx = mf;
+        cur.mSkeleton = dancer_frame->mSkeleton;
+        for (int i = 0; i < 2; i++) {
+            DetectFrame &df = mPlayerDetectFrames[i][mf];
+            df.Reset(fv, -1, &moveFrames[mf], &cur, (MoveMirrored)mirrored);
+        }
+        dancer_frame++;
     }
     for (int i = 0; i < 2; i++) {
         for (int j = 0; j < 4; j++) {
