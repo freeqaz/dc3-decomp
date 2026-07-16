@@ -512,6 +512,22 @@ void Game::SetHamMove(int i1, HamMove *move, bool b3) {
                     move_passed[2] = frac;
                     move_passed[3] = b3;
                     TheGamePanel->Handle(move_passed, false);
+                    // Observed-trigger evidence for the default-on runtime gate:
+                    // move_passed must be seen firing, not inferred (G5).
+                    if (Dc3EnvFlag("DC3_SCORING_DEBUG", false)) {
+                        static int sMovePassedCount = 0;
+                        ++sMovePassedCount;
+                        if (sMovePassedCount <= 5 || sMovePassedCount % 25 == 0) {
+                            static Symbol gameplay_mode("gameplay_mode");
+                            MILO_LOG(
+                                "DC3 SCORING: move_passed #%d player=%d frac=%.3f mode=%s\n",
+                                sMovePassedCount,
+                                i1,
+                                frac,
+                                TheGameMode->Property(gameplay_mode)->Sym().Str()
+                            );
+                        }
+                    }
                 }
 #else
                 float frac = mMoveDir->DetectFrac(i1, i5);
