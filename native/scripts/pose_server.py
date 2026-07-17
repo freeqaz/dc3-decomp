@@ -11,6 +11,7 @@ Protocol (little-endian):
 
 Usage:
   python pose_server.py [--socket /tmp/dc3_pose.sock] [--camera 0] [--model yolo11n-pose.pt]
+  python pose_server.py --video /path/to/clip.mp4 [--loop] [--fps 30] [--socket /tmp/dc3_pose.sock] [--model yolo11n-pose.pt]
 """
 
 import argparse
@@ -27,7 +28,13 @@ import numpy as np
 def main():
     parser = argparse.ArgumentParser(description="DC3 Pose Estimation Server")
     parser.add_argument("--socket", default="/tmp/dc3_pose.sock", help="Unix socket path")
-    parser.add_argument("--camera", type=int, default=0, help="Camera index")
+    input_group = parser.add_mutually_exclusive_group()
+    input_group.add_argument("--camera", type=int, default=0, help="Camera index")
+    input_group.add_argument("--video", default=None, help="Path to a video file to use as input instead of a camera")
+    parser.add_argument("--loop", action="store_true", help="Loop the video at EOF (video mode only)")
+    parser.add_argument("--fps", type=float, default=None,
+                         help="Wall-clock pacing override for video mode (default: video's own CAP_PROP_FPS, "
+                              "fallback 20.0 if unreadable). Ignored in camera mode.")
     parser.add_argument("--width", type=int, default=640, help="Capture width")
     parser.add_argument("--height", type=int, default=480, help="Capture height")
     parser.add_argument("--model", default="yolo11n-pose.pt", help="YOLO pose model path")
@@ -36,19 +43,39 @@ def main():
     parser.add_argument("--show", action="store_true", help="Show debug visualization window")
     args = parser.parse_args()
 
+    video_mode = args.video is not None
+
     # Late import so --help works without ultralytics installed
     from ultralytics import YOLO
 
     print(f"Loading model: {args.model}", file=sys.stderr)
     model = YOLO(args.model)
 
-    print(f"Opening camera {args.camera} at {args.width}x{args.height}", file=sys.stderr)
-    cap = cv2.VideoCapture(args.camera)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, args.width)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, args.height)
-    if not cap.isOpened():
-        print("ERROR: Could not open camera", file=sys.stderr)
-        sys.exit(1)
+    frame_period = None  # video-mode wall-clock pacing interval (seconds); None = camera (paces itself)
+
+    if video_mode:
+        print(f"Opening video file {args.video}", file=sys.stderr)
+        cap = cv2.VideoCapture(args.video)
+        if not cap.isOpened():
+            print("ERROR: Could not open video file", file=sys.stderr)
+            sys.exit(1)
+
+        video_fps = args.fps
+        if video_fps is None:
+            video_fps = cap.get(cv2.CAP_PROP_FPS)
+            if not video_fps or video_fps <= 0:
+                video_fps = 20.0
+        frame_period = 1.0 / video_fps
+        print(f"Video pacing at {video_fps:.3f} fps ({frame_period * 1000:.1f} ms/frame), loop={args.loop}",
+              file=sys.stderr)
+    else:
+        print(f"Opening camera {args.camera} at {args.width}x{args.height}", file=sys.stderr)
+        cap = cv2.VideoCapture(args.camera)
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, args.width)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, args.height)
+        if not cap.isOpened():
+            print("ERROR: Could not open camera", file=sys.stderr)
+            sys.exit(1)
 
     # Set up Unix socket server
     sock_path = args.socket
@@ -64,6 +91,8 @@ def main():
 
     client = None
     frame_id = 0
+    next_frame_time = time.monotonic()  # video-mode pacing anchor
+    eof_drain_deadline = None  # video-mode, --loop off: send ~2s of zero-person frames after EOF, then exit
 
     try:
         while True:
@@ -76,19 +105,56 @@ def main():
                 except socket.timeout:
                     pass
 
-            ret, frame = cap.read()
-            if not ret:
-                time.sleep(0.01)
-                continue
+            if video_mode and eof_drain_deadline is not None:
+                # Past EOF, not looping: emit zero-person frames for ~2s then exit cleanly.
+                frame = None
+                ret = True
+                if time.monotonic() >= eof_drain_deadline:
+                    print("Video EOF drain complete, exiting", file=sys.stderr)
+                    break
+            else:
+                ret, frame = cap.read()
+                if not ret:
+                    if video_mode:
+                        if args.loop:
+                            # Restart from the beginning. NOTE: BOTSORT track IDs may or may not
+                            # persist across this seam — that's acceptable, we don't try to fix
+                            # tracker state across a loop restart.
+                            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                            continue
+                        else:
+                            print("Video EOF, draining ~2s of zero-person frames", file=sys.stderr)
+                            eof_drain_deadline = time.monotonic() + 2.0
+                            frame = None
+                            ret = True
+                    else:
+                        time.sleep(0.01)
+                        continue
 
-            # Run tracking
-            results = model.track(
-                frame,
-                persist=True,
-                tracker="botsort.yaml",
-                conf=args.conf,
-                verbose=False,
-            )
+            if video_mode:
+                # Wall-clock pacing: camera mode paces itself via the device, so this branch
+                # only applies to file-backed video input.
+                now = time.monotonic()
+                sleep_for = next_frame_time - now
+                if sleep_for > 0:
+                    time.sleep(sleep_for)
+                    next_frame_time += frame_period
+                else:
+                    # Fell behind (e.g. slow inference) — resync instead of busy-catching-up.
+                    next_frame_time = time.monotonic() + frame_period
+
+            if frame is None:
+                # EOF-drain synthetic frame: skip inference, send an empty person list.
+                results = None
+            else:
+                # Run tracking
+                results = model.track(
+                    frame,
+                    persist=True,
+                    tracker="botsort.yaml",
+                    conf=args.conf,
+                    verbose=False,
+                )
 
             # Build binary packet
             timestamp = time.monotonic()

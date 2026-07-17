@@ -1365,10 +1365,20 @@ def capture_il(
     )
 
     il_base = None
+    il_src_dir = None
     for line in result.stdout.splitlines() + result.stderr.splitlines():
-        m = re.search(r'-il\s+(_CL_[0-9a-f]+)', line)
+        # The compiler reports the IL temp path as `-il <dir><sep>_CL_<hash>`.
+        # On the current wibo build the prefix is a real tmp path with a
+        # backslash separator (e.g. `<tmpdir>\_CL_2596b77c`), so strip any
+        # leading directory before the _CL_ basename and remember the directory
+        # the files actually landed in (drift fix 2026-07-10; older builds
+        # emitted a bare `_CL_<hash>` with files in CWD).
+        m = re.search(r'-il\s+(\S*?)(_CL_[0-9a-f]+)', line)
         if m:
-            il_base = m.group(1)
+            il_base = m.group(2)
+            prefix = m.group(1).replace('\\', '/')
+            if prefix:
+                il_src_dir = os.path.dirname(prefix + il_base) or None
             break
 
     if il_base is None:
@@ -1379,25 +1389,30 @@ def capture_il(
                 print(f"  {line}", file=sys.stderr)
         return None
 
-    # IL files are written to CWD — move them to output_dir if different
-    il_path_cwd = str(Path(run_cwd) / il_base)
-    il_path_out = str(output_dir / il_base)
+    # IL files are written to the compiler's temp dir (reported via -il) or CWD.
+    # Move them to output_dir if they landed elsewhere.
+    candidates = []
+    if il_src_dir:
+        candidates.append(str(Path(il_src_dir) / il_base))
+    candidates.append(str(Path(run_cwd) / il_base))
+    candidates.append(str(output_dir / il_base))
 
-    if Path(il_path_cwd + 'ex').exists() and str(Path(run_cwd).resolve()) != str(output_dir.resolve()):
-        # Move IL files from source dir to output_dir
-        import shutil
-        for s in ['ex', 'gl', 'sy', 'in', 'db']:
-            src = Path(il_path_cwd + s)
-            if src.exists():
-                shutil.move(str(src), str(output_dir / (il_base + s)))
-        il_path = il_path_out
-    elif Path(il_path_cwd + 'ex').exists():
-        il_path = il_path_cwd
-    elif Path(il_path_out + 'ex').exists():
-        il_path = il_path_out
+    il_path = str(output_dir / il_base)
+    for cand in candidates:
+        if not Path(cand + 'ex').exists():
+            continue
+        if str(Path(cand).parent.resolve()) != str(output_dir.resolve()):
+            import shutil
+            for s in IL_SUFFIXES:
+                src = Path(cand + s)
+                if src.exists():
+                    shutil.move(str(src), str(output_dir / (il_base + s)))
+            il_path = str(output_dir / il_base)
+        else:
+            il_path = cand
+        break
     else:
         print("WARNING: IL .ex file not found", file=sys.stderr)
-        il_path = il_path_out
 
     for s in IL_SUFFIXES:
         p = Path(il_path + s)

@@ -148,3 +148,8 @@ native/third_party/
 /.objdiff_report_cache
 # Transient permuter lock files (present only while a permuter run is active)
 *.permuter.lock
+
+# retired 8.6G shared ML venv, preserved for rollback (delete to reclaim space)
+venv-legacy-ml/
+uv-cache/
+/venv

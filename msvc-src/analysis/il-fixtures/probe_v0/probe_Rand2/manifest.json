@@ -1,0 +1,71 @@
+{
+  "bundle_base": "/tmp/claude/il-probe/probe_Rand2/_CL_d8d4b536",
+  "bundle_name": "probe_Rand2",
+  "captured_at": "2026-07-10T10:03:38+00:00",
+  "command": [
+    "~/code/milohax/wibo/build/release/wibo",
+    "build/compilers/X360/16.00.11886.00/cl.exe",
+    "/Bd",
+    "/d2nop",
+    "/I",
+    "e:/lazer_build_gmc1/system/src/stlport",
+    "/I",
+    "src/xdk/LIBCMT",
+    "/I",
+    "e:/lazer_build_gmc1/system/src",
+    "/I",
+    "e:/lazer_build_gmc1/lazer/src",
+    "/I",
+    "e:/lazer_build_gmc1/system/src/oggvorbis",
+    "/I",
+    "e:/lazer_build_gmc1/system/src/synth/tomcrypt",
+    "/I",
+    "e:/lazer_build_gmc1/system/src/net/curl/include",
+    "/I",
+    "src",
+    "/nologo",
+    "/wd4355",
+    "/wd4164",
+    "/c",
+    "/GR",
+    "/O1",
+    "/Oi",
+    "/EHsc",
+    "/TP",
+    "/FoZ:\\tmp\\claude\\il-probe\\il_capture.obj",
+    "Z:\\<repo>\\src\\system\\math\\Rand2.cpp"
+  ],
+  "compiler_path": "build/compilers/X360/16.00.11886.00/cl.exe",
+  "files": {
+    "db": {
+      "exists": true,
+      "path": "_CL_d8d4b536db",
+      "size": 3319
+    },
+    "ex": {
+      "exists": true,
+      "path": "_CL_d8d4b536ex",
+      "size": 4732
+    },
+    "gl": {
+      "exists": true,
+      "path": "_CL_d8d4b536gl",
+      "size": 1022
+    },
+    "in": {
+      "exists": true,
+      "path": "_CL_d8d4b536in",
+      "size": 503
+    },
+    "sy": {
+      "exists": true,
+      "path": "_CL_d8d4b536sy",
+      "size": 591
+    }
+  },
+  "il_base": "_CL_d8d4b536",
+  "run_cwd": "src/system/math",
+  "source_path": "src/system/math/Rand2.cpp",
+  "wibo_path": "~/code/milohax/wibo/build/release/wibo",
+  "_sanitized": "absolute machine paths rewritten to repo-relative / ~; .gl/.ex retain the original e:\\lazer_build_gmc1 build paths by design"
+}

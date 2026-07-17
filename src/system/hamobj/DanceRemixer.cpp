@@ -199,6 +199,15 @@ void DanceRemixer::PostMoveFinished() {
         }
     }
     for (int i = 0; i < 2; i++) {
+#ifdef HX_NATIVE
+        // moveIdx is derived from the wall-clock beat, so at/after the final
+        // move boundary it can reach one past mRoutineMeasures' extent
+        // (mTotalMeasures). The unchecked [] then reads a garbage MoveVariant*
+        // and Find() faults on its name — observed SIGSEGV on long headless
+        // runs that idle at song end.
+        if (moveIdx < 0 || moveIdx >= (int)TheMoveMgr->mRoutineMeasures[i].size())
+            continue;
+#endif
         if (ScoredDanceMeasure(i, moveIdx)) {
             const MoveVariant *mv = TheMoveMgr->mRoutineMeasures[i][moveIdx].first;
             if (mv) {

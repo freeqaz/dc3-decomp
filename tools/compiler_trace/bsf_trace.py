@@ -86,10 +86,17 @@ WIBO_32 = _resolve_wibo_32()
 BSF_RVA = 0x026780
 BSF_VA = C2_IMAGE_BASE + BSF_RVA  # 0x10b26780
 
-# c2.dll loads at callDllMain hit #13
-C2_LOAD_HIT = 13
+# wibo PE-mapping anchor. Breakpoint site for identifying c2.dll and reading its
+# actual (relocated) host base. Anchors the statement
+#   `executable.imageBase = allocatedBase;`
+# in wibo/src/loader.cpp::(anonymous namespace)::loadPEFromSource. Update this
+# constant (or set BSF_WIBO_LOADER_BP) if wibo's loader.cpp is edited above this
+# line. Locals relied on at this site: `allocatedBase` (void*, actual host base)
+# and `header32.imageBase` (this module's preferred base — c2.dll == 0x10B00000).
+WIBO_LOADER_BP = os.environ.get("BSF_WIBO_LOADER_BP", "loader.cpp:452")
 
-# Regex to parse BSF output lines
+# Regex to parse BSF output lines. The caller field is emitted as a c2-relative
+# RVA directly by the gdb script (caller_return_addr - $c2base).
 _BSF_RE = re.compile(
     r"BSF #(\d+): caller=0x([0-9a-f]+) lo=0x([0-9a-f]+) "
     r"hi=0x([0-9a-f]+) base=(\d+) bit=(-?\d+)"
@@ -298,12 +305,20 @@ def _generate_gdb_script(
     # Get the full command and strip the wibo prefix
     cmd = invoker.base_command(source, obj_output, extra_flags)
     # cmd[0] is wibo path, cmd[1] is cl.exe, rest are flags
-    cl_args = " ".join(cmd[1:])
+    # gdb's `set args` tokenizer interprets backslash escapes when it splits the
+    # string into argv (\t -> TAB, \x -> x). The wibo Z:\\ path for out-of-project
+    # sources (e.g. Z:\\tmp\\foo.cpp) would be mangled to Z:<TAB>mpfoo.cpp and the
+    # frontend fails with "cannot open source file". Double every backslash so the
+    # tokenizer reproduces the original argv, matching CompilerInvoker.compile.
+    cl_args = " ".join(cmd[1:]).replace("\\", "\\\\")
 
     lines = [
         "# Auto-generated BSF trace script",
         "set confirm off",
         "set pagination off",
+        # Exec the inferior directly (no /bin/sh -c) so argv is passed verbatim,
+        # matching CompilerInvoker.compile's subprocess launch.
+        "set startup-with-shell off",
         "set debuginfod enabled off",
         'set libthread-db-search-path ""',
         "set print elements 0",
@@ -311,24 +326,33 @@ def _generate_gdb_script(
         f"file {WIBO_32}",
         f"set args {cl_args}",
         "",
-        "# Run until c2.dll is loaded (callDllMain hit #13)",
-        "break callDllMain",
+        "# Stop at wibo's PE mapping site for the module whose PREFERRED base is c2.dll's",
+        "# (0x10B00000) — unique in the toolchain set, independent of DllMain routing,",
+        "# and robust to relocation (we read the actual base from allocatedBase).",
+        f"break {WIBO_LOADER_BP} if header32.imageBase == 0x{C2_IMAGE_BASE:08x}",
         "run",
         "",
-        f"# Skip through {C2_LOAD_HIT - 1} callDllMain hits",
-        "set $i = 0",
-        f"while $i < {C2_LOAD_HIT - 1}",
-        "  set $i = $i + 1",
-        "  continue",
+        "# Guard: if the condition could not be evaluated (debug-info drift) gdb stops",
+        "# unconditionally — verify we are really on c2.dll before trusting locals.",
+        f"if header32.imageBase == 0x{C2_IMAGE_BASE:08x}",
+        "  set $c2base = (unsigned int)allocatedBase",
+        '  printf "### c2 mapped: base=0x%08x preferred=0x%08x\\n", $c2base, header32.imageBase',
+        "else",
+        '  printf "### ERROR: loader bp stopped on wrong module (preferred=0x%08x)\\n", header32.imageBase',
+        "  quit 1",
         "end",
-        "",
-        "# Verify c2.dll is loaded",
-        f"set $val = *(unsigned char*)0x{BSF_VA:08x}",
-        f'printf "### At callDllMain hit #{C2_LOAD_HIT}: BSF byte = 0x%02x\\n", $val',
-        "",
-        "# Delete callDllMain breakpoint, set BSF breakpoint",
         "delete 1",
-        f"break *0x{BSF_VA:08x}",
+        "",
+        "# CRITICAL ORDERING: section data is copied (loader.cpp ~line 512) and relocations",
+        "# applied (~line 550) INSIDE loadPEFromSource AFTER line 452. A software breakpoint",
+        "# planted now would be memcpy'd over (never fires) and gdb would restore a stale",
+        "# zero shadow byte over real code on removal. finish => image bytes are final.",
+        "finish",
+        "",
+        f"set $bsf = $c2base + 0x{BSF_RVA:x}",
+        "set $val = *(unsigned char*)$bsf",
+        'printf "### BSF byte at 0x%08x = 0x%02x\\n", $bsf, $val',
+        "break *$bsf",
         "",
         "# Trace all BSF calls",
         "set $n = 0",
@@ -338,9 +362,10 @@ def _generate_gdb_script(
         "  if $_isvoid($eip)",
         "    set $done = 1",
         "  else",
-        f"    if $eip == 0x{BSF_VA:08x}",
+        "    if $eip == $bsf",
         "      set $n = $n + 1",
         "      set $caller = *(unsigned int*)$esp",
+        "      set $crva = $caller - $c2base",
         "      set $lo = *(unsigned int*)($esp + 4)",
         "      set $hi = *(unsigned int*)($esp + 8)",
         "      set $node_ptr = *(unsigned int*)$edx",
@@ -365,7 +390,7 @@ def _generate_gdb_script(
         "          set $bit = $bit + 1",
         "        end",
         "      end",
-        '      printf "BSF #%d: caller=0x%08x lo=0x%08x hi=0x%08x base=%d bit=%d\\n", $n, $caller, $lo, $hi, $base, $bit',
+        '      printf "BSF #%d: caller=0x%08x lo=0x%08x hi=0x%08x base=%d bit=%d\\n", $n, $crva, $lo, $hi, $base, $bit',
         "    else",
         "      set $done = 1",
         "    end",
@@ -383,13 +408,11 @@ def _parse_bsf_output(output: str, source: Path) -> BSFTrace:
     trace = BSFTrace(source=source)
     for match in _BSF_RE.finditer(output):
         index = int(match.group(1))
-        caller_va = int(match.group(2), 16)
+        caller_rva = int(match.group(2), 16)
         lo = int(match.group(3), 16)
         hi = int(match.group(4), 16)
         base = int(match.group(5))
         bit = int(match.group(6))
-
-        caller_rva = caller_va - C2_IMAGE_BASE
 
         trace.calls.append(
             BSFCall(
@@ -463,13 +486,31 @@ def trace_bsf(
         trace = _parse_bsf_output(output, source)
 
         if trace.total_calls == 0:
-            # Check for common errors
-            if "No such file" in output:
-                raise RuntimeError(f"GDB could not find wibo or source: {output[:500]}")
+            # Diagnose by marker rather than by scraping stray compiler stderr
+            # (the old "No such file" branch misfired on benign cl.exe output).
             if "not in executable format" in output:
                 raise RuntimeError(f"Wrong wibo binary format: {output[:500]}")
+            if "### c2 mapped:" not in output:
+                hint = ""
+                if (
+                    "No source file named" in output
+                    or "No symbol" in output
+                    or "### ERROR" in output
+                ):
+                    hint = (
+                        " — debug-info/anchor drift: rebuild wibo debug with -g "
+                        "(cmake -DCMAKE_BUILD_TYPE=Debug) or update WIBO_LOADER_BP "
+                        "to the `executable.imageBase = allocatedBase;` line"
+                    )
+                raise RuntimeError(
+                    f"c2.dll never hit wibo PE-mapping breakpoint ({WIBO_LOADER_BP})"
+                    f"{hint}. GDB return code: {result.returncode}\n"
+                    f"Last 500 chars of output: {output[-500:]}"
+                )
             raise RuntimeError(
-                f"No BSF calls captured. GDB return code: {result.returncode}\n"
+                "c2.dll mapped but 0 BSF calls captured — compile likely failed "
+                "(bad flags/source) or BSF_RVA 0x26780 is stale for this c2.dll. "
+                f"GDB return code: {result.returncode}\n"
                 f"Last 500 chars of output: {output[-500:]}"
             )
 

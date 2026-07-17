@@ -1,0 +1,71 @@
+{
+  "bundle_base": "/tmp/claude/il-probe/probe_Sort/_CL_14152cf4",
+  "bundle_name": "probe_Sort",
+  "captured_at": "2026-07-10T10:03:39+00:00",
+  "command": [
+    "~/code/milohax/wibo/build/release/wibo",
+    "build/compilers/X360/16.00.11886.00/cl.exe",
+    "/Bd",
+    "/d2nop",
+    "/I",
+    "e:/lazer_build_gmc1/system/src/stlport",
+    "/I",
+    "src/xdk/LIBCMT",
+    "/I",
+    "e:/lazer_build_gmc1/system/src",
+    "/I",
+    "e:/lazer_build_gmc1/lazer/src",
+    "/I",
+    "e:/lazer_build_gmc1/system/src/oggvorbis",
+    "/I",
+    "e:/lazer_build_gmc1/system/src/synth/tomcrypt",
+    "/I",
+    "e:/lazer_build_gmc1/system/src/net/curl/include",
+    "/I",
+    "src",
+    "/nologo",
+    "/wd4355",
+    "/wd4164",
+    "/c",
+    "/GR",
+    "/O1",
+    "/Oi",
+    "/EHsc",
+    "/TP",
+    "/FoZ:\\tmp\\claude\\il-probe\\il_capture.obj",
+    "Z:\\<repo>\\src\\system\\math\\Sort.cpp"
+  ],
+  "compiler_path": "build/compilers/X360/16.00.11886.00/cl.exe",
+  "files": {
+    "db": {
+      "exists": true,
+      "path": "_CL_14152cf4db",
+      "size": 97
+    },
+    "ex": {
+      "exists": true,
+      "path": "_CL_14152cf4ex",
+      "size": 2955
+    },
+    "gl": {
+      "exists": true,
+      "path": "_CL_14152cf4gl",
+      "size": 315
+    },
+    "in": {
+      "exists": true,
+      "path": "_CL_14152cf4in",
+      "size": 439
+    },
+    "sy": {
+      "exists": true,
+      "path": "_CL_14152cf4sy",
+      "size": 121
+    }
+  },
+  "il_base": "_CL_14152cf4",
+  "run_cwd": "src/lazer/meta_ham",
+  "source_path": "src/system/math/Sort.cpp",
+  "wibo_path": "~/code/milohax/wibo/build/release/wibo",
+  "_sanitized": "absolute machine paths rewritten to repo-relative / ~; .gl/.ex retain the original e:\\lazer_build_gmc1 build paths by design"
+}

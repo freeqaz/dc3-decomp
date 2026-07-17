@@ -209,7 +209,7 @@ def extract_reg_swap_pairs(objdiff_json: dict) -> list[tuple[str, str]]:
 
     Returns pairs of (target_reg, base_reg) that are swapped.
     """
-    from scripts.diff_inspect import parse_breakdowns, compute_reg_swap_pairs
+    from scripts.analysis.diff_inspect import parse_breakdowns, compute_reg_swap_pairs
 
     instrs = objdiff_json.get("instructions", [])
     reg_swaps_raw, _, _, _ = parse_breakdowns(instrs)
@@ -690,6 +690,7 @@ def cmd_bsf_solve(args) -> None:
     import json
     import subprocess
     import sys
+    import tempfile
     from pathlib import Path
 
     from .invoker import PROJECT_ROOT
@@ -697,29 +698,53 @@ def cmd_bsf_solve(args) -> None:
     source = Path(args.source).resolve()
     symbol = args.symbol
 
-    # Get objdiff JSON
+    # Get objdiff JSON.
+    #
+    # ``--build`` makes objdiff-cli invoke ninja, and ninja's progress chatter
+    # ("ninja: no work to do." / "[1/2] Building ...") is written to *stdout* —
+    # the same stream the ``-f json`` diff would land on if left to default.
+    # Parsing that mixed stream as JSON fails at the ninja prefix (the T2
+    # bsf-solve blocker). Route the diff to an explicit output file via ``-o``
+    # so the build chatter stays on stdout and only the JSON reaches us.
     print(f"Running objdiff for {symbol}...", file=sys.stderr)
-    objdiff_result = subprocess.run(
-        [
-            str(PROJECT_ROOT / "bin" / "objdiff-cli"),
-            "diff",
-            symbol,
-            "--include-instructions",
-            "--build",
-            "--incremental",
-            "-f",
-            "json",
-        ],
-        cwd=PROJECT_ROOT,
-        capture_output=True,
-        text=True,
-    )
+    with tempfile.NamedTemporaryFile(
+        mode="r", suffix=".json", prefix="bsf_objdiff_", delete=True
+    ) as jf:
+        objdiff_result = subprocess.run(
+            [
+                str(PROJECT_ROOT / "bin" / "objdiff-cli"),
+                "diff",
+                symbol,
+                "--include-instructions",
+                "--build",
+                "--incremental",
+                "-f",
+                "json",
+                "-o",
+                jf.name,
+            ],
+            cwd=PROJECT_ROOT,
+            capture_output=True,
+            text=True,
+        )
 
-    if objdiff_result.returncode != 0:
-        print(f"objdiff failed: {objdiff_result.stderr}", file=sys.stderr)
+        if objdiff_result.returncode != 0:
+            print(f"objdiff failed: {objdiff_result.stderr}", file=sys.stderr)
+            sys.exit(1)
+
+        jf.seek(0)
+        objdiff_out = jf.read()
+
+    if not objdiff_out.strip():
+        print(
+            "objdiff produced no JSON output "
+            f"(stdout: {objdiff_result.stdout.strip()[:200]!r}; "
+            f"stderr: {objdiff_result.stderr.strip()[-200:]!r})",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
-    objdiff_json = json.loads(objdiff_result.stdout)
+    objdiff_json = json.loads(objdiff_out)
 
     # Trace BSF
     print(f"Tracing BSF calls for {source.name}...", file=sys.stderr)
