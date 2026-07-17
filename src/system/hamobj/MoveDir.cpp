@@ -750,6 +750,17 @@ void MoveDir::Update(const SkeletonUpdateData &data) {
 
 void MoveDir::PostUpdate(const SkeletonUpdateData *data) {
     if (data) {
+#ifdef HX_NATIVE
+        // GestureMgr_NativePoll passes data->mFrame = nullptr (native has no
+        // per-frame DetectFrame feed). The record-clip derefs below are reachable
+        // only when a record clip is set, which happens only via SetupRecordClip
+        // when the static MoveDir::sGameRecord is true — toggled solely by the
+        // OnToggleSongRecord debug DTA handler, never in a default/CI run. This is
+        // cheap hardening so the now-default-on scoring pipeline can't segfault if
+        // that debug path is ever hit with a null frame. PPC bytes are unchanged
+        // (whole block compiles out on Xbox).
+        if (data->mFrame) {
+#endif
         if (mRecordClip) {
             mRecordClip->PollRecording(*data->mFrame);
         }
@@ -759,6 +770,9 @@ void MoveDir::PostUpdate(const SkeletonUpdateData *data) {
         if (mSkeletonRecordClip) {
             mSkeletonRecordClip->PollRecording(*data->mFrame);
         }
+#ifdef HX_NATIVE
+        }
+#endif
         if (TheLoadMgr.EditMode()) {
             MILO_ASSERT(TheGameData, 0x387);
             TheGameData->AutoAssignSkeletons(data);

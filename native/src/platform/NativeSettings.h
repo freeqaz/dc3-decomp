@@ -2,6 +2,12 @@
 #include <cstdlib>
 #include <cstdio>
 
+// Dc3EnvFlag — value-parsed boolean env gate (defined in System_Native.cpp).
+//   unset/empty -> defaultOn; "0"/"false"/"off"/"no" (case-insensitive) -> false;
+//   anything else -> true. Use for native default-on toggles so that DC3_FOO=0
+//   can disable them (plain getenv() truthiness treats DC3_FOO=0 as "set" = on).
+bool Dc3EnvFlag(const char *name, bool defaultOn);
+
 // Native-only runtime settings. These are enhancements or toggles that don't
 // exist on Xbox 360 — the original build has no equivalent options.
 // On by default where they improve the experience; togglable for fidelity.

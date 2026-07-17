@@ -777,11 +777,22 @@ void App::RunOneFrame() {
     SystemPoll(false);
 
 #ifdef HX_NATIVE
-    // Move-scoring pipeline (opt-in). See the native headless loop below for the
-    // full rationale; gated on DC3_NATIVE_SCORING / DC3_POSE_SELFTEST so default
-    // gameplay is unchanged (the pose->skeleton->scoring driver stays dormant).
-    if (TheGestureMgr && (getenv("DC3_NATIVE_SCORING") || getenv("DC3_POSE_SELFTEST")))
-        TheGestureMgr->Poll();
+    // Move-scoring pipeline (DEFAULT-ON; opt-out DC3_NATIVE_SCORING=0). See the
+    // native headless loop below for the full rationale. This drives the
+    // pose->skeleton->scoring pipeline every frame: with a real pose provider
+    // (DC3_POSE=external|internal) it scores the live player; with NO provider
+    // GestureMgr_NativePoll fills a static tracked dummy skeleton, so the whole
+    // pipeline (archive-before-fill -> FilterQueue::Poll -> MoveDir callback
+    // fan-out) runs deterministically and DetectFrac is ~0 — that near-zero score
+    // is the CORRECT "player standing still" signal, not a bug (its exact value is
+    // a blessed regression signal). DC3_POSE_SELFTEST is OR'd in so the self-test
+    // still forces the poll even under DC3_NATIVE_SCORING=0. This is the web loop
+    // too; web goes default-on (CheckForSkeletonLoss early-returns on __EMSCRIPTEN__).
+    {
+        extern bool Dc3EnvFlag(const char *, bool);
+        if (TheGestureMgr && (Dc3EnvFlag("DC3_NATIVE_SCORING", true) || Dc3EnvFlag("DC3_POSE_SELFTEST", false)))
+            TheGestureMgr->Poll();
+    }
 #endif
 
     if (TheUI)
@@ -1099,16 +1110,23 @@ void App::RunWithoutDebugging() {
         // App::Run (Xbox) polls TheGestureMgr every frame; the native loops
         // omitted it, so GestureMgr_NativePoll — which drives the pose->skeleton
         // pipeline AND the move-scoring callback fan-out (MoveDir) — never ran,
-        // leaving DetectFrac identically 0. Gated on DC3_NATIVE_SCORING (opt-in):
-        // with DC3_POSE_SELFTEST the choreography's own reference pose is fed as
-        // the player and the pipeline is crash-free and scores 1.0 (proving the
-        // wiring end to end). Real live-pose scoring additionally needs the native
-        // skeleton-history displacement path (ErrorFrameInput ->
-        // Skeleton::Displacements -> SkeletonHistory::PrevFromArchive), which is
-        // still unfinished on native — so this stays off by default to keep
-        // gameplay unchanged. Poll before the UI so DetectFrac is fresh this frame.
-        if (TheGestureMgr && (getenv("DC3_NATIVE_SCORING") || getenv("DC3_POSE_SELFTEST")))
-            TheGestureMgr->Poll();
+        // leaving DetectFrac identically 0. Now DEFAULT-ON (opt-out
+        // DC3_NATIVE_SCORING=0): the live-pose pipeline landed 2026-07-02
+        // (ErrorFrameInput -> SkeletonHistory::PrevFromArchive displacement path is
+        // wired) so this is an already-exercised path, not new machinery. With a
+        // real provider (DC3_POSE=external|internal) it scores the live player;
+        // with DC3_POSE_SELFTEST the choreography's own reference pose is fed and
+        // DetectFrac -> ~1.0; with NO provider GestureMgr_NativePoll fills a static
+        // TRACKED dummy skeleton so the entire pipeline runs deterministically and
+        // DetectFrac is ~0 — that near-zero is the correct "standing still" signal
+        // (a blessed regression number), NOT a scoring bug. DC3_POSE_SELFTEST is
+        // OR'd so it still forces the poll under DC3_NATIVE_SCORING=0. Poll before
+        // the UI so DetectFrac is fresh this frame.
+        {
+            extern bool Dc3EnvFlag(const char *, bool);
+            if (TheGestureMgr && (Dc3EnvFlag("DC3_NATIVE_SCORING", true) || Dc3EnvFlag("DC3_POSE_SELFTEST", false)))
+                TheGestureMgr->Poll();
+        }
 
         if (TheUI)
             TheUI->Poll();

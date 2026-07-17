@@ -10,6 +10,14 @@
 #
 # All DC3_*/MILO_* env vars can still be overridden from the caller:
 #   MILO_MAX_FRAMES=500 ./scripts/dc3-agent-test.sh
+#
+# Move-scoring is now DEFAULT-ON (this script sets none of the scoring vars, so
+# they take their new defaults): DC3_NATIVE_SCORING and DC3_REAL_MOVE_PASSED both
+# run by default. With no pose provider the static tracked dummy yields a
+# deterministic DetectFrac ~0 (the correct "standing still" signal, not a bug).
+# To reproduce the pre-flip baseline: DC3_NATIVE_SCORING=0 DC3_REAL_MOVE_PASSED=0.
+# See docs/native/SCORING_ENV_VARS.md for the full parsing rules (=0/false/off/no
+# disables) and the deterministic-dummy expectation.
 
 set -euo pipefail
 

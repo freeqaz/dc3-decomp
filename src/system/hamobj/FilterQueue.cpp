@@ -94,7 +94,8 @@ void FilterQueue::Poll(const SkeletonUpdateData &skelData) {
         // Only the fed skeleton + the tracked-gate change; the scoring math is
         // untouched. This whole block compiles out on PPC.
         bool selfTest = false;
-        if (getenv("DC3_POSE_SELFTEST")) {
+        extern bool Dc3EnvFlag(const char *, bool);
+        if (Dc3EnvFlag("DC3_POSE_SELFTEST", false)) {
             selfTest = true;
             skel = const_cast<BaseSkeleton *>(
                 static_cast<const BaseSkeleton *>(

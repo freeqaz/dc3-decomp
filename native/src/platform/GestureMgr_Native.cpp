@@ -1,6 +1,7 @@
 #ifdef HX_NATIVE
 
 #include "Skeleton_Native.h"
+#include "NativeSettings.h" // Dc3EnvFlag
 #include "gesture/CameraInput.h"
 #include "gesture/GestureMgr.h"
 #include "gesture/Skeleton.h" // SkeletonCallback
@@ -27,7 +28,7 @@ public:
         bool found = PrevFromArchive(*this, s, targetMs, out, elapsedMs);
         // DC3_SCORING_DEBUG=1: once-per-second archive-lookup liveness counters,
         // so a crash-free run can be distinguished from silently-dead lookups.
-        static bool sDebug = getenv("DC3_SCORING_DEBUG") != nullptr;
+        static bool sDebug = Dc3EnvFlag("DC3_SCORING_DEBUG", false);
         if (sDebug) {
             static unsigned sCalls = 0, sHits = 0;
             static std::chrono::steady_clock::time_point sLastPrint;
@@ -268,7 +269,7 @@ static int AcceptedFrameElapsed() {
 // the PrevSkeleton counter style. accepted/skipped are per-call increments;
 // reassigns accumulates the AssignSlots reassignment count.
 static void ScoringDebugTick(bool accepted, bool skipped, int reassigns) {
-    static bool sDebug = getenv("DC3_SCORING_DEBUG") != nullptr;
+    static bool sDebug = Dc3EnvFlag("DC3_SCORING_DEBUG", false);
     if (!sDebug) return;
     static unsigned sAccepted = 0, sSkipped = 0, sReassign = 0;
     static std::chrono::steady_clock::time_point sLastPrint;
@@ -393,6 +394,13 @@ void GestureMgr_NativePoll(GestureMgr *mgr) {
     if (!providerRunning) {
         // No pose provider running at all — provide a dummy skeleton in slot 0
         // so skeleton-gated code paths (scroll behavior, enter anims) still run.
+        // Now that move-scoring is DEFAULT-ON (App.cpp DC3_NATIVE_SCORING gate),
+        // this static tracked dummy is the default-run SCORING INPUT: it exercises
+        // the whole pipeline (archive-before-fill -> FilterQueue::Poll -> MoveDir
+        // fan-out) every frame, yielding a deterministic DetectFrac ~0 (the correct
+        // "player standing still" signal). Keep it TRACKED — MarkUntracked would
+        // break ShellInput::HasSkeleton()/SkeletonChooser::Poll and silently drop
+        // scoring coverage to the errors=1.0 short-circuit.
         // The static dummy pose treats every game frame as a new frame (harmless
         // -- it never moves). Remaining slots stay untracked. A transient
         // 0-person dropout from a running provider intentionally does NOT reach
