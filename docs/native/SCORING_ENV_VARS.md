@@ -59,3 +59,38 @@ DC3_NATIVE_SCORING=0 DC3_REAL_MOVE_PASSED=0   # faithful rollback:
                                               #   no move_passed fires,
                                               #   DetectFrac identically 0
 ```
+
+## Landing record (2026-07-17, merge 4c6cd81b)
+
+Both flips landed default-on after the full runtime gate battery on 18K–60K
+frame headless `betteroffalone` runs:
+
+- **G1** landing config (`DC3_REAL_MOVE_PASSED=0`): clean, scoring active,
+  zero `move_passed`.
+- **G2** selftest: clean, **`frac=1.000`** flowing through `move_passed` on
+  reference poses — end-to-end proof of real detection values (dummy runs
+  stay at the expected `0.000`).
+- **G4** full opt-out: clean, zero scoring output (legacy behavior).
+- **G5** both-flips 60K frames: clean past song end; `move_passed` fired
+  **150 times total** = once per move boundary per player.
+- **Gate A** real-video pose chain (`pose_server.py --video`): 93.1% archive
+  hit rate, zero skeleton failures.
+
+Two engine bugs were found and fixed by these gates before landing:
+
+1. **`DataNode::Equal` string mis-decomp** (`d3100a62`): `kDataString` glob
+   pointer compared as chars → all DTA string equality false → the hud
+   `move_interp` `$new_move` debounce fired every frame → `set_cur_move` /
+   `post_move_finished` storms (67,475 `move_passed` in 18K frames).
+2. **`DanceRemixer::PostMoveFinished` OOB** (`79e47f0a`): wall-clock-derived
+   `moveIdx` indexed one past `mRoutineMeasures` at song end → SIGSEGV in
+   `FindObject`. HX_NATIVE bounds guard.
+
+Gate-horizon lesson: 18K-frame runs end **inside** the song; both crashes only
+manifested past song end. Long-run gates must idle past the last move boundary
+(60K frames for this song).
+
+Web (`__EMSCRIPTEN__`) note: default-on there too (`CheckForSkeletonLoss`
+early-returns on web); build verified green at landing. During-song web frame
+time not yet measured — if scoring cost shows up on wasm profiles, flip the
+web default at the `App.cpp` gate sites.
