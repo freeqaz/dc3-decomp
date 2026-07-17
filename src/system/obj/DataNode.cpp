@@ -662,7 +662,7 @@ bool DataNode::Equal(const DataNode &n, DataArray *a, bool warn) const {
     if (firstType == secondType) {
         bool res;
         if (firstType == kDataString) {
-            res = streq(first.UncheckedStr(), second.UncheckedStr());
+            res = streq(first.mValue.var->mValue.symbol, second.mValue.var->mValue.symbol);
 #ifdef HX_NATIVE
         } else if (firstType == kDataSymbol) {
             // On 64-bit, UncheckedInt() truncates the 8-byte symbol pointer to 4 bytes.
@@ -685,12 +685,12 @@ bool DataNode::Equal(const DataNode &n, DataArray *a, bool warn) const {
                 if (secondType == kDataSymbol) {
                     return streq(objName, second.UncheckedStr());
                 } else if (secondType == kDataString) {
-                    return streq(objName, second.UncheckedStr());
+                    return streq(objName, second.mValue.var->mValue.symbol);
                 }
             }
             if (firstType == kDataSymbol) {
                 if (secondType == kDataString) {
-                    return streq(first.UncheckedStr(), second.UncheckedStr());
+                    return streq(first.UncheckedStr(), second.mValue.var->mValue.symbol);
                 }
             } else if (secondType != kDataString && secondType != kDataSymbol) {
                 warn &= secondType != kDataObject; // i dunno lol
