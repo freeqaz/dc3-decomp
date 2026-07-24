@@ -642,9 +642,9 @@ std::list<HamCamShot::TargetCache>::iterator HamCamShot::GetTargetCache(Symbol s
 
 std::list<HamCamShot::TargetCache>::iterator HamCamShot::CreateTargetCache(Symbol s) {
     TargetCache cache;
-    sCache.insert(sCache.begin(), cache);
-    sCache.begin()->mTargetName = s;
-    sCache.begin()->mTrans = FindTarget(s);
+    sCache.push_front(cache);
+    sCache.front().mTargetName = s;
+    sCache.front().mTrans = FindTarget(s);
     return sCache.begin();
 }
 
