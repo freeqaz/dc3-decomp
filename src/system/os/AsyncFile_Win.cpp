@@ -65,8 +65,8 @@ void AsyncFileWin::_OpenAsync() {
         dwDesiredAccess = 0x40000000;
         dwCreationDisposition = 2;
     } else {
-        dwCreationDisposition = 3 + ((mMode & 0x100) != 0);
         dwDesiredAccess = 0x40000000;
+        dwCreationDisposition = (mMode & 0x100) ? 4 : 3;
     }
     mFile = CreateFileA(
         mFilename.c_str(),
