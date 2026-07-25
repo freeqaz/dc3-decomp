@@ -162,10 +162,9 @@ void CSHA1::Transform(unsigned int *pState, const unsigned char *pBuffer) {
 void CSHA1::Update(const unsigned char *data, unsigned int len) {
     unsigned int i, j;
 
-    j = m_count[0];
-    j = (j / 8) % 64;
-    m_count[0] += len * 8;
-    if (m_count[0] < len * 8) {
+    j = (m_count[0] >> 3) % 64;
+    m_count[0] += (unsigned long)len << 3;
+    if (m_count[0] < (unsigned long)len << 3) {
         m_count[1]++;
     }
     m_count[1] += (len >> 29);
