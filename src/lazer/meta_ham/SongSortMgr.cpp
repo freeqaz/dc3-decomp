@@ -216,8 +216,7 @@ int SongSortMgr::FirstArtistSongIndex(Symbol sym) {
         SongSortNode *ssNode =
             dynamic_cast<SongSortNode *>(mSorts[mCurrentSortIdx]->GetListFromIdx(i));
         if (ssNode != 0) {
-            const char *artist = ssNode->GetArtist();
-            if (strcmp(artist, sym.Str()) == 0) {
+            if (strcmp(sym.Str(), ssNode->GetArtist()) == 0) {
                 result = GetHeaderIndexFromChildListIndex(i);
                 break;
             }
