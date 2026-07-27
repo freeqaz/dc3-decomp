@@ -5,11 +5,9 @@ void MemStream::Flush() {}
 bool MemStream::Fail() { return mFail; }
 
 void MemStream::ReadImpl(void *data, int bytes) {
-    unsigned int size = mBuffer.size();
-    int tell = mTell;
-    if (tell + bytes > size) {
+    if (mTell + bytes > mBuffer.size()) {
+        bytes = mBuffer.size() - mTell;
         mFail = true;
-        bytes = size - tell;
     }
     memcpy(data, &mBuffer[mTell], bytes);
     mTell += bytes;
