@@ -452,6 +452,17 @@ bool GestureMgr::IsSkeletonSideways(int idx) const {
 }
 
 void GestureMgr::UpdateTrackedSkeletons() {
+#ifdef HX_NATIVE
+    // Native: mPlayerSkeletonIDs (set by our callers) is the only thing native
+    // consumers read. The notify below is Xbox NUI-only — it tells the Kinect
+    // driver which two skeletons to track at full fidelity. Native has no NUI
+    // (mLiveCamInput is always null), and the pose provider already fills every
+    // slot at full fidelity with its own trackId->slot map, so there is nothing
+    // to notify. Returning early also avoids a per-frame assert spam from
+    // SkeletonChooser::Poll.
+    if (!mLiveCamInput)
+        return;
+#endif
     LiveCameraInput *cameraInput = mLiveCamInput;
     MILO_ASSERT(cameraInput, 0x14F);
     cameraInput->SetTrackedSkeletons(mPlayerSkeletonIDs[0], mPlayerSkeletonIDs[1]);
