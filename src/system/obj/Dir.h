@@ -499,6 +499,25 @@ public:
         if (sDeleteObjectsDepth == 0)
             FlushDeferredFrees();
     }
+    /** RAII: re-enter cascading-teardown mode outside ~ObjectDir.
+     *
+     *  ~ObjectDir brackets itself with sDeleteObjectsDepth, but on the async
+     *  path it only hands the dir's objects to a DirUnloader and returns —
+     *  the actual deletes happen later, from DirUnloader::PollLoading(), when
+     *  the depth guard has already lapsed. Those deletes need the same
+     *  treatment: ~ObjectDir ran NullifyAllRefs() over every object first, so
+     *  refs into the dying set are already severed and destructors must not
+     *  walk them. */
+    struct CascadeDeleteScope {
+        CascadeDeleteScope() { sDeleteObjectsDepth++; }
+        ~CascadeDeleteScope() {
+            sDeleteObjectsDepth--;
+            if (sDeleteObjectsDepth == 0 && !sSuppressFlush)
+                FlushDeferredFrees();
+        }
+        CascadeDeleteScope(const CascadeDeleteScope &) = delete;
+        CascadeDeleteScope &operator=(const CascadeDeleteScope &) = delete;
+    };
 private:
     static int sDeleteObjectsDepth;
     static bool sInMergeDirs;

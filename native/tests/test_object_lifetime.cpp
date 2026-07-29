@@ -1257,4 +1257,92 @@ TEST_F(ObjectLifetimeTest, CascadeDeleteCleansUpExternalObjPtrList) {
     delete externalOwner;
 }
 
+// Regression for the async-unload SIGSEGV in ~RndTransformable.
+//
+// ObjectDir's async-unload path (Dir.cpp) calls NullifyAllRefs() on every
+// object in the dir and then hands them to DirUnloader, which deletes them
+// one at a time from PollLoading().
+//
+// The trans hierarchy is asymmetric: mParent is an ObjOwnerPtr (nullifiable),
+// but mChildren is a raw std::list<RndTransformable*>. NullifyAllRefs()
+// therefore severs each child's back-link while leaving the parent's forward
+// link intact. A child destroyed afterwards sees mParent == null and skips
+// mParent->mChildren.remove(this), so the parent is left holding a dangling
+// pointer — and the parent's own destructor then walks mChildren.
+//
+// ~RndTransformable already guards this, but only under
+// ObjectDir::InDeleteObjects(), which is false on the DirUnloader path.
+TEST_F(ObjectLifetimeTest, NullifiedTransParentDoesNotLeaveDanglingChild) {
+    ObjectDir *dir = Hmx::Object::New<ObjectDir>();
+
+    RndGroup *parent = Hmx::Object::New<RndGroup>();
+    parent->SetName("parent.grp", dir);
+
+    RndGroup *child = Hmx::Object::New<RndGroup>();
+    child->SetName("child.grp", dir);
+
+    child->SetTransParent(parent, false);
+    ASSERT_EQ(child->TransParent(), parent);
+    ASSERT_EQ(parent->Children().size(), 1u);
+
+    // Phase 0 of the async unload: nullify every ref pointing at these objects.
+    // This is what clears child->mParent.
+    parent->NullifyAllRefs();
+    child->NullifyAllRefs();
+
+    ASSERT_EQ(child->TransParent(), nullptr)
+        << "NullifyAllRefs is expected to clear the child's ObjOwnerPtr parent";
+
+    // The child can no longer unlink itself, so the parent is left holding a
+    // stale entry. This is the hazard the cascade scope exists to absorb.
+    delete child;
+    ASSERT_EQ(parent->Children().size(), 1u)
+        << "precondition: the nullified child cannot remove itself";
+
+    // DirUnloader deletes one object at a time inside a cascade scope. Without
+    // it, ~RndTransformable walks mChildren and dereferences the freed child.
+    {
+        ObjectDir::CascadeDeleteScope cascade;
+        EXPECT_TRUE(ObjectDir::InDeleteObjects());
+        delete parent;
+    }
+
+    delete dir;
+}
+
+// End-to-end version of the above: drive a real async unload and let
+// DirUnloader delete the dir's objects, which is where the game crashed
+// (game_screen -> meta_loading_pause_new_song_screen).
+TEST_F(ObjectLifetimeTest, AsyncUnloadDrainsTransHierarchyWithoutCrash) {
+    TheLoadMgr.StartAsyncUnload();
+
+    ObjectDir *dir = Hmx::Object::New<ObjectDir>();
+
+    RndGroup *parent = Hmx::Object::New<RndGroup>();
+    parent->SetName("parent.grp", dir);
+
+    // Several children so the unloader's back-to-front order destroys some of
+    // them before their parent.
+    for (int i = 0; i < 4; ++i) {
+        RndGroup *child = Hmx::Object::New<RndGroup>();
+        child->SetName(MakeString("child%d.grp", i), dir);
+        child->SetTransParent(parent, false);
+    }
+    ASSERT_EQ(parent->Children().size(), 4u);
+
+    // Async path: ~ObjectDir nullifies refs and hands the objects to a
+    // DirUnloader instead of deleting them inline.
+    delete dir;
+
+    // Drain the unloader. It deletes one object per poll and finally itself.
+    for (int i = 0; i < 256 && !TheLoadMgr.Loading().empty(); ++i) {
+        TheLoadMgr.Poll();
+    }
+
+    EXPECT_TRUE(TheLoadMgr.Loading().empty())
+        << "async unloader should have drained";
+
+    TheLoadMgr.FinishAsyncUnload();
+}
+
 } // namespace
