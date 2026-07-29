@@ -434,12 +434,12 @@ void HamSkeletonConverter::Set(const BaseSkeleton *skel) {
             unk751 = true;
         }
         if (mCharacter) {
-            Vector3 axisX;
-            axisX.Set(1.0f, 0.0f, 0.0f);
-            Vector3 axisZ;
-            axisZ.Set(0.0f, 0.0f, 1.0f);
             Vector3 axisY;
             axisY.Set(0.0f, 1.0f, 0.0f);
+            Vector3 axisZ;
+            axisZ.Set(0.0f, 0.0f, 1.0f);
+            Vector3 axisX;
+            axisX.Set(1.0f, 0.0f, 0.0f);
             Vector3 axisZ2;
             axisZ2.Set(0.0f, 0.0f, 1.0f);
             Vector3 axisNegY;
@@ -498,28 +498,18 @@ void HamSkeletonConverter::Set(const BaseSkeleton *skel) {
             Multiply(pelvisV, invCharXfm, pelvisLocal);
             SetPosBoneValue(String("bone_pelvis.mesh"), pelvisLocal);
 
-            float pelvisX = worldJoints[kJointHipCenter].x;
-            float pelvisY = worldJoints[kJointHipCenter].y;
-            float pelvisZ = worldJoints[kJointHipCenter].z;
+            const PaddedJointPos &hipCenterWorld = worldJoints[kJointHipCenter];
             PaddedJointPos *curJoint = mJointPositions;
             for (int j = 0; j < kNumJoints; j++, curJoint++) {
                 int parentJoint = JointParent((SkeletonJoint)j);
                 if (parentJoint == -1) {
                     float dist = Distance(pelvisV, worldJoints[kJointHipCenter]);
                     float meshDist = Distance(mPelvisMesh->WorldXfm().v, mBoneMeshes[0]->WorldXfm().v);
-                    float pvx = pelvisV.x;
-                    float pvy = pelvisV.y;
-                    float pvz = pelvisV.z;
-                    float diffX = pelvisX - pvx;
-                    float diffY = pelvisY - pvy;
-                    float diffZ = pelvisZ - pvz;
                     float scale = meshDist / dist;
-                    float sx = diffX * scale;
-                    float sy = diffY * scale;
-                    float sz = diffZ * scale;
-                    curJoint->x = pvx + sx;
-                    curJoint->y = pvy + sy;
-                    curJoint->z = pvz + sz;
+                    Vector3 diff;
+                    Subtract(hipCenterWorld, pelvisV, diff);
+                    Scale(diff, scale, diff);
+                    Add(pelvisV, diff, *curJoint);
                 } else {
                     ScaleBone((SkeletonJoint)parentJoint, (SkeletonJoint)j, kUnk5, worldJoints[parentJoint], worldJoints[j], mJointPositions[parentJoint], *curJoint);
                 }
