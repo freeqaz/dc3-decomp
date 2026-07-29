@@ -259,8 +259,14 @@ int NativeSkeletonProvider::FindByTrackId(int trackId) const {
 
 Vector3 NativeSkeletonProvider::NormalizedToMeters(float nx, float ny) const {
     // Map normalized [0,1] camera coords to approximate meter-space
-    // Origin at hip center, X right, Y up, Z toward camera
-    float x = (nx - 0.5f) * mViewWidth;
+    // Origin at hip center, X = player's right, Y up, Z toward camera.
+    // X is flipped like Y: a subject facing the camera has their anatomical
+    // LEFT at large image x, but DC3 camera space puts player-left at -X.
+    // Ground truth: the baked Kinect capture in StubCameraInput has
+    // ShoulderLeft.x=-0.047 / ShoulderRight.x=+0.322, and FillDummySkeleton
+    // below uses left=-0.20 / right=+0.20. Without this flip the live pose
+    // path contradicted the dummy path and every pose was mirrored.
+    float x = (0.5f - nx) * mViewWidth;
     float y = (0.5f - ny) * mViewHeight; // flip Y (image Y is down)
     float z = mViewDepth;
     return Vector3(x, y, z);
@@ -411,6 +417,24 @@ void NativeSkeletonProvider::FillDummySkeleton(Skeleton &skel) {
 void NativeSkeletonProvider::FinalizeSkeletonFrame(Skeleton &skel, int skelIdx, int elapsedMs) {
     skel.mSkeletonIdx = skelIdx;
     skel.mElapsedMs = elapsedMs;
+
+    // Xbox Skeleton::Poll caches every bone length here, and Skeleton::BoneLength
+    // returns that cache directly rather than recomputing. Leaving it zeroed makes
+    // ErrorNode's norm_bones divisor zero, so PositionNode/DisplacementNode take
+    // their "no base bone length" path and emit MAXIMUM error (1,1,1) for every
+    // node — DetectFrac then pins at exactly 0 no matter what the player does.
+    // (DC3_POSE_SELFTEST hid this: it substitutes a DancerSkeleton, which computes
+    // its bone lengths lazily on demand.)
+    for (int i = 0; i < kNumBones; i++) {
+        skel.mCamBoneLengths[i] = skel.BaseSkeleton::BoneLength((SkeletonBone)i, kCoordCamera);
+    }
+
+    // Xbox sets this from the NUI body position; SkeletonQualityFilter treats a
+    // zero root as "no data" and forces mValid/mSitting/mSideways all false, which
+    // makes Skeleton::IsValid() permanently false (breaking ShellInput::HasSkeleton
+    // and HamGameData::AutoAssignSkeletons player binding).
+    skel.unkab0 = skel.mTrackedJoints[kJointHipCenter].mJointPos[kCoordCamera];
+
     skel.mCamDisplacements.clear();
 }
 

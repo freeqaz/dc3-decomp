@@ -117,7 +117,9 @@ void InternalPoseProvider::MapDetectionToPersonData(
 
     // Helper lambdas (same as NativeSkeletonProvider::MapCOCOToDC3)
     auto normalizedToMeters = [&](float nx, float ny) -> Vector3 {
-        float x = (nx - 0.5f) * mViewWidth;
+        // X flips like Y — see NativeSkeletonProvider::NormalizedToMeters for
+        // the DC3 camera-space convention (player-left is -X).
+        float x = (0.5f - nx) * mViewWidth;
         float y = (0.5f - ny) * mViewHeight;
         float z = mViewDepth;
         return Vector3(x, y, z);
