@@ -30,14 +30,22 @@ ErrorFrameInput::ErrorFrameInput(
     baseSkeleton.CamBoneLengths(mBaseBoneLengths);
     dancerSkeleton.CamJointPositions((Vector3 *)mJointPositions);
     baseSkeleton.CamJointPositions((Vector3 *)mBaseJointPositions);
+    dancerSkeleton.CamJointDisplacements((Vector3 *)mJointDisps);
     mDisplacements = false;
     int elapsedMs = dancerSkeleton.ElapsedMs();
     if (elapsedMs != -1) {
-        int div = (int)(elapsedMs / f1);
-        mDisplacements =
-            baseSkeleton.Displacements(history, kCoordCamera, div, (Vector3 *)mBaseJointDisps, div);
+        // Deliberately uninitialized: an out-param the callee always writes on success.
+        // Zero-initializing costs the match (97.9%) — the retail build passes an
+        // uninitialized stack slot here.
+        int prevElapsedMs;
+        mDisplacements = baseSkeleton.Displacements(
+            history,
+            kCoordCamera,
+            (int)(elapsedMs / f1),
+            (Vector3 *)mBaseJointDisps,
+            prevElapsedMs
+        );
     }
-    dancerSkeleton.CamJointDisplacements((Vector3 *)mJointDisps);
 }
 
 void ErrorNodeInput::Set(const Vector3 &v, const Ham1NodeWeight *w) {
@@ -242,16 +250,16 @@ bool BaseDisplacementNode::Displacements(
     ham1Data.unk18 = 0.0f;
     ham1Data.unk0 = 0.0f;
     ham1Data.unk1c = 0.0f;
-    bool ok = Displacements(frame_input, dispData);
-    if (ok) {
-        float jdLen = Length(dispData.mJointDisplacement);
+    if (Displacements(frame_input, dispData)) {
+        const Vector3 &jointDisp = dispData.mJointDisplacement;
+        float jdLen = Length(jointDisp);
         ham1Data.unk1c = jdLen;
         float nx, ny, nz;
         if (0.0f < jdLen) {
             float inv = 1.0f / jdLen;
-            nx = dispData.mJointDisplacement.x * inv;
-            ny = inv * dispData.mJointDisplacement.y;
-            nz = dispData.mJointDisplacement.z * inv;
+            nx = jointDisp.x * inv;
+            ny = inv * jointDisp.y;
+            nz = jointDisp.z * inv;
         } else {
             nx = 0.0f;
             ny = 0.0f;
@@ -264,14 +272,15 @@ bool BaseDisplacementNode::Displacements(
         proj.y = ny * dot;
         proj.z = nz * dot;
         ham1Data.unk14 = (dot > 0.0f);
-        float bjdLen = Length(dispData.mBaseJointDisplacement);
+        const Vector3 &baseDisp = dispData.mBaseJointDisplacement;
+        float bjdLen = Length(baseDisp);
         ham1Data.unk0 = bjdLen;
         float bnx, bny, bnz;
         if (0.0f < bjdLen) {
             float inv = 1.0f / bjdLen;
-            bnx = dispData.mBaseJointDisplacement.x * inv;
-            bny = dispData.mBaseJointDisplacement.y * inv;
-            bnz = inv * dispData.mBaseJointDisplacement.z;
+            bnx = baseDisp.x * inv;
+            bny = baseDisp.y * inv;
+            bnz = inv * baseDisp.z;
         } else {
             bnx = 0.0f;
             bny = 0.0f;
@@ -289,9 +298,7 @@ bool BaseDisplacementNode::Displacements(
 void DistanceToErrors(const Vector3 &a, const Vector3 &b, const Vector3 &c, Vector3 &d) {
     Subtract(a, b, d);
 
-    d.x *= c.x;
-    d.z *= c.z;
-    d.y *= c.y;
+    Scale(d, c, d);
 
     for (int j = 0; j < 3; ++j) {
         float x = fabsf(d[j]);
