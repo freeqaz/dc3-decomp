@@ -195,19 +195,22 @@ void MoveFrame::Load(BinStreamRev &d) {
                         d >> mNodeScales[i][j];
                     }
                     for (int k = 0; k < 3; k++) {
-                        float &cur = mNodeScales[i][j][k];
-                        float set = kHugeFloat;
-                        if (fabsf(cur) >= 0.0000099999997f) {
+                        float cur = mNodeScales[i][j][k];
+                        float set;
+                        if (fabsf(cur) < 0.0000099999997f) {
+                            set = kHugeFloat;
+                        } else {
                             set = 1.0f / cur;
                         }
-                        mNodeScales[i][j][k] = set;
+                        mNodesInverseScale[i][j][k] = set;
                     }
                 }
             }
         }
-        for (; count < num_ham2_nodes; count++) {
-            for (int mirror = 0; mirror < 2; mirror++) {
-                SetNodeScale(count, (MoveMirrored)mirror, Vector3(1, 1, 1));
+        for (int node = count; node < num_ham2_nodes; node++) {
+            for (int mirror = 0; mirror < kNumMoveMirrored; mirror++) {
+                mNodeWeights[mirror][node].Zero();
+                SetNodeScale(node, (MoveMirrored)mirror, Vector3(1, 1, 1));
             }
         }
     } else {
@@ -251,47 +254,51 @@ void MoveFrame::Load(BinStreamRev &d) {
                 }
             }
         }
-        // Copy oldNodeWeights into mHam1NodeWeights arrays
-        int node_idx = 0;
+        // Copy oldNodeWeights[mode][mirror] into mHam1NodeWeights
         for (int mode = 0; mode < kNumMoveModes; mode++) {
             for (int mirror = 0; mirror < kNumMoveMirrored; mirror++) {
-                int size = oldNodeWeights[node_idx].size();
-                for (int i = 0; i < size; i++) {
-                    OldNodeWeight &old = oldNodeWeights[node_idx][i];
-                    mHam1NodeWeights[mode][mirror][i].mActive = (old.unk0 != 0.0f);
-                    mHam1NodeWeights[mode][mirror][i].mPerfectDist2 = old.unkc;
-                    mHam1NodeWeights[mode][mirror][i].mRate2 = old.unk10;
-                    mHam1NodeWeights[mode][mirror][i].mPerfectDist = old.unk4;
-                    mHam1NodeWeights[mode][mirror][i].mRate = old.unk8;
+                for (int i = 0; i < kNumHam1Nodes; i++) {
+                    std::vector<OldNodeWeight> &oldWeights =
+                        oldNodeWeights[mode * kNumMoveMirrored + mirror];
+                    if (i < oldWeights.size()) {
+                        OldNodeWeight &old = oldWeights[i];
+                        Ham1NodeWeight &weight = mHam1NodeWeights[mode][mirror][i];
+                        weight.mActive = (old.unk0 != 0.0f);
+                        weight.mPerfectDist2 = old.unkc;
+                        weight.mRate2 = old.unk10;
+                        weight.mPerfectDist = old.unk4;
+                        weight.mRate = old.unk8;
+                    }
                 }
-                node_idx++;
             }
         }
         // Copy oldNodeWeights[4+mirror] into mNodeWeights, offset by kNumHam1Nodes
         for (int mirror = 0; mirror < kNumMoveMirrored; mirror++) {
-            int size = oldNodeWeights[node_idx].size();
+            std::vector<OldNodeWeight> &oldWeights =
+                oldNodeWeights[kNumMoveModes * kNumMoveMirrored + mirror];
             for (int i = 0; i < num_ham2_nodes; i++) {
-                if (i + kNumHam1Nodes < size) {
-                    mNodeWeights[mirror][i].Set(
-                        oldNodeWeights[node_idx][i + kNumHam1Nodes].unk0,
-                        oldNodeWeights[node_idx][i + kNumHam1Nodes].unk0,
-                        oldNodeWeights[node_idx][i + kNumHam1Nodes].unk0
-                    );
+                if (i + kNumHam1Nodes < oldWeights.size()) {
+                    float weight = oldWeights[i + kNumHam1Nodes].unk0;
+                    mNodeWeights[mirror][i].Set(weight, weight, weight);
                 }
             }
-            node_idx++;
         }
         // Process ham2 frame weights
-        if (d.rev > 0x1C) {
-            for (int mirror = 0; mirror < kNumMoveMirrored; mirror++) {
-                d >> mFrameWeights[mirror];
+        if (d.rev < 0x1E) {
+            if (d.rev > 0x1C) {
+                for (int mirror = 0; mirror < kNumMoveMirrored; mirror++) {
+                    d >> mFrameWeights[mirror];
+                }
             }
-        }
-        // Fill remaining nodes with default scale
-        for (int node = node_idx; node < num_ham2_nodes; node++) {
+        } else {
+            Ham2FrameWeight frameWeights[kNumMoveModes][kNumMoveMirrored];
+            for (int mode = 0; mode < kNumMoveModes; mode++) {
+                for (int mirror = 0; mirror < kNumMoveMirrored; mirror++) {
+                    d >> frameWeights[mode][mirror];
+                }
+            }
             for (int mirror = 0; mirror < kNumMoveMirrored; mirror++) {
-                auto _tmp1 = Vector3(1, 1, 1);
-                SetNodeScale(node, (MoveMirrored)mirror, _tmp1);
+                mFrameWeights[mirror] = frameWeights[kNumMoveModes - 1][mirror];
             }
         }
     }
