@@ -45,6 +45,9 @@ END_MESSAGE
 
 const int HamNavList::sListStateMaxDisplay = HamListRibbon::sNumListSelectable + 6;
 bool HamNavList::sForceDisengage;
+/** Distinct file-scope gate the retail build reads before running the scroll
+ *  behavior (data:0x82F5FFE8) - NOT HamNavList::sForceDisengage (0x82F5FE64). */
+static bool sSuppressScrollBehavior;
 #ifdef HX_NATIVE
 float HamNavList::sSlideTrendAmount;
 float HamNavList::sSlideSmoothAmount;
@@ -361,27 +364,29 @@ void HamNavList::Poll() {
         return;
     }
 
-    // Check if gesture mode changed and update if needed
+    // Everything skeleton-driven needs a live GestureMgr and a non-editing LoadMgr.
     if (TheGestureMgr && !TheLoadMgr.EditMode()) {
+        // Check if gesture mode changed and update if needed
         if (TheGestureMgr->InDoubleUserMode() != mWasInDoubleUserMode) {
             Update();
         }
-    }
 
-    // Update skeleton tracking ID if using active skeleton
-    if (mAlwaysUseActiveSkeleton) {
-        mSkeletonTrackingID = TheGestureMgr->GetActiveSkeletonTrackingID();
-    }
+        // Update skeleton tracking ID if using active skeleton
+        if (mAlwaysUseActiveSkeleton) {
+            mSkeletonTrackingID = TheGestureMgr->GetActiveSkeletonTrackingID();
+        }
 
-    // Get skeleton and update gestures
-    Skeleton *skeleton = TheGestureMgr->GetSkeletonByTrackingID(mSkeletonTrackingID);
-    if (skeleton && skeleton->IsValid() && !skeleton->IsSideways() && !sForceDisengage) {
-        UpdateGestures(skeleton);
+        // Get skeleton and update gestures
+        Skeleton *skeleton = TheGestureMgr->GetSkeletonByTrackingID(mSkeletonTrackingID);
+        if (skeleton && skeleton->IsValid() && !skeleton->IsSideways()
+            && !sForceDisengage) {
+            UpdateGestures(skeleton);
 
-        // Update scroll speed indicator if present
-        if (mScrollSpeedIndicatorResource) {
-            if (mRibbonMode != HamListRibbon::kRibbonDisengaged) {
-                if (!mListState.ScrollPastMinDisplay() && mScrollSpeedIndicatorResource->IsShowing()) {
+            // Update scroll speed indicator if present
+            if (mScrollSpeedIndicatorResource) {
+                if ((mRibbonMode == HamListRibbon::kRibbonDisengaged
+                     || !mListState.ScrollPastMinDisplay())
+                    && mScrollSpeedIndicatorResource->IsShowing()) {
                     mScrollSpeedIndicatorResource->Show(false);
                 } else if (mRibbonMode == HamListRibbon::kRibbonSwell
                            && !mScrollSpeedIndicatorResource->IsShowing()
@@ -391,20 +396,22 @@ void HamNavList::Poll() {
                     float scrollSpeed = mHandHeightFilter->mHandHeight;
                     float scrollDownCap = HamScrollBehavior::mScrollDownCap;
                     float scrollUpCap = HamScrollBehavior::mScrollUpCap;
-                    mScrollSpeedIndicatorResource->Update(scrollSpeed, scrollUpCap, scrollDownCap);
+                    mScrollSpeedIndicatorResource->Update(
+                        scrollSpeed, scrollUpCap, scrollDownCap
+                    );
                 }
             }
-        }
-    } else {
-        // No valid skeleton - check if we should disengage
-        bool inVoiceMode = TheGestureMgr ? TheGestureMgr->InVoiceMode() : false;
-        if (!inVoiceMode) {
-            Disengage();
+        } else {
+            // No valid skeleton - check if we should disengage
+            bool inVoiceMode = TheGestureMgr && TheGestureMgr->InVoiceMode();
+            if (!inVoiceMode) {
+                Disengage();
 
-            // Hide scroll speed indicator if present
-            if (mScrollSpeedIndicatorResource) {
-                if (mScrollSpeedIndicatorResource->IsShowing()) {
-                    mScrollSpeedIndicatorResource->Show(false);
+                // Hide scroll speed indicator if present
+                if (mScrollSpeedIndicatorResource) {
+                    if (mScrollSpeedIndicatorResource->IsShowing()) {
+                        mScrollSpeedIndicatorResource->Show(false);
+                    }
                 }
             }
         }
@@ -412,8 +419,9 @@ void HamNavList::Poll() {
 
     // Update swipe direction debug overlay
     if (mRibbonMode != HamListRibbon::kRibbonDisengaged) {
+        DirectionGestureFilter *filter = mDirectionGestureFilter;
         RndOverlay *swipeOverlay = RndOverlay::Find("swipe_direction", true);
-        swipeOverlay->SetCallback(mDirectionGestureFilter);
+        swipeOverlay->SetCallback(filter);
     }
 
     // Play enter anim if pending
@@ -424,29 +432,25 @@ void HamNavList::Poll() {
 
     // Determine highlighted item based on mode
     if (mRibbonMode == HamListRibbon::kRibbonSwell) {
-        bool inControllerMode = TheGestureMgr ? TheGestureMgr->InControllerMode() : false;
+        bool inControllerMode = TheGestureMgr && TheGestureMgr->InControllerMode();
         if (!inControllerMode) {
-            bool inVoiceMode = TheGestureMgr ? TheGestureMgr->InVoiceMode() : false;
+            bool inVoiceMode = TheGestureMgr && TheGestureMgr->InVoiceMode();
             if (!inVoiceMode && !TheLoadMgr.EditMode()) {
                 DetermineHighlightedItem();
             }
         }
     }
 
-    // Check if we should clear scroll tracking
-    if (mRibbonMode == HamListRibbon::kRibbonDisengaged) {
-        bool inControllerMode = TheGestureMgr ? TheGestureMgr->InControllerMode() : false;
-        if (!inControllerMode) {
-            bool inVoiceMode = TheGestureMgr ? TheGestureMgr->InVoiceMode() : false;
-            if (inVoiceMode) {
-                mScrollBehavior.mScrollDir = 0;
-            }
-        }
+    // Reset the scroll direction whenever the list isn't being hand-scrolled:
+    // disengaged, driven by a controller, or driven by voice.
+    if (mRibbonMode == HamListRibbon::kRibbonDisengaged || InControllerMode()
+        || InVoiceMode()) {
+        mScrollBehavior.mScrollDir = 0;
     }
 
     // If disengaged and in controller mode, switch to swell
     if (mRibbonMode == HamListRibbon::kRibbonDisengaged) {
-        bool inControllerMode = TheGestureMgr ? TheGestureMgr->InControllerMode() : false;
+        bool inControllerMode = TheGestureMgr && TheGestureMgr->InControllerMode();
         if (inControllerMode) {
             SetRibbonMode(HamListRibbon::kRibbonSwell);
         }
@@ -454,7 +458,8 @@ void HamNavList::Poll() {
 
     // Update scroll behavior if scrollable
     if (mListRibbonResource && mListState.Provider()
-        && mListRibbonResource->IsScrollable(mListState.NumShowing()) && !sForceDisengage) {
+        && mListRibbonResource->IsScrollable(mListState.NumShowing())
+        && !sSuppressScrollBehavior) {
         mScrollBehavior.Update(mHandHeightFilter->mHandHeight);
     }
 
@@ -477,9 +482,10 @@ void HamNavList::Poll() {
 
     // Update each ribbon draw state swell amount
     for (unsigned int i = 0; i < mRibbonDrawStates.size(); i++) {
+        HamListRibbonDrawState *states = &mRibbonDrawStates[0];
         float deltaUI = TheTaskMgr.DeltaUISeconds();
         float targetSwell = GetTargetSwellAmount(i);
-        mRibbonDrawStates[i].mSwellSmoother.Smooth(targetSwell, deltaUI);
+        states[i].mSwellSmoother.Smooth(targetSwell, deltaUI);
     }
 
     // Smooth the secondary smoother based on mode
@@ -1320,6 +1326,10 @@ bool HamNavList::InControllerMode() const {
     return TheGestureMgr && TheGestureMgr->InControllerMode();
 }
 
+bool HamNavList::InVoiceMode() const {
+    return TheGestureMgr && TheGestureMgr->InVoiceMode();
+}
+
 void HamNavList::DetermineHighlightedItem() {
     MILO_ASSERT(!InControllerMode(), 0x2b7);
     MILO_ASSERT(!TheLoadMgr.EditMode(), 0x2b8);
@@ -1435,10 +1445,9 @@ void HamNavList::UpdateGestures(const Skeleton *skeleton) {
 
             int firstShowing = mListState.FirstShowing();
             unsigned char gathering = mListState.ScrollPastMinDisplay();
-            int selected = mListState.Selected();
-            int scrollOffset = selected + (!!gathering - firstShowing);
+            int scrollOffset = mListState.Selected() + (!!gathering - firstShowing);
             if (scrollOffset == NumItems() - 1) {
-                mDirectionGestureFilter->ClearSwipe();
+                mDirectionGestureFilter->ResetHoverTimer();
             }
 
             bool handValid = skeleton && skeleton->IsValid()
@@ -1467,20 +1476,24 @@ void HamNavList::UpdateGestures(const Skeleton *skeleton) {
                 return;
             }
 
-            if (handValid) {
-                if (mDirectionGestureFilter->IsLockedIn()) {
-                    if (!mDirectionGestureFilter->HasDirection()
-                        && mScrollBehavior.mScrollDir == 0) {
-                        SetSwelling();
-                        return;
-                    }
-                    if (!mSelectionEnabled) {
-                        return;
-                    }
-                    float pct = mDirectionGestureFilter->GetPercentPulled();
-                    SetSliding(pct);
+            if (!handValid) {
+                mDirectionGestureFilter->ClearSwipe();
+                return;
+            }
+            {
+                bool shouldSwell = (!mDirectionGestureFilter->IsLockedIn()
+                                    && !mDirectionGestureFilter->HasDirection())
+                    || mScrollBehavior.mScrollDir != 0;
+                if (shouldSwell) {
+                    SetSwelling();
                     return;
                 }
+                if (!mSelectionEnabled) {
+                    return;
+                }
+                float pct = mDirectionGestureFilter->GetPercentPulled();
+                SetSliding(pct);
+                return;
             }
         }
     }
