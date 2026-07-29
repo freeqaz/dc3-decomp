@@ -49,9 +49,9 @@ void SkeletonQualityFilter::Update(const Skeleton &skeleton, bool inShellMode) {
         }
         bool playerIsPlaying = false;
         for (int i = 0; i < 2; i++) {
-            HamPlayerData *player = TheGameData->Player(i);
-            if (player->GetSkeletonTrackingID() == skeleton.TrackingID()) {
-                playerIsPlaying = player->IsPlaying();
+            if (TheGameData->Player(i)->GetSkeletonTrackingID()
+                == skeleton.TrackingID()) {
+                playerIsPlaying = TheGameData->Player(i)->IsPlaying();
                 break;
             }
         }
@@ -85,23 +85,20 @@ void SkeletonQualityFilter::UpdateIsConfident(const TrackedJoint *joints) {
 }
 
 void SkeletonQualityFilter::UpdateIsSideways(const TrackedJoint *joint) {
-    float threshold;
-    float thresh;
-    bool side;
     Vector3 vDiff;
-    Vector3 vDiff2;
-
     Subtract(joint[8].mJointPos[0], joint[4].mJointPos[0], vDiff);
     Normalize(vDiff, vDiff);
-    threshold = fabsf((vDiff.x + vDiff.y) * 0.0f + vDiff.z);
-    thresh = mSideways ? mSidewaysCutoffThreshold * 0.9f : mSidewaysCutoffThreshold;
-    side = true;
-    if (thresh <= threshold) {
+    float threshold = fabsf((vDiff.x + vDiff.y) * 0.0f + vDiff.z);
+    float thresh =
+        mSideways ? mSidewaysCutoffThreshold * 0.9f : mSidewaysCutoffThreshold;
+    bool side = true;
+    if (threshold <= thresh) {
         side = false;
     }
     mSideways = side;
     Subtract(joint[8].mJointPos[0], joint[2].mJointPos[0], vDiff);
     Normalize(vDiff, vDiff);
+    Vector3 vDiff2;
     Subtract(joint[4].mJointPos[0], joint[2].mJointPos[0], vDiff2);
     Normalize(vDiff2, vDiff2);
     if (0.25f < Dot(vDiff, vDiff2)) {
