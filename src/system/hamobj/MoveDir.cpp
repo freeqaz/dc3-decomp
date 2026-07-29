@@ -1489,6 +1489,27 @@ MoveFrame *MoveDir::ClosestMoveFrame() {
     return ret != frames.end() ? ret : nullptr;
 }
 
+#ifdef HX_NATIVE
+// Temporary localization probe for the "real video pose in, DetectFrac
+// identically 0 out" investigation. Reports which branch of the beat-indexed
+// DetectFrac produced the score, so we can tell "no move key at this beat"
+// from "no detect frames enqueued" from "Ham2 ran and scored 0".
+static void Dc3DetectFracProbe(
+    int player, int beat, int numKeys, const char *branch, int rangeLen, float frac
+) {
+    extern bool Dc3EnvFlag(const char *, bool);
+    if (!Dc3EnvFlag("DC3_DETECTFRAC_PROBE", false))
+        return;
+    static int sCount = 0;
+    if (++sCount <= 40 || sCount % 200 == 0) {
+        MILO_LOG(
+            "DC3 DETECTFRAC[%d] p=%d beat=%d keys=%d branch=%s rangeLen=%d frac=%.4f\n",
+            sCount, player, beat, numKeys, branch, rangeLen, frac
+        );
+    }
+}
+#endif
+
 float MoveDir::DetectFrac(
     int player,
     const HamMove *move,
@@ -1720,10 +1741,23 @@ float MoveDir::DetectFrac(int player, int beat) {
             frac = mAsyncDetector->MoveRatingFrac(
                 player, (MoveAsyncDetector::RatingBar)(curMeasure != beat), move
             );
+#ifdef HX_NATIVE
+            Dc3DetectFracProbe(player, beat, keys.size(), "async-empty-range", 0, frac);
+#endif
         } else {
             frac = DetectFrac(player, move, range);
+#ifdef HX_NATIVE
+            Dc3DetectFracProbe(
+                player, beat, keys.size(), "ham2", range.second - range.first, frac
+            );
+#endif
         }
     }
+#ifdef HX_NATIVE
+    else {
+        Dc3DetectFracProbe(player, beat, keys.size(), "no-move-key", 0, frac);
+    }
+#endif
     return frac;
 }
 

@@ -35,13 +35,26 @@ feature** — audit before relying on old semantics.
 ## Deterministic dummy: `DetectFrac ~0 is CORRECT
 
 When NO pose provider is running (`DC3_POSE` unset), `GestureMgr_NativePoll`
-fills a **static, TRACKED dummy skeleton** in slot 0. This is the intended
-default-run scoring input: it exercises the entire pipeline every frame and
-produces a deterministic `DetectFrac ~0` — the honest "player standing still"
-signal, **NOT a scoring bug**. Its exact end-of-song value is a blessed
-regression signal; do not "fix" a near-zero score, and do not `MarkUntracked`
-the dummy (that would break `ShellInput::HasSkeleton()` / `SkeletonChooser::Poll`
-and silently collapse scoring coverage to the `errors=1.0` short-circuit).
+fills a **static, TRACKED dummy skeleton** in slot 0. It exercises the entire
+pipeline every frame. Do not `MarkUntracked` the dummy — that would break
+`ShellInput::HasSkeleton()` / `SkeletonChooser::Poll` and silently collapse
+scoring coverage to the `errors=1.0` short-circuit.
+
+> **CORRECTION (2026-07-17).** This section previously claimed the dummy's
+> `DetectFrac ~0` was "the honest standing-still signal, NOT a scoring bug", and
+> told agents not to fix it. **That was wrong, and it masked two real bugs** —
+> a standing pose vs. a moving reference should score low-but-nonzero, never
+> identically 0. Live instrumentation showed all 33 error nodes pinned at
+> exactly 1.0 because `mCamBoneLengths` was never populated on native (the
+> `norm_bones` divisor was 0, so every `PositionNode`/`DisplacementNode` took
+> its max-error path). `DC3_POSE_SELFTEST` hid it by substituting a
+> `DancerSkeleton`, which computes its bone lengths lazily.
+>
+> Treat a *degenerate* score — identically 0.000 or identically 1.000,
+> regardless of input — as a BUG, not a baseline. The useful regression
+> assertion is a **differential** one: selftest must score near 1.0, a static
+> dummy must score clearly below a real dancer, and neither may be exactly
+> 0 or exactly 1 for every move.
 
 ## `move_passed` arg semantics (so future agents don't "fix" it)
 
