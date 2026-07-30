@@ -333,7 +333,7 @@ void NativeSkeletonProvider::MapCOCOToDC3(const float cocoKpts[][3], PersonData 
     // partial sum that omits the hand inflates the desired/base ratio. Extrapolate
     // the palm past the wrist along the forearm: wrist-to-palm is ~28% of forearm.
     out.joints[kJointHandLeft] =
-        extrapolate(kpt(COCO_LEFT_ELBOW), kpt(COCO_LEFT_WRIST), 0.28f);
+        extrapolate(kpt(COCO_LEFT_ELBOW), kpt(COCO_LEFT_WRIST), 0.42f);
     out.confidence[kJointHandLeft] =
         minConf(kptConf(COCO_LEFT_WRIST), kptConf(COCO_LEFT_ELBOW));
 
@@ -347,7 +347,7 @@ void NativeSkeletonProvider::MapCOCOToDC3(const float cocoKpts[][3], PersonData 
     out.confidence[kJointWristRight] = kptConf(COCO_RIGHT_WRIST);
 
     out.joints[kJointHandRight] =
-        extrapolate(kpt(COCO_RIGHT_ELBOW), kpt(COCO_RIGHT_WRIST), 0.28f);
+        extrapolate(kpt(COCO_RIGHT_ELBOW), kpt(COCO_RIGHT_WRIST), 0.42f);
     out.confidence[kJointHandRight] =
         minConf(kptConf(COCO_RIGHT_WRIST), kptConf(COCO_RIGHT_ELBOW));
 
@@ -376,12 +376,12 @@ void NativeSkeletonProvider::MapCOCOToDC3(const float cocoKpts[][3], PersonData 
     // length, which is what the normalizer actually consumes. Revisit once the
     // provider supplies real depth and real foot landmarks.
     out.joints[kJointFootLeft] =
-        extrapolate(kpt(COCO_LEFT_KNEE), kpt(COCO_LEFT_ANKLE), 0.25f);
+        extrapolate(kpt(COCO_LEFT_KNEE), kpt(COCO_LEFT_ANKLE), 0.11f);
     out.confidence[kJointFootLeft] =
         minConf(kptConf(COCO_LEFT_ANKLE), kptConf(COCO_LEFT_KNEE));
 
     out.joints[kJointFootRight] =
-        extrapolate(kpt(COCO_RIGHT_KNEE), kpt(COCO_RIGHT_ANKLE), 0.25f);
+        extrapolate(kpt(COCO_RIGHT_KNEE), kpt(COCO_RIGHT_ANKLE), 0.11f);
     out.confidence[kJointFootRight] =
         minConf(kptConf(COCO_RIGHT_ANKLE), kptConf(COCO_RIGHT_KNEE));
 

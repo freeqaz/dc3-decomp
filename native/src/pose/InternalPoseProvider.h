@@ -69,7 +69,11 @@ private:
                                   NativeSkeletonProvider::PersonData &out) const;
 
     // Coordinate mapping
-    float mViewWidth = 2.4f;
-    float mViewHeight = 1.8f;
+    // See NativeSkeletonProvider (Skeleton_Native.h) for the derivation: the
+    // Kinect projection u = 160 + 285.63*x/z over 320x240, recovered from the
+    // target disassembly, gives a 3.361 x 2.521 m extent at z = 3.0. The old
+    // 2.4 x 1.8 under-scaled x/y by ~1.40x against this struct's own z.
+    float mViewWidth = 3.361f;
+    float mViewHeight = 2.521f;
     float mViewDepth = 3.0f;
 };

@@ -172,7 +172,7 @@ void InternalPoseProvider::MapDetectionToPersonData(
     out.confidence[kJointElbowLeft] = kptConf(L_ELBOW);
     out.joints[kJointWristLeft] = kpt(L_WRIST);
     out.confidence[kJointWristLeft] = kptConf(L_WRIST);
-    out.joints[kJointHandLeft] = extrapolate(kpt(L_ELBOW), kpt(L_WRIST), 0.28f);
+    out.joints[kJointHandLeft] = extrapolate(kpt(L_ELBOW), kpt(L_WRIST), 0.42f);
     out.confidence[kJointHandLeft] = minConf(kptConf(L_WRIST), kptConf(L_ELBOW));
     out.joints[kJointShoulderRight] = kpt(R_SHOULDER);
     out.confidence[kJointShoulderRight] = kptConf(R_SHOULDER);
@@ -180,7 +180,7 @@ void InternalPoseProvider::MapDetectionToPersonData(
     out.confidence[kJointElbowRight] = kptConf(R_ELBOW);
     out.joints[kJointWristRight] = kpt(R_WRIST);
     out.confidence[kJointWristRight] = kptConf(R_WRIST);
-    out.joints[kJointHandRight] = extrapolate(kpt(R_ELBOW), kpt(R_WRIST), 0.28f);
+    out.joints[kJointHandRight] = extrapolate(kpt(R_ELBOW), kpt(R_WRIST), 0.42f);
     out.confidence[kJointHandRight] = minConf(kptConf(R_WRIST), kptConf(R_ELBOW));
     out.joints[kJointHipLeft] = kpt(L_HIP);
     out.confidence[kJointHipLeft] = kptConf(L_HIP);
@@ -194,9 +194,9 @@ void InternalPoseProvider::MapDetectionToPersonData(
     out.confidence[kJointKneeRight] = kptConf(R_KNEE);
     out.joints[kJointAnkleRight] = kpt(R_ANKLE);
     out.confidence[kJointAnkleRight] = kptConf(R_ANKLE);
-    out.joints[kJointFootLeft] = extrapolate(kpt(L_KNEE), kpt(L_ANKLE), 0.25f);
+    out.joints[kJointFootLeft] = extrapolate(kpt(L_KNEE), kpt(L_ANKLE), 0.11f);
     out.confidence[kJointFootLeft] = minConf(kptConf(L_ANKLE), kptConf(L_KNEE));
-    out.joints[kJointFootRight] = extrapolate(kpt(R_KNEE), kpt(R_ANKLE), 0.25f);
+    out.joints[kJointFootRight] = extrapolate(kpt(R_KNEE), kpt(R_ANKLE), 0.11f);
     out.confidence[kJointFootRight] = minConf(kptConf(R_ANKLE), kptConf(R_KNEE));
 
     // Synthesized joints

@@ -96,11 +96,31 @@ private:
     uint32_t mFrameIdBack = 0;
     uint32_t mFrameIdFront = 0;
 
-    // Coordinate mapping: approximate camera FOV to meter space
-    // Default assumes ~2m viewing distance, 1.2m horizontal FOV
-    float mViewWidth = 2.4f;   // meters across camera view
-    float mViewHeight = 1.8f;  // meters vertical
-    float mViewDepth = 3.0f;   // meters from camera to subject (fixed Z)
+    // Coordinate mapping: camera view extent in metres at mViewDepth.
+    //
+    // These are NOT guesses. NuiTransformSkeletonToDepthImage is declared in
+    // src/xdk/nui/nuiskeleton.h but never defined in-tree (it links from the XDK),
+    // so the projection was recovered from the target disassembly at
+    // build/373307D9/asm/system/gesture/JointUtl.s:580-627 (0x824435E0):
+    //
+    //     u = 160 + 285.63 * x/z        v = 120 - 285.63 * y/z
+    //
+    // over a 320x240 depth image -- hFOV 58.51 deg, vFOV 45.58 deg. Corroborated
+    // in-tree by JointUtl.cpp:89,103 normalising by 1/320 and 1/240, and by
+    // LiveCameraInput.cpp:494 opening depth at NUI_IMAGE_RESOLUTION_320x240.
+    //
+    // Solving for the full-frame extent at z: width = 2*z*160/285.63. At z = 3.0
+    // that is 3.361 x 2.521 m, NOT the 2.4 x 1.8 previously hardcoded -- which
+    // corresponded to z = 2.14 m and so under-scaled x and y by ~1.40x relative
+    // to this same struct's fixed z = 3.0. x/y and z were mutually inconsistent,
+    // which would silently corrupt any depth estimate scored against them.
+    //
+    // Note this path still assumes a 4:3 frame (which the Kinect depth stream is).
+    // A 16:9 webcam feeding normalised coords through a 4:3 box skews angles; the
+    // MediaPipe backend avoids the issue entirely by sending metres directly.
+    float mViewWidth = 3.361f;  // 2 * 3.0 * 160 / 285.63
+    float mViewHeight = 2.521f; // 2 * 3.0 * 120 / 285.63
+    float mViewDepth = 3.0f;    // meters from camera to subject (fixed Z)
 };
 
 extern NativeSkeletonProvider *TheSkeletonProvider;
