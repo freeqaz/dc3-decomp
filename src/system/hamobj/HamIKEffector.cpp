@@ -263,8 +263,7 @@ void HamIKEffector::SetName(const char *name, ObjectDir *dir) {
 }
 
 void HamIKEffector::ListPollChildren(std::list<RndPollable *> &polls) const {
-    RndPollable *poll = mMore ? mMore->mSkeleton.Ptr() : nullptr;
-    polls.push_back(poll);
+    polls.push_back(mMore);
     polls.push_back(mOther);
 }
 
