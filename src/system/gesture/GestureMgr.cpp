@@ -494,6 +494,15 @@ int GestureMgr::GetPlayerFilteredSkeletonID(int playerIndex, bool b2) {
 DataNode GestureMgr::OnMsg(const KinectHardwareStatusMsg &msg) {
     if (msg->Int(2) == 1) {
         MILO_ASSERT(mLiveCamInput, 0x21b);
+#ifdef HX_NATIVE
+        // MILO_ASSERT is print-and-continue on native (Debug::Fail early-returns
+        // unless MILO_FATAL_FAILS=1), so the assert above does NOT stop the
+        // SetAutoexposure call, which touches members and would hard fault. There
+        // is no LiveCameraInput on native; a webcam has no Kinect autoexposure
+        // control. Dormant today only because nothing sends this message yet.
+        if (!mLiveCamInput)
+            return 1;
+#endif
         mLiveCamInput->SetAutoexposure(true);
     }
     return 1;

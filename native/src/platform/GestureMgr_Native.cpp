@@ -221,6 +221,10 @@ static int AssignSlots(const int *trackIds, int numValid, int *personForSlot) {
                 sSlotTrackId[s] = trackIds[k];
                 personForSlot[s] = k;
                 if (sNativeHistory) sNativeHistory->ClearHistory(s);
+                // Same reasoning applies to the low-confidence joint-hold cache:
+                // a new occupant must not inherit the previous person's held
+                // joint positions.
+                NativeSkeletonProvider::ResetJointHold(s);
                 reassignments++;
                 break;
             }

@@ -1,4 +1,5 @@
 #include "Skeleton_Native.h"
+#include "gesture/GestureMgr.h" // NUM_SKELETONS
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
@@ -28,6 +29,7 @@ void NativeSkeletonProvider::Poll() {}
 int NativeSkeletonProvider::FindByTrackId(int) const { return -1; }
 Vector3 NativeSkeletonProvider::NormalizedToMeters(float, float) const { return Vector3(0,0,0); }
 void NativeSkeletonProvider::MapCOCOToDC3(const float[][3], PersonData&) {}
+void NativeSkeletonProvider::ResetJointHold(int) {}
 void NativeSkeletonProvider::FillSkeleton(Skeleton&, int) const {}
 #else
 
@@ -289,10 +291,32 @@ void NativeSkeletonProvider::MapCOCOToDC3(const float cocoKpts[][3], PersonData 
     auto minConf = [](JointConfidence a, JointConfidence b) -> JointConfidence {
         return (a < b) ? a : b;
     };
+    // Extrapolate a missing tip joint past `tip` along the parent->tip direction,
+    // by `frac` of the parent bone's length. Used for hand and foot, which COCO-17
+    // simply does not have. The fraction scales with the measured parent bone, so
+    // it tracks the subject's apparent size and distance automatically.
+    auto extrapolate = [](const Vector3 &parent, const Vector3 &tip,
+                           float frac) -> Vector3 {
+        Vector3 dir;
+        Subtract(tip, parent, dir);
+        return Vector3(tip.x + dir.x * frac, tip.y + dir.y * frac, tip.z + dir.z * frac);
+    };
 
-    // Direct mappings
-    out.joints[kJointHead] = kpt(COCO_NOSE);
-    out.confidence[kJointHead] = kptConf(COCO_NOSE);
+    // Direct mappings.
+    // Kinect's kJointHead sits at roughly the centre of the skull; the COCO nose is
+    // anterior and inferior to it, which biases every head-weighted error node by a
+    // constant offset. The ear midpoint is much closer to skull centre, and the ear
+    // keypoints were previously decoded and then discarded. Fall back to the nose
+    // when the ears are unreliable (profile views occlude one ear).
+    JointConfidence earConf =
+        minConf(kptConf(COCO_LEFT_EAR), kptConf(COCO_RIGHT_EAR));
+    if (earConf > kConfidenceNotTracked) {
+        out.joints[kJointHead] = midpoint(kpt(COCO_LEFT_EAR), kpt(COCO_RIGHT_EAR));
+        out.confidence[kJointHead] = earConf;
+    } else {
+        out.joints[kJointHead] = kpt(COCO_NOSE);
+        out.confidence[kJointHead] = kptConf(COCO_NOSE);
+    }
 
     out.joints[kJointShoulderLeft] = kpt(COCO_LEFT_SHOULDER);
     out.confidence[kJointShoulderLeft] = kptConf(COCO_LEFT_SHOULDER);
@@ -303,8 +327,15 @@ void NativeSkeletonProvider::MapCOCOToDC3(const float cocoKpts[][3], PersonData 
     out.joints[kJointWristLeft] = kpt(COCO_LEFT_WRIST);
     out.confidence[kJointWristLeft] = kptConf(COCO_LEFT_WRIST);
 
-    out.joints[kJointHandLeft] = kpt(COCO_LEFT_WRIST); // no hand keypoint
-    out.confidence[kJointHandLeft] = kptConf(COCO_LEFT_WRIST);
+    // hand == wrist made kBoneHandLeft/Right length 0. ErrorNode::NormBoneLengths
+    // sums the bones in a node's norm_bones set, and PositionNode returns a flat
+    // max error (1,1,1) whenever that base sum is <= 0 (ErrorNode.cpp:415), while a
+    // partial sum that omits the hand inflates the desired/base ratio. Extrapolate
+    // the palm past the wrist along the forearm: wrist-to-palm is ~28% of forearm.
+    out.joints[kJointHandLeft] =
+        extrapolate(kpt(COCO_LEFT_ELBOW), kpt(COCO_LEFT_WRIST), 0.28f);
+    out.confidence[kJointHandLeft] =
+        minConf(kptConf(COCO_LEFT_WRIST), kptConf(COCO_LEFT_ELBOW));
 
     out.joints[kJointShoulderRight] = kpt(COCO_RIGHT_SHOULDER);
     out.confidence[kJointShoulderRight] = kptConf(COCO_RIGHT_SHOULDER);
@@ -315,8 +346,10 @@ void NativeSkeletonProvider::MapCOCOToDC3(const float cocoKpts[][3], PersonData 
     out.joints[kJointWristRight] = kpt(COCO_RIGHT_WRIST);
     out.confidence[kJointWristRight] = kptConf(COCO_RIGHT_WRIST);
 
-    out.joints[kJointHandRight] = kpt(COCO_RIGHT_WRIST);
-    out.confidence[kJointHandRight] = kptConf(COCO_RIGHT_WRIST);
+    out.joints[kJointHandRight] =
+        extrapolate(kpt(COCO_RIGHT_ELBOW), kpt(COCO_RIGHT_WRIST), 0.28f);
+    out.confidence[kJointHandRight] =
+        minConf(kptConf(COCO_RIGHT_WRIST), kptConf(COCO_RIGHT_ELBOW));
 
     out.joints[kJointHipLeft] = kpt(COCO_LEFT_HIP);
     out.confidence[kJointHipLeft] = kptConf(COCO_LEFT_HIP);
@@ -336,11 +369,21 @@ void NativeSkeletonProvider::MapCOCOToDC3(const float cocoKpts[][3], PersonData 
     out.joints[kJointAnkleRight] = kpt(COCO_RIGHT_ANKLE);
     out.confidence[kJointAnkleRight] = kptConf(COCO_RIGHT_ANKLE);
 
-    out.joints[kJointFootLeft] = kpt(COCO_LEFT_ANKLE); // approximate
-    out.confidence[kJointFootLeft] = kptConf(COCO_LEFT_ANKLE);
+    // Same for foot == ankle (kBoneFootLeft/Right were length 0). Kinect's foot
+    // joint is forward of and below the ankle; "forward" is +Z, which a 2D
+    // keypoint set cannot see, so extend along the shin instead. That lands the
+    // foot below the ankle -- wrong in Z, but a plausible non-degenerate bone
+    // length, which is what the normalizer actually consumes. Revisit once the
+    // provider supplies real depth and real foot landmarks.
+    out.joints[kJointFootLeft] =
+        extrapolate(kpt(COCO_LEFT_KNEE), kpt(COCO_LEFT_ANKLE), 0.25f);
+    out.confidence[kJointFootLeft] =
+        minConf(kptConf(COCO_LEFT_ANKLE), kptConf(COCO_LEFT_KNEE));
 
-    out.joints[kJointFootRight] = kpt(COCO_RIGHT_ANKLE);
-    out.confidence[kJointFootRight] = kptConf(COCO_RIGHT_ANKLE);
+    out.joints[kJointFootRight] =
+        extrapolate(kpt(COCO_RIGHT_KNEE), kpt(COCO_RIGHT_ANKLE), 0.25f);
+    out.confidence[kJointFootRight] =
+        minConf(kptConf(COCO_RIGHT_ANKLE), kptConf(COCO_RIGHT_KNEE));
 
     // Synthesized joints
     Vector3 hipCenter = midpoint(kpt(COCO_LEFT_HIP), kpt(COCO_RIGHT_HIP));
@@ -362,12 +405,48 @@ void NativeSkeletonProvider::FillSkeleton(Skeleton &skel, int personIdx) const {
     FillSkeleton(skel, mPersons[personIdx]);
 }
 
+// Last-good camera-space position per skeleton slot, for the confidence hold in
+// FillSkeleton. Nothing under src/system/hamobj/ reads JointConf -- the scorer
+// consumes mJointPos unconditionally -- so a keypoint the detector has no
+// confidence in is otherwise graded as ground truth. A real Kinect never presents
+// a garbage joint: it fills occluded joints from its own skeletal model and flags
+// them inferred. Holding the last good position is the closest equivalent, and it
+// also keeps displacement scoring sane (a held joint reads as stationary rather
+// than as a large spurious velocity).
+static Vector3 sLastGoodJointPos[NUM_SKELETONS][kNumJoints];
+static bool sHaveLastGoodJoint[NUM_SKELETONS][kNumJoints];
+
+void NativeSkeletonProvider::ResetJointHold(int skelIdx) {
+    if (skelIdx < 0 || skelIdx >= NUM_SKELETONS)
+        return;
+    for (int j = 0; j < kNumJoints; j++)
+        sHaveLastGoodJoint[skelIdx][j] = false;
+}
+
 void NativeSkeletonProvider::FillSkeleton(Skeleton &skel, const PersonData &person) const {
+    // mSkeletonIdx is assigned by FinalizeSkeletonFrame, which runs AFTER this, so
+    // on the very first fill of a slot it may still be -1; hold is simply disabled
+    // until the slot is known.
+    int slot = skel.mSkeletonIdx;
+    bool canHold = (slot >= 0 && slot < NUM_SKELETONS);
+
     // Access protected members directly via friend declaration (LP64-safe)
     for (int j = 0; j < kNumJoints; j++) {
-        skel.mTrackedJoints[j].mJointPos[kCoordCamera] = person.joints[j];
-        skel.mTrackedJoints[j].mSmoothedPos = person.joints[j];
-        skel.mTrackedJoints[j].mJointConf = person.confidence[j];
+        Vector3 pos = person.joints[j];
+        JointConfidence conf = person.confidence[j];
+
+        if (canHold) {
+            if (conf > kConfidenceNotTracked) {
+                sLastGoodJointPos[slot][j] = pos;
+                sHaveLastGoodJoint[slot][j] = true;
+            } else if (sHaveLastGoodJoint[slot][j]) {
+                pos = sLastGoodJointPos[slot][j];
+            }
+        }
+
+        skel.mTrackedJoints[j].mJointPos[kCoordCamera] = pos;
+        skel.mTrackedJoints[j].mSmoothedPos = pos;
+        skel.mTrackedJoints[j].mJointConf = conf;
     }
 
     skel.mTracking = kSkeletonTracked;

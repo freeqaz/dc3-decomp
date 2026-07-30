@@ -66,6 +66,11 @@ public:
     // tracking-ID rotation can't resolve a dead slot. Call only on tracked slots.
     static void MarkUntracked(Skeleton &skel);
 
+    // Drop the low-confidence joint-hold cache for a slot. Must be called when a
+    // slot changes occupants, or the incoming person inherits the previous
+    // person's held joint positions.
+    static void ResetJointHold(int skelIdx);
+
 private:
     void ReaderThread();
     void MapCOCOToDC3(const float cocoKpts[][3], PersonData &out);

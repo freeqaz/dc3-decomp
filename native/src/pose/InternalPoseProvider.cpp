@@ -139,6 +139,14 @@ void InternalPoseProvider::MapDetectionToPersonData(
     auto minConf = [](JointConfidence a, JointConfidence b) -> JointConfidence {
         return (a < b) ? a : b;
     };
+    // See NativeSkeletonProvider::MapCOCOToDC3 for why hand/foot are extrapolated
+    // rather than aliased onto wrist/ankle.
+    auto extrapolate = [](const Vector3 &parent, const Vector3 &tip,
+                           float frac) -> Vector3 {
+        Vector3 dir;
+        Subtract(tip, parent, dir);
+        return Vector3(tip.x + dir.x * frac, tip.y + dir.y * frac, tip.z + dir.z * frac);
+    };
 
     // COCO keypoint indices
     enum {
@@ -148,25 +156,32 @@ void InternalPoseProvider::MapDetectionToPersonData(
         L_KNEE=13, R_KNEE=14, L_ANKLE=15, R_ANKLE=16
     };
 
-    // Direct mappings
-    out.joints[kJointHead] = kpt(NOSE);
-    out.confidence[kJointHead] = kptConf(NOSE);
+    // Direct mappings. Head comes from the ear midpoint (closer to Kinect's
+    // skull-centre kJointHead than the nose), falling back to the nose.
+    JointConfidence earConf = minConf(kptConf(L_EAR), kptConf(R_EAR));
+    if (earConf > kConfidenceNotTracked) {
+        out.joints[kJointHead] = midpoint(kpt(L_EAR), kpt(R_EAR));
+        out.confidence[kJointHead] = earConf;
+    } else {
+        out.joints[kJointHead] = kpt(NOSE);
+        out.confidence[kJointHead] = kptConf(NOSE);
+    }
     out.joints[kJointShoulderLeft] = kpt(L_SHOULDER);
     out.confidence[kJointShoulderLeft] = kptConf(L_SHOULDER);
     out.joints[kJointElbowLeft] = kpt(L_ELBOW);
     out.confidence[kJointElbowLeft] = kptConf(L_ELBOW);
     out.joints[kJointWristLeft] = kpt(L_WRIST);
     out.confidence[kJointWristLeft] = kptConf(L_WRIST);
-    out.joints[kJointHandLeft] = kpt(L_WRIST);
-    out.confidence[kJointHandLeft] = kptConf(L_WRIST);
+    out.joints[kJointHandLeft] = extrapolate(kpt(L_ELBOW), kpt(L_WRIST), 0.28f);
+    out.confidence[kJointHandLeft] = minConf(kptConf(L_WRIST), kptConf(L_ELBOW));
     out.joints[kJointShoulderRight] = kpt(R_SHOULDER);
     out.confidence[kJointShoulderRight] = kptConf(R_SHOULDER);
     out.joints[kJointElbowRight] = kpt(R_ELBOW);
     out.confidence[kJointElbowRight] = kptConf(R_ELBOW);
     out.joints[kJointWristRight] = kpt(R_WRIST);
     out.confidence[kJointWristRight] = kptConf(R_WRIST);
-    out.joints[kJointHandRight] = kpt(R_WRIST);
-    out.confidence[kJointHandRight] = kptConf(R_WRIST);
+    out.joints[kJointHandRight] = extrapolate(kpt(R_ELBOW), kpt(R_WRIST), 0.28f);
+    out.confidence[kJointHandRight] = minConf(kptConf(R_WRIST), kptConf(R_ELBOW));
     out.joints[kJointHipLeft] = kpt(L_HIP);
     out.confidence[kJointHipLeft] = kptConf(L_HIP);
     out.joints[kJointKneeLeft] = kpt(L_KNEE);
@@ -179,10 +194,10 @@ void InternalPoseProvider::MapDetectionToPersonData(
     out.confidence[kJointKneeRight] = kptConf(R_KNEE);
     out.joints[kJointAnkleRight] = kpt(R_ANKLE);
     out.confidence[kJointAnkleRight] = kptConf(R_ANKLE);
-    out.joints[kJointFootLeft] = kpt(L_ANKLE);
-    out.confidence[kJointFootLeft] = kptConf(L_ANKLE);
-    out.joints[kJointFootRight] = kpt(R_ANKLE);
-    out.confidence[kJointFootRight] = kptConf(R_ANKLE);
+    out.joints[kJointFootLeft] = extrapolate(kpt(L_KNEE), kpt(L_ANKLE), 0.25f);
+    out.confidence[kJointFootLeft] = minConf(kptConf(L_ANKLE), kptConf(L_KNEE));
+    out.joints[kJointFootRight] = extrapolate(kpt(R_KNEE), kpt(R_ANKLE), 0.25f);
+    out.confidence[kJointFootRight] = minConf(kptConf(R_ANKLE), kptConf(R_KNEE));
 
     // Synthesized joints
     Vector3 hipCenter = midpoint(kpt(L_HIP), kpt(R_HIP));
