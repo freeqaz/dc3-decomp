@@ -119,8 +119,9 @@ DataNode CharDriverMidi::OnMidiParserGroup(DataArray *da) {
     const char *name = da->Str(2);
     CharClipGroup *grp = mClips->Find<CharClipGroup>(name, false);
     if (!grp) {
-        // BUG: grp is NULL here, grp->Name() will crash. Preserved from original.
-        MILO_WARN("%s could not find group %s in %s", PathName(this), name, grp->Name());
+        MILO_NOTIFY(
+            "%s could not find group %s in %s", PathName(this), name, mClips->Name()
+        );
         return 0;
     } else {
         CharClip *clip;
@@ -130,7 +131,7 @@ DataNode CharDriverMidi::OnMidiParserGroup(DataArray *da) {
             clip = dynamic_cast<CharClip *>(mDefaultClip.Ptr());
         }
         if (!clip) {
-            MILO_WARN(
+            MILO_NOTIFY(
                 "%s could not find clip with flags %d in %s",
                 PathName(this),
                 mClipFlags,
