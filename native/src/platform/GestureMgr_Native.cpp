@@ -7,6 +7,8 @@
 #include "gesture/Skeleton.h" // SkeletonCallback
 #include "gesture/SkeletonHistory.h"
 #include "gesture/SkeletonUpdate.h"
+#include "hamobj/HamGameData.h"   // TheGameData (player->skeleton binding)
+#include "hamobj/HamPlayerData.h" // GetSkeletonTrackingID
 #include "obj/Task.h"
 #include <vector>
 #ifdef ENABLE_NCNN
@@ -243,6 +245,97 @@ static void ArchivePrevFrame(GestureMgr *mgr) {
     }
 }
 
+// Xbox builds SkeletonUpdateData::mSkeletonsLeft as a 2-entry array indexed by
+// PLAYER, by matching each player's assigned skeleton tracking ID against the 6
+// hardware slots (SkeletonUpdate::Update, src/system/gesture/SkeletonUpdate.cpp
+// :390-398; the IDs are snapshotted from HamPlayerData::GetSkeletonTrackingID at
+// :455). mSkeletonsRight is the flat 6-entry SLOT array. Consumers depend on the
+// distinction: FilterQueue::Poll indexes mSkeletonsLeft by inFrame->mSlot, which
+// is a PLAYER index, and HamSkeletonConverter / HamVisDir / FreestyleMotionFilter
+// all loop i < 2 over players.
+//
+// Native previously passed the slot array for BOTH, so player 0 scored only
+// because it happened to occupy slot 0, while player 1 read an untracked slot 1
+// and therefore always took the errors=1.0 short-circuit -- it could never score.
+//
+// SkeletonChooser normally performs the binding (TheGameData->AssignSkeleton), but
+// that UI flow does not necessarily complete in a headless/fast-boot run, so fall
+// back to auto-binding each unbound player to the first unclaimed slot. That
+// mirrors the intent of HamGameData::AutoAssignSkeletons, which has no caller in
+// the decompiled tree. Leaving an entry null is CORRECT when nobody is present --
+// the errors=1.0 path is the right answer for an absent player.
+static Skeleton *sPlayerSkeletons[2];
+
+static void BindPlayerSkeletons(GestureMgr *mgr) {
+    for (int p = 0; p < 2; p++)
+        sPlayerSkeletons[p] = nullptr;
+
+    // Tier 1: the faithful path -- explicit tracking-ID match per player.
+    for (int p = 0; p < 2; p++) {
+        int wantId = -1;
+        if (TheGameData) {
+            HamPlayerData *playerData = TheGameData->Player(p);
+            if (playerData)
+                wantId = playerData->GetSkeletonTrackingID();
+        }
+        if (wantId < 0)
+            continue;
+        for (int s = 0; s < NUM_SKELETONS; s++) {
+            Skeleton &skel = mgr->GetSkeleton(s);
+            if (skel.TrackingID() == wantId) {
+                sPlayerSkeletons[p] = &skel;
+                break;
+            }
+        }
+    }
+
+    // Tiers 2 and 3: auto-bind an unbound player to the first unclaimed slot,
+    // preferring a quality-filter-valid skeleton and falling back to merely
+    // tracked. Tier 3 matters for the static dummy, which is tracked but whose
+    // validity depends on the quality filter having seen enough frames.
+    for (int pass = 0; pass < 2; pass++) {
+        bool requireValid = (pass == 0);
+        for (int p = 0; p < 2; p++) {
+            if (sPlayerSkeletons[p])
+                continue;
+            for (int s = 0; s < NUM_SKELETONS; s++) {
+                Skeleton &skel = mgr->GetSkeleton(s);
+                if (requireValid ? !skel.IsValid() : !skel.IsTracked())
+                    continue;
+                bool claimed = false;
+                for (int q = 0; q < 2; q++) {
+                    if (sPlayerSkeletons[q] == &skel)
+                        claimed = true;
+                }
+                if (claimed)
+                    continue;
+                sPlayerSkeletons[p] = &skel;
+                if (TheGameData) {
+                    HamPlayerData *playerData = TheGameData->Player(p);
+                    if (playerData
+                        && playerData->GetSkeletonTrackingID() != skel.TrackingID())
+                        TheGameData->AssignSkeleton(p, skel.TrackingID());
+                }
+                break;
+            }
+        }
+    }
+
+    static bool sDebug = Dc3EnvFlag("DC3_SCORING_DEBUG", false);
+    if (sDebug) {
+        static int sPrevIdx[2] = { -2, -2 };
+        int idx[2];
+        for (int p = 0; p < 2; p++)
+            idx[p] = sPlayerSkeletons[p] ? sPlayerSkeletons[p]->SkeletonIndex() : -1;
+        if (idx[0] != sPrevIdx[0] || idx[1] != sPrevIdx[1]) {
+            sPrevIdx[0] = idx[0];
+            sPrevIdx[1] = idx[1];
+            fprintf(stderr, "DC3 SCORING: player->slot binding p0=%d p1=%d\n",
+                idx[0], idx[1]);
+        }
+    }
+}
+
 // Wall-clock ms since the previous ACCEPTED frame (Xbox gets this from
 // NUI_SKELETON_FRAME). Displacement scoring integrates these, so a garbage value
 // poisons it; clamped to [1,200], first accepted frame returns 33.
@@ -440,7 +533,13 @@ void GestureMgr_NativePoll(GestureMgr *mgr) {
     data.mHistory = sNativeHistory;
     data.mCameraInput = sNativeCameraInput;
 
+    // GestureMgr::PostUpdate reads only mSkeletonsRight (the slot array), and it
+    // refreshes the quality filter that Skeleton::IsValid consults -- so bind the
+    // per-PLAYER array after it, and before the scoring callbacks that consume
+    // mSkeletonsLeft.
     mgr->PostUpdate(&data);
+    BindPlayerSkeletons(mgr);
+    data.mSkeletonsLeft = sPlayerSkeletons;
 
     // Drive the SkeletonUpdate scoring callbacks (MoveDir/Game/HamVisDir) that
     // Xbox runs from SkeletonUpdate::UpdateCallbacks/PostUpdate. Update() must
