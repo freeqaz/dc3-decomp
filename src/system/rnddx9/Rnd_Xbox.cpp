@@ -340,13 +340,12 @@ void DxRnd::SetDefaultRenderStates() {
     D3DDevice_SetRenderState_SrcBlendAlpha(TheDxRnd.Device(), 1);
     D3DDevice_SetRenderState_DestBlendAlpha(TheDxRnd.Device(), 1);
     D3DDevice_SetRenderState_BlendOpAlpha(TheDxRnd.Device(), 3);
-    for (unsigned int i = 0, stage_offset = 0; i < caps.MaxTextureBlendStages;
-         i++, stage_offset += 0x18) {
+    for (unsigned int i = 0; i < caps.MaxTextureBlendStages; i++) {
         D3DDevice_SetSamplerState_MinFilter(TheDxRnd.Device(), i, 1);
         D3DDevice_SetSamplerState_MagFilter(TheDxRnd.Device(), i, 1);
 
         unsigned char* device = reinterpret_cast<unsigned char*>(TheDxRnd.Device());
-        unsigned int* stage_ptr = reinterpret_cast<unsigned int*>(device + stage_offset + 0x48C);
+        unsigned int* stage_ptr = reinterpret_cast<unsigned int*>(device + i * 0x18 + 0x48C);
         *stage_ptr = (*stage_ptr & 0xFE7FFFFF) | 0x800000;
 
         unsigned long long* state64 = reinterpret_cast<unsigned long long*>(device + 0x18);
