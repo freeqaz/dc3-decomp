@@ -227,8 +227,9 @@ void NgPostProc::DoBloom() {
 }
 
 NgPostProc::BloomTextureSet::BloomTextureSet() {
-    mBloomTexture[0] = (RndTex*)0;
-    mBloomTexture[1] = (RndTex*)0;
+    for (int i = 0; i < DIM(mBloomTexture); i++) {
+        mBloomTexture[i] = 0;
+    }
 }
 
 NgPostProc::BloomTextureSet::~BloomTextureSet() { FreeTextures(); }
