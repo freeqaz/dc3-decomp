@@ -26,9 +26,13 @@ public:
     NativeSkeletonProvider();
     ~NativeSkeletonProvider();
 
+    // backend selects the pose_server.py estimator: "mediapipe" (BlazePose GHUM,
+    // DC3-20 joints in camera-space metres WITH depth, Apache-2.0) or "yolo"
+    // (COCO-17 2D, no depth, AGPL). Model default must match the backend.
     bool Start(const std::string &socketPath = "/tmp/dc3_pose.sock",
-               const std::string &modelPath = "yolo11n-pose.pt",
-               int cameraIndex = 0);
+               const std::string &modelPath = "native/models/pose_landmarker_full.task",
+               int cameraIndex = 0,
+               const std::string &backend = "mediapipe");
     void Stop();
     bool IsRunning() const { return mRunning; }
 

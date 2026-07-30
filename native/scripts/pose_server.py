@@ -1,17 +1,33 @@
 #!/usr/bin/env python3
 """
-DC3 Native Port — YOLO Pose Estimation Server
+DC3 Native Port — Pose Estimation Server
 
-Runs YOLO26-pose with BOTSORT tracking on webcam input, sends skeleton data
-to the C++ engine over a Unix domain socket as packed binary frames.
+Streams skeleton data to the C++ engine over a Unix domain socket as packed
+binary frames. Two backends:
 
-Protocol (little-endian):
-  Header:  [uint32 frame_id] [uint32 num_persons] [float64 timestamp]
-  Per person: [int32 track_id] [17 × (float32 x, float32 y, float32 conf)]
+  yolo       (default) YOLO11n-pose + BOTSORT tracking. COCO-17, 2D only, so the
+             C++ side has to invent a constant z for every joint.
+  mediapipe  BlazePose GHUM. Emits DC3's own 20 joints in camera-space METRES
+             with real depth. See pose_mediapipe.py.
+
+Protocol v2 (little-endian), emitted by both backends:
+  [uint32 packet_len]
+  [uint32 magic 0x44503302] [uint32 frame_id] [uint32 num_persons] [f64 timestamp]
+  [uint16 frame_w] [uint16 frame_h] [uint8 num_landmarks] [uint8 layout] [uint16 pad]
+  Per person: [int32 track_id] [num_landmarks × (f32 x, f32 y, f32 z, f32 conf)]
+
+  layout 0 = COCO-17, normalised [0,1] image coords, z unused (yolo)
+  layout 1 = DC3-20, camera-space metres (mediapipe)
+
+Protocol v1 (legacy, still accepted by the C++ reader; pose_server_synthetic.py
+emits it) had no magic and packed [frame_id][num_persons][ts] then per person
+[track_id] + 17 × (x, y, conf). The reader distinguishes them by testing the
+first word against the magic — v1's first field is a small incrementing frame_id,
+so there is no ambiguity.
 
 Usage:
-  python pose_server.py [--socket /tmp/dc3_pose.sock] [--camera 0] [--model yolo11n-pose.pt]
-  python pose_server.py --video /path/to/clip.mp4 [--loop] [--fps 30] [--socket /tmp/dc3_pose.sock] [--model yolo11n-pose.pt]
+  python pose_server.py [--socket /tmp/dc3_pose.sock] [--camera 0] [--backend mediapipe]
+  python pose_server.py --video clip.mp4 [--loop] [--fps 30] [--backend mediapipe]
 """
 
 import argparse
@@ -23,6 +39,10 @@ import time
 
 import cv2
 import numpy as np
+
+# Protocol v2 magic. Chosen large so it cannot collide with a v1 packet, whose
+# first field is a small incrementing frame_id.
+PROTOCOL_MAGIC = 0x44503302
 
 
 def main():
@@ -37,19 +57,47 @@ def main():
                               "fallback 20.0 if unreadable). Ignored in camera mode.")
     parser.add_argument("--width", type=int, default=640, help="Capture width")
     parser.add_argument("--height", type=int, default=480, help="Capture height")
-    parser.add_argument("--model", default="yolo11n-pose.pt", help="YOLO pose model path")
+    parser.add_argument("--backend", choices=("yolo", "mediapipe"), default="yolo",
+                        help="Pose estimator. yolo = COCO-17 2D (no depth); "
+                             "mediapipe = BlazePose GHUM, DC3-20 in camera-space metres")
+    parser.add_argument("--model", default=None,
+                        help="Model path (default: yolo11n-pose.pt for yolo, "
+                             "native/models/pose_landmarker_full.task for mediapipe)")
+    parser.add_argument("--hfov", type=float, default=None,
+                        help="Camera horizontal FOV in degrees (mediapipe only). "
+                             "Default 58.51 = DC3's own Kinect FOV, recovered from "
+                             "the target disassembly of NuiTransformSkeletonToDepthImage")
     parser.add_argument("--conf", type=float, default=0.5, help="Confidence threshold")
     parser.add_argument("--max-persons", type=int, default=6, help="Max tracked persons")
     parser.add_argument("--show", action="store_true", help="Show debug visualization window")
     args = parser.parse_args()
 
     video_mode = args.video is not None
+    use_mediapipe = args.backend == "mediapipe"
 
-    # Late import so --help works without ultralytics installed
-    from ultralytics import YOLO
+    if args.model is None:
+        args.model = ("native/models/pose_landmarker_full.task" if use_mediapipe
+                      else "yolo11n-pose.pt")
 
-    print(f"Loading model: {args.model}", file=sys.stderr)
-    model = YOLO(args.model)
+    # Late imports so --help works without the heavy deps installed.
+    model = None
+    mp_backend = None
+    if use_mediapipe:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from pose_mediapipe import MediaPipeBackend, NUM_DC3_JOINTS
+
+        print(f"Loading MediaPipe model: {args.model}", file=sys.stderr)
+        kwargs = {"num_poses": min(args.max_persons, 2), "min_conf": args.conf}
+        if args.hfov is not None:
+            kwargs["hfov_deg"] = args.hfov
+        mp_backend = MediaPipeBackend(args.model, **kwargs)
+        num_landmarks, layout = NUM_DC3_JOINTS, 1
+    else:
+        from ultralytics import YOLO
+
+        print(f"Loading model: {args.model}", file=sys.stderr)
+        model = YOLO(args.model)
+        num_landmarks, layout = 17, 0
 
     frame_period = None  # video-mode wall-clock pacing interval (seconds); None = camera (paces itself)
 
@@ -143,22 +191,33 @@ def main():
                     # Fell behind (e.g. slow inference) — resync instead of busy-catching-up.
                     next_frame_time = time.monotonic() + frame_period
 
-            if frame is None:
-                # EOF-drain synthetic frame: skip inference, send an empty person list.
-                results = None
-            else:
-                # Run tracking
-                results = model.track(
-                    frame,
-                    persist=True,
-                    tracker="botsort.yaml",
-                    conf=args.conf,
-                    verbose=False,
-                )
-
-            # Build binary packet
+            results = None
             timestamp = time.monotonic()
             persons = []
+            frame_w, frame_h = (args.width, args.height)
+            if frame is not None:
+                frame_h, frame_w = frame.shape[:2]
+
+            if use_mediapipe:
+                if frame is not None:
+                    # MediaPipe VIDEO mode requires monotonically increasing
+                    # timestamps; derive from frame_id so a paced video run is
+                    # reproducible rather than wall-clock dependent.
+                    ts_ms = frame_id * (frame_period * 1000.0 if frame_period else 33.0)
+                    for tid, joints in mp_backend.process(frame, ts_ms):
+                        if len(persons) >= args.max_persons:
+                            break
+                        persons.append((tid, joints))
+            else:
+                if frame is not None:
+                    # Run tracking
+                    results = model.track(
+                        frame,
+                        persist=True,
+                        tracker="botsort.yaml",
+                        conf=args.conf,
+                        verbose=False,
+                    )
 
             if results and results[0].keypoints is not None:
                 kpts = results[0].keypoints
@@ -183,17 +242,22 @@ def main():
                             nx = float(xy[i, j, 0]) / w
                             ny = float(xy[i, j, 1]) / h
                             c = float(conf[i, j]) if conf.ndim == 2 else float(conf[i, j, 0])
-                            keypoints.append((nx, ny, c))
+                            # z is 0 for layout 0: COCO-17 carries no depth. The
+                            # C++ side substitutes its own constant.
+                            keypoints.append((nx, ny, 0.0, c))
                         persons.append((tid, keypoints))
 
-            # Pack and send
+            # Pack and send (protocol v2 — see module docstring)
             if client is not None:
-                # Header: frame_id (u32), num_persons (u32), timestamp (f64)
-                packet = struct.pack("<IId", frame_id, len(persons), timestamp)
+                packet = struct.pack(
+                    "<IIIdHHBBH",
+                    PROTOCOL_MAGIC, frame_id, len(persons), timestamp,
+                    int(frame_w), int(frame_h), num_landmarks, layout, 0,
+                )
                 for tid, kpts in persons:
                     packet += struct.pack("<i", tid)
-                    for x, y, c in kpts:
-                        packet += struct.pack("<fff", x, y, c)
+                    for x, y, z, c in kpts:
+                        packet += struct.pack("<ffff", x, y, z, c)
 
                 # Prefix with packet length
                 msg = struct.pack("<I", len(packet)) + packet
@@ -205,7 +269,7 @@ def main():
                     client.close()
                     client = None
 
-            if args.show and results:
+            if args.show and results is not None:
                 annotated = results[0].plot()
                 cv2.imshow("DC3 Pose Server", annotated)
                 if cv2.waitKey(1) & 0xFF == ord('q'):

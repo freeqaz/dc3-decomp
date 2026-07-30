@@ -23,7 +23,7 @@ NativeSkeletonProvider *TheSkeletonProvider = nullptr;
 // Stubs — no Kinect skeleton tracking on web
 NativeSkeletonProvider::NativeSkeletonProvider() { memset(mFront, 0, sizeof(mFront)); memset(mBack, 0, sizeof(mBack)); memset(mPersons, 0, sizeof(mPersons)); }
 NativeSkeletonProvider::~NativeSkeletonProvider() {}
-bool NativeSkeletonProvider::Start(const std::string&, const std::string&, int) { return false; }
+bool NativeSkeletonProvider::Start(const std::string&, const std::string&, int, const std::string&) { return false; }
 void NativeSkeletonProvider::Stop() {}
 void NativeSkeletonProvider::Poll() {}
 int NativeSkeletonProvider::FindByTrackId(int) const { return -1; }
@@ -54,6 +54,20 @@ enum COCOKeypoint {
     COCO_RIGHT_ANKLE = 16,
 };
 
+// Wire layout ids (see native/scripts/pose_server.py protocol v2).
+enum PoseLayout {
+    kLayoutCOCO17 = 0,  // normalised [0,1] image coords, no depth
+    kLayoutDC3_20 = 1,  // DC3's own 20 joints, camera-space metres
+};
+
+// Same thresholds the COCO path uses, so the two backends agree on what counts
+// as a trustworthy joint.
+static JointConfidence ConfidenceFromScore(float score) {
+    if (score < 0.3f) return kConfidenceNotTracked;
+    if (score < 0.6f) return kConfidenceInferred;
+    return kConfidenceTracked;
+}
+
 NativeSkeletonProvider::NativeSkeletonProvider() {
     memset(mFront, 0, sizeof(mFront));
     memset(mBack, 0, sizeof(mBack));
@@ -65,7 +79,8 @@ NativeSkeletonProvider::~NativeSkeletonProvider() {
 }
 
 bool NativeSkeletonProvider::Start(
-    const std::string &socketPath, const std::string &modelPath, int cameraIndex
+    const std::string &socketPath, const std::string &modelPath, int cameraIndex,
+    const std::string &backend
 ) {
     if (mRunning) return true;
 
@@ -106,6 +121,7 @@ bool NativeSkeletonProvider::Start(
                    scriptPath.c_str(),
                    "--socket", socketPath.c_str(),
                    "--model", modelPath.c_str(),
+                   "--backend", backend.c_str(),
                    "--camera", std::to_string(cameraIndex).c_str(),
                    nullptr);
             // If exec fails
@@ -204,15 +220,45 @@ void NativeSkeletonProvider::ReaderThread() {
             break;
         }
 
-        // Parse header: frame_id (u32), num_persons (u32), timestamp (f64)
+        // Two wire formats. v1 (legacy, still emitted by pose_server_synthetic.py):
+        //   [u32 frame_id][u32 num_persons][f64 ts], then per person
+        //   [i32 track_id] + 17 x (f32 x, y, conf), normalised image coords.
+        // v2 (pose_server.py, both backends):
+        //   [u32 magic][u32 frame_id][u32 num_persons][f64 ts]
+        //   [u16 w][u16 h][u8 num_landmarks][u8 layout][u16 pad], then per person
+        //   [i32 track_id] + num_landmarks x (f32 x, y, z, conf).
+        // They are distinguished by the leading magic: v1's first field is a small
+        // incrementing frame_id, so a large sentinel cannot collide.
+        static const uint32_t kProtocolMagic = 0x44503302u;
         if (packetLen < 16) continue;
         const uint8_t *p = packet.data();
+        const uint8_t *end = packet.data() + packetLen;
+
+        uint32_t magic = 0;
+        memcpy(&magic, p, 4);
+        const bool v2 = (magic == kProtocolMagic);
 
         uint32_t frameId, numPersons;
         double timestamp;
-        memcpy(&frameId, p, 4); p += 4;
-        memcpy(&numPersons, p, 4); p += 4;
-        memcpy(&timestamp, p, 8); p += 8;
+        uint16_t frameW = 0, frameH = 0;
+        uint8_t numLandmarks = 17, layout = kLayoutCOCO17;
+
+        if (v2) {
+            if (packetLen < 28) continue;
+            p += 4; // magic
+            memcpy(&frameId, p, 4); p += 4;
+            memcpy(&numPersons, p, 4); p += 4;
+            memcpy(&timestamp, p, 8); p += 8;
+            memcpy(&frameW, p, 2); p += 2;
+            memcpy(&frameH, p, 2); p += 2;
+            numLandmarks = *p++;
+            layout = *p++;
+            p += 2; // pad
+        } else {
+            memcpy(&frameId, p, 4); p += 4;
+            memcpy(&numPersons, p, 4); p += 4;
+            memcpy(&timestamp, p, 8); p += 8;
+        }
 
         if (numPersons > (uint32_t)kMaxPersons)
             numPersons = kMaxPersons;
@@ -221,18 +267,61 @@ void NativeSkeletonProvider::ReaderThread() {
         PersonData newBack[kMaxPersons];
         memset(newBack, 0, sizeof(newBack));
 
+        const size_t compsPerLandmark = v2 ? 4 : 3;
+        const size_t personBytes = 4 + (size_t)numLandmarks * compsPerLandmark * sizeof(float);
+        bool truncated = false;
+
         for (uint32_t i = 0; i < numPersons; i++) {
+            if ((size_t)(end - p) < personBytes) { truncated = true; break; }
+
             int32_t trackId;
             memcpy(&trackId, p, 4); p += 4;
-
-            float cocoKpts[17][3]; // x, y, conf
-            memcpy(cocoKpts, p, 17 * 3 * sizeof(float));
-            p += 17 * 3 * sizeof(float);
-
             newBack[i].trackId = trackId;
-            MapCOCOToDC3(cocoKpts, newBack[i]);
+
+            if (layout == kLayoutDC3_20 && numLandmarks == kNumJoints) {
+                // Already DC3's own 20 joints in camera-space METRES. No remap and
+                // no NormalizedToMeters, which is exactly why this path is immune
+                // to the 4:3 view-box assumption that skews a 16:9 camera.
+                for (int j = 0; j < kNumJoints; j++) {
+                    float v[4];
+                    memcpy(v, p, 4 * sizeof(float));
+                    p += 4 * sizeof(float);
+                    newBack[i].joints[j] = Vector3(v[0], v[1], v[2]);
+                    newBack[i].confidence[j] = ConfidenceFromScore(v[3]);
+                }
+            } else if (numLandmarks == 17) {
+                float cocoKpts[17][3]; // x, y, conf
+                for (int j = 0; j < 17; j++) {
+                    float v[4] = { 0, 0, 0, 0 };
+                    memcpy(v, p, compsPerLandmark * sizeof(float));
+                    p += compsPerLandmark * sizeof(float);
+                    cocoKpts[j][0] = v[0];
+                    cocoKpts[j][1] = v[1];
+                    // v1 packs conf third; v2 packs z third and conf fourth.
+                    cocoKpts[j][2] = v2 ? v[3] : v[2];
+                }
+                MapCOCOToDC3(cocoKpts, newBack[i]);
+            } else {
+                // Unknown layout/landmark count: skip this person rather than
+                // walking the cursor off the end of the packet.
+                p += personBytes - 4;
+                continue;
+            }
             newBack[i].valid = true;
         }
+
+        if (truncated) {
+            static bool sWarned = false;
+            if (!sWarned) {
+                sWarned = true;
+                fprintf(stderr,
+                    "Pose packet truncated (len=%u persons=%u landmarks=%u layout=%u);"
+                    " dropping trailing persons\n",
+                    packetLen, numPersons, numLandmarks, layout);
+            }
+        }
+        (void)frameW;
+        (void)frameH;
 
         // Swap to back buffer
         {

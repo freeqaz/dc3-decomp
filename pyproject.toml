@@ -27,8 +27,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# native/scripts/pose_server.py — YOLO pose estimation helper (ultralytics pulls torch).
-pose = ["ultralytics", "opencv-python"]
+# native/scripts/pose_server.py backends.
+#   mediapipe (default): Apache-2.0, BlazePose GHUM, real per-joint depth.
+#   ultralytics (--backend yolo): AGPL-3.0 and 2D-only; kept as a fallback
+#   until the z-recovery benchmark confirms MediaPipe, then removable along
+#   with the ~37 MB of derived weights in native/models.
+pose = ["mediapipe", "opencv-python"]
+pose-yolo = ["ultralytics", "opencv-python"]
 # broader ML/analysis research scripts (onnx/pnnx/ncnn export, transformer experiments).
 ml = [
     "torch", "torchvision", "torchaudio",

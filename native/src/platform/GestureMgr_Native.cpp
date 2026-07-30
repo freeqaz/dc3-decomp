@@ -134,10 +134,22 @@ void GestureMgr_NativeInit() {
             const char *socketPath = getenv("DC3_POSE_SOCKET");
             if (!socketPath) socketPath = "/tmp/dc3_pose.sock";
 
-            const char *modelPath = getenv("DC3_POSE_MODEL");
-            if (!modelPath) modelPath = "yolo11n-pose.pt";
+            // MediaPipe BlazePose is the default backend: it supplies real
+            // per-joint depth (protocol layout 1, DC3-20 in camera-space metres)
+            // where YOLO's COCO-17 has none, and it is Apache-2.0 rather than
+            // AGPL. DC3_POSE_BACKEND=yolo restores the old path; the model
+            // default follows the backend unless DC3_POSE_MODEL overrides it.
+            const char *backend = getenv("DC3_POSE_BACKEND");
+            if (!backend) backend = "mediapipe";
+            const bool useMediaPipe = (strcmp(backend, "yolo") != 0);
 
-            if (TheSkeletonProvider->Start(socketPath, modelPath, camIdx)) {
+            const char *modelPath = getenv("DC3_POSE_MODEL");
+            if (!modelPath) {
+                modelPath = useMediaPipe ? "native/models/pose_landmarker_full.task"
+                                         : "yolo11n-pose.pt";
+            }
+
+            if (TheSkeletonProvider->Start(socketPath, modelPath, camIdx, backend)) {
                 printf("Native: external pose server started\n");
             } else {
                 printf("Native: pose tracking unavailable (no ncnn, no pose server)\n");
