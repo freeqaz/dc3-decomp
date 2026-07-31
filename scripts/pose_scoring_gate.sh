@@ -36,7 +36,7 @@ FRAMES=25000
 FLOW="scripts/dc3-input-flows/betteroffalone.txt"
 VIDEO=""
 SOCKET="/tmp/dc3_pose_gate.sock"
-BACKEND="yolo"
+BACKEND="mediapipe"   # match the shipping default (GestureMgr_Native.cpp); --backend yolo for the fallback path
 
 while [ $# -gt 0 ]; do
     case "$1" in
