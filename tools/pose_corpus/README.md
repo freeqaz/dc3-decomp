@@ -86,6 +86,15 @@ Corroborated by `JointUtl.cpp:89,103` normalising by 1/320 and 1/240, and
 compare recovered per-joint z against truth. `native/scripts/pose_server_synthetic.py`
 is the template for the replay harness.
 
+`bench_z.py` runs three root-recovery estimators against this loop: torso
+similar triangles on the full 3D length (the original bug: +1/cos(tilt) depth
+bias), on the in-plane extent (unbiased to first order, −0.24 m perspective
+residual at high tilt), and exact linear least-squares over all landmarks
+(zero residual on perfect landmarks; the production estimator in
+`pose_mediapipe.py::_absolute_root` since `d8977110`). Its Q3 section adds
+world-landmark + pixel noise: the least-squares form degrades ~7–10× more
+gracefully than the torso heuristic (1 px jitter: 0.010 m vs 0.102 m).
+
 **Framing:** poses are authored body-centred with lateral travel to ±1.2 m, so
 raw projection puts only 0.6% of frames fully in-frame. Recentre the hip on the
 optical axis and shift so hip depth = 3.0 m → **99.7% project fully inside
