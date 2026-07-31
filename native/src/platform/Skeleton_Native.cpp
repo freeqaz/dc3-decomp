@@ -79,8 +79,7 @@ NativeSkeletonProvider::~NativeSkeletonProvider() {
 }
 
 bool NativeSkeletonProvider::Start(
-    const std::string &socketPath, const std::string &modelPath, int cameraIndex,
-    const std::string &backend
+    const std::string &socketPath, const std::string &modelPath, int cameraIndex
 ) {
     if (mRunning) return true;
 
@@ -121,7 +120,6 @@ bool NativeSkeletonProvider::Start(
                    scriptPath.c_str(),
                    "--socket", socketPath.c_str(),
                    "--model", modelPath.c_str(),
-                   "--backend", backend.c_str(),
                    "--camera", std::to_string(cameraIndex).c_str(),
                    nullptr);
             // If exec fails

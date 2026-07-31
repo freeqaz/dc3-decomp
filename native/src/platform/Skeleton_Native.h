@@ -9,8 +9,10 @@
 // <atomic> not usable with clang + GCC 15 headers; use volatile bool instead
 // #include <atomic>
 
-// Maps COCO 17 keypoints from YOLO pose to DC3's 20 SkeletonJoints,
-// receives data from pose_server.py over a Unix socket.
+// Receives skeleton data from pose_server.py (MediaPipe BlazePose) over a
+// Unix socket. Protocol layout 1 carries DC3's own 20 joints in camera-space
+// metres; the layout-0 path maps COCO-17 2D keypoints for any external
+// COCO source (the in-tree YOLO backend that used it is retired).
 class NativeSkeletonProvider {
 public:
     static const int kCOCOKeypoints = 17;
@@ -26,13 +28,9 @@ public:
     NativeSkeletonProvider();
     ~NativeSkeletonProvider();
 
-    // backend selects the pose_server.py estimator: "mediapipe" (BlazePose GHUM,
-    // DC3-20 joints in camera-space metres WITH depth, Apache-2.0) or "yolo"
-    // (COCO-17 2D, no depth, AGPL). Model default must match the backend.
     bool Start(const std::string &socketPath = "/tmp/dc3_pose.sock",
                const std::string &modelPath = "native/models/pose_landmarker_full.task",
-               int cameraIndex = 0,
-               const std::string &backend = "mediapipe");
+               int cameraIndex = 0);
     void Stop();
     bool IsRunning() const { return mRunning; }
 

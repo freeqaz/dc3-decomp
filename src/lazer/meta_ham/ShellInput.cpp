@@ -148,7 +148,7 @@ void ShellInput::Poll() {
     if (mCursorPanel)
         mCursorPanel->Poll();
 
-    // Poll SkeletonChooser when there are tracked skeletons (YOLO pose server).
+    // Poll SkeletonChooser when there are tracked skeletons (native pose server).
     // With default properties now set in HamInit, SkeletonChooser code paths
     // that read ui_nav_mode etc. are safe.
     if (mSkelChooser && NumTrackedSkeletons() > 0)

@@ -2,7 +2,7 @@
 """Synthetic pose server for headless CI verification of the native live-pose path.
 
 Speaks the same wire protocol as pose_server.py (see its docstring) but emits a
-scripted person enter/leave scenario instead of webcam+YOLO output, so the
+scripted person enter/leave scenario instead of webcam+pose-server output, so the
 trackId->slot mapping, provider frame gating, and archive-history integrity in
 GestureMgr_NativePoll can be exercised deterministically with no camera.
 

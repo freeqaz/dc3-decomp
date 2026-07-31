@@ -275,7 +275,7 @@ Shell music audio plays end-to-end through the full decode pipeline:
 | Category | Stub Count | Notes |
 |----------|-----------|-------|
 | Xbox XDK APIs | ~25 | XInput, XNet, marketplace, etc. |
-| Kinect/NUI APIs | ~47 | Replaced by native YOLO pose server |
+| Kinect/NUI APIs | ~47 | Replaced by native pose server (MediaPipe) |
 | Bink Video | 6 | BinkOpen, BinkGoto, etc. |
 | JSON Library | ~14 | Network serialization |
 | Crypto (Rijndael) | 6 | Network encryption |

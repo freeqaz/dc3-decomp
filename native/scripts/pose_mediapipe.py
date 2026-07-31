@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """MediaPipe BlazePose GHUM backend for the DC3 pose server.
 
-WHY THIS EXISTS: the YOLO11n-pose backend produces COCO-17 keypoints with NO
+WHY THIS EXISTS: the (retired) YOLO11n-pose backend produced COCO-17 keypoints with NO
 depth, so the C++ side had to invent a constant z (3.0 m for every joint). DC3's
 scoring is genuinely 3D -- DetectFrame::LimbPSNR dots a per-move Vector3 weight
 against a Vector3 error -- and because the numerator is Dot(w,e)^2 rather than a

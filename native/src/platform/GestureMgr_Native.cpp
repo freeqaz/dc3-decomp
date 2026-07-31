@@ -76,7 +76,7 @@ static void ResetSlotMap() {
 }
 
 // Native implementation of GestureMgr::Init — replaces the early return stub.
-// Called from game startup to initialize skeleton tracking via webcam + YOLO pose.
+// Called from game startup to initialize skeleton tracking via webcam + MediaPipe pose.
 void GestureMgr_NativeInit() {
     ResetSlotMap();
 
@@ -134,22 +134,15 @@ void GestureMgr_NativeInit() {
             const char *socketPath = getenv("DC3_POSE_SOCKET");
             if (!socketPath) socketPath = "/tmp/dc3_pose.sock";
 
-            // MediaPipe BlazePose is the default backend: it supplies real
-            // per-joint depth (protocol layout 1, DC3-20 in camera-space metres)
-            // where YOLO's COCO-17 has none, and it is Apache-2.0 rather than
-            // AGPL. DC3_POSE_BACKEND=yolo restores the old path; the model
-            // default follows the backend unless DC3_POSE_MODEL overrides it.
-            const char *backend = getenv("DC3_POSE_BACKEND");
-            if (!backend) backend = "mediapipe";
-            const bool useMediaPipe = (strcmp(backend, "yolo") != 0);
-
+            // MediaPipe BlazePose is the only backend: real per-joint depth
+            // (protocol layout 1, DC3-20 in camera-space metres), Apache-2.0.
+            // The AGPL YOLO fallback was retired after ground-truth measurement
+            // showed MediaPipe dominates it on depth AND detection robustness
+            // (tools/pose_corpus/bench_model_z.py, bench_detection.py).
             const char *modelPath = getenv("DC3_POSE_MODEL");
-            if (!modelPath) {
-                modelPath = useMediaPipe ? "native/models/pose_landmarker_full.task"
-                                         : "yolo11n-pose.pt";
-            }
+            if (!modelPath) modelPath = "native/models/pose_landmarker_full.task";
 
-            if (TheSkeletonProvider->Start(socketPath, modelPath, camIdx, backend)) {
+            if (TheSkeletonProvider->Start(socketPath, modelPath, camIdx)) {
                 printf("Native: external pose server started\n");
             } else {
                 printf("Native: pose tracking unavailable (no ncnn, no pose server)\n");
@@ -394,7 +387,7 @@ static void ScoringDebugTick(bool accepted, bool skipped, int reassigns) {
 }
 
 // Called each frame by GestureMgr::Poll() to update skeleton slots
-// from the YOLO pose server (or a dummy skeleton), then run the
+// from the pose server (or a dummy skeleton), then run the
 // filtering pipeline.
 void GestureMgr_NativePoll(GestureMgr *mgr) {
     bool providerRunning = false;

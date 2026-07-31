@@ -15,9 +15,9 @@
 #             Perfect mimicry, so this must score HIGH (~1.0).
 #   dummy     a static standing skeleton (no provider). A person standing
 #             still is not dancing, so this must score clearly BELOW selftest.
-#   video     real YOLO pose from a recorded dancer, if footage + server are
-#             available. Optional; reported but not asserted, since its value
-#             depends on the clip.
+#   video     real pose estimation from a recorded dancer, if footage + server
+#             are available. Optional; reported but not asserted, since its
+#             value depends on the clip.
 #
 # FAIL conditions: any config scoring identically 0.000 or identically 1.000
 # across every move, or dummy scoring >= selftest.
@@ -36,26 +36,17 @@ FRAMES=25000
 FLOW="scripts/dc3-input-flows/betteroffalone.txt"
 VIDEO=""
 SOCKET="/tmp/dc3_pose_gate.sock"
-BACKEND="mediapipe"   # match the shipping default (GestureMgr_Native.cpp); --backend yolo for the fallback path
+POSE_MODEL="native/models/pose_landmarker_full.task"
 
 while [ $# -gt 0 ]; do
     case "$1" in
         --frames)  FRAMES="$2";  shift 2 ;;
         --song)    FLOW="$2";    shift 2 ;;
         --video)   VIDEO="$2";   shift 2 ;;
-        --backend) BACKEND="$2"; shift 2 ;;
+        --model)   POSE_MODEL="$2"; shift 2 ;;
         *) echo "unknown arg: $1" >&2; exit 2 ;;
     esac
 done
-
-# Model default follows the backend. mediapipe emits DC3-20 joints in
-# camera-space metres WITH depth (protocol layout 1); yolo emits COCO-17
-# normalised 2D (layout 0) and the C++ side substitutes a constant z.
-if [ "$BACKEND" = "mediapipe" ]; then
-    POSE_MODEL="native/models/pose_landmarker_full.task"
-else
-    POSE_MODEL="native/models/yolo11n-pose.pt"
-fi
 
 BIN="$REPO/native/build/dc3-native"
 [ -x "$BIN" ] || { echo "FAIL: $BIN not built"; exit 1; }
@@ -91,7 +82,7 @@ run_cfg() {
     echo "$exit_code $segv $(summarize "$log")"
 }
 
-echo "=== native move-scoring differential gate (${FRAMES} frames, $(basename "$FLOW"), pose backend: ${BACKEND}) ==="
+echo "=== native move-scoring differential gate (${FRAMES} frames, $(basename "$FLOW"), model: $(basename "$POSE_MODEL")) ==="
 
 read -r ST_EXIT ST_SEGV ST_N ST_LO ST_HI ST_D <<<"$(run_cfg selftest DC3_POSE_SELFTEST=1)"
 echo "selftest : exit=$ST_EXIT segv=$ST_SEGV samples=$ST_N range=[$ST_LO..$ST_HI] distinct=$ST_D"
@@ -103,7 +94,7 @@ VI_N=0
 if [ -n "$VIDEO" ] && [ -f "$VIDEO" ]; then
     rm -f "$SOCKET"
     .venv/bin/python native/scripts/pose_server.py --video "$VIDEO" --loop --fps 15 \
-        --backend "$BACKEND" --socket "$SOCKET" --model "$POSE_MODEL" \
+        --socket "$SOCKET" --model "$POSE_MODEL" \
         >/tmp/pose_gate_server.log 2>&1 &
     SERVER_PID=$!
     for _ in $(seq 1 60); do [ -S "$SOCKET" ] && break; sleep 1; done
