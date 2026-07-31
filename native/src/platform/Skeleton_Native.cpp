@@ -254,6 +254,10 @@ void NativeSkeletonProvider::ReaderThread() {
             numLandmarks = *p++;
             layout = *p++;
             p += 2; // pad
+            // Must be set before the person loop below: MapCOCOToDC3 ->
+            // NormalizedToMeters consumes it for THIS packet's landmarks.
+            if (frameW > 0 && frameH > 0)
+                mFrameAspect = (float)frameH / (float)frameW;
         } else {
             memcpy(&frameId, p, 4); p += 4;
             memcpy(&numPersons, p, 4); p += 4;
@@ -320,8 +324,6 @@ void NativeSkeletonProvider::ReaderThread() {
                     packetLen, numPersons, numLandmarks, layout);
             }
         }
-        (void)frameW;
-        (void)frameH;
 
         // Swap to back buffer
         {
@@ -358,7 +360,10 @@ Vector3 NativeSkeletonProvider::NormalizedToMeters(float nx, float ny) const {
     // below uses left=-0.20 / right=+0.20. Without this flip the live pose
     // path contradicted the dummy path and every pose was mirrored.
     float x = (0.5f - nx) * mViewWidth;
-    float y = (0.5f - ny) * mViewHeight; // flip Y (image Y is down)
+    // Vertical extent derives from the ACTUAL frame aspect (square pixels:
+    // viewH = viewW * H/W), fed from the v2 packet header. Fixes the 16:9
+    // webcam case, which the old hardcoded 4:3 view box anisotropically skewed.
+    float y = (0.5f - ny) * (mViewWidth * mFrameAspect); // flip Y (image Y is down)
     float z = mViewDepth;
     return Vector3(x, y, z);
 }

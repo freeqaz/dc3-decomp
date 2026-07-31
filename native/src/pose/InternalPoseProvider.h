@@ -73,7 +73,11 @@ private:
     // Kinect projection u = 160 + 285.63*x/z over 320x240, recovered from the
     // target disassembly, gives a 3.361 x 2.521 m extent at z = 3.0. The old
     // 2.4 x 1.8 under-scaled x/y by ~1.40x against this struct's own z.
+    // Vertical extent derives from the width and the ACTUAL camera aspect
+    // (square pixels: viewH = viewW * H/W), so a 16:9 webcam is not squeezed
+    // through a 4:3 box. Set once in Start() from the opened camera's
+    // resolution, before the worker thread launches.
     float mViewWidth = 3.361f;
-    float mViewHeight = 2.521f;
+    float mFrameAspect = 0.75f; // H/W; Kinect 320x240 default
     float mViewDepth = 3.0f;
 };

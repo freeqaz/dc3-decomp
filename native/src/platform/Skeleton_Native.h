@@ -119,12 +119,17 @@ private:
     // to this same struct's fixed z = 3.0. x/y and z were mutually inconsistent,
     // which would silently corrupt any depth estimate scored against them.
     //
-    // Note this path still assumes a 4:3 frame (which the Kinect depth stream is).
-    // A 16:9 webcam feeding normalised coords through a 4:3 box skews angles; the
-    // MediaPipe backend avoids the issue entirely by sending metres directly.
+    // The vertical extent is derived from the width and the ACTUAL frame aspect
+    // (square pixels: viewH = viewW * H/W). Protocol v2 carries the camera frame
+    // dimensions, so a 16:9 webcam no longer gets its normalised coords squeezed
+    // through a 4:3 box (which anisotropically skewed every limb angle on the
+    // COCO/YOLO path). v1 packets carry no dimensions and keep the Kinect 4:3.
     float mViewWidth = 3.361f;  // 2 * 3.0 * 160 / 285.63
-    float mViewHeight = 2.521f; // 2 * 3.0 * 120 / 285.63
     float mViewDepth = 3.0f;    // meters from camera to subject (fixed Z)
+    // H/W of the incoming camera frame. Written by the reader thread from the
+    // v2 header; only read by NormalizedToMeters, which also runs on the reader
+    // thread (via MapCOCOToDC3), so no synchronisation is needed.
+    float mFrameAspect = 0.75f; // Kinect 320x240 default until a v2 header says otherwise
 };
 
 extern NativeSkeletonProvider *TheSkeletonProvider;

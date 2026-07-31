@@ -34,6 +34,9 @@ bool InternalPoseProvider::Start(const std::string &modelDir,
     printf("InternalPoseProvider: started (camera %d, %dx%d, GPU=%d)\n",
            cameraIndex, mCamera.Width(), mCamera.Height(), useGPU);
 
+    if (mCamera.Width() > 0 && mCamera.Height() > 0)
+        mFrameAspect = (float)mCamera.Height() / (float)mCamera.Width();
+
     mRunning = true;
     mWorkerThread = std::thread(&InternalPoseProvider::WorkerThread, this);
     return true;
@@ -120,7 +123,7 @@ void InternalPoseProvider::MapDetectionToPersonData(
         // X flips like Y — see NativeSkeletonProvider::NormalizedToMeters for
         // the DC3 camera-space convention (player-left is -X).
         float x = (0.5f - nx) * mViewWidth;
-        float y = (0.5f - ny) * mViewHeight;
+        float y = (0.5f - ny) * (mViewWidth * mFrameAspect);
         float z = mViewDepth;
         return Vector3(x, y, z);
     };
