@@ -186,14 +186,72 @@ class MediaPipeBackend:
         """
         return (width * 0.5) / math.tan(self._hfov * 0.5)
 
-    def _absolute_root(self, world, image_xy, width, height):
-        """Recover the hip centre's absolute camera-space position, in metres.
+    def _absolute_root(self, world, image_xy, vis, width, height):
+        """Recover the world-landmark origin's camera-space position, in metres.
 
-        MediaPipe world landmarks are hip-relative, so depth comes from similar
-        triangles on the torso: a segment of known metric length S projecting to
-        s pixels sits at Z = f * S / s. The torso (hip centre to shoulder centre)
-        is the right choice -- it is long, rigid, and rarely occluded, unlike a
-        limb which foreshortens.
+        Exact linear least-squares (DLT with known structure). We know every
+        landmark's full 3D offset from the origin (world landmarks, flipped into
+        DC3 axes: rel_i) and its pixel position. The projection u = W/2 - f*X/Z,
+        v = H/2 - f*Y/Z with X_i = rel_i + R rearranges to equations LINEAR in
+        the root R = (Rx, Ry, Rz):
+
+            f*Rx + a_i*Rz = -f*rel_x_i - a_i*rel_z_i     a_i = u_i - W/2
+            f*Ry + b_i*Rz = -f*rel_y_i - b_i*rel_z_i     b_i = v_i - H/2
+
+        Two equations per landmark, three unknowns: solve visibility-weighted
+        normal equations. Benchmarked against the 30k-pose reference corpus
+        (tools/pose_corpus/bench_z.py) this is EXACT on perfect landmarks --
+        unlike torso similar triangles, which even with the in-plane fix carries
+        a -0.24 m perspective residual at high tilt -- and it degrades ~7-10x
+        more gracefully under noise (1 px pixel jitter: 0.010 m vs 0.102 m;
+        50 mm world noise: 0.052 m vs 0.397 m) because it averages ~66 equations
+        instead of leaning on one ~47 px torso segment.
+
+        Falls back to the torso method when too few landmarks are visible or the
+        system is degenerate; returns None only if that fallback also fails.
+        """
+        f = self._focal_px(width)
+        # World -> DC3 axes: flip x and y, keep z (matches _remap).
+        a = image_xy[:, 0] * width - width * 0.5
+        b = image_xy[:, 1] * height - height * 0.5
+        rel_x, rel_y, rel_z = -world[:, 0], -world[:, 1], world[:, 2]
+        w = np.where(vis >= 0.3, np.clip(vis, 0.0, 1.0), 0.0)
+        if np.count_nonzero(w) < 4:
+            return self._absolute_root_torso(world, image_xy, width, height)
+
+        ru = -f * rel_x - a * rel_z
+        rv = -f * rel_y - b * rel_z
+        wf2 = float((w * f * f).sum())
+        wfa = float((w * f * a).sum())
+        wfb = float((w * f * b).sum())
+        ata = np.array([
+            [wf2, 0.0, wfa],
+            [0.0, wf2, wfb],
+            [wfa, wfb, float((w * (a * a + b * b)).sum())],
+        ])
+        aty = np.array([
+            float((w * f * ru).sum()),
+            float((w * f * rv).sum()),
+            float((w * (a * ru + b * rv)).sum()),
+        ])
+        try:
+            root = np.linalg.solve(ata, aty)
+        except np.linalg.LinAlgError:
+            return self._absolute_root_torso(world, image_xy, width, height)
+        if not np.isfinite(root).all():
+            return self._absolute_root_torso(world, image_xy, width, height)
+        # A living room is roughly 1-6 m; clamp so a bad frame cannot fling the
+        # skeleton to infinity and poison displacement scoring.
+        root[2] = min(max(root[2], 0.8), 8.0)
+        return root
+
+    def _absolute_root_torso(self, world, image_xy, width, height):
+        """Fallback root recovery: similar triangles on the torso.
+
+        A segment of known metric length S projecting to s pixels sits at
+        Z = f * S / s. The torso (hip centre to shoulder centre) is the best
+        single segment -- long, rigid, rarely occluded. Kept only as the
+        degenerate-case fallback for _absolute_root, which supersedes it.
 
         Returns None when the torso projects to a degenerate length.
         """
@@ -259,7 +317,7 @@ class MediaPipeBackend:
                 image_xy = np.zeros((len(wlms), 2))
                 vis = np.ones(len(wlms))
 
-            root = self._absolute_root(world, image_xy, width, height)
+            root = self._absolute_root(world, image_xy, vis, width, height)
             if root is None:
                 continue
 

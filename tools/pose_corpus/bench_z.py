@@ -102,6 +102,57 @@ def in_frame(uv):
             & (uv[..., 1] >= 0) & (uv[..., 1] < DEPTH_H)).all(axis=-1)
 
 
+def recover_root_pnp(rel, uv, weights=None):
+    """Exact linear least-squares root recovery (DLT with known structure).
+
+    The torso similar-triangles estimate -- even with the in-plane fix -- is an
+    approximation: it assumes the whole segment sits at one depth, but a tilted
+    torso spans a depth range and perspective makes the projected length depend
+    on WHERE in that range each endpoint sits. That is the second-order residual
+    (-0.24 m at sin(tilt) > 0.5) the tilt table shows.
+
+    But the problem is exactly solvable. We know each landmark's full 3D offset
+    from the root, rel_i (world landmarks are hip-relative 3D), and its pixel
+    position. With the mirrored camera-view projection u = CX - f*X/Z,
+    v = CY - f*Y/Z and X_i = rel_i + R:
+
+        (u_i - CX)(Rz + rel_z_i) = -f(Rx + rel_x_i)
+        (v_i - CY)(Rz + rel_z_i) = -f(Ry + rel_y_i)
+
+    which is LINEAR in R = (Rx, Ry, Rz):
+
+        f*Rx + a_i*Rz = -f*rel_x_i - a_i*rel_z_i      a_i = u_i - CX
+        f*Ry + b_i*Rz = -f*rel_y_i - b_i*rel_z_i      b_i = v_i - CY
+
+    Two equations per landmark, three unknowns total: massively overdetermined,
+    solved by (optionally weighted) normal equations, batched across poses.
+    On perfect landmarks the residual is zero -- no tilt bias, no perspective
+    approximation. On noisy landmarks it averages over every joint instead of
+    leaning on three.
+    """
+    a = uv[:, :, 0] - CX
+    b = uv[:, :, 1] - CY
+    ru = -FOCAL * rel[:, :, 0] - a * rel[:, :, 2]
+    rv = -FOCAL * rel[:, :, 1] - b * rel[:, :, 2]
+
+    w = np.ones_like(a) if weights is None else weights
+    f2 = FOCAL * FOCAL
+
+    ata = np.zeros((len(rel), 3, 3))
+    aty = np.zeros((len(rel), 3))
+    ata[:, 0, 0] = (w * f2).sum(axis=1)
+    ata[:, 1, 1] = (w * f2).sum(axis=1)
+    ata[:, 0, 2] = ata[:, 2, 0] = (w * FOCAL * a).sum(axis=1)
+    ata[:, 1, 2] = ata[:, 2, 1] = (w * FOCAL * b).sum(axis=1)
+    ata[:, 2, 2] = (w * (a * a + b * b)).sum(axis=1)
+    aty[:, 0] = (w * FOCAL * ru).sum(axis=1)
+    aty[:, 1] = (w * FOCAL * rv).sum(axis=1)
+    aty[:, 2] = (w * (a * ru + b * rv)).sum(axis=1)
+
+    root = np.linalg.solve(ata, aty[:, :, None])[:, :, 0]
+    return root[:, 0], root[:, 1], np.clip(root[:, 2], 0.8, 8.0)
+
+
 def recover_root(pos, uv, in_plane=True):
     """Port of MediaPipe backend's _absolute_root, fed PERFECT world landmarks.
 
@@ -184,11 +235,16 @@ def main():
     print("Q2  ABSOLUTE-ROOT RECOVERY (fed perfect world landmarks)")
     print("=" * 68)
     true_hip = norm[:, HIP_CENTER, :]
+    rel = norm - true_hip[:, None, :]
     for label, ip in (("full 3D length (buggy)", False), ("in-plane extent (fixed)", True)):
         _x, _y, _z, _ok = recover_root(norm, uv_cam, in_plane=ip)
         e = np.abs(_z - true_hip[:, 2])
         print(f"  [{label:24s}] hip Z abs-mean {np.nanmean(e):.4f} m  "
               f"p90 {pct(e,90):.4f}  max {np.nanmax(e):.4f}")
+    px, py, pz = recover_root_pnp(rel, uv_cam)
+    e = np.abs(pz - true_hip[:, 2])
+    print(f"  [{'PnP least-squares':24s}] hip Z abs-mean {np.nanmean(e):.4f} m  "
+          f"p90 {pct(e,90):.4f}  max {np.nanmax(e):.4f}")
     print()
     x_hip, y_hip, z_hip, ok = recover_root(norm, uv_cam, in_plane=True)
     dz = z_hip - true_hip[:, 2]
@@ -211,16 +267,46 @@ def main():
     torso_len = np.linalg.norm(torso_vec, axis=-1)
     # |z-component| / length = sin(tilt out of the image plane); 0 = fronto-parallel
     tilt = np.abs(torso_vec[:, 2]) / np.maximum(torso_len, 1e-6)
+    dz_pnp = pz - true_hip[:, 2]
     print("\n  hip Z error vs torso tilt out of the image plane"
           " (the predicted failure mode):")
+    print(f"    {'':22s}{'in-plane torso':>26s}{'PnP least-squares':>26s}")
     edges = [0.0, 0.1, 0.2, 0.3, 0.5, 1.01]
     for lo, hi in zip(edges[:-1], edges[1:]):
         m = (tilt >= lo) & (tilt < hi)
         if m.sum() < 20:
             continue
         print(f"    sin(tilt) {lo:.1f}-{hi:.1f}  n={m.sum():6d}  "
-              f"mean dz {np.nanmean(dz[m]):+.4f} m   "
-              f"abs-mean {np.nanmean(np.abs(dz[m])):.4f}")
+              f"mean {np.nanmean(dz[m]):+.4f} abs {np.nanmean(np.abs(dz[m])):.4f}   "
+              f"mean {np.nanmean(dz_pnp[m]):+.4f} abs {np.nanmean(np.abs(dz_pnp[m])):.4f}")
+
+    # -- Q3: which estimator degrades better under NOISE? ------------------
+    # Q2's perfect-landmark result is guaranteed by construction for PnP (zero
+    # residual). The real question is robustness: live MediaPipe world landmarks
+    # carry model error (tens of mm) and image landmarks carry pixel jitter. An
+    # exact solver that amplified noise would be a step backwards.
+    print("\n" + "=" * 68)
+    print("Q3  NOISE SENSITIVITY (world-landmark sigma in mm + 1 px pixel noise)")
+    print("=" * 68)
+    rng = np.random.default_rng(0)
+    sub = rng.choice(len(norm), size=min(8000, len(norm)), replace=False)
+    nsub, uvsub, hipsub = norm[sub], uv_cam[sub], true_hip[sub]
+    relsub = nsub - hipsub[:, None, :]
+    print(f"  n={len(sub)} poses; abs-mean hip error in metres (Z | X | Y)")
+    for sigma_mm in (0.0, 10.0, 25.0, 50.0):
+        wnoise = rng.normal(0.0, sigma_mm / 1000.0, relsub.shape)
+        pxnoise = rng.normal(0.0, 1.0, uvsub.shape)
+        rel_n = relsub + wnoise
+        uv_n = uvsub + pxnoise
+        # Torso estimator reads metric lengths from pos differences, so the root
+        # offset cancels -- feed noisy rel re-anchored at the true root.
+        pos_n = rel_n + hipsub[:, None, :]
+        tx, ty, tz, _ = recover_root(pos_n, uv_n, in_plane=True)
+        qx, qy, qz = recover_root_pnp(rel_n, uv_n)
+        et = [np.nanmean(np.abs(v)) for v in (tz - hipsub[:, 2], tx - hipsub[:, 0], ty - hipsub[:, 1])]
+        eq = [np.nanmean(np.abs(v)) for v in (qz - hipsub[:, 2], qx - hipsub[:, 0], qy - hipsub[:, 1])]
+        print(f"    sigma {sigma_mm:4.0f} mm   torso {et[0]:.4f} | {et[1]:.4f} | {et[2]:.4f}"
+              f"     pnp {eq[0]:.4f} | {eq[1]:.4f} | {eq[2]:.4f}")
 
     print("\n" + "=" * 68)
     print("READ THIS BEFORE QUOTING THE NUMBERS")
