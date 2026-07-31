@@ -30,6 +30,10 @@ feature** — audit before relying on old semantics.
 | `DC3_POSE_SELFTEST` | off | Feeds the choreography's OWN reference pose as the player (perfect self-mimicry → `DetectFrac` → ~1.0). Still OR'd into the `App.cpp` scoring gate, so it forces the poll even under `DC3_NATIVE_SCORING=0`. Parsed with `Dc3EnvFlag(..., false)` at `FilterQueue.cpp` and both `App.cpp` sites, so `DC3_POSE_SELFTEST=0` can never accidentally enable it. |
 | `DC3_POSE` | unset | Provider select: `external` (unix-socket `pose_server.py`) or `internal` (ncnn). Also overrides the `MILO_HEADLESS` skip in `GestureMgr_NativeInit`. |
 | `DC3_POSE_NO_SPAWN` | unset | Connect-only; do not fork `pose_server.py`. |
+| `DC3_POSE_MODEL` | `native/models/pose_landmarker_full.task` | MediaPipe pose landmarker `.task` path passed to the spawned server (`lite`/`full`/`heavy` tiers ship in `native/models/`). The AGPL YOLO backend and its weights were retired after ground-truth measurement (`tools/pose_corpus/bench_model_z.py`). |
+| `DC3_POSE_SOCKET` | `/tmp/dc3_pose.sock` | Unix socket path shared with the pose server. |
+| `DC3_POSE_CAMERA` | `0` | Camera index passed to the spawned server. |
+| `DC3_POSE_HFOV` | unset (server default 58.51°) | Real horizontal FOV of the webcam, degrees. Absolute depth scales with the assumed focal length: the Kinect-default 58.51° measured +0.76–1.73 m depth bias on real 65–72.5° cameras. Pose SHAPE is FOV-invariant, so the default is safe for scoring; calibrate for correct absolute positions/displacements. |
 | `DC3_SCORING_DEBUG` | off | Once-per-second liveness counters (archive lookups, frame gating, slot reassignments). Parsed with `Dc3EnvFlag(..., false)`. |
 
 ## Deterministic dummy: `DetectFrac ~0 is CORRECT
