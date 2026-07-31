@@ -3,6 +3,7 @@
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
+#include <vector>
 #ifndef __EMSCRIPTEN__
 #include <unistd.h>
 #include <signal.h>
@@ -115,13 +116,26 @@ bool NativeSkeletonProvider::Start(
 
         mServerPid = fork();
         if (mServerPid == 0) {
-            // Child process
-            execlp("python3", "python3",
-                   scriptPath.c_str(),
-                   "--socket", socketPath.c_str(),
-                   "--model", modelPath.c_str(),
-                   "--camera", std::to_string(cameraIndex).c_str(),
-                   nullptr);
+            // Child process. DC3_POSE_HFOV (degrees) calibrates the server to
+            // the real camera's horizontal FOV -- absolute depth scales with
+            // the assumed focal length, and the 58.51-degree Kinect default
+            // measured +0.76..1.73 m of depth bias on real 65-72.5 degree
+            // cameras (bench_model_z.py). Pose SHAPE is FOV-invariant, so the
+            // default stays safe for scoring; calibrate for better absolutes.
+            std::string camArg = std::to_string(cameraIndex);
+            const char *hfov = getenv("DC3_POSE_HFOV");
+            std::vector<const char *> argv = {
+                "python3", scriptPath.c_str(),
+                "--socket", socketPath.c_str(),
+                "--model",  modelPath.c_str(),
+                "--camera", camArg.c_str(),
+            };
+            if (hfov && *hfov) {
+                argv.push_back("--hfov");
+                argv.push_back(hfov);
+            }
+            argv.push_back(nullptr);
+            execvp("python3", const_cast<char *const *>(argv.data()));
             // If exec fails
             perror("Failed to launch pose_server.py");
             _exit(1);
