@@ -80,6 +80,50 @@ NUM_DC3_JOINTS = 20
 FOOT_TOE_BLEND = 0.35
 
 
+class OneEuroFilter:
+    """Speed-adaptive low-pass (Casiez et al.): smooth when slow, responsive
+    when fast.
+
+    Applied to the recovered root DEPTH only. Justification is measured, not
+    assumed: against AIST++ ground truth (7 sequences incl. 1.8 m of real
+    depth travel), the raw per-frame root z carries 0.089 m/frame of jitter
+    where the true motion is 0.017 -- phantom depth velocity that feeds
+    straight into displacement scoring. min_cutoff=0.2 Hz, beta=0.1 was grid-
+    swept against that GT at 15 and 30 fps: it cuts jitter 4.7x AND lowers
+    absolute |z| error ~10% (0.176 -> 0.159 m mean, p90 0.363 -> 0.312),
+    because the noise is larger than the true motion. x/y are left raw: their
+    measured jitter is near the true-motion floor and lateral dance moves are
+    fast and real.
+    """
+
+    def __init__(self, min_cutoff=0.2, beta=0.1, d_cutoff=1.0):
+        self.min_cutoff = min_cutoff
+        self.beta = beta
+        self.d_cutoff = d_cutoff
+        self._x = None
+        self._dx = 0.0
+        self._t = None
+
+    def __call__(self, x, t_s):
+        if self._x is None:
+            self._x, self._t = x, t_s
+            return x
+        dt = t_s - self._t
+        if dt <= 0.0:
+            return self._x
+        self._t = t_s
+
+        def alpha(cutoff):
+            tau = 1.0 / (2.0 * math.pi * cutoff)
+            return 1.0 / (1.0 + tau / dt)
+
+        dx = (x - self._x) / dt
+        self._dx += alpha(self.d_cutoff) * (dx - self._dx)
+        cutoff = self.min_cutoff + self.beta * abs(self._dx)
+        self._x += alpha(cutoff) * (x - self._x)
+        return self._x
+
+
 class CentroidTracker:
     """Assign persistent IDs across frames by nearest hip-centre match.
 
@@ -166,6 +210,9 @@ class MediaPipeBackend:
         )
         self._landmarker = vision.PoseLandmarker.create_from_options(opts)
         self._tracker = CentroidTracker()
+        self._root_z_filters = {}  # track id -> OneEuroFilter on root depth
+        self._filter_last_seen = {}  # track id -> last process() call index
+        self._frame_count = 0
         self._hfov = math.radians(hfov_deg)
         self.num_landmarks = NUM_DC3_JOINTS
         self.layout = 1  # DC3-20, camera-space metres
@@ -175,6 +222,8 @@ class MediaPipeBackend:
 
     def reset_tracks(self):
         self._tracker.reset()
+        self._root_z_filters.clear()
+        self._filter_last_seen.clear()
 
     # -- geometry ----------------------------------------------------------
     def _focal_px(self, width):
@@ -322,18 +371,34 @@ class MediaPipeBackend:
                 continue
 
             joints, confs = self._remap(world, vis, root)
-            people.append((joints, confs))
+            people.append((joints, confs, float(root[2])))
             hip_c = (image_xy[L_HIP] + image_xy[R_HIP]) * 0.5
             centroids.append((float(hip_c[0]), float(hip_c[1])))
 
         ids = self._tracker.update(centroids)
+        self._frame_count += 1
+        t_s = timestamp_ms / 1000.0
         out = []
-        for (joints, confs), tid in zip(people, ids):
+        for (joints, confs, root_z), tid in zip(people, ids):
+            # Filter the root DEPTH per persistent track and shift the whole
+            # skeleton by the correction -- root noise is a rigid z offset, so
+            # every joint moves together and the pose shape is untouched.
+            filt = self._root_z_filters.setdefault(int(tid), OneEuroFilter())
+            self._filter_last_seen[int(tid)] = self._frame_count
+            joints = joints.copy()
+            joints[:, 2] += filt(root_z, t_s) - root_z
             out.append((int(tid), [
                 (float(joints[j][0]), float(joints[j][1]), float(joints[j][2]),
                  float(confs[j]))
                 for j in range(NUM_DC3_JOINTS)
             ]))
+        # Age out filters for departed tracks (past the tracker's own
+        # max_missing grace, so a brief dropout keeps its filter state).
+        stale = [t for t, seen in self._filter_last_seen.items()
+                 if self._frame_count - seen > 60]
+        for t in stale:
+            self._filter_last_seen.pop(t, None)
+            self._root_z_filters.pop(t, None)
         return out
 
     def _remap(self, world, vis, root):

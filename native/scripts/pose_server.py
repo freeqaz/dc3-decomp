@@ -127,6 +127,7 @@ def main():
 
     client = None
     frame_id = 0
+    start_time = time.monotonic()  # camera-mode timestamp anchor
     next_frame_time = time.monotonic()  # video-mode pacing anchor
     eof_drain_deadline = None  # video-mode, --loop off: send ~2s of zero-person frames after EOF, then exit
 
@@ -186,9 +187,15 @@ def main():
                 frame_h, frame_w = frame.shape[:2]
 
                 # MediaPipe VIDEO mode requires monotonically increasing
-                # timestamps; derive from frame_id so a paced video run is
-                # reproducible rather than wall-clock dependent.
-                ts_ms = frame_id * (frame_period * 1000.0 if frame_period else 33.0)
+                # timestamps. Video mode derives them from frame_id so a paced
+                # run is reproducible; camera mode uses the wall clock, because
+                # a fixed per-frame step assumes a frame rate the device may
+                # not have (a 60 fps webcam under a hardcoded 33 ms/frame ran
+                # MediaPipe's temporal model at half speed).
+                if frame_period:
+                    ts_ms = frame_id * frame_period * 1000.0
+                else:
+                    ts_ms = (time.monotonic() - start_time) * 1000.0
                 for tid, joints in mp_backend.process(frame, ts_ms):
                     if len(persons) >= args.max_persons:
                         break
