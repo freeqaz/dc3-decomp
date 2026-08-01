@@ -73,11 +73,74 @@ NUM_DC3_JOINTS = 20
  HIP_RIGHT, KNEE_RIGHT, ANKLE_RIGHT,
  FOOT_LEFT, FOOT_RIGHT) = range(NUM_DC3_JOINTS)
 
-# Kinect's kJointFoot sits only ~4.6 cm from the ankle and almost straight DOWN
-# (measured from the baked capture in src/system/gesture/StubCameraInput.cpp:57-61:
-# offset dx=-0.002 dy=-0.046 dz=-0.004). BlazePose's foot_index is the toe tip,
-# ~10.6 cm out, so blend it toward the heel to land near the mid-foot instead.
+# Kinect's kJointFoot sits ~7.9 cm from the ankle, pointing DOWN AND FORWARD at
+# -50 deg elevation (dy -0.059, dz -0.038), not straight down. Measured over
+# 116 k frames of real Kinect v1 output in tools/pose_corpus/bench_utd_mhad.py,
+# and strikingly stable: per-action mean 0.074-0.084 m at -45 to -52 deg on all
+# 27 actions. (The single baked frame in src/system/gesture/StubCameraInput.cpp
+# :57-61 reads 4.6 cm nearly straight down -- that frame is NOT representative,
+# so do not re-derive this constant from it.) BlazePose's foot_index is the toe
+# tip, ~10.6 cm out, so blend it toward the heel to land near the mid-foot.
+# Sweeping the blend against Kinect's own foot-minus-ankle offset gives a flat
+# minimum at 0.30-0.35 (0.0320 m limb-relative); the resulting joint is 0.079 m
+# at -58 deg, matching the reference's length to 0.5 mm.
 FOOT_TOE_BLEND = 0.35
+
+# ---------------------------------------------------------------------------
+# CENTRE JOINTS -- HipCenter / Spine / ShoulderCenter are NOT midpoints.
+#
+# DC3's choreography, gesture filters and scoring thresholds were all authored
+# against Kinect v1 skeletons, so these three joints have to reproduce KINECT'S
+# definitions, not anatomical midpoints. Measured on UTD-MHAD (861 trials,
+# 116 k frames of real Kinect v1 skeletons over 8 subjects,
+# tools/pose_corpus/bench_utd_mhad.py). Expressing each centre joint in a body
+# frame built from Kinect's OWN hips and shoulders --
+#     hip_mid + a*(sho_mid - hip_mid) + b*|torso|*back
+# -- gives, pooled over all 8 subjects (between-subject sd in brackets):
+#     HipCenter        a 0.193 [0.008]  b +0.008 [0.003]
+#     Spine            a 0.370 [0.007]  b +0.096 [0.016]
+#     ShoulderCenter   a 1.285 [0.013]  b +0.019 [0.025]
+# i.e. HipCenter sits ~19% up the torso (7.2 cm above the hip line -- confirmed
+# independently by the baked capture, HipCenter.y 0.1118 vs HipLeft.y 0.0333),
+# ShoulderCenter ~29% ABOVE the shoulder line (the neck base), and Spine only
+# ~37% up -- plus a real 3.6 cm POSTERIOR offset, because Kinect's Spine is a
+# spine-surface point rather than a point on the hip-to-shoulder line. Those
+# fractions are scale-invariant (fractions of the subject's own torso), which is
+# what makes them safe for players of any size.
+#
+# The fractions below are NOT those numbers, because BlazePose's torso is not
+# Kinect's torso: body-aligned over the same corpus our hip landmarks sit 5.5 cm
+# LOWER and our shoulder landmarks 7.5 cm HIGHER than Kinect's, so our
+# hip_mid->sho_mid span is 0.488 m against Kinect's 0.372 m (1.32x). The
+# coefficients are therefore fitted in OUR body frame by least squares against
+# the Kinect target on subjects 1-5, and validated on held-out subjects 6-8
+# (body-aligned mean error, held-out, metres):
+#     HipCenter       0.1385 -> 0.0486     Spine  0.0878 -> 0.0555
+#     ShoulderCenter  0.1434 -> 0.1389
+# and because DC3 root-aligns on HipCenter, this drops the ROOT-ALIGNED error of
+# every other joint too: mean over all 20 joints 0.219 -> 0.165 m held-out.
+#
+# WHY ONLY SPINE GETS A PERPENDICULAR TERM: the fit "wants" a 0.147 posterior
+# term on ShoulderCenter as well (held-out 0.1389 -> 0.1028), but Kinect's own
+# ShoulderCenter is b = +0.019, i.e. essentially ON its shoulder line -- that
+# 0.147 is compensating the 5.7 cm ANTERIOR bias of our shoulder LANDMARKS, and
+# baking it into one derived joint would leave the neck sitting behind our own
+# ShoulderLeft/Right and skew every shoulder-relative vector the scorer forms.
+# Spine's term survives the same test: Kinect's intrinsic 0.096*0.372 = 3.6 cm
+# and the value fitted in our frame, 0.085*0.488 = 4.2 cm, agree, so it is a
+# definition and not bias absorption. HipCenter needs none (b 0.008 = 3 mm).
+#
+# CAVEAT for anyone re-deriving these: the per-subject spread of the fitted
+# axial term is wide (HipCenter 0.18-0.36 across the 8 subjects) because it
+# absorbs how BlazePose places hips on that particular body. The pooled value
+# still beats the midpoint on every subject; do not read the last digit as
+# precise. ShoulderCenter's 1.04 is within that spread of 1.00 -- Kinect's 29%
+# neck-base rise very nearly cancels against our higher shoulder landmarks, so
+# only ~2 cm of correction survives.
+HIP_CENTER_UP = 0.24        # fraction of the hip_mid -> sho_mid torso vector
+SPINE_UP = 0.36
+SPINE_BACK = 0.085          # fraction of torso LENGTH, posterior (away from camera)
+SHOULDER_CENTER_UP = 1.04
 
 
 class OneEuroFilter:
@@ -420,13 +483,28 @@ class MediaPipeBackend:
 
         j[HIP_LEFT], c[HIP_LEFT] = cam[L_HIP], vis[L_HIP]
         j[HIP_RIGHT], c[HIP_RIGHT] = cam[R_HIP], vis[R_HIP]
-        j[HIP_CENTER], c[HIP_CENTER] = mid(L_HIP, R_HIP), minc(L_HIP, R_HIP)
         j[SHOULDER_LEFT], c[SHOULDER_LEFT] = cam[L_SHOULDER], vis[L_SHOULDER]
         j[SHOULDER_RIGHT], c[SHOULDER_RIGHT] = cam[R_SHOULDER], vis[R_SHOULDER]
-        j[SHOULDER_CENTER] = mid(L_SHOULDER, R_SHOULDER)
-        c[SHOULDER_CENTER] = minc(L_SHOULDER, R_SHOULDER)
-        j[SPINE] = (j[HIP_CENTER] + j[SHOULDER_CENTER]) * 0.5
-        c[SPINE] = min(c[HIP_CENTER], c[SHOULDER_CENTER])
+
+        # Centre joints: fractions along the subject's own torso, not midpoints
+        # (see the CENTRE JOINTS block above for the measurement).
+        hip_mid = mid(L_HIP, R_HIP)
+        torso = mid(L_SHOULDER, R_SHOULDER) - hip_mid
+        torso_len = float(np.linalg.norm(torso))
+        # Body-frame POSTERIOR direction. cross(up, player-left) is +Z (away
+        # from the camera) for a player facing the sensor and rotates with them,
+        # so the Spine offset stays behind the spine whichever way they turn.
+        # Orthogonalising the hip axis against the torso first would not change
+        # this: cross(t, l - (l.t)t) == cross(t, l).
+        back = np.cross(torso, cam[L_HIP] - cam[R_HIP])
+        back_len = float(np.linalg.norm(back))
+        back = back / back_len if back_len > 1e-9 else np.zeros(3)
+
+        centre_conf = minc(L_HIP, R_HIP, L_SHOULDER, R_SHOULDER)
+        j[HIP_CENTER] = hip_mid + HIP_CENTER_UP * torso
+        j[SPINE] = hip_mid + SPINE_UP * torso + (SPINE_BACK * torso_len) * back
+        j[SHOULDER_CENTER] = hip_mid + SHOULDER_CENTER_UP * torso
+        c[HIP_CENTER] = c[SPINE] = c[SHOULDER_CENTER] = centre_conf
 
         # Kinect's head is ~skull centre; the ear midpoint is much closer to that
         # than the nose, which sits anterior and inferior. Nose is the fallback
@@ -441,8 +519,25 @@ class MediaPipeBackend:
         j[ELBOW_RIGHT], c[ELBOW_RIGHT] = cam[R_ELBOW], vis[R_ELBOW]
         j[WRIST_RIGHT], c[WRIST_RIGHT] = cam[R_WRIST], vis[R_WRIST]
 
-        # Real hand landmarks at last: the knuckle line (pinky/index midpoint) is
-        # about where Kinect's hand joint sits, ~0.10 m past the wrist.
+        # Real hand landmarks at last: the knuckle line (pinky/index midpoint)
+        # is about where Kinect's hand joint sits. Measured, not assumed: over
+        # 116 k real Kinect v1 frames (bench_utd_mhad.py) Kinect puts its hand
+        # joint 0.068 m past the wrist at -42.3 deg elevation and this
+        # construction puts ours 0.083 m out at -42.8 deg -- same direction,
+        # 1.5 cm long. (Two independent hand-GT corpora say the true wrist-to-
+        # knuckle distance is 0.076-0.080 m: bench_panoptic_hands.py on CMU
+        # Panoptic 21-keypoint hands and bench_3dhp.py. The older "~0.10 m past
+        # the wrist" note here was wrong -- what we actually emit is
+        # 0.042-0.060 m, so we UNDER-reach rather than over-reach.) Shortening
+        # to wrist + 0.7*(knuckle - wrist) does buy ~8 mm against Kinect, but it
+        # is NOT applied, on the other two corpora's evidence: 3DHP sweeps that
+        # exact factor and k = 1.0 is an INTERIOR minimum there (offset error
+        # 0.0603 at k=1.0 against 0.0660 at 0.7, 0.0690 at 0.6, 0.0698 at 1.6),
+        # so 0.7 costs 5.7 mm -- as much as it gains -- and Panoptic finds any
+        # rescale in x0.78-x1.24 worth under 1 mm. Kinect's own hand joint also
+        # sits 18.8 px (~10 cm at 2.85 m) from the visible hand in the image, so
+        # the 8 mm is well inside the reference's own error bar. Two anatomical
+        # corpora against one estimator quirk: keep the knuckle midpoint.
         j[HAND_LEFT], c[HAND_LEFT] = mid(L_PINKY, L_INDEX), minc(L_PINKY, L_INDEX)
         j[HAND_RIGHT], c[HAND_RIGHT] = mid(R_PINKY, R_INDEX), minc(R_PINKY, R_INDEX)
 
