@@ -171,10 +171,14 @@ Steps:
 
    If your console *does* have a devkit partition / dev kernel, skip the patch entirely and
    just make sure `devkit:\` exists — try it unpatched first, it costs one song.
-3. Plug a **USB keyboard** into the console.
-4. Boot the game, get to song select, press **`Alt`+`R`**. You should see an on-screen
-   `Song recording   TRUE` confirmation (that's the `cheat_display show_bool` in the cheat).
-   Press it *before* starting the song — `sGameRecord` is read when the song is set up.
+3. Arm the recorder. **No keyboard is required** — hold **LT + LB** and click the **left
+   stick (L3)** to open the on-screen cheat menu, then select
+   *"Game: Toggle Song Recording"* with **A**. (If you do have a USB keyboard, `Alt`+`R`
+   works too.) Full evidence and the other routes are in
+   [§2b Triggering the recording on a console](#2b-triggering-the-recording-on-a-console-no-pc-keyboard).
+4. Either way you should see an on-screen `Song recording   TRUE` confirmation (that's the
+   `cheat_display show_bool` in the cheat). Arm it *before* starting the song — `sGameRecord`
+   is read when the song is set up.
 5. Play the song to the end (or fail out) — the file is written on `EndGameMsg`. **Do not
    dashboard out mid-song**, nothing is flushed until then.
 6. Retrieve the `.clp` from `game:\` (i.e. the game folder) over FTP (FSD / DashLaunch) or by
@@ -241,6 +245,191 @@ If routes A/B stall, a small homebrew XEX using `NuiSkeletonGetNextFrame` can re
 data. Downside: it is not DC3's camera configuration (tilt, near/seated mode, play-space
 prompts) and there is no `song_seconds`, so sync and comparability are weaker. Use only as a
 last resort.
+
+---
+
+## 2b. Triggering the recording on a console (no PC keyboard)
+
+Once you are booting `debug.xex` (Route A), `toggle_song_record` exists as a `DataFunc` and the
+question is only how to *call* it from the couch. **You do not need a keyboard.**
+
+### Option 1 (recommended) — the on-screen cheat menu, opened with a pad chord
+
+> **Hold `LT` + `LB`, then click the left stick (`L3`).** An on-screen list of every cheat
+> appears. Scroll to **`alt r  Game: Toggle Song Recording`**, press **`A`**. Press **`B`** to
+> close the menu. Do this *before* starting the song.
+
+DC3 has no `DebugMenu`/`RndDebugUI` class (that Milo-era construct is absent from `src/`
+entirely), but it has something better: a real, scrollable, pad-navigable cheat browser that
+can invoke **keyboard-section cheats**. The whole chain is confirmed against the shipped data:
+
+* **The chord.** `src/system/utl/Cheats.cpp:308-309` —
+  ```cpp
+  bool leftShift  = (buttons & (1 << kPad_L1)) && (buttons & (1 << kPad_L2));
+  bool rightShift = (buttons & (1 << kPad_R1)) && (buttons & (1 << kPad_R2));
+  ```
+  `kPad_L2 = 0`, `kPad_L1 = 2`, `kPad_L3 = 9`
+  (`orig-assets/extracted/(..)/(..)/system/run/config/macros.dta:169-188`). `kPad_L2` is the
+  *trigger*: `src/system/os/Joypad_Xinput.cpp:198-206` maps `state.Gamepad.bLeftTrigger` to
+  bit 0. So "left shift" = **LT + LB**, and `CheatProvider` even spells it out in the menu
+  header — `"LEFT CHEATS (L1 + L2)"`, `src/system/ui/CheatProvider.cpp:28`.
+
+* **The binding.** `orig-assets/extracted/(..)/(..)/system/run/config/default.dta:218-220` —
+  ```
+  (kPad_L3
+     "Show Cheats"
+     {show_cheat_screen system_cheat_screen})
+  ```
+
+* **Why that binding is live in DC3.** DC3's own `config/cheats.dta` `(left …)` section only
+  defines `kPad_Tri` and `kPad_R2`. But `config/ham_keep.dta` **is** the system config
+  (`src/App.cpp:317` → `SystemInit("config/ham_keep.dta")`), and its last line is
+  `#merge ../../../system/run/config/default.dta` (`config/ham_keep.dta:158`). `#merge` is
+  resolved **at runtime**, not baked (`src/system/obj/DataArray.cpp:564,597`), and
+  `DataMergeTags` is a union-by-tag that *appends* tags missing from the destination
+  (`src/system/obj/DataUtl.cpp:70-88`). `kPad_L3` (9) is absent from DC3's `left`, so it is
+  appended. Verified in the shipped binaries: the `#merge` node is present in
+  `config/gen/ham_keep.dtb` and both `"Show Cheats"` strings are present in
+  `(..)/(..)/system/run/config/gen/default.dtb`.
+
+* **The screen exists and ships.** `(..)/(..)/system/run/ui/cheat.dta` defines
+  `system_cheat_panel` / `system_cheat_screen`; it is loaded by
+  `(cheat_init #include ../ui/cheat.dta …)` at `default.dta:414-418`, executed from
+  `src/system/ui/UI.cpp:905-906` (`static Message cheat_init("cheat_init"); Handle(...)`).
+  The art file is in the ark: `(..)/(..)/system/run/ui/gen/cheat.milo_xbox`.
+
+* **Navigation is pure pad.** `cheat.dta:20-30` handles `BUTTON_DOWN_MSG`
+  (`kAction_Cancel` → pop screen, `kAction_ViewModify` → cycle filter) and `cheat.dta:47-51`
+  handles `SELECT_MSG` → `{cheat_provider invoke {cheat.lst selected_pos} $user}`.
+
+* **The list includes the *keyboard* cheats.** `src/system/ui/CheatProvider.cpp:18-30` walks
+  `SystemConfig("quick_cheats")` and pushes every section, emitting a `"KEYBOARD CHEATS"`
+  header. The entry renders as `alt r | Game: Toggle Song Recording`.
+
+* **Selecting one really runs it.** `CheatProvider::Invoke` (`CheatProvider.cpp:126-131`) →
+  `CallQuickCheat` (`src/system/utl/Cheats.cpp:151-156`) →
+  `CheatsManager::CallCheatScript(true, da, lu, /*b2=*/false)`. With `b2 == false` the
+  joypad-type gate at `Cheats.cpp:227-231` is skipped entirely and the script is executed at
+  `Cheats.cpp:256`. **This is the key fact: a keyboard-only cheat is invocable from the pad.**
+
+* **Cheats are on.** `(disable_cheats FALSE)` at `default.dta:180`; gate at
+  `src/system/utl/Cheats.cpp:391-396`. Key cheats are disabled during boot
+  (`src/App.cpp:291`) and re-enabled at `src/App.cpp:763`.
+
+* **The `#ifdef` guards do not remove any of this.** `ham_keep.dta:75-77` wraps the cheats
+  include in `#ifndef _SHIP` and `cheats.dta:1` wraps the pad sections in `#ifndef DEMO`. DTA
+  `#ifdef`s are evaluated **at runtime** from the macro table, and the only `DataSetMacro`
+  calls in the tree are `HX_XBOX` / `HX_WIN` / `HX_NG` plus `-define` argv
+  (`src/system/os/System.cpp:433-440`) and `REGION_*` (`src/system/os/PlatformMgr.cpp:137`).
+  Neither `_SHIP` nor `DEMO` is ever defined, so both blocks are active.
+
+* **The cheat is in the shipped, precompiled data.** `config/gen/cheats.dtb` is encrypted with
+  the engine's own `Rand2` stream cipher (`src/system/utl/BinStream.cpp:227-231` seeds
+  `Rand2` from a leading LE int; `src/system/math/Rand2.cpp` is a Lehmer PRNG, each byte
+  XORed with `Int() & 0xFF`). Decrypting it shows `toggle_song_record`,
+  `toggle_song_record_double` and `Game: Toggle Song Recording` present, matching
+  `orig-assets/extracted/config/cheats.dta:1528-1543`.
+
+If the list is long, press the **ViewModify** button to cycle the filter to `game` — the entry
+carries `(filters game)` (`cheats.dta:1531`), and `CheatProvider::ApplyFilter`
+(`CheatProvider.cpp:137-166`) shows everything under the default `all` filter anyway.
+
+### Option 2 — USB keyboard (`Alt`+`R`). This genuinely works on a real 360.
+
+The keyboard path is **not** Win32-only. `src/system/os/Keyboard_Xbox.cpp:48-50` polls
+`XInputGetKeystroke(0xFF, 2, &keystroke)`, and that translation unit is linked into the
+shipped debug XEX — `config/373307D9/symbols.txt` lists
+`?KeyboardPoll@@YAXXZ = .text:0x825F41F0` and the file-local
+`?TranslateVK@?A0x009a559d@@YAHG_N@Z = .text:0x825F4038`. `KeyboardPoll()` is called
+unconditionally every frame from `SystemPoll` (`src/system/os/System.cpp:226`), and
+`CheatsInit` subscribes the manager to the keyboard and parses the `keyboard` section
+(`src/system/utl/Cheats.cpp:397,403`). The `keyboard` section even contains its own
+`#ifdef HX_XBOX` block (`config/cheats.dta:34-44`), which only makes sense if it is consumed
+on Xbox. So plug in any USB keyboard and press `Alt`+`R`.
+
+With a keyboard you also get the **RndConsole**: `ESC` (`default.dta:226-228` →
+`{rnd show_console}`) opens a text prompt that evaluates arbitrary DTA —
+`src/system/rndobj/Console.cpp:416-450` does `DataReadString(line)->Execute()`. Typing
+`{toggle_song_record}` there is equivalent. There is **no pad binding for the console
+anywhere**; it is keyboard-only.
+
+### Option 3 — arm it unconditionally at boot (needs an ark rebuild)
+
+`sGameRecord` is *not* DTA-settable: `src/system/hamobj/MoveDir.h:115-116` declares plain
+`static bool`s with no `SYNC_PROP` / `DataMember` / `DataVariable` binding, and the only
+mutators are the two **toggle** DataFuncs at `src/lazer/game/Game.cpp:1224-1225`. So there is
+no config value to flip — but there *is* a boot script: `config/ham_init.dta`, executed by
+`src/system/hamobj/Ham.cpp:172` (`SystemConfig("ham_init")->ExecuteBlock(1)`). Appending
+`{toggle_song_record}` there arms recording for every song, since `SetupSongRecordClip()` is
+re-consulted at each song reset (`src/system/hamobj/MoveDir.cpp:1201,1209`).
+
+Two obstacles make this worse than Option 1:
+
+1. **You must rebuild the `.dtb`, not the `.dta`.** `CachedDataFile` redirects `.dta` →
+   `gen/<base>.dtb` whenever `UsingCD()` (`src/system/obj/DataFile.cpp:584-598`), and the
+   shipped `.dtb`s are `Rand2`-encrypted.
+2. **The XEX SHA1-checks ark DTBs.** `src/ChecksumData_xbox.cpp` is a baked table (it includes
+   `./config/gen/ham_keep.dtb` at line 297), installed at `src/App.cpp:292` and enforced in
+   `src/system/obj/DataFile.cpp:528-533` and `:734-741`. Editing a checked `.dtb` in place will
+   trip validation.
+
+Related but not a shortcut: `{run <path>}` (`src/system/obj/DataFunc.cpp:1060-1069`, registered
+at `:1703`) *will* parse a **loose** `.dta` as text, because `CachedDataFile` only redirects
+non-local paths and `FileIsLocal` is true for any drive prefix longer than one char that isn't
+`game` (`src/system/os/File_Win.cpp:9-13`, `src/system/os/File.cpp:610-624`). So
+`{run "hdd:\rec.dta"}` bypasses the ark — but you still need something to *call* `{run}`, which
+puts you back at Option 1 or 2.
+
+### Option 4 — remote trigger over the network (not practical here)
+
+* **xbdm is a dead end.** `debug.xex` imports exactly five xbdm APIs —
+  `DmMapDevkitDrive`, `DmGetXboxName`, `DmCaptureStackBackTrace`, `DmGetSystemInfo`,
+  `DmIsDebuggerPresent` (`config/373307D9/symbols.txt:161-165`). There is **no**
+  `DmRegisterCommandProcessor` anywhere in the binary, so the title registers no remote command
+  surface.
+* **Holmes (TCP 4544)** is Harmonix's PC link and *does* inject remote keystrokes:
+  `HolmesClientPollKeyboard` → `KeyboardSendMsg` (`src/system/os/HolmesKeyboard.cpp:50-65`),
+  called from the tail of `KeyboardPoll` (`src/system/os/Keyboard_Xbox.cpp:70`). But it only
+  dials out when `UsingCD()` is false (ark header missing or `-no_cd`) or `-host_config` /
+  `-host_logging` is passed (`src/system/os/HolmesClient.cpp:402,750-761`), and **no PC-side
+  Holmes server exists** in this repo or the sibling decomps — you would have to write one.
+* **AppChild (TCP 4543)** is the cleanest remote eval —
+  `src/system/os/AppChild.cpp:66-78` literally does `*mStream >> cmd; cmd->Execute(true);` —
+  but it requires `-app_child` on the command line plus a resolvable Holmes host
+  (`AppChild.cpp:53-57`), i.e. devkit-style launch arguments.
+* **OSC (UDP 12346)** carries only float/int values into a name→value map
+  (`src/system/utl/OSCMessenger.cpp:15-78`); it cannot call a DataFunc.
+
+### Option 5 (last resort) — patch the executable
+
+**A data byte-flip is not possible.** `sGameRecord` lives in **`.bss`**, not `.data`:
+`orig/373307D9/ham_xbox_r.map:91793` puts it at `0009:0005bcc8`, and section 0009's `.bss`
+begins at `0009:00058580` (`.data` is `0009:00000680`, length `0x57ee0`). Uninitialized data is
+not stored in the image, so there is no byte in `debug.xex` to change. (`symbols.txt` labels it
+`.data:0x82F618C8`; the map is the authority here.)
+
+That leaves a **code** patch. The relevant addresses (debug XEX VAs, from
+`config/373307D9/symbols.txt`):
+
+| Symbol | VA |
+| --- | --- |
+| `MoveDir::SetupSongRecordClip()` — reads `sGameRecord` at `MoveDir.cpp:1057` | `0x824FF9B0` (size `0x1F0`) |
+| `OnToggleSongRecord(DataArray*)` | `0x82865C10` (size `0x64`) |
+| `OnToggleSongRecordDouble(DataArray*)` | `0x82865C78` (size `0x2C`) |
+| `MoveDir::sGameRecord` / `sGameRecord2Player` | `.bss` `0x82F618C8` / `0x82F618C9` |
+
+The minimal edit is to neutralise the `sGameRecord` test in `SetupSongRecordClip` so the
+`SetupRecordClip(...)` call is always taken. **Caveat before you try this:** the VA→file-offset
+mapping in `debug.xex` is **piecewise, not flat**. The `+0x3000` formula used for the two
+`devkit:` string patches above is correct for those two (both were located by direct content
+search and independently corroborated — `??_C@…toggle_song_record?$AA@` at `.rdata:0x820F40BC`
+sits at file `0x000F70BC`, exactly `VA − 0x82000000 + 0x3000`), but applying the same formula in
+`.text` around `SetupSongRecordClip` lands roughly `0x8000` bytes off — consistent with XEX
+"basic" (zero-run) compression omitting zero blocks from the file. **A code patcher must parse
+the XEX basefile block map rather than assume a constant delta.** This was not pinned down; it
+is the one item in this section that is unverified.
+
+Given Option 1 works with a stock controller, this route should not be needed.
 
 ---
 
@@ -373,9 +562,15 @@ matches the song. If `tracked frames` is near 0 % or the joint ranges are absurd
    Dev-signed XEXs are normally not hash-verified on RGH, but if it refuses to launch, rebuild
    the XEX header with `xextool`/`imagexex` instead of a raw byte edit.
 5. **Whether the recorder actually arms** — confirm you saw the on-screen
-   `Song recording   TRUE` from the cheat before trusting a session. If the cheat does nothing,
-   the keyboard isn't being read (`XInputGetKeystroke`) or cheats are disabled
-   (`disable_cheats` in `system/run/config/default.dta` — shipped as `FALSE`, so it should be on).
+   `Song recording   TRUE` before trusting a session. Diagnostic ladder: if **LT+LB+L3** does
+   not open the cheat menu at all, cheats are off (`disable_cheats` in
+   `system/run/config/default.dta` — shipped as `FALSE`, so it should be on) or the runtime
+   `#merge` of `default.dta` did not bring in the `kPad_L3` binding. If the menu opens but
+   *"Game: Toggle Song Recording"* is missing, `config/gen/cheats.dtb` in your ark differs from
+   the one analysed here. If the menu opens and the entry is there but selecting it does
+   nothing, the problem is downstream in `toggle_song_record` itself. The **LT+LB+L3** chord is
+   the single best smoke test — it is the one step verified only by source reading, never on
+   hardware.
 
 ## References
 
@@ -386,5 +581,9 @@ matches the song. If `tracked frames` is near 0 % or the joint ranges are absurd
   `PostUpdate`, `FinishGameRecord`
 * `src/lazer/game/Game.cpp` — `OnToggleSongRecord`, `Game::ClearState`
 * `src/system/utl/Cheats.cpp`, `src/system/os/Keyboard_Xbox.cpp` — the cheat/keyboard path
+* `src/system/ui/CheatProvider.cpp` — the pad-navigable cheat menu's list provider
+* `orig-assets/extracted/(..)/(..)/system/run/ui/cheat.dta` — `system_cheat_screen` UI
+* `orig-assets/extracted/(..)/(..)/system/run/config/default.dta` — `kPad_L3` "Show Cheats"
+  binding, merged into DC3's config by `config/ham_keep.dta:158`
 * `orig-assets/extracted/config/cheats.dta` — the `Alt+R` binding
 * `tools/pose_corpus/parse_skeleton_clip.py` — parser + format spec + selftest
