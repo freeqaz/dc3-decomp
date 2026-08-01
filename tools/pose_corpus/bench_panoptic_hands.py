@@ -121,7 +121,9 @@ SANITY GATES (printed first; do not read the 3D tables if these fail):
                (BlazePose GHUM full publishes ~35-90 mm).
 
 METRICS (each absolute AND root-aligned; root-aligned = subtract each
-skeleton's own HipCenter and re-anchor on the GT hip midpoint, which is the
+skeleton's own HipCenter and re-anchor on a GT root built the SAME way -- see
+gt_root; a plain GT hip midpoint would not be apples-to-apples now that the
+backend's HipCenter is a torso fraction -- which is the
 scoring-relevant view because DC3's ErrorNode differences two joints of the
 SAME skeleton and is therefore translation-invariant):
   (a) HandL/R vs GT knuckle midpoint (kpt5 + kpt17)/2 -- 3D, |dz|, |dxy|.
@@ -188,6 +190,19 @@ HEADLINE (23,000+ scored hand-frames across the two sequences):
     dance5 (0.291 -> 0.222 m left) and rises mildly with GT hand speed
     (0.231 -> 0.262 m), so the confidence channel is usable as a gate.
 
+UPDATE 2026-08-01 -- root anchor changed, verdicts unchanged. The backend's
+HipCenter stopped being the hip midpoint (it is now a torso fraction matching
+the Kinect convention, pose_mediapipe.HIP_CENTER_UP), so gt_root above was
+changed to match and every ROOT-ALIGNED number here moved. Re-run on
+170307_dance5 (undistorted): Hand 0.2448/0.2976 -> 0.2373/0.2805 m (L/R),
+Wrist 0.2222/0.2722 -> 0.2126/0.2535, Hand:=Wrist ablation 0.2531/0.3071 ->
+0.2445/0.2904. The new anchor is slightly BETTER on this corpus too -- it
+averages the shoulders in, so it is a less noisy root than the hip midpoint
+alone. The hand increment over the wrist (+0.025/+0.027 m) and the ablation's
+sign are unchanged, and the offset-vector analysis is anchor-free, so the
+verdicts above all stand. 171204_pose1 was NOT re-run; its numbers above
+predate the change.
+
 Run:
   .venv/bin/python tools/pose_corpus/bench_panoptic_hands.py \
       --data-dir /home/free/tmp/pose_gt_panoptic --seq 170307_dance5 \
@@ -209,6 +224,7 @@ _REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 sys.path.insert(0, os.path.join(_REPO, "native", "scripts"))
 from pose_mediapipe import (  # noqa: E402
     MediaPipeBackend, DC3_JOINT_NAMES, NUM_DC3_JOINTS,
+    HIP_CENTER_UP,
     HIP_CENTER, SPINE, SHOULDER_CENTER, HEAD,
     SHOULDER_LEFT, ELBOW_LEFT, WRIST_LEFT, HAND_LEFT,
     SHOULDER_RIGHT, ELBOW_RIGHT, WRIST_RIGHT, HAND_RIGHT,
@@ -702,6 +718,17 @@ def evaluate(cond, cam, gt, cache, args):
     body_dc3 = body_dc3[:F]
     gt_hip = 0.5 * (body_dc3[:, P_LHIP] + body_dc3[:, P_RHIP])
 
+    # Root-alignment anchor. NOT the hip midpoint: the backend's HipCenter is
+    # a fraction up the subject's own torso (pose_mediapipe.HIP_CENTER_UP, from
+    # the Kinect convention measured in bench_utd_mhad.py), so anchoring our
+    # skeleton on that and the GT on a plain midpoint would inject a ~12 cm
+    # vertical offset into every root-aligned number here. Build the GT anchor
+    # the same way, from coco19's own hips and shoulders, and the alignment
+    # measures tracking again. (gt_hip itself stays the plain midpoint: GATE 3
+    # compares RAW BlazePose world landmarks, whose origin IS the hip midpoint.)
+    gt_sho = 0.5 * (body_dc3[:, P_LSHO] + body_dc3[:, P_RSHO])
+    gt_root = gt_hip + HIP_CENTER_UP * (gt_sho - gt_hip)
+
     # ---- GATE 3: root-relative body MPJPE --------------------------------
     rel = []
     for mp_i, p_i in BODY_PAIRS:
@@ -737,9 +764,10 @@ def evaluate(cond, cam, gt, cache, args):
         pred_wrist = joints[:, J_WRIST]
         pred_hip = joints[:, HIP_CENTER]
 
-        # Root-aligned = own hip subtracted, GT hip added back.
-        ra_hand = pred_hand - pred_hip + gt_hip
-        ra_wrist = pred_wrist - pred_hip + gt_hip
+        # Root-aligned = own HipCenter subtracted, the identically-constructed
+        # GT root added back (see gt_root above).
+        ra_hand = pred_hand - pred_hip + gt_root
+        ra_wrist = pred_wrist - pred_hip + gt_root
 
         # GT hand speed (m/s) for the motion split.
         spd = np.full(F, np.nan)

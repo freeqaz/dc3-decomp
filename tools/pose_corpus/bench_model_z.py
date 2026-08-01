@@ -55,13 +55,28 @@ the whole comparison (see bench_z.py:to_camera_view for the war story):
 
 JOINT MATCHING: COCO-17 has no hands, feet, or spine, so we evaluate the
 16-joint common subset: 12 direct (shoulders, elbows, wrists, hips, knees,
-ankles) + 4 derived the same way on both sides (HipCenter = mid-hips,
-ShoulderCenter = mid-shoulders, Spine = mid of those two, Head = ear midpoint,
-matching the backend's own ear-midpoint choice at pose_mediapipe.py:369-372).
-DROPPED: HandLeft/Right (backend: knuckle line), FootLeft/Right (backend:
-heel/toe blend) -- no COCO-17 counterpart exists. Head is reported but flagged:
-the backend substitutes the nose when ears are occluded, a definitional
-mismatch the GT cannot see.
+ankles) + 4 derived THE SAME WAY ON BOTH SIDES. The three centre joints are
+built with the backend's own torso fractions (HIP_CENTER_UP / SPINE_UP +
+SPINE_BACK / SHOULDER_CENTER_UP, imported from pose_mediapipe so the two sides
+can never drift apart), and Head is the ear midpoint, matching the backend's
+own choice in _remap. DROPPED: HandLeft/Right (backend: knuckle line),
+FootLeft/Right (backend: heel/toe blend) -- no COCO-17 counterpart exists. Head
+is reported but flagged: the backend substitutes the nose when ears are
+occluded, a definitional mismatch the GT cannot see.
+
+  WHY THE CENTRE JOINTS ARE BUILT FROM FRACTIONS AND NOT MIDPOINTS: they were
+  plain midpoints on both sides until UTD-MHAD (bench_utd_mhad.py, 116 k frames
+  of real Kinect v1 skeletons) showed Kinect -- the convention DC3's
+  choreography was authored in -- does not define them that way, and the
+  backend was changed to match. Applying the SAME construction to the GT keeps
+  this comparison apples-to-apples: it measures the backend's TRACKING, not the
+  centre-joint definition, which UTD-MHAD is the right corpus to judge. AIST++
+  cannot arbitrate the definition itself; its COCO-17 GT has no Kinect centre
+  joints to compare against. Consequence to expect when re-running across that
+  change: the four DERIVED rows move (both sides moved), the twelve DIRECT
+  rows' ABSOLUTE numbers are bit-identical, and the direct rows' ROOT-ALIGNED
+  numbers move slightly because root alignment re-anchors on HipCenter, which
+  is now a different point on both skeletons.
 
 CONDITIONS
   hfov=true      backend given the real camera's horizontal FOV computed from
@@ -123,6 +138,7 @@ _REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 sys.path.insert(0, os.path.join(_REPO, "native", "scripts"))
 from pose_mediapipe import (  # noqa: E402
     MediaPipeBackend, DC3_JOINT_NAMES, NUM_DC3_JOINTS,
+    HIP_CENTER_UP, SPINE_UP, SPINE_BACK, SHOULDER_CENTER_UP,
     HIP_CENTER, SPINE, SHOULDER_CENTER, HEAD,
     SHOULDER_LEFT, ELBOW_LEFT, WRIST_LEFT,
     SHOULDER_RIGHT, ELBOW_RIGHT, WRIST_RIGHT,
@@ -204,16 +220,25 @@ def gt_to_dc3(kp_world_cm, cam):
 
 def gt_subset(gt_dc3):
     """(F,17,3) GT -> (F,16,3) in SUBSET order, derived joints built the same
-    way the backend builds them (_remap): mids of hips/shoulders, spine = mid
-    of those, head = ear midpoint."""
+    way the backend builds them (_remap).
+
+    The three centre joints use the backend's torso fractions verbatim -- same
+    body frame (hip midpoint, torso vector, posterior direction from
+    cross(torso, hip axis)), same constants, so nothing here can drift from
+    production. Head is the ear midpoint, as in _remap.
+    """
     F = gt_dc3.shape[0]
     out = np.empty((F, len(SUBSET), 3))
-    hipc = (gt_dc3[:, C_LHIP] + gt_dc3[:, C_RHIP]) * 0.5
-    shoc = (gt_dc3[:, C_LSHO] + gt_dc3[:, C_RSHO]) * 0.5
-    out[:, 0] = hipc                      # HipCenter
-    out[:, 1] = (hipc + shoc) * 0.5       # Spine
-    out[:, 2] = shoc                      # ShoulderCenter
-    out[:, 3] = (gt_dc3[:, C_LEAR] + gt_dc3[:, C_REAR]) * 0.5  # Head (ear mid)
+    hip_mid = (gt_dc3[:, C_LHIP] + gt_dc3[:, C_RHIP]) * 0.5
+    sho_mid = (gt_dc3[:, C_LSHO] + gt_dc3[:, C_RSHO]) * 0.5
+    torso = sho_mid - hip_mid
+    torso_len = np.linalg.norm(torso, axis=-1, keepdims=True)
+    back = np.cross(torso, gt_dc3[:, C_LHIP] - gt_dc3[:, C_RHIP])
+    back /= np.maximum(np.linalg.norm(back, axis=-1, keepdims=True), 1e-9)
+    out[:, 0] = hip_mid + HIP_CENTER_UP * torso                     # HipCenter
+    out[:, 1] = hip_mid + SPINE_UP * torso + (SPINE_BACK * torso_len) * back
+    out[:, 2] = hip_mid + SHOULDER_CENTER_UP * torso            # ShoulderCenter
+    out[:, 3] = (gt_dc3[:, C_LEAR] + gt_dc3[:, C_REAR]) * 0.5   # Head (ear mid)
     for i, (_, coco) in enumerate(DIRECT):
         out[:, 4 + i] = gt_dc3[:, coco]
     return out

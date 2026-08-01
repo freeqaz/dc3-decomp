@@ -67,13 +67,32 @@ HEADLINE FINDINGS (S1/Seq1 + S2/Seq1, camera 0, ~12.9k frames, 92-93% detected):
     0.059-0.068 m against 0.089-0.097 m of GT and 0.099-0.122 m of Kinect --
     but SCALING IT OUT MAKES ACCURACY WORSE (offset error 0.060 at k=1.0,
     0.070 at k=1.6), because the wrist->knuckle DIRECTION is noisy and
-    lengthening amplifies it. Leave the hand construction alone.
+    lengthening amplifies it. The shipped k=1.0 is an INTERIOR minimum, not an
+    endpoint: shortening hurts too (0.0615 at k=0.9, 0.0660 at k=0.7, 0.0690 at
+    k=0.6), which is the direct answer to the k~0.7 that UTD-MHAD's Kinect
+    reference prefers -- that 8 mm Kinect gain costs 5.7 mm here. Leave the
+    hand construction alone.
   * FOOT_TOE_BLEND: the two candidate targets DISAGREE and must not be
     conflated. Against 3DHP anatomy (GT ball) the optimum is 0.65
     (0.0828 m vs 0.0898 at the current 0.35). Against the KINECT convention
     DC3 actually scores -- ankle->foot 0.043 m, near-vertical -- the optimum is
     0.0 (0.0438 m, +0.0005 from Kinect; the current 0.35 is 0.069 m, +2.6 cm
     too long and 25 deg too shallow). Kinect is the scoring target.
+
+UPDATE 2026-08-01 -- centre joints stopped being midpoints, so the ROOT-ALIGNED
+columns moved. HipCenter / Spine / ShoulderCenter are now torso fractions
+matching the Kinect convention (pose_mediapipe CENTRE JOINTS block, derived in
+bench_utd_mhad.py) and gt_subset above builds the GT side identically. Every
+ABSOLUTE row is bit-identical, and so are the foot-pitch, blend and
+hand-extension sweeps (all anchor-free). What moves is root-aligned: Spine
+0.164 -> 0.022, HipL/R 0.123/0.137 -> 0.068/0.071, shoulders ~0.02 better --
+but knees 0.177/0.161 -> 0.213/0.200 and ankles 0.257/0.215 -> 0.310/0.269
+WORSE, because the anchor moved up the torso and 3DHP's Captury hips are not
+Kinect's. That is definitional, not a regression: this corpus cannot arbitrate
+the Kinect convention (it has no Kinect centre joints), UTD-MHAD does, and
+there the same change cut the root-aligned error of all 20 joints from 0.219 to
+0.165 m. Read the ABSOLUTE and offset-vector columns here. The hand increment
+is essentially unchanged (+0.040/+0.031 -> +0.037/+0.035 m).
 
 AXIS CONVENTIONS -- every flip documented, because a sign error here poisons
 the whole comparison (see bench_z.py:to_camera_view for the war story):
@@ -163,6 +182,7 @@ _REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 sys.path.insert(0, os.path.join(_REPO, "native", "scripts"))
 from pose_mediapipe import (  # noqa: E402
     MediaPipeBackend, DC3_JOINT_NAMES, NUM_DC3_JOINTS, FOOT_TOE_BLEND,
+    HIP_CENTER_UP, SPINE_UP, SPINE_BACK, SHOULDER_CENTER_UP,
     HIP_CENTER, SPINE, SHOULDER_CENTER, HEAD,
     SHOULDER_LEFT, ELBOW_LEFT, WRIST_LEFT, HAND_LEFT,
     SHOULDER_RIGHT, ELBOW_RIGHT, WRIST_RIGHT, HAND_RIGHT,
@@ -295,14 +315,26 @@ def gt_to_dc3(a3_mm):
 
 
 def gt_subset(gt):
-    """(F,28,3) -> (F,len(SUBSET),3), derived joints built exactly like _remap."""
+    """(F,28,3) -> (F,len(SUBSET),3), derived joints built exactly like _remap.
+
+    The three centre joints use the backend's own torso fractions (imported
+    from pose_mediapipe, so the two sides cannot drift apart): they are NOT
+    midpoints -- see the CENTRE JOINTS block there and bench_utd_mhad.py for
+    the Kinect-convention measurement behind them. Building them the same way
+    on both sides keeps this table measuring TRACKING; it also matters for the
+    root-aligned columns and the foot rows, which re-anchor on HipCenter.
+    """
     F = gt.shape[0]
     out = np.empty((F, len(SUBSET), 3))
-    hipc = (gt[:, G_LHIP] + gt[:, G_RHIP]) * 0.5
-    shoc = (gt[:, G_LSHO] + gt[:, G_RSHO]) * 0.5
-    out[:, 0] = hipc
-    out[:, 1] = (hipc + shoc) * 0.5
-    out[:, 2] = shoc
+    hip_mid = (gt[:, G_LHIP] + gt[:, G_RHIP]) * 0.5
+    sho_mid = (gt[:, G_LSHO] + gt[:, G_RSHO]) * 0.5
+    torso = sho_mid - hip_mid
+    torso_len = np.linalg.norm(torso, axis=-1, keepdims=True)
+    back = np.cross(torso, gt[:, G_LHIP] - gt[:, G_RHIP])
+    back /= np.maximum(np.linalg.norm(back, axis=-1, keepdims=True), 1e-9)
+    out[:, 0] = hip_mid + HIP_CENTER_UP * torso
+    out[:, 1] = hip_mid + SPINE_UP * torso + (SPINE_BACK * torso_len) * back
+    out[:, 2] = hip_mid + SHOULDER_CENTER_UP * torso
     out[:, 3] = gt[:, G_HEAD]
     for i, (_, g) in enumerate(DIRECT):
         out[:, 4 + i] = gt[:, g]
@@ -772,7 +804,11 @@ def report_offset_error(per_seq):
     kh = np.mean([np.linalg.norm(v) for v in KINECT_WRIST_HAND.values()])
     print(f"    {'k':>5s} {'offset err vs GT':>17s} {'|wrist->hand|':>14s} "
           f"{'vs Kinect len':>14s}")
-    for k in (1.0, 1.2, 1.4, 1.5, 1.6, 1.8, 2.0):
+    # k < 1 SHORTENS the offset. Swept because UTD-MHAD (bench_utd_mhad.py)
+    # finds Kinect's own hand joint only 0.068 m past the wrist and prefers
+    # k ~ 0.7, in the opposite direction from this corpus's anatomy: the two
+    # targets disagree, so both sides of k=1 have to be visible here.
+    for k in (0.6, 0.7, 0.8, 0.9, 1.0, 1.2, 1.4, 1.5, 1.6, 1.8, 2.0):
         errs, lens = [], []
         for s, r in per_seq.items():
             gt, j, m = r["gt"], r["joints"], r["valid"]

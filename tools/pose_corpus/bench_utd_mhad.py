@@ -142,11 +142,12 @@ more here than anything else:
   Absolute      raw camera-space 3D distance (carries the GATE 2b dataset
                 offset -- do not headline it).
   Root-aligned  both skeletons re-anchored on their OWN HipCenter. DC3's actual
-                anchor, but see DEFINITIONAL OFFSETS below: Kinect's HipCenter
-                sits ~8 cm ABOVE its own hip-joint line while ours is exactly
-                on it, so this alignment injects a ~0.19 m vertical bias into
-                EVERY other joint. Reported because it is what the game does,
-                not because it is the fairest view.
+                anchor, and the column this script's headline finding was about:
+                it used to inject a ~0.19 m vertical bias into EVERY other joint
+                because our HipCenter was the plain hip midpoint while Kinect's
+                sits well above its own hip-joint line. That is fixed (see the
+                CENTRE-JOINT FIX note below); the column is now meaningful, but
+                body-aligned is still the fairer SHAPE view.
   Body-aligned  per-frame translation that best matches the eight reliable body
                 joints (shoulders, hips, knees, ankles). Removes any rigid
                 offset without trusting one mis-defined joint: the SHAPE view.
@@ -203,11 +204,12 @@ MEASURED (full run, 861 trials / 44,933 video frames / 8 subjects, 2026-08-01)
   at -58 deg. Same length to 0.5 mm, 8 deg steeper. Sweeping the blend in
   limb-relative space gives a flat minimum at 0.30-0.35 (0.0320 m) -- the
   shipped value. FootL/R costs only +0.0066 m over its own AnkleL/R control.
-  NOTE this REFUTES the justification written at pose_mediapipe.py:76-79: the
-  single baked frame in StubCameraInput says 4.6 cm nearly straight down, but
-  across 116 k real Kinect frames the offset is 7.9 cm at -50 deg, and it is
+  NOTE this REFUTED the justification originally written above FOOT_TOE_BLEND:
+  the single baked frame in StubCameraInput says 4.6 cm nearly straight down,
+  but across 116 k real Kinect frames the offset is 7.9 cm at -50 deg, and it is
   strikingly stable (per-action mean 0.074-0.084 m, elevation -45 to -52 deg on
-  all 27 actions). The blend value is right; the reason recorded for it is not.
+  all 27 actions). The blend value was right; the reason recorded for it was
+  not, and the comment has since been corrected in place.
 
   FOOT PITCH: our ~30 deg toe-down bias is REAL but SMALLER THAN THE
   REFERENCE'S OWN TILT. On 84 k stance frames our toe sits 6.3 cm below our
@@ -219,7 +221,10 @@ MEASURED (full run, 861 trials / 44,933 video frames / 8 subjects, 2026-08-01)
   of it.
 
   HANDS: mildly over-extended, but the disagreement is dominated by the
-  REFERENCE. Kinect's hand-minus-wrist is 0.068 m, ours 0.083 m -- we overshoot
+  REFERENCE, and the k=0.7 shortening below was NOT adopted -- 3DHP sweeps the
+  same factor against anatomical GT and bottoms at k=1.0 (0.0603 m, vs 0.0660
+  at 0.7), so the 8 mm won here costs 5.7 mm there, and Panoptic finds any
+  rescale in x0.78-x1.24 worth under 1 mm. Kinect's hand-minus-wrist is 0.068 m, ours 0.083 m -- we overshoot
   by 1.5 cm -- at an almost identical elevation (-42.3 vs -42.8 deg) and 20.6
   deg median direction difference on quiet frames. Sweeping wrist + a*(knuckle
   - wrist) bottoms at a ~= 0.7 (0.0408 m) versus 0.0492 m at the shipped a = 1
@@ -228,19 +233,35 @@ MEASURED (full run, 861 trials / 44,933 video frames / 8 subjects, 2026-08-01)
   visible hand in the image, so an 8 mm placement tweak is far inside the
   reference's error bar. Real, in the right direction, not urgent.
 
-  THE ACTUAL DEFECTS ARE IN THE THREE CENTRE JOINTS, not the extremities. In
-  HipCenter-relative terms our whole skeleton is ~0.11 m too HIGH because
-  Kinect's HipCenter is NOT the hip midpoint: it sits ~7 cm ABOVE the HipL/R
-  line (confirmed independently by the baked capture, where HipCenter.y 0.1118
-  > HipLeft.y 0.0333). Ours is exactly on the line. Likewise Kinect's
-  ShoulderCenter sits ~11 cm above its own shoulder line (neck base) where ours
-  is the plain midpoint, and Kinect's Spine is ~16% of the way up the torso
-  where ours is the 50% midpoint (ours +0.237 vs Kinect +0.063). These three
-  are pure definition errors in _remap, they are systematic on every frame, and
-  because DC3 root-aligns on HipCenter they contaminate EVERY other joint --
-  which is exactly why the root-aligned column reads worse than the
-  body-aligned one for joints that are otherwise fine (KneeRight 0.162 ra vs
-  0.067 body). Fixing them is a bigger win than anything in the hands or feet.
+  THE ACTUAL DEFECTS WERE IN THE THREE CENTRE JOINTS, not the extremities -- and
+  this corpus is what fixed them. In HipCenter-relative terms our whole skeleton
+  used to sit ~0.11 m too HIGH because Kinect's HipCenter is NOT the hip
+  midpoint: it sits ~7 cm ABOVE the HipL/R line (confirmed independently by the
+  baked capture, where HipCenter.y 0.1118 > HipLeft.y 0.0333) while ours was
+  exactly on it. Likewise Kinect's ShoulderCenter sits ~11 cm above its own
+  shoulder line (neck base) and its Spine only ~16% of the way up the torso
+  where ours was the 50% midpoint. Those were pure definition errors in _remap,
+  systematic on every frame, and because DC3 root-aligns on HipCenter they
+  contaminated EVERY other joint -- which is why the root-aligned column used to
+  read far worse than the body-aligned one for joints that are otherwise fine
+  (KneeRight 0.162 ra vs 0.067 body).
+
+  CENTRE-JOINT FIX (landed; the numbers in this docstring above are POST-fix,
+  the ones below are the before/after). _remap now builds all three as
+  fractions of the subject's own torso (pose_mediapipe CENTRE JOINTS block),
+  fitted in OUR body frame on subjects 1-5 and validated on 6-8. Body-aligned
+  mean, before -> after: HipCenter 0.1290 -> 0.0458, Spine 0.0907 -> 0.0508,
+  ShoulderCenter 0.1211 -> 0.1186. Root-aligned mean, before -> after: Spine
+  0.1929 -> 0.0209, ShoulderCenter 0.1383 -> 0.1003, ShoulderLeft 0.2230 ->
+  0.1215, ShoulderRight 0.2173 -> 0.1250, ElbowL/R 0.2868/0.2426 ->
+  0.1895/0.1887, WristL/R 0.3963/0.3282 -> 0.3099/0.3001, KneeL/R 0.1484/0.1621
+  -> 0.1107/0.0933, AnkleL/R 0.1914/0.1769 -> 0.1723/0.1395, FootL/R
+  0.1987/0.1766 -> 0.1801/0.1487, Head 0.1764 -> 0.1537; mean over all 20 joints
+  0.2108 -> 0.1595 (0.2219 -> 0.1678 over the 19 that are not the anchor).
+  ShoulderCenter barely moves because Kinect's neck-base rise nearly cancels
+  against BlazePose's higher shoulder landmarks; the only thing that would move
+  it materially is a 7 cm posterior shove that Kinect's own geometry does not
+  support (see that block for why it was declined).
 
 CACHING: raw landmarker output per video in <data>/cache/<trial>.npz
 (world/img/vis/det). ~30 ms/frame CPU, 861 trials x ~52 frames ~ 25 min once;
