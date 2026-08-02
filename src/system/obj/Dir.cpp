@@ -962,7 +962,7 @@ void ObjectDir::Iterate(DataArray *arr, bool b) {
     Symbol first;
     for (ObjDirItr<Hmx::Object> it(this, b); it != nullptr; ++it) {
         bool bbb;
-                first = it->ClassName();
+        first = it->ClassName();
         std::pair<Symbol, Symbol> key = std::make_pair(first, s2);
         std::map<std::pair<Symbol, Symbol>, bool>::iterator superclassIt =
             sSuperClassMap.find(key);
@@ -971,7 +971,7 @@ void ObjectDir::Iterate(DataArray *arr, bool b) {
             sSuperClassMap[key] = bbb;
         } else
             bbb = superclassIt->second;
-        if (bbb && (s2.Null() || it->Type() == s2)) {
+        if (bbb && (s8.Null() || it->Type() == s8)) {
             *var = &*it;
             for (int i = 4; i < arr->Size(); i++) {
                 arr->Command(i)->Execute(true);
