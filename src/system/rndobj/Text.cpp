@@ -2431,20 +2431,19 @@ void RndText::SizeCheck() {
                         )) {
                         return;
                     }
-                    float fontUnit = font->FontUnit();
-                    float aspectRatio = font->AspectRatio();
+                    float fontSize = font->FontUnit() * font->AspectRatio();
                     float cap = 127.5f;
                     if (screenHeight < 127.5f) {
                         cap = screenHeight;
                     }
-                    if (cap <= fontUnit * aspectRatio * 1.25f) {
+                    if (fontSize * 1.25f >= cap) {
                         return;
                     }
-                    if (sLastText == this && screenHeight <= sLastHeight) {
+                    if (sLastText == this && sLastHeight >= screenHeight) {
                         return;
                     }
                     int heightInt = (int)screenHeight;
-                    int productInt = (int)(fontUnit * aspectRatio);
+                    int productInt = (int)fontSize;
                     MILO_NOTIFY(
                         "oversized: %s font: %s token:'%s' text:'%s' %d < %d",
                         PathName(this),
