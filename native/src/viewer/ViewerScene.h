@@ -3,6 +3,7 @@
 #include "obj/Dir.h"
 #include <vector>
 #include <string>
+#include <set>
 
 class RndDir;
 class RndMesh;
@@ -54,6 +55,8 @@ struct ViewerScene {
 
     // --- Setup ---
     void ResolveMeshVisibility(const ViewerConfig& cfg);
+    int  ChooseLod() const;
+    void CollectRedundantLodMeshes(std::set<const class RndDrawable*>& out, bool verbose) const;
     void ApplyFallbackMaterial(const ViewerConfig& cfg);
     void SetupSyntheticLights(const ViewerConfig& cfg);
     void AutoFrameCamera(OrbitCamera& cam, RndCam* rndCam, const ViewerConfig& cfg) const;

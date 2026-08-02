@@ -325,57 +325,91 @@ void ViewerScene::PrintSummary(bool verbose) const {
     }
 }
 
-// True when `mesh` is a level-of-detail variant that a higher-detail sibling in
-// the same ObjectDir already covers, i.e. drawing it would double-draw geometry
-// the full engine's Character::DrawLodOrShadow would have picked between.
+// Which meshes are redundant lower-detail copies is decided by the asset, not by
+// its file names. Character::mLods is that authority: "drawables not in any lod
+// group will be drawn at every LOD" (Character.h), and a drawable in group i is
+// drawn only when the engine selects LOD i. The viewer wants the highest-detail
+// view, so it hides exactly the drawables that appear in group 1..N-1 and in no
+// earlier group.
 //
-// A bare `strstr(name, "_lod")` is NOT sufficient: RB3's crowd characters are
-// authored *as* their LOD-2 asset (char/crowd/gen/crowd_female01 ships exactly
-// one body mesh, `female_crowd_body01_lod02.mesh`, with no sibling), so the
-// blanket test hid the entire character and left two disembodied hands.
-// DC3's own assets always ship the sibling, so this is a no-op for DC3 content:
-//   crowd_f_body01_lod.mesh -> crowd_f_body01.mesh      (exists, still hidden)
-//   aubrey01_lod.1.mesh     -> aubrey01.1.mesh          (exists, still hidden)
-//   aubrey_head_lod1.mesh   -> aubrey_head.mesh         (exists, still hidden)
-static bool IsRedundantLodMesh(ObjectDir* dir, const char* name) {
-    const char* lod = strstr(name, "_lod");
-    if (!lod || !dir) return false;
+// The name test this replaces (`strstr(name, "_lod")`) was wrong in both
+// directions, and DC3's own content proves both:
+//   * RB3 char/crowd/gen/crowd_female01 ships ONE body mesh,
+//     female_crowd_body01_lod02.mesh, and it is in LOD group 0 -- the blanket
+//     test hid the whole character and left four hand/prop meshes.
+//   * DC3 char/main/dancer/gen/emilia01 names its LOD-1 meshes emilia01_lod1*
+//     while the full-detail ones are emilia01_outfit* -- no name-derived sibling
+//     lookup can pair those, but mLods pairs them exactly.
+// Only assets with no Character (or with no LOD groups) fall back to the name
+// test, where there is no authority to consult.
+// The chosen LOD is the most detailed group that actually HAS geometry, not
+// blindly group 0. RB3's crowd characters ship an empty group 0 and put their
+// only body mesh in group 2 -- they are authored as the distant-crowd LOD and
+// the engine would only ever select that group for them. Picking 0 unconditionally
+// renders nothing but the hand props, which is the defect this replaced.
+int ViewerScene::ChooseLod() const {
+    if (!character) return -1;
+    int n = character->NumLods();
+    for (int l = 0; l < n; l++) {
+        const Character::Lod& lod = character->GetLod(l);
+        if (lod.mOpaque.size() > 0 || lod.mTranslucent.size() > 0) return l;
+    }
+    return -1;
+}
 
-    size_t prefixLen = (size_t)(lod - name);
-    const char* tail = lod + 4;  // text after "_lod"
+void ViewerScene::CollectRedundantLodMeshes(std::set<const RndDrawable*>& out,
+                                            bool verbose) const {
+    int chosen = ChooseLod();
+    if (chosen < 0) return;
+    int n = character->NumLods();
 
-    // An explicit LOD index may follow ("_lod1", "_lod02"); everything after it
-    // (a ".N" split-mesh index plus ".mesh") belongs to the sibling's name too.
-    int index = -1;
-    if (*tail >= '0' && *tail <= '9') {
-        index = 0;
-        while (*tail >= '0' && *tail <= '9') { index = index * 10 + (*tail - '0'); tail++; }
+    if (verbose) {
+        for (int l = 0; l < n; l++) {
+            const Character::Lod& lod = character->GetLod(l);
+            printf("  LOD group %d%s: %d opaque, %d translucent\n", l,
+                   l == chosen ? " (CHOSEN)" : "",
+                   (int)lod.mOpaque.size(), (int)lod.mTranslucent.size());
+        }
     }
 
-    char candidate[256];
-    snprintf(candidate, sizeof(candidate), "%.*s%s", (int)prefixLen, name, tail);
-    if (dir->Find<RndMesh>(candidate, false)) return true;
+    std::set<const RndDrawable*> kept;  // everything the chosen LOD draws
+    const Character::Lod& best = character->GetLod(chosen);
+    for (int i = 0; i < best.mOpaque.size(); i++) kept.insert(best.mOpaque[i]);
+    for (int i = 0; i < best.mTranslucent.size(); i++) kept.insert(best.mTranslucent[i]);
 
-    for (int i = 0; i < index; i++) {
-        snprintf(candidate, sizeof(candidate), "%.*s_lod%d%s", (int)prefixLen, name, i, tail);
-        if (dir->Find<RndMesh>(candidate, false)) return true;
-        snprintf(candidate, sizeof(candidate), "%.*s_lod%02d%s", (int)prefixLen, name, i, tail);
-        if (dir->Find<RndMesh>(candidate, false)) return true;
+    for (int l = 0; l < n; l++) {
+        if (l == chosen) continue;
+        const Character::Lod& lod = character->GetLod(l);
+        for (int i = 0; i < lod.mOpaque.size(); i++)
+            if (!kept.count(lod.mOpaque[i])) out.insert(lod.mOpaque[i]);
+        for (int i = 0; i < lod.mTranslucent.size(); i++)
+            if (!kept.count(lod.mTranslucent[i])) out.insert(lod.mTranslucent[i]);
     }
-    return false;
 }
 
 void ViewerScene::ResolveMeshVisibility(const ViewerConfig& cfg) {
     int hidCount = 0;
     int keptLod = 0;
+
+    std::set<const RndDrawable*> lowerLods;
+    if (!cfg.showAllLods) CollectRedundantLodMeshes(lowerLods, cfg.verbose);
+    // Only trust the name test when the asset offers no LOD groups to read.
+    bool haveLodAuthority = ChooseLod() >= 0;
+
     ObjDirItr<RndMesh> meshIt(baseScene, true);
     while (meshIt) {
         const char* name = meshIt->Name();
         size_t len = strlen(name);
 
         bool lodName = strstr(name, "_lod") != nullptr;
-        bool redundantLod = lodName && !cfg.showAllLods
-            && IsRedundantLodMesh(meshIt->Dir() ? meshIt->Dir() : baseScene, name);
+        // No LOD groups => nothing is demoted. Character.h is explicit that
+        // "drawables not in any lod group will be drawn at every LOD", so an
+        // asset that defines no groups is asking for all of its geometry. RB3's
+        // crowd_female01 is exactly that: zero LOD groups, one lod-named body
+        // mesh with Showing() set. Hiding it on the strength of its name alone
+        // was overriding the asset with a guess.
+        bool redundantLod = haveLodAuthority && !cfg.showAllLods
+            && lowerLods.count(&(*meshIt)) != 0;
 
         if (redundantLod || strstr(name, "_wrinkle")) {
             meshIt->SetShowing(false);
@@ -383,10 +417,12 @@ void ViewerScene::ResolveMeshVisibility(const ViewerConfig& cfg) {
             if (cfg.verbose) printf("  hide LOD/wrinkle mesh '%s'\n", name);
         }
         else if (lodName) {
-            // The only LOD of its group — this IS the geometry, so draw it.
+            // Named like a LOD but the asset says it is drawn at this LOD.
             keptLod++;
             if (cfg.verbose)
-                printf("  keep LOD mesh '%s' (no higher-detail sibling)\n", name);
+                printf("  keep LOD mesh '%s' (%s)\n", name,
+                       haveLodAuthority ? "in the Character's chosen LOD group"
+                                        : "the asset defines no LOD groups");
         }
         else if (len > 5 && strcmp(name + len - 5, ".mesh") == 0) {
             bool isSplit = false;
@@ -414,8 +450,8 @@ void ViewerScene::ResolveMeshVisibility(const ViewerConfig& cfg) {
         printf("Milo Viewer: hid %d meshes (LOD/wrinkle/combined)\n", hidCount);
     }
     if (keptLod > 0) {
-        printf("Milo Viewer: kept %d lod-named mesh(es) that have no higher-detail "
-               "sibling — they are the geometry, not a redundant copy\n", keptLod);
+        printf("Milo Viewer: kept %d lod-named mesh(es) the asset does NOT demote — "
+               "they are the geometry, not a redundant copy\n", keptLod);
     }
 }
 

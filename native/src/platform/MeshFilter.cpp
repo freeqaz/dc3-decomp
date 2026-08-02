@@ -5,6 +5,28 @@
 #include <cstring>
 
 bool ShouldSkipMesh(const char* name, RndMat* mat) {
+    // Migrated out of milo-native-engine's RndMesh::DrawShowing, which used to
+    // hardcode these two DC3-specific name tests for every consumer (RB3-Wii and
+    // rb3-xenon link the same engine and the LOD one is actively wrong for RB3
+    // content — its crowd characters are authored *as* their LOD-2 asset).
+
+    // Kinect depth-sensor visualisation (80x60 sensor grid) — no data on native.
+    if (strstr(name, "grid_80by60")) return true;
+
+#ifndef MILO_VIEWER
+    // Lower-detail character geometry. In the full engine Character::DrawLod
+    // picks exactly one LOD; dc3-native reaches meshes by other routes too, so
+    // without this the LOD copies double-draw over the full-detail body.
+    //
+    // milo-viewer deliberately does NOT use this: it resolves LODs from the
+    // authoritative Character::mLods groups in ViewerScene::ResolveMeshVisibility
+    // and clears Showing() on the demoted ones. The name test cannot do that job
+    // — DC3's own emilia01 names its LOD-1 meshes `emilia01_lod1*` while the
+    // full-detail ones are `emilia01_outfit*`, and RB3's crowd body is a lone
+    // `*_lod02` mesh sitting in LOD group 0.
+    if (strstr(name, "_lod")) return true;
+#endif
+
     // Skip Kinect-specific UI elements that render incorrectly without
     // the Xbox gesture/speech systems. On Xbox, controller_mode.flow and
     // DTA scripts animate these to correct alpha/visibility. On native,

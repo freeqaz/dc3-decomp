@@ -112,6 +112,10 @@ public:
     void SetFloorShadow(bool shadow) { mFloorShadow = shadow; }
     bool FloorShadow() const { return mFloorShadow; }
     void SetLodType(LODType lod) { mForceLod = lod; }
+    /** Number of LOD groups this Character defines. A drawable in no LOD group
+        is drawn at every LOD; a drawable in group i is drawn only at LOD i. */
+    int NumLods() const { return mLods.size(); }
+    const Lod &GetLod(int i) const { return mLods[i]; }
     void SetDebugDrawInterestObjects(bool);
     void ForceBlink();
     void CopyBoundingSphere(Character *);
