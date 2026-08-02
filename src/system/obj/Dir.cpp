@@ -967,7 +967,11 @@ void ObjectDir::Iterate(DataArray *arr, bool b) {
         std::map<std::pair<Symbol, Symbol>, bool>::iterator superclassIt =
             sSuperClassMap.find(key);
         if (superclassIt == sSuperClassMap.end()) {
-            bbb = IsASubclass(first, s2);
+            // key is (first, s2); reading the args back out of key -- rather than
+            // from the locals -- is what the target does. It ends s2's live range
+            // at the pair store, which is required for the matching callee-saved
+            // register assignment.
+            bbb = IsASubclass(key.first, key.second);
             sSuperClassMap[key] = bbb;
         } else
             bbb = superclassIt->second;
