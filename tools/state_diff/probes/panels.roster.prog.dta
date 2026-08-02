@@ -1,0 +1,9 @@
+; Roster enumeration for the `panels` probe — PASS 1 of the two-pass pattern.
+; Returns only panel NAMES, separated by ';', so the reply stays compact and
+; the per-panel detail reads are paged separately by the driver.
+; Uses the engine's own iterators, which (unlike ObjectDir::iterate) work in
+; the native port today: UI.cpp:943 and UIScreen.cpp:65.
+{do ($out "")
+    {ui foreach_current_screen $sc
+        {$sc foreach_panel $p {strcat $out {sprintf "%s;" {$p name}}}}}
+    $out}

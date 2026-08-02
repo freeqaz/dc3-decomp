@@ -1,0 +1,28 @@
+; hierarchy.dta — object hierarchy / roster probe.
+;
+; Widest-scope probe: every object in the directory, with its class, DTA type,
+; owning dir and transform parent. This is the probe that answers "is the same
+; set of objects even present on both sides, and are they wired to the same
+; parents".
+;
+; Verified against the native port (dc3-native, HTTP debug server) 2026-08.
+;   {$o class_name}      -> Hmx::Object HANDLE_EXPR(class_name)  Object.cpp:144
+;   {$o dir}             -> Hmx::Object HANDLE_EXPR(dir)         Object.cpp:149
+;   {$o get (type)}      -> Hmx::Object SYNC_PROP_SET(type)      Object.cpp:167
+;   {$o get (trans_parent)} -> RndTransformable SYNC_PROP_SET    Trans.cpp:99
+;
+; `trans_parent` is guarded by `has`, so non-transformable objects report
+; <absent> rather than a misleading <null>.
+
+(probe hierarchy
+    (doc "Every object in a dir: class, DTA type, owning dir, transform parent.")
+    (discriminates
+        "objects missing entirely on one side; proxy/inline dirs that failed to load; reparenting bugs; wrong object class for a name")
+    (scope
+        (dir main)
+        (limit 4000))
+    (fields
+        (class        msg  class_name      sym)
+        (type         prop (type)          sym)
+        (owner_dir    msg  dir             obj)
+        (trans_parent prop (trans_parent)  obj)))

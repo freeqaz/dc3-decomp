@@ -1,0 +1,59 @@
+; transforms.dta — world + local transforms for every RndTransformable.
+;
+; Source of truth: src/system/rndobj/Trans.cpp
+;   SYNC_PROP_MODIFY(local_xfm, mLocalXfm, SetDirty())            Trans.cpp:112
+;   SYNC_PROP_MODIFY(world_xfm, mWorldXfm, ComputeLocalXfm(...))  Trans.cpp:113
+;   SYNC_PROP_SET(trans_parent / trans_constraint / trans_target / preserve_scale)
+;
+; Transform sub-props are resolved by PropSync(Transform&) in
+; src/system/obj/PropSync.cpp:185 — translation is `x`/`y`/`z`, and anything
+; else falls through to PropSync(Hmx::Matrix3&) at PropSync.cpp:89, which
+; exposes `pitch`/`roll`/`yaw` (DEGREES, via MakeEulerScale) and
+; `x_scale`/`y_scale`/`z_scale`.
+;
+; NOTE: euler angles are derived, not stored. Near gimbal lock two numerically
+; different matrices can produce wildly different pitch/roll/yaw, so the
+; normalizer treats the rotation fields with a looser tolerance than
+; translation and the differ ranks a rotation-only delta below a
+; translation delta. For an exact matrix comparison you would need an
+; engine-side hook (see docs/tools/STATE_DIFF.md, "What we cannot reach").
+;
+; Scope is deliberately parameterizable — run this against a named subtree
+; (--names / --classes) rather than the whole world, or the output is huge and
+; dominated by animated objects.
+
+(probe transforms
+    (doc "World and local transform (translation, euler rotation, scale) per RndTransformable.")
+    (discriminates
+        "objects drawn at the wrong place/orientation/scale; broken parent-chain propagation; local-vs-world desync (dirty-flag bugs); constraint/look-at divergence")
+    (scope
+        (dir main)
+        (isa Trans)
+        ; isa above guarantees every prop below exists, so the `has` guard is
+        ; redundant here; dropping it halves the emitted script (see budget.py).
+        (guard 0)
+        (limit 2000))
+    (fields
+        (class            msg  class_name              sym)
+        (trans_parent     prop (trans_parent)          obj)
+        (trans_constraint prop (trans_constraint)      int)
+        (trans_target     prop (trans_target)          obj)
+        (preserve_scale   prop (preserve_scale)        bool)
+        (world_x          prop (world_xfm x)           float)
+        (world_y          prop (world_xfm y)           float)
+        (world_z          prop (world_xfm z)           float)
+        (world_pitch      prop (world_xfm pitch)       float)
+        (world_roll       prop (world_xfm roll)        float)
+        (world_yaw        prop (world_xfm yaw)         float)
+        (world_sx         prop (world_xfm x_scale)     float)
+        (world_sy         prop (world_xfm y_scale)     float)
+        (world_sz         prop (world_xfm z_scale)     float)
+        (local_x          prop (local_xfm x)           float)
+        (local_y          prop (local_xfm y)           float)
+        (local_z          prop (local_xfm z)           float)
+        (local_pitch      prop (local_xfm pitch)       float)
+        (local_roll       prop (local_xfm roll)        float)
+        (local_yaw        prop (local_xfm yaw)         float)
+        (local_sx         prop (local_xfm x_scale)     float)
+        (local_sy         prop (local_xfm y_scale)     float)
+        (local_sz         prop (local_xfm z_scale)     float)))

@@ -1,0 +1,48 @@
+; panel_dirs.dta — PanelDir / RndDir / WorldDir wiring.
+;
+; A PanelDir is the container a UIPanel actually draws. Its `cam` decides the
+; projection for everything inside it and its `environ` decides the lighting,
+; so a null or wrong value here explains an entire panel rendering wrongly
+; while every object inside it probes clean.
+;
+; Source of truth:
+;   PanelDir props  src/system/ui/PanelDir.cpp  — cam, use_specified_cam,
+;                   focus_component, owner_panel, show_view_only_panels,
+;                   postprocs_before_draw
+;   RndDir props    src/system/rndobj/Dir.cpp:31-51 — environ, polls, enters,
+;                   draws, test_event
+;   WorldDir props  src/system/world/Dir.cpp:166-191 — hud, hud_filename,
+;                   show_hud, explicit_postproc, *_overrides
+;
+; The WorldDir HUD fields are called out specifically because the DC3 native
+; port has a known HUD-overlay architecture (WorldDir::mHUD, PanelDir
+; type='hud'); `show_hud` 1-vs-0 or a null `hud` is the direct signal for
+; "the gameplay HUD is missing".
+;
+; All fields are `has`-guarded, so plain RndDirs report <absent> for the
+; WorldDir-only fields rather than polluting the diff.
+
+(probe panel_dirs
+    (doc "PanelDir camera/environ binding, focus component, and WorldDir HUD overlay wiring.")
+    (discriminates
+        "an entire panel rendering with the wrong camera or no camera; missing environ so a subtree is unlit; HUD overlay absent or pointed at the wrong dir; postproc ordering differences; focus component divergence")
+    (scope
+        (dir main)
+        (isa ObjectDir)
+        (limit 500))
+    (fields
+        (class                 msg  class_name                sym)
+        (is_proxy              msg  is_proxy                  bool)
+        (cam                   prop (cam)                     obj)
+        (use_specified_cam     prop (use_specified_cam)       bool)
+        (environ               prop (environ)                 obj)
+        (focus_component       prop (focus_component)         obj)
+        (owner_panel           prop (owner_panel)             obj)
+        (show_view_only_panels prop (show_view_only_panels)   bool)
+        (postprocs_before_draw prop (postprocs_before_draw)   bool)
+        (hud                   prop (hud)                     obj)
+        (hud_filename          prop (hud_filename)            sym)
+        (show_hud              prop (show_hud)                bool)
+        (explicit_postproc     prop (explicit_postproc)       obj)
+        (showing               prop (showing)                 bool)
+        (draw_order            prop (draw_order)              float)))

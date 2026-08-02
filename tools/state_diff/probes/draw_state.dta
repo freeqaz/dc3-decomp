@@ -1,0 +1,37 @@
+; draw_state.dta — RndDrawable visibility / ordering / bounds.
+;
+; The single highest-value probe for "something is invisible / drawing in the
+; wrong order / getting frustum-culled". Every field here maps directly onto a
+; decision the renderer makes.
+;
+; Source of truth: src/system/rndobj/Draw.cpp
+;   BEGIN_PROPSYNCS(RndDrawable)
+;     SYNC_PROP(draw_order, mOrder)     Draw.cpp:37
+;     SYNC_PROP(showing,    mShowing)   Draw.cpp:38
+;     SYNC_PROP(sphere,     mSphere)    Draw.cpp:39
+;     SYNC_PROP(clip_planes,mClipPlanes)Draw.cpp:40
+;
+; Sphere sub-props come from PropSync(Sphere&) -> x/y/z/radius.
+; A radius of 0 means "no bounds" and disables sphere culling, so a side that
+; reports 0 where the other reports a real radius is a strong culling-bug
+; signal — the differ ranks sphere_radius transitions to/from 0 highly.
+
+(probe draw_state
+    (doc "RndDrawable showing flag, draw order and bounding sphere.")
+    (discriminates
+        "invisible or wrongly-visible objects; draw-order / z-fighting and overlay-stacking bugs; frustum culling caused by a zero or stale bounding sphere")
+    (scope
+        (dir main)
+        (isa Draw)
+        ; isa above guarantees every prop below exists, so the `has` guard is
+        ; redundant here; dropping it halves the emitted script (see budget.py).
+        (guard 0)
+        (limit 4000))
+    (fields
+        (class         msg  class_name        sym)
+        (showing       prop (showing)         bool)
+        (draw_order    prop (draw_order)      float)
+        (sphere_x      prop (sphere x)        float)
+        (sphere_y      prop (sphere y)        float)
+        (sphere_z      prop (sphere z)        float)
+        (sphere_radius prop (sphere radius)   float)))

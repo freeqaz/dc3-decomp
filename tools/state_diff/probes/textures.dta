@@ -1,0 +1,39 @@
+; textures.dta — RndTex dimensions / format / load state.
+;
+; Source of truth: src/system/rndobj/Tex.cpp
+;   SYNC_PROP_SET(width, mWidth, ...)        Tex.cpp:56
+;   SYNC_PROP_SET(height, mHeight, ...)      Tex.cpp:57
+;   `bpp` is a GET-ONLY propsync                Tex.cpp:58-60
+;   SYNC_PROP(mip_map_k, mMipMapK)           Tex.cpp:62
+;   SYNC_PROP_MODIFY(file_path, mFilepath)   Tex.cpp:64
+;   HANDLE_EXPR(size_kb, SizeKb())           Tex.cpp:48
+;   HANDLE_EXPR(tex_type, mType)             Tex.cpp:49
+;
+; size_kb is the load-state discriminator: a texture that resolved its
+; file but never got bits uploaded reports width/height from the header and
+; size_kb 0. That combination is exactly the "everything is untextured /
+; white / black" class of native-port bug, so the differ ranks a
+; size_kb 0-vs-nonzero transition above a plain dimension change.
+;
+; file_path is a FilePath; the normalizer lowercases it and rewrites
+; backslashes to forward slashes so Xbox and Linux paths compare equal.
+
+(probe textures
+    (doc "RndTex width/height/bpp/type, resident size and source file path.")
+    (discriminates
+        "textures that failed to load (size_kb 0), wrong mip level or dimensions picked, format/bpp differences, texture resolved to a different file, missing DDS/bitmap conversion")
+    (scope
+        (dir main)
+        (isa Tex)
+        ; isa above guarantees every prop below exists, so the `has` guard is
+        ; redundant here; dropping it halves the emitted script (see budget.py).
+        (guard 0)
+        (limit 3000))
+    (fields
+        (width     prop (width)      int)
+        (height    prop (height)     int)
+        (bpp       prop (bpp)        int)
+        (mip_map_k prop (mip_map_k)  float)
+        (file_path prop (file_path)  sym)
+        (size_kb   msg  size_kb      int)
+        (tex_type  msg  tex_type     int)))

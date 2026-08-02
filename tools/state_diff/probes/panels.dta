@@ -1,0 +1,35 @@
+; panels.dta — per-panel load/visibility state for the ACTIVE screen stack.
+;
+; Two-pass by construction, which is the pattern the console transport
+; requires: PASS 1 (panels.roster.prog.dta) returns just the panel names via
+; the engine's own `foreach_current_screen` / `foreach_panel` iterators; PASS 2
+; is the normal paged per-object property read.
+;
+; Because the roster comes from a DTA program rather than the native HTTP
+; object listing, this probe enumerates identically on both targets — it does
+; not depend on /api/objects, and it sidesteps the broken ObjectDir::iterate
+; (src/system/obj/Dir.cpp:974, see docs/tools/STATE_DIFF.md).
+;
+; Source of truth for the handlers: src/system/ui/UIPanel.cpp:328-349
+;   HANDLE(showing / is_up / is_loaded / paused / loaded_dir)
+; UIPanel has NO propsyncs, so every field here is a `msg` field.
+;
+; `loaded_dir` is the highest-value field: a panel that is up and showing but
+; whose loaded_dir is <null> renders nothing at all, which is the single most
+; common "the screen is blank" cause in the native port.
+
+(probe panels
+    (doc "UIPanel up/showing/loaded/paused state and loaded PanelDir, for every panel on the active screen stack.")
+    (discriminates
+        "a panel that failed to load (loaded_dir null) so its whole screen region is blank; panels showing that should be hidden and vice versa; panels stuck paused; panel stack differing between the two sides")
+    (scope
+        (dir main)
+        (limit 200))
+    (roster_program_file "panels.roster.prog.dta")
+    (fields
+        (class       msg  class_name  sym)
+        (is_up       msg  is_up       bool)
+        (showing     msg  showing     bool)
+        (is_loaded   msg  is_loaded   bool)
+        (paused      msg  paused      bool)
+        (loaded_dir  msg  loaded_dir  obj)))

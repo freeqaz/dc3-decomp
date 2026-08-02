@@ -1,0 +1,57 @@
+; environ.dta — RndEnviron ambient / fog / colour-grading.
+;
+; Source of truth: src/system/rndobj/Env.cpp, BEGIN_PROPSYNCS(RndEnviron)
+; (Env.cpp:180-218). Ambient and fog live on mAmbientFogOwner, which is itself
+; a settable propsync (`ambient_fog_owner`) — if the two sides disagree on the
+; OWNER then every ambient/fog value below is being read from a different
+; object, so the differ ranks an ambient_fog_owner divergence above the
+; individual colour values it explains.
+;
+; The colour-transform block (hue/saturation/lightness/brightness/contrast and
+; the in_lo/in_hi/out_lo/out_hi levels) is the native port's most likely
+; source of "the whole screen is washed out / too contrasty" bugs, since
+; RndColorXfm::AdjustColorXfm() has to be reimplemented for WebGPU.
+;
+; `lights_real` / `lights_approx` are ObjectLists. Their LENGTH is read with
+; the Hmx::Object `size` handler (Object.cpp:135) rather than `get`, because
+; indexing past the end of an empty list SIGSEGVs the eval (observed live).
+; The driver never indexes them; only the count is captured here.
+
+(probe environ
+    (doc "RndEnviron ambient colour, fog, fade, tone mapping and colour-transform grading.")
+    (discriminates
+        "whole-scene ambient/fog wrong (too dark, missing fog, wrong fog range), colour grading / tone mapping divergence, exposure and white-point differences, light-list attachment count mismatches")
+    (scope
+        (dir main)
+        (isa Environ)
+        ; isa above guarantees every prop below exists, so the `has` guard is
+        ; redundant here; dropping it halves the emitted script (see budget.py).
+        (guard 0)
+        (limit 200))
+    (fields
+        (ambient_color     prop (ambient_color)      color)
+        (ambient_alpha     prop (ambient_alpha)      float)
+        (fog_enable        prop (fog_enable)         bool)
+        (fog_start         prop (fog_start)          float)
+        (fog_end           prop (fog_end)            float)
+        (fog_color         prop (fog_color)          color)
+        (ambient_fog_owner prop (ambient_fog_owner)  obj)
+        (fade_out          prop (fade_out)           bool)
+        (fade_start        prop (fade_start)         float)
+        (fade_end          prop (fade_end)           float)
+        (fade_max          prop (fade_max)           float)
+        (ao_strength       prop (ao_strength)        float)
+        (exposure          prop (exposure)           float)
+        (white_point       prop (white_point)        float)
+        (tone_map          prop (tone_map)           bool)
+        (use_color_adjust  prop (use_color_adjust)   bool)
+        (hue               prop (hue)                float)
+        (saturation        prop (saturation)         float)
+        (lightness         prop (lightness)          float)
+        (brightness        prop (brightness)         float)
+        (contrast          prop (contrast)           float)
+        (in_lo             prop (in_lo)              float)
+        (in_hi             prop (in_hi)              float)
+        (out_lo            prop (out_lo)             float)
+        (out_hi            prop (out_hi)             float)
+        (showing           prop (showing)            bool)))

@@ -1,0 +1,49 @@
+; cameras.dta — RndCam frustum, viewport and placement.
+;
+; Source of truth: src/system/rndobj/Cam.cpp, BEGIN_PROPSYNCS(RndCam) at :61-73
+;   SYNC_PROP_SET(near_plane, mNearPlane, ...)   Cam.cpp:63
+;   SYNC_PROP_SET(far_plane,  mFarPlane,  ...)   Cam.cpp:64
+;   SYNC_PROP_SET(y_fov, mYFov * RAD2DEG, ...)   Cam.cpp:65-69
+;   SYNC_PROP(z_range, mZRange)                  Cam.cpp:70   (Vector2: x y)
+;   SYNC_PROP_MODIFY(screen_rect, mScreenRect)   Cam.cpp:71   (Rect: x y w h)
+;
+; y_fov is stored in RADIANS but the propsync exposes DEGREES. Both sides go
+; through the same propsync so they are directly comparable; do not compare a
+; captured y_fov against a raw mYFov read from a debugger.
+;
+; The camera is the highest-leverage single object for visual divergence: a
+; wrong y_fov or aspect makes EVERYTHING look wrong while every other probe
+; reports clean. The differ therefore ranks any camera-frustum divergence at
+; the top severity tier regardless of magnitude.
+;
+; screen_rect is the normalized viewport (0..1). A w/h of 0 means the camera
+; renders nothing.
+
+(probe cameras
+    (doc "RndCam near/far planes, vertical FOV, depth range, viewport rect and world placement.")
+    (discriminates
+        "whole-screen framing wrong (FOV/aspect), geometry clipped by near/far planes, viewport/target-rect covering the wrong screen region, camera positioned or aimed wrongly, letterboxing differences")
+    (scope
+        (dir main)
+        (isa Cam)
+        ; isa above guarantees every prop below exists, so the `has` guard is
+        ; redundant here; dropping it halves the emitted script (see budget.py).
+        (guard 0)
+        (limit 200))
+    (fields
+        (near_plane   prop (near_plane)     float)
+        (far_plane    prop (far_plane)      float)
+        (y_fov        prop (y_fov)          float)
+        (z_range_x    prop (z_range x)      float)
+        (z_range_y    prop (z_range y)      float)
+        (rect_x       prop (screen_rect x)  float)
+        (rect_y       prop (screen_rect y)  float)
+        (rect_w       prop (screen_rect w)  float)
+        (rect_h       prop (screen_rect h)  float)
+        (world_x      prop (world_xfm x)    float)
+        (world_y      prop (world_xfm y)    float)
+        (world_z      prop (world_xfm z)    float)
+        (world_pitch  prop (world_xfm pitch) float)
+        (world_roll   prop (world_xfm roll)  float)
+        (world_yaw    prop (world_xfm yaw)   float)
+        (trans_parent prop (trans_parent)   obj)))

@@ -1,0 +1,48 @@
+; lights.dta — RndLight parameters + placement.
+;
+; Source of truth: src/system/rndobj/Lit.cpp, BEGIN_PROPSYNCS(RndLight):
+;   SYNC_PROP_SET(light_type, mType, ...)        Lit.cpp:171
+;   SYNC_PROP_SET(range, mRange, ...)            Lit.cpp:172
+;   SYNC_PROP_SET(falloff_start, ...)            Lit.cpp:173
+;   SYNC_PROP_SET(color, PackedColor(), ...)     Lit.cpp:174
+;   SYNC_PROP_SET(intensity, Intensity(), ...)   Lit.cpp:175
+;   SYNC_PROP_SET(topradius / botradius)         Lit.cpp:176-177
+;   SYNC_PROP(texture / cube_texture / texture_xfm)
+;
+; NOTE the color/intensity split: RndLight::PackedColor() divides the stored
+; colour by Intensity() (Lit.cpp:156), so `color` is the NORMALIZED hue and
+; `intensity` the scalar. A scene that is uniformly too dark or too bright
+; shows up as an intensity delta with color unchanged — the differ reports
+; those separately for exactly that reason.
+;
+; RndLight is a Trans but NOT a Draw (verified live: `is_a Draw` -> 0), so
+; visibility comes from its own mShowing via HANDLE_ACTION(set_showing) and is
+; not exposed as a propsync. See "cannot reach" in docs/tools/STATE_DIFF.md.
+
+(probe lights
+    (doc "RndLight type, colour, intensity, range/falloff, cone radii and world placement.")
+    (discriminates
+        "scene lit too dark/bright (intensity), wrong light colour, point-vs-spot-vs-directional type mismatch, range/falloff making lights not reach geometry, lights positioned wrongly, missing projected light textures")
+    (scope
+        (dir main)
+        (isa Light)
+        ; isa above guarantees every prop below exists, so the `has` guard is
+        ; redundant here; dropping it halves the emitted script (see budget.py).
+        (guard 0)
+        (limit 500))
+    (fields
+        (light_type    prop (light_type)     int)
+        (color         prop (color)          color)
+        (intensity     prop (intensity)      float)
+        (range         prop (range)          float)
+        (falloff_start prop (falloff_start)  float)
+        (topradius     prop (topradius)      float)
+        (botradius     prop (botradius)      float)
+        (texture       prop (texture)        obj)
+        (cube_texture  prop (cube_texture)   obj)
+        (world_x       prop (world_xfm x)    float)
+        (world_y       prop (world_xfm y)    float)
+        (world_z       prop (world_xfm z)    float)
+        (world_pitch   prop (world_xfm pitch) float)
+        (world_roll    prop (world_xfm roll)  float)
+        (world_yaw     prop (world_xfm yaw)   float)))

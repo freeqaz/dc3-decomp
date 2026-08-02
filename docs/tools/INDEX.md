@@ -122,6 +122,7 @@ python3 msvc-src/tools/il_diff.py variant_a.cpp variant_b.cpp -f FunctionName
 |------|-------------|-----|
 | [HTTP Debug Server](HTTP_DEBUG_SERVER.md) | Embedded HTTP server for live engine interaction — DTA eval, screenshots, telemetry, settings | [HTTP_DEBUG_SERVER.md](HTTP_DEBUG_SERVER.md) |
 | `tools/console/dc3_eval.py` | Evaluate DTA on a **real Xbox 360** (or the native port) and print the reply — for diffing hardware state against the port | [../native/CONSOLE_DTA_EVAL.md](../native/CONSOLE_DTA_EVAL.md) |
+| [State Diff](STATE_DIFF.md) | Capture live engine state via DTA probes, normalize to JSON, and rank divergences between native and console — for chasing visual bugs | [STATE_DIFF.md](STATE_DIFF.md) |
 
 ## Code Transformation Tools
 

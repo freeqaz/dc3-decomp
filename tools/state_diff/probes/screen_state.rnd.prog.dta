@@ -1,0 +1,6 @@
+; Page 2/2 of the screen_state probe: render surface.
+{do ($out "")
+    {strcat $out {sprintf "rnd.screen_width=%d;" {rnd screen_width}}}
+    {strcat $out {sprintf "rnd.screen_height=%d;" {rnd screen_height}}}
+    {strcat $out {sprintf "rnd.aspect=%d;" {rnd aspect}}}
+    $out}

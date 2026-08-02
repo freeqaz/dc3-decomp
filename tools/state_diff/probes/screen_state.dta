@@ -1,0 +1,28 @@
+; screen_state.dta — active screen + render surface (global singletons).
+;
+; A `scalars` probe: runs fixed DTA programs and parses `key=value;` pairs.
+; Deliberately split into two small program PAGES so each request stays under
+; the console transport's ~1000-char script and 1023-byte reply caps
+; (see tools/state_diff/budget.py).
+;
+; Run this FIRST when chasing a visual bug. If the two sides are not on the
+; same screen, every other probe is comparing apples to oranges — the differ
+; emits a `screen_mismatch` finding at the top severity tier because it
+; invalidates the rest of the comparison.
+;
+; CAVEAT — UIManager::Handle short-circuits and returns 0 for most messages
+; while InTransition() || InComponentSelect() (src/system/ui/UI.cpp:922-925).
+; A zero here during a transition may be suppression rather than real state,
+; so `ui.in_transition` is captured and the differ suppresses UI findings when
+; either side reports 1.
+;
+; Requests: 2. Panel detail lives in the separate `panels` probe, which pages
+; properly instead of inlining a whole nested walk into one reply.
+
+(probe screen_state
+    (doc "Active/transition/bottom screen, focus panel, transition state and render surface size.")
+    (discriminates
+        "the two sides are not on the same screen at all; mid-transition state divergence; render target resolution or aspect differences that rescale the whole frame")
+    (kind scalars)
+    (line_sep ";")
+    (program_file "screen_state.ui.prog.dta" "screen_state.rnd.prog.dta"))

@@ -1,0 +1,15 @@
+; Page 1/2 of the screen_state probe: UIManager globals.
+; Must stay under the 1000-char script cap and 1023-byte reply cap.
+{do ($out "")
+    {strcat $out {sprintf "ui.current_screen=%s;"
+        {do ($s {ui current_screen}) {if_else $s {$s name} "<null>"}}}}
+    {strcat $out {sprintf "ui.transition_screen=%s;"
+        {do ($s {ui transition_screen}) {if_else $s {$s name} "<null>"}}}}
+    {strcat $out {sprintf "ui.bottom_screen=%s;"
+        {do ($s {ui bottom_screen}) {if_else $s {$s name} "<null>"}}}}
+    {strcat $out {sprintf "ui.focus_panel=%s;"
+        {do ($p {ui focus_panel}) {if_else $p {$p name} "<null>"}}}}
+    {strcat $out {sprintf "ui.in_transition=%d;" {ui in_transition}}}
+    {strcat $out {sprintf "ui.went_back=%d;" {ui went_back}}}
+    {strcat $out {sprintf "ui.game_active=%d;" {ui is_game_screen_active}}}
+    $out}

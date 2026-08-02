@@ -1,0 +1,51 @@
+; materials.dta — RndMat rendering state.
+;
+; Source of truth: src/system/rndobj/Mat.cpp, BEGIN_PROPSYNCS(RndMat) via the
+; SYNC_MAT_PROP macro (Mat.cpp:81). Full property set observed there:
+;   intensify blend color alpha use_environ z_mode stencil_mode tex_gen
+;   tex_wrap tex_xfm diffuse_tex diffuse_tex2 prelit alpha_cut alpha_threshold
+;   alpha_write force_alpha_write next_pass cull per_pixel_lit
+;   emissive_multiplier specular_* normal_map emissive_map environ_map*
+;   de_normal anisotropy norm_detail_* rim_* refract_*
+;
+; This probe carries the subset that changes what a pixel looks like. `color`
+; is an Hmx::Color and comes back PACKED as an int (PropSync(Hmx::Color&),
+; PropSync.cpp:32 -> color.Pack()); the normalizer unpacks it into r/g/b/a so
+; a diff reads as "green channel changed" instead of "int 4278190080 changed".
+;
+; blend / z_mode / cull / tex_wrap / tex_gen / stencil_mode are enums; the
+; normalizer maps them to symbolic names where known so the report is legible.
+
+(probe materials
+    (doc "RndMat blend/z/cull modes, color+alpha, and texture references.")
+    (discriminates
+        "wrong blending (additive vs alpha vs opaque), z-write/z-test bugs causing sorting artifacts, backface culling flips, missing or swapped textures, wrong tint/alpha, prelit/lighting differences")
+    (scope
+        (dir main)
+        (isa Mat)
+        ; isa above guarantees every prop below exists, so the `has` guard is
+        ; redundant here; dropping it halves the emitted script (see budget.py).
+        (guard 0)
+        (limit 3000))
+    (fields
+        (blend           prop (blend)             int)
+        (z_mode          prop (z_mode)            int)
+        (stencil_mode    prop (stencil_mode)      int)
+        (cull            prop (cull)              int)
+        (color           prop (color)             color)
+        (alpha           prop (alpha)             float)
+        (intensify       prop (intensify)         bool)
+        (prelit          prop (prelit)            bool)
+        (use_environ     prop (use_environ)       bool)
+        (alpha_cut       prop (alpha_cut)         bool)
+        (alpha_threshold prop (alpha_threshold)   int)
+        (alpha_write     prop (alpha_write)       bool)
+        (per_pixel_lit   prop (per_pixel_lit)     bool)
+        (tex_gen         prop (tex_gen)           int)
+        (tex_wrap        prop (tex_wrap)          int)
+        (diffuse_tex     prop (diffuse_tex)       obj)
+        (diffuse_tex2    prop (diffuse_tex2)      obj)
+        (normal_map      prop (normal_map)        obj)
+        (emissive_map    prop (emissive_map)      obj)
+        (environ_map     prop (environ_map)       obj)
+        (next_pass       prop (next_pass)         obj)))

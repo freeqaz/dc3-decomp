@@ -1,0 +1,37 @@
+; meshes.dta — RndMesh geometry summary and material binding.
+;
+; Source of truth: src/system/rndobj/Mesh.cpp, BEGIN_PROPSYNCS(RndMesh):
+;   mat geom_owner mutable num_verts num_faces volume has_valid_bones bones
+;   has_ao_calculation keep_mesh_data verts
+;
+; `mat` is the material binding — the field that turns "this model renders
+; untextured/black" into a one-line finding. Because a single material is
+; typically shared by dozens of meshes, the differ COLLAPSES identical
+; mat-divergences across meshes into one grouped finding rather than emitting
+; one per mesh.
+;
+; num_verts/num_faces catch geometry that decoded differently (wrong stride,
+; truncated buffer). geom_owner catches instancing/sharing divergence.
+
+(probe meshes
+    (doc "RndMesh vert/face counts, material binding, geometry owner and bone state.")
+    (discriminates
+        "meshes bound to the wrong or a null material; geometry that decoded to a different vert/face count; instancing (geom_owner) divergence; skinning enabled/disabled differences")
+    (scope
+        (dir main)
+        (isa Mesh)
+        ; isa above guarantees every prop below exists, so the `has` guard is
+        ; redundant here; dropping it halves the emitted script (see budget.py).
+        (guard 0)
+        (limit 3000))
+    (fields
+        (mat              prop (mat)                obj)
+        (geom_owner       prop (geom_owner)         obj)
+        (num_verts        prop (num_verts)          int)
+        (num_faces        prop (num_faces)          int)
+        (mutable          prop (mutable)            int)
+        (has_valid_bones  prop (has_valid_bones)    bool)
+        (has_ao           prop (has_ao_calculation) bool)
+        (keep_mesh_data   prop (keep_mesh_data)     bool)
+        (showing          prop (showing)            bool)
+        (draw_order       prop (draw_order)         float)))
