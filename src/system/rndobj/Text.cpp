@@ -1848,6 +1848,7 @@ void RndText::FitTextScroll() {
     float scrollCharWidth = 0.0f;
 
     Hmx::Rect bounds;
+    float savedWidth = mWidth;
     if ((charWidths[numChars] > mWidth) || (mFitType == kFitScrollMarqueeWrapAlways)) {
         mWidth = 0.0f;
         mWrapEnabled = true;
@@ -1865,20 +1866,19 @@ void RndText::FitTextScroll() {
     ConstructMeshes(lines, bounds, 1.0f);
 
     if (mWrapEnabled) {
-        mWidth = bounds.w;
+        mWidth = savedWidth;
         mScrollCopies = 1;
         mScrollTimer = 0.0f;
         mScrollSpeed = (mScrollRate * scrollCharWidth) * -0.001f;
 
         if (mFitType == kFitScrollMarqueeWrapAlways) {
-            mScrollPos = bounds.w;
+            mScrollPos = savedWidth;
+            mScrollOffset = savedWidth;
             mNumLines = mNumLines + 1;
-            mScrollOffset = bounds.w;
             mTotalWidth = (mIndentation * (float)mNumLines) + charWidths[numChars];
-            mLineWidths.push_back(bounds.w);
-            mLineOffsets.push_back(0.0f);
-            mLineWidths.push_back(charWidths[numChars]);
-            mLineOffsets.push_back(scrollCharWidth);
+            mLineWidths.push_back(mTotalWidth);
+            mLineWidths.push_front(0.0f);
+            mLineOffsets.push_back(mTotalWidth);
             mLineHeight = mTotalWidth;
 
             float f = mTotalWidth;
@@ -2400,7 +2400,20 @@ void RndText::DrawShowing() {
 
 void RndText::SizeCheck() {
 #ifdef HX_NATIVE
-    UpdateText();
+    // On Xbox this hook only emitted an "oversized font" warning; the native
+    // port repurposed it to re-lay-out the text every frame. That is safe for
+    // static labels but destructive for the scrolling fit types: FitTextScroll()
+    // resets mScrollTimer to 0 and mScrollPos to the start offset, so redoing it
+    // once per frame pins a marquee at frame 0 forever. (DC3 main_screen's
+    // motd.lbl therefore never scrolled and permanently showed the message with
+    // its head parked under the authored left-edge gradient mask.)
+    //
+    // Once a scrolling label has been fitted (mWrapEnabled, set only by
+    // FitTextScroll) leave it alone — UILabel::LabelUpdate() and the LOAD/COPY
+    // paths still call UpdateText() explicitly whenever the string or a layout
+    // property actually changes.
+    if (!mWrapEnabled)
+        UpdateText();
 #else
     static float sLastHeight;
     static RndText *sLastText;

@@ -166,7 +166,10 @@ several older docs are stale and are called out in §6.
 
 | # | Bug | Game | Status | What the diff gets / misses |
 |---|---|---|---|---|
-| 15 | UI text positions offset ~15% vertically from Xbox | DC3 | **UNCERTAIN** — likely stale after the 2026-07-01/02 `[ui.cam]` work | Gets cam + `RndText` box + `world_xfm`; misses glyph-quad generation (the `SetupCharacter` class of bug) |
+| 15 | UI text positions offset ~15% vertically from Xbox | DC3 | **CLOSED as stated / REPLACED — measured 2026-08-02, see §6.9** | The *positioning* claim is confirmed stale: `motd.lbl`'s `world_xfm` matches the shipped `main.milo_xbox` byte-for-byte, `{rnd aspect}` = `kWidescreen` (`YRatio` 0.5625 = exact 16:9), and `turbo_shell.cam` reprojects the label to the observed pixel row within 1 px. **But the screen is not clean**: `main_screen`'s MOTD label was rendering a permanently-truncated string. Root cause was *not* placement — see §6.9 |
+| 15a | Marquee/ticker `RndText` labels never scroll (`kFitScroll*`) | DC3 | **FIXED 2026-08-02** — two causes, see §6.9 | Invisible to a state diff: `mScrollPos`/`mScrollTimer`/`mWrapEnabled` are not `SyncProperty`-visible. Caught by sweeping the label's `local_xfm` and watching which screen columns stayed pinned |
+| 15b | `RndDrawable::mClipPlanes` is a **no-op on native** — `WgpuRnd` never overrides `PushClipPlanesInternal` (only `DxRnd` implements it, `rnddx9/Rnd.cpp:279`) | DC3 | **OPEN** | `[clip_planes]` reads identically on both sides (`motd.lbl` reports 2) — a pure T3 "state agrees, frame differs". Authored gradient-mask quads (`mod_frame2_lt_gradient*.mesh`) currently hide the un-clipped overspill on `main_screen`, so it is cosmetically masked there |
+| 15c | `RndText::mScrollCopies` is computed but **never read** — the marquee draws one copy, so a ticker has a dead gap between repetitions instead of chaining at `mTotalWidth` spacing | DC3 | **OPEN** | Not state-visible. Follow-on to §6.9 |
 | 16 | `main_screen` overshell rows project off-bottom (y≈1.03 / 1.53) | DC3 | **UNCERTAIN** — flagged "likely intentionally offscreen" | Gets authored `world_xfm`; console settles intent immediately |
 | 17 | Mixed-camera composition on `choose_mode_panel` (`turbo_shell.cam` chrome + `ui.cam` payload) | DC3 | **UNCERTAIN** (last status 2026-03-11) | `PanelDir::cam` / `use_specified_cam` per panel is readable; the compositing order is not |
 | 18 | Bone garbage — leg/foot bones with ~1e16 translations, masked by identity fallback | DC3 | **OPEN** | Bone objects are `RndTransformable` → `[world_xfm x/y/z]` readable per-bone, but you can only sample a handful per request |
@@ -739,6 +742,40 @@ probing; otherwise the camera-cut phase alone will differ.
 8. **DC3 in-song native screenshots are black and get skipped** — the Bink intro movie never
    ends and covers the world. Do in-song visual checks on the **web** build, or fix the movie
    end condition first. This directly affects B4/B5 above: budget for it.
+9. **"DC3 UI text ~15% offset" (item #15) was re-measured live on 2026-08-02 and the
+   *offset* framing is dead — but the screen it was reported on was still wrong, for an
+   unrelated reason.** Do not spend console time on item #15 as written.
+
+   *What was actually wrong.* `main_screen`'s profile-hint bar (`motd.lbl`, a
+   `kFitScrollMarqueeWrapAlways` MOTD ticker in `ui/main/gen/main.milo_xbox`, armed by
+   `{$this motd_setup motd.lbl}` → `MainMenuPanel::MotdSetup`) rendered a **frozen,
+   head-truncated** string — "in to a Gamer Profile to save progress and stats." — forever.
+   Two independent causes, both now fixed:
+
+   1. **`RndText::SizeCheck()` re-laid out the text every frame.** On Xbox this hook only
+      emits an oversized-font warning; the native port replaced its whole body with
+      `UpdateText()` (`7415c525f`, 2026-03-12). For a scrolling label `UpdateText()` reaches
+      `FitTextScroll()`, which resets `mScrollTimer = 0` and `mScrollPos` — so the marquee
+      was re-armed every frame and `UpdateScrollOffsets()` never got past its
+      `mScrollTimer < mScrollDelay` early-out. Now gated on `!mWrapEnabled`.
+   2. **`RndText::FitTextScroll()` was mis-decompiled (82.5%).** It (a) clobbered `mWidth`
+      with the *measured text width* instead of restoring the authored box width, and
+      (b) seeded `mLineWidths`/`mLineOffsets` with four `push_back`s where the target does
+      three inserts. The target's seeding puts `mTotalWidth` in **both** lists — and
+      `mTotalWidth` is precisely the sentinel that the (100 %-matching)
+      `UpdateScrollOffsets()` tests in both of its wrap-reset branches
+      (`if (firstWidth == mTotalWidth)` / `if (firstOffset == mTotalWidth)`). With our
+      seeding neither branch could ever fire, so even an unfrozen marquee would have
+      scrolled off once and never come back. Corrected → **82.5 % → 92.7 %**, and
+      `motd.lbl`'s `[width]` now reads the authored **400.0** instead of a computed 300.41.
+
+   *Method note worth reusing.* The discriminator was **not** a state diff — none of
+   `mScrollPos`, `mScrollTimer`, `mWrapEnabled` or `mScrollCopies` is `SyncProperty`-visible.
+   It was a **position sweep against `/api/screenshot`**: drive the label's `local_xfm.x`
+   through 6 values and measure which screen columns the glyphs occupy. Columns that stay
+   pinned while the transform moves prove screen-anchored occlusion; columns that track the
+   transform prove the geometry is fine. `/api/screenshot` renders under `MILO_HEADLESS=1`
+   on a machine with no display, so this loop is available to sandboxed agents.
 
 ---
 
