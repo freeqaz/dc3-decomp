@@ -7,6 +7,10 @@ console state can be diffed against the native port (which already answers the s
 Client: [`tools/console/dc3_eval.py`](../../tools/console/dc3_eval.py) (stdlib only, `--self-test`
 runs offline).
 
+Its CLI and importable API are deliberately **the same shape as RB3Enhanced's
+`tools/rb3e_dta.py`** (`feature/dta-eval-channel`), so the state-differ can drive an RB3 console and
+a DC3 console with the same code — see [§8](#8-interface-parity-with-rb3enhanced).
+
 ---
 
 ## 0. Verdict
@@ -181,17 +185,32 @@ const char *CachedDataFile(const char *file, bool &b) {
 }
 ```
 
-1. **`game:\` is illegal.** `strieq` is case-insensitive, so `GAME:\…` asserts too. *(This also
-   invalidates the `GAME:\%s` string patch suggested in
-   [KINECT_CAPTURE.md §Route A step 2](KINECT_CAPTURE.md) — use a multi-character non-`game`
-   drive there as well.)*
+1. **`game:\` is illegal — for reads *and* writes, and fatally so.** `strieq` is `stricmp`-based,
+   so `GAME:`, `Game:` and `game:` all assert. This is not a debug-only nicety: `File_Win.obj` is
+   linked into the shipped Xbox image (`orig/373307D9/ham_xbox_r.map` puts the assert-expression
+   string at `.rdata:0x820807C4`, owner `os:File_Win.obj`), `?FileIsLocal@@YA_NPBD@Z` sits at
+   `.text:0x825EEEB8` and the decomp matches it 100 %, and `Debug::Fail` → `Debug::Modal` ends in
+   `Exit(1, true)` (`Debug.cpp:439-444`) — the title dies.
+
+   `NewFile` (`File.cpp:610`) calls `FileIsLocal` **unconditionally**, before the read/write
+   split, so writes reach the assert too. *(This invalidated the `GAME:\%s` string patch that
+   [KINECT_CAPTURE.md](KINECT_CAPTURE.md) used to suggest; that doc is now corrected and carries
+   a ranked drive ladder. Note the fix there is **not** "use a multi-character drive" — see
+   rule 3 — it is simply "use a drive that is not `game`", and `d:\` is the right answer because
+   it names the same directory.)*
 2. **Reads need a multi-character drive.** A relative path, or a single-character drive like
    `d:\`, has `strlen(drive) <= 1` → `FileIsLocal` false → with `UsingCD()` true the request is
    rewritten to `<path>/gen/<base>.dtb` and served **from the ark**, never from disk.
    `NewFile` (`File.cpp:619-622`) makes the same split: non-local reads go to `ArkFile`.
-3. **Writes are unaffected** — `kWrite`/`kAppend` never sets the read bit, so a *relative* write
+3. **Writes are unaffected *by rule 2*** — `kWrite`/`kAppend` never sets the read bit, so neither
+   the `CachedDataFile` `.dtb` rewrite nor the `ArkFile` branch can catch them; a *relative* write
    goes straight through `AsyncFile::New` to the title's working directory, i.e. the folder the
-   XEX was launched from. That is the return path.
+   XEX was launched from. That is the return path. Writes are **not** exempt from rule 1.
+
+   One caveat that only applies to writes: `AsyncFile::New` (`AsyncFile.cpp:64`) routes
+   `UsingHolmes(1) && (mode & FILE_OPEN_WRITE) && !FileIsLocal(path)` to `AsyncFileHolmes`, i.e.
+   to a connected dev PC rather than the console. With no Holmes host `gHolmesStream` is null and
+   the branch is dead, so this is only a concern if you are also running `--host`.
 
 So: **push the probe with a drive-qualified path, get the answer back on a relative path.**
 
@@ -230,11 +249,14 @@ PC:      poll <ftp-dir>/dc3_done.txt for this run's token
 
 ### 3.3 What the generated probe looks like
 
-`dc3_eval.py` wraps your script so its value lands in a file:
+`dc3_eval.py` wraps your commands so their values land in a file, one record per command:
 
 ```
 {do
-   {write_string_to_file "dc3_out.txt" {sprint {do <YOUR SCRIPT> }} 0}
+   {set $dc3_r ""}
+   {strcat $dc3_r {sprint {do <COMMAND 1>}} "~~DC3REC:dc3-1a2b3c4d~~"}
+   {strcat $dc3_r {sprint {do <COMMAND 2>}} "~~DC3REC:dc3-1a2b3c4d~~"}
+   {write_string_to_file "dc3_out.txt" $dc3_r 0}
    {write_string_to_file "dc3_done.txt" "dc3-1a2b3c4d" 0}
 }
 ```
@@ -242,13 +264,40 @@ PC:      poll <ftp-dir>/dc3_done.txt for this run's token
 * `{run}` = `DataRun`, `DataFunc.cpp:1060-1069`. `FileMakePath(FileExecRoot(), path)` preserves a
   drive-qualified path verbatim (`File.cpp:472-486`).
 * `{sprint …}` = `DataSprint`, `DataFunc.cpp:72-79` — evaluates each argument and renders it into a
-  `String`. Nested `{do …}` (`DataFunc.cpp:303-328`) lets a multi-statement script still return its
+  `String`. Nested `{do …}` (`DataFunc.cpp:303-328`) lets a multi-statement command still return its
   last expression.
+* `{strcat $v a b}` = `DataStrCat`, `DataFunc.cpp:1217-1225`. Note it appends **in place** and
+  takes `array->Var(1)`, so argument 1 must be a literal `$var` — `{strcat {sprint …} "x"}` would
+  fault. The remaining arguments go through `DataArray::Str` → `DataNode::Str`, which *evaluates*
+  commands first (`DataNode.cpp:423-424`), which is why the nested `{sprint}` works inline.
 * `{write_string_to_file p s 0}` = `OnWriteStringToFile`, `DataFunc.cpp:1088-1094`. **The 4th
   argument must be `0`** — `array->Size() > 3 ? array->Int(3) : true` defaults to *append*.
-  `TextFileStream::Print` converts `\n` to CRLF.
+* Accumulating into `$dc3_r` and writing once means the whole batch needs exactly **one** successful
+  truncating write, and never depends on `kAppend` working.
+* Records are separated by a per-run marker rather than a newline because `TextFileStream::Print`
+  rewrites `\n` to CRLF (`TextFileStream.cpp:10-19`) and DTA string literals have no escape syntax.
 * The `dc3_done.txt` token is a sentinel so the PC never reads a half-written `dc3_out.txt`.
 * `--raw` skips the wrapper if you want to push a script that manages its own output.
+
+### 3.3a `Debug::Print` is live in DC3's debug XEX — but this path does not depend on it
+
+On retail RB3 TU5, `Debug::Print` compiled to a bare `blr` and was ICF-folded onto an empty stub, so
+`TheDebug << …` is a no-op and the stock `print` DataFunc emits nothing. **DC3's debug XEX does not
+have this problem**, verified in the shipped image:
+
+| symbol | VA | first bytes | verdict |
+| --- | --- | --- | --- |
+| `?Print@Debug@@UAAXPBD@Z` | `0x825CC5D8` (size `0xC4`) | `7d 88 02 a6 91 81 ff f8 …` | real prologue, not a stub |
+| `??_7Debug@@6B@` slot 1 | `.rdata 0x82079AB0` | → `0x825CC5D8` | vtable points at it, no ICF fold |
+
+More importantly, **the chosen return path never touches `Debug::Print`.** `{sprint}` renders into a
+`String` and `{write_string_to_file}` goes `TextFileStream::Print` (`0x827EFA18`, also a real
+function, and slot 1 of `??_7TextFileStream@@6B@` at `0x820DCB68`) → `FileStream::Write`. So even on
+a build where `Debug::Print` *is* stubbed, records still come back. `{print …}` / `{printf …}` are
+the verbs that would silently vanish — the client never uses them, and you should not either.
+
+Not verified: whether `Debug::Print` is stubbed in DC3 **retail**. It does not matter for the plan
+of record (boot `debug.xex`), and it cannot affect this return path either way.
 
 `{run}` re-reads the file every time: `DataReadFile` (`DataFile.cpp:500-540`) only consults the
 `gReadFiles` memo while `gReadingFile` is set (nested reads), and opens a fresh `FileStream`
@@ -257,7 +306,7 @@ otherwise. So overwriting `p.dta` between iterations is enough — no cache bust
 ### 3.4 Client usage
 
 ```bash
-# offline sanity check (parser + wire encoder + probe generator)
+# offline sanity check (validator + parser + wire encoder + probe + FTP round-trip)
 python3 tools/console/dc3_eval.py --self-test
 
 # print the one-time console line
@@ -269,15 +318,31 @@ python3 tools/console/dc3_eval.py --print-bootstrap \
 export DC3_XBOX=192.168.1.60
 export DC3_FTP_DIR=/Hdd1/Games/DanceCentral3
 export DC3_GAME_PATH='Hdd1:\Games\DanceCentral3'
-python3 tools/console/dc3_eval.py -t file -e '{ui current_screen}'
-python3 tools/console/dc3_eval.py -t file -f probes/dump_venue.dta --timeout 60
+python3 tools/console/dc3_eval.py -T file '{ui current_screen}'
+python3 tools/console/dc3_eval.py -T file -f probes/dump_venue.dta --timeout 60
 
-# same script against the native port (default transport)
-python3 tools/console/dc3_eval.py -e '{ui current_screen}'
+# BATCH: one FTP round-trip and ONE keypress for the whole set,
+# one result line per command, in order
+python3 tools/console/dc3_eval.py -T file \
+    -b '{ui current_screen}' -b '{rnd frame}' -b '{$venue get_showing}'
 
-# console vs native, unified diff  (exit 1 if they differ)
-python3 tools/console/dc3_eval.py -t file --diff -e '{ui current_screen}'
+# a DC3Enhanced DLL (route 2) -- same flags, no keypress
+python3 tools/console/dc3_eval.py 192.168.1.60 '{ui current_screen}'
+
+# the native port
+python3 tools/console/dc3_eval.py localhost -p 9090 '{ui current_screen}'
+
+# console vs native, unified diff (exit 1 if they differ)
+python3 tools/console/dc3_eval.py -T file --diff -b '{ui current_screen}' -b '{rnd frame}'
+
+# poke around interactively
+python3 tools/console/dc3_eval.py 192.168.1.60 --repl
 ```
+
+**Batch before you loop.** Per-round-trip cost dominates on every transport — an HTTP request on
+the DLL route, and an entire FTP push plus a human keypress on the file route. `-b` sends the whole
+set at once and returns one result per command, so a 20-probe state dump is one keypress rather
+than twenty.
 
 `--hid-cmd '<shell command>'` replaces the manual keypress with anything you like — the intended
 upgrade is a $5 RP2040 board enumerating as a USB HID keyboard, driven over serial, which makes the
@@ -528,9 +593,20 @@ and the DashLaunch-plugin loader. Two traps carried over: `RB3E_FlushCache` is a
 (fine for boot-time patching only), and `DataReadString` faults on malformed DTA on the game
 thread — brace-balance before parsing.
 
-Endpoint parity is the point: make it `GET /execute?script=` so
-`dc3_eval.py -t http --api execute --host <console>:21070` and
-`dc3_eval.py --host localhost:9090` answer the same script, and `--diff` compares them directly.
+**Endpoint parity is the point.** Expose `POST /dta/eval` on port 21070 with the raw script as the
+body, exactly as RB3Enhanced now does — *not* `GET /execute?script=`, whose script is capped by the
+server's `request_path[250]` buffer to roughly 200 bytes and is therefore useless for real probes.
+Keep `/execute` only as back-compat. Then
+
+```bash
+dc3_eval.py <console-ip> '{ui current_screen}'      # DC3Enhanced
+dc3_eval.py localhost -p 9090 '{ui current_screen}' # native port
+dc3_eval.py <console-ip> --diff -b '…' -b '…'       # compare them
+```
+
+all answer the same script. Port `source/net_dta_exec.c` verbatim, including the batching loop, the
+`=> ` result markers, the 16 KB/32 KB caps and the exact truncation notice — the client already
+parses that format, and §8 documents it.
 
 ---
 
@@ -587,7 +663,68 @@ Ordered by how much they block.
 
 ---
 
-## 8. References
+## 8. Interface parity with RB3Enhanced
+
+The differ must be able to swap consoles without caring about the wire, so `dc3_eval.py` mirrors
+`RB3Enhanced/tools/rb3e_dta.py` (branch `feature/dta-eval-channel`, commit `63c5a1a`).
+
+**CLI** — same positionals, same flags, same exit codes:
+
+| | RB3Enhanced | DC3 |
+| --- | --- | --- |
+| invocation | `rb3e_dta.py <host> '<script>'` | `dc3_eval.py <host> '<script>'` |
+| script from file / stdin / prompt | `-f`, `-`, `--repl` | same |
+| port / timeout | `-p` (21070), `-t` (10.0) | same defaults |
+| exit codes | 0 ok, 1 unreachable/usage, 2 console refused | same |
+| extra here | — | `-T/--transport`, `--api`, `-b/--batch`, `--diff`, `--print-bootstrap` |
+
+**Importable API** — `evaluate(host, script, port=DEFAULT_PORT, timeout=10.0) -> str`,
+`class ConsoleError(status, reason, body)` with `.status`/`.body`, and `DEFAULT_PORT = 21070`, all
+signature-compatible. Additionally every transport object exposes `eval(script) -> str` and
+`eval_batch(scripts) -> [str]`, which `rb3e_dta.py` does not have — that is the layer the differ
+should target, because it is the only one that works for the file transport too.
+
+**Wire contract implemented for `--api eval`** (`POST /dta/eval`, port 21070, raw body):
+
+* Request body is the **raw script**, not URL-encoded, not JSON. `Content-Length` must be exact —
+  the console hard-400s a short body.
+* A **batch is just concatenated top-level commands** in one body; the console detects it by proving
+  every top-level node is a `COMMAND`. `dc3_eval.py` joins with newlines rather than the bare
+  concatenation in RB3E's doc example, because a command ending in a `;` line comment would
+  otherwise swallow the next one.
+* The response is **not** one plain line per command. It is captured `print` output interleaved with
+  one `=> <value>` line per command; the Nth `=> ` line is the Nth command's return value and
+  everything since the previous marker is that command's printed output. `split_results()`
+  implements this.
+* **Attribution is not bulletproof**: a batch element that fails the console's plausibility check
+  emits *no* `=> ` line, silently shifting every later index. The client counts markers against
+  commands sent and returns an explicit `<console returned N result markers for M commands>` note
+  rather than mis-attributing.
+* **Truncation and parse errors are never returned as data.** A body containing
+  `!! output truncated` or equal to `!! parse error` raises `ConsoleError`, so the differ can never
+  diff against a clipped payload. The real marker is the full sentence
+  `\n!! output truncated, raise RB3E_DTA_OUTPUT_MAX or split the script\n`.
+* Caps: **16384** bytes in (`>=` is a 413), **32768** out. *(Note: RB3E's own `docs/DTA-EVAL.md`
+  says 4096 for the 413 threshold; the code checks 16384. This client follows the code.)*
+* In `--api auto`, only a **404** falls through to the next endpoint. A 403/409/413/504 is a real
+  refusal and is surfaced immediately rather than masked by trying another path.
+
+**Client-side validation.** `rb3e_dta.py` performs none — its only check is non-empty. All the
+structural checking lives console-side in `RB3E_DTAEval_Validate` (`source/DTAEval.c:272-334`).
+`dc3_eval.py` **ports that function to Python and runs it before sending**, because the console-side
+failure modes are expensive: a crash costs the user a reboot mid-session. Semantics are matched
+deliberately — `;` line comments, `"` toggles string mode with **no backslash escapes**, nesting
+past 64 rejected, an embedded NUL ends the scan — plus two safe additions (`/* */` block comments,
+which can only prevent false rejects, and the 16 KB size cap).
+
+**What validation cannot catch.** A *balanced* script naming a nonexistent object still reaches the
+parser and faults via `MILO_FAIL`, which is a C++ throw that neither a C DLL nor the AppChild path
+can catch. Treat script text as trusted. This is why the file transport is the safest of the three
+for exploratory probing: it runs through the game's own `RndConsole`, which wraps `ExecuteLine` in
+`MILO_TRY`/`MILO_CATCH` (`src/system/rndobj/Console.cpp:434-444,522-527`) and merely prints
+`Script error: …` — so on the chosen route a bad probe costs you a line of red text, not a reboot.
+
+## 9. References
 
 * `src/system/os/AppChild.cpp` — the 4543 channel
 * `src/system/os/HolmesClient.cpp`, `HolmesClient_NetSocket.cpp`, `HolmesKeyboard.cpp` — Holmes
