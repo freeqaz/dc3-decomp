@@ -112,10 +112,16 @@ public:
     void SetFloorShadow(bool shadow) { mFloorShadow = shadow; }
     bool FloorShadow() const { return mFloorShadow; }
     void SetLodType(LODType lod) { mForceLod = lod; }
+#ifdef HX_NATIVE
+    // Read-only access to the LOD groups for native consumers (milo-viewer needs
+    // to know which drawables the asset demotes to a lower LOD). HX_NATIVE-gated
+    // so the match build's token stream is untouched: it passes no /D, so these
+    // never exist there.
     /** Number of LOD groups this Character defines. A drawable in no LOD group
         is drawn at every LOD; a drawable in group i is drawn only at LOD i. */
     int NumLods() const { return mLods.size(); }
     const Lod &GetLod(int i) const { return mLods[i]; }
+#endif
     void SetDebugDrawInterestObjects(bool);
     void ForceBlink();
     void CopyBoundingSphere(Character *);
