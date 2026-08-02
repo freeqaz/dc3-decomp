@@ -84,6 +84,7 @@ Tool-specific deep docs live in subdirectories:
 | [native/TESTING.md](native/TESTING.md) | Native build testing guide — GTest fixtures, ASan, debugging |
 | [native/dta/OVERLAY_ENGINE.md](native/dta/OVERLAY_ENGINE.md) | DTA overlay engine — file overlay system design |
 | [native/dta/USAGE_GUIDE.md](native/dta/USAGE_GUIDE.md) | DTA overlay usage — settings toggles, locale strings |
+| [investigations/2026-08-02-viewer-rb3-asset-render/](investigations/2026-08-02-viewer-rb3-asset-render/README.md) | milo-viewer dropped geometry the asset asks for — LOD resolution from `Character::mLods`, material-less geometry libraries, outlier-guarded auto-framing |
 
 ## General
 
