@@ -75,6 +75,7 @@ Tool-specific deep docs live in subdirectories:
 | [debugging/native.md](debugging/native.md) | **Start here** — native port debugging, ASan, headless testing, scripted input, ObjRef rings |
 | [debugging/web.md](debugging/web.md) | Web build debugging — WASM/Emscripten testing, CDP debugger |
 | [tools/HTTP_DEBUG_SERVER.md](tools/HTTP_DEBUG_SERVER.md) | HTTP debug server — live DTA eval, screenshots, telemetry, settings, object introspection |
+| [native/CONSOLE_DTA_EVAL.md](native/CONSOLE_DTA_EVAL.md) | Evaluating DTA on a **real Xbox 360** and getting the answer back on the PC — surface survey, wire protocols, `tools/console/dc3_eval.py` |
 
 ## Native Port
 
