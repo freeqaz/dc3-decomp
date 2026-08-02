@@ -1081,6 +1081,14 @@ bool IsUselessLoad(const char *file) {
     return useless;
 }
 
+#ifdef HX_NATIVE
+// Why the native main loop ended, consumed by the DC3_EXIT record in
+// native/src/main_native.cpp. Defined here rather than there so that every
+// binary linking App.cpp resolves it — milo-tests links App.cpp but supplies its
+// own main() and never sees main_native.cpp.
+const char *gDc3ExitReason = nullptr;
+#endif
+
 void App::Run() { RunWithoutDebugging(); }
 
 void App::RunWithoutDebugging() {
@@ -1089,9 +1097,20 @@ void App::RunWithoutDebugging() {
     int frameCount = 0;
     bool windowed = (gNativeWindow != nullptr);
 
+    // Headless frame cap. This is a *deliberate self-termination*, and it was
+    // repeatedly mistaken for a crash: a default agent run
+    // (scripts/dc3-agent-test.sh, MILO_MAX_FRAMES=100000) reaches the cap after
+    // ~55 minutes at 30 fps, exits with code 0, and prints a success-shaped line
+    // that is buried under megabytes of DC3_TEL telemetry. Long capture runs
+    // therefore looked "complete, with less data".
+    //
+    // MILO_MAX_FRAMES=0 (or negative) now means UNLIMITED. It previously
+    // collapsed to the 10000 default — i.e. asking for "no cap" silently gave
+    // you the *shortest* run of all, about 5 minutes.
     int maxFrames = 10000;
     const char *maxFramesEnv = getenv("MILO_MAX_FRAMES");
     if (maxFramesEnv) maxFrames = atoi(maxFramesEnv);
+    const bool unlimitedFrames = (maxFramesEnv && maxFrames <= 0);
     if (maxFrames <= 0) maxFrames = 10000;
 
     GameplayTelemetry::Init();
@@ -1101,8 +1120,15 @@ void App::RunWithoutDebugging() {
 
     if (windowed)
         MILO_LOG("DC3 Native: Windowed mode - close window or press ESC to exit\n");
+    else if (unlimitedFrames)
+        MILO_LOG("DC3 Native: Headless mode — no frame cap (MILO_MAX_FRAMES<=0)\n");
     else
-        MILO_LOG("DC3 Native: Headless mode — running %d frames\n", maxFrames);
+        MILO_LOG(
+            "DC3 Native: Headless mode — will SELF-TERMINATE after %d frames "
+            "(~%d min at 30fps); set MILO_MAX_FRAMES=0 for no cap\n",
+            maxFrames,
+            maxFrames / 1800
+        );
 
     while (true) {
         SystemPoll(false);
@@ -1210,11 +1236,26 @@ void App::RunWithoutDebugging() {
         frameCount++;
 
         if (windowed) {
-            if (glfwWindowShouldClose(gNativeWindow))
+            if (glfwWindowShouldClose(gNativeWindow)) {
+                gDc3ExitReason = "window_closed";
                 break;
+            }
         } else {
-            if (frameCount >= maxFrames) {
-                MILO_LOG("DC3 Native: %d frames completed, engine stable!\n", frameCount);
+            if (!unlimitedFrames && frameCount >= maxFrames) {
+                // Say plainly that WE stopped the run, and why. The old wording
+                // was only "engine stable!", which read as a clean finish and hid
+                // the fact that an unattended capture had just been truncated by
+                // the cap. The original phrase is retained verbatim because
+                // native/tests/test_headless_boot.cpp matches on it.
+                MILO_LOG(
+                    "DC3 Native: FRAME CAP REACHED — %d frames completed, engine "
+                    "stable! Self-terminating because MILO_MAX_FRAMES=%d was "
+                    "reached. This is NOT a crash; set MILO_MAX_FRAMES=0 for no "
+                    "cap.\n",
+                    frameCount,
+                    maxFrames
+                );
+                gDc3ExitReason = "frame_cap_reached";
                 break;
             }
         }

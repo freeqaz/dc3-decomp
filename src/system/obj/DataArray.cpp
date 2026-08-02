@@ -138,6 +138,40 @@ class DataCallStackFrame {
 public:
     DataCallStackFrame(DataArray *arr) {
         MILO_ASSERT(gCallStackPtr - gCallStack < HANDLE_STACK_SIZE, 0x2F);
+#ifdef HX_NATIVE
+        // On Xbox a failed MILO_ASSERT raised a modal dialog, so the store below
+        // was never reached with a full stack. In the native port Debug::Fail
+        // deliberately RETURNS (asserts are non-fatal — see Debug.cpp), so
+        // execution falls straight through a failed assert into the store, which
+        // then writes past gCallStack[100] into the BSS immediately after it:
+        // gCallStackPtr, gPreExecuteLevel, DataArray::sDefaultHandler and
+        // gPreExecuteFunc (all declared right after gCallStack above). A
+        // corrupted gPreExecuteFunc is then *called* as a function pointer two
+        // lines down — a wild jump that kills the process with no diagnostic.
+        //
+        // This is reachable in practice: /api/dta/eval evaluates agent-supplied
+        // script, and a crashing eval used to leak frames off this stack
+        // permanently (fixed in 26cc0088, but Debug::mTry and
+        // gDataArrayConditional could not be restored there, so drift can still
+        // accumulate). Refuse the out-of-bounds store and say so once. The
+        // pointer is still advanced so the destructor's matching decrement keeps
+        // the depth balanced, and gPreExecuteFunc is skipped while overflowed.
+        if (gCallStackPtr - gCallStack >= HANDLE_STACK_SIZE) {
+            static bool sWarnedOverflow = false;
+            if (!sWarnedOverflow) {
+                sWarnedOverflow = true;
+                fprintf(
+                    stderr,
+                    "DC3: DTA call stack overflow (depth >= %d) — suppressing "
+                    "out-of-bounds write to gCallStack. Script recursion is too "
+                    "deep, or frames have leaked off the stack.\n",
+                    HANDLE_STACK_SIZE
+                );
+            }
+            ++gCallStackPtr;
+            return;
+        }
+#endif
         *gCallStackPtr++ = arr;
 
         if (gPreExecuteFunc && (gCallStackPtr - gCallStack) <= gPreExecuteLevel) {

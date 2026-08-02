@@ -37,7 +37,14 @@ fi
 : "${DC3_FAST_BOOT:=1}"
 : "${DC3_TEL:=1}"
 : "${DC3_SHOW_SPLASH:=0}"
-: "${MILO_MAX_FRAMES:=100000}"
+# Frame cap. 0 = unlimited (the engine treats <=0 as "no cap").
+#
+# This used to default to 100000, which at 30 fps self-terminates a headless run
+# after ~55 minutes with exit code 0 — repeatedly mistaken for an unexplained
+# crash, because a truncated long capture is otherwise indistinguishable from a
+# completed one. Unattended agent runs should be bounded by the caller (or by
+# --frames), not by a surprise default. Pass --frames N to reinstate a cap.
+: "${MILO_MAX_FRAMES:=0}"
 
 export DC3_HTTP DC3_HTTP_PORT DC3_FAST_BOOT DC3_TEL DC3_SHOW_SPLASH MILO_MAX_FRAMES
 
