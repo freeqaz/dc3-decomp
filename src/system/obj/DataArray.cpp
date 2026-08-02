@@ -469,7 +469,12 @@ void DataArray::SortNodes(int idx) {
         return;
     if (idx >= mSize)
         return;
-    qsort(&mNodes[idx], mSize - idx, 8, NodeCmp);
+    // The literal element size in the target is 8 == sizeof(DataNode) on PPC32.
+    // Spelling it as sizeof(DataNode) keeps the PPC codegen byte-identical
+    // (`li r5, 0x8`) while staying correct on LP64, where DataNode is 16 bytes.
+    // With a hardcoded 8 qsort strides over half-nodes on LP64, so NodeCmp reads
+    // garbage types/pointers and SIGSEGVs (this is what crashed `object_list`).
+    qsort(&mNodes[idx], mSize - idx, sizeof(DataNode), NodeCmp);
 }
 
 void DataArrayGlitchCB(float f, void *v) {
