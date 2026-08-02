@@ -74,11 +74,16 @@ Reads and modifies `NativeSettings` live. Available fields:
 ```bash
 # Arithmetic
 curl -X POST localhost:9090/api/dta/eval -d '{+ 1 2}'
-# {"ok":true,"data":{"type":"int","value":3}}
+# {"ok":true,"data":{"type":"int","typeId":0,"value":3}}
 
 # Set and use variables
 curl -X POST localhost:9090/api/dta/eval -d '{set $x 10}{+ $x 5}'
-# {"ok":true,"data":{"type":"int","value":15}}
+# {"ok":true,"data":{"type":"int","typeId":0,"value":15}}
+
+# Strings come back verbatim (no {symbol ...} workaround needed)
+curl -X POST localhost:9090/api/dta/eval -d '"hello world"'
+# {"ok":true,"data":{"type":"string","typeId":18,"encoding":"utf8",
+#                   "value":"hello world","bytes":11}}
 
 # Query engine state
 curl -X POST localhost:9090/api/dta/eval -d '{ui current_screen}'
@@ -94,9 +99,99 @@ curl -X POST localhost:9090/api/dta/eval \
 
 Executes DTA expressions on the main thread and returns the result. Supports multi-command sequences (separated by `}{`). The body can be raw DTA text or JSON `{"expr": "..."}`.
 
-Result types: `int`, `float`, `symbol`, `object` (returns object name). Functions that return temporary strings (like `sprint`) may produce garbled output — use `sprintf` with variables instead.
-
 **Important**: Use `{ui goto_screen <name>}` for navigation, not `{flow_mgr goto_screen ...}` — `flow_mgr` is not a registered object in the native port. Jumping to screens that require prior setup (e.g. `loading_screen` without a song selected) will crash the engine — use the `MILO_INPUT_SCRIPT` system for safe menu navigation flows.
+
+#### Result types
+
+Every `DataType` serializes to an object carrying a short `type` name *and* the
+numeric `typeId`, so a client can switch on either. Nothing falls through to a
+bare numeric type any more.
+
+| `type` | `typeId` | `value` |
+|--------|----------|---------|
+| `int` | 0 | JSON number |
+| `float` | 1 | JSON number; non-finite floats give `null` plus `"special":"nan"\|"inf"\|"-inf"` (JSON has no NaN literal) |
+| `symbol` | 5 | string |
+| `string` | 18 | string or base64 — see escaping below; also `encoding` and `bytes` |
+| `object` | 4 | object name, plus `class`; `null` for a null object reference |
+| `array` / `command` / `property` | 16 / 17 / 19 | JSON array of nested result objects, plus `size`; capped at 8 levels deep and 256 elements per level (`"truncated":true` when clipped) |
+| `glob` | 20 | always base64, plus `bytes` |
+| `var` | 2 | the dereferenced value as a nested result object, plus `name` |
+| `func` | 3 | `null` (a raw function pointer is meaningless to a client) |
+| `unhandled` | 6 | `null` |
+| `ifdef` / `else` / `endif` / `define` / `include` / `merge` / `ifndef` / `autorun` / `undef` | 7,8,9,32,33,34,35,36,37 | `null` — parse directives, never real results |
+
+**String/glob escaping.** Results are consumed by Python clients, so the body is
+always valid UTF-8 and always `json.loads()`-able:
+
+* valid UTF-8 payloads are sent as text with `"encoding":"utf8"` — quotes,
+  backslashes, newlines, tabs and every other control byte (including NUL, as
+  `\u0000`) are escaped, so they round-trip exactly;
+* anything that is not valid UTF-8 (Latin-1 text, binary junk) is sent as
+  `"encoding":"base64"` — `base64.b64decode(value)` gives the exact bytes back.
+  Raw invalid bytes are never emitted.
+
+`bytes` is the exact payload length in bytes (the trailing NUL of a DTA string
+is not counted). Other endpoints' strings (object names, class names, …) use the
+same escaper, but a non-UTF-8 name is escaped lossily as Latin-1 rather than
+base64.
+
+Functions that return temporary strings (like `sprint`) may still return a stale
+engine buffer — that is a DTA-level quirk, not a serialization one; use
+`sprintf` with variables instead.
+
+#### Size limits
+
+| Limit | Value | Behaviour when exceeded |
+|-------|-------|-------------------------|
+| Request body (`DtaEval::kMaxScriptBytes`) | **16384** | `413` + `{"ok":false,"error":"Request body too large (N bytes, max 16384 — RB3E_DTA_SCRIPT_MAX)"}` |
+| Result payload (`DtaEval::kMaxResultBytes`) | **32768** | `413` + `{"ok":false,"error":"DTA result too large (…max 32768 — RB3E_DTA_OUTPUT_MAX)…"}` |
+| Nesting depth (`DtaEval::kMaxNestingDepth`) | **256** | `400` + explicit error |
+| Transport ceiling (`kMaxHttpBodyBytes`, HttpServer.cpp) | 1 MiB | bare `413` from cpp-httplib before the body is buffered |
+
+The two DTA caps deliberately equal the RB3Enhanced console channel's
+`RB3E_DTA_SCRIPT_MAX` / `RB3E_DTA_OUTPUT_MAX` (see `tools/console/dc3_eval.py`),
+so a script that fits over the console also fits over localhost. Neither cap
+truncates silently — you always get an explicit error naming the limit. (The
+console rejects a body of *exactly* 16384; the HTTP endpoint accepts it and
+rejects 16385.)
+
+Before this was fixed the endpoint inherited cpp-httplib's
+`CPPHTTPLIB_FORM_URL_ENCODED_PAYLOAD_MAX_LENGTH` default of 8192 — `curl -d`
+sends `application/x-www-form-urlencoded`, so any body over 8 KiB was rejected
+with a bodyless 413, *tighter* than the console channel.
+
+#### Crash recovery
+
+Arbitrary script can segfault the engine, so eval runs under a
+`sigsetjmp`/`siglongjmp` net for SIGSEGV/SIGBUS/SIGFPE/SIGABRT and returns
+`{"ok":false,"error":"DTA eval crashed: …"}` instead of taking the process down.
+
+`siglongjmp` does **not** run C++ destructors, so every scope guard between the
+crash site and the recovery point is skipped — including `DataCallStackFrame`,
+which is what pops `gCallStackPtr`. Each crashed eval therefore used to burn one
+or more of the 100 `HANDLE_STACK_SIZE` slots permanently, and after enough
+failures the engine died on the **main thread** inside unrelated script with a
+misleading `MILO_ASSERT(gCallStackPtr - gCallStack < HANDLE_STACK_SIZE)`.
+
+`DtaEval::ScriptStateGuard` (native/src/platform/DtaEvalSupport.h) snapshots the
+interpreter globals — `gCallStackPtr`, `gPreExecuteFunc`/`gPreExecuteLevel`,
+`gDataThis`, `gDataDir`, the `$`-var stack pointer, `DataArray::gFile`, and the
+per-thread heap/temp-allocation stack — and restores them from its destructor,
+which runs on every path out of the handler including the post-`longjmp` return.
+When it repairs something the response says so and a line is logged:
+
+```
+[HttpServer] DTA eval recovered from SIGABRT (abort) for expression: {if 1 {fail "boom"}}
+[HttpServer] repaired leaked DTA state: call stack depth 2 -> 0
+```
+
+Two pieces of state still cannot be repaired because they are private to
+`src/` (the PPC decomp, which this native-only code must not touch):
+`Debug::mTry` (a crash inside a `MILO_TRY` leaves the try-depth incremented) and
+`gDataArrayConditional` (`#ifdef` nesting state, file-static in `DataArray.cpp`).
+Both are harmless in practice; fixing them needs an `HX_NATIVE`-gated accessor in
+`src/` with PPC codegen verified byte-identical.
 
 ### DTA Functions List
 

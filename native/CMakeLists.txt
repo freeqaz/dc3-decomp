@@ -1130,6 +1130,7 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/RenderState_Native.cpp
     src/platform/DataParser_Native.cpp
     $<$<NOT:$<BOOL:${EMSCRIPTEN}>>:src/platform/HttpServer.cpp>
+    src/platform/DtaEvalSupport.cpp   # DTA eval state guard + result serializer (unit-tested)
     src/engine_stubs_generated.cpp
     src/StubTrace.cpp
     src/native_link_glue.cpp
@@ -1859,6 +1860,7 @@ if(BUILD_TESTS)
         tests/test_rand_seed.cpp
         tests/test_threadtask_replace.cpp
         tests/test_shaderprogram_cache_logic.cpp
+        tests/test_dta_eval_endpoint.cpp
         src/dc3_render_hook.cpp       # Phase 0.2a: HamRenderHook (registers with milo-engine)
         ${DC3_ENGINE_SOURCES}
         ${DC3_NATIVE_CORE_SOURCES_ENGINE}

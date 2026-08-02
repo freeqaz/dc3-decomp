@@ -5,6 +5,7 @@
 #ifdef DC3_HTTP_SERVER
 
 #include "platform/HttpServer.h"
+#include "platform/DtaEvalSupport.h"
 #include "platform/NativeSettings.h"
 #include "platform/Rnd_Wgpu.h"
 #include "telemetry/GameplayTelemetry.h"
@@ -20,6 +21,16 @@
 #include "ui/UI.h"
 #include "StubTrace.h"
 
+// cpp-httplib rejects any application/x-www-form-urlencoded body larger than
+// CPPHTTPLIB_FORM_URL_ENCODED_PAYLOAD_MAX_LENGTH (default 8192) with a bare,
+// bodyless 413 — before our handler ever runs. `curl -d` sends exactly that
+// content type, so the default silently imposed an 8 KiB cap on /api/dta/eval,
+// tighter than the console's 16 KiB RB3E_DTA_SCRIPT_MAX. Raise it well past our
+// own cap so the explicit, JSON-formatted check in the handler is what clients
+// actually hit.
+#define CPPHTTPLIB_FORM_URL_ENCODED_PAYLOAD_MAX_LENGTH kMaxHttpBodyBytes
+static const size_t kMaxHttpBodyBytes = 1024 * 1024; // hard transport ceiling
+
 #include <httplib.h>
 #include <cstdio>
 #include <cstdlib>
@@ -33,21 +44,12 @@ extern std::map<Symbol, DataFunc*> gDataFuncs;
 
 HttpServer* TheHttpServer = nullptr;
 
-// JSON helpers — hand-rolled to avoid pulling in a JSON library
+// JSON helpers — hand-rolled to avoid pulling in a JSON library.
+// The escaper lives in DtaEvalSupport so it can be unit-tested; it escapes all
+// control bytes and any byte that would make the response invalid UTF-8, so a
+// Python client's json.loads() can never choke on engine-supplied text.
 static std::string JsonEscape(const std::string& s) {
-    std::string out;
-    out.reserve(s.size() + 8);
-    for (char c : s) {
-        switch (c) {
-            case '"':  out += "\\\""; break;
-            case '\\': out += "\\\\"; break;
-            case '\n': out += "\\n"; break;
-            case '\r': out += "\\r"; break;
-            case '\t': out += "\\t"; break;
-            default:   out += c; break;
-        }
-    }
-    return out;
+    return DtaEval::JsonEscape(s);
 }
 
 static std::string JsonOk(const std::string& dataJson) {
@@ -136,6 +138,12 @@ bool HttpServer::Start(int port) {
 
     mStartTime = TheTaskMgr.Seconds(TaskMgr::kRealTime);
     auto* svr = new httplib::Server();
+    // Hard transport ceiling. Anything under this reaches a handler and gets a
+    // JSON error naming the real cap (DtaEval::kMaxScriptBytes); anything over
+    // is refused by httplib with a bare 413 before it is buffered in memory.
+    static_assert(kMaxHttpBodyBytes >= DtaEval::kMaxScriptBytes,
+                  "transport ceiling must not be tighter than the script cap");
+    svr->set_payload_max_length(kMaxHttpBodyBytes);
     mServer = svr;
     RegisterEndpoints();
 
@@ -342,10 +350,42 @@ static void DtaEvalCrashHandler(int sig) {
     raise(sig);
 }
 
+// RAII wrapper for the crash-handler install/restore pair. Declared *before*
+// the sigsetjmp in HandleDtaEval so that its destructor runs on every exit path
+// out of that frame — including the return taken after siglongjmp — and cannot
+// be skipped by an early return or a failure path added later.
+namespace {
+struct DtaEvalSignalGuard {
+    struct sigaction oldSegv, oldBus, oldFpe, oldAbrt;
+
+    DtaEvalSignalGuard() {
+        struct sigaction sa;
+        memset(&sa, 0, sizeof(sa));
+        sa.sa_handler = DtaEvalCrashHandler;
+        sigemptyset(&sa.sa_mask);
+        sa.sa_flags = 0;
+        sigaction(SIGSEGV, &sa, &oldSegv);
+        sigaction(SIGBUS, &sa, &oldBus);
+        sigaction(SIGFPE, &sa, &oldFpe);
+        sigaction(SIGABRT, &sa, &oldAbrt);
+        sInDtaEval = 1;
+        sDtaEvalSignal = 0;
+    }
+
+    ~DtaEvalSignalGuard() {
+        sInDtaEval = 0;
+        sigaction(SIGSEGV, &oldSegv, nullptr);
+        sigaction(SIGBUS, &oldBus, nullptr);
+        sigaction(SIGFPE, &oldFpe, nullptr);
+        sigaction(SIGABRT, &oldAbrt, nullptr);
+    }
+};
+} // namespace
+
 // Pre-validate nesting depth as a fast-reject before hitting the parser.
 // The parser itself has a depth guard (kMaxParseDepth=512 in DataFile.cpp),
 // but rejecting here gives a cleaner error message and avoids partial parses.
-static const int kMaxDtaNesting = 256;
+static const int kMaxDtaNesting = DtaEval::kMaxNestingDepth;
 
 static int MaxNestingDepth(const char* s) {
     int depth = 0, maxDepth = 0;
@@ -362,7 +402,56 @@ static int MaxNestingDepth(const char* s) {
     return maxDepth;
 }
 
+// Evaluate + serialize. Split out so HandleDtaEval's frame contains only the
+// guards, the sigsetjmp and this call — nothing that could return early past a
+// guard declaration.
+static void RunDtaEval(HttpServer::Command& cmd) {
+    DataArray* parsed = DataReadString(cmd.param1.c_str());
+    if (!parsed || parsed->Size() == 0) {
+        cmd.result.ok = false;
+        cmd.result.httpStatus = 400;
+        cmd.result.error = "Failed to parse DTA expression";
+        if (parsed) parsed->Release();
+        return;
+    }
+
+    // DataReadString returns a top-level array containing parsed commands.
+    // Evaluate each node — for command sub-arrays, Evaluate calls Execute.
+    DataNode result(0);
+    for (int i = 0; i < parsed->Size(); i++) {
+        result = parsed->Evaluate(i);
+    }
+    parsed->Release();
+
+    std::string json = DtaEval::NodeToJson(result);
+
+    // Explicit response cap — mirrors the console's RB3E_DTA_OUTPUT_MAX. Never
+    // truncate silently: an over-cap result is an error the caller can see.
+    if (json.size() > DtaEval::kMaxResultBytes) {
+        cmd.result.ok = false;
+        cmd.result.httpStatus = 413;
+        cmd.result.error = "DTA result too large (" + std::to_string(json.size()) +
+            " bytes, max " + std::to_string(DtaEval::kMaxResultBytes) +
+            " — RB3E_DTA_OUTPUT_MAX); narrow the expression";
+        return;
+    }
+
+    cmd.result.ok = true;
+    cmd.result.jsonData = json;
+}
+
 void HttpServer::HandleDtaEval(Command& cmd) {
+    // Pre-validation: reject oversized scripts (the HTTP layer checks too; this
+    // also covers any non-HTTP caller that queues a kCmdDtaEval directly).
+    if (cmd.param1.size() > DtaEval::kMaxScriptBytes) {
+        cmd.result.ok = false;
+        cmd.result.httpStatus = 413;
+        cmd.result.error = "DTA script too large (" +
+            std::to_string(cmd.param1.size()) + " bytes, max " +
+            std::to_string(DtaEval::kMaxScriptBytes) + " — RB3E_DTA_SCRIPT_MAX)";
+        return;
+    }
+
     // Pre-validation: reject expressions that would stack-overflow the parser
     int nesting = MaxNestingDepth(cmd.param1.c_str());
     if (nesting > kMaxDtaNesting) {
@@ -374,30 +463,22 @@ void HttpServer::HandleDtaEval(Command& cmd) {
         return;
     }
 
-    // Install signal handlers for crash recovery during eval
-    struct sigaction sa_segv, sa_bus, sa_fpe, sa_abrt;
-    struct sigaction old_segv, old_bus, old_fpe, old_abrt;
-    memset(&sa_segv, 0, sizeof(sa_segv));
-    sa_segv.sa_handler = DtaEvalCrashHandler;
-    sigemptyset(&sa_segv.sa_mask);
-    sa_segv.sa_flags = 0;
-    sa_bus = sa_fpe = sa_abrt = sa_segv;
-
-    sigaction(SIGSEGV, &sa_segv, &old_segv);
-    sigaction(SIGBUS, &sa_bus, &old_bus);
-    sigaction(SIGFPE, &sa_fpe, &old_fpe);
-    sigaction(SIGABRT, &sa_abrt, &old_abrt);
-
-    sInDtaEval = 1;
-    sDtaEvalSignal = 0;
+    // Both guards MUST be declared before the sigsetjmp: siglongjmp does not run
+    // destructors, so only guards living in *this* frame survive a crash — their
+    // destructors run when we return from the recovery block below.
+    //
+    // stateGuard snapshots the DTA interpreter globals (gCallStackPtr above all).
+    // Without it every crashed eval permanently burned one of the 100 handle
+    // stack slots, and the engine later died on the main thread inside unrelated
+    // script with MILO_ASSERT(gCallStackPtr - gCallStack < HANDLE_STACK_SIZE).
+    DtaEval::ScriptStateGuard stateGuard;
+    DtaEvalSignalGuard signalGuard;
 
     if (sigsetjmp(sDtaEvalJmpBuf, 1) != 0) {
-        // Recovered from a crash during DTA eval
-        sInDtaEval = 0;
-        sigaction(SIGSEGV, &old_segv, nullptr);
-        sigaction(SIGBUS, &old_bus, nullptr);
-        sigaction(SIGFPE, &old_fpe, nullptr);
-        sigaction(SIGABRT, &old_abrt, nullptr);
+        // Recovered from a crash during DTA eval. Repair the interpreter state
+        // right here so the description can be logged; the guard destructors
+        // still run on the way out (Restore() is idempotent).
+        std::string repaired = stateGuard.Restore();
 
         const char* sigName = "unknown signal";
         switch (sDtaEvalSignal) {
@@ -408,74 +489,29 @@ void HttpServer::HandleDtaEval(Command& cmd) {
         }
         cmd.result.ok = false;
         cmd.result.error = std::string("DTA eval crashed: ") + sigName;
+        if (!repaired.empty())
+            cmd.result.error += " [interpreter state repaired: " + repaired + "]";
         fprintf(stderr, "[HttpServer] DTA eval recovered from %s for expression: %.200s\n",
                 sigName, cmd.param1.c_str());
+        if (!repaired.empty())
+            fprintf(stderr, "[HttpServer] repaired leaked DTA state: %s\n",
+                    repaired.c_str());
         return;
     }
 
     try {
-        DataArray* parsed = DataReadString(cmd.param1.c_str());
-        if (!parsed || parsed->Size() == 0) {
-            cmd.result.ok = false;
-            cmd.result.httpStatus = 400;
-            cmd.result.error = "Failed to parse DTA expression";
-            if (parsed) parsed->Release();
-            goto cleanup;
-        }
-
-        {
-            // DataReadString returns a top-level array containing parsed commands.
-            // Evaluate each node — for command sub-arrays, Evaluate calls Execute.
-            DataNode result(0);
-            for (int i = 0; i < parsed->Size(); i++) {
-                result = parsed->Evaluate(i);
-            }
-            parsed->Release();
-
-            // Serialize DataNode result to JSON based on type
-            cmd.result.ok = true;
-            switch (result.Type()) {
-                case kDataInt:
-                    cmd.result.jsonData = "{\"type\":\"int\",\"value\":" +
-                        std::to_string(result.UncheckedInt()) + "}";
-                    break;
-                case kDataFloat:
-                    cmd.result.jsonData = "{\"type\":\"float\",\"value\":" +
-                        std::to_string(result.UncheckedFloat()) + "}";
-                    break;
-                case kDataSymbol: {
-                    const char* s = result.UncheckedStr();
-                    cmd.result.jsonData = "{\"type\":\"symbol\",\"value\":\"" +
-                        JsonEscape(s ? s : "") + "\"}";
-                    break;
-                }
-                case kDataObject: {
-                    Hmx::Object* obj = result.GetObj(nullptr);
-                    const char* name = obj ? obj->Name() : "null";
-                    cmd.result.jsonData = "{\"type\":\"object\",\"value\":\"" +
-                        JsonEscape(name) + "\"}";
-                    break;
-                }
-                default:
-                    cmd.result.jsonData = "{\"type\":" +
-                        std::to_string((int)result.Type()) + ",\"value\":null}";
-                    break;
-            }
-        }
+        RunDtaEval(cmd);
     } catch (const std::exception& e) {
         cmd.result.ok = false;
         cmd.result.error = std::string("DTA eval exception: ") + e.what();
+    } catch (const char* msg) {
+        // MILO_FAIL / MILO_ASSERT throw a const char* through TheDebugFailer.
+        cmd.result.ok = false;
+        cmd.result.error = std::string("DTA eval failed: ") + (msg ? msg : "");
     } catch (...) {
         cmd.result.ok = false;
         cmd.result.error = "DTA eval threw unknown exception";
     }
-
-cleanup:
-    sInDtaEval = 0;
-    sigaction(SIGSEGV, &old_segv, nullptr);
-    sigaction(SIGBUS, &old_bus, nullptr);
-    sigaction(SIGFPE, &old_fpe, nullptr);
-    sigaction(SIGABRT, &old_abrt, nullptr);
 }
 
 void HttpServer::HandleSetSetting(Command& cmd) {
@@ -881,6 +917,18 @@ void HttpServer::RegisterEndpoints() {
 
     // POST /api/dta/eval — execute DTA expression
     svr->Post("/api/dta/eval", [this](const httplib::Request& req, httplib::Response& res) {
+        // Explicit request cap — matches the console's RB3E_DTA_SCRIPT_MAX so a
+        // script that fits over the console channel also fits over localhost.
+        // Reported as a 413 with a JSON body; never silently truncated.
+        if (req.body.size() > DtaEval::kMaxScriptBytes) {
+            res.status = 413;
+            res.set_content(JsonError(
+                "Request body too large (" + std::to_string(req.body.size()) +
+                " bytes, max " + std::to_string(DtaEval::kMaxScriptBytes) +
+                " — RB3E_DTA_SCRIPT_MAX)"), "application/json");
+            return;
+        }
+
         // Accept either JSON body {"expr":"..."} or raw text body
         std::string expr;
         if (req.has_header("Content-Type") &&
@@ -917,7 +965,16 @@ void HttpServer::RegisterEndpoints() {
 
         auto result = QueueAndWait(kCmdDtaEval, expr);
         if (result.ok) {
-            res.set_content(JsonOk(result.jsonData), "application/json");
+            std::string body = JsonOk(result.jsonData);
+            if (body.size() > DtaEval::kMaxResultBytes) {
+                res.status = 413;
+                res.set_content(JsonError(
+                    "Response too large (" + std::to_string(body.size()) +
+                    " bytes, max " + std::to_string(DtaEval::kMaxResultBytes) +
+                    " — RB3E_DTA_OUTPUT_MAX)"), "application/json");
+                return;
+            }
+            res.set_content(body, "application/json");
         } else {
             res.status = result.httpStatus;
             res.set_content(JsonError(result.error), "application/json");
