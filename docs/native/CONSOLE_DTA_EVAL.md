@@ -15,14 +15,31 @@ a DC3 console with the same code — see [§8](#8-interface-parity-with-rb3enhan
 
 ## 0. Verdict
 
+> **Start here when you sit down at hardware.** One command, cheapest checks
+> first, tells you in under a minute whether the chain works and which link is
+> broken — it separates *host unreachable* / *port closed* / *connected but no
+> response* / *responded with an error* instead of lumping them into "it didn't
+> work":
+>
+> ```bash
+> python3 tools/console/hw_smoke.py "$DC3_XBOX"
+> ```
+>
+> It reports which title is actually running (so you don't probe DC3 while RB3
+> is up), verifies the XBDM file channel, tries RB3Enhanced `/dta/eval`, and
+> walks you through the zero-cost `.clp` drive probe — checking from the PC that
+> the file really landed, so a wrong drive spelling costs seconds instead of a
+> whole take. Hardware ground truth it encodes:
+> [CONSOLE_HW_FINDINGS.md](CONSOLE_HW_FINDINGS.md).
+
 | # | Surface | Reachable **today**? | Result comes back? | Verdict |
 | --- | --- | --- | --- | --- |
-| **1** | **RndConsole + loose `.dta` over FTP** | **yes, zero binary edits** | **yes** (script writes a file, PC pulls it) | **CHOSEN.** 3 keystrokes per iteration; payloads and results are 100 % PC-driven. |
+| **1** | **RndConsole + loose `.dta` over XBDM** (was: over FTP — [see the §3 correction](#3-chosen-route--rndconsole--loose-dta-pushed-over-xbdm-not-ftp)) | **yes, zero binary edits** | **yes** (script writes a file, PC pulls it) | **CHOSEN.** 3 keystrokes per iteration; payloads and results are 100 % PC-driven. |
 | 2 | DC3Enhanced DLL (RB3Enhanced pattern) | needs a DLL + loader | yes, HTTP request/response | **Best long-term.** Design + addresses in §6. Not implemented here (sibling agent owns the RB3E side). |
 | 3 | AppChild, TCP 4543 | needs **3 byte-patches** to `debug.xex` | **no** — wire protocol is fire-and-forget | Real, shipped, protocol recovered (§5). Command injector, not an eval channel. Free to test on Xenia. |
 | 4 | Holmes, TCP 4544 | debug XEX only, needs a PC-side server nobody has written | partially (`MILO_LOG` tee) | Not worth it on its own; only interesting as the thing that unlocks #3 without patches. |
 | 5 | OSC, UDP 12346 | no | n/a | Confirmed dead end. |
-| 6 | xbdm | no | n/a | Confirmed dead end. |
+| 6 | xbdm **as a title-side command channel** | no | n/a | Confirmed dead end (no `DmRegisterCommandProcessor` import). **But xbdm as a *file transport* is very much alive and is now how route 1 moves files** — that needs nothing from the title. See §3. |
 
 The decisive constraint is §4: **an RGH console cannot pass launch arguments to a title.** That
 kills #3 and #4 outright unless you edit the executable, and once you are willing to edit the
@@ -192,6 +209,14 @@ const char *CachedDataFile(const char *file, bool &b) {
    `.text:0x825EEEB8` and the decomp matches it 100 %, and `Debug::Fail` → `Debug::Modal` ends in
    `Exit(1, true)` (`Debug.cpp:439-444`) — the title dies.
 
+   **Sharpened 2026-08-02 from hardware:** `D:\` and `GAME:\` are the *same mount*. XBDM
+   `dirlist name="D:\"` and `dirlist name="GAME:\"` return byte-identical listings (both are the
+   running title's root, alongside `Usb1:\Games\<title>` and `\Device\Mass1\Games\<title>`). So
+   the fatality has **nothing to do with path resolution** — `game:\` resolves fine. It is purely
+   DC3's own `FileIsLocal()` `MILO_ASSERT` rejecting the literal drive *string* `"game"`. `d:\`
+   works not because it points somewhere different, but because it names the identical directory
+   under a spelling the assert lets through.
+
    `NewFile` (`File.cpp:610`) calls `FileIsLocal` **unconditionally**, before the read/write
    split, so writes reach the assert too. *(This invalidated the `GAME:\%s` string patch that
    [KINECT_CAPTURE.md](KINECT_CAPTURE.md) used to suggest; that doc is now corrected and carries
@@ -216,14 +241,46 @@ So: **push the probe with a drive-qualified path, get the answer back on a relat
 
 ---
 
-## 3. CHOSEN ROUTE — RndConsole + loose `.dta` over FTP
+## 3. CHOSEN ROUTE — RndConsole + loose `.dta`, pushed over **XBDM** (not FTP)
+
+> ### ⚠ Correction (2026-08-02, from hardware): the file channel is XBDM, not FTP
+>
+> This section originally specified FTP. **FTP cannot work for this transport**,
+> and the reason is structural rather than a configuration mistake:
+>
+> On an RGH/JTAG console the FTP server belongs to the **dashboard**
+> (Aurora / FSD / DashLaunch). **Launching a title unloads the dashboard and its
+> FTP server with it.** But this route has to push `p.dta` *while DC3 is
+> running* — so FTP is unavailable in precisely the situation it exists to
+> serve. Verified on the live console: with a title running, port 21 is closed
+> while XBDM on 730 answers normally. (`../xex-patcher/tools/xbox.sh` documents
+> the same behaviour at the top of the file: *"FTP … only while the Aurora
+> dashboard is running (launching a title unloads Aurora + FTP)"*.)
+>
+> **XBDM survives a title launch**, and supports `sendfile` / `getfile` /
+> `mkdir` / `delete`. Both directions are hardware-verified, including a
+> 10240-byte byte-identical round-trip. So XBDM carries both legs: pushing the
+> probe and fetching `dc3_out.txt` / `dc3_done.txt`.
+>
+> `dc3_eval.py -T file` now defaults to `--file-channel xbdm`; `--file-channel
+> ftp` keeps the old path for a console sitting at the dashboard. Full evidence
+> and the wire details in [CONSOLE_HW_FINDINGS.md](CONSOLE_HW_FINDINGS.md).
+>
+> Note this does **not** contradict §1e. That says DC3's XEX imports no
+> `DmRegisterCommandProcessor`, so you cannot add a custom xbdm command *inside
+> the game* — still true. XBDM is used here purely as a **file transport**,
+> which needs nothing from the title.
 
 ### 3.1 One-time console setup
 
 1. Boot `orig-assets/debug.xex` from an **extracted** install (see
    [KINECT_CAPTURE.md §Route A](KINECT_CAPTURE.md) for the debug-XEX boot procedure; xbdm must be
    available). Plug in a USB keyboard.
-2. Make sure the console runs an FTP server (DashLaunch / FSD / Aurora — standard on RGH).
+2. Nothing else to set up for the file channel — XBDM is already listening on
+   730 (that is what you booted the debug XEX with). *For the legacy
+   `--file-channel ftp` path only:* the console must be sitting at a dashboard
+   that serves FTP, which, per the correction above, it will not be once DC3 is
+   running.
 3. Establish two names for **the same folder** (the one containing `default.xex`):
    * `--ftp-dir` — as FTP sees it, e.g. `/Hdd1/Games/DanceCentral3`
    * `--game-path` — as the *title* sees it, e.g. `Hdd1:\Games\DanceCentral3` (multi-character
@@ -305,29 +362,41 @@ otherwise. So overwriting `p.dta` between iterations is enough — no cache bust
 
 ### 3.4 Client usage
 
+> **Set `$DC3_XBOX` and never type a literal IP.** Console addresses move; an IP
+> pasted into a doc rots silently and the next person debugs a dead host instead
+> of their actual problem. This page used to name `192.168.1.60`, which had been
+> dead for a long time. The address that answers today is discoverable, and is
+> already the default in `../xex-patcher/tools/xbox.sh` (`XBOX=`):
+>
+> ```bash
+> nmap -n -Pn -p 21,730,21070 --open 192.168.8.0/24   # whatever your subnet is
+> ```
+
 ```bash
-# offline sanity check (validator + parser + wire encoder + probe + FTP round-trip)
+# offline sanity check (validator + parser + wire encoder + probe + both
+# file-channel round-trips against in-process fake consoles)
 python3 tools/console/dc3_eval.py --self-test
+
+# is the chain alive at all? cheapest-first, names the broken link
+python3 tools/console/hw_smoke.py "$DC3_XBOX"
 
 # print the one-time console line
 python3 tools/console/dc3_eval.py --print-bootstrap \
-    --ftp-host 192.168.1.60 --ftp-dir /Hdd1/Games/DanceCentral3 \
     --game-path 'Hdd1:\Games\DanceCentral3'
 
 # evaluate on hardware
-export DC3_XBOX=192.168.1.60
-export DC3_FTP_DIR=/Hdd1/Games/DanceCentral3
+export DC3_XBOX=<your console ip>
 export DC3_GAME_PATH='Hdd1:\Games\DanceCentral3'
 python3 tools/console/dc3_eval.py -T file '{ui current_screen}'
 python3 tools/console/dc3_eval.py -T file -f probes/dump_venue.dta --timeout 60
 
-# BATCH: one FTP round-trip and ONE keypress for the whole set,
+# BATCH: one push and ONE keypress for the whole set,
 # one result line per command, in order
 python3 tools/console/dc3_eval.py -T file \
     -b '{ui current_screen}' -b '{rnd frame}' -b '{$venue get_showing}'
 
 # a DC3Enhanced DLL (route 2) -- same flags, no keypress
-python3 tools/console/dc3_eval.py 192.168.1.60 '{ui current_screen}'
+python3 tools/console/dc3_eval.py "$DC3_XBOX" '{ui current_screen}'
 
 # the native port
 python3 tools/console/dc3_eval.py localhost -p 9090 '{ui current_screen}'
@@ -336,7 +405,7 @@ python3 tools/console/dc3_eval.py localhost -p 9090 '{ui current_screen}'
 python3 tools/console/dc3_eval.py -T file --diff -b '{ui current_screen}' -b '{rnd frame}'
 
 # poke around interactively
-python3 tools/console/dc3_eval.py 192.168.1.60 --repl
+python3 tools/console/dc3_eval.py "$DC3_XBOX" --repl
 ```
 
 **Batch before you loop.** Per-round-trip cost dominates on every transport — an HTTP request on
@@ -411,7 +480,9 @@ Xenia implements `ExLoadedCommandLine` with a passthrough
 argument-gated surface can be exercised in the emulator, today, with no patching**:
 
 ```bash
-xenia --cl "-app_child -host_logging -holmes_host 192.168.1.50" default.xex
+# $HOLMES_HOST is *your workstation's* IP (the console/emulator dials out to it),
+# NOT the console's -- don't confuse it with $DC3_XBOX.
+xenia --cl "-app_child -host_logging -holmes_host $HOLMES_HOST" default.xex
 ```
 
 Use this to validate the AppChild wire encoder (§5) before touching hardware — see the

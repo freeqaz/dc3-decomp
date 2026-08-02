@@ -623,7 +623,7 @@ is sequential and scripted; the only manual work is menu navigation.
    RB3Enhanced. Note the console IP.
 2. Sanity-check the channel — the arithmetic probe must return `3`:
    ```bash
-   CONSOLE=192.168.1.x
+   CONSOLE=${RB3_XBOX:?export RB3_XBOX=<console ip> first}
    curl -s "http://$CONSOLE:21070/execute?script=%7B%2B%201%202%7D"
    ```
    If this returns nothing, `AllowScripts` is off or the DLL didn't load. Stop and fix.

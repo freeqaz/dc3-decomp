@@ -347,7 +347,10 @@ real hardware.
 ```python
 from state_diff.transport import ConsoleTarget, make_target
 
-target = make_target("console:192.168.1.50")     # HTTP transport
+target = make_target("console:%s" % os.environ["DC3_XBOX"])   # HTTP transport
+# ^ use $DC3_XBOX, never a literal IP -- console addresses move and a stale one
+#   sends the next reader debugging a dead host. See
+#   docs/native/CONSOLE_HW_FINDINGS.md for how to find the live address.
 # or wrap any transport object directly:
 target = ConsoleTarget(FileTransport(...), name="dc3-xex")
 ```
