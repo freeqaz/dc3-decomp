@@ -37,6 +37,10 @@ void ViewerConfig::PrintHelp(FILE* f) {
     fprintf(f, "  --width <pixels>           Render width (default: 1280)\n");
     fprintf(f, "  --height <pixels>          Render height (default: 720)\n");
     fprintf(f, "  --verbose, -v              Print detailed object/drawable info\n");
+    fprintf(f, "  --show-all-lods            Draw every LOD variant, including ones a\n");
+    fprintf(f, "                             higher-detail sibling already covers\n");
+    fprintf(f, "  --no-fallback-material     Do not give material-less meshes a neutral\n");
+    fprintf(f, "                             grey; leave them undrawn as the file ships them\n");
     fprintf(f, "  --export-textures <dir>    Export all textures as PNG and exit\n");
     fprintf(f, "  --export-materials <dir>   Export all materials as JSON and exit\n");
     fprintf(f, "  --export-gltf <path>       Export scene as glTF 2.0 and exit\n");
@@ -146,6 +150,10 @@ ViewerConfig ViewerConfig::Parse(int argc, char** argv) {
             setenv("MILO_HEIGHT", argv[++i], 1);
         } else if (strcmp(argv[i], "--verbose") == 0 || strcmp(argv[i], "-v") == 0) {
             cfg.verbose = true;
+        } else if (strcmp(argv[i], "--show-all-lods") == 0) {
+            cfg.showAllLods = true;
+        } else if (strcmp(argv[i], "--no-fallback-material") == 0) {
+            cfg.fallbackMaterial = false;
         } else if (strcmp(argv[i], "--export-textures") == 0 && i + 1 < argc) {
             cfg.exportTexturesDir = argv[++i];
         } else if (strcmp(argv[i], "--export-materials") == 0 && i + 1 < argc) {

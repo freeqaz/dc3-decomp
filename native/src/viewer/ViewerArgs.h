@@ -57,6 +57,12 @@ struct ViewerConfig {
     int videoFps = 30;
     bool startPaused = false;
     bool verbose = false;
+    // Draw every LOD variant, even ones a higher-detail sibling already covers.
+    bool showAllLods = false;
+    // Give meshes that ship no RndMat a neutral prelit grey so geometry-library
+    // milos (which get their materials from the venue that instantiates them)
+    // are visible instead of blank. Disable to see exactly what the file ships.
+    bool fallbackMaterial = true;
     bool dumpBones = false;
     bool directPose = false;
     int maxFrames = -1;

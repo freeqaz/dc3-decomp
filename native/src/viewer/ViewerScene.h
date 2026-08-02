@@ -49,8 +49,12 @@ struct ViewerScene {
     RndEnviron* FindEnvironment() const;
     void PrintSummary(bool verbose) const;
 
+    // Neutral grey handed to meshes that ship no RndMat (geometry-library milos)
+    class RndMat* fallbackMat = nullptr;
+
     // --- Setup ---
     void ResolveMeshVisibility(const ViewerConfig& cfg);
+    void ApplyFallbackMaterial(const ViewerConfig& cfg);
     void SetupSyntheticLights(const ViewerConfig& cfg);
     void AutoFrameCamera(OrbitCamera& cam, RndCam* rndCam, const ViewerConfig& cfg) const;
 

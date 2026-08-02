@@ -31,6 +31,8 @@
 #include <cstring>
 #include <cmath>
 #include <climits>
+#include <algorithm>
+#include <vector>
 
 bool ViewerScene::Load(const char* miloAbsPath, const ViewerConfig& cfg) {
     printf("Milo Viewer: loading milo file...\n");
@@ -323,17 +325,68 @@ void ViewerScene::PrintSummary(bool verbose) const {
     }
 }
 
+// True when `mesh` is a level-of-detail variant that a higher-detail sibling in
+// the same ObjectDir already covers, i.e. drawing it would double-draw geometry
+// the full engine's Character::DrawLodOrShadow would have picked between.
+//
+// A bare `strstr(name, "_lod")` is NOT sufficient: RB3's crowd characters are
+// authored *as* their LOD-2 asset (char/crowd/gen/crowd_female01 ships exactly
+// one body mesh, `female_crowd_body01_lod02.mesh`, with no sibling), so the
+// blanket test hid the entire character and left two disembodied hands.
+// DC3's own assets always ship the sibling, so this is a no-op for DC3 content:
+//   crowd_f_body01_lod.mesh -> crowd_f_body01.mesh      (exists, still hidden)
+//   aubrey01_lod.1.mesh     -> aubrey01.1.mesh          (exists, still hidden)
+//   aubrey_head_lod1.mesh   -> aubrey_head.mesh         (exists, still hidden)
+static bool IsRedundantLodMesh(ObjectDir* dir, const char* name) {
+    const char* lod = strstr(name, "_lod");
+    if (!lod || !dir) return false;
+
+    size_t prefixLen = (size_t)(lod - name);
+    const char* tail = lod + 4;  // text after "_lod"
+
+    // An explicit LOD index may follow ("_lod1", "_lod02"); everything after it
+    // (a ".N" split-mesh index plus ".mesh") belongs to the sibling's name too.
+    int index = -1;
+    if (*tail >= '0' && *tail <= '9') {
+        index = 0;
+        while (*tail >= '0' && *tail <= '9') { index = index * 10 + (*tail - '0'); tail++; }
+    }
+
+    char candidate[256];
+    snprintf(candidate, sizeof(candidate), "%.*s%s", (int)prefixLen, name, tail);
+    if (dir->Find<RndMesh>(candidate, false)) return true;
+
+    for (int i = 0; i < index; i++) {
+        snprintf(candidate, sizeof(candidate), "%.*s_lod%d%s", (int)prefixLen, name, i, tail);
+        if (dir->Find<RndMesh>(candidate, false)) return true;
+        snprintf(candidate, sizeof(candidate), "%.*s_lod%02d%s", (int)prefixLen, name, i, tail);
+        if (dir->Find<RndMesh>(candidate, false)) return true;
+    }
+    return false;
+}
+
 void ViewerScene::ResolveMeshVisibility(const ViewerConfig& cfg) {
     int hidCount = 0;
+    int keptLod = 0;
     ObjDirItr<RndMesh> meshIt(baseScene, true);
     while (meshIt) {
         const char* name = meshIt->Name();
         size_t len = strlen(name);
 
-        if (strstr(name, "_lod") || strstr(name, "_wrinkle")) {
+        bool lodName = strstr(name, "_lod") != nullptr;
+        bool redundantLod = lodName && !cfg.showAllLods
+            && IsRedundantLodMesh(meshIt->Dir() ? meshIt->Dir() : baseScene, name);
+
+        if (redundantLod || strstr(name, "_wrinkle")) {
             meshIt->SetShowing(false);
             hidCount++;
             if (cfg.verbose) printf("  hide LOD/wrinkle mesh '%s'\n", name);
+        }
+        else if (lodName) {
+            // The only LOD of its group — this IS the geometry, so draw it.
+            keptLod++;
+            if (cfg.verbose)
+                printf("  keep LOD mesh '%s' (no higher-detail sibling)\n", name);
         }
         else if (len > 5 && strcmp(name + len - 5, ".mesh") == 0) {
             bool isSplit = false;
@@ -360,6 +413,59 @@ void ViewerScene::ResolveMeshVisibility(const ViewerConfig& cfg) {
     if (hidCount > 0) {
         printf("Milo Viewer: hid %d meshes (LOD/wrinkle/combined)\n", hidCount);
     }
+    if (keptLod > 0) {
+        printf("Milo Viewer: kept %d lod-named mesh(es) that have no higher-detail "
+               "sibling — they are the geometry, not a redundant copy\n", keptLod);
+    }
+}
+
+void ViewerScene::ApplyFallbackMaterial(const ViewerConfig& cfg) {
+    // Some milos are geometry *libraries*: they ship meshes and no RndMat at all,
+    // because the venue that instantiates them supplies the materials. RB3's
+    // ui/track/gen/tracksystem_meshes is the canonical case — 130 meshes, zero
+    // Mat objects. The engine's RndMesh::DrawShowing hard-skips a mesh whose
+    // Mat() is null (Mesh_Wgpu.cpp, "no material"), and that skip is correct:
+    // without a material there is nothing to bind. The result is a blank frame.
+    //
+    // That is an asset property, not a renderer bug — but a *viewer* exists to
+    // show what is in the file, so a neutral prelit grey is attached and the
+    // substitution is announced. The shape is the asset's; the grey is ours.
+    // --no-fallback-material turns this off. Skipped entirely for export runs so
+    // exported glTF/materials only ever contain what the file actually ships.
+    if (!cfg.fallbackMaterial || cfg.IsExportOnly() || !baseScene) return;
+
+    int matless = 0, total = 0;
+    ObjDirItr<RndMesh> countIt(baseScene, true);
+    while (countIt) {
+        total++;
+        if (!countIt->Mat()) matless++;
+        ++countIt;
+    }
+    if (matless == 0) return;
+
+    RndMat* fallback = Hmx::Object::New<RndMat>();
+    fallback->SetName("viewer_fallback_mat", baseScene);
+    fallback->SetPreLit(true);       // no RndEnviron dependency
+    fallback->SetUseEnv(false);
+    fallback->SetColor(0.68f, 0.68f, 0.70f);
+    fallback->SetAlpha(1.0f);
+    fallback->SetZMode(kZModeNormal);
+    fallback->SetBlend(BaseMaterial::kBlendSrc);  // kBlendDest would draw nothing
+    fallback->SetAlphaCut(false);
+    fallbackMat = fallback;
+
+    ObjDirItr<RndMesh> assignIt(baseScene, true);
+    while (assignIt) {
+        if (!assignIt->Mat()) {
+            assignIt->SetMat(fallback);
+            if (cfg.verbose) printf("  fallback material -> '%s'\n", assignIt->Name());
+        }
+        ++assignIt;
+    }
+
+    printf("Milo Viewer: %d of %d meshes ship NO material and were given a neutral "
+           "prelit grey — their colour below is the VIEWER's, not the asset's "
+           "(--no-fallback-material to disable)\n", matless, total);
 }
 
 void ViewerScene::SetupSyntheticLights(const ViewerConfig& cfg) {
@@ -431,6 +537,15 @@ void ViewerScene::AutoFrameCamera(OrbitCamera& cam, RndCam* rndCam, const Viewer
     float maxX = -1e10f, maxY = -1e10f, maxZ = -1e10f;
     int meshCount = 0;
 
+    // Every world-space coordinate is also kept per axis so a robust (percentile)
+    // bound can be computed as a fallback. A single garbage vertex otherwise
+    // destroys the framing: RB3's ui/track/gen/tracksystem_meshes decodes one
+    // vertex at Y=121458 (both this decoder and rb3-xenon's independent one
+    // produce that same number, so the outlier is in the asset / a shared
+    // vertex-format branch, not in the framing code), which parked the camera
+    // 243180 units out and made the frame blank.
+    std::vector<float> xs, ys, zs;
+
     bool charFraming = character && !cfg.subdirs.empty();
     ObjDirItr<RndMesh> bboxIt(baseScene, !charFraming);
     while (bboxIt) {
@@ -455,6 +570,7 @@ void ViewerScene::AutoFrameCamera(OrbitCamera& cam, RndCam* rndCam, const Viewer
                 if (wx < minX) minX = wx; if (wx > maxX) maxX = wx;
                 if (wy < minY) minY = wy; if (wy > maxY) maxY = wy;
                 if (wz < minZ) minZ = wz; if (wz > maxZ) maxZ = wz;
+                xs.push_back(wx); ys.push_back(wy); zs.push_back(wz);
             }
         } else if (ncv > 0 && owner->CompressedVerts()) {
             const unsigned char* data = owner->CompressedVerts();
@@ -474,14 +590,41 @@ void ViewerScene::AutoFrameCamera(OrbitCamera& cam, RndCam* rndCam, const Viewer
                 if (wx < minX) minX = wx; if (wx > maxX) maxX = wx;
                 if (wy < minY) minY = wy; if (wy > maxY) maxY = wy;
                 if (wz < minZ) minZ = wz; if (wz > maxZ) maxZ = wz;
+                xs.push_back(wx); ys.push_back(wy); zs.push_back(wz);
             }
         } else {
             if (px < minX) minX = px; if (px > maxX) maxX = px;
             if (py < minY) minY = py; if (py > maxY) maxY = py;
             if (pz < minZ) minZ = pz; if (pz > maxZ) maxZ = pz;
+            xs.push_back(px); ys.push_back(py); zs.push_back(pz);
         }
         meshCount++;
         ++bboxIt;
+    }
+
+    // Outlier guard. The percentile bound is used ONLY on an axis whose raw span
+    // is more than kOutlierRatio times the robust span — i.e. only when a handful
+    // of vertices are demonstrably lying. Well-formed assets keep their exact
+    // historical framing, so this cannot silently crop anything.
+    if (xs.size() >= 200) {
+        const float kOutlierRatio = 4.0f;
+        auto robustAxis = [&](std::vector<float>& v, float& lo, float& hi) {
+            std::sort(v.begin(), v.end());
+            size_t n = v.size();
+            size_t k = n / 200;  // 0.5%
+            if (k == 0) k = 1;
+            float rlo = v[k], rhi = v[n - 1 - k];
+            float rawSpan = hi - lo, robSpan = rhi - rlo;
+            if (robSpan > 0.0f && rawSpan > robSpan * kOutlierRatio) {
+                printf("Milo Viewer: WARNING outlier vertices — raw span %.2f vs robust "
+                       "span %.2f; framing on the robust bound [%.2f, %.2f] (raw was "
+                       "[%.2f, %.2f])\n", rawSpan, robSpan, rlo, rhi, lo, hi);
+                lo = rlo; hi = rhi;
+            }
+        };
+        robustAxis(xs, minX, maxX);
+        robustAxis(ys, minY, maxY);
+        robustAxis(zs, minZ, maxZ);
     }
 
     if (meshCount > 0 && maxX > minX - 1e6f) {

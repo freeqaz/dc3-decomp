@@ -442,6 +442,7 @@ int main(int argc, char** argv) {
     }
 
     scene.ResolveMeshVisibility(cfg);
+    scene.ApplyFallbackMaterial(cfg);
     scene.EnterMovies(cfg);
     scene.PrintSummary(cfg.verbose);
 
