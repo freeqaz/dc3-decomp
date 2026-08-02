@@ -19,13 +19,15 @@ probes/*.dta ──compile──► paged DTA ──transport──► raw recor
 | File | Role |
 |------|------|
 | `tools/state_diff/probes/*.dta` | Probe specs (declarative, DTA syntax) + `manifest.json` |
+| `tools/state_diff/probes/dta_classes.json` | DTA class vocabulary — the names a class filter actually accepts |
 | `tools/state_diff/probe.py` | Spec parser, DTA compiler, pager, runner |
 | `tools/state_diff/budget.py` | Transport caps, brace validation, enumeration safety |
-| `tools/state_diff/transport.py` | `Target` interface, native HTTP, console adapter, replay |
+| `tools/state_diff/transport.py` | `Target` interface, dir scopes, rosters, native HTTP, console adapter, replay |
 | `tools/state_diff/normalize.py` | Canonical snapshot format |
 | `tools/state_diff/diff.py` | Ranked, collapsed differ |
 | `tools/state_diff/noise.py` | Run-to-run noise floor measurement |
-| `tools/state_diff/tests/` | 28 unit tests, no engine required |
+| `tools/state_diff/sweep.py` | Property sweep + pixel measurement (`--sweep` mode) |
+| `tools/state_diff/tests/` | 66 unit tests, no engine required |
 
 ---
 
@@ -48,15 +50,140 @@ python3 -m state_diff.noise --runs 5 -o /tmp/noise_native.json
 # 4. Capture
 python3 -m state_diff.capture --probe draw_state -o /tmp/native.json
 
+# 4b. Capture INSIDE a loaded panel dir — this is where the UI bugs are
+python3 -m state_diff.capture --probe transforms --dir panel:main_panel \
+    -o /tmp/native_panel.json
+
 # 5. Diff two snapshots
 python3 -m state_diff.diff /tmp/console.json /tmp/native.json \
     --noise-profile /tmp/noise_native.json
+
+# 6. When every state field is CORRECT and the frame is still wrong: sweep
+python3 -m state_diff.sweep --dir panel:main_panel --object motd.lbl \
+    --prop 'local_xfm x' --values=-400,-200,0,200,400,600 \
+    --region 40,578,1160,606 --bg-threshold 190 --repeat 3
 ```
 
 > Use `127.0.0.1`, not `localhost`. The engine's cpp-httplib server binds IPv4
 > only; on hosts where `localhost` resolves to `::1` first, every Python request
 > fails with ECONNREFUSED while `curl` (which falls back) works. The default
 > base URL already accounts for this.
+
+---
+
+## Scoping: `main` is not where the UI lives
+
+`main` (`ObjectDir::Main()`) holds ~687 globals and **zero** of the objects
+inside a loaded `.milo` panel dir. `ObjDirItr`'s recursion does not cross into a
+`PanelDir` hung off a `Panel`, so `/api/objects?dir=main&recurse=true` cannot
+see `motd.lbl`, `parent_motd.trans`, `motd_clip_left.trans` or
+`motd_debloom.mesh` — the entire cast of the first UI bug this tool was pointed
+at. Measured, dc3-native headless at `main_screen`:
+
+```
+{main iterate Cam ...}                    -> 5   [tex proc cam] … [ui.cam]
+{{main_panel loaded_dir} iterate Cam ...} -> 2   camera1.cam, turbo_shell.cam
+```
+
+Disjoint sets. So every scope-bearing probe takes a **dir spec**, in the spec
+(`(scope (dir …))`) or on the CLI (`--dir`):
+
+| Form | Compiles to | Use |
+|------|-------------|-----|
+| `main` *(default)* | `main` | the globals |
+| `panel:main_panel` | `{main_panel loaded_dir}` | **a loaded panel dir** |
+| `{<any DTA expr>}` | verbatim | anything else (`{$world_panel loaded_dir}`, …) |
+
+The compiled page binds the dir **once** —
+`{do ($s "") ($o 0) ($p 0) ($d {main_panel loaded_dir}) … {find_obj $d "motd.lbl"} …}`
+— so a panel scope costs the same script bytes per object as `main`, and the
+paging budgets are unchanged. The dir expression's own length is charged
+against the script cap (`Probe.wrapper_len()`), so it can never silently push a
+page over.
+
+### Scope CLI
+
+Shared by `capture` and `noise`, so a panel scope can have its own measured
+noise floor:
+
+| Flag | Effect |
+|------|--------|
+| `--dir SPEC` | scope to a dir (above) |
+| `--names A,B` | read only these; still two-pass, a name enumeration did not return is **refused** |
+| `--classes A,B` | **exact** class post-filter |
+| `--limit N` | cap the read set |
+| `--no-recurse` | this dir only (routes to `iterate_self`) |
+| `--enumerate auto\|object_list\|iterate` | enumeration primitive |
+
+`transforms.dta`'s header used to promise `--names` / `--classes`; they exist
+now.
+
+### Enumeration primitives — measured, not assumed
+
+Against `{main_panel loaded_dir}` on dc3-native headless, 2026-08-02:
+
+| Primitive | Result | Used for |
+|-----------|--------|----------|
+| `{object_list $d <Class> FALSE}` | **works** — a *sorted* `DataArray` of name strings (`Utl.cpp:289`), indexable with `{elem $a $i}` | **default** when recursing |
+| `{$d iterate <Class> $o {…}}` | **works** — 57 `Trans`, 45 `Draw`, 2 `Cam` | fallback (`--enumerate iterate`) |
+| `{$d iterate_self <Class> $o {…}}` | **works**, non-recursive | `--no-recurse` |
+| `{find_obj $d "<name>"}` | works, null when absent | every property read |
+| `/api/objects?dir=…` | native-only, and cannot name a `PanelDir` reached via a `Panel` | `main` fast path |
+
+Both enumeration back ends were run against all shipped probes on the same
+build: **identical snapshots**, byte-for-byte after eliding volatiles, for
+`transforms` (57), `hierarchy` (620) and `materials` (49). That cross-check is
+what licenses trusting either.
+
+`object_list` is the default because it returns a **sorted** array with a real
+cursor, so paging is `{foreach_int $i lo {min hi {size $a}} …}` and the
+traversal order is deterministic for free. `iterate` has no cursor, so its
+paging re-walks the dir per window and emits only the ordinals in range.
+
+> `object_list` used to SIGSEGV and three of them killed the engine. The bug
+> was never in `object_list`: `DataArray::SortNodes` hardcoded **8** as the
+> `qsort` element size — `sizeof(DataNode)` on PPC32 but **16** on LP64 native
+> — so it strided over half-nodes, and `ObjectList` ends with `SortNodes(0)`.
+> Fixed in `8c73183d`; PPC codegen verified byte-identical, so no `HX_NATIVE`
+> gate. Any DTA in the game that sorted an array was affected, not just this.
+
+### Class filters take **DTA** class names, not C++ class names
+
+This one fails **silently, as an empty result**, which is indistinguishable
+from "there are no such objects" — the exact failure that makes a state diff
+look clean while it is blind. Filtering resolves through the shipped `objects`
+superclass graph (`IsASubclass` → `SystemConfig("objects", child)`), which is
+keyed by DTA names. Measured on `main_panel`:
+
+| You might write | Result | What works | Result |
+|---|---|---|---|
+| `RndDrawable` | **0** | `Draw` | 45 |
+| `RndGroup` | **0** | `Group` | 7 |
+| — | — | `UILabel` / `HamLabel` | 6 |
+| — | — | `UIComponent` | 7 |
+
+Three defences, because a silent zero is unacceptable:
+
+1. **`probes/dta_classes.json`** ships the vocabulary (269 names + the 199-entry
+   superclass graph), extracted from `orig-assets/extracted/**/*objects.dta` —
+   the same data `SystemConfig("objects")` is built from — plus the C++-alias
+   table and the live counts above.
+2. **`probe.validate_classes()`** runs *before* the capture and names the
+   replacement: *"class `'RndGroup'` is a C++ class name and will enumerate ZERO
+   (measured). Use the DTA name `'Group'`."*
+3. **Any class filter that enumerates zero is recorded as a capture error**, as
+   is an exact `--classes` filter that keeps nothing out of a non-empty roster
+   (that error lists the classes actually seen). Capture errors are a `BLOCKER`
+   in the differ, so a blind run cannot masquerade as a clean one.
+
+Not fatal, only loud: `IsASubclass` short-circuits on `child == parent`
+(`Utl.cpp:67`), so a literal `ClassName` absent from the graph still works.
+`UIScreen` enumerates the 3 objects whose class is literally `UIScreen` — and
+`HamScreen` appears in no `objects.dta`, so `{main iterate UIScreen}` yields 3,
+not 296. **The real console behaves identically**; this is a cross-target
+invariant, not a native divergence. Likewise `FAIL: Couldn't find 'HamScreen'
+in array` in the log comes from a discarded lookup the target also performs —
+not an error signal.
 
 ---
 
@@ -149,6 +276,15 @@ commands sent, every later value lands on the wrong object and the report is
 confidently wrong. Both the console clients and this runner refuse to attribute
 in that case and fail the batch loudly instead.
 
+**6. Never let an empty result pass as a valid one.** A wrong class name, a
+panel that never loaded and "there genuinely are no lights here" all produce
+*zero objects*, and a snapshot of zero objects diffs as "everything is missing
+on the other side" — maximally alarming and completely wrong. Every zero
+(enumeration, per-class filter, exact `--classes` filter) is recorded as a
+capture error naming what was tried and what was seen, and capture errors are a
+`BLOCKER`. Sweep applies the same rule to its own noise floor: with
+`--repeat 1` it reports `above_noise: null`, never `false`.
+
 ---
 
 ## Transport caps
@@ -229,8 +365,10 @@ Contract for an implementation:
    count and attribution refused on mismatch.
 4. `describe()` returns stable build identity. Frame counters and uptime belong
    in `volatile`, which the normalizer elides.
-5. `roster()` may use the inherited DTA `iterate` implementation, which is
-   correct on the original binary and, since `4e4cf851`, natively too.
+5. `roster()` needs no override at all: the inherited implementation is pure
+   DTA (`object_list`, or `iterate`/`iterate_self`), correct on the original
+   binary and — since `4e4cf851` and `8c73183d` — natively too. It handles dir
+   scopes, paging and the class-filter diagnostics for free.
 
 Batching matters: the DC3 file transport accumulates into a variable and writes
 once, so a whole probe is one round trip and one keypress. The runner dispatches
@@ -292,10 +430,91 @@ compare unequal is handled **here**, so the differ only ranks real differences:
 
 ---
 
+## Sweep mode — when every state field is correct and the frame is still wrong
+
+A state diff answers *"do the two sides hold the same values?"*. It cannot
+answer *"is this object being drawn where those values say it should be?"* —
+and the first real UI bug chased with this tool was exactly that shape: **every
+state-visible field was correct on the broken build**, so a static diff reported
+nothing. What broke it open was setting one property to a series of values and
+watching the pixels. Sweeping `motd.lbl`'s `local_xfm x` and measuring which
+screen columns stayed pinned separated *"the geometry is wrong"* from
+*"something is occluding it / not advancing"* in a single pass.
+
+```bash
+python3 -m state_diff.sweep \
+    --dir panel:main_panel --object motd.lbl \
+    --prop 'local_xfm x' --values=-400,-200,0,200,400,600 \
+    --region 40,578,1160,606 --bg-threshold 190 --repeat 3 \
+    -o sweep.json [--save-frames /tmp/frames]
+```
+
+```
+sweep motd.lbl [HamLabel] (local_xfm x) in panel:main_panel -> {main_panel loaded_dir}
+  frame 1280x720  region [40, 578, 1160, 606]  original=96.038147  restored=True  repeat=3
+
+         value      applied |    fg px    x0    x1    y0    y1 |     d px    x0    x1    y0    y1
+    (baseline)    96.038147 |     2127    64   722   578   605 |        -     -     -     -     -
+          -400         -400 |      810   690   722   578   605 |     1981    53   360   582   602
+          -200         -200 |      810   690   722   578   605 |     1981    53   360   582   602
+             0            0 |      810   690   722   578   605 |     1981    53   360   582   602
+           200          200 |     3072   163   722   578   605 |     4268    53   681   582   602
+           400          400 |     2013   451   953   578   605 |     4879    53   970   582   602
+           600          600 |      982   690  1159   578   605 |     4564    53  1159   582   602
+
+  delta: pinned=['x0', 'y0', 'y1']  moved=['x1(up,spread=799 >noise)', 'cx(up,spread=417.66 >noise)',
+                                           'cy(down,spread=0.16 <=NOISE)', 'px(flat,spread=2898 >noise)']
+       same-value noise floor: {'x1': 328, 'cx': 159.9, 'cy': 0.18, 'px': 2257}
+```
+
+**The per-edge summary is the finding**, not the images. `delta x0` is pinned at
+53 through the whole sweep while `delta x1` tracks the property monotonically
+and well clear of noise: the label's left edge is clipped, its right edge is
+not. That is a different bug from "drawn in the wrong place", and no state field
+distinguishes them.
+
+Two measures per step, both reported in **absolute image coordinates**:
+
+* **`fg`** — bounding box / pixel count / centroid of pixels whose channel
+  maximum exceeds `--bg-threshold`.
+* **`delta`** — the same, over pixels differing from a baseline frame captured
+  at the property's original value. More robust: it needs no notion of
+  "background", only "what moved".
+
+If the `fg` bbox equals the whole `--region` at every step, the report says so
+explicitly rather than calling all four edges *pinned* — a bright background
+above the threshold is not a pinned object.
+
+**`--repeat` is what makes a sweep trustworthy.** It captures each value N times
+and reports median + spread, so the sweep measures **its own noise floor in the
+same session, on the same object, under the same animation**. Without it an
+animating element produces a series that looks exactly like signal — measured
+here: `motd.lbl`'s marquee (unfrozen in `23727b3c`) gives a `delta x1` spread of
+**328 px** across captures at one unchanged value. Every reported movement is
+tagged `>noise` or `<=NOISE` against that. With `--repeat 1` the tool refuses to
+imply a verdict: `above_noise` is `null`, never `false`, and the report carries
+a warning saying the floor is *unmeasured* — which is not the same as zero.
+
+**The original value is always restored**, in a `finally`: on success, on a
+failed step, on a transport drop and on Ctrl-C. The read-back is verified and
+reported in `restored`; a mismatch is an error. A sweep that died holding a
+swept value would silently poison every capture taken afterwards.
+
+The object is enumerated first, exactly as a probe would — a sweep is the one
+place in this tool where a guessed name would *write*, so `assert_enumerated()`
+gates it. Property paths must be bare identifiers, checked before they are
+embedded in a `(…)` property expression.
+
+---
+
 ## Noise floor — measured
 
-**Result: 0 of 2421 field cells (0.00%) varied across 5 consecutive captures**
-of all 12 probes from one native build, with zero object churn.
+A noise floor is only valid for the **scope** it was measured over, so it is
+recorded in the profile (`scope_dir`) and re-measured per scope.
+
+**`main` — 0 of 2421 field cells (0.00%)** varied across 5 consecutive captures
+of all 12 probes, zero object churn. Unchanged by the panel-scope and
+`object_list` work, which is the regression check that matters.
 
 ```
 cameras        runs=5 objects=5   cells=80   unstable=0 (0.0%) churn=0
@@ -310,19 +529,38 @@ transforms     runs=5 objects=7   cells=161  unstable=0 (0.0%) churn=0
 NOISE FLOOR: 0/2421 field cells (0.0%) varied across 5 runs
 ```
 
-**Read this honestly.** The measurement was taken on `main_screen` with no world
-or venue loaded, which is a largely static scene — `materials`, `meshes` and
-`textures` had zero objects to sample. A clean zero here shows the *pipeline*
-contributes no noise of its own (normalization, paging, ordering and batching are
-all deterministic), which is the property that matters most: any nonzero reading
-later is real engine variance, not tooling artefact. **Re-measure during
-gameplay** before trusting transform/animation findings there; animated subtrees
-are the obvious candidates to go unstable.
+**`panel:main_panel` — 0 of 6197 field cells (0.00%)**, zero churn. Two and a
+half times the coverage of `main`, on the scope that was previously invisible:
 
-Re-measure whenever the logical capture point changes:
+```
+cameras        runs=5 objects=2   cells=32   unstable=0 (0.0%) churn=0
+draw_state     runs=5 objects=45  cells=315  unstable=0 (0.0%) churn=0
+hierarchy      runs=5 objects=620 cells=2480 unstable=0 (0.0%) churn=0
+materials      runs=5 objects=49  cells=1029 unstable=0 (0.0%) churn=0
+meshes         runs=5 objects=30  cells=300  unstable=0 (0.0%) churn=0
+panel_dirs     runs=5 objects=20  cells=300  unstable=0 (0.0%) churn=0
+textures       runs=5 objects=60  cells=420  unstable=0 (0.0%) churn=0
+transforms     runs=5 objects=57  cells=1311 unstable=0 (0.0%) churn=0
+lights / environ / panels: 0 objects (reported as an explicit capture error,
+    not a silent empty capture)
+NOISE FLOOR: 0/6197 field cells (0.0%) varied across 5 runs
+```
+
+**Read this honestly.** Both were taken on `main_screen` with no world or venue
+loaded. A clean zero shows the *pipeline* contributes no noise of its own
+(normalization, paging, ordering and batching are all deterministic) — so any
+nonzero reading later is real engine variance, not a tooling artefact. It does
+**not** mean the screen is static: `motd.lbl`'s marquee is scrolling throughout,
+and the sweep measures **328 px of same-value spread** on it. Property state
+holds still while pixels do not, which is precisely why sweep mode exists.
+**Re-measure during gameplay** before trusting transform findings there.
+
+Re-measure whenever the logical capture point or the scope changes:
 
 ```bash
-python3 -m state_diff.noise --runs 5 --settle 1.0 -o noise_native.json
+python3 -m state_diff.noise --runs 5 --settle 1.0 -o noise_main.json
+python3 -m state_diff.noise --runs 5 --settle 1.0 --dir panel:main_panel \
+    -o noise_panel.json
 ```
 
 A field that varies is recorded in the profile and **suppressed** by the differ
@@ -383,6 +621,27 @@ draw_state / lights / environ / textures / materials / meshes: 0-1 records
     (no world or venue loaded on main_screen — expected)
 ```
 
+**The same probes against `--dir panel:main_panel`, which was previously
+unreachable** — same build, same screen, same run:
+
+```
+hierarchy:    620 records,  20 requests, max script 16353B, max reply 1190B
+textures:      60 records,   3 requests, max script 16239B, max reply 1885B
+transforms:    57 records,   8 requests, max script 15386B, max reply 1868B
+materials:     49 records,   6 requests, max script 16049B, max reply 1324B
+draw_state:    45 records,   2 requests, max script 16057B, max reply 1162B
+meshes:        30 records,   2 requests, max script 15533B, max reply 1377B
+panel_dirs:    20 records,   3 requests, max script 15251B, max reply 1127B
+cameras:        2 records,   1 requests, max script  2744B, max reply  206B
+lights / environ: 0 records, reported as an explicit capture error
+```
+
+`motd.lbl`, `parent_motd.trans`, `motd_clip_left.trans` and `motd_debloom.mesh`
+— the whole cast of the bug the tool was first pointed at, and all four
+invisible before — now come back with real values from every applicable probe.
+Every page still fits the `portable` caps (max 16353B < 16384), and the two
+enumeration back ends produce byte-identical snapshots.
+
 Raising the script cap from 8192 to 16383 collapsed **every** probe to a single
 field group and roughly halved the round trips (113 -> 58 for 60 objects;
 `hierarchy` 35 -> 18, `transforms` 130 -> 65, `panel_dirs` 167 -> 72). No probe
@@ -427,14 +686,15 @@ unit tests (including short-batch refusal) but has never run against real
 hardware from this lane.
 
 ```bash
-python3 tools/state_diff/tests/test_state_diff.py   # 28/28 passed
+python3 tools/state_diff/tests/test_state_diff.py   # 66/66 passed
 ```
 
 ---
 
 ## What we cannot reach from DTA
 
-These need an engine-side hook to expose; none is currently available.
+These need an engine-side hook to expose; none is currently available. Several
+of them are reachable *through pixels* instead — see the note after the table.
 
 | State | Why |
 |-------|-----|
@@ -448,13 +708,51 @@ These need an engine-side hook to expose; none is currently available.
 | **Bone/skinning matrices** | Not propsynced. |
 | **Anything during a UI transition** | `UIManager::Handle` short-circuits and returns 0 while `InTransition() || InComponentSelect()` (`UI.cpp:922-925`), so UI reads are suppressed rather than wrong. The probe captures `ui.in_transition` so the differ can tell. |
 
+### …but pixels are reachable, headless, with no GPU
+
+**`/api/screenshot` works under `MILO_HEADLESS=1` on a machine with no display
+and no GPU.** Verified live from this lane: a 1280x720 RGBA PNG (~750 KB) per
+request, rendered and returned on a box with no framebuffer at all. The capture
+is queued and executed on the main thread after `EndDrawing()`
+(`HttpServer.cpp:847`), so it is a fully rendered frame — and a screenshot
+request therefore doubles as an "advance to the next presented frame"
+primitive, which is how `--settle-frames` is implemented.
+
+Nothing about it requires the windowed/GPU path. Earlier wording here implied
+otherwise; that was wrong, and it mattered — the field agent who first used
+this tool rendered ~60 verification frames this way and caught that their first
+fix, landed on its own, would have made the frame *worse*.
+
+The practical consequence: a **sandboxed agent with no display can close the
+loop visually**. `sweep` mode (above) is built on exactly this, so several rows
+of the table above — "right size, wrong pixels", actual draw order, whether an
+object is occluded — are answerable after all, just not from DTA.
+
 ---
 
 ## Engine bugs found while building this
 
-All four were reported from this lane and have since been **fixed** by the
-owning lanes; no `src/` or `native/src` changes were made here. Kept for the
+All were reported from this lane and have since been **fixed** by the owning
+lanes; no `src/` or `native/src` changes were made here. Kept for the
 reasoning, and because the first one still shapes the design.
+
+**0. `DataArray::SortNodes` used a hardcoded LP64-wrong element size.**
+*(Fixed in `8c73183d`.)* `qsort(..., 8, ...)` — `sizeof(DataNode)` on PPC32 but
+**16** on LP64 native — so it strided over half-nodes, read garbage types,
+corrupted arrays that did not crash, and only ever covered half the array.
+`ObjectList` ends with `SortNodes(0)`, which is why
+`{object_list <dir> <Class> TRUE}` SIGSEGVed and three of them killed the
+engine. The blast radius is much wider than this tool: **any** in-game DTA that
+sorted an array was affected. Fixed with `sizeof(DataNode)`; PPC codegen
+verified byte-identical at the object-file level, so no `HX_NATIVE` gate.
+`object_list` is now this tool's default enumeration primitive.
+
+**0b. Not a bug: `iterate` "returning zero" against a `PanelDir`.** Reported
+from this lane and **withdrawn**. `ObjectDir::Iterate` is correct; the filter
+was a C++ class name (`RndDrawable`), which resolves through the DTA `objects`
+superclass graph to nothing. See "Class filters take DTA class names" above —
+and note that this failure mode is silent, which is why the tool now ships a
+vocabulary, validates against it, and reports every zero-result filter.
 
 **1. `ObjectDir::Iterate` was mis-decompiled — `iterate` enumerated nothing.**
 *(Fixed in `4e4cf851`, 96.6% -> 99.4%.)*
@@ -472,11 +770,15 @@ and `Type()` is the object's typedef symbol rather than its class,
 times in the native port.** Suggested fix: `bbb && (s8.Null() || it->Type() == s8)`.
 
 Now that it is fixed, the inherited DTA `iterate` roster works on **both**
-targets — verified live, `{$dir iterate Cam …}` returns all 5 cameras. That
-makes enumeration genuinely portable, and it is the *safer* path: `iterate`
-filters by class inside the engine, so it never messages the script objects that
-rule 1 above warns about. `NativeHttpTarget` still overrides `roster()` with
-`/api/objects` because it is one request instead of one per class.
+targets — verified live, `{main iterate Cam …}` returns all 5 cameras and
+`{{main_panel loaded_dir} iterate Trans …}` all 57 panel transformables. That
+makes enumeration genuinely portable, and it is a *safe* path: `iterate` filters
+by class inside the engine, so it never messages the script objects that rule 1
+above warns about. It is retained as `--enumerate iterate` and as the only
+non-recursive back end; `object_list` is the default because it is sorted and
+has a real cursor. `NativeHttpTarget` still overrides `roster()` with
+`/api/objects` for `main` only, because that is one request instead of one per
+class — it cannot serve a panel dir at all.
 
 The wider impact is bigger than this tool: any in-game `.dta` relying on
 `iterate` was silently a no-op natively.

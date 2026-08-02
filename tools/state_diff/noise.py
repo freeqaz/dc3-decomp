@@ -36,7 +36,7 @@ import time
 from pathlib import Path
 
 from .budget import Limits
-from .capture import add_common_args, build_limits, capture
+from .capture import add_common_args, apply_scope, build_limits, capture
 from .normalize import Snapshot
 from .probe import load_all
 from .transport import make_target
@@ -123,6 +123,10 @@ def measure(
         "runs": runs,
         "settle_s": settle_s,
         "transport": limits.name,
+        # A noise floor is only valid for the scope it was measured over: a
+        # panel dir full of animating UI is a different measurement from the
+        # static globals in `main`.
+        "scope_dir": probe.scope.dir,
         "measured_at": time.time(),
         "unstable": {probe.id: unstable},
         "summary": {
@@ -154,6 +158,7 @@ def merge_profiles(profiles: list[dict]) -> dict:
         out["unstable"].update(p["unstable"])
         out["probes"][p["probe"]] = p["summary"] | {
             "runs": p["runs"], "target": p["target"], "transport": p.get("transport"),
+            "scope_dir": p.get("scope_dir"),
         }
     return out
 
@@ -189,7 +194,8 @@ def main(argv=None) -> int:
             print(f"skip unknown probe {pid}", file=sys.stderr)
             continue
         try:
-            profile, _ = measure(target, probes[pid], limits, args.runs, args.settle)
+            profile, _ = measure(target, apply_scope(probes[pid], args), limits,
+                                 args.runs, args.settle)
         except Exception as e:  # noqa: BLE001 - one bad probe must not kill the sweep
             print(f"{pid}: FAILED: {type(e).__name__}: {e}", file=sys.stderr)
             continue

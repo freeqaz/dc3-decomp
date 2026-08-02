@@ -18,8 +18,9 @@ from pathlib import Path
 
 from .budget import BudgetError, Limits
 from .normalize import Snapshot, apply_noise_profile, normalize
-from .probe import load_all, run_probe
-from .transport import Target, TransportError, make_target
+from . import probe as probe_mod
+from .probe import load_all, rescope, run_probe
+from .transport import DirSpecError, Target, TransportError, make_target
 
 
 def capture(
@@ -42,6 +43,10 @@ def capture(
         s = target.current_screen()
         if s:
             meta["screen"] = s
+    # The scope belongs in the header for the same reason the screen does:
+    # two snapshots taken over different dirs are not comparable, and the
+    # differ refuses rather than reporting every object as "missing".
+    meta["scope_dir"] = probe.scope.dir
 
     snap = normalize(probe, raw, target.name, meta=meta, volatile=volatile)
     snap.volatile["captured_at"] = time.time()
@@ -92,6 +97,52 @@ def add_common_args(ap: argparse.ArgumentParser) -> None:
                     help="lift transport caps (native-only; probe may not run on hardware)")
     ap.add_argument("--noise-profile", type=Path,
                     help="noise profile JSON to elide unstable fields")
+    add_scope_args(ap)
+
+
+def add_scope_args(ap: argparse.ArgumentParser) -> None:
+    """Scope overrides. Shared by capture and noise so a panel-dir scope can
+    have its own measured noise floor."""
+    ap.add_argument("--dir", dest="dir_spec", default=None, metavar="SPEC",
+                    help="scope override: 'main' (default), 'panel:<panel>' "
+                         "e.g. panel:main_panel, or a literal DTA expression "
+                         "such as '{main_panel loaded_dir}'. `main` cannot see "
+                         "objects inside a loaded .milo panel dir at all.")
+    ap.add_argument("--names", default=None, metavar="A,B",
+                    help="comma-separated object names to restrict the read to "
+                         "(still two-pass: a name enumeration does not return "
+                         "is refused, never guessed)")
+    ap.add_argument("--classes", default=None, metavar="A,B",
+                    help="comma-separated EXACT class names to restrict to")
+    ap.add_argument("--limit", type=int, default=None,
+                    help="max objects to read")
+    ap.add_argument("--no-recurse", action="store_true",
+                    help="enumerate this dir only, no subdirs (forces iterate_self; "
+                         "object_list has no non-recursive mode)")
+    ap.add_argument("--enumerate", dest="enumerate_method", default=None,
+                    choices=["auto", "object_list", "iterate"],
+                    help="enumeration primitive. auto (default) = object_list "
+                         "when recursing (sorted, real cursor), iterate_self "
+                         "otherwise")
+
+
+def _csv(v: str | None) -> list[str] | None:
+    if v is None:
+        return None
+    return [x.strip() for x in v.split(",") if x.strip()]
+
+
+def apply_scope(probe, args):
+    """Apply --dir/--names/--classes/--limit/--no-recurse to a loaded probe."""
+    return rescope(
+        probe,
+        dir_spec=getattr(args, "dir_spec", None),
+        names=_csv(getattr(args, "names", None)),
+        classes=_csv(getattr(args, "classes", None)),
+        limit=getattr(args, "limit", None),
+        recurse=False if getattr(args, "no_recurse", False) else None,
+        method=getattr(args, "enumerate_method", None),
+    )
 
 
 def main(argv=None) -> int:
@@ -118,6 +169,12 @@ def main(argv=None) -> int:
     profile = json.loads(args.noise_profile.read_text()) if args.noise_profile else None
 
     try:
+        selected = apply_scope(probes[args.probe], args)
+    except DirSpecError as e:
+        print(f"error: --dir: {e}", file=sys.stderr)
+        return 3
+
+    try:
         target = make_target(args.target)
     except NotImplementedError as e:
         print(f"error: {e}", file=sys.stderr)
@@ -128,20 +185,24 @@ def main(argv=None) -> int:
         return 2
 
     try:
-        snap = capture(target, probes[args.probe], build_limits(args), profile)
+        snap = capture(target, selected, build_limits(args), profile)
     except BudgetError as e:
         print(f"budget error: {e}", file=sys.stderr)
         return 3
     except TransportError as e:
         print(f"transport error: {e}", file=sys.stderr)
         return 2
+    except probe_mod.UnenumeratedName as e:
+        print(f"scope error: {e}", file=sys.stderr)
+        return 3
 
     payload = json.dumps(snap.to_json(), indent=2, sort_keys=True)
     if args.out:
         args.out.write_text(payload)
         st = snap.volatile.get("stats", {})
         print(
-            f"{args.probe}: {len(snap.objects) or len(snap.scalars)} records, "
+            f"{args.probe}[{selected.scope.dir}]: "
+            f"{len(snap.objects) or len(snap.scalars)} records, "
             f"{st.get('requests')} requests, max script {st.get('max_script')}B, "
             f"max reply {st.get('max_result')}B -> {args.out}"
         )

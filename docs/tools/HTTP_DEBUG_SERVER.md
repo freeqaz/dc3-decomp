@@ -41,7 +41,9 @@ Requires `DC3_TEL=1` for the telemetry snapshot to update each sampling interval
 curl -o frame.png localhost:9090/api/screenshot
 ```
 
-Captures the current framebuffer as PNG. Requires headless rendering (the default when no window is present). The capture happens after `EndDrawing()` on the main thread, so the image reflects the fully rendered frame.
+Captures the current framebuffer as PNG. The capture happens after `EndDrawing()` on the main thread, so the image reflects the fully rendered frame — and the request blocks until one is presented, which makes it usable as an "advance one frame" primitive.
+
+**Works headless with no display and no GPU.** Verified live under `MILO_HEADLESS=1` on a box with no framebuffer: 1280x720 RGBA PNG, ~750 KB per request. No window, X display or GPU device is required, so sandboxed agents can verify rendering changes visually (see `docs/tools/STATE_DIFF.md`, sweep mode).
 
 ### Settings
 

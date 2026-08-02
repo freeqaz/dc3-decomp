@@ -233,6 +233,17 @@ def diff_snapshots(
             a=a.probe, b=b.probe))
         return findings
 
+    da, db = a.meta.get("scope_dir"), b.meta.get("scope_dir")
+    if da and db and da != db:
+        # Two dirs are two different object sets, so EVERY object would report
+        # as missing on one side. That is not a divergence, it is a mistake.
+        findings.append(Finding(
+            BLOCKER, "context", probe, "scope_dir",
+            f"snapshots were captured over DIFFERENT dirs ({da} vs {db}); "
+            "object sets are not comparable",
+            a=da, b=db))
+        return findings
+
     sa, sb = a.meta.get("screen"), b.meta.get("screen")
     if sa and sb and sa != sb:
         findings.append(Finding(

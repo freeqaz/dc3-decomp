@@ -19,8 +19,19 @@
 ; engine-side hook (see docs/tools/STATE_DIFF.md, "What we cannot reach").
 ;
 ; Scope is deliberately parameterizable — run this against a named subtree
-; (--names / --classes) rather than the whole world, or the output is huge and
-; dominated by animated objects.
+; rather than the whole world, or the output is huge and dominated by animated
+; objects. All four scope overrides are implemented by the capture CLI:
+;
+;   --dir panel:main_panel      reach INSIDE a loaded .milo panel dir; `main`
+;                               cannot see those objects at all
+;   --names motd.lbl,legal.lbl  read only these (still two-pass: a name that
+;                               enumeration does not return is refused)
+;   --classes HamLabel          EXACT class post-filter (DTA class names --
+;                               `RndDrawable` enumerates ZERO, use `Draw`)
+;   --limit 50                  cap the read set
+;
+; e.g.  python3 -m state_diff.capture --probe transforms \
+;           --dir panel:main_panel --classes HamLabel -o labels.json
 
 (probe transforms
     (doc "World and local transform (translation, euler rotation, scale) per RndTransformable.")

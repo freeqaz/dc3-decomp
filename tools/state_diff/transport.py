@@ -17,12 +17,15 @@ from __future__ import annotations
 
 import abc
 import json
+import re
 import sys
 import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
 from typing import Any, Iterable
+
+from .budget import brace_balance
 
 # Sentinel returned for DTA string values the engine could not produce.
 ABSENT = "<absent>"
@@ -31,6 +34,127 @@ NULL_OBJ = "<null>"
 
 class TransportError(RuntimeError):
     """Raised when the transport itself fails (connection, timeout, protocol)."""
+
+
+# --------------------------------------------------------------------------
+# Directory scopes
+# --------------------------------------------------------------------------
+#
+# `main` (ObjectDir::Main()) holds the ~687 globals and NOTHING that lives in a
+# loaded .milo panel dir: ObjDirItr's recursion does not cross into a PanelDir
+# hung off a Panel, so `/api/objects?dir=main&recurse=true` cannot see
+# `motd.lbl` or its siblings. Measured on dc3-native at main_screen:
+#
+#     {main iterate Cam ...}                     -> 5   [tex proc cam] ... [ui.cam]
+#     {{main_panel loaded_dir} iterate Cam ...}  -> 2   camera1.cam, turbo_shell.cam
+#
+# The two sets are disjoint. Menu screens are where the highest-value UI bugs
+# live, so a scope has to be able to name the panel dir directly.
+
+#: A bare directory name: a symbol we hand straight to `find_obj` / `iterate`.
+_BARE_DIR = re.compile(r"^[A-Za-z_][A-Za-z0-9_.+\-]*$")
+
+
+class DirSpecError(ValueError):
+    """Raised when a --dir spec cannot be turned into a safe DTA expression."""
+
+
+def dir_expr(spec: str | None) -> str:
+    """Compile a scope/``--dir`` spec into a DTA expression yielding an ObjectDir.
+
+    Three forms, in increasing order of escape-hatch-ness::
+
+        main                    -> main                        (the global dir)
+        panel:main_panel        -> {main_panel loaded_dir}      (sugar)
+        {main_panel loaded_dir} -> verbatim                     (any expression)
+
+    Verified live: ``find_obj`` and ``iterate`` both accept a *variable holding
+    a dir* as well as a bare symbol, so the compiled probe binds the expression
+    once per page (``{do ($d <expr>) ... {find_obj $d "name"} ...}``) instead of
+    re-evaluating it per object. That keeps the emitted script the same size for
+    a panel dir as for ``main``, which is what preserves the paging budgets.
+
+    The verbatim form is an *author* escape hatch, not a user-input surface:
+    it is brace-validated here and the resulting page still goes through
+    :func:`budget.validate_script`, but a caller who passes a bogus object name
+    inside it will fault the title exactly as any other bad DTA would. Prefer
+    ``panel:`` where it fits.
+    """
+    s = (spec or "main").strip()
+    if not s:
+        return "main"
+    if s.startswith("panel:"):
+        name = s[len("panel:"):].strip()
+        if not _BARE_DIR.match(name):
+            raise DirSpecError(
+                f"panel name {name!r} is not a bare symbol; use the explicit "
+                "'{<panel> loaded_dir}' form if you really mean it"
+            )
+        return "{%s loaded_dir}" % name
+    if s.startswith("{"):
+        ok, why = brace_balance(s)
+        if not ok:
+            raise DirSpecError(f"dir expression {s!r} is unbalanced DTA ({why})")
+        return s
+    if not _BARE_DIR.match(s):
+        raise DirSpecError(
+            f"dir spec {s!r} is neither a bare symbol, a 'panel:<name>' sugar, "
+            "nor a '{...}' DTA expression"
+        )
+    return s
+
+
+def is_main_dir(spec: str | None) -> bool:
+    """True when the spec is the plain global dir (the fast /api/objects path)."""
+    return (spec or "main").strip() in ("", "main")
+
+
+#: Separators for the DTA roster payload. ``|`` splits name from class, ``;``
+#: splits entries. Object names in DC3 contain brackets and spaces (`[ui.cam]`,
+#: `[default lit]`) but not these two, and an entry that does not split cleanly
+#: is reported rather than silently dropped.
+ROSTER_KV = "|"
+ROSTER_SEP = ";"
+
+#: Entries per roster request: 250 x ~40B ~= 10 KB, comfortably inside the
+#: 32 KB reply cap's 80% headroom.
+ROSTER_PAGE = 250
+
+#: Prefix of the count header the object_list roster emits as its first entry.
+ROSTER_COUNT = "#"
+
+#: C++ class names that look plausible in a probe spec and enumerate ZERO,
+#: because the class filter resolves through the shipped DTA `objects`
+#: superclass graph rather than the C++ type system. Measured live 2026-08-02:
+#: RndDrawable -> 0 where Draw -> 45; RndGroup -> 0 where Group -> 7. The
+#: full vocabulary lives in probes/dta_classes.json.
+CPP_ALIASES = {
+    "RndDrawable": "Draw", "RndTransformable": "Trans", "RndGroup": "Group",
+    "RndMesh": "Mesh", "RndMat": "Mat", "RndTex": "Tex", "RndCam": "Cam",
+    "RndLight": "Light", "RndEnviron": "Environ", "RndAnimatable": "Anim",
+    "RndFont": "Font", "RndText": "Text", "RndMovie": "Movie",
+    "RndParticleSys": "ParticleSys", "RndPollable": "Poll",
+    "Hmx::Object": "Object",
+}
+
+
+def _zero_class_hint(dir_name: str, cls: str, method: str) -> str:
+    """Explain a zero-result class filter loudly.
+
+    A wrong class name fails as an EMPTY result, which is indistinguishable
+    from "no such objects exist" — so a silent zero would make a state diff
+    look clean while it was actually blind. Never record one silently.
+    """
+    fix = CPP_ALIASES.get(cls)
+    if fix is None and cls.startswith(("Rnd", "Hmx")):
+        fix = cls[3:] or None
+    tail = (f" {cls!r} is a C++ class name; the DTA name is {fix!r}."
+            if fix else
+            " If that is unexpected, check the name against "
+            "probes/dta_classes.json: filters resolve through the shipped "
+            "`objects` superclass graph (DTA names), not C++ class names.")
+    return (f"roster {dir_name}: class filter {cls!r} ({method}) enumerated "
+            f"ZERO objects.{tail}")
 
 
 @dataclass
@@ -158,34 +282,190 @@ class Target(abc.ABC):
         """
         return {"target": self.name}
 
-    def roster(self, dir_name: str = "main", classes: Iterable[str] | None = None) -> list[ObjRef]:
-        """Enumerate objects in ``dir_name``.
+    def roster(
+        self,
+        dir_name: str = "main",
+        classes: Iterable[str] | None = None,
+        *,
+        isa: Iterable[str] | None = None,
+        limit: int = 0,
+        recurse: bool = True,
+        page: int = ROSTER_PAGE,
+        method: str = "auto",
+        errors: list[str] | None = None,
+    ) -> list[ObjRef]:
+        """Enumerate objects in the dir named by ``dir_name`` (a --dir spec).
 
-        Uses DTA ``iterate``, the portable enumeration primitive: it works on
-        the original binary and — since the ``ObjectDir::Iterate`` type-filter
-        fix (4e4cf851) — natively too. Verified live on both.
+        Two portable primitives, both verified live against
+        ``{main_panel loaded_dir}`` on dc3-native headless, 2026-08-02, and
+        cross-checked against each other (identical counts for every class):
 
-        This is also the SAFER path, because ``iterate`` filters by class
-        inside the engine and therefore never messages the DTA script objects
-        that :data:`probe.DANGEROUS_CLASSES` exists to avoid.
-        :class:`NativeHttpTarget` still overrides it with ``/api/objects``
-        purely because that is one request instead of one per class.
+        ``object_list`` *(default when recursing)*
+            ``{object_list $d <Class> FALSE}`` returns a **sorted DataArray of
+            name strings** (``Utl.cpp:289``), always recursive, indexable with
+            ``{elem $a $i}``. That gives a real cursor, so paging is
+            ``{foreach_int $i lo {min hi {size $a}} ...}`` — deterministic
+            order for free, which the snapshot format wants anyway.
+            *(It used to SIGSEGV. The bug was never in ``object_list``: it was
+            an LP64 stride bug in ``DataArray::SortNodes``, which hardcoded 8
+            as the qsort element size — ``sizeof(DataNode)`` on PPC32 but 16 on
+            LP64 — so ``ObjectList``'s closing ``SortNodes(0)`` strided over
+            half-nodes. Fixed in 8c73183d.)*
+
+        ``iterate`` *(used for ``recurse=False``, and as an explicit fallback)*
+            ``{$d iterate_self <Class> $o {...}}`` is the only way to enumerate
+            **this dir only**; ``object_list`` has no non-recursive mode.
+            Paging is an ordinal window because ``iterate`` has no cursor.
+
+        Both are SAFE against the DTA script objects that
+        :data:`probe.DANGEROUS_CLASSES` exists to avoid: the class filter runs
+        inside the engine, and the only message sent per object is
+        ``class_name``, which ``Hmx::Object::Handle`` answers itself
+        (Object.cpp:144) *before* the ``HANDLE_ARRAY(mTypeDef)`` fallthrough at
+        :159 that would execute game script.
+
+        **Class names must be DTA names, not C++ names.** Filtering resolves
+        through the shipped ``objects`` superclass graph
+        (``IsASubclass`` -> ``SystemConfig("objects", child)``), which is keyed
+        by DTA names. ``RndDrawable`` and ``RndGroup`` return **0** where
+        ``Draw`` returns 45 and ``Group`` returns 7 — and a wrong name fails
+        *silently as an empty result*, which is indistinguishable from "no such
+        objects exist" and would make a state diff look clean while blind. Any
+        class that enumerates zero is therefore reported through ``errors``,
+        and :func:`probe.validate_classes` checks names against the shipped
+        ``probes/dta_classes.json`` before a capture starts.
+
+        ``isa`` and ``classes`` do NOT mean the same thing and must not be
+        conflated. ``isa`` is the probe's SUBCLASS gate and is exactly what
+        both primitives implement engine-side, so it is the enumeration filter
+        here. ``classes`` is an EXACT post-filter applied later by
+        :meth:`probe.Scope.select`; a target that enumerates by exact class
+        (``/api/objects``, :class:`ReplayTarget`) applies it directly and
+        ignores ``isa``.
         """
+        dexpr = dir_expr(dir_name)
+        if method == "auto":
+            method = "object_list" if recurse else "iterate"
+        if method not in ("object_list", "iterate"):
+            raise DirSpecError(
+                f"unknown enumeration method {method!r}; expected auto | "
+                "object_list | iterate")
+        if method == "object_list" and not recurse:
+            raise DirSpecError(
+                "object_list is always recursive (Utl.cpp:292 walks with "
+                "ObjDirItr(dir, true)); use --enumerate iterate for --no-recurse")
+
         out: list[ObjRef] = []
-        for cls in classes or ["Object"]:
-            expr = (
-                '{set $s ""}'
-                f'{{{{object "{dir_name}"}} iterate {cls} $o '
-                '{strcat $s {$o name} "\\n"}}'
-                "{symbol $s}"
-            )
-            res = self.eval_dta(expr)
-            if not res.ok:
-                continue
-            for nm in res.text.split("\n"):
-                if nm:
-                    out.append(ObjRef(name=nm, type=cls, dir=dir_name))
+        seen: set[str] = set()
+        for cls in list(isa or classes or ["Object"]):
+            if not _BARE_DIR.match(cls):
+                raise DirSpecError(f"roster class {cls!r} is not a bare symbol")
+            before = len(out)
+            if method == "object_list":
+                self._roster_object_list(dexpr, dir_name, cls, page, limit,
+                                         out, seen, errors)
+            else:
+                self._roster_iterate(dexpr, dir_name, cls, page, limit, recurse,
+                                     out, seen, errors)
+            if len(out) == before and errors is not None:
+                errors.append(_zero_class_hint(dir_name, cls, method))
         return out
+
+    # -- roster back ends -------------------------------------------------
+
+    def _entry(self, entry: str, dir_name: str, cls: str,
+               out: list[ObjRef], seen: set[str],
+               errors: list[str] | None) -> None:
+        name, sep, klass = entry.rpartition(ROSTER_KV)
+        if not sep:
+            if errors is not None:
+                errors.append(
+                    f"roster {dir_name}/{cls}: entry {entry!r} has no "
+                    f"{ROSTER_KV!r} separator; skipped")
+            return
+        if name in seen:
+            return
+        seen.add(name)
+        out.append(ObjRef(name=name, type=klass, dir=dir_name))
+
+    def _roster_object_list(self, dexpr, dir_name, cls, page, limit,
+                            out, seen, errors) -> None:
+        """Cursor paging over the sorted name array ``object_list`` returns."""
+        lo, total = 0, None
+        while total is None or lo < total:
+            hi = lo + page
+            expr = (
+                '{do ($s "") ($d %s) ($a {object_list $d %s FALSE})'
+                '{strcat $s "%s" {sprintf "%%d" {size $a}} "%s"}'
+                "{foreach_int $i %d {min %d {size $a}}"
+                ' {strcat $s {elem $a $i} "%s"'
+                ' {{find_obj $d {elem $a $i}} class_name} "%s"}}'
+                "$s}"
+            ) % (dexpr, cls, ROSTER_COUNT, ROSTER_SEP, lo, hi,
+                 ROSTER_KV, ROSTER_SEP)
+            res = self.eval_dta(expr, timeout=30.0)
+            if not res.ok:
+                if errors is not None:
+                    errors.append(f"roster {dir_name}/{cls}: {res.error}")
+                return
+            for entry in res.text.split(ROSTER_SEP):
+                entry = entry.strip()
+                if not entry:
+                    continue
+                if entry.startswith(ROSTER_COUNT):
+                    try:
+                        total = int(entry[len(ROSTER_COUNT):])
+                    except ValueError:
+                        if errors is not None:
+                            errors.append(
+                                f"roster {dir_name}/{cls}: bad count header "
+                                f"{entry!r}; refusing to page blind")
+                        return
+                    continue
+                self._entry(entry, dir_name, cls, out, seen, errors)
+            if total is None:
+                if errors is not None:
+                    errors.append(
+                        f"roster {dir_name}/{cls}: reply carried no count "
+                        "header; refusing to page blind")
+                return
+            lo = hi
+            if limit and len(out) >= limit:
+                return
+
+    def _roster_iterate(self, dexpr, dir_name, cls, page, limit, recurse,
+                        out, seen, errors) -> None:
+        """Ordinal-window paging: ``iterate`` has no cursor, so each request
+        re-walks the dir and emits only ordinals in ``[lo, lo+page)``."""
+        verb = "iterate" if recurse else "iterate_self"
+        lo = 0
+        while True:
+            hi = lo + page
+            expr = (
+                '{do ($s "") ($n 0) ($d %s)'
+                "{$d %s %s $o"
+                '{if {&& {>= $n %d} {< $n %d}}'
+                ' {strcat $s {$o name} "%s" {$o class_name} "%s"}}'
+                "{set $n {+ $n 1}}}"
+                "$s}"
+            ) % (dexpr, verb, cls, lo, hi, ROSTER_KV, ROSTER_SEP)
+            res = self.eval_dta(expr, timeout=30.0)
+            if not res.ok:
+                if errors is not None:
+                    errors.append(f"roster {dir_name}/{cls}: {res.error}")
+                return
+            got = 0
+            for entry in res.text.split(ROSTER_SEP):
+                entry = entry.strip()
+                if not entry:
+                    continue
+                got += 1
+                self._entry(entry, dir_name, cls, out, seen, errors)
+            if got < page:
+                return
+            lo = hi
+            if limit and len(out) >= limit:
+                return
 
 
 class NativeHttpTarget(Target):
@@ -266,12 +546,44 @@ class NativeHttpTarget(Target):
         except TransportError:
             return None
 
-    def roster(self, dir_name: str = "main", classes: Iterable[str] | None = None) -> list[ObjRef]:
-        """Enumerate via /api/objects (DTA ``iterate`` is broken natively)."""
-        q = "?recurse=true"
-        if dir_name and dir_name != "main":
-            q = f"?dir={urllib.parse.quote(dir_name)}&recurse=true"
-        payload = self._get(f"/api/objects{q}")
+    def screenshot(self, timeout: float = 60.0) -> bytes:
+        """Grab the current framebuffer as PNG bytes.
+
+        **This works under ``MILO_HEADLESS=1`` on a box with no display and no
+        GPU** — verified live, 1280x720 RGBA PNG, ~750 KB. The capture is
+        queued and executed on the main thread after ``EndDrawing()``
+        (HttpServer.cpp:847), so the image is a fully rendered frame and the
+        call also doubles as a "advance to the next presented frame" primitive.
+        """
+        url = f"{self.base}/api/screenshot"
+        try:
+            with urllib.request.urlopen(url, timeout=timeout) as r:
+                data = r.read()
+        except (urllib.error.URLError, OSError) as e:
+            raise TransportError(f"GET {url}: {e}") from e
+        if not data.startswith(b"\x89PNG"):
+            raise TransportError(
+                f"GET {url}: reply is not a PNG ({data[:80]!r})"
+            )
+        return data
+
+    def roster(self, dir_name: str = "main", classes: Iterable[str] | None = None,
+               **kw) -> list[ObjRef]:
+        """Enumerate via /api/objects for ``main``, via DTA ``iterate`` elsewhere.
+
+        ``/api/objects`` is one request instead of one per class, so it stays
+        the default for the global dir. It cannot serve a panel dir, though:
+        its ``dir=`` parameter resolves the name through
+        ``ObjectDir::Main()->FindObject`` (HttpServer.cpp:560), and a PanelDir
+        reached via ``{<panel> loaded_dir}`` is not registered there — and even
+        when it is findable, the name collides (`main_panel`'s loaded dir is
+        itself *named* "main"). Panel scopes therefore take the portable
+        ``iterate`` path, which is also what a console target will use, so both
+        sides of a diff enumerate identically.
+        """
+        if not is_main_dir(dir_name):
+            return super().roster(dir_name, classes, **kw)
+        payload = self._get("/api/objects?recurse=true")
         data = payload.get("data", payload)
         if isinstance(data, dict):
             data = data.get("objects", [])
@@ -426,7 +738,8 @@ class ReplayTarget(Target):
     def describe(self) -> dict:
         return dict(self._meta)
 
-    def roster(self, dir_name: str = "main", classes: Iterable[str] | None = None) -> list[ObjRef]:
+    def roster(self, dir_name: str = "main", classes: Iterable[str] | None = None,
+               **kw) -> list[ObjRef]:
         refs = self._roster
         if classes:
             want = set(classes)

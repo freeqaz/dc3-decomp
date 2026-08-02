@@ -1,0 +1,953 @@
+{
+  "_doc": "DTA class names accepted by object_list / iterate / IsASubclass. Filtering resolves through the shipped `objects` superclass graph, which uses DTA names -- NOT C++ class names. A C++ name yields an EMPTY result, indistinguishable from 'no such objects exist'.",
+  "_provenance": {
+    "source": "orig-assets/extracted/**/*objects.dta (top-level forms + every (superclasses ...) entry) -- the same data SystemConfig(\"objects\") is built from, so this IS the engine's vocabulary",
+    "extracted": "2026-08-02",
+    "note": "IsASubclass(child,parent) also returns true when child == parent (Utl.cpp:67), so any literal ClassName works as a filter even if it is absent here -- e.g. UIScreen enumerates the 3 objects whose class is literally UIScreen, while HamScreen appears in no objects.dta at all so {main iterate UIScreen} yields 3, not 296. The real console behaves identically; this is a cross-target invariant, not a native divergence."
+  },
+  "classes": [
+    "ADSR",
+    "AmbientOcclusion",
+    "Anim",
+    "AnimFilter",
+    "AudioDuckerTrigger",
+    "BeatClock",
+    "BustAMoveData",
+    "Cam",
+    "CamAnim",
+    "CamShot",
+    "CameraManager",
+    "CharBlendBone",
+    "CharBone",
+    "CharBoneDir",
+    "CharBoneOffset",
+    "CharBoneTwist",
+    "CharBonesAlloc",
+    "CharBonesBlender",
+    "CharBonesMeshes",
+    "CharBonesObject",
+    "CharClip",
+    "CharClipGroup",
+    "CharClipSet",
+    "CharCollide",
+    "CharCuff",
+    "CharDriver",
+    "CharDriverMidi",
+    "CharEyeDartRuleset",
+    "CharEyes",
+    "CharFaceServo",
+    "CharFeedback",
+    "CharForeTwist",
+    "CharGuitarString",
+    "CharHair",
+    "CharIKFingers",
+    "CharIKFoot",
+    "CharIKHand",
+    "CharIKHead",
+    "CharIKMidi",
+    "CharIKRod",
+    "CharIKScale",
+    "CharIKSliderMidi",
+    "CharInterest",
+    "CharLipSync",
+    "CharLipSyncDriver",
+    "CharLookAt",
+    "CharMeshHide",
+    "CharMirror",
+    "CharNeckTwist",
+    "CharPollGroup",
+    "CharPollable",
+    "CharPosConstraint",
+    "CharServoBone",
+    "CharSignalApplier",
+    "CharSleeve",
+    "CharTransCopy",
+    "CharTransDraw",
+    "CharUpperTwist",
+    "CharWalk",
+    "CharWeightSetter",
+    "CharWeightable",
+    "Character",
+    "ClipBlendTester",
+    "ClipCollide",
+    "ColorPalette",
+    "CrazeHollaback",
+    "CubeTex",
+    "DancerSequence",
+    "DataProvider",
+    "DepthBuffer3D",
+    "Draw",
+    "EditTimeline",
+    "EditorDir",
+    "Enterable",
+    "Environ",
+    "EventTrigger",
+    "FileMerger",
+    "Flare",
+    "Flow",
+    "FlowEventTester",
+    "Font",
+    "Font3d",
+    "FontBase",
+    "Fur",
+    "FxSend",
+    "FxSendChorus",
+    "FxSendCompress",
+    "FxSendDelay",
+    "FxSendDistortion",
+    "FxSendEQ",
+    "FxSendFlanger",
+    "FxSendMeterEffect",
+    "FxSendReverb",
+    "FxSendSynapse",
+    "FxSendWah",
+    "Generator",
+    "Group",
+    "GroupSeq",
+    "HamBattleData",
+    "HamCamShot",
+    "HamCamTransform",
+    "HamCharacter",
+    "HamDirector",
+    "HamDriver",
+    "HamIKEffector",
+    "HamIKSkeleton",
+    "HamIconMan",
+    "HamLabel",
+    "HamList",
+    "HamListRibbon",
+    "HamMove",
+    "HamNavList",
+    "HamNavProvider",
+    "HamPartyJumpData",
+    "HamPeakRibbon",
+    "HamPhotoDisplay",
+    "HamPhraseMeter",
+    "HamRegulate",
+    "HamRibbon",
+    "HamScrollSpeedIndicator",
+    "HamSkeletonConverter",
+    "HamSupereasyData",
+    "HamVisDir",
+    "HamWardrobe",
+    "HollaBackMinigame",
+    "HudDir",
+    "InlineHelp",
+    "LabelNumberTicker",
+    "LabelShrinkWrapper",
+    "Light",
+    "LightAnim",
+    "LightHue",
+    "LightPreset",
+    "Line",
+    "Mat",
+    "MatAnim",
+    "Mesh",
+    "MeshAnim",
+    "MeshDeform",
+    "MetaMaterial",
+    "MeterDisplay",
+    "MeterEffectMonitor",
+    "MidiInstrument",
+    "MidiParser",
+    "MiniLeaderboardDisplay",
+    "MoggClip",
+    "Morph",
+    "MotionBlur",
+    "MoveDir",
+    "MoveGraph",
+    "Movie",
+    "MultiMesh",
+    "NavigationSkeletonDir",
+    "ObjFolder",
+    "Object",
+    "ObjectDir",
+    "ObjectIntersection",
+    "OutfitLoader",
+    "PanelDir",
+    "ParallelGroupSeq",
+    "PartLauncher",
+    "ParticleSys",
+    "ParticleSysAnim",
+    "PatchDir",
+    "PatchLayer",
+    "PhotoSpotlightPositioner",
+    "PhysicsVolume",
+    "PlotDef",
+    "PlotDir",
+    "Poll",
+    "PollAnim",
+    "PostProc",
+    "PostProcMgr",
+    "PostProcer",
+    "PracticeOptionsProvider",
+    "PracticeSection",
+    "PropAnim",
+    "PropertyEventProvider",
+    "RandomGroupSeq",
+    "RandomIntervalGroupSeq",
+    "RhythmBattle",
+    "RhythmBattlePlayer",
+    "RhythmDetector",
+    "RhythmDetectorGroup",
+    "Ribbon",
+    "RndDir",
+    "ScreenMask",
+    "Screenshot",
+    "Sequence",
+    "SerialGroupSeq",
+    "Set",
+    "Sfx",
+    "Shockwave",
+    "SkeletonClip",
+    "SkeletonDir",
+    "SkeletonViz",
+    "SoftParticles",
+    "Song",
+    "SongCollision",
+    "SongDifficultyDisplay",
+    "SongLayout",
+    "Sound",
+    "Spline",
+    "SplineDeform",
+    "SplineDeformBend",
+    "SplineDeformNode",
+    "SplineDeformStraighten",
+    "SplineDeformTwist",
+    "Spotlight",
+    "SpotlightDrawer",
+    "SpotlightEnder",
+    "StarsDisplay",
+    "StreamRecorder",
+    "StreamRenderer",
+    "SuperEasyRemixer",
+    "SyncWorldFx",
+    "SynthEmitter",
+    "SynthFader",
+    "SynthSample",
+    "TestProvider",
+    "Tex",
+    "TexBlendController",
+    "TexBlender",
+    "TexMovie",
+    "TexProc",
+    "TexRenderer",
+    "Text",
+    "ThreeDSound",
+    "TrackDir",
+    "TrackGeom",
+    "TrackWidget",
+    "TrackWidgetMultiMesh",
+    "TrackWidgetRndDir",
+    "Trans",
+    "TransAnim",
+    "TransConstraint",
+    "TransProxy",
+    "UIButton",
+    "UIColor",
+    "UIComponent",
+    "UIFontImporter",
+    "UIGuide",
+    "UILabel",
+    "UILabelDir",
+    "UIList",
+    "UIListArrow",
+    "UIListCustom",
+    "UIListDir",
+    "UIListHighlight",
+    "UIListLabel",
+    "UIListMesh",
+    "UIListSlot",
+    "UIListSubList",
+    "UIListWidget",
+    "UIPicture",
+    "UISlider",
+    "UITrigger",
+    "UserPreferences",
+    "WaitSeq",
+    "Waypoint",
+    "Wind",
+    "WorldCrowd",
+    "WorldDir",
+    "WorldInstance",
+    "WorldReflection",
+    "adsr",
+    "dir",
+    "sfxmaps",
+    "sixteenth"
+  ],
+  "graph": {
+    "AnimFilter": [
+      "Anim"
+    ],
+    "Cam": [
+      "Trans"
+    ],
+    "CamAnim": [
+      "Anim"
+    ],
+    "CamShot": [
+      "Anim",
+      "Trans"
+    ],
+    "CharBlendBone": [
+      "CharPollable"
+    ],
+    "CharBone": [],
+    "CharBoneDir": [
+      "ObjectDir"
+    ],
+    "CharBoneOffset": [
+      "CharPollable"
+    ],
+    "CharBoneTwist": [
+      "CharPollable",
+      "CharWeightable"
+    ],
+    "CharBonesAlloc": [
+      "CharBonesObject"
+    ],
+    "CharBonesBlender": [
+      "CharBonesAlloc",
+      "CharPollable"
+    ],
+    "CharBonesMeshes": [
+      "CharBonesAlloc"
+    ],
+    "CharClipSet": [
+      "ObjectDir"
+    ],
+    "CharCollide": [
+      "Trans"
+    ],
+    "CharCuff": [
+      "Trans"
+    ],
+    "CharDriver": [
+      "CharPollable",
+      "CharWeightable"
+    ],
+    "CharDriverMidi": [
+      "CharDriver"
+    ],
+    "CharEyes": [
+      "CharPollable",
+      "CharWeightable"
+    ],
+    "CharFaceServo": [
+      "CharBonesMeshes",
+      "CharPollable"
+    ],
+    "CharFeedback": [
+      "Draw"
+    ],
+    "CharForeTwist": [
+      "CharPollable"
+    ],
+    "CharGuitarString": [
+      "CharPollable"
+    ],
+    "CharHair": [
+      "CharPollable"
+    ],
+    "CharIKFingers": [
+      "CharPollable",
+      "CharWeightable"
+    ],
+    "CharIKFoot": [
+      "CharIKHand"
+    ],
+    "CharIKHand": [
+      "CharPollable",
+      "CharWeightable"
+    ],
+    "CharIKHead": [
+      "CharPollable",
+      "CharWeightable"
+    ],
+    "CharIKMidi": [
+      "CharPollable"
+    ],
+    "CharIKRod": [
+      "CharPollable"
+    ],
+    "CharIKScale": [
+      "CharPollable",
+      "CharWeightable"
+    ],
+    "CharIKSliderMidi": [
+      "CharPollable",
+      "CharWeightable"
+    ],
+    "CharInterest": [
+      "Trans"
+    ],
+    "CharLipSync": [],
+    "CharLipSyncDriver": [
+      "CharPollable",
+      "CharWeightable"
+    ],
+    "CharLookAt": [
+      "CharPollable",
+      "CharWeightable"
+    ],
+    "CharMirror": [
+      "CharPollable",
+      "CharWeightable"
+    ],
+    "CharNeckTwist": [
+      "CharPollable"
+    ],
+    "CharPollGroup": [
+      "CharPollable",
+      "CharWeightable"
+    ],
+    "CharPollable": [
+      "Poll"
+    ],
+    "CharPosConstraint": [
+      "CharPollable"
+    ],
+    "CharServoBone": [
+      "CharBonesMeshes",
+      "CharPollable"
+    ],
+    "CharSignalApplier": [
+      "CharPollable",
+      "CharWeightable"
+    ],
+    "CharTransCopy": [
+      "CharPollable"
+    ],
+    "CharTransDraw": [
+      "Draw"
+    ],
+    "CharUpperTwist": [
+      "CharPollable"
+    ],
+    "CharWalk": [
+      "CharPollable"
+    ],
+    "CharWeightSetter": [
+      "CharPollable",
+      "CharWeightable"
+    ],
+    "Character": [
+      "RndDir"
+    ],
+    "ClipCollide": [],
+    "DancerSequence": [
+      "Anim"
+    ],
+    "DataProvider": [],
+    "DepthBuffer3D": [
+      "Draw",
+      "Trans"
+    ],
+    "EditorDir": [
+      "ObjectDir"
+    ],
+    "Environ": [
+      "Draw",
+      "Trans"
+    ],
+    "EventTrigger": [
+      "Anim"
+    ],
+    "FileMerger": [],
+    "Flare": [
+      "Draw",
+      "Trans"
+    ],
+    "Font": [
+      "FontBase"
+    ],
+    "Font3d": [
+      "FontBase"
+    ],
+    "FxSendChorus": [
+      "FxSend"
+    ],
+    "FxSendCompress": [
+      "FxSend"
+    ],
+    "FxSendDelay": [
+      "FxSend"
+    ],
+    "FxSendDistortion": [
+      "FxSend"
+    ],
+    "FxSendEQ": [
+      "FxSend"
+    ],
+    "FxSendFlanger": [
+      "FxSend"
+    ],
+    "FxSendMeterEffect": [
+      "FxSend"
+    ],
+    "FxSendReverb": [
+      "FxSend"
+    ],
+    "FxSendSynapse": [
+      "FxSend"
+    ],
+    "FxSendWah": [
+      "FxSend"
+    ],
+    "Generator": [
+      "Anim",
+      "Draw",
+      "Trans"
+    ],
+    "Group": [
+      "Anim",
+      "Draw",
+      "Trans"
+    ],
+    "GroupSeq": [
+      "Sequence"
+    ],
+    "HamCamShot": [
+      "CamShot"
+    ],
+    "HamCamTransform": [
+      "Poll"
+    ],
+    "HamCharacter": [
+      "Character"
+    ],
+    "HamDirector": [
+      "Draw",
+      "Poll"
+    ],
+    "HamDriver": [
+      "CharPollable",
+      "CharWeightable"
+    ],
+    "HamIKEffector": [
+      "CharPollable",
+      "CharWeightable"
+    ],
+    "HamIKSkeleton": [
+      "CharPollable"
+    ],
+    "HamIconMan": [
+      "Anim",
+      "Draw"
+    ],
+    "HamLabel": [
+      "UILabel"
+    ],
+    "HamList": [
+      "UIList"
+    ],
+    "HamListRibbon": [
+      "RndDir"
+    ],
+    "HamMove": [
+      "PropAnim"
+    ],
+    "HamNavList": [
+      "UIComponent"
+    ],
+    "HamNavProvider": [],
+    "HamPeakRibbon": [
+      "Line",
+      "Poll"
+    ],
+    "HamPhotoDisplay": [
+      "RndDir"
+    ],
+    "HamPhraseMeter": [
+      "RndDir"
+    ],
+    "HamRegulate": [
+      "CharPollable"
+    ],
+    "HamRibbon": [
+      "Draw",
+      "Poll"
+    ],
+    "HamScrollSpeedIndicator": [
+      "RndDir"
+    ],
+    "HamSkeletonConverter": [
+      "CharPollable"
+    ],
+    "HamVisDir": [
+      "SkeletonDir"
+    ],
+    "HollaBackMinigame": [
+      "Poll"
+    ],
+    "HudDir": [
+      "PanelDir"
+    ],
+    "InlineHelp": [
+      "UIComponent"
+    ],
+    "Light": [
+      "Trans"
+    ],
+    "LightAnim": [
+      "Anim"
+    ],
+    "LightPreset": [
+      "Anim"
+    ],
+    "Line": [
+      "Draw",
+      "Trans"
+    ],
+    "MatAnim": [
+      "Anim"
+    ],
+    "Mesh": [
+      "Draw",
+      "Trans"
+    ],
+    "MeshAnim": [
+      "Anim"
+    ],
+    "MeshDeform": [],
+    "MeterDisplay": [
+      "UIComponent"
+    ],
+    "MeterEffectMonitor": [
+      "Poll"
+    ],
+    "MiniLeaderboardDisplay": [
+      "UIComponent"
+    ],
+    "Morph": [
+      "Anim"
+    ],
+    "MotionBlur": [
+      "Draw"
+    ],
+    "MoveDir": [
+      "SkeletonDir"
+    ],
+    "Movie": [
+      "Anim"
+    ],
+    "MultiMesh": [
+      "Draw"
+    ],
+    "NavigationSkeletonDir": [
+      "SkeletonDir"
+    ],
+    "OutfitLoader": [],
+    "PanelDir": [
+      "RndDir"
+    ],
+    "ParallelGroupSeq": [
+      "GroupSeq"
+    ],
+    "ParticleSys": [
+      "Anim",
+      "Draw",
+      "Poll",
+      "Trans"
+    ],
+    "ParticleSysAnim": [
+      "Anim"
+    ],
+    "PhotoSpotlightPositioner": [
+      "Poll"
+    ],
+    "PhysicsVolume": [
+      "Draw",
+      "Poll",
+      "Trans"
+    ],
+    "PlotDef": [],
+    "PlotDir": [
+      "RndDir"
+    ],
+    "PollAnim": [
+      "Anim",
+      "Poll"
+    ],
+    "PostProcMgr": [
+      "Poll"
+    ],
+    "PostProcer": [
+      "Draw"
+    ],
+    "PracticeOptionsProvider": [
+      "HamNavProvider"
+    ],
+    "PracticeSection": [
+      "Anim"
+    ],
+    "PropAnim": [
+      "Anim"
+    ],
+    "RandomGroupSeq": [
+      "GroupSeq"
+    ],
+    "RandomIntervalGroupSeq": [
+      "GroupSeq"
+    ],
+    "RhythmBattle": [
+      "Poll"
+    ],
+    "RhythmBattlePlayer": [
+      "Poll"
+    ],
+    "RhythmDetector": [
+      "Poll"
+    ],
+    "RhythmDetectorGroup": [
+      "Poll"
+    ],
+    "Ribbon": [
+      "Draw",
+      "Poll"
+    ],
+    "RndDir": [
+      "Anim",
+      "Draw",
+      "ObjectDir",
+      "Poll",
+      "Trans"
+    ],
+    "ScreenMask": [
+      "Draw"
+    ],
+    "Screenshot": [
+      "Draw"
+    ],
+    "SerialGroupSeq": [
+      "GroupSeq"
+    ],
+    "Sfx": [
+      "Sequence"
+    ],
+    "Shockwave": [
+      "Poll",
+      "Trans"
+    ],
+    "SkeletonClip": [
+      "Anim"
+    ],
+    "SkeletonDir": [
+      "PanelDir"
+    ],
+    "SkeletonViz": [
+      "Draw",
+      "Trans"
+    ],
+    "SoftParticles": [
+      "Draw"
+    ],
+    "SongDifficultyDisplay": [
+      "UIComponent"
+    ],
+    "Spline": [],
+    "SplineDeform": [
+      "Poll"
+    ],
+    "SplineDeformBend": [
+      "SplineDeformNode"
+    ],
+    "SplineDeformNode": [],
+    "SplineDeformStraighten": [
+      "SplineDeformNode"
+    ],
+    "SplineDeformTwist": [
+      "SplineDeformNode"
+    ],
+    "Spotlight": [
+      "Draw",
+      "Poll",
+      "Trans"
+    ],
+    "SpotlightDrawer": [],
+    "SpotlightEnder": [
+      "Draw"
+    ],
+    "StarsDisplay": [
+      "UIComponent"
+    ],
+    "StreamRecorder": [
+      "Draw"
+    ],
+    "StreamRenderer": [
+      "Draw"
+    ],
+    "SyncWorldFx": [],
+    "SynthEmitter": [
+      "Draw",
+      "Trans"
+    ],
+    "TestProvider": [],
+    "TexBlender": [
+      "Draw"
+    ],
+    "TexMovie": [
+      "Draw",
+      "Poll"
+    ],
+    "TexProc": [
+      "Draw"
+    ],
+    "TexRenderer": [
+      "Anim",
+      "Draw"
+    ],
+    "Text": [
+      "Draw",
+      "Trans"
+    ],
+    "ThreeDSound": [
+      "Sound",
+      "Trans"
+    ],
+    "TrackDir": [
+      "PanelDir"
+    ],
+    "TrackGeom": [
+      "Draw",
+      "Trans"
+    ],
+    "TrackWidget": [
+      "Draw",
+      "Poll"
+    ],
+    "TrackWidgetMultiMesh": [
+      "TrackWidget"
+    ],
+    "TrackWidgetRndDir": [
+      "TrackWidget"
+    ],
+    "TransAnim": [
+      "Anim"
+    ],
+    "TransConstraint": [
+      "Poll"
+    ],
+    "TransProxy": [
+      "Trans"
+    ],
+    "UIButton": [
+      "UILabel"
+    ],
+    "UIComponent": [
+      "Draw",
+      "Poll",
+      "Trans"
+    ],
+    "UIFontImporter": [],
+    "UILabel": [
+      "UIComponent"
+    ],
+    "UILabelDir": [
+      "RndDir",
+      "UIFontImporter"
+    ],
+    "UIList": [
+      "UIComponent"
+    ],
+    "UIListArrow": [],
+    "UIListCustom": [],
+    "UIListDir": [
+      "RndDir"
+    ],
+    "UIListHighlight": [],
+    "UIListLabel": [],
+    "UIListMesh": [],
+    "UIListSubList": [],
+    "UIPicture": [
+      "UIComponent"
+    ],
+    "UISlider": [
+      "UIComponent"
+    ],
+    "UITrigger": [
+      "EventTrigger"
+    ],
+    "WaitSeq": [
+      "Sequence"
+    ],
+    "Waypoint": [
+      "Trans"
+    ],
+    "Wind": [],
+    "WorldCrowd": [
+      "Draw"
+    ],
+    "WorldDir": [
+      "PanelDir"
+    ],
+    "WorldInstance": [
+      "RndDir"
+    ],
+    "WorldReflection": [
+      "Draw",
+      "Trans"
+    ]
+  },
+  "cpp_aliases_that_do_not_work": {
+    "RndDrawable": "Draw",
+    "RndTransformable": "Trans",
+    "RndGroup": "Group",
+    "RndMesh": "Mesh",
+    "RndMat": "Mat",
+    "RndTex": "Tex",
+    "RndCam": "Cam",
+    "RndLight": "Light",
+    "RndEnviron": "Environ",
+    "RndAnimatable": "Anim",
+    "RndFont": "Font",
+    "RndText": "Text",
+    "RndMovie": "Movie",
+    "RndParticleSys": "ParticleSys",
+    "RndPollable": "Poll",
+    "Hmx::Object": "Object",
+    "HamScreen": null,
+    "PanelDir": "PanelDir"
+  },
+  "measured": {
+    "_doc": "Live counts, dc3-native headless at main_screen, 2026-08-02, via {size {object_list <dir> <Class> FALSE}}. Cross-checked against {<dir> iterate <Class> ...}: identical for every row.",
+    "main": {
+      "Trans": 7,
+      "Draw": 1,
+      "Mesh": 0,
+      "Mat": 0,
+      "Tex": 0,
+      "Cam": 5,
+      "Light": 1,
+      "Environ": 1,
+      "ObjectDir": 2,
+      "Group": 0,
+      "UILabel": 0,
+      "HamLabel": 0,
+      "UIComponent": 0,
+      "UIScreen": 3,
+      "RndDrawable": 0,
+      "RndGroup": 0,
+      "Object": 688
+    },
+    "panel:main_panel": {
+      "Trans": 57,
+      "Draw": 45,
+      "Mesh": 30,
+      "Mat": 49,
+      "Tex": 60,
+      "Cam": 2,
+      "Light": 0,
+      "Environ": 0,
+      "ObjectDir": 20,
+      "Group": 7,
+      "UILabel": 6,
+      "HamLabel": 6,
+      "UIComponent": 7,
+      "UIScreen": 0,
+      "RndDrawable": 0,
+      "RndGroup": 0
+    }
+  }
+}

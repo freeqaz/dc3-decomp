@@ -50,12 +50,13 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Iterable
 
 from .budget import BudgetError, Limits, check_result, validate_script
-from .transport import ABSENT, NULL_OBJ, ObjRef, Target, TransportError
+from .transport import (ABSENT, CPP_ALIASES, NULL_OBJ, ObjRef, Target,
+                        TransportError, dir_expr)
 
 PROBE_DIR = Path(__file__).parent / "probes"
 
@@ -267,6 +268,10 @@ DANGEROUS_CLASSES = ("Object",)
 
 @dataclass
 class Scope:
+    #: A ``--dir`` spec, NOT necessarily a bare name: ``main``,
+    #: ``panel:main_panel`` or a literal ``{...}`` DTA expression. Compiled by
+    #: :func:`transport.dir_expr`. This is what lets a probe reach inside a
+    #: loaded .milo panel dir, which `main` cannot see at all.
     dir: str = "main"
     isa: list[str] = field(default_factory=list)
     classes: list[str] = field(default_factory=list)
@@ -279,6 +284,30 @@ class Scope:
     #: Turn off (guard 0) when `isa` already guarantees the property set —
     #: it roughly halves the emitted script and doubles objects-per-request.
     guard: bool = True
+    #: Recurse into sub-dirs when enumerating (``iterate`` vs ``iterate_self``).
+    recurse: bool = True
+
+    @property
+    def dir_expression(self) -> str:
+        """The scope's dir spec compiled to a DTA expression."""
+        return dir_expr(self.dir)
+
+    def roster_classes(self) -> list[str]:
+        """Classes handed to the engine-side ``iterate`` subclass filter.
+
+        ``isa`` is the probe's real gate, so it is also the right enumeration
+        filter — narrowing enumeration to it means a panel scope never even
+        enumerates objects the read pass would skip. ``classes`` (an EXACT
+        post-filter in :meth:`select`) is only the fallback, because
+        ``iterate`` matches subclasses and would otherwise return a strict
+        superset that ``select`` immediately throws away.
+
+        Reporting only; the real values are passed to
+        :meth:`transport.Target.roster` as separate ``isa`` / ``classes``
+        arguments, because a target that enumerates by exact class must not
+        treat the subclass gate as one.
+        """
+        return list(self.isa or self.classes or ["Object"])
 
     def select(self, roster: Iterable[ObjRef]) -> list[ObjRef]:
         refs = list(roster)
@@ -312,9 +341,9 @@ class Page:
 
 
 # Wrapper / per-object script overheads, measured from the emitted text.
-_WRAPPER = len('{do ($s "") ($o 0) ($p 0) $s}')
-_OBJ_FIXED = len('{set $o {find_obj main ""}}{if_else $o {do } {strcat $s "0~@~"}}'
-                 '{strcat $s "~#~"}')
+#: Fixed part of the page wrapper; the dir expression's own length is added by
+#: :meth:`Probe.wrapper_len` because it varies per scope.
+_WRAPPER_FIXED = len('{do ($s "") ($o 0) ($p 0) ($d ) $s}')
 _REC_RESULT_FIXED = len("1" + FIELD_SEP) + len(RECORD_SEP)
 
 
@@ -332,12 +361,21 @@ class Probe:
     programs: list[str] = field(default_factory=list)
     roster_program: str = ""
     line_sep: str = ";"
+    #: Enumeration primitive: ``auto`` | ``object_list`` | ``iterate``.
+    enumerate_method: str = "auto"
 
     @property
     def keys(self) -> list[str]:
         return [f.key for f in self.fields]
 
     # -- compilation --------------------------------------------------
+
+    @property
+    def dir_expression(self) -> str:
+        return self.scope.dir_expression
+
+    def wrapper_len(self) -> int:
+        return _WRAPPER_FIXED + len(self.dir_expression)
 
     def _object_block(self, name: str, fields: list[Field]) -> str:
         """Commands producing one record for ``name`` (inside the {do} wrapper).
@@ -347,6 +385,12 @@ class Probe:
         ``find_obj`` returns null (DataFunc.cpp:1167-1182). The record body is
         wrapped in a null check so an object deleted between roster and read
         degrades to a skipped record instead of a crash.
+
+        The dir is read from ``$d``, bound ONCE per page by :meth:`_program`.
+        Inlining ``{main_panel loaded_dir}`` per object would both re-send the
+        panel a message per read and inflate every block by ~24 bytes, which
+        would silently shrink objects-per-page for exactly the scopes this
+        feature exists to serve.
         """
         miss = '{strcat $s "0%s"}' % FIELD_SEP
         reads = '{strcat $s "1%s"}' % FIELD_SEP
@@ -365,7 +409,7 @@ class Probe:
             inner = '{do %s}' % reads
 
         return (
-            "{set $o {find_obj %s %s}}" % (self.scope.dir, dta_quote(name))
+            "{set $o {find_obj $d %s}}" % dta_quote(name)
             + '{if_else $o %s %s}' % (inner, miss)
             + '{strcat $s "%s"}' % RECORD_SEP
         )
@@ -378,7 +422,8 @@ class Probe:
         # could not serialize kDataString; now that it can, dropping it avoids
         # interning every page's payload into the global symbol table forever
         # (the hierarchy probe alone would leak ~500 unique symbols per run).
-        return '{do ($s "") ($o 0) ($p 0) %s$s}' % blocks
+        return '{do ($s "") ($o 0) ($p 0) ($d %s) %s$s}' % (
+            self.dir_expression, blocks)
 
     def field_groups(self, longest_name: str, limits: Limits) -> list[list[Field]]:
         """Split fields so ONE object's block fits the script and reply caps.
@@ -391,7 +436,7 @@ class Probe:
             return [list(self.fields)]
 
         # Room for one object's block: whole cap minus the {do ...} wrapper.
-        script_budget = limits.max_script - _WRAPPER
+        script_budget = limits.max_script - self.wrapper_len()
         result_budget = limits.result_headroom - _REC_RESULT_FIXED
         if result_budget <= 0:
             raise BudgetError(
@@ -431,7 +476,7 @@ class Probe:
         for group in self.field_groups(longest, limits):
             per_obj_result = sum(f.result_estimate() for f in group) + _REC_RESULT_FIXED
             cur: list[str] = []
-            script = _WRAPPER
+            script = self.wrapper_len()
             r = 0
             for n in names:
                 cost = len(self._object_block(n, group))
@@ -440,7 +485,7 @@ class Probe:
                     or r + per_obj_result > limits.result_headroom
                 ):
                     out.append(Page(group, cur, self._program(cur, group)))
-                    cur, script, r = [], _WRAPPER, 0
+                    cur, script, r = [], self.wrapper_len(), 0
                 cur.append(n)
                 script += cost
                 r += per_obj_result
@@ -526,6 +571,7 @@ def load_probe(path: str | Path) -> Probe:
         names=list(scope_kv.get("names", [])),
         limit=int((scope_kv.get("limit") or [0])[0]),
         guard=bool(int((scope_kv.get("guard") or [1])[0])),
+        recurse=bool(int((scope_kv.get("recurse") or [1])[0])),
         exclude_classes=list(
             scope_kv["exclude_classes"] if "exclude_classes" in scope_kv
             else DANGEROUS_CLASSES
@@ -568,6 +614,41 @@ def load_probe(path: str | Path) -> Probe:
     )
 
 
+def rescope(
+    probe: Probe,
+    dir_spec: str | None = None,
+    names: Iterable[str] | None = None,
+    classes: Iterable[str] | None = None,
+    limit: int | None = None,
+    recurse: bool | None = None,
+    method: str | None = None,
+) -> Probe:
+    """Return a COPY of ``probe`` with its scope narrowed by CLI overrides.
+
+    A copy, not a mutation: :func:`load_all` hands out one Probe per id and
+    :mod:`noise` sweeps all of them in a loop, so mutating in place would leak
+    one run's ``--names`` into the next probe's capture.
+
+    Every override tightens the read set except ``--dir``, which redirects it.
+    ``--names`` stays subject to the two-pass rule: a name that enumeration
+    does not return is refused, not guessed (see :func:`assert_enumerated`).
+    """
+    sc = probe.scope
+    new = Scope(
+        dir=sc.dir if dir_spec is None else dir_spec,
+        isa=list(sc.isa),
+        classes=list(sc.classes) if classes is None else list(classes),
+        names=list(sc.names) if names is None else list(names),
+        exclude_classes=list(sc.exclude_classes),
+        limit=sc.limit if limit is None else limit,
+        guard=sc.guard,
+        recurse=sc.recurse if recurse is None else recurse,
+    )
+    dir_expr(new.dir)  # fail fast, at author time, not mid-capture
+    kw = {} if method is None else {"enumerate_method": method}
+    return replace(probe, scope=new, **kw)
+
+
 def load_all(probe_dir: Path | None = None) -> dict[str, Probe]:
     d = Path(probe_dir or PROBE_DIR)
     probes = {}
@@ -583,6 +664,62 @@ def load_manifest(probe_dir: Path | None = None) -> dict:
     d = Path(probe_dir or PROBE_DIR)
     mf = d / "manifest.json"
     return json.loads(mf.read_text()) if mf.exists() else {}
+
+
+# --------------------------------------------------------------------------
+# DTA class-name vocabulary
+# --------------------------------------------------------------------------
+
+_CLASS_MAP_CACHE: dict | None = None
+
+
+def load_class_map(probe_dir: Path | None = None) -> dict:
+    """The shipped DTA class vocabulary (``probes/dta_classes.json``)."""
+    global _CLASS_MAP_CACHE
+    if _CLASS_MAP_CACHE is None:
+        p = Path(probe_dir or PROBE_DIR) / "dta_classes.json"
+        _CLASS_MAP_CACHE = json.loads(p.read_text()) if p.exists() else {}
+    return _CLASS_MAP_CACHE
+
+
+def validate_classes(names: Iterable[str], where: str = "scope",
+                     probe_dir: Path | None = None) -> list[str]:
+    """Warn about class filters that are not DTA names.
+
+    ``iterate`` / ``object_list`` / ``IsASubclass`` all resolve the filter
+    through the shipped ``objects`` superclass graph, which is keyed by **DTA**
+    names. A C++ name such as ``RndDrawable`` is not an error — it is an
+    *empty result*, and an empty result is indistinguishable from "there are no
+    such objects". That is precisely the failure mode that makes a state diff
+    look clean while it is blind, so it is checked before a capture starts
+    rather than diagnosed afterwards.
+
+    Not fatal: ``IsASubclass`` also returns true when ``child == parent``
+    (Utl.cpp:67), so a literal ClassName absent from the graph still works —
+    ``UIScreen`` enumerates the 3 objects whose class is literally ``UIScreen``.
+    The map cannot know those, so this warns and lets the run proceed.
+    """
+    cmap = load_class_map(probe_dir)
+    known = set(cmap.get("classes", []))
+    out: list[str] = []
+    for n in names:
+        if not known or n in known:
+            continue
+        fix = CPP_ALIASES.get(n)
+        if fix:
+            out.append(
+                f"{where}: class {n!r} is a C++ class name and will enumerate "
+                f"ZERO (measured). Use the DTA name {fix!r}."
+            )
+        else:
+            out.append(
+                f"{where}: class {n!r} is not in the shipped DTA class "
+                "vocabulary (probes/dta_classes.json). It still works if it is "
+                "an object's literal ClassName (IsASubclass short-circuits on "
+                "child == parent), but if it is a C++ name it will enumerate "
+                "ZERO and look like an empty dir."
+            )
+    return out
 
 
 # --------------------------------------------------------------------------
@@ -646,6 +783,20 @@ def run_probe(
                 f"were not enumerated and will NOT be read: {missing[:5]}"
             )
     selected = probe.scope.select(roster)
+    if roster and not selected:
+        # Enumeration worked but the EXACT `classes` post-filter matched
+        # nothing. Almost always a C++ class name (`RndDrawable` where the
+        # object reports `Mesh`), and a silent empty capture would read as
+        # "everything is missing on this side".
+        stats.errors.extend(validate_classes(probe.scope.classes,
+                                             f"probe {probe.id} --classes"))
+        stats.errors.append(
+            f"{probe.id}: enumerated {len(roster)} object(s) but the scope "
+            f"filter kept NONE. classes={probe.scope.classes} "
+            f"names={probe.scope.names[:5]} "
+            f"exclude={probe.scope.exclude_classes}. Classes here are matched "
+            f"EXACTLY; seen: {sorted({r.type for r in roster})[:12]}"
+        )
     # Defense in depth: every name we are about to emit must have come back
     # from enumeration this session. Reading an object that does not exist
     # faults the title rather than returning an error.
@@ -794,7 +945,35 @@ def _roster_for(target, probe, limits, stats) -> list[ObjRef]:
             for n in res.text.split(probe.line_sep)
             if n.strip()
         ]
-    return target.roster(probe.scope.dir, probe.scope.classes or None)
+    # Class-name check BEFORE the round trips: a C++ name enumerates zero and
+    # looks exactly like an empty dir, so catching it here costs one second
+    # instead of an entire misleading capture.
+    stats.errors.extend(validate_classes(probe.scope.roster_classes(),
+                                         f"probe {probe.id}"))
+    errs: list[str] = []
+    refs = target.roster(
+        probe.scope.dir,
+        probe.scope.classes or None,
+        isa=probe.scope.isa or None,
+        limit=probe.scope.limit,
+        recurse=probe.scope.recurse,
+        method=probe.enumerate_method,
+        errors=errs,
+    )
+    stats.errors.extend(errs)
+    if not refs and not errs:
+        # Enumerating nothing is nearly always a bad --dir (the panel is not
+        # up, or its .milo never loaded) or a bad class name. Silently
+        # capturing zero objects would read downstream as "everything is
+        # missing on this side" — the worst failure this differ can produce.
+        stats.errors.append(
+            f"{probe.id}: scope dir {probe.scope.dir!r} "
+            f"({probe.scope.dir_expression}) enumerated 0 objects for classes "
+            f"{probe.scope.roster_classes()}. Check the panel is loaded "
+            "({<panel> is_loaded} / {<panel> loaded_dir}) and that the class "
+            "names are DTA names (probes/dta_classes.json)."
+        )
+    return refs
 
 
 def _merge(records: dict, parsed: dict, by_name: dict[str, ObjRef]) -> None:
