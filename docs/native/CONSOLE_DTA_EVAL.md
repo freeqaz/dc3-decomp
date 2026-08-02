@@ -696,16 +696,29 @@ should target, because it is the only one that works for the file transport too.
   one `=> <value>` line per command; the Nth `=> ` line is the Nth command's return value and
   everything since the previous marker is that command's printed output. `split_results()`
   implements this.
-* **Attribution is not bulletproof**: a batch element that fails the console's plausibility check
-  emits *no* `=> ` line, silently shifting every later index. The client counts markers against
-  commands sent and returns an explicit `<console returned N result markers for M commands>` note
-  rather than mis-attributing.
-* **Truncation and parse errors are never returned as data.** A body containing
-  `!! output truncated` or equal to `!! parse error` raises `ConsoleError`, so the differ can never
-  diff against a clipped payload. The real marker is the full sentence
+* **Exactly one marker per top-level command, in order, including refused ones.** A command the
+  console declines emits `=> !! refused: bad command pointer`, so markers stay 1:1 and positional
+  attribution holds. `is_refusal(result)` identifies those slots.
+* **One exception: truncation stops the batch early**, so a truncated body legitimately carries
+  *fewer* markers than commands sent. The two shortfall cases need opposite handling and the client
+  distinguishes them:
+
+  | body | meaning | client behaviour |
+  | --- | --- | --- |
+  | fewer markers **and** the truncation banner | legitimate partial result — the markers received are correctly attributed to the first N commands; the rest never ran | keep the good prefix, then **re-issue the un-run tail automatically** until everything has an answer (`--no-auto-page` to opt out, which marks the remainder `<not executed: …>` instead) |
+  | any count mismatch **without** the banner | genuine protocol inconsistency | raise `ConsoleError` and refuse to attribute at all, rather than risk pairing command *i*'s script with command *j*'s answer |
+
+  Auto-paging is what a paged state dump wants: a 200-probe dump that overflows 32 KB just costs
+  extra round trips instead of failing. It always terminates — each pass consumes at least one
+  command, and a lone command whose *own* output overflows is recorded as
+  `<truncated: this command's own output exceeds the 32768-byte cap; narrow it>` and stepped over.
+* **Parse errors, and truncation of a single-command request, are never returned as data.** A body
+  equal to `!! parse error`, or a one-command response carrying the truncation banner (where there
+  is no salvageable prefix), raises `ConsoleError`. The banner's full text is
   `\n!! output truncated, raise RB3E_DTA_OUTPUT_MAX or split the script\n`.
-* Caps: **16384** bytes in (`>=` is a 413), **32768** out. *(Note: RB3E's own `docs/DTA-EVAL.md`
-  says 4096 for the 413 threshold; the code checks 16384. This client follows the code.)*
+* Caps: **`RB3E_DTA_SCRIPT_MAX` = 16384** bytes in (`>=` is a 413), **`RB3E_DTA_OUTPUT_MAX` = 32768**
+  out. Both sides now cite the symbol names rather than the literals so they cannot drift apart
+  again.
 * In `--api auto`, only a **404** falls through to the next endpoint. A 403/409/413/504 is a real
   refusal and is surfaced immediately rather than masked by trying another path.
 

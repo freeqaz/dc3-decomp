@@ -63,13 +63,23 @@ MAX_SCRIPT_BYTES = 16384         # RB3E_DTA_SCRIPT_MAX; >= this is a 413
 MAX_RESULT_BYTES = 32768         # RB3E_DTA_OUTPUT_MAX
 MAX_NESTING = 64                 # sizeof(stack) in RB3E_DTAEval_Validate
 
-# Exact console-side markers.  A body ending in the truncation notice is
-# INVALID DATA, not a short answer -- the differ must not diff against it.
+# Exact console-side markers.
 TRUNCATION_NOTICE = ("\n!! output truncated, raise RB3E_DTA_OUTPUT_MAX or "
                      "split the script\n")
 TRUNCATION_PREFIX = "!! output truncated"
 PARSE_ERROR_BODY = "!! parse error"
 RESULT_PREFIX = "=> "            # Nth "=> " line == Nth command's return value
+REFUSED_PREFIX = "!! refused"    # e.g. "=> !! refused: bad command pointer"
+
+# Placeholder for batch elements the console never got to because output filled
+# up first.  Distinct from a refusal: these did not run at all.
+NOT_EXECUTED = ("<not executed: batch was cut short by the console's %d-byte "
+                "output cap>" % MAX_RESULT_BYTES)
+
+
+def is_refusal(result: str) -> bool:
+    """True if the console executed this slot but refused the command."""
+    return result.startswith(REFUSED_PREFIX)
 
 # --------------------------------------------------------------------------
 # DataNode type tags (src/system/obj/Data.h:22-44)
@@ -202,7 +212,13 @@ def validate_script(script: str, limit: int = MAX_SCRIPT_BYTES) -> str:
 
 
 def check_truncated(body: str) -> None:
-    """Raise if the console told us it dropped output. Never diff a truncated body."""
+    """Raise if a SINGLE-command response was clipped.
+
+    Only for the one-command paths (/execute, and a batch of one), where there
+    is no salvageable prefix -- the one answer we asked for is incomplete, so
+    returning it would silently hand the differ a clipped payload.  Batches go
+    through split_results(), which can keep the good prefix instead.
+    """
     if TRUNCATION_PREFIX in body:
         raise ConsoleError(200, "OK (truncated)",
                            "console output exceeded %d bytes and was truncated; "
@@ -213,18 +229,28 @@ def check_truncated(body: str) -> None:
 def split_results(body: str, count: int):
     """Split an RB3Enhanced /dta/eval body into one result per command.
 
-    The body is captured print output interleaved with one `=> <value>` line
-    per executed command (RB3Enhanced source/DTAEval.c:435-451).  Everything
-    emitted since the previous `=> ` line is that command's printed output.
+    Returns `(results, truncated)`.
 
-    Attribution is positional and NOT bulletproof console-side: a batch element
-    that fails the plausibility check emits no `=> ` line at all
-    (source/DTAEval.c:427-429), silently shifting every later index.  So count
-    the markers instead of assuming alignment, and say so when they disagree.
+    The body is captured print output interleaved with one `=> <value>` line
+    per top-level command (RB3Enhanced source/DTAEval.c).  Everything emitted
+    since the previous `=> ` line is that command's printed output.
+
+    The contract is exactly one marker per command, in order, INCLUDING refused
+    commands (which emit `=> !! refused: ...`), with one exception: **truncation
+    stops the batch early**, so a truncated body legitimately carries fewer
+    markers than commands sent.  Those two cases need opposite handling:
+
+    * fewer markers AND the truncation banner -> a legitimate partial result.
+      The markers we did get are correctly attributed to the first N commands;
+      the rest simply never ran.  Caller re-issues the remainder.
+    * any count mismatch WITHOUT the banner -> a genuine protocol
+      inconsistency.  Refuse to attribute at all rather than risk silently
+      pairing command i's script with command j's answer.
     """
     if body.strip() == PARSE_ERROR_BODY:
         raise ConsoleError(200, "OK (parse error)",
                            "console could not parse the script")
+    truncated = TRUNCATION_PREFIX in body
     results, printed = [], []
     for raw_line in body.splitlines():
         if raw_line.startswith(RESULT_PREFIX):
@@ -232,16 +258,24 @@ def split_results(body: str, count: int):
             prefix = "\n".join(printed).strip()
             results.append((prefix + "\n" + value).strip() if prefix else value)
             printed = []
+        elif raw_line.startswith(TRUNCATION_PREFIX):
+            continue                    # banner is framing, not output
         else:
             printed.append(raw_line)
+
     if not results:
+        if truncated:
+            return [], True             # not even one command fitted
         # single-expression path: no "=> " markers at all
-        return [body.strip()]
-    if len(results) != count:
-        note = ("<console returned %d result markers for %d commands; "
-                "positional attribution is unreliable>" % (len(results), count))
-        results = results + [note] * max(0, count - len(results))
-    return results[:count]
+        return [body.strip()], False
+
+    if len(results) > count or (len(results) < count and not truncated):
+        raise ConsoleError(
+            200, "OK (protocol mismatch)",
+            "console returned %d result markers for %d commands and did not "
+            "report truncation; refusing to attribute results to commands"
+            % (len(results), count))
+    return results[:count], truncated
 
 
 def join_batch(scripts):
@@ -430,11 +464,12 @@ class HttpTransport:
     """
 
     def __init__(self, host: str, port: int = DEFAULT_PORT, api: str = "auto",
-                 timeout: float = 10.0):
+                 timeout: float = 10.0, auto_page: bool = True):
         self.host = host
         self.port = port
         self.api = api
         self.timeout = timeout
+        self.auto_page = auto_page
 
     # -- raw HTTP ---------------------------------------------------------
     def _request(self, method: str, path: str, body: bytes = None) -> str:
@@ -455,15 +490,50 @@ class HttpTransport:
             conn.close()
 
     # -- per-api ----------------------------------------------------------
-    def _eval_batch(self, scripts):
+    def _post_batch(self, scripts):
         body = join_batch(scripts).encode("utf-8", errors="replace")
         if len(body) >= MAX_SCRIPT_BYTES:
             raise DtaError("batch body is %d bytes; the console rejects >= %d "
-                           "(413) -- send fewer commands per batch"
-                           % (len(body), MAX_SCRIPT_BYTES))
-        text = self._request("POST", "/dta/eval", body)
-        check_truncated(text)
-        return split_results(text, len(scripts))
+                           "(RB3E_DTA_SCRIPT_MAX, 413) -- send fewer commands "
+                           "per batch" % (len(body), MAX_SCRIPT_BYTES))
+        return split_results(self._request("POST", "/dta/eval", body),
+                             len(scripts))
+
+    def _eval_batch(self, scripts):
+        """Run a batch, transparently paging around the output cap.
+
+        Truncation stops the console's batch early, which is the ordinary
+        "your dump is bigger than 32 KB" signal rather than an error.  Re-issue
+        the un-run tail until everything has an answer.  This terminates: each
+        pass consumes at least one command (a lone command whose own output
+        overflows is recorded as truncated and stepped over).
+        """
+        if len(scripts) == 1:
+            text = self._request("POST", "/dta/eval",
+                                 scripts[0].encode("utf-8", errors="replace"))
+            check_truncated(text)       # nothing to salvage from one command
+            results, _ = split_results(text, 1)
+            return results
+
+        out, remaining = [], list(scripts)
+        while remaining:
+            results, truncated = self._post_batch(remaining)
+            if not truncated:
+                out.extend(results)     # split_results proved the counts match
+                break
+            if results:
+                out.extend(results)
+                remaining = remaining[len(results):]
+            else:
+                # The very first command overflowed the cap on its own, so
+                # paging cannot make progress. Record it and step past.
+                out.append("<truncated: this command's own output exceeds the "
+                           "%d-byte cap; narrow it>" % MAX_RESULT_BYTES)
+                remaining = remaining[1:]
+            if remaining and not self.auto_page:
+                out.extend([NOT_EXECUTED] * len(remaining))
+                break
+        return out
 
     def _native_one(self, script: str) -> str:
         text = self._request("POST", "/api/dta/eval",
@@ -987,12 +1057,34 @@ def self_test() -> int:
     # prints `"a"` (with quotes -- DTAEval_PrintNode quotes STRING_VALUE), then
     # `=> 0` for print's return, then `=> 83`.
     check("split 2 cmds", split_results('"a"\n=> 0\n=> 83\n', 2),
-          ['"a"\n0', "83"])
-    check("split single", split_results("just a value", 1), ["just a value"])
-    check("split marker count", len(split_results("=> 1\n", 3)), 3)
+          (['"a"\n0', "83"], False))
+    check("split single", split_results("just a value", 1),
+          (["just a value"], False))
+    # Refusals are in-band and keep the markers 1:1, so they attribute normally.
+    check("split refusal", split_results("=> 1\n=> !! refused: bad command "
+                                         "pointer\n=> 3\n", 3),
+          (["1", "!! refused: bad command pointer", "3"], False))
+    check("is_refusal", (is_refusal("!! refused: bad command pointer"),
+                         is_refusal("83")), (True, False))
+
+    # Case 1: fewer markers WITH the banner == legitimate partial result.
+    check("split truncated partial",
+          split_results("=> 1\n=> 2\n" + TRUNCATION_NOTICE, 5),
+          (["1", "2"], True))
+    check("split truncated none", split_results(TRUNCATION_NOTICE, 4), ([], True))
+
+    # Case 2: count mismatch WITHOUT the banner == protocol violation.
+    for body, count, why in (("=> 1\n", 3, "too few, no banner"),
+                             ("=> 1\n=> 2\n", 1, "too many")):
+        try:
+            split_results(body, count)
+            failures.append("split_results accepted %s" % why)
+        except ConsoleError:
+            pass
+
     try:
         check_truncated("stuff" + TRUNCATION_NOTICE)
-        failures.append("truncated body was not rejected")
+        failures.append("truncated single response was not rejected")
     except ConsoleError as exc:
         if exc.status != 200:
             failures.append("truncation should surface as a 200-with-error")
@@ -1058,6 +1150,10 @@ def build_parser():
                         "one result line per command.")
     p.add_argument("-T", "--transport", default="http",
                    choices=("http", "file", "appchild"))
+    p.add_argument("--no-auto-page", dest="auto_page", action="store_false",
+                   help="do not re-issue the tail of a batch that the console "
+                        "cut short at its %d-byte output cap; mark the un-run "
+                        "commands instead" % MAX_RESULT_BYTES)
     p.add_argument("--api", default="auto",
                    choices=("auto", "eval", "native", "execute"),
                    help="eval = POST /dta/eval (RB3Enhanced contract), "
@@ -1111,7 +1207,8 @@ def make_transport(args, parser):
     if args.transport == "http":
         if not args.host:
             parser.error("the http transport needs a host")
-        return HttpTransport(args.host, args.port, args.api, args.timeout)
+        return HttpTransport(args.host, args.port, args.api, args.timeout,
+                             auto_page=args.auto_page)
     if args.transport == "file":
         ftp_host = args.ftp_host or args.host
         missing = [n for n, v in (("--ftp-host or a host positional", ftp_host),
