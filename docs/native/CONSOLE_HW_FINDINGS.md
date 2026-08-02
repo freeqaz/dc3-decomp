@@ -188,3 +188,81 @@ wire carries 4 + size). Getting this wrong truncates every download by 4 bytes.
 then write N bytes, then read the status line). Upload was NOT executed --
 writing to the console is a state change and was left for the user to
 authorise. Upload support is confirmed only at the command level (§5).
+
+## 9. XBDM upload PROVEN (write direction closed, cleanup verified)
+
+Executed against the live console with authorisation, on a collision-proof name:
+
+    exists Hdd:\_dc3probe_smoke.tmp   -> False   (pre-check)
+    sendfile ... length=10            -> wrote 10 bytes
+    exists                            -> True
+    getfile                           -> 10 bytes, b'dc3-smoke\n'
+    ROUND-TRIP BYTE-IDENTICAL         -> True
+    delete                            -> 200- OK
+    exists                            -> False   (cleanup verified, no litter)
+
+**The two directions are ASYMMETRIC — this is the easy bug to write:**
+
+    sendfile: length=N goes in the COMMAND; then write N RAW bytes, no prefix.
+    getfile : 203- response, then <u32-LE length><data>. The prefix is ON THE WIRE.
+
+So upload takes no prefix and download emits one. Treating them symmetrically
+either corrupts the upload (10 bytes of data become 6 after a bogus 4-byte
+header) or truncates every download by 4.
+
+Both directions of the XBDM transport are now hardware-proven. The only
+remaining console unknown for DC3 is the RndConsole keypress leg, which needs a
+USB keyboard (or `--hid-cmd`) at the console itself.
+
+## 10. Native loopback noise floor — HOLDS EXACTLY (no regression)
+
+Re-measured 2026-08-02 against a fresh `ninja dc3-native` build, AFTER today's
+engine fixes (4e4cf851 ObjectDir::Iterate, 8c73183d DataArray::SortNodes,
+23727b3c RndText marquee), 5 runs each:
+
+    --dir main               NOISE FLOOR: 0/2421 field cells (0.0%)
+    --dir panel:main_panel   NOISE FLOOR: 0/6197 field cells (0.0%)
+
+Both the floor AND the total cell counts are IDENTICAL to the previously
+recorded numbers (0/2421 and 0/6197). Every one of the 12 probes reports
+unstable=0 churn=0 on both scopes. Nothing regressed.
+
+## 11. `dc3_eval.py` xbdm sub-transport — implemented and hardware-verified
+
+`tools/console/dc3_eval.py` now has a pluggable file channel:
+
+    --file-channel xbdm    (DEFAULT)  debug monitor, TCP 730, survives a title launch
+    --file-channel ftp                the old path, kept for a console at the dashboard
+
+The xbdm channel needs no `--ftp-dir`: it addresses files the same way the title
+does, so `--game-path` doubles as its root.
+
+    python3 tools/console/dc3_eval.py -T file \
+        --ftp-host $DC3_XBOX --game-path 'Hdd1:\Games\DanceCentral3' \
+        -e '{ui current_screen}'
+
+Verified against the live console with the SHIPPED `XbdmBackend` class (not an
+ad-hoc script): mkdir + 10240-byte put + get round-trip BYTE-IDENTICAL + delete,
+cleanup confirmed by re-listing.
+
+Offline coverage: `--self-test` now stands up a real in-process fake XBDM
+*socket server* and drives `FileTransport` through it -- single eval, 3-command
+batch, a 10240-byte binary round-trip, path joining, and the stale-console
+timeout. A socket server rather than a mock specifically because the likely bug
+is the asymmetric framing (§9), which a dict-backed mock cannot catch.
+Mutation-checked: flipping the client's `<I` length decode to `>I` makes the
+self-test fail loudly.
+
+### Gotcha: `delete` will not remove a directory without `dir`
+
+    delete name="Hdd:\_dc3probe"        -> 200- OK   but the directory REMAINS
+    delete name="Hdd:\_dc3probe" dir    -> 200- OK   actually removes it
+
+The plain form reports success on a directory and silently leaves it. Anything
+that cleans up after itself must pass `dir` and then re-list to confirm --
+"200- OK" is not evidence the thing is gone. (Found by re-listing after a probe
+run and finding the directory still there.)
+
+Related: a `getfile` of an absent path can come back `414- access denied`
+rather than `404- file not found`, so absence must not be detected by matching
+on 404 alone.

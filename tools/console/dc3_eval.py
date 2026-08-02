@@ -37,6 +37,7 @@ hardware unknowns.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import difflib
 import ftplib
 import http.client
@@ -674,10 +675,187 @@ def split_records(blob: str, token: str, count: int):
     return out[:count]
 
 
+class FileBackendError(Exception):
+    """A file operation failed on whichever file channel is in use."""
+
+
+class FtpBackend:
+    """Loose files over FTP.
+
+    WARNING -- on an RGH/JTAG console the FTP server belongs to the *dashboard*
+    (Aurora/FSD/DashLaunch), and launching a title unloads the dashboard along
+    with its FTP server.  Since this transport has to push the probe **while DC3
+    is running**, FTP is unavailable in exactly the situation it is needed for.
+    Verified on hardware 2026-08-02: port 21 closed with a title running, XBDM
+    still up.  Prefer XbdmBackend; see docs/native/CONSOLE_HW_FINDINGS.md.
+    """
+
+    name = "ftp"
+    sep = "/"
+
+    def __init__(self, host, root, user="xbox", password="xbox", port=21,
+                 timeout=20.0):
+        self.host = host
+        self.root = root.rstrip("/")
+        self.user = user
+        self.password = password
+        self.port = port
+        self.timeout = timeout
+
+    def join(self, *parts):
+        return self.sep.join([self.root] + [p.strip("/") for p in parts])
+
+    @contextlib.contextmanager
+    def session(self):
+        ftp = ftplib.FTP()
+        ftp.connect(self.host, self.port, timeout=self.timeout)
+        ftp.login(self.user, self.password)
+        try:
+            yield _FtpSession(ftp)
+        finally:
+            try:
+                ftp.quit()
+            except ftplib.all_errors:
+                pass
+
+
+class _FtpSession:
+    def __init__(self, ftp):
+        self.ftp = ftp
+
+    def mkdir(self, path):
+        try:
+            self.ftp.mkd(path)
+        except ftplib.all_errors:
+            pass                        # already exists, or no permission
+
+    def delete(self, path):
+        try:
+            self.ftp.delete(path)
+        except ftplib.all_errors:
+            pass                        # absent is the desired end state
+
+    def put(self, path, data):
+        self.ftp.storbinary("STOR " + path, io.BytesIO(data))
+
+    def get(self, path):
+        sink = io.BytesIO()
+        try:
+            self.ftp.retrbinary("RETR " + path, sink.write)
+        except ftplib.all_errors as exc:
+            raise FileBackendError(str(exc))
+        return sink.getvalue()
+
+
+class XbdmBackend:
+    """Loose files over the XBDM debug monitor (TCP 730).
+
+    The transport that actually works on hardware: XBDM survives a title
+    launch, so it can push the probe while DC3 is running -- which FTP cannot
+    (see FtpBackend's warning).  Both directions hardware-verified 2026-08-02.
+
+    Wire notes, and they are ASYMMETRIC:
+      sendfile name="p" length=N  -> '204- send binary data', then N RAW bytes
+                                     (the length rides in the command, NOT in
+                                     the payload), then a status line.
+      getfile  name="p"           -> '203- binary response follows', then
+                                     <u32 little-endian length><that many bytes>
+                                     -- the prefix IS on the wire here.
+    Paths take the DRIVE-LETTER form (Usb1:\\Games\\rb3), one backslash, and
+    NOT the NT device form (\\Device\\Mass1\\...) which only magicboot accepts.
+    """
+
+    name = "xbdm"
+    sep = "\\"
+
+    def __init__(self, host, root, port=730, timeout=20.0):
+        self.host = host
+        self.root = root.rstrip("\\/")
+        self.port = port
+        self.timeout = timeout
+
+    def join(self, *parts):
+        return self.sep.join([self.root] + [p.strip("\\/") for p in parts])
+
+    @contextlib.contextmanager
+    def session(self):
+        sess = _XbdmSession(self.host, self.port, self.timeout)
+        try:
+            yield sess
+        finally:
+            sess.close()
+
+
+class _XbdmSession:
+    def __init__(self, host, port, timeout):
+        self.s = socket.create_connection((host, port), timeout)
+        self.s.settimeout(timeout)
+        self.f = self.s.makefile("rwb")
+        banner = self.f.readline()
+        if not banner.startswith(b"201"):
+            raise FileBackendError("unexpected XBDM banner %r" % banner)
+
+    def _cmd(self, line):
+        self.f.write(line.encode("latin-1") + b"\r\n")
+        self.f.flush()
+        status = self.f.readline().decode("latin-1").strip()
+        if not status:
+            raise FileBackendError("XBDM hung up during %r" % line)
+        if status.startswith("202"):
+            while True:
+                ln = self.f.readline()
+                if not ln or ln.decode("latin-1").rstrip("\r\n") == ".":
+                    break
+        return status
+
+    def mkdir(self, path):
+        self._cmd('mkdir name="%s"' % path)          # 4xx if it already exists
+
+    def delete(self, path):
+        self._cmd('delete name="%s"' % path)         # 4xx if already absent
+
+    def put(self, path, data):
+        status = self._cmd('sendfile name="%s" length=%d' % (path, len(data)))
+        if not status.startswith("204"):
+            raise FileBackendError("sendfile %s: %s" % (path, status))
+        self.f.write(data)                            # raw, no length prefix
+        self.f.flush()
+        status = self.f.readline().decode("latin-1").strip()
+        if not status.startswith("200"):
+            raise FileBackendError("sendfile %s: %s" % (path, status))
+
+    def get(self, path):
+        self.f.write(b'getfile name="' + path.encode("latin-1") + b'"\r\n')
+        self.f.flush()
+        status = self.f.readline().decode("latin-1").strip()
+        if not status.startswith("203"):
+            raise FileBackendError("getfile %s: %s" % (path, status))
+        raw = self.f.read(4)
+        if len(raw) != 4:
+            raise FileBackendError("getfile %s: short length prefix" % path)
+        (n,) = struct.unpack("<I", raw)
+        data = self.f.read(n)
+        if len(data) != n:
+            raise FileBackendError("getfile %s: short read %d of %d"
+                                   % (path, len(data), n))
+        return data
+
+    def close(self):
+        try:
+            self.f.write(b"bye\r\n")
+            self.f.flush()
+        except Exception:
+            pass
+        try:
+            self.s.close()
+        except Exception:
+            pass
+
+
 class FileTransport:
     def __init__(self, ftp_host, ftp_dir, game_path, user="xbox", password="xbox",
                  port=21, timeout=20.0, poll=0.5, hid_cmd=None, subdir="dc3",
-                 verbose=False):
+                 verbose=False, backend=None):
         self.ftp_host = ftp_host
         self.ftp_dir = ftp_dir.rstrip("/")
         self.game_path = game_path.rstrip("\\/")
@@ -689,32 +867,10 @@ class FileTransport:
         self.hid_cmd = hid_cmd
         self.subdir = subdir
         self.verbose = verbose
-
-    # -- FTP helpers ------------------------------------------------------
-    def _connect(self):
-        ftp = ftplib.FTP()
-        ftp.connect(self.ftp_host, self.port, timeout=self.timeout)
-        ftp.login(self.user, self.password)
-        return ftp
-
-    @staticmethod
-    def _quiet_delete(ftp, path):
-        try:
-            ftp.delete(path)
-        except ftplib.all_errors:
-            pass
-
-    @staticmethod
-    def _quiet_mkd(ftp, path):
-        try:
-            ftp.mkd(path)
-        except ftplib.all_errors:
-            pass
-
-    def _get(self, ftp, path):
-        sink = io.BytesIO()
-        ftp.retrbinary("RETR " + path, sink.write)
-        return sink.getvalue()
+        # Default stays FTP so existing invocations behave identically; the
+        # CLI's --file-channel xbdm passes an XbdmBackend instead.
+        self.fs = backend or FtpBackend(ftp_host, self.ftp_dir, user, password,
+                                        port, timeout)
 
     # -- public -----------------------------------------------------------
     def console_line(self):
@@ -749,26 +905,24 @@ class FileTransport:
             raise DtaError("generated probe is %d bytes, over the %d-byte limit "
                            "-- send fewer commands per batch"
                            % (len(probe.encode("utf-8")), MAX_SCRIPT_BYTES))
-        remote_dir = "%s/%s" % (self.ftp_dir, self.subdir)
-        out_path = "%s/%s" % (self.ftp_dir, OUT_NAME)
-        done_path = "%s/%s" % (self.ftp_dir, DONE_NAME)
+        remote_dir = self.fs.join(self.subdir)
+        probe_path = self.fs.join(self.subdir, PROBE_NAME)
+        out_path = self.fs.join(OUT_NAME)
+        done_path = self.fs.join(DONE_NAME)
 
-        ftp = self._connect()
-        try:
-            self._quiet_mkd(ftp, remote_dir)
-            self._quiet_delete(ftp, out_path)
-            self._quiet_delete(ftp, done_path)
-            ftp.storbinary("STOR %s/%s" % (remote_dir, PROBE_NAME),
-                           io.BytesIO(probe.encode("utf-8")))
-        finally:
-            try:
-                ftp.quit()
-            except ftplib.all_errors:
-                pass
+        with self.fs.session() as fs:
+            fs.mkdir(remote_dir)
+            # Clear last run's answers so a stale pair cannot be mistaken for
+            # this run's -- the token check below is the real guard, this is
+            # belt-and-braces.
+            fs.delete(out_path)
+            fs.delete(done_path)
+            fs.put(probe_path, probe.encode("utf-8"))
 
         if self.verbose:
-            sys.stderr.write("pushed %s/%s (%d bytes, %d command(s))\n"
-                             % (remote_dir, PROBE_NAME, len(probe), len(scripts)))
+            sys.stderr.write("pushed %s (%d bytes, %d command(s)) over %s\n"
+                             % (probe_path, len(probe), len(scripts),
+                                self.fs.name))
 
         self._trigger()
 
@@ -777,32 +931,27 @@ class FileTransport:
         while time.time() < deadline:
             time.sleep(self.poll)
             try:
-                ftp = self._connect()
-            except OSError as exc:      # console busy / single-session FTP
+                with self.fs.session() as fs:
+                    try:
+                        done = fs.get(done_path).decode("utf-8", "replace")
+                    except FileBackendError as exc:
+                        last_err = exc
+                        continue
+                    if token not in done:
+                        continue
+                    try:
+                        blob = fs.get(out_path).decode("utf-8", "replace")
+                    except FileBackendError:
+                        blob = ""       # script ran but wrote no output file
+                    return token, blob.strip()
+            except (OSError, FileBackendError) as exc:
+                # console busy / single-session FTP / XBDM mid-title-switch
                 last_err = exc
                 continue
-            try:
-                try:
-                    done = self._get(ftp, done_path).decode("utf-8", "replace")
-                except ftplib.all_errors as exc:
-                    last_err = exc
-                    continue
-                if token not in done:
-                    continue
-                try:
-                    blob = self._get(ftp, out_path).decode("utf-8", "replace")
-                except ftplib.all_errors:
-                    blob = ""           # script ran but wrote no output file
-                return token, blob.strip()
-            finally:
-                try:
-                    ftp.quit()
-                except ftplib.all_errors:
-                    pass
         raise TimeoutError(
-            "no %s with token %s after %.1fs (last FTP error: %s).  Did the "
-            "console run %s ?" % (DONE_NAME, token, self.timeout, last_err,
-                                  self.console_line()))
+            "no %s with token %s after %.1fs (last %s error: %s).  Did the "
+            "console run %s ?" % (DONE_NAME, token, self.timeout, self.fs.name,
+                                  last_err, self.console_line()))
 
     def _trigger(self):
         if self.hid_cmd:
@@ -976,6 +1125,135 @@ def _self_test_file_transport():
     return failures
 
 
+def _self_test_xbdm_transport():
+    """Exercise the XBDM round-trip against a real in-process fake console.
+
+    A socket server rather than a monkeypatch, because the thing most likely to
+    be wrong is the WIRE FRAMING -- sendfile takes its length in the command and
+    raw bytes after it, while getfile emits its own u32-LE length prefix.  A
+    mock that just remembers dict entries would not catch getting that backwards.
+    """
+    import threading
+
+    failures = []
+    store = {}
+    root = "Hdd1:\\g"
+    run_probe = [True]
+
+    def serve(conn):
+        f = conn.makefile("rwb")
+        f.write(b"201- connected\r\n")
+        f.flush()
+        while True:
+            line = f.readline()
+            if not line:
+                return
+            cmd = line.decode("latin-1").strip()
+            if cmd == "bye":
+                f.write(b"200- OK\r\n")
+                f.flush()
+                return
+            m = re.match(r'(\w+) name="([^"]*)"(?: length=(\d+))?', cmd)
+            if not m:
+                f.write(b"407- unknown command\r\n")
+                f.flush()
+                continue
+            verb, path, length = m.group(1), m.group(2), m.group(3)
+            if verb == "mkdir":
+                f.write(b"200- OK\r\n")
+            elif verb == "delete":
+                if path in store:
+                    del store[path]
+                    f.write(b"200- OK\r\n")
+                else:
+                    f.write(b"404- file not found\r\n")
+            elif verb == "sendfile":
+                f.write(b"204- send binary data\r\n")
+                f.flush()
+                data = f.read(int(length))
+                store[path] = data
+                f.write(b"200- OK\r\n")
+                if run_probe[0] and path.endswith(PROBE_NAME):
+                    text = data.decode()
+                    token = re.search(r'"dc3_done\.txt" "([^"]+)"', text).group(1)
+                    mark = record_marker(token)
+                    n = text.count("{strcat $dc3_r")
+                    store[root + "\\" + OUT_NAME] = (
+                        mark.join(["r%d" % i for i in range(n)]).encode()
+                        + mark.encode())
+                    store[root + "\\" + DONE_NAME] = token.encode()
+            elif verb == "getfile":
+                if path in store:
+                    blob = store[path]
+                    f.write(b"203- binary response follows\r\n")
+                    f.write(struct.pack("<I", len(blob)) + blob)
+                else:
+                    f.write(b"404- file not found\r\n")
+            else:
+                f.write(b"407- unknown command\r\n")
+            f.flush()
+
+    srv = socket.socket()
+    srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    srv.bind(("127.0.0.1", 0))
+    srv.listen(8)
+    port = srv.getsockname()[1]
+    stop = [False]
+
+    def loop():
+        while not stop[0]:
+            try:
+                conn, _ = srv.accept()
+            except OSError:
+                return
+            threading.Thread(target=serve, args=(conn,), daemon=True).start()
+
+    t = threading.Thread(target=loop, daemon=True)
+    t.start()
+    try:
+        be = XbdmBackend("127.0.0.1", root, port=port, timeout=5)
+        tr = FileTransport("127.0.0.1", "/unused", root, timeout=5, poll=0.01,
+                           hid_cmd="true", backend=be)
+
+        if tr.eval("{ui current_screen}") != "r0":
+            failures.append("xbdm single round-trip failed")
+        probe = store[root + "\\dc3\\" + PROBE_NAME].decode()
+        if "{sprint {do {ui current_screen}}}" not in probe:
+            failures.append("xbdm pushed probe wrong:\n%s" % probe)
+
+        got = tr.eval_batch(["{a}", "{b}", "{c}"])
+        if got != ["r0", "r1", "r2"]:
+            failures.append("xbdm batch round-trip got %r" % got)
+
+        # Byte-exactness of the framing in both directions, on a payload big
+        # enough to span several reads.
+        blob = bytes(range(256)) * 40
+        with be.session() as fs:
+            fs.put(root + "\\blob.bin", blob)
+            back = fs.get(root + "\\blob.bin")
+        if back != blob:
+            failures.append("xbdm binary round-trip corrupted %d bytes"
+                            % len(blob))
+
+        # Path joining must use backslashes and not double them.
+        if be.join("dc3", PROBE_NAME) != root + "\\dc3\\" + PROBE_NAME:
+            failures.append("xbdm join: %r" % be.join("dc3", PROBE_NAME))
+
+        store.clear()
+        run_probe[0] = False
+        tr = FileTransport("127.0.0.1", "/unused", root, timeout=0.3, poll=0.05,
+                           hid_cmd="true", backend=be)
+        try:
+            tr.eval("{x}")
+            failures.append("xbdm stale console did not time out")
+        except TimeoutError:
+            pass
+    finally:
+        stop[0] = True
+        srv.close()
+    return failures
+
+
 def self_test() -> int:
     failures = []
 
@@ -1105,6 +1383,7 @@ def self_test() -> int:
           ["a", "b"])
 
     failures.extend(_self_test_file_transport())
+    failures.extend(_self_test_xbdm_transport())
 
     if failures:
         for f in failures:
@@ -1168,10 +1447,19 @@ def build_parser():
                    help="file transport: push the script verbatim, do not wrap "
                         "it in {sprint}/{write_string_to_file}")
 
-    g = p.add_argument_group("file transport (console over FTP)")
+    g = p.add_argument_group("file transport (console: RndConsole + a file channel)")
+    g.add_argument("--file-channel", choices=("xbdm", "ftp"), default="xbdm",
+                   help="how to move the probe and answer files. 'xbdm' "
+                        "(default) uses the debug monitor on TCP 730, which "
+                        "SURVIVES A TITLE LAUNCH. 'ftp' needs a dashboard "
+                        "(Aurora/FSD) to be running, and launching a title "
+                        "unloads it -- so FTP is generally unavailable exactly "
+                        "when this transport needs it. See "
+                        "docs/native/CONSOLE_HW_FINDINGS.md")
+    g.add_argument("--xbdm-port", type=int, default=730)
     g.add_argument("--ftp-host", default=os.environ.get("DC3_XBOX"),
-                   help="console IP running an FTP server (defaults to $DC3_XBOX, "
-                        "then the host positional)")
+                   help="console IP (defaults to $DC3_XBOX, then the host "
+                        "positional). Used for both file channels.")
     g.add_argument("--ftp-port", type=int, default=21)
     g.add_argument("--ftp-user", default=os.environ.get("DC3_FTP_USER", "xbox"))
     g.add_argument("--ftp-pass", default=os.environ.get("DC3_FTP_PASS", "xbox"))
@@ -1210,17 +1498,28 @@ def make_transport(args, parser):
         return HttpTransport(args.host, args.port, args.api, args.timeout,
                              auto_page=args.auto_page)
     if args.transport == "file":
-        ftp_host = args.ftp_host or args.host
-        missing = [n for n, v in (("--ftp-host or a host positional", ftp_host),
-                                  ("--ftp-dir", args.ftp_dir),
-                                  ("--game-path", args.game_path)) if not v]
+        host = args.ftp_host or args.host
+        # The xbdm channel addresses files the same way the title does, so
+        # --game-path doubles as its root and --ftp-dir is not needed.
+        needed = [("--ftp-host or a host positional", host),
+                  ("--game-path", args.game_path)]
+        if args.file_channel == "ftp":
+            needed.append(("--ftp-dir", args.ftp_dir))
+        missing = [n for n, v in needed if not v]
         if missing:
             parser.error("the file transport needs " + ", ".join(missing))
+        if args.file_channel == "xbdm":
+            backend = XbdmBackend(host, args.game_path, port=args.xbdm_port,
+                                  timeout=args.timeout)
+        else:
+            backend = FtpBackend(host, args.ftp_dir, args.ftp_user,
+                                 args.ftp_pass, args.ftp_port, args.timeout)
         return FileTransport(
-            ftp_host=ftp_host, ftp_dir=args.ftp_dir, game_path=args.game_path,
+            ftp_host=host, ftp_dir=args.ftp_dir or args.game_path,
+            game_path=args.game_path,
             user=args.ftp_user, password=args.ftp_pass, port=args.ftp_port,
             timeout=args.timeout, hid_cmd=args.hid_cmd, subdir=args.subdir,
-            verbose=args.verbose)
+            verbose=args.verbose, backend=backend)
     return AppChildTransport(args.bind, args.appchild_port, args.timeout,
                              args.verbose)
 
