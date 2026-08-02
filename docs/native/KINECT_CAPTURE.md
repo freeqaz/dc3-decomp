@@ -121,11 +121,25 @@ handlers **are linked into retail** (verified by disassembling the `static Symbo
 that reference those string addresses). So the machinery survives; only the DTA entry points
 and the devkit file paths were compiled out.
 
-**(b) `devkit:\` is a development-kernel drive.** It is not created by the title —
-we searched the debug XEX and it contains no `\??\devkit:` `ObCreateSymbolicLink` target
-(unlike `\??\game:` / `\??\cache:`, which the NUI speech code does create). It comes from the
-dev kernel / dev HDD partition. On stock retail hardware `CreateFile("devkit:\…")` fails and
-`StopRecordingNoClear` hits `MILO_FAIL("Recording failed; could not open output file (%s).")`.
+**(b) `devkit:\` is a development-kernel drive.** The title does not create it with an
+`ObCreateSymbolicLink` of its own; it comes from the dev kernel / dev HDD partition. On stock
+retail hardware `CreateFile("devkit:\…")` fails and `StopRecordingNoClear` hits
+`MILO_FAIL("Recording failed; could not open output file (%s).")` — which, note, is **fatal**
+(`Debug::Modal` ends in `Exit(1, true)`, `src/system/os/Debug.cpp:439-444`), so a failed open
+kills the title at the end of the song and you lose the take.
+
+> **Correction (was wrong in an earlier revision of this doc).** This section used to claim
+> `\??\game:` and `\??\cache:` "are created by the NUI speech code". What the binary actually
+> shows is weaker: the literals `\??\game:` (`0x821BB168`), `\??\cache:` (`0x821BB148`) and
+> `\Device\Harddisk0\` (`0x821BB154`) all belong to **`nuispeech:datacollection.obj`**
+> (`orig/373307D9/ham_xbox_r.map`) — the XDK speech *voice-data-collection* object, which only
+> runs when collection is enabled. They are not a boot-time guarantee from DC3.
+>
+> The title *does*, however, call **`DmMapDevkitDrive()`** unconditionally during startup, from
+> `Locale.cpp:179` (alternate-locale probe; also `HolmesUtl.cpp:8`, `BinkMovieImpl_Xbox.cpp:29`).
+> It is one of the 7 xbdm imports. So on a console whose xbdm can satisfy it, `devkit:\` is
+> mapped for free with **no patch at all** — which is why "try it unpatched first" is rung 0 of
+> the ladder below.
 
 One more consequence worth knowing: editing `config/cheats.dta` in the ark **does nothing**.
 `CachedDataFile()` (`src/system/obj/DataFile.cpp:584`) redirects any `.dta` request to
@@ -153,24 +167,65 @@ install the xbdm plugin).
 Steps:
 
 1. Copy the game to HDD or USB as an **extracted folder** (not an ISO / not from disc) — this
-   is what makes `game:\` writable. Put `debug.xex` next to the ark files as `default.xex`
-   (keep the original retail `default.xex` under another name so you can switch back).
+   is what makes the game folder writable. Put `debug.xex` next to the ark files as
+   `default.xex` (keep the original retail `default.xex` under another name so you can switch
+   back).
 2. **Patch the two `devkit:` string literals** so the clip lands somewhere writable. The debug
    XEX is a plain image, so this is a two-string byte edit — no re-signing logic, no code
    changes:
 
    | File offset in `debug.xex` | Current bytes | Replace with | Slot size |
    | --- | --- | --- | --- |
-   | `0x00058AEC` | `devkit:\%s\0` | `GAME:\%s\0` + `\0` padding | 12 bytes (max 11 chars) |
-   | `0x00254EAC` | `devkit:\%s.clp\0` | `GAME:\%s.clp\0` + `\0` padding | 20 bytes |
+   | `0x00058AEC` | `64 65 76 6B 69 74 3A 5C 25 73 00` (`devkit:\%s\0`) | `64 3A 5C 25 73 00` (`d:\%s\0`), zero-pad to 12 | 12 bytes (max 11 chars) |
+   | `0x00254EAC` | `64 65 76 6B 69 74 3A 5C 25 73 2E 63 6C 70 00` (`devkit:\%s.clp\0`) | `64 3A 5C 25 73 2E 63 6C 70 00` (`d:\%s.clp\0`), zero-pad to 20 | 20 bytes |
 
-   (`.rdata` VAs `0x82055AEC` and `0x82251EAC`; file offset = VA − `0x82000000` + `0x3000`.)
-   The first literal is `/GF`-pooled and also used by `FreestyleMoveRecorder`'s debug dumps —
-   harmless collateral. The second is only used by `SkeletonClip::FlushMoveRecord` (the manual
-   rhythm-battle flush) and is optional.
+   (`.rdata` VAs `0x82055AEC` and `0x82251EAC`; file offset = VA − `0x82000000` + `0x3000`.
+   Slot sizes confirmed against `orig/373307D9/ham_xbox_r.map`: the next symbol after
+   `0x82055AEC` is at `0x82055AF8`, and `0x82251EAC` is followed by C++ EH data at
+   `0x82251EC0`.) The first literal is `/GF`-pooled and also used by
+   `FreestyleMoveRecorder`'s debug dumps — harmless collateral. Only the **first** literal
+   matters for song capture (it is the one `SetupRecordClip` uses, `MoveDir.cpp:1021`); the
+   second is only used by `SkeletonClip::FlushMoveRecord` (the manual rhythm-battle flush) and
+   is optional.
+
+   > **⚠ Do NOT patch these to `GAME:\` — it is fatal.**
+   >
+   > An earlier revision of this doc told you to write `GAME:\%s`. **That patch hard-kills the
+   > title at the end of the song, after you have already played it.** Evidence, from the
+   > shipped debug image (not just source):
+   >
+   > * `FileIsLocal` (`src/system/os/File_Win.cpp:9-13`) is
+   >   `MILO_ASSERT(!strieq(drive, "game"), 0x24)`. `File_Win.obj` **is** the object linked into
+   >   the Xbox 360 image — `orig/373307D9/ham_xbox_r.map` lists
+   >   `??_C@_0BH@JLBBPNDG@?$CBstrieq?$CIdrive?0?5?$CCgame?$CC?$CJ?$AA@` (the assert-expression
+   >   string) at `.rdata:0x820807C4` owned by `os:File_Win.obj`. `?FileIsLocal@@YA_NPBD@Z` is at
+   >   `.text:0x825EEEB8` and our decomp matches it **100 %**; its target listing is literally
+   >   `bl FileGetDrive` → `bl stricmp` (against `"game"`) → `bl Debug::Fail`. So the check is
+   >   live in this build and **case-insensitive** — `GAME:`, `Game:` and `game:` all trip it.
+   > * The clip write **does** go through it: `StopRecordingNoClear`
+   >   (`SkeletonClip.cpp:593`, decomp 100 % vs `0x82DF2FA0`) builds
+   >   `FileStream(mFile, kWrite, true)` → `NewFile(file, 0x301)` (`File.cpp:597`), and `NewFile`
+   >   calls `FileIsLocal(iFilename)` **unconditionally**, for writes as well as reads
+   >   (`File.cpp:610`). There is no lower-level bypass.
+   > * A tripped `MILO_ASSERT` is not survivable here: `Debug::Fail` → `Debug::Modal(kModalFail…)`
+   >   → `Exit(1, true)` (`Debug.cpp:439-444`). No "Continue".
+   > * Worst of all, the assert fires at `EndGameMsg`, i.e. **after** the whole song — so the
+   >   take is lost.
+   >
+   > `d:\` is the correct spelling of the *same directory*: `FileQualifiedFilename`
+   > (`File_Win.cpp:53-57`) uses `UsingCD() ? "d:" : HolmesFileShare()` as the console root, and
+   > the boot path proves `d:` resolves — `CheckForArchive` (`System.cpp:78-85`) decides
+   > `UsingCD()` by `FileGetStat("gen/main_xbox.hdr")`, which qualifies to
+   > `d:\gen\main_xbox.hdr` before `GetFileAttributesExA`. `stricmp("d","game") != 0`, so the
+   > assert passes.
 
    If your console *does* have a devkit partition / dev kernel, skip the patch entirely and
-   just make sure `devkit:\` exists — try it unpatched first, it costs one song.
+   just make sure `devkit:\` exists — try it unpatched first (the title already calls
+   `DmMapDevkitDrive()` at startup from `Locale.cpp:179`).
+
+   **Before you burn a song on any of this, probe the drive from the RndConsole** — see
+   [the zero-cost drive probe](#drive-spelling-zero-cost-probe) and the
+   [ranked drive ladder](#drive-spelling-ranked-ladder).
 3. Arm the recorder. **No keyboard is required** — hold **LT + LB** and click the **left
    stick (L3)** to open the on-screen cheat menu, then select
    *"Game: Toggle Song Recording"* with **A**. (If you do have a USB keyboard, `Alt`+`R`
@@ -181,8 +236,53 @@ Steps:
    is read when the song is set up.
 5. Play the song to the end (or fail out) — the file is written on `EndGameMsg`. **Do not
    dashboard out mid-song**, nothing is flushed until then.
-6. Retrieve the `.clp` from `game:\` (i.e. the game folder) over FTP (FSD / DashLaunch) or by
-   pulling the USB stick.
+6. Retrieve the `.clp` from the game folder (what the title calls `d:\`, what FTP calls e.g.
+   `/Hdd1/Games/DanceCentral3`) over FTP (FSD / DashLaunch) or by pulling the USB stick.
+
+### Drive spelling: zero-cost probe
+
+Do this **before** committing to a byte patch or playing a song. It exercises the exact same
+code path the recorder uses (`StartXboxRecording` → `StopRecordingNoClear` → `FileStream(kWrite)`
+→ `NewFile` → `FileIsLocal` → `AsyncFileWin::_OpenAsync`), takes seconds, and can be repeated for
+each candidate drive spelling. `SkeletonClip` exposes the handlers directly
+(`SkeletonClip.cpp:285-295`):
+
+```
+{new SkeletonClip $probe}
+{$probe xbox_start_record "d:\probe.clp"}
+{$probe stop_recording}
+```
+
+Run it from the on-screen RndConsole (`Esc` with a USB keyboard, or the pad route) or via the
+loose-`.dta` bootstrap in [CONSOLE_DTA_EVAL.md](CONSOLE_DTA_EVAL.md).
+
+* **Pass** — no assert, and a small `probe.clp` appears in the game folder over FTP.
+* **Fail, illegal drive** — red assert screen reading `File_Win.cpp:36 !strieq(drive, "game")`,
+  then the title exits. You used a `game:` spelling.
+* **Fail, unwritable/unmapped drive** — red screen reading
+  `Recording failed; could not open output file (…)`, then the title exits. The drive name was
+  legal but the open failed.
+
+Both failures terminate the title, so expect to relaunch between rungs — but you lose seconds,
+not a song.
+
+### Drive spelling: ranked ladder
+
+Every rung below passes the `FileIsLocal` assert. They are ordered by how well the shipped
+binary backs them.
+
+| # | String to patch in (slot 1 / slot 2) | Why | Residual risk |
+| --- | --- | --- | --- |
+| 0 | *(no patch)* `devkit:\%s` | The title calls `DmMapDevkitDrive()` at startup (`Locale.cpp:179`); if your xbdm satisfies it you need no patch at all | Most RGH setups have no devkit partition |
+| 1 | `d:\%s` / `d:\%s.clp` | `d:` is DC3's own console root (`File_Win.cpp:57`) and the boot path proves it resolves to the game folder (`CheckForArchive` stats `d:\gen\main_xbox.hdr`) | Read-only when booting from disc — use an extracted folder |
+| 2 | `%s` / `%s.clp` (bare relative, no drive) | Also proven at boot: `ArchiveInit` opens `gen/main_xbox.hdr` through `FileStream` → `NewFile` → `CreateFileA` with a *bare relative path*, so the XDK resolves relative paths against the launch directory. Shortest possible string, always fits either slot | Write goes through the CRT `_open` rather than `CreateFileA`; same underlying mapping, but not independently proven for writes |
+| 3 | `cache:\%s` / `cache:\%s.clp` | Multi-character drive → `FileIsLocal` is **true**, which additionally rules out the `AsyncFile::New` Holmes branch (`AsyncFile.cpp:64`) | `cache:` is not referenced anywhere in DC3's own code; may not be mounted |
+| 4 | `Hdd1:\Games\DanceCentral3\%s` (your literal install path) | Fully explicit, multi-character drive; matches the `--game-path` spelling CONSOLE_DTA_EVAL.md asks you to establish | 12-byte slot 1 cannot hold it — you would have to relocate the string or patch the `lis/addi` pair that loads it |
+
+**If a Holmes/`--host` dev PC is connected**, note that rungs 1 and 2 (`strlen(drive) <= 1`) make
+`FileIsLocal` false, and `AsyncFile::New` will then route the *write* to the Holmes host instead
+of the console (`AsyncFile.cpp:64`, `UsingHolmes(1) && (mode & FILE_OPEN_WRITE) && !FileIsLocal`).
+With no Holmes host, `gHolmesStream` is null and the branch is dead. Rung 3 is immune.
 
 ### Route B — DC3Enhanced: an RB3Enhanced-style runtime patch (fallback)
 
@@ -203,7 +303,12 @@ RB3Enhanced (`/home/free/code/milohax/RB3Enhanced`) is the template:
   `ObCreateSymbolicLink("\\??\\RB3HDD:", "\\Device\\Harddisk0\\Partition1")` (plus
   `RB3USB0..2: → \Device\Mass0..2`) in `source/xbox360_files.c`, then uses plain
   `CreateFile`/`WriteFile`. Its crash dumper writes to `GAME:\` and falls back to `RB3HDD:\`.
-  Copy that pattern.
+  Copy the *symlink* pattern, **not** the `GAME:\` spelling: RB3E can use `GAME:\` because it
+  calls Win32 directly, whereas anything routed through DC3's own `NewFile`/`FileIsLocal`
+  asserts on a `game` drive (see the warning in [Route A step 2](#route-a--run-the-debug-executable-preferred)).
+  A DC3Enhanced that writes the clip itself with raw `CreateFile` is free to use `GAME:\`; one
+  that only pokes `sGameRecord` and lets the game's own `WriteClip` run must use a non-`game`
+  drive.
 * It also has a UDP broadcast channel (`source/net_events.c`, port `0x524E`, `'RB3E'` magic) —
   but with a **255-byte per-packet cap**, and a `RecordedFrame` is ~440 bytes, so a live
   skeleton tee needs either two packets per frame or a private packet type. The underlying
@@ -517,7 +622,8 @@ routines include:
 
 ## 5. What to send back
 
-* **The `.clp` files** — from `game:\` (or wherever your patch writes them). Filenames look
+* **The `.clp` files** — from the game folder, i.e. `d:\` as the title sees it (or wherever your
+  patch writes them; see the [drive ladder](#drive-spelling-ranked-ladder)). Filenames look
   like `2117447891~aroundtheworld~h~emilia~pi.clp`; keep them as-is, the name encodes the
   timestamp, song, difficulty, dancer and mode.
 * **The video files**, unedited and untranscoded (straight off the phone — do NOT let a
@@ -555,9 +661,13 @@ matches the song. If `tracked frames` is near 0 % or the joint ranges are absurd
    untested. If the game asserts on load, that's the first thing to suspect.
 2. **Is `xbdm.xex` present/loadable?** `debug.xex` imports it. Without it the module won't
    resolve its imports.
-3. **Is `game:\` actually writable on your setup?** True for an extracted HDD/USB install,
-   false when booting from disc. If writes fail, the debug build will `MILO_FAIL` with
-   `Recording failed; could not open output file (…)` — a loud, unambiguous signal.
+3. **Is the game folder actually writable on your setup, and under which drive spelling?** True
+   for an extracted HDD/USB install, false when booting from disc. If writes fail, the debug
+   build will `MILO_FAIL` with `Recording failed; could not open output file (…)` — a loud,
+   unambiguous signal, but a **fatal** one (`Debug::Modal` → `Exit(1, true)`). Settle this with
+   the [zero-cost drive probe](#drive-spelling-zero-cost-probe) before playing a song, and work down
+   the [ranked drive ladder](#drive-spelling-ranked-ladder). **Never use a `game:` spelling** — that
+   trips `MILO_ASSERT(!strieq(drive, "game"))` in `FileIsLocal` and kills the title.
 4. **Does the debug XEX still pass RGH's signature handling after the two-byte-string patch?**
    Dev-signed XEXs are normally not hash-verified on RGH, but if it refuses to launch, rebuild
    the XEX header with `xextool`/`imagexex` instead of a raw byte edit.
