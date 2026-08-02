@@ -266,3 +266,44 @@ run and finding the directory still there.)
 Related: a `getfile` of an absent path can come back `414- access denied`
 rather than `404- file not found`, so absence must not be detected by matching
 on 404 alone.
+
+---
+
+## 12. What is validated, and what ONLY hardware can still close
+
+### Validated against real hardware (2026-08-02)
+- Console reachable, identified, title enumerated (XBDM/730).
+- XBDM file channel **both directions**, byte-exact, incl. a 10240-byte payload,
+  using the shipped `XbdmBackend` class rather than a throwaway script.
+- Cleanup/delete semantics, including the directory-delete gotcha (§11).
+- `hw_smoke.py` end-to-end, correctly isolating the one genuine failure.
+- RB3Enhanced HTTP server alive; `/dta/eval` absent on the installed build.
+
+### Validated offline only (mock / self-test)
+- `dc3_eval.py --self-test` — parser, validator, wire encoder, batch splitting,
+  truncation-vs-count-mismatch, FTP round-trip, XBDM round-trip.
+  The XBDM half runs against a real socket server and is mutation-checked, but
+  a fake console is still a fake console.
+- `tools/state_diff/tests/` — 66 tests, no engine required.
+
+### Validated against the native port only
+- Full state_diff pipeline + a 0/2421 and 0/6197 noise floor (§10). Native is
+  not hardware; it shares the probe library, not the runtime.
+
+### STILL UNVALIDATED — needs hardware, and nothing here substitutes
+1. **RB3 `/dta/eval` against a console.** Blocked on installing the
+   `bd6959a` DLL (§6). Until then the entire RB3E DTA path -- batching,
+   the 16KB/32KB caps, the truncation banner, result attribution -- has never
+   executed on a console. The PC-side client is exercised; the DLL side is not.
+2. **The DC3 RndConsole keypress leg.** Needs DC3 booted from its debug XEX and
+   a USB keyboard (or `--hid-cmd`) at the console. XBDM moves the files, but
+   nothing has yet made DC3 *run* `p.dta`.
+3. **The `.clp` drive probe actually writing.** `d:\` is confirmed to exist and
+   to alias the title root, but no DC3 build has been made to write there. The
+   `game:\` fatality remains inferred from the decompiled assert, not observed.
+4. **`--game-path` spelling for DC3**, called out as "the #1 hardware unknown"
+   in CONSOLE_DTA_EVAL.md §3.1. Narrowed but not closed: the *form*
+   (`Usb1:\Games\<title>`) is now verified for the rb3 install, and DC3 is
+   present at `Hdd:\Games\Dance Central 3` / `\Device\Mass1\Games\Dance Central 3`.
+5. **End-to-end console-vs-native state diff.** Everything upstream is ready on
+   both sides; it has never been run across the two.
