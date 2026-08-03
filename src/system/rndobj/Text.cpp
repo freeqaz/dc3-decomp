@@ -1855,10 +1855,10 @@ void RndText::FitTextScroll() {
 
         RndFontBase *font = mStyles[0].mFont;
         MILO_ASSERT(font, 2718);
-        unsigned short charCode = 0;
+        unsigned short charCode;
         DecodeUTF8(charCode, "8");
-        float w = 0.0f;
-        mStyles[0].mFont->CharAdvance(charCode, charCode, w);
+        float w;
+        font->CharAdvance(charCode, charCode, w);
         scrollCharWidth = (mStyles[0].mKerning + w) * mStyles[0].mSize;
     }
 
