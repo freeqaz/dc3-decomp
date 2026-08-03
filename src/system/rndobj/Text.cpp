@@ -1855,11 +1855,13 @@ void RndText::FitTextScroll() {
 
         RndFontBase *font = mStyles[0].mFont;
         MILO_ASSERT(font, 2718);
-        unsigned short charCode = 0;
-        DecodeUTF8(charCode, "8");
-        float w = 0.0f;
-        mStyles[0].mFont->CharAdvance(charCode, charCode, w);
-        scrollCharWidth = (mStyles[0].mKerning + w) * mStyles[0].mSize;
+        if (font) {
+            unsigned short charCode;
+            float w;
+            DecodeUTF8(charCode, "8");
+            font->CharAdvance(charCode, charCode, w);
+            scrollCharWidth = (mStyles[0].mKerning + w) * mStyles[0].mSize;
+        }
     }
 
     WrapText(&wideChars[0], numChars, charWidths, lines, bounds, 1.0f);
