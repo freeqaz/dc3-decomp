@@ -307,3 +307,53 @@ on 404 alone.
    present at `Hdd:\Games\Dance Central 3` / `\Device\Mass1\Games\Dance Central 3`.
 5. **End-to-end console-vs-native state diff.** Everything upstream is ready on
    both sides; it has never been run across the two.
+
+---
+
+## 13. RB3E DTA-eval hardware validation (redeploy authorised by the user)
+
+Pre-redeploy state, for comparison:
+    Server: RB3Enhanced 0.7-85-gaaf319d-dirty   (no /dta/eval; socket closed on that route)
+Deploying: bd6959a, sha256 b350959da407be3a7c081f7e117e2b9cf6f50a4b7f0bc97ea7b1205a8e2440e1
+
+### 13.1 INCIDENT: the redeploy took the console OFF the network
+
+`xbox.sh redeploy` did NOT complete. Sequence:
+
+    -- [1/4] boot Aurora (restore FTP) --
+    magicboot title=\Device\Harddisk0\Partition1\Apps\Aurora\Aurora\Aurora.xex
+              directory=\Device\Harddisk0\Partition1\Apps\Aurora\Aurora
+    200- OK
+    -- [2/4] wait for FTP --
+    waiting up to 120s for FTP (Aurora) to answer...
+    FTP still down after 120s
+
+The magicboot was ACCEPTED (`200- OK`) and resets the console -- killing XBDM is
+expected at that point. What is NOT expected is that nothing came back:
+
+    port 730   -> No route to host      (was open before the redeploy)
+    port 21    -> timed out
+    port 21070 -> timed out
+    full rescan `nmap -n -Pn -p 21,730,21070 --open 192.168.8.0/24`
+               -> ZERO hosts with any of those ports open
+
+So this is not a DHCP lease change; the console is simply not serving anything.
+The DLL was NEVER deployed -- the flow died at step 2 of 4, before any file was
+written. The on-console DLL is still `aaf319d`.
+
+**Leading hypothesis: magicbooting Aurora directly bypasses the DashLaunch boot
+path that loads `xbdm.xex` and the FTP server.** The console root has
+`launch.ini`, `xbdm.xex` and `xbdm.ini`, i.e. XBDM here is a DashLaunch-loaded
+plugin, not something Aurora provides. A magicboot straight to `Aurora.xex`
+plausibly comes up without the plugins -- which would explain losing FTP *and*
+XBDM simultaneously while the console itself is fine. `xbox.sh`'s own header
+hints at this: *"cold-reboot to get it back"*, not "magicboot to get it back".
+
+**Consequence: this needs a physical power-cycle.** There is no remote channel
+left to recover through -- XBDM was the recovery channel and it is gone.
+
+**Do not re-run `xbox.sh redeploy` as-is** until this is understood; it will
+walk into the same hole. Before the next attempt, verify from XBDM that
+`Hdd:\Apps\Aurora\Aurora\Aurora.xex` actually exists (the path is hardcoded at
+xbox.sh:100 and was never checked), and prefer restoring the dashboard by
+cold-reboot over magicboot.
