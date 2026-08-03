@@ -153,3 +153,6 @@ native/third_party/
 venv-legacy-ml/
 uv-cache/
 /venv
+
+# MSVC/preprocessor expansion dumps (e.g. src/system/net/curl/lib/formdata.i)
+*.i
