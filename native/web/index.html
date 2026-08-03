@@ -83,6 +83,75 @@
         }
         #console .err { color: #c66; }
     </style>
+    <script>
+        // Path-prefix shim (2026-07-31): lets this exact build be served
+        // unmodified either at the server root (localhost:8420, the app
+        // server's native home) OR behind a reverse proxy mounted at a
+        // sub-path (e.g. https://home.freeqaz.com/dc3/). Ported from rb3's
+        // native/web/index.html, which hit this first at /rb3/.
+        //
+        // The game constructs root-absolute "/api/..." URLs in places we
+        // don't want to touch (the splash <video> src, the /api/version
+        // cache-bust probe, and WebAssets' emscripten_fetch/sync XHR) —
+        // under a prefix those resolve to the proxy's ROOT and 404. Instead
+        // we derive the mount base from the page's own URL and prefix just
+        // the "/api/" calls at the fetch/XHR/beacon/media-src layer, before
+        // any of that code runs. Everything else on the page (release/ and
+        // debug/ wasm, the audio worklet) already uses paths relative to
+        // index.html, so it needs no help.
+        //
+        // base is "" at the server root (index.html or /), so the whole
+        // block is a no-op there — zero behavior change on localhost:8420.
+        var base = location.pathname.replace(/\/(index\.html)?$/, '');
+        if (base) {
+            window.__dc3UrlBase = base;
+
+            // Only touch our own root-absolute API surface; anything else
+            // (relative build assets, third-party URLs, non-string args)
+            // passes through untouched.
+            function dc3PrefixApi(url) {
+                if (typeof url === 'string' && url.indexOf('/api/') === 0) {
+                    return base + url;
+                }
+                return url;
+            }
+
+            var dc3Fetch = window.fetch;
+            window.fetch = function(input, init) {
+                return dc3Fetch.call(this, dc3PrefixApi(input), init);
+            };
+
+            var dc3XhrOpen = XMLHttpRequest.prototype.open;
+            XMLHttpRequest.prototype.open = function(method, url) {
+                var args = Array.prototype.slice.call(arguments);
+                args[1] = dc3PrefixApi(url);
+                return dc3XhrOpen.apply(this, args);
+            };
+
+            if (navigator.sendBeacon) {
+                var dc3SendBeacon = navigator.sendBeacon;
+                navigator.sendBeacon = function(url, data) {
+                    return dc3SendBeacon.call(navigator, dc3PrefixApi(url), data);
+                };
+            }
+
+            // The splash overlay assigns "/api/file/ui/splash/flimflam.webm"
+            // straight to a <video>'s .src — a DOM property write, not a
+            // fetch/XHR/beacon call, so it slips past the three patches
+            // above. Patch the shared HTMLMediaElement.src setter (covers
+            // <video> and <audio>) the same way.
+            var dc3MediaSrcDesc = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'src');
+            if (dc3MediaSrcDesc && dc3MediaSrcDesc.set) {
+                Object.defineProperty(HTMLMediaElement.prototype, 'src', {
+                    get: dc3MediaSrcDesc.get,
+                    set: function(url) {
+                        dc3MediaSrcDesc.set.call(this, dc3PrefixApi(url));
+                    },
+                    configurable: true
+                });
+            }
+        }
+    </script>
 </head>
 <body>
     <div id="canvas-container">
