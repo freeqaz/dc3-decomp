@@ -378,43 +378,41 @@ void AnimTask::Poll(float time) {
     if (!mLoop && time <= mFrameSpan && mFrameSpan != 0.0f) {
         float normalized = time / mFrameSpan;
         float eased = mEaseFunc(normalized, mEasePower, 1.0f);
-        frame = (mScale * (eased * mFrameSpan)) + mOffset;
+        frame = eased * mScale * mFrameSpan + mOffset;
     } else {
         frame = mScale * time + mOffset;
     }
 
     if (mLoop) {
-        frame = Mod(frame - mMin, mMax - mMin) + mMin;
-        mAnim->SetFrame(frame, blend);
-        if (!mListener)
-            goto done;
-        float range = mMax - mMin;
-        float prevNorm = mPrevFrame / range;
-        float frameNorm = frame / range;
-        if ((int)prevNorm != (int)frameNorm) {
-            static Message msg("on_anim_event", DataNode(Symbol("looped")));
-            mListener->Handle(msg, false);
+        mAnim->SetFrame(ModRange(mMin, mMax, frame), blend);
+        if (mListener) {
+            float range = mMax - mMin;
+            if ((int)(mPrevFrame / range) != (int)(frame / range)) {
+                static Message msg("on_anim_event", DataNode(Symbol("looped")));
+                mListener->Handle(msg, false);
+            }
         }
     } else {
+        float setFrame;
         if (mWait) {
             float startFrame = mAnim->StartFrame();
             float endFrame = mAnim->EndFrame();
+            float animMin = Min(startFrame, endFrame);
+            float animMax = Max(startFrame, endFrame);
             if (time != 0.0f) {
-                if (mScale > 0.0f) {
-                    frame = mMax;
+                if (time < mFrameSpan) {
+                    float wrapped = fmod(frame, animMax - animMin);
+                    setFrame = wrapped + animMin;
                 } else {
-                    frame = mMin;
+                    setFrame = fmod(mScale > 0.0f ? mMax : mMin, animMax - animMin);
                 }
-                if (time <= mFrameSpan && mFrameSpan != 0.0f) {
-                    float normalized = time / mFrameSpan;
-                    float eased = mEaseFunc(normalized, mEasePower, 1.0f);
-                    frame = mScale * eased * mFrameSpan + mOffset;
-                }
-                frame = fmod(frame - mMin, mMax - mMin) + mMin;
+            } else {
+                setFrame = fmod(mScale > 0.0f ? mMin : mMax, animMax - animMin);
             }
+        } else {
+            setFrame = Clamp(mMin, mMax, frame);
         }
-        frame = frame < mMin ? mMin : frame > mMax ? mMax : frame;
-        mAnim->SetFrame(frame, blend);
+        mAnim->SetFrame(setFrame, blend);
     }
 
     mPrevFrame = frame;
@@ -440,7 +438,6 @@ void AnimTask::Poll(float time) {
             }
         }
     }
-done:;
 }
 
 #pragma endregion
