@@ -401,7 +401,8 @@ void RndPostProc::LoadRev(BinStreamRev &d) {
                 c.blue = (4.0f - c.blue) / (4.0f - minVal);
                 mBloomThreshold = c.alpha;
                 c.alpha = 0.0f;
-                mBloomColor = c;
+                Hmx::Color &bloomColor = mBloomColor;
+                bloomColor = c;
             } else {
                 mBloomColor.red = 1.0f;
                 mBloomColor.green = 1.0f;
