@@ -353,11 +353,12 @@ void RndRibbon::UpdateChase() {
 
     int firstDirty = mTransforms.size() - added;
     if (firstDirty < mTransforms.size()) {
-        // Held as three loose floats rather than a Vector3: the shipped build keeps
-        // them in callee-saved FPRs across the loop. Deliberately uninitialized —
-        // they are only read when the `2 < i` branch above wrote them in the same
-        // iteration (`angle` is reset to -1 every iteration and gates both).
-        float smoothDirX, smoothDirY, smoothDirZ;
+        // Declared outside the loop: the shipped build keeps its three components in
+        // callee-saved FPRs across iterations (the preheader loads their stack homes
+        // before anything writes them). Only read when the `2 < i` branch below wrote
+        // it in the same iteration, since `angle` is reset to -1 every iteration and
+        // gates both.
+        Vector3 smoothDir;
         float prevAngle = -1.0f;
         for (int i = firstDirty; i < mTransforms.size(); ++i) {
             if (i != 0) {
@@ -375,12 +376,8 @@ void RndRibbon::UpdateChase() {
                     angle = std::acos(dot);
                     Vector3 scaledPrev = prevDir;
                     scaledPrev *= prevAngle;
-                    Vector3 newSmoothDir;
-                    Interp(dir, scaledPrev, 0.5f, newSmoothDir);
-                    Normalize(newSmoothDir, newSmoothDir);
-                    smoothDirX = newSmoothDir.x;
-                    smoothDirY = newSmoothDir.y;
-                    smoothDirZ = newSmoothDir.z;
+                    Interp(dir, scaledPrev, 0.5f, smoothDir);
+                    Normalize(smoothDir, smoothDir);
                 }
 
                 static Vector3 up(0.0f, 0.0f, 1.0f);
@@ -398,10 +395,8 @@ void RndRibbon::UpdateChase() {
                 if (angle != -1.0f) {
                     Hmx::Matrix3 inv;
                     Invert(result.m, inv);
-                    Vector3 localSmooth;
-                    Vector3 smoothDir(smoothDirX, smoothDirY, smoothDirZ);
-                    Multiply(smoothDir, inv, localSmooth);
-                    float clamped = Clamp(0.0f, 1.0f, localSmooth.x);
+                    Multiply(smoothDir, inv, smoothDir);
+                    float clamped = Clamp(0.0f, 1.0f, smoothDir.x);
                     float a = std::acos(clamped);
                     float cosHalf = std::cos(angle * 0.5f);
                     float invCos = 1.0f / cosHalf;
