@@ -87,7 +87,12 @@ namespace {
     static float sCharWidth;
 
     float DrawDetectedBar(
-        float y, const char *label, float detected, float min, float max, bool mirrored,
+        float y,
+        const char *label,
+        float detected,
+        float min,
+        float max,
+        bool mirrored,
         bool usePercent
     ) {
         Hmx::Color darkColor = sDarkerGray;
@@ -126,7 +131,8 @@ namespace {
         if (ratingIdx < clip->NumMoveRatings()) {
             const SkeletonClip::MoveRating &rating = clip->GetMoveRating(ratingIdx);
             str += MakeString(
-                " (bar %i: expected=%s)", ratingIdx,
+                " (bar %i: expected=%s)",
+                ratingIdx,
                 rating.mExpected.Null() ? Symbol("<none>") : rating.mExpected
             );
         } else {
@@ -134,9 +140,7 @@ namespace {
         }
         Hmx::Rect rect(0.01f, y, 0.9f, sCharWidth);
         TheRnd.DrawRectScreen(rect, sDarkGray, nullptr, nullptr, nullptr);
-        return TheRnd
-            .DrawStringScreen(str.c_str(), Vector2(0.01f, y), sLightGray, true)
-            .y;
+        return TheRnd.DrawStringScreen(str.c_str(), Vector2(0.01f, y), sLightGray, true).y;
     }
 
     struct DetectFrameSecondsCmp {
@@ -201,12 +205,13 @@ float MoveDir::sPLFMinTimeError;
 
 MoveDir::MoveDir()
     : mShowMoveOverlay(0), mErrorNodeInfo(0), mPlayClip(this), mRecordClip(this),
-      mAlternateRecordClip(this), mSkeletonRecordClip(this), unk2e4(0), mReportMove(this), mFiltersEnabled(0),
-      mGamePanel(0), unk30c(0), mFilterQueue(0), mAsyncDetector(0), mUpdateLoader(0),
-      mFinishingMoveMeasure(10000), mMoveOverlay(RndOverlay::Find("ham_move")),
-      mDancerSeq(this), unk414(0), mDancerViz(Hmx::Object::New<SkeletonViz>()),
-      mShowErrorFrames(0), mDebugLatencyOffset(0), mDebugLoop(0), mLastPollMs(0),
-      mDebugCollision(0), unkf84(-1) {
+      mAlternateRecordClip(this), mSkeletonRecordClip(this), unk2e4(0), mReportMove(this),
+      mFiltersEnabled(0), mGamePanel(0), unk30c(0), mFilterQueue(0), mAsyncDetector(0),
+      mUpdateLoader(0), mFinishingMoveMeasure(10000),
+      mMoveOverlay(RndOverlay::Find("ham_move")), mDancerSeq(this), unk414(0),
+      mDancerViz(Hmx::Object::New<SkeletonViz>()), mShowErrorFrames(0),
+      mDebugLatencyOffset(0), mDebugLoop(0), mLastPollMs(0), mDebugCollision(0),
+      unkf84(-1) {
     for (int i = 0; i < 2; i++) {
         mMovePlayerData[i].Reset();
         mCurMoveSmoothers[i].SetCoeffs(1, 0);
@@ -636,8 +641,9 @@ void MoveDir::Poll() {
             }
             mCurMoveSmoothers[i].Smooth(
                 mCurMoveNormalizedResult[i],
-                TheMaster && TheMaster->GetMeasure() == 3 ? TheTaskMgr.DeltaUISeconds() * 4.0f
-                                                     : TheTaskMgr.DeltaUISeconds()
+                TheMaster && TheMaster->GetMeasure() == 3
+                    ? TheTaskMgr.DeltaUISeconds() * 4.0f
+                    : TheTaskMgr.DeltaUISeconds()
             );
             if (mCurMoveRating[i] <= kMoveRatingPerfect && mPrevMoveRating[i] > 1) {
                 static Symbol passed_move_p1("passed_move_p1");
@@ -761,15 +767,15 @@ void MoveDir::PostUpdate(const SkeletonUpdateData *data) {
         // (whole block compiles out on Xbox).
         if (data->mFrame) {
 #endif
-        if (mRecordClip) {
-            mRecordClip->PollRecording(*data->mFrame);
-        }
-        if (mAlternateRecordClip) {
-            mAlternateRecordClip->PollRecording(*data->mFrame);
-        }
-        if (mSkeletonRecordClip) {
-            mSkeletonRecordClip->PollRecording(*data->mFrame);
-        }
+            if (mRecordClip) {
+                mRecordClip->PollRecording(*data->mFrame);
+            }
+            if (mAlternateRecordClip) {
+                mAlternateRecordClip->PollRecording(*data->mFrame);
+            }
+            if (mSkeletonRecordClip) {
+                mSkeletonRecordClip->PollRecording(*data->mFrame);
+            }
 #ifdef HX_NATIVE
         }
 #endif
@@ -835,8 +841,7 @@ void MoveDir::Draw(const BaseSkeleton &baseSkeleton, SkeletonViz &skeletonViz) {
         auto history = handle.History();
         auto songSpeed = SongSpeed();
         ErrorFrameInput input(
-            history, mShowErrorFrames->GetDancerFrame()->mSkeleton, baseSkeleton,
-            songSpeed
+            history, mShowErrorFrames->GetDancerFrame()->mSkeleton, baseSkeleton, songSpeed
         );
         ErrorNode **nodePtr = mFilterVer->mErrorNodes;
         for (int i = 0; i < mFilterVer->NumNodes(); i++) {
@@ -1096,8 +1101,7 @@ void MoveDir::FinalPoseStateMachine() {
         MovePlayerData &mpd = mMovePlayerData[i];
         HamMove *move = mpd.mCurMove;
         HamPlayerData *playerData = TheGameData->Player(i);
-        if (playerData->IsPlaying() && !InGracePeriod(i) && move
-            && move->IsFinalPose()) {
+        if (playerData->IsPlaying() && !InGracePeriod(i) && move && move->IsFinalPose()) {
             const FilterVersion *fv = move->FilterVer();
             if (move->IsFinalPose() && mpd.mFeedbackMode != 2) {
                 float frac;
@@ -1123,8 +1127,7 @@ void MoveDir::FinalPoseStateMachine() {
                         mpd.mFeedbackMode = 1;
                     }
                     if (mpd.mFeedbackMode == 1) {
-                        float measureBeat =
-                            (float)(TheTaskMgr.CurrentMeasure() * 4);
+                        float measureBeat = (float)(TheTaskMgr.CurrentMeasure() * 4);
                         float lastFrameSeconds =
                             BeatToSeconds(lastFrameBeat + measureBeat);
                         float errorDist = ScaleFullErrorDist(fv->mScaleOp);
@@ -1140,21 +1143,14 @@ void MoveDir::FinalPoseStateMachine() {
                         }
                         if (detectEndSeconds <= unk30c
                             || beatInMeasure
-                                   >= (float)(4.0f
-                                              - HamMove::sMinFrameDistBeats)) {
-                            static Symbol final_pose_rating(
-                                "final_pose_rating"
-                            );
-                            const std::vector<float> *ratings =
-                                move->RatingOverride();
+                                >= (float)(4.0f - HamMove::sMinFrameDistBeats)) {
+                            static Symbol final_pose_rating("final_pose_rating");
+                            const std::vector<float> *ratings = move->RatingOverride();
                             DataNode ratingNode(
                                 DetectFracToRating(frac, ratings, nullptr)
                             );
-                            HamPlayerData *pd =
-                                TheGameData->Player(i);
-                            pd->Provider()->SetProperty(
-                                final_pose_rating, ratingNode
-                            );
+                            HamPlayerData *pd = TheGameData->Player(i);
+                            pd->Provider()->SetProperty(final_pose_rating, ratingNode);
                             mpd.mFeedbackMode = 2;
                         }
                     }
@@ -1232,7 +1228,9 @@ void MoveDir::ResetDetectFrames(int player, Difficulty diff) {
             }
             MILO_NOTIFY(
                 "%s: could not find %s DancerSequence (%s)",
-                PathName(this), DifficultyToSym(diff), mode
+                PathName(this),
+                DifficultyToSym(diff),
+                mode
             );
         } else {
             const std::vector<DancerFrame> &dancerFrames = seq->GetDancerFrames();
@@ -1240,7 +1238,8 @@ void MoveDir::ResetDetectFrames(int player, Difficulty diff) {
             if (dfBegin == &*dancerFrames.end()) {
                 TheDebug << MakeString(
                     "%s %s: could not reset detect frames, no DancerFrames\n",
-                    PathName(this), DifficultyToSym(diff)
+                    PathName(this),
+                    DifficultyToSym(diff)
                 );
             } else {
                 const DancerFrame *dfIt = dfBegin;
@@ -1249,12 +1248,13 @@ void MoveDir::ResetDetectFrames(int player, Difficulty diff) {
                 if (mpd.mMoveKeys.size() > prevCapacity) {
                     MILO_NOTIFY(
                         "%s move keys size (%i) above capacity (%i)",
-                        PathName(this), mpd.mMoveKeys.size(), prevCapacity
+                        PathName(this),
+                        mpd.mMoveKeys.size(),
+                        prevCapacity
                     );
                 }
                 int detectCapacity = mpd.mDetectFrames.capacity();
-                for (int moveKeyIdx = 0;
-                     moveKeyIdx < mpd.mMoveKeys.size();
+                for (int moveKeyIdx = 0; moveKeyIdx < mpd.mMoveKeys.size();
                      moveKeyIdx++) {
                     if (dfIt->mMoveIdx == moveKeyIdx) {
                         const HamMoveKey &key = mpd.mMoveKeys[moveKeyIdx];
@@ -1263,8 +1263,7 @@ void MoveDir::ResetDetectFrames(int player, Difficulty diff) {
                             ((const HamMove *)curMove)->GetMoveFrames();
                         MoveMirrored mirrored =
                             (MoveMirrored)(curMove->Mirrored() != kMirroredNo);
-                        for (unsigned int j = 0;
-                             j < (unsigned int)moveFrames.size();
+                        for (unsigned int j = 0; j < (unsigned int)moveFrames.size();
                              j++) {
                             if (dfIt->mMoveFrameIdx == (int)j) {
                                 DetectFrame df;
@@ -1290,7 +1289,8 @@ void MoveDir::ResetDetectFrames(int player, Difficulty diff) {
                                     "%s %s: invalid DancerFrame at move "
                                     "%i frame %i\n",
                                     PathName(this),
-                                    DifficultyToSym(diff), moveKeyIdx,
+                                    DifficultyToSym(diff),
+                                    moveKeyIdx,
                                     dfIt->mMoveFrameIdx
                                 );
                             }
@@ -1504,7 +1504,13 @@ static void Dc3DetectFracProbe(
     if (++sCount <= 40 || sCount % 200 == 0) {
         MILO_LOG(
             "DC3 DETECTFRAC[%d] p=%d beat=%d keys=%d branch=%s rangeLen=%d frac=%.4f\n",
-            sCount, player, beat, numKeys, branch, rangeLen, frac
+            sCount,
+            player,
+            beat,
+            numKeys,
+            branch,
+            rangeLen,
+            frac
         );
     }
 }
@@ -1568,8 +1574,9 @@ void MoveDir::EnqueueDetectFrames(
         DetectFrame *best = nullptr;
         float bestError = 1000.0f;
         for (DetectFrame *it = range.first; it != range.second; ++it) {
-            float error =
-                ScaleDistToError(filterVer->mScaleOp, fabsf(it->Seconds() - adjustedSecs));
+            float error = ScaleDistToError(
+                filterVer->mScaleOp, fabsf(it->Seconds() - adjustedSecs)
+            );
             if (error < 1.0f) {
                 mFilterQueue->EnqueueFrame(
                     player, error, adjustedSecs - it->Seconds(), it, filterVer
@@ -1598,14 +1605,15 @@ void MoveDir::DetectRange(
 }
 
 void MoveDir::DrawShowing() {
-    if (HashTable().Begin() != nullptr) {
+    ObjectDir *dir = this;
+    if (dir != Dir()) {
         if (mDebugCollision) {
-            SongCollision *songCol = Find<SongCollision>("SongCollision", false);
+            SongCollision *songCol = dir->Find<SongCollision>("SongCollision", false);
             if (songCol) {
                 float beat = TheTaskMgr.Beat();
                 int intBeat = (int)beat;
 
-                if ((unsigned int)unkf84 != intBeat) {
+                if (unkf84 != intBeat) {
                     unkf84 = intBeat;
                     MILO_ASSERT(TheHamDirector, 0xab1);
                     for (int i = 0; i < 2; i++) {
@@ -1631,57 +1639,53 @@ void MoveDir::DrawShowing() {
                 float radius1 = 1.0f;
 
                 unsigned int beatIdx = 0;
-                size_t outputSize = outputs.size();
+                for (size_t i = 0; i < outputs.size(); i++) {
+                    const SongCollisionOutput &out = outputs[i];
 
-                if (outputSize > 0) {
-                    for (size_t i = 0; i < outputSize; i++) {
-                        const SongCollisionOutput &out = outputs[i];
-
-                        Hmx::Color color;
-                        if (out.Colliding()) {
-                            color.Set(gray, gray, gray, 1.0f);
-                        } else {
-                            color.Set(1.0f, zero, 1.0f, 1.0f);
-                        }
-
-                        int playerIdx = 0;
-                        int labeledBeat = beatIdx + intBeat;
-
-                        for (playerIdx = 0; playerIdx < 2; playerIdx++) {
-                            const Vector3 &pos = out.WorldPos(playerIdx);
-                            UtilDrawSphere(pos, radius1, color, nullptr);
-
-                            const char *label = MakeString("%i:%i", playerIdx, labeledBeat);
-                            UtilDrawString(label, pos, color);
-
-                            TheRnd.DrawLine(pos, out.Offset(playerIdx), color, false);
-                            UtilDrawSphere(out.Offset(playerIdx), radius1, color, nullptr);
-
-                            TheRnd.DrawLine(pos, out.Offset(playerIdx + 2), color, false);
-                            UtilDrawSphere(out.Offset(playerIdx + 2), radius1, color, nullptr);
-                        }
-
-                        for (playerIdx = 0; playerIdx < 2; playerIdx++) {
-                            const Vector3 &worldPos = out.WorldPos(playerIdx);
-                            Vector3 offsetPos = out.Offset(playerIdx + 4);
-                            offsetPos += worldPos;
-                            Hmx::Color altColor;
-                            altColor.Set(zero, 1.0f, zero, 1.0f);
-                            TheRnd.DrawLine(worldPos, offsetPos, altColor, false);
-                            UtilDrawSphere(offsetPos, radius2, altColor, nullptr);
-
-                            const char *label = MakeString("%i", playerIdx);
-                            UtilDrawString(label, offsetPos, altColor);
-                        }
-
-                        beatIdx++;
+                    Hmx::Color color;
+                    if (out.Colliding()) {
+                        color.Set(gray, gray, gray, 1.0f);
+                    } else {
+                        color.Set(1.0f, zero, 1.0f, 1.0f);
                     }
+
+                    int playerIdx = 0;
+                    int labeledBeat = beatIdx + intBeat;
+
+                    for (playerIdx = 0; playerIdx < 2; playerIdx++) {
+                        const Vector3 &pos = out.WorldPos(playerIdx);
+                        UtilDrawSphere(pos, radius1, color, nullptr);
+
+                        const char *label = MakeString("%i:%i", playerIdx, labeledBeat);
+                        UtilDrawString(label, pos, color);
+
+                        TheRnd.DrawLine(pos, out.Offset(playerIdx), color, false);
+                        UtilDrawSphere(out.Offset(playerIdx), radius1, color, nullptr);
+
+                        TheRnd.DrawLine(pos, out.Offset(playerIdx + 2), color, false);
+                        UtilDrawSphere(out.Offset(playerIdx + 2), radius1, color, nullptr);
+                    }
+
+                    for (playerIdx = 0; playerIdx < 2; playerIdx++) {
+                        const Vector3 &worldPos = out.WorldPos(playerIdx);
+                        Vector3 offsetPos;
+                        Add(worldPos, out.Offset(playerIdx + 4), offsetPos);
+                        Hmx::Color altColor;
+                        altColor.Set(zero, 1.0f, zero, 1.0f);
+                        TheRnd.DrawLine(worldPos, offsetPos, altColor, false);
+                        UtilDrawSphere(offsetPos, radius2, altColor, nullptr);
+
+                        const char *label = MakeString("%i", playerIdx);
+                        UtilDrawString(label, offsetPos, altColor);
+                    }
+
+                    beatIdx++;
                 }
             }
         }
     } else if (TheLoadMgr.EditMode()) {
         if (mDancerSeq) {
-            ObjDirItr<SkeletonViz> it(this, true);
+            ObjDirItr<SkeletonViz> it(dir, true);
             if (it) {
                 StubCameraInput camInput;
                 camInput.PollTracking();
@@ -1709,12 +1713,14 @@ namespace {
     float gFourPointZero = 4.0f;
     static float sOverlayWidth = gBeatLineData.maxValue - gBeatLineData.minValue;
 
-    void DrawBeatLine(float x, float y, float z, const Hmx::Color& color) {
+    void DrawBeatLine(float x, float y, float z, const Hmx::Color &color) {
         float sum = x + y;
         float numerator = gBeatLineData.rangeOffset + z;
-        float denominator = gBeatLineData.rangeScale + gBeatLineData.rangeOffset + gFourPointZero;
+        float denominator =
+            gBeatLineData.rangeScale + gBeatLineData.rangeOffset + gFourPointZero;
         float t = numerator / denominator;
-        float linePos = t * (gBeatLineData.maxValue - gBeatLineData.minValue) + gBeatLineData.minValue;
+        float linePos = t * (gBeatLineData.maxValue - gBeatLineData.minValue)
+            + gBeatLineData.minValue;
 
         Vector2 endPos(linePos, sum);
         Vector2 startPos(linePos, x);
@@ -1764,7 +1770,7 @@ float MoveDir::DetectFrac(int player, int beat) {
 float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
     if (!mFiltersEnabled)
         return y;
-    auto& _ref0 = mMovePlayerData;
+    auto &_ref0 = mMovePlayerData;
     HamMove *move = _ref0[0].mCurMove;
     if (!move)
         return y;
@@ -1808,47 +1814,54 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
         RatingStateThreshold(i, ratingName, thresh, move->RatingOverride());
         float xRight = sCharWidth + y;
         float xPos = (gBeatLineData.maxValue - gBeatLineData.minValue)
-            * (gBeatLineData.rangeOffset
-               / (gBeatLineData.rangeScale + gBeatLineData.rangeOffset
-                  + beatScale4))
+                * (gBeatLineData.rangeOffset
+                   / (gBeatLineData.rangeScale + gBeatLineData.rangeOffset + beatScale4))
             + gBeatLineData.minValue;
         float threshPos = (0.99f - xPos) * thresh + xPos;
         UtilDrawLine(Vector2(threshPos, y), Vector2(threshPos, xRight), sGray);
         const char *colon = strstr(ratingName.Str(), "_");
         if (colon) {
-            TheRnd.DrawStringScreen(
-                colon + 1, Vector2(threshPos, y), sLightGray, true
-            );
+            TheRnd.DrawStringScreen(colon + 1, Vector2(threshPos, y), sLightGray, true);
         }
     }
 
     // Compute overlay positioning
     float xRight = sCharWidth + y;
     float xMin = (gBeatLineData.maxValue - gBeatLineData.minValue)
-        * (gBeatLineData.rangeOffset
-           / (gBeatLineData.rangeScale + gBeatLineData.rangeOffset + beatScale4))
+            * (gBeatLineData.rangeOffset
+               / (gBeatLineData.rangeScale + gBeatLineData.rangeOffset + beatScale4))
         + gBeatLineData.minValue;
     float barRange = 0.99f - xMin;
 
     // Draw detected bar
     float detectFrac = move->IsRest() ? 0.0f : DetectFrac(0, -1);
     const char *mirroredStr = mirrored == 1 ? "(mirror)" : gNullStr;
-    y = DrawDetectedBar(xRight, MakeString(
-        "%i %s %s", TheTaskMgr.CurrentMeasure(),
-        move->Name() + (move->Name()[0] == '/' ? 1 : 0), mirroredStr
-    ), detectFrac, xMin, 0.99f, false, true);
+    y = DrawDetectedBar(
+        xRight,
+        MakeString(
+            "%i %s %s",
+            TheTaskMgr.CurrentMeasure(),
+            move->Name() + (move->Name()[0] == '/' ? 1 : 0),
+            mirroredStr
+        ),
+        detectFrac,
+        xMin,
+        0.99f,
+        false,
+        true
+    );
 
     // Draw smoothed overlay bar
     DrawOverlayBar(y, xMin, 0.99f, sDarkGray, sCharWidth);
-    DrawOverlayBar(
-        y, xMin, mLastPollMs * 0.0625f * barRange + xMin, sGreen, sCharWidth
-    );
+    DrawOverlayBar(y, xMin, mLastPollMs * 0.0625f * barRange + xMin, sGreen, sCharWidth);
 
     // Timer text
     {
         TheRnd.DrawStringScreen(
-            MakeString("timer: %.3fms\n", mLastPollMs), Vector2(xMin, xRight),
-            sLightGray, true
+            MakeString("timer: %.3fms\n", mLastPollMs),
+            Vector2(xMin, xRight),
+            sLightGray,
+            true
         );
     }
 
@@ -1863,23 +1876,32 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
     }
     {
         float bgBottom = (gBeatLineData.maxValue - gBeatLineData.minValue)
-            * (0.0f
-               / (gBeatLineData.rangeScale + gBeatLineData.rangeOffset
-                  + beatScale4))
+                * (0.0f
+                   / (gBeatLineData.rangeScale + gBeatLineData.rangeOffset + beatScale4))
             + gBeatLineData.minValue;
         TheRnd.DrawRectScreen(
             Hmx::Rect(0.0f, yBase, bgBottom, height),
-            Hmx::Color(0.3, 0.3, 0.3, 0.9), nullptr, nullptr, nullptr
+            Hmx::Color(0.3, 0.3, 0.3, 0.9),
+            nullptr,
+            nullptr,
+            nullptr
         );
-        float totalRange = gBeatLineData.rangeScale + gBeatLineData.rangeOffset
-            + beatScale4;
+        float totalRange =
+            gBeatLineData.rangeScale + gBeatLineData.rangeOffset + beatScale4;
         TheRnd.DrawRectScreen(
-            Hmx::Rect(bgBottom, yBase,
+            Hmx::Rect(
+                bgBottom,
+                yBase,
                 ((gBeatLineData.maxValue - gBeatLineData.minValue)
-                     * (totalRange / totalRange) + gBeatLineData.minValue)
+                     * (totalRange / totalRange)
+                 + gBeatLineData.minValue)
                     - bgBottom,
-                height),
-            sDarkGray, nullptr, nullptr, nullptr
+                height
+            ),
+            sDarkGray,
+            nullptr,
+            nullptr,
+            nullptr
         );
     }
 
@@ -1888,13 +1910,11 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
         Vector2 pos(gBeatLineData.minValue, sCharWidth + yBase);
         for (int n = 0; n < numNodes; n++) {
             const ErrorNode *node = fv->mErrorNodes[n];
-            Vector2 result = TheRnd.DrawStringScreen(
-                node->NodeName().Str(), pos, sLightGray, false
-            );
+            Vector2 result =
+                TheRnd.DrawStringScreen(node->NodeName().Str(), pos, sLightGray, false);
             float width = result.x - pos.x;
             TheRnd.DrawStringScreen(
-                node->NodeName().Str(), Vector2(pos.x - width, pos.y), sLightGray,
-                true
+                node->NodeName().Str(), Vector2(pos.x - width, pos.y), sLightGray, true
             );
             pos.y += sCharWidth;
         }
@@ -1903,13 +1923,10 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
     // Draw beat lines (0 through 4)
     for (int i = 0; i < 5; i++) {
         float beatX = (gBeatLineData.maxValue - gBeatLineData.minValue)
-            * (((float)i + gBeatLineData.rangeOffset)
-               / (gBeatLineData.rangeScale + gBeatLineData.rangeOffset
-                  + beatScale4))
+                * (((float)i + gBeatLineData.rangeOffset)
+                   / (gBeatLineData.rangeScale + gBeatLineData.rangeOffset + beatScale4))
             + gBeatLineData.minValue;
-        TheRnd.DrawStringScreen(
-            MakeString("%i", i), Vector2(beatX, yBase), sGray, true
-        );
+        TheRnd.DrawStringScreen(MakeString("%i", i), Vector2(beatX, yBase), sGray, true);
         DrawBeatLine(yBase, height, (float)i, sLightGray);
     }
 
@@ -1929,20 +1946,20 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
             continue;
 
         float frameBeatX = (gBeatLineData.maxValue - gBeatLineData.minValue)
-            * ((frame.GetBeat() + gBeatLineData.rangeOffset)
-               / (gBeatLineData.rangeScale + gBeatLineData.rangeOffset
-                  + beatScale4))
+                * ((frame.GetBeat() + gBeatLineData.rangeOffset)
+                   / (gBeatLineData.rangeScale + gBeatLineData.rangeOffset + beatScale4))
             + gBeatLineData.minValue;
 
-        Hmx::Color markerColor = (&frame == closest)
-            ? Hmx::Color(0.8, 0.8, 0.0, 1.0)
-            : Hmx::Color(0.8, 0.8, 0.8, 1.0);
+        Hmx::Color markerColor = (&frame == closest) ? Hmx::Color(0.8, 0.8, 0.0, 1.0)
+                                                     : Hmx::Color(0.8, 0.8, 0.8, 1.0);
 
         DrawBeatLine(yBase, height, frame.GetBeat(), markerColor);
 
         TheRnd.DrawStringScreen(
-            MakeString("%.2f", frame.GetBeat()), Vector2(frameBeatX, yBase - sCharWidth),
-            markerColor, true
+            MakeString("%.2f", frame.GetBeat()),
+            Vector2(frameBeatX, yBase - sCharWidth),
+            markerColor,
+            true
         );
 
         // Draw node-by-node rects for Ham1
@@ -1952,9 +1969,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
             float bx2 = frameBeatX + halfWidth;
             for (int n = 0; n < numNodes; n++) {
                 float cellH = colY + sCharWidth;
-                UtilDrawRect2D(
-                    Vector2(bx1, bx2), Vector2(cellH, colY), markerColor
-                );
+                UtilDrawRect2D(Vector2(bx1, bx2), Vector2(cellH, colY), markerColor);
                 colY += sCharWidth;
             }
         }
@@ -1962,16 +1977,21 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
 
     // Draw detect frames in range
     std::pair<DetectFrame *, DetectFrame *> detectRange(nullptr, nullptr);
-    DetectRange(_ref0[0].mDetectFrames, detectRange, TheTaskMgr.CurrentMeasure(), TheTaskMgr.CurrentMeasure());
+    DetectRange(
+        _ref0[0].mDetectFrames,
+        detectRange,
+        TheTaskMgr.CurrentMeasure(),
+        TheTaskMgr.CurrentMeasure()
+    );
 
     if (fv->mType == kFilterVersionHam1 && detectRange.first != detectRange.second) {
         for (DetectFrame *df = detectRange.first; df != detectRange.second; df++) {
             MoveFrame *mf = (MoveFrame *)df->GetMoveFrame();
             float colY = sCharWidth + yBase;
             float frameBeatX = (gBeatLineData.maxValue - gBeatLineData.minValue)
-                * ((mf->GetBeat() + gBeatLineData.rangeOffset)
-                   / (gBeatLineData.rangeScale + gBeatLineData.rangeOffset
-                      + beatScale4))
+                    * ((mf->GetBeat() + gBeatLineData.rangeOffset)
+                       / (gBeatLineData.rangeScale + gBeatLineData.rangeOffset
+                          + beatScale4))
                 + gBeatLineData.minValue;
             float bx1 = frameBeatX - halfWidth;
             if (numNodes > 0) {
@@ -1999,8 +2019,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
 
     // Merge moves property
     static Symbol merge_moves("merge_moves");
-    const DataNode *mergeNode =
-        TheHamProvider->Property(merge_moves, true);
+    const DataNode *mergeNode = TheHamProvider->Property(merge_moves, true);
     int mergeVal = mergeNode->Int(NULL);
 
     BaseSkeleton *vizSkeleton = nullptr;
@@ -2011,16 +2030,14 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
         DancerSequence *seq = move->GetDancerSequence();
         if (seq) {
             const std::vector<DancerFrame> &dancerFrames = seq->GetDancerFrames();
-            float frameF =
-                (float)(dancerFrames.size() - 1) * (beatOffset * 0.25f);
+            float frameF = (float)(dancerFrames.size() - 1) * (beatOffset * 0.25f);
             int frameIdx;
             if (frameF > 0.0f) {
                 frameIdx = (int)(frameF + 0.5f);
             } else {
                 frameIdx = (int)(frameF - 0.5f);
             }
-            vizSkeleton =
-                (BaseSkeleton *)&dancerFrames[frameIdx].mSkeleton;
+            vizSkeleton = (BaseSkeleton *)&dancerFrames[frameIdx].mSkeleton;
         }
     } else {
         // Non-merged: iterate detect frames by seconds
@@ -2029,7 +2046,9 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
             BeatToSeconds((float)(measureStart + 4) + gBeatLineData.rangeScale);
         DetectFrame *endFrame = &_ref0[0].mDetectFrames.back() + 1;
         DetectFrame *it = std::lower_bound(
-            &_ref0[0].mDetectFrames.front(), endFrame, startSeconds,
+            &_ref0[0].mDetectFrames.front(),
+            endFrame,
+            startSeconds,
             DetectFrameSecondsCmp()
         );
         float vizY = height + yBase;
@@ -2054,9 +2073,9 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
                     float step = 1.0f / 30.0f;
                     Vector2 prevPt(
                         (gBeatLineData.maxValue - gBeatLineData.minValue)
-                            * (0.0f
-                               / (gBeatLineData.rangeScale
-                                  + gBeatLineData.rangeOffset + beatScale4))
+                                * (0.0f
+                                   / (gBeatLineData.rangeScale + gBeatLineData.rangeOffset
+                                      + beatScale4))
                             + gBeatLineData.minValue,
                         vizY
                     );
@@ -2064,28 +2083,22 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
                         float currentTime = startSeconds;
                         do {
                             float error = ScaleDistToError(
-                                fv->mScaleOp,
-                                fabsf(currentTime - it->Seconds())
+                                fv->mScaleOp, fabsf(currentTime - it->Seconds())
                             );
                             float beat = SecondsToBeat(currentTime);
-                            float beatX = (gBeatLineData.maxValue
-                                - gBeatLineData.minValue)
-                                * ((beat - (float)measureStart
-                                       + gBeatLineData.rangeOffset)
-                                    / (gBeatLineData.rangeScale
-                                       + gBeatLineData.rangeOffset + beatScale4))
+                            float beatX =
+                                (gBeatLineData.maxValue - gBeatLineData.minValue)
+                                    * ((beat - (float)measureStart
+                                        + gBeatLineData.rangeOffset)
+                                       / (gBeatLineData.rangeScale
+                                          + gBeatLineData.rangeOffset + beatScale4))
                                 + gBeatLineData.minValue;
                             if (error < 1.0f) {
                                 float errorY = error * height + yBase;
-                                UtilDrawLine(
-                                    prevPt, Vector2(beatX, errorY),
-                                    lineColor
-                                );
+                                UtilDrawLine(prevPt, Vector2(beatX, errorY), lineColor);
                                 prevPt.y = errorY;
                             } else if (prevPt.y < vizY) {
-                                UtilDrawLine(
-                                    prevPt, Vector2(beatX, vizY), lineColor
-                                );
+                                UtilDrawLine(prevPt, Vector2(beatX, vizY), lineColor);
                                 prevPt.y = vizY;
                             }
                             currentTime += step;
@@ -2096,20 +2109,18 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
 
                 // Draw error node index
                 float frameBeat2 = SecondsToBeat(it->Seconds());
-                const BaseSkeleton *skel =
-                    &it->GetDancerFrame()->mSkeleton;
+                const BaseSkeleton *skel = &it->GetDancerFrame()->mSkeleton;
                 float fbx2 = (gBeatLineData.maxValue - gBeatLineData.minValue)
-                    * (((frameBeat2 - (float)measureStart)
-                           + gBeatLineData.rangeOffset)
-                        / (gBeatLineData.rangeScale + gBeatLineData.rangeOffset
-                           + beatScale4))
+                        * (((frameBeat2 - (float)measureStart)
+                            + gBeatLineData.rangeOffset)
+                           / (gBeatLineData.rangeScale + gBeatLineData.rangeOffset
+                              + beatScale4))
                     + gBeatLineData.minValue;
                 int errorIdx = skel->ElapsedMs();
                 if (errorIdx != -1) {
                     int nodeIdx = skel->ElapsedMs();
                     TheRnd.DrawStringScreen(
-                        MakeString("%i", nodeIdx), Vector2(fbx2, vizY),
-                        sLightGray, true
+                        MakeString("%i", nodeIdx), Vector2(fbx2, vizY), sLightGray, true
                     );
                 }
 
@@ -2125,24 +2136,19 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
     // Draw song beat position text
     {
         float beatPosX = (gBeatLineData.maxValue - gBeatLineData.minValue)
-            * ((beatOffset + gBeatLineData.rangeOffset)
-               / (gBeatLineData.rangeScale + gBeatLineData.rangeOffset
-                  + beatScale4))
+                * ((beatOffset + gBeatLineData.rangeOffset)
+                   / (gBeatLineData.rangeScale + gBeatLineData.rangeOffset + beatScale4))
             + gBeatLineData.minValue;
         TheRnd.DrawStringScreen(
-            MakeString("%.2f", totalBeatF), Vector2(beatPosX, yBase), yellowColor,
-            true
+            MakeString("%.2f", totalBeatF), Vector2(beatPosX, yBase), yellowColor, true
         );
     }
 
     // Draw latency-adjusted beat line
     {
         Hmx::Color greenBeatColor(0, 0.5, 0, 1);
-        float latencyBeat =
-            SecondsToBeat(BeatToSeconds(totalBeatF) - sLatencySeconds);
-        DrawBeatLine(
-            yBase, height, latencyBeat - (float)measureStart, greenBeatColor
-        );
+        float latencyBeat = SecondsToBeat(BeatToSeconds(totalBeatF) - sLatencySeconds);
+        DrawBeatLine(yBase, height, latencyBeat - (float)measureStart, greenBeatColor);
     }
 
     // Advance y past the overlay
@@ -2196,26 +2202,26 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
                 float cellH = vizWidth * invGrid;
                 int idx = 0;
                 for (std::set<DetectFrame *>::iterator sit = unkf88.begin();
-                     sit != unkf88.end(); ++sit) {
+                     sit != unkf88.end();
+                     ++sit) {
                     int row = idx / gridSize;
                     int col = idx % gridSize;
                     Hmx::Rect cellRect(
                         (float)col * cellH + vizRect.x,
-                        (float)row * cellW + vizRect.y, cellH, cellW
+                        (float)row * cellW + vizRect.y,
+                        cellH,
+                        cellW
                     );
                     mDancerViz->SetPhysicalCamScreenRect(cellRect);
                     StubCameraInput camInput;
                     camInput.PollTracking();
                     DetectFrame *df = *sit;
                     const DancerFrame *dancerFrame = df->GetDancerFrame();
-                    BaseSkeleton *skel =
-                        (BaseSkeleton *)&dancerFrame->mSkeleton;
+                    BaseSkeleton *skel = (BaseSkeleton *)&dancerFrame->mSkeleton;
                     std::vector<SkeletonCallback *> callbacks;
                     callbacks.push_back(this);
                     unk414 = (DancerSkeleton *)skel;
-                    mDancerViz->Visualize(
-                        camInput, *skel, &callbacks, false
-                    );
+                    mDancerViz->Visualize(camInput, *skel, &callbacks, false);
                     idx++;
                 }
             }
@@ -2238,20 +2244,22 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
         // debug draw rather than bind a reference to null.
         if (camInput)
 #endif
-            mDancerViz->Visualize(
-                *camInput, mDebugSkeleton, &callbacks, false
-            );
+            mDancerViz->Visualize(*camInput, mDebugSkeleton, &callbacks, false);
 
         // Latency offset text
         const char *offsetStr = mDebugLatencyOffset ? "ON" : "OFF";
         TheRnd.DrawStringScreen(
             MakeString("latency offset: %s", offsetStr),
-            Vector2(debugRect.x, debugRect.y), sLightGray, true
+            Vector2(debugRect.x, debugRect.y),
+            sLightGray,
+            true
         );
         float rotation = mDancerViz->PhysicalCamRotation();
         TheRnd.DrawStringScreen(
             MakeString("rotation: %.2f", rotation),
-            Vector2(debugRect.x, debugRect.y + 0.02f), sLightGray, true
+            Vector2(debugRect.x, debugRect.y + 0.02f),
+            sLightGray,
+            true
         );
     }
 
@@ -2275,8 +2283,8 @@ void MoveDir::PostUpdateFilters() {
             }
         }
 
-        if (mFiltersEnabled && hasMove && TheMaster
-            && TheMaster->GetAudio() && TheMaster->GetAudio()->IsReady()) {
+        if (mFiltersEnabled && hasMove && TheMaster && TheMaster->GetAudio()
+            && TheMaster->GetAudio()->IsReady()) {
             MILO_ASSERT(TheGameData, 0x3d9);
             float songSecs = SongSeconds();
             float adjustedSecs = songSecs - sLatencySeconds;
@@ -2296,7 +2304,9 @@ void MoveDir::PostUpdateFilters() {
                         && mMovePlayerData[i].mCurMove->Scored()) {
                         HamMove *move = mMovePlayerData[i].mCurMove;
                         EnqueueDetectFrames(
-                            adjustedSecs, i, mMovePlayerData[i].mDetectFrames,
+                            adjustedSecs,
+                            i,
+                            mMovePlayerData[i].mDetectFrames,
                             move->FilterVer()
                         );
                     }
@@ -2304,7 +2314,9 @@ void MoveDir::PostUpdateFilters() {
                     if (mAsyncDetector) {
                         mAsyncDetector->EnqueueDetectFrames(
                             TheTaskMgr.CurrentMeasure(),
-                            TheTaskMgr.CurrentBeat(), adjustedSecs, i
+                            TheTaskMgr.CurrentBeat(),
+                            adjustedSecs,
+                            i
                         );
                     }
 #else
@@ -2383,8 +2395,7 @@ void MoveDir::PostUpdateFilters() {
                             );
                         if (nodeWeight.mActive) {
                             int feedbackLimbs = (*errorNodes)->GetFeedbackLimbs();
-                            const Vector3 &bestError =
-                                detectFrame->BestNodeError(n);
+                            const Vector3 &bestError = detectFrame->BestNodeError(n);
                             float errVal = bestError.x;
                             for (int limb = 0; limb < 4; limb++) {
                                 if ((1 << limb) & feedbackLimbs) {
@@ -2396,8 +2407,7 @@ void MoveDir::PostUpdateFilters() {
                     }
                     for (int limb = 0; limb < 4; limb++) {
                         float clamped = Clamp(0.0f, 1.0f, 1.0f - limbErrors[limb]);
-                        const std::vector<float> *ratings =
-                            move->RatingOverride();
+                        const std::vector<float> *ratings = move->RatingOverride();
                         int ratingIdx;
                         DetectFracToRating(clamped, ratings, &ratingIdx);
                         if (ratingIdx == 3) {
@@ -2409,14 +2419,10 @@ void MoveDir::PostUpdateFilters() {
                 } else {
                     MILO_ASSERT(fv->mType == kFilterVersionHam2, 0x460);
                     const Ham2FrameWeight &frameWeight =
-                        detectFrame->GetMoveFrame()->FrameWeight(
-                            detectFrame->Mirror()
-                        );
+                        detectFrame->GetMoveFrame()->FrameWeight(detectFrame->Mirror());
                     if (0.5f < frameWeight.mWeight) {
                         for (int limb = 0; limb < 4; limb++) {
-                            float limbPSNR = detectFrame->LimbPSNR(
-                                fv, 1 << limb
-                            );
+                            float limbPSNR = detectFrame->LimbPSNR(fv, 1 << limb);
                             float badThresh = frameWeight.unk4[limb];
                             if (badThresh < frameWeight.unk14[limb]) {
                                 if (limbPSNR > frameWeight.unk14[limb]) {
@@ -2439,8 +2445,7 @@ void MoveDir::PostUpdateFilters() {
         MovePlayerData &mpd = mMovePlayerData[i];
         HamMove *move = mpd.mCurMove;
         HamPlayerData *playerData = TheGameData->Player(i);
-        if (playerData->IsPlaying() && !InGracePeriod(i) && move
-            && move->Scored()) {
+        if (playerData->IsPlaying() && !InGracePeriod(i) && move && move->Scored()) {
             float frac;
             if (TheMoveMgr->HasRoutine()) {
                 frac = mAsyncDetector->MoveRatingFrac(
@@ -2451,13 +2456,9 @@ void MoveDir::PostUpdateFilters() {
             }
             HamPlayerData *player2 = TheGameData->Player(i);
             if (frac > prevFracs[i] || player2->IsAutoplaying()) {
-                float ratingFrac = DetectFracToRatingFrac(
-                    frac, move->RatingOverride()
-                );
+                float ratingFrac = DetectFracToRatingFrac(frac, move->RatingOverride());
                 MILO_ASSERT(mpd.mPhraseMeter, 0x49a);
-                mpd.mPhraseMeter->SetRatingFrac(
-                    ratingFrac, 4.0f - beatInMeasure
-                );
+                mpd.mPhraseMeter->SetRatingFrac(ratingFrac, 4.0f - beatInMeasure);
                 static Symbol rating_frac("rating_frac");
                 DataNode ratingNode(ratingFrac);
                 HamPlayerData *player3 = TheGameData->Player(i);

@@ -99,6 +99,33 @@ BEGIN_LOADS(FlowIf)
     }
 END_LOADS
 
+/** Compare two numeric DataNodes.
+ *
+ *  Kept as a helper taking both operands by reference: the target evaluates
+ *  mValue1.Node()/mValue2.Node() as unnamed argument temporaries (so
+ *  right-to-left, mValue2 first) and drives every use off the pointer Node()
+ *  returned, exactly the shape the kNotEqual case's operator!= call produces.
+ *  Named DataNode locals instead pin stack slots and re-materialise their
+ *  addresses. */
+__forceinline static bool CompareLiterals(
+    const DataNode &n1, const DataNode &n2, FlowNode::OperatorType op
+) {
+    if ((n1.Type() == kDataInt || n1.Type() == kDataFloat)
+        && (n2.Type() == kDataInt || n2.Type() == kDataFloat)) {
+        switch (op) {
+        case FlowNode::kGreaterThan:
+            return n1.LiteralFloat() > n2.LiteralFloat();
+        case FlowNode::kGreaterThanOrEqual:
+            return n1.LiteralFloat() >= n2.LiteralFloat();
+        case FlowNode::kLessThan:
+            return n1.LiteralFloat() < n2.LiteralFloat();
+        default:
+            return n1.LiteralFloat() <= n2.LiteralFloat();
+        }
+    }
+    return false;
+}
+
 bool FlowIf::Activate() {
     FLOW_LOG("Activate\n");
     mStopRequested = false;
@@ -118,54 +145,18 @@ bool FlowIf::Activate() {
     case kNotEqual:
         activate = mValue1.Node() != mValue2.Node();
         break;
-    case kGreaterThan: {
-        DataNode n1 = mValue1.Node();
-        DataNode n2 = mValue2.Node();
-        if (n1.Type() != kDataInt && n1.Type() != kDataFloat) {
-            activate = false;
-        } else if (n2.Type() != kDataInt && n2.Type() != kDataFloat) {
-            activate = false;
-        } else {
-            activate = n1.LiteralFloat() > n2.LiteralFloat();
-        }
+    case kGreaterThan:
+        activate = CompareLiterals(mValue1.Node(), mValue2.Node(), kGreaterThan);
         break;
-    }
-    case kGreaterThanOrEqual: {
-        DataNode n1 = mValue1.Node();
-        DataNode n2 = mValue2.Node();
-        if (n1.Type() != kDataInt && n1.Type() != kDataFloat) {
-            activate = false;
-        } else if (n2.Type() != kDataInt && n2.Type() != kDataFloat) {
-            activate = false;
-        } else {
-            activate = n1.LiteralFloat() >= n2.LiteralFloat();
-        }
+    case kGreaterThanOrEqual:
+        activate = CompareLiterals(mValue1.Node(), mValue2.Node(), kGreaterThanOrEqual);
         break;
-    }
-    case kLessThan: {
-        DataNode n1 = mValue1.Node();
-        DataNode n2 = mValue2.Node();
-        if (n1.Type() != kDataInt && n1.Type() != kDataFloat) {
-            activate = false;
-        } else if (n2.Type() != kDataInt && n2.Type() != kDataFloat) {
-            activate = false;
-        } else {
-            activate = n1.LiteralFloat() < n2.LiteralFloat();
-        }
+    case kLessThan:
+        activate = CompareLiterals(mValue1.Node(), mValue2.Node(), kLessThan);
         break;
-    }
-    case kLessThanOrEqual: {
-        DataNode n1 = mValue1.Node();
-        DataNode n2 = mValue2.Node();
-        if (n1.Type() != kDataInt && n1.Type() != kDataFloat) {
-            activate = false;
-        } else if (n2.Type() != kDataInt && n2.Type() != kDataFloat) {
-            activate = false;
-        } else {
-            activate = n1.LiteralFloat() <= n2.LiteralFloat();
-        }
+    case kLessThanOrEqual:
+        activate = CompareLiterals(mValue1.Node(), mValue2.Node(), kLessThanOrEqual);
         break;
-    }
     default:
         break;
     }
