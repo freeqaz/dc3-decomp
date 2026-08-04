@@ -152,9 +152,8 @@ void Locale::Init() {
     MILO_ASSERT(!mSymTable, 0x59);
     MILO_ASSERT(!mSize, 0x5A);
     MILO_ASSERT(!mStringData, 0x5B);
-    mSize = 0;
-
     MILO_ASSERT(!mNumFilesLoaded, 0x5C);
+    mSize = 0;
     int totalStrLen = 0;  // Total length of all unique localized strings
     int numChunks = 0;     // Number of locale entries loaded from files
     LocaleChunkSort::OrderedLocaleChunk *chunks = 0;
@@ -167,7 +166,7 @@ void Locale::Init() {
     FileQualifiedFilename(devkitPath, devkitPath.c_str());
 
     static Symbol locale("locale");
-    DataArrayPtr altCfg((DataNode(devkitPath)), DataNode(locale));
+    DataArrayPtr altCfg((DataNode(locale)), DataNode(devkitPath));
 
     DataArray *cfg = SystemConfig();
     if (!cfg) {
@@ -192,8 +191,7 @@ void Locale::Init() {
         // NOTE: mInitialized is uninitialized here (UB). RB3 doesn't have this check.
         // This appears to be dead code or a bug, but matches the original binary.
         if (mInitialized) {
-            auto _tmp10 = cfg->Size();
-            for (int i = 1; i < _tmp10; i++) {
+            for (int i = 1; i < cfg->Size(); i++) {
                 const char *path = FileMakePath(FileGetPath(cfg->File()), cfg->Str(i));
                 arrVec[i - 1] = DataReadFile(path, true);
                 if (!arrVec[i - 1]) {
@@ -240,15 +238,15 @@ void Locale::Init() {
             }
         }
     }
+    MemPopTemp();
 
     mSymTable = new Symbol[mSize];
     mStringData = new StringTable(totalStrLen);
     mStrTable = new const char *[mSize];
     mUploadedFlags = new bool[mSize];
 
-    prevSym = Symbol();
-
-    if ((unsigned int)numChunks > 0) {
+    if (chunks) {
+        prevSym = Symbol();
         int chunkIdx = 0;
         for (int i = 0; i < numChunks; i++) {
             Symbol curSym = chunks[i].node1.LiteralSym();
@@ -261,10 +259,8 @@ void Locale::Init() {
             } else
                 TheDebug << MakeString("Locale symbol '%s' redefined\n", curSym);
         }
+        delete[] chunks;
     }
-
-    delete[] chunks;
-    MemPopTemp();
 
 done:
     if (cfg && cfg->Size() > 1) {
