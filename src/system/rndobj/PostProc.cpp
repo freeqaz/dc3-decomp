@@ -396,13 +396,13 @@ void RndPostProc::LoadRev(BinStreamRev &d) {
             if (minVal > c.blue)
                 minVal = c.blue;
             if (minVal < 4.0f) {
-                float range = 4.0f - minVal;
-                c.red = (4.0f - red) / range;
-                c.green = (4.0f - c.green) / range;
-                c.blue = (4.0f - c.blue) / range;
+                c.red = (4.0f - red) / (4.0f - minVal);
+                c.green = (4.0f - c.green) / (4.0f - minVal);
+                c.blue = (4.0f - c.blue) / (4.0f - minVal);
                 mBloomThreshold = c.alpha;
                 c.alpha = 0.0f;
-                mBloomColor = c;
+                Hmx::Color &bloomColor = mBloomColor;
+                bloomColor = c;
             } else {
                 mBloomColor.red = 1.0f;
                 mBloomColor.green = 1.0f;
@@ -424,9 +424,10 @@ void RndPostProc::LoadRev(BinStreamRev &d) {
     }
     if (d.rev > 6) {
         if (d.rev < 0x12) {
-            d >> mColorXfm.mColorXfm.m.x >> mColorXfm.mColorXfm.m.y
-                >> mColorXfm.mColorXfm.m.z;
-            d >> mColorXfm.mColorXfm.v;
+            BinStream &bs = d.stream;
+            Transform &xfm = mColorXfm.mColorXfm;
+            bs >> xfm.m.x >> xfm.m.y >> xfm.m.z;
+            bs >> xfm.v;
         } else {
             if (!mColorXfm.Load(d.stream)) {
                 MILO_FAIL(
@@ -434,7 +435,7 @@ void RndPostProc::LoadRev(BinStreamRev &d) {
                 );
             }
         }
-        d >> (Key<float>&)mFlickerModBounds >> (Key<float>&)mFlickerTimeBounds;
+        d.stream >> (Key<float>&)mFlickerModBounds >> (Key<float>&)mFlickerTimeBounds;
         if (d.rev < 9) {
             mFlickerModBounds.x = 1.0f - mFlickerModBounds.x;
             mFlickerModBounds.y = 1.0f - mFlickerModBounds.y;
@@ -442,7 +443,7 @@ void RndPostProc::LoadRev(BinStreamRev &d) {
         if (d.rev < 0x1D) {
             mFlickerModBounds.x = 0.0f;
         }
-        d >> (Key<float>&)mNoiseBaseScale >> mNoiseTopScale >> mNoiseIntensity;
+        d.stream >> (Key<float>&)mNoiseBaseScale >> mNoiseTopScale >> mNoiseIntensity;
         if (d.rev > 0xC) {
             d >> mNoiseStationary;
         }
@@ -464,8 +465,8 @@ void RndPostProc::LoadRev(BinStreamRev &d) {
     }
     if (d.rev > 9) {
         if (d.rev < 0x12) {
-            d >> mColorXfm.mLevelInLo >> mColorXfm.mLevelInHi;
-            d >> mColorXfm.mLevelOutLo >> mColorXfm.mLevelOutHi;
+            d.stream >> mColorXfm.mLevelInLo >> mColorXfm.mLevelInHi;
+            d.stream >> mColorXfm.mLevelOutLo >> mColorXfm.mLevelOutHi;
         }
         d >> mPosterLevels;
     }
@@ -496,7 +497,7 @@ void RndPostProc::LoadRev(BinStreamRev &d) {
     }
     if (d.rev > 0x12) {
         d >> mHallOfTimeRate;
-        d >> mHallOfTimeColor >> mHallOfTimeMix;
+        d.stream >> mHallOfTimeColor >> mHallOfTimeMix;
         if (d.rev > 0x13 && d.rev < 0x20) {
             bool hotType;
             d >> hotType;
@@ -522,10 +523,12 @@ void RndPostProc::LoadRev(BinStreamRev &d) {
         mBloomThreshold *= 4.0f;
     }
     if (d.rev > 0x18) {
-        d >> mRefractMap >> mRefractDist >> (Key<float>&)mRefractScale
-            >> (Key<float>&)mRefractPanning >> mRefractAngle;
+        d >> mRefractMap >> mRefractDist;
+        d.stream >> (Key<float>&)mRefractScale;
+        d.stream >> (Key<float>&)mRefractPanning;
+        d >> mRefractAngle;
         if (d.rev > 0x1B) {
-            d >> (Key<float>&)mRefractVelocity;
+            d.stream >> (Key<float>&)mRefractVelocity;
         }
     }
     if (d.rev > 0x19) {
@@ -535,7 +538,7 @@ void RndPostProc::LoadRev(BinStreamRev &d) {
         }
     }
     if (d.rev > 0x1D) {
-        d >> mVignetteColor >> mVignetteIntensity;
+        d.stream >> mVignetteColor >> mVignetteIntensity;
     }
     if (d.rev > 0x20) {
         d >> mBloomGlare;

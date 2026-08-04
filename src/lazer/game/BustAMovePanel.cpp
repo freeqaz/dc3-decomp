@@ -1535,7 +1535,7 @@ void BustAMovePanel::Poll() {
         mRecordSkelIdx = skelIdx;
     }
 
-    if (mState == kBAMState_Recording && (unsigned int)mBeatCount >= 3) {
+    if (mState == kBAMState_Recording && mBeatCount >= 3) {
         mDancerTakeScore = mRecorder->GetScore(skelIdx, 0, mRecordScore, true);
         mCurrentMoveScore = mRecorder->GetScore(skelIdx, 1, mRecordScore, false);
         mRecordScore += TheTaskMgr.DeltaUISeconds();
@@ -1559,15 +1559,15 @@ void BustAMovePanel::Poll() {
         );
         forceSkelIdx = mRecordSkelIdx;
     } else if (mState == kBAMState_ShowMoveSequence) {
-        float *scores = (float *)&mPlayerScoreLeft;
         for (int p = 0; p < 2; p++) {
             int pSkelIdx = TheGestureMgr->GetSkeletonIndexByTrackingID(
                 TheGameData->Player(p)->GetSkeletonTrackingID()
             );
             SkeletonSide pSide = TheGameData->Player(p)->Side();
-            scores[p] = mRecorder->GetScore(pSkelIdx, p, -1.0f, false);
+            ((float *)&mPlayerScoreLeft)[p] =
+                mRecorder->GetScore(pSkelIdx, p, -1.0f, false);
             mPhraseMeters[pSide]->SetShowing(true);
-            float pBase = scores[p];
+            float pBase = ((float *)&mPlayerScoreLeft)[p];
             unsigned int pE = 2;
             float pScoreSq = 1.0f;
             do {
@@ -1593,10 +1593,10 @@ void BustAMovePanel::Poll() {
             mBAMVisualizerPanel->DataDir()->Find<RndTex>("gradient_pink.tex", true);
         RndTex *blueTex =
             mBAMVisualizerPanel->DataDir()->Find<RndTex>("gradient_blue.tex", true);
-        unsigned char isPlayer0Pink = 0;
-        if (TheGameData->Player(0)->Side() == kSkeletonLeft
-            && GetPlayerColor(0) == "pink") {
-            isPlayer0Pink = 1;
+        bool isPlayer0Pink = true;
+        if (TheGameData->Player(0)->Side() != kSkeletonLeft
+            || GetPlayerColor(0) != "pink") {
+            isPlayer0Pink = false;
         }
         for (ObjDirItr<DepthBuffer3D> it(mBAMVisualizerPanel->DataDir(), true);
              it != nullptr; ++it) {
@@ -1622,7 +1622,7 @@ void BustAMovePanel::Poll() {
         mDepthBufPlayer = activePlayer;
     }
 
-    unsigned char forceShow = !(mState == kBAMState_Recording || mState == kBAMState_End);
+    bool forceShow = !(mState == kBAMState_Recording || mState == kBAMState_End);
     for (ObjDirItr<DepthBuffer3D> it(mBAMVisualizerPanel->DataDir(), true);
          it != nullptr; ++it) {
         it->ForceDrawSkeletonIndex(forceSkelIdx, forceShow);
@@ -1679,15 +1679,15 @@ void BustAMovePanel::Poll() {
         graph->AddScreenString(
             MakeString("State: %s  Reps left: %d", stateName, mRepsRemaining), pos, white
         );
-        unsigned int currentPhrase = 0;
         int remainingBeat = (int)(TheTaskMgr.Beat() + 0.5f);
+        unsigned int currentPhrase = 0;
         while (currentPhrase < mSongStructure.size()) {
             remainingBeat -= mSongStructure[currentPhrase] * 4;
             if (remainingBeat < 0)
                 break;
             currentPhrase++;
         }
-        for (int i = 0; i < (int)mSongStructure.size(); i++) {
+        for (int i = 0; i < mSongStructure.size(); i++) {
             graph->AddScreenString(
                 MakeString("%d", mSongStructure[i]),
                 Vector2((float)i * 0.02f + 0.1f, 0.08f),

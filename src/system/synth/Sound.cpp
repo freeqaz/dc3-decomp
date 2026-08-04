@@ -36,7 +36,15 @@ Sound::~Sound() {
 
 BEGIN_HANDLERS(Sound)
     HANDLE(play, OnPlay)
-    HANDLE_EXPR(disable_pan, DisablePan(nullptr))
+    // Not HANDLE_EXPR: the original routes this one through _HANDLE_CHECKED, which
+    // materialises a DataNode temp and copy-constructs it into the return slot.
+    // Behaviourally identical (DisablePan returns bool, so the kDataUnhandled test
+    // always passes), but it is what the shipped code emits.
+    {
+        _NEW_STATIC_SYMBOL(disable_pan)
+        if (sym == _s)
+            _HANDLE_CHECKED(DisablePan(nullptr))
+    }
     HANDLE_ACTION(stop, Stop(nullptr, _msg->Size() == 4 ? _msg->Int(3) : false))
     HANDLE_ACTION(add_fader, mFaders.Add(_msg->Obj<Fader>(2)))
     HANDLE_ACTION(

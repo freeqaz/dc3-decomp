@@ -50,9 +50,12 @@ bool RndShadowMap::PrepShadow(RndDrawable *draw, RndEnviron *env) {
         goto found;
 
     for (it = e->LightsReal().begin(); it != e->LightsReal().end(); ++it) {
-        light = *it;
-        if (light->GetType() == RndLight::kDirectional || light->GetType() == RndLight::kPoint)
+        RndLight *cur = *it;
+        if (cur->GetType() == RndLight::kDirectional
+            || cur->GetType() == RndLight::kPoint) {
+            light = cur;
             goto found;
+        }
     }
 
     return false;
@@ -72,10 +75,7 @@ found:
     lightXfm.v = sphere.center;
 
     if (light->GetType() == RndLight::kPoint) {
-        const Transform &lw = light->WorldXfm();
-        lightXfm.m.y.z = sphere.center.z - lw.v.z;
-        lightXfm.m.y.y = sphere.center.y - lw.v.y;
-        lightXfm.m.y.x = sphere.center.x - lw.v.x;
+        Subtract(sphere.center, light->WorldXfm().v, lightXfm.m.y);
         Normalize(lightXfm.m, lightXfm.m);
     }
 

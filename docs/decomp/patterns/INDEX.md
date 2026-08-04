@@ -156,6 +156,7 @@ These patterns can often be fixed with source changes. Sorted by ROI (impact x s
 | Inline Constructor Location | +5-10% | 100% | [fixable-inline-boundary.md](fixable-inline-boundary.md#inline-constructor-in-header-vs-out-of-line-in-cpp) |
 | Sort Comparator Inline Location | +30-50% | 100% | [fixable-inline-boundary.md](fixable-inline-boundary.md#sort-comparator-inline-location-stdsort--std__median) |
 | Inline Boundary Cascade (ICF) | varies | requires diagnose | [fixable-inline-boundary.md](fixable-inline-boundary.md#inline-boundary-cascade-icf-merge-of-out-of-line-accessor) |
+| Inline-Level Counting (parameter home area) | +0.5-1%, collapses whole clusters | n=1, signal unambiguous | [fixable-inline-boundary.md](fixable-inline-boundary.md#inline-level-counting-via-the-parameter-home-area) |
 | Manual Helper Inlining | +2-12% | HIGH | [fixable-control-flow.md](fixable-control-flow.md#manual-helper-inlining-reverse-inline-a-trivial-helper) |
 | Static Variable Type in MakeString Args | +1-2% | HIGH | [fixable-casting.md](fixable-casting.md#sub-pattern-static-variable-type-in-makestring-args) |
 | Bool-Returning Call Coercion Defeats Shared Tail-Call | +2-3% | HIGH | [fixable-control-flow.md](fixable-control-flow.md#bool-returning-call-coercion-defeats-shared-tail-call) |
