@@ -878,11 +878,12 @@ QuatXfm::QuatXfm(const Transform &t) : v(t.v) { q.Set(t.m); }
 #ifndef HX_NATIVE
 void HamCharacter::Poll() {
     int songAnim = SongAnimation();
-    auto& _ref0 = mDriver;
     if (songAnim == -1 || InClipTest()) {
-        if (_ref0) _ref0->SetWeight(1.0f);
+        if (mDriver)
+            mDriver->SetWeight(1.0f);
     } else {
-        if (_ref0) _ref0->SetWeight(0.0f);
+        if (mDriver)
+            mDriver->SetWeight(0.0f);
     }
 
     bool wasShowing = mShowing;
@@ -896,13 +897,12 @@ void HamCharacter::Poll() {
     if (boneProp) {
         RndTransformable *spotProp = Find<RndTransformable>("spot_prop0.mesh", false);
         if (spotProp) {
-            float blendWeight = 0.0f;
+            float blendWeight = 1.0f;
             int songAnim2 = SongAnimation();
-            if (songAnim2 == -1) {
-                blendWeight = 1.0f;
-                if (_ref0->First()) {
-                    blendWeight = _ref0->EvaluateFlags(2);
-                }
+            if (songAnim2 != -1) {
+                blendWeight = 0.0f;
+            } else if (mDriver->First()) {
+                blendWeight = mDriver->EvaluateFlags(2);
             }
 
             QuatXfm boneXfm(boneProp->WorldXfm());
@@ -928,15 +928,16 @@ void HamCharacter::Poll() {
     CharLipSync::PlayBack *pb = lipDrv->GetPlayBack();
     if (pb) {
         float maxWeight = 0.0f;
-        for (int i = 0; i < (int)pb->mWeights.size(); i++) {
+        for (int i = 0; i < pb->mWeights.size(); i++) {
             CharLipSync::PlayBack::Weight &w = pb->mWeights[i];
-            if (!w.mClip) continue;
-            float curWeight = w.mCurWeight;
-            float newMax = (maxWeight >= curWeight) ? maxWeight : curWeight;
-            if (newMax != maxWeight) {
+            if (!w.mClip)
+                continue;
+            float prevMax = maxWeight;
+            maxWeight = Max(maxWeight, w.mCurWeight);
+            bool isNewMax = maxWeight != prevMax;
+            if (isNewMax) {
                 clipName = w.mClip->Name();
             }
-            maxWeight = newMax;
         }
     }
 

@@ -1118,8 +1118,13 @@ void RndMesh::SetVolume(RndMesh::Volume vol) {
                     Vector3 vb0;
                     vb0.Zero();
                     vb0[i % 3] = i > 2 ? -1.0f : 1.0f;
-                    Vector3 _val0 = i > 2 ? box.mMin : box.mMax;
-                    bspIt->plane = Plane(_val0, vb0);
+                    const Vector3 &planePoint = i > 2 ? box.mMin : box.mMax;
+                    Plane &plane = bspIt->plane;
+                    plane.a = vb0.x;
+                    plane.b = vb0.y;
+                    plane.c = vb0.z;
+                    plane.d = -(vb0.x * planePoint.x + vb0.y * planePoint.y
+                                + vb0.z * planePoint.z);
                     bspIt->left = 0;
                     if (i == 5) {
                         bspIt->right = 0;
@@ -1148,7 +1153,7 @@ void RndMesh::SetVolume(RndMesh::Volume vol) {
                         boxa0.GrowToContain(it->pos, &it->pos == &mVerts.begin()->pos);
                     }
                     if (!CheckBSPTree(mBSPTree, boxa0)) {
-                        MILO_LOG("BSP tree outside bounding box");
+                        MILO_NOTIFY("BSP tree outside bounding box");
                         RELEASE(mBSPTree);
                     }
                 }
