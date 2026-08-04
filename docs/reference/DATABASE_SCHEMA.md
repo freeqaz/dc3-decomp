@@ -45,6 +45,25 @@ Primary table tracking all symbols in the project.
 | `primary_pattern` | TEXT | Primary pattern tag (e.g., `REGISTER_SWAP`, `LINKER_MERGED`) |
 | `reachable_100` | BOOLEAN | 1 if function can theoretically reach 100% match |
 
+**Columns you cannot trust for triage (measured 2026-08-04):**
+
+Blind stratified audit of the `verdict='AT_LIMIT' AND has_register_swap=1 AND is_stub=0
+AND excluded=0` bucket (836 rows). These are measurements, not cautions:
+
+| Column | Problem |
+|--------|---------|
+| `verdict` | `AT_LIMIT` is **wrong ≥30% of the time** in that bucket — 3 of 10 blind-sampled rows had byte-exact source fixes, and one was a live behavioural bug. Treat `AT_LIMIT` as a deprioritization signal, never as an exclusion. |
+| `current_percent` | **Stale by up to 12 points** (94.94 recorded vs 86.1 measured; 53.47 vs 41.1). Never band or sort work on it without re-measuring — use `mcp__orchestrator__run_objdiff` with `project_dir` set to your worktree. |
+| `has_prologue_mismatch` | **Identically 0 for every row.** The detector never populated it; any heuristic keyed on it silently matches nothing. |
+| `has_register_swap` | Can be **pure noise** — one sampled row was 88 inserts / 88 deletes, an incomplete reconstruction rather than a swap case. |
+| `verdict_reason` | Free TEXT, and stale. Use `is_stub` + a fresh `current_percent` measurement instead. |
+
+`tier=` / `share=` appear in generated triage worklists (not in this schema) and were
+measured to have **no discriminative power**; `tier` is mildly *anti*-correlated with
+outcome. Do not route on either.
+
+See [patterns/INDEX.md: AT_LIMIT Breakdown](../decomp/patterns/INDEX.md#at_limit-breakdown).
+
 **Scoring Columns:**
 
 | Column | Type | Description |

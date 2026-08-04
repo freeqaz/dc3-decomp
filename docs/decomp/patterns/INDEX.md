@@ -7,6 +7,27 @@ Quick reference for all documented decompilation patterns in DC3 (Dance Central 
 
 ## Corrections — read before trusting an older section
 
+- **2026-08-04 — the AT_LIMIT + `REGISTER_SWAP` bucket is 836 functions, and its verdict
+  is wrong at least 30% of the time.** Blind stratified audit (selection rule fixed before
+  any diff was looked at: 6 match bands, ordered within each by `md5(symbol)`, max one
+  function per unit) scored **3/10**. The earlier "3 of 3 sampled functions had source
+  fixes" figure was a *selected* sample — those functions were chosen because someone was
+  already working on them — and was never a rate; do not re-cite it. Full detail and the
+  fields you cannot trust are in the
+  [AT_LIMIT Breakdown](#at_limit-breakdown) below and in
+  [../../sessions/2026-08-04-regswap-atlimit-sweep.md](../../sessions/2026-08-04-regswap-atlimit-sweep.md).
+  The routing rule that came out of it is
+  [fixable-liveness.md: Triage Split](fixable-liveness.md#triage-split-statement-level-vs-within-one-expression).
+
+- **2026-08-04 — base *declaration order* does not control base *offsets*.** MSVC hoists
+  the polymorphic (vfptr-bearing) base to offset 0 whichever order the bases are written
+  in, so an MI base-adjustment tell in the target proves a base's offset and says nothing
+  about the declaration list. Measured with `cl.exe /d1reportAllClassLayout`; both orders
+  of `class String` give a byte-identical dump. Affects
+  [Inheritance offset shift](fixable-struct-layout.md#inheritance-offset-shift); the
+  correction and the whole-build fingerprint of a construction-order-only edit are in
+  [fixable-struct-layout.md: Base Declaration Order](fixable-struct-layout.md#base-declaration-order-does-not-set-base-offsets-msvc-hoists-the-polymorphic-base-to-0).
+
 - **2026-08-03 — register swaps are symptoms, and declaration reorder is the wrong axis for them.**
   See **[fixable-liveness.md](fixable-liveness.md)**. Measured on 3 functions
   (`ObjectDir::Iterate` 99.4%→**100%**, `RndText::FitTextScroll` 92.7%→98.2%,
@@ -218,7 +239,7 @@ These patterns resist simple source-level fixes. Each documents what would be ne
 | ~~MakeString Array-Size ICF~~ | ~~2,550+ functions~~ | ~~1-5%~~ | [verifiable-icf.md](verifiable-icf.md#makestring-array-size-icf-resolved) — **Resolved** in objdiff (2026-03-03) |
 | LTCG/Global Pooling | varies | 0.5-1% | [verifiable-icf.md](verifiable-icf.md#ltcg-global-pooling) |
 | Float Constant Pooling | common | 1-2 instr | [verifiable-icf.md](verifiable-icf.md#float-constant-pooling) |
-| Register Allocation | ~250 functions | 1-3% | [unfixable-compiler.md](unfixable-compiler.md#register-allocation) (mechanism understood) — **work [fixable-liveness.md](fixable-liveness.md) first**; the swap is usually a symptom |
+| Register Allocation | 836 flagged (≥30% mislabeled) | 1-3% | [unfixable-compiler.md](unfixable-compiler.md#register-allocation) (mechanism understood) — **work [fixable-liveness.md](fixable-liveness.md) first**; the swap is *always* a symptom, and the flag itself is unreliable ([breakdown](#at_limit-breakdown)) |
 | Dead Store Elimination / Destructor Merging | RAII wrappers | 1-2% | [unfixable-compiler.md](unfixable-compiler.md#dead-store-elimination--destructor-merging) |
 | Anonymous Namespace Hash | common | 0.5-3% | [unfixable-compiler.md](unfixable-compiler.md#anonymous-namespace-hash-mismatch) |
 | Build Env Regression (Headers) | rare | 5-10% | [unfixable-compiler.md](unfixable-compiler.md#build-environment-regression-from-unrelated-headers) |
@@ -371,12 +392,34 @@ The 894 AT_LIMIT functions break down by dominant blocking pattern:
 | Pattern | Est. Count | Typical Gap | Notes |
 |---------|-----------|-------------|-------|
 | LINKER_MERGED (ICF) | ~350 | 0.5-3% | Merged `bl` targets from Identical COMDAT Folding |
-| REGISTER_SWAP | ~250 | 1-3% | Compiler register allocation artifact — but this bucket is **not audited against the liveness/scheduling levers** ([fixable-liveness.md](fixable-liveness.md), 2026-08-03); 3 of 3 sampled functions had source fixes |
+| REGISTER_SWAP | **836** (measured 2026-08-04, not ~250) | 1-3% | **Verdict wrong ≥30% of the time** — blind stratified audit scored 3/10. See the note under this table. |
 | Address relocation noise | ~150 | 0.5-2% | `lis`/`addi` pairs at different global addresses |
 | ASSERT_REVS / INIT_REVS scheduling | ~80 | 0.8-0.9% | Instruction scheduling around rev macros |
 | BOOL_MASK (insert direction) | ~30 | 1-2% | Compiler `clrlwi` insertion we can't remove |
 | Store-then-reload scheduling | ~20 | 0.5-1% | Target stores to global then reloads; our compiler keeps register |
 | Mixed / multiple patterns | ~80 | varies | Combination of above patterns |
+
+> The "Est. Count" column is a 2026-03 estimate and has not been re-derived except for
+> the `REGISTER_SWAP` row. Treat the others as order-of-magnitude only.
+
+#### `decomp.db` is not trustworthy for this bucket (measured 2026-08-04)
+
+The population is `verdict='AT_LIMIT' AND has_register_swap=1 AND is_stub=0 AND
+excluded=0` — **836 functions** at audit time (834 today; it drifts as wins land). Every
+item below is measured on a blind stratified sample, not speculated:
+
+| Field | Finding |
+|---|---|
+| `verdict='AT_LIMIT'` | Wrong **≥30%** of the time here. 3 of 10 blind-sampled functions had real, byte-exact source fixes. |
+| `tier=` | **No discriminative power, and mildly ANTI-correlated.** 9/10 sampled were `tier=A_HAND_FIXABLE` and 8 of those 9 failed; the single `tier=B_PERMUTER` was a win. `share=` is likewise unrelated to outcome. |
+| `current_percent` | **Stale by up to 12 points** (DB 94.94 vs measured 86.1; DB 53.47 vs measured 41.1). Do not band on it — re-measure with `mcp__orchestrator__run_objdiff` passing `project_dir`. |
+| `has_prologue_mismatch` | **Identically 0 for every row** — the detector never populated it. The "PROLOGUE_MISMATCH is a positive indicator" heuristic cannot be applied from the DB at all. |
+| `has_register_swap=1` | Can be **pure noise**. One sampled function was 88 inserts / 88 deletes — an incomplete reconstruction, not a swap case. |
+
+Budget a follow-up sweep at **~1 win per 3 functions**, scoped to the statement-level half
+of the bucket ([Triage Split](fixable-liveness.md#triage-split-statement-level-vs-within-one-expression)).
+One of the three blind wins, `HDCache::WriteDone`, was a **live bug** — see
+[behavioral-divergence.md](behavioral-divergence.md).
 
 ### Fine-Tuning Success Rates (90%+ to 100%)
 
@@ -400,7 +443,7 @@ From 143 successful fine-tuning attempts (90%+ start, 100% end):
 
 ## See Also
 
-- [fixable-struct-layout.md](fixable-struct-layout.md) — Padded arrays, struct offset verification, stride mismatches
+- [fixable-struct-layout.md](fixable-struct-layout.md) — Padded arrays, struct offset verification, stride mismatches; **base declaration order does not set base offsets** (MSVC hoists the polymorphic base to 0)
 - [fixable-comparison.md](fixable-comparison.md) — Signed/unsigned, empty vs size, zero-check
 - [fixable-casting.md](fixable-casting.md) — Float cast, noreturn, float/double, sizeof
 - [fixable-control-flow.md](fixable-control-flow.md) — Max/Min explicit, ternary vs if/else, loop structure
