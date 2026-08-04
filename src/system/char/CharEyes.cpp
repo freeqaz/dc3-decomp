@@ -1275,17 +1275,17 @@ void CharEyes::Poll() {
 
     if (mLastCang != 1e+30f) {
         TheTaskMgr.Seconds(TaskMgr::kRealTime);
-        CharInterest *interest = mCurrentInterest;
         mAvDelta = (cang - mLastCang - mAvDelta) * 0.1f + mAvDelta;
 
-        float minLookTime = interest ? interest->mMinLookTime : 1.0f;
-        float maxLookTime = interest ? interest->mMaxLookTime : 3.0f;
-        float viewAngleCos = interest ? interest->mMaxViewAngleCos : mMaxEyeCang;
+        float minLookTime = mCurrentInterest ? mCurrentInterest->mMinLookTime : 1.0f;
+        float maxLookTime = mCurrentInterest ? mCurrentInterest->mMaxLookTime : 3.0f;
+        float viewAngleCos =
+            mCurrentInterest ? mCurrentInterest->mMaxViewAngleCos : mMaxEyeCang;
 
         bool canSeeTarget = cang >= viewAngleCos;
 
         if (mLastLook <= maxLookTime && !mNeedRecalc
-            && (mFocusInterest == 0 || interest == (CharInterest *)mFocusInterest
+            && (mFocusInterest == 0 || mCurrentInterest == (CharInterest *)mFocusInterest
                 || ((mLastLook <= 0.4f
                      || !mFocusInterest->IsWithinViewCone(headPos, facingDir))
                     && !IsHeadIKWeightIncreasing()))
