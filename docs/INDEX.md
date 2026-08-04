@@ -7,7 +7,8 @@ Top-level sitemap for the DC3 decomp documentation.
 | Doc | Description |
 |-----|-------------|
 | [tools/INDEX.md](tools/INDEX.md) | Agent tool selection guide — which tool to use when |
-| [tools/REFERENCE.md](tools/REFERENCE.md) | Scripts, commands, symbol lookup, linking tools |
+| [tools/BUILD_SYSTEM.md](tools/BUILD_SYSTEM.md) | The split pipeline — dtk, the `symbols.txt` depfile dependency (settled: already wired), the fixed-point invariant and the 2026-08-04 jump-table bug, toolchain propagation |
+| [tools/REFERENCE.md](tools/REFERENCE.md) | Scripts, commands, symbol lookup, linking tools, progress measurement + its staleness gate, decomp.db trust caveats |
 | [tools/WORKFLOW.md](tools/WORKFLOW.md) | Workflow narratives, common patterns, diff_inspect reference |
 
 Tool-specific deep docs live in subdirectories:
