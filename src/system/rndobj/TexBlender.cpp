@@ -188,14 +188,15 @@ void RndTexBlender::DrawShowing() {
                 }
                 std::sort(nearList.begin(), nearList.end(), BlendSorter());
                 std::sort(farList.begin(), farList.end(), BlendSorter());
-                if (mNearMap && !nearList.empty()) {
+                RndTex *nearMap = mNearMap;
+                if (nearMap && !nearList.empty()) {
                     mRenderedStates |= 2;
                     RndMat *work = TheShaderMgr.GetWork();
                     Transform xfm;
                     xfm.Reset();
                     TheShaderMgr.SetVConstant((VShaderConstant)4, Hmx::Matrix4(xfm));
                     TheShaderMgr.SetTransform(xfm);
-                    SetupMaterial(work, mNearMap);
+                    SetupMaterial(work, nearMap);
                     work->SetBlend(BaseMaterial::kBlendSrcAlpha);
                     float alpha = -1;
                     FOREACH (it, nearList) {
