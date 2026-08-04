@@ -413,10 +413,17 @@ item below is measured on a blind stratified sample, not speculated:
 | Field | Finding |
 |---|---|
 | `verdict='AT_LIMIT'` | Wrong **≥30%** of the time here. 3 of 10 blind-sampled functions had real, byte-exact source fixes. |
-| `tier=` | **No discriminative power, and mildly ANTI-correlated.** 9/10 sampled were `tier=A_HAND_FIXABLE` and 8 of those 9 failed; the single `tier=B_PERMUTER` was a win. `share=` is likewise unrelated to outcome. |
-| `current_percent` | **Stale by up to 12 points** (DB 94.94 vs measured 86.1; DB 53.47 vs measured 41.1). Do not band on it — re-measure with `mcp__orchestrator__run_objdiff` passing `project_dir`. |
-| `has_prologue_mismatch` | **Identically 0 for every row** — the detector never populated it. The "PROLOGUE_MISMATCH is a positive indicator" heuristic cannot be applied from the DB at all. |
+| `current_percent` | **Staleness is unbounded, not merely large.** The ninja `SYNC DB` step deliberately does not write this column but *does* bump `updated_at`, so **`updated_at` is not a freshness signal**, and it exits 0 even when the fleet holds the DB lock. Measured minutes after a sync: 818 of 31,387 comparable rows off by >0.5pp, worst ~65pp, both directions. Never band on it — re-measure with `mcp__orchestrator__run_objdiff` passing `project_dir`. Mechanism: [tools/REFERENCE.md](../../tools/REFERENCE.md#trust-caveats--read-before-believing-a-column). |
+| `has_prologue_mismatch` | **Identically 0 for every row** (`SUM=0`, `COUNT(DISTINCT)=1` over all 52,546 rows) — the detector never populated it. The "PROLOGUE_MISMATCH is a positive indicator" heuristic cannot be applied from the DB at all. |
 | `has_register_swap=1` | Can be **pure noise**. One sampled function was 88 inserts / 88 deletes — an incomplete reconstruction, not a swap case. |
+
+> **Retracted 2026-08-04: the `tier=` finding.** An earlier draft of this section reported
+> that `tier=` had no discriminative power and was mildly anti-correlated (9/10 sampled
+> `A_HAND_FIXABLE`, 8 of 9 failed). That claim **could not be substantiated** — there is no
+> `tier` column in `decomp.db`'s `functions` table, in `attempts`, or in any view; the only
+> `tier` in the orchestrator is the unrelated `model_tier` in `model_selection.py`. Do not
+> cite the figure. Whatever field it actually referred to (possibly something in the
+> recon/health tooling) needs re-identifying before any claim about it is made.
 
 Budget a follow-up sweep at **~1 win per 3 functions**, scoped to the statement-level half
 of the bucket ([Triage Split](fixable-liveness.md#triage-split-statement-level-vs-within-one-expression)).

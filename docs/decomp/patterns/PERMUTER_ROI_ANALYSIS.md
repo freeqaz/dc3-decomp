@@ -171,10 +171,11 @@ Numbers for planning a pass over the AT_LIMIT + `REGISTER_SWAP` bucket:
 Do **not** budget an unfiltered pass at the post-filter rate. The filter is the
 [Triage Split](fixable-liveness.md#triage-split-statement-level-vs-within-one-expression):
 open statement-level residuals, skip anything confined to one flat arithmetic expression.
-Two DB fields that look like they should route the sweep do not — `tier=` has no
-discriminative power (mildly *anti*-correlated: 8 of 9 `A_HAND_FIXABLE` failed, the lone
-`B_PERMUTER` was a win) and `current_percent` is stale by up to 12 points. Re-measure per
-candidate with `run_objdiff` and `project_dir`.
+Do **not** band or sort candidates on the DB's `current_percent`: its staleness is
+unbounded (the `SYNC DB` step does not write it yet bumps `updated_at`; 818 of 31,387 rows
+off by >0.5pp minutes after a sync, worst ~65pp). Re-measure per candidate with
+`run_objdiff` and `project_dir` — see
+[tools/REFERENCE.md: Trust caveats](../../tools/REFERENCE.md#trust-caveats--read-before-believing-a-column).
 
 The real return is not the percentage: that sweep found **12 live behavioural bugs**
 (1 in the blind audit, 11 in the lanes) in a bucket labelled unfixable. Budget for that

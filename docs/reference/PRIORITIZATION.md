@@ -121,9 +121,12 @@ this was measured, not argued:
   ≥ 32. A later seven-lane sweep of the same bucket found **11 more** behavioural
   defects, including a comprehensively broken OSC parser and four permanent locale
   tables allocated on the temp heap.
-- **Do not band on the DB's `current_percent`** (stale by up to 12 points) or route on
-  `tier=` / `share=` (no discriminative power; `tier` is mildly anti-correlated with
-  outcome). Re-measure with `mcp__orchestrator__run_objdiff` passing `project_dir`.
+- **Do not band on the DB's `current_percent`.** Its staleness is *unbounded*: the ninja
+  `SYNC DB` step deliberately does not write the column but does bump `updated_at`, and
+  exits 0 when the fleet holds the lock. Measured minutes after a sync, 818 of 31,387
+  comparable rows were off by >0.5pp, the worst by ~65pp. Re-measure with
+  `mcp__orchestrator__run_objdiff` passing `project_dir` — see
+  [tools/REFERENCE.md: Trust caveats](../tools/REFERENCE.md#trust-caveats--read-before-believing-a-column).
 
 So AT_LIMIT is a **deprioritization signal, not an exclusion**. If you do sweep it,
 scope to the statement-level half
