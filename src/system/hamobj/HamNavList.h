@@ -142,6 +142,7 @@ private:
     void DetermineHighlightedItem();
     bool InControllerMode() const;
     bool InVoiceMode() const;
+    HamListRibbon::RibbonMode RibbonMode() const { return mRibbonMode; }
     float GetTargetSwellAmount(int);
 
     static const int sListStateMaxDisplay;

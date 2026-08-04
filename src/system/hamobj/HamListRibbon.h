@@ -88,7 +88,7 @@ public:
     void SetDisengageFrame(float);
 
     Sound *SlideSound() const { return mSlideSound; }
-    RndAnimatable *SlideSoundAnim() const { return mSlideSoundAnim; }
+    const ObjPtr<RndAnimatable> &SlideSoundAnim() const { return mSlideSoundAnim; }
     Sound *ScrollSound() const { return mScrollSound; }
     RndAnimatable *ScrollSoundAnim() const { return mScrollSoundAnim; }
     RndAnimatable *EnterAnim() const { return mEnterAnim; }

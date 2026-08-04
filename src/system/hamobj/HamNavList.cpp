@@ -355,7 +355,8 @@ void HamNavList::Poll() {
     if (SkipPoll()) {
         // When skipping poll but ribbon resource exists, reset slide sound anim
         if (mListRibbonResource) {
-            RndAnimatable *slideSoundAnim = mListRibbonResource->SlideSoundAnim();
+            const ObjPtr<RndAnimatable> &slideSoundAnim =
+                mListRibbonResource->SlideSoundAnim();
             if (slideSoundAnim) {
                 slideSoundAnim->SetFrame(0.0f, 1.0f);
             }
@@ -443,13 +444,13 @@ void HamNavList::Poll() {
 
     // Reset the scroll direction whenever the list isn't being hand-scrolled:
     // disengaged, driven by a controller, or driven by voice.
-    if (mRibbonMode == HamListRibbon::kRibbonDisengaged || InControllerMode()
+    if (RibbonMode() == HamListRibbon::kRibbonDisengaged || InControllerMode()
         || InVoiceMode()) {
         mScrollBehavior.mScrollDir = 0;
     }
 
     // If disengaged and in controller mode, switch to swell
-    if (mRibbonMode == HamListRibbon::kRibbonDisengaged) {
+    if (RibbonMode() == HamListRibbon::kRibbonDisengaged) {
         bool inControllerMode = TheGestureMgr && TheGestureMgr->InControllerMode();
         if (inControllerMode) {
             SetRibbonMode(HamListRibbon::kRibbonSwell);

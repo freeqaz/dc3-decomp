@@ -311,21 +311,26 @@ void RndRibbon::UpdateChase() {
                 memcpy(&mTransforms[dstIdx], &mTransforms[srcIdx], sizeof(Key<Transform>));
                 srcIdx++;
                 dstIdx++;
-            } while (srcIdx < mTransforms.size());
+                numKeys = mTransforms.size();
+            } while (srcIdx < numKeys);
         }
         key.frame = 0.0f;
         mTransforms.resize(numKeys - removeCount, key);
-        key.value = Transform::IDXfm();
         key.frame = 0.0f;
+        key.value = Transform::IDXfm();
         if (mTransforms.size() == 0) {
-            key.value.v = followed;
             key.frame = now;
+            key.value.v = followed;
             mTransforms.push_back(key);
         } else {
             float step = mDecay / mNumSegments;
             float minDistSq = mWidth * mWidth * 0.125f;
             float nextTime = mTransforms.back().frame + step;
             while (now > nextTime) {
+                // NOTE: caching `&mTransforms.back()` in a named local reproduces the
+                // target's +0x30/+0x40 element-relative offsets but costs a register
+                // (85.8% vs 86.7%) — the shipped build reloads mTransforms.mEnd every
+                // iteration instead of keeping it live. Do not re-try.
                 key.frame = mTransforms.back().frame + step;
                 Interp(
                     mTransforms.back().value.v,
@@ -348,6 +353,12 @@ void RndRibbon::UpdateChase() {
 
     int firstDirty = mTransforms.size() - added;
     if (firstDirty < mTransforms.size()) {
+        // Declared outside the loop: the shipped build keeps its three components in
+        // callee-saved FPRs across iterations (the preheader loads their stack homes
+        // before anything writes them). Only read when the `2 < i` branch below wrote
+        // it in the same iteration, since `angle` is reset to -1 every iteration and
+        // gates both.
+        Vector3 smoothDir;
         float prevAngle = -1.0f;
         for (int i = firstDirty; i < mTransforms.size(); ++i) {
             if (i != 0) {
@@ -357,7 +368,6 @@ void RndRibbon::UpdateChase() {
                 Subtract(cur.value.v, prev.value.v, dir);
                 Normalize(dir, dir);
 
-                Vector3 smoothDir;
                 float angle = -1.0f;
                 if (2 < i) {
                     Vector3 prevDir;
@@ -385,9 +395,8 @@ void RndRibbon::UpdateChase() {
                 if (angle != -1.0f) {
                     Hmx::Matrix3 inv;
                     Invert(result.m, inv);
-                    Vector3 localSmooth;
-                    Multiply(smoothDir, inv, localSmooth);
-                    float clamped = Clamp(0.0f, 1.0f, localSmooth.x);
+                    Multiply(smoothDir, inv, smoothDir);
+                    float clamped = Clamp(0.0f, 1.0f, smoothDir.x);
                     float a = std::acos(clamped);
                     float cosHalf = std::cos(angle * 0.5f);
                     float invCos = 1.0f / cosHalf;
