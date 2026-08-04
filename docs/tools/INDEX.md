@@ -7,6 +7,7 @@ Which tool to use for decomp work. For scripts, commands, and reference material
 | Doc | Description |
 |-----|-------------|
 | **[WORKFLOW.md](WORKFLOW.md)** | **Decision guide: which tool to use when** |
+| [BUILD_SYSTEM.md](BUILD_SYSTEM.md) | The split pipeline: how `ninja` gets from `default.xex` to target objects, the `symbols.txt` dependency (already wired — settled), dtk's fixed-point invariant, and why nothing rebuilds `dtk`/`objdiff-cli` for you |
 
 ## MCP Orchestrator Tools (Primary Interface)
 
@@ -14,10 +15,10 @@ Prefer `mcp__orchestrator__` tools for decomp analysis. Use CLI directly for adv
 
 | Tool | Description |
 |------|-------------|
-| `run_objdiff` | Build + diff a function. Returns match%, verdict. Source of truth for percentages. Supports `full_listing` for complete instruction output. |
+| `run_objdiff` | Build + diff a function. Returns match%, verdict. Source of truth for percentages. Supports `full_listing` for complete instruction output. **Always pass `project_dir`** — omitting it silently measures the main repo instead of your worktree, making your edits invisible. |
 | `run_diff_inspect` | Deep mismatch analysis: `diagnose`, `mismatches`, `clusters`, `regswaps`, `offsets`, `replaces`, `compare`, `asm_listing` |
 | `run_analyze_function` | Combined objdiff + struct offset resolution for field-level context |
-| `query_functions` | Find workable functions by unit pattern and match range |
+| `query_functions` | Find workable functions by unit pattern and match range. **Work-selection index, not a measurement** — `current_percent` drifts (818/31,387 rows off by >0.5pp, worst ~65pp, measured 2026-08-04) and `has_prologue_mismatch` is identically 0 for every row. Re-measure with `run_objdiff`; see [REFERENCE.md § Trust caveats](REFERENCE.md#trust-caveats--read-before-believing-a-column) |
 | `lookup_rb3` | Search RB3 codebase for reference implementations (shared Milo engine) |
 | `get_rb3_pair` | Get RB3 file pairing info + optional source for a DC3 unit |
 | `get_rb2_class_info` | Class layout from RB2 DWARF dump (member offsets, sizes, inheritance) |
