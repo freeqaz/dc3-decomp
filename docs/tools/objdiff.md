@@ -154,9 +154,9 @@ objdiff-cli diff -p . "Game::Poll" -f json --include-instructions
 
 For comprehensive usage information, see:
 
-- **[OBJDIFF_CLI_USAGE.md](../OBJDIFF_CLI_USAGE.md)** - Main usage guide with examples
-- **[OBJDIFF_CLI_COMMANDS.md](../OBJDIFF_CLI_COMMANDS.md)** - Full command reference
-- **[OBJDIFF_LEARNINGS.md](../OBJDIFF_LEARNINGS.md)** - Patterns and lessons learned from decomp work
+- **[objdiff/USAGE.md](objdiff/USAGE.md)** - Main usage guide with examples
+- **[objdiff/CLI_OPTIONS.md](objdiff/CLI_OPTIONS.md)** - Full command reference
+- **[objdiff/LEARNINGS.md](objdiff/LEARNINGS.md)** - Patterns and lessons learned from decomp work
 - **[objdiff/JSON_EXTENSIONS.md](objdiff/JSON_EXTENSIONS.md)** - Fork-only JSON: data-symbol diffs (`--include-data`, vtables/init data) + instruction branch graph (see the `/data-diff` skill)
 
 ## Typical Workflow

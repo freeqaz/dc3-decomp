@@ -32,7 +32,7 @@ Prefer `mcp__orchestrator__` tools for decomp analysis. Use CLI directly for adv
 |------|-------------|-----|
 | [analyze-function](ANALYZE_FUNCTION.md) | Combined objdiff + Ghidra analysis (start here) | [ANALYZE_FUNCTION.md](ANALYZE_FUNCTION.md) |
 | [objdiff](objdiff.md) | Assembly diffing and function matching analysis | [objdiff.md](objdiff.md) |
-| diff_inspect | Deep mismatch analysis (diagnose, clusters, regswaps, offsets, replaces, compare) | [WORKFLOW.md](WORKFLOW.md#diff_inspect) |
+| diff_inspect | Deep mismatch analysis (diagnose, clusters, regswaps, offsets, replaces, compare) | [WORKFLOW.md](WORKFLOW.md#diff_inspect--deep-mismatch-analysis) |
 | [Ghidra + pyghidra-mcp](GHIDRA.md) | Binary analysis, decompilation, and type seeding via MCP | [GHIDRA.md](GHIDRA.md) |
 | [Ghidra Manual Setup](GHIDRA_MANUAL_SETUP.md) | GUI-only Ghidra setup (no MCP) — symbol import, fork install | [GHIDRA_MANUAL_SETUP.md](GHIDRA_MANUAL_SETUP.md) |
 | [XEXLoaderWV](XEXLOADERWV.md) | Ghidra extension for Xbox 360 XEX files | [XEXLOADERWV.md](XEXLOADERWV.md) |
