@@ -208,6 +208,40 @@ block index ≥ 32.)
 
 ---
 
+## Landing procedure — commit messages are the deliverable
+
+The per-commit messages from the lanes are **the most valuable artifact of this
+sweep**, more than the match-percentage delta. Each one records what the
+assembly said, which source construct produced it, and why the fix works —
+that is the reasoning trace the training-data pipelines mine, and it cannot be
+reconstructed from the final diff.
+
+So the landing rule is not a style preference here, it is a data-integrity
+requirement:
+
+```bash
+# per lane, from the main repo, after the branch is rebased onto main
+git merge --no-ff sweep/regswap-<lane>
+```
+
+- **Never** `cherry-pick`, `squash`, `--ff-only`, `rebase -i` with fixups, or
+  `commit --amend` on a landed lane commit. Every one of those destroys or
+  merges away individual messages.
+- `git rebase` onto main is fine — it rewrites hashes but preserves messages
+  verbatim. If a rebase conflicts badly enough that it tempts you to squash,
+  **merge the un-rebased branch directly instead**; a slightly messier graph is
+  strictly better than a lost message.
+- Write a real merge-commit message per lane: what the lane set out to do, what
+  it found, and what it deliberately did not do. Never accept the default
+  `Merge branch 'x'`.
+- Negative results are first-class. A commit that says "tried X, regressed
+  0.3%, reverted" is worth landing; do not drop those commits when tidying.
+
+Lanes in flight: `sweep/regswap-statement` (coordinator), `sweep/regswap-a`
+… `sweep/regswap-f`, and `sweep/regswap-bam` (single-function deep dive on
+`BustAMovePanel::Poll`, writing to
+`docs/investigations/2026-08-04-bustamovepanel-poll.md`).
+
 ## Method notes for the next sweep
 
 - Work in a worktree: `scripts/setup_worktree.sh <path> <branch>`. Fresh
