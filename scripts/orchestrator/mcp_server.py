@@ -751,7 +751,7 @@ class DecompMCPServer:
                             },
                             "project_dir": {
                                 "type": "string",
-                                "description": "Project directory to build from. Pass your worktree directory here to test your changes.",
+                                "description": "Project directory to build from. Pass your worktree directory here to test your changes. Must be a worktree of THIS project (title 373307D9) -- a foreign repo's path raises CrossProjectError; use that repo's own orchestrator instead.",
                             },
                             "context": {
                                 "type": "integer",
@@ -794,7 +794,7 @@ class DecompMCPServer:
                             },
                             "project_dir": {
                                 "type": "string",
-                                "description": "Project directory to build from. Pass your worktree directory here to test your changes.",
+                                "description": "Project directory to build from. Pass your worktree directory here to test your changes. Must be a worktree of THIS project (title 373307D9) -- a foreign repo's path raises CrossProjectError; use that repo's own orchestrator instead.",
                             },
                         },
                         "required": ["symbol", "project_dir"],
@@ -817,7 +817,7 @@ class DecompMCPServer:
                             },
                             "project_dir": {
                                 "type": "string",
-                                "description": "Project directory to build from. Pass your worktree directory here.",
+                                "description": "Project directory to build from. Pass your worktree directory here. Must be a worktree of THIS project (title 373307D9) -- a foreign repo's path raises CrossProjectError; use that repo's own orchestrator instead.",
                             },
                             "baseline_json": {
                                 "type": "string",
