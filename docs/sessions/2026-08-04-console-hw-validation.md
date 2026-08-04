@@ -544,3 +544,42 @@ would exercise the exact same code path.
    "psize + boot version string = new-build marker" check in `xbox.sh verify`.
 4. **`DTA-EVAL.md` example is wrong**: `{print "hi"}` returns `"hi"` (quoted), not `hi`.
 5. Untested on hardware still: truncation banner, `409`, `504`, refusal marker.
+
+---
+
+## Post-battery: idle stability, and a second unexplained title death
+
+After the battery passed, the title was left idle for a few minutes while this file was written. It
+then **stopped on its own** — `getexecstate` -> `200- stop`, `/dta/eval` timing out — with no script
+sent in between (`hw_smoke.py`'s stage-3 probe is only `{print "hi"}`, which had already passed
+repeatedly). It had been sitting on `intro_movie_screen`.
+
+Recovered with `magicboot cold` (XBDM back in 24s) + `magicboot` into RB3. The user confirms the
+console is now sitting on the **RB3 title screen**, past the intro movie. In that state it is
+**stable**:
+
+```
+/dta/eval answering after 26.1s
+idle stability, 8 probes at 30s intervals over 4 minutes:  8/8  200 OK
+```
+
+So the earlier death correlates with the **intro-movie / attract screen**, not with the DTA channel.
+Not root-caused; flagging it because it means an unattended run parked on the intro movie is not a
+reliable harness, while the title screen is.
+
+## Why the song-library amplifier could not work
+
+`DTAFunctions.c:212-234`: `rb3e_get_song_name` does
+`GetMetadata((BandSongMgr *)PORT_THESONGMGR, firstArg->value.intVal)` — the argument is a **song
+ID**, not a 0-based list index. Indices 0..29 therefore all miss and return the
+`rb3e_no_song_name` symbol, on the title screen just as on the intro screen (re-tested with the
+library loaded and `{rb3e_get_song_count}` -> `4419`; ratio still 0.93).
+
+Even with real song IDs the ratio would be ~1.2 — still under the 2x needed to reach 32768 from a
+16383-byte request. **The output-cap conclusion above stands independently of screen state.**
+
+## Final console state
+
+RB3 running on the title screen, wine-packed `bd6959a` DLL loaded, `/dta/eval` answering and stable
+over a 4-minute idle. Three `magicboot cold` recoveries this session, each back in ~24s.
+**Zero physical power-cycles.**
