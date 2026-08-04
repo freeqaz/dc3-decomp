@@ -284,7 +284,12 @@ void UIListDir::FillElement(
             disp = snapped;
         int disp2show = state.Display2Showing(i);
         bool wasNegOne = i == -1;
-        ClampEq(i, 0, state.NumDisplay());
+        int numDisplay = state.NumDisplay();
+        if (i > numDisplay) {
+            i = numDisplay;
+        } else if (i < 0) {
+            i = 0;
+        }
         FOREACH (it, vec) {
             (*it)->Fill(*state.Provider(), i, disp2show, disp);
             if (wasNegOne && snapped >= 0) {
