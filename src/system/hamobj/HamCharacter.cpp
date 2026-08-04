@@ -553,8 +553,9 @@ bool HamCharacter::GetPropShowing(int prop) {
 
 void HamCharacter::SetPropShowing(int prop, bool show) {
     if (mShowableProps.size() > prop) {
-        if (mShowableProps[prop])
-            mShowableProps[prop]->SetShowing(show);
+        RndDrawable *drawable = mShowableProps[prop];
+        if (drawable)
+            drawable->SetShowing(show);
     }
 }
 
