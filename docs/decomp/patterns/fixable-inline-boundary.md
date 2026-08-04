@@ -389,9 +389,18 @@ for a 10-parameter ctor), and the correct conclusion was that the lever does
 not apply to that function. Do the census, record the zero, and move to another
 lever.
 
-**Unverified for optimized builds.** Every observation here comes from DC3's
-*debug* target. Whether a retail `/O1` MSVC PPC build emits these home writes
-at all is an open question — see the rb3-xenon port for the answer.
+**ANSWERED: the lever survives retail `/O1`.** I originally predicted these
+home writes were a low-optimization artifact that an optimized build would
+elide. That prediction was **wrong**. A whole-binary census on rb3-xenon —
+Rock Band 3, retail `/O1 /Oi /GR /EHsc`, a *different compiler build*
+(10224 vs DC3's 11886) — found **8,711 of 82,230 functions (10.59%)** carrying
+dead home stores, 23,378 in total, **7,715 of them with the exact
+`addi`-then-store signature** described above. DC3's debug target reads
+**10.34%** — essentially the same rate. Verbatim rb3 instance:
+`addi r25, r24, 0x90` / `stw r25, 0x50(r31)`.
+
+So this is a property of the **MSVC PowerPC ABI**, not of the optimization
+level, and the lever is portable across both trees.
 
 ---
 
