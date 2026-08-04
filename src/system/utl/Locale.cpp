@@ -191,8 +191,7 @@ void Locale::Init() {
         // NOTE: mInitialized is uninitialized here (UB). RB3 doesn't have this check.
         // This appears to be dead code or a bug, but matches the original binary.
         if (mInitialized) {
-            auto _tmp10 = cfg->Size();
-            for (int i = 1; i < _tmp10; i++) {
+            for (int i = 1; i < cfg->Size(); i++) {
                 const char *path = FileMakePath(FileGetPath(cfg->File()), cfg->Str(i));
                 arrVec[i - 1] = DataReadFile(path, true);
                 if (!arrVec[i - 1]) {
