@@ -220,11 +220,26 @@ for (ObjDirItr<RndDrawable> it(dir, true); it != nullptr; ++it) {
 
 ## Pre-Compute References Before Clobbering Calls
 
+<!-- ANCHOR CONTRACT: #pre-compute-references-before-clobbering-calls is the rendered
+     [docs] link objdiff-cli emits for REGISTER_SWAP and PROLOGUE_MISMATCH. Do not
+     rename this heading without re-pointing objdiff. See INDEX.md "Anchor contract". -->
+
 **Impact:** +5-18%
 **Success Rate:** HIGH
 **Time:** 5 minutes
 
 Compute a derived pointer/reference before a function call that could clobber the base pointer's register, rather than reloading the base pointer from memory after the call.
+
+> **If you arrived here from an objdiff `REGISTER_SWAP` hint:** this is the right family
+> — the swap is almost certainly a **liveness** symptom, not a coloring accident — but
+> read **[fixable-liveness.md](fixable-liveness.md)** for the full set of levers and the
+> diagnostic that picks between them in ~5 minutes. Quick triage:
+> `[callee-saved]` swaps → liveness across calls (this pattern, and
+> [Lever 1](fixable-liveness.md#lever-1--live-range-shortening-read-the-args-back-out-of-the-aggregate-you-just-built)
+> / [Lever 2](fixable-liveness.md#lever-2--call-through-the-cached-local-dont-re-load-the-member-at-the-call-site));
+> `[volatile]` swaps → [scheduling and operand order](fixable-liveness.md#lever-3--fix-the-schedule-first-then-the-comparison-polarity).
+> Do **not** start with [declaration reorder](#variable-declaration-order) — it is
+> measured inert for register-only swaps.
 
 ### Symptom
 
@@ -781,6 +796,10 @@ for (int i = 3; i < a->Size(); i++) {
 ---
 
 ## Offset Swap
+
+<!-- ANCHOR CONTRACT: #offset-swap is referenced by objdiff-cli's OFFSET_SWAP hint.
+     Deliberately lives in declarations: scoping/packing moves stack slots. Do not
+     rename. See INDEX.md "Anchor contract". -->
 
 **Impact:** +1-5%
 **Success Rate:** 60%
