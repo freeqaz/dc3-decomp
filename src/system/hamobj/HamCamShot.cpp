@@ -248,9 +248,10 @@ void HamCamShot::UpdateTargetsFlipped() {
                  kit != mKeyframes.end();
                  ++kit) {
                 CamShotFrame &frame = *kit;
+                ObjPtrList<RndTransformable> &frameTargets = frame.mTargets;
                 std::vector<RndTransformable *> newTargets;
-                for (ObjPtrList<RndTransformable>::iterator tit = frame.mTargets.begin();
-                     tit != frame.mTargets.end();
+                for (ObjPtrList<RndTransformable>::iterator tit = frameTargets.begin();
+                     tit != frameTargets.end();
                      ++tit) {
                     RndTransformable *target = *tit;
                     const char *name = target->Name();
@@ -283,13 +284,13 @@ void HamCamShot::UpdateTargetsFlipped() {
                     }
                     newTargets.push_back(newTarget);
                 }
-                while (!frame.mTargets.empty()) {
-                    frame.mTargets.pop_back();
+                while (!frameTargets.empty()) {
+                    frameTargets.pop_back();
                 }
                 for (std::vector<RndTransformable *>::iterator jit = newTargets.begin();
                      jit != newTargets.end();
                      ++jit) {
-                    frame.mTargets.push_back(*jit);
+                    frameTargets.push_back(*jit);
                 }
             }
         }
