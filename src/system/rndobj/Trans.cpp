@@ -168,21 +168,17 @@ BEGIN_LOADS(RndTransformable)
         }
     }
 
-    auto _arg0 = mConstraint + kConstraintLocalRotate;
-    switch (gRev) {
-    default:
+    if (gRev > 8) {
         bs >> (int &)mConstraint;
-        break;
-    case 7:
-    case 8:
+    } else if (gRev > 6) {
         bs >> (int &)mConstraint;
-        if (mConstraint == 4) {
+        if (mConstraint == kConstraintShadowTarget) {
             mConstraint = kConstraintNone;
-        } else if (mConstraint == 2 || mConstraint == 3 || mConstraint == 4) {
-            mConstraint = (Constraint)(_arg0);
+        } else if (mConstraint > kConstraintLocalRotate
+                   && mConstraint < kConstraintBillboardZ) {
+            mConstraint = (Constraint)(mConstraint + kConstraintLocalRotate);
         }
-        break;
-    case 6:
+    } else if (gRev == 6) {
         bs >> (int &)mConstraint;
         mPreserveScale = mConstraint > kConstraintTargetWorld;
         if (mConstraint > 9) {
@@ -192,15 +188,15 @@ BEGIN_LOADS(RndTransformable)
         } else if (mConstraint == 2) {
             mConstraint = kConstraintParentWorld;
         }
-        break;
-    case 3:
-    case 4:
-    case 5:
-        int unkb0;
-        bs >> unkb0;
-        mPreserveScale = unkb0;
+    } else if (gRev >= 3) {
+        // Rev 3-5 packed the constraint mode and the preserve-scale flag into one
+        // int: bit 0x80 is preserve-scale, the low bits select the billboard mode
+        // (hence the 0x04/0x84, 0x08/0x88, ... case pairs below).
+        int packedConstraint;
+        bs >> packedConstraint;
+        mPreserveScale = (packedConstraint & 0x80) != 0;
 
-        switch (unkb0) {
+        switch (packedConstraint) {
         case 0x4:
         case 0x84:
             mConstraint = kConstraintBillboardZ;
@@ -224,21 +220,18 @@ BEGIN_LOADS(RndTransformable)
             mConstraint = kConstraintNone;
             break;
         }
-        break;
-    case 1:
-    case 2: {
-        unsigned int numb4;
-        bs >> (int &)numb4;
-        int sp80[6] = { 0, 0, 0, 5, 6, 7 };
-                                if (numb4 >= 0x18) {
-                    mConstraint = kConstraintNone;
-                } else {
-                    mConstraint = (Constraint)sp80[numb4];
-                }
-        break;
-    }
-    case 0:
-        break;
+    } else if (gRev > 0) {
+        unsigned int legacyConstraint;
+        bs >> (int &)legacyConstraint;
+        // NOTE: the bound below is 0x18 but the table only has 6 entries; that is
+        // what the original binary does, so indices 6..23 read past the end of the
+        // array.  Preserved deliberately -- do not "fix" without changing the asm.
+        int legacyConstraintMap[6] = { 0, 0, 0, 5, 6, 7 };
+        if (legacyConstraint >= 0x18) {
+            mConstraint = kConstraintNone;
+        } else {
+            mConstraint = (Constraint)legacyConstraintMap[legacyConstraint];
+        }
     }
     if (gRev > 0 && gRev < 7) {
         Vector3 v;

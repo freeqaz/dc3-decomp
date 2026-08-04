@@ -133,67 +133,58 @@ float FlowMathOp::Apply(float val) {
             DataArray *script = found->FindArray("script", true);
             DataVariable("val") = DataNode(val);
             DataVariable("prop_val") = DataNode(rhs);
-            rhs = script->Node(1).Float(script);
+            return script->Node(1).Float(script);
         }
         break;
     }
     case kMathOp_Add:
-        rhs = rhs + val;
-        break;
+        return rhs + val;
     case kMathOp_Subtract:
-        rhs = val - rhs;
-        break;
+        return val - rhs;
     case kMathOp_Multiply:
-        rhs = rhs * val;
-        break;
+        return rhs * val;
     case kMathOp_Divide:
         if (rhs == 0.0f) {
             rhs = 0.0001f;
         }
-        rhs = val / rhs;
-        break;
+        return val / rhs;
     case kMathOp_Random: {
         float r = RandomFloat(0, rhs * 2.0f);
-        rhs = (r - rhs) + val;
-        break;
+        return (r - rhs) + val;
     }
     case kMathOp_Min:
         if (val >= rhs) {
             return val;
         }
-        break;
+        return rhs;
     case kMathOp_Max:
         if (val <= rhs) {
             return val;
         }
-        break;
+        return rhs;
     case kMathOp_Mod:
         if (rhs <= 0.0f) {
             return val;
         }
-        rhs = (float)fmod(val, rhs);
-        break;
+        return (float)fmod(val, rhs);
     case kMathOp_Round:
         if (rhs == 0.0f) {
             rhs = 1.0f;
         }
         val = (float)(int)((val + rhs * 0.5f) / rhs);
-        rhs = val * rhs;
-        break;
+        return val * rhs;
     case kMathOp_Floor:
         if (rhs <= 0.0f) {
             rhs = 1.0f;
         }
         val = (float)floor(val / rhs);
-        rhs = val * rhs;
-        break;
+        return val * rhs;
     case kMathOp_Ceil:
         if (rhs <= 0.0f) {
             rhs = 1.0f;
         }
         val = (float)ceil(val / rhs);
-        rhs = val * rhs;
-        break;
+        return val * rhs;
     case kMathOp_NormalizeDb: {
         float neg_val = -val;
         float absVal = (neg_val >= 0.0f) ? 0.0f : val;
@@ -201,8 +192,7 @@ float FlowMathOp::Apply(float val) {
         if (rhs != 0.0f) {
             clamped = clamped / rhs;
         }
-        rhs = RatioToDb(clamped);
-        break;
+        return RatioToDb(clamped);
     }
     case kMathOp_InvNormalizeDb: {
         float neg_val = -val;
@@ -212,21 +202,16 @@ float FlowMathOp::Apply(float val) {
             clamped = clamped / rhs;
         }
         clamped = 1.0f - clamped;
-        rhs = RatioToDb(clamped);
-        break;
+        return RatioToDb(clamped);
     }
     case kMathOp_Abs:
-        rhs = fabsf(val);
-        break;
+        return fabsf(val);
     case kMathOp_Sin:
-        rhs = (float)sin(val);
-        break;
+        return (float)sin(val);
     case kMathOp_Cos:
-        rhs = (float)cos(val);
-        break;
+        return (float)cos(val);
     case kMathOp_Pow:
-        rhs = (float)pow(val, rhs);
-        break;
+        return (float)pow(val, rhs);
     case -1:
         break;
     default:

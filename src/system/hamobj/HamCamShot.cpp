@@ -157,8 +157,8 @@ void HamCamShot::UpdateTargetsFlipped() {
     static Symbol dance_battle("dance_battle");
 
     bool flipped = AreTargetsFlipped();
-    Symbol mode = TheHamProvider->Property(gameplay_mode, true)->Sym(NULL);
-    bool isDanceBattle = (mode == dance_battle);
+    bool isDanceBattle =
+        TheHamProvider->Property(gameplay_mode, true)->Sym(NULL) == dance_battle;
 
     if (TheHamDirector) {
         TheHamDirector->SetPhraseMetersFlipped(flipped);
@@ -174,17 +174,18 @@ void HamCamShot::UpdateTargetsFlipped() {
         static Symbol BattleIntro("BattleIntro");
 
         if (isDanceBattle && flipped) {
-            Symbol stage = TheHamProvider->Property(game_stage, true)->Sym(NULL);
-            if (stage == intro) {
+            if (TheHamProvider->Property(game_stage, true)->Sym(NULL) == intro) {
                 TheDebug << MakeString("Camshot %s\n", (char *)Name());
                 int targetIdx = 0;
                 for (ObjList<Target>::iterator it = mTargets.begin();
                      it != mTargets.end();
                      ++it) {
                     HamCharacter *character = CharacterNameToCharacter(it->mTarget);
-                    ObjectDir *clipsDir = NULL;
+                    ObjectDir *clipsDir;
                     if (character != NULL) {
                         clipsDir = character->Find<ObjectDir>("clips", true);
+                    } else {
+                        clipsDir = NULL;
                     }
 
                     if (((mPlayerFlag == kHamPlayer1 && targetIdx % 2 == 0)
@@ -247,9 +248,10 @@ void HamCamShot::UpdateTargetsFlipped() {
                  kit != mKeyframes.end();
                  ++kit) {
                 CamShotFrame &frame = *kit;
+                ObjPtrList<RndTransformable> &frameTargets = frame.mTargets;
                 std::vector<RndTransformable *> newTargets;
-                for (ObjPtrList<RndTransformable>::iterator tit = frame.mTargets.begin();
-                     tit != frame.mTargets.end();
+                for (ObjPtrList<RndTransformable>::iterator tit = frameTargets.begin();
+                     tit != frameTargets.end();
                      ++tit) {
                     RndTransformable *target = *tit;
                     const char *name = target->Name();
@@ -263,7 +265,7 @@ void HamCamShot::UpdateTargetsFlipped() {
                     } while (c != '\0');
 
                     RndTransformable *newTarget = target;
-                    if (!flipped) {
+                    if (flipped) {
                         if (strstr(name, "player0") && mPlayerFlag == kHamPlayer0) {
                             buf[6] = '1';
                             newTarget = venueWorld2->Find<RndTransformable>(buf, true);
@@ -282,13 +284,13 @@ void HamCamShot::UpdateTargetsFlipped() {
                     }
                     newTargets.push_back(newTarget);
                 }
-                while (!frame.mTargets.empty()) {
-                    frame.mTargets.pop_back();
+                while (!frameTargets.empty()) {
+                    frameTargets.pop_back();
                 }
                 for (std::vector<RndTransformable *>::iterator jit = newTargets.begin();
                      jit != newTargets.end();
                      ++jit) {
-                    frame.mTargets.push_back(*jit);
+                    frameTargets.push_back(*jit);
                 }
             }
         }
