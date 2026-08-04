@@ -2394,8 +2394,9 @@ void MoveDir::PostUpdateFilters() {
                                 n, moveMode, detectFrame->Mirror()
                             );
                         if (nodeWeight.mActive) {
-                            int feedbackLimbs = (*errorNodes)->GetFeedbackLimbs();
+                            const ErrorNode *node = *errorNodes;
                             const Vector3 &bestError = detectFrame->BestNodeError(n);
+                            int feedbackLimbs = node->GetFeedbackLimbs();
                             float errVal = bestError.x;
                             for (int limb = 0; limb < 4; limb++) {
                                 if ((1 << limb) & feedbackLimbs) {
