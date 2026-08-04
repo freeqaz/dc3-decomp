@@ -1593,10 +1593,10 @@ void BustAMovePanel::Poll() {
             mBAMVisualizerPanel->DataDir()->Find<RndTex>("gradient_pink.tex", true);
         RndTex *blueTex =
             mBAMVisualizerPanel->DataDir()->Find<RndTex>("gradient_blue.tex", true);
-        bool isPlayer0Pink = false;
-        if (TheGameData->Player(0)->Side() == kSkeletonLeft
-            && GetPlayerColor(0) == "pink") {
-            isPlayer0Pink = true;
+        bool isPlayer0Pink = true;
+        if (TheGameData->Player(0)->Side() != kSkeletonLeft
+            || GetPlayerColor(0) != "pink") {
+            isPlayer0Pink = false;
         }
         for (ObjDirItr<DepthBuffer3D> it(mBAMVisualizerPanel->DataDir(), true);
              it != nullptr; ++it) {
