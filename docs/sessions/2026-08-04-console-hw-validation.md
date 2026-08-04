@@ -583,3 +583,90 @@ Even with real song IDs the ratio would be ~1.2 — still under the 2x needed to
 RB3 running on the title screen, wine-packed `bd6959a` DLL loaded, `/dta/eval` answering and stable
 over a 4-minute idle. Three `magicboot cold` recoveries this session, each back in ~24s.
 **Zero physical power-cycles.**
+
+---
+
+# ADDENDUM — the native LZX packer is FIXED and now HARDWARE-VERIFIED
+
+A parallel offline investigation root-caused the packer defect, and I then ran the hardware gate on
+its fix. **It loads.** The wine/XexTool dependency in the RB3Enhanced ship path is now closed.
+
+## Root cause (offline analysis, read out of `reference/hv_kernel_17489.bin`)
+
+Not alignment alone — **two** loader constraints on `block.Size`, both violated by the native
+writer's single 70018-byte (`0x11182`) basefile block:
+
+1. **`block.Size` must be a multiple of `0x800`.** `XexpLoadfile`'s read callback (`0x8009f420`)
+   opens the module with `NtOpenFile(OpenOptions = FILE_NO_INTERMEDIATE_BUFFERING)` at `0x8009f530`.
+   `XexpLoadCompressedImage` (`0x800a5928`) then reads **each block with one `NtReadFile` of exactly
+   `block.Size` bytes** (`800a5ad4 lwz r6,0(r26)`). Unbuffered reads require a sector-multiple
+   length, so the read just fails and the module is dropped with no message — exactly the silent
+   rejection I observed.
+2. **`block.Size` must be <= `0x10000`.** The loader carves two 64 KiB read double-buffers from one
+   arena (`0x800a59d4`, `0x800a5a00`).
+
+Corroborated across **all 74 Format=2 XEX containers on this box** (retail `dash`/`xam`/`xbdm`/
+`hud`/…, game `default.xex`, RGLoader, XexTool output, every hardware-proven RB3E build): 73/74
+within `0x10000`, 72/74 `0x800`-aligned. **The only violators are xex-patcher's own two outputs** —
+`out/RB3Enhanced.dll` (`0x11182`) and `artifacts/outputs/out_c.xex` (`0xFCD6`) — i.e. precisely the
+containers the loader rejected. XexTool fills a block to `0x10000` then zero-pads to `0x800`, and the
+pad is inside the digest (the loader SHA-1s the full `block.Size`, `800a5bb8`).
+
+**Why every existing gate was blind:** the round-trip, the `--emit-decoded` parity gate and the whole
+"offline equivalence" claim all run over the *decoded image*, which was always perfect. The defect
+existed only in the on-disk block framing. My 2048-alignment lead was a symptom of constraint 1.
+
+## The fix — `xex-patcher` commit `f408c91`, branch `hang-capture-tooling`
+
+`lzx_pack.cpp` now emits a proper **block chain** (greedy fill to `0x10000`, terminate, zero-pad to
+`0x800`, descriptors filled back-to-front over the padded payloads); `lzx_decode_chain` walks it like
+the loader and verifies every digest as a mandatory self-test; `main.cpp` hard-gates geometry before
+writing. `xexlint.py` gains `check_basefile_geometry()` — **the rule that would have caught this** —
+which rejects both historical native outputs and passes all 72 known-good containers.
+
+## HARDWARE GATE — PASS
+
+Built from the same untouched `K-link/RB3Enhanced.exe`: **79872 bytes (`% 2048 == 0`)**, blocks
+`0xF800 + 0x2000`, sha256 `53a4ee33…`, `xexlint PASS (8 checks)`.
+
+```
+[05:57:35] [RB3ELoader] Checking GAME:\RB3Enhanced.dll...
+[05:57:36] modload name="RB3Enhanced.dll" base=0x84000000 size=0x00868c00
+[05:57:36] [RB3ELoader] Loaded GAME:\RB3Enhanced.dll!
+[05:58:04] RB3E v0 ALIVE (Xbox360)  *** DLL IS LOADED ON CONSOLE (T5 PASS) ***
+```
+
+And **functionally** verified, not merely mapped:
+
+| check | result |
+|---|---|
+| `{print "native-lzx"}` | `200 OK` `"native-lzx"\n=> 0\n` |
+| `{sprint "a"}{sprint "b"}{rb3e_get_song_count}` | `200 OK` `=> "a"` / `=> "b"` / `=> 4419` |
+| request cap 16384 | `413 Payload Too Large` |
+| request cap 16383 | `200 OK` |
+
+> **VERDICT REVERSED, with hardware evidence both ways.** Earlier this session the native-LZX
+> container was rejected by `XexLoadImage`; with `f408c91` the container built from the *same PE*
+> loads on the first `GAME:\` probe and the DTA-eval channel is fully functional. **`pack-dll.sh`'s
+> wine-free path is now hardware-proven and the `wine xextool -m d -c c` dependency can be dropped.**
+
+Byte-identity with the wine container is **not** achievable and not required: wimlib and XexTool are
+different LZX encoders (69452 vs 67740 stream bytes). Header region `[0, 0x2000)` is 96.26% identical
+with exactly three necessarily-different ranges (RSA signature, HeaderHash, FirstDescriptor
+Size+DataDigest); ImageHash, ImportDigest, LoadAddress, ImageSize, the optional-header directory and
+**all 135 page descriptors** are identical.
+
+## Stale docs to correct (deliberately NOT edited — concurrent agents had uncommitted edits)
+
+- `xex-patcher/docs/BUILD-STATUS.md` and `docs/WINE-FREE-PACK.md` still attribute the failure to
+  "the console LZX decoder doesn't byte-agree with mspack" — **refuted**; it was block geometry.
+- `xex-patcher/docs/M5-LZX-WRITER.md` claims `xextool -b` cannot parse our Format=2 output; it parses
+  both the old and new containers fine. Stale.
+- `RB3Enhanced/tools/oss-xbox-build/pack-dll.sh:17-24` and `docs/BUILD-AND-SHIP.md` still describe
+  the native HW load as PENDING and wine as the only proven path. **Both statements are now
+  obsolete** — update once `f408c91` lands canonical.
+
+## Final console state (updated)
+
+RB3 running with the **fixed native-LZX** `bd6959a` build loaded, `/dta/eval` answering. Four
+`magicboot cold` recoveries this session, each back in ~24s. **Zero physical power-cycles.**
