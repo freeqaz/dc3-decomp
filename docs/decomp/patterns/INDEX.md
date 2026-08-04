@@ -5,6 +5,23 @@ Quick reference for all documented decompilation patterns in DC3 (Dance Central 
 > **Data source:** `decomp.db` — 50,981 functions (34,215 non-excluded). 92.8% COMPLETE, 7.2% AT_LIMIT, 0.04% remaining (14 stubs).
 > **Last updated:** 2026-05-27
 
+## Corrections — read before trusting an older section
+
+- **2026-08-03 — register swaps are symptoms, and declaration reorder is the wrong axis for them.**
+  See **[fixable-liveness.md](fixable-liveness.md)**. Measured on 3 functions
+  (`ObjectDir::Iterate` 99.4%→**100%**, `RndText::FitTextScroll` 92.7%→98.2%,
+  `RndText::SizeCheck` 96.5%→99.1%): 12+ declaration-reorder variants produced
+  **byte-identical** output and a 65-candidate permuter sweep found 0 improvements,
+  yet every function had a one-to-three-line fix on the **liveness** or **scheduling**
+  axis that flipped all its register swaps at once.
+  **Scoping/packing changes move stack slots; liveness/scheduling changes move
+  registers.** Affects
+  [Variable Declaration Order](fixable-declarations.md#variable-declaration-order),
+  [Register Allocation](unfixable-compiler.md#register-allocation), and the
+  `REGISTER_SWAP` routing in [PERMUTER_ROI_ANALYSIS.md](PERMUTER_ROI_ANALYSIS.md).
+  Also promotes a third floor-evidence condition: **Ghidra-decompile the target** and
+  name the construct.
+
 ## Session catalogues
 
 - [permuter-patterns-2026-05-27.md](permuter-patterns-2026-05-27.md) — 3 new patterns (reference_elimination_chain, loop_body_assign_hoist, signed_unsigned_cast_polarity), 15 proposal-stage patterns, tooling fixes (libclang+guards), validated wins on both DC3 and RB3.
@@ -73,7 +90,11 @@ These patterns can often be fixed with source changes. Sorted by ROI (impact x s
 | Function Definition Order ($S#) | +3-5% | 100% | [fixable-declarations.md](fixable-declarations.md#function-definition-order-tu-wide-static-guard-counters) |
 | Hoist Loop Variable for sret | +6% | HIGH | [fixable-declarations.md](fixable-declarations.md#hoist-loop-variable-for-sret-register-matching) |
 | Goto-Based Loop (Deferred Assignment) | +2-3% | MEDIUM | [fixable-control-flow.md](fixable-control-flow.md#goto-based-loop-for-deferred-assignment) |
-| Variable Declaration Order | +1-88% | 30% | [fixable-declarations.md](fixable-declarations.md#variable-declaration-order) |
+| Live-Range Shortening (aggregate projection) | +0.6% (→100%) | n=1 | [fixable-liveness.md](fixable-liveness.md#lever-1--live-range-shortening-read-the-args-back-out-of-the-aggregate-you-just-built) |
+| Call Through Cached Local (not member re-load) | +4% | n=1 | [fixable-liveness.md](fixable-liveness.md#lever-2--call-through-the-cached-local-dont-re-load-the-member-at-the-call-site) |
+| Schedule-Then-Polarity (float compares) | +2.6% | n=1 | [fixable-liveness.md](fixable-liveness.md#lever-3--fix-the-schedule-first-then-the-comparison-polarity) |
+| Scope Declaration Into Using Block (stack packing) | +1.5% | n=1 | [fixable-liveness.md](fixable-liveness.md#lever-4--scope-a-declaration-into-the-block-that-uses-it-stack-lever-not-a-register-lever) |
+| Variable Declaration Order | +1-88% | 30% (**not for register swaps** — see [correction](#corrections--read-before-trusting-an-older-section)) | [fixable-declarations.md](fixable-declarations.md#variable-declaration-order) |
 | Bodyless Copy Constructor | +100% (0→100) | 100% | [fixable-copy-ctor.md](fixable-copy-ctor.md) |
 | Inline Constructor Location | +5-10% | 100% | [fixable-inline-boundary.md](fixable-inline-boundary.md#inline-constructor-in-header-vs-out-of-line-in-cpp) |
 | Sort Comparator Inline Location | +30-50% | 100% | [fixable-inline-boundary.md](fixable-inline-boundary.md#sort-comparator-inline-location-stdsort--std__median) |
@@ -139,7 +160,7 @@ These patterns resist simple source-level fixes. Each documents what would be ne
 | ~~MakeString Array-Size ICF~~ | ~~2,550+ functions~~ | ~~1-5%~~ | [verifiable-icf.md](verifiable-icf.md#makestring-array-size-icf-resolved) — **Resolved** in objdiff (2026-03-03) |
 | LTCG/Global Pooling | varies | 0.5-1% | [verifiable-icf.md](verifiable-icf.md#ltcg-global-pooling) |
 | Float Constant Pooling | common | 1-2 instr | [verifiable-icf.md](verifiable-icf.md#float-constant-pooling) |
-| Register Allocation | ~250 functions | 1-3% | [unfixable-compiler.md](unfixable-compiler.md#register-allocation) (mechanism understood) |
+| Register Allocation | ~250 functions | 1-3% | [unfixable-compiler.md](unfixable-compiler.md#register-allocation) (mechanism understood) — **work [fixable-liveness.md](fixable-liveness.md) first**; the swap is usually a symptom |
 | Dead Store Elimination / Destructor Merging | RAII wrappers | 1-2% | [unfixable-compiler.md](unfixable-compiler.md#dead-store-elimination--destructor-merging) |
 | Anonymous Namespace Hash | common | 0.5-3% | [unfixable-compiler.md](unfixable-compiler.md#anonymous-namespace-hash-mismatch) |
 | Build Env Regression (Headers) | rare | 5-10% | [unfixable-compiler.md](unfixable-compiler.md#build-environment-regression-from-unrelated-headers) |
@@ -190,12 +211,18 @@ Match% 80-95%?
 
 Match% 95-99%?
   → Check for hard patterns first (register swap, merged symbols, address noise).
+  → Register swaps? Do NOT start with variable reorder — see fixable-liveness.md.
+    Check __savegprlr_NN delta (live set), swap-cycle length (live range),
+    producer instruction index (schedule) first.
   → If no hard patterns: try variable reorder, inline assignment.
   → run_diff_inspect mode=diagnose to separate fixable from unfixable diffs.
 
 Match% 99%+ but not 100%?
   → Often hard patterns (linker-merged, register allocation), but verify first.
   → Use run_recon to check for LINKER_MERGED calls.
+  → A pure register rotation with identical instruction counts/sizes is a liveness
+    signal, not a floor — ObjectDir::Iterate went 99.4% → 100% from one line after
+    8 declaration variants and a 65-candidate sweep came back empty.
   → Only mark "at limit" after verification; otherwise keep investigating.
 ```
 
@@ -286,7 +313,7 @@ The 894 AT_LIMIT functions break down by dominant blocking pattern:
 | Pattern | Est. Count | Typical Gap | Notes |
 |---------|-----------|-------------|-------|
 | LINKER_MERGED (ICF) | ~350 | 0.5-3% | Merged `bl` targets from Identical COMDAT Folding |
-| REGISTER_SWAP | ~250 | 1-3% | Compiler register allocation artifact |
+| REGISTER_SWAP | ~250 | 1-3% | Compiler register allocation artifact — but this bucket is **not audited against the liveness/scheduling levers** ([fixable-liveness.md](fixable-liveness.md), 2026-08-03); 3 of 3 sampled functions had source fixes |
 | Address relocation noise | ~150 | 0.5-2% | `lis`/`addi` pairs at different global addresses |
 | ASSERT_REVS / INIT_REVS scheduling | ~80 | 0.8-0.9% | Instruction scheduling around rev macros |
 | BOOL_MASK (insert direction) | ~30 | 1-2% | Compiler `clrlwi` insertion we can't remove |
@@ -320,6 +347,7 @@ From 143 successful fine-tuning attempts (90%+ start, 100% end):
 - [fixable-casting.md](fixable-casting.md) — Float cast, noreturn, float/double, sizeof
 - [fixable-control-flow.md](fixable-control-flow.md) — Max/Min explicit, ternary vs if/else, loop structure
 - [fixable-declarations.md](fixable-declarations.md) — Variable extraction, declaration order, destructor
+- [fixable-liveness.md](fixable-liveness.md) — **Register-swap levers**: live-range shortening, call-through-the-cached-local, schedule-then-polarity, scope-into-using-block; negative-result table; strengthened floor-evidence standard
 - [fixable-fsel-fma.md](fixable-fsel-fma.md) — fsel intrinsic, Clamp templates, #pragma fp_contract
 - [fixable-operators.md](fixable-operators.md) — FMA order, operator overload, inline assignment
 - [fixable-bool-mask.md](fixable-bool-mask.md) — Bool mask (`clrlwi`) fixes
