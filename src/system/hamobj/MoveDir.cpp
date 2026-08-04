@@ -2454,8 +2454,8 @@ void MoveDir::PostUpdateFilters() {
             } else {
                 frac = DetectFrac(i, -1);
             }
-            HamPlayerData *player2 = TheGameData->Player(i);
-            if (frac > prevFracs[i] || player2->IsAutoplaying()) {
+            Symbol autoplay = TheGameData->Player(i)->Autoplay();
+            if (frac > prevFracs[i] || !autoplay.Null()) {
                 float ratingFrac = DetectFracToRatingFrac(frac, move->RatingOverride());
                 MILO_ASSERT(mpd.mPhraseMeter, 0x49a);
                 mpd.mPhraseMeter->SetRatingFrac(ratingFrac, 4.0f - beatInMeasure);
