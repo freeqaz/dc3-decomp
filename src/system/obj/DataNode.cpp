@@ -666,7 +666,7 @@ bool DataNode::Equal(const DataNode &n, DataArray *a, bool warn) const {
             res = first.UncheckedStr() == second.UncheckedStr();
 #endif
         } else {
-            res = second.UncheckedInt() == first.UncheckedInt();
+            res = first.UncheckedInt() == second.UncheckedInt();
         }
         return res;
     } else {
