@@ -2342,15 +2342,13 @@ void MoveDir::PostUpdateFilters() {
 
     float prevFracs[2];
     for (int i = 0; i < 2; i++) {
-        float frac;
         if (TheMoveMgr->HasRoutine()) {
-            frac = mAsyncDetector->MoveRatingFrac(
+            prevFracs[i] = mAsyncDetector->MoveRatingFrac(
                 i, (MoveAsyncDetector::RatingBar)0, mMovePlayerData[i].mCurMove
             );
         } else {
-            frac = DetectFrac(i, -1);
+            prevFracs[i] = DetectFrac(i, -1);
         }
-        prevFracs[i] = frac;
     }
 
     DetectFrame *resultFrames[2];
