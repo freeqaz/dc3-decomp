@@ -430,8 +430,8 @@ void AnimTask::Poll(float time) {
         if (mListener) {
             static Message msg("on_anim_event", DataNode(Symbol("ended")));
             mListener->Handle(msg, false);
+            mListener = nullptr;
         }
-        mListener = nullptr;
         TheTaskMgr.QueueTaskDelete(this);
     }
 }
