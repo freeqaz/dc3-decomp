@@ -148,8 +148,11 @@ git_dirty_of() {
 tool_from_ninja() {
     local dir="$1" rule="$2" pat="$3" path
     [[ -f "${dir}/build.ninja" ]] || return 1
+    # Strip ninja's trailing '$' line-continuations and squeeze whitespace so a
+    # wrapped `command =` line reads as one line before matching.
     path="$(sed -n "/^rule ${rule}\$/,/^ *description/p" "${dir}/build.ninja" 2>/dev/null \
-        | tr '\n' ' ' | grep -oE "${pat}" | head -n1 | sed -E 's/ .*//')"
+        | sed -e 's/\$$//' | tr '\n' ' ' | tr -s ' ' \
+        | grep -oE "${pat}" | head -n1 | sed -E 's/ .*//')"
     [[ -n "${path}" ]] || return 1
     case "${path}" in
         /*) ;;
@@ -159,8 +162,8 @@ tool_from_ninja() {
     echo "${path}"
 }
 
-dtk_of_dir() { tool_from_ninja "$1" split '[^ $]+dtk xex split'; }
-objdiff_of_dir() { tool_from_ninja "$1" report '[^ $]+objdiff-cli report generate'; }
+dtk_of_dir() { tool_from_ninja "$1" split '[^ ]+dtk xex split'; }
+objdiff_of_dir() { tool_from_ninja "$1" report '[^ ]+objdiff-cli report generate'; }
 
 # Is `dir`'s report.json fully up to date with respect to its ninja graph?
 # `ninja -n` is a pure dry run; "no work to do" is the only clean answer.
@@ -242,8 +245,15 @@ BUILD_DTK="$(dtk_of_dir "${CURRENT_DIR}" || dtk_of_dir "${MAIN_REPO}" \
     || (cd "${MAIN_REPO}" && realpath -e ../jeff/target/release/dtk 2>/dev/null) || true)"
 BUILD_OBJDIFF="$(objdiff_of_dir "${CURRENT_DIR}" || objdiff_of_dir "${MAIN_REPO}" \
     || (cd "${MAIN_REPO}" && realpath -e ../objdiff/target/release/objdiff-cli 2>/dev/null) || true)"
-DTK_SHA="$(sha_of "${BUILD_DTK:-/nonexistent}")"
-OBJDIFF_SHA="$(sha_of "${BUILD_OBJDIFF:-/nonexistent}")"
+if [[ -z "${BUILD_DTK}" || -z "${BUILD_OBJDIFF}" ]]; then
+    echo "ERROR: cannot determine which dtk/objdiff-cli ${CURRENT_DIR} builds with." >&2
+    echo "       dtk='${BUILD_DTK:-<none>}' objdiff='${BUILD_OBJDIFF:-<none>}'" >&2
+    echo "       Without them the baseline would be built by different tools than the" >&2
+    echo "       current side, which invents differences. Run 'ninja' there first." >&2
+    exit 1
+fi
+DTK_SHA="$(sha_of "${BUILD_DTK}")"
+OBJDIFF_SHA="$(sha_of "${BUILD_OBJDIFF}")"
 
 echo "  baseline : ${BASELINE_COMMIT}"
 echo "  current  : ${CURRENT_DIR} @ ${CURRENT_HEAD} (${CURRENT_DIRTY} tracked file(s) modified)"
