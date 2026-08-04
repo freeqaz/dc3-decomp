@@ -1346,13 +1346,12 @@ void Spotlight::BuildNGSheet(BeamDef &def) {
     memcpy(&orientMtx, pMtx, 0x30);
 
     def.mBeam = Hmx::Object::New<RndMesh>();
-    int numSections = def.mNumSections;
+    int defSections = def.mNumSections;
     RndMesh::VertVector &verts = def.mBeam->Verts();
 
     std::vector<RndMesh::Face> &faces = def.mBeam->Faces();
-    if (numSections <= 1) numSections = 5;
-    int numSegments = def.mNumSegments;
-    if (numSegments <= 2) numSegments = 10;
+    int numSections = defSections > 1 ? defSections : 5;
+    int numSegments = def.mNumSegments > 2 ? def.mNumSegments : 10;
 
     int numRows = numSections + 1;
     int numCols = numSegments + 1;
