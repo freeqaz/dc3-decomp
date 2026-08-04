@@ -1593,10 +1593,10 @@ void BustAMovePanel::Poll() {
             mBAMVisualizerPanel->DataDir()->Find<RndTex>("gradient_pink.tex", true);
         RndTex *blueTex =
             mBAMVisualizerPanel->DataDir()->Find<RndTex>("gradient_blue.tex", true);
-        unsigned char isPlayer0Pink = 0;
+        bool isPlayer0Pink = false;
         if (TheGameData->Player(0)->Side() == kSkeletonLeft
             && GetPlayerColor(0) == "pink") {
-            isPlayer0Pink = 1;
+            isPlayer0Pink = true;
         }
         for (ObjDirItr<DepthBuffer3D> it(mBAMVisualizerPanel->DataDir(), true);
              it != nullptr; ++it) {
@@ -1622,7 +1622,7 @@ void BustAMovePanel::Poll() {
         mDepthBufPlayer = activePlayer;
     }
 
-    unsigned char forceShow = !(mState == kBAMState_Recording || mState == kBAMState_End);
+    bool forceShow = !(mState == kBAMState_Recording || mState == kBAMState_End);
     for (ObjDirItr<DepthBuffer3D> it(mBAMVisualizerPanel->DataDir(), true);
          it != nullptr; ++it) {
         it->ForceDrawSkeletonIndex(forceSkelIdx, forceShow);
@@ -1687,7 +1687,7 @@ void BustAMovePanel::Poll() {
                 break;
             currentPhrase++;
         }
-        for (int i = 0; i < (int)mSongStructure.size(); i++) {
+        for (int i = 0; i < mSongStructure.size(); i++) {
             graph->AddScreenString(
                 MakeString("%d", mSongStructure[i]),
                 Vector2((float)i * 0.02f + 0.1f, 0.08f),
