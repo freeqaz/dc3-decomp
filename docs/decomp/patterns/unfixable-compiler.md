@@ -145,6 +145,23 @@ After adding fsel-based code, the prologue changes from 2 callee-saved FPRs to 4
 **Typical Gap:** 1-3%
 **Status:** Mechanism fully understood (Experiments 1-9). Hand-edit declaration reorder works ~30% of the time. The remaining ~70% is the source permuter's primary domain — it mutates declaration order, scope, branch shape, and many other axes simultaneously and scores each variant's `.obj` against the target. Binary patching of c2.dll's coloring loop is a last-resort escape hatch when a full permuter sweep returns zero gains.
 
+> **Correction (2026-08-03): a register swap is usually a symptom, and declaration
+> reorder is usually the wrong axis.** Three functions taken to or near 100%
+> (`ObjectDir::Iterate` 99.4%→**100%**, `RndText::FitTextScroll` 92.7%→98.2%,
+> `RndText::SizeCheck` 96.5%→99.1%) had register swaps as their dominant residual. In
+> all three the swaps flipped **at once** when a *live range* or an *instruction
+> schedule* was corrected. Declaration reorder was measured inert: 12+ variants
+> byte-identical, 2 regressed, and a 65-candidate beam-search sweep on `Iterate` found
+> 0 improvements — a function that then went to 100% from a one-line liveness change.
+>
+> Before concluding "regalloc floor," work
+> **[fixable-liveness.md](fixable-liveness.md)**: the `__savegprlr_NN` delta (live-set
+> difference), swap-cycle length (2-cycle vs 3+ rotation), and producer-instruction
+> index (schedule) discriminate the three causes in about five minutes. This is n = 3,
+> not a measured conversion rate — but a zero-gain permuter sweep on the *declaration*
+> axis is now known to be compatible with a one-line source fix existing, so it is no
+> longer sufficient evidence of a floor on its own.
+
 ### Symptom
 
 Consistent register swaps (e.g., r30 vs r31, f30 vs f31) throughout function.
@@ -247,7 +264,17 @@ float z, y, x;  // Instead of x, y, z
 
 ### What To Do
 
-1. Try [Variable Declaration Order](fixable-declarations.md#variable-declaration-order) with the heuristics above. If 5-10 hand reorderings don't help, the residual is interference-constrained beyond what a single-axis hand-edit can move.
+Revised order (2026-08-03) — liveness and scheduling **before** declaration order:
+
+0. **Diagnose which of the three causes you have** —
+   [fixable-liveness.md: Diagnostic Order](fixable-liveness.md#diagnostic-order-for-a-register-swap-residual).
+   `__savegprlr_NN` delta → live-set difference (a re-loaded member at a call site);
+   3+-register rotation → live-range difference (a value carried across a call that the
+   target lets die); producer at a different instruction index → schedule difference.
+   Apply the matching lever from [fixable-liveness.md](fixable-liveness.md). This is
+   what took `ObjectDir::Iterate` to 100% after declaration reorder and a permuter sweep
+   had both come back empty.
+1. Try [Variable Declaration Order](fixable-declarations.md#variable-declaration-order) with the heuristics above — but **stop at the first byte-identical result**, which proves the interference constraints have no slack on this axis. (The old "if 5-10 hand reorderings don't help" advice under-weighted that signal; byte-identical is qualitatively different from "no improvement.")
 2. **Run the source permuter** on the function before declaring AT_LIMIT — see [PERMUTER_ROI_ANALYSIS.md](PERMUTER_ROI_ANALYSIS.md). The permuter at `/home/free/code/milohax/dc3-decomp/scripts/permuter/` composes declaration reorder with many other mutation classes and routinely cracks register-swap residuals that hand-edits cannot. A zero-gain sweep is the real AT_LIMIT signal for this pattern.
 3. **Last-resort:** Binary patching of c2.dll's coloring loop (RVA `0x026780`) could reverse the BSF scan direction or reorder the color assignment, fixing all register swap functions at once. See [compiler-instrumentation.md](../../plans/compiler-instrumentation.md) for the full mechanism and address map.
 
@@ -1001,9 +1028,39 @@ A function is at-limit — meaning further work is wasted cycles, not a defensib
 
 Condition (b) requires an actually-completed sweep with the run noted (date, sweep config, result). Condition (a) requires per-mismatch classification — if even one mismatch is `REGISTER_SWAP`, `STACK_SPILL`, `FMA`, `DSE`, or `SCHEDULING`, you are in permuter territory, not source-immune.
 
+### Strengthened Evidence Standard for Register-Class Residuals (2026-08-03)
+
+Conditions (a)-(d) above are budget and exhaustion arguments. For a `REGISTER_SWAP`
+residual specifically they are now known to be too weak: `ObjectDir::Iterate` satisfied
+"declaration reorder exhausted (8 variants) + 65-candidate permuter sweep with 0 wins"
+and still had a **one-line source fix** that took it to 100%. Require all three of:
+
+- **(a) Hand variants byte-identical.** Not merely "no improvement" — identical output
+  bytes. Output that changes without improving means the axis is live and you have not
+  found the right point on it.
+- **(b) Permuter sweep zero-gain**, with date, config, and candidate count recorded.
+- **(c) Ghidra-decompile the *target* and name the construct.** Decompile the target
+  symbol (not ours) and read the residual instructions inside the target's own
+  decompilation. A floor claim is defensible only if the residual resolves to one of:
+  a spill/reload with no source-level identity, one stack slot holding two unrelated
+  values (live-range splitting), or a store never read on any path (dead conditional
+  spill). Anything else — a real computation, an extra call, a different constant —
+  means a source construct is missing and the function is **not** at a floor.
+
+(c) is the step that converts "I ran out of ideas" into "I proved this is unreachable."
+Worked example: `RndText::FitTextScroll`'s residual 8/232 instructions decompiled in the
+target as the styles-begin *pointer* written into `float w`'s stack slot on a dead path
+— an allocator live-range-split artifact, inexpressible in C++. Full write-up in
+[fixable-liveness.md: Floor Evidence](fixable-liveness.md#floor-evidence-the-three-part-standard).
+
+Before invoking any of this, run the liveness/scheduling diagnostics in
+[fixable-liveness.md](fixable-liveness.md#diagnostic-order-for-a-register-swap-residual)
+— they are ~5 minutes and they are what cracked all three functions.
+
 ## See Also
 
 - [verifiable-icf.md](verifiable-icf.md) - ICF/linker-side verifiable patterns
+- [fixable-liveness.md](fixable-liveness.md) - **Register-swap levers and the strengthened floor standard**; corrects the declaration-order-first guidance on this page
 - [fixable-declarations.md](fixable-declarations.md#variable-declaration-order) - When register issues are fixable
 - [fixable-control-flow.md](fixable-control-flow.md#branch-polarity-steering-beqbne-blebge) - Branch-shape steering tactics
 - [PERMUTER_ROI_ANALYSIS.md](PERMUTER_ROI_ANALYSIS.md) - Per-pattern permuter conversion rates and detection signals

@@ -284,6 +284,15 @@ This pattern is most effective when:
 
 The derived reference MUST remain valid across the intervening call. If `SetShowing()` could invalidate the Movie reference (e.g., by destroying/recreating the movie), pre-computing would introduce a use-after-free bug. In practice, simple setters don't invalidate sibling objects, so this is safe for most cases.
 
+### Follow Through: Actually Call Through the Local
+
+Creating the local and then still spelling the member path at a later call site is the
+worst of both worlds — you pay for the local's live range *and* for the reload, and the
+reload can cost an extra callee-saved register (`__savegprlr_23` vs the target's
+`__savegprlr_22`). In `RndText::FitTextScroll` that single extra register cascaded into
+~40 register swaps. See
+[fixable-liveness.md: Lever 2](fixable-liveness.md#lever-2--call-through-the-cached-local-dont-re-load-the-member-at-the-call-site).
+
 ---
 
 ## Boolean Init from Existing Register
@@ -344,13 +353,49 @@ if (!mesh->GetKeepMeshData()) {
 
 The order of variable declarations affects register allocation.
 
+> ### ⚠️ Correction (2026-08-03): this is not the primary lever for register swaps
+>
+> This section was previously the recommended first move for a `REGISTER_SWAP` diff.
+> Measured on three functions taken to or near 100%
+> (`ObjectDir::Iterate` 99.4%→**100%**, `RndText::FitTextScroll` 92.7%→98.2%,
+> `RndText::SizeCheck` 96.5%→99.1%), declaration reorder was **inert**: 12+ hand
+> variants produced *byte-identical* `.obj` output, 2 more regressed, and a
+> 65-candidate beam-search permuter sweep found 0 improvements. In all three the
+> register swaps were **symptoms** — every swap flipped at once when a live range or a
+> schedule was fixed, and no register was ever permuted directly.
+>
+> **Scoping and packing changes move stack slots. Liveness and scheduling changes move
+> registers.** Declaration order is a scoping/packing axis, so it is the right tool for
+> [Offset Swap](#offset-swap) and stack-layout residuals, and the wrong tool for a pure
+> register rotation.
+>
+> For register-swap residuals start at **[fixable-liveness.md](fixable-liveness.md)**
+> (live-range shortening, call-through-the-cached-local, schedule-then-polarity) and
+> come back here only after those are exhausted. n = 3 — see that page for scope limits
+> and the full negative-result table.
+
 ### Symptom
 
 objdiff shows consistent register swaps (r30/r31, f30/f31) throughout function.
 
+**Caveat on this symptom (2026-08-03):** register swaps alone do *not* select this
+pattern. Check the discriminators in
+[fixable-liveness.md: Diagnostic Order](fixable-liveness.md#diagnostic-order-for-a-register-swap-residual)
+first — a `__savegprlr_NN` delta or a 3+-register rotation means the live *set* differs
+and no reorder can fix it. This pattern's real symptom is a 2-cycle swap in a function
+whose live set already matches, or a stack-slot residual.
+
 ### Why It Works
 
 The compiler assigns registers based on declaration order. Changing declaration order changes the entire register allocation scheme.
+
+More precisely (per the c2.dll mechanism in
+[unfixable-compiler.md](unfixable-compiler.md#register-allocation)): colors are
+determined by the interference graph and are *invariant* to declaration order;
+declaration order only permutes the color→register mapping, and only when the
+interference constraints leave slack. When they don't, reordering is provably a no-op —
+which is exactly the byte-identical result seen above. **A byte-identical result is the
+stop signal for this pattern**, not an invitation to try more orderings.
 
 ### Fix
 
@@ -396,7 +441,14 @@ int total = 0;  // This breaks register allocation!
 
 ### Success Rate
 
-Only ~30% success rate. If 10+ reordering attempts don't help, the function is likely at its limit due to [Register Allocation](unfixable-compiler.md#register-allocation).
+Only ~30% success rate — and that figure comes from a mixed population of stack-layout
+and register residuals. Revised guidance (2026-08-03): **stop after the first
+byte-identical result**, not after 10 attempts. Byte-identical output means the
+interference constraints have no slack on this axis, so further orderings cannot change
+anything. Switch to the liveness/scheduling levers in
+[fixable-liveness.md](fixable-liveness.md); only if *those* are exhausted is the
+function at its limit due to
+[Register Allocation](unfixable-compiler.md#register-allocation).
 
 ---
 
@@ -781,12 +833,47 @@ obj->fieldB = b;
 obj->fieldA = a;
 ```
 
+**4. Scope the declaration into the block that uses it** (stack-local offsets only):
+
+If the mismatched offsets are `r1`-based — stack locals, not struct members — MSVC's
+per-scope stack-home assignment is in play. Moving a declaration into the inner block
+that uses it lets it pack with that block's other locals instead of claiming a slot in
+the outer frame region.
+
+```cpp
+// Before (96.7%) — w lands above `bounds`, pushing wideChars/lines up by 8
+unsigned short charCode;
+DecodeUTF8(charCode, "8");
+float w;
+font->CharAdvance(charCode, charCode, w);
+
+// After (98.2%) — same inner scope: w packs into 0x54 next to charCode
+if (font) {
+    unsigned short charCode;
+    float w;
+    DecodeUTF8(charCode, "8");
+    font->CharAdvance(charCode, charCode, w);
+}
+```
+
+`RndText::FitTextScroll`, commit `4b29b16b` — killed all 14 offset diffs at once. Full
+writeup: [fixable-liveness.md: Lever 4](fixable-liveness.md#lever-4--scope-a-declaration-into-the-block-that-uses-it-stack-lever-not-a-register-lever).
+Only add a block that the target's control flow actually has; in that case the target
+branched past the whole measurement when the font was null, so `if (font)` was faithful,
+not a match hack.
+
 ### Detection
 
 objdiff shows `OFFSET_SWAP` pattern with details like:
 ```
 swapped_offsets: [(instr 15: 0x4 vs 0x8), (instr 23: 0x8 vs 0x4)]
 ```
+
+`run_diff_inspect mode=stack-layout` distinguishes the two sub-cases: SHIFTED rows with a
+uniform delta on `r1`-based slots → scoping/packing (fix 4 above); paired swaps on a
+struct base register → field access order (fixes 1-3). See
+[unfixable-compiler.md: OFFSET_SWAP Auto-Classifier False Positives](unfixable-compiler.md#offset_swap-auto-classifier-false-positives-wave-1--f3)
+before spending time on a classification you haven't verified.
 
 ---
 
@@ -1159,5 +1246,6 @@ the locals' sizes. In the instruction diff: repeated `mr rN, r3` (TGT) vs
 
 ## See Also
 
+- [fixable-liveness.md](fixable-liveness.md) - **Register-swap levers** (live-range shortening, call-through-the-local, schedule-then-polarity); corrects the declaration-order guidance on this page
 - [fixable-operators.md](fixable-operators.md) - Assignment patterns
 - [unfixable-compiler.md](unfixable-compiler.md#register-allocation) - When reordering doesn't help

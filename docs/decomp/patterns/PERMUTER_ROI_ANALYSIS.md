@@ -9,6 +9,8 @@ There are **22 permuter pattern implementations** covering ~72 documented fixabl
 
 The highest-frequency detected patterns across all functions are address relocation (5,295), register swap (1,327), control flow (733), offset swap (445), and scope counter mismatch (430). Of these, control flow and offset swap have the best fixability prospects.
 
+> **See [Correction (2026-08-03)](#correction-2026-08-03-register_swap--declaration_reorder-is-the-wrong-mapping)** — the register-swap bucket (1,327, the second largest) is currently routed to `declaration_reorder`, which is measured inert on that class. The productive axis is liveness/scheduling, and no permuter pattern covers it yet.
+
 ## ROI Rankings: New Patterns to Implement
 
 ### Tier 1: Trivial AST, High ROI
@@ -85,7 +87,7 @@ Pattern counts are across **all non-excluded functions** (not just AT_LIMIT):
 | Pattern | Count | Fixability | Notes |
 |---------|------:|------------|-------|
 | ADDRESS_RELOCATION | 5,295 | Unfixable | Positional drift from .text size delta |
-| REGISTER_SWAP | 1,327 | Partially fixable | Via `declaration_reorder`/`declaration_movement` |
+| REGISTER_SWAP | 1,327 | Partially fixable | ~~Via `declaration_reorder`/`declaration_movement`~~ — see correction below; the productive axis is liveness/scheduling, not declaration order |
 | CONTROL_FLOW | 733 | Fixable | Via `branch_polarity` + `and_split` |
 | OFFSET_SWAP | 445 | Best fixability | Field reorder, `variable_extraction` |
 | PROLOGUE_MISMATCH | 439 | Unfixable | Compiler prologue generation quirks |
@@ -110,6 +112,52 @@ Pattern counts are across **all non-excluded functions** (not just AT_LIMIT):
 |----------|-------|
 | Total AT_LIMIT | 2,469 |
 
+## Correction (2026-08-03): REGISTER_SWAP → `declaration_reorder` Is the Wrong Mapping
+
+The `REGISTER_SWAP → declaration_reorder / declaration_movement` mapping above is
+measured to under-fire, and the reason is structural rather than a tuning problem.
+
+Evidence from three functions taken to or near 100% (see
+[fixable-liveness.md](fixable-liveness.md)):
+
+| Function | Result | Declaration-axis evidence |
+|----------|--------|---------------------------|
+| `ObjectDir::Iterate` | 99.4% → **100%** via a one-line liveness change | 6 reorder variants **byte-identical**, 2 regressed to ~95.8%, 65-candidate beam search **0 improvements** |
+| `RndText::FitTextScroll` | 92.7% → 98.2% via call-through-the-local + block scoping | reorder variants: no movement |
+| `RndText::SizeCheck` | 96.5% → 99.1% via scheduling then comparison polarity | not the declaration axis |
+
+Why the mapping fails: MSVC's coloring assigns colors from the interference graph and
+those colors are **invariant to declaration order**; order only permutes the
+color→register mapping, and only where the constraints leave slack. A byte-identical
+`.obj` from a reorder is therefore the expected outcome whenever the constraints are
+tight — the mutation cannot change the program the allocator sees. To move a register
+swap you must change the **interference graph itself**, which means changing what is
+live across a call or where a value is materialized.
+
+**Tooling implication.** `declaration_reorder` / `declaration_movement` are
+*stack-and-packing* mutations that occasionally hit registers as a side effect. The
+missing pattern class is liveness/scheduling mutations. Candidates, in rough order of
+how mechanical they look (all unimplemented, all n=1 evidence — treat as hypotheses):
+
+| Proposed pattern | Transform | From |
+|------------------|-----------|------|
+| `aggregate_projection` | `f(a, b)` ↔ `f(agg.first, agg.second)` where `agg` was just built from `a`, `b` and is unmodified | Lever 1 |
+| `member_call_through_local` | `obj->mField->Method(...)` ↔ `local->Method(...)` where `local` already caches `obj->mField` | Lever 2 |
+| `out_param_init_strip` | drop `= 0` / `= 0.0f` on a local whose first use is as an out-param the callee writes unconditionally | Lever 2 sub-lever |
+| `product_hoist` | collapse `a = f(); b = g(); ... use(a*b)` ↔ `p = f()*g(); ... use(p)` to move the multiply's schedule slot | Lever 3 |
+| `decl_scope_into_block` | move a declaration into the inner block that uses it (stack packing, not registers) | Lever 4 |
+
+Two of these (`out_param_init_strip`, `member_call_through_local`) need a safety gate:
+the first is only neutral if the callee writes the out-param on every reachable path,
+the second only if the local provably still aliases the member at the call site. Neither
+is a pure syntactic rewrite, so they belong in the guarded-transform tier alongside
+`variable_extraction`, not the free-mutation tier.
+
+Also note for sweep budgeting: a zero-gain sweep over declaration-axis mutations is
+**not** evidence that a function is at a register floor. `ObjectDir::Iterate` produced
+exactly that result and then went to 100% from one line. See
+[unfixable-compiler.md: Strengthened Evidence Standard](unfixable-compiler.md#strengthened-evidence-standard-for-register-class-residuals-2026-08-03).
+
 ## Existing Patterns with 0 Wins
 
 These 3 patterns should be reviewed:
@@ -125,8 +173,8 @@ These 3 patterns should be reviewed:
 | Objdiff Signal | Current Permuter | Gap Pattern |
 |---------------|-----------------|-------------|
 | `CONTROL_FLOW` | `branch_polarity`, `and_split`, `bool_return_expr`, `early_return_merge` | ✓ well covered |
-| `REGISTER_SWAP` | `declaration_reorder`, `declaration_movement` | FPR support (added) |
-| `OFFSET_SWAP` | (none) | Could trigger `variable_extraction` or field reorder |
+| `REGISTER_SWAP` | `declaration_reorder`, `declaration_movement` | **Real gap: no liveness or scheduling mutations.** See correction below |
+| `OFFSET_SWAP` | (none) | Could trigger `variable_extraction` or field reorder, or scope-a-declaration-into-its-using-block ([Offset Swap fix 4](fixable-declarations.md#offset-swap)) |
 | `COMPARISON_STYLE` | `comparison_equivalence` | ✓ covered |
 | `COMMUTATIVE_OP_ORDER` | `commutative_swap` | ✓ covered (0 wins though) |
 | `BOOL_MASK` | `bool_cast` | ✓ covered |
