@@ -396,10 +396,9 @@ void RndPostProc::LoadRev(BinStreamRev &d) {
             if (minVal > c.blue)
                 minVal = c.blue;
             if (minVal < 4.0f) {
-                float range = 4.0f - minVal;
-                c.red = (4.0f - red) / range;
-                c.green = (4.0f - c.green) / range;
-                c.blue = (4.0f - c.blue) / range;
+                c.red = (4.0f - red) / (4.0f - minVal);
+                c.green = (4.0f - c.green) / (4.0f - minVal);
+                c.blue = (4.0f - c.blue) / (4.0f - minVal);
                 mBloomThreshold = c.alpha;
                 c.alpha = 0.0f;
                 mBloomColor = c;
