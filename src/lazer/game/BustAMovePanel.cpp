@@ -1679,8 +1679,8 @@ void BustAMovePanel::Poll() {
         graph->AddScreenString(
             MakeString("State: %s  Reps left: %d", stateName, mRepsRemaining), pos, white
         );
-        unsigned int currentPhrase = 0;
         int remainingBeat = (int)(TheTaskMgr.Beat() + 0.5f);
+        unsigned int currentPhrase = 0;
         while (currentPhrase < mSongStructure.size()) {
             remainingBeat -= mSongStructure[currentPhrase] * 4;
             if (remainingBeat < 0)
