@@ -136,11 +136,12 @@ void RndTexBlender::DrawShowing() {
             }
             std::vector<std::pair<RndTexBlendController *, float> > nearList, farList,
                 customList;
+            float influence = mControllerInfluence;
             FOREACH (it, mControllerList) {
                 RndTexBlendController *curCtrlr = *it;
                 float second;
                 RndTexBlendController::BlendState state =
-                    curCtrlr->GetBlendState(second, mControllerInfluence);
+                    curCtrlr->GetBlendState(second, influence);
                 switch (state) {
                 case 1:
                     nearList.push_back(std::make_pair(curCtrlr, second));
@@ -157,7 +158,8 @@ void RndTexBlender::DrawShowing() {
                 || mRenderedStates != 1) {
                 unkc0 = false;
                 RndCam *cam = TheRnd.GetDefaultCam();
-                RndTex *targetTex = RndCam::Current()->TargetTex();
+                RndCam *prevCam = RndCam::Current();
+                RndTex *targetTex = prevCam->TargetTex();
                 if (targetTex) {
                     MILO_NOTIFY_ONCE(
                         "%s: Cannot render to texture (%s) while already rendering to texture (%s).",
@@ -186,14 +188,15 @@ void RndTexBlender::DrawShowing() {
                 }
                 std::sort(nearList.begin(), nearList.end(), BlendSorter());
                 std::sort(farList.begin(), farList.end(), BlendSorter());
-                if (mNearMap && !nearList.empty()) {
+                RndTex *nearMap = mNearMap;
+                if (nearMap && !nearList.empty()) {
                     mRenderedStates |= 2;
                     RndMat *work = TheShaderMgr.GetWork();
                     Transform xfm;
                     xfm.Reset();
                     TheShaderMgr.SetVConstant((VShaderConstant)4, Hmx::Matrix4(xfm));
                     TheShaderMgr.SetTransform(xfm);
-                    SetupMaterial(work, mNearMap);
+                    SetupMaterial(work, nearMap);
                     work->SetBlend(BaseMaterial::kBlendSrcAlpha);
                     float alpha = -1;
                     FOREACH (it, nearList) {
@@ -258,7 +261,7 @@ void RndTexBlender::DrawShowing() {
                 }
                 DrawBlendList(customList, (TexState)8);
                 cam->SetTargetTex(nullptr);
-                RndCam::Current()->Select();
+                prevCam->Select();
             }
         }
     }

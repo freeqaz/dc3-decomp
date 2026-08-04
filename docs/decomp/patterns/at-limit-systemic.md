@@ -54,3 +54,97 @@ These are project-wide issues that cause regressions across many functions. Fixi
   - No BBT section splitting in target binary (single `.text` section)
 - **Possible explanations**: Different c2.dll build variant, linker-level BBT with branch trace data, or unknown compiler mechanism
 - **Status**: UNFIXABLE — cannot reproduce block sinking with our compiler under any conditions
+
+## 8. Short-Circuit Bool Materialization Rotates Later Anonymous-Temp Slots (AT_LIMIT)
+
+- **Observed in**: `BustAMovePanel::Poll` (dc3-decomp), 99.58% with the residual below.
+- **What it looks like**: two source-level fixes that are individually correct
+  cannot be held at the same time. Fixing a 4-instruction bool block ~320
+  instructions in costs 23 instructions in an unrelated branch ~250 instructions
+  later. Net 99.58% -> 97.74%.
+
+### The two clusters
+
+Residual at 99.58% is 5 instructions in two places:
+
+| idx | target | ours |
+|----|--------|------|
+| 319 | *(absent)* | `li r28, 0x1` |
+| 332 | `li r10, 0x1` | *(absent)* |
+| 334 | `mr r10, r21` | `mr r28, r21` |
+| 336 | `clrlwi r28, r10, 24` | *(absent)* |
+| 729 | `add r4, r11, r28` | `add r4, r28, r11` |
+
+The target builds the bool in a scratch register **after** the comparison and
+then truncates it into the named local (`clrlwi rD, rS, 24`). That shape is the
+signature of a **short-circuit boolean materialization** — a branch converted to
+a value. Only `bool x = A && B;` produces it. The `bool x = true; if (!A || !B)
+x = false;` form we ship assigns the named local directly and emits no scratch
+temp and no truncation.
+
+Idx 729 is a second live range of the same register (`r28` is reused as the
+`mSongStructure[i]` byte offset), so it moves with the first cluster.
+
+### What actually moves 250 instructions away
+
+Writing `bool isPlayer0Pink = A && B;` fixes idx 332/334/336 **byte-for-byte**
+and simultaneously breaks the `static DebugGraph scoreGraph(...)` construction:
+
+```cpp
+static DebugGraph scoreGraph(
+    0.1f, 0.1f, 0.8f, 0.2f,
+    Hmx::Color(1.0f, 1.0f, 1.0f, 1.0f),   // arg 5
+    Hmx::Color(0.0f, 0.0f, 0.0f, 0.3f),   // arg 6
+    100, 0.0f, 1.0f, String(""));
+```
+
+`run_diff_inspect mode=stack-layout` names it exactly. Good build: **50/50
+MATCH**. Bad build: **40 MATCH / 10 PERMUTED**, frame size identical (0x1f0
+both), callee-saved counts identical, **no TGT_ONLY / BASE_ONLY slot**. The
+report reads `target's slot 0xb0 <-> base 0xb8`, `0xc0 <-> 0xc4`, etc.
+
+Decoding the stores, the two 16-byte `Hmx::Color` argument temporaries simply
+**swap frame slots**:
+
+- target / good build: arg5 (white) at `0xb0-0xbf`, arg6 (dark) at `0xc0-0xcf`
+- bad build:           arg6 (dark)  at `0xb0-0xbf`, arg5 (white) at `0xc0-0xcf`
+
+So this is **not** a slot-count change, **not** a frame-size change, and **not**
+a shift. It is a *rotation of assignment within an unchanged set of slots* — two
+anonymous temporaries of identical size, alignment and type exchanging places.
+The 23 extra instructions are the re-scheduled `stfs`/`ld` pairs that feed the
+by-value Color arguments, not extra work.
+
+### Mechanism
+
+MSVC allocates anonymous (unnamed) constructor temporaries from a pool ordered
+by an internal creation counter, separate from named locals. A short-circuit
+boolean materialization introduces one extra anonymous temp earlier in the
+function; that bumps the counter and flips the tie-break between the next pair
+of equal-size, equal-alignment temps. Arguments are evaluated right-to-left, so
+arg6 is created before arg5; the good ordering gives the lower slot to arg5
+(left-to-right), the bad ordering gives it to arg6 (creation order).
+
+### Ruled out (measured, do not re-derive)
+
+- **Lexical scope count** — ruled out by an earlier pass.
+- **Surface syntax of the `&&`** — `bool x = !(A' || B');` compiles to
+  *byte-identical* output to `bool x = A && B;`: 97.735%, the same 28
+  mismatches at the same 28 indices. So it is the short-circuit
+  branch-to-value conversion itself, not the operator spelling.
+- **Register pressure / frame growth** — frame size, callee-saved GPR count
+  (11) and FPR count (7) are identical in all variants.
+- **Declaration reorder** — inert here as everywhere else.
+
+### Why it is not repairable from source (currently)
+
+The obvious counter-lever is lever 5, "name the temporaries so their slots are
+pinned". It does not apply: both Colors are arguments to a **function-local
+`static`**, so they are constructed *inside* the run-once guard (the guard's
+`bne` is at idx 561, the Color stores at 568-593). Naming them would hoist
+construction outside the guard and run it on every call — a behaviour change,
+not a formulation change. There is no source position that is both inside the
+guard and able to hold a name.
+
+Retried at four independent baselines; cost identical every time.
+**Verdict: accept the 4-instruction bool residual. AT_LIMIT.**
