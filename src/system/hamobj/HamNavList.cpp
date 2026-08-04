@@ -444,13 +444,13 @@ void HamNavList::Poll() {
 
     // Reset the scroll direction whenever the list isn't being hand-scrolled:
     // disengaged, driven by a controller, or driven by voice.
-    if (mRibbonMode == HamListRibbon::kRibbonDisengaged || InControllerMode()
+    if (RibbonMode() == HamListRibbon::kRibbonDisengaged || InControllerMode()
         || InVoiceMode()) {
         mScrollBehavior.mScrollDir = 0;
     }
 
     // If disengaged and in controller mode, switch to swell
-    if (mRibbonMode == HamListRibbon::kRibbonDisengaged) {
+    if (RibbonMode() == HamListRibbon::kRibbonDisengaged) {
         bool inControllerMode = TheGestureMgr && TheGestureMgr->InControllerMode();
         if (inControllerMode) {
             SetRibbonMode(HamListRibbon::kRibbonSwell);
