@@ -474,7 +474,11 @@ void ObjectDir::Save(BinStream &bs) {
     std::vector<InlinedDir> unused;
     mInlinedDirs.swap(unused);
     gLoadingProxyFromDisk = oldProxy;
-    mCurViewportID = (ViewportId)0;
+    // NOTE: no `mCurViewportID = (ViewportId)0;` here. The DC3 target function
+    // contains zero stores to this-0x18 (mCurViewportID) across all 626
+    // instructions -- the only member store in the epilogue region is ours.
+    // rb3-xenon and og-dc3-decomp both carry that reset, but neither is ground
+    // truth for this binary. See commit message.
     const char *nextname = unk8c ? unk8c->Name() : "";
     bs << nextname;
     const char *camName = mCurCam ? mCurCam->Name() : "";
