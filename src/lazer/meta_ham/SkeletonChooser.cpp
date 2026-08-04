@@ -1118,7 +1118,7 @@ void SkeletonChooser::ChoosePlayerSides() {
                 TheGameData->AssignSkeleton(1, -1);
             }
         } else {
-            int swapTest = pPlayer1Skeleton->GetUnkab0().x >= pPlayer2Skeleton->GetUnkab0().x;
+            bool swapTest = pPlayer1Skeleton->GetUnkab0().x >= pPlayer2Skeleton->GetUnkab0().x;
             if (side0 == kSkeletonRight) {
                 if (!swapTest) {
                     SwapPlayerSides();
@@ -1130,9 +1130,7 @@ void SkeletonChooser::ChoosePlayerSides() {
             }
         }
     } else {
-        bool inverse = (id0 > 0);
-        bool isPos = (id1 > 0);
-        if (inverse != isPos) {
+        if ((id0 > 0) != (id1 > 0)) {
             if (locked) {
                 int activeID = (id0 > 0) ? id0 : id1;
                 Skeleton *pPlayerSkeleton = TheGestureMgr->GetSkeletonByTrackingID(activeID);
@@ -1152,7 +1150,7 @@ void SkeletonChooser::ChoosePlayerSides() {
                         SwapPlayerSides();
                     }
                 } else if (side == kSkeletonLeft) {
-                    if (!xGtThresh) {
+                    if (xGtThresh) {
                         SwapPlayerSides();
                     }
                 }
