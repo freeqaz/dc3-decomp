@@ -83,7 +83,24 @@ BASE_COMMIT="$(git -C "$MAIN_REPO" rev-parse --short "$BASE_REF" 2>/dev/null)" |
 BASE_BRANCH="$(git -C "$MAIN_REPO" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "detached")"
 
 # ---- tool sanity (everything lives under MAIN_REPO) -------------------------
-DTK="$MAIN_REPO/build/tools/dtk"
+# Prefer the dtk recorded in the main repo's build.ninja over the in-repo
+# build/tools/dtk. dtk decides function boundaries from config/*/symbols.txt,
+# so a worktree that splits with a different dtk than main produces a report
+# that differs from main's for reasons that have nothing to do with the code
+# under test -- i.e. phantom regressions in any worktree-vs-main comparison.
+# (Observed 2026-08-04: build/tools/dtk was a Feb build while main used
+# ../jeff/target/release/dtk, which split Curl_raw_toupper differently.)
+# Same reasoning, and same fallback, as WIBO below.
+DTK="$(sed -n '/^rule split$/,/^ *description/p' "$MAIN_REPO/build.ninja" 2>/dev/null \
+    | tr '\n' ' ' | grep -oE '[^ $]+dtk xex split' | head -n1 | sed 's/ xex split$//')"
+case "$DTK" in
+    "") ;;
+    /*) ;;
+    *) DTK="$(cd "$MAIN_REPO" && realpath -e "$DTK" 2>/dev/null || echo "")" ;;
+esac
+if [ -z "$DTK" ] || [ ! -x "$DTK" ]; then
+    DTK="$MAIN_REPO/build/tools/dtk"
+fi
 # Prefer the wibo recorded in the main repo's build.ninja (typically a newer
 # build at a sibling path) over the in-repo build/tools/wibo, which can be
 # stale and lack inline-env-var support. Fall back to the in-repo binary.
