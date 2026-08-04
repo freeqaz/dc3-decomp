@@ -34,17 +34,29 @@ import os
 import re
 import sys
 
-# Value types that MSVC materializes in a stack slot when built as a temporary
-# and bound to a const reference.  Size is the *slot* size (16-byte aligned).
+# Value types that MSVC materializes in a STACK SLOT when built as a temporary
+# and bound to a const reference.  Size is the slot size (16-byte aligned).
+#
+# The entry bar is: the type must be too large to pass in a register, so a
+# temporary of it has to be given an address.  `Symbol` was in this table on the
+# first pass and produced a clean false positive (FlowNode::DuplicateChild) --
+# `class Symbol { const char *mStr; }` is FOUR bytes and travels in a GPR, so a
+# `Symbol(...)` temp costs no stack at all.  Same reasoning excludes any handle
+# or pointer-wrapper type.  Verified against src/system/utl/Symbol.h:11.
 AGGREGATES = {
-    "Vector3": 16, "Vector4": 16, "Vector2": 16,
-    "Hmx::Color": 16, "Color": 16, "Color32": 16,
+    "Vector3": 16, "Vector4": 16, "Vector2": 16,          # src/system/math/Vec.h
+    "Hmx::Color": 16, "Color": 16,                        # 4 floats, Color.h:8
+    "Hmx::Rect": 16, "Rect": 16,
     "Transform": 64, "Matrix4": 64, "Hmx::Matrix3": 48, "Matrix3": 48,
     "Hmx::Quat": 16, "Quat": 16,
     "Box": 32, "Sphere": 16, "Plane": 16, "Segment": 32,
-    "Symbol": 16, "String": 16, "FilePath": 16, "DataNode": 16,
-    "UIComponent::State": 16,
+    "String": 16, "DataNode": 16,                         # nontrivial ctor/dtor
 }
+
+# Types that LOOK like aggregates in a call argument but are register-passed, so
+# a temporary of one never occupies a frame slot.  Kept explicit so nobody
+# re-adds them.
+NOT_AGGREGATES = {"Symbol", "ObjRef", "ObjectDir", "FilePath"}
 
 # `Foo(` inside an argument list.  We reject:
 #   - a declaration:            Vector3 v(a, b, c);   -> has an identifier before

@@ -192,8 +192,14 @@ def main():
     ap.add_argument("--project-dir", default=os.getcwd())
     ap.add_argument("--all", action="store_true",
                     help="report every frame delta, not just deficits")
-    ap.add_argument("--max-percent", type=float, default=100.0,
-                    help="skip functions already at/above this match%%")
+    # NOTE: report.json is a *build artifact of whatever was last compiled*, so a
+    # function you just edited still carries its old percentage.  Default the
+    # ceiling above 100 so the filter never silently drops the function under
+    # test -- this bit us while validating the tool against the known-good
+    # LabelShrinkWrapper case, where a stale 100.0 hid a live -0x10 deficit.
+    ap.add_argument("--max-percent", type=float, default=101.0,
+                    help="skip functions already at/above this match%% "
+                         "(pass 99.999 to hide matched functions; default 101 = no filter)")
     ap.add_argument("--min-percent", type=float, default=0.0)
     ap.add_argument("--json", default=None)
     ap.add_argument("--limit", type=int, default=0)
