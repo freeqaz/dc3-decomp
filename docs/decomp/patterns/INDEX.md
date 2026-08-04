@@ -33,14 +33,33 @@ assume the other repo's name:
 | Permuter ROI / pattern automation | `PERMUTER_ROI_ANALYSIS.md` | `permuter-roi.md` |
 | Systemic at-limit classes | `at-limit-systemic.md` | `at-limit-mwcc.md` |
 
-This is not hypothetical: objdiff-cli's `REGISTER_SWAP` hint pointed at
+This was not hypothetical: objdiff-cli's `REGISTER_SWAP` hint pointed at
 `permuter-roi.md` / `at-limit-mwcc.md`, so **the hint most likely to mislead someone was
 also linking nowhere in this repo**. The compilers differ too (DC3 = MSVC, RB3 =
 MetroWerks), so an RB3 filename in a DC3 hint is usually a sign the *content* was
 written for the other backend as well — check before trusting it.
 
-When adding a cross-repo link, verify the filename against the repo you're linking
-into, not the one you're writing in.
+**Fixed in objdiff 2026-08-04.** objdiff-cli no longer hardcodes one repo's filenames:
+links are named by what they explain and resolved through a per-project table, with the
+project detected from this repo's `docs/decomp/patterns/` directory (marker filename).
+Nothing has to be passed on the command line. An unrecognised repo gets only links the
+two projects agree on, rather than a guess. Consequences here: the ROI links now say
+`PERMUTER_ROI_ANALYSIS.md`, the at-limit links resolve to `unfixable-compiler.md` /
+`at-limit-systemic.md` instead of `at-limit-mwcc.md`, and `fixable-liveness.md` is
+linked directly from `REGISTER_SWAP` and `OFFSET_SWAP`.
+
+Re-check after renaming or restructuring any file in this directory:
+
+```bash
+python3 ../objdiff/scripts/check_doc_links.py --dc3 . --rb3 ../rb3
+```
+
+It resolves every URL objdiff would emit (`objdiff-cli doc-links -f json`) against both
+working trees — file must exist, `#anchor` must match a real heading. 30/30 here,
+25/25 in RB3 as of 2026-08-04.
+
+When adding a cross-repo link by hand, verify the filename against the repo you're
+linking into, not the one you're writing in.
 
 ### Anchor contract (tool-referenced — do not rename)
 
@@ -52,7 +71,13 @@ get objdiff re-pointed first:
 |--------|----------|--------|
 | [`fixable-declarations.md#pre-compute-references-before-clobbering-calls`](fixable-declarations.md#pre-compute-references-before-clobbering-calls) | `REGISTER_SWAP` **primary** (rendered link), `PROLOGUE_MISMATCH` | Stable — extended in place 2026-08-03, not moved |
 | [`fixable-declarations.md#offset-swap`](fixable-declarations.md#offset-swap) | `OFFSET_SWAP` | Stable — deliberately stays in declarations; scoping/packing moves stack slots |
-| [`PERMUTER_ROI_ANALYSIS.md#instruction-scheduling`](PERMUTER_ROI_ANALYSIS.md#instruction-scheduling) | `REGISTER_SWAP` secondary | Added 2026-08-03. objdiff currently points at `permuter-roi.md#instruction-scheduling` (RB3 name) — **needs re-pointing to this path** |
+| [`PERMUTER_ROI_ANALYSIS.md#instruction-scheduling`](PERMUTER_ROI_ANALYSIS.md#instruction-scheduling) | `REGISTER_SWAP` secondary | Added 2026-08-03. Re-pointed 2026-08-04 — objdiff now emits this path for DC3 (was `permuter-roi.md#…`, an RB3 name) |
+| [`fixable-liveness.md#diagnostic-order-for-a-register-swap-residual`](fixable-liveness.md#diagnostic-order-for-a-register-swap-residual) | `REGISTER_SWAP`, `PROLOGUE_MISMATCH` | Added 2026-08-04. Replaces the RB3-only `permuter-roi.md#register-allocation-cascades` |
+| [`fixable-liveness.md#lever-4-scope-a-declaration-into-the-block-that-uses-it-stack-lever-not-a-register-lever`](fixable-liveness.md#lever-4-scope-a-declaration-into-the-block-that-uses-it-stack-lever-not-a-register-lever) | `OFFSET_SWAP` secondary | Added 2026-08-04. Replaces the RB3-only `permuter-roi.md#stack-slot-inversion` |
+
+All three original anchors are asserted by unit test in objdiff
+(`doc_link_tests::dc3_first_url_anchor_contract`) — objdiff renders only the **first**
+URL of each pattern inline, so those are the ones that must not drift.
 
 ## Session catalogues
 
