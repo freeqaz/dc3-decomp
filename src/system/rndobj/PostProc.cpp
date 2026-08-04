@@ -496,7 +496,7 @@ void RndPostProc::LoadRev(BinStreamRev &d) {
     }
     if (d.rev > 0x12) {
         d >> mHallOfTimeRate;
-        d >> mHallOfTimeColor >> mHallOfTimeMix;
+        d.stream >> mHallOfTimeColor >> mHallOfTimeMix;
         if (d.rev > 0x13 && d.rev < 0x20) {
             bool hotType;
             d >> hotType;
@@ -523,8 +523,9 @@ void RndPostProc::LoadRev(BinStreamRev &d) {
     }
     if (d.rev > 0x18) {
         d >> mRefractMap >> mRefractDist;
-        d.stream >> (Key<float>&)mRefractScale >> (Key<float>&)mRefractPanning
-            >> mRefractAngle;
+        d.stream >> (Key<float>&)mRefractScale;
+        d.stream >> (Key<float>&)mRefractPanning;
+        d >> mRefractAngle;
         if (d.rev > 0x1B) {
             d.stream >> (Key<float>&)mRefractVelocity;
         }
@@ -536,7 +537,7 @@ void RndPostProc::LoadRev(BinStreamRev &d) {
         }
     }
     if (d.rev > 0x1D) {
-        d >> mVignetteColor >> mVignetteIntensity;
+        d.stream >> mVignetteColor >> mVignetteIntensity;
     }
     if (d.rev > 0x20) {
         d >> mBloomGlare;
