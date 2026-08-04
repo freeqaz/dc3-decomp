@@ -648,11 +648,6 @@ bool DataNode::operator>(const DataNode &other) const {
     } else
         return false;
 }
-__declspec(noinline) const char * _outline_Name(Hmx::Object* _obj) {
-    return _obj->Name();
-}
-
-
 bool DataNode::Equal(const DataNode &n, DataArray *a, bool warn) const {
     DataType thisType = Type();
     DataType otherType = n.Type();
