@@ -9,8 +9,28 @@
 > live across a call) and **scheduling** (where a value is materialized relative to
 > its consumer).
 >
-> **Measured:** 2026-08-02/03. All percentages via `run_objdiff` with `project_dir`
-> pointed at the worktree.
+> **Measured:** 2026-08-02/03, re-verified against **dc3-decomp** `main` on 2026-08-04.
+> All percentages via `mcp__orchestrator__run_objdiff` with `project_dir` pointed at the
+> worktree.
+
+> ### Standing note: percentages here are point-in-time
+>
+> **Every per-function percentage in this file (and in any pattern doc) is a reading
+> taken on one repo at one commit. Re-measure with `mcp__orchestrator__run_objdiff`
+> before citing one.** Two ways these numbers rot:
+>
+> 1. **Neighbours drift.** A function's match% can move when a *different* function in
+>    the same translation unit changes — inlining, ICF, and `.text` layout are all
+>    TU-wide. A figure that was true when it was written is not automatically true now.
+> 2. **The number in a commit message is not a measurement.** It is whatever the author
+>    typed. See the correction box in Lever 3 below: `RndText::SizeCheck` carried a
+>    fabricated **99.1%** in its own commit message and in six downstream docs for two
+>    days. Direct `run_objdiff` output is the only authority.
+>
+> **Always name the repo next to a number.** dc3-decomp, rb3-xenon and rb3 share the
+> Milo engine, so they have *identical symbol names* and overlapping address ranges.
+> An unattributed figure will eventually be "refuted" against the wrong tree — that has
+> already happened here at least once.
 
 ---
 
@@ -139,9 +159,16 @@ rather than by re-projecting an aggregate.
 
 ## Lever 2 — Call Through the Cached Local; Don't Re-Load the Member at the Call Site
 
-**Impact:** +4.0% (92.7% → 96.7%)
+**Impact:** +4.0% (92.7% → 96.7%) in **dc3-decomp**
 **Success Rate:** unknown (1 for 1)
 **Time:** 5 minutes
+
+> **96.7% is an intermediate, not `FitTextScroll`'s final figure.** This lever
+> (`97455510`) is step one of two; [Lever 4](#lever-4--scope-a-declaration-into-the-block-that-uses-it-stack-lever-not-a-register-lever)
+> (`4b29b16b`) then takes the same function 96.7% → **98.2%**, which is where it stands
+> on **dc3-decomp** `main` today (re-measured 2026-08-04: 98.2% normalized / 98.0% raw,
+> 232 instructions). Cite 98.2% for "where `FitTextScroll` is"; cite 96.7% only when
+> you specifically mean "after the liveness lever but before the scoping lever".
 
 ### Symptom
 
@@ -223,9 +250,51 @@ for the constructor-side version of the same trade.)
 
 ## Lever 3 — Fix the Schedule First, Then the Comparison Polarity
 
-**Impact:** +2.6% (96.5% → 99.1%)
+**Impact:** +2.1% (96.5% → **98.6%**) in **dc3-decomp**
 **Success Rate:** unknown (1 for 1)
 **Time:** 15 minutes
+
+> **Correction (2026-08-04): this lever was documented as reaching 99.1%. It does not,
+> and it never did.** Direct `run_objdiff` measurement of
+> `?SizeCheck@RndText@@IAAXXZ` in **dc3-decomp**:
+>
+> | Commit | What it is | Measured | Instrs |
+> |--------|-----------|----------|--------|
+> | `f0275669` | parent — before this lever | **96.5%** (96.1% raw) | 142 |
+> | `0c2b0c38` | the lever itself, in isolation | **98.6%** (98.1% raw) | 141 |
+> | `4d45aacc` | `main` today | **98.6%** (98.1% raw) | 141 |
+>
+> **The 99.1% was never a direct measurement.** The obvious hypothesis — that
+> `SizeCheck` really did hit 99.1% in isolation and was later perturbed by
+> `RndText::FitTextScroll`, which was developed in an independent lane off the *same*
+> parent `f0275669` and landed in the same `Text.cpp` — was tested and **refuted**. A
+> worktree checked out at `0c2b0c38`, with `Text.obj` deleted and rebuilt from scratch,
+> reads `SizeCheck` at 98.6% with the identical residual. (That worktree reads
+> `FitTextScroll` at 92.7% / 238 instructions vs `main`'s 98.2% / 232, which is the
+> proof it was genuinely compiling its own source and not reusing `main`'s object.)
+> The instruction count was already 141 at `0c2b0c38`; it did not go 140 → 141.
+>
+> So 99.1% entered the record in commit `0c2b0c38`'s own subject line and was copied
+> outward from there into six documents across three repos. Its provenance is not
+> recoverable from the tree; it is consistent with the known failure mode of reading a
+> percentage off objdiff's **"did you mean" symbol-suggestion hint** rather than off a
+> direct diff — those suggestion percentages do not agree with direct measurement.
+> **The direct diff is the only authority.**
+>
+> **What the lever actually fixes, precisely.** At 96.5% the residual was 17
+> instructions: nine f30↔f31 / f12↔f13 swaps, two `bge`↔`ble` polarity flips, one
+> commutative swap, two relocation-noise entries — *and* an `mr r4, r27` insert/delete
+> pair at index 61/63. The lever kills everything except that `mr` pair, which was
+> **already present at 96.5%** and which this lever never touched. It remains the whole
+> residual at 98.6% today:
+>
+> ```
+> [61] insert: mr  r4, r27
+> [63] delete: mr  r4, r27      ; same instruction, two slots later
+> ```
+>
+> Do not credit this lever with that pair in either direction — it is an independent,
+> still-open scheduling difference.
 
 ### Symptom
 
@@ -283,7 +352,7 @@ if (cap <= fontUnit * aspectRatio * 1.25f) return;
 if (sLastText == this && screenHeight <= sLastHeight) return;
 int productInt = (int)(fontUnit * aspectRatio);
 
-// AFTER (99.1%)
+// AFTER (98.6%)
 float fontSize = font->FontUnit() * font->AspectRatio();
 float cap = 127.5f;
 if (screenHeight < 127.5f) cap = screenHeight;
@@ -312,7 +381,9 @@ for the polarity half in isolation.
 
 ## Lever 4 — Scope a Declaration Into the Block That Uses It (stack lever, not a register lever)
 
-**Impact:** +1.5% (96.7% → 98.2%); killed 14 offset diffs at once
+**Impact:** +1.5% (96.7% → **98.2%**) in **dc3-decomp**; killed 14 offset diffs at once.
+This is the second of `FitTextScroll`'s two levers, so 98.2% is the function's final
+figure (confirmed on `main` 2026-08-04).
 **Success Rate:** unknown (1 for 1)
 **Time:** 5 minutes
 
@@ -372,9 +443,20 @@ scoping will not move a register swap.
 
 ## Lever 5 — Name the Temporaries So They Are Built Up Front and Frame-Packed
 
-**Impact:** +19.4% (80.4% → **99.9%**) — 68.1% for the honest starting point
+**Impact:** +31.8% (68.1% → **99.9%**) in **dc3-decomp**
 **Success Rate:** unknown (1 for 1)
 **Time:** 30 minutes
+
+> **The baseline is 68.1%, not 80.4%.** 80.4% was *itself* a match-hack state — an
+> `auto _tmp0 = Vector3(...)` hoisted above the block purely to force `TopLeft` to be
+> called last (see [Match-Hack Smell](#match-hack-smell--why-804-was-not-a-baseline)
+> below).
+> Measuring a lever against a hack inflates the "before" and deflates the lever: it
+> reports +19.4% for what is really **+31.8%**. Quote 68.1% → 99.9%; mention 80.4% only
+> as the discarded hack. Ladder, all in **dc3-decomp**: 68.1% (`3bb49c53`'s starting
+> point) → 90.6% (`3bb49c53`) → **99.9%** (`50d75d6d`), re-measured on `main`
+> 2026-08-04 at 99.9% normalized / 99.7% raw, 141 instructions, residual two
+> commutative `fadds` operand orders.
 
 This is the other half of Lever 4. Lever 4 *narrows* a scope to make locals pack.
 This one *widens* the live range of unnamed temporaries — by giving them names — so
@@ -467,7 +549,7 @@ then stall, which reads like a floor:
 The rule: match the target's **number of live values**, and let the packer choose the
 sharing. Do not hand-recycle a slot.
 
-### Match-Hack Smell
+### Match-Hack Smell — why 80.4% was not a baseline
 
 The 80.4% state this replaced used an `auto _tmp0 = Vector3(...)` hoisted above the
 other three calls so that `SetLocalPos` on the top-left bone could run *last*, against
