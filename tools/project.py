@@ -1716,8 +1716,15 @@ def generate_build_ninja(
     n.comment("preventing unnecessary generator re-runs that invalidate ninja deps.")
     n.rule(
         name="split",
+        # prune_split_outputs: dtk rewrites the whole live unit set every run
+        # but never REMOVES a unit whose splits.txt heading was re-pathed,
+        # renamed or deleted, so the previous generation is orphaned on disk
+        # forever (measured here: 8 stale .s + 9 stale .obj, oldest 2026-03-08).
+        # Runs after the split succeeds; it never touches config.json, so the
+        # cmp/touch mtime-preservation below is unaffected.
         command=f"cp $out_dir/config.json $out_dir/config.json.prev 2>/dev/null; "
                 f"{dtk} xex split $in $out_dir && "
+                f"$python tools/prune_split_outputs.py $out_dir && "
                 f"if cmp -s $out_dir/config.json $out_dir/config.json.prev; then "
                 f"touch -r $out_dir/config.json.prev $out_dir/config.json; fi; "
                 f"rm -f $out_dir/config.json.prev",
