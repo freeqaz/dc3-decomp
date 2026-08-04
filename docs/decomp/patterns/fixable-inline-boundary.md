@@ -334,11 +334,23 @@ the accessor; flattening an inline level changes their codegen too. For
 regresses, the accessor is not the right lever — the extra level is somewhere
 else on the chain.
 
-### When It Doesn't Help
+### When It Doesn't Help — follow the count, not the direction
 
 If both sides have the same number of home writes, inline depth already
 matches and the residual is something else. Do not "fix" a home-write count
 that already agrees.
+
+**More important caveat, from `RndMesh::SetVolume` (lane F, same day the lever
+was found): the lever is bidirectional and the obvious direction is often
+wrong.** There, an extra base-only home write did correctly say "we have too
+many inline levels" — but removing the wrapper entirely made it *worse*
+(92.0% → 91.3%), because the target wanted **exactly one** level, not zero.
+Likewise `HamCharacter::Poll` was fixed by *un-hoisting* a reference so we
+would redundantly reload a member — the inverse of the usual liveness advice.
+
+So: read the home-write **count** off the asm and match that number. Do not
+reason from "fewer inline levels is closer to the target" — it isn't a
+direction, it's a count.
 
 ---
 

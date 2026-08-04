@@ -151,8 +151,198 @@ Landed on `sweep/regswap-statement` (main coordinator lane):
 | `RhythmBattlePlayer::UpdateScore(Hmx::Object*)` | 97.5% | **98.4%** | `RndParticleSys::SetEmitRate` had one inline level too many (`Part.h`) |
 
 Six parallel lanes (`sweep/regswap-a` … `sweep/regswap-f`, worktrees
-`wt/rsw-a` … `wt/rsw-f`) ran the same playbook over ~40 further candidates.
-Their results are folded into the final report for this sweep.
+`wt/rsw-a` … `wt/rsw-f`) ran the same playbook. **26 functions triaged, 22
+investigated, 21 improved, 5 driven to a byte-exact 100%.**
+
+| Lane | Function | Before | After |
+|---|---|---|---|
+| A | `RndTransformable::Load` | 93.6% | **100.0%** |
+| A | `CharEyes::Poll` | 94.7% | 96.2% |
+| A | `HamCamShot::UpdateTargetsFlipped` | 94.2% | 96.2% |
+| A | `FlowMathOp::Apply` | 96.9% | 97.9% |
+| B | `Debug::DoCrucible` | 95.2% | 99.3% |
+| B | `HamDirector::OnPopulateMoves` | 95.4% | 98.1% |
+| B | `HamCharacter::SyncProperty` | 96.5% | 97.9% |
+| B | `Locale::Init` | 88.2% | 92.1% |
+| C | `RndPostProc::LoadRev` | 94.1% | **100.0%** |
+| C | `Spotlight::BuildNGSheet` | 88.0% | 88.7% |
+| D | `FlowIf::Activate` | 87.6% | **100.0%** |
+| D | `MoveDir::DrawShowing` | 86.0% | 95.3% |
+| D | `DataNode::Equal` | 94.3% | 98.0% |
+| E | `HamDirector::DrawIconMan` | 92.5% | 98.4% |
+| E | `SkeletonChooser::DrawDebug` | 84.6% | 97.9% |
+| E | `SkeletonChooser::ChoosePlayerSides` | 93.8% | 95.8% |
+| E | `OSCMessenger::Poll` | 87.3% | 95.6% |
+| E | `RndMeshDeform::Load` | 90.3% | 93.7% |
+| F | `Sound::Handle` | 97.1% | **100.0%** |
+| F | `RndMesh::SetVolume` | 92.0% | 99.3% |
+| F | `HamCharacter::Poll` | 91.7% | 98.3% |
+| F | `RndShadowMap::PrepShadow` | 89.5% | 92.7% |
+
+Integration verified: all seven branches merge cleanly, the merged tree builds
+and links, and the two files touched by two lanes each (`HamDirector.cpp` by B
+and E, `HamCharacter.cpp` by B and F) hold every claimed percentage with both
+lanes' edits present. Whole-tree delta **53.84% → 53.85% fuzzy, +4 newly
+matched functions** across 9 subsystems.
+
+## LIVE BUGS FOUND (11 confirmed)
+
+This is the real return on the sweep. A bucket labelled "unfixable register
+allocation" was hiding eleven behavioural defects in shipped code paths.
+
+**`OSCMessenger::Poll` — the OSC parser was comprehensively broken (lane E).**
+Three independent bugs, any one of which breaks it: `pos` was
+`strlen(str)/4 + 1`, a *word* index, where the target computes
+`len - len%4 + 4`, the *byte* offset of the type-tag string, so every
+`data[pos+N]` read garbage; `i`/`f` payloads were copied one byte at a time
+(`value.buffer[0] = data[pos+4]`) where the target copies a full 32-bit word,
+so every `GetInt`/`GetFloat` returned a value built from one byte; and the
+`fff` vector payload read `dataIn[1..3]` from the start of the packet,
+ignoring `pos` entirely.
+
+**`Locale::Init` — all four permanent locale tables were allocated on the temp
+heap (lane B).** `MemPopTemp()` sat at the bottom of the function, after
+`mSymTable`, `mStringData`, `mStrTable` and `mUploadedFlags` were allocated.
+The target pops at the parse block's closing brace, before the first
+allocation. These tables are read by every `Localize()` call for the entire
+run of the game.
+
+**`Locale::Init` — the devkit locale override could never have worked (lane
+B).** `DataArrayPtr altCfg((DataNode(devkitPath)), DataNode(locale))` builds
+`("devkit:\locale\…\locale_keep.dta" locale)`, but the reader treats Node(0)
+as the section tag and Node(1..) as the file list — so the only "file" opened
+was the literal string `"locale"`. MSVC evaluates arguments right-to-left and
+the target constructs the String node first, exactly inverted from ours.
+
+**`HamCamShot::UpdateTargetsFlipped` — the flipped/unflipped player remap was
+inverted (lane A).** `if (!flipped)` where the target has `if (flipped)`. In
+dance-battle / flipped camera shots every keyframe target named `*player0*`
+was remapped for the wrong dancer, and left un-remapped when it should have
+been remapped.
+
+**`RndTransformable::Load` — rev 7/8 constraint remap used a stale value (lane
+A).** `auto _arg0 = mConstraint + kConstraintLocalRotate;` was computed
+*before* `bs >> (int&)mConstraint`, so the remap derived from whatever the
+object already held.
+
+**`RndTransformable::Load` — rev 3-5 preserve-scale flag (lane A).**
+`mPreserveScale = unkb0;` set the flag for any non-zero packed value; the
+target emits `extrwi r10, r11, 1, 24`, i.e. `(packed & 0x80) != 0`.
+Corroborated by the case labels below it coming in `0x04/0x84`, `0x08/0x88`,
+`0x10/0x90`, `0x20/0xA0` pairs — `0x80` *is* the preserve-scale bit.
+
+**`MoveDir::DrawShowing` — the outer guard was an entirely unrelated
+expression (lane D).** It read `if (HashTable().Begin() != nullptr)`, emitting
+a call to `KeylessHash<…>::FirstFrom`. The target makes no such call — it
+walks the virtual-base table to reach `Hmx::Object::mDir` and compares against
+`this`. The real condition is `Dir() != this`; the whole debug-collision block
+was gated on a hash-table probe.
+
+**`SkeletonChooser::ChoosePlayerSides` — inverted swap condition (lane E).**
+`if (!xGtThresh) SwapPlayerSides()` should be `if (xGtThresh)`. As written the
+condition was true for nearly every pose, so player sides would thrash every
+frame with one player tracked and `sided_colors_locked` set.
+
+**`HamDirector::DrawIconMan` — the texture was passed as the bool flag (lane
+E).** `PoseIconMan(clip, poseBeat, NULL, (bool)tex, …)` vs target
+`(clip, poseBeat, tex, true, …)`. On Expert the icon-man posed with no
+texture.
+
+**`RndMesh::SetVolume` — a diagnostic the original raised as a notification
+was being silently logged (lane F).** `MILO_LOG("BSP tree outside bounding
+box")` should be `MILO_NOTIFY`; the target calls `Debug::Notify`.
+
+**`NgMat::RefreshState` — texture half-pixel offsets are numerically wrong,
+and NOT yet fixed (lane C).** See the reciprocal-multiply section below.
+
+### Non-behavioural but wrong-typed (recorded, not urgent)
+
+- `Spotlight::BuildNGSheet` face indices are `short`; the target uses
+  `unsigned short` (`extsh` vs `clrlwi`). Bit patterns land identically in
+  `RndMesh::Face`'s `unsigned short` fields.
+- `SkeletonChooser::DrawDebug`'s `Hmx::Rect` had all four arguments reversed —
+  debug-only, but it drew a sliver in the wrong place.
+- `HamCharacter::Poll` has a spurious `(int)` cast making the viseme loop
+  signed.
+- `DataNode.cpp` carried a `__declspec(noinline) _outline_Name` shim forcing a
+  call the target does not make (removed).
+- **Unverified lead worth chasing:** the target's `MakeString` for `texName`
+  in `HamCharacter::Poll` instantiates as `char const[7]` against our
+  `char const[256]`, which would imply the shipped code declared a 7-byte
+  buffer that `strcpy`/`strcat` overflow. Lane F declined to act on a mangled
+  name alone — correctly, but it should be checked.
+
+## NEW LEVER #2 — reciprocal-multiply is source-steerable, and it changes results
+
+Given **N ≥ 2 divisions by the same *named local***, MSVC emits one
+`fdivs 1.0, d` plus N `fmuls`. Writing the divisor **expression inline** at
+each site yields N real `fdivs`. The two forms produce **different float
+values**. This is a correctness lever, not a cosmetic one.
+
+- Fixed: `RndPostProc::LoadRev`'s bloom-color inverse
+  (`float range = 4.0f - minVal;`) — now byte-exact.
+- **Open: `NgMat::RefreshState`.** `0.5f/h`, `-0.5f/h`, `0.5f/w`, `-0.5f/w`
+  over `int w, h` locals — the Xbox binary emits four `fdivs`, we emit two
+  reciprocals and four `fmuls`. Last-bit-different half-pixel offsets feed
+  **every NgMat texture sample**. Four source forms were tried and all
+  regressed the match (89.1–90.3% vs 93.3%) because inlining kills the
+  reciprocal but makes MSVC re-load the ints with `lwa` instead of reusing the
+  guard's `lwz`. Real behavioural difference, not currently fixable from this
+  source shape. **Grep the tree for the same `1/x`-named-local shape.**
+
+## Further levers the lanes established
+
+- **`static` vs external linkage on file-scope data is a register-allocation
+  lever** — worth 13 points on `SkeletonChooser::DrawDebug`. With internal
+  linkage MSVC knows a run of file-scope floats is contiguous and materialises
+  *one* base pointer; with external linkage it emits a separate `lis` per
+  symbol. Tell: target has N separate `lis` for adjacent statics where we have
+  one `addi` base.
+- **`ObjPtr<T>` in boolean/equality context emits SIGNED `cmpwi`/`cmpw`; a raw
+  `T*` local copy emits UNSIGNED `cmplwi`/`cmplw`.** So a pointer
+  signed/unsigned mismatch usually means we introduced a raw-pointer local the
+  target doesn't have. Much more actionable than "spurious unsigned cast".
+- **A dense `switch` over 0..N lowers to `mtctr` + `bdz` chain with one
+  unsigned range check; an if/else-if chain gives signed `cmpwi` binary
+  search.** Worth ~6 points on `RndTransformable::Load`.
+- **Named local vs unnamed temporary.** `DataNode n1 = mValue1.Node();` pins a
+  stack slot, so MSVC re-materialises `addi r3, r31, <slot>` at every use and
+  constructs left-to-right; passing the same calls as *arguments* makes them
+  rvalues — right-to-left evaluation, each use riding the NRVO'd return
+  pointer. A helper without `__forceinline` gets outlined and costs 18 points,
+  so the annotation is load-bearing.
+- **A cached loop bound can cost a callee-saved register and shift the entire
+  frame.** `size_t outputSize = outputs.size()` forced `r18..r31` where the
+  target saved `r19..r31` — that one register *was* a +0x10 frame delta and a
+  +0x18 offset shift on every local.
+- **Destructor emission points are a readable scope map.** Five consecutive
+  `stw <vptr>, 0x…(r31)` at a function's end means five objects held live too
+  long; the target's per-object positions tell you where each block closes.
+  +4.1% on `DoCrucible`.
+- **Mid-chain bool materialisation means a named bool lvalue, not
+  parentheses.** Parenthesising a 12-term `&&` does nothing (MSVC collapses it
+  straight back); only `bool ok = …; ok = ok && …;` reproduces the target's
+  periodic `clrlwi.` re-test.
+- **`= 0` initializer vs full if/else** applies to *any* conditionally-assigned
+  local, not just out-params — a constant initializer gets hoisted above the
+  test, where the target emits an out-of-line `else` block. Paid off three
+  times independently in lane A.
+
+## A THIRD RESIDUAL BUCKET — stack-slot allocation
+
+Lane A's `RndText::Load` did not fit the binary rule and cost two wasted
+cycles. It *looked* statement-level (14 inserts / 15 deletes) but the clusters
+were the **same instructions placed differently**; the real cause is MSVC
+reusing stack slots across disjoint nested scopes where the target does not
+(frame Δ −0x10, 6 target-only slots, 19 DIFFER).
+
+**Added rule: if the insert and delete clusters contain the same instructions
+and `stack-layout` shows many DIFFER/PERMUTED slots, it is slot allocation —
+drop it.** `HamDirector::OnPopulateMoves` is the same story: its remaining 110
+`diff_arg` rows are almost entirely stack offsets shifted by a 0xe0 frame
+delta, because the target gives each of three `FileMerger::Merger` locals its
+own 0x70 slot while MSVC packs ours onto one. Renaming them apart changed
+nothing — the packing is lifetime-based.
 
 ### Investigated and dropped
 
@@ -186,6 +376,57 @@ residuals. But at very high match (≥98%) statement-level classification is
 **necessary, not sufficient**: `SyncDir` and `HamNavList::Poll` both presented
 clean statement-level tells and both resisted. Treat the rule as a filter for
 what to *open*, not a predictor of what will *close*.
+
+### Aggregate across all seven lanes
+
+**31 functions triaged, 26 investigated, 23 improved, 5 to byte-exact 100%,
+11 live bugs.** Roughly **1 win per 1.3 functions** — far better than the
+1-in-3 the sweep was budgeted at, and the bucket was labelled unfixable.
+
+The rule performed as a **filter**, not as a success predictor:
+
+- **It never misfired in the direction that costs budget.** Every
+  expression-level residual that was dropped stayed a floor under test. Lane F
+  spent two builds testing the parenthesized-nested-sum exception on
+  `SetVolume`'s dot product — both groupings produced a byte-identical
+  residual, so the exception did not apply. Lane E confirmed three separate
+  floors (`data + (pos+4)` vs `(data+4) + pos` associativity produced a
+  *byte-identical object*). Lane B spent one diagnostic pass and zero build
+  cycles on `UpdateChase`.
+- **Register swaps were symptoms in 100% of cases, across every lane, without
+  exception.** `FlowIf::Activate` opened with a 45-instruction `r29↔r30` swap
+  flagged "one liveness cause, start there" — it had no liveness cause at all
+  and evaporated when the *last control-flow difference* was fixed.
+  `RndTransformable::Load` had 54 register-swap instructions across 8 pairs and
+  reached byte-exact 100% without a single register-motivated edit.
+  `Sound::Handle`'s 40-instruction and `HamCharacter::Poll`'s 33-instruction
+  cascades each collapsed to zero from one unrelated edit elsewhere.
+- **But statement-level did not reliably convert.** Lane C was 2-for-5 with
+  three *correct* diagnoses that measured worse (`ObjectDir::Save` −9%,
+  `BuildNGSheet` −0.6%, `DrawShowing` −0.2%). The discriminator it found:
+  **fixes that removed work paid; fixes that added a local and raised
+  register/stack pressure regressed.**
+
+### REVISED RULE — do not discard a correct edit because it measures worse
+
+Three lanes independently hit this, so it is not noise:
+
+- Lane B: the `OnPopulateMoves` loop-bound fix measured **95.4 → 95.2 applied
+  first, and +1.1% applied after an unrelated register-pressure fix.** A strict
+  "revert anything that lowers" policy would have thrown away a correct edit
+  and the function would have stopped at 97.0 instead of 98.1.
+- Lane E: the `Hmx::Rect` argument reversal — **a real bug fix** — dropped the
+  score 84.6 → 83.8 on its own, even though it moved all four `stfs` onto the
+  target's exact FPRs. Alignment noise masked it until the linkage fix landed
+  on top and took it to 97.9. Kept on the evidence, not the number.
+- Lane F: removing an inline wrapper that the home-area count correctly
+  flagged made things *worse*, because the target wanted one level, not zero.
+
+**Procedure:** when an edit you believe is *correct* measures worse, record the
+delta, park it, and retry it after every subsequent landed change. Only call it
+a genuine trade-off once it has failed to pay following your last successful
+fix. And when the edit fixes a *behavioural* bug, keep it regardless of the
+number — live bugs outrank match %.
 
 ### One honest caveat worth recording
 
