@@ -136,11 +136,12 @@ void RndTexBlender::DrawShowing() {
             }
             std::vector<std::pair<RndTexBlendController *, float> > nearList, farList,
                 customList;
+            float influence = mControllerInfluence;
             FOREACH (it, mControllerList) {
                 RndTexBlendController *curCtrlr = *it;
                 float second;
                 RndTexBlendController::BlendState state =
-                    curCtrlr->GetBlendState(second, mControllerInfluence);
+                    curCtrlr->GetBlendState(second, influence);
                 switch (state) {
                 case 1:
                     nearList.push_back(std::make_pair(curCtrlr, second));
