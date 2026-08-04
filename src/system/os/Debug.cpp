@@ -491,30 +491,36 @@ void Debug::DoCrucible(ModalType type, const char *msg, void *addr) {
     if (!TheSystemArgs.empty()) {
         exeName = TheSystemArgs.front();
     }
-    StackString<256> exePath(exeName);
-    StackString<256> exeBase(exePath.c_str());
-    StackString<256> baseName(FileGetBase(exeBase.c_str()));
-    exeBase = baseName;
-    if (strlen(exeBase.c_str()) > 3) {
-        if (exeBase[strlen(exeBase.c_str()) - 2] == '_') {
-            exeBase[strlen(exeBase.c_str()) - 2] = '\0';
+    {
+        StackString<256> exePath(exeName);
+        StackString<256> exeBase(exePath.c_str());
+        {
+            StackString<256> baseName(FileGetBase(exeBase.c_str()));
+            exeBase = baseName;
         }
+        if (strlen(exeBase.c_str()) > 3) {
+            if (exeBase[strlen(exeBase.c_str()) - 2] == '_') {
+                exeBase[strlen(exeBase.c_str()) - 2] = '\0';
+            }
+        }
+        exePath.ReplaceAll('\\', '/');
+        detailPoint.AddPair("path", DataNode(exePath.c_str()));
+        const char *appName = mCrucibleApp;
+        if (!mCrucibleApp) {
+            appName = exeBase.c_str();
+        }
+        mainPoint.AddPair("application", DataNode(appName));
     }
-    exePath.ReplaceAll('\\', '/');
-    detailPoint.AddPair("path", DataNode(exePath.c_str()));
-    const char *appName = mCrucibleApp;
-    if (!mCrucibleApp) {
-        appName = exeBase.c_str();
+    {
+        StackString<256> argsStr;
+        for (unsigned int i = 0; i < TheSystemArgs.size(); i++) {
+            StackString<256> arg(TheSystemArgs[i]);
+            arg.ReplaceAll('\\', '/');
+            argsStr += arg.c_str();
+            argsStr += "\r\n";
+        }
+        detailPoint.AddPair("args", DataNode(argsStr.c_str()));
     }
-    mainPoint.AddPair("application", DataNode(appName));
-    StackString<256> argsStr;
-    for (unsigned int i = 0; i < TheSystemArgs.size(); i++) {
-        StackString<256> arg(TheSystemArgs[i]);
-        arg.ReplaceAll('\\', '/');
-        argsStr += arg.c_str();
-        argsStr += "\r\n";
-    }
-    detailPoint.AddPair("args", DataNode(argsStr.c_str()));
     detailPoint.AddPair("opsys", DataNode(mKernelVersion));
     mainPoint.AddPair("extra", DataNode(""));
     if (type == kModalFail) {
@@ -528,10 +534,12 @@ void Debug::DoCrucible(ModalType type, const char *msg, void *addr) {
         stackTrace += dataCallstack.c_str();
         detailPoint.AddPair("stack", DataNode(stackTrace.c_str()));
     }
-    StackString<256> cheatsMsg;
-    AppendCheatsLog(cheatsMsg);
-    if (*cheatsMsg.c_str() != '\0') {
-        detailPoint.AddPair("history", DataNode(cheatsMsg.c_str()));
+    {
+        StackString<256> cheatsMsg;
+        AppendCheatsLog(cheatsMsg);
+        if (*cheatsMsg.c_str() != '\0') {
+            detailPoint.AddPair("history", DataNode(cheatsMsg.c_str()));
+        }
     }
     if (mCrucibleCallback) {
         mCrucibleCallback(type, detailPoint);
