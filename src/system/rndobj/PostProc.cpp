@@ -464,8 +464,8 @@ void RndPostProc::LoadRev(BinStreamRev &d) {
     }
     if (d.rev > 9) {
         if (d.rev < 0x12) {
-            d >> mColorXfm.mLevelInLo >> mColorXfm.mLevelInHi;
-            d >> mColorXfm.mLevelOutLo >> mColorXfm.mLevelOutHi;
+            d.stream >> mColorXfm.mLevelInLo >> mColorXfm.mLevelInHi;
+            d.stream >> mColorXfm.mLevelOutLo >> mColorXfm.mLevelOutHi;
         }
         d >> mPosterLevels;
     }
