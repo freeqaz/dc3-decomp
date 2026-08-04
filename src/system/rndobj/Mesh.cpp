@@ -1153,7 +1153,7 @@ void RndMesh::SetVolume(RndMesh::Volume vol) {
                         boxa0.GrowToContain(it->pos, &it->pos == &mVerts.begin()->pos);
                     }
                     if (!CheckBSPTree(mBSPTree, boxa0)) {
-                        MILO_LOG("BSP tree outside bounding box");
+                        MILO_NOTIFY("BSP tree outside bounding box");
                         RELEASE(mBSPTree);
                     }
                 }
