@@ -2806,8 +2806,7 @@ void HamDirector::OnPopulateMoves() {
         }
     }
 
-    int numKeys = moveInstSymKeys->size();
-    for (int i = 0; i != numKeys; i++) {
+    for (int i = 0; i < moveInstSymKeys->size(); i++) {
             if ((*moveInstSymKeys)[i].value == "") continue;
 
             float keyFrame = (*moveInstSymKeys)[i].frame;
