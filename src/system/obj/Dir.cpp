@@ -394,9 +394,10 @@ void ObjectDir::Save(BinStream &bs) {
     for (int i = 0; i < mInlinedDirs.size(); i++) {
         InlinedDir &id = mInlinedDirs[i];
         switch (id.mType) {
-        case kInlineCachedShared:
-            id.shared = true;
-        case kInlineCached: {
+        case kInlineCached:
+        case kInlineCachedShared: {
+            if (id.mType == kInlineCachedShared)
+                id.shared = true;
             if (bs.Cached()) {
                 bool old = gLoadingProxyFromDisk;
                 gLoadingProxyFromDisk = false;
