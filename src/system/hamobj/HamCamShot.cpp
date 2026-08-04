@@ -265,7 +265,7 @@ void HamCamShot::UpdateTargetsFlipped() {
                     } while (c != '\0');
 
                     RndTransformable *newTarget = target;
-                    if (!flipped) {
+                    if (flipped) {
                         if (strstr(name, "player0") && mPlayerFlag == kHamPlayer0) {
                             buf[6] = '1';
                             newTarget = venueWorld2->Find<RndTransformable>(buf, true);
