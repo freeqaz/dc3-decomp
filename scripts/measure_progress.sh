@@ -139,6 +139,29 @@ git_dirty_of() {
     git -C "$1" status --porcelain --untracked-files=no 2>/dev/null | wc -l | tr -d ' '
 }
 
+# Which dtk / objdiff-cli does a build directory actually use? Read it out of
+# the generated build.ninja rather than assuming. dtk decides function
+# boundaries from symbols.txt and objdiff-cli computes the percentages, so a
+# version skew between the two sides of the comparison invents differences that
+# have nothing to do with the code. The baseline is therefore built with the
+# *current* side's binaries.
+tool_from_ninja() {
+    local dir="$1" rule="$2" pat="$3" path
+    [[ -f "${dir}/build.ninja" ]] || return 1
+    path="$(sed -n "/^rule ${rule}\$/,/^ *description/p" "${dir}/build.ninja" 2>/dev/null \
+        | tr '\n' ' ' | grep -oE "${pat}" | head -n1 | sed -E 's/ .*//')"
+    [[ -n "${path}" ]] || return 1
+    case "${path}" in
+        /*) ;;
+        *) path="$(cd "${dir}" && realpath -e "${path}" 2>/dev/null)" || return 1 ;;
+    esac
+    [[ -x "${path}" ]] || return 1
+    echo "${path}"
+}
+
+dtk_of_dir() { tool_from_ninja "$1" split '[^ $]+dtk xex split'; }
+objdiff_of_dir() { tool_from_ninja "$1" report '[^ $]+objdiff-cli report generate'; }
+
 # Is `dir`'s report.json fully up to date with respect to its ninja graph?
 # `ninja -n` is a pure dry run; "no work to do" is the only clean answer.
 ninja_is_clean() {
@@ -214,17 +237,32 @@ echo "Measuring progress: ${BASELINE_SHORT} (baseline) -> ${CURRENT_SHORT} (curr
 # --- Provenance banner: say exactly what is being compared ---
 CURRENT_HEAD="$(git_head_of "${CURRENT_DIR}")"
 CURRENT_DIRTY="$(git_dirty_of "${CURRENT_DIR}")"
-DTK_SHA="unknown"
-if DTK_PROBE="$(cd "${MAIN_REPO}" && realpath -e ../jeff/target/release/dtk 2>/dev/null)"; then
-    DTK_SHA="$(sha_of "${DTK_PROBE}")"
-fi
-OBJDIFF_SHA="unknown"
-if OBJDIFF_PROBE="$(cd "${MAIN_REPO}" && realpath -e ../objdiff/target/release/objdiff-cli 2>/dev/null)"; then
-    OBJDIFF_SHA="$(sha_of "${OBJDIFF_PROBE}")"
-fi
+# Tools the *current* side actually built with; the baseline is forced to match.
+BUILD_DTK="$(dtk_of_dir "${CURRENT_DIR}" || dtk_of_dir "${MAIN_REPO}" \
+    || (cd "${MAIN_REPO}" && realpath -e ../jeff/target/release/dtk 2>/dev/null) || true)"
+BUILD_OBJDIFF="$(objdiff_of_dir "${CURRENT_DIR}" || objdiff_of_dir "${MAIN_REPO}" \
+    || (cd "${MAIN_REPO}" && realpath -e ../objdiff/target/release/objdiff-cli 2>/dev/null) || true)"
+DTK_SHA="$(sha_of "${BUILD_DTK:-/nonexistent}")"
+OBJDIFF_SHA="$(sha_of "${BUILD_OBJDIFF:-/nonexistent}")"
+
 echo "  baseline : ${BASELINE_COMMIT}"
 echo "  current  : ${CURRENT_DIR} @ ${CURRENT_HEAD} (${CURRENT_DIRTY} tracked file(s) modified)"
-echo "  dtk      : ${DTK_SHA:0:12}   objdiff: ${OBJDIFF_SHA:0:12}"
+echo "  dtk      : ${DTK_SHA:0:12}  ${BUILD_DTK:-<unresolved>}"
+echo "  objdiff  : ${OBJDIFF_SHA:0:12}  ${BUILD_OBJDIFF:-<unresolved>}"
+
+# A worktree that splits with a different dtk than the main repo produces a
+# report that differs from main's for tool reasons alone. Say so.
+if [[ "${CURRENT_DIR}" != "${MAIN_REPO}" ]]; then
+    MAIN_DTK="$(dtk_of_dir "${MAIN_REPO}" || true)"
+    if [[ -n "${MAIN_DTK}" && "$(sha_of "${MAIN_DTK}")" != "${DTK_SHA}" ]]; then
+        echo "  WARNING: this tree splits with a different dtk than the main repo:"
+        echo "             current : ${BUILD_DTK}"
+        echo "             main    : ${MAIN_DTK}"
+        echo "           Function boundaries can differ, so comparing this tree's numbers"
+        echo "           against main's directly will show phantom diffs. (The baseline"
+        echo "           built below uses this tree's dtk, so THIS comparison is sound.)"
+    fi
+fi
 if [[ "${CURRENT_DIRTY}" -gt 0 ]]; then
     echo "  NOTE: the 'current' tree has ${CURRENT_DIRTY} uncommitted tracked change(s), so the"
     echo "        numbers below include work that is in no commit. If this is a shared"
@@ -379,28 +417,32 @@ else
         echo "${abs_path}"
     }
 
-    # Extract tool paths used in the main build and pass them explicitly
-    for tool_flag_pair in \
-        "--dtk:../jeff/target/release/dtk" \
-        "--objdiff:../objdiff/target/release/objdiff-cli" \
-        "--wrapper:../wibo/build/release/wibo"; do
-        flag="${tool_flag_pair%%:*}"
-        rel="${tool_flag_pair#*:}"
-        abs="$(resolve_tool "${rel}")" && CONFIGURE_ARGS+=("${flag}" "${abs}")
+    # Drop any --dtk/--objdiff inherited from the main repo's configure_args.
+    # They are replaced below by the *current* side's binaries so both halves of
+    # the comparison are produced by the same tools. Leaving both in relied on
+    # configure.py preferring the last occurrence while the explicit split step
+    # below picked the first — i.e. the two split invocations could disagree.
+    FILTERED_ARGS=()
+    skip_next=0
+    for arg in "${CONFIGURE_ARGS[@]+"${CONFIGURE_ARGS[@]}"}"; do
+        if [[ "${skip_next}" -eq 1 ]]; then skip_next=0; continue; fi
+        if [[ "${arg}" == "--dtk" || "${arg}" == "--objdiff" ]]; then skip_next=1; continue; fi
+        FILTERED_ARGS+=("${arg}")
     done
+    CONFIGURE_ARGS=("${FILTERED_ARGS[@]+"${FILTERED_ARGS[@]}"}")
+
+    [[ -n "${BUILD_DTK}" ]] && CONFIGURE_ARGS+=("--dtk" "${BUILD_DTK}")
+    [[ -n "${BUILD_OBJDIFF}" ]] && CONFIGURE_ARGS+=("--objdiff" "${BUILD_OBJDIFF}")
+    if abs="$(resolve_tool "../wibo/build/release/wibo")"; then
+        CONFIGURE_ARGS+=("--wrapper" "${abs}")
+    fi
 
     echo "Using configure args: ${CONFIGURE_ARGS[*]}"
 
-    # Extract dtk path from configure args so we can run the split step directly.
-    # This avoids a misleading ninja "manifest still dirty" loop when the split
-    # fails and build/373307D9/config.json is never produced.
-    DTK_BIN=""
-    for ((i = 0; i < ${#CONFIGURE_ARGS[@]}; i++)); do
-        if [[ "${CONFIGURE_ARGS[$i]}" == "--dtk" && $((i + 1)) -lt ${#CONFIGURE_ARGS[@]} ]]; then
-            DTK_BIN="${CONFIGURE_ARGS[$((i + 1))]}"
-            break
-        fi
-    done
+    # Same dtk for the explicit split step as for the generated ninja manifest.
+    # Running it here (instead of only via ninja) gives a clear error path when
+    # the split fails and build/373307D9/config.json is never produced.
+    DTK_BIN="${BUILD_DTK}"
 
     # --- Generate split config explicitly (clear error path if dtk fails) ---
     if [[ -n "${DTK_BIN}" && -x "${DTK_BIN}" ]]; then
