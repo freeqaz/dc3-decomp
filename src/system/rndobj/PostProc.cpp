@@ -434,7 +434,7 @@ void RndPostProc::LoadRev(BinStreamRev &d) {
                 );
             }
         }
-        d >> (Key<float>&)mFlickerModBounds >> (Key<float>&)mFlickerTimeBounds;
+        d.stream >> (Key<float>&)mFlickerModBounds >> (Key<float>&)mFlickerTimeBounds;
         if (d.rev < 9) {
             mFlickerModBounds.x = 1.0f - mFlickerModBounds.x;
             mFlickerModBounds.y = 1.0f - mFlickerModBounds.y;
@@ -442,7 +442,7 @@ void RndPostProc::LoadRev(BinStreamRev &d) {
         if (d.rev < 0x1D) {
             mFlickerModBounds.x = 0.0f;
         }
-        d >> (Key<float>&)mNoiseBaseScale >> mNoiseTopScale >> mNoiseIntensity;
+        d.stream >> (Key<float>&)mNoiseBaseScale >> mNoiseTopScale >> mNoiseIntensity;
         if (d.rev > 0xC) {
             d >> mNoiseStationary;
         }
@@ -522,10 +522,11 @@ void RndPostProc::LoadRev(BinStreamRev &d) {
         mBloomThreshold *= 4.0f;
     }
     if (d.rev > 0x18) {
-        d >> mRefractMap >> mRefractDist >> (Key<float>&)mRefractScale
-            >> (Key<float>&)mRefractPanning >> mRefractAngle;
+        d >> mRefractMap >> mRefractDist;
+        d.stream >> (Key<float>&)mRefractScale >> (Key<float>&)mRefractPanning
+            >> mRefractAngle;
         if (d.rev > 0x1B) {
-            d >> (Key<float>&)mRefractVelocity;
+            d.stream >> (Key<float>&)mRefractVelocity;
         }
     }
     if (d.rev > 0x19) {
