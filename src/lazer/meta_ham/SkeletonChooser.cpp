@@ -1118,7 +1118,7 @@ void SkeletonChooser::ChoosePlayerSides() {
                 TheGameData->AssignSkeleton(1, -1);
             }
         } else {
-            int swapTest = pPlayer1Skeleton->GetUnkab0().x >= pPlayer2Skeleton->GetUnkab0().x;
+            bool swapTest = pPlayer1Skeleton->GetUnkab0().x >= pPlayer2Skeleton->GetUnkab0().x;
             if (side0 == kSkeletonRight) {
                 if (!swapTest) {
                     SwapPlayerSides();
@@ -1130,9 +1130,7 @@ void SkeletonChooser::ChoosePlayerSides() {
             }
         }
     } else {
-        bool inverse = (id0 > 0);
-        bool isPos = (id1 > 0);
-        if (inverse != isPos) {
+        if ((id0 > 0) != (id1 > 0)) {
             if (locked) {
                 int activeID = (id0 > 0) ? id0 : id1;
                 Skeleton *pPlayerSkeleton = TheGestureMgr->GetSkeletonByTrackingID(activeID);
@@ -1152,7 +1150,7 @@ void SkeletonChooser::ChoosePlayerSides() {
                         SwapPlayerSides();
                     }
                 } else if (side == kSkeletonLeft) {
-                    if (!xGtThresh) {
+                    if (xGtThresh) {
                         SwapPlayerSides();
                     }
                 }
@@ -1161,12 +1159,12 @@ void SkeletonChooser::ChoosePlayerSides() {
     }
 }
 
-static float sFloat0 = 0.03f;
-static float sFloat1 = 0.37f;
-static float sFloat2 = 0.2f;
-static float sFloat3 = 0.6f;
-static float sFloat4 = 0.1f;
-static float sFloat5 = 0.25f;
+float sFloat0 = 0.03f;
+float sFloat1 = 0.37f;
+float sFloat2 = 0.2f;
+float sFloat3 = 0.6f;
+float sFloat4 = 0.1f;
+float sFloat5 = 0.25f;
 
 void SkeletonChooser::DrawDebug() {
     if (mDrawDebug) {
@@ -1194,7 +1192,7 @@ void SkeletonChooser::DrawDebug() {
         static Hmx::Color textColor(1.0f, 1.0f, 1.0f, 1.0f);
 
         TheRnd.DrawRectScreen(
-            Hmx::Rect(sFloat5 + 0.05f, sFloat3, sFloat4 - 0.05f, sFloat2),
+            Hmx::Rect(sFloat2, sFloat4 - 0.05f, sFloat3, sFloat5 + 0.05f),
             bgColor,
             nullptr,
             nullptr,
