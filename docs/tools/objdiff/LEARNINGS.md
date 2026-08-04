@@ -142,7 +142,7 @@ bool IsActive() { bool r = (flags & F); return r; }  // Still generates clrlwi
 bool HasData() { return data ? true : false; }        // Still generates clrlwi
 ```
 
-**When unfixable:** When our build generates `clrlwi` that the target doesn't have, and no source-level change removes it. See [detailed patterns doc](decomp/patterns/fixable-bool-mask.md#step-4-when-its-actually-unfixable).
+**When unfixable:** When our build generates `clrlwi` that the target doesn't have, and no source-level change removes it. See [detailed patterns doc](../../decomp/patterns/fixable-bool-mask.md#step-4-when-its-actually-unfixable).
 
 ---
 
@@ -649,7 +649,12 @@ objdiff-cli diff -p . "?GetRefractEnabled@RndMat@@QAA_N_N@Z" -f json --include-i
 
 ## Tool Improvement Ideas
 
-See [OBJDIFF_WISHLIST.md](OBJDIFF_WISHLIST.md) for proposed objdiff-cli enhancements that don't exist yet.
+The separate `WISHLIST.md` that used to live here was deleted in `1932373d`, and most of
+what it proposed has since shipped in the milohax objdiff fork: pattern analysis
+(`--analyze`), batch mode (`--batch`), an instruction context window (`-C N`),
+full listings (`--full-listing`), and markdown report output (`-f markdown`). For what the
+fork actually supports today see [CLI_OPTIONS.md](CLI_OPTIONS.md) and
+[JSON_EXTENSIONS.md](JSON_EXTENSIONS.md).
 
 ---
 

@@ -95,7 +95,7 @@ get objdiff re-pointed first:
 | [`fixable-declarations.md#offset-swap`](fixable-declarations.md#offset-swap) | `OFFSET_SWAP` | Stable — deliberately stays in declarations; scoping/packing moves stack slots |
 | [`PERMUTER_ROI_ANALYSIS.md#instruction-scheduling`](PERMUTER_ROI_ANALYSIS.md#instruction-scheduling) | `REGISTER_SWAP` secondary | Added 2026-08-03. Re-pointed 2026-08-04 — objdiff now emits this path for DC3 (was `permuter-roi.md#…`, an RB3 name) |
 | [`fixable-liveness.md#diagnostic-order-for-a-register-swap-residual`](fixable-liveness.md#diagnostic-order-for-a-register-swap-residual) | `REGISTER_SWAP`, `PROLOGUE_MISMATCH` | Added 2026-08-04. Replaces the RB3-only `permuter-roi.md#register-allocation-cascades` |
-| [`fixable-liveness.md#lever-4-scope-a-declaration-into-the-block-that-uses-it-stack-lever-not-a-register-lever`](fixable-liveness.md#lever-4-scope-a-declaration-into-the-block-that-uses-it-stack-lever-not-a-register-lever) | `OFFSET_SWAP` secondary | Added 2026-08-04. Replaces the RB3-only `permuter-roi.md#stack-slot-inversion` |
+| [`fixable-liveness.md#lever-4--scope-a-declaration-into-the-block-that-uses-it-stack-lever-not-a-register-lever`](fixable-liveness.md#lever-4--scope-a-declaration-into-the-block-that-uses-it-stack-lever-not-a-register-lever) | `OFFSET_SWAP` secondary | Added 2026-08-04. Replaces the RB3-only `permuter-roi.md#stack-slot-inversion`. **objdiff emits `#lever-4-scope-…` with one hyphen and that does not resolve** — the heading's em dash is stripped and *both* surrounding spaces become hyphens. `check_doc_links.py` cannot see this because its `slugify` collapses whitespace runs; GitHub does not. Keep the heading, fix objdiff. |
 
 All three original anchors are asserted by unit test in objdiff
 (`doc_link_tests::dc3_first_url_anchor_contract`) — objdiff renders only the **first**
@@ -239,13 +239,13 @@ These patterns resist simple source-level fixes. Each documents what would be ne
 |---------|------------|-------------|------|
 | Linker Merged (ICF) | ~350 functions | 0.5-3% | [verifiable-icf.md](verifiable-icf.md#linker-merged-icf) (verify first) |
 | ~~MakeString Array-Size ICF~~ | ~~2,550+ functions~~ | ~~1-5%~~ | [verifiable-icf.md](verifiable-icf.md#makestring-array-size-icf-resolved) — **Resolved** in objdiff (2026-03-03) |
-| LTCG/Global Pooling | varies | 0.5-1% | [verifiable-icf.md](verifiable-icf.md#ltcg-global-pooling) |
+| LTCG/Global Pooling | varies | 0.5-1% | [verifiable-icf.md](verifiable-icf.md#ltcgglobal-pooling) |
 | Float Constant Pooling | common | 1-2 instr | [verifiable-icf.md](verifiable-icf.md#float-constant-pooling) |
 | Register Allocation | 836 flagged (≥30% mislabeled) | 1-3% | [unfixable-compiler.md](unfixable-compiler.md#register-allocation) (mechanism understood) — **work [fixable-liveness.md](fixable-liveness.md) first**; the swap is *always* a symptom, and the flag itself is unreliable ([breakdown](#at_limit-breakdown)) |
 | Dead Store Elimination / Destructor Merging | RAII wrappers | 1-2% | [unfixable-compiler.md](unfixable-compiler.md#dead-store-elimination--destructor-merging) |
 | Anonymous Namespace Hash | common | 0.5-3% | [unfixable-compiler.md](unfixable-compiler.md#anonymous-namespace-hash-mismatch) |
 | Build Env Regression (Headers) | rare | 5-10% | [unfixable-compiler.md](unfixable-compiler.md#build-environment-regression-from-unrelated-headers) |
-| ASSERT_REVS Scheduling | ~10% | ~0.8-0.9% | [unfixable-compiler.md](unfixable-compiler.md#assert_revs-scheduling) |
+| ASSERT_REVS Scheduling | ~10% | ~0.8-0.9% | [unfixable-compiler.md](unfixable-compiler.md#assert_revs--init_revs-scheduling) |
 | fmadds vs Separate Ops (mixed) | float math | 1-3% | [unfixable-compiler.md](unfixable-compiler.md#fmadds-vs-separate-ops) — try [fixable-fsel-fma.md](fixable-fsel-fma.md) first |
 | fsel Register Pressure | float clamp | 5-20% | [unfixable-compiler.md](unfixable-compiler.md#fsel-register-pressure) — needs c2.dll patch |
 | Boolean Negation (subfic/subic) | ptr→bool sites | 3-8% | [unfixable-compiler.md](unfixable-compiler.md#boolean-negation-subfic-vs-subic) |
@@ -463,7 +463,7 @@ From 143 successful fine-tuning attempts (90%+ start, 100% end):
 - [fixable-bool-mask.md](fixable-bool-mask.md) — Bool mask (`clrlwi`) fixes
 - [fixable-inline-boundary.md](fixable-inline-boundary.md) — Inline ctor location, sort comparator inlining, ICF cascade fix
 - [unfixable-compiler.md](unfixable-compiler.md) — Hard patterns: register swap, ASSERT_REVS, fmadds, fsel pressure, guard naming
-- [TECHNICAL_NOTES.md: Offset Diagnosis](../TECHNICAL_NOTES.md#offset-mismatch-diagnosis-off--n) — How to diagnose `[off:-N]` mismatches (class vs stack)
+- [TECHNICAL_NOTES.md: Offset Diagnosis](../TECHNICAL_NOTES.md#offset-mismatch-diagnosis-off-n) — How to diagnose `[off:-N]` mismatches (class vs stack)
 - [TECHNICAL_NOTES.md: MSVC Encoding](../TECHNICAL_NOTES.md#msvc-mangled-number-encoding) — Decode MakeString template sizes
 - [verifiable-icf.md](verifiable-icf.md) — ICF, LTCG, float constant pooling
 - [harmful-avoid.md](harmful-avoid.md) — Member aliasing, child pointer in loop
