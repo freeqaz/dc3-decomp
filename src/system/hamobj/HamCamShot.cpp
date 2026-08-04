@@ -181,9 +181,11 @@ void HamCamShot::UpdateTargetsFlipped() {
                      it != mTargets.end();
                      ++it) {
                     HamCharacter *character = CharacterNameToCharacter(it->mTarget);
-                    ObjectDir *clipsDir = NULL;
+                    ObjectDir *clipsDir;
                     if (character != NULL) {
                         clipsDir = character->Find<ObjectDir>("clips", true);
+                    } else {
+                        clipsDir = NULL;
                     }
 
                     if (((mPlayerFlag == kHamPlayer1 && targetIdx % 2 == 0)
