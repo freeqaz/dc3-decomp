@@ -1605,9 +1605,10 @@ void MoveDir::DetectRange(
 }
 
 void MoveDir::DrawShowing() {
-    if (this != Dir()) {
+    ObjectDir *dir = this;
+    if (dir != Dir()) {
         if (mDebugCollision) {
-            SongCollision *songCol = Find<SongCollision>("SongCollision", false);
+            SongCollision *songCol = dir->Find<SongCollision>("SongCollision", false);
             if (songCol) {
                 float beat = TheTaskMgr.Beat();
                 int intBeat = (int)beat;
@@ -1684,7 +1685,7 @@ void MoveDir::DrawShowing() {
         }
     } else if (TheLoadMgr.EditMode()) {
         if (mDancerSeq) {
-            ObjDirItr<SkeletonViz> it(this, true);
+            ObjDirItr<SkeletonViz> it(dir, true);
             if (it) {
                 StubCameraInput camInput;
                 camInput.PollTracking();
