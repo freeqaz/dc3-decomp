@@ -374,6 +374,9 @@ void AnimTask::Poll(float time) {
             TheTaskMgr.QueueTaskDelete(mBlendTask);
     }
 
+    // The raw frame in animation space. Note this is never overwritten below: the
+    // looped / waited / clamped value is a separate value handed to SetFrame, and
+    // mPrevFrame always records this raw one.
     float frame;
     if (!mLoop && time <= mFrameSpan && mFrameSpan != 0.0f) {
         frame = mEaseFunc(time / mFrameSpan, mEasePower, 1.0f) * mScale * mFrameSpan
@@ -386,6 +389,9 @@ void AnimTask::Poll(float time) {
         float wrappedFrame = ModRange(mMin, mMax, frame);
         mAnim->SetFrame(wrappedFrame, blend);
         if (mListener) {
+            // Which lap of [mMin, mMax] we are on. Both quotients must stay
+            // separate divisions -- sharing a `range` local lets MSVC's reciprocal
+            // transform turn them into one fdivs plus two fmuls.
             if ((int)(mPrevFrame / (mMax - mMin)) != (int)(frame / (mMax - mMin))) {
                 static Message msg("on_anim_event", DataNode(Symbol("looped")));
                 mListener->Handle(msg, false);
@@ -394,12 +400,20 @@ void AnimTask::Poll(float time) {
     } else {
         float setFrame;
         if (mWait) {
+            // A waiting task wraps into the animatable's *own* frame range rather
+            // than into [mMin, mMax], and snaps to whichever end of [mMin, mMax] it
+            // is travelling from / to at the two boundaries.
             float startFrame = mAnim->StartFrame();
             float endFrame = mAnim->EndFrame();
             float animMin = Min(startFrame, endFrame);
             float animMax = Max(startFrame, endFrame);
             float animRange = animMax - animMin;
             float endpoint;
+            // The two snap cases share one fmod. It has to live inside the second
+            // case's block with the first jumping into it: that is what puts the
+            // shared tail on the second arm's fall-through path, the way the target
+            // lays it out. A goto to a statement *after* the if/else chain compiles
+            // to the other placement (measured).
             if (time == 0.0f) {
                 endpoint = mScale > 0.0f ? mMin : mMax;
                 goto snap;
