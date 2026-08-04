@@ -393,6 +393,7 @@ void ObjectDir::Save(BinStream &bs) {
     boolVec.resize(mInlinedDirs.size(), false);
     for (int i = 0; i < mInlinedDirs.size(); i++) {
         InlinedDir &id = mInlinedDirs[i];
+        const FilePath &idFile = id.file;
         switch (id.mType) {
         case kInlineCached:
         case kInlineCachedShared: {
@@ -402,7 +403,7 @@ void ObjectDir::Save(BinStream &bs) {
                 bool old = gLoadingProxyFromDisk;
                 gLoadingProxyFromDisk = false;
                 DirLoader::SetCacheMode(false);
-                id.dir.LoadFile(id.file, false, false, kLoadFront, true);
+                id.dir.LoadFile(idFile, false, false, kLoadFront, true);
                 DirLoader::SetCacheMode(true);
                 gLoadingProxyFromDisk = old;
             } else {
@@ -414,7 +415,7 @@ void ObjectDir::Save(BinStream &bs) {
             MILO_ASSERT(id.mType == kInlineAlways, 0x211);
             int gg = 0;
             for (; gg != mSubDirs.size(); gg++) {
-                if (mSubDirs[gg].GetFile() == id.file)
+                if (mSubDirs[gg].GetFile() == idFile)
                     break;
             }
             MILO_ASSERT(gg < mSubDirs.size(), 0x21A);
@@ -427,7 +428,7 @@ void ObjectDir::Save(BinStream &bs) {
         }
         }
         if (id.dir) {
-            boolVec[i] = id.shared && !bs.AddSharedInlined(id.file);
+            boolVec[i] = id.shared && !bs.AddSharedInlined(idFile);
         } else {
             boolVec[i] = true;
         }
