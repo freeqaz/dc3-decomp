@@ -324,6 +324,32 @@ insert/delete clusters disappeared completely (the residual became a pure
    (`lookup_struct_offset` / `struct-info`).
 3. That member's type has a small inline mutator the accessor is calling.
 
+### CORRECTION (same day) — a single call site does not determine the body
+
+The `SetEmitRate` fix below **was reverted.** It gained +0.9% on
+`RhythmBattlePlayer::UpdateScore` (1812 B) and lost 0.9% on `RndScaleObject`
+(2928 B) — byte-weighted, a net loss. Measured A/B:
+
+| `SetEmitRate` form | `UpdateScore` | `RndScaleObject` |
+|---|---|---|
+| `mEmitRate.Set(x, y)` | 97.5% | **90.4%** |
+| `mEmitRate.x = x; mEmitRate.y = y;` | **98.4%** | 89.5% |
+
+Two call sites in the same binary disagree about which form the original used.
+So **the home-write evidence at one call site constrains an accessor's body; it
+does not determine it.** The lever remains valid as a *diagnostic* — it
+correctly identified that `UpdateScore` has one inline level too many — but the
+*fix* must be validated across every caller, weighted by size, before it lands.
+Where callers disagree, the real difference is somewhere other than the
+accessor, and flattening it is just moving the error around.
+
+**The regression check itself is the trap.** The check was run and it passed,
+because the line-number-to-enclosing-function mapping resolved
+`Utl.cpp:2077` to `ResourceFileCacheHelper::CacheFile` (line 1923) instead of
+`RndScaleObject` (line 1949). `CacheFile` is three instructions and was 100%
+either way. **Resolve the enclosing symbol from the objdiff symbol list, not
+from the nearest preceding line matching a function-definition regex.**
+
 ### Caveat — Re-measure Every Caller
 
 This is a header edit. Before committing, re-measure **every** other caller of
