@@ -399,15 +399,14 @@ void AnimTask::Poll(float time) {
             float endFrame = mAnim->EndFrame();
             float animMin = Min(startFrame, endFrame);
             float animMax = Max(startFrame, endFrame);
-            if (time != 0.0f) {
-                if (time < mFrameSpan) {
-                    float wrapped = fmod(frame, animMax - animMin);
-                    setFrame = wrapped + animMin;
-                } else {
-                    setFrame = fmod(mScale > 0.0f ? mMax : mMin, animMax - animMin);
-                }
+            float animRange = animMax - animMin;
+            if (time == 0.0f) {
+                setFrame = fmod(mScale > 0.0f ? mMin : mMax, animRange);
+            } else if (time >= mFrameSpan) {
+                setFrame = fmod(mScale > 0.0f ? mMax : mMin, animRange);
             } else {
-                setFrame = fmod(mScale > 0.0f ? mMin : mMax, animMax - animMin);
+                float wrapped = fmod(frame, animRange);
+                setFrame = wrapped + animMin;
             }
         } else {
             setFrame = Clamp(mMin, mMax, frame);
