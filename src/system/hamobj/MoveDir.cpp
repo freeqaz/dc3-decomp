@@ -1667,8 +1667,8 @@ void MoveDir::DrawShowing() {
 
                     for (playerIdx = 0; playerIdx < 2; playerIdx++) {
                         const Vector3 &worldPos = out.WorldPos(playerIdx);
-                        Vector3 offsetPos = out.Offset(playerIdx + 4);
-                        offsetPos += worldPos;
+                        Vector3 offsetPos;
+                        Add(worldPos, out.Offset(playerIdx + 4), offsetPos);
                         Hmx::Color altColor;
                         altColor.Set(zero, 1.0f, zero, 1.0f);
                         TheRnd.DrawLine(worldPos, offsetPos, altColor, false);
