@@ -3041,12 +3041,11 @@ void HamDirector::DrawIconMan(Difficulty diff, float beat, float startBeat, floa
                 if (beat - startBeat > duration + beatExtra) {
                     poseBeat -= duration;
                 }
-                PoseIconMan(clip, poseBeat, NULL, (bool)tex, NULL, 0.0f, 0.0f);
+                PoseIconMan(clip, poseBeat, tex, true, NULL, 0.0f, 0.0f);
             }
         }
     } else {
-        static Symbol clip_sym2("clip");
-        PropKeys *clipKeys = GetPropKeys(diff, clip_sym2);
+        PropKeys *clipKeys = GetPropKeys(diff, "clip");
         if (clipKeys) {
             Keys<Symbol, Symbol> *keys = clipKeys->AsSymbolKeys();
             float frame = BeatToSeconds(beat) * 30.0f;
