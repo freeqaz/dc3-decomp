@@ -157,7 +157,8 @@ void RndTexBlender::DrawShowing() {
                 || mRenderedStates != 1) {
                 unkc0 = false;
                 RndCam *cam = TheRnd.GetDefaultCam();
-                RndTex *targetTex = RndCam::Current()->TargetTex();
+                RndCam *prevCam = RndCam::Current();
+                RndTex *targetTex = prevCam->TargetTex();
                 if (targetTex) {
                     MILO_NOTIFY_ONCE(
                         "%s: Cannot render to texture (%s) while already rendering to texture (%s).",
@@ -258,7 +259,7 @@ void RndTexBlender::DrawShowing() {
                 }
                 DrawBlendList(customList, (TexState)8);
                 cam->SetTargetTex(nullptr);
-                RndCam::Current()->Select();
+                prevCam->Select();
             }
         }
     }
