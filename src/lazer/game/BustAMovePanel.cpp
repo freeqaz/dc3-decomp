@@ -1535,7 +1535,7 @@ void BustAMovePanel::Poll() {
         mRecordSkelIdx = skelIdx;
     }
 
-    if (mState == kBAMState_Recording && (unsigned int)mBeatCount >= 3) {
+    if (mState == kBAMState_Recording && mBeatCount >= 3) {
         mDancerTakeScore = mRecorder->GetScore(skelIdx, 0, mRecordScore, true);
         mCurrentMoveScore = mRecorder->GetScore(skelIdx, 1, mRecordScore, false);
         mRecordScore += TheTaskMgr.DeltaUISeconds();
