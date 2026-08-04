@@ -147,7 +147,7 @@ Landed on `sweep/regswap-statement` (main coordinator lane):
 
 | Function | Before | After | Cause |
 |---|---|---|---|
-| `BustAMovePanel::Poll` | 97.7% | **98.6%** | `unsigned char` → `bool` flag locals; signed→unsigned loop-bound compare |
+| `BustAMovePanel::Poll` | 97.7% | **99.6%** | `unsigned char` → `bool` flag locals; signed→unsigned loop-bound compare; then a follow-up deep dive (bool initialiser polarity, decl order, preheader local, parked-cast retry) — see [investigation](../investigations/2026-08-04-bustamovepanel-poll.md) |
 | `RhythmBattlePlayer::UpdateScore(Hmx::Object*)` | 97.5% | **98.4%** | `RndParticleSys::SetEmitRate` had one inline level too many (`Part.h`) |
 
 Six parallel lanes (`sweep/regswap-a` … `sweep/regswap-f`, worktrees

@@ -352,6 +352,21 @@ So: read the home-write **count** off the asm and match that number. Do not
 reason from "fewer inline levels is closer to the target" — it isn't a
 direction, it's a count.
 
+**A zero/zero census is a normal result, not a failed audit.** This build only
+emits a home write when the inlined callee's `this` is a **computed sub-object
+address** (`addi rN, rBase, <field-offset>`). A function that calls accessors
+on `this` directly produces no home writes at all, on either side — that is the
+expected outcome, not evidence you looked wrong. `BustAMovePanel::Poll` was
+audited this way: all 16 of its `stw` instructions are live (Message `DataNode`
+temps, member stores, static guards, and two genuine outgoing stack arguments
+for a 10-parameter ctor), and the correct conclusion was that the lever does
+not apply to that function. Do the census, record the zero, and move to another
+lever.
+
+**Unverified for optimized builds.** Every observation here comes from DC3's
+*debug* target. Whether a retail `/O1` MSVC PPC build emits these home writes
+at all is an open question — see the rb3-xenon port for the answer.
+
 ---
 
 ## See Also
