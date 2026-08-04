@@ -355,7 +355,8 @@ void HamNavList::Poll() {
     if (SkipPoll()) {
         // When skipping poll but ribbon resource exists, reset slide sound anim
         if (mListRibbonResource) {
-            RndAnimatable *slideSoundAnim = mListRibbonResource->SlideSoundAnim();
+            const ObjPtr<RndAnimatable> &slideSoundAnim =
+                mListRibbonResource->SlideSoundAnim();
             if (slideSoundAnim) {
                 slideSoundAnim->SetFrame(0.0f, 1.0f);
             }
