@@ -376,8 +376,8 @@ void AnimTask::Poll(float time) {
 
     float frame;
     if (!mLoop && time <= mFrameSpan && mFrameSpan != 0.0f) {
-        float eased = mEaseFunc(time / mFrameSpan, mEasePower, 1.0f);
-        frame = eased * mScale * mFrameSpan + mOffset;
+        frame = mEaseFunc(time / mFrameSpan, mEasePower, 1.0f) * mScale * mFrameSpan
+            + mOffset;
     } else {
         frame = mScale * time + mOffset;
     }
