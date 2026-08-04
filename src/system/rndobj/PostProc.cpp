@@ -423,9 +423,10 @@ void RndPostProc::LoadRev(BinStreamRev &d) {
     }
     if (d.rev > 6) {
         if (d.rev < 0x12) {
-            d >> mColorXfm.mColorXfm.m.x >> mColorXfm.mColorXfm.m.y
-                >> mColorXfm.mColorXfm.m.z;
-            d >> mColorXfm.mColorXfm.v;
+            BinStream &bs = d.stream;
+            Transform &xfm = mColorXfm.mColorXfm;
+            bs >> xfm.m.x >> xfm.m.y >> xfm.m.z;
+            bs >> xfm.v;
         } else {
             if (!mColorXfm.Load(d.stream)) {
                 MILO_FAIL(
