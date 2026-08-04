@@ -369,8 +369,8 @@ void ObjectDir::Save(BinStream &bs) {
     std::vector<ObjDirPtr<ObjectDir> > notInlinedSubDirs;
     if (SaveSubdirs()) {
         for (int i = 0; i < mSubDirs.size(); i++) {
-            if (mSubDirs[i]) {
-                ObjDirPtr<ObjectDir> &curSubDir = mSubDirs[i];
+            ObjDirPtr<ObjectDir> &curSubDir = mSubDirs[i];
+            if (curSubDir) {
                 if (curSubDir->InlineSubDirType() != kInlineNever) {
                     inlinedSubDirs.push_back(curSubDir);
                 } else {
@@ -393,15 +393,17 @@ void ObjectDir::Save(BinStream &bs) {
     boolVec.resize(mInlinedDirs.size(), false);
     for (int i = 0; i < mInlinedDirs.size(); i++) {
         InlinedDir &id = mInlinedDirs[i];
+        const FilePath &idFile = id.file;
         switch (id.mType) {
-        case kInlineCachedShared:
-            id.shared = true;
-        case kInlineCached: {
-            bool old = gLoadingProxyFromDisk;
+        case kInlineCached:
+        case kInlineCachedShared: {
+            if (id.mType == kInlineCachedShared)
+                id.shared = true;
             if (bs.Cached()) {
+                bool old = gLoadingProxyFromDisk;
                 gLoadingProxyFromDisk = false;
                 DirLoader::SetCacheMode(false);
-                id.dir.LoadFile(id.file, false, false, kLoadFront, true);
+                id.dir.LoadFile(idFile, false, false, kLoadFront, true);
                 DirLoader::SetCacheMode(true);
                 gLoadingProxyFromDisk = old;
             } else {
@@ -413,7 +415,7 @@ void ObjectDir::Save(BinStream &bs) {
             MILO_ASSERT(id.mType == kInlineAlways, 0x211);
             int gg = 0;
             for (; gg != mSubDirs.size(); gg++) {
-                if (mSubDirs[gg].GetFile() == id.file)
+                if (mSubDirs[gg].GetFile() == idFile)
                     break;
             }
             MILO_ASSERT(gg < mSubDirs.size(), 0x21A);
@@ -426,9 +428,7 @@ void ObjectDir::Save(BinStream &bs) {
         }
         }
         if (id.dir) {
-            if (id.shared && !bs.AddSharedInlined(id.file)) {
-                boolVec[i] = true;
-            }
+            boolVec[i] = id.shared && !bs.AddSharedInlined(idFile);
         } else {
             boolVec[i] = true;
         }
@@ -476,7 +476,11 @@ void ObjectDir::Save(BinStream &bs) {
     std::vector<InlinedDir> unused;
     mInlinedDirs.swap(unused);
     gLoadingProxyFromDisk = oldProxy;
-    mCurViewportID = (ViewportId)0;
+    // NOTE: no `mCurViewportID = (ViewportId)0;` here. The DC3 target function
+    // contains zero stores to this-0x18 (mCurViewportID) across all 626
+    // instructions -- the only member store in the epilogue region is ours.
+    // rb3-xenon and og-dc3-decomp both carry that reset, but neither is ground
+    // truth for this binary. See commit message.
     const char *nextname = unk8c ? unk8c->Name() : "";
     bs << nextname;
     const char *camName = mCurCam ? mCurCam->Name() : "";
