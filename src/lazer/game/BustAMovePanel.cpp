@@ -1559,15 +1559,15 @@ void BustAMovePanel::Poll() {
         );
         forceSkelIdx = mRecordSkelIdx;
     } else if (mState == kBAMState_ShowMoveSequence) {
-        float *scores = (float *)&mPlayerScoreLeft;
         for (int p = 0; p < 2; p++) {
             int pSkelIdx = TheGestureMgr->GetSkeletonIndexByTrackingID(
                 TheGameData->Player(p)->GetSkeletonTrackingID()
             );
             SkeletonSide pSide = TheGameData->Player(p)->Side();
-            scores[p] = mRecorder->GetScore(pSkelIdx, p, -1.0f, false);
+            ((float *)&mPlayerScoreLeft)[p] =
+                mRecorder->GetScore(pSkelIdx, p, -1.0f, false);
             mPhraseMeters[pSide]->SetShowing(true);
-            float pBase = scores[p];
+            float pBase = ((float *)&mPlayerScoreLeft)[p];
             unsigned int pE = 2;
             float pScoreSq = 1.0f;
             do {
