@@ -353,6 +353,11 @@ void RndRibbon::UpdateChase() {
 
     int firstDirty = mTransforms.size() - added;
     if (firstDirty < mTransforms.size()) {
+        // Held as three loose floats rather than a Vector3: the shipped build keeps
+        // them in callee-saved FPRs across the loop. Deliberately uninitialized —
+        // they are only read when the `2 < i` branch above wrote them in the same
+        // iteration (`angle` is reset to -1 every iteration and gates both).
+        float smoothDirX, smoothDirY, smoothDirZ;
         float prevAngle = -1.0f;
         for (int i = firstDirty; i < mTransforms.size(); ++i) {
             if (i != 0) {
@@ -362,7 +367,6 @@ void RndRibbon::UpdateChase() {
                 Subtract(cur.value.v, prev.value.v, dir);
                 Normalize(dir, dir);
 
-                Vector3 smoothDir;
                 float angle = -1.0f;
                 if (2 < i) {
                     Vector3 prevDir;
@@ -371,8 +375,12 @@ void RndRibbon::UpdateChase() {
                     angle = std::acos(dot);
                     Vector3 scaledPrev = prevDir;
                     scaledPrev *= prevAngle;
-                    Interp(dir, scaledPrev, 0.5f, smoothDir);
-                    Normalize(smoothDir, smoothDir);
+                    Vector3 newSmoothDir;
+                    Interp(dir, scaledPrev, 0.5f, newSmoothDir);
+                    Normalize(newSmoothDir, newSmoothDir);
+                    smoothDirX = newSmoothDir.x;
+                    smoothDirY = newSmoothDir.y;
+                    smoothDirZ = newSmoothDir.z;
                 }
 
                 static Vector3 up(0.0f, 0.0f, 1.0f);
@@ -391,6 +399,7 @@ void RndRibbon::UpdateChase() {
                     Hmx::Matrix3 inv;
                     Invert(result.m, inv);
                     Vector3 localSmooth;
+                    Vector3 smoothDir(smoothDirX, smoothDirY, smoothDirZ);
                     Multiply(smoothDir, inv, localSmooth);
                     float clamped = Clamp(0.0f, 1.0f, localSmooth.x);
                     float a = std::acos(clamped);
