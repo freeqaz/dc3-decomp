@@ -42,6 +42,7 @@ PROVENANCE_FILES=(
     "config/373307D9/symbols.txt"
     "config/373307D9/splits.txt"
     "config/373307D9/objects.json"
+    "config/373307D9/link_order.txt"
 )
 
 # --- Parse arguments ---
@@ -217,9 +218,13 @@ DTK_SHA="unknown"
 if DTK_PROBE="$(cd "${MAIN_REPO}" && realpath -e ../jeff/target/release/dtk 2>/dev/null)"; then
     DTK_SHA="$(sha_of "${DTK_PROBE}")"
 fi
+OBJDIFF_SHA="unknown"
+if OBJDIFF_PROBE="$(cd "${MAIN_REPO}" && realpath -e ../objdiff/target/release/objdiff-cli 2>/dev/null)"; then
+    OBJDIFF_SHA="$(sha_of "${OBJDIFF_PROBE}")"
+fi
 echo "  baseline : ${BASELINE_COMMIT}"
 echo "  current  : ${CURRENT_DIR} @ ${CURRENT_HEAD} (${CURRENT_DIRTY} tracked file(s) modified)"
-echo "  dtk      : ${DTK_SHA:0:12}"
+echo "  dtk      : ${DTK_SHA:0:12}   objdiff: ${OBJDIFF_SHA:0:12}"
 if [[ "${CURRENT_DIRTY}" -gt 0 ]]; then
     echo "  NOTE: the 'current' tree has ${CURRENT_DIRTY} uncommitted tracked change(s), so the"
     echo "        numbers below include work that is in no commit. If this is a shared"
@@ -239,6 +244,7 @@ BASELINE_META="${CACHE_DIR}/${BASELINE_COMMIT}.meta"
 expected_provenance() {
     echo "commit ${BASELINE_COMMIT}"
     echo "dtk ${DTK_SHA}"
+    echo "objdiff ${OBJDIFF_SHA}"
     local f blob
     for f in "${PROVENANCE_FILES[@]}"; do
         blob="$(git -C "${MAIN_REPO}" rev-parse --verify --quiet "${BASELINE_COMMIT}:${f}" || echo absent)"
