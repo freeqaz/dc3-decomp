@@ -1246,6 +1246,14 @@ DataNode HamDirector::OnListPossibleVariants() {
 
 namespace {
     const char *gGrooveName = "groove";
+
+    /** FileMerger::Mergers() hands back an ObjVector, whose own push_back()
+     *  default-constructs an element and then assigns it. OnPopulateMoves goes
+     *  through the std::vector base instead, so it gets a single copy-construct.
+     *  ObjVector derives from std::vector, so this is a plain upcast. */
+    std::vector<FileMerger::Merger> &MergerList(FileMerger *fileMerger) {
+        return *(std::vector<FileMerger::Merger> *)&fileMerger->Mergers();
+    }
 }
 
 DataNode HamDirector::PracticeList(Difficulty d) {
@@ -2791,10 +2799,11 @@ void HamDirector::OnPopulateMoves() {
 
     gMoveMergeMap.clear();
 
-    std::vector<FileMerger::Merger> *mergers =
-        (std::vector<FileMerger::Merger> *)((char *)mMoveMerger.Ptr() + 0x40);
-    if (mergers->begin() != mergers->end()) {
-        mergers->erase(mergers->begin(), mergers->end());
+    {
+        std::vector<FileMerger::Merger> &mergers = MergerList(mMoveMerger.Ptr());
+        if (mergers.begin() != mergers.end()) {
+            mergers.erase(mergers.begin(), mergers.end());
+        }
     }
 
     int numKeys = moveInstSymKeys->size();
@@ -2865,7 +2874,7 @@ void HamDirector::OnPopulateMoves() {
                     merger.mPreClear = true;
                     merger.mSelected = fp;
                     merger.mForceReload = true;
-                    mergers->push_back(merger);
+                    MergerList(mMoveMerger.Ptr()).push_back(merger);
                     gMoveMergeMap[transName]++;
                 }
             }
@@ -2882,7 +2891,7 @@ void HamDirector::OnPopulateMoves() {
                 merger.mPreClear = true;
                 merger.mSelected = fp;
                 merger.mForceReload = true;
-                mergers->push_back(merger);
+                MergerList(mMoveMerger.Ptr()).push_back(merger);
                 gMoveMergeMap[clipName]++;
             }
 
@@ -2900,7 +2909,7 @@ void HamDirector::OnPopulateMoves() {
                 merger.mPreClear = true;
                 merger.mSelected = fp;
                 merger.mForceReload = true;
-                mergers->push_back(merger);
+                MergerList(mMoveMerger.Ptr()).push_back(merger);
                 gMoveMergeMap[hamMiloName]++;
             }
     }
