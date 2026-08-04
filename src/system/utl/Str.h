@@ -56,12 +56,46 @@ public:
     static const unsigned int npos;
 };
 
-// TODO(hugh): upstream has TextStream, FixedString order here but that
-// causes String copy ctor to drop from 96.7% to 39.4% (extra TextStream
-// ctor call emitted). Need to verify correct order via DWARF/objdiff.
+// Base order is `FixedString, TextStream` and that is CORRECT — settled
+// 2026-08-04, do not re-litigate. See the RESOLVED note below for the two
+// independent proofs and the whole-build measurement.
 class String : public FixedString, public TextStream {
-    // TextStream vtable = 0x4
-    // FixedString = 0x0
+    // MSVC hoists the polymorphic base to offset 0 regardless of the order the
+    // bases are *declared* in, so the layout is:
+    //   +0x0  TextStream  ({vfptr})
+    //   +0x4  FixedString (mStr)
+    // Verified with cl.exe /d1reportAllClassLayout on this exact toolchain
+    // (X360/16.00.11886.00): `class String size(8)` with TextStream at 0 and
+    // FixedString::mStr at 4 — byte-identical dump for BOTH declaration orders.
+    //
+    // RESOLVED: "swap to `TextStream, FixedString` because the target does a
+    // `p ? p+4 : 0` base adjustment before loading mStr" — that reasoning is
+    // wrong. Evidence:
+    //
+    //  1. The +4 adjustment (e.g. CharLipSync::Print: `addi rN, rM, 4` then
+    //     `lwz r4, 0(rN)`) proves only that FixedString sits at +4. It already
+    //     does under this order, so the tell is *satisfied*, not violated; it
+    //     cannot discriminate between the two orders at all.
+    //
+    //  2. Declaration order does still control base *construction* order, and
+    //     there the target is unambiguous. In `String::String(const String &)`
+    //     the target inlines FixedString's gEmpty setup FIRST, then calls the
+    //     empty TextStream ctor (ICF-merged with StackString<128>::~StackString),
+    //     then stores ??_7String@@6B@. That is FixedString-then-TextStream,
+    //     i.e. exactly this declaration order.
+    //
+    //  3. Whole-build A/B of the swap (full rebuild, measure_progress.sh vs
+    //     9ad5c4c8): 4 regressions, 0 improvements, overall fuzzy 53.83% ->
+    //     53.83% (-0.00%). Only the four String constructors moved — String(),
+    //     String(const char *), String(const String &), String(unsigned, char),
+    //     all 100% -> 34-64% — and nothing else in the binary changed, which is
+    //     the expected signature of a layout-neutral, ctor-order-only edit.
+    //
+    // og-dc3-decomp/src/system/utl/Str.h agrees (same declaration order); its
+    // companion comment "TextStream vtable = 0x0, FixedString = 0x4" is the
+    // accurate one — the two offsets below used to be stated backwards here.
+    // RB2 DWARF is NOT usable for this: RB2's String predates FixedString
+    // (`class String : public TextStream`, size 0xC, mCap/mStr).
 public:
     virtual ~String();
     virtual void Print(const char *str) { *this += str; }
