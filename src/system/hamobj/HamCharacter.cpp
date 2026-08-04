@@ -123,7 +123,8 @@ BEGIN_PROPSYNCS(HamCharacter)
     SYNC_PROP_SET(
         crew_card_showing,
         mCrewCardMesh ? mCrewCardMesh->Showing() : false,
-        if (mCrewCardMesh) mCrewCardMesh->SetShowing(_val.Int())
+        bool showCrewCard = _val.Int();
+        if (mCrewCardMesh) mCrewCardMesh->SetShowing(showCrewCard)
     )
     SYNC_PROP_SET(prop_0_showing, GetPropShowing(0), SetPropShowing(0, _val.Int()))
     SYNC_PROP_SET(prop_1_showing, GetPropShowing(1), SetPropShowing(1, _val.Int()))
