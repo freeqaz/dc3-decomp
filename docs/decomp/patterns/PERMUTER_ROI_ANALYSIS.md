@@ -158,6 +158,55 @@ Also note for sweep budgeting: a zero-gain sweep over declaration-axis mutations
 exactly that result and then went to 100% from one line. See
 [unfixable-compiler.md: Strengthened Evidence Standard](unfixable-compiler.md#strengthened-evidence-standard-for-register-class-residuals-2026-08-03).
 
+## Instruction Scheduling
+
+**Coverage: none.** No permuter pattern currently mutates where a value is *materialized*
+relative to its consumer. This is the second half of the REGISTER_SWAP gap above, and it
+is the one that shows up as **volatile**-register swaps (r0, r3-r12, f0-f13) rather than
+callee-saved ones — a volatile register cannot be live across a call, so a swap between
+two of them is a scheduling or operand-order question, never a live-across-call question.
+
+Worked example, `RndText::SizeCheck` 96.5% → 99.1% (commit `0c2b0c38`): the target
+computes the `FontUnit() * AspectRatio()` product *before* the `fcmpu` that consumes it,
+
+```
+fmuls  f12, f30, f1
+...
+fcmpu  cr6, f13, f0
+bge    ...
+```
+
+while we computed it inside a later `if` condition, putting the `fmuls` in a different
+slot and leaving the compare reading a different register (`fcmpu cr6, f0, f12` / `ble`).
+Collapsing two separate locals into one `float fontSize = font->FontUnit() *
+font->AspectRatio();` fixed the schedule, and all nine f30↔f31 / f12↔f13 swaps resolved
+on their own. Only then did flipping the two float compares to the target's operand
+order become productive.
+
+**Ordering constraint for any implementation:** schedule first, polarity second. Flipping
+a comparison before the producing arithmetic is in the right slot just moves the swap to
+the other side of the compare, which scores as a neutral wash and will teach a beam
+search that the polarity mutation is useless. A scheduling pattern must therefore be
+sequenced *ahead* of `comparison_flip` / `branch_polarity` in the search, not composed
+freely with them.
+
+**Candidate transforms** (unimplemented; n=1 each — see the table in the correction
+above): `product_hoist` (collapse `a = f(); b = g(); … use(a*b)` ↔ `p = f()*g(); … use(p)`),
+and more generally hoisting or sinking a pure sub-expression across a statement boundary
+without changing its operands. Neutrality is easy to argue for side-effect-free operands
+and hard otherwise, so the gate is "both callees are known pure or are the same two
+member reads" rather than a general dataflow proof.
+
+Full pattern writeup with before/after source:
+[fixable-liveness.md: Lever 3](fixable-liveness.md#lever-3--fix-the-schedule-first-then-the-comparison-polarity).
+
+> **Anchor note.** objdiff-cli's `REGISTER_SWAP` secondary hint points at
+> `docs/decomp/patterns/permuter-roi.md#instruction-scheduling`. That **filename does not
+> exist in dc3-decomp** — `permuter-roi.md` is the RB3 name for this document. The
+> correct DC3 path is
+> `docs/decomp/patterns/PERMUTER_ROI_ANALYSIS.md#instruction-scheduling`, which this
+> section provides. See the cross-repo naming note in [INDEX.md](INDEX.md#dc3--rb3-doc-filename-divergence).
+
 ## Existing Patterns with 0 Wins
 
 These 3 patterns should be reviewed:

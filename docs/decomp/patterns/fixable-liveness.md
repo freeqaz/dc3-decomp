@@ -386,6 +386,24 @@ the wrong axis and must change the live set or the schedule.
 
 ## Diagnostic Order for a Register-Swap Residual
 
+### First: which register class swapped?
+
+objdiff's `REGISTER_SWAP` hint labels the class for you, and the class selects the
+lever:
+
+| objdiff hint | Registers | Lever |
+|--------------|-----------|-------|
+| `[callee-saved — check liveness across calls]` | r14-r31, f14-f31 | **Liveness** — Levers 1-2. A value is live across a call in one build and not the other. |
+| `[volatile — scheduling/operand order]` | r0, r3-r12, f0-f13 | **Scheduling** — Lever 3. Volatile registers don't survive calls, so a swap between them is about *when* a value is computed and in what operand order, not what is kept alive. |
+
+This mapping is consistent with all three functions but is n=3 plus first principles
+(volatile registers cannot be live across a call, so a volatile swap cannot be a
+live-across-call problem). `RndText::FitTextScroll` showed both at once — callee-saved
+r27↔r28 / r22↔r23 *and* volatile f12↔f13 — because one extra callee-saved register
+displaced the whole allocation; fixing the liveness cause cleared both classes.
+
+### Then
+
 1. **Instruction counts and sizes.** If they are equal and every mismatch is `diff_arg`
    on a register operand, the logic is right and you are purely in allocation territory.
 2. **`__savegprlr_NN` / `__restgprlr_NN` delta.** A difference of one or two callee-saved
@@ -400,6 +418,11 @@ the wrong axis and must change the live set or the schedule.
    result — it means the constraints have no slack.
 6. **Offsets, not registers?** Different problem: go to Lever 4 /
    [Offset Swap](fixable-declarations.md#offset-swap).
+
+This order matches objdiff-cli's verdict text, which now suggests **find the cause →
+permuter → declaration reorder**, with reorder marked *"usually inert for register-only
+swaps; reach for it when stack-slot / OFFSET_SWAP diffs are also present."* Tool output
+and these docs should say the same thing; if they drift, fix both.
 
 ---
 

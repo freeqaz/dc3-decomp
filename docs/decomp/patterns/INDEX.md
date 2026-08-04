@@ -22,6 +22,38 @@ Quick reference for all documented decompilation patterns in DC3 (Dance Central 
   Also promotes a third floor-evidence condition: **Ghidra-decompile the target** and
   name the construct.
 
+## DC3 ↔ RB3 doc filename divergence
+
+The two decomps document the same shared Milo engine but **use different filenames for
+the same documents**. Tools and prose that link across repos silently 404 when they
+assume the other repo's name:
+
+| Topic | DC3 (this repo) | RB3 (`../rb3/`) |
+|-------|-----------------|-----------------|
+| Permuter ROI / pattern automation | `PERMUTER_ROI_ANALYSIS.md` | `permuter-roi.md` |
+| Systemic at-limit classes | `at-limit-systemic.md` | `at-limit-mwcc.md` |
+
+This is not hypothetical: objdiff-cli's `REGISTER_SWAP` hint pointed at
+`permuter-roi.md` / `at-limit-mwcc.md`, so **the hint most likely to mislead someone was
+also linking nowhere in this repo**. The compilers differ too (DC3 = MSVC, RB3 =
+MetroWerks), so an RB3 filename in a DC3 hint is usually a sign the *content* was
+written for the other backend as well — check before trusting it.
+
+When adding a cross-repo link, verify the filename against the repo you're linking
+into, not the one you're writing in.
+
+### Anchor contract (tool-referenced — do not rename)
+
+objdiff-cli renders `[docs]` links that resolve against **this** repo. These anchors are
+load-bearing; restructure the prose around them freely, but keep the headings stable or
+get objdiff re-pointed first:
+
+| Anchor | Used for | Status |
+|--------|----------|--------|
+| [`fixable-declarations.md#pre-compute-references-before-clobbering-calls`](fixable-declarations.md#pre-compute-references-before-clobbering-calls) | `REGISTER_SWAP` **primary** (rendered link), `PROLOGUE_MISMATCH` | Stable — extended in place 2026-08-03, not moved |
+| [`fixable-declarations.md#offset-swap`](fixable-declarations.md#offset-swap) | `OFFSET_SWAP` | Stable — deliberately stays in declarations; scoping/packing moves stack slots |
+| [`PERMUTER_ROI_ANALYSIS.md#instruction-scheduling`](PERMUTER_ROI_ANALYSIS.md#instruction-scheduling) | `REGISTER_SWAP` secondary | Added 2026-08-03. objdiff currently points at `permuter-roi.md#instruction-scheduling` (RB3 name) — **needs re-pointing to this path** |
+
 ## Session catalogues
 
 - [permuter-patterns-2026-05-27.md](permuter-patterns-2026-05-27.md) — 3 new patterns (reference_elimination_chain, loop_body_assign_hoist, signed_unsigned_cast_polarity), 15 proposal-stage patterns, tooling fixes (libclang+guards), validated wins on both DC3 and RB3.
