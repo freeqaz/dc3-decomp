@@ -2423,9 +2423,10 @@ void MoveDir::PostUpdateFilters() {
                     if (0.5f < frameWeight.mWeight) {
                         for (int limb = 0; limb < 4; limb++) {
                             float limbPSNR = detectFrame->LimbPSNR(fv, 1 << limb);
+                            float goodThresh = frameWeight.unk14[limb];
                             float badThresh = frameWeight.unk4[limb];
-                            if (badThresh < frameWeight.unk14[limb]) {
-                                if (limbPSNR > frameWeight.unk14[limb]) {
+                            if (goodThresh > badThresh) {
+                                if (limbPSNR > goodThresh) {
                                     feedback->UpdateLimb(limb, false);
                                 } else if (limbPSNR < badThresh) {
                                     feedback->UpdateLimb(limb, true);
