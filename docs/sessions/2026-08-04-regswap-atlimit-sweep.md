@@ -148,7 +148,7 @@ Landed on `sweep/regswap-statement` (main coordinator lane):
 | Function | Before | After | Cause |
 |---|---|---|---|
 | `BustAMovePanel::Poll` | 97.7% | **99.6%** | `unsigned char` → `bool` flag locals; signed→unsigned loop-bound compare; then a follow-up deep dive (bool initialiser polarity, decl order, preheader local, parked-cast retry) — see [investigation](../investigations/2026-08-04-bustamovepanel-poll.md) |
-| `RhythmBattlePlayer::UpdateScore(Hmx::Object*)` | 97.5% | **98.4%** | `RndParticleSys::SetEmitRate` had one inline level too many (`Part.h`) |
+| `RhythmBattlePlayer::UpdateScore(Hmx::Object*)` | 97.5% | 97.5% | **REVERTED** — the `SetEmitRate` flattening gained 0.9% here and lost 0.9% on `RndScaleObject`, which is 60% larger. See the correction in [fixable-inline-boundary.md](../decomp/patterns/fixable-inline-boundary.md#correction-same-day--a-single-call-site-does-not-determine-the-body) |
 
 Six parallel lanes (`sweep/regswap-a` … `sweep/regswap-f`, worktrees
 `wt/rsw-a` … `wt/rsw-f`) ran the same playbook. **26 functions triaged, 22
