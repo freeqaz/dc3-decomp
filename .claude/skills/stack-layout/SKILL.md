@@ -37,10 +37,58 @@ with verdicts that point to specific source fixes.
    |---|---|---|
    | **SWAPPED** | Two slots' fingerprints exchanged | Reorder the two declarations |
    | **DIFFER** | Same offset, different fingerprint | Different variable lives there — decl-reorder |
+   | **PERMUTED** | Same offset, same fingerprint, but the two sides touch it at **different program points** | Same slot *set*, variables assigned differently — MSVC slot-allocation shaping. Read the `↔ base 0x..` note for the mapping. **Not** a missing/extra local. |
    | **SHIFTED** | Same fingerprint, offset differs by the dominant Δ | One side has an extra local pushing the rest |
    | **TGT_ONLY** | Slot exists only on target | Target spills a temp we keep in a register (or vice versa) |
    | **BASE_ONLY** | Slot exists only on our build | Extra spill; usually a register-pressure symptom |
-   | **MATCH** | Hidden by default; pass `--show-equal` to see |
+   | **MATCH** | Same offset, same fingerprint, **and** same aligned access rows | Hidden by default; pass `--show-equal` to see |
+
+   ⚠ **`MATCH` did not always mean this.** Before 2026-08-04 a row was MATCH
+   whenever the offset and the `(kind,size,loads,stores)` fingerprint agreed. For
+   a run of same-typed locals that fingerprint is **constant**, so a pure
+   permutation of variables across identically-shaped slots read as MATCH.
+   Measured on **this** binary over **N = 1,909** functions that have at least one
+   exact-offset paired user slot (drawn from all 2,236 partial-match functions in
+   units with a base `.obj`): **475 (24.9%)** had at least one false MATCH, and
+   **2,512 of 12,917 MATCH rows (19.4%)** moved MATCH → PERMUTED.
+   `ArcDetector::UpdateOverlay` went from "MATCH 88" to "9 MATCH / 75 PERMUTED".
+   Any pre-2026-08-04 stack-layout reading of "slots all match" should be re-run
+   before being trusted.
+
+   Read the **signature discriminating power** line under the summary: it says how
+   many target slots share a fingerprint with another. Where that number is high,
+   any *fingerprint-based* pairing (SWAPPED, SHIFTED) is arbitrary within the
+   group and is flagged `⚠ ambiguous`. On `ArcDetector::UpdateOverlay` it is
+   94 of 103, largest group 82.
+
+3b. ** LOUD: BEHAVIOUR CHANGE OTHER LANES MAY DEPEND ON. ** `r31` is now counted
+   as a frame base **only when the prologue derives it from r1**. It previously
+   counted unconditionally — but on this corpus r31 is the frame base in only
+   1,186 of 2,236 target prologues (53.0%); the other 47.0% it holds an incoming
+   object pointer, so `lwz r3, 0x50, r31` is a **class member** load. **682
+   functions (30.5%) were having class layout tabulated into their stack report
+   — 3,515 phantom slots**, now gone. Row counts across the corpus drop from
+   19,769 to 16,055.
+
+3c. **Frame size can now REFUSE.** If the prologue cannot be decoded the tool
+   prints `UNKNOWN` (never `0x0`) and exits **2** with no frame verdict, because
+   the callee-save slot filter is derived from the frame size. Pass
+   `--allow-unknown-frame` to force exit 0. The refusal path fires on **0 of
+   2,236** functions today — it is insurance, not something catching anything now.
+
+3d. **Callee-save counts were fabricated on bare save helpers.** `bl __savegprlr`
+   with no `_NN` scored 0 saved registers, so a target rendered with the FUNCTION
+   symbol read 0 against a base rendered with the LABEL symbol reading 18.
+   `config/373307D9/symbols.txt` settles it: `__savegprlr` and `__savegprlr_14`
+   are both `.text:0x8299D8F0`, so bare == `_14`. **70 functions** in the corpus
+   have this asymmetry; `ArcDetector::UpdateOverlay` went from
+   "Callee-saved FPRs: TGT 0 BASE 18 Δ +18" to "TGT 18 BASE 18 Δ +0", which also
+   corrects its frame-Δ attribution.
+
+   Self-check with no toolchain, objdiff or filesystem needed:
+   ```bash
+   python3 scripts/analysis/stack_layout.py --selftest   # expect PASS, 28 checks
+   ```
 
 4. **Fingerprint columns** (`kind sz=N L=loads S=stores A=accesses [first..last]`):
    - `float sz=4` → `float`
@@ -66,6 +114,8 @@ with verdicts that point to specific source fixes.
 - `--show-equal` — include MATCH rows
 - `--show-callee-save` — include prologue/epilogue callee-save slots (hidden by default)
 - `--json-file <path>` — skip objdiff invocation; load diff JSON from cached path
+- `--allow-unknown-frame` — exit 0 instead of 2 when the frame size could not be determined
+- `--selftest` — run the in-memory regression fixtures (no toolchain, no objdiff, no filesystem) and exit
 
 ## How name extraction works
 

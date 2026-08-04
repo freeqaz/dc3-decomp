@@ -1377,8 +1377,13 @@ def _extract_frame_size_from_instrs(instrs, side='target', prologue_info=None):
     1. Structured PrologueMismatchInfo fields from objdiff v4.1+ (``prologue_info``
        dict with keys ``target_frame_size`` / ``base_frame_size``).  These are
        authoritative and require no instruction scanning.
-    2. Fallback: scan the first 20 instructions for ``stwu r1, -N(r1)`` using a
-       regex.  Handles older objdiff binaries that lack the structured fields.
+    2. Delegate to scripts/analysis/stack_layout.py, which is the maintained
+       prologue parser (2026-08-04, back-ported from rb3-xenon 111ea902). It
+       handles the ``lis/ori + stwux`` big-frame form and the ``subf r31`` frame
+       alias, and — crucially — it distinguishes "no frame" (0) from "could not
+       determine" (None). Keeping two independent prologue parsers is how they
+       drift apart, so this one forwards.
+    3. Fallback: the old stwu-only regex scan, if that import fails.
     """
     # Prefer structured field when available (objdiff v4.1+)
     if prologue_info is not None:
@@ -1386,6 +1391,13 @@ def _extract_frame_size_from_instrs(instrs, side='target', prologue_info=None):
         val = prologue_info.get(key)
         if val is not None:
             return abs(int(val))
+
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from stack_layout import _scan_frame_size  # type: ignore
+        return _scan_frame_size(instrs, side, min(80, len(instrs)))[0]
+    except Exception:
+        pass
 
     # Fallback: stwu-regex scan over the instruction list
     for ins in instrs[:20]:
@@ -1462,6 +1474,7 @@ def _cluster_into_slots(accesses):
                 'access_count': len(current_accesses),
                 'ops_summary': ', '.join(f"{op} x{n}" for op, n in ops.most_common()),
                 'first_index': min(a['index'] for a in current_accesses),
+                'indices': frozenset(a['index'] for a in current_accesses),
                 'type_hint': _infer_type(current_accesses, slot_size),
             })
             current_base = acc['offset']
@@ -1477,6 +1490,7 @@ def _cluster_into_slots(accesses):
             'access_count': len(current_accesses),
             'ops_summary': ', '.join(f"{op} x{n}" for op, n in ops.most_common()),
             'first_index': min(a['index'] for a in current_accesses),
+            'indices': frozenset(a['index'] for a in current_accesses),
             'type_hint': _infer_type(current_accesses, slot_size),
         })
 
@@ -1523,7 +1537,18 @@ def _diff_layouts(target_slots, source_slots):
         tgt = tgt_by_off.get(off)
         src = src_by_off.get(off)
         if tgt and src:
-            status = 'MATCH'
+            # ★ v1 said MATCH on OFFSET EQUALITY ALONE -- it did not even compare
+            #   the access pattern, let alone which variable lives there. Two
+            #   builds that both use slot 0x60, for different variables at
+            #   different program points, read "MATCH". Require the aligned
+            #   access rows to agree; otherwise say so (2026-08-04, back-ported
+            #   from rb3-xenon 111ea902).
+            #   See scripts/analysis/stack_layout.py for the maintained version.
+            ti, si = tgt.get('indices'), src.get('indices')
+            if ti is not None and si is not None and ti != si:
+                status = 'PERMUTED'
+            else:
+                status = 'MATCH'
         elif tgt and not src:
             status = 'TGT_ONLY'
         elif src and not tgt:
@@ -1636,8 +1661,19 @@ def cmd_stack_layout(instrs, symbol=None, project_dir=None, data=None):
     tgt_only = [r for r in rows if r['status'] == 'TGT_ONLY']
     src_only = [r for r in rows if r['status'] == 'SRC_ONLY']
     matched = [r for r in rows if r['status'] == 'MATCH']
+    permuted = [r for r in rows if r['status'] == 'PERMUTED']
 
-    if not swapped and not tgt_only and not src_only:
+    if tgt_frame is None or src_frame is None:
+        print("  ⛔ Frame size could not be determined on "
+              f"{'target' if tgt_frame is None else 'our build'} — no frame "
+              "verdict. (A frame we cannot read is not a frame that matches.)")
+    if permuted:
+        print(f"  {len(permuted)} slot(s) PERMUTED: present on both sides at the same "
+              "offset but\n    accessed at different program points — the same slot SET "
+              "with variables\n    assigned differently. Slot-allocation shaping, not a "
+              "missing/extra local.")
+
+    if not swapped and not tgt_only and not src_only and not permuted:
         print("  All stack slots match. No layout mismatches.")
         if tgt_frame and src_frame and tgt_frame != src_frame:
             print(f"  Frame size difference ({src_frame - tgt_frame:+d}) is likely from "
