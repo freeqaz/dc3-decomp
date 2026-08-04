@@ -122,6 +122,7 @@ match (some at 0% as unpaired stubs). Several were *introduced* by match-neutral
 | Reversed container args `erase(end,begin)` | small | `ResetDetectFrames` (**UB**) | `scan_behavioral_idioms.py` (exact) |
 | Stale iterator across realloc | small | `OnComputeCharWidths` (**UB**) | iterator used after push_back |
 | Wrong body of 0%-stub | invisible | `Transform::LookAt` | unpaired COMDAT; audit vs target asm |
+| Out-of-range shift (missing `% 32`) | −19% | `HDCache::WriteDone` (**UB**) | `1 << i` where a sibling stmt does `i / 32` |
 
 Includes the **"regalloc floor" false-certification** anti-pattern + the floor-cert
 standard, and the instrument→stub-test→audit→retry→runtime-verify workflow.

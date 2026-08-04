@@ -35,6 +35,7 @@ floor.
 | Reversed container-op args | small | **UB / heap corruption** | `ResetDetectFrames` `erase(end(),begin())` | fixed f57f2307 |
 | Stale iterator after realloc | small | **UB / walk-off** | `OnComputeCharWidths` iterator across `push_back` | fixed fabe57a5 |
 | Wrong body of a 0%-stub | invisible (0% either way) | anything | `Transform::LookAt` (unpaired COMDAT) | fixed a9fc8528 |
+| Out-of-range shift (missing `% 32`) | −19% (80.8 vs 100) | **UB**; wrong bit set for index ≥ 32 | `HDCache::WriteDone` `1 << mWriteBlock` | fixed in the 2026-08-04 sweep |
 
 ---
 
@@ -211,6 +212,56 @@ run_objdiff verdict is `Stub (High)` / unpaired but which is actually called on 
 is untrusted until its body is read against ground truth.** See
 [at-limit-systemic.md](at-limit-systemic.md) and
 [verifiable-icf.md](verifiable-icf.md) for ICF/COMDAT pairing.
+
+---
+
+## 7. Out-of-range shift: a missing `% 32` on a bit index
+
+The narrowest possible source difference — three characters — and it is a real
+corruption for every input past the first word.
+
+`HDCache::WriteDone` (`src/system/os/HDCache.cpp:87-88`) marks a written block in a
+bitmap:
+
+```cpp
+int word = mWriteBlock / 32;
+int mask = 1 << mWriteBlock;          // WRONG — 80.8%
+int mask = 1 << (mWriteBlock % 32);   // target, and RB3 — 100%
+```
+
+The `/ 32` was already there and correct, which is what made the missing `% 32` easy to
+read past: the word index says plainly that this is a multi-word bitmap, so the shift
+*must* be reduced modulo the word width. Without it, every block index ≥ 32 sets the
+wrong bit in `mBlockState` (and the C++ behavior is undefined; on PPC `slw` uses the low
+six bits of the shift amount, so a shift of 32-63 produces 0 rather than wrapping the way
+x86 would — a difference that also makes this reproduce differently on the native port
+than on hardware).
+
+**Detection.** Grep the tree for a `<<` or `>>` whose amount is an index that a sibling
+statement divides or masks:
+
+```bash
+grep -rn "1 << " src/ | grep -v "% 32\|& 0x1f\|& 31"
+```
+
+then check for a nearby `/ 32`, `>> 5`, `/ 8`, `& 7` on the *same* variable. The
+asymmetry — one statement reduces the index, the neighbouring one does not — is the tell.
+Cross-check against RB3, which has the `% 32` here.
+
+**Why it belongs in this doc.** It was found by match work, not by testing: the function
+sat at 80.8% inside the AT_LIMIT + `REGISTER_SWAP` bucket, a bucket whose documentation
+until 2026-08-04 said its members were "functionally correct — don't spend time on them."
+See [INDEX.md: AT_LIMIT Breakdown](INDEX.md#at_limit-breakdown).
+
+**The general lesson, which is the point of the whole sweep it came from:**
+match-percentage work surfaces real semantic bugs, and those are worth more than the
+percentage. The same seven-lane sweep of the same bucket turned up **11 further live
+bugs** — a comprehensively broken OSC parser (three independent defects in
+`OSCMessenger::Poll`), all four permanent locale tables allocated on the temp heap in
+`Locale::Init`, an inverted flipped/unflipped player remap in
+`HamCamShot::UpdateTargetsFlipped`, and more. Full list:
+[sessions/2026-08-04-regswap-atlimit-sweep.md](../../sessions/2026-08-04-regswap-atlimit-sweep.md#live-bugs-found-11-confirmed).
+When an edit fixes a behavioural bug, **keep it regardless of the match number.**
 
 ---
 
