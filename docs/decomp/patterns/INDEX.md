@@ -3,7 +3,8 @@
 Quick reference for all documented decompilation patterns in DC3 (Dance Central 3), targeting Xbox 360 / MSVC (PowerPC).
 
 > **Data source:** `decomp.db` — 50,981 functions (34,215 non-excluded). 92.8% COMPLETE, 7.2% AT_LIMIT, 0.04% remaining (14 stubs).
-> **Last updated:** 2026-05-27
+> **Last updated:** 2026-08-04 (statistics below are 2026-03 except where a row says
+> otherwise — the `REGISTER_SWAP` counts were re-measured 2026-08-04)
 
 ## Corrections — read before trusting an older section
 

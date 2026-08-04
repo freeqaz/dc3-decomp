@@ -141,7 +141,7 @@ After adding fsel-based code, the prologue changes from 2 callee-saved FPRs to 4
 
 ## Register Allocation
 
-**Prevalence:** ~250 AT_LIMIT functions with REGISTER_SWAP as dominant blocker
+**Prevalence:** **836** AT_LIMIT functions carry `has_register_swap=1` (measured 2026-08-04; the older "~250" was an estimate and was low by 3x). **At least 30% of them are mislabeled** — see [INDEX.md: AT_LIMIT Breakdown](INDEX.md#at_limit-breakdown).
 **Typical Gap:** 1-3%
 **Status:** Mechanism fully understood (Experiments 1-9). Hand-edit declaration reorder works ~30% of the time. The remaining ~70% is the source permuter's primary domain — it mutates declaration order, scope, branch shape, and many other axes simultaneously and scores each variant's `.obj` against the target. Binary patching of c2.dll's coloring loop is a last-resort escape hatch when a full permuter sweep returns zero gains.
 
@@ -161,6 +161,22 @@ After adding fsel-based code, the prologue changes from 2 callee-saved FPRs to 4
 > not a measured conversion rate — but a zero-gain permuter sweep on the *declaration*
 > axis is now known to be compatible with a one-line source fix existing, so it is no
 > longer sufficient evidence of a floor on its own.
+
+> **Follow-up (2026-08-04): "usually" is now "always", but the cause is often not
+> liveness.** A blind stratified audit plus a seven-lane sweep of this bucket triaged 31
+> functions; register swaps were symptoms in **100% of cases, without exception**, and two
+> functions reached byte-exact 100% with no register-motivated edit at all
+> (`FlowIf::Activate`'s 45-instruction `r29↔r30` swap had no liveness cause — it
+> evaporated when the last *control-flow* difference was fixed;
+> `RndTransformable::Load` had 54 swapped instructions across 8 pairs). Causes that
+> actually paid, in order of frequency: control flow, inline-level count
+> ([fixable-inline-boundary.md](fixable-inline-boundary.md#inline-level-counting-via-the-parameter-home-area)),
+> signed/unsigned compares, then liveness.
+>
+> So route on **what the residual implicates**, not on the register:
+> [fixable-liveness.md: Triage Split](fixable-liveness.md#triage-split-statement-level-vs-within-one-expression).
+> A residual confined to one *flat* arithmetic expression is a genuine floor; a residual
+> that implicates a statement is not.
 
 ### Symptom
 
@@ -1056,6 +1072,15 @@ target as the styles-begin *pointer* written into `float w`'s stack slot on a de
 Before invoking any of this, run the liveness/scheduling diagnostics in
 [fixable-liveness.md](fixable-liveness.md#diagnostic-order-for-a-register-swap-residual)
 — they are ~5 minutes and they are what cracked all three functions.
+
+**Cheaper pre-filter (2026-08-04).** Classify what the residual *implicates* before
+spending any of the above. If it is confined to a single **flat** arithmetic expression —
+commutative operand order, flat-sum term order, which of two independent loads issues
+first — it is a floor and the three-part standard is not worth running. If it implicates a
+statement, it is not a floor no matter how many registers are swapped. The exception that
+justifies the word "flat": an *explicitly nested* `a+(b+(c+…))` chain keeps its shape and
+its term order is recoverable from the assembly. See
+[fixable-liveness.md: Triage Split](fixable-liveness.md#triage-split-statement-level-vs-within-one-expression).
 
 ## See Also
 
