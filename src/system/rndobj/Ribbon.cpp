@@ -311,12 +311,13 @@ void RndRibbon::UpdateChase() {
                 memcpy(&mTransforms[dstIdx], &mTransforms[srcIdx], sizeof(Key<Transform>));
                 srcIdx++;
                 dstIdx++;
-            } while (srcIdx < mTransforms.size());
+                numKeys = mTransforms.size();
+            } while (srcIdx < numKeys);
         }
         key.frame = 0.0f;
         mTransforms.resize(numKeys - removeCount, key);
-        key.value = Transform::IDXfm();
         key.frame = 0.0f;
+        key.value = Transform::IDXfm();
         if (mTransforms.size() == 0) {
             key.value.v = followed;
             key.frame = now;
@@ -326,6 +327,10 @@ void RndRibbon::UpdateChase() {
             float minDistSq = mWidth * mWidth * 0.125f;
             float nextTime = mTransforms.back().frame + step;
             while (now > nextTime) {
+                // NOTE: caching `&mTransforms.back()` in a named local reproduces the
+                // target's +0x30/+0x40 element-relative offsets but costs a register
+                // (85.8% vs 86.7%) — the shipped build reloads mTransforms.mEnd every
+                // iteration instead of keeping it live. Do not re-try.
                 key.frame = mTransforms.back().frame + step;
                 Interp(
                     mTransforms.back().value.v,
