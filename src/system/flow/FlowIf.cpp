@@ -110,21 +110,20 @@ END_LOADS
 __forceinline static bool CompareLiterals(
     const DataNode &n1, const DataNode &n2, FlowNode::OperatorType op
 ) {
-    if (n1.Type() != kDataInt && n1.Type() != kDataFloat) {
-        return false;
-    } else if (n2.Type() != kDataInt && n2.Type() != kDataFloat) {
-        return false;
+    if ((n1.Type() == kDataInt || n1.Type() == kDataFloat)
+        && (n2.Type() == kDataInt || n2.Type() == kDataFloat)) {
+        switch (op) {
+        case FlowNode::kGreaterThan:
+            return n1.LiteralFloat() > n2.LiteralFloat();
+        case FlowNode::kGreaterThanOrEqual:
+            return n1.LiteralFloat() >= n2.LiteralFloat();
+        case FlowNode::kLessThan:
+            return n1.LiteralFloat() < n2.LiteralFloat();
+        default:
+            return n1.LiteralFloat() <= n2.LiteralFloat();
+        }
     }
-    switch (op) {
-    case FlowNode::kGreaterThan:
-        return n1.LiteralFloat() > n2.LiteralFloat();
-    case FlowNode::kGreaterThanOrEqual:
-        return n1.LiteralFloat() >= n2.LiteralFloat();
-    case FlowNode::kLessThan:
-        return n1.LiteralFloat() < n2.LiteralFloat();
-    default:
-        return n1.LiteralFloat() <= n2.LiteralFloat();
-    }
+    return false;
 }
 
 bool FlowIf::Activate() {
