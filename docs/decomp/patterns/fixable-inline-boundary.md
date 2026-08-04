@@ -255,8 +255,110 @@ of the register swap is elsewhere.
 
 ---
 
+## Inline-Level Counting via the Parameter Home Area
+
+**Impact:** +0.5-1% per occurrence, and it collapses whole insert/delete
+clusters rather than shaving single instructions
+**Success Rate:** high — the signal is unambiguous once you know to look
+**Time:** 10 minutes (plus one re-measure per other caller of the accessor)
+**Discovered:** 2026-08-04 regswap sweep
+([session](../../sessions/2026-08-04-regswap-atlimit-sweep.md))
+
+### Symptom
+
+The diff contains a store to a fixed frame offset — typically
+`stw rN, 0x50(r31)` — that is **never reloaded**, appearing on only one side.
+Usually it comes in a pair with an address computation:
+
+```
+base only:   addi r10, r11, 0x198       ; &someObject->mField
+base only:   stw  r10, 0x50, r31        ; dead store, never read back
+```
+
+Because the store is dead it looks like scheduling noise. It is not.
+
+### Why It Works
+
+On this build every **inlined** callee writes its `this` into the outgoing
+parameter home area before its body is emitted. The store is dead — the value
+stays in a register for the actual work — but MSVC emits it anyway, once per
+inline level.
+
+So the home-slot writes are a **counter for inline depth**:
+
+- An extra **base-only** `addi rN, rBase, <field-offset>` + `stw rN, <home>`
+  pair ⇒ our source has *one more* inline level than the target at that point.
+  The `<field-offset>` names the sub-object whose method we are calling, which
+  tells you exactly which accessor to look at.
+- A **target-only** home write ⇒ the target has an inline level we are
+  *missing* — we flattened something the original delegated.
+
+The usual cause of the first case is a small accessor that delegates to another
+inline instead of doing the work itself.
+
+### Fix
+
+```cpp
+// BEFORE — src/system/rndobj/Part.h
+// mEmitRate is at 0x198; Vector2::Set is a second inline level, so this
+// emits `addi rN, this, 0x198` + a home-slot write for Set's `this`.
+void SetEmitRate(float x, float y) { mEmitRate.Set(x, y); }
+
+// AFTER — target assigns the components directly, one inline level
+void SetEmitRate(float x, float y) {
+    mEmitRate.x = x;
+    mEmitRate.y = y;
+}
+```
+
+`RhythmBattlePlayer::UpdateScore(Hmx::Object*)`: **97.5% → 98.4%**, and the
+insert/delete clusters disappeared completely (the residual became a pure
+`r29`↔`r30` callee-saved renaming over an identical instruction stream).
+
+### How to Confirm Before Editing
+
+1. The dead store's offset (`0x50` here) is the same slot the surrounding
+   `MILO_ASSERT` sequence uses to home its `const int&` line-number temp —
+   that confirms it is the parameter home area and not a real local.
+2. The `addi` displacement matches a member offset on the receiver class
+   (`lookup_struct_offset` / `struct-info`).
+3. That member's type has a small inline mutator the accessor is calling.
+
+### Caveat — Re-measure Every Caller
+
+This is a header edit. Before committing, re-measure **every** other caller of
+the accessor; flattening an inline level changes their codegen too. For
+`SetEmitRate` the other four callers (`RndParticleSys::OnSetEmitRate`,
+`RndParticleSysAnim::SetFrame`, `RhythmBattlePlayer::Enter`,
+`ResourceFileCacheHelper::CacheFile`) all stayed at 100%. If any caller
+regresses, the accessor is not the right lever — the extra level is somewhere
+else on the chain.
+
+### When It Doesn't Help — follow the count, not the direction
+
+If both sides have the same number of home writes, inline depth already
+matches and the residual is something else. Do not "fix" a home-write count
+that already agrees.
+
+**More important caveat, from `RndMesh::SetVolume` (lane F, same day the lever
+was found): the lever is bidirectional and the obvious direction is often
+wrong.** There, an extra base-only home write did correctly say "we have too
+many inline levels" — but removing the wrapper entirely made it *worse*
+(92.0% → 91.3%), because the target wanted **exactly one** level, not zero.
+Likewise `HamCharacter::Poll` was fixed by *un-hoisting* a reference so we
+would redundantly reload a member — the inverse of the usual liveness advice.
+
+So: read the home-write **count** off the asm and match that number. Do not
+reason from "fewer inline levels is closer to the target" — it isn't a
+direction, it's a count.
+
+---
+
 ## See Also
 
+- [../../sessions/2026-08-04-regswap-atlimit-sweep.md](../../sessions/2026-08-04-regswap-atlimit-sweep.md) — Session
+  that discovered the home-area inline-level counter, plus the calibration of
+  the statement-vs-expression triage rule on the AT_LIMIT+REGISTER_SWAP bucket
 - [verifiable-icf.md](verifiable-icf.md) — Linker-merged ICF as a verifiable
   pattern (when accepting at_limit)
 - [fixable-declarations.md: Function Definition Order ($S#)](fixable-declarations.md#function-definition-order-tu-wide-static-guard-counters) — Related
