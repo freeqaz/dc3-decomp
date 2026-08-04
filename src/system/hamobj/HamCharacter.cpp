@@ -876,11 +876,12 @@ QuatXfm::QuatXfm(const Transform &t) : v(t.v) { q.Set(t.m); }
 #ifndef HX_NATIVE
 void HamCharacter::Poll() {
     int songAnim = SongAnimation();
-    auto& _ref0 = mDriver;
     if (songAnim == -1 || InClipTest()) {
-        if (_ref0) _ref0->SetWeight(1.0f);
+        if (mDriver)
+            mDriver->SetWeight(1.0f);
     } else {
-        if (_ref0) _ref0->SetWeight(0.0f);
+        if (mDriver)
+            mDriver->SetWeight(0.0f);
     }
 
     bool wasShowing = mShowing;
@@ -898,8 +899,8 @@ void HamCharacter::Poll() {
             int songAnim2 = SongAnimation();
             if (songAnim2 == -1) {
                 blendWeight = 1.0f;
-                if (_ref0->First()) {
-                    blendWeight = _ref0->EvaluateFlags(2);
+                if (mDriver->First()) {
+                    blendWeight = mDriver->EvaluateFlags(2);
                 }
             }
 
