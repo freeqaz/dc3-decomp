@@ -386,8 +386,7 @@ void AnimTask::Poll(float time) {
     if (mLoop) {
         mAnim->SetFrame(ModRange(mMin, mMax, frame), blend);
         if (mListener) {
-            float range = mMax - mMin;
-            if ((int)(mPrevFrame / range) != (int)(frame / range)) {
+            if ((int)(mPrevFrame / (mMax - mMin)) != (int)(frame / (mMax - mMin))) {
                 static Message msg("on_anim_event", DataNode(Symbol("looped")));
                 mListener->Handle(msg, false);
             }
