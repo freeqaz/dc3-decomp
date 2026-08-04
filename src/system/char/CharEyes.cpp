@@ -1339,9 +1339,11 @@ storeState:
         EnforceMinimumTargetDistance(headPos, mTarget, mTarget);
     }
 
-    RndTransformable *eyeTarget = 0;
+    RndTransformable *eyeTarget;
     if (!mEyes.empty() && mEyes[0].mEye) {
         eyeTarget = mEyes[0].mEye->mTarget;
+    } else {
+        eyeTarget = 0;
     }
 
     if (eyeTarget) {
