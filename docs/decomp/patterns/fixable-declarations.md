@@ -371,9 +371,9 @@ The order of variable declarations affects register allocation.
 > ### ⚠️ Correction (2026-08-03): this is not the primary lever for register swaps
 >
 > This section was previously the recommended first move for a `REGISTER_SWAP` diff.
-> Measured on three functions taken to or near 100%
+> Measured on three **dc3-decomp** functions taken to or near 100%
 > (`ObjectDir::Iterate` 99.4%→**100%**, `RndText::FitTextScroll` 92.7%→98.2%,
-> `RndText::SizeCheck` 96.5%→99.1%), declaration reorder was **inert**: 12+ hand
+> `RndText::SizeCheck` 96.5%→98.6%), declaration reorder was **inert**: 12+ hand
 > variants produced *byte-identical* `.obj` output, 2 more regressed, and a
 > 65-candidate beam-search permuter sweep found 0 improvements. In all three the
 > register swaps were **symptoms** — every swap flipped at once when a live range or a

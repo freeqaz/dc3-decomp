@@ -146,9 +146,9 @@ After adding fsel-based code, the prologue changes from 2 callee-saved FPRs to 4
 **Status:** Mechanism fully understood (Experiments 1-9). Hand-edit declaration reorder works ~30% of the time. The remaining ~70% is the source permuter's primary domain — it mutates declaration order, scope, branch shape, and many other axes simultaneously and scores each variant's `.obj` against the target. Binary patching of c2.dll's coloring loop is a last-resort escape hatch when a full permuter sweep returns zero gains.
 
 > **Correction (2026-08-03): a register swap is usually a symptom, and declaration
-> reorder is usually the wrong axis.** Three functions taken to or near 100%
-> (`ObjectDir::Iterate` 99.4%→**100%**, `RndText::FitTextScroll` 92.7%→98.2%,
-> `RndText::SizeCheck` 96.5%→99.1%) had register swaps as their dominant residual. In
+> reorder is usually the wrong axis.** Three **dc3-decomp** functions taken to or near
+> 100% (`ObjectDir::Iterate` 99.4%→**100%**, `RndText::FitTextScroll` 92.7%→98.2%,
+> `RndText::SizeCheck` 96.5%→98.6%) had register swaps as their dominant residual. In
 > all three the swaps flipped **at once** when a *live range* or an *instruction
 > schedule* was corrected. Declaration reorder was measured inert: 12+ variants
 > byte-identical, 2 regressed, and a 65-candidate beam-search sweep on `Iterate` found

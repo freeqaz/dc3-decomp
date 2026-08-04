@@ -30,9 +30,9 @@ Quick reference for all documented decompilation patterns in DC3 (Dance Central 
   [fixable-struct-layout.md: Base Declaration Order](fixable-struct-layout.md#base-declaration-order-does-not-set-base-offsets-msvc-hoists-the-polymorphic-base-to-0).
 
 - **2026-08-03 — register swaps are symptoms, and declaration reorder is the wrong axis for them.**
-  See **[fixable-liveness.md](fixable-liveness.md)**. Measured on 3 functions
-  (`ObjectDir::Iterate` 99.4%→**100%**, `RndText::FitTextScroll` 92.7%→98.2%,
-  `RndText::SizeCheck` 96.5%→99.1%): 12+ declaration-reorder variants produced
+  See **[fixable-liveness.md](fixable-liveness.md)**. Measured on 3 **dc3-decomp**
+  functions (`ObjectDir::Iterate` 99.4%→**100%**, `RndText::FitTextScroll` 92.7%→98.2%,
+  `RndText::SizeCheck` 96.5%→98.6%): 12+ declaration-reorder variants produced
   **byte-identical** output and a 65-candidate permuter sweep found 0 improvements,
   yet every function had a one-to-three-line fix on the **liveness** or **scheduling**
   axis that flipped all its register swaps at once.
