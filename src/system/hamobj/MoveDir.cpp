@@ -2342,15 +2342,13 @@ void MoveDir::PostUpdateFilters() {
 
     float prevFracs[2];
     for (int i = 0; i < 2; i++) {
-        float frac;
         if (TheMoveMgr->HasRoutine()) {
-            frac = mAsyncDetector->MoveRatingFrac(
+            prevFracs[i] = mAsyncDetector->MoveRatingFrac(
                 i, (MoveAsyncDetector::RatingBar)0, mMovePlayerData[i].mCurMove
             );
         } else {
-            frac = DetectFrac(i, -1);
+            prevFracs[i] = DetectFrac(i, -1);
         }
-        prevFracs[i] = frac;
     }
 
     DetectFrame *resultFrames[2];
@@ -2384,9 +2382,9 @@ void MoveDir::PostUpdateFilters() {
             DetectFrame *detectFrame = resultFrames[i];
             if (move && detectFrame) {
                 const FilterVersion *fv = move->FilterVer();
+                ErrorNode *const *errorNodes = fv->mErrorNodes;
                 FilterVersionType version = move->Version();
                 if (version == kFilterVersionHam1) {
-                    ErrorNode *const *errorNodes = fv->mErrorNodes;
                     float limbErrors[4] = {};
                     for (int n = 0; n < 16; n++) {
                         const Ham1NodeWeight &nodeWeight =
@@ -2394,8 +2392,9 @@ void MoveDir::PostUpdateFilters() {
                                 n, moveMode, detectFrame->Mirror()
                             );
                         if (nodeWeight.mActive) {
-                            int feedbackLimbs = (*errorNodes)->GetFeedbackLimbs();
+                            const ErrorNode *node = *errorNodes;
                             const Vector3 &bestError = detectFrame->BestNodeError(n);
+                            int feedbackLimbs = node->GetFeedbackLimbs();
                             float errVal = bestError.x;
                             for (int limb = 0; limb < 4; limb++) {
                                 if ((1 << limb) & feedbackLimbs) {
@@ -2407,9 +2406,8 @@ void MoveDir::PostUpdateFilters() {
                     }
                     for (int limb = 0; limb < 4; limb++) {
                         float clamped = Clamp(0.0f, 1.0f, 1.0f - limbErrors[limb]);
-                        const std::vector<float> *ratings = move->RatingOverride();
                         int ratingIdx;
-                        DetectFracToRating(clamped, ratings, &ratingIdx);
+                        DetectFracToRating(clamped, move->RatingOverride(), &ratingIdx);
                         if (ratingIdx == 3) {
                             feedback->UpdateLimb(limb, true);
                         } else if (ratingIdx <= 1) {
@@ -2418,14 +2416,16 @@ void MoveDir::PostUpdateFilters() {
                     }
                 } else {
                     MILO_ASSERT(fv->mType == kFilterVersionHam2, 0x460);
+                    const MoveFrame *moveFrame = detectFrame->GetMoveFrame();
                     const Ham2FrameWeight &frameWeight =
-                        detectFrame->GetMoveFrame()->FrameWeight(detectFrame->Mirror());
+                        moveFrame->FrameWeight(detectFrame->Mirror());
                     if (0.5f < frameWeight.mWeight) {
                         for (int limb = 0; limb < 4; limb++) {
                             float limbPSNR = detectFrame->LimbPSNR(fv, 1 << limb);
+                            float goodThresh = frameWeight.unk14[limb];
                             float badThresh = frameWeight.unk4[limb];
-                            if (badThresh < frameWeight.unk14[limb]) {
-                                if (limbPSNR > frameWeight.unk14[limb]) {
+                            if (goodThresh > badThresh) {
+                                if (limbPSNR > goodThresh) {
                                     feedback->UpdateLimb(limb, false);
                                 } else if (limbPSNR < badThresh) {
                                     feedback->UpdateLimb(limb, true);
@@ -2454,8 +2454,8 @@ void MoveDir::PostUpdateFilters() {
             } else {
                 frac = DetectFrac(i, -1);
             }
-            HamPlayerData *player2 = TheGameData->Player(i);
-            if (frac > prevFracs[i] || player2->IsAutoplaying()) {
+            Symbol autoplay = TheGameData->Player(i)->Autoplay();
+            if (frac > prevFracs[i] || !autoplay.Null()) {
                 float ratingFrac = DetectFracToRatingFrac(frac, move->RatingOverride());
                 MILO_ASSERT(mpd.mPhraseMeter, 0x49a);
                 mpd.mPhraseMeter->SetRatingFrac(ratingFrac, 4.0f - beatInMeasure);
