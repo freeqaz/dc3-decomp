@@ -14,6 +14,15 @@
 #   scripts/measure_progress.sh --regressions      # Only show regressions
 #   scripts/measure_progress.sh --current-dir /path/to/worktree HEAD  # Use worktree as "current"
 #   scripts/measure_progress.sh --authorable       # Print authorable-denominator metrics (no baseline needed)
+#   scripts/measure_progress.sh --refresh-baseline # Ignore + rebuild the cached baseline report
+#   scripts/measure_progress.sh --allow-stale      # Downgrade staleness/race errors to warnings
+#
+# Staleness safety: a report.json that is out of date (or that another agent
+# rebuilds underneath us) shows up as a pile of phantom regressions. Both
+# sides of the comparison are therefore gated: the "current" report must be
+# ninja-clean before it is read, cached baselines carry a provenance stamp
+# that is re-verified on reuse, and both files are fingerprinted before and
+# after the diff to catch a concurrent rebuild. Use --allow-stale to override.
 #
 set -euo pipefail
 
@@ -24,6 +33,17 @@ COMPARE_FLAGS=()
 WORKTREE_DIR="/tmp/claude/measure-progress"
 CREATED_WORKTREE=0
 CURRENT_DIR=""
+ALLOW_STALE=0
+REFRESH_BASELINE=0
+# Config inputs whose content decides what dtk/objdiff measure against.
+# Recorded per baseline so a later config or toolchain change invalidates it.
+PROVENANCE_FILES=(
+    "config/373307D9/config.yml"
+    "config/373307D9/symbols.txt"
+    "config/373307D9/splits.txt"
+    "config/373307D9/objects.json"
+    "config/373307D9/link_order.txt"
+)
 
 # --- Parse arguments ---
 while [[ $# -gt 0 ]]; do
@@ -63,8 +83,16 @@ while [[ $# -gt 0 ]]; do
             COMPARE_FLAGS+=("--limit" "$2")
             shift 2
             ;;
+        --allow-stale)
+            ALLOW_STALE=1
+            shift
+            ;;
+        --refresh-baseline)
+            REFRESH_BASELINE=1
+            shift
+            ;;
         --help|-h)
-            sed -n '2,14p' "$0"
+            sed -n '2,26p' "$0"
             exit 0
             ;;
         *)
@@ -76,6 +104,104 @@ done
 
 WORKTREE="${WORKTREE_DIR}"
 CACHE_DIR="${MAIN_REPO}/build/373307D9/baselines"
+
+# =============================================================================
+# Staleness / provenance guards
+#
+# A report.json that lags its sources produces phantom regressions that look
+# exactly like real ones. Everything below exists so that can never happen
+# quietly: either the comparison is provably fresh, or the script says why
+# it is not.
+# =============================================================================
+
+# Loud failure that --allow-stale can downgrade to a warning.
+stale_fail() {
+    local msg="$1"
+    if [[ "${ALLOW_STALE}" -eq 1 ]]; then
+        echo "WARNING (--allow-stale): ${msg}" >&2
+        return 0
+    fi
+    echo "" >&2
+    echo "ERROR: ${msg}" >&2
+    echo "       Refusing to compare — a stale report shows up as phantom regressions." >&2
+    echo "       Re-run with --allow-stale to compare anyway (results are not trustworthy)." >&2
+    exit 1
+}
+
+sha_of() { [[ -f "$1" ]] && sha256sum "$1" | cut -d' ' -f1 || echo "missing"; }
+
+# inode:size:mtime — changes if anyone rewrites the file underneath us.
+fingerprint_of() { stat -c '%i:%s:%Y:%Z' "$1" 2>/dev/null || echo "missing"; }
+
+git_head_of() { git -C "$1" rev-parse HEAD 2>/dev/null || echo "unknown"; }
+
+git_dirty_of() {
+    git -C "$1" status --porcelain --untracked-files=no 2>/dev/null | wc -l | tr -d ' '
+}
+
+# Which dtk / objdiff-cli does a build directory actually use? Read it out of
+# the generated build.ninja rather than assuming. dtk decides function
+# boundaries from symbols.txt and objdiff-cli computes the percentages, so a
+# version skew between the two sides of the comparison invents differences that
+# have nothing to do with the code. The baseline is therefore built with the
+# *current* side's binaries.
+tool_from_ninja() {
+    local dir="$1" rule="$2" pat="$3" path
+    [[ -f "${dir}/build.ninja" ]] || return 1
+    # Strip ninja's trailing '$' line-continuations and squeeze whitespace so a
+    # wrapped `command =` line reads as one line before matching.
+    path="$(sed -n "/^rule ${rule}\$/,/^ *description/p" "${dir}/build.ninja" 2>/dev/null \
+        | sed -e 's/\$$//' | tr '\n' ' ' | tr -s ' ' \
+        | grep -oE "${pat}" | head -n1 | sed -E 's/ .*//')"
+    [[ -n "${path}" ]] || return 1
+    case "${path}" in
+        /*) ;;
+        *) path="$(cd "${dir}" && realpath -e "${path}" 2>/dev/null)" || return 1 ;;
+    esac
+    [[ -x "${path}" ]] || return 1
+    echo "${path}"
+}
+
+dtk_of_dir() { tool_from_ninja "$1" split '[^ ]+dtk xex split'; }
+objdiff_of_dir() { tool_from_ninja "$1" report '[^ ]+objdiff-cli report generate'; }
+
+# Is `dir`'s report.json fully up to date with respect to its ninja graph?
+# `ninja -n` is a pure dry run; "no work to do" is the only clean answer.
+ninja_is_clean() {
+    local dir="$1" out
+    [[ -f "${dir}/build.ninja" ]] || return 2
+    out="$(cd "${dir}" && ninja -n "${REPORT_REL}" 2>&1)" || return 3
+    [[ "${out}" == *"no work to do"* ]]
+}
+
+# Gate a report we are about to read. Rebuilds it once if stale, then insists.
+require_fresh_report() {
+    local dir="$1" label="$2" rc=0
+
+    ninja_is_clean "${dir}" || rc=$?
+    case "${rc}" in
+        0) return 0 ;;
+        2)
+            stale_fail "${label} (${dir}) has no build.ninja — cannot verify its report is current."
+            return 0
+            ;;
+        3)
+            stale_fail "${label} (${dir}): 'ninja -n ${REPORT_REL}' failed — the build graph is broken."
+            return 0
+            ;;
+    esac
+
+    echo "  ${label} report is STALE (ninja has pending work). Rebuilding..."
+    if ! ninja -C "${dir}" "${REPORT_REL}" -j"$(nproc)" >/dev/null 2>&1; then
+        stale_fail "${label} (${dir}): rebuild of ${REPORT_REL} failed."
+        return 0
+    fi
+    rc=0
+    ninja_is_clean "${dir}" || rc=$?
+    if [[ "${rc}" -ne 0 ]]; then
+        stale_fail "${label} (${dir}) is still stale after a rebuild — another process is probably building there concurrently."
+    fi
+}
 
 # --- Resolve current directory (main repo or worktree) ---
 if [[ -n "${CURRENT_DIR}" ]]; then
@@ -111,13 +237,97 @@ CURRENT_SHORT="${CURRENT_LABEL}"
 
 echo "Measuring progress: ${BASELINE_SHORT} (baseline) -> ${CURRENT_SHORT} (current)"
 
+# --- Provenance banner: say exactly what is being compared ---
+CURRENT_HEAD="$(git_head_of "${CURRENT_DIR}")"
+CURRENT_DIRTY="$(git_dirty_of "${CURRENT_DIR}")"
+# Tools the *current* side actually built with; the baseline is forced to match.
+BUILD_DTK="$(dtk_of_dir "${CURRENT_DIR}" || dtk_of_dir "${MAIN_REPO}" \
+    || (cd "${MAIN_REPO}" && realpath -e ../jeff/target/release/dtk 2>/dev/null) || true)"
+BUILD_OBJDIFF="$(objdiff_of_dir "${CURRENT_DIR}" || objdiff_of_dir "${MAIN_REPO}" \
+    || (cd "${MAIN_REPO}" && realpath -e ../objdiff/target/release/objdiff-cli 2>/dev/null) || true)"
+if [[ -z "${BUILD_DTK}" || -z "${BUILD_OBJDIFF}" ]]; then
+    echo "ERROR: cannot determine which dtk/objdiff-cli ${CURRENT_DIR} builds with." >&2
+    echo "       dtk='${BUILD_DTK:-<none>}' objdiff='${BUILD_OBJDIFF:-<none>}'" >&2
+    echo "       Without them the baseline would be built by different tools than the" >&2
+    echo "       current side, which invents differences. Run 'ninja' there first." >&2
+    exit 1
+fi
+DTK_SHA="$(sha_of "${BUILD_DTK}")"
+OBJDIFF_SHA="$(sha_of "${BUILD_OBJDIFF}")"
+
+echo "  baseline : ${BASELINE_COMMIT}"
+echo "  current  : ${CURRENT_DIR} @ ${CURRENT_HEAD} (${CURRENT_DIRTY} tracked file(s) modified)"
+echo "  dtk      : ${DTK_SHA:0:12}  ${BUILD_DTK:-<unresolved>}"
+echo "  objdiff  : ${OBJDIFF_SHA:0:12}  ${BUILD_OBJDIFF:-<unresolved>}"
+
+# A worktree that splits with a different dtk than the main repo produces a
+# report that differs from main's for tool reasons alone. Say so.
+if [[ "${CURRENT_DIR}" != "${MAIN_REPO}" ]]; then
+    MAIN_DTK="$(dtk_of_dir "${MAIN_REPO}" || true)"
+    if [[ -n "${MAIN_DTK}" && "$(sha_of "${MAIN_DTK}")" != "${DTK_SHA}" ]]; then
+        echo "  WARNING: this tree splits with a different dtk than the main repo:"
+        echo "             current : ${BUILD_DTK}"
+        echo "             main    : ${MAIN_DTK}"
+        echo "           Function boundaries can differ, so comparing this tree's numbers"
+        echo "           against main's directly will show phantom diffs. (The baseline"
+        echo "           built below uses this tree's dtk, so THIS comparison is sound.)"
+    fi
+fi
+if [[ "${CURRENT_DIRTY}" -gt 0 ]]; then
+    echo "  NOTE: the 'current' tree has ${CURRENT_DIRTY} uncommitted tracked change(s), so the"
+    echo "        numbers below include work that is in no commit. If this is a shared"
+    echo "        checkout, that includes other agents' in-progress edits — prefer"
+    echo "        --current-dir <your own worktree>."
+fi
+
+# --- Gate the current report: it must be ninja-clean before we read it ---
+echo "Checking that the current report is up to date..."
+require_fresh_report "${CURRENT_DIR}" "current (${CURRENT_LABEL})"
+
+# --- Baseline provenance stamp -----------------------------------------------
+# Records the commit and the config/toolchain inputs the cached report was
+# produced from, so a later config edit or dtk rebuild cannot be reused blindly.
+BASELINE_META="${CACHE_DIR}/${BASELINE_COMMIT}.meta"
+
+expected_provenance() {
+    echo "commit ${BASELINE_COMMIT}"
+    echo "dtk ${DTK_SHA}"
+    echo "objdiff ${OBJDIFF_SHA}"
+    local f blob
+    for f in "${PROVENANCE_FILES[@]}"; do
+        blob="$(git -C "${MAIN_REPO}" rev-parse --verify --quiet "${BASELINE_COMMIT}:${f}" || echo absent)"
+        echo "${f} ${blob}"
+    done
+}
+
 # --- Check baseline cache ---
 CACHED_REPORT="${CACHE_DIR}/${BASELINE_COMMIT}.json"
-if [[ -f "${CACHED_REPORT}" ]]; then
-    echo "Using cached baseline report for ${BASELINE_SHORT}"
+if [[ "${REFRESH_BASELINE}" -eq 1 && -f "${CACHED_REPORT}" ]]; then
+    echo "--refresh-baseline: discarding cached baseline for ${BASELINE_SHORT}"
+    rm -f "${CACHED_REPORT}" "${BASELINE_META}"
+fi
+if [[ -f "${CACHED_REPORT}" ]] && [[ -f "${BASELINE_META}" ]] \
+   && diff -q <(expected_provenance) "${BASELINE_META}" >/dev/null 2>&1; then
+    echo "Using cached baseline report for ${BASELINE_SHORT} (provenance verified)"
+    BASELINE_REPORT="${CACHED_REPORT}"
+elif [[ -f "${CACHED_REPORT}" && ! -f "${BASELINE_META}" ]]; then
+    # Legacy cache entry from before provenance stamping. We cannot prove what
+    # config/toolchain produced it, so say so instead of pretending.
+    echo ""
+    echo "WARNING: cached baseline ${BASELINE_SHORT} has no provenance stamp."
+    echo "         It predates provenance tracking, so it cannot be verified against"
+    echo "         the current config/373307D9/* or dtk build. If it was generated with"
+    echo "         a different dtk, differences below may be tool artifacts, not code."
+    echo "         Re-run with --refresh-baseline to rebuild it from scratch."
+    echo ""
     BASELINE_REPORT="${CACHED_REPORT}"
 else
-    echo "No cached baseline for ${BASELINE_SHORT}, building..."
+    if [[ -f "${CACHED_REPORT}" ]]; then
+        echo "Cached baseline for ${BASELINE_SHORT} is INVALID (config/toolchain changed since it was built):"
+        diff <(expected_provenance) "${BASELINE_META}" | sed 's/^/    /' || true
+        rm -f "${CACHED_REPORT}" "${BASELINE_META}"
+    fi
+    echo "No usable cached baseline for ${BASELINE_SHORT}, building..."
     echo "Using worktree: ${WORKTREE}"
 
     # --- Create worktree if it doesn't exist ---
@@ -217,28 +427,32 @@ else
         echo "${abs_path}"
     }
 
-    # Extract tool paths used in the main build and pass them explicitly
-    for tool_flag_pair in \
-        "--dtk:../jeff/target/release/dtk" \
-        "--objdiff:../objdiff/target/release/objdiff-cli" \
-        "--wrapper:../wibo/build/release/wibo"; do
-        flag="${tool_flag_pair%%:*}"
-        rel="${tool_flag_pair#*:}"
-        abs="$(resolve_tool "${rel}")" && CONFIGURE_ARGS+=("${flag}" "${abs}")
+    # Drop any --dtk/--objdiff inherited from the main repo's configure_args.
+    # They are replaced below by the *current* side's binaries so both halves of
+    # the comparison are produced by the same tools. Leaving both in relied on
+    # configure.py preferring the last occurrence while the explicit split step
+    # below picked the first — i.e. the two split invocations could disagree.
+    FILTERED_ARGS=()
+    skip_next=0
+    for arg in "${CONFIGURE_ARGS[@]+"${CONFIGURE_ARGS[@]}"}"; do
+        if [[ "${skip_next}" -eq 1 ]]; then skip_next=0; continue; fi
+        if [[ "${arg}" == "--dtk" || "${arg}" == "--objdiff" ]]; then skip_next=1; continue; fi
+        FILTERED_ARGS+=("${arg}")
     done
+    CONFIGURE_ARGS=("${FILTERED_ARGS[@]+"${FILTERED_ARGS[@]}"}")
+
+    [[ -n "${BUILD_DTK}" ]] && CONFIGURE_ARGS+=("--dtk" "${BUILD_DTK}")
+    [[ -n "${BUILD_OBJDIFF}" ]] && CONFIGURE_ARGS+=("--objdiff" "${BUILD_OBJDIFF}")
+    if abs="$(resolve_tool "../wibo/build/release/wibo")"; then
+        CONFIGURE_ARGS+=("--wrapper" "${abs}")
+    fi
 
     echo "Using configure args: ${CONFIGURE_ARGS[*]}"
 
-    # Extract dtk path from configure args so we can run the split step directly.
-    # This avoids a misleading ninja "manifest still dirty" loop when the split
-    # fails and build/373307D9/config.json is never produced.
-    DTK_BIN=""
-    for ((i = 0; i < ${#CONFIGURE_ARGS[@]}; i++)); do
-        if [[ "${CONFIGURE_ARGS[$i]}" == "--dtk" && $((i + 1)) -lt ${#CONFIGURE_ARGS[@]} ]]; then
-            DTK_BIN="${CONFIGURE_ARGS[$((i + 1))]}"
-            break
-        fi
-    done
+    # Same dtk for the explicit split step as for the generated ninja manifest.
+    # Running it here (instead of only via ninja) gives a clear error path when
+    # the split fails and build/373307D9/config.json is never produced.
+    DTK_BIN="${BUILD_DTK}"
 
     # --- Generate split config explicitly (clear error path if dtk fails) ---
     if [[ -n "${DTK_BIN}" && -x "${DTK_BIN}" ]]; then
@@ -251,7 +465,19 @@ else
             echo ""
             tail -100 "${SPLIT_LOG}" || true
             echo ""
-            echo "Hint: the selected baseline may require a different dtk version or a cached baseline report."
+            if grep -q "Overlapping functions" "${SPLIT_LOG}"; then
+                echo "Hint: 'Overlapping functions A-B -> C' means config/373307D9/symbols.txt at the"
+                echo "      baseline commit declares a type:function symbol at C that falls inside the"
+                echo "      function A..B that dtk derives from pdata/jump-table analysis. That is"
+                echo "      almost always a symbol cut at an *internal* control-flow target (a switch"
+                echo "      jump table, a loop head, or an EH funclet) rather than a real function"
+                echo "      boundary. The overlap check is correct; the config is wrong."
+                echo "      Inspect the range with: build/373307D9/asm/**  and fix symbols.txt."
+                echo "      Baselines between 05f3e705 and its revert cannot be regenerated for this"
+                echo "      reason — use a commit outside that range, or a cached baseline report."
+            else
+                echo "Hint: the selected baseline may require a different dtk version or a cached baseline report."
+            fi
             exit 1
         fi
         rm -f "${SPLIT_LOG}" 2>/dev/null || true
@@ -312,13 +538,19 @@ else
         exit 1
     fi
 
-    # --- Cache the baseline report ---
+    # --- Cache the baseline report + its provenance stamp ---
     mkdir -p "${CACHE_DIR}"
     cp "${WORKTREE}/${REPORT_REL}" "${CACHED_REPORT}"
+    expected_provenance > "${BASELINE_META}"
     echo "Cached baseline report -> ${CACHED_REPORT}"
+    echo "Stamped provenance     -> ${BASELINE_META}"
 
     BASELINE_REPORT="${WORKTREE}/${REPORT_REL}"
 fi
+
+# --- Race detection: nobody may rewrite either report while we diff it ---
+BASELINE_FP_BEFORE="$(fingerprint_of "${BASELINE_REPORT}")"
+CURRENT_FP_BEFORE="$(fingerprint_of "${CURRENT_REPORT}")"
 
 # --- Compare ---
 echo ""
@@ -326,3 +558,10 @@ python3 "${MAIN_REPO}/scripts/analysis/compare_progress.py" \
     "${COMPARE_FLAGS[@]}" \
     "${BASELINE_REPORT}" \
     "${CURRENT_REPORT}"
+
+if [[ "$(fingerprint_of "${BASELINE_REPORT}")" != "${BASELINE_FP_BEFORE}" ]]; then
+    stale_fail "the baseline report ${BASELINE_REPORT} was rewritten while it was being compared — the numbers above are from a racing build."
+fi
+if [[ "$(fingerprint_of "${CURRENT_REPORT}")" != "${CURRENT_FP_BEFORE}" ]]; then
+    stale_fail "the current report ${CURRENT_REPORT} was rewritten while it was being compared — the numbers above are from a racing build."
+fi
