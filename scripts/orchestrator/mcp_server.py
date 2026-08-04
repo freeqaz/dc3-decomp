@@ -58,6 +58,101 @@ from tools.struct_db import StructDB
 from tools.merged_symbols import MergedSymbolLookup
 
 
+# ---------------------------------------------------------------------------
+# Cross-project guard
+#
+# This MCP server is pinned to ONE decomp project: the decomp.db it was started
+# with, that project's report.json / struct_db / symbol tables, and its title ID
+# (DC3 = 373307D9). `project_dir` selects a *tree* (worktree) inside that
+# project -- it does NOT select a different project.
+#
+# Passing a foreign repo's path (../rb3-xenon, ../rb3) used to silently answer
+# out of DC3's database: a "Symbol not found" in the foreign tree fell through
+# to `_suggest_similar_symbols`, which printed the SAME symbol name annotated
+# with DC3's percentage. Two lanes burned a day on numbers about the wrong
+# binary (rb3-xenon ObjectDir::Iterate reported as 100.0%, DC3's value; another
+# symbol reported as 93.3%). Now we detect it and raise.
+# ---------------------------------------------------------------------------
+
+_TITLE_ID_RE = re.compile(r"/(?:build|orig)/([A-Za-z0-9_.-]{4,24})/")
+
+# build/ and orig/ subdirectories that are never a title ID.
+_NON_TITLE_DIRS = frozenset({
+    "compilers", "tools", "scratch", "obj", "src", "host", "asm", "docs",
+    "include", "orig", "config", "cache", "temp", "tmp",
+})
+
+
+def _looks_like_title_id(name: str) -> bool:
+    """True for 8-hex-digit title IDs such as '373307D9' (DC3) or '45410914' (RB3 xenon)."""
+    return len(name) == 8 and all(c in "0123456789abcdefABCDEF" for c in name)
+
+
+def _discover_title_id(root: Path) -> "str | None":
+    """
+    Discover which game title a decomp tree is configured for.
+
+    Derived (never hardcoded) from, in order:
+      1. objdiff.json unit paths -- "build/<TITLE>/obj/Foo.obj"
+      2. a build/<TITLE>/ directory
+      3. an orig/<TITLE>/ directory
+
+    Returns the upper-cased title ID, or None when the tree is not a configured
+    decomp project (in which case the caller must not assume anything).
+    """
+    objdiff_json = root / "objdiff.json"
+    if objdiff_json.is_file():
+        try:
+            cfg = json.loads(objdiff_json.read_text())
+        except (OSError, json.JSONDecodeError, ValueError):
+            cfg = None
+        if isinstance(cfg, dict):
+            for unit in (cfg.get("units") or [])[:32]:
+                if not isinstance(unit, dict):
+                    continue
+                for key in ("target_path", "base_path"):
+                    value = unit.get(key)
+                    if not value:
+                        continue
+                    match = _TITLE_ID_RE.search("/" + str(value))
+                    if match and match.group(1).lower() not in _NON_TITLE_DIRS:
+                        return match.group(1).upper()
+
+    for parent in ("build", "orig"):
+        directory = root / parent
+        if not directory.is_dir():
+            continue
+        try:
+            names = sorted(p.name for p in directory.iterdir() if p.is_dir())
+        except OSError:
+            continue
+        for name in names:
+            if _looks_like_title_id(name):
+                return name.upper()
+
+    return None
+
+
+def _git_common_dir(path: Path) -> "str | None":
+    """Absolute path of the shared .git dir, so worktrees of one repo compare equal."""
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(path), "rev-parse",
+             "--path-format=absolute", "--git-common-dir"],
+            capture_output=True, text=True, timeout=15,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0:
+        return None
+    out = result.stdout.strip()
+    return out or None
+
+
+class CrossProjectError(RuntimeError):
+    """Raised when project_dir points at a decomp project this server cannot measure."""
+
+
 # Patterns for filtering noisy build output
 _NINJA_PROGRESS = re.compile(r'^\s*\[\d+/\d+\]\s')
 _NOISY_PREFIXES = (' INFO ', ' WARN ', 'xex: ', 'INFO ')
@@ -397,8 +492,106 @@ class DecompMCPServer:
         self.record_attempts = record_attempts
         # Determine project root from script location (more reliable than cwd)
         self.project_root = Path(__file__).resolve().parent.parent.parent
+        self._title_id_cache: dict[str, "str | None"] = {}
         self.server = Server("decomp")
         self._setup_tools()
+
+    # ------------------------------------------------------------------
+    # Project identity
+    # ------------------------------------------------------------------
+
+    def _title_id_of(self, root: Path) -> "str | None":
+        key = str(root)
+        if key not in self._title_id_cache:
+            self._title_id_cache[key] = _discover_title_id(root)
+        return self._title_id_cache[key]
+
+    @property
+    def project_title_id(self) -> "str | None":
+        """Title ID this server is pinned to (DC3: '373307D9'), derived not hardcoded."""
+        return self._title_id_of(self.project_root)
+
+    def _assert_same_project(self, project_dir: Path) -> None:
+        """
+        Fail loudly when `project_dir` is a *different decomp project*.
+
+        `project_dir` is meant to select a worktree of THIS project so builds
+        test the agent's edits. It cannot select another game: the database,
+        report.json, struct DB, symbol suggestions and map file all come from
+        this server's project root. Silently answering from them produces
+        numbers about the wrong binary that look entirely plausible.
+
+        Raises CrossProjectError. Never falls back to the main repo.
+        """
+        own_title = self.project_title_id
+        if own_title is None:
+            # We cannot establish our own identity -- do not invent a rule.
+            return
+
+        try:
+            resolved = project_dir.resolve()
+        except OSError:
+            resolved = project_dir
+        if resolved == self.project_root.resolve():
+            return
+
+        other_title = self._title_id_of(resolved)
+        if other_title == own_title:
+            return
+
+        # Unconfigured tree (no objdiff.json / build/<TITLE>): allow it only if
+        # git says it is a worktree/clone of this same repository. A fresh
+        # worktree before `configure.py` runs is legitimate; anything else is not.
+        if other_title is None:
+            own_git = _git_common_dir(self.project_root)
+            other_git = _git_common_dir(resolved)
+            if own_git and other_git and own_git == other_git:
+                return
+
+        found = f"title ID {other_title}" if other_title else "no decomp project detected"
+        sibling_server = resolved / "scripts" / "orchestrator" / "mcp_server.py"
+        hint = (
+            f"Use that repo's own orchestrator instead: {sibling_server}"
+            if sibling_server.is_file()
+            else f"There is no orchestrator at {sibling_server} either -- this repo cannot measure that tree."
+        )
+        raise CrossProjectError(
+            "project_dir belongs to a different decomp project -- refusing to answer.\n"
+            f"  project_dir:  {resolved}  ({found})\n"
+            f"  this server:  {self.project_root}  (title ID {own_title})\n"
+            f"  database:     {self.db_path}\n"
+            "\n"
+            "project_dir selects a WORKTREE of this project, not a different project. "
+            "This server's report.json, decomp.db, struct DB, symbol suggestions and "
+            "linker map are all pinned to "
+            f"title ID {own_title}; measuring another tree through it returns a "
+            "plausible-looking number about the wrong binary.\n"
+            f"{hint}"
+        )
+
+    def _resolve_project_dir(self, project_dir_arg: "str | None") -> Path:
+        """
+        Resolve the project directory for a tool call and verify it is this project.
+
+        Priority: explicit project_dir arg > REPO_ROOT env var > main repo fallback.
+        REPO_ROOT is set by agent_runner.py to the agent's worktree, so builds test
+        the agent's edits even when project_dir is omitted.
+
+        Raises FileNotFoundError when the directory does not exist and
+        CrossProjectError when it is a foreign decomp project.
+        """
+        if project_dir_arg:
+            project_dir = Path(project_dir_arg)
+            if not project_dir.exists():
+                raise FileNotFoundError(f"project_dir does not exist: {project_dir}")
+        elif os.environ.get("REPO_ROOT"):
+            project_dir = Path(os.environ["REPO_ROOT"])
+        else:
+            # Default: this server's own repo. Unchanged behaviour, no check needed.
+            return self.project_root
+
+        self._assert_same_project(project_dir)
+        return project_dir
 
     def _setup_tools(self):
         """Register all MCP tools."""
@@ -558,7 +751,7 @@ class DecompMCPServer:
                             },
                             "project_dir": {
                                 "type": "string",
-                                "description": "Project directory to build from. Pass your worktree directory here to test your changes.",
+                                "description": "Project directory to build from. Pass your worktree directory here to test your changes. Must be a worktree of THIS project (title 373307D9) -- a foreign repo's path raises CrossProjectError; use that repo's own orchestrator instead.",
                             },
                             "context": {
                                 "type": "integer",
@@ -601,7 +794,7 @@ class DecompMCPServer:
                             },
                             "project_dir": {
                                 "type": "string",
-                                "description": "Project directory to build from. Pass your worktree directory here to test your changes.",
+                                "description": "Project directory to build from. Pass your worktree directory here to test your changes. Must be a worktree of THIS project (title 373307D9) -- a foreign repo's path raises CrossProjectError; use that repo's own orchestrator instead.",
                             },
                         },
                         "required": ["symbol", "project_dir"],
@@ -624,7 +817,7 @@ class DecompMCPServer:
                             },
                             "project_dir": {
                                 "type": "string",
-                                "description": "Project directory to build from. Pass your worktree directory here.",
+                                "description": "Project directory to build from. Pass your worktree directory here. Must be a worktree of THIS project (title 373307D9) -- a foreign repo's path raises CrossProjectError; use that repo's own orchestrator instead.",
                             },
                             "baseline_json": {
                                 "type": "string",
@@ -1603,21 +1796,13 @@ class DecompMCPServer:
         # Extract parameter type hint for disambiguation (e.g., "Set(BaseSkeleton*)" → "Set", hint="BaseSkeleton*")
         symbol, param_hint = _extract_param_hint(symbol)
 
-        # Determine which project directory to use
-        # Priority: explicit project_dir arg > REPO_ROOT env var > main repo fallback
-        # REPO_ROOT is set by agent_runner.py to the agent's worktree, ensuring
-        # builds test the agent's edits even if project_dir is omitted.
-        if project_dir_arg:
-            project_dir = Path(project_dir_arg)
-            if not project_dir.exists():
-                return [TextContent(
-                    type="text",
-                    text=f"Error: project_dir does not exist: {project_dir}"
-                )]
-        elif os.environ.get("REPO_ROOT"):
-            project_dir = Path(os.environ["REPO_ROOT"])
-        else:
-            project_dir = self.project_root
+        # Determine which project directory to use.
+        # Raises CrossProjectError for a foreign repo -- never silently measures
+        # this project's tree in its place.
+        try:
+            project_dir = self._resolve_project_dir(project_dir_arg)
+        except FileNotFoundError as e:
+            return [TextContent(type="text", text=f"Error: {e}")]
 
         # Find objdiff-cli in the determined project directory
         objdiff_cli = project_dir / "bin" / "objdiff-cli"
@@ -1900,21 +2085,13 @@ class DecompMCPServer:
         # Extract parameter type hint for disambiguation
         symbol, _param_hint = _extract_param_hint(symbol)
 
-        # Determine which project directory to use
-        # Priority: explicit project_dir arg > REPO_ROOT env var > main repo fallback
-        # REPO_ROOT is set by agent_runner.py to the agent's worktree, ensuring
-        # builds test the agent's edits even if project_dir is omitted.
-        if project_dir_arg:
-            project_dir = Path(project_dir_arg)
-            if not project_dir.exists():
-                return [TextContent(
-                    type="text",
-                    text=f"Error: project_dir does not exist: {project_dir}"
-                )]
-        elif os.environ.get("REPO_ROOT"):
-            project_dir = Path(os.environ["REPO_ROOT"])
-        else:
-            project_dir = self.project_root
+        # Determine which project directory to use.
+        # Raises CrossProjectError for a foreign repo -- never silently measures
+        # this project's tree in its place.
+        try:
+            project_dir = self._resolve_project_dir(project_dir_arg)
+        except FileNotFoundError as e:
+            return [TextContent(type="text", text=f"Error: {e}")]
 
         # Find analyze-function script in the determined project directory
         analyze_script = project_dir / "bin" / "analyze-function"
@@ -2024,12 +2201,15 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
         # Extract parameter type hint for disambiguation
         symbol, _param_hint = _extract_param_hint(symbol)
 
-        # Require project_dir — no silent fallback to main repo
+        # Require project_dir — no silent fallback to main repo.
+        # _resolve_project_dir additionally raises CrossProjectError when the
+        # directory belongs to a different decomp project.
         if not project_dir_arg:
             return [TextContent(type="text", text="Error: project_dir is required. Pass your worktree directory so builds test your changes.")]
-        project_dir = Path(project_dir_arg)
-        if not project_dir.exists():
-            return [TextContent(type="text", text=f"Error: project_dir does not exist: {project_dir}")]
+        try:
+            project_dir = self._resolve_project_dir(project_dir_arg)
+        except FileNotFoundError as e:
+            return [TextContent(type="text", text=f"Error: {e}")]
 
         # Safe symbol for filenames
         safe_symbol = symbol.replace("?", "_Q_").replace("@", "_A_").replace("<", "_L_").replace(">", "_R_")
@@ -2376,8 +2556,17 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
         """Compile with /FAs and return source-annotated assembly listing with var->register mapping."""
         import tempfile as _tempfile
 
-        # 1. Find the obj target for this symbol from report.json
-        report_path = project_dir / "build" / "373307D9" / "report.json"
+        # 1. Find the obj target for this symbol from report.json.
+        # The title ID is derived from the tree, never hardcoded -- a hardcoded
+        # one silently pointed at DC3's build dir for any other project.
+        title_id = self._title_id_of(project_dir)
+        if title_id is None:
+            return [TextContent(type="text", text=(
+                f"Error: cannot determine the title ID of {project_dir} "
+                "(no objdiff.json unit paths, no build/<TITLE>/ and no orig/<TITLE>/). "
+                "Run configure.py / ninja first."))]
+
+        report_path = project_dir / "build" / title_id / "report.json"
         if not report_path.exists():
             return [TextContent(type="text", text=f"Error: report.json not found at {report_path}. Run 'ninja' first.")]
 
@@ -2400,8 +2589,8 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
         if not source_path:
             return [TextContent(type="text", text=f"Error: Symbol '{symbol}' not found in report.json. Cannot determine source file.")]
 
-        # 2. Derive the obj target from source path (src/foo/Bar.cpp -> build/373307D9/default/foo/Bar.obj)
-        obj_target = source_path.replace("src/", "build/373307D9/default/").rsplit(".", 1)[0] + ".obj"
+        # 2. Derive the obj target from source path (src/foo/Bar.cpp -> build/<TITLE>/default/foo/Bar.obj)
+        obj_target = source_path.replace("src/", f"build/{title_id}/default/").rsplit(".", 1)[0] + ".obj"
 
         # 3. Extract compile command from ninja
         ninja_result = subprocess.run(
