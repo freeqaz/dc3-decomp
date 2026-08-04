@@ -369,8 +369,8 @@ void ObjectDir::Save(BinStream &bs) {
     std::vector<ObjDirPtr<ObjectDir> > notInlinedSubDirs;
     if (SaveSubdirs()) {
         for (int i = 0; i < mSubDirs.size(); i++) {
-            if (mSubDirs[i]) {
-                ObjDirPtr<ObjectDir> &curSubDir = mSubDirs[i];
+            ObjDirPtr<ObjectDir> &curSubDir = mSubDirs[i];
+            if (curSubDir) {
                 if (curSubDir->InlineSubDirType() != kInlineNever) {
                     inlinedSubDirs.push_back(curSubDir);
                 } else {
