@@ -1320,9 +1320,11 @@ storeState:
     mLastCang = cang;
     mLastFacing = facingDir;
 
-    float headLookWeight = 0.0f;
+    float headLookWeight;
     if (mHeadLookAt) {
         headLookWeight = mHeadLookAt->Weight();
+    } else {
+        headLookWeight = 0.0f;
     }
     mDartTimer = headLookWeight;
 
