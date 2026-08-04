@@ -95,7 +95,7 @@ When using `--analyze`, these patterns are automatically detected:
 |---------|------------|-------------|
 | `LINKER_MERGED` | Unfixable | Calls to ICF-merged functions (`merged_*`, `OnlyReturns`, MSVC dtors) |
 | `BOOL_MASK` | UsuallyUnfixable | Bool return masking with `clrlwi`/`rlwinm` (bit 24 or 31) |
-| `REGISTER_SWAP` | MaybeFixable | Consistent register allocation differences (e.g., r30↔r31) |
+| `REGISTER_SWAP` | MaybeFixable | Consistent register allocation differences (e.g., r30↔r31). **Symptom, not cause** — route at [fixable-liveness.md](../../decomp/patterns/fixable-liveness.md#diagnostic-order-for-a-register-swap-residual), not declaration reorder |
 | `COMPARISON_STYLE` | LikelyFixable | Comparison immediate differs by 1 (`>` vs `>=`) |
 | `CONTROL_FLOW` | LikelyFixable | Branch instruction differences (`beq` vs `bne`, etc.) |
 | `COMMUTATIVE_OP_ORDER` | LikelyFixable | Operand order swap in `fadd`/`fmul`/`add`/`and`/`or`/`xor` |

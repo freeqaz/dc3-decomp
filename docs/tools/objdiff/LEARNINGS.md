@@ -7,7 +7,7 @@ This document captures patterns, insights, and potential tool improvements disco
 ## Table of Contents
 
 1. [Match Type Reference](#match-type-reference)
-2. [Diagnostic Patterns](#diagnostic-patterns)
+2. [Diagnostic Patterns](#diagnostic-patterns) — incl. [Pattern 6: EH funclet score wobble](#pattern-6-eh-funclet-score-wobble)
 3. [Fixability Decision Tree](#fixability-decision-tree)
 4. [Workflow: Fix Loop](#workflow-fix-loop)
 5. [Troubleshooting](#troubleshooting)
@@ -154,6 +154,24 @@ bool HasData() { return data ? true : false; }        // Still generates clrlwi
 {"target": {"args": "r10, r31"}, "base": {"args": "r10, r30"}}
 ```
 
+> **Read this before the fix attempts below (2026-08-03/04).** Register swaps are
+> **symptoms, not causes.** Nobody permutes a register name; the whole swap set flips at
+> once when the underlying liveness/scheduling difference is fixed. Across the 2026-08-04
+> AT_LIMIT sweep this held in **100% of cases across seven lanes** — `FlowIf::Activate`
+> opened with a 45-instruction `r29↔r30` swap and had no liveness cause at all (it
+> evaporated when the last control-flow difference was fixed);
+> `RndTransformable::Load` reached byte-exact 100% with 54 swapped instructions across 8
+> pairs and **not one register-motivated edit**.
+>
+> Declaration reorder — Attempts 1-3 below — was measured **byte-identical** across 12+
+> variants on three functions. Start at
+> [fixable-liveness.md: Diagnostic Order](../../decomp/patterns/fixable-liveness.md#diagnostic-order-for-a-register-swap-residual)
+> instead, and treat the reorder attempts as the *stack-slot* lever they actually are
+> (reach for them when `OFFSET_SWAP` / `[off:-N]` diffs are also present).
+>
+> objdiff-cli's own hints were retargeted to say this in `6079bdd`, so tool output and
+> these docs now agree. If they ever drift, fix both.
+
 **Fix attempts with examples:**
 
 ```cpp
@@ -235,6 +253,54 @@ if (curShader->CheckError(0) && !mat->FadeOut()) { ... }
 
 ---
 
+### Pattern 6: EH Funclet Score Wobble
+
+**It is the parent's frame size, not pairing noise.**
+
+**Symptom:** you fix a function and a tiny, unrelated-looking `fn_<addr>` symbol nearby
+moves by a fraction of a percent. The funclet body is two or three instructions and its
+only mismatch is an immediate:
+
+```
+target: subi r11, r1, 0xe0
+base:   subi r11, r1, 0xf0
+```
+
+**What is going on.** Roughly 1,367 of DC3's `fn_<addr>` "stubs" are MSVC
+`__unwind$NNNNNN` / `__catch$NNNNNN` exception-handling funclets — compiler-emitted
+destructor-cleanup and local-static-guard-reset code with **no source representation**
+(EH is on via `/EHsc /GR`; you cannot author these). Ground truth: any `fn_<addr>` whose
+address appears as an `__unwind$` / `__catch$` line in `orig/373307D9/ham_xbox_r.map`.
+objdiff v4.2.0 pairs them by byte signature — see `scripts/analyze_funclets.py`.
+
+The key fact: **a funclet's prologue `subi` encodes its *parent's* frame size.** So any
+source edit that grows the parent's frame shows up as a mismatch inside a funclet body
+that your edit never touched.
+
+Measured in rb3-xenon (2026-08-04): `fn_8274FEC8` is `ObjectDir::Iterate`'s own unwind
+funclet — its body is `addi r3, r31, 0x60; bl ??1DataNode@@QAA@XZ`, destroying `Iterate`'s
+saved `varNode` local — and its single mismatch was `0xe0` vs `0xf0`.
+
+**Do not read this as generic pairing noise, and do not let it veto a parent fix.** The
+semantic fix moved the parent **58.8% → 60.7% on 440 bytes** while costing **0.1 on a
+40-byte funclet**: that is the same 16-byte frame growth counted twice, once where it
+matters and once where it does not.
+
+**Diagnostic value.** The converse is the useful half: a liveness lever that does *not*
+move the frame leaves the funclet at **exactly 100.0** (verified by control experiment).
+So a funclet wobble is a free, cheap read on whether your edit changed the frame:
+
+| Funclet after your edit | Meaning |
+|---|---|
+| still 100.0 | frame unchanged — a pure liveness/scheduling edit (Levers 1-3) |
+| moved | you changed the frame — a stack/packing edit (Lever 4/5), intentional or not |
+
+**Two data planes.** `report.json` scores funclets; `decomp.db` does not ingest them
+(they stay `verdict=NULL, is_stub=1`), which is why `get_progress.py` keeps a map-driven
+funclet denominator exclusion. A funclet is never a work target.
+
+---
+
 ## Fixability Decision Tree
 
 ```
@@ -286,7 +352,8 @@ The standard workflow for improving a near-match function:
 │    → Apply fix based on pattern/suggestion                  │
 │    → LINKER_MERGED: Nothing to do (unfixable)               │
 │    → BOOL_MASK: Usually nothing to do (unfixable)           │
-│    → REGISTER_SWAP: Try reordering variable declarations    │
+│    → REGISTER_SWAP: SYMPTOM — find the liveness/schedule    │
+│      cause (fixable-liveness.md), not the register          │
 │    → Control flow: Try restructuring if/else                │
 └─────────────────────────────────────────────────────────────┘
                             ↓
