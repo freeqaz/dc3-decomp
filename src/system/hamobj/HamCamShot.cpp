@@ -157,8 +157,8 @@ void HamCamShot::UpdateTargetsFlipped() {
     static Symbol dance_battle("dance_battle");
 
     bool flipped = AreTargetsFlipped();
-    Symbol mode = TheHamProvider->Property(gameplay_mode, true)->Sym(NULL);
-    bool isDanceBattle = (mode == dance_battle);
+    bool isDanceBattle =
+        TheHamProvider->Property(gameplay_mode, true)->Sym(NULL) == dance_battle;
 
     if (TheHamDirector) {
         TheHamDirector->SetPhraseMetersFlipped(flipped);
@@ -174,8 +174,7 @@ void HamCamShot::UpdateTargetsFlipped() {
         static Symbol BattleIntro("BattleIntro");
 
         if (isDanceBattle && flipped) {
-            Symbol stage = TheHamProvider->Property(game_stage, true)->Sym(NULL);
-            if (stage == intro) {
+            if (TheHamProvider->Property(game_stage, true)->Sym(NULL) == intro) {
                 TheDebug << MakeString("Camshot %s\n", (char *)Name());
                 int targetIdx = 0;
                 for (ObjList<Target>::iterator it = mTargets.begin();
