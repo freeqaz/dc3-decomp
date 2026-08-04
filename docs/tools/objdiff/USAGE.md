@@ -452,7 +452,7 @@ Output:
 |---------|-------------|------------|
 | `LINKER_MERGED` | Calls to `merged_*`, `OnlyReturns`, MSVC dtors | Verify then accept (see lookup workflow) |
 | `BOOL_MASK` | `clrlwi`/`rlwinm` for bool masking | Often fixable (see [fixable-bool-mask.md](decomp/patterns/fixable-bool-mask.md)) |
-| `REGISTER_SWAP` | Consistent register allocation differences | Maybe fixable (try reordering vars) |
+| `REGISTER_SWAP` | Consistent register allocation differences | Maybe fixable — **symptom, not cause**: find the liveness/scheduling difference behind it ([fixable-liveness.md](../../decomp/patterns/fixable-liveness.md#diagnostic-order-for-a-register-swap-residual)). Reordering vars is the lever for `OFFSET_SWAP`, not for this |
 | `COMPARISON_STYLE` | `cmpwi`/`cmplwi` with values differing by 1 (e.g., `>= 5` vs `> 4`) | Maybe fixable |
 | `CONTROL_FLOW` | `diff_op`/`replace` on branch instructions | Likely fixable |
 | `COMMUTATIVE_OP_ORDER` | Operand order swap in `fadd`/`fmul`/`add`/`and`/`or`/`xor` | Likely fixable |

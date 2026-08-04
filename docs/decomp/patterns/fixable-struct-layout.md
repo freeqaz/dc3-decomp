@@ -97,6 +97,117 @@ The reference conversion operators (`operator Vector3&`) allow seamless use with
 
 **Fix:** Check parent class size. Virtual inheritance adds vbptr (4 bytes on PPC). Multiple inheritance adds vtable pointers.
 
+> **Do not extend this to base *declaration order*.** Under multiple inheritance MSVC
+> hoists the polymorphic base to offset 0 regardless of the order the bases are written,
+> so a base-adjustment tell in the target constrains a base's **offset** and says nothing
+> about the declaration list. See the next section before acting on one.
+
+## Base Declaration Order Does Not Set Base Offsets (MSVC Hoists the Polymorphic Base to 0)
+
+**This is a negative result — a triage rule, not a lever.** It exists to stop a
+plausible-looking lead that costs a full-rebuild cycle to chase.
+
+### The measurement
+
+Run the toolchain's own layout dumper rather than reasoning about it:
+
+```bash
+cl.exe /d1reportAllClassLayout ...   # X360/16.00.11886.00, the project toolchain
+```
+
+For `class String` (`src/system/utl/Str.h`), **both** base orders emit a byte-identical
+dump:
+
+```
+class String	size(8):
+	| +--- (base class TextStream)
+ 0	| | {vfptr}
+	| +--- (base class FixedString)
+ 4	| | mStr
+```
+
+`TextStream` carries the vfptr, so MSVC puts it at 0 whether the declaration reads
+`String : public FixedString, public TextStream` or `String : public TextStream, public
+FixedString`. `FixedString::mStr` lands at +4 either way.
+
+### What that means for a base-adjustment tell
+
+An MI base adjustment in the target — the null-guarded `p ? p + delta : 0` shape — proves
+the base's **offset**. It cannot discriminate declaration order, because both orders
+produce the same offset.
+
+`CharLipSync::Print` (`src/system/char/CharLipSync.cpp`) is the case that looked like
+proof and was not. Target, idx 62-71 (verified by `run_objdiff full_listing=true`):
+
+```
+62  add.  r10, r27, r11        ; element address, sets CR0
+64  addi  r25, r10, 0x4        ; -> FixedString sub-object (+4)
+65  bne   ...                  ; non-null path
+66  mr    r25, r21             ; null -> 0
+71  lwz   r4, 0x0, r25         ; load mStr through the adjusted pointer
+```
+
+That reads "`FixedString` is at +4", which is exactly where our build already puts it —
+our own base side loads `mStr` from `0x5c` off a `String` temp based at `0x58`, i.e. +4.
+The tell is **satisfied**, not violated. Reading it as an argument for swapping the base
+list is reading a constraint that is already met.
+
+### What *does* discriminate: base construction order
+
+Declaration order does control one observable thing — the order base subobjects are
+constructed. Read that out of a constructor instead:
+
+In the target's `String::String(const String &)`, `FixedString`'s `gEmpty` setup is
+inlined **first**, then the empty `TextStream` ctor is called, then `??_7String@@6B@` is
+stored. That is FixedString-then-TextStream, i.e. the order the tree already ships.
+
+Two gotchas when reading a constructor this way:
+
+- **Use raw diff mode.** The target's call there disassembles as
+  `bl ??1?$StackString@$0IA@@@UAA@XZ` in the slot where we emit
+  `bl ??0TextStream@@QAA@XZ` — ICF merged the two empty functions, so *normalized* mode
+  scores the constructor 100% and hides the evidence. `run_diff_inspect diff_mode=raw`.
+- **You cannot repair a base-order regression from the mem-init list.** MSVC reorders a
+  mem-init list back to declaration order, so rewriting it changes nothing.
+
+### The whole-build signature of a construction-order-only edit
+
+Worth recognising on sight, because it lets you stop after one measurement instead of
+bisecting. Applying the base swap and rebuilding gave:
+
+| Metric | Result |
+|--------|--------|
+| Overall fuzzy | 53.83% → 53.83% (**−0.00%**) |
+| Regressions | exactly **4**, all four `String` constructors (100% → 34.6 / 42.0 / 55.0 / 63.7) |
+| Other movers anywhere in the binary | **zero** |
+
+**One subsystem, constructors only, no other movers** is the fingerprint of a
+layout-neutral, construction-order-only edit. If a layout had actually moved, every
+function that touches the class would have moved with it. Seeing this shape means the
+edit did not do what you thought it did — stop and re-read the tell.
+
+### Ground-truth sources that do *not* work here
+
+- **RB2 DWARF is unusable for `String`.** RB2's `String` predates `FixedString` entirely:
+  `class String : public TextStream`, size `0xC`, `mCap`@4 / `mStr`@8. The
+  [`rb2-class`](../../tools/INDEX.md) skill will answer confidently and wrongly. Check
+  the *member set* matches before trusting a DWARF layout for a class that evolved
+  between titles.
+- **A stale source comment is not evidence.** The `// TODO(hugh)` this lead came from had
+  the two base offsets stated backwards and claimed the copy ctor was at 96.7% with an
+  extra `TextStream` ctor call. All four ctors were at 100% at baseline, and the edit is
+  an ordering swap, not an extra call. `../og-dc3-decomp/src/system/utl/Str.h` uses the
+  same declaration order and its comment was the accurate one.
+
+### Cost note
+
+`src/system/utl/Str.h` is in the PCH. Any edit there forces a **~830-step full rebuild**,
+so budget accordingly before testing a hypothesis on it — and prefer settling the
+question from `/d1reportAllClassLayout` plus a constructor diff, which costs nothing.
+
+Settled in `9065a8f6` (comment-only; the source order was already correct). The full
+reasoning is preserved in the class comment at `src/system/utl/Str.h:62-98`.
+
 ## Verification Checklist
 
 After fixing a struct:

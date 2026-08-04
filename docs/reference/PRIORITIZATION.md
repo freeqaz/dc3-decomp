@@ -99,15 +99,41 @@ These have room for improvement and aren't blocked by compiler quirks:
 ./bin/objdiff-cli near-match --unit "system/hamobj/*" --verdict LIKELY_FIXABLE
 ```
 
-### Avoid: AT_LIMIT Functions
+### AT_LIMIT Functions — the label is unreliable, and "functionally correct" is false
 
-Functions marked AT_LIMIT have hit compiler/linker barriers:
+Functions marked AT_LIMIT are *supposed* to have hit compiler/linker barriers:
 - Register allocation differences
 - Instruction scheduling
 - COMDAT folding (merged symbols)
 - Bool normalization patterns
 
-These are functionally correct - don't spend time on them.
+**Corrected 2026-08-04.** This section used to end "these are functionally correct —
+don't spend time on them." Both halves are wrong for the register-swap sub-bucket, and
+this was measured, not argued:
+
+- **The verdict is wrong ≥30% of the time.** A blind stratified audit of
+  `verdict='AT_LIMIT' AND has_register_swap=1 AND is_stub=0 AND excluded=0` (836
+  functions; selection rule fixed before any diff was inspected) scored **3/10**, all
+  three byte-exact fixes.
+- **"Functionally correct" does not follow from "at limit".** One of those three,
+  `HDCache::WriteDone`, was a live bug: `1 << mWriteBlock` where the target has
+  `1 << (mWriteBlock % 32)`, setting the wrong bit in `mBlockState` for any block index
+  ≥ 32. A later seven-lane sweep of the same bucket found **11 more** behavioural
+  defects, including a comprehensively broken OSC parser and four permanent locale
+  tables allocated on the temp heap.
+- **Do not band on the DB's `current_percent`.** Its staleness is *unbounded*: the ninja
+  `SYNC DB` step deliberately does not write the column but does bump `updated_at`, and
+  exits 0 when the fleet holds the lock. Measured minutes after a sync, 818 of 31,387
+  comparable rows were off by >0.5pp, the worst by ~65pp. Re-measure with
+  `mcp__orchestrator__run_objdiff` passing `project_dir` — see
+  [tools/REFERENCE.md: Trust caveats](../tools/REFERENCE.md#trust-caveats--read-before-believing-a-column).
+
+So AT_LIMIT is a **deprioritization signal, not an exclusion**. If you do sweep it,
+scope to the statement-level half
+([Triage Split](../decomp/patterns/fixable-liveness.md#triage-split-statement-level-vs-within-one-expression))
+and budget **~1 win per 3 functions**. Detail:
+[patterns/INDEX.md: AT_LIMIT Breakdown](../decomp/patterns/INDEX.md#at_limit-breakdown)
+and [sessions/2026-08-04-regswap-atlimit-sweep.md](../sessions/2026-08-04-regswap-atlimit-sweep.md).
 
 ### Quick Wins: 90%+ Functions
 

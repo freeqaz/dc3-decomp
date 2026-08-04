@@ -25,7 +25,7 @@ Tool-specific deep docs live in subdirectories:
 |-----|-------------|
 | [decomp/TECHNICAL_NOTES.md](decomp/TECHNICAL_NOTES.md) | Compiler quirks, codegen patterns, Xbox 360 specifics |
 | [decomp/RB3_REFERENCE.md](decomp/RB3_REFERENCE.md) | Rock Band 3 decomp reference (shared Milo engine) |
-| [decomp/patterns/INDEX.md](decomp/patterns/INDEX.md) | Fixable/unfixable codegen patterns catalog |
+| [decomp/patterns/INDEX.md](decomp/patterns/INDEX.md) | Fixable/unfixable codegen patterns catalog — start at its **Corrections** section, which supersedes older rows |
 | [decomp/PRAGMA_INDEX.md](decomp/PRAGMA_INDEX.md) | Xbox 360 compiler pragma documentation |
 | [decomp/XBOX360_FLOATING_POINT_CODEGEN.md](decomp/XBOX360_FLOATING_POINT_CODEGEN.md) | Floating-point code generation details |
 | [decomp/SUBAGENT_STRATEGY.md](decomp/SUBAGENT_STRATEGY.md) | Parallel agent strategy for batch decomp |
@@ -37,7 +37,7 @@ Tool-specific deep docs live in subdirectories:
 |-----|-------------|
 | [reference/STYLEGUIDE.md](reference/STYLEGUIDE.md) | Code style conventions |
 | [reference/MACROS.md](reference/MACROS.md) | Project macros (MILO_ASSERT, OBJ_MEM_OVERLOAD, etc.) |
-| [reference/DATABASE_SCHEMA.md](reference/DATABASE_SCHEMA.md) | decomp.db SQLite schema |
+| [reference/DATABASE_SCHEMA.md](reference/DATABASE_SCHEMA.md) | decomp.db SQLite schema — **incl. the columns you cannot trust for triage** (`verdict`, `current_percent`, `has_prologue_mismatch`) |
 | [reference/FREE60_XEX_FORMAT.md](reference/FREE60_XEX_FORMAT.md) | Xbox 360 XEX executable format |
 
 ## Code Transformation

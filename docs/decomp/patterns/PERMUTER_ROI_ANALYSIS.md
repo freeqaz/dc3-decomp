@@ -158,6 +158,29 @@ Also note for sweep budgeting: a zero-gain sweep over declaration-axis mutations
 exactly that result and then went to 100% from one line. See
 [unfixable-compiler.md: Strengthened Evidence Standard](unfixable-compiler.md#strengthened-evidence-standard-for-register-class-residuals-2026-08-03).
 
+### Sweep budgeting, measured (2026-08-04)
+
+Numbers for planning a pass over the AT_LIMIT + `REGISTER_SWAP` bucket:
+
+| Quantity | Value |
+|---|---|
+| Population (`verdict='AT_LIMIT' AND has_register_swap=1 AND is_stub=0 AND excluded=0`) | **836** |
+| Blind hit rate (stratified sample, selection rule fixed before inspection) | **3/10 = 30%** → budget **~1 win per 3 functions** |
+| Post-filter rate, scoped to statement-level residuals over seven lanes | ~1 per 1.3 (31 triaged, 23 improved, 5 to byte-exact 100%) |
+
+Do **not** budget an unfiltered pass at the post-filter rate. The filter is the
+[Triage Split](fixable-liveness.md#triage-split-statement-level-vs-within-one-expression):
+open statement-level residuals, skip anything confined to one flat arithmetic expression.
+Do **not** band or sort candidates on the DB's `current_percent`: its staleness is
+unbounded (the `SYNC DB` step does not write it yet bumps `updated_at`; 818 of 31,387 rows
+off by >0.5pp minutes after a sync, worst ~65pp). Re-measure per candidate with
+`run_objdiff` and `project_dir` — see
+[tools/REFERENCE.md: Trust caveats](../../tools/REFERENCE.md#trust-caveats--read-before-believing-a-column).
+
+The real return is not the percentage: that sweep found **12 live behavioural bugs**
+(1 in the blind audit, 11 in the lanes) in a bucket labelled unfixable. Budget for that
+as the deliverable.
+
 ## Instruction Scheduling
 
 **Coverage: none.** No permuter pattern currently mutates where a value is *materialized*

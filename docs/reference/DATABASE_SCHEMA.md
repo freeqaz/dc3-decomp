@@ -45,6 +45,30 @@ Primary table tracking all symbols in the project.
 | `primary_pattern` | TEXT | Primary pattern tag (e.g., `REGISTER_SWAP`, `LINKER_MERGED`) |
 | `reachable_100` | BOOLEAN | 1 if function can theoretically reach 100% match |
 
+**Columns you cannot trust for triage:**
+
+> The **mechanism** for `current_percent` drift and the `has_prologue_mismatch` dead
+> detector are documented once, in
+> [tools/REFERENCE.md: Trust caveats](../tools/REFERENCE.md#trust-caveats--read-before-believing-a-column).
+> Short version: the ninja `SYNC DB` step deliberately does not write `current_percent`
+> but *does* bump `updated_at` (so `updated_at` is not a freshness signal) and exits 0
+> even when the fleet holds the lock — which makes the staleness **unbounded**, not
+> merely large. Measured minutes after a sync: 818 of 31,387 comparable rows off by
+> >0.5pp, worst ~65pp, in both directions.
+
+Two further findings from the decomp-triage side, measured on a blind stratified audit of
+the `verdict='AT_LIMIT' AND has_register_swap=1 AND is_stub=0 AND excluded=0` bucket
+(836 rows, 2026-08-04):
+
+| Column | Problem |
+|--------|---------|
+| `verdict` | `AT_LIMIT` is **wrong ≥30% of the time** in that bucket — 3 of 10 blind-sampled rows had byte-exact source fixes, and one was a live behavioural bug. Treat `AT_LIMIT` as a deprioritization signal, never as an exclusion. |
+| `has_register_swap` | Can be **pure noise** — one sampled row was 88 inserts / 88 deletes, an incomplete reconstruction rather than a swap case. |
+| `verdict_reason` | Free TEXT, and stale. Use `is_stub` plus a freshly measured percentage instead. |
+
+See [patterns/INDEX.md: AT_LIMIT Breakdown](../decomp/patterns/INDEX.md#at_limit-breakdown)
+for how to triage what you find.
+
 **Scoring Columns:**
 
 | Column | Type | Description |

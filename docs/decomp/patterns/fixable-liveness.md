@@ -43,6 +43,17 @@ documented in [unfixable-compiler.md](unfixable-compiler.md#register-allocation)
 treat it as a strong working hypothesis, not an established conversion rate. No win
 rate is claimed. Do not cite this page as "liveness edits fix REGSWAP N% of the time."
 
+**Update 2026-08-04.** The *symptom* claim — not the levers — has since been tested much
+harder: a seven-lane sweep of the AT_LIMIT + `REGISTER_SWAP` bucket triaged 31 functions
+and register swaps were symptoms in **100% of cases, without exception**, including two
+functions that reached byte-exact 100% with no register-motivated edit at all. What that
+sweep also showed is that the *cause* is frequently not liveness either — it is just as
+often control flow, an inline-level count, or a signed/unsigned compare. So read this page
+as "do not chase the register", not as "the cause is always liveness". The routing rule
+that came out of it is the [Triage Split](#triage-split-statement-level-vs-within-one-expression)
+below. Session log:
+[2026-08-04-regswap-atlimit-sweep.md](../../sessions/2026-08-04-regswap-atlimit-sweep.md).
+
 ---
 
 ## Lever 1 — Live-Range Shortening: Read the Args Back Out of the Aggregate You Just Built
@@ -494,6 +505,83 @@ the wrong axis and must change the live set or the schedule.
 
 ---
 
+## Triage Split: Statement-Level vs Within-One-Expression
+
+**The single most actionable rule to come out of the 2026-08-04 AT_LIMIT sweep.** It
+decides *which functions to open*, and it is what separates the wins from the wasted
+build cycles. Register swaps do not classify a function — this does.
+
+| Residual implicates… | Verdict | Tells |
+|---|---|---|
+| **A statement** — control flow, which field is read, which call is made, what stays live across a call, the shape of an *explicitly nested* expression | **Investigate.** Every win came from here. | insert/delete clusters, Function Call Diff rows, `addi`/`lwz` field-offset diffs, `__savegprlr_NN` deltas, branch polarity, signed-vs-unsigned compares, bool materialization |
+| **One arithmetic expression** — commutative operand order, flat-sum term order, which of two independent loads issues first | **Floor. Skip.** | a lone `fadds`/`fmuls`/`add` operand swap with no surrounding structural difference |
+
+MSVC canonicalises a flat `a + b + c` to `A + (C + B)` however you write it, so the flat
+case is not a source-visible degree of freedom at all. See the negative-result rows above
+for `LabelShrinkWrapper::UpdateAndDrawWrapper`, where six spellings of a 2-term `fadds`
+were byte-identical.
+
+### Exception — explicit parenthesization is NOT inert
+
+A nested `a + (b + (c + …))` chain **preserves its shape**, and its term order is
+**recoverable from the assembly**: target and base share a schedule, so the difference is
+a fixed permutation. Read the mapping off the base — which source term produced which
+emission slot — and invert it.
+
+That distinction is the whole difference between the sweep's one expression-level win and
+its three expression-level failures: `RndUtl EstimateDraw`, a 12-term *nested* sum, went
+**99.6 → 100** by recovering the term order this way; the flat/commutative cases did not
+move at all.
+
+Before spending builds on it, confirm the nesting is real. Lane F tested the exception on
+`RndMesh::SetVolume`'s dot product and both groupings produced a byte-identical residual —
+MSVC had flattened it, so the exception did not apply.
+
+### A third bucket: stack-slot allocation (looks statement-level, is not)
+
+`RndText::Load` cost two cycles by fitting neither half of the binary rule. It *looked*
+statement-level — 14 inserts / 15 deletes — but the clusters contained the **same
+instructions placed differently**; the real cause was MSVC reusing stack slots across
+disjoint nested scopes where the target does not (frame Δ −0x10, 6 target-only slots, 19
+DIFFER).
+
+**Added rule: if the insert and delete clusters contain the same instructions and
+`mode=stack-layout` shows many DIFFER / PERMUTED slots, it is slot allocation — drop it.**
+`HamDirector::OnPopulateMoves` is the same story: its residual `diff_arg` rows are almost
+entirely stack offsets shifted by a `0xe0` frame delta, because the target gives each of
+three `FileMerger::Merger` locals its own `0x70` slot while MSVC packs ours onto one.
+Renaming them apart changed nothing — the packing is lifetime-based.
+
+### How well the rule performs
+
+It is a **filter for what to open, not a predictor of what will close.**
+
+- **It never misfired in the costly direction.** Every expression-level residual that was
+  dropped stayed a floor under test.
+- **Statement-level does not reliably convert.** At ≥98% match it is necessary but not
+  sufficient — `WorldInstance::SyncDir` and `HamNavList::Poll` both presented clean
+  statement-level tells and both resisted. One lane went 2-for-5 with three *correct*
+  diagnoses that measured worse.
+- **Budget** a blind sweep of the AT_LIMIT + `REGISTER_SWAP` bucket at **~1 win per 3
+  functions** (the measured blind rate — see
+  [INDEX.md: AT_LIMIT Breakdown](INDEX.md#at_limit-breakdown)). Scoped to the
+  statement-level half the seven-lane sweep did far better than that, ~1 per 1.3, but
+  that number is post-filter and should not be used to budget an unfiltered pass.
+
+### Two signals that are routinely misread as floor evidence
+
+- **`PROLOGUE_MISMATCH` is the fingerprint of a value held across a call.** It is a
+  *liveness* tell — Lever 2 territory — **not** floor evidence. (It is also unusable from
+  `decomp.db`: `has_prologue_mismatch` is identically 0 for every row, the detector never
+  populated it.)
+- **A funclet score wobble is the parent's frame size, not noise, and must not veto a
+  parent fix.** See
+  [objdiff LEARNINGS: Pattern 6](../../tools/objdiff/LEARNINGS.md#pattern-6-eh-funclet-score-wobble).
+  Usefully, the converse is a free control: an edit that leaves the paired funclet at
+  exactly 100.0 did not move the frame, i.e. it was a pure liveness/scheduling edit.
+
+---
+
 ## Diagnostic Order for a Register-Swap Residual
 
 ### First: which register class swapped?
@@ -592,3 +680,6 @@ anti-pattern in [behavioral-divergence.md](behavioral-divergence.md).
 - [unfixable-compiler.md: Register Allocation](unfixable-compiler.md#register-allocation) — c2.dll coloring mechanism; why byte-identical reorders are expected
 - [unfixable-compiler.md: When To Truly Accept](unfixable-compiler.md#when-to-truly-accept) — floor conditions this page strengthens
 - [PERMUTER_ROI_ANALYSIS.md](PERMUTER_ROI_ANALYSIS.md) — `declaration_reorder` ROI, corrected for REGISTER_SWAP
+- [fixable-inline-boundary.md: Inline-Level Counting](fixable-inline-boundary.md#inline-level-counting-via-the-parameter-home-area) — the parameter-home-area lever; the most common non-liveness cause behind a swap cascade
+- [../../tools/objdiff/LEARNINGS.md: Pattern 6](../../tools/objdiff/LEARNINGS.md#pattern-6-eh-funclet-score-wobble) — funclet wobble = parent frame size; the free control experiment for "did my edit move the frame?"
+- [../../sessions/2026-08-04-regswap-atlimit-sweep.md](../../sessions/2026-08-04-regswap-atlimit-sweep.md) — the seven-lane sweep that calibrated the triage split (and found 11 live bugs)
