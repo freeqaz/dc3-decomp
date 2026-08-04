@@ -101,10 +101,10 @@ Remaining decomp gaps (assembly doesn't match Xbox binary) — file: `src/system
 | `RndText::FontMap::AllocateMeshes(RndText*, int)` | `?AllocateMeshes@FontMap@RndText@@UAAXPAV2@H@Z` | 88.1% | |
 | `RndText::FitTextEllipsis()` | `?FitTextEllipsis@RndText@@IAAXXZ` | 87.3% | |
 | `RndText::OnComputeCharWidths(unsigned short const*, float*, bool)` | `?OnComputeCharWidths@RndText@@IAAHPBGPAM_N@Z` | 94.8% | AT_LIMIT (regswap r16↔r17, offset swap, vbtable dispatch) |
-| `RndText::FitTextScroll()` | `?FitTextScroll@RndText@@IAAXXZ` | 96.7% | AT_LIMIT (regswap) |
+| `RndText::FitTextScroll()` | `?FitTextScroll@RndText@@IAAXXZ` | 98.2% | Near-match (re-measured 2026-08-04; the old 96.7% was the intermediate after Lever 2 only) |
 | `RndText::UpdateScrollOffsets()` | `?UpdateScrollOffsets@RndText@@IAAXXZ` | 97.8% | AT_LIMIT (regswap) |
 | `RndText::ParseMarkup(unsigned short const*, RndText::StyleState&, unsigned short&)` | `?ParseMarkup@RndText@@IAAPBGPBGAAVStyleState@1@AAG@Z` | 97.2% | AT_LIMIT (regswap) |
-| `RndText::SizeCheck()` | `?SizeCheck@RndText@@IAAXXZ` | 96.5% | AT_LIMIT (regswap, offset swap) |
+| `RndText::SizeCheck()` | `?SizeCheck@RndText@@IAAXXZ` | 98.6% | Near-match (re-measured 2026-08-04; residual is one `mr r4, r27` moved two slots) |
 
 These are decomp accuracy targets, not native port blockers. Native text rendering works correctly regardless.
 

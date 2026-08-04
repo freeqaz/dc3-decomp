@@ -124,7 +124,7 @@ Evidence from three functions taken to or near 100% (see
 |----------|--------|---------------------------|
 | `ObjectDir::Iterate` | 99.4% → **100%** via a one-line liveness change | 6 reorder variants **byte-identical**, 2 regressed to ~95.8%, 65-candidate beam search **0 improvements** |
 | `RndText::FitTextScroll` | 92.7% → 98.2% via call-through-the-local + block scoping | reorder variants: no movement |
-| `RndText::SizeCheck` | 96.5% → 99.1% via scheduling then comparison polarity | not the declaration axis |
+| `RndText::SizeCheck` | 96.5% → 98.6% via scheduling then comparison polarity | not the declaration axis |
 
 Why the mapping fails: MSVC's coloring assigns colors from the interference graph and
 those colors are **invariant to declaration order**; order only permutes the
@@ -189,7 +189,9 @@ is the one that shows up as **volatile**-register swaps (r0, r3-r12, f0-f13) rat
 callee-saved ones — a volatile register cannot be live across a call, so a swap between
 two of them is a scheduling or operand-order question, never a live-across-call question.
 
-Worked example, `RndText::SizeCheck` 96.5% → 99.1% (commit `0c2b0c38`): the target
+Worked example, **dc3-decomp**'s `RndText::SizeCheck` 96.5% → 98.6% (commit `0c2b0c38`;
+the commit subject's "99.1%" is wrong — see the correction box in
+[fixable-liveness.md](fixable-liveness.md) Lever 3): the target
 computes the `FontUnit() * AspectRatio()` product *before* the `fcmpu` that consumes it,
 
 ```
