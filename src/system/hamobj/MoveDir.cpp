@@ -2384,9 +2384,9 @@ void MoveDir::PostUpdateFilters() {
             DetectFrame *detectFrame = resultFrames[i];
             if (move && detectFrame) {
                 const FilterVersion *fv = move->FilterVer();
+                ErrorNode *const *errorNodes = fv->mErrorNodes;
                 FilterVersionType version = move->Version();
                 if (version == kFilterVersionHam1) {
-                    ErrorNode *const *errorNodes = fv->mErrorNodes;
                     float limbErrors[4] = {};
                     for (int n = 0; n < 16; n++) {
                         const Ham1NodeWeight &nodeWeight =
