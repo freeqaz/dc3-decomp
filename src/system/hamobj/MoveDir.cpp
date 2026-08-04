@@ -2406,9 +2406,8 @@ void MoveDir::PostUpdateFilters() {
                     }
                     for (int limb = 0; limb < 4; limb++) {
                         float clamped = Clamp(0.0f, 1.0f, 1.0f - limbErrors[limb]);
-                        const std::vector<float> *ratings = move->RatingOverride();
                         int ratingIdx;
-                        DetectFracToRating(clamped, ratings, &ratingIdx);
+                        DetectFracToRating(clamped, move->RatingOverride(), &ratingIdx);
                         if (ratingIdx == 3) {
                             feedback->UpdateLimb(limb, true);
                         } else if (ratingIdx <= 1) {
