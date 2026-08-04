@@ -1159,12 +1159,12 @@ void SkeletonChooser::ChoosePlayerSides() {
     }
 }
 
-static float sFloat0 = 0.03f;
-static float sFloat1 = 0.37f;
-static float sFloat2 = 0.2f;
-static float sFloat3 = 0.6f;
-static float sFloat4 = 0.1f;
-static float sFloat5 = 0.25f;
+float sFloat0 = 0.03f;
+float sFloat1 = 0.37f;
+float sFloat2 = 0.2f;
+float sFloat3 = 0.6f;
+float sFloat4 = 0.1f;
+float sFloat5 = 0.25f;
 
 void SkeletonChooser::DrawDebug() {
     if (mDrawDebug) {
@@ -1192,7 +1192,7 @@ void SkeletonChooser::DrawDebug() {
         static Hmx::Color textColor(1.0f, 1.0f, 1.0f, 1.0f);
 
         TheRnd.DrawRectScreen(
-            Hmx::Rect(sFloat5 + 0.05f, sFloat3, sFloat4 - 0.05f, sFloat2),
+            Hmx::Rect(sFloat2, sFloat4 - 0.05f, sFloat3, sFloat5 + 0.05f),
             bgColor,
             nullptr,
             nullptr,
