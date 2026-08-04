@@ -359,6 +359,114 @@ scoping will not move a register swap.
 
 ---
 
+## Lever 5 — Name the Temporaries So They Are Built Up Front and Frame-Packed
+
+**Impact:** +19.4% (80.4% → **99.9%**) — 68.1% for the honest starting point
+**Success Rate:** unknown (1 for 1)
+**Time:** 30 minutes
+
+This is the other half of Lever 4. Lever 4 *narrows* a scope to make locals pack.
+This one *widens* the live range of unnamed temporaries — by giving them names — so
+the frame packer gets to see them at all.
+
+### Symptom
+
+A run of calls each taking a by-const-ref aggregate built at the call site:
+
+```cpp
+m_pTopLeftBone->SetLocalPos(Vector3(minX, 0.0f, maxZ));
+m_pTopRightBone->SetLocalPos(Vector3(maxX, 0.0f, maxZ));
+// ...
+```
+
+The frame comes out **too small** — `stwu r1, -0xb0` against the target's `-0xc0` —
+and essentially every FPR and GPR downstream of the first call is permuted. In
+`LabelShrinkWrapper::UpdateAndDrawWrapper` (`src/system/ui/LabelShrinkWrapper.cpp`)
+that was 68.1%, with 21 inserts and 21 deletes.
+
+Count the target's slots before doing anything else. Read every `stfs`/`stw` with an
+`r1` base out of `full_listing=true` and group them by 16-byte slot. Here the target
+wrote `0x60,0x64,0x68`, `0x70,0x74,0x78`, `0x60,0x64,0x68` again, and `0x80,0x84,0x88`
+— **four values in three slots**, all four materialized in the first basic block,
+before the first call.
+
+### Why It Works
+
+An unnamed temporary passed by const-ref dies at the end of the full expression, so
+each one dies at its own call and the next reuses the same slot: N temporaries, one
+slot. Naming them extends each live range to the end of the enclosing block, so all N
+are in the frame at once — and *then* MSVC's frame packer coalesces the pairs whose
+live ranges still do not overlap. Here `topLeft` dies as soon as its 16 bytes have
+been copied into the bone, which happens before `bottomLeft` is stored, so those two
+share `0x60` while `topRight` and `bottomRight` (both live across intervening calls)
+keep their own. Four names, three slots — exactly the target.
+
+Getting the slot *count* right fixed everything downstream for free: the FPR
+assignment (`f31=minX f30=minZ f29=maxX f28=maxZ`, with `f0` rather than a recycled
+`f31` holding the zero constant) and the instruction schedule both fell out with no
+further edits.
+
+### Fix
+
+```cpp
+SetWorldXfm(label->WorldXfm());
+
+// BEFORE (68.1%) — four temps, one slot, frame 0x10 short
+m_pTopLeftBone->SetLocalPos(Vector3(minX, 0.0f, maxZ));
+m_pTopRightBone->SetLocalPos(Vector3(maxX, 0.0f, maxZ));
+m_pBottomLeftBone->SetLocalPos(Vector3(minX, 0.0f, minZ));
+m_pBottomRightBone->SetLocalPos(Vector3(maxX, 0.0f, minZ));
+
+// AFTER (99.9%) — four names, three slots, 0x60 reused by the packer
+Vector3 topLeft(minX, 0.0f, maxZ);
+Vector3 topRight(maxX, 0.0f, maxZ);
+Vector3 bottomLeft(minX, 0.0f, minZ);
+Vector3 bottomRight(maxX, 0.0f, minZ);
+m_pTopLeftBone->SetLocalPos(topLeft);
+m_pTopRightBone->SetLocalPos(topRight);
+m_pBottomLeftBone->SetLocalPos(bottomLeft);
+m_pBottomRightBone->SetLocalPos(bottomRight);
+```
+
+Commits `3bb49c53`, `50d75d6d`; merged as `b79fecaf`.
+
+### Detection
+
+- Frame-size delta on `stwu r1, -N` that is an exact multiple of the aggregate size,
+  with the *base* frame smaller than the target's.
+- `mode=stack-layout` reporting TGT_ONLY rows for a whole 16-byte group.
+- Source-side tell: an aggregate constructed inside a call argument list.
+
+Do not read the resulting register swaps as the problem. Every one of them was a
+symptom of the missing slot.
+
+### Do Not Half-Fix It
+
+Two intermediate shapes were measured and both are traps — they buy real points and
+then stall, which reads like a floor:
+
+- Naming only the corners that need their own slot (two named + two temps): **90.6%**.
+  Right slot *count*, wrong assignment — the named `bottomRight` claims `0x60` and the
+  left column is pushed to `0x70`.
+- Three names plus a mid-function `left.Set(minX, 0.0f, minZ)` to recycle one:
+  **86.2%**. Correct slots *and* frame, but the `Set()` statement sits after the
+  second call, so `bottomLeft` is materialized in the third basic block instead of the
+  first. Fewer names is not closer.
+
+The rule: match the target's **number of live values**, and let the packer choose the
+sharing. Do not hand-recycle a slot.
+
+### Match-Hack Smell
+
+The 80.4% state this replaced used an `auto _tmp0 = Vector3(...)` hoisted above the
+other three calls so that `SetLocalPos` on the top-left bone could run *last*, against
+the target's call order. That is the shape of a hack that found half of this lever by
+accident: naming one temp bought a second slot. If you find a lone named temp whose
+only purpose is to reorder calls, the real fix is usually to name **all** of them and
+restore the natural order.
+
+---
+
 ## Negative Results — Do Not Re-Run These
 
 These cost real hours. They are recorded so the next person does not repeat them.
@@ -369,6 +477,8 @@ These cost real hours. They are recorded so the next person does not repeat them
 | `ObjectDir::Iterate` | Declaration reorder, 2 further variants | 2 | Regressed 99.4% → ~95.8% |
 | `ObjectDir::Iterate` | Beam-search permuter sweep (decomp-synth) | 65 candidates | **0 improvements** |
 | `RndText::FitTextScroll` | Declaration reorder (before Lever 2 was found) | several | No movement |
+| `LabelShrinkWrapper::UpdateAndDrawWrapper` | Commutative operand order on a 2-term `fadds` — source operand swap, statement split with `+=`, hoisting either addend into a named local, flat-sum term reorder, explicit grouping | 6 | **Byte-identical `.obj`** every time |
+| `LabelShrinkWrapper::UpdateAndDrawWrapper` | Beam-search permuter sweep (decomp-synth), chain-depth 4: `fma_reorder`, `declaration_reorder`, `reference_elimination`, `float_double_literal` | 56 | **0 improvements** over 99.86% |
 
 The `Iterate` result is the sharpest: the compiler's coloring is **deterministic given
 the interference graph**, and none of those six edits changed the interference graph, so
