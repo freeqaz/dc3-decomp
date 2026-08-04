@@ -2419,8 +2419,9 @@ void MoveDir::PostUpdateFilters() {
                     }
                 } else {
                     MILO_ASSERT(fv->mType == kFilterVersionHam2, 0x460);
+                    const MoveFrame *moveFrame = detectFrame->GetMoveFrame();
                     const Ham2FrameWeight &frameWeight =
-                        detectFrame->GetMoveFrame()->FrameWeight(detectFrame->Mirror());
+                        moveFrame->FrameWeight(detectFrame->Mirror());
                     if (0.5f < frameWeight.mWeight) {
                         for (int limb = 0; limb < 4; limb++) {
                             float limbPSNR = detectFrame->LimbPSNR(fv, 1 << limb);
