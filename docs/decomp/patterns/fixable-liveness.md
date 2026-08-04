@@ -529,8 +529,8 @@ Commits `3bb49c53`, `50d75d6d`; merged as `b79fecaf`.
 
 | | Signal | Where to read it |
 |---|---|---|
-| **binary** | structural frame Δ **negative**, an exact multiple of the aggregate size, **and** `TGT_ONLY > 0` with `BASE_ONLY == 0` (our homes are a strict subset of the target's) | `mode=stack-layout`; or `scripts/analysis/frame_deficit_census.py` for the frame half tree-wide |
-| **source** | ≥ 2 aggregate constructors in **argument position** in consecutive statements | `scripts/analysis/lever5_score.py` |
+| **binary** | structural frame Δ **negative**, an exact multiple of the aggregate size, **and** N separate `TGT_ONLY` groups whose `BASE_ONLY` counterpart carries **`S = N`** (N stores into one home) | `mode=stack-layout`; or `scripts/analysis/frame_deficit_census.py` for the frame half tree-wide |
+| **source** | ≥ 2 aggregates of one type whose lifetimes MSVC can prove disjoint — either **unnamed constructors in argument position** in consecutive statements, or **the same type declared as a named local in several sibling scopes** | `scripts/analysis/lever5_score.py` (finds the argument-position shape only) |
 
 Measured on **dc3-decomp** `main` `86357b58`: the frame-deficit signal alone fires on
 **183** functions (128 of them at exactly −16, which is also what a single missing
@@ -554,6 +554,25 @@ not a slot-count problem, and `stack_layout.py` flags it AT_LIMIT on its own.
 **Type gotcha.** The aggregate has to be too large to pass in a register. `Symbol` is
 `class Symbol { const char *mStr; }` — four bytes, GPR-passed — so `Symbol(x)` in an
 argument list never occupies a home. Same for any handle or pointer wrapper.
+
+**The underlying bug is more general than "unnamed temporaries."** It is *N aggregates
+with lifetimes MSVC can prove disjoint, collapsed into one home, where the target kept
+N.* Unnamed temporaries are the extreme case — each dies at its own full-expression —
+but named locals in sibling scopes collapse the same way:
+
+```cpp
+if (a) { FileMerger::Merger merger(p); ... }   // three sibling scopes,
+if (b) { FileMerger::Merger merger(p); ... }   // three disjoint lifetimes,
+if (c) { FileMerger::Merger merger(p); ... }   // one home in our build, three in the target
+```
+
+That is `HamDirector::OnPopulateMoves` (**dc3-decomp**, measured 98.1%, structural
+−0xF0 = 2 × 0x70 missing `Merger` instances). Renaming them apart is inert — MSVC packs
+by lifetime, never by name — so the lever is whatever makes the lifetimes overlap, and
+a naive hoist of all three constructors to the enclosing scope **regressed it to 93.9%**
+while correctly driving the frame delta and both slot sets to zero. Fixing the *count*
+and fixing the *construction site* are separate problems; see the
+[census](../../sessions/2026-08-04-lever5-census.md).
 
 Do not read the resulting register swaps as the problem. Every one of them was a
 symptom of the missing slot.
