@@ -525,13 +525,53 @@ Commits `3bb49c53`, `50d75d6d`; merged as `b79fecaf`.
 
 ### Detection
 
-- Frame-size delta on `stwu r1, -N` that is an exact multiple of the aggregate size,
-  with the *base* frame smaller than the target's.
-- `mode=stack-layout` reporting TGT_ONLY rows for a whole 16-byte group.
-- Source-side tell: an aggregate constructed inside a call argument list.
+**The signature is a conjunction of two signals. Neither works alone.**
+
+| | Signal | Where to read it |
+|---|---|---|
+| **binary** | structural frame Δ **negative**, an exact multiple of the aggregate size, **and** `TGT_ONLY > 0` with `BASE_ONLY == 0` (our homes are a strict subset of the target's) | `mode=stack-layout`; or `scripts/analysis/frame_deficit_census.py` for the frame half tree-wide |
+| **source** | ≥ 2 aggregate constructors in **argument position** in consecutive statements | `scripts/analysis/lever5_score.py` |
+
+Measured on **dc3-decomp** `main` `86357b58`: the frame-deficit signal alone fires on
+**183** functions (128 of them at exactly −16, which is also what a single missing
+scalar local looks like after 16-byte alignment); the source signal alone fires on 14.
+**The conjunction fires on 2.** Details and the ranked candidate list:
+[2026-08-04-lever5-census.md](../../sessions/2026-08-04-lever5-census.md).
+
+Ground truth, from round-tripping `UpdateAndDrawWrapper` back to its pre-fix form:
+
+```
+  Frame size:          TGT 0xc0      BASE 0xb0      Δ -0x10
+  Callee-saved FPRs:   TGT 4       BASE 5       Δ +1
+  → Callee-saved Δ = +0x8; structural Δ remaining = -0x18.
+  Summary (user slots):  DIFFER 3 | TGT_ONLY 6 | MATCH 1
+```
+
+Split the frame delta from the **callee-save** delta before doing anything — if the
+whole delta is callee-save counts, this is a register-pressure problem (Levers 1-2),
+not a slot-count problem, and `stack_layout.py` flags it AT_LIMIT on its own.
+
+**Type gotcha.** The aggregate has to be too large to pass in a register. `Symbol` is
+`class Symbol { const char *mStr; }` — four bytes, GPR-passed — so `Symbol(x)` in an
+argument list never occupies a home. Same for any handle or pointer wrapper.
 
 Do not read the resulting register swaps as the problem. Every one of them was a
 symptom of the missing slot.
+
+### Two sibling buckets this is often confused with
+
+`TGT_ONLY` vs `BASE_ONLY` routes all three:
+
+| Reading | Meaning | Lever |
+|---|---|---|
+| structural Δ < 0, `TGT_ONLY > 0`, `BASE_ONLY == 0` | target holds live values we collapse | **Lever 5** (this one) |
+| structural Δ > 0, `BASE_ONLY` dominant | we hold live values the target collapses | **Lever 4** / inverse |
+| Δ ≈ 0, `PERMUTED` rows dominate | same set of homes, different assignment | **neither** |
+
+The third row is what "the packing is lifetime-based and renaming locals apart changed
+nothing" actually means. `PERMUTED` is count-neutral by construction, and renaming
+cannot change a count — so renaming is *expected* to be inert there. Stop reordering
+declarations and look at scheduling instead.
 
 ### Do Not Half-Fix It
 
