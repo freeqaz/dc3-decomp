@@ -246,9 +246,8 @@ void Locale::Init() {
     mStrTable = new const char *[mSize];
     mUploadedFlags = new bool[mSize];
 
-    prevSym = Symbol();
-
-    if ((unsigned int)numChunks > 0) {
+    if (chunks) {
+        prevSym = Symbol();
         int chunkIdx = 0;
         for (int i = 0; i < numChunks; i++) {
             Symbol curSym = chunks[i].node1.LiteralSym();
@@ -261,9 +260,8 @@ void Locale::Init() {
             } else
                 TheDebug << MakeString("Locale symbol '%s' redefined\n", curSym);
         }
+        delete[] chunks;
     }
-
-    delete[] chunks;
 
 done:
     if (cfg && cfg->Size() > 1) {
