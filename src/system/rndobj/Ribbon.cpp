@@ -319,8 +319,8 @@ void RndRibbon::UpdateChase() {
         key.frame = 0.0f;
         key.value = Transform::IDXfm();
         if (mTransforms.size() == 0) {
-            key.value.v = followed;
             key.frame = now;
+            key.value.v = followed;
             mTransforms.push_back(key);
         } else {
             float step = mDecay / mNumSegments;
