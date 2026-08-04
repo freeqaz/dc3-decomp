@@ -19,6 +19,12 @@ public:
         mAlpha = alpha;
         mBeta = beta;
     }
+    // Assignment order here is pinned by HamListRibbon::DrawShowing, which is
+    // byte-exact with exactly this order. Moving mTrend ahead of mPrevLevel
+    // fixes a +0x8/+0x4 store-order swap in HamNavList::Poll but drops
+    // HamListRibbon::DrawShowing from 100% to 95.8% (measured 2026-08-04,
+    // dc3-decomp). The Poll swap is scheduling of three identical 0.0f stores,
+    // not source order — do not "fix" it here.
     void SetParams(float prevLevel, float level, float trend) {
         mPrevLevel = prevLevel;
         mLevel = level;
