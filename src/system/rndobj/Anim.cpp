@@ -424,17 +424,15 @@ void AnimTask::Poll(float time) {
         }
     }
 #endif
-    if (!mAnimTarget) {
-        if (!mLoop && !mBlending && !mBlendPeriod) {
-            if (time > mFrameSpan || mScale == 0.0f) {
-                if (mListener) {
-                    static Message msg("on_anim_event", DataNode(Symbol("ended")));
-                    mListener->Handle(msg, false);
-                }
-                mListener = nullptr;
-                TheTaskMgr.QueueTaskDelete(this);
-            }
+    if (!mAnimTarget
+        || (!mLoop && !mBlending && !mBlendPeriod
+            && (time > mFrameSpan || mScale == 0.0f))) {
+        if (mListener) {
+            static Message msg("on_anim_event", DataNode(Symbol("ended")));
+            mListener->Handle(msg, false);
         }
+        mListener = nullptr;
+        TheTaskMgr.QueueTaskDelete(this);
     }
 }
 
