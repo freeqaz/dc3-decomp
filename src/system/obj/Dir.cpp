@@ -397,8 +397,8 @@ void ObjectDir::Save(BinStream &bs) {
         case kInlineCachedShared:
             id.shared = true;
         case kInlineCached: {
-            bool old = gLoadingProxyFromDisk;
             if (bs.Cached()) {
+                bool old = gLoadingProxyFromDisk;
                 gLoadingProxyFromDisk = false;
                 DirLoader::SetCacheMode(false);
                 id.dir.LoadFile(id.file, false, false, kLoadFront, true);
@@ -426,9 +426,7 @@ void ObjectDir::Save(BinStream &bs) {
         }
         }
         if (id.dir) {
-            if (id.shared && !bs.AddSharedInlined(id.file)) {
-                boolVec[i] = true;
-            }
+            boolVec[i] = id.shared && !bs.AddSharedInlined(id.file);
         } else {
             boolVec[i] = true;
         }
