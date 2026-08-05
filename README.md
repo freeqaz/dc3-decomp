@@ -113,7 +113,23 @@ Linux
 
 - Install [ninja](https://github.com/ninja-build/ninja/wiki/Pre-built-Ninja-packages).
 - For non-`x86_64` platforms: install wine from your package manager.
-- For `x86_64`: [wibo](https://github.com/decompals/wibo), a minimal 32-bit Windows binary wrapper, is downloaded automatically.
+- For `x86_64`: [wibo](https://github.com/decompals/wibo), a minimal 32-bit Windows binary wrapper.
+
+  The auto-download is **dead code on Linux.** `configure.py` always sets
+  `--wrapper`/`--wibo` (default `../wibo/build/release/wibo`), which makes
+  `use_wibo()` false, which removes the download edge — so `wibo_tag` is never
+  consulted and `build/tools/wibo` is never fetched. Clone
+  <https://github.com/freeqaz/wibo> next to this repo and build it:
+  `cmake --preset release64-clang && cmake --build --preset release64-clang`,
+  then install the result as `build/release/wibo`. Pass `--wibo /path/to/wibo`
+  to use one elsewhere.
+
+  Use the **fork**, not stock upstream: the generated `msvc` rule relies on
+  `WIBO_FS_CACHE`, `WIBO_REWRITE_SHOWINCLUDES` (this is what makes ninja's
+  `/showIncludes` header tracking work without `transform_dep.py`),
+  `WIBO_PATH_MAP` and `WIBO_COMPUTER_NAME`, none of which exist upstream. The
+  binary in use on the reference machine is `wibo 1.2.0-c2rs.1`; check with
+  `../wibo/build/release/wibo --version`.
 
 Building
 ========
