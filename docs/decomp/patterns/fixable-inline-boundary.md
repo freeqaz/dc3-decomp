@@ -257,12 +257,24 @@ of the register swap is elsewhere.
 
 ## Inline-Level Counting via the Parameter Home Area
 
-**Impact:** +0.5-1% per occurrence, and it collapses whole insert/delete
-clusters rather than shaving single instructions
-**Success Rate:** high — the signal is unambiguous once you know to look
+> **The heading is a misnomer, kept only so existing links do not break.** The
+> slot is **not** the parameter home area — see
+> [What the slot actually is](#correction-2026-08-06--not-an-abi-property-and-not-the-home-area).
+> It is the first local-temp slot, and it looks fixed only because the stack
+> packer reuses it. Read that correction before acting on anything in this
+> section.
+
+**Impact:** 0 to +7% — two constructors went 92.8% → 100% and 79.3% → 100%;
+most candidate sites yield nothing
+**Success Rate:** low in general, high in one narrow sub-case (constructors
+whose adjacent same-typed scalar fields are really an aggregate member)
+**Population:** **rare in its strict form** — 14 functions in the *whole*
+binary have a nonzero census delta (see
+[Empirical yield](#empirical-yield-2026-08-06--census-tool-and-measured-results))
 **Time:** 10 minutes (plus one re-measure per other caller of the accessor)
 **Discovered:** 2026-08-04 regswap sweep
-([session](../../sessions/2026-08-04-regswap-atlimit-sweep.md))
+([session](../../sessions/2026-08-04-regswap-atlimit-sweep.md));
+mechanism corrected by controlled probes 2026-08-06
 
 ### Symptom
 
@@ -279,12 +291,14 @@ Because the store is dead it looks like scheduling noise. It is not.
 
 ### Why It Works
 
-On this build every **inlined** callee writes its `this` into the outgoing
-parameter home area before its body is emitted. The store is dead — the value
-stays in a register for the actual work — but MSVC emits it anyway, once per
-inline level.
+The store materialises an inlined callee's `this` into a stack temp. It is
+dead — the value stays in a register for the actual work — but MSVC emits it
+anyway, once per qualifying inline level. It is **not** emitted for every
+inline level: three conditions must hold simultaneously, and removing any one
+of them removes the store (see
+[the mechanism](#correction-2026-08-06--not-an-abi-property-and-not-the-home-area)).
 
-So the home-slot writes are a **counter for inline depth**:
+Where the conditions do hold, the writes are a **counter for inline depth**:
 
 - An extra **base-only** `addi rN, rBase, <field-offset>` + `stw rN, <home>`
   pair ⇒ our source has *one more* inline level than the target at that point.
@@ -317,9 +331,17 @@ insert/delete clusters disappeared completely (the residual became a pure
 
 ### How to Confirm Before Editing
 
+0. **Pre-qualify first, before measuring anything.** If the function has no
+   `__CxxFrameHandler` / `__ehfuncinfo$` (no local with a non-trivial
+   destructor, no try/catch), or the inlined callee touches `this` only once,
+   or the receiver is `this` itself / a plain pointer already in a register,
+   the lever **cannot** apply. Skip it — do not spend a build on it.
 1. The dead store's offset (`0x50` here) is the same slot the surrounding
-   `MILO_ASSERT` sequence uses to home its `const int&` line-number temp —
-   that confirms it is the parameter home area and not a real local.
+   `MILO_ASSERT` sequence uses for its `const int&` line-number temp. That is
+   **not** proof it is a home slot — it is proof the stack packer coalesces
+   several unrelated temps onto the first local-temp slot. Treat a shared
+   offset as weak corroboration only, and check the store is genuinely never
+   read back (an `addi rX, r1, 0x50` counts as a read).
 2. The `addi` displacement matches a member offset on the receiver class
    (`lookup_struct_offset` / `struct-info`).
 3. That member's type has a small inline mutator the accessor is calling.
@@ -380,17 +402,21 @@ direction, it's a count.
 
 **A zero/zero census is a normal result, not a failed audit.** This build only
 emits a home write when the inlined callee's `this` is a **computed sub-object
-address** (`addi rN, rBase, <field-offset>`). A function that calls accessors
-on `this` directly produces no home writes at all, on either side — that is the
-expected outcome, not evidence you looked wrong. `BustAMovePanel::Poll` was
+address** (`addi rN, rBase, <field-offset>`) — and, as the 2026-08-06 probes
+below establish, only when two further conditions hold on top of that. A
+function that calls accessors on `this` directly produces no home writes at
+all, on either side — that is the expected outcome, not evidence you looked
+wrong. `BustAMovePanel::Poll` was
 audited this way: all 16 of its `stw` instructions are live (Message `DataNode`
 temps, member stores, static guards, and two genuine outgoing stack arguments
 for a 10-parameter ctor), and the correct conclusion was that the lever does
 not apply to that function. Do the census, record the zero, and move to another
 lever.
 
-**ANSWERED: the lever survives retail `/O1`.** I originally predicted these
-home writes were a low-optimization artifact that an optimized build would
+### CORRECTION (2026-08-06) — not an ABI property, and not the home area
+
+**ANSWERED: the signature survives retail `/O1`.** It was originally predicted
+that these writes were a low-optimization artifact an optimized build would
 elide. That prediction was **wrong**. A whole-binary census on rb3-xenon —
 Rock Band 3, retail `/O1 /Oi /GR /EHsc`, a *different compiler build*
 (10224 vs DC3's 11886) — found **8,711 of 82,230 functions (10.59%)** carrying
@@ -399,8 +425,202 @@ dead home stores, 23,378 in total, **7,715 of them with the exact
 **10.34%** — essentially the same rate. Verbatim rb3 instance:
 `addi r25, r24, 0x90` / `stw r25, 0x50(r31)`.
 
-So this is a property of the **MSVC PowerPC ABI**, not of the optimization
-level, and the lever is portable across both trees.
+The census numbers stand. **The conclusion drawn from them does not.** The
+original write-up closed with "this is a property of the MSVC PowerPC ABI, not
+of the optimization level, and the lever is portable across both trees." That
+is refuted.
+
+So this is **not** an ABI property. Controlled probes with this exact compiler
+and flag set (`/O1 /Oi /GR /EHsc`) show the store is emitted only when **all**
+of the following hold:
+
+1. The function carries a **C++ EH state** — `__CxxFrameHandler` /
+   `__ehfuncinfo$`, i.e. at least one local with a non-trivial destructor, or a
+   try/catch.
+2. An inlined member call's `this` is a **computed sub-object address**
+   (`&obj->member`) — not a pointer already in a register, and not the
+   enclosing object at offset 0.
+3. The inlined callee references `this` **at least twice**. With a single use
+   the offset folds into the load/store displacement and nothing is
+   materialised.
+
+Remove any one of the three and the store disappears.
+
+The 10.34% / 10.59% cross-tree agreement therefore means the mechanism is
+**stable and reproducible** across compiler builds and optimisation levels —
+*not* that it is unavoidable. Roughly that fraction of functions in both
+codebases satisfy all three conditions, because EH-carrying locals (`String`,
+`Symbol`, `ObjPtr`) are ubiquitous. **The stores are removable from source.**
+
+Condition 3 is the one this page never had, and it is why most candidate sites
+yield nothing.
+
+**Two further corrections.**
+
+- The slot is **not the parameter home area.** A `/FAsc` listing of
+  `RhythmBattlePlayer::UpdateScore` shows `$T242098`, `$T242102`, `$T242107`
+  and the real local `skelIdx$` all coalesced onto offset `0x50`. It is simply
+  the **first local-temp slot**, and it looks fixed only because the packer
+  reuses it.
+- The census figure is an **upper bound.** An address-taken temp
+  (`stw rN, 0x50(r1)` followed by `addi r3, r1, 0x50` — the `MakeString` /
+  `const int&` shape) has no explicit reload either, so it is counted as dead
+  while being fully live.
+
+#### Probe details
+
+- **Field-offset magnitude is irrelevant** — `0x4` behaves identically to
+  `0x198`. **Member type is irrelevant** — two `int`s behave like a `Vec2`.
+- **A separate second contributor:** one *extra* store of the **raw receiver
+  register** (no `addi` at all) appears when the receiver is a **member**
+  pointer that is null-checked before the inlined call. It is absent for
+  parameter receivers and for unconditional calls. This is why the real
+  `RhythmBattlePlayer::UpdateScore` counts **3** stores, not 2 — do not try to
+  explain all three with the sub-object rule.
+
+#### Refuted: the `HamNavList::RibbonMode()` evidence
+
+An earlier write-up of this lever cited `HamNavList::RibbonMode()` as proof of
+the mechanism. It is not. The accessor is
+
+```cpp
+// src/system/hamobj/HamNavList.h
+HamListRibbon::RibbonMode RibbonMode() const { return mRibbonMode; }
+```
+
+— **one** use of `this`, at **offset 0**, no sub-object. That is exactly the
+shape the probes show emits **zero** stores under every configuration tested.
+The citation does not hold; do not reason from it.
+
+#### Minimal reproducing construct, and the inverse edit
+
+```cpp
+struct Inner {
+    int a, b;
+    void Set(int x, int y) { a = x; b = y; }   // two uses of `this`
+};
+struct Outer {
+    Inner mInner;                              // at a nonzero offset
+    void Touch(int x, int y) {
+        String scratch("eh state");            // condition 1: EH-carrying local
+        mInner.Set(x, y);                      // condition 2: &this->mInner
+    }
+};
+```
+
+`Touch` emits `addi rN, rThis, <offsetof(mInner)>` + a dead
+`stw rN, <temp>(r1)`. The **inverse edit** is either of:
+
+- **Flatten one level at the receiver**, so `this` is no longer a computed
+  sub-object address: `mInner.a = x; mInner.b = y;`
+- **Split the callee** so each inlined body uses `this` once.
+
+Both remove the store. Which one the original source used is a separate
+question — read the *count* off the target and match it (see
+[When It Doesn't Help](#when-it-doesnt-help--follow-the-count-not-the-direction)),
+and re-measure every other caller before landing a header edit.
+
+---
+
+## Empirical yield (2026-08-06) — census tool and measured results
+
+### The census tool
+
+`scripts/analysis/home_store_census.py` reads both COFF objects directly — **no
+objdiff run needed**. It counts sites where `addi rD, rBase, imm` (with `rBase`
+not a frame register and `imm > 0`) is followed within 24 instructions by
+`stw rD, F(r1|r31)` into a slot that is never read back, and reports
+
+```
+delta = target_count − base_count
+```
+
+```bash
+python3 scripts/analysis/home_store_census.py --min 90 --max 99.99
+python3 scripts/analysis/home_store_census.py --all --json /tmp/home.json
+```
+
+Two load-bearing corrections were found while building it, both via **false**
+candidates — keep them if you ever reimplement this:
+
+- **`r30` is not a frame register on this target.** Only `r1` and `r31` are.
+  Treating `r30` as one produced a phantom `delta −1` on
+  `PartyModeMgr::DetermineSubModePlayers`.
+- **`addi rX, rFrame, D` must count as a use of slot `D`.** Taking a slot's
+  address (an sret buffer, an outgoing const-ref argument) makes it live with
+  no load naming it.
+
+### Population reality check — read this before planning a sweep
+
+With the strict detector, the **90–99.99% band yields 16 candidates before
+those two fixes and 4 after**, and the **whole binary (0–99.99%) has only 14
+functions with a nonzero delta.**
+
+So the strict, actionable form of this signature is **rare**. The ~10% census
+figure above counts *live* slots. The earlier "floor" verdict on this pattern
+was wrong — but so is the population size the original write-up implied. Do
+not budget a broad sweep against it.
+
+### Measured results
+
+All measured with `run_objdiff` directly, `project_dir` pointed at a worktree.
+
+| Function | Before → After | Mismatches | Edit |
+|---|---|---|---|
+| `HamAudio::HamAudio` | 92.8% → **100.0%** | 11 → 0 | 8 loose crossfade fields → two `HamCrossfade` structs (delta +2) |
+| `NgPostProc::NgPostProc` | 79.3% → **100.0%** | 16 → 0 | 4 loose floats → two `Vector2` members (delta +2) |
+| `RndAnimatable::FireFlowLabel` | 98.0% → 97.6% | 8 → 18 | real bug fix — see [below](#worked-example--the-lever-found-a-live-bug-rndanimatablefireflowlabel) |
+| `EventTrigger::CleanupEventCase` | 88.4% → 88.5% | 12 → 12 | `String(it->Str())` instead of `String(*it)` |
+
+**The productive sub-case is narrow and self-confirming:** *constructors whose
+adjacent same-typed scalar fields are really an aggregate member.* Both wins
+had independent source-side corroboration before the edit was made —
+`PollCrossfade` copied all four fields in offset order (a longhand struct
+assignment), and `mRefractPanOffset` was accumulated component-wise from an
+existing `Vector2`. Run a **targeted pass over that sub-case**, not a broad
+sweep.
+
+### Negative results worth not repeating
+
+- **Placement-new probe.** Reproducing the sub-object address with a
+  placement-new temp did produce the right `addi`, but crashed the constructor
+  to 79.4% — the null check and the init both sink below the body. The field
+  has to be a **real member initialised in the initialiser list**.
+- **`(*it).Str()` is byte-identical to `it->Str()`.** The spelling is not a
+  lever; the `Str()` vs `*it` *conversion* is.
+
+---
+
+## Worked example — the lever found a live bug: `RndAnimatable::FireFlowLabel`
+
+This is the strongest argument for running the lever at all: the diff it opened
+up was not a codegen difference, it was a **wrong receiver**.
+
+`RndAnimatable::FireFlowLabel` sent `on_anim_event` to the **wrong object**.
+The target loads offset `0x4c` off the `AnimTask` — `mListener.mObject` — and
+uses that as the `Handle` receiver. The decomp loaded `0x60`
+(`mAnimTarget.mObject`) and therefore sent the message to the `AnimTask`
+itself.
+
+`AnimTask` has **no `on_anim_event` handler.** `FlowAnimate` and
+`FlowSetProperty` do, and those are exactly what get passed as the `Animate()`
+listener. Both sibling sends in `src/system/rndobj/Anim.cpp` (`"looped"`,
+`"ended"`) already go to `mListener`. So **animation flow labels were being
+delivered to an object that ignores them.** Fixed.
+
+The fix **costs 0.4pp** (98.0% → 97.6%): correcting the receiver triggers a
+whole-function `r28`↔`r29` renaming, which the diff scores as 18 mismatches
+instead of 8. This is a **correct fix that lowers the headline number** — a
+concrete instance of the standing rule *do not judge a fix by the headline %*.
+Land it anyway.
+
+`../og-dc3-decomp/src/system/rndobj/Anim.cpp:172` carries the **same bug**.
+Recorded here only — that repo is a reference tree and was not edited.
+
+**Secondary finding.** `HamAudio`'s old field names were wrong:
+`mActiveCrossfadeEnd` (offset `0x6c`) actually received the crossfade
+**start**. The replacement `HamCrossfade` members (`mStart` / `mEnd` /
+`mDuration` / `mFlag`) line the roles back up with what the code does.
 
 ---
 
@@ -408,7 +628,14 @@ level, and the lever is portable across both trees.
 
 - [../../sessions/2026-08-04-regswap-atlimit-sweep.md](../../sessions/2026-08-04-regswap-atlimit-sweep.md) — Session
   that discovered the home-area inline-level counter, plus the calibration of
-  the statement-vs-expression triage rule on the AT_LIMIT+REGISTER_SWAP bucket
+  the statement-vs-expression triage rule on the AT_LIMIT+REGISTER_SWAP bucket.
+  Its mechanism claim is superseded by the
+  [2026-08-06 correction](#correction-2026-08-06--not-an-abi-property-and-not-the-home-area)
+- [../../investigations/2026-08-04-bustamovepanel-poll.md](../../investigations/2026-08-04-bustamovepanel-poll.md) — the
+  zero/zero census that first observed the computed-sub-object-address
+  condition (condition 2 of 3)
+- `scripts/analysis/home_store_census.py` — the COFF-level census tool; see
+  [The census tool](#the-census-tool)
 - [verifiable-icf.md](verifiable-icf.md) — Linker-merged ICF as a verifiable
   pattern (when accepting at_limit)
 - [fixable-declarations.md: Function Definition Order ($S#)](fixable-declarations.md#function-definition-order-tu-wide-static-guard-counters) — Related

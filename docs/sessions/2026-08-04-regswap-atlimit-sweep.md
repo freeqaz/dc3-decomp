@@ -61,6 +61,18 @@ read it as floor evidence.
 **This is the main research result of the session.** Full write-up in
 [`docs/decomp/patterns/fixable-inline-boundary.md`](../decomp/patterns/fixable-inline-boundary.md#inline-level-counting-via-the-parameter-home-area).
 
+> **Correction added 2026-08-06 — this section is left as written; read the
+> correction before using it.** Two claims below are refuted by controlled
+> probes: (a) the slot is **not** the parameter home area — it is the first
+> local-temp slot, onto which several unrelated temps coalesce; and (b) it is
+> **not** true that "every inlined callee" writes its `this` there. The store
+> requires all three of: a C++ EH state in the caller (`__CxxFrameHandler`), an
+> inlined callee whose `this` is a **computed sub-object address**, and that
+> callee using `this` **at least twice**. The lever is real and the stores are
+> removable from source, but strictly qualifying sites are **rare** (14
+> functions in the whole binary). See
+> [the 2026-08-06 correction](../decomp/patterns/fixable-inline-boundary.md#correction-2026-08-06--not-an-abi-property-and-not-the-home-area).
+
 On this build every *inlined* callee writes its `this` into the outgoing
 parameter home slot — you see a recurring `stw rN, 0x50(r31)` with no matching
 reload. Those stores are dead, so they are easy to dismiss as noise. They are

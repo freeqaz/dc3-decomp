@@ -91,6 +91,24 @@ The reference conversion operators (`operator Vector3&`) allow seamless use with
 
 **Fix:** Add explicit padding bytes or reorder members to match alignment.
 
+### Loose scalar fields that are really an aggregate member
+
+**Symptom:** A constructor is well below 100% with insert/delete clusters, and a
+[dead temp-slot store census](fixable-inline-boundary.md#empirical-yield-2026-08-06--census-tool-and-measured-results)
+shows the *target* has more of those stores than we do (`delta > 0`). The target
+computes `&this-><something>` where our header declares several adjacent
+same-typed scalars.
+
+**Fix:** Group the adjacent scalars into the aggregate they actually are, and
+initialise it as one member in the initialiser list. `HamAudio::HamAudio`
+(8 loose crossfade fields → two `HamCrossfade` structs) went 92.8% → 100%, and
+`NgPostProc::NgPostProc` (4 loose floats → two `Vector2`s) 79.3% → 100%.
+
+**Corroborate before editing:** look for a sibling function that touches all the
+fields together in offset order — that is a longhand struct assignment, and it
+is independent evidence. A placement-new temp that merely *reproduces* the
+sub-object address does **not** work; the field has to be a real member.
+
 ### Inheritance offset shift
 
 **Symptom:** All member offsets are shifted by a fixed amount from the base class size.

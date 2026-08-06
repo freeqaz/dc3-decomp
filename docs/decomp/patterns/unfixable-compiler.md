@@ -178,6 +178,20 @@ After adding fsel-based code, the prologue changes from 2 callee-saved FPRs to 4
 > A residual confined to one *flat* arithmetic expression is a genuine floor; a residual
 > that implicates a statement is not.
 
+> **Correction (2026-08-06) to the "inline-level count" entry above.** That lever was
+> written up as reading the *parameter home area* and as an **MSVC PowerPC ABI
+> property**. Both are wrong: the slot is the first local-temp slot (several unrelated
+> temps coalesce onto it), and the store is emitted only when the function carries a C++
+> EH state **and** the inlined callee's `this` is a computed sub-object address **and**
+> that callee uses `this` at least twice. It is therefore **removable from source, not a
+> floor** — but strictly qualifying sites are also **rare** (14 functions in the whole
+> binary). See
+> [fixable-inline-boundary.md: 2026-08-06 correction](fixable-inline-boundary.md#correction-2026-08-06--not-an-abi-property-and-not-the-home-area).
+> A related caution for this page: `RndAnimatable::FireFlowLabel`'s **correct** receiver
+> fix *lowered* its score 98.0% → 97.6% by triggering a whole-function `r28`↔`r29`
+> renaming. A register-swap residual that grows after a fix is not evidence the fix was
+> wrong.
+
 ### Symptom
 
 Consistent register swaps (e.g., r30 vs r31, f30 vs f31) throughout function.
