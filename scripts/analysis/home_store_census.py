@@ -158,7 +158,7 @@ OP_LHZ = 40
 OP_LBZ = 34
 
 
-def home_stores(words, frame_regs=(1, 31, 30)):
+def home_stores(words, frame_regs=(1, 31)):
     """Return list of (addi_idx, stw_idx, base_reg, field_off, frame_off).
 
     A `stw rD, F(rFrame)` counts only when
@@ -167,11 +167,14 @@ def home_stores(words, frame_regs=(1, 31, 30)):
       * no load in the whole function reads displacement F off the same frame
         register (the slot is dead).
     """
-    # displacements loaded off each frame register anywhere in the body
+    # displacements read back off a frame register anywhere in the body.  An
+    # `addi rX, rFrame, D` counts too: taking the slot's address (an sret
+    # buffer, an outgoing const-ref argument) makes the slot LIVE even though
+    # no load names it.  Missing this was worth several false candidates.
     loaded = set()
     for w in words:
         o = op(w)
-        if o in (OP_LWZ, OP_LWZU, OP_LFS, OP_LFD, OP_LHZ, OP_LBZ):
+        if o in (OP_LWZ, OP_LWZU, OP_LFS, OP_LFD, OP_LHZ, OP_LBZ, OP_ADDI):
             if rA(w) in frame_regs:
                 loaded.add((rA(w), simm(w)))
 

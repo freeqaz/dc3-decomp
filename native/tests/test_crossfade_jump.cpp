@@ -2,7 +2,7 @@
 // (Wave-3 Lane C, roadmap N.4).
 //
 // SetCrossfadeJump decides whether a queued crossfade is "invalid" (begins
-// before the start of the song) and, if so, clears mCrossfadePending so a hard
+// before the start of the song) and, if so, clears mCrossfade.mFlag so a hard
 // jump is used instead. The original Xbox 360 binary computes that predicate as
 // `startTime - fadeDuration*0.5 > 0` (a STRICT greater-than). The decompiled
 // source had `startTime >= fadeDuration*0.5` (>=), which wrongly cancels the
