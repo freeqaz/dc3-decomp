@@ -152,6 +152,13 @@ this lever is correctly inapplicable here. Every accessor the brief flagged
 to the same depth as the target already, or is a real `bl`/`bctrl` on both
 sides.
 
+> **Follow-up 2026-08-06 (log left as written):** the observation below was
+> correct and has been promoted into the pattern doc — but it is only **one of
+> three** necessary conditions. The caller must also carry a C++ EH state, and
+> the inlined callee must reference `this` at least twice. The slot is also not
+> the parameter home area; it is the first local-temp slot. See
+> [fixable-inline-boundary.md: 2026-08-06 correction](../decomp/patterns/fixable-inline-boundary.md#correction-2026-08-06--not-an-abi-property-and-not-the-home-area).
+
 Note for whoever generalises this lever: **this build only emits home-area
 writes when the inlined callee's `this` is a computed sub-object address.**
 Functions like `Poll` that call accessors on `this` directly, or through a

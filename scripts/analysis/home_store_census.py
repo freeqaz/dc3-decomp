@@ -5,13 +5,19 @@ Signature (docs/decomp/patterns/fixable-inline-boundary.md):
 
     addi rD, rBase, <field-offset>      # computed sub-object address
     ...
-    stw  rD, <frame-offset>(r1|r31)     # homed into the parameter home area
+    stw  rD, <frame-offset>(r1|r31)     # dead store into a local temp slot
     <frame-offset is never reloaded in this function>
 
-That store is the ABI home slot for the `this` of an *inlined member function*
-whose receiver is a sub-object of some other object.  The count of such stores
-is therefore a direct read of how many inline levels the original source had at
-that point.  Counting them on both sides gives a per-function delta:
+That store materialises the `this` of an *inlined member function* whose
+receiver is a sub-object of some other object.  It is NOT an ABI home slot and
+NOT the parameter home area (corrected 2026-08-06): it is the first local-temp
+slot, which the stack packer also reuses for unrelated temps.  The store is
+emitted only when ALL of: the caller carries a C++ EH state
+(__CxxFrameHandler), the inlined callee's `this` is a computed sub-object
+address, and that callee references `this` at least twice.  Where it is
+emitted, the count is a direct read of how many inline levels the original
+source had at that point.  Counting them on both sides gives a per-function
+delta:
 
     delta = target_home_stores - base_home_stores
 
@@ -21,6 +27,11 @@ that point.  Counting them on both sides gives a per-function delta:
 
 The lever is a COUNT, not a direction: `RndMesh::SetVolume` regressed when the
 wrapper was removed entirely, because the target wanted exactly one level.
+
+Population note: the strict form is RARE.  The 90-99.99% band yields 4 rows and
+the whole binary yields 14 with a nonzero delta.  The productive sub-case is
+constructors whose adjacent same-typed scalar fields are really an aggregate
+member (HamAudio, NgPostProc -- both reached 100%).
 
 Reads COFF objects directly -- no objdiff run needed.
 
