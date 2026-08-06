@@ -244,15 +244,15 @@ void NgPostProc::BloomTextureSet::AllocateTextures(unsigned int w, unsigned int 
 void NgPostProc::BloomTextureSet::FreeTextures() { RELEASE(mBloomTexture[0]); }
 
 NgPostProc::NgPostProc()
-    : mRandomSeed1(RandomFloat()), mRandomSeed2(RandomFloat()), unk234(0), unk238(0),
+    : mRandomSeed(RandomFloat(), RandomFloat()), mRefractPanOffset(0, 0),
       mMotionBlurDrawList(this), mMotionBlurEnabled(1) {}
 
 NgPostProc::~NgPostProc() {}
 
 void NgPostProc::Select() {
     RndPostProc::Select();
-    mRandomSeed1 = RandomFloat();
-    mRandomSeed2 = RandomFloat();
+    mRandomSeed.x = RandomFloat();
+    mRandomSeed.y = RandomFloat();
 }
 
 void NgPostProc::Init() {
@@ -420,16 +420,16 @@ void NgPostProc::CheckRefract() {
         float sinAngle = (float)sin((double)angleRad);
         float cosAngle = (float)cos((double)angleRad);
 
-        unk234 += mRefractVelocity.x * mDeltaSecs;
-        unk238 += mRefractVelocity.y * mDeltaSecs;
+        mRefractPanOffset.x += mRefractVelocity.x * mDeltaSecs;
+        mRefractPanOffset.y += mRefractVelocity.y * mDeltaSecs;
 
         Vector4 refractParams(angleRad, sinAngle, cosAngle, mRefractDist);
 
-        unk234 = (float)fmod((double)unk234, 1.0);
-        unk238 = (float)fmod((double)unk238, 1.0);
+        mRefractPanOffset.x = (float)fmod((double)mRefractPanOffset.x, 1.0);
+        mRefractPanOffset.y = (float)fmod((double)mRefractPanOffset.y, 1.0);
 
         Vector4 panningParams(mRefractScale.x, mRefractScale.y,
-                              mRefractPanning.x + unk234, mRefractPanning.y + unk238);
+                              mRefractPanning.x + mRefractPanOffset.x, mRefractPanning.y + mRefractPanOffset.y);
         TheShaderMgr.SetPConstant(kPS_RefractStrength, refractParams);
         TheShaderMgr.SetPConstant(kPS_RefractPanning, panningParams);
 
@@ -438,8 +438,8 @@ void NgPostProc::CheckRefract() {
         TheRenderState.SetTextureClamp(1, (RndRenderState::ClampMode)0);
         TheShaderMgr.unk3b = true;
     } else {
-        unk234 = 0.0f;
-        unk238 = 0.0f;
+        mRefractPanOffset.x = 0.0f;
+        mRefractPanOffset.y = 0.0f;
     }
 }
 
@@ -452,7 +452,7 @@ void NgPostProc::CheckNoise() {
             Vector4 params(mNoiseBaseScale.x, mNoiseBaseScale.y, mNoiseTopScale, mNoiseIntensity);
             TheShaderMgr.SetPConstant(kPS_NoiseParams, params);
         } else {
-            Vector4 seeds(mRandomSeed1, mRandomSeed2, mRandomSeed1, mRandomSeed2);
+            Vector4 seeds(mRandomSeed.x, mRandomSeed.y, mRandomSeed.x, mRandomSeed.y);
             TheShaderMgr.SetPConstant(kPS_NoiseSeeds, seeds);
             Vector4 params(mNoiseBaseScale.x, mNoiseBaseScale.y, 1.0f, mNoiseIntensity);
             TheShaderMgr.SetPConstant(kPS_NoiseParams, params);
