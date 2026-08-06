@@ -614,7 +614,7 @@ void EventTrigger::UnregisterEvents() {
 void EventTrigger::CleanupEventCase(std::list<Symbol> &syms) {
     FOREACH (it, syms) {
         if (strstr(it->Str(), "lighting_")) {
-            String str(*it);
+            String str(it->Str());
             str.ToLower();
             *it = str.c_str();
         }
