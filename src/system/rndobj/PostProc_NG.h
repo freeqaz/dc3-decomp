@@ -101,10 +101,10 @@ protected:
 
     static void ReleaseTex();
 
-    float mRandomSeed1; // 0x22c
-    float mRandomSeed2; // 0x230
-    float unk234; // 0x234
-    float unk238; // 0x238
+    /** Two per-instance random seeds, fed to the shader as a Vector4. */
+    Vector2 mRandomSeed; // 0x22c
+    /** Accumulated refraction pan, added to mRefractPanning each frame. */
+    Vector2 mRefractPanOffset; // 0x234
     ObjPtrList<RndDrawable> mMotionBlurDrawList; // 0x23c
     bool mMotionBlurEnabled; // 0x250
 };

@@ -7,6 +7,19 @@
 #include "utl/SongInfoCopy.h"
 #include "utl/Symbol.h"
 
+/** One crossfade timeline: the two loop endpoints, the fade length, and a
+ *  state/pending flag.  Two of these live back to back in HamAudio at 0x5c
+ *  and 0x6c, and PollCrossfade copies one onto the other field for field. */
+struct HamCrossfade {
+    float mStart; // 0x0
+    float mEnd; // 0x4
+    float mDuration; // 0x8
+    /** Pending flag on the request, state on the active one. */
+    int mFlag; // 0xc
+
+    HamCrossfade() : mFlag(0) {}
+};
+
 class HamAudio : public Hmx::Object, public HxAudio {
 public:
     HamAudio();
@@ -39,14 +52,14 @@ public:
     // Whether a crossfade is queued. Exposed for the crossfade-boundary
     // regression test (SetCrossfadeJump clears this when the crossfade is
     // judged invalid).
-    bool CrossfadePending() const { return mCrossfadePending != 0; }
+    bool CrossfadePending() const { return mCrossfade.mFlag != 0; }
 #ifdef HX_NATIVE
     // Test-only seams (milo-tests crossfade regression); never compiled on Xbox.
     void SetStreamsForTest(Stream *a, Stream *b) {
         mStreams[0] = a;
         mStreams[1] = b;
     }
-    void SetCrossfadeStateForTest(int s) { mCrossfadeState = s; }
+    void SetCrossfadeStateForTest(int s) { mActiveCrossfade.mFlag = s; }
 #endif
 
     void SetBackgroundVolume(float);
@@ -77,14 +90,10 @@ private:
     float mMasterVolume; // 0x54
     bool mMuteMaster; // 0x58
     bool mFXSendApplied; // 0x59
-    float mCrossfadeStartTime; // 0x5c
-    float mCrossfadeEndTime; // 0x60
-    float mCrossfadeDuration; // 0x64
-    int mCrossfadePending; // 0x68
-    float mActiveCrossfadeEnd;
-    float mActiveCrossfadeStart; // 0x70
-    float mActiveCrossfadeDuration; // 0x74
-    int mCrossfadeState; // 0x78
+    /** The pending crossfade request. */
+    HamCrossfade mCrossfade; // 0x5c
+    /** The crossfade currently running. */
+    HamCrossfade mActiveCrossfade; // 0x6c
     Fader *mCrossFaders[2]; // 0x7c
     std::vector<Fader *> mChannelFaders; // 0x84
     std::map<Symbol, Fader *> mTrackFaders; // 0x90
