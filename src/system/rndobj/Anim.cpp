@@ -167,9 +167,13 @@ void RndAnimatable::FireFlowLabel(Symbol s) {
     FOREACH (it, Refs()) {
         Hmx::Object *owner = it->RefOwner();
         if (owner && owner->ClassName() == "AnimTask") {
-            AnimTask *task = static_cast<AnimTask *>(owner);
-            if (task->AnimTarget()) {
-                owner->Handle(Message("on_anim_event", s), false);
+            // The event goes to the AnimTask's listener, not to the task
+            // itself -- target reads mListener.mObject (0x4c) and uses that
+            // as the Handle receiver.  Matches AnimTask::Poll's "looped" and
+            // "ended" sends, which both target mListener.
+            Hmx::Object *listener = static_cast<AnimTask *>(owner)->Listener();
+            if (listener) {
+                listener->Handle(Message("on_anim_event", s), false);
                 break;
             }
         }
