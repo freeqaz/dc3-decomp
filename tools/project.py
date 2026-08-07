@@ -15,6 +15,7 @@ import json
 import math
 import os
 import platform
+import subprocess
 import sys
 from pathlib import Path
 from typing import (
@@ -1827,6 +1828,37 @@ def generate_objdiff_config(
         "units": [],
         "progress_categories": [],
     }
+
+    # ICF-fold symbol alias map. Retail's /OPT:ICF link folds byte-identical
+    # COMDATs, so several source spellings survive at ONE address: the target
+    # objects can only name the survivor, while our objects emit their own TU's
+    # spelling, and objdiff's by-name reloc comparison flags a [sym] mismatch on
+    # a call site that is the same bytes to the same code. objdiff already
+    # consumes ICF equivalences from an MSVC `map_file` (parse_msvc_map groups
+    # symbols sharing an address); scripts/gen_icf_alias_map.py renders the
+    # body-test-witnessed folds (scripts/symbol_aliases.json) into a synthetic
+    # one. Generate it here so objdiff.json can reference it even on the FIRST
+    # configure of a fresh tree.
+    #
+    # The `map_file` key is written ONLY if the map exists, and that pairing is
+    # load-bearing in BOTH directions: naming a map the tree does not have makes
+    # decomp-synth's symbol_equivalences fail closed to no equivalences at all,
+    # while shipping the alias JSON with no map_file makes its gate (f) -- "the
+    # class is one objdiff itself consumes" -- silently skip, leaving the grader
+    # applying classes the sole judge does not. Absent both, behaviour is
+    # exactly the pre-ICF behaviour.
+    icf_gen = Path("scripts") / "gen_icf_alias_map.py"
+    icf_map = config.out_path() / "icf_aliases.map"
+    if icf_gen.is_file() and Path("scripts", "symbol_aliases.json").is_file():
+        try:
+            subprocess.run(
+                [sys.executable, str(icf_gen), "--out", str(icf_map)],
+                check=True, stdout=subprocess.DEVNULL,
+            )
+        except Exception as e:
+            print(f"(icf alias map generation skipped: {e})")
+    if icf_map.is_file():
+        objdiff_config["map_file"] = str(icf_map).replace(os.sep, "/")
 
     # decomp.me compiler name mapping
     COMPILER_MAP = {

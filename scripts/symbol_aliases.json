@@ -1,0 +1,1143 @@
+{
+ "_comment": [
+  "ICF fold classes for dc3 (build 373307D9), WITNESSED by",
+  "tools/revcomp/probes/probe_icf_foldtest.py in decomp-synth:",
+  "retail bytes at the survivor address are relocation-invariantly",
+  "identical to our compiled body for each folded spelling.",
+  "Representation: transitive-closure classes over witnessed directed",
+  "pairs. This file holds the VALIDATOR-ACCEPTED classes only, so the",
+  "synthetic map rendered from it (scripts/gen_symbol_alias_map.py ->",
+  "build/373307D9/icf_aliases.map) never hands objdiff a class the validator refused.",
+  "Regenerate with decomp-synth tools/il_witness/build_icf_alias_inputs.py.",
+  "Do not hand-edit."
+ ],
+ "_provenance": {
+  "generator": "decomp-synth tools/il_witness/build_icf_alias_inputs.py",
+  "validator": "decomp-synth tools/il_witness/symbol_equivalences.validate_groups",
+  "validated_against_tree": "/home/free/code/milohax/dc3-decomp",
+  "n_groups_generated": 79,
+  "n_groups_accepted": 76,
+  "n_target_objs": 2223,
+  "n_base_objs": 980,
+  "n_names": 412
+ },
+ "_rejected_at_install": [
+  {
+   "name": "MakeString@0x82610090",
+   "reasons": [
+    "(c) target objs name ['??$MakeString@W4BlendEaseMode@CamShotFrame@@@@YAPBDPBDABW4BlendEaseMode@CamShotFrame@@@Z', '??$MakeString@PAX@@YAPBDPBDABQAX@Z'], expected only ['??$MakeString@W4BlendEaseMode@CamShotFrame@@@@YAPBDPBDABW4BlendEaseMode@CamShotFrame@@@Z'] -- not a real fold"
+   ]
+  },
+  {
+   "name": "MemAllocFailed@0x82334a38",
+   "reasons": [
+    "(b) folded '?MemAllocFailed@?A0x7f03e814@@YAXK_N@Z' referenced by 0 compiled objs"
+   ]
+  },
+  {
+   "name": "fn_82E21268@0x82e21268",
+   "reasons": [
+    "(c) target objs name ['fn_82E21268', '??3@YAXPAX@Z'], expected only ['fn_82E21268'] -- not a real fold",
+    "(d) address-derived placeholder spelling 'fn_82E21268'"
+   ]
+  }
+ ],
+ "groups": [
+  {
+   "name": "YAAAVBinStream@0x826ee638",
+   "address": "0x826ee638",
+   "survivor": "??$?5M@@YAAAVBinStream@@AAV0@AAV?$Key@M@@@Z",
+   "folded": [
+    "??5@YAAAVBinStream@@AAV0@AAVVector2@@@Z"
+   ],
+   "sites": 2,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 2 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "UIKTarget@0x8238ec30",
+   "address": "0x8238ec30",
+   "survivor": "??$?6UIKTarget@CharIKHand@@V?$StlNodeAlloc@UIKTarget@CharIKHand@@@stlpmtx_std@@@@YAAAVBinStream@@AAV0@ABV?$vector@UIKTarget@CharIKHand@@V?$StlNodeAlloc@UIKTarget@CharIKHand@@@stlpmtx_std@@@stlpmtx_std@@@Z",
+   "folded": [
+    "??$?6UConstraintSystem@CharBlendBone@@V?$StlNodeAlloc@UConstraintSystem@CharBlendBone@@@stlpmtx_std@@@@YAAAVBinStream@@AAV0@ABV?$vector@UConstraintSystem@CharBlendBone@@V?$StlNodeAlloc@UConstraintSystem@CharBlendBone@@@stlpmtx_std@@@stlpmtx_std@@@Z"
+   ],
+   "sites": 1,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 1 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "Key@0x82682ef8",
+   "address": "0x82682ef8",
+   "survivor": "??$?6V?$Key@VQuat@Hmx@@@@V?$StlNodeAlloc@V?$Key@VQuat@Hmx@@@@@stlpmtx_std@@@@YAAAVBinStream@@AAV0@ABV?$vector@V?$Key@VQuat@Hmx@@@@V?$StlNodeAlloc@V?$Key@VQuat@Hmx@@@@@stlpmtx_std@@@stlpmtx_std@@@Z",
+   "folded": [
+    "??$?6V?$Key@VColor@Hmx@@@@V?$StlNodeAlloc@V?$Key@VColor@Hmx@@@@@stlpmtx_std@@@@YAAAVBinStream@@AAV0@ABV?$vector@V?$Key@VColor@Hmx@@@@V?$StlNodeAlloc@V?$Key@VColor@Hmx@@@@@stlpmtx_std@@@stlpmtx_std@@@Z"
+   ],
+   "sites": 3,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 3 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "VCharEyeDartRuleset@0x8275c428",
+   "address": "0x8275c428",
+   "survivor": "??$?6VCharEyeDartRuleset@@@@YAAAVBinStream@@AAV0@ABV?$ObjRefConcrete@VCharEyeDartRuleset@@VObjectDir@@@@@Z",
+   "folded": [
+    "??$?6VRndPostProc@@@@YAAAVBinStream@@AAV0@ABV?$ObjRefConcrete@VRndPostProc@@VObjectDir@@@@@Z",
+    "??$?6VRndTex@@@@YAAAVBinStream@@AAV0@ABV?$ObjRefConcrete@VRndTex@@VObjectDir@@@@@Z",
+    "??$?6VSynthSample@@@@YAAAVBinStream@@AAV0@ABV?$ObjRefConcrete@VSynthSample@@VObjectDir@@@@@Z"
+   ],
+   "sites": 3,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 3 folded spelling(s), 3 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "VRndAnimatable@0x8236bad0",
+   "address": "0x8236bad0",
+   "survivor": "??$?6VRndAnimatable@@@@YAAAVBinStream@@AAV0@ABV?$ObjPtrList@VRndAnimatable@@VObjectDir@@@@@Z",
+   "folded": [
+    "??$?6VRndDrawable@@@@YAAAVBinStream@@AAV0@ABV?$ObjPtrList@VRndDrawable@@VObjectDir@@@@@Z"
+   ],
+   "sites": 1,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 1 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "VRndMat@0x827a9860",
+   "address": "0x827a9860",
+   "survivor": "??$?6VRndMat@@@@YAAAVBinStream@@AAV0@ABV?$ObjPtrList@VRndMat@@VObjectDir@@@@@Z",
+   "folded": [
+    "??$?6VObject@Hmx@@@@YAAAVBinStream@@AAV0@ABV?$ObjPtrList@VObject@Hmx@@VObjectDir@@@@@Z"
+   ],
+   "sites": 1,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 1 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "VUIComponent@0x826ee578",
+   "address": "0x826ee578",
+   "survivor": "??$?6VUIComponent@@@@YAAAVBinStream@@AAV0@ABV?$ObjRefConcrete@VUIComponent@@VObjectDir@@@@@Z",
+   "folded": [
+    "??$?6VCharacter@@@@YAAAVBinStream@@AAV0@ABV?$ObjRefConcrete@VCharacter@@VObjectDir@@@@@Z",
+    "??$?6VHamLabel@@@@YAAAVBinStream@@AAV0@ABV?$ObjRefConcrete@VHamLabel@@VObjectDir@@@@@Z",
+    "??$?6VRhythmBattlePlayer@@@@YAAAVBinStream@@AAV0@ABV?$ObjRefConcrete@VRhythmBattlePlayer@@VObjectDir@@@@@Z",
+    "??$?6VRndAnimatable@@@@YAAAVBinStream@@AAV0@ABV?$ObjRefConcrete@VRndAnimatable@@VObjectDir@@@@@Z",
+    "??$?6VRndLight@@@@YAAAVBinStream@@AAV0@ABV?$ObjRefConcrete@VRndLight@@VObjectDir@@@@@Z",
+    "??$?6VRndMesh@@@@YAAAVBinStream@@AAV0@ABV?$ObjRefConcrete@VRndMesh@@VObjectDir@@@@@Z",
+    "??$?6VRndMultiMesh@@@@YAAAVBinStream@@AAV0@ABV?$ObjRefConcrete@VRndMultiMesh@@VObjectDir@@@@@Z",
+    "??$?6VRndParticleSys@@@@YAAAVBinStream@@AAV0@ABV?$ObjRefConcrete@VRndParticleSys@@VObjectDir@@@@@Z",
+    "??$?6VRndTransAnim@@@@YAAAVBinStream@@AAV0@ABV?$ObjRefConcrete@VRndTransAnim@@VObjectDir@@@@@Z",
+    "??$?6VRndTransformable@@@@YAAAVBinStream@@AAV0@ABV?$ObjRefConcrete@VRndTransformable@@VObjectDir@@@@@Z",
+    "??$?6VRndWind@@@@YAAAVBinStream@@AAV0@ABV?$ObjRefConcrete@VRndWind@@VObjectDir@@@@@Z",
+    "??$?6VUILabel@@@@YAAAVBinStream@@AAV0@ABV?$ObjRefConcrete@VUILabel@@VObjectDir@@@@@Z",
+    "??$?6VWaypoint@@@@YAAAVBinStream@@AAV0@ABV?$ObjRefConcrete@VWaypoint@@VObjectDir@@@@@Z"
+   ],
+   "sites": 22,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 13 folded spelling(s), 22 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "DeleteAll@0x82e15940",
+   "address": "0x82e15940",
+   "survivor": "??$DeleteAll@V?$vector@PAVSampleInst@@V?$StlNodeAlloc@PAVSampleInst@@@stlpmtx_std@@@stlpmtx_std@@@@YAXAAV?$vector@PAVSampleInst@@V?$StlNodeAlloc@PAVSampleInst@@@stlpmtx_std@@@stlpmtx_std@@@Z",
+   "folded": [
+    "??$DeleteAll@V?$vector@PAVMic@@V?$StlNodeAlloc@PAVMic@@@stlpmtx_std@@@stlpmtx_std@@@@YAXAAV?$vector@PAVMic@@V?$StlNodeAlloc@PAVMic@@@stlpmtx_std@@@stlpmtx_std@@@Z"
+   ],
+   "sites": 1,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 1 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "MakeString@0x824d1870",
+   "address": "0x824d1870",
+   "survivor": "??$MakeString@$$BY07$$CBDH$$BY0CD@$$CBD@@YAPBDPBDAAY07$$CBDABHAAY0CD@$$CBD@Z",
+   "folded": [
+    "??$MakeString@$$BY07$$CBDH$$BY02$$CBD@@YAPBDPBDAAY07$$CBDABHAAY02$$CBD@Z",
+    "??$MakeString@$$BY07$$CBDH$$BY03$$CBD@@YAPBDPBDAAY07$$CBDABHAAY03$$CBD@Z",
+    "??$MakeString@$$BY07$$CBDH$$BY07$$CBD@@YAPBDPBDAAY07$$CBDABH1@Z",
+    "??$MakeString@$$BY07$$CBDH$$BY0EB@$$CBD@@YAPBDPBDAAY07$$CBDABHAAY0EB@$$CBD@Z",
+    "??$MakeString@$$BY07$$CBDH$$BY0N@$$CBD@@YAPBDPBDAAY07$$CBDABHAAY0N@$$CBD@Z",
+    "??$MakeString@$$BY08$$CBDH$$BY02$$CBD@@YAPBDPBDAAY08$$CBDABHAAY02$$CBD@Z",
+    "??$MakeString@$$BY08$$CBDH$$BY03$$CBD@@YAPBDPBDAAY08$$CBDABHAAY03$$CBD@Z",
+    "??$MakeString@$$BY08$$CBDH$$BY06$$CBD@@YAPBDPBDAAY08$$CBDABHAAY06$$CBD@Z",
+    "??$MakeString@$$BY08$$CBDH$$BY07$$CBD@@YAPBDPBDAAY08$$CBDABHAAY07$$CBD@Z",
+    "??$MakeString@$$BY08$$CBDH$$BY0BG@$$CBD@@YAPBDPBDAAY08$$CBDABHAAY0BG@$$CBD@Z",
+    "??$MakeString@$$BY08$$CBDH$$BY0L@$$CBD@@YAPBDPBDAAY08$$CBDABHAAY0L@$$CBD@Z",
+    "??$MakeString@$$BY08$$CBDH$$BY0N@$$CBD@@YAPBDPBDAAY08$$CBDABHAAY0N@$$CBD@Z",
+    "??$MakeString@$$BY09$$CBDH$$BY0BF@$$CBD@@YAPBDPBDAAY09$$CBDABHAAY0BF@$$CBD@Z",
+    "??$MakeString@$$BY09$$CBDH$$BY0BJ@$$CBD@@YAPBDPBDAAY09$$CBDABHAAY0BJ@$$CBD@Z",
+    "??$MakeString@$$BY09$$CBDH$$BY0CL@$$CBD@@YAPBDPBDAAY09$$CBDABHAAY0CL@$$CBD@Z",
+    "??$MakeString@$$BY09$$CBDH$$BY0CP@$$CBD@@YAPBDPBDAAY09$$CBDABHAAY0CP@$$CBD@Z",
+    "??$MakeString@$$BY09$$CBDH$$BY0O@$$CBD@@YAPBDPBDAAY09$$CBDABHAAY0O@$$CBD@Z",
+    "??$MakeString@$$BY09$$CBDH$$BY0P@$$CBD@@YAPBDPBDAAY09$$CBDABHAAY0P@$$CBD@Z",
+    "??$MakeString@$$BY0BA@$$CBDH$$BY05$$CBD@@YAPBDPBDAAY0BA@$$CBDABHAAY05$$CBD@Z",
+    "??$MakeString@$$BY0BA@$$CBDH$$BY07$$CBD@@YAPBDPBDAAY0BA@$$CBDABHAAY07$$CBD@Z",
+    "??$MakeString@$$BY0BA@$$CBDH$$BY08$$CBD@@YAPBDPBDAAY0BA@$$CBDABHAAY08$$CBD@Z",
+    "??$MakeString@$$BY0BA@$$CBDH$$BY09$$CBD@@YAPBDPBDAAY0BA@$$CBDABHAAY09$$CBD@Z",
+    "??$MakeString@$$BY0BA@$$CBDH$$BY0BE@$$CBD@@YAPBDPBDAAY0BA@$$CBDABHAAY0BE@$$CBD@Z",
+    "??$MakeString@$$BY0BA@$$CBDH$$BY0BH@$$CBD@@YAPBDPBDAAY0BA@$$CBDABHAAY0BH@$$CBD@Z",
+    "??$MakeString@$$BY0BA@$$CBDH$$BY0CA@$$CBD@@YAPBDPBDAAY0BA@$$CBDABHAAY0CA@$$CBD@Z",
+    "??$MakeString@$$BY0BA@$$CBDH$$BY0CL@$$CBD@@YAPBDPBDAAY0BA@$$CBDABHAAY0CL@$$CBD@Z",
+    "??$MakeString@$$BY0BA@$$CBDH$$BY0M@$$CBD@@YAPBDPBDAAY0BA@$$CBDABHAAY0M@$$CBD@Z",
+    "??$MakeString@$$BY0BA@$$CBDH$$BY0P@$$CBD@@YAPBDPBDAAY0BA@$$CBDABHAAY0P@$$CBD@Z",
+    "??$MakeString@$$BY0BB@$$CBDH$$BY07$$CBD@@YAPBDPBDAAY0BB@$$CBDABHAAY07$$CBD@Z",
+    "??$MakeString@$$BY0BB@$$CBDH$$BY09$$CBD@@YAPBDPBDAAY0BB@$$CBDABHAAY09$$CBD@Z",
+    "??$MakeString@$$BY0BB@$$CBDH$$BY0BE@$$CBD@@YAPBDPBDAAY0BB@$$CBDABHAAY0BE@$$CBD@Z",
+    "??$MakeString@$$BY0BB@$$CBDH$$BY0BH@$$CBD@@YAPBDPBDAAY0BB@$$CBDABHAAY0BH@$$CBD@Z",
+    "??$MakeString@$$BY0BB@$$CBDH$$BY0BP@$$CBD@@YAPBDPBDAAY0BB@$$CBDABHAAY0BP@$$CBD@Z",
+    "??$MakeString@$$BY0BB@$$CBDH$$BY0CA@$$CBD@@YAPBDPBDAAY0BB@$$CBDABHAAY0CA@$$CBD@Z",
+    "??$MakeString@$$BY0BB@$$CBDH$$BY0CE@$$CBD@@YAPBDPBDAAY0BB@$$CBDABHAAY0CE@$$CBD@Z",
+    "??$MakeString@$$BY0BB@$$CBDH$$BY0CI@$$CBD@@YAPBDPBDAAY0BB@$$CBDABHAAY0CI@$$CBD@Z",
+    "??$MakeString@$$BY0BB@$$CBDH$$BY0CO@$$CBD@@YAPBDPBDAAY0BB@$$CBDABHAAY0CO@$$CBD@Z",
+    "??$MakeString@$$BY0BB@$$CBDH$$BY0L@$$CBD@@YAPBDPBDAAY0BB@$$CBDABHAAY0L@$$CBD@Z",
+    "??$MakeString@$$BY0BC@$$CBDH$$BY06$$CBD@@YAPBDPBDAAY0BC@$$CBDABHAAY06$$CBD@Z",
+    "??$MakeString@$$BY0BC@$$CBDH$$BY09$$CBD@@YAPBDPBDAAY0BC@$$CBDABHAAY09$$CBD@Z",
+    "??$MakeString@$$BY0BC@$$CBDH$$BY0BC@$$CBD@@YAPBDPBDAAY0BC@$$CBDABH1@Z",
+    "??$MakeString@$$BY0BC@$$CBDH$$BY0BH@$$CBD@@YAPBDPBDAAY0BC@$$CBDABHAAY0BH@$$CBD@Z",
+    "??$MakeString@$$BY0BC@$$CBDH$$BY0BK@$$CBD@@YAPBDPBDAAY0BC@$$CBDABHAAY0BK@$$CBD@Z",
+    "??$MakeString@$$BY0BC@$$CBDH$$BY0BP@$$CBD@@YAPBDPBDAAY0BC@$$CBDABHAAY0BP@$$CBD@Z",
+    "??$MakeString@$$BY0BC@$$CBDH$$BY0CM@$$CBD@@YAPBDPBDAAY0BC@$$CBDABHAAY0CM@$$CBD@Z",
+    "??$MakeString@$$BY0BC@$$CBDH$$BY0EP@$$CBD@@YAPBDPBDAAY0BC@$$CBDABHAAY0EP@$$CBD@Z",
+    "??$MakeString@$$BY0BC@$$CBDH$$BY0N@$$CBD@@YAPBDPBDAAY0BC@$$CBDABHAAY0N@$$CBD@Z",
+    "??$MakeString@$$BY0BD@$$CBDH$$BY05$$CBD@@YAPBDPBDAAY0BD@$$CBDABHAAY05$$CBD@Z",
+    "??$MakeString@$$BY0BD@$$CBDH$$BY08$$CBD@@YAPBDPBDAAY0BD@$$CBDABHAAY08$$CBD@Z",
+    "??$MakeString@$$BY0BD@$$CBDH$$BY0BA@$$CBD@@YAPBDPBDAAY0BD@$$CBDABHAAY0BA@$$CBD@Z",
+    "??$MakeString@$$BY0BD@$$CBDH$$BY0BB@$$CBD@@YAPBDPBDAAY0BD@$$CBDABHAAY0BB@$$CBD@Z",
+    "??$MakeString@$$BY0BD@$$CBDH$$BY0BD@$$CBD@@YAPBDPBDAAY0BD@$$CBDABH1@Z",
+    "??$MakeString@$$BY0BD@$$CBDH$$BY0BI@$$CBD@@YAPBDPBDAAY0BD@$$CBDABHAAY0BI@$$CBD@Z",
+    "??$MakeString@$$BY0BD@$$CBDH$$BY0CJ@$$CBD@@YAPBDPBDAAY0BD@$$CBDABHAAY0CJ@$$CBD@Z",
+    "??$MakeString@$$BY0BD@$$CBDH$$BY0DF@$$CBD@@YAPBDPBDAAY0BD@$$CBDABHAAY0DF@$$CBD@Z",
+    "??$MakeString@$$BY0BE@$$CBDH$$BY02$$CBD@@YAPBDPBDAAY0BE@$$CBDABHAAY02$$CBD@Z",
+    "??$MakeString@$$BY0BE@$$CBDH$$BY03$$CBD@@YAPBDPBDAAY0BE@$$CBDABHAAY03$$CBD@Z",
+    "??$MakeString@$$BY0BE@$$CBDH$$BY05$$CBD@@YAPBDPBDAAY0BE@$$CBDABHAAY05$$CBD@Z",
+    "??$MakeString@$$BY0BE@$$CBDH$$BY08$$CBD@@YAPBDPBDAAY0BE@$$CBDABHAAY08$$CBD@Z",
+    "??$MakeString@$$BY0BE@$$CBDH$$BY0BE@$$CBD@@YAPBDPBDAAY0BE@$$CBDABH1@Z",
+    "??$MakeString@$$BY0BE@$$CBDH$$BY0BH@$$CBD@@YAPBDPBDAAY0BE@$$CBDABHAAY0BH@$$CBD@Z",
+    "??$MakeString@$$BY0BE@$$CBDH$$BY0CG@$$CBD@@YAPBDPBDAAY0BE@$$CBDABHAAY0CG@$$CBD@Z",
+    "??$MakeString@$$BY0BF@$$CBDH$$BY04$$CBD@@YAPBDPBDAAY0BF@$$CBDABHAAY04$$CBD@Z",
+    "??$MakeString@$$BY0BF@$$CBDH$$BY06$$CBD@@YAPBDPBDAAY0BF@$$CBDABHAAY06$$CBD@Z",
+    "??$MakeString@$$BY0BF@$$CBDH$$BY0BC@$$CBD@@YAPBDPBDAAY0BF@$$CBDABHAAY0BC@$$CBD@Z",
+    "??$MakeString@$$BY0BF@$$CBDH$$BY0DG@$$CBD@@YAPBDPBDAAY0BF@$$CBDABHAAY0DG@$$CBD@Z",
+    "??$MakeString@$$BY0BF@$$CBDH$$BY0L@$$CBD@@YAPBDPBDAAY0BF@$$CBDABHAAY0L@$$CBD@Z",
+    "??$MakeString@$$BY0BG@$$CBDH$$BY04$$CBD@@YAPBDPBDAAY0BG@$$CBDABHAAY04$$CBD@Z",
+    "??$MakeString@$$BY0BG@$$CBDH$$BY07$$CBD@@YAPBDPBDAAY0BG@$$CBDABHAAY07$$CBD@Z",
+    "??$MakeString@$$BY0BG@$$CBDH$$BY08$$CBD@@YAPBDPBDAAY0BG@$$CBDABHAAY08$$CBD@Z",
+    "??$MakeString@$$BY0BG@$$CBDH$$BY09$$CBD@@YAPBDPBDAAY0BG@$$CBDABHAAY09$$CBD@Z",
+    "??$MakeString@$$BY0BG@$$CBDH$$BY0BI@$$CBD@@YAPBDPBDAAY0BG@$$CBDABHAAY0BI@$$CBD@Z",
+    "??$MakeString@$$BY0BG@$$CBDH$$BY0BP@$$CBD@@YAPBDPBDAAY0BG@$$CBDABHAAY0BP@$$CBD@Z",
+    "??$MakeString@$$BY0BG@$$CBDH$$BY0CC@$$CBD@@YAPBDPBDAAY0BG@$$CBDABHAAY0CC@$$CBD@Z",
+    "??$MakeString@$$BY0BG@$$CBDH$$BY0CD@$$CBD@@YAPBDPBDAAY0BG@$$CBDABHAAY0CD@$$CBD@Z",
+    "??$MakeString@$$BY0BG@$$CBDH$$BY0L@$$CBD@@YAPBDPBDAAY0BG@$$CBDABHAAY0L@$$CBD@Z",
+    "??$MakeString@$$BY0BG@$$CBDH$$BY0O@$$CBD@@YAPBDPBDAAY0BG@$$CBDABHAAY0O@$$CBD@Z",
+    "??$MakeString@$$BY0BH@$$CBDH$$BY09$$CBD@@YAPBDPBDAAY0BH@$$CBDABHAAY09$$CBD@Z",
+    "??$MakeString@$$BY0BH@$$CBDH$$BY0N@$$CBD@@YAPBDPBDAAY0BH@$$CBDABHAAY0N@$$CBD@Z",
+    "??$MakeString@$$BY0BI@$$CBDH$$BY05$$CBD@@YAPBDPBDAAY0BI@$$CBDABHAAY05$$CBD@Z",
+    "??$MakeString@$$BY0BI@$$CBDH$$BY07$$CBD@@YAPBDPBDAAY0BI@$$CBDABHAAY07$$CBD@Z",
+    "??$MakeString@$$BY0BI@$$CBDH$$BY08$$CBD@@YAPBDPBDAAY0BI@$$CBDABHAAY08$$CBD@Z",
+    "??$MakeString@$$BY0BJ@$$CBDH$$BY03$$CBD@@YAPBDPBDAAY0BJ@$$CBDABHAAY03$$CBD@Z",
+    "??$MakeString@$$BY0BJ@$$CBDH$$BY06$$CBD@@YAPBDPBDAAY0BJ@$$CBDABHAAY06$$CBD@Z",
+    "??$MakeString@$$BY0BJ@$$CBDH$$BY07$$CBD@@YAPBDPBDAAY0BJ@$$CBDABHAAY07$$CBD@Z",
+    "??$MakeString@$$BY0BK@$$CBDH$$BY09$$CBD@@YAPBDPBDAAY0BK@$$CBDABHAAY09$$CBD@Z",
+    "??$MakeString@$$BY0BK@$$CBDH$$BY0BJ@$$CBD@@YAPBDPBDAAY0BK@$$CBDABHAAY0BJ@$$CBD@Z",
+    "??$MakeString@$$BY0BK@$$CBDH$$BY0N@$$CBD@@YAPBDPBDAAY0BK@$$CBDABHAAY0N@$$CBD@Z",
+    "??$MakeString@$$BY0BL@$$CBDH$$BY0P@$$CBD@@YAPBDPBDAAY0BL@$$CBDABHAAY0P@$$CBD@Z",
+    "??$MakeString@$$BY0BM@$$CBDH$$BY04$$CBD@@YAPBDPBDAAY0BM@$$CBDABHAAY04$$CBD@Z",
+    "??$MakeString@$$BY0BM@$$CBDH$$BY0BI@$$CBD@@YAPBDPBDAAY0BM@$$CBDABHAAY0BI@$$CBD@Z",
+    "??$MakeString@$$BY0BM@$$CBDH$$BY0L@$$CBD@@YAPBDPBDAAY0BM@$$CBDABHAAY0L@$$CBD@Z",
+    "??$MakeString@$$BY0BM@$$CBDH$$BY0P@$$CBD@@YAPBDPBDAAY0BM@$$CBDABHAAY0P@$$CBD@Z",
+    "??$MakeString@$$BY0BO@$$CBDH$$BY09$$CBD@@YAPBDPBDAAY0BO@$$CBDABHAAY09$$CBD@Z",
+    "??$MakeString@$$BY0BO@$$CBDH$$BY0BA@$$CBD@@YAPBDPBDAAY0BO@$$CBDABHAAY0BA@$$CBD@Z",
+    "??$MakeString@$$BY0BO@$$CBDH$$BY0BB@$$CBD@@YAPBDPBDAAY0BO@$$CBDABHAAY0BB@$$CBD@Z",
+    "??$MakeString@$$BY0BO@$$CBDH$$BY0BP@$$CBD@@YAPBDPBDAAY0BO@$$CBDABHAAY0BP@$$CBD@Z",
+    "??$MakeString@$$BY0BO@$$CBDH$$BY0M@$$CBD@@YAPBDPBDAAY0BO@$$CBDABHAAY0M@$$CBD@Z",
+    "??$MakeString@$$BY0BO@$$CBDH$$BY0O@$$CBD@@YAPBDPBDAAY0BO@$$CBDABHAAY0O@$$CBD@Z",
+    "??$MakeString@$$BY0CC@$$CBDH$$BY09$$CBD@@YAPBDPBDAAY0CC@$$CBDABHAAY09$$CBD@Z",
+    "??$MakeString@$$BY0CF@$$CBDH$$BY0BI@$$CBD@@YAPBDPBDAAY0CF@$$CBDABHAAY0BI@$$CBD@Z",
+    "??$MakeString@$$BY0CF@$$CBDH$$BY0M@$$CBD@@YAPBDPBDAAY0CF@$$CBDABHAAY0M@$$CBD@Z",
+    "??$MakeString@$$BY0CH@$$CBDH$$BY0CM@$$CBD@@YAPBDPBDAAY0CH@$$CBDABHAAY0CM@$$CBD@Z",
+    "??$MakeString@$$BY0CH@$$CBDH$$BY0P@$$CBD@@YAPBDPBDAAY0CH@$$CBDABHAAY0P@$$CBD@Z",
+    "??$MakeString@$$BY0CJ@$$CBDH$$BY0BI@$$CBD@@YAPBDPBDAAY0CJ@$$CBDABHAAY0BI@$$CBD@Z",
+    "??$MakeString@$$BY0CK@$$CBDH$$BY08$$CBD@@YAPBDPBDAAY0CK@$$CBDABHAAY08$$CBD@Z",
+    "??$MakeString@$$BY0CN@$$CBDH$$BY0BB@$$CBD@@YAPBDPBDAAY0CN@$$CBDABHAAY0BB@$$CBD@Z",
+    "??$MakeString@$$BY0CN@$$CBDH$$BY0BP@$$CBD@@YAPBDPBDAAY0CN@$$CBDABHAAY0BP@$$CBD@Z",
+    "??$MakeString@$$BY0CO@$$CBDH$$BY01$$CBD@@YAPBDPBDAAY0CO@$$CBDABHAAY01$$CBD@Z",
+    "??$MakeString@$$BY0CO@$$CBDH$$BY03$$CBD@@YAPBDPBDAAY0CO@$$CBDABHAAY03$$CBD@Z",
+    "??$MakeString@$$BY0DB@$$CBDH$$BY05$$CBD@@YAPBDPBDAAY0DB@$$CBDABHAAY05$$CBD@Z",
+    "??$MakeString@$$BY0DI@$$CBDH$$BY0BB@$$CBD@@YAPBDPBDAAY0DI@$$CBDABHAAY0BB@$$CBD@Z",
+    "??$MakeString@$$BY0DJ@$$CBDH$$BY0DO@$$CBD@@YAPBDPBDAAY0DJ@$$CBDABHAAY0DO@$$CBD@Z",
+    "??$MakeString@$$BY0L@$$CBDH$$BY0BC@$$CBD@@YAPBDPBDAAY0L@$$CBDABHAAY0BC@$$CBD@Z",
+    "??$MakeString@$$BY0L@$$CBDH$$BY0BI@$$CBD@@YAPBDPBDAAY0L@$$CBDABHAAY0BI@$$CBD@Z",
+    "??$MakeString@$$BY0L@$$CBDH$$BY0CE@$$CBD@@YAPBDPBDAAY0L@$$CBDABHAAY0CE@$$CBD@Z",
+    "??$MakeString@$$BY0L@$$CBDH$$BY0EA@$$CBD@@YAPBDPBDAAY0L@$$CBDABHAAY0EA@$$CBD@Z",
+    "??$MakeString@$$BY0L@$$CBDH$$BY0GH@$$CBD@@YAPBDPBDAAY0L@$$CBDABHAAY0GH@$$CBD@Z",
+    "??$MakeString@$$BY0L@$$CBDH$$BY0M@$$CBD@@YAPBDPBDAAY0L@$$CBDABHAAY0M@$$CBD@Z",
+    "??$MakeString@$$BY0L@$$CBDH$$BY0N@$$CBD@@YAPBDPBDAAY0L@$$CBDABHAAY0N@$$CBD@Z",
+    "??$MakeString@$$BY0L@$$CBDH$$BY0O@$$CBD@@YAPBDPBDAAY0L@$$CBDABHAAY0O@$$CBD@Z",
+    "??$MakeString@$$BY0L@$$CBDH$$BY0P@$$CBD@@YAPBDPBDAAY0L@$$CBDABHAAY0P@$$CBD@Z",
+    "??$MakeString@$$BY0M@$$CBDH$$BY05$$CBD@@YAPBDPBDAAY0M@$$CBDABHAAY05$$CBD@Z",
+    "??$MakeString@$$BY0M@$$CBDH$$BY09$$CBD@@YAPBDPBDAAY0M@$$CBDABHAAY09$$CBD@Z",
+    "??$MakeString@$$BY0M@$$CBDH$$BY0BF@$$CBD@@YAPBDPBDAAY0M@$$CBDABHAAY0BF@$$CBD@Z",
+    "??$MakeString@$$BY0M@$$CBDH$$BY0CG@$$CBD@@YAPBDPBDAAY0M@$$CBDABHAAY0CG@$$CBD@Z",
+    "??$MakeString@$$BY0M@$$CBDH$$BY0CK@$$CBD@@YAPBDPBDAAY0M@$$CBDABHAAY0CK@$$CBD@Z",
+    "??$MakeString@$$BY0M@$$CBDH$$BY0DB@$$CBD@@YAPBDPBDAAY0M@$$CBDABHAAY0DB@$$CBD@Z",
+    "??$MakeString@$$BY0M@$$CBDH$$BY0DH@$$CBD@@YAPBDPBDAAY0M@$$CBDABHAAY0DH@$$CBD@Z",
+    "??$MakeString@$$BY0M@$$CBDH$$BY0DK@$$CBD@@YAPBDPBDAAY0M@$$CBDABHAAY0DK@$$CBD@Z",
+    "??$MakeString@$$BY0M@$$CBDH$$BY0EG@$$CBD@@YAPBDPBDAAY0M@$$CBDABHAAY0EG@$$CBD@Z",
+    "??$MakeString@$$BY0M@$$CBDH$$BY0L@$$CBD@@YAPBDPBDAAY0M@$$CBDABHAAY0L@$$CBD@Z",
+    "??$MakeString@$$BY0N@$$CBDH$$BY05$$CBD@@YAPBDPBDAAY0N@$$CBDABHAAY05$$CBD@Z",
+    "??$MakeString@$$BY0N@$$CBDH$$BY07$$CBD@@YAPBDPBDAAY0N@$$CBDABHAAY07$$CBD@Z",
+    "??$MakeString@$$BY0N@$$CBDH$$BY09$$CBD@@YAPBDPBDAAY0N@$$CBDABHAAY09$$CBD@Z",
+    "??$MakeString@$$BY0N@$$CBDH$$BY0BD@$$CBD@@YAPBDPBDAAY0N@$$CBDABHAAY0BD@$$CBD@Z",
+    "??$MakeString@$$BY0N@$$CBDH$$BY0BF@$$CBD@@YAPBDPBDAAY0N@$$CBDABHAAY0BF@$$CBD@Z",
+    "??$MakeString@$$BY0N@$$CBDH$$BY0BH@$$CBD@@YAPBDPBDAAY0N@$$CBDABHAAY0BH@$$CBD@Z",
+    "??$MakeString@$$BY0N@$$CBDH$$BY0BK@$$CBD@@YAPBDPBDAAY0N@$$CBDABHAAY0BK@$$CBD@Z",
+    "??$MakeString@$$BY0N@$$CBDH$$BY0CD@$$CBD@@YAPBDPBDAAY0N@$$CBDABHAAY0CD@$$CBD@Z",
+    "??$MakeString@$$BY0N@$$CBDH$$BY0CI@$$CBD@@YAPBDPBDAAY0N@$$CBDABHAAY0CI@$$CBD@Z",
+    "??$MakeString@$$BY0N@$$CBDH$$BY0CJ@$$CBD@@YAPBDPBDAAY0N@$$CBDABHAAY0CJ@$$CBD@Z",
+    "??$MakeString@$$BY0N@$$CBDH$$BY0CO@$$CBD@@YAPBDPBDAAY0N@$$CBDABHAAY0CO@$$CBD@Z",
+    "??$MakeString@$$BY0N@$$CBDH$$BY0DB@$$CBD@@YAPBDPBDAAY0N@$$CBDABHAAY0DB@$$CBD@Z",
+    "??$MakeString@$$BY0N@$$CBDH$$BY0DD@$$CBD@@YAPBDPBDAAY0N@$$CBDABHAAY0DD@$$CBD@Z",
+    "??$MakeString@$$BY0N@$$CBDH$$BY0DE@$$CBD@@YAPBDPBDAAY0N@$$CBDABHAAY0DE@$$CBD@Z",
+    "??$MakeString@$$BY0N@$$CBDH$$BY0FD@$$CBD@@YAPBDPBDAAY0N@$$CBDABHAAY0FD@$$CBD@Z",
+    "??$MakeString@$$BY0N@$$CBDH$$BY0FH@$$CBD@@YAPBDPBDAAY0N@$$CBDABHAAY0FH@$$CBD@Z",
+    "??$MakeString@$$BY0N@$$CBDH$$BY0L@$$CBD@@YAPBDPBDAAY0N@$$CBDABHAAY0L@$$CBD@Z",
+    "??$MakeString@$$BY0N@$$CBDH$$BY0N@$$CBD@@YAPBDPBDAAY0N@$$CBDABH1@Z",
+    "??$MakeString@$$BY0N@$$CBDH$$BY0O@$$CBD@@YAPBDPBDAAY0N@$$CBDABHAAY0O@$$CBD@Z",
+    "??$MakeString@$$BY0N@$$CBDH$$BY0P@$$CBD@@YAPBDPBDAAY0N@$$CBDABHAAY0P@$$CBD@Z",
+    "??$MakeString@$$BY0O@$$CBDH$$BY02$$CBD@@YAPBDPBDAAY0O@$$CBDABHAAY02$$CBD@Z",
+    "??$MakeString@$$BY0O@$$CBDH$$BY07$$CBD@@YAPBDPBDAAY0O@$$CBDABHAAY07$$CBD@Z",
+    "??$MakeString@$$BY0O@$$CBDH$$BY0BH@$$CBD@@YAPBDPBDAAY0O@$$CBDABHAAY0BH@$$CBD@Z",
+    "??$MakeString@$$BY0O@$$CBDH$$BY0BL@$$CBD@@YAPBDPBDAAY0O@$$CBDABHAAY0BL@$$CBD@Z",
+    "??$MakeString@$$BY0O@$$CBDH$$BY0BN@$$CBD@@YAPBDPBDAAY0O@$$CBDABHAAY0BN@$$CBD@Z",
+    "??$MakeString@$$BY0O@$$CBDH$$BY0BP@$$CBD@@YAPBDPBDAAY0O@$$CBDABHAAY0BP@$$CBD@Z",
+    "??$MakeString@$$BY0O@$$CBDH$$BY0CC@$$CBD@@YAPBDPBDAAY0O@$$CBDABHAAY0CC@$$CBD@Z",
+    "??$MakeString@$$BY0O@$$CBDH$$BY0L@$$CBD@@YAPBDPBDAAY0O@$$CBDABHAAY0L@$$CBD@Z",
+    "??$MakeString@$$BY0P@$$CBDH$$BY04$$CBD@@YAPBDPBDAAY0P@$$CBDABHAAY04$$CBD@Z",
+    "??$MakeString@$$BY0P@$$CBDH$$BY06$$CBD@@YAPBDPBDAAY0P@$$CBDABHAAY06$$CBD@Z",
+    "??$MakeString@$$BY0P@$$CBDH$$BY07$$CBD@@YAPBDPBDAAY0P@$$CBDABHAAY07$$CBD@Z",
+    "??$MakeString@$$BY0P@$$CBDH$$BY08$$CBD@@YAPBDPBDAAY0P@$$CBDABHAAY08$$CBD@Z",
+    "??$MakeString@$$BY0P@$$CBDH$$BY0BI@$$CBD@@YAPBDPBDAAY0P@$$CBDABHAAY0BI@$$CBD@Z",
+    "??$MakeString@$$BY0P@$$CBDH$$BY0BJ@$$CBD@@YAPBDPBDAAY0P@$$CBDABHAAY0BJ@$$CBD@Z",
+    "??$MakeString@$$BY0P@$$CBDH$$BY0BK@$$CBD@@YAPBDPBDAAY0P@$$CBDABHAAY0BK@$$CBD@Z",
+    "??$MakeString@$$BY0P@$$CBDH$$BY0BN@$$CBD@@YAPBDPBDAAY0P@$$CBDABHAAY0BN@$$CBD@Z",
+    "??$MakeString@$$BY0P@$$CBDH$$BY0BO@$$CBD@@YAPBDPBDAAY0P@$$CBDABHAAY0BO@$$CBD@Z",
+    "??$MakeString@$$BY0P@$$CBDH$$BY0CJ@$$CBD@@YAPBDPBDAAY0P@$$CBDABHAAY0CJ@$$CBD@Z",
+    "??$MakeString@$$BY0P@$$CBDH$$BY0DA@$$CBD@@YAPBDPBDAAY0P@$$CBDABHAAY0DA@$$CBD@Z",
+    "??$MakeString@$$BY0P@$$CBDH$$BY0L@$$CBD@@YAPBDPBDAAY0P@$$CBDABHAAY0L@$$CBD@Z",
+    "??$MakeString@$$BY0P@$$CBDH$$BY0M@$$CBD@@YAPBDPBDAAY0P@$$CBDABHAAY0M@$$CBD@Z"
+   ],
+   "sites": 252,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 173 folded spelling(s), 252 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "MakeString@0x82e21d80",
+   "address": "0x82e21d80",
+   "survivor": "??$MakeString@$$BY0BE@$$CBDKK@@YAPBDPBDAAY0BE@$$CBDABK2@Z",
+   "folded": [
+    "??$MakeString@$$BY0BG@$$CBDKK@@YAPBDPBDAAY0BG@$$CBDABK2@Z",
+    "??$MakeString@$$BY0BP@$$CBDKK@@YAPBDPBDAAY0BP@$$CBDABK2@Z"
+   ],
+   "sites": 2,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 2 folded spelling(s), 2 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "MakeString@0x828ea1a0",
+   "address": "0x828ea1a0",
+   "survivor": "??$MakeString@$$BY0BI@$$CBDH@@YAPBDPBDAAY0BI@$$CBDABH@Z",
+   "folded": [
+    "??$MakeString@$$BY08$$CBDH@@YAPBDPBDAAY08$$CBDABH@Z",
+    "??$MakeString@$$BY09$$CBDH@@YAPBDPBDAAY09$$CBDABH@Z",
+    "??$MakeString@$$BY0BB@$$CBDH@@YAPBDPBDAAY0BB@$$CBDABH@Z",
+    "??$MakeString@$$BY0BH@$$CBDH@@YAPBDPBDAAY0BH@$$CBDABH@Z",
+    "??$MakeString@$$BY0L@$$CBDH@@YAPBDPBDAAY0L@$$CBDABH@Z"
+   ],
+   "sites": 5,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 5 folded spelling(s), 5 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "MakeString@0x827d40f0",
+   "address": "0x827d40f0",
+   "survivor": "??$MakeString@$$BY0DB@$$CBD@@YAPBDPBDAAY0DB@$$CBD@Z",
+   "folded": [
+    "??$MakeString@$$BY0IA@D@@YAPBDPBDAAY0IA@$$CBD@Z"
+   ],
+   "sites": 2,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 2 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "MakeString@0x82563b08",
+   "address": "0x82563b08",
+   "survivor": "??$MakeString@$$BY0O@$$CBDH$$BY04$$CBD@@YAPBDPBDAAY0O@$$CBDABHAAY04$$CBD@Z",
+   "folded": [
+    "??$MakeString@$$BY0N@$$CBDH$$BY04$$CBD@@YAPBDPBDAAY0N@$$CBDABHAAY04$$CBD@Z"
+   ],
+   "sites": 1,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 1 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "MakeString@0x82895520",
+   "address": "0x82895520",
+   "survivor": "??$MakeString@HW4State@SaveLoadManager@@@@YAPBDPBDABHABW4State@SaveLoadManager@@@Z",
+   "folded": [
+    "??$MakeString@HH@@YAPBDPBDABH1@Z",
+    "??$MakeString@W4State@SaveLoadManager@@W412@@@YAPBDPBDABW4State@SaveLoadManager@@1@Z"
+   ],
+   "sites": 4,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 2 folded spelling(s), 4 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "MakeString@0x823314d8",
+   "address": "0x823314d8",
+   "survivor": "??$MakeString@PAD@@YAPBDPBDABQAD@Z",
+   "folded": [
+    "??$MakeString@PBD@@YAPBDPBDABQBD@Z"
+   ],
+   "sites": 19,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 19 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "MakeString@0x8292bf68",
+   "address": "0x8292bf68",
+   "survivor": "??$MakeString@PBD$$BY06$$CBD@@YAPBDPBDABQBDAAY06$$CBD@Z",
+   "folded": [
+    "??$MakeString@PBD$$BY0IA@D@@YAPBDPBDABQBDAAY0IA@$$CBD@Z"
+   ],
+   "sites": 2,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 2 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "_M_allocate_and_copy@0x8249e288",
+   "address": "0x8249e288",
+   "survivor": "??$_M_allocate_and_copy@PAPBVMoveParent@@@?$vector@PBVMoveParent@@V?$StlNodeAlloc@PBVMoveParent@@@stlpmtx_std@@@stlpmtx_std@@IAAPAPBVMoveParent@@IPAPBV2@0@Z",
+   "folded": [
+    "??$_M_allocate_and_copy@PBQBVMoveParent@@@?$vector@PBVMoveParent@@V?$StlNodeAlloc@PBVMoveParent@@@stlpmtx_std@@@stlpmtx_std@@IAAPAPBVMoveParent@@IPBQBV2@0@Z"
+   ],
+   "sites": 1,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 1 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "_M_allocate_and_copy@0x82813298",
+   "address": "0x82813298",
+   "survivor": "??$_M_allocate_and_copy@PBQAVRndDrawable@@@?$vector@PAVRndDrawable@@V?$StlNodeAlloc@PAVRndDrawable@@@stlpmtx_std@@@stlpmtx_std@@IAAPAPAVRndDrawable@@IPBQAV2@0@Z",
+   "folded": [
+    "??$_M_allocate_and_copy@PAPAVRndDrawable@@@?$vector@PAVRndDrawable@@V?$StlNodeAlloc@PAVRndDrawable@@@stlpmtx_std@@@stlpmtx_std@@IAAPAPAVRndDrawable@@IPAPAV2@0@Z"
+   ],
+   "sites": 1,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 1 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "_M_find@0x824b0f30",
+   "address": "0x824b0f30",
+   "survivor": "??$_M_find@H@?$_Rb_tree@HU?$less@H@stlpmtx_std@@U?$pair@$$CBHVSongStatus@@@2@U?$_Select1st@U?$pair@$$CBHVSongStatus@@@stlpmtx_std@@@2@U?$_MapTraitsT@U?$pair@$$CBHVSongStatus@@@stlpmtx_std@@@priv@2@V?$StlNodeAlloc@U?$pair@$$CBHVSongStatus@@@stlpmtx_std@@@2@@stlpmtx_std@@ABAPAU_Rb_tree_node_base@1@ABH@Z",
+   "folded": [
+    "??$_M_find@H@?$_Rb_tree@HU?$less@H@stlpmtx_std@@HU?$_Identity@H@2@U?$_SetTraitsT@H@priv@2@V?$StlNodeAlloc@H@2@@stlpmtx_std@@ABAPAU_Rb_tree_node_base@1@ABH@Z",
+    "??$_M_find@H@?$_Rb_tree@HU?$less@H@stlpmtx_std@@U?$pair@$$CBHPAVSongMetadata@@@2@U?$_Select1st@U?$pair@$$CBHPAVSongMetadata@@@stlpmtx_std@@@2@U?$_MapTraitsT@U?$pair@$$CBHPAVSongMetadata@@@stlpmtx_std@@@priv@2@V?$StlNodeAlloc@U?$pair@$$CBHPAVSongMetadata@@@stlpmtx_std@@@2@@stlpmtx_std@@ABAPAU_Rb_tree_node_base@1@ABH@Z",
+    "??$_M_find@H@?$_Rb_tree@HU?$less@H@stlpmtx_std@@U?$pair@$$CBHVSymbol@@@2@U?$_Select1st@U?$pair@$$CBHVSymbol@@@stlpmtx_std@@@2@U?$_MapTraitsT@U?$pair@$$CBHVSymbol@@@stlpmtx_std@@@priv@2@V?$StlNodeAlloc@U?$pair@$$CBHVSymbol@@@stlpmtx_std@@@2@@stlpmtx_std@@ABAPAU_Rb_tree_node_base@1@ABH@Z"
+   ],
+   "sites": 4,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 3 folded spelling(s), 4 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "_M_find@0x8296ffc0",
+   "address": "0x8296ffc0",
+   "survivor": "??$_M_find@VSymbol@@@?$_Rb_tree@VSymbol@@U?$less@VSymbol@@@stlpmtx_std@@U?$pair@$$CBVSymbol@@_N@3@U?$_Select1st@U?$pair@$$CBVSymbol@@_N@stlpmtx_std@@@3@U?$_MapTraitsT@U?$pair@$$CBVSymbol@@_N@stlpmtx_std@@@priv@3@V?$StlNodeAlloc@U?$pair@$$CBVSymbol@@_N@stlpmtx_std@@@3@@stlpmtx_std@@ABAPAU_Rb_tree_node_base@1@ABVSymbol@@@Z",
+   "folded": [
+    "??$_M_find@VKey@MoveRatingHistory@@@?$_Rb_tree@VKey@MoveRatingHistory@@U?$less@VKey@MoveRatingHistory@@@stlpmtx_std@@U?$pair@$$CBVKey@MoveRatingHistory@@VRatingHistory@2@@4@U?$_Select1st@U?$pair@$$CBVKey@MoveRatingHistory@@VRatingHistory@2@@stlpmtx_std@@@4@U?$_MapTraitsT@U?$pair@$$CBVKey@MoveRatingHistory@@VRatingHistory@2@@stlpmtx_std@@@priv@4@V?$StlNodeAlloc@U?$pair@$$CBVKey@MoveRatingHistory@@VRatingHistory@2@@stlpmtx_std@@@4@@stlpmtx_std@@ABAPAU_Rb_tree_node_base@1@ABVKey@MoveRatingHistory@@@Z",
+    "??$_M_find@VSymbol@@@?$_Rb_tree@VSymbol@@U?$less@VSymbol@@@stlpmtx_std@@U?$pair@$$CBVSymbol@@H@3@U?$_Select1st@U?$pair@$$CBVSymbol@@H@stlpmtx_std@@@3@U?$_MapTraitsT@U?$pair@$$CBVSymbol@@H@stlpmtx_std@@@priv@3@V?$StlNodeAlloc@U?$pair@$$CBVSymbol@@H@stlpmtx_std@@@3@@stlpmtx_std@@ABAPAU_Rb_tree_node_base@1@ABVSymbol@@@Z",
+    "??$_M_find@VSymbol@@@?$_Rb_tree@VSymbol@@U?$less@VSymbol@@@stlpmtx_std@@U?$pair@$$CBVSymbol@@V?$vector@HV?$StlNodeAlloc@H@stlpmtx_std@@@stlpmtx_std@@@3@U?$_Select1st@U?$pair@$$CBVSymbol@@V?$vector@HV?$StlNodeAlloc@H@stlpmtx_std@@@stlpmtx_std@@@stlpmtx_std@@@3@U?$_MapTraitsT@U?$pair@$$CBVSymbol@@V?$vector@HV?$StlNodeAlloc@H@stlpmtx_std@@@stlpmtx_std@@@stlpmtx_std@@@priv@3@V?$StlNodeAlloc@U?$pair@$$CBVSymbol@@V?$vector@HV?$StlNodeAlloc@H@stlpmtx_std@@@stlpmtx_std@@@stlpmtx_std@@@3@@stlpmtx_std@@ABAPAU_Rb_tree_node_base@1@ABVSymbol@@@Z",
+    "??$_M_find@VSymbol@@@?$_Rb_tree@VSymbol@@U?$less@VSymbol@@@stlpmtx_std@@U?$pair@$$CBVSymbol@@VSongRecord@@@3@U?$_Select1st@U?$pair@$$CBVSymbol@@VSongRecord@@@stlpmtx_std@@@3@U?$_MapTraitsT@U?$pair@$$CBVSymbol@@VSongRecord@@@stlpmtx_std@@@priv@3@V?$StlNodeAlloc@U?$pair@$$CBVSymbol@@VSongRecord@@@stlpmtx_std@@@3@@stlpmtx_std@@ABAPAU_Rb_tree_node_base@1@ABVSymbol@@@Z",
+    "??$_M_find@VSymbol@@@?$_Rb_tree@VSymbol@@U?$less@VSymbol@@@stlpmtx_std@@U?$pair@$$CBVSymbol@@VString@@@3@U?$_Select1st@U?$pair@$$CBVSymbol@@VString@@@stlpmtx_std@@@3@U?$_MapTraitsT@U?$pair@$$CBVSymbol@@VString@@@stlpmtx_std@@@priv@3@V?$StlNodeAlloc@U?$pair@$$CBVSymbol@@VString@@@stlpmtx_std@@@3@@stlpmtx_std@@ABAPAU_Rb_tree_node_base@1@ABVSymbol@@@Z",
+    "??$_M_find@VSymbol@@@?$_Rb_tree@VSymbol@@U?$less@VSymbol@@@stlpmtx_std@@V1@U?$_Identity@VSymbol@@@3@U?$_SetTraitsT@VSymbol@@@priv@3@V?$StlNodeAlloc@VSymbol@@@3@@stlpmtx_std@@ABAPAU_Rb_tree_node_base@1@ABVSymbol@@@Z"
+   ],
+   "sites": 7,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 6 folded spelling(s), 7 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "__find@0x826121c0",
+   "address": "0x826121c0",
+   "survivor": "??$__find@PAVSymbol@@V1@@stlpmtx_std@@YAPAVSymbol@@PAV1@0ABV1@ABUrandom_access_iterator_tag@0@@Z",
+   "folded": [
+    "??$__find@PAPAVFxSend360@@PAV1@@stlpmtx_std@@YAPAPAVFxSend360@@PAPAV1@0ABQAV1@ABUrandom_access_iterator_tag@0@@Z"
+   ],
+   "sites": 1,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 1 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "__uninitialized_copy@0x82704b70",
+   "address": "0x82704b70",
+   "survivor": "??$__uninitialized_copy@PAUHamMoveKey@@PAU1@@stlpmtx_std@@YAPAUHamMoveKey@@PAU1@00ABU__false_type@0@@Z",
+   "folded": [
+    "??$__uninitialized_copy@PBU?$pair@HH@stlpmtx_std@@PAU12@@stlpmtx_std@@YAPAU?$pair@HH@0@PBU10@0PAU10@ABU__false_type@0@@Z"
+   ],
+   "sites": 1,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 1 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "__uninitialized_copy@0x82796b50",
+   "address": "0x82796b50",
+   "survivor": "??$__uninitialized_copy@PAULabelStyle@UILabel@@PAU12@@stlpmtx_std@@YAPAULabelStyle@UILabel@@PAU12@00ABU__false_type@0@@Z",
+   "folded": [
+    "??$__uninitialized_copy@PBULabelStyle@UILabel@@PAU12@@stlpmtx_std@@YAPAULabelStyle@UILabel@@PBU12@0PAU12@ABU__false_type@0@@Z"
+   ],
+   "sites": 1,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 1 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "__uninitialized_copy@0x82755938",
+   "address": "0x82755938",
+   "survivor": "??$__uninitialized_copy@PAVSfxMap@@PAV1@@stlpmtx_std@@YAPAVSfxMap@@PAV1@00ABU__false_type@0@@Z",
+   "folded": [
+    "??$__uninitialized_copy@PBVSfxMap@@PAV1@@stlpmtx_std@@YAPAVSfxMap@@PBV1@0PAV1@ABU__false_type@0@@Z"
+   ],
+   "sites": 1,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 1 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "min_element@0x824fc160",
+   "address": "0x824fc160",
+   "survivor": "??$min_element@PAVMoveFrame@@UFilterFrameDist@?3??ClosestMoveFrame@MoveDir@@AAAPAV1@XZ@@stlpmtx_std@@YAPAVMoveFrame@@PAV1@0UFilterFrameDist@?3??ClosestMoveFrame@MoveDir@@AAAPAV1@XZ@@Z",
+   "folded": [
+    "??$min_element@PAVMoveFrame@@UFilterFrameDist@?1??ClosestMoveFrame@MoveDir@@AAAPAV1@XZ@@stlpmtx_std@@YAPAVMoveFrame@@PAV1@0UFilterFrameDist@?1??ClosestMoveFrame@MoveDir@@AAAPAV1@XZ@@Z"
+   ],
+   "sites": 1,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 1 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "random_shuffle@0x8245db48",
+   "address": "0x8245db48",
+   "survivor": "??$random_shuffle@PAPBUUnlockable@?A0xf8e4b4b5@@@stlpmtx_std@@YAXPAPBUUnlockable@?A0xf8e4b4b5@@0@Z",
+   "folded": [
+    "??$random_shuffle@PAPBVMoveVariant@@@stlpmtx_std@@YAXPAPBVMoveVariant@@0@Z"
+   ],
+   "sites": 2,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 2 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "sort@0x82658148",
+   "address": "0x82658148",
+   "survivor": "??$sort@PAPAVRndPollable@@P6A_NPBV1@0@Z@stlpmtx_std@@YAXPAPAVRndPollable@@0P6A_NPBV1@1@Z@Z",
+   "folded": [
+    "??$sort@PAPAVRndDrawable@@P6A_NPAV1@0@Z@stlpmtx_std@@YAXPAPAVRndDrawable@@0P6A_NPAV1@1@Z@Z"
+   ],
+   "sites": 1,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 1 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "YAAAVBinStream@0x82639de0",
+   "address": "0x82639de0",
+   "survivor": "??6@YAAAVBinStream@@AAV0@ABVVector4@@@Z",
+   "folded": [
+    "??6@YAAAVBinStream@@AAV0@ABVColor@Hmx@@@Z"
+   ],
+   "sites": 2,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 2 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "ObjDirPtr@0x82440e08",
+   "address": "0x82440e08",
+   "survivor": "??C?$ObjDirPtr@VWorldInstance@@@@QBAPAVWorldInstance@@XZ",
+   "folded": [
+    "??C?$ObjDirPtr@VRndDir@@@@QBAPAVRndDir@@XZ"
+   ],
+   "sites": 4,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 4 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "Clear@0x82dfd1e0",
+   "address": "0x82dfd1e0",
+   "survivor": "?Clear@HandRaisedGestureFilter@@QAAXXZ",
+   "folded": [
+    "?Clear@StandingStillGestureFilter@@QAAXXZ"
+   ],
+   "sites": 1,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 1 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "CopyRef@0x823efaa0",
+   "address": "0x823efaa0",
+   "survivor": "?CopyRef@?$ObjRefConcrete@VCharWeightable@@VObjectDir@@@@QAAXABV1@@Z",
+   "folded": [
+    "?CopyRef@?$ObjRefConcrete@VHamLabel@@VObjectDir@@@@QAAXABV1@@Z",
+    "?CopyRef@?$ObjRefConcrete@VHamMove@@VObjectDir@@@@QAAXABV1@@Z",
+    "?CopyRef@?$ObjRefConcrete@VHamPhraseMeter@@VObjectDir@@@@QAAXABV1@@Z",
+    "?CopyRef@?$ObjRefConcrete@VRndAnimatable@@VObjectDir@@@@QAAXABV1@@Z",
+    "?CopyRef@?$ObjRefConcrete@VRndDrawable@@VObjectDir@@@@QAAXABV1@@Z",
+    "?CopyRef@?$ObjRefConcrete@VRndMat@@VObjectDir@@@@QAAXABV1@@Z",
+    "?CopyRef@?$ObjRefConcrete@VRndMesh@@VObjectDir@@@@QAAXABV1@@Z",
+    "?CopyRef@?$ObjRefConcrete@VRndParticleSys@@VObjectDir@@@@QAAXABV1@@Z",
+    "?CopyRef@?$ObjRefConcrete@VRndTex@@VObjectDir@@@@QAAXABV1@@Z",
+    "?CopyRef@?$ObjRefConcrete@VRndTransformable@@VObjectDir@@@@QAAXABV1@@Z",
+    "?CopyRef@?$ObjRefConcrete@VSkeletonClip@@VObjectDir@@@@QAAXABV1@@Z"
+   ],
+   "sites": 29,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 11 folded spelling(s), 29 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "DiskErrorLoop@0x82602690",
+   "address": "0x82602690",
+   "survivor": "?DiskErrorLoop@?A0x7f36a62b@@YAXXZ",
+   "folded": [
+    "?DiskErrorLoop@?A0x7e36a62b@@YAXXZ"
+   ],
+   "sites": 1,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 1 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "GetCacheName@0x82545670",
+   "address": "0x82545670",
+   "survivor": "?GetCacheName@CacheXbox@@UAAPBDXZ",
+   "folded": [
+    "?GetSize@NetLoader@@QAAHXZ",
+    "?GetSongStatusMgr@HamProfile@@QBAPAVSongStatusMgr@@XZ"
+   ],
+   "sites": 3,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 2 folded spelling(s), 3 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "GetCampaignProgress@0x828dfb80",
+   "address": "0x828dfb80",
+   "survivor": "?GetCampaignProgress@HamProfile@@QBAABVCampaignProgress@@W4Difficulty@@@Z",
+   "folded": [
+    "?AccessCampaignProgress@HamProfile@@QAAAAVCampaignProgress@@W4Difficulty@@@Z"
+   ],
+   "sites": 2,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 2 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "GetCharacters@0x82450210",
+   "address": "0x82450210",
+   "survivor": "?GetCharacters@?A0x861ea732@@YAPAVDataArray@@XZ",
+   "folded": [
+    "?GetCharacters@?A0x3ea2c057@@YAPAVDataArray@@XZ"
+   ],
+   "sites": 1,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 1 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "GetEraProgress@0x82971390",
+   "address": "0x82971390",
+   "survivor": "?GetEraProgress@CampaignProgress@@ABAPAVCampaignEraProgress@@VSymbol@@@Z",
+   "folded": [
+    "?GetEraSongProgress@CampaignEraProgress@@QBAPAVCampaignEraSongProgress@@VSymbol@@@Z"
+   ],
+   "sites": 7,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 7 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "GetIntegralImage@0x82aed428",
+   "address": "0x82aed428",
+   "survivor": "?GetIntegralImage@FaceDetector@TrueColor@@QAAPAMXZ",
+   "folded": [
+    "?GetSize@FileLoader@@QAAHXZ"
+   ],
+   "sites": 1,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 1 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "GetItemCount@0x82b05a48",
+   "address": "0x82b05a48",
+   "survivor": "?GetItemCount@ChallengeHeaderNode@@UAAHXZ",
+   "folded": [
+    "?ParentList@UIListWidget@@QAAPAVUIList@@XZ"
+   ],
+   "sites": 2,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 2 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "GetMoveFrames@0x824b0bc8",
+   "address": "0x824b0bc8",
+   "survivor": "?GetMoveFrames@HamMove@@QBAABV?$vector@VMoveFrame@@V?$StlNodeAlloc@VMoveFrame@@@stlpmtx_std@@@stlpmtx_std@@XZ",
+   "folded": [
+    "?GetMoveFrames@HamMove@@QAAAAV?$vector@VMoveFrame@@V?$StlNodeAlloc@VMoveFrame@@@stlpmtx_std@@@stlpmtx_std@@XZ"
+   ],
+   "sites": 1,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 1 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "GetName@0x82919ee0",
+   "address": "0x82919ee0",
+   "survivor": "?GetName@AccomplishmentGroup@@QBA?AVSymbol@@XZ",
+   "folded": [
+    "?GetName@CampaignEra@@QBA?AVSymbol@@XZ"
+   ],
+   "sites": 5,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 5 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "GetObj@0x823c9b80",
+   "address": "0x823c9b80",
+   "survivor": "?GetObj@?$ObjRefConcrete@VMoggClip@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+   "folded": [
+    "?GetRemotePath@NetCacheLoader@@QBAPBDXZ"
+   ],
+   "sites": 1,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 1 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "GetStringKey@0x82576860",
+   "address": "0x82576860",
+   "survivor": "?GetStringKey@CFEModuleDef@NUISPEECH@@QBAPB_WXZ",
+   "folded": [
+    "json_object_get_type"
+   ],
+   "sites": 3,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 3 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "IsLoaded@0x82440420",
+   "address": "0x82440420",
+   "survivor": "?IsLoaded@?$ObjDirPtr@VUILabelDir@@@@QBA_NXZ",
+   "folded": [
+    "?IsLoaded@?$ObjDirPtr@VObjectDir@@@@QBA_NXZ"
+   ],
+   "sites": 1,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 1 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "KeyGreaterEq@0x8267e270",
+   "address": "0x8267e270",
+   "survivor": "?KeyGreaterEq@?$Keys@VTexPtr@RndMatAnim@@PAVRndTex@@@@QBAHM@Z",
+   "folded": [
+    "?KeyGreaterEq@?$Keys@VObjectStage@@PAVObject@Hmx@@@@QBAHM@Z"
+   ],
+   "sites": 2,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 2 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "KeyLessEq@0x82689600",
+   "address": "0x82689600",
+   "survivor": "?KeyLessEq@?$Keys@VSymbol@@V1@@@QBAHM@Z",
+   "folded": [
+    "?KeyLessEq@?$Keys@MM@@QBAHM@Z"
+   ],
+   "sites": 1,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 1 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "LocalizeToken@0x82decdb0",
+   "address": "0x82decdb0",
+   "survivor": "?LocalizeToken@NavListShortcutNode@@UBA_NXZ",
+   "folded": [
+    "?IsOnDisc@SongMetadata@@QBA_NXZ"
+   ],
+   "sites": 1,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 1 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "Node@0x8259f730",
+   "address": "0x8259f730",
+   "survivor": "?Node@DataArray@@QAAAAVDataNode@@H@Z",
+   "folded": [
+    "?Node@DataArray@@QBAAAVDataNode@@H@Z"
+   ],
+   "sites": 36,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 36 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "Parent@0x82378970",
+   "address": "0x82378970",
+   "survivor": "?Parent@Node@?$ObjPtrVec@VRndTransformable@@VObjectDir@@@@UBAPAVObjRefOwner@@XZ",
+   "folded": [
+    "?GetPadNum@Profile@@QBAHXZ"
+   ],
+   "sites": 2,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 2 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "PostDownload@0x827fc6c0",
+   "address": "0x827fc6c0",
+   "survivor": "?PostDownload@NetLoader@@IAAXXZ",
+   "folded": [
+    "?MakeDirty@Profile@@QAAXXZ"
+   ],
+   "sites": 3,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 3 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "RegisterSongLayout@0x8245f098",
+   "address": "0x8245f098",
+   "survivor": "?RegisterSongLayout@MoveMgr@@QAAXPAVSongLayout@@@Z",
+   "folded": [
+    "?SetPanelDir@CharacterProvider@@QAAXPAVPanelDir@@@Z"
+   ],
+   "sites": 1,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 1 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "Remove@0x82632900",
+   "address": "0x82632900",
+   "survivor": "?Remove@?$Keys@VQuat@Hmx@@V12@@@QAAHMM@Z",
+   "folded": [
+    "?Remove@?$Keys@VVector3@@V1@@@QAAHMM@Z"
+   ],
+   "sites": 1,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 1 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "SetEngine@0x82aeae70",
+   "address": "0x82aeae70",
+   "survivor": "?SetEngine@CTrigramStore@NUISPEECH@@QAAJPAVCEngine@2@@Z",
+   "folded": [
+    "?DefaultDifficulty@@YA?AW4Difficulty@@XZ",
+    "?GetSetlistMode@SongSortMgr@@QAA_NXZ"
+   ],
+   "sites": 4,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 2 folded spelling(s), 4 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "SetObjConcrete@0x8283f540",
+   "address": "0x8283f540",
+   "survivor": "?SetObjConcrete@?$ObjRefConcrete@VRndDrawable@@VObjectDir@@@@QAAXPAVRndDrawable@@@Z",
+   "folded": [
+    "?SetObjConcrete@?$ObjRefConcrete@VCamShot@@VObjectDir@@@@QAAXPAVCamShot@@@Z",
+    "?SetObjConcrete@?$ObjRefConcrete@VCharInterest@@VObjectDir@@@@QAAXPAVCharInterest@@@Z",
+    "?SetObjConcrete@?$ObjRefConcrete@VCharPollable@@VObjectDir@@@@QAAXPAVCharPollable@@@Z",
+    "?SetObjConcrete@?$ObjRefConcrete@VCharWeightSetter@@VObjectDir@@@@QAAXPAVCharWeightSetter@@@Z",
+    "?SetObjConcrete@?$ObjRefConcrete@VEventTrigger@@VObjectDir@@@@QAAXPAVEventTrigger@@@Z",
+    "?SetObjConcrete@?$ObjRefConcrete@VFlow@@VObjectDir@@@@QAAXPAVFlow@@@Z",
+    "?SetObjConcrete@?$ObjRefConcrete@VFlowNode@@VObjectDir@@@@QAAXPAVFlowNode@@@Z",
+    "?SetObjConcrete@?$ObjRefConcrete@VHamCharacter@@VObjectDir@@@@QAAXPAVHamCharacter@@@Z",
+    "?SetObjConcrete@?$ObjRefConcrete@VHamIKSkeleton@@VObjectDir@@@@QAAXPAVHamIKSkeleton@@@Z",
+    "?SetObjConcrete@?$ObjRefConcrete@VObjectDir@@V1@@@QAAXPAVObjectDir@@@Z",
+    "?SetObjConcrete@?$ObjRefConcrete@VRhythmDetector@@VObjectDir@@@@QAAXPAVRhythmDetector@@@Z",
+    "?SetObjConcrete@?$ObjRefConcrete@VRndAnimatable@@VObjectDir@@@@QAAXPAVRndAnimatable@@@Z",
+    "?SetObjConcrete@?$ObjRefConcrete@VRndLight@@VObjectDir@@@@QAAXPAVRndLight@@@Z",
+    "?SetObjConcrete@?$ObjRefConcrete@VRndMesh@@VObjectDir@@@@QAAXPAVRndMesh@@@Z",
+    "?SetObjConcrete@?$ObjRefConcrete@VRndParticleSysAnim@@VObjectDir@@@@QAAXPAVRndParticleSysAnim@@@Z",
+    "?SetObjConcrete@?$ObjRefConcrete@VRndTransAnim@@VObjectDir@@@@QAAXPAVRndTransAnim@@@Z",
+    "?SetObjConcrete@?$ObjRefConcrete@VWorldCrowd@@VObjectDir@@@@QAAXPAVWorldCrowd@@@Z"
+   ],
+   "sites": 19,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 17 folded spelling(s), 19 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "SetRepeatMask@0x825f4390",
+   "address": "0x825f4390",
+   "survivor": "?SetRepeatMask@JoypadClient@@QAAXH@Z",
+   "folded": [
+    "?SetPanelDir@CrewProvider@@QAAXPAVPanelDir@@@Z"
+   ],
+   "sites": 1,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 1 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "SongBlock@0x8261d058",
+   "address": "0x8261d058",
+   "survivor": "?SongBlock@SongMetadata@@QBAPAVSongInfo@@XZ",
+   "folded": [
+    "?GetLiveCameraInput@GestureMgr@@QBAPAVLiveCameraInput@@XZ"
+   ],
+   "sites": 4,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 4 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "_M_clear_after_move@0x82796a88",
+   "address": "0x82796a88",
+   "survivor": "?_M_clear_after_move@?$vector@ULabelStyle@UILabel@@V?$StlNodeAlloc@ULabelStyle@UILabel@@@stlpmtx_std@@@stlpmtx_std@@IAAXXZ",
+   "folded": [
+    "?_M_clear@?$vector@ULabelStyle@UILabel@@V?$StlNodeAlloc@ULabelStyle@UILabel@@@stlpmtx_std@@@stlpmtx_std@@IAAXXZ"
+   ],
+   "sites": 1,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 1 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "_M_clear_after_move@0x823bfc58",
+   "address": "0x823bfc58",
+   "survivor": "?_M_clear_after_move@?$vector@UMerger@FileMerger@@V?$StlNodeAlloc@UMerger@FileMerger@@@stlpmtx_std@@@stlpmtx_std@@IAAXXZ",
+   "folded": [
+    "?_M_clear@?$vector@UMerger@FileMerger@@V?$StlNodeAlloc@UMerger@FileMerger@@@stlpmtx_std@@@stlpmtx_std@@IAAXXZ"
+   ],
+   "sites": 1,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 1 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "_M_clear_after_move@0x825c7f58",
+   "address": "0x825c7f58",
+   "survivor": "?_M_clear_after_move@?$vector@V?$ObjPtr@VObject@Hmx@@@@V?$StlNodeAlloc@V?$ObjPtr@VObject@Hmx@@@@@stlpmtx_std@@@stlpmtx_std@@IAAXXZ",
+   "folded": [
+    "?_M_clear@?$vector@V?$ObjPtr@VObject@Hmx@@@@V?$StlNodeAlloc@V?$ObjPtr@VObject@Hmx@@@@@stlpmtx_std@@@stlpmtx_std@@IAAXXZ"
+   ],
+   "sites": 1,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 1 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "_M_clear_after_move@0x82e1fa20",
+   "address": "0x82e1fa20",
+   "survivor": "?_M_clear_after_move@?$vector@VActionRec@@V?$StlNodeAlloc@VActionRec@@@stlpmtx_std@@@stlpmtx_std@@IAAXXZ",
+   "folded": [
+    "?_M_clear@?$vector@VActionRec@@V?$StlNodeAlloc@VActionRec@@@stlpmtx_std@@@stlpmtx_std@@IAAXXZ"
+   ],
+   "sites": 1,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 1 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "_M_clear_after_move@0x82755b40",
+   "address": "0x82755b40",
+   "survivor": "?_M_clear_after_move@?$vector@VSfxMap@@V?$StlNodeAlloc@VSfxMap@@@stlpmtx_std@@@stlpmtx_std@@IAAXXZ",
+   "folded": [
+    "?_M_clear@?$vector@VSfxMap@@V?$StlNodeAlloc@VSfxMap@@@stlpmtx_std@@@stlpmtx_std@@IAAXXZ"
+   ],
+   "sites": 1,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 1 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "_M_erase@0x825f4c30",
+   "address": "0x825f4c30",
+   "survivor": "?_M_erase@?$vector@PAVRCJob@@V?$StlNodeAlloc@PAVRCJob@@@stlpmtx_std@@@stlpmtx_std@@IAAPAPAVRCJob@@PAPAV3@ABU__false_type@2@@Z",
+   "folded": [
+    "?_M_erase@?$vector@HV?$StlNodeAlloc@H@stlpmtx_std@@@stlpmtx_std@@IAAPAHPAHABU__false_type@2@@Z",
+    "?_M_erase@?$vector@PAVFxSend360@@V?$StlNodeAlloc@PAVFxSend360@@@stlpmtx_std@@@stlpmtx_std@@IAAPAPAVFxSend360@@PAPAV3@ABU__false_type@2@@Z"
+   ],
+   "sites": 2,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 2 folded spelling(s), 2 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "_M_erase@0x827ed2e8",
+   "address": "0x827ed2e8",
+   "survivor": "?_M_erase@?$vector@U?$pair@HH@stlpmtx_std@@V?$StlNodeAlloc@U?$pair@HH@stlpmtx_std@@@2@@stlpmtx_std@@IAAPAU?$pair@HH@2@PAU32@ABU__false_type@2@@Z",
+   "folded": [
+    "?_M_erase@?$vector@UCacheIDStoreEntry@CacheMgr@@V?$StlNodeAlloc@UCacheIDStoreEntry@CacheMgr@@@stlpmtx_std@@@stlpmtx_std@@IAAPAUCacheIDStoreEntry@CacheMgr@@PAU34@ABU__false_type@2@@Z"
+   ],
+   "sites": 1,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 1 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "_M_erase@0x82840198",
+   "address": "0x82840198",
+   "survivor": "?_M_erase@?$vector@VColor@Hmx@@V?$StlNodeAlloc@VColor@Hmx@@@stlpmtx_std@@@stlpmtx_std@@IAAPAVColor@Hmx@@PAV34@ABU__false_type@2@@Z",
+   "folded": [
+    "?_M_erase@?$vector@UHamMoveScore@@V?$StlNodeAlloc@UHamMoveScore@@@stlpmtx_std@@@stlpmtx_std@@IAAPAUHamMoveScore@@PAU3@ABU__false_type@2@@Z"
+   ],
+   "sites": 1,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 1 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "_M_fill_insert_aux@0x82655ce0",
+   "address": "0x82655ce0",
+   "survivor": "?_M_fill_insert_aux@?$vector@PAVRndDrawable@@V?$StlNodeAlloc@PAVRndDrawable@@@stlpmtx_std@@@stlpmtx_std@@AAAXPAPAVRndDrawable@@IABQAV3@ABU__false_type@2@@Z",
+   "folded": [
+    "?_M_fill_insert_aux@?$vector@PAVFlowNode@@V?$StlNodeAlloc@PAVFlowNode@@@stlpmtx_std@@@stlpmtx_std@@AAAXPAPAVFlowNode@@IABQAV3@ABU__false_type@2@@Z",
+    "?_M_fill_insert_aux@?$vector@PAVHamPlayerData@@V?$StlNodeAlloc@PAVHamPlayerData@@@stlpmtx_std@@@stlpmtx_std@@AAAXPAPAVHamPlayerData@@IABQAV3@ABU__false_type@2@@Z",
+    "?_M_fill_insert_aux@?$vector@PAVNavListItemNode@@V?$StlNodeAlloc@PAVNavListItemNode@@@stlpmtx_std@@@stlpmtx_std@@AAAXPAPAVNavListItemNode@@IABQAV3@ABU__false_type@2@@Z",
+    "?_M_fill_insert_aux@?$vector@PAVObjectDir@@V?$StlNodeAlloc@PAVObjectDir@@@stlpmtx_std@@@stlpmtx_std@@AAAXPAPAVObjectDir@@IABQAV3@ABU__false_type@2@@Z"
+   ],
+   "sites": 4,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 4 folded spelling(s), 4 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "_M_fill_insert_aux@0x823a4e38",
+   "address": "0x823a4e38",
+   "survivor": "?_M_fill_insert_aux@?$vector@V?$Key@M@@V?$StlNodeAlloc@V?$Key@M@@@stlpmtx_std@@@stlpmtx_std@@AAAXPAV?$Key@M@@IABV3@ABU__false_type@2@@Z",
+   "folded": [
+    "?_M_fill_insert_aux@?$vector@UMirrorOp@CharMirror@@V?$StlNodeAlloc@UMirrorOp@CharMirror@@@stlpmtx_std@@@stlpmtx_std@@AAAXPAUMirrorOp@CharMirror@@IABU34@ABU__false_type@2@@Z"
+   ],
+   "sites": 1,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 1 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "clear@0x82517bb0",
+   "address": "0x82517bb0",
+   "survivor": "?clear@?$vector@VCategoryData@@V?$StlNodeAlloc@VCategoryData@@@stlpmtx_std@@@stlpmtx_std@@QAAXXZ",
+   "folded": [
+    "?clear@?$vector@U?$pair@HH@stlpmtx_std@@V?$StlNodeAlloc@U?$pair@HH@stlpmtx_std@@@2@@stlpmtx_std@@QAAXXZ",
+    "?clear@?$vector@UXUSER_ACHIEVEMENT@@V?$StlNodeAlloc@UXUSER_ACHIEVEMENT@@@stlpmtx_std@@@stlpmtx_std@@QAAXXZ",
+    "?clear@?$vector@VBAMPhrase@@V?$StlNodeAlloc@VBAMPhrase@@@stlpmtx_std@@@stlpmtx_std@@QAAXXZ"
+   ],
+   "sites": 3,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 3 folded spelling(s), 3 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "erase@0x8278c298",
+   "address": "0x8278c298",
+   "survivor": "?erase@?$ObjPtrList@VObjectDir@@V1@@@QAA?AViterator@1@V21@@Z",
+   "folded": [
+    "?erase@?$ObjPtrList@VCharWeightSetter@@VObjectDir@@@@QAA?AViterator@1@V21@@Z",
+    "?erase@?$ObjPtrList@VEventTrigger@@VObjectDir@@@@QAA?AViterator@1@V21@@Z",
+    "?erase@?$ObjPtrList@VFlowNode@@VObjectDir@@@@QAA?AViterator@1@V21@@Z",
+    "?erase@?$ObjPtrList@VObject@Hmx@@VObjectDir@@@@QAA?AViterator@1@V21@@Z",
+    "?erase@?$ObjPtrList@VSequence@@VObjectDir@@@@QAA?AViterator@1@V21@@Z",
+    "?erase@?$ObjPtrList@VTask@@VObjectDir@@@@QAA?AViterator@1@V21@@Z",
+    "?erase@?$ObjPtrList@VThreeDSound@@VObjectDir@@@@QAA?AViterator@1@V21@@Z"
+   ],
+   "sites": 7,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 7 folded spelling(s), 7 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "erase@0x827bd118",
+   "address": "0x827bd118",
+   "survivor": "?erase@?$vector@IV?$StlNodeAlloc@I@stlpmtx_std@@@stlpmtx_std@@QAAPAIPAI0@Z",
+   "folded": [
+    "?erase@?$vector@DV?$StlNodeAlloc@D@stlpmtx_std@@@stlpmtx_std@@QAAPADPAD0@Z",
+    "?erase@?$vector@HV?$StlNodeAlloc@H@stlpmtx_std@@@stlpmtx_std@@QAAPAHPAH0@Z",
+    "?erase@?$vector@MV?$StlNodeAlloc@M@stlpmtx_std@@@stlpmtx_std@@QAAPAMPAM0@Z",
+    "?erase@?$vector@PAVFaderGroup@@V?$StlNodeAlloc@PAVFaderGroup@@@stlpmtx_std@@@stlpmtx_std@@QAAPAPAVFaderGroup@@PAPAV3@0@Z",
+    "?erase@?$vector@PAVHamPlayerData@@V?$StlNodeAlloc@PAVHamPlayerData@@@stlpmtx_std@@@stlpmtx_std@@QAAPAPAVHamPlayerData@@PAPAV3@0@Z",
+    "?erase@?$vector@PAVRndAnimatable@@V?$StlNodeAlloc@PAVRndAnimatable@@@stlpmtx_std@@@stlpmtx_std@@QAAPAPAVRndAnimatable@@PAPAV3@0@Z",
+    "?erase@?$vector@PBVMoveParent@@V?$StlNodeAlloc@PBVMoveParent@@@stlpmtx_std@@@stlpmtx_std@@QAAPAPBVMoveParent@@PAPBV3@0@Z",
+    "?erase@?$vector@PBVMoveVariant@@V?$StlNodeAlloc@PBVMoveVariant@@@stlpmtx_std@@@stlpmtx_std@@QAAPAPBVMoveVariant@@PAPBV3@0@Z"
+   ],
+   "sites": 11,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 8 folded spelling(s), 11 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "erase@0x82843f30",
+   "address": "0x82843f30",
+   "survivor": "?erase@?$vector@UJumpInstance@@V?$StlNodeAlloc@UJumpInstance@@@stlpmtx_std@@@stlpmtx_std@@QAAPAUJumpInstance@@PAU3@0@Z",
+   "folded": [
+    "?erase@?$vector@VColor@Hmx@@V?$StlNodeAlloc@VColor@Hmx@@@stlpmtx_std@@@stlpmtx_std@@QAAPAVColor@Hmx@@PAV34@0@Z",
+    "?erase@?$vector@VVector3@@V?$StlNodeAlloc@VVector3@@@stlpmtx_std@@@stlpmtx_std@@QAAPAVVector3@@PAV3@0@Z"
+   ],
+   "sites": 4,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 2 folded spelling(s), 4 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "pop_back@0x823912c8",
+   "address": "0x823912c8",
+   "survivor": "?pop_back@?$ObjPtrList@VSfxInst@@VObjectDir@@@@QAAXXZ",
+   "folded": [
+    "?pop_back@?$ObjPtrList@VCharPollable@@VObjectDir@@@@QAAXXZ",
+    "?pop_back@?$ObjPtrList@VCharWeightSetter@@VObjectDir@@@@QAAXXZ",
+    "?pop_back@?$ObjPtrList@VEventTrigger@@VObjectDir@@@@QAAXXZ",
+    "?pop_back@?$ObjPtrList@VFader@@VObjectDir@@@@QAAXXZ",
+    "?pop_back@?$ObjPtrList@VRndMesh@@VObjectDir@@@@QAAXXZ",
+    "?pop_back@?$ObjPtrList@VRndTexBlendController@@VObjectDir@@@@QAAXXZ"
+   ],
+   "sites": 6,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 6 folded spelling(s), 6 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "OnlyReturns@0x823e3b70",
+   "address": "0x823e3b70",
+   "survivor": "OnlyReturns",
+   "folded": [
+    "?PostLoad@UIComponent@@UAAXAAVBinStream@@@Z",
+    "?SynthUtlTerm@@YAXXZ"
+   ],
+   "sites": 5,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 2 folded spelling(s), 5 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "merged_Get0x5C@0x825e1ce8",
+   "address": "0x825e1ce8",
+   "survivor": "merged_Get0x5C",
+   "folded": [
+    "?Artist@HamSongMetadata@@QBAPBDXZ"
+   ],
+   "sites": 2,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 2 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "merged_ObjPtrListLink@0x823da6c8",
+   "address": "0x823da6c8",
+   "survivor": "merged_ObjPtrListLink",
+   "folded": [
+    "?Link@?$ObjPtrList@VCharBone@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z",
+    "?Link@?$ObjPtrList@VCharInterest@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z",
+    "?Link@?$ObjPtrList@VCharPollable@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z",
+    "?Link@?$ObjPtrList@VCharWeightSetter@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z",
+    "?Link@?$ObjPtrList@VEventTrigger@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z"
+   ],
+   "sites": 5,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 5 folded spelling(s), 5 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "merged_Returns1@0x82e2ab00",
+   "address": "0x82e2ab00",
+   "survivor": "merged_Returns1",
+   "folded": [
+    "?ValidateCRC@CRC@Hmx@@SA_NHPBD@Z"
+   ],
+   "sites": 1,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 1 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "merged_SetObjConcrete@0x82401cd0",
+   "address": "0x82401cd0",
+   "survivor": "merged_SetObjConcrete",
+   "folded": [
+    "?SetObjConcrete@?$ObjRefConcrete@VCharBone@@VObjectDir@@@@QAAXPAVCharBone@@@Z",
+    "?SetObjConcrete@?$ObjRefConcrete@VObject@Hmx@@VObjectDir@@@@QAAXPAVObject@Hmx@@@Z",
+    "?SetObjConcrete@?$ObjRefConcrete@VRndPostProc@@VObjectDir@@@@QAAXPAVRndPostProc@@@Z",
+    "?SetObjConcrete@?$ObjRefConcrete@VRndTex@@VObjectDir@@@@QAAXPAVRndTex@@@Z"
+   ],
+   "sites": 16,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 4 folded spelling(s), 16 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "pop3_state_list_resp@0x8257c228",
+   "address": "0x8257c228",
+   "survivor": "pop3_state_list_resp",
+   "folded": [
+    "pop3_state_retr_resp"
+   ],
+   "sites": 1,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 1 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  }
+ ]
+}
