@@ -53,17 +53,17 @@ public:
 };
 
 ResourceFileCacheHelper gResourceFileCacheHelper;
-float gLimitUVRange;
-int gDxtCacher;
+SplashFunc gSplashResume;
+SplashFunc gSplashSuspend;
+SplashFunc gSplashPoll;
 static RndMesh *sCylinderMesh;
 static ObjectDir *sCylinderDir;
 static RndMesh *sSphereMesh;
 static ObjectDir *sSphereDir;
+float gLimitUVRange;
+int gDxtCacher;
 std::list<BuildPoly> gChildPolys;
 std::list<BuildPoly> gParentPolys;
-SplashFunc gSplashPoll;
-SplashFunc gSplashSuspend;
-SplashFunc gSplashResume;
 Vector3 gUtlXfms;
 
 RndGroup *GroupOwner(Hmx::Object *o) {
@@ -859,6 +859,48 @@ void RandomXfms(RndMultiMesh *mesh) {
     mesh->InvalidateProxies();
 }
 
+void UtilDrawSphere(const Vector3 &v, float f, const Hmx::Color &col, RndMat *mat) {
+    if (!sSphereMesh)
+        MILO_NOTIFY_ONCE("Sphere mesh is not loaded")
+    else {
+        RndMat *oldMat = sSphereMesh->Mat();
+        Transform tf58;
+        tf58.Reset();
+        tf58.v = v;
+        Scale(Vector3(f, f, f), tf58.m, tf58.m);
+        if (mat) {
+            sSphereMesh->SetMat(mat);
+        } else {
+            sSphereMesh->Mat()->SetColor(col.red, col.green, col.blue);
+            sSphereMesh->Mat()->SetAlpha(0.2f);
+            sSphereMesh->Mat()->SetCull(kCullNone);
+        }
+        sSphereMesh->SetLocalXfm(tf58);
+        sSphereMesh->SetSphere(Sphere(Vector3(0, 0, 0), f));
+        sSphereMesh->Draw();
+        if (mat) {
+            sSphereMesh->SetMat(oldMat);
+        }
+    }
+}
+
+void UtilDrawCylinder(
+    const Transform &tf, float radius, float height, const Hmx::Color &col, int
+) {
+    if (!sCylinderMesh)
+        MILO_NOTIFY_ONCE("Sphere mesh is not loaded")
+    else {
+        Transform tf58;
+        tf58 = tf;
+        Scale(Vector3(radius, height, radius), tf58.m, tf58.m);
+        sCylinderMesh->Mat()->SetColor(col.red, col.green, col.blue);
+        sCylinderMesh->Mat()->SetAlpha(0.2f);
+        sCylinderMesh->Mat()->SetCull(kCullNone);
+        sCylinderMesh->SetLocalXfm(tf58);
+        sCylinderMesh->Draw();
+    }
+}
+
 void RandomPointOnMesh(RndMesh *m, Vector3 &v1, Vector3 &v2) {
     RndMesh::Face &face = m->Faces()[RandomInt(0, m->Faces().size())];
     int numverts = m->Verts().size();
@@ -901,48 +943,6 @@ void RandomPointOnMesh(RndMesh *m, Vector3 &v1, Vector3 &v2) {
         Add(norm1, norm2, v2);
         Add(v2, norm3, v2);
         Normalize(v2, v2);
-    }
-}
-
-void UtilDrawSphere(const Vector3 &v, float f, const Hmx::Color &col, RndMat *mat) {
-    if (!sSphereMesh) {
-        MILO_NOTIFY_ONCE("Sphere mesh is not loaded");
-    } else {
-        RndMat *oldMat = sSphereMesh->Mat();
-        Transform tf58;
-        tf58.Reset();
-        tf58.v = v;
-        Scale(Vector3(f, f, f), tf58.m, tf58.m);
-        if (mat) {
-            sSphereMesh->SetMat(mat);
-        } else {
-            sSphereMesh->Mat()->SetColor(col.red, col.green, col.blue);
-            sSphereMesh->Mat()->SetAlpha(0.2f);
-            sSphereMesh->Mat()->SetCull(kCullNone);
-        }
-        sSphereMesh->SetLocalXfm(tf58);
-        sSphereMesh->SetSphere(Sphere(Vector3(0, 0, 0), f));
-        sSphereMesh->Draw();
-        if (mat) {
-            sSphereMesh->SetMat(oldMat);
-        }
-    }
-}
-
-void UtilDrawCylinder(
-    const Transform &tf, float radius, float height, const Hmx::Color &col, int
-) {
-    if (!sCylinderMesh) {
-        MILO_NOTIFY_ONCE("Sphere mesh is not loaded");
-    } else {
-        Transform tf58;
-        tf58 = tf;
-        Scale(Vector3(radius, height, radius), tf58.m, tf58.m);
-        sCylinderMesh->Mat()->SetColor(col.red, col.green, col.blue);
-        sCylinderMesh->Mat()->SetAlpha(0.2f);
-        sCylinderMesh->Mat()->SetCull(kCullNone);
-        sCylinderMesh->SetLocalXfm(tf58);
-        sCylinderMesh->Draw();
     }
 }
 
