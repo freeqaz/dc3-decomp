@@ -906,12 +906,11 @@ system/flow/FlowPtr.cpp:
 	.text       start:0x82426AF8 end:0x82426E50
 
 system/flow/DrivenPropertyEntry.cpp:
-	.rdata      start:0x8202C168 end:0x8202C278
 	.pdata      start:0x822BBAE0 end:0x822BBB48
 	.text       start:0x82426E50 end:0x824273D8
 
 system/flow/DrivenPropertyMathOps.cpp:
-	.rdata      start:0x8202C278 end:0x8202C6FC
+	.rdata      start:0x8202C168 end:0x8202C6FC
 	.pdata      start:0x822BBB48 end:0x822BBBD0
 	.text       start:0x824273D8 end:0x824280C8
 	.text       start:0x82EE0F08 end:0x82EE0F18 rename:.text$yd
@@ -3101,7 +3100,7 @@ system/rndobj/Overlay.cpp:
 	.text       start:0x82EDCB88 end:0x82EDCBE0 rename:.text$yc
 	.text       start:0x82EE27A0 end:0x82EE27B0 rename:.text$yd
 	.data       start:0x82F13950 end:0x82F139A8
-	.data       start:0x830A1964 end:0x830A1984 rename:.bss
+	.data       start:0x830A1964 end:0x830A196C rename:.bss
 
 system/rndobj/Utl.cpp:
 	.rdata      start:0x8208AF4C end:0x8208C500
@@ -3112,7 +3111,7 @@ system/rndobj/Utl.cpp:
 	.text       start:0x82EDCBE0 end:0x82EDCCA0 rename:.text$yc
 	.text       start:0x82EE27B0 end:0x82EE2818 rename:.text$yd
 	.data       start:0x82F139A8 end:0x82F13CB4
-	.data       start:0x830A1984 end:0x830A1AD4 rename:.bss
+	.data       start:0x830A196C end:0x830A1AD4 rename:.bss
 
 system/rndobj/Mesh.cpp:
 	.rdata      start:0x8208C500 end:0x8208E2D0
