@@ -16,6 +16,46 @@
 #include "utl/Str.h"
 #include <cstdlib>
 
+// Declared extern in math/Easing.h. Retail emitted the out-of-line easing
+// COMDATs from this object (ham_xbox_r.map: ?EaseBackIn@@YAMMMM@Z at
+// 82411d50, flow:FlowSetProperty.obj), so this is where the table lives.
+EaseFunc *gEaseFuncs[35] = {
+    EaseLinear,
+    EasePolyIn,
+    EasePolyOut,
+    EasePolyInOut,
+    EasePolyOutIn,
+    EaseBounceIn,
+    EaseBounceOut,
+    EaseBounceInOut,
+    EaseBounceOutIn,
+    EaseElasticIn,
+    EaseElasticOut,
+    EaseElasticInOut,
+    EaseElasticOutIn,
+    EaseBackIn,
+    EaseBackOut,
+    EaseBackInOut,
+    EaseBackOutIn,
+    EaseSineIn,
+    EaseSineOut,
+    EaseSineInOut,
+    EaseSineOutIn,
+    EaseExpoIn,
+    EaseExpoOut,
+    EaseExpoInOut,
+    EaseExpoOutIn,
+    EaseCircIn,
+    EaseCircOut,
+    EaseCircInOut,
+    EaseCircOutIn,
+    EaseStairstep,
+    EaseThirdStairstep,
+    EaseQuarterStairstep,
+    EaseHalfQuarterStairstep,
+    EaseQuarterHalfStairstep,
+};
+
 FlowSetProperty::~FlowSetProperty() { TheFlowMgr->CancelCommand(this); }
 
 FlowSetProperty::FlowSetProperty()

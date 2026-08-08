@@ -353,45 +353,12 @@ inline float EaseQuarterHalfStairstep(float t, float power, float) {
 
 typedef float EaseFunc(float, float, float);
 
-#ifdef HX_NATIVE
-inline
-#endif
-EaseFunc *gEaseFuncs[35] = {
-    EaseLinear,
-    EasePolyIn,
-    EasePolyOut,
-    EasePolyInOut,
-    EasePolyOutIn,
-    EaseBounceIn,
-    EaseBounceOut,
-    EaseBounceInOut,
-    EaseBounceOutIn,
-    EaseElasticIn,
-    EaseElasticOut,
-    EaseElasticInOut,
-    EaseElasticOutIn,
-    EaseBackIn,
-    EaseBackOut,
-    EaseBackInOut,
-    EaseBackOutIn,
-    EaseSineIn,
-    EaseSineOut,
-    EaseSineInOut,
-    EaseSineOutIn,
-    EaseExpoIn,
-    EaseExpoOut,
-    EaseExpoInOut,
-    EaseExpoOutIn,
-    EaseCircIn,
-    EaseCircOut,
-    EaseCircInOut,
-    EaseCircOutIn,
-    EaseStairstep,
-    EaseThirdStairstep,
-    EaseQuarterStairstep,
-    EaseHalfQuarterStairstep,
-    EaseQuarterHalfStairstep,
-};
+// Defined in flow/FlowSetProperty.cpp. Retail's linker map places the
+// out-of-line ?Ease*@@YAMMMM@Z copies in flow:FlowSetProperty.obj, so that
+// is the translation unit whose initializer took their addresses; defining
+// the table anywhere else pulls 168 bytes of .data and ~34 dead COMDATs
+// into every one of the 445 translation units that include this header.
+extern EaseFunc *gEaseFuncs[35];
 
 inline EaseFunc *GetEaseFunction(EaseType e) {
     MILO_ASSERT(e >= kEaseLinear && e <= kEaseQuarterHalfStairstep, 0x16B);
