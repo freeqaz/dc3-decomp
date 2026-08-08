@@ -110,8 +110,8 @@ void NgSpotlightDrawer::SpotlightResources::Clear() {
 
 static float sBeamBrighten = 2.0f;
 static float sSphereScale = 0.5f;
-static float sSheetIntensity = 3.0f;
-static float sSheetW = 0.0f;
+static float sSheetIntensity = 8.0f;
+float sSheetW = 0.5f;
 
 #ifdef HX_NATIVE
 void NgSpotlightDrawer::SetupFogDensityMap() {}
@@ -147,7 +147,7 @@ bool NgSpotlightDrawer::CheckCam() {
     return true;
 }
 
-static float sBeamIntensity = 1.0f;
+static float sBeamIntensity = 8.0f;
 
 void NgSpotlightDrawer::RenderCone(Spotlight *sl) {
     MILO_ASSERT(sl->HasBeam(), 0x45d);
@@ -404,6 +404,8 @@ void NgSpotlightDrawer::SetupFogDensityMap() {
     TheShaderMgr.SetPConstant((PShaderConstant)0x7F, fogParams);
 }
 
+static float sPostIntensityScale = 32.0f;
+
 void NgSpotlightDrawer::SetupForPostProcess() {
     Vector4 zero(0.0f, 0.0f, 0.0f, 0.0f);
     TheShaderMgr.SetPConstant((PShaderConstant)0x5A, zero);
@@ -415,7 +417,9 @@ void NgSpotlightDrawer::SetupForPostProcess() {
     } else {
         recipFarPlane = 0.0f;
     }
-    Vector4 intensityParams(mParams.mIntensity * 32.0f, 0.0f, 0.0f, recipFarPlane);
+    Vector4 intensityParams(
+        mParams.mIntensity * sPostIntensityScale, 0.0f, 0.0f, recipFarPlane
+    );
     TheShaderMgr.SetPConstant((PShaderConstant)0x5B, intensityParams);
     Hmx::Color c = mParams.mColor;
     Vector4 colorVec(c.red, c.green, c.blue, c.alpha);
@@ -429,7 +433,7 @@ void NgSpotlightDrawer::SetupForPostProcess() {
     sActiveFrame = true;
 }
 
-static float kFogScale = 256.0f;
+static float kFogScale = 10.0f;
 
 void NgSpotlightDrawer::RenderFogProxy() {
     RndDrawable *proxy = mParams.mProxy;
@@ -482,8 +486,8 @@ void NgSpotlightDrawer::SetupFogDensityState() {
     TheShaderMgr.SetPConstant((PShaderConstant)0x7F, fogParams);
 }
 
-static float sBlurAmount = 0.5f;
-static bool sSeparateBlurPasses = false;
+static float sBlurAmount = 1.0f;
+bool sSeparateBlurPasses = true;
 
 void NgSpotlightDrawer::BlurRT() {
     D3DDevice_SetDepthStencilSurface(TheDxRnd.Device(), 0);
