@@ -211,14 +211,13 @@ void TexProc::DrawToTexture() {
         }
         RndCam *prevCam = RndCam::Current();
         RndTex *targetTex = RndCam::Current()->TargetTex();
-        if (targetTex) {
+        if (targetTex)
             MILO_NOTIFY_ONCE(
                 "%s: Cannot render to texture (%s) while already rendering to texture (%s).",
                 PathName(targetTex),
                 PathName(this),
                 PathName(targetTex)
-            );
-        }
+            )
         mCam->SetTargetTex(mOutputTex);
         mCam->Select();
         mat->SetDiffuseTex(mInputTex);
