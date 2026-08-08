@@ -286,8 +286,12 @@ public:
     T *Ptr() const { return mObject; }
 };
 
-template <class T1>
-BinStream &operator<<(BinStream &bs, const ObjOwnerPtr<T1> &ptr);
+// NOTE: there is deliberately no `operator<<(BinStream&, const ObjOwnerPtr<T1>&)`
+// declaration here. No definition for it exists anywhere in the tree (the
+// BINSTREAM_OP_OBJOWNERPTR macro in link_glue.cpp is #define'd and #undef'ed
+// without ever being invoked), so declaring it only steals `bs << someOwnerPtr`
+// from the ObjRefConcrete<T1, ObjectDir> base-class operator<< that the retail
+// build actually instantiated and ICF-folded.
 
 template <class T1>
 BinStream &operator>>(BinStream &bs, ObjOwnerPtr<T1> &ptr);
