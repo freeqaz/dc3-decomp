@@ -356,7 +356,7 @@ typedef float EaseFunc(float, float, float);
 // Defined in flow/FlowSetProperty.cpp. Retail's linker map places the
 // out-of-line ?Ease*@@YAMMMM@Z copies in flow:FlowSetProperty.obj, so that
 // is the translation unit whose initializer took their addresses; defining
-// the table anywhere else pulls 168 bytes of .data and ~34 dead COMDATs
+// the table anywhere else pulls 140 bytes of .data and 33 dead COMDATs
 // into every one of the 445 translation units that include this header.
 extern EaseFunc *gEaseFuncs[35];
 
