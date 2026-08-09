@@ -179,7 +179,31 @@ if not config.non_matching:
 # Tool versions
 config.binutils_tag = "2.42-1"
 config.compilers_tag = "20250812"
-config.dtk_tag = "v1.9.2"
+# dtk_tag does NOT select the binary -- config.dtk_path above wins, and it points
+# at our jeff fork's build (../jeff/target/release/dtk), so whatever is compiled
+# there is what splits the XEX. The tag still has one live job: tools/project.py's
+# load_build_config() deletes build/<version>/config.json when the "version" it
+# recorded is older than dtk_tag, forcing a re-split. Leaving the tag stale
+# therefore silently disables that staleness gate. Keep it in step with the jeff
+# binary actually deployed.
+#
+# jeff cdfe173 == v1.10.0 (previously 1.9.5). The 1.9.5 -> 1.10.0 delta is a
+# single change: xpdb.rs::try_parse_pdb now harvests S_GPROC32/S_LPROC32 sizes
+# from a PDB's per-module DBI streams instead of only the globals stream (plus an
+# env-gated JEFF_DUMP_RELOCS stderr dump in xex.rs that mutates nothing).
+# try_parse_pdb is reached from load_analyze_xex only under
+# `if let Some(pdb_path) = &config.base.pdb`, and config/373307D9/config.yml has
+# no `pdb:` key -- so the whole changed path is unreachable for this project.
+#
+# Verified empirically on 2026-08-08 rather than assumed: 1.9.5 and 1.10.0 were
+# each run over config/373307D9/config.yml into separate out_dirs and the outputs
+# compared by sha256. All 2223 split .obj and all 2223 .s files are byte-identical
+# between the two versions AND identical to what is already in build/373307D9/;
+# config.json matches too once the recorded "version" string is ignored.
+# Regenerating the objdiff report over the 2224 units moved nothing: 43.67707%
+# matched code, 29384/48383 functions, 968 complete units, and zero measure deltas
+# in any unit or category (game 87.21148%, engine 76.40033%, sdk 0.021002889%).
+config.dtk_tag = "v1.10.0"
 config.objdiff_tag = "v4.2.2"  # freeqaz/objdiff fork release (linux-x86_64 asset)
 config.sjiswrap_tag = "v1.2.1"
 config.wibo_tag = "1.0.0"
