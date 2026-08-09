@@ -293,18 +293,22 @@ void MemHeap::LRUFit(int size, int align, FreeBlockInfo &blockinfo) {
     }
 }
 
-int MemHeap::GetAlignWords(int align) {
-    if ((int)align == 0) return 1;
-    int bits = 0;
-    int extra = 0;
-    while (align > 1) {
-        if (align & 1) extra = 1;
-        bits++;
-        align >>= 1;
+int MemHeap::GetAlignWords(int bytes) {
+    if (bytes == 0)
+        return 1;
+    else {
+        int num;
+        int isOdd;
+        int tmp = bytes;
+
+        for (num = 0, isOdd = 0; tmp > 1; tmp >>= 1) {
+            if (tmp & 1) {
+                isOdd = 1;
+            }
+            num++;
+        }
+        return Max(0, num + isOdd - 2);
     }
-    int result = bits + extra - 2;
-    if (0 > result) result = 0;
-    return result;
 }
 
 int *MemHeap::TryAlloc(int sizeWords, int align, int &allocSize) {

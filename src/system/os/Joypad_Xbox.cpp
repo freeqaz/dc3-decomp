@@ -237,13 +237,8 @@ JoypadType SetupHXGuitar(int pad, const XINPUT_CAPABILITIES &c) {
 JoypadType SetupHXDrums(int pad, const XINPUT_CAPABILITIES &c) {
     bool hasFlag1 = c.Flags & 1;
     bool hasFlag2 = c.Flags & 0x2;
-    bool isRb2Drums;
-    if (!hasFlag1) {
-        isRb2Drums = hasFlag2 && c.Gamepad.sThumbRX >= 0x100;
-    } else {
-        isRb2Drums = hasFlag2;
-    }
-    bool isRockOfAgesDrums = hasFlag2 && hasFlag1;
+    bool isRb2Drums = hasFlag1 || c.Gamepad.sThumbRX >= 0x100;
+    bool isRockOfAgesDrums = hasFlag2 && !hasFlag1;
     JoypadGetPadData(pad)->mIsWireless = hasFlag2;
     JoypadGetPadData(pad)->mHasCapFlag1 = hasFlag1;
     if (c.Gamepad.sThumbLX == 0x1BAD) {

@@ -166,10 +166,12 @@ void RndShaderMgr::SetTransform(const Transform &xfm) {
     SetVConstant4x3(kVS_WorldTransform, Hmx::Matrix4(xfm));
 }
 
-void RndShaderMgr::Invalidate(ShaderType t) {
-    for (std::list<ShaderTree>::iterator it = mShaderTrees.begin();
-         it != mShaderTrees.end();) {
-        if (it == mShaderTrees.begin() && it->shaderType != t) {
+void RndShaderMgr::Invalidate(ShaderType type) {
+    auto begin = mShaderTrees.begin();
+    auto it = begin;
+    bool isMax = type == kMaxShaderTypes;
+    while (it != mShaderTrees.end()) {
+        if (!isMax && it->shaderType != type) {
             ++it;
         } else {
             delete it->obj;
@@ -243,51 +245,44 @@ void *RndShaderMgr::AllocShader() {
 
 RndShaderProgram &RndShaderMgr::FindShader(ShaderType t, const ShaderOptions &opts) {
     u64 flags = opts.flags;
-    std::list<ShaderTree>::iterator it;
-
-    for (it = mShaderTrees.begin(); it != mShaderTrees.end(); ++it) {
+    FOREACH (it, mShaderTrees) {
         if (it->shaderType == t) {
-            break;
+            RndShaderProgram *node = it->obj;
+            while (true) {
+                if (flags < node->mFlags) {
+                    RndShaderProgram *left = (RndShaderProgram *)node->unk10;
+                    if (left == NULL) {
+                        RndShaderProgram *newNode = NewShaderProgram();
+                        node->unk10 = (Hmx::Object *)newNode;
+                        newNode->mFlags = flags;
+                        return *newNode;
+                    }
+                    node = left;
+                } else if (flags > node->mFlags) {
+                    RndShaderProgram *right = (RndShaderProgram *)node->unk14;
+                    if (right == NULL) {
+                        RndShaderProgram *newNode = NewShaderProgram();
+                        node->unk14 = (Hmx::Object *)newNode;
+                        newNode->mFlags = flags;
+                        return *newNode;
+                    }
+                    node = right;
+                } else {
+                    return *node;
+                }
+            }
         }
     }
 
-    if (it == mShaderTrees.end()) {
-        ShaderTree tree;
-        tree.shaderType = t;
-        RndShaderProgram *p = NewShaderProgram();
-        p->mFlags = flags;
-        tree.obj = p;
-        if (t == kStandardShader) {
-            mShaderTrees.push_front(tree);
-        } else {
-            mShaderTrees.push_back(tree);
-        }
-        return *p;
+    ShaderTree tree;
+    tree.shaderType = t;
+    RndShaderProgram *p = NewShaderProgram();
+    p->mFlags = flags;
+    tree.obj = p;
+    if (t == kStandardShader) {
+        mShaderTrees.push_front(tree);
+    } else {
+        mShaderTrees.push_back(tree);
     }
-
-    // Found the tree, now binary search in it
-    RndShaderProgram *node = it->obj;
-    while (true) {
-        if (flags < node->mFlags) {
-            RndShaderProgram *left = (RndShaderProgram *)node->unk10;
-            if (left == NULL) {
-                RndShaderProgram *newNode = NewShaderProgram();
-                node->unk10 = (Hmx::Object *)newNode;
-                newNode->mFlags = flags;
-                return *newNode;
-            }
-            node = left;
-        } else if (flags > node->mFlags) {
-            RndShaderProgram *right = (RndShaderProgram *)node->unk14;
-            if (right == NULL) {
-                RndShaderProgram *newNode = NewShaderProgram();
-                node->unk14 = (Hmx::Object *)newNode;
-                newNode->mFlags = flags;
-                return *newNode;
-            }
-            node = right;
-        } else {
-            return *node;
-        }
-    }
+    return *p;
 }
