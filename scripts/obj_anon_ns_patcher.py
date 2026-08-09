@@ -23,6 +23,9 @@ import re
 import sys
 from collections import defaultdict
 from pathlib import Path
+import sys as _sys, os as _os
+_sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
+from obj_patch_io import write_patched_obj  # mtime-preserving in-place write
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 OBJ_DIR = PROJECT_ROOT / "build" / "373307D9" / "obj"
@@ -113,8 +116,7 @@ def patch_obj_file(obj_path: str, old_hash: bytes, new_hash: bytes,
 
     if apply:
         new_data = data.replace(old_pattern, new_pattern)
-        with open(obj_path, 'wb') as f:
-            f.write(new_data)
+        write_patched_obj(obj_path, new_data)
 
     return count
 
@@ -265,6 +267,13 @@ def process_batch(args):
     if not args.apply and patched_files > 0:
         print(f"\nRun with --apply to actually patch the files.")
 
+    if getattr(args, 'check', False) and patched_files > 0:
+        print('FAIL[anon_ns]: {n} pending patch(es) -- this build tree carries '
+              'objects that were compiled but never post-processed. See '
+              'docs/tools/BUILD_SYSTEM.md "post-compile patchers".'.format(n=patched_files),
+              file=sys.stderr)
+        sys.exit(2)
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -279,6 +288,10 @@ def main():
                         help='Original .obj directory (default: build/373307D9/obj)')
     parser.add_argument('--src-dir',
                         help='Decomp .obj directory (default: build/373307D9/src)')
+    parser.add_argument('--check', action='store_true',
+                        help='Dry-run and EXIT 2 if any object in the build tree '
+                             'still needs this pass (used by '
+                             'scripts/verify_objs_patched.py)')
     args = parser.parse_args()
 
     if not args.batch:

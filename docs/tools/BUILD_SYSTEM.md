@@ -167,6 +167,77 @@ See also [objdiff.md § Which binary am I running?](objdiff.md#which-binary-am-i
 — the same `objdiff-cli` binary is shared by three repos, so one rebuild
 propagates to all of them at once.
 
+## The post-compile patchers, and why they must re-run behind a recompile
+
+Five scripts rewrite `build/373307D9/src/**/*.obj` **in place** after every
+object compiles and before anything reads them — anonymous-namespace hashes,
+`??__E` STATIC→EXTERNAL promotion, `$S`→`??_B` guard naming, bool-parameter
+back-reference mangling, `??__F` atexit scope counters. They are not cosmetic:
+the symbol names, storage classes and relocations they produce are what this
+project matches the retail image against. **An object that skipped them is raw
+compiler output, and anything measured from it is wrong.**
+
+They are wired as a serialized chain of stamps in `configure.py`, and each
+stamp takes **`all_source` as a real implicit input, never `order_only`.**
+
+> Order-only constrains ORDER but never marks an edge dirty.
+
+That distinction was the whole bug (fixed 2026-08-09; rb3-xenon had already hit
+and fixed the identical one in `bd6cefa1`, 2026-08-02). With `order_only`, two
+routes produced a tree of unpatched objects and announced nothing:
+
+1. **Any incremental build.** One edited `.cpp` recompiled one `.obj`, which
+   arrived unpatched while every stamp was still "current".
+2. **Any *second* `ninja`, on any tree.** An in-place rewrite makes the object
+   newer than the mtime ninja stored beside its `deps = msvc` record, so the
+   next build says `stored deps info out of date` and recompiles it — producing
+   a fresh *unpatched* object that no stamp re-ran behind.
+
+Route 2 made "patches wiped" the **steady state**. Measured at dc3 `21f7f331`:
+a clean full build → `ninja` reverted **277 of 980** objects, no patcher
+re-fired, and the third `ninja` reported `[1/1] PROGRESS` — the tree looked
+settled and clean while carrying 224 unpromoted `??__E` symbols across 125
+objects. The ADDR_IDENTITY witness generated from it produced **53** pairings
+instead of **60** (`cdea2f9e…` vs `ccde57e8…`).
+
+### The three coupled parts (any one alone is not a fix)
+
+1. `configure.py` — `all_source` is an **implicit** input of all five stamps, so
+   ninja propagates the objects' mtimes through the phony and any object newer
+   than a stamp re-triggers that patcher.
+2. `scripts/obj_patch_io.py` — every patcher writes through
+   `write_patched_obj()`, which **restores the object's mtime**. This is what
+   makes part 1 converge: a patcher that bumped the mtime would make ninja
+   recompile the object it just patched, which now re-triggers the patcher, for
+   ever. (Measured: with part 1 only, every `ninja` recompiled the same 277
+   objects and re-ran all five patchers.)
+3. `tools/project.py` — `report.json` / `report_raw.json` **depend on**
+   `post-compile` rather than being ordered after it, so a build in which only
+   the patchers ran cannot leave a stale report.
+
+### How a degraded tree announces itself
+
+`scripts/verify_objs_patched.py` runs as the last post-compile edge:
+
+- `--check` re-runs all five patchers in dry-run and **fails the build** unless
+  the object tree is a fixed point of them. If it ever fires during a full
+  build, the dependency graph above has regressed.
+- `--emit` then writes `build/373307D9/patch_state.json` — the sha256 of every
+  object at the moment the tree was verified patched.
+
+The manifest exists because no build-time check can see the remaining hole: a
+**targeted** `ninja build/373307D9/src/Foo.obj`, or a tool compiling one TU,
+does not pull in the post-compile edges at all. Consumers of the tree — the
+decomp-synth ADDR_IDENTITY witness among them — check it with
+
+```bash
+python3 scripts/verify_objs_patched.py --verify-manifest
+```
+
+which needs no toolchain and no COFF parsing. It is content-keyed on purpose:
+because part 2 preserves mtimes, **the patch state of this tree is not visible
+in any timestamp**, and no age-based check can substitute.
+
 ## Expected steady state
 
 A fully built, unmodified tree should behave like this:
@@ -178,7 +249,15 @@ $ git status --short    # empty — the build writes nothing into config/ or src
 ```
 
 If `ninja -n` shows a SPLIT with no config edit behind it, the fixed-point
-property has regressed — see above before assuming a ninja bug.
+property has regressed — see above before assuming a ninja bug. If it shows a
+batch of `MSVC` edges on a tree nobody edited, read the `-d explain` output: a
+wall of `stored deps info out of date` means something rewrote objects in place
+without restoring their mtimes (see the post-compile patchers above).
+
+**`[1/1] PROGRESS` is necessary and not sufficient.** Between 2026-02 and
+2026-08-09 the degraded, patch-wiped tree reported exactly that. The additional
+question a settled tree must answer is `scripts/verify_objs_patched.py
+--verify-manifest`.
 
 Other build-hygiene tools:
 

@@ -24,6 +24,9 @@ import re
 import struct
 import sys
 from pathlib import Path
+import sys as _sys, os as _os
+_sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
+from obj_patch_io import write_patched_obj  # mtime-preserving in-place write
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
@@ -298,8 +301,7 @@ def patch_obj_file(decomp_path, orig_path, apply=False, verbose=False):
         details.append(f'  {sym_name} -> {new_name}')
 
     if apply and num_applied > 0:
-        with open(decomp_path, 'wb') as f:
-            f.write(decomp_data)
+        write_patched_obj(decomp_path, decomp_data)
 
     return num_applied, details
 
@@ -319,6 +321,10 @@ def main():
                         help='Decomp .obj directory')
     parser.add_argument('files', nargs='*',
                         help='Specific .obj files to patch (relative paths)')
+    parser.add_argument('--check', action='store_true',
+                        help='Dry-run and EXIT 2 if any object in the build tree '
+                             'still needs this pass (used by '
+                             'scripts/verify_objs_patched.py)')
     args = parser.parse_args()
 
     if not args.batch and not args.files:
@@ -361,6 +367,13 @@ def main():
 
     if not args.apply and total_patches > 0:
         print('Run with --apply to modify files.')
+
+    if getattr(args, 'check', False) and total_patches > 0:
+        print('FAIL[bool_mangle]: {n} pending patch(es) -- this build tree carries '
+              'objects that were compiled but never post-processed. See '
+              'docs/tools/BUILD_SYSTEM.md "post-compile patchers".'.format(n=total_patches),
+              file=sys.stderr)
+        sys.exit(2)
 
 
 if __name__ == '__main__':

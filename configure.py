@@ -334,6 +334,31 @@ config.pch_eligible_dirs = {
 # Each stamp is an implicit input of the next, fixing the order: data stubs
 # are generated first (so patchers see a stable file set), then the patchers
 # run one at a time.
+#
+# *** `all_source` IS AN IMPLICIT INPUT, NOT AN ORDER-ONLY ONE. ***
+# Order-only constrains ORDER but NEVER marks an edge dirty, so until 2026-08-09
+# nothing re-ran a patcher behind a recompiled object.  Two ways in:
+#   * an incremental build -- one edited .cpp recompiles one .obj, which arrives
+#     UNPATCHED while every stamp is still "current";
+#   * ANY SECOND `ninja`, on any tree -- an in-place rewrite makes the object
+#     newer than the mtime ninja stored beside its `deps = msvc` record, so the
+#     next build prints `stored deps info out of date` and RECOMPILES it.
+# The second one made "patches wiped" the STEADY STATE of this build: measured
+# 2026-08-09 at dc3 21f7f331, build-then-`ninja` reverted 277 of 980 objects,
+# no patcher re-fired, the third build said "no work to do", and the
+# ADDR_IDENTITY witness derived from that tree fell 60 -> 53 pairings with
+# nothing failing anywhere.  As an implicit input, `all_source` propagates the
+# objects' mtimes through the phony, so an object newer than a stamp re-triggers
+# that patcher.  (Same defect and same fix as rb3-xenon bd6cefa1, 2026-08-02.)
+#
+# ! THIS ONLY CONVERGES BECAUSE EVERY PATCHER RESTORES THE OBJECT'S mtime
+# (scripts/obj_patch_io.py).  A patcher that bumped the mtime would make ninja
+# recompile the object it just patched, which now re-triggers the patcher --
+# an oscillation that never reaches "no work to do".  Do not remove it.
+#
+# The last step re-runs all five in dry-run and FAILS THE BUILD unless the tree
+# is a fixed point of them, then records a content manifest so a single-TU
+# compile that bypasses this graph entirely is detectable from outside.
 stamp_dir = config.build_dir / config.version
 config.custom_build_rules = [
     {
@@ -355,8 +380,7 @@ config.custom_build_steps = {
         {
             "outputs": str(stamp_dir / "anon_ns_patched.stamp"),
             "rule": "run_script",
-            "order_only": "all_source",
-            "implicit": str(stamp_dir / "data_stubs.stamp"),
+            "implicit": [str(stamp_dir / "data_stubs.stamp"), "all_source"],
             "variables": {
                 "cmd": "python3 scripts/obj_anon_ns_patcher.py --batch --apply",
                 "desc": "PATCH anonymous namespace hashes",
@@ -365,8 +389,7 @@ config.custom_build_steps = {
         {
             "outputs": str(stamp_dir / "dynamic_init_patched.stamp"),
             "rule": "run_script",
-            "order_only": "all_source",
-            "implicit": str(stamp_dir / "anon_ns_patched.stamp"),
+            "implicit": [str(stamp_dir / "anon_ns_patched.stamp"), "all_source"],
             "variables": {
                 "cmd": "python3 scripts/obj_dynamic_init_patcher.py --batch --apply",
                 "desc": "PATCH ??__E dynamic initializers STATIC->EXTERNAL",
@@ -375,8 +398,7 @@ config.custom_build_steps = {
         {
             "outputs": str(stamp_dir / "guard_patched.stamp"),
             "rule": "run_script",
-            "order_only": "all_source",
-            "implicit": str(stamp_dir / "dynamic_init_patched.stamp"),
+            "implicit": [str(stamp_dir / "dynamic_init_patched.stamp"), "all_source"],
             "variables": {
                 "cmd": "python3 scripts/obj_guard_patcher.py --batch --apply",
                 "desc": "PATCH $S guard variables to match ??_B naming",
@@ -385,8 +407,7 @@ config.custom_build_steps = {
         {
             "outputs": str(stamp_dir / "bool_mangle_patched.stamp"),
             "rule": "run_script",
-            "order_only": "all_source",
-            "implicit": str(stamp_dir / "guard_patched.stamp"),
+            "implicit": [str(stamp_dir / "guard_patched.stamp"), "all_source"],
             "variables": {
                 "cmd": "python3 scripts/obj_bool_mangle_patcher.py --batch --apply",
                 "desc": "PATCH bool parameter back-reference mangling",
@@ -395,11 +416,24 @@ config.custom_build_steps = {
         {
             "outputs": str(stamp_dir / "atexit_scope_patched.stamp"),
             "rule": "run_script",
-            "order_only": "all_source",
-            "implicit": str(stamp_dir / "bool_mangle_patched.stamp"),
+            "implicit": [str(stamp_dir / "bool_mangle_patched.stamp"), "all_source"],
             "variables": {
                 "cmd": "python3 scripts/obj_atexit_scope_patcher.py --batch --apply",
                 "desc": "PATCH ??__F atexit scope counters (fuzzy match)",
+            },
+        },
+        {
+            # The patch passes are only half of the fix: a build that omits
+            # one has to SAY SO.  This re-runs every patcher in dry-run and
+            # fails the build unless the object tree is a fixed point of all
+            # five, then records a content manifest so a consumer can detect a
+            # single-TU compile that bypassed the graph entirely.
+            "outputs": str(stamp_dir / "objs_patched_verified.stamp"),
+            "rule": "run_script",
+            "implicit": [str(stamp_dir / "atexit_scope_patched.stamp"), "all_source"],
+            "variables": {
+                "cmd": "python3 scripts/verify_objs_patched.py --check --emit",
+                "desc": "VERIFY every .obj carries the post-compile patches",
             },
         },
     ],
