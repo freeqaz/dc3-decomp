@@ -14,7 +14,7 @@
  "_provenance": {
   "generator": "decomp-synth tools/il_witness/build_icf_alias_inputs.py",
   "validator": "decomp-synth tools/il_witness/symbol_equivalences.validate_groups",
-  "validated_against_tree": "/home/free/code/milohax/dc3-decomp",
+  "validated_against_tree": "~/code/milohax/dc3-decomp",
   "witness_runs": [
    "dec-label-reverify-2026-08-06 label-sample adjudication (926 sites)",
    "dc3-icf-alias-growth-20260809 full-frontier residue body test (1,869 pairs at pin 78ad9bee; 1,417 FOLD)"
