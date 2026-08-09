@@ -271,16 +271,15 @@ void RndBitmap::Create(void *buffer) {
     }
 }
 
-void RndBitmap::SetPixelIndex(int i1, int i2, unsigned char uc) {
-    bool bb;
-    int offset = PixelOffset(i1, i2, bb);
-    u8 *pixels = mPixels;
+void RndBitmap::SetPixelIndex(int x, int y, unsigned char idx) {
+    bool b;
+    u8 *p = mPixels + PixelOffset(x, y, b);
     if (mBpp == 8) {
-        *(pixels + offset) = uc;
-    } else if (bb) {
-        *(pixels + offset) = uc << 4 | *(pixels + offset) & 0xF;
+        *p = idx;
+    } else if (b) {
+        *p = (*p & 0xF) | (idx << 4);
     } else {
-        *(pixels + offset) = *(pixels + offset) & 0xF0 | uc;
+        *p = (*p & 0xF0) | idx;
     }
 }
 
