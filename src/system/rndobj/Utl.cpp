@@ -901,16 +901,20 @@ void UtilDrawCylinder(
     }
 }
 
+// Keep the oncer as the `if`'s bare substatement and let the else arm return:
+// `MILO_NOTIFY_ONCE` is itself a compound block, so wrapping it in braces opens
+// one scope more than retail did, and MSVC numbers a function-local static by a
+// monotone count of the scope-opening constructs read before it.  Retail's map
+// (`orig/373307D9/ham_xbox_r.map`) spells all three rndobj:Utl.obj atexit thunks
+// `?4?`; the braced form emitted `?5?` here.
 void RandomPointOnMesh(RndMesh *m, Vector3 &v1, Vector3 &v2) {
     RndMesh::Face &face = m->Faces()[RandomInt(0, m->Faces().size())];
     int numverts = m->Verts().size();
-    if (face.v1 >= numverts || face.v2 >= numverts || face.v3 >= numverts) {
+    if (face.v1 >= numverts || face.v2 >= numverts || face.v3 >= numverts)
         MILO_NOTIFY_ONCE(
             "%s: %s random face contains unknown vert indices!", PathName(m), m->Name()
-        );
-        v1.Zero();
-        v2.Zero();
-    } else {
+        )
+    else {
         Vector3 pos1, pos2, pos3;
         Vector3 norm1, norm2, norm3;
         if (m->NumBones() > 0) {
@@ -943,7 +947,10 @@ void RandomPointOnMesh(RndMesh *m, Vector3 &v1, Vector3 &v2) {
         Add(norm1, norm2, v2);
         Add(v2, norm3, v2);
         Normalize(v2, v2);
+        return;
     }
+    v1.Zero();
+    v2.Zero();
 }
 
 void UtilDrawCigar(
