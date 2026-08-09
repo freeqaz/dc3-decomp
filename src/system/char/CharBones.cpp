@@ -138,10 +138,8 @@ void CharBones::SetCompression(CompressionType ty) {
 }
 
 CharBones::Type CharBones::TypeOf(Symbol s) {
-    const char *p = s.Str();
-    char c = *p;
-    while (c != 0) {
-        if (c == '.') {
+    for (const char *p = s.Str(); *p != '\0'; p++) {
+        if (*p == '.') {
             p++;
             switch (*p) {
             case 'p':
@@ -151,7 +149,6 @@ CharBones::Type CharBones::TypeOf(Symbol s) {
             case 'q':
                 return TYPE_QUAT;
             case 'r': {
-                // check if rot is x, y, or z
                 char next = p[3];
                 if (next >= 'x' && next <= 'z')
                     return (Type)(next - 'u');
@@ -160,9 +157,8 @@ CharBones::Type CharBones::TypeOf(Symbol s) {
                 break;
             }
         }
-        c = *++p;
     }
-    MILO_FAIL("Unknown bone suffix in %s", (String &)s);
+    MILO_FAIL("Unknown bone suffix in %s", s);
     return NUM_TYPES;
 }
 
