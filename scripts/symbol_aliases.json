@@ -19,50 +19,47 @@
    "dec-label-reverify-2026-08-06 label-sample adjudication (926 sites)",
    "dc3-icf-alias-growth-20260809 full-frontier residue body test (1,869 pairs at pin 78ad9bee; 1,417 FOLD)"
   ],
-  "n_groups_generated": 376,
-  "n_groups_accepted": 368,
+  "n_groups_generated": 375,
+  "n_groups_accepted": 373,
   "n_target_objs": 2223,
   "n_base_objs": 980,
-  "n_names": 2097,
-  "known_regression_vs_76_class_set": {
-   "n_names_lost": 5,
-   "names": [
+  "n_names": 2120,
+  "over_merge_split": {
+   "what": "A closure class holding two TARGET-RESIDENT names is an over-merge: a real ICF fold keeps exactly one spelling. Gate (c) catches it and rejects the WHOLE class, which is why the 76 -> 368 growth LOST five MakeString names the smaller set had -- growing the evidence shrank the accepted set. Such a class is now SPLIT into maximal sub-classes of one target-resident name each.",
+   "implementation": "decomp-synth tools/il_witness/build_icf_alias_inputs.py:split_on_target_residents (--no-split reproduces the raw-closure output)",
+   "n_classes_split_out": 5,
+   "n_names_dropped_as_ambiguous": 3,
+   "names_dropped_as_ambiguous": [
+    "??$MakeString@H@@YAPBDPBDABH@Z",
     "??$MakeString@HH@@YAPBDPBDABH1@Z",
+    "??$MakeString@I@@YAPBDPBDABI@Z"
+   ],
+   "why_dropped": "Reachable from TWO target-resident survivors, i.e. witnessed folded against both, so no deterministic canonical spelling exists. Same reasoning as gate (e) applies to a name in two groups, same fail-closed direction."
+  },
+  "regression_vs_76_class_set": {
+   "status": "REPAIRED for 4 of the 5 names; the 5th was a FALSE admission the growth exposed.",
+   "recovered": [
     "??$MakeString@HW4State@SaveLoadManager@@@@YAPBDPBDABHABW4State@SaveLoadManager@@@Z",
     "??$MakeString@PAD@@YAPBDPBDABQAD@Z",
     "??$MakeString@PBD@@YAPBDPBDABQBD@Z",
     "??$MakeString@W4State@SaveLoadManager@@W412@@@YAPBDPBDABW4State@SaveLoadManager@@1@Z"
    ],
-   "mechanism": "GROWING THE EVIDENCE CAN SHRINK THE ACCEPTED SET. The representation is a transitive closure over witnessed pairs, so more pairs merge more names into each class. A larger class is likelier to contain two names that are BOTH resident in the target objects, which trips validator gate (c) -- 'the survivor must be the ONLY group member named in the TARGET objects' -- and gate (c) rejects the WHOLE class, including the sub-part that passed at the smaller closure. Three MakeString classes were rejected here for exactly that reason.",
-   "net_effect": "Strictly positive in aggregate and measured, not argued: strict raw_text_reloc_eq passes at pin 78ad9bee are 14,056 -> 16,889 with this set (+2,833) versus +1,772 with the 76-class set. The 5 lost names cost nothing measurable against that.",
-   "fix_not_applied": "The principled repair is to SPLIT a gate-(c)-rejected closure class into maximal sub-classes that pass, instead of dropping it whole. Not built: 5 names of 2,097 did not justify it during the phase-5 push. Recorded so the next grower does not rediscover it as a mystery."
+   "not_recovered": "??$MakeString@HH@@YAPBDPBDABH1@Z",
+   "not_recovered_why": "Directly witnessed folded against BOTH ??$MakeString@HW4State@SaveLoadManager@@... (3 sites) and ??$MakeString@KH@@YAPBDPBDABKABH@Z (1 site), which are separately target-resident. The 76-class set admitted it only because the smaller closure had not yet seen the second pair; keeping it would canonicalise one name to two distinct addresses."
+  },
+  "measured_effect_at_pin_78ad9bee": {
+   "comparable_pairs": 29397,
+   "strict_raw_text_reloc_eq_passes": {
+    "no_equivalences": 14056,
+    "installed_368_class_set": 16889,
+    "this_373_class_set": 17016
+   },
+   "gained_vs_installed": 127,
+   "lost_vs_installed": 0,
+   "lost_vs_no_equivalences": 0
   }
  },
  "_rejected_at_install": [
-  {
-   "name": "MakeString@0x82895520",
-   "reasons": [
-    "(c) target objs name ['??$MakeString@HW4State@SaveLoadManager@@@@YAPBDPBDABHABW4State@SaveLoadManager@@@Z', '??$MakeString@KH@@YAPBDPBDABKABH@Z'], expected only ['??$MakeString@HW4State@SaveLoadManager@@@@YAPBDPBDABHABW4State@SaveLoadManager@@@Z'] -- not a real fold"
-   ]
-  },
-  {
-   "name": "MakeString@0x823314d8",
-   "reasons": [
-    "(c) target objs name ['??$MakeString@PAD@@YAPBDPBDABQAD@Z', '??$MakeString@VSymbol@@@@YAPBDPBDABVSymbol@@@Z'], expected only ['??$MakeString@PAD@@YAPBDPBDABQAD@Z'] -- not a real fold"
-   ]
-  },
-  {
-   "name": "MakeString@0x82610090",
-   "reasons": [
-    "(c) target objs name ['??$MakeString@W4BlendEaseMode@CamShotFrame@@@@YAPBDPBDABW4BlendEaseMode@CamShotFrame@@@Z', '??$MakeString@PAX@@YAPBDPBDABQAX@Z'], expected only ['??$MakeString@W4BlendEaseMode@CamShotFrame@@@@YAPBDPBDABW4BlendEaseMode@CamShotFrame@@@Z'] -- not a real fold"
-   ]
-  },
-  {
-   "name": "AVector3@0x82389dc0",
-   "reasons": [
-    "(c) target objs name ['??AVector3@@QBAABMH@Z', '??AVector3@@QAAAAMH@Z'], expected only ['??AVector3@@QBAABMH@Z'] -- not a real fold"
-   ]
-  },
   {
    "name": "MemAllocFailed@0x82334a38",
    "reasons": [
@@ -70,21 +67,8 @@
    ]
   },
   {
-   "name": "Notify@0x825ce0e8",
-   "reasons": [
-    "(c) target objs name ['?Notify@Debug@@QAAXPBD@Z', '?Warn@Debug@@QAAXPBD@Z'], expected only ['?Notify@Debug@@QAAXPBD@Z'] -- not a real fold"
-   ]
-  },
-  {
-   "name": "Style@0x82794b98",
-   "reasons": [
-    "(c) target objs name ['?Style@UILabel@@QBAABV0RndText@@H@Z', '?Style@UILabel@@QAAAAV0RndText@@H@Z'], expected only ['?Style@UILabel@@QBAABV0RndText@@H@Z'] -- not a real fold"
-   ]
-  },
-  {
    "name": "fn_82E21268@0x82e21268",
    "reasons": [
-    "(c) target objs name ['fn_82E21268', '??3@YAXPAX@Z'], expected only ['fn_82E21268'] -- not a real fold",
     "(d) address-derived placeholder spelling 'fn_82E21268'"
    ]
   }
@@ -1137,6 +1121,69 @@
    "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 1 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
   },
   {
+   "name": "MakeString@0x82895520",
+   "address": "0x82895520",
+   "survivor": "??$MakeString@HW4State@SaveLoadManager@@@@YAPBDPBDABHABW4State@SaveLoadManager@@@Z",
+   "folded": [
+    "??$MakeString@W4State@SaveLoadManager@@W412@@@YAPBDPBDABW4State@SaveLoadManager@@1@Z",
+    "??$MakeString@W4State@SaveLoadManager@@W4SaveLoadMode@@@@YAPBDPBDABW4State@SaveLoadManager@@ABW4SaveLoadMode@@@Z"
+   ],
+   "sites": 2,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 2 folded spelling(s), 2 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE. SPLIT out of a 6-name closure class that held more than one target-resident name; 1 member(s) of that class were reachable from two target-resident survivors and were dropped as having no deterministic canonical spelling. See split_on_target_residents.",
+   "split_of": 6,
+   "split_dropped_ambiguous": [
+    "??$MakeString@HH@@YAPBDPBDABH1@Z"
+   ]
+  },
+  {
+   "name": "MakeString@0x827f84a8",
+   "address": "0x827f84a8",
+   "survivor": "??$MakeString@KH@@YAPBDPBDABKABH@Z",
+   "folded": [
+    "??$MakeString@IH@@YAPBDPBDABIABH@Z"
+   ],
+   "sites": 1,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 1 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE. SPLIT out of a 6-name closure class that held more than one target-resident name; 1 member(s) of that class were reachable from two target-resident survivors and were dropped as having no deterministic canonical spelling. See split_on_target_residents.",
+   "split_of": 6,
+   "split_dropped_ambiguous": [
+    "??$MakeString@HH@@YAPBDPBDABH1@Z"
+   ]
+  },
+  {
+   "name": "MakeString@0x823314d8",
+   "address": "0x823314d8",
+   "survivor": "??$MakeString@PAD@@YAPBDPBDABQAD@Z",
+   "folded": [
+    "??$MakeString@PBD@@YAPBDPBDABQBD@Z"
+   ],
+   "sites": 19,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 19 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE. SPLIT out of a 3-name closure class that held more than one target-resident name; 0 member(s) of that class were reachable from two target-resident survivors and were dropped as having no deterministic canonical spelling. See split_on_target_residents.",
+   "split_of": 3,
+   "split_dropped_ambiguous": []
+  },
+  {
+   "name": "MakeString@0x823b2008",
+   "address": "0x823b2008",
+   "survivor": "??$MakeString@PAX@@YAPBDPBDABQAX@Z",
+   "folded": [
+    "??$MakeString@J@@YAPBDPBDABJ@Z",
+    "??$MakeString@K@@YAPBDPBDABK@Z",
+    "??$MakeString@PAPAVCacheID@@@@YAPBDPBDABQAPAVCacheID@@@Z",
+    "??$MakeString@PAVCacheID@@@@YAPBDPBDABQAVCacheID@@@Z"
+   ],
+   "sites": 5,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 4 folded spelling(s), 5 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE. SPLIT out of a 18-name closure class that held more than one target-resident name; 2 member(s) of that class were reachable from two target-resident survivors and were dropped as having no deterministic canonical spelling. See split_on_target_residents.",
+   "split_of": 18,
+   "split_dropped_ambiguous": [
+    "??$MakeString@H@@YAPBDPBDABH@Z",
+    "??$MakeString@I@@YAPBDPBDABI@Z"
+   ]
+  },
+  {
    "name": "MakeString@0x8292bf68",
    "address": "0x8292bf68",
    "survivor": "??$MakeString@PBD$$BY06$$CBD@@YAPBDPBDABQBDAAY06$$CBD@Z",
@@ -1193,6 +1240,31 @@
    "sites": 1,
    "survivor_candidates": 1,
    "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 1 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "MakeString@0x82610090",
+   "address": "0x82610090",
+   "survivor": "??$MakeString@W4BlendEaseMode@CamShotFrame@@@@YAPBDPBDABW4BlendEaseMode@CamShotFrame@@@Z",
+   "folded": [
+    "??$MakeString@W4CacheResult@@@@YAPBDPBDABW4CacheResult@@@Z",
+    "??$MakeString@W4DataType@@@@YAPBDPBDABW4DataType@@@Z",
+    "??$MakeString@W4NetCacheMgrFailType@@@@YAPBDPBDABW4NetCacheMgrFailType@@@Z",
+    "??$MakeString@W4NotifyLocation@@@@YAPBDPBDABW4NotifyLocation@@@Z",
+    "??$MakeString@W4OpType@CacheMgr@@@@YAPBDPBDABW4OpType@CacheMgr@@@Z",
+    "??$MakeString@W4OrganizedState@FileMergerOrganizer@@@@YAPBDPBDABW4OrganizedState@FileMergerOrganizer@@@Z",
+    "??$MakeString@W4SongInfoAudioType@@@@YAPBDPBDABW4SongInfoAudioType@@@Z",
+    "??$MakeString@W4SongMgrState@@@@YAPBDPBDABW4SongMgrState@@@Z",
+    "??$MakeString@W4State@SaveLoadManager@@@@YAPBDPBDABW4State@SaveLoadManager@@@Z",
+    "??$MakeString@W4_D3DFORMAT@@@@YAPBDPBDABW4_D3DFORMAT@@@Z"
+   ],
+   "sites": 10,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 10 folded spelling(s), 10 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE. SPLIT out of a 18-name closure class that held more than one target-resident name; 2 member(s) of that class were reachable from two target-resident survivors and were dropped as having no deterministic canonical spelling. See split_on_target_residents.",
+   "split_of": 18,
+   "split_dropped_ambiguous": [
+    "??$MakeString@H@@YAPBDPBDABH@Z",
+    "??$MakeString@I@@YAPBDPBDABI@Z"
+   ]
   },
   {
    "name": "MakeString@0x8255a0a0",
