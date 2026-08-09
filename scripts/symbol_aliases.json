@@ -22,9 +22,9 @@
   "n_groups_generated": 376,
   "n_target_objs": 2223,
   "n_base_objs": 980,
-  "n_groups_accepted": 371,
-  "n_names": 2121,
-  "gate_c_split": "Installed under validator gate (c'), added 2026-08-09: a folded spelling that has its OWN address in target_symbol_map.json, different from the survivor's, is a DISTINCT FUNCTION the transitive closure merged in error, and is dropped FROM the class instead of rejecting the class whole. This retires `known_regression_vs_76_class_set`: all five MakeString names the 76 -> 368 growth had lost are back. Measured on this tree, 368 -> 371 classes, 2,097 -> 2,121 names, and strict raw_text_reloc_eq passes 18,061 -> 18,234."
+  "gate_c_split": "Installed under validator gate (c'), added 2026-08-09: a folded spelling that has its OWN address in target_symbol_map.json, different from the survivor's, is a DISTINCT FUNCTION the transitive closure merged in error, and is dropped FROM the class instead of rejecting the class whole. This retires `known_regression_vs_76_class_set`: all five MakeString names the 76 -> 368 growth had lost are back. Measured on this tree, 368 -> 371 classes, 2,097 -> 2,121 names, and strict raw_text_reloc_eq passes 18,061 -> 18,234.",
+  "n_groups_accepted": 372,
+  "n_names": 2124
  },
  "_rejected_at_install": [
   {
@@ -52,13 +52,6 @@
    "reasons": [
     "(c') dropped ['?Style@UILabel@@QAAAAV0RndText@@H@Z']: target map puts [['0x82795068']] against the survivor's ['0x82794b98'] \u2014 distinct functions, not a fold",
     "malformed group (no survivor or no folded spelling)"
-   ]
-  },
-  {
-   "name": "fn_82E21268@0x82e21268",
-   "reasons": [
-    "(c') dropped ['??3@YAXPAX@Z']: target map puts [['0x82abc2a8']] against the survivor's ['0x82e21268'] \u2014 distinct functions, not a fold",
-    "(d) address-derived placeholder spelling 'fn_82E21268'"
    ]
   }
  ],
@@ -5219,6 +5212,26 @@
    "sites": 1,
    "survivor_candidates": 1,
    "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 1 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+  },
+  {
+   "name": "fn_82E21268@0x82e21268",
+   "address": "0x82e21268",
+   "survivor": "??3@YAXPAX@Z",
+   "folded": [
+    "??_V@YAXPAX@Z",
+    "OggFree"
+   ],
+   "sites": 34,
+   "survivor_candidates": 1,
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 3 folded spelling(s), 34 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE.",
+   "renamed_from": {
+    "survivor": "fn_82E21268",
+    "folded": [
+     "??3@YAXPAX@Z",
+     "??_V@YAXPAX@Z",
+     "OggFree"
+    ]
+   }
   },
   {
    "name": "merged_8237B768@0x8237b768",
