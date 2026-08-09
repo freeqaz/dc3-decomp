@@ -23,7 +23,20 @@
   "n_groups_accepted": 368,
   "n_target_objs": 2223,
   "n_base_objs": 980,
-  "n_names": 2097
+  "n_names": 2097,
+  "known_regression_vs_76_class_set": {
+   "n_names_lost": 5,
+   "names": [
+    "??$MakeString@HH@@YAPBDPBDABH1@Z",
+    "??$MakeString@HW4State@SaveLoadManager@@@@YAPBDPBDABHABW4State@SaveLoadManager@@@Z",
+    "??$MakeString@PAD@@YAPBDPBDABQAD@Z",
+    "??$MakeString@PBD@@YAPBDPBDABQBD@Z",
+    "??$MakeString@W4State@SaveLoadManager@@W412@@@YAPBDPBDABW4State@SaveLoadManager@@1@Z"
+   ],
+   "mechanism": "GROWING THE EVIDENCE CAN SHRINK THE ACCEPTED SET. The representation is a transitive closure over witnessed pairs, so more pairs merge more names into each class. A larger class is likelier to contain two names that are BOTH resident in the target objects, which trips validator gate (c) -- 'the survivor must be the ONLY group member named in the TARGET objects' -- and gate (c) rejects the WHOLE class, including the sub-part that passed at the smaller closure. Three MakeString classes were rejected here for exactly that reason.",
+   "net_effect": "Strictly positive in aggregate and measured, not argued: strict raw_text_reloc_eq passes at pin 78ad9bee are 14,056 -> 16,889 with this set (+2,833) versus +1,772 with the 76-class set. The 5 lost names cost nothing measurable against that.",
+   "fix_not_applied": "The principled repair is to SPLIT a gate-(c)-rejected closure class into maximal sub-classes that pass, instead of dropping it whole. Not built: 5 names of 2,097 did not justify it during the phase-5 push. Recorded so the next grower does not rediscover it as a mystery."
+  }
  },
  "_rejected_at_install": [
   {
