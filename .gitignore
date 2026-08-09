@@ -80,6 +80,10 @@ generated-patches/
 # Scratch workspace for patch triage
 scratch/
 cl_temp_files/
+# Same idea as scratch/, different name: per-lane triage artifacts (.obj.before
+# snapshots, .patch candidates, run result JSON). Untracked and re-derivable, but
+# it kept showing up as a dirty tree and inviting an accidental `git add -A`.
+work/
 
 # One-off analysis scripts
 tools/retriage_85_100.py
