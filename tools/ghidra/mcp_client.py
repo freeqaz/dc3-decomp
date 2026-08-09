@@ -22,7 +22,9 @@ except ImportError:
 
 # Default configuration
 # Note: New pyghidra-mcp uses FastMCP/Uvicorn on port 8000 (changed from old port 8765)
-MCP_URL = "http://127.0.0.1:8000/mcp"
+# GHIDRA_MCP_URL overrides it: needed to point at a remote/forwarded service, and
+# to exercise the service-down path in tests without stopping the real one.
+MCP_URL = os.environ.get("GHIDRA_MCP_URL", "http://127.0.0.1:8000/mcp")
 SESSION_CACHE_FILE = Path("/tmp/claude/ghidra_mcp_session.txt")
 # Binary name is dynamically resolved - pyghidra-mcp uses SHA1 hash suffix
 DEFAULT_BINARY = None  # Will be resolved via list_binaries()
