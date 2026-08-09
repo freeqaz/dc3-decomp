@@ -131,23 +131,23 @@ void TimerStats::CollectStats(float ms, bool critical, int critCount) {
 }
 
 void TimerStats::PrintPctile(float pctile) {
-    float target = mCount * (1.0f - pctile);
+    float target = (1.0f - pctile) * (float)(long long)mCount;
     float top;
-    for (int i = 0; i < MAX_TOP_VALS; i++) {
+    int i;
+    for (i = 0; i < 0x80; i++) {
         top = mTopValues[i];
-        if (i > target) {
+        if ((float)(long long)i > target)
             break;
-        }
     }
-    int a = std::floor(pctile * 100);
-    if (target > MAX_TOP_VALS) {
+    int pct = (int)(float)floor(pctile * 100.0f);
+    if (target > 128.0f) {
         MILO_LOG(
             "   %dth pctile:   <%.2f THIS IS AN OVERESTIMATE.  For accurate percentile, increase MAX_TOP_VALS in Timer.h\n",
-            a,
+            pct,
             top
         );
     } else {
-        MILO_LOG("   %dth pctile:   %.2f\n", a, top);
+        MILO_LOG("   %dth pctile:   %.2f\n", pct, top);
     }
 }
 
