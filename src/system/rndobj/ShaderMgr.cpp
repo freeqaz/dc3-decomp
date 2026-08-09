@@ -166,10 +166,12 @@ void RndShaderMgr::SetTransform(const Transform &xfm) {
     SetVConstant4x3(kVS_WorldTransform, Hmx::Matrix4(xfm));
 }
 
-void RndShaderMgr::Invalidate(ShaderType t) {
-    for (std::list<ShaderTree>::iterator it = mShaderTrees.begin();
-         it != mShaderTrees.end();) {
-        if (it == mShaderTrees.begin() && it->shaderType != t) {
+void RndShaderMgr::Invalidate(ShaderType type) {
+    auto begin = mShaderTrees.begin();
+    auto it = begin;
+    bool isMax = type == kMaxShaderTypes;
+    while (it != mShaderTrees.end()) {
+        if (!isMax && it->shaderType != type) {
             ++it;
         } else {
             delete it->obj;
