@@ -23,6 +23,17 @@
 NgSpotlightDrawer::SpotlightResources *NgSpotlightDrawer::sSharedResources;
 #endif
 
+// The tuning scalars below live as function-local statics on purpose -- do not
+// hoist them back to file scope.  MSVC-PPC emits every file-scope initialised
+// definition into the object's single plain `.data` section, which the linker
+// always lays out BEFORE that object's `.data` COMDATs; a function-local static
+// instead gets its own `.data` COMDAT, emitted next to its function.  Retail's
+// contribution for this TU (`orig/373307D9/ham_xbox_r.map`) starts at the split
+// range base with `??_R0?AVSpotlightResources@NgSpotlightDrawer@@@8`, so retail
+// had no file-scope initialised data here at all.  Moving the ten scalars into
+// their users takes the reconstructed `.data` block from 0x112 to retail's
+// exact 0x114 and from 0 to 4 of 6 retail-map anchors, at zero measured cost.
+
 void GetLightPosition(Spotlight *s, Vector3 &v) {
     v = s->WorldXfm().v;
     Vector3 offset;
@@ -108,10 +119,6 @@ void NgSpotlightDrawer::SpotlightResources::Clear() {
 }
 
 
-static float sBeamBrighten = 2.0f;
-static float sSphereScale = 0.5f;
-static float sSheetIntensity = 8.0f;
-float sSheetW = 0.5f;
 
 #ifdef HX_NATIVE
 void NgSpotlightDrawer::SetupFogDensityMap() {}
@@ -147,9 +154,8 @@ bool NgSpotlightDrawer::CheckCam() {
     return true;
 }
 
-static float sBeamIntensity = 8.0f;
-
 void NgSpotlightDrawer::RenderCone(Spotlight *sl) {
+    static float sBeamIntensity = 8.0f;
     MILO_ASSERT(sl->HasBeam(), 0x45d);
     Spotlight *colorOwner = sl->mColorOwner;
     float scale = colorOwner->mIntensity * sBeamIntensity;
@@ -170,6 +176,8 @@ void NgSpotlightDrawer::RenderCone(Spotlight *sl) {
 }
 
 void NgSpotlightDrawer::RenderSphere(Spotlight *sl) {
+    static float sBeamBrighten = 2.0f;
+    static float sSphereScale = 0.5f;
     MILO_ASSERT(sl->HasBeam(), 0x470);
     float zero = 0.0f;
     Vector4 sphereParams(zero, zero, 0.625f, sl->mBeam.mTopRadius * sSphereScale);
@@ -199,6 +207,8 @@ void NgSpotlightDrawer::RenderSphere(Spotlight *sl) {
 }
 
 void NgSpotlightDrawer::RenderSheet(Spotlight *sl) {
+    static float sSheetIntensity = 8.0f;
+    static float sSheetW = 0.5f;
     SetXSectionTexture(sl->mBeam);
 
     float brighten = sl->mBeam.mBrighten;
@@ -404,9 +414,8 @@ void NgSpotlightDrawer::SetupFogDensityMap() {
     TheShaderMgr.SetPConstant((PShaderConstant)0x7F, fogParams);
 }
 
-static float sPostIntensityScale = 32.0f;
-
 void NgSpotlightDrawer::SetupForPostProcess() {
+    static float sPostIntensityScale = 32.0f;
     Vector4 zero(0.0f, 0.0f, 0.0f, 0.0f);
     TheShaderMgr.SetPConstant((PShaderConstant)0x5A, zero);
     BlurRT();
@@ -433,9 +442,8 @@ void NgSpotlightDrawer::SetupForPostProcess() {
     sActiveFrame = true;
 }
 
-static float kFogScale = 10.0f;
-
 void NgSpotlightDrawer::RenderFogProxy() {
+    static float kFogScale = 10.0f;
     RndDrawable *proxy = mParams.mProxy;
     if (proxy) {
         MILO_ASSERT(mFogDensityMap == SR().mDensityMap, 0x400);
@@ -486,10 +494,10 @@ void NgSpotlightDrawer::SetupFogDensityState() {
     TheShaderMgr.SetPConstant((PShaderConstant)0x7F, fogParams);
 }
 
-static float sBlurAmount = 1.0f;
-bool sSeparateBlurPasses = true;
 
 void NgSpotlightDrawer::BlurRT() {
+    static float sBlurAmount = 1.0f;
+    static bool sSeparateBlurPasses = true;
     D3DDevice_SetDepthStencilSurface(TheDxRnd.Device(), 0);
     if (sSeparateBlurPasses) {
         BlurRT(sBlurAmount, 0.0f);
@@ -498,8 +506,6 @@ void NgSpotlightDrawer::BlurRT() {
         BlurRT(sBlurAmount, sBlurAmount);
     }
 }
-
-static float sFogScale = 1.0f;
 
 #ifndef HX_NATIVE
 void NgSpotlightDrawer::BlurRT(float amountX, float amountY) {
@@ -556,6 +562,7 @@ void NgSpotlightDrawer::BlurRT(float amountX, float amountY) {
 }
 
 void NgSpotlightDrawer::RenderScene() {
+    static float sFogScale = 1.0f;
     START_AUTO_TIMER("world_draw");
 
     sActiveFrame = false;
