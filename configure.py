@@ -203,7 +203,17 @@ config.compilers_tag = "20250812"
 # Regenerating the objdiff report over the 2224 units moved nothing: 43.67707%
 # matched code, 29384/48383 functions, 968 complete units, and zero measure deltas
 # in any unit or category (game 87.21148%, engine 76.40033%, sdk 0.021002889%).
-config.dtk_tag = "v1.10.0"
+#
+# 1.10.0 -> 1.11.0: the XDK CRT register save/restore sleds are now named from their
+# bodies (__savegprlr_25) instead of split as lbl_<addr>. dtk had the names all along
+# and discarded them. Not PDB-gated, so unlike 1.10.0 this one DOES reach DC3.
+# build/373307D9/config.json already records 1.11.0 -- the shared jeff binary was
+# rebuilt and this tree re-split against it -- so this pin bump is documentation
+# catching up to a split that already happened, and it cannot itself force a
+# re-split: load_build_config() only drops config.json when the RECORDED version is
+# older than the pin, and 1.11.0 < 1.11.0 is false. Bumping it re-arms that gate for
+# the next release, which is the whole reason the v1.9.2 pin was worth fixing.
+config.dtk_tag = "v1.11.0"
 config.objdiff_tag = "v4.2.2"  # freeqaz/objdiff fork release (linux-x86_64 asset)
 config.sjiswrap_tag = "v1.2.1"
 config.wibo_tag = "1.0.0"
