@@ -1,10 +1,10 @@
 #pragma once
-#include "math/Easing.h"
-#include "obj/Object.h"
-#include "os/Timer.h"
-#include "synth/Pollable.h"
-#include "utl/BinStream.h"
-#include "utl/MemMgr.h"
+#include "math\Easing.h"
+#include "obj\Object.h"
+#include "os\Timer.h"
+#include "synth\Pollable.h"
+#include "utl\BinStream.h"
+#include "utl\MemMgr.h"
 #include <set>
 
 class FaderGroup;

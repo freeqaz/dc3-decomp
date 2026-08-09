@@ -1,9 +1,9 @@
-#include "rndobj/PollAnim.h"
-#include "obj/Object.h"
-#include "obj/Task.h"
-#include "rndobj/Anim.h"
-#include "rndobj/Poll.h"
-#include "utl/BinStream.h"
+#include "rndobj\PollAnim.h"
+#include "obj\Object.h"
+#include "obj\Task.h"
+#include "rndobj\Anim.h"
+#include "rndobj\Poll.h"
+#include "utl\BinStream.h"
 
 #pragma region Hmx::Object
 

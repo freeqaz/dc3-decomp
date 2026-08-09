@@ -1,22 +1,22 @@
-#include "synth/SampleData.h"
-#include "synth/WavMgr.h"
-#include "os/Debug.h"
-#include "os/File.h"
-#include "utl/BinStream.h"
-#include "utl/ChunkStream.h"
-#include "utl/WaveFile.h"
+#include "synth\SampleData.h"
+#include "synth\WavMgr.h"
+#include "os\Debug.h"
+#include "os\File.h"
+#include "utl\BinStream.h"
+#include "utl\ChunkStream.h"
+#include "utl\WaveFile.h"
 #ifdef HX_NATIVE
 #include <cstdlib>
 #endif
 #ifdef HX_FFMPEG
-#include "platform/XmaSampleDecoder.h"
+#include "platform\XmaSampleDecoder.h"
 #endif
 #ifdef HX_NATIVE
 // Offline XMA->PCM sidecar bridge: native (HX_FFMPEG) WRITES sidecars as a
 // byproduct of the runtime decode; web (no ffmpeg) READS them. Closes the
 // web-audio XMA gap with no emscripten ffmpeg port. Invisible to the matched
 // Wii build (HX_NATIVE undefined there).
-#include "platform/XmaPcmSidecar.h"
+#include "platform\XmaPcmSidecar.h"
 #endif
 
 SampleDataAllocFunc SampleData::sAlloc = nullptr;

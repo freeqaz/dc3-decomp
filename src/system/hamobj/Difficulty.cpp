@@ -1,9 +1,9 @@
-#include "hamobj/Difficulty.h"
+#include "hamobj\Difficulty.h"
 #include "Difficulty.h"
-#include "obj/Data.h"
-#include "obj/DataFunc.h"
-#include "obj/DataUtl.h"
-#include "os/Debug.h"
+#include "obj\Data.h"
+#include "obj\DataFunc.h"
+#include "obj\DataUtl.h"
+#include "os\Debug.h"
 
 Difficulty DefaultDifficulty() { return kDifficultyEasy; }
 Difficulty EasiestDifficulty() { return kDifficultyBeginner; }

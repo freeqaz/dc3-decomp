@@ -1,7 +1,7 @@
-#include "meta/StoreEnumeration.h"
-#include "os/Debug.h"
-#include "utl/MakeString.h"
-#include "xdk/XAPILIB.h"
+#include "meta\StoreEnumeration.h"
+#include "os\Debug.h"
+#include "utl\MakeString.h"
+#include "xdk\XAPILIB.h"
 #include <cstring>
 
 

@@ -1,8 +1,8 @@
-#include "gesture/ArchiveSkeleton.h"
+#include "gesture\ArchiveSkeleton.h"
 #include "Skeleton.h"
-#include "gesture/BaseSkeleton.h"
-#include "os/Debug.h"
-#include "math/Mtx.h"
+#include "gesture\BaseSkeleton.h"
+#include "os\Debug.h"
+#include "math\Mtx.h"
 
 
 ArchiveSkeleton::ArchiveSkeleton() {

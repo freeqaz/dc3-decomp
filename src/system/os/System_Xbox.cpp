@@ -1,10 +1,10 @@
-#include "obj/Data.h"
-#include "os/Debug.h"
-#include "os/File.h"
-#include "os/PlatformMgr.h"
-#include "os/System.h"
-#include "xdk/XAPILIB.h"
-#include "xdk/XBDM.h"
+#include "obj\Data.h"
+#include "os\Debug.h"
+#include "os\File.h"
+#include "os\PlatformMgr.h"
+#include "os\System.h"
+#include "xdk\XAPILIB.h"
+#include "xdk\XBDM.h"
 #include "Memory.h"
 
 namespace {

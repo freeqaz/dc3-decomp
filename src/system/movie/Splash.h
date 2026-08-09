@@ -1,9 +1,9 @@
 #pragma once
-#include "movie/TexMovie.h"
-#include "os/CritSec.h"
-#include "os/SynchronizationEvent.h"
-#include "rndobj/Dir.h"
-#include "rndobj/EventTrigger.h"
+#include "movie\TexMovie.h"
+#include "os\CritSec.h"
+#include "os\SynchronizationEvent.h"
+#include "rndobj\Dir.h"
+#include "rndobj\EventTrigger.h"
 
 class Splash {
 public:

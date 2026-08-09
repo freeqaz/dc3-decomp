@@ -1,6 +1,6 @@
 #pragma once
-#include "rndobj/Poll.h"
-#include "rndobj/Trans.h"
+#include "rndobj\Poll.h"
+#include "rndobj\Trans.h"
 
 /** "Vertex-based shockwave effect" */
 class RndShockwave : public RndPollable, public RndTransformable {

@@ -1,15 +1,15 @@
 #pragma once
-#include "obj/Data.h"
-#include "obj/Msg.h"
-#include "obj/Object.h"
-#include "os/Joypad.h"
-#include "os/Timer.h"
-#include "rndobj/Cam.h"
-#include "rndobj/Env.h"
-#include "rndobj/Overlay.h"
-#include "ui/UIScreen.h"
-#include "ui/UIComponent.h"
-#include "utl/Symbol.h"
+#include "obj\Data.h"
+#include "obj\Msg.h"
+#include "obj\Object.h"
+#include "os\Joypad.h"
+#include "os\Timer.h"
+#include "rndobj\Cam.h"
+#include "rndobj\Env.h"
+#include "rndobj\Overlay.h"
+#include "ui\UIScreen.h"
+#include "ui\UIComponent.h"
+#include "utl\Symbol.h"
 
 class Automator;
 class JoypadClient;
@@ -169,7 +169,7 @@ UIChangedMsg(bool showing) : Message(Type(), showing) {}
 bool Showing() const { return mData->Int(2); }
 END_MESSAGE
 
-#include "ui/PanelDir.h"
+#include "ui\PanelDir.h"
 // #define FOCUS_MSG (component_focus ($new_focus $old_focus $panel_dir $nav_type))
 DECLARE_MESSAGE(UIComponentFocusChangeMsg, "component_focus");
 UIComponentFocusChangeMsg(UIComponent *comp1, UIComponent *comp2, PanelDir *dir, Symbol s)

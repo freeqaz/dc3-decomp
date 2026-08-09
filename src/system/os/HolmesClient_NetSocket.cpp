@@ -1,9 +1,9 @@
-#include "os/HolmesClient.h"
-#include "os/NetStream.h"
-#include "os/NetworkSocket.h"
-#include "os/System.h"
-#include "utl/BinStream.h"
-#include "utl/Option.h"
+#include "os\HolmesClient.h"
+#include "os\NetStream.h"
+#include "os\NetworkSocket.h"
+#include "os\System.h"
+#include "utl\BinStream.h"
+#include "utl\Option.h"
 #include <cstdio>
 
 String HolmesClient::PlatformGetHostName() { return NetworkSocket::GetHostName(); }

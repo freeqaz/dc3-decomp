@@ -1,8 +1,8 @@
 #pragma once
-#include "obj/Object.h"
-#include "synth/ADSR.h"
-#include "synth/FxSend.h"
-#include "synth/Pollable.h"
+#include "obj\Object.h"
+#include "synth\ADSR.h"
+#include "synth\FxSend.h"
+#include "synth\Pollable.h"
 
 class PlayableSample : public SynthPollable {
 public:

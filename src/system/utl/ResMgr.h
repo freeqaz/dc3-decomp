@@ -1,7 +1,7 @@
 #pragma once
-#include "os/Debug.h"
-#include "utl/CRC.h"
-#include "utl/Std.h"
+#include "os\Debug.h"
+#include "utl\CRC.h"
+#include "utl\Std.h"
 #include <map>
 
 template <class T>

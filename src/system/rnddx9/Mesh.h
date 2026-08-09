@@ -1,10 +1,10 @@
 #pragma once
-#include "math/Mtx.h"
-#include "obj/Object.h"
-#include "rnddx9/Object.h"
-#include "rndobj/Mesh.h"
-#include "utl/PoolAlloc.h"
-#include "xdk/D3D9.h"
+#include "math\Mtx.h"
+#include "obj\Object.h"
+#include "rnddx9\Object.h"
+#include "rndobj\Mesh.h"
+#include "utl\PoolAlloc.h"
+#include "xdk\D3D9.h"
 
 class DxMat;
 

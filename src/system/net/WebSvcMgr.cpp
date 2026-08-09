@@ -1,8 +1,8 @@
-#include "net/WebSvcMgr.h"
-#include "net/WebSvcReq.h"
-#include "obj/Dir.h"
-#include "os/Debug.h"
-#include "os/NetworkSocket.h"
+#include "net\WebSvcMgr.h"
+#include "net\WebSvcReq.h"
+#include "obj\Dir.h"
+#include "os\Debug.h"
+#include "os\NetworkSocket.h"
 
 const char *kHMXDomain = "harmonixmusic.com";
 

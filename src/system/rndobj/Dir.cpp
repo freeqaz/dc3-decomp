@@ -1,26 +1,26 @@
-#include "rndobj/Dir.h"
+#include "rndobj\Dir.h"
 #ifdef HX_NATIVE
 #include <cstdlib>
 #include <cstring>
 #include <cstdio>
 #endif
-#include "obj/Data.h"
-#include "obj/Dir.h"
-#include "obj/Object.h"
-#include "os/Debug.h"
-#include "rndobj/Anim.h"
-#include "rndobj/Draw.h"
-#include "rndobj/Env.h"
-#include "rndobj/EventTrigger.h"
-#include "rndobj/Group.h"
-#include "rndobj/Poll.h"
-#include "rndobj/PostProc.h"
-#include "rndobj/Trans.h"
-#include "rndobj/Utl.h"
-#include "utl/BinStream.h"
-#include "utl/FilePath.h"
-#include "utl/Loader.h"
-#include "utl/MemMgr.h"
+#include "obj\Data.h"
+#include "obj\Dir.h"
+#include "obj\Object.h"
+#include "os\Debug.h"
+#include "rndobj\Anim.h"
+#include "rndobj\Draw.h"
+#include "rndobj\Env.h"
+#include "rndobj\EventTrigger.h"
+#include "rndobj\Group.h"
+#include "rndobj\Poll.h"
+#include "rndobj\PostProc.h"
+#include "rndobj\Trans.h"
+#include "rndobj\Utl.h"
+#include "utl\BinStream.h"
+#include "utl\FilePath.h"
+#include "utl\Loader.h"
+#include "utl\MemMgr.h"
 
 RndDir::RndDir() : mEnv(this) {}
 

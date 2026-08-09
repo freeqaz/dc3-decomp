@@ -1,7 +1,7 @@
-#include "obj/TextFile.h"
-#include "os/HolmesClient.h"
+#include "obj\TextFile.h"
+#include "os\HolmesClient.h"
 #include <cstring>
-#include "os/HolmesClient.h"
+#include "os\HolmesClient.h"
 
 void TextFile::SetName(const char *name, class ObjectDir *dir) {
     Hmx::Object::SetName(name, dir);

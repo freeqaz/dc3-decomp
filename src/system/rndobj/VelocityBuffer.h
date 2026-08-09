@@ -1,9 +1,9 @@
 #pragma once
-#include "rndobj/Cam.h"
-#include "rndobj/Draw.h"
-#include "rndobj/Mesh.h"
-#include "rndobj/Mat.h"
-#include "rndobj/Tex.h"
+#include "rndobj\Cam.h"
+#include "rndobj\Draw.h"
+#include "rndobj\Mesh.h"
+#include "rndobj\Mat.h"
+#include "rndobj\Tex.h"
 
 // size 0x1b584
 class RndXfmCache {

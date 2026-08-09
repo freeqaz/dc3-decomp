@@ -1,8 +1,8 @@
-#include "rndobj/PartLauncher.h"
-#include "math/Rand.h"
-#include "obj/Object.h"
-#include "rndobj/MultiMesh.h"
-#include "rndobj/Poll.h"
+#include "rndobj\PartLauncher.h"
+#include "math\Rand.h"
+#include "obj\Object.h"
+#include "rndobj\MultiMesh.h"
+#include "rndobj\Poll.h"
 
 RndPartLauncher::RndPartLauncher()
     : mPart(this, 0), mTrans(this, 0), mMeshEmitter(this, 0), mNumParts(0),

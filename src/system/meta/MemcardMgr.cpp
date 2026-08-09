@@ -1,5 +1,5 @@
-#include "meta/MemcardMgr.h"
-#include "os/Debug.h"
+#include "meta\MemcardMgr.h"
+#include "os\Debug.h"
 
 MemcardMgr TheMemcardMgr;
 

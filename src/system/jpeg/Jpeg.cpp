@@ -1,6 +1,6 @@
-#include "jpeg/Jpeg.h"
-#include "jpeg/jpeglib.h"
-#include "os/Debug.h"
+#include "jpeg\Jpeg.h"
+#include "jpeg\jpeglib.h"
+#include "os\Debug.h"
 
 namespace {
     // Extended destination manager with additional fields for buffer tracking

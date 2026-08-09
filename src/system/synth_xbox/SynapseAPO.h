@@ -1,5 +1,5 @@
 #pragma once
-#include "synth_xbox/FxSendSynapse.h"
+#include "synth_xbox\FxSendSynapse.h"
 
 struct XAPO_REGISTRATION_PROPERTIES;
 

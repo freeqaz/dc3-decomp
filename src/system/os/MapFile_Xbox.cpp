@@ -1,8 +1,8 @@
-#include "os/MapFile_Xbox.h"
-#include "os/File.h"
-#include "os/Debug.h"
-#include "os/System.h"
-#include "utl/MemMgr.h"
+#include "os\MapFile_Xbox.h"
+#include "os\File.h"
+#include "os\Debug.h"
+#include "os\System.h"
+#include "utl\MemMgr.h"
 #include <cstdio>
 
 namespace {

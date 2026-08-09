@@ -1,9 +1,9 @@
 #pragma once
-#include "gesture/Skeleton.h"
-#include "hamobj/DetectFrame.h"
-#include "hamobj/ErrorNode.h"
-#include "hamobj/FilterVersion.h"
-#include "hamobj/HamMove.h"
+#include "gesture\Skeleton.h"
+#include "hamobj\DetectFrame.h"
+#include "hamobj\ErrorNode.h"
+#include "hamobj\FilterVersion.h"
+#include "hamobj\HamMove.h"
 #include <vector>
 
 // size 0x34

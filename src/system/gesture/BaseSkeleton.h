@@ -1,6 +1,6 @@
 #pragma once
-#include "math/Vec.h"
-#include "math/Mtx.h"
+#include "math\Vec.h"
+#include "math\Mtx.h"
 
 enum SkeletonBone {
     kBoneHead = 0,

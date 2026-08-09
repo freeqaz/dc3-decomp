@@ -1,15 +1,15 @@
 #pragma once
-#include "char/CharDriver.h"
-#include "char/CharServoBone.h"
-#include "math/Sphere.h"
-#include "obj/Data.h"
-#include "obj/Dir.h"
-#include "obj/Object.h"
-#include "rndobj/Dir.h"
-#include "rndobj/Draw.h"
-#include "rndobj/Env.h"
-#include "rndobj/Trans.h"
-#include "utl/MemMgr.h"
+#include "char\CharDriver.h"
+#include "char\CharServoBone.h"
+#include "math\Sphere.h"
+#include "obj\Data.h"
+#include "obj\Dir.h"
+#include "obj\Object.h"
+#include "rndobj\Dir.h"
+#include "rndobj\Draw.h"
+#include "rndobj\Env.h"
+#include "rndobj\Trans.h"
+#include "utl\MemMgr.h"
 
 class Waypoint;
 class CharEyes;

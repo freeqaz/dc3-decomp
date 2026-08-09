@@ -1,6 +1,6 @@
-#include "ui/Utl.h"
-#include "os/Joypad.h"
-#include "ui/UI.h"
+#include "ui\Utl.h"
+#include "os\Joypad.h"
+#include "ui\UI.h"
 
 int PageDirection(JoypadAction act) {
     if (act == kAction_PageDown)

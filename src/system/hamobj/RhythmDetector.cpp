@@ -1,12 +1,12 @@
 #include "RhythmDetector.h"
-#include "gesture/BaseSkeleton.h"
-#include "gesture/GestureMgr.h"
-#include "gesture/Skeleton.h"
-#include "math/Vec.h"
-#include "ui/UIPanel.h"
-#include "obj/DataFunc.h"
-#include "obj/Dir.h"
-#include "gesture/SkeletonUpdate.h"
+#include "gesture\BaseSkeleton.h"
+#include "gesture\GestureMgr.h"
+#include "gesture\Skeleton.h"
+#include "math\Vec.h"
+#include "ui\UIPanel.h"
+#include "obj\DataFunc.h"
+#include "obj\Dir.h"
+#include "gesture\SkeletonUpdate.h"
 #include <cstring>
 
 namespace {

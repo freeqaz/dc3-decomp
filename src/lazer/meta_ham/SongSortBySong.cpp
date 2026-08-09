@@ -1,9 +1,9 @@
 #include "SongSortBySong.h"
 
-#include "meta/Sorting.h"
-#include "meta_ham/NavListNode.h"
-#include "meta_ham/SongSortNode.h"
-#include "ui/UIListWidget.h"
+#include "meta\Sorting.h"
+#include "meta_ham\NavListNode.h"
+#include "meta_ham\SongSortNode.h"
+#include "ui\UIListWidget.h"
 #include <cstdio>
 
 SongSortBySong::~SongSortBySong() {}

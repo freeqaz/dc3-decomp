@@ -1,5 +1,5 @@
-#include "rndobj/ColorXfm.h"
-#include "utl/BinStream.h"
+#include "rndobj\ColorXfm.h"
+#include "utl\BinStream.h"
 #include <cmath>
 
 static int ModChan(int chan) {

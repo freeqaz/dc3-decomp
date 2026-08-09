@@ -1,7 +1,7 @@
 #pragma once
-#include "utl/MemMgr.h"
-#include "utl/SongInfoAudioType.h"
-#include "utl/BinStream.h"
+#include "utl\MemMgr.h"
+#include "utl\SongInfoAudioType.h"
+#include "utl\BinStream.h"
 #include <vector>
 
 struct TrackChannels {

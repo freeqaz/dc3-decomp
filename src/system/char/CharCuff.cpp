@@ -1,8 +1,8 @@
-#include "char/CharCuff.h"
-#include "obj/Object.h"
-#include "rndobj/Trans.h"
-#include "rndobj/Rnd.h"
-#include "math/Trig.h"
+#include "char\CharCuff.h"
+#include "obj\Object.h"
+#include "rndobj\Trans.h"
+#include "rndobj\Rnd.h"
+#include "math\Trig.h"
 #include <cmath>
 
 CharCuff::CharCuff() : mOpenEnd(0), mIgnore(this), mBone(this), mEccentricity(1) {

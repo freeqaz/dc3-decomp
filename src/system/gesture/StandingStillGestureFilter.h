@@ -1,7 +1,7 @@
 #pragma once
-#include "gesture/Skeleton.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
+#include "gesture\Skeleton.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
 
 class StandingStillGestureFilter : public Hmx::Object {
 public:

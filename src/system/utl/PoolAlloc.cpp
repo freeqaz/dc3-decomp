@@ -1,13 +1,13 @@
-#include "utl/PoolAlloc.h"
+#include "utl\PoolAlloc.h"
 #include "MemMgr.h"
-#include "math/Utl.h"
+#include "math\Utl.h"
 #include <cstdio>
 #include <cstdlib>
-#include "os/CritSec.h"
-#include "os/Debug.h"
-#include "obj/Data.h"
-#include "utl/TextStream.h"
-#include "utl/Std.h"
+#include "os\CritSec.h"
+#include "os\Debug.h"
+#include "obj\Data.h"
+#include "utl\TextStream.h"
+#include "utl\Std.h"
 
 int gBigHunk = 0xC800;
 int gSmallHunk = 0xC800;

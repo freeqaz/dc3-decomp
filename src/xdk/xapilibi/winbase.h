@@ -1,6 +1,6 @@
 #pragma once
-#include "xdk/XBOXKRNL.h"
-#include "../win_types.h"
+#include "xdk\XBOXKRNL.h"
+#include "..\win_types.h"
 #include "minwinbase.h"
 #include "wtypesbase.h"
 

@@ -1,11 +1,11 @@
-#include "net/WebSvcMgrCurl.h"
+#include "net\WebSvcMgrCurl.h"
 #include "WebSvcReq.h"
-#include "curl/curl.h"
-#include "curl/multi.h"
-#include "net/HttpReq.h"
-#include "net/HttpReqCurl.h"
-#include "net/WebSvcMgr.h"
-#include "os/Debug.h"
+#include "curl\curl.h"
+#include "curl\multi.h"
+#include "net\HttpReq.h"
+#include "net\HttpReqCurl.h"
+#include "net\WebSvcMgr.h"
+#include "os\Debug.h"
 
 WebSvcMgrCurl gWebSvcMgr;
 WebSvcMgr &TheWebSvcMgr = gWebSvcMgr;

@@ -1,6 +1,6 @@
-#include "midi/DisplayEvents.h"
-#include "math/Utl.h"
-#include "rndobj/Rnd.h"
+#include "midi\DisplayEvents.h"
+#include "math\Utl.h"
+#include "rndobj\Rnd.h"
 
 static const float _kFloat2_0 = 2.0f;
 float DisplayEvents(DataEventList *events, float f1, float f2) {

@@ -1,10 +1,10 @@
 #pragma once
 
 #include "HamPanel.h"
-#include "obj/Object.h"
-#include "world/Instance.h"
+#include "obj\Object.h"
+#include "world\Instance.h"
 #include "ProfileMgr.h"
-#include "ui/UIListProvider.h"
+#include "ui\UIListProvider.h"
 
 class WeightInputProvider : public UIListProvider, public Hmx::Object {
 public:

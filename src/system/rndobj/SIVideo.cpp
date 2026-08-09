@@ -1,6 +1,6 @@
-#include "rndobj/SIVideo.h"
-#include "os/Debug.h"
-#include "utl/MemMgr.h"
+#include "rndobj\SIVideo.h"
+#include "os\Debug.h"
+#include "utl\MemMgr.h"
 
 void SIVideo::Reset() {
     mWidth = mHeight = mNumFrames = mOrder = 0;

@@ -1,12 +1,12 @@
 #pragma once
-#include "oggvorbis/codec.h"
-#include "oggvorbis/ogg.h"
-#include "os/CritSec.h"
-#include "os/File.h"
-#include "synth/OggMap.h"
-#include "synth/StandardStream.h"
-#include "synth/StreamReader.h"
-#include "synth/tomcrypt/mycrypt.h"
+#include "oggvorbis\codec.h"
+#include "oggvorbis\ogg.h"
+#include "os\CritSec.h"
+#include "os\File.h"
+#include "synth\OggMap.h"
+#include "synth\StandardStream.h"
+#include "synth\StreamReader.h"
+#include "synth\tomcrypt\mycrypt.h"
 
 class VorbisReader : public StreamReader, public CriticalSection {
 public:

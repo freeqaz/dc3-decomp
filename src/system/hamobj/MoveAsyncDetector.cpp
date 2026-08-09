@@ -1,17 +1,17 @@
 #include "MoveDir.h"
-#include "hamobj/DancerSequence.h"
-#include "hamobj/Difficulty.h"
-#include "hamobj/FilterVersion.h"
-#include "hamobj/HamDirector.h"
-#include "hamobj/HamGameData.h"
-#include "hamobj/HamMove.h"
-#include "hamobj/MoveDetector.h"
-#include "os/Debug.h"
-#include "stl/_pair.h"
+#include "hamobj\DancerSequence.h"
+#include "hamobj\Difficulty.h"
+#include "hamobj\FilterVersion.h"
+#include "hamobj\HamDirector.h"
+#include "hamobj\HamGameData.h"
+#include "hamobj\HamMove.h"
+#include "hamobj\MoveDetector.h"
+#include "os\Debug.h"
+#include "stl\_pair.h"
 #ifdef HX_NATIVE
-#include "gesture/SkeletonUpdate.h"
+#include "gesture\SkeletonUpdate.h"
 #endif
-#include "utl/TimeConversion.h"
+#include "utl\TimeConversion.h"
 
 MoveDetector::MoveDetector(
     const FilterVersion *fv, const HamMove *move, const DancerFrame *&dancer_frame

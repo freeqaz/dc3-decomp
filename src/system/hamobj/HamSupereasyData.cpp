@@ -1,5 +1,5 @@
-#include "hamobj/HamSupereasyData.h"
-#include "obj/Object.h"
+#include "hamobj\HamSupereasyData.h"
+#include "obj\Object.h"
 
 HamSupereasyData::HamSupereasyData() {}
 HamSupereasyData::~HamSupereasyData() {}

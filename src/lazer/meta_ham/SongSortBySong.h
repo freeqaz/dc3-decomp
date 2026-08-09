@@ -1,7 +1,7 @@
 #pragma once
 #include "NavListNode.h"
 #include "SongSort.h"
-#include "utl/Symbol.h"
+#include "utl\Symbol.h"
 
 class SongCmp : public NavListItemSortCmp {
 public:

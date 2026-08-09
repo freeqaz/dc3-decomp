@@ -1,7 +1,7 @@
-#include "synth_xbox/EnvelopeGenerator.h"
-#include "math/Decibels.h"
-#include "os/Debug.h"
-#include "xdk/LIBCMT/ppcintrinsics.h"
+#include "synth_xbox\EnvelopeGenerator.h"
+#include "math\Decibels.h"
+#include "os\Debug.h"
+#include "xdk\LIBCMT\ppcintrinsics.h"
 
 EnvelopeGenerator::EnvelopeGenerator() : unk8c(0) {
     EnvelopeGeneratorParams p;

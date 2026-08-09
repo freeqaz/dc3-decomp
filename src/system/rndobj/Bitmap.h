@@ -1,8 +1,8 @@
 #pragma once
-#include "utl/BinStream.h"
-#include "obj/Object.h"
-#include "utl/CRC.h"
-#include "utl/MemMgr.h"
+#include "utl\BinStream.h"
+#include "obj\Object.h"
+#include "utl\CRC.h"
+#include "utl\MemMgr.h"
 #include "types.h"
 
 /** Info at the very start of a .bmp. */

@@ -1,10 +1,10 @@
 // reloc-fix validation: header-only change (MEM_OVERLOAD class-name string), no .cpp behavior change
-#include "char/ClipGraphGen.h"
-#include "char/CharClip.h"
-#include "char/ClipDistMap.h"
-#include "math/Utl.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
+#include "char\ClipGraphGen.h"
+#include "char\CharClip.h"
+#include "char\ClipDistMap.h"
+#include "math\Utl.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
 
 ClipGraphGenerator::ClipGraphGenerator() : mTypeData(0), mDmap(0), mClipA(0), mClipB(0) {}
 

@@ -1,6 +1,6 @@
-#include "synth/BitCrushEffect.h"
-#include "os/Debug.h"
-#include "xdk/xaudio2/xaudio2.h"
+#include "synth\BitCrushEffect.h"
+#include "os\Debug.h"
+#include "xdk\xaudio2\xaudio2.h"
 
 BitCrushEffect::BitCrushEffect(IXAudioBatchAllocator *)
     : mHoldPeriod(0), mHoldCounter(0), mHeldLeft(0), mHeldRight(0) {}

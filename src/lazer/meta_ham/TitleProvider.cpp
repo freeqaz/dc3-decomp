@@ -1,11 +1,11 @@
-#include "meta_ham/TitleProvider.h"
-#include "obj/Object.h"
-#include "os/Debug.h"
-#include "rndobj/Mat.h"
-#include "ui/UILabel.h"
-#include "ui/UIListLabel.h"
-#include "ui/UIListMesh.h"
-#include "utl/Symbol.h"
+#include "meta_ham\TitleProvider.h"
+#include "obj\Object.h"
+#include "os\Debug.h"
+#include "rndobj\Mat.h"
+#include "ui\UILabel.h"
+#include "ui\UIListLabel.h"
+#include "ui\UIListMesh.h"
+#include "utl\Symbol.h"
 
 TitleProvider::~TitleProvider() {}
 

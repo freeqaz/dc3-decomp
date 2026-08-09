@@ -1,10 +1,10 @@
 #pragma once
 #include "ErrorNode.h"
-#include "hamobj/DancerSequence.h"
-#include "hamobj/ErrorNode.h"
-#include "hamobj/FilterVersion.h"
-#include "hamobj/HamMove.h"
-#include "math/Vec.h"
+#include "hamobj\DancerSequence.h"
+#include "hamobj\ErrorNode.h"
+#include "hamobj\FilterVersion.h"
+#include "hamobj\HamMove.h"
+#include "math\Vec.h"
 
 // size 0x430
 class DetectFrame {

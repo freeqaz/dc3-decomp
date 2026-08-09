@@ -1,7 +1,7 @@
 #pragma once
 #ifndef HX_NATIVE
 
-#include "../stlport/stl/_vector.h"
+#include "..\stlport\stl\_vector.h"
 
 namespace DSP {
 namespace Synapse {

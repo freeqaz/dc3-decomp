@@ -1,11 +1,11 @@
-#include "rndobj/Env.h"
+#include "rndobj\Env.h"
 #include "BoxMap.h"
-#include "obj/Object.h"
-#include "os/Debug.h"
-#include "rndobj/Draw.h"
-#include "rndobj/Trans.h"
-#include "utl/BinStream.h"
-#include "utl/Std.h"
+#include "obj\Object.h"
+#include "os\Debug.h"
+#include "rndobj\Draw.h"
+#include "rndobj\Trans.h"
+#include "utl\BinStream.h"
+#include "utl\Std.h"
 
 BoxMapLighting RndEnviron::sGlobalLighting;
 RndEnviron *RndEnviron::sCurrent;

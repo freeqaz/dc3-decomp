@@ -1,12 +1,12 @@
 #pragma once
-#include "char/CharPollable.h"
-#include "math/Vec.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "rndobj/Highlight.h"
-#include "rndobj/Trans.h"
-#include "utl/BinStream.h"
-#include "utl/MemMgr.h"
+#include "char\CharPollable.h"
+#include "math\Vec.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "rndobj\Highlight.h"
+#include "rndobj\Trans.h"
+#include "utl\BinStream.h"
+#include "utl\MemMgr.h"
 
 class CharSleeve : public RndHighlightable, public CharPollable {
 public:

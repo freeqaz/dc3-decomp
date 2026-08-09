@@ -1,7 +1,7 @@
 #pragma once
 #include "NavListSort.h"
-#include "meta_ham/NavListNode.h"
-#include "utl/Symbol.h"
+#include "meta_ham\NavListNode.h"
+#include "utl\Symbol.h"
 
 class PlaylistSort : public NavListSort {
 public:

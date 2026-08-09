@@ -1,11 +1,11 @@
-#include "os/NetworkSocket_Win.h"
-#include "os/Debug.h"
-#include "os/NetworkSocket.h"
-#include "utl/MakeString.h"
-#include "xdk/xapilibi/handleapi.h"
-#include "xdk/xapilibi/synchapi.h"
-#include "xdk/xbdm/xbdm.h"
-#include "xdk/xnet/winsockx.h"
+#include "os\NetworkSocket_Win.h"
+#include "os\Debug.h"
+#include "os\NetworkSocket.h"
+#include "utl\MakeString.h"
+#include "xdk\xapilibi\handleapi.h"
+#include "xdk\xapilibi\synchapi.h"
+#include "xdk\xbdm\xbdm.h"
+#include "xdk\xnet\winsockx.h"
 #include <cstring>
 
 struct XNDNS {

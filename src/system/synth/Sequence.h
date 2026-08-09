@@ -1,8 +1,8 @@
 #pragma once
-#include "obj/Object.h"
-#include "synth/Pollable.h"
-#include "synth/Faders.h"
-#include "utl/PoolAlloc.h"
+#include "obj\Object.h"
+#include "synth\Pollable.h"
+#include "synth\Faders.h"
+#include "utl\PoolAlloc.h"
 
 class SeqInst;
 

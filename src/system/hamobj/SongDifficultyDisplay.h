@@ -1,10 +1,10 @@
 #pragma once
-#include "obj/Object.h"
-#include "rndobj/Anim.h"
-#include "rndobj/Dir.h"
-#include "ui/ResourceDirPtr.h"
-#include "ui/UIComponent.h"
-#include "utl/MemMgr.h"
+#include "obj\Object.h"
+#include "rndobj\Anim.h"
+#include "rndobj\Dir.h"
+#include "ui\ResourceDirPtr.h"
+#include "ui\UIComponent.h"
+#include "utl\MemMgr.h"
 
 /** "Song Difficulty Display" */
 class SongDifficultyDisplay : public UIComponent {

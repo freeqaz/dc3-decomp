@@ -1,8 +1,8 @@
 #pragma once
-#include "os/Platform.h"
-#include "os/Timer.h"
-#include "utl/FilePath.h"
-#include "utl/MemMgr.h"
+#include "os\Platform.h"
+#include "os\Timer.h"
+#include "utl\FilePath.h"
+#include "utl\MemMgr.h"
 #include <list>
 
 enum LoaderPos {

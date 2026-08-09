@@ -1,8 +1,8 @@
-#include "rndobj/Lit.h"
+#include "rndobj\Lit.h"
 #include "Lit.h"
-#include "obj/Object.h"
-#include "rndobj/Trans.h"
-#include "utl/BinStream.h"
+#include "obj\Object.h"
+#include "rndobj\Trans.h"
+#include "utl\BinStream.h"
 
 void RndLight::SetShadowOverride(ObjPtrList<RndDrawable> *l) { mShadowOverride = l; }
 

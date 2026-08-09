@@ -1,9 +1,9 @@
 #pragma once
-#include "gesture/DirectionGestureFilter.h"
-#include "gesture/HandRaisedGestureFilter.h"
-#include "gesture/HighFiveGestureFilter.h"
-#include "gesture/StandingStillGestureFilter.h"
-#include "obj/Object.h"
+#include "gesture\DirectionGestureFilter.h"
+#include "gesture\HandRaisedGestureFilter.h"
+#include "gesture\HighFiveGestureFilter.h"
+#include "gesture\StandingStillGestureFilter.h"
+#include "obj\Object.h"
 
 // size 0xc4
 class SkeletonChooser : public Hmx::Object {

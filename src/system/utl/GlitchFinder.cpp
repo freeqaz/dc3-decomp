@@ -1,7 +1,7 @@
-#include "utl/GlitchFinder.h"
-#include "obj/DataFunc.h"
-#include "os/Debug.h"
-#include "utl/MakeString.h"
+#include "utl\GlitchFinder.h"
+#include "obj\DataFunc.h"
+#include "os\Debug.h"
+#include "utl\MakeString.h"
 
 DataNode GlitchFindScriptImpl(DataArray *arr, int iii);
 

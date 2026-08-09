@@ -1,12 +1,12 @@
 #pragma once
-#include "hamobj/Difficulty.h"
-#include "obj/Object.h"
-#include "rndobj/Dir.h"
-#include "stl/_vector.h"
-#include "ui/UILabel.h"
-#include "ui/UIListLabel.h"
-#include "ui/UIListProvider.h"
-#include "utl/Symbol.h"
+#include "hamobj\Difficulty.h"
+#include "obj\Object.h"
+#include "rndobj\Dir.h"
+#include "stl\_vector.h"
+#include "ui\UILabel.h"
+#include "ui\UIListLabel.h"
+#include "ui\UIListProvider.h"
+#include "utl\Symbol.h"
 
 class DifficultyProvider : public UIListProvider, public Hmx::Object {
 public:

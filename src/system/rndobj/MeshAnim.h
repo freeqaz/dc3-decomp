@@ -1,7 +1,7 @@
 #pragma once
-#include "obj/Object.h"
-#include "rndobj/Anim.h"
-#include "rndobj/Mesh.h"
+#include "obj\Object.h"
+#include "rndobj\Anim.h"
+#include "rndobj\Mesh.h"
 
 /** "A MeshAnim object animates Mesh vertices. This should be
     done only when an effect can't be achieved with material

@@ -1,9 +1,9 @@
-#include "synth/BinkReader.h"
-#include "os/Block.h"
-#include "os/Debug.h"
-#include "os/Timer.h"
-#include "utl/Symbol.h"
-#include "utl/MakeString.h"
+#include "synth\BinkReader.h"
+#include "os\Block.h"
+#include "os\Debug.h"
+#include "os\Timer.h"
+#include "utl\Symbol.h"
+#include "utl\MakeString.h"
 
 // External declarations - C functions from Bink SDK
 extern "C" {

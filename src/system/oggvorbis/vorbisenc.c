@@ -19,8 +19,8 @@
 #include <string.h>
 #include <math.h>
 
-#include "vorbis/codec.h"
-#include "vorbis/vorbisenc.h"
+#include "vorbis\codec.h"
+#include "vorbis\vorbisenc.h"
 
 #include "codec_internal.h"
 
@@ -151,14 +151,14 @@ static vorbis_info_mapping0 _map_nominal[2]={
   {1, {0,0}, {1}, {1}, 1,{0},{1}}
 };
 
-#include "modes/setup_44.h"
-#include "modes/setup_44u.h"
-#include "modes/setup_32.h"
-#include "modes/setup_8.h"
-#include "modes/setup_11.h"
-#include "modes/setup_16.h"
-#include "modes/setup_22.h"
-#include "modes/setup_X.h"
+#include "modes\setup_44.h"
+#include "modes\setup_44u.h"
+#include "modes\setup_32.h"
+#include "modes\setup_8.h"
+#include "modes\setup_11.h"
+#include "modes\setup_16.h"
+#include "modes\setup_22.h"
+#include "modes\setup_X.h"
 
 static ve_setup_data_template *setup_list[]={
   &ve_setup_44_stereo,

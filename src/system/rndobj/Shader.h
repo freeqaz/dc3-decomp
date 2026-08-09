@@ -1,10 +1,10 @@
 #pragma once
 #include "ShaderOptions.h"
 #include "types.h"
-#include "os/Debug.h"
-#include "rndobj/ShaderOptions.h"
-#include "rndobj/Mat.h"
-#include "rndobj/Mat_NG.h"
+#include "os\Debug.h"
+#include "rndobj\ShaderOptions.h"
+#include "rndobj\Mat.h"
+#include "rndobj\Mat_NG.h"
 
 class RndShader {
 public:

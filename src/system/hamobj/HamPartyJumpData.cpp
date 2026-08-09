@@ -1,5 +1,5 @@
-#include "hamobj/HamPartyJumpData.h"
-#include "obj/Object.h"
+#include "hamobj\HamPartyJumpData.h"
+#include "obj\Object.h"
 
 HamPartyJumpData::HamPartyJumpData() {}
 HamPartyJumpData::~HamPartyJumpData() {}

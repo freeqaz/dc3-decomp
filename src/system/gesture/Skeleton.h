@@ -1,7 +1,7 @@
 #pragma once
-#include "gesture/BaseSkeleton.h"
-#include "math/DoubleExponentialSmoother.h"
-#include "xdk/NUI.h"
+#include "gesture\BaseSkeleton.h"
+#include "math\DoubleExponentialSmoother.h"
+#include "xdk\NUI.h"
 
 // TrackedJoint size: 0x74
 struct TrackedJoint {

@@ -1,13 +1,13 @@
 #pragma once
-#include "math/Color.h"
-#include "math/DoubleExponentialSmoother.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "rndobj/Cam.h"
-#include "rndobj/Draw.h"
-#include "rndobj/ShaderOptions.h"
-#include "rndobj/Tex.h"
-#include "utl/MemMgr.h"
+#include "math\Color.h"
+#include "math\DoubleExponentialSmoother.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "rndobj\Cam.h"
+#include "rndobj\Draw.h"
+#include "rndobj\ShaderOptions.h"
+#include "rndobj\Tex.h"
+#include "utl\MemMgr.h"
 
 enum StreamDisplay {
     /** "Color output of camera" */

@@ -1,10 +1,10 @@
-#include "ui/UIListDir.h"
-#include "obj/Object.h"
-#include "rndobj/Dir.h"
-#include "ui/UIListState.h"
-#include "utl/BinStream.h"
-#include "utl/Loader.h"
-#include "utl/Std.h"
+#include "ui\UIListDir.h"
+#include "obj\Object.h"
+#include "rndobj\Dir.h"
+#include "ui\UIListState.h"
+#include "utl\BinStream.h"
+#include "utl\Loader.h"
+#include "utl\Std.h"
 #ifdef HX_NATIVE
 #include <cstdio>
 #include <cstdlib>

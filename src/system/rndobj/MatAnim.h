@@ -1,9 +1,9 @@
 #pragma once
-#include "obj/Object.h"
-#include "rndobj/Anim.h"
-#include "rndobj/Mat.h"
-#include "rndobj/Tex.h"
-#include "utl/BinStream.h"
+#include "obj\Object.h"
+#include "rndobj\Anim.h"
+#include "rndobj\Mat.h"
+#include "rndobj\Tex.h"
+#include "utl\BinStream.h"
 
 /**
  * @brief A class for animating Mats.

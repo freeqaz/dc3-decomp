@@ -1,7 +1,7 @@
-#include "rndobj/DOFProc.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "rndobj/Cam.h"
+#include "rndobj\DOFProc.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "rndobj\Cam.h"
 
 DOFProc *TheDOFProc;
 

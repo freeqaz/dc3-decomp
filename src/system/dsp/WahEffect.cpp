@@ -1,6 +1,6 @@
-#include "synth/WahEffect.h"
-#include "os/Debug.h"
-#include "math/Utl.h"
+#include "synth\WahEffect.h"
+#include "os\Debug.h"
+#include "math\Utl.h"
 #include <cmath>
 
 #line 6 "dsp\\WahEffect.cpp"

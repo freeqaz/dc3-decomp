@@ -1,10 +1,10 @@
 #pragma once
 #include "HamPlayerData.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "os/DateTime.h"
-#include "utl/MemMgr.h"
-#include "utl/Symbol.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "os\DateTime.h"
+#include "utl\MemMgr.h"
+#include "utl\Symbol.h"
 
 class HamGameData : public Hmx::Object {
 public:

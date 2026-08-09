@@ -1,9 +1,9 @@
 #pragma once
-#include "obj/Object.h"
-#include "rndobj/Mesh.h"
-#include "rndobj/Part.h"
-#include "rndobj/Poll.h"
-#include "rndobj/Trans.h"
+#include "obj\Object.h"
+#include "rndobj\Mesh.h"
+#include "rndobj\Part.h"
+#include "rndobj\Poll.h"
+#include "rndobj\Trans.h"
 
 class RndPartLauncher : public RndPollable {
 public:

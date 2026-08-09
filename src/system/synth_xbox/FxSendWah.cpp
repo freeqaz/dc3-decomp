@@ -1,10 +1,10 @@
 #include "FxSendWah.h"
 #include "FxSend.h"
-#include "dsp/StandardEffect.h"
-#include "synth/WahEffect.h"
-#include "math/Utl.h"
-#include "synth/Utl.h"
-#include "xdk/xaudio2/xaudio2.h"
+#include "dsp\StandardEffect.h"
+#include "synth\WahEffect.h"
+#include "math\Utl.h"
+#include "synth\Utl.h"
+#include "xdk\xaudio2\xaudio2.h"
 
 FxSendWah360::FxSendWah360() : FxSend360(this) {}
 

@@ -1,9 +1,9 @@
 #pragma once
-#include "hamobj/HamLabel.h"
-#include "rndobj/Anim.h"
-#include "rndobj/Dir.h"
-#include "ui/ResourceDirPtr.h"
-#include "ui/UIComponent.h"
+#include "hamobj\HamLabel.h"
+#include "rndobj\Anim.h"
+#include "rndobj\Dir.h"
+#include "ui\ResourceDirPtr.h"
+#include "ui\UIComponent.h"
 
 /** "Meter Display" */
 class MeterDisplay : public UIComponent {

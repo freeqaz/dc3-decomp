@@ -1,6 +1,6 @@
 #pragma once
-#include "flow/FlowSwitch.h"
-#include "flow/PropertyEventListener.h"
+#include "flow\FlowSwitch.h"
+#include "flow\PropertyEventListener.h"
 
 /** "A while node; behaves as if constantly evaluting it's property" */
 class FlowWhile : public FlowSwitch, public PropertyEventListener {

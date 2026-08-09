@@ -1,5 +1,5 @@
-#include "utl/SongInfoCopy.h"
-#include "utl/Symbol.h"
+#include "utl\SongInfoCopy.h"
+#include "utl\Symbol.h"
 #include <algorithm>
 
 Symbol SongInfoCopy::GetName() const { return mName; }

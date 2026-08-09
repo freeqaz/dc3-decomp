@@ -1,9 +1,9 @@
 #pragma once
-#include "obj/Object.h"
-#include "utl/BinStream.h"
-#include "utl/FilePath.h"
-#include "rndobj/Bitmap.h"
-#include "utl/MemMgr.h"
+#include "obj\Object.h"
+#include "utl\BinStream.h"
+#include "utl\FilePath.h"
+#include "rndobj\Bitmap.h"
+#include "utl\MemMgr.h"
 
 /** "This class implements a cube map intended for environment mapping." */
 class RndCubeTex : public Hmx::Object {

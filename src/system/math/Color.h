@@ -1,8 +1,8 @@
 #pragma once
 #include "types.h"
-#include "utl/TextStream.h"
-#include "utl/BinStream.h"
-#include "math/Utl.h"
+#include "utl\TextStream.h"
+#include "utl\BinStream.h"
+#include "math\Utl.h"
 
 namespace Hmx {
     class Color {

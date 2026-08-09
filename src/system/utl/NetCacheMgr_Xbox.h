@@ -1,6 +1,6 @@
 #pragma once
-#include "utl/NetCacheMgr.h"
-#include "net/XLSPConnection.h"
+#include "utl\NetCacheMgr.h"
+#include "net\XLSPConnection.h"
 
 class NetCacheMgrXbox : public NetCacheMgr {
 public:

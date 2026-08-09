@@ -1,8 +1,8 @@
 #pragma once
-#include "obj/Data.h"
-#include "rndobj/Poll.h"
-#include "rndobj/PostProc.h"
-#include "utl/MemMgr.h"
+#include "obj\Data.h"
+#include "rndobj\Poll.h"
+#include "rndobj\PostProc.h"
+#include "utl\MemMgr.h"
 
 /** "Settings for terr world effects." */
 class RndPostProcMgr : public RndPollable {

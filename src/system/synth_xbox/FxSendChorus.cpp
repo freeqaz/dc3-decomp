@@ -1,8 +1,8 @@
 #include "FxSendChorus.h"
 #include "FxSend.h"
-#include "dsp/StandardEffect.h"
-#include "synth/FlangerEffect.h"
-#include "xdk/XAUDIO2.h"
+#include "dsp\StandardEffect.h"
+#include "synth\FlangerEffect.h"
+#include "xdk\XAUDIO2.h"
 
 FxSendChorus360::FxSendChorus360() : FxSend360(this) {}
 

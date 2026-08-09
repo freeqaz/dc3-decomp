@@ -1,7 +1,7 @@
 #pragma once
 #include "macros.h"
-#include "xdk/XAUDIO2.h"
-#include "xdk/xaudio2/xapobase.h"
+#include "xdk\XAUDIO2.h"
+#include "xdk\xaudio2\xapobase.h"
 
 template <class T>
 class StandardEffect : public ATG::CSampleXAPOBase<T, typename T::Params> {

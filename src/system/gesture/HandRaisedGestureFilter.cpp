@@ -1,7 +1,7 @@
-#include "gesture/HandRaisedGestureFilter.h"
+#include "gesture\HandRaisedGestureFilter.h"
 #include "StandingStillGestureFilter.h"
-#include "gesture/GestureMgr.h"
-#include "obj/Object.h"
+#include "gesture\GestureMgr.h"
+#include "obj\Object.h"
 
 HandRaisedGestureFilter::HandRaisedGestureFilter()
     : mHandRaised(false), mRaisedMs(0), mRequiredMs(500) {

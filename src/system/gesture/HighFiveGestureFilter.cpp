@@ -1,9 +1,9 @@
-#include "gesture/HighFiveGestureFilter.h"
-#include "gesture/BaseSkeleton.h"
-#include "gesture/JointUtl.h"
-#include "gesture/Skeleton.h"
-#include "math/Vec.h"
-#include "obj/Object.h"
+#include "gesture\HighFiveGestureFilter.h"
+#include "gesture\BaseSkeleton.h"
+#include "gesture\JointUtl.h"
+#include "gesture\Skeleton.h"
+#include "math\Vec.h"
+#include "obj\Object.h"
 
 HighFiveGestureFilter::HighFiveGestureFilter() : mHighFived(false) {}
 

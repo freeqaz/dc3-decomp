@@ -1,11 +1,11 @@
 #pragma once
-#include "char/CharCollide.h"
-#include "char/CharPollable.h"
-#include "char/CharWeightable.h"
-#include "obj/Object.h"
-#include "rndobj/Highlight.h"
-#include "rndobj/Trans.h"
-#include "utl/MemMgr.h"
+#include "char\CharCollide.h"
+#include "char\CharPollable.h"
+#include "char\CharWeightable.h"
+#include "obj\Object.h"
+#include "rndobj\Highlight.h"
+#include "rndobj\Trans.h"
+#include "utl\MemMgr.h"
 
 /** "Pins a hand bone to another RndTransformable, bending the elbow to make it reach.
     Optionally aligns orientations and stretches" */

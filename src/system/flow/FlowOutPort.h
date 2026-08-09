@@ -1,6 +1,6 @@
 #pragma once
-#include "flow/FlowNode.h"
-#include "utl/Str.h"
+#include "flow\FlowNode.h"
+#include "utl\Str.h"
 
 /** "An output port for flow encapsulation" */
 class FlowOutPort : public FlowNode {

@@ -1,7 +1,7 @@
-#include "utl/HxGuid.h"
-#include "os/Debug.h"
-#include "utl/BinStream.h"
-#include "xdk/XNET.h"
+#include "utl\HxGuid.h"
+#include "os\Debug.h"
+#include "utl\BinStream.h"
+#include "xdk\XNET.h"
 
 bool HxGuid::operator==(const HxGuid &hx) const {
     return (

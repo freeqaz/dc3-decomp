@@ -1,13 +1,13 @@
 #pragma once
-#include "hamobj/HamMove.h"
-#include "math/Key.h"
-#include "obj/Msg.h"
-#include "ui/UIComponent.h"
-#include "ui/UILabel.h"
-#include "ui/UITransitionHandler.h"
-#include "utl/MemMgr.h"
-#include "utl/Str.h"
-#include "utl/Symbol.h"
+#include "hamobj\HamMove.h"
+#include "math\Key.h"
+#include "obj\Msg.h"
+#include "ui\UIComponent.h"
+#include "ui\UILabel.h"
+#include "ui\UITransitionHandler.h"
+#include "utl\MemMgr.h"
+#include "utl\Str.h"
+#include "utl\Symbol.h"
 
 /** "Label with Hammer-specific features" */
 class HamLabel : public UILabel, public UITransitionHandler {

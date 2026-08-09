@@ -1,10 +1,10 @@
 #pragma once
-#include "char/CharClip.h"
-#include "hamobj/Difficulty.h"
-#include "rndobj/Anim.h"
-#include "rndobj/Draw.h"
-#include "rndobj/Tex.h"
-#include "utl/MemMgr.h"
+#include "char\CharClip.h"
+#include "hamobj\Difficulty.h"
+#include "rndobj\Anim.h"
+#include "rndobj\Draw.h"
+#include "rndobj\Tex.h"
+#include "utl\MemMgr.h"
 
 /** "Icon Man to render icon man in game" */
 class HamIconMan : public RndAnimatable, public RndDrawable {

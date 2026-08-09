@@ -1,6 +1,6 @@
 #pragma once
-#include "xdk/win_types.h"
-#include "xdk/unknwn.h"
+#include "xdk\win_types.h"
+#include "xdk\unknwn.h"
 
 // https://learn.microsoft.com/en-us/windows/win32/api/xapo/
 

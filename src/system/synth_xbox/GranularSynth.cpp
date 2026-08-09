@@ -1,7 +1,7 @@
 #include "types.h"
 #include "GranularSynth.h"
 #ifndef HX_NATIVE
-#include "../stlport/stl/_uninitialized.h"
+#include "..\stlport\stl\_uninitialized.h"
 #include <math.h>
 
 // Synapse natural-log helper with a small-magnitude clamp (avoids log(0)).

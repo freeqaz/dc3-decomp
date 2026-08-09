@@ -1,6 +1,6 @@
 #pragma once
-#include "xdk/xapilibi/rtlheap.h"
-#include "xdk/xapilibi/xbox.h"
+#include "xdk\xapilibi\rtlheap.h"
+#include "xdk\xapilibi\xbox.h"
 
 namespace NUISPEECH {
     unsigned long GetXAllocAttributes(int);

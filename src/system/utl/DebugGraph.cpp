@@ -1,6 +1,6 @@
 #include "DebugGraph.h"
-#include "rndobj/Graph.h"
-#include "utl/MakeString.h"
+#include "rndobj\Graph.h"
+#include "utl\MakeString.h"
 
 void DebugGraph::AddData(float data, bool b) {
     Sample sample;

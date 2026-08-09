@@ -1,12 +1,12 @@
 #pragma once
 #include "MoveDir.h"
-#include "hamobj/Difficulty.h"
-#include "hamobj/HamCharacter.h"
-#include "math/Mtx.h"
-#include "math/Vec.h"
-#include "obj/Object.h"
-#include "rndobj/Trans.h"
-#include "utl/MemMgr.h"
+#include "hamobj\Difficulty.h"
+#include "hamobj\HamCharacter.h"
+#include "math\Mtx.h"
+#include "math\Vec.h"
+#include "obj\Object.h"
+#include "rndobj\Trans.h"
+#include "utl\MemMgr.h"
 
 struct BeatCollisionData {
     void Set(float, float, const Transform &, const Transform &);

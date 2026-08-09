@@ -1,6 +1,6 @@
 #pragma once
-#include "os/CritSec.h"
-#include "os/Joypad.h"
+#include "os\CritSec.h"
+#include "os\Joypad.h"
 
 // ProKeysData overlaps ProGuitarData at offset 0x34 in JoypadData
 // This is the keyboard-specific interpretation of the same 16 bytes

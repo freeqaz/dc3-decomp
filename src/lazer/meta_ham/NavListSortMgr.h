@@ -1,16 +1,16 @@
 #pragma once
 
-#include "meta/SongPreview.h"
+#include "meta\SongPreview.h"
 #include "NavListNode.h"
 #include "NavListSort.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "os/ContentMgr.h"
-#include "os/System.h"
-#include "ui/UIComponent.h"
-#include "ui/UIListCustom.h"
-#include "ui/UIListProvider.h"
-#include "utl/Symbol.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "os\ContentMgr.h"
+#include "os\System.h"
+#include "ui\UIComponent.h"
+#include "ui\UIListCustom.h"
+#include "ui\UIListProvider.h"
+#include "utl\Symbol.h"
 class NavListSortMgr : public UIListProvider,
                        public Hmx::Object,
                        public ContentMgr::Callback {

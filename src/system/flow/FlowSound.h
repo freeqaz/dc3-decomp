@@ -1,8 +1,8 @@
 #pragma once
-#include "flow/FlowLabelProvider.h"
-#include "flow/FlowNode.h"
-#include "flow/FlowPtr.h"
-#include "synth/Sound.h"
+#include "flow\FlowLabelProvider.h"
+#include "flow\FlowNode.h"
+#include "flow\FlowPtr.h"
+#include "synth\Sound.h"
 
 /** "Plays a sound cue" */
 class FlowSound : public FlowNode, public FlowLabelProvider {

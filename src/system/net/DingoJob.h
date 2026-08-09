@@ -1,10 +1,10 @@
 #pragma once
-#include "net/HttpReq.h"
-#include "net/JsonUtils.h"
-#include "net/WebSvcReq.h"
-#include "obj/Msg.h"
-#include "obj/Object.h"
-#include "utl/DataPointMgr.h"
+#include "net\HttpReq.h"
+#include "net\JsonUtils.h"
+#include "net\WebSvcReq.h"
+#include "obj\Msg.h"
+#include "obj\Object.h"
+#include "utl\DataPointMgr.h"
 
 class DingoJob : public WebSvcRequest {
 public:

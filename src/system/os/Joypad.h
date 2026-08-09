@@ -1,7 +1,7 @@
 #pragma once
-#include "obj/Object.h"
-#include "obj/Msg.h"
-#include "utl/Symbol.h"
+#include "obj\Object.h"
+#include "obj\Msg.h"
+#include "utl\Symbol.h"
 
 
 enum {

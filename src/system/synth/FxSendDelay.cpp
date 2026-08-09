@@ -1,7 +1,7 @@
-#include "synth/FxSendDelay.h"
-#include "obj/Object.h"
-#include "synth/FxSend.h"
-#include "utl/BinStream.h"
+#include "synth\FxSendDelay.h"
+#include "obj\Object.h"
+#include "synth\FxSend.h"
+#include "utl\BinStream.h"
 
 BEGIN_COPYS(FxSendDelay)
     COPY_SUPERCLASS(FxSend)

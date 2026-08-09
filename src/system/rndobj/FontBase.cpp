@@ -1,9 +1,9 @@
-#include "rndobj/FontBase.h"
-#include "os/Debug.h"
-#include "rndobj/Font.h"
-#include "obj/Object.h"
-#include "utl/BinStream.h"
-#include "utl/UTF8.h"
+#include "rndobj\FontBase.h"
+#include "os\Debug.h"
+#include "rndobj\Font.h"
+#include "obj\Object.h"
+#include "utl\BinStream.h"
+#include "utl\UTF8.h"
 
 RndFontBase::RndFontBase() : mMonospace(0), mBaseKerning(0), mKerningTable(nullptr) {}
 

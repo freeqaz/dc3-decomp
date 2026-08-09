@@ -1,10 +1,10 @@
-#include "ui/ScrollSelect.h"
+#include "ui\ScrollSelect.h"
 #include "UIComponent.h"
-#include "obj/Object.h"
-#include "os/Joypad.h"
-#include "ui/UI.h"
-#include "ui/Utl.h"
-#include "utl/Symbol.h"
+#include "obj\Object.h"
+#include "os\Joypad.h"
+#include "ui\UI.h"
+#include "ui\Utl.h"
+#include "utl\Symbol.h"
 
 void ScrollSelect::Store() { mSelectedAux = SelectedAux(); }
 void ScrollSelect::Reset() { mSelectedAux = -1; }

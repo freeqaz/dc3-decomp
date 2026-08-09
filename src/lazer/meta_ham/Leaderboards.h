@@ -1,15 +1,15 @@
 #pragma once
-#include "meta_ham/HamProfile.h"
-#include "meta_ham/SongStatusMgr.h"
-#include "net_ham/LeaderboardJobs.h"
-#include "net_ham/RCJobDingo.h"
-#include "net_ham/ScoreJobs.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "ui/UIListProvider.h"
-#include "utl/Str.h"
+#include "meta_ham\HamProfile.h"
+#include "meta_ham\SongStatusMgr.h"
+#include "net_ham\LeaderboardJobs.h"
+#include "net_ham\RCJobDingo.h"
+#include "net_ham\ScoreJobs.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "ui\UIListProvider.h"
+#include "utl\Str.h"
 #include "types.h"
-#include "xdk/XAPILIB.h"
+#include "xdk\XAPILIB.h"
 
 class Leaderboards : public Hmx::Object, public UIListProvider {
 public:

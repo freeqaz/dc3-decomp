@@ -1,7 +1,7 @@
 #pragma once
-#include "net/DingoJob.h"
-#include "obj/Object.h"
-#include "obj/Msg.h"
+#include "net\DingoJob.h"
+#include "obj\Object.h"
+#include "obj\Msg.h"
 
 class RCJob : public DingoJob {
 public:

@@ -1,8 +1,8 @@
 #pragma once
-#include "rndobj/Draw.h"
-#include "rndobj/Trans.h"
-#include "rndobj/MultiMesh.h"
-#include "utl/MemMgr.h"
+#include "rndobj\Draw.h"
+#include "rndobj\Trans.h"
+#include "rndobj\MultiMesh.h"
+#include "utl\MemMgr.h"
 #include <list>
 
 class RndMultiMeshProxy : public RndTransformable, public RndDrawable {

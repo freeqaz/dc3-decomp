@@ -1,5 +1,5 @@
 #pragma once
-#include "xdk/win_types.h"
+#include "xdk\win_types.h"
 
 #ifdef __cplusplus
 extern "C" {

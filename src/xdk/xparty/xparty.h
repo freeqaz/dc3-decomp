@@ -1,7 +1,7 @@
 #pragma once
-#include "../win_types.h"
-#include "xdk/xapilibi/xbase.h"
-#include "xdk/xonline/xonline.h"
+#include "..\win_types.h"
+#include "xdk\xapilibi\xbase.h"
+#include "xdk\xonline\xonline.h"
 
 #ifdef __cplusplus
 extern "C" {

@@ -1,9 +1,9 @@
 #pragma once
-#include "obj/Object.h"
-#include "rndobj/Anim.h"
-#include "rndobj/Dir.h"
-#include "utl/TempoMap.h"
-#include "utl/MemMgr.h"
+#include "obj\Object.h"
+#include "rndobj\Anim.h"
+#include "rndobj\Dir.h"
+#include "utl\TempoMap.h"
+#include "utl\MemMgr.h"
 
 /** "Custom component for move feedback progress" */
 class HamPhraseMeter : public RndDir {

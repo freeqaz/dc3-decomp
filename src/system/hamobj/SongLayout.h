@@ -1,10 +1,10 @@
 #pragma once
 #include "MoveGraph.h"
-#include "hamobj/MoveGraph.h"
-#include "hamobj/SongUtl.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "utl/MemMgr.h"
+#include "hamobj\MoveGraph.h"
+#include "hamobj\SongUtl.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "utl\MemMgr.h"
 #include <vector>
 
 class SongPattern {

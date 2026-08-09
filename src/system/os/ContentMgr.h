@@ -1,8 +1,8 @@
 #pragma once
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "utl/MemMgr.h"
-#include "utl/FilePath.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "utl\MemMgr.h"
+#include "utl\FilePath.h"
 
 enum ContentLocT {
     kLocationRemovableMem,
@@ -170,7 +170,7 @@ protected:
 
 extern ContentMgr &TheContentMgr;
 
-#include "obj/Msg.h"
+#include "obj\Msg.h"
 
 DECLARE_MESSAGE(ContentReadFailureMsg, "content_read_failure");
 ContentReadFailureMsg(bool b, const char *cc) : Message(Type(), b, cc) {}

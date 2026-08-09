@@ -1,9 +1,9 @@
-#include "ui/UIListState.h"
-#include "os/Debug.h"
-#include "rndobj/Dir.h"
-#include "ui/UIListProvider.h"
-#include "utl/Loader.h"
-#include "utl/Std.h"
+#include "ui\UIListState.h"
+#include "os\Debug.h"
+#include "rndobj\Dir.h"
+#include "ui\UIListProvider.h"
+#include "utl\Loader.h"
+#include "utl\Std.h"
 
 UIListState::UIListState(UIListProvider *provider, UIListStateCallback *callback)
     : mCircular(0), mNumDisplay(5), mGridSpan(1), mSpeed(0.25f), mMinDisplay(0),

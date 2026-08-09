@@ -1,7 +1,7 @@
 #pragma once
 #include "FxSend.h"
-#include "obj/Object.h"
-#include "synth/FxSendSynapse.h"
+#include "obj\Object.h"
+#include "synth\FxSendSynapse.h"
 
 class FxSendSynapse360 : public FxSendSynapse, public FxSend360 {
 public:

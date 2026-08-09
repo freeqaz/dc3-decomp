@@ -1,8 +1,8 @@
 #pragma once
-#include "utl/BinStream.h"
-#include "utl/TempoMap.h"
-#include "utl/ChunkIDs.h"
-#include "utl/MemMgr.h"
+#include "utl\BinStream.h"
+#include "utl\TempoMap.h"
+#include "utl\ChunkIDs.h"
+#include "utl\MemMgr.h"
 #include <vector>
 
 struct MidiMessage {

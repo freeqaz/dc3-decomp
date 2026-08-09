@@ -1,10 +1,10 @@
 #pragma once
-#include "meta_ham/OverlayPanel.h"
-#include "obj/Data.h"
-#include "obj/Msg.h"
-#include "obj/Object.h"
-#include "os/JoypadMsgs.h"
-#include "ui/UIComponent.h"
+#include "meta_ham\OverlayPanel.h"
+#include "obj\Data.h"
+#include "obj\Msg.h"
+#include "obj\Object.h"
+#include "os\JoypadMsgs.h"
+#include "ui\UIComponent.h"
 
 DECLARE_MESSAGE(EventDialogStartMsg, "event_dialog_start")
 EventDialogStartMsg(DataArray *a1, DataArray *a2) : Message(Type(), a1, a2) {}

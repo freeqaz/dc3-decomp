@@ -1,9 +1,9 @@
 #pragma once
-#include "utl/HxGuid.h"
-#include "utl/MemMgr.h"
-#include "utl/Str.h"
+#include "utl\HxGuid.h"
+#include "utl\MemMgr.h"
+#include "utl\Str.h"
 #include "types.h"
-#include "os/Debug.h"
+#include "os\Debug.h"
 #include <vector>
 
 class ArkHash {

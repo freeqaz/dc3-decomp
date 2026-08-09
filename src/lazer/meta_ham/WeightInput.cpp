@@ -1,8 +1,8 @@
 #include "WeightInput.h"
 #include "HamProfile.h"
-#include "os/Debug.h"
-#include "ui/UIListLabel.h"
-#include "meta_ham/ProfileMgr.h"
+#include "os\Debug.h"
+#include "ui\UIListLabel.h"
+#include "meta_ham\ProfileMgr.h"
 
 #pragma region WeightInputProvider
 

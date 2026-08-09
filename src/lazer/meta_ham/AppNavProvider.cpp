@@ -1,7 +1,7 @@
 #include "AppNavProvider.h"
 #include "HamStarsDisplay.h"
-#include "hamobj/Difficulty.h"
-#include "ui/UIListCustom.h"
+#include "hamobj\Difficulty.h"
+#include "ui\UIListCustom.h"
 #include "AppLabel.h"
 
 BEGIN_CUSTOM_HANDLERS(AppNavProvider)

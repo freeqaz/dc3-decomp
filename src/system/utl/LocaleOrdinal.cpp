@@ -1,7 +1,7 @@
 #include "LocaleOrdinal.h"
 
 #include "UTF8.h"
-#include "os/System.h"
+#include "os\System.h"
 
 const char *LocalizeOrdinal(
     int num,

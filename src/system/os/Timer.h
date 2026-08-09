@@ -1,8 +1,8 @@
 #pragma once
-#include "utl/MemMgr.h"
-#include "utl/Symbol.h"
-#include "obj/Data.h"
-#include "os/OSFuncs.h"
+#include "utl\MemMgr.h"
+#include "utl\Symbol.h"
+#include "obj\Data.h"
+#include "os\OSFuncs.h"
 #ifdef HX_NATIVE
 #include <chrono>
 // Emulate PPC __mftb() with high-resolution clock (returns microseconds)

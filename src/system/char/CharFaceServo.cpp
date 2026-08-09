@@ -1,9 +1,9 @@
-#include "char/CharFaceServo.h"
-#include "char/CharBoneDir.h"
-#include "char/CharBonesMeshes.h"
-#include "obj/Dir.h"
-#include "obj/Object.h"
-#include "rndobj/Poll.h"
+#include "char\CharFaceServo.h"
+#include "char\CharBoneDir.h"
+#include "char\CharBonesMeshes.h"
+#include "obj\Dir.h"
+#include "obj\Object.h"
+#include "rndobj\Poll.h"
 
 CharFaceServo::CharFaceServo()
     : mClips(this), mBaseClip(this), mBlinkClipLeft(this), mBlinkClipLeft2(this),

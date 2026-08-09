@@ -1,14 +1,14 @@
-#include "char/CharBonesMeshes.h"
+#include "char\CharBonesMeshes.h"
 #ifdef HX_NATIVE
 #include <cstdlib>
 #include <cstring>
 #include <cstdio>
 #endif
-#include "char/CharUtl.h"
-#include "math/Rot.h"
-#include "obj/Object.h"
-#include "rndobj/Trans.h"
-#include "utl/Str.h"
+#include "char\CharUtl.h"
+#include "math\Rot.h"
+#include "obj\Object.h"
+#include "rndobj\Trans.h"
+#include "utl\Str.h"
 #include <string.h>
 
 RndTransformable *CharBonesMeshes::sDummyMesh;

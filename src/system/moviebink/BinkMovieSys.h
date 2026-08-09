@@ -1,7 +1,7 @@
 #pragma once
 
-#include "movie/MovieSys.h"
-#include "os/CritSec.h"
+#include "movie\MovieSys.h"
+#include "os\CritSec.h"
 #include <list>
 
 class DataArray;

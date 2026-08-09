@@ -1,9 +1,9 @@
-#include "hamobj/MiniLeaderboardDisplay.h"
+#include "hamobj\MiniLeaderboardDisplay.h"
 #include "MiniLeaderboardDisplay.h"
-#include "obj/Object.h"
-#include "os/Debug.h"
-#include "ui/LabelShrinkWrapper.h"
-#include "ui/UIComponent.h"
+#include "obj\Object.h"
+#include "os\Debug.h"
+#include "ui\LabelShrinkWrapper.h"
+#include "ui\UIComponent.h"
 
 MiniLeaderboardDisplay::MiniLeaderboardDisplay() : mResourceDir(this) {}
 MiniLeaderboardDisplay::~MiniLeaderboardDisplay() {}

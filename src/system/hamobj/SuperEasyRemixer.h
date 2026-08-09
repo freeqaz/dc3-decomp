@@ -1,7 +1,7 @@
 #pragma once
-#include "hamobj/OriginalChoreoRemixer.h"
-#include "obj/Object.h"
-#include "utl/MemMgr.h"
+#include "hamobj\OriginalChoreoRemixer.h"
+#include "obj\Object.h"
+#include "utl\MemMgr.h"
 
 class SuperEasyRemixer : public OriginalChoreoRemixer {
 public:

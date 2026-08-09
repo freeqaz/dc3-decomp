@@ -1,8 +1,8 @@
 #include "FxSendDelay.h"
 #include "FxSend.h"
-#include "dsp/StandardEffect.h"
-#include "synth/DelayEffect.h"
-#include "synth/Utl.h"
+#include "dsp\StandardEffect.h"
+#include "synth\DelayEffect.h"
+#include "synth\Utl.h"
 
 FxSendDelay360::FxSendDelay360() : FxSend360(this) {}
 

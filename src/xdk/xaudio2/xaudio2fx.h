@@ -1,6 +1,6 @@
 #pragma once
-#include "xdk/win_types.h"
-#include "xdk/unknwn.h"
+#include "xdk\win_types.h"
+#include "xdk\unknwn.h"
 
 // XAudio2FX built-in audio effects (reverb / volume meter) — public XAPOFX C API.
 // Only the reverb declarations the engine references are mirrored here; the

@@ -1,10 +1,10 @@
 #pragma once
 #include "FxSend.h"
-#include "obj/Object.h"
-#include "stl/_vector.h"
-#include "synth/FxSendDelay.h"
-#include "xdk/xapilibi/xbase.h"
-#include "xdk/xaudio2/xaudio2.h"
+#include "obj\Object.h"
+#include "stl\_vector.h"
+#include "synth\FxSendDelay.h"
+#include "xdk\xapilibi\xbase.h"
+#include "xdk\xaudio2\xaudio2.h"
 
 class FxSendDelay360 : public FxSendDelay, public FxSend360 {
 public:

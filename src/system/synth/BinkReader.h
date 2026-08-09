@@ -1,7 +1,7 @@
 #pragma once
-#include "os/File.h"
-#include "synth/StreamReader.h"
-#include "synth/StandardStream.h"
+#include "os\File.h"
+#include "synth\StreamReader.h"
+#include "synth\StandardStream.h"
 
 #define BINK_AUDIO_CHANNEL_MAX 16
 

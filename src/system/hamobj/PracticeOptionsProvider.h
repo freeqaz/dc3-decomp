@@ -1,7 +1,7 @@
 #pragma once
-#include "hamobj/HamNavProvider.h"
-#include "obj/Object.h"
-#include "utl/MemMgr.h"
+#include "hamobj\HamNavProvider.h"
+#include "obj\Object.h"
+#include "utl\MemMgr.h"
 
 enum PracticeOptions {
     kPracticeSlowmo = 0,

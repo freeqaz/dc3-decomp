@@ -1,9 +1,9 @@
 #pragma once
-#include "char/Character.h"
-#include "gesture/BaseSkeleton.h"
-#include "gesture/CameraInput.h"
-#include "gesture/Skeleton.h"
-#include "rndobj/Trans.h"
+#include "char\Character.h"
+#include "gesture\BaseSkeleton.h"
+#include "gesture\CameraInput.h"
+#include "gesture\Skeleton.h"
+#include "rndobj\Trans.h"
 
 class CharCameraInput : public CameraInput {
 public:

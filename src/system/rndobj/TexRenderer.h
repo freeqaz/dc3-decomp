@@ -1,14 +1,14 @@
 #pragma once
-#include "math/Vec.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "rndobj/Anim.h"
-#include "rndobj/Cam.h"
-#include "rndobj/Draw.h"
-#include "rndobj/Env.h"
-#include "rndobj/Poll.h"
-#include "rndobj/Tex.h"
-#include "utl/MemMgr.h"
+#include "math\Vec.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "rndobj\Anim.h"
+#include "rndobj\Cam.h"
+#include "rndobj\Draw.h"
+#include "rndobj\Env.h"
+#include "rndobj\Poll.h"
+#include "rndobj\Tex.h"
+#include "utl\MemMgr.h"
 
 /** "TexRender renders a draw and cam into a texture." */
 class RndTexRenderer : public RndDrawable, public RndAnimatable, public RndPollable {

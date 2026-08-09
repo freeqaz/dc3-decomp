@@ -1,12 +1,12 @@
-#include "gesture/DirectionGestureFilter.h"
+#include "gesture\DirectionGestureFilter.h"
 #include "BaseSkeleton.h"
-#include "gesture/BaseSkeleton.h"
-#include "gesture/GestureMgr.h"
-#include "gesture/Skeleton.h"
-#include "gesture/SkeletonViz.h"
-#include "gesture/StandingStillGestureFilter.h"
-#include "obj/Task.h"
-#include "rndobj/Overlay.h"
+#include "gesture\BaseSkeleton.h"
+#include "gesture\GestureMgr.h"
+#include "gesture\Skeleton.h"
+#include "gesture\SkeletonViz.h"
+#include "gesture\StandingStillGestureFilter.h"
+#include "obj\Task.h"
+#include "rndobj\Overlay.h"
 
 float DirectionGestureFilter::sLastSwipeTime[6] = { -100, -100, -100, -100, -100, -100 };
 

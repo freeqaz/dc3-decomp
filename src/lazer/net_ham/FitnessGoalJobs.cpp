@@ -1,12 +1,12 @@
-#include "net_ham/FitnessGoalJobs.h"
-#include "meta_ham/HamProfile.h"
-#include "net/JsonUtils.h"
-#include "net_ham/RCJobDingo.h"
-#include "obj/Object.h"
-#include "os/DateTime.h"
-#include "os/Debug.h"
-#include "utl/DataPointMgr.h"
-#include "utl/Symbol.h"
+#include "net_ham\FitnessGoalJobs.h"
+#include "meta_ham\HamProfile.h"
+#include "net\JsonUtils.h"
+#include "net_ham\RCJobDingo.h"
+#include "obj\Object.h"
+#include "os\DateTime.h"
+#include "os\Debug.h"
+#include "utl\DataPointMgr.h"
+#include "utl\Symbol.h"
 
 GetFitnessGoalJob::GetFitnessGoalJob(Hmx::Object *callback, char const *onlineID)
     : RCJob("fitness/getfitnessgoal/", callback) {

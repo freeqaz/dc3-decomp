@@ -1,6 +1,6 @@
-#include "synth/ADSR.h"
-#include "obj/Object.h"
-#include "utl/BinStream.h"
+#include "synth\ADSR.h"
+#include "obj\Object.h"
+#include "utl\BinStream.h"
 
 ADSRImpl::ADSRImpl()
     : mAttackRate(0.001f), mDecayRate(0.0001f), mSustainRate(0.001f),

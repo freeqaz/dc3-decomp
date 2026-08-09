@@ -1,7 +1,7 @@
-#include "math/Key.h"
-#include "math/Mtx.h"
-#include "math/Vec.h"
-#include "math/Rot.h"
+#include "math\Key.h"
+#include "math\Mtx.h"
+#include "math\Vec.h"
+#include "math\Rot.h"
 
 void InterpTangent(
     const Vector3 &v1,

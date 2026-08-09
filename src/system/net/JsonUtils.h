@@ -1,7 +1,7 @@
 #pragma once
-#include "net/json-c/json_object.h"
+#include "net\json-c\json_object.h"
 #include "types.h"
-#include "utl/Str.h"
+#include "utl\Str.h"
 
 class JsonObject {
 public:

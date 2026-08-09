@@ -1,12 +1,12 @@
 #pragma once
-#include "char/CharClip.h"
-#include "obj/Data.h"
-#include "obj/Dir.h"
-#include "obj/Object.h"
-#include "rndobj/PropAnim.h"
-#include "synth/Sound.h"
-#include "utl/MemMgr.h"
-#include "utl/TextStream.h"
+#include "char\CharClip.h"
+#include "obj\Data.h"
+#include "obj\Dir.h"
+#include "obj\Object.h"
+#include "rndobj\PropAnim.h"
+#include "synth\Sound.h"
+#include "utl\MemMgr.h"
+#include "utl\TextStream.h"
 
 /** "A full lipsync animation, basically a changing set of weights
     for a set of named visemes.  Sampled at 30hz" */

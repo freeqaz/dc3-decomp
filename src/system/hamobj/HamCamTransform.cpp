@@ -1,17 +1,17 @@
-#include "hamobj/HamCamTransform.h"
-#include "flow/Flow.h"
-#include "obj/Data.h"
-#include "obj/DataFile.h"
-#include "obj/Object.h"
+#include "hamobj\HamCamTransform.h"
+#include "flow\Flow.h"
+#include "obj\Data.h"
+#include "obj\DataFile.h"
+#include "obj\Object.h"
 #ifdef HX_NATIVE
-#include "obj/Dir.h"
+#include "obj\Dir.h"
 #endif
-#include "rndobj/Anim.h"
-#include "rndobj/Poll.h"
-#include "rndobj/Trans.h"
-#include "utl/BinStream.h"
-#include "utl/Loader.h"
-#include "world/CameraShot.h"
+#include "rndobj\Anim.h"
+#include "rndobj\Poll.h"
+#include "rndobj\Trans.h"
+#include "utl\BinStream.h"
+#include "utl\Loader.h"
+#include "world\CameraShot.h"
 
 HamCamTransform::HamCamTransform() : mAreas(this) {}
 

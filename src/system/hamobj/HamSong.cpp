@@ -1,11 +1,11 @@
-#include "hamobj/HamSong.h"
-#include "hamobj/HamMaster.h"
-#include "hamobj/HamSongData.h"
-#include "meta/DataArraySongInfo.h"
-#include "midi/MidiParserMgr.h"
-#include "obj/DataUtl.h"
-#include "obj/Dir.h"
-#include "obj/Object.h"
+#include "hamobj\HamSong.h"
+#include "hamobj\HamMaster.h"
+#include "hamobj\HamSongData.h"
+#include "meta\DataArraySongInfo.h"
+#include "midi\MidiParserMgr.h"
+#include "obj\DataUtl.h"
+#include "obj\Dir.h"
+#include "obj\Object.h"
 
 int HamSong::mPreferStreaming;
 

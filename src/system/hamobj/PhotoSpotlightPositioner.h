@@ -1,9 +1,9 @@
 #pragma once
-#include "obj/Object.h"
-#include "rndobj/Group.h"
-#include "rndobj/Mesh.h"
-#include "rndobj/Poll.h"
-#include "utl/MemMgr.h"
+#include "obj\Object.h"
+#include "rndobj\Group.h"
+#include "rndobj\Mesh.h"
+#include "rndobj\Poll.h"
+#include "utl\MemMgr.h"
 
 class PhotoSpotlightPositioner : public RndPollable {
 public:

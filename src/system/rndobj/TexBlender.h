@@ -1,8 +1,8 @@
 #pragma once
-#include "obj/Data.h"
-#include "rndobj/Draw.h"
-#include "rndobj/Tex.h"
-#include "rndobj/TexBlendController.h"
+#include "obj\Data.h"
+#include "rndobj\Draw.h"
+#include "rndobj\Tex.h"
+#include "rndobj\TexBlendController.h"
 
 /** "Renderable texture used to composite pieces of texture maps
     based on the distance between bones or other animatiable objects" */

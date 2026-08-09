@@ -1,5 +1,5 @@
-#include "hamobj/SongUtl.h"
-#include "obj/Object.h"
+#include "hamobj\SongUtl.h"
+#include "obj\Object.h"
 
 BEGIN_CUSTOM_PROPSYNC(Range)
     SYNC_PROP(start, o.start)

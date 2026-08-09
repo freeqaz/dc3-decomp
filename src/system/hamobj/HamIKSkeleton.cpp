@@ -1,10 +1,10 @@
-#include "hamobj/HamIKSkeleton.h"
-#include "hamobj/HamCharacter.h"
-#include "math/Mtx.h"
-#include "obj/Dir.h"
-#include "obj/Object.h"
-#include "os/Debug.h"
-#include "rndobj/Trans.h"
+#include "hamobj\HamIKSkeleton.h"
+#include "hamobj\HamCharacter.h"
+#include "math\Mtx.h"
+#include "obj\Dir.h"
+#include "obj\Object.h"
+#include "os\Debug.h"
+#include "rndobj\Trans.h"
 
 HamIKSkeleton::HamIKSkeleton() : mNeutralSkelDir(nullptr), mChar(this) {}
 

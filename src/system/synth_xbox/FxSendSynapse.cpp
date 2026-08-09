@@ -1,5 +1,5 @@
-#include "synth_xbox/FxSendSynapse.h"
-#include "synth_xbox/FxSendSynapse360.h"
+#include "synth_xbox\FxSendSynapse.h"
+#include "synth_xbox\FxSendSynapse360.h"
 
 // SynapseAPO.h cannot be included here: it ships a hand-rolled global
 // IXAPOParameters that ODR-collides with the real xapo.h one pulled in via the

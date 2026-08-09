@@ -1,8 +1,8 @@
-#include "synth/FxSendPitchShift.h"
-#include "obj/Object.h"
-#include "os/Debug.h"
-#include "synth/FxSend.h"
-#include "utl/BinStream.h"
+#include "synth\FxSendPitchShift.h"
+#include "obj\Object.h"
+#include "os\Debug.h"
+#include "synth\FxSend.h"
+#include "utl\BinStream.h"
 
 FxSendPitchShift::FxSendPitchShift() : mRatio(1.0f) {}
 

@@ -1,6 +1,6 @@
 #pragma once
-#include "os/Debug.h"
-#include "utl/MemMgr.h"
+#include "os\Debug.h"
+#include "utl\MemMgr.h"
 
 class Rand {
 public:

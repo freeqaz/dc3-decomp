@@ -1,7 +1,7 @@
 #pragma once
-#include "flow/FlowNode.h"
-#include "flow/FlowPtr.h"
-#include "rndobj/Trans.h"
+#include "flow\FlowNode.h"
+#include "flow\FlowPtr.h"
+#include "rndobj\Trans.h"
 
 /** "Runs children when two trans objects are within a range" */
 class FlowDistance : public FlowNode {

@@ -1,5 +1,5 @@
 #pragma once
-#include "math/Vec.h"
+#include "math\Vec.h"
 
 class Sphere {
 public:
@@ -22,7 +22,7 @@ public:
     float radius; // 0x10
 };
 
-#include "utl/BinStream.h"
+#include "utl\BinStream.h"
 inline BinStream &operator<<(BinStream &bs, const Sphere &s) {
     bs << s.center << s.radius;
     return bs;

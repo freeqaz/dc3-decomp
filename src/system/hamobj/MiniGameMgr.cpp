@@ -1,12 +1,12 @@
-#include "hamobj/MiniGameMgr.h"
-#include "hamobj/HamDirector.h"
-#include "hamobj/HamGameData.h"
-#include "hamobj/MoveGraph.h"
-#include "hamobj/MoveMgr.h"
-#include "obj/Data.h"
-#include "obj/Dir.h"
-#include "obj/Object.h"
-#include "os/Debug.h"
+#include "hamobj\MiniGameMgr.h"
+#include "hamobj\HamDirector.h"
+#include "hamobj\HamGameData.h"
+#include "hamobj\MoveGraph.h"
+#include "hamobj\MoveMgr.h"
+#include "obj\Data.h"
+#include "obj\Dir.h"
+#include "obj\Object.h"
+#include "os\Debug.h"
 
 MiniGameMgr *TheMiniGameMgr;
 

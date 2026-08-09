@@ -10,7 +10,7 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <cerrno>
-#include "xdk/win_types.h"
+#include "xdk\win_types.h"
 typedef int SOCKET;
 #define INVALID_SOCKET (-1)
 #define SOCKET_ERROR (-1)
@@ -63,7 +63,7 @@ inline int WSAStartup(WORD, LPWSADATA) { return 0; }
 inline int WSACleanup() { return 0; }
 
 #else
-#include "xdk/win_types.h"
+#include "xdk\win_types.h"
 
 #ifdef __cplusplus
 extern "C" {

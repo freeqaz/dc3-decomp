@@ -1,6 +1,6 @@
 #pragma once
-#include "obj/Object.h"
-#include "utl/MemMgr.h"
+#include "obj\Object.h"
+#include "utl\MemMgr.h"
 
 /** "a guide used to line up UI elements" */
 class UIGuide : public Hmx::Object {

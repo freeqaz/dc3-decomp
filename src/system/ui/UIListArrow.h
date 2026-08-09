@@ -1,9 +1,9 @@
 #pragma once
-#include "obj/Object.h"
-#include "rndobj/Anim.h"
-#include "rndobj/Mesh.h"
-#include "ui/UIListWidget.h"
-#include "utl/MemMgr.h"
+#include "obj\Object.h"
+#include "rndobj\Anim.h"
+#include "rndobj\Mesh.h"
+#include "ui\UIListWidget.h"
+#include "utl\MemMgr.h"
 
 enum UIListArrowPosition {
     kUIListArrowBack,

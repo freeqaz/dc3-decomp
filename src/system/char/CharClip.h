@@ -1,13 +1,13 @@
 #pragma once
-#include "char/CharBoneDir.h"
-#include "char/CharBones.h"
-#include "obj/Data.h"
-#include "obj/Dir.h"
-#include "obj/Object.h"
-#include "rndobj/Anim.h"
-#include "utl/BinStream.h"
-#include "utl/MemMgr.h"
-#include "char/CharBonesSamples.h"
+#include "char\CharBoneDir.h"
+#include "char\CharBones.h"
+#include "obj\Data.h"
+#include "obj\Dir.h"
+#include "obj\Object.h"
+#include "rndobj\Anim.h"
+#include "utl\BinStream.h"
+#include "utl\MemMgr.h"
+#include "char\CharBonesSamples.h"
 
 struct CharGraphNode {
     /** "where to blend from in my clip" */

@@ -1,16 +1,16 @@
 #pragma once
 #include "AudioDucker.h"
 #include "SynthSample.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "synth/ADSR.h"
-#include "synth/Faders.h"
-#include "synth/FxSend.h"
-#include "synth/MoggClip.h"
-#include "synth/Pollable.h"
-#include "synth/PlayableSample.h"
-#include "synth/SynthSample.h"
-#include "utl/MemMgr.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "synth\ADSR.h"
+#include "synth\Faders.h"
+#include "synth\FxSend.h"
+#include "synth\MoggClip.h"
+#include "synth\Pollable.h"
+#include "synth\PlayableSample.h"
+#include "synth\SynthSample.h"
+#include "utl\MemMgr.h"
 
 /** "Basic sound effect object.  Plays several samples with a given volume, pan,
  * transpose, and envelope settings." */
@@ -111,7 +111,7 @@ protected:
     std::list<DelayArgs *> mDelayArgs; // 0xcc
 };
 
-#include "obj/Msg.h"
+#include "obj\Msg.h"
 
 DECLARE_MESSAGE(SoundPlayMsg, "sound_play")
 SoundPlayMsg(Sound *snd) : Message(Type(), snd) {}

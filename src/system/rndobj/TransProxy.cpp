@@ -1,6 +1,6 @@
-#include "rndobj/TransProxy.h"
-#include "obj/Object.h"
-#include "rndobj/Trans.h"
+#include "rndobj\TransProxy.h"
+#include "obj\Object.h"
+#include "rndobj\Trans.h"
 
 RndTransProxy::RndTransProxy() : mProxy(this) {}
 

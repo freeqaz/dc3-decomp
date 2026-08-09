@@ -1,6 +1,6 @@
 #pragma once
-#include "gesture/BaseSkeleton.h"
-#include "gesture/Skeleton.h"
+#include "gesture\BaseSkeleton.h"
+#include "gesture\Skeleton.h"
 
 class HandHeightGestureFilter {
     friend class HamNavList;

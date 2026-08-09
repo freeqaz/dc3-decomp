@@ -1,13 +1,13 @@
 #pragma once
 #include "UIListWidget.h"
-#include "obj/Data.h"
-#include "rndobj/Dir.h"
-#include "rndobj/Mat.h"
-#include "rndobj/Mesh.h"
-#include "ui/UIColor.h"
-#include "ui/UILabel.h"
-#include "ui/UIListWidget.h"
-#include "utl/Symbol.h"
+#include "obj\Data.h"
+#include "rndobj\Dir.h"
+#include "rndobj\Mat.h"
+#include "rndobj\Mesh.h"
+#include "ui\UIColor.h"
+#include "ui\UILabel.h"
+#include "ui\UIListWidget.h"
+#include "utl\Symbol.h"
 
 class UIList;
 class UIListLabel;

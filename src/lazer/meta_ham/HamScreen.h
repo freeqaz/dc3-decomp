@@ -1,6 +1,6 @@
 #pragma once
-#include "obj/Object.h"
-#include "ui/UIScreen.h"
+#include "obj\Object.h"
+#include "ui\UIScreen.h"
 
 class HamScreen : public UIScreen {
 public:

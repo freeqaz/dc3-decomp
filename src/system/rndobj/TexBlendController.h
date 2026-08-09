@@ -1,9 +1,9 @@
 #pragma once
-#include "obj/Object.h"
-#include "rndobj/Mesh.h"
-#include "rndobj/Tex.h"
-#include "rndobj/Trans.h"
-#include "utl/MemMgr.h"
+#include "obj\Object.h"
+#include "rndobj\Mesh.h"
+#include "rndobj\Tex.h"
+#include "rndobj\Trans.h"
+#include "utl\MemMgr.h"
 
 /** "Defines the two objects that will be used to determine
     the distance for the texture blend." */

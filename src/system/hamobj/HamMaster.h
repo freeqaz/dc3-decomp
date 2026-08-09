@@ -1,14 +1,14 @@
 #pragma once
-#include "hamobj/HamAudio.h"
-#include "beatmatch/HxMaster.h"
-#include "hamobj/HamSongData.h"
-#include "math/Vec.h"
-#include "midi/Midi.h"
-#include "midi/MidiParserMgr.h"
-#include "obj/Object.h"
-#include "utl/Loader.h"
-#include "utl/SongInfoCopy.h"
-#include "utl/SongPos.h"
+#include "hamobj\HamAudio.h"
+#include "beatmatch\HxMaster.h"
+#include "hamobj\HamSongData.h"
+#include "math\Vec.h"
+#include "midi\Midi.h"
+#include "midi\MidiParserMgr.h"
+#include "obj\Object.h"
+#include "utl\Loader.h"
+#include "utl\SongInfoCopy.h"
+#include "utl\SongPos.h"
 
 class HamMaster;
 

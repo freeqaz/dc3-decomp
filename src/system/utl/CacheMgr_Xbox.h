@@ -1,10 +1,10 @@
 #pragma once
-#include "obj/Object.h"
-#include "utl/Cache.h"
-#include "utl/CacheMgr.h"
-#include "utl/Cache_Xbox.h"
-#include "xdk/win_types.h"
-#include "xdk/xapilibi/xbase.h"
+#include "obj\Object.h"
+#include "utl\Cache.h"
+#include "utl\CacheMgr.h"
+#include "utl\Cache_Xbox.h"
+#include "xdk\win_types.h"
+#include "xdk\xapilibi\xbase.h"
 
 // size 0x18c
 class CacheMgrXbox : public CacheMgr {

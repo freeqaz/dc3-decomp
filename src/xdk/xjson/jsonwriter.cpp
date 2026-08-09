@@ -1,7 +1,7 @@
 // JsonWriter::GetBuffer implementation
 // Converts UTF-16 buffer to UTF-8
 
-#include "xdk/xjson/jsonwriter.h"
+#include "xdk\xjson\jsonwriter.h"
 
 // GetBuffer converts the internal UTF-16 buffer to UTF-8
 // Returns HRESULT: S_OK on success, error codes for failures

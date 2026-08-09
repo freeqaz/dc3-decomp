@@ -1,7 +1,7 @@
 #pragma once
 
-#include "sys/types.h"
-#include "xdk/LIBCMT/time.h"
+#include "sys\types.h"
+#include "xdk\LIBCMT\time.h"
 struct _stati64 {
     _dev_t st_dev;
     _ino_t st_ino;

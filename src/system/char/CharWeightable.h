@@ -1,6 +1,6 @@
 #pragma once
-#include "obj/Object.h"
-#include "utl/MemMgr.h"
+#include "obj\Object.h"
+#include "utl\MemMgr.h"
 
 /** "Base class for any object that can have weight set on it,
  *  or have a Weightable parent from which it gets that state." */

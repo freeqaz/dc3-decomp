@@ -1,12 +1,12 @@
 #pragma once
-#include "math/Key.h"
-#include "math/Mtx.h"
-#include "rndobj/Draw.h"
-#include "rndobj/Mat.h"
-#include "rndobj/Mesh.h"
-#include "rndobj/Poll.h"
-#include "rndobj/Trans.h"
-#include "utl/MemMgr.h"
+#include "math\Key.h"
+#include "math\Mtx.h"
+#include "rndobj\Draw.h"
+#include "rndobj\Mat.h"
+#include "rndobj\Mesh.h"
+#include "rndobj\Poll.h"
+#include "rndobj\Trans.h"
+#include "utl\MemMgr.h"
 
 /** "Ribbon" */
 class HamRibbon : public RndPollable, public RndDrawable {

@@ -1,13 +1,13 @@
 #pragma once
-#include "hamobj/HamNavList.h"
-#include "meta_ham/HamPanel.h"
-#include "meta_ham/SaveLoadManager.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "os/JoypadMsgs.h"
-#include "rndobj/Draw.h"
-#include "rndobj/Group.h"
-#include "ui/UIPanel.h"
+#include "hamobj\HamNavList.h"
+#include "meta_ham\HamPanel.h"
+#include "meta_ham\SaveLoadManager.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "os\JoypadMsgs.h"
+#include "rndobj\Draw.h"
+#include "rndobj\Group.h"
+#include "ui\UIPanel.h"
 
 class HelpBarPanel : public HamPanel {
 public:

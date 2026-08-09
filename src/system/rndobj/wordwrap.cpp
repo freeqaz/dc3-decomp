@@ -1,4 +1,4 @@
-#include "rndobj/wordwrap.h"
+#include "rndobj\wordwrap.h"
 
 unsigned int g_uOption;
 LineBreakEntry g_LineBreakTable[146];

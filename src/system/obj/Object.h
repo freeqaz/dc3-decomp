@@ -1,11 +1,11 @@
 #pragma once
-#include "obj/Data.h" /* IWYU pragma: keep */
-#include "obj/DataUtl.h"
-#include "obj/MessageTimer.h" /* IWYU pragma: keep */
-#include "os/Debug.h"
-#include "utl/BinStream.h" /* IWYU pragma: keep */
-#include "utl/MemMgr.h" /* IWYU pragma: keep */
-#include "utl/Symbol.h" /* IWYU pragma: keep */
+#include "obj\Data.h" /* IWYU pragma: keep */
+#include "obj\DataUtl.h"
+#include "obj\MessageTimer.h" /* IWYU pragma: keep */
+#include "os\Debug.h"
+#include "utl\BinStream.h" /* IWYU pragma: keep */
+#include "utl\MemMgr.h" /* IWYU pragma: keep */
+#include "utl\Symbol.h" /* IWYU pragma: keep */
 #include <list> /* IWYU pragma: keep */
 #include <map> /* IWYU pragma: keep */
 
@@ -1140,7 +1140,7 @@ typedef Hmx::Object *ObjectFunc(void);
 
 #pragma endregion
 #pragma region Hmx::Object
-#include "obj/PropSync.h" /* IWYU pragma: keep */
+#include "obj\PropSync.h" /* IWYU pragma: keep */
 
 // Hmx::Object implementation
 namespace Hmx {

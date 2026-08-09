@@ -1,6 +1,6 @@
 #pragma once
-#include "os/NetworkSocket.h"
-#include "xdk/XNET.h"
+#include "os\NetworkSocket.h"
+#include "xdk\XNET.h"
 
 class WinSockSocket : public NetworkSocket {
 public:

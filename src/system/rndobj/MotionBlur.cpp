@@ -1,11 +1,11 @@
-#include "rndobj/MotionBlur.h"
-#include "obj/Object.h"
-#include "rndobj/Dir.h"
-#include "rndobj/Draw.h"
-#include "rndobj/Group.h"
-#include "rndobj/Mesh.h"
-#include "rndobj/PostProc.h"
-#include "utl/BinStream.h"
+#include "rndobj\MotionBlur.h"
+#include "obj\Object.h"
+#include "rndobj\Dir.h"
+#include "rndobj\Draw.h"
+#include "rndobj\Group.h"
+#include "rndobj\Mesh.h"
+#include "rndobj\PostProc.h"
+#include "utl\BinStream.h"
 
 RndMotionBlur::RndMotionBlur() : mDrawList(this) {}
 

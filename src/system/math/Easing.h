@@ -1,8 +1,8 @@
 #pragma once
 #include <cmath>
-#include "math/Rot.h"
-#include "math/Trig.h"
-#include "os/Debug.h"
+#include "math\Rot.h"
+#include "math\Trig.h"
+#include "os\Debug.h"
 
 enum EaseType {
     /** "None": "No Ease" */

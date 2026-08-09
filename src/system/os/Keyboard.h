@@ -1,5 +1,5 @@
 #pragma once
-#include "obj/Object.h"
+#include "obj\Object.h"
 
 void KeyboardInitCommon();
 void KeyboardTerminateCommon();
@@ -13,7 +13,7 @@ void KeyboardUnsubscribe(Hmx::Object *);
 Hmx::Object *KeyboardOverride(Hmx::Object *);
 void KeyboardSendMsg(int key, bool shift, bool ctrl, bool alt);
 
-#include "obj/Msg.h"
+#include "obj\Msg.h"
 
 DECLARE_MESSAGE(KeyboardKeyMsg, "key")
 KeyboardKeyMsg(int key, bool shift, bool ctrl, bool alt)

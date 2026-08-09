@@ -1,14 +1,14 @@
-#include "meta_ham/FitnessCalorieSortNode.h"
+#include "meta_ham\FitnessCalorieSortNode.h"
 #include "FitnessCalorieSortMgr.h"
 #include "NavListNode.h"
-#include "meta_ham/AppLabel.h"
-#include "os/Debug.h"
-#include "stl/_vector.h"
-#include "ui/UILabel.h"
-#include "ui/UIListLabel.h"
-#include "utl/Locale.h"
-#include "utl/MakeString.h"
-#include "utl/Symbol.h"
+#include "meta_ham\AppLabel.h"
+#include "os\Debug.h"
+#include "stl\_vector.h"
+#include "ui\UILabel.h"
+#include "ui\UIListLabel.h"
+#include "utl\Locale.h"
+#include "utl\MakeString.h"
+#include "utl\Symbol.h"
 
 #pragma region FitnessCalorieSortNode
 

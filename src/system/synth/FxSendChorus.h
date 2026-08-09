@@ -1,7 +1,7 @@
 #pragma once
-#include "obj/Object.h"
-#include "synth/FxSend.h"
-#include "utl/MemMgr.h"
+#include "obj\Object.h"
+#include "synth\FxSend.h"
+#include "utl\MemMgr.h"
 
 /** "A chorus effect." */
 class FxSendChorus : public FxSend {

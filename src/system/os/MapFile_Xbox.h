@@ -1,6 +1,6 @@
 #pragma once
-#include "os/File.h"
-#include "utl/Str.h"
+#include "os\File.h"
+#include "utl\Str.h"
 
 class XboxMapFile {
 public:

@@ -1,15 +1,15 @@
 #pragma once
 #include "BoxMap.h"
 #include "Lit.h"
-#include "math/Vec.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "os/Timer.h"
-#include "rndobj/ColorXfm.h"
-#include "rndobj/Draw.h"
-#include "rndobj/Trans.h"
-#include "rndobj/Lit.h"
-#include "utl/MemMgr.h"
+#include "math\Vec.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "os\Timer.h"
+#include "rndobj\ColorXfm.h"
+#include "rndobj\Draw.h"
+#include "rndobj\Trans.h"
+#include "rndobj\Lit.h"
+#include "utl\MemMgr.h"
 
 class RndEnviron : public RndTransformable, public RndDrawable {
     friend class LightPreset;

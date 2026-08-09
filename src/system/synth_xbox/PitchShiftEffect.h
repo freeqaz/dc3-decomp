@@ -1,6 +1,6 @@
 #pragma once
-#include "synth_xbox/soundtouch/source/SoundTouch/SoundTouch.h"
-#include "xdk/xaudio2/xapobase.h"
+#include "synth_xbox\soundtouch\source\SoundTouch\SoundTouch.h"
+#include "xdk\xaudio2\xapobase.h"
 
 struct PitchShiftEffectParams {
     float unk0;

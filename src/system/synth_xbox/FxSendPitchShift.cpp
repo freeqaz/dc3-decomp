@@ -1,5 +1,5 @@
-#include "synth_xbox/FxSendPitchShift360.h"
-#include "synth_xbox/PitchShiftEffect.h"
+#include "synth_xbox\FxSendPitchShift360.h"
+#include "synth_xbox\PitchShiftEffect.h"
 
 void FxSendPitchShift360::Recreate(std::vector<FxSend *> &sends) { FxSend360::Refresh(sends); }
 

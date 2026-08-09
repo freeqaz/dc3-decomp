@@ -1,13 +1,13 @@
-#include "synth/Faders.h"
+#include "synth\Faders.h"
 
 #ifdef HX_NATIVE
 inline double __fsel(double a, double b, double c) { return a >= 0.0 ? b : c; }
-#include "obj/Dir.h"
+#include "obj\Dir.h"
 #endif
-#include "math/Easing.h"
-#include "obj/Object.h"
-#include "os/Debug.h"
-#include "utl/BinStream.h"
+#include "math\Easing.h"
+#include "obj\Object.h"
+#include "os\Debug.h"
+#include "utl\BinStream.h"
 
 #pragma region Fader
 

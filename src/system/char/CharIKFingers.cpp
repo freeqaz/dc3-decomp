@@ -1,12 +1,12 @@
-#include "char/CharIKFingers.h"
-#include "char/CharWeightable.h"
-#include "math/Mtx.h"
-#include "math/Rot.h"
-#include "math/Vec.h"
-#include "obj/Object.h"
-#include "rndobj/Rnd.h"
-#include "rndobj/Trans.h"
-#include "rndobj/Utl.h"
+#include "char\CharIKFingers.h"
+#include "char\CharWeightable.h"
+#include "math\Mtx.h"
+#include "math\Rot.h"
+#include "math\Vec.h"
+#include "obj\Object.h"
+#include "rndobj\Rnd.h"
+#include "rndobj\Trans.h"
+#include "rndobj\Utl.h"
 
 CharIKFingers::CharIKFingers()
     : mHand(nullptr), mForeArm(nullptr), mUpperArm(nullptr), mBlendInFrames(0),

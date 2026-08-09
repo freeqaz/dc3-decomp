@@ -1,9 +1,9 @@
 #pragma once
 #include "CharCameraInput.h"
-#include "gesture/Skeleton.h"
-#include "gesture/SkeletonHistory.h"
-#include "hamobj/HamCharacter.h"
-#include "math/Mtx.h"
+#include "gesture\Skeleton.h"
+#include "gesture\SkeletonHistory.h"
+#include "hamobj\HamCharacter.h"
+#include "math\Mtx.h"
 
 class MocapSkeletonIterator : public SkeletonHistoryArchive, public SkeletonHistory {
 public:

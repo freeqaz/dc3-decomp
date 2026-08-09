@@ -1,11 +1,11 @@
-#include "synth_xbox/ExternalMic.h"
-#include "os/Debug.h"
+#include "synth_xbox\ExternalMic.h"
+#include "os\Debug.h"
 #include <string.h>
 #include <vector>
-#include "xdk/xapilibi/handleapi.h"
-#include "xdk/xapilibi/processthreadsapi.h"
-#include "xdk/xapilibi/synchapi.h"
-#include "xdk/xapilibi/xbox.h"
+#include "xdk\xapilibi\handleapi.h"
+#include "xdk\xapilibi\processthreadsapi.h"
+#include "xdk\xapilibi\synchapi.h"
+#include "xdk\xapilibi\xbox.h"
 
 namespace {
     unsigned long ExternalMicThreadEntry(void *v) {

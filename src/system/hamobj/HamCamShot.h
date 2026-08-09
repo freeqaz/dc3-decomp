@@ -1,15 +1,15 @@
 #pragma once
-#include "char/Character.h"
-#include "math/Mtx.h"
-#include "math/Vec.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "rndobj/Anim.h"
-#include "rndobj/Draw.h"
-#include "rndobj/Env.h"
-#include "rndobj/Trans.h"
-#include "utl/MemMgr.h"
-#include "world/CameraShot.h"
+#include "char\Character.h"
+#include "math\Mtx.h"
+#include "math\Vec.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "rndobj\Anim.h"
+#include "rndobj\Draw.h"
+#include "rndobj\Env.h"
+#include "rndobj\Trans.h"
+#include "utl\MemMgr.h"
+#include "world\CameraShot.h"
 
 enum HamPlayerFlags {
     /** "Player 0" */

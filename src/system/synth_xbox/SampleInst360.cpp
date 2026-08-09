@@ -1,6 +1,6 @@
-#include "synth_xbox/SampleInst360.h"
-#include "synth_xbox/Voice.h"
-#include "synth_xbox/FxSend.h"
+#include "synth_xbox\SampleInst360.h"
+#include "synth_xbox\Voice.h"
+#include "synth_xbox\FxSend.h"
 
 SampleInst360::SampleInst360(SynthSample360 *sample, bool loop, int startSample, int endSample)
     : SampleInst(sample) {

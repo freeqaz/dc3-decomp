@@ -1,7 +1,7 @@
-#include "synth/FxSendFlanger.h"
-#include "obj/Object.h"
-#include "synth/FxSend.h"
-#include "utl/BinStream.h"
+#include "synth\FxSendFlanger.h"
+#include "obj\Object.h"
+#include "synth\FxSend.h"
+#include "utl\BinStream.h"
 
 BEGIN_COPYS(FxSendFlanger)
     COPY_SUPERCLASS(FxSend)

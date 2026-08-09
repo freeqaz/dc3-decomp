@@ -1,10 +1,10 @@
 #include "MoveGraph.h"
-#include "hamobj/Difficulty.h"
-#include "hamobj/MoveGraph.h"
-#include "obj/Data.h"
-#include "os/Debug.h"
-#include "utl/BinStream.h"
-#include "utl/Symbol.h"
+#include "hamobj\Difficulty.h"
+#include "hamobj\MoveGraph.h"
+#include "obj\Data.h"
+#include "os\Debug.h"
+#include "utl\BinStream.h"
+#include "utl\Symbol.h"
 
 #pragma region MoveCandidate
 

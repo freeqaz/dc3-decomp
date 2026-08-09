@@ -1,6 +1,6 @@
-#include "rndobj/MeshAnim.h"
-#include "obj/Object.h"
-#include "rndobj/Anim.h"
+#include "rndobj\MeshAnim.h"
+#include "obj\Object.h"
+#include "rndobj\Anim.h"
 
 #pragma region Hmx::Object
 

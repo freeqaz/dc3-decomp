@@ -1,25 +1,25 @@
-#include "synth/StandardStream.h"
-#include "os/Debug.h"
-#include "os/File.h"
-#include "os/System.h"
-#include "synth/ADSR.h"
-#include "synth/Synth.h"
-#include "utl/MemMgr.h"
-#include "utl/Std.h"
-#include "synth/StreamReceiver.h"
-#include "synth/StreamReceiverFile.h"
+#include "synth\StandardStream.h"
+#include "os\Debug.h"
+#include "os\File.h"
+#include "os\System.h"
+#include "synth\ADSR.h"
+#include "synth\Synth.h"
+#include "utl\MemMgr.h"
+#include "utl\Std.h"
+#include "synth\StreamReceiver.h"
+#include "synth\StreamReceiverFile.h"
 #ifdef HX_NATIVE
-#include "platform/StreamReceiver_Native.h"
+#include "platform\StreamReceiver_Native.h"
 #endif
-#include "utl/Symbol.h"
+#include "utl\Symbol.h"
 #include <cmath>
 #include <functional>
 #ifdef HX_NATIVE
 // std::mem_fun removed in C++17; use std::mem_fn (no underscore)
 #define mem_fun mem_fn
 #endif
-#include "math/Decibels.h"
-#include "math/Utl.h"
+#include "math\Decibels.h"
+#include "math\Utl.h"
 
 bool StandardStream::sReportLargeTimerErrors = true;
 #ifdef HX_NATIVE

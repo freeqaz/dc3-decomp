@@ -1,9 +1,9 @@
 #pragma once
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "rndobj/Dir.h"
-#include "rndobj/Mesh.h"
-#include "utl/MemMgr.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "rndobj\Dir.h"
+#include "rndobj\Mesh.h"
+#include "utl\MemMgr.h"
 
 class HamPhotoDisplay : public RndDir {
 public:

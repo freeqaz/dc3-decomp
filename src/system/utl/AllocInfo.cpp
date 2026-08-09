@@ -1,11 +1,11 @@
-#include "utl/AllocInfo.h"
-#include "utl/MemTracker.h"
-#include "utl/Pool.h"
-#include "os/Debug.h"
-#include "os/System.h"
+#include "utl\AllocInfo.h"
+#include "utl\MemTracker.h"
+#include "utl\Pool.h"
+#include "os\Debug.h"
+#include "os\System.h"
 #include "trie.h"
-#include "utl/TextStream.h"
-#include "xdk/XBDM.h"
+#include "utl\TextStream.h"
+#include "xdk\XBDM.h"
 #include <cstdio>
 
 extern MemTracker *gMemTracker;

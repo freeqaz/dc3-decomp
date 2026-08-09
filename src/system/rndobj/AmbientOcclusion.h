@@ -1,11 +1,11 @@
 #pragma once
-#include "math/Geo.h"
-#include "math/kdTree.h"
-#include "math/Vec.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "rndobj/Mesh.h"
-#include "utl/MemMgr.h"
+#include "math\Geo.h"
+#include "math\kdTree.h"
+#include "math\Vec.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "rndobj\Mesh.h"
+#include "utl\MemMgr.h"
 
 /** "Computes ambient occlusion and automatic tessellation.
     Also stores AO configuration options." */

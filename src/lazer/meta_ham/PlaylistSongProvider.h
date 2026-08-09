@@ -1,11 +1,11 @@
 #pragma once
 #include "Playlist.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "ui/UILabel.h"
-#include "ui/UIListLabel.h"
-#include "ui/UIListProvider.h"
-#include "utl/Symbol.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "ui\UILabel.h"
+#include "ui\UIListLabel.h"
+#include "ui\UIListProvider.h"
+#include "utl\Symbol.h"
 
 class PlaylistSongProvider : public UIListProvider, public Hmx::Object {
 public:

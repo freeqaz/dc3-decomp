@@ -1,6 +1,6 @@
-#include "gesture/SkeletonHistory.h"
+#include "gesture\SkeletonHistory.h"
 #include "ArchiveSkeleton.h"
-#include "os/Debug.h"
+#include "os\Debug.h"
 
 SkeletonHistoryArchive::SkeletonHistoryArchive() {
     for (int i = 0; i < 6; i++) {

@@ -1,13 +1,13 @@
-#include "synth/EQEffect.h"
-#include "os/Debug.h"
-#include "xdk/xaudio2/xaudio2.h"
+#include "synth\EQEffect.h"
+#include "os\Debug.h"
+#include "xdk\xaudio2\xaudio2.h"
 #include <math.h>
 #include <string.h>
 
 #ifdef HX_NATIVE
 inline double __fsel(double a, double b, double c) { return a >= 0.0 ? b : c; }
 #else
-#include "xdk/LIBCMT/ppcintrinsics.h"
+#include "xdk\LIBCMT\ppcintrinsics.h"
 #endif
 
 #line 13 "dsp\\EQEffect.cpp"

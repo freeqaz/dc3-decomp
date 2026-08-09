@@ -1,10 +1,10 @@
 #pragma once
-#include "os/File.h"
-#include "synth/ADSR.h"
-#include "synth/Pollable.h"
-#include "synth/Stream.h"
-#include "synth/StreamReader.h"
-#include "utl/VarTimer.h"
+#include "os\File.h"
+#include "synth\ADSR.h"
+#include "synth\Pollable.h"
+#include "synth\Stream.h"
+#include "synth\StreamReader.h"
+#include "utl\VarTimer.h"
 
 class StreamReceiver;
 

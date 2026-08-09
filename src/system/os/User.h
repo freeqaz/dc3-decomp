@@ -1,8 +1,8 @@
 #pragma once
-#include "obj/Object.h"
-#include "utl/HxGuid.h"
-#include "os/OnlineID.h"
-#include "utl/Str.h"
+#include "obj\Object.h"
+#include "utl\HxGuid.h"
+#include "os\OnlineID.h"
+#include "utl\Str.h"
 
 // forward decs
 class LocalUser;

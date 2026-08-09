@@ -1,6 +1,6 @@
 #pragma once
-#include "utl/TextStream.h"
-#include "utl/TextFileStream.h"
+#include "utl\TextStream.h"
+#include "utl\TextFileStream.h"
 #include <list>
 #include <string.h>
 
@@ -83,8 +83,8 @@ public:
 
 typedef void ModalCallbackFunc(Debug::ModalType &, FixedString &, bool);
 
-#include "utl/Str.h"
-#include "utl/MakeString.h"
+#include "utl\Str.h"
+#include "utl\MakeString.h"
 #include <list>
 
 extern Debug TheDebug;

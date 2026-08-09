@@ -1,7 +1,7 @@
-#include "rndobj/Fur.h"
-#include "obj/Object.h"
-#include "os/Debug.h"
-#include "utl/BinStream.h"
+#include "rndobj\Fur.h"
+#include "obj\Object.h"
+#include "os\Debug.h"
+#include "utl\BinStream.h"
 
 RndFur::RndFur()
     : mLayers(12), mThickness(3), mCurvature(2), mShellOut(1), mAlphaFalloff(0.5),

@@ -5,4 +5,4 @@
 // ATG::CSampleXAPOBase (EnvelopeGenerator.h, HeadsetXferEffect.h, SynapseAPO.h) do not
 // hit an ODR collision. Code that needs the real template includes
 // dsp/StandardEffect.h, which pulls xapobase.h directly.
-#include "xdk/xaudio2/xaudio2.h"
+#include "xdk\xaudio2\xaudio2.h"

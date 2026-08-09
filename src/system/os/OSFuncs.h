@@ -1,6 +1,6 @@
 #pragma once
-#include "xdk/XAPILIB.h"
-#include "os/ThreadCall.h"
+#include "xdk\XAPILIB.h"
+#include "os\ThreadCall.h"
 
 inline DWORD CurrentThreadId() { return GetCurrentThreadId(); }
 

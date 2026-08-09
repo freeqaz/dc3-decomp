@@ -1,10 +1,10 @@
-#include "utl/BinStream.h"
-#include "math/Rand.h"
-#include "math/Rand2.h"
-#include "obj/Object.h"
-#include "os/Debug.h"
-#include "os/Endian.h"
-#include "os/Timer.h"
+#include "utl\BinStream.h"
+#include "math\Rand.h"
+#include "math\Rand2.h"
+#include "obj\Object.h"
+#include "os\Debug.h"
+#include "os\Endian.h"
+#include "os\Timer.h"
 #include <vector>
 
 #define BUF_SIZE 512

@@ -1,9 +1,9 @@
-#include "synth/FlangerEffect.h"
-#include "synth/Common_Xbox.h"
-#include "math/Rot.h"
-#include "os/Debug.h"
+#include "synth\FlangerEffect.h"
+#include "synth\Common_Xbox.h"
+#include "math\Rot.h"
+#include "os\Debug.h"
 #include "types.h"
-#include "xdk/xaudio2/xaudio2.h"
+#include "xdk\xaudio2\xaudio2.h"
 
 #line 8 "dsp\\FlangerEffect.cpp"
 FlangerEffect::FlangerEffect(IXAudioBatchAllocator *ix)

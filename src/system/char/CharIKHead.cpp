@@ -1,13 +1,13 @@
-#include "char/CharIKHead.h"
-#include "char/Character.h"
-#include "char/CharWeightable.h"
-#include "math/Vec.h"
-#include "math/Rot.h"
-#include "obj/Object.h"
-#include "obj/Task.h"
-#include "rndobj/Rnd.h"
-#include "rndobj/Trans.h"
-#include "rndobj/Utl.h"
+#include "char\CharIKHead.h"
+#include "char\Character.h"
+#include "char\CharWeightable.h"
+#include "math\Vec.h"
+#include "math\Rot.h"
+#include "obj\Object.h"
+#include "obj\Task.h"
+#include "rndobj\Rnd.h"
+#include "rndobj\Trans.h"
+#include "rndobj\Utl.h"
 
 void NormalizeScale(const Vector3 &, float, Vector3 &);
 

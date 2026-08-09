@@ -1,6 +1,6 @@
-#include "char/CharTaskMgr.h"
-#include "obj/Data.h"
-#include "obj/DataFunc.h"
+#include "char\CharTaskMgr.h"
+#include "obj\Data.h"
+#include "obj\DataFunc.h"
 
 bool CharTaskMgr::sShowGraph = false;
 int CharTaskMgr::sNumInstances;

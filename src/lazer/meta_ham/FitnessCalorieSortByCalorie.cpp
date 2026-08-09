@@ -1,10 +1,10 @@
-#include "meta_ham/FitnessCalorieSortByCalorie.h"
-#include "meta_ham/FitnessCalorieSortMgr.h"
-#include "meta_ham/FitnessCalorieSortNode.h"
-#include "meta_ham/NavListNode.h"
-#include "world/CameraShot.h"
-#include "utl/MakeString.h"
-#include "utl/Symbol.h"
+#include "meta_ham\FitnessCalorieSortByCalorie.h"
+#include "meta_ham\FitnessCalorieSortMgr.h"
+#include "meta_ham\FitnessCalorieSortNode.h"
+#include "meta_ham\NavListNode.h"
+#include "world\CameraShot.h"
+#include "utl\MakeString.h"
+#include "utl\Symbol.h"
 
 FitnessCalorieSortCmp::~FitnessCalorieSortCmp() {}
 FitnessCalorieSortByCalorie::~FitnessCalorieSortByCalorie() {}

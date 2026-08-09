@@ -1,12 +1,12 @@
-#include "os/ContentMgr.h"
-#include "obj/Data.h"
-#include "obj/Dir.h"
-#include "obj/Object.h"
-#include "os/Debug.h"
-#include "os/File.h"
-#include "utl/Loader.h"
-#include "os/ThreadCall.h"
-#include "utl/Std.h"
+#include "os\ContentMgr.h"
+#include "obj\Data.h"
+#include "obj\Dir.h"
+#include "obj\Object.h"
+#include "os\Debug.h"
+#include "os\File.h"
+#include "utl\Loader.h"
+#include "os\ThreadCall.h"
+#include "utl\Std.h"
 
 bool Content::Contains(const char *str) { return !(str - strstr(str, Root())); }
 

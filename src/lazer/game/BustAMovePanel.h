@@ -1,16 +1,16 @@
 #pragma once
-#include "gesture/BaseSkeleton.h"
-#include "gesture/Skeleton.h"
-#include "hamobj/BustAMoveData.h"
-#include "hamobj/DancerSkeleton.h"
-#include "hamobj/FreestyleMoveRecorder.h"
-#include "hamobj/HamLabel.h"
-#include "hamobj/HamPhraseMeter.h"
-#include "hamobj/ScoreUtl.h"
-#include "meta_ham/HamPanel.h"
-#include "obj/Dir.h"
-#include "obj/Object.h"
-#include "rndobj/Dir.h"
+#include "gesture\BaseSkeleton.h"
+#include "gesture\Skeleton.h"
+#include "hamobj\BustAMoveData.h"
+#include "hamobj\DancerSkeleton.h"
+#include "hamobj\FreestyleMoveRecorder.h"
+#include "hamobj\HamLabel.h"
+#include "hamobj\HamPhraseMeter.h"
+#include "hamobj\ScoreUtl.h"
+#include "meta_ham\HamPanel.h"
+#include "obj\Dir.h"
+#include "obj\Object.h"
+#include "rndobj\Dir.h"
 
 class BustAMovePanel : public HamPanel {
 public:

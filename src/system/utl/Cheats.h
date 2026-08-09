@@ -1,9 +1,9 @@
 #pragma once
-#include "obj/Object.h"
-#include "os/JoypadMsgs.h"
-#include "os/Keyboard.h"
-#include "obj/Data.h"
-#include "os/User.h"
+#include "obj\Object.h"
+#include "os\JoypadMsgs.h"
+#include "os\Keyboard.h"
+#include "obj\Data.h"
+#include "os\User.h"
 
 struct CheatLog {
     bool mQuick;

@@ -1,11 +1,11 @@
-#include "hamobj/ErrorNode.h"
+#include "hamobj\ErrorNode.h"
 #include "ErrorNode.h"
-#include "hamobj/CharFeedback.h"
-#include "gesture/BaseSkeleton.h"
-#include "hamobj/DancerSkeleton.h"
-#include "math/Vec.h"
-#include "obj/Data.h"
-#include "os/Debug.h"
+#include "hamobj\CharFeedback.h"
+#include "gesture\BaseSkeleton.h"
+#include "hamobj\DancerSkeleton.h"
+#include "math\Vec.h"
+#include "obj\Data.h"
+#include "os\Debug.h"
 
 namespace {
     int gSkeletonJointToErrorJoint[kNumJoints] = {

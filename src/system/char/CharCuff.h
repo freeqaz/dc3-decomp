@@ -1,8 +1,8 @@
 #pragma once
-#include "obj/Object.h"
-#include "rndobj/Mesh.h"
-#include "rndobj/Trans.h"
-#include "utl/MemMgr.h"
+#include "obj\Object.h"
+#include "rndobj\Mesh.h"
+#include "rndobj\Trans.h"
+#include "utl\MemMgr.h"
 
 /** "A cuff used to constrain colliding outfits against each other.
     for example boots against pants.  The widest cuff wins" */

@@ -1,10 +1,10 @@
-#include "char/CharCollide.h"
+#include "char\CharCollide.h"
 #include "CharCollide.h"
-#include "math/Color.h"
-#include "math/Mtx.h"
-#include "obj/Object.h"
-#include "rndobj/Trans.h"
-#include "rndobj/Utl.h"
+#include "math\Color.h"
+#include "math\Mtx.h"
+#include "obj\Object.h"
+#include "rndobj\Trans.h"
+#include "rndobj\Utl.h"
 
 CharCollide::CharCollide()
     : mShape(kCollideSphere), mFlags(0), mMesh(this), mMeshYBias(false) {

@@ -1,5 +1,5 @@
 #pragma once
-#include "math/Vec.h"
+#include "math\Vec.h"
 
 // https://en.wikipedia.org/wiki/Exponential_smoothing#Double_exponential_smoothing_(Holt_linear)
 class DoubleExponentialSmoother {

@@ -1,12 +1,12 @@
 #pragma once
-#include "hamobj/RhythmBattlePlayer.h"
-#include "meta_ham/HamProfile.h"
-#include "net_ham/RCJobDingo.h"
-#include "obj/Data.h"
-#include "obj/Msg.h"
-#include "obj/Object.h"
-#include "os/Friend.h"
-#include "stl/_vector.h"
+#include "hamobj\RhythmBattlePlayer.h"
+#include "meta_ham\HamProfile.h"
+#include "net_ham\RCJobDingo.h"
+#include "obj\Data.h"
+#include "obj\Msg.h"
+#include "obj\Object.h"
+#include "os\Friend.h"
+#include "stl\_vector.h"
 
 DECLARE_MESSAGE(PlatformMgrOpCompleteMsg, "platform_mgr_op_complete_msg")
 PlatformMgrOpCompleteMsg(int i) : Message(Type(), i) {}

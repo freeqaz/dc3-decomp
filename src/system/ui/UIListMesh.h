@@ -1,10 +1,10 @@
 #pragma once
-#include "obj/Object.h"
-#include "ui/UIListProvider.h"
-#include "ui/UIListSlot.h"
-#include "rndobj/Mat.h"
-#include "rndobj/Mesh.h"
-#include "utl/MemMgr.h"
+#include "obj\Object.h"
+#include "ui\UIListProvider.h"
+#include "ui\UIListSlot.h"
+#include "rndobj\Mat.h"
+#include "rndobj\Mesh.h"
+#include "utl\MemMgr.h"
 
 /** "Custom slot for use with UIList" */
 class UIListMesh : public UIListSlot {

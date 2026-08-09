@@ -1,9 +1,9 @@
 #pragma once
-#include "math/Key.h"
-#include "obj/Object.h"
-#include "rndobj/Anim.h"
-#include "rndobj/Mesh.h"
-#include "utl/MemMgr.h"
+#include "math\Key.h"
+#include "obj\Object.h"
+#include "rndobj\Anim.h"
+#include "rndobj\Mesh.h"
+#include "utl\MemMgr.h"
 
 /**
  * @brief A set of RndMesh poses that can be blended between.

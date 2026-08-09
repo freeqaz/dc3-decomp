@@ -1,12 +1,12 @@
-#include "flow/FlowSound.h"
+#include "flow\FlowSound.h"
 #include "FlowNode.h"
-#include "flow/FlowLabel.h"
-#include "flow/FlowManager.h"
-#include "flow/FlowNode.h"
-#include "flow/FlowPtr.h"
-#include "math/Decibels.h"
-#include "obj/Object.h"
-#include "synth/Sound.h"
+#include "flow\FlowLabel.h"
+#include "flow\FlowManager.h"
+#include "flow\FlowNode.h"
+#include "flow\FlowPtr.h"
+#include "math\Decibels.h"
+#include "obj\Object.h"
+#include "synth\Sound.h"
 
 FlowSound::FlowSound()
     : mImmediateRelease(true), mStopMode(kStopLastFrame), mHasMarkerFired(false),

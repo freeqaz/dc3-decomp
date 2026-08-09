@@ -1,13 +1,13 @@
 #pragma once
 #include "MoveMgr.h"
-#include "gesture/BaseSkeleton.h"
-#include "gesture/Skeleton.h"
-#include "math/Vec.h"
-#include "obj/Object.h"
-#include "rndobj/Poll.h"
-#include "utl/MemMgr.h"
-#include "utl/DebugGraph.h"
-#include "gesture/GestureMgr.h"
+#include "gesture\BaseSkeleton.h"
+#include "gesture\Skeleton.h"
+#include "math\Vec.h"
+#include "obj\Object.h"
+#include "rndobj\Poll.h"
+#include "utl\MemMgr.h"
+#include "utl\DebugGraph.h"
+#include "gesture\GestureMgr.h"
 #include <vector>
 
 // size 0xc44

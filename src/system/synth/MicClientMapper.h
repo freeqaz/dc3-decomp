@@ -1,5 +1,5 @@
 #pragma once
-#include "synth/MicManagerInterface.h"
+#include "synth\MicManagerInterface.h"
 #include <vector>
 
 class MicClientMapper {

@@ -1,16 +1,16 @@
-#include "rndobj/Console.h"
-#include "obj/Data.h"
-#include "obj/DataFile.h"
-#include "obj/DataFunc.h"
-#include "obj/Msg.h"
-#include "os/Keyboard.h"
-#include "os/System.h"
+#include "rndobj\Console.h"
+#include "obj\Data.h"
+#include "obj\DataFile.h"
+#include "obj\DataFunc.h"
+#include "obj\Msg.h"
+#include "os\Keyboard.h"
+#include "os\System.h"
 #ifndef HX_NATIVE
-#include "os/HolmesClient.h"
+#include "os\HolmesClient.h"
 #endif
-#include "rndobj/Rnd.h"
-#include "utl/Cheats.h"
-#include "utl/Std.h"
+#include "rndobj\Rnd.h"
+#include "utl\Cheats.h"
+#include "utl\Std.h"
 #include <string.h>
 
 #ifdef HX_NATIVE

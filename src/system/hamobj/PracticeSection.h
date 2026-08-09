@@ -1,8 +1,8 @@
 #pragma once
-#include "hamobj/DancerSequence.h"
-#include "hamobj/Difficulty.h"
-#include "rndobj/Anim.h"
-#include "utl/MemMgr.h"
+#include "hamobj\DancerSequence.h"
+#include "hamobj\Difficulty.h"
+#include "rndobj\Anim.h"
+#include "utl\MemMgr.h"
 
 class PracticeStep {
 public:

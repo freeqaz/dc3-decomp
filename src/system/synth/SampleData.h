@@ -1,10 +1,10 @@
 #pragma once
-#include "obj/Data.h"
-#include "obj/PropSync.h"
-#include "utl/CRC.h"
-#include "utl/Str.h"
-#include "utl/BinStream.h"
-#include "utl/FilePath.h"
+#include "obj\Data.h"
+#include "obj\PropSync.h"
+#include "utl\CRC.h"
+#include "utl\Str.h"
+#include "utl\BinStream.h"
+#include "utl\FilePath.h"
 #include <vector>
 
 class SampleMarker {

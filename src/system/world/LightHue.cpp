@@ -1,7 +1,7 @@
-#include "world/LightHue.h"
-#include "obj/Object.h"
-#include "rndobj/Bitmap.h"
-#include "utl/BufStream.h"
+#include "world\LightHue.h"
+#include "obj\Object.h"
+#include "rndobj\Bitmap.h"
+#include "utl\BufStream.h"
 
 LightHue::LightHue() : mLoader(nullptr) {}
 LightHue::~LightHue() { delete mLoader; }

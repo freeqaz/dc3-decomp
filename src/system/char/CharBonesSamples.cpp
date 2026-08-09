@@ -1,14 +1,14 @@
-#include "char/CharBonesSamples.h"
+#include "char\CharBonesSamples.h"
 
 #include "CharClip.h"
-#include "math/Mtx.h"
-#include "math/Rot.h"
-#include "math/Trig.h"
-#include "obj/Object.h"
-#include "os/Debug.h"
-#include "os/Timer.h"
-#include "utl/ChunkStream.h"
-#include "utl/MemMgr.h"
+#include "math\Mtx.h"
+#include "math\Rot.h"
+#include "math\Trig.h"
+#include "obj\Object.h"
+#include "os\Debug.h"
+#include "os\Timer.h"
+#include "utl\ChunkStream.h"
+#include "utl\MemMgr.h"
 #ifdef HX_NATIVE
 #include <cstdlib> // getenv (DC3_CLIP_SWAP_LEGACY / DC3_CLIP_SWAP_DIAG)
 #include <cstring> // strstr

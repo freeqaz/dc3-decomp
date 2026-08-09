@@ -1,6 +1,6 @@
 #pragma once
-#include "utl/PoolAlloc.h"
-#include "xdk/xaudio2/xapobase.h"
+#include "utl\PoolAlloc.h"
+#include "xdk\xaudio2\xapobase.h"
 
 // size 0x10
 struct EnvelopeGeneratorParams {

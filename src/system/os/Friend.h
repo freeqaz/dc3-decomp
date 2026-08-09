@@ -1,8 +1,8 @@
 #pragma once
-#include "obj/Msg.h"
-#include "utl/MemMgr.h"
-#include "utl/Str.h"
-#include "xdk/xapilibi/xbase.h"
+#include "obj\Msg.h"
+#include "utl\MemMgr.h"
+#include "utl\Str.h"
+#include "xdk\xapilibi\xbase.h"
 
 // size 0x20
 class Friend {

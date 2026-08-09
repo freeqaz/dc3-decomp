@@ -1,7 +1,7 @@
-#include "gesture/HandHeightGestureFilter.h"
+#include "gesture\HandHeightGestureFilter.h"
 #include "BaseSkeleton.h"
-#include "gesture/BaseSkeleton.h"
-#include "gesture/Skeleton.h"
+#include "gesture\BaseSkeleton.h"
+#include "gesture\Skeleton.h"
 
 HandHeightGestureFilter::HandHeightGestureFilter(SkeletonSide side)
     : mSide(side), mHeightOffset(0.15), mTrackingState(0) {}

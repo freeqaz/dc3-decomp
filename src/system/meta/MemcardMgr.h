@@ -1,13 +1,13 @@
 #pragma once
-#include "meta/MemcardAction.h"
-#include "meta/Profile.h"
-#include "obj/Data.h"
-#include "obj/Msg.h"
-#include "obj/Object.h"
-#include "os/Memcard.h"
-#include "os/PlatformMgr.h"
-#include "os/ThreadCall.h"
-#include "ui/UI.h"
+#include "meta\MemcardAction.h"
+#include "meta\Profile.h"
+#include "obj\Data.h"
+#include "obj\Msg.h"
+#include "obj\Object.h"
+#include "os\Memcard.h"
+#include "os\PlatformMgr.h"
+#include "os\ThreadCall.h"
+#include "ui\UI.h"
 
 class MemcardMgr : public Hmx::Object, public ThreadCallback {
     friend class SaveMemcardAction; // hack

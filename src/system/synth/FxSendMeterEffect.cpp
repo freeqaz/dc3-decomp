@@ -1,7 +1,7 @@
-#include "synth/FxSendMeterEffect.h"
-#include "obj/Object.h"
-#include "synth/FxSend.h"
-#include "utl/BinStream.h"
+#include "synth\FxSendMeterEffect.h"
+#include "obj\Object.h"
+#include "synth\FxSend.h"
+#include "utl\BinStream.h"
 
 BEGIN_COPYS(FxSendMeterEffect)
     COPY_SUPERCLASS(FxSend)

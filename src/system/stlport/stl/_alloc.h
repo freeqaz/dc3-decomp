@@ -27,7 +27,7 @@
 #ifndef _STLP_INTERNAL_ALLOC_H
 #define _STLP_INTERNAL_ALLOC_H
 
-#include "utl/MemMgr.h" // to allow MemAlloc and MemFree, i can't think of a better way to do so
+#include "utl\MemMgr.h" // to allow MemAlloc and MemFree, i can't think of a better way to do so
 
 #ifndef _STLP_CSTDDEF
 #include <cstddef>

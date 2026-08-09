@@ -1,12 +1,12 @@
-#include "gesture/ArcDetector.h"
-#include "gesture/BaseSkeleton.h"
-#include "gesture/GestureMgr.h"
-#include "gesture/SkeletonViz.h"
-#include "os/Debug.h"
-#include "rndobj/Rnd.h"
-#include "rndobj/Utl.h"
-#include "utl/DebugMeter.h"
-#include "utl/Std.h"
+#include "gesture\ArcDetector.h"
+#include "gesture\BaseSkeleton.h"
+#include "gesture\GestureMgr.h"
+#include "gesture\SkeletonViz.h"
+#include "os\Debug.h"
+#include "rndobj\Rnd.h"
+#include "rndobj\Utl.h"
+#include "utl\DebugMeter.h"
+#include "utl\Std.h"
 
 static int sDefaultHoverTimer = 600;
 static float _acceptablePathErrorRatio = 0.89999998f;

@@ -1,13 +1,13 @@
-#include "meta_ham/NavListSort.h"
-#include "math/Utl.h"
-#include "meta_ham/NavListNode.h"
-#include "math/Utl.h"
-#include "obj/Data.h"
-#include "obj/Msg.h"
-#include "obj/Object.h"
-#include "os/Debug.h"
-#include "ui/UI.h"
-#include "utl/Locale.h"
+#include "meta_ham\NavListSort.h"
+#include "math\Utl.h"
+#include "meta_ham\NavListNode.h"
+#include "math\Utl.h"
+#include "obj\Data.h"
+#include "obj\Msg.h"
+#include "obj\Object.h"
+#include "os\Debug.h"
+#include "ui\UI.h"
+#include "utl\Locale.h"
 
 struct NodeFind {
     NodeFind(Symbol t) : token(t) {}

@@ -1,9 +1,9 @@
 #pragma once
-#include "obj/Msg.h"
-#include "obj/Object.h"
-#include "utl/MemMgr.h"
-#include "utl/Str.h"
-#include "xdk/XAPILIB.h"
+#include "obj\Msg.h"
+#include "obj\Object.h"
+#include "utl\MemMgr.h"
+#include "utl\Str.h"
+#include "xdk\XAPILIB.h"
 
 enum AccessType {
     kAccessRead = 0,
@@ -118,7 +118,7 @@ public:
     virtual void DestroyContainer(MCContainer *);
 };
 
-#include "obj/Msg.h"
+#include "obj\Msg.h"
 DECLARE_MESSAGE(DeviceChosenMsg, "device_chosen")
 DeviceChosenMsg(int x) : Message(Type(), x) {}
 int Device() const { return mData->Int(2); }

@@ -1,7 +1,7 @@
-#include "math/Trig.h"
-#include "math/Utl.h"
-#include "obj/Data.h"
-#include "obj/DataFunc.h"
+#include "math\Trig.h"
+#include "math\Utl.h"
+#include "obj\Data.h"
+#include "obj\DataFunc.h"
 #include <cmath>
 
 float gBigSinTable[0x200];

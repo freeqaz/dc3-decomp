@@ -1,9 +1,9 @@
 
 #pragma once
-#include "xdk/win_types.h"
-#include "xdk/d3d9i/d3d9types.h"
-#include "xdk/XAPILIB.h"
-#include "xdk/xapilibi/xbase.h"
+#include "xdk\win_types.h"
+#include "xdk\d3d9i\d3d9types.h"
+#include "xdk\XAPILIB.h"
+#include "xdk\xapilibi\xbase.h"
 
 #ifdef __cplusplus
 extern "C" {

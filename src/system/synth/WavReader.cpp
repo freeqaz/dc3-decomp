@@ -1,6 +1,6 @@
 #include "WavReader.h"
 
-#include "os/Memcard.h"
+#include "os\Memcard.h"
 
 WavReader::WavReader(File *file, StandardStream *stream) {
     mInFile = file;

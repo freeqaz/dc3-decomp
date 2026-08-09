@@ -1,6 +1,6 @@
 #include "RhythmDetectorGroup.h"
-#include "hamobj/HollaBackMinigame.h"
-#include "hamobj/RhythmDetector.h"
+#include "hamobj\HollaBackMinigame.h"
+#include "hamobj\RhythmDetector.h"
 
 void HollaBackMinigame::Enter() {
     RndPollable::Enter();

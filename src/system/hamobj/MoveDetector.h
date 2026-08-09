@@ -1,7 +1,7 @@
 #pragma once
-#include "hamobj/DetectFrame.h"
-#include "hamobj/DancerSequence.h"
-#include "hamobj/HamMove.h"
+#include "hamobj\DetectFrame.h"
+#include "hamobj\DancerSequence.h"
+#include "hamobj\HamMove.h"
 #include <set>
 
 class MoveDir;

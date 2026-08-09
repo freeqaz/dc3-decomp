@@ -21,7 +21,7 @@
 # endif
 
 # if defined (__SUNPRO_CC) || defined (__HP_aCC)
-# include "/usr/include/pthread.h"
+# include "\usr\include\pthread.h"
 # else
 # include _STLP_NATIVE_C_HEADER(pthread.h)
 # endif

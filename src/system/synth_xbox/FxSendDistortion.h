@@ -1,8 +1,8 @@
 #pragma once
 #include "FxSend.h"
-#include "obj/Object.h"
-#include "synth/FxSendDistortion.h"
-#include "xdk/xapilibi/xbase.h"
+#include "obj\Object.h"
+#include "synth\FxSendDistortion.h"
+#include "xdk\xapilibi\xbase.h"
 
 class FxSendDistortion360 : public FxSendDistortion, public FxSend360 {
 public:

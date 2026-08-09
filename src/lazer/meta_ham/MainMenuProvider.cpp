@@ -1,13 +1,13 @@
-#include "meta_ham/MainMenuProvider.h"
+#include "meta_ham\MainMenuProvider.h"
 #include "Challenges.h"
 #include "HamProfile.h"
 #include "ProfileMgr.h"
-#include "meta_ham/AppLabel.h"
-#include "net_ham/RockCentral.h"
-#include "os/Debug.h"
-#include "os/PlatformMgr.h"
-#include "ui/UIListProvider.h"
-#include "utl/Symbol.h"
+#include "meta_ham\AppLabel.h"
+#include "net_ham\RockCentral.h"
+#include "os\Debug.h"
+#include "os\PlatformMgr.h"
+#include "ui\UIListProvider.h"
+#include "utl\Symbol.h"
 
 MainMenuProvider::MainMenuProvider() {}
 

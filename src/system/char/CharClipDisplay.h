@@ -1,8 +1,8 @@
 #pragma once
-#include "char/CharClip.h"
-#include "math/Color.h"
-#include "obj/Dir.h"
-#include "obj/Object.h"
+#include "char\CharClip.h"
+#include "math\Color.h"
+#include "obj\Dir.h"
+#include "obj\Object.h"
 
 struct CharClipDisplay {
     CharClipDisplay()

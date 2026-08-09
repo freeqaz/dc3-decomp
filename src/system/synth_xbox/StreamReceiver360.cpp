@@ -1,10 +1,10 @@
-#include "synth_xbox/StreamReceiver360.h"
-#include "synth_xbox/FxSend.h"
-#include "os/Debug.h"
-#include "math/Utl.h"
-#include "utl/PoolAlloc.h"
-#include "utl/Std.h"
-#include "utl/MemMgr.h"
+#include "synth_xbox\StreamReceiver360.h"
+#include "synth_xbox\FxSend.h"
+#include "os\Debug.h"
+#include "math\Utl.h"
+#include "utl\PoolAlloc.h"
+#include "utl\Std.h"
+#include "utl\MemMgr.h"
 
 extern void *_MemAllocTemp(int, const char *, int, const char *, int);
 extern "C" void XMemCpy(void *, const void *, int);

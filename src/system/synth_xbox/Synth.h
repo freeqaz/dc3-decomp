@@ -1,14 +1,14 @@
 #pragma once
 #include "FxSend.h"
-#include "obj/Data.h"
-#include "os/CritSec.h"
-#include "os/Timer.h"
-#include "stl/_vector.h"
-#include "synth/FxSend.h"
-#include "synth/Mic.h"
-#include "synth/Synth.h"
-#include "xdk/xaudio2/xaudio2.h"
-#include "xdk/xvh2/xvh2.h"
+#include "obj\Data.h"
+#include "os\CritSec.h"
+#include "os\Timer.h"
+#include "stl\_vector.h"
+#include "synth\FxSend.h"
+#include "synth\Mic.h"
+#include "synth\Synth.h"
+#include "xdk\xaudio2\xaudio2.h"
+#include "xdk\xvh2\xvh2.h"
 
 class FxSend360;
 

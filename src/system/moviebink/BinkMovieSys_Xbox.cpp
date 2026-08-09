@@ -1,6 +1,6 @@
-#include "moviebink/BinkMovieSys.h"
+#include "moviebink\BinkMovieSys.h"
 #include "ppcintrinsics.h"
-#include "synth_xbox/Synth.h"
+#include "synth_xbox\Synth.h"
 
 extern "C" void BinkSetSoundSystem(void *, unsigned long);
 extern "C" void BinkOpenXAudio2();

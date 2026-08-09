@@ -1,9 +1,9 @@
 #pragma once
 
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "os/Joypad.h"
-#include "os/JoypadMsgs.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "os\Joypad.h"
+#include "os\JoypadMsgs.h"
 
 class JoypadRepeat {
 public:

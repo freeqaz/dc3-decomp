@@ -1,12 +1,12 @@
 #pragma once
-#include "char/CharBonesMeshes.h"
-#include "char/CharPollable.h"
-#include "char/Waypoint.h"
-#include "math/Vec.h"
-#include "obj/Object.h"
-#include "rndobj/Highlight.h"
-#include "utl/MemMgr.h"
-#include "utl/Symbol.h"
+#include "char\CharBonesMeshes.h"
+#include "char\CharPollable.h"
+#include "char\Waypoint.h"
+#include "math\Vec.h"
+#include "obj\Object.h"
+#include "rndobj\Highlight.h"
+#include "utl\MemMgr.h"
+#include "utl\Symbol.h"
 
 class Character;
 class RndTransformable;

@@ -1,8 +1,8 @@
 #pragma once
-#include "flow/FlowNode.h"
-#include "flow/PropertyEventListener.h"
-#include "math/Easing.h"
-#include "obj/Object.h"
+#include "flow\FlowNode.h"
+#include "flow\PropertyEventListener.h"
+#include "math\Easing.h"
+#include "obj\Object.h"
 
 /** "Ramps intensity up/down on child nodes based on value of slider" */
 class FlowSlider : public FlowNode, public PropertyEventListener {

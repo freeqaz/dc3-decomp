@@ -1,13 +1,13 @@
-#include "utl/CacheMgr.h"
+#include "utl\CacheMgr.h"
 #include "Cache.h"
 #include "CacheMgr_Xbox.h"
-#include "obj/Object.h"
-#include "os/Debug.h"
-#include "stl/_vector.h"
-#include "utl/Cache.h"
-#include "utl/MemMgr.h"
-#include "utl/Std.h"
-#include "utl/Symbol.h"
+#include "obj\Object.h"
+#include "os\Debug.h"
+#include "stl\_vector.h"
+#include "utl\Cache.h"
+#include "utl\MemMgr.h"
+#include "utl\Std.h"
+#include "utl\Symbol.h"
 
 CacheMgr *TheCacheMgr;
 

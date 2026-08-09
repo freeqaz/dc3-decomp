@@ -1,10 +1,10 @@
 #pragma once
-#include "obj/Object.h"
-#include "rndobj/Dir.h"
-#include "rndobj/Mesh.h"
-#include "ui/ResourceDirPtr.h"
-#include "ui/UIComponent.h"
-#include "ui/UILabel.h"
+#include "obj\Object.h"
+#include "rndobj\Dir.h"
+#include "rndobj\Mesh.h"
+#include "ui\ResourceDirPtr.h"
+#include "ui\UIComponent.h"
+#include "ui\UILabel.h"
 
 /** "a mesh shrink wrapped to selected label" */
 class LabelShrinkWrapper : public UIComponent {

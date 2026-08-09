@@ -1,7 +1,7 @@
-#include "math/Interp.h"
-#include "math/Vec.h"
-#include "obj/Data.h"
-#include "os/Debug.h"
+#include "math\Interp.h"
+#include "math\Vec.h"
+#include "obj\Data.h"
+#include "os\Debug.h"
 #include <cmath>
 
 Interpolator::~Interpolator() {}

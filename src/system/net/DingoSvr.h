@@ -1,13 +1,13 @@
 #pragma once
-#include "net/DingoJob.h"
-#include "meta/ConnectionStatusPanel.h"
-#include "obj/Data.h"
-#include "obj/Msg.h"
-#include "obj/Object.h"
-#include "os/OnlineID.h"
-#include "os/PlatformMgr.h"
-#include "utl/DataPointMgr.h"
-#include "utl/Str.h"
+#include "net\DingoJob.h"
+#include "meta\ConnectionStatusPanel.h"
+#include "obj\Data.h"
+#include "obj\Msg.h"
+#include "obj\Object.h"
+#include "os\OnlineID.h"
+#include "os\PlatformMgr.h"
+#include "utl\DataPointMgr.h"
+#include "utl\Str.h"
 #include <vector>
 
 class DingoServer : public Hmx::Object {

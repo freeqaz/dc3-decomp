@@ -1,7 +1,7 @@
 #pragma once
-#include "gesture/Skeleton.h"
-#include "math/DoubleExponentialSmoother.h"
-#include "math/Vec.h"
+#include "gesture\Skeleton.h"
+#include "math\DoubleExponentialSmoother.h"
+#include "math\Vec.h"
 
 class HandInvokeGestureFilter {
 public:

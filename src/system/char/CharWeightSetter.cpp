@@ -1,6 +1,6 @@
-#include "char/CharWeightSetter.h"
-#include "char/CharWeightable.h"
-#include "obj/Object.h"
+#include "char\CharWeightSetter.h"
+#include "char\CharWeightable.h"
+#include "obj\Object.h"
 
 CharWeightSetter::CharWeightSetter()
     : mBase(this), mDriver(this), mMinWeights(this), mMaxWeights(this), mFlags(0),

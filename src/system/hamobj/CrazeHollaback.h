@@ -1,7 +1,7 @@
 #pragma once
-#include "hamobj/SongUtl.h"
-#include "obj/Object.h"
-#include "utl/MemMgr.h"
+#include "hamobj\SongUtl.h"
+#include "obj\Object.h"
+#include "utl\MemMgr.h"
 
 /** "Data used for Craze Hollaback" */
 class CrazeHollaback : public Hmx::Object {

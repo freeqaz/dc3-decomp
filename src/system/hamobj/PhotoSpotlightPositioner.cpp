@@ -1,9 +1,9 @@
-#include "hamobj/PhotoSpotlightPositioner.h"
-#include "gesture/GestureMgr.h"
-#include "hamobj/HamGameData.h"
-#include "math/Utl.h"
-#include "obj/Object.h"
-#include "utl/Loader.h"
+#include "hamobj\PhotoSpotlightPositioner.h"
+#include "gesture\GestureMgr.h"
+#include "hamobj\HamGameData.h"
+#include "math\Utl.h"
+#include "obj\Object.h"
+#include "utl\Loader.h"
 
 PhotoSpotlightPositioner::PhotoSpotlightPositioner()
     : mPlayer(0), mSpotlight(this), mRefImage(this) {}

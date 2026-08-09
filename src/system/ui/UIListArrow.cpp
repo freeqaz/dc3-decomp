@@ -1,9 +1,9 @@
-#include "ui/UIListArrow.h"
-#include "math/Easing.h"
-#include "obj/Object.h"
-#include "ui/UIList.h"
-#include "ui/UIListWidget.h"
-#include "ui/UIList.h"
+#include "ui\UIListArrow.h"
+#include "math\Easing.h"
+#include "obj\Object.h"
+#include "ui\UIList.h"
+#include "ui\UIListWidget.h"
+#include "ui\UIList.h"
 
 UIListArrow::UIListArrow()
     : mMesh(this), mScrollAnim(this), mPosition(kUIListArrowBack), mShowOnlyScroll(0),

@@ -1,8 +1,8 @@
 #pragma once
-#include "obj/Data.h"
-#include "os/ThreadCall.h"
-#include "utl/BinStream.h"
-#include "utl/Loader.h"
+#include "obj\Data.h"
+#include "os\ThreadCall.h"
+#include "utl\BinStream.h"
+#include "utl\Loader.h"
 
 class DataLoader;
 typedef void (DataLoader::*DataLoaderStateFunc)(void);

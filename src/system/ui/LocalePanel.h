@@ -1,11 +1,11 @@
 #pragma once
-#include "obj/Dir.h"
-#include "obj/Object.h"
-#include "ui/UILabel.h"
-#include "ui/UIListProvider.h"
-#include "ui/UIPanel.h"
-#include "ui/UIScreen.h"
-#include "utl/Symbol.h"
+#include "obj\Dir.h"
+#include "obj\Object.h"
+#include "ui\UILabel.h"
+#include "ui\UIListProvider.h"
+#include "ui\UIPanel.h"
+#include "ui\UIScreen.h"
+#include "utl\Symbol.h"
 
 class LocalePanel : public UIPanel, public UIListProvider {
 public:

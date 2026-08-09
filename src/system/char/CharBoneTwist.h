@@ -1,8 +1,8 @@
 #pragma once
-#include "char/CharPollable.h"
-#include "char/CharWeightable.h"
-#include "rndobj/Trans.h"
-#include "utl/MemMgr.h"
+#include "char\CharPollable.h"
+#include "char\CharWeightable.h"
+#include "rndobj\Trans.h"
+#include "utl\MemMgr.h"
 
 /** "Rotate a bone to point towards targets" */
 class CharBoneTwist : public CharPollable, public CharWeightable {

@@ -1,9 +1,9 @@
 #include "HamMemcardAction.h"
-#include "meta/FixedSizeSaveable.h"
-#include "meta/FixedSizeSaveableStream.h"
-#include "meta/MemcardAction.h"
-#include "meta/MemcardMgr.h"
-#include "os/Memcard.h"
+#include "meta\FixedSizeSaveable.h"
+#include "meta\FixedSizeSaveableStream.h"
+#include "meta\MemcardAction.h"
+#include "meta\MemcardMgr.h"
+#include "os\Memcard.h"
 
 SaveMemcardAction::SaveMemcardAction(Profile *profile) : MemcardAction(profile) {
     mResult = kMCNoError;

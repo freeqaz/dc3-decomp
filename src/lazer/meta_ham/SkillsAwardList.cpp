@@ -1,10 +1,10 @@
-#include "meta_ham/SkillsAwardList.h"
-#include "hamobj/HamGameData.h"
-#include "meta/FixedSizeSaveableStream.h"
-#include "meta_ham/HamSongMgr.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "utl/Std.h"
+#include "meta_ham\SkillsAwardList.h"
+#include "hamobj\HamGameData.h"
+#include "meta\FixedSizeSaveableStream.h"
+#include "meta_ham\HamSongMgr.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "utl\Std.h"
 
 void SkillsAwardList::SaveFixed(FixedSizeSaveableStream &stream) const {
     int size = mAwardList.size();

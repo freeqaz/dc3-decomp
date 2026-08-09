@@ -1,11 +1,11 @@
-#include "rndobj/Spline.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "math/Rot.h"
-#include "os/Debug.h"
-#include "rndobj/Poll.h"
-#include "rndobj/ShaderMgr.h"
-#include "utl/BinStream.h"
+#include "rndobj\Spline.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "math\Rot.h"
+#include "os\Debug.h"
+#include "rndobj\Poll.h"
+#include "rndobj\ShaderMgr.h"
+#include "utl\BinStream.h"
 
 RndSpline *RndSpline::sGlobalDefaultSpline;
 

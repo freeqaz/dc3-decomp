@@ -1,7 +1,7 @@
 #pragma once
-#include "meta/FixedSizeSaveable.h"
-#include "obj/Object.h"
-#include "os/User.h"
+#include "meta\FixedSizeSaveable.h"
+#include "obj\Object.h"
+#include "os\User.h"
 
 enum ProfileSaveState {
     kMetaProfileUnloaded = 0,
@@ -43,7 +43,7 @@ protected:
     ProfileSaveState mState; // 0x14
 };
 
-#include "obj/Msg.h"
+#include "obj\Msg.h"
 
 DECLARE_MESSAGE(ProfileSwappedMsg, "profile_swapped")
 ProfileSwappedMsg(LocalUser *u1, LocalUser *u2) : Message(Type(), u1, u2) {}

@@ -1,6 +1,6 @@
-#include "game/Shuttle.h"
-#include "math/Utl.h"
-#include "os/Joypad.h"
+#include "game\Shuttle.h"
+#include "math\Utl.h"
+#include "os\Joypad.h"
 #include "types.h"
 #include <cmath>
 

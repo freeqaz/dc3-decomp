@@ -1,7 +1,7 @@
 #pragma once
 #include "ChallengeSort.h"
 #include "NavListNode.h"
-#include "meta_ham/NavListNode.h"
+#include "meta_ham\NavListNode.h"
 
 class ChallengeScoreCmp : public NavListItemSortCmp {
 public:

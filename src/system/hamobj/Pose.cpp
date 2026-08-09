@@ -1,7 +1,7 @@
-#include "hamobj/Pose.h"
-#include "math/Utl.h"
-#include "os/Debug.h"
-#include "utl/Std.h"
+#include "hamobj\Pose.h"
+#include "math\Utl.h"
+#include "os\Debug.h"
+#include "utl\Std.h"
 
 Pose::Pose(int x, ScoreMode s) : unk18(x), mScoreMode(s) {}
 Pose::~Pose() { DeleteAll(mElements); }

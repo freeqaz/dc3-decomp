@@ -1,27 +1,27 @@
-#include "meta_ham/SkeletonIdentifier.h"
+#include "meta_ham\SkeletonIdentifier.h"
 #include "SkeletonIdentifier.h"
 #include <stdio.h>
-#include "flow/PropertyEventProvider.h"
-#include "rndobj/Rnd.h"
+#include "flow\PropertyEventProvider.h"
+#include "rndobj\Rnd.h"
 
 #ifndef HX_NATIVE
 template int sprintf_s<200>(char (&)[200], const char *, ...);
 #endif
-#include "gesture/GestureMgr.h"
-#include "gesture/Skeleton.h"
-#include "hamobj/HamGameData.h"
-#include "hamobj/HamPlayerData.h"
-#include "meta_ham/PassiveMessenger.h"
-#include "meta_ham/ProfileMgr.h"
-#include "obj/Data.h"
-#include "obj/Dir.h"
-#include "obj/Object.h"
-#include "os/Debug.h"
-#include "os/PlatformMgr.h"
-#include "utl/Locale.h"
-#include "utl/MakeString.h"
-#include "utl/Symbol.h"
-#include "xdk/NUI.h"
+#include "gesture\GestureMgr.h"
+#include "gesture\Skeleton.h"
+#include "hamobj\HamGameData.h"
+#include "hamobj\HamPlayerData.h"
+#include "meta_ham\PassiveMessenger.h"
+#include "meta_ham\ProfileMgr.h"
+#include "obj\Data.h"
+#include "obj\Dir.h"
+#include "obj\Object.h"
+#include "os\Debug.h"
+#include "os\PlatformMgr.h"
+#include "utl\Locale.h"
+#include "utl\MakeString.h"
+#include "utl\Symbol.h"
+#include "xdk\NUI.h"
 
 String EnrollmentIndexString(int idx) {
     String str = MakeString("enrollment index %d", idx);

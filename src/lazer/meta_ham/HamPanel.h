@@ -1,11 +1,11 @@
 #pragma once
-#include "hamobj/HamNavList.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "rndobj/Anim.h"
-#include "ui/UIComponent.h"
-#include "ui/UIPanel.h"
-#include "utl/Symbol.h"
+#include "hamobj\HamNavList.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "rndobj\Anim.h"
+#include "ui\UIComponent.h"
+#include "ui\UIPanel.h"
+#include "utl\Symbol.h"
 
 class HamPanel : public UIPanel {
 public:

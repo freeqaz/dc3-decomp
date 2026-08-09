@@ -1,7 +1,7 @@
 #pragma once
-#include "xdk/win_types.h"
-#include "xdk/xapilibi/xbase.h"
-#include "xdk/xjson/xjson.h"
+#include "xdk\win_types.h"
+#include "xdk\xapilibi\xbase.h"
+#include "xdk\xjson\xjson.h"
 
 #ifdef __cplusplus
 extern "C" {

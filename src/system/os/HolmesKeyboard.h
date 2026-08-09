@@ -1,8 +1,8 @@
 #pragma once
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "utl/BinStream.h"
-#include "utl/MemStream.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "utl\BinStream.h"
+#include "utl\MemStream.h"
 
 class CWnd;
 

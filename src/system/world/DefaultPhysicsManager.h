@@ -1,8 +1,8 @@
 #pragma once
-#include "obj/Dir.h"
-#include "obj/Object.h"
-#include "rndobj/Mesh.h"
-#include "world/PhysicsManager.h"
+#include "obj\Dir.h"
+#include "obj\Object.h"
+#include "rndobj\Mesh.h"
+#include "world\PhysicsManager.h"
 
 class DefaultPhysicsManager : public PhysicsManager {
 public:

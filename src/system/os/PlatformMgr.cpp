@@ -1,16 +1,16 @@
-#include "os/PlatformMgr.h"
-#include "obj/Data.h"
-#include "obj/DataUtl.h"
+#include "os\PlatformMgr.h"
+#include "obj\Data.h"
+#include "obj\DataUtl.h"
 
-#include "obj/Object.h"
-#include "os/Debug.h"
-#include "os/System.h"
-#include "os/User.h"
-#include "os/UserMgr.h"
-#include "utl/Option.h"
-#include "utl/UTF8.h"
-#include "utl/Str.h"
-#include "xdk/XAPILIB.h"
+#include "obj\Object.h"
+#include "os\Debug.h"
+#include "os\System.h"
+#include "os\User.h"
+#include "os\UserMgr.h"
+#include "utl\Option.h"
+#include "utl\UTF8.h"
+#include "utl\Str.h"
+#include "xdk\XAPILIB.h"
 
 #ifdef HX_NATIVE
 XCallbackFunc *PlatformMgr::sXShowCallback;

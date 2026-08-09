@@ -1,11 +1,11 @@
 #pragma once
-#include "math/Color.h"
-#include "obj/Object.h"
-#include "obj/Object.h"
-#include "rndobj/Tex.h"
-#include "rndobj/Wind.h"
-#include "utl/BinStream.h"
-#include "utl/MemMgr.h"
+#include "math\Color.h"
+#include "obj\Object.h"
+#include "obj\Object.h"
+#include "rndobj\Tex.h"
+#include "rndobj\Wind.h"
+#include "utl\BinStream.h"
+#include "utl\MemMgr.h"
 
 // size 0x9c
 /** "Parameters for fur shading, to be set on a material" */

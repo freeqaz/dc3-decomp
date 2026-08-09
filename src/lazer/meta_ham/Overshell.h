@@ -1,7 +1,7 @@
 #pragma once
-#include "hamobj/HamPlayerData.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
+#include "hamobj\HamPlayerData.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
 
 enum OvershellSlotState {
 };

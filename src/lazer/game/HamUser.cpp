@@ -1,9 +1,9 @@
-#include "game/HamUser.h"
-#include "meta_ham/SkeletonIdentifier.h"
-#include "obj/Object.h"
-#include "os/OnlineID.h"
-#include "os/User.h"
-#include "xdk/XAPILIB.h"
+#include "game\HamUser.h"
+#include "meta_ham\SkeletonIdentifier.h"
+#include "obj\Object.h"
+#include "os\OnlineID.h"
+#include "os\User.h"
+#include "xdk\XAPILIB.h"
 
 HamUser::HamUser(int i) : unk4(0), mPlayerIndex(i) {}
 

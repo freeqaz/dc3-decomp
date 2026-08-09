@@ -1,8 +1,8 @@
 #pragma once
-#include "obj/Object.h"
-#include "rndobj/EventTrigger.h"
-#include "rndobj/Poll.h"
-#include "utl/MemMgr.h"
+#include "obj\Object.h"
+#include "rndobj\EventTrigger.h"
+#include "rndobj\Poll.h"
+#include "utl\MemMgr.h"
 
 /** "Triggers anims based on UI events (enter, exit, etc.)" */
 class UITrigger : public EventTrigger, public RndPollable {
@@ -42,7 +42,7 @@ protected:
     bool mDone; // 0x13c
 };
 
-#include "obj/Msg.h"
+#include "obj\Msg.h"
 
 DECLARE_MESSAGE(UITriggerCompleteMsg, "ui_trigger_complete");
 UITriggerCompleteMsg(UITrigger *trig) : Message(Type(), trig) {}

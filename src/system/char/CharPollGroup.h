@@ -1,10 +1,10 @@
 #pragma once
-#include "char/CharPollable.h"
-#include "char/CharWeightable.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "utl/BinStream.h"
-#include "utl/MemMgr.h"
+#include "char\CharPollable.h"
+#include "char\CharWeightable.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "utl\BinStream.h"
+#include "utl\MemMgr.h"
 
 /** "Group of Charpollable, polled in the order given,
     use when the automatic CharPollable sorting is not correct or sufficient." */

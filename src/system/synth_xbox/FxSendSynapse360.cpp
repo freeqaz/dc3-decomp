@@ -1,4 +1,4 @@
-#include "synth_xbox/FxSendSynapse360.h"
+#include "synth_xbox\FxSendSynapse360.h"
 
 FxSendSynapse360::FxSendSynapse360() {}
 FxSendSynapse360::~FxSendSynapse360() {}

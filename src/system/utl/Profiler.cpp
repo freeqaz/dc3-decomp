@@ -1,8 +1,8 @@
-#include "utl/Profiler.h"
-#include "math/Utl.h"
-#include "os/Debug.h"
-#include "os/Timer.h"
-#include "xdk/LIBCMT/float.h"
+#include "utl\Profiler.h"
+#include "math\Utl.h"
+#include "os\Debug.h"
+#include "os\Timer.h"
+#include "xdk\LIBCMT\float.h"
 
 Profiler::Profiler(char const *c, int i)
     : mName(c), mMin(3.4028235e+38), mMax(0.0f), mSum(0.0f), mCount(0), mCountMax(i) {}

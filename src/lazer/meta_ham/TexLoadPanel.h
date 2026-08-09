@@ -1,11 +1,11 @@
 #pragma once
-#include "meta_ham/HamPanel.h"
-#include "obj/Object.h"
-#include "os/ContentMgr.h"
-#include "rndobj/Mat.h"
-#include "rndobj/Tex.h"
-#include "synth/MoggClip.h"
-#include "ui/UIPanel.h"
+#include "meta_ham\HamPanel.h"
+#include "obj\Object.h"
+#include "os\ContentMgr.h"
+#include "rndobj\Mat.h"
+#include "rndobj\Tex.h"
+#include "synth\MoggClip.h"
+#include "ui\UIPanel.h"
 
 class DynamicTex {
 public:

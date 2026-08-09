@@ -1,16 +1,16 @@
 #pragma once
 #include "TexLoadPanel.h"
-#include "hamobj/Difficulty.h"
-#include "hamobj/HamNavProvider.h"
-#include "meta_ham/CampaignEra.h"
-#include "meta_ham/CampaignProgress.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "os/DateTime.h"
-#include "stl/_vector.h"
-#include "ui/PanelDir.h"
-#include "utl/Str.h"
-#include "utl/Symbol.h"
+#include "hamobj\Difficulty.h"
+#include "hamobj\HamNavProvider.h"
+#include "meta_ham\CampaignEra.h"
+#include "meta_ham\CampaignProgress.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "os\DateTime.h"
+#include "stl\_vector.h"
+#include "ui\PanelDir.h"
+#include "utl\Str.h"
+#include "utl\Symbol.h"
 
 class CampaignSongProvider : public HamNavProvider {
 public:

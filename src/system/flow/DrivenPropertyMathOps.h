@@ -1,9 +1,9 @@
 #pragma once
-#include "flow/FlowPtr.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
+#include "flow\FlowPtr.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
 #include "types.h"
-#include "utl/BinStream.h"
+#include "utl\BinStream.h"
 
 enum MathOpType {
     kMathOp_Add = 0,

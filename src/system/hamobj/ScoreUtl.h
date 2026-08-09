@@ -1,6 +1,6 @@
 #pragma once
-#include "obj/Data.h"
-#include "utl/Symbol.h"
+#include "obj\Data.h"
+#include "utl\Symbol.h"
 #include <vector>
 
 enum MoveRating {

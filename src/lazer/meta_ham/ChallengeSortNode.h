@@ -1,8 +1,8 @@
 #pragma once
 #include "ChallengeSortMgr.h"
 #include "NavListNode.h"
-#include "hamobj/Difficulty.h"
-#include "obj/Data.h"
+#include "hamobj\Difficulty.h"
+#include "obj\Data.h"
 
 class ChallengeHeaderNode : public NavListHeaderNode {
 public:

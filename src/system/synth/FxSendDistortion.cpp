@@ -1,7 +1,7 @@
-#include "synth/FxSendDistortion.h"
-#include "obj/Object.h"
-#include "synth/FxSend.h"
-#include "utl/BinStream.h"
+#include "synth\FxSendDistortion.h"
+#include "obj\Object.h"
+#include "synth\FxSend.h"
+#include "utl\BinStream.h"
 
 FxSendDistortion::FxSendDistortion() : mDrive(0) {}
 

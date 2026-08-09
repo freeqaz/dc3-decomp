@@ -1,10 +1,10 @@
 #pragma once
 #include "HttpReq.h"
-#include "obj/Dir.h"
-#include "obj/Msg.h"
-#include "obj/Object.h"
-#include "os/NetworkSocket.h"
-#include "utl/Symbol.h"
+#include "obj\Dir.h"
+#include "obj\Msg.h"
+#include "obj\Object.h"
+#include "os\NetworkSocket.h"
+#include "utl\Symbol.h"
 
 class WebSvcRequest : public Hmx::Object {
     friend class WebSvcMgr;

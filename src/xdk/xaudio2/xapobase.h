@@ -1,7 +1,7 @@
 #pragma once
 #include "xapo.h"
-#include "xdk/win_types.h"
-#include "xdk/XAPILIB.h"
+#include "xdk\win_types.h"
+#include "xdk\XAPILIB.h"
 #include <string.h>
 
 // https://learn.microsoft.com/en-us/windows/win32/api/xapobase/

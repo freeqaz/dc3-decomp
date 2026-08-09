@@ -482,8 +482,8 @@ long vorbis_book_decodevv_add(codebook *book,float **a,long offset,int ch,
 
 #include <stdio.h>
 
-#include "vorbis/book/lsp20_0.vqh"
-#include "vorbis/book/res0a_13.vqh"
+#include "vorbis\book\lsp20_0.vqh"
+#include "vorbis\book\res0a_13.vqh"
 #define TESTSIZE 40
 
 float test1[TESTSIZE]={

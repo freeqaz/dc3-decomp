@@ -1,6 +1,6 @@
 #pragma once
-#include "net/HttpGet.h"
-#include "utl/NetLoader.h"
+#include "net\HttpGet.h"
+#include "utl\NetLoader.h"
 
 class NetLoaderXbox : public NetLoader {
 public:

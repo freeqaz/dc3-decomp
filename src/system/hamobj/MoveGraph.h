@@ -1,8 +1,8 @@
 #pragma once
-#include "hamobj/Difficulty.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "utl/BinStream.h"
+#include "hamobj\Difficulty.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "utl\BinStream.h"
 #include <map>
 
 class MoveParent;

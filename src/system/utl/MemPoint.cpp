@@ -1,8 +1,8 @@
 #include "MemPoint.h"
 #include "Memory.h"
-#include "os/Debug.h"
-#include "utl/MakeString.h"
-#include "utl/MemMgr.h"
+#include "os\Debug.h"
+#include "utl\MakeString.h"
+#include "utl\MemMgr.h"
 #include "string.h"
 #include "Str.h"
 

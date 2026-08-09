@@ -1,9 +1,9 @@
 #include "FxSendCompress.h"
 #include "FxSend.h"
-#include "dsp/StandardEffect.h"
-#include "synth/CompressionEffect.h"
-#include "xdk/xapilibi/xbase.h"
-#include "xdk/xaudio2/xaudio2.h"
+#include "dsp\StandardEffect.h"
+#include "synth\CompressionEffect.h"
+#include "xdk\xapilibi\xbase.h"
+#include "xdk\xaudio2\xaudio2.h"
 
 FxSendCompress360::FxSendCompress360() : FxSend360(this) {}
 

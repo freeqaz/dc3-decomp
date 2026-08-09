@@ -1,8 +1,8 @@
 #include "Instarank.h"
-#include "os/Debug.h"
-#include "utl/Locale.h"
-#include "utl/LocaleOrdinal.h"
-#include "utl/Symbol.h"
+#include "os\Debug.h"
+#include "utl\Locale.h"
+#include "utl\LocaleOrdinal.h"
+#include "utl\Symbol.h"
 
 const char *Instarank::Str() const {
     static Symbol ir_still_rank("ir_still_rank");

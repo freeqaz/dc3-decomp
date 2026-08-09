@@ -1,6 +1,6 @@
-#include "math/FileChecksum.h"
-#include "os/File.h"
-#include "utl/Std.h"
+#include "math\FileChecksum.h"
+#include "os\File.h"
+#include "utl\Std.h"
 #include <vector>
 
 std::vector<ChecksumData> gChecksumData;

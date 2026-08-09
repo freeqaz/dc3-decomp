@@ -1,13 +1,13 @@
 #include "Data.h"
 #include "Dir.h"
-#include "obj/Data.h"
-#include "os/Debug.h"
-#include "utl/BinStream.h"
-#include "utl/Str.h"
-#include "utl/TextStream.h"
-#include "obj/DataFunc.h"
-#include "obj/Object.h"
-#include "obj/DataUtl.h"
+#include "obj\Data.h"
+#include "os\Debug.h"
+#include "utl\BinStream.h"
+#include "utl\Str.h"
+#include "utl\TextStream.h"
+#include "obj\DataFunc.h"
+#include "obj\Object.h"
+#include "obj\DataUtl.h"
 #include <cstring>
 #include <map>
 

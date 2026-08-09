@@ -1,6 +1,6 @@
-#include "char/CharBoneTwist.h"
-#include "char/CharWeightable.h"
-#include "obj/Object.h"
+#include "char\CharBoneTwist.h"
+#include "char\CharWeightable.h"
+#include "obj\Object.h"
 
 CharBoneTwist::CharBoneTwist() : mBone(this), mTargets(this) {}
 

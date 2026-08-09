@@ -1,15 +1,15 @@
-#include "synth/ByteGrinder.h"
+#include "synth\ByteGrinder.h"
 
 #include <string.h>
 #include <stdio.h>
 #include <vector>
 #include "types.h"
-#include "obj/Data.h"
-#include "obj/DataFunc.h"
-#include "utl/Str.h"
-#include "os/Debug.h"
-#include "os/System.h"
-#include "synth/tomcrypt/mycrypt.h"
+#include "obj\Data.h"
+#include "obj\DataFunc.h"
+#include "utl\Str.h"
+#include "os\Debug.h"
+#include "os\System.h"
+#include "synth\tomcrypt\mycrypt.h"
 
 static unsigned char gHvKeyGreen[64] = {
     0x01, 0x22, 0x00, 0x38, 0xd2, 0x01, 0x78, 0x8b, 0xdd, 0xcd, 0xd0, 0xf0, 0xfe,

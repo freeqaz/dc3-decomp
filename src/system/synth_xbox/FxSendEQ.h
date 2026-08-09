@@ -1,11 +1,11 @@
 #pragma once
 #include "FxSend.h"
-#include "obj/Object.h"
-#include "stl/_vector.h"
-#include "synth/FxSend.h"
-#include "synth/FxSendEQ.h"
-#include "xdk/xapilibi/xbase.h"
-#include "xdk/xaudio2/xaudio2.h"
+#include "obj\Object.h"
+#include "stl\_vector.h"
+#include "synth\FxSend.h"
+#include "synth\FxSendEQ.h"
+#include "xdk\xapilibi\xbase.h"
+#include "xdk\xaudio2\xaudio2.h"
 
 class FxSendEQ360 : public FxSendEQ, public FxSend360 {
 public:

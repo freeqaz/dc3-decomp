@@ -1,12 +1,12 @@
-#include "rndobj/HiResScreen.h"
-#include "os/Debug.h"
-#include "os/File.h"
-#include "rndobj/Rnd.h"
-#include "rndobj/Bitmap.h"
-#include "rndobj/Tex.h"
-#include "utl/MemMgr.h"
-#include "utl/MakeString.h"
-#include "utl/FileStream.h"
+#include "rndobj\HiResScreen.h"
+#include "os\Debug.h"
+#include "os\File.h"
+#include "rndobj\Rnd.h"
+#include "rndobj\Bitmap.h"
+#include "rndobj\Tex.h"
+#include "utl\MemMgr.h"
+#include "utl\MakeString.h"
+#include "utl\FileStream.h"
 
 HiResScreen gHiResScreen;
 HiResScreen &TheHiResScreen = gHiResScreen;

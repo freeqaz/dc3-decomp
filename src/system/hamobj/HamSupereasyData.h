@@ -1,6 +1,6 @@
 #pragma once
-#include "obj/Object.h"
-#include "utl/MemMgr.h"
+#include "obj\Object.h"
+#include "utl\MemMgr.h"
 
 struct HamSupereasyMeasure {
     /** "MoveVariant to use for transition into measure" */

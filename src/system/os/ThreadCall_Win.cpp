@@ -1,7 +1,7 @@
 #include "ThreadCall.h"
-#include "os/CritSec.h"
-#include "os/Debug.h"
-#include "xdk/XAPILIB.h"
+#include "os\CritSec.h"
+#include "os\Debug.h"
+#include "xdk\XAPILIB.h"
 #include <process.h>
 
 namespace {

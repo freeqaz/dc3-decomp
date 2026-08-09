@@ -1,16 +1,16 @@
 #pragma once
-#include "game/SongDB.h"
-#include "hamobj/HamMaster.h"
-#include "meta/HAQManager.h"
-#include "meta/MetaMusicManager.h"
-#include "meta/SongPreview.h"
-#include "meta_ham/Campaign.h"
-#include "obj/Data.h"
-#include "obj/Msg.h"
-#include "obj/Object.h"
-#include "stl/_vector.h"
-#include "ui/UIPanel.h"
-#include "utl/Symbol.h"
+#include "game\SongDB.h"
+#include "hamobj\HamMaster.h"
+#include "meta\HAQManager.h"
+#include "meta\MetaMusicManager.h"
+#include "meta\SongPreview.h"
+#include "meta_ham\Campaign.h"
+#include "obj\Data.h"
+#include "obj\Msg.h"
+#include "obj\Object.h"
+#include "stl\_vector.h"
+#include "ui\UIPanel.h"
+#include "utl\Symbol.h"
 
 DECLARE_MESSAGE(XMPStateChangedMsg, "xmp_state_changed")
 XMPStateChangedMsg(int i) : Message(Type(), i) {}

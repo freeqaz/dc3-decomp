@@ -1,8 +1,8 @@
 #pragma once
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "rndobj/Overlay.h"
-#include "os/Keyboard.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "rndobj\Overlay.h"
+#include "os\Keyboard.h"
 
 // size 0x68
 class RndConsole : public Hmx::Object {

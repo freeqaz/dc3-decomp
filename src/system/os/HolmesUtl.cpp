@@ -1,7 +1,7 @@
 #include "HolmesUtl.h"
-#include "os/File.h"
-#include "utl/MakeString.h"
-#include "xdk/xbdm/xbdm.h"
+#include "os\File.h"
+#include "utl\MakeString.h"
+#include "xdk\xbdm\xbdm.h"
 
 String HolmesXboxPath(const char *cc1, const char *cc2) {
     String path;

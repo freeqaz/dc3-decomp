@@ -1,10 +1,10 @@
 #pragma once
-#include "os/Debug.h"
-#include "utl/BinStream.h"
-#include "utl/PoolAlloc.h"
-#include "utl/Str.h"
-#include "utl/Symbol.h"
-#include "utl/TextStream.h"
+#include "os\Debug.h"
+#include "utl\BinStream.h"
+#include "utl\PoolAlloc.h"
+#include "utl\Str.h"
+#include "utl\Symbol.h"
+#include "utl\TextStream.h"
 
 // forward declarations
 class DataNode;

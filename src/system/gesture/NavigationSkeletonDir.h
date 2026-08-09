@@ -1,6 +1,6 @@
 #pragma once
-#include "gesture/DirectionGestureFilter.h"
-#include "gesture/SkeletonDir.h"
+#include "gesture\DirectionGestureFilter.h"
+#include "gesture\SkeletonDir.h"
 
 /** "Dir to view shell navigation gestures in milo" */
 class NavigationSkeletonDir : public SkeletonDir {

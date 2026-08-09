@@ -1,7 +1,7 @@
 #pragma once
-#include "curl/curl.h"
-#include "net/HttpReq.h"
-#include "utl/Str.h"
+#include "curl\curl.h"
+#include "net\HttpReq.h"
+#include "utl\Str.h"
 
 class HttpReqCurl : public HttpReq {
 public:

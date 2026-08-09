@@ -1,9 +1,9 @@
 #pragma once
-#include "math/Mtx.h"
-#include "math/Vec.h"
-#include "obj/Object.h"
-#include "rndobj/Trans.h"
-#include "utl/MemMgr.h"
+#include "math\Mtx.h"
+#include "math\Vec.h"
+#include "obj\Object.h"
+#include "rndobj\Trans.h"
+#include "utl\MemMgr.h"
 
 /** "A waypoint for character movement. Characters walk to
  *  these, start themselves out from these, etc." */

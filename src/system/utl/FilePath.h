@@ -1,7 +1,7 @@
 #pragma once
-#include "os/File.h"
-#include "utl/BinStream.h"
-#include "utl/Str.h"
+#include "os\File.h"
+#include "utl\BinStream.h"
+#include "utl\Str.h"
 
 class FilePath : public String {
 private:

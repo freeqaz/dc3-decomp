@@ -1,9 +1,9 @@
 #pragma once
-#include "char/CharDriver.h"
-#include "char/CharPollable.h"
-#include "char/CharWeightable.h"
-#include "obj/Object.h"
-#include "utl/MemMgr.h"
+#include "char\CharDriver.h"
+#include "char\CharPollable.h"
+#include "char\CharWeightable.h"
+#include "obj\Object.h"
+#include "utl\MemMgr.h"
 
 /** "Sets its own weight by pushing flags through a driver to
  *  see what fraction of them it has." */

@@ -1,10 +1,10 @@
 #pragma once
-#include "game/HamUser.h"
-#include "obj/Data.h"
-#include "os/User.h"
-#include "os/UserMgr.h"
-#include "stl/_vector.h"
-#include "utl/HxGuid.h"
+#include "game\HamUser.h"
+#include "obj\Data.h"
+#include "os\User.h"
+#include "os\UserMgr.h"
+#include "stl\_vector.h"
+#include "utl\HxGuid.h"
 
 class HamUserMgr : public UserMgr {
 public:

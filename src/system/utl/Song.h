@@ -1,15 +1,15 @@
 #pragma once
-#include "beatmatch/HxMaster.h"
-#include "beatmatch/HxSongData.h"
-#include "midi/Midi.h"
-#include "obj/Data.h"
-#include "rndobj/Anim.h"
-#include "rndobj/Overlay.h"
-#include "utl/BeatMap.h"
-#include "utl/MBT.h"
-#include "utl/MeasureMap.h"
-#include "utl/MemMgr.h"
-#include "utl/TempoMap.h"
+#include "beatmatch\HxMaster.h"
+#include "beatmatch\HxSongData.h"
+#include "midi\Midi.h"
+#include "obj\Data.h"
+#include "rndobj\Anim.h"
+#include "rndobj\Overlay.h"
+#include "utl\BeatMap.h"
+#include "utl\MBT.h"
+#include "utl\MeasureMap.h"
+#include "utl\MemMgr.h"
+#include "utl\TempoMap.h"
 
 class SongCallback {
 public:

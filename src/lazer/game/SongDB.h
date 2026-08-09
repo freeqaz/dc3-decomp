@@ -1,11 +1,11 @@
 #pragma once
 
-#include "beatmatch/HxMaster.h"
-#include "hamobj/HamSongData.h"
-#include "midi/DataEventList.h"
-#include "obj/Object.h"
-#include "utl/MemMgr.h"
-#include "utl/SongPos.h"
+#include "beatmatch\HxMaster.h"
+#include "hamobj\HamSongData.h"
+#include "midi\DataEventList.h"
+#include "obj\Object.h"
+#include "utl\MemMgr.h"
+#include "utl\SongPos.h"
 
 class SongDB {
 public:

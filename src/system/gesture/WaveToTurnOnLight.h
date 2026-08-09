@@ -1,6 +1,6 @@
 #pragma once
-#include "obj/Object.h"
-#include "os/Timer.h"
+#include "obj\Object.h"
+#include "os\Timer.h"
 
 // size 0xb30
 class WaveToTurnOnLight : public Hmx::Object {

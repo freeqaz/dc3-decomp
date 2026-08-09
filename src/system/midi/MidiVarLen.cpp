@@ -1,5 +1,5 @@
-#include "midi/MidiVarLen.h"
-#include "os/Debug.h"
+#include "midi\MidiVarLen.h"
+#include "os\Debug.h"
 
 MidiVarLenNumber::MidiVarLenNumber(BinStream &b) { Read(b); }
 

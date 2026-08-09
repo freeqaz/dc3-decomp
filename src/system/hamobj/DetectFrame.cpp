@@ -1,11 +1,11 @@
-#include "hamobj/DetectFrame.h"
+#include "hamobj\DetectFrame.h"
 #include "ErrorNode.h"
 #include "FilterVersion.h"
-#include "hamobj/ErrorNode.h"
-#include "hamobj/HamMove.h"
-#include "math/Utl.h"
-#include "math/Vec.h"
-#include "os/Debug.h"
+#include "hamobj\ErrorNode.h"
+#include "hamobj\HamMove.h"
+#include "math\Utl.h"
+#include "math\Vec.h"
+#include "os\Debug.h"
 
 DetectFrame::DetectFrame() { Reset(); }
 

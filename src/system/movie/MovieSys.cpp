@@ -1,13 +1,13 @@
-#include "movie/MovieSys.h"
+#include "movie\MovieSys.h"
 #include "MovieImpl.h"
 #include "MovieSys.h"
 #include "TexMovie.h"
-#include "obj/Object.h"
-#include "os/Debug.h"
-#include "utl/MemMgr.h"
+#include "obj\Object.h"
+#include "os\Debug.h"
+#include "utl\MemMgr.h"
 
 #ifdef HX_NATIVE
-#include "moviebink/BinkMovieSys.h"
+#include "moviebink\BinkMovieSys.h"
 extern BinkMovieSys gBinkMovieSys;
 MovieSys &TheMovieSys = gBinkMovieSys;
 #endif

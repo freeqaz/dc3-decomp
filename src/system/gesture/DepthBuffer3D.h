@@ -1,15 +1,15 @@
 #pragma once
-#include "hamobj/RhythmDetector.h"
-#include "math/Color.h"
-#include "math/DoubleExponentialSmoother.h"
-#include "obj/Object.h"
-#include "rnddx9/Rnd.h"
-#include "rndobj/Draw.h"
-#include "rndobj/Mat.h"
-#include "rndobj/Mesh.h"
-#include "rndobj/Tex.h"
-#include "rndobj/Trans.h"
-#include "utl/MemMgr.h"
+#include "hamobj\RhythmDetector.h"
+#include "math\Color.h"
+#include "math\DoubleExponentialSmoother.h"
+#include "obj\Object.h"
+#include "rnddx9\Rnd.h"
+#include "rndobj\Draw.h"
+#include "rndobj\Mat.h"
+#include "rndobj\Mesh.h"
+#include "rndobj\Tex.h"
+#include "rndobj\Trans.h"
+#include "utl\MemMgr.h"
 
 struct DepthBuffer3DAttachment {
     RndTransformable *obj; // 0x0

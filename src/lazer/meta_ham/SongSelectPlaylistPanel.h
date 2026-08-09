@@ -1,14 +1,14 @@
 #pragma once
-#include "hamobj/HamNavProvider.h"
-#include "meta_ham/HamPanel.h"
-#include "meta_ham/Playlist.h"
-#include "meta_ham/PlaylistSongProvider.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "stl/_vector.h"
-#include "ui/UILabel.h"
-#include "ui/UIListLabel.h"
-#include "utl/Symbol.h"
+#include "hamobj\HamNavProvider.h"
+#include "meta_ham\HamPanel.h"
+#include "meta_ham\Playlist.h"
+#include "meta_ham\PlaylistSongProvider.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "stl\_vector.h"
+#include "ui\UILabel.h"
+#include "ui\UIListLabel.h"
+#include "utl\Symbol.h"
 
 class SongSelectPlaylistProvider : public HamNavProvider {
 public:

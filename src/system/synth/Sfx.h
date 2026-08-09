@@ -1,14 +1,14 @@
 #pragma once
-#include "obj/Object.h"
-#include "synth/ADSR.h"
-#include "synth/FxSend.h"
-#include "synth/MoggClipMap.h"
-#include "synth/Sequence.h"
-#include "synth/SynthSample.h"
-#include "synth/SampleInst.h"
-#include "utl/BinStream.h"
-#include "utl/MemMgr.h"
-#include "utl/PoolAlloc.h"
+#include "obj\Object.h"
+#include "synth\ADSR.h"
+#include "synth\FxSend.h"
+#include "synth\MoggClipMap.h"
+#include "synth\Sequence.h"
+#include "synth\SynthSample.h"
+#include "synth\SampleInst.h"
+#include "utl\BinStream.h"
+#include "utl\MemMgr.h"
+#include "utl\PoolAlloc.h"
 
 class SfxMap {
     friend bool PropSync(SfxMap &, DataNode &, DataArray *, int, PropOp);

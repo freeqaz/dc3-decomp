@@ -1,6 +1,6 @@
 #pragma once
-#include "obj/Object.h"
-#include "meta/MetaMusicScene.h"
+#include "obj\Object.h"
+#include "meta\MetaMusicScene.h"
 #include <map>
 
 class MetaMusicManager : public Hmx::Object {

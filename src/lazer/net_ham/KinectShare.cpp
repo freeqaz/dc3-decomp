@@ -1,10 +1,10 @@
-#include "net_ham/KinectShare.h"
-#include "net/HttpGet.h"
-#include "os/Debug.h"
-#include "os/System.h"
-#include "utl/HxGuid.h"
-#include "utl/MemMgr.h"
-#include "xdk/xapilibi/sysinfoapi.h"
+#include "net_ham\KinectShare.h"
+#include "net\HttpGet.h"
+#include "os\Debug.h"
+#include "os\System.h"
+#include "utl\HxGuid.h"
+#include "utl\MemMgr.h"
+#include "xdk\xapilibi\sysinfoapi.h"
 
 KinectShare::KinectShare(
     unsigned int ip,

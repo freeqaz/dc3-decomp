@@ -1,9 +1,9 @@
-#include "os/AsyncFile_Win.h"
-#include "os/ContentMgr.h"
-#include "os/File.h"
-#include "os/PlatformMgr.h"
-#include "os/System.h"
-#include "xdk/XAPILIB.h"
+#include "os\AsyncFile_Win.h"
+#include "os\ContentMgr.h"
+#include "os\File.h"
+#include "os\PlatformMgr.h"
+#include "os\System.h"
+#include "xdk\XAPILIB.h"
 #include <errno.h>
 #include <io.h>
 

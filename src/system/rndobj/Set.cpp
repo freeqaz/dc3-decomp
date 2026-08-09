@@ -1,9 +1,9 @@
-#include "rndobj/Set.h"
-#include "obj/Data.h"
-#include "obj/Dir.h"
-#include "obj/Object.h"
-#include "obj/PropSync.h"
-#include "utl/BinStream.h"
+#include "rndobj\Set.h"
+#include "obj\Data.h"
+#include "obj\Dir.h"
+#include "obj\Object.h"
+#include "obj\PropSync.h"
+#include "utl\BinStream.h"
 
 RndSet::RndSet() : mObjects(this) {}
 

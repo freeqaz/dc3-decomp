@@ -1,8 +1,8 @@
 #pragma once
-#include "os/NetworkSocket.h"
-#include "os/Timer.h"
-#include "utl/MemMgr.h"
-#include "utl/Str.h"
+#include "os\NetworkSocket.h"
+#include "os\Timer.h"
+#include "utl\MemMgr.h"
+#include "utl\Str.h"
 
 enum HttpGetFailType {
     kHttpFail_None = 0,

@@ -1,11 +1,11 @@
 #pragma once
-#include "gesture/BaseSkeleton.h"
-#include "gesture/SkeletonViz.h"
-#include "hamobj/DancerSkeleton.h"
-#include "math/Vec.h"
-#include "obj/Data.h"
-#include "utl/MemMgr.h"
-#include "utl/Symbol.h"
+#include "gesture\BaseSkeleton.h"
+#include "gesture\SkeletonViz.h"
+#include "hamobj\DancerSkeleton.h"
+#include "math\Vec.h"
+#include "obj\Data.h"
+#include "utl\MemMgr.h"
+#include "utl\Symbol.h"
 
 enum ErrorNodeType {
     kErrorJointHipCenter = 1,

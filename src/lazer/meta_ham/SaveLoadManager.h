@@ -1,16 +1,16 @@
 #pragma once
 #include "EventDialogPanel.h"
-#include "meta/MemcardAction.h"
-#include "meta/MemcardMgr.h"
-#include "meta_ham/HamProfile.h"
-#include "meta_ham/UIEventMgr.h"
-#include "obj/Data.h"
-#include "obj/Msg.h"
-#include "obj/Object.h"
-#include "os/Memcard.h"
-#include "os/PlatformMgr.h"
-#include "utl/Cache.h"
-#include "utl/Str.h"
+#include "meta\MemcardAction.h"
+#include "meta\MemcardMgr.h"
+#include "meta_ham\HamProfile.h"
+#include "meta_ham\UIEventMgr.h"
+#include "obj\Data.h"
+#include "obj\Msg.h"
+#include "obj\Object.h"
+#include "os\Memcard.h"
+#include "os\PlatformMgr.h"
+#include "utl\Cache.h"
+#include "utl\Str.h"
 
 enum SaveLoadMode {
     kAutoLoad = 0,

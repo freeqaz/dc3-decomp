@@ -1,6 +1,6 @@
-#include "synth/OggMap.h"
-#include "math/Utl.h"
-#include "os/Debug.h"
+#include "synth\OggMap.h"
+#include "math\Utl.h"
+#include "os\Debug.h"
 
 int OggMap::GetSongLengthSamples() { return mGran * mLookup.size(); }
 

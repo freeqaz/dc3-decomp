@@ -1,6 +1,6 @@
 #pragma once
-#include "obj/Dir.h"
-#include "rndobj/Trans.h"
+#include "obj\Dir.h"
+#include "rndobj\Trans.h"
 
 /**
  * @brief A RndTransformable but within a proxy.

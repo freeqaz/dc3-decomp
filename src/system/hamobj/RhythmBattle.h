@@ -1,14 +1,14 @@
 #pragma once
-#include "gesture/ArchiveSkeleton.h"
-#include "hamobj/FreestyleMoveRecorder.h"
-#include "hamobj/HamLabel.h"
-#include "hamobj/RhythmBattlePlayer.h"
-#include "obj/Object.h"
-#include "rndobj/Anim.h"
-#include "rndobj/Poll.h"
-#include "rndobj/Trans.h"
-#include "utl/MemMgr.h"
-#include "utl/Symbol.h"
+#include "gesture\ArchiveSkeleton.h"
+#include "hamobj\FreestyleMoveRecorder.h"
+#include "hamobj\HamLabel.h"
+#include "hamobj\RhythmBattlePlayer.h"
+#include "obj\Object.h"
+#include "rndobj\Anim.h"
+#include "rndobj\Poll.h"
+#include "rndobj\Trans.h"
+#include "utl\MemMgr.h"
+#include "utl\Symbol.h"
 #include <vector>
 
 class RhythmBattlePlayer;

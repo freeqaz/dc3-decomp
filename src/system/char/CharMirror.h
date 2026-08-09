@@ -1,13 +1,13 @@
 #pragma once
-#include "char/CharBones.h"
-#include "char/CharPollable.h"
-#include "char/CharServoBone.h"
-#include "char/CharWeightable.h"
-#include "obj/Object.h"
-#include "stl/_vector.h"
-#include "utl/BinStream.h"
-#include "utl/MemMgr.h"
-#include "utl/Symbol.h"
+#include "char\CharBones.h"
+#include "char\CharPollable.h"
+#include "char\CharServoBone.h"
+#include "char\CharWeightable.h"
+#include "obj\Object.h"
+#include "stl\_vector.h"
+#include "utl\BinStream.h"
+#include "utl\MemMgr.h"
+#include "utl\Symbol.h"
 
 class CharMirror : public CharWeightable, public CharPollable {
 public:

@@ -1,11 +1,11 @@
 #pragma once
-#include "math/Easing.h"
-#include "math/Mtx.h"
-#include "obj/Object.h"
-#include "rndobj/Trans.h"
-#include "synth/Faders.h"
-#include "synth/Sound.h"
-#include "utl/MemMgr.h"
+#include "math\Easing.h"
+#include "math\Mtx.h"
+#include "obj\Object.h"
+#include "rndobj\Trans.h"
+#include "synth\Faders.h"
+#include "synth\Sound.h"
+#include "utl\MemMgr.h"
 
 /** "Sound effect object tied to a position.  Changes volume and pan based on the current
  * camera position." */

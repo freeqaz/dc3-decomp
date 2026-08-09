@@ -1,6 +1,6 @@
 #pragma once
-#include "math/Geo.h"
-#include "math/Color.h"
+#include "math\Geo.h"
+#include "math\Color.h"
 #include <float.h>
 
 class DebugGraph {

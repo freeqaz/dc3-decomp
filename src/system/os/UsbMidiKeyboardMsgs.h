@@ -1,5 +1,5 @@
 #pragma once
-#include "obj/Msg.h"
+#include "obj\Msg.h"
 
 DECLARE_MESSAGE(KeyboardKeyPressedMsg, "keyboard_key_pressed");
 KeyboardKeyPressedMsg(int, int, int);

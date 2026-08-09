@@ -1,8 +1,8 @@
-#include "gesture/JointUtl.h"
-#include "gesture/BaseSkeleton.h"
-#include "gesture/Skeleton.h"
-#include "os/Debug.h"
-#include "utl/Str.h"
+#include "gesture\JointUtl.h"
+#include "gesture\BaseSkeleton.h"
+#include "gesture\Skeleton.h"
+#include "os\Debug.h"
+#include "utl\Str.h"
 
 bool IsSkeletonBone(const char *name) {
     static const char *sBoneNames[] = {

@@ -1,11 +1,11 @@
 #pragma once
-#include "beatmatch/HxAudio.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "synth/Faders.h"
-#include "utl/Loader.h"
-#include "utl/SongInfoCopy.h"
-#include "utl/Symbol.h"
+#include "beatmatch\HxAudio.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "synth\Faders.h"
+#include "utl\Loader.h"
+#include "utl\SongInfoCopy.h"
+#include "utl\Symbol.h"
 
 /** One crossfade timeline: the two loop endpoints, the fade length, and a
  *  state/pending flag.  Two of these live back to back in HamAudio at 0x5c

@@ -1,7 +1,7 @@
-#include "os/VirtualKeyboard.h"
-#include "obj/Dir.h"
-#include "os/User.h"
-#include "utl/Symbol.h"
+#include "os\VirtualKeyboard.h"
+#include "obj\Dir.h"
+#include "os\User.h"
+#include "utl\Symbol.h"
 
 VirtualKeyboard TheVirtualKeyboard;
 

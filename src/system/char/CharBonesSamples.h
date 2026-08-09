@@ -1,8 +1,8 @@
 #pragma once
-#include "char/CharBones.h"
-#include "obj/Object.h"
-#include "utl/BinStream.h"
-#include "utl/MemMgr.h"
+#include "char\CharBones.h"
+#include "obj\Object.h"
+#include "utl\BinStream.h"
+#include "utl\MemMgr.h"
 
 class CharBonesSamples : public CharBones {
 public:

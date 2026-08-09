@@ -1,6 +1,6 @@
 #pragma once
-#include "obj/Object.h"
-#include "synth/FxSend.h"
+#include "obj\Object.h"
+#include "synth\FxSend.h"
 
 /** "distortion effect" */
 class FxSendDistortion : public FxSend {

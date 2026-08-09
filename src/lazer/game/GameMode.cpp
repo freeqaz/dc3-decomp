@@ -1,4 +1,4 @@
-#include "game/GameMode.h"
+#include "game\GameMode.h"
 
 bool (*g_LoaderModeCallback)(const Symbol &);
 
@@ -6,20 +6,20 @@ bool (*g_LoaderModeCallback)(const Symbol &);
 GameMode *TheGameMode = nullptr;
 #endif
 
-#include "char/FileMerger.h"
-#include "flow/PropertyEventProvider.h"
-#include "hamobj/HamDirector.h"
-#include "hamobj/HamGameData.h"
+#include "char\FileMerger.h"
+#include "flow\PropertyEventProvider.h"
+#include "hamobj\HamDirector.h"
+#include "hamobj\HamGameData.h"
 #include "macros.h"
-#include "meta_ham/CampaignPerformer.h"
-#include "meta_ham/MetaPerformer.h"
-#include "obj/Data.h"
-#include "obj/Dir.h"
-#include "obj/Msg.h"
-#include "obj/Object.h"
-#include "os/Debug.h"
-#include "os/System.h"
-#include "utl/Symbol.h"
+#include "meta_ham\CampaignPerformer.h"
+#include "meta_ham\MetaPerformer.h"
+#include "obj\Data.h"
+#include "obj\Dir.h"
+#include "obj\Msg.h"
+#include "obj\Object.h"
+#include "os\Debug.h"
+#include "os\System.h"
+#include "utl\Symbol.h"
 
 GameMode::GameMode() : mInPartyMode(0) {
     SetName("gamemode", ObjectDir::Main());

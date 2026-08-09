@@ -1,10 +1,10 @@
 #pragma once
-#include "char/CharPollable.h"
-#include "hamobj/HamCharacter.h"
-#include "obj/Dir.h"
-#include "obj/Object.h"
-#include "rndobj/Trans.h"
-#include "utl/MemMgr.h"
+#include "char\CharPollable.h"
+#include "hamobj\HamCharacter.h"
+#include "obj\Dir.h"
+#include "obj\Object.h"
+#include "rndobj\Trans.h"
+#include "utl\MemMgr.h"
 
 /** "Manages the neutral skeleton for a HamCharacter" */
 class HamIKSkeleton : public CharPollable {

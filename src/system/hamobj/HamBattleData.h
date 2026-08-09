@@ -1,9 +1,9 @@
 #pragma once
-#include "hamobj/HamCamShot.h"
-#include "hamobj/SongUtl.h"
-#include "obj/Object.h"
-#include "utl/MemMgr.h"
-#include "utl/Symbol.h"
+#include "hamobj\HamCamShot.h"
+#include "hamobj\SongUtl.h"
+#include "obj\Object.h"
+#include "utl\MemMgr.h"
+#include "utl\Symbol.h"
 
 class BattleStep {
 public:

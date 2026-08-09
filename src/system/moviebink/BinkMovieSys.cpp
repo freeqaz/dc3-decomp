@@ -1,18 +1,18 @@
-#include "moviebink/BinkMovieSys.h"
-#include "moviebink/BinkMovieImpl.h"
-#include "binkxenon/bink.h"
-#include "movie/MovieSys.h"
-#include "obj/Data.h"
-#include "obj/DataFunc.h"
-#include "os/CritSec.h"
-#include "os/Debug.h"
-#include "os/System.h"
-#include "utl/MemMgr.h"
+#include "moviebink\BinkMovieSys.h"
+#include "moviebink\BinkMovieImpl.h"
+#include "binkxenon\bink.h"
+#include "movie\MovieSys.h"
+#include "obj\Data.h"
+#include "obj\DataFunc.h"
+#include "os\CritSec.h"
+#include "os\Debug.h"
+#include "os\System.h"
+#include "utl\MemMgr.h"
 
 #ifdef HX_FFMPEG
-#include "platform/FFmpegMovieImpl.h"
+#include "platform\FFmpegMovieImpl.h"
 #elif defined(__EMSCRIPTEN__)
-#include "platform/WebMovieImpl.h"
+#include "platform\WebMovieImpl.h"
 #endif
 
 BinkMovieSys gBinkMovieSys;

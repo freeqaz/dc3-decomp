@@ -1,9 +1,9 @@
 #pragma once
-#include "hamobj/Difficulty.h"
-#include "hamobj/HamPlayerData.h"
-#include "meta_ham/AccomplishmentConditional.h"
-#include "obj/Data.h"
-#include "utl/Symbol.h"
+#include "hamobj\Difficulty.h"
+#include "hamobj\HamPlayerData.h"
+#include "meta_ham\AccomplishmentConditional.h"
+#include "obj\Data.h"
+#include "utl\Symbol.h"
 
 class AccomplishmentOneShot : public AccomplishmentConditional {
 public:

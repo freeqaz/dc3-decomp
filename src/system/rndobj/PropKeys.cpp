@@ -1,11 +1,11 @@
-#include "rndobj/PropKeys.h"
-#include "math/Rot.h"
-#include "math/Utl.h"
-#include "math/Vec.h"
-#include "obj/DataUtl.h"
-#include "obj/Utl.h"
-#include "os/Debug.h"
-#include "utl/BinStream.h"
+#include "rndobj\PropKeys.h"
+#include "math\Rot.h"
+#include "math\Utl.h"
+#include "math\Vec.h"
+#include "obj\DataUtl.h"
+#include "obj\Utl.h"
+#include "os\Debug.h"
+#include "utl\BinStream.h"
 
 Hmx::Object *ObjectStage::sOwner;
 Message PropKeys::sInterpMessage(gNullStr, 0, 0, 0, 0, 0);

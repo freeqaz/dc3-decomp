@@ -1,7 +1,7 @@
-#include "rndobj/BoxMap.h"
-#include "math/Utl.h"
-#include "os/Timer.h"
-#include "rndobj/Lit.h"
+#include "rndobj\BoxMap.h"
+#include "math\Utl.h"
+#include "os\Timer.h"
+#include "rndobj\Lit.h"
 
 static int gLightIndex = 0;
 static Hmx::Color gLightBuffer1[150];

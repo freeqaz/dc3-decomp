@@ -6,7 +6,7 @@
 #define M_PI 3.14159265358979323846
 #endif
 #include <cstdlib>
-#include "xdk/LIBCMT/vectorintrinsics.h"
+#include "xdk\LIBCMT\vectorintrinsics.h"
 
 // External declarations
 int FFTComplex(float* data, long size, long inverse, float* context);

@@ -1,20 +1,20 @@
-#include "rndobj/Cam.h"
+#include "rndobj\Cam.h"
 #include "Rnd.h"
 #include "Utl.h"
-#include "math/Mtx.h"
-#include "math/Rot.h"
+#include "math\Mtx.h"
+#include "math\Rot.h"
 
-#include "obj/Data.h"
-#include "obj/DataFunc.h"
-#include "obj/Object.h"
-#include "os/Debug.h"
-#include "os/System.h"
-#include "rndobj/Draw.h"
-#include "rndobj/HiResScreen.h"
-#include "rndobj/Rnd_NG.h"
-#include "rndobj/Trans.h"
+#include "obj\Data.h"
+#include "obj\DataFunc.h"
+#include "obj\Object.h"
+#include "os\Debug.h"
+#include "os\System.h"
+#include "rndobj\Draw.h"
+#include "rndobj\HiResScreen.h"
+#include "rndobj\Rnd_NG.h"
+#include "rndobj\Trans.h"
 #ifdef HX_NATIVE
-#include "platform/NativeSettings.h"
+#include "platform\NativeSettings.h"
 #endif
 
 // Transpose is inline in math/Mtx.h

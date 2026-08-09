@@ -1,11 +1,11 @@
 #pragma once
 #include "MemStats.h"
-#include "obj/Data.h"
-#include "utl/AllocInfo.h"
-#include "utl/KeylessHash.h"
-#include "utl/Str.h"
-#include "utl/TextFileStream.h"
-#include "utl/TextStream.h"
+#include "obj\Data.h"
+#include "utl\AllocInfo.h"
+#include "utl\KeylessHash.h"
+#include "utl\Str.h"
+#include "utl\TextFileStream.h"
+#include "utl\TextStream.h"
 
 // size 0x1820c
 class MemTracker {

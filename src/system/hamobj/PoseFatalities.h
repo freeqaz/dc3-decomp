@@ -1,13 +1,13 @@
 #pragma once
 #include "FreestyleMoveRecorder.h"
-#include "char/CharClip.h"
-#include "gesture/BaseSkeleton.h"
-#include "gesture/Skeleton.h"
-#include "hamobj/HamLabel.h"
-#include "obj/Dir.h"
-#include "obj/Object.h"
-#include "rndobj/Anim.h"
-#include "utl/MemMgr.h"
+#include "char\CharClip.h"
+#include "gesture\BaseSkeleton.h"
+#include "gesture\Skeleton.h"
+#include "hamobj\HamLabel.h"
+#include "obj\Dir.h"
+#include "obj\Object.h"
+#include "rndobj\Anim.h"
+#include "utl\MemMgr.h"
 
 #define MAX_NUM_PLAYERS 2
 #define NUM_FATALITIES 8

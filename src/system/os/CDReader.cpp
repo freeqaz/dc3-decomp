@@ -1,12 +1,12 @@
-#include "os/CDReader.h"
-#include "os/Archive.h"
-#include "os/File.h"
-#include "os/PlatformMgr.h"
-#include "os/System.h"
-#include "xdk/xapilibi/errhandlingapi.h"
-#include "xdk/xapilibi/fileapi.h"
+#include "os\CDReader.h"
+#include "os\Archive.h"
+#include "os\File.h"
+#include "os\PlatformMgr.h"
+#include "os\System.h"
+#include "xdk\xapilibi\errhandlingapi.h"
+#include "xdk\xapilibi\fileapi.h"
 #include <vector>
-#include "xdk/XAPILIB.h"
+#include "xdk\XAPILIB.h"
 
 namespace {
     OVERLAPPED gOverlapped;

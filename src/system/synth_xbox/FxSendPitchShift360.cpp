@@ -1,4 +1,4 @@
-#include "synth_xbox/FxSendPitchShift360.h"
+#include "synth_xbox\FxSendPitchShift360.h"
 
 FxSendPitchShift360::FxSendPitchShift360() {}
 FxSendPitchShift360::~FxSendPitchShift360() {}

@@ -1,13 +1,13 @@
 #pragma once
 #include "HamPanel.h"
-#include "hamobj/HamMove.h"
-#include "hamobj/PracticeSection.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "rndobj/Dir.h"
-#include "rndobj/Mat.h"
-#include "ui/UIListProvider.h"
-#include "utl/Symbol.h"
+#include "hamobj\HamMove.h"
+#include "hamobj\PracticeSection.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "rndobj\Dir.h"
+#include "rndobj\Mat.h"
+#include "ui\UIListProvider.h"
+#include "utl\Symbol.h"
 #include <vector>
 
 class StepMoves : public PracticeStep {

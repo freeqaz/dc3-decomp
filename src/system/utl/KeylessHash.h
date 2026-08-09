@@ -6,11 +6,11 @@
  * @tparam T1 the key type used to hash the value.
  * @tparam T2 the type to store into the hash table.
  */
-#include "math/Primes.h"
-#include "math/Sort.h"
-#include "os/Debug.h"
-#include "utl/AllocInfo.h"
-#include "utl/Loader.h"
+#include "math\Primes.h"
+#include "math\Sort.h"
+#include "os\Debug.h"
+#include "utl\AllocInfo.h"
+#include "utl\Loader.h"
 template <class T1, class T2>
 class KeylessHash {
 private:

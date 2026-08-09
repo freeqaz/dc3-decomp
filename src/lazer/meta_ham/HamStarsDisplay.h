@@ -1,9 +1,9 @@
 #pragma once
-#include "hamobj/Difficulty.h"
-#include "hamobj/HamLabel.h"
-#include "hamobj/StarsDisplay.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
+#include "hamobj\Difficulty.h"
+#include "hamobj\HamLabel.h"
+#include "hamobj\StarsDisplay.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
 
 class HamStarsDisplay : public StarsDisplay {
 public:

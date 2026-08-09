@@ -1,7 +1,7 @@
-#include "synth/SampleZone.h"
-#include "obj/Object.h"
-#include "synth/Stream.h"
-#include "utl/BinStream.h"
+#include "synth\SampleZone.h"
+#include "obj\Object.h"
+#include "synth\Stream.h"
+#include "utl\BinStream.h"
 
 SampleZone::SampleZone(Hmx::Object *owner)
     : mSample(owner), mVolume(0.0f), mPan(0.0f), mCenterNote(0x24), mMinNote(0),

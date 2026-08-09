@@ -1,13 +1,13 @@
-#include "rndobj/SoftParticleBuffer.h"
+#include "rndobj\SoftParticleBuffer.h"
 #include "Rnd_NG.h"
-#include "math/Vec.h"
-#include "obj/Object.h"
-#include "os/Debug.h"
-#include "rnddx9/RenderState.h"
-#include "rndobj/Cam.h"
-#include "rndobj/Rnd.h"
-#include "rndobj/ShaderMgr.h"
-#include "rndobj/Tex.h"
+#include "math\Vec.h"
+#include "obj\Object.h"
+#include "os\Debug.h"
+#include "rnddx9\RenderState.h"
+#include "rndobj\Cam.h"
+#include "rndobj\Rnd.h"
+#include "rndobj\ShaderMgr.h"
+#include "rndobj\Tex.h"
 
 RndSoftParticleBuffer::RndSoftParticleBuffer() : unk38(4), mSoftParticleDrawList(this) {
     for (int i = 0; i < 2; i++) {

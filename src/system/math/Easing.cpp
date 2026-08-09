@@ -1,6 +1,6 @@
-#include "math/Easing.h"
-#include "os/Debug.h"
-#include "utl/Licenses.h"
+#include "math\Easing.h"
+#include "os\Debug.h"
+#include "utl\Licenses.h"
 
 Licenses sLicense("system/src/math/Easing.h", Licenses::kRequirementNotification);
 

@@ -5,8 +5,8 @@
 // native/src/native_link_glue.cpp (host malloc/free). Keep the Xbox/PPC
 // implementations here behind the guard so the native link does not get
 // duplicate definitions.
-#include "utl/Licenses.h"
-#include "utl/MemMgr.h"
+#include "utl\Licenses.h"
+#include "utl\MemMgr.h"
 #include <cstring>
 
 static const char *sVorbisMemName = "Ogg_Internal";

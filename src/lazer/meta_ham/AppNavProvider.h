@@ -1,7 +1,7 @@
 #pragma once
-#include "hamobj/HamNavProvider.h"
-#include "ui/UIListLabel.h"
-#include "obj/Object.h"
+#include "hamobj\HamNavProvider.h"
+#include "ui\UIListLabel.h"
+#include "obj\Object.h"
 
 class AppNavProvider : public HamNavProvider {
 public:

@@ -1,7 +1,7 @@
 #pragma once
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "os/JoypadMsgs.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "os\JoypadMsgs.h"
 
 class UIPanel;
 
@@ -72,7 +72,7 @@ protected:
     int mScreenId; // 0x40
 };
 
-#include "obj/Msg.h"
+#include "obj\Msg.h"
 
 DECLARE_MESSAGE(UITransitionCompleteMsg, "transition_complete");
 UITransitionCompleteMsg(UIScreen *s1, UIScreen *s2) : Message(Type(), s1, s2) {}

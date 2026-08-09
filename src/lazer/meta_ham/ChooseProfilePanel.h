@@ -1,13 +1,13 @@
 #pragma once
-#include "meta_ham/HamPanel.h"
-#include "meta_ham/HamProfile.h"
-#include "obj/Data.h"
-#include "obj/Dir.h"
-#include "obj/Object.h"
-#include "os/PlatformMgr.h"
-#include "stl/_vector.h"
-#include "ui/PanelDir.h"
-#include "ui/UIListProvider.h"
+#include "meta_ham\HamPanel.h"
+#include "meta_ham\HamProfile.h"
+#include "obj\Data.h"
+#include "obj\Dir.h"
+#include "obj\Object.h"
+#include "os\PlatformMgr.h"
+#include "stl\_vector.h"
+#include "ui\PanelDir.h"
+#include "ui\UIListProvider.h"
 
 class ChooseProfilePanel : public HamPanel, public UIListProvider {
 public:

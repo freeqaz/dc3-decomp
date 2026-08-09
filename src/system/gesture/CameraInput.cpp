@@ -1,5 +1,5 @@
-#include "gesture/CameraInput.h"
-#include "gesture/Skeleton.h"
+#include "gesture\CameraInput.h"
+#include "gesture\Skeleton.h"
 
 void CameraInput::PollTracking() {
     mNewFrame = PollNewFrame();

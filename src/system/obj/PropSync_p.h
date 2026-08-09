@@ -1,11 +1,11 @@
 #pragma once
-#include "math/Color.h"
-#include "math/Key.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "obj/PropSync.h"
-#include "os/Debug.h"
-#include "utl/Std.h"
+#include "math\Color.h"
+#include "math\Key.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "obj\PropSync.h"
+#include "os\Debug.h"
+#include "utl\Std.h"
 
 // DO NOT try to include this header directly!
 // include obj/PropSync.h instead

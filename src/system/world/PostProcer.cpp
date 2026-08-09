@@ -1,8 +1,8 @@
-#include "world/PostProcer.h"
-#include "obj/Object.h"
-#include "rndobj/Cam.h"
-#include "rndobj/Draw.h"
-#include "rndobj/Rnd.h"
+#include "world\PostProcer.h"
+#include "obj\Object.h"
+#include "rndobj\Cam.h"
+#include "rndobj\Draw.h"
+#include "rndobj\Rnd.h"
 
 PostProcer::PostProcer() {}
 

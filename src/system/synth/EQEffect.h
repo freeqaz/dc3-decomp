@@ -1,6 +1,6 @@
 #pragma once
 
-#include "xdk/xaudio2/xaudio2.h"
+#include "xdk\xaudio2\xaudio2.h"
 
 // Maximum number of audio channels supported
 #define EQ_MAX_CHANS 2

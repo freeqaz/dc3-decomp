@@ -1,10 +1,10 @@
-#include "hamobj/MoveGraph.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "os/Debug.h"
-#include "utl/BinStream.h"
-#include "utl/Std.h"
-#include "utl/Symbol.h"
+#include "hamobj\MoveGraph.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "os\Debug.h"
+#include "utl\BinStream.h"
+#include "utl\Std.h"
+#include "utl\Symbol.h"
 
 MoveGraph::~MoveGraph() {
     mLayoutData = nullptr;

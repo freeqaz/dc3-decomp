@@ -1,9 +1,9 @@
-#include "os/DateTime.h"
-#include "os/Debug.h"
-#include "os/System.h"
-#include "utl/Locale.h"
-#include "utl/LocaleOrdinal.h"
-#include "xdk/XAPILIB.h"
+#include "os\DateTime.h"
+#include "os\Debug.h"
+#include "os\System.h"
+#include "utl\Locale.h"
+#include "utl\LocaleOrdinal.h"
+#include "xdk\XAPILIB.h"
 
 void GetDateAndTime(DateTime &dt) {
     SYSTEMTIME time;

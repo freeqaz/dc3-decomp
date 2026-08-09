@@ -1,10 +1,10 @@
 #pragma once
-#include "char/CharIKFoot.h"
-#include "char/CharPollable.h"
-#include "char/Character.h"
-#include "char/Waypoint.h"
-#include "rndobj/Highlight.h"
-#include "utl/MemMgr.h"
+#include "char\CharIKFoot.h"
+#include "char\CharPollable.h"
+#include "char\Character.h"
+#include "char\Waypoint.h"
+#include "rndobj\Highlight.h"
+#include "utl\MemMgr.h"
 
 /** "Class to do regulation on a HamCharacter.  Has two modes of operation" */
 class HamRegulate : public RndHighlightable, public CharPollable {

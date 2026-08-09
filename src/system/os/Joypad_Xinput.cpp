@@ -1,11 +1,11 @@
-#include "os/Joypad_Xinput.h"
-#include "os/Joypad_Xbox.h"
-#include "obj/Data.h"
-#include "os/CritSec.h"
-#include "os/Joypad.h"
-#include "os/UserMgr.h"
-#include "xdk/XAPILIB.h"
-#include "xdk/xapilibi/winerror.h"
+#include "os\Joypad_Xinput.h"
+#include "os\Joypad_Xbox.h"
+#include "obj\Data.h"
+#include "os\CritSec.h"
+#include "os\Joypad.h"
+#include "os\UserMgr.h"
+#include "xdk\XAPILIB.h"
+#include "xdk\xapilibi\winerror.h"
 
 namespace {
     XINPUT_CAPABILITIES gCaps[kNumJoypads];

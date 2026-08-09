@@ -1,7 +1,7 @@
-#include "utl/Str.h"
+#include "utl\Str.h"
 #include "Str.h"
-#include "os/Debug.h"
-#include "utl/MemMgr.h"
+#include "os\Debug.h"
+#include "utl\MemMgr.h"
 #include <cctype>
 
 #ifdef HX_NATIVE

@@ -1,8 +1,8 @@
-#include "synth/DelayEffect.h"
-#include "synth/Common_Xbox.h"
-#include "math/Decibels.h"
-#include "os/Debug.h"
-#include "xdk/xaudio2/xaudio2.h"
+#include "synth\DelayEffect.h"
+#include "synth\Common_Xbox.h"
+#include "math\Decibels.h"
+#include "os\Debug.h"
+#include "xdk\xaudio2\xaudio2.h"
 
 #line 7 "dsp\\DelayEffect.cpp"
 DelayEffect::DelayEffect(IXAudioBatchAllocator *ix)

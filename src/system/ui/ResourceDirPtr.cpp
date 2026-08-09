@@ -1,10 +1,10 @@
-#include "ui/ResourceDirPtr.h"
-#include "obj/Data.h"
-#include "obj/Utl.h"
-#include "os/File.h"
-#include "os/System.h"
-#include "utl/FilePath.h"
-#include "utl/MakeString.h"
+#include "ui\ResourceDirPtr.h"
+#include "obj\Data.h"
+#include "obj\Utl.h"
+#include "os\File.h"
+#include "os\System.h"
+#include "utl\FilePath.h"
+#include "utl\MakeString.h"
 
 const char *ResourceDirBase::GetResourcesPath(Symbol s1, Symbol s2) {
     std::vector<Symbol> superClasses;

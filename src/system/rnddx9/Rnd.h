@@ -1,15 +1,15 @@
 #pragma once
 #include "Memory.h"
-#include "math/Color.h"
-#include "movie/Splash.h"
-#include "os/Debug.h"
-#include "os/OSFuncs.h"
-#include "rnddx9/Object.h"
-#include "rnddx9/Tex.h"
-#include "rndobj/Bitmap.h"
-#include "rndobj/Rnd_NG.h"
-#include "xdk/D3D9.h"
-#include "xdk/XGRAPHICS.h"
+#include "math\Color.h"
+#include "movie\Splash.h"
+#include "os\Debug.h"
+#include "os\OSFuncs.h"
+#include "rnddx9\Object.h"
+#include "rnddx9\Tex.h"
+#include "rndobj\Bitmap.h"
+#include "rndobj\Rnd_NG.h"
+#include "xdk\D3D9.h"
+#include "xdk\XGRAPHICS.h"
 #include <types.h>
 
 struct LargeQuadRenderData {

@@ -1,9 +1,9 @@
-#include "rndobj/SoftParticles.h"
+#include "rndobj\SoftParticles.h"
 #include "Rnd_NG.h"
-#include "obj/Object.h"
-#include "rndobj/BaseMaterial.h"
-#include "rndobj/Draw.h"
-#include "rndobj/SoftParticleBuffer.h"
+#include "obj\Object.h"
+#include "rndobj\BaseMaterial.h"
+#include "rndobj\Draw.h"
+#include "rndobj\SoftParticleBuffer.h"
 
 RndSoftParticles::RndSoftParticles()
     : mParticles(this), mBlend(BaseMaterial::kBlendSrcAlphaAdd) {}

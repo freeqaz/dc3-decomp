@@ -1,11 +1,11 @@
 #pragma once
-#include "hamobj/HamPlayerData.h"
-#include "meta_ham/HamProfile.h"
-#include "meta_ham/SongStatusMgr.h"
-#include "net_ham/RCJobDingo.h"
-#include "net_ham/ChallengeSystemJobs.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
+#include "hamobj\HamPlayerData.h"
+#include "meta_ham\HamProfile.h"
+#include "meta_ham\SongStatusMgr.h"
+#include "net_ham\RCJobDingo.h"
+#include "net_ham\ChallengeSystemJobs.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
 
 class ChallengeResultPanel;
 

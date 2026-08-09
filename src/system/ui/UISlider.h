@@ -1,13 +1,13 @@
 #pragma once
 #include "ResourceDirPtr.h"
-#include "obj/Object.h"
-#include "rndobj/Dir.h"
-#include "rndobj/Mat.h"
-#include "rndobj/Mesh.h"
-#include "ui/UIComponent.h"
-#include "ui/ScrollSelect.h"
-#include "os/JoypadMsgs.h"
-#include "utl/MemMgr.h"
+#include "obj\Object.h"
+#include "rndobj\Dir.h"
+#include "rndobj\Mat.h"
+#include "rndobj\Mesh.h"
+#include "ui\UIComponent.h"
+#include "ui\ScrollSelect.h"
+#include "os\JoypadMsgs.h"
+#include "utl\MemMgr.h"
 
 class RndMesh;
 class RndMat;

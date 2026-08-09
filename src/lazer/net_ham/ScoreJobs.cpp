@@ -1,8 +1,8 @@
-#include "net_ham/ScoreJobs.h"
-#include "net_ham/RCJobDingo.h"
-#include "obj/Object.h"
-#include "os/System.h"
-#include "utl/DataPointMgr.h"
+#include "net_ham\ScoreJobs.h"
+#include "net_ham\RCJobDingo.h"
+#include "obj\Object.h"
+#include "os\System.h"
+#include "utl\DataPointMgr.h"
 
 RecordScoreJob::RecordScoreJob(
     Hmx::Object *callback, RecordScoreData &data, int songID, bool provideInstarank

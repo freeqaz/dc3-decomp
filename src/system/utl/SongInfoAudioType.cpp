@@ -1,7 +1,7 @@
-#include "utl/SongInfoAudioType.h"
+#include "utl\SongInfoAudioType.h"
 #include "SongInfoAudioType.h"
-#include "os/Debug.h"
-#include "utl/Symbol.h"
+#include "os\Debug.h"
+#include "utl\Symbol.h"
 
 SongInfoAudioType SymbolToAudioType(Symbol s) {
     static Symbol drum("drum");

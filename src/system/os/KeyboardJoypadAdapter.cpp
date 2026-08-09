@@ -1,5 +1,5 @@
-#include "obj/Data.h"
-#include "os/Keyboard.h"
+#include "obj\Data.h"
+#include "os\Keyboard.h"
 
 void lmaoKeyboardJoypadAdapter(DataArray *a) {
     KeyboardKeyMsg msg(a);

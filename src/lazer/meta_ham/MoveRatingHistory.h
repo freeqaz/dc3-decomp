@@ -1,6 +1,6 @@
 #pragma once
-#include "hamobj/ScoreUtl.h"
-#include "meta/FixedSizeSaveable.h"
+#include "hamobj\ScoreUtl.h"
+#include "meta\FixedSizeSaveable.h"
 
 // size 0x24
 class MoveRatingHistory : public FixedSizeSaveable {

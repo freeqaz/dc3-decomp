@@ -1,9 +1,9 @@
 #pragma once
-#include "obj/Object.h"
-#include "rndobj/Draw.h"
-#include "rndobj/PostProc.h"
-#include "rndobj/ShaderOptions.h"
-#include "rndobj/Tex.h"
+#include "obj\Object.h"
+#include "rndobj\Draw.h"
+#include "rndobj\PostProc.h"
+#include "rndobj\ShaderOptions.h"
+#include "rndobj\Tex.h"
 
 enum BloomBlurStyle {
     kBloomBlurNormal = 0,

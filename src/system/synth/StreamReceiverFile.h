@@ -1,6 +1,6 @@
 #pragma once
-#include "synth/StreamReceiver.h"
-#include "utl/MemMgr.h"
+#include "synth\StreamReceiver.h"
+#include "utl\MemMgr.h"
 
 #define kStreamBufSize 0x4000
 

@@ -1,8 +1,8 @@
 #pragma once
-#include "hamobj/Difficulty.h"
-#include "obj/Data.h"
-#include "ui/UILabel.h"
-#include "utl/Symbol.h"
+#include "hamobj\Difficulty.h"
+#include "obj\Data.h"
+#include "ui\UILabel.h"
+#include "utl\Symbol.h"
 
 class HamProfile;
 

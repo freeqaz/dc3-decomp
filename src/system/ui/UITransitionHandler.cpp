@@ -1,8 +1,8 @@
-#include "ui/UITransitionHandler.h"
-#include "math/Easing.h"
-#include "rndobj/Anim.h"
-#include "ui/UI.h"
-#include "utl/BinStream.h"
+#include "ui\UITransitionHandler.h"
+#include "math\Easing.h"
+#include "rndobj\Anim.h"
+#include "ui\UI.h"
+#include "utl\BinStream.h"
 
 UITransitionHandler::UITransitionHandler(Hmx::Object *obj)
     : mInAnim(obj), mOutAnim(obj), mAnimationState(kUITransitionAnimationInvalid),

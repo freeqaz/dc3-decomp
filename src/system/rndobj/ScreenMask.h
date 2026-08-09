@@ -1,8 +1,8 @@
 #pragma once
-#include "rndobj/Draw.h"
-#include "rndobj/Mat.h"
-#include "math/Color.h"
-#include "math/Geo.h"
+#include "rndobj\Draw.h"
+#include "rndobj\Mat.h"
+#include "math\Color.h"
+#include "math\Geo.h"
 
 /** "Draws full screen quad with material and color." */
 class RndScreenMask : public RndDrawable {

@@ -1,5 +1,5 @@
 #pragma once
-#include "os/Debug.h"
+#include "os\Debug.h"
 
 enum MidiMetaEvent {
     kSequenceNumber = 0,
