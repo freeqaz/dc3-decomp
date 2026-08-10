@@ -19,11 +19,11 @@
    "dec-label-reverify-2026-08-06 label-sample adjudication (926 sites)",
    "dc3-icf-alias-growth-20260809 full-frontier residue body test (1,869 pairs at pin 78ad9bee; 1,417 FOLD)"
   ],
-  "n_groups_generated": 1913,
-  "n_groups_accepted": 1913,
+  "n_groups_generated": 1956,
+  "n_groups_accepted": 1950,
   "n_target_objs": 2223,
   "n_base_objs": 980,
-  "n_names": 7351,
+  "n_names": 8277,
   "over_merge_split": {
    "what": "A closure class holding two TARGET-RESIDENT names is an over-merge: a real ICF fold keeps exactly one spelling. Gate (c) catches it and rejects the WHOLE class, which is why the 76 -> 368 growth LOST five MakeString names the smaller set had -- growing the evidence shrank the accepted set. Such a class is now SPLIT into maximal sub-classes of one target-resident name each.",
    "implementation": "decomp-synth tools/il_witness/build_icf_alias_inputs.py:split_on_target_residents (--no-split reproduces the raw-closure output)",
@@ -60,9 +60,49 @@
   },
   "weak_alias_classes": "Added 2026-08-10. MSVC emits the vector deleting destructor ??_E<Class> as an UNDEFINED WEAK EXTERNAL whose auxiliary record names its default resolution ??_G<Class> with characteristics 2 (IMAGE_WEAK_EXTERN_SEARCH_ALIAS). The linker resolves one to the other, so these are declared aliases, not empirical folds -- the compiler states it in our own object file. Direction is read off the target: whichever spelling the target objects define is the survivor (893 ??_G, 78 ??_E), because gate (c) requires exactly that.",
   "reconciled_with_main": "2026-08-10. Two lanes repaired the same over-merged MakeString class independently -- this lane 368->371 under gate (c'), main 368->373 by splitting. Main's finer partition is authoritative here: this lane's version folded symbols at retail 0x827F84A8 and 0x823B2008 into groups whose survivors sit at 0x82895520 / 0x82610090, which is a false equivalence across four distinct addresses. Main's plain groups were taken wholesale and only this lane's additions re-applied.",
-  "retail_map_classes": "Added 2026-08-10. orig/373307D9/ham_xbox_r.map is the shipped MSVC linker map for this build -- verified same-build by 67,483 of 67,510 names shared with target_symbol_map.json sitting at identical addresses. /OPT:ICF folds byte-identical COMDATs, so symbols sharing an address in that map ARE the fold set, stated by the linker rather than inferred by body test. Admitted narrowly: the address must carry two or more names our own objects reference, __unwind$/__catch$/$L/??_C@ names are excluded as annotations rather than aliases, and the survivor must be the single member the target objects define."
+  "retail_map_classes": "Added 2026-08-10. orig/373307D9/ham_xbox_r.map is the shipped MSVC linker map for this build -- verified same-build by 67,483 of 67,510 names shared with target_symbol_map.json sitting at identical addresses. /OPT:ICF folds byte-identical COMDATs, so symbols sharing an address in that map ARE the fold set, stated by the linker rather than inferred by body test. Admitted narrowly: the address must carry two or more names our own objects reference, __unwind$/__catch$/$L/??_C@ names are excluded as annotations rather than aliases, and the survivor must be the single member the target objects define.",
+  "retail_map_splitter_named": "Added 2026-08-10. Companion to retail_map_classes: addresses where the linker map names none of the symbols the TARGET objects define, because the splitter invented that name (merged_*, OnlyReturns). The survivor is then read from target_symbol_map.json and the folded members from the map. Address-derived survivors (fn_/lbl_) stay refused by gate (d) -- those are a rename problem, not an alias one."
  },
- "_rejected_at_install": [],
+ "_rejected_at_install": [
+  {
+   "name": "retailmap:__savegprlr",
+   "reasons": [
+    "(c) target objs name ['__savegprlr', '__savegprlr_14'], expected only ['__savegprlr'] -- not a real fold"
+   ]
+  },
+  {
+   "name": "retailmap:__restgprlr",
+   "reasons": [
+    "(c) target objs name ['__restgprlr', '__restgprlr_14'], expected only ['__restgprlr'] -- not a real fold"
+   ]
+  },
+  {
+   "name": "retailmap:__savefpr",
+   "reasons": [
+    "(c) target objs name ['__savefpr', '__savefpr_14'], expected only ['__savefpr'] -- not a real fold"
+   ]
+  },
+  {
+   "name": "retailmap:__restfpr",
+   "reasons": [
+    "(c) target objs name ['__restfpr', '__restfpr_14'], expected only ['__restfpr'] -- not a real fold"
+   ]
+  },
+  {
+   "name": "retailmap:__savevmx",
+   "reasons": [
+    "(b) folded '__savevmx_14' referenced by 0 compiled objs",
+    "(c) target objs name ['__savevmx', '__savevmx_14'], expected only ['__savevmx'] -- not a real fold"
+   ]
+  },
+  {
+   "name": "retailmap:__restvmx",
+   "reasons": [
+    "(b) folded '__restvmx_14' referenced by 0 compiled objs",
+    "(c) target objs name ['__restvmx', '__restvmx_14'], expected only ['__restvmx'] -- not a real fold"
+   ]
+  }
+ ],
  "groups": [
   {
    "name": "YAAAVBinStream@0x826ee638",
@@ -6195,33 +6235,460 @@
    "address": "0x823e3b70",
    "survivor": "OnlyReturns",
    "folded": [
+    "??0Vector3@@QAA@XZ",
     "??0Vector4@@QAA@XZ",
+    "??1CriticalSection@@QAA@XZ",
+    "??1PeakDetector@Synapse@DSP@@QAA@XZ",
+    "??1PitchCorrectedVoice@Synapse@DSP@@QAA@XZ",
     "??1Shuttle@@QAA@XZ",
+    "??3@YAXPAX0@Z",
+    "?AcquireOwnership@Rnd@@UAAXXZ",
+    "?ActivateCollidable@PhysicsManager@@UAAXPAVObject@Hmx@@@Z",
+    "?AddContactStateListener@PhysicsManager@@UAAXPAVContactStateListener@@@Z",
+    "?AddMarker@Stream@@UAAXABUMarker@@@Z",
+    "?AddVirtualChannels@Stream@@UAAXH@Z",
     "?AddedObject@ObjectDir@@MAAXPAVObject@Hmx@@@Z",
+    "?AdjustTrans@UIList@@UAAXAAVTransform@@ABUUIListElementDrawState@@@Z",
+    "?AdjustTransSelected@UIList@@UAAXAAVTransform@@@Z",
+    "?AnimateOut@RhythmBattlePlayer@@QAAXXZ",
+    "?ApplyDirectionalForce@DetectionVolume@@UAAXABVVector3@@@Z",
+    "?ApplyDirectionalImpulse@DetectionVolume@@UAAXABVVector3@@@Z",
+    "?ApplyDirectionalLinearVelocity@DetectionVolume@@UAAXABVVector3@@@Z",
+    "?ApplyDynamicOffsetPostLookAt@CamShot@@MAAXAAVTransform@@@Z",
+    "?ApplyDynamicOffsetPreLookAt@CamShot@@MAAXAAVTransform@@_N@Z",
+    "?ApplyFinalCamTransform@CamShot@@MAAXAAVTransform@@@Z",
+    "?ApplyForce@PhysicsManager@@UAAXPAVObject@Hmx@@ABVVector3@@@Z",
+    "?ApplyRadialForce@DefaultDetectionVolume@@UAAXM@Z",
+    "?ApplyRadialForce@DetectionVolume@@UAAXM@Z",
+    "?ApplyRadialImpulse@DetectionVolume@@UAAXM@Z",
+    "?ApplyTangentialForce@DetectionVolume@@UAAXVVector3@@@Z",
+    "?BeginDrawPass@Rnd@@UAAXXZ",
+    "?BeginWorld@PostProcessor@@UAAXXZ",
+    "?Cancel@StoreEnumJob@@UAAXPAVObject@Hmx@@@Z",
+    "?CaptureMic@Synth@@UAAXH@Z",
+    "?CaptureNextGpuFrame@Rnd@@UAAXXZ",
+    "?CheckAnims@EventTrigger@@MAAXXZ",
     "?CheckBlendMode@@YA?AW4Blend@BaseMaterial@@W412@PAV2@@Z",
     "?CheckForIconManUnlock@HamProfile@@QAAXXZ",
     "?CheckForNinjaUnlock@HamProfile@@QAAXXZ",
+    "?CheckMailbox@PlatformMgr@@QAAXXZ",
+    "?Clear@FreestyleMoveRecorder@@UAAXXZ",
+    "?Clear@Game@@UAAXXZ",
+    "?Clear@GestureMgr@@UAAXXZ",
+    "?Clear@HamSkeletonConverter@@UAAXXZ",
+    "?Clear@NgRnd@@UAAXIABVColor@Hmx@@@Z",
+    "?Clear@RhythmDetector@@MAAXXZ",
+    "?Clear@ShellInput@@UAAXXZ",
+    "?Clear@SkeletonDir@@UAAXXZ",
+    "?ClearIconLabels@UIListProvider@@UAAXXZ",
+    "?ClearJump@StreamNull@@UAAXXZ",
+    "?ClearLoopPoints@SimpleTempoMap@@UAAXXZ",
+    "?ClearMarkerList@Stream@@UAAXXZ",
+    "?ClearPostProc@SpotlightDrawer@@MAAXXZ",
+    "?CloneKey@PropKeys@@UAAXH@Z",
+    "?CompleteScroll@UIListWidget@@UAAXABVUIListState@@H@Z",
+    "?Compress@RndTex@@UAAXW4AlphaCompress@1@@Z",
+    "?ContentAllMounted@Callback@ContentMgr@@UAAXXZ",
+    "?ContentDone@Callback@ContentMgr@@UAAXXZ",
+    "?ContentFailed@Callback@ContentMgr@@UAAXPBD@Z",
+    "?ContentLoaded@Callback@ContentMgr@@UAAXPAVLoader@@W4ContentLocT@@VSymbol@@@Z",
+    "?ContentMountBegun@Callback@ContentMgr@@UAAXH@Z",
+    "?ContentMounted@Callback@ContentMgr@@UAAXPBD0@Z",
+    "?ContentStarted@Callback@ContentMgr@@UAAXXZ",
+    "?ContentUnmounted@Callback@ContentMgr@@UAAXPBD@Z",
     "?Copy@Song@@UAAXPBVObject@Hmx@@W4CopyType@23@@Z",
+    "?CreateAccount@DingoSvrXbox@@UAAXXZ",
+    "?CreateElements@UIListWidget@@UAAXPAVUIList@@H@Z",
+    "?CurrentShot@CamShot@@UAAPAV1@XZ",
+    "?Custom@NavListItemNode@@UBAXPAVUIListCustom@@PAVObject@Hmx@@@Z",
+    "?Custom@UIListProvider@@UBAXHHPAVUIListCustom@@PAVObject@Hmx@@@Z",
+    "?Data@HxGuid@@QBAPBHXZ",
+    "?DataOwner@RndFontBase@@UBAPBV1@XZ",
+    "?DateTimeInit@@YAXXZ",
+    "?DeactivateCollidable@PhysicsManager@@UAAXPAVObject@Hmx@@@Z",
+    "?Delete@Content@@UAAXXZ",
+    "?DeleteSessionComplete@DingoServer@@UAAX_N@Z",
+    "?Disconnect@DingoServer@@UAAXXZ",
+    "?DoPost@PostProcessor@@UAAXXZ",
     "?DoneLoading@BinkMovieLoader@@AAAXXZ",
     "?DoneLoading@DataLoader@@AAAXXZ",
     "?DoneLoading@DirLoader@@AAAXXZ",
     "?DoneLoading@FileLoader@@AAAXXZ",
+    "?Draw@FreestyleMoveRecorder@@UAAXABVBaseSkeleton@@AAVSkeletonViz@@@Z",
+    "?Draw@Game@@UAAXABVBaseSkeleton@@AAVSkeletonViz@@@Z",
+    "?Draw@GestureMgr@@UAAXABVBaseSkeleton@@AAVSkeletonViz@@@Z",
+    "?Draw@HamSkeletonConverter@@UAAXABVBaseSkeleton@@AAVSkeletonViz@@@Z",
+    "?Draw@MovieImpl@@UAAXXZ",
+    "?Draw@RhythmDetector@@MAAXABVBaseSkeleton@@AAVSkeletonViz@@@Z",
+    "?Draw@ShellInput@@UAAXABVBaseSkeleton@@AAVSkeletonViz@@@Z",
+    "?Draw@SkeletonDir@@UAAXABVBaseSkeleton@@AAVSkeletonViz@@@Z",
+    "?Draw@UIListWidget@@UAAXABUUIListWidgetDrawState@@ABVUIListState@@ABVTransform@@W4State@UIComponent@@PAVBox@@W4DrawCommand@@@Z",
+    "?DrawBeams@NgSpotlightDrawer@@MAAXPAVSpotlightEntry@SpotlightDrawer@@ABQAV23@@Z",
+    "?DrawFacesInRange@RndMesh@@UAAXHH@Z",
+    "?DrawLine@Rnd@@UAAXABVVector3@@0ABVColor@Hmx@@_N@Z",
+    "?DrawPreClear@RndDrawable@@UAAXXZ",
+    "?DrawRect@NgRnd@@UAAXABVRect@Hmx@@PAVRndMat@@W4ShaderType@@ABVColor@3@PBV63@4@Z",
+    "?DrawRect@Rnd@@UAAXABVRect@Hmx@@ABVColor@3@PAVRndMat@@PBV43@3@Z",
+    "?DrawRectDepth@NgRnd@@UAAXABVVector3@@AAY03$$CBV2@ABVVector4@@PAVRndMat@@W4ShaderType@@@Z",
+    "?DrawShadow@RndDrawable@@UAAXABVTransform@@M@Z",
+    "?DrawShowing@RndDrawable@@UAAXXZ",
+    "?EaseLinear@@YAMMMM@Z",
+    "?EnableLevels@Synth@@UAAX_N@Z",
+    "?EnableReads@BinkReader@@UAAX_N@Z",
+    "?EnableReads@StreamNull@@UAAX_N@Z",
+    "?EnableSlipStreaming@StreamNull@@UAAXH@Z",
+    "?End@MovieImpl@@UAAXXZ",
+    "?EndAnim@RndAnimatable@@UAAXXZ",
+    "?EndAnim@RndPropAnim@@UAAXXZ",
+    "?EndData@VorbisReader@@MAAXXZ",
+    "?EndDrawPass@Rnd@@UAAXXZ",
+    "?EndSessionComplete@DingoServer@@UAAX_N@Z",
+    "?EndWorld@PostProcessor@@UAAXXZ",
+    "?Enter@PhysicsManager@@UAAXXZ",
+    "?Execute@FlowNode@@UAAXW4QueueState@1@@Z",
+    "?FailedLoading@Callback@Loader@@UAAXPAV2@@Z",
+    "?Fill@StandardStream@@UAAXXZ",
+    "?Fill@StreamNull@@UAAXXZ",
+    "?Fill@UIListWidget@@UAAXABVUIListProvider@@HHH@Z",
+    "?Finalize@TempoMap@@UAAXXZ",
+    "?FinishDrawTarget@RndTex@@UAAXXZ",
+    "?FinishLoading@Callback@Loader@@UAAXPAV2@@Z",
+    "?FinishSort@NavListItemNode@@UAAXPAVNavListSort@@@Z",
+    "?Flush@ArkFile@@UAAXXZ",
+    "?Flush@BufFile@@UAAXXZ",
+    "?Flush@BufStream@@UAAXXZ",
+    "?Flush@ChunkStream@@UAAXXZ",
+    "?Flush@FileCacheFile@@UAAXXZ",
     "?Flush@HDCache@@AAAXXZ",
+    "?Flush@IDataChunk@@UAAXXZ",
+    "?Flush@MemStream@@UAAXXZ",
+    "?Flush@NetStream@@UAAXXZ",
+    "?Flush@NullFile@@UAAXXZ",
+    "?FocusIn@UIPanel@@UAAXXZ",
+    "?FocusOut@UIPanel@@UAAXXZ",
+    "?ForceColorClear@Rnd@@UAAXXZ",
+    "?GetAngularVelocity@PhysicsManager@@UAAXPAVObject@Hmx@@AAVVector3@@@Z",
+    "?GetChallengeScoreCmp@ChallengeScoreCmp@@UBAPBV1@XZ",
+    "?GetDifficultyCmp@DifficultyCmp@@UBAPBV1@XZ",
+    "?GetFitnessCalorieSortCmp@FitnessCalorieSortCmp@@UBAPBV1@XZ",
+    "?GetLocationCmp@LocationCmp@@UBAPBV1@XZ",
+    "?GetMQSongCharCmp@MQSongCharCmp@@UBAPBV1@XZ",
+    "?GetOverlaps@DetectionVolume@@UAAXAAV?$list@U?$pair@PAVObject@Hmx@@PAVObjectDir@@@stlpmtx_std@@V?$StlNodeAlloc@U?$pair@PAVObject@Hmx@@PAVObjectDir@@@stlpmtx_std@@@2@@stlpmtx_std@@@Z",
+    "?GetPlaylistTypeCmp@PlaylistTypeCmp@@UBAPBV1@XZ",
+    "?GetSongCmp@SongCmp@@UBAPBV1@XZ",
+    "?GetTimeInLoop@SimpleTempoMap@@UAAMM@Z",
+    "?GetVelocity@PhysicsManager@@UAAXPAVObject@Hmx@@AAVVector3@@@Z",
+    "?GrowBoundingBox@StarsDisplay@@UBAXAAVBox@@@Z",
+    "?HandleChange@Playlist@@MAAXXZ",
+    "?Highlight@CharBoneOffset@@UAAXXZ",
+    "?Highlight@CharForeTwist@@MAAXXZ",
+    "?Highlight@CharHair@@UAAXXZ",
+    "?Highlight@CharIKFoot@@UAAXXZ",
+    "?Highlight@CharServoBone@@UAAXXZ",
+    "?Highlight@HamIKEffector@@UAAXXZ",
+    "?Highlight@HamRegulate@@UAAXXZ",
+    "?Highlight@PhysicsVolume@@UAAXXZ",
+    "?Highlight@RndWind@@UAAXXZ",
+    "?Highlight@Waypoint@@UAAXXZ",
     "?HolmesClientPrint@@YAXPBD@Z",
+    "?Init@FileCache@@SAXXZ",
+    "?Init@NavListSort@@UAAXXZ",
+    "?Init@PhysicsManager@@UAAXXZ",
+    "?InitData@UIListProvider@@UAAXPAVRndDir@@@Z",
+    "?InitParams@FxSend360@@MAAXPAUIXAudio2SubmixVoice@@H@Z",
+    "?JoinSessionComplete@DingoServer@@UAAX_N@Z",
+    "?LeaveSessionComplete@DingoServer@@UAAX_N@Z",
+    "?ListAnimChildren@RndAnimatable@@UBAXAAV?$list@PAVRndAnimatable@@V?$StlNodeAlloc@PAVRndAnimatable@@@stlpmtx_std@@@stlpmtx_std@@@Z",
+    "?ListDrawChildren@RndDrawable@@UAAXAAV?$list@PAVRndDrawable@@V?$StlNodeAlloc@PAVRndDrawable@@@stlpmtx_std@@@stlpmtx_std@@@Z",
+    "?ListPollChildren@RndPollable@@UBAXAAV?$list@PAVRndPollable@@V?$StlNodeAlloc@PAVRndPollable@@@stlpmtx_std@@@stlpmtx_std@@@Z",
+    "?LoadInit@NetCacheMgr@@MAAXXZ",
+    "?LoadMarkerList@StreamNull@@UAAXPBD@Z",
+    "?LockThread@MovieImpl@@UAAXXZ",
+    "?MakeAnimDriven@PhysicsManager@@UAAXPAVObject@Hmx@@@Z",
+    "?MakeDrawTarget@Rnd@@UAAXXZ",
+    "?MakeDrawTarget@RndTex@@UAAXXZ",
+    "?MakeFixed@PhysicsManager@@UAAXPAVObject@Hmx@@@Z",
+    "?MakePhysicsDriven@PhysicsManager@@UAAXPAVObject@Hmx@@@Z",
+    "?MakeSessionJobComplete@DingoServer@@UAAX_N@Z",
+    "?Mats@RndDrawable@@UAAXAAV?$list@PAVRndMat@@V?$StlNodeAlloc@PAVRndMat@@@stlpmtx_std@@@stlpmtx_std@@_N@Z",
+    "?ModalDraw@Rnd@@MAAXW4ModalType@Debug@@PBD@Z",
+    "?Mount@Content@@UAAXXZ",
+    "?Move@PhysicsManager@@UAAXPAVObject@Hmx@@ABVVector3@@_N@Z",
+    "?MovePassed@DanceRemixer@@UAAXHPAVHamMove@@VSymbol@@@Z",
+    "?NotifyDeleted@ContentMgr@@MAAXPAVContent@@@Z",
+    "?NotifyFailed@ContentMgr@@MAAXPAVContent@@@Z",
+    "?NotifyMounted@ContentMgr@@MAAXPAVContent@@@Z",
+    "?NotifyUnmounted@ContentMgr@@MAAXPAVContent@@@Z",
+    "?OnAllTracksRead@HamSongData@@UAAXXZ",
+    "?OnAllTracksRead@MidiParserMgr@@UAAXXZ",
+    "?OnAllTracksRead@Song@@UAAXXZ",
+    "?OnAuthSuccess@DingoServer@@MAAXXZ",
+    "?OnBeginFrame@DxRndOcclusionQueryMgr@@MAAXXZ",
+    "?OnCompletion@Job@@UAAXPAVObject@Hmx@@@Z",
+    "?OnContentMounted@NavListSortNode@@UAAXPBD0@Z",
+    "?OnEndFrame@DxRndOcclusionQueryMgr@@MAAXXZ",
+    "?OnEndOfTrack@HamSongData@@UAAXXZ",
+    "?OnEndOfTrack@Song@@UAAXXZ",
+    "?OnEnter@NavListSortMgr@@UAAXXZ",
+    "?OnHighlight@NavListHeaderNode@@UAAXXZ",
+    "?OnHighlight@NavListItemNode@@UAAXXZ",
+    "?OnLoadSong@MetaPerformer@@UAAXXZ",
+    "?OnMidiMessage@HamSongData@@UAAXHEEE@Z",
+    "?OnMidiMessage@Song@@UAAXHEEE@Z",
+    "?OnNewTrack@HamSongData@@UAAXH@Z",
+    "?OnNewTrack@Song@@UAAXH@Z",
+    "?OnParametersChanged@FxSend@@MAAXXZ",
+    "?OnSetParameters@?$CSampleXAPOBase@VBitCrushEffect@@UParams@1@@ATG@@MAAXABUParams@BitCrushEffect@@@Z",
+    "?OnSetParameters@?$CSampleXAPOBase@VCompressionEffect@@UParams@1@@ATG@@MAAXABUParams@CompressionEffect@@@Z",
+    "?OnSetParameters@?$CSampleXAPOBase@VDelayEffect@@UParams@1@@ATG@@MAAXABUParams@DelayEffect@@@Z",
+    "?OnSetParameters@?$CSampleXAPOBase@VDistortionEffect@@UParams@1@@ATG@@MAAXABUParams@DistortionEffect@@@Z",
+    "?OnSetParameters@?$CSampleXAPOBase@VEQEffect@@UParams@1@@ATG@@MAAXABUParams@EQEffect@@@Z",
+    "?OnSetParameters@?$CSampleXAPOBase@VEnvelopeGenerator@@UEnvelopeGeneratorParams@@@ATG@@MAAXABUEnvelopeGeneratorParams@@@Z",
+    "?OnSetParameters@?$CSampleXAPOBase@VFlangerEffect@@UParams@1@@ATG@@MAAXABUParams@FlangerEffect@@@Z",
+    "?OnSetParameters@?$CSampleXAPOBase@VMeterEffect@@UMeterEffectParams@@@ATG@@MAAXABUMeterEffectParams@@@Z",
+    "?OnSetParameters@?$CSampleXAPOBase@VPitchShiftEffect@@UPitchShiftEffectParams@@@ATG@@MAAXABUPitchShiftEffectParams@@@Z",
+    "?OnSetParameters@?$CSampleXAPOBase@VWahEffect@@UParams@1@@ATG@@MAAXABUParams@WahEffect@@@Z",
+    "?OnTempo@MidiReceiver@@UAAXHH@Z",
+    "?OnText@HamSongData@@UAAXHPBDE@Z",
+    "?OnTimeSig@MidiReceiver@@UAAXHHH@Z",
+    "?OnUnHighlight@NavListFunctionNode@@UAAXXZ",
+    "?OnUnHighlight@NavListHeaderNode@@UAAXXZ",
+    "?OnUnHighlight@NavListItemNode@@UAAXXZ",
+    "?PauseImpl@StreamReceiverFile@@MAAX_N@Z",
+    "?PlatformInit@Achievements@@SAXXZ",
+    "?PlayImpl@StreamReceiverFile@@MAAXXZ",
+    "?Poll@CacheXbox@@UAAXXZ",
+    "?Poll@Content@@UAAXXZ",
+    "?Poll@DingoServer@@UAAXXZ",
+    "?Poll@HttpReqCurl@@UAAXXZ",
+    "?Poll@Memcard@@UAAXXZ",
+    "?Poll@PhysicsManager@@UAAXXZ",
+    "?Poll@RndPollable@@UAAXXZ",
+    "?Poll@SeqInst@@UAAXXZ",
+    "?Poll@StarsDisplay@@UAAXXZ",
+    "?Poll@UIListSlotElement@@UAAXXZ",
+    "?Poll@UIListWidget@@UAAXXZ",
+    "?Poll@XboxMultipleItemsPurchaser@@UAAXXZ",
+    "?Poll@XboxPurchaser@@UAAXXZ",
+    "?PopClipPlanesInternal@Rnd@@MAAXAAV?$ObjPtrVec@VRndTransformable@@VObjectDir@@@@@Z",
+    "?PostAction@SaveMemcardAction@@UAAXXZ",
+    "?PostDeviceReset@DxObject@@UAAXXZ",
+    "?PostLoad@FileMerger@@UAAXAAVBinStream@@@Z",
+    "?PostLoad@HamDriver@@UAAXAAVBinStream@@@Z",
+    "?PostLoad@Object@Hmx@@UAAXAAVBinStream@@@Z",
     "?PostLoad@UIComponent@@UAAXAAVBinStream@@@Z",
+    "?PostSave@CharClip@@UAAXAAVBinStream@@@Z",
+    "?PostSave@Object@Hmx@@UAAXAAVBinStream@@@Z",
+    "?PostUpdate@FreestyleMoveRecorder@@UAAXPBUSkeletonUpdateData@@@Z",
+    "?PostUpdate@Skeleton@@QAAXXZ",
+    "?PostUpdate@SkeletonDir@@UAAXPBUSkeletonUpdateData@@@Z",
+    "?PreAction@LoadMemcardAction@@UAAXXZ",
+    "?PreDeviceReset@DxObject@@UAAXXZ",
+    "?PreDraw@UIListProvider@@UBAXHHPAVUIListSlot@@@Z",
+    "?PreInit@ContentMgr@@UAAXXZ",
+    "?PreInit@Synth@@UAAXXZ",
+    "?PreLoad@Profile@@UAAXXZ",
+    "?PreSave@Object@Hmx@@UAAXAAVBinStream@@@Z",
+    "?PreSave@WorldInstance@@UAAXAAVBinStream@@@Z",
+    "?Preload@OfflineCallback@@UAAXXZ",
+    "?Print@Object@Hmx@@UAAXXZ",
+    "?Print@RndFontBase@@UBAXXZ",
+    "?PushClipPlanesInternal@Rnd@@MAAXAAV?$ObjPtrVec@VRndTransformable@@VObjectDir@@@@@Z",
+    "?QueueMotionBlurObject@RndPostProc@@UAAXPAVRndDrawable@@@Z",
+    "?ReInit@Rnd@@UAAXXZ",
+    "?ReadyInit@NetCacheMgr@@MAAXXZ",
+    "?ReallocateInternal@CharBones@@MAAXXZ",
+    "?Recreate@FxSend@@UAAXAAV?$vector@PAVFxSend@@V?$StlNodeAlloc@PAVFxSend@@@stlpmtx_std@@@stlpmtx_std@@@Z",
+    "?RefOwner@Object@Hmx@@UBAPAV12@XZ",
+    "?ReleaseAllMics@Synth@@UAAXXZ",
+    "?ReleaseMic@Synth@@UAAXH@Z",
+    "?ReleaseOwnership@Rnd@@UAAXXZ",
+    "?RemapChannel@Stream@@UAAXHH@Z",
+    "?RemoveContactStateListener@PhysicsManager@@UAAXPAVContactStateListener@@@Z",
+    "?RequirePushToTalk@Synth@@UAAX_NH@Z",
     "?Reset@BitCrushEffect@@QAAXXZ",
+    "?Reset@DefaultDetectionVolume@@UAAXABVTransform@@@Z",
     "?Reset@DistortionEffect@@QAAXXZ",
+    "?ResetMicsChanged@Synth@@UAAXXZ",
+    "?ResetMotionState@PhysicsManager@@UAAXPAVObject@Hmx@@@Z",
+    "?ResetMotionType@PhysicsManager@@UAAXPAVObject@Hmx@@@Z",
+    "?ResetTrans@PhysicsManager@@UAAXPAVObject@Hmx@@@Z",
+    "?Resume@NgRnd@@UAAXXZ",
+    "?ResumeMics@Synth@@UAAXXZ",
+    "?RunNetStartUtility@PlatformMgr@@QAAXXZ",
     "?ScriptDebugModal@@YAXAAW4ModalType@Debug@@AAVFixedString@@_N@Z",
+    "?Select@RndCubeTex@@UAAXH@Z",
+    "?Select@RndTex@@UAAXH@Z",
+    "?SelectMove@DanceRemixer@@MAAXHH@Z",
+    "?Set@DOFProc@@UAAXPBVRndCam@@MMMM@Z",
+    "?SetADSR@MoggClip@@UAAXABVADSRImpl@@@Z",
+    "?SetADSR@Stream@@UAAXHABVADSR@@@Z",
+    "?SetADSR@StreamReceiver@@UAAXABVADSRImpl@@@Z",
+    "?SetAngularDamp@PhysicsManager@@UAAXPAVObject@Hmx@@M@Z",
+    "?SetBackgroundVolume@HamAudio@@QAAXM@Z",
+    "?SetBloomColor@RndPostProc@@UAAXXZ",
+    "?SetChangeNotify@Mic@@UAAX_N@Z",
+    "?SetChatVoiceGain@Synth@@UAAXHM@Z",
+    "?SetCollapseIconLabel@NavListFunctionNode@@UAAXPAVUILabel@@@Z",
+    "?SetCollapseIconLabel@NavListItemNode@@UAAXPAVUILabel@@@Z",
+    "?SetCollisionFilter@DetectionVolume@@UAAXW4CollisionFilter@@@Z",
+    "?SetCollisionFilter@PhysicsManager@@UAAXPAVObject@Hmx@@W4CollisionFilter@@@Z",
+    "?SetCompressor@MicNull@@UAAX_N@Z",
+    "?SetCompressor@MicXbox@@UAAX_N@Z",
+    "?SetCompressorParam@MicNull@@UAAXM@Z",
+    "?SetCompressorParam@MicXbox@@UAAXM@Z",
+    "?SetContainerDisplayName@Memcard@@UAAXPB_W@Z",
+    "?SetContainerName@Memcard@@UAAXPBD@Z",
+    "?SetContent@HttpGet@@UAAXPBD@Z",
+    "?SetContentLength@HttpGet@@UAAXI@Z",
+    "?SetDMA@MicNull@@UAAX_N@Z",
+    "?SetDMA@MicXbox@@UAAX_N@Z",
+    "?SetDolby@Synth@@UAAX_N0@Z",
+    "?SetEarpiece@MicNull@@UAAX_N@Z",
+    "?SetEarpieceVolume@MicNull@@UAAXM@Z",
+    "?SetEarpieceVolume@MicXbox@@UAAXM@Z",
+    "?SetFX@StandardStream@@UAAXH_N@Z",
+    "?SetFX@StreamNull@@UAAXH_N@Z",
+    "?SetFXChain@Synth@@UAAX_N@Z",
+    "?SetFXCore@SampleInst360@@UAAXW4FXCore@@@Z",
+    "?SetFXCore@StandardStream@@UAAXHW4FXCore@@@Z",
+    "?SetFXCore@StreamNull@@UAAXHW4FXCore@@@Z",
+    "?SetFXDelay@Synth@@UAAXHM@Z",
+    "?SetFXFeedback@Synth@@UAAXHM@Z",
+    "?SetFXMode@Synth@@UAAXHW4FXMode@@@Z",
+    "?SetFXSend@Stream@@UAAXHPAVFxSend@@@Z",
+    "?SetFXSend@StreamReceiver@@UAAXPAVFxSend@@@Z",
+    "?SetFXVolume@Synth@@UAAXHM@Z",
     "?SetForegroundVolume@HamAudio@@QAAXM@Z",
+    "?SetFrame@PropKeys@@UAAXMMM@Z",
+    "?SetFriction@PhysicsManager@@UAAXPAVObject@Hmx@@M@Z",
+    "?SetFxSend@Mic@@UAAXPAVFxSend@@@Z",
+    "?SetGain@MicNull@@UAAXM@Z",
+    "?SetGravityDirection@PhysicsManager@@UAAXABVVector3@@@Z",
+    "?SetGravityFactor@PhysicsManager@@UAAXPAVObject@Hmx@@M@Z",
+    "?SetIncomingVoiceChatVolume@Synth@@UAAXM@Z",
+    "?SetJump@StreamNull@@UAAXAAVString@@0@Z",
+    "?SetJump@StreamNull@@UAAXMMPBD@Z",
+    "?SetJumpSamples@StreamNull@@UAAXHHPBD@Z",
+    "?SetKey@RndAnimatable@@UAAXM@Z",
+    "?SetLBScoreProperty@DingoServer@@UAAXI@Z",
+    "?SetLBView@DingoServer@@UAAXI@Z",
+    "?SetLinearDamp@PhysicsManager@@UAAXPAVObject@Hmx@@M@Z",
+    "?SetLinearVelocity@PhysicsManager@@UAAXPAVObject@Hmx@@ABVVector3@@@Z",
+    "?SetLoginName@DingoServer@@UAAXPBD@Z",
+    "?SetLoginPassword@DingoServer@@UAAXPBD@Z",
+    "?SetLoopPoints@SimpleTempoMap@@UAAXHH@Z",
+    "?SetMass@PhysicsManager@@UAAXPAVObject@Hmx@@M@Z",
+    "?SetMaxSpeed@PhysicsManager@@UAAXPAVObject@Hmx@@M@Z",
+    "?SetMicFX@Synth@@UAAX_N@Z",
+    "?SetMicVolume@Synth@@UAAXM@Z",
+    "?SetMotionState@PhysicsManager@@UAAXPAVObject@Hmx@@W4PhysMotionState@@@Z",
+    "?SetMute@Mic@@UAAX_N@Z",
+    "?SetOnlineID@Playlist@@UAAXH@Z",
+    "?SetOutputGain@MicNull@@UAAXM@Z",
+    "?SetPan@StreamNull@@UAAXHM@Z",
+    "?SetPan@StreamReceiverFile@@UAAXM@Z",
+    "?SetPan@WaitSeqInst@@UAAXM@Z",
+    "?SetPaused@MovieImpl@@UAAX_N@Z",
+    "?SetPenetrationDepth@PhysicsManager@@UAAXPAVObject@Hmx@@M@Z",
+    "?SetPreFrame@CamShot@@UAAXMM@Z",
+    "?SetRestitution@PhysicsManager@@UAAXPAVObject@Hmx@@M@Z",
+    "?SetReverbEnable@MoggClip@@UAAX_N@Z",
+    "?SetReverbEnableImpl@SampleInst@@MAAX_N@Z",
+    "?SetReverbMixDb@MoggClip@@UAAXM@Z",
+    "?SetReverbMixDbImpl@SampleInst@@MAAXM@Z",
+    "?SetRollingFrictionMult@PhysicsManager@@UAAXPAVObject@Hmx@@M@Z",
+    "?SetSSLCertName@HttpReq@@UAAXPBD@Z",
+    "?SetSSLCertPath@HttpReq@@UAAXPBD@Z",
+    "?SetSSLVerifyHost@HttpReq@@UAAXG@Z",
+    "?SetSSLVerifyPeer@HttpReq@@UAAXG@Z",
+    "?SetSendImpl@SampleInst@@MAAXPAVFxSend@@@Z",
+    "?SetSensitivity@MicNull@@UAAXM@Z",
+    "?SetShadowMap@Rnd@@UAAXPAVRndTex@@PAVRndCam@@PBVColor@Hmx@@@Z",
+    "?SetSlipOffset@StreamNull@@UAAXHM@Z",
+    "?SetSlipOffset@StreamReceiverFile@@UAAXM@Z",
+    "?SetSlipSpeed@StreamNull@@UAAXHM@Z",
+    "?SetSlipSpeed@StreamReceiverFile@@UAAXM@Z",
+    "?SetSpeed@MoggClip@@UAAXM@Z",
+    "?SetSpeed@StreamReceiverFile@@UAAXM@Z",
+    "?SetStartProgress@SampleInst@@UAAXM@Z",
+    "?SetStereo@HamAudio@@QAAX_N@Z",
+    "?SetStereoPair@Stream@@UAAXHH@Z",
+    "?SetToCurrentVal@PropKeys@@UAAXH@Z",
+    "?SetTrack@HamSongData@@UAAXVSymbol@@@Z",
+    "?SetTranspose@WaitSeqInst@@UAAXM@Z",
+    "?SetVolume@Mic@@UAAXM@Z",
+    "?SetVolume@MovieImpl@@UAAXM@Z",
+    "?SetVolume@StreamNull@@UAAXHM@Z",
+    "?SetVolume@StreamReceiverFile@@UAAXM@Z",
+    "?SetWidthHeight@MovieImpl@@UAAXHH@Z",
+    "?SetupScrolling@FontMap3d@RndText@@UAAXXZ",
+    "?SlipStop@StreamNull@@UAAXH@Z",
+    "?SlipStop@StreamReceiverFile@@UAAXXZ",
+    "?SongPlay@OfflineCallback@@UAAX_N@Z",
+    "?SongSetFrame@OfflineCallback@@UAAXPAVSong@@M@Z",
+    "?SpewInit@@YAXXZ",
+    "?SpewTerminate@@YAXXZ",
+    "?Start@MicNull@@UAAXXZ",
+    "?StartAnim@RndAnimatable@@UAAXXZ",
+    "?StartIntro@Game@@QAAXXZ",
+    "?StartPlayback@Mic@@UAAXXZ",
+    "?StartRefresh@ContentMgr@@UAAXXZ",
+    "?StartScroll@UIListWidget@@UAAXH_N@Z",
+    "?StartSessionComplete@DingoServer@@UAAX_N@Z",
+    "?StartUploadCareerScore@DingoServer@@UAAX_K@Z",
+    "?Stop@MicNull@@UAAXXZ",
+    "?StopPlayback@Mic@@UAAXXZ",
+    "?Suspend@NgRnd@@UAAXXZ",
+    "?SuspendMics@Synth@@UAAXXZ",
     "?SynthUtlTerm@@YAXXZ",
+    "?Tag@StreamReceiver@@UAAXXZ",
     "?Terminate@CharBonesMeshes@@SAXXZ",
     "?Terminate@Character@@SAXXZ",
+    "?Terminate@ContentMgr@@UAAXXZ",
+    "?Terminate@DingoServer@@UAAXXZ",
     "?Terminate@DxLight@@SAXXZ",
     "?Terminate@FileCache@@SAXXZ",
     "?Terminate@Memcard@@UAAXXZ",
+    "?Terminate@SongMgr@@UAAXXZ",
     "?Terminate@UILabel@@SAXXZ",
     "?TerminateMakeString@@YAXXZ",
+    "?TexelsUnlock@RndTex@@UAAXXZ",
     "?TrigTableTerminate@@YAXXZ",
+    "?UnHighlightCurrent@UIListProvider@@UAAXXZ",
+    "?UnSet@DOFProc@@UAAXXZ",
+    "?UnloadInit@NetCacheMgr@@MAAXXZ",
+    "?UnlockBitmap@RndTex@@UAAXXZ",
+    "?UnlockThread@MovieImpl@@UAAXXZ",
+    "?Unmount@Content@@UAAXXZ",
+    "?Update@FreestyleMoveRecorder@@UAAXABUSkeletonUpdateData@@@Z",
+    "?Update@Game@@UAAXABUSkeletonUpdateData@@@Z",
+    "?Update@GestureMgr@@UAAXABUSkeletonUpdateData@@@Z",
+    "?Update@HamNavList@@UAAXABUSkeletonUpdateData@@@Z",
+    "?Update@HamSkeletonConverter@@UAAXABUSkeletonUpdateData@@@Z",
+    "?Update@MiniLeaderboardDisplay@@MAAXXZ",
+    "?Update@RhythmDetector@@MAAXABUSkeletonUpdateData@@@Z",
+    "?Update@ShellInput@@UAAXABUSkeletonUpdateData@@@Z",
+    "?Update@SkeletonDir@@UAAXABUSkeletonUpdateData@@@Z",
+    "?UpdateApproxLighting@RndEnviron@@UAAXPBVVector3@@@Z",
+    "?UpdateItemCount@NavListHeaderNode@@UAAXPAVNavListItemNode@@@Z",
+    "?UpdateMesh@RndMultiMesh@@MAAXXZ",
+    "?UpdateMix@FxSend@@MAAXXZ",
+    "?UpdateObject@OfflineCallback@@UAAXPBVObject@Hmx@@PAVDataArray@@@Z",
+    "?UpdateOverlay@Callback@RndOverlay@@UAAMPAV2@M@Z",
+    "?UpdateOverlay@FitnessFilter@@UAAMPAVRndOverlay@@M@Z",
+    "?UpdatePreClearState@RndDrawable@@UAAXXZ",
+    "?UpdateScrolling@FontMap3d@RndText@@UAAXM@Z",
+    "?UpdateVolume@WaitSeqInst@@UAAXXZ",
+    "?UpdatedWorldXfm@RndTransformable@@MAAXXZ",
+    "?Validate@MovieSys@@UAAXXZ",
+    "?VizError@DisplacementNode@@UBAXAAVSkeletonViz@@ABUErrorFrameInput@@ABUErrorNodeInput@@@Z",
+    "?VizError@Ham1DisplacementNode@@UBAXAAVSkeletonViz@@ABUErrorFrameInput@@ABUErrorNodeInput@@@Z",
+    "?VizError@Ham1EuclideanNode@@UBAXAAVSkeletonViz@@ABUErrorFrameInput@@ABUErrorNodeInput@@@Z",
+    "?VizError@PositionNode@@UBAXAAVSkeletonViz@@ABUErrorFrameInput@@ABUErrorNodeInput@@@Z",
+    "?WriteCareerLeaderboardComplete@DingoServer@@UAAX_N@Z",
+    "?WriteImpl@IDataChunk@@UAAXPBXH@Z",
+    "?clearCrossCorrState@TDStretch@soundtouch@@MAAXXZ",
     "?get_allocator@?$_List_base@PAVObjectDir@@V?$StlNodeAlloc@PAVObjectDir@@@stlpmtx_std@@@stlpmtx_std@@QBA?AV?$StlNodeAlloc@PAVObjectDir@@@2@XZ",
     "?get_allocator@?$_List_base@PAVRndAnimatable@@V?$StlNodeAlloc@PAVRndAnimatable@@@stlpmtx_std@@@stlpmtx_std@@QBA?AV?$StlNodeAlloc@PAVRndAnimatable@@@2@XZ",
     "?get_allocator@?$_List_base@PAVRndDrawable@@V?$StlNodeAlloc@PAVRndDrawable@@@stlpmtx_std@@@stlpmtx_std@@QBA?AV?$StlNodeAlloc@PAVRndDrawable@@@2@XZ",
@@ -6255,6 +6722,32 @@
     "?get_allocator@?$vector@PAVUIScreen@@V?$StlNodeAlloc@PAVUIScreen@@@stlpmtx_std@@@stlpmtx_std@@QBA?AV?$StlNodeAlloc@PAVUIScreen@@@2@XZ",
     "?get_allocator@?$vector@PAVVoice@@V?$StlNodeAlloc@PAVVoice@@@stlpmtx_std@@@stlpmtx_std@@QBA?AV?$StlNodeAlloc@PAVVoice@@@2@XZ",
     "?get_allocator@?$vector@PBVMoveParent@@V?$StlNodeAlloc@PBVMoveParent@@@stlpmtx_std@@@stlpmtx_std@@QBA?AV?$StlNodeAlloc@PBVMoveParent@@@2@XZ",
+    "?get_allocator@?$vector@U?$pair@HH@stlpmtx_std@@V?$StlNodeAlloc@U?$pair@HH@stlpmtx_std@@@2@@stlpmtx_std@@QBA?AV?$StlNodeAlloc@U?$pair@HH@stlpmtx_std@@@2@XZ",
+    "?get_allocator@?$vector@UChar3D@CharData@WorldCrowd@@V?$StlNodeAlloc@UChar3D@CharData@WorldCrowd@@@stlpmtx_std@@@stlpmtx_std@@QBA?AV?$StlNodeAlloc@UChar3D@CharData@WorldCrowd@@@2@XZ",
+    "?get_allocator@?$vector@UCompEv@DataEventList@@V?$StlNodeAlloc@UCompEv@DataEventList@@@stlpmtx_std@@@stlpmtx_std@@QBA?AV?$StlNodeAlloc@UCompEv@DataEventList@@@2@XZ",
+    "?get_allocator@?$vector@UEnvLightEntry@LightPreset@@V?$StlNodeAlloc@UEnvLightEntry@LightPreset@@@stlpmtx_std@@@stlpmtx_std@@QBA?AV?$StlNodeAlloc@UEnvLightEntry@LightPreset@@@2@XZ",
+    "?get_allocator@?$vector@UEnvironmentEntry@LightPreset@@V?$StlNodeAlloc@UEnvironmentEntry@LightPreset@@@stlpmtx_std@@@stlpmtx_std@@QBA?AV?$StlNodeAlloc@UEnvironmentEntry@LightPreset@@@2@XZ",
+    "?get_allocator@?$vector@ULod@Character@@V?$StlNodeAlloc@ULod@Character@@@stlpmtx_std@@@stlpmtx_std@@QBA?AV?$StlNodeAlloc@ULod@Character@@@2@XZ",
+    "?get_allocator@?$vector@UPoint@CharHair@@V?$StlNodeAlloc@UPoint@CharHair@@@stlpmtx_std@@@stlpmtx_std@@QBA?AV?$StlNodeAlloc@UPoint@CharHair@@@2@XZ",
+    "?get_allocator@?$vector@UPressRec@@V?$StlNodeAlloc@UPressRec@@@stlpmtx_std@@@stlpmtx_std@@QBA?AV?$StlNodeAlloc@UPressRec@@@2@XZ",
+    "?get_allocator@?$vector@UPropertyFilter@CameraManager@@V?$StlNodeAlloc@UPropertyFilter@CameraManager@@@stlpmtx_std@@@stlpmtx_std@@QBA?AV?$StlNodeAlloc@UPropertyFilter@CameraManager@@@2@XZ",
+    "?get_allocator@?$vector@USpotlightDrawerEntry@LightPreset@@V?$StlNodeAlloc@USpotlightDrawerEntry@LightPreset@@@stlpmtx_std@@@stlpmtx_std@@QBA?AV?$StlNodeAlloc@USpotlightDrawerEntry@LightPreset@@@2@XZ",
+    "?get_allocator@?$vector@USpotlightEntry@LightPreset@@V?$StlNodeAlloc@USpotlightEntry@LightPreset@@@stlpmtx_std@@@stlpmtx_std@@QBA?AV?$StlNodeAlloc@USpotlightEntry@LightPreset@@@2@XZ",
+    "?get_allocator@?$vector@UTempoInfoPoint@MultiTempoTempoMap@@V?$StlNodeAlloc@UTempoInfoPoint@MultiTempoTempoMap@@@stlpmtx_std@@@stlpmtx_std@@QBA?AV?$StlNodeAlloc@UTempoInfoPoint@MultiTempoTempoMap@@@2@XZ",
+    "?get_allocator@?$vector@V?$Key@M@@V?$StlNodeAlloc@V?$Key@M@@@stlpmtx_std@@@stlpmtx_std@@QBA?AV?$StlNodeAlloc@V?$Key@M@@@2@XZ",
+    "?get_allocator@?$vector@V?$ObjPtr@VUIColor@@@@V?$StlNodeAlloc@V?$ObjPtr@VUIColor@@@@@stlpmtx_std@@@stlpmtx_std@@QBA?AV?$StlNodeAlloc@V?$ObjPtr@VUIColor@@@@@2@XZ",
+    "?get_allocator@?$vector@VActionRec@@V?$StlNodeAlloc@VActionRec@@@stlpmtx_std@@@stlpmtx_std@@QBA?AV?$StlNodeAlloc@VActionRec@@@2@XZ",
+    "?get_allocator@?$vector@VChallengeRow@@V?$StlNodeAlloc@VChallengeRow@@@stlpmtx_std@@@stlpmtx_std@@QBA?AV?$StlNodeAlloc@VChallengeRow@@@2@XZ",
+    "?get_allocator@?$vector@VColor@Hmx@@V?$StlNodeAlloc@VColor@Hmx@@@stlpmtx_std@@@stlpmtx_std@@QBA?AV?$StlNodeAlloc@VColor@Hmx@@@2@XZ",
+    "?get_allocator@?$vector@VDataEvent@@V?$StlNodeAlloc@VDataEvent@@@stlpmtx_std@@@stlpmtx_std@@QBA?AV?$StlNodeAlloc@VDataEvent@@@2@XZ",
+    "?get_allocator@?$vector@VFlowMathOp@@V?$StlNodeAlloc@VFlowMathOp@@@stlpmtx_std@@@stlpmtx_std@@QBA?AV?$StlNodeAlloc@VFlowMathOp@@@2@XZ",
+    "?get_allocator@?$vector@VLeaderboardRow@@V?$StlNodeAlloc@VLeaderboardRow@@@stlpmtx_std@@@stlpmtx_std@@QBA?AV?$StlNodeAlloc@VLeaderboardRow@@@2@XZ",
+    "?get_allocator@?$vector@VSampleMarker@@V?$StlNodeAlloc@VSampleMarker@@@stlpmtx_std@@@stlpmtx_std@@QBA?AV?$StlNodeAlloc@VSampleMarker@@@2@XZ",
+    "?get_allocator@?$vector@VString@@V?$StlNodeAlloc@VString@@@stlpmtx_std@@@stlpmtx_std@@QBA?AV?$StlNodeAlloc@VString@@@2@XZ",
+    "?get_allocator@?$vector@VSymbol@@V?$StlNodeAlloc@VSymbol@@@stlpmtx_std@@@stlpmtx_std@@QBA?AV?$StlNodeAlloc@VSymbol@@@2@XZ",
+    "?get_allocator@?$vector@VTransformCrowd@@V?$StlNodeAlloc@VTransformCrowd@@@stlpmtx_std@@@stlpmtx_std@@QBA?AV?$StlNodeAlloc@VTransformCrowd@@@2@XZ",
+    "?get_allocator@?$vector@VVector2@@V?$StlNodeAlloc@VVector2@@@stlpmtx_std@@@stlpmtx_std@@QBA?AV?$StlNodeAlloc@VVector2@@@2@XZ",
+    "?get_allocator@?$vector@VVector3@@V?$StlNodeAlloc@VVector3@@@stlpmtx_std@@@stlpmtx_std@@QBA?AV?$StlNodeAlloc@VVector3@@@2@XZ",
     "?get_allocator@?$vector@_KV?$StlNodeAlloc@_K@stlpmtx_std@@@stlpmtx_std@@QBA?AV?$StlNodeAlloc@_K@2@XZ",
     "?jpeg_mem_term@@YAXPAUjpeg_common_struct@@@Z",
     "?null_method@@YAXPAUjpeg_compress_struct@@@Z",
@@ -6297,7 +6790,8 @@
    "address": "0x8237b768",
    "survivor": "merged_8237B768",
    "folded": [
-    "?_M_clear@?$vector@UEyeDesc@CharEyes@@V?$StlNodeAlloc@UEyeDesc@CharEyes@@@stlpmtx_std@@@stlpmtx_std@@IAAXXZ"
+    "?_M_clear@?$vector@UEyeDesc@CharEyes@@V?$StlNodeAlloc@UEyeDesc@CharEyes@@@stlpmtx_std@@@stlpmtx_std@@IAAXXZ",
+    "?_M_clear_after_move@?$vector@UEyeDesc@CharEyes@@V?$StlNodeAlloc@UEyeDesc@CharEyes@@@stlpmtx_std@@@stlpmtx_std@@IAAXXZ"
    ],
    "sites": 1,
    "survivor_candidates": 1,
@@ -6308,7 +6802,8 @@
    "address": "0x8237b7d8",
    "survivor": "merged_8237B7D8",
    "folded": [
-    "?_M_clear@?$vector@UCharInterestState@CharEyes@@V?$StlNodeAlloc@UCharInterestState@CharEyes@@@stlpmtx_std@@@stlpmtx_std@@IAAXXZ"
+    "?_M_clear@?$vector@UCharInterestState@CharEyes@@V?$StlNodeAlloc@UCharInterestState@CharEyes@@@stlpmtx_std@@@stlpmtx_std@@IAAXXZ",
+    "?_M_clear_after_move@?$vector@UCharInterestState@CharEyes@@V?$StlNodeAlloc@UCharInterestState@CharEyes@@@stlpmtx_std@@@stlpmtx_std@@IAAXXZ"
    ],
    "sites": 1,
    "survivor_candidates": 1,
@@ -6319,7 +6814,8 @@
    "address": "0x8239ea20",
    "survivor": "merged_8239EA20",
    "folded": [
-    "?Handle@CharTransDraw@@UAA?AVDataNode@@PAVDataArray@@_N@Z"
+    "?Handle@CharTransDraw@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "?Handle@RndSoftParticles@@UAA?AVDataNode@@PAVDataArray@@_N@Z"
    ],
    "sites": 1,
    "survivor_candidates": 1,
@@ -6330,6 +6826,7 @@
    "address": "0x823e8a38",
    "survivor": "merged_823E8A38",
    "folded": [
+    "?Set@?$ObjPtrVec@VFlowNode@@VObjectDir@@@@QAAXViterator@1@PAVFlowNode@@@Z",
     "?Set@?$ObjPtrVec@VRndEnviron@@VObjectDir@@@@QAAXViterator@1@PAVRndEnviron@@@Z",
     "?Set@?$ObjPtrVec@VRndLight@@VObjectDir@@@@QAAXViterator@1@PAVRndLight@@@Z",
     "?Set@?$ObjPtrVec@VSpotlightDrawer@@VObjectDir@@@@QAAXViterator@1@PAVSpotlightDrawer@@@Z"
@@ -6343,7 +6840,9 @@
    "address": "0x8253fa40",
    "survivor": "merged_8253FA40",
    "folded": [
-    "??$_Copy_Construct@UTrackChannels@@@stlpmtx_std@@YAXPAUTrackChannels@@ABU1@@Z"
+    "??$_Copy_Construct@U?$pair@$$CBVSymbol@@V?$vector@HV?$StlNodeAlloc@H@stlpmtx_std@@@stlpmtx_std@@@stlpmtx_std@@@stlpmtx_std@@YAXPAU?$pair@$$CBVSymbol@@V?$vector@HV?$StlNodeAlloc@H@stlpmtx_std@@@stlpmtx_std@@@0@ABU10@@Z",
+    "??$_Copy_Construct@UTrackChannels@@@stlpmtx_std@@YAXPAUTrackChannels@@ABU1@@Z",
+    "??$_Param_Construct@UTrackChannels@@U1@@stlpmtx_std@@YAXPAUTrackChannels@@ABU1@@Z"
    ],
    "sites": 1,
    "survivor_candidates": 1,
@@ -6354,7 +6853,8 @@
    "address": "0x828a7508",
    "survivor": "merged_828A7508",
    "folded": [
-    "?_M_clear@?$vector@VLeaderboardRow@@V?$StlNodeAlloc@VLeaderboardRow@@@stlpmtx_std@@@stlpmtx_std@@IAAXXZ"
+    "?_M_clear@?$vector@VLeaderboardRow@@V?$StlNodeAlloc@VLeaderboardRow@@@stlpmtx_std@@@stlpmtx_std@@IAAXXZ",
+    "?_M_clear_after_move@?$vector@VLeaderboardRow@@V?$StlNodeAlloc@VLeaderboardRow@@@stlpmtx_std@@@stlpmtx_std@@IAAXXZ"
    ],
    "sites": 1,
    "survivor_candidates": 1,
@@ -6365,7 +6865,8 @@
    "address": "0x82910f90",
    "survivor": "merged_82910F90",
    "folded": [
-    "??$_Copy_Construct@VChallengeRecord@@@stlpmtx_std@@YAXPAVChallengeRecord@@ABV1@@Z"
+    "??$_Copy_Construct@VChallengeRecord@@@stlpmtx_std@@YAXPAVChallengeRecord@@ABV1@@Z",
+    "??$_Param_Construct@VChallengeRecord@@V1@@stlpmtx_std@@YAXPAVChallengeRecord@@ABV1@@Z"
    ],
    "sites": 1,
    "survivor_candidates": 1,
@@ -6376,7 +6877,8 @@
    "address": "0x82920ba0",
    "survivor": "merged_82920BA0",
    "folded": [
-    "??$_Copy_Construct@VLeaderboardRow@@@stlpmtx_std@@YAXPAVLeaderboardRow@@ABV1@@Z"
+    "??$_Copy_Construct@VLeaderboardRow@@@stlpmtx_std@@YAXPAVLeaderboardRow@@ABV1@@Z",
+    "??$_Param_Construct@VLeaderboardRow@@V1@@stlpmtx_std@@YAXPAVLeaderboardRow@@ABV1@@Z"
    ],
    "sites": 1,
    "survivor_candidates": 1,
@@ -6387,6 +6889,7 @@
    "address": "0x82945418",
    "survivor": "merged_82945418",
    "folded": [
+    "??1CharacterProvider@@UAA@XZ",
     "??1VenueProvider@@UAA@XZ"
    ],
    "sites": 1,
@@ -6398,7 +6901,8 @@
    "address": "0x82948d30",
    "survivor": "merged_82948D30",
    "folded": [
-    "??$_Copy_Construct@VStepMoves@@@stlpmtx_std@@YAXPAVStepMoves@@ABV1@@Z"
+    "??$_Copy_Construct@VStepMoves@@@stlpmtx_std@@YAXPAVStepMoves@@ABV1@@Z",
+    "??$_Param_Construct@VStepMoves@@V1@@stlpmtx_std@@YAXPAVStepMoves@@ABV1@@Z"
    ],
    "sites": 1,
    "survivor_candidates": 1,
@@ -6409,7 +6913,8 @@
    "address": "0x8295f418",
    "survivor": "merged_8295F418",
    "folded": [
-    "?Handle@FitnessCalorieSortMgr@@UAA?AVDataNode@@PAVDataArray@@_N@Z"
+    "?Handle@FitnessCalorieSortMgr@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "?Handle@MQSongSortMgr@@UAA?AVDataNode@@PAVDataArray@@_N@Z"
    ],
    "sites": 1,
    "survivor_candidates": 1,
@@ -6420,7 +6925,8 @@
    "address": "0x82996510",
    "survivor": "merged_82996510",
    "folded": [
-    "??$_Copy_Construct@VCustomPlaylist@@@stlpmtx_std@@YAXPAVCustomPlaylist@@ABV1@@Z"
+    "??$_Copy_Construct@VCustomPlaylist@@@stlpmtx_std@@YAXPAVCustomPlaylist@@ABV1@@Z",
+    "??$_Param_Construct@VCustomPlaylist@@V1@@stlpmtx_std@@YAXPAVCustomPlaylist@@ABV1@@Z"
    ],
    "sites": 1,
    "survivor_candidates": 1,
@@ -6431,7 +6937,8 @@
    "address": "0x8299a938",
    "survivor": "merged_8299A938",
    "folded": [
-    "??$_Copy_Construct@VCartRow@@@stlpmtx_std@@YAXPAVCartRow@@ABV1@@Z"
+    "??$_Copy_Construct@VCartRow@@@stlpmtx_std@@YAXPAVCartRow@@ABV1@@Z",
+    "??$_Param_Construct@VCartRow@@V1@@stlpmtx_std@@YAXPAVCartRow@@ABV1@@Z"
    ],
    "sites": 1,
    "survivor_candidates": 1,
@@ -6442,7 +6949,8 @@
    "address": "0x82e1c530",
    "survivor": "merged_82E1C530",
    "folded": [
-    "??$_Copy_Construct@VActionRec@@@stlpmtx_std@@YAXPAVActionRec@@ABV1@@Z"
+    "??$_Copy_Construct@VActionRec@@@stlpmtx_std@@YAXPAVActionRec@@ABV1@@Z",
+    "??$_Param_Construct@VActionRec@@V1@@stlpmtx_std@@YAXPAVActionRec@@ABV1@@Z"
    ],
    "sites": 1,
    "survivor_candidates": 1,
@@ -6453,7 +6961,8 @@
    "address": "0x82e2ab08",
    "survivor": "merged_82E2AB08",
    "folded": [
-    "?GetLocalUser@LocalUser@@UAAPAV1@XZ"
+    "?GetLocalUser@LocalUser@@UAAPAV1@XZ",
+    "?GetLocalUser@LocalUser@@UBAPBV1@XZ"
    ],
    "sites": 1,
    "survivor_candidates": 1,
@@ -6464,8 +6973,11 @@
    "address": "0x825f9518",
    "survivor": "merged_Get0x20",
    "folded": [
+    "?GetFailType@NetCacheLoader@@QBA?AW4NetCacheMgrFailType@@XZ",
     "?Provider@UIListState@@QAAPAVUIListProvider@@XZ",
-    "?Provider@UIListState@@QBAPAVUIListProvider@@XZ"
+    "?Provider@UIListState@@QBAPAVUIListProvider@@XZ",
+    "?Tell@ArkFile@@UAAHXZ",
+    "?UncompressedSize@AsyncFile@@UAAHXZ"
    ],
    "sites": 2,
    "survivor_candidates": 1,
@@ -6531,10 +7043,79 @@
    "address": "0x82e2ab00",
    "survivor": "merged_Returns1",
    "folded": [
+    "?AllowContentToBeAdded@SongMgr@@MAA_NPAVDataArray@@W4ContentLocT@@@Z",
+    "?CanBeLaunched@AccomplishmentConditional@@UBA_NXZ",
+    "?CanHaveFocus@UIComponent@@UAA_NXZ",
+    "?CanPushParameters@FxSend@@UAA_NXZ",
+    "?CanSelect@UIListProvider@@UBA_NH@Z",
+    "?CheckReqResult@WebSvcRequest@@MAA_NXZ",
+    "?CheckReturned@DingoJob@@MAA_NXZ",
+    "?ContentDiscovered@Callback@ContentMgr@@UAA_NVSymbol@@@Z",
+    "?ContentTitleDiscovered@Callback@ContentMgr@@UAA_NIVSymbol@@@Z",
+    "?DeleteContent@ContentMgr@@UAA_NVSymbol@@@Z",
+    "?DidCallSucceed@DingoJob@@MAA_NXZ",
+    "?Eof@NullFile@@UAA_NXZ",
     "?FileReadOnly@@YA_NPBD@Z",
+    "?FillDone@StandardStream@@UBA_NXZ",
+    "?FillDone@StreamNull@@UBA_NXZ",
+    "?GetItemCount@NavListItemNode@@UAAHXZ",
+    "?GetNumTempoChangePoints@SimpleTempoMap@@UBAHXZ",
+    "?GetType@AccomplishmentSongListConditional@@UBA?AW4AccomplishmentType@@XZ",
+    "?GetType@CmdGetFitnessGoalFromRC@@UAAHXZ",
+    "?GetType@CmdGetPlaylistsFromRC@@UAAHXZ",
+    "?GetType@NavListShortcutNode@@UBA?AW4NavListNodeType@@XZ",
+    "?HasSpecificSongsToLaunch@AccomplishmentDiscSongConditional@@UBA_NXZ",
+    "?HasSpecificSongsToLaunch@AccomplishmentSongListConditional@@UBA_NXZ",
+    "?HasValidLicenseBits@Content@@UAA_NXZ",
+    "?HasValidLoginCandidate@DingoServer@@UBA_NXZ",
+    "?HeadersSelectable@NavListSortMgr@@UAA_NXZ",
+    "?IsActive@NavListItemNode@@UBA_NXZ",
+    "?IsActive@UIListProvider@@UBA_NH@Z",
+    "?IsConnected@CameraInput@@UBA_NXZ",
+    "?IsCustom@CustomPlaylist@@UBA_NXZ",
+    "?IsDeleteDone@ContentMgr@@UAA_NVSymbol@@@Z",
+    "?IsDeviceValid@Memcard@@UAA_NABUContainerId@@@Z",
     "?IsDifficultyUnlockedForProfile@HamProfile@@QAA_NVSymbol@@0@Z",
+    "?IsDirPtr@?$ObjDirPtr@VHamListRibbon@@@@UAA_NXZ",
+    "?IsDirPtr@?$ObjDirPtr@VHamScrollSpeedIndicator@@@@UAA_NXZ",
+    "?IsDirPtr@?$ObjDirPtr@VObjectDir@@@@UAA_NXZ",
+    "?IsDirPtr@?$ObjDirPtr@VRndDir@@@@UAA_NXZ",
+    "?IsDirPtr@?$ObjDirPtr@VUILabelDir@@@@UAA_NXZ",
+    "?IsDirPtr@?$ObjDirPtr@VUIListDir@@@@UAA_NXZ",
+    "?IsDirPtr@?$ObjDirPtr@VWorldInstance@@@@UAA_NXZ",
+    "?IsDoneLoading@NetCacheMgr@@MBA_NXZ",
+    "?IsDoneUnloading@NetCacheMgr@@MBA_NXZ",
     "?IsLocal@LocalUser@@UBA_NXZ",
-    "?ValidateCRC@CRC@Hmx@@SA_NHPBD@Z"
+    "?IsMounted@ContentMgr@@UAA_NVSymbol@@@Z",
+    "?IsOverride@CameraInput@@UBA_NXZ",
+    "?IsReady@StreamNull@@UBA_NXZ",
+    "?IsRelevantForSong@AccomplishmentCampaignConditional@@UBA_NVSymbol@@@Z",
+    "?IsRelevantForSong@AccomplishmentCharacterListConditional@@UBA_NVSymbol@@@Z",
+    "?IsRelevantForSong@AccomplishmentCountConditional@@UBA_NVSymbol@@@Z",
+    "?IsRunning@MicNull@@UBA_NXZ",
+    "?IsSafeToDelete@HttpReq@@UBA_NXZ",
+    "?IsSafeToDelete@NetLoaderStub@@UBA_NXZ",
+    "?IsSafeToDelete@NetLoaderXbox@@UBA_NXZ",
+    "?IsStandard@FxSend360@@UBA_NXZ",
+    "?IsTimelineResetAllowed@UIManager@@UBA_NXZ",
+    "?IsValidLoginCandidate@DingoServer@@UBA_NH@Z",
+    "?IsWebSvcRequest@WebSvcRequest@@UBA_NXZ",
+    "?LocalizeToken@NavListNode@@UBA_NXZ",
+    "?MountContent@ContentMgr@@UAA_NVSymbol@@@Z",
+    "?NeedsEnum@XboxMultipleItemsPurchaser@@UBA_NXZ",
+    "?NeedsEnum@XboxPurchaser@@UBA_NXZ",
+    "?NumDrawPasses@Rnd@@UBAHXZ",
+    "?PollEnabled@RndPollable@@UBA_NXZ",
+    "?SendDoneImpl@StreamReceiverFile@@MAA_NXZ",
+    "?ShouldDrawPanel@Rnd@@UAA_NPBVUIPanel@@@Z",
+    "?ShouldUseLocalNavlist@HamPanel@@UBA_NXZ",
+    "?SkipFirstFrame@BaseDisplacementNode@@UBA_NXZ",
+    "?SupportsScrolling@FontMap@RndText@@UBA_NXZ",
+    "?ValidateCRC@CRC@Hmx@@SA_NHPBD@Z",
+    "?ValidateInterest@Character@@UAA_NPAVCharInterest@@PAVObjectDir@@@Z",
+    "?_OpenDone@AsyncFileHolmes@@MAA_NXZ",
+    "?_OpenDone@AsyncFileWin@@MAA_NXZ",
+    "?_WriteDone@AsyncFileHolmes@@MAA_NXZ"
    ],
    "sites": 4,
    "survivor_candidates": 1,
@@ -6742,7 +7323,8 @@
    "survivor": "??_E?$ObjDirPtr@VHamListRibbon@@@@UAAPAXI@Z",
    "address": "0x82448da0",
    "folded": [
-    "??_G?$ObjDirPtr@VHamListRibbon@@@@UAAPAXI@Z"
+    "??_G?$ObjDirPtr@VHamListRibbon@@@@UAAPAXI@Z",
+    "??_G?$ResourceDirPtr@VHamListRibbon@@@@UAAPAXI@Z"
    ],
    "evidence": "COFF weak external, IMAGE_WEAK_EXTERN_SEARCH_ALIAS"
   },
@@ -6751,7 +7333,8 @@
    "survivor": "??_E?$ObjDirPtr@VHamScrollSpeedIndicator@@@@UAAPAXI@Z",
    "address": "0x82448df0",
    "folded": [
-    "??_G?$ObjDirPtr@VHamScrollSpeedIndicator@@@@UAAPAXI@Z"
+    "??_G?$ObjDirPtr@VHamScrollSpeedIndicator@@@@UAAPAXI@Z",
+    "??_G?$ResourceDirPtr@VHamScrollSpeedIndicator@@@@UAAPAXI@Z"
    ],
    "evidence": "COFF weak external, IMAGE_WEAK_EXTERN_SEARCH_ALIAS"
   },
@@ -6790,7 +7373,8 @@
    "survivor": "??_E?$ObjOwnerPtr@VRndLightAnim@@@@UAAPAXI@Z",
    "address": "0x826ecbe0",
    "folded": [
-    "??_G?$ObjOwnerPtr@VRndLightAnim@@@@UAAPAXI@Z"
+    "??_G?$ObjOwnerPtr@VRndLightAnim@@@@UAAPAXI@Z",
+    "??_G?$ObjRefConcrete@VRndLightAnim@@VObjectDir@@@@UAAPAXI@Z"
    ],
    "evidence": "COFF weak external, IMAGE_WEAK_EXTERN_SEARCH_ALIAS"
   },
@@ -6859,7 +7443,8 @@
    "survivor": "??_E?$ObjPtr@VFxSendMeterEffect@@@@UAAPAXI@Z",
    "address": "0x82767d18",
    "folded": [
-    "??_G?$ObjPtr@VFxSendMeterEffect@@@@UAAPAXI@Z"
+    "??_G?$ObjPtr@VFxSendMeterEffect@@@@UAAPAXI@Z",
+    "??_G?$ObjRefConcrete@VFxSendMeterEffect@@VObjectDir@@@@UAAPAXI@Z"
    ],
    "evidence": "COFF weak external, IMAGE_WEAK_EXTERN_SEARCH_ALIAS"
   },
@@ -6878,7 +7463,8 @@
    "survivor": "??_E?$ObjPtr@VLightPreset@@@@UAAPAXI@Z",
    "address": "0x82804240",
    "folded": [
-    "??_G?$ObjPtr@VLightPreset@@@@UAAPAXI@Z"
+    "??_G?$ObjPtr@VLightPreset@@@@UAAPAXI@Z",
+    "??_G?$ObjRefConcrete@VLightPreset@@VObjectDir@@@@UAAPAXI@Z"
    ],
    "evidence": "COFF weak external, IMAGE_WEAK_EXTERN_SEARCH_ALIAS"
   },
@@ -6907,7 +7493,8 @@
    "survivor": "??_E?$ObjPtr@VPropertyEventProvider@@@@UAAPAXI@Z",
    "address": "0x8247fad0",
    "folded": [
-    "??_G?$ObjPtr@VPropertyEventProvider@@@@UAAPAXI@Z"
+    "??_G?$ObjPtr@VPropertyEventProvider@@@@UAAPAXI@Z",
+    "??_G?$ObjRefConcrete@VPropertyEventProvider@@VObjectDir@@@@UAAPAXI@Z"
    ],
    "evidence": "COFF weak external, IMAGE_WEAK_EXTERN_SEARCH_ALIAS"
   },
@@ -6949,7 +7536,9 @@
    "survivor": "??_E?$ObjPtr@VRndPropAnim@@@@UAAPAXI@Z",
    "address": "0x82341c48",
    "folded": [
-    "??_G?$ObjPtr@VRndPropAnim@@@@UAAPAXI@Z"
+    "??_G?$ObjPtr@VRndPropAnim@@@@UAAPAXI@Z",
+    "??_G?$ObjRefConcrete@VRndPropAnim@@VObjectDir@@@@UAAPAXI@Z",
+    "??_GAnimPtr@@UAAPAXI@Z"
    ],
    "evidence": "COFF weak external, IMAGE_WEAK_EXTERN_SEARCH_ALIAS"
   },
@@ -6958,7 +7547,8 @@
    "survivor": "??_E?$ObjPtr@VUILabel@@@@UAAPAXI@Z",
    "address": "0x8278b678",
    "folded": [
-    "??_G?$ObjPtr@VUILabel@@@@UAAPAXI@Z"
+    "??_G?$ObjPtr@VUILabel@@@@UAAPAXI@Z",
+    "??_G?$ObjRefConcrete@VUILabel@@VObjectDir@@@@UAAPAXI@Z"
    ],
    "evidence": "COFF weak external, IMAGE_WEAK_EXTERN_SEARCH_ALIAS"
   },
@@ -6967,7 +7557,8 @@
    "survivor": "??_E?$ObjPtr@VWorldInstance@@@@UAAPAXI@Z",
    "address": "0x82854b30",
    "folded": [
-    "??_G?$ObjPtr@VWorldInstance@@@@UAAPAXI@Z"
+    "??_G?$ObjPtr@VWorldInstance@@@@UAAPAXI@Z",
+    "??_G?$ObjRefConcrete@VWorldInstance@@VObjectDir@@@@UAAPAXI@Z"
    ],
    "evidence": "COFF weak external, IMAGE_WEAK_EXTERN_SEARCH_ALIAS"
   },
@@ -7354,7 +7945,8 @@
    "survivor": "??_E?$ObjPtrVec@VRndDrawable@@VObjectDir@@@@UAAPAXI@Z",
    "address": "0x823591e8",
    "folded": [
-    "??_G?$ObjPtrVec@VRndDrawable@@VObjectDir@@@@UAAPAXI@Z"
+    "??_G?$ObjPtrVec@VRndDrawable@@VObjectDir@@@@UAAPAXI@Z",
+    "??_GDrawPtrVec@@UAAPAXI@Z"
    ],
    "evidence": "COFF weak external, IMAGE_WEAK_EXTERN_SEARCH_ALIAS"
   },
@@ -7647,6 +8239,7 @@
    "survivor": "??_E?$ObjRefConcrete@VDetectionVolume@@VObjectDir@@@@UAAPAXI@Z",
    "address": "0x82858f50",
    "folded": [
+    "??_G?$ObjPtr@VDetectionVolume@@@@UAAPAXI@Z",
     "??_G?$ObjRefConcrete@VDetectionVolume@@VObjectDir@@@@UAAPAXI@Z"
    ],
    "evidence": "COFF weak external, IMAGE_WEAK_EXTERN_SEARCH_ALIAS"
@@ -7656,6 +8249,8 @@
    "survivor": "??_E?$ObjRefConcrete@VEventTrigger@@VObjectDir@@@@UAAPAXI@Z",
    "address": "0x82728200",
    "folded": [
+    "??_G?$ObjOwnerPtr@VEventTrigger@@@@UAAPAXI@Z",
+    "??_G?$ObjPtr@VEventTrigger@@@@UAAPAXI@Z",
     "??_G?$ObjRefConcrete@VEventTrigger@@VObjectDir@@@@UAAPAXI@Z"
    ],
    "evidence": "COFF weak external, IMAGE_WEAK_EXTERN_SEARCH_ALIAS"
@@ -7717,6 +8312,8 @@
    "survivor": "??_E?$ObjRefConcrete@VFxSend@@VObjectDir@@@@UAAPAXI@Z",
    "address": "0x8273ec08",
    "folded": [
+    "??_G?$ObjOwnerPtr@VFxSend@@@@UAAPAXI@Z",
+    "??_G?$ObjPtr@VFxSend@@@@UAAPAXI@Z",
     "??_G?$ObjRefConcrete@VFxSend@@VObjectDir@@@@UAAPAXI@Z"
    ],
    "evidence": "COFF weak external, IMAGE_WEAK_EXTERN_SEARCH_ALIAS"
@@ -7726,6 +8323,7 @@
    "survivor": "??_E?$ObjRefConcrete@VHamCamShot@@VObjectDir@@@@UAAPAXI@Z",
    "address": "0x824692c0",
    "folded": [
+    "??_G?$ObjPtr@VHamCamShot@@@@UAAPAXI@Z",
     "??_G?$ObjRefConcrete@VHamCamShot@@VObjectDir@@@@UAAPAXI@Z"
    ],
    "evidence": "COFF weak external, IMAGE_WEAK_EXTERN_SEARCH_ALIAS"
@@ -7735,7 +8333,9 @@
    "survivor": "??_E?$ObjRefConcrete@VHamCharacter@@VObjectDir@@@@UAAPAXI@Z",
    "address": "0x82440e80",
    "folded": [
-    "??_G?$ObjRefConcrete@VHamCharacter@@VObjectDir@@@@UAAPAXI@Z"
+    "??_G?$ObjPtr@VHamCharacter@@@@UAAPAXI@Z",
+    "??_G?$ObjRefConcrete@VHamCharacter@@VObjectDir@@@@UAAPAXI@Z",
+    "??_GNode@?$ObjPtrVec@VHamCharacter@@VObjectDir@@@@UAAPAXI@Z"
    ],
    "evidence": "COFF weak external, IMAGE_WEAK_EXTERN_SEARCH_ALIAS"
   },
@@ -7802,6 +8402,7 @@
    "survivor": "??_E?$ObjRefConcrete@VHamVisDir@@VObjectDir@@@@UAAPAXI@Z",
    "address": "0x8246b130",
    "folded": [
+    "??_G?$ObjPtr@VHamVisDir@@@@UAAPAXI@Z",
     "??_G?$ObjRefConcrete@VHamVisDir@@VObjectDir@@@@UAAPAXI@Z"
    ],
    "evidence": "COFF weak external, IMAGE_WEAK_EXTERN_SEARCH_ALIAS"
@@ -7891,6 +8492,7 @@
    "survivor": "??_E?$ObjRefConcrete@VRndCubeTex@@VObjectDir@@@@UAAPAXI@Z",
    "address": "0x826b94d8",
    "folded": [
+    "??_G?$ObjPtr@VRndCubeTex@@@@UAAPAXI@Z",
     "??_G?$ObjRefConcrete@VRndCubeTex@@VObjectDir@@@@UAAPAXI@Z"
    ],
    "evidence": "COFF weak external, IMAGE_WEAK_EXTERN_SEARCH_ALIAS"
@@ -7974,6 +8576,7 @@
    "survivor": "??_E?$ObjRefConcrete@VRndMatAnim@@VObjectDir@@@@UAAPAXI@Z",
    "address": "0x826e9ec8",
    "folded": [
+    "??_G?$ObjOwnerPtr@VRndMatAnim@@@@UAAPAXI@Z",
     "??_G?$ObjRefConcrete@VRndMatAnim@@VObjectDir@@@@UAAPAXI@Z"
    ],
    "evidence": "COFF weak external, IMAGE_WEAK_EXTERN_SEARCH_ALIAS"
@@ -7994,6 +8597,7 @@
    "survivor": "??_E?$ObjRefConcrete@VRndMultiMesh@@VObjectDir@@@@UAAPAXI@Z",
    "address": "0x826ffd58",
    "folded": [
+    "??_G?$ObjPtr@VRndMultiMesh@@@@UAAPAXI@Z",
     "??_G?$ObjRefConcrete@VRndMultiMesh@@VObjectDir@@@@UAAPAXI@Z"
    ],
    "evidence": "COFF weak external, IMAGE_WEAK_EXTERN_SEARCH_ALIAS"
@@ -8022,6 +8626,7 @@
    "survivor": "??_E?$ObjRefConcrete@VRndParticleSysAnim@@VObjectDir@@@@UAAPAXI@Z",
    "address": "0x826e6f28",
    "folded": [
+    "??_G?$ObjOwnerPtr@VRndParticleSysAnim@@@@UAAPAXI@Z",
     "??_G?$ObjRefConcrete@VRndParticleSysAnim@@VObjectDir@@@@UAAPAXI@Z"
    ],
    "evidence": "COFF weak external, IMAGE_WEAK_EXTERN_SEARCH_ALIAS"
@@ -8031,6 +8636,7 @@
    "survivor": "??_E?$ObjRefConcrete@VRndPostProc@@VObjectDir@@@@UAAPAXI@Z",
    "address": "0x82469338",
    "folded": [
+    "??_G?$ObjPtr@VRndPostProc@@@@UAAPAXI@Z",
     "??_G?$ObjRefConcrete@VRndPostProc@@VObjectDir@@@@UAAPAXI@Z"
    ],
    "evidence": "COFF weak external, IMAGE_WEAK_EXTERN_SEARCH_ALIAS"
@@ -8070,6 +8676,8 @@
    "survivor": "??_E?$ObjRefConcrete@VRndWind@@VObjectDir@@@@UAAPAXI@Z",
    "address": "0x82394138",
    "folded": [
+    "??_G?$ObjOwnerPtr@VRndWind@@@@UAAPAXI@Z",
+    "??_G?$ObjPtr@VRndWind@@@@UAAPAXI@Z",
     "??_G?$ObjRefConcrete@VRndWind@@VObjectDir@@@@UAAPAXI@Z"
    ],
    "evidence": "COFF weak external, IMAGE_WEAK_EXTERN_SEARCH_ALIAS"
@@ -8099,6 +8707,7 @@
    "survivor": "??_E?$ObjRefConcrete@VSfx@@VObjectDir@@@@UAAPAXI@Z",
    "address": "0x8275cae0",
    "folded": [
+    "??_G?$ObjPtr@VSfx@@@@UAAPAXI@Z",
     "??_G?$ObjRefConcrete@VSfx@@VObjectDir@@@@UAAPAXI@Z"
    ],
    "evidence": "COFF weak external, IMAGE_WEAK_EXTERN_SEARCH_ALIAS"
@@ -8128,6 +8737,7 @@
    "survivor": "??_E?$ObjRefConcrete@VSongCollision@@VObjectDir@@@@UAAPAXI@Z",
    "address": "0x8246b0b8",
    "folded": [
+    "??_G?$ObjPtr@VSongCollision@@@@UAAPAXI@Z",
     "??_G?$ObjRefConcrete@VSongCollision@@VObjectDir@@@@UAAPAXI@Z"
    ],
    "evidence": "COFF weak external, IMAGE_WEAK_EXTERN_SEARCH_ALIAS"
@@ -8224,6 +8834,7 @@
    "survivor": "??_E?$ObjRefConcrete@VWorldDir@@VObjectDir@@@@UAAPAXI@Z",
    "address": "0x8246b040",
    "folded": [
+    "??_G?$ObjPtr@VWorldDir@@@@UAAPAXI@Z",
     "??_G?$ObjRefConcrete@VWorldDir@@VObjectDir@@@@UAAPAXI@Z"
    ],
    "evidence": "COFF weak external, IMAGE_WEAK_EXTERN_SEARCH_ALIAS"
@@ -8344,7 +8955,9 @@
    "survivor": "??_E?$VBLock@UCompressedVertex_Xbox@@@@UAAPAXI@Z",
    "address": "0x82626230",
    "folded": [
-    "??_G?$VBLock@UCompressedVertex_Xbox@@@@UAAPAXI@Z"
+    "??_G?$BufLock@UD3DVertexBuffer@@@@UAAPAXI@Z",
+    "??_G?$VBLock@UCompressedVertex_Xbox@@@@UAAPAXI@Z",
+    "??_G?$VBLock@X@@UAAPAXI@Z"
    ],
    "evidence": "COFF weak external, IMAGE_WEAK_EXTERN_SEARCH_ALIAS"
   },
@@ -10065,6 +10678,7 @@
    "survivor": "??_EDxRndTexMgr@@UAAPAXI@Z",
    "address": "0x8261df18",
    "folded": [
+    "??_G?$ResMgr@X@@UAAPAXI@Z",
     "??_GDxRndTexMgr@@UAAPAXI@Z"
    ],
    "evidence": "COFF weak external, IMAGE_WEAK_EXTERN_SEARCH_ALIAS"
@@ -11639,7 +12253,91 @@
    "survivor": "??_EKeyboardKeyReleasedMsg@@UAAPAXI@Z",
    "address": "0x82609528",
    "folded": [
-    "??_GKeyboardKeyReleasedMsg@@UAAPAXI@Z"
+    "??_GButtonDownMsg@@UAAPAXI@Z",
+    "??_GButtonUpMsg@@UAAPAXI@Z",
+    "??_GConnectionStatusChangedMsg@@UAAPAXI@Z",
+    "??_GContentInstalledMsg@@UAAPAXI@Z",
+    "??_GContentReadFailureMsg@@UAAPAXI@Z",
+    "??_GCurrentScreenChangedMsg@@UAAPAXI@Z",
+    "??_GDeviceChosenMsg@@UAAPAXI@Z",
+    "??_GDingoJobCompleteMsg@@UAAPAXI@Z",
+    "??_GDiskErrorMsg@@UAAPAXI@Z",
+    "??_GEndGameMsg@@UAAPAXI@Z",
+    "??_GEventDialogDismissMsg@@UAAPAXI@Z",
+    "??_GEventDialogStartMsg@@UAAPAXI@Z",
+    "??_GHamLabelCountDoneMsg@@UAAPAXI@Z",
+    "??_GJoypadBreedDataReadMsg@@UAAPAXI@Z",
+    "??_GJoypadBreedDataWriteMsg@@UAAPAXI@Z",
+    "??_GJoypadConnectionMsg@@UAAPAXI@Z",
+    "??_GKeyboardConnectedAccessoriesMsg@@UAAPAXI@Z",
+    "??_GKeyboardExpressionPedalMsg@@UAAPAXI@Z",
+    "??_GKeyboardHighHandPlacementMsg@@UAAPAXI@Z",
+    "??_GKeyboardKeyMsg@@UAAPAXI@Z",
+    "??_GKeyboardKeyPressedMsg@@UAAPAXI@Z",
+    "??_GKeyboardKeyReleaseMsg@@UAAPAXI@Z",
+    "??_GKeyboardKeyReleasedMsg@@UAAPAXI@Z",
+    "??_GKeyboardLowHandPlacementMsg@@UAAPAXI@Z",
+    "??_GKeyboardModMsg@@UAAPAXI@Z",
+    "??_GKeyboardStompBoxMsg@@UAAPAXI@Z",
+    "??_GKeyboardSustainMsg@@UAAPAXI@Z",
+    "??_GKeysAccelerometerMsg@@UAAPAXI@Z",
+    "??_GKinectGuideGestureMsg@@UAAPAXI@Z",
+    "??_GKinectHardwareStatusMsg@@UAAPAXI@Z",
+    "??_GKinectUserBindingChangedMsg@@UAAPAXI@Z",
+    "??_GLeftHandListEngagementMsg@@UAAPAXI@Z",
+    "??_GLinkingCodeRetrievedMsg@@UAAPAXI@Z",
+    "??_GMCResultMsg@@UAAPAXI@Z",
+    "??_GMessage@@UAAPAXI@Z",
+    "??_GMultipleItemsEnumCompleteMsg@@UAAPAXI@Z",
+    "??_GNavHighlightMsg@@UAAPAXI@Z",
+    "??_GNavHighlightSettledMsg@@UAAPAXI@Z",
+    "??_GNavSelectMsg@@UAAPAXI@Z",
+    "??_GNoDeviceChosenMsg@@UAAPAXI@Z",
+    "??_GPlatformMgrOpCompleteMsg@@UAAPAXI@Z",
+    "??_GPreviewDownloadCompleteMsg@@UAAPAXI@Z",
+    "??_GProcessedButtonDownMsg@@UAAPAXI@Z",
+    "??_GProfileChangedMsg@@UAAPAXI@Z",
+    "??_GProfileSwappedMsg@@UAAPAXI@Z",
+    "??_GRCJobCompleteMsg@@UAAPAXI@Z",
+    "??_GRGAccelerometerMsg@@UAAPAXI@Z",
+    "??_GRGConnectedAccessoriesMsg@@UAAPAXI@Z",
+    "??_GRGFretButtonDownMsg@@UAAPAXI@Z",
+    "??_GRGFretButtonUpMsg@@UAAPAXI@Z",
+    "??_GRGMutingMsg@@UAAPAXI@Z",
+    "??_GRGPitchBendMsg@@UAAPAXI@Z",
+    "??_GRGProgramChangeMsg@@UAAPAXI@Z",
+    "??_GRGStompBoxMsg@@UAAPAXI@Z",
+    "??_GRGSwingMsg@@UAAPAXI@Z",
+    "??_GResetControllerModeTimeoutMsg@@UAAPAXI@Z",
+    "??_GSaveLoadAllCompleteMsg@@UAAPAXI@Z",
+    "??_GSaveLoadMgrStatusUpdateMsg@@UAAPAXI@Z",
+    "??_GServerStatusChangedMsg@@UAAPAXI@Z",
+    "??_GSigninChangedMsg@@UAAPAXI@Z",
+    "??_GSingleItemEnumCompleteMsg@@UAAPAXI@Z",
+    "??_GSkeletonEnrollmentChangedMsg@@UAAPAXI@Z",
+    "??_GSkeletonIdentifiedMsg@@UAAPAXI@Z",
+    "??_GSmartGlassMsg@@UAAPAXI@Z",
+    "??_GSoundPlayMsg@@UAAPAXI@Z",
+    "??_GSpeechEnableMsg@@UAAPAXI@Z",
+    "??_GSpeechRecoMessage@@UAAPAXI@Z",
+    "??_GStorageChangedMsg@@UAAPAXI@Z",
+    "??_GStringStrummedMsg@@UAAPAXI@Z",
+    "??_GTmsDownloadedMsg@@UAAPAXI@Z",
+    "??_GTokenRedeemedMsg@@UAAPAXI@Z",
+    "??_GUIChangedMsg@@UAAPAXI@Z",
+    "??_GUIComponentFocusChangeMsg@@UAAPAXI@Z",
+    "??_GUIComponentScrollMsg@@UAAPAXI@Z",
+    "??_GUIComponentScrollSelectMsg@@UAAPAXI@Z",
+    "??_GUIComponentScrollStartMsg@@UAAPAXI@Z",
+    "??_GUIComponentSelectDoneMsg@@UAAPAXI@Z",
+    "??_GUIComponentSelectMsg@@UAAPAXI@Z",
+    "??_GUIScreenChangeMsg@@UAAPAXI@Z",
+    "??_GUITransitionCompleteMsg@@UAAPAXI@Z",
+    "??_GUITriggerCompleteMsg@@UAAPAXI@Z",
+    "??_GUserLoginMsg@@UAAPAXI@Z",
+    "??_GVirtualKeyboardResultMsg@@UAAPAXI@Z",
+    "??_GWebReqCompleteMsg@@UAAPAXI@Z",
+    "??_GXMPStateChangedMsg@@UAAPAXI@Z"
    ],
    "evidence": "COFF weak external, IMAGE_WEAK_EXTERN_SEARCH_ALIAS"
   },
@@ -11823,7 +12521,14 @@
    "survivor": "??_ELocationCmp@@UAAPAXI@Z",
    "address": "0x8298bc58",
    "folded": [
-    "??_GLocationCmp@@UAAPAXI@Z"
+    "??_GChallengeScoreCmp@@UAAPAXI@Z",
+    "??_GDifficultyCmp@@UAAPAXI@Z",
+    "??_GFitnessCalorieSortCmp@@UAAPAXI@Z",
+    "??_GLocationCmp@@UAAPAXI@Z",
+    "??_GMQSongCharCmp@@UAAPAXI@Z",
+    "??_GNavListItemSortCmp@@UAAPAXI@Z",
+    "??_GPlaylistTypeCmp@@UAAPAXI@Z",
+    "??_GSongCmp@@UAAPAXI@Z"
    ],
    "evidence": "COFF weak external, IMAGE_WEAK_EXTERN_SEARCH_ALIAS"
   },
@@ -11916,6 +12621,7 @@
    "survivor": "??_EMakeSessionJob@@UAAPAXI@Z",
    "address": "0x82559ef0",
    "folded": [
+    "??_GJob@@UAAPAXI@Z",
     "??_GMakeSessionJob@@UAAPAXI@Z"
    ],
    "evidence": "COFF weak external, IMAGE_WEAK_EXTERN_SEARCH_ALIAS"
@@ -11934,7 +12640,8 @@
    "survivor": "??_EMemcard@@UAAPAXI@Z",
    "address": "0x825f5fe0",
    "folded": [
-    "??_GMemcard@@UAAPAXI@Z"
+    "??_GMemcard@@UAAPAXI@Z",
+    "??_GMemcardXbox@@UAAPAXI@Z"
    ],
    "evidence": "COFF weak external, IMAGE_WEAK_EXTERN_SEARCH_ALIAS"
   },
@@ -12428,7 +13135,8 @@
    "survivor": "??_ENgFur@@UAAPAXI@Z",
    "address": "0x82732d38",
    "folded": [
-    "??_GNgFur@@UAAPAXI@Z"
+    "??_GNgFur@@UAAPAXI@Z",
+    "??_GRndFur@@UAAPAXI@Z"
    ],
    "evidence": "COFF weak external, IMAGE_WEAK_EXTERN_SEARCH_ALIAS"
   },
@@ -12779,6 +13487,8 @@
    "survivor": "??_ENode@?$ObjPtrVec@VHamMove@@VObjectDir@@@@UAAPAXI@Z",
    "address": "0x824fefe0",
    "folded": [
+    "??_G?$ObjPtr@VHamMove@@@@UAAPAXI@Z",
+    "??_G?$ObjRefConcrete@VHamMove@@VObjectDir@@@@UAAPAXI@Z",
     "??_GNode@?$ObjPtrVec@VHamMove@@VObjectDir@@@@UAAPAXI@Z"
    ],
    "evidence": "COFF weak external, IMAGE_WEAK_EXTERN_SEARCH_ALIAS"
@@ -12800,6 +13510,7 @@
    "survivor": "??_ENode@?$ObjPtrVec@VSpotlightDrawer@@VObjectDir@@@@UAAPAXI@Z",
    "address": "0x82840280",
    "folded": [
+    "??_G?$ObjRefConcrete@VSpotlightDrawer@@VObjectDir@@@@UAAPAXI@Z",
     "??_GNode@?$ObjPtrVec@VSpotlightDrawer@@VObjectDir@@@@UAAPAXI@Z"
    ],
    "evidence": "COFF weak external, IMAGE_WEAK_EXTERN_SEARCH_ALIAS"
@@ -14849,6 +15560,7 @@
    "survivor": "??_EThreadCallback@@UAAPAXI@Z",
    "address": "0x825bf848",
    "folded": [
+    "??_GDataLoaderThreadObj@@UAAPAXI@Z",
     "??_GThreadCallback@@UAAPAXI@Z"
    ],
    "evidence": "COFF weak external, IMAGE_WEAK_EXTERN_SEARCH_ALIAS"
@@ -14858,6 +15570,7 @@
    "survivor": "??_EThreadTask@@UAAPAXI@Z",
    "address": "0x825aaf58",
    "folded": [
+    "??_GScriptTask@@UAAPAXI@Z",
     "??_GThreadTask@@UAAPAXI@Z"
    ],
    "evidence": "COFF weak external, IMAGE_WEAK_EXTERN_SEARCH_ALIAS"
@@ -15165,6 +15878,7 @@
    "survivor": "??_EUIScreen@@UAAPAXI@Z",
    "address": "0x828c37a0",
    "folded": [
+    "??_GHamScreen@@UAAPAXI@Z",
     "??_GUIScreen@@UAAPAXI@Z"
    ],
    "evidence": "COFF weak external, IMAGE_WEAK_EXTERN_SEARCH_ALIAS"
@@ -15313,6 +16027,8 @@
    "survivor": "??_EWavFileCacheHelper@@UAAPAXI@Z",
    "address": "0x82768808",
    "folded": [
+    "??_GFileCacheHelper@@UAAPAXI@Z",
+    "??_GResourceFileCacheHelper@@UAAPAXI@Z",
     "??_GWavFileCacheHelper@@UAAPAXI@Z"
    ],
    "evidence": "COFF weak external, IMAGE_WEAK_EXTERN_SEARCH_ALIAS"
@@ -15502,6 +16218,12 @@
    "survivor": "??_EXboxSessionJob@@UAAPAXI@Z",
    "address": "0x82559fc0",
    "folded": [
+    "??_GAddLocalPlayerJob@@UAAPAXI@Z",
+    "??_GDeleteSessionJob@@UAAPAXI@Z",
+    "??_GEndSessionJob@@UAAPAXI@Z",
+    "??_GRemoveLocalPlayerJob@@UAAPAXI@Z",
+    "??_GStartSessionJob@@UAAPAXI@Z",
+    "??_GWriteCareerLeaderboardJob@@UAAPAXI@Z",
     "??_GXboxSessionJob@@UAAPAXI@Z"
    ],
    "evidence": "COFF weak external, IMAGE_WEAK_EXTERN_SEARCH_ALIAS"
@@ -15511,7 +16233,9 @@
    "survivor": "??_E__non_rtti_object@std@@UAAPAXI@Z",
    "address": "0x8299dc60",
    "folded": [
-    "??_G__non_rtti_object@std@@UAAPAXI@Z"
+    "??_G__non_rtti_object@std@@UAAPAXI@Z",
+    "??_Gbad_cast@std@@UAAPAXI@Z",
+    "??_Gbad_typeid@std@@UAAPAXI@Z"
    ],
    "evidence": "COFF weak external, IMAGE_WEAK_EXTERN_SEARCH_ALIAS"
   },
@@ -21579,6 +22303,507 @@
     "?GetMotdFreq@RockCentral@@QBAHXZ"
    ],
    "evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors share an address"
+  },
+  {
+   "name": "retailmap:merged_ObjRefConcreteGetObj",
+   "survivor": "merged_ObjRefConcreteGetObj",
+   "address": "0x82331448",
+   "folded": [
+    "?GetObj@?$ObjRefConcrete@VCamShot@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VCameraInput@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VCharCollide@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VCharDriver@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VCharEyes@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VCharFaceServo@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VCharIKFoot@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VCharInterest@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VCharLipSyncDriver@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VCharLookAt@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VCharPollable@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VCharServoBone@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VCharWeightSetter@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VCharWeightable@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VCharacter@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VDancerSequence@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VDepthBuffer3D@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VEventTrigger@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VFlow@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VFlowLabel@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VFlowNode@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VFlowOutPort@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VFlowTimer@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VHamCamShot@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VHamCharacter@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VHamIKEffector@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VHamIKSkeleton@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VHamLabel@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VHamListRibbon@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VHamMove@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VHamPhraseMeter@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VHamScrollSpeedIndicator@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VHamVisDir@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VLightPreset@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VMoveDir@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VObjectDir@@V1@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VRhythmBattlePlayer@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VRhythmDetector@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VRhythmDetectorGroup@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VRndAnimatable@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VRndCam@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VRndCamAnim@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VRndDir@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VRndDrawable@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VRndEnviron@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VRndGroup@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VRndLight@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VRndLightAnim@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VRndLine@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VRndMatAnim@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VRndMesh@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VRndMeshAnim@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VRndMultiMesh@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VRndPartLauncher@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VRndParticleSys@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VRndParticleSysAnim@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VRndPropAnim@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VRndTexRenderer@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VRndTransAnim@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VRndTransformable@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VRndWind@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VSkeletonClip@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VSpotlight@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VSpotlightDrawer@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VTexMovie@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VThreeDSound@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VTransConstraint@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VUIComponent@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VUILabel@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VUILabelDir@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VUIList@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VUIListDir@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VWaypoint@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VWorldCrowd@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VWorldDir@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?GetObj@?$ObjRefConcrete@VWorldInstance@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ"
+   ],
+   "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it"
+  },
+  {
+   "name": "retailmap:merged_8235E578",
+   "survivor": "merged_8235E578",
+   "address": "0x8235e578",
+   "folded": [
+    "?Handle@CharBoneOffset@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "?Handle@PhotoSpotlightPositioner@@UAA?AVDataNode@@PAVDataArray@@_N@Z"
+   ],
+   "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it"
+  },
+  {
+   "name": "retailmap:merged_8237A778",
+   "survivor": "merged_8237A778",
+   "address": "0x8237a778",
+   "folded": [
+    "??$_Copy_Construct@UEyeDesc@CharEyes@@@stlpmtx_std@@YAXPAUEyeDesc@CharEyes@@ABU12@@Z",
+    "??$_Param_Construct@UEyeDesc@CharEyes@@U12@@stlpmtx_std@@YAXPAUEyeDesc@CharEyes@@ABU12@@Z"
+   ],
+   "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it"
+  },
+  {
+   "name": "retailmap:merged_8237A7E8",
+   "survivor": "merged_8237A7E8",
+   "address": "0x8237a7e8",
+   "folded": [
+    "??$_Copy_Construct@UCharInterestState@CharEyes@@@stlpmtx_std@@YAXPAUCharInterestState@CharEyes@@ABU12@@Z",
+    "??$_Param_Construct@UCharInterestState@CharEyes@@U12@@stlpmtx_std@@YAXPAUCharInterestState@CharEyes@@ABU12@@Z"
+   ],
+   "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it"
+  },
+  {
+   "name": "retailmap:merged_823AAA20",
+   "survivor": "merged_823AAA20",
+   "address": "0x823aaa20",
+   "folded": [
+    "?Handle@CharBoneTwist@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "?Handle@CharSignalApplier@@UAA?AVDataNode@@PAVDataArray@@_N@Z"
+   ],
+   "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it"
+  },
+  {
+   "name": "retailmap:merged_823E5850",
+   "survivor": "merged_823E5850",
+   "address": "0x823e5850",
+   "folded": [
+    "??$_Copy_Construct@UDistEntry@@@stlpmtx_std@@YAXPAUDistEntry@@ABU1@@Z",
+    "??$_Param_Construct@UDistEntry@@U1@@stlpmtx_std@@YAXPAUDistEntry@@ABU1@@Z"
+   ],
+   "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it"
+  },
+  {
+   "name": "retailmap:??1?$ObjRefConcrete@VFlowNode@@VObjectDir@@@@UAA@XZ",
+   "survivor": "??1?$ObjRefConcrete@VFlowNode@@VObjectDir@@@@UAA@XZ",
+   "address": "0x823e89d0",
+   "folded": [
+    "??1?$ObjPtr@VFlowNode@@@@UAA@XZ",
+    "??1Node@?$ObjPtrVec@VFlowNode@@VObjectDir@@@@UAA@XZ"
+   ],
+   "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it"
+  },
+  {
+   "name": "retailmap:merged_ObjPtrVecNodeRefOwner",
+   "survivor": "merged_ObjPtrVecNodeRefOwner",
+   "address": "0x823e8a90",
+   "folded": [
+    "?RefOwner@Node@?$ObjPtrVec@VCharClip@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?RefOwner@Node@?$ObjPtrVec@VFlow@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?RefOwner@Node@?$ObjPtrVec@VFlowLabel@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?RefOwner@Node@?$ObjPtrVec@VFlowNode@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?RefOwner@Node@?$ObjPtrVec@VFlowOutPort@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?RefOwner@Node@?$ObjPtrVec@VHamCharacter@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?RefOwner@Node@?$ObjPtrVec@VHamMove@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?RefOwner@Node@?$ObjPtrVec@VObject@Hmx@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?RefOwner@Node@?$ObjPtrVec@VRhythmDetector@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?RefOwner@Node@?$ObjPtrVec@VRndDrawable@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?RefOwner@Node@?$ObjPtrVec@VRndEnviron@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?RefOwner@Node@?$ObjPtrVec@VRndGroup@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?RefOwner@Node@?$ObjPtrVec@VRndLight@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?RefOwner@Node@?$ObjPtrVec@VRndMat@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?RefOwner@Node@?$ObjPtrVec@VRndTex@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?RefOwner@Node@?$ObjPtrVec@VRndTransformable@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?RefOwner@Node@?$ObjPtrVec@VSpotlight@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?RefOwner@Node@?$ObjPtrVec@VSpotlightDrawer@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "?RefOwner@Node@?$ObjPtrVec@VWaypoint@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ"
+   ],
+   "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it"
+  },
+  {
+   "name": "retailmap:merged_ObjPtrVecErase",
+   "survivor": "merged_ObjPtrVecErase",
+   "address": "0x823ea0b8",
+   "folded": [
+    "?erase@?$ObjPtrVec@VFlowNode@@VObjectDir@@@@QAA?AViterator@1@V21@@Z",
+    "?erase@?$ObjPtrVec@VRndEnviron@@VObjectDir@@@@QAA?AViterator@1@V21@@Z",
+    "?erase@?$ObjPtrVec@VRndLight@@VObjectDir@@@@QAA?AViterator@1@V21@@Z",
+    "?erase@?$ObjPtrVec@VSpotlightDrawer@@VObjectDir@@@@QAA?AViterator@1@V21@@Z"
+   ],
+   "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it"
+  },
+  {
+   "name": "retailmap:merged_823FB1A8",
+   "survivor": "merged_823FB1A8",
+   "address": "0x823fb1a8",
+   "folded": [
+    "??$_Copy_Construct@VFlowMathOp@@@stlpmtx_std@@YAXPAVFlowMathOp@@ABV1@@Z",
+    "??$_Param_Construct@VFlowMathOp@@V1@@stlpmtx_std@@YAXPAVFlowMathOp@@ABV1@@Z"
+   ],
+   "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it"
+  },
+  {
+   "name": "retailmap:merged_823FBFF8",
+   "survivor": "merged_823FBFF8",
+   "address": "0x823fbff8",
+   "folded": [
+    "??$_Copy_Construct@VDrivenPropertyEntry@@@stlpmtx_std@@YAXPAVDrivenPropertyEntry@@ABV1@@Z",
+    "??$_Param_Construct@VDrivenPropertyEntry@@V1@@stlpmtx_std@@YAXPAVDrivenPropertyEntry@@ABV1@@Z"
+   ],
+   "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it"
+  },
+  {
+   "name": "retailmap:??1?$ObjRefConcrete@VFlow@@VObjectDir@@@@UAA@XZ",
+   "survivor": "??1?$ObjRefConcrete@VFlow@@VObjectDir@@@@UAA@XZ",
+   "address": "0x8240ce48",
+   "folded": [
+    "??1?$ObjPtr@VFlow@@@@UAA@XZ",
+    "??1Node@?$ObjPtrVec@VFlow@@VObjectDir@@@@UAA@XZ"
+   ],
+   "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it"
+  },
+  {
+   "name": "retailmap:merged_BinStreamEnumRead",
+   "survivor": "merged_BinStreamEnumRead",
+   "address": "0x82412d08",
+   "folded": [
+    "??$?5W4EaseType@@@@YAAAVBinStreamRev@@AAV0@AAV?$BinStreamEnum@W4EaseType@@@@@Z",
+    "??$?5W4NavInputType@HamNavList@@@@YAAAVBinStreamRev@@AAV0@AAV?$BinStreamEnum@W4NavInputType@HamNavList@@@@@Z",
+    "??$?5W4Rate@RndAnimatable@@@@YAAAVBinStreamRev@@AAV0@AAV?$BinStreamEnum@W4Rate@RndAnimatable@@@@@Z",
+    "??$?5W4StopMode@FlowNode@@@@YAAAVBinStreamRev@@AAV0@AAV?$BinStreamEnum@W4StopMode@FlowNode@@@@@Z"
+   ],
+   "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it"
+  },
+  {
+   "name": "retailmap:merged_ObjOwnerPtrReplace",
+   "survivor": "merged_ObjOwnerPtrReplace",
+   "address": "0x824131a8",
+   "folded": [
+    "?Replace@?$ObjOwnerPtr@VAnimTask@@@@UAAXPAVObject@Hmx@@@Z",
+    "?Replace@?$ObjOwnerPtr@VCameraInput@@@@UAAXPAVObject@Hmx@@@Z",
+    "?Replace@?$ObjOwnerPtr@VCharClip@@@@UAAXPAVObject@Hmx@@@Z",
+    "?Replace@?$ObjOwnerPtr@VCharInterest@@@@UAAXPAVObject@Hmx@@@Z",
+    "?Replace@?$ObjOwnerPtr@VCharLookAt@@@@UAAXPAVObject@Hmx@@@Z",
+    "?Replace@?$ObjOwnerPtr@VCharWeightable@@@@UAAXPAVObject@Hmx@@@Z",
+    "?Replace@?$ObjOwnerPtr@VEventTrigger@@@@UAAXPAVObject@Hmx@@@Z",
+    "?Replace@?$ObjOwnerPtr@VFxSend@@@@UAAXPAVObject@Hmx@@@Z",
+    "?Replace@?$ObjOwnerPtr@VObject@Hmx@@@@UAAXPAVObject@Hmx@@@Z",
+    "?Replace@?$ObjOwnerPtr@VObjectDir@@@@UAAXPAVObject@Hmx@@@Z",
+    "?Replace@?$ObjOwnerPtr@VRndAnimatable@@@@UAAXPAVObject@Hmx@@@Z",
+    "?Replace@?$ObjOwnerPtr@VRndCamAnim@@@@UAAXPAVObject@Hmx@@@Z",
+    "?Replace@?$ObjOwnerPtr@VRndDrawable@@@@UAAXPAVObject@Hmx@@@Z",
+    "?Replace@?$ObjOwnerPtr@VRndEnviron@@@@UAAXPAVObject@Hmx@@@Z",
+    "?Replace@?$ObjOwnerPtr@VRndFont3d@@@@UAAXPAVObject@Hmx@@@Z",
+    "?Replace@?$ObjOwnerPtr@VRndFont@@@@UAAXPAVObject@Hmx@@@Z",
+    "?Replace@?$ObjOwnerPtr@VRndLight@@@@UAAXPAVObject@Hmx@@@Z",
+    "?Replace@?$ObjOwnerPtr@VRndLightAnim@@@@UAAXPAVObject@Hmx@@@Z",
+    "?Replace@?$ObjOwnerPtr@VRndMatAnim@@@@UAAXPAVObject@Hmx@@@Z",
+    "?Replace@?$ObjOwnerPtr@VRndMesh@@@@UAAXPAVObject@Hmx@@@Z",
+    "?Replace@?$ObjOwnerPtr@VRndMeshAnim@@@@UAAXPAVObject@Hmx@@@Z",
+    "?Replace@?$ObjOwnerPtr@VRndParticleSysAnim@@@@UAAXPAVObject@Hmx@@@Z",
+    "?Replace@?$ObjOwnerPtr@VRndTex@@@@UAAXPAVObject@Hmx@@@Z",
+    "?Replace@?$ObjOwnerPtr@VRndTransAnim@@@@UAAXPAVObject@Hmx@@@Z",
+    "?Replace@?$ObjOwnerPtr@VRndTransformable@@@@UAAXPAVObject@Hmx@@@Z",
+    "?Replace@?$ObjOwnerPtr@VRndWind@@@@UAAXPAVObject@Hmx@@@Z",
+    "?Replace@?$ObjOwnerPtr@VSpotlight@@@@UAAXPAVObject@Hmx@@@Z",
+    "?Replace@?$ObjOwnerPtr@VTask@@@@UAAXPAVObject@Hmx@@@Z"
+   ],
+   "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it"
+  },
+  {
+   "name": "retailmap:merged_824131C8",
+   "survivor": "merged_824131C8",
+   "address": "0x824131c8",
+   "folded": [
+    "??_G?$ObjPtr@VPropertyTask@@@@UAAPAXI@Z",
+    "??_G?$ObjRefConcrete@VPropertyTask@@VObjectDir@@@@UAAPAXI@Z"
+   ],
+   "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it"
+  },
+  {
+   "name": "retailmap:??1?$ObjRefConcrete@VRndMat@@VObjectDir@@@@UAA@XZ",
+   "survivor": "??1?$ObjRefConcrete@VRndMat@@VObjectDir@@@@UAA@XZ",
+   "address": "0x82498280",
+   "folded": [
+    "??1?$ObjPtr@VRndMat@@@@UAA@XZ",
+    "??1Node@?$ObjPtrVec@VRndMat@@VObjectDir@@@@UAA@XZ"
+   ],
+   "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it"
+  },
+  {
+   "name": "retailmap:??1?$ObjRefConcrete@VHamMove@@VObjectDir@@@@UAA@XZ",
+   "survivor": "??1?$ObjRefConcrete@VHamMove@@VObjectDir@@@@UAA@XZ",
+   "address": "0x824b0f88",
+   "folded": [
+    "??1?$ObjPtr@VHamMove@@@@UAA@XZ",
+    "??1Node@?$ObjPtrVec@VHamMove@@VObjectDir@@@@UAA@XZ"
+   ],
+   "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it"
+  },
+  {
+   "name": "retailmap:merged_ObjPtrListRemove",
+   "survivor": "merged_ObjPtrListRemove",
+   "address": "0x825c6868",
+   "folded": [
+    "?remove@?$ObjPtrList@VFlowNode@@VObjectDir@@@@QAA_NPAVFlowNode@@@Z",
+    "?remove@?$ObjPtrList@VObject@Hmx@@VObjectDir@@@@QAA_NPAVObject@Hmx@@@Z",
+    "?remove@?$ObjPtrList@VRndDrawable@@VObjectDir@@@@QAA_NPAVRndDrawable@@@Z",
+    "?remove@?$ObjPtrList@VRndLight@@VObjectDir@@@@QAA_NPAVRndLight@@@Z",
+    "?remove@?$ObjPtrList@VThreeDSound@@VObjectDir@@@@QAA_NPAVThreeDSound@@@Z"
+   ],
+   "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it"
+  },
+  {
+   "name": "retailmap:merged_825D6820",
+   "survivor": "merged_825D6820",
+   "address": "0x825d6820",
+   "folded": [
+    "?SetPurchaseMade@MultipleItemsEnumCompleteMsg@@QAAX_N@Z"
+   ],
+   "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it"
+  },
+  {
+   "name": "retailmap:merged_825D6BB8",
+   "survivor": "merged_825D6BB8",
+   "address": "0x825d6bb8",
+   "folded": [
+    "?SetSuccess@LinkingCodeRetrievedMsg@@QAAX_N@Z",
+    "?SetSuccess@MultipleItemsEnumCompleteMsg@@QAAX_N@Z",
+    "?SetSuccess@TokenRedeemedMsg@@QAAX_N@Z"
+   ],
+   "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it"
+  },
+  {
+   "name": "retailmap:merged_GetB0x8",
+   "survivor": "merged_GetB0x8",
+   "address": "0x825f9508",
+   "folded": [
+    "?Fail@AsyncFile@@UAA_NXZ"
+   ],
+   "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it"
+  },
+  {
+   "name": "retailmap:merged_Get0x1C",
+   "survivor": "merged_Get0x1C",
+   "address": "0x825f9510",
+   "folded": [
+    "?AnimTarget@RndMatAnim@@UAAPAVObject@Hmx@@XZ",
+    "?FirstClip@LayerClip@HamDriver@@UAAPAVCharClip@@XZ",
+    "?GetBeatMap@HamSongData@@UBAPAVBeatMap@@XZ",
+    "?Size@AsyncFile@@UAAHXZ",
+    "?Size@BufStream@@UAAHXZ"
+   ],
+   "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it"
+  },
+  {
+   "name": "retailmap:merged_GetB0x24",
+   "survivor": "merged_GetB0x24",
+   "address": "0x825fa5c8",
+   "folded": [
+    "?Fail@ArkFile@@UAA_NXZ",
+    "?Fail@IDataChunk@@UAA_NXZ",
+    "?IsDirty@CustomPlaylist@@UAA_NXZ"
+   ],
+   "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it"
+  },
+  {
+   "name": "retailmap:merged_828DC218",
+   "survivor": "merged_828DC218",
+   "address": "0x828dc218",
+   "folded": [
+    "?GetSignedIn@ProfileMgr@@QAA?AV?$vector@PAVHamProfile@@V?$StlNodeAlloc@PAVHamProfile@@@stlpmtx_std@@@stlpmtx_std@@XZ",
+    "?GetSignedInProfiles@ProfileMgr@@QAA?AV?$vector@PAVHamProfile@@V?$StlNodeAlloc@PAVHamProfile@@@stlpmtx_std@@@stlpmtx_std@@XZ"
+   ],
+   "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it"
+  },
+  {
+   "name": "retailmap:?SyncProperty@LockedContentPanel@@$4PPPPPPPM@A@AA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z",
+   "survivor": "?SyncProperty@LockedContentPanel@@$4PPPPPPPM@A@AA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z",
+   "address": "0x828fff18",
+   "folded": [
+    "?SyncProperty@LetterboxPanel@@$4PPPPPPPM@A@AA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z"
+   ],
+   "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it"
+  },
+  {
+   "name": "retailmap:merged_8290B1D0",
+   "survivor": "merged_8290B1D0",
+   "address": "0x8290b1d0",
+   "folded": [
+    "?Handle@SongStatusMgr@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "?Handle@WebSvcMgr@@UAA?AVDataNode@@PAVDataArray@@_N@Z"
+   ],
+   "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it"
+  },
+  {
+   "name": "retailmap:merged_829292C0",
+   "survivor": "merged_829292C0",
+   "address": "0x829292c0",
+   "folded": [
+    "??1CampaignMqCrewProvider@@UAA@XZ",
+    "??1CampaignSongProvider@@UAA@XZ"
+   ],
+   "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it"
+  },
+  {
+   "name": "retailmap:merged_82946770",
+   "survivor": "merged_82946770",
+   "address": "0x82946770",
+   "folded": [
+    "?SetOfferString@TokenRedeemedMsg@@QAAXABVString@@@Z"
+   ],
+   "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it"
+  },
+  {
+   "name": "retailmap:merged_82975658",
+   "survivor": "merged_82975658",
+   "address": "0x82975658",
+   "folded": [
+    "?Handle@NavListFunctionNode@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "?Handle@NavListHeaderNode@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "?Handle@NavListItemNode@@UAA?AVDataNode@@PAVDataArray@@_N@Z"
+   ],
+   "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it"
+  },
+  {
+   "name": "retailmap:merged_82979158",
+   "survivor": "merged_82979158",
+   "address": "0x82979158",
+   "folded": [
+    "?Handle@ChallengeSortNode@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "?Handle@MQSongSortNode@@UAA?AVDataNode@@PAVDataArray@@_N@Z"
+   ],
+   "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it"
+  },
+  {
+   "name": "retailmap:merged_82984FC8",
+   "survivor": "merged_82984FC8",
+   "address": "0x82984fc8",
+   "folded": [
+    "??1HamStoreFilterProvider@@UAA@XZ",
+    "??1PackSongListProvider@@UAA@XZ",
+    "??1PlaylistSongProvider@@UAA@XZ",
+    "??1WeightInputProvider@@UAA@XZ"
+   ],
+   "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it"
+  },
+  {
+   "name": "retailmap:merged_8298DFF0",
+   "survivor": "merged_8298DFF0",
+   "address": "0x8298dff0",
+   "folded": [
+    "?SetItemCountString@MQSongHeaderNode@@UBAXPAVUILabel@@@Z",
+    "?SetItemCountString@PlaylistHeaderNode@@UBAXPAVUILabel@@@Z"
+   ],
+   "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it"
+  },
+  {
+   "name": "retailmap:merged_82993050",
+   "survivor": "merged_82993050",
+   "address": "0x82993050",
+   "folded": [
+    "??$_Copy_Construct@U?$pair@$$CBVString@@VChallengeBadgeInfo@@@stlpmtx_std@@@stlpmtx_std@@YAXPAU?$pair@$$CBVString@@VChallengeBadgeInfo@@@0@ABU10@@Z",
+    "??$_Copy_Construct@UNetLoaderRef@@@stlpmtx_std@@YAXPAUNetLoaderRef@@ABU1@@Z"
+   ],
+   "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it"
+  },
+  {
+   "name": "retailmap:merged_829930B8",
+   "survivor": "merged_829930B8",
+   "address": "0x829930b8",
+   "folded": [
+    "?_M_lower_bound@?$_Rb_tree@VString@@U?$less@VString@@@stlpmtx_std@@U?$pair@$$CBVString@@V?$vector@VChallengeRow@@V?$StlNodeAlloc@VChallengeRow@@@stlpmtx_std@@@stlpmtx_std@@@3@U?$_Select1st@U?$pair@$$CBVString@@V?$vector@VChallengeRow@@V?$StlNodeAlloc@VChallengeRow@@@stlpmtx_std@@@stlpmtx_std@@@stlpmtx_std@@@3@U?$_MapTraitsT@U?$pair@$$CBVString@@V?$vector@VChallengeRow@@V?$StlNodeAlloc@VChallengeRow@@@stlpmtx_std@@@stlpmtx_std@@@stlpmtx_std@@@priv@3@V?$StlNodeAlloc@U?$pair@$$CBVString@@V?$vector@VChallengeRow@@V?$StlNodeAlloc@VChallengeRow@@@stlpmtx_std@@@stlpmtx_std@@@stlpmtx_std@@@3@@stlpmtx_std@@ABAPAU_Rb_tree_node_base@2@ABVString@@@Z",
+    "?_M_lower_bound@?$_Rb_tree@VString@@U?$less@VString@@@stlpmtx_std@@U?$pair@$$CBVString@@VChallengeBadgeInfo@@@3@U?$_Select1st@U?$pair@$$CBVString@@VChallengeBadgeInfo@@@stlpmtx_std@@@3@U?$_MapTraitsT@U?$pair@$$CBVString@@VChallengeBadgeInfo@@@stlpmtx_std@@@priv@3@V?$StlNodeAlloc@U?$pair@$$CBVString@@VChallengeBadgeInfo@@@stlpmtx_std@@@3@@stlpmtx_std@@ABAPAU_Rb_tree_node_base@2@ABVString@@@Z",
+    "?_M_lower_bound@?$_Rb_tree@VString@@U?$less@VString@@@stlpmtx_std@@U?$pair@$$CBVString@@VDataNode@@@3@U?$_Select1st@U?$pair@$$CBVString@@VDataNode@@@stlpmtx_std@@@3@U?$_MapTraitsT@U?$pair@$$CBVString@@VDataNode@@@stlpmtx_std@@@priv@3@V?$StlNodeAlloc@U?$pair@$$CBVString@@VDataNode@@@stlpmtx_std@@@3@@stlpmtx_std@@ABAPAU_Rb_tree_node_base@2@ABVString@@@Z"
+   ],
+   "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it"
+  },
+  {
+   "name": "retailmap:?GetLtsPhoneConverter@CEngineLocaleHandler@NUISPEECH@@UAAPAUISpPhoneConverter@@XZ",
+   "survivor": "?GetLtsPhoneConverter@CEngineLocaleHandler@NUISPEECH@@UAAPAUISpPhoneConverter@@XZ",
+   "address": "0x82a374f0",
+   "folded": [
+    "?GetResponseData@WebSvcRequest@@UAAPADXZ",
+    "?GetSampleRate@StandardStream@@UAAHXZ"
+   ],
+   "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it"
+  },
+  {
+   "name": "retailmap:?ParseITN@CCfgEngineBase@NUISPEECH@@UAAJPAUISpPhraseBuilder@2@@Z",
+   "survivor": "?ParseITN@CCfgEngineBase@NUISPEECH@@UAAJPAUISpPhraseBuilder@2@@Z",
+   "address": "0x82a711a0",
+   "folded": [
+    "?EnableReads@StandardStream@@UAAX_N@Z"
+   ],
+   "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it"
+  },
+  {
+   "name": "retailmap:?VoiceType@CX2OutputVoice@XAUDIO2@@UBA?AW4EVoiceType@CX2Voice@2@XZ",
+   "survivor": "?VoiceType@CX2OutputVoice@XAUDIO2@@UBA?AW4EVoiceType@CX2Voice@2@XZ",
+   "address": "0x82e77010",
+   "folded": [
+    "?GetType@AccomplishmentCharacterListConditional@@UBA?AW4AccomplishmentType@@XZ",
+    "?GetType@CmdAddPlaylistToRC@@UAAHXZ",
+    "?GetType@CmdUpdateFitnessGoalToRC@@UAAHXZ",
+    "?GetType@NavListItemNode@@UBA?AW4NavListNodeType@@XZ",
+    "?NumData@PracticeOptionsProvider@@UBAHXZ"
+   ],
+   "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it"
   }
  ]
 }
