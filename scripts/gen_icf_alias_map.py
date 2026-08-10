@@ -16,8 +16,9 @@ symbol name sharing an 8-hex address and treats names in a group as
 reloc-name-equal. We DO have a real MSVC ``.map`` -- ``orig/373307D9/ham_xbox_r.map``
 is the shipped linker map for this exact build (same-build check: of the 67,510
 symbol names it shares with ``scripts/target_symbol_map.json``, 67,483 sit at
-identical addresses; all 27 disagreements are non-unique ``__unwind$N`` labels),
-and roughly twenty tools in this repo already read it. What we hand objdiff is
+identical addresses; all 27 disagreements are non-unique annotation labels --
+26 ``__unwind$N`` and one ``__catch$N``), and 17 tools in this repo already
+read it. What we hand objdiff is
 nevertheless still a *synthetic* map, because the real one is ~118,000 publics
 over ~107,649 addresses, i.e. the linker's whole symbol table rather than an
 admitted equivalence set. The real map is therefore one of the SOURCES the alias
