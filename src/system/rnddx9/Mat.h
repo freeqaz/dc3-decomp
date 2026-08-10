@@ -1,7 +1,7 @@
 #pragma once
 
-#include "obj/Object.h"
-#include "rndobj/Mat_NG.h"
+#include "obj\Object.h"
+#include "rndobj\Mat_NG.h"
 
 class DxMat : public NgMat {
 public:

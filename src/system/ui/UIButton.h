@@ -1,8 +1,8 @@
 #pragma once
-#include "obj/Object.h"
-#include "ui/UILabel.h"
-#include "os/JoypadMsgs.h"
-#include "utl/MemMgr.h"
+#include "obj\Object.h"
+#include "ui\UILabel.h"
+#include "os\JoypadMsgs.h"
+#include "utl\MemMgr.h"
 
 /**
  * @brief A base implementation of a button.

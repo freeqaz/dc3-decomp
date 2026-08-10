@@ -1,6 +1,6 @@
 #pragma once
-#include "math/SHA1.h"
-#include "utl/MemMgr.h"
+#include "math\SHA1.h"
+#include "utl\MemMgr.h"
 
 class StreamChecksum {
 private:

@@ -1,13 +1,13 @@
-#include "meta_ham/FitnessProvider.h"
+#include "meta_ham\FitnessProvider.h"
 #include "FitnessProvider.h"
 #include "HamProfile.h"
 #include "ProfileMgr.h"
-#include "obj/Object.h"
-#include "os/Debug.h"
-#include "ui/UILabel.h"
-#include "ui/UIListLabel.h"
-#include "ui/UIListProvider.h"
-#include "utl/Symbol.h"
+#include "obj\Object.h"
+#include "os\Debug.h"
+#include "ui\UILabel.h"
+#include "ui\UIListLabel.h"
+#include "ui\UIListProvider.h"
+#include "utl\Symbol.h"
 
 FitnessProvider::~FitnessProvider() {}
 

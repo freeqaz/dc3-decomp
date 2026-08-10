@@ -1,12 +1,12 @@
-#include "ui/CheatProvider.h"
-#include "obj/Data.h"
-#include "obj/DataUtl.h"
-#include "os/Debug.h"
-#include "os/System.h"
-#include "ui/UIListLabel.h"
-#include "utl/Cheats.h"
-#include "utl/Std.h"
-#include "utl/Symbol.h"
+#include "ui\CheatProvider.h"
+#include "obj\Data.h"
+#include "obj\DataUtl.h"
+#include "os\Debug.h"
+#include "os\System.h"
+#include "ui\UIListLabel.h"
+#include "utl\Cheats.h"
+#include "utl\Std.h"
+#include "utl\Symbol.h"
 
 CheatProvider *CheatProvider::sInstance = nullptr;
 

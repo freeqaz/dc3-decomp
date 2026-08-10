@@ -1,7 +1,7 @@
-#include "char/CharBoneOffset.h"
-#include "char/CharPollable.h"
-#include "hamobj/PhotoSpotlightPositioner.h"
-#include "obj/Object.h"
+#include "char\CharBoneOffset.h"
+#include "char\CharPollable.h"
+#include "hamobj\PhotoSpotlightPositioner.h"
+#include "obj\Object.h"
 
 CharBoneOffset::CharBoneOffset() : mDest(this), mOffset(0, 0, 0) {}
 

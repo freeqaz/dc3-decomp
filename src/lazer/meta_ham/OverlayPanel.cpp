@@ -1,11 +1,11 @@
-#include "meta_ham/OverlayPanel.h"
+#include "meta_ham\OverlayPanel.h"
 #include "HamUI.h"
 #include "OverlayPanel.h"
-#include "meta_ham/HamPanel.h"
-#include "meta_ham/ShellInput.h"
-#include "obj/Object.h"
-#include "rndobj/Rnd.h"
-#include "ui/UIPanel.h"
+#include "meta_ham\HamPanel.h"
+#include "meta_ham\ShellInput.h"
+#include "obj\Object.h"
+#include "rndobj\Rnd.h"
+#include "ui\UIPanel.h"
 
 OverlayPanel::OverlayPanel() : mPostProc(0) {}
 

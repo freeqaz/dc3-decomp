@@ -1,15 +1,15 @@
 #include "NavListSortMgr.h"
 
 #include "NavListSort.h"
-#include "meta_ham/SongSortMgr.h"
+#include "meta_ham\SongSortMgr.h"
 #include "macros.h"
-#include "meta/SongPreview.h"
-#include "meta_ham/NavListNode.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "os/System.h"
-#include "utl/Std.h"
-#include "utl/Symbol.h"
+#include "meta\SongPreview.h"
+#include "meta_ham\NavListNode.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "os\System.h"
+#include "utl\Std.h"
+#include "utl\Symbol.h"
 
 NavListSortMgr::NavListSortMgr(SongPreview &songprev)
     : mSongPreview(&songprev), mCurrentSortIdx(0), mHighlightSaved(false), mHeaderMode(false),

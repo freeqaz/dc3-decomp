@@ -1,9 +1,9 @@
 #pragma once
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "os/Joypad.h"
-#include "os/JoypadMsgs.h"
-#include "os/UserMgr.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "os\Joypad.h"
+#include "os\JoypadMsgs.h"
+#include "os\UserMgr.h"
 
 struct PressRec {
     LocalUser *iUser; // 0x0
@@ -43,7 +43,7 @@ private:
     std::vector<ActionRec> mActionRecs; // 0x34
 };
 
-#include "obj/Msg.h"
+#include "obj\Msg.h"
 DECLARE_MESSAGE(ProcessedButtonDownMsg, "processed_button_down")
 ProcessedButtonDownMsg(LocalUser *, JoypadButton, JoypadAction, int, bool);
 LocalUser *GetUser() const;

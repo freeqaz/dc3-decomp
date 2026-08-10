@@ -1,6 +1,6 @@
 #pragma once
-#include "math/Vec.h"
-#include "math/Color.h"
+#include "math\Vec.h"
+#include "math\Color.h"
 
 class RndLight;
 

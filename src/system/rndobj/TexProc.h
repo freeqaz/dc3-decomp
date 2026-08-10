@@ -1,8 +1,8 @@
 #pragma once
-#include "obj/Data.h"
-#include "rndobj/Draw.h"
-#include "rndobj/Tex.h"
-#include "utl/MemMgr.h"
+#include "obj\Data.h"
+#include "rndobj\Draw.h"
+#include "rndobj\Tex.h"
+#include "utl\MemMgr.h"
 
 /** "Applies a shader to the specified texture." */
 class TexProc : public RndDrawable {

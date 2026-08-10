@@ -1,9 +1,9 @@
-#include "ui/Screenshot.h"
-#include "obj/Object.h"
-#include "rndobj/Draw.h"
-#include "rndobj/Utl.h"
-#include "utl/Loader.h"
-#include "rndobj/Rnd.h"
+#include "ui\Screenshot.h"
+#include "obj\Object.h"
+#include "rndobj\Draw.h"
+#include "rndobj\Utl.h"
+#include "utl\Loader.h"
+#include "rndobj\Rnd.h"
 
 Screenshot::~Screenshot() {
     RELEASE(mTex);

@@ -1,11 +1,11 @@
-#include "midi/Midi.h"
-#include "os/Debug.h"
-#include "utl/MultiTempoTempoMap.h"
-#include "utl/MeasureMap.h"
-#include "midi/MidiConstants.h"
-#include "utl/TempoMap.h"
-#include "midi/MidiVarLen.h"
-#include "utl/MBT.h"
+#include "midi\Midi.h"
+#include "os\Debug.h"
+#include "utl\MultiTempoTempoMap.h"
+#include "utl\MeasureMap.h"
+#include "midi\MidiConstants.h"
+#include "utl\TempoMap.h"
+#include "midi\MidiVarLen.h"
+#include "utl\MBT.h"
 #include <algorithm>
 
 const MidiChunkID MidiChunkID::kMThd("MThd");

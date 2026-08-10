@@ -1,16 +1,16 @@
-#include "rndobj/Gen.h"
-#include "math/Geo.h"
-#include "math/Rand.h"
-#include "math/Rot.h"
+#include "rndobj\Gen.h"
+#include "math\Geo.h"
+#include "math\Rand.h"
+#include "math\Rot.h"
 #include <cmath>
-#include "obj/Object.h"
-#include "rndobj/Anim.h"
-#include "rndobj/Cam.h"
-#include "rndobj/Draw.h"
-#include "rndobj/MultiMesh.h"
-#include "rndobj/Part.h"
-#include "rndobj/Trans.h"
-#include "rndobj/Utl.h"
+#include "obj\Object.h"
+#include "rndobj\Anim.h"
+#include "rndobj\Cam.h"
+#include "rndobj\Draw.h"
+#include "rndobj\MultiMesh.h"
+#include "rndobj\Part.h"
+#include "rndobj\Trans.h"
+#include "rndobj\Utl.h"
 
 RndGenerator::RndGenerator()
     : mPath(this), mPathStartFrame(0), mPathEndFrame(0), mMesh(this), mMultiMesh(this),

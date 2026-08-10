@@ -1,9 +1,9 @@
 #pragma once
-#include "obj/Object.h"
-#include "synth/ADSR.h"
-#include "synth/Stream.h"
-#include "synth/SynthSample.h"
-#include "utl/BinStream.h"
+#include "obj\Object.h"
+#include "synth\ADSR.h"
+#include "synth\Stream.h"
+#include "synth\SynthSample.h"
+#include "utl\BinStream.h"
 
 class SampleZone {
     friend bool __cdecl PropSync(SampleZone &, DataNode &, DataArray *, int, PropOp);

@@ -1,5 +1,5 @@
 #include "HeadsetXferEffect.h"
-#include "xdk/LIBCMT/string.h"
+#include "xdk\LIBCMT\string.h"
 
 namespace ATG {
 

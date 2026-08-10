@@ -1,16 +1,16 @@
 #pragma once
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "os/DateTime.h"
-#include "os/Debug.h"
-#include "rndobj/Text.h"
-#include "ui/ResourceDirPtr.h"
-#include "ui/UIColor.h"
-#include "ui/UIComponent.h"
-#include "ui/UILabelDir.h"
-#include "utl/BinStream.h"
-#include "utl/MemMgr.h"
-#include "utl/Symbol.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "os\DateTime.h"
+#include "os\Debug.h"
+#include "rndobj\Text.h"
+#include "ui\ResourceDirPtr.h"
+#include "ui\UIColor.h"
+#include "ui\UIComponent.h"
+#include "ui\UILabelDir.h"
+#include "utl\BinStream.h"
+#include "utl\MemMgr.h"
+#include "utl\Symbol.h"
 
 class UILabel : public RndText, public UIComponent, public TextHolder {
 public:

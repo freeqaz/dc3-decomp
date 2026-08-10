@@ -1,7 +1,7 @@
-#include "synth/AudioDucker.h"
-#include "obj/Object.h"
-#include "obj/PropSync.h"
-#include "utl/BinStream.h"
+#include "synth\AudioDucker.h"
+#include "obj\Object.h"
+#include "obj\PropSync.h"
+#include "utl\BinStream.h"
 
 #pragma region AudioDucker
 

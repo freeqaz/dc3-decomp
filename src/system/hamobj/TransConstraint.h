@@ -1,10 +1,10 @@
 #pragma once
-#include "math/Vec.h"
-#include "obj/Object.h"
-#include "rndobj/Highlight.h"
-#include "rndobj/Poll.h"
-#include "rndobj/Trans.h"
-#include "utl/MemMgr.h"
+#include "math\Vec.h"
+#include "obj\Object.h"
+#include "rndobj\Highlight.h"
+#include "rndobj\Poll.h"
+#include "rndobj\Trans.h"
+#include "utl\MemMgr.h"
 
 /** "Object for setting up lazy transform parenting" */
 class TransConstraint : public RndHighlightable, public RndPollable {

@@ -1,10 +1,10 @@
 #pragma once
-#include "char/CharPollable.h"
-#include "char/CharWeightable.h"
-#include "obj/Object.h"
-#include "rndobj/Highlight.h"
-#include "rndobj/Trans.h"
-#include "utl/MemMgr.h"
+#include "char\CharPollable.h"
+#include "char\CharWeightable.h"
+#include "obj\Object.h"
+#include "rndobj\Highlight.h"
+#include "rndobj\Trans.h"
+#include "utl\MemMgr.h"
 
 /** "Puts a head bone into a position, doing IK on the spine to achieve it." */
 class CharIKHead : public RndHighlightable, public CharWeightable, public CharPollable {

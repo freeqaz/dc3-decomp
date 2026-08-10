@@ -1,8 +1,8 @@
 #pragma once
 #include "FileMerger.h"
-#include "obj/Object.h"
-#include "utl/Loader.h"
-#include "utl/MemMgr.h"
+#include "obj\Object.h"
+#include "utl\Loader.h"
+#include "utl\MemMgr.h"
 
 class FileMergerOrganizerLoader : public Loader {
 public:

@@ -1,12 +1,12 @@
 #pragma once
-#include "obj/Object.h"
-#include "synth/Faders.h"
-#include "synth/FxSend.h"
-#include "synth/Pollable.h"
-#include "synth/SampleZone.h"
-#include "synth/SampleInst.h"
-#include "utl/MemMgr.h"
-#include "utl/PoolAlloc.h"
+#include "obj\Object.h"
+#include "synth\Faders.h"
+#include "synth\FxSend.h"
+#include "synth\Pollable.h"
+#include "synth\SampleZone.h"
+#include "synth\SampleInst.h"
+#include "utl\MemMgr.h"
+#include "utl\PoolAlloc.h"
 
 class MidiInstrument;
 

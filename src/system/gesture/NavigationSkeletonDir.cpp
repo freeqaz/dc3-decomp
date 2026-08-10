@@ -1,12 +1,12 @@
-#include "gesture/NavigationSkeletonDir.h"
+#include "gesture\NavigationSkeletonDir.h"
 #include "SkeletonDir.h"
-#include "gesture/BaseSkeleton.h"
-#include "gesture/DirectionGestureFilter.h"
-#include "gesture/Skeleton.h"
-#include "gesture/SkeletonDir.h"
-#include "gesture/SkeletonViz.h"
-#include "obj/Object.h"
-#include "rndobj/Overlay.h"
+#include "gesture\BaseSkeleton.h"
+#include "gesture\DirectionGestureFilter.h"
+#include "gesture\Skeleton.h"
+#include "gesture\SkeletonDir.h"
+#include "gesture\SkeletonViz.h"
+#include "obj\Object.h"
+#include "rndobj\Overlay.h"
 
 NavigationSkeletonDir::NavigationSkeletonDir() : mDirectionGestureFilter(nullptr) {}
 NavigationSkeletonDir::~NavigationSkeletonDir() { delete mDirectionGestureFilter; }

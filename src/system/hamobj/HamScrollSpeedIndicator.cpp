@@ -1,10 +1,10 @@
-#include "hamobj/HamScrollSpeedIndicator.h"
-#include "math/Easing.h"
-#include "math/Mtx.h"
-#include "obj/Object.h"
-#include "rndobj/Anim.h"
-#include "rndobj/Dir.h"
-#include "utl/BinStream.h"
+#include "hamobj\HamScrollSpeedIndicator.h"
+#include "math\Easing.h"
+#include "math\Mtx.h"
+#include "obj\Object.h"
+#include "rndobj\Anim.h"
+#include "rndobj\Dir.h"
+#include "utl\BinStream.h"
 
 HamScrollSpeedIndicator::HamScrollSpeedIndicator()
     : mIsShowing(0), mEnterAnim(this), mExitAnim(this), mIndicatorAnim(this) {}

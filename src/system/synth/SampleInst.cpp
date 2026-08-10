@@ -1,8 +1,8 @@
-#include "synth/SampleInst.h"
-#include "math/Decibels.h"
-#include "obj/Msg.h"
-#include "obj/Object.h"
-#include "synth/SynthSample.h"
+#include "synth\SampleInst.h"
+#include "math\Decibels.h"
+#include "obj\Msg.h"
+#include "obj\Object.h"
+#include "synth\SynthSample.h"
 
 SampleInst::SampleInst(SynthSample *sample)
     : mSample(this, sample), mVolume(1), mBankVolume(1), mPan(0), mBankPan(0), mSpeed(1),

@@ -1,13 +1,13 @@
-#include "flow/DrivenPropertyMathOps.h"
-#include "math/Decibels.h"
-#include "math/Rand.h"
-#include "obj/DataFile.h"
-#include "obj/Object.h"
-#include "os/Debug.h"
-#include "os/System.h"
-#include "utl/MakeString.h"
-#include "utl/BinStream.h"
-#include "flow/FlowNode.h"
+#include "flow\DrivenPropertyMathOps.h"
+#include "math\Decibels.h"
+#include "math\Rand.h"
+#include "obj\DataFile.h"
+#include "obj\Object.h"
+#include "os\Debug.h"
+#include "os\System.h"
+#include "utl\MakeString.h"
+#include "utl\BinStream.h"
+#include "flow\FlowNode.h"
 #include <math.h>
 
 FlowMathOp &FlowMathOp::operator=(const FlowMathOp &other) {

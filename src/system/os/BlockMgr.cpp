@@ -1,12 +1,12 @@
 #include "CDReader.h"
-#include "obj/DataFunc.h"
-#include "os/Archive.h"
-#include "os/Block.h"
-#include "os/Debug.h"
-#include "os/HDCache.h"
-#include "os/OSFuncs.h"
-#include "os/System.h"
-#include "utl/MemMgr.h"
+#include "obj\DataFunc.h"
+#include "os\Archive.h"
+#include "os\Block.h"
+#include "os\Debug.h"
+#include "os\HDCache.h"
+#include "os\OSFuncs.h"
+#include "os\System.h"
+#include "utl\MemMgr.h"
 
 #define kNumBlockBuffers 0x13
 

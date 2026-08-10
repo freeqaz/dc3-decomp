@@ -1,6 +1,6 @@
-#include "utl/FileStream.h"
-#include "os/File.h"
-#include "os/Debug.h"
+#include "utl\FileStream.h"
+#include "os\File.h"
+#include "os\Debug.h"
 
 FileStream::FileStream(const char *file, FileType type, bool lilEndian)
     : BinStream(lilEndian), mChecksumValidator(0), mBytesChecksummed(0) {

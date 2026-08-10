@@ -1,6 +1,6 @@
 #pragma once
-#include "synth/ADSR.h"
-#include "utl/MemMgr.h"
+#include "synth\ADSR.h"
+#include "utl\MemMgr.h"
 
 class StreamReceiver;
 typedef StreamReceiver *StreamReceiverFactoryFunc(int, int, bool, int);

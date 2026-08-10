@@ -1,11 +1,11 @@
-#include "rndobj/ScreenMask.h"
-#include "math/Geo.h"
-#include "os/Debug.h"
-#include "rndobj/Cam.h"
-#include "rndobj/Draw.h"
-#include "rndobj/HiResScreen.h"
-#include "rndobj/Rnd.h"
-#include "utl/BinStream.h"
+#include "rndobj\ScreenMask.h"
+#include "math\Geo.h"
+#include "os\Debug.h"
+#include "rndobj\Cam.h"
+#include "rndobj\Draw.h"
+#include "rndobj\HiResScreen.h"
+#include "rndobj\Rnd.h"
+#include "utl\BinStream.h"
 
 void RndScreenMask::Save(BinStream &bs) {
     bs << 2;

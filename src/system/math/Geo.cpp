@@ -1,12 +1,12 @@
-#include "math/Geo.h"
+#include "math\Geo.h"
 #include "Vec.h"
-#include "math/Mtx.h"
-#include "math/Sphere.h"
-#include "math/Utl.h"
-#include "math/Vec.h"
-#include "obj/DataFunc.h"
-#include "os/System.h"
-#include "utl/BinStream.h"
+#include "math\Mtx.h"
+#include "math\Sphere.h"
+#include "math\Utl.h"
+#include "math\Vec.h"
+#include "obj\DataFunc.h"
+#include "os\System.h"
+#include "utl\BinStream.h"
 #include <cfloat>
 #include <cmath>
 

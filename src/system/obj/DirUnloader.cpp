@@ -1,7 +1,7 @@
-#include "obj/Dir.h"
-#include "obj/DirUnloader.h"
-#include "os/Debug.h"
-#include "utl/Loader.h"
+#include "obj\Dir.h"
+#include "obj\DirUnloader.h"
+#include "os\Debug.h"
+#include "utl\Loader.h"
 
 const char *DirUnloader::DebugText() { return MakeString("UnLoader: %s", mFile.c_str()); }
 

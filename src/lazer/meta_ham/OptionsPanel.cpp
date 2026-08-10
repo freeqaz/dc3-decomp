@@ -1,11 +1,11 @@
-#include "meta_ham/OptionsPanel.h"
+#include "meta_ham\OptionsPanel.h"
 #include "ProfileMgr.h"
-#include "meta/StoreOffer.h"
-#include "net_ham/RockCentral.h"
-#include "obj/Dir.h"
-#include "os/Debug.h"
-#include "utl/Locale.h"
-#include "xdk/xapilibi/xbox.h"
+#include "meta\StoreOffer.h"
+#include "net_ham\RockCentral.h"
+#include "obj\Dir.h"
+#include "os\Debug.h"
+#include "utl\Locale.h"
+#include "xdk\xapilibi\xbox.h"
 
 OptionsPanel::OptionsPanel() {
     mOfferID = 0;

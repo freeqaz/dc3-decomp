@@ -1,8 +1,8 @@
 #pragma once
-#include "obj/Object.h"
-#include "rndobj/Mat.h"
-#include "utl/BinStream.h"
-#include "utl/MemMgr.h"
+#include "obj\Object.h"
+#include "rndobj\Mat.h"
+#include "utl\BinStream.h"
+#include "utl\MemMgr.h"
 
 class RndFontBase : public Hmx::Object {
     friend class UIFontImporter;

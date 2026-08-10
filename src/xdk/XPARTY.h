@@ -1,5 +1,5 @@
 #pragma once
-#include "xparty/xparty.h"
+#include "xparty\xparty.h"
 
 // this is where you'd include every last .h file that you need that comes from XPARTY
 // that way, you don't have to worry about which XPARTY header to include for your

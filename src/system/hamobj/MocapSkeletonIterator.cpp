@@ -1,12 +1,12 @@
-#include "hamobj/MocapSkeletonIterator.h"
+#include "hamobj\MocapSkeletonIterator.h"
 #include "ClipPlayer.h"
 #include "HamRegulate.h"
-#include "hamobj/HamCharacter.h"
-#include "hamobj/HamDirector.h"
-#include "hamobj/HamGameData.h"
-#include "math/Utl.h"
-#include "obj/Task.h"
-#include "os/Debug.h"
+#include "hamobj\HamCharacter.h"
+#include "hamobj\HamDirector.h"
+#include "hamobj\HamGameData.h"
+#include "math\Utl.h"
+#include "obj\Task.h"
+#include "os\Debug.h"
 
 MocapSkeletonIterator::MocapSkeletonIterator(int x, int y)
     : mDancer(TheHamDirector->GetCharacter(0)), mInput(mDancer), mStartFrame(x), mEndFrame(y) {

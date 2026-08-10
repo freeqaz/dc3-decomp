@@ -1,8 +1,8 @@
 #pragma once
-#include "utl/MakeString.h"
-#include "utl/Locale.h"
-#include "utl/Symbol.h"
-#include "obj/Data.h"
+#include "utl\MakeString.h"
+#include "utl\Locale.h"
+#include "utl\Symbol.h"
+#include "obj\Data.h"
 
 class SuperFormatString : public FormatString {
 public:

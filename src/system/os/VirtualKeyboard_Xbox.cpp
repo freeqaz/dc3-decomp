@@ -1,9 +1,9 @@
-#include "os/Debug.h"
-#include "os/VirtualKeyboard.h"
-#include "utl/Str.h"
-#include "utl/Symbol.h"
-#include "utl/UTF8.h"
-#include "xdk/XAPILIB.h"
+#include "os\Debug.h"
+#include "os\VirtualKeyboard.h"
+#include "utl\Str.h"
+#include "utl\Symbol.h"
+#include "utl\UTF8.h"
+#include "xdk\XAPILIB.h"
 
 namespace {
     bool gCheckOverlappedIoComplete;

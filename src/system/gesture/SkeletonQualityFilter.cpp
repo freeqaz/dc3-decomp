@@ -1,11 +1,11 @@
-#include "gesture/SkeletonQualityFilter.h"
+#include "gesture\SkeletonQualityFilter.h"
 #include "BaseSkeleton.h"
-#include "gesture/BaseSkeleton.h"
-#include "gesture/GestureMgr.h"
-#include "gesture/Skeleton.h"
-#include "hamobj/HamGameData.h"
-#include "hamobj/HamPlayerData.h"
-#include "math/Vec.h"
+#include "gesture\BaseSkeleton.h"
+#include "gesture\GestureMgr.h"
+#include "gesture\Skeleton.h"
+#include "hamobj\HamGameData.h"
+#include "hamobj\HamPlayerData.h"
+#include "math\Vec.h"
 #include <stdio.h>
 
 #ifndef HX_NATIVE

@@ -1,9 +1,9 @@
 #pragma once
 
-#include "obj/Object.h"
-#include "obj/Task.h"
-#include "ui/UIPanel.h"
-#include "utl/DeJitter.h"
+#include "obj\Object.h"
+#include "obj\Task.h"
+#include "ui\UIPanel.h"
+#include "utl\DeJitter.h"
 
 class DeJitterPanel : public UIPanel {
 public:

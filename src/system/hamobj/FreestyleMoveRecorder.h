@@ -1,13 +1,13 @@
 #pragma once
 #include "FreestyleMove.h"
-#include "gesture/BaseSkeleton.h"
-#include "gesture/Skeleton.h"
-#include "obj/Data.h"
-#include "os/Debug.h"
-#include "rndobj/Tex.h"
-#include "utl/MemMgr.h"
-#include "utl/Str.h"
-#include "utl/Symbol.h"
+#include "gesture\BaseSkeleton.h"
+#include "gesture\Skeleton.h"
+#include "obj\Data.h"
+#include "os\Debug.h"
+#include "rndobj\Tex.h"
+#include "utl\MemMgr.h"
+#include "utl\Str.h"
+#include "utl\Symbol.h"
 
 #define MAX_FREESTYLE_MOVES 4
 

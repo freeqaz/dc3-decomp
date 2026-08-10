@@ -1,11 +1,11 @@
 #pragma once
-#include "meta_ham/HamPanel.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "stl/_vector.h"
-#include "synth/Stream.h"
-#include "ui/UIListProvider.h"
-#include "ui/UIPanel.h"
+#include "meta_ham\HamPanel.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "stl\_vector.h"
+#include "synth\Stream.h"
+#include "ui\UIListProvider.h"
+#include "ui\UIPanel.h"
 
 class CalibrationOffsetProvider : public UIListProvider, public Hmx::Object {
 public:

@@ -1,9 +1,9 @@
 #pragma once
-#include "obj/Object.h"
-#include "rndobj/BaseMaterial.h"
-#include "rndobj/Draw.h"
-#include "rndobj/PostProc.h"
-#include "rndobj/Tex.h"
+#include "obj\Object.h"
+#include "rndobj\BaseMaterial.h"
+#include "rndobj\Draw.h"
+#include "rndobj\PostProc.h"
+#include "rndobj\Tex.h"
 
 class RndSoftParticleBuffer : public Hmx::Object, public PostProcessor {
 public:

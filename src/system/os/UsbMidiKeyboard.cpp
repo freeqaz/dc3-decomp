@@ -1,8 +1,8 @@
-#include "os/UsbMidiKeyboard.h"
+#include "os\UsbMidiKeyboard.h"
 #include "decomp.h"
-#include "os/Debug.h"
-#include "os/Joypad.h"
-#include "os/UsbMidiKeyboardMsgs.h"
+#include "os\Debug.h"
+#include "os\Joypad.h"
+#include "os\UsbMidiKeyboardMsgs.h"
 
 UsbMidiKeyboard *TheKeyboard;
 bool UsbMidiKeyboard::mUsbMidiKeyboardExists = false;

@@ -1,8 +1,8 @@
-#include "char/CharTransDraw.h"
-#include "char/Character.h"
-#include "obj/Object.h"
-#include "rndobj/Draw.h"
-#include "utl/Std.h"
+#include "char\CharTransDraw.h"
+#include "char\Character.h"
+#include "obj\Object.h"
+#include "rndobj\Draw.h"
+#include "utl\Std.h"
 
 CharTransDraw::CharTransDraw() : mChars(this), mForceDraw(false) {}
 

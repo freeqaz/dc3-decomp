@@ -1,15 +1,15 @@
 #pragma once
 
-#include "obj/Data.h"
-#include "obj/DataFile.h"
-#include "obj/Object.h"
-#include "os/JoypadMsgs.h"
-#include "synth/Stream.h"
-#include "ui/UIListLabel.h"
-#include "ui/UIListMesh.h"
-#include "ui/UIListProvider.h"
-#include "ui/UIPanel.h"
-#include "utl/Symbol.h"
+#include "obj\Data.h"
+#include "obj\DataFile.h"
+#include "obj\Object.h"
+#include "os\JoypadMsgs.h"
+#include "synth\Stream.h"
+#include "ui\UIListLabel.h"
+#include "ui\UIListMesh.h"
+#include "ui\UIListProvider.h"
+#include "ui\UIPanel.h"
+#include "utl\Symbol.h"
 
 class CreditsPanel : public UIListProvider, public UIPanel {
 private:

@@ -1,5 +1,5 @@
-#include "synth_xbox/PitchShiftEffect.h"
-#include "synth_xbox/soundtouch/source/SoundTouch/SoundTouch.h"
+#include "synth_xbox\PitchShiftEffect.h"
+#include "synth_xbox\soundtouch\source\SoundTouch\SoundTouch.h"
 #include <string.h>
 
 PitchShiftEffect::PitchShiftEffect() : unk68(1), unk6c(2) {

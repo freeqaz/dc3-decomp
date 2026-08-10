@@ -1,7 +1,7 @@
 #pragma once
-#include "gesture/BaseSkeleton.h"
-#include "hamobj/DancerSkeleton.h"
-#include "utl/MemMgr.h"
+#include "gesture\BaseSkeleton.h"
+#include "hamobj\DancerSkeleton.h"
+#include "utl\MemMgr.h"
 
 struct FreestyleMoveFrame {
     DancerSkeleton skeleton; // 0x0

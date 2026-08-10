@@ -42,7 +42,7 @@
 #else /* HAVE_CONFIG_H */
 
 #ifdef _XBOX360
-#include "xdk/xapilibi/winnt.h"
+#include "xdk\xapilibi\winnt.h"
 #include "config-xbox360.h"
 #endif
 

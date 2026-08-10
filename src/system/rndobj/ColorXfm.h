@@ -1,7 +1,7 @@
 #pragma once
-#include "math/Color.h"
-#include "math/Mtx.h"
-#include "utl/BinStream.h"
+#include "math\Color.h"
+#include "math\Mtx.h"
+#include "utl\BinStream.h"
 
 class RndColorXfm {
 public:

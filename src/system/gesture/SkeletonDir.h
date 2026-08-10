@@ -1,9 +1,9 @@
 #pragma once
-#include "gesture/Skeleton.h"
-#include "gesture/SkeletonClip.h"
-#include "obj/Object.h"
-#include "ui/PanelDir.h"
-#include "utl/MemMgr.h"
+#include "gesture\Skeleton.h"
+#include "gesture\SkeletonClip.h"
+#include "obj\Object.h"
+#include "ui\PanelDir.h"
+#include "utl\MemMgr.h"
 
 /** "Dir with skeleton tracking/debugging functionality" */
 class SkeletonDir : public PanelDir, public SkeletonCallback {

@@ -1,8 +1,8 @@
 #pragma once
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "os/ContentMgr.h"
-#include "ui/UIPanel.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "os\ContentMgr.h"
+#include "ui\UIPanel.h"
 
 class ContentLoadingPanel : public UIPanel, public ContentMgr::Callback {
 public:

@@ -1,9 +1,9 @@
 #pragma once
 #include "CDReader.h"
-#include "os/File.h"
+#include "os\File.h"
 #include "types.h"
-#include "utl/MemMgr.h"
-#include "utl/Str.h"
+#include "utl\MemMgr.h"
+#include "utl\Str.h"
 
 class ArkFile : public File {
 public:

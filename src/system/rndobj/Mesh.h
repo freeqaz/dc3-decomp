@@ -1,13 +1,13 @@
 #pragma once
-#include "math/Color.h"
-#include "math/Geo.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "os/System.h"
-#include "rndobj/Draw.h"
-#include "rndobj/Mat.h"
-#include "rndobj/Trans.h"
-#include "utl/MemMgr.h"
+#include "math\Color.h"
+#include "math\Geo.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "os\System.h"
+#include "rndobj\Draw.h"
+#include "rndobj\Mat.h"
+#include "rndobj\Trans.h"
+#include "utl\MemMgr.h"
 
 class RndMultiMesh;
 

@@ -1,12 +1,12 @@
 #pragma once
 #include "SongMgr.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "os/DateTime.h"
-#include "stl/_vector.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "os\DateTime.h"
+#include "stl\_vector.h"
 #include "types.h"
-#include "utl/Symbol.h"
-#include "xdk/win_types.h"
+#include "utl\Symbol.h"
+#include "xdk\win_types.h"
 
 class StorePurchaseable : public Hmx::Object {
 public:

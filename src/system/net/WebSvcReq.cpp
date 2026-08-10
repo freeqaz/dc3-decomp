@@ -1,11 +1,11 @@
-#include "net/WebSvcReq.h"
+#include "net\WebSvcReq.h"
 #include "HttpReq.h"
 #include "macros.h"
-#include "obj/Dir.h"
-#include "obj/Object.h"
-#include "os/Debug.h"
-#include "utl/MemMgr.h"
-#include "utl/Symbol.h"
+#include "obj\Dir.h"
+#include "obj\Object.h"
+#include "os\Debug.h"
+#include "utl\MemMgr.h"
+#include "utl\Symbol.h"
 
 WebSvcRequest::WebSvcRequest(
     const char *url, const char *additional_hdr, Hmx::Object *callback

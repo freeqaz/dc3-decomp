@@ -1,11 +1,11 @@
-#include "os/Joypad_Xbox.h"
-#include "obj/Data.h"
-#include "os/CritSec.h"
-#include "os/Debug.h"
-#include "os/Joypad.h"
-#include "os/Joypad_Xinput.h"
-#include "os/System.h"
-#include "xdk/XAPILIB.h"
+#include "os\Joypad_Xbox.h"
+#include "obj\Data.h"
+#include "os\CritSec.h"
+#include "os\Debug.h"
+#include "os\Joypad.h"
+#include "os\Joypad_Xinput.h"
+#include "os\System.h"
+#include "xdk\XAPILIB.h"
 
 namespace {
     BreedData tBreed[kNumJoypads];

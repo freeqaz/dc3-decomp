@@ -1,7 +1,7 @@
-#include "ui/UIButton.h"
-#include "obj/Object.h"
-#include "ui/UILabel.h"
-#include "utl/BinStream.h"
+#include "ui\UIButton.h"
+#include "obj\Object.h"
+#include "ui\UILabel.h"
+#include "utl\BinStream.h"
 
 void UIButton::Load(BinStream &bs) {
     PreLoad(bs);

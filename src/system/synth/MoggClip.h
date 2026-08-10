@@ -1,12 +1,12 @@
 #pragma once
-#include "obj/Object.h"
-#include "synth/Faders.h"
-#include "synth/FxSend.h"
-#include "synth/PlayableSample.h"
-#include "synth/StandardStream.h"
-#include "utl/BinStream.h"
-#include "utl/FilePath.h"
-#include "utl/MemMgr.h"
+#include "obj\Object.h"
+#include "synth\Faders.h"
+#include "synth\FxSend.h"
+#include "synth\PlayableSample.h"
+#include "synth\StandardStream.h"
+#include "utl\BinStream.h"
+#include "utl\FilePath.h"
+#include "utl\MemMgr.h"
 
 /** "Allows dynamic playback of Mogg-based audio clips, most notably crowd audio loops."
  */

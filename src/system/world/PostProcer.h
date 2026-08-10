@@ -1,7 +1,7 @@
 #pragma once
-#include "obj/Object.h"
-#include "rndobj/Draw.h"
-#include "utl/MemMgr.h"
+#include "obj\Object.h"
+#include "rndobj\Draw.h"
+#include "utl\MemMgr.h"
 
 /** "Forces the PostProc" */
 class PostProcer : public RndDrawable {

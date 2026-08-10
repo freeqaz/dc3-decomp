@@ -1,10 +1,10 @@
 #pragma once
-#include "gesture/CameraInput.h"
-#include "gesture/SpeechMgr.h"
-#include "rnddx9/Tex.h"
-#include "rndobj/Mat.h"
-#include "rndobj/Tex.h"
-#include "xdk/NUI.h"
+#include "gesture\CameraInput.h"
+#include "gesture\SpeechMgr.h"
+#include "rnddx9\Tex.h"
+#include "rndobj\Mat.h"
+#include "rndobj\Tex.h"
+#include "xdk\NUI.h"
 
 struct CamTexClip {
     void StoreTextureClip(RndTex *, float, float, float, float);

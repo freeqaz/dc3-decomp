@@ -1,8 +1,8 @@
-#include "utl/Compress.h"
-#include "utl/MemMgr.h"
-#include "zlib/zconf.h"
-#include "zlib/zlib.h"
-#include "os/Debug.h"
+#include "utl\Compress.h"
+#include "utl\MemMgr.h"
+#include "zlib\zconf.h"
+#include "zlib\zlib.h"
+#include "os\Debug.h"
 
 void *ZAlloc(void *mem, unsigned int len, unsigned int ct) {
     return _MemAllocTemp(len * ct, __FILE__, 0x55, "zlib", 0);

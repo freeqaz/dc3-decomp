@@ -1,9 +1,9 @@
 #pragma once
 #include "MovieImpl.h"
 #include "MovieSys.h"
-#include "synth/Faders.h"
-#include "utl/BinStream.h"
-#include "utl/Loader.h"
+#include "synth\Faders.h"
+#include "utl\BinStream.h"
+#include "utl\Loader.h"
 
 class Movie {
 public:

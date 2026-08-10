@@ -1,9 +1,9 @@
 #pragma once
-#include "obj/Object.h"
-#include "synth/FxSend.h"
-#include "synth/PlayableSample.h"
-#include "synth/Stream.h"
-#include "synth/SynthSample.h"
+#include "obj\Object.h"
+#include "synth\FxSend.h"
+#include "synth\PlayableSample.h"
+#include "synth\Stream.h"
+#include "synth\SynthSample.h"
 
 class SampleInst : public Hmx::Object, public PlayableSample {
 public:

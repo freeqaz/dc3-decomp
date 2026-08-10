@@ -3,8 +3,8 @@
 #include "ChallengeRecord.h"
 #include "ChallengeSortNode.h"
 #include "Challenges.h"
-#include "meta/Sorting.h"
-#include "os/Debug.h"
+#include "meta\Sorting.h"
+#include "os\Debug.h"
 
 int ChallengeScoreCmp::Compare(
     const NavListItemSortCmp *cmp, NavListNodeType type

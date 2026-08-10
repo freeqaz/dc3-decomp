@@ -15,9 +15,9 @@
 
  ********************************************************************/
 
-#include "vorbis/codec.h"
+#include "vorbis\codec.h"
 #include "backends.h"
-#include "books/floor/floor_books.h"
+#include "books\floor\floor_books.h"
 
 static static_codebook *_floor_128x4_books[]={
   &_huff_book_line_128x4_class0,

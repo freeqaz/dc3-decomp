@@ -1,12 +1,12 @@
-#include "meta_ham/VenueProvider.h"
-#include "hamobj/HamGameData.h"
-#include "hamobj/HamPlayerData.h"
-#include "meta_ham/ProfileMgr.h"
-#include "obj/Data.h"
-#include "os/Debug.h"
-#include "os/System.h"
-#include "ui/UIListLabel.h"
-#include "utl/Symbol.h"
+#include "meta_ham\VenueProvider.h"
+#include "hamobj\HamGameData.h"
+#include "hamobj\HamPlayerData.h"
+#include "meta_ham\ProfileMgr.h"
+#include "obj\Data.h"
+#include "os\Debug.h"
+#include "os\System.h"
+#include "ui\UIListLabel.h"
+#include "utl\Symbol.h"
 #include <cstdio>
 
 VenueProvider::VenueProvider() : mPlayer(0) {}

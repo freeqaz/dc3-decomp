@@ -1,18 +1,18 @@
-#include "char/CharBones.h"
+#include "char\CharBones.h"
 #ifdef HX_NATIVE
 #include <cstdlib>
 #include <cstring>
 #include <cstdio>
 #endif
-#include "char/CharClip.h"
-#include "math/Mtx.h"
-#include "math/Rot.h"
-#include "math/Vec.h"
-#include "os/Debug.h"
-#include "utl/BinStream.h"
-#include "utl/MakeString.h"
-#include "obj/Object.h"
-#include "utl/MemMgr.h"
+#include "char\CharClip.h"
+#include "math\Mtx.h"
+#include "math\Rot.h"
+#include "math\Vec.h"
+#include "os\Debug.h"
+#include "utl\BinStream.h"
+#include "utl\MakeString.h"
+#include "obj\Object.h"
+#include "utl\MemMgr.h"
 
 CharBones *gPropBones;
 

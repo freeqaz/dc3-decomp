@@ -1,15 +1,15 @@
 #pragma once
-#include "hamobj/HamPlayerData.h"
-#include "meta_ham/Accomplishment.h"
-#include "meta_ham/AccomplishmentCategory.h"
-#include "meta_ham/AccomplishmentGroup.h"
-#include "meta_ham/Award.h"
-#include "meta_ham/HamProfile.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "os/ContentMgr.h"
-#include "os/PlatformMgr.h"
-#include "utl/Symbol.h"
+#include "hamobj\HamPlayerData.h"
+#include "meta_ham\Accomplishment.h"
+#include "meta_ham\AccomplishmentCategory.h"
+#include "meta_ham\AccomplishmentGroup.h"
+#include "meta_ham\Award.h"
+#include "meta_ham\HamProfile.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "os\ContentMgr.h"
+#include "os\PlatformMgr.h"
+#include "utl\Symbol.h"
 
 enum HardCoreStatus {
 };

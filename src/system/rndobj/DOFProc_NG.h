@@ -1,8 +1,8 @@
 #pragma once
-#include "obj/Object.h"
-#include "rndobj/DOFProc.h"
-#include "rndobj/PostProc.h"
-#include "rndobj/Tex.h"
+#include "obj\Object.h"
+#include "rndobj\DOFProc.h"
+#include "rndobj\PostProc.h"
+#include "rndobj\Tex.h"
 
 class NgDOFProc : public DOFProc, public PostProcessor {
 public:

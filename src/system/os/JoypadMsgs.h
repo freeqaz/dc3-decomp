@@ -1,7 +1,7 @@
 #pragma once
-#include "obj/Msg.h"
-#include "os/User.h"
-#include "os/Joypad.h"
+#include "obj\Msg.h"
+#include "os\User.h"
+#include "os\Joypad.h"
 
 DECLARE_MESSAGE(ButtonDownMsg, "button_down")
 ButtonDownMsg(LocalUser *user, JoypadButton button, JoypadAction action, int padnum);

@@ -1,12 +1,12 @@
 #include "Fur_NG.h"
-#include "rnddx9/RenderState.h"
-#include "rndobj/ShaderMgr.h"
-#include "rndobj/Shader.h"
-#include "rndobj/ShaderOptions.h"
-#include "rndobj/Mat.h"
-#include "rndobj/Mat_NG.h"
-#include "rndobj/Mesh.h"
-#include "math/Vec.h"
+#include "rnddx9\RenderState.h"
+#include "rndobj\ShaderMgr.h"
+#include "rndobj\Shader.h"
+#include "rndobj\ShaderOptions.h"
+#include "rndobj\Mat.h"
+#include "rndobj\Mat_NG.h"
+#include "rndobj\Mesh.h"
+#include "math\Vec.h"
 
 bool NgFur::Prep(RndMesh *, RndMat *) const {
     TheShaderMgr.SetPConstant(kPS_FurDetail, mFurDetail);

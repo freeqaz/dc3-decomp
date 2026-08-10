@@ -1,8 +1,8 @@
 #pragma once
-#include "hamobj/DancerSkeleton.h"
-#include "obj/Object.h"
-#include "rndobj/Anim.h"
-#include "utl/MemMgr.h"
+#include "hamobj\DancerSkeleton.h"
+#include "obj\Object.h"
+#include "rndobj\Anim.h"
+#include "utl\MemMgr.h"
 
 // size 0x2dc
 struct DancerFrame {

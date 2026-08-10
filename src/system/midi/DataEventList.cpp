@@ -1,8 +1,8 @@
-#include "midi/DataEventList.h"
-#include "os/Debug.h"
-#include "utl/Std.h"
-#include "utl/TextStream.h"
-#include "utl/TimeConversion.h"
+#include "midi\DataEventList.h"
+#include "os\Debug.h"
+#include "utl\Std.h"
+#include "utl\TextStream.h"
+#include "utl\TimeConversion.h"
 #include <algorithm>
 
 namespace {

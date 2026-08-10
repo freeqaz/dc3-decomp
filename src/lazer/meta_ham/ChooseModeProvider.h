@@ -1,13 +1,13 @@
 #pragma once
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "rndobj/Mat.h"
-#include "stl/_vector.h"
-#include "ui/UILabel.h"
-#include "ui/UIListLabel.h"
-#include "ui/UIListMesh.h"
-#include "ui/UIListProvider.h"
-#include "utl/Symbol.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "rndobj\Mat.h"
+#include "stl\_vector.h"
+#include "ui\UILabel.h"
+#include "ui\UIListLabel.h"
+#include "ui\UIListMesh.h"
+#include "ui\UIListProvider.h"
+#include "utl\Symbol.h"
 
 class ChooseModeProvider : public UIListProvider, public Hmx::Object {
 public:

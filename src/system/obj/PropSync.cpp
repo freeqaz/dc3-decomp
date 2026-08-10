@@ -1,13 +1,13 @@
-#include "obj/PropSync.h"
-#include "math/Color.h"
-#include "math/Geo.h"
-#include "math/Mtx.h"
-#include "math/Rot.h"
-#include "math/Sphere.h"
-#include "obj/Data.h"
-#include "os/Debug.h"
-#include "os/File.h"
-#include "utl/FilePath.h"
+#include "obj\PropSync.h"
+#include "math\Color.h"
+#include "math\Geo.h"
+#include "math\Mtx.h"
+#include "math\Rot.h"
+#include "math\Sphere.h"
+#include "obj\Data.h"
+#include "os\Debug.h"
+#include "os\File.h"
+#include "utl\FilePath.h"
 
 bool PropSync(class String &str, DataNode &node, DataArray *prop, int i, PropOp op) {
     MILO_ASSERT(i == prop->Size() && (op & (kPropSet|kPropGet|kPropInsert)), 0x12);

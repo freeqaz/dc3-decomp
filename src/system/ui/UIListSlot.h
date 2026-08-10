@@ -1,7 +1,7 @@
 #pragma once
-#include "obj/Object.h"
-#include "ui/UIListWidget.h"
-#include "utl/MemMgr.h"
+#include "obj\Object.h"
+#include "ui\UIListWidget.h"
+#include "utl\MemMgr.h"
 
 enum UIListSlotDrawType {
     kUIListSlotDrawAlways,

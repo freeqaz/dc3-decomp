@@ -1,6 +1,6 @@
-#include "utl/TextStream.h"
-#include "os/Debug.h"
-#include "os/System.h"
+#include "utl\TextStream.h"
+#include "os\Debug.h"
+#include "os\System.h"
 #define SNPRINTF Hx_snprintf
 
 TextStream::TextStream() {}

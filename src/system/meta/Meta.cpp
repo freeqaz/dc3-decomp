@@ -1,11 +1,11 @@
-#include "meta/Meta.h"
+#include "meta\Meta.h"
 #include "HeldButtonPanel.h"
-#include "meta/Achievements.h"
-#include "meta/ConnectionStatusPanel.h"
-#include "meta/DeJitterPanel.h"
-#include "meta/PreloadPanel.h"
-#include "obj/Object.h"
-#include "os/Debug.h"
+#include "meta\Achievements.h"
+#include "meta\ConnectionStatusPanel.h"
+#include "meta\DeJitterPanel.h"
+#include "meta\PreloadPanel.h"
+#include "obj\Object.h"
+#include "os\Debug.h"
 
 void MetaInit() {
     Achievements::Init();

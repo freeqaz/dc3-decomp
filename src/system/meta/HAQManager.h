@@ -1,12 +1,12 @@
 #pragma once
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "os/Joypad.h"
-#include "ui/UIComponent.h"
-#include "ui/UIList.h"
-#include "ui/UISlider.h"
-#include "utl/Str.h"
-#include "utl/Symbol.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "os\Joypad.h"
+#include "ui\UIComponent.h"
+#include "ui\UIList.h"
+#include "ui\UISlider.h"
+#include "utl\Str.h"
+#include "utl\Symbol.h"
 
 class UIComponent;
 class UIList;

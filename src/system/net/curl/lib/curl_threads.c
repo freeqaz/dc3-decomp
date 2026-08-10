@@ -21,7 +21,7 @@
  ***************************************************************************/
 
 #include "setup.h"
-#include "xdk/xapilibi/winnt.h"
+#include "xdk\xapilibi\winnt.h"
 
 #if defined(USE_THREADS_POSIX)
 #ifdef HAVE_PTHREAD_H

@@ -1,7 +1,7 @@
 #pragma once
 #include "FxSend.h"
-#include "obj/Object.h"
-#include "synth/FxSendPitchShift.h"
+#include "obj\Object.h"
+#include "synth\FxSendPitchShift.h"
 
 class FxSendPitchShift360 : public FxSendPitchShift, public FxSend360 {
 public:

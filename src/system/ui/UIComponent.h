@@ -1,11 +1,11 @@
 #pragma once
-#include "obj/Object.h"
-#include "os/User.h"
-#include "rndobj/Draw.h"
-#include "rndobj/Trans.h"
-#include "rndobj/Poll.h"
-#include "utl/MemMgr.h"
-#include "ui/UIScreen.h"
+#include "obj\Object.h"
+#include "os\User.h"
+#include "rndobj\Draw.h"
+#include "rndobj\Trans.h"
+#include "rndobj\Poll.h"
+#include "utl\MemMgr.h"
+#include "ui\UIScreen.h"
 
 class PanelDir;
 
@@ -80,7 +80,7 @@ private:
 
 UIComponent::State SymToUIComponentState(Symbol s);
 
-#include "obj/Msg.h"
+#include "obj\Msg.h"
 
 DECLARE_MESSAGE(UIComponentScrollMsg, "component_scroll");
 UIComponentScrollMsg(UIComponent *comp, LocalUser *user) : Message(Type(), comp, user) {}

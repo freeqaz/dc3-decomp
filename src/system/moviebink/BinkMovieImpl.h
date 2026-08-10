@@ -1,13 +1,13 @@
 #pragma once
-#include "binkxenon/bink.h"
-#include "math/Geo.h"
-#include "movie/MovieImpl.h"
-#include "rndobj/Mat.h"
-#include "rndobj/Tex.h"
-#include "utl/BinStream.h"
-#include "utl/Loader.h"
-#include "utl/Str.h"
-#include "xdk/win_types.h"
+#include "binkxenon\bink.h"
+#include "math\Geo.h"
+#include "movie\MovieImpl.h"
+#include "rndobj\Mat.h"
+#include "rndobj\Tex.h"
+#include "utl\BinStream.h"
+#include "utl\Loader.h"
+#include "utl\Str.h"
+#include "xdk\win_types.h"
 
 // size 0xC0
 struct MovieInternalBuffers {

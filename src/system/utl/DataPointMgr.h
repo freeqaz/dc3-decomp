@@ -1,6 +1,6 @@
 #pragma once
-#include "obj/Data.h"
-#include "utl/Str.h"
+#include "obj\Data.h"
+#include "utl\Str.h"
 #include <map>
 
 class DataPoint {

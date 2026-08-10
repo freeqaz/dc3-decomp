@@ -1,7 +1,7 @@
 #pragma once
-#include "xdk/XAPILIB.h"
-#include "xdk/D3D9.h"
-#include "xdk/win_types.h"
+#include "xdk\XAPILIB.h"
+#include "xdk\D3D9.h"
+#include "xdk\win_types.h"
 // This is where Xbox related functions that use D3D9 stuff will go.
 
 #ifdef __cplusplus

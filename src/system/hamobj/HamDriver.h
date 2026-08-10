@@ -1,14 +1,14 @@
 #pragma once
-#include "char/CharBones.h"
-#include "char/CharClip.h"
-#include "char/CharPollable.h"
-#include "char/CharWeightable.h"
-#include "math/Utl.h"
-#include "obj/Object.h"
-#include "rndobj/Highlight.h"
-#include "rndobj/Poll.h"
-#include "utl/BinStream.h"
-#include "utl/MemMgr.h"
+#include "char\CharBones.h"
+#include "char\CharClip.h"
+#include "char\CharPollable.h"
+#include "char\CharWeightable.h"
+#include "math\Utl.h"
+#include "obj\Object.h"
+#include "rndobj\Highlight.h"
+#include "rndobj\Poll.h"
+#include "utl\BinStream.h"
+#include "utl\MemMgr.h"
 
 /** "Class to play back clips, has a tree view of layers" */
 class HamDriver : public RndHighlightable, public CharWeightable, public CharPollable {

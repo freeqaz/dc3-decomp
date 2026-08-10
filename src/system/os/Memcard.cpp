@@ -1,6 +1,6 @@
-#include "os/Memcard.h"
-#include "obj/Dir.h"
-#include "os/Debug.h"
+#include "os\Memcard.h"
+#include "obj\Dir.h"
+#include "os\Debug.h"
 
 void Memcard::Init() { SetName("memcard", ObjectDir::Main()); }
 void Memcard::Terminate() {}

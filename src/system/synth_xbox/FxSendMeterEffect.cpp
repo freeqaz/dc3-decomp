@@ -1,10 +1,10 @@
 #include "FxSendMeterEffect.h"
 #include "FxSend.h"
 #include "macros.h"
-#include "os/Debug.h"
-#include "synth/FxSend.h"
-#include "synth_xbox/MeterEffect.h"
-#include "xdk/unknwn.h"
+#include "os\Debug.h"
+#include "synth\FxSend.h"
+#include "synth_xbox\MeterEffect.h"
+#include "xdk\unknwn.h"
 
 FxSendMeterEffect360::FxSendMeterEffect360() : FxSend360(this), mParams(0) {}
 

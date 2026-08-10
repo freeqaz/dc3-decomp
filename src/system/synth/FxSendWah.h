@@ -1,6 +1,6 @@
 #pragma once
-#include "obj/Object.h"
-#include "synth/FxSend.h"
+#include "obj\Object.h"
+#include "synth\FxSend.h"
 
 /** "wah-wah effect" */
 class FxSendWah : public FxSend {

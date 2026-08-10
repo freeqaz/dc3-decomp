@@ -1,13 +1,13 @@
 #pragma once
 #include "NavListNode.h"
 #include "Playlist.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "stl/_vector.h"
-#include "ui/UILabel.h"
-#include "ui/UIListCustom.h"
-#include "ui/UIListLabel.h"
-#include "utl/Symbol.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "stl\_vector.h"
+#include "ui\UILabel.h"
+#include "ui\UIListCustom.h"
+#include "ui\UIListLabel.h"
+#include "utl\Symbol.h"
 
 class PlaylistSortNode : public NavListItemNode {
 public:

@@ -1,9 +1,9 @@
 #pragma once
-#include "meta/SongMgr.h"
-#include "meta/StoreOffer.h"
-#include "obj/Data.h"
-#include "utl/Str.h"
-#include "utl/Symbol.h"
+#include "meta\SongMgr.h"
+#include "meta\StoreOffer.h"
+#include "obj\Data.h"
+#include "utl\Str.h"
+#include "utl\Symbol.h"
 
 class HamStoreOffer : public StoreOffer {
 public:

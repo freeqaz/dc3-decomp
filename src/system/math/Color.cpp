@@ -1,5 +1,5 @@
-#include "math/Color.h"
-#include "utl/TextStream.h"
+#include "math\Color.h"
+#include "utl\TextStream.h"
 
 TextStream &operator<<(TextStream &ts, const Hmx::Color &color) {
     ts << "(r:" << color.red << " g:" << color.green << " b:" << color.blue

@@ -1,9 +1,9 @@
 #pragma once
 
 #include "StreamReader.h"
-#include "os/File.h"
-#include "utl/FileStream.h"
-#include "utl/WaveFile.h"
+#include "os\File.h"
+#include "utl\FileStream.h"
+#include "utl\WaveFile.h"
 #include "StandardStream.h"
 
 class WavReader : public StreamReader {

@@ -1,6 +1,6 @@
-#include "meta/DeJitterPanel.h"
-#include "ui/UIPanel.h"
-#include "utl/DeJitter.h"
+#include "meta\DeJitterPanel.h"
+#include "ui\UIPanel.h"
+#include "utl\DeJitter.h"
 
 DeJitterPanel::DeJitterPanel() : mFirstFrame(true) {}
 

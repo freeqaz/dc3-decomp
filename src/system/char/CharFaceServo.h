@@ -1,11 +1,11 @@
 #pragma once
-#include "char/CharBonesMeshes.h"
-#include "char/CharClip.h"
-#include "char/CharPollable.h"
-#include "obj/Dir.h"
-#include "obj/Object.h"
-#include "utl/MemMgr.h"
-#include "utl/Symbol.h"
+#include "char\CharBonesMeshes.h"
+#include "char\CharClip.h"
+#include "char\CharPollable.h"
+#include "obj\Dir.h"
+#include "obj\Object.h"
+#include "utl\MemMgr.h"
+#include "utl\Symbol.h"
 
 /** "BonesMeshes for facial blending" */
 class CharFaceServo : public CharPollable, public CharBonesMeshes {

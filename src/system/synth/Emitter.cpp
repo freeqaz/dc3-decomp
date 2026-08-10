@@ -1,13 +1,13 @@
-#include "synth/Emitter.h"
+#include "synth\Emitter.h"
 #include "Emitter.h"
-#include "obj/Dir.h"
-#include "obj/DirLoader.h"
-#include "obj/Object.h"
-#include "rndobj/Dir.h"
-#include "rndobj/Draw.h"
-#include "rndobj/Trans.h"
-#include "synth/Sfx.h"
-#include "utl/Loader.h"
+#include "obj\Dir.h"
+#include "obj\DirLoader.h"
+#include "obj\Object.h"
+#include "rndobj\Dir.h"
+#include "rndobj\Draw.h"
+#include "rndobj\Trans.h"
+#include "synth\Sfx.h"
+#include "utl\Loader.h"
 
 namespace {
     RndDir *gIconDir = nullptr;

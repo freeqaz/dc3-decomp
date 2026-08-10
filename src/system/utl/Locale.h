@@ -1,7 +1,7 @@
 #pragma once
-#include "utl/Symbol.h"
-#include "utl/StringTable.h"
-#include "obj/Data.h"
+#include "utl\Symbol.h"
+#include "utl\StringTable.h"
+#include "obj\Data.h"
 
 enum LocaleGender {
     LocaleGenderMasculine = 0,

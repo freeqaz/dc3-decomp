@@ -1,5 +1,5 @@
-#include "meta/MetaMusicScene.h"
-#include "os/Debug.h"
+#include "meta\MetaMusicScene.h"
+#include "os\Debug.h"
 
 MetaMusicScene::MetaMusicScene(DataArray *da) : m_symName(""), mMix(0) { Configure(da); }
 

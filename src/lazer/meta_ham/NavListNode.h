@@ -1,11 +1,11 @@
 #pragma once
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "os/DateTime.h"
-#include "os/Debug.h"
-#include "ui/UILabel.h"
-#include "ui/UIListLabel.h"
-#include "utl/Symbol.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "os\DateTime.h"
+#include "os\Debug.h"
+#include "ui\UILabel.h"
+#include "ui\UIListLabel.h"
+#include "utl\Symbol.h"
 
 enum NavListNodeType {
     // stole these from RB3 lmao

@@ -1,5 +1,5 @@
 #pragma once
-#include "os/Debug.h"
+#include "os\Debug.h"
 
 namespace Hmx {
     class CRC {
@@ -18,7 +18,7 @@ namespace Hmx {
     };
 }
 
-#include "utl/BinStream.h"
+#include "utl\BinStream.h"
 inline BinStream &operator<<(BinStream &bs, const Hmx::CRC &crc) {
     bs << crc.mCRC;
     return bs;

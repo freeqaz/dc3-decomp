@@ -1,11 +1,11 @@
 #pragma once
-#include "char/CharBones.h"
-#include "char/CharClip.h"
-#include "obj/Object.h"
-#include "obj/Task.h"
-#include "utl/MemMgr.h"
-#include "utl/PoolAlloc.h"
-#include "utl/Symbol.h"
+#include "char\CharBones.h"
+#include "char\CharClip.h"
+#include "obj\Object.h"
+#include "obj\Task.h"
+#include "utl\MemMgr.h"
+#include "utl\PoolAlloc.h"
+#include "utl\Symbol.h"
 
 class CharClipDriver {
 public:

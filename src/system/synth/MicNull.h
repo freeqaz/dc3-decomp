@@ -1,6 +1,6 @@
 #pragma once
-#include "os/Timer.h"
-#include "synth/Mic.h"
+#include "os\Timer.h"
+#include "synth\Mic.h"
 
 // size 0xA880
 class MicNull : public Mic {

@@ -1,7 +1,7 @@
 #pragma once
-#include "obj/Object.h"
-#include "rnddx9/Object.h"
-#include "rndobj/TexRenderer.h"
+#include "obj\Object.h"
+#include "rnddx9\Object.h"
+#include "rndobj\TexRenderer.h"
 
 class DxTexRenderer : public RndTexRenderer, public DxObject {
 public:

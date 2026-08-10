@@ -1,11 +1,11 @@
-#include "rndobj/BaseMaterial.h"
+#include "rndobj\BaseMaterial.h"
 #include "Utl.h"
-#include "obj/Data.h"
-#include "obj/Dir.h"
+#include "obj\Data.h"
+#include "obj\Dir.h"
 
-#include "obj/Object.h"
-#include "os/Debug.h"
-#include "utl/BinStream.h"
+#include "obj\Object.h"
+#include "os\Debug.h"
+#include "utl\BinStream.h"
 
 BaseMaterial *gDefaultMat;
 

@@ -1,8 +1,8 @@
 #include "Rot.h"
-#include "math/Mtx.h"
-#include "math/Trig.h"
-#include "math/Vec.h"
-#include "os/Debug.h"
+#include "math\Mtx.h"
+#include "math\Trig.h"
+#include "math\Vec.h"
+#include "os\Debug.h"
 #include <cmath>
 
 TextStream &operator<<(TextStream &ts, const Hmx::Quat &v) {

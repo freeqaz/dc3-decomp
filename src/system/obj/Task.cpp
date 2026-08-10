@@ -1,13 +1,13 @@
-#include "obj/Task.h"
+#include "obj\Task.h"
 #include "Dir.h"
-#include "obj/Data.h"
-#include "obj/DataFunc.h"
-#include "obj/DataUtl.h"
-#include "obj/Object.h"
-#include "os/Debug.h"
-#include "os/Timer.h"
-#include "utl/BeatMap.h"
-#include "utl/TempoMap.h"
+#include "obj\Data.h"
+#include "obj\DataFunc.h"
+#include "obj\DataUtl.h"
+#include "obj\Object.h"
+#include "os\Debug.h"
+#include "os\Timer.h"
+#include "utl\BeatMap.h"
+#include "utl\TempoMap.h"
 
 #ifdef HX_NATIVE
 #include <unordered_set>

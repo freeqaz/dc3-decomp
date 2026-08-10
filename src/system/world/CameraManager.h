@@ -1,12 +1,12 @@
 #pragma once
-#include "math/Rand.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "utl/MemMgr.h"
-#include "utl/Symbol.h"
-#include "world/CameraShot.h"
-#include "world/Crowd.h"
-#include "world/FreeCamera.h"
+#include "math\Rand.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "utl\MemMgr.h"
+#include "utl\Symbol.h"
+#include "world\CameraShot.h"
+#include "world\Crowd.h"
+#include "world\FreeCamera.h"
 
 class WorldDir;
 

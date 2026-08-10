@@ -1,8 +1,8 @@
 #pragma once
-#include "char/CharPollable.h"
-#include "char/CharWeightable.h"
-#include "rndobj/Trans.h"
-#include "utl/MemMgr.h"
+#include "char\CharPollable.h"
+#include "char\CharWeightable.h"
+#include "rndobj\Trans.h"
+#include "utl\MemMgr.h"
 
 /** "Rescales a local position of a bone" */
 class CharIKScale : public CharWeightable, public CharPollable {

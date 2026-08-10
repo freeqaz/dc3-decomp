@@ -1,10 +1,10 @@
 #pragma once
-#include "obj/Msg.h"
-#include "obj/Object.h"
+#include "obj\Msg.h"
+#include "obj\Object.h"
 #include "stdlib.h"
-#include "utl/MemMgr.h"
-#include "utl/Symbol.h"
-#include "xdk/xapilibi/xbase.h"
+#include "utl\MemMgr.h"
+#include "utl\Symbol.h"
+#include "xdk\xapilibi\xbase.h"
 #include <vector>
 
 class Job {

@@ -1,5 +1,5 @@
 #pragma once
-#include "../win_types.h"
+#include "..\win_types.h"
 #include "winsockx.h"
 
 #ifdef __cplusplus

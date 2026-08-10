@@ -1,12 +1,12 @@
 #pragma once
-#include "math/Vec.h"
-#include "obj/Data.h"
-#include "obj/Dir.h"
-#include "obj/Object.h"
-#include "rndobj/Draw.h"
-#include "rndobj/Poll.h"
-#include "rndobj/Trans.h"
-#include "utl/MemMgr.h"
+#include "math\Vec.h"
+#include "obj\Data.h"
+#include "obj\Dir.h"
+#include "obj\Object.h"
+#include "rndobj\Draw.h"
+#include "rndobj\Poll.h"
+#include "rndobj\Trans.h"
+#include "utl\MemMgr.h"
 
 enum PhysicsVolumeType {
     kPhysicsVolumeBox = 0,

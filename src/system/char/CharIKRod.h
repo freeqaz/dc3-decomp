@@ -1,8 +1,8 @@
 #pragma once
-#include "char/CharPollable.h"
-#include "math/Mtx.h"
-#include "rndobj/Trans.h"
-#include "utl/MemMgr.h"
+#include "char\CharPollable.h"
+#include "math\Mtx.h"
+#include "rndobj\Trans.h"
+#include "utl\MemMgr.h"
 
 /** "<p>Rigs a bone between two other bones and sets the
     orientation from that.</p>

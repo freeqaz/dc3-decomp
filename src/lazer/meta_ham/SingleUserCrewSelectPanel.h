@@ -1,12 +1,12 @@
 #pragma once
-#include "meta_ham/CharacterProvider.h"
-#include "meta_ham/CrewProvider.h"
-#include "meta_ham/OutfitProvider.h"
-#include "meta_ham/TexLoadPanel.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "rndobj/Mesh.h"
-#include "utl/Symbol.h"
+#include "meta_ham\CharacterProvider.h"
+#include "meta_ham\CrewProvider.h"
+#include "meta_ham\OutfitProvider.h"
+#include "meta_ham\TexLoadPanel.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "rndobj\Mesh.h"
+#include "utl\Symbol.h"
 
 class SingleUserCrewSelectPanel : public TexLoadPanel {
 public:

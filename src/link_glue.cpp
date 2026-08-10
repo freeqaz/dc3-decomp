@@ -8,20 +8,20 @@
 // third-party libraries (libjpeg, zlib, vorbis, curl, etc.) and Xbox SDK
 // functions that are not part of the decomp scope.
 
-#include "obj/Data.h"
-#include "os/Debug.h"
-#include "os/HDCache.h"
-#include "utl/MemMgr.h"
-#include "utl/PoolAlloc.h"
-#include "synth/Faders.h"
-#include "rndobj/Lit.h"
-#include "world/Spotlight.h"
-#include "char/Waypoint.h"
-#include "rndobj/Wind.h"
-#include "char/CharPollable.h"
-#include "char/CharWeightSetter.h"
-#include "flow/FlowNode.h"
-#include "rndobj/CamAnim.h"
+#include "obj\Data.h"
+#include "os\Debug.h"
+#include "os\HDCache.h"
+#include "utl\MemMgr.h"
+#include "utl\PoolAlloc.h"
+#include "synth\Faders.h"
+#include "rndobj\Lit.h"
+#include "world\Spotlight.h"
+#include "char\Waypoint.h"
+#include "rndobj\Wind.h"
+#include "char\CharPollable.h"
+#include "char\CharWeightSetter.h"
+#include "flow\FlowNode.h"
+#include "rndobj\CamAnim.h"
 
 // ============================================================================
 // ICF-merged function definitions
@@ -135,7 +135,7 @@ int WSACreateEvent() { return 0; }
 // (String constructors removed — utl/Str is Matching)
 
 // -- FormatString --
-#include "utl/MakeString.h"
+#include "utl\MakeString.h"
 
 FormatString &FormatString::operator<<(float) { return *this; }
 FormatString &FormatString::operator<<(long) { return *this; }
@@ -143,21 +143,21 @@ FormatString &FormatString::operator<<(unsigned int) { return *this; }
 FormatString &FormatString::operator<<(unsigned long long) { return *this; }
 
 // -- ObjectDir --
-#include "obj/Dir.h"
+#include "obj\Dir.h"
 
 // -- PanelDir --
-#include "ui/PanelDir.h"
+#include "ui\PanelDir.h"
 
 // -- UIComponent --
-#include "ui/UIComponent.h"
+#include "ui\UIComponent.h"
 
 // -- UIList --
-#include "ui/UIList.h"
+#include "ui\UIList.h"
 
 // -- BufStream --
 // Still needed: virtual method not exported from decomp .obj, referenced by other split
 // .objs
-#include "utl/BufStream.h"
+#include "utl\BufStream.h"
 
 // (ObjPtrList/ObjRefConcrete/BinStream template specializations removed —
 // generic templates in ObjPtr_p.h now provide all needed instantiations via COMDAT)
@@ -167,10 +167,10 @@ FormatString &FormatString::operator<<(unsigned long long) { return *this; }
 // (including these headers causes the compiler to emit needed template COMDATs)
 // ============================================================================
 
-#include "meta_ham/VenueProvider.h"
-#include "synth/WavMgr.h"
-#include "meta/Achievements.h"
-#include "meta/SongMetadata.h"
+#include "meta_ham\VenueProvider.h"
+#include "synth\WavMgr.h"
+#include "meta\Achievements.h"
+#include "meta\SongMetadata.h"
 
 // (ObjRefConcrete::CopyRef and BinStream operator<< specializations removed —
 // provided by COMDAT from real TUs via ObjPtr_p.h generic templates)
@@ -179,14 +179,14 @@ FormatString &FormatString::operator<<(unsigned long long) { return *this; }
 // Missing accessor/method stubs for Matching unit resolution
 // ============================================================================
 
-#include "meta/Profile.h"
-#include "meta_ham/AccomplishmentProgress.h"
-#include "meta_ham/CampaignEra.h"
-#include "meta_ham/AccomplishmentGroup.h"
-#include "meta_ham/Award.h"
-#include "meta/MetaMusicManager.h"
-#include "meta/MetaMusicScene.h"
-#include "os/PlatformMgr.h"
+#include "meta\Profile.h"
+#include "meta_ham\AccomplishmentProgress.h"
+#include "meta_ham\CampaignEra.h"
+#include "meta_ham\AccomplishmentGroup.h"
+#include "meta_ham\Award.h"
+#include "meta\MetaMusicManager.h"
+#include "meta\MetaMusicScene.h"
+#include "os\PlatformMgr.h"
 
 // -- CampaignEra stubs --
 
@@ -200,23 +200,23 @@ FormatString &FormatString::operator<<(unsigned long long) { return *this; }
 // -- Award stubs --
 
 // -- ProfileMgr stubs --
-#include "meta_ham/ProfileMgr.h"
+#include "meta_ham\ProfileMgr.h"
 
 // -- CharServoBone stubs --
-#include "char/CharServoBone.h"
+#include "char\CharServoBone.h"
 
 // -- CharBonesMeshes stubs (vtordisp thunk needs this) --
-#include "char/CharBonesMeshes.h"
+#include "char\CharBonesMeshes.h"
 
 // -- AppLabel stubs --
-#include "meta_ham/AppLabel.h"
+#include "meta_ham\AppLabel.h"
 
 // ============================================================================
 // Round 2: Additional stubs for 55 more Matching units
 // ============================================================================
 
 // -- FormatString stubs --
-#include "utl/MakeString.h"
+#include "utl\MakeString.h"
 FormatString &FormatString::operator<<(void *) { return *this; }
 FormatString &FormatString::operator<<(unsigned long) { return *this; }
 
@@ -224,11 +224,11 @@ FormatString &FormatString::operator<<(unsigned long) { return *this; }
 DebugNotifyOncePrinter TheDebugNotifyOncePrinter;
 
 // -- NavListSortMgr stubs --
-#include "meta_ham/NavListSortMgr.h"
+#include "meta_ham\NavListSortMgr.h"
 
 // -- ObjRefConcrete template stubs --
 
-#include "rndobj/Wind.h"
+#include "rndobj\Wind.h"
 
 // -- ObjPtrVec<RndTransformable> stubs --
 
@@ -236,80 +236,80 @@ DebugNotifyOncePrinter TheDebugNotifyOncePrinter;
 // provided by generic templates in ObjPtr_p.h)
 
 // -- CharDriver stubs --
-#include "char/CharDriver.h"
+#include "char\CharDriver.h"
 
 // -- SongMetadata stubs --
-#include "meta/SongMetadata.h"
+#include "meta\SongMetadata.h"
 
 // -- CacheMgr stubs --
-#include "utl/CacheMgr.h"
+#include "utl\CacheMgr.h"
 
 // (PracticeSection::Steps removed — hamobj/PracticeSection is Matching)
 
 // -- GestureMgr stubs --
-#include "gesture/GestureMgr.h"
+#include "gesture\GestureMgr.h"
 
 // -- CampaignProgress stubs --
-#include "meta_ham/CampaignProgress.h"
+#include "meta_ham\CampaignProgress.h"
 
 // -- CampaignEra stubs (round 2) --
 
 // -- UIListMesh stubs --
-#include "ui/UIListMesh.h"
+#include "ui\UIListMesh.h"
 
 // -- Hmx::Object stubs --
 
 // -- Award stubs (round 2) --
 
 // -- FaderGroup stubs --
-#include "synth/Faders.h"
+#include "synth\Faders.h"
 
 // -- UIList stubs --
-#include "ui/UIList.h"
+#include "ui\UIList.h"
 
 // -- NetCacheMgr stubs --
-#include "utl/NetCacheMgr.h"
+#include "utl\NetCacheMgr.h"
 
 // -- NetCacheMgrXbox stubs --
-#include "utl/NetCacheMgr_Xbox.h"
+#include "utl\NetCacheMgr_Xbox.h"
 
 // -- Round 3 stubs --
 
 // ObjRefConcrete::CopyRef for RndParticleSys (PartLauncher.obj)
-#include "rndobj/Part.h"
+#include "rndobj\Part.h"
 
 // ObjRefConcrete::CopyRef for CharBone (CharBone.obj)
-#include "char/CharBone.h"
+#include "char\CharBone.h"
 
 // FileLoader::GetSize (FileCache.obj, NetLoader.obj)
-#include "utl/Loader.h"
+#include "utl\Loader.h"
 
 // NavListHeaderNode::Handle (MQSongSortNode.obj)
-#include "meta_ham/NavListNode.h"
+#include "meta_ham\NavListNode.h"
 
 // BinStream operator<< for ObjOwnerPtr<RndTransAnim> (TransAnim.obj)
-#include "rndobj/TransAnim.h"
+#include "rndobj\TransAnim.h"
 
 // BinStream operator<< for ObjDirPtr<RndDir> (UISlider.obj)
-#include "obj/Dir.h"
-#include "rndobj/Rnd.h"
+#include "obj\Dir.h"
+#include "rndobj\Rnd.h"
 
 // BinStream operator<< for ObjPtrList<CharPollable> (CharPollGroup.obj - if needed later)
 // wmemcpy (SpeechMgr.obj - CRT function, needs library)
 
 // -- HolmesClientPrint stub (ArkFile.obj) --
-#include "os/HolmesClient.h"
+#include "os\HolmesClient.h"
 void HolmesClientPrint(const char *) {}
 
 // -- MemOrPoolFree stub (Str.obj) --
-#include "utl/MemMgr.h"
+#include "utl\MemMgr.h"
 void MemOrPoolFree(int, void *mem, const char *, int, const char *) {}
 
 // (ObjPtrList Node::RefOwner specializations removed — provided by generic templates)
 
 // EaseLinear standalone instantiation (inline in Easing.h, needs out-of-line symbol)
 // Including Easing.h emits gEaseFuncs[] which takes &EaseLinear, forcing out-of-line copy
-#include "math/Easing.h"
+#include "math\Easing.h"
 
 // ObjDirPtr<ObjectDir>::IsLoaded
 
@@ -695,32 +695,32 @@ extern "C" const char __link_glue_empty_str[] = "";
 // ============================================================================
 
 // -- Additional includes for template instantiations --
-#include "world/CameraShot.h"
-#include "char/CharClip.h"
-#include "char/CharInterest.h"
-#include "char/CharLookAt.h"
-#include "flow/Flow.h"
-#include "hamobj/HamCamShot.h"
-#include "hamobj/HamListRibbon.h"
-#include "hamobj/HamScrollSpeedIndicator.h"
-#include "hamobj/RhythmDetector.h"
-#include "rndobj/Env.h"
-#include "rndobj/FontBase.h"
-#include "rndobj/Font.h"
-#include "rndobj/LitAnim.h"
-#include "rndobj/Mat.h"
-#include "rndobj/MatAnim.h"
-#include "rndobj/MeshAnim.h"
-#include "rndobj/PartAnim.h"
-#include "rndobj/PartLauncher.h"
-#include "rndobj/TexBlendController.h"
-#include "rndobj/Group.h"
-#include "world/SpotlightDrawer.h"
-#include "world/Instance.h"
-#include "ui/UIListDir.h"
-#include "char/CharCollide.h"
-#include "char/CharHair.h"
-#include "char/CharClipSet.h"
+#include "world\CameraShot.h"
+#include "char\CharClip.h"
+#include "char\CharInterest.h"
+#include "char\CharLookAt.h"
+#include "flow\Flow.h"
+#include "hamobj\HamCamShot.h"
+#include "hamobj\HamListRibbon.h"
+#include "hamobj\HamScrollSpeedIndicator.h"
+#include "hamobj\RhythmDetector.h"
+#include "rndobj\Env.h"
+#include "rndobj\FontBase.h"
+#include "rndobj\Font.h"
+#include "rndobj\LitAnim.h"
+#include "rndobj\Mat.h"
+#include "rndobj\MatAnim.h"
+#include "rndobj\MeshAnim.h"
+#include "rndobj\PartAnim.h"
+#include "rndobj\PartLauncher.h"
+#include "rndobj\TexBlendController.h"
+#include "rndobj\Group.h"
+#include "world\SpotlightDrawer.h"
+#include "world\Instance.h"
+#include "ui\UIListDir.h"
+#include "char\CharCollide.h"
+#include "char\CharHair.h"
+#include "char\CharClipSet.h"
 
 // -- BinStream operator<< for ObjPtrList<T> --
 

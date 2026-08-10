@@ -1,15 +1,15 @@
 #pragma once
 #include "NavListSortMgr.h"
-#include "game/PartyModeMgr.h"
-#include "meta/SongPreview.h"
-#include "meta_ham/FitnessGoalMgr.h"
-#include "meta_ham/Playlist.h"
-#include "net_ham/PlaylistJobs.h"
-#include "net_ham/RCJobDingo.h"
-#include "obj/Data.h"
-#include "stl/_vector.h"
-#include "utl/Str.h"
-#include "utl/Symbol.h"
+#include "game\PartyModeMgr.h"
+#include "meta\SongPreview.h"
+#include "meta_ham\FitnessGoalMgr.h"
+#include "meta_ham\Playlist.h"
+#include "net_ham\PlaylistJobs.h"
+#include "net_ham\RCJobDingo.h"
+#include "obj\Data.h"
+#include "stl\_vector.h"
+#include "utl\Str.h"
+#include "utl\Symbol.h"
 #include <list>
 
 struct CmdGetPlaylistsFromRC : public QueueableCommand {

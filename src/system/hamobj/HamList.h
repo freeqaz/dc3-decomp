@@ -1,6 +1,6 @@
 #pragma once
-#include "ui/UIList.h"
-#include "utl/MemMgr.h"
+#include "ui\UIList.h"
+#include "utl\MemMgr.h"
 
 class HamList : public UIList {
 public:

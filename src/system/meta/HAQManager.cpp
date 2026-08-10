@@ -1,13 +1,13 @@
-#include "meta/HAQManager.h"
+#include "meta\HAQManager.h"
 #include "HAQManager.h"
-#include "obj/Object.h"
-#include "os/Debug.h"
-#include "ui/UI.h"
-#include "ui/UIComponent.h"
-#include "ui/UIList.h"
-#include "ui/UIPanel.h"
-#include "ui/UISlider.h"
-#include "utl/Str.h"
+#include "obj\Object.h"
+#include "os\Debug.h"
+#include "ui\UI.h"
+#include "ui\UIComponent.h"
+#include "ui\UIList.h"
+#include "ui\UIPanel.h"
+#include "ui\UISlider.h"
+#include "utl\Str.h"
 
 UIComponent *HAQManager::GetUIFocusComponent() const {
     UIComponent *ret = 0;

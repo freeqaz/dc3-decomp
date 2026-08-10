@@ -1,5 +1,5 @@
 #pragma once
-#include "flow/FlowNode.h"
+#include "flow\FlowNode.h"
 
 /** "A sequence of flow objects" */
 class FlowSequence : public FlowNode {

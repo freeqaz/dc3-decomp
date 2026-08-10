@@ -1,6 +1,6 @@
 #pragma once
-#include "synth/Stream.h"
-#include "utl/VarTimer.h"
+#include "synth\Stream.h"
+#include "utl\VarTimer.h"
 
 class StreamNull : public Stream {
 public:

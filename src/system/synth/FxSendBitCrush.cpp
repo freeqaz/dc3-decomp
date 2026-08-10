@@ -1,7 +1,7 @@
-#include "synth/FxSendBitCrush.h"
-#include "obj/Object.h"
-#include "synth/FxSend.h"
-#include "utl/BinStream.h"
+#include "synth\FxSendBitCrush.h"
+#include "obj\Object.h"
+#include "synth\FxSend.h"
+#include "utl\BinStream.h"
 
 FxSendBitCrush::FxSendBitCrush() : mAmount(0) {}
 

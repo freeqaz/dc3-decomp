@@ -1,10 +1,10 @@
 #pragma once
-#include "math/Mtx.h"
-#include "obj/Object.h"
-#include "rndobj/Mesh.h"
-#include "rndobj/Trans.h"
-#include "utl/BinStream.h"
-#include "utl/MemMgr.h"
+#include "math\Mtx.h"
+#include "obj\Object.h"
+#include "rndobj\Mesh.h"
+#include "rndobj\Trans.h"
+#include "utl\BinStream.h"
+#include "utl\MemMgr.h"
 
 /** "Reskins target mesh according to exobones." */
 class RndMeshDeform : public Hmx::Object {

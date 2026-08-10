@@ -1,11 +1,11 @@
-#include "net_ham/MotdJobs.h"
-#include "net/JsonUtils.h"
-#include "net_ham/RCJobDingo.h"
-#include "obj/Object.h"
-#include "os/DateTime.h"
-#include "os/System.h"
-#include "utl/DataPointMgr.h"
-#include "utl/Symbol.h"
+#include "net_ham\MotdJobs.h"
+#include "net\JsonUtils.h"
+#include "net_ham\RCJobDingo.h"
+#include "obj\Object.h"
+#include "os\DateTime.h"
+#include "os\System.h"
+#include "utl\DataPointMgr.h"
+#include "utl\Symbol.h"
 #include <cstdlib>
 
 GetMotdJob::GetMotdJob(Hmx::Object *callback) : RCJob("motd/getmotd/", callback) {

@@ -1,13 +1,13 @@
-#include "utl/ChunkStream.h"
+#include "utl\ChunkStream.h"
 
 #include "Compress.h"
-#include "obj/Object.h"
-#include "os/CritSec.h"
-#include "os/Endian.h"
-#include "os/File.h"
-#include "os/SynchronizationEvent.h"
-#include "os/System.h"
-#include "utl/Std.h"
+#include "obj\Object.h"
+#include "os\CritSec.h"
+#include "os\Endian.h"
+#include "os\File.h"
+#include "os\SynchronizationEvent.h"
+#include "os\System.h"
+#include "utl\Std.h"
 
 namespace {
     std::list<DecompressTask> gDecompressionQueue;

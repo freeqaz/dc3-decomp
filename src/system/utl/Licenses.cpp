@@ -1,5 +1,5 @@
 #include "Licenses.h"
-#include "os/Debug.h"
+#include "os\Debug.h"
 
 Licenses *Licenses::sFront = nullptr;
 int Licenses::sInited = 0;

@@ -1,12 +1,12 @@
 #pragma once
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "obj/Task.h"
-#include "rndobj/Poll.h"
-#include "synth/Sound.h"
-#include "utl/MeasureMap.h"
-#include "utl/MemMgr.h"
-#include "utl/SongPos.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "obj\Task.h"
+#include "rndobj\Poll.h"
+#include "synth\Sound.h"
+#include "utl\MeasureMap.h"
+#include "utl\MemMgr.h"
+#include "utl\SongPos.h"
 
 /** "Class that provides a beat using the taskmgr time or uses the taskmgr beat" */
 class BeatClock : public RndPollable {

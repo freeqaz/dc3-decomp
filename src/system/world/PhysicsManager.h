@@ -1,13 +1,13 @@
 #pragma once
-#include "math/Geo.h"
-#include "math/Mtx.h"
-#include "math/Vec.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "rndobj/Dir.h"
-#include "rndobj/Mesh.h"
-#include "utl/MemMgr.h"
-#include "world/PhysicsVolume.h"
+#include "math\Geo.h"
+#include "math\Mtx.h"
+#include "math\Vec.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "rndobj\Dir.h"
+#include "rndobj\Mesh.h"
+#include "utl\MemMgr.h"
+#include "world\PhysicsVolume.h"
 
 struct RayCast;
 class DetectionVolumeListener;

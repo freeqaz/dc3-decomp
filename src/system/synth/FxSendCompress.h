@@ -1,6 +1,6 @@
 #pragma once
-#include "obj/Object.h"
-#include "synth/FxSend.h"
+#include "obj\Object.h"
+#include "synth\FxSend.h"
 
 /** "A compression/expansion effect." */
 class FxSendCompress : public FxSend {

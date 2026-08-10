@@ -1,6 +1,6 @@
 #pragma once
-#include "utl/FileStream.h"
-#include "utl/TextStream.h"
+#include "utl\FileStream.h"
+#include "utl\TextStream.h"
 
 class TextFileStream : public TextStream {
 public:

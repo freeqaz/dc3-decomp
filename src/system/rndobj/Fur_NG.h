@@ -1,9 +1,9 @@
 #pragma once
 
-#include "obj/Object.h"
-#include "rndobj/Fur.h"
-#include "rndobj/Mat.h"
-#include "rndobj/Mesh.h"
+#include "obj\Object.h"
+#include "rndobj\Fur.h"
+#include "rndobj\Mat.h"
+#include "rndobj\Mesh.h"
 
 class NgFur : public RndFur {
 public:

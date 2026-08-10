@@ -1,9 +1,9 @@
 #pragma once
-#include "char/CharPollable.h"
-#include "obj/Object.h"
-#include "rndobj/Highlight.h"
-#include "rndobj/Trans.h"
-#include "utl/MemMgr.h"
+#include "char\CharPollable.h"
+#include "obj\Object.h"
+#include "rndobj\Highlight.h"
+#include "rndobj\Trans.h"
+#include "utl\MemMgr.h"
 
 /** "Does all interpolation for the forearm. Assumes:
         -foretwist1 and forearm are under upperarm.

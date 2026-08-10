@@ -1,6 +1,6 @@
 #pragma once
-#include "os/NetworkSocket.h"
-#include "utl/Str.h"
+#include "os\NetworkSocket.h"
+#include "utl\Str.h"
 #include <list>
 
 class OSCMessenger {

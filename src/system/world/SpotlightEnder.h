@@ -1,7 +1,7 @@
 #pragma once
-#include "obj/Object.h"
-#include "rndobj/Draw.h"
-#include "utl/MemMgr.h"
+#include "obj\Object.h"
+#include "rndobj\Draw.h"
+#include "utl\MemMgr.h"
 
 /** "Object that ends spotlights, must put after the last spotlight
     and before anything that would render using those spotlights" */

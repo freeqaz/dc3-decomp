@@ -1,6 +1,6 @@
-#include "os/UserMgr.h"
+#include "os\UserMgr.h"
 #include "Joypad.h"
-#include "obj/Dir.h"
+#include "obj\Dir.h"
 
 UserMgr *TheUserMgr;
 

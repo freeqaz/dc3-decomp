@@ -1,10 +1,10 @@
-#include "os/UsbMidiGuitar.h"
+#include "os\UsbMidiGuitar.h"
 #include "decomp.h"
-#include "os/CritSec.h"
-#include "os/Joypad.h"
-#include "os/Debug.h"
-#include "os/UsbMidiGuitarMsgs.h"
-#include "os/UsbMidiKeyboardMsgs.h"
+#include "os\CritSec.h"
+#include "os\Joypad.h"
+#include "os\Debug.h"
+#include "os\UsbMidiGuitarMsgs.h"
+#include "os\UsbMidiKeyboardMsgs.h"
 
 CriticalSection gCritSection;
 Queue gQueue(0x32);

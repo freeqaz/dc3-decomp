@@ -1,10 +1,10 @@
 #pragma once
-#include "meta_ham/HamMemcardAction.h"
-#include "utl/BinStream.h"
-#include "utl/BufStream.h"
-#include "meta/FixedSizeSaveableStream.h"
-#include "os/Debug.h"
-#include "utl/Std.h"
+#include "meta_ham\HamMemcardAction.h"
+#include "utl\BinStream.h"
+#include "utl\BufStream.h"
+#include "meta\FixedSizeSaveableStream.h"
+#include "os\Debug.h"
+#include "utl\Std.h"
 #include <set>
 
 enum {

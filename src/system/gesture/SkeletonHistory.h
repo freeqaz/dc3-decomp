@@ -1,6 +1,6 @@
 #pragma once
-#include "gesture/Skeleton.h"
-#include "gesture/ArchiveSkeleton.h"
+#include "gesture\Skeleton.h"
+#include "gesture\ArchiveSkeleton.h"
 #include <vector>
 
 class SkeletonHistoryArchive {

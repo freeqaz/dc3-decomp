@@ -1,4 +1,4 @@
-#include "xdk/LIBCMT/vectorintrinsics.h"
+#include "xdk\LIBCMT\vectorintrinsics.h"
 
 #ifdef __cplusplus
 extern "C" {

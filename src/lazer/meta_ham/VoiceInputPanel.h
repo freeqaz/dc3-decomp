@@ -1,11 +1,11 @@
 #pragma once
-#include "gesture/SpeechMgr.h"
-#include "meta_ham/HamPanel.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "os/Debug.h"
-#include "ui/UIPanel.h"
-#include "utl/Symbol.h"
+#include "gesture\SpeechMgr.h"
+#include "meta_ham\HamPanel.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "os\Debug.h"
+#include "ui\UIPanel.h"
+#include "utl\Symbol.h"
 #include <vector>
 
 class VoiceInputPanel : public HamPanel {

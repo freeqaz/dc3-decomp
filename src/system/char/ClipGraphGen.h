@@ -1,8 +1,8 @@
 #pragma once
-#include "char/CharClip.h"
-#include "char/ClipDistMap.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
+#include "char\CharClip.h"
+#include "char\ClipDistMap.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
 
 class ClipGraphGenerator : public Hmx::Object {
 public:

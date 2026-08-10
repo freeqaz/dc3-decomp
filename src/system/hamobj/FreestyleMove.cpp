@@ -1,6 +1,6 @@
-#include "hamobj/FreestyleMove.h"
-#include "gesture/BaseSkeleton.h"
-#include "hamobj/DancerSkeleton.h"
+#include "hamobj\FreestyleMove.h"
+#include "gesture\BaseSkeleton.h"
+#include "hamobj\DancerSkeleton.h"
 #include <string.h>
 
 FreestyleMove::FreestyleMove() : mDepthFrames(0), mNumFrames(0), unk10(0), unk14(0), mFrames(0) {}

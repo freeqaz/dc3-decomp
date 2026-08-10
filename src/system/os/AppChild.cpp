@@ -1,11 +1,11 @@
-#include "os/AppChild.h"
+#include "os\AppChild.h"
 #include "HolmesClient.h"
 #include "NetStream.h"
 #include "NetworkSocket.h"
-#include "obj/Data.h"
-#include "os/Debug.h"
-#include "utl/Option.h"
-#include "obj/DataFunc.h"
+#include "obj\Data.h"
+#include "os\Debug.h"
+#include "utl\Option.h"
+#include "obj\DataFunc.h"
 
 AppChild *TheAppChild;
 

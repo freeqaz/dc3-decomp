@@ -1,9 +1,9 @@
-#include "gesture/FreestyleMotionFilter.h"
+#include "gesture\FreestyleMotionFilter.h"
 #include "Skeleton.h"
-#include "hamobj/HamGameData.h"
-#include "hamobj/HamPlayerData.h"
-#include "obj/Object.h"
-#include "os/Debug.h"
+#include "hamobj\HamGameData.h"
+#include "hamobj\HamPlayerData.h"
+#include "obj\Object.h"
+#include "os\Debug.h"
 
 FreestyleMotionFilter::FreestyleMotionFilter() : mIsActive(false) { Clear(); }
 

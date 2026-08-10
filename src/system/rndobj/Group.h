@@ -1,9 +1,9 @@
 #pragma once
-#include "rndobj/Trans.h"
-#include "rndobj/Draw.h"
-#include "rndobj/Anim.h"
-#include "obj/Object.h"
-#include "utl/MemMgr.h"
+#include "rndobj\Trans.h"
+#include "rndobj\Draw.h"
+#include "rndobj\Anim.h"
+#include "obj\Object.h"
+#include "utl\MemMgr.h"
 #include <vector>
 
 /**

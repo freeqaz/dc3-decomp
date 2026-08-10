@@ -1,5 +1,5 @@
-#include "os/JoypadMsgs.h"
-#include "os/Joypad.h"
+#include "os\JoypadMsgs.h"
+#include "os\Joypad.h"
 
 ButtonDownMsg::ButtonDownMsg(LocalUser *user, JoypadButton butt, JoypadAction act, int i)
     : Message(Type(), user, butt, act, i) {}

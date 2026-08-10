@@ -1,9 +1,9 @@
 #pragma once
-#include "rndobj/Anim.h"
-#include "rndobj/Cam.h"
-#include "obj/Object.h"
-#include "math/Key.h"
-#include "utl/MemMgr.h"
+#include "rndobj\Anim.h"
+#include "rndobj\Cam.h"
+#include "obj\Object.h"
+#include "math\Key.h"
+#include "utl\MemMgr.h"
 
 /**
  * @brief A class for animating Cams.

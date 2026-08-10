@@ -1,11 +1,11 @@
 #pragma once
-#include "math/Geo.h"
-#include "math/Vec.h"
-#include "obj/Object.h"
-#include "rndobj/Draw.h"
-#include "rndobj/Mat.h"
-#include "rndobj/Trans.h"
-#include "utl/MemMgr.h"
+#include "math\Geo.h"
+#include "math\Vec.h"
+#include "obj\Object.h"
+#include "rndobj\Draw.h"
+#include "rndobj\Mat.h"
+#include "rndobj\Trans.h"
+#include "utl\MemMgr.h"
 
 class RndFlare : public RndTransformable, public RndDrawable {
 public:

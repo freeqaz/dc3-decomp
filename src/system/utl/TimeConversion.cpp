@@ -1,8 +1,8 @@
-#include "utl/TimeConversion.h"
-#include "obj/Data.h"
-#include "obj/DataFunc.h"
-#include "utl/TempoMap.h"
-#include "utl/BeatMap.h"
+#include "utl\TimeConversion.h"
+#include "obj\Data.h"
+#include "obj\DataFunc.h"
+#include "utl\TempoMap.h"
+#include "utl\BeatMap.h"
 
 float MsToTick(float ms) { return !TheTempoMap ? 0 : TheTempoMap->TimeToTick(ms); }
 

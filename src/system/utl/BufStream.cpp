@@ -1,5 +1,5 @@
-#include "utl/BufStream.h"
-#include "os/Debug.h"
+#include "utl\BufStream.h"
+#include "os\Debug.h"
 #include <cstring>
 
 BufStream::BufStream(void *buffer, int size, bool lilEndian)

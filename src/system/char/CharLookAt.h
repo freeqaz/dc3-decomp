@@ -1,12 +1,12 @@
 #pragma once
-#include "char/CharPollable.h"
-#include "char/CharWeightable.h"
-#include "math/Geo.h"
-#include "math/Rot.h"
-#include "obj/Object.h"
-#include "rndobj/Highlight.h"
-#include "rndobj/Trans.h"
-#include "utl/MemMgr.h"
+#include "char\CharPollable.h"
+#include "char\CharWeightable.h"
+#include "math\Geo.h"
+#include "math\Rot.h"
+#include "obj\Object.h"
+#include "rndobj\Highlight.h"
+#include "rndobj\Trans.h"
+#include "utl\MemMgr.h"
 
 /** "Makes a source point at dest by rotating a pivot, points along Y axis of source" */
 class CharLookAt : public RndHighlightable, public CharWeightable, public CharPollable {

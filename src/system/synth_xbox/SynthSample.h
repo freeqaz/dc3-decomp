@@ -1,5 +1,5 @@
 #pragma once
-#include "synth/SynthSample.h"
+#include "synth\SynthSample.h"
 
 class SampleInst360;
 

@@ -1,9 +1,9 @@
 #pragma once
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "rndobj/Overlay.h"
-#include "xdk/NUI.h"
-#include "xdk/nui/nuispeech.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "rndobj\Overlay.h"
+#include "xdk\NUI.h"
+#include "xdk\nui\nuispeech.h"
 
 class SpeechMgr : public Hmx::Object {
 public:
@@ -74,7 +74,7 @@ private:
 
 extern SpeechMgr *TheSpeechMgr;
 
-#include "obj/Msg.h"
+#include "obj\Msg.h"
 
 DECLARE_MESSAGE(SpeechEnableMsg, "speech_enable")
 SpeechEnableMsg(bool enabled) : Message(Type(), enabled) {}

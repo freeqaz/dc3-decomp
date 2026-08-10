@@ -1,8 +1,8 @@
 #pragma once
-#include "obj/Object.h"
-#include "stl/_vector.h"
-#include "utl/MemMgr.h"
-#include "utl/Symbol.h"
+#include "obj\Object.h"
+#include "stl\_vector.h"
+#include "utl\MemMgr.h"
+#include "utl\Symbol.h"
 #include <vector>
 #include <list>
 

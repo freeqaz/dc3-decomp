@@ -1,8 +1,8 @@
 #pragma once
 #include "NavListSortMgr.h"
-#include "meta_ham/ChallengeRecord.h"
-#include "net_ham/ChallengeSystemJobs.h"
-#include "utl/Symbol.h"
+#include "meta_ham\ChallengeRecord.h"
+#include "net_ham\ChallengeSystemJobs.h"
+#include "utl\Symbol.h"
 
 class ChallengeSortMgr : public NavListSortMgr {
     friend class ChallengeSort;

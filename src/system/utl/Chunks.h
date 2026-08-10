@@ -1,7 +1,7 @@
 #pragma once
-#include "utl/BinStream.h"
-#include "utl/ChunkIDs.h"
-#include "utl/MemMgr.h"
+#include "utl\BinStream.h"
+#include "utl\ChunkIDs.h"
+#include "utl\MemMgr.h"
 
 #define kDataHeaderSize 8
 

@@ -1,8 +1,8 @@
-#include "rndobj/Morph.h"
-#include "math/Vec.h"
-#include "obj/Object.h"
-#include "rndobj/Anim.h"
-#include "utl/BinStream.h"
+#include "rndobj\Morph.h"
+#include "math\Vec.h"
+#include "obj\Object.h"
+#include "rndobj\Anim.h"
+#include "utl\BinStream.h"
 
 RndMorph::RndMorph()
     : mPoses(this), mTarget(this), mNormals(false), mSpline(false), mIntensity(1) {}

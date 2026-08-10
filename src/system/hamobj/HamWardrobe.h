@@ -1,11 +1,11 @@
 #pragma once
-#include "char/Character.h"
-#include "hamobj/HamCharacter.h"
-#include "obj/Data.h"
-#include "obj/Dir.h"
-#include "obj/Object.h"
-#include "rndobj/Overlay.h"
-#include "utl/MemMgr.h"
+#include "char\Character.h"
+#include "hamobj\HamCharacter.h"
+#include "obj\Data.h"
+#include "obj\Dir.h"
+#include "obj\Object.h"
+#include "rndobj\Overlay.h"
+#include "utl\MemMgr.h"
 
 /** "Manager class that clothes characters and loads animations
     under different conditions" */

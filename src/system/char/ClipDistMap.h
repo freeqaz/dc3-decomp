@@ -1,11 +1,11 @@
 #pragma once
 
-#include "char/CharBonesMeshes.h"
-#include "char/CharClip.h"
-#include "char/CharDriver.h"
-#include "math/Color.h"
-#include "obj/Object.h"
-#include "utl/MemMgr.h"
+#include "char\CharBonesMeshes.h"
+#include "char\CharClip.h"
+#include "char\CharDriver.h"
+#include "math\Color.h"
+#include "obj\Object.h"
+#include "utl\MemMgr.h"
 
 struct DistEntry {
 public:

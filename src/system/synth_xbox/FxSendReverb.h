@@ -1,7 +1,7 @@
 #pragma once
 #include "FxSend.h"
-#include "obj/Object.h"
-#include "synth/FxSendReverb.h"
+#include "obj\Object.h"
+#include "synth\FxSendReverb.h"
 
 class FxSendReverb360 : public FxSendReverb, public FxSend360 {
 public:

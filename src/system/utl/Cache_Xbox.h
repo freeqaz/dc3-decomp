@@ -1,11 +1,11 @@
 #pragma once
-#include "obj/Object.h"
-#include "os/ThreadCall.h"
-#include "utl/Cache.h"
-#include "utl/Str.h"
-#include "xdk/xapilibi/xbase.h"
+#include "obj\Object.h"
+#include "os\ThreadCall.h"
+#include "utl\Cache.h"
+#include "utl\Str.h"
+#include "xdk\xapilibi\xbase.h"
 #include <cstring>
-#include "xdk/XAPILIB.h"
+#include "xdk\XAPILIB.h"
 
 class CacheIDXbox : public CacheID {
 public:

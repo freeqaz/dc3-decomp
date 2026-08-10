@@ -1,9 +1,9 @@
-#include "net/SessionJobs_Xbox.h"
-#include "net/DingoSvr.h"
-#include "obj/Object.h"
-#include "xdk/win_types.h"
-#include "xdk/XAPILIB.h"
-#include "xdk/XNET.h"
+#include "net\SessionJobs_Xbox.h"
+#include "net\DingoSvr.h"
+#include "obj\Object.h"
+#include "xdk\win_types.h"
+#include "xdk\XAPILIB.h"
+#include "xdk\XNET.h"
 
 XboxSessionJob::XboxSessionJob(void *v) : mSession(v), mSuccess(true) {
     memset(&mXOverlapped, 0, sizeof(XOVERLAPPED));

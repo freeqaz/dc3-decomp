@@ -1,7 +1,7 @@
 #pragma once
-#include "rndobj/Draw.h"
-#include "rndobj/Env.h"
-#include "rndobj/Tex.h"
+#include "rndobj\Draw.h"
+#include "rndobj\Env.h"
+#include "rndobj\Tex.h"
 
 class RndShadowMap {
 public:

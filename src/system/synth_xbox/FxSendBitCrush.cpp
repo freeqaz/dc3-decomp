@@ -1,10 +1,10 @@
 #include "FxSendBitCrush.h"
 #include "FxSend.h"
-#include "dsp/StandardEffect.h"
-#include "obj/Object.h"
-#include "synth/BitCrushEffect.h"
-#include "synth/FxSend.h"
-#include "xdk/XAUDIO2.h"
+#include "dsp\StandardEffect.h"
+#include "obj\Object.h"
+#include "synth\BitCrushEffect.h"
+#include "synth\FxSend.h"
+#include "xdk\XAUDIO2.h"
 
 FxSendBitCrush360::FxSendBitCrush360() : FxSend360(this) {}
 

@@ -1,10 +1,10 @@
 #include "MQSongSortByCharacter.h"
 
-#include "hamobj/HamGameData.h"
+#include "hamobj\HamGameData.h"
 #include "HamSongMgr.h"
 #include "MQSongSortNode.h"
-#include "meta_ham/NavListNode.h"
-#include "utl/Symbol.h"
+#include "meta_ham\NavListNode.h"
+#include "utl\Symbol.h"
 
 MQSongSortByCharacter::~MQSongSortByCharacter() {}
 

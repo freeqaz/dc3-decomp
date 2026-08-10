@@ -1,8 +1,8 @@
 #pragma once
-#include "os/ThreadCall.h"
-#include "os/Timer.h"
-#include "utl/Str.h"
-#include "xdk/XNET.h"
+#include "os\ThreadCall.h"
+#include "os\Timer.h"
+#include "utl\Str.h"
+#include "xdk\XNET.h"
 
 class XLSPConnection : public ThreadCallback {
 public:

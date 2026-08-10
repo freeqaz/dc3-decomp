@@ -1,9 +1,9 @@
 #include "HolmesClient.h"
-#include "os/Archive.h"
-#include "os/Debug.h"
-#include "os/File.h"
-#include "os/System.h"
-#include "xdk/XAPILIB.h"
+#include "os\Archive.h"
+#include "os\Debug.h"
+#include "os\File.h"
+#include "os\System.h"
+#include "xdk\XAPILIB.h"
 #include <cstdio>
 
 bool FileIsLocal(const char *file) {

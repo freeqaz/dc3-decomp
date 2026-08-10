@@ -1,6 +1,6 @@
 #pragma once
-#include "obj/Object.h"
-#include "rndobj/Trans.h"
+#include "obj\Object.h"
+#include "rndobj\Trans.h"
 
 class WorldDir;
 

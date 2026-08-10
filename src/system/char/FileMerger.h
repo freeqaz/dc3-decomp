@@ -1,10 +1,10 @@
 #pragma once
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "obj/Utl.h"
-#include "utl/FilePath.h"
-#include "utl/Loader.h"
-#include "utl/MemMgr.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "obj\Utl.h"
+#include "utl\FilePath.h"
+#include "utl\Loader.h"
+#include "utl\MemMgr.h"
 
 class OriginalPathable {
 public:

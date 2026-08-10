@@ -1,9 +1,9 @@
 #pragma once
-#include "obj/Object.h"
-#include "rnddx9/Object.h"
-#include "rndobj/Tex.h"
-#include "xdk/D3D9.h"
-#include "xdk/d3d9i/d3d9.h"
+#include "obj\Object.h"
+#include "rnddx9\Object.h"
+#include "rndobj\Tex.h"
+#include "xdk\D3D9.h"
+#include "xdk\d3d9i\d3d9.h"
 
 class DxTex : public RndTex, public DxObject {
 public:

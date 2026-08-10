@@ -1,11 +1,11 @@
 #include "Memory.h"
-#include "os/Debug.h"
-#include "os/System.h"
-#include "utl/MakeString.h"
-#include "utl/MemMgr.h"
-#include "utl/MemTracker.h"
-#include "xdk/xapilibi/winbase.h"
-#include "xdk/xapilibi/xbox.h"
+#include "os\Debug.h"
+#include "os\System.h"
+#include "utl\MakeString.h"
+#include "utl\MemMgr.h"
+#include "utl\MemTracker.h"
+#include "xdk\xapilibi\winbase.h"
+#include "xdk\xapilibi\xbox.h"
 #include <cstdio>
 #include <cstring>
 

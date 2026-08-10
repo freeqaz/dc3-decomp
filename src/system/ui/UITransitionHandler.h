@@ -1,7 +1,7 @@
 #pragma once
-#include "obj/Object.h"
-#include "rndobj/Anim.h"
-#include "utl/BinStream.h"
+#include "obj\Object.h"
+#include "rndobj\Anim.h"
+#include "utl\BinStream.h"
 
 enum UITransitionAnimationState {
     kUITransitionAnimationInvalid,

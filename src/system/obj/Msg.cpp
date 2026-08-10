@@ -1,10 +1,10 @@
-#include "obj/Msg.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "os/Debug.h"
-#include "utl/Str.h"
-#include "utl/Symbol.h"
-#include "world/CameraShot.h"
+#include "obj\Msg.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "os\Debug.h"
+#include "utl\Str.h"
+#include "utl\Symbol.h"
+#include "world\CameraShot.h"
 
 Symbol MsgSinks::sCurrentExportEvent(gNullStr);
 

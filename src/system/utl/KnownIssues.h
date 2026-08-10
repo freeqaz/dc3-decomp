@@ -1,6 +1,6 @@
 #pragma once
-#include "obj/Data.h"
-#include "utl/Str.h"
+#include "obj\Data.h"
+#include "utl\Str.h"
 
 /** Metadata for known issues, meant to be displayed on-screen. */
 class KnownIssues {

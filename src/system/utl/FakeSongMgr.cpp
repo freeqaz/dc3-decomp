@@ -1,6 +1,6 @@
-#include "utl/FakeSongMgr.h"
-#include "os/File.h"
-#include "utl/SongInfoCopy.h"
+#include "utl\FakeSongMgr.h"
+#include "os\File.h"
+#include "utl\SongInfoCopy.h"
 
 FakeSongMgr *TheFakeSongMgr;
 DataArray *gSongs;

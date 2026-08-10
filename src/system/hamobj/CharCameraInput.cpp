@@ -1,11 +1,11 @@
-#include "hamobj/CharCameraInput.h"
-#include "char/Character.h"
-#include "gesture/BaseSkeleton.h"
-#include "gesture/JointUtl.h"
-#include "gesture/Skeleton.h"
-#include "math/Mtx.h"
-#include "os/Debug.h"
-#include "rndobj/Trans.h"
+#include "hamobj\CharCameraInput.h"
+#include "char\Character.h"
+#include "gesture\BaseSkeleton.h"
+#include "gesture\JointUtl.h"
+#include "gesture\Skeleton.h"
+#include "math\Mtx.h"
+#include "os\Debug.h"
+#include "rndobj\Trans.h"
 
 const float CharCameraInput::kDrawScale = 39.370079f;
 

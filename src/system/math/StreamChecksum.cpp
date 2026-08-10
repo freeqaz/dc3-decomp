@@ -1,8 +1,8 @@
-#include "math/StreamChecksum.h"
-#include "math/SHA1.h"
-#include "math/FileChecksum.h"
-#include "os/Debug.h"
-#include "os/PlatformMgr.h"
+#include "math\StreamChecksum.h"
+#include "math\SHA1.h"
+#include "math\FileChecksum.h"
+#include "os\Debug.h"
+#include "os\PlatformMgr.h"
 
 void StreamChecksum::Begin() {
     if (mState == 1)

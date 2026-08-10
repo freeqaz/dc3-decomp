@@ -1,9 +1,9 @@
 #pragma once
-#include "obj/Object.h"
-#include "os/Timer.h"
-#include "ui/UI.h"
-#include "xdk/XAPILIB.h"
-#include "xdk/NUI.h"
+#include "obj\Object.h"
+#include "os\Timer.h"
+#include "ui\UI.h"
+#include "xdk\XAPILIB.h"
+#include "xdk\NUI.h"
 
 class CameraTilt : public Hmx::Object {
 public:

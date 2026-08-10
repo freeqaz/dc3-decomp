@@ -1,9 +1,9 @@
 #pragma once
-#include "obj/Object.h"
-#include "os/DateTime.h"
+#include "obj\Object.h"
+#include "os\DateTime.h"
 #include "types.h"
-#include "utl/MemMgr.h"
-#include "utl/Str.h"
+#include "utl\MemMgr.h"
+#include "utl\Str.h"
 
 enum OpType {
     kOpNone = 0,

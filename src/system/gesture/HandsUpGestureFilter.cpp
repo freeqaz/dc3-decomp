@@ -1,10 +1,10 @@
-#include "gesture/HandsUpGestureFilter.h"
-#include "gesture/BaseSkeleton.h"
-#include "gesture/GestureMgr.h"
-#include "gesture/Skeleton.h"
-#include "gesture/SkeletonQualityFilter.h"
-#include "math/Mtx.h"
-#include "obj/Object.h"
+#include "gesture\HandsUpGestureFilter.h"
+#include "gesture\BaseSkeleton.h"
+#include "gesture\GestureMgr.h"
+#include "gesture\Skeleton.h"
+#include "gesture\SkeletonQualityFilter.h"
+#include "math\Mtx.h"
+#include "obj\Object.h"
 
 HandsUpGestureFilter::HandsUpGestureFilter() : mRequiredMs(500) { Clear(); }
 

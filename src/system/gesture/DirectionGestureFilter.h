@@ -1,10 +1,10 @@
 #pragma once
 #include "ArcDetector.h"
-#include "gesture/BaseSkeleton.h"
-#include "gesture/Skeleton.h"
-#include "gesture/StandingStillGestureFilter.h"
-#include "rndobj/Overlay.h"
-#include "gesture/SkeletonViz.h"
+#include "gesture\BaseSkeleton.h"
+#include "gesture\Skeleton.h"
+#include "gesture\StandingStillGestureFilter.h"
+#include "rndobj\Overlay.h"
+#include "gesture\SkeletonViz.h"
 
 class DirectionGestureFilter : public RndOverlay::Callback {
 public:

@@ -1,9 +1,9 @@
 #pragma once
-#include "meta/ConnectionStatusPanel.h"
-#include "os/ContentMgr.h"
-#include "os/PlatformMgr.h"
-#include "utl/UTF8.h"
-#include "xdk/XAPILIB.h"
+#include "meta\ConnectionStatusPanel.h"
+#include "os\ContentMgr.h"
+#include "os\PlatformMgr.h"
+#include "utl\UTF8.h"
+#include "xdk\XAPILIB.h"
 
 class XboxContent : public Content {
 public:

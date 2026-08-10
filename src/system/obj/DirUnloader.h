@@ -1,7 +1,7 @@
 #pragma once
-#include "obj/Object.h"
-#include "utl/Loader.h"
-#include "utl/MemMgr.h"
+#include "obj\Object.h"
+#include "utl\Loader.h"
+#include "utl\MemMgr.h"
 
 class DirUnloader : public Loader, public Hmx::Object {
 public:

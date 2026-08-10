@@ -1,7 +1,7 @@
-#include "meta_ham/ChallengeRecord.h"
-#include "meta_ham/Challenges.h"
-#include "meta_ham/HamSongMgr.h"
-#include "meta_ham/ProfileMgr.h"
+#include "meta_ham\ChallengeRecord.h"
+#include "meta_ham\Challenges.h"
+#include "meta_ham\HamSongMgr.h"
+#include "meta_ham\ProfileMgr.h"
 
 ChallengeRecord::ChallengeRecord(ChallengeRow row) {
     mRow = row;

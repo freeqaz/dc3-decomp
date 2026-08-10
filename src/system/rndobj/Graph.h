@@ -1,11 +1,11 @@
 #pragma once
-#include "utl/MemMgr.h"
+#include "utl\MemMgr.h"
 #include <vector>
-#include "math/Vec.h"
-#include "math/Color.h"
-#include "math/Geo.h"
-#include "rndobj/Cam.h"
-#include "utl/Str.h"
+#include "math\Vec.h"
+#include "math\Color.h"
+#include "math\Geo.h"
+#include "rndobj\Cam.h"
+#include "utl\Str.h"
 
 class Drawable {
 public:

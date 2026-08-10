@@ -1,9 +1,9 @@
 #pragma once
-#include "rndobj/Draw.h"
-#include "rndobj/Poll.h"
-#include "rndobj/Trans.h"
-#include "synth/Sfx.h"
-#include "utl/MemMgr.h"
+#include "rndobj\Draw.h"
+#include "rndobj\Poll.h"
+#include "rndobj\Trans.h"
+#include "synth\Sfx.h"
+#include "utl\MemMgr.h"
 
 /** "A 3D positional emitter.  The volume and surround-panning of
  *  a sfx are controlled by its position relative to a listener (usually the

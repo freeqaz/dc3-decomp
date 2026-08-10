@@ -1,11 +1,11 @@
-#include "net/HttpReqCurl.h"
-#include "curl/curl.h"
-#include "curl/easy.h"
-#include "net/HttpReq.h"
-#include "os/Debug.h"
-#include "os/NetworkSocket.h"
-#include "utl/MemMgr.h"
-#include "utl/Std.h"
+#include "net\HttpReqCurl.h"
+#include "curl\curl.h"
+#include "curl\easy.h"
+#include "net\HttpReq.h"
+#include "os\Debug.h"
+#include "os\NetworkSocket.h"
+#include "utl\MemMgr.h"
+#include "utl\Std.h"
 
 namespace {
     // userp points to &mBuffer in HttpReqCurl, with mBufferLength immediately after.

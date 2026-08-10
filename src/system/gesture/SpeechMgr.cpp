@@ -1,12 +1,12 @@
-#include "gesture/SpeechMgr.h"
-#include "obj/Data.h"
-#include "obj/Dir.h"
-#include "obj/Object.h"
-#include "os/Debug.h"
-#include "os/File.h"
-#include "os/System.h"
-#include "os/Timer.h"
-#include "rndobj/Overlay.h"
+#include "gesture\SpeechMgr.h"
+#include "obj\Data.h"
+#include "obj\Dir.h"
+#include "obj\Object.h"
+#include "os\Debug.h"
+#include "os\File.h"
+#include "os\System.h"
+#include "os\Timer.h"
+#include "rndobj\Overlay.h"
 #include "stdlib.h"
 
 #ifdef HX_NATIVE
@@ -18,15 +18,15 @@ inline int mbstowcs_s(size_t *ret, wchar_t *dst, size_t dstSize, const char *src
     return (result == (size_t)-1) ? -1 : 0;
 }
 #endif
-#include "utl/MemMgr.h"
-#include "utl/Symbol.h"
-#include "utl/UTF8.h"
-#include "xdk/NUI.h"
-#include "xdk/XAPILIB.h"
-#include "xdk/nui/nuispeech.h"
-#include "xdk/win_types.h"
-#include "xdk/xapilibi/winerror.h"
-#include "xdk/xapilibi/xbase.h"
+#include "utl\MemMgr.h"
+#include "utl\Symbol.h"
+#include "utl\UTF8.h"
+#include "xdk\NUI.h"
+#include "xdk\XAPILIB.h"
+#include "xdk\nui\nuispeech.h"
+#include "xdk\win_types.h"
+#include "xdk\xapilibi\winerror.h"
+#include "xdk\xapilibi\xbase.h"
 #include <string>
 #include <cstdlib>
 

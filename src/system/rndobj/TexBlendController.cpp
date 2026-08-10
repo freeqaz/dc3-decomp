@@ -1,7 +1,7 @@
-#include "rndobj/TexBlendController.h"
-#include "math/Mtx.h"
-#include "math/Utl.h"
-#include "obj/Object.h"
+#include "rndobj\TexBlendController.h"
+#include "math\Mtx.h"
+#include "math\Utl.h"
+#include "obj\Object.h"
 
 RndTexBlendController::RndTexBlendController()
     : mMesh(this), mObject1(this), mObject2(this), mReferenceDistance(0), mMinDistance(0),

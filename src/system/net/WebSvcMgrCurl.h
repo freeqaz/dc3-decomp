@@ -1,8 +1,8 @@
 #pragma once
 #include "WebSvcReq.h"
-#include "curl/multi.h"
-#include "net/HttpReq.h"
-#include "net/WebSvcMgr.h"
+#include "curl\multi.h"
+#include "net\HttpReq.h"
+#include "net\WebSvcMgr.h"
 
 class WebSvcMgrCurl : public WebSvcMgr {
 public:

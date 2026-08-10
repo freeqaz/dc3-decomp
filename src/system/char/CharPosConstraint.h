@@ -1,9 +1,9 @@
 #pragma once
-#include "char/CharPollable.h"
-#include "math/Geo.h"
-#include "obj/Object.h"
-#include "rndobj/Trans.h"
-#include "utl/MemMgr.h"
+#include "char\CharPollable.h"
+#include "math\Geo.h"
+#include "obj\Object.h"
+#include "rndobj\Trans.h"
+#include "utl\MemMgr.h"
 
 /** "Forces the targets to be within a world space bounding box relative to source." */
 class CharPosConstraint : public CharPollable {

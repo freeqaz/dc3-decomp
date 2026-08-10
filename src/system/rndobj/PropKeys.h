@@ -1,13 +1,13 @@
 #pragma once
-#include "math/Key.h"
-#include "math/Color.h"
-#include "math/Mtx.h"
-#include "math/Vec.h"
-#include "obj/Data.h"
-#include "obj/Msg.h"
-#include "obj/Object.h"
-#include "os/Debug.h"
-#include "rndobj/Trans.h"
+#include "math\Key.h"
+#include "math\Color.h"
+#include "math\Mtx.h"
+#include "math\Vec.h"
+#include "obj\Data.h"
+#include "obj\Msg.h"
+#include "obj\Object.h"
+#include "os\Debug.h"
+#include "rndobj\Trans.h"
 
 class ObjKeys : public Keys<ObjectStage, Hmx::Object *> {
 public:

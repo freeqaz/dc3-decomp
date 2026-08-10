@@ -1,12 +1,12 @@
 #pragma once
-#include "os/Debug.h"
-#include "os/File.h"
-#include "rndobj/ShaderOptions.h"
-#include "rndobj/ShaderProgram.h"
-#include "utl/MemMgr.h"
-#include "xdk/D3DX9.h"
-#include "xdk/XAPILIB.h"
-#include "xdk/d3dx9/d3dx9mesh.h"
+#include "os\Debug.h"
+#include "os\File.h"
+#include "rndobj\ShaderOptions.h"
+#include "rndobj\ShaderProgram.h"
+#include "utl\MemMgr.h"
+#include "xdk\D3DX9.h"
+#include "xdk\XAPILIB.h"
+#include "xdk\d3dx9\d3dx9mesh.h"
 
 class DxShaderBuffer : public RndShaderBuffer {
 public:

@@ -1,5 +1,5 @@
-#include "gesture/BaseSkeleton.h"
-#include "os/Debug.h"
+#include "gesture\BaseSkeleton.h"
+#include "os\Debug.h"
 
 const BoneJoints BaseSkeleton::sBones[] = {
     { kBoneHead, kJointHead, kJointShoulderCenter },

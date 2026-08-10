@@ -1,9 +1,9 @@
 #pragma once
-#include "obj/Data.h"
-#include "obj/DirLoader.h"
-#include "obj/Object.h"
-#include "ui/UIComponent.h"
-#include "utl/Str.h"
+#include "obj\Data.h"
+#include "obj\DirLoader.h"
+#include "obj\Object.h"
+#include "ui\UIComponent.h"
+#include "utl\Str.h"
 
 class PanelDir;
 

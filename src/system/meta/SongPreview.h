@@ -1,12 +1,12 @@
 #pragma once
-#include "meta/SongMgr.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "os/ContentMgr.h"
-#include "movie/TexMovie.h"
-#include "synth/Faders.h"
-#include "utl/Symbol.h"
-#include "synth/Stream.h"
+#include "meta\SongMgr.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "os\ContentMgr.h"
+#include "movie\TexMovie.h"
+#include "synth\Faders.h"
+#include "utl\Symbol.h"
+#include "synth\Stream.h"
 
 class SongPreview : public ContentMgr::Callback, public Hmx::Object {
 public:

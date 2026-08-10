@@ -1,5 +1,5 @@
-#include "rndobj/Poll.h"
-#include "obj/Msg.h"
+#include "rndobj\Poll.h"
+#include "obj\Msg.h"
 
 BEGIN_HANDLERS(RndPollable)
     HANDLE_ACTION(enter, Enter())

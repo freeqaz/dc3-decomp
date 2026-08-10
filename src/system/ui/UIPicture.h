@@ -1,10 +1,10 @@
 #pragma once
-#include "obj/Object.h"
-#include "ui/UIComponent.h"
-#include "ui/UITransitionHandler.h"
-#include "rndobj/Mesh.h"
-#include "utl/FilePath.h"
-#include "utl/MemMgr.h"
+#include "obj\Object.h"
+#include "ui\UIComponent.h"
+#include "ui\UITransitionHandler.h"
+#include "rndobj\Mesh.h"
+#include "utl\FilePath.h"
+#include "utl\MemMgr.h"
 
 /** "A picture object with asynchronously loading texture" */
 class UIPicture : public UIComponent, public UITransitionHandler {

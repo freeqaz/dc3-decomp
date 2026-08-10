@@ -1,13 +1,13 @@
 #pragma once
 #include "OcclusionQueryMgr.h"
-#include "math/Color.h"
-#include "math/Geo.h"
-#include "rndobj/Cam.h"
-#include "rndobj/Flare.h"
-#include "rndobj/Rnd.h"
-#include "rndobj/ShaderOptions.h"
-#include "rndobj/SoftParticleBuffer.h"
-#include "rndobj/Tex.h"
+#include "math\Color.h"
+#include "math\Geo.h"
+#include "rndobj\Cam.h"
+#include "rndobj\Flare.h"
+#include "rndobj\Rnd.h"
+#include "rndobj\ShaderOptions.h"
+#include "rndobj\SoftParticleBuffer.h"
+#include "rndobj\Tex.h"
 
 struct LargeQuadRenderData;
 

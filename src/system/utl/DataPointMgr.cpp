@@ -1,9 +1,9 @@
-#include "utl/DataPointMgr.h"
-#include "obj/Data.h"
-#include "os/System.h"
-#include "os/NetworkSocket.h"
-#include "utl/JsonEncode.h"
-#include "utl/UrlEncode.h"
+#include "utl\DataPointMgr.h"
+#include "obj\Data.h"
+#include "os\System.h"
+#include "os\NetworkSocket.h"
+#include "utl\JsonEncode.h"
+#include "utl\UrlEncode.h"
 #include <utility>
 
 DataPointMgr gDataPointMgr;

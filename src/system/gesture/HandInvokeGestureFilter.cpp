@@ -1,5 +1,5 @@
-#include "gesture/HandInvokeGestureFilter.h"
-#include "math/Rot.h"
+#include "gesture\HandInvokeGestureFilter.h"
+#include "math\Rot.h"
 #include <cmath>
 
 HandInvokeGestureFilter::HandInvokeGestureFilter()

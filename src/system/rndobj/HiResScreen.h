@@ -1,8 +1,8 @@
 #pragma once
-#include "math/Geo.h"
-#include "rndobj/Cam.h"
-#include "utl/MemMgr.h"
-#include "utl/Str.h"
+#include "math\Geo.h"
+#include "rndobj\Cam.h"
+#include "utl\MemMgr.h"
+#include "utl\Str.h"
 
 class RndBitmap;
 

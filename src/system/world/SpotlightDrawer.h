@@ -1,11 +1,11 @@
 #pragma once
-#include "obj/Object.h"
-#include "rndobj/Draw.h"
-#include "rndobj/Env.h"
-#include "rndobj/Mesh.h"
-#include "rndobj/PostProc.h"
-#include "utl/BinStream.h"
-#include "utl/MemMgr.h"
+#include "obj\Object.h"
+#include "rndobj\Draw.h"
+#include "rndobj\Env.h"
+#include "rndobj\Mesh.h"
+#include "rndobj\PostProc.h"
+#include "utl\BinStream.h"
+#include "utl\MemMgr.h"
 
 class Spotlight;
 class SpotlightDrawer;

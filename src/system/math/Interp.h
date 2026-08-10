@@ -1,7 +1,7 @@
 #pragma once
-#include "obj/Data.h"
-#include "utl/MemMgr.h"
-#include "math/Vec.h"
+#include "obj\Data.h"
+#include "utl\MemMgr.h"
+#include "math\Vec.h"
 
 class Interpolator {
 public:

@@ -1,10 +1,10 @@
-#include "meta/StreamPlayer.h"
+#include "meta\StreamPlayer.h"
 #include "macros.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "os/Debug.h"
-#include "synth/Stream.h"
-#include "synth/Synth.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "os\Debug.h"
+#include "synth\Stream.h"
+#include "synth\Synth.h"
 
 StreamPlayer::StreamPlayer()
     : mMasterVol(1.0f), mStreamVol(1.0f), mLoop(0), mStarted(0), mPaused(0), mStream(0) {}

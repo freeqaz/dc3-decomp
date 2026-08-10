@@ -1,11 +1,11 @@
-#include "world/Reflection.h"
-#include "char/Character.h"
-#include "obj/Dir.h"
-#include "obj/Object.h"
-#include "rndobj/Cam.h"
-#include "rndobj/Draw.h"
-#include "rndobj/Rnd.h"
-#include "rndobj/Trans.h"
+#include "world\Reflection.h"
+#include "char\Character.h"
+#include "obj\Dir.h"
+#include "obj\Object.h"
+#include "rndobj\Cam.h"
+#include "rndobj\Draw.h"
+#include "rndobj\Rnd.h"
+#include "rndobj\Trans.h"
 
 WorldReflection::WorldReflection()
     : mDraws(this), mLodChars(this), mVerticalStretch(1), mInDrawShowing(false), mHideList(this),

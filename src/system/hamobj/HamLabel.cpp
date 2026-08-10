@@ -1,13 +1,13 @@
-#include "hamobj/HamLabel.h"
-#include "hamobj/HamMove.h"
-#include "obj/Task.h"
-#include "rndobj/Anim.h"
-#include "ui/UI.h"
-#include "ui/UILabel.h"
-#include "ui/UITransitionHandler.h"
-#include "utl/BinStream.h"
-#include "utl/Locale.h"
-#include "utl/Str.h"
+#include "hamobj\HamLabel.h"
+#include "hamobj\HamMove.h"
+#include "obj\Task.h"
+#include "rndobj\Anim.h"
+#include "ui\UI.h"
+#include "ui\UILabel.h"
+#include "ui\UITransitionHandler.h"
+#include "utl\BinStream.h"
+#include "utl\Locale.h"
+#include "utl\Str.h"
 
 HamLabel::HamLabel()
     : UITransitionHandler(this), mPendingText(""), mPendingMarkup(0), mCanHaveFocus(0) {}

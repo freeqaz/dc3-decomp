@@ -1,5 +1,5 @@
 #pragma once
-#include "synth/Stream.h"
+#include "synth\Stream.h"
 
 class HxAudio {
 public:

@@ -1,5 +1,5 @@
-#include "meta/MetaMusicManager.h"
-#include "obj/Dir.h"
+#include "meta\MetaMusicManager.h"
+#include "obj\Dir.h"
 
 MetaMusicManager *TheMetaMusicManager;
 

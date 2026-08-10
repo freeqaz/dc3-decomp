@@ -1,12 +1,12 @@
 #pragma once
-#include "hamobj/HamLabel.h"
-#include "obj/Dir.h"
-#include "obj/Object.h"
-#include "ui/ResourceDirPtr.h"
-#include "ui/UIColor.h"
-#include "ui/UIComponent.h"
-#include "ui/UIList.h"
-#include "utl/MemMgr.h"
+#include "hamobj\HamLabel.h"
+#include "obj\Dir.h"
+#include "obj\Object.h"
+#include "ui\ResourceDirPtr.h"
+#include "ui\UIColor.h"
+#include "ui\UIComponent.h"
+#include "ui\UIList.h"
+#include "utl\MemMgr.h"
 
 /** "Stars Display" */
 class StarsDisplay : public UIComponent, public UIListCustomTemplate {

@@ -1,10 +1,10 @@
 #pragma once
-#include "math/Color.h"
-#include "math/Utl.h"
-#include "math/Vec.h"
-#include "os/Debug.h"
-#include "utl/BinStream.h"
-#include "utl/TextStream.h"
+#include "math\Color.h"
+#include "math\Utl.h"
+#include "math\Vec.h"
+#include "os\Debug.h"
+#include "utl\BinStream.h"
+#include "utl\TextStream.h"
 #include <vector>
 
 struct Weight {

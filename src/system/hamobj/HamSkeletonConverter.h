@@ -1,14 +1,14 @@
 #pragma once
-#include "char/CharBones.h"
-#include "char/CharPollable.h"
-#include "gesture/BaseSkeleton.h"
-#include "gesture/Skeleton.h"
-#include "hamobj/ErrorNode.h"
-#include "hamobj/HamCharacter.h"
-#include "math/Mtx.h"
-#include "rndobj/Highlight.h"
-#include "rndobj/Trans.h"
-#include "utl/MemMgr.h"
+#include "char\CharBones.h"
+#include "char\CharPollable.h"
+#include "gesture\BaseSkeleton.h"
+#include "gesture\Skeleton.h"
+#include "hamobj\ErrorNode.h"
+#include "hamobj\HamCharacter.h"
+#include "math\Mtx.h"
+#include "rndobj\Highlight.h"
+#include "rndobj\Trans.h"
+#include "utl\MemMgr.h"
 
 /** "Class to convert from a camera to a character skeleton" */
 class HamSkeletonConverter : public CharPollable,

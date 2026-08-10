@@ -1,16 +1,16 @@
 #pragma once
-#include "char/CharBones.h"
-#include "char/CharClip.h"
-#include "char/CharClipDriver.h"
-#include "char/CharClipGroup.h"
-#include "char/CharWeightable.h"
-#include "char/CharPollable.h"
-#include "obj/Data.h"
-#include "obj/Dir.h"
-#include "obj/Object.h"
-#include "rndobj/Highlight.h"
-#include "utl/MemMgr.h"
-#include "utl/Symbol.h"
+#include "char\CharBones.h"
+#include "char\CharClip.h"
+#include "char\CharClipDriver.h"
+#include "char\CharClipGroup.h"
+#include "char\CharWeightable.h"
+#include "char\CharPollable.h"
+#include "obj\Data.h"
+#include "obj\Dir.h"
+#include "obj\Object.h"
+#include "rndobj\Highlight.h"
+#include "utl\MemMgr.h"
+#include "utl\Symbol.h"
 
 class CharDriver : public RndHighlightable, public CharWeightable, public CharPollable {
 public:

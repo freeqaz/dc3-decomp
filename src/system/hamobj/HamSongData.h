@@ -1,13 +1,13 @@
 #pragma once
-#include "beatmatch/GemListInterface.h"
-#include "beatmatch/HxMaster.h"
-#include "beatmatch/HxSongData.h"
-#include "midi/Midi.h"
-#include "utl/BeatMap.h"
-#include "utl/MeasureMap.h"
-#include "utl/MemStream.h"
-#include "utl/SongInfoCopy.h"
-#include "utl/TempoMap.h"
+#include "beatmatch\GemListInterface.h"
+#include "beatmatch\HxMaster.h"
+#include "beatmatch\HxSongData.h"
+#include "midi\Midi.h"
+#include "utl\BeatMap.h"
+#include "utl\MeasureMap.h"
+#include "utl\MemStream.h"
+#include "utl\SongInfoCopy.h"
+#include "utl\TempoMap.h"
 
 enum HamSongDataValidate {
     // SongDataValidate values from RB3

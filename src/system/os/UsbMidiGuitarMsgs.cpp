@@ -1,4 +1,4 @@
-#include "os/UsbMidiGuitarMsgs.h"
+#include "os\UsbMidiGuitarMsgs.h"
 
 StringStrummedMsg::StringStrummedMsg(int i1, int i2, int i3, int i4)
     : Message(Type(), i1, i2, i3, i4) {}

@@ -1,11 +1,11 @@
-#include "ui/LabelNumberTicker.h"
+#include "ui\LabelNumberTicker.h"
 #include "UIComponent.h"
-#include "obj/Object.h"
-#include "os/Debug.h"
-#include "utl/BinStream.h"
-#include "utl/Locale.h"
-#include "utl/MBT.h"
-#include "utl/Symbol.h"
+#include "obj\Object.h"
+#include "os\Debug.h"
+#include "utl\BinStream.h"
+#include "utl\Locale.h"
+#include "utl\MBT.h"
+#include "utl\Symbol.h"
 
 LabelNumberTicker::LabelNumberTicker()
     : mLabel(this), mDesiredValue(0), mAnimTime(0), mAnimDelay(0), mWrapperText(gNullStr),

@@ -1,12 +1,12 @@
-#include "synth/FxSend.h"
+#include "synth\FxSend.h"
 #include "Sfx.h"
-#include "math/Decibels.h"
-#include "math/Utl.h"
-#include "obj/Object.h"
-#include "os/Debug.h"
-#include "synth/Synth.h"
-#include "utl/BinStream.h"
-#include "utl/Loader.h"
+#include "math\Decibels.h"
+#include "math\Utl.h"
+#include "obj\Object.h"
+#include "os\Debug.h"
+#include "synth\Synth.h"
+#include "utl\BinStream.h"
+#include "utl\Loader.h"
 
 FxSend::FxSend()
     : mNextSend(this), mStage(0), mBypass(0), mDryGain(kDbSilence), mWetGain(0),

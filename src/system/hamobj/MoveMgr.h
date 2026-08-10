@@ -1,11 +1,11 @@
 #pragma once
-#include "char/CharClip.h"
-#include "hamobj/Difficulty.h"
-#include "hamobj/MoveGraph.h"
-#include "hamobj/SongLayout.h"
-#include "obj/Data.h"
-#include "obj/Dir.h"
-#include "obj/Object.h"
+#include "char\CharClip.h"
+#include "hamobj\Difficulty.h"
+#include "hamobj\MoveGraph.h"
+#include "hamobj\SongLayout.h"
+#include "obj\Data.h"
+#include "obj\Dir.h"
+#include "obj\Object.h"
 #include <map>
 #include <set>
 

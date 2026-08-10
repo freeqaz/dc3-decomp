@@ -1,9 +1,9 @@
 #pragma once
-#include "math/Mtx.h"
-#include "obj/Object.h"
-#include "rndobj/Anim.h"
-#include "rndobj/Dir.h"
-#include "utl/MemMgr.h"
+#include "math\Mtx.h"
+#include "obj\Object.h"
+#include "rndobj\Anim.h"
+#include "rndobj\Dir.h"
+#include "utl\MemMgr.h"
 
 /** "Resource object for scrolly stuff" */
 class HamScrollSpeedIndicator : public RndDir {

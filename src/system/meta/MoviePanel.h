@@ -1,13 +1,13 @@
 #pragma once
-#include "movie/Movie.h"
-#include "obj/Data.h"
-#include "obj/DataFile.h"
-#include "obj/Object.h"
-#include "obj/PropSync.h"
-#include "rndobj/Anim.h"
-#include "stl/_vector.h"
-#include "ui/UILabel.h"
-#include "ui/UIPanel.h"
+#include "movie\Movie.h"
+#include "obj\Data.h"
+#include "obj\DataFile.h"
+#include "obj\Object.h"
+#include "obj\PropSync.h"
+#include "rndobj\Anim.h"
+#include "stl\_vector.h"
+#include "ui\UILabel.h"
+#include "ui\UIPanel.h"
 
 class MoviePanel : public UIPanel {
 public:

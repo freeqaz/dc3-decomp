@@ -1,5 +1,5 @@
-#include "hamobj/ScoreUtl.h"
-#include "os/Debug.h"
+#include "hamobj\ScoreUtl.h"
+#include "os\Debug.h"
 
 std::vector<Symbol> sRatingStates;
 std::vector<float> sDefaultRatingThresholds;

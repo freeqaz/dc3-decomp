@@ -1,16 +1,16 @@
 #pragma once
-#include "math/Color.h"
-#include "math/Mtx.h"
-#include "math/Vec.h"
-#include "obj/Object.h"
-#include "rndobj/Anim.h"
-#include "rndobj/Draw.h"
-#include "rndobj/Mat.h"
-#include "rndobj/Mesh.h"
-#include "rndobj/Poll.h"
-#include "rndobj/Trans.h"
-#include "utl/BinStream.h"
-#include "utl/MemMgr.h"
+#include "math\Color.h"
+#include "math\Mtx.h"
+#include "math\Vec.h"
+#include "obj\Object.h"
+#include "rndobj\Anim.h"
+#include "rndobj\Draw.h"
+#include "rndobj\Mat.h"
+#include "rndobj\Mesh.h"
+#include "rndobj\Poll.h"
+#include "rndobj\Trans.h"
+#include "utl\BinStream.h"
+#include "utl\MemMgr.h"
 
 // size 0x68
 class RndParticle {

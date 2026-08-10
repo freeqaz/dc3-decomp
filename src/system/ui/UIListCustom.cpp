@@ -1,8 +1,8 @@
-#include "ui/UIListCustom.h"
-#include "obj/Object.h"
-#include "rndobj/Trans.h"
-#include "ui/UIList.h"
-#include "ui/UIListSlot.h"
+#include "ui\UIListCustom.h"
+#include "obj\Object.h"
+#include "rndobj\Trans.h"
+#include "ui\UIList.h"
+#include "ui\UIListSlot.h"
 #ifdef HX_NATIVE
 #include <cstdio>
 #include <cstdlib>

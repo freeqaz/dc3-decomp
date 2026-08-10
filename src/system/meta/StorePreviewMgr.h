@@ -1,13 +1,13 @@
 #pragma once
 
-#include "obj/Msg.h"
-#include "meta/StreamPlayer.h"
-#include "movie/TexMovie.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "utl/NetCacheLoader.h"
-#include "utl/NetCacheMgr.h"
-#include "utl/Str.h"
+#include "obj\Msg.h"
+#include "meta\StreamPlayer.h"
+#include "movie\TexMovie.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "utl\NetCacheLoader.h"
+#include "utl\NetCacheMgr.h"
+#include "utl\Str.h"
 
 class StorePreviewMgr : public Hmx::Object {
 public:

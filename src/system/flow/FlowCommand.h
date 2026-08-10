@@ -1,7 +1,7 @@
 #pragma once
-#include "flow/FlowNode.h"
-#include "flow/FlowPtr.h"
-#include "obj/Object.h"
+#include "flow\FlowNode.h"
+#include "flow\FlowPtr.h"
+#include "obj\Object.h"
 
 /** "Runs a handler exposed by coders on an object" */
 class FlowCommand : public FlowNode {

@@ -1,8 +1,8 @@
-#include "char/CharGuitarString.h"
-#include "math/Mtx.h"
-#include "math/Utl.h"
-#include "math/Vec.h"
-#include "obj/Object.h"
+#include "char\CharGuitarString.h"
+#include "math\Mtx.h"
+#include "math\Utl.h"
+#include "math\Vec.h"
+#include "obj\Object.h"
 
 CharGuitarString::CharGuitarString()
     : mOpen(false), mNut(this), mBridge(this), mBend(this), mTarget(this) {}

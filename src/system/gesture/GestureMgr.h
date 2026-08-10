@@ -1,16 +1,16 @@
 #pragma once
 #include "IdentityInfo.h"
 #include "SkeletonRecoverer.h"
-#include "gesture/LiveCameraInput.h"
-#include "gesture/IdentityInfo.h"
-#include "gesture/Skeleton.h"
-#include "gesture/SkeletonQualityFilter.h"
-#include "obj/Dir.h"
-#include "obj/Msg.h"
-#include "obj/Object.h"
-#include "rndobj/Dir.h"
-#include "rndobj/Tex.h"
-#include "xdk/XAPILIB.h"
+#include "gesture\LiveCameraInput.h"
+#include "gesture\IdentityInfo.h"
+#include "gesture\Skeleton.h"
+#include "gesture\SkeletonQualityFilter.h"
+#include "obj\Dir.h"
+#include "obj\Msg.h"
+#include "obj\Object.h"
+#include "rndobj\Dir.h"
+#include "rndobj\Tex.h"
+#include "xdk\XAPILIB.h"
 
 DECLARE_MESSAGE(KinectHardwareStatusMsg, "kinect_status_changed")
 KinectHardwareStatusMsg(int i) : Message(Type(), i) {}

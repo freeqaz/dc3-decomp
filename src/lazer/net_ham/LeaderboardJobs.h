@@ -1,7 +1,7 @@
 #pragma once
-#include "hamobj/Difficulty.h"
-#include "meta_ham/HamProfile.h"
-#include "net_ham/RCJobDingo.h"
+#include "hamobj\Difficulty.h"
+#include "meta_ham\HamProfile.h"
+#include "net_ham\RCJobDingo.h"
 
 class LeaderboardRow {
 public:

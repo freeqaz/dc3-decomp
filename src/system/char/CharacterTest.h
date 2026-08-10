@@ -1,13 +1,13 @@
 #pragma once
-#include "char/ClipDistMap.h"
-#include "char/Waypoint.h"
-#include "char/CharClip.h"
-#include "char/CharClipGroup.h"
-#include "char/CharDriver.h"
-#include "obj/Data.h"
-#include "rndobj/Overlay.h"
-#include "obj/Object.h"
-#include "utl/BinStream.h"
+#include "char\ClipDistMap.h"
+#include "char\Waypoint.h"
+#include "char\CharClip.h"
+#include "char\CharClipGroup.h"
+#include "char\CharDriver.h"
+#include "obj\Data.h"
+#include "rndobj\Overlay.h"
+#include "obj\Object.h"
+#include "utl\BinStream.h"
 
 class Character;
 

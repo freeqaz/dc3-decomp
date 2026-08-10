@@ -1,9 +1,9 @@
-#include "utl/SuperFormatString.h"
-#include "os/Debug.h"
-#include "os/System.h"
-#include "utl/Locale.h"
-#include "utl/LocaleOrdinal.h"
-#include "obj/Data.h"
+#include "utl\SuperFormatString.h"
+#include "os\Debug.h"
+#include "os\System.h"
+#include "utl\Locale.h"
+#include "utl\LocaleOrdinal.h"
+#include "obj\Data.h"
 #include <string.h>
 
 #define BUF_SIZE 0x800

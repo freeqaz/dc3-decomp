@@ -1,7 +1,7 @@
-#include "synth/FxSendWah.h"
-#include "obj/Object.h"
-#include "synth/FxSend.h"
-#include "utl/BinStream.h"
+#include "synth\FxSendWah.h"
+#include "obj\Object.h"
+#include "synth\FxSend.h"
+#include "utl\BinStream.h"
 
 FxSendWah::FxSendWah()
     : mResonance(7.0f), mUpperFreq(5000.0f), mLowerFreq(1000.0f), mLfoFreq(1.35f),

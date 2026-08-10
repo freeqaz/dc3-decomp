@@ -2,12 +2,12 @@
 
 #include "Campaign.h"
 #include "NavListSortMgr.h"
-#include "hamobj/HamGameData.h"
+#include "hamobj\HamGameData.h"
 #include "HamSongMgr.h"
 #include "MQSongSortByCharacter.h"
 #include "MQSongSortNode.h"
 #include "ProfileMgr.h"
-#include "obj/Dir.h"
+#include "obj\Dir.h"
 
 MQSongSortMgr::MQSongSortMgr(SongPreview &sp) : NavListSortMgr(sp) {
     SetName("mq_song_provider", ObjectDir::Main());

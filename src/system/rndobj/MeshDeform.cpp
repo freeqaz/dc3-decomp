@@ -1,9 +1,9 @@
-#include "rndobj/MeshDeform.h"
-#include "obj/Object.h"
-#include "os/Debug.h"
-#include "utl/BinStream.h"
-#include "utl/MemMgr.h"
-#include "math/Rot.h"
+#include "rndobj\MeshDeform.h"
+#include "obj\Object.h"
+#include "os\Debug.h"
+#include "utl\BinStream.h"
+#include "utl\MemMgr.h"
+#include "math\Rot.h"
 
 #pragma region Hmx::Object
 

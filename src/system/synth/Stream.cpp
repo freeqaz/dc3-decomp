@@ -1,6 +1,6 @@
-#include "synth/Stream.h"
+#include "synth\Stream.h"
 #include "Synth.h"
-#include "synth/Faders.h"
+#include "synth\Faders.h"
 
 const int Stream::kStreamEndSamples = -1;
 const float Stream::kStreamEndMs = -1.1920929E-7f;

@@ -1,12 +1,12 @@
-#include "meta_ham/ContentLoadingPanel.h"
-#include "obj/Dir.h"
-#include "obj/Object.h"
-#include "obj/Task.h"
-#include "os/ContentMgr.h"
-#include "os/Debug.h"
-#include "rndobj/Group.h"
-#include "ui/PanelDir.h"
-#include "ui/UIPanel.h"
+#include "meta_ham\ContentLoadingPanel.h"
+#include "obj\Dir.h"
+#include "obj\Object.h"
+#include "obj\Task.h"
+#include "os\ContentMgr.h"
+#include "os\Debug.h"
+#include "rndobj\Group.h"
+#include "ui\PanelDir.h"
+#include "ui\UIPanel.h"
 
 ContentLoadingPanel::ContentLoadingPanel() : mAllowedToShow(false), mContentCount(0), mMountedCount(0) {
     TheContentMgr.RegisterCallback(this, false);

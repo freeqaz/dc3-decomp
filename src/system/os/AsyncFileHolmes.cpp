@@ -1,6 +1,6 @@
 #include "HolmesClient.h"
-#include "os/AsyncFileHolmes_p.h"
-#include "os/Debug.h"
+#include "os\AsyncFileHolmes_p.h"
+#include "os\Debug.h"
 
 AsyncFileHolmes::AsyncFileHolmes(const char *name, int mode)
     : AsyncFile(name, mode), mFd(-1) {}

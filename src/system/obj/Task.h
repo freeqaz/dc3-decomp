@@ -1,9 +1,9 @@
 #pragma once
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "obj/Object.h"
-#include "utl/MemMgr.h"
-#include "utl/SongPos.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "obj\Object.h"
+#include "utl\MemMgr.h"
+#include "utl\SongPos.h"
 
 enum TaskUnits {
     kTaskSeconds = 0,

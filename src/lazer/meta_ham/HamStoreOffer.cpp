@@ -1,12 +1,12 @@
-#include "meta_ham/HamStoreOffer.h"
-#include "hamobj/Difficulty.h"
-#include "meta/SongMgr.h"
-#include "meta/Sorting.h"
-#include "meta/StoreOffer.h"
-#include "obj/Data.h"
-#include "os/DateTime.h"
-#include "os/Debug.h"
-#include "utl/Symbol.h"
+#include "meta_ham\HamStoreOffer.h"
+#include "hamobj\Difficulty.h"
+#include "meta\SongMgr.h"
+#include "meta\Sorting.h"
+#include "meta\StoreOffer.h"
+#include "obj\Data.h"
+#include "os\DateTime.h"
+#include "os\Debug.h"
+#include "utl\Symbol.h"
 
 HamStoreOffer::HamStoreOffer(DataArray *d, SongMgr *s) : StoreOffer(d, s) {
     static Symbol preview("preview");

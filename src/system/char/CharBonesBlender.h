@@ -1,8 +1,8 @@
 #pragma once
-#include "char/CharBones.h"
-#include "char/CharPollable.h"
-#include "obj/Object.h"
-#include "utl/MemMgr.h"
+#include "char\CharBones.h"
+#include "char\CharPollable.h"
+#include "obj\Object.h"
+#include "utl\MemMgr.h"
 
 /** "Blends itself into another CharBones, clearing self each frame" */
 class CharBonesBlender : public CharPollable, public CharBonesAlloc {

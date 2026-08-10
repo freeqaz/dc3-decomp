@@ -1,8 +1,8 @@
 #pragma once
-#include "obj/Object.h"
-#include "synth/Faders.h"
-#include "utl/BinStream.h"
-#include "utl/MemMgr.h"
+#include "obj\Object.h"
+#include "synth\Faders.h"
+#include "utl\BinStream.h"
+#include "utl\MemMgr.h"
 
 class AudioDucker {
     friend bool

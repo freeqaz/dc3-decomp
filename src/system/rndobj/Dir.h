@@ -1,14 +1,14 @@
 #pragma once
-#include "math/Geo.h"
-#include "obj/Data.h"
-#include "obj/Dir.h"
-#include "obj/Object.h"
-#include "rndobj/Anim.h"
-#include "rndobj/Draw.h"
-#include "rndobj/Env.h"
-#include "rndobj/Poll.h"
-#include "rndobj/Trans.h"
-#include "utl/MemMgr.h"
+#include "math\Geo.h"
+#include "obj\Data.h"
+#include "obj\Dir.h"
+#include "obj\Object.h"
+#include "rndobj\Anim.h"
+#include "rndobj\Draw.h"
+#include "rndobj\Env.h"
+#include "rndobj\Poll.h"
+#include "rndobj\Trans.h"
+#include "utl\MemMgr.h"
 
 class RndDir : public ObjectDir,
                public RndDrawable,

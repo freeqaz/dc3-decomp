@@ -1,13 +1,13 @@
 #pragma once
-#include "char/CharClip.h"
-#include "hamobj/Difficulty.h"
-#include "hamobj/HamCharacter.h"
-#include "hamobj/HamDriver.h"
-#include "math/Key.h"
-#include "math/Utl.h"
-#include "obj/Dir.h"
-#include "rndobj/PropAnim.h"
-#include "utl/Symbol.h"
+#include "char\CharClip.h"
+#include "hamobj\Difficulty.h"
+#include "hamobj\HamCharacter.h"
+#include "hamobj\HamDriver.h"
+#include "math\Key.h"
+#include "math\Utl.h"
+#include "obj\Dir.h"
+#include "rndobj\PropAnim.h"
+#include "utl\Symbol.h"
 
 class ClipPlayer {
 public:

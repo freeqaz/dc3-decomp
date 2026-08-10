@@ -4,9 +4,9 @@
 #include "ChallengeSortByScore.h"
 #include "ChallengeSortMgr.h"
 #include "ChallengeSortNode.h"
-#include "meta_ham/MQSongSort.h"
-#include "meta_ham/NavListSort.h"
-#include "obj/Object.h"
+#include "meta_ham\MQSongSort.h"
+#include "meta_ham\NavListSort.h"
+#include "obj\Object.h"
 
 struct NodeFind {
     NodeFind(Symbol t) : token(t) {}

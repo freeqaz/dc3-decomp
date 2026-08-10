@@ -1,6 +1,6 @@
-#include "char/CharUpperTwist.h"
-#include "math/Rot.h"
-#include "obj/Object.h"
+#include "char\CharUpperTwist.h"
+#include "math\Rot.h"
+#include "obj\Object.h"
 
 void NormalizeAboutX(Hmx::Matrix3 &m) {
     Cross(m.x, m.y, m.z);

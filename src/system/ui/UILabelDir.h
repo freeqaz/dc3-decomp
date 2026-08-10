@@ -1,14 +1,14 @@
 #pragma once
 #include "UIComponent.h"
-#include "obj/Object.h"
-#include "rndobj/Anim.h"
-#include "rndobj/Dir.h"
-#include "rndobj/FontBase.h"
-#include "rndobj/Group.h"
-#include "ui/UIColor.h"
-#include "ui/UIFontImporter.h"
-#include "utl/MemMgr.h"
-#include "utl/Symbol.h"
+#include "obj\Object.h"
+#include "rndobj\Anim.h"
+#include "rndobj\Dir.h"
+#include "rndobj\FontBase.h"
+#include "rndobj\Group.h"
+#include "ui\UIColor.h"
+#include "ui\UIFontImporter.h"
+#include "utl\MemMgr.h"
+#include "utl\Symbol.h"
 
 /** "Top-level resource object for UILabels" */
 class UILabelDir : public RndDir, public UIFontImporter {

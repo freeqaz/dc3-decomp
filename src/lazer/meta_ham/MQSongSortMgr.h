@@ -1,7 +1,7 @@
 #pragma once
 #include "MQSongSort.h"
 #include "NavListSortMgr.h"
-#include "ui/UIListProvider.h"
+#include "ui\UIListProvider.h"
 
 class MQSongSortMgr : public NavListSortMgr {
 public:

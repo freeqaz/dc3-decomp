@@ -1,11 +1,11 @@
-#include "char/CharIKSliderMidi.h"
-#include "char/CharWeightable.h"
-#include "char/Character.h"
-#include "math/Easing.h"
-#include "math/Key.h"
-#include "obj/Object.h"
-#include "obj/Task.h"
-#include "rndobj/Utl.h"
+#include "char\CharIKSliderMidi.h"
+#include "char\CharWeightable.h"
+#include "char\Character.h"
+#include "math\Easing.h"
+#include "math\Key.h"
+#include "obj\Object.h"
+#include "obj\Task.h"
+#include "rndobj\Utl.h"
 
 CharIKSliderMidi::CharIKSliderMidi()
     : mTarget(this), mFirstSpot(this), mSecondSpot(this) {

@@ -1,7 +1,7 @@
 #pragma once
 #include "CharEyeDartRuleset.h"
-#include "rndobj/Trans.h"
-#include "utl/MemMgr.h"
+#include "rndobj\Trans.h"
+#include "utl\MemMgr.h"
 
 /** "An interest object for a character to look at" */
 class CharInterest : public RndTransformable {

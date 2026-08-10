@@ -1,8 +1,8 @@
 #pragma once
-#include "obj/Dir.h"
-#include "obj/Object.h"
-#include "utl/Symbol.h"
-#include "obj/Data.h"
+#include "obj\Dir.h"
+#include "obj\Object.h"
+#include "utl\Symbol.h"
+#include "obj\Data.h"
 
 typedef bool FileCallbackFunc(char *);
 

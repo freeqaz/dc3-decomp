@@ -1,15 +1,15 @@
 #pragma once
-#include "obj/Data.h"
-#include "os/CritSec.h"
-#include "os/Timer.h"
-#include "stl/_vector.h"
-#include "synth/FxSend.h"
-#include "synth/Mic.h"
-#include "synth_xbox/Voice.h"
+#include "obj\Data.h"
+#include "os\CritSec.h"
+#include "os\Timer.h"
+#include "stl\_vector.h"
+#include "synth\FxSend.h"
+#include "synth\Mic.h"
+#include "synth_xbox\Voice.h"
 #include "types.h"
-#include "utl/Symbol.h"
-#include "xdk/xapilibi/xbase.h"
-#include "xdk/xvh2/xvh2.h"
+#include "utl\Symbol.h"
+#include "xdk\xapilibi\xbase.h"
+#include "xdk\xvh2\xvh2.h"
 
 class MemStream;
 

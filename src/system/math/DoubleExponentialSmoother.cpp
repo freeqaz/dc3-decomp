@@ -1,4 +1,4 @@
-#include "math/DoubleExponentialSmoother.h"
+#include "math\DoubleExponentialSmoother.h"
 
 DoubleExponentialSmoother::DoubleExponentialSmoother()
     : mLevel(0), mPrevLevel(0), mTrend(0), mAlpha(0), mBeta(0) {}

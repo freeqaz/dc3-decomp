@@ -1,7 +1,7 @@
 #line 1 "synapse_apo\\FftIpp.cpp"
-#include "synth_xbox/FftIpp.h"
+#include "synth_xbox\FftIpp.h"
 #include "types.h"
-#include "os/Debug.h"
+#include "os\Debug.h"
 #include <cstring>
 #include <stdarg.h>
 

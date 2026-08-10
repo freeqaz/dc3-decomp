@@ -1,12 +1,12 @@
 #pragma once
-#include "math/Color.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "rndobj/DOFProc.h"
-#include "rndobj/ColorXfm.h"
-#include "rndobj/Tex.h"
-#include "utl/BinStream.h"
-#include "utl/MemMgr.h"
+#include "math\Color.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "rndobj\DOFProc.h"
+#include "rndobj\ColorXfm.h"
+#include "rndobj\Tex.h"
+#include "utl\BinStream.h"
+#include "utl\MemMgr.h"
 
 enum ProcessCmd {
     kProcessNone = 0,

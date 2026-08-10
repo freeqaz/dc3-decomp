@@ -1,5 +1,5 @@
 #pragma once
-#include "obj/Object.h"
+#include "obj\Object.h"
 #include "types.h"
 
 class Instarank : public virtual Hmx::Object {

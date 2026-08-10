@@ -1,6 +1,6 @@
-#include "math/Rand.h"
-#include "os/Debug.h"
-#include "os/OSFuncs.h"
+#include "math\Rand.h"
+#include "os\Debug.h"
+#include "os\OSFuncs.h"
 #include <cmath>
 
 Rand Rand::sRand(0x29A);

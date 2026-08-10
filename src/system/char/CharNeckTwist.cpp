@@ -1,10 +1,10 @@
-#include "char/CharNeckTwist.h"
-#include "math/Mtx.h"
-#include "math/Rot.h"
-#include "math/Trig.h"
-#include "math/Utl.h"
-#include "obj/Object.h"
-#include "rndobj/Trans.h"
+#include "char\CharNeckTwist.h"
+#include "math\Mtx.h"
+#include "math\Rot.h"
+#include "math\Trig.h"
+#include "math\Utl.h"
+#include "obj\Object.h"
+#include "rndobj\Trans.h"
 
 CharNeckTwist::CharNeckTwist() : mTwist(this), mHead(this) {}
 

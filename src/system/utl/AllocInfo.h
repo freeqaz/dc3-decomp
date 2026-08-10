@@ -1,9 +1,9 @@
 #pragma once
 #include "MemTrack.h"
-#include "os/Debug.h"
-#include "utl/Str.h"
-#include "utl/trie.h"
-#include "utl/TextStream.h"
+#include "os\Debug.h"
+#include "utl\Str.h"
+#include "utl\trie.h"
+#include "utl\TextStream.h"
 
 // size 0x65
 #pragma pack(push, 1)

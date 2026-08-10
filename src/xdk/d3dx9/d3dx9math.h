@@ -1,8 +1,8 @@
 #pragma once
-#include "xdk/D3D9.h"
-#include "xdk/XAPILIB.h"
-#include "xdk/win_types.h"
-#include "xdk/unknwn.h"
+#include "xdk\D3D9.h"
+#include "xdk\XAPILIB.h"
+#include "xdk\win_types.h"
+#include "xdk\unknwn.h"
 
 #ifdef __cplusplus
 extern "C" {

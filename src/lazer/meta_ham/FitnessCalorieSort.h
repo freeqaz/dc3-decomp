@@ -1,8 +1,8 @@
 #pragma once
 #include "NavListSort.h"
-#include "meta_ham/NavListNode.h"
-#include "ui/UILabel.h"
-#include "ui/UIListLabel.h"
+#include "meta_ham\NavListNode.h"
+#include "ui\UILabel.h"
+#include "ui\UIListLabel.h"
 
 class FitnessCalorieSort : public NavListSort {
 public:

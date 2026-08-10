@@ -1,9 +1,9 @@
-#include "synth/Sequence.h"
+#include "synth\Sequence.h"
 #include "Sequence_p.h"
-#include "math/Rand.h"
-#include "obj/Dir.h"
-#include "obj/Object.h"
-#include "obj/Task.h"
+#include "math\Rand.h"
+#include "obj\Dir.h"
+#include "obj\Object.h"
+#include "obj\Task.h"
 #ifdef HX_NATIVE
 // std::mem_fun removed in C++17; use std::mem_fn (no underscore)
 #define mem_fun mem_fn

@@ -1,12 +1,12 @@
 #include "FxSend.h"
 #include "Synth.h"
-#include "math/Decibels.h"
-#include "math/Utl.h"
-#include "os/Debug.h"
-#include "os/Timer.h"
-#include "synth/FxSend.h"
-#include "synth/Synth.h"
-#include "utl/Std.h"
+#include "math\Decibels.h"
+#include "math\Utl.h"
+#include "os\Debug.h"
+#include "os\Timer.h"
+#include "synth\FxSend.h"
+#include "synth\Synth.h"
+#include "utl\Std.h"
 
 FxSend360::FxSend360(FxSend *fx) : mOutputVoice(0), mThis(fx), unk30(true) {
     TheXboxSynth->AddFxSend(this);

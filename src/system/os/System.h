@@ -1,7 +1,7 @@
 #pragma once
-#include "obj/Data.h"
-#include "os/Platform.h"
-#include "utl/Symbol.h"
+#include "obj\Data.h"
+#include "os\Platform.h"
+#include "utl\Symbol.h"
 
 #ifdef HX_NATIVE
 #define kCommandLineSz 0x2000  // 8KB for long paths on native

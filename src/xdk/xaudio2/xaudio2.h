@@ -1,11 +1,11 @@
 #pragma once
 
-#include "xdk/win_types.h"
-#include "xdk/unknwn.h"
-#include "xdk/xapilibi/xbase.h"
+#include "xdk\win_types.h"
+#include "xdk\unknwn.h"
+#include "xdk\xapilibi\xbase.h"
 // tWAVEFORMATEX / WAVEFORMATEX are owned by xapo.h (matches og include wiring); pulling
 // it here keeps a single definition regardless of include order across TUs.
-#include "xdk/xaudio2/xapo.h"
+#include "xdk\xaudio2\xapo.h"
 
 struct XAUDIO2_BUFFER { /* Size=0x24 */
     /* 0x0000 */ UINT32 Flags;

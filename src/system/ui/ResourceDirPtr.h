@@ -1,13 +1,13 @@
 #pragma once
-#include "obj/Data.h"
-#include "obj/Dir.h"
-#include "obj/Object.h"
-#include "obj/PropSync.h"
-#include "os/File.h"
-#include "utl/BinStream.h"
-#include "utl/FilePath.h"
-#include "utl/Loader.h"
-#include "utl/Symbol.h"
+#include "obj\Data.h"
+#include "obj\Dir.h"
+#include "obj\Object.h"
+#include "obj\PropSync.h"
+#include "os\File.h"
+#include "utl\BinStream.h"
+#include "utl\FilePath.h"
+#include "utl\Loader.h"
+#include "utl\Symbol.h"
 
 class ResourceDirBase {
 public:

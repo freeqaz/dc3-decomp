@@ -1,6 +1,6 @@
-#include "synth/MicClientMapper.h"
-#include "os/Debug.h"
-#include "synth/Synth.h"
+#include "synth\MicClientMapper.h"
+#include "os\Debug.h"
+#include "synth\Synth.h"
 
 MicClientMapper::MicClientMapper() : mMicManager(0), mNumPlayers(2) {
     for (int i = 0; i < 4; i++) {

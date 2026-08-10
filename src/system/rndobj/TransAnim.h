@@ -1,8 +1,8 @@
 #pragma once
-#include "obj/Object.h"
-#include "rndobj/Anim.h"
-#include "rndobj/Trans.h"
-#include "utl/MemMgr.h"
+#include "obj\Object.h"
+#include "rndobj\Anim.h"
+#include "rndobj\Trans.h"
+#include "utl\MemMgr.h"
 
 /**
  * @brief A class for animating Transes.

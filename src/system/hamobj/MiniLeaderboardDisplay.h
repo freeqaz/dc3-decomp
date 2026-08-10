@@ -1,9 +1,9 @@
 #pragma once
-#include "obj/Object.h"
-#include "rndobj/Dir.h"
-#include "ui/ResourceDirPtr.h"
-#include "ui/UIComponent.h"
-#include "utl/MemMgr.h"
+#include "obj\Object.h"
+#include "rndobj\Dir.h"
+#include "ui\ResourceDirPtr.h"
+#include "ui\UIComponent.h"
+#include "utl\MemMgr.h"
 
 /** "Mini Leaderboard Display" */
 class MiniLeaderboardDisplay : public UIComponent {

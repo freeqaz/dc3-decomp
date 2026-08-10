@@ -1,10 +1,10 @@
 #pragma once
-#include "obj/Object.h"
-#include "rndobj/Cam.h"
-#include "rndobj/Dir.h"
-#include "ui/UIComponent.h"
-#include "ui/UIPanel.h"
-#include "utl/MemMgr.h"
+#include "obj\Object.h"
+#include "rndobj\Cam.h"
+#include "rndobj\Dir.h"
+#include "ui\UIComponent.h"
+#include "ui\UIPanel.h"
+#include "utl\MemMgr.h"
 
 class Flow;
 class UITrigger;

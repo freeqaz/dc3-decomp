@@ -2,7 +2,7 @@
 #include "NavListNode.h"
 #include "SongSort.h"
 #include "SongSortNode.h"
-#include "meta_ham/NavListNode.h"
+#include "meta_ham\NavListNode.h"
 
 class DifficultyCmp : public NavListItemSortCmp {
 public:

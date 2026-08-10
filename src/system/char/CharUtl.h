@@ -1,10 +1,10 @@
 #pragma once
-#include "char/CharBone.h"
-#include "char/CharClip.h"
-#include "char/Character.h"
-#include "math/Vec.h"
-#include "obj/Data.h"
-#include "obj/Dir.h"
+#include "char\CharBone.h"
+#include "char\CharClip.h"
+#include "char\Character.h"
+#include "math\Vec.h"
+#include "obj\Data.h"
+#include "obj\Dir.h"
 
 void CharUtlResetHair(Character *);
 void CharUtlInit();

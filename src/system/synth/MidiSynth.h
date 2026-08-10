@@ -1,5 +1,5 @@
 #pragma once
-#include "synth/MidiChannel.h"
+#include "synth\MidiChannel.h"
 
 class MidiSynth {
 public:

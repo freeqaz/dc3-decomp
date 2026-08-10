@@ -1,9 +1,9 @@
-#include "net/HttpGet.h"
-#include "os/Debug.h"
-#include "os/NetworkSocket.h"
-#include "stl/_vector.h"
-#include "utl/MemMgr.h"
-#include "utl/Str.h"
+#include "net\HttpGet.h"
+#include "os\Debug.h"
+#include "os\NetworkSocket.h"
+#include "stl\_vector.h"
+#include "utl\MemMgr.h"
+#include "utl\Str.h"
 #include <cctype>
 
 const float HttpGet::kDefaultTimeoutMs = 5000.0f;

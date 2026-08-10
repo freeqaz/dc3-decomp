@@ -1,7 +1,7 @@
-#include "synth/StreamReceiver.h"
-#include "os/Debug.h"
+#include "synth\StreamReceiver.h"
+#include "os\Debug.h"
 #ifdef HX_NATIVE
-#include "platform/StreamReceiver_Native.h"
+#include "platform\StreamReceiver_Native.h"
 #else
 extern "C" void XMemCpy(void *, const void *, int);
 #endif

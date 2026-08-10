@@ -1,9 +1,9 @@
 #pragma once
 
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "ui/UIPanel.h"
-#include "utl/Symbol.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "ui\UIPanel.h"
+#include "utl\Symbol.h"
 
 DECLARE_MESSAGE(ConnectionStatusChangedMsg, "connection_status_changed")
 ConnectionStatusChangedMsg(bool b1) : Message(Type(), b1) {}

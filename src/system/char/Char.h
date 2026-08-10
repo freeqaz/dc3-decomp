@@ -1,7 +1,7 @@
 #pragma once
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "rndobj/Overlay.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "rndobj\Overlay.h"
 
 void CharDeferHighlight(Hmx::Object *);
 void CharInit();

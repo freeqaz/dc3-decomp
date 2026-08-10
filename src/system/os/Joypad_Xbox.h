@@ -1,6 +1,6 @@
 #pragma once
-#include "os/Joypad.h"
-#include "xdk/XAPILIB.h"
+#include "os\Joypad.h"
+#include "xdk\XAPILIB.h"
 
 void GetXinputSinceLastFrame(int, XINPUT_STATE *, unsigned int *);
 JoypadType SetupHXKeytar(int, const XINPUT_CAPABILITIES &);

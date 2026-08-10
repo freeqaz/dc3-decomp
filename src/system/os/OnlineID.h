@@ -1,9 +1,9 @@
 #pragma once
 #include "types.h"
-#include "utl/BinStream.h"
-#include "utl/MemMgr.h"
-#include "utl/Str.h"
-#include "xdk/XAPILIB.h"
+#include "utl\BinStream.h"
+#include "utl\MemMgr.h"
+#include "utl\Str.h"
+#include "xdk\XAPILIB.h"
 
 // size 0x18
 class OnlineID {

@@ -1,10 +1,10 @@
-#include "meta_ham/MovieProvider.h"
-#include "meta_ham/ProfileMgr.h"
-#include "obj/Object.h"
-#include "os/Debug.h"
-#include "ui/UILabel.h"
-#include "ui/UIListLabel.h"
-#include "utl/Symbol.h"
+#include "meta_ham\MovieProvider.h"
+#include "meta_ham\ProfileMgr.h"
+#include "obj\Object.h"
+#include "os\Debug.h"
+#include "ui\UILabel.h"
+#include "ui\UIListLabel.h"
+#include "utl\Symbol.h"
 
 MovieProvider::~MovieProvider() {}
 

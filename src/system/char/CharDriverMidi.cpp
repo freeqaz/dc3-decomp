@@ -1,12 +1,12 @@
-#include "char/CharDriverMidi.h"
-#include "char/CharDriver.h"
-#include "obj/Data.h"
-#include "obj/Dir.h"
-#include "obj/Object.h"
-#include "obj/Task.h"
-#include "utl/Symbol.h"
-#include "utl/TimeConversion.h"
-#include "math/Utl.h"
+#include "char\CharDriverMidi.h"
+#include "char\CharDriver.h"
+#include "obj\Data.h"
+#include "obj\Dir.h"
+#include "obj\Object.h"
+#include "obj\Task.h"
+#include "utl\Symbol.h"
+#include "utl\TimeConversion.h"
+#include "math\Utl.h"
 
 CharDriverMidi::CharDriverMidi() : mClipFlags(0), mBlendOverridePct(1.0f) {}
 

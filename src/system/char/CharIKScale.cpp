@@ -1,9 +1,9 @@
-#include "char/CharIKScale.h"
-#include "char/CharWeightable.h"
-#include "math/Utl.h"
-#include "math/Vec.h"
-#include "obj/Object.h"
-#include "rndobj/Trans.h"
+#include "char\CharIKScale.h"
+#include "char\CharWeightable.h"
+#include "math\Utl.h"
+#include "math\Vec.h"
+#include "obj\Object.h"
+#include "rndobj\Trans.h"
 
 CharIKScale::CharIKScale()
     : mDest(this), mScale(1.0f), mSecondaryTargets(this), mBottomHeight(0.0f), mTopHeight(0.0f),

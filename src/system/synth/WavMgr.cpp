@@ -1,6 +1,6 @@
-#include "synth/WavMgr.h"
-#include "obj/Dir.h"
-#include "obj/Object.h"
+#include "synth\WavMgr.h"
+#include "obj\Dir.h"
+#include "obj\Object.h"
 
 #ifdef HX_NATIVE
 WavMgrAllocFunc WavMgr::sAlloc;

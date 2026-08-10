@@ -1,11 +1,11 @@
-#include "meta_ham/HamPanel.h"
-#include "gesture/Skeleton.h"
-#include "hamobj/HamNavList.h"
-#include "meta_ham/HamUI.h"
-#include "obj/Object.h"
-#include "os/Debug.h"
-#include "ui/UIComponent.h"
-#include "ui/UIPanel.h"
+#include "meta_ham\HamPanel.h"
+#include "gesture\Skeleton.h"
+#include "hamobj\HamNavList.h"
+#include "meta_ham\HamUI.h"
+#include "obj\Object.h"
+#include "os\Debug.h"
+#include "ui\UIComponent.h"
+#include "ui\UIPanel.h"
 
 HamPanel::HamPanel() : mNavList(nullptr) {}
 

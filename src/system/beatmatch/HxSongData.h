@@ -1,8 +1,8 @@
 #pragma once
-#include "utl/SongPos.h"
-#include "utl/BeatMap.h"
-#include "utl/TempoMap.h"
-#include "utl/MeasureMap.h"
+#include "utl\SongPos.h"
+#include "utl\BeatMap.h"
+#include "utl\TempoMap.h"
+#include "utl\MeasureMap.h"
 
 class HxSongData {
 public:

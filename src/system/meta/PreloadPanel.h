@@ -1,12 +1,12 @@
 #pragma once
-#include "meta/SongMgr.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "os/ContentMgr.h"
-#include "os/FileCache.h"
-#include "ui/UIPanel.h"
-#include "ui/UIScreen.h"
-#include "utl/Symbol.h"
+#include "meta\SongMgr.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "os\ContentMgr.h"
+#include "os\FileCache.h"
+#include "ui\UIPanel.h"
+#include "ui\UIScreen.h"
+#include "utl\Symbol.h"
 #include <vector>
 
 class PreloadPanel : public UIPanel, public ContentMgr::Callback {

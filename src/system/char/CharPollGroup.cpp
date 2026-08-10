@@ -1,8 +1,8 @@
-#include "char/CharPollGroup.h"
-#include "char/CharPollable.h"
-#include "char/CharWeightable.h"
-#include "obj/Object.h"
-#include "rndobj/Trans.h"
+#include "char\CharPollGroup.h"
+#include "char\CharPollable.h"
+#include "char\CharWeightable.h"
+#include "obj\Object.h"
+#include "rndobj\Trans.h"
 #include <algorithm>
 #ifdef HX_NATIVE
 #include <cstdio>

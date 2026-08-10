@@ -1,8 +1,8 @@
 #pragma once
-#include "char/CharPollable.h"
-#include "obj/Object.h"
-#include "rndobj/Trans.h"
-#include "utl/MemMgr.h"
+#include "char\CharPollable.h"
+#include "obj\Object.h"
+#include "rndobj\Trans.h"
+#include "utl\MemMgr.h"
 
 /** "moves a bone based on the position of the hand, nut, and bridge" */
 class CharGuitarString : public CharPollable {

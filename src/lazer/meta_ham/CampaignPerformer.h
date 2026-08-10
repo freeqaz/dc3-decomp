@@ -1,10 +1,10 @@
 #pragma once
-#include "hamobj/Difficulty.h"
-#include "meta_ham/HamSongMgr.h"
-#include "meta_ham/MetaPerformer.h"
-#include "meta_ham/Playlist.h"
-#include "obj/Data.h"
-#include "utl/Symbol.h"
+#include "hamobj\Difficulty.h"
+#include "meta_ham\HamSongMgr.h"
+#include "meta_ham\MetaPerformer.h"
+#include "meta_ham\Playlist.h"
+#include "obj\Data.h"
+#include "utl\Symbol.h"
 
 class CampaignPerformer : public MetaPerformer {
 public:

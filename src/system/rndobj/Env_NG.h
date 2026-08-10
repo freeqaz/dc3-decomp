@@ -1,7 +1,7 @@
 #pragma once
-#include "obj/Object.h"
-#include "rndobj/Env.h"
-#include "rndobj/Lit.h"
+#include "obj\Object.h"
+#include "rndobj\Env.h"
+#include "rndobj\Lit.h"
 
 class NgEnviron : public RndEnviron {
 public:

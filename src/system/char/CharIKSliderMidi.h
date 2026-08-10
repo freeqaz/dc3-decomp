@@ -1,8 +1,8 @@
 #pragma once
-#include "char/CharPollable.h"
-#include "char/CharWeightable.h"
-#include "rndobj/Highlight.h"
-#include "rndobj/Trans.h"
+#include "char\CharPollable.h"
+#include "char\CharWeightable.h"
+#include "rndobj\Highlight.h"
+#include "rndobj\Trans.h"
 
 /** "Moves an RndTransformable (bone) to a percentage of the way between two spots." */
 class CharIKSliderMidi : public RndHighlightable,

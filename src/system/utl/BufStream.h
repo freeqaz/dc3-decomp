@@ -1,6 +1,6 @@
 #pragma once
-#include "utl/BinStream.h"
-#include "math/StreamChecksum.h"
+#include "utl\BinStream.h"
+#include "math\StreamChecksum.h"
 
 class BufStream : public BinStream {
 public:

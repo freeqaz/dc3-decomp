@@ -1,11 +1,11 @@
-#include "ui/UITrigger.h"
-#include "math/Easing.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "rndobj/Anim.h"
-#include "rndobj/EventTrigger.h"
-#include "ui/UIComponent.h"
-#include "utl/Loader.h"
+#include "ui\UITrigger.h"
+#include "math\Easing.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "rndobj\Anim.h"
+#include "rndobj\EventTrigger.h"
+#include "ui\UIComponent.h"
+#include "utl\Loader.h"
 
 UITrigger::UITrigger()
     : mBlockTransition(0), mCallbackObject(this), mEndTime(0), mDone(1) {}

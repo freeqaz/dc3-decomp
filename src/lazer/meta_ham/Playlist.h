@@ -1,7 +1,7 @@
 #pragma once
-#include "meta/FixedSizeSaveable.h"
-#include "meta/FixedSizeSaveableStream.h"
-#include "utl/Symbol.h"
+#include "meta\FixedSizeSaveable.h"
+#include "meta\FixedSizeSaveableStream.h"
+#include "utl\Symbol.h"
 
 enum PlaylistType { // Taken from RB3 and "Setlist" replaced with "Playlist"
     kPlaylistLocal = 0,

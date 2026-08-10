@@ -1,6 +1,6 @@
 #pragma once
-#include "utl/MemMgr.h"
-#include "utl/TextStream.h"
+#include "utl\MemMgr.h"
+#include "utl\TextStream.h"
 #include <vector>
 
 // forward declaration

@@ -1,8 +1,8 @@
 #pragma once
-#include "char/CharPollable.h"
-#include "rndobj/Highlight.h"
-#include "rndobj/Trans.h"
-#include "utl/MemMgr.h"
+#include "char\CharPollable.h"
+#include "rndobj\Highlight.h"
+#include "rndobj\Trans.h"
+#include "utl\MemMgr.h"
 
 /** "Offsets a dest bone." */
 class CharBoneOffset : public CharPollable, public RndHighlightable {

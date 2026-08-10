@@ -1,10 +1,10 @@
 #pragma once
-#include "gesture/CameraInput.h"
-#include "gesture/Skeleton.h"
-#include "gesture/SkeletonHistory.h"
-#include "obj/Object.h"
-#include "os/CritSec.h"
-#include "xdk/nui/nuiskeleton.h"
+#include "gesture\CameraInput.h"
+#include "gesture\Skeleton.h"
+#include "gesture\SkeletonHistory.h"
+#include "obj\Object.h"
+#include "os\CritSec.h"
+#include "xdk\nui\nuiskeleton.h"
 
 class SkeletonUpdate;
 

@@ -1,6 +1,6 @@
 #pragma once
-#include "game/GameInput.h"
-#include "hamobj/HamAudio.h"
+#include "game\GameInput.h"
+#include "hamobj\HamAudio.h"
 
 class LiveInput : public GameInput {
 public:

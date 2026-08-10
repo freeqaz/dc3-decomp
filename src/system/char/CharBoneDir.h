@@ -1,11 +1,11 @@
 #pragma once
-#include "char/CharBone.h"
-#include "char/CharBones.h"
-#include "obj/Data.h"
-#include "obj/Dir.h"
-#include "obj/Object.h"
-#include "utl/FilePath.h"
-#include "utl/MemMgr.h"
+#include "char\CharBone.h"
+#include "char\CharBones.h"
+#include "obj\Data.h"
+#include "obj\Dir.h"
+#include "obj\Object.h"
+#include "utl\FilePath.h"
+#include "utl\MemMgr.h"
 
 /** "A CharBone container, acts as a resource file,
     storing skeleton and DOF for particular contexts" */

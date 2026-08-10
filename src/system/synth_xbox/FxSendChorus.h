@@ -1,7 +1,7 @@
 #pragma once
 #include "FxSend.h"
-#include "obj/Object.h"
-#include "synth/FxSendChorus.h"
+#include "obj\Object.h"
+#include "synth\FxSendChorus.h"
 
 class FxSendChorus360 : public FxSendChorus, public FxSend360 {
 public:

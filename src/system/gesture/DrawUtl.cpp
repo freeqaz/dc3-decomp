@@ -1,8 +1,8 @@
 #include "DrawUtl.h"
 
 #include "SkeletonViz.h"
-#include "gesture/SkeletonUpdate.h"
-#include "rndobj/Utl.h"
+#include "gesture\SkeletonUpdate.h"
+#include "rndobj\Utl.h"
 
 Vector3 DrawUtlVec3(0.5f, 0.05f, 0.4f);
 

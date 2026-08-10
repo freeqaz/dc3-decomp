@@ -4,12 +4,12 @@
 #include "HamUI.h"
 #include "MQSongSortMgr.h"
 #include "HamStarsDisplay.h"
-#include "meta_ham/NavListNode.h"
-#include "meta_ham/MQSongSortByCharacter.h"
-#include "stl/_vector.h"
-#include "utl/MakeString.h"
-#include "utl/Std.h"
-#include "utl/Symbol.h"
+#include "meta_ham\NavListNode.h"
+#include "meta_ham\MQSongSortByCharacter.h"
+#include "stl\_vector.h"
+#include "utl\MakeString.h"
+#include "utl\Std.h"
+#include "utl\Symbol.h"
 
 BEGIN_HANDLERS(MQSongHeaderNode)
     HANDLE_EXPR(get_challenge_count, mChallengeCount)

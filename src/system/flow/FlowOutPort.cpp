@@ -1,9 +1,9 @@
-#include "flow/FlowOutPort.h"
-#include "flow/Flow.h"
-#include "flow/FlowLabel.h"
-#include "flow/FlowNode.h"
-#include "obj/Dir.h"
-#include "obj/Msg.h"
+#include "flow\FlowOutPort.h"
+#include "flow\Flow.h"
+#include "flow\FlowLabel.h"
+#include "flow\FlowNode.h"
+#include "obj\Dir.h"
+#include "obj\Msg.h"
 
 FlowOutPort::FlowOutPort() : mImmediateRelease(0), mStop(0), mExposed(0) {}
 FlowOutPort::~FlowOutPort() {}

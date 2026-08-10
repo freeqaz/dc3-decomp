@@ -1,12 +1,12 @@
 #pragma once
-#include "hamobj/Difficulty.h"
-#include "meta_ham/HamSongMgr.h"
-#include "meta/FixedSizeSaveable.h"
-#include "meta/FixedSizeSaveableStream.h"
-#include "obj/Data.h"
-#include "os/ContentMgr.h"
-#include "utl/BinStream.h"
-#include "utl/Symbol.h"
+#include "hamobj\Difficulty.h"
+#include "meta_ham\HamSongMgr.h"
+#include "meta\FixedSizeSaveable.h"
+#include "meta\FixedSizeSaveableStream.h"
+#include "obj\Data.h"
+#include "os\ContentMgr.h"
+#include "utl\BinStream.h"
+#include "utl\Symbol.h"
 
 // size 0x1c
 struct SongStatusData {

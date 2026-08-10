@@ -1,8 +1,8 @@
 #pragma once
 
 #include "FftIpp.h"
-#include "stlport/stl/_vector.h"
-#include "utl/StlAlloc.h"
+#include "stlport\stl\_vector.h"
+#include "utl\StlAlloc.h"
 #include <vector>
 
 namespace DSP {

@@ -24,7 +24,7 @@
  ***************************************************************************/
 
 #ifdef USE_AXTLS
-#include "curl/curl.h"
+#include "curl\curl.h"
 #include "urldata.h"
 
 int Curl_axtls_init(void);

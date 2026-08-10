@@ -1,11 +1,11 @@
-#include "char/FileMergerOrganizer.h"
+#include "char\FileMergerOrganizer.h"
 #include "FileMerger.h"
 #include "FileMergerOrganizer.h"
-#include "hamobj/SongCollision.h"
-#include "math/Rand.h"
-#include "obj/Object.h"
-#include "os/Debug.h"
-#include "os/System.h"
+#include "hamobj\SongCollision.h"
+#include "math\Rand.h"
+#include "obj\Object.h"
+#include "os\Debug.h"
+#include "os\System.h"
 
 FileMergerOrganizer *TheFileMergerOrganizer;
 std::map<Symbol, CatData> gCatPriority;

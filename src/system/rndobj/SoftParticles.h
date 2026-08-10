@@ -1,6 +1,6 @@
 #pragma once
-#include "rndobj/BaseMaterial.h"
-#include "rndobj/Draw.h"
+#include "rndobj\BaseMaterial.h"
+#include "rndobj\Draw.h"
 
 /** "Renders the specified particles with soft edges." */
 class RndSoftParticles : public RndDrawable {

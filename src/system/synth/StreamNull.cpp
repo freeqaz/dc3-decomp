@@ -1,6 +1,6 @@
-#include "synth/StreamNull.h"
-#include "synth/Faders.h"
-#include "utl/Std.h"
+#include "synth\StreamNull.h"
+#include "synth\Faders.h"
+#include "utl\Std.h"
 
 StreamNull::StreamNull(float f) : mFaders(nullptr) {
     mTimer.Reset(f);

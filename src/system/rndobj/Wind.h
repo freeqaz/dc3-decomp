@@ -1,9 +1,9 @@
 #pragma once
-#include "math/Vec.h"
-#include "obj/Object.h"
-#include "rndobj/Highlight.h"
-#include "rndobj/Trans.h"
-#include "utl/MemMgr.h"
+#include "math\Vec.h"
+#include "obj\Object.h"
+#include "rndobj\Highlight.h"
+#include "rndobj\Trans.h"
+#include "utl\MemMgr.h"
 
 /** "Object representing blowing wind, CharHair and Fur can point at them." */
 class RndWind : public RndHighlightable {

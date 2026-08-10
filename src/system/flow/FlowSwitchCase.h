@@ -1,5 +1,5 @@
 #pragma once
-#include "flow/FlowNode.h"
+#include "flow\FlowNode.h"
 
 /** "a case for a flow switch" */
 class FlowSwitchCase : public FlowNode {

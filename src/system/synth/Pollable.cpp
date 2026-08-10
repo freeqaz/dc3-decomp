@@ -1,4 +1,4 @@
-#include "synth/Pollable.h"
+#include "synth\Pollable.h"
 
 std::list<SynthPollable *> SynthPollable::sPollables;
 

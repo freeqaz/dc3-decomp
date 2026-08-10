@@ -1,11 +1,11 @@
 #pragma once
-#include "obj/Object.h"
-#include "rndobj/CubeTex.h"
-#include "rndobj/Trans.h"
-#include "math/Color.h"
-#include "rndobj/Tex.h"
-#include "rndobj/Draw.h"
-#include "utl/MemMgr.h"
+#include "obj\Object.h"
+#include "rndobj\CubeTex.h"
+#include "rndobj\Trans.h"
+#include "math\Color.h"
+#include "rndobj\Tex.h"
+#include "rndobj\Draw.h"
+#include "utl\MemMgr.h"
 
 class RndLight : public RndTransformable {
 public:

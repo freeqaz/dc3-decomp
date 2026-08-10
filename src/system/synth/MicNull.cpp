@@ -1,5 +1,5 @@
-#include "synth/MicNull.h"
-#include "math/Rand.h"
+#include "synth\MicNull.h"
+#include "math\Rand.h"
 
 static Rand sRand(0x1bca7);
 

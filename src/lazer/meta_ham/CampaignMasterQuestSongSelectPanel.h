@@ -1,13 +1,13 @@
 #pragma once
 #include "CampaignSongSelectPanel.h"
 #include "TexLoadPanel.h"
-#include "meta_ham/MQSongSortMgr.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "os/DateTime.h"
-#include "ui/UILabel.h"
-#include "ui/UIListProvider.h"
-#include "utl/Symbol.h"
+#include "meta_ham\MQSongSortMgr.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "os\DateTime.h"
+#include "ui\UILabel.h"
+#include "ui\UIListProvider.h"
+#include "utl\Symbol.h"
 
 class CampaignMasterQuestSongSelectPanel : public TexLoadPanel {
 public:

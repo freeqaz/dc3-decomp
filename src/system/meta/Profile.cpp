@@ -1,5 +1,5 @@
-#include "meta/Profile.h"
-#include "os/PlatformMgr.h"
+#include "meta\Profile.h"
+#include "os\PlatformMgr.h"
 
 Profile::Profile(int pnum) : mDirty(0), mPadNum(pnum), mState(kMetaProfileUnloaded) {}
 Profile::~Profile() { mDirty = true; }

@@ -344,10 +344,33 @@ def check_path_case(path: Path):
         print(f"⚠️  Case mismatch: expected={path} actual={curr}")
 
 
+def shell_quote_flag(flag: str) -> str:
+    """Keep a backslash in a flag alive through /bin/sh.
+
+    The msvc rules interpolate `$cflags` straight into a shell command line, so
+    an unquoted `/I e:\\lazer_build_gmc1\\system\\src` reaches cl.exe as
+    `e:lazer_build_gmc1systemsrc` -- sh eats every backslash. That separator is
+    load-bearing: MSVC hashes a string literal's CONTENTS into its COMDAT name,
+    so `__FILE__` spelled with `/` where the retail build spelled `\\` gives
+    byte-identical code a different relocation target.
+
+    Quoting happens HERE, once, at the seam where a flag list becomes a shell
+    string. Every Python consumer of the flag lists (compile_commands, the
+    decompctx include set, tools/compiler_trace) keeps seeing the plain
+    spelling, which is what they want to reason about.
+    """
+    if "\\" not in flag:
+        return flag
+    head, sep, tail = flag.partition(" ")
+    if not sep:
+        return f"'{flag}'"
+    return f"{head} '{tail}'"
+
+
 def make_flags_str(flags: Optional[List[str]]) -> str:
     if flags is None:
         return ""
-    return " ".join(flags)
+    return " ".join(shell_quote_flag(f) for f in flags)
 
 
 # Unit configuration
@@ -1213,7 +1236,9 @@ def generate_build_ninja(
                         include_dirs.append(flag[3:])
                     elif flag.startswith("/I"):
                         include_dirs.append(flag[2:].lstrip())
-                includes = " ".join([f"-I {d}" for d in include_dirs])
+                # Also a shell command line, so the same backslash rule applies.
+                includes = " ".join(shell_quote_flag(f"-I {d}")
+                                    for d in include_dirs)
                 n.build(
                     outputs=obj.ctx_path,
                     rule="decompctx",

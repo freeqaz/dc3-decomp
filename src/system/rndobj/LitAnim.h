@@ -1,9 +1,9 @@
 #pragma once
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "rndobj/Anim.h"
-#include "rndobj/Lit.h"
-#include "utl/MemMgr.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "rndobj\Anim.h"
+#include "rndobj\Lit.h"
+#include "utl\MemMgr.h"
 
 /** "LightAnim objects animate light object properties using keyframe interpolation." */
 class RndLightAnim : public RndAnimatable {

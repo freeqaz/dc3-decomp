@@ -1,7 +1,7 @@
 #pragma once
-#include "obj/Object.h"
-#include "synth/FxSend.h"
-#include "utl/Str.h"
+#include "obj\Object.h"
+#include "synth\FxSend.h"
+#include "utl\Str.h"
 #include <vector>
 
 /** "meter effect" */

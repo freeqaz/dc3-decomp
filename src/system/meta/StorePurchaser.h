@@ -1,10 +1,10 @@
 #pragma once
 
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "stl/_vector.h"
-#include "ui/UI.h"
-#include "utl/Symbol.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "stl\_vector.h"
+#include "ui\UI.h"
+#include "utl\Symbol.h"
 
 enum PurchaseState { // just know the val of kSuccess
     purchasestate0 = 0,

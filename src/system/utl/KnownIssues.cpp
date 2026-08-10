@@ -1,10 +1,10 @@
-#include "utl/KnownIssues.h"
-#include "obj/Data.h"
-#include "obj/DataFunc.h"
-#include "obj/Task.h"
-#include "os/System.h"
-#include "rndobj/Graph.h"
-#include "utl/Symbol.h"
+#include "utl\KnownIssues.h"
+#include "obj\Data.h"
+#include "obj\DataFunc.h"
+#include "obj\Task.h"
+#include "os\System.h"
+#include "rndobj\Graph.h"
+#include "utl\Symbol.h"
 
 KnownIssues TheKnownIssues;
 

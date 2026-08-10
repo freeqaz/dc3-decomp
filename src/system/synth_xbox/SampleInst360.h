@@ -1,6 +1,6 @@
 #pragma once
-#include "synth/SampleInst.h"
-#include "synth_xbox/SynthSample.h"
+#include "synth\SampleInst.h"
+#include "synth_xbox\SynthSample.h"
 
 class Voice;
 

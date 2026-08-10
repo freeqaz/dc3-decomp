@@ -1,14 +1,14 @@
 #pragma once
 #include "HamIKSkeleton.h"
-#include "char/CharPollable.h"
-#include "char/CharWeightable.h"
-#include "char/Character.h"
-#include "math/Mtx.h"
-#include "math/Vec.h"
-#include "obj/Object.h"
-#include "rndobj/Highlight.h"
-#include "rndobj/Trans.h"
-#include "utl/MemMgr.h"
+#include "char\CharPollable.h"
+#include "char\CharWeightable.h"
+#include "char\Character.h"
+#include "math\Mtx.h"
+#include "math\Vec.h"
+#include "obj\Object.h"
+#include "rndobj\Highlight.h"
+#include "rndobj\Trans.h"
+#include "utl\MemMgr.h"
 
 /** "Does IK on end effectors and props" */
 class HamIKEffector : public RndHighlightable,

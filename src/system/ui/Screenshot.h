@@ -1,10 +1,10 @@
 #pragma once
-#include "obj/Object.h"
-#include "rndobj/Draw.h"
-#include "utl/FilePath.h"
-#include "rndobj/Tex.h"
-#include "rndobj/Mat.h"
-#include "utl/MemMgr.h"
+#include "obj\Object.h"
+#include "rndobj\Draw.h"
+#include "utl\FilePath.h"
+#include "rndobj\Tex.h"
+#include "rndobj\Mat.h"
+#include "utl\MemMgr.h"
 
 class Screenshot : public RndDrawable {
 public:

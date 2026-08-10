@@ -1,25 +1,25 @@
-#include "ui/PanelDir.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "os/Debug.h"
-#include "rndobj/Cam.h"
-#include "rndobj/Dir.h"
-#include "rndobj/EventTrigger.h"
-#include "ui/UI.h"
-#include "ui/UIComponent.h"
-#include "ui/UIPanel.h"
-#include "ui/UITrigger.h"
-#include "ui/Utl.h"
-#include "utl/BinStream.h"
-#include "utl/Loader.h"
-#include "utl/Std.h"
-#include "utl/Symbol.h"
+#include "ui\PanelDir.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "os\Debug.h"
+#include "rndobj\Cam.h"
+#include "rndobj\Dir.h"
+#include "rndobj\EventTrigger.h"
+#include "ui\UI.h"
+#include "ui\UIComponent.h"
+#include "ui\UIPanel.h"
+#include "ui\UITrigger.h"
+#include "ui\Utl.h"
+#include "utl\BinStream.h"
+#include "utl\Loader.h"
+#include "utl\Std.h"
+#include "utl\Symbol.h"
 #ifdef HX_NATIVE
 #include <cctype>
 #include <cstdlib>
 #include <cstring>
 #include <string>
-#include "flow/Flow.h"
+#include "flow\Flow.h"
 extern void FlushTransparentDraws();
 extern void FlushPostProcessingForOverlay();
 #endif

@@ -1,7 +1,7 @@
 #pragma once
-#include "synth/ADSR.h"
-#include "synth/Faders.h"
-#include "synth/FxSend.h"
+#include "synth\ADSR.h"
+#include "synth\Faders.h"
+#include "synth\FxSend.h"
 
 enum FXCore {
     kFXCore0 = 0,

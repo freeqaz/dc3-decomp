@@ -73,12 +73,15 @@ def _load_include_flags() -> List[str]:
         else:
             path_str = flag
 
-        # Map original build paths to local source tree
-        if path_str.startswith("e:/lazer_build_gmc1/system/src"):
-            local_path = PROJECT_ROOT / "src" / "system" / path_str[len("e:/lazer_build_gmc1/system/src") :].lstrip("/")
+        # Map original build paths to local source tree. The `e:` roots are
+        # spelled with backslashes (they have to be -- see defines_common), so
+        # normalize before prefix-matching rather than matching one spelling.
+        norm = path_str.replace("\\", "/")
+        if norm.startswith("e:/lazer_build_gmc1/system/src"):
+            local_path = PROJECT_ROOT / "src" / "system" / norm[len("e:/lazer_build_gmc1/system/src") :].lstrip("/")
             result.extend(["/I", str(local_path)])
-        elif path_str.startswith("e:/lazer_build_gmc1/lazer/src"):
-            local_path = PROJECT_ROOT / "src" / "lazer" / path_str[len("e:/lazer_build_gmc1/lazer/src") :].lstrip("/")
+        elif norm.startswith("e:/lazer_build_gmc1/lazer/src"):
+            local_path = PROJECT_ROOT / "src" / "lazer" / norm[len("e:/lazer_build_gmc1/lazer/src") :].lstrip("/")
             result.extend(["/I", str(local_path)])
         elif flag.startswith("/I "):
             result.extend(["/I", path_str])

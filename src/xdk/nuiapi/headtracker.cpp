@@ -1,5 +1,5 @@
-#include "xdk/LIBCMT/vectorintrinsics.h"
-#include "xdk/xapilibi/xbox.h"
+#include "xdk\LIBCMT\vectorintrinsics.h"
+#include "xdk\xapilibi\xbox.h"
 #include <stdio.h>
 #include <new>
 

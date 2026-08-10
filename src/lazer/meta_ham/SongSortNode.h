@@ -1,8 +1,8 @@
 #pragma once
 
-#include "meta_ham/NavListNode.h"
-#include "meta_ham/SongRecord.h"
-#include "utl/Symbol.h"
+#include "meta_ham\NavListNode.h"
+#include "meta_ham\SongRecord.h"
+#include "utl\Symbol.h"
 
 class SongHeaderNode : public NavListHeaderNode {
 public:

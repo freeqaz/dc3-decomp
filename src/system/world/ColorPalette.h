@@ -1,7 +1,7 @@
 #pragma once
-#include "math/Color.h"
-#include "obj/Object.h"
-#include "utl/MemMgr.h"
+#include "math\Color.h"
+#include "obj\Object.h"
+#include "utl\MemMgr.h"
 
 struct ColorSet {
     Hmx::Color mPrimary;

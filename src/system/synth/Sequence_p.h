@@ -1,6 +1,6 @@
 #pragma once
-#include "synth/Sequence.h"
-#include "utl/PoolAlloc.h"
+#include "synth\Sequence.h"
+#include "utl\PoolAlloc.h"
 
 // DO NOT try to include this header directly!
 // include synth/Sequence.h instead

@@ -1,14 +1,14 @@
-#include "utl/Locale.h"
+#include "utl\Locale.h"
 
 #include "DataPointMgr.h"
-#include "obj/DataFile.h"
-#include "obj/DataFunc.h"
-#include "os/Debug.h"
-#include "os/File.h"
-#include "os/System.h"
-#include "utl/Str.h"
-#include "utl/DataPointMgr.h"
-#include "xdk/xbdm/xbdm.h"
+#include "obj\DataFile.h"
+#include "obj\DataFunc.h"
+#include "os\Debug.h"
+#include "os\File.h"
+#include "os\System.h"
+#include "utl\Str.h"
+#include "utl\DataPointMgr.h"
+#include "xdk\xbdm\xbdm.h"
 #include <vector>
 
 Locale TheLocale;

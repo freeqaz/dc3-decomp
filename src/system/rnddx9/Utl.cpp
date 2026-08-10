@@ -1,7 +1,7 @@
 #pragma once
 #include "Utl.h"
-#include "rnddx9/Rnd.h"
-#include "xdk/D3D9.h"
+#include "rnddx9\Rnd.h"
+#include "xdk\D3D9.h"
 #include <cstring>
 
 struct D3DVertexBuffer *MakeVertexBuffer(int num, uint size, uint, bool) {

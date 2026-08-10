@@ -1,6 +1,6 @@
-#include "os/SynchronizationEvent.h"
-#include "os/Debug.h"
-#include "xdk/XAPILIB.h"
+#include "os\SynchronizationEvent.h"
+#include "os\Debug.h"
+#include "xdk\XAPILIB.h"
 
 SynchronizationEvent::~SynchronizationEvent() { CloseHandle(mEvent); }
 

@@ -1,7 +1,7 @@
-#include "synth/StreamReceiverFile.h"
+#include "synth\StreamReceiverFile.h"
 #include "StreamReceiver.h"
 #include "StreamReceiverFile.h"
-#include "os/Debug.h"
+#include "os\Debug.h"
 
 int StreamReceiverFile::sPlayCursor = 0;
 

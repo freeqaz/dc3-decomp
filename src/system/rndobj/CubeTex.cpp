@@ -1,11 +1,11 @@
-#include "rndobj/CubeTex.h"
+#include "rndobj\CubeTex.h"
 #include "CubeTex.h"
-#include "obj/Object.h"
-#include "os/File.h"
-#include "rndobj/Tex.h"
-#include "os/Debug.h"
-#include "utl/BinStream.h"
-#include "utl/Loader.h"
+#include "obj\Object.h"
+#include "os\File.h"
+#include "rndobj\Tex.h"
+#include "os\Debug.h"
+#include "utl\BinStream.h"
+#include "utl\Loader.h"
 
 #ifndef HX_NATIVE
 void RndTex::Load(BinStream &bs) {

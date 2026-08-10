@@ -1,10 +1,10 @@
 #pragma once
 #include "Object.h"
-#include "obj/Dir.h" /* IWYU pragma: keep */
-#include "obj/Object.h"
-#include "utl/BinStream.h" /* IWYU pragma: keep */
-#include "os/Debug.h" /* IWYU pragma: keep */
-#include "utl/PoolAlloc.h"
+#include "obj\Dir.h" /* IWYU pragma: keep */
+#include "obj\Object.h"
+#include "utl\BinStream.h" /* IWYU pragma: keep */
+#include "os\Debug.h" /* IWYU pragma: keep */
+#include "utl\PoolAlloc.h"
 #include <algorithm> /* IWYU pragma: keep */
 #include <cstddef> /* IWYU pragma: keep */
 
@@ -409,7 +409,7 @@ BinStream &operator>>(BinStream &bs, ObjPtrVec<T1, ObjectDir> &vec) {
 // to keep them out of the PCH (inlining budget pollution).
 // Include ObjPtrVec_impl.h in .cpp files that call these methods.
 #ifdef HX_NATIVE
-#include "obj/ObjPtrVec_impl.h"
+#include "obj\ObjPtrVec_impl.h"
 #endif
 
 #pragma endregion
@@ -940,6 +940,6 @@ typename ObjPtrVec<T1, T2>::iterator ObjPtrVec<T1, T2>::FindRef(ObjRef *ref) {
 }
 
 // ObjPtrVec::merge, ::unique, ::remove bodies are in ObjPtrVec_impl.h
-#include "obj/ObjPtrVec_impl.h"
+#include "obj\ObjPtrVec_impl.h"
 
 #endif

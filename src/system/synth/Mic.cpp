@@ -1,8 +1,8 @@
-#include "synth/Mic.h"
-#include "math/Utl.h"
-#include "os/Debug.h"
-#include "obj/Data.h"
-#include "utl/MemMgr.h"
+#include "synth\Mic.h"
+#include "math\Utl.h"
+#include "os\Debug.h"
+#include "obj\Data.h"
+#include "utl\MemMgr.h"
 #include <cstring>
 
 void Mic::Set(const DataArray *data) {

@@ -1,6 +1,6 @@
-#include "gesture/IdentityInfo.h"
-#include "gesture/GestureMgr.h"
-#include "meta_ham/SkeletonIdentifier.h"
+#include "gesture\IdentityInfo.h"
+#include "gesture\GestureMgr.h"
+#include "meta_ham\SkeletonIdentifier.h"
 
 SkeletonIdentifiedMsg::SkeletonIdentifiedMsg(int arg1, int arg2)
     : Message(Type(), arg1, arg2) {}

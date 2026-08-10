@@ -48,7 +48,7 @@
 #ifndef FIFOSamplePipe_H
 #define FIFOSamplePipe_H
 
-#include "os/Debug.h"
+#include "os\Debug.h"
 #include <assert.h>
 #include <stdlib.h>
 #include "STTypes.h"

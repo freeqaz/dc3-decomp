@@ -1,9 +1,9 @@
 #pragma once
-#include "stl/_vector.h"
+#include "stl\_vector.h"
 #include "types.h"
-#include "utl/Str.h"
-#include "xdk/xapilibi/xbase.h"
-#include "xdk/xapilibi/stringapiset.h"
+#include "utl\Str.h"
+#include "xdk\xapilibi\xbase.h"
+#include "xdk\xapilibi\stringapiset.h"
 #include <list>
 
 enum StoreError {

@@ -1,14 +1,14 @@
 #pragma once
-#include "gesture/BaseSkeleton.h"
-#include "meta_ham/HamPanel.h"
-#include "flow/PropertyEventProvider.h"
-#include "hamobj/HamNavList.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "ui/UIList.h"
-#include "ui/UIListProvider.h"
-#include "utl/Symbol.h"
-#include "net_ham/ChallengeSystemJobs.h"
+#include "gesture\BaseSkeleton.h"
+#include "meta_ham\HamPanel.h"
+#include "flow\PropertyEventProvider.h"
+#include "hamobj\HamNavList.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "ui\UIList.h"
+#include "ui\UIListProvider.h"
+#include "utl\Symbol.h"
+#include "net_ham\ChallengeSystemJobs.h"
 
 class ChallengeResultPanel : public UIListProvider, public HamPanel {
 public:

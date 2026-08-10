@@ -1,14 +1,14 @@
 #pragma once
-#include "flow/FlowLabel.h"
-#include "flow/FlowLabelProvider.h"
-#include "flow/FlowOutPort.h"
-#include "flow/FlowQueueable.h"
-#include "flow/FlowTrigger.h"
-#include "obj/Data.h"
-#include "obj/Dir.h"
-#include "obj/Object.h"
-#include "rndobj/Poll.h"
-#include "utl/Str.h"
+#include "flow\FlowLabel.h"
+#include "flow\FlowLabelProvider.h"
+#include "flow\FlowOutPort.h"
+#include "flow\FlowQueueable.h"
+#include "flow\FlowTrigger.h"
+#include "obj\Data.h"
+#include "obj\Dir.h"
+#include "obj\Object.h"
+#include "rndobj\Poll.h"
+#include "utl\Str.h"
 
 /** "Top level flow" */
 class Flow : public FlowQueueable,

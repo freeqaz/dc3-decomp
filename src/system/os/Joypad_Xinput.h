@@ -1,6 +1,6 @@
 #pragma once
-#include "os/Joypad.h"
-#include "xdk/XAPILIB.h"
+#include "os\Joypad.h"
+#include "xdk\XAPILIB.h"
 
 void JoypadInitXboxPCDeadzone(class DataArray *);
 void TranslateStick(char *, short, bool, bool);

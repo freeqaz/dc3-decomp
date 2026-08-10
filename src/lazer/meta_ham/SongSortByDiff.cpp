@@ -3,12 +3,12 @@
 #include "HamSongMetadata.h"
 #include "HamSongMgr.h"
 #include "SongSortNode.h"
-#include "meta/SongMgr.h"
+#include "meta\SongMgr.h"
 #include "SongRecord.h"
 #include "SongSortNode.h"
-#include "meta/Sorting.h"
-#include "meta_ham/HamSongMgr.h"
-#include "meta_ham/NavListNode.h"
+#include "meta\Sorting.h"
+#include "meta_ham\HamSongMgr.h"
+#include "meta_ham\NavListNode.h"
 
 int DifficultyCmp::Compare(const NavListItemSortCmp *cmp, NavListNodeType type) const {
     switch (type) {

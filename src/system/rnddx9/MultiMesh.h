@@ -1,7 +1,7 @@
 #pragma once
-#include "obj/Object.h"
-#include "rndobj/MultiMesh.h"
-#include "xdk/D3D9.h"
+#include "obj\Object.h"
+#include "rndobj\MultiMesh.h"
+#include "xdk\D3D9.h"
 
 class DxMultiMesh : public RndMultiMesh {
 public:

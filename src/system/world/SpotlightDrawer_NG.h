@@ -1,13 +1,13 @@
 #pragma once
-#include "math/Mtx.h"
-#include "obj/Object.h"
-#include "os/Debug.h"
-#include "rndobj/Cam.h"
-#include "rndobj/Tex.h"
-#include "utl/MemMgr.h"
-#include "world/Spotlight.h"
-#include "world/SpotlightDrawer.h"
-#include "xdk/D3D9.h"
+#include "math\Mtx.h"
+#include "obj\Object.h"
+#include "os\Debug.h"
+#include "rndobj\Cam.h"
+#include "rndobj\Tex.h"
+#include "utl\MemMgr.h"
+#include "world\Spotlight.h"
+#include "world\SpotlightDrawer.h"
+#include "xdk\D3D9.h"
 
 class NgSpotlightDrawer : public SpotlightDrawer {
 public:

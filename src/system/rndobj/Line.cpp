@@ -1,12 +1,12 @@
-#include "rndobj/Line.h"
-#include "obj/Object.h"
-#include "math/Rot.h"
-#include "rndobj/Cam.h"
-#include "rndobj/Draw.h"
-#include "rndobj/Mat.h"
-#include "rndobj/Trans.h"
-#include "utl/BinStream.h"
-#include "world/Spotlight.h"
+#include "rndobj\Line.h"
+#include "obj\Object.h"
+#include "math\Rot.h"
+#include "rndobj\Cam.h"
+#include "rndobj\Draw.h"
+#include "rndobj\Mat.h"
+#include "rndobj\Trans.h"
+#include "utl\BinStream.h"
+#include "world\Spotlight.h"
 
 void Spotlight::UpdateSphere() {
     Sphere s;

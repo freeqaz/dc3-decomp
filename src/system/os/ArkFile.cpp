@@ -1,13 +1,13 @@
 #include "AsyncTask.h"
 #include "HolmesClient.h"
-#include "os/ArkFile_p.h"
-#include "os/Archive.h"
-#include "os/Block.h"
-#include "os/Debug.h"
-#include "os/File.h"
-#include "os/System.h"
-#include "utl/Loader.h"
-#include "utl/Str.h"
+#include "os\ArkFile_p.h"
+#include "os\Archive.h"
+#include "os\Block.h"
+#include "os\Debug.h"
+#include "os\File.h"
+#include "os\System.h"
+#include "utl\Loader.h"
+#include "utl\Str.h"
 
 #ifdef HX_NATIVE
 // Native port: direct read from ark files, bypassing BlockMgr

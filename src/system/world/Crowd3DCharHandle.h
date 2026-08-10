@@ -1,10 +1,10 @@
 #pragma once
-#include "math/Mtx.h"
-#include "obj/Object.h"
-#include "rndobj/Draw.h"
-#include "rndobj/Trans.h"
-#include "utl/MemMgr.h"
-#include "world/Crowd.h"
+#include "math\Mtx.h"
+#include "obj\Object.h"
+#include "rndobj\Draw.h"
+#include "rndobj\Trans.h"
+#include "utl\MemMgr.h"
+#include "world\Crowd.h"
 
 class WorldCrowd3DCharHandle : public RndTransformable, public RndDrawable {
 public:

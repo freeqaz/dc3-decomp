@@ -1,5 +1,5 @@
-#include "meta/SongMetadata.h"
-#include "os/Debug.h"
+#include "meta\SongMetadata.h"
+#include "os\Debug.h"
 
 int SongMetadata::sSaveVer = 6;
 

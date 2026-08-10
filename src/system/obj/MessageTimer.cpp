@@ -1,6 +1,6 @@
-#include "obj/MessageTimer.h"
-#include "obj/DataFunc.h"
-#include "utl/Std.h"
+#include "obj\MessageTimer.h"
+#include "obj\DataFunc.h"
+#include "utl\Std.h"
 #include <vector>
 
 std::vector<EventEntry *> gEntries;

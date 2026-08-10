@@ -1,6 +1,6 @@
 #pragma once
-#include "obj/Object.h"
-#include "xdk/XAPILIB.h"
+#include "obj\Object.h"
+#include "xdk\XAPILIB.h"
 #include <vector>
 
 /**

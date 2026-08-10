@@ -1,9 +1,9 @@
-#include "utl/OSCMessenger.h"
-#include "os/Debug.h"
-#include "os/HolmesClient.h"
-#include "os/NetworkSocket.h"
-#include "os/System.h"
-#include "utl/Std.h"
+#include "utl\OSCMessenger.h"
+#include "os\Debug.h"
+#include "os\HolmesClient.h"
+#include "os\NetworkSocket.h"
+#include "os\System.h"
+#include "utl\Std.h"
 
 OSCMessenger TheOSCMessenger;
 

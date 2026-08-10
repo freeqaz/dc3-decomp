@@ -1,5 +1,5 @@
 #pragma once
-#include "gesture/Skeleton.h"
+#include "gesture\Skeleton.h"
 
 class SkeletonQualityFilter {
 public:

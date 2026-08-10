@@ -1,6 +1,6 @@
 #pragma once
-#include "obj/Data.h"
-#include "obj/Object.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
 
 /** A DataArray container to send to other objects for handling. */
 class Message {
@@ -197,8 +197,8 @@ public:
     }                                                                                    \
     ;
 
-#include "obj/Object.h"
-#include "utl/MemMgr.h"
+#include "obj\Object.h"
+#include "utl\MemMgr.h"
 
 class ObjRef;
 
@@ -281,5 +281,5 @@ private:
     static Symbol sCurrentExportEvent;
 };
 
-#include "obj/PropSync.h"
+#include "obj\PropSync.h"
 bool PropSync(MsgSinks &, DataNode &, DataArray *, int, PropOp);

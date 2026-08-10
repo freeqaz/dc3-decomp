@@ -1,8 +1,8 @@
-#include "meta_ham/Utl.h"
-#include "utl/Locale.h"
-#include "utl/MakeString.h"
-#include "utl/Str.h"
-#include "utl/Symbol.h"
+#include "meta_ham\Utl.h"
+#include "utl\Locale.h"
+#include "utl\MakeString.h"
+#include "utl\Str.h"
+#include "utl\Symbol.h"
 #include <cstring>
 
 Symbol GetStarsToken(int i) {

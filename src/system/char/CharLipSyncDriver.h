@@ -1,15 +1,15 @@
 #pragma once
 #include "CharLipSync.h"
-#include "char/CharBones.h"
-#include "char/CharClip.h"
-#include "char/CharDriver.h"
-#include "char/CharLipSync.h"
-#include "char/CharPollable.h"
-#include "char/CharWeightable.h"
-#include "obj/Dir.h"
-#include "obj/Object.h"
-#include "rndobj/Highlight.h"
-#include "utl/MemMgr.h"
+#include "char\CharBones.h"
+#include "char\CharClip.h"
+#include "char\CharDriver.h"
+#include "char\CharLipSync.h"
+#include "char\CharPollable.h"
+#include "char\CharWeightable.h"
+#include "obj\Dir.h"
+#include "obj\Object.h"
+#include "rndobj\Highlight.h"
+#include "utl\MemMgr.h"
 
 /** "Drives lip sync animation" */
 class CharLipSyncDriver : public RndHighlightable,

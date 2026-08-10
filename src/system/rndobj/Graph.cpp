@@ -1,9 +1,9 @@
-#include "rndobj/Graph.h"
+#include "rndobj\Graph.h"
 #include "Rnd.h"
-#include "obj/DataFunc.h"
-#include "os/Debug.h"
-#include "rndobj/Utl.h"
-#include "utl/MemMgr.h"
+#include "obj\DataFunc.h"
+#include "os\Debug.h"
+#include "rndobj\Utl.h"
+#include "utl\MemMgr.h"
 
 static RndGraph *sOneFrame = nullptr;
 static std::list<RndGraph *> *sGraphs = nullptr;

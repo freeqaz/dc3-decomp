@@ -1,6 +1,6 @@
-#include "midi/Midi.h"
-#include "os/Debug.h"
-#include "utl/MBT.h"
+#include "midi\Midi.h"
+#include "os\Debug.h"
+#include "utl\MBT.h"
 
 MidiReceiver::MidiReceiver() : mReader(0) {}
 

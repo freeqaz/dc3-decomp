@@ -1,8 +1,8 @@
 #pragma once
-#include "math/Mtx.h"
-#include "obj/Object.h"
-#include "rndobj/Mat.h"
-#include "rnddx9/RenderState.h"
+#include "math\Mtx.h"
+#include "obj\Object.h"
+#include "rndobj\Mat.h"
+#include "rnddx9\RenderState.h"
 
 class NgMat : public RndMat {
     friend class RndShaderMultimesh;

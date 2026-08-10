@@ -1,7 +1,7 @@
 #pragma once
-#include "os/Timer.h"
-#include "midi/Midi.h"
-#include "os/Joypad.h"
+#include "os\Timer.h"
+#include "midi\Midi.h"
+#include "os\Joypad.h"
 
 class UsbMidiGuitar {
 public:

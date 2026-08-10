@@ -1,7 +1,7 @@
 #pragma once
-#include "obj/Data.h"
-#include "rndobj/Poll.h"
-#include "utl/BinStream.h"
+#include "obj\Data.h"
+#include "rndobj\Poll.h"
+#include "utl\BinStream.h"
 
 /** "sexy sexy cubic spline"
     I am not making this up, this is actually what HMX put

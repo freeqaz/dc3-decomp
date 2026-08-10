@@ -1,11 +1,11 @@
-#include "rnddx9/CubeTex.h"
+#include "rnddx9\CubeTex.h"
 #include "Memory.h"
 #include "Rnd.h"
-#include "rnddx9/Rnd.h"
-#include "rndobj/Bitmap.h"
-#include "rndobj/Mat_NG.h"
-#include "xdk/D3D9.h"
-#include "xdk/XGRAPHICS.h"
+#include "rnddx9\Rnd.h"
+#include "rndobj\Bitmap.h"
+#include "rndobj\Mat_NG.h"
+#include "xdk\D3D9.h"
+#include "xdk\XGRAPHICS.h"
 
 DxCubeTex::DxCubeTex() : mTex(0) {}
 DxCubeTex::~DxCubeTex() { Reset(); }

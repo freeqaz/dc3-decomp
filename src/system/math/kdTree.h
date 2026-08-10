@@ -1,9 +1,9 @@
 #pragma once
-#include "math/Geo.h"
-#include "math/Vec.h"
-#include "os/Debug.h"
-#include "utl/MemMgr.h"
-#include "utl/Std.h"
+#include "math\Geo.h"
+#include "math\Vec.h"
+#include "os\Debug.h"
+#include "utl\MemMgr.h"
+#include "utl\Std.h"
 #include <stdint.h>
 #include <float.h>
 #include <list>

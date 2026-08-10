@@ -1,5 +1,5 @@
-#include "synth/MoggClipMap.h"
-#include "utl/BinStream.h"
+#include "synth\MoggClipMap.h"
+#include "utl\BinStream.h"
 
 void MoggClipMap::mySave(BinStream &bs) const {
     bs << mMoggClip;

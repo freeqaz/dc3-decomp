@@ -1,11 +1,11 @@
-#include "meta_ham/BlacklightPanel.h"
-#include "flow/Flow.h"
-#include "meta_ham/HamPanel.h"
-#include "meta_ham/HamUI.h"
-#include "obj/Data.h"
-#include "obj/Dir.h"
-#include "obj/Object.h"
-#include "ui/PanelDir.h"
+#include "meta_ham\BlacklightPanel.h"
+#include "flow\Flow.h"
+#include "meta_ham\HamPanel.h"
+#include "meta_ham\HamUI.h"
+#include "obj\Data.h"
+#include "obj\Dir.h"
+#include "obj\Object.h"
+#include "ui\PanelDir.h"
 
 #ifdef HX_NATIVE
 BlacklightPanel *BlacklightPanel::sInstance;

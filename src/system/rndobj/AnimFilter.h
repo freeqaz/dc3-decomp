@@ -1,7 +1,7 @@
 #pragma once
-#include "rndobj/Anim.h"
-#include "obj/Object.h"
-#include "utl/MemMgr.h"
+#include "rndobj\Anim.h"
+#include "obj\Object.h"
+#include "utl\MemMgr.h"
 
 /**
  * @brief: A filter for an animatable object.

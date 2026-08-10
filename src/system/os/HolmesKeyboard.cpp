@@ -1,11 +1,11 @@
-#include "os/HolmesKeyboard.h"
-#include "obj/Data.h"
-#include "os/Joypad.h"
-#include "os/JoypadMsgs.h"
-#include "os/Keyboard.h"
-#include "os/PlatformMgr.h"
-#include "utl/BinStream.h"
-#include "utl/MemStream.h"
+#include "os\HolmesKeyboard.h"
+#include "obj\Data.h"
+#include "os\Joypad.h"
+#include "os\JoypadMsgs.h"
+#include "os\Keyboard.h"
+#include "os\PlatformMgr.h"
+#include "utl\BinStream.h"
+#include "utl\MemStream.h"
 
 HolmesInput::HolmesInput(CWnd *cwnd)
     : mJoypadStream(new MemStream(true)), mKeyboardStream(new MemStream(true)),

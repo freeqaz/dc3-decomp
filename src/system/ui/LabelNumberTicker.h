@@ -1,8 +1,8 @@
 #pragma once
-#include "obj/Object.h"
-#include "rndobj/EventTrigger.h"
-#include "ui/UIComponent.h"
-#include "ui/UILabel.h"
+#include "obj\Object.h"
+#include "rndobj\EventTrigger.h"
+#include "ui\UIComponent.h"
+#include "ui\UILabel.h"
 
 /** "a ticker to control counting up or down for a given number based label" */
 class LabelNumberTicker : public UIComponent {

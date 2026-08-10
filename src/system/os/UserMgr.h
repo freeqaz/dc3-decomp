@@ -1,6 +1,6 @@
 #pragma once
-#include "obj/Object.h"
-#include "os/User.h"
+#include "obj\Object.h"
+#include "os\User.h"
 
 class UserMgr : public Hmx::Object {
 protected:

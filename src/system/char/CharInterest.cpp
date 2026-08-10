@@ -1,11 +1,11 @@
-#include "char/CharInterest.h"
-#include "math/Rand.h"
-#include "math/Rot.h"
-#include "math/Utl.h"
-#include "obj/Object.h"
-#include "os/Debug.h"
-#include "rndobj/Graph.h"
-#include "rndobj/Trans.h"
+#include "char\CharInterest.h"
+#include "math\Rand.h"
+#include "math\Rot.h"
+#include "math\Utl.h"
+#include "obj\Object.h"
+#include "os\Debug.h"
+#include "rndobj\Graph.h"
+#include "rndobj\Trans.h"
 
 CharInterest::CharInterest()
     : mMaxViewAngle(20), mPriority(1), mMinLookTime(1), mMaxLookTime(3),

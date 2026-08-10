@@ -1,5 +1,5 @@
 #pragma once
-#include "obj/Msg.h"
+#include "obj\Msg.h"
 
 DECLARE_MESSAGE(StringStrummedMsg, "string_strummed")
 StringStrummedMsg(int, int, int, int);

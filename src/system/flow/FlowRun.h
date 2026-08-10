@@ -1,9 +1,9 @@
 #pragma once
-#include "flow/Flow.h"
-#include "flow/FlowNode.h"
-#include "flow/FlowPtr.h"
-#include "obj/Dir.h"
-#include "utl/Str.h"
+#include "flow\Flow.h"
+#include "flow\FlowNode.h"
+#include "flow\FlowPtr.h"
+#include "obj\Dir.h"
+#include "utl\Str.h"
 
 /** "Run or stop another Flow" */
 class FlowRun : public FlowNode {

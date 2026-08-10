@@ -1,8 +1,8 @@
 #pragma once
-#include "char/CharIKHand.h"
-#include "char/Character.h"
-#include "rndobj/Trans.h"
-#include "utl/MemMgr.h"
+#include "char\CharIKHand.h"
+#include "char\Character.h"
+#include "rndobj\Trans.h"
+#include "utl\MemMgr.h"
 
 /** "Remedial foot skate ik, not yet ready for prime time." */
 class CharIKFoot : public CharIKHand {

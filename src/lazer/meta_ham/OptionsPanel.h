@@ -1,16 +1,16 @@
 #pragma once
-#include "meta/StorePurchaser.h"
-#include "meta_ham/HamPanel.h"
-#include "meta_ham/HamProfile.h"
-#include "net_ham/RCJobDingo.h"
-#include "net_ham/TokenJobs.h"
-#include "net_ham/WebLinkJobs.h"
-#include "obj/Data.h"
-#include "obj/Msg.h"
-#include "obj/Object.h"
-#include "utl/JobMgr.h"
-#include "utl/Symbol.h"
-#include "xdk/win_types.h"
+#include "meta\StorePurchaser.h"
+#include "meta_ham\HamPanel.h"
+#include "meta_ham\HamProfile.h"
+#include "net_ham\RCJobDingo.h"
+#include "net_ham\TokenJobs.h"
+#include "net_ham\WebLinkJobs.h"
+#include "obj\Data.h"
+#include "obj\Msg.h"
+#include "obj\Object.h"
+#include "utl\JobMgr.h"
+#include "utl\Symbol.h"
+#include "xdk\win_types.h"
 
 class OptionsPanel : public HamPanel {
 public:

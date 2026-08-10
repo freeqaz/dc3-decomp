@@ -1,10 +1,10 @@
 #pragma once
-#include "char/CharPollable.h"
-#include "char/CharWeightable.h"
-#include "math/Mtx.h"
-#include "rndobj/Highlight.h"
-#include "rndobj/Trans.h"
-#include "utl/MemMgr.h"
+#include "char\CharPollable.h"
+#include "char\CharWeightable.h"
+#include "math\Mtx.h"
+#include "rndobj\Highlight.h"
+#include "rndobj\Trans.h"
+#include "utl\MemMgr.h"
 
 /** "Moves an RndTransformable (bone) to another RndTransformable (spot) over time,
     blending from where it was relative to the parent of the spot." */

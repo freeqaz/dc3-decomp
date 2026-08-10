@@ -1,15 +1,15 @@
 #pragma once
-#include "hamobj/DancerSequence.h"
-#include "hamobj/Difficulty.h"
-#include "hamobj/ErrorNode.h"
-#include "hamobj/FilterVersion.h"
-#include "hamobj/ScoreUtl.h"
-#include "math/Vec.h"
-#include "obj/Object.h"
-#include "rndobj/PropAnim.h"
-#include "rndobj/Tex.h"
-#include "utl/BinStream.h"
-#include "utl/MemMgr.h"
+#include "hamobj\DancerSequence.h"
+#include "hamobj\Difficulty.h"
+#include "hamobj\ErrorNode.h"
+#include "hamobj\FilterVersion.h"
+#include "hamobj\ScoreUtl.h"
+#include "math\Vec.h"
+#include "obj\Object.h"
+#include "rndobj\PropAnim.h"
+#include "rndobj\Tex.h"
+#include "utl\BinStream.h"
+#include "utl\MemMgr.h"
 
 enum MoveMirrored {
     kMirroredNo = 0,

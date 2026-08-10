@@ -1,9 +1,9 @@
 #pragma once
-#include "gesture/BaseSkeleton.h"
-#include "gesture/Skeleton.h"
-#include "math/Vec.h"
-#include "math/Color.h"
-#include "rndobj/Overlay.h"
+#include "gesture\BaseSkeleton.h"
+#include "gesture\Skeleton.h"
+#include "math\Vec.h"
+#include "math\Color.h"
+#include "rndobj\Overlay.h"
 
 class ArcDetector {
 public:

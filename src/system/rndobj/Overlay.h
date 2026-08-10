@@ -1,9 +1,9 @@
 #pragma once
-#include "math/Color.h"
-#include "obj/Data.h"
-#include "os/Timer.h"
-#include "utl/MemMgr.h"
-#include "utl/TextStream.h"
+#include "math\Color.h"
+#include "obj\Data.h"
+#include "os\Timer.h"
+#include "utl\MemMgr.h"
+#include "utl\TextStream.h"
 
 class RndOverlay : public TextStream {
 public:

@@ -1,9 +1,9 @@
 #pragma once
-#include "obj/Data.h"
+#include "obj\Data.h"
 #include "types.h"
-#include "utl/Loader.h"
-#include "utl/MemMgr.h"
-#include "utl/Str.h"
+#include "utl\Loader.h"
+#include "utl\MemMgr.h"
+#include "utl\Str.h"
 
 enum NetLoaderFailType {
     // file not found = 1

@@ -1,10 +1,10 @@
-#include "net/DingoAuthJob.h"
+#include "net\DingoAuthJob.h"
 #include "DingoAuthJob.h"
 #include "DingoSvr.h"
-#include "net/DingoJob.h"
-#include "net/JsonUtils.h"
-#include "os/Debug.h"
-#include "utl/MakeString.h"
+#include "net\DingoJob.h"
+#include "net\JsonUtils.h"
+#include "os\Debug.h"
+#include "utl\MakeString.h"
 
 AuthenticateReqJob::AuthenticateReqJob(
     char const *url, const DataPoint &point, Hmx::Object *callback

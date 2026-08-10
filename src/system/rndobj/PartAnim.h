@@ -1,8 +1,8 @@
 #pragma once
-#include "obj/Object.h"
-#include "rndobj/Anim.h"
-#include "rndobj/Part.h"
-#include "utl/MemMgr.h"
+#include "obj\Object.h"
+#include "rndobj\Anim.h"
+#include "rndobj\Part.h"
+#include "utl\MemMgr.h"
 
 /** "Object that animates Particle System properties." */
 class RndParticleSysAnim : public RndAnimatable {

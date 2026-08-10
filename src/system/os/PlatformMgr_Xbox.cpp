@@ -1,20 +1,20 @@
-#include "os/PlatformMgr.h"
-#include "game/PartyModeMgr.h"
-#include "stl/_map.h"
+#include "os\PlatformMgr.h"
+#include "game\PartyModeMgr.h"
+#include "stl\_map.h"
 #include <cstdlib>
 #include <cstring>
 #include <cwchar>
-#include "os/OnlineID.h"
-#include "utl/DataPointMgr.h"
-#include "utl/GlitchFinder.h"
-#include "xdk/XAPILIB.h"
-#include "xdk/xparty/xparty.h"
-#include "xdk/XBC.h"
-#include "xdk/XMP.h"
-#include "xdk/XNET.h"
-#include "xdk/NUI.h"
-#include "xdk/xapilibi/winerror.h"
-#include "xdk/xapilibi/xbox.h"
+#include "os\OnlineID.h"
+#include "utl\DataPointMgr.h"
+#include "utl\GlitchFinder.h"
+#include "xdk\XAPILIB.h"
+#include "xdk\xparty\xparty.h"
+#include "xdk\XBC.h"
+#include "xdk\XMP.h"
+#include "xdk\XNET.h"
+#include "xdk\NUI.h"
+#include "xdk\xapilibi\winerror.h"
+#include "xdk\xapilibi\xbox.h"
 
 enum ServiceIdState {};
 
@@ -706,9 +706,9 @@ void PlatformMgr::SmartGlassSend(unsigned long clientID, const DataArray *arr) {
     XbcSendMsg(clientID, arr);
 }
 
-#include "utl/JobMgr.h"
-#include "meta/StorePanel.h"
-#include "lazer/meta_ham/OptionsPanel.h"
+#include "utl\JobMgr.h"
+#include "meta\StorePanel.h"
+#include "lazer\meta_ham\OptionsPanel.h"
 
 void MultipleItemsEnumJob::Cancel(Hmx::Object *) {
     MILO_FAIL("MultipleItemsEnumJob::Cancel called");

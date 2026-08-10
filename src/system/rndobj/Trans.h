@@ -1,8 +1,8 @@
 #pragma once
-#include "math/Mtx.h"
-#include "obj/Data.h"
-#include "rndobj/Highlight.h"
-#include "utl/MemMgr.h"
+#include "math\Mtx.h"
+#include "obj\Data.h"
+#include "rndobj\Highlight.h"
+#include "utl\MemMgr.h"
 
 /**
  * @brief An object controlling position, rotation, etc. for any derivatives.

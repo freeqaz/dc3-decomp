@@ -1,10 +1,10 @@
-#include "rndobj/Env_NG.h"
-#include "rndobj/Lit_NG.h"
-#include "rndobj/Mat_NG.h"
-#include "rndobj/Rnd.h"
-#include "rndobj/ShaderMgr.h"
-#include "rndobj/Stats_NG.h"
-#include "rnddx9/RenderState.h"
+#include "rndobj\Env_NG.h"
+#include "rndobj\Lit_NG.h"
+#include "rndobj\Mat_NG.h"
+#include "rndobj\Rnd.h"
+#include "rndobj\ShaderMgr.h"
+#include "rndobj\Stats_NG.h"
+#include "rnddx9\RenderState.h"
 
 namespace {
     Transform sIdentityXfm(

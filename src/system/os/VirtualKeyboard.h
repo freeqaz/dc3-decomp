@@ -1,5 +1,5 @@
 #pragma once
-#include "obj/Object.h"
+#include "obj\Object.h"
 
 class VirtualKeyboard : public Hmx::Object {
 private:
@@ -29,7 +29,7 @@ public:
     DataNode OnShowKeyboardUI(const DataArray *);
 };
 
-#include "obj/Msg.h"
+#include "obj\Msg.h"
 
 DECLARE_MESSAGE(VirtualKeyboardResultMsg, "virtual_keyboard_result_msg");
 VirtualKeyboardResultMsg(bool ok, const char *text);

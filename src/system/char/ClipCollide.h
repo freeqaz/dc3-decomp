@@ -1,12 +1,12 @@
 #pragma once
-#include "char/CharClip.h"
-#include "char/Character.h"
-#include "char/Waypoint.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "rndobj/Graph.h"
+#include "char\CharClip.h"
+#include "char\Character.h"
+#include "char\Waypoint.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "rndobj\Graph.h"
 #include <vector>
-#include "utl/MemMgr.h"
+#include "utl\MemMgr.h"
 
 /** "Analyzes character clips in a venue" */
 class ClipCollide : public Hmx::Object {

@@ -1,11 +1,11 @@
-#include "char/CharSleeve.h"
-#include "char/Character.h"
-#include "math/Utl.h"
-#include "math/Vec.h"
-#include "obj/Object.h"
-#include "obj/Task.h"
-#include "rndobj/Rnd.h"
-#include "rndobj/Utl.h"
+#include "char\CharSleeve.h"
+#include "char\Character.h"
+#include "math\Utl.h"
+#include "math\Vec.h"
+#include "obj\Object.h"
+#include "obj\Task.h"
+#include "rndobj\Rnd.h"
+#include "rndobj\Utl.h"
 
 void NormalizeScale(const Vector3 &, float, Vector3 &);
 

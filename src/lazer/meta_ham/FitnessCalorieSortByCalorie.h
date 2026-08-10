@@ -1,6 +1,6 @@
 #pragma once
-#include "meta_ham/FitnessCalorieSort.h"
-#include "meta_ham/NavListNode.h"
+#include "meta_ham\FitnessCalorieSort.h"
+#include "meta_ham\NavListNode.h"
 
 class FitnessCalorieSortCmp : public NavListItemSortCmp {
 public:

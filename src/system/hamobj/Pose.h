@@ -1,7 +1,7 @@
 #pragma once
-#include "gesture/BaseSkeleton.h"
-#include "gesture/Skeleton.h"
-#include "math/Vec.h"
+#include "gesture\BaseSkeleton.h"
+#include "gesture\Skeleton.h"
+#include "math\Vec.h"
 #include <vector>
 #include <list>
 

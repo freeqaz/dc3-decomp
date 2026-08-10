@@ -1,10 +1,10 @@
-#include "utl/Magnu.h"
-#include "obj/Data.h"
-#include "obj/DataFile.h"
-#include "obj/DataFunc.h"
-#include "os/HolmesClient.h"
-#include "os/System.h"
-#include "utl/Locale.h"
+#include "utl\Magnu.h"
+#include "obj\Data.h"
+#include "obj\DataFile.h"
+#include "obj\DataFunc.h"
+#include "os\HolmesClient.h"
+#include "os\System.h"
+#include "utl\Locale.h"
 
 DataNode MagnuRefreshStrings(DataArray *arr) {
     DataArray *yeet = 0;

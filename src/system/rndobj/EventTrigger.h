@@ -1,11 +1,11 @@
 #pragma once
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "rndobj/Anim.h"
-#include "rndobj/Draw.h"
-#include "rndobj/PartLauncher.h"
-#include "synth/Sequence.h"
-#include "utl/MemMgr.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "rndobj\Anim.h"
+#include "rndobj\Draw.h"
+#include "rndobj\PartLauncher.h"
+#include "synth\Sequence.h"
+#include "utl\MemMgr.h"
 
 /**
  * @brief An object that can trigger based on an in-game event.

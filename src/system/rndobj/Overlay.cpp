@@ -1,8 +1,8 @@
-#include "rndobj/Overlay.h"
-#include "rndobj/Rnd.h"
-#include "os/System.h"
-#include "rndobj/Rnd.h"
-#include "utl/Std.h"
+#include "rndobj\Overlay.h"
+#include "rndobj\Rnd.h"
+#include "os\System.h"
+#include "rndobj\Rnd.h"
+#include "utl\Std.h"
 
 bool RndOverlay::sTopAligned = true;
 std::list<RndOverlay *> RndOverlay::sOverlays;

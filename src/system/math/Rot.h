@@ -1,6 +1,6 @@
 #pragma once
-#include "math/Mtx.h"
-#include "math/Vec.h"
+#include "math\Mtx.h"
+#include "math\Vec.h"
 
 #define PI 3.1415927f
 #define RAD2DEG 57.29578f

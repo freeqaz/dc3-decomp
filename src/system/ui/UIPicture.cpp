@@ -1,13 +1,13 @@
-#include "ui/UIPicture.h"
+#include "ui\UIPicture.h"
 #include "UIComponent.h"
 #include "UITransitionHandler.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "os/File.h"
-#include "rndobj/Mesh.h"
-#include "utl/BinStream.h"
-#include "utl/FilePath.h"
-#include "utl/Loader.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "os\File.h"
+#include "rndobj\Mesh.h"
+#include "utl\BinStream.h"
+#include "utl\FilePath.h"
+#include "utl\Loader.h"
 #include <cstring>
 
 UIPicture::UIPicture()

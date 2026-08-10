@@ -1,7 +1,7 @@
 #pragma once
-#include "net/HttpGet.h"
-#include "net/XLSPConnection.h"
-#include "utl/HxGuid.h"
+#include "net\HttpGet.h"
+#include "net\XLSPConnection.h"
+#include "utl\HxGuid.h"
 
 // size 0x140
 #pragma pack(push, 1)

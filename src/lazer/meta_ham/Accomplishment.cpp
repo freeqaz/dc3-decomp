@@ -1,9 +1,9 @@
-#include "meta_ham/Accomplishment.h"
-#include "hamobj/Difficulty.h"
-#include "obj/Data.h"
-#include "os/Debug.h"
-#include "utl/MakeString.h"
-#include "utl/Symbol.h"
+#include "meta_ham\Accomplishment.h"
+#include "hamobj\Difficulty.h"
+#include "obj\Data.h"
+#include "os\Debug.h"
+#include "utl\MakeString.h"
+#include "utl\Symbol.h"
 
 static const unsigned int sMinPriority = 1;
 static const unsigned int sMaxPriority = 1000;

@@ -1,13 +1,13 @@
 #pragma once
-#include "char/CharCollide.h"
-#include "char/CharPollable.h"
-#include "math/Mtx.h"
-#include "obj/Object.h"
-#include "rndobj/Highlight.h"
-#include "rndobj/Trans.h"
-#include "rndobj/Wind.h"
-#include "utl/BinStream.h"
-#include "utl/MemMgr.h"
+#include "char\CharCollide.h"
+#include "char\CharPollable.h"
+#include "math\Mtx.h"
+#include "obj\Object.h"
+#include "rndobj\Highlight.h"
+#include "rndobj\Trans.h"
+#include "rndobj\Wind.h"
+#include "utl\BinStream.h"
+#include "utl\MemMgr.h"
 
 /** "Hair physics, deals with strands of hair" */
 class CharHair : public RndHighlightable, public CharPollable {

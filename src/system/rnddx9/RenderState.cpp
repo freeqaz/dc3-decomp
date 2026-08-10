@@ -1,5 +1,5 @@
 #include "RenderState.h"
-#include "rnddx9/Rnd.h"
+#include "rnddx9\Rnd.h"
 
 RndRenderState TheRenderState;
 

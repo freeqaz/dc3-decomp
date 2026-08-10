@@ -1,9 +1,9 @@
-#include "hamobj/FilterVersion.h"
-#include "hamobj/ErrorNode.h"
-#include "hamobj/DetectFrame.h"
-#include "hamobj/HamMove.h"
-#include "obj/Data.h"
-#include "os/Debug.h"
+#include "hamobj\FilterVersion.h"
+#include "hamobj\ErrorNode.h"
+#include "hamobj\DetectFrame.h"
+#include "hamobj\HamMove.h"
+#include "obj\Data.h"
+#include "os\Debug.h"
 
 #ifdef HX_NATIVE
 int FilterVersion::sNumHam2Nodes;

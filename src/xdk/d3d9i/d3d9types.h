@@ -1,5 +1,5 @@
 #pragma once
-#include "xdk/win_types.h"
+#include "xdk\win_types.h"
 #include "vectorintrinsics.h"
 
 // Enums and very small struct definitions go here.

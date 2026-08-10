@@ -1,9 +1,9 @@
-#include "meta/HeldButtonPanel.h"
-#include "meta/ButtonHolder.h"
-#include "obj/Object.h"
-#include "os/JoypadMsgs.h"
-#include "ui/UI.h"
-#include "ui/UIPanel.h"
+#include "meta\HeldButtonPanel.h"
+#include "meta\ButtonHolder.h"
+#include "obj\Object.h"
+#include "os\JoypadMsgs.h"
+#include "ui\UI.h"
+#include "ui\UIPanel.h"
 
 HeldButtonPanel::HeldButtonPanel()
     : mHolder(new ButtonHolder(this, nullptr)), mHandling(false) {}

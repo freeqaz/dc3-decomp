@@ -1,7 +1,7 @@
 #pragma once
 #include "File.h"
-#include "os/File.h"
-#include "os/Debug.h"
+#include "os\File.h"
+#include "os\Debug.h"
 
 class BufFile : public File {
 public:

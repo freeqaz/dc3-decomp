@@ -1,11 +1,11 @@
 #pragma once
-#include "obj/Data.h"
-#include "obj/Msg.h"
-#include "os/NetworkSocket.h"
-#include "os/File.h"
+#include "obj\Data.h"
+#include "obj\Msg.h"
+#include "os\NetworkSocket.h"
+#include "os\File.h"
 #include "types.h"
-#include "utl/Cache.h"
-#include "utl/Str.h"
+#include "utl\Cache.h"
+#include "utl\Str.h"
 
 struct RecurseInfo {
     String mDir;

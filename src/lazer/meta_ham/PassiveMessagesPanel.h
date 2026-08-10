@@ -1,8 +1,8 @@
 #pragma once
 #include "PassiveMessenger.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "ui/UIPanel.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "ui\UIPanel.h"
 
 class PassiveMessagesPanel : public UIPanel {
 public:

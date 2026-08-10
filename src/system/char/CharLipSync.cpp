@@ -1,13 +1,13 @@
-#include "char/CharLipSync.h"
-#include "math/Utl.h"
-#include "obj/Data.h"
-#include "obj/DataFile.h"
-#include "obj/Msg.h"
-#include "obj/Object.h"
-#include "obj/PropSync.h"
-#include "os/Debug.h"
-#include "rndobj/PropAnim.h"
-#include "utl/TextStream.h"
+#include "char\CharLipSync.h"
+#include "math\Utl.h"
+#include "obj\Data.h"
+#include "obj\DataFile.h"
+#include "obj\Msg.h"
+#include "obj\Object.h"
+#include "obj\PropSync.h"
+#include "os\Debug.h"
+#include "rndobj\PropAnim.h"
+#include "utl\TextStream.h"
 
 
 std::map<Symbol, CharLipSync *> *CharLipSync::sLipSyncMap;

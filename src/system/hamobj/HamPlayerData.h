@@ -1,12 +1,12 @@
 #pragma once
-#include "flow/PropertyEventProvider.h"
-#include "gesture/BaseSkeleton.h"
-#include "gesture/Skeleton.h"
-#include "hamobj/Difficulty.h"
-#include "obj/Object.h"
-#include "stl/_vector.h"
-#include "utl/Str.h"
-#include "utl/Symbol.h"
+#include "flow\PropertyEventProvider.h"
+#include "gesture\BaseSkeleton.h"
+#include "gesture\Skeleton.h"
+#include "hamobj\Difficulty.h"
+#include "obj\Object.h"
+#include "stl\_vector.h"
+#include "utl\Str.h"
+#include "utl\Symbol.h"
 
 class HamPlayerData : public Hmx::Object {
 public:

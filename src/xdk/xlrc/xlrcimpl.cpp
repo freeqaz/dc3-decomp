@@ -1,5 +1,5 @@
 #include "types.h"
-#include "xdk/xapilibi/winerror.h"
+#include "xdk\xapilibi\winerror.h"
 
 // Forward declarations
 enum XLRC_CLIENT_TRANSPORT_ID {};

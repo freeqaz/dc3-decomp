@@ -1,9 +1,9 @@
-#include "flow/DrivenPropertyEntry.h"
-#include "flow/Flow.h"
-#include "flow/FlowNode.h"
-#include "obj/Dir.h"
-#include "obj/Object.h"
-#include "utl/BinStream.h"
+#include "flow\DrivenPropertyEntry.h"
+#include "flow\Flow.h"
+#include "flow\FlowNode.h"
+#include "obj\Dir.h"
+#include "obj\Object.h"
+#include "utl\BinStream.h"
 
 DrivenPropertyEntry::DrivenPropertyEntry(Hmx::Object *owner) : mMathOps(owner) {
     static Symbol none("none");

@@ -1,6 +1,6 @@
-#include "synth/DistortionEffect.h"
-#include "os/Debug.h"
-#include "xdk/xaudio2/xaudio2.h"
+#include "synth\DistortionEffect.h"
+#include "os\Debug.h"
+#include "xdk\xaudio2\xaudio2.h"
 #include <cmath>
 
 #line 6 "dsp\\DistortionEffect.cpp"

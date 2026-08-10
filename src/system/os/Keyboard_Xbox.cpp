@@ -1,6 +1,6 @@
-#include "os/Keyboard.h"
-#include "os/HolmesClient.h"
-#include "xdk/XAPILIB.h"
+#include "os\Keyboard.h"
+#include "os\HolmesClient.h"
+#include "xdk\XAPILIB.h"
 #include <ctype.h>
 
 namespace {

@@ -1,10 +1,10 @@
-#include "rndobj/Bitmap.h"
-#include "utl/CRC.h"
-#include "utl/BufStream.h"
-#include "utl/ChunkStream.h"
-#include "utl/FileStream.h"
-#include "utl/MemMgr.h"
-#include "os/Endian.h"
+#include "rndobj\Bitmap.h"
+#include "utl\CRC.h"
+#include "utl\BufStream.h"
+#include "utl\ChunkStream.h"
+#include "utl\FileStream.h"
+#include "utl\MemMgr.h"
+#include "os\Endian.h"
 
 unsigned char BITMAP_REV = 2;
 

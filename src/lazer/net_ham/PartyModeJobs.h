@@ -1,7 +1,7 @@
 #pragma once
-#include "net_ham/RCJobDingo.h"
+#include "net_ham\RCJobDingo.h"
 #include "types.h"
-#include "utl/Str.h"
+#include "utl\Str.h"
 
 class SongQueueRow {
 public:

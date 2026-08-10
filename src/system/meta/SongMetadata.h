@@ -1,8 +1,8 @@
 #pragma once
-#include "utl/Symbol.h"
-#include "obj/Object.h"
-#include "obj/Data.h"
-#include "meta/DataArraySongInfo.h"
+#include "utl\Symbol.h"
+#include "obj\Object.h"
+#include "obj\Data.h"
+#include "meta\DataArraySongInfo.h"
 
 class SongMetadata : public Hmx::Object {
 public:

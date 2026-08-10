@@ -1,7 +1,7 @@
 #pragma once
-#include "hamobj/ErrorNode.h"
-#include "obj/Data.h"
-#include "utl/MemMgr.h"
+#include "hamobj\ErrorNode.h"
+#include "obj\Data.h"
+#include "utl\MemMgr.h"
 
 enum MoveMode {
     // 0 - perform it mode

@@ -1,8 +1,8 @@
 #pragma once
-#include "char/CharPollable.h"
-#include "obj/Object.h"
-#include "rndobj/Trans.h"
-#include "utl/MemMgr.h"
+#include "char\CharPollable.h"
+#include "obj\Object.h"
+#include "rndobj\Trans.h"
+#include "utl\MemMgr.h"
 
 /** "Does all interpolation for the upperarm, assuming
         upperArm, upperTwist1 and 2 are under clavicle. Rotation about x is

@@ -1,8 +1,8 @@
 #pragma once
 
-#include "obj/Data.h"
-#include "obj/Object.h"
-#include "utl/Symbol.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "utl\Symbol.h"
 
 class GameMode : public Hmx::Object {
 public:

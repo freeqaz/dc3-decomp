@@ -1,9 +1,9 @@
-#include "hamobj/MoveGraph.h"
-#include "hamobj/Difficulty.h"
-#include "math/Rand.h"
-#include "obj/Data.h"
-#include "os/Debug.h"
-#include "utl/BinStream.h"
+#include "hamobj\MoveGraph.h"
+#include "hamobj\Difficulty.h"
+#include "math\Rand.h"
+#include "obj\Data.h"
+#include "os\Debug.h"
+#include "utl\BinStream.h"
 #include <set>
 
 MoveParent::MoveParent() {}

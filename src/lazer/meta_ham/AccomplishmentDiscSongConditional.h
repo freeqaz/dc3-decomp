@@ -1,7 +1,7 @@
 #pragma once
-#include "meta_ham/AccomplishmentManager.h"
-#include "meta_ham/AccomplishmentSongConditional.h"
-#include "obj/Data.h"
+#include "meta_ham\AccomplishmentManager.h"
+#include "meta_ham\AccomplishmentSongConditional.h"
+#include "obj\Data.h"
 
 class AccomplishmentDiscSongConditional : public AccomplishmentSongConditional {
 public:
