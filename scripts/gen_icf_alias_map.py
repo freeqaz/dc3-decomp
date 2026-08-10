@@ -137,8 +137,16 @@ def main() -> int:
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(content)
-    n_syms = sum(1 + len(g.get("folded", [])) for g in groups)
-    print(f"wrote {out_path}: {len(groups)} ICF groups, {n_syms} symbol lines")
+    # Count what was EMITTED, not what was offered. render_map skips any group
+    # with no address, so summarising the input reported 1334 groups / 4060
+    # symbol lines for a file that carried 372 -- and the only symptom was every
+    # addressless class failing gate (f) later as "absent from map_file".
+    emitted = [g for g in groups if g.get("address")]
+    n_syms = sum(1 + len(g.get("folded", [])) for g in emitted)
+    print(f"wrote {out_path}: {len(emitted)} ICF groups, {n_syms} symbol lines")
+    if len(emitted) != len(groups):
+        print(f"  SKIPPED {len(groups) - len(emitted)} group(s) with no address "
+              f"-- these cannot pass gate (f) and will be rejected at load")
     return 0
 
 
