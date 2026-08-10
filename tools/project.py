@@ -1861,9 +1861,13 @@ def generate_objdiff_config(
     # a call site that is the same bytes to the same code. objdiff already
     # consumes ICF equivalences from an MSVC `map_file` (parse_msvc_map groups
     # symbols sharing an address); scripts/gen_icf_alias_map.py renders the
-    # body-test-witnessed folds (scripts/symbol_aliases.json) into a synthetic
-    # one. Generate it here so objdiff.json can reference it even on the FIRST
-    # configure of a fresh tree.
+    # admitted fold classes (scripts/symbol_aliases.json -- body-test witnesses,
+    # COFF weak-external aliases, and address-sharing in the retail linker map
+    # orig/373307D9/ham_xbox_r.map) into a synthetic one. The retail map is a
+    # SOURCE for those classes, not the file objdiff consumes: it is the whole
+    # linker symbol table, while the synthetic map carries only what was
+    # admitted. Generate it here so objdiff.json can reference it even on the
+    # FIRST configure of a fresh tree.
     #
     # The `map_file` key is written ONLY if the map exists, and that pairing is
     # load-bearing in BOTH directions: naming a map the tree does not have makes
