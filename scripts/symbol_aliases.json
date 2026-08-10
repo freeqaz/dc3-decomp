@@ -19,42 +19,15 @@
    "dec-label-reverify-2026-08-06 label-sample adjudication (926 sites)",
    "dc3-icf-alias-growth-20260809 full-frontier residue body test (1,869 pairs at pin 78ad9bee; 1,417 FOLD)"
   ],
-  "n_groups_generated": 376,
+  "n_groups_generated": 372,
   "n_target_objs": 2223,
   "n_base_objs": 980,
   "gate_c_split": "Installed under validator gate (c'), added 2026-08-09: a folded spelling that has its OWN address in target_symbol_map.json, different from the survivor's, is a DISTINCT FUNCTION the transitive closure merged in error, and is dropped FROM the class instead of rejecting the class whole. This retires `known_regression_vs_76_class_set`: all five MakeString names the 76 -> 368 growth had lost are back. Measured on this tree, 368 -> 371 classes, 2,097 -> 2,121 names, and strict raw_text_reloc_eq passes 18,061 -> 18,234.",
   "n_groups_accepted": 372,
-  "n_names": 2124
+  "n_names": 2136,
+  "onlyreturns_class": "Added 2026-08-10. `OnlyReturns` is the splitter's name for the address every trivially-returning function folded into. The 12 members are the definitions of ours whose body sha equals that folded body; seven other names pair with the same address with DIFFERENT bodies and are deliberately excluded -- notably ??1CriticalSection@@QAA@XZ, 9 functions, which is a mismatch to fix and not a fold to declare."
  },
- "_rejected_at_install": [
-  {
-   "name": "AVector3@0x82389dc0",
-   "reasons": [
-    "(c') dropped ['??AVector3@@QAAAAMH@Z']: target map puts [['0x8236ef88']] against the survivor's ['0x82389dc0'] \u2014 distinct functions, not a fold",
-    "malformed group (no survivor or no folded spelling)"
-   ]
-  },
-  {
-   "name": "MemAllocFailed@0x82334a38",
-   "reasons": [
-    "(b) folded '?MemAllocFailed@?A0x7f03e814@@YAXK_N@Z' referenced by 0 compiled objs"
-   ]
-  },
-  {
-   "name": "Notify@0x825ce0e8",
-   "reasons": [
-    "(c') dropped ['?Warn@Debug@@QAAXPBD@Z']: target map puts [['0x825ce000']] against the survivor's ['0x825ce0e8'] \u2014 distinct functions, not a fold",
-    "malformed group (no survivor or no folded spelling)"
-   ]
-  },
-  {
-   "name": "Style@0x82794b98",
-   "reasons": [
-    "(c') dropped ['?Style@UILabel@@QAAAAV0RndText@@H@Z']: target map puts [['0x82795068']] against the survivor's ['0x82794b98'] \u2014 distinct functions, not a fold",
-    "malformed group (no survivor or no folded spelling)"
-   ]
-  }
- ],
+ "_rejected_at_install": [],
  "groups": [
   {
    "name": "YAAAVBinStream@0x826ee638",
@@ -5129,17 +5102,24 @@
    "address": "0x823e3b70",
    "survivor": "OnlyReturns",
    "folded": [
+    "??0PaddedJointPos@@QAA@XZ",
+    "??0Vector4@@QAA@XZ",
     "??1Shuttle@@QAA@XZ",
     "?AddedObject@ObjectDir@@MAAXPAVObject@Hmx@@@Z",
     "?CheckBlendMode@@YA?AW4Blend@BaseMaterial@@W412@PAV2@@Z",
     "?CheckForIconManUnlock@HamProfile@@QAAXXZ",
     "?CheckForNinjaUnlock@HamProfile@@QAAXXZ",
     "?Copy@Song@@UAAXPBVObject@Hmx@@W4CopyType@23@@Z",
+    "?DoneLoading@BinkMovieLoader@@AAAXXZ",
+    "?DoneLoading@DataLoader@@AAAXXZ",
+    "?DoneLoading@DirLoader@@AAAXXZ",
+    "?DoneLoading@FileLoader@@AAAXXZ",
     "?Flush@HDCache@@AAAXXZ",
     "?HolmesClientPrint@@YAXPBD@Z",
     "?PostLoad@UIComponent@@UAAXAAVBinStream@@@Z",
     "?Reset@BitCrushEffect@@QAAXXZ",
     "?Reset@DistortionEffect@@QAAXXZ",
+    "?ScriptDebugModal@@YAXAAW4ModalType@Debug@@AAVFixedString@@_N@Z",
     "?SetForegroundVolume@HamAudio@@QAAXM@Z",
     "?SynthUtlTerm@@YAXXZ",
     "?Terminate@CharBonesMeshes@@SAXXZ",
@@ -5184,12 +5164,31 @@
     "?get_allocator@?$vector@PBVMoveParent@@V?$StlNodeAlloc@PBVMoveParent@@@stlpmtx_std@@@stlpmtx_std@@QBA?AV?$StlNodeAlloc@PBVMoveParent@@@2@XZ",
     "?get_allocator@?$vector@_KV?$StlNodeAlloc@_K@stlpmtx_std@@@stlpmtx_std@@QBA?AV?$StlNodeAlloc@_K@2@XZ",
     "?jpeg_mem_term@@YAXPAUjpeg_common_struct@@@Z",
+    "?null_method@@YAXPAUjpeg_compress_struct@@@Z",
+    "?start_pass_downsample@@YAXPAUjpeg_compress_struct@@@Z",
     "Curl_resolver_cleanup",
-    "JoypadSetActuatorsImp"
+    "JoypadSetActuatorsImp",
+    "curlx_sltoui",
+    "llist_dtor",
+    "multi_freeamsg"
    ],
    "sites": 60,
    "survivor_candidates": 1,
-   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 57 folded spelling(s), 60 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 57 folded spelling(s), 60 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE.",
+   "extended_2026_08_10": [
+    "?DoneLoading@FileLoader@@AAAXXZ",
+    "?DoneLoading@DataLoader@@AAAXXZ",
+    "?DoneLoading@BinkMovieLoader@@AAAXXZ",
+    "?DoneLoading@DirLoader@@AAAXXZ",
+    "??0PaddedJointPos@@QAA@XZ",
+    "?ScriptDebugModal@@YAXAAW4ModalType@Debug@@AAVFixedString@@_N@Z",
+    "??0Vector4@@QAA@XZ",
+    "multi_freeamsg",
+    "llist_dtor",
+    "curlx_sltoui",
+    "?start_pass_downsample@@YAXPAUjpeg_compress_struct@@@Z",
+    "?null_method@@YAXPAUjpeg_compress_struct@@@Z"
+   ]
   },
   {
    "name": "curlx_uztosz@0x8256d8e8",
