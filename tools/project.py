@@ -1565,16 +1565,29 @@ def generate_build_ninja(
             command=f"{objdiff} report generate $objdiff_report_args -c functionRelocDiffs=name_address -o $out",
             description="REPORT RAW",
         )
+        # The reports are generated from the PATCHED objects, so they must
+        # DEPEND ON the post-compile patch stamps, not merely be ordered after
+        # them: `order_only="post-build"` never marks these edges dirty, and
+        # now that every patcher restores the object's mtime (required for the
+        # patch edges to converge -- see configure.py's post-compile block)
+        # `all_source` does not change either when only the patchers ran.
+        # Without this, a build in which only the patch passes fired (editing
+        # a patcher script, or recovering a bypassed tree) leaves report.json
+        # stale and the change measures as inert.  Same fix as rb3-xenon
+        # bd6cefa1 part 3.
+        report_implicit: List[Union[str, Path]] = [objdiff, "objdiff.json", "all_source"]
+        if config.custom_build_steps and "post-compile" in config.custom_build_steps:
+            report_implicit.append("post-compile")
         n.build(
             outputs=report_path,
             rule="report",
-            implicit=[objdiff, "objdiff.json", "all_source"],
+            implicit=report_implicit,
             order_only="post-build",
         )
         n.build(
             outputs=raw_report_path,
             rule="report_raw",
-            implicit=[objdiff, "objdiff.json", "all_source"],
+            implicit=report_implicit,
             order_only="post-build",
         )
 

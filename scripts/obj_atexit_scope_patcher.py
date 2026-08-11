@@ -44,6 +44,9 @@ import struct
 import sys
 from collections import defaultdict
 from pathlib import Path
+import sys as _sys, os as _os
+_sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
+from obj_patch_io import write_patched_obj  # mtime-preserving in-place write
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_TARGET_DIR = PROJECT_ROOT / "build" / "373307D9" / "obj"
@@ -410,8 +413,7 @@ def patch_obj_pair(target_path, base_path, apply=False, verbose=False):
     applied = apply_renames_to_obj(base_data, safe_plan, base_syms)
 
     if apply and applied:
-        with open(base_path, 'wb') as f:
-            f.write(base_data)
+        write_patched_obj(base_path, base_data)
 
     return {
         'num_renamed': len(applied),
@@ -506,6 +508,13 @@ def process_batch(args):
 
     if not args.apply and total_renames > 0:
         print('\nRun with --apply to actually rewrite the .obj files.')
+
+    if getattr(args, 'check', False) and total_renames > 0:
+        print('FAIL[atexit_scope]: {n} pending patch(es) -- this build tree carries '
+              'objects that were compiled but never post-processed. See '
+              'docs/tools/BUILD_SYSTEM.md "post-compile patchers".'.format(n=total_renames),
+              file=sys.stderr)
+        sys.exit(2)
 
     if args.stats_json:
         stats = {
@@ -610,6 +619,10 @@ def main():
                         help='Run inline unit tests and exit')
     parser.add_argument('files', nargs='*',
                         help='Specific .obj files to patch (paths relative to base-dir)')
+    parser.add_argument('--check', action='store_true',
+                        help='Dry-run and EXIT 2 if any object in the build tree '
+                             'still needs this pass (used by '
+                             'scripts/verify_objs_patched.py)')
     args = parser.parse_args()
 
     if args.selftest:

@@ -23,6 +23,9 @@ import glob
 import struct
 import sys
 from pathlib import Path
+import sys as _sys, os as _os
+_sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
+from obj_patch_io import write_patched_obj  # mtime-preserving in-place write
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 SRC_DIR = PROJECT_ROOT / "build" / "373307D9" / "src"
@@ -85,8 +88,7 @@ def patch_obj(path, apply=False, verbose=False):
         i += 1 + num_aux
 
     if patched_names and apply:
-        with open(path, 'wb') as f:
-            f.write(data)
+        write_patched_obj(path, data)
 
     return patched_names
 
@@ -121,6 +123,13 @@ def process_batch(args):
     if not args.apply and total_patched > 0:
         print(f"\nRun with --apply to actually patch the files.")
 
+    if getattr(args, 'check', False) and total_patched > 0:
+        print('FAIL[dynamic_init]: {n} pending patch(es) -- this build tree carries '
+              'objects that were compiled but never post-processed. See '
+              'docs/tools/BUILD_SYSTEM.md "post-compile patchers".'.format(n=total_patched),
+              file=sys.stderr)
+        sys.exit(2)
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -133,6 +142,10 @@ def main():
                         help='Process all decomp .obj files')
     parser.add_argument('--src-dir',
                         help='Decomp .obj directory (default: build/373307D9/src)')
+    parser.add_argument('--check', action='store_true',
+                        help='Dry-run and EXIT 2 if any object in the build tree '
+                             'still needs this pass (used by '
+                             'scripts/verify_objs_patched.py)')
     args = parser.parse_args()
 
     if not args.batch:
