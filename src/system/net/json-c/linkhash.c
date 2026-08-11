@@ -19,6 +19,7 @@
 #include <limits.h>
 
 #include "linkhash.h"
+#include "system/net/JsonMemory.h"
 
 void lh_abort(const char *msg, ...)
 {
@@ -63,13 +64,13 @@ struct lh_table *lh_table_new(
     int i;
     struct lh_table *t;
 
-    t = (struct lh_table *)calloc(1, sizeof(struct lh_table));
+    t = (struct lh_table *)JsonCalloc(1, sizeof(struct lh_table));
     if (!t)
         lh_abort("lh_table_new: calloc failed\n");
     t->count = 0;
     t->size = size;
     t->name = name;
-    t->table = (struct lh_entry *)calloc(size, sizeof(struct lh_entry));
+    t->table = (struct lh_entry *)JsonCalloc(size, sizeof(struct lh_entry));
     if (!t->table)
         lh_abort("lh_table_new: calloc failed\n");
     t->free_fn = free_fn;
@@ -103,13 +104,13 @@ void lh_table_resize(struct lh_table *t, int new_size)
         lh_table_insert(new_t, ent->k, ent->v);
         ent = ent->next;
     }
-    free(t->table);
+    ::operator delete(t->table);
     t->table = new_t->table;
     t->size = new_size;
     t->head = new_t->head;
     t->tail = new_t->tail;
     t->resizes++;
-    free(new_t);
+    ::operator delete(new_t);
 }
 
 void lh_table_free(struct lh_table *t)
@@ -120,8 +121,8 @@ void lh_table_free(struct lh_table *t)
             t->free_fn(c);
         }
     }
-    free(t->table);
-    free(t);
+    ::operator delete(t->table);
+    ::operator delete(t);
 }
 
 int lh_table_insert(struct lh_table *t, void *k, const void *v)

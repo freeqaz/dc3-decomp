@@ -693,7 +693,7 @@ bool CharEyes::EyesOnTarget(float f) {
             fwd.z = 0;
             float dot = Dot(fwd, diff2d);
             float angle = std::acos(Clamp<float>(-1, 1, dot / (Length(fwd) * Length(diff2d))));
-            if (angle * 57.295776f > f) {
+            if (angle * 57.29578f > f) {
                 return false;
             }
         }

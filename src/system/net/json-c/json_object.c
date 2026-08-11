@@ -24,6 +24,7 @@
 #include "arraylist.h"
 #include "json_object.h"
 #include "json_object_private.h"
+#include "system/net/JsonMemory.h"
 
 #if !HAVE_STRNDUP
 char *strndup(const char *str, size_t n);
@@ -163,14 +164,14 @@ static void json_object_generic_delete(struct json_object *jso)
     lh_table_delete(json_object_table, jso);
 #endif /* REFCOUNT_DEBUG */
     printbuf_free(jso->_pb);
-    free(jso);
+    ::operator delete(jso);
 }
 
 static struct json_object *json_object_new(enum json_type o_type)
 {
     struct json_object *jso;
 
-    jso = (struct json_object *)calloc(sizeof(struct json_object), 1);
+    jso = (struct json_object *)JsonCalloc(sizeof(struct json_object), 1);
     if (!jso)
         return NULL;
     jso->o_type = o_type;
@@ -242,7 +243,7 @@ json_object_object_to_json_string(struct json_object *jso, struct printbuf *pb)
 
 static void json_object_lh_entry_free(struct lh_entry *ent)
 {
-    free(ent->k);
+    ::operator delete(ent->k);
     json_object_put((struct json_object *)ent->v);
 }
 
@@ -426,7 +427,7 @@ json_object_string_to_json_string(struct json_object *jso, struct printbuf *pb)
 
 static void json_object_string_delete(struct json_object *jso)
 {
-    free(jso->o.c_string);
+    ::operator delete(jso->o.c_string);
     json_object_generic_delete(jso);
 }
 

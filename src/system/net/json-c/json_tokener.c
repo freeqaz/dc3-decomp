@@ -29,6 +29,7 @@
 #include "arraylist.h"
 #include "json_object.h"
 #include "json_tokener.h"
+#include "system/net/JsonMemory.h"
 
 #if !HAVE_STRNCASECMP && defined(_MSC_VER)
 /* MSC has the version as strnicmp */
@@ -62,7 +63,7 @@ struct json_tokener *json_tokener_new(void)
 {
     struct json_tokener *tok;
 
-    tok = (struct json_tokener *)calloc(1, sizeof(struct json_tokener));
+    tok = (struct json_tokener *)JsonCalloc(1, sizeof(struct json_tokener));
     if (!tok)
         return NULL;
     tok->pb = printbuf_new();
@@ -75,7 +76,7 @@ void json_tokener_free(struct json_tokener *tok)
     json_tokener_reset(tok);
     if (tok)
         printbuf_free(tok->pb);
-    free(tok);
+    ::operator delete(tok);
 }
 
 static void json_tokener_reset_level(struct json_tokener *tok, int depth)
@@ -84,7 +85,7 @@ static void json_tokener_reset_level(struct json_tokener *tok, int depth)
     tok->stack[depth].saved_state = json_tokener_state_start;
     json_object_put(tok->stack[depth].current);
     tok->stack[depth].current = NULL;
-    free(tok->stack[depth].obj_field_name);
+    ::operator delete(tok->stack[depth].obj_field_name);
     tok->stack[depth].obj_field_name = NULL;
 }
 
@@ -628,7 +629,7 @@ json_tokener_parse_ex(struct json_tokener *tok, const char *str, int len)
 
         case json_tokener_state_object_value_add:
             json_object_object_add(current, obj_field_name, obj);
-            free(obj_field_name);
+            ::operator delete(obj_field_name);
             obj_field_name = NULL;
             saved_state = json_tokener_state_object_sep;
             state = json_tokener_state_eatws;
