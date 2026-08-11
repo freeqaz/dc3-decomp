@@ -1,5 +1,5 @@
 #pragma once
-#include "OcclusionQueryMgr.h"
+#include "rndobj/OcclusionQueryMgr.h"
 #include "math\Color.h"
 #include "math/Geo.h"
 #include "rndobj/Cam.h"
