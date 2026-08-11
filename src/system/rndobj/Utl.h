@@ -11,7 +11,7 @@
 #include "math/Geo.h"
 #include "rndobj\TransAnim.h"
 #include <vector>
-#include "MultiMesh.h"
+#include "rndobj/MultiMesh.h"
 
 struct BuildPoly {
     BuildPoly();

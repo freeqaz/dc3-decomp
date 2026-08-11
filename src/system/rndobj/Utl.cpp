@@ -6,7 +6,7 @@
 #include "obj\DataFunc.h"
 #include "obj/Object.h"
 #include "os\Debug.h"
-#include "os\Endian.h"
+#include "os/Endian.h"
 #include "os/FileCache.h"
 #include "os\HolmesClient.h"
 #include "os\Platform.h"

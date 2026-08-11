@@ -7,7 +7,7 @@
 #include "oggvorbis\ogg.h"
 #include "os\CritSec.h"
 #include "os\Debug.h"
-#include "os\Endian.h"
+#include "os/Endian.h"
 #include "os\Timer.h"
 #include "synth\Synth.h"
 #include "utl\BufStream.h"

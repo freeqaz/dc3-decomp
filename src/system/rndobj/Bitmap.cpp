@@ -4,7 +4,7 @@
 #include "utl\ChunkStream.h"
 #include "utl\FileStream.h"
 #include "utl\MemMgr.h"
-#include "os\Endian.h"
+#include "os/Endian.h"
 
 unsigned char BITMAP_REV = 2;
 

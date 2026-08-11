@@ -2,7 +2,7 @@
 #include "Dir.h"
 
 #include "Msg.h"
-#include "Object.h"
+#include "obj/Object.h"
 #include "Utl.h"
 #include "math\Mtx.h"
 #include "math\Rot.h"

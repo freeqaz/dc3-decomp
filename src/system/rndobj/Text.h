@@ -11,7 +11,7 @@
 #include "rndobj\Trans.h"
 #include "utl\MemMgr.h"
 #include "utl\Symbol.h"
-#include "utl\StlAlloc.h"
+#include "utl/StlAlloc.h"
 
 #ifndef HX_NATIVE
 using stlpmtx_std::StlNodeAlloc;
