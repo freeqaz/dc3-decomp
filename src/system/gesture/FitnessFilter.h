@@ -1,9 +1,9 @@
 #pragma once
 #include "gesture\SkeletonViz.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Overlay.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\MemMgr.h"
 
 class FitnessFilter : public RndOverlay::Callback {

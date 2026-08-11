@@ -2,7 +2,7 @@
 #include "SampleZone.h"
 #include "math\Decibels.h"
 #include "math\Utl.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "synth\FxSend.h"
 #include "synth\Synth.h"
 #include "synth\Utl.h"

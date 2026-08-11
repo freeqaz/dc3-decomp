@@ -1,8 +1,8 @@
 #include "utl\WaveFile.h"
 #include "os\Debug.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\ChunkIDs.h"
-#include "utl\Chunks.h"
+#include "utl/Chunks.h"
 
 namespace {
     struct CuePoint {

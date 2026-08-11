@@ -2,7 +2,7 @@
 #include "math\Rot.h"
 #include "math\Trig.h"
 #include "math\Utl.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include <cmath>
 
 float LimitAng(float ang) {

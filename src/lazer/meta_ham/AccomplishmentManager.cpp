@@ -29,7 +29,7 @@
 #include "meta_ham\SongStatusMgr.h"
 #include "obj\Data.h"
 #include "obj\Dir.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\ContentMgr.h"
 #include "os\DateTime.h"
 #include "os\Debug.h"

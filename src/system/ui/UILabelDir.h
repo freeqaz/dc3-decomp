@@ -1,6 +1,6 @@
 #pragma once
 #include "UIComponent.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Anim.h"
 #include "rndobj\Dir.h"
 #include "rndobj\FontBase.h"

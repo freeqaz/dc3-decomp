@@ -1,5 +1,5 @@
 #pragma once
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\EventTrigger.h"
 #include "rndobj\Poll.h"
 #include "utl\MemMgr.h"

@@ -3,7 +3,7 @@
 #include "meta\FixedSizeSaveableStream.h"
 #include "meta_ham\HamSongMgr.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "utl\Std.h"
 
 void SkillsAwardList::SaveFixed(FixedSizeSaveableStream &stream) const {

@@ -2,7 +2,7 @@
 #include "hamobj\HamMaster.h"
 #include "macros.h"
 #include "math\FileChecksum.h"
-#include "math\StreamChecksum.h"
+#include "math/StreamChecksum.h"
 #include "midi\Midi.h"
 #include "midi\MidiParserMgr.h"
 #include "os\Debug.h"

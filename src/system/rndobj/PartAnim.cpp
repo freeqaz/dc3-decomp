@@ -1,5 +1,5 @@
 #include "rndobj\PartAnim.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "rndobj\Anim.h"
 #include "rndobj\Part.h"

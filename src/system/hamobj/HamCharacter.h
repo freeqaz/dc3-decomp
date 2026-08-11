@@ -10,7 +10,7 @@
 #include "hamobj\HamDriver.h"
 #include "obj\Data.h"
 #include "obj\Dir.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Mesh.h"
 #include "utl\MemMgr.h"
 #include "utl\Std.h"

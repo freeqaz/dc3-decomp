@@ -2,8 +2,8 @@
 #include "FileMerger.h"
 #include "FileMergerOrganizer.h"
 #include "hamobj\SongCollision.h"
-#include "math\Rand.h"
-#include "obj\Object.h"
+#include "math/Rand.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "os\System.h"
 

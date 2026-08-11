@@ -1,7 +1,7 @@
 #include "rndobj\LitAnim.h"
 #include "math\Color.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "rndobj\Anim.h"
 

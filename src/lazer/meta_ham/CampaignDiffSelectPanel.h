@@ -2,7 +2,7 @@
 #include "hamobj\Difficulty.h"
 #include "meta_ham\HamPanel.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "ui\UIListProvider.h"
 #include <vector>
 

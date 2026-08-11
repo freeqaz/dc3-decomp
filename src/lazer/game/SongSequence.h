@@ -1,7 +1,7 @@
 #pragma once
 #include "obj\Data.h"
-#include "obj\Object.h"
-#include "os\FileCache.h"
+#include "obj/Object.h"
+#include "os/FileCache.h"
 #include "rndobj\Poll.h"
 #include "stl\_vector.h"
 #include "utl\Symbol.h"

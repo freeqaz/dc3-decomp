@@ -7,7 +7,7 @@
 #include "char\CharPollable.h"
 #include "char\CharWeightable.h"
 #include "obj\Dir.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Highlight.h"
 #include "utl\MemMgr.h"
 

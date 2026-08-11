@@ -282,7 +282,7 @@ DebugNotifyOncePrinter TheDebugNotifyOncePrinter;
 #include "char\CharBone.h"
 
 // FileLoader::GetSize (FileCache.obj, NetLoader.obj)
-#include "utl\Loader.h"
+#include "utl/Loader.h"
 
 // NavListHeaderNode::Handle (MQSongSortNode.obj)
 #include "meta_ham\NavListNode.h"
@@ -309,7 +309,7 @@ void MemOrPoolFree(int, void *mem, const char *, int, const char *) {}
 
 // EaseLinear standalone instantiation (inline in Easing.h, needs out-of-line symbol)
 // Including Easing.h emits gEaseFuncs[] which takes &EaseLinear, forcing out-of-line copy
-#include "math\Easing.h"
+#include "math/Easing.h"
 
 // ObjDirPtr<ObjectDir>::IsLoaded
 
@@ -713,11 +713,11 @@ extern "C" const char __link_glue_empty_str[] = "";
 #include "rndobj\MeshAnim.h"
 #include "rndobj\PartAnim.h"
 #include "rndobj\PartLauncher.h"
-#include "rndobj\TexBlendController.h"
+#include "rndobj/TexBlendController.h"
 #include "rndobj\Group.h"
 #include "world\SpotlightDrawer.h"
 #include "world\Instance.h"
-#include "ui\UIListDir.h"
+#include "ui/UIListDir.h"
 #include "char\CharCollide.h"
 #include "char\CharHair.h"
 #include "char\CharClipSet.h"

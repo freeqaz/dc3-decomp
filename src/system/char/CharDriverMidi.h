@@ -1,8 +1,8 @@
 #pragma once
 #include "char\CharDriver.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
-#include "utl\BinStream.h"
+#include "obj/Object.h"
+#include "utl/BinStream.h"
 #include "utl\MemMgr.h"
 
 class CharDriverMidi : public CharDriver {

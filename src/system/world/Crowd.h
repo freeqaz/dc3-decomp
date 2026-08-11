@@ -2,14 +2,14 @@
 #include "char\Character.h"
 #include "math\Mtx.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
-#include "rndobj\Cam.h"
+#include "obj/Object.h"
+#include "rndobj/Cam.h"
 #include "rndobj\Draw.h"
 #include "rndobj\Env.h"
 #include "rndobj\Mesh.h"
-#include "rndobj\MultiMesh.h"
+#include "rndobj/MultiMesh.h"
 #include "rndobj\Poll.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\MemMgr.h"
 
 /** "A quickly-rendered bunch of instanced characters within an area" */

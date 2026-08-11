@@ -1,11 +1,11 @@
 #include "hamobj\HamPhotoDisplay.h"
 #include "gesture\GestureMgr.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Dir.h"
 #include "rndobj\Env.h"
 #include "rndobj\Mesh.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 
 HamPhotoDisplay::HamPhotoDisplay() : mMesh1(this), mMesh2(this), mIndex1(0), mIndex2(0) {}
 

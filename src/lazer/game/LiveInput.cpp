@@ -2,7 +2,7 @@
 #include "game\GamePanel.h"
 #include "hamobj\HamAudio.h"
 #include "meta_ham\ProfileMgr.h"
-#include "obj\Task.h"
+#include "obj/Task.h"
 #ifdef HX_NATIVE
 #include <cstdlib>
 #endif

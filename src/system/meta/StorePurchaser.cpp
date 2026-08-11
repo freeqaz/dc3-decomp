@@ -1,7 +1,7 @@
 #include "meta\StorePurchaser.h"
 #include "meta\StoreOffer.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "os\PlatformMgr.h"
 #include "ui\UI.h"

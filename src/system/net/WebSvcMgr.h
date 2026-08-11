@@ -1,7 +1,7 @@
 #pragma once
 #include "net\WebSvcReq.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\NetworkSocket.h"
 
 class WebSvcMgr : public Hmx::Object {

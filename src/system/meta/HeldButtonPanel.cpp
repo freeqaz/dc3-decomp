@@ -1,6 +1,6 @@
 #include "meta\HeldButtonPanel.h"
 #include "meta\ButtonHolder.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\JoypadMsgs.h"
 #include "ui\UI.h"
 #include "ui\UIPanel.h"

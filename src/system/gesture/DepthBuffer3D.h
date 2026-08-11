@@ -2,7 +2,7 @@
 #include "hamobj\RhythmDetector.h"
 #include "math\Color.h"
 #include "math\DoubleExponentialSmoother.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rnddx9\Rnd.h"
 #include "rndobj\Draw.h"
 #include "rndobj\Mat.h"

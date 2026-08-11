@@ -1,9 +1,9 @@
 #pragma once
 #include "flow\FlowNode.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\Symbol.h"
 
 class FlowPtrBase {

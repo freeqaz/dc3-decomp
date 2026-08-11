@@ -3,8 +3,8 @@
 #include "flow\Flow.h"
 #include "obj\Data.h"
 #include "obj\Dir.h"
-#include "obj\DirLoader.h"
-#include "obj\Object.h"
+#include "obj/DirLoader.h"
+#include "obj/Object.h"
 
 FlowIf::FlowIf() : mValue1(0), mValue2(0), mOperator(kEqual) {}
 FlowIf::~FlowIf() {}

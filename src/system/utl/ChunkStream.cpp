@@ -1,7 +1,7 @@
 #include "utl\ChunkStream.h"
 
 #include "Compress.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\CritSec.h"
 #include "os\Endian.h"
 #include "os\File.h"

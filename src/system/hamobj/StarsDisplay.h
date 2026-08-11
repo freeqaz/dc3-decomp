@@ -1,7 +1,7 @@
 #pragma once
 #include "hamobj\HamLabel.h"
 #include "obj\Dir.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "ui\ResourceDirPtr.h"
 #include "ui\UIColor.h"
 #include "ui\UIComponent.h"

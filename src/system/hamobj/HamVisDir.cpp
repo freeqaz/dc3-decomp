@@ -8,14 +8,14 @@
 #include "gesture\SkeletonDir.h"
 #include "gesture\SkeletonUpdate.h"
 #include "hamobj\HamPlayerData.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "rndobj\Anim.h"
-#include "rndobj\Cam.h"
+#include "rndobj/Cam.h"
 #include "rndobj\Draw.h"
 #include "ui\PanelDir.h"
-#include "utl\BinStream.h"
-#include "utl\Loader.h"
+#include "utl/BinStream.h"
+#include "utl/Loader.h"
 
 #include <cmath>
 

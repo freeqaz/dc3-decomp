@@ -3,7 +3,7 @@
 #include "obj\DataUtl.h"
 #include "obj\MessageTimer.h" /* IWYU pragma: keep */
 #include "os\Debug.h"
-#include "utl\BinStream.h" /* IWYU pragma: keep */
+#include "utl/BinStream.h" /* IWYU pragma: keep */
 #include "utl\MemMgr.h" /* IWYU pragma: keep */
 #include "utl\Symbol.h" /* IWYU pragma: keep */
 #include <list> /* IWYU pragma: keep */

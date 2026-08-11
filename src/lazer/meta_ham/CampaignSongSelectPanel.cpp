@@ -19,7 +19,7 @@
 #include "meta_ham\SongStatusMgr.h"
 #include "obj\Data.h"
 #include "obj\Msg.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\DateTime.h"
 #include "os\Debug.h"
 #include "ui\UILabel.h"

@@ -1,10 +1,10 @@
 #include "char\CharIKMidi.h"
 #include "char\Char.h"
-#include "math\Easing.h"
+#include "math/Easing.h"
 #include "math\Rot.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "obj\Msg.h"
-#include "obj\Task.h"
+#include "obj/Task.h"
 #include "rndobj\Rnd.h"
 #include "rndobj\Trans.h"
 

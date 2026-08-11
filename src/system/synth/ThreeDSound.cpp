@@ -1,15 +1,15 @@
 #include "synth\ThreeDSound.h"
 #include "math\Decibels.h"
-#include "math\Easing.h"
+#include "math/Easing.h"
 #include "math\Rot.h"
 #include "math\Utl.h"
 #include "math\Vec.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "rndobj\Trans.h"
 #include "rndobj\Utl.h"
 #include "synth\Utl.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 
 const float sSpeedCaps[2] = { 0.00390625f, 4.0f };
 

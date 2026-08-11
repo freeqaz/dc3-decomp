@@ -4,7 +4,7 @@
 #include "meta\ConnectionStatusPanel.h"
 #include "meta\DeJitterPanel.h"
 #include "meta\PreloadPanel.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 
 void MetaInit() {

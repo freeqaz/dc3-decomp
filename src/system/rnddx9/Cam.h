@@ -1,7 +1,7 @@
 #pragma once
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rnddx9\Object.h"
-#include "rndobj\Cam.h"
+#include "rndobj/Cam.h"
 
 class DxCam : public RndCam, public DxObject {
 public:

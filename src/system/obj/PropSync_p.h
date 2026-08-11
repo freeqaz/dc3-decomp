@@ -1,8 +1,8 @@
 #pragma once
 #include "math\Color.h"
-#include "math\Key.h"
+#include "math/Key.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "obj\PropSync.h"
 #include "os\Debug.h"
 #include "utl\Std.h"

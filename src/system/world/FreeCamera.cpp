@@ -2,13 +2,13 @@
 #include "math\Mtx.h"
 #include "math\Trig.h"
 #include "math\Vec.h"
-#include "obj\Task.h"
+#include "obj/Task.h"
 #include "os\Joypad.h"
 #include "rndobj\Trans.h"
 #include "world\Dir.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "math\Rot.h"
-#include "rndobj\Cam.h"
+#include "rndobj/Cam.h"
 #include "rndobj\DOFProc.h"
 
 extern float gUnitsPerMeter;

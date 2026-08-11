@@ -2,7 +2,7 @@
 #include "meta_ham\OverlayPanel.h"
 #include "obj\Data.h"
 #include "obj\Msg.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\JoypadMsgs.h"
 #include "ui\UIComponent.h"
 

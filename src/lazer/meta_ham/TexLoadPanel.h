@@ -1,6 +1,6 @@
 #pragma once
 #include "meta_ham\HamPanel.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\ContentMgr.h"
 #include "rndobj\Mat.h"
 #include "rndobj\Tex.h"

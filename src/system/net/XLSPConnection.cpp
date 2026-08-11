@@ -1,5 +1,5 @@
 #include "net\XLSPConnection.h"
-#include "math\Rand.h"
+#include "math/Rand.h"
 #include "utl\MemMgr.h"
 #include "xdk\XAPILIB.h"
 #include "xdk\XNET.h"

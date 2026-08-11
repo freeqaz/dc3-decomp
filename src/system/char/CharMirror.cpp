@@ -1,6 +1,6 @@
 #include "char\CharMirror.h"
 #include "char\CharWeightable.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "utl\Symbol.h"
 
 CharMirror::CharMirror() : mServo(this), mMirrorServo(this), mBones(), mOps() {}

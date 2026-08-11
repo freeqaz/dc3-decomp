@@ -9,7 +9,7 @@
 #include "meta_ham\SkeletonIdentifier.h"
 #include "math\DoubleExponentialSmoother.h"
 #include "obj\Msg.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\JoypadMsgs.h"
 #include "rndobj\Anim.h"
 #include "types.h"

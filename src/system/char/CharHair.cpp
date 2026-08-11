@@ -1,14 +1,14 @@
 #include "char\CharHair.h"
 #include "char\CharCollide.h"
 #include "char\Character.h"
-#include "math\Geo.h"
+#include "math/Geo.h"
 #include "math\Rot.h"
-#include "obj\Object.h"
-#include "obj\Task.h"
+#include "obj/Object.h"
+#include "obj/Task.h"
 #include "os\Timer.h"
 #include "rndobj\Poll.h"
 #include "rndobj\PostProc.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "world\Dir.h"
 
 void CharCollide::SyncWorldState() {

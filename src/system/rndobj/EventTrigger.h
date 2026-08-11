@@ -1,6 +1,6 @@
 #pragma once
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Anim.h"
 #include "rndobj\Draw.h"
 #include "rndobj\PartLauncher.h"

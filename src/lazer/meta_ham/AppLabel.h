@@ -9,7 +9,7 @@
 #include "meta_ham\Playlist.h"
 #include "meta_ham\PracticeChoosePanel.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "ui\UIListSlot.h"
 #include "utl\MemMgr.h"
 #include "utl\Symbol.h"

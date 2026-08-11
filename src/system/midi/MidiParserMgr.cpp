@@ -2,7 +2,7 @@
 #include "beatmatch\GemListInterface.h"
 #include "math\Utl.h"
 #include "midi\Midi.h"
-#include "midi\MidiConstants.h"
+#include "midi/MidiConstants.h"
 #include "obj\DataFile.h"
 #include "obj\Dir.h"
 #include "os\Debug.h"

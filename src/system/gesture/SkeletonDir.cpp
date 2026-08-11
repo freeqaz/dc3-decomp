@@ -8,12 +8,12 @@
 #include "gesture\Skeleton.h"
 #include "gesture\SkeletonUpdate.h"
 #include "gesture\SkeletonViz.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "rndobj\Dir.h"
 #include "ui\PanelDir.h"
-#include "utl\BinStream.h"
-#include "utl\Loader.h"
+#include "utl/BinStream.h"
+#include "utl/Loader.h"
 
 SkeletonDir::SkeletonDir() : mMiloInitted(0), mTestClip(this) {}
 

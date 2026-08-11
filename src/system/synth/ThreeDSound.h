@@ -1,7 +1,7 @@
 #pragma once
-#include "math\Easing.h"
+#include "math/Easing.h"
 #include "math\Mtx.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Trans.h"
 #include "synth\Faders.h"
 #include "synth\Sound.h"

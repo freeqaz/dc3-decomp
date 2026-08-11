@@ -3,7 +3,7 @@
 #include "net\JsonUtils.h"
 #include "net\WebSvcReq.h"
 #include "obj\Msg.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "utl\DataPointMgr.h"
 
 class DingoJob : public WebSvcRequest {

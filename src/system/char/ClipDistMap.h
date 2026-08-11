@@ -4,7 +4,7 @@
 #include "char\CharClip.h"
 #include "char\CharDriver.h"
 #include "math\Color.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "utl\MemMgr.h"
 
 struct DistEntry {

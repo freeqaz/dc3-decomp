@@ -2,7 +2,7 @@
 #include "macros.h"
 #include "obj\Data.h"
 #include "obj\DataFile.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "os\Joypad.h"
 #include "os\JoypadMsgs.h"
@@ -20,7 +20,7 @@
 #include "ui\UIPanel.h"
 #include "utl\ChunkStream.h"
 #include "utl\FilePath.h"
-#include "utl\Loader.h"
+#include "utl/Loader.h"
 #include "utl\Symbol.h"
 
 #pragma region Hmx::Object

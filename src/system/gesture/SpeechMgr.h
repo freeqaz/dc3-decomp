@@ -1,6 +1,6 @@
 #pragma once
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Overlay.h"
 #include "xdk\NUI.h"
 #include "xdk\nui\nuispeech.h"

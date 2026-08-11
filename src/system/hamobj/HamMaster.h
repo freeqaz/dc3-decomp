@@ -5,8 +5,8 @@
 #include "math\Vec.h"
 #include "midi\Midi.h"
 #include "midi\MidiParserMgr.h"
-#include "obj\Object.h"
-#include "utl\Loader.h"
+#include "obj/Object.h"
+#include "utl/Loader.h"
 #include "utl\SongInfoCopy.h"
 #include "utl\SongPos.h"
 

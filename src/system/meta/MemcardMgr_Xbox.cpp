@@ -2,7 +2,7 @@
 #include "meta\MemcardMgr.h"
 #include "meta\Profile.h"
 #include "obj\Dir.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "os\Memcard.h"
 #include "os\Memcard_Xbox.h"

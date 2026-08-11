@@ -3,7 +3,7 @@
 #include "meta\FixedSizeSaveable.h"
 #include "meta_ham\MetaPerformer.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "ui\UIListProvider.h"
 
 class HamProfile;

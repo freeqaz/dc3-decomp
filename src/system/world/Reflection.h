@@ -1,7 +1,7 @@
 #pragma once
 #include "char\Character.h"
-#include "obj\Object.h"
-#include "rndobj\Cam.h"
+#include "obj/Object.h"
+#include "rndobj/Cam.h"
 #include "rndobj\Draw.h"
 #include "rndobj\Trans.h"
 #include "utl\MemMgr.h"

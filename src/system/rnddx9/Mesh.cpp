@@ -1,7 +1,7 @@
 #include "Mesh.h"
 #include "Mat.h"
 #include "Rnd.h"
-#include "obj\Task.h"
+#include "obj/Task.h"
 #include "os\Debug.h"
 #include "rndobj\BaseMaterial.h"
 #include "rndobj\Fur.h"

@@ -1,4 +1,4 @@
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "Dir.h"
 #include "Msg.h"
 #include "Object.h"
@@ -10,7 +10,7 @@
 #include "os\OSFuncs.h"
 #include "os\Platform.h"
 #include "os\System.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\Symbol.h"
 
 #ifdef HX_NATIVE

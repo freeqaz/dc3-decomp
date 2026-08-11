@@ -1,8 +1,8 @@
 #pragma once
 #include "math\Mtx.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
-#include "rndobj\Cam.h"
+#include "rndobj/Cam.h"
 #include "rndobj\Tex.h"
 #include "utl\MemMgr.h"
 #include "world\Spotlight.h"

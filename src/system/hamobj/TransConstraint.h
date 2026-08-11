@@ -1,6 +1,6 @@
 #pragma once
 #include "math\Vec.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Highlight.h"
 #include "rndobj\Poll.h"
 #include "rndobj\Trans.h"

@@ -1,4 +1,4 @@
-#include "math\Rand2.h"
+#include "math/Rand2.h"
 
 Rand2::Rand2(int i) {
     mSeed = i;

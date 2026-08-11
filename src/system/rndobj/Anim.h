@@ -1,11 +1,11 @@
 #pragma once
-#include "math\Easing.h"
+#include "math/Easing.h"
 #include "math\Utl.h"
 #include "obj\Data.h"
 
-#include "obj\Object.h"
-#include "obj\Task.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
+#include "obj/Task.h"
+#include "obj/Object.h"
 #include "utl\MemMgr.h"
 #include "utl\PoolAlloc.h"
 #include <list>

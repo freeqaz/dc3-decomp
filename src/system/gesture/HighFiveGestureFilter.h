@@ -1,6 +1,6 @@
 #pragma once
 #include "gesture\Skeleton.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 
 class HighFiveGestureFilter : public Hmx::Object {
 public:

@@ -4,16 +4,16 @@
 #include "math\Utl.h"
 #include "math\Vec.h"
 #include "obj\DataFunc.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "os\Endian.h"
-#include "os\FileCache.h"
+#include "os/FileCache.h"
 #include "os\HolmesClient.h"
 #include "os\Platform.h"
 #include "os\System.h"
 #include "rndobj\AmbientOcclusion.h"
 #include "rndobj\Bitmap.h"
-#include "rndobj\Cam.h"
+#include "rndobj/Cam.h"
 #include "rndobj\CamAnim.h"
 #include "rndobj\Dir.h"
 #include "rndobj\Draw.h"
@@ -37,13 +37,13 @@
 #include "rndobj\Gen.h"
 #include "rndobj\MatAnim.h"
 #include <set>
-#include "math\Key.h"
+#include "math/Key.h"
 #include <math.h>
 #include "os\File.h"
 #include "obj\Data.h"
 #include "obj\Utl.h"
 
-#include "math\Rand.h"
+#include "math/Rand.h"
 
 typedef void (*SplashFunc)(void);
 

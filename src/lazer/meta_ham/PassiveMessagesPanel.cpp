@@ -1,7 +1,7 @@
 #include "meta_ham\PassiveMessagesPanel.h"
 #include "PassiveMessenger.h"
 #include "macros.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "ui\UIPanel.h"
 
 PassiveMessagesPanel::PassiveMessagesPanel() { mPassiveMessenger = new PassiveMessenger(this); }

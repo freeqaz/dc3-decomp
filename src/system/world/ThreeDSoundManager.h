@@ -1,7 +1,7 @@
 #pragma once
 #include "math\Mtx.h"
 #include "obj\Dir.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Trans.h"
 #include "synth\ThreeDSound.h"
 

@@ -1,6 +1,6 @@
 #pragma once
 #include "obj\Dir.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Mesh.h"
 #include "world\PhysicsManager.h"
 

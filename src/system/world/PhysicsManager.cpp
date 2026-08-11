@@ -1,7 +1,7 @@
 #include "world\PhysicsManager.h"
 #include "PhysicsManager.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "os\System.h"
 #include "rndobj\Dir.h"

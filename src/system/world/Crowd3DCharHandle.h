@@ -1,6 +1,6 @@
 #pragma once
 #include "math\Mtx.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Draw.h"
 #include "rndobj\Trans.h"
 #include "utl\MemMgr.h"

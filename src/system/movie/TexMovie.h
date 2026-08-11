@@ -1,14 +1,14 @@
 #pragma once
 #include "movie\Movie.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "obj\PropSync.h"
 #include "rndobj\Draw.h"
 #include "rndobj\Poll.h"
 #include "rndobj\Tex.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\FilePath.h"
-#include "utl\Loader.h"
+#include "utl/Loader.h"
 
 class TexMovie : public RndDrawable, public RndPollable {
 public:

@@ -1,6 +1,6 @@
 #pragma once
-#include "obj\Object.h"
-#include "utl\ResMgr.h"
+#include "obj/Object.h"
+#include "utl/ResMgr.h"
 
 typedef void *(*WavMgrAllocFunc)(int, const char *, int, const char *, int);
 typedef void (*WavMgrFreeFunc)(void *, const char *, int, const char *);

@@ -13,7 +13,7 @@
 #include "net_ham\RockCentral.h"
 #include "obj\Data.h"
 #include "obj\Msg.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\ContentMgr.h"
 #include "os\Debug.h"
 #include "rndobj\Bitmap.h"
@@ -28,7 +28,7 @@
 #include "utl\NetCacheMgr.h"
 #include "utl\Std.h"
 #include "utl\Symbol.h"
-#include "math\Rand.h"
+#include "math/Rand.h"
 #include "synth\Pollable.h"
 
 #pragma region MotdData

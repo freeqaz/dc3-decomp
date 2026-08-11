@@ -1,6 +1,6 @@
 #pragma once
 #include "net_ham\RCJobDingo.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 
 class GetMotdJob : public RCJob {
 public:

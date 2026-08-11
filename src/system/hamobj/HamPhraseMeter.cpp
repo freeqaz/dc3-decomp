@@ -1,10 +1,10 @@
 #include "hamobj\HamPhraseMeter.h"
 #include "ScoreUtl.h"
 #include "math\Utl.h"
-#include "obj\Object.h"
-#include "obj\Task.h"
+#include "obj/Object.h"
+#include "obj/Task.h"
 #include "rndobj\Dir.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 
 HamPhraseMeter::HamPhraseMeter()
     : mAnim(this), mRatingFrac(0), mRating("move_bad"), mDesiredFPB(480),

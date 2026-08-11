@@ -1,13 +1,13 @@
 #include "rndobj\Ribbon.h"
 #include "math\Mtx.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\File.h"
-#include "obj\Task.h"
+#include "obj/Task.h"
 #include "rndobj\Draw.h"
 #include "rndobj\Mesh.h"
 #include "rndobj\Poll.h"
 #include "rndobj\Trans.h"
-#include "utl\Loader.h"
+#include "utl/Loader.h"
 #include <cmath>
 
 RndRibbon::RndRibbon()

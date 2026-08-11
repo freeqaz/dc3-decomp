@@ -1,7 +1,7 @@
 #pragma once
 #include "math\SHA1.h"
 #include "math\Vec.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Mesh.h"
 #include "rndobj\Trans.h"
 #include "utl\MemMgr.h"

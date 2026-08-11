@@ -1,5 +1,5 @@
 #pragma once
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "ui\UIComponent.h"
 #include "ui\UITransitionHandler.h"
 #include "rndobj\Mesh.h"

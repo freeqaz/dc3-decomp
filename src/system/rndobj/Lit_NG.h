@@ -1,6 +1,6 @@
 #pragma once
 #include "math\Vec.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Draw.h"
 #include "rndobj\Lit.h"
 #include "rndobj\Tex.h"

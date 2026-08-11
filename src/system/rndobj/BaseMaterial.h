@@ -2,12 +2,12 @@
 #include "math\Color.h"
 #include "math\Mtx.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
+#include "obj/Object.h"
 #include "rndobj\CubeTex.h"
 #include "rndobj\Fur.h"
 #include "rndobj\Tex.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 
 enum Cull {
     /** "No culling.  User sees both front and back of polygon." */

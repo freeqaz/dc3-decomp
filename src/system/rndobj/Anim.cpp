@@ -1,17 +1,17 @@
 #include "rndobj\Anim.h"
-#include "math\Easing.h"
+#include "math/Easing.h"
 #include "math\Utl.h"
 #include "obj\Data.h"
 #include "obj\DataUtl.h"
 
 #include "obj\Msg.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\File.h"
-#include "obj\Task.h"
+#include "obj/Task.h"
 #include "os\Debug.h"
 #include "rndobj\AnimFilter.h"
 #include "rndobj\Group.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 
 static TaskUnits gRateUnits[6] = { kTaskSeconds, kTaskBeats,           kTaskUISeconds,
                                    kTaskBeats,   kTaskTutorialSeconds, kTaskBeats };

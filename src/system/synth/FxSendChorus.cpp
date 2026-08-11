@@ -1,7 +1,7 @@
 #include "synth\FxSendChorus.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "synth\FxSend.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 
 BEGIN_COPYS(FxSendChorus)
     COPY_SUPERCLASS(FxSend)

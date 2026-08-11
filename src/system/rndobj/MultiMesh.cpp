@@ -1,12 +1,12 @@
-#include "rndobj\MultiMesh.h"
+#include "rndobj/MultiMesh.h"
 #include "math\Rot.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Draw.h"
 #include "rndobj\Mesh.h"
 #include "rndobj\MultiMeshProxy.h"
 #include "rndobj\Utl.h"
-#include "utl\BinStream.h"
-#include "utl\Loader.h"
+#include "utl/BinStream.h"
+#include "utl/Loader.h"
 #include "utl\TextStream.h"
 
 ReclaimableAlloc gTransListAlloc(0x4C, "InstanceListNode");

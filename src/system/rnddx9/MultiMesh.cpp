@@ -1,5 +1,5 @@
 #include "rnddx9\MultiMesh.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rnddx9\Rnd.h"
 #include "rnddx9\Mesh.h"
 #include "rnddx9\Utl.h"

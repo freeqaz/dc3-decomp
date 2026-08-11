@@ -1,7 +1,7 @@
-#include "utl\StringTable.h"
+#include "utl/StringTable.h"
 #include "math\Utl.h"
 #include "os\Debug.h"
-#include "utl\Loader.h"
+#include "utl/Loader.h"
 #include "utl\MemMgr.h"
 
 int StringTable::UsedSize() const {

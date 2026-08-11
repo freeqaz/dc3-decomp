@@ -10,7 +10,7 @@
 #include "meta_ham\AccomplishmentGroup.h"
 #include "meta_ham\AccomplishmentManager.h"
 #include "meta_ham\Award.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "os\PlatformMgr.h"
 #include "stl\_pair.h"

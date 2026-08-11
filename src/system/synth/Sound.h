@@ -2,7 +2,7 @@
 #include "AudioDucker.h"
 #include "SynthSample.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "synth\ADSR.h"
 #include "synth\Faders.h"
 #include "synth\FxSend.h"

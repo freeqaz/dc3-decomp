@@ -2,7 +2,7 @@
 #include "NetStream.h"
 #include "NetworkSocket.h"
 #include "os\Timer.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 
 NetStream::NetStream()
     : BinStream(true), mSocket(nullptr), mFail(false), mReadTimeoutMs(0), mBytesRead(0),

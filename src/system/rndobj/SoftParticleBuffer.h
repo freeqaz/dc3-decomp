@@ -1,5 +1,5 @@
 #pragma once
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\BaseMaterial.h"
 #include "rndobj\Draw.h"
 #include "rndobj\PostProc.h"

@@ -4,7 +4,7 @@
 #include "meta_ham\OutfitProvider.h"
 #include "meta_ham\TexLoadPanel.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Mesh.h"
 #include "utl\Symbol.h"
 

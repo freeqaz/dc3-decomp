@@ -2,7 +2,7 @@
 #include "os\Debug.h"
 #include "os\File.h"
 #include "rndobj\ShaderOptions.h"
-#include "rndobj\ShaderProgram.h"
+#include "rndobj/ShaderProgram.h"
 #include "utl\MemMgr.h"
 #include "xdk\D3DX9.h"
 #include "xdk\XAPILIB.h"

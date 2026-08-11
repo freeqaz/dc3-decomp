@@ -1,6 +1,6 @@
 #pragma once
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "obj\PropSync.h"
 #include "utl\Symbol.h"
 #include <list>

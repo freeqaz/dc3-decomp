@@ -4,7 +4,7 @@
 #include "math\Utl.h"
 #include "obj\Data.h"
 #include "obj\Msg.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "ui\UI.h"
 #include "utl\Locale.h"

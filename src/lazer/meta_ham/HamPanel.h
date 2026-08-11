@@ -1,7 +1,7 @@
 #pragma once
 #include "hamobj\HamNavList.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Anim.h"
 #include "ui\UIComponent.h"
 #include "ui\UIPanel.h"

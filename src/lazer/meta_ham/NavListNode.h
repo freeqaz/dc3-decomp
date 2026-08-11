@@ -1,6 +1,6 @@
 #pragma once
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\DateTime.h"
 #include "os\Debug.h"
 #include "ui\UILabel.h"

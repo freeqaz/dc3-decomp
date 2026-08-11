@@ -3,11 +3,11 @@
 #include "hamobj\HamLabel.h"
 #include "math\DoubleExponentialSmoother.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Anim.h"
 #include "rndobj\Dir.h"
 #include "synth\Sound.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\MemMgr.h"
 
 struct UIListElementDrawState;

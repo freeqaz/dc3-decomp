@@ -2,7 +2,7 @@
 #include "StreamRecorder.h"
 #include "obj\Data.h"
 #include "obj\Dir.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "rndobj\Dir.h"
 #include "rndobj\Draw.h"
@@ -12,8 +12,8 @@
 #include "rndobj\Anim.h"
 #include "rndobj\Rnd.h"
 #include "rndobj\Tex.h"
-#include "rndobj\TexRenderer.h"
-#include "obj\Task.h"
+#include "rndobj/TexRenderer.h"
+#include "obj/Task.h"
 #include "utl\Symbol.h"
 
 StreamRecorder::StreamRecorder()

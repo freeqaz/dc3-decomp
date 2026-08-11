@@ -1,5 +1,5 @@
 #include "meta_ham\TitleProvider.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "rndobj\Mat.h"
 #include "ui\UILabel.h"

@@ -1,6 +1,6 @@
 #include "meta_ham\ChooseModeProvider.h"
 #include "game\GameMode.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "rndobj\Mat.h"
 #include "ui\UILabel.h"

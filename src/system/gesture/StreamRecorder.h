@@ -1,13 +1,13 @@
 #pragma once
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Dir.h"
 #include "rndobj\Draw.h"
 #include "rndobj\Mat.h"
 #include "rndobj\Poll.h"
 #include "rndobj\Tex.h"
-#include "rndobj\TexRenderer.h"
-#include "utl\BinStream.h"
+#include "rndobj/TexRenderer.h"
+#include "utl/BinStream.h"
 #include "utl\MemMgr.h"
 #include <list>
 

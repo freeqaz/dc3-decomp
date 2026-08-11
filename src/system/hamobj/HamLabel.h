@@ -1,6 +1,6 @@
 #pragma once
 #include "hamobj\HamMove.h"
-#include "math\Key.h"
+#include "math/Key.h"
 #include "obj\Msg.h"
 #include "ui\UIComponent.h"
 #include "ui\UILabel.h"

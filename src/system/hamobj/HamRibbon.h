@@ -1,5 +1,5 @@
 #pragma once
-#include "math\Key.h"
+#include "math/Key.h"
 #include "math\Mtx.h"
 #include "rndobj\Draw.h"
 #include "rndobj\Mat.h"

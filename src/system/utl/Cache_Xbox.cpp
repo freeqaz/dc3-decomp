@@ -2,7 +2,7 @@
 #include "utl\Cache.h"
 #include "utl\CacheMgr.h"
 #include "obj\Msg.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "os\ThreadCall.h"
 #include "utl\Cache.h"

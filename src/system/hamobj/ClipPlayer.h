@@ -3,7 +3,7 @@
 #include "hamobj\Difficulty.h"
 #include "hamobj\HamCharacter.h"
 #include "hamobj\HamDriver.h"
-#include "math\Key.h"
+#include "math/Key.h"
 #include "math\Utl.h"
 #include "obj\Dir.h"
 #include "rndobj\PropAnim.h"

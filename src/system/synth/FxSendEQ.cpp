@@ -1,8 +1,8 @@
 #include "synth\FxSendEQ.h"
 #include "FxSendEQ.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "synth\FxSend.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 
 FxSendEQ::FxSendEQ()
     : mHighFreqCutoff(12000.0f), mHighFreqGain(0.0f), mMidFreqCutoff(8000.0f),

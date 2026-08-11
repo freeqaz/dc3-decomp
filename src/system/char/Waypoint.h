@@ -1,7 +1,7 @@
 #pragma once
 #include "math\Mtx.h"
 #include "math\Vec.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Trans.h"
 #include "utl\MemMgr.h"
 

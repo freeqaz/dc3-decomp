@@ -5,8 +5,8 @@
 #include "flow\FlowQueueable.h"
 #include "obj\Data.h"
 #include "obj\Dir.h"
-#include "obj\Object.h"
-#include "utl\BinStream.h"
+#include "obj/Object.h"
+#include "utl/BinStream.h"
 #include "utl\Symbol.h"
 
 

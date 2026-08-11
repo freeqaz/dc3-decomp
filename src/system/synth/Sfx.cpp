@@ -1,7 +1,7 @@
 #include "synth\Sfx.h"
 #include "SampleInst.h"
 #include "math\Utl.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "synth\FxSend.h"
 #include "synth\MoggClip.h"
 #include "synth\MoggClipMap.h"

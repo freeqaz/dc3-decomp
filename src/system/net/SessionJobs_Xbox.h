@@ -1,6 +1,6 @@
 #pragma once
-#include "obj\Object.h"
-#include "utl\JobMgr.h"
+#include "obj/Object.h"
+#include "utl/JobMgr.h"
 #include "xdk\XAPILIB.h"
 #include "xdk\XONLINE.h"
 

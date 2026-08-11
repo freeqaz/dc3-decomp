@@ -1,7 +1,7 @@
 #pragma once
 #include "obj\Data.h"
-#include "obj\Object.h"
-#include "math\Key.h"
+#include "obj/Object.h"
+#include "math/Key.h"
 #include "utl\MemMgr.h"
 
 class LightHue : public Hmx::Object {

@@ -1,4 +1,4 @@
-#include "rndobj\Cam.h"
+#include "rndobj/Cam.h"
 #include "Rnd.h"
 #include "Utl.h"
 #include "math\Mtx.h"
@@ -6,7 +6,7 @@
 
 #include "obj\Data.h"
 #include "obj\DataFunc.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "os\System.h"
 #include "rndobj\Draw.h"

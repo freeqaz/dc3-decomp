@@ -1,7 +1,7 @@
 #pragma once
 #include "math\Color.h"
 #include "math\Utl.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "rndobj\Draw.h"
 #include "rndobj\FontBase.h"

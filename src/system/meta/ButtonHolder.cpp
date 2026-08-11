@@ -1,6 +1,6 @@
 #include "meta\ButtonHolder.h"
-#include "obj\Object.h"
-#include "obj\Task.h"
+#include "obj/Object.h"
+#include "obj/Task.h"
 #include "os\Debug.h"
 #include "os\Joypad.h"
 #include "os\JoypadMsgs.h"

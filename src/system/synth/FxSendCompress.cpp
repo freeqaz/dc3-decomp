@@ -1,7 +1,7 @@
 #include "synth\FxSendCompress.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "synth\FxSend.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 
 FxSendCompress::FxSendCompress()
     : mThresholdDB(-12.0f), mRatio(3.0f), mOutputLevel(0.0f), mAttack(0.005f),

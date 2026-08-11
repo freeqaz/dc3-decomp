@@ -15,7 +15,7 @@
 #include "meta_ham\TexLoadPanel.h"
 #include "obj\Data.h"
 #include "obj\Msg.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "rndobj\Mat.h"
 #include "rndobj\Mesh.h"

@@ -1,6 +1,6 @@
 #include "ui\UIGuide.h"
-#include "obj\Object.h"
-#include "utl\BinStream.h"
+#include "obj/Object.h"
+#include "utl/BinStream.h"
 
 UIGuide::UIGuide() : mType(kGuideVertical), mPos(0.5f) {}
 

@@ -7,10 +7,10 @@
 #include "meta_ham\ProfileMgr.h"
 #include "obj\Data.h"
 #include "obj\DataUtl.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "os\System.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\Symbol.h"
 
 #define MIN_SONG_VERSION 0

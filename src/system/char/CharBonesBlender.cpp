@@ -1,6 +1,6 @@
 #include "char\CharBonesBlender.h"
 #include "char\CharBoneDir.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 
 void CharBonesBlender::Enter() { CharBones::Enter(); }
 

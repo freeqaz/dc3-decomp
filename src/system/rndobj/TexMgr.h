@@ -1,5 +1,5 @@
 #pragma once
-#include "utl\ResMgr.h"
+#include "utl/ResMgr.h"
 
 class TexMgr : public ResMgr<void> {
 public:

@@ -1,6 +1,6 @@
 #pragma once
 #include "FxSend.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "synth\FxSendWah.h"
 
 class FxSendWah360 : public FxSendWah, public FxSend360 {

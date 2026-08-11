@@ -1,6 +1,6 @@
 #pragma once
-#include "math\Key.h"
-#include "obj\Object.h"
+#include "math/Key.h"
+#include "obj/Object.h"
 #include "rndobj\Anim.h"
 #include "rndobj\Mesh.h"
 #include "utl\MemMgr.h"

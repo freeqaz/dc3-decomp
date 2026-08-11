@@ -7,7 +7,7 @@
 #include "char\Waypoint.h"
 #include "math\Vec.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Draw.h"
 #include "rndobj\Mat.h"
 #include "rndobj\Mesh.h"

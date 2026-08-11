@@ -2,14 +2,14 @@
 #include "math\Color.h"
 #include "math\Mtx.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
-#include "rndobj\Cam.h"
+#include "rndobj/Cam.h"
 #include "rndobj\Env.h"
 #include "rndobj\Group.h"
 #include "rndobj\Rnd.h"
 #include "rndobj\Utl.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 
 #ifdef HX_NATIVE
 HighlightStyle RndDrawable::sHighlightStyle;

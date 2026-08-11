@@ -1,7 +1,7 @@
 #pragma once
 #include "meta_ham\Playlist.h"
 #include "net_ham\RCJobDingo.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 
 class GetPlaylistsJob : public RCJob {
 public:

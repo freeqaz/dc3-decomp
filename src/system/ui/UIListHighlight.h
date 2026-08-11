@@ -1,5 +1,5 @@
 #pragma once
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "ui\UIListWidget.h"
 #include "rndobj\Mesh.h"
 #include "utl\MemMgr.h"

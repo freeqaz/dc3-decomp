@@ -1,7 +1,7 @@
 #pragma once
 #include "net\DingoSvr.h"
 #include "net\XLSPConnection.h"
-#include "utl\JobMgr.h"
+#include "utl/JobMgr.h"
 #include "utl\Str.h"
 
 class DingoSvrXbox : public DingoServer {

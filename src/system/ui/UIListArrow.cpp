@@ -1,6 +1,6 @@
 #include "ui\UIListArrow.h"
-#include "math\Easing.h"
-#include "obj\Object.h"
+#include "math/Easing.h"
+#include "obj/Object.h"
 #include "ui\UIList.h"
 #include "ui\UIListWidget.h"
 #include "ui\UIList.h"

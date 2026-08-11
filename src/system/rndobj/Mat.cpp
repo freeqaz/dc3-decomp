@@ -4,8 +4,8 @@
 #include "math\Color.h"
 #include "obj\Data.h"
 #include "obj\Dir.h"
-#include "obj\DirLoader.h"
-#include "obj\Object.h"
+#include "obj/DirLoader.h"
+#include "obj/Object.h"
 #include "obj\Utl.h"
 #include "os\Debug.h"
 #include "os\File.h"
@@ -14,9 +14,9 @@
 #include "rndobj\Fur.h"
 #include "rndobj\MetaMaterial.h"
 #include "rndobj\Tex.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\FilePath.h"
-#include "utl\Loader.h"
+#include "utl/Loader.h"
 #include "utl\Symbol.h"
 
 #ifdef HX_NATIVE

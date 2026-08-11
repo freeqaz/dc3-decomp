@@ -2,13 +2,13 @@
 #include "hamobj\HamLabel.h"
 #include "math\Mtx.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Dir.h"
 #include "rndobj\Env.h"
 #include "rndobj\Text.h"
 #include "ui\UIListWidget.h"
-#include "utl\BinStream.h"
-#include "utl\Loader.h"
+#include "utl/BinStream.h"
+#include "utl/Loader.h"
 
 // HamListRibbonDrawState ctor is defined in HamNavList.cpp
 

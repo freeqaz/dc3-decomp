@@ -1,5 +1,5 @@
 #include "world\LightHue.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Bitmap.h"
 #include "utl\BufStream.h"
 

@@ -3,7 +3,7 @@
 #include "char\CharPollable.h"
 #include "char\Waypoint.h"
 #include "math\Vec.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Highlight.h"
 #include "utl\MemMgr.h"
 #include "utl\Symbol.h"

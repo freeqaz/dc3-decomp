@@ -1,4 +1,4 @@
-#include "math\StreamChecksum.h"
+#include "math/StreamChecksum.h"
 #include "math\SHA1.h"
 #include "math\FileChecksum.h"
 #include "os\Debug.h"

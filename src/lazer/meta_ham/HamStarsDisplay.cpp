@@ -7,7 +7,7 @@
 #include "meta_ham\MetaPerformer.h"
 #include "meta_ham\ProfileMgr.h"
 #include "meta_ham\Utl.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "utl\MakeString.h"
 #include "utl\Symbol.h"

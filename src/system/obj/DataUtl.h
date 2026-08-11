@@ -1,6 +1,6 @@
 #pragma once
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include <map>
 
 extern std::map<Symbol, DataArray *> gMacroTable;

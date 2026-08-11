@@ -1,6 +1,6 @@
 #pragma once
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 
 /** A DataArray container to send to other objects for handling. */
 class Message {
@@ -197,7 +197,7 @@ public:
     }                                                                                    \
     ;
 
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "utl\MemMgr.h"
 
 class ObjRef;

@@ -4,7 +4,7 @@
 #include "beatmatch\HxSongData.h"
 #include "midi\Midi.h"
 #include "utl\BeatMap.h"
-#include "utl\MeasureMap.h"
+#include "utl/MeasureMap.h"
 #include "utl\MemStream.h"
 #include "utl\SongInfoCopy.h"
 #include "utl\TempoMap.h"

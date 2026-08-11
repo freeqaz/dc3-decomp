@@ -1,7 +1,7 @@
 #include "synth\SampleInst.h"
 #include "math\Decibels.h"
 #include "obj\Msg.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "synth\SynthSample.h"
 
 SampleInst::SampleInst(SynthSample *sample)

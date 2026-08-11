@@ -2,7 +2,7 @@
 #include "char\CharCollide.h"
 #include "char\CharPollable.h"
 #include "char\CharWeightable.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Highlight.h"
 #include "rndobj\Trans.h"
 #include "utl\MemMgr.h"

@@ -3,8 +3,8 @@
 #include "char\Character.h"
 #include "math\Mtx.h"
 #include "math\Vec.h"
-#include "obj\Object.h"
-#include "obj\Task.h"
+#include "obj/Object.h"
+#include "obj/Task.h"
 #include "rndobj\Trans.h"
 #ifdef HX_NATIVE
 #include "hamobj\HamCharacter.h"

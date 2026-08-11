@@ -6,7 +6,7 @@
 #include "meta\StorePreviewMgr.h"
 #include "obj\Data.h"
 #include "obj\Msg.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\PlatformMgr.h"
 #include "rndobj\Tex.h"
 #include "stl\_vector.h"

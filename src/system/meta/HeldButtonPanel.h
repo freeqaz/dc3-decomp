@@ -1,6 +1,6 @@
 #pragma once
 #include "meta\ButtonHolder.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "ui\UIPanel.h"
 
 class HeldButtonPanel : public UIPanel {

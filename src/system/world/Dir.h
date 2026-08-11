@@ -4,20 +4,20 @@
 #include "PhysicsManager.h"
 #include "ThreeDSoundManager.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Dir.h"
 #include "rndobj\Draw.h"
 #include "rndobj\Mat.h"
 #include "rndobj\Mesh.h"
 #include "rndobj\Tex.h"
 #include "ui\PanelDir.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\FilePath.h"
 #include "utl\MemMgr.h"
 #include "world\CameraManager.h"
 #include "world\CameraShot.h"
 #include "world\LightHue.h"
-#include "world\LightPreset.h"
+#include "world/LightPreset.h"
 
 /**
  * @brief An ObjectDir dedicated to holding world objects.

@@ -8,10 +8,10 @@
 #include "obj\Data.h"
 #include "obj\DataFile.h"
 #include "obj\Msg.h"
-#include "obj\Object.h"
-#include "obj\Task.h"
+#include "obj/Object.h"
+#include "obj/Task.h"
 #include "os\Debug.h"
-#include "utl\Loader.h"
+#include "utl/Loader.h"
 #include "utl\Symbol.h"
 
 HamPlayerData::HamPlayerData(int i)

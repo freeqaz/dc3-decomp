@@ -1,5 +1,5 @@
 #include "char\CharCuff.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Trans.h"
 #include "rndobj\Rnd.h"
 #include "math\Trig.h"

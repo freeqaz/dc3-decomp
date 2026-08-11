@@ -2,10 +2,10 @@
 #include "char\CharPollable.h"
 #include "char\CharWeightable.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Trans.h"
 #include "stl\_vector.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\MemMgr.h"
 
 class CharSignalApplier : public CharPollable, public CharWeightable {

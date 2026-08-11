@@ -1,7 +1,7 @@
 #include "meta\StreamPlayer.h"
 #include "macros.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "synth\Stream.h"
 #include "synth\Synth.h"

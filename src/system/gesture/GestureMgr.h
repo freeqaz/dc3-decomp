@@ -7,7 +7,7 @@
 #include "gesture\SkeletonQualityFilter.h"
 #include "obj\Dir.h"
 #include "obj\Msg.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Dir.h"
 #include "rndobj\Tex.h"
 #include "xdk\XAPILIB.h"

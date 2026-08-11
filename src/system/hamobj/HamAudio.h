@@ -1,9 +1,9 @@
 #pragma once
 #include "beatmatch\HxAudio.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "synth\Faders.h"
-#include "utl\Loader.h"
+#include "utl/Loader.h"
 #include "utl\SongInfoCopy.h"
 #include "utl\Symbol.h"
 

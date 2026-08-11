@@ -9,7 +9,7 @@
 #include "meta_ham\PlaylistSongProvider.h"
 #include "obj\Dir.h"
 #include "obj\Msg.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "ui\UIPanel.h"
 #include "utl\Symbol.h"

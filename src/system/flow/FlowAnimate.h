@@ -2,8 +2,8 @@
 #include "flow\FlowLabelProvider.h"
 #include "flow\FlowNode.h"
 #include "flow\FlowPtr.h"
-#include "math\Easing.h"
-#include "obj\Object.h"
+#include "math/Easing.h"
+#include "obj/Object.h"
 #include "rndobj\Anim.h"
 #include "utl\MemMgr.h"
 

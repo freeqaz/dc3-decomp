@@ -9,10 +9,10 @@
 #include "math\Vec.h"
 #include "obj\Data.h"
 #include "obj\DataUtl.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "rndobj\Trans.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\Std.h"
 #include "utl\TimeConversion.h"
 #include <float.h>

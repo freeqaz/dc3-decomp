@@ -1,12 +1,12 @@
 #include "hamobj\StarsDisplay.h"
 #include "StarsDisplay.h"
 #include "hamobj\HamLabel.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "ui\UIColor.h"
 #include "ui\UIComponent.h"
-#include "utl\BinStream.h"
-#include "utl\Loader.h"
+#include "utl/BinStream.h"
+#include "utl/Loader.h"
 
 StarsDisplay::StarsDisplay()
     : mResourceDir(this), mStarsLabel(Hmx::Object::New<HamLabel>()),

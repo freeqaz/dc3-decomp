@@ -3,7 +3,7 @@
 #include "obj\DataFunc.h"
 #include "obj\Msg.h"
 #include "os\Debug.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\JoypadMsgs.h"
 #include "os\System.h"
 #include "os\User.h"

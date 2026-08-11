@@ -3,7 +3,7 @@
 #include "char\CharClip.h"
 #include "char\CharPollable.h"
 #include "obj\Dir.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "utl\MemMgr.h"
 #include "utl\Symbol.h"
 

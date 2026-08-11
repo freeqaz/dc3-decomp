@@ -1,6 +1,6 @@
 #pragma once
 #include "hamobj\DancerSkeleton.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Anim.h"
 #include "utl\MemMgr.h"
 

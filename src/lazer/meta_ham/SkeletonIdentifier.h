@@ -2,7 +2,7 @@
 #include "gesture\GestureMgr.h"
 #include "obj\Data.h"
 #include "obj\Msg.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\PlatformMgr.h"
 #include "utl\Str.h"
 

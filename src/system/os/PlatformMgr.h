@@ -2,11 +2,11 @@
 #include "Friend.h"
 #include "obj\Data.h"
 #include "obj\Msg.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\OnlineID.h"
 #include "os\User.h"
 #include "stl\_vector.h"
-#include "utl\JobMgr.h"
+#include "utl/JobMgr.h"
 #include "xdk\XSOCIAL.h"
 
 enum DiskError {

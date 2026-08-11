@@ -5,7 +5,7 @@
 #include "hamobj\HamDirector.h"
 #include "hamobj\HamGameData.h"
 #include "math\Utl.h"
-#include "obj\Task.h"
+#include "obj/Task.h"
 #include "os\Debug.h"
 
 MocapSkeletonIterator::MocapSkeletonIterator(int x, int y)

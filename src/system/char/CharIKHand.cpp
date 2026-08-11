@@ -4,10 +4,10 @@
 #include "math\Color.h"
 #include "math\Rot.h"
 #include "math\Vec.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Rnd.h"
 #include "rndobj\Trans.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "rndobj\Utl.h"
 #ifdef HX_NATIVE
 #include <cstring>

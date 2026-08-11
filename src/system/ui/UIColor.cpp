@@ -1,6 +1,6 @@
 #include "ui\UIColor.h"
-#include "obj\Object.h"
-#include "utl\BinStream.h"
+#include "obj/Object.h"
+#include "utl/BinStream.h"
 
 const Hmx::Color &UIColor::GetColor() const { return mColor; }
 void UIColor::SetColor(const Hmx::Color &color) { mColor = color; }

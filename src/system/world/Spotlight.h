@@ -1,7 +1,7 @@
 #pragma once
 #include "math\Color.h"
 #include "math\Mtx.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Draw.h"
 #include "rndobj\Env.h"
 #include "rndobj\Flare.h"
@@ -12,7 +12,7 @@
 #include "rndobj\Poll.h"
 #include "rndobj\Tex.h"
 #include "rndobj\Trans.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\MemMgr.h"
 
 /** "Represents a beam and floorspot for venue modeling" */

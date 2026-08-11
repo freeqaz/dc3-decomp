@@ -4,7 +4,7 @@
 #include "os\JoypadMsgs.h"
 #include "os\Keyboard.h"
 #include "os\PlatformMgr.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\MemStream.h"
 
 HolmesInput::HolmesInput(CWnd *cwnd)

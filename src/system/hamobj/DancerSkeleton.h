@@ -1,7 +1,7 @@
 #pragma once
 #include "gesture\BaseSkeleton.h"
 #include "math\Vec.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 
 class DancerSkeleton : public BaseSkeleton {
 public:

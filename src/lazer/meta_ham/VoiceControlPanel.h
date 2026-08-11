@@ -3,7 +3,7 @@
 #include "hamobj\Difficulty.h"
 #include "meta_ham\OverlayPanel.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\ContentMgr.h"
 #include "ui\UIScreen.h"
 #include "utl\Symbol.h"

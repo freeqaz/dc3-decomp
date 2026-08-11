@@ -2,7 +2,7 @@
 #include "hamobj\DancerSequence.h"
 #include "hamobj\Difficulty.h"
 #include "hamobj\MoveDir.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Anim.h"
 #include "synth\FxSend.h"
 #include "utl\Std.h"

@@ -24,8 +24,8 @@
 #include "obj\DataFile.h"
 #include "obj\DataFunc.h"
 #include "obj\Dir.h"
-#include "obj\Object.h"
-#include "os\BufFile.h"
+#include "obj/Object.h"
+#include "os/BufFile.h"
 #include "os\Debug.h"
 #include "os\Platform.h"
 #include "os\System.h"
@@ -48,7 +48,7 @@
 #endif
 #include "synth\WavMgr.h"
 #include "utl\Cache.h"
-#include "utl\Loader.h"
+#include "utl/Loader.h"
 #include <cstdio>
 
 namespace {

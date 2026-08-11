@@ -8,7 +8,7 @@
 #include "meta_ham\HamSongMgr.h"
 #include "meta_ham\HamUI.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "os\PlatformMgr.h"
 #include "os\System.h"

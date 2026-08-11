@@ -706,7 +706,7 @@ void PlatformMgr::SmartGlassSend(unsigned long clientID, const DataArray *arr) {
     XbcSendMsg(clientID, arr);
 }
 
-#include "utl\JobMgr.h"
+#include "utl/JobMgr.h"
 #include "meta\StorePanel.h"
 #include "lazer\meta_ham\OptionsPanel.h"
 

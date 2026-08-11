@@ -1,5 +1,5 @@
 #pragma once
-#include "rndobj\Cam.h"
+#include "rndobj/Cam.h"
 #include "rndobj\Draw.h"
 #include "rndobj\Mesh.h"
 #include "rndobj\Mat.h"

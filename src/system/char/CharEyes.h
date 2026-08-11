@@ -8,7 +8,7 @@
 #include "char\CharWeightSetter.h"
 #include "char\CharWeightable.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Highlight.h"
 #include "rndobj\Overlay.h"
 #include "rndobj\Trans.h"

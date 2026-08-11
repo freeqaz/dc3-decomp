@@ -10,10 +10,10 @@
 #include "obj\Data.h"
 #include "obj\DataFile.h"
 #include "obj\Dir.h"
-#include "obj\DirLoader.h"
-#include "obj\Object.h"
+#include "obj/DirLoader.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
-#include "utl\Loader.h"
+#include "utl/Loader.h"
 #include "utl\Std.h"
 #include "utl\Symbol.h"
 

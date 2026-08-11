@@ -3,7 +3,7 @@
 #include "hamobj\FreestyleMoveRecorder.h"
 #include "hamobj\HamLabel.h"
 #include "hamobj\RhythmBattlePlayer.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Anim.h"
 #include "rndobj\Poll.h"
 #include "rndobj\Trans.h"

@@ -2,14 +2,14 @@
 #include "MovieImpl.h"
 #include "MovieSys.h"
 #include "macros.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "os\System.h"
 #include "os\Timer.h"
 #include "synth\Faders.h"
 #include "synth\Synth.h"
 #include "ui\UIListState.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\Symbol.h"
 
 Movie::Movie() : mImpl(nullptr) {

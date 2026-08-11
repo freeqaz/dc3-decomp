@@ -7,7 +7,7 @@
 #include "hamobj\HamPlayerData.h"
 #include "meta_ham\AppLabel.h"
 #include "meta_ham\Challenges.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "ui\UIComponent.h"
 #include "ui\UIList.h"

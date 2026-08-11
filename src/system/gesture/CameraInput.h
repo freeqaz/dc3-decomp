@@ -1,6 +1,6 @@
 #pragma once
 #include "math\Mtx.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "gesture\Skeleton.h"
 
 class CameraInput : public virtual Hmx::Object {

@@ -1,5 +1,5 @@
 #pragma once
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include <vector>
 
 /** A collection of ogg samples, meant for quick seeking into an ogg. */

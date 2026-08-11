@@ -1,9 +1,9 @@
 #pragma once
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Highlight.h"
 #include "rndobj\Trans.h"
-#include "math\Geo.h"
+#include "math/Geo.h"
 #include "math\Mtx.h"
 #include "math\Sphere.h"
 #include "utl\MemMgr.h"

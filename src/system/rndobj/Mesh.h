@@ -1,8 +1,8 @@
 #pragma once
 #include "math\Color.h"
-#include "math\Geo.h"
+#include "math/Geo.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\System.h"
 #include "rndobj\Draw.h"
 #include "rndobj\Mat.h"

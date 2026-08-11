@@ -1,7 +1,7 @@
 #pragma once
 #include "NavListNode.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "ui\UIListProvider.h"
 #include "meta_ham\NavListNode.h"
 

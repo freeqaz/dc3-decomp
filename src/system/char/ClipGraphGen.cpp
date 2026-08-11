@@ -4,7 +4,7 @@
 #include "char\ClipDistMap.h"
 #include "math\Utl.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 
 ClipGraphGenerator::ClipGraphGenerator() : mTypeData(0), mDmap(0), mClipA(0), mClipB(0) {}
 

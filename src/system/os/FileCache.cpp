@@ -1,7 +1,7 @@
-#include "os\FileCache.h"
+#include "os/FileCache.h"
 #include "macros.h"
 #include "math\Utl.h"
-#include "obj\DirLoader.h"
+#include "obj/DirLoader.h"
 #include "os\Debug.h"
 #include "os\File.h"
 #include "os\System.h"
@@ -10,7 +10,7 @@
 #include "synth\Utl.h"
 #include "utl\Cache.h"
 #include "utl\FilePath.h"
-#include "utl\Loader.h"
+#include "utl/Loader.h"
 #include "utl\MemMgr.h"
 #include <list>
 

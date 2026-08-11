@@ -1,7 +1,7 @@
 #pragma once
 #include "meta\SongMgr.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\ContentMgr.h"
 #include "movie\TexMovie.h"
 #include "synth\Faders.h"

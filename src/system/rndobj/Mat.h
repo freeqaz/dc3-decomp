@@ -3,11 +3,11 @@
 #include "math\Mtx.h"
 #include "obj\Data.h"
 #include "obj\Dir.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\BaseMaterial.h"
 #include "rndobj\MetaMaterial.h"
 #include "rndobj\Tex.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 
 struct bf {
     uint val;

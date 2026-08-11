@@ -1,5 +1,5 @@
 #pragma once
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Dir.h"
 #include "ui\ResourceDirPtr.h"
 #include "ui\UIComponent.h"

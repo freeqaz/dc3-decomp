@@ -2,7 +2,7 @@
 #include "Skeleton.h"
 #include "StandingStillGestureFilter.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 
 class HandRaisedGestureFilter : public Hmx::Object {
 public:

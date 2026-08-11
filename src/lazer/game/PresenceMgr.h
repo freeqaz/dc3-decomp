@@ -1,7 +1,7 @@
 #pragma once
 #include "obj\Data.h"
 #include "obj\Msg.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "utl\Symbol.h"
 
 class PresenceMgr : public Hmx::Object {

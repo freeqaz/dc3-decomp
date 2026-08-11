@@ -1,7 +1,7 @@
 #pragma once
 #include "meta_ham\HamPanel.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "ui\UIPanel.h"
 
 class BlacklightPanel : public HamPanel {

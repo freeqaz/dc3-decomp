@@ -1,5 +1,5 @@
 #pragma once
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "synth\FxSend.h"
 
 /** "A flanger effect." */

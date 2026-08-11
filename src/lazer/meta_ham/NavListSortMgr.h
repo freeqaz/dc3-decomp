@@ -4,7 +4,7 @@
 #include "NavListNode.h"
 #include "NavListSort.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\ContentMgr.h"
 #include "os\System.h"
 #include "ui\UIComponent.h"

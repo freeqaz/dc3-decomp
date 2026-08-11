@@ -1,10 +1,10 @@
 #pragma once
 #include "obj\Data.h"
 #include "obj\Msg.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Joypad.h"
 #include "os\Timer.h"
-#include "rndobj\Cam.h"
+#include "rndobj/Cam.h"
 #include "rndobj\Env.h"
 #include "rndobj\Overlay.h"
 #include "ui\UIScreen.h"

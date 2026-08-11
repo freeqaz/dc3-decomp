@@ -11,7 +11,7 @@
 #include "obj\Data.h"
 #include "obj\Dir.h"
 #include "obj\Msg.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\ContentMgr.h"
 #include "os\Debug.h"
 #include "os\System.h"

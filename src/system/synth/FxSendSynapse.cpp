@@ -1,9 +1,9 @@
 #include "synth\FxSendSynapse.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "synth\FxSend.h"
 #include "synth\FxSendBitCrush.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 
 FxSendSynapse::FxSendSynapse()
     : mAmount(0.0f), mProximityEffect(0.5f), mProximityFocus(0.5f), mNote1Hz(200.0f),

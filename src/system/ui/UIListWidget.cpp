@@ -1,11 +1,11 @@
 #include "ui\UIListWidget.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "rndobj\Utl.h"
 #include "ui\UIColor.h"
 #include "ui\UIComponent.h"
 #include "math\Vec.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 
 UIListWidget::UIListWidget()
     : mDrawOrder(0), mDisabledAlphaScale(1), mDefaultColor(this),

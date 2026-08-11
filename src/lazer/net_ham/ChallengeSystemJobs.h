@@ -2,7 +2,7 @@
 #include "meta_ham\HamProfile.h"
 #include "meta_ham\SongStatusMgr.h"
 #include "net_ham\RCJobDingo.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 
 // size 0x3c
 class ChallengeRow {

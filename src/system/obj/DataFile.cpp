@@ -4,7 +4,7 @@
 #include "DataFlex.h"
 #include "math\Utl.h"
 #include "obj\DataUtl.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\Compress.h"
 #include "utl\Std.h"
 #include "math\FileChecksum.h"
@@ -20,7 +20,7 @@
 #include "utl\BufStream.h"
 #include "utl\FileStream.h"
 #include "utl\FilePath.h"
-#include "utl\Loader.h"
+#include "utl/Loader.h"
 #include "utl\MemMgr.h"
 
 static DataArray *gArray = nullptr;

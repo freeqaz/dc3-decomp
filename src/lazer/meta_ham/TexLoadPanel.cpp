@@ -4,7 +4,7 @@
 #include "meta_ham\HamPanel.h"
 #include "meta_ham\HamSongMgr.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "os\System.h"
 #include "rndobj\BaseMaterial.h"

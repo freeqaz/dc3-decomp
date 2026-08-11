@@ -1,6 +1,6 @@
 #include "obj\PropSync.h"
 #include "math\Color.h"
-#include "math\Geo.h"
+#include "math/Geo.h"
 #include "math\Mtx.h"
 #include "math\Rot.h"
 #include "math\Sphere.h"

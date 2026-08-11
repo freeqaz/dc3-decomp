@@ -2,11 +2,11 @@
 #include "hamobj\HamDirector.h"
 #include "hamobj\MoveMgr.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "rndobj\PropAnim.h"
 #include "rndobj\PropKeys.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\Std.h"
 #include <cstring>
 

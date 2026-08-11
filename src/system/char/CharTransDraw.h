@@ -1,9 +1,9 @@
 #pragma once
 #include "char\Character.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Draw.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\MemMgr.h"
 
 /** "Defers drawing translucent parts of characters until this object is drawn" */

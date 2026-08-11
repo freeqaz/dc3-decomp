@@ -1,4 +1,4 @@
-#include "math\Rand.h"
+#include "math/Rand.h"
 #include "os\Debug.h"
 #include "os\OSFuncs.h"
 #include <cmath>

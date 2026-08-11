@@ -9,7 +9,7 @@
 #include "meta_ham\MetagameRank.h"
 #include "meta_ham\Utl.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "os\System.h"
 #include "ui\UIListLabel.h"

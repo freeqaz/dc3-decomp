@@ -3,9 +3,9 @@
 #include "gesture\SkeletonDir.h"
 #include "gesture\FreestyleMotionFilter.h"
 #include "math\Mtx.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Anim.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\MemMgr.h"
 
 struct PoseOwner {

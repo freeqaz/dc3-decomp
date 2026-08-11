@@ -1,9 +1,9 @@
 #include "rndobj\Wind.h"
-#include "math\Rand.h"
+#include "math/Rand.h"
 #include "math\Utl.h"
-#include "obj\Object.h"
-#include "utl\BinStream.h"
-#include "math\Rand.h"
+#include "obj/Object.h"
+#include "utl/BinStream.h"
+#include "math/Rand.h"
 #include "math\Utl.h"
 #include "math\Mtx.h"
 

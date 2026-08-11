@@ -1,9 +1,9 @@
 #include "rndobj\AnimFilter.h"
-#include "math\Rand.h"
-#include "obj\Object.h"
+#include "math/Rand.h"
+#include "obj/Object.h"
 #include "rndobj\Anim.h"
 #include "rndobj\Utl.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 
 RndAnimFilter::RndAnimFilter()
     : mAnim(this), mPeriod(0.0f), mStart(0.0f), mEnd(0.0f), mScale(1.0f), mOffset(0.0f),

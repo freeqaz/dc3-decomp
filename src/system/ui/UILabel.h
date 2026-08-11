@@ -1,6 +1,6 @@
 #pragma once
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\DateTime.h"
 #include "os\Debug.h"
 #include "rndobj\Text.h"
@@ -8,7 +8,7 @@
 #include "ui\UIColor.h"
 #include "ui\UIComponent.h"
 #include "ui\UILabelDir.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\MemMgr.h"
 #include "utl\Symbol.h"
 

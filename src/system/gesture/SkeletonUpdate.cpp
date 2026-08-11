@@ -8,7 +8,7 @@
 #include "hamobj\HamGameData.h"
 #include "hamobj\HamPlayerData.h"
 #include "obj\DataFunc.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\CritSec.h"
 #include "os\Debug.h"
 #include "os\Joypad.h"

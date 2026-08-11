@@ -9,7 +9,7 @@
 #include "hamobj\ScoreUtl.h"
 #include "meta_ham\HamPanel.h"
 #include "obj\Dir.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Dir.h"
 
 class BustAMovePanel : public HamPanel {

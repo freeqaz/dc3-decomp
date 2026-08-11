@@ -1,6 +1,6 @@
 #pragma once
 #include "rndobj\ShaderMgr.h"
-#include "rndobj\ShaderProgram.h"
+#include "rndobj/ShaderProgram.h"
 #include "xdk\D3D9.h"
 
 class DxShader : public RndShaderProgram {

@@ -1,7 +1,7 @@
 #pragma once
 #include "char\CharBones.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Trans.h"
 #include "utl\MemMgr.h"
 

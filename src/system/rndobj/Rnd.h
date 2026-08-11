@@ -1,9 +1,9 @@
 #pragma once
 #include "math\Color.h"
-#include "math\Geo.h"
+#include "math/Geo.h"
 #include "math\Vec.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Keyboard.h"
 #include "rndobj\Console.h"
 #include "rndobj\CubeTex.h"

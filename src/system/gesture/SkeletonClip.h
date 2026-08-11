@@ -9,7 +9,7 @@
 #include "rndobj\Anim.h"
 #include "rndobj\Poll.h"
 #include "gesture\SkeletonHistory.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\FileStream.h"
 #include "utl\MemMgr.h"
 

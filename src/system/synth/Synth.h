@@ -3,7 +3,7 @@
 #include "SynthSample.h"
 #include "obj\Data.h"
 #include "obj\Dir.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Platform.h"
 #include "rndobj\Overlay.h"
 #include "synth\ADSR.h"

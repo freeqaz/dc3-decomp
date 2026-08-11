@@ -4,7 +4,7 @@
 #include "hamobj\HamLabel.h"
 #include "meta_ham\MainMenuProvider.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\ContentMgr.h"
 #include "rndobj\Tex.h"
 #include "stl\_map.h"

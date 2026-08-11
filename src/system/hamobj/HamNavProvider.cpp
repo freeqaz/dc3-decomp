@@ -3,12 +3,12 @@
 #include "hamobj\HamNavProvider.h"
 #include "obj\Data.h"
 #include "obj\Msg.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "ui\UIListLabel.h"
 #include "ui\UIListProvider.h"
 #include "ui\UIListSubList.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\Symbol.h"
 #include <cstdlib>
 #include <cstring>

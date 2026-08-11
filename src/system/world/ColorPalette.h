@@ -1,6 +1,6 @@
 #pragma once
 #include "math\Color.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "utl\MemMgr.h"
 
 struct ColorSet {

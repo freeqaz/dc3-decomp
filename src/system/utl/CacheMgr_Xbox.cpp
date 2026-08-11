@@ -1,7 +1,7 @@
 #include "Cache.h"
 #include "CacheMgr.h"
 #include "obj\Msg.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "os\PlatformMgr.h"
 #include "utl\Cache.h"
