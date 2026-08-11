@@ -54,7 +54,7 @@ public:
         int vecsize = vec.size();
         if (vecsize > maxsize) {
             MILO_NOTIFY(
-                "The vector size is greater than the maximum supplied! size=%i max=%i\n",
+                "The vector size is greater than the maximum supplied! size=%i max=%i",
                 vecsize,
                 maxsize
             );
@@ -100,7 +100,7 @@ public:
         int vecsize = vec.size();
         if (vecsize > maxsize) {
             MILO_NOTIFY(
-                "The vector size is greater than the maximum supplied! size=%i max=%i\n",
+                "The vector size is greater than the maximum supplied! size=%i max=%i",
                 vecsize,
                 maxsize
             );
@@ -145,7 +145,7 @@ public:
         int mapsize = map.size();
         if (mapsize > maxsize) {
             MILO_NOTIFY(
-                "The hash_map size is greater than the maximum supplied! size=%i max=%i\n",
+                "The hash_map size is greater than the maximum supplied! size=%i max=%i",
                 mapsize,
                 maxsize
             );
@@ -171,7 +171,7 @@ public:
         int mapsize = map.size();
         if (mapsize > maxsize) {
             MILO_NOTIFY(
-                "The hash_map size is greater than the maximum supplied! size=%i max=%i\n",
+                "The map size is greater than the maximum supplied! size=%i max=%i",
                 mapsize,
                 maxsize
             );
@@ -196,7 +196,7 @@ public:
         int lsize = list.size();
         if (lsize > maxsize) {
             MILO_NOTIFY(
-                "The list size is greater than the maximum supplied! size=%i max=%i\n",
+                "The list size is greater than the maximum supplied! size=%i max=%i",
                 lsize,
                 maxsize
             );
@@ -222,7 +222,7 @@ public:
         int lsize = vec.size();
         if (lsize > maxsize) {
             MILO_NOTIFY(
-                "The vector size is greater than the maximum supplied! size=%i max=%i\n",
+                "The vector size is greater than the maximum supplied! size=%i max=%i",
                 lsize,
                 maxsize
             );
@@ -246,7 +246,7 @@ public:
         int lsize = map.size();
         if (lsize > maxsize) {
             MILO_NOTIFY(
-                "The map size is greater than the maximum supplied! size=%i max=%i\n",
+                "The hash_map size is greater than the maximum supplied! size=%i max=%i",
                 lsize,
                 maxsize
             );
@@ -290,7 +290,7 @@ public:
         FixedSizeSaveableStream &stream, std::map<T1, T2> &map, int maxsize, int savesize
     ) {
         if (map.size() > 0) {
-            MILO_NOTIFY("hash_map is not empty!");
+            MILO_NOTIFY("map is not empty!");
             map.clear();
         }
         int size;

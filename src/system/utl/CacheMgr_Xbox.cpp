@@ -248,7 +248,7 @@ bool CacheMgrXbox::MountAsync(CacheID *pCacheIDXbox, Cache **ppCache, Hmx::Objec
 
 bool CacheMgrXbox::UnmountAsync(Cache **ppCache, Hmx::Object *o) {
     if (!IsDone()) {
-        MILO_NOTIFY("MountAsync: !IsDone() current op is %i", GetOp());
+        MILO_NOTIFY("UnmountAsync: !IsDone() current op is %i", GetOp());
         SetLastResult(kCache_ErrorBusy);
         return false;
     } else if (ppCache && *ppCache) {

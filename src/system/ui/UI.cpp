@@ -133,7 +133,7 @@ void FailAppendCallback(FixedString &str) {
             str += TheUI->CurrentScreen()->Name();
         }
         if (TheUI->InTransition()) {
-            str += "Trans: ";
+            str += " Trans: ";
             str += TransitionStateString(TheUI->GetTransitionState());
             str += " ";
             str += TheUI->TransitionScreen()->Name();
@@ -461,7 +461,7 @@ void UIManager::GotoScreenImpl(UIScreen *scr, bool b1, bool b2) {
 
 void UIManager::PopScreen(UIScreen *screen) {
     if (mPushedScreens.empty()) {
-        MILO_NOTIFY("No screen to pop\n");
+        MILO_NOTIFY("No screen to pop");
     } else {
         GotoScreenImpl(nullptr, false, false);
         mTransitionState = kTransitionPop;

@@ -459,7 +459,7 @@ void DxRnd::PerfCountersInit() {
 }
 
 void DxRnd::PerfCountersStart() {
-    MILO_ASSERT(mGsTiming == true, 0x249);
+    MILO_ASSERT(mGSTiming == true, 0x249);
     MILO_ASSERT(mCreatedPerfCounters == true, 0x24A);
     MILO_ASSERT(mGPUTimer != NULL, 0x24B);
     MILO_ASSERT(mPerfCounterStart != NULL, 0x24C);
@@ -469,7 +469,7 @@ void DxRnd::PerfCountersStart() {
 }
 
 void DxRnd::PerfCountersStop() {
-    MILO_ASSERT(mGsTiming == true, 0x25D);
+    MILO_ASSERT(mGSTiming == true, 0x25D);
     MILO_ASSERT(mCreatedPerfCounters == true, 0x25E);
     MILO_ASSERT(mGPUTimer != NULL, 0x25F);
     MILO_ASSERT(mPerfCounterStart != NULL, 0x260);
