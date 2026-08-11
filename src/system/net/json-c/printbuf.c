@@ -36,13 +36,13 @@ struct printbuf *printbuf_new(void)
 {
     struct printbuf *p;
 
-    p = (struct printbuf *)calloc(1, sizeof(struct printbuf));
+    p = (struct printbuf *)JsonCalloc(1, sizeof(struct printbuf));
     if (!p)
         return NULL;
     p->size = 32;
     p->bpos = 0;
     if (!(p->buf = (char *)JsonMalloc(p->size))) {
-        free(p);
+        ::operator delete(p);
         return NULL;
     }
     return p;
@@ -110,7 +110,7 @@ static int vasprintf(char **buf, const char *fmt, va_list ap)
     }
 
     if ((chars = vsprintf(b, fmt, ap)) < 0) {
-        free(b);
+        ::operator delete(b);
     } else {
         *buf = b;
     }
@@ -142,7 +142,7 @@ int sprintbuf(struct printbuf *p, const char *msg, ...)
         }
         va_end(ap);
         printbuf_memappend(p, t, size);
-        free(t);
+        ::operator delete(t);
         return size;
     } else {
         printbuf_memappend(p, buf, size);
@@ -159,8 +159,8 @@ void printbuf_reset(struct printbuf *p)
 void printbuf_free(struct printbuf *p)
 {
     if (p) {
-        free(p->buf);
-        free(p);
+        ::operator delete(p->buf);
+        ::operator delete(p);
     }
 }
 

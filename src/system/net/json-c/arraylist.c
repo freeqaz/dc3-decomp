@@ -30,14 +30,14 @@ struct array_list *array_list_new(array_list_free_fn *free_fn)
 {
     struct array_list *arr;
 
-    arr = (struct array_list *)calloc(1, sizeof(struct array_list));
+    arr = (struct array_list *)JsonCalloc(1, sizeof(struct array_list));
     if (!arr)
         return NULL;
     arr->size = ARRAY_LIST_DEFAULT_SIZE;
     arr->length = 0;
     arr->free_fn = free_fn;
-    if (!(arr->array = (void **)calloc(sizeof(void *), arr->size))) {
-        free(arr);
+    if (!(arr->array = (void **)JsonCalloc(sizeof(void *), arr->size))) {
+        ::operator delete(arr);
         return NULL;
     }
     return arr;
@@ -49,8 +49,8 @@ extern void array_list_free(struct array_list *arr)
     for (i = 0; i < arr->length; i++)
         if (arr->array[i])
             arr->free_fn(arr->array[i]);
-    free(arr->array);
-    free(arr);
+    ::operator delete(arr->array);
+    ::operator delete(arr);
 }
 
 void *array_list_get_idx(struct array_list *arr, int i)
