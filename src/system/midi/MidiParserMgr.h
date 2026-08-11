@@ -1,7 +1,7 @@
 #pragma once
 #include "midi\Midi.h"
 #include "midi\MidiParser.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include <vector>
 
 class GemListInterface; // forward dec

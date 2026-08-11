@@ -1,5 +1,5 @@
 #include "rndobj\MultiMeshProxy.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Mesh.h"
 
 #ifdef HX_NATIVE

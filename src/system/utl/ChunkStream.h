@@ -2,7 +2,7 @@
 #include "os\File.h"
 #include "os\Platform.h"
 #include "os\Timer.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\MemMgr.h"
 
 #define kChunkSizeMask 0x00ffffff

@@ -1,7 +1,7 @@
 #pragma once
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\File.h"
-#include "rndobj\Movie.h"
+#include "rndobj/Movie.h"
 #include "rndobj\SIVideo.h"
 
 class DxMovie : public RndMovie {

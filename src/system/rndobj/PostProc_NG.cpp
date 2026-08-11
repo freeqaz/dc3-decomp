@@ -3,8 +3,8 @@
 #include "Tex.h"
 #include "hamobj\HamDirector.h"
 #include "math\Color.h"
-#include "math\Rand.h"
-#include "obj\Object.h"
+#include "math/Rand.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "rnddx9\RenderState.h"
 #include "rndobj\Mat.h"
@@ -16,7 +16,7 @@
 #include "rndobj\VelocityBuffer.h"
 #include "rndobj\HiResScreen.h"
 #include "rndobj\ShaderMgr.h"
-#include "utl\Loader.h"
+#include "utl/Loader.h"
 #include "utl\MakeString.h"
 #include <math.h>
 

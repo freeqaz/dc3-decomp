@@ -1,9 +1,9 @@
 #pragma once
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Bitmap.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\FilePath.h"
-#include "utl\Loader.h"
+#include "utl/Loader.h"
 #include "utl\MemMgr.h"
 
 /**

@@ -2,7 +2,7 @@
 #include "hamobj\HamMove.h"
 #include "obj\Data.h"
 #include "obj\Dir.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Dir.h"
 #include "rndobj\Poll.h"
 #include "synth\Sound.h"

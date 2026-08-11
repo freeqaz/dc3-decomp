@@ -2,7 +2,7 @@
 #include "flow\PropertyEventProvider.h"
 #include "obj\Data.h"
 #include "obj\Msg.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 
 HamProviderPrinter::HamProviderPrinter() { TheHamProvider->AddSink(this); }
 

@@ -1,9 +1,9 @@
 #pragma once
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Dir.h"
 #include "rndobj\Group.h"
 #include "rndobj\Poll.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\MemMgr.h"
 
 class SharedGroup;

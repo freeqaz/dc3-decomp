@@ -1,10 +1,10 @@
 #include "char\CharBone.h"
 #include "char\CharBoneDir.h"
 #include "char\CharBones.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "rndobj\Trans.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 
 CharBone::CharBone()
     : mPositionContext(0), mScaleContext(0), mRotation(CharBones::TYPE_END),

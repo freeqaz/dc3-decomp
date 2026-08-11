@@ -2,7 +2,7 @@
 #include "obj\Data.h"
 #include "obj\DataFile.h"
 #include "obj\DataUtl.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\File.h"
 #include "os\System.h"
 #include "utl\MakeString.h"

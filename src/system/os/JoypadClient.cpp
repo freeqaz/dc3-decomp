@@ -1,6 +1,6 @@
 #include "os\JoypadClient.h"
 #include "JoypadClient.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "os\Joypad.h"
 #include "os\JoypadMsgs.h"

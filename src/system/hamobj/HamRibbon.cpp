@@ -1,8 +1,8 @@
 #include "hamobj\HamRibbon.h"
 #include "math\Mtx.h"
 #include "math\Rot.h"
-#include "obj\Object.h"
-#include "obj\Task.h"
+#include "obj/Object.h"
+#include "obj/Task.h"
 #include "os\Debug.h"
 #include "os\File.h"
 #include "os\System.h"
@@ -10,7 +10,7 @@
 #include "rndobj\Mesh.h"
 #include "rndobj\Poll.h"
 #include "rndobj\Trans.h"
-#include "utl\Loader.h"
+#include "utl/Loader.h"
 
 HamRibbon::HamRibbon()
     : mLastTime(-1), mNumSides(4), mMat(this), mWidth(1), mDirtyFlags(1), mActive(1),

@@ -3,7 +3,7 @@
 // Include this header in .cpp files that call ObjPtrVec::find/swap/sort/merge/unique/remove.
 #pragma once
 
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "utl\MemMgr.h"
 #include <algorithm>
 #include <vector>

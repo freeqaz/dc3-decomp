@@ -2,17 +2,17 @@
 #include "Tex.h"
 #include "math\Utl.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\File.h"
 #include "os\System.h"
 #include "os\Debug.h"
 #include "rndobj\Bitmap.h"
 #include "rndobj\Rnd.h"
 #include "rndobj\Utl.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\CRC.h"
 #include "utl\FilePath.h"
-#include "utl\Loader.h"
+#include "utl/Loader.h"
 
 bool UseBottomMip() {
     DataArray *found = SystemConfig("rnd")->FindArray("use_bottom_mip", false);

@@ -6,7 +6,7 @@
 #include "meta_ham\UIEventMgr.h"
 #include "obj\Data.h"
 #include "obj\Msg.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Memcard.h"
 #include "os\PlatformMgr.h"
 #include "utl\Cache.h"

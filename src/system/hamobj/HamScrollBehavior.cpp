@@ -5,7 +5,7 @@
 #include "gesture\GestureMgr.h"
 #include "obj\Data.h"
 #include "obj\Msg.h"
-#include "obj\Task.h"
+#include "obj/Task.h"
 #include "os\System.h"
 #include "rndobj\Anim.h"
 #include "ui\UI.h"

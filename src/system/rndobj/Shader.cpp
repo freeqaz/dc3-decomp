@@ -3,7 +3,7 @@
 #include "os\System.h"
 #include "rndobj\HiResScreen.h"
 #include "rnddx9\RenderState.h"
-#include "rndobj\Cam.h"
+#include "rndobj/Cam.h"
 #include "rndobj\Env.h"
 #include "rndobj\Mat_NG.h"
 #include "rndobj\Env_NG.h"
@@ -13,12 +13,12 @@
 #include "rndobj\Rnd_NG.h"
 #include "rndobj\ShaderMgr.h"
 #include "rndobj\ShaderOptions.h"
-#include "rndobj\ShaderProgram.h"
+#include "rndobj/ShaderProgram.h"
 #include "rndobj\Shockwave.h"
 #include "rndobj\Spline.h"
 #include "rndobj\Stats_NG.h"
 #include "math\Utl.h"
-#include "utl\Loader.h"
+#include "utl/Loader.h"
 #include "utl\Str.h"
 #include <set>
 
@@ -1257,7 +1257,7 @@ void RndShaderStandard::Select(RndMat *mat, ShaderType shader_type, bool b) {
         ((NgMat *)mat)->SetupShader(TheShaderMgr.AllowPerPixel(), true);
         CheckShadow();
         ShaderOptions opts(CalcShaderOpts((NgMat *)mat, shader_type, b));
-        MILO_ASSERT((shader_type == kStandardShader || shader_type == kStandardBBShader || shader_type == kAllWhiteShader), 0x4BB);
+        MILO_ASSERT((shader_type == kStandardShader) || (shader_type == kStandardBBShader) || (shader_type == kAllWhiteShader), 0x4BB);
         if (shader_type == kStandardBBShader) {
             shader_type = kStandardShader;
         }

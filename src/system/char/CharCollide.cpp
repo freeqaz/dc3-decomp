@@ -2,7 +2,7 @@
 #include "CharCollide.h"
 #include "math\Color.h"
 #include "math\Mtx.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Trans.h"
 #include "rndobj\Utl.h"
 

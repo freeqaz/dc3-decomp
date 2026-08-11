@@ -4,10 +4,10 @@
 #include "char\CharPollable.h"
 #include "char\CharWeightable.h"
 #include "math\Utl.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Highlight.h"
 #include "rndobj\Poll.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\MemMgr.h"
 
 /** "Class to play back clips, has a tree view of layers" */

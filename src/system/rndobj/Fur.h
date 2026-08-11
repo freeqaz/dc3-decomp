@@ -1,10 +1,10 @@
 #pragma once
 #include "math\Color.h"
-#include "obj\Object.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
+#include "obj/Object.h"
 #include "rndobj\Tex.h"
 #include "rndobj\Wind.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\MemMgr.h"
 
 // size 0x9c

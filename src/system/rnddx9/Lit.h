@@ -1,5 +1,5 @@
 #pragma once
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rnddx9\Object.h"
 #include "rndobj\Lit.h"
 #include "rndobj\Lit_NG.h"

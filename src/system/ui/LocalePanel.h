@@ -1,6 +1,6 @@
 #pragma once
 #include "obj\Dir.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "ui\UILabel.h"
 #include "ui\UIListProvider.h"
 #include "ui\UIPanel.h"

@@ -27,7 +27,7 @@ template ScopedState<bool, 1, 0>::~ScopedState();
 #include "os\NetworkSocket.h"
 #include "utl\Cheats.h"
 #include "utl\DataPointMgr.h"
-#include "utl\Loader.h"
+#include "utl/Loader.h"
 #include "utl\MemMgr.h"
 #include "utl\Option.h"
 #include "utl\TextFileStream.h"

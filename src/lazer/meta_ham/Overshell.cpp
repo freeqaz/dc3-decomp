@@ -8,7 +8,7 @@
 #include "meta_ham\HamUI.h"
 #include "obj\Dir.h"
 #include "obj\Msg.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "utl\Symbol.h"
 
 OvershellSlot::OvershellSlot(HamPlayerData &data)

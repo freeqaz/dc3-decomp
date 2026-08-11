@@ -1,10 +1,10 @@
 #include "Data.h"
 #include "obj\DataUtl.h"
 #include "obj\Dir.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
-#include "utl\BinStream.h"
-#include "utl\Loader.h"
+#include "utl/BinStream.h"
+#include "utl/Loader.h"
 #include "utl\Symbol.h"
 
 DataNode *TypeProps::KeyValue(Symbol key, bool fail) const {

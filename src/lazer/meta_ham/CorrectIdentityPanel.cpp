@@ -4,7 +4,7 @@
 #include "meta_ham\HamUI.h"
 #include "meta_ham\OverlayPanel.h"
 #include "meta_ham\SkeletonIdentifier.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "os\PlatformMgr.h"
 #include "ui\UILabel.h"

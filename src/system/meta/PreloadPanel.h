@@ -1,9 +1,9 @@
 #pragma once
 #include "meta\SongMgr.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\ContentMgr.h"
-#include "os\FileCache.h"
+#include "os/FileCache.h"
 #include "ui\UIPanel.h"
 #include "ui\UIScreen.h"
 #include "utl\Symbol.h"

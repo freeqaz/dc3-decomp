@@ -1,6 +1,6 @@
 #pragma once
 #include "utl\TextStream.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\File.h"
 
 class TextFile : public Hmx::Object, public TextStream {

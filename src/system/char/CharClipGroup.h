@@ -1,6 +1,6 @@
 #pragma once
 #include "char\CharClip.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "utl\MemMgr.h"
 
 /** "A related group of animations.  Gives you the lru one.  Usually no extension." */

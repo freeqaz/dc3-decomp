@@ -1,7 +1,7 @@
 #pragma once
 #include "os\Debug.h"
 #include "rnddx9\Rnd.h"
-#include "rndobj\OcclusionQueryMgr.h"
+#include "rndobj/OcclusionQueryMgr.h"
 #include "xdk\D3D9.h"
 #include "xdk\XAPILIB.h"
 #include "xdk\d3d9i\d3d9.h"

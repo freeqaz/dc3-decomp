@@ -1,6 +1,6 @@
 #include "hamobj\HamBattleData.h"
 #include "hamobj\HamCamShot.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 
 HamBattleData::HamBattleData() {}
 HamBattleData::~HamBattleData() {}

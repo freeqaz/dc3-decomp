@@ -7,11 +7,11 @@
 #include "net_ham\RCJobDingo.h"
 #include "obj\Data.h"
 #include "obj\Msg.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\ContentMgr.h"
 #include "os\DateTime.h"
 #include "utl\MemMgr.h"
-#include "utl\PseudoRandomPicker.h"
+#include "utl/PseudoRandomPicker.h"
 
 DECLARE_MESSAGE(SmartGlassMsg, "smart_glass_msg")
 SmartGlassMsg(int id, DataArray *a) : Message(Type(), id, a) {}

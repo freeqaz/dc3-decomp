@@ -3,7 +3,7 @@
 #include "TexLoadPanel.h"
 #include "meta_ham\MQSongSortMgr.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\DateTime.h"
 #include "ui\UILabel.h"
 #include "ui\UIListProvider.h"

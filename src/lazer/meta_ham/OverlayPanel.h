@@ -1,7 +1,7 @@
 #pragma once
 #include "meta_ham\HamPanel.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\PostProc.h"
 
 class OverlayPanel : public HamPanel {

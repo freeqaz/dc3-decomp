@@ -1,18 +1,18 @@
 #include "movie\Splash.h"
 #include "Splash.h"
-#include "obj\Object.h"
-#include "obj\Task.h"
+#include "obj/Object.h"
+#include "obj/Task.h"
 #include "os\Archive.h"
 #include "os\CritSec.h"
 #include "os\Debug.h"
 #include "os\System.h"
 #include "utl\MakeString.h"
 #include "rndobj\EventTrigger.h"
-#include "rndobj\Movie.h"
+#include "rndobj/Movie.h"
 #include "rndobj\Rnd_NG.h"
 #include "rndobj\Utl.h"
 #ifdef HX_NATIVE
-#include "rndobj\Cam.h"
+#include "rndobj/Cam.h"
 #endif
 #include "xdk\xapilibi\processthreadsapi.h"
 

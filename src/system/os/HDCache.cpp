@@ -7,7 +7,7 @@
 #include "os\File.h"
 #include "os\OSFuncs.h"
 #include "os\System.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\FileStream.h"
 #include "utl\HxGuid.h"
 #include "utl\MemStream.h"

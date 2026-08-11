@@ -3,7 +3,7 @@
 #include "gesture\JointUtl.h"
 #include "gesture\Skeleton.h"
 #include "math\Vec.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 
 HighFiveGestureFilter::HighFiveGestureFilter() : mHighFived(false) {}
 

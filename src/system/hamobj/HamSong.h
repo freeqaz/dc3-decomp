@@ -2,8 +2,8 @@
 #include "beatmatch\HxMaster.h"
 #include "beatmatch\HxSongData.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
-#include "utl\Song.h"
+#include "obj/Object.h"
+#include "utl/Song.h"
 #include "utl\Symbol.h"
 
 class HamSong : public Song {

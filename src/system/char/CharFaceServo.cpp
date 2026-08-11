@@ -2,7 +2,7 @@
 #include "char\CharBoneDir.h"
 #include "char\CharBonesMeshes.h"
 #include "obj\Dir.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Poll.h"
 
 CharFaceServo::CharFaceServo()

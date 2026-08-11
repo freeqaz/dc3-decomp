@@ -2,14 +2,14 @@
 #include "UIComponent.h"
 #include "math\Mtx.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "os\JoypadMsgs.h"
 #include "rndobj\Draw.h"
 #include "ui\UI.h"
 #include "ui\UIPanel.h"
 #include "ui\Utl.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\Symbol.h"
 
 UISlider::UISlider() : mSliderResource(this), mCurrent(0), mNumSteps(10), mVertical(0) {}

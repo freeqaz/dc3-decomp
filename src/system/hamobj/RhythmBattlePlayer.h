@@ -7,13 +7,13 @@
 #include "hamobj\TransConstraint.h"
 #include "obj\Data.h"
 #include "obj\Dir.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Anim.h"
 #include "rndobj\Dir.h"
 #include "rndobj\Part.h"
 #include "rndobj\Poll.h"
 #include "rndobj\Trans.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\Symbol.h"
 
 class RhythmBattle;

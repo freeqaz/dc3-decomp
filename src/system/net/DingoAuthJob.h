@@ -1,7 +1,7 @@
 #pragma once
 
 #include "net\DingoJob.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "utl\DataPointMgr.h"
 #include "utl\Str.h"
 

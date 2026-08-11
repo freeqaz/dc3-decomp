@@ -5,7 +5,7 @@
 #include "hamobj\SongLayout.h"
 #include "obj\Data.h"
 #include "obj\Dir.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include <map>
 #include <set>
 

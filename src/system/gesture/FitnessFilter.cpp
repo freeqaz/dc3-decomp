@@ -4,7 +4,7 @@
 #include "hamobj\HamGameData.h"
 #include "hamobj\HamPlayerData.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "rndobj\Overlay.h"
 #include "utl\Symbol.h"

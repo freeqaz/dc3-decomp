@@ -10,7 +10,7 @@
 #include "meta_ham\ShellInput.h"
 #include "obj\Data.h"
 #include "obj\Dir.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "os\JoypadMsgs.h"
 #include "rndobj\Draw.h"

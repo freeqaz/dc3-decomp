@@ -1,6 +1,6 @@
 #pragma once
 #include "obj\Dir.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Draw.h"
 #include "rndobj\Mesh.h"
 #include "rndobj\Poll.h"
@@ -8,10 +8,10 @@
 #include "math\Vec.h"
 #include "math\Mtx.h"
 #include "math\Color.h"
-#include "math\Geo.h"
+#include "math/Geo.h"
 #include "rndobj\TransAnim.h"
 #include <vector>
-#include "MultiMesh.h"
+#include "rndobj/MultiMesh.h"
 
 struct BuildPoly {
     BuildPoly();

@@ -1,9 +1,9 @@
-#include "rndobj\Movie.h"
-#include "obj\Object.h"
+#include "rndobj/Movie.h"
+#include "obj/Object.h"
 #include "os\File.h"
 #include "rndobj\Anim.h"
 #include "rndobj\Tex.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\FilePath.h"
 
 RndMovie::RndMovie() : mStream(false), mLoop(true), mTex(this) {}

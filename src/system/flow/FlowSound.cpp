@@ -5,7 +5,7 @@
 #include "flow\FlowNode.h"
 #include "flow\FlowPtr.h"
 #include "math\Decibels.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "synth\Sound.h"
 
 FlowSound::FlowSound()

@@ -1,13 +1,13 @@
 #include "synth\SynthSample.h"
 #include "Memory.h"
 #include "SampleData.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "os\Platform.h"
 #include "synth\SampleInst.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\BufStream.h"
-#include "utl\Loader.h"
+#include "utl/Loader.h"
 #include "utl\MemMgr.h"
 
 FileLoader *SynthSample::sLoader = nullptr;

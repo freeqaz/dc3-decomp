@@ -7,7 +7,7 @@
 #include "rndobj\Overlay.h"
 #include "utl\BeatMap.h"
 #include "utl\MBT.h"
-#include "utl\MeasureMap.h"
+#include "utl/MeasureMap.h"
 #include "utl\MemMgr.h"
 #include "utl\TempoMap.h"
 

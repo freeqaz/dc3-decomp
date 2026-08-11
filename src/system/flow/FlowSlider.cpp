@@ -6,8 +6,8 @@
 #include "flow\FlowValueCase.h"
 #include "flow\PropertyEventListener.h"
 #include "flow\Flow.h"
-#include "math\Easing.h"
-#include "obj\Object.h"
+#include "math/Easing.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 
 void FlowDistance::RequestStop() {

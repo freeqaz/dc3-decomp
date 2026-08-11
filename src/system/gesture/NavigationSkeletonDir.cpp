@@ -5,7 +5,7 @@
 #include "gesture\Skeleton.h"
 #include "gesture\SkeletonDir.h"
 #include "gesture\SkeletonViz.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Overlay.h"
 
 NavigationSkeletonDir::NavigationSkeletonDir() : mDirectionGestureFilter(nullptr) {}

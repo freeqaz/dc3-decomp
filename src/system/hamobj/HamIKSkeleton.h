@@ -2,7 +2,7 @@
 #include "char\CharPollable.h"
 #include "hamobj\HamCharacter.h"
 #include "obj\Dir.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Trans.h"
 #include "utl\MemMgr.h"
 

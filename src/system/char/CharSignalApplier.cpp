@@ -4,7 +4,7 @@
 #include "math\Mtx.h"
 #include "math\Rot.h"
 #include "math\Utl.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 
 CharSignalApplier::BoneOp::BoneOp(Hmx::Object *o) : mBone(o) {
     mOp = 0;

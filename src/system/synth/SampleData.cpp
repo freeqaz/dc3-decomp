@@ -2,7 +2,7 @@
 #include "synth\WavMgr.h"
 #include "os\Debug.h"
 #include "os\File.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\ChunkStream.h"
 #include "utl\WaveFile.h"
 #ifdef HX_NATIVE

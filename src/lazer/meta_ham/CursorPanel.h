@@ -1,7 +1,7 @@
 #pragma once
 #include "PassiveMessagesPanel.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 
 class CursorPanel : public PassiveMessagesPanel {
 public:

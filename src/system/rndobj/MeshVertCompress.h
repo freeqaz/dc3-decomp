@@ -1,7 +1,7 @@
 #pragma once
 #include "rndobj\Mesh.h"
 #include "math\Vec.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 
 struct CompressedVertex_Xbox {
     float mPosX;

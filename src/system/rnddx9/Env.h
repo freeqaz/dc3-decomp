@@ -1,5 +1,5 @@
 #pragma once
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Env_NG.h"
 
 class DxEnviron : public NgEnviron {

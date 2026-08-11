@@ -1,5 +1,5 @@
 #pragma once
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "utl\MemMgr.h"
 
 /** "Base class for any object that can have weight set on it,

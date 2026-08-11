@@ -1,6 +1,6 @@
 #include "hamobj\BustAMoveData.h"
-#include "obj\Object.h"
-#include "utl\BinStream.h"
+#include "obj/Object.h"
+#include "utl/BinStream.h"
 
 BustAMoveData::BustAMoveData() {}
 BustAMoveData::~BustAMoveData() {}

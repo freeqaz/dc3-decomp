@@ -1,7 +1,7 @@
 #pragma once
 #include "Playlist.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "ui\UILabel.h"
 #include "ui\UIListLabel.h"
 #include "ui\UIListProvider.h"

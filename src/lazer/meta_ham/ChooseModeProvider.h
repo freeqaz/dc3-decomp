@@ -1,6 +1,6 @@
 #pragma once
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Mat.h"
 #include "stl\_vector.h"
 #include "ui\UILabel.h"

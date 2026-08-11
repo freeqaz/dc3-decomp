@@ -2,7 +2,7 @@
 
 #include "obj\Data.h"
 #include "obj\DataFile.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\JoypadMsgs.h"
 #include "synth\Stream.h"
 #include "ui\UIListLabel.h"

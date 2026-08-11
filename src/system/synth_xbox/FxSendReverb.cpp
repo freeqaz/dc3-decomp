@@ -1,6 +1,6 @@
 #include "FxSendReverb.h"
 #include "FxSend.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "utl\Symbol.h"
 #include "xdk\xaudio2\xaudio2.h"

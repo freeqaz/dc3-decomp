@@ -2,11 +2,11 @@
 #include "char\CharClip.h"
 #include "obj\Data.h"
 #include "obj\Dir.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Anim.h"
 #include "rndobj\Dir.h"
 #include "rndobj\Draw.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\FilePath.h"
 #include "utl\MemMgr.h"
 

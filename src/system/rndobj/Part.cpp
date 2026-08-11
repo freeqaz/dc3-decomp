@@ -1,12 +1,12 @@
 #include "rndobj\Part.h"
-#include "math\Geo.h"
-#include "math\Rand.h"
+#include "math/Geo.h"
+#include "math/Rand.h"
 #include "math\Rot.h"
 #include "math\Trig.h"
 #include "obj\Data.h"
 #include "obj\DataFunc.h"
-#include "obj\Object.h"
-#include "obj\Task.h"
+#include "obj/Object.h"
+#include "obj/Task.h"
 #include "os\System.h"
 #include "os\Timer.h"
 #include "rndobj\Anim.h"
@@ -17,8 +17,8 @@
 #include "rndobj\Utl.h"
 #include "rndobj\Mat.h"
 #include "os\File.h"
-#include "utl\BinStream.h"
-#include "utl\Loader.h"
+#include "utl/BinStream.h"
+#include "utl/Loader.h"
 #include <cmath>
 
 PartOverride gNoPartOverride;

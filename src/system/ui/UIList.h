@@ -1,9 +1,9 @@
 #pragma once
-#include "UIListDir.h"
-#include "math\Geo.h"
+#include "ui/UIListDir.h"
+#include "math/Geo.h"
 #include "math\Mtx.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\JoypadMsgs.h"
 #include "os\User.h"
 #include "rndobj\Mesh.h"

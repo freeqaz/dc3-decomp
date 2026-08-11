@@ -2,7 +2,7 @@
 #include "HttpReq.h"
 #include "macros.h"
 #include "obj\Dir.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "utl\MemMgr.h"
 #include "utl\Symbol.h"

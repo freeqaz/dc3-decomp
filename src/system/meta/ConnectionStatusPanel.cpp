@@ -1,7 +1,7 @@
 #include "meta\ConnectionStatusPanel.h"
 #include "obj\Data.h"
 #include "obj\Msg.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\PlatformMgr.h"
 #include "ui\UIPanel.h"
 #include "utl\Symbol.h"

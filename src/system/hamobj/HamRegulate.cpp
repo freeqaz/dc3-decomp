@@ -7,10 +7,10 @@
 #include "math\Utl.h"
 #include "math\Vec.h"
 #include "obj\Dir.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\System.h"
 #include "rndobj\Poll.h"
-#include "utl\Loader.h"
+#include "utl/Loader.h"
 
 const float kConstFloats[2] = { 4, 4 };
 

@@ -3,7 +3,7 @@
 #include "HamPanel.h"
 #include "UIEventMgr.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "os\File.h"
 #include "os\Joypad.h"

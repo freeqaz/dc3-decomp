@@ -1,6 +1,6 @@
 #pragma once
 #include "FxSendMeterEffect.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Poll.h"
 #include "utl\MemMgr.h"
 

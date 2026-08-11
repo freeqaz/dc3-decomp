@@ -1,10 +1,10 @@
 #pragma once
 #include "math\Mtx.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Draw.h"
 #include "rndobj\Mesh.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\MemMgr.h"
 
 struct OldMMInst {

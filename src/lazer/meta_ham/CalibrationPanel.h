@@ -1,7 +1,7 @@
 #pragma once
 #include "meta_ham\HamPanel.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "stl\_vector.h"
 #include "synth\Stream.h"
 #include "ui\UIListProvider.h"

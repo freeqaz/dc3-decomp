@@ -1,5 +1,5 @@
 #include "hamobj\CrazeHollaback.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 
 CrazeHollaback::CrazeHollaback() {}
 

@@ -1,7 +1,7 @@
 #pragma once
 #include "obj\Data.h"
-#include "obj\Object.h"
-#include "os\FileCache.h"
+#include "obj/Object.h"
+#include "os/FileCache.h"
 #include "utl\Cache.h"
 #include "utl\NetCacheLoader.h"
 #include "utl\NetLoader.h"

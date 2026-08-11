@@ -11,7 +11,7 @@
 #include "meta_ham\SaveLoadManager.h"
 #include "obj\Data.h"
 #include "obj\Msg.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "ui\UILabel.h"
 #include "ui\UIListLabel.h"

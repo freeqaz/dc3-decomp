@@ -4,7 +4,7 @@
 #include "math\Utl.h"
 #include "math\Vec.h"
 #include "obj\Data.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\MemMgr.h"
 #include "utl\PoolAlloc.h"
 

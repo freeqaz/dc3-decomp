@@ -2,10 +2,10 @@
 #include "obj\DataFile.h"
 #include "obj\DataFunc.h"
 #include "obj\Dir.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "obj\TextFile.h"
 #include "utl\FilePath.h"
-#include "utl\Loader.h"
+#include "utl/Loader.h"
 #include "utl\Option.h"
 #include <map>
 

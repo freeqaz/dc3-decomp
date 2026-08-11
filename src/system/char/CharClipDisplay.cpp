@@ -1,8 +1,8 @@
 #include "char\CharClipDisplay.h"
 #include "char\CharBones.h"
 #include "char\CharIKFoot.h"
-#include "math\Geo.h"
-#include "obj\Object.h"
+#include "math/Geo.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "rndobj\Rnd.h"
 #include <cmath>

@@ -1,6 +1,6 @@
 #pragma once
 #include "utl\Str.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "xdk\XAPILIB.h"
 
 enum DateFormat {

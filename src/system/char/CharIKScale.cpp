@@ -2,7 +2,7 @@
 #include "char\CharWeightable.h"
 #include "math\Utl.h"
 #include "math\Vec.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Trans.h"
 
 CharIKScale::CharIKScale()

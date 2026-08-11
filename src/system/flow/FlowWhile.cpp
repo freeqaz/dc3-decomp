@@ -6,7 +6,7 @@
 #include "flow\FlowSwitchCase.h"
 #include "flow\PropertyEventListener.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Timer.h"
 
 FlowWhile::FlowWhile() : PropertyEventListener(this), mEntryCount(0) {}

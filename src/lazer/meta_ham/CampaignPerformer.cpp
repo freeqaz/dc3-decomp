@@ -19,7 +19,7 @@
 #include "meta_ham\ProfileMgr.h"
 #include "meta_ham\SongStatusMgr.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "utl\Symbol.h"
 

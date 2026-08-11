@@ -1,6 +1,6 @@
 #include "hamobj\MiniLeaderboardDisplay.h"
 #include "MiniLeaderboardDisplay.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "ui\LabelShrinkWrapper.h"
 #include "ui\UIComponent.h"

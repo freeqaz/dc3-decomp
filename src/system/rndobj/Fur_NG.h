@@ -1,6 +1,6 @@
 #pragma once
 
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Fur.h"
 #include "rndobj\Mat.h"
 #include "rndobj\Mesh.h"

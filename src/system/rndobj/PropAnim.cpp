@@ -1,12 +1,12 @@
 #include "rndobj\PropAnim.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "obj\Utl.h"
 #include "os\Debug.h"
 #include "rndobj\Anim.h"
 #include "rndobj\EventTrigger.h"
 #include "rndobj\PropKeys.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\Std.h"
 #ifdef HX_NATIVE
 #include <cstdlib>

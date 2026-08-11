@@ -442,7 +442,7 @@ void Voice::SetSendImpl(FxSend360 *send) {
 }
 
 void Voice::SafeRestart() {
-    MILO_ASSERT(mSourceVoice, 0x471);
+    MILO_ASSERT(GetVoice(), 0x471);
     int *pVoice = (int *)mSourceVoice;
     bool sync = mSynchronized != 0;
     ((void (*)(int *, int, bool))(*(int *)(*(int *)pVoice + 0x4c)))(pVoice, 0, sync);

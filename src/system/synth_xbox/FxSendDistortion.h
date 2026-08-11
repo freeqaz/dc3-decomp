@@ -1,6 +1,6 @@
 #pragma once
 #include "FxSend.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "synth\FxSendDistortion.h"
 #include "xdk\xapilibi\xbase.h"
 

@@ -14,7 +14,7 @@
 #include "gesture\SkeletonViz.h"
 #include "gesture\StreamRenderer.h"
 #include "gesture\WaveToTurnOnLight.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 
 void GestureTerminate() { StreamRenderer::Terminate(); }
 

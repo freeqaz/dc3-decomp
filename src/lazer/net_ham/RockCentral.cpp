@@ -8,7 +8,7 @@
 #include "net_ham\RCJobDingo.h"
 #include "obj\Dir.h"
 #include "obj\Msg.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "os\PlatformMgr.h"
 #include "os\System.h"

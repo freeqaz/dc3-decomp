@@ -4,7 +4,7 @@
 #include "macros.h"
 #include "meta_ham\AppLabel.h"
 #include "meta_ham\HamStoreProvider.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "ui\UILabel.h"
 #include "ui\UIListLabel.h"

@@ -7,7 +7,7 @@
 #include "meta_ham\TexLoadPanel.h"
 #include "meta_ham\VenueProvider.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\JoypadMsgs.h"
 #include "ui\UIComponent.h"
 #include "ui\UIPicture.h"

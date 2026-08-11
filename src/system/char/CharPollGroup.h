@@ -2,8 +2,8 @@
 #include "char\CharPollable.h"
 #include "char\CharWeightable.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
-#include "utl\BinStream.h"
+#include "obj/Object.h"
+#include "utl/BinStream.h"
 #include "utl\MemMgr.h"
 
 /** "Group of Charpollable, polled in the order given,

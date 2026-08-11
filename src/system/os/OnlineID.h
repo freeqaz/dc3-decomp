@@ -1,6 +1,6 @@
 #pragma once
 #include "types.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\MemMgr.h"
 #include "utl\Str.h"
 #include "xdk\XAPILIB.h"

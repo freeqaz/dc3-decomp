@@ -1,6 +1,6 @@
 #pragma once
-#include "obj\Object.h"
-#include "utl\BinStream.h"
+#include "obj/Object.h"
+#include "utl/BinStream.h"
 #include "utl\MemMgr.h"
 
 class ADSR; // forward declaration for ADSRImpl::Load

@@ -9,7 +9,7 @@
 #include "obj\Dir.h"
 #include "obj\MessageTimer.h"
 #include "obj\Msg.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "os\File.h"
 #include "os\Joypad.h"
@@ -18,7 +18,7 @@
 #include "os\Keyboard.h"
 #include "os\System.h"
 #include "os\UserMgr.h"
-#include "rndobj\Cam.h"
+#include "rndobj/Cam.h"
 #include "ui\CheatProvider.h"
 #include "ui\InlineHelp.h"
 #include "ui\LabelNumberTicker.h"
@@ -133,7 +133,7 @@ void FailAppendCallback(FixedString &str) {
             str += TheUI->CurrentScreen()->Name();
         }
         if (TheUI->InTransition()) {
-            str += "Trans: ";
+            str += " Trans: ";
             str += TransitionStateString(TheUI->GetTransitionState());
             str += " ";
             str += TheUI->TransitionScreen()->Name();
@@ -461,7 +461,7 @@ void UIManager::GotoScreenImpl(UIScreen *scr, bool b1, bool b2) {
 
 void UIManager::PopScreen(UIScreen *screen) {
     if (mPushedScreens.empty()) {
-        MILO_NOTIFY("No screen to pop\n");
+        MILO_NOTIFY("No screen to pop");
     } else {
         GotoScreenImpl(nullptr, false, false);
         mTransitionState = kTransitionPop;

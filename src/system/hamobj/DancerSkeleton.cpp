@@ -3,7 +3,7 @@
 #include "math\Mtx.h"
 #include "math\Vec.h"
 #include "os\Debug.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 
 DancerSkeleton::DancerSkeleton() {
     for (int i = 0; i < kNumBones; i++) {

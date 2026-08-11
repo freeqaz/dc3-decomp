@@ -4,7 +4,7 @@
 #include "net\DingoSvr.h"
 #include "net\SessionJobs_Xbox.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "os\PlatformMgr.h"
 #include "os\System.h"

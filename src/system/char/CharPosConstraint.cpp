@@ -1,5 +1,5 @@
 #include "char\CharPosConstraint.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 
 CharPosConstraint::CharPosConstraint()
     : mSrc(this), mTargets(this), mBox(Vector3(1, 1, 1), Vector3(-1, -1, -1)) {}

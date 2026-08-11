@@ -1,7 +1,7 @@
 #pragma once
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "synth\MoggClip.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 
 class MoggClipMap {
     friend bool PropSync(MoggClipMap &, DataNode &, DataArray *, int, PropOp);

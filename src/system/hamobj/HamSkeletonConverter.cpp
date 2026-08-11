@@ -9,7 +9,7 @@
 #include "math\Utl.h"
 #include "math\Vec.h"
 #include "obj\Dir.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "rndobj\Poll.h"
 #include "rndobj\Rnd.h"

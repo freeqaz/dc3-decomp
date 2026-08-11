@@ -2,7 +2,7 @@
 #include "HamSongMgr.h"
 #include "meta_ham\HamSongMgr.h"
 #include "meta_ham\HamProfile.h"
-#include "math\Rand.h"
+#include "math/Rand.h"
 #include "meta\FixedSizeSaveable.h"
 #include "meta\FixedSizeSaveableStream.h"
 #include "net_ham\DataMinerJobs.h"

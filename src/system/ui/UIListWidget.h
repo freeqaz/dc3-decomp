@@ -1,7 +1,7 @@
 #pragma once
 #include "math\Mtx.h"
 #include "math\Vec.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Mesh.h"
 #include "ui\UIColor.h"
 #include "ui\UIComponent.h"

@@ -1,5 +1,5 @@
 #include "rndobj\TransAnim.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Anim.h"
 #include "rndobj\Draw.h"
 #include "rndobj\Utl.h"

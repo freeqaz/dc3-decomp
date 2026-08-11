@@ -1,11 +1,11 @@
 #include "rndobj\MatAnim.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "os\File.h"
 #include "rndobj\Anim.h"
 #include "rndobj\Tex.h"
-#include "utl\BinStream.h"
-#include "utl\Loader.h"
+#include "utl/BinStream.h"
+#include "utl/Loader.h"
 
 Hmx::Object *RndMatAnim::sOwner;
 

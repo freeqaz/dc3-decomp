@@ -1,7 +1,7 @@
 #pragma once
 
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "ui\UIPanel.h"
 #include "utl\Symbol.h"
 

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "HamPanel.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "world\Instance.h"
 #include "ProfileMgr.h"
 #include "ui\UIListProvider.h"

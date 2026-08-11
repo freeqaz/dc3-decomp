@@ -1,8 +1,8 @@
 #pragma once
-#include "Object.h"
+#include "obj/Object.h"
 #include "obj\Dir.h" /* IWYU pragma: keep */
-#include "obj\Object.h"
-#include "utl\BinStream.h" /* IWYU pragma: keep */
+#include "obj/Object.h"
+#include "utl/BinStream.h" /* IWYU pragma: keep */
 #include "os\Debug.h" /* IWYU pragma: keep */
 #include "utl\PoolAlloc.h"
 #include <algorithm> /* IWYU pragma: keep */

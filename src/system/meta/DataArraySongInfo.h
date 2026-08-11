@@ -1,7 +1,7 @@
 #pragma once
 #include "utl\SongInfoCopy.h"
 #include "obj\Data.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 
 /** Song metadata contained inside the (song ) DataArray in a songs.dta (pans, vols,
  * cores, etc). */

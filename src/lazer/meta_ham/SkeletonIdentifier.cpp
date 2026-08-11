@@ -15,7 +15,7 @@ template int sprintf_s<200>(char (&)[200], const char *, ...);
 #include "meta_ham\ProfileMgr.h"
 #include "obj\Data.h"
 #include "obj\Dir.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "os\PlatformMgr.h"
 #include "utl\Locale.h"

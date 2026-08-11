@@ -1,5 +1,5 @@
 #pragma once
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rnddx9\Object.h"
 #include "rndobj\Tex.h"
 #include "xdk\D3D9.h"

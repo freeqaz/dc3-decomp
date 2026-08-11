@@ -1,7 +1,7 @@
 #pragma once
 #include "net_ham\RockCentral.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Tex.h"
 #include "ui\UIPanel.h"
 #include "xdk\XAPILIB.h"

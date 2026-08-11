@@ -8,11 +8,11 @@
 #include "math\Rot.h"
 #include "math\Vec.h"
 #include "obj\Dir.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "rndobj\Poll.h"
 #include "rndobj\Trans.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\Str.h"
 
 #ifdef HX_NATIVE

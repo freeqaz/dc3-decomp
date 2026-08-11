@@ -14,7 +14,7 @@
 #include "meta_ham\NavListNode.h"
 #include "meta_ham\NavListSort.h"
 #include "meta_ham\ProfileMgr.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\ContentMgr.h"
 #include "os\Debug.h"
 #include "ui\UIListCustom.h"

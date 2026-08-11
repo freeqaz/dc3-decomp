@@ -2,7 +2,7 @@
 #include "hamobj\DanceRemixer.h"
 #include "hamobj\Difficulty.h"
 #include "hamobj\MoveGraph.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "utl\MemMgr.h"
 
 class OriginalChoreoRemixer : public DanceRemixer {

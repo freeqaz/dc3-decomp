@@ -3,7 +3,7 @@
 #include "hamobj\HamMove.h"
 #include "hamobj\PracticeSection.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Dir.h"
 #include "rndobj\Mat.h"
 #include "ui\UIListProvider.h"

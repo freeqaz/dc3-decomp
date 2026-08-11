@@ -1,7 +1,7 @@
 #include "world\LightPresetManager.h"
 #include "world\Dir.h"
 #include "math\Utl.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 
 void PrintPreset(const char *str, LightPreset *preset) {
     if (preset) {

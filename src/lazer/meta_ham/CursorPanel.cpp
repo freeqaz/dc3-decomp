@@ -9,7 +9,7 @@
 #include "meta_ham\PassiveMessagesPanel.h"
 #include "net_ham\RockCentral.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "rndobj\Mat.h"
 #include "rndobj\Tex.h"

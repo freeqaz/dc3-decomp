@@ -1,7 +1,7 @@
 #include "rndobj\PartLauncher.h"
-#include "math\Rand.h"
-#include "obj\Object.h"
-#include "rndobj\MultiMesh.h"
+#include "math/Rand.h"
+#include "obj/Object.h"
+#include "rndobj/MultiMesh.h"
 #include "rndobj\Poll.h"
 
 RndPartLauncher::RndPartLauncher()

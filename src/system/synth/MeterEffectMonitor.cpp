@@ -1,6 +1,6 @@
 #include "synth\MeterEffectMonitor.h"
 #include "obj\Msg.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Poll.h"
 
 MeterEffectMonitor::MeterEffectMonitor() : mMeterEffect(this), mLastData0(0), mLastData1(0) {}

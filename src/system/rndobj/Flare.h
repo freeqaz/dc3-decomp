@@ -1,7 +1,7 @@
 #pragma once
-#include "math\Geo.h"
+#include "math/Geo.h"
 #include "math\Vec.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Draw.h"
 #include "rndobj\Mat.h"
 #include "rndobj\Trans.h"

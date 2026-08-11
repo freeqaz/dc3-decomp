@@ -1,6 +1,6 @@
 #pragma once
 #include "os\NetworkSocket.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 
 /**
  * @brief BinStream implementation that handles networking.

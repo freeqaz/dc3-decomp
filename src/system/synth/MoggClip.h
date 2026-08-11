@@ -1,10 +1,10 @@
 #pragma once
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "synth\Faders.h"
 #include "synth\FxSend.h"
 #include "synth\PlayableSample.h"
 #include "synth\StandardStream.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\FilePath.h"
 #include "utl\MemMgr.h"
 

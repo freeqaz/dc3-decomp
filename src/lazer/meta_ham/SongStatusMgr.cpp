@@ -6,11 +6,11 @@
 #include "obj\DataFunc.h"
 #include "obj\Dir.h"
 #include "obj\Msg.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\ContentMgr.h"
 #include "os\DateTime.h"
 #include "os\Debug.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\Symbol.h"
 
 #ifdef HX_NATIVE

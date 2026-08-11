@@ -1,7 +1,7 @@
 #pragma once
 #include "meta_ham\HamScreen.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\PlatformMgr.h"
 #include "ui\UI.h"
 #include "ui\UIScreen.h"

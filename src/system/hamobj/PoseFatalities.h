@@ -5,7 +5,7 @@
 #include "gesture\Skeleton.h"
 #include "hamobj\HamLabel.h"
 #include "obj\Dir.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Anim.h"
 #include "utl\MemMgr.h"
 

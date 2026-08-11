@@ -1,6 +1,6 @@
 #include "movie\MovieImpl.h"
 #include "os\Debug.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 
 bool MovieImpl::BeginFromFile(
     char const *c,

@@ -1,6 +1,6 @@
 #pragma once
 #include "char\Character.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Draw.h"
 #include "rndobj\Mat.h"
 #include "rndobj\Mesh.h"

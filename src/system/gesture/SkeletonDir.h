@@ -1,7 +1,7 @@
 #pragma once
 #include "gesture\Skeleton.h"
 #include "gesture\SkeletonClip.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "ui\PanelDir.h"
 #include "utl\MemMgr.h"
 

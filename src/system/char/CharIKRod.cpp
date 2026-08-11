@@ -1,6 +1,6 @@
 #include "char\CharIKRod.h"
-#include "obj\Object.h"
-#include "utl\BinStream.h"
+#include "obj/Object.h"
+#include "utl/BinStream.h"
 
 CharIKRod::CharIKRod()
     : mLeftEnd(this), mRightEnd(this), mDestPos(0.5), mSideAxis(this), mVertical(0),

@@ -1,8 +1,8 @@
 #include "hamobj\HamList.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Anim.h"
 #include "ui\UIList.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 
 HamList::HamList() {}
 

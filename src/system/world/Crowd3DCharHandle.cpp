@@ -1,5 +1,5 @@
 #include "world\Crowd3DCharHandle.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 
 #ifdef HX_NATIVE
 WorldCrowd3DCharHandle::WorldCrowd3DCharHandle() : mCrowd(0), mCharItr(), mCharIdx(-1) {}

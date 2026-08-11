@@ -6,7 +6,7 @@
 #endif
 #include "obj\Data.h"
 #include "obj\Dir.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "rndobj\Anim.h"
 #include "rndobj\Draw.h"
@@ -17,9 +17,9 @@
 #include "rndobj\PostProc.h"
 #include "rndobj\Trans.h"
 #include "rndobj\Utl.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\FilePath.h"
-#include "utl\Loader.h"
+#include "utl/Loader.h"
 #include "utl\MemMgr.h"
 
 RndDir::RndDir() : mEnv(this) {}

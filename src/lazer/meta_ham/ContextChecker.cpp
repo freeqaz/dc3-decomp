@@ -4,7 +4,7 @@
 #include "hamobj\Difficulty.h"
 #include "hamobj\HamGameData.h"
 #include "hamobj\HamPlayerData.h"
-#include "math\Rand.h"
+#include "math/Rand.h"
 #include "meta_ham\CampaignPerformer.h"
 #include "meta_ham\ProfileMgr.h"
 #include "obj\Data.h"

@@ -1,7 +1,7 @@
 #pragma once
-#include "math\Key.h"
+#include "math/Key.h"
 #include "math\Mtx.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Draw.h"
 #include "rndobj\Mat.h"
 #include "rndobj\Mesh.h"

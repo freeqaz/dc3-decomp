@@ -1,7 +1,7 @@
 #include "world\SpotlightEnder.h"
 #include "SpotlightDrawer.h"
 #include "SpotlightEnder.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Draw.h"
 
 SpotlightEnder::SpotlightEnder() { mOrder = -900; }

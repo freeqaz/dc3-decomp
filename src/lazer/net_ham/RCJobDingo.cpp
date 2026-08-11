@@ -1,6 +1,6 @@
 #include "net_ham\RCJobDingo.h"
 #include "net\DingoJob.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 
 RCJob::RCJob(const char *url, Hmx::Object *callback) : DingoJob(url, callback) {}
 RCJob::~RCJob() {}

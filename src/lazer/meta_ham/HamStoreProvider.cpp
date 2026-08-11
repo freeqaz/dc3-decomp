@@ -6,7 +6,7 @@
 #include "meta_ham\HamStorePanel.h"
 #include "meta_ham\HamUI.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "stl\_algo.h"
 #include "ui\UILabel.h"

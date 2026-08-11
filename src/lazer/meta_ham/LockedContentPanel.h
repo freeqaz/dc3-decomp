@@ -2,7 +2,7 @@
 #include "HamPanel.h"
 #include "hamobj\Difficulty.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "synth\Sound.h"
 #include "utl\Symbol.h"
 

@@ -1,6 +1,6 @@
 #include "char\CharTransDraw.h"
 #include "char\Character.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Draw.h"
 #include "utl\Std.h"
 

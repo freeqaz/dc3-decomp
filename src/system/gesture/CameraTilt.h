@@ -1,5 +1,5 @@
 #pragma once
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Timer.h"
 #include "ui\UI.h"
 #include "xdk\XAPILIB.h"

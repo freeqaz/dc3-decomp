@@ -1,11 +1,11 @@
 #include "ui\UIComponent.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\System.h"
 #include "rndobj\Draw.h"
 #include "rndobj\Poll.h"
 #include "rndobj\Trans.h"
 #include "ui\UI.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 
 int UIComponent::sSelectFrames = 0;
 

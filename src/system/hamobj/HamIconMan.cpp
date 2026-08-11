@@ -2,8 +2,8 @@
 #include "hamobj\Difficulty.h"
 #include "hamobj\HamDirector.h"
 #include "hamobj\SongUtl.h"
-#include "obj\Object.h"
-#include "obj\Task.h"
+#include "obj/Object.h"
+#include "obj/Task.h"
 #include "rndobj\Anim.h"
 #include "rndobj\Draw.h"
 

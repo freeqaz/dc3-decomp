@@ -5,7 +5,7 @@
 #include "flow\DrivenPropertyMathOps.h"
 #include "flow\FlowNode.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 
 FlowSwitch::FlowSwitch() : mFirstValidCaseOnly(1) { mPreviousValue = DataNode(kDataUndef, 0); }
 FlowSwitch::~FlowSwitch() {}

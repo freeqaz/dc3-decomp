@@ -4,11 +4,11 @@
 #include "math\Utl.h"
 #include "math\Vec.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Rnd.h"
 #include "rndobj\Tex.h"
 #include "rndobj\Trans.h"
-#include "math\Geo.h"
+#include "math/Geo.h"
 #include "utl\MemMgr.h"
 
 class RndCam : public RndTransformable {

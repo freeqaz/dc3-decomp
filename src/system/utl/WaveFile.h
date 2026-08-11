@@ -1,6 +1,6 @@
 #pragma once
-#include "utl\BinStream.h"
-#include "utl\Chunks.h"
+#include "utl/BinStream.h"
+#include "utl/Chunks.h"
 #include "synth\SampleData.h"
 #include <vector>
 

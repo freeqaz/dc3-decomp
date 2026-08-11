@@ -5,7 +5,7 @@
 #include "gesture\Skeleton.h"
 #include "gesture\SkeletonViz.h"
 #include "gesture\StandingStillGestureFilter.h"
-#include "obj\Task.h"
+#include "obj/Task.h"
 #include "rndobj\Overlay.h"
 
 float DirectionGestureFilter::sLastSwipeTime[6] = { -100, -100, -100, -100, -100, -100 };

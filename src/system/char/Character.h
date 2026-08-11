@@ -4,7 +4,7 @@
 #include "math\Sphere.h"
 #include "obj\Data.h"
 #include "obj\Dir.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Dir.h"
 #include "rndobj\Draw.h"
 #include "rndobj\Env.h"

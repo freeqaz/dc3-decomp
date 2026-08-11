@@ -8,7 +8,7 @@
 #include "hamobj\MoveDir.h"
 #include "meta_ham\Overshell.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "obj\Msg.h"
 #include "utl\MultiTempoTempoMap.h"
 #include "utl\SongInfoCopy.h"

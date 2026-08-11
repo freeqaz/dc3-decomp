@@ -1,5 +1,5 @@
 #pragma once
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "ui\UILabel.h"
 #include "os\JoypadMsgs.h"
 #include "utl\MemMgr.h"

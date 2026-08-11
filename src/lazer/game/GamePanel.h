@@ -2,7 +2,7 @@
 #include "game\Game.h"
 #include "gesture\FitnessFilter.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Timer.h"
 #include "rndobj\Overlay.h"
 #include "ui\UIPanel.h"

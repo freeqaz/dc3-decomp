@@ -1,6 +1,6 @@
 #include "hamobj\CharFeedback.h"
-#include "obj\Object.h"
-#include "obj\Task.h"
+#include "obj/Object.h"
+#include "obj/Task.h"
 #include "os\Debug.h"
 #include "rndobj\Anim.h"
 #include "rndobj\Draw.h"
@@ -9,7 +9,7 @@
 #include "rndobj\Mesh.h"
 #include "rndobj\Poll.h"
 #include "ui\UIColor.h"
-#include "utl\Loader.h"
+#include "utl/Loader.h"
 
 bool CharFeedback::sEnabled = true;
 

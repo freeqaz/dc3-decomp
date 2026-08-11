@@ -1,7 +1,7 @@
 #pragma once
-#include "math\Rand.h"
+#include "math/Rand.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "utl\MemMgr.h"
 #include "utl\Symbol.h"
 #include "world\CameraShot.h"

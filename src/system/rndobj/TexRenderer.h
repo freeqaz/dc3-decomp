@@ -1,9 +1,9 @@
 #pragma once
 #include "math\Vec.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Anim.h"
-#include "rndobj\Cam.h"
+#include "rndobj/Cam.h"
 #include "rndobj\Draw.h"
 #include "rndobj\Env.h"
 #include "rndobj\Poll.h"

@@ -7,8 +7,8 @@
 #include "net_ham\WebLinkJobs.h"
 #include "obj\Data.h"
 #include "obj\Msg.h"
-#include "obj\Object.h"
-#include "utl\JobMgr.h"
+#include "obj/Object.h"
+#include "utl/JobMgr.h"
 #include "utl\Symbol.h"
 #include "xdk\win_types.h"
 

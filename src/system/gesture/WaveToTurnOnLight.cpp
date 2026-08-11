@@ -3,7 +3,7 @@
 #include "hamobj\HamDirector.h"
 #include "obj\Dir.h"
 #include "obj\Msg.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "xdk\NUI.h"
 #include "xdk\xapilibi\winerror.h"

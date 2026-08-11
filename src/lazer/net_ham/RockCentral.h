@@ -6,7 +6,7 @@
 #include "net_ham\RCJobDingo.h"
 #include "obj\Data.h"
 #include "obj\Msg.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Timer.h"
 #include "rndobj\Bitmap.h"
 #include "rndobj\Tex.h"

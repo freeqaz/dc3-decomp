@@ -3,7 +3,7 @@
 #include "ContentMgr_Xbox.h"
 #include "meta\ConnectionStatusPanel.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\ContentMgr.h"
 #include "os\Debug.h"
 #include "os\PlatformMgr.h"

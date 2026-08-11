@@ -1,11 +1,11 @@
 #pragma once
 #include "math\Mtx.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Anim.h"
 #include "rndobj\Draw.h"
 #include "rndobj\Mesh.h"
-#include "rndobj\MultiMesh.h"
+#include "rndobj/MultiMesh.h"
 #include "rndobj\Part.h"
 #include "rndobj\Trans.h"
 #include "rndobj\TransAnim.h"

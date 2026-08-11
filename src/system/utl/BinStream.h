@@ -1,7 +1,7 @@
 #pragma once
 #include "utl\MemMgr.h"
 #include <types.h>
-#include "math\Rand2.h"
+#include "math/Rand2.h"
 #include "os\Platform.h"
 #include "utl\Symbol.h"
 #include "utl\Str.h"

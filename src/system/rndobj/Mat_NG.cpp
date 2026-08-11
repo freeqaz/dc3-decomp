@@ -7,7 +7,7 @@
 #include "os\Debug.h"
 #include "rnddx9\RenderState.h"
 #include "rndobj\BaseMaterial.h"
-#include "rndobj\Cam.h"
+#include "rndobj/Cam.h"
 #include "rndobj\Env.h"
 #include "rndobj\HiResScreen.h"
 #include "rndobj\Rnd.h"

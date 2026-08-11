@@ -6,10 +6,10 @@
 #include "math\Utl.h"
 #include "obj\Data.h"
 #include "os\Debug.h"
-#include "os\Endian.h"
+#include "os/Endian.h"
 #include "os\File.h"
 #include "os\System.h"
-#include "utl\Loader.h"
+#include "utl/Loader.h"
 #include "utl\MemMgr.h"
 #include "utl\Str.h"
 

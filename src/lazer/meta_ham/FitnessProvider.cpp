@@ -2,7 +2,7 @@
 #include "FitnessProvider.h"
 #include "HamProfile.h"
 #include "ProfileMgr.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "ui\UILabel.h"
 #include "ui\UIListLabel.h"

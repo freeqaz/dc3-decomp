@@ -3,7 +3,7 @@
 #include "char\Character.h"
 #include "char\Waypoint.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Graph.h"
 #include <vector>
 #include "utl\MemMgr.h"

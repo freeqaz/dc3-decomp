@@ -2,7 +2,7 @@
 #include "meta\FixedSizeSaveableStream.h"
 #include "obj\Data.h"
 #include "obj\Msg.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "meta_ham\HamProfile.h"
 #include "game\HamUser.h"
 #include "os\Joypad.h"

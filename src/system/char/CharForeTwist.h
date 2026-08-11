@@ -1,6 +1,6 @@
 #pragma once
 #include "char\CharPollable.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Highlight.h"
 #include "rndobj\Trans.h"
 #include "utl\MemMgr.h"

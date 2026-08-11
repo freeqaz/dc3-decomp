@@ -1,12 +1,12 @@
 #pragma once
-#include "math\Geo.h"
-#include "obj\Object.h"
+#include "math/Geo.h"
+#include "obj/Object.h"
 #include "rndobj\Bitmap.h"
 #include "rndobj\FontBase.h"
 #include "rndobj\Mat.h"
 #include "rndobj\Mesh.h"
 #include "rndobj\Tex.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\MemMgr.h"
 
 class KerningTable {

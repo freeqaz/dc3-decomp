@@ -1,5 +1,5 @@
 #include "ui\UIListLabel.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "rndobj\Utl.h"
 #include "ui\UILabel.h"

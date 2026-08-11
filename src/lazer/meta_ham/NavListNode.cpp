@@ -4,7 +4,7 @@
 #include "game\GameMode.h"
 #include "meta_ham\HamStarsDisplay.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "rndobj\Mat.h"
 #include "ui\UILabel.h"

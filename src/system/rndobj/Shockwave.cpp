@@ -1,9 +1,9 @@
 #include "rndobj\Shockwave.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Poll.h"
 #include "rndobj\ShaderMgr.h"
 #include "rndobj\Trans.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 
 RndShockwave *RndShockwave::sSelected = nullptr;
 static const float sWavelength = 10;

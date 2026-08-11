@@ -2,8 +2,8 @@
 #include "DancerSkeleton.h"
 #include "gesture\BaseSkeleton.h"
 #include "hamobj\MoveDir.h"
-#include "math\Key.h"
-#include "obj\Object.h"
+#include "math/Key.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "rndobj\Anim.h"
 

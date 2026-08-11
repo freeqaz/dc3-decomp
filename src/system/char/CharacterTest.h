@@ -6,8 +6,8 @@
 #include "char\CharDriver.h"
 #include "obj\Data.h"
 #include "rndobj\Overlay.h"
-#include "obj\Object.h"
-#include "utl\BinStream.h"
+#include "obj/Object.h"
+#include "utl/BinStream.h"
 
 class Character;
 

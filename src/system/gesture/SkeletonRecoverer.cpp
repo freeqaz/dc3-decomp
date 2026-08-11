@@ -1,7 +1,7 @@
 #include "gesture\SkeletonRecoverer.h"
 #include "gesture\GestureMgr.h"
 #include "gesture\Skeleton.h"
-#include "obj\Task.h"
+#include "obj/Task.h"
 #include "utl\Std.h"
 #include <cfloat>
 

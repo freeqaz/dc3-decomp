@@ -1,7 +1,7 @@
 #include "ui\UIListSlot.h"
 #include "macros.h"
 #include "math\Color.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "ui\UIList.h"
 #include "ui\UIListState.h"
 #include "ui\UIListWidget.h"

@@ -3,7 +3,7 @@
 #include "Lit.h"
 #include "math\Vec.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Timer.h"
 #include "rndobj\ColorXfm.h"
 #include "rndobj\Draw.h"

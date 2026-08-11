@@ -1,6 +1,6 @@
 #pragma once
 #include "rndobj\Anim.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "utl\MemMgr.h"
 
 /**

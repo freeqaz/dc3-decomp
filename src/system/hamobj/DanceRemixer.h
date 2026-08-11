@@ -2,7 +2,7 @@
 #include "hamobj\HamMove.h"
 #include "hamobj\MoveGraph.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "utl\MemMgr.h"
 #include <set>
 

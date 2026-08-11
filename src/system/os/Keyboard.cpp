@@ -1,6 +1,6 @@
 #include "os\Keyboard.h"
-#include "obj\Object.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
+#include "obj/Object.h"
 
 Hmx::Object *gSource;
 ObjPtr<Hmx::Object> gOverride(0, 0);

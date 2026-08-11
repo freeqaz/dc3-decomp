@@ -1,6 +1,6 @@
 #pragma once
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Dir.h"
 #include "rndobj\Mesh.h"
 #include "utl\MemMgr.h"

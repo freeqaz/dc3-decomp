@@ -1,7 +1,7 @@
 #pragma once
 #include "math\Color.h"
 #include "math\Utl.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "rndobj\Draw.h"
 #include "rndobj\FontBase.h"
@@ -11,7 +11,7 @@
 #include "rndobj\Trans.h"
 #include "utl\MemMgr.h"
 #include "utl\Symbol.h"
-#include "utl\StlAlloc.h"
+#include "utl/StlAlloc.h"
 
 #ifndef HX_NATIVE
 using stlpmtx_std::StlNodeAlloc;

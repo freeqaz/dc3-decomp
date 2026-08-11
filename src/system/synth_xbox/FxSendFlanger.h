@@ -1,6 +1,6 @@
 #pragma once
 #include "FxSend.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "synth\FxSendFlanger.h"
 #include "xdk\xaudio2\xaudio2.h"
 

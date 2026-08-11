@@ -1,6 +1,6 @@
 #include "meta\HAQManager.h"
 #include "HAQManager.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "ui\UI.h"
 #include "ui\UIComponent.h"

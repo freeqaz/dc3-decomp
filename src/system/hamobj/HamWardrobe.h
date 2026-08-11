@@ -3,7 +3,7 @@
 #include "hamobj\HamCharacter.h"
 #include "obj\Data.h"
 #include "obj\Dir.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Overlay.h"
 #include "utl\MemMgr.h"
 

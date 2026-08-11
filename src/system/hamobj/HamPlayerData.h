@@ -3,7 +3,7 @@
 #include "gesture\BaseSkeleton.h"
 #include "gesture\Skeleton.h"
 #include "hamobj\Difficulty.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "stl\_vector.h"
 #include "utl\Str.h"
 #include "utl\Symbol.h"

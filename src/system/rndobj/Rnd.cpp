@@ -13,7 +13,7 @@
 #include "rndobj\Shockwave.h"
 #include "rndobj\SoftParticles.h"
 #include "rndobj\Spline.h"
-#include "rndobj\TexBlendController.h"
+#include "rndobj/TexBlendController.h"
 #include "rndobj\TexBlender.h"
 #include "math\Color.h"
 #include "obj\DataFunc.h"
@@ -25,7 +25,7 @@
 #include "os\Timer.h"
 #include "rndobj\AnimFilter.h"
 #include "rndobj\BaseMaterial.h"
-#include "rndobj\Cam.h"
+#include "rndobj/Cam.h"
 #include "rndobj\Console.h"
 #include "rndobj\CubeTex.h"
 #include "rndobj\DOFProc.h"
@@ -49,8 +49,8 @@
 #include "rndobj\MeshAnim.h"
 #include "rndobj\MeshDeform.h"
 #include "rndobj\MetaMaterial.h"
-#include "rndobj\Movie.h"
-#include "rndobj\MultiMesh.h"
+#include "rndobj/Movie.h"
+#include "rndobj/MultiMesh.h"
 #include "rndobj\MultiMeshProxy.h"
 #include "rndobj\Part.h"
 #include "rndobj\PartAnim.h"
@@ -62,14 +62,14 @@
 #include "rndobj\Tex.h"
 #include "rnddx9\Tex.h"
 #include "rndobj\TexProc.h"
-#include "rndobj\TexRenderer.h"
+#include "rndobj/TexRenderer.h"
 #include "rndobj\Text.h"
 #include "rndobj\Trans.h"
 #include "rndobj\TransAnim.h"
 #include "rndobj\TransProxy.h"
 #include "rndobj\Utl.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Bitmap.h"
 #include "rndobj\Overlay.h"
 #include "rndobj\PostProc.h"
@@ -150,7 +150,7 @@ Rnd::Rnd()
       mWatchOverlay(0), mStatsOverlay(0), mDefaultMat(0), mOverlayMat(0), mOverdrawMat(0),
       mDefaultCam(0), mWorldCamCopy(0), mDefaultEnv(0), mDefaultLit(0), mDefaultCubeTexBlack(nullptr),
       mDefaultCubeTexWhite(nullptr), mRateTotal(0), mRateCount(5), mFrameID(0), mRateGate("    "),
-      mFont(nullptr), mSync(1), mGsTiming(0), mShowSafeArea(0), mDrawing(0),
+      mFont(nullptr), mSync(1), mGSTiming(0), mShowSafeArea(0), mDrawing(0),
       mWorldEnded(1), mAspect(kWidescreen), mDrawMode(kDrawNormal), mResourceCached(0), mShowShaderCost(0),
       mShrinkToSafe(1), mInGame(0), mVerboseTimers(0), mDisablePostProc(0), unk146(0),
       mWorldCamCopied(0), unk148(0), mWorldEndCallback(0), unk150(0), mPostProcOverride(this),
@@ -379,7 +379,7 @@ void Rnd::PreInit() {
     mConsole = new RndConsole();
     mWorldEnded = true;
     mDrawing = false;
-    mGsTiming = mTimersOverlay->Showing();
+    mGSTiming = mTimersOverlay->Showing();
     CreateDefaults();
     InitParticleSystem();
     DataRegisterFunc("keep_going", FailKeepGoing);

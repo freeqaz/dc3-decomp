@@ -1,7 +1,7 @@
 #include "hamobj\HamDriver.h"
 
 #include "char\CharClipDisplay.h"
-#include "math\Easing.h"
+#include "math/Easing.h"
 #include "utl\TimeConversion.h"
 #include "char\Char.h"
 #include "char\CharBones.h"
@@ -9,9 +9,9 @@
 #include "char\CharPollable.h"
 #include "char\CharWeightable.h"
 #include "math\Utl.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Rnd.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 
 HamDriver::HamDriver() : mBones(this), mDisplayBeat(-kHugeFloat) {}
 

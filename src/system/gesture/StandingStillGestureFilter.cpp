@@ -3,7 +3,7 @@
 #include "gesture\GestureMgr.h"
 #include "gesture\Skeleton.h"
 #include "math\Vec.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 
 StandingStillGestureFilter::StandingStillGestureFilter()
     : mRequiredMs(500), mForwardFacingCutoff(0.4f), unk48(false) {

@@ -8,7 +8,7 @@
 #include "meta_ham\MetaPerformer.h"
 #include "meta_ham\SongSortMgr.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "os\System.h"
 #include "rndobj\Overlay.h"

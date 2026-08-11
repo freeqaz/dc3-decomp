@@ -2,10 +2,10 @@
 #include "math\Utl.h"
 #include "obj\Data.h"
 #include "obj\Msg.h"
-#include "obj\Object.h"
-#include "obj\Task.h"
+#include "obj/Object.h"
+#include "obj/Task.h"
 #include "rndobj\Poll.h"
-#include "utl\MeasureMap.h"
+#include "utl/MeasureMap.h"
 #include "utl\SongPos.h"
 
 BeatClock::BeatClock()

@@ -1,9 +1,9 @@
 #pragma once
 #include "char\CharPollable.h"
 #include "char\CharWeightable.h"
-#include "math\Geo.h"
+#include "math/Geo.h"
 #include "math\Rot.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Highlight.h"
 #include "rndobj\Trans.h"
 #include "utl\MemMgr.h"

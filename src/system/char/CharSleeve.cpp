@@ -2,8 +2,8 @@
 #include "char\Character.h"
 #include "math\Utl.h"
 #include "math\Vec.h"
-#include "obj\Object.h"
-#include "obj\Task.h"
+#include "obj/Object.h"
+#include "obj/Task.h"
 #include "rndobj\Rnd.h"
 #include "rndobj\Utl.h"
 

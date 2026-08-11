@@ -1,6 +1,6 @@
 #pragma once
 #include "hamobj\HamNavProvider.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "utl\MemMgr.h"
 
 enum PracticeOptions {

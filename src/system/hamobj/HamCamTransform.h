@@ -1,11 +1,11 @@
 #pragma once
 #include "flow\Flow.h"
 #include "hamobj\HamCamShot.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Anim.h"
 #include "rndobj\Poll.h"
 #include "rndobj\Trans.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\MemMgr.h"
 #include "world\CameraShot.h"
 #include "world\Crowd.h"

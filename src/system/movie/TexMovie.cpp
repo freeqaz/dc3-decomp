@@ -9,7 +9,7 @@
 #include "macros.h"
 #include "obj\Data.h"
 #include "obj\Msg.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "obj\PropSync.h"
 #include "os\Debug.h"
 #include "os\File.h"
@@ -17,9 +17,9 @@
 #include "rndobj\Poll.h"
 #include "rndobj\Rnd.h"
 #include "rndobj\Utl.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\FilePath.h"
-#include "utl\Loader.h"
+#include "utl/Loader.h"
 #include <cstddef>
 
 TexMovie::TexMovie()

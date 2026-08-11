@@ -3,16 +3,16 @@
 #include "ShaderMgr.h"
 #include "obj\Data.h"
 #include "obj\Dir.h"
-#include "obj\Object.h"
-#include "obj\Task.h"
+#include "obj/Object.h"
+#include "obj/Task.h"
 #include "os\Debug.h"
 #include "rndobj\BaseMaterial.h"
-#include "rndobj\Cam.h"
+#include "rndobj/Cam.h"
 #include "rndobj\Draw.h"
 #include "rndobj\Mat.h"
 #include "rndobj\Rnd_NG.h"
 #include "rndobj\Tex.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include <cmath>
 
 float gAmpTemp = 0.3f;

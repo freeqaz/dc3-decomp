@@ -4,7 +4,7 @@
 #include "gesture\Skeleton.h"
 #include "gesture\SkeletonQualityFilter.h"
 #include "math\Mtx.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 
 HandsUpGestureFilter::HandsUpGestureFilter() : mRequiredMs(500) { Clear(); }
 

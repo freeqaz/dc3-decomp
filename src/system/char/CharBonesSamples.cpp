@@ -4,7 +4,7 @@
 #include "math\Mtx.h"
 #include "math\Rot.h"
 #include "math\Trig.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "os\Timer.h"
 #include "utl\ChunkStream.h"

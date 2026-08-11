@@ -1,7 +1,7 @@
 #pragma once
 #include "char\CharPollable.h"
-#include "math\Geo.h"
-#include "obj\Object.h"
+#include "math/Geo.h"
+#include "obj/Object.h"
 #include "rndobj\Trans.h"
 #include "utl\MemMgr.h"
 

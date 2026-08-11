@@ -1,6 +1,6 @@
 #pragma once
 #include "FxSend.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "stl\_vector.h"
 #include "synth\FxSend.h"
 #include "synth\FxSendEQ.h"

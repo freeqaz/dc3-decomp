@@ -5,7 +5,7 @@
 #include "char\Character.h"
 #include "math\Mtx.h"
 #include "math\Vec.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Highlight.h"
 #include "rndobj\Trans.h"
 #include "utl\MemMgr.h"

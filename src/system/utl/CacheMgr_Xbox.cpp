@@ -1,7 +1,7 @@
 #include "Cache.h"
 #include "CacheMgr.h"
 #include "obj\Msg.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "os\PlatformMgr.h"
 #include "utl\Cache.h"
@@ -248,7 +248,7 @@ bool CacheMgrXbox::MountAsync(CacheID *pCacheIDXbox, Cache **ppCache, Hmx::Objec
 
 bool CacheMgrXbox::UnmountAsync(Cache **ppCache, Hmx::Object *o) {
     if (!IsDone()) {
-        MILO_NOTIFY("MountAsync: !IsDone() current op is %i", GetOp());
+        MILO_NOTIFY("UnmountAsync: !IsDone() current op is %i", GetOp());
         SetLastResult(kCache_ErrorBusy);
         return false;
     } else if (ppCache && *ppCache) {

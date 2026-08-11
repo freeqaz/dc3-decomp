@@ -4,8 +4,8 @@
 #include "flow\FlowNode.h"
 #include "math\Utl.h"
 #include "math\Vec.h"
-#include "obj\Object.h"
-#include "utl\BinStream.h"
+#include "obj/Object.h"
+#include "utl/BinStream.h"
 
 FlowDistance::FlowDistance()
     : mObj1(this, nullptr), mObj2(this, nullptr), mDistance(10), mPersistent(0), mPolling(0),

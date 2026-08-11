@@ -3,8 +3,8 @@
 #include <vector>
 #include "math\Vec.h"
 #include "math\Color.h"
-#include "math\Geo.h"
-#include "rndobj\Cam.h"
+#include "math/Geo.h"
+#include "rndobj/Cam.h"
 #include "utl\Str.h"
 
 class Drawable {

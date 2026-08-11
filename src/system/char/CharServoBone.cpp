@@ -11,7 +11,7 @@
 #include "math\Trig.h"
 #include "math\Utl.h"
 #include "obj\Dir.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "utl\Symbol.h"
 
 void RotateAboutZ(const Vector3 &v, float f, Vector3 &res) {

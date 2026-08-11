@@ -24,7 +24,7 @@
 #include "obj\Data.h"
 #include "obj\Dir.h"
 #include "obj\Msg.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "os\Joypad.h"
 #include "os\JoypadMsgs.h"

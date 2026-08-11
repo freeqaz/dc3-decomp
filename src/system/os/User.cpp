@@ -1,7 +1,7 @@
 #include "os\User.h"
 #include "Joypad.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\PlatformMgr.h"
 
 #pragma region User

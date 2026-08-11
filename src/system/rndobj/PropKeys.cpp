@@ -5,7 +5,7 @@
 #include "obj\DataUtl.h"
 #include "obj\Utl.h"
 #include "os\Debug.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 
 Hmx::Object *ObjectStage::sOwner;
 Message PropKeys::sInterpMessage(gNullStr, 0, 0, 0, 0, 0);

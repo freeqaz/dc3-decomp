@@ -1,8 +1,8 @@
 #include "rndobj\CamAnim.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Anim.h"
 #include "rndobj\Utl.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 
 #pragma region Hmx::Object
 

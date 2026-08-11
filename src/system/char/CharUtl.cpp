@@ -6,8 +6,8 @@
 #include "obj\Data.h"
 #include "obj\DataFunc.h"
 #include "obj\Dir.h"
-#include "obj\Object.h"
-#include "rndobj\Cam.h"
+#include "obj/Object.h"
+#include "rndobj/Cam.h"
 #include "rndobj\Trans.h"
 
 // does nothing, doesn't get called anywhere

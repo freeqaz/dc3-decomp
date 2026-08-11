@@ -6,8 +6,8 @@
 #include "flow\FlowWhile.h"
 #include "obj\Data.h"
 #include "obj\Dir.h"
-#include "obj\DirLoader.h"
-#include "obj\Object.h"
+#include "obj/DirLoader.h"
+#include "obj/Object.h"
 #include "world\CameraShot.h"
 
 FlowSwitchCase::FlowSwitchCase()

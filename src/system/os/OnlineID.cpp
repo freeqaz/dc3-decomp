@@ -1,6 +1,6 @@
 #include "os\OnlineID.h"
 #include "os\Debug.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 
 OnlineID::OnlineID() : mValid(false) {}
 void OnlineID::Clear() { mValid = false; }
@@ -24,7 +24,7 @@ XUID OnlineID::GetXUID() const {
 
 const char *OnlineID::ToString() const {
     if (mValid) {
-        return MakeString("%0x16llx", mXUID);
+        return MakeString("%016llx", mXUID);
     } else
         return "";
 }

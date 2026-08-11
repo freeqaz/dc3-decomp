@@ -1,7 +1,7 @@
 #include "hamobj\PracticeOptionsProvider.h"
 #include "flow\PropertyEventProvider.h"
 #include "hamobj\HamNavProvider.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "rndobj\Dir.h"
 #include "ui\UIListLabel.h"

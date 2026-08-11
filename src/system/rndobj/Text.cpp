@@ -1,7 +1,7 @@
 #include "rndobj\Text.h"
 #include "Text.h"
 #include "obj\Msg.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "os\System.h"
 #include "rndobj\Draw.h"
@@ -10,10 +10,10 @@
 #include "rndobj\Mat.h"
 #include "rndobj\Mesh.h"
 #include "rndobj\Trans.h"
-#include "rndobj\Cam.h"
+#include "rndobj/Cam.h"
 #include "rndobj\Rnd.h"
 #include "math\Trig.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\FilePath.h"
 #include "utl\MemMgr.h"
 #include "utl\UTF8.h"
@@ -2765,7 +2765,7 @@ void RndText::FontMap3d::SetupCharacter(
 // Template instantiation for map<RndFontBase*, set<unsigned short>>
 #include <map>
 #include <set>
-#include "utl\StlAlloc.h"
+#include "utl/StlAlloc.h"
 namespace stlpmtx_std {
 typedef set<unsigned short, less<unsigned short>, StlNodeAlloc<unsigned short> > _FontCharSet;
 typedef pair<RndFontBase* const, _FontCharSet> _FontMapValue;

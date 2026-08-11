@@ -1,8 +1,8 @@
 #pragma once
 #include "os\File.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\Str.h"
-#include "math\StreamChecksum.h"
+#include "math/StreamChecksum.h"
 #include "utl\MemMgr.h"
 
 class FileStream : public BinStream {

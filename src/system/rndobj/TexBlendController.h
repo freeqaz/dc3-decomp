@@ -1,5 +1,5 @@
 #pragma once
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Mesh.h"
 #include "rndobj\Tex.h"
 #include "rndobj\Trans.h"

@@ -14,7 +14,7 @@
 #include "os\Debug.h"
 #include "rndobj\PropAnim.h"
 #include "rndobj\PropKeys.h"
-#include "utl\Loader.h"
+#include "utl/Loader.h"
 
 const char *ClipPlayer::sRestStepNames[4] = {
     "rest_step_left", "rest_step_right", "rest_step_fwd", "rest_step_back"

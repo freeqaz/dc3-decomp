@@ -2,7 +2,7 @@
 #include "obj\Data.h"
 #include "obj\DataFile.h"
 #include "obj\Dir.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 
 static bool sLoadingWatches = false;

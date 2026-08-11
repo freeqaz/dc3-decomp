@@ -5,7 +5,7 @@
 #include "net_ham\RCJobDingo.h"
 #include "net_ham\ChallengeSystemJobs.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 
 class ChallengeResultPanel;
 

@@ -1,6 +1,6 @@
 #include "synth\Sfx.h"
 #include "synth\Stream.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 
 SfxMap::SfxMap(Hmx::Object *obj)
     : mSample(obj), mVolume(0), mPan(0), mTranspose(0), mFXCore(kFXCoreNone) {}

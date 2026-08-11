@@ -18,7 +18,7 @@
 #include "meta_ham\MoveRatingHistory.h"
 #include "obj\Data.h"
 #include "obj\Dir.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "rndobj\Dir.h"
 #include "rndobj\Mat.h"

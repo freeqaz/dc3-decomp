@@ -3,13 +3,13 @@
 #include "meta\DataArraySongInfo.h"
 #include "obj\Data.h"
 #include "obj\Dir.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "synth\Faders.h"
 #include "synth\Stream.h"
-#include "math\Rand.h"
+#include "math/Rand.h"
 #include "meta\MetaMusicScene.h"
 #include "utl\MemMgr.h"
-#include "utl\Loader.h"
+#include "utl/Loader.h"
 
 class MetaMusic : public Hmx::Object {
 public:

@@ -1,5 +1,5 @@
 #pragma once
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Platform.h"
 #include "synth\SampleData.h"
 #include "utl\MemMgr.h"

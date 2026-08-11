@@ -2,7 +2,7 @@
 #include "flow\FlowLabel.h"
 #include "flow\FlowManager.h"
 #include "flow\FlowNode.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "os\Timer.h"
 #include "rndobj\Anim.h"

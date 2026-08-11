@@ -1,5 +1,5 @@
 #pragma once
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Poll.h"
 
 /** "A simple object with an enter an exit script call" */

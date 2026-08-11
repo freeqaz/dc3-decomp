@@ -3,7 +3,7 @@
 #include "gesture\BaseSkeleton.h"
 #include "gesture\Skeleton.h"
 #include "math\Vec.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Poll.h"
 #include "utl\MemMgr.h"
 #include "utl\DebugGraph.h"

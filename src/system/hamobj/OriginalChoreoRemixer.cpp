@@ -8,7 +8,7 @@
 #include "hamobj\MoveGraph.h"
 #include "hamobj\MoveMgr.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 
 OriginalChoreoRemixer::OriginalChoreoRemixer() {}

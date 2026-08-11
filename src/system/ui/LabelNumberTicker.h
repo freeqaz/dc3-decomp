@@ -1,5 +1,5 @@
 #pragma once
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\EventTrigger.h"
 #include "ui\UIComponent.h"
 #include "ui\UILabel.h"

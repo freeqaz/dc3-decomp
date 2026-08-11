@@ -1,9 +1,9 @@
 #include "hamobj\SongDifficultyDisplay.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "rndobj\Anim.h"
 #include "ui\UIComponent.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 
 SongDifficultyDisplay::SongDifficultyDisplay() : mAnimation(this), mResourceDir(this) {}
 SongDifficultyDisplay::~SongDifficultyDisplay() {}

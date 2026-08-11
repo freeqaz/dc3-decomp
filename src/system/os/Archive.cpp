@@ -6,10 +6,10 @@
 #include "os\File.h"
 #include "os\System.h"
 #include "stl\_algo.h"
-#include "utl\BinStream.h"
+#include "utl/BinStream.h"
 #include "utl\FileStream.h"
 #include "utl\HxGuid.h"
-#include "utl\Loader.h"
+#include "utl/Loader.h"
 #include "utl\MemMgr.h"
 #include "utl\Option.h"
 #include <cstdio>

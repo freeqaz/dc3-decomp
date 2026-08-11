@@ -1,6 +1,6 @@
 #pragma once
-#include "obj\Object.h"
-#include "rndobj\Cam.h"
+#include "obj/Object.h"
+#include "rndobj/Cam.h"
 #include "rndobj\Dir.h"
 #include "ui\UIComponent.h"
 #include "ui\UIPanel.h"

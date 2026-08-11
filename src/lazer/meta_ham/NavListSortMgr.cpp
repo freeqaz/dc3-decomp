@@ -6,7 +6,7 @@
 #include "meta\SongPreview.h"
 #include "meta_ham\NavListNode.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\System.h"
 #include "utl\Std.h"
 #include "utl\Symbol.h"

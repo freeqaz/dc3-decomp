@@ -6,7 +6,7 @@
 #include "meta_ham\Award.h"
 #include "meta_ham\HamProfile.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\ContentMgr.h"
 #include "os\PlatformMgr.h"
 #include "utl\Symbol.h"

@@ -1,7 +1,7 @@
 #pragma once
-#include "math\Geo.h"
+#include "math/Geo.h"
 #include "obj\Data.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Mesh.h"
 
 class SkeletonExtentTracker : public Hmx::Object {

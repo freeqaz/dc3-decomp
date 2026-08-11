@@ -6,7 +6,7 @@
 #endif
 #include "char\CharUtl.h"
 #include "math\Rot.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "rndobj\Trans.h"
 #include "utl\Str.h"
 #include <string.h>

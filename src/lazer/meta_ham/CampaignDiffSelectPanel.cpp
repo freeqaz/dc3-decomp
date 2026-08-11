@@ -13,7 +13,7 @@
 #include "meta_ham\SaveLoadManager.h"
 #include "meta_ham\SongStatusMgr.h"
 #include "obj\Msg.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 #include "os\Debug.h"
 #include "ui\UIListLabel.h"
 #include "ui\UIPanel.h"

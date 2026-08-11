@@ -1,6 +1,6 @@
 #pragma once
 #include "ui\UIListProvider.h"
-#include "obj\Object.h"
+#include "obj/Object.h"
 
 /**
  * @brief Handles data for the debug cheat menu.
