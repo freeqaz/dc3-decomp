@@ -268,7 +268,7 @@ void MsgSinks::RemoveSink(Hmx::Object *s, Symbol ev) {
     for (ObjList<Sink>::iterator it = mSinks.begin(); it != mSinks.end(); ++it) {
         if (it->obj == s) {
             if (!ev.Null()) {
-                MILO_WARN(
+                MILO_NOTIFY(
                     "%s: removing global to %s for event %s, all other events will be wiped out",
                     PathName(mOwner), s->Name(), ev
                 );
