@@ -308,7 +308,7 @@ bool HamStorePanel::IsSpecialOfferOwned(Symbol offer) const {
             return (*it).mOwned;
         }
     }
-    Symbol s = offer;
+    char *s = (char *)offer.Str();
     MILO_NOTIFY("Unknown offer %s", s);
     return false;
 }
@@ -335,7 +335,7 @@ bool HamStorePanel::ContentTitleDiscovered(unsigned int ui, Symbol s) {
 void HamStorePanel::ContentMounted(char const *c1, char const *c2) {
     FOREACH (it, mSpecialOffers) {
         if (it->mCategory == c1) {
-            Symbol s = it->mName;
+            char *s = (char *)it->mName.Str();
             MILO_LOG("Store: special offer %s on local drive.\n", s);
             it->mOwned = true;
             return;
@@ -367,7 +367,7 @@ bool HamStorePanel::BuySpecialOffer(Symbol offer) {
             return true;
         }
     }
-    Symbol s = offer;
+    char *s = (char *)offer.Str();
     MILO_NOTIFY("Unknown offer %s", s);
     return false;
 }
@@ -486,7 +486,10 @@ void HamStorePanel::FinishSpecialOfferEnum(std::vector<bool> const &vec, bool b)
             }
 
             if (mSpecialOffers[i].mOwned) {
-                MILO_LOG("Store: special offer %s is owned\n", mSpecialOffers[i].mName);
+                MILO_LOG(
+                    "Store: special offer %s is owned\n",
+                    (char *)mSpecialOffers[i].mName.Str()
+                );
             }
         }
     }
