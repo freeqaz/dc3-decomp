@@ -1257,7 +1257,7 @@ void RndShaderStandard::Select(RndMat *mat, ShaderType shader_type, bool b) {
         ((NgMat *)mat)->SetupShader(TheShaderMgr.AllowPerPixel(), true);
         CheckShadow();
         ShaderOptions opts(CalcShaderOpts((NgMat *)mat, shader_type, b));
-        MILO_ASSERT((shader_type == kStandardShader || shader_type == kStandardBBShader || shader_type == kAllWhiteShader), 0x4BB);
+        MILO_ASSERT((shader_type == kStandardShader) || (shader_type == kStandardBBShader) || (shader_type == kAllWhiteShader), 0x4BB);
         if (shader_type == kStandardBBShader) {
             shader_type = kStandardShader;
         }

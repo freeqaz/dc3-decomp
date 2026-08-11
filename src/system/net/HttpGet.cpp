@@ -253,7 +253,7 @@ void HttpGet::SafeDisconnect() {
 }
 
 void HttpGet::StartConnection() {
-    MILO_ASSERT(!mSocket, 0x2FF);
+    MILO_ASSERT(mSocket == NULL, 0x2FF);
     mSocket = NetworkSocket::Create(true);
     if (mSocket->Fail()) {
         mFailType = kHttpFail_Send;

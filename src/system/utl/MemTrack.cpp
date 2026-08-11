@@ -235,7 +235,7 @@ void EndMemTrackObjectName() {
     if (gMemTracker) {
         int pos = s_MemTrackObjectNameStackPos - 1;
         s_MemTrackObjectNameStackPos = pos;
-        MILO_ASSERT(0 <= s_MemTrackObjectNameStackPos && s_MemTrackObjectNameStackPos < STACK_SIZE, 0xCF);
+        MILO_ASSERT(0<=s_MemTrackObjectNameStackPos && s_MemTrackObjectNameStackPos<STACK_SIZE, 0xCF);
         if (s_MemTrackObjectNameStackPos >= 0) {
             gMemTracker->unk181b4 =
                 ((char **)MemTrackObjectName)[s_MemTrackObjectNameStackPos];
@@ -259,7 +259,7 @@ void EndMemTrackFileName() {
     if (gMemTracker) {
         int pos = s_MemTrackFileNameStackPos - 1;
         s_MemTrackFileNameStackPos = pos;
-        MILO_ASSERT(0 <= s_MemTrackFileNameStackPos && s_MemTrackFileNameStackPos < STACK_SIZE, 0xE6);
+        MILO_ASSERT(0<=s_MemTrackFileNameStackPos && s_MemTrackFileNameStackPos<STACK_SIZE, 0xE6);
         if (s_MemTrackFileNameStackPos >= 0) {
             char *name = ((char **)CharArrayArray)[s_MemTrackFileNameStackPos];
             String *prev = &gMemTracker->unk181ac;
