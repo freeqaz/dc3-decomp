@@ -900,14 +900,12 @@ void HamNavList::SetRibbonMode(HamListRibbon::RibbonMode mode) {
 
 void HamNavList::SetNavProvider(HamNavProvider *provider) {
     mNavProvider = provider;
-    UIListProvider *listProvider;
     if (provider) {
         provider->SetNavList(this);
-        listProvider = static_cast<UIListProvider *>(provider);
+        SetProvider(provider);
     } else {
-        listProvider = static_cast<UIListProvider *>(this);
+        SetProvider(this);
     }
-    SetProvider(listProvider);
 }
 
 void HamNavList::ScrollToIndex(int idx, int firstShowing) {
