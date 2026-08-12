@@ -145,6 +145,15 @@ Verified per object: no duplicate symbol names are created, and the pass is a
 fixed point after one apply (rule 1 then maps our names to themselves), which
 `scripts/verify_objs_patched.py` requires of every patcher in the chain.
 
+**A fallback can never manufacture a match**, and this is checkable rather than
+argued. If a fallback-assigned name coincided with a retail name, the template
+lookup would have found that retail name first and it would not have been a
+fallback — so the two rule classes are disjoint by construction. Measured on
+the patched tree: **542 anonymous-namespace symbols are now name-identical to
+retail's, and all 542 were reached by a `template*` rule. Zero by `token`,
+`token_global` or `majority`.** The 522 `majority` assignments buy no match and
+were never going to; they keep an object's own references consistent.
+
 ## Why this is a post-build rewrite, and why the honest alternative is blocked
 
 No source edit can produce these values. The hash encodes the build machine's
