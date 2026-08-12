@@ -193,8 +193,8 @@ void CharClipSet::PostLoad(BinStream &bs) {
             PathName(this)
         );
     if (d.rev < 0xD) {
-        static Message filter_clips_msg("filter_clips");
-        Handle(filter_clips_msg, false);
+        static Message filterClips("filter_clips");
+        Handle(filterClips, false);
     }
     if (d.rev > 0x11) {
         d >> mCharFilePath;

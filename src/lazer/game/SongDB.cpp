@@ -1,7 +1,7 @@
 #include "game\SongDB.h"
 #include "SongDB.h"
 #include "beatmatch\HxMaster.h"
-#include "hamobj\HamSongData.h"
+#include "hamobj/HamSongData.h"
 #include "macros.h"
 #include "midi\DataEventList.h"
 #include "obj\Data.h"

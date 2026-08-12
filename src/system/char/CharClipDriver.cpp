@@ -148,10 +148,10 @@ void CharClipDriver::ExecuteEvent(Symbol sym) {
     static Symbol clip_event("clip_event");
     Hmx::Object *owner = mClip.RefOwner();
     Hmx::Object *exportTarget = owner->Dir();
-    static Message msg(clip_event, DataNode(0), DataNode(0), DataNode(0));
-    msg[0] = DataNode(sym);
-    msg[1] = DataNode(mClip.Ptr());
-    exportTarget->Export(msg, true);
+    static Message h(clip_event, DataNode(0), DataNode(0), DataNode(0));
+    h[0] = DataNode(sym);
+    h[1] = DataNode(mClip.Ptr());
+    exportTarget->Export(h, true);
 }
 
 void CharClipDriver::SetBeatOffset(float offset, TaskUnits units, Symbol sym) {

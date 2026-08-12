@@ -137,9 +137,9 @@ void StreamRecorder::StopRecordingImmediate() {
 
 void StreamRecorder::StoppedRecordingScript() {
     static Symbol stream_recorder_stopped_recording("stream_recorder_stopped_recording");
-    static DataArrayPtr p = new DataArray(1);
-    p->Node(0) = stream_recorder_stopped_recording;
-    p->Execute(false);
+    static DataArrayPtr func = new DataArray(1);
+    func->Node(0) = stream_recorder_stopped_recording;
+    func->Execute(false);
 }
 
 bool StreamRecorder::SetFrame(int index) {

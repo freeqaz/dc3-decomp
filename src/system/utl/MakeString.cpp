@@ -2,7 +2,7 @@
 #include "obj\Data.h"
 #include "os\Debug.h"
 #include "os\System.h"
-#include "os\CritSec.h"
+#include "os/CritSec.h"
 #include "os\OSFuncs.h"
 #include "utl\MemMgr.h"
 #include "utl\Str.h"

@@ -3,7 +3,7 @@
 #include "char\CharBones.h"
 #include "obj/Object.h"
 #include "os\Debug.h"
-#include "rndobj\Trans.h"
+#include "rndobj/Trans.h"
 #include "utl/BinStream.h"
 
 CharBone::CharBone()

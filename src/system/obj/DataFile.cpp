@@ -31,7 +31,7 @@ static bool gCachingFile = false;
 static bool gReadingFile = false;
 int gDataLine = 0;
 static CriticalSection gDataReadCrit;
-Symbol gFile;
+static Symbol gFile;
 static std::list<bool> gConditional;
 static std::map<String, DataNode> gReadFiles;
 // bool gCompressCached;
