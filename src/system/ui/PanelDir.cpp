@@ -457,10 +457,10 @@ void PanelDir::Enter() {
     FOREACH (it, mTriggers) {
         (*it)->Enter();
     }
-    static Message ui_enter("ui_enter");
+    static Message msg("msg");
     static Symbol ui_enter_forward("ui_enter_forward");
     static Symbol ui_enter_back("ui_enter_back");
-    SendTransition(ui_enter, ui_enter_forward, ui_enter_back);
+    SendTransition(msg, ui_enter_forward, ui_enter_back);
 #ifdef HX_NATIVE
     // Legacy synthetic panel entry — INERT by default (see
     // GetNativeFlowFilterMode: the default filter mode is `none`, so

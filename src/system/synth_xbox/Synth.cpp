@@ -151,7 +151,7 @@ void Synth360::Poll() {
         } else if (ms < 900.0f) {
             volume = -96.0f;
         } else if (ms < 1800.0f) {
-            volume = (1800.0f - ms) * -0.10662958f;
+            volume = (1800.0f - ms) * -0.10666667f;
         } else {
             mDolbyTimer.Reset();
             volume = 0.0f;

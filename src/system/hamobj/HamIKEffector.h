@@ -17,7 +17,7 @@ class HamIKEffector : public RndHighlightable,
 public:
     class Constraint {
     public:
-        Constraint(Hmx::Object *owner) : mTarget(owner), mWeight(0) {}
+        Constraint(Hmx::Object *owner) : mTarget(owner), mWeight(1) {}
 
         /** "The thing the [effector] will keep relative xfm to,
             or absolute xfm if weight <= 0." */

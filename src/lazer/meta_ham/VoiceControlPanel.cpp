@@ -162,10 +162,10 @@ void VoiceControlPanel::EnterGame() {
         mEnteredGame = true;
         SetRules(false);
         static Symbol enter_gameplay("enter_gameplay");
-        static DataArrayPtr dataPtr(enter_gameplay);
-        dataPtr->Execute();
-        static Message microphone_activity("microphone_activity");
-        TheHamProvider->Handle(microphone_activity, false);
+        static DataArrayPtr enterGameplayFunc(enter_gameplay);
+        enterGameplayFunc->Execute();
+        static Message microphoneActivityMsg("microphoneActivityMsg");
+        TheHamProvider->Handle(microphoneActivityMsg, false);
     } else {
         Flow *pFlow = DataDir()->Find<Flow>("sound_error.flow");
         pFlow->Activate();

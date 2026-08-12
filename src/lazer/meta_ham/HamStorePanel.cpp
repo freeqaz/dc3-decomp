@@ -442,11 +442,11 @@ exit:
                 }
             }
 
-            static Message special_finished("special_finished", 0, 0);
-            special_finished[0] = purchaseMade;
-            special_finished[1] = needsEnum;
-            HandleType(special_finished);
-            TheUI->Handle(special_finished, false);
+            static Message msg("msg", 0, 0);
+            msg[0] = purchaseMade;
+            msg[1] = needsEnum;
+            HandleType(msg);
+            TheUI->Handle(msg, false);
             RELEASE(mXboxPurchaser);
         }
     }
