@@ -141,7 +141,9 @@ XboxMultipleItemsPurchaser::XboxMultipleItemsPurchaser(
     int i, std::vector<unsigned long long> &offerIDs, Symbol s, unsigned int ui
 )
     : StorePurchaser(s, ui), mState(purchasestate0), mUserIndex(i) {
-    MILO_ASSERT(offerIDs.size() >= 1 && offerIDs.size() <= 6, 0x337);
+    MILO_ASSERT(
+        offerIDs.size() >= 1 && offerIDs.size() <= XMARKETPLACE_MAX_OFFERIDS, 0x337
+    );
     mOfferIDs = offerIDs;
 }
 

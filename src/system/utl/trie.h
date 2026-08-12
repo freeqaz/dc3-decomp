@@ -32,8 +32,10 @@ public:
     void inc_dup_count(unsigned int index);
     void dec_dup_count(unsigned int index);
 
-    void check_index(unsigned int index) {
-        MILO_ASSERT(index < 0x20000, 0x36);
+    enum { MAX_NODES = 0x20000 };
+
+    void check_index(unsigned int n) {
+        MILO_ASSERT(0<= n && n < MAX_NODES, 0x36);
     }
 
     char *get(int index, char *buffer, int bufSize) {

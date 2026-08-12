@@ -205,11 +205,11 @@ void DxMesh::VertexBufferData::Release() {
     size = 0;
 }
 
-void DxMesh::VertexBufferData::SetData(D3DVertexBuffer *buffer, unsigned int sz) {
+void DxMesh::VertexBufferData::SetData(D3DVertexBuffer *buffer, unsigned int size) {
     MILO_ASSERT(buffer != NULL, 0x1E);
-    MILO_ASSERT(sz, 0x1F);
+    MILO_ASSERT(size > 0, 0x1F);
     this->buffer = buffer;
-    size = sz;
+    this->size = size;
 }
 
 void DxMesh::Copy(const Hmx::Object *src, Hmx::Object::CopyType ty) {
