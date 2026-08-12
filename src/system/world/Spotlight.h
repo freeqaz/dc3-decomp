@@ -104,8 +104,6 @@ public:
     // RndPollable
     virtual void Poll();
 
-    static RndEnviron *sEnviron;
-
     static void Init();
 
     OBJ_MEM_OVERLOAD(0x22)
@@ -137,6 +135,10 @@ public:
     bool AnimateOrientationFromPreset() const { return mAnimateOrientationFromPreset; }
 
 protected:
+
+    // Access read off retail's mangling: ?sEnviron@Spotlight@@1PAVRndEnviron@@A
+    // -- `1` is protected, ours emitted `2` (public).
+    static RndEnviron *sEnviron;
 
     Spotlight();
 

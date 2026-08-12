@@ -16,6 +16,8 @@ public:
     virtual void SetBaseFileName(const char *);
     virtual void AddExtraMidiFile(const char *, const char *);
 
+private:
+    // ?sSaveVer@DataArraySongInfo@@0HA -- `0` is private, ours emitted `2`.
     static int sSaveVer;
 };
 

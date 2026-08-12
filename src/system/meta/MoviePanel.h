@@ -30,11 +30,13 @@ public:
 
     NEW_OBJ(MoviePanel)
 
-    static bool sUseSubtitles;
     MoviePanel();
     void ShowMenu(bool);
 
 protected:
+    // ?sUseSubtitles@MoviePanel@@1_NA -- `1` is protected, ours emitted `2`.
+    static bool sUseSubtitles;
+
     // UIPanel
     virtual void SetPaused(bool);
 
