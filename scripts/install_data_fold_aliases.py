@@ -79,6 +79,39 @@ COMMENT_ADDITION = [
     "    load_validated drops them and grades stricter than this file.",
 ]
 
+# The file asserted a property this tier is the first exception to, and leaving
+# that sentence standing would make the file lie about itself. Swapped while
+# the tier is installed and swapped back by --uninstall, so `_comment` states
+# what is true of the file as it actually is.
+COMMENT_SWAP = [
+    (["This file holds the VALIDATOR-ACCEPTED classes only, so the synthetic",
+      "map rendered from it (scripts/gen_icf_alias_map.py ->",
+      "build/373307D9/icf_aliases.map) never hands objdiff a class the",
+      "validator refused."],
+     ["Every tier here except retailmap-data is VALIDATOR-ACCEPTED, so the",
+      "synthetic map rendered from it (scripts/gen_icf_alias_map.py ->",
+      "build/373307D9/icf_aliases.map) hands objdiff no class the validator",
+      "refused ON EVIDENCE. retailmap-data is the one exception and it is a",
+      "blind spot rather than a disagreement: validate_groups can only fault",
+      "it on gate (a), which no data symbol can satisfy. load_validated drops",
+      "it, so decomp-synth grades STRICTER than this file, never looser."]),
+    (["Do not hand-edit. NOTE: build_icf_alias_inputs.py mints the body-test",
+      "class ONLY -- regenerating from it alone would drop the other two."],
+     ["Do not hand-edit. NOTE: build_icf_alias_inputs.py mints the body-test",
+      "class ONLY -- regenerating from it alone would drop the other three."]),
+]
+
+
+def swap_comment(lines, installed):
+    """Apply (or undo) the sentences the fourth tier makes true or false."""
+    for was, now in COMMENT_SWAP:
+        src, dst = (was, now) if installed else (now, was)
+        for i in range(len(lines) - len(src) + 1):
+            if lines[i:i + len(src)] == src:
+                lines = lines[:i] + list(dst) + lines[i + len(src):]
+                break
+    return lines
+
 
 def candidates(identity, out_dir, restrict_to=None):
     # Without --ignore-installed-prefix the generator's collision gate sees the
@@ -112,11 +145,13 @@ def rebuild(doc, groups, identity, refused):
         fresh.append(g)
         spoken |= {g["survivor"], *g["folded"]}
 
-    comment = [c for c in doc["_comment"] if c not in COMMENT_ADDITION]
+    comment = swap_comment(
+        [c for c in doc["_comment"] if c not in COMMENT_ADDITION], False)
     if fresh:
         anchor = next((i for i, c in enumerate(comment)
                        if c.startswith("This file holds")), len(comment))
-        comment = comment[:anchor] + COMMENT_ADDITION + comment[anchor:]
+        comment = swap_comment(
+            comment[:anchor] + COMMENT_ADDITION + comment[anchor:], True)
 
     prov = {k: v for k, v in doc["_provenance"].items() if k != PROV_KEY}
     if fresh:
