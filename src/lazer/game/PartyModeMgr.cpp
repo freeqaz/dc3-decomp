@@ -886,11 +886,6 @@ void PartyModeMgr::AddNextSongToRCPartySongQueue() {
     }
 }
 
-Symbol PartyModeMgr::GetNextMode() {
-    MILO_ASSERT(mModePicker.Size() > 0, 0x17B);
-    return mModePicker.GetNext();
-}
-
 void PartyModeMgr::DetermineSubMode(Symbol *pMode, Symbol *pSubMode) {
     if (mUsePlaytestData) {
         *pMode = mModePicker.GetNext();

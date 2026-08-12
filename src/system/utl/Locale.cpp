@@ -1,4 +1,5 @@
 #include "utl\Locale.h"
+#include "utl\LocaleChunkSort.h"
 
 #include "DataPointMgr.h"
 #include "obj\DataFile.h"

@@ -145,7 +145,7 @@ public:
         int mapsize = map.size();
         if (mapsize > maxsize) {
             MILO_NOTIFY(
-                "The hash_map size is greater than the maximum supplied! size=%i max=%i",
+                "The map size is greater than the maximum supplied! size=%i max=%i",
                 mapsize,
                 maxsize
             );
@@ -269,7 +269,7 @@ public:
         int savesize
     ) {
         if (map.size() > 0) {
-            MILO_NOTIFY("hash_map is not empty!");
+            MILO_NOTIFY("map is not empty!");
             map.clear();
         }
         int mapsize;
@@ -360,7 +360,7 @@ public:
         int savesize
     ) {
         if (map.size() != 0) {
-            MILO_NOTIFY("hash_map is not empty!");
+            MILO_NOTIFY("map is not empty!");
             FOREACH (it, map) {
                 RELEASE(it->second);
             }

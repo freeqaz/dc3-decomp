@@ -3,7 +3,7 @@
 #include "math/Key.h"
 #include "obj\Msg.h"
 #include "ui\UIComponent.h"
-#include "ui\UILabel.h"
+#include "ui/UILabel.h"
 #include "ui\UITransitionHandler.h"
 #include "utl\MemMgr.h"
 #include "utl\Str.h"

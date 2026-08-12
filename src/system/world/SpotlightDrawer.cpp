@@ -292,7 +292,7 @@ void SpotlightDrawer::DrawLight(Spotlight *spot) {
         ((packedColor & 0xff) > 5) || (((packedColor >> 8) & 0xff) > 3) || (((packedColor >> 16) & 0xff) > 7);
 
     if (shouldProcess && spot->mTargetLoaded && spot->Showing()) {
-        if (GetGfxMode() == kOldGfx && spot->GetTarget() && spot->TargetShadow()) {
+        if (GetGfxMode() == kOldGfx && spot->GetTarget() && spot->GetCastShadow()) {
             sShadowSpots.push_back(spot);
         }
 
@@ -385,7 +385,7 @@ void SpotlightDrawer::DrawShadow() {
     std::vector<Spotlight *>::iterator itEnd = sShadowSpots.end();
     for (; it != itEnd; ++it) {
         Spotlight *shadowSpot = *it;
-        MILO_ASSERT(shadowSpot->GetTarget() && shadowSpot->TargetShadow(), 0x288);
+        MILO_ASSERT(shadowSpot->GetTarget() && shadowSpot->GetCastShadow(), 0x288);
         RndDrawable *draw = dynamic_cast<RndDrawable *>(shadowSpot->GetTarget());
         if (draw) {
             draw->DrawShadow(shadowSpot->WorldXfm(), 1.5f);

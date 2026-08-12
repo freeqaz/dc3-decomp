@@ -9,26 +9,6 @@
 
 extern Hmx::Object *gDataThis;
 
-class DataFuncObj : public Hmx::Object {
-private:
-    DataArray *mFunc;
-
-    DataFuncObj(DataArray *da) : mFunc(da) {
-        da->AddRef();
-        SetName(da->Str(1), ObjectDir::Main());
-    }
-
-public:
-    virtual ~DataFuncObj() { mFunc->Release(); }
-    virtual DataNode Handle(DataArray *_msg, bool _warn) {
-        return mFunc->ExecuteScript(2, gDataThis, _msg, 1);
-    }
-
-    POOL_OVERLOAD(DataFuncObj, 0x4F);
-
-    static DataNode New(DataArray *);
-};
-
 class DataThisPtr : public ObjPtr<Hmx::Object> {
 public:
     DataThisPtr() : ObjPtr(nullptr, nullptr) {}

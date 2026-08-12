@@ -404,7 +404,7 @@ int *MemHeap::Alloc(int sizeWords, int align, int &allocSize) {
         }
         extern MemTracker *gMemTracker;
         if (gMemTracker != nullptr && !gMemTracker->GetHeapOnly()) {
-            FILE *f = fopen("alloc_fail.txt", "w");
+            FILE *f = fopen("devkit:\\out_of_mem_alloc_info.csv", "w");
             if (f) {
                 MemTracker::SpitAllocInfo((struct _iobuf *)f);
                 fclose(f);

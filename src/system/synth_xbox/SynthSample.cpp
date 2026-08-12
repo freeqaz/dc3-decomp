@@ -3,7 +3,7 @@
 #include "obj/Object.h"
 #include "os\Debug.h"
 #include "synth\SampleData.h"
-#include "synth_xbox\SampleInst360.h"
+#include "synth360\SampleInst.h"
 #include "utl\MemMgr.h"
 
 

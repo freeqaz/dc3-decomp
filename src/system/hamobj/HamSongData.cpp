@@ -12,7 +12,7 @@
 #include "utl\FileStream.h"
 #include "utl\MemMgr.h"
 #include "utl\MemStream.h"
-#include "utl\SongInfoCopy.h"
+#include "utl\SongInfo.h"
 #include "utl\SongPos.h"
 #include "utl\TempoMap.h"
 HamSongData *HamSongData::sInstance;

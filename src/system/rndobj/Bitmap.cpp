@@ -1,5 +1,5 @@
 #include "rndobj\Bitmap.h"
-#include "utl\CRC.h"
+#include "utl\Crc.h"
 #include "utl\BufStream.h"
 #include "utl\ChunkStream.h"
 #include "utl\FileStream.h"

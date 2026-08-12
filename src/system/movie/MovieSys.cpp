@@ -1,5 +1,5 @@
 #include "movie\MovieSys.h"
-#include "MovieImpl.h"
+#include "MovieImpl_p.h"
 #include "MovieSys.h"
 #include "TexMovie.h"
 #include "obj/Object.h"

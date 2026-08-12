@@ -1,6 +1,6 @@
 #include "os\Archive.h"
 #include "math\Sort.h"
-#include "os\Block.h"
+#include "os\BlockMgr_p.h"
 #include "os\ContentMgr.h"
 #include "os\Debug.h"
 #include "os\File.h"

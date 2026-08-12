@@ -1,6 +1,6 @@
 #pragma once
 #include "rndobj\TexMgr.h"
-#include "utl\CRC.h"
+#include "utl\Crc.h"
 #include "xdk\D3D9.h"
 
 class DxRndTexMgr : public TexMgr {

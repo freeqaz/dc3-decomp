@@ -1,6 +1,6 @@
 #pragma once
 #include "os\Debug.h"
-#include "utl\CRC.h"
+#include "utl\Crc.h"
 #include "utl\Std.h"
 #include <map>
 

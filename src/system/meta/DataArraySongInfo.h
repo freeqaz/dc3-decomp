@@ -1,5 +1,5 @@
 #pragma once
-#include "utl\SongInfoCopy.h"
+#include "utl\SongInfo.h"
 #include "obj\Data.h"
 #include "utl/BinStream.h"
 

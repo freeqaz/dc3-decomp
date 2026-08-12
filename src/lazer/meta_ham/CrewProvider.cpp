@@ -64,9 +64,9 @@ Symbol CrewProvider::DataSymbol(int idx) const {
     return mCrews[idx];
 }
 
-bool CrewProvider::CanSelect(int idx) const {
-    MILO_ASSERT_RANGE(idx, 0, NumData(), 0xf4);
-    Symbol dataSym = DataSymbol(idx);
+bool CrewProvider::CanSelect(int data) const {
+    MILO_ASSERT_RANGE(data, 0, NumData(), 0xf4);
+    Symbol dataSym = DataSymbol(data);
     if (!TheProfileMgr.IsContentUnlocked(dataSym))
         return false;
     else

@@ -56,12 +56,6 @@ namespace {
     }
 }
 
-const Hmx::Color &ColorPalette::GetColor(int idx) const {
-    MILO_ASSERT(mColors.size(), 0x18);
-    int colorIdx = idx % mColors.size();
-    return mColors[colorIdx];
-}
-
 #pragma region CharDef
 
 void WorldCrowd::CharDef::Save(BinStream &bs) const {

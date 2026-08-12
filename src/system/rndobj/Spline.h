@@ -103,3 +103,5 @@ private:
     float mPulseOffset; // 0x148
     bool mTestPulseActive; // 0x14c
 };
+
+#include "rndobj/Spline.inl"

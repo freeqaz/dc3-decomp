@@ -141,11 +141,6 @@ DataNode RndSpline::OnClearGlobalDefaultSpline(DataArray *) {
     return 0;
 }
 
-const RndSpline::CtrlPoint &RndSpline::GetDeformedCtrlPoint(int iIndex) const {
-    MILO_ASSERT_RANGE(iIndex, 0, (int)mDeformedCtrlPoints.size(), 0x56);
-    return mDeformedCtrlPoints[iIndex];
-}
-
 const RndSpline::CtrlPoint &RndSpline::GetDeformedCtrlPointOrDummy(int iIndex) const {
     MILO_ASSERT_RANGE_EQ(iIndex, -1, (int)(mDeformedCtrlPoints.size()) + 1, 0x2F7);
     if (iIndex == -1) {

@@ -1,5 +1,5 @@
 #include "synth_xbox\Voice.h"
-#include "synth_xbox\EnvelopeGenerator.h"
+#include "synth360\EnvelopeGenerator.h"
 #include "synth_xbox\FxSend.h"
 #include "synth_xbox\Synth.h"
 #include "math\Utl.h"

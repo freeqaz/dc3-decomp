@@ -2,7 +2,7 @@
 #include "char\CharBones.h"
 #include "obj\Data.h"
 #include "obj/Object.h"
-#include "rndobj\Trans.h"
+#include "rndobj/Trans.h"
 #include "utl\MemMgr.h"
 
 /** "A Character system bone, conveys degrees of freedom to animate in a CharClip, lives

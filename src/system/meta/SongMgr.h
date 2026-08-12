@@ -7,7 +7,7 @@
 #include "utl\BufStream.h"
 #include "utl\Cache.h"
 #include "utl\MemStream.h"
-#include "utl\SongInfoCopy.h"
+#include "utl\SongInfo.h"
 #include <set>
 #include <vector>
 #include <map>
