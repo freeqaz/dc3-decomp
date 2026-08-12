@@ -510,7 +510,8 @@ DataNode OnCycleActiveFakeShellSkeleton(DataArray *) {
 
 DataNode OnSetFakeSkeletonSidesSwapped(DataArray *a) {
     SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
-    handle.mInst->mSwapSides = a->Int(1) != 0;
+    bool v = a->Int(1) != 0;
+    handle.mInst->mSwapSides = v;
     return 0;
 }
 
