@@ -439,6 +439,25 @@ config.custom_build_steps = {
     ],
 }
 
+# *** A PATCHER'S OWN SOURCE IS AN INPUT TO ITS OWN EDGE. ***
+# Every step above lists the previous stamp and `all_source`, so it re-fires when
+# an OBJECT changes underneath it (the 2026-08-09 fix).  Nothing listed the
+# SCRIPT, so changing what a patcher does re-fired nothing: its stamp was still
+# newer than every object, ninja said "no work to do", and the tree kept the old
+# patches.  Measured 2026-08-12 -- obj_anon_ns_patcher.py was rewritten to assign
+# hashes per SYMBOL (+132 functions in its own worktree, where it had been run by
+# hand), the branch merged, `ninja` reported success, and dc3 measured +0 of it:
+# stamp 03:57, script 06:02.  A landed change that measures as nothing looks
+# exactly like a lane that overstated itself, which is the expensive way to find
+# this.
+# Derived from each step's own `cmd` rather than hand-listed, so a new patcher
+# cannot be added without its dependency.
+for _step in config.custom_build_steps["post-compile"]:
+    _cmd = _step["variables"]["cmd"]
+    for _tok in _cmd.split():
+        if _tok.endswith(".py") and (config.build_dir.parent / _tok).exists():
+            _step.setdefault("implicit", []).append(_tok)
+
 # Object files
 Matching = True
 Equivalent = config.non_matching
