@@ -383,6 +383,13 @@ def main():
                          "pre-gate-5 candidate set for comparison")
     ap.add_argument("--identity-report",
                     help="write the per-name byte comparison here")
+    ap.add_argument("--ignore-installed-prefix", metavar="PREFIX",
+                    help="treat groups already in symbol_aliases.json whose "
+                         "name starts with PREFIX as absent when checking for "
+                         "collisions. An installer that owns a tier must pass "
+                         "its own prefix or the second run finds every group "
+                         "it installed itself and refuses all of them, which "
+                         "reads as the class evaporating")
     ap.add_argument("--padding-evidence", nargs="?", const="??_8",
                     metavar="PREFIX",
                     help="tabulate padded-vs-flush against the successor's "
@@ -426,10 +433,18 @@ def main():
 
     v2n = retail_map()
     doc = json.loads(ALIAS.read_text())
-    spoken = {n for g in doc["groups"]
+    installed = [g for g in doc["groups"]
+                 if not (args.ignore_installed_prefix
+                         and g.get("name", "").startswith(
+                             args.ignore_installed_prefix))]
+    if len(installed) != len(doc["groups"]):
+        print(f"ignoring {len(doc['groups']) - len(installed)} installed "
+              f"{args.ignore_installed_prefix!r} group(s) when checking "
+              f"collisions")
+    spoken = {n for g in installed
               for n in (g["survivor"], *g.get("folded", []))}
     have_addr = {int(str(g["address"]).removeprefix("0x"), 16)
-                 for g in doc["groups"] if g.get("address")}
+                 for g in installed if g.get("address")}
 
     keep = None
     if args.restrict_to:
