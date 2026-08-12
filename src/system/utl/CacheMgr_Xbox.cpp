@@ -486,30 +486,30 @@ void CacheMgrXbox::PollMount() {
 }
 
 void CacheMgrXbox::PollUnmount() {
-    if (mOverlapped.InternalLow != 0x3E5) {
-        DWORD dw;
-        DWORD res = XGetOverlappedResult(&mOverlapped, &dw, false);
-        if (res != 0) {
-            if (res != 0x15 && res != 0x456 && res != 0x48F && res != 0x651
-                && XContentGetDeviceState(mCacheIDXbox->DeviceID(), nullptr) != 0) {
-                SetLastResult(kCache_ErrorStorageDeviceMissing);
-            } else {
-                MILO_NOTIFY(
-                    "CacheMgrXbox::PollUnmount(): Unhandled error returned from XContentClose().\n"
-                );
-                SetLastResult(kCache_ErrorUnknown);
-            }
-        } else {
-            SetLastResult(kCache_NoError);
-        }
-        RELEASE(*mppCache);
-        mppCache = nullptr;
-        SetOp(kOpNone);
-        if (mCallback) {
-            static Message msg("cache_mgr_unmount_result", GetLastResult());
-            msg[0] = GetLastResult();
-            mCallback->Handle(msg, true);
-            mCallback = nullptr;
-        }
+    if (mOverlapped.InternalLow == 0x3E5)
+        return;
+    DWORD dw;
+    DWORD res = XGetOverlappedResult(&mOverlapped, &dw, false);
+    if (res != 0)
+        if (res == 0x15 || res == 0x456 || res == 0x48F || res == 0x651)
+            SetLastResult(kCache_ErrorStorageDeviceMissing);
+        else if (XContentGetDeviceState(mCacheIDXbox->DeviceID(), nullptr) != 0)
+            SetLastResult(kCache_ErrorStorageDeviceMissing);
+        else
+            SetLastResult(
+                (MILO_NOTIFY("CacheMgrXbox::PollUnmount(): Unhandled error returned from "
+                             "XContentClose().\n"),
+                 kCache_ErrorUnknown)
+            );
+    else
+        SetLastResult(kCache_NoError);
+    RELEASE(*mppCache);
+    mppCache = nullptr;
+    SetOp(kOpNone);
+    if (mCallback) {
+        static Message msg("cache_mgr_unmount_result", GetLastResult());
+        msg[0] = GetLastResult();
+        mCallback->Handle(msg, true);
+        mCallback = nullptr;
     }
 }
