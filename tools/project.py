@@ -1865,6 +1865,30 @@ def generate_objdiff_config(
         ],
         "units": [],
         "progress_categories": [],
+        # Relocation ruler. The objdiff default, `none`, compares a relocation's
+        # POSITION and TYPE but not the NAME of the symbol it points at, so a `bl`
+        # to the wrong callee, a load of the wrong global, or a reference to the
+        # wrong float constant all score a COMPLETE match. That is not theoretical
+        # here: an audit of the strict census found 32 functions whose .text was
+        # byte-identical to retail and which called the wrong thing -- among them
+        # EaseInExp raising t to 3.03 where retail raises it to 3.76, and
+        # MsgSinks::RemoveSink reporting at the wrong severity.
+        #
+        # `name_check` is `name_only` plus the tolerances a SPLIT target object
+        # requires: a missing left-side relocation and a placeholder-named left
+        # target (`fn_8xxxxxxx`, `lbl_*`, `$L…`) are unverifiable rather than
+        # wrong, COFF weak-external aliases (`??_E` defaulting to `??_G`) are one
+        # body, template array-size instantiations are the same code, and two
+        # non-code sections are the same logical section. It honours the ICF
+        # equivalence classes in `map_file` by design.
+        #
+        # This DOES lower every recorded progress number, and the drop is the
+        # point: it is the part of the corpus that was being credited without
+        # being checked. Measured at the flip, dc3 goes 43.7276% -> 40.3618%
+        # matched_code, exposing 1,166 of 29,182 complete functions.
+        "options": {
+            "functionRelocDiffs": "name_check",
+        },
     }
 
     # ICF-fold symbol alias map. Retail's /OPT:ICF link folds byte-identical

@@ -40405,5 +40405,8 @@
       "name": "XDK Code"
     }
   ],
+  "options": {
+    "functionRelocDiffs": "name_check"
+  },
   "map_file": "build/373307D9/icf_aliases.map"
 }
