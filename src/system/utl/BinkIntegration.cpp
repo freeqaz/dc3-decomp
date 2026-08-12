@@ -105,23 +105,9 @@ void ReadFunc(BINKIO *bink, bool startRead);
 unsigned int BinkFileReadFrame(BINKIO *bink, unsigned int frameOffset, int hasHeader, void *dest, unsigned int length);
 unsigned int BinkFileIdle(BINKIO *bink);
 
-template<typename T>
-void EndianSwapBlock(T *block, int count) {
-    MILO_ASSERT(block != NULL, 0x53);
-    MILO_ASSERT(count >= 0, 0x54);
-
-    T *cur = block;
-    T *end = block + count;
-    if (cur != end) {
-        do {
-            *cur = EndianSwap(*cur);
-            cur++;
-        } while (cur != end);
-    }
-}
-
 // Explicit instantiation for unsigned int
 template void EndianSwapBlock<unsigned int>(unsigned int *, int);
+
 
 int BinkFileBGControl(BINKIO *file, unsigned int flags) {
     char *pByte = (char *)file;

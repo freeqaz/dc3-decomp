@@ -27,7 +27,11 @@ public:
     NEW_OBJ(ColorPalette)
 
     int NumColors() const { return mColors.size(); }
-    const Hmx::Color &GetColor(int idx) const;
+    const Hmx::Color &GetColor(int idx) const {
+        MILO_ASSERT(mColors.size(), 0x18);
+        int colorIdx = idx % mColors.size();
+        return mColors[colorIdx];
+    }
 
 protected:
     ColorPalette();
