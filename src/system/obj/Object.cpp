@@ -528,7 +528,7 @@ DataArray *GetNextPropPath() {
             return gPropPaths[i];
         }
     }
-    MILO_FAIL("Recursive SetProperty call count greater than %d!", 8);
+    MILO_FAIL("Recursive SetProperty call count greater than %d!", DIM(gPropPaths));
     return nullptr;
 }
 

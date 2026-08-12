@@ -348,7 +348,9 @@ DataNode RndTransformable::OnGetLocalPos(const DataArray *da) {
 
 DataNode RndTransformable::OnGetLocalPosIndex(const DataArray *a) {
     MILO_ASSERT(a->Int(2) < 3, 0x351);
-    return mLocalXfm.v[a->Int(2)];
+    // retail reads through the const Vector3::operator[] (??AVector3@@QBAABMH@Z)
+    const Transform &xfm = mLocalXfm;
+    return xfm.v[a->Int(2)];
 }
 
 DataNode RndTransformable::OnGetLocalRot(const DataArray *a) {

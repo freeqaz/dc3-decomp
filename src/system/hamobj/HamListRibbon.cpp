@@ -398,7 +398,10 @@ void HamListRibbon::SetDisengageFrame(float f1) {
 float HamListRibbon::GetLabelTotalAlpha() const {
     float ret = 1;
     for (unsigned int i = 0; i < mLabelPlaceholder->NumStyles(); i++) {
-        ret *= mLabelPlaceholder->Style(i).GetAlpha();
+        // retail reads the const UILabel::Style overload (?Style@UILabel@@QBA...);
+        // ObjPtr::operator-> hands back a non-const UILabel* even from a const method.
+        const UILabel *placeholder = mLabelPlaceholder;
+        ret *= placeholder->Style(i).GetAlpha();
     }
     return ret;
 }

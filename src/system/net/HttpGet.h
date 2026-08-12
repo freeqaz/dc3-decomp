@@ -101,7 +101,7 @@ protected:
     virtual void Sending();
 
     const char *mContent; // 0x88
-    unsigned int mContentLength; // 0x8c
+    int mContentLength; // 0x8c
     int mBytesRemaining; // 0x90
     String mRequestHeaders; // 0x94
     int mHeaderLength;
