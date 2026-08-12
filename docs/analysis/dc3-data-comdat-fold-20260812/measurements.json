@@ -1,0 +1,116 @@
+{
+ "what": "Retail-map ICF fold classes over DATA COMDATs -- the class the installed retail_map_classes generator could not see, because it evaluates its gates with coff_ppc.parse().funcs and every folded data COMDAT is therefore invisible to it. Strengthened with a fifth gate (byte identity of the COMDAT against the target survivor, the condition /OPT:ICF actually tests) and installed as a fourth evidence tier, 'retailmap-data:'.",
+ "tree_pin": "dc3-decomp 85c36e082, branch laneG-datafolds",
+ "generator": "scripts/retail_map_fold_candidates.py",
+ "installer": "scripts/install_data_fold_aliases.py",
+ "how_measured": {
+  "command": "objdiff-cli report generate -p . -c functionRelocDiffs=<RULER> -o <FILE>",
+  "rulers_passed_explicitly": true,
+  "why": "objdiff.json's options block sets functionRelocDiffs=name_check, so any run that omits -c silently inherits it. tools/progress.sh is a THIRD ruler (ninja's report rule is hard-coded to name_address) and does not reconcile with either of these.",
+  "complete_functions": "compared as SETS of (unit, function) at fuzzy_match_percent == 100.0, not as an aggregate percentage",
+  "cache_hazard": "objdiff-cli writes a sidecar <output>.cache and seeds the next run from it; the key is hash_unit + hash_options and does NOT include objdiff.json's map_file. Every number here was taken after deleting the sidecar and was verified to be 0 cache hits / 2224 misses. See the note below."
+ },
+ "baseline": {
+  "name_check": {"pct": 41.731250, "bytes": 4746272, "complete_fns": 28532},
+  "none": {"pct": 43.730614, "bytes": 4973668, "complete_fns": 29183},
+  "matched_data": 6732
+ },
+ "arms": [
+  {
+   "name": "INSTALLED -- full-map sweep, identity align",
+   "groups": 106,
+   "names": 426,
+   "name_check": {"pct": 42.431480, "bytes": 4825912, "delta_bytes": 79640,
+                  "complete_fns": 28730, "delta": "+198 / -0"},
+   "none": "43.730614% / 4,973,668 bytes / 29,183 complete -- the complete-function SET is identical, not merely the total",
+   "matched_data": 6732,
+   "none_guard": "clean: 0 functions lost, matched_data unmoved, ??_C@ string-COMDAT fingerprint unmoved"
+  },
+  {
+   "name": "control -- full-map sweep, identity strict (no padding normalisation)",
+   "groups": 79,
+   "names": 340,
+   "name_check": {"pct": 42.276100, "bytes": 4808240, "delta_bytes": 61968,
+                  "complete_fns": 28675, "delta": "+143 / -0"},
+   "none": "43.730614% / 4,973,668 bytes / 29,183 complete -- unmoved",
+   "note": "strict refuses the 27 groups whose survivor carries alignment padding, including the 99-spelling class. The padding normalisation is worth +55 functions and +17,672 bytes, so strict is a real control rather than a formality."
+  },
+  {
+   "name": "control -- charged addresses only, identity align",
+   "groups": 99,
+   "names": 412,
+   "restrict_to": "docs/analysis/namecheck-residency-split-20260812/pairs_both_mapped_same_addr.json",
+   "name_check": {"pct": 42.428560, "bytes": 4825580, "delta_bytes": 79308,
+                  "complete_fns": 28728, "delta": "+196 / -0"},
+   "none": "unmoved",
+   "note": "the full sweep's extra 7 groups are worth +2 functions; the value of the class is concentrated at addresses the residency split already charged."
+  }
+ ],
+ "inherited_numbers_superseded": {
+  "source": "lane-C merge a3b1102db",
+  "said": "101 groups / 417 names -> +201 / -0 and 115 groups / 463 names -> +205 / -0, both from a name_check baseline of 40.560802%",
+  "why_different": "four lanes landed on top of that baseline, which is now 41.731250%, and gate 5 refuses 9 of the 115. Re-measured from today's HEAD the class is +198 / -0 at 106 groups. The inherited figures are not retracted, they were taken against a different tree."
+ },
+ "gate_5": {
+  "what": "For every member our objects DEFINE, the COMDAT contents must equal the target survivor's, with relocation-patched fields masked and relocation targets compared by name. A group with a mismatching member, or with no member our objects define, is refused fail-closed.",
+  "probe_over_all_vbtables": {
+   "our_definitions": 571,
+   "target_definitions": 254,
+   "defined_both_sides": 254,
+   "byte_identical": 176,
+   "ours_plus_4_trailing_zeros": 78,
+   "genuinely_different_content": 0,
+   "distinct_contents_among_our_571": 254,
+   "most_common_content": {"bytes": "fffffffcffffffcc", "spellings": 99,
+                           "note": "independently the 99-spellings-at-one-address class the lane-C message held for an owner call; byte identity confirms that fold at the mechanism level."}
+  },
+  "refused": {
+   "total": 9,
+   "relocation targets differ": 6,
+   "our objects define no member of this class, so nothing checks the fold": 3,
+   "detail": "refused_by_byte_identity.json",
+   "not_plumbing": "??_7bad_typeid's slot 0 points at ??_Ebad_typeid on our side and ??_E__non_rtti_object on the target's -- a further fold claim, about the scalar deleting destructors, that address-sharing does not carry. dtk carved ?SUBSAMPLED_HALF_WIDTH over 8 bytes whose second word relocates to an ??_R4, so the target survivor is not the 4-byte float our __real@42200000 is. The remaining four are stlpmtx_std template bodies calling different callees. The 3 undefined ones are XAPO/CXAPOBase."
+  }
+ },
+ "padding_verdict": {
+  "question": "78 of 254 target-side vbtable COMDATs are exactly ours + 4 trailing zeros. dtk splitter padding, or a real retail emission difference?",
+  "verdict": "PADDING, attributed to the vbtable by dtk's splitter.",
+  "discriminator": "dtk sizes a split symbol by the gap to the next thing it can name, so under the padding reading the tail must track the SUCCESSOR's alignment and under the emission reading it cannot. Tabulated over all 254 by `retail_map_fold_candidates.py --padding-evidence`; no exceptions.",
+  "table": {
+   "flush / successor only 4-byte aligned / our end off the boundary": 47,
+   "flush / successor needs 8-byte alignment / our end on the boundary": 129,
+   "padded / successor needs 8-byte alignment / our end off the boundary": 78
+  },
+  "the_control": "the 47. Their last word sits at addr % 8 == 4 and they are NOT padded, because the datum after them only wanted 4-byte alignment. An emitted terminator entry would be present in all 254 regardless of what follows.",
+  "corroboration": [
+   "every ??_8 COMDAT we emit is IMAGE_SCN_ALIGN_4BYTES (792/792), so the linker never pads a vbtable for the vbtable's own sake and any padding after one belongs to what follows",
+   "the target size histogram is 12:103, 8:96, 16:36, 24:10, 20:9 -- not the uniform '+1 terminator entry' shape a real emission difference would give",
+   "the 4 bytes are zero, and a vbtable entry of 0 would mean a virtual base at displacement 0 from the vbptr, which is degenerate"
+  ],
+  "rows": "padding_evidence.json"
+ },
+ "decomp_synth_validator": {
+  "verdict": "rejects 102 of the 106, all on gate (a) and on nothing else; 4 pass outright",
+  "gate_a": "survivor is a value in scripts/target_symbol_map.json",
+  "why_it_cannot_run": "that file holds 0 data symbols in 69,132 names -- the same function-only blindness as the installer, one layer up",
+  "why_installed_anyway": "the check gate (a) stands for is made twice and more directly by gate 4 (the target OBJECTS define exactly one member) and gate 5 (that member's bytes are ours). load_validated therefore drops these classes and decomp-synth grades STRICTER than the rendered map, which is the safe direction and the one gen_icf_alias_map.py's header already describes. objdiff reads build/373307D9/icf_aliases.map and honours them.",
+  "real_repair_not_done_here": "widen scripts/target_symbol_map.json so gate (a) is runnable rather than waived. It is a 69,132-entry committed artifact that decomp-synth grades against and that no in-repo script regenerates; rewriting it is not this lane's call."
+ },
+ "defects_found_and_fixed": [
+  {
+   "what": "COMDAT extent was read from the section start rather than from the symbol's Value",
+   "impact": "MSVC puts ??_7 at Value=4 behind the complete-object-locator pointer (5,220/5,220 of ours) and dtk puts it at 0 (2,863/2,863), so reading from 0 compared our 12-byte [??_R4 ptr][slot][slot] against the target's 8-byte [slot][slot] and called a matching vftable a content mismatch. Every ??_8 is at Value=0 on both sides, so the vbtable numbers are unaffected.",
+   "fixed_in": "scripts/retail_map_fold_candidates.py comdat_contents()"
+  },
+  {
+   "what": "the generator's collision gate saw the tier its own installer had installed",
+   "impact": "rerunning the installer took 106 groups to 9 candidates and then to 0 after gate 5 -- the class appearing to evaporate when the file was in fact already correct",
+   "fixed_in": "--ignore-installed-prefix"
+  },
+  {
+   "what": "objdiff-cli report cache does not key on objdiff.json's map_file",
+   "impact": "`report generate -o X.json` writes a sidecar X.cache and seeds the next run from it, keyed on hash_unit + hash_options. Re-running into the same -o path after only the ICF alias map changed returned 2224 hits and a report byte-identical to the baseline for a map with 340 more names in it -- a +143-function change measured as +0. build/373307D9/report.cache is the same sidecar for ninja's PROGRESS output and poisons a plain `report generate -p .` the same way. tools/none_guard.py was exposed in the direction that matters: a cached report cannot show a lost function, so it always says 'none is intact'.",
+   "fixed_in": "tools/none_guard.py now purges the sidecar and refuses to grade a report with any cache hit"
+  }
+ ]
+}
