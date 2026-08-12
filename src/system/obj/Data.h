@@ -332,7 +332,6 @@ private:
     ~DataArray();
 
 public:
-    static Symbol gFile;
     static DataFunc *sDefaultHandler;
     static void SetFile(Symbol);
 

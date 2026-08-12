@@ -1,0 +1,1047 @@
+[
+  {
+    "target": "?Notify@Debug@@QAAXPBD@Z",
+    "base": "?Warn@Debug@@QAAXPBD@Z",
+    "sites": 5,
+    "functions": 5,
+    "units": [
+      "default/system/obj/DataFile",
+      "default/system/obj/Utl",
+      "default/system/ui/UIList",
+      "default/system/world/Dir",
+      "default/system/world/LightPreset"
+    ],
+    "target_addr": [
+      "0x825ce0e8"
+    ],
+    "base_addr": [
+      "0x825ce000"
+    ],
+    "target_obj": "os:Debug.obj",
+    "base_obj": "os:Debug.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??1String@@UAA@XZ",
+    "base": "??1DataNode@@QAA@XZ",
+    "sites": 2,
+    "functions": 2,
+    "units": [
+      "default/system/obj/Dir",
+      "default/system/os/Memcard_Xbox"
+    ],
+    "target_addr": [
+      "0x827ce2b0"
+    ],
+    "base_addr": [
+      "0x8254ca70"
+    ],
+    "target_obj": "utl:Str.obj",
+    "base_obj": "App.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??0String@@QAA@PBD@Z",
+    "base": "??0FilePath@@QAA@PBD@Z",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/obj/Dir"
+    ],
+    "target_addr": [
+      "0x827ce9e8"
+    ],
+    "base_addr": [
+      "0x823311b0"
+    ],
+    "target_obj": "utl:Str.obj",
+    "base_obj": "App.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??1?$Keys@UWeight@@U1@@@QAA@XZ",
+    "base": "??1DataNode@@QAA@XZ",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Morph"
+    ],
+    "target_addr": [
+      "0x827174f8"
+    ],
+    "base_addr": [
+      "0x8254ca70"
+    ],
+    "target_obj": "rndobj:Morph.obj",
+    "base_obj": "App.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??1?$ObjPtr@VWorldInstance@@@@UAA@XZ",
+    "base": "??1String@@UAA@XZ",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/world/Instance"
+    ],
+    "target_addr": [
+      "0x828547e0"
+    ],
+    "base_addr": [
+      "0x827ce2b0"
+    ],
+    "target_obj": "world:Instance.obj",
+    "base_obj": "utl:Str.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??1?$ObjRefConcrete@VRndAnimatable@@VObjectDir@@@@UAA@XZ",
+    "base": "??1ObjRefOwner@@UAA@XZ",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Anim"
+    ],
+    "target_addr": [
+      "0x823d2440"
+    ],
+    "base_addr": [
+      "0x8233d408"
+    ],
+    "target_obj": "char:CharClip.obj",
+    "base_obj": "char:Char.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??1?$_List_base@UPresetOverride@WorldDir@@V?$StlNodeAlloc@UPresetOverride@WorldDir@@@stlpmtx_std@@@stlpmtx_std@@QAA@XZ",
+    "base": "??1?$_List_base@UMatOverride@WorldDir@@V?$StlNodeAlloc@UMatOverride@WorldDir@@@stlpmtx_std@@@stlpmtx_std@@QAA@XZ",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/world/Dir"
+    ],
+    "target_addr": [
+      "0x828074b0"
+    ],
+    "base_addr": [
+      "0x82806c60"
+    ],
+    "target_obj": "world:Dir.obj",
+    "base_obj": "world:Dir.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??1?$pair@$$CBVString@@I@stlpmtx_std@@QAA@XZ",
+    "base": "??1DataNode@@QAA@XZ",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/obj/Dir"
+    ],
+    "target_addr": [
+      "0x827cfe20"
+    ],
+    "base_addr": [
+      "0x8254ca70"
+    ],
+    "target_obj": "os:PlatformMgr_Xbox.obj",
+    "base_obj": "App.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??1?$pair@$$CBVString@@I@stlpmtx_std@@QAA@XZ",
+    "base": "??1MessageTimer@@QAA@XZ",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/obj/Dir"
+    ],
+    "target_addr": [
+      "0x827cfe20"
+    ],
+    "base_addr": [
+      "0x82341a78"
+    ],
+    "target_obj": "os:PlatformMgr_Xbox.obj",
+    "base_obj": "char:CharLipSync.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??1?$vector@UNode@?$ObjPtrVec@VRndTex@@VObjectDir@@@@V?$StlNodeAlloc@UNode@?$ObjPtrVec@VRndTex@@VObjectDir@@@@@stlpmtx_std@@@stlpmtx_std@@QAA@XZ",
+    "base": "??1?$vector@UNode@?$ObjPtrVec@VRndTransformable@@VObjectDir@@@@V?$StlNodeAlloc@UNode@?$ObjPtrVec@VRndTransformable@@VObjectDir@@@@@stlpmtx_std@@@stlpmtx_std@@QAA@XZ",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/gesture/StreamRecorder"
+    ],
+    "target_addr": [
+      "0x82e03ea8"
+    ],
+    "base_addr": [
+      "0x82349208"
+    ],
+    "target_obj": "gesture:StreamRecorder.obj",
+    "base_obj": "char:CharBonesMeshes.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??1?$vector@VVector2@@V?$StlNodeAlloc@VVector2@@@stlpmtx_std@@@stlpmtx_std@@QAA@XZ",
+    "base": "??1?$Key@V?$vector@VColor@Hmx@@V?$StlNodeAlloc@VColor@Hmx@@@stlpmtx_std@@@stlpmtx_std@@@@QAA@XZ",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/MeshAnim"
+    ],
+    "target_addr": [
+      "0x82535da8"
+    ],
+    "base_addr": [
+      "0x82630ea0"
+    ],
+    "target_obj": "math:Geo.obj",
+    "base_obj": "rndobj:Utl.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??1BaseMaterial@@UAA@XZ",
+    "base": "??1FilePath@@UAA@XZ",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Mat"
+    ],
+    "target_addr": [
+      "0x826ca268"
+    ],
+    "base_addr": [
+      "0x827cfe20"
+    ],
+    "target_obj": "rndobj:Mat.obj",
+    "base_obj": "App.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??1ChallengeSort@@UAA@XZ",
+    "base": "??1NavListSortMgr@@UAA@XZ",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/lazer/meta_ham/ChallengeSortMgr"
+    ],
+    "target_addr": [
+      "0x82912520"
+    ],
+    "base_addr": [
+      "0x82910598"
+    ],
+    "target_obj": "meta_ham:ChallengeSortMgr.obj",
+    "base_obj": "meta_ham:NavListSortMgr.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??1CompareMoveVariantName@@QAA@XZ",
+    "base": "??1?$list@PAVMidiParser@@V?$StlNodeAlloc@PAVMidiParser@@@stlpmtx_std@@@stlpmtx_std@@QAA@XZ",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/midi/MidiParser"
+    ],
+    "target_addr": [
+      "0x8254ca70"
+    ],
+    "base_addr": [
+      "0x8254a1f8"
+    ],
+    "target_obj": "hamobj:MiniGameMgr.obj",
+    "base_obj": "midi:MidiParser.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??1CompareMoveVariantName@@QAA@XZ",
+    "base": "??1?$list@PAVRndPollable@@V?$StlNodeAlloc@PAVRndPollable@@@stlpmtx_std@@@stlpmtx_std@@QAA@XZ",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Dir"
+    ],
+    "target_addr": [
+      "0x8254ca70"
+    ],
+    "base_addr": [
+      "0x82655be0"
+    ],
+    "target_obj": "hamobj:MiniGameMgr.obj",
+    "base_obj": "rndobj:Dir.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??1CompareMoveVariantName@@QAA@XZ",
+    "base": "??1FilePath@@UAA@XZ",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/obj/Dir"
+    ],
+    "target_addr": [
+      "0x8254ca70"
+    ],
+    "base_addr": [
+      "0x827cfe20"
+    ],
+    "target_obj": "hamobj:MiniGameMgr.obj",
+    "base_obj": "App.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??1FxSendSynapse@@UAA@XZ",
+    "base": "??1?$CSampleXAPOBase@VFlangerEffect@@UParams@1@@ATG@@MAA@XZ",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/synth_xbox/FxSendChorus"
+    ],
+    "target_addr": [
+      "0x82762458"
+    ],
+    "base_addr": [
+      "0x82e33b28"
+    ],
+    "target_obj": "synth:FxSendSynapse.obj",
+    "base_obj": "synth_xbox:FxSendChorus.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??1HolmesInput@@UAA@XZ",
+    "base": "?clear@?$_List_base@VString@@V?$StlNodeAlloc@VString@@@stlpmtx_std@@@stlpmtx_std@@QAAXXZ",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/os/HolmesClient"
+    ],
+    "target_addr": [
+      "0x82600c28"
+    ],
+    "base_addr": [
+      "0x8234c368"
+    ],
+    "target_obj": "os:HolmesKeyboard.obj",
+    "base_obj": "char:CharBoneDir.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??1Loader@@UAA@XZ",
+    "base": "??1?$list@PAVLoader@@V?$StlNodeAlloc@PAVLoader@@@stlpmtx_std@@@stlpmtx_std@@QAA@XZ",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/utl/Loader"
+    ],
+    "target_addr": [
+      "0x827d15f0"
+    ],
+    "base_addr": [
+      "0x827d1920"
+    ],
+    "target_obj": "utl:Loader.obj",
+    "base_obj": "utl:Loader.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??1MemDoTempAllocations@@QAA@XZ",
+    "base": "??1CritSecTracker@@QAA@XZ",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/utl/MemMgr"
+    ],
+    "target_addr": [
+      "0x823616b8"
+    ],
+    "base_addr": [
+      "0x82552e18"
+    ],
+    "target_obj": "char:CharClipGroup.obj",
+    "base_obj": "movie:Splash.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??1Message@@UAA@XZ",
+    "base": "??1DataNode@@QAA@XZ",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/ui/UIList"
+    ],
+    "target_addr": [
+      "0x825fda60"
+    ],
+    "base_addr": [
+      "0x8254ca70"
+    ],
+    "target_obj": "App.obj",
+    "base_obj": "App.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??1MessageTimer@@QAA@XZ",
+    "base": "??1FilePath@@UAA@XZ",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/obj/Dir"
+    ],
+    "target_addr": [
+      "0x82341a78"
+    ],
+    "base_addr": [
+      "0x827cfe20"
+    ],
+    "target_obj": "char:CharLipSync.obj",
+    "base_obj": "App.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??1Node@?$ObjPtrVec@VRndEnviron@@VObjectDir@@@@UAA@XZ",
+    "base": "??1Node@?$ObjPtrVec@VSpotlightDrawer@@VObjectDir@@@@UAA@XZ",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/world/LightPreset"
+    ],
+    "target_addr": [
+      "0x823516e8"
+    ],
+    "base_addr": [
+      "0x82840078"
+    ],
+    "target_obj": "world:LightPreset.obj",
+    "base_obj": "world:LightPreset.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??1ObjRef@@UAA@XZ",
+    "base": "??1DataNode@@QAA@XZ",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/world/Dir"
+    ],
+    "target_addr": [
+      "0x823312b0"
+    ],
+    "base_addr": [
+      "0x8254ca70"
+    ],
+    "target_obj": "App.obj",
+    "base_obj": "App.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??1Object@Hmx@@UAA@XZ",
+    "base": "??1?$_String_base@DV?$allocator@D@stlpmtx_std@@@stlpmtx_std@@IAA@XZ",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/midi/MidiParser"
+    ],
+    "target_addr": [
+      "0x825ac9a0"
+    ],
+    "base_addr": [
+      "0x82348420"
+    ],
+    "target_obj": "obj:Object.obj",
+    "base_obj": "char:CharBonesMeshes.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??1Object@Hmx@@UAA@XZ",
+    "base": "??1?$list@PAVTriangle@@V?$StlNodeAlloc@PAVTriangle@@@stlpmtx_std@@@stlpmtx_std@@QAA@XZ",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/AmbientOcclusion"
+    ],
+    "target_addr": [
+      "0x825ac9a0"
+    ],
+    "base_addr": [
+      "0x826dd7b0"
+    ],
+    "target_obj": "obj:Object.obj",
+    "base_obj": "rndobj:AmbientOcclusion.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??1Object@Hmx@@UAA@XZ",
+    "base": "??1NavListNode@@UAA@XZ",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/lazer/meta_ham/NavListNode"
+    ],
+    "target_addr": [
+      "0x825ac9a0"
+    ],
+    "base_addr": [
+      "0x829744e0"
+    ],
+    "target_obj": "obj:Object.obj",
+    "base_obj": "meta_ham:NavListNode.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??1Object@Hmx@@UAA@XZ",
+    "base": "??1UIListWidget@@UAA@XZ",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/ui/UIListSlot"
+    ],
+    "target_addr": [
+      "0x825ac9a0"
+    ],
+    "base_addr": [
+      "0x8279af28"
+    ],
+    "target_obj": "obj:Object.obj",
+    "base_obj": "ui:UIListSlot.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??1SeqInst@@UAA@XZ",
+    "base": "??1GroupSeqInst@@UAA@XZ",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/synth/Sequence"
+    ],
+    "target_addr": [
+      "0x827465c0"
+    ],
+    "base_addr": [
+      "0x8274b310"
+    ],
+    "target_obj": "synth:Sequence.obj",
+    "base_obj": "synth:Sequence.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??1String@@UAA@XZ",
+    "base": "??1?$_Vector_base@UCheat@CheatProvider@@V?$StlNodeAlloc@UCheat@CheatProvider@@@stlpmtx_std@@@stlpmtx_std@@QAA@XZ",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/ui/CheatProvider"
+    ],
+    "target_addr": [
+      "0x827ce2b0"
+    ],
+    "base_addr": [
+      "0x827b4278"
+    ],
+    "target_obj": "utl:Str.obj",
+    "base_obj": "ui:CheatProvider.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??1String@@UAA@XZ",
+    "base": "??1CritSecTracker@@QAA@XZ",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/os/Debug"
+    ],
+    "target_addr": [
+      "0x827ce2b0"
+    ],
+    "base_addr": [
+      "0x82552e18"
+    ],
+    "target_obj": "utl:Str.obj",
+    "base_obj": "movie:Splash.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??1String@@UAA@XZ",
+    "base": "??1ObjRefOwner@@UAA@XZ",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/world/LightPreset"
+    ],
+    "target_addr": [
+      "0x827ce2b0"
+    ],
+    "base_addr": [
+      "0x8233d408"
+    ],
+    "target_obj": "utl:Str.obj",
+    "base_obj": "char:Char.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??1String@@UAA@XZ",
+    "base": "??1Object@Hmx@@UAA@XZ",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/lazer/meta_ham/Challenges"
+    ],
+    "target_addr": [
+      "0x827ce2b0"
+    ],
+    "base_addr": [
+      "0x825ac9a0"
+    ],
+    "target_obj": "utl:Str.obj",
+    "base_obj": "obj:Object.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??1UILabel@@UAA@XZ",
+    "base": "??1?$_Vector_base@UNode@?$ObjPtrVec@VRndTransformable@@VObjectDir@@@@V?$StlNodeAlloc@UNode@?$ObjPtrVec@VRndTransformable@@VObjectDir@@@@@stlpmtx_std@@@stlpmtx_std@@QAA@XZ",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/HamLabel"
+    ],
+    "target_addr": [
+      "0x82797430"
+    ],
+    "base_addr": [
+      "0x82347f00"
+    ],
+    "target_obj": "ui:UILabel.obj",
+    "base_obj": "char:CharBonesMeshes.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??3DataArray@@SAXPAX@Z",
+    "base": "??3DirLoader@@SAXPAX@Z",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/HamNavList"
+    ],
+    "target_addr": [
+      "0x82331228"
+    ],
+    "base_addr": [
+      "0x823313e8"
+    ],
+    "target_obj": "App.obj",
+    "base_obj": "App.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??3FlowNode@@SAXPAX@Z",
+    "base": "??3PropertyEventProvider@@SAXPAX@Z",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/flow/Flow"
+    ],
+    "target_addr": [
+      "0x823eb968"
+    ],
+    "base_addr": [
+      "0x823ebcc8"
+    ],
+    "target_obj": "flow:Flow.obj",
+    "base_obj": "flow:Flow.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??3FlowTimer@@SAXPAX@Z",
+    "base": "??3FlowNode@@SAXPAX@Z",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/flow/Flow"
+    ],
+    "target_addr": [
+      "0x823ec6e8"
+    ],
+    "base_addr": [
+      "0x823eb968"
+    ],
+    "target_obj": "flow:Flow.obj",
+    "base_obj": "flow:Flow.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??3FxSendChorus@@SAXPAX@Z",
+    "base": "??3FxSendWah@@SAXPAX@Z",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/synth_xbox/Synth"
+    ],
+    "target_addr": [
+      "0x82734498"
+    ],
+    "base_addr": [
+      "0x82734d18"
+    ],
+    "target_obj": "synth:Synth.obj",
+    "base_obj": "synth:Synth.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??3FxSendDistortion@@SAXPAX@Z",
+    "base": "??3FxSendReverb@@SAXPAX@Z",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/synth_xbox/Synth"
+    ],
+    "target_addr": [
+      "0x82734658"
+    ],
+    "base_addr": [
+      "0x82734258"
+    ],
+    "target_obj": "synth:Synth.obj",
+    "base_obj": "synth:Synth.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??3FxSendEQ@@SAXPAX@Z",
+    "base": "??3FxSendPitchShift@@SAXPAX@Z",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/synth_xbox/Synth"
+    ],
+    "target_addr": [
+      "0x82734898"
+    ],
+    "base_addr": [
+      "0x82734bf8"
+    ],
+    "target_obj": "synth:Synth.obj",
+    "base_obj": "synth:Synth.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??3FxSendMeterEffect@@SAXPAX@Z",
+    "base": "??3FxSendSynapse@@SAXPAX@Z",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/synth_xbox/Synth"
+    ],
+    "target_addr": [
+      "0x82734ad8"
+    ],
+    "base_addr": [
+      "0x82734e38"
+    ],
+    "target_obj": "synth:Synth.obj",
+    "base_obj": "synth:Synth.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??3SkeletonViz@@SAXPAX@Z",
+    "base": "??3FitnessFilterObj@@SAXPAX@Z",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/gesture/Gesture"
+    ],
+    "target_addr": [
+      "0x82442ff8"
+    ],
+    "base_addr": [
+      "0x82deb3e0"
+    ],
+    "target_obj": "gesture:SkeletonViz.obj",
+    "base_obj": "gesture:Gesture.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??3UIListCustom@@SAXPAX@Z",
+    "base": "??3UIListSubList@@SAXPAX@Z",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/ui/UIList"
+    ],
+    "target_addr": [
+      "0x8278a9e8"
+    ],
+    "base_addr": [
+      "0x8278ad48"
+    ],
+    "target_obj": "ui:UIList.obj",
+    "base_obj": "ui:UIList.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??AVector3@@QBAABMH@Z",
+    "base": "??AVector3@@QAAAAMH@Z",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Trans"
+    ],
+    "target_addr": [
+      "0x82389dc0"
+    ],
+    "base_addr": [
+      "0x8236ef88"
+    ],
+    "target_obj": "char:CharIKFoot.obj",
+    "base_obj": "char:CharLookAt.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "?CacheMgrInit@@YAXXZ",
+    "base": "?NetCacheMgrInit@@YAXXZ",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/os/System"
+    ],
+    "target_addr": [
+      "0x827ed060"
+    ],
+    "base_addr": [
+      "0x827f0270"
+    ],
+    "target_obj": "utl:CacheMgr.obj",
+    "base_obj": "utl:NetCacheMgr.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "?NetCacheMgrInit@@YAXXZ",
+    "base": "?Init@FileCache@@SAXXZ",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/os/System"
+    ],
+    "target_addr": [
+      "0x827f0270"
+    ],
+    "base_addr": [
+      "0x823e3b70"
+    ],
+    "target_obj": "utl:NetCacheMgr.obj",
+    "base_obj": "os:FileCache.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "?Notify@Debug@@QAAXPBD@Z",
+    "base": "??6TextStream@@QAAAAV0@PBD@Z",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/HamDirector"
+    ],
+    "target_addr": [
+      "0x825ce0e8"
+    ],
+    "base_addr": [
+      "0x827d25d0"
+    ],
+    "target_obj": "os:Debug.obj",
+    "base_obj": "utl:TextStream.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "?PhysicalFreeTracked@@YAXPAXPBDH1@Z",
+    "base": "?MemFree@@YAXPAXPBDH1@Z",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/synth_xbox/SynthSample"
+    ],
+    "target_addr": [
+      "0x82334840"
+    ],
+    "base_addr": [
+      "0x827cb0f0"
+    ],
+    "target_obj": "Memory_Xbox.obj",
+    "base_obj": "utl:MemMgr.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "?Poll@UILabel@@UAAXXZ",
+    "base": "?Poll@UIComponent@@UAAXXZ",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/HamLabel"
+    ],
+    "target_addr": [
+      "0x82793388"
+    ],
+    "base_addr": [
+      "0x82786308"
+    ],
+    "target_obj": "ui:UILabel.obj",
+    "base_obj": "ui:UIComponent.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "?Style@UILabel@@QBAABV0RndText@@H@Z",
+    "base": "?Style@UILabel@@QAAAAV0RndText@@H@Z",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/HamListRibbon"
+    ],
+    "target_addr": [
+      "0x82794b98"
+    ],
+    "base_addr": [
+      "0x82795068"
+    ],
+    "target_obj": "ui:UILabel.obj",
+    "base_obj": "ui:UILabel.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "?Terminate@VirtualKeyboard@@QAAXXZ",
+    "base": "?Terminate@Memcard@@UAAXXZ",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/os/System"
+    ],
+    "target_addr": [
+      "0x825f5ad8"
+    ],
+    "base_addr": [
+      "0x823e3b70"
+    ],
+    "target_obj": "os:VirtualKeyboard.obj",
+    "base_obj": "os:Memcard.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "?gathering@CUgtFilter@NUISPEECH@@QAA_NXZ",
+    "base": "?IsScrolling@UIListState@@QBA_NXZ",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/HamNavList"
+    ],
+    "target_addr": [
+      "0x826018c8"
+    ],
+    "base_addr": [
+      "0x82782db0"
+    ],
+    "target_obj": "nuispeech:ugtfilter.obj",
+    "base_obj": "ui:UIListState.obj",
+    "lanes": [
+      "different_function"
+    ]
+  }
+]

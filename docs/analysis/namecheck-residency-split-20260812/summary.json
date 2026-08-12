@@ -1,0 +1,35 @@
+{
+  "buckets": {
+    "both_mapped_same_addr": {
+      "sites": 618,
+      "pairs": 305,
+      "functions": 204
+    },
+    "survivor_mapped_ours_unmapped": {
+      "sites": 107,
+      "pairs": 31,
+      "functions": 40
+    },
+    "neither_mapped": {
+      "sites": 68,
+      "pairs": 21,
+      "functions": 24
+    },
+    "both_mapped_diff_addr": {
+      "sites": 57,
+      "pairs": 52,
+      "functions": 56
+    },
+    "ambiguous_multi_addr": {
+      "sites": 8,
+      "pairs": 6,
+      "functions": 8
+    },
+    "ours_mapped_survivor_unmapped": {
+      "sites": 5,
+      "pairs": 5,
+      "functions": 5
+    }
+  },
+  "two_cycles": []
+}

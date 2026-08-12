@@ -1,0 +1,6107 @@
+[
+  {
+    "target": "?SUBSAMPLED_HALF_WIDTH@?1???$TransformWorldToSubsampledScreen@$07@ST@@YAXU__vector4@@PAH1@Z@4MB",
+    "base": "__real@42200000",
+    "sites": 8,
+    "functions": 4,
+    "units": [
+      "default/system/char/CharacterTest",
+      "default/system/gesture/DepthBuffer3D",
+      "default/system/hamobj/RhythmBattle",
+      "default/system/synth_xbox/FxSendSynapse"
+    ],
+    "target_addr": [
+      "0x8201ffcc"
+    ],
+    "base_addr": [
+      "0x8201ffcc"
+    ],
+    "target_obj": "ST:bgr.obj",
+    "base_obj": "char:CharacterTest.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??_7bad_typeid@std@@6B@",
+    "base": "??_7bad_cast@std@@6B@",
+    "sites": 4,
+    "functions": 2,
+    "units": [
+      "default/xdk/LIBCMT/rtti"
+    ],
+    "target_addr": [
+      "0x8213e8ac"
+    ],
+    "base_addr": [
+      "0x8213e8ac"
+    ],
+    "target_obj": "LIBCMT:rtti.obj",
+    "base_obj": "LIBCMT:rtti.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_G?$vector@MV?$StlNodeAlloc@M@stlpmtx_std@@@stlpmtx_std@@QAAPAXI@Z",
+    "base": "??_GDebugGraph@?A0xb39b74bf@@QAAPAXI@Z",
+    "sites": 2,
+    "functions": 2,
+    "units": [
+      "default/system/synth/Synth"
+    ],
+    "target_addr": [
+      "0x82738a40"
+    ],
+    "base_addr": [
+      "0x82738a40"
+    ],
+    "target_obj": "synth_xbox:Synapse_dsp.obj",
+    "base_obj": "synth:Synth.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??3@YAXPAX@Z",
+    "base": "?RadFree@?A0x6dfd0232@@YAXPAX@Z",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/moviebink/BinkMovieSys"
+    ],
+    "target_addr": [
+      "0x82abc2a8",
+      "0x82e21268",
+      "0x82eb0c70"
+    ],
+    "base_addr": [
+      "0x82e21268"
+    ],
+    "target_obj": "utl:MemMgr.obj",
+    "base_obj": "moviebink:BinkMovieSys.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??_7bad_typeid@std@@6B@",
+    "base": "??_7__non_rtti_object@std@@6B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/xdk/LIBCMT/rtti"
+    ],
+    "target_addr": [
+      "0x8213e8ac"
+    ],
+    "base_addr": [
+      "0x8213e8ac"
+    ],
+    "target_obj": "LIBCMT:rtti.obj",
+    "base_obj": "LIBCMT:rtti.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8AppLabel@@7BUIComponent@@@",
+    "base": "??_8HamLabel@@7BUIComponent@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/HamLabel"
+    ],
+    "target_addr": [
+      "0x8205a9b0"
+    ],
+    "base_addr": [
+      "0x8205a9b0"
+    ],
+    "target_obj": "meta_ham:MetaPanel.obj",
+    "base_obj": "hamobj:HamLabel.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8AppMiniLeaderboardDisplay@@7BRndDrawable@@@",
+    "base": "??_8AppLabel@@7BRndDrawable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/lazer/meta_ham/MetaPanel"
+    ],
+    "target_addr": [
+      "0x8211ed10"
+    ],
+    "base_addr": [
+      "0x8211ed10"
+    ],
+    "target_obj": "meta_ham:AppMiniLeaderboardDisplay.obj",
+    "base_obj": "meta_ham:MetaPanel.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8AppMiniLeaderboardDisplay@@7BRndDrawable@@@",
+    "base": "??_8HamLabel@@7BRndDrawable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/HamLabel"
+    ],
+    "target_addr": [
+      "0x8211ed10"
+    ],
+    "base_addr": [
+      "0x8211ed10"
+    ],
+    "target_obj": "meta_ham:AppMiniLeaderboardDisplay.obj",
+    "base_obj": "hamobj:HamLabel.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8AppMiniLeaderboardDisplay@@7BRndDrawable@@@",
+    "base": "??_8HamList@@7BRndDrawable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/HamList"
+    ],
+    "target_addr": [
+      "0x8211ed10"
+    ],
+    "base_addr": [
+      "0x8211ed10"
+    ],
+    "target_obj": "meta_ham:AppMiniLeaderboardDisplay.obj",
+    "base_obj": "hamobj:HamList.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8AppMiniLeaderboardDisplay@@7BRndDrawable@@@",
+    "base": "??_8HamNavList@@7BRndDrawable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/HamNavList"
+    ],
+    "target_addr": [
+      "0x8211ed10"
+    ],
+    "base_addr": [
+      "0x8211ed10"
+    ],
+    "target_obj": "meta_ham:AppMiniLeaderboardDisplay.obj",
+    "base_obj": "hamobj:HamNavList.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8AppMiniLeaderboardDisplay@@7BRndDrawable@@@",
+    "base": "??_8HamStarsDisplay@@7BRndDrawable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/lazer/meta_ham/MetaPanel"
+    ],
+    "target_addr": [
+      "0x8211ed10"
+    ],
+    "base_addr": [
+      "0x8211ed10"
+    ],
+    "target_obj": "meta_ham:AppMiniLeaderboardDisplay.obj",
+    "base_obj": "meta_ham:MetaPanel.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8AppMiniLeaderboardDisplay@@7BRndDrawable@@@",
+    "base": "??_8InlineHelp@@7BRndDrawable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/ui/InlineHelp"
+    ],
+    "target_addr": [
+      "0x8211ed10"
+    ],
+    "base_addr": [
+      "0x8211ed10"
+    ],
+    "target_obj": "meta_ham:AppMiniLeaderboardDisplay.obj",
+    "base_obj": "ui:InlineHelp.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8AppMiniLeaderboardDisplay@@7BRndDrawable@@@",
+    "base": "??_8LabelShrinkWrapper@@7BRndDrawable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/ui/LabelShrinkWrapper"
+    ],
+    "target_addr": [
+      "0x8211ed10"
+    ],
+    "base_addr": [
+      "0x8211ed10"
+    ],
+    "target_obj": "meta_ham:AppMiniLeaderboardDisplay.obj",
+    "base_obj": "ui:LabelShrinkWrapper.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8AppMiniLeaderboardDisplay@@7BRndDrawable@@@",
+    "base": "??_8MeterDisplay@@7BRndDrawable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/MeterDisplay"
+    ],
+    "target_addr": [
+      "0x8211ed10"
+    ],
+    "base_addr": [
+      "0x8211ed10"
+    ],
+    "target_obj": "meta_ham:AppMiniLeaderboardDisplay.obj",
+    "base_obj": "hamobj:MeterDisplay.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8AppMiniLeaderboardDisplay@@7BRndDrawable@@@",
+    "base": "??_8MiniLeaderboardDisplay@@7BRndDrawable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/MiniLeaderboardDisplay"
+    ],
+    "target_addr": [
+      "0x8211ed10"
+    ],
+    "base_addr": [
+      "0x8211ed10"
+    ],
+    "target_obj": "meta_ham:AppMiniLeaderboardDisplay.obj",
+    "base_obj": "hamobj:MiniLeaderboardDisplay.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8AppMiniLeaderboardDisplay@@7BRndDrawable@@@",
+    "base": "??_8SongDifficultyDisplay@@7BRndDrawable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/SongDifficultyDisplay"
+    ],
+    "target_addr": [
+      "0x8211ed10"
+    ],
+    "base_addr": [
+      "0x8211ed10"
+    ],
+    "target_obj": "meta_ham:AppMiniLeaderboardDisplay.obj",
+    "base_obj": "hamobj:SongDifficultyDisplay.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8AppMiniLeaderboardDisplay@@7BRndDrawable@@@",
+    "base": "??_8StarsDisplay@@7BRndDrawable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/StarsDisplay"
+    ],
+    "target_addr": [
+      "0x8211ed10"
+    ],
+    "base_addr": [
+      "0x8211ed10"
+    ],
+    "target_obj": "meta_ham:AppMiniLeaderboardDisplay.obj",
+    "base_obj": "hamobj:StarsDisplay.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8AppMiniLeaderboardDisplay@@7BRndDrawable@@@",
+    "base": "??_8UIButton@@7BRndDrawable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/ui/UIButton"
+    ],
+    "target_addr": [
+      "0x8211ed10"
+    ],
+    "base_addr": [
+      "0x8211ed10"
+    ],
+    "target_obj": "meta_ham:AppMiniLeaderboardDisplay.obj",
+    "base_obj": "ui:UIButton.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8AppMiniLeaderboardDisplay@@7BRndDrawable@@@",
+    "base": "??_8UILabel@@7BRndDrawable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/ui/UILabel"
+    ],
+    "target_addr": [
+      "0x8211ed10"
+    ],
+    "base_addr": [
+      "0x8211ed10"
+    ],
+    "target_obj": "meta_ham:AppMiniLeaderboardDisplay.obj",
+    "base_obj": "ui:UILabel.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8AppMiniLeaderboardDisplay@@7BRndDrawable@@@",
+    "base": "??_8UISlider@@7BRndDrawable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/ui/UISlider"
+    ],
+    "target_addr": [
+      "0x8211ed10"
+    ],
+    "base_addr": [
+      "0x8211ed10"
+    ],
+    "target_obj": "meta_ham:AppMiniLeaderboardDisplay.obj",
+    "base_obj": "ui:UISlider.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8CamShot@@7B@",
+    "base": "??_8SkeletonDir@@7BObjectDir@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/gesture/SkeletonDir"
+    ],
+    "target_addr": [
+      "0x820e526c"
+    ],
+    "base_addr": [
+      "0x820e526c"
+    ],
+    "target_obj": "world:CameraShot.obj",
+    "base_obj": "gesture:SkeletonDir.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8ChallengeResultPanel@@7B@",
+    "base": "??_8CharSleeve@@7BCharPollable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharSleeve"
+    ],
+    "target_addr": [
+      "0x82108acc"
+    ],
+    "base_addr": [
+      "0x82108acc"
+    ],
+    "target_obj": "meta_ham:ChallengeResultPanel.obj",
+    "base_obj": "char:CharSleeve.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8ChallengeResultPanel@@7B@",
+    "base": "??_8CharWeightSetter@@7BCharPollable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharWeightSetter"
+    ],
+    "target_addr": [
+      "0x82108acc"
+    ],
+    "base_addr": [
+      "0x82108acc"
+    ],
+    "target_obj": "meta_ham:ChallengeResultPanel.obj",
+    "base_obj": "char:CharWeightSetter.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8ChallengeResultPanel@@7B@",
+    "base": "??_8FlowLabel@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/flow/FlowLabel"
+    ],
+    "target_addr": [
+      "0x82108acc"
+    ],
+    "base_addr": [
+      "0x82108acc"
+    ],
+    "target_obj": "meta_ham:ChallengeResultPanel.obj",
+    "base_obj": "flow:FlowLabel.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8ChallengeResultPanel@@7B@",
+    "base": "??_8HamDriver@@7BCharPollable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/HamDriver"
+    ],
+    "target_addr": [
+      "0x82108acc"
+    ],
+    "base_addr": [
+      "0x82108acc"
+    ],
+    "target_obj": "meta_ham:ChallengeResultPanel.obj",
+    "base_obj": "hamobj:HamDriver.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8ChallengeResultPanel@@7B@",
+    "base": "??_8WeightInputPanel@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/lazer/meta_ham/MetaPanel"
+    ],
+    "target_addr": [
+      "0x82108acc"
+    ],
+    "base_addr": [
+      "0x82108acc"
+    ],
+    "target_obj": "meta_ham:ChallengeResultPanel.obj",
+    "base_obj": "meta_ham:MetaPanel.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8ChallengeResultPanel@@7B@",
+    "base": "??_8WorldInstance@@7BRndPollable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/world/Instance"
+    ],
+    "target_addr": [
+      "0x82108acc"
+    ],
+    "base_addr": [
+      "0x82108acc"
+    ],
+    "target_obj": "meta_ham:ChallengeResultPanel.obj",
+    "base_obj": "world:Instance.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8CharBoneTwist@@7BCharPollable@@@",
+    "base": "??_8CharPosConstraint@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharPosConstraint"
+    ],
+    "target_addr": [
+      "0x82013d48"
+    ],
+    "base_addr": [
+      "0x82013d48"
+    ],
+    "target_obj": "char:CharBoneTwist.obj",
+    "base_obj": "char:CharPosConstraint.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8CharBoneTwist@@7BCharPollable@@@",
+    "base": "??_8CharSignalApplier@@7BCharPollable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharSignalApplier"
+    ],
+    "target_addr": [
+      "0x82013d48"
+    ],
+    "base_addr": [
+      "0x82013d48"
+    ],
+    "target_obj": "char:CharBoneTwist.obj",
+    "base_obj": "char:CharSignalApplier.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8CharBoneTwist@@7BCharPollable@@@",
+    "base": "??_8CorrectIdentityPanel@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/lazer/meta_ham/MetaPanel"
+    ],
+    "target_addr": [
+      "0x82013d48"
+    ],
+    "base_addr": [
+      "0x82013d48"
+    ],
+    "target_obj": "char:CharBoneTwist.obj",
+    "base_obj": "meta_ham:MetaPanel.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8CharBoneTwist@@7BCharPollable@@@",
+    "base": "??_8RndDir@@7BRndPollable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Dir"
+    ],
+    "target_addr": [
+      "0x82013d48"
+    ],
+    "base_addr": [
+      "0x82013d48"
+    ],
+    "target_obj": "char:CharBoneTwist.obj",
+    "base_obj": "rndobj:Dir.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8CharBonesAlloc@@7B@",
+    "base": "??_8CharBonesObject@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/Char"
+    ],
+    "target_addr": [
+      "0x82008400"
+    ],
+    "base_addr": [
+      "0x82008400"
+    ],
+    "target_obj": "char:CharBonesMeshes.obj",
+    "base_obj": "char:Char.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8CharBonesBlender@@7BCharPollable@@@",
+    "base": "??_8Flow@@7BRndPollable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/flow/Flow"
+    ],
+    "target_addr": [
+      "0x8204b388"
+    ],
+    "base_addr": [
+      "0x8204b388"
+    ],
+    "target_obj": "char:CharBonesBlender.obj",
+    "base_obj": "flow:Flow.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8CharBonesBlender@@7BCharPollable@@@",
+    "base": "??_8HamRegulate@@7BCharPollable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/HamRegulate"
+    ],
+    "target_addr": [
+      "0x8204b388"
+    ],
+    "base_addr": [
+      "0x8204b388"
+    ],
+    "target_obj": "char:CharBonesBlender.obj",
+    "base_obj": "hamobj:HamRegulate.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8CharCollide@@7BRndTransformable@@@",
+    "base": "??_8ThreeDSound@@7BRndTransformable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/synth/ThreeDSound"
+    ],
+    "target_addr": [
+      "0x820be8cc"
+    ],
+    "base_addr": [
+      "0x820be8cc"
+    ],
+    "target_obj": "char:CharCollide.obj",
+    "base_obj": "synth:ThreeDSound.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8CharDriverMidi@@7BCharWeightable@@@",
+    "base": "??_8CharLookAt@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharLookAt"
+    ],
+    "target_addr": [
+      "0x8200fc2c"
+    ],
+    "base_addr": [
+      "0x8200fc2c"
+    ],
+    "target_obj": "char:CharDriverMidi.obj",
+    "base_obj": "char:CharLookAt.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8CharDriverMidi@@7BCharWeightable@@@",
+    "base": "??_8MetaPanel@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/lazer/meta_ham/MetaPanel"
+    ],
+    "target_addr": [
+      "0x8200fc2c"
+    ],
+    "base_addr": [
+      "0x8200fc2c"
+    ],
+    "target_obj": "char:CharDriverMidi.obj",
+    "base_obj": "meta_ham:MetaPanel.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8CharEyes@@7BCharPollable@@@",
+    "base": "??_8PanelDir@@7BRndAnimatable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/ui/PanelDir"
+    ],
+    "target_addr": [
+      "0x820cccac"
+    ],
+    "base_addr": [
+      "0x820cccac"
+    ],
+    "target_obj": "char:CharEyes.obj",
+    "base_obj": "ui:PanelDir.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8CharFeedback@@7B@",
+    "base": "??_8CharMirror@@7BCharPollable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharMirror"
+    ],
+    "target_addr": [
+      "0x82044300"
+    ],
+    "base_addr": [
+      "0x82044300"
+    ],
+    "target_obj": "hamobj:CharFeedback.obj",
+    "base_obj": "char:CharMirror.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8CharFeedback@@7B@",
+    "base": "??_8FlowEventListener@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/flow/FlowEventListener"
+    ],
+    "target_addr": [
+      "0x82044300"
+    ],
+    "base_addr": [
+      "0x82044300"
+    ],
+    "target_obj": "hamobj:CharFeedback.obj",
+    "base_obj": "flow:FlowEventListener.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8CharHair@@7BRndHighlightable@@@",
+    "base": "??_8FlowTimer@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/flow/FlowTimer"
+    ],
+    "target_addr": [
+      "0x82028944"
+    ],
+    "base_addr": [
+      "0x82028944"
+    ],
+    "target_obj": "char:CharHair.obj",
+    "base_obj": "flow:FlowTimer.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8CharIKFingers@@7BRndHighlightable@@@",
+    "base": "??_8CharEyes@@7BCharWeightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharEyes"
+    ],
+    "target_addr": [
+      "0x820116d0"
+    ],
+    "base_addr": [
+      "0x820116d0"
+    ],
+    "target_obj": "char:CharIKFingers.obj",
+    "base_obj": "char:CharEyes.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8CharIKFingers@@7BRndHighlightable@@@",
+    "base": "??_8NavigationSkeletonDir@@7BRndAnimatable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/gesture/NavigationSkeletonDir"
+    ],
+    "target_addr": [
+      "0x820116d0"
+    ],
+    "base_addr": [
+      "0x820116d0"
+    ],
+    "target_obj": "char:CharIKFingers.obj",
+    "base_obj": "gesture:NavigationSkeletonDir.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8CharIKHead@@7BCharPollable@@@",
+    "base": "??_8PanelDir@@7BRndPollable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/ui/PanelDir"
+    ],
+    "target_addr": [
+      "0x82013a08"
+    ],
+    "base_addr": [
+      "0x82013a08"
+    ],
+    "target_obj": "char:CharIKHead.obj",
+    "base_obj": "ui:PanelDir.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8CharIKMidi@@7BRndHighlightable@@@",
+    "base": "??_8CharBoneDir@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharBoneDir"
+    ],
+    "target_addr": [
+      "0x8200a468"
+    ],
+    "base_addr": [
+      "0x8200a468"
+    ],
+    "target_obj": "char:CharIKMidi.obj",
+    "base_obj": "char:CharBoneDir.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8CharIKSliderMidi@@7BCharWeightable@@@",
+    "base": "??_8CharServoBone@@7BCharPollable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharServoBone"
+    ],
+    "target_addr": [
+      "0x82018028"
+    ],
+    "base_addr": [
+      "0x82018028"
+    ],
+    "target_obj": "char:CharIKSliderMidi.obj",
+    "base_obj": "char:CharServoBone.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8CharIKSliderMidi@@7BCharWeightable@@@",
+    "base": "??_8FlowDistance@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/flow/FlowDistance"
+    ],
+    "target_addr": [
+      "0x82018028"
+    ],
+    "base_addr": [
+      "0x82018028"
+    ],
+    "target_obj": "char:CharIKSliderMidi.obj",
+    "base_obj": "flow:FlowDistance.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8CharInterest@@7BRndTransformable@@@",
+    "base": "??_8RndLine@@7BRndTransformable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Line"
+    ],
+    "target_addr": [
+      "0x8201defc"
+    ],
+    "base_addr": [
+      "0x8201defc"
+    ],
+    "target_obj": "char:CharInterest.obj",
+    "base_obj": "rndobj:Line.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8CharInterest@@7BRndTransformable@@@",
+    "base": "??_8Waypoint@@7BRndTransformable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/Waypoint"
+    ],
+    "target_addr": [
+      "0x8201defc"
+    ],
+    "base_addr": [
+      "0x8201defc"
+    ],
+    "target_obj": "char:CharInterest.obj",
+    "base_obj": "char:Waypoint.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8CharLookAt@@7BCharWeightable@@@",
+    "base": "??_8CharIKHead@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharIKHead"
+    ],
+    "target_addr": [
+      "0x8200fc24"
+    ],
+    "base_addr": [
+      "0x8200fc24"
+    ],
+    "target_obj": "char:CharLookAt.obj",
+    "base_obj": "char:CharIKHead.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8CharMirror@@7BCharWeightable@@@",
+    "base": "??_8CharDriver@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharDriver"
+    ],
+    "target_addr": [
+      "0x8204abe0"
+    ],
+    "base_addr": [
+      "0x8204abe0"
+    ],
+    "target_obj": "char:CharMirror.obj",
+    "base_obj": "char:CharDriver.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8CharMirror@@7BCharWeightable@@@",
+    "base": "??_8HamIKEffector@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/HamIKEffector"
+    ],
+    "target_addr": [
+      "0x8204abe0"
+    ],
+    "base_addr": [
+      "0x8204abe0"
+    ],
+    "target_obj": "char:CharMirror.obj",
+    "base_obj": "hamobj:HamIKEffector.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8CharPollable@@7B@",
+    "base": "??_8RndEnterable@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Rnd"
+    ],
+    "target_addr": [
+      "0x82092f1c"
+    ],
+    "base_addr": [
+      "0x82092f1c"
+    ],
+    "target_obj": "char:CharBoneOffset.obj",
+    "base_obj": "rndobj:Rnd.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8CharTransDraw@@7BRndDrawable@@@",
+    "base": "??_8RndMultiMeshProxy@@7BRndDrawable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/MultiMeshProxy"
+    ],
+    "target_addr": [
+      "0x820b13b8"
+    ],
+    "base_addr": [
+      "0x820b13b8"
+    ],
+    "target_obj": "char:CharTransDraw.obj",
+    "base_obj": "rndobj:MultiMeshProxy.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8CharTransDraw@@7BRndDrawable@@@",
+    "base": "??_8RndSoftParticles@@7BRndDrawable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/SoftParticles"
+    ],
+    "target_addr": [
+      "0x820b13b8"
+    ],
+    "base_addr": [
+      "0x820b13b8"
+    ],
+    "target_obj": "char:CharTransDraw.obj",
+    "base_obj": "rndobj:SoftParticles.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8CharUpperTwist@@7B@",
+    "base": "??_8LoadingPanel@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/lazer/meta_ham/LoadingPanel"
+    ],
+    "target_addr": [
+      "0x82128df4"
+    ],
+    "base_addr": [
+      "0x82128df4"
+    ],
+    "target_obj": "char:CharUpperTwist.obj",
+    "base_obj": "meta_ham:LoadingPanel.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8CharUpperTwist@@7B@",
+    "base": "??_8RndCamAnim@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/CamAnim"
+    ],
+    "target_addr": [
+      "0x82128df4"
+    ],
+    "base_addr": [
+      "0x82128df4"
+    ],
+    "target_obj": "char:CharUpperTwist.obj",
+    "base_obj": "rndobj:CamAnim.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8CharUpperTwist@@7B@",
+    "base": "??_8RndLightAnim@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/LitAnim"
+    ],
+    "target_addr": [
+      "0x82128df4"
+    ],
+    "base_addr": [
+      "0x82128df4"
+    ],
+    "target_obj": "char:CharUpperTwist.obj",
+    "base_obj": "rndobj:LitAnim.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8CharUpperTwist@@7B@",
+    "base": "??_8SongSelectPlaylistCustomizePanel@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/lazer/meta_ham/SongSelectPlaylistCustomizePanel"
+    ],
+    "target_addr": [
+      "0x82128df4"
+    ],
+    "base_addr": [
+      "0x82128df4"
+    ],
+    "target_obj": "char:CharUpperTwist.obj",
+    "base_obj": "meta_ham:SongSelectPlaylistCustomizePanel.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8CharUpperTwist@@7B@",
+    "base": "??_8SongSelectPlaylistPanel@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/lazer/meta_ham/SongSelectPlaylistPanel"
+    ],
+    "target_addr": [
+      "0x82128df4"
+    ],
+    "base_addr": [
+      "0x82128df4"
+    ],
+    "target_obj": "char:CharUpperTwist.obj",
+    "base_obj": "meta_ham:SongSelectPlaylistPanel.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8CharWeightable@@7B@",
+    "base": "??_8HamIKSkeleton@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/HamIKSkeleton"
+    ],
+    "target_addr": [
+      "0x8200d254"
+    ],
+    "base_addr": [
+      "0x8200d254"
+    ],
+    "target_obj": "char:CharWeightable.obj",
+    "base_obj": "hamobj:HamIKSkeleton.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Character@@7BRndPollable@@@",
+    "base": "??_8CharIKFoot@@7BCharWeightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharIKFoot"
+    ],
+    "target_addr": [
+      "0x8200c390"
+    ],
+    "base_addr": [
+      "0x8200c390"
+    ],
+    "target_obj": "char:Character.obj",
+    "base_obj": "char:CharIKFoot.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Character@@7BRndTransformable@@@",
+    "base": "??_8NavigationSkeletonDir@@7BRndDrawable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/gesture/NavigationSkeletonDir"
+    ],
+    "target_addr": [
+      "0x822558bc"
+    ],
+    "base_addr": [
+      "0x822558bc"
+    ],
+    "target_obj": "char:Character.obj",
+    "base_obj": "gesture:NavigationSkeletonDir.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8ChooseProfilePanel@@7B@",
+    "base": "??_8TransConstraint@@7BRndPollable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/TransConstraint"
+    ],
+    "target_addr": [
+      "0x8210900c"
+    ],
+    "base_addr": [
+      "0x8210900c"
+    ],
+    "target_obj": "meta_ham:MetaPanel.obj",
+    "base_obj": "hamobj:TransConstraint.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8ContentLoadingPanel@@7B@",
+    "base": "??_8CharBlendBone@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharBlendBone"
+    ],
+    "target_addr": [
+      "0x82018588"
+    ],
+    "base_addr": [
+      "0x82018588"
+    ],
+    "target_obj": "meta_ham:ContentLoadingPanel.obj",
+    "base_obj": "char:CharBlendBone.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8ContentLoadingPanel@@7B@",
+    "base": "??_8CharBoneTwist@@7BCharWeightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharBoneTwist"
+    ],
+    "target_addr": [
+      "0x82018588"
+    ],
+    "base_addr": [
+      "0x82018588"
+    ],
+    "target_obj": "meta_ham:ContentLoadingPanel.obj",
+    "base_obj": "char:CharBoneTwist.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8ContentLoadingPanel@@7B@",
+    "base": "??_8CharSignalApplier@@7BCharWeightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharSignalApplier"
+    ],
+    "target_addr": [
+      "0x82018588"
+    ],
+    "base_addr": [
+      "0x82018588"
+    ],
+    "target_obj": "meta_ham:ContentLoadingPanel.obj",
+    "base_obj": "char:CharSignalApplier.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8ContentLoadingPanel@@7B@",
+    "base": "??_8LocalePanel@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/ui/UI"
+    ],
+    "target_addr": [
+      "0x82018588"
+    ],
+    "base_addr": [
+      "0x82018588"
+    ],
+    "target_obj": "meta_ham:ContentLoadingPanel.obj",
+    "base_obj": "ui:UI.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8ContentLoadingPanel@@7B@",
+    "base": "??_8RndAnimFilter@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/AnimFilter"
+    ],
+    "target_addr": [
+      "0x82018588"
+    ],
+    "base_addr": [
+      "0x82018588"
+    ],
+    "target_obj": "meta_ham:ContentLoadingPanel.obj",
+    "base_obj": "rndobj:AnimFilter.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8CreditsPanel@@7B@",
+    "base": "??_8SynthEmitter@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/synth/Emitter"
+    ],
+    "target_addr": [
+      "0x820bcc48"
+    ],
+    "base_addr": [
+      "0x820bcc48"
+    ],
+    "target_obj": "meta:CreditsPanel.obj",
+    "base_obj": "synth:Emitter.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8CursorPanel@@7B@",
+    "base": "??_8BlacklightPanel@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/lazer/meta_ham/BlacklightPanel"
+    ],
+    "target_addr": [
+      "0x820ae950"
+    ],
+    "base_addr": [
+      "0x820ae950"
+    ],
+    "target_obj": "meta_ham:CursorPanel.obj",
+    "base_obj": "meta_ham:BlacklightPanel.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8CursorPanel@@7B@",
+    "base": "??_8HamPanel@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/lazer/meta_ham/HamPanel"
+    ],
+    "target_addr": [
+      "0x820ae950"
+    ],
+    "base_addr": [
+      "0x820ae950"
+    ],
+    "target_obj": "meta_ham:CursorPanel.obj",
+    "base_obj": "meta_ham:HamPanel.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8CursorPanel@@7B@",
+    "base": "??_8PassiveMessagesPanel@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/lazer/meta_ham/PassiveMessagesPanel"
+    ],
+    "target_addr": [
+      "0x820ae950"
+    ],
+    "base_addr": [
+      "0x820ae950"
+    ],
+    "target_obj": "meta_ham:CursorPanel.obj",
+    "base_obj": "meta_ham:PassiveMessagesPanel.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8CursorPanel@@7B@",
+    "base": "??_8RndMorph@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Morph"
+    ],
+    "target_addr": [
+      "0x820ae950"
+    ],
+    "base_addr": [
+      "0x820ae950"
+    ],
+    "target_obj": "meta_ham:CursorPanel.obj",
+    "base_obj": "rndobj:Morph.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8CursorPanel@@7B@",
+    "base": "??_8RndPostProcMgr@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/PostProcMgr"
+    ],
+    "target_addr": [
+      "0x820ae950"
+    ],
+    "base_addr": [
+      "0x820ae950"
+    ],
+    "target_obj": "meta_ham:CursorPanel.obj",
+    "base_obj": "rndobj:PostProcMgr.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8CursorPanel@@7B@",
+    "base": "??_8SongSelectPanel@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/lazer/meta_ham/SongSelectPanel"
+    ],
+    "target_addr": [
+      "0x820ae950"
+    ],
+    "base_addr": [
+      "0x820ae950"
+    ],
+    "target_obj": "meta_ham:CursorPanel.obj",
+    "base_obj": "meta_ham:SongSelectPanel.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8DxEnviron@@7BRndTransformable@@@",
+    "base": "??_8NgEnviron@@7BRndTransformable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Env_NG"
+    ],
+    "target_addr": [
+      "0x820876b8"
+    ],
+    "base_addr": [
+      "0x820876b8"
+    ],
+    "target_obj": "rnddx9:Rnd_Xbox.obj",
+    "base_obj": "rndobj:Env_NG.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8DxMesh@@7BRndTransformable@@@",
+    "base": "??_8PhysicsVolume@@7BRndDrawable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/world/PhysicsVolume"
+    ],
+    "target_addr": [
+      "0x8208942c"
+    ],
+    "base_addr": [
+      "0x8208942c"
+    ],
+    "target_obj": "rnddx9:Mesh.obj",
+    "base_obj": "world:PhysicsVolume.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8DxMovie@@7B@",
+    "base": "??_8BeatClock@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/world/BeatClock"
+    ],
+    "target_addr": [
+      "0x820890b0"
+    ],
+    "base_addr": [
+      "0x820890b0"
+    ],
+    "target_obj": "rnddx9:Movie.obj",
+    "base_obj": "world:BeatClock.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8DxMovie@@7B@",
+    "base": "??_8CharGuitarString@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharGuitarString"
+    ],
+    "target_addr": [
+      "0x820890b0"
+    ],
+    "base_addr": [
+      "0x820890b0"
+    ],
+    "target_obj": "rnddx9:Movie.obj",
+    "base_obj": "char:CharGuitarString.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8DxMovie@@7B@",
+    "base": "??_8CharPollGroup@@7BCharWeightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharPollGroup"
+    ],
+    "target_addr": [
+      "0x820890b0"
+    ],
+    "base_addr": [
+      "0x820890b0"
+    ],
+    "target_obj": "rnddx9:Movie.obj",
+    "base_obj": "char:CharPollGroup.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8DxMovie@@7B@",
+    "base": "??_8FlowNode@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/flow/FlowNode"
+    ],
+    "target_addr": [
+      "0x820890b0"
+    ],
+    "base_addr": [
+      "0x820890b0"
+    ],
+    "target_obj": "rnddx9:Movie.obj",
+    "base_obj": "flow:FlowNode.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8DxTexRenderer@@7BRndPollable@@@",
+    "base": "??_8HamDriver@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/HamDriver"
+    ],
+    "target_addr": [
+      "0x8204a150"
+    ],
+    "base_addr": [
+      "0x8204a150"
+    ],
+    "target_obj": "rnddx9:Rnd_Xbox.obj",
+    "base_obj": "hamobj:HamDriver.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Flow@@7BObjectDir@@@",
+    "base": "??_8EventTrigger@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/EventTrigger"
+    ],
+    "target_addr": [
+      "0x8210c5c0"
+    ],
+    "base_addr": [
+      "0x8210c5c0"
+    ],
+    "target_obj": "flow:Flow.obj",
+    "base_obj": "rndobj:EventTrigger.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Flow@@7BObjectDir@@@",
+    "base": "??_8MetaPerformer@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/lazer/meta_ham/MetaPerformer"
+    ],
+    "target_addr": [
+      "0x8210c5c0"
+    ],
+    "base_addr": [
+      "0x8210c5c0"
+    ],
+    "target_obj": "flow:Flow.obj",
+    "base_obj": "meta_ham:MetaPerformer.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Flow@@7BObjectDir@@@",
+    "base": "??_8QuickplayPerformer@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/lazer/meta_ham/MetaPerformer"
+    ],
+    "target_addr": [
+      "0x8210c5c0"
+    ],
+    "base_addr": [
+      "0x8210c5c0"
+    ],
+    "target_obj": "flow:Flow.obj",
+    "base_obj": "meta_ham:MetaPerformer.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8FlowAnimate@@7B@",
+    "base": "??_8UIListDir@@7BRndPollable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/ui/UIListDir"
+    ],
+    "target_addr": [
+      "0x820c8b18"
+    ],
+    "base_addr": [
+      "0x820c8b18"
+    ],
+    "target_obj": "flow:FlowAnimate.obj",
+    "base_obj": "ui:UIListDir.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8FlowCommand@@7B@",
+    "base": "??_8HamPhotoDisplay@@7BRndPollable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/HamPhotoDisplay"
+    ],
+    "target_addr": [
+      "0x8204b390"
+    ],
+    "base_addr": [
+      "0x8204b390"
+    ],
+    "target_obj": "flow:FlowCommand.obj",
+    "base_obj": "hamobj:HamPhotoDisplay.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8FlowCommand@@7B@",
+    "base": "??_8HamPhraseMeter@@7BRndPollable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/HamPhraseMeter"
+    ],
+    "target_addr": [
+      "0x8204b390"
+    ],
+    "base_addr": [
+      "0x8204b390"
+    ],
+    "target_obj": "flow:FlowCommand.obj",
+    "base_obj": "hamobj:HamPhraseMeter.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8FlowCommand@@7B@",
+    "base": "??_8HamRegulate@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/HamRegulate"
+    ],
+    "target_addr": [
+      "0x8204b390"
+    ],
+    "base_addr": [
+      "0x8204b390"
+    ],
+    "target_obj": "flow:FlowCommand.obj",
+    "base_obj": "hamobj:HamRegulate.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8FlowCommand@@7B@",
+    "base": "??_8RndParticleSysAnim@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/PartAnim"
+    ],
+    "target_addr": [
+      "0x8204b390"
+    ],
+    "base_addr": [
+      "0x8204b390"
+    ],
+    "target_obj": "flow:FlowCommand.obj",
+    "base_obj": "rndobj:PartAnim.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8FlowQueueable@@7B@",
+    "base": "??_8FlowOutPort@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/flow/FlowOutPort"
+    ],
+    "target_addr": [
+      "0x820a5d98"
+    ],
+    "base_addr": [
+      "0x820a5d98"
+    ],
+    "target_obj": "flow:FlowQueueable.obj",
+    "base_obj": "flow:FlowOutPort.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8FlowQueueable@@7B@",
+    "base": "??_8RndMeshAnim@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/MeshAnim"
+    ],
+    "target_addr": [
+      "0x820a5d98"
+    ],
+    "base_addr": [
+      "0x820a5d98"
+    ],
+    "target_obj": "flow:FlowQueueable.obj",
+    "base_obj": "rndobj:MeshAnim.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8FlowRun@@7B@",
+    "base": "??_8CharIKHand@@7BCharWeightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharIKHand"
+    ],
+    "target_addr": [
+      "0x820130b0"
+    ],
+    "base_addr": [
+      "0x820130b0"
+    ],
+    "target_obj": "flow:FlowRun.obj",
+    "base_obj": "char:CharIKHand.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8FlowSetProperty@@7B@",
+    "base": "??_8CharIKMidi@@7BCharPollable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharIKMidi"
+    ],
+    "target_addr": [
+      "0x820169f8"
+    ],
+    "base_addr": [
+      "0x820169f8"
+    ],
+    "target_obj": "flow:FlowSetProperty.obj",
+    "base_obj": "char:CharIKMidi.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8FlowSound@@7B@",
+    "base": "??_8DxTexRenderer@@7BRndAnimatable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rnddx9/Rnd_Xbox"
+    ],
+    "target_addr": [
+      "0x82027eb0"
+    ],
+    "base_addr": [
+      "0x82027eb0"
+    ],
+    "target_obj": "flow:FlowSound.obj",
+    "base_obj": "rnddx9:Rnd_Xbox.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8FlowSwitch@@7B@",
+    "base": "??_8CampaignSongSelectPanel@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/lazer/meta_ham/CampaignSongSelectPanel"
+    ],
+    "target_addr": [
+      "0x821201e4"
+    ],
+    "base_addr": [
+      "0x821201e4"
+    ],
+    "target_obj": "flow:FlowSwitch.obj",
+    "base_obj": "meta_ham:CampaignSongSelectPanel.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8FlowSwitch@@7B@",
+    "base": "??_8VoiceControlPanel@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/lazer/meta_ham/VoiceControlPanel"
+    ],
+    "target_addr": [
+      "0x821201e4"
+    ],
+    "base_addr": [
+      "0x821201e4"
+    ],
+    "target_obj": "flow:FlowSwitch.obj",
+    "base_obj": "meta_ham:VoiceControlPanel.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8FlowTrigger@@7B@",
+    "base": "??_8CharIKSliderMidi@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharIKSliderMidi"
+    ],
+    "target_addr": [
+      "0x8202be28"
+    ],
+    "base_addr": [
+      "0x8202be28"
+    ],
+    "target_obj": "flow:FlowTrigger.obj",
+    "base_obj": "char:CharIKSliderMidi.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8FlowTrigger@@7B@",
+    "base": "??_8CharServoBone@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharServoBone"
+    ],
+    "target_addr": [
+      "0x8202be28"
+    ],
+    "base_addr": [
+      "0x8202be28"
+    ],
+    "target_obj": "flow:FlowTrigger.obj",
+    "base_obj": "char:CharServoBone.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8GamePanel@@7B@",
+    "base": "??_8LightPreset@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/world/LightPreset"
+    ],
+    "target_addr": [
+      "0x820ec048"
+    ],
+    "base_addr": [
+      "0x820ec048"
+    ],
+    "target_obj": "game:GamePanel.obj",
+    "base_obj": "world:LightPreset.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8HamCamShot@@7B@",
+    "base": "??_8WorldDir@@7BRndDrawable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/world/Dir"
+    ],
+    "target_addr": [
+      "0x82046d8c"
+    ],
+    "base_addr": [
+      "0x82046d8c"
+    ],
+    "target_obj": "hamobj:HamCamShot.obj",
+    "base_obj": "world:Dir.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8HamDriver@@7BCharWeightable@@@",
+    "base": "??_8CalibrationPanel@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/lazer/meta_ham/CalibrationPanel"
+    ],
+    "target_addr": [
+      "0x82029bf8"
+    ],
+    "base_addr": [
+      "0x82029bf8"
+    ],
+    "target_obj": "hamobj:HamDriver.obj",
+    "base_obj": "meta_ham:CalibrationPanel.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8HamDriver@@7BCharWeightable@@@",
+    "base": "??_8CharIKSliderMidi@@7BCharPollable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharIKSliderMidi"
+    ],
+    "target_addr": [
+      "0x82029bf8"
+    ],
+    "base_addr": [
+      "0x82029bf8"
+    ],
+    "target_obj": "hamobj:HamDriver.obj",
+    "base_obj": "char:CharIKSliderMidi.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8HamDriver@@7BCharWeightable@@@",
+    "base": "??_8CharWeightSetter@@7BCharWeightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharWeightSetter"
+    ],
+    "target_addr": [
+      "0x82029bf8"
+    ],
+    "base_addr": [
+      "0x82029bf8"
+    ],
+    "target_obj": "hamobj:HamDriver.obj",
+    "base_obj": "char:CharWeightSetter.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8HamDriver@@7BCharWeightable@@@",
+    "base": "??_8FlowWhile@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/flow/FlowWhile"
+    ],
+    "target_addr": [
+      "0x82029bf8"
+    ],
+    "base_addr": [
+      "0x82029bf8"
+    ],
+    "target_obj": "hamobj:HamDriver.obj",
+    "base_obj": "flow:FlowWhile.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8HamIKEffector@@7BCharPollable@@@",
+    "base": "??_8CharDriver@@7BCharPollable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharDriver"
+    ],
+    "target_addr": [
+      "0x82115e58"
+    ],
+    "base_addr": [
+      "0x82115e58"
+    ],
+    "target_obj": "hamobj:HamIKEffector.obj",
+    "base_obj": "char:CharDriver.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8HamIKEffector@@7BCharPollable@@@",
+    "base": "??_8HelpBarPanel@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/lazer/meta_ham/HelpBarPanel"
+    ],
+    "target_addr": [
+      "0x82115e58"
+    ],
+    "base_addr": [
+      "0x82115e58"
+    ],
+    "target_obj": "hamobj:HamIKEffector.obj",
+    "base_obj": "meta_ham:HelpBarPanel.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8HamIKEffector@@7BCharWeightable@@@",
+    "base": "??_8CharDriver@@7BCharWeightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharDriver"
+    ],
+    "target_addr": [
+      "0x82250db0"
+    ],
+    "base_addr": [
+      "0x82250db0"
+    ],
+    "target_obj": "hamobj:HamIKEffector.obj",
+    "base_obj": "char:CharDriver.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8HamIKEffector@@7BCharWeightable@@@",
+    "base": "??_8KinectSharePanel@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/lazer/meta_ham/KinectSharePanel"
+    ],
+    "target_addr": [
+      "0x82250db0"
+    ],
+    "base_addr": [
+      "0x82250db0"
+    ],
+    "target_obj": "hamobj:HamIKEffector.obj",
+    "base_obj": "meta_ham:KinectSharePanel.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8HamIKEffector@@7BCharWeightable@@@",
+    "base": "??_8SkeletonDir@@7BRndPollable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/gesture/SkeletonDir"
+    ],
+    "target_addr": [
+      "0x82250db0"
+    ],
+    "base_addr": [
+      "0x82250db0"
+    ],
+    "target_obj": "hamobj:HamIKEffector.obj",
+    "base_obj": "gesture:SkeletonDir.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8HamIconMan@@7B@",
+    "base": "??_8SpotlightDrawer@@7BRndDrawable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/world/SpotlightDrawer"
+    ],
+    "target_addr": [
+      "0x820e67a8"
+    ],
+    "base_addr": [
+      "0x820e67a8"
+    ],
+    "target_obj": "hamobj:HamIconMan.obj",
+    "base_obj": "world:SpotlightDrawer.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8HamLabel@@7BRndText@@@",
+    "base": "??_8AppLabel@@7BRndText@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/lazer/meta_ham/MetaPanel"
+    ],
+    "target_addr": [
+      "0x8205a9c4"
+    ],
+    "base_addr": [
+      "0x8205a9c4"
+    ],
+    "target_obj": "hamobj:HamLabel.obj",
+    "base_obj": "meta_ham:MetaPanel.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8HamListRibbon@@7BRndDrawable@@@",
+    "base": "??_8DxParticleSys@@7BRndDrawable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rnddx9/Part"
+    ],
+    "target_addr": [
+      "0x82040290"
+    ],
+    "base_addr": [
+      "0x82040290"
+    ],
+    "target_obj": "hamobj:HamListRibbon.obj",
+    "base_obj": "rnddx9:Part.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8HamNavList@@7BRndTransformable@@@",
+    "base": "??_8AppLabel@@7BRndTransformable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/lazer/meta_ham/MetaPanel"
+    ],
+    "target_addr": [
+      "0x82034860"
+    ],
+    "base_addr": [
+      "0x82034860"
+    ],
+    "target_obj": "hamobj:HamNavList.obj",
+    "base_obj": "meta_ham:MetaPanel.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8HamNavList@@7BRndTransformable@@@",
+    "base": "??_8AppMiniLeaderboardDisplay@@7BRndTransformable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/lazer/meta_ham/AppMiniLeaderboardDisplay"
+    ],
+    "target_addr": [
+      "0x82034860"
+    ],
+    "base_addr": [
+      "0x82034860"
+    ],
+    "target_obj": "hamobj:HamNavList.obj",
+    "base_obj": "meta_ham:AppMiniLeaderboardDisplay.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8HamNavList@@7BRndTransformable@@@",
+    "base": "??_8HamLabel@@7BRndTransformable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/HamLabel"
+    ],
+    "target_addr": [
+      "0x82034860"
+    ],
+    "base_addr": [
+      "0x82034860"
+    ],
+    "target_obj": "hamobj:HamNavList.obj",
+    "base_obj": "hamobj:HamLabel.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8HamNavList@@7BRndTransformable@@@",
+    "base": "??_8HamList@@7BRndTransformable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/HamList"
+    ],
+    "target_addr": [
+      "0x82034860"
+    ],
+    "base_addr": [
+      "0x82034860"
+    ],
+    "target_obj": "hamobj:HamNavList.obj",
+    "base_obj": "hamobj:HamList.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8HamNavList@@7BRndTransformable@@@",
+    "base": "??_8HamStarsDisplay@@7BRndTransformable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/lazer/meta_ham/MetaPanel"
+    ],
+    "target_addr": [
+      "0x82034860"
+    ],
+    "base_addr": [
+      "0x82034860"
+    ],
+    "target_obj": "hamobj:HamNavList.obj",
+    "base_obj": "meta_ham:MetaPanel.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8HamNavList@@7BRndTransformable@@@",
+    "base": "??_8InlineHelp@@7BRndTransformable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/ui/InlineHelp"
+    ],
+    "target_addr": [
+      "0x82034860"
+    ],
+    "base_addr": [
+      "0x82034860"
+    ],
+    "target_obj": "hamobj:HamNavList.obj",
+    "base_obj": "ui:InlineHelp.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8HamNavList@@7BRndTransformable@@@",
+    "base": "??_8LabelShrinkWrapper@@7BRndTransformable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/ui/LabelShrinkWrapper"
+    ],
+    "target_addr": [
+      "0x82034860"
+    ],
+    "base_addr": [
+      "0x82034860"
+    ],
+    "target_obj": "hamobj:HamNavList.obj",
+    "base_obj": "ui:LabelShrinkWrapper.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8HamNavList@@7BRndTransformable@@@",
+    "base": "??_8MeterDisplay@@7BRndTransformable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/MeterDisplay"
+    ],
+    "target_addr": [
+      "0x82034860"
+    ],
+    "base_addr": [
+      "0x82034860"
+    ],
+    "target_obj": "hamobj:HamNavList.obj",
+    "base_obj": "hamobj:MeterDisplay.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8HamNavList@@7BRndTransformable@@@",
+    "base": "??_8MiniLeaderboardDisplay@@7BRndTransformable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/MiniLeaderboardDisplay"
+    ],
+    "target_addr": [
+      "0x82034860"
+    ],
+    "base_addr": [
+      "0x82034860"
+    ],
+    "target_obj": "hamobj:HamNavList.obj",
+    "base_obj": "hamobj:MiniLeaderboardDisplay.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8HamNavList@@7BRndTransformable@@@",
+    "base": "??_8SongDifficultyDisplay@@7BRndTransformable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/SongDifficultyDisplay"
+    ],
+    "target_addr": [
+      "0x82034860"
+    ],
+    "base_addr": [
+      "0x82034860"
+    ],
+    "target_obj": "hamobj:HamNavList.obj",
+    "base_obj": "hamobj:SongDifficultyDisplay.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8HamNavList@@7BRndTransformable@@@",
+    "base": "??_8StarsDisplay@@7BRndTransformable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/StarsDisplay"
+    ],
+    "target_addr": [
+      "0x82034860"
+    ],
+    "base_addr": [
+      "0x82034860"
+    ],
+    "target_obj": "hamobj:HamNavList.obj",
+    "base_obj": "hamobj:StarsDisplay.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8HamNavList@@7BRndTransformable@@@",
+    "base": "??_8UIButton@@7BRndTransformable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/ui/UIButton"
+    ],
+    "target_addr": [
+      "0x82034860"
+    ],
+    "base_addr": [
+      "0x82034860"
+    ],
+    "target_obj": "hamobj:HamNavList.obj",
+    "base_obj": "ui:UIButton.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8HamNavList@@7BRndTransformable@@@",
+    "base": "??_8UILabel@@7BRndTransformable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/ui/UILabel"
+    ],
+    "target_addr": [
+      "0x82034860"
+    ],
+    "base_addr": [
+      "0x82034860"
+    ],
+    "target_obj": "hamobj:HamNavList.obj",
+    "base_obj": "ui:UILabel.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8HamNavList@@7BRndTransformable@@@",
+    "base": "??_8UISlider@@7BRndTransformable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/ui/UISlider"
+    ],
+    "target_addr": [
+      "0x82034860"
+    ],
+    "base_addr": [
+      "0x82034860"
+    ],
+    "target_obj": "hamobj:HamNavList.obj",
+    "base_obj": "ui:UISlider.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8HamPhotoDisplay@@7BRndAnimatable@@@",
+    "base": "??_8HamPhraseMeter@@7BRndAnimatable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/HamPhraseMeter"
+    ],
+    "target_addr": [
+      "0x8204b0d0"
+    ],
+    "base_addr": [
+      "0x8204b0d0"
+    ],
+    "target_obj": "hamobj:HamPhotoDisplay.obj",
+    "base_obj": "hamobj:HamPhraseMeter.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8HamPhotoDisplay@@7BRndAnimatable@@@",
+    "base": "??_8RndSpline@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Spline"
+    ],
+    "target_addr": [
+      "0x8204b0d0"
+    ],
+    "base_addr": [
+      "0x8204b0d0"
+    ],
+    "target_obj": "hamobj:HamPhotoDisplay.obj",
+    "base_obj": "rndobj:Spline.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8HamPhotoDisplay@@7BRndTransformable@@@",
+    "base": "??_8HamPhraseMeter@@7BRndTransformable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/HamPhraseMeter"
+    ],
+    "target_addr": [
+      "0x82059f90"
+    ],
+    "base_addr": [
+      "0x82059f90"
+    ],
+    "target_obj": "hamobj:HamPhotoDisplay.obj",
+    "base_obj": "hamobj:HamPhraseMeter.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8HamPhraseMeter@@7BObjectDir@@@",
+    "base": "??_8HamPhotoDisplay@@7BObjectDir@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/HamPhotoDisplay"
+    ],
+    "target_addr": [
+      "0x82059f9c"
+    ],
+    "base_addr": [
+      "0x82059f9c"
+    ],
+    "target_obj": "hamobj:HamPhraseMeter.obj",
+    "base_obj": "hamobj:HamPhotoDisplay.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8HamRibbon@@7B@",
+    "base": "??_8RndShockwave@@7BRndTransformable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Shockwave"
+    ],
+    "target_addr": [
+      "0x8204b968"
+    ],
+    "base_addr": [
+      "0x8204b968"
+    ],
+    "target_obj": "hamobj:HamRibbon.obj",
+    "base_obj": "rndobj:Shockwave.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8HeldButtonPanel@@7B@",
+    "base": "??_8CampaignDiffSelectPanel@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/lazer/meta_ham/CampaignDiffSelectPanel"
+    ],
+    "target_addr": [
+      "0x8225a2dc"
+    ],
+    "base_addr": [
+      "0x8225a2dc"
+    ],
+    "target_obj": "meta:HeldButtonPanel.obj",
+    "base_obj": "meta_ham:CampaignDiffSelectPanel.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8HeldButtonPanel@@7B@",
+    "base": "??_8CharForeTwist@@7BCharPollable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharForeTwist"
+    ],
+    "target_addr": [
+      "0x8225a2dc"
+    ],
+    "base_addr": [
+      "0x8225a2dc"
+    ],
+    "target_obj": "meta:HeldButtonPanel.obj",
+    "base_obj": "char:CharForeTwist.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8HeldButtonPanel@@7B@",
+    "base": "??_8CharIKScale@@7BCharPollable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharIKScale"
+    ],
+    "target_addr": [
+      "0x8225a2dc"
+    ],
+    "base_addr": [
+      "0x8225a2dc"
+    ],
+    "target_obj": "meta:HeldButtonPanel.obj",
+    "base_obj": "char:CharIKScale.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8HeldButtonPanel@@7B@",
+    "base": "??_8EventDialogPanel@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/lazer/meta_ham/EventDialogPanel"
+    ],
+    "target_addr": [
+      "0x8225a2dc"
+    ],
+    "base_addr": [
+      "0x8225a2dc"
+    ],
+    "target_obj": "meta:HeldButtonPanel.obj",
+    "base_obj": "meta_ham:EventDialogPanel.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8HeldButtonPanel@@7B@",
+    "base": "??_8OverlayPanel@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/lazer/meta_ham/OverlayPanel"
+    ],
+    "target_addr": [
+      "0x8225a2dc"
+    ],
+    "base_addr": [
+      "0x8225a2dc"
+    ],
+    "target_obj": "meta:HeldButtonPanel.obj",
+    "base_obj": "meta_ham:OverlayPanel.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8LabelNumberTicker@@7BRndDrawable@@@",
+    "base": "??_8UIComponent@@7BRndDrawable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/ui/UIComponent"
+    ],
+    "target_addr": [
+      "0x820d25f0"
+    ],
+    "base_addr": [
+      "0x820d25f0"
+    ],
+    "target_obj": "ui:LabelNumberTicker.obj",
+    "base_obj": "ui:UIComponent.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8LabelNumberTicker@@7BRndDrawable@@@",
+    "base": "??_8UIPicture@@7BRndDrawable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/ui/UIPicture"
+    ],
+    "target_addr": [
+      "0x820d25f0"
+    ],
+    "base_addr": [
+      "0x820d25f0"
+    ],
+    "target_obj": "ui:LabelNumberTicker.obj",
+    "base_obj": "ui:UIPicture.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8LockedContentPanel@@7B@",
+    "base": "??_8CharIKHand@@7BCharPollable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharIKHand"
+    ],
+    "target_addr": [
+      "0x8202a07c"
+    ],
+    "base_addr": [
+      "0x8202a07c"
+    ],
+    "target_obj": "meta_ham:LockedContentPanel.obj",
+    "base_obj": "char:CharIKHand.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8LockedContentPanel@@7B@",
+    "base": "??_8FlowMultiSetProperty@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/flow/FlowMultiSetProperty"
+    ],
+    "target_addr": [
+      "0x8202a07c"
+    ],
+    "base_addr": [
+      "0x8202a07c"
+    ],
+    "target_obj": "meta_ham:LockedContentPanel.obj",
+    "base_obj": "flow:FlowMultiSetProperty.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8LockedContentPanel@@7B@",
+    "base": "??_8FlowSlider@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/flow/FlowSlider"
+    ],
+    "target_addr": [
+      "0x8202a07c"
+    ],
+    "base_addr": [
+      "0x8202a07c"
+    ],
+    "target_obj": "meta_ham:LockedContentPanel.obj",
+    "base_obj": "flow:FlowSlider.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8LockedContentPanel@@7B@",
+    "base": "??_8LetterboxPanel@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/lazer/meta_ham/LetterboxPanel"
+    ],
+    "target_addr": [
+      "0x8202a07c"
+    ],
+    "base_addr": [
+      "0x8202a07c"
+    ],
+    "target_obj": "meta_ham:LockedContentPanel.obj",
+    "base_obj": "meta_ham:LetterboxPanel.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8MainMenuPanel@@7B@",
+    "base": "??_8CharIKHead@@7BCharWeightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharIKHead"
+    ],
+    "target_addr": [
+      "0x822558a8"
+    ],
+    "base_addr": [
+      "0x822558a8"
+    ],
+    "target_obj": "meta_ham:MainMenuPanel.obj",
+    "base_obj": "char:CharIKHead.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8MainMenuPanel@@7B@",
+    "base": "??_8NavigationSkeletonDir@@7BRndPollable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/gesture/NavigationSkeletonDir"
+    ],
+    "target_addr": [
+      "0x822558a8"
+    ],
+    "base_addr": [
+      "0x822558a8"
+    ],
+    "target_obj": "meta_ham:MainMenuPanel.obj",
+    "base_obj": "gesture:NavigationSkeletonDir.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8NgEnviron@@7BRndDrawable@@@",
+    "base": "??_8DxEnviron@@7BRndDrawable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rnddx9/Rnd_Xbox"
+    ],
+    "target_addr": [
+      "0x8209cfe0"
+    ],
+    "base_addr": [
+      "0x8209cfe0"
+    ],
+    "target_obj": "rndobj:Env_NG.obj",
+    "base_obj": "rnddx9:Rnd_Xbox.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8NgLight@@7BRndTransformable@@@",
+    "base": "??_8HamPhotoDisplay@@7BRndDrawable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/HamPhotoDisplay"
+    ],
+    "target_addr": [
+      "0x8204b0d8"
+    ],
+    "base_addr": [
+      "0x8204b0d8"
+    ],
+    "target_obj": "rndobj:Lit_NG.obj",
+    "base_obj": "hamobj:HamPhotoDisplay.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8NgLight@@7BRndTransformable@@@",
+    "base": "??_8HamPhraseMeter@@7BRndDrawable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/HamPhraseMeter"
+    ],
+    "target_addr": [
+      "0x8204b0d8"
+    ],
+    "base_addr": [
+      "0x8204b0d8"
+    ],
+    "target_obj": "rndobj:Lit_NG.obj",
+    "base_obj": "hamobj:HamPhraseMeter.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8ObjectDir@@7B@",
+    "base": "??_8FlowSwitchCase@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/flow/FlowSwitchCase"
+    ],
+    "target_addr": [
+      "0x82027b70"
+    ],
+    "base_addr": [
+      "0x82027b70"
+    ],
+    "target_obj": "obj:Dir.obj",
+    "base_obj": "flow:FlowSwitchCase.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8PanelDir@@7BObjectDir@@@",
+    "base": "??_8HamCharacter@@7BRndTransformable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/HamCharacter"
+    ],
+    "target_addr": [
+      "0x820cccc0"
+    ],
+    "base_addr": [
+      "0x820cccc0"
+    ],
+    "target_obj": "ui:PanelDir.obj",
+    "base_obj": "hamobj:HamCharacter.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8PhysicsVolume@@7B@",
+    "base": "??_8CharHair@@7BCharPollable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharHair"
+    ],
+    "target_addr": [
+      "0x8201565c"
+    ],
+    "base_addr": [
+      "0x8201565c"
+    ],
+    "target_obj": "world:PhysicsVolume.obj",
+    "base_obj": "char:CharHair.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8PhysicsVolume@@7B@",
+    "base": "??_8CharSleeve@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharSleeve"
+    ],
+    "target_addr": [
+      "0x8201565c"
+    ],
+    "base_addr": [
+      "0x8201565c"
+    ],
+    "target_obj": "world:PhysicsVolume.obj",
+    "base_obj": "char:CharSleeve.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8PhysicsVolume@@7B@",
+    "base": "??_8FlowSequence@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/flow/FlowSequence"
+    ],
+    "target_addr": [
+      "0x8201565c"
+    ],
+    "base_addr": [
+      "0x8201565c"
+    ],
+    "target_obj": "world:PhysicsVolume.obj",
+    "base_obj": "flow:FlowSequence.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8PhysicsVolume@@7B@",
+    "base": "??_8PreloadPanel@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/meta/PreloadPanel"
+    ],
+    "target_addr": [
+      "0x8201565c"
+    ],
+    "base_addr": [
+      "0x8201565c"
+    ],
+    "target_obj": "world:PhysicsVolume.obj",
+    "base_obj": "meta:PreloadPanel.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8PhysicsVolume@@7B@",
+    "base": "??_8SkeletonClip@@7BRndAnimatable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/gesture/SkeletonClip"
+    ],
+    "target_addr": [
+      "0x8201565c"
+    ],
+    "base_addr": [
+      "0x8201565c"
+    ],
+    "target_obj": "world:PhysicsVolume.obj",
+    "base_obj": "gesture:SkeletonClip.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8RhythmDetectorGroup@@7B@",
+    "base": "??_8CharBoneOffset@@7BCharPollable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharBoneOffset"
+    ],
+    "target_addr": [
+      "0x8205170c"
+    ],
+    "base_addr": [
+      "0x8205170c"
+    ],
+    "target_obj": "hamobj:RhythmDetectorGroup.obj",
+    "base_obj": "char:CharBoneOffset.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8RhythmDetectorGroup@@7B@",
+    "base": "??_8PhotoSpotlightPositioner@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/PhotoSpotlightPositioner"
+    ],
+    "target_addr": [
+      "0x8205170c"
+    ],
+    "base_addr": [
+      "0x8205170c"
+    ],
+    "target_obj": "hamobj:RhythmDetectorGroup.obj",
+    "base_obj": "hamobj:PhotoSpotlightPositioner.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8RhythmDetectorGroup@@7B@",
+    "base": "??_8PracticeSection@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/PracticeSection"
+    ],
+    "target_addr": [
+      "0x8205170c"
+    ],
+    "base_addr": [
+      "0x8205170c"
+    ],
+    "target_obj": "hamobj:RhythmDetectorGroup.obj",
+    "base_obj": "hamobj:PracticeSection.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8RndCam@@7BRndTransformable@@@",
+    "base": "??_8HamDirector@@7BRndDrawable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/HamDirector"
+    ],
+    "target_addr": [
+      "0x8208a734"
+    ],
+    "base_addr": [
+      "0x8208a734"
+    ],
+    "target_obj": "rndobj:Cam.obj",
+    "base_obj": "hamobj:HamDirector.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8RndCam@@7BRndTransformable@@@",
+    "base": "??_8Spotlight@@7BRndDrawable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/world/Spotlight"
+    ],
+    "target_addr": [
+      "0x8208a734"
+    ],
+    "base_addr": [
+      "0x8208a734"
+    ],
+    "target_obj": "rndobj:Cam.obj",
+    "base_obj": "world:Spotlight.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8RndDir@@7BRndTransformable@@@",
+    "base": "??_8CharCuff@@7BRndTransformable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharCuff"
+    ],
+    "target_addr": [
+      "0x820146d4"
+    ],
+    "base_addr": [
+      "0x820146d4"
+    ],
+    "target_obj": "rndobj:Dir.obj",
+    "base_obj": "char:CharCuff.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8RndGenerator@@7BRndDrawable@@@",
+    "base": "??_8HamRibbon@@7BRndDrawable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/HamRibbon"
+    ],
+    "target_addr": [
+      "0x820ae604"
+    ],
+    "base_addr": [
+      "0x820ae604"
+    ],
+    "target_obj": "rndobj:Gen.obj",
+    "base_obj": "hamobj:HamRibbon.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8RndMatAnim@@7B@",
+    "base": "??_8FlowPickOne@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/flow/FlowPickOne"
+    ],
+    "target_addr": [
+      "0x82026fec"
+    ],
+    "base_addr": [
+      "0x82026fec"
+    ],
+    "target_obj": "rndobj:MatAnim.obj",
+    "base_obj": "flow:FlowPickOne.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8RndMatAnim@@7B@",
+    "base": "??_8HamSong@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/Ham"
+    ],
+    "target_addr": [
+      "0x82026fec"
+    ],
+    "base_addr": [
+      "0x82026fec"
+    ],
+    "target_obj": "rndobj:MatAnim.obj",
+    "base_obj": "hamobj:Ham.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8RndMatAnim@@7B@",
+    "base": "??_8MoviePanel@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/meta/MoviePanel"
+    ],
+    "target_addr": [
+      "0x82026fec"
+    ],
+    "base_addr": [
+      "0x82026fec"
+    ],
+    "target_obj": "rndobj:MatAnim.obj",
+    "base_obj": "meta:MoviePanel.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8RndMatAnim@@7B@",
+    "base": "??_8RndWind@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Wind"
+    ],
+    "target_addr": [
+      "0x82026fec"
+    ],
+    "base_addr": [
+      "0x82026fec"
+    ],
+    "target_obj": "rndobj:MatAnim.obj",
+    "base_obj": "rndobj:Wind.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8RndMatAnim@@7B@",
+    "base": "??_8Song@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/utl/Song"
+    ],
+    "target_addr": [
+      "0x82026fec"
+    ],
+    "base_addr": [
+      "0x82026fec"
+    ],
+    "target_obj": "rndobj:MatAnim.obj",
+    "base_obj": "utl:Song.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8RndMesh@@7BRndTransformable@@@",
+    "base": "??_8WorldReflection@@7BRndTransformable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/world/Reflection"
+    ],
+    "target_addr": [
+      "0x820ed0f0"
+    ],
+    "base_addr": [
+      "0x820ed0f0"
+    ],
+    "target_obj": "rndobj:Mesh.obj",
+    "base_obj": "world:Reflection.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8RndTexBlender@@7BRndDrawable@@@",
+    "base": "??_8RndFlare@@7BRndDrawable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Flare"
+    ],
+    "target_addr": [
+      "0x820b0be8"
+    ],
+    "base_addr": [
+      "0x820b0be8"
+    ],
+    "target_obj": "rndobj:TexBlender.obj",
+    "base_obj": "rndobj:Flare.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8RndTransformableRemover@@7BRndTransformable@@@",
+    "base": "??_8RndTransformable@@7B0@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Trans"
+    ],
+    "target_addr": [
+      "0x8208e8f4"
+    ],
+    "base_addr": [
+      "0x8208e8f4"
+    ],
+    "target_obj": "char:CharBone.obj",
+    "base_obj": "rndobj:Trans.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8AppLabel@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/lazer/meta_ham/MetaPanel"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "meta_ham:MetaPanel.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8AppMiniLeaderboardDisplay@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/lazer/meta_ham/AppMiniLeaderboardDisplay"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "meta_ham:AppMiniLeaderboardDisplay.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8CamShot@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/world/CameraShot"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "world:CameraShot.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8CharClipSet@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharClipSet"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "char:CharClipSet.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8CharCollide@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharCollide"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "char:CharCollide.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8CharCuff@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharCuff"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "char:CharCuff.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8CharFeedback@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/CharFeedback"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "hamobj:CharFeedback.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8CharInterest@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharInterest"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "char:CharInterest.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8CharTransDraw@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharTransDraw"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "char:CharTransDraw.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8Character@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/Character"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "char:Character.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8DepthBuffer3D@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/gesture/DepthBuffer3D"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "gesture:DepthBuffer3D.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8DxCam@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rnddx9/Cam"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "rnddx9:Cam.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8DxEnviron@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rnddx9/Rnd_Xbox"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "rnddx9:Rnd_Xbox.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8DxLight@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rnddx9/Lit"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "rnddx9:Lit.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8DxMultiMesh@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rnddx9/MultiMesh"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "rnddx9:MultiMesh.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8DxParticleSys@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rnddx9/Part"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "rnddx9:Part.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8DxTexRenderer@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rnddx9/Rnd_Xbox"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "rnddx9:Rnd_Xbox.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8HamCamShot@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/HamCamShot"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "hamobj:HamCamShot.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8HamCharacter@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/HamCharacter"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "hamobj:HamCharacter.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8HamDirector@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/HamDirector"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "hamobj:HamDirector.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8HamIconMan@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/HamIconMan"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "hamobj:HamIconMan.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8HamLabel@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/HamLabel"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "hamobj:HamLabel.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8HamList@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/HamList"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "hamobj:HamList.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8HamListRibbon@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/HamListRibbon"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "hamobj:HamListRibbon.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8HamNavList@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/HamNavList"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "hamobj:HamNavList.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8HamPhotoDisplay@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/HamPhotoDisplay"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "hamobj:HamPhotoDisplay.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8HamPhraseMeter@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/HamPhraseMeter"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "hamobj:HamPhraseMeter.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8HamRibbon@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/HamRibbon"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "hamobj:HamRibbon.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8HamScrollSpeedIndicator@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/HamScrollSpeedIndicator"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "hamobj:HamScrollSpeedIndicator.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8HamStarsDisplay@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/lazer/meta_ham/MetaPanel"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "meta_ham:MetaPanel.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8InlineHelp@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/ui/InlineHelp"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "ui:InlineHelp.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8LabelNumberTicker@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/ui/LabelNumberTicker"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "ui:LabelNumberTicker.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8LabelShrinkWrapper@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/ui/LabelShrinkWrapper"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "ui:LabelShrinkWrapper.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8MeterDisplay@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/MeterDisplay"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "hamobj:MeterDisplay.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8MiniLeaderboardDisplay@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/MiniLeaderboardDisplay"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "hamobj:MiniLeaderboardDisplay.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8MoveDir@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/MoveDir"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "hamobj:MoveDir.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8NavigationSkeletonDir@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/gesture/NavigationSkeletonDir"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "gesture:NavigationSkeletonDir.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8NgEnviron@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Env_NG"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "rndobj:Env_NG.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8NgLight@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Lit_NG"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "rndobj:Lit_NG.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8NgSpotlightDrawer@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/world/SpotlightDrawer_NG"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "world:SpotlightDrawer_NG.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8PanelDir@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/ui/PanelDir"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "ui:PanelDir.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8PhysicsVolume@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/world/PhysicsVolume"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "world:PhysicsVolume.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8PostProcer@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/world/PostProcer"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "world:PostProcer.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8RndCam@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Cam"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "rndobj:Cam.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8RndDir@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Dir"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "rndobj:Dir.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8RndDrawable@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Draw"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "rndobj:Draw.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8RndEnviron@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Env"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "rndobj:Env.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8RndFlare@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Flare"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "rndobj:Flare.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8RndGenerator@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Gen"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "rndobj:Gen.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8RndGroup@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Group"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "rndobj:Group.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8RndLight@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Lit"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "rndobj:Lit.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8RndLine@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Line"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "rndobj:Line.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8RndMesh@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Mesh"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "rndobj:Mesh.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8RndMotionBlur@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/MotionBlur"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "rndobj:MotionBlur.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8RndMultiMesh@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/MultiMesh"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "rndobj:MultiMesh.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8RndMultiMeshProxy@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/MultiMeshProxy"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "rndobj:MultiMeshProxy.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8RndParticleSys@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Part"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "rndobj:Part.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8RndPollAnim@@7BRndAnimatable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/PollAnim"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "rndobj:PollAnim.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8RndRibbon@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Ribbon"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "rndobj:Ribbon.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8RndScreenMask@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/ScreenMask"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "rndobj:ScreenMask.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8RndShockwave@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Shockwave"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "rndobj:Shockwave.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8RndSoftParticles@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/SoftParticles"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "rndobj:SoftParticles.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8RndTexBlender@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/TexBlender"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "rndobj:TexBlender.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8RndTexRenderer@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/TexRenderer"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "rndobj:TexRenderer.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8RndTransProxy@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/TransProxy"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "rndobj:TransProxy.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8RndTransformable@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Trans"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "rndobj:Trans.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8RndTransformableRemover@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharBone"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "char:CharBone.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8ShadowBone@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/Character"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "char:Character.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8SkeletonDir@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/gesture/SkeletonDir"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "gesture:SkeletonDir.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8SongDifficultyDisplay@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/SongDifficultyDisplay"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "hamobj:SongDifficultyDisplay.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8Spotlight@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/world/Spotlight"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "world:Spotlight.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8SpotlightDrawer@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/world/SpotlightDrawer"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "world:SpotlightDrawer.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8SpotlightEnder@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/world/SpotlightEnder"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "world:SpotlightEnder.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8StarsDisplay@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/StarsDisplay"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "hamobj:StarsDisplay.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8StreamRecorder@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/gesture/StreamRecorder"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "gesture:StreamRecorder.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8StreamRenderer@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/gesture/StreamRenderer"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "gesture:StreamRenderer.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8SynthEmitter@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/synth/Emitter"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "synth:Emitter.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8TexMovie@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/movie/TexMovie"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "movie:TexMovie.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8TexProc@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/TexProc"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "rndobj:TexProc.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8ThreeDSound@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/synth/ThreeDSound"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "synth:ThreeDSound.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8UIButton@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/ui/UIButton"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "ui:UIButton.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8UIComponent@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/ui/UIComponent"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "ui:UIComponent.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8UILabel@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/ui/UILabel"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "ui:UILabel.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8UILabelDir@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/ui/UILabelDir"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "ui:UILabelDir.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8UIListDir@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/ui/UIListDir"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "ui:UIListDir.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8UIPicture@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/ui/UIPicture"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "ui:UIPicture.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8UISlider@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/ui/UISlider"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "ui:UISlider.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8Waypoint@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/Waypoint"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "char:Waypoint.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8WorldCrowd3DCharHandle@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/world/Crowd3DCharHandle"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "world:Crowd3DCharHandle.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8WorldCrowd@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/world/Crowd"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "world:Crowd.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8WorldDir@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/world/Dir"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "world:Dir.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8WorldInstance@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/world/Instance"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "world:Instance.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8Screenshot@@7BRndHighlightable@@@",
+    "base": "??_8WorldReflection@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/world/Reflection"
+    ],
+    "target_addr": [
+      "0x820c8288"
+    ],
+    "base_addr": [
+      "0x820c8288"
+    ],
+    "target_obj": "ui:Screenshot.obj",
+    "base_obj": "world:Reflection.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8SharedGroup@@7B@",
+    "base": "??_8MeterEffectMonitor@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/synth/MeterEffectMonitor"
+    ],
+    "target_addr": [
+      "0x820bee88"
+    ],
+    "base_addr": [
+      "0x820bee88"
+    ],
+    "target_obj": "world:Instance.obj",
+    "base_obj": "synth:MeterEffectMonitor.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8SkeletonClip@@7BRndPollable@@@",
+    "base": "??_8CampaignMasterQuestSongSelectPanel@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/lazer/meta_ham/CampaignMasterQuestSongSelectPanel"
+    ],
+    "target_addr": [
+      "0x82017b78"
+    ],
+    "base_addr": [
+      "0x82017b78"
+    ],
+    "target_obj": "gesture:SkeletonClip.obj",
+    "base_obj": "meta_ham:CampaignMasterQuestSongSelectPanel.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8SkeletonClip@@7BRndPollable@@@",
+    "base": "??_8CharPollGroup@@7BCharPollable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharPollGroup"
+    ],
+    "target_addr": [
+      "0x82017b78"
+    ],
+    "base_addr": [
+      "0x82017b78"
+    ],
+    "target_obj": "gesture:SkeletonClip.obj",
+    "base_obj": "char:CharPollGroup.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8SkeletonClip@@7BRndPollable@@@",
+    "base": "??_8FlowOnStop@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/flow/FlowOnStop"
+    ],
+    "target_addr": [
+      "0x82017b78"
+    ],
+    "base_addr": [
+      "0x82017b78"
+    ],
+    "target_obj": "gesture:SkeletonClip.obj",
+    "base_obj": "flow:FlowOnStop.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8SkeletonClip@@7BRndPollable@@@",
+    "base": "??_8PracticeChoosePanel@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/lazer/meta_ham/PracticeChoosePanel"
+    ],
+    "target_addr": [
+      "0x82017b78"
+    ],
+    "base_addr": [
+      "0x82017b78"
+    ],
+    "target_obj": "gesture:SkeletonClip.obj",
+    "base_obj": "meta_ham:PracticeChoosePanel.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8SkeletonClip@@7BRndPollable@@@",
+    "base": "??_8RndTransAnim@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/TransAnim"
+    ],
+    "target_addr": [
+      "0x82017b78"
+    ],
+    "base_addr": [
+      "0x82017b78"
+    ],
+    "target_obj": "gesture:SkeletonClip.obj",
+    "base_obj": "rndobj:TransAnim.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8SkeletonDir@@7BRndAnimatable@@@",
+    "base": "??_8HamCharacter@@7BRndPollable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/HamCharacter"
+    ],
+    "target_addr": [
+      "0x82250dc4"
+    ],
+    "base_addr": [
+      "0x82250dc4"
+    ],
+    "target_obj": "gesture:SkeletonDir.obj",
+    "base_obj": "hamobj:HamCharacter.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8SkeletonDir@@7BRndTransformable@@@",
+    "base": "??_8RndGenerator@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Gen"
+    ],
+    "target_addr": [
+      "0x82250db8"
+    ],
+    "base_addr": [
+      "0x82250db8"
+    ],
+    "target_obj": "gesture:SkeletonDir.obj",
+    "base_obj": "rndobj:Gen.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8SkeletonViz@@7B@",
+    "base": "??_8CharFaceServo@@7BCharPollable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharFaceServo"
+    ],
+    "target_addr": [
+      "0x82032260"
+    ],
+    "base_addr": [
+      "0x82032260"
+    ],
+    "target_obj": "gesture:SkeletonViz.obj",
+    "base_obj": "char:CharFaceServo.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8SpotlightEnder@@7BRndDrawable@@@",
+    "base": "??_8PostProcer@@7BRndDrawable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/world/PostProcer"
+    ],
+    "target_addr": [
+      "0x820eccc0"
+    ],
+    "base_addr": [
+      "0x820eccc0"
+    ],
+    "target_obj": "world:SpotlightEnder.obj",
+    "base_obj": "world:PostProcer.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8SpotlightEnder@@7BRndDrawable@@@",
+    "base": "??_8RndDrawable@@7B0@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Draw"
+    ],
+    "target_addr": [
+      "0x820eccc0"
+    ],
+    "base_addr": [
+      "0x820eccc0"
+    ],
+    "target_obj": "world:SpotlightEnder.obj",
+    "base_obj": "rndobj:Draw.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8StarsDisplay@@7B@",
+    "base": "??_8HamStarsDisplay@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/lazer/meta_ham/MetaPanel"
+    ],
+    "target_addr": [
+      "0x8210a0ac"
+    ],
+    "base_addr": [
+      "0x8210a0ac"
+    ],
+    "target_obj": "hamobj:StarsDisplay.obj",
+    "base_obj": "meta_ham:MetaPanel.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8StreamRecorder@@7B@",
+    "base": "??_8CharIKRod@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharIKRod"
+    ],
+    "target_addr": [
+      "0x82015ae0"
+    ],
+    "base_addr": [
+      "0x82015ae0"
+    ],
+    "target_obj": "gesture:StreamRecorder.obj",
+    "base_obj": "char:CharIKRod.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8StreamRecorder@@7B@",
+    "base": "??_8RndTexRenderer@@7BRndAnimatable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/TexRenderer"
+    ],
+    "target_addr": [
+      "0x82015ae0"
+    ],
+    "base_addr": [
+      "0x82015ae0"
+    ],
+    "target_obj": "gesture:StreamRecorder.obj",
+    "base_obj": "rndobj:TexRenderer.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8StreamRecorder@@7BRndDrawable@@@",
+    "base": "??_8RndTexRenderer@@7BRndDrawable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/TexRenderer"
+    ],
+    "target_addr": [
+      "0x8209d8c0"
+    ],
+    "base_addr": [
+      "0x8209d8c0"
+    ],
+    "target_obj": "gesture:StreamRecorder.obj",
+    "base_obj": "rndobj:TexRenderer.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8SynthEmitter@@7BRndTransformable@@@",
+    "base": "??_8HamScrollSpeedIndicator@@7BRndTransformable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/HamScrollSpeedIndicator"
+    ],
+    "target_addr": [
+      "0x820417b0"
+    ],
+    "base_addr": [
+      "0x820417b0"
+    ],
+    "target_obj": "synth:Emitter.obj",
+    "base_obj": "hamobj:HamScrollSpeedIndicator.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8TexMovie@@7B@",
+    "base": "??_8CharNeckTwist@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharNeckTwist"
+    ],
+    "target_addr": [
+      "0x8209f6c8"
+    ],
+    "base_addr": [
+      "0x8209f6c8"
+    ],
+    "target_obj": "movie:TexMovie.obj",
+    "base_obj": "char:CharNeckTwist.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8TexMovie@@7B@",
+    "base": "??_8RndMovie@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Movie"
+    ],
+    "target_addr": [
+      "0x8209f6c8"
+    ],
+    "base_addr": [
+      "0x8209f6c8"
+    ],
+    "target_obj": "movie:TexMovie.obj",
+    "base_obj": "rndobj:Movie.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8TexMovie@@7B@",
+    "base": "??_8RndPropAnim@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/PropAnim"
+    ],
+    "target_addr": [
+      "0x8209f6c8"
+    ],
+    "base_addr": [
+      "0x8209f6c8"
+    ],
+    "target_obj": "movie:TexMovie.obj",
+    "base_obj": "rndobj:PropAnim.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8TexMovie@@7B@",
+    "base": "??_8SongSequence@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/lazer/game/SongSequence"
+    ],
+    "target_addr": [
+      "0x8209f6c8"
+    ],
+    "base_addr": [
+      "0x8209f6c8"
+    ],
+    "target_obj": "movie:TexMovie.obj",
+    "base_obj": "game:SongSequence.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8TransConstraint@@7BRndHighlightable@@@",
+    "base": "??_8TexLoadPanel@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/lazer/meta_ham/TexLoadPanel"
+    ],
+    "target_addr": [
+      "0x8211feb4"
+    ],
+    "base_addr": [
+      "0x8211feb4"
+    ],
+    "target_obj": "hamobj:TransConstraint.obj",
+    "base_obj": "meta_ham:TexLoadPanel.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8UILabel@@7BRndText@@@",
+    "base": "??_8UIButton@@7BRndText@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/ui/UIButton"
+    ],
+    "target_addr": [
+      "0x820cba00"
+    ],
+    "base_addr": [
+      "0x820cba00"
+    ],
+    "target_obj": "ui:UILabel.obj",
+    "base_obj": "ui:UIButton.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8UILabel@@7BUIComponent@@@",
+    "base": "??_8UIButton@@7BUIComponent@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/ui/UIButton"
+    ],
+    "target_addr": [
+      "0x820d3c3c"
+    ],
+    "base_addr": [
+      "0x820d3c3c"
+    ],
+    "target_obj": "ui:UILabel.obj",
+    "base_obj": "ui:UIButton.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8UIListDir@@7BRndAnimatable@@@",
+    "base": "??_8CharIKFingers@@7BCharWeightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharIKFingers"
+    ],
+    "target_addr": [
+      "0x820c8b20"
+    ],
+    "base_addr": [
+      "0x820c8b20"
+    ],
+    "target_obj": "ui:UIListDir.obj",
+    "base_obj": "char:CharIKFingers.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8UIListDir@@7BRndTransformable@@@",
+    "base": "??_8DxLight@@7BRndTransformable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rnddx9/Lit"
+    ],
+    "target_addr": [
+      "0x82089c0c"
+    ],
+    "base_addr": [
+      "0x82089c0c"
+    ],
+    "target_obj": "ui:UIListDir.obj",
+    "base_obj": "rnddx9:Lit.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8UIPanel@@7B@",
+    "base": "??_8CharForeTwist@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharForeTwist"
+    ],
+    "target_addr": [
+      "0x820ce2f4"
+    ],
+    "base_addr": [
+      "0x820ce2f4"
+    ],
+    "target_obj": "ui:UIPanel.obj",
+    "base_obj": "char:CharForeTwist.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8UIPanel@@7B@",
+    "base": "??_8ConnectionStatusPanel@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/meta/ConnectionStatusPanel"
+    ],
+    "target_addr": [
+      "0x820ce2f4"
+    ],
+    "base_addr": [
+      "0x820ce2f4"
+    ],
+    "target_obj": "ui:UIPanel.obj",
+    "base_obj": "meta:ConnectionStatusPanel.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8UIPicture@@7BRndTransformable@@@",
+    "base": "??_8LabelNumberTicker@@7BRndTransformable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/ui/LabelNumberTicker"
+    ],
+    "target_addr": [
+      "0x820d25fc"
+    ],
+    "base_addr": [
+      "0x820d25fc"
+    ],
+    "target_obj": "ui:UIPicture.obj",
+    "base_obj": "ui:LabelNumberTicker.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8UIPicture@@7BRndTransformable@@@",
+    "base": "??_8UIComponent@@7BRndTransformable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/ui/UIComponent"
+    ],
+    "target_addr": [
+      "0x820d25fc"
+    ],
+    "base_addr": [
+      "0x820d25fc"
+    ],
+    "target_obj": "ui:UIPicture.obj",
+    "base_obj": "ui:UIComponent.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8UITrigger@@7BEventTrigger@@@",
+    "base": "??_8CharLipSyncDriver@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharLipSyncDriver"
+    ],
+    "target_addr": [
+      "0x8201a448"
+    ],
+    "base_addr": [
+      "0x8201a448"
+    ],
+    "target_obj": "ui:UITrigger.obj",
+    "base_obj": "char:CharLipSyncDriver.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8UITrigger@@7BRndPollable@@@",
+    "base": "??_8CharBoneOffset@@7BRndHighlightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharBoneOffset"
+    ],
+    "target_addr": [
+      "0x8200d008"
+    ],
+    "base_addr": [
+      "0x8200d008"
+    ],
+    "target_obj": "ui:UITrigger.obj",
+    "base_obj": "char:CharBoneOffset.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8VoiceInputPanel@@7B@",
+    "base": "??_8CampaignMasterQuestCrewSelectPanel@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/lazer/meta_ham/CampaignMasterQuestCrewSelectPanel"
+    ],
+    "target_addr": [
+      "0x82019430"
+    ],
+    "base_addr": [
+      "0x82019430"
+    ],
+    "target_obj": "meta_ham:VoiceInputPanel.obj",
+    "base_obj": "meta_ham:CampaignMasterQuestCrewSelectPanel.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8VoiceInputPanel@@7B@",
+    "base": "??_8CharClipSet@@7BRndAnimatable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharClipSet"
+    ],
+    "target_addr": [
+      "0x82019430"
+    ],
+    "base_addr": [
+      "0x82019430"
+    ],
+    "target_obj": "meta_ham:VoiceInputPanel.obj",
+    "base_obj": "char:CharClipSet.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8VoiceInputPanel@@7B@",
+    "base": "??_8CharIKScale@@7BCharWeightable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/char/CharIKScale"
+    ],
+    "target_addr": [
+      "0x82019430"
+    ],
+    "base_addr": [
+      "0x82019430"
+    ],
+    "target_obj": "meta_ham:VoiceInputPanel.obj",
+    "base_obj": "char:CharIKScale.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8VoiceInputPanel@@7B@",
+    "base": "??_8FlowValueCase@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/flow/FlowValueCase"
+    ],
+    "target_addr": [
+      "0x82019430"
+    ],
+    "base_addr": [
+      "0x82019430"
+    ],
+    "target_obj": "meta_ham:VoiceInputPanel.obj",
+    "base_obj": "flow:FlowValueCase.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8WorldCrowd@@7B@",
+    "base": "??_8FlowIf@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/flow/FlowIf"
+    ],
+    "target_addr": [
+      "0x820417a8"
+    ],
+    "base_addr": [
+      "0x820417a8"
+    ],
+    "target_obj": "world:Crowd.obj",
+    "base_obj": "flow:FlowIf.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8WorldCrowd@@7B@",
+    "base": "??_8HamScrollSpeedIndicator@@7BRndPollable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/HamScrollSpeedIndicator"
+    ],
+    "target_addr": [
+      "0x820417a8"
+    ],
+    "base_addr": [
+      "0x820417a8"
+    ],
+    "target_obj": "world:Crowd.obj",
+    "base_obj": "hamobj:HamScrollSpeedIndicator.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8WorldCrowd@@7BRndDrawable@@@",
+    "base": "??_8RndShockwave@@7B@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Shockwave"
+    ],
+    "target_addr": [
+      "0x820b0e2c"
+    ],
+    "base_addr": [
+      "0x820b0e2c"
+    ],
+    "target_obj": "world:Crowd.obj",
+    "base_obj": "rndobj:Shockwave.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8WorldCrowd@@7BRndDrawable@@@",
+    "base": "??_8RndTransProxy@@7BRndTransformable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/TransProxy"
+    ],
+    "target_addr": [
+      "0x820b0e2c"
+    ],
+    "base_addr": [
+      "0x820b0e2c"
+    ],
+    "target_obj": "world:Crowd.obj",
+    "base_obj": "rndobj:TransProxy.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8WorldInstance@@7BRndDrawable@@@",
+    "base": "??_8PanelDir@@7BRndTransformable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/ui/PanelDir"
+    ],
+    "target_addr": [
+      "0x820ccca0"
+    ],
+    "base_addr": [
+      "0x820ccca0"
+    ],
+    "target_obj": "world:Instance.obj",
+    "base_obj": "ui:PanelDir.obj",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_8WorldReflection@@7BRndDrawable@@@",
+    "base": "??_8RndMesh@@7BRndDrawable@@@",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Mesh"
+    ],
+    "target_addr": [
+      "0x820ed0fc"
+    ],
+    "base_addr": [
+      "0x820ed0fc"
+    ],
+    "target_obj": "world:Reflection.obj",
+    "base_obj": "rndobj:Mesh.obj",
+    "lanes": [
+      "different_data"
+    ]
+  }
+]

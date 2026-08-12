@@ -1,0 +1,338 @@
+[
+  {
+    "target": "?sSuperClassMap@ObjectDir@@2V?$map@U?$pair@VSymbol@@V1@@stlpmtx_std@@_NU?$less@U?$pair@VSymbol@@V1@@stlpmtx_std@@@2@V?$StlNodeAlloc@U?$pair@$$CBU?$pair@VSymbol@@V1@@stlpmtx_std@@_N@stlpmtx_std@@@2@@stlpmtx_std@@A",
+    "base": "?sSuperClassMap@@3V?$map@U?$pair@VSymbol@@V1@@stlpmtx_std@@_NU?$less@U?$pair@VSymbol@@V1@@stlpmtx_std@@@2@V?$StlNodeAlloc@U?$pair@$$CBU?$pair@VSymbol@@V1@@stlpmtx_std@@_N@stlpmtx_std@@@2@@stlpmtx_std@@A",
+    "sites": 24,
+    "functions": 5,
+    "units": [
+      "default/system/obj/Dir"
+    ],
+    "target_addr": [],
+    "base_addr": [],
+    "target_obj": "",
+    "base_obj": "",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "?gFile@@3VSymbol@@A",
+    "base": "?gFile@DataArray@@2VSymbol@@A",
+    "sites": 4,
+    "functions": 2,
+    "units": [
+      "default/system/obj/DataArray"
+    ],
+    "target_addr": [],
+    "base_addr": [],
+    "target_obj": "",
+    "base_obj": "",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "OnlyReturns",
+    "base": "??0PaddedJointPos@@QAA@XZ",
+    "sites": 4,
+    "functions": 1,
+    "units": [
+      "default/system/gesture/SkeletonUpdate"
+    ],
+    "target_addr": [],
+    "base_addr": [],
+    "target_obj": "",
+    "base_obj": "",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "?gRevs@?1??Load@ThreeDSound@@UAAXAAVBinStream@@@Z@4QBGB",
+    "base": "gAltRev",
+    "sites": 3,
+    "functions": 1,
+    "units": [
+      "default/system/synth/ThreeDSound"
+    ],
+    "target_addr": [],
+    "base_addr": [],
+    "target_obj": "",
+    "base_obj": "",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "gImpostorTex",
+    "base": "gImpostorMat",
+    "sites": 3,
+    "functions": 1,
+    "units": [
+      "default/system/world/Crowd"
+    ],
+    "target_addr": [],
+    "base_addr": [],
+    "target_obj": "",
+    "base_obj": "",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "?gMachineName@?A0xbd0b8fef@@3PADA",
+    "base": "?gShareName@?A0x3eb27431@@3PADA",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/os/HolmesClient"
+    ],
+    "target_addr": [],
+    "base_addr": [],
+    "target_obj": "",
+    "base_obj": "",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "?gShaderDepthVolume@@3VRndShaderDepthVolume@@A",
+    "base": "?gShaderVelocityCamera@@3VRndShaderVelocityCamera@@A",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Shader"
+    ],
+    "target_addr": [],
+    "base_addr": [],
+    "target_obj": "",
+    "base_obj": "",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "?gShaderDrawRect@@3VRndShaderDrawRect@@A",
+    "base": "?gShaderPostProc@@3VRndShaderPostProc@@A",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Shader"
+    ],
+    "target_addr": [],
+    "base_addr": [],
+    "target_obj": "",
+    "base_obj": "",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "?gShaderFur@@3VRndShaderFur@@A",
+    "base": "?gShaderDepthVolume@@3VRndShaderDepthVolume@@A",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Shader"
+    ],
+    "target_addr": [],
+    "base_addr": [],
+    "target_obj": "",
+    "base_obj": "",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "?gShaderMultimesh@@3VRndShaderMultimesh@@A",
+    "base": "?gShaderParticles@@3VRndShaderParticles@@A",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Shader"
+    ],
+    "target_addr": [],
+    "base_addr": [],
+    "target_obj": "",
+    "base_obj": "",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "?gShaderParticles@@3VRndShaderParticles@@A",
+    "base": "?gShaderSimple@@3VRndShaderSimple@@A",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Shader"
+    ],
+    "target_addr": [],
+    "base_addr": [],
+    "target_obj": "",
+    "base_obj": "",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "?gShaderPostProc@@3VRndShaderPostProc@@A",
+    "base": "?gShaderStandard@@3VRndShaderStandard@@A",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Shader"
+    ],
+    "target_addr": [],
+    "base_addr": [],
+    "target_obj": "",
+    "base_obj": "",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "?gShaderStandard@@3VRndShaderStandard@@A",
+    "base": "?gShaderMultimesh@@3VRndShaderMultimesh@@A",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Shader"
+    ],
+    "target_addr": [],
+    "base_addr": [],
+    "target_obj": "",
+    "base_obj": "",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "?gShaderSyncTrack@@3VRndShaderSyncTrack@@A",
+    "base": "?gShaderFur@@3VRndShaderFur@@A",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Shader"
+    ],
+    "target_addr": [],
+    "base_addr": [],
+    "target_obj": "",
+    "base_obj": "",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "?gShaderUnwrapUV@@3VRndShaderUnwrapUV@@A",
+    "base": "?gShaderDrawRect@@3VRndShaderDrawRect@@A",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Shader"
+    ],
+    "target_addr": [],
+    "base_addr": [],
+    "target_obj": "",
+    "base_obj": "",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "?gShaderVelocity@@3VRndShaderVelocity@@A",
+    "base": "?gShaderUnwrapUV@@3VRndShaderUnwrapUV@@A",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Shader"
+    ],
+    "target_addr": [],
+    "base_addr": [],
+    "target_obj": "",
+    "base_obj": "",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "?gShaderVelocityCamera@@3VRndShaderVelocityCamera@@A",
+    "base": "?gShaderVelocity@@3VRndShaderVelocity@@A",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Shader"
+    ],
+    "target_addr": [],
+    "base_addr": [],
+    "target_obj": "",
+    "base_obj": "",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "gImpostorTex",
+    "base": "gImpostorCamera",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/world/Crowd"
+    ],
+    "target_addr": [],
+    "base_addr": [],
+    "target_obj": "",
+    "base_obj": "",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "gImpostorTex",
+    "base": "gNumCrowd",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/world/Crowd"
+    ],
+    "target_addr": [],
+    "base_addr": [],
+    "target_obj": "",
+    "base_obj": "",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??$__destroy_range@PAV?$vector@PAUUnlockable@?A0x9d17dd81@@V?$StlNodeAlloc@PAUUnlockable@?A0x9d17dd81@@@stlpmtx_std@@@stlpmtx_std@@V12@@stlpmtx_std@@YAXPAV?$vector@PAUUnlockable@?A0x9d17dd81@@V?$StlNodeAlloc@PAUUnlockable@?A0x9d17dd81@@@stlpmtx_std@@@0@00@Z",
+    "base": "??$__destroy_mv_srcs@PAV?$vector@PAUUnlockable@?A0x44bf5786@@V?$StlNodeAlloc@PAUUnlockable@?A0x44bf5786@@@stlpmtx_std@@@stlpmtx_std@@V12@@stlpmtx_std@@YAXPAV?$vector@PAUUnlockable@?A0x44bf5786@@V?$StlNodeAlloc@PAUUnlockable@?A0x44bf5786@@@stlpmtx_std@@@0@00@Z",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/lazer/meta_ham/MetagameRank"
+    ],
+    "target_addr": [],
+    "base_addr": [],
+    "target_obj": "",
+    "base_obj": "",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "OnlyReturns",
+    "base": "?get_allocator@?$vector@PAUUnlockable@?A0x44bf5786@@V?$StlNodeAlloc@PAUUnlockable@?A0x44bf5786@@@stlpmtx_std@@@stlpmtx_std@@QBA?AV?$StlNodeAlloc@PAUUnlockable@?A0x44bf5786@@@2@XZ",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/lazer/meta_ham/MetagameRank"
+    ],
+    "target_addr": [],
+    "base_addr": [],
+    "target_obj": "",
+    "base_obj": "",
+    "lanes": [
+      "different_function"
+    ]
+  }
+]

@@ -389,7 +389,7 @@ const char *Localize(Symbol token, bool *success, Locale &locale) {
     if (!localized) {
         textStr = token.Str();
         Locale::sIgnoreMissingText = textStr;
-        if (Locale::sVerboseNotify) {
+        if (Locale::GetLocaleVerboseNotify()) {
             MILO_NOTIFY("\"%s\" needs localization", token);
         }
     }

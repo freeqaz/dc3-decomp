@@ -131,7 +131,9 @@ DataArray **gCallStackPtr = gCallStack;
 int gPreExecuteLevel;
 DataFunc *DataArray::sDefaultHandler;
 DataFunc *gPreExecuteFunc;
-Symbol DataArray::gFile;
+// ?gFile@@3VSymbol@@A -- retail spells this at FILE scope; a static member
+// of DataArray would mangle ?gFile@DataArray@@2VSymbol@@A.
+Symbol gFile;
 std::list<bool> gDataArrayConditional;
 
 class DataCallStackFrame {

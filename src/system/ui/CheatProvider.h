@@ -38,9 +38,11 @@ public:
 
     static void Init();
     static void Terminate();
-    static CheatProvider *sInstance;
 
 private:
+    // ?sInstance@CheatProvider@@0PAV1@A -- `0` is private, ours emitted `2`.
+    static CheatProvider *sInstance;
+
     /** Set the current filter in place to the next available filter. */
     void NextFilter();
     /** Update the filtered cheats vector based on the current filter. */

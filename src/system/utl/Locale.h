@@ -68,9 +68,11 @@ public:
     static void SetLocaleVerboseNotify(bool set) { Locale::sVerboseNotify = set; }
     static bool GetLocaleVerboseNotify() { return sVerboseNotify; }
 
-    static bool sVerboseNotify;
 
 protected:
+    // ?sVerboseNotify@Locale@@1_NA -- `1` is protected, ours emitted `2`.
+    static bool sVerboseNotify;
+
     bool FindDataIndex(Symbol, int &, bool) const;
 };
 

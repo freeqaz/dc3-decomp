@@ -1,0 +1,136 @@
+[
+  {
+    "target": "??3@YAXPAX@Z",
+    "base": "??3DataArray@@SAXPAX@Z",
+    "sites": 3,
+    "functions": 3,
+    "units": [
+      "default/lazer/meta_ham/FitnessGoalMgr",
+      "default/lazer/meta_ham/HamUI",
+      "default/system/meta/StorePreviewMgr"
+    ],
+    "target_addr": [
+      "0x82abc2a8",
+      "0x82e21268",
+      "0x82eb0c70"
+    ],
+    "base_addr": [
+      "0x82331228"
+    ],
+    "target_obj": "utl:MemMgr.obj",
+    "base_obj": "App.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??3@YAXPAX@Z",
+    "base": "??3HamLabel@@SAXPAX@Z",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/lazer/meta_ham/MetaPanel"
+    ],
+    "target_addr": [
+      "0x82abc2a8",
+      "0x82e21268",
+      "0x82eb0c70"
+    ],
+    "base_addr": [
+      "0x82516b80"
+    ],
+    "target_obj": "utl:MemMgr.obj",
+    "base_obj": "hamobj:HamLabel.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??3@YAXPAX@Z",
+    "base": "??3ParallelGroupSeqInst@@SAXPAX@Z",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/synth/Sequence"
+    ],
+    "target_addr": [
+      "0x82abc2a8",
+      "0x82e21268",
+      "0x82eb0c70"
+    ],
+    "base_addr": [
+      "0x82746348"
+    ],
+    "target_obj": "utl:MemMgr.obj",
+    "base_obj": "synth:Sequence.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??3@YAXPAX@Z",
+    "base": "??3SerialGroupSeqInst@@SAXPAX@Z",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/synth/Sequence"
+    ],
+    "target_addr": [
+      "0x82abc2a8",
+      "0x82e21268",
+      "0x82eb0c70"
+    ],
+    "base_addr": [
+      "0x82746328"
+    ],
+    "target_obj": "utl:MemMgr.obj",
+    "base_obj": "synth:Sequence.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??3@YAXPAX@Z",
+    "base": "??3StreamRecorder@@SAXPAX@Z",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/gesture/Gesture"
+    ],
+    "target_addr": [
+      "0x82abc2a8",
+      "0x82e21268",
+      "0x82eb0c70"
+    ],
+    "base_addr": [
+      "0x82deb0a8"
+    ],
+    "target_obj": "utl:MemMgr.obj",
+    "base_obj": "gesture:Gesture.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??3FxSendFlanger@@SAXPAX@Z",
+    "base": "??3@YAXPAX@Z",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/synth/Synth"
+    ],
+    "target_addr": [
+      "0x827349b8"
+    ],
+    "base_addr": [
+      "0x82abc2a8",
+      "0x82e21268",
+      "0x82eb0c70"
+    ],
+    "target_obj": "synth:Synth.obj",
+    "base_obj": "utl:MemMgr.obj",
+    "lanes": [
+      "different_function"
+    ]
+  }
+]

@@ -1,0 +1,1998 @@
+{
+ "generated_by": "scripts/build_wrongref_worklist.py",
+ "totals": {
+  "pairs": 115,
+  "charged_functions": 130,
+  "solo_completable_functions": 111,
+  "two_cycles": 0
+ },
+ "two_cycles": [],
+ "pairs": [
+  {
+   "target": "?sSuperClassMap@ObjectDir@@2V?$map@U?$pair@VSymbol@@V1@@stlpmtx_std@@_NU?$less@U?$pair@VSymbol@@V1@@stlpmtx_std@@@2@V?$StlNodeAlloc@U?$pair@$$CBU?$pair@VSymbol@@V1@@stlpmtx_std@@_N@stlpmtx_std@@@2@@stlpmtx_std@@A",
+   "base": "?sSuperClassMap@@3V?$map@U?$pair@VSymbol@@V1@@stlpmtx_std@@_NU?$less@U?$pair@VSymbol@@V1@@stlpmtx_std@@@2@V?$StlNodeAlloc@U?$pair@$$CBU?$pair@VSymbol@@V1@@stlpmtx_std@@_N@stlpmtx_std@@@2@@stlpmtx_std@@A",
+   "bucket": "neither_mapped",
+   "sites": 24,
+   "functions": 5,
+   "solo_completable": 5,
+   "units": [
+    "default/system/obj/Dir"
+   ],
+   "charged_functions": [
+    "??__EsSuperClassMap@@YAXXZ",
+    "??__FsSuperClassMap@@YAXXZ",
+    "?Iterate@ObjectDir@@IAAXPAVDataArray@@_N@Z",
+    "?PreInit@ObjectDir@@SAXHH@Z",
+    "?Terminate@ObjectDir@@SAXXZ"
+   ],
+   "two_cycle": false,
+   "subclass": "same_identifier_other_scope",
+   "note": "TRIED, REVERTED: declaring the std::map member in Dir.h costs HamStoreProvider fn_82980E8C at `none` (100 -> 99.9), at either placement; a 4-blank-line control probe at the same point lost nothing, so it is the declaration. Needs a forward-declared or type-erased member."
+  },
+  {
+   "target": "?Notify@Debug@@QAAXPBD@Z",
+   "base": "?Warn@Debug@@QAAXPBD@Z",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 5,
+   "functions": 5,
+   "solo_completable": 5,
+   "units": [
+    "default/system/obj/DataFile",
+    "default/system/obj/Utl",
+    "default/system/ui/UIList",
+    "default/system/world/Dir",
+    "default/system/world/LightPreset"
+   ],
+   "charged_functions": [
+    "??5@YAAAVBinStream@@AAV0@AAUBitmapOverride@WorldDir@@@Z",
+    "?CopyTypeProperties@@YAXPAVObject@Hmx@@0@Z",
+    "?DataReadFile@@YAPAVDataArray@@PBD_N@Z",
+    "?OnSetKeyframe@LightPreset@@IAA?AVDataNode@@PAVDataArray@@@Z",
+    "?SetSelectedSimulateScroll@UIList@@QAA_NVSymbol@@_N@Z"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??1?$aligned_vector@M@@QAA@XZ",
+   "base": "??1?$vector@MV?$XboxAllocator@M@@@stlpmtx_std@@QAA@XZ",
+   "bucket": "survivor_mapped_ours_unmapped",
+   "sites": 4,
+   "functions": 4,
+   "solo_completable": 4,
+   "units": [
+    "default/system/synth_xbox/FftIpp"
+   ],
+   "charged_functions": [
+    "fn_82E4DE20",
+    "fn_82E4DE4C",
+    "fn_82E4DE78",
+    "fn_82E4DEA4"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "?gPhysicalType@?A0x2be09a71@@3PBDB",
+   "base": "?gPhysicalType@?A0x2be09a71@@3PADA",
+   "bucket": "survivor_mapped_ours_unmapped",
+   "sites": 7,
+   "functions": 3,
+   "solo_completable": 3,
+   "units": [
+    "default/Memory_Xbox"
+   ],
+   "charged_functions": [
+    "??0PhysMemTypeTracker@@QAA@VSymbol@@@Z",
+    "??1PhysMemTypeTracker@@QAA@XZ",
+    "??__EgPhysicalType@?A0x2be09a71@@YAXXZ"
+   ],
+   "two_cycle": false,
+   "subclass": "same_qualified_name",
+   "note": "NEEDS JUDGEMENT: `PBDB` is `const char *const`, but PhysMemTypeTracker assigns to it at Memory_Xbox.cpp:338/347. Either retail had a second variable or those writes live elsewhere."
+  },
+  {
+   "target": "?sVerboseNotify@Locale@@1_NA",
+   "base": "?sVerboseNotify@Locale@@2_NA",
+   "bucket": "survivor_mapped_ours_unmapped",
+   "sites": 6,
+   "functions": 3,
+   "solo_completable": 3,
+   "units": [
+    "default/system/ui/UI",
+    "default/system/utl/Locale"
+   ],
+   "charged_functions": [
+    "?DataSetLocaleVerboseNotify@@YA?AVDataNode@@PAVDataArray@@@Z",
+    "?Init@UIManager@@UAAXXZ",
+    "?Localize@@YAPBDVSymbol@@PA_NAAVLocale@@@Z"
+   ],
+   "two_cycle": false,
+   "subclass": "same_qualified_name",
+   "note": ""
+  },
+  {
+   "target": "??3@YAXPAX@Z",
+   "base": "??3DataArray@@SAXPAX@Z",
+   "bucket": "ambiguous_multi_addr",
+   "sites": 3,
+   "functions": 3,
+   "solo_completable": 3,
+   "units": [
+    "default/lazer/meta_ham/FitnessGoalMgr",
+    "default/lazer/meta_ham/HamUI",
+    "default/system/meta/StorePreviewMgr"
+   ],
+   "charged_functions": [
+    "fn_82890220",
+    "fn_8295A8F0",
+    "fn_82E1E608"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": "NEEDS JUDGEMENT: retail calls the GLOBAL operator delete where we call the class-scoped POOL_OVERLOAD one. Mirror image of rb3-xenon's biggest pair. `??3@YAXPAX@Z` sits at three addresses in the map, so no alias is minted."
+  },
+  {
+   "target": "?sInstance@CheatProvider@@0PAV1@A",
+   "base": "?sInstance@CheatProvider@@2PAV1@A",
+   "bucket": "survivor_mapped_ours_unmapped",
+   "sites": 7,
+   "functions": 2,
+   "solo_completable": 2,
+   "units": [
+    "default/system/ui/CheatProvider"
+   ],
+   "charged_functions": [
+    "?Init@CheatProvider@@SAXXZ",
+    "?Terminate@CheatProvider@@SAXXZ"
+   ],
+   "two_cycle": false,
+   "subclass": "same_qualified_name",
+   "note": ""
+  },
+  {
+   "target": "?kArkBlockSize@@3HB",
+   "base": "?kArkBlockSize@@3HA",
+   "bucket": "survivor_mapped_ours_unmapped",
+   "sites": 6,
+   "functions": 2,
+   "solo_completable": 2,
+   "units": [
+    "default/system/os/Archive",
+    "default/system/os/HDCache"
+   ],
+   "charged_functions": [
+    "?GetArkfileNumBlocks@Archive@@QBAHH@Z",
+    "?ReadAsync@HDCache@@QAA_NHHPAX@Z"
+   ],
+   "two_cycle": false,
+   "subclass": "same_qualified_name",
+   "note": "TRIED, REVERTED: `extern const int` in Archive.cpp lets MSVC fold the divisor and costs Archive::GetArkfileNumBlocks at `none`. Retail divides, so retail's DEFINITION is in another TU -- find it, do not add const here."
+  },
+  {
+   "target": "?gFile@@3VSymbol@@A",
+   "base": "?gFile@DataArray@@2VSymbol@@A",
+   "bucket": "neither_mapped",
+   "sites": 4,
+   "functions": 2,
+   "solo_completable": 2,
+   "units": [
+    "default/system/obj/DataArray"
+   ],
+   "charged_functions": [
+    "??__EgFile@@YAXXZ",
+    "?SetFile@DataArray@@SAXVSymbol@@@Z"
+   ],
+   "two_cycle": false,
+   "subclass": "same_identifier_other_scope",
+   "note": ""
+  },
+  {
+   "target": "?DeleteChecksum@FileStream@@AAAXXZ",
+   "base": "?DeleteChecksum@BufStream@@QAAXXZ",
+   "bucket": "survivor_mapped_ours_unmapped",
+   "sites": 3,
+   "functions": 2,
+   "solo_completable": 2,
+   "units": [
+    "default/system/utl/BufStream"
+   ],
+   "charged_functions": [
+    "??1BufStream@@UAA@XZ",
+    "?StartChecksum@BufStream@@QAAXPBD@Z"
+   ],
+   "two_cycle": false,
+   "subclass": "same_identifier_other_scope",
+   "note": "LIKELY A FOLD, NOT A DEFECT: two same-named methods on unrelated classes with identical bodies; ours is simply the spelling /OPT:ICF discarded. Needs a body test, not a source edit."
+  },
+  {
+   "target": "??1String@@UAA@XZ",
+   "base": "??1DataNode@@QAA@XZ",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 2,
+   "functions": 2,
+   "solo_completable": 2,
+   "units": [
+    "default/system/obj/Dir",
+    "default/system/os/Memcard_Xbox"
+   ],
+   "charged_functions": [
+    "fn_82596300",
+    "fn_825F6848"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "?sOverlapped@XboxMultipleItemsPurchaser@@0U_XOVERLAPPED@@A",
+   "base": "?sOverlapped@?6??Initiate@XboxMultipleItemsPurchaser@@UAAXXZ@4U_XOVERLAPPED@@A",
+   "bucket": "survivor_mapped_ours_unmapped",
+   "sites": 4,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/meta/StorePurchaser"
+   ],
+   "charged_functions": [
+    "?Initiate@XboxMultipleItemsPurchaser@@UAAXXZ"
+   ],
+   "two_cycle": false,
+   "subclass": "same_identifier_other_scope",
+   "note": ""
+  },
+  {
+   "target": "?sFmDeleting@FileMerger@@2PAVObject@Hmx@@A",
+   "base": "?sFmDeleting@FileMerger@@2PAV1@A",
+   "bucket": "survivor_mapped_ours_unmapped",
+   "sites": 4,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/char/FileMerger"
+   ],
+   "charged_functions": [
+    "??1FileMerger@@UAA@XZ"
+   ],
+   "two_cycle": false,
+   "subclass": "same_qualified_name",
+   "note": ""
+  },
+  {
+   "target": "OnlyReturns",
+   "base": "??0PaddedJointPos@@QAA@XZ",
+   "bucket": "neither_mapped",
+   "sites": 4,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/gesture/SkeletonUpdate"
+   ],
+   "charged_functions": [
+    "??0SkeletonFrame@@QAA@XZ"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??_B?5??SetType@RndCamAnim@@UAAXVSymbol@@@Z@55",
+   "base": "??_B?L@???$PropSync@M@@YA_NAAV?$Key@M@@AAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@5L@",
+   "bucket": "survivor_mapped_ours_unmapped",
+   "sites": 4,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/rndobj/CamAnim"
+   ],
+   "charged_functions": [
+    "fn_826EF510"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "?gRevs@?1??Load@ThreeDSound@@UAAXAAVBinStream@@@Z@4QBGB",
+   "base": "gAltRev",
+   "bucket": "neither_mapped",
+   "sites": 3,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/synth/ThreeDSound"
+   ],
+   "charged_functions": [
+    "?Load@ThreeDSound@@UAAXAAVBinStream@@@Z"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "?sUseSubtitles@MoviePanel@@1_NA",
+   "base": "?sUseSubtitles@MoviePanel@@2_NA",
+   "bucket": "survivor_mapped_ours_unmapped",
+   "sites": 2,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/meta/MoviePanel"
+   ],
+   "charged_functions": [
+    "?Load@MoviePanel@@UAAXXZ"
+   ],
+   "two_cycle": false,
+   "subclass": "same_qualified_name",
+   "note": ""
+  },
+  {
+   "target": "?sSaveVer@DataArraySongInfo@@0HA",
+   "base": "?sSaveVer@DataArraySongInfo@@2HA",
+   "bucket": "survivor_mapped_ours_unmapped",
+   "sites": 2,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/meta/DataArraySongInfo"
+   ],
+   "charged_functions": [
+    "?Save@DataArraySongInfo@@UBAXAAVBinStream@@@Z"
+   ],
+   "two_cycle": false,
+   "subclass": "same_qualified_name",
+   "note": ""
+  },
+  {
+   "target": "?sJointParents@BaseSkeleton@@2QBW4SkeletonJoint@@B",
+   "base": "?gMirrorJoints@@3PAW4SkeletonJoint@@A",
+   "bucket": "survivor_mapped_ours_unmapped",
+   "sites": 2,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/gesture/BaseSkeleton"
+   ],
+   "charged_functions": [
+    "?MirrorJoint@BaseSkeleton@@SA?AW4SkeletonJoint@@W42@@Z"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??__FgConditional@@YAXXZ",
+   "base": "??__FgDataArrayConditional@@YAXXZ",
+   "bucket": "survivor_mapped_ours_unmapped",
+   "sites": 2,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/obj/DataArray"
+   ],
+   "charged_functions": [
+    "??__EgConditional@@YAXXZ"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "?sEnviron@Spotlight@@1PAVRndEnviron@@A",
+   "base": "?sEnviron@Spotlight@@2PAVRndEnviron@@A",
+   "bucket": "survivor_mapped_ours_unmapped",
+   "sites": 2,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/world/Spotlight"
+   ],
+   "charged_functions": [
+    "?Init@Spotlight@@SAXXZ"
+   ],
+   "two_cycle": false,
+   "subclass": "same_qualified_name",
+   "note": ""
+  },
+  {
+   "target": "?gShaderParticles@@3VRndShaderParticles@@A",
+   "base": "?gShaderSimple@@3VRndShaderSimple@@A",
+   "bucket": "neither_mapped",
+   "sites": 2,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/rndobj/Shader"
+   ],
+   "charged_functions": [
+    "??__FgShaderSimple@@YAXXZ"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "?gShaderMultimesh@@3VRndShaderMultimesh@@A",
+   "base": "?gShaderParticles@@3VRndShaderParticles@@A",
+   "bucket": "neither_mapped",
+   "sites": 2,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/rndobj/Shader"
+   ],
+   "charged_functions": [
+    "??__FgShaderParticles@@YAXXZ"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "?gShaderStandard@@3VRndShaderStandard@@A",
+   "base": "?gShaderMultimesh@@3VRndShaderMultimesh@@A",
+   "bucket": "neither_mapped",
+   "sites": 2,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/rndobj/Shader"
+   ],
+   "charged_functions": [
+    "??__FgShaderMultimesh@@YAXXZ"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "?gShaderPostProc@@3VRndShaderPostProc@@A",
+   "base": "?gShaderStandard@@3VRndShaderStandard@@A",
+   "bucket": "neither_mapped",
+   "sites": 2,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/rndobj/Shader"
+   ],
+   "charged_functions": [
+    "??__FgShaderStandard@@YAXXZ"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "?gShaderDrawRect@@3VRndShaderDrawRect@@A",
+   "base": "?gShaderPostProc@@3VRndShaderPostProc@@A",
+   "bucket": "neither_mapped",
+   "sites": 2,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/rndobj/Shader"
+   ],
+   "charged_functions": [
+    "??__FgShaderPostProc@@YAXXZ"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "?gShaderUnwrapUV@@3VRndShaderUnwrapUV@@A",
+   "base": "?gShaderDrawRect@@3VRndShaderDrawRect@@A",
+   "bucket": "neither_mapped",
+   "sites": 2,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/rndobj/Shader"
+   ],
+   "charged_functions": [
+    "??__FgShaderDrawRect@@YAXXZ"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "?gShaderVelocity@@3VRndShaderVelocity@@A",
+   "base": "?gShaderUnwrapUV@@3VRndShaderUnwrapUV@@A",
+   "bucket": "neither_mapped",
+   "sites": 2,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/rndobj/Shader"
+   ],
+   "charged_functions": [
+    "??__FgShaderUnwrapUV@@YAXXZ"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "?gShaderVelocityCamera@@3VRndShaderVelocityCamera@@A",
+   "base": "?gShaderVelocity@@3VRndShaderVelocity@@A",
+   "bucket": "neither_mapped",
+   "sites": 2,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/rndobj/Shader"
+   ],
+   "charged_functions": [
+    "??__FgShaderVelocity@@YAXXZ"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "?gShaderDepthVolume@@3VRndShaderDepthVolume@@A",
+   "base": "?gShaderVelocityCamera@@3VRndShaderVelocityCamera@@A",
+   "bucket": "neither_mapped",
+   "sites": 2,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/rndobj/Shader"
+   ],
+   "charged_functions": [
+    "??__FgShaderVelocityCamera@@YAXXZ"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "?gShaderFur@@3VRndShaderFur@@A",
+   "base": "?gShaderDepthVolume@@3VRndShaderDepthVolume@@A",
+   "bucket": "neither_mapped",
+   "sites": 2,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/rndobj/Shader"
+   ],
+   "charged_functions": [
+    "??__FgShaderDepthVolume@@YAXXZ"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "?gShaderSyncTrack@@3VRndShaderSyncTrack@@A",
+   "base": "?gShaderFur@@3VRndShaderFur@@A",
+   "bucket": "neither_mapped",
+   "sites": 2,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/rndobj/Shader"
+   ],
+   "charged_functions": [
+    "??__FgShaderFur@@YAXXZ"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "?OnGetOccluded@CamShot@@IAA?AVDataNode@@PAVDataArray@@@Z",
+   "base": "?OnSaveFaceAnims@HamDirector@@IAA?AVDataNode@@PAVDataArray@@@Z",
+   "bucket": "survivor_mapped_ours_unmapped",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/hamobj/HamDirector"
+   ],
+   "charged_functions": [
+    "?Handle@HamDirector@@UAA?AVDataNode@@PAVDataArray@@_N@Z"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "merged_82975658",
+   "base": "?Handle@NavListSortNode@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+   "bucket": "ours_mapped_survivor_unmapped",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/lazer/meta_ham/PlaylistSortNode"
+   ],
+   "charged_functions": [
+    "?Handle@PlaylistHeaderNode@@UAA?AVDataNode@@PAVDataArray@@_N@Z"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??$?5VTransformArea@@@@YAAAVBinStream@@AAVBinStreamRev@@AAV?$ObjVector@VTransformArea@@@@@Z",
+   "base": "??5@YAAAVBinStream@@AAVBinStreamRev@@AAV?$ObjVector@VTransformArea@@@@@Z",
+   "bucket": "survivor_mapped_ours_unmapped",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/hamobj/HamCamTransform"
+   ],
+   "charged_functions": [
+    "?Load@HamCamTransform@@UAAXAAVBinStream@@@Z"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "?Poll@UILabel@@UAAXXZ",
+   "base": "?Poll@UIComponent@@UAAXXZ",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/hamobj/HamLabel"
+   ],
+   "charged_functions": [
+    "?Poll@HamLabel@@UAAXXZ"
+   ],
+   "two_cycle": false,
+   "subclass": "same_identifier_other_scope",
+   "note": ""
+  },
+  {
+   "target": "?DrawHighlightMat@RndShaderMgr@@UAAPAVRndMat@@XZ",
+   "base": "?GetDataAddr@SynthSample360@@QBAIXZ",
+   "bucket": "survivor_mapped_ours_unmapped",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/synth_xbox/SampleInst360"
+   ],
+   "charged_functions": [
+    "??0SampleInst360@@QAA@PAVSynthSample360@@_NHH@Z"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "merged_Returns1",
+   "base": "?ColorXfmEnabled@RndPostProc@@QBA_NXZ",
+   "bucket": "ours_mapped_survivor_unmapped",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/rndobj/PostProc_NG"
+   ],
+   "charged_functions": [
+    "?CheckHueConverge@NgPostProc@@IAAXXZ"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??AVector3@@QBAABMH@Z",
+   "base": "??AVector3@@QAAAAMH@Z",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/rndobj/Trans"
+   ],
+   "charged_functions": [
+    "?OnGetLocalPosIndex@RndTransformable@@AAA?AVDataNode@@PBVDataArray@@@Z"
+   ],
+   "two_cycle": false,
+   "subclass": "same_qualified_name",
+   "note": ""
+  },
+  {
+   "target": "merged_SetObjConcrete",
+   "base": "?SetObj@?$ObjRefConcrete@VFxSend@@VObjectDir@@@@QAAPAVObject@Hmx@@PAV23@@Z",
+   "bucket": "ours_mapped_survivor_unmapped",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/synth/FxSend"
+   ],
+   "charged_functions": [
+    "?Copy@FxSend@@UAAXPBVObject@Hmx@@W4CopyType@23@@Z"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "?gathering@CUgtFilter@NUISPEECH@@QAA_NXZ",
+   "base": "?IsScrolling@UIListState@@QBA_NXZ",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/hamobj/HamNavList"
+   ],
+   "charged_functions": [
+    "?ScrollToIndex@HamNavList@@QAAXHH@Z"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "?Style@UILabel@@QBAABV0RndText@@H@Z",
+   "base": "?Style@UILabel@@QAAAAV0RndText@@H@Z",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/hamobj/HamListRibbon"
+   ],
+   "charged_functions": [
+    "?GetLabelTotalAlpha@HamListRibbon@@ABAMXZ"
+   ],
+   "two_cycle": false,
+   "subclass": "same_qualified_name",
+   "note": ""
+  },
+  {
+   "target": "??1HamLabel@@UAA@XZ",
+   "base": "??1AppLabel@@UAA@XZ",
+   "bucket": "survivor_mapped_ours_unmapped",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/lazer/meta_ham/MetaPanel"
+   ],
+   "charged_functions": [
+    "??_DAppLabel@@QAAXXZ"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??1?$vector@UNode@?$ObjPtrVec@VRndTex@@VObjectDir@@@@V?$StlNodeAlloc@UNode@?$ObjPtrVec@VRndTex@@VObjectDir@@@@@stlpmtx_std@@@stlpmtx_std@@QAA@XZ",
+   "base": "??1?$vector@UNode@?$ObjPtrVec@VRndTransformable@@VObjectDir@@@@V?$StlNodeAlloc@UNode@?$ObjPtrVec@VRndTransformable@@VObjectDir@@@@@stlpmtx_std@@@stlpmtx_std@@QAA@XZ",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/gesture/StreamRecorder"
+   ],
+   "charged_functions": [
+    "fn_82E0447C"
+   ],
+   "two_cycle": false,
+   "subclass": "same_identifier_other_scope",
+   "note": ""
+  },
+  {
+   "target": "??1ObjRef@@UAA@XZ",
+   "base": "??1DataNode@@QAA@XZ",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/world/Dir"
+   ],
+   "charged_functions": [
+    "fn_82802FFC"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??1?$_List_base@UPresetOverride@WorldDir@@V?$StlNodeAlloc@UPresetOverride@WorldDir@@@stlpmtx_std@@@stlpmtx_std@@QAA@XZ",
+   "base": "??1?$_List_base@UMatOverride@WorldDir@@V?$StlNodeAlloc@UMatOverride@WorldDir@@@stlpmtx_std@@@stlpmtx_std@@QAA@XZ",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/world/Dir"
+   ],
+   "charged_functions": [
+    "fn_8280891C"
+   ],
+   "two_cycle": false,
+   "subclass": "same_identifier_other_scope",
+   "note": ""
+  },
+  {
+   "target": "??3UIListCustom@@SAXPAX@Z",
+   "base": "??3UIListSubList@@SAXPAX@Z",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/ui/UIList"
+   ],
+   "charged_functions": [
+    "fn_8278B368"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??1Message@@UAA@XZ",
+   "base": "??1DataNode@@QAA@XZ",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/ui/UIList"
+   ],
+   "charged_functions": [
+    "fn_8278BDE8"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??3DataArray@@SAXPAX@Z",
+   "base": "??3DirLoader@@SAXPAX@Z",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/hamobj/HamNavList"
+   ],
+   "charged_functions": [
+    "fn_82445FB0"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??3FlowNode@@SAXPAX@Z",
+   "base": "??3PropertyEventProvider@@SAXPAX@Z",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/flow/Flow"
+   ],
+   "charged_functions": [
+    "fn_823EDD8C"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??3FlowTimer@@SAXPAX@Z",
+   "base": "??3FlowNode@@SAXPAX@Z",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/flow/Flow"
+   ],
+   "charged_functions": [
+    "fn_823EE5A4"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??1?$vector@VVector2@@V?$StlNodeAlloc@VVector2@@@stlpmtx_std@@@stlpmtx_std@@QAA@XZ",
+   "base": "??1?$Key@V?$vector@VColor@Hmx@@V?$StlNodeAlloc@VColor@Hmx@@@stlpmtx_std@@@stlpmtx_std@@@@QAA@XZ",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/rndobj/MeshAnim"
+   ],
+   "charged_functions": [
+    "fn_826D816C"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??1String@@UAA@XZ",
+   "base": "??1ObjRefOwner@@UAA@XZ",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/world/LightPreset"
+   ],
+   "charged_functions": [
+    "fn_82848750"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??1Node@?$ObjPtrVec@VRndEnviron@@VObjectDir@@@@UAA@XZ",
+   "base": "??1Node@?$ObjPtrVec@VSpotlightDrawer@@VObjectDir@@@@UAA@XZ",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/world/LightPreset"
+   ],
+   "charged_functions": [
+    "fn_8284A6AC"
+   ],
+   "two_cycle": false,
+   "subclass": "same_identifier_other_scope",
+   "note": ""
+  },
+  {
+   "target": "??1?$ObjPtr@VWorldInstance@@@@UAA@XZ",
+   "base": "??1String@@UAA@XZ",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/world/Instance"
+   ],
+   "charged_functions": [
+    "fn_82855248"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??1?$pair@$$CBVString@@I@stlpmtx_std@@QAA@XZ",
+   "base": "??1DataNode@@QAA@XZ",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/obj/Dir"
+   ],
+   "charged_functions": [
+    "fn_82590924"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??1?$pair@$$CBVString@@I@stlpmtx_std@@QAA@XZ",
+   "base": "??1MessageTimer@@QAA@XZ",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/obj/Dir"
+   ],
+   "charged_functions": [
+    "fn_82596378"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??1MessageTimer@@QAA@XZ",
+   "base": "??1FilePath@@UAA@XZ",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/obj/Dir"
+   ],
+   "charged_functions": [
+    "fn_825978CC"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??1CompareMoveVariantName@@QAA@XZ",
+   "base": "??1FilePath@@UAA@XZ",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/obj/Dir"
+   ],
+   "charged_functions": [
+    "fn_825979B4"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??1CompareMoveVariantName@@QAA@XZ",
+   "base": "??1?$list@PAVRndPollable@@V?$StlNodeAlloc@PAVRndPollable@@@stlpmtx_std@@@stlpmtx_std@@QAA@XZ",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/rndobj/Dir"
+   ],
+   "charged_functions": [
+    "fn_826572B8"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??3FxSendDistortion@@SAXPAX@Z",
+   "base": "??3FxSendReverb@@SAXPAX@Z",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/synth_xbox/Synth"
+   ],
+   "charged_functions": [
+    "fn_82E2B958"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??3FxSendChorus@@SAXPAX@Z",
+   "base": "??3FxSendWah@@SAXPAX@Z",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/synth_xbox/Synth"
+   ],
+   "charged_functions": [
+    "fn_82E2BB48"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??3FxSendEQ@@SAXPAX@Z",
+   "base": "??3FxSendPitchShift@@SAXPAX@Z",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/synth_xbox/Synth"
+   ],
+   "charged_functions": [
+    "fn_82E2BD38"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??3FxSendMeterEffect@@SAXPAX@Z",
+   "base": "??3FxSendSynapse@@SAXPAX@Z",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/synth_xbox/Synth"
+   ],
+   "charged_functions": [
+    "fn_82E2BF28"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??1Object@Hmx@@UAA@XZ",
+   "base": "??1?$list@PAVTriangle@@V?$StlNodeAlloc@PAVTriangle@@@stlpmtx_std@@@stlpmtx_std@@QAA@XZ",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/rndobj/AmbientOcclusion"
+   ],
+   "charged_functions": [
+    "fn_826E03BC"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??1BaseMaterial@@UAA@XZ",
+   "base": "??1FilePath@@UAA@XZ",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/rndobj/Mat"
+   ],
+   "charged_functions": [
+    "fn_826CBCF4"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??1?$ObjRefConcrete@VRndAnimatable@@VObjectDir@@@@UAA@XZ",
+   "base": "??1ObjRefOwner@@UAA@XZ",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/rndobj/Anim"
+   ],
+   "charged_functions": [
+    "fn_8264D64C"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??3@YAXPAX@Z",
+   "base": "??3SerialGroupSeqInst@@SAXPAX@Z",
+   "bucket": "ambiguous_multi_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/synth/Sequence"
+   ],
+   "charged_functions": [
+    "fn_8274BD00"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??3@YAXPAX@Z",
+   "base": "??3ParallelGroupSeqInst@@SAXPAX@Z",
+   "bucket": "ambiguous_multi_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/synth/Sequence"
+   ],
+   "charged_functions": [
+    "fn_8274BD78"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??1SeqInst@@UAA@XZ",
+   "base": "??1GroupSeqInst@@UAA@XZ",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/synth/Sequence"
+   ],
+   "charged_functions": [
+    "fn_8274C33C"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??1MemDoTempAllocations@@QAA@XZ",
+   "base": "??1MemTemp@@QAA@XZ",
+   "bucket": "survivor_mapped_ours_unmapped",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/rndobj/Text"
+   ],
+   "charged_functions": [
+    "fn_82693FAC"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??3FxSendFlanger@@SAXPAX@Z",
+   "base": "??3@YAXPAX@Z",
+   "bucket": "ambiguous_multi_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/synth/Synth"
+   ],
+   "charged_functions": [
+    "fn_82736240"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??1Object@Hmx@@UAA@XZ",
+   "base": "??1NavListNode@@UAA@XZ",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/lazer/meta_ham/NavListNode"
+   ],
+   "charged_functions": [
+    "fn_82974554"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??1?$Keys@UWeight@@U1@@@QAA@XZ",
+   "base": "??1DataNode@@QAA@XZ",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/rndobj/Morph"
+   ],
+   "charged_functions": [
+    "fn_82717C28"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??1FxSendSynapse@@UAA@XZ",
+   "base": "??1?$CSampleXAPOBase@VFlangerEffect@@UParams@1@@ATG@@MAA@XZ",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/synth_xbox/FxSendChorus"
+   ],
+   "charged_functions": [
+    "fn_82E33E2C"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??3@YAXPAX@Z",
+   "base": "??3HamLabel@@SAXPAX@Z",
+   "bucket": "ambiguous_multi_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/lazer/meta_ham/MetaPanel"
+   ],
+   "charged_functions": [
+    "fn_828C34BC"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??1Object@Hmx@@UAA@XZ",
+   "base": "??1UIListWidget@@UAA@XZ",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/ui/UIListSlot"
+   ],
+   "charged_functions": [
+    "fn_8279AFAC"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??1ChallengeSort@@UAA@XZ",
+   "base": "??1NavListSortMgr@@UAA@XZ",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/lazer/meta_ham/ChallengeSortMgr"
+   ],
+   "charged_functions": [
+    "fn_829125C8"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??1Loader@@UAA@XZ",
+   "base": "??1?$list@PAVLoader@@V?$StlNodeAlloc@PAVLoader@@@stlpmtx_std@@@stlpmtx_std@@QAA@XZ",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/utl/Loader"
+   ],
+   "charged_functions": [
+    "fn_827D18A0"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??1MemDoTempAllocations@@QAA@XZ",
+   "base": "??1CritSecTracker@@QAA@XZ",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/utl/MemMgr"
+   ],
+   "charged_functions": [
+    "fn_827CCD24"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??1String@@UAA@XZ",
+   "base": "??1Object@Hmx@@UAA@XZ",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/lazer/meta_ham/Challenges"
+   ],
+   "charged_functions": [
+    "fn_828A1BD8"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??1CompareMoveVariantName@@QAA@XZ",
+   "base": "??1?$list@PAVMidiParser@@V?$StlNodeAlloc@PAVMidiParser@@@stlpmtx_std@@@stlpmtx_std@@QAA@XZ",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/midi/MidiParser"
+   ],
+   "charged_functions": [
+    "fn_82549948"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??1Object@Hmx@@UAA@XZ",
+   "base": "??1?$_String_base@DV?$allocator@D@stlpmtx_std@@@stlpmtx_std@@IAA@XZ",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/midi/MidiParser"
+   ],
+   "charged_functions": [
+    "fn_8254BAC4"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??1UILabel@@UAA@XZ",
+   "base": "??1?$_Vector_base@UNode@?$ObjPtrVec@VRndTransformable@@VObjectDir@@@@V?$StlNodeAlloc@UNode@?$ObjPtrVec@VRndTransformable@@VObjectDir@@@@@stlpmtx_std@@@stlpmtx_std@@QAA@XZ",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/hamobj/HamLabel"
+   ],
+   "charged_functions": [
+    "fn_82518738"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??1String@@UAA@XZ",
+   "base": "??1CritSecTracker@@QAA@XZ",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/os/Debug"
+   ],
+   "charged_functions": [
+    "fn_825CE598"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??1String@@UAA@XZ",
+   "base": "??1?$_Vector_base@UCheat@CheatProvider@@V?$StlNodeAlloc@UCheat@CheatProvider@@@stlpmtx_std@@@stlpmtx_std@@QAA@XZ",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/ui/CheatProvider"
+   ],
+   "charged_functions": [
+    "fn_827B3F80"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??3@YAXPAX@Z",
+   "base": "??3StreamRecorder@@SAXPAX@Z",
+   "bucket": "ambiguous_multi_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/gesture/Gesture"
+   ],
+   "charged_functions": [
+    "fn_82DEAEC0"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??3SkeletonViz@@SAXPAX@Z",
+   "base": "??3FitnessFilterObj@@SAXPAX@Z",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/gesture/Gesture"
+   ],
+   "charged_functions": [
+    "fn_82DEB534"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "?PhysicalFreeTracked@@YAXPAXPBDH1@Z",
+   "base": "?MemFree@@YAXPAXPBDH1@Z",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 1,
+   "units": [
+    "default/system/synth_xbox/SynthSample"
+   ],
+   "charged_functions": [
+    "?SampleFree@@YAXPAXPBDH1@Z"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??_B?BD@??Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@5BD@",
+   "base": "?$S1@?BH@??Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4IA",
+   "bucket": "survivor_mapped_ours_unmapped",
+   "sites": 8,
+   "functions": 1,
+   "solo_completable": 0,
+   "units": [
+    "default/lazer/meta_ham/CampaignSongSelectPanel"
+   ],
+   "charged_functions": [
+    "?Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "?gDefaultHoldMs@?A0x831dd776@@3MA",
+   "base": "?gDefaultHoldMs@@3MA",
+   "bucket": "survivor_mapped_ours_unmapped",
+   "sites": 6,
+   "functions": 1,
+   "solo_completable": 0,
+   "units": [
+    "default/system/os/JoypadClient"
+   ],
+   "charged_functions": [
+    "?Init@JoypadClient@@AAAXXZ"
+   ],
+   "two_cycle": false,
+   "subclass": "same_identifier_other_scope",
+   "note": ""
+  },
+  {
+   "target": "?gDefaultRepeatMs@?A0x831dd776@@3MA",
+   "base": "?gDefaultRepeatMs@@3MA",
+   "bucket": "survivor_mapped_ours_unmapped",
+   "sites": 6,
+   "functions": 1,
+   "solo_completable": 0,
+   "units": [
+    "default/system/os/JoypadClient"
+   ],
+   "charged_functions": [
+    "?Init@JoypadClient@@AAAXXZ"
+   ],
+   "two_cycle": false,
+   "subclass": "same_identifier_other_scope",
+   "note": ""
+  },
+  {
+   "target": "??_B?BD@??Text@CampaignMqCrewProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@5BD@",
+   "base": "?$S1@?BH@??Text@CampaignMqCrewProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4IA",
+   "bucket": "survivor_mapped_ours_unmapped",
+   "sites": 5,
+   "functions": 1,
+   "solo_completable": 0,
+   "units": [
+    "default/lazer/meta_ham/CampaignMasterQuestCrewSelectPanel"
+   ],
+   "charged_functions": [
+    "?Text@CampaignMqCrewProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??_B?5???$PropSync@M@@YA_NAAV?$Key@M@@AAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@55",
+   "base": "??_B?L@???$PropSync@M@@YA_NAAV?$Key@M@@AAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@5L@",
+   "bucket": "survivor_mapped_ours_unmapped",
+   "sites": 5,
+   "functions": 1,
+   "solo_completable": 0,
+   "units": [
+    "default/system/rndobj/CamAnim"
+   ],
+   "charged_functions": [
+    "??$PropSync@M@@YA_NAAV?$Key@M@@AAVDataNode@@PAVDataArray@@HW4PropOp@@@Z"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??_B?CA@??Insert@?$KeylessHash@PBDUEntry@ObjectDir@@@@QAAPAUEntry@ObjectDir@@ABU23@@Z@5CA@",
+   "base": "??_B?CK@??Insert@?$KeylessHash@PBDUEntry@ObjectDir@@@@QAAPAUEntry@ObjectDir@@ABU23@@Z@5CK@",
+   "bucket": "survivor_mapped_ours_unmapped",
+   "sites": 3,
+   "functions": 1,
+   "solo_completable": 0,
+   "units": [
+    "default/system/obj/Dir"
+   ],
+   "charged_functions": [
+    "?Insert@?$KeylessHash@PBDUEntry@ObjectDir@@@@QAAPAUEntry@ObjectDir@@ABU23@@Z"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "gImpostorTex",
+   "base": "gImpostorMat",
+   "bucket": "neither_mapped",
+   "sites": 3,
+   "functions": 1,
+   "solo_completable": 0,
+   "units": [
+    "default/system/world/Crowd"
+   ],
+   "charged_functions": [
+    "??0WorldCrowd@@IAA@XZ"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??_B?CA@??Insert@?$KeylessHash@PBDPBD@@QAAPAPBDABQBD@Z@5CA@",
+   "base": "??_B?CK@??Insert@?$KeylessHash@PBDPBD@@QAAPAPBDABQBD@Z@5CK@",
+   "bucket": "survivor_mapped_ours_unmapped",
+   "sites": 3,
+   "functions": 1,
+   "solo_completable": 0,
+   "units": [
+    "default/system/utl/Symbol"
+   ],
+   "charged_functions": [
+    "?Insert@?$KeylessHash@PBDPBD@@QAAPAPBDABQBD@Z"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??_B?CA@??Insert@?$KeylessHash@PAXPAVAllocInfo@@@@QAAPAPAVAllocInfo@@ABQAV2@@Z@5CA@",
+   "base": "??_B?CK@??Insert@?$KeylessHash@PAXPAVAllocInfo@@@@QAAPAPAVAllocInfo@@ABQAV2@@Z@5CK@",
+   "bucket": "survivor_mapped_ours_unmapped",
+   "sites": 3,
+   "functions": 1,
+   "solo_completable": 0,
+   "units": [
+    "default/system/utl/MemTracker"
+   ],
+   "charged_functions": [
+    "?Insert@?$KeylessHash@PAXPAVAllocInfo@@@@QAAPAPAVAllocInfo@@ABQAV2@@Z"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??_B?BB@??Text@SongSelectPlaylistProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@5BB@",
+   "base": "?$S2@?BJ@??Text@SongSelectPlaylistProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4IA",
+   "bucket": "survivor_mapped_ours_unmapped",
+   "sites": 3,
+   "functions": 1,
+   "solo_completable": 0,
+   "units": [
+    "default/lazer/meta_ham/SongSelectPlaylistPanel"
+   ],
+   "charged_functions": [
+    "?Text@SongSelectPlaylistProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??_B?BC@??OnCheatInvoked@Automator@@AAA?AVDataNode@@PBVDataArray@@@Z@5BC@",
+   "base": "?$S12@?BF@??OnCheatInvoked@Automator@@AAA?AVDataNode@@PBVDataArray@@@Z@4IA",
+   "bucket": "survivor_mapped_ours_unmapped",
+   "sites": 3,
+   "functions": 1,
+   "solo_completable": 0,
+   "units": [
+    "default/system/ui/UI"
+   ],
+   "charged_functions": [
+    "?OnCheatInvoked@Automator@@AAA?AVDataNode@@PBVDataArray@@@Z"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "gImpostorTex",
+   "base": "gNumCrowd",
+   "bucket": "neither_mapped",
+   "sites": 2,
+   "functions": 1,
+   "solo_completable": 0,
+   "units": [
+    "default/system/world/Crowd"
+   ],
+   "charged_functions": [
+    "??0WorldCrowd@@IAA@XZ"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "gImpostorTex",
+   "base": "gImpostorCamera",
+   "bucket": "neither_mapped",
+   "sites": 2,
+   "functions": 1,
+   "solo_completable": 0,
+   "units": [
+    "default/system/world/Crowd"
+   ],
+   "charged_functions": [
+    "??0WorldCrowd@@IAA@XZ"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "?gMachineName@?A0xbd0b8fef@@3PADA",
+   "base": "?gShareName@?A0x3eb27431@@3PADA",
+   "bucket": "neither_mapped",
+   "sites": 2,
+   "functions": 1,
+   "solo_completable": 0,
+   "units": [
+    "default/system/os/HolmesClient"
+   ],
+   "charged_functions": [
+    "?HolmesClientInitOpcode@@YA_N_N@Z"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??0String@@QAA@PBD@Z",
+   "base": "??0FilePath@@QAA@PBD@Z",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 0,
+   "units": [
+    "default/system/obj/Dir"
+   ],
+   "charged_functions": [
+    "?PropSyncSubDirs@@YA_NAAV?$vector@V?$ObjDirPtr@VObjectDir@@@@V?$StlNodeAlloc@V?$ObjDirPtr@VObjectDir@@@@@stlpmtx_std@@@stlpmtx_std@@AAVDataNode@@PAVDataArray@@HW4PropOp@@@Z"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "?Notify@Debug@@QAAXPBD@Z",
+   "base": "??6TextStream@@QAAAAV0@PBD@Z",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 0,
+   "units": [
+    "default/system/hamobj/HamDirector"
+   ],
+   "charged_functions": [
+    "?LoadRoutineBuilderData@HamDirector@@QAAXAAV?$set@PBVMoveVariant@@U?$less@PBVMoveVariant@@@stlpmtx_std@@V?$StlNodeAlloc@PBVMoveVariant@@@3@@stlpmtx_std@@_N@Z"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "?WaitForResponse@?A0x49b544a7@@YAXW4Protocol@Holmes@@@Z",
+   "base": "?WaitForAnyResponse@?A0x3eb27431@@YAXW4Protocol@Holmes@@@Z",
+   "bucket": "survivor_mapped_ours_unmapped",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 0,
+   "units": [
+    "default/system/os/HolmesClient"
+   ],
+   "charged_functions": [
+    "?HolmesClientInitOpcode@@YA_N_N@Z"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "?SongBlock@SongMetadata@@QBAPAVSongInfo@@XZ",
+   "base": "?SongBlock@SongMetadata@@QBAPAVDataArraySongInfo@@XZ",
+   "bucket": "survivor_mapped_ours_unmapped",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 0,
+   "units": [
+    "default/lazer/meta_ham/HamSongMgr"
+   ],
+   "charged_functions": [
+    "?SongAudioData@HamSongMgr@@UBAPAVSongInfo@@H@Z"
+   ],
+   "two_cycle": false,
+   "subclass": "same_qualified_name",
+   "note": ""
+  },
+  {
+   "target": "OnlyReturns",
+   "base": "?CacheMgrInit@@YAXXZ",
+   "bucket": "ours_mapped_survivor_unmapped",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 0,
+   "units": [
+    "default/system/os/System"
+   ],
+   "charged_functions": [
+    "?SystemInit@@YAXPBD@Z"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "?CacheMgrInit@@YAXXZ",
+   "base": "?NetCacheMgrInit@@YAXXZ",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 0,
+   "units": [
+    "default/system/os/System"
+   ],
+   "charged_functions": [
+    "?SystemInit@@YAXPBD@Z"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "?NetCacheMgrInit@@YAXXZ",
+   "base": "?Init@FileCache@@SAXXZ",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 0,
+   "units": [
+    "default/system/os/System"
+   ],
+   "charged_functions": [
+    "?SystemInit@@YAXPBD@Z"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??$__destroy_range@PAV?$vector@PAUUnlockable@?A0x9d17dd81@@V?$StlNodeAlloc@PAUUnlockable@?A0x9d17dd81@@@stlpmtx_std@@@stlpmtx_std@@V12@@stlpmtx_std@@YAXPAV?$vector@PAUUnlockable@?A0x9d17dd81@@V?$StlNodeAlloc@PAUUnlockable@?A0x9d17dd81@@@stlpmtx_std@@@0@00@Z",
+   "base": "??$__destroy_mv_srcs@PAV?$vector@PAUUnlockable@?A0x44bf5786@@V?$StlNodeAlloc@PAUUnlockable@?A0x44bf5786@@@stlpmtx_std@@@stlpmtx_std@@V12@@stlpmtx_std@@YAXPAV?$vector@PAUUnlockable@?A0x44bf5786@@V?$StlNodeAlloc@PAUUnlockable@?A0x44bf5786@@@stlpmtx_std@@@0@00@Z",
+   "bucket": "neither_mapped",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 0,
+   "units": [
+    "default/lazer/meta_ham/MetagameRank"
+   ],
+   "charged_functions": [
+    "?_M_erase@?$vector@V?$vector@PAUUnlockable@?A0xf8e4b4b5@@V?$StlNodeAlloc@PAUUnlockable@?A0xf8e4b4b5@@@stlpmtx_std@@@stlpmtx_std@@V?$StlNodeAlloc@V?$vector@PAUUnlockable@?A0xf8e4b4b5@@V?$StlNodeAlloc@PAUUnlockable@?A0xf8e4b4b5@@@stlpmtx_std@@@stlpmtx_std@@@2@@stlpmtx_std@@IAAPAV?$vector@PAUUnlockable@?A0xf8e4b4b5@@V?$StlNodeAlloc@PAUUnlockable@?A0xf8e4b4b5@@@stlpmtx_std@@@2@PAV32@0ABU__true_type@2@@Z"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "?Terminate@VirtualKeyboard@@QAAXXZ",
+   "base": "?Terminate@Memcard@@UAAXXZ",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 0,
+   "units": [
+    "default/system/os/System"
+   ],
+   "charged_functions": [
+    "?SystemTerminate@@YAXXZ"
+   ],
+   "two_cycle": false,
+   "subclass": "same_identifier_other_scope",
+   "note": ""
+  },
+  {
+   "target": "OnlyReturns",
+   "base": "?Terminate@Symbol@@SAXXZ",
+   "bucket": "ours_mapped_survivor_unmapped",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 0,
+   "units": [
+    "default/system/os/System"
+   ],
+   "charged_functions": [
+    "?SystemTerminate@@YAXXZ"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "OnlyReturns",
+   "base": "?get_allocator@?$vector@PAUUnlockable@?A0x44bf5786@@V?$StlNodeAlloc@PAUUnlockable@?A0x44bf5786@@@stlpmtx_std@@@stlpmtx_std@@QBA?AV?$StlNodeAlloc@PAUUnlockable@?A0x44bf5786@@@2@XZ",
+   "bucket": "neither_mapped",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 0,
+   "units": [
+    "default/lazer/meta_ham/MetagameRank"
+   ],
+   "charged_functions": [
+    "??0?$vector@PAUUnlockable@?A0xf8e4b4b5@@V?$StlNodeAlloc@PAUUnlockable@?A0xf8e4b4b5@@@stlpmtx_std@@@stlpmtx_std@@QAA@ABV01@@Z"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  },
+  {
+   "target": "??1HolmesInput@@UAA@XZ",
+   "base": "?clear@?$_List_base@VString@@V?$StlNodeAlloc@VString@@@stlpmtx_std@@@stlpmtx_std@@QAAXXZ",
+   "bucket": "both_mapped_diff_addr",
+   "sites": 1,
+   "functions": 1,
+   "solo_completable": 0,
+   "units": [
+    "default/system/os/HolmesClient"
+   ],
+   "charged_functions": [
+    "??__FgInput@?A0x49b544a7@@YAXXZ"
+   ],
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
+  }
+ ]
+}
