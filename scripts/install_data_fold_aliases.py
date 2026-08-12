@@ -51,6 +51,27 @@ stops supporting.  objdiff itself reads `build/373307D9/icf_aliases.map` and
 honours them.  Widening `target_symbol_map.json` would make gate (a) runnable
 instead of waived, and is the real repair; it is a 69,132-entry file that
 decomp-synth grades against and it is not this lane's to rewrite.
+
+UPDATE 2026-08-12, and read this before requoting the paragraph above.
+
+`load_validated` still drops all 102 -- the admission predicate has not moved
+one name -- but it no longer calls it a REJECTION.  decomp-synth
+`laneU-mapgate` splits gate (a)'s outcome: a survivor the target objects type
+as DATA, checked against a map measured to hold 0 non-function names, is
+reported UNRESOLVED ("cannot verify, not refuted") in its own bucket, distinct
+from the 2 groups gate (b') genuinely refuses.  So "102 rejected" is retired
+wording; the number to quote is 102 unresolved.  The `decomp_synth_validator`
+string this script writes into `symbol_aliases.json` predates that split and
+still says "rejects"; it is deliberately NOT regenerated here, because
+regenerating the alias file would re-render `build/373307D9/icf_aliases.map`
+and move a measurement to fix a comment.
+
+The widening itself is now derived and PRICED but still not installed:
+`scripts/derive_target_symbol_map.py` reproduces this map from
+`config/373307D9/symbols.txt` (`--verify`), emits any of three widenings
+(`--tier`), and its docstring carries the consumer audit that makes this an
+owner call -- five consumers read absence-from-map as a MEANING, and one of
+them pins the grader by hashing two .py files and not this one.
 """
 import argparse
 import collections
