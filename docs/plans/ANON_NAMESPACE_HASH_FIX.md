@@ -1,5 +1,25 @@
 # Anonymous Namespace Hash Fix
 
+> **Update 2026-08-12 — the patcher section below describes a SUPERSEDED rule.**
+> "For each decomp file with exactly 1 hash: if original has N hashes,
+> heuristic -- replace with the unique hash (not a common header hash)" is no
+> longer what `scripts/obj_anon_ns_patcher.py` does, and that heuristic skipped
+> the 13 objects carrying all 714 of dc3's `anon_namespace_hash` relocation-name
+> charges while MIS-assigning five more.  The pass now assigns **per symbol**, by
+> matching the mangled name against retail's object.  714 sites -> 26;
+> `name_check` +23,232 B / +132 functions.  The "Current Numbers" table below is
+> also stale (it predates `name_check` and counts files, not charges).
+>
+> **Everything else here stands and is load-bearing** -- in particular the
+> `SigForPbCb` CRC-32 chain, the `9QVZU3` CRC preimage, and the 2026-02-26
+> finding that cl under wibo hashes only the `.cpp` path and never a declaring
+> header's.  That last one is why the wibo route cannot close this lane on its
+> own, and it CONTRADICTS the later (2026-08-12) `namecheck-lane-triage`
+> manifest calling the lane "reachable" via a reverse `WIBO_PATH_MAP`.  The
+> older, instrumented measurement wins.
+>
+> Read with: `docs/analysis/anon-namespace-hash-lane-20260812.md`.
+
 ## Background
 
 MSVC generates anonymous namespace hashes (`?A0x<HASH>@@`) based on the build machine's computer name and the source file path. Our decomp build environment produces different hashes than the original binary because:
