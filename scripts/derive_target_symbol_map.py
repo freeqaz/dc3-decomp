@@ -48,6 +48,25 @@ nothing else, because all 102 survivors are `??_8` vbtables and the map holds
 0 data names. Measured against the target objects' own COFF `Type` field:
 69,130 of the map's names are typed FUNCTION there, 0 are typed anything else.
 
+And the blindness is EXPENSIVE, re-measured here rather than inherited. Render
+the map with and without the 102 `kind: data` groups, pinned objdiff-cli-B, one
+-o path per arm with the .cache purged, complete-function SETS compared:
+
+    name_check   41.940052% (28,668 complete)  ->  42.635746% (28,862)
+                 +194 complete functions, +0.695694 pp, 0 LOST
+    none         43.730507% (29,182 complete)  ->  43.730507% (29,182)
+                 +0, 0 LOST -- the control, and it behaves
+
+The `none` null is the proof the gain is real rather than a scorer artefact:
+`none` ignores relocation names, so a name-equivalence tier MUST be invisible
+to it, and it is, to the byte. The `name_check` gain is what the 102 groups
+buy, and it is what decomp-synth's grader is currently declining to see.
+
+The figure carried into this lane was +198. Measured here it is +194, over
+`fuzzy_match_percent == 100` at dc3 16b5c31b4 on pinned binary B. The 4-row gap
+is not chased; the number to quote is the one with the ruler and tree named
+beside it.
+
 The data IS derivable -- `--tier` prices three of them below, and the 102
 survivors are all present in `symbols.txt` as `type:object` in `.rdata` at
 exactly the address the alias group records (0 mismatches). Widening is the
