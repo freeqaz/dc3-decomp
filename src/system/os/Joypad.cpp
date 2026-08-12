@@ -150,7 +150,7 @@ namespace {
         static Symbol AND("and");
         Symbol sym = detect_cfg->Sym(0);
         if (sym == type) {
-            return detect_cfg->Int(1) == (int)data.mType;
+            return (int)data.mType == detect_cfg->Int(1);
         } else if (sym == button) {
             return data.IsButtonInMask(detect_cfg->Int(1));
         } else if (sym == stick) {
@@ -164,11 +164,11 @@ namespace {
                 MILO_FAIL("bad axis %s in controller detect array\n", axis_sym);
             int i3 = detect_cfg->Int(1);
             float f7 = detect_cfg->Float(3);
-            return f7 == data.mSticks[i3][i4];
+            return data.mSticks[i3][i4] == f7;
         } else if (sym == trigger) {
             int i5 = detect_cfg->Int(1);
             float f8 = detect_cfg->Float(2);
-            return f8 == data.mTriggers[i5];
+            return data.mTriggers[i5] == f8;
         } else if (sym == OR) {
             for (int i = 1; i < detect_cfg->Size(); i++) {
                 if (IsJoypadDetectMatch(detect_cfg->Array(i), data))
