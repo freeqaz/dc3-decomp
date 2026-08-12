@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Re-derive the three source lanes against the SHIPPED LINKER MAP, not residency."""
-import json, sys, collections
-sys.path.insert(0, "/home/free/.claude/jobs/bc1aebde/tmp/laneS")
+import json, sys, collections, os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from mapidx import load
 
 n2a, a2n = load(sys.argv[2])
