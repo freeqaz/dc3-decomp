@@ -346,7 +346,7 @@ void HamDriver::SetClipWeightMap() {
     if (total > 0.0f) {
         for (std::map<CharClip *, float>::iterator it = mClipTimingMap.begin();
              it != mClipTimingMap.end(); ++it) {
-            it->second = it->second * (1.0f / total);
+            it->second *= (1.0f / total);
         }
     }
 }
