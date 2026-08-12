@@ -184,7 +184,10 @@ private:
     void ReadPartyOptions();
     void DeleteSongFromRCPartySongQueue(int);
     void AddNextSongToRCPartySongQueue();
-    Symbol GetNextMode();
+    Symbol GetNextMode() {
+        MILO_ASSERT(mModePicker.Size() > 0, 0x17B);
+        return mModePicker.GetNext();
+    }
     void DetermineSubMode(Symbol *, Symbol *);
     void DetermineSubModeSong(Symbol *, int *);
     PartyModePlayer *CreatePartyModePlayer();
