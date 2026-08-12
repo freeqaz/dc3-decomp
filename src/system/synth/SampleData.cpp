@@ -130,25 +130,37 @@ void SampleData::LoadWAV(BinStream &bs, const FilePath &fp, bool bigEndian) {
 }
 
 int SampleData::SizeAs(Format fmt) const {
+    // The two case blocks below that share a body -- 7 and kNintendoADPCM -- are
+    // NOT interchangeable and must NOT be folded into a fallthrough.  Retail emits
+    // two separate, byte-identical blocks (both load __real@be969696) and its
+    // bdzf dispatch ladder sends fmt==7 to the first and fmt==6 to the second, so
+    // the source order 7-then-6 is what picks the right block for each value.
+    // Measured: `case 7: case kNintendoADPCM: { ... }` drops the function to 84.9%.
+    // (`case kBigEndPCM:`/`case kPCM:` are also written out twice; those two the
+    // compiler *does* fold, so merging them stays byte-exact -- left as-is to keep
+    // the two duplicate pairs looking the same.)
+    // `fmt == 7` has no name: Format stops at kNintendoADPCM in the header, while
+    // the range guard here admits eight values.  Not guessed -- there is no format
+    // name table anywhere in the target binary.
     if ((unsigned int)fmt <= 7U) {
         switch (fmt) {
-        case 1:
+        case kBigEndPCM:
             return mNumChannels * mNumSamples * 2;
-        case 0:
+        case kPCM:
             return mNumChannels * mNumSamples * 2;
-        case 2:
+        case kVAG:
             return ((mNumSamples + 0x6F) / 0x70) * mNumChannels * 0x40;
-        case 4:
-        case 5:
+        case kATRAC:
+        case kMP3:
             return ((mNumSamples + 0x3FF) / 0x400) * mNumChannels * 0xC0;
-        case 3:
+        case kXMA:
             MILO_NOTIFY("don't know size as XMA");
             return mNumSamples / 5;
         case 7: {
             int iVar2 = mNumChannels * mNumSamples;
             return 0x60 - (int)((float)(long long)(iVar2 * 2) * -0.29411763f);
         }
-        case 6: {
+        case kNintendoADPCM: {
             int iVar2 = mNumChannels * mNumSamples;
             return 0x60 - (int)((float)(long long)(iVar2 * 2) * -0.29411763f);
         }
