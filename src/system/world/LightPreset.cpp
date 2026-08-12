@@ -1051,7 +1051,7 @@ void LightPreset::SetKeyframe(Keyframe &k) {
 
 DataNode LightPreset::OnSetKeyframe(DataArray *da) {
     if (mHue) {
-        MILO_WARN("Can't set keyframe with hue translation");
+        MILO_NOTIFY("Can't set keyframe with hue translation");
         return 0;
     } else {
         int idx = da->Int(2);

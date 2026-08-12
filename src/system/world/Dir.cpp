@@ -304,7 +304,7 @@ BinStream &operator>>(BinStream &bs, WorldDir::BitmapOverride &c) {
             }
             c.replacement = gOldTexDir->Find<RndTex>(chr, false);
             if (!c.replacement) {
-                MILO_WARN(
+                MILO_NOTIFY(
                     "Loading %s synchronously, please resave %s",
                     chr,
                     gOldTexDir->Loader()->LoaderFile()

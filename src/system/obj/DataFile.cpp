@@ -518,7 +518,7 @@ DataArray *DataReadFile(const char *file, bool warn) {
     FileStream fs(cached, FileStream::kRead, true);
     if (fs.Fail()) {
         if (warn)
-            MILO_WARN("DataReadFile: Can't open %s", buf);
+            MILO_NOTIFY("DataReadFile: Can't open %s", buf);
         if (!node)
             FinishDataRead();
         return nullptr;

@@ -578,7 +578,7 @@ void CopyTypeProperties(Hmx::Object *from, Hmx::Object *to) {
                             if (objProp) {
                                 to->SetProperty(prop, objProp);
                             } else {
-                                MILO_WARN(
+                                MILO_NOTIFY(
                                     "Trying to convert Symbol prop to Object prop, but cannot find Object '%s'",
                                     fromVal->Sym().Str()
                                 );
