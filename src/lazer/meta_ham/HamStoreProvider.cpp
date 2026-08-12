@@ -132,8 +132,7 @@ void HamStoreProvider::Text(int, int data, UIListLabel *slot, UILabel *label) co
             label->SetTextToken(Symbol("store_unavailable"));
             return;
         }
-    }
-    if (slot->Matches("cost")) {
+    } else if (slot->Matches("cost")) {
         String temp;
         if (!ShowBrowserPurchased(offer) && !offer->InLibrary() && offer->IsAvailable()) {
             static_cast<AppLabel *>(label)->SetStoreOfferCost(offer);
