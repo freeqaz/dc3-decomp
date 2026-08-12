@@ -1195,7 +1195,7 @@ DataNode OnDumpMoves(DataArray *) {
     Debug &dbg = TheDebug;
     for (std::vector<HamMoveKey>::iterator it = keys.begin(); it != keys.end(); ++it) {
         const char *name = it->move ? it->move->Name() : "NULL";
-        dbg << MakeString("move %d: beat %.2f: name: '%s'\n", i++, it->beat, name);
+        dbg << MakeString("move %d: beat %.2f: name:'%s'\n", i++, it->beat, name);
     }
     return DataNode(0);
 }

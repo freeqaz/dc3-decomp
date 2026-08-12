@@ -165,7 +165,7 @@ void DingoJob::AddContent(HttpReq *httpReq) {
 }
 
 void DingoJob::SetDataPoint(const DataPoint &point) {
-    MILO_ASSERT(!mDataPoint, 0x27);
+    MILO_ASSERT(mDataPoint == NULL, 0x27);
     mDataPoint = new DataPoint(point);
     MILO_ASSERT(mDataPoint, 0x29);
 }

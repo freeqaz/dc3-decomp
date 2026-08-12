@@ -963,7 +963,7 @@ void MetagameRank::AwardPointsForTask(Symbol task) {
             MILO_FAIL("Task %s not found in metagame_rank.dta", task.Str());
         }
 
-        MILO_ASSERT(task_index < 0x40, 0x19b); // change later
+        MILO_ASSERT(task_index < kMaxTasksOneTime, 0x19b); // change later
         if (!oneTimeTask) {
             return;
         }

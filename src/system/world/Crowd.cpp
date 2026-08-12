@@ -1395,7 +1395,7 @@ void SetMatColorFlags(ObjPtrList<RndMat, ObjectDir> &matList, BaseMaterial::Colo
     FOREACH (it, matList) {
         (*it)->SetColorModFlags(flags);
         if (modulate) {
-            MILO_ASSERT(BaseMaterial::kColorModNum == modulate->size(), 0x33b);
+            MILO_ASSERT(RndMat::kColorModNum == modulate->size(), 0x33b);
             for (int i = 0; i < modulate->size(); i++) {
                 (*it)->SetColorMod(modulate->at(i), i);
             }

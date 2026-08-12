@@ -37,7 +37,7 @@ namespace {
             ret = 3;
             break;
         default:
-            MILO_NOTIFY(" Wrong encryption version passed to ByteGrinder: [%d] !\n", ver);
+            MILO_NOTIFY(" Wrong encryption version passed to ByteGrinder: [%d] !", ver);
             break;
         }
         return ret;

@@ -88,18 +88,18 @@ namespace {
         }
         return prefixLen == 0;
     }
-    char *ParseHeader(char *p, int lineLen, std::vector<String> *pHeader) {
+    char *ParseHeader(char *p, int len, std::vector<String> *pHeader) {
         MILO_ASSERT(pHeader, 0x83);
         int count = (((char **)pHeader)[1] - ((char **)pHeader)[0]) >> 3;
         if (count > 0) {
             int idx = 0;
             while (count != 0) {
-                int len = LineLength(p, lineLen);
-                MILO_ASSERT(len > 0, 0x8C);
-                (*pHeader)[idx].resize(len + 1);
-                strncpy((char *)(*pHeader)[idx].c_str(), p, len);
-                (*pHeader)[idx].erase(len);
-                p = GetNextLine(p, &lineLen);
+                int lineLen = LineLength(p, len);
+                MILO_ASSERT(lineLen > 0, 0x8C);
+                (*pHeader)[idx].resize(lineLen + 1);
+                strncpy((char *)(*pHeader)[idx].c_str(), p, lineLen);
+                (*pHeader)[idx].erase(lineLen);
+                p = GetNextLine(p, &len);
                 idx = idx + 1;
                 count = count - 1;
             }

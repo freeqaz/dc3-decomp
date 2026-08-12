@@ -265,7 +265,7 @@ namespace {
         }
 
         char buf[0x800];
-        Hx_snprintf(buf, 0x800, "Allocation failure, \"%s\", want %d, have %d, total phys %d",
+        Hx_snprintf(buf, 0x800, "Allocation failure, \"%s\", want %d bytes\n   Free (bytes) =  %8d\n   Usage (bytes) =%8d\n",
             allocType, size, memStatus.dwAvailPhys, gPhysicalUsage);
         MemPrintOverview(kNoHeap, buf + strlen(buf));
         MILO_FAIL(buf);

@@ -42,9 +42,7 @@ XboxEnumeration::~XboxEnumeration() {
 }
 
 bool XboxEnumeration::IsSuccess() const {
-    if (mHandle != 0) {
-        MILO_ASSERT(false, 0x208);
-    }
+    MILO_ASSERT(!mHandle, 0x208);
     return mEnumerating;
 }
 

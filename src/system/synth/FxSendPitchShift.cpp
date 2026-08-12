@@ -22,7 +22,7 @@ void FxSendPitchShift::Save(BinStream &bs) {
 }
 
 void FxSendPitchShift::Load(BinStream &bs) {
-    MILO_FAIL("FxSendPitchShift objects should not be created in Milo!\n");
+    MILO_FAIL("FxSendPitchShift objects should not be created in Milo!");
     int rev;
     bs >> rev;
     if (rev > 1)

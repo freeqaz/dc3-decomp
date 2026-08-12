@@ -998,7 +998,7 @@ ObjDirPtr<ObjectDir> ObjectDir::PostLoadInlined() {
         mInlinedDirs.swap(empty);
     }
     if (iDir.shared && iDir.file.length() > 0 && !iDir.dir) {
-        MILO_NOTIFY("Couldn't load shared inlined file %s\n", iDir.file);
+        MILO_NOTIFY("Couldn't load shared inlined file %s", iDir.file);
     }
     return iDir.dir;
 }

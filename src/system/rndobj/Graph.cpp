@@ -165,7 +165,7 @@ void RndGraph::Free(const void *id, bool notify) {
         }
     }
     if (notify)
-        MILO_NOTIFY("could not find line graph %x to free\n", (int)id);
+        MILO_NOTIFY("could not find line graph %x to free", (int)id);
 }
 
 DataNode OnGraphReset(DataArray *) {

@@ -17,7 +17,7 @@ CacheIDXbox::CacheIDXbox() { memset(&mContentData, 0, sizeof(XCONTENT_DATA)); }
 
 const char *CacheIDXbox::GetCachePath(const char *c) {
     if (mStrCacheName.empty()) {
-        MILO_FAIL("CacheID::GetCachePath - mStrCacheName is empty.\n");
+        MILO_FAIL("CacheID::GetCachePath() - mStrCacheName is empty.\n");
     }
     if (!c) {
         return MakeString("%s:\\", mStrCacheName.c_str());

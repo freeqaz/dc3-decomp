@@ -4500,7 +4500,7 @@ static void override_userpass(struct SessionHandle *data,
                        user, passwd,
                        data->set.str[STRING_NETRC_FILE])) {
       infof(data, "Couldn't find host %s in the "
-            DOT_CHAR "netrc file; using defaults\n",
+            ".netrc file; using defaults\n",
             conn->host.name);
     }
     else {

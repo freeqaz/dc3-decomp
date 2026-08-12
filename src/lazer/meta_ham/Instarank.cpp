@@ -44,7 +44,7 @@ const char *Instarank::Str() const {
         );
     } else {
         ret = "";
-        MILO_NOTIFY("unrecognized instarank token: %c\n", mToken);
+        MILO_NOTIFY("unrecognized instarank token: %c", mToken);
     }
     return ret;
 }

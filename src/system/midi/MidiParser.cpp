@@ -470,7 +470,7 @@ void MidiParser::SetGlobalVars(int startTick, int endTick, const DataNode &data)
         if (data.Array()->Type(0) == kDataSymbol) {
             *mpVal = data.Array()->Sym(0);
         } else
-            MILO_NOTIFY("Text Event in midi file is missing Text.  \n");
+            MILO_NOTIFY("Text Event in midi file is missing Text.  ");
     } else if (mCurParser == mLyricParser) {
         MILO_ASSERT(data.Type() == kDataString, 0x230);
         *mpVal = data.Str();

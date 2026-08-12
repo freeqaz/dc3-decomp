@@ -205,10 +205,10 @@ void DxMesh::VertexBufferData::Release() {
     size = 0;
 }
 
-void DxMesh::VertexBufferData::SetData(D3DVertexBuffer *buf, unsigned int sz) {
-    MILO_ASSERT(buf, 0x1E);
+void DxMesh::VertexBufferData::SetData(D3DVertexBuffer *buffer, unsigned int sz) {
+    MILO_ASSERT(buffer != NULL, 0x1E);
     MILO_ASSERT(sz, 0x1F);
-    buffer = buf;
+    this->buffer = buffer;
     size = sz;
 }
 

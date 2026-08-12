@@ -546,16 +546,16 @@ void ChallengeSortNode::OnContentMounted(const char *contentName, const char *c2
 
 void ChallengeSortNode::Custom(UIListCustom *list, Hmx::Object *obj) const {
     if (list->Matches("stars")) {
-        HamStarsDisplay *pStarsDisplay = dynamic_cast<HamStarsDisplay *>(obj);
-        MILO_ASSERT(pStarsDisplay, 0x294);
-        pStarsDisplay->SetShowing(true);
+        HamStarsDisplay *starsDisplay = dynamic_cast<HamStarsDisplay *>(obj);
+        MILO_ASSERT(starsDisplay, 0x294);
+        starsDisplay->SetShowing(true);
         int type = mChallengeRecord->GetChallengeRow().mType;
         bool valid = (type >= 0 && type <= 2);
         if (!valid) {
             valid = (type >= 3 && type <= 5);
             if (!valid) {
                 int diff = mChallengeRecord->GetChallengeRow().mDiff;
-                pStarsDisplay->SetSongChallenge((Difficulty)diff);
+                starsDisplay->SetSongChallenge((Difficulty)diff);
             }
         }
     }

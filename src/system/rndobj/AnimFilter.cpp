@@ -24,7 +24,7 @@ BEGIN_PROPSYNCS(RndAnimFilter)
     SYNC_PROP(end, mEnd)
     SYNC_PROP(snap, mSnap)
     SYNC_PROP_MODIFY(jitter, mJitter, mJitterFrame = 0.0f)
-    SYNC_PROP(type, (int &)mType)
+    SYNC_PROP(anim_type, (int &)mType)
     SYNC_SUPERCLASS(RndAnimatable)
     SYNC_SUPERCLASS(Hmx::Object)
 END_PROPSYNCS

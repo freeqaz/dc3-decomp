@@ -373,7 +373,7 @@ DataNode HamNavProvider::OnSetFormatArgs(const DataArray *a) {
     } else {
         index = FindLabel(evalNode.ForceSym());
     }
-    MILO_ASSERT(index >= 0 && (unsigned int)index < (unsigned int)mNavItems.size(), 0x16d);
+    MILO_ASSERT(index >= 0 && index < mNavItems.size(), 0x16d);
 
     if (mNavItems[index].mFormatArgs) {
         mNavItems[index].mFormatArgs->Release();

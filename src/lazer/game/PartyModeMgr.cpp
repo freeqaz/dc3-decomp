@@ -355,7 +355,7 @@ void PartyModeMgr::ContentMounted(const char *contentName, const char *) {
 }
 
 void PartyModeMgr::Init() {
-    MILO_ASSERT(ThePartyModeMgr == nullptr, 0x142);
+    MILO_ASSERT(ThePartyModeMgr == NULL, 0x142);
     ThePartyModeMgr = new PartyModeMgr();
     if (ObjectDir::Main()) {
         ThePartyModeMgr->SetName("partymode_mgr", ObjectDir::Main());
