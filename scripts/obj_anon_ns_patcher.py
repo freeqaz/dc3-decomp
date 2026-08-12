@@ -107,6 +107,8 @@ OBJ_DIR = PROJECT_ROOT / "build" / "373307D9" / "obj"
 SRC_DIR = PROJECT_ROOT / "build" / "373307D9" / "src"
 
 ANON_NS_PATTERN = re.compile(rb'\?A0x([0-9a-fA-F]{8})@@')
+#: The hashless spelling.  `(?!0x)` keeps it from eating the hashed one.
+HASHLESS_PATTERN = re.compile(rb'\?A(?!0x)@@')
 #: Placeholder a template puts where a hash was.  Same length is not required;
 #: templates are only ever compared to other templates.
 TEMPLATE_MARK = b'?A0x*@@'
@@ -122,6 +124,33 @@ SCOPE_ORDINAL = re.compile(rb'\?[0-9A-Za-z]\?\?')
 #: The identifier at the tail of a mangled scope component.  Stops at `@`, at
 #: the `?<ord>??` marker, and at the leading `??__E`-style decorations.
 TRAILING_IDENT = re.compile(rb'[A-Za-z0-9_<>\-]+$')
+
+
+def hashless_names(path):
+    """Retail's OTHER anonymous-namespace spelling, `?A@@` with no hash.
+
+    Returns `{template: name}` for every NUL-delimited run in the object that
+    names the anonymous namespace hashlessly, keyed by the same template the
+    hashed path uses so the two can be compared.  Three retail objects use it
+    (`rnddx9/Rnd`, `os/Joypad_Xbox`, `os/Joypad_Xinput`), and two of those use
+    BOTH spellings in the same object for members of the SAME namespace block
+    -- so it is a property of the individual symbol, not of the file, the TU or
+    the namespace.  Cause not yet established.
+
+    This pass cannot produce it: every rewrite it makes is 8 hex characters
+    over 8 hex characters so that nothing in the object moves, and `?A0x<h>@@`
+    is 12 bytes against `?A@@`'s 4.  Reported rather than silently dropped.
+    """
+    with open(path, 'rb') as fh:
+        data = fh.read()
+    out = {}
+    for m in HASHLESS_PATTERN.finditer(data):
+        start = data.rfind(b'\0', 0, m.start()) + 1
+        end = data.find(b'\0', m.end())
+        run = data[start:end if end >= 0 else len(data)]
+        out[HASHLESS_PATTERN.sub(TEMPLATE_MARK, ANON_NS_PATTERN.sub(
+            TEMPLATE_MARK, run))] = run
+    return out
 
 
 def find_anon_ns_hashes(data: bytes) -> set:
@@ -399,6 +428,7 @@ def process_batch(args):
     skipped_no_hash_orig = 0
     skipped_unresolved = 0
     rules = Counter()
+    hashless = []            # (relpath, ours, retail's) -- see hashless_names()
 
     for relpath, decomp_path in sorted(decomp_by_relpath.items()):
         with open(decomp_path, 'rb') as fh:
@@ -411,12 +441,21 @@ def process_batch(args):
                 print(f"  SKIP {relpath}: no matching original .obj")
             skipped_no_orig += 1
             continue
+        # Retail's hashless `?A@@` spelling, wherever it names a symbol we
+        # spell with a hash.  Counted whether or not the object also has hashed
+        # names to patch, because two of the three objects that use it use BOTH.
+        for tmpl, retail_name in hashless_names(orig_by_relpath[relpath]).items():
+            for start, end in hash_runs(data):
+                if template_of(data[start:end]) == tmpl:
+                    hashless.append((relpath, data[start:end], retail_name))
+
         if relpath not in orig_index:
             # Retail's object has no anonymous namespace where ours does.
-            # That is a SOURCE difference (we wrapped in an anonymous namespace
-            # where retail used file-scope `static`, or retail spelled it the
-            # hashless `?A@@`), not a naming one, and no rewrite here can fix
-            # it.  See docs/analysis/ for the per-object triage.
+            # That is a SOURCE difference -- we wrapped in an anonymous
+            # namespace where retail used file-scope `static`, or retail
+            # spelled it `?A@@` -- not a naming one, and no length-preserving
+            # rewrite can fix it.  See
+            # docs/analysis/anon-namespace-hash-lane-20260812.md.
             if args.verbose:
                 print(f"  SKIP {relpath}: original has no anonymous namespace hashes")
             skipped_no_hash_orig += 1
@@ -461,6 +500,15 @@ def process_batch(args):
     print(f"Skipped (no retail evidence): {skipped_unresolved}")
     print(f"Skipped (no matching original): {skipped_no_orig}")
     print(f"Skipped (original has no anon ns): {skipped_no_hash_orig}")
+    if hashless:
+        units = sorted({r for r, _o, _t in hashless})
+        print(f"Out of reach (retail spells it `?A@@`, hashless): "
+              f"{len(hashless)} name(s) in {len(units)} object(s) -- a length "
+              f"change this pass does not make, see "
+              f"docs/analysis/anon-namespace-hash-lane-20260812.md")
+        for relpath, ours, theirs in hashless:
+            print(f"    {relpath}: {ours.decode('latin1')[:80]}")
+            print(f"    {' ' * len(relpath)}  retail: {theirs.decode('latin1')[:80]}")
     if rules:
         print("Assignment rules: "
               + ', '.join(f"{k}={v}" for k, v in sorted(rules.items())))
