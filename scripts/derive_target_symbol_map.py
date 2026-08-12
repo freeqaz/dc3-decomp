@@ -53,6 +53,17 @@ survivors are all present in `symbols.txt` as `type:object` in `.rdata` at
 exactly the address the alias group records (0 mismatches). Widening is the
 correct repair of the blindness.
 
+`--cross-check-retail-map` confirms that against a SECOND and fully independent
+witness -- `orig/373307D9/ham_xbox_r.map`, the shipped MSVC linker map, which
+symbols.txt was not derived from. All 102 survivors appear there at exactly the
+address the alias group records, 102/102. So the data half of the widening does
+not rest on the splitter alone.
+
+(That mode is worth running for its own sake. It is how you see that
+symbols.txt's `merged_*` spellings ARE the ICF classes: at 0x82331448 the
+splitter writes `merged_ObjRefConcreteGetObj` and the retail map publishes
+three `?GetObj@?$ObjRefConcrete@...` instantiations at that one address.)
+
 It is still an OWNER CALL, because absence-from-this-map is a MEANING to five
 consumers, not a lookup miss:
 
@@ -221,6 +232,66 @@ def diff(committed: dict, derived: dict) -> dict:
     }
 
 
+# MSVC map publics: ` 0001:00000000       <name>   82000600  f i <obj>`
+PUBLIC = re.compile(r"^\s*\d{4}:[0-9a-fA-F]+\s+(\S+)\s+([0-9a-fA-F]{8})\s+(\S.*)?$")
+
+
+def cross_check_retail(repo: Path, parsed: dict, path: str) -> dict:
+    """Agree `symbols.txt` against the SHIPPED linker map, VA by VA.
+
+    An independent witness matters here because everything else in this file
+    comes from one source. `symbols.txt` is the dtk splitter's output; the
+    retail map is what the MSVC linker itself published in 2012, and the
+    widening's whole case is that the data addresses in the first are real.
+
+    Disagreement at a VA is EXPECTED and is not an error: the retail map is
+    where the ICF folds are visible, so an address the splitter had to give one
+    synthetic `merged_*` name is an address the linker published several real
+    ones at. Counted, exampled, never reconciled away.
+    """
+    if path == "AUTO":
+        cands = sorted((repo / "orig").glob("*/*.map"))
+        if len(cands) != 1:
+            return {"status": "unresolved",
+                    "reason": f"cannot pick a retail map automatically: {cands}"}
+        mp = cands[0]
+    else:
+        mp = Path(path)
+    if not mp.is_file():
+        return {"status": "unresolved", "reason": f"no such map: {mp}"}
+    by_va: dict = {}
+    n_pub = 0
+    for line in mp.read_text(errors="replace").splitlines():
+        m = PUBLIC.match(line)
+        if not m:
+            continue
+        n_pub += 1
+        by_va.setdefault("0x" + m.group(2).lower(), set()).add(m.group(1))
+
+    def agree(rows: dict) -> dict:
+        present = absent = name_eq = 0
+        ex = []
+        for va, name in rows.items():
+            names = by_va.get(va)
+            if names is None:
+                absent += 1
+                continue
+            present += 1
+            if name in names:
+                name_eq += 1
+            elif len(ex) < 8:
+                ex.append({"va": va, "symbols_txt": name,
+                           "retail_map": sorted(names)[:3]})
+        return {"n": len(rows), "va_present_in_retail_map": present,
+                "va_absent": absent, "name_agrees": name_eq,
+                "name_disagrees": present - name_eq, "examples": ex}
+
+    return {"status": "checked", "map": str(mp.name), "n_publics": n_pub,
+            "n_distinct_vas": len(by_va),
+            "function_rows": agree(parsed["rows"]["function"]),
+            "object_rows": agree(parsed["rows"]["object"])}
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0],
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -234,6 +305,10 @@ def main(argv=None) -> int:
                          "path: widening is an owner call, not a flag.")
     ap.add_argument("--price-all-tiers", action="store_true",
                     help="diff every tier against the committed map and stop")
+    ap.add_argument("--cross-check-retail-map", nargs="?", const="AUTO",
+                    default=None, metavar="PATH",
+                    help="second witness: agree symbols.txt against the shipped "
+                         "MSVC linker map (default orig/<BUILD_ID>/*.map)")
     a = ap.parse_args(argv)
 
     if a.symbols:
@@ -284,6 +359,10 @@ def main(argv=None) -> int:
         report["tiers"][t] = {"desc": TIERS[t], "n_entries": len(m),
                               "probe_median": probe_median(m),
                               **diff(committed, m)}
+
+    if a.cross_check_retail_map:
+        report["retail_map"] = cross_check_retail(
+            REPO, parsed, a.cross_check_retail_map)
 
     if a.emit:
         out = Path(a.emit).resolve()
