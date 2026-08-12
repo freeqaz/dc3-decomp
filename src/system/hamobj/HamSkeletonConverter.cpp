@@ -260,8 +260,9 @@ void HamSkeletonConverter::CalcRotzBone(
         xfm.v = mesh->LocalXfm().v;
 
         Multiply(xfm, mBoneTransforms[joint], mBoneTransforms[from]);
+
+        SetRotzBoneValue(String(MirrorBoneName(from)), angle);
     }
-    SetRotzBoneValue(String(MirrorBoneName(from)), angle);
 }
 
 void HamSkeletonConverter::ScaleBone(
