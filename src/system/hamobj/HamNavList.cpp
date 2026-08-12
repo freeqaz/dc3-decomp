@@ -970,7 +970,7 @@ bool HamNavList::IsElementBig(int display) const {
 float HamNavList::CalculateSwell(int pos) const {
     int numItems = NumItems();
     float slideVal = Max(0.0f, mHandHeight);
-    float clamped = Min(1.0f, slideVal);
+    float clamped = Min(slideVal, 1.0f);
     float diff = clamped - (float)pos / (float)(numItems - 1);
     float swell = sqrtf(fabsf(diff)) * sqrtf((float)numItems) * 0.15f;
     swell = Clamp(0.0f, 1.0f, swell);
