@@ -32,7 +32,7 @@
 const char *kNotObjectMsg = "Could not find %s in dir \"%s\"";
 ObjectDir *ObjectDir::sMainDir;
 ObjectDir *gDir;
-static std::map<std::pair<Symbol, Symbol>, bool> sSuperClassMap;
+std::map<std::pair<Symbol, Symbol>, bool> sSuperClassMap;
 
 #ifdef HX_NATIVE
 namespace {

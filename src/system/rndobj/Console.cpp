@@ -17,7 +17,7 @@
 static void HolmesClientSendMessage(const Message&) {}
 #endif
 
-static RndConsole *gConsole = nullptr;
+RndConsole *gConsole = nullptr;
 
 DataNode DataBreak(DataArray *da);
 
