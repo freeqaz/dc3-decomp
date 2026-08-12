@@ -1,7 +1,7 @@
 #pragma once
 #include "binkxenon\bink.h"
 #include "math/Geo.h"
-#include "movie\MovieImpl.h"
+#include "movie\MovieImpl_p.h"
 #include "rndobj\Mat.h"
 #include "rndobj\Tex.h"
 #include "utl/BinStream.h"

@@ -4,7 +4,7 @@
 #include "obj/Object.h"
 #include "synth\Faders.h"
 #include "utl/Loader.h"
-#include "utl\SongInfoCopy.h"
+#include "utl\SongInfo.h"
 #include "utl\Symbol.h"
 
 /** One crossfade timeline: the two loop endpoints, the fade length, and a

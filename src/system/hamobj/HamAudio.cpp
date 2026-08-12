@@ -12,7 +12,7 @@
 #include "utl\MakeString.h"
 #include "utl\MemMgr.h"
 #include "utl\SongInfoAudioType.h"
-#include "utl\SongInfoCopy.h"
+#include "utl\SongInfo.h"
 #include "utl\TimeConversion.h"
 
 HamAudio::HamAudio()

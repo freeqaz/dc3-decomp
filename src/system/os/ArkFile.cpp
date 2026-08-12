@@ -2,7 +2,7 @@
 #include "HolmesClient.h"
 #include "os\ArkFile_p.h"
 #include "os\Archive.h"
-#include "os\Block.h"
+#include "os\BlockMgr_p.h"
 #include "os\Debug.h"
 #include "os\File.h"
 #include "os\System.h"

@@ -1,4 +1,4 @@
-#include "CRC.h"
+#include "Crc.h"
 
 bool Hmx::CRC::ValidateCRC(int, const char *) { return true; }
 

@@ -1,5 +1,5 @@
 #include "synth\BinkReader.h"
-#include "os\Block.h"
+#include "os\BlockMgr_p.h"
 #include "os\Debug.h"
 #include "os\Timer.h"
 #include "utl\Symbol.h"

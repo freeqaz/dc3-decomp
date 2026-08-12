@@ -10,7 +10,7 @@
 #include "rndobj\Rnd.h"
 #include "rndobj\Utl.h"
 #include "utl/BinStream.h"
-#include "utl\CRC.h"
+#include "utl\Crc.h"
 #include "utl\FilePath.h"
 #include "utl/Loader.h"
 

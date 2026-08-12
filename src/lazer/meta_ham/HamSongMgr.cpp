@@ -29,7 +29,7 @@
 #include "utl\FakeSongMgr.h"
 #include "utl\Locale.h"
 #include "utl\MakeString.h"
-#include "utl\SongInfoCopy.h"
+#include "utl\SongInfo.h"
 #include "utl\Std.h"
 #include "utl\Symbol.h"
 #include <cstring>

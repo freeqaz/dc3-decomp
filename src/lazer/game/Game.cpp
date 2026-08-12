@@ -45,7 +45,7 @@
 #include "ui\UI.h"
 #include "ui\UIPanel.h"
 #include "utl\MultiTempoTempoMap.h"
-#include "utl\SongInfoCopy.h"
+#include "utl\SongInfo.h"
 #include "utl\SongPos.h"
 #include "utl\Symbol.h"
 #include "utl\TempoMap.h"

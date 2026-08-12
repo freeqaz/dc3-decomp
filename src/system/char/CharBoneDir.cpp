@@ -1,6 +1,6 @@
 #include "char\CharBoneDir.h"
 #include "char\CharBone.h"
-#include "utl\SongInfoCopy.h"
+#include "utl\SongInfo.h"
 #include "char\CharUtl.h"
 #include "obj\Data.h"
 #include "obj\DataFunc.h"

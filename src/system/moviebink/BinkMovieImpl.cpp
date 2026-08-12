@@ -10,7 +10,7 @@
 #include "obj\DirUnloader.h"
 #include "obj\Msg.h"
 #include "obj/Object.h"
-#include "os\Block.h"
+#include "os\BlockMgr_p.h"
 #include "os\Debug.h"
 #include "os\File.h"
 #include "os\OSFuncs.h"

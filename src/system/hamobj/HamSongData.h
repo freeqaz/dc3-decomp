@@ -6,7 +6,7 @@
 #include "utl\BeatMap.h"
 #include "utl/MeasureMap.h"
 #include "utl\MemStream.h"
-#include "utl\SongInfoCopy.h"
+#include "utl\SongInfo.h"
 #include "utl\TempoMap.h"
 
 enum HamSongDataValidate {

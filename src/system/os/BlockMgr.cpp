@@ -1,7 +1,7 @@
 #include "CDReader.h"
 #include "obj\DataFunc.h"
 #include "os\Archive.h"
-#include "os\Block.h"
+#include "os\BlockMgr_p.h"
 #include "os\Debug.h"
 #include "os\HDCache.h"
 #include "os\OSFuncs.h"

@@ -11,7 +11,7 @@
 #include "obj/Object.h"
 #include "obj\Msg.h"
 #include "utl\MultiTempoTempoMap.h"
-#include "utl\SongInfoCopy.h"
+#include "utl\SongInfo.h"
 #include "utl\SongPos.h"
 #include "utl\Symbol.h"
 #include "meta_ham\MetaPerformer.h"

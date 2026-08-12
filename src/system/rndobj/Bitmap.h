@@ -1,7 +1,7 @@
 #pragma once
 #include "utl/BinStream.h"
 #include "obj/Object.h"
-#include "utl\CRC.h"
+#include "utl\Crc.h"
 #include "utl\MemMgr.h"
 #include "types.h"
 

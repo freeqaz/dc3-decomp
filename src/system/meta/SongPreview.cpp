@@ -14,7 +14,7 @@
 #include "os\System.h"
 #include "synth\Faders.h"
 #include "synth\Synth.h"
-#include "utl\SongInfoCopy.h"
+#include "utl\SongInfo.h"
 #include "utl\Symbol.h"
 
 const float SongPreview::kSilenceVal = -48;

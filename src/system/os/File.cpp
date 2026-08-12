@@ -1,6 +1,6 @@
 #include "os\File.h"
 #include "os\AsyncFile.h"
-#include "os\Block.h"
+#include "os\BlockMgr_p.h"
 #include "os/FileCache.h"
 #include "os\ArkFile_p.h"
 #include "HolmesClient.h"

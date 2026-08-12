@@ -13,7 +13,7 @@
 #include "stl\_map.h"
 #include "stl\_vector.h"
 #include "utl/BinStream.h"
-#include "utl\SongInfoCopy.h"
+#include "utl\SongInfo.h"
 #include "utl\Str.h"
 #include "utl\Symbol.h"
 
