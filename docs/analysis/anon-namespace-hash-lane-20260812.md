@@ -184,6 +184,66 @@ hashes and it can **never** reach the 7 header hashes, whatever the path map
 says. Since the header hashes are the whole reason an object needs a split, the
 wibo route could not have closed this lane on its own.
 
+Re-probed 2026-08-12 with a live cl oracle
+(`scripts/probe_anon_hash.py`, ~0.1 s/compile) and `WIBO_SIGFORPBCB_LOG`. Three
+things came back that the doc did not have:
+
+- **The chain's third buffer is a one-byte ORDINAL, not the `"\x00"`
+  terminator the doc records.** It is 0 without a PCH and 1 under `/Yu`, for
+  any PCH regardless of how many anonymous namespaces the PCH contains — a
+  file-table index with the PCH in slot 0, not a namespace counter (three
+  anonymous namespaces in one non-PCH TU all share ordinal 0). The doc's
+  exhaustive header search swept no such dimension. A re-run that does (5.2M
+  paths, ~21M hashes, ordinals 0–3, positive control passing) is also **0
+  hits**, so the conclusion survives — but the original evidence for it did
+  not cover the space it claimed to.
+- **The header path is never hashed at all.** The doc inferred a
+  canonicalisation mismatch; the log shows the call is simply not made. Two of
+  its proposed mechanisms are also dead: `GetShortPathNameW` *is* called on the
+  header's directory (no hash follows), and cl imports
+  `GetFileInformationByHandle` without ever calling it (1 IAT line, 0 calls in
+  a 59k-line trace).
+- **The model is now runnable and validated against retail.**
+  `scripts/anon_ns_hash.py --self-test`. `9QVZU3` is confirmed correct — the
+  brief's "known wrong for at least `MetagameRank.cpp`" was a misreading, since
+  `MetagameRank`'s retail hash is header-sourced and so is not evidence about
+  the computer name at all.
+
+### The part that is *not* blocked: the ordinal is why our TU-local hashes miss
+
+Retail's `HolmesClient` hash and ours are the **same path and the same computer
+name, differing only in the PCH byte**:
+
+    predict(e:\lazer_build_gmc1\system\src\os, HolmesClient.cpp, ordinal 0) = 49b544a7   retail
+    predict(                     … same …    , HolmesClient.cpp, ordinal 1) = 3eb27431   ours
+
+`system/gesture/DrawUtl.cpp` is the same story (`da23fae1` at 1, retail's
+`ad24ca77` at 0), and `MetagameRank.cpp` — in `lazer/meta_ham`, which is not in
+`config.pch_eligible_dirs` — comes out at ordinal 0 as predicted.
+
+**Verified end to end, not just modelled.** Compiling `HolmesClient.cpp` with
+`/FI"decomp_pch.h"` but without `/Yu`, into a scratch `/Fo`, makes cl emit
+`?A0x49b544a7` — retail's value, from the compiler. So the plan doc's "8 .cpp
+files match" is a floor imposed by the PCH, not a ceiling, and part of this
+lane *is* reachable at compile time after all.
+
+Two things bound it, and neither is settled here:
+
+- **It generalises much less far than it looks.** Sweeping all 256 ordinals
+  against every retail object's own `.cpp` path reproduces **8 of 123**.
+  `Joypad.obj`'s `ca10770b` carries 25 unmistakably Joypad.cpp-local symbols
+  and no ordinal predicts it, while `HolmesClient.cpp` *in the same directory*
+  is exact. So for most TUs the hashed string is not
+  `<name> + <path> + <one byte>` — the third buffer may not always be one byte,
+  or the chain may be longer. A failed `predict()` is therefore not evidence
+  about a path.
+- **The codegen cost is unmeasured.** The no-`/Yu` object is not
+  section-identical to the PCH one (extra COMDATs, different `.debug$S`), so
+  whether `none` holds under a per-TU PCH opt-out needs its own measurement and
+  its own lane. It would also buy no metric on top of this pass, which already
+  produces `49b544a7`; what it buys is that the value stops being a post-build
+  rewrite. Worth doing for that reason, not for the number.
+
 > **Doc conflict, resolved by the older measurement.** The 2026-08-12
 > `namecheck-lane-triage-and-fixers` manifest calls this lane "reachable — a
 > reverse `WIBO_PATH_MAP` in wibo's host→Windows conversion, plus the right
@@ -265,10 +325,45 @@ namespace, header-vs-cpp placement and an unavailable path are all ruled out:
 none of them can split one block per member. What the three hashless symbols
 have in common is that all three are data and none is a function — but `gCaps`
 and `gCapsValid` are data in the same block and get the hash, so that is not
-the discriminator either. **Cause unknown.** The hypothesis worth testing first
-is the cheapest one and the only one whose answer would be a *source* fix:
-that retail wrote these as file-scope `static` outside any anonymous namespace,
-and MSVC spells a file-scope static's scope `?A@@` under some condition.
+the discriminator either.
+
+Probed, and it is a clean negative. Not reproducible in **~65 variants**: 45
+flag sets (`/Za /Zl /Z7 /Zi /GS- /Gy /GF- /Gz /Gr /Ox /Od /O2 /Os /Oy /Ob0
+/Ob2 /J /vmg /vms /vmv /vmb /Zp1 /Zp16 /GX /EHa /GR- /Yd /Gh /GH /Qpar /openmp
+/Gm /MT /MD /LD /Zc:*` …) and 22 source shapes, every one of which produced a
+hash. Specifically ruled out by measurement:
+
+- **File-scope `static` is not it, which kills the one-word source fix.** MSVC
+  emits a file-scope `static` — and a `static` *inside* an anonymous namespace
+  — with a **plain undecorated name**, never `?A@@`. Retail's source cannot
+  have written `static float gXboxDeadzone;`.
+- **Not the datum's shape.** In one anonymous namespace, all 13 of these got
+  the hash, including `sDepthRectVerts`' exact shape (brace-initialised array
+  of a locally-declared struct) and `sThreadData`' exact shape (unnamed-struct-
+  typed object), plus bare/initialised/const/volatile scalars and an object
+  with a dynamic initialiser. Our cl also spells unnamed types
+  `U<unnamed-type-X>@1@` exactly as retail does, so a different cl revision is
+  out too.
+- **Not "the compiler had no file".** `#line 1 ""`, `#line` to a fake path,
+  `#line` inside the block, `/FI` forced include, `extern "C++"` wrapping and
+  `namespace{namespace{}}` all hashed.
+- **Nothing distinguishes them in the object either.** Reading the 18-byte COFF
+  symbol records for a hashless and a hashed symbol in the *same* retail
+  object: `?gXboxDeadzone@?A@@3MA` and `?gCaps@?A0xf503845b@@…` are
+  **identical in every field** — both `IMAGE_SYM_CLASS_EXTERNAL`, both in
+  their own COMDAT section with characteristics `0xc0401040`, consecutive
+  section numbers, no aux records. Same for `?sThreadData@?A@@` against
+  `?tBreed@?A0x439b694a@@` (`0xc0401040`, sections 71 and 72). The prediction
+  that the hashless ones would be `STATIC` or non-COMDAT is **refuted**.
+- **Not declaration order.** `Joypad_Xbox.cpp` declares `tBreed` *first* and
+  `sThreadData` second; retail hashes `tBreed` and not `sThreadData`.
+
+**Cause unknown, and the search space is now small.** The split is visible only
+in the name string, matches nothing source-level, nothing flag-level and
+nothing object-level — which points at two different name-emission paths inside
+cl (front end vs back end) taking different decisions about whether the file
+signature is available yet, in a real Windows build we cannot reproduce under
+wibo. That is a hypothesis, not a finding.
 
 **This pass cannot reach it**, and the reason is structural rather than a
 missing rule: every rewrite it makes is 8 hex characters over 8 hex characters,

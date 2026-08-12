@@ -10,13 +10,44 @@
 > `name_check` +23,232 B / +132 functions.  The "Current Numbers" table below is
 > also stale (it predates `name_check` and counts files, not charges).
 >
-> **Everything else here stands and is load-bearing** -- in particular the
-> `SigForPbCb` CRC-32 chain, the `9QVZU3` CRC preimage, and the 2026-02-26
-> finding that cl under wibo hashes only the `.cpp` path and never a declaring
-> header's.  That last one is why the wibo route cannot close this lane on its
-> own, and it CONTRADICTS the later (2026-08-12) `namecheck-lane-triage`
-> manifest calling the lane "reachable" via a reverse `WIBO_PATH_MAP`.  The
-> older, instrumented measurement wins.
+> **The `SigForPbCb` CRC-32 chain stands, with ONE CORRECTION.** The third
+> call's buffer is **not a NUL terminator**.  It is a one-byte **ordinal**:
+> **0 without a PCH, 1 under `/Yu`**, regardless of how many anonymous
+> namespaces the PCH contains (three anonymous namespaces in one non-PCH TU all
+> share ordinal 0, so it is a file-table index with the PCH in slot 0, not a
+> namespace counter).  Measured under `WIBO_SIGFORPBCB_LOG` and independently
+> brute-forced back out of the CRC state, 2026-08-12.  **The "Exhaustive Header
+> Path Search" below swept no such dimension, so its 0/1,338 is not the
+> negative it reads as** -- though a re-run with ordinals 0-3 over 5.2M paths
+> (2,447 filenames x 71 dirs x 32 roots x 2 cases) is also 0, with a passing
+> positive control.
+>
+> **This is now a runnable model, not a description**: `scripts/anon_ns_hash.py`
+> (`--self-test` checks it against retail) and `scripts/probe_anon_hash.py`
+> (the live cl oracle, ~0.1 s per compile).
+>
+> **It also yields something this doc concludes is impossible.**  Retail's
+> `HolmesClient` hash `49b544a7` is exactly `predict(.cpp path, ordinal 0)` and
+> ours, `3eb27431`, is the same path at **ordinal 1** -- same computer name,
+> same path, differing only in the PCH byte.  Compiling `HolmesClient.cpp` with
+> `/FI"decomp_pch.h"` but WITHOUT `/Yu` makes cl emit `?A0x49b544a7` for real.
+> `gesture/DrawUtl.cpp` is the same (`da23fae1` at 1, retail's `ad24ca77` at 0).
+> So the "8 .cpp files match" below is a floor set by the PCH, not a ceiling.
+> Bounded, though: sweeping all 256 ordinals reproduces only 8 of 123 retail
+> objects, so the input string is not that shape for most TUs, and the codegen
+> cost of dropping `/Yu` is unmeasured.
+>
+> **The 2026-02-26 per-TU finding stands and is sharpened**: a `namespace {}`
+> in a header is not merely hashed from the wrong path, **the call is never
+> made** for the header's path at all.  Also two of this doc's mechanisms are
+> now refuted -- `GetShortPathNameW` IS called on the header's directory (no
+> hash follows), and the `GetFileInformationByHandle` identity theory is dead
+> (cl imports the symbol and never calls it: 1 IAT line, 0 calls in a 59k-line
+> trace).  That is why the compile-time route cannot close this lane on its own
+> whatever the path map says, and it CONTRADICTS the later (2026-08-12)
+> `namecheck-lane-triage` manifest calling the lane "reachable" via a reverse
+> `WIBO_PATH_MAP`.  The manifest is right for `.cpp`-sourced hashes and wrong
+> for header-sourced ones.
 >
 > Read with: `docs/analysis/anon-namespace-hash-lane-20260812.md`.
 
