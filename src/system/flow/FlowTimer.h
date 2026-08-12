@@ -42,19 +42,3 @@ public:
 protected:
     FlowTimer();
 };
-
-class EventTask : public Task {
-public:
-    EventTask(FlowTimer *, ObjPtrVec<FlowNode> *, TaskUnits, float);
-    virtual ~EventTask();
-    OBJ_CLASSNAME(EventTask)
-    virtual void Poll(float);
-
-    POOL_OVERLOAD(EventTask, 0x12)
-
-protected:
-    ObjPtr<FlowTimer> mOwner; // 0x2c
-    ObjPtrVec<FlowNode> *mChildNodes; // 0x40
-    ObjPtrVec<FlowNode>::iterator mCurNode; // 0x44
-    float mDuration; // 0x48
-};

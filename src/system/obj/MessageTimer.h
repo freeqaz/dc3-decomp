@@ -34,48 +34,6 @@ struct ObjSort {
     }
 };
 
-struct EventEntry {
-    EventEntry(Symbol s, Hmx::Object *o, float ms) {
-        msgs = s;
-        Add(o, ms);
-    }
-
-    Symbol msgs; // 0x0
-    std::vector<ObjEntry *> objs; // 0x4
-
-    ~EventEntry() {
-        for (int i = 0; i < objs.size(); i++) {
-            delete objs[i];
-        }
-    }
-
-    float MaxMs() {
-        float total = 0.0f;
-        for (int i = 0; i < objs.size(); i++) {
-            MaxEq(total, objs[i]->maxMs);
-        }
-        return total;
-    }
-
-    void Dump() {
-        std::sort(objs.begin(), objs.end(), ObjSort());
-        MILO_LOG("%g %s\n", MaxMs(), msgs.Str());
-        for (int i = 0; i < objs.size(); i++) {
-            objs[i]->Dump();
-        }
-    }
-
-    void Add(Hmx::Object *o, float ms);
-
-    MEM_OVERLOAD(EventEntry, 0x3D);
-};
-
-struct MaxSort {
-    bool operator()(EventEntry *e1, EventEntry *e2) const {
-        return e1->MaxMs() > e2->MaxMs();
-    }
-};
-
 class MessageTimer {
 protected:
     static bool sActive;
