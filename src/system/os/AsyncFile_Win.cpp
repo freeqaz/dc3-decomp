@@ -10,10 +10,13 @@
 void ReadError(const char *cc) {
     DWORD err = GetLastError();
     String str;
-    if (FileIsLocal(cc) && TheContentMgr.Contains(cc, str)) {
-        MILO_LOG("ReadError in package '%s', err = 0x%08x\n", str, err);
-        int b3 = (err == ERROR_FILE_CORRUPT) || (err == ERROR_DISK_CORRUPT);
-        TheContentMgr.OnReadFailure(b3, str.c_str());
+    if (FileIsLocal(cc)) {
+        if (TheContentMgr.Contains(cc, str)) {
+            MILO_LOG("ReadError in package '%s', err = 0x%08x\n", str, err);
+            int b3 = (err == ERROR_FILE_CORRUPT) || (err == ERROR_DISK_CORRUPT);
+            TheContentMgr.OnReadFailure(b3, str.c_str());
+        }
+        return;
     } else {
         if (!UsingCD())
             return;
