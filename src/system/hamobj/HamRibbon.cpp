@@ -124,7 +124,16 @@ void HamRibbon::Reset() { mChaseKeys.clear(); }
 
 void HamRibbon::ExposeMesh() {
     if (!mMesh->Dir()) {
-        mMesh->SetName(MakeString("%s_mesh.mesh", (char *)FileGetBase(Name())), Dir());
+        // Do NOT re-add the `(char *)` cast that used to sit on FileGetBase here.
+        // It only changed which MakeString instantiation we emit (@PBD@ -> @PAD@).
+        // The linker folds those two, our own icf_aliases.map records the fold, and
+        // the splitter renders the surviving spelling at every one of the 566 target
+        // call sites -- @PBD@ appears 0 times anywhere in the target listing -- so
+        // the name proves nothing about the original source.  It costs 0.244 of
+        // raw_match_percent here and 0.000 on RndRibbon::ExposeMesh, the base
+        // class's identical un-cast version of this same function, which scores
+        // 100/100.  fuzzy is 100 either way and the diff score is 0/4100 either way.
+        mMesh->SetName(MakeString("%s_mesh.mesh", FileGetBase(Name())), Dir());
     }
 }
 

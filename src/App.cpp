@@ -888,22 +888,24 @@ static void DebugModal(Debug::ModalType &ty, FixedString &str, bool b3) {
             if (notifyLevel == 2) {
                 gRealCallback(ty, str, b3);
                 return;
-            }
-            if (notifyLevel == 1) {
-                Hmx::Object *cheatDisplay =
-                    ObjectDir::Main()->Find<Hmx::Object>("cheat_display", false);
-                if (cheatDisplay) {
-                    // The two nested blocks are load-bearing: MSVC numbers the
-                    // local-static scope index per lexical block, and the target
-                    // encodes `show` at scope 0x15 (??__Fshow@?BF@...). Without
-                    // them we emit 0x13 (?BD) and the object is not byte-exact.
-                    {
-                        {
-                            static Message show("show", 0);
-                            show[0] = str.c_str();
-                            cheatDisplay->Handle(show, false);
-                            return;
-                        }
+            } else {
+                // This `else` is load-bearing, not redundant style. MSVC tags a
+                // local static with the count of lexical scopes opened ahead of
+                // it in the function; the target encodes `show` at 21
+                // (??__Fshow@?BF@...) and our scopes only reach 19 without it.
+                // Measured cost of each construct, on this compiler:
+                //   `{ }` +1   `if (c) { }` +3   `else { }` +2   `else if` +1
+                // So folding this to `else if (notifyLevel == 1)` is worth only
+                // +1 and un-matches the function. See the cosmetic-review
+                // readout in decomp-bench for the full measurement.
+                if (notifyLevel == 1) {
+                    Hmx::Object *cheatDisplay =
+                        ObjectDir::Main()->Find<Hmx::Object>("cheat_display", false);
+                    if (cheatDisplay) {
+                        static Message show("show", 0);
+                        show[0] = str.c_str();
+                        cheatDisplay->Handle(show, false);
+                        return;
                     }
                 }
             }
