@@ -120,11 +120,8 @@ Vector3 RndFont3d::CharOriginOffset() const {
     if (mTextureOwner != this) {
         return mTextureOwner->CharOriginOffset();
     }
-    float unit = FontUnitInverse();
     Vector3 result;
-    result.x = unk8c.x * unit;
-    result.y = unk8c.y * unit;
-    result.z = unk8c.z * unit;
+    Scale(unk8c, FontUnitInverse(), result);
     return result;
 }
 
