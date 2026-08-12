@@ -485,6 +485,18 @@ void CacheMgrXbox::PollMount() {
     }
 }
 
+// LOAD-BEARING LAYOUT -- do not add braces, and do not split the comma expression.
+// MSVC tags a local static with the count of lexical scopes opened ahead of it in
+// the function, and the target puts `msg` at 16 (??__Fmsg@?BA@...).  Measured cost
+// of each construct on this compiler: function body +1, `if (c) stmt;` +2,
+// `if (c) { stmt }` +3, `else stmt;` +1, `else { stmt }` +2, bare `{ }` +1.
+// The three-arm chain below is forced by codegen (an `||`-merged two-arm version
+// reorders the emitted blocks and drops to 96.5%), and that chain costs 6, so the
+// whole budget is spent:
+//     body 2 + guard-return 2 + if(res) 2 + if(codes) 2 + else-if 3 + else 1
+//         + else(NoError) 1 + if(mCallback){ 3  =  16
+// Putting braces anywhere but on `if (mCallback)` overshoots to 17 and un-matches
+// the function.  PollDelete needs none of this because it declares no local static.
 void CacheMgrXbox::PollUnmount() {
     if (mOverlapped.InternalLow == 0x3E5)
         return;
