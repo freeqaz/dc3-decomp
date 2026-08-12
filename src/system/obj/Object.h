@@ -710,7 +710,9 @@ extern DataArray *SystemConfig(Symbol, Symbol, Symbol);
 #define OBJ_SET_TYPE(classname)                                                           \
     virtual void SetType(Symbol classname) {                                              \
         DataArray *def;                                                                   \
-        if (!classname.Null()) {                                                          \
+        if (classname.Null())                                                             \
+            SetTypeDef(nullptr);                                                          \
+        else {                                                                            \
             static DataArray *types =                                                     \
                 SystemConfig("objects", StaticClassName(), "types");                      \
             DataArray *found = types->FindArray(classname, false);                        \
@@ -722,8 +724,7 @@ extern DataArray *SystemConfig(Symbol, Symbol, Symbol);
                 );                                                                        \
                 SetTypeDef(nullptr);                                                      \
             }                                                                             \
-        } else                                                                            \
-            SetTypeDef(nullptr);                                                          \
+        }                                                                                 \
     }
 // END SET TYPE MACRO --------------------------------------------------------------------
 
