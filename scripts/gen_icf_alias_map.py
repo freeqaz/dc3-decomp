@@ -78,7 +78,10 @@ Usage
 
 ``tools/project.py`` runs this at configure time and wires ``map_file`` only if
 the output exists, so a fresh tree without the generated map still builds -- no
-map means no equivalences, which is the pre-ICF behaviour.
+map means no equivalences, which is the pre-ICF behaviour. Thereafter the
+``icf_alias_map`` ninja edge keeps it fresh and the ``icf_alias_map_checked``
+edge asserts it: see the design comment in ``tools/project.py``, which is the
+one place per repo this rule is written down.
 """
 
 import argparse
@@ -112,6 +115,15 @@ HEADER = (
     ";\n"
     "; Address                        Publics by Value\n"
 )
+
+
+def rel(p: Path) -> str:
+    """Repo-relative when possible: the defaults resolve absolute, and an absolute
+    machine path in a build-failure message is noise nobody can paste."""
+    try:
+        return str(p.resolve().relative_to(Path.cwd().resolve()))
+    except ValueError:
+        return str(p)
 
 
 def load_groups(aliases_path: Path) -> list:
@@ -160,24 +172,47 @@ def main() -> int:
 
     out_path = Path(args.out)
     if args.check:
+        # The remediation line is not decoration: --check is reached from the
+        # build, where the reader is whoever ran `ninja` and not whoever left the
+        # map stale.
+        fix = (f"  fix: python3 scripts/gen_icf_alias_map.py "
+               f"--aliases {rel(aliases_path)} --out {rel(out_path)}")
         if not out_path.is_file():
-            print(f"STALE: {out_path} does not exist", file=sys.stderr)
+            print(f"STALE: {rel(out_path)} does not exist\n{fix}", file=sys.stderr)
             return 1
         if out_path.read_text() != content:
-            print(f"STALE: {out_path} differs from generated content", file=sys.stderr)
+            print(f"STALE: {rel(out_path)} disagrees with {rel(aliases_path)}.\n"
+                  f"  ninja renders this map from that JSON by mtime, so a map that is\n"
+                  f"  NEWER than the JSON (hand-edited, or rendered from a different\n"
+                  f"  --aliases) or a JSON restored with an OLD mtime (cp -a, tar,\n"
+                  f"  rsync -a) is invisible to the edge and measures as a silent lie.\n"
+                  f"{fix}", file=sys.stderr)
             return 1
         print(f"OK: {out_path} up to date ({len(groups)} ICF groups)")
         return 0
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(content)
+    # *** WRITE ONLY WHEN THE CONTENT CHANGES. ***
+    # The map is a ninja output (tools/project.py's `icf_alias_map` edge) AND is
+    # re-rendered at configure time, so an unconditional write bumps its mtime on
+    # every configure and every `ninja -t clean`-less rebuild -- which would drag
+    # the multi-minute `report generate` behind it for a file whose bytes did not
+    # move. Paired with `restat = 1` on the rule: ninja re-stats the output, sees
+    # an unchanged mtime, marks the edge clean and does NOT rebuild the report.
+    # Without the restat this pairing would be worse than an unconditional write
+    # (the output would stay older than its input forever and the generator would
+    # re-run on every build); the two go together, do not split them.
+    unchanged = out_path.is_file() and out_path.read_text() == content
+    if not unchanged:
+        out_path.write_text(content)
     # Count what was EMITTED, not what was offered. render_map skips any group
     # with no address, so summarising the input reported 1334 groups / 4060
     # symbol lines for a file that carried 372 -- and the only symptom was every
     # addressless class failing gate (f) later as "absent from map_file".
     emitted = [g for g in groups if g.get("address")]
     n_syms = sum(1 + len(g.get("folded", [])) for g in emitted)
-    print(f"wrote {out_path}: {len(emitted)} ICF groups, {n_syms} symbol lines")
+    verb = "unchanged" if unchanged else "wrote"
+    print(f"{verb} {out_path}: {len(emitted)} ICF groups, {n_syms} symbol lines")
     if len(emitted) != len(groups):
         print(f"  SKIPPED {len(groups) - len(emitted)} group(s) with no address "
               f"-- these cannot pass gate (f) and will be rejected at load")
