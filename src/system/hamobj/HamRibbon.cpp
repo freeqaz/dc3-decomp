@@ -124,7 +124,7 @@ void HamRibbon::Reset() { mChaseKeys.clear(); }
 
 void HamRibbon::ExposeMesh() {
     if (!mMesh->Dir()) {
-        mMesh->SetName(MakeString("%s_mesh.mesh", FileGetBase(mMesh->Name())), Dir());
+        mMesh->SetName(MakeString("%s_mesh.mesh", (char *)FileGetBase(Name())), Dir());
     }
 }
 
