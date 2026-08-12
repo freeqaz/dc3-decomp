@@ -440,13 +440,10 @@ float ScaleDistToError(const ScaleOp &op, float dist) {
 float ScaleFullErrorDist(const ScaleOp &op) {
     if (op.mPerfectDist == -1.0f)
         return 1.0f;
-    float invRate;
     if (op.mType == kErrorScaleDist) {
-        invRate = 1.0f / op.mRate;
-    } else {
-        invRate = sqrtf(1.0f / op.mRate);
+        return 1.0f / op.mRate + op.mPerfectDist;
     }
-    return invRate + op.mPerfectDist;
+    return sqrtf(1.0f / op.mRate) + op.mPerfectDist;
 }
 
 void XZErrorWeight(const Vector3 &v, float &xzWeight, float &yWeight) {
