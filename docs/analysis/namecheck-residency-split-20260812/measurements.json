@@ -1,0 +1,59 @@
+{
+ "ruler_baseline": {
+  "none": {
+   "pct": 43.727554,
+   "bytes": 4973320,
+   "complete_fns": 29182
+  },
+  "name_check": {
+   "pct": 40.560802,
+   "bytes": 4613152,
+   "complete_fns": 28081
+  }
+ },
+ "waves": [
+  {
+   "name": "access-region fixes (5 static members)",
+   "name_check_pct": 40.593864,
+   "name_check_bytes": 4616912,
+   "delta": "+8 / -0",
+   "none": "unmoved"
+  },
+  {
+   "name": "gFile moved to file scope",
+   "name_check_pct": 40.594143,
+   "name_check_bytes": 4616944,
+   "delta": "+2 / -0",
+   "none": "unmoved"
+  }
+ ],
+ "total_landed": {
+  "name_check": "40.560802% -> 40.594143% (4,613,152 -> 4,616,944 bytes)",
+  "complete_fns": "+10 / -0",
+  "none": "43.727554% / 4,973,320 bytes, byte-identical"
+ },
+ "measured_not_landed": {
+  "what": "retail-map fold classes over DATA COMDATs, gated by scripts/retail_map_fold_candidates.py",
+  "charged_addresses_only": {
+   "groups": 101,
+   "names": 417,
+   "name_check": "40.560802% -> 41.269260% (4,613,152 -> 4,693,728 bytes)",
+   "complete_fns": "+201 / -0",
+   "none": "unmoved"
+  },
+  "full_map_sweep": {
+   "groups": 115,
+   "names": 463,
+   "name_check": "40.560802% -> 41.278263% (4,613,152 -> 4,694,752 bytes)",
+   "complete_fns": "+205 / -0",
+   "none": "unmoved"
+  },
+  "blocking_gate": "the installed retail_map_classes installer evaluates its member/survivor gates with coff_ppc.parse().funcs -- function COMDATs only -- so every DATA COMDAT the linker folded is invisible. Target objects DO define 254 ??_8 symbols and pick a unique survivor at 98 of the 102 charged fold addresses, so gate 4 is satisfiable, not merely unrunnable. scripts/target_symbol_map.json (gate (a)) has the same blindness: 0 of its 69,132 names is a ??_8.",
+  "not_installed_because": "admitting a data-COMDAT fold class on this evidence tier is an owner call; the largest class carries 99 spellings at one address."
+ },
+ "reverted": [
+  "extern const int kArkBlockSize -- costs Archive::GetArkfileNumBlocks at none",
+  "ObjectDir::sSuperClassMap -- costs HamStoreProvider fn_82980E8C at none, at either declaration placement"
+ ],
+ "two_cycles": 0
+}

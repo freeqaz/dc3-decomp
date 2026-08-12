@@ -25,7 +25,9 @@
     "?PreInit@ObjectDir@@SAXHH@Z",
     "?Terminate@ObjectDir@@SAXXZ"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "same_identifier_other_scope",
+   "note": "TRIED, REVERTED: declaring the std::map member in Dir.h costs HamStoreProvider fn_82980E8C at `none` (100 -> 99.9), at either placement; a 4-blank-line control probe at the same point lost nothing, so it is the declaration. Needs a forward-declared or type-erased member."
   },
   {
    "target": "?Notify@Debug@@QAAXPBD@Z",
@@ -48,7 +50,9 @@
     "?OnSetKeyframe@LightPreset@@IAA?AVDataNode@@PAVDataArray@@@Z",
     "?SetSelectedSimulateScroll@UIList@@QAA_NVSymbol@@_N@Z"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??1?$aligned_vector@M@@QAA@XZ",
@@ -66,7 +70,9 @@
     "fn_82E4DE78",
     "fn_82E4DEA4"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "?gPhysicalType@?A0x2be09a71@@3PBDB",
@@ -83,7 +89,9 @@
     "??1PhysMemTypeTracker@@QAA@XZ",
     "??__EgPhysicalType@?A0x2be09a71@@YAXXZ"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "same_qualified_name",
+   "note": "NEEDS JUDGEMENT: `PBDB` is `const char *const`, but PhysMemTypeTracker assigns to it at Memory_Xbox.cpp:338/347. Either retail had a second variable or those writes live elsewhere."
   },
   {
    "target": "?sVerboseNotify@Locale@@1_NA",
@@ -101,7 +109,9 @@
     "?Init@UIManager@@UAAXXZ",
     "?Localize@@YAPBDVSymbol@@PA_NAAVLocale@@@Z"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "same_qualified_name",
+   "note": ""
   },
   {
    "target": "??3@YAXPAX@Z",
@@ -120,7 +130,9 @@
     "fn_8295A8F0",
     "fn_82E1E608"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": "NEEDS JUDGEMENT: retail calls the GLOBAL operator delete where we call the class-scoped POOL_OVERLOAD one. Mirror image of rb3-xenon's biggest pair. `??3@YAXPAX@Z` sits at three addresses in the map, so no alias is minted."
   },
   {
    "target": "?sInstance@CheatProvider@@0PAV1@A",
@@ -136,7 +148,9 @@
     "?Init@CheatProvider@@SAXXZ",
     "?Terminate@CheatProvider@@SAXXZ"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "same_qualified_name",
+   "note": ""
   },
   {
    "target": "?kArkBlockSize@@3HB",
@@ -153,7 +167,9 @@
     "?GetArkfileNumBlocks@Archive@@QBAHH@Z",
     "?ReadAsync@HDCache@@QAA_NHHPAX@Z"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "same_qualified_name",
+   "note": "TRIED, REVERTED: `extern const int` in Archive.cpp lets MSVC fold the divisor and costs Archive::GetArkfileNumBlocks at `none`. Retail divides, so retail's DEFINITION is in another TU -- find it, do not add const here."
   },
   {
    "target": "?gFile@@3VSymbol@@A",
@@ -169,7 +185,9 @@
     "??__EgFile@@YAXXZ",
     "?SetFile@DataArray@@SAXVSymbol@@@Z"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "same_identifier_other_scope",
+   "note": ""
   },
   {
    "target": "?DeleteChecksum@FileStream@@AAAXXZ",
@@ -185,7 +203,9 @@
     "??1BufStream@@UAA@XZ",
     "?StartChecksum@BufStream@@QAAXPBD@Z"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "same_identifier_other_scope",
+   "note": "LIKELY A FOLD, NOT A DEFECT: two same-named methods on unrelated classes with identical bodies; ours is simply the spelling /OPT:ICF discarded. Needs a body test, not a source edit."
   },
   {
    "target": "??1String@@UAA@XZ",
@@ -202,7 +222,9 @@
     "fn_82596300",
     "fn_825F6848"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "?sOverlapped@XboxMultipleItemsPurchaser@@0U_XOVERLAPPED@@A",
@@ -217,7 +239,9 @@
    "charged_functions": [
     "?Initiate@XboxMultipleItemsPurchaser@@UAAXXZ"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "same_identifier_other_scope",
+   "note": ""
   },
   {
    "target": "?sFmDeleting@FileMerger@@2PAVObject@Hmx@@A",
@@ -232,7 +256,9 @@
    "charged_functions": [
     "??1FileMerger@@UAA@XZ"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "same_qualified_name",
+   "note": ""
   },
   {
    "target": "OnlyReturns",
@@ -247,7 +273,9 @@
    "charged_functions": [
     "??0SkeletonFrame@@QAA@XZ"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??_B?5??SetType@RndCamAnim@@UAAXVSymbol@@@Z@55",
@@ -262,7 +290,9 @@
    "charged_functions": [
     "fn_826EF510"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "?gRevs@?1??Load@ThreeDSound@@UAAXAAVBinStream@@@Z@4QBGB",
@@ -277,7 +307,9 @@
    "charged_functions": [
     "?Load@ThreeDSound@@UAAXAAVBinStream@@@Z"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "?sUseSubtitles@MoviePanel@@1_NA",
@@ -292,7 +324,9 @@
    "charged_functions": [
     "?Load@MoviePanel@@UAAXXZ"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "same_qualified_name",
+   "note": ""
   },
   {
    "target": "?sSaveVer@DataArraySongInfo@@0HA",
@@ -307,7 +341,9 @@
    "charged_functions": [
     "?Save@DataArraySongInfo@@UBAXAAVBinStream@@@Z"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "same_qualified_name",
+   "note": ""
   },
   {
    "target": "?sJointParents@BaseSkeleton@@2QBW4SkeletonJoint@@B",
@@ -322,7 +358,9 @@
    "charged_functions": [
     "?MirrorJoint@BaseSkeleton@@SA?AW4SkeletonJoint@@W42@@Z"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??__FgConditional@@YAXXZ",
@@ -337,7 +375,9 @@
    "charged_functions": [
     "??__EgConditional@@YAXXZ"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "?sEnviron@Spotlight@@1PAVRndEnviron@@A",
@@ -352,7 +392,9 @@
    "charged_functions": [
     "?Init@Spotlight@@SAXXZ"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "same_qualified_name",
+   "note": ""
   },
   {
    "target": "?gShaderParticles@@3VRndShaderParticles@@A",
@@ -367,7 +409,9 @@
    "charged_functions": [
     "??__FgShaderSimple@@YAXXZ"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "?gShaderMultimesh@@3VRndShaderMultimesh@@A",
@@ -382,7 +426,9 @@
    "charged_functions": [
     "??__FgShaderParticles@@YAXXZ"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "?gShaderStandard@@3VRndShaderStandard@@A",
@@ -397,7 +443,9 @@
    "charged_functions": [
     "??__FgShaderMultimesh@@YAXXZ"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "?gShaderPostProc@@3VRndShaderPostProc@@A",
@@ -412,7 +460,9 @@
    "charged_functions": [
     "??__FgShaderStandard@@YAXXZ"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "?gShaderDrawRect@@3VRndShaderDrawRect@@A",
@@ -427,7 +477,9 @@
    "charged_functions": [
     "??__FgShaderPostProc@@YAXXZ"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "?gShaderUnwrapUV@@3VRndShaderUnwrapUV@@A",
@@ -442,7 +494,9 @@
    "charged_functions": [
     "??__FgShaderDrawRect@@YAXXZ"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "?gShaderVelocity@@3VRndShaderVelocity@@A",
@@ -457,7 +511,9 @@
    "charged_functions": [
     "??__FgShaderUnwrapUV@@YAXXZ"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "?gShaderVelocityCamera@@3VRndShaderVelocityCamera@@A",
@@ -472,7 +528,9 @@
    "charged_functions": [
     "??__FgShaderVelocity@@YAXXZ"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "?gShaderDepthVolume@@3VRndShaderDepthVolume@@A",
@@ -487,7 +545,9 @@
    "charged_functions": [
     "??__FgShaderVelocityCamera@@YAXXZ"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "?gShaderFur@@3VRndShaderFur@@A",
@@ -502,7 +562,9 @@
    "charged_functions": [
     "??__FgShaderDepthVolume@@YAXXZ"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "?gShaderSyncTrack@@3VRndShaderSyncTrack@@A",
@@ -517,7 +579,9 @@
    "charged_functions": [
     "??__FgShaderFur@@YAXXZ"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "?OnGetOccluded@CamShot@@IAA?AVDataNode@@PAVDataArray@@@Z",
@@ -532,7 +596,9 @@
    "charged_functions": [
     "?Handle@HamDirector@@UAA?AVDataNode@@PAVDataArray@@_N@Z"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "merged_82975658",
@@ -547,7 +613,9 @@
    "charged_functions": [
     "?Handle@PlaylistHeaderNode@@UAA?AVDataNode@@PAVDataArray@@_N@Z"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??$?5VTransformArea@@@@YAAAVBinStream@@AAVBinStreamRev@@AAV?$ObjVector@VTransformArea@@@@@Z",
@@ -562,7 +630,9 @@
    "charged_functions": [
     "?Load@HamCamTransform@@UAAXAAVBinStream@@@Z"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "?Poll@UILabel@@UAAXXZ",
@@ -577,7 +647,9 @@
    "charged_functions": [
     "?Poll@HamLabel@@UAAXXZ"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "same_identifier_other_scope",
+   "note": ""
   },
   {
    "target": "?DrawHighlightMat@RndShaderMgr@@UAAPAVRndMat@@XZ",
@@ -592,7 +664,9 @@
    "charged_functions": [
     "??0SampleInst360@@QAA@PAVSynthSample360@@_NHH@Z"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "merged_Returns1",
@@ -607,7 +681,9 @@
    "charged_functions": [
     "?CheckHueConverge@NgPostProc@@IAAXXZ"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??AVector3@@QBAABMH@Z",
@@ -622,7 +698,9 @@
    "charged_functions": [
     "?OnGetLocalPosIndex@RndTransformable@@AAA?AVDataNode@@PBVDataArray@@@Z"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "same_qualified_name",
+   "note": ""
   },
   {
    "target": "merged_SetObjConcrete",
@@ -637,7 +715,9 @@
    "charged_functions": [
     "?Copy@FxSend@@UAAXPBVObject@Hmx@@W4CopyType@23@@Z"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "?gathering@CUgtFilter@NUISPEECH@@QAA_NXZ",
@@ -652,7 +732,9 @@
    "charged_functions": [
     "?ScrollToIndex@HamNavList@@QAAXHH@Z"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "?Style@UILabel@@QBAABV0RndText@@H@Z",
@@ -667,7 +749,9 @@
    "charged_functions": [
     "?GetLabelTotalAlpha@HamListRibbon@@ABAMXZ"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "same_qualified_name",
+   "note": ""
   },
   {
    "target": "??1HamLabel@@UAA@XZ",
@@ -682,7 +766,9 @@
    "charged_functions": [
     "??_DAppLabel@@QAAXXZ"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??1?$vector@UNode@?$ObjPtrVec@VRndTex@@VObjectDir@@@@V?$StlNodeAlloc@UNode@?$ObjPtrVec@VRndTex@@VObjectDir@@@@@stlpmtx_std@@@stlpmtx_std@@QAA@XZ",
@@ -697,7 +783,9 @@
    "charged_functions": [
     "fn_82E0447C"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "same_identifier_other_scope",
+   "note": ""
   },
   {
    "target": "??1ObjRef@@UAA@XZ",
@@ -712,7 +800,9 @@
    "charged_functions": [
     "fn_82802FFC"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??1?$_List_base@UPresetOverride@WorldDir@@V?$StlNodeAlloc@UPresetOverride@WorldDir@@@stlpmtx_std@@@stlpmtx_std@@QAA@XZ",
@@ -727,7 +817,9 @@
    "charged_functions": [
     "fn_8280891C"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "same_identifier_other_scope",
+   "note": ""
   },
   {
    "target": "??3UIListCustom@@SAXPAX@Z",
@@ -742,7 +834,9 @@
    "charged_functions": [
     "fn_8278B368"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??1Message@@UAA@XZ",
@@ -757,7 +851,9 @@
    "charged_functions": [
     "fn_8278BDE8"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??3DataArray@@SAXPAX@Z",
@@ -772,7 +868,9 @@
    "charged_functions": [
     "fn_82445FB0"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??3FlowNode@@SAXPAX@Z",
@@ -787,7 +885,9 @@
    "charged_functions": [
     "fn_823EDD8C"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??3FlowTimer@@SAXPAX@Z",
@@ -802,7 +902,9 @@
    "charged_functions": [
     "fn_823EE5A4"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??1?$vector@VVector2@@V?$StlNodeAlloc@VVector2@@@stlpmtx_std@@@stlpmtx_std@@QAA@XZ",
@@ -817,7 +919,9 @@
    "charged_functions": [
     "fn_826D816C"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??1String@@UAA@XZ",
@@ -832,7 +936,9 @@
    "charged_functions": [
     "fn_82848750"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??1Node@?$ObjPtrVec@VRndEnviron@@VObjectDir@@@@UAA@XZ",
@@ -847,7 +953,9 @@
    "charged_functions": [
     "fn_8284A6AC"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "same_identifier_other_scope",
+   "note": ""
   },
   {
    "target": "??1?$ObjPtr@VWorldInstance@@@@UAA@XZ",
@@ -862,7 +970,9 @@
    "charged_functions": [
     "fn_82855248"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??1?$pair@$$CBVString@@I@stlpmtx_std@@QAA@XZ",
@@ -877,7 +987,9 @@
    "charged_functions": [
     "fn_82590924"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??1?$pair@$$CBVString@@I@stlpmtx_std@@QAA@XZ",
@@ -892,7 +1004,9 @@
    "charged_functions": [
     "fn_82596378"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??1MessageTimer@@QAA@XZ",
@@ -907,7 +1021,9 @@
    "charged_functions": [
     "fn_825978CC"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??1CompareMoveVariantName@@QAA@XZ",
@@ -922,7 +1038,9 @@
    "charged_functions": [
     "fn_825979B4"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??1CompareMoveVariantName@@QAA@XZ",
@@ -937,7 +1055,9 @@
    "charged_functions": [
     "fn_826572B8"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??3FxSendDistortion@@SAXPAX@Z",
@@ -952,7 +1072,9 @@
    "charged_functions": [
     "fn_82E2B958"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??3FxSendChorus@@SAXPAX@Z",
@@ -967,7 +1089,9 @@
    "charged_functions": [
     "fn_82E2BB48"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??3FxSendEQ@@SAXPAX@Z",
@@ -982,7 +1106,9 @@
    "charged_functions": [
     "fn_82E2BD38"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??3FxSendMeterEffect@@SAXPAX@Z",
@@ -997,7 +1123,9 @@
    "charged_functions": [
     "fn_82E2BF28"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??1Object@Hmx@@UAA@XZ",
@@ -1012,7 +1140,9 @@
    "charged_functions": [
     "fn_826E03BC"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??1BaseMaterial@@UAA@XZ",
@@ -1027,7 +1157,9 @@
    "charged_functions": [
     "fn_826CBCF4"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??1?$ObjRefConcrete@VRndAnimatable@@VObjectDir@@@@UAA@XZ",
@@ -1042,7 +1174,9 @@
    "charged_functions": [
     "fn_8264D64C"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??3@YAXPAX@Z",
@@ -1057,7 +1191,9 @@
    "charged_functions": [
     "fn_8274BD00"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??3@YAXPAX@Z",
@@ -1072,7 +1208,9 @@
    "charged_functions": [
     "fn_8274BD78"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??1SeqInst@@UAA@XZ",
@@ -1087,7 +1225,9 @@
    "charged_functions": [
     "fn_8274C33C"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??1MemDoTempAllocations@@QAA@XZ",
@@ -1102,7 +1242,9 @@
    "charged_functions": [
     "fn_82693FAC"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??3FxSendFlanger@@SAXPAX@Z",
@@ -1117,7 +1259,9 @@
    "charged_functions": [
     "fn_82736240"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??1Object@Hmx@@UAA@XZ",
@@ -1132,7 +1276,9 @@
    "charged_functions": [
     "fn_82974554"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??1?$Keys@UWeight@@U1@@@QAA@XZ",
@@ -1147,7 +1293,9 @@
    "charged_functions": [
     "fn_82717C28"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??1FxSendSynapse@@UAA@XZ",
@@ -1162,7 +1310,9 @@
    "charged_functions": [
     "fn_82E33E2C"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??3@YAXPAX@Z",
@@ -1177,7 +1327,9 @@
    "charged_functions": [
     "fn_828C34BC"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??1Object@Hmx@@UAA@XZ",
@@ -1192,7 +1344,9 @@
    "charged_functions": [
     "fn_8279AFAC"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??1ChallengeSort@@UAA@XZ",
@@ -1207,7 +1361,9 @@
    "charged_functions": [
     "fn_829125C8"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??1Loader@@UAA@XZ",
@@ -1222,7 +1378,9 @@
    "charged_functions": [
     "fn_827D18A0"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??1MemDoTempAllocations@@QAA@XZ",
@@ -1237,7 +1395,9 @@
    "charged_functions": [
     "fn_827CCD24"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??1String@@UAA@XZ",
@@ -1252,7 +1412,9 @@
    "charged_functions": [
     "fn_828A1BD8"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??1CompareMoveVariantName@@QAA@XZ",
@@ -1267,7 +1429,9 @@
    "charged_functions": [
     "fn_82549948"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??1Object@Hmx@@UAA@XZ",
@@ -1282,7 +1446,9 @@
    "charged_functions": [
     "fn_8254BAC4"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??1UILabel@@UAA@XZ",
@@ -1297,7 +1463,9 @@
    "charged_functions": [
     "fn_82518738"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??1String@@UAA@XZ",
@@ -1312,7 +1480,9 @@
    "charged_functions": [
     "fn_825CE598"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??1String@@UAA@XZ",
@@ -1327,7 +1497,9 @@
    "charged_functions": [
     "fn_827B3F80"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??3@YAXPAX@Z",
@@ -1342,7 +1514,9 @@
    "charged_functions": [
     "fn_82DEAEC0"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??3SkeletonViz@@SAXPAX@Z",
@@ -1357,7 +1531,9 @@
    "charged_functions": [
     "fn_82DEB534"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "?PhysicalFreeTracked@@YAXPAXPBDH1@Z",
@@ -1372,7 +1548,9 @@
    "charged_functions": [
     "?SampleFree@@YAXPAXPBDH1@Z"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??_B?BD@??Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@5BD@",
@@ -1387,7 +1565,9 @@
    "charged_functions": [
     "?Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "?gDefaultHoldMs@?A0x831dd776@@3MA",
@@ -1402,7 +1582,9 @@
    "charged_functions": [
     "?Init@JoypadClient@@AAAXXZ"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "same_identifier_other_scope",
+   "note": ""
   },
   {
    "target": "?gDefaultRepeatMs@?A0x831dd776@@3MA",
@@ -1417,7 +1599,9 @@
    "charged_functions": [
     "?Init@JoypadClient@@AAAXXZ"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "same_identifier_other_scope",
+   "note": ""
   },
   {
    "target": "??_B?BD@??Text@CampaignMqCrewProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@5BD@",
@@ -1432,7 +1616,9 @@
    "charged_functions": [
     "?Text@CampaignMqCrewProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??_B?5???$PropSync@M@@YA_NAAV?$Key@M@@AAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@55",
@@ -1447,7 +1633,9 @@
    "charged_functions": [
     "??$PropSync@M@@YA_NAAV?$Key@M@@AAVDataNode@@PAVDataArray@@HW4PropOp@@@Z"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??_B?CA@??Insert@?$KeylessHash@PBDUEntry@ObjectDir@@@@QAAPAUEntry@ObjectDir@@ABU23@@Z@5CA@",
@@ -1462,7 +1650,9 @@
    "charged_functions": [
     "?Insert@?$KeylessHash@PBDUEntry@ObjectDir@@@@QAAPAUEntry@ObjectDir@@ABU23@@Z"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "gImpostorTex",
@@ -1477,7 +1667,9 @@
    "charged_functions": [
     "??0WorldCrowd@@IAA@XZ"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??_B?CA@??Insert@?$KeylessHash@PBDPBD@@QAAPAPBDABQBD@Z@5CA@",
@@ -1492,7 +1684,9 @@
    "charged_functions": [
     "?Insert@?$KeylessHash@PBDPBD@@QAAPAPBDABQBD@Z"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??_B?CA@??Insert@?$KeylessHash@PAXPAVAllocInfo@@@@QAAPAPAVAllocInfo@@ABQAV2@@Z@5CA@",
@@ -1507,7 +1701,9 @@
    "charged_functions": [
     "?Insert@?$KeylessHash@PAXPAVAllocInfo@@@@QAAPAPAVAllocInfo@@ABQAV2@@Z"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??_B?BB@??Text@SongSelectPlaylistProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@5BB@",
@@ -1522,7 +1718,9 @@
    "charged_functions": [
     "?Text@SongSelectPlaylistProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??_B?BC@??OnCheatInvoked@Automator@@AAA?AVDataNode@@PBVDataArray@@@Z@5BC@",
@@ -1537,7 +1735,9 @@
    "charged_functions": [
     "?OnCheatInvoked@Automator@@AAA?AVDataNode@@PBVDataArray@@@Z"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "gImpostorTex",
@@ -1552,7 +1752,9 @@
    "charged_functions": [
     "??0WorldCrowd@@IAA@XZ"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "gImpostorTex",
@@ -1567,7 +1769,9 @@
    "charged_functions": [
     "??0WorldCrowd@@IAA@XZ"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "?gMachineName@?A0xbd0b8fef@@3PADA",
@@ -1582,7 +1786,9 @@
    "charged_functions": [
     "?HolmesClientInitOpcode@@YA_N_N@Z"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??0String@@QAA@PBD@Z",
@@ -1597,7 +1803,9 @@
    "charged_functions": [
     "?PropSyncSubDirs@@YA_NAAV?$vector@V?$ObjDirPtr@VObjectDir@@@@V?$StlNodeAlloc@V?$ObjDirPtr@VObjectDir@@@@@stlpmtx_std@@@stlpmtx_std@@AAVDataNode@@PAVDataArray@@HW4PropOp@@@Z"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "?Notify@Debug@@QAAXPBD@Z",
@@ -1612,7 +1820,9 @@
    "charged_functions": [
     "?LoadRoutineBuilderData@HamDirector@@QAAXAAV?$set@PBVMoveVariant@@U?$less@PBVMoveVariant@@@stlpmtx_std@@V?$StlNodeAlloc@PBVMoveVariant@@@3@@stlpmtx_std@@_N@Z"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "?WaitForResponse@?A0x49b544a7@@YAXW4Protocol@Holmes@@@Z",
@@ -1627,7 +1837,9 @@
    "charged_functions": [
     "?HolmesClientInitOpcode@@YA_N_N@Z"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "?SongBlock@SongMetadata@@QBAPAVSongInfo@@XZ",
@@ -1642,7 +1854,9 @@
    "charged_functions": [
     "?SongAudioData@HamSongMgr@@UBAPAVSongInfo@@H@Z"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "same_qualified_name",
+   "note": ""
   },
   {
    "target": "OnlyReturns",
@@ -1657,7 +1871,9 @@
    "charged_functions": [
     "?SystemInit@@YAXPBD@Z"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "?CacheMgrInit@@YAXXZ",
@@ -1672,7 +1888,9 @@
    "charged_functions": [
     "?SystemInit@@YAXPBD@Z"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "?NetCacheMgrInit@@YAXXZ",
@@ -1687,7 +1905,9 @@
    "charged_functions": [
     "?SystemInit@@YAXPBD@Z"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??$__destroy_range@PAV?$vector@PAUUnlockable@?A0x9d17dd81@@V?$StlNodeAlloc@PAUUnlockable@?A0x9d17dd81@@@stlpmtx_std@@@stlpmtx_std@@V12@@stlpmtx_std@@YAXPAV?$vector@PAUUnlockable@?A0x9d17dd81@@V?$StlNodeAlloc@PAUUnlockable@?A0x9d17dd81@@@stlpmtx_std@@@0@00@Z",
@@ -1702,7 +1922,9 @@
    "charged_functions": [
     "?_M_erase@?$vector@V?$vector@PAUUnlockable@?A0xf8e4b4b5@@V?$StlNodeAlloc@PAUUnlockable@?A0xf8e4b4b5@@@stlpmtx_std@@@stlpmtx_std@@V?$StlNodeAlloc@V?$vector@PAUUnlockable@?A0xf8e4b4b5@@V?$StlNodeAlloc@PAUUnlockable@?A0xf8e4b4b5@@@stlpmtx_std@@@stlpmtx_std@@@2@@stlpmtx_std@@IAAPAV?$vector@PAUUnlockable@?A0xf8e4b4b5@@V?$StlNodeAlloc@PAUUnlockable@?A0xf8e4b4b5@@@stlpmtx_std@@@2@PAV32@0ABU__true_type@2@@Z"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "?Terminate@VirtualKeyboard@@QAAXXZ",
@@ -1717,7 +1939,9 @@
    "charged_functions": [
     "?SystemTerminate@@YAXXZ"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "same_identifier_other_scope",
+   "note": ""
   },
   {
    "target": "OnlyReturns",
@@ -1732,7 +1956,9 @@
    "charged_functions": [
     "?SystemTerminate@@YAXXZ"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "OnlyReturns",
@@ -1747,7 +1973,9 @@
    "charged_functions": [
     "??0?$vector@PAUUnlockable@?A0xf8e4b4b5@@V?$StlNodeAlloc@PAUUnlockable@?A0xf8e4b4b5@@@stlpmtx_std@@@stlpmtx_std@@QAA@ABV01@@Z"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   },
   {
    "target": "??1HolmesInput@@UAA@XZ",
@@ -1762,7 +1990,9 @@
    "charged_functions": [
     "??__FgInput@?A0x49b544a7@@YAXXZ"
    ],
-   "two_cycle": false
+   "two_cycle": false,
+   "subclass": "different_identifier",
+   "note": ""
   }
  ]
 }
