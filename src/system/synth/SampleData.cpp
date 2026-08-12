@@ -144,11 +144,11 @@ int SampleData::SizeAs(Format fmt) const {
         case 3:
             MILO_NOTIFY("don't know size as XMA");
             return mNumSamples / 5;
-        case 6: {
+        case 7: {
             int iVar2 = mNumChannels * mNumSamples;
             return 0x60 - (int)((float)(long long)(iVar2 * 2) * -0.29411763f);
         }
-        case 7: {
+        case 6: {
             int iVar2 = mNumChannels * mNumSamples;
             return 0x60 - (int)((float)(long long)(iVar2 * 2) * -0.29411763f);
         }
