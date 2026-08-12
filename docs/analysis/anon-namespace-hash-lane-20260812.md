@@ -114,13 +114,18 @@ Fallbacks, in order, with their firing counts on the current tree:
 
 | rule | count | what it is |
 |---|--:|---|
-| `template` | 755 | exact name in the paired retail object |
+| `template` | 756 | exact name in the paired retail object |
 | `template_stripped` | 333 | same, under a stripped `__ehfuncinfo$`/`__unwindtable$` decoration |
 | `token` | 599 | the identifier immediately before `?A0x`, from the paired object |
 | `token_global` | 41 | that identifier, from anywhere in the retail tree |
 | `template_global` | 19 | exact name anywhere in the retail tree |
-| `template_ordinal` | 2 | exact name with the lexical-scope ordinal blanked |
+| `template_ordinal` | 1 | exact name with the lexical-scope ordinal blanked |
 | `majority` | 522 | the object's dominant target hash |
+
+(Counts on the settled tree. Before `obj_atexit_scope_patcher` re-fired behind
+this pass they were `template` 755 / `template_ordinal` 2: its `?5??`→`?4??`
+rename on HolmesClient's `??__F_dw@…EndCmd` turned one ordinal-blanked match
+into an exact one.)
 
 Only the `template*` rules are retail stating the answer. The rest exist for
 symbols we emit and retail never did — STL instantiations it inlined, EH tables
@@ -233,11 +238,37 @@ namespace with no hash at all**:
 | `system/os/Joypad_Xinput` | 6 | `?gXboxDeadzone@?A0xf503845b@@3MA` | `?gXboxDeadzone@?A@@3MA` |
 
 `?A@@` is still an anonymous namespace — all three of our sources already use
-`namespace { … }`, so this is not a source-shape difference. Something about
-how retail compiled these three TUs made cl omit the signature. A plausible
-mechanism, untested here, is that the hash comes from `mspdb80.dll` at all:
-a TU compiled in a configuration where `SigForPbCb` is unavailable has no
-signature to emit.
+`namespace { … }`, so this is not a source-shape difference in the obvious
+sense.
+
+**And it is per SYMBOL, not per TU, per file or per namespace block.** That is
+the constraint any explanation has to satisfy. `Joypad_Xinput.cpp` declares
+four things in ONE anonymous namespace:
+
+```cpp
+namespace {
+    XINPUT_CAPABILITIES gCaps[kNumJoypads];
+    float gXboxDeadzone;
+    bool gCapsValid[kNumJoypads];
+    CriticalSection gCritSection;
+}
+```
+
+and retail's object spells that one namespace two ways: `?gCaps@?A0xf503845b@@`,
+`?gCapsValid@?A0xf503845b@@` and the two `gCritSection` init/term thunks under
+the hash, `?gXboxDeadzone@?A@@3MA` without it. `Joypad_Xbox.obj` is the same
+shape — six hashed names, one hashless. Only `rnddx9/Rnd.obj` is uniformly
+hashless, and it has just the one anonymous-namespace symbol.
+
+So a compiler flag, a different cl revision, `/TC` vs `/TP`, a nested
+namespace, header-vs-cpp placement and an unavailable path are all ruled out:
+none of them can split one block per member. What the three hashless symbols
+have in common is that all three are data and none is a function — but `gCaps`
+and `gCapsValid` are data in the same block and get the hash, so that is not
+the discriminator either. **Cause unknown.** The hypothesis worth testing first
+is the cheapest one and the only one whose answer would be a *source* fix:
+that retail wrote these as file-scope `static` outside any anonymous namespace,
+and MSVC spells a file-scope static's scope `?A@@` under some condition.
 
 **This pass cannot reach it**, and the reason is structural rather than a
 missing rule: every rewrite it makes is 8 hex characters over 8 hex characters,
