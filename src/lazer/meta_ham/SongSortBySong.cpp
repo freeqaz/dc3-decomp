@@ -85,7 +85,7 @@ SongSortBySong::NewHeaderNode(NavListItemNode *n1, NavListItemNode *n2) const {
     if (*title1 == *title2) {
         sprintf(sortLabel, "%s", letter1);
     } else {
-        sprintf(sortLabel, "%s-%s", letter1, letter2);
+        sprintf(sortLabel, "%s - %s", letter1, letter2);
     }
     Symbol sortSym(sortLabel);
 

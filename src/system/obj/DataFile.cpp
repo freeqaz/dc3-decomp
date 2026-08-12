@@ -25,7 +25,7 @@
 
 static DataArray *gArray = nullptr;
 static int gNode = 0;
-static BinStream *gBinStream = nullptr;
+static BinStream *gStream = nullptr;
 static int gOpenArray = 0;
 static bool gCachingFile = false;
 static bool gReadingFile = false;
@@ -441,13 +441,13 @@ DataArray *ParseArray() {
 }
 
 int DataInput(void *v, int x) {
-    if (gBinStream->Fail()) {
+    if (gStream->Fail()) {
         return 0;
-    } else if (gBinStream->Eof()) {
+    } else if (gStream->Eof()) {
         return 0;
     } else {
-        gBinStream->Read(v, x);
-        MILO_ASSERT(!gBinStream->Fail(), 0x260);
+        gStream->Read(v, x);
+        MILO_ASSERT(!gStream->Fail(), 0x260);
         return x;
     }
 }
@@ -547,7 +547,7 @@ DataArray *DataReadFile(const char *file, bool warn) {
 
 DataArray *DataReadStream(BinStream *bs) {
     CritSecTracker tracker(&gDataReadCrit);
-    gBinStream = bs;
+    gStream = bs;
     gFile = bs->Name();
     gDataLine = 1;
     gOpenArray = 0;
@@ -609,7 +609,7 @@ DataArray *ReadEmbeddedFile(const char *file, bool b) {
     Symbol localfile = gFile;
     int dataline = gDataLine;
     int node = gNode;
-    BinStream *bs = gBinStream;
+    BinStream *bs = gStream;
     int openArr = gOpenArray;
     DataArray *arr = gArray;
 #ifdef HX_NATIVE
@@ -631,7 +631,7 @@ DataArray *ReadEmbeddedFile(const char *file, bool b) {
         );
     }
     gNode = node;
-    gBinStream = bs;
+    gStream = bs;
     gDataLine = dataline;
     gFile = localfile;
     gArray = arr;

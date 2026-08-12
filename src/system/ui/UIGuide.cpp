@@ -33,7 +33,7 @@ END_LOADS
 
 BEGIN_PROPSYNCS(UIGuide)
     SYNC_PROP(pos, mPos)
-    SYNC_PROP(type, (int &)mType)
+    SYNC_PROP(direction, (int &)mType)
     SYNC_SUPERCLASS(Hmx::Object)
 END_PROPSYNCS
 

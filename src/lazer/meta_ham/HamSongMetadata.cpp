@@ -13,8 +13,7 @@
 #include "utl/BinStream.h"
 #include "utl\Symbol.h"
 
-#define MIN_SONG_VERSION 0
-#define MAX_SONG_VERSION 99
+enum { MIN_SONG_VERSION = 0, MAX_SONG_VERSION = 99 };
 
 int HamSongMetadata::sHamSaveVer = 14;
 

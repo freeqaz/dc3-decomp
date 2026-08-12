@@ -1545,7 +1545,7 @@ DataNode RndMesh::OnUnitizeNormals(const DataArray *da) {
 DataNode RndMesh::OnConfigureMesh(const DataArray *da) {
     static Symbol configurable_mesh("configurable_mesh");
     if (Type() != configurable_mesh)
-        MILO_NOTIFY("Can't configure nonconfigurable mesh %s\n", Name());
+        MILO_NOTIFY("Can't configure nonconfigurable mesh %s", Name());
     else {
         static Symbol left("left");
         static Symbol right("right");

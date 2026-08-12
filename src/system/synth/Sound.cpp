@@ -304,7 +304,7 @@ void Sound::Play(
                 }
             }
         } else {
-            MILO_LOG("Sound::Play : '%s' **** NOT FOUND\n", PathName(this));
+            MILO_LOG("Sound::Play : '%s' **** NOT FOUND ***\n", PathName(this));
         }
         TheSynth->SendToPlayHandlers(this);
     }

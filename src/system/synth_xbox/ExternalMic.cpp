@@ -91,7 +91,7 @@ void ExternalMic::dataReady(unsigned long, unsigned long, _XOVERLAPPED *pOverlap
 long ExternalMic::processGain(unsigned long deviceId) {
     float gainReq = ExternalMicClientMgr::GetRequiredGain(mDeviceId);
     if (gainReq != mLastGain) {
-        MILO_ASSERT(0.0f <= gainReq && gainReq <= 1.0f, 0x26f);
+        MILO_ASSERT((0.0f <= gainReq) && (gainReq <= 1.0f), 0x26f);
         float gain = (mGainRight - mGainLeft) * gainReq + mGainLeft;
         DWORD result = XMicSetGain(deviceId, gain, 0);
         mLastGain = gainReq;

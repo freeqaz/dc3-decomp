@@ -301,10 +301,10 @@ void StorePanel::HandleNetCacheMgrFailure() {
     failTy = TheNetCacheMgr->GetFailType();
     switch (failTy) {
     case kNCMFT_StoreServer:
-    case kNCMFT_NoSpace:
+    case kNCMFT_ClientError:
         MILO_NOTIFY("Failure %d in NetCacheMgr.\n", failTy);
         break;
-    case kNCMFT_StorageDeviceMissing:
+    case kNCMFT_NoEthernetCable:
         err = kStoreErrorNoMetadata;
         break;
     default:
@@ -333,9 +333,9 @@ void StorePanel::HandleNetCacheLoaderFailure(int failType) {
         err = (StoreError)((!signedIn ^ 1) + kStoreErrorCacheNoSpace);
         break;
     }
-    case kNCMFT_NoSpace:
+    case kNCMFT_ClientError:
         return;
-    case kNCMFT_StorageDeviceMissing:
+    case kNCMFT_NoEthernetCable:
         goto no_metadata;
     default:
         MILO_NOTIFY("Unknown failure %d in a net cache loader!", failType);

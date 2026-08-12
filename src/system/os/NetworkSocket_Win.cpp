@@ -328,7 +328,7 @@ String NetworkSocket::GetHostName() {
     buf[0xff] = 0;
     DWORD buf_sz = 0x100;
     DmGetXboxName(buf, &buf_sz);
-    MILO_ASSERT(buf[buf_sz - 1] == '\0', 0x43);
+    MILO_ASSERT(buf[buf_sz-1] == '\0', 0x43);
     return buf;
 }
 

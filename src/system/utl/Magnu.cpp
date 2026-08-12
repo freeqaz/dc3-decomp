@@ -30,7 +30,7 @@ DataNode AddToken(DataArray *arr) {
 }
 
 DataNode EditToken(DataArray *arr) {
-    MILO_NOTIFY("Magnu add token only supported on PC");
+    MILO_NOTIFY("Magnu edit token only supported on PC");
     return 1;
 }
 

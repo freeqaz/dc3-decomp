@@ -56,7 +56,7 @@ void SaveLoadManager::HandleEventResponse(HamProfile *profile, int choiceIdx) {
     mStateAtSelectStart = kS_Idle;
     if (start != mState) {
         MILO_NOTIFY(
-            "HandleEventResponse: expected state %d but am now in state %d\n",
+            "States changed between UIComponentSelectMsg (%d) and UIComponentSelectDoneMsg (%d).",
             start,
             mState
         );

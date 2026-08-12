@@ -196,13 +196,13 @@ void MainMenuPanel::HandleNetCacheMgrFailure() {
     switch (failType) {
     case kNCMFT_StoreServer:
         break;
-    case kNCMFT_NoSpace:
-        MILO_LOG("[MainMenuPanel::HandleNetCacheMgrFailure] kNCMFT_NoSpace.\n");
+    case kNCMFT_ClientError:
+        MILO_LOG("[MainMenuPanel::HandleNetCacheMgrFailure] kNCMFT_ClientError.\n");
         break;
-    case kNCMFT_StorageDeviceMissing:
+    case kNCMFT_NoEthernetCable:
         MILO_LOG(
             "[MainMenuPanel::HandleNetCacheMgrFailure] "
-            "kNCMFT_StorageDeviceMissing.\n"
+            "kNCMFT_NoEthernetCable.\n"
         );
         break;
     default:
@@ -220,12 +220,12 @@ void MainMenuPanel::HandleNetCacheLoaderFailure(int failType) {
     case kNCMFT_StoreServer:
         MILO_LOG("[MainMenuPanel::HandleNetCacheLoaderFailure] kNCMFT_StoreServer.\n");
         break;
-    case kNCMFT_NoSpace:
+    case kNCMFT_ClientError:
         break;
-    case kNCMFT_StorageDeviceMissing:
+    case kNCMFT_NoEthernetCable:
         MILO_LOG(
             "[MainMenuPanel::HandleNetCacheLoaderFailure] "
-            "kNCMFT_StorageDeviceMissing.\n"
+            "kNCMFT_NoEthernetCable.\n"
         );
         break;
     default:

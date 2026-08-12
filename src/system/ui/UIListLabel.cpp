@@ -86,7 +86,7 @@ UILabel *UIListLabel::ElementLabel(int display) const {
     if (size == 0)
         return 0;
 
-    MILO_ASSERT((0) <= (display) && (display) < (size), 0x74);
+    MILO_ASSERT((0) <= (display) && (display) < (mElements.size()), 0x74);
     UIListLabelElement *le = dynamic_cast<UIListLabelElement *>(mElements[display]);
     MILO_ASSERT(le, 0x77);
     return le->mLabel;
