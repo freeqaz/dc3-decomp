@@ -1,5 +1,5 @@
 #include "utl\NetLoader_Xbox.h"
-#include "net\HttpGet.h"
+#include "net/HttpGet.h"
 #include "os\Debug.h"
 #include "utl\NetCacheMgr_Xbox.h"
 #include "utl\NetCacheMgr.h"

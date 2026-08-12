@@ -4,7 +4,7 @@
 #include "game\GamePanel.h"
 #include "gesture\BaseSkeleton.h"
 #include "gesture\DepthBuffer3D.h"
-#include "hamobj\FreestyleMoveRecorder.h"
+#include "hamobj/FreestyleMoveRecorder.h"
 #include "hamobj\HamDirector.h"
 #include "hamobj\HamGameData.h"
 #include "hamobj\HamLabel.h"

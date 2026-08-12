@@ -3,7 +3,7 @@
 #include "obj/Task.h"
 #include "rndobj\Anim.h"
 #include "ui\UI.h"
-#include "ui\UILabel.h"
+#include "ui/UILabel.h"
 #include "ui\UITransitionHandler.h"
 #include "utl/BinStream.h"
 #include "utl\Locale.h"
