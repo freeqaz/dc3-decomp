@@ -357,8 +357,9 @@ void CacheMgrXbox::PollDelete() {
         DWORD dw;
         DWORD res = XGetOverlappedResult(&mOverlapped, &dw, false);
         if (res != 0) {
-            if (res != 0x15 && res != 0x456 && res != 0x48F && res != 0x651
-                && XContentGetDeviceState(mCacheIDXbox->DeviceID(), nullptr) != 0) {
+            if (res == 0x15 || res == 0x456 || res == 0x48F || res == 0x651) {
+                SetLastResult(kCache_ErrorStorageDeviceMissing);
+            } else if (XContentGetDeviceState(mCacheIDXbox->DeviceID(), nullptr) != 0) {
                 SetLastResult(kCache_ErrorStorageDeviceMissing);
             } else {
                 MILO_NOTIFY(
