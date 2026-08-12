@@ -1,4 +1,4 @@
-#include "synth_xbox\EnvelopeGenerator.h"
+#include "synth360\EnvelopeGenerator.h"
 #include "math\Decibels.h"
 #include "os\Debug.h"
 #include "xdk\LIBCMT\ppcintrinsics.h"

@@ -1,4 +1,4 @@
-#include "synth_xbox\SampleInst360.h"
+#include "synth360\SampleInst.h"
 #include "synth_xbox\Voice.h"
 #include "synth_xbox\FxSend.h"
 
