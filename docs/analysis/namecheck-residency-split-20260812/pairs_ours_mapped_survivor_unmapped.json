@@ -1,0 +1,92 @@
+[
+  {
+    "target": "OnlyReturns",
+    "base": "?CacheMgrInit@@YAXXZ",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/os/System"
+    ],
+    "target_addr": [],
+    "base_addr": [
+      "0x827ed060"
+    ],
+    "target_obj": "",
+    "base_obj": "utl:CacheMgr.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "OnlyReturns",
+    "base": "?Terminate@Symbol@@SAXXZ",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/os/System"
+    ],
+    "target_addr": [],
+    "base_addr": [
+      "0x827d2db8"
+    ],
+    "target_obj": "",
+    "base_obj": "utl:Symbol.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "merged_82975658",
+    "base": "?Handle@NavListSortNode@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/lazer/meta_ham/PlaylistSortNode"
+    ],
+    "target_addr": [],
+    "base_addr": [
+      "0x82975020"
+    ],
+    "target_obj": "",
+    "base_obj": "meta_ham:NavListNode.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "merged_Returns1",
+    "base": "?ColorXfmEnabled@RndPostProc@@QBA_NXZ",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/PostProc_NG"
+    ],
+    "target_addr": [],
+    "base_addr": [
+      "0x8266b0a8"
+    ],
+    "target_obj": "",
+    "base_obj": "rndobj:PostProc.obj",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "merged_SetObjConcrete",
+    "base": "?SetObj@?$ObjRefConcrete@VFxSend@@VObjectDir@@@@QAAPAVObject@Hmx@@PAV23@@Z",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/synth/FxSend"
+    ],
+    "target_addr": [],
+    "base_addr": [
+      "0x8273ed70"
+    ],
+    "target_obj": "",
+    "base_obj": "synth:Sound.obj",
+    "lanes": [
+      "different_function"
+    ]
+  }
+]

@@ -1,0 +1,563 @@
+[
+  {
+    "target": "??1?$aligned_vector@M@@QAA@XZ",
+    "base": "??1?$vector@MV?$XboxAllocator@M@@@stlpmtx_std@@QAA@XZ",
+    "sites": 4,
+    "functions": 4,
+    "units": [
+      "default/system/synth_xbox/FftIpp"
+    ],
+    "target_addr": [
+      "0x82e4a160"
+    ],
+    "base_addr": [],
+    "target_obj": "synth_xbox:PitchDetector.obj",
+    "base_obj": "",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "?gPhysicalType@?A0x2be09a71@@3PBDB",
+    "base": "?gPhysicalType@?A0x2be09a71@@3PADA",
+    "sites": 7,
+    "functions": 3,
+    "units": [
+      "default/Memory_Xbox"
+    ],
+    "target_addr": [
+      "0x82f5e21c"
+    ],
+    "base_addr": [],
+    "target_obj": "Memory_Xbox.obj",
+    "base_obj": "",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "?sVerboseNotify@Locale@@1_NA",
+    "base": "?sVerboseNotify@Locale@@2_NA",
+    "sites": 6,
+    "functions": 3,
+    "units": [
+      "default/system/ui/UI",
+      "default/system/utl/Locale"
+    ],
+    "target_addr": [
+      "0x830e5e4c"
+    ],
+    "base_addr": [],
+    "target_obj": "utl:Locale.obj",
+    "base_obj": "",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "?sInstance@CheatProvider@@0PAV1@A",
+    "base": "?sInstance@CheatProvider@@2PAV1@A",
+    "sites": 7,
+    "functions": 2,
+    "units": [
+      "default/system/ui/CheatProvider"
+    ],
+    "target_addr": [
+      "0x830e4830"
+    ],
+    "base_addr": [],
+    "target_obj": "ui:CheatProvider.obj",
+    "base_obj": "",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "?kArkBlockSize@@3HB",
+    "base": "?kArkBlockSize@@3HA",
+    "sites": 6,
+    "functions": 2,
+    "units": [
+      "default/system/os/Archive",
+      "default/system/os/HDCache"
+    ],
+    "target_addr": [
+      "0x82082928"
+    ],
+    "base_addr": [],
+    "target_obj": "os:BlockMgr.obj",
+    "base_obj": "",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "?DeleteChecksum@FileStream@@AAAXXZ",
+    "base": "?DeleteChecksum@BufStream@@QAAXXZ",
+    "sites": 3,
+    "functions": 2,
+    "units": [
+      "default/system/utl/BufStream"
+    ],
+    "target_addr": [
+      "0x827e1170"
+    ],
+    "base_addr": [],
+    "target_obj": "utl:FileStream.obj",
+    "base_obj": "",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??_B?BD@??Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@5BD@",
+    "base": "?$S1@?BH@??Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4IA",
+    "sites": 8,
+    "functions": 1,
+    "units": [
+      "default/lazer/meta_ham/CampaignSongSelectPanel"
+    ],
+    "target_addr": [
+      "0x8311a1ec"
+    ],
+    "base_addr": [],
+    "target_obj": "meta_ham:CampaignSongSelectPanel.obj",
+    "base_obj": "",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "?gDefaultHoldMs@?A0x831dd776@@3MA",
+    "base": "?gDefaultHoldMs@@3MA",
+    "sites": 6,
+    "functions": 1,
+    "units": [
+      "default/system/os/JoypadClient"
+    ],
+    "target_addr": [
+      "0x82f125f0"
+    ],
+    "base_addr": [],
+    "target_obj": "os:JoypadClient.obj",
+    "base_obj": "",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "?gDefaultRepeatMs@?A0x831dd776@@3MA",
+    "base": "?gDefaultRepeatMs@@3MA",
+    "sites": 6,
+    "functions": 1,
+    "units": [
+      "default/system/os/JoypadClient"
+    ],
+    "target_addr": [
+      "0x82f125f4"
+    ],
+    "base_addr": [],
+    "target_obj": "os:JoypadClient.obj",
+    "base_obj": "",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_B?5???$PropSync@M@@YA_NAAV?$Key@M@@AAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@55",
+    "base": "??_B?L@???$PropSync@M@@YA_NAAV?$Key@M@@AAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@5L@",
+    "sites": 5,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/CamAnim"
+    ],
+    "target_addr": [
+      "0x830e025c"
+    ],
+    "base_addr": [],
+    "target_obj": "rndobj:CamAnim.obj",
+    "base_obj": "",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??_B?BD@??Text@CampaignMqCrewProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@5BD@",
+    "base": "?$S1@?BH@??Text@CampaignMqCrewProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4IA",
+    "sites": 5,
+    "functions": 1,
+    "units": [
+      "default/lazer/meta_ham/CampaignMasterQuestCrewSelectPanel"
+    ],
+    "target_addr": [
+      "0x8311a268"
+    ],
+    "base_addr": [],
+    "target_obj": "meta_ham:CampaignMasterQuestCrewSelectPanel.obj",
+    "base_obj": "",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??_B?5??SetType@RndCamAnim@@UAAXVSymbol@@@Z@55",
+    "base": "??_B?L@???$PropSync@M@@YA_NAAV?$Key@M@@AAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@5L@",
+    "sites": 4,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/CamAnim"
+    ],
+    "target_addr": [
+      "0x830e0264"
+    ],
+    "base_addr": [],
+    "target_obj": "rndobj:CamAnim.obj",
+    "base_obj": "",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "?sFmDeleting@FileMerger@@2PAVObject@Hmx@@A",
+    "base": "?sFmDeleting@FileMerger@@2PAV1@A",
+    "sites": 4,
+    "functions": 1,
+    "units": [
+      "default/system/char/FileMerger"
+    ],
+    "target_addr": [
+      "0x82f5ee04"
+    ],
+    "base_addr": [],
+    "target_obj": "char:FileMerger.obj",
+    "base_obj": "",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "?sOverlapped@XboxMultipleItemsPurchaser@@0U_XOVERLAPPED@@A",
+    "base": "?sOverlapped@?6??Initiate@XboxMultipleItemsPurchaser@@UAAXXZ@4U_XOVERLAPPED@@A",
+    "sites": 4,
+    "functions": 1,
+    "units": [
+      "default/system/meta/StorePurchaser"
+    ],
+    "target_addr": [
+      "0x8316b590"
+    ],
+    "base_addr": [],
+    "target_obj": "meta:StorePurchaser.obj",
+    "base_obj": "",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??_B?BB@??Text@SongSelectPlaylistProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@5BB@",
+    "base": "?$S2@?BJ@??Text@SongSelectPlaylistProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4IA",
+    "sites": 3,
+    "functions": 1,
+    "units": [
+      "default/lazer/meta_ham/SongSelectPlaylistPanel"
+    ],
+    "target_addr": [
+      "0x8311a85c"
+    ],
+    "base_addr": [],
+    "target_obj": "meta_ham:SongSelectPlaylistPanel.obj",
+    "base_obj": "",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??_B?BC@??OnCheatInvoked@Automator@@AAA?AVDataNode@@PBVDataArray@@@Z@5BC@",
+    "base": "?$S12@?BF@??OnCheatInvoked@Automator@@AAA?AVDataNode@@PBVDataArray@@@Z@4IA",
+    "sites": 3,
+    "functions": 1,
+    "units": [
+      "default/system/ui/UI"
+    ],
+    "target_addr": [
+      "0x830e3f80"
+    ],
+    "base_addr": [],
+    "target_obj": "ui:UI.obj",
+    "base_obj": "",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??_B?CA@??Insert@?$KeylessHash@PAXPAVAllocInfo@@@@QAAPAPAVAllocInfo@@ABQAV2@@Z@5CA@",
+    "base": "??_B?CK@??Insert@?$KeylessHash@PAXPAVAllocInfo@@@@QAAPAPAVAllocInfo@@ABQAV2@@Z@5CK@",
+    "sites": 3,
+    "functions": 1,
+    "units": [
+      "default/system/utl/MemTracker"
+    ],
+    "target_addr": [
+      "0x830e5a58"
+    ],
+    "base_addr": [],
+    "target_obj": "utl:MemTracker.obj",
+    "base_obj": "",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??_B?CA@??Insert@?$KeylessHash@PBDPBD@@QAAPAPBDABQBD@Z@5CA@",
+    "base": "??_B?CK@??Insert@?$KeylessHash@PBDPBD@@QAAPAPBDABQBD@Z@5CK@",
+    "sites": 3,
+    "functions": 1,
+    "units": [
+      "default/system/utl/Symbol"
+    ],
+    "target_addr": [
+      "0x830e57d4"
+    ],
+    "base_addr": [],
+    "target_obj": "utl:Symbol.obj",
+    "base_obj": "",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??_B?CA@??Insert@?$KeylessHash@PBDUEntry@ObjectDir@@@@QAAPAUEntry@ObjectDir@@ABU23@@Z@5CA@",
+    "base": "??_B?CK@??Insert@?$KeylessHash@PBDUEntry@ObjectDir@@@@QAAPAUEntry@ObjectDir@@ABU23@@Z@5CK@",
+    "sites": 3,
+    "functions": 1,
+    "units": [
+      "default/system/obj/Dir"
+    ],
+    "target_addr": [
+      "0x82f64570"
+    ],
+    "base_addr": [],
+    "target_obj": "obj:Dir.obj",
+    "base_obj": "",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??__FgConditional@@YAXXZ",
+    "base": "??__FgDataArrayConditional@@YAXXZ",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/obj/DataArray"
+    ],
+    "target_addr": [
+      "0x82ee1f78",
+      "0x82ee2178"
+    ],
+    "base_addr": [],
+    "target_obj": "obj:DataArray.obj",
+    "base_obj": "",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "?sEnviron@Spotlight@@1PAVRndEnviron@@A",
+    "base": "?sEnviron@Spotlight@@2PAVRndEnviron@@A",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/world/Spotlight"
+    ],
+    "target_addr": [
+      "0x831169d4"
+    ],
+    "base_addr": [],
+    "target_obj": "world:Spotlight.obj",
+    "base_obj": "",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "?sJointParents@BaseSkeleton@@2QBW4SkeletonJoint@@B",
+    "base": "?gMirrorJoints@@3PAW4SkeletonJoint@@A",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/gesture/BaseSkeleton"
+    ],
+    "target_addr": [
+      "0x8202eec0"
+    ],
+    "base_addr": [],
+    "target_obj": "gesture:BaseSkeleton.obj",
+    "base_obj": "",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "?sSaveVer@DataArraySongInfo@@0HA",
+    "base": "?sSaveVer@DataArraySongInfo@@2HA",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/meta/DataArraySongInfo"
+    ],
+    "target_addr": [
+      "0x82f0f90c"
+    ],
+    "base_addr": [],
+    "target_obj": "meta:DataArraySongInfo.obj",
+    "base_obj": "",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "?sUseSubtitles@MoviePanel@@1_NA",
+    "base": "?sUseSubtitles@MoviePanel@@2_NA",
+    "sites": 2,
+    "functions": 1,
+    "units": [
+      "default/system/meta/MoviePanel"
+    ],
+    "target_addr": [
+      "0x8316b480"
+    ],
+    "base_addr": [],
+    "target_obj": "meta:MoviePanel.obj",
+    "base_obj": "",
+    "lanes": [
+      "different_data"
+    ]
+  },
+  {
+    "target": "??$?5VTransformArea@@@@YAAAVBinStream@@AAVBinStreamRev@@AAV?$ObjVector@VTransformArea@@@@@Z",
+    "base": "??5@YAAAVBinStream@@AAVBinStreamRev@@AAV?$ObjVector@VTransformArea@@@@@Z",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/HamCamTransform"
+    ],
+    "target_addr": [
+      "0x824af8f8"
+    ],
+    "base_addr": [],
+    "target_obj": "hamobj:HamCamTransform.obj",
+    "base_obj": "",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??1HamLabel@@UAA@XZ",
+    "base": "??1AppLabel@@UAA@XZ",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/lazer/meta_ham/MetaPanel"
+    ],
+    "target_addr": [
+      "0x82517e00"
+    ],
+    "base_addr": [],
+    "target_obj": "hamobj:HamLabel.obj",
+    "base_obj": "",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "??1MemDoTempAllocations@@QAA@XZ",
+    "base": "??1MemTemp@@QAA@XZ",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/rndobj/Text"
+    ],
+    "target_addr": [
+      "0x823616b8"
+    ],
+    "base_addr": [],
+    "target_obj": "char:CharClipGroup.obj",
+    "base_obj": "",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "?DrawHighlightMat@RndShaderMgr@@UAAPAVRndMat@@XZ",
+    "base": "?GetDataAddr@SynthSample360@@QBAIXZ",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/synth_xbox/SampleInst360"
+    ],
+    "target_addr": [
+      "0x8261d060"
+    ],
+    "base_addr": [],
+    "target_obj": "rnddx9:ShaderMgr.obj",
+    "base_obj": "",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "?OnGetOccluded@CamShot@@IAA?AVDataNode@@PAVDataArray@@@Z",
+    "base": "?OnSaveFaceAnims@HamDirector@@IAA?AVDataNode@@PAVDataArray@@@Z",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/hamobj/HamDirector"
+    ],
+    "target_addr": [
+      "0x82901c78"
+    ],
+    "base_addr": [],
+    "target_obj": "world:CameraShot.obj",
+    "base_obj": "",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "?SongBlock@SongMetadata@@QBAPAVSongInfo@@XZ",
+    "base": "?SongBlock@SongMetadata@@QBAPAVDataArraySongInfo@@XZ",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/lazer/meta_ham/HamSongMgr"
+    ],
+    "target_addr": [
+      "0x8261d058"
+    ],
+    "base_addr": [],
+    "target_obj": "meta:SongMetadata.obj",
+    "base_obj": "",
+    "lanes": [
+      "different_function"
+    ]
+  },
+  {
+    "target": "?WaitForResponse@?A0x49b544a7@@YAXW4Protocol@Holmes@@@Z",
+    "base": "?WaitForAnyResponse@?A0x3eb27431@@YAXW4Protocol@Holmes@@@Z",
+    "sites": 1,
+    "functions": 1,
+    "units": [
+      "default/system/os/HolmesClient"
+    ],
+    "target_addr": [
+      "0x825f0e80"
+    ],
+    "base_addr": [],
+    "target_obj": "os:HolmesClient.obj",
+    "base_obj": "",
+    "lanes": [
+      "different_function"
+    ]
+  }
+]
