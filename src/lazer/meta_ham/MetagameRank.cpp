@@ -494,14 +494,14 @@ bool compare_deferred_points(DeferredPoints a, DeferredPoints b) {
     if (ait != award_sort_map.end()) {
         aIdx = ait->second;
     } else {
-        Symbol aSym = a.mSource;
+        const char *aSym = a.mSource.Str();
         TheDebug << MakeString("WARNING: XP Task for %s not in sort order. It should be added.\n", aSym);
     }
 
     if (bit != award_sort_map.end()) {
         bIdx = bit->second;
     } else {
-        Symbol bSym = b.mSource;
+        const char *bSym = b.mSource.Str();
         TheDebug << MakeString("WARNING: XP Task for %s not in sort order. It should be added.\n", bSym);
     }
 

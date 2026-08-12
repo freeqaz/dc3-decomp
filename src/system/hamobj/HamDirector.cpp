@@ -2181,7 +2181,7 @@ void HamDirector::LoadRoutineBuilderData(
     } else {
         ObjectDir *moveMgrDir = TheMoveMgr->MoveDataDir();
         if (!moveMgrDir) {
-            MILO_LOG("Move data missing from %s", TheGameData->GetSong());
+            MILO_LOG("Move data missing from %s", TheGameData->GetSong().Str());
         } else {
             ObjectDir *movesDir = GetWorld()->Find<ObjectDir>("moves", true);
             int movesDirHash = movesDir->HashTableSize() + moveMgrDir->HashTableSize();

@@ -88,9 +88,9 @@ void FitnessGoalMgr::UpdateFitnessGoal(HamProfile *profile) {
 }
 
 void FitnessGoalMgr::BroadcastSyncMsg(Symbol s) {
-    Symbol sym = s;
+    const char *sym = s.Str();
     MILO_LOG("[FitnessGoalMgr::BroadcastSyncMsg] Broadcasting msg (%s).\n", sym);
-    Message msg(sym);
+    Message msg(s);
     HandleType(msg);
     TheUI->Handle(msg, false);
 }

@@ -460,7 +460,7 @@ Flow *FlowNode::GetTopFlow() {
 }
 
 void FlowNode::ActivateLabel(FlowLabel *label) {
-    FLOW_LOG("Activating Label:%s\n", label->Label());
+    FLOW_LOG("Activating Label:%s\n", label->Label().Str());
     mStopRequested = false;
     mRunningNodes.push_back(label);
     if (!label->Activate(this)) {
