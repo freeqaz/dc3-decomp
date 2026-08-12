@@ -532,7 +532,7 @@ void MainMenuPanel::UpdateArtLoaders() {
                 if (TheRockCentral.GetDlcImage() == loader->GetRemotePath()) {
                     mDownloadedTexture1->SetBitmap(bitmap, nullptr, false, RndTex::kRegular);
                     if (mState == 1) {
-                        static Message msg("msg");
+                        static Message msg("dlc_image_loaded");
                         Handle(msg, false);
                     }
                 }

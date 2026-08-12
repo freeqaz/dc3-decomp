@@ -164,7 +164,7 @@ void VoiceControlPanel::EnterGame() {
         static Symbol enter_gameplay("enter_gameplay");
         static DataArrayPtr enterGameplayFunc(enter_gameplay);
         enterGameplayFunc->Execute();
-        static Message microphoneActivityMsg("microphoneActivityMsg");
+        static Message microphoneActivityMsg("microphone_activity");
         TheHamProvider->Handle(microphoneActivityMsg, false);
     } else {
         Flow *pFlow = DataDir()->Find<Flow>("sound_error.flow");

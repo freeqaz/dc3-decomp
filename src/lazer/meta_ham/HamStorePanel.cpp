@@ -442,7 +442,7 @@ exit:
                 }
             }
 
-            static Message msg("msg", 0, 0);
+            static Message msg("special_finished", 0, 0);
             msg[0] = purchaseMade;
             msg[1] = needsEnum;
             HandleType(msg);

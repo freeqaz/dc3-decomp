@@ -443,7 +443,7 @@ void ShellInput::EnterControllerMode(bool b) {
     if (pHelpbarPanel->AllowController() || b) {
         pHelpbarPanel->EnterControllerMode();
         TheGestureMgr->SetInControllerMode(true);
-        static Message controllerModeEntered("controllerModeEntered");
+        static Message controllerModeEntered("controller_mode_entered");
         TheUI->Handle(controllerModeEntered, false);
         unk_0xA4 = false;
         static Symbol in_controller_mode("in_controller_mode");

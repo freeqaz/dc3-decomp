@@ -49,6 +49,30 @@ def qualified(fnmangled):
     return None, parts[0]
 
 
+# A local static is very often a `Symbol`/`Message` whose CONSTRUCTOR ARGUMENT is
+# a string spelling the same word -- `static Message special_finished("special_
+# finished", 0, 0)`.  A word-boundary rename walks straight into that literal and
+# renames the MESSAGE, which is a behavioural change the `none` ruler cannot see
+# (a string COMDAT is data, and `matched_code` at `none` ignores its name).  So
+# literals and comments are masked out before the rename and restored after.
+_MASKABLE = re.compile(r'"(?:\\.|[^"\\])*"' r"|'(?:\\.|[^'\\])*'"
+                       r"|//[^\n]*" r"|/\*.*?\*/", re.S)
+
+
+def mask_literals(body):
+    saved = []
+
+    def stash(m):
+        saved.append(m.group(0))
+        return f"\x00{len(saved) - 1}\x00"
+
+    return _MASKABLE.sub(stash, body), saved
+
+
+def unmask(body, saved):
+    return re.sub(r"\x00(\d+)\x00", lambda m: saved[int(m.group(1))], body)
+
+
 def body_span(text, cls, fn):
     """Byte span of the definition body of `cls::fn` (or free `fn`)."""
     pat = (rf"\b{re.escape(cls)}\s*::\s*{re.escape(fn)}\s*\("
@@ -110,7 +134,7 @@ def main():
             skipped += 1
             continue
         lo, hi = span
-        body = text[lo:hi]
+        body, saved = mask_literals(text[lo:hi])
         decl = re.search(rf"\bstatic\b[^;{{}}]*?\b{re.escape(ours)}\b", body)
         if not decl:
             print(f"  SKIP  {unit}: `{ours}` is not declared static in "
@@ -127,7 +151,7 @@ def main():
         new_body, n = re.subn(rf"\b{re.escape(ours)}\b", retail, body)
         print(f"  {unit}: {ours} -> {retail}  ({n} refs in "
               f"{cls + '::' if cls else ''}{fn}; {note})")
-        edits[path] = text[:lo] + new_body + text[hi:]
+        edits[path] = text[:lo] + unmask(new_body, saved) + text[hi:]
         done += 1
 
     if args.apply:

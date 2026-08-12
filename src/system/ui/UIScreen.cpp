@@ -198,7 +198,7 @@ bool UIScreen::IsLoaded() const {
     }
 
     // please don't tell me const_cast is what they did lol
-    static Message msg("msg");
+    static Message msg("is_loaded");
     DataNode result = const_cast<UIScreen *>(this)->HandleType(msg);
     if (result.Type() != kDataUnhandled) {
         return result.Int();

@@ -903,7 +903,7 @@ void UIManager::Init() {
     }
     CheatProvider::Init();
     REGISTER_OBJ_FACTORY(LocalePanel)
-    static Message cheat_init_msg("cheat_init_msg");
+    static Message cheat_init_msg("cheat_init");
     Hmx::Object::Handle(cheat_init_msg, false);
     mOverlay = RndOverlay::Find("ui", true);
     mOverlay->SetShowing(false);
@@ -911,7 +911,7 @@ void UIManager::Init() {
     TheDebug.AddFailAppendCallback(FailAppendCallback);
     PreloadSharedSubdirs("ui");
     UILabel::sRequireFixedLength = true;
-    static Message init_msg("init_msg");
+    static Message init_msg("init");
     Hmx::Object::Handle(init_msg, false);
     UILabel::sRequireFixedLength = false;
     cfg->FindData("overload_horizontal_nav", mOverloadHorizontalNav, false);

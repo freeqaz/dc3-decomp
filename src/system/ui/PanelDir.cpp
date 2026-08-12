@@ -457,7 +457,7 @@ void PanelDir::Enter() {
     FOREACH (it, mTriggers) {
         (*it)->Enter();
     }
-    static Message msg("msg");
+    static Message msg("ui_enter");
     static Symbol ui_enter_forward("ui_enter_forward");
     static Symbol ui_enter_back("ui_enter_back");
     SendTransition(msg, ui_enter_forward, ui_enter_back);

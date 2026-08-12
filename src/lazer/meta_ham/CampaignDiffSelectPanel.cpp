@@ -136,7 +136,7 @@ void CampaignDiffSelectPanel::FinishLoad() {
 
 void CampaignDiffSelectPanel::Refresh() {
     MILO_ASSERT(m_pCampaignDiffProvider, 0xca);
-    static Message cUpdateProviderMsg("cUpdateProviderMsg", 0);
+    static Message cUpdateProviderMsg("update_diff_provider", 0);
     cUpdateProviderMsg[0] = m_pCampaignDiffProvider;
     Handle(cUpdateProviderMsg, true);
 }
