@@ -636,7 +636,7 @@ bool UIList::SetSelectedSimulateScroll(Symbol sym, bool b) {
     int index = mListState.Provider()->DataIndex(sym);
     if (index == -1) {
         if (b) {
-            MILO_WARN("Couldn't find %s in UIList provider", sym);
+            MILO_NOTIFY("Couldn't find %s in UIList provider", sym);
         }
         return false;
     } else {

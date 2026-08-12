@@ -183,7 +183,7 @@ void SongLayout::DumpPatterns() const {
             it->mInitialMeasureRange.start,
             it->mInitialMeasureRange.end
         );
-        MILO_LOG(" size=%d moves=%d\n", (int)it->mElements.size(), it->mNumMoves);
+        MILO_LOG(" size=%d moves=%d\n", it->mElements.size(), it->mNumMoves);
         i++;
         for (int j = 0; j < it->mNumMoves; j++) {
             MILO_LOG("   %s\n", it->mMoveParents[j]->Name());

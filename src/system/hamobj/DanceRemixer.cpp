@@ -143,7 +143,7 @@ END_LOADS
 
 void DanceRemixer::Init(int x) {
     if (TheMoveMgr->MoveParents().size() == 0) {
-        MILO_FAIL("Failed to load move graph for: %s\n", TheGameData->GetSong());
+        MILO_FAIL("Failed to load move graph for: %s\n", TheGameData->GetSong().Str());
     }
     mTotalMeasures = x;
     for (int i = 0; i < 2; i++) {

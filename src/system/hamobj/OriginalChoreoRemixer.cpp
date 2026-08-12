@@ -119,7 +119,7 @@ void OriginalChoreoRemixer::Init() {
     if (TheMoveMgr->MoveParents().size() == 0) {
         TheMoveMgr->InitSong();
         if (TheMoveMgr->MoveParents().size() == 0) {
-            MILO_FAIL("Failed to load move graph for: %s\n", TheGameData->GetSong());
+            MILO_FAIL("Failed to load move graph for: %s\n", TheGameData->GetSong().Str());
 #ifdef HX_NATIVE
             // MILO_FAIL is non-fatal on native. Must not continue — Layout() would
             // be null and SaveOriginalMoveParents would null-deref.

@@ -63,7 +63,7 @@ bool OptionsPanel::OnGetLinkingCode(int pad) {
 }
 
 void OptionsPanel::OnXboxTokenRedemption(int pad) {
-    int res = XShowTokenRedemptionUI(pad);
+    unsigned int res = XShowTokenRedemptionUI(pad);
     MILO_LOG("XShowTokenRedemptionUI returned %d\n", res);
 }
 

@@ -44,7 +44,7 @@ public:
         MILO_ASSERT(false, 0x50);
     }
     // UIComponent
-    virtual void Poll() { UIComponent::Poll(); }
+    virtual void Poll();
     virtual void Highlight();
     // TextHolder
     virtual void SetTextToken(Symbol);

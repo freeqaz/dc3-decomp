@@ -507,6 +507,8 @@ void UILabel::PostLoad(BinStream &bs) {
     }
 }
 
+void UILabel::Poll() { UIComponent::Poll(); }
+
 void UILabel::Highlight() {
     RndTransformable::Highlight();
     Box box;

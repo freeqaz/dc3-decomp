@@ -261,9 +261,9 @@ CustomPlaylist &CustomPlaylist::operator=(const CustomPlaylist &other) {
 }
 
 void PlaylistSortMgr::BroadcastSyncMsg(Symbol s) {
-    Symbol sym = s;
+    const char *sym = s.Str();
     MILO_LOG("[PlaylistSortMgr::BroadcastSyncMsg] Broadcasting msg (%s).\n", sym);
-    Message msg(sym);
+    Message msg(s);
     HandleType(msg);
     TheUI->Handle(msg, false);
 }

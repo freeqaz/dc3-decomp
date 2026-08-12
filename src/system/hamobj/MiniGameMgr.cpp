@@ -122,11 +122,11 @@ void MiniGameMgr::GetMoveOptions(DataArray *a1, DataArray *a2) {
     a2->Resize(mNumMovesNeeded - 1);
     a1->Node(0) = mValidMoves.front()->Name();
     options.insert(mValidMoves.front());
-    MILO_LOG("ADDING %s...\n", mValidMoves.front()->Name());
+    MILO_LOG("ADDING %s...\n", mValidMoves.front()->Name().Str());
     for (int i = 0; i < mNumMovesNeeded - 1; i++) {
         a2->Node(i) = mInvalidMoves[i]->Name();
         options.insert(mInvalidMoves[i]);
-        MILO_LOG("ADDING %s...\n", mInvalidMoves[i]->Name());
+        MILO_LOG("ADDING %s...\n", mInvalidMoves[i]->Name().Str());
     }
     LoadMoveOptions(options, false);
 }

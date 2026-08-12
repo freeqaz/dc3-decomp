@@ -5,8 +5,8 @@
 #include "utl\MakeString.h"
 #include "utl\Symbol.h"
 
-static const unsigned int sMinPriority = 1;
-static const unsigned int sMaxPriority = 1000;
+static const int sMinPriority = 1;
+static const int sMaxPriority = 1000;
 
 Accomplishment::Accomplishment(DataArray *cfg, int idx)
     : mName(""), mAccomplishmentType(), mCategory(""), mAward(""), mUnitsToken(gNullStr),
