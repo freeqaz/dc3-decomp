@@ -893,11 +893,19 @@ static void DebugModal(Debug::ModalType &ty, FixedString &str, bool b3) {
                 Hmx::Object *cheatDisplay =
                     ObjectDir::Main()->Find<Hmx::Object>("cheat_display", false);
                 if (cheatDisplay) {
-                    static Message show("show", 0);
-                    show[0] = str.c_str();
-                    cheatDisplay->Handle(show, false);
+                    // The two nested blocks are load-bearing: MSVC numbers the
+                    // local-static scope index per lexical block, and the target
+                    // encodes `show` at scope 0x15 (??__Fshow@?BF@...). Without
+                    // them we emit 0x13 (?BD) and the object is not byte-exact.
+                    {
+                        {
+                            static Message show("show", 0);
+                            show[0] = str.c_str();
+                            cheatDisplay->Handle(show, false);
+                            return;
+                        }
+                    }
                 }
-                return;
             }
         }
         MILO_LOG("%s\n", str.c_str());
