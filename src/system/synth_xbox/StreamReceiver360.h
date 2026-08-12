@@ -1,6 +1,6 @@
 #pragma once
 #include <list>
-#include "synth\StreamReceiver.h"
+#include "synth/StreamReceiver.h"
 #include "synth\ADSR.h"
 #include "synth_xbox\Voice.h"
 

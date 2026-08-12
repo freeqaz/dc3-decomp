@@ -3,7 +3,7 @@
 #include "gesture\Skeleton.h"
 #include "hamobj\BustAMoveData.h"
 #include "hamobj\DancerSkeleton.h"
-#include "hamobj\FreestyleMoveRecorder.h"
+#include "hamobj/FreestyleMoveRecorder.h"
 #include "hamobj\HamLabel.h"
 #include "hamobj\HamPhraseMeter.h"
 #include "hamobj\ScoreUtl.h"

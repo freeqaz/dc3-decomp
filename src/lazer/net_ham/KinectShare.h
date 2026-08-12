@@ -1,5 +1,5 @@
 #pragma once
-#include "net\HttpGet.h"
+#include "net/HttpGet.h"
 #include "net\XLSPConnection.h"
 #include "utl\HxGuid.h"
 
