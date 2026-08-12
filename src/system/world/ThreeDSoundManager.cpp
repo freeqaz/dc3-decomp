@@ -139,16 +139,16 @@ float ThreeDSoundManager::CalculateDoppler(
     float listenerApproach = (Dot(listenerVel, dir) * (invDist * invDt));
     float soundApproach = (Dot(soundVel, dir) * (invDist * invDt));
 
-    static const float kDopplerConsts[3] = { 340.29f, 0.7491535544395447f, 1.3348398208618164f };
+    static const float kDopplerConsts[3] = { 340.29f, 1.3348398208618164f, 0.7491535544395447f };
     float speedOfSound = kDopplerConsts[0];
     listenerApproach = -listenerApproach;
     float ratio = (listenerApproach + speedOfSound) / (soundApproach + speedOfSound);
     float result = powf(ratio, mDopplerPower);
 
     // Clamp to +-5 semitones
-    float kMaxDoppler = kDopplerConsts[2];
-    float kMinDoppler = kDopplerConsts[1];
+    float kMaxDoppler = kDopplerConsts[1];
+    float kMinDoppler = kDopplerConsts[2];
+    result = Max(kMinDoppler, result);
     result = Min(result, kMaxDoppler);
-    result = Max(result, kMinDoppler);
     return result;
 }
