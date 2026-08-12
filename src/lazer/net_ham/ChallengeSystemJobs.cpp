@@ -211,7 +211,7 @@ GetChallengeBadgeCountsJob::GetChallengeBadgeCountsJob(
     : RCJob("leaderboards/getchallengebadgecounts/", callback) {
     MILO_LOG("***********************************\n");
     MILO_LOG("GetChallengeBadgeCountsJob::GetChallengeBadgeCountsJob()\n");
-    MILO_LOG(MakeString("   profiles.size()   = %d\n", (int)profiles.size()));
+    MILO_LOG(MakeString("   profiles.size()   = %d\n", profiles.size()));
     for (int i = 0; i < profiles.size(); i++) {
         MILO_LOG(MakeString(
             "   profiles[%d]       = '%s'\n", i, profiles[i]->GetOnlineID()->ToString()
