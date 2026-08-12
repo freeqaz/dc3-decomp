@@ -1,0 +1,227 @@
+[
+ {
+  "name": "retailmap-data:?SUBSAMPLED_HALF_WIDTH@?1???$TransformWo@0x8201ffcc",
+  "address": "0x8201ffcc",
+  "survivor": "?SUBSAMPLED_HALF_WIDTH@?1???$TransformWorldToSubsampledScreen@$07@ST@@YAXU__vector4@@PAH1@Z@4MB",
+  "folded": [
+   "__real@42200000"
+  ],
+  "n_map_names_at_addr": 2,
+  "kind": "data",
+  "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x8201ffcc; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (?SUBSAMPLED_HALF_WIDTH@?1???$TransformWorldToSubsampledScreen@$07@ST@@YAXU__vector4@@PAH1@Z@4MB), which is therefore the survivor.",
+  "refused_by": "byte identity",
+  "reasons": [
+   {
+    "member": "__real@42200000",
+    "why": "relocation targets differ"
+   }
+  ]
+ },
+ {
+  "name": "retailmap-data:??_7bad_typeid@std@@6B@@0x8213e8ac",
+  "address": "0x8213e8ac",
+  "survivor": "??_7bad_typeid@std@@6B@",
+  "folded": [
+   "??_7__non_rtti_object@std@@6B@",
+   "??_7bad_cast@std@@6B@"
+  ],
+  "n_map_names_at_addr": 3,
+  "kind": "data",
+  "evidence": "orig/373307D9/ham_xbox_r.map: 3 public name(s) share 0x8213e8ac; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 3 name(s) our or the target objects use; the target objects define exactly one of them (??_7bad_typeid@std@@6B@), which is therefore the survivor.",
+  "refused_by": "byte identity",
+  "reasons": [
+   {
+    "member": "??_7bad_typeid@std@@6B@",
+    "why": "relocation targets differ"
+   },
+   {
+    "member": "??_7bad_cast@std@@6B@",
+    "why": "relocation targets differ"
+   }
+  ]
+ },
+ {
+  "name": "retailmap-data:?AddToStrings@?A0xc9fefd64@@YA_NPBDAAV?$@0x82372aa0",
+  "address": "0x82372aa0",
+  "survivor": "?AddToStrings@?A0xc9fefd64@@YA_NPBDAAV?$list@VString@@V?$StlNodeAlloc@VString@@@stlpmtx_std@@@stlpmtx_std@@@Z",
+  "folded": [
+   "?AddToStrings@?A0x309f45e8@@YA_NPBDAAV?$list@VString@@V?$StlNodeAlloc@VString@@@stlpmtx_std@@@stlpmtx_std@@@Z",
+   "?AddToStrings@?A0x53432a53@@YA_NPBDAAV?$list@VString@@V?$StlNodeAlloc@VString@@@stlpmtx_std@@@stlpmtx_std@@@Z",
+   "?AddToStrings@?A0x8ccc14d7@@YA_NPBDAAV?$list@VString@@V?$StlNodeAlloc@VString@@@stlpmtx_std@@@stlpmtx_std@@@Z",
+   "?AddToStrings@?A0x8e038fa7@@YA_NPBDAAV?$list@VString@@V?$StlNodeAlloc@VString@@@stlpmtx_std@@@stlpmtx_std@@@Z",
+   "?AddToStrings@?A0xc297e441@@YA_NPBDAAV?$list@VString@@V?$StlNodeAlloc@VString@@@stlpmtx_std@@@stlpmtx_std@@@Z",
+   "?AddToStrings@?A0xcb0871ef@@YA_NPBDAAV?$list@VString@@V?$StlNodeAlloc@VString@@@stlpmtx_std@@@stlpmtx_std@@@Z",
+   "?AddToStrings@?A0xe50ea9df@@YA_NPBDAAV?$list@VString@@V?$StlNodeAlloc@VString@@@stlpmtx_std@@@stlpmtx_std@@@Z",
+   "?AddToStrings@?A0xf8b42a02@@YA_NPBDAAV?$list@VString@@V?$StlNodeAlloc@VString@@@stlpmtx_std@@@stlpmtx_std@@@Z",
+   "?AddToStrings@?A0xfe071329@@YA_NPBDAAV?$list@VString@@V?$StlNodeAlloc@VString@@@stlpmtx_std@@@stlpmtx_std@@@Z"
+  ],
+  "n_map_names_at_addr": 55,
+  "kind": "code",
+  "evidence": "orig/373307D9/ham_xbox_r.map: 55 public name(s) share 0x82372aa0; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 10 name(s) our or the target objects use; the target objects define exactly one of them (?AddToStrings@?A0xc9fefd64@@YA_NPBDAAV?$list@VString@@V?$StlNodeAlloc@VString@@@stlpmtx_std@@@stlpmtx_std@@@Z), which is therefore the survivor.",
+  "refused_by": "byte identity",
+  "reasons": [
+   {
+    "member": "?AddToStrings@?A0xc9fefd64@@YA_NPBDAAV?$list@VString@@V?$StlNodeAlloc@VString@@@stlpmtx_std@@@stlpmtx_std@@@Z",
+    "why": "relocation targets differ"
+   },
+   {
+    "member": "?AddToStrings@?A0x309f45e8@@YA_NPBDAAV?$list@VString@@V?$StlNodeAlloc@VString@@@stlpmtx_std@@@stlpmtx_std@@@Z",
+    "why": "relocation targets differ"
+   },
+   {
+    "member": "?AddToStrings@?A0x53432a53@@YA_NPBDAAV?$list@VString@@V?$StlNodeAlloc@VString@@@stlpmtx_std@@@stlpmtx_std@@@Z",
+    "why": "relocation targets differ"
+   },
+   {
+    "member": "?AddToStrings@?A0x8ccc14d7@@YA_NPBDAAV?$list@VString@@V?$StlNodeAlloc@VString@@@stlpmtx_std@@@stlpmtx_std@@@Z",
+    "why": "relocation targets differ"
+   },
+   {
+    "member": "?AddToStrings@?A0x8e038fa7@@YA_NPBDAAV?$list@VString@@V?$StlNodeAlloc@VString@@@stlpmtx_std@@@stlpmtx_std@@@Z",
+    "why": "relocation targets differ"
+   },
+   {
+    "member": "?AddToStrings@?A0xc297e441@@YA_NPBDAAV?$list@VString@@V?$StlNodeAlloc@VString@@@stlpmtx_std@@@stlpmtx_std@@@Z",
+    "why": "relocation targets differ"
+   },
+   {
+    "member": "?AddToStrings@?A0xcb0871ef@@YA_NPBDAAV?$list@VString@@V?$StlNodeAlloc@VString@@@stlpmtx_std@@@stlpmtx_std@@@Z",
+    "why": "relocation targets differ"
+   },
+   {
+    "member": "?AddToStrings@?A0xe50ea9df@@YA_NPBDAAV?$list@VString@@V?$StlNodeAlloc@VString@@@stlpmtx_std@@@stlpmtx_std@@@Z",
+    "why": "relocation targets differ"
+   },
+   {
+    "member": "?AddToStrings@?A0xf8b42a02@@YA_NPBDAAV?$list@VString@@V?$StlNodeAlloc@VString@@@stlpmtx_std@@@stlpmtx_std@@@Z",
+    "why": "relocation targets differ"
+   },
+   {
+    "member": "?AddToStrings@?A0xfe071329@@YA_NPBDAAV?$list@VString@@V?$StlNodeAlloc@VString@@@stlpmtx_std@@@stlpmtx_std@@@Z",
+    "why": "relocation targets differ"
+   }
+  ]
+ },
+ {
+  "name": "retailmap-data:??$__linear_insert@PAUGroupDrawDist@@U1@@0x826d0a78",
+  "address": "0x826d0a78",
+  "survivor": "??$__linear_insert@PAUGroupDrawDist@@U1@P6A_NABU1@0@Z@stlpmtx_std@@YAXPAUGroupDrawDist@@0U1@P6A_NABU1@2@Z@Z",
+  "folded": [
+   "??$__linear_insert@PAUCuePoint@?A0x81ddebd1@@U12@P6A_NABU12@0@Z@stlpmtx_std@@YAXPAUCuePoint@?A0x81ddebd1@@0U12@P6A_NABU12@2@Z@Z"
+  ],
+  "n_map_names_at_addr": 2,
+  "kind": "code",
+  "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x826d0a78; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??$__linear_insert@PAUGroupDrawDist@@U1@P6A_NABU1@0@Z@stlpmtx_std@@YAXPAUGroupDrawDist@@0U1@P6A_NABU1@2@Z@Z), which is therefore the survivor.",
+  "refused_by": "byte identity",
+  "reasons": [
+   {
+    "member": "??$__linear_insert@PAUGroupDrawDist@@U1@P6A_NABU1@0@Z@stlpmtx_std@@YAXPAUGroupDrawDist@@0U1@P6A_NABU1@2@Z@Z",
+    "why": "relocation targets differ"
+   }
+  ]
+ },
+ {
+  "name": "retailmap-data:??$_Copy_Construct@UDebugGraph@?A0xb39b7@0x827389d8",
+  "address": "0x827389d8",
+  "survivor": "??$_Copy_Construct@UDebugGraph@?A0xb39b74bf@@@stlpmtx_std@@YAXPAUDebugGraph@?A0xb39b74bf@@ABU12@@Z",
+  "folded": [
+   "??$_Param_Construct@UDebugGraph@?A0xb39b74bf@@U12@@stlpmtx_std@@YAXPAUDebugGraph@?A0xb39b74bf@@ABU12@@Z"
+  ],
+  "n_map_names_at_addr": 2,
+  "kind": "code",
+  "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x827389d8; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??$_Copy_Construct@UDebugGraph@?A0xb39b74bf@@@stlpmtx_std@@YAXPAUDebugGraph@?A0xb39b74bf@@ABU12@@Z), which is therefore the survivor.",
+  "refused_by": "byte identity",
+  "reasons": [
+   {
+    "member": "??$_Copy_Construct@UDebugGraph@?A0xb39b74bf@@@stlpmtx_std@@YAXPAUDebugGraph@?A0xb39b74bf@@ABU12@@Z",
+    "why": "relocation targets differ"
+   },
+   {
+    "member": "??$_Param_Construct@UDebugGraph@?A0xb39b74bf@@U12@@stlpmtx_std@@YAXPAUDebugGraph@?A0xb39b74bf@@ABU12@@Z",
+    "why": "relocation targets differ"
+   }
+  ]
+ },
+ {
+  "name": "retailmap-data:??$__partial_sort@PAUGroupDrawDist@@U1@P@0x827f5c90",
+  "address": "0x827f5c90",
+  "survivor": "??$__partial_sort@PAUGroupDrawDist@@U1@P6A_NABU1@0@Z@stlpmtx_std@@YAXPAUGroupDrawDist@@000P6A_NABU1@1@Z@Z",
+  "folded": [
+   "??$__partial_sort@PAUCuePoint@?A0x81ddebd1@@U12@P6A_NABU12@0@Z@stlpmtx_std@@YAXPAUCuePoint@?A0x81ddebd1@@000P6A_NABU12@1@Z@Z"
+  ],
+  "n_map_names_at_addr": 2,
+  "kind": "code",
+  "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x827f5c90; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??$__partial_sort@PAUGroupDrawDist@@U1@P6A_NABU1@0@Z@stlpmtx_std@@YAXPAUGroupDrawDist@@000P6A_NABU1@1@Z@Z), which is therefore the survivor.",
+  "refused_by": "byte identity",
+  "reasons": [
+   {
+    "member": "??$__partial_sort@PAUGroupDrawDist@@U1@P6A_NABU1@0@Z@stlpmtx_std@@YAXPAUGroupDrawDist@@000P6A_NABU1@1@Z@Z",
+    "why": "relocation targets differ"
+   }
+  ]
+ },
+ {
+  "name": "retailmap-data:?HashKey@?$CSPHash@KPAVCRule@NUISPEECH@@@0x82e2d590",
+  "address": "0x82e2d590",
+  "survivor": "?HashKey@?$CSPHash@KPAVCRule@NUISPEECH@@@NUISPEECH@@MBAIK@Z",
+  "folded": [
+   "?CalcInputFrames@CXAPOBase@@UAAII@Z",
+   "?CalcOutputFrames@CXAPOBase@@UAAII@Z"
+  ],
+  "n_map_names_at_addr": 26,
+  "kind": "code",
+  "evidence": "orig/373307D9/ham_xbox_r.map: 26 public name(s) share 0x82e2d590; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 3 name(s) our or the target objects use; the target objects define exactly one of them (?HashKey@?$CSPHash@KPAVCRule@NUISPEECH@@@NUISPEECH@@MBAIK@Z), which is therefore the survivor.",
+  "refused_by": "byte identity",
+  "reasons": [
+   {
+    "member": "(none)",
+    "why": "our objects define no member of this class, so nothing checks the fold"
+   }
+  ]
+ },
+ {
+  "name": "retailmap-data:?OnSetParameters@?$CSampleXAPOBase@VGain@0x82e44240",
+  "address": "0x82e44240",
+  "survivor": "?OnSetParameters@?$CSampleXAPOBase@VGainEffect@@UGainEffectParams@@@ATG@@MAAXPBXI@Z",
+  "folded": [
+   "?OnSetParameters@?$CSampleXAPOBase@VBitCrushEffect@@UParams@1@@ATG@@MAAXPBXI@Z",
+   "?OnSetParameters@?$CSampleXAPOBase@VCompressionEffect@@UParams@1@@ATG@@MAAXPBXI@Z",
+   "?OnSetParameters@?$CSampleXAPOBase@VDelayEffect@@UParams@1@@ATG@@MAAXPBXI@Z",
+   "?OnSetParameters@?$CSampleXAPOBase@VDistortionEffect@@UParams@1@@ATG@@MAAXPBXI@Z",
+   "?OnSetParameters@?$CSampleXAPOBase@VEQEffect@@UParams@1@@ATG@@MAAXPBXI@Z",
+   "?OnSetParameters@?$CSampleXAPOBase@VEnvelopeGenerator@@UEnvelopeGeneratorParams@@@ATG@@MAAXPBXI@Z",
+   "?OnSetParameters@?$CSampleXAPOBase@VFlangerEffect@@UParams@1@@ATG@@MAAXPBXI@Z",
+   "?OnSetParameters@?$CSampleXAPOBase@VMeterEffect@@UMeterEffectParams@@@ATG@@MAAXPBXI@Z",
+   "?OnSetParameters@?$CSampleXAPOBase@VPitchShiftEffect@@UPitchShiftEffectParams@@@ATG@@MAAXPBXI@Z",
+   "?OnSetParameters@?$CSampleXAPOBase@VWahEffect@@UParams@1@@ATG@@MAAXPBXI@Z"
+  ],
+  "n_map_names_at_addr": 14,
+  "kind": "code",
+  "evidence": "orig/373307D9/ham_xbox_r.map: 14 public name(s) share 0x82e44240; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 11 name(s) our or the target objects use; the target objects define exactly one of them (?OnSetParameters@?$CSampleXAPOBase@VGainEffect@@UGainEffectParams@@@ATG@@MAAXPBXI@Z), which is therefore the survivor.",
+  "refused_by": "byte identity",
+  "reasons": [
+   {
+    "member": "(none)",
+    "why": "our objects define no member of this class, so nothing checks the fold"
+   }
+  ]
+ },
+ {
+  "name": "retailmap-data:?IsInputFormatSupported@CXAPOBase@@UAAJP@0x82e63a38",
+  "address": "0x82e63a38",
+  "survivor": "?IsInputFormatSupported@CXAPOBase@@UAAJPBUtWAVEFORMATEX@@0PAPAU2@@Z",
+  "folded": [
+   "?IsOutputFormatSupported@CXAPOBase@@UAAJPBUtWAVEFORMATEX@@0PAPAU2@@Z"
+  ],
+  "n_map_names_at_addr": 2,
+  "kind": "code",
+  "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x82e63a38; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (?IsInputFormatSupported@CXAPOBase@@UAAJPBUtWAVEFORMATEX@@0PAPAU2@@Z), which is therefore the survivor.",
+  "refused_by": "byte identity",
+  "reasons": [
+   {
+    "member": "(none)",
+    "why": "our objects define no member of this class, so nothing checks the fold"
+   }
+  ]
+ }
+]

@@ -12,12 +12,23 @@
   "  - orig/373307D9/ham_xbox_r.map, the shipped MSVC linker map: /OPT:ICF",
   "    folds byte-identical COMDATs, so symbols sharing an address there",
   "    are the fold set, stated by the linker that made the image.",
-  "This file holds the VALIDATOR-ACCEPTED classes only, so the synthetic",
-  "map rendered from it (scripts/gen_icf_alias_map.py ->",
-  "build/373307D9/icf_aliases.map) never hands objdiff a class the",
-  "validator refused.",
+  "  - retail-map DATA COMDAT fold (scripts/install_data_fold_aliases.py,",
+  "    group names 'retailmap-data:'): the same linker-map address-sharing",
+  "    evidence, over data COMDATs the function-only symbol read could not",
+  "    see, AND a byte-identity gate -- our COMDAT contents equal the target",
+  "    survivor's, relocations masked and reloc targets equal by name.",
+  "    decomp-synth validate_groups gate (a) cannot run on these: 0 of",
+  "    target_symbol_map.json's 69,132 names is a data symbol, so",
+  "    load_validated drops them and grades stricter than this file.",
+  "Every tier here except retailmap-data is VALIDATOR-ACCEPTED, so the",
+  "synthetic map rendered from it (scripts/gen_icf_alias_map.py ->",
+  "build/373307D9/icf_aliases.map) hands objdiff no class the validator",
+  "refused ON EVIDENCE. retailmap-data is the one exception and it is a",
+  "blind spot rather than a disagreement: validate_groups can only fault",
+  "it on gate (a), which no data symbol can satisfy. load_validated drops",
+  "it, so decomp-synth grades STRICTER than this file, never looser.",
   "Do not hand-edit. NOTE: build_icf_alias_inputs.py mints the body-test",
-  "class ONLY -- regenerating from it alone would drop the other two.",
+  "class ONLY -- regenerating from it alone would drop the other three.",
   "Installers extend this file in place and copy _comment forward."
  ],
  "_provenance": {
@@ -70,7 +81,24 @@
   "weak_alias_classes": "Added 2026-08-10. MSVC emits the vector deleting destructor ??_E<Class> as an UNDEFINED WEAK EXTERNAL whose auxiliary record names its default resolution ??_G<Class> with characteristics 2 (IMAGE_WEAK_EXTERN_SEARCH_ALIAS). The linker resolves one to the other, so these are declared aliases, not empirical folds -- the compiler states it in our own object file. Direction is read off the target: whichever spelling the target objects define is the survivor (893 ??_G, 78 ??_E), because gate (c) requires exactly that.",
   "reconciled_with_main": "2026-08-10. Two lanes repaired the same over-merged MakeString class independently -- this lane 368->371 under gate (c'), main 368->373 by splitting. Main's finer partition is authoritative here: this lane's version folded symbols at retail 0x827F84A8 and 0x823B2008 into groups whose survivors sit at 0x82895520 / 0x82610090, which is a false equivalence across four distinct addresses. Main's plain groups were taken wholesale and only this lane's additions re-applied.",
   "retail_map_classes": "Added 2026-08-10. orig/373307D9/ham_xbox_r.map is the shipped MSVC linker map for this build -- verified same-build by 67,483 of 67,510 names shared with target_symbol_map.json sitting at identical addresses. /OPT:ICF folds byte-identical COMDATs, so symbols sharing an address in that map ARE the fold set, stated by the linker rather than inferred by body test. Admitted narrowly: the address must carry two or more names our own objects reference, __unwind$/__catch$/$L/??_C@ names are excluded as annotations rather than aliases, and the survivor must be the single member the target objects define.",
-  "retail_map_splitter_named": "Added 2026-08-10. Companion to retail_map_classes: addresses where the linker map names none of the symbols the TARGET objects define, because the splitter invented that name (merged_*, OnlyReturns). The survivor is then read from target_symbol_map.json and the folded members from the map. Address-derived survivors (fn_/lbl_) stay refused by gate (d) -- those are a rename problem, not an alias one."
+  "retail_map_splitter_named": "Added 2026-08-10. Companion to retail_map_classes: addresses where the linker map names none of the symbols the TARGET objects define, because the splitter invented that name (merged_*, OnlyReturns). The survivor is then read from target_symbol_map.json and the folded members from the map. Address-derived survivors (fn_/lbl_) stay refused by gate (d) -- those are a rename problem, not an alias one.",
+  "retail_map_data_comdat_classes": {
+   "installed_by": "scripts/install_data_fold_aliases.py",
+   "generator": "scripts/retail_map_fold_candidates.py",
+   "identity_mode": "align",
+   "n_groups": 106,
+   "n_names": 426,
+   "n_refused_by_byte_identity": 9,
+   "refusal_reasons": {
+    "relocation targets differ": 6,
+    "our objects define no member of this class, so nothing checks the fold": 3
+   },
+   "n_dropped_on_collision_with_an_installed_group": 0,
+   "dropped_on_collision": [],
+   "what": "/OPT:ICF folds byte-identical COMDATs. The installed retail_map_classes tier evaluates its member and survivor gates with function COMDATs only, so every DATA COMDAT the linker folded was invisible to it -- not refused on evidence, not seen. These groups re-run those four gates over the whole COFF external-definition table and add a fifth: for every member our objects DEFINE, the COMDAT contents must equal the target survivor's with relocation-patched fields masked and relocation targets equal by name, which is the condition ICF actually tests. A group with a mismatching member, or with no member our objects define, is refused fail-closed.",
+   "padding_normalisation": "identity_mode 'align' additionally admits a target COMDAT that is our bytes followed by fewer than 8 zero bytes landing the end on an 8-byte boundary. Of the 254 ??_8 COMDATs defined on both sides, 176 are byte-identical, 78 are exactly ours + 4 trailing zeros and 0 differ in content; those 4 bytes are inter-symbol alignment padding dtk's splitter attributed to the vbtable, not a retail emission difference. Discriminator (retail_map_fold_candidates.py --padding-evidence, no exceptions in 254): 47 flush with a 4-byte-aligned successor, 129 flush already on the boundary, 78 padded with an 8-byte-aligned successor and an off-boundary end. The 47 are the control an emitted terminator entry fails. 'strict' refuses the padding and admits 176 of the 254 instead.",
+   "decomp_synth_validator": "validate_groups rejects 102 of these on gate (a) alone -- survivor absent from scripts/target_symbol_map.json, which holds 0 data symbols in 69,132 names and has the same function-only blindness. Gates 4 and 5 make that check directly against the objects. load_validated therefore drops them and decomp-synth grades stricter than this file; objdiff reads the rendered map and honours them."
+  }
  },
  "_rejected_at_install": [
   {
@@ -22813,6 +22841,2560 @@
     "?NumData@PracticeOptionsProvider@@UBAHXZ"
    ],
    "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it"
+  },
+  {
+   "name": "retailmap-data:??_8CharBonesAlloc@@7B@@0x82008400",
+   "address": "0x82008400",
+   "survivor": "??_8CharBonesAlloc@@7B@",
+   "folded": [
+    "??_8CharBonesObject@@7B@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x82008400; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8CharBonesAlloc@@7B@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8CharBonesAlloc@@7B@",
+     "??_8CharBonesObject@@7B@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8CharIKMidi@@7BRndHighlightable@@@@0x8200a468",
+   "address": "0x8200a468",
+   "survivor": "??_8CharIKMidi@@7BRndHighlightable@@@",
+   "folded": [
+    "??_8CharBoneDir@@7B@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x8200a468; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8CharIKMidi@@7BRndHighlightable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8CharBoneDir@@7B@",
+     "??_8CharIKMidi@@7BRndHighlightable@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8Character@@7BRndPollable@@@@0x8200c390",
+   "address": "0x8200c390",
+   "survivor": "??_8Character@@7BRndPollable@@@",
+   "folded": [
+    "??_8CharIKFoot@@7BCharWeightable@@@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x8200c390; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8Character@@7BRndPollable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8CharIKFoot@@7BCharWeightable@@@",
+     "??_8Character@@7BRndPollable@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8UITrigger@@7BRndPollable@@@@0x8200d008",
+   "address": "0x8200d008",
+   "survivor": "??_8UITrigger@@7BRndPollable@@@",
+   "folded": [
+    "??_8CharBoneOffset@@7BRndHighlightable@@@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x8200d008; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8UITrigger@@7BRndPollable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8CharBoneOffset@@7BRndHighlightable@@@",
+     "??_8UITrigger@@7BRndPollable@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8CharWeightable@@7B@@0x8200d254",
+   "address": "0x8200d254",
+   "survivor": "??_8CharWeightable@@7B@",
+   "folded": [
+    "??_8HamIKSkeleton@@7B@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x8200d254; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8CharWeightable@@7B@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name; 2 of them modulo trailing alignment padding dtk's splitter attributed to the survivor.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8CharWeightable@@7B@",
+     "??_8HamIKSkeleton@@7B@"
+    ],
+    "padded": [
+     "??_8CharWeightable@@7B@",
+     "??_8HamIKSkeleton@@7B@"
+    ]
+   }
+  },
+  {
+   "name": "retailmap-data:??_8CharLookAt@@7BCharWeightable@@@@0x8200fc24",
+   "address": "0x8200fc24",
+   "survivor": "??_8CharLookAt@@7BCharWeightable@@@",
+   "folded": [
+    "??_8CharIKHead@@7BRndHighlightable@@@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x8200fc24; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8CharLookAt@@7BCharWeightable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8CharIKHead@@7BRndHighlightable@@@",
+     "??_8CharLookAt@@7BCharWeightable@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8CharDriverMidi@@7BCharWeightable@@@@0x8200fc2c",
+   "address": "0x8200fc2c",
+   "survivor": "??_8CharDriverMidi@@7BCharWeightable@@@",
+   "folded": [
+    "??_8CharLookAt@@7BRndHighlightable@@@",
+    "??_8MetaPanel@@7B@"
+   ],
+   "n_map_names_at_addr": 3,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 3 public name(s) share 0x8200fc2c; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 3 name(s) our or the target objects use; the target objects define exactly one of them (??_8CharDriverMidi@@7BCharWeightable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 3 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name; 3 of them modulo trailing alignment padding dtk's splitter attributed to the survivor.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8CharDriverMidi@@7BCharWeightable@@@",
+     "??_8CharLookAt@@7BRndHighlightable@@@",
+     "??_8MetaPanel@@7B@"
+    ],
+    "padded": [
+     "??_8CharDriverMidi@@7BCharWeightable@@@",
+     "??_8CharLookAt@@7BRndHighlightable@@@",
+     "??_8MetaPanel@@7B@"
+    ]
+   }
+  },
+  {
+   "name": "retailmap-data:??_8CharIKFingers@@7BRndHighlightable@@@@0x820116d0",
+   "address": "0x820116d0",
+   "survivor": "??_8CharIKFingers@@7BRndHighlightable@@@",
+   "folded": [
+    "??_8CharEyes@@7BCharWeightable@@@",
+    "??_8NavigationSkeletonDir@@7BRndAnimatable@@@"
+   ],
+   "n_map_names_at_addr": 3,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 3 public name(s) share 0x820116d0; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 3 name(s) our or the target objects use; the target objects define exactly one of them (??_8CharIKFingers@@7BRndHighlightable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 3 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8CharEyes@@7BCharWeightable@@@",
+     "??_8CharIKFingers@@7BRndHighlightable@@@",
+     "??_8NavigationSkeletonDir@@7BRndAnimatable@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8FlowRun@@7B@@0x820130b0",
+   "address": "0x820130b0",
+   "survivor": "??_8FlowRun@@7B@",
+   "folded": [
+    "??_8CharIKHand@@7BCharWeightable@@@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x820130b0; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8FlowRun@@7B@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8CharIKHand@@7BCharWeightable@@@",
+     "??_8FlowRun@@7B@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8CharIKHead@@7BCharPollable@@@@0x82013a08",
+   "address": "0x82013a08",
+   "survivor": "??_8CharIKHead@@7BCharPollable@@@",
+   "folded": [
+    "??_8PanelDir@@7BRndPollable@@@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x82013a08; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8CharIKHead@@7BCharPollable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8CharIKHead@@7BCharPollable@@@",
+     "??_8PanelDir@@7BRndPollable@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8CharBoneTwist@@7BCharPollable@@@@0x82013d48",
+   "address": "0x82013d48",
+   "survivor": "??_8CharBoneTwist@@7BCharPollable@@@",
+   "folded": [
+    "??_8CharPosConstraint@@7B@",
+    "??_8CharSignalApplier@@7BCharPollable@@@",
+    "??_8CorrectIdentityPanel@@7B@",
+    "??_8RndDir@@7BRndPollable@@@"
+   ],
+   "n_map_names_at_addr": 5,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 5 public name(s) share 0x82013d48; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 5 name(s) our or the target objects use; the target objects define exactly one of them (??_8CharBoneTwist@@7BCharPollable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 5 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8CharBoneTwist@@7BCharPollable@@@",
+     "??_8CharPosConstraint@@7B@",
+     "??_8CharSignalApplier@@7BCharPollable@@@",
+     "??_8CorrectIdentityPanel@@7B@",
+     "??_8RndDir@@7BRndPollable@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8RndDir@@7BRndTransformable@@@@0x820146d4",
+   "address": "0x820146d4",
+   "survivor": "??_8RndDir@@7BRndTransformable@@@",
+   "folded": [
+    "??_8CharCuff@@7BRndTransformable@@@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x820146d4; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8RndDir@@7BRndTransformable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8CharCuff@@7BRndTransformable@@@",
+     "??_8RndDir@@7BRndTransformable@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8PhysicsVolume@@7B@@0x8201565c",
+   "address": "0x8201565c",
+   "survivor": "??_8PhysicsVolume@@7B@",
+   "folded": [
+    "??_8CharHair@@7BCharPollable@@@",
+    "??_8CharSleeve@@7BRndHighlightable@@@",
+    "??_8FlowSequence@@7B@",
+    "??_8PreloadPanel@@7B@",
+    "??_8SkeletonClip@@7BRndAnimatable@@@"
+   ],
+   "n_map_names_at_addr": 6,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 6 public name(s) share 0x8201565c; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 6 name(s) our or the target objects use; the target objects define exactly one of them (??_8PhysicsVolume@@7B@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 6 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name; 6 of them modulo trailing alignment padding dtk's splitter attributed to the survivor.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8CharHair@@7BCharPollable@@@",
+     "??_8CharSleeve@@7BRndHighlightable@@@",
+     "??_8FlowSequence@@7B@",
+     "??_8PhysicsVolume@@7B@",
+     "??_8PreloadPanel@@7B@",
+     "??_8SkeletonClip@@7BRndAnimatable@@@"
+    ],
+    "padded": [
+     "??_8CharHair@@7BCharPollable@@@",
+     "??_8CharSleeve@@7BRndHighlightable@@@",
+     "??_8FlowSequence@@7B@",
+     "??_8PhysicsVolume@@7B@",
+     "??_8PreloadPanel@@7B@",
+     "??_8SkeletonClip@@7BRndAnimatable@@@"
+    ]
+   }
+  },
+  {
+   "name": "retailmap-data:??_8StreamRecorder@@7B@@0x82015ae0",
+   "address": "0x82015ae0",
+   "survivor": "??_8StreamRecorder@@7B@",
+   "folded": [
+    "??_8CharIKRod@@7B@",
+    "??_8RndTexRenderer@@7BRndAnimatable@@@"
+   ],
+   "n_map_names_at_addr": 3,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 3 public name(s) share 0x82015ae0; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 3 name(s) our or the target objects use; the target objects define exactly one of them (??_8StreamRecorder@@7B@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 3 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8CharIKRod@@7B@",
+     "??_8RndTexRenderer@@7BRndAnimatable@@@",
+     "??_8StreamRecorder@@7B@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8FlowSetProperty@@7B@@0x820169f8",
+   "address": "0x820169f8",
+   "survivor": "??_8FlowSetProperty@@7B@",
+   "folded": [
+    "??_8CharIKMidi@@7BCharPollable@@@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x820169f8; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8FlowSetProperty@@7B@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8CharIKMidi@@7BCharPollable@@@",
+     "??_8FlowSetProperty@@7B@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8SkeletonClip@@7BRndPollable@@@@0x82017b78",
+   "address": "0x82017b78",
+   "survivor": "??_8SkeletonClip@@7BRndPollable@@@",
+   "folded": [
+    "??_8CampaignMasterQuestSongSelectPanel@@7B@",
+    "??_8CharPollGroup@@7BCharPollable@@@",
+    "??_8FlowOnStop@@7B@",
+    "??_8PracticeChoosePanel@@7B@",
+    "??_8RndTransAnim@@7B@"
+   ],
+   "n_map_names_at_addr": 6,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 6 public name(s) share 0x82017b78; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 6 name(s) our or the target objects use; the target objects define exactly one of them (??_8SkeletonClip@@7BRndPollable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 6 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8CampaignMasterQuestSongSelectPanel@@7B@",
+     "??_8CharPollGroup@@7BCharPollable@@@",
+     "??_8FlowOnStop@@7B@",
+     "??_8PracticeChoosePanel@@7B@",
+     "??_8RndTransAnim@@7B@",
+     "??_8SkeletonClip@@7BRndPollable@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8CharIKSliderMidi@@7BCharWeightable@@@0x82018028",
+   "address": "0x82018028",
+   "survivor": "??_8CharIKSliderMidi@@7BCharWeightable@@@",
+   "folded": [
+    "??_8CharServoBone@@7BCharPollable@@@",
+    "??_8FlowDistance@@7B@"
+   ],
+   "n_map_names_at_addr": 3,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 3 public name(s) share 0x82018028; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 3 name(s) our or the target objects use; the target objects define exactly one of them (??_8CharIKSliderMidi@@7BCharWeightable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 3 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8CharIKSliderMidi@@7BCharWeightable@@@",
+     "??_8CharServoBone@@7BCharPollable@@@",
+     "??_8FlowDistance@@7B@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8ContentLoadingPanel@@7B@@0x82018588",
+   "address": "0x82018588",
+   "survivor": "??_8ContentLoadingPanel@@7B@",
+   "folded": [
+    "??_8CharBlendBone@@7B@",
+    "??_8CharBoneTwist@@7BCharWeightable@@@",
+    "??_8CharSignalApplier@@7BCharWeightable@@@",
+    "??_8LocalePanel@@7B@",
+    "??_8RndAnimFilter@@7B@"
+   ],
+   "n_map_names_at_addr": 6,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 6 public name(s) share 0x82018588; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 6 name(s) our or the target objects use; the target objects define exactly one of them (??_8ContentLoadingPanel@@7B@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 6 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8CharBlendBone@@7B@",
+     "??_8CharBoneTwist@@7BCharWeightable@@@",
+     "??_8CharSignalApplier@@7BCharWeightable@@@",
+     "??_8ContentLoadingPanel@@7B@",
+     "??_8LocalePanel@@7B@",
+     "??_8RndAnimFilter@@7B@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8VoiceInputPanel@@7B@@0x82019430",
+   "address": "0x82019430",
+   "survivor": "??_8VoiceInputPanel@@7B@",
+   "folded": [
+    "??_8CampaignMasterQuestCrewSelectPanel@@7B@",
+    "??_8CharClipSet@@7BRndAnimatable@@@",
+    "??_8CharIKScale@@7BCharWeightable@@@",
+    "??_8FlowValueCase@@7B@",
+    "??_8OptionsPanel@@7B@"
+   ],
+   "n_map_names_at_addr": 6,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 6 public name(s) share 0x82019430; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 6 name(s) our or the target objects use; the target objects define exactly one of them (??_8VoiceInputPanel@@7B@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 6 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8CampaignMasterQuestCrewSelectPanel@@7B@",
+     "??_8CharClipSet@@7BRndAnimatable@@@",
+     "??_8CharIKScale@@7BCharWeightable@@@",
+     "??_8FlowValueCase@@7B@",
+     "??_8OptionsPanel@@7B@",
+     "??_8VoiceInputPanel@@7B@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8UITrigger@@7BEventTrigger@@@@0x8201a448",
+   "address": "0x8201a448",
+   "survivor": "??_8UITrigger@@7BEventTrigger@@@",
+   "folded": [
+    "??_8CharLipSyncDriver@@7BRndHighlightable@@@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x8201a448; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8UITrigger@@7BEventTrigger@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8CharLipSyncDriver@@7BRndHighlightable@@@",
+     "??_8UITrigger@@7BEventTrigger@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8CharInterest@@7BRndTransformable@@@@0x8201defc",
+   "address": "0x8201defc",
+   "survivor": "??_8CharInterest@@7BRndTransformable@@@",
+   "folded": [
+    "??_8RndLine@@7BRndTransformable@@@",
+    "??_8Waypoint@@7BRndTransformable@@@"
+   ],
+   "n_map_names_at_addr": 3,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 3 public name(s) share 0x8201defc; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 3 name(s) our or the target objects use; the target objects define exactly one of them (??_8CharInterest@@7BRndTransformable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 3 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8CharInterest@@7BRndTransformable@@@",
+     "??_8RndLine@@7BRndTransformable@@@",
+     "??_8Waypoint@@7BRndTransformable@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8RndMatAnim@@7B@@0x82026fec",
+   "address": "0x82026fec",
+   "survivor": "??_8RndMatAnim@@7B@",
+   "folded": [
+    "??_8FlowPickOne@@7B@",
+    "??_8HamSong@@7B@",
+    "??_8MoviePanel@@7B@",
+    "??_8RndWind@@7B@",
+    "??_8Song@@7B@"
+   ],
+   "n_map_names_at_addr": 6,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 6 public name(s) share 0x82026fec; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 6 name(s) our or the target objects use; the target objects define exactly one of them (??_8RndMatAnim@@7B@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 6 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name; 6 of them modulo trailing alignment padding dtk's splitter attributed to the survivor.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8FlowPickOne@@7B@",
+     "??_8HamSong@@7B@",
+     "??_8MoviePanel@@7B@",
+     "??_8RndMatAnim@@7B@",
+     "??_8RndWind@@7B@",
+     "??_8Song@@7B@"
+    ],
+    "padded": [
+     "??_8FlowPickOne@@7B@",
+     "??_8HamSong@@7B@",
+     "??_8MoviePanel@@7B@",
+     "??_8RndMatAnim@@7B@",
+     "??_8RndWind@@7B@",
+     "??_8Song@@7B@"
+    ]
+   }
+  },
+  {
+   "name": "retailmap-data:??_8ObjectDir@@7B@@0x82027b70",
+   "address": "0x82027b70",
+   "survivor": "??_8ObjectDir@@7B@",
+   "folded": [
+    "??_8FlowSwitchCase@@7B@",
+    "??_8StorePanel@@7B@"
+   ],
+   "n_map_names_at_addr": 3,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 3 public name(s) share 0x82027b70; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 3 name(s) our or the target objects use; the target objects define exactly one of them (??_8ObjectDir@@7B@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 3 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8FlowSwitchCase@@7B@",
+     "??_8ObjectDir@@7B@",
+     "??_8StorePanel@@7B@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8FlowSound@@7B@@0x82027eb0",
+   "address": "0x82027eb0",
+   "survivor": "??_8FlowSound@@7B@",
+   "folded": [
+    "??_8DxTexRenderer@@7BRndAnimatable@@@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x82027eb0; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8FlowSound@@7B@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8DxTexRenderer@@7BRndAnimatable@@@",
+     "??_8FlowSound@@7B@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8CharHair@@7BRndHighlightable@@@@0x82028944",
+   "address": "0x82028944",
+   "survivor": "??_8CharHair@@7BRndHighlightable@@@",
+   "folded": [
+    "??_8FlowTimer@@7B@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x82028944; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8CharHair@@7BRndHighlightable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name; 2 of them modulo trailing alignment padding dtk's splitter attributed to the survivor.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8CharHair@@7BRndHighlightable@@@",
+     "??_8FlowTimer@@7B@"
+    ],
+    "padded": [
+     "??_8CharHair@@7BRndHighlightable@@@",
+     "??_8FlowTimer@@7B@"
+    ]
+   }
+  },
+  {
+   "name": "retailmap-data:??_8HamDriver@@7BCharWeightable@@@@0x82029bf8",
+   "address": "0x82029bf8",
+   "survivor": "??_8HamDriver@@7BCharWeightable@@@",
+   "folded": [
+    "??_8CalibrationPanel@@7B@",
+    "??_8CharIKSliderMidi@@7BCharPollable@@@",
+    "??_8CharWeightSetter@@7BCharWeightable@@@",
+    "??_8FlowWhile@@7B@"
+   ],
+   "n_map_names_at_addr": 5,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 5 public name(s) share 0x82029bf8; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 5 name(s) our or the target objects use; the target objects define exactly one of them (??_8HamDriver@@7BCharWeightable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 5 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8CalibrationPanel@@7B@",
+     "??_8CharIKSliderMidi@@7BCharPollable@@@",
+     "??_8CharWeightSetter@@7BCharWeightable@@@",
+     "??_8FlowWhile@@7B@",
+     "??_8HamDriver@@7BCharWeightable@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8LockedContentPanel@@7B@@0x8202a07c",
+   "address": "0x8202a07c",
+   "survivor": "??_8LockedContentPanel@@7B@",
+   "folded": [
+    "??_8CharIKHand@@7BCharPollable@@@",
+    "??_8FlowMultiSetProperty@@7B@",
+    "??_8FlowSlider@@7B@",
+    "??_8LetterboxPanel@@7B@"
+   ],
+   "n_map_names_at_addr": 5,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 5 public name(s) share 0x8202a07c; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 5 name(s) our or the target objects use; the target objects define exactly one of them (??_8LockedContentPanel@@7B@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 5 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name; 5 of them modulo trailing alignment padding dtk's splitter attributed to the survivor.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8CharIKHand@@7BCharPollable@@@",
+     "??_8FlowMultiSetProperty@@7B@",
+     "??_8FlowSlider@@7B@",
+     "??_8LetterboxPanel@@7B@",
+     "??_8LockedContentPanel@@7B@"
+    ],
+    "padded": [
+     "??_8CharIKHand@@7BCharPollable@@@",
+     "??_8FlowMultiSetProperty@@7B@",
+     "??_8FlowSlider@@7B@",
+     "??_8LetterboxPanel@@7B@",
+     "??_8LockedContentPanel@@7B@"
+    ]
+   }
+  },
+  {
+   "name": "retailmap-data:??_8FlowTrigger@@7B@@0x8202be28",
+   "address": "0x8202be28",
+   "survivor": "??_8FlowTrigger@@7B@",
+   "folded": [
+    "??_8CharIKSliderMidi@@7BRndHighlightable@@@",
+    "??_8CharServoBone@@7BRndHighlightable@@@"
+   ],
+   "n_map_names_at_addr": 3,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 3 public name(s) share 0x8202be28; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 3 name(s) our or the target objects use; the target objects define exactly one of them (??_8FlowTrigger@@7B@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 3 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8CharIKSliderMidi@@7BRndHighlightable@@@",
+     "??_8CharServoBone@@7BRndHighlightable@@@",
+     "??_8FlowTrigger@@7B@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8SkeletonViz@@7B@@0x82032260",
+   "address": "0x82032260",
+   "survivor": "??_8SkeletonViz@@7B@",
+   "folded": [
+    "??_8CharFaceServo@@7BCharPollable@@@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x82032260; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8SkeletonViz@@7B@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8CharFaceServo@@7BCharPollable@@@",
+     "??_8SkeletonViz@@7B@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8HamNavList@@7BRndTransformable@@@@0x82034860",
+   "address": "0x82034860",
+   "survivor": "??_8HamNavList@@7BRndTransformable@@@",
+   "folded": [
+    "??_8AppLabel@@7BRndTransformable@@@",
+    "??_8AppMiniLeaderboardDisplay@@7BRndTransformable@@@",
+    "??_8HamLabel@@7BRndTransformable@@@",
+    "??_8HamList@@7BRndTransformable@@@",
+    "??_8HamStarsDisplay@@7BRndTransformable@@@",
+    "??_8InlineHelp@@7BRndTransformable@@@",
+    "??_8LabelShrinkWrapper@@7BRndTransformable@@@",
+    "??_8MeterDisplay@@7BRndTransformable@@@",
+    "??_8MiniLeaderboardDisplay@@7BRndTransformable@@@",
+    "??_8RndText@@7BRndTransformable@@@",
+    "??_8SongDifficultyDisplay@@7BRndTransformable@@@",
+    "??_8StarsDisplay@@7BRndTransformable@@@",
+    "??_8UIButton@@7BRndTransformable@@@",
+    "??_8UILabel@@7BRndTransformable@@@",
+    "??_8UIList@@7BRndTransformable@@@",
+    "??_8UISlider@@7BRndTransformable@@@"
+   ],
+   "n_map_names_at_addr": 17,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 17 public name(s) share 0x82034860; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 17 name(s) our or the target objects use; the target objects define exactly one of them (??_8HamNavList@@7BRndTransformable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 17 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8AppLabel@@7BRndTransformable@@@",
+     "??_8AppMiniLeaderboardDisplay@@7BRndTransformable@@@",
+     "??_8HamLabel@@7BRndTransformable@@@",
+     "??_8HamList@@7BRndTransformable@@@",
+     "??_8HamNavList@@7BRndTransformable@@@",
+     "??_8HamStarsDisplay@@7BRndTransformable@@@",
+     "??_8InlineHelp@@7BRndTransformable@@@",
+     "??_8LabelShrinkWrapper@@7BRndTransformable@@@",
+     "??_8MeterDisplay@@7BRndTransformable@@@",
+     "??_8MiniLeaderboardDisplay@@7BRndTransformable@@@",
+     "??_8RndText@@7BRndTransformable@@@",
+     "??_8SongDifficultyDisplay@@7BRndTransformable@@@",
+     "??_8StarsDisplay@@7BRndTransformable@@@",
+     "??_8UIButton@@7BRndTransformable@@@",
+     "??_8UILabel@@7BRndTransformable@@@",
+     "??_8UIList@@7BRndTransformable@@@",
+     "??_8UISlider@@7BRndTransformable@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8HamListRibbon@@7BRndDrawable@@@@0x82040290",
+   "address": "0x82040290",
+   "survivor": "??_8HamListRibbon@@7BRndDrawable@@@",
+   "folded": [
+    "??_8DxParticleSys@@7BRndDrawable@@@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x82040290; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8HamListRibbon@@7BRndDrawable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8DxParticleSys@@7BRndDrawable@@@",
+     "??_8HamListRibbon@@7BRndDrawable@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8WorldCrowd@@7B@@0x820417a8",
+   "address": "0x820417a8",
+   "survivor": "??_8WorldCrowd@@7B@",
+   "folded": [
+    "??_8FlowIf@@7B@",
+    "??_8HamScrollSpeedIndicator@@7BRndPollable@@@"
+   ],
+   "n_map_names_at_addr": 3,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 3 public name(s) share 0x820417a8; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 3 name(s) our or the target objects use; the target objects define exactly one of them (??_8WorldCrowd@@7B@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 3 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8FlowIf@@7B@",
+     "??_8HamScrollSpeedIndicator@@7BRndPollable@@@",
+     "??_8WorldCrowd@@7B@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8SynthEmitter@@7BRndTransformable@@@@0x820417b0",
+   "address": "0x820417b0",
+   "survivor": "??_8SynthEmitter@@7BRndTransformable@@@",
+   "folded": [
+    "??_8HamScrollSpeedIndicator@@7BRndTransformable@@@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x820417b0; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8SynthEmitter@@7BRndTransformable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8HamScrollSpeedIndicator@@7BRndTransformable@@@",
+     "??_8SynthEmitter@@7BRndTransformable@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8CharFeedback@@7B@@0x82044300",
+   "address": "0x82044300",
+   "survivor": "??_8CharFeedback@@7B@",
+   "folded": [
+    "??_8CharMirror@@7BCharPollable@@@",
+    "??_8FlowEventListener@@7B@"
+   ],
+   "n_map_names_at_addr": 3,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 3 public name(s) share 0x82044300; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 3 name(s) our or the target objects use; the target objects define exactly one of them (??_8CharFeedback@@7B@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 3 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8CharFeedback@@7B@",
+     "??_8CharMirror@@7BCharPollable@@@",
+     "??_8FlowEventListener@@7B@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8HamCamShot@@7B@@0x82046d8c",
+   "address": "0x82046d8c",
+   "survivor": "??_8HamCamShot@@7B@",
+   "folded": [
+    "??_8WorldDir@@7BRndDrawable@@@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x82046d8c; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8HamCamShot@@7B@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8HamCamShot@@7B@",
+     "??_8WorldDir@@7BRndDrawable@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8StreamRenderer@@7BRndDrawable@@@@0x82049864",
+   "address": "0x82049864",
+   "survivor": "??_8StreamRenderer@@7BRndDrawable@@@",
+   "folded": [
+    "??_8HamVisDir@@7BObjectDir@@@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x82049864; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8StreamRenderer@@7BRndDrawable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8HamVisDir@@7BObjectDir@@@",
+     "??_8StreamRenderer@@7BRndDrawable@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8DxTexRenderer@@7BRndPollable@@@@0x8204a150",
+   "address": "0x8204a150",
+   "survivor": "??_8DxTexRenderer@@7BRndPollable@@@",
+   "folded": [
+    "??_8HamDriver@@7BRndHighlightable@@@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x8204a150; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8DxTexRenderer@@7BRndPollable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8DxTexRenderer@@7BRndPollable@@@",
+     "??_8HamDriver@@7BRndHighlightable@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8CharMirror@@7BCharWeightable@@@@0x8204abe0",
+   "address": "0x8204abe0",
+   "survivor": "??_8CharMirror@@7BCharWeightable@@@",
+   "folded": [
+    "??_8CharDriver@@7BRndHighlightable@@@",
+    "??_8HamIKEffector@@7BRndHighlightable@@@"
+   ],
+   "n_map_names_at_addr": 3,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 3 public name(s) share 0x8204abe0; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 3 name(s) our or the target objects use; the target objects define exactly one of them (??_8CharMirror@@7BCharWeightable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 3 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8CharDriver@@7BRndHighlightable@@@",
+     "??_8CharMirror@@7BCharWeightable@@@",
+     "??_8HamIKEffector@@7BRndHighlightable@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8HamPhotoDisplay@@7BRndAnimatable@@@@0x8204b0d0",
+   "address": "0x8204b0d0",
+   "survivor": "??_8HamPhotoDisplay@@7BRndAnimatable@@@",
+   "folded": [
+    "??_8HamPhraseMeter@@7BRndAnimatable@@@",
+    "??_8RndSpline@@7B@"
+   ],
+   "n_map_names_at_addr": 3,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 3 public name(s) share 0x8204b0d0; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 3 name(s) our or the target objects use; the target objects define exactly one of them (??_8HamPhotoDisplay@@7BRndAnimatable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 3 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8HamPhotoDisplay@@7BRndAnimatable@@@",
+     "??_8HamPhraseMeter@@7BRndAnimatable@@@",
+     "??_8RndSpline@@7B@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8NgLight@@7BRndTransformable@@@@0x8204b0d8",
+   "address": "0x8204b0d8",
+   "survivor": "??_8NgLight@@7BRndTransformable@@@",
+   "folded": [
+    "??_8HamPhotoDisplay@@7BRndDrawable@@@",
+    "??_8HamPhraseMeter@@7BRndDrawable@@@"
+   ],
+   "n_map_names_at_addr": 3,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 3 public name(s) share 0x8204b0d8; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 3 name(s) our or the target objects use; the target objects define exactly one of them (??_8NgLight@@7BRndTransformable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 3 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name; 3 of them modulo trailing alignment padding dtk's splitter attributed to the survivor.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8HamPhotoDisplay@@7BRndDrawable@@@",
+     "??_8HamPhraseMeter@@7BRndDrawable@@@",
+     "??_8NgLight@@7BRndTransformable@@@"
+    ],
+    "padded": [
+     "??_8HamPhotoDisplay@@7BRndDrawable@@@",
+     "??_8HamPhraseMeter@@7BRndDrawable@@@",
+     "??_8NgLight@@7BRndTransformable@@@"
+    ]
+   }
+  },
+  {
+   "name": "retailmap-data:??_8CharBonesBlender@@7BCharPollable@@@@0x8204b388",
+   "address": "0x8204b388",
+   "survivor": "??_8CharBonesBlender@@7BCharPollable@@@",
+   "folded": [
+    "??_8Flow@@7BRndPollable@@@",
+    "??_8HamRegulate@@7BCharPollable@@@"
+   ],
+   "n_map_names_at_addr": 3,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 3 public name(s) share 0x8204b388; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 3 name(s) our or the target objects use; the target objects define exactly one of them (??_8CharBonesBlender@@7BCharPollable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 3 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8CharBonesBlender@@7BCharPollable@@@",
+     "??_8Flow@@7BRndPollable@@@",
+     "??_8HamRegulate@@7BCharPollable@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8FlowCommand@@7B@@0x8204b390",
+   "address": "0x8204b390",
+   "survivor": "??_8FlowCommand@@7B@",
+   "folded": [
+    "??_8HamPhotoDisplay@@7BRndPollable@@@",
+    "??_8HamPhraseMeter@@7BRndPollable@@@",
+    "??_8HamRegulate@@7BRndHighlightable@@@",
+    "??_8RndParticleSysAnim@@7B@"
+   ],
+   "n_map_names_at_addr": 5,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 5 public name(s) share 0x8204b390; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 5 name(s) our or the target objects use; the target objects define exactly one of them (??_8FlowCommand@@7B@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 5 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8FlowCommand@@7B@",
+     "??_8HamPhotoDisplay@@7BRndPollable@@@",
+     "??_8HamPhraseMeter@@7BRndPollable@@@",
+     "??_8HamRegulate@@7BRndHighlightable@@@",
+     "??_8RndParticleSysAnim@@7B@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8HamRibbon@@7B@@0x8204b968",
+   "address": "0x8204b968",
+   "survivor": "??_8HamRibbon@@7B@",
+   "folded": [
+    "??_8RndShockwave@@7BRndTransformable@@@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x8204b968; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8HamRibbon@@7B@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name; 2 of them modulo trailing alignment padding dtk's splitter attributed to the survivor.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8HamRibbon@@7B@",
+     "??_8RndShockwave@@7BRndTransformable@@@"
+    ],
+    "padded": [
+     "??_8HamRibbon@@7B@",
+     "??_8RndShockwave@@7BRndTransformable@@@"
+    ]
+   }
+  },
+  {
+   "name": "retailmap-data:??_8RhythmDetectorGroup@@7B@@0x8205170c",
+   "address": "0x8205170c",
+   "survivor": "??_8RhythmDetectorGroup@@7B@",
+   "folded": [
+    "??_8CharBoneOffset@@7BCharPollable@@@",
+    "??_8PhotoSpotlightPositioner@@7B@",
+    "??_8PracticeSection@@7B@"
+   ],
+   "n_map_names_at_addr": 4,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 4 public name(s) share 0x8205170c; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 4 name(s) our or the target objects use; the target objects define exactly one of them (??_8RhythmDetectorGroup@@7B@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 4 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name; 4 of them modulo trailing alignment padding dtk's splitter attributed to the survivor.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8CharBoneOffset@@7BCharPollable@@@",
+     "??_8PhotoSpotlightPositioner@@7B@",
+     "??_8PracticeSection@@7B@",
+     "??_8RhythmDetectorGroup@@7B@"
+    ],
+    "padded": [
+     "??_8CharBoneOffset@@7BCharPollable@@@",
+     "??_8PhotoSpotlightPositioner@@7B@",
+     "??_8PracticeSection@@7B@",
+     "??_8RhythmDetectorGroup@@7B@"
+    ]
+   }
+  },
+  {
+   "name": "retailmap-data:??_8HamPhotoDisplay@@7BRndTransformable@@0x82059f90",
+   "address": "0x82059f90",
+   "survivor": "??_8HamPhotoDisplay@@7BRndTransformable@@@",
+   "folded": [
+    "??_8HamPhraseMeter@@7BRndTransformable@@@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x82059f90; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8HamPhotoDisplay@@7BRndTransformable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8HamPhotoDisplay@@7BRndTransformable@@@",
+     "??_8HamPhraseMeter@@7BRndTransformable@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8HamPhraseMeter@@7BObjectDir@@@@0x82059f9c",
+   "address": "0x82059f9c",
+   "survivor": "??_8HamPhraseMeter@@7BObjectDir@@@",
+   "folded": [
+    "??_8HamPhotoDisplay@@7BObjectDir@@@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x82059f9c; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8HamPhraseMeter@@7BObjectDir@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8HamPhotoDisplay@@7BObjectDir@@@",
+     "??_8HamPhraseMeter@@7BObjectDir@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8HamList@@7B@@0x8205a368",
+   "address": "0x8205a368",
+   "survivor": "??_8HamList@@7B@",
+   "folded": [
+    "??_8UIList@@7B@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x8205a368; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8HamList@@7B@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name; 2 of them modulo trailing alignment padding dtk's splitter attributed to the survivor.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8HamList@@7B@",
+     "??_8UIList@@7B@"
+    ],
+    "padded": [
+     "??_8HamList@@7B@",
+     "??_8UIList@@7B@"
+    ]
+   }
+  },
+  {
+   "name": "retailmap-data:??_8AppLabel@@7BUIComponent@@@@0x8205a9b0",
+   "address": "0x8205a9b0",
+   "survivor": "??_8AppLabel@@7BUIComponent@@@",
+   "folded": [
+    "??_8HamLabel@@7BUIComponent@@@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x8205a9b0; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8AppLabel@@7BUIComponent@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8AppLabel@@7BUIComponent@@@",
+     "??_8HamLabel@@7BUIComponent@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8HamLabel@@7BRndText@@@@0x8205a9c4",
+   "address": "0x8205a9c4",
+   "survivor": "??_8HamLabel@@7BRndText@@@",
+   "folded": [
+    "??_8AppLabel@@7BRndText@@@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x8205a9c4; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8HamLabel@@7BRndText@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8AppLabel@@7BRndText@@@",
+     "??_8HamLabel@@7BRndText@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8DxEnviron@@7BRndTransformable@@@@0x820876b8",
+   "address": "0x820876b8",
+   "survivor": "??_8DxEnviron@@7BRndTransformable@@@",
+   "folded": [
+    "??_8NgEnviron@@7BRndTransformable@@@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x820876b8; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8DxEnviron@@7BRndTransformable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name; 2 of them modulo trailing alignment padding dtk's splitter attributed to the survivor.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8DxEnviron@@7BRndTransformable@@@",
+     "??_8NgEnviron@@7BRndTransformable@@@"
+    ],
+    "padded": [
+     "??_8DxEnviron@@7BRndTransformable@@@",
+     "??_8NgEnviron@@7BRndTransformable@@@"
+    ]
+   }
+  },
+  {
+   "name": "retailmap-data:??_8DxMovie@@7B@@0x820890b0",
+   "address": "0x820890b0",
+   "survivor": "??_8DxMovie@@7B@",
+   "folded": [
+    "??_8BeatClock@@7B@",
+    "??_8CharGuitarString@@7B@",
+    "??_8CharPollGroup@@7BCharWeightable@@@",
+    "??_8FlowNode@@7B@"
+   ],
+   "n_map_names_at_addr": 5,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 5 public name(s) share 0x820890b0; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 5 name(s) our or the target objects use; the target objects define exactly one of them (??_8DxMovie@@7B@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 5 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8BeatClock@@7B@",
+     "??_8CharGuitarString@@7B@",
+     "??_8CharPollGroup@@7BCharWeightable@@@",
+     "??_8DxMovie@@7B@",
+     "??_8FlowNode@@7B@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8DxMesh@@7BRndTransformable@@@@0x8208942c",
+   "address": "0x8208942c",
+   "survivor": "??_8DxMesh@@7BRndTransformable@@@",
+   "folded": [
+    "??_8PhysicsVolume@@7BRndDrawable@@@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x8208942c; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8DxMesh@@7BRndTransformable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8DxMesh@@7BRndTransformable@@@",
+     "??_8PhysicsVolume@@7BRndDrawable@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8UIListDir@@7BRndTransformable@@@@0x82089c0c",
+   "address": "0x82089c0c",
+   "survivor": "??_8UIListDir@@7BRndTransformable@@@",
+   "folded": [
+    "??_8DxLight@@7BRndTransformable@@@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x82089c0c; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8UIListDir@@7BRndTransformable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8DxLight@@7BRndTransformable@@@",
+     "??_8UIListDir@@7BRndTransformable@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8RndCam@@7BRndTransformable@@@@0x8208a734",
+   "address": "0x8208a734",
+   "survivor": "??_8RndCam@@7BRndTransformable@@@",
+   "folded": [
+    "??_8HamDirector@@7BRndDrawable@@@",
+    "??_8Spotlight@@7BRndDrawable@@@"
+   ],
+   "n_map_names_at_addr": 3,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 3 public name(s) share 0x8208a734; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 3 name(s) our or the target objects use; the target objects define exactly one of them (??_8RndCam@@7BRndTransformable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 3 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8HamDirector@@7BRndDrawable@@@",
+     "??_8RndCam@@7BRndTransformable@@@",
+     "??_8Spotlight@@7BRndDrawable@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8RndTransformableRemover@@7BRndTransf@0x8208e8f4",
+   "address": "0x8208e8f4",
+   "survivor": "??_8RndTransformableRemover@@7BRndTransformable@@@",
+   "folded": [
+    "??_8RndTransformable@@7B0@@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x8208e8f4; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8RndTransformableRemover@@7BRndTransformable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8RndTransformable@@7B0@@",
+     "??_8RndTransformableRemover@@7BRndTransformable@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8CharPollable@@7B@@0x82092f1c",
+   "address": "0x82092f1c",
+   "survivor": "??_8CharPollable@@7B@",
+   "folded": [
+    "??_8RndEnterable@@7B@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x82092f1c; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8CharPollable@@7B@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8CharPollable@@7B@",
+     "??_8RndEnterable@@7B@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8NgEnviron@@7BRndDrawable@@@@0x8209cfe0",
+   "address": "0x8209cfe0",
+   "survivor": "??_8NgEnviron@@7BRndDrawable@@@",
+   "folded": [
+    "??_8DxEnviron@@7BRndDrawable@@@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x8209cfe0; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8NgEnviron@@7BRndDrawable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name; 2 of them modulo trailing alignment padding dtk's splitter attributed to the survivor.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8DxEnviron@@7BRndDrawable@@@",
+     "??_8NgEnviron@@7BRndDrawable@@@"
+    ],
+    "padded": [
+     "??_8DxEnviron@@7BRndDrawable@@@",
+     "??_8NgEnviron@@7BRndDrawable@@@"
+    ]
+   }
+  },
+  {
+   "name": "retailmap-data:??_8StreamRecorder@@7BRndDrawable@@@@0x8209d8c0",
+   "address": "0x8209d8c0",
+   "survivor": "??_8StreamRecorder@@7BRndDrawable@@@",
+   "folded": [
+    "??_8RndTexRenderer@@7BRndDrawable@@@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x8209d8c0; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8StreamRecorder@@7BRndDrawable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name; 2 of them modulo trailing alignment padding dtk's splitter attributed to the survivor.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8RndTexRenderer@@7BRndDrawable@@@",
+     "??_8StreamRecorder@@7BRndDrawable@@@"
+    ],
+    "padded": [
+     "??_8RndTexRenderer@@7BRndDrawable@@@",
+     "??_8StreamRecorder@@7BRndDrawable@@@"
+    ]
+   }
+  },
+  {
+   "name": "retailmap-data:??_8TexMovie@@7B@@0x8209f6c8",
+   "address": "0x8209f6c8",
+   "survivor": "??_8TexMovie@@7B@",
+   "folded": [
+    "??_8CharNeckTwist@@7B@",
+    "??_8RndMovie@@7B@",
+    "??_8RndPropAnim@@7B@",
+    "??_8SongSequence@@7B@"
+   ],
+   "n_map_names_at_addr": 5,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 5 public name(s) share 0x8209f6c8; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 5 name(s) our or the target objects use; the target objects define exactly one of them (??_8TexMovie@@7B@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 5 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8CharNeckTwist@@7B@",
+     "??_8RndMovie@@7B@",
+     "??_8RndPropAnim@@7B@",
+     "??_8SongSequence@@7B@",
+     "??_8TexMovie@@7B@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8FlowQueueable@@7B@@0x820a5d98",
+   "address": "0x820a5d98",
+   "survivor": "??_8FlowQueueable@@7B@",
+   "folded": [
+    "??_8FlowOutPort@@7B@",
+    "??_8RndMeshAnim@@7B@"
+   ],
+   "n_map_names_at_addr": 3,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 3 public name(s) share 0x820a5d98; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 3 name(s) our or the target objects use; the target objects define exactly one of them (??_8FlowQueueable@@7B@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 3 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8FlowOutPort@@7B@",
+     "??_8FlowQueueable@@7B@",
+     "??_8RndMeshAnim@@7B@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8CharDriverMidi@@7BCharPollable@@@@0x820ac3ac",
+   "address": "0x820ac3ac",
+   "survivor": "??_8CharDriverMidi@@7BCharPollable@@@",
+   "folded": [
+    "??_8RndPartLauncher@@7B@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x820ac3ac; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8CharDriverMidi@@7BCharPollable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name; 2 of them modulo trailing alignment padding dtk's splitter attributed to the survivor.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8CharDriverMidi@@7BCharPollable@@@",
+     "??_8RndPartLauncher@@7B@"
+    ],
+    "padded": [
+     "??_8CharDriverMidi@@7BCharPollable@@@",
+     "??_8RndPartLauncher@@7B@"
+    ]
+   }
+  },
+  {
+   "name": "retailmap-data:??_8RndGenerator@@7BRndDrawable@@@@0x820ae604",
+   "address": "0x820ae604",
+   "survivor": "??_8RndGenerator@@7BRndDrawable@@@",
+   "folded": [
+    "??_8HamRibbon@@7BRndDrawable@@@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x820ae604; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8RndGenerator@@7BRndDrawable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8HamRibbon@@7BRndDrawable@@@",
+     "??_8RndGenerator@@7BRndDrawable@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8CursorPanel@@7B@@0x820ae950",
+   "address": "0x820ae950",
+   "survivor": "??_8CursorPanel@@7B@",
+   "folded": [
+    "??_8BlacklightPanel@@7B@",
+    "??_8HamPanel@@7B@",
+    "??_8PassiveMessagesPanel@@7B@",
+    "??_8RndMorph@@7B@",
+    "??_8RndPostProcMgr@@7B@",
+    "??_8SongSelectPanel@@7B@"
+   ],
+   "n_map_names_at_addr": 7,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 7 public name(s) share 0x820ae950; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 7 name(s) our or the target objects use; the target objects define exactly one of them (??_8CursorPanel@@7B@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 7 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8BlacklightPanel@@7B@",
+     "??_8CursorPanel@@7B@",
+     "??_8HamPanel@@7B@",
+     "??_8PassiveMessagesPanel@@7B@",
+     "??_8RndMorph@@7B@",
+     "??_8RndPostProcMgr@@7B@",
+     "??_8SongSelectPanel@@7B@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8RndTexBlender@@7BRndDrawable@@@@0x820b0be8",
+   "address": "0x820b0be8",
+   "survivor": "??_8RndTexBlender@@7BRndDrawable@@@",
+   "folded": [
+    "??_8RndFlare@@7BRndDrawable@@@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x820b0be8; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8RndTexBlender@@7BRndDrawable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name; 2 of them modulo trailing alignment padding dtk's splitter attributed to the survivor.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8RndFlare@@7BRndDrawable@@@",
+     "??_8RndTexBlender@@7BRndDrawable@@@"
+    ],
+    "padded": [
+     "??_8RndFlare@@7BRndDrawable@@@",
+     "??_8RndTexBlender@@7BRndDrawable@@@"
+    ]
+   }
+  },
+  {
+   "name": "retailmap-data:??_8WorldCrowd@@7BRndDrawable@@@@0x820b0e2c",
+   "address": "0x820b0e2c",
+   "survivor": "??_8WorldCrowd@@7BRndDrawable@@@",
+   "folded": [
+    "??_8RndShockwave@@7B@",
+    "??_8RndTransProxy@@7BRndTransformable@@@"
+   ],
+   "n_map_names_at_addr": 3,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 3 public name(s) share 0x820b0e2c; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 3 name(s) our or the target objects use; the target objects define exactly one of them (??_8WorldCrowd@@7BRndDrawable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 3 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8RndShockwave@@7B@",
+     "??_8RndTransProxy@@7BRndTransformable@@@",
+     "??_8WorldCrowd@@7BRndDrawable@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8CharTransDraw@@7BRndDrawable@@@@0x820b13b8",
+   "address": "0x820b13b8",
+   "survivor": "??_8CharTransDraw@@7BRndDrawable@@@",
+   "folded": [
+    "??_8RndMultiMeshProxy@@7BRndDrawable@@@",
+    "??_8RndSoftParticles@@7BRndDrawable@@@"
+   ],
+   "n_map_names_at_addr": 3,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 3 public name(s) share 0x820b13b8; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 3 name(s) our or the target objects use; the target objects define exactly one of them (??_8CharTransDraw@@7BRndDrawable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 3 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name; 3 of them modulo trailing alignment padding dtk's splitter attributed to the survivor.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8CharTransDraw@@7BRndDrawable@@@",
+     "??_8RndMultiMeshProxy@@7BRndDrawable@@@",
+     "??_8RndSoftParticles@@7BRndDrawable@@@"
+    ],
+    "padded": [
+     "??_8CharTransDraw@@7BRndDrawable@@@",
+     "??_8RndMultiMeshProxy@@7BRndDrawable@@@",
+     "??_8RndSoftParticles@@7BRndDrawable@@@"
+    ]
+   }
+  },
+  {
+   "name": "retailmap-data:??_8CreditsPanel@@7B@@0x820bcc48",
+   "address": "0x820bcc48",
+   "survivor": "??_8CreditsPanel@@7B@",
+   "folded": [
+    "??_8SynthEmitter@@7B@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x820bcc48; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8CreditsPanel@@7B@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8CreditsPanel@@7B@",
+     "??_8SynthEmitter@@7B@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8CharCollide@@7BRndTransformable@@@@0x820be8cc",
+   "address": "0x820be8cc",
+   "survivor": "??_8CharCollide@@7BRndTransformable@@@",
+   "folded": [
+    "??_8SkeletonViz@@7BRndDrawable@@@",
+    "??_8ThreeDSound@@7BRndTransformable@@@"
+   ],
+   "n_map_names_at_addr": 3,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 3 public name(s) share 0x820be8cc; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 3 name(s) our or the target objects use; the target objects define exactly one of them (??_8CharCollide@@7BRndTransformable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 3 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8CharCollide@@7BRndTransformable@@@",
+     "??_8SkeletonViz@@7BRndDrawable@@@",
+     "??_8ThreeDSound@@7BRndTransformable@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8SharedGroup@@7B@@0x820bee88",
+   "address": "0x820bee88",
+   "survivor": "??_8SharedGroup@@7B@",
+   "folded": [
+    "??_8MeterEffectMonitor@@7B@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x820bee88; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8SharedGroup@@7B@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8MeterEffectMonitor@@7B@",
+     "??_8SharedGroup@@7B@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8Screenshot@@7BRndHighlightable@@@@0x820c8288",
+   "address": "0x820c8288",
+   "survivor": "??_8Screenshot@@7BRndHighlightable@@@",
+   "folded": [
+    "??_8AppLabel@@7BRndHighlightable@@@",
+    "??_8AppMiniLeaderboardDisplay@@7BRndHighlightable@@@",
+    "??_8CamShot@@7BRndHighlightable@@@",
+    "??_8CharClipSet@@7BRndHighlightable@@@",
+    "??_8CharCollide@@7BRndHighlightable@@@",
+    "??_8CharCuff@@7BRndHighlightable@@@",
+    "??_8CharFeedback@@7BRndHighlightable@@@",
+    "??_8CharInterest@@7BRndHighlightable@@@",
+    "??_8CharTransDraw@@7BRndHighlightable@@@",
+    "??_8Character@@7BRndHighlightable@@@",
+    "??_8DepthBuffer3D@@7BRndHighlightable@@@",
+    "??_8DxCam@@7BRndHighlightable@@@",
+    "??_8DxEnviron@@7BRndHighlightable@@@",
+    "??_8DxLight@@7BRndHighlightable@@@",
+    "??_8DxMesh@@7BRndHighlightable@@@",
+    "??_8DxMultiMesh@@7BRndHighlightable@@@",
+    "??_8DxParticleSys@@7BRndHighlightable@@@",
+    "??_8DxTexRenderer@@7BRndHighlightable@@@",
+    "??_8HamCamShot@@7BRndHighlightable@@@",
+    "??_8HamCharacter@@7BRndHighlightable@@@",
+    "??_8HamDirector@@7BRndHighlightable@@@",
+    "??_8HamIconMan@@7BRndHighlightable@@@",
+    "??_8HamLabel@@7BRndHighlightable@@@",
+    "??_8HamList@@7BRndHighlightable@@@",
+    "??_8HamListRibbon@@7BRndHighlightable@@@",
+    "??_8HamNavList@@7BRndHighlightable@@@",
+    "??_8HamPhotoDisplay@@7BRndHighlightable@@@",
+    "??_8HamPhraseMeter@@7BRndHighlightable@@@",
+    "??_8HamRibbon@@7BRndHighlightable@@@",
+    "??_8HamScrollSpeedIndicator@@7BRndHighlightable@@@",
+    "??_8HamStarsDisplay@@7BRndHighlightable@@@",
+    "??_8HamVisDir@@7BRndHighlightable@@@",
+    "??_8InlineHelp@@7BRndHighlightable@@@",
+    "??_8LabelNumberTicker@@7BRndHighlightable@@@",
+    "??_8LabelShrinkWrapper@@7BRndHighlightable@@@",
+    "??_8MeterDisplay@@7BRndHighlightable@@@",
+    "??_8MiniLeaderboardDisplay@@7BRndHighlightable@@@",
+    "??_8MoveDir@@7BRndHighlightable@@@",
+    "??_8NavigationSkeletonDir@@7BRndHighlightable@@@",
+    "??_8NgEnviron@@7BRndHighlightable@@@",
+    "??_8NgLight@@7BRndHighlightable@@@",
+    "??_8NgSpotlightDrawer@@7BRndHighlightable@@@",
+    "??_8PanelDir@@7BRndHighlightable@@@",
+    "??_8PhysicsVolume@@7BRndHighlightable@@@",
+    "??_8PostProcer@@7BRndHighlightable@@@",
+    "??_8RndCam@@7BRndHighlightable@@@",
+    "??_8RndDir@@7BRndHighlightable@@@",
+    "??_8RndDrawable@@7BRndHighlightable@@@",
+    "??_8RndEnviron@@7BRndHighlightable@@@",
+    "??_8RndFlare@@7BRndHighlightable@@@",
+    "??_8RndGenerator@@7BRndHighlightable@@@",
+    "??_8RndGroup@@7BRndHighlightable@@@",
+    "??_8RndLight@@7BRndHighlightable@@@",
+    "??_8RndLine@@7BRndHighlightable@@@",
+    "??_8RndMesh@@7BRndHighlightable@@@",
+    "??_8RndMotionBlur@@7BRndHighlightable@@@",
+    "??_8RndMultiMesh@@7BRndHighlightable@@@",
+    "??_8RndMultiMeshProxy@@7BRndHighlightable@@@",
+    "??_8RndParticleSys@@7BRndHighlightable@@@",
+    "??_8RndPollAnim@@7BRndAnimatable@@@",
+    "??_8RndRibbon@@7BRndHighlightable@@@",
+    "??_8RndScreenMask@@7BRndHighlightable@@@",
+    "??_8RndShockwave@@7BRndHighlightable@@@",
+    "??_8RndSoftParticles@@7BRndHighlightable@@@",
+    "??_8RndTexBlender@@7BRndHighlightable@@@",
+    "??_8RndTexRenderer@@7BRndHighlightable@@@",
+    "??_8RndText@@7BRndHighlightable@@@",
+    "??_8RndTransProxy@@7BRndHighlightable@@@",
+    "??_8RndTransformable@@7BRndHighlightable@@@",
+    "??_8RndTransformableRemover@@7BRndHighlightable@@@",
+    "??_8ShadowBone@@7BRndHighlightable@@@",
+    "??_8SkeletonDir@@7BRndHighlightable@@@",
+    "??_8SkeletonViz@@7BRndHighlightable@@@",
+    "??_8SongDifficultyDisplay@@7BRndHighlightable@@@",
+    "??_8Spotlight@@7BRndHighlightable@@@",
+    "??_8SpotlightDrawer@@7BRndHighlightable@@@",
+    "??_8SpotlightEnder@@7BRndHighlightable@@@",
+    "??_8StarsDisplay@@7BRndHighlightable@@@",
+    "??_8StreamRecorder@@7BRndHighlightable@@@",
+    "??_8StreamRenderer@@7BRndHighlightable@@@",
+    "??_8SynthEmitter@@7BRndHighlightable@@@",
+    "??_8TexMovie@@7BRndHighlightable@@@",
+    "??_8TexProc@@7BRndHighlightable@@@",
+    "??_8ThreeDSound@@7BRndHighlightable@@@",
+    "??_8UIButton@@7BRndHighlightable@@@",
+    "??_8UIComponent@@7BRndHighlightable@@@",
+    "??_8UILabel@@7BRndHighlightable@@@",
+    "??_8UILabelDir@@7BRndHighlightable@@@",
+    "??_8UIList@@7BRndHighlightable@@@",
+    "??_8UIListDir@@7BRndHighlightable@@@",
+    "??_8UIPicture@@7BRndHighlightable@@@",
+    "??_8UISlider@@7BRndHighlightable@@@",
+    "??_8Waypoint@@7BRndHighlightable@@@",
+    "??_8WorldCrowd3DCharHandle@@7BRndHighlightable@@@",
+    "??_8WorldCrowd@@7BRndHighlightable@@@",
+    "??_8WorldDir@@7BRndHighlightable@@@",
+    "??_8WorldInstance@@7BRndHighlightable@@@",
+    "??_8WorldReflection@@7BRndHighlightable@@@"
+   ],
+   "n_map_names_at_addr": 99,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 99 public name(s) share 0x820c8288; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 99 name(s) our or the target objects use; the target objects define exactly one of them (??_8Screenshot@@7BRndHighlightable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 99 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8AppLabel@@7BRndHighlightable@@@",
+     "??_8AppMiniLeaderboardDisplay@@7BRndHighlightable@@@",
+     "??_8CamShot@@7BRndHighlightable@@@",
+     "??_8CharClipSet@@7BRndHighlightable@@@",
+     "??_8CharCollide@@7BRndHighlightable@@@",
+     "??_8CharCuff@@7BRndHighlightable@@@",
+     "??_8CharFeedback@@7BRndHighlightable@@@",
+     "??_8CharInterest@@7BRndHighlightable@@@",
+     "??_8CharTransDraw@@7BRndHighlightable@@@",
+     "??_8Character@@7BRndHighlightable@@@",
+     "??_8DepthBuffer3D@@7BRndHighlightable@@@",
+     "??_8DxCam@@7BRndHighlightable@@@",
+     "??_8DxEnviron@@7BRndHighlightable@@@",
+     "??_8DxLight@@7BRndHighlightable@@@",
+     "??_8DxMesh@@7BRndHighlightable@@@",
+     "??_8DxMultiMesh@@7BRndHighlightable@@@",
+     "??_8DxParticleSys@@7BRndHighlightable@@@",
+     "??_8DxTexRenderer@@7BRndHighlightable@@@",
+     "??_8HamCamShot@@7BRndHighlightable@@@",
+     "??_8HamCharacter@@7BRndHighlightable@@@",
+     "??_8HamDirector@@7BRndHighlightable@@@",
+     "??_8HamIconMan@@7BRndHighlightable@@@",
+     "??_8HamLabel@@7BRndHighlightable@@@",
+     "??_8HamList@@7BRndHighlightable@@@",
+     "??_8HamListRibbon@@7BRndHighlightable@@@",
+     "??_8HamNavList@@7BRndHighlightable@@@",
+     "??_8HamPhotoDisplay@@7BRndHighlightable@@@",
+     "??_8HamPhraseMeter@@7BRndHighlightable@@@",
+     "??_8HamRibbon@@7BRndHighlightable@@@",
+     "??_8HamScrollSpeedIndicator@@7BRndHighlightable@@@",
+     "??_8HamStarsDisplay@@7BRndHighlightable@@@",
+     "??_8HamVisDir@@7BRndHighlightable@@@",
+     "??_8InlineHelp@@7BRndHighlightable@@@",
+     "??_8LabelNumberTicker@@7BRndHighlightable@@@",
+     "??_8LabelShrinkWrapper@@7BRndHighlightable@@@",
+     "??_8MeterDisplay@@7BRndHighlightable@@@",
+     "??_8MiniLeaderboardDisplay@@7BRndHighlightable@@@",
+     "??_8MoveDir@@7BRndHighlightable@@@",
+     "??_8NavigationSkeletonDir@@7BRndHighlightable@@@",
+     "??_8NgEnviron@@7BRndHighlightable@@@",
+     "??_8NgLight@@7BRndHighlightable@@@",
+     "??_8NgSpotlightDrawer@@7BRndHighlightable@@@",
+     "??_8PanelDir@@7BRndHighlightable@@@",
+     "??_8PhysicsVolume@@7BRndHighlightable@@@",
+     "??_8PostProcer@@7BRndHighlightable@@@",
+     "??_8RndCam@@7BRndHighlightable@@@",
+     "??_8RndDir@@7BRndHighlightable@@@",
+     "??_8RndDrawable@@7BRndHighlightable@@@",
+     "??_8RndEnviron@@7BRndHighlightable@@@",
+     "??_8RndFlare@@7BRndHighlightable@@@",
+     "??_8RndGenerator@@7BRndHighlightable@@@",
+     "??_8RndGroup@@7BRndHighlightable@@@",
+     "??_8RndLight@@7BRndHighlightable@@@",
+     "??_8RndLine@@7BRndHighlightable@@@",
+     "??_8RndMesh@@7BRndHighlightable@@@",
+     "??_8RndMotionBlur@@7BRndHighlightable@@@",
+     "??_8RndMultiMesh@@7BRndHighlightable@@@",
+     "??_8RndMultiMeshProxy@@7BRndHighlightable@@@",
+     "??_8RndParticleSys@@7BRndHighlightable@@@",
+     "??_8RndPollAnim@@7BRndAnimatable@@@",
+     "??_8RndRibbon@@7BRndHighlightable@@@",
+     "??_8RndScreenMask@@7BRndHighlightable@@@",
+     "??_8RndShockwave@@7BRndHighlightable@@@",
+     "??_8RndSoftParticles@@7BRndHighlightable@@@",
+     "??_8RndTexBlender@@7BRndHighlightable@@@",
+     "??_8RndTexRenderer@@7BRndHighlightable@@@",
+     "??_8RndText@@7BRndHighlightable@@@",
+     "??_8RndTransProxy@@7BRndHighlightable@@@",
+     "??_8RndTransformable@@7BRndHighlightable@@@",
+     "??_8RndTransformableRemover@@7BRndHighlightable@@@",
+     "??_8Screenshot@@7BRndHighlightable@@@",
+     "??_8ShadowBone@@7BRndHighlightable@@@",
+     "??_8SkeletonDir@@7BRndHighlightable@@@",
+     "??_8SkeletonViz@@7BRndHighlightable@@@",
+     "??_8SongDifficultyDisplay@@7BRndHighlightable@@@",
+     "??_8Spotlight@@7BRndHighlightable@@@",
+     "??_8SpotlightDrawer@@7BRndHighlightable@@@",
+     "??_8SpotlightEnder@@7BRndHighlightable@@@",
+     "??_8StarsDisplay@@7BRndHighlightable@@@",
+     "??_8StreamRecorder@@7BRndHighlightable@@@",
+     "??_8StreamRenderer@@7BRndHighlightable@@@",
+     "??_8SynthEmitter@@7BRndHighlightable@@@",
+     "??_8TexMovie@@7BRndHighlightable@@@",
+     "??_8TexProc@@7BRndHighlightable@@@",
+     "??_8ThreeDSound@@7BRndHighlightable@@@",
+     "??_8UIButton@@7BRndHighlightable@@@",
+     "??_8UIComponent@@7BRndHighlightable@@@",
+     "??_8UILabel@@7BRndHighlightable@@@",
+     "??_8UILabelDir@@7BRndHighlightable@@@",
+     "??_8UIList@@7BRndHighlightable@@@",
+     "??_8UIListDir@@7BRndHighlightable@@@",
+     "??_8UIPicture@@7BRndHighlightable@@@",
+     "??_8UISlider@@7BRndHighlightable@@@",
+     "??_8Waypoint@@7BRndHighlightable@@@",
+     "??_8WorldCrowd3DCharHandle@@7BRndHighlightable@@@",
+     "??_8WorldCrowd@@7BRndHighlightable@@@",
+     "??_8WorldDir@@7BRndHighlightable@@@",
+     "??_8WorldInstance@@7BRndHighlightable@@@",
+     "??_8WorldReflection@@7BRndHighlightable@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8FlowAnimate@@7B@@0x820c8b18",
+   "address": "0x820c8b18",
+   "survivor": "??_8FlowAnimate@@7B@",
+   "folded": [
+    "??_8UIListDir@@7BRndPollable@@@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x820c8b18; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8FlowAnimate@@7B@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8FlowAnimate@@7B@",
+     "??_8UIListDir@@7BRndPollable@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8UIListDir@@7BRndAnimatable@@@@0x820c8b20",
+   "address": "0x820c8b20",
+   "survivor": "??_8UIListDir@@7BRndAnimatable@@@",
+   "folded": [
+    "??_8CharIKFingers@@7BCharWeightable@@@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x820c8b20; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8UIListDir@@7BRndAnimatable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8CharIKFingers@@7BCharWeightable@@@",
+     "??_8UIListDir@@7BRndAnimatable@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8UILabel@@7BRndText@@@@0x820cba00",
+   "address": "0x820cba00",
+   "survivor": "??_8UILabel@@7BRndText@@@",
+   "folded": [
+    "??_8UIButton@@7BRndText@@@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x820cba00; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8UILabel@@7BRndText@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name; 2 of them modulo trailing alignment padding dtk's splitter attributed to the survivor.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8UIButton@@7BRndText@@@",
+     "??_8UILabel@@7BRndText@@@"
+    ],
+    "padded": [
+     "??_8UIButton@@7BRndText@@@",
+     "??_8UILabel@@7BRndText@@@"
+    ]
+   }
+  },
+  {
+   "name": "retailmap-data:??_8WorldInstance@@7BRndDrawable@@@@0x820ccca0",
+   "address": "0x820ccca0",
+   "survivor": "??_8WorldInstance@@7BRndDrawable@@@",
+   "folded": [
+    "??_8PanelDir@@7BRndTransformable@@@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x820ccca0; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8WorldInstance@@7BRndDrawable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8PanelDir@@7BRndTransformable@@@",
+     "??_8WorldInstance@@7BRndDrawable@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8CharEyes@@7BCharPollable@@@@0x820cccac",
+   "address": "0x820cccac",
+   "survivor": "??_8CharEyes@@7BCharPollable@@@",
+   "folded": [
+    "??_8PanelDir@@7BRndAnimatable@@@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x820cccac; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8CharEyes@@7BCharPollable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8CharEyes@@7BCharPollable@@@",
+     "??_8PanelDir@@7BRndAnimatable@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8PanelDir@@7BObjectDir@@@@0x820cccc0",
+   "address": "0x820cccc0",
+   "survivor": "??_8PanelDir@@7BObjectDir@@@",
+   "folded": [
+    "??_8HamCharacter@@7BRndTransformable@@@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x820cccc0; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8PanelDir@@7BObjectDir@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name; 2 of them modulo trailing alignment padding dtk's splitter attributed to the survivor.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8HamCharacter@@7BRndTransformable@@@",
+     "??_8PanelDir@@7BObjectDir@@@"
+    ],
+    "padded": [
+     "??_8HamCharacter@@7BRndTransformable@@@",
+     "??_8PanelDir@@7BObjectDir@@@"
+    ]
+   }
+  },
+  {
+   "name": "retailmap-data:??_8UIPanel@@7B@@0x820ce2f4",
+   "address": "0x820ce2f4",
+   "survivor": "??_8UIPanel@@7B@",
+   "folded": [
+    "??_8CharForeTwist@@7BRndHighlightable@@@",
+    "??_8ConnectionStatusPanel@@7B@"
+   ],
+   "n_map_names_at_addr": 3,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 3 public name(s) share 0x820ce2f4; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 3 name(s) our or the target objects use; the target objects define exactly one of them (??_8UIPanel@@7B@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 3 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name; 3 of them modulo trailing alignment padding dtk's splitter attributed to the survivor.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8CharForeTwist@@7BRndHighlightable@@@",
+     "??_8ConnectionStatusPanel@@7B@",
+     "??_8UIPanel@@7B@"
+    ],
+    "padded": [
+     "??_8CharForeTwist@@7BRndHighlightable@@@",
+     "??_8ConnectionStatusPanel@@7B@",
+     "??_8UIPanel@@7B@"
+    ]
+   }
+  },
+  {
+   "name": "retailmap-data:??_8LabelNumberTicker@@7BRndDrawable@@@@0x820d25f0",
+   "address": "0x820d25f0",
+   "survivor": "??_8LabelNumberTicker@@7BRndDrawable@@@",
+   "folded": [
+    "??_8UIComponent@@7BRndDrawable@@@",
+    "??_8UIPicture@@7BRndDrawable@@@"
+   ],
+   "n_map_names_at_addr": 3,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 3 public name(s) share 0x820d25f0; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 3 name(s) our or the target objects use; the target objects define exactly one of them (??_8LabelNumberTicker@@7BRndDrawable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 3 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8LabelNumberTicker@@7BRndDrawable@@@",
+     "??_8UIComponent@@7BRndDrawable@@@",
+     "??_8UIPicture@@7BRndDrawable@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8UIPicture@@7BRndTransformable@@@@0x820d25fc",
+   "address": "0x820d25fc",
+   "survivor": "??_8UIPicture@@7BRndTransformable@@@",
+   "folded": [
+    "??_8LabelNumberTicker@@7BRndTransformable@@@",
+    "??_8UIComponent@@7BRndTransformable@@@"
+   ],
+   "n_map_names_at_addr": 3,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 3 public name(s) share 0x820d25fc; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 3 name(s) our or the target objects use; the target objects define exactly one of them (??_8UIPicture@@7BRndTransformable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 3 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8LabelNumberTicker@@7BRndTransformable@@@",
+     "??_8UIComponent@@7BRndTransformable@@@",
+     "??_8UIPicture@@7BRndTransformable@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8UILabel@@7BUIComponent@@@@0x820d3c3c",
+   "address": "0x820d3c3c",
+   "survivor": "??_8UILabel@@7BUIComponent@@@",
+   "folded": [
+    "??_8UIButton@@7BUIComponent@@@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x820d3c3c; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8UILabel@@7BUIComponent@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8UIButton@@7BUIComponent@@@",
+     "??_8UILabel@@7BUIComponent@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8CamShot@@7B@@0x820e526c",
+   "address": "0x820e526c",
+   "survivor": "??_8CamShot@@7B@",
+   "folded": [
+    "??_8SkeletonDir@@7BObjectDir@@@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x820e526c; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8CamShot@@7B@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8CamShot@@7B@",
+     "??_8SkeletonDir@@7BObjectDir@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8HamIconMan@@7B@@0x820e67a8",
+   "address": "0x820e67a8",
+   "survivor": "??_8HamIconMan@@7B@",
+   "folded": [
+    "??_8SpotlightDrawer@@7BRndDrawable@@@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x820e67a8; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8HamIconMan@@7B@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name; 2 of them modulo trailing alignment padding dtk's splitter attributed to the survivor.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8HamIconMan@@7B@",
+     "??_8SpotlightDrawer@@7BRndDrawable@@@"
+    ],
+    "padded": [
+     "??_8HamIconMan@@7B@",
+     "??_8SpotlightDrawer@@7BRndDrawable@@@"
+    ]
+   }
+  },
+  {
+   "name": "retailmap-data:??_8GamePanel@@7B@@0x820ec048",
+   "address": "0x820ec048",
+   "survivor": "??_8GamePanel@@7B@",
+   "folded": [
+    "??_8LightPreset@@7B@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x820ec048; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8GamePanel@@7B@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8GamePanel@@7B@",
+     "??_8LightPreset@@7B@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8SpotlightEnder@@7BRndDrawable@@@@0x820eccc0",
+   "address": "0x820eccc0",
+   "survivor": "??_8SpotlightEnder@@7BRndDrawable@@@",
+   "folded": [
+    "??_8PostProcer@@7BRndDrawable@@@",
+    "??_8RndDrawable@@7B0@@"
+   ],
+   "n_map_names_at_addr": 3,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 3 public name(s) share 0x820eccc0; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 3 name(s) our or the target objects use; the target objects define exactly one of them (??_8SpotlightEnder@@7BRndDrawable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 3 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name; 3 of them modulo trailing alignment padding dtk's splitter attributed to the survivor.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8PostProcer@@7BRndDrawable@@@",
+     "??_8RndDrawable@@7B0@@",
+     "??_8SpotlightEnder@@7BRndDrawable@@@"
+    ],
+    "padded": [
+     "??_8PostProcer@@7BRndDrawable@@@",
+     "??_8RndDrawable@@7B0@@",
+     "??_8SpotlightEnder@@7BRndDrawable@@@"
+    ]
+   }
+  },
+  {
+   "name": "retailmap-data:??_8RndMesh@@7BRndTransformable@@@@0x820ed0f0",
+   "address": "0x820ed0f0",
+   "survivor": "??_8RndMesh@@7BRndTransformable@@@",
+   "folded": [
+    "??_8WorldReflection@@7BRndTransformable@@@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x820ed0f0; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8RndMesh@@7BRndTransformable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8RndMesh@@7BRndTransformable@@@",
+     "??_8WorldReflection@@7BRndTransformable@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8WorldReflection@@7BRndDrawable@@@@0x820ed0fc",
+   "address": "0x820ed0fc",
+   "survivor": "??_8WorldReflection@@7BRndDrawable@@@",
+   "folded": [
+    "??_8RndMesh@@7BRndDrawable@@@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x820ed0fc; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8WorldReflection@@7BRndDrawable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8RndMesh@@7BRndDrawable@@@",
+     "??_8WorldReflection@@7BRndDrawable@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8ChallengeResultPanel@@7B@@0x82108acc",
+   "address": "0x82108acc",
+   "survivor": "??_8ChallengeResultPanel@@7B@",
+   "folded": [
+    "??_8CharSleeve@@7BCharPollable@@@",
+    "??_8CharWeightSetter@@7BCharPollable@@@",
+    "??_8FlowLabel@@7B@",
+    "??_8HamDriver@@7BCharPollable@@@",
+    "??_8WeightInputPanel@@7B@",
+    "??_8WorldInstance@@7BRndPollable@@@"
+   ],
+   "n_map_names_at_addr": 7,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 7 public name(s) share 0x82108acc; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 7 name(s) our or the target objects use; the target objects define exactly one of them (??_8ChallengeResultPanel@@7B@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 7 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name; 7 of them modulo trailing alignment padding dtk's splitter attributed to the survivor.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8ChallengeResultPanel@@7B@",
+     "??_8CharSleeve@@7BCharPollable@@@",
+     "??_8CharWeightSetter@@7BCharPollable@@@",
+     "??_8FlowLabel@@7B@",
+     "??_8HamDriver@@7BCharPollable@@@",
+     "??_8WeightInputPanel@@7B@",
+     "??_8WorldInstance@@7BRndPollable@@@"
+    ],
+    "padded": [
+     "??_8ChallengeResultPanel@@7B@",
+     "??_8CharSleeve@@7BCharPollable@@@",
+     "??_8CharWeightSetter@@7BCharPollable@@@",
+     "??_8FlowLabel@@7B@",
+     "??_8HamDriver@@7BCharPollable@@@",
+     "??_8WeightInputPanel@@7B@",
+     "??_8WorldInstance@@7BRndPollable@@@"
+    ]
+   }
+  },
+  {
+   "name": "retailmap-data:??_8ChooseProfilePanel@@7B@@0x8210900c",
+   "address": "0x8210900c",
+   "survivor": "??_8ChooseProfilePanel@@7B@",
+   "folded": [
+    "??_8TransConstraint@@7BRndPollable@@@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x8210900c; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8ChooseProfilePanel@@7B@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name; 2 of them modulo trailing alignment padding dtk's splitter attributed to the survivor.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8ChooseProfilePanel@@7B@",
+     "??_8TransConstraint@@7BRndPollable@@@"
+    ],
+    "padded": [
+     "??_8ChooseProfilePanel@@7B@",
+     "??_8TransConstraint@@7BRndPollable@@@"
+    ]
+   }
+  },
+  {
+   "name": "retailmap-data:??_8StarsDisplay@@7B@@0x8210a0ac",
+   "address": "0x8210a0ac",
+   "survivor": "??_8StarsDisplay@@7B@",
+   "folded": [
+    "??_8HamStarsDisplay@@7B@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x8210a0ac; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8StarsDisplay@@7B@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8HamStarsDisplay@@7B@",
+     "??_8StarsDisplay@@7B@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8Flow@@7BObjectDir@@@@0x8210c5c0",
+   "address": "0x8210c5c0",
+   "survivor": "??_8Flow@@7BObjectDir@@@",
+   "folded": [
+    "??_8EventTrigger@@7B@",
+    "??_8MetaPerformer@@7B@",
+    "??_8QuickplayPerformer@@7B@"
+   ],
+   "n_map_names_at_addr": 4,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 4 public name(s) share 0x8210c5c0; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 4 name(s) our or the target objects use; the target objects define exactly one of them (??_8Flow@@7BObjectDir@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 4 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8EventTrigger@@7B@",
+     "??_8Flow@@7BObjectDir@@@",
+     "??_8MetaPerformer@@7B@",
+     "??_8QuickplayPerformer@@7B@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8HamIKEffector@@7BCharPollable@@@@0x82115e58",
+   "address": "0x82115e58",
+   "survivor": "??_8HamIKEffector@@7BCharPollable@@@",
+   "folded": [
+    "??_8CharDriver@@7BCharPollable@@@",
+    "??_8HelpBarPanel@@7B@"
+   ],
+   "n_map_names_at_addr": 3,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 3 public name(s) share 0x82115e58; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 3 name(s) our or the target objects use; the target objects define exactly one of them (??_8HamIKEffector@@7BCharPollable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 3 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8CharDriver@@7BCharPollable@@@",
+     "??_8HamIKEffector@@7BCharPollable@@@",
+     "??_8HelpBarPanel@@7B@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8AppMiniLeaderboardDisplay@@7BRndDraw@0x8211ed10",
+   "address": "0x8211ed10",
+   "survivor": "??_8AppMiniLeaderboardDisplay@@7BRndDrawable@@@",
+   "folded": [
+    "??_8AppLabel@@7BRndDrawable@@@",
+    "??_8HamLabel@@7BRndDrawable@@@",
+    "??_8HamList@@7BRndDrawable@@@",
+    "??_8HamNavList@@7BRndDrawable@@@",
+    "??_8HamStarsDisplay@@7BRndDrawable@@@",
+    "??_8InlineHelp@@7BRndDrawable@@@",
+    "??_8LabelShrinkWrapper@@7BRndDrawable@@@",
+    "??_8MeterDisplay@@7BRndDrawable@@@",
+    "??_8MiniLeaderboardDisplay@@7BRndDrawable@@@",
+    "??_8RndText@@7BRndDrawable@@@",
+    "??_8SongDifficultyDisplay@@7BRndDrawable@@@",
+    "??_8StarsDisplay@@7BRndDrawable@@@",
+    "??_8UIButton@@7BRndDrawable@@@",
+    "??_8UILabel@@7BRndDrawable@@@",
+    "??_8UIList@@7BRndDrawable@@@",
+    "??_8UISlider@@7BRndDrawable@@@"
+   ],
+   "n_map_names_at_addr": 17,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 17 public name(s) share 0x8211ed10; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 17 name(s) our or the target objects use; the target objects define exactly one of them (??_8AppMiniLeaderboardDisplay@@7BRndDrawable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 17 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8AppLabel@@7BRndDrawable@@@",
+     "??_8AppMiniLeaderboardDisplay@@7BRndDrawable@@@",
+     "??_8HamLabel@@7BRndDrawable@@@",
+     "??_8HamList@@7BRndDrawable@@@",
+     "??_8HamNavList@@7BRndDrawable@@@",
+     "??_8HamStarsDisplay@@7BRndDrawable@@@",
+     "??_8InlineHelp@@7BRndDrawable@@@",
+     "??_8LabelShrinkWrapper@@7BRndDrawable@@@",
+     "??_8MeterDisplay@@7BRndDrawable@@@",
+     "??_8MiniLeaderboardDisplay@@7BRndDrawable@@@",
+     "??_8RndText@@7BRndDrawable@@@",
+     "??_8SongDifficultyDisplay@@7BRndDrawable@@@",
+     "??_8StarsDisplay@@7BRndDrawable@@@",
+     "??_8UIButton@@7BRndDrawable@@@",
+     "??_8UILabel@@7BRndDrawable@@@",
+     "??_8UIList@@7BRndDrawable@@@",
+     "??_8UISlider@@7BRndDrawable@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8TransConstraint@@7BRndHighlightable@@0x8211feb4",
+   "address": "0x8211feb4",
+   "survivor": "??_8TransConstraint@@7BRndHighlightable@@@",
+   "folded": [
+    "??_8TexLoadPanel@@7B@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x8211feb4; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8TransConstraint@@7BRndHighlightable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name; 2 of them modulo trailing alignment padding dtk's splitter attributed to the survivor.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8TexLoadPanel@@7B@",
+     "??_8TransConstraint@@7BRndHighlightable@@@"
+    ],
+    "padded": [
+     "??_8TexLoadPanel@@7B@",
+     "??_8TransConstraint@@7BRndHighlightable@@@"
+    ]
+   }
+  },
+  {
+   "name": "retailmap-data:??_8FlowSwitch@@7B@@0x821201e4",
+   "address": "0x821201e4",
+   "survivor": "??_8FlowSwitch@@7B@",
+   "folded": [
+    "??_8CampaignSongSelectPanel@@7B@",
+    "??_8VoiceControlPanel@@7B@"
+   ],
+   "n_map_names_at_addr": 3,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 3 public name(s) share 0x821201e4; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 3 name(s) our or the target objects use; the target objects define exactly one of them (??_8FlowSwitch@@7B@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 3 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name; 3 of them modulo trailing alignment padding dtk's splitter attributed to the survivor.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8CampaignSongSelectPanel@@7B@",
+     "??_8FlowSwitch@@7B@",
+     "??_8VoiceControlPanel@@7B@"
+    ],
+    "padded": [
+     "??_8CampaignSongSelectPanel@@7B@",
+     "??_8FlowSwitch@@7B@",
+     "??_8VoiceControlPanel@@7B@"
+    ]
+   }
+  },
+  {
+   "name": "retailmap-data:??_8CharUpperTwist@@7B@@0x82128df4",
+   "address": "0x82128df4",
+   "survivor": "??_8CharUpperTwist@@7B@",
+   "folded": [
+    "??_8LoadingPanel@@7B@",
+    "??_8RndCamAnim@@7B@",
+    "??_8RndLightAnim@@7B@",
+    "??_8SongSelectPlaylistCustomizePanel@@7B@",
+    "??_8SongSelectPlaylistPanel@@7B@"
+   ],
+   "n_map_names_at_addr": 6,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 6 public name(s) share 0x82128df4; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 6 name(s) our or the target objects use; the target objects define exactly one of them (??_8CharUpperTwist@@7B@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 6 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name; 6 of them modulo trailing alignment padding dtk's splitter attributed to the survivor.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8CharUpperTwist@@7B@",
+     "??_8LoadingPanel@@7B@",
+     "??_8RndCamAnim@@7B@",
+     "??_8RndLightAnim@@7B@",
+     "??_8SongSelectPlaylistCustomizePanel@@7B@",
+     "??_8SongSelectPlaylistPanel@@7B@"
+    ],
+    "padded": [
+     "??_8CharUpperTwist@@7B@",
+     "??_8LoadingPanel@@7B@",
+     "??_8RndCamAnim@@7B@",
+     "??_8RndLightAnim@@7B@",
+     "??_8SongSelectPlaylistCustomizePanel@@7B@",
+     "??_8SongSelectPlaylistPanel@@7B@"
+    ]
+   }
+  },
+  {
+   "name": "retailmap-data:?g_CameraHalf_H@?1??TransformScreenToWor@0x821edbc0",
+   "address": "0x821edbc0",
+   "survivor": "?g_CameraHalf_H@?1??TransformScreenToWorldMM@ST@@YAXABH00PAM11@Z@4MB",
+   "folded": [
+    "__real@43700000"
+   ],
+   "n_map_names_at_addr": 3,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 3 public name(s) share 0x821edbc0; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (?g_CameraHalf_H@?1??TransformScreenToWorldMM@ST@@YAXABH00PAM11@Z@4MB), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 1 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "__real@43700000"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8HamIKEffector@@7BCharWeightable@@@@0x82250db0",
+   "address": "0x82250db0",
+   "survivor": "??_8HamIKEffector@@7BCharWeightable@@@",
+   "folded": [
+    "??_8CharDriver@@7BCharWeightable@@@",
+    "??_8KinectSharePanel@@7B@",
+    "??_8SkeletonDir@@7BRndPollable@@@"
+   ],
+   "n_map_names_at_addr": 4,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 4 public name(s) share 0x82250db0; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 4 name(s) our or the target objects use; the target objects define exactly one of them (??_8HamIKEffector@@7BCharWeightable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 4 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8CharDriver@@7BCharWeightable@@@",
+     "??_8HamIKEffector@@7BCharWeightable@@@",
+     "??_8KinectSharePanel@@7B@",
+     "??_8SkeletonDir@@7BRndPollable@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8SkeletonDir@@7BRndTransformable@@@@0x82250db8",
+   "address": "0x82250db8",
+   "survivor": "??_8SkeletonDir@@7BRndTransformable@@@",
+   "folded": [
+    "??_8RndGenerator@@7B@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x82250db8; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8SkeletonDir@@7BRndTransformable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8RndGenerator@@7B@",
+     "??_8SkeletonDir@@7BRndTransformable@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8SkeletonDir@@7BRndAnimatable@@@@0x82250dc4",
+   "address": "0x82250dc4",
+   "survivor": "??_8SkeletonDir@@7BRndAnimatable@@@",
+   "folded": [
+    "??_8HamCharacter@@7BRndPollable@@@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x82250dc4; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8SkeletonDir@@7BRndAnimatable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8HamCharacter@@7BRndPollable@@@",
+     "??_8SkeletonDir@@7BRndAnimatable@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8MainMenuPanel@@7B@@0x822558a8",
+   "address": "0x822558a8",
+   "survivor": "??_8MainMenuPanel@@7B@",
+   "folded": [
+    "??_8CharIKHead@@7BCharWeightable@@@",
+    "??_8NavigationSkeletonDir@@7BRndPollable@@@"
+   ],
+   "n_map_names_at_addr": 3,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 3 public name(s) share 0x822558a8; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 3 name(s) our or the target objects use; the target objects define exactly one of them (??_8MainMenuPanel@@7B@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 3 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8CharIKHead@@7BCharWeightable@@@",
+     "??_8MainMenuPanel@@7B@",
+     "??_8NavigationSkeletonDir@@7BRndPollable@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8Character@@7BRndTransformable@@@@0x822558bc",
+   "address": "0x822558bc",
+   "survivor": "??_8Character@@7BRndTransformable@@@",
+   "folded": [
+    "??_8NavigationSkeletonDir@@7BRndDrawable@@@"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x822558bc; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_8Character@@7BRndTransformable@@@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8Character@@7BRndTransformable@@@",
+     "??_8NavigationSkeletonDir@@7BRndDrawable@@@"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_8HeldButtonPanel@@7B@@0x8225a2dc",
+   "address": "0x8225a2dc",
+   "survivor": "??_8HeldButtonPanel@@7B@",
+   "folded": [
+    "??_8CampaignDiffSelectPanel@@7B@",
+    "??_8CharForeTwist@@7BCharPollable@@@",
+    "??_8CharIKScale@@7BCharPollable@@@",
+    "??_8EventDialogPanel@@7B@",
+    "??_8OverlayPanel@@7B@"
+   ],
+   "n_map_names_at_addr": 6,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 6 public name(s) share 0x8225a2dc; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 6 name(s) our or the target objects use; the target objects define exactly one of them (??_8HeldButtonPanel@@7B@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 6 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name; 6 of them modulo trailing alignment padding dtk's splitter attributed to the survivor.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_8CampaignDiffSelectPanel@@7B@",
+     "??_8CharForeTwist@@7BCharPollable@@@",
+     "??_8CharIKScale@@7BCharPollable@@@",
+     "??_8EventDialogPanel@@7B@",
+     "??_8HeldButtonPanel@@7B@",
+     "??_8OverlayPanel@@7B@"
+    ],
+    "padded": [
+     "??_8CampaignDiffSelectPanel@@7B@",
+     "??_8CharForeTwist@@7BCharPollable@@@",
+     "??_8CharIKScale@@7BCharPollable@@@",
+     "??_8EventDialogPanel@@7B@",
+     "??_8HeldButtonPanel@@7B@",
+     "??_8OverlayPanel@@7B@"
+    ]
+   }
+  },
+  {
+   "name": "retailmap-data:??$__lower_bound@PAUCompEv@DataEventList@0x825511f8",
+   "address": "0x825511f8",
+   "survivor": "??$__lower_bound@PAUCompEv@DataEventList@@MUEventTimeCompComp@?A0xbe67b340@@H@stlpmtx_std@@YAPAUCompEv@DataEventList@@PAU12@0ABMUEventTimeCompComp@?A0xbe67b340@@PAH@Z",
+   "folded": [
+    "??$__lower_bound@PAVDataEvent@@MUEventTimeComp@?A0xbe67b340@@H@stlpmtx_std@@YAPAVDataEvent@@PAV1@0ABMUEventTimeComp@?A0xbe67b340@@PAH@Z"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "code",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x825511f8; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??$__lower_bound@PAUCompEv@DataEventList@@MUEventTimeCompComp@?A0xbe67b340@@H@stlpmtx_std@@YAPAUCompEv@DataEventList@@PAU12@0ABMUEventTimeCompComp@?A0xbe67b340@@PAH@Z), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??$__lower_bound@PAUCompEv@DataEventList@@MUEventTimeCompComp@?A0xbe67b340@@H@stlpmtx_std@@YAPAUCompEv@DataEventList@@PAU12@0ABMUEventTimeCompComp@?A0xbe67b340@@PAH@Z",
+     "??$__lower_bound@PAVDataEvent@@MUEventTimeComp@?A0xbe67b340@@H@stlpmtx_std@@YAPAVDataEvent@@PAV1@0ABMUEventTimeComp@?A0xbe67b340@@PAH@Z"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??$__push_heap@PAUGroupDrawDist@@HU1@P6A@0x826d01b0",
+   "address": "0x826d01b0",
+   "survivor": "??$__push_heap@PAUGroupDrawDist@@HU1@P6A_NABU1@0@Z@stlpmtx_std@@YAXPAUGroupDrawDist@@HHU1@P6A_NABU1@2@Z@Z",
+   "folded": [
+    "??$__push_heap@PAUCuePoint@?A0x81ddebd1@@HU12@P6A_NABU12@0@Z@stlpmtx_std@@YAXPAUCuePoint@?A0x81ddebd1@@HHU12@P6A_NABU12@2@Z@Z"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "code",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x826d01b0; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??$__push_heap@PAUGroupDrawDist@@HU1@P6A_NABU1@0@Z@stlpmtx_std@@YAXPAUGroupDrawDist@@HHU1@P6A_NABU1@2@Z@Z), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??$__push_heap@PAUCuePoint@?A0x81ddebd1@@HU12@P6A_NABU12@0@Z@stlpmtx_std@@YAXPAUCuePoint@?A0x81ddebd1@@HHU12@P6A_NABU12@2@Z@Z",
+     "??$__push_heap@PAUGroupDrawDist@@HU1@P6A_NABU1@0@Z@stlpmtx_std@@YAXPAUGroupDrawDist@@HHU1@P6A_NABU1@2@Z@Z"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??_G?$vector@MV?$StlNodeAlloc@M@stlpmtx_@0x82738a40",
+   "address": "0x82738a40",
+   "survivor": "??_G?$vector@MV?$StlNodeAlloc@M@stlpmtx_std@@@stlpmtx_std@@QAAPAXI@Z",
+   "folded": [
+    "??_GDebugGraph@?A0xb39b74bf@@QAAPAXI@Z"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "code",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x82738a40; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??_G?$vector@MV?$StlNodeAlloc@M@stlpmtx_std@@@stlpmtx_std@@QAAPAXI@Z), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_G?$vector@MV?$StlNodeAlloc@M@stlpmtx_std@@@stlpmtx_std@@QAAPAXI@Z",
+     "??_GDebugGraph@?A0xb39b74bf@@QAAPAXI@Z"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??$__unguarded_partition@PAUGroupDrawDis@0x827f5860",
+   "address": "0x827f5860",
+   "survivor": "??$__unguarded_partition@PAUGroupDrawDist@@U1@P6A_NABU1@0@Z@stlpmtx_std@@YAPAUGroupDrawDist@@PAU1@0U1@P6A_NABU1@2@Z@Z",
+   "folded": [
+    "??$__unguarded_partition@PAUCuePoint@?A0x81ddebd1@@U12@P6A_NABU12@0@Z@stlpmtx_std@@YAPAUCuePoint@?A0x81ddebd1@@PAU12@0U12@P6A_NABU12@2@Z@Z"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "code",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x827f5860; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??$__unguarded_partition@PAUGroupDrawDist@@U1@P6A_NABU1@0@Z@stlpmtx_std@@YAPAUGroupDrawDist@@PAU1@0U1@P6A_NABU1@2@Z@Z), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??$__unguarded_partition@PAUCuePoint@?A0x81ddebd1@@U12@P6A_NABU12@0@Z@stlpmtx_std@@YAPAUCuePoint@?A0x81ddebd1@@PAU12@0U12@P6A_NABU12@2@Z@Z",
+     "??$__unguarded_partition@PAUGroupDrawDist@@U1@P6A_NABU1@0@Z@stlpmtx_std@@YAPAUGroupDrawDist@@PAU1@0U1@P6A_NABU1@2@Z@Z"
+    ],
+    "padded": []
+   }
   }
  ]
 }

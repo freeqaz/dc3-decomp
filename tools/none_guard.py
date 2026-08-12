@@ -38,11 +38,26 @@ def build(repo):
 
 
 def report(repo, out):
-    subprocess.run(["objdiff-cli", "report", "generate", "-p", ".", *RULER,
-                    "-o", str(out)], cwd=repo, check=True,
-                   capture_output=True, text=True)
-    d = json.loads(Path(repo, out).read_text() if not Path(out).is_absolute()
-                   else Path(out).read_text())
+    # `report generate -o X.json` writes a SIDECAR `X.cache` and seeds the next
+    # run from it. The key is hash_unit + hash_options and does NOT include
+    # objdiff.json's `map_file`, so a second run into the same -o path after
+    # only the ICF alias map changed comes back 100% cache hits carrying the
+    # PREVIOUS map's numbers. Measured 2026-08-12: 2224 hits and a report
+    # byte-identical to the baseline for a map with 340 more names in it. A
+    # guard that reads a cached report cannot see a regression, and reports
+    # "intact" -- so purge the sidecar and refuse to grade a run that was not a
+    # full recompute.
+    path = Path(out) if Path(out).is_absolute() else Path(repo, out)
+    path.with_suffix(".cache").unlink(missing_ok=True)
+    r = subprocess.run(["objdiff-cli", "report", "generate", "-p", ".", *RULER,
+                        "-o", str(out)], cwd=repo, check=True,
+                       capture_output=True, text=True)
+    hits = re.search(r"Report cache: (\d+) hits", r.stderr)
+    if hits and int(hits.group(1)):
+        sys.exit(f"REFUSING to grade: objdiff-cli served {hits.group(1)} unit"
+                 f"(s) from cache, so this report is not a measurement of the "
+                 f"current tree. Remove the stale *.cache sidecars and retry.")
+    d = json.loads(path.read_text())
     complete = {(u["name"], f["name"]) for u in d["units"]
                 for f in u.get("functions", [])
                 if f.get("fuzzy_match_percent") == 100.0}
