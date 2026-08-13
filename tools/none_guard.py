@@ -37,27 +37,62 @@ def build(repo):
         sys.exit("BUILD FAILED:\n" + (r.stdout + r.stderr)[-3000:])
 
 
+def refuse_if_not_a_full_recompute(d):
+    """Exit unless the report `d` is a cold-cache measurement of this tree.
+
+    Read the cache count off the REPORT, not off stderr. The old check scraped
+    `Report cache: (\\d+) hits` out of stderr and refused only on a truthy match
+    -- so ABSENCE of the line read as a PASS. Every way of losing that line (a
+    binary that never printed it, a quieter build, a redirect, a cache disabled
+    outright) turned this guard into a green no-op, which is precisely the
+    failure it exists to catch. The report's own `provenance` block cannot go
+    missing for a formatting reason: either the tool wrote it or the tool is the
+    wrong tool.
+
+    `.get("cache_hits", 0)`, never `["cache_hits"]`: the block is serialized
+    from proto3, which OMITS zero-valued scalars, so the clean run is the one
+    with no `cache_hits` key at all. Subscripting raises exactly on success, and
+    a bare `.get(k)` returns None, which is not a number.
+    """
+    prov = d.get("provenance")
+    if prov is None:
+        sys.exit("REFUSING to grade: this report carries no `provenance` block, "
+                 "so nothing in it identifies the ruler it was measured with or "
+                 "says whether any unit came out of cache. That means a "
+                 "pre-2026-08-13 objdiff-cli, or one with the report cache "
+                 "disabled -- both are exactly the state this guard exists to "
+                 "catch. Absent is FAILED, not clean. Use the current fork "
+                 "build (`objdiff-cli --version` must print a commit + xxh3).")
+    hits = prov.get("cache_hits", 0)
+    if hits:
+        sys.exit(f"REFUSING to grade: objdiff-cli served {hits} unit(s) from "
+                 f"cache, so this report is not a measurement of the current "
+                 f"tree. Remove the stale *.cache sidecars and retry.")
+    return prov
+
+
 def report(repo, out):
     # `report generate -o X.json` writes a SIDECAR `X.cache` and seeds the next
-    # run from it. The key is hash_unit + hash_options and does NOT include
-    # objdiff.json's `map_file`, so a second run into the same -o path after
-    # only the ICF alias map changed comes back 100% cache hits carrying the
-    # PREVIOUS map's numbers. Measured 2026-08-12: 2224 hits and a report
-    # byte-identical to the baseline for a map with 340 more names in it. A
-    # guard that reads a cached report cannot see a regression, and reports
-    # "intact" -- so purge the sidecar and refuse to grade a run that was not a
-    # full recompute.
+    # run from it. Historically the key was hash_unit + hash_options and did NOT
+    # include objdiff.json's `map_file`, so a second run into the same -o path
+    # after only the ICF alias map changed came back 100% cache hits carrying
+    # the PREVIOUS map's numbers. Measured 2026-08-12: 2224 hits and a report
+    # byte-identical to the baseline for a map with 340 more names in it.
+    #
+    # UPDATED 2026-08-13: the objdiff fork landing keys the cache on the obj
+    # bytes + the resolved diff config + the MAP FILE'S CONTENT HASH + the
+    # objdiff-cli binary's own xxh3, so that specific silent staleness is fixed
+    # upstream. The unlink below is kept anyway -- belt and braces, and it costs
+    # one syscall. What is NOT optional is refusing to grade a cached run: a
+    # guard that reads a cached report cannot see a regression and reports
+    # "intact".
     path = Path(out) if Path(out).is_absolute() else Path(repo, out)
     path.with_suffix(".cache").unlink(missing_ok=True)
-    r = subprocess.run(["objdiff-cli", "report", "generate", "-p", ".", *RULER,
-                        "-o", str(out)], cwd=repo, check=True,
-                       capture_output=True, text=True)
-    hits = re.search(r"Report cache: (\d+) hits", r.stderr)
-    if hits and int(hits.group(1)):
-        sys.exit(f"REFUSING to grade: objdiff-cli served {hits.group(1)} unit"
-                 f"(s) from cache, so this report is not a measurement of the "
-                 f"current tree. Remove the stale *.cache sidecars and retry.")
+    subprocess.run(["objdiff-cli", "report", "generate", "-p", ".", *RULER,
+                    "-o", str(out)], cwd=repo, check=True,
+                   capture_output=True, text=True)
     d = json.loads(path.read_text())
+    refuse_if_not_a_full_recompute(d)
     complete = {(u["name"], f["name"]) for u in d["units"]
                 for f in u.get("functions", [])
                 if f.get("fuzzy_match_percent") == 100.0}
