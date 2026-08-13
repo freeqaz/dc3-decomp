@@ -213,7 +213,26 @@ config.compilers_tag = "20250812"
 # re-split: load_build_config() only drops config.json when the RECORDED version is
 # older than the pin, and 1.11.0 < 1.11.0 is false. Bumping it re-arms that gate for
 # the next release, which is the whole reason the v1.9.2 pin was worth fixing.
-config.dtk_tag = "v1.11.0"
+#
+# 1.11.0 -> 1.12.0 (jeff c0cc506, deployed 2026-08-13): write_coff no longer emits a
+# PpcRel14 for a branch whose destination never leaves the emitted section. The
+# tracker walks past function_end (tracker.rs:503) and was minting relocation
+# records for intra-function branches; the writer now requires the destination to
+# leave BOTH the ObjInfo section and the COMDAT region. REL14 records go 8 -> 0 on
+# this project (rb3-xenon 650 -> 17, cea 3 -> 0), and the 17 survivors are correct
+# keeps guarded by two discriminating negative controls.
+#
+# This one DOES reach DC3 and it changes objects, so unlike 1.10.0 the pin bump is
+# not documentation catching up -- it is the gate that forces the re-split. Parity
+# measured before deploying (jeff docs/sessions/2026-08-12-splitter-reloc-addend/
+# INTEGRATION.md): staging self-check fired on 8,983 objects across three projects;
+# the ONLY object-level difference in all 195 changed objects is removed REL14
+# records -- 0 added, 0 layout/data/symbol changes; per-symbol report movement is
+# 1 up / 21 up / 0 down with zero unexplained; and the `normalized == 100`
+# population moves by +0 on both games. Not cosmetic: the spurious records made the
+# MSVC linker rewrite 7 DC3 branch instructions away from their retail encoding,
+# and the 1.12.0 image carries the retail words.
+config.dtk_tag = "v1.12.0"
 config.objdiff_tag = "v4.2.2"  # freeqaz/objdiff fork release (linux-x86_64 asset)
 config.sjiswrap_tag = "v1.2.1"
 config.wibo_tag = "1.0.0"
