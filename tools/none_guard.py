@@ -68,8 +68,14 @@ def refuse_if_not_a_full_recompute(d, label=""):
                  f"unconditionally -- --no-cache, --deduplicate and an "
                  f"unhashable binary all still write it -- so 'the cache was "
                  f"off' is NOT an innocent explanation. Absent is FAILED, not "
-                 f"clean. Use the current fork build (`objdiff-cli --version` "
-                 f"must print a commit + xxh3).")
+                 f"clean.\n"
+                 f"  FIX: use the current fork build -- `objdiff-cli --version` "
+                 f"must print a commit + xxh3, e.g. "
+                 f"`objdiff-cli 4.2.3 (<commit>, xxh3 <hash>)`. A stored "
+                 f"baseline recorded by an older binary is not repairable and "
+                 f"is not a tool bug: re-run `none_guard.py --baseline "
+                 f"<path>` with the current binary, on the pre-edit tree, to "
+                 f"record a comparable one.")
     hits = prov.get("cache_hits", 0)
     if hits:
         sys.exit(f"REFUSING to grade{label}: objdiff-cli served {hits} unit(s) "
