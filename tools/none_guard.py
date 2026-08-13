@@ -37,17 +37,21 @@ def build(repo):
         sys.exit("BUILD FAILED:\n" + (r.stdout + r.stderr)[-3000:])
 
 
-def refuse_if_not_a_full_recompute(d):
+def refuse_if_not_a_full_recompute(d, label=""):
     """Exit unless the report `d` is a cold-cache measurement of this tree.
+
+    `label` names which side of the comparison failed, since this now guards the
+    stored baseline as well as the freshly generated report.
 
     Read the cache count off the REPORT, not off stderr. The old check scraped
     `Report cache: (\\d+) hits` out of stderr and refused only on a truthy match
     -- so ABSENCE of the line read as a PASS. Every way of losing that line (a
-    binary that never printed it, a quieter build, a redirect, a cache disabled
-    outright) turned this guard into a green no-op, which is precisely the
-    failure it exists to catch. The report's own `provenance` block cannot go
-    missing for a formatting reason: either the tool wrote it or the tool is the
-    wrong tool.
+    binary that never printed it, a quieter build, a redirect) turned this guard
+    into a green no-op, which is precisely the failure it exists to catch. The
+    report's own `provenance` block cannot go missing for a formatting reason,
+    and cannot go missing for a cache-configuration reason either: `report
+    generate` writes it unconditionally. Either the tool wrote it or the tool is
+    the wrong tool.
 
     `.get("cache_hits", 0)`, never `["cache_hits"]`: the block is serialized
     from proto3, which OMITS zero-valued scalars, so the clean run is the one
@@ -56,18 +60,21 @@ def refuse_if_not_a_full_recompute(d):
     """
     prov = d.get("provenance")
     if prov is None:
-        sys.exit("REFUSING to grade: this report carries no `provenance` block, "
-                 "so nothing in it identifies the ruler it was measured with or "
-                 "says whether any unit came out of cache. That means a "
-                 "pre-2026-08-13 objdiff-cli, or one with the report cache "
-                 "disabled -- both are exactly the state this guard exists to "
-                 "catch. Absent is FAILED, not clean. Use the current fork "
-                 "build (`objdiff-cli --version` must print a commit + xxh3).")
+        sys.exit(f"REFUSING to grade{label}: this report carries no "
+                 f"`provenance` block, so nothing in it identifies the ruler it "
+                 f"was measured with or says whether any unit came out of "
+                 f"cache. There is exactly one cause: a pre-2026-08-13 "
+                 f"objdiff-cli. `report generate` emits the block "
+                 f"unconditionally -- --no-cache, --deduplicate and an "
+                 f"unhashable binary all still write it -- so 'the cache was "
+                 f"off' is NOT an innocent explanation. Absent is FAILED, not "
+                 f"clean. Use the current fork build (`objdiff-cli --version` "
+                 f"must print a commit + xxh3).")
     hits = prov.get("cache_hits", 0)
     if hits:
-        sys.exit(f"REFUSING to grade: objdiff-cli served {hits} unit(s) from "
-                 f"cache, so this report is not a measurement of the current "
-                 f"tree. Remove the stale *.cache sidecars and retry.")
+        sys.exit(f"REFUSING to grade{label}: objdiff-cli served {hits} unit(s) "
+                 f"from cache, so this report is not a measurement of the "
+                 f"current tree. Remove the stale *.cache sidecars and retry.")
     return prov
 
 
@@ -92,7 +99,7 @@ def report(repo, out):
                     "-o", str(out)], cwd=repo, check=True,
                    capture_output=True, text=True)
     d = json.loads(path.read_text())
-    refuse_if_not_a_full_recompute(d)
+    refuse_if_not_a_full_recompute(d, label=f" ({out})")
     complete = {(u["name"], f["name"]) for u in d["units"]
                 for f in u.get("functions", [])
                 if f.get("fuzzy_match_percent") == 100.0}
@@ -171,7 +178,14 @@ def main():
               f"({m['matched_code']} bytes), {len(fp)} string COMDATs")
         return 0
 
+    # Guard the BASELINE too, not just the fresh side. A comparison is only as
+    # sound as its weaker leg: a baseline written by a pre-landing binary, or
+    # served warm out of a sidecar, is exactly as invalid a basis as a warm
+    # fresh read -- and it is the leg nobody re-examines, because it was
+    # recorded in an earlier session and has looked fine ever since. Cheap: one
+    # dict lookup on a file this function already parses.
     base = json.loads(Path(args.check).read_text())
+    refuse_if_not_a_full_recompute(base, label=f" (baseline {args.check})")
     before = {(u["name"], f["name"]) for u in base["units"]
               for f in u.get("functions", [])
               if f.get("fuzzy_match_percent") == 100.0}
