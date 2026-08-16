@@ -88,6 +88,69 @@ LS_OPCODES = {**LOAD_OPCODES, **STORE_OPCODES}
 FRAME_BASE_REGS = {"r1", "r31"}
 
 
+# ── Operand splitting: objdiff renders d-form TWO ways ───────────────────────
+#
+# ★ 2026-08-16. objdiff-cli's `args` field is a DISPLAY string and its spelling
+#   is not stable across objdiff revisions. Two spellings exist in the wild for
+#   the same instruction:
+#
+#       stwu r1, -0x80, r1      (flat; objdiff <= 4.2.2, "ruler H" and earlier)
+#       stwu r1, -0x80(r1)      (parenthesised d-form; objdiff 4.2.3 fdc5113+)
+#
+#   Every parser in this module used to do `args.split(",")` and gate on
+#   `len(parts) >= 3`. Under the paren spelling a d-form instruction yields TWO
+#   comma-parts, so every gate failed closed and the module reported a confident
+#   `(0, "frameless/leaf")` for real 0x80 / 0x70 / 0x60 frames. MEASURED on 7
+#   real functions from THIS repo's objects (ARGS_READER_AUDIT, task #96):
+#   parse_prologue frame sizes read 0/0/0/272/0/0/160 where the true sizes are
+#   128/112/96/272/112/0/160, and parse_stack_ref found 18 frame-slot references
+#   where the flat spelling finds 49 (-63%). This is rendered inline in every
+#   MCP `run_objdiff` response (scripts/orchestrator/mcp_server.py imports
+#   build_fingerprints / parse_prologue / classify_slots from here).
+#
+#   `split_operands` accepts BOTH spellings, so the rest of the module keeps its
+#   canonical flat operand list (`rD, imm, rBase`) and none of the `len(parts)`
+#   gates had to move. It works on typed_args-free rows too, which is what keeps
+#   the in-memory selftest fixtures usable.
+#
+#   Deliberately NOT applied to `_scan_frame_size_v1`, which is a frozen
+#   wrong-on-purpose control — see its docstring.
+#
+#   The *structural* guard against the NEXT unmodelled spelling is not this
+#   regex: it is `_scan_frame_size` setting `saw_alloc_form` from the OPCODE
+#   before decoding any operand, so an allocation we cannot read reports UNKNOWN
+#   rather than a confident zero. See the note there.
+#
+# The `[^()]+` guard keeps this from mangling a symbol that itself contains
+# parentheses; a relocated d-form like `sym@l(r30)` splits to `['sym@l','r30']`,
+# which is exactly the pre-4.2.3 flat spelling and is correctly rejected as a
+# frame reference by `int(..., 0)` further down.
+_DFORM_RE = re.compile(r"^([^()]+)\(\s*(r\d+)\s*\)$")
+
+
+def split_operands(args: str) -> list:
+    """Split an objdiff `args` display string into a flat operand list.
+
+    Accepts both the flat (`0x374, r1`) and parenthesised (`0x374(r1)`)
+    d-form spellings; the returned list is always the flat form.
+
+        >>> split_operands("r0, 0x374(r1)")
+        ['r0', '0x374', 'r1']
+        >>> split_operands("r0, 0x374, r1")
+        ['r0', '0x374', 'r1']
+    """
+    out = []
+    for part in (args or "").split(","):
+        part = part.strip()
+        m = _DFORM_RE.match(part)
+        if m:
+            out.append(m.group(1).strip())
+            out.append(m.group(2))
+        else:
+            out.append(part)
+    return out
+
+
 def frame_base_regs(instrs: list, side_key: str) -> set:
     """Which registers actually address the FRAME in this function.
 
@@ -114,7 +177,7 @@ def frame_base_regs(instrs: list, side_key: str) -> set:
         if not side:
             continue
         op = side.get("opcode", "")
-        parts = [p.strip() for p in side.get("args", "").split(",")]
+        parts = split_operands(side.get("args", ""))
         if not parts or parts[0] != "r31":
             continue
         if op == "subf":                       # subf r31, rA, rB => rB - rA
@@ -131,14 +194,18 @@ def parse_stack_ref(opcode: str, args: str,
     """Return (offset, kind, size) if this instruction references the frame
     base (r1 or r31), else None.
 
-    objdiff arg format examples:
-      stw  r0, 0x374, r1          -> (0x374, 'int',   4)
-      stfd f31, 0x360, r1         -> (0x360, 'float', 8)
-      std  r29, 0x88, r1          -> (0x88,  'int',   8)  (Xenon 64-bit)
-      stw  r11, 0x58, r31         -> (0x58,  'int',   4)  (MSVC frame-ptr alias)
-      addi r11, r1, 0x270         -> filtered (r1/r11/r31 frame arithmetic)
+    objdiff arg format examples — BOTH spellings are accepted (see
+    `split_operands`; objdiff <= 4.2.2 emits the flat form, 4.2.3+ the paren
+    form, and this parser must not care which):
+
+      stw  r0, 0x374, r1  / stw  r0, 0x374(r1)   -> (0x374, 'int',   4)
+      stfd f31, 0x360, r1 / stfd f31, 0x360(r1)  -> (0x360, 'float', 8)
+      std  r29, 0x88, r1  / std  r29, 0x88(r1)   -> (0x88,  'int',   8)  (Xenon 64-bit)
+      stw  r11, 0x58, r31 / stw  r11, 0x58(r31)  -> (0x58,  'int',   4)  (MSVC frame-ptr alias)
+      addi r11, r1, 0x270                        -> filtered (r1/r11/r31 frame arithmetic)
+      lwz  r3, sym@l(r30)                        -> None (relocated global, not a frame ref)
     """
-    parts = [p.strip() for p in args.split(",")]
+    parts = split_operands(args)
     if len(parts) < 3:
         return None
 
@@ -344,7 +411,13 @@ _CONST_LIS = re.compile(r"^(r\d+)$")
 def _scan_frame_size_v1(instrs: list, side_key: str, horizon: int) -> int:
     """SUPERSEDED 2026-08-04. Retained ONLY so the selftest can assert it STAYS
     WRONG. Handles `stwu r1, -N, r1` and nothing else, and returns a plain 0 --
-    indistinguishable from a frameless leaf -- otherwise."""
+    indistinguishable from a frameless leaf -- otherwise.
+
+    ★ Deliberately NOT given `split_operands` (2026-08-16). This function is a
+    frozen control, and its raw `.split(",")` is now doing double duty: on the
+    objdiff-4.2.3 paren fixtures it reproduces, in-tree, the exact confident-zero
+    that shipped for the whole of 2026-08-16. Do not "fix" it -- the selftest
+    asserts it stays 0 there."""
     for ins in instrs[:horizon]:
         side = ins.get(side_key)
         if not side:
@@ -377,7 +450,7 @@ def _scan_frame_size(instrs: list, side_key: str, horizon: int) -> tuple:
             continue
         op = side.get("opcode", "")
         args = side.get("args", "")
-        parts = [a.strip() for a in args.split(",")]
+        parts = split_operands(args)
 
         # --- constant materialization: lis / ori / li ------------------------
         if op == "lis" and len(parts) == 2:
@@ -396,9 +469,25 @@ def _scan_frame_size(instrs: list, side_key: str, horizon: int) -> tuple:
                 consts[parts[0]] = v & 0xFFFFFFFF
             continue
 
+        # --- the allocation forms: stwu / stwux, writing back to r1 ----------
+        #
+        # ★ 2026-08-16. `saw_alloc_form` is set from the OPCODE + destination,
+        #   BEFORE any operand is decoded, and this ordering is the load-bearing
+        #   part of the tri-state. It used to be set inside the fully-decoded
+        #   gates below (`len(parts) >= 3 and parts[2] == "r1"`). objdiff 4.2.3
+        #   re-spelled the d-form as `stwu r1, -0x80(r1)`, those gates stopped
+        #   matching, the flag never set, and the function fell through to the
+        #   confident-zero `else` — reporting a real 0x80 frame as a frameless
+        #   leaf. The module's own note above says this is THE bug that matters
+        #   because it is unbounded, and it recurred anyway, so the recognition
+        #   is now decoupled from the decode: if we see an allocation we cannot
+        #   read, we return UNKNOWN. `split_operands` fixes today's spelling;
+        #   this makes the NEXT one loud instead of silent.
+        if op in ("stwu", "stwux") and parts and parts[0] == "r1":
+            saw_alloc_form = True
+
         # --- stwu r1, -N, r1  (83.59% of functions here) ---------------------
         if op == "stwu" and len(parts) >= 3 and parts[0] == "r1" and parts[2] == "r1":
-            saw_alloc_form = True
             n = _try_int(parts[1])
             if n is not None and n < 0 and stwu_size is None:
                 stwu_size = -n
@@ -406,7 +495,6 @@ def _scan_frame_size(instrs: list, side_key: str, horizon: int) -> tuple:
 
         # --- stwux r1, r1, rX  (big frames; 7 functions in the whole binary) --
         if op == "stwux" and len(parts) >= 3 and parts[0] == "r1" and parts[1] == "r1":
-            saw_alloc_form = True
             reg = parts[2]
             raw = consts.get(reg)
             if raw is None:
@@ -497,7 +585,7 @@ def parse_prologue(instrs: list, side_key: str) -> Prologue:
             continue
         op = side.get("opcode", "")
         args = side.get("args", "")
-        parts = [a.strip() for a in args.split(",")]
+        parts = split_operands(args)
 
         # bl __save(gpr|fpr|gprlr)[_NN]  (one or two leading underscores)
         #
@@ -1077,6 +1165,16 @@ def run_objdiff_for_symbol(symbol: str, project_dir: Optional[str] = None,
 #   code is asserted to STAY WRONG on the same fixtures. A selftest that only
 #   demonstrates the new comparator would pass just as happily after somebody
 #   "simplified" the fix back out.
+#
+# ★ 2026-08-16, and this is the second lesson: fixtures 1-6 are HAND-AUTHORED,
+#   and every one of them hand-writes the FLAT operand spelling
+#   (`("stwu", "r1, -0x150, r1")`). objdiff 4.2.3 emits `r1, -0x80(r1)`. So the
+#   whole battery ran green through the entire day on which the parser was, in
+#   the field, reading a confident 0 for every framed function it was handed.
+#   A synthetic fixture can only test the input shape its author imagined.
+#   Fixture 7 below is therefore a VERBATIM dump of live `bin/objdiff-cli`
+#   output, not a hand-written approximation, and fixture 7's first assertion is
+#   that the fixture still literally contains a parenthesis.
 
 def _ins(idx, t=None, b=None):
     """One objdiff-shaped aligned row. t/b are (opcode, args) or None."""
@@ -1105,6 +1203,202 @@ def _bigframe_prologue(hi, lo, idx0=0):
         _ins(idx0 + 7, ("bl", "_RtlCheckStack12"), ("bl", "_RtlCheckStack12")),
         _ins(idx0 + 8, ("stwux", "r1, r1, r12"), ("stwux", "r1, r1, r12")),
     ]
+
+
+
+# ── Fixture 7 data: VERBATIM live objdiff-cli output ─────────────────────────
+#
+# Dumped 2026-08-16 with `objdiff-cli 4.2.3 (0fd82159607c)` (the repo's
+# bin/objdiff-cli symlink), against this repo's own build (373307D9):
+#
+#   bin/objdiff-cli diff -p . '<symbol>' --include-instructions -f json
+#
+# and transcribed opcode-for-opcode, args-for-args; the transcription was
+# re-verified row-by-row against the JSON. NOTHING here is normalised or
+# prettied; the `-0x80(r1)` spellings are what the tool actually printed. The
+# two long mangled names are hoisted into constants purely to keep the lines
+# under 100 columns -- concatenate them and you get the literal bytes back.
+# Regenerate the same way if objdiff's display changes again -- and if you find
+# yourself editing a paren out of this list to make a test pass, the test is
+# telling you the truth and the parser is the thing that is wrong.
+
+_SYM_LIPSYNCMAP = (
+    "?sLipSyncMap@CharLipSync@@1PAV?$map@VSymbol@@PAVCharLipSync@@U?$less@VSy"
+    "mbol@@@stlpmtx_std@@V?$StlNodeAlloc@U?$pair@$$CBVSymbol@@PAVCharLipSync@"
+    "@@stlpmtx_std@@@4@@stlpmtx_std@@A"
+)
+
+_SYM_RB_M_ERASE = (
+    "?_M_erase@?$_Rb_tree@VSymbol@@U?$less@VSymbol@@@stlpmtx_std@@U?$pair@$$C"
+    "BVSymbol@@PAVCharLipSync@@@3@U?$_Select1st@U?$pair@$$CBVSymbol@@PAVCharL"
+    "ipSync@@@stlpmtx_std@@@3@U?$_MapTraitsT@U?$pair@$$CBVSymbol@@PAVCharLipS"
+    "ync@@@stlpmtx_std@@@priv@3@V?$StlNodeAlloc@U?$pair@$$CBVSymbol@@PAVCharL"
+    "ipSync@@@stlpmtx_std@@@3@@stlpmtx_std@@AAAXPAU_Rb_tree_node_base@2@@Z"
+)
+
+# ?Init@CharLipSync@@SAXXZ — the audit's headline row. 0x80 frame allocated by
+# `stwu r1, -0x80(r1)`, LR saved pre-stwu by `stw r12, -0x8(r1)`, two real r1
+# slots (0x50 via `lbz`, 0x60 via `addi`), and a relocated `sym@l(r11)` store
+# that must NOT be read as a frame reference.
+_RULER_J_CHARLIPSYNC_INIT = [
+    _ins(0, ("mflr", "r12"), ("mflr", "r12")),
+    _ins(1, ("stw", "r12, -0x8(r1)"), ("stw", "r12, -0x8(r1)")),
+    _ins(2, ("stwu", "r1, -0x80(r1)"), ("stwu", "r1, -0x80(r1)")),
+    _ins(3, ("li", "r3, 0x18"), ("li", "r3, 0x18")),
+    _ins(4, ("bl", "??2@YAPAXI@Z"), ("bl", "??2@YAPAXI@Z")),
+    _ins(5, ("cmplwi", "r3, 0x0"), ("cmplwi", "r3, 0x0")),
+    _ins(6, ("beq", "0x74"), ("beq", "0x74")),
+    _ins(7, ("addi", "r9, r1, 0x60"), ("addi", "r9, r1, 0x60")),
+    _ins(8, ("lbz", "r8, 0x50(r1)"), ("lbz", "r8, 0x50(r1)")),
+    _ins(9, ("li", "r11, 0x0"), ("li", "r11, 0x0")),
+    _ins(10, ("addi", "r7, r1, 0x60"), ("addi", "r7, r1, 0x60")),
+    _ins(11, ("mr", "r10, r3"), ("mr", "r10, r3")),
+    _ins(12, ("stw", "r11, 0x10(r3)"), ("stw", "r11, 0x10(r3)")),
+    _ins(13, ("std", "r11, 0x0(r9)"), ("std", "r11, 0x0(r9)")),
+    _ins(14, ("std", "r11, 0x8(r9)"), ("std", "r11, 0x8(r9)")),
+    _ins(15, ("stb", "r8, 0x14(r3)"), ("stb", "r8, 0x14(r3)")),
+    _ins(16, ("lwz", "r9, 0xc(r7)"), ("lwz", "r9, 0xc(r7)")),
+    _ins(17, ("lwz", "r8, 0x0(r7)"), ("lwz", "r8, 0x0(r7)")),
+    _ins(18, ("lwz", "r6, 0x4(r7)"), ("lwz", "r6, 0x4(r7)")),
+    _ins(19, ("lwz", "r7, 0x8(r7)"), ("lwz", "r7, 0x8(r7)")),
+    _ins(20, ("stw", "r9, 0xc(r3)"), ("stw", "r9, 0xc(r3)")),
+    _ins(21, ("stw", "r8, 0x0(r3)"), ("stw", "r8, 0x0(r3)")),
+    _ins(22, ("stw", "r6, 0x4(r3)"), ("stw", "r6, 0x4(r3)")),
+    _ins(23, ("stw", "r7, 0x8(r3)"), ("stw", "r7, 0x8(r3)")),
+    _ins(24, ("stb", "r11, 0x0(r3)"), ("stb", "r11, 0x0(r3)")),
+    _ins(25, ("stw", "r11, 0x4(r3)"), ("stw", "r11, 0x4(r3)")),
+    _ins(26, ("stw", "r3, 0x8(r3)"), ("stw", "r3, 0x8(r3)")),
+    _ins(27, ("stw", "r3, 0xc(r3)"), ("stw", "r3, 0xc(r3)")),
+    _ins(28, ("b", "0x78"), ("b", "0x78")),
+    _ins(29, ("li", "r10, 0x0"), ("li", "r10, 0x0")),
+    _ins(30, ("lis", f"r11, {_SYM_LIPSYNCMAP}@h"), ("lis", f"r11, {_SYM_LIPSYNCMAP}@h")),
+    _ins(31, ("stw", f"r10, {_SYM_LIPSYNCMAP}@l(r11)"),
+            ("stw", f"r10, {_SYM_LIPSYNCMAP}@l(r11)")),
+    _ins(32, ("addi", "r1, r1, 0x80"), ("addi", "r1, r1, 0x80")),
+    _ins(33, ("lwz", "r12, -0x8(r1)"), ("lwz", "r12, -0x8(r1)")),
+    _ins(34, ("mtlr", "r12"), ("mtlr", "r12")),
+    _ins(35, ("blr", ""), ("blr", "")),
+]
+
+
+# ?clear@?$_Rb_tree@...@@QAAXXZ — 0x60 frame, manual pre-stwu callee saves in
+# the paren spelling (`stw r12, -0x8(r1)`, `std r31, -0x10(r1)`), and `mr r31, r3`
+# so r31 holds `this` and is NOT a frame base. This is fixture 6's shape as it
+# actually occurs in the binary rather than as it was imagined: the four
+# r31-relative stores at 0x4/0x8/0xc/0x10 are CLASS MEMBERS, and v1's hardcoded
+# {"r1","r31"} tabulates all four as stack slots.
+_RULER_J_RBTREE_CLEAR = [
+    _ins(0, ("mflr", "r12"), ("mflr", "r12")),
+    _ins(1, ("stw", "r12, -0x8(r1)"), ("stw", "r12, -0x8(r1)")),
+    _ins(2, ("std", "r31, -0x10(r1)"), ("std", "r31, -0x10(r1)")),
+    _ins(3, ("stwu", "r1, -0x60(r1)"), ("stwu", "r1, -0x60(r1)")),
+    _ins(4, ("lwz", "r11, 0x10(r3)"), ("lwz", "r11, 0x10(r3)")),
+    _ins(5, ("mr", "r31, r3"), ("mr", "r31, r3")),
+    _ins(6, ("cmplwi", "cr6, r11, 0x0"), ("cmplwi", "cr6, r11, 0x0")),
+    _ins(7, ("beq", "cr6, 0x3c"), ("beq", "cr6, 0x3c")),
+    _ins(8, ("lwz", "r4, 0x4(r3)"), ("lwz", "r4, 0x4(r3)")),
+    _ins(9, ("bl", f"{_SYM_RB_M_ERASE}"), ("bl", f"{_SYM_RB_M_ERASE}")),
+    _ins(10, ("li", "r11, 0x0"), ("li", "r11, 0x0")),
+    _ins(11, ("stw", "r31, 0x8(r31)"), ("stw", "r31, 0x8(r31)")),
+    _ins(12, ("stw", "r31, 0xc(r31)"), ("stw", "r31, 0xc(r31)")),
+    _ins(13, ("stw", "r11, 0x4(r31)"), ("stw", "r11, 0x4(r31)")),
+    _ins(14, ("stw", "r11, 0x10(r31)"), ("stw", "r11, 0x10(r31)")),
+    _ins(15, ("addi", "r1, r1, 0x60"), ("addi", "r1, r1, 0x60")),
+    _ins(16, ("lwz", "r12, -0x8(r1)"), ("lwz", "r12, -0x8(r1)")),
+    _ins(17, ("mtlr", "r12"), ("mtlr", "r12")),
+    _ins(18, ("ld", "r31, -0x10(r1)"), ("ld", "r31, -0x10(r1)")),
+    _ins(19, ("blr", ""), ("blr", "")),
+]
+
+
+def _selftest_ruler_fixtures(check, out, H):
+    """Fixture 7 — the objdiff-4.2.3 paren spelling, on VERBATIM tool output.
+
+    Every assertion in here fails if `split_operands` loses its paren branch,
+    which is the mutation this fixture exists to catch.
+    """
+    out.append("fixture 7 — REAL objdiff-4.2.3 output, parenthesised d-form:")
+
+    # 7.0 — the fixture must still BE the thing it claims to be. Without this,
+    # a future "cleanup" that rewrites `-0x80(r1)` to `-0x80, r1` silently turns
+    # fixture 7 back into fixture 3 and the battery goes vacuous again.
+    paren_rows = sum(1 for r in _RULER_J_CHARLIPSYNC_INIT + _RULER_J_RBTREE_CLEAR
+                     for k in ("target", "base")
+                     if r.get(k) and "(" in r[k]["args"])
+    check("fixture is still in the PAREN spelling (do not normalise it)",
+          paren_rows, 64)
+
+    # 7.1 — the shipped bug, reproduced in-tree. v1 has no paren branch, so it
+    # reads a confident 0 on a real 0x80 frame: exactly what every MCP
+    # run_objdiff response printed on 2026-08-16.
+    check("v1 reads a confident 0 on a real 0x80 frame (STAYS WRONG)",
+          _scan_frame_size_v1(_RULER_J_CHARLIPSYNC_INIT, "target", H), 0)
+    check("v1 reads a confident 0 on a real 0x60 frame (STAYS WRONG)",
+          _scan_frame_size_v1(_RULER_J_RBTREE_CLEAR, "target", H), 0)
+
+    # 7.2 — v2 must read the real frame sizes off the paren spelling. These are
+    # the audit's 128 / 96, on the audit's own functions.
+    check("v2 Init TARGET frame",
+          _scan_frame_size(_RULER_J_CHARLIPSYNC_INIT, "target", H)[0], 128)
+    check("v2 Init BASE   frame",
+          _scan_frame_size(_RULER_J_CHARLIPSYNC_INIT, "base", H)[0], 128)
+    check("v2 clear TARGET frame",
+          _scan_frame_size(_RULER_J_RBTREE_CLEAR, "target", H)[0], 96)
+    check("v2 evidence names the stwu",
+          _scan_frame_size(_RULER_J_CHARLIPSYNC_INIT, "target", H)[1],
+          "stwu r1, -0x80, r1")
+
+    # 7.3 — prologue classification off the paren spelling.
+    pi = parse_prologue(_RULER_J_CHARLIPSYNC_INIT, "target")
+    check("Init frame_size", pi.frame_size, 128)
+    check("Init LR save seen through `stw r12, -0x8(r1)`",
+          sorted(pi.callee_save_slots), [0x78])
+    pc = parse_prologue(_RULER_J_RBTREE_CLEAR, "target")
+    check("clear frame_size", pc.frame_size, 96)
+    check("clear pre-stwu saves seen through `stw r12, -0x8(r1)` / "
+          "`std r31, -0x10(r1)`", sorted(pc.callee_save_slots), [0x50, 0x58])
+    check("clear saved GPR count", pc.saved_gpr_count, 1)
+
+    # 7.4 — slot references. This is the -63% the audit measured.
+    check("Init finds both real r1 slots",
+          sorted(build_fingerprints("target", _RULER_J_CHARLIPSYNC_INIT)),
+          [0x50, 0x60])
+    check("clear r31 holds `this`, so it is NOT a frame base",
+          sorted(frame_base_regs(_RULER_J_RBTREE_CLEAR, "target")), ["r1"])
+    check("clear finds no stack slots (all r31 refs are members)",
+          sorted(build_fingerprints("target", _RULER_J_RBTREE_CLEAR)), [])
+    check("v1's hardcoded {r1,r31} tabulates 4 phantom member slots "
+          "(STAYS WRONG)",
+          sorted(build_fingerprints("target", _RULER_J_RBTREE_CLEAR,
+                                    FRAME_BASE_REGS)),
+          [0x4, 0x8, 0xc, 0x10])
+
+    # 7.5 — CONTROL (rule 4): a relocated d-form is not a frame reference.
+    # `stw r10, sym@l(r11)` splits to ['r10','sym@l','r11'] and must be
+    # REJECTED, or the paren branch would be manufacturing slots out of globals.
+    check("relocated `sym@l(r11)` store is NOT a frame reference",
+          parse_stack_ref("stw", f"r10, {_SYM_LIPSYNCMAP}@l(r11)",
+                          {"r1", "r31", "r11"}),
+          None)
+    check("a plain paren d-form on a frame base IS one",
+          parse_stack_ref("lbz", "r8, 0x50(r1)", {"r1", "r31"}), (0x50, "int", 1))
+
+    # 7.6 — the honest branch, in the paren spelling (rules 2 & 4).
+    # `saw_alloc_form` is set from the OPCODE, so an allocation whose operands we
+    # cannot decode reports UNKNOWN. If this ever reads 0 again, the 2026-08-16
+    # failure mode is back.
+    undecodable = [_ins(0, ("mflr", "r12"), None),
+                   _ins(1, ("stwu", "r1, __chkstk_frame@l(r1)"), None)]
+    check("undecodable displacement in a paren d-form is UNKNOWN, never 0",
+          _scan_frame_size(undecodable, "target", H)[0], None)
+    unmodelled = [_ins(0, ("stwu", "r1, -0x80(r1) [scaled]"), None)]
+    check("an allocation spelling we do not model at all is UNKNOWN, never 0",
+          _scan_frame_size(unmodelled, "target", H)[0], None)
+    # ...and the CONTROL: a genuinely frameless leaf must still read 0-KNOWN,
+    # or the two clauses above are just `return None`.
+    leaf7 = [_ins(0, ("lwz", "r3, 0x10(r3)"), None), _ins(1, ("blr", ""), None)]
+    check("a real frameless leaf still reads KNOWN-zero",
+          _scan_frame_size(leaf7, "target", H)[0], 0)
 
 
 def selftest():
@@ -1248,6 +1542,9 @@ def selftest():
     # and the subf form, which is the one the big-frame prologue uses
     check("v2 detects `subf r31, r12, r1` as a frame base",
           sorted(frame_base_regs(_bigframe_prologue(0x1, 0x2f0), "target")), ["r1", "r31"])
+
+    # ── Fixture 7: the spelling fixtures 1-6 could not see ───────────────────
+    _selftest_ruler_fixtures(check, out, H)
 
     return ok, out
 
