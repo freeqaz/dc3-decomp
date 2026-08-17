@@ -380,8 +380,8 @@ void ShellInput::SyncVoiceControl() { // almost done
         static Message hide_microphone_msg(hide_microphone_icon);
         TheHamProvider->Handle(hide_microphone_msg, false);
         static Symbol voice_commander_help_hide("voice_commander_help_hide");
-        static Message voice_commander_help_hide_msg(voice_commander_help_hide);
-        TheHamProvider->Handle(voice_commander_help_hide_msg, false);
+        static Message voiceCommanderHelpHide(voice_commander_help_hide);
+        TheHamProvider->Handle(voiceCommanderHelpHide, false);
         static Symbol voice_commander_tip_temporary("voice_commander_tip_temporary");
         TheHamProvider->SetProperty(voice_commander_tip_temporary, false);
         return;
@@ -422,8 +422,8 @@ void ShellInput::SyncVoiceControl() { // almost done
         static Message hide_microphone_msg(hide_microphone_icon);
         TheHamProvider->Handle(hide_microphone_msg, false);
         static Symbol voice_commander_help_hide("voice_commander_help_hide");
-        static Message voice_commander_help_hide_msg(voice_commander_help_hide);
-        TheHamProvider->Handle(voice_commander_help_hide_msg, false);
+        static Message voiceCommanderHelpHide(voice_commander_help_hide);
+        TheHamProvider->Handle(voiceCommanderHelpHide, false);
     }
 }
 
@@ -617,8 +617,8 @@ DataNode ShellInput::OnMsg(const SpeechRecoMessage &msg) { return 0; }
 DataNode ShellInput::OnMsg(const LeftHandListEngagementMsg &msg) {
     if (msg.Success()) {
         static Symbol voice_commander_help_hide("voice_commander_help_hide");
-        static Message voice_commander_help_hide_msg(voice_commander_help_hide);
-        TheHamProvider->Handle(voice_commander_help_hide_msg, false);
+        static Message voiceCommanderHelpHide(voice_commander_help_hide);
+        TheHamProvider->Handle(voiceCommanderHelpHide, false);
 
     } else {
         if (!mInputPanel) {
