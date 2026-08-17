@@ -216,11 +216,40 @@ def _stack_signal_summary(instrs: list, data: "dict | None" = None) -> "str | No
         base_prol = parse_prologue(instrs, "base")
 
         # Prefer structured frame-size fields (objdiff v4.1+) over stwu-regex.
+        #
+        # ★ 2026-08-17. `abs()` was added here to match diff_inspect.py's
+        #   `_extract_frame_size_from_instrs`, which has always applied it to
+        #   the same field. The two readers of one JSON field disagreed on its
+        #   sign convention, and only one of them could be right.
+        #
+        #   MEASURED, so this is not a guess about a dead path: run
+        #   `objdiff-cli diff -p . <sym> --verdict -f json` over all 2,463
+        #   partial-match functions in this repo (fuzzy 0<x<100, from an
+        #   objdiff-cli 4.2.3 report). 238 emit a PROLOGUE_MISMATCH pattern;
+        #   234 of those carry target_frame_size/base_frame_size (the other 4
+        #   OMIT the keys entirely, which the extractor's `in info` guard
+        #   already rejects — no null values were emitted anywhere). All 468
+        #   observed values are POSITIVE, min 112, max 8672. So abs() is a
+        #   no-op on today's objdiff and the divergence was latent, not live —
+        #   but it is now one convention instead of two.
+        #
+        #   The path itself is very much live HERE: _run_objdiff passes
+        #   `--verdict` (which implies --analyze), so every run_objdiff JSON
+        #   carries the `analysis` key. It is dead for the stack_layout.py and
+        #   diff_inspect.py CLIs only because THEY omit the flag — a caller
+        #   property, not an objdiff-4.2.3 property.
         if data is not None:
             prologue_info = _extract_prologue_mismatch_info(data)
             if prologue_info is not None:
-                tgt_prol.frame_size = prologue_info["target_frame_size"]
-                base_prol.frame_size = prologue_info["base_frame_size"]
+                tgt_size = prologue_info["target_frame_size"]
+                base_size = prologue_info["base_frame_size"]
+                # Never overwrite a parsed measurement with a null: the
+                # extractor gates on key PRESENCE, so a future objdiff that
+                # emits an explicit null would otherwise erase the tri-state.
+                if tgt_size is not None:
+                    tgt_prol.frame_size = abs(int(tgt_size))
+                if base_size is not None:
+                    base_prol.frame_size = abs(int(base_size))
 
         dom = dominant_delta_from_rows(tgt_slots, base_slots)
         rows = classify_slots(
@@ -259,15 +288,29 @@ def _stack_signal_summary(instrs: list, data: "dict | None" = None) -> "str | No
         parts.append("frame Δ UNKNOWN (prologue not parsed — callee-save "
                      "filtering unreliable)")
     elif frame_delta != 0:
-        # Xenon GPRs are 64-bit (std) — 8 bytes per saved GPR
-        callee_bytes = (
-            (base_prol.saved_gpr_count - tgt_prol.saved_gpr_count) * 8
-            + (base_prol.saved_fpr_count - tgt_prol.saved_fpr_count) * 8
-        )
-        if callee_bytes == frame_delta:
-            parts.append(f"frame Δ {frame_delta:+#x} (callee-save AT_LIMIT)")
+        # ★ 2026-08-17. saved_gpr_count / saved_fpr_count are TRI-STATE too:
+        #   None when parse_prologue saw ZERO instructions on that side. This
+        #   subtraction used to run off a fabricated 0 and label the frame Δ
+        #   "callee-save AT_LIMIT" / "structural" off counts nobody measured;
+        #   with the tri-state in place it would raise TypeError instead. Note
+        #   frame_known does NOT imply saves_known here specifically, because
+        #   the structured-field block above can set frame_size on a side whose
+        #   counts were never scanned.
+        saves_known = (getattr(tgt_prol, "saves_known", True)
+                       and getattr(base_prol, "saves_known", True))
+        if not saves_known:
+            parts.append(f"frame Δ {frame_delta:+#x} (callee-save counts "
+                         "UNKNOWN — not attributed)")
         else:
-            parts.append(f"frame Δ {frame_delta:+#x} (structural)")
+            # Xenon GPRs are 64-bit (std) — 8 bytes per saved GPR
+            callee_bytes = (
+                (base_prol.saved_gpr_count - tgt_prol.saved_gpr_count) * 8
+                + (base_prol.saved_fpr_count - tgt_prol.saved_fpr_count) * 8
+            )
+            if callee_bytes == frame_delta:
+                parts.append(f"frame Δ {frame_delta:+#x} (callee-save AT_LIMIT)")
+            else:
+                parts.append(f"frame Δ {frame_delta:+#x} (structural)")
 
     verdict_pieces = []
     if swapped:
