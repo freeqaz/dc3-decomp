@@ -279,7 +279,7 @@ M1 is done. M2 is done. M3 is done. M4 is done. M5 requires completing the decom
 
 | Doc | Path | What it covers |
 |-----|------|---------------|
-| Linking Status | `docs/LINKING_STATUS.md` | COMDAT infrastructure, subsection layout, marking rules |
+| Linking Status | `docs/archive/2026-08-17-doc-audit/status-snapshots/LINKING_STATUS.md` | COMDAT infrastructure, subsection layout, marking rules. **Archived 2026-08-17** — its counts are a 2026-02 snapshot; the architecture it describes is still broadly right. See `docs/tools/BUILD_SYSTEM.md` |
 | Jeff Limitations | `docs/sessions/JEFF_LINK_LIMITATIONS.md` | All jeff-side limitations with fix paths |
 | Clean Link Plan | `docs/sessions/2026-02-20-clean-link-plan.md` | COMDAT Phase 1/2 task breakdown |
 | Technical Notes | `docs/decomp/TECHNICAL_NOTES.md` | Compiler version confirmation, flags |

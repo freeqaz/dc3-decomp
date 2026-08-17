@@ -177,5 +177,5 @@ been added to the pattern docs:
 - [docs/decomp/RB3_REFERENCE.md](RB3_REFERENCE.md) — How to use the
   Rock Band 3 decomp as a reference (shared Milo engine).
 - [docs/decomp/patterns/INDEX.md](patterns/INDEX.md) — Full pattern catalog.
-- [docs/decomp/SUBAGENT_STRATEGY.md](SUBAGENT_STRATEGY.md) — How to brief
+- [docs/tools/WORKFLOW.md](../tools/WORKFLOW.md) — How to brief agents (supersedes the archived `SUBAGENT_STRATEGY.md`, which predates the orchestrator tooling)
   parallel subagents for decomp work.

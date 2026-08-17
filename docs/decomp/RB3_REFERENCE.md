@@ -12,6 +12,9 @@ DC3 and RB3 share extensive Milo engine code. Current DC3 status:
 - **30.7% code matched**
 - **45.2% functions matched** (21,211 of 46,958)
 
+> ⚠ **The two numbers above are years out of date — see the
+> [dated correction](#correction-2026-08-17) at the end of this document.**
+
 RB3 is an invaluable reference, especially for low-level engine code.
 
 ---
@@ -225,8 +228,40 @@ grep -A 50 "class ClassName" ~/code/milohax/rb3/src/**/*.h
 
 ---
 
+## Correction (2026-08-17)
+
+This document's **Overview** section reports "30.7 % code matched" and
+"45.2 % functions matched (21,211 of 46,958)". Both are long superseded. The
+original text is left in place deliberately, as a record of when this reference
+guide was written.
+
+Measured 2026-08-17 on a fresh build (`924ab0c5e`, re-verified at `2b7382e93`):
+
+| | |
+|---|---|
+| Authorable functions matched | **91.21 %** — 29,383 / 32,213 |
+| Authorable code bytes matched | **77.41 %** — 4,910,452 / 6,343,156 |
+| Whole-XEX (XDK-diluted) | 60.81 % functions / 43.18 % bytes |
+
+Note also that the "46,958 total functions" denominator in the original text is
+the whole-XEX denominator, which mixes in ~16,000 Microsoft XDK and RAD Bink
+functions that have no source in this repo. Quote the authorable denominator
+(32,213) unless you specifically mean the shipped image.
+
+The 2026-08 relocation-ruler change (`functionRelocDiffs=None` → `name_check`)
+also means any percentage recorded before 2026-08 cannot be differenced against
+a current one. See [`../STATE_OF_THE_DECOMP.md`](../STATE_OF_THE_DECOMP.md).
+
+**The directory compatibility matrix and the shared-file lists above are still
+useful** — the RB3 tree has not been restructured — but treat the per-directory
+compatibility percentages as rough guidance, not measurement. `lookup_rb3` and
+the `rb3-pair` skill answer "is there a reference for this file?" against the
+current trees.
+
+---
+
 ## See Also
 
-- [LOW_HANGING_FRUIT.md](LOW_HANGING_FRUIT.md) - Prioritized function list
+- [REMAINING_WORK.md](REMAINING_WORK.md) - How to find work (queries, not worklists)
 - [TECHNICAL_NOTES.md](TECHNICAL_NOTES.md) - Compiler patterns and lessons
-- [../WORKSESSION.md](../WORKSESSION.md) - Main session notes
+- [../STATE_OF_THE_DECOMP.md](../STATE_OF_THE_DECOMP.md) - Current numbers with denominators

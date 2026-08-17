@@ -29,6 +29,7 @@ import argparse
 import json
 import sys
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 
 # Shared exclusion-prefix definition.
@@ -226,11 +227,36 @@ def print_metrics(all_m: Metrics, auth_m: Metrics) -> None:
     print()
 
 
+def read_provenance(report_path: Path) -> dict:
+    """Return report.json's provenance block (empty dict if absent).
+
+    The relocation mode the report was built with is *not* a constant — it
+    changed from ``functionRelocDiffs=None`` to ``name_check`` in 2026-08, which
+    moved the headline by roughly -1.2 pp.  Read it rather than hardcoding it,
+    or this document will confidently state the wrong ruler.
+    """
+    try:
+        with report_path.open(encoding="utf-8") as fh:
+            return json.load(fh).get("provenance") or {}
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def reloc_mode(prov: dict) -> str:
+    for entry in prov.get("diff_config") or []:
+        if entry.startswith("functionRelocDiffs="):
+            return entry.split("=", 1)[1]
+    return "unknown"
+
+
 def generate_markdown(all_m: Metrics, auth_m: Metrics, report_path: Path) -> str:
     """Return the PROGRESS_METRICS.md content as a string."""
     xdk_bytes = all_m.total_code - auth_m.total_code
     xdk_pct = 100.0 * xdk_bytes / all_m.total_code if all_m.total_code else 0.0
     prefixes_md = "\n".join(f"- `{p}`" for p in SDK_UNIT_PREFIXES)
+    prov = read_provenance(report_path)
+    mode = reloc_mode(prov)
+    built = datetime.fromtimestamp(report_path.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
 
     lines = [
         "# DC3 Decomp — Progress Metrics",
@@ -238,7 +264,12 @@ def generate_markdown(all_m: Metrics, auth_m: Metrics, report_path: Path) -> str
         "> **Auto-generated** by `scripts/progress_metrics.py`.  Do not edit manually.",
         "> Re-generate with `python3 scripts/progress_metrics.py --markdown`.",
         "",
-        "## Why there are four headline numbers",
+        f"> Report built: **{built}** · objdiff-cli `{prov.get('tool_version', '?')}` "
+        f"(commit `{prov.get('tool_commit', '?')}`) · "
+        f"relocation mode `functionRelocDiffs={mode}`.",
+        "> A number without those three facts is not comparable to another number.",
+        "",
+        "## Why there are three headline numbers",
         "",
         "The DC3 binary contains two disjoint code populations:",
         "",
@@ -254,27 +285,41 @@ def generate_markdown(all_m: Metrics, auth_m: Metrics, report_path: Path) -> str
         "",
         "Any metric that counts vendor bytes in the denominator is permanently capped",
         f"near {100-xdk_pct:.0f} % — the project looks half-done when game code is",
-        "actually three-quarters matched.  This document names the four numbers so",
+        "actually three-quarters matched.  This document names the three numbers so",
         "they cannot be confused.",
         "",
-        "## The four coexisting headlines",
+        "## The coexisting headlines",
         "",
         "| Metric | Value | Notes |",
         "|--------|-------|-------|",
         f"| **XDK-diluted fuzzy** | {all_m.matched_code_pct:.2f} % | `matched_code_percent` in report.json measures root node; counts vendor bytes in denominator |",
         f"| **Authorable fuzzy** | {auth_m.matched_code_pct:.2f} % | Raw matched-code bytes over authorable-only total; best apples-to-apples byte signal |",
         f"| **Authorable normalized %** ✅ | **{auth_m.matched_fns_norm_pct:.2f} %** | **CANONICAL.** Functions where `match_percent_normalized == 100` over authorable total. Forgives register permutation / benign reloc-addend, but NOT wrong constants, offsets, or vtable slots |",
-        f"| Strict reloc (pending Lane C) | TBD | Would use name-only reloc mode; expected to differ only for benign addend diffs |",
         "",
         "## Relocation-mode caveat",
         "",
-        "The `match_percent_normalized` field (and therefore this metric) is computed",
-        "with `functionRelocDiffs = None`, which forgives relocation-target differences.",
-        "In practice this means a `bl wrong_function` would still score 100 % if the",
-        "wrong callee has the same relocation flags.  Lane C's strict-reloc recertification",
-        "will quantify the genuine false-100 % exposure; preliminary analysis (doc 02)",
-        "found only ~2 non-boilerplate functions dropping >10 % under strict mode, so the",
-        "risk is bounded but currently unquantified.",
+        f"This report was built with `functionRelocDiffs={mode}`, read from",
+        "`report.json`'s `provenance` block — not assumed.",
+        "",
+        *(
+            [
+                "Under `name_check` a relocation whose *target symbol name* differs is",
+                "charged even when the instruction bytes are identical, so a",
+                "`bl wrong_function` can no longer score 100 %.  This is a stricter ruler",
+                "than the `functionRelocDiffs=None` mode used before 2026-08: switching",
+                "to it moved the authorable headline down by roughly **1.2 pp** with no",
+                "code change.  Numbers from before the switch are not comparable to",
+                "numbers after it.  See",
+                "[STATE_OF_THE_DECOMP.md](STATE_OF_THE_DECOMP.md#the-2026-08-ruler-change).",
+            ]
+            if mode == "name_check"
+            else [
+                f"Mode `{mode}` forgives relocation-target differences: a",
+                "`bl wrong_function` can still score 100 % if the wrong callee carries",
+                "the same relocation flags.  Prefer `name_check`, and do not compare",
+                "these numbers against a `name_check` report.",
+            ]
+        ),
         "",
         "## Current numbers",
         "",

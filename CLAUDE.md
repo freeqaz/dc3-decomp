@@ -85,5 +85,7 @@ Ghidra MCP runs on `http://127.0.0.1:8000/mcp` (not `/mcp/v1`). Session ID heade
 ## Decomp Docs
 
 - [docs/INDEX.md](docs/INDEX.md) - Table of Contents for docs. START HERE! This helps you find the right docs.
+- [docs/STATE_OF_THE_DECOMP.md](docs/STATE_OF_THE_DECOMP.md) - Where the project is. **Both headline metrics with their denominators** (MATCHED from report.json vs DONE-WITH-CERTS from decomp.db — they are different populations and conflating them is the top source of wrong numbers), the 2026-08 `name_check` ruler change, and how much to trust an AT_LIMIT certificate.
+- [docs/decomp/REMAINING_WORK.md](docs/decomp/REMAINING_WORK.md) - How to find work. Queries only, never worklists — every hardcoded worklist this project wrote rotted within weeks.
 - [docs/decomp/TECHNICAL_NOTES.md](docs/decomp/TECHNICAL_NOTES.md) - Compiler quirks, patterns
 - [docs/decomp/RB3_REFERENCE.md](docs/decomp/RB3_REFERENCE.md) - Rock Band 3 decomp reference (shared engine)

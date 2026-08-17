@@ -323,4 +323,5 @@ Optimized indexes exist for common query patterns:
 
 - [../tools/INDEX.md](../tools/INDEX.md) - Tool documentation index
 - [../decomp/patterns/INDEX.md](../decomp/patterns/INDEX.md) - Pattern reference with SQL queries
-- [../meta-strategy/SQL_QUERIES.md](../meta-strategy/SQL_QUERIES.md) - Additional analysis queries
+- [../decomp/REMAINING_WORK.md](../decomp/REMAINING_WORK.md) - The canonical work-finding queries, and which columns not to trust
+- [docs/archive/2026-08-17-doc-audit/experiments/meta-strategy/SQL_QUERIES.md](../archive/2026-08-17-doc-audit/experiments/meta-strategy/SQL_QUERIES.md) - The 2026-02 query collection this replaced (archived; many of its queries key on `current_percent` / `verdict`, which are unreliable)

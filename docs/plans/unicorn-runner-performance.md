@@ -7,7 +7,7 @@
 
 ### Architecture & Design
 - [UNICORN_FUNCTION_RUNNER.md](../tools/UNICORN_FUNCTION_RUNNER.md) — Main design doc: phases, memory map, components, CLI usage
-- [PHASE1_DESIGN.md](../unicorn_runner/PHASE1_DESIGN.md) — Deep dive into COFF extraction, relocation patching (5 types), execution engine, comparator
+- [PHASE1_DESIGN.md](../archive/2026-08-17-doc-audit/experiments/PHASE1_DESIGN.md) — Deep dive into COFF extraction, relocation patching (5 types), execution engine, comparator. **Archived 2026-08-17** — this is the pre-build design document, not the runner's documentation; see [tools/UNICORN_FUNCTION_RUNNER.md](../tools/UNICORN_FUNCTION_RUNNER.md)
 
 ### Strategy & Value
 - [unicorn-roadmap.md](unicorn-roadmap.md) — Strategic assessment: what works (false positive filtering), what doesn't (bug localization), improvement tiers
