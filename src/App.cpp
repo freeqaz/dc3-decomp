@@ -994,12 +994,10 @@ bool IsUselessLoad(const char *file) {
                         || strstr(fileBase.Str(), GetCrewCharacter(crew0, 1).Str())
                         || strstr(fileBase.Str(), GetCrewCharacter(crew1, 0).Str())
                         || strstr(fileBase.Str(), GetCrewCharacter(crew1, 1).Str());
-                    if (!nostr) {
+                    if (!nostr)
                         useless = true;
-                    }
-                } else {
+                } else
                     useless = true;
-                }
             }
             if (!g_LoaderModeCallback(dance_battle)
                 && (isCrewStr || EndsWith(file, "/vo_bank.milo"))) {
