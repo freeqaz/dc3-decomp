@@ -41,16 +41,16 @@ int rolling = 0;
 void StartSynchronizedVoices();
 
 
-IXAudio2SourceVoice *Voice::GetVoice() { return (IXAudio2SourceVoice *)mSourceVoice; }
+IXAudio2SourceVoice *Voice::GetVoice() { return (IXAudio2SourceVoice *)mPoolVoice.sourceVoice; }
 
 Voice::Voice(bool b1, int i, bool b2)
     : mState(0), mBuffer(0), mAudioBytes(0), mNumSamples(0), mSampleRate(0), mStartSamp(0), mLoopStart(-1),
       mLoopEnd(-1), mVolume(1.0f), mPan(0), mSpeed(1.0f), mAttackRate(0.001f), mReleaseRate(0.001f),
       mXMA(b1), mFxSend(), mReverbEnabled(false), mReverbMixDb(-96.0f), unk48(false), mSynchronized(b2),
       mChannels(i), mTagState(0), unk54(false) {
-    mEnvelopeEffect = 0;
-    mEnvelopeParams = 0;
-    mSourceVoice = 0;
+    mPoolVoice.eg = 0;
+    mPoolVoice.egParams = 0;
+    mPoolVoice.sourceVoice = 0;
     if (gEvent == INVALID_HANDLE_VALUE) {
         gEvent = CreateEventA(0, 0, 0, 0);
         MILO_ASSERT(gEvent, 0xfa);
@@ -76,7 +76,7 @@ Voice::~Voice() {
     }
     if (GetVoice()) {
         GetVoice()->Stop(0, 0);
-        dispose((PoolVoice *)&mSourceVoice, unk0);
+        dispose(&mPoolVoice, unk0);
     }
 }
 
@@ -108,9 +108,9 @@ long Voice::createOrReuse(
     }
     long result;
     MILO_ASSERT(pPoolVoice->eg == 0, 0x1c1);
-    pPoolVoice->eg = (int)new EnvelopeGenerator();
-    MILO_ASSERT(mEnvelopeParams == 0, 0x1c3);
-    pPoolVoice->egParams = (int)new EnvelopeGeneratorParams;
+    pPoolVoice->eg = new EnvelopeGenerator();
+    MILO_ASSERT(mPoolVoice.egParams == 0, 0x1c3);
+    pPoolVoice->egParams = new EnvelopeGeneratorParams;
 
     XAUDIO2_EFFECT_DESCRIPTOR effectDesc;
     XAUDIO2_EFFECT_CHAIN effectChain;
@@ -173,8 +173,8 @@ long Voice::createOrReuse(
 }
 
 void Voice::UpdateSends() {
-    IXAudio2SourceVoice *voice = (IXAudio2SourceVoice *)mSourceVoice;
-    if (mSourceVoice != 0) {
+    IXAudio2SourceVoice *voice = (IXAudio2SourceVoice *)mPoolVoice.sourceVoice;
+    if (mPoolVoice.sourceVoice != 0) {
         XAUDIO2_VOICE_SENDS voiceSends;
         XAUDIO2_SEND_DESCRIPTOR mainDesc;
         XAUDIO2_SEND_DESCRIPTOR reverbDesc;
@@ -368,16 +368,16 @@ void Voice::blockingStart(bool b1) {
 }
 
 void Voice::Stop(bool immediate) {
-    if (mSourceVoice) {
+    if (mPoolVoice.sourceVoice) {
         if (immediate) {
-            int *pVoice = (int *)mSourceVoice;
+            int *pVoice = (int *)mPoolVoice.sourceVoice;
             ((void (*)(int *, int, int))(*(int *)(*(int *)pVoice + 0x50)))(pVoice, 0, 0);
         } else {
-            MILO_ASSERT(mEnvelopeParams, 0x14d);
-            *(float *)((int *)mEnvelopeParams + 2) = 1.0f;
-            int *pVoice = (int *)mSourceVoice;
+            MILO_ASSERT(mPoolVoice.egParams, 0x14d);
+            *(float *)((int *)mPoolVoice.egParams + 2) = 1.0f;
+            int *pVoice = (int *)mPoolVoice.sourceVoice;
             HRESULT hr = ((HRESULT(*)(int *, int, int, int, int))(*(int *)(*(int *)pVoice + 0x18)))(
-                pVoice, 0, (int)mEnvelopeParams, 0x10, 0
+                pVoice, 0, (int)mPoolVoice.egParams, 0x10, 0
             );
             MILO_ASSERT(SUCCEEDED(hr), 0x150);
         }
@@ -417,8 +417,8 @@ void Voice::SetSpeed(float speed) {
         clamped = max_speed;
     }
     mSpeed = clamped;
-    if (mSourceVoice != 0) {
-        int *pVoice = (int *)mSourceVoice;
+    if (mPoolVoice.sourceVoice != 0) {
+        int *pVoice = (int *)mPoolVoice.sourceVoice;
         ((void (*)(int *, float, int))(*(int *)(*(int *)pVoice + 0x68)))(pVoice, mSpeed, 0);
     }
 }
@@ -443,17 +443,17 @@ void Voice::SetSendImpl(FxSend360 *send) {
 
 void Voice::SafeRestart() {
     MILO_ASSERT(GetVoice(), 0x471);
-    int *pVoice = (int *)mSourceVoice;
+    int *pVoice = (int *)mPoolVoice.sourceVoice;
     bool sync = mSynchronized != 0;
     ((void (*)(int *, int, bool))(*(int *)(*(int *)pVoice + 0x4c)))(pVoice, 0, sync);
     mState = 3;
 }
 
 int Voice::GetAddr() {
-    if (mSourceVoice == 0 || mXMA)
+    if (mPoolVoice.sourceVoice == 0 || mXMA)
         return 0;
 
-    int *pVoice = (int *)mSourceVoice;
+    int *pVoice = (int *)mPoolVoice.sourceVoice;
     XAUDIO2_VOICE_STATE state;
     ((void (*)(int *, XAUDIO2_VOICE_STATE *, int))(*(int *)(*(int *)pVoice + 0x64)))(pVoice, &state, 0);
 
@@ -566,7 +566,7 @@ void Voice::Init(bool b1) {
     if (voiceSends.SendCount != 0) {
         pSends = &voiceSends;
     }
-    HRESULT hr = createOrReuse((PoolVoice *)&mSourceVoice, unk0, fmt.wfx, pSends);
+    HRESULT hr = createOrReuse(&mPoolVoice, unk0, fmt.wfx, pSends);
     MILO_ASSERT(SUCCEEDED(hr), 0x19d);
     MILO_ASSERT(GetVoice(), 0x19e);
 
@@ -581,11 +581,11 @@ void Voice::Init(bool b1) {
     }
 
     // Set envelope parameters
-    ((float *)mEnvelopeParams)[0] = mAttackRate;
-    ((float *)mEnvelopeParams)[1] = mReleaseRate;
-    ((float *)mEnvelopeParams)[2] = 0.0f;
-    ((float *)mEnvelopeParams)[3] = 0.0f;
-    hr = GetVoice()->SetEffectParameters(0, mEnvelopeParams, 0x10, 0);
+    ((float *)mPoolVoice.egParams)[0] = mAttackRate;
+    ((float *)mPoolVoice.egParams)[1] = mReleaseRate;
+    ((float *)mPoolVoice.egParams)[2] = 0.0f;
+    ((float *)mPoolVoice.egParams)[3] = 0.0f;
+    hr = GetVoice()->SetEffectParameters(0, mPoolVoice.egParams, 0x10, 0);
     MILO_ASSERT(SUCCEEDED(hr), 0x1b0);
 }
 // clang-format on
@@ -694,7 +694,7 @@ unsigned long StartVoiceThreadEntry(void *) {
                     int *pEg = (int *)pv.eg;
                     ((void (*)(int *, int))(*(int *)(*(int *)pEg + 0x38)))(pEg, 1);
                     pv.eg = 0;
-                    PoolFree(0x10, (void *)pv.egParams, __FILE__, 0x1e, "EnvelopeGeneratorParams");
+                    PoolFree(0x10, pv.egParams, __FILE__, 0x1e, "EnvelopeGeneratorParams");
                     pv.egParams = 0;
                 }
             }

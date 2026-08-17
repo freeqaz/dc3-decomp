@@ -55,6 +55,8 @@
 
 #include <stdio.h>
 
+#line 1 "soundtouch\\TDStretch.cpp"
+
 using namespace soundtouch;
 
 #define max(x, y) (((x) > (y)) ? (x) : (y))

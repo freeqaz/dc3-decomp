@@ -48,6 +48,8 @@
 #include "AAFilter.h"
 #include "FIRFilter.h"
 
+#line 1 "soundtouch\\AAFilter.cpp"
+
 using namespace soundtouch;
 
 #define PI 3.1415927f

@@ -47,6 +47,7 @@
 
 #ifndef FIFOSamplePipe_H
 #define FIFOSamplePipe_H
+#line 1 "e:\\lazer_build_gmc1\\system\\src\\synth360\\soundtouch\\FIFOSamplePipe.h"
 
 #include "os\Debug.h"
 #include <assert.h>

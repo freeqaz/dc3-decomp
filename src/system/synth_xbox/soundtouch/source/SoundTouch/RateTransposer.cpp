@@ -47,6 +47,8 @@
 #include "RateTransposer.h"
 #include "AAFilter.h"
 
+#line 1 "soundtouch\\RateTransposer.cpp"
+
 using namespace std;
 using namespace soundtouch;
 

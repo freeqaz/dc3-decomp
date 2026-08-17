@@ -10,8 +10,8 @@ class FxSend360;
 
 struct PoolVoice {
     int sourceVoice;        // 0x00 - IXAudio2SourceVoice*
-    int eg;                 // 0x04 - XAPO envelope generator
-    int egParams;           // 0x08 - envelope effect parameters (pointer stored as int, like eg)
+    void *eg;               // 0x04 - XAPO envelope generator
+    void *egParams;         // 0x08 - envelope effect parameters
     tWAVEFORMATEX wfx;     // 0x0c - cached wave format (0x12 bytes)
     short pad1e;            // 0x1e - padding
     int disposeTick;        // 0x20 - GetTickCount() timestamp for GC
@@ -71,12 +71,10 @@ public:
     int mChannels; // 0x4c
     int mTagState; // 0x50 - stream tag state
     bool unk54; // 0x54
-    int mSourceVoice; // 0x58 - IXAudio2SourceVoice* (as int for vtable dispatch)
-    int mEnvelopeEffect; // 0x5c - XAPO envelope generator (PoolVoice.eg)
-    void *mEnvelopeParams; // 0x60 - envelope effect parameters (PoolVoice.egParams)
-    tWAVEFORMATEX mWaveFormat; // 0x64 - cached wave format (0x12 bytes, copied in createOrReuse)
-    short mPadding76; // 0x76 - alignment padding
-    int mDisposeTick; // 0x78 - GetTickCount() timestamp for voice GC
+    /** The pooled XAudio2 voice this Voice is currently driving.  Laid out
+     *  inline, not by pointer: dispose() and createOrReuse() take its address
+     *  directly. */
+    PoolVoice mPoolVoice; // 0x58
 
 private:
     void UpdateMix();
