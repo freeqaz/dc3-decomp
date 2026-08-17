@@ -86,11 +86,11 @@
    "installed_by": "scripts/install_data_fold_aliases.py",
    "generator": "scripts/retail_map_fold_candidates.py",
    "identity_mode": "align",
-   "n_groups": 106,
-   "n_names": 426,
-   "n_refused_by_byte_identity": 9,
+   "n_groups": 110,
+   "n_names": 435,
+   "n_refused_by_byte_identity": 4,
    "refusal_reasons": {
-    "relocation targets differ": 6,
+    "relocation targets differ": 1,
     "our objects define no member of this class, so nothing checks the fold": 3
    },
    "n_dropped_on_collision_with_an_installed_group": 0,
@@ -98,6 +98,14 @@
    "what": "/OPT:ICF folds byte-identical COMDATs. The installed retail_map_classes tier evaluates its member and survivor gates with function COMDATs only, so every DATA COMDAT the linker folded was invisible to it -- not refused on evidence, not seen. These groups re-run those four gates over the whole COFF external-definition table and add a fifth: for every member our objects DEFINE, the COMDAT contents must equal the target survivor's with relocation-patched fields masked and relocation targets equal by name, which is the condition ICF actually tests. A group with a mismatching member, or with no member our objects define, is refused fail-closed.",
    "padding_normalisation": "identity_mode 'align' additionally admits a target COMDAT that is our bytes followed by fewer than 8 zero bytes landing the end on an 8-byte boundary. Of the 254 ??_8 COMDATs defined on both sides, 176 are byte-identical, 78 are exactly ours + 4 trailing zeros and 0 differ in content; those 4 bytes are inter-symbol alignment padding dtk's splitter attributed to the vbtable, not a retail emission difference. Discriminator (retail_map_fold_candidates.py --padding-evidence, no exceptions in 254): 47 flush with a 4-byte-aligned successor, 129 flush already on the boundary, 78 padded with an 8-byte-aligned successor and an off-boundary end. The 47 are the control an emitted terminator entry fails. 'strict' refuses the padding and admits 176 of the 254 instead.",
    "decomp_synth_validator": "validate_groups rejects 102 of these on gate (a) alone -- survivor absent from scripts/target_symbol_map.json, which holds 0 data symbols in 69,132 names and has the same function-only blindness. Gates 4 and 5 make that check directly against the objects. load_validated therefore drops them and decomp-synth grades stricter than this file; objdiff reads the rendered map and honours them."
+  },
+  "retail_map_group_extensions": {
+   "installed_by": "task #101 DB-hygiene lane, in place",
+   "what": "Members added to an EXISTING group of another tier on orig/373307D9/ham_xbox_r.map address-sharing evidence. The retail-map data generator refuses these addresses at its collision gate rather than on evidence, so they cannot come from a tier installer. Each carries a per-group 'map_extended' record naming what was added and what would drop it.",
+   "groups": [
+    "fn_82E21268@0x82e21268"
+   ],
+   "n_names_added": 1
   }
  },
  "_rejected_at_install": [
@@ -7222,17 +7230,37 @@
    "survivor": "??3@YAXPAX@Z",
    "folded": [
     "??_V@YAXPAX@Z",
+    "?RadFree@?A0x6dfd0232@@YAXPAX@Z",
     "OggFree"
    ],
    "sites": 34,
    "survivor_candidates": 1,
-   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 3 folded spelling(s), 34 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE.",
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 3 folded spelling(s), 34 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE. EXTENDED 2026-08-17 with 1 member on retail-linker-map evidence: orig/373307D9/ham_xbox_r.map puts 6 public names at 0x82e21268 (??3@YAXPAX@Z, ??_V@YAXPAX@Z, OggFree, JsonFree, ?RadFree@?A0x6dfd0232@@YAXPAX@Z, ?BinkFree@@YAXPAX@Z); /OPT:ICF folds byte-identical COMDATs, so that is the fold set stated by the linker that made the image. The body-test class named only the three the probe had witnessed. Of the three it did not, only ?RadFree@?A0x6dfd0232@@YAXPAX@Z is a name either side's objects use (JsonFree and ?BinkFree@@YAXPAX@Z are referenced by neither and would be inert), and the target objects define exactly one member of the class -- ??3@YAXPAX@Z, which is already the survivor.",
    "renamed_from": {
     "survivor": "fn_82E21268",
     "folded": [
      "??3@YAXPAX@Z",
      "??_V@YAXPAX@Z",
      "OggFree"
+    ]
+   },
+   "map_extended": {
+    "added": [
+     "?RadFree@?A0x6dfd0232@@YAXPAX@Z"
+    ],
+    "date": "2026-08-17",
+    "why": "scripts/retail_map_fold_candidates.py cannot emit this address: its collision gate refuses any address an installed group already claims, and this one is claimed by the body-test class. The addition is applied in place instead. A regeneration of the BODY-TEST tier (decomp-synth tools/il_witness/build_icf_alias_inputs.py) would drop it again -- re-apply from this record.",
+    "map_names_at_address": [
+     "??3@YAXPAX@Z",
+     "??_V@YAXPAX@Z",
+     "OggFree",
+     "JsonFree",
+     "?RadFree@?A0x6dfd0232@@YAXPAX@Z",
+     "?BinkFree@@YAXPAX@Z"
+    ],
+    "not_added_because_unused": [
+     "JsonFree",
+     "?BinkFree@@YAXPAX@Z"
     ]
    }
   },
@@ -23304,6 +23332,24 @@
    }
   },
   {
+   "name": "retailmap-data:?SUBSAMPLED_HALF_WIDTH@?1???$TransformWo@0x8201ffcc",
+   "address": "0x8201ffcc",
+   "survivor": "?SUBSAMPLED_HALF_WIDTH@?1???$TransformWorldToSubsampledScreen@$07@ST@@YAXU__vector4@@PAH1@Z@4MB",
+   "folded": [
+    "__real@42200000"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x8201ffcc; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (?SUBSAMPLED_HALF_WIDTH@?1???$TransformWorldToSubsampledScreen@$07@ST@@YAXU__vector4@@PAH1@Z@4MB), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 1 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "__real@42200000"
+    ],
+    "padded": []
+   }
+  },
+  {
    "name": "retailmap-data:??_8RndMatAnim@@7B@@0x82026fec",
    "address": "0x82026fec",
    "survivor": "??_8RndMatAnim@@7B@",
@@ -25168,6 +25214,27 @@
    }
   },
   {
+   "name": "retailmap-data:??_7bad_typeid@std@@6B@@0x8213e8ac",
+   "address": "0x8213e8ac",
+   "survivor": "??_7bad_typeid@std@@6B@",
+   "folded": [
+    "??_7__non_rtti_object@std@@6B@",
+    "??_7bad_cast@std@@6B@"
+   ],
+   "n_map_names_at_addr": 3,
+   "kind": "data",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 3 public name(s) share 0x8213e8ac; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 3 name(s) our or the target objects use; the target objects define exactly one of them (??_7bad_typeid@std@@6B@), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 3 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??_7__non_rtti_object@std@@6B@",
+     "??_7bad_cast@std@@6B@",
+     "??_7bad_typeid@std@@6B@"
+    ],
+    "padded": []
+   }
+  },
+  {
    "name": "retailmap-data:?g_CameraHalf_H@?1??TransformScreenToWor@0x821edbc0",
    "address": "0x821edbc0",
    "survivor": "?g_CameraHalf_H@?1??TransformScreenToWorldMM@ST@@YAXABH00PAM11@Z@4MB",
@@ -25359,6 +25426,25 @@
    }
   },
   {
+   "name": "retailmap-data:??$__linear_insert@PAUGroupDrawDist@@U1@@0x826d0a78",
+   "address": "0x826d0a78",
+   "survivor": "??$__linear_insert@PAUGroupDrawDist@@U1@P6A_NABU1@0@Z@stlpmtx_std@@YAXPAUGroupDrawDist@@0U1@P6A_NABU1@2@Z@Z",
+   "folded": [
+    "??$__linear_insert@PAUCuePoint@?A0x81ddebd1@@U12@P6A_NABU12@0@Z@stlpmtx_std@@YAXPAUCuePoint@?A0x81ddebd1@@0U12@P6A_NABU12@2@Z@Z"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "code",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x826d0a78; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??$__linear_insert@PAUGroupDrawDist@@U1@P6A_NABU1@0@Z@stlpmtx_std@@YAXPAUGroupDrawDist@@0U1@P6A_NABU1@2@Z@Z), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??$__linear_insert@PAUCuePoint@?A0x81ddebd1@@U12@P6A_NABU12@0@Z@stlpmtx_std@@YAXPAUCuePoint@?A0x81ddebd1@@0U12@P6A_NABU12@2@Z@Z",
+     "??$__linear_insert@PAUGroupDrawDist@@U1@P6A_NABU1@0@Z@stlpmtx_std@@YAXPAUGroupDrawDist@@0U1@P6A_NABU1@2@Z@Z"
+    ],
+    "padded": []
+   }
+  },
+  {
    "name": "retailmap-data:??_G?$vector@MV?$StlNodeAlloc@M@stlpmtx_@0x82738a40",
    "address": "0x82738a40",
    "survivor": "??_G?$vector@MV?$StlNodeAlloc@M@stlpmtx_std@@@stlpmtx_std@@QAAPAXI@Z",
@@ -25392,6 +25478,25 @@
     "members_we_define": [
      "??$__unguarded_partition@PAUCuePoint@?A0x81ddebd1@@U12@P6A_NABU12@0@Z@stlpmtx_std@@YAPAUCuePoint@?A0x81ddebd1@@PAU12@0U12@P6A_NABU12@2@Z@Z",
      "??$__unguarded_partition@PAUGroupDrawDist@@U1@P6A_NABU1@0@Z@stlpmtx_std@@YAPAUGroupDrawDist@@PAU1@0U1@P6A_NABU1@2@Z@Z"
+    ],
+    "padded": []
+   }
+  },
+  {
+   "name": "retailmap-data:??$__partial_sort@PAUGroupDrawDist@@U1@P@0x827f5c90",
+   "address": "0x827f5c90",
+   "survivor": "??$__partial_sort@PAUGroupDrawDist@@U1@P6A_NABU1@0@Z@stlpmtx_std@@YAXPAUGroupDrawDist@@000P6A_NABU1@1@Z@Z",
+   "folded": [
+    "??$__partial_sort@PAUCuePoint@?A0x81ddebd1@@U12@P6A_NABU12@0@Z@stlpmtx_std@@YAXPAUCuePoint@?A0x81ddebd1@@000P6A_NABU12@1@Z@Z"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "code",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x827f5c90; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. Members restricted to the 2 name(s) our or the target objects use; the target objects define exactly one of them (??$__partial_sort@PAUGroupDrawDist@@U1@P6A_NABU1@0@Z@stlpmtx_std@@YAXPAUGroupDrawDist@@000P6A_NABU1@1@Z@Z), which is therefore the survivor. Gate 5 (byte identity, the condition /OPT:ICF actually tests): our objects define 2 member(s) of this class and every one has COMDAT contents equal to the target survivor's with relocation-patched fields masked and relocation targets equal by name;.",
+   "byte_identity": {
+    "mode": "align",
+    "members_we_define": [
+     "??$__partial_sort@PAUCuePoint@?A0x81ddebd1@@U12@P6A_NABU12@0@Z@stlpmtx_std@@YAXPAUCuePoint@?A0x81ddebd1@@000P6A_NABU12@1@Z@Z",
+     "??$__partial_sort@PAUGroupDrawDist@@U1@P6A_NABU1@0@Z@stlpmtx_std@@YAXPAUGroupDrawDist@@000P6A_NABU1@1@Z@Z"
     ],
     "padded": []
    }
