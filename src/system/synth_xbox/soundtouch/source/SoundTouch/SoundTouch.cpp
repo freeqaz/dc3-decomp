@@ -82,6 +82,8 @@
 #include "RateTransposer.h"
 #include "cpu_detect.h"
 
+#line 1 "soundtouch\\SoundTouch.cpp"
+
 using namespace soundtouch;
 
 /// test if two floating point numbers are equal

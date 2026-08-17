@@ -52,6 +52,8 @@
 
 #include "FIFOSampleBuffer.h"
 
+#line 1 "soundtouch\\FIFOSampleBuffer.cpp"
+
 using namespace soundtouch;
 
 // Constructor
