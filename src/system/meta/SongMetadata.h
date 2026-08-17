@@ -16,7 +16,7 @@ public:
     bool IsOnDisc() const;
     Symbol GameOrigin() const;
     void PreviewTimes(float &, float &) const;
-    DataArraySongInfo *SongBlock() const;
+    SongInfo *SongBlock() const;
     int NumVocalParts() const;
     Symbol ShortName() const { return mShortName; }
     int Age() const { return mAge; }

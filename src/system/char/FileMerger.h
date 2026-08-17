@@ -116,7 +116,7 @@ public:
     OBJ_MEM_OVERLOAD(0x17)
     NEW_OBJ(FileMerger);
 
-    static FileMerger *sFmDeleting;
+    static Hmx::Object *sFmDeleting;
 
     Merger *FindMerger(Symbol, bool);
     int FindMergerIndex(Symbol, bool);

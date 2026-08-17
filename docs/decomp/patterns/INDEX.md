@@ -461,6 +461,7 @@ From 143 successful fine-tuning attempts (90%+ start, 100% end):
 - [fixable-fsel-fma.md](fixable-fsel-fma.md) — fsel intrinsic, Clamp templates, #pragma fp_contract
 - [fixable-operators.md](fixable-operators.md) — FMA order, operator overload, inline assignment
 - [fixable-bool-mask.md](fixable-bool-mask.md) — Bool mask (`clrlwi`) fixes
+- [fixable-scope-index.md](fixable-scope-index.md) — **Local-static scope indices**: the MSVC number in `?x@?4??f@@...` is a per-function count of scopes opened; cost table per construct, whole-build census tool, and the four source shapes that explain a delta (missing brace, invented brace, nested-if vs `&&`, inverted branch)
 - [fixable-inline-boundary.md](fixable-inline-boundary.md) — Inline ctor location, sort comparator inlining, ICF cascade fix
 - [unfixable-compiler.md](unfixable-compiler.md) — Hard patterns: register swap, ASSERT_REVS, fmadds, fsel pressure, guard naming
 - [TECHNICAL_NOTES.md: Offset Diagnosis](../TECHNICAL_NOTES.md#offset-mismatch-diagnosis-off-n) — How to diagnose `[off:-N]` mismatches (class vs stack)

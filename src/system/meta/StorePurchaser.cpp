@@ -102,12 +102,13 @@ bool XboxMultipleItemsPurchaser::IsPurchasing() const {
     return mState != purchasestate0 && mState != kSuccess && mState != purchasestate3;
 }
 
+XOVERLAPPED XboxMultipleItemsPurchaser::sOverlapped;
+
 void XboxMultipleItemsPurchaser::Initiate() {
     MILO_ASSERT(!IsPurchasing(), 0x343);
     mState = purchasestate1;
 
     // Initialize overlapped structure for async Xbox marketplace operation
-    static XOVERLAPPED sOverlapped;
     memset(&sOverlapped, 0, sizeof(XOVERLAPPED));
 
     mSelectedCount = 0;

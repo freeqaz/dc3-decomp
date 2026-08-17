@@ -1162,10 +1162,8 @@ DataNode Automator::OnCheatInvoked(DataArray const *arr) {
             mSkipNextQuickCheat = false;
         } else if (arr->Int(2) != 0) {
             Symbol screen = CurScreenName();
-            if (mUIManager.CurrentScreen()) {
-                if (screen.Null()) {
-                    screen = CurRecordScreen();
-                }
+            if (mUIManager.CurrentScreen() && screen.Null()) {
+                screen = CurRecordScreen();
             }
             if (!screen.Null()) {
                 static Symbol quick_cheat("quick_cheat");

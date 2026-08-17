@@ -149,4 +149,4 @@ bool SongMetadata::IsOnDisc() const { return mIsOnDisc; }
 
 Symbol SongMetadata::GameOrigin() const { return mGameOrigin; }
 
-DataArraySongInfo *SongMetadata::SongBlock() const { return mSongInfo; }
+SongInfo *SongMetadata::SongBlock() const { return mSongInfo; }

@@ -203,122 +203,157 @@ bool DirLoader::ShouldBlockSubdirLoad(const FilePath &fp) {
 Symbol DirLoader::FixClassName(Symbol orig) {
     if (mRev >= 0x1C)
         goto ret;
-    static Symbol CharClip("CharClip");
-    static Symbol CharClipSamples("CharClipSamples");
-    if (orig == CharClipSamples)
-        orig = CharClip;
+    {
+        static Symbol CharClip("CharClip");
+        static Symbol CharClipSamples("CharClipSamples");
+        if (orig == CharClipSamples)
+            orig = CharClip;
+    }
 
     if (mRev >= 0x1B)
         goto ret;
-    static Symbol BandMeshLauncher("BandMeshLauncher");
-    static Symbol PartLauncher("PartLauncher");
-    if (orig == BandMeshLauncher)
-        orig = PartLauncher;
+    {
+        static Symbol BandMeshLauncher("BandMeshLauncher");
+        static Symbol PartLauncher("PartLauncher");
+        if (orig == BandMeshLauncher) {
+            orig = PartLauncher;
+        }
+    }
 
     if (mRev >= 0x1A)
         goto ret;
-    static Symbol P9TransDraw("P9TransDraw");
-    static Symbol CharTransDraw("CharTransDraw");
-    if (orig == P9TransDraw)
-        orig = CharTransDraw;
+    {
+        static Symbol P9TransDraw("P9TransDraw");
+        static Symbol CharTransDraw("CharTransDraw");
+        if (orig == P9TransDraw)
+            orig = CharTransDraw;
+    }
 
     if (mRev >= 0x19)
         goto ret;
-    static Symbol CompositeTexture("CompositeTexture");
-    static Symbol RenderedTex("RenderedTex");
-    static Symbol TexRenderer("TexRenderer");
-    static Symbol LayerDir("LayerDir");
-    if (orig == RenderedTex)
-        orig = TexRenderer;
-    else if (orig == CompositeTexture)
-        orig = LayerDir;
+    {
+        static Symbol CompositeTexture("CompositeTexture");
+        static Symbol RenderedTex("RenderedTex");
+        static Symbol TexRenderer("TexRenderer");
+        static Symbol LayerDir("LayerDir");
+        if (orig == RenderedTex)
+            orig = TexRenderer;
+        else if (orig == CompositeTexture)
+            orig = LayerDir;
+    }
 
     if (mRev >= 0x18)
         goto ret;
-    static Symbol WorldFx("WorldFx");
-    static Symbol BandFx("BandFx");
-    if (orig == BandFx)
-        return WorldFx;
+    {
+        static Symbol WorldFx("WorldFx");
+        static Symbol BandFx("BandFx");
+        if (orig == BandFx)
+            return WorldFx;
+    }
 
     if (mRev >= 0x16)
         goto ret;
-    static Symbol Slider("Slider");
-    static Symbol BandSlider("BandSlider");
-    if (orig == Slider)
-        return BandSlider;
+    {
+        static Symbol Slider("Slider");
+        static Symbol BandSlider("BandSlider");
+        if (orig == Slider)
+            return BandSlider;
+    }
 
     if (mRev >= 0x15)
         goto ret;
-    static Symbol TextEntry("TextEntry");
-    static Symbol BandTextEntry("BandTextEntry");
-    if (orig == TextEntry)
-        return BandTextEntry;
+    {
+        static Symbol TextEntry("TextEntry");
+        static Symbol BandTextEntry("BandTextEntry");
+        if (orig == TextEntry)
+            return BandTextEntry;
+    }
 
     if (mRev >= 0x14)
         goto ret;
-    static Symbol Placer("Placer");
-    static Symbol BandPlacer("BandPlacer");
-    if (orig == Placer)
-        return BandPlacer;
+    {
+        static Symbol Placer("Placer");
+        static Symbol BandPlacer("BandPlacer");
+        if (orig == Placer)
+            return BandPlacer;
+    }
 
     if (mRev >= 0x13)
         goto ret;
-    static Symbol ButtonEx("ButtonEx");
-    static Symbol BandButton("BandButton");
-    if (orig == ButtonEx)
-        return BandButton;
+    {
+        static Symbol ButtonEx("ButtonEx");
+        static Symbol BandButton("BandButton");
+        if (orig == ButtonEx)
+            return BandButton;
+    }
 
-    static Symbol LabelEx("LabelEx");
-    static Symbol BandLabel("BandLabel");
-    if (orig == LabelEx)
-        return BandLabel;
+    {
+        static Symbol LabelEx("LabelEx");
+        static Symbol BandLabel("BandLabel");
+        if (orig == LabelEx)
+            return BandLabel;
+    }
 
-    static Symbol PictureEx("PictureEx");
-    static Symbol BandPicture("BandPicture");
-    if (orig == PictureEx)
-        return BandPicture;
+    {
+        static Symbol PictureEx("PictureEx");
+        static Symbol BandPicture("BandPicture");
+        if (orig == PictureEx)
+            return BandPicture;
+    }
 
     if (mRev >= 0x12)
         goto ret;
-    static Symbol UIPanel("UIPanel");
-    static Symbol PanelDir("PanelDir");
-    if (orig == UIPanel)
-        return PanelDir;
+    {
+        static Symbol UIPanel("UIPanel");
+        static Symbol PanelDir("PanelDir");
+        if (orig == UIPanel)
+            return PanelDir;
+    }
 
     if (mRev >= 0x10)
         goto ret;
-    static Symbol WorldInstance("WorldInstance");
-    static Symbol WorldObject("WorldObject");
-    if (orig == WorldInstance)
-        return WorldObject;
+    {
+        static Symbol WorldInstance("WorldInstance");
+        static Symbol WorldObject("WorldObject");
+        if (orig == WorldInstance)
+            return WorldObject;
+    }
 
     if (mRev >= 0xF)
         goto ret;
-    static Symbol Group("Group");
-    static Symbol View("View");
-    if (orig == View)
-        return Group;
+    {
+        static Symbol Group("Group");
+        static Symbol View("View");
+        if (orig == View)
+            return Group;
+    }
 
     if (mRev >= 7)
         goto ret;
-    static Symbol String("String");
-    static Symbol Line("Line");
-    if (orig == String)
-        return Line;
+    {
+        static Symbol String("String");
+        static Symbol Line("Line");
+        if (orig == String)
+            return Line;
+    }
 
     if (mRev >= 6)
         goto ret;
-    static Symbol MeshGenerator("MeshGenerator");
-    static Symbol Generator("Generator");
-    if (orig == MeshGenerator)
-        return Generator;
+    {
+        static Symbol MeshGenerator("MeshGenerator");
+        static Symbol Generator("Generator");
+        if (orig == MeshGenerator)
+            return Generator;
+    }
 
     if (mRev >= 5)
         goto ret;
-    static Symbol TexMovie("TexMovie");
-    static Symbol Movie("Movie");
-    if (orig == TexMovie)
-        return Movie;
+    {
+        static Symbol TexMovie("TexMovie");
+        static Symbol Movie("Movie");
+        if (orig == TexMovie)
+            return Movie;
+    }
 
 ret:
     return orig;
