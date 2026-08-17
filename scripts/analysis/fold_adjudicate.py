@@ -92,6 +92,13 @@ GUARD_TAIL = re.compile(r"^(\?\?_B)\?([0-9A-Z]+)@?$")
 SCOUNT = re.compile(r"^\?\$S\d+$")
 ANON = re.compile(r"\?A0x[0-9a-f]{8}")
 STRING_LIT = re.compile(r"^\?\?_C@_[0-9A-Z]+@[0-9A-Z]+@(.*)@$")
+#: `merged_<hex>` -- an ICF class dtk names by its ADDRESS, which the map can
+#: resolve.  `merged_Returns1` / `merged_SetObjConcrete` are NOT this: they are
+#: named by SHAPE and resolve to nothing.
+MERGED_ADDR = re.compile(r"^merged_[0-9a-fA-F]{8}$")
+#: dtk's shape-derived placeholders for fold classes with no surviving name.
+SYNTHETIC_TARGET = re.compile(r"^(OnlyReturns|Returns\w*|merged_[0-9a-fA-F]+|"
+                              r"fn_[0-9a-fA-F]{8}|lbl_[0-9a-fA-F]{8}|merged_)")
 
 
 def split_local_static(name):
@@ -106,6 +113,12 @@ def split_local_static(name):
     i = name.rfind("??")
     if i <= 0:
         return None
+    # A TEMPLATE enclosing function is written `???$Name@...`, so rfind lands on
+    # the second `?` of the three and the prefix keeps a stray `?`.  Back up one
+    # character when that is what happened, or every template-scoped local
+    # static falls through to DIFFERENT_SYMBOL.
+    if i >= 1 and name[i - 1] == "?" and name[i + 2:i + 3] == "$":
+        i -= 1
     prefix, rest = name[:i], name[i + 2:]
     for rx in (GUARD_TAIL, SCOPE_TAIL):
         m = rx.match(prefix)
@@ -114,15 +127,94 @@ def split_local_static(name):
     return None
 
 
+#: A mangled function ends at the first `XZ` (void params) or `@Z`; whatever
+#: follows is the local object's own storage/type decoration (`@4VSymbol@@A`,
+#: `@4IA`, `@57`) and must not take part in "same enclosing function?".
+FUNC_END = re.compile(r"^(.*?(?:X|@)Z)")
+
+
 def strip_type_suffix(enclosing):
-    """Drop the trailing `@<storage><type>` objdiff-visible decoration."""
-    return enclosing.rsplit("@Z", 1)[0] if "@Z" in enclosing else enclosing
+    """The enclosing function's mangling, without the local's decoration."""
+    m = FUNC_END.match(enclosing)
+    return m.group(1) if m else enclosing
 
 
-def classify_structural(target, base):
+#: `?<leaf>@<owner>@@<storage><type>` -- a data symbol's leaf name and owner.
+DATA_SYM = re.compile(r"^\?([^@?][^@]*)@(.*)$")
+#: An anonymous namespace scope, either MSVC's hashed form or dtk's bare `?A@`.
+ANON_SCOPE = re.compile(r"\?A(?:0x[0-9a-f]{8})?@")
+
+
+def leaf_of(name):
+    """The leaf identifier of a simple data symbol, or None."""
+    m = DATA_SYM.match(name) if isinstance(name, str) else None
+    return m.group(1) if m else None
+
+
+def classify_data_naming(target, base, symbols_txt=None):
+    """Sub-classes for two spellings of the SAME data object.
+
+    None of these is a fold: they are one object under two naming conventions,
+    and which side is wrong differs per class.
+    """
+    tl, bl = leaf_of(target), leaf_of(base)
+
+    # An unmangled name is what MSVC emits for an INTERNAL-LINKAGE data symbol.
+    # The target side then cannot have come from the shipped image's public
+    # names -- it is a spelling the decomp's own split config invented.
+    for mangled, plain, side in ((target, base, "ours"), (base, target, "target")):
+        if isinstance(plain, str) and isinstance(mangled, str) \
+                and not plain.startswith("?") and leaf_of(mangled) == plain:
+            if symbols_txt is not None and mangled in symbols_txt:
+                return ("SPLIT_CONFIG_NAMING",
+                        f"{side} emits the unmangled internal-linkage label "
+                        f"`{plain}`; the other spelling is synthesised in "
+                        f"config/.../symbols.txt and is not in the linker map")
+            return ("C_LINKAGE_SKEW",
+                    f"`{plain}` has C linkage on one side and C++ linkage on "
+                    f"the other")
+
+    if tl and bl and tl == bl:
+        ta, ba = bool(ANON_SCOPE.search(target)), bool(ANON_SCOPE.search(base))
+        if ta != ba:
+            return ("ANON_NS_PRESENCE",
+                    f"`{tl}` is in an unnamed namespace on the "
+                    f"{'target' if ta else 'our'} side only")
+        if ta and ba:
+            return ("ANON_NS_HASH",
+                    f"`{tl}`: same unnamed namespace, different hash")
+        return ("STORAGE_CLASS_SKEW",
+                f"`{tl}` has a different owner scope: "
+                f"`{target.split('@@')[0]}` vs `{base.split('@@')[0]}`")
+    return None
+
+
+#: Structural classes that state WHY nothing can decide, not what the answer is.
+UNDECIDABLE_CLASSES = frozenset({
+    "DIFFERENT_SYMBOL", "ICF_SYNTHETIC_TARGET_NAME",
+})
+
+
+def classify_structural(target, base, symbols_txt=None):
     """A REFUTED sub-class for a pair the map and the fold proof both decline."""
     if not isinstance(base, str) or not isinstance(target, str):
         return "IMMEDIATE_VS_SYMBOL", "target relocates a symbol; we emit a bare immediate"
+
+    if MERGED_ADDR.match(target) or MERGED_ADDR.match(base):
+        return ("ICF_MERGED_TARGET",
+                "the target side is an ICF class; look the address up in the "
+                "linker map and check whether our callee is among its occupants")
+
+    # dtk names a trivial target function by its SHAPE, not its identity, when
+    # the fold class has no surviving public name.  Such a name exists in no
+    # source and in no object, so neither the map nor the fold proof can ever
+    # resolve it -- the pair stays UNDECIDABLE by construction, and saying so is
+    # the honest answer.
+    if not target.startswith("?") and SYNTHETIC_TARGET.match(target):
+        return ("ICF_SYNTHETIC_TARGET_NAME",
+                f"the target side is dtk's shape-derived placeholder "
+                f"`{target}` for a fold class with no surviving public name; "
+                f"it names no symbol, so nothing can look it up")
 
     ts, bs = split_local_static(target), split_local_static(base)
     if ts and bs and strip_type_suffix(ts[2]) == strip_type_suffix(bs[2]):
@@ -156,6 +248,17 @@ def classify_structural(target, base):
         return ("ANON_NS_HASH",
                 "same symbol under two anonymous-namespace hashes")
 
+    dn = classify_data_naming(target, base, symbols_txt)
+    if dn:
+        return dn
+
+    if target.startswith("??$") != base.startswith("??$") \
+            and target.lstrip("?").split("@")[0].lstrip("$") \
+            == base.lstrip("?").split("@")[0].lstrip("$"):
+        return ("TEMPLATE_VS_PLAIN",
+                "one side is a template specialisation, the other a plain "
+                "overload of the same operator/function")
+
     tq, bq = target.split("@@", 1)[0], base.split("@@", 1)[0]
     if tq == bq and target != base:
         return ("SIGNATURE_DIFF",
@@ -172,6 +275,10 @@ def main(argv=None):
     ap.add_argument("--include-data", action="store_true")
     ap.add_argument("--map", help="MSVC linker map for stage 1")
     ap.add_argument("--equiv-json", help="alias JSON for the PROVEN_MOD_ALIAS tier")
+    ap.add_argument("--symbols-txt",
+                    help="dtk split symbol config (config/<title>/symbols.txt). "
+                         "Lets the classifier tell a name the SPLIT invented "
+                         "from a name the shipped image actually carries.")
     ap.add_argument("--only-map-verdict",
                     help="restrict to pairs the census gave this map verdict "
                          "(e.g. NOT_IN_MAP)")
@@ -190,6 +297,18 @@ def main(argv=None):
           f"({index.build_seconds:.1f}s)")
     canon = fp.load_equivalences(args.equiv_json) if args.equiv_json else {}
     mapidx = load_map_index(args.map) if args.map else None
+    byaddr = None
+    if mapidx:
+        byaddr = collections.defaultdict(set)
+        for name, addrs in mapidx.items():
+            for a in addrs:
+                byaddr[a].add(name)
+    symbols_txt = None
+    if args.symbols_txt:
+        symbols_txt = {ln.split("=", 1)[0].strip()
+                       for ln in Path(args.symbols_txt).read_text().splitlines()
+                       if "=" in ln}
+        print(f"split config: {args.symbols_txt} ({len(symbols_txt)} names)")
 
     out = []
     for p in pairs:
@@ -216,14 +335,31 @@ def main(argv=None):
             rec["tier"] = proof["verdict"]
         elif proof["verdict"] == fp.REFUTED:
             rec["verdict"], rec["why"] = "REFUTED", "our COMDATs for the two names differ: " + proof["reason"]
-            rec["structural"] = classify_structural(t, b)[0]
+            rec["structural"] = classify_structural(t, b, symbols_txt)[0]
         else:
-            klass, why = classify_structural(t, b)
+            klass, why = classify_structural(t, b, symbols_txt)
             rec["structural"] = klass
-            if klass == "DIFFERENT_SYMBOL":
-                rec["verdict"], rec["why"] = "UNDECIDABLE", (
-                    "neither name is in the map, our objects define at most one "
-                    "of them, and the names follow no known spelling rule: " + why)
+            if klass == "ICF_MERGED_TARGET" and byaddr:
+                # `merged_<hex>` IS decidable: the map lists the fold class's
+                # occupants at that address.  Our callee is either among them or
+                # it is not, and there is no third answer.
+                addr = (t if t.startswith("merged_") else b).split("_", 1)[1].lower()
+                occ = byaddr.get(addr.lstrip("0").rjust(8, "0")) or byaddr.get(addr)
+                ours = b if t.startswith("merged_") else t
+                if occ is None:
+                    rec["verdict"], rec["why"] = "UNDECIDABLE", (
+                        f"the ICF class at 0x{addr} is not in the linker map")
+                elif ours in occ:
+                    rec["verdict"], rec["why"] = "PROVEN_FOLD", (
+                        f"our callee is one of the {len(occ)} names the map "
+                        f"lists at 0x{addr}")
+                else:
+                    rec["verdict"], rec["why"] = "REFUTED", (
+                        f"the map lists {len(occ)} names at 0x{addr} and our "
+                        f"callee is NOT among them: "
+                        + ", ".join(sorted(occ)[:4]))
+            elif klass in UNDECIDABLE_CLASSES:
+                rec["verdict"], rec["why"] = "UNDECIDABLE", why
             else:
                 rec["verdict"], rec["why"] = "REFUTED", why
         out.append(rec)
