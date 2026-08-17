@@ -36,21 +36,40 @@ Three instruments, applied in order of what each can conclude:
 
 **The bucket that could not be adjudicated from the map is not a bucket of hidden
 folds. It is a bucket of real source differences that the charges were reporting
-faithfully.** Of 118 rows / 44,544 B, 3 rows / 504 B are provable folds and
+faithfully.** Of 119 rows / 44,760 B, 3 rows / 504 B are provable folds and
 108 rows / 42,024 B are refuted — 94% of the bytes.
 
 ## Rows whose ONLY charges are relocation names (the whole population)
 
 | map verdict | rows | bytes |
 |---|---:|---:|
-| NOT_IN_MAP (this lane) | 118 | 44,544 |
-| MAP_REFUTES_FOLD (other lane) | 24 | 8,432 |
-| MAP_CONFIRMS_FOLD (alias lane) | 12 | 12,024 |
-| **total** | **154** | **65,000** |
+| NOT_IN_MAP (this lane) | 119 | 44,760 |
+| MAP_REFUTES_FOLD (other lane) | 14 | 4,096 |
+| MAP_CONFIRMS_FOLD (alias lane) | 4 | 9,320 |
+| **total** | **137** | **58,176** |
 
-Measured AFTER this lane's five source fixes. Before them the census read 158
-rows / 66,792 B, and it reproduces the research lane's earlier artifact on named
-rows exactly (NOT_IN_MAP 122, MAP_REFUTES 24, MAP_CONFIRMS 11).
+Measured on this lane rebased onto `38b723a17`, so it already includes the
+map-refuted lane's fixes (which is why MAP_REFUTES_FOLD is down to 14 rows from
+24) and this lane's five.
+
+Provenance, so the drift is legible:
+
+| tree state | clean rows | bytes | NOT_IN_MAP | MAP_REFUTES | MAP_CONFIRMS |
+|---|---:|---:|---:|---:|---:|
+| research artifact, named rows only | 157 | — | 122 | 24 | 11 |
+| this lane's first census, same base | 158 | 66,792 | 122 | 24 | 12 |
+| after this lane's 5 fixes | 154 | 65,000 | 118 | 24 | 12 |
+| rebased onto `38b723a17` | 137 | 58,176 | 119 | 14 | 4 |
+
+The first two lines agree to the row, which is the census's validation against
+the research lane. The single MAP_CONFIRMS disagreement is
+`?Handle@HamDirector@@`, which moved out of NOT_IN_MAP because of the
+`OnSaveFaceanims` rename; byte totals reconcile exactly
+(51,252 − 9,004 + 4,088 = 46,336).
+
+The NOT_IN_MAP classification is unchanged by the rebase — REFUTED 108 rows /
+42,024 B, PROVEN_FOLD 3 / 504, UNDECIDABLE 8 / 2,232 (one row more than before
+the rebase). Every per-pair list below is from the rebased tree.
 
 ### On the brief's "115 rows / 33,792 B"
 
@@ -107,7 +126,7 @@ have to fire. Evidence tier: body test, within-build.
   - ours   `?DeleteChecksum@BufStream@@QAAXXZ`
   - `-` — byte- AND relocation-set-identical (72 B, 1 relocations) => /OPT:ICF must merge them
 
-## NOT_IN_MAP → UNDECIDABLE — 7 pairs
+## NOT_IN_MAP → UNDECIDABLE — 8 pairs
 
 Stated as WHY nothing can decide, not as a soft refusal.
 
@@ -123,6 +142,10 @@ Stated as WHY nothing can decide, not as a soft refusal.
   - target `?DrawHighlightMat@RndShaderMgr@@UAAPAVRndMat@@XZ`
   - ours   `?GetDataAddr@SynthSample360@@QBAIXZ`
   - `DIFFERENT_SYMBOL` — names are not related by any known spelling rule
+- **216 B** `default/system/os/System` → `?SystemTerminate@@YAXXZ`
+  - target `OnlyReturns`
+  - ours   `?MemTerminate@@YAXXZ`
+  - `ICF_SYNTHETIC_TARGET_NAME` — the target side is dtk's shape-derived placeholder `OnlyReturns` for a fold class with no surviving public name; it names no symbol, so nothing can look it up
 - **180 B** `default/system/rndobj/PostProc_NG` → `?CheckHueConverge@NgPostProc@@IAAXXZ`
   - target `merged_Returns1`
   - ours   `?ColorXfmEnabled@RndPostProc@@QBA_NXZ`
@@ -142,11 +165,9 @@ Stated as WHY nothing can decide, not as a soft refusal.
 
 ## NOT_IN_MAP → REFUTED (real differences)
 
-Grouped by sub-class. Rows marked FIXED were closed by this lane.
+Grouped by sub-class, largest byte total first.
 
 ### LOCAL_STATIC_SCOPE_SKEW — 72 pairs
-
-same variable, same enclosing function, different MSVC scope index — our source has a different number of preceding lexical scopes or local statics
 
 - **3008 B** `default/system/world/CameraShot` → `?SyncProperty@CamShot@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z`
   - target `?_s@?HP@??SyncProperty@CamShot@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@4VSymbol@@A`
@@ -367,8 +388,6 @@ same variable, same enclosing function, different MSVC scope index — our sourc
 
 ### STRING_LITERAL — 21 pairs
 
-two `??_C@` literals whose decoded text differs — on this tree almost all are `__FILE__` path prefixes
-
 - **1104 B** `default/system/synth_xbox/soundtouch/source/SoundTouch/AAFilter` → `?calculateCoeffs@AAFilter@soundtouch@@IAAXXZ`
   - target `??_C@_0BI@NKFBOHBE@soundtouch?2AAFilter?4cpp?$AA@`
   - ours   `??_C@_0N@JNMAMKG@AAFilter?4cpp?$AA@`
@@ -435,15 +454,11 @@ two `??_C@` literals whose decoded text differs — on this tree almost all are 
 
 ### LOCAL_STATIC_RENAME — 1 pairs
 
-same enclosing function and same scope index, the local is simply named differently — a one-line fix
-
 - **4088 B** `default/lazer/meta_ham/MetagameRank` → `?compare_deferred_points@@YA_NUDeferredPoints@@0@Z`
   - target `??__Faward_sort_indices@?1??compare_deferred_points@@YA_NUDeferredPoints@@0@Z@YAXXZ`
   - ours   `??__Faward_sort_map@?1??compare_deferred_points@@YA_NUDeferredPoints@@0@Z@YAXXZ`
 
 ### LOCAL_STATIC_KIND_CHANGE — 7 pairs
-
-`??_B` init guard on one side, `?$S` counter on the other — the local static has a different shape
 
 - **748 B** `default/lazer/meta_ham/CampaignSongSelectPanel` → `?Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z`
   - target `??_B?BD@??Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@5BD@`
@@ -468,8 +483,6 @@ same enclosing function and same scope index, the local is simply named differen
   - ours   `?$S12@?BF@??OnCheatInvoked@Automator@@AAA?AVDataNode@@PBVDataArray@@@Z@4IA`
 
 ### SPLIT_CONFIG_NAMING — 20 pairs
-
-our compiler emits the unmangled internal-linkage label MSVC gives a file-scope static; the target-side spelling was synthesised in `config/373307D9/symbols.txt` and appears nowhere in the shipped map
 
 - **420 B** `default/system/world/Crowd` → `?BuildBillboard@WorldCrowd@@IAAPAVRndMesh@@PAVCharacter@@M@Z`
   - target `?gImpostorCamera@@3PAVRndCam@@A`
@@ -534,8 +547,6 @@ our compiler emits the unmangled internal-linkage label MSVC gives a file-scope 
 
 ### STORAGE_CLASS_SKEW — 10 pairs
 
-same leaf name under a different owner — class static vs file static vs function-local
-
 - **612 B** `default/system/obj/Dir` → `?Iterate@ObjectDir@@IAAXPAVDataArray@@_N@Z`
   - target `?sSuperClassMap@ObjectDir@@2V?$map@U?$pair@VSymbol@@V1@@stlpmtx_std@@_NU?$less@U?$pair@VSymbol@@V1@@stlpmtx_std@@@2@V?$StlNodeAlloc@U?$pair@$$CBU?$pair@VSymbol@@V1@@stlpmtx_std@@_N@stlpmtx_std@@@2@@stlpmtx_std@@A`
   - ours   `?sSuperClassMap@@3V?$map@U?$pair@VSymbol@@V1@@stlpmtx_std@@_NU?$less@U?$pair@VSymbol@@V1@@stlpmtx_std@@@2@V?$StlNodeAlloc@U?$pair@$$CBU?$pair@VSymbol@@V1@@stlpmtx_std@@_N@stlpmtx_std@@@2@@stlpmtx_std@@A`
@@ -569,15 +580,11 @@ same leaf name under a different owner — class static vs file static vs functi
 
 ### LOCAL_STATIC_SCOPE_RENAME — 1 pairs
 
-both the name and the scope index differ
-
 - **1132 B** `default/lazer/meta_ham/MainMenuPanel` → `?UpdateArtLoaders@MainMenuPanel@@AAAXXZ`
   - target `??__Fmsg@?CI@??UpdateArtLoaders@MainMenuPanel@@AAAXXZ@YAXXZ`
   - ours   `??__Futility_image_loaded@?CL@??UpdateArtLoaders@MainMenuPanel@@AAAXXZ@YAXXZ`
 
 ### ANON_NS_HASH — 8 pairs
-
-same symbol in an unnamed namespace under two different `?A0x` hashes — a build-environment artifact `scripts/obj_anon_ns_patcher.py` owns, not a source bug
 
 - **352 B** `default/system/rnddx9/Rnd` → `?DrawRectDepth@DxRnd@@UAAXABVVector3@@AAY03$$CBV2@ABVVector4@@PAVRndMat@@W4ShaderType@@@Z`
   - target `?sDepthRectVerts@?A@@3PAUDepthRectVert@1@A`
@@ -605,8 +612,6 @@ same symbol in an unnamed namespace under two different `?A0x` hashes — a buil
   - ours   `?gPhysicalType@?A0x2be09a71@@3PADA`
 
 ### DIFFERENT_SYMBOL — 15 pairs
-
-our COMDATs for the two names differ, and the names follow no known spelling rule — a genuinely different callee
 
 - **296 B** `default/system/net/DingoAuthJob` → `?Start@AuthenticateReqJob@@UAAXXZ`
   - target `??$MakeString@PBDPBDPBD@@YAPBDPBDABQBD11@Z`
@@ -656,8 +661,6 @@ our COMDATs for the two names differ, and the names follow no known spelling rul
 
 ### IMMEDIATE_VS_SYMBOL — 2 pairs
 
-the target relocates a symbol where we emit a bare immediate
-
 - **396 B** `default/system/gesture/SpeechMgr` → `?Enable@SpeechMgr@@QAAX_N@Z`
   - target `lbl_8301000E`
   - ours   `14`
@@ -667,15 +670,12 @@ the target relocates a symbol where we emit a bare immediate
 
 ### C_LINKAGE_SKEW — 2 pairs
 
-the same name with C linkage on one side and C++ linkage on the other
-
 - **60 B** `default/system/utl/BinkIntegration` → `?BinkInit@@YAXXZ`
   - target `BinkSetIO`
   - ours   `?BinkSetIO@@YAXP6AHPAUBINKIO@@PBDI@Z@Z`
 - **60 B** `default/system/utl/BinkIntegration` → `?BinkInit@@YAXXZ`
   - target `BinkSetMemory`
   - ours   `?BinkSetMemory@@YAXP6APAXI@ZP6AXPAX@Z@Z`
-
 
 ## Source fixes made by this lane
 
