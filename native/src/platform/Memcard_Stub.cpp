@@ -15,6 +15,11 @@ void MemcardXbox::Poll() {}
 // definition (and thus the vtable emission) must live here too.
 void MemcardXbox::Init() { Memcard::Init(); }
 
+// Same story for Terminate, moved out-of-line so the SystemTerminate call site
+// emits ?Terminate@MemcardXbox@@UAAXXZ (see src/system/os/Memcard_Xbox.cpp).
+// Retail's body is a bare blr, and Memcard::Terminate is empty anyway.
+void MemcardXbox::Terminate() {}
+
 void MemcardXbox::SetContainerName(const char *name) {
     strncpy(mFileName, name, XCONTENT_MAX_FILENAME_LENGTH - 1);
     mFileName[XCONTENT_MAX_FILENAME_LENGTH - 1] = '\0';

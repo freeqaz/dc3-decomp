@@ -49,7 +49,7 @@ public:
     MemcardXbox() : mSelectorPending(0), mSelectorCallback(0), mSelectedDevice(0) {}
     virtual ~MemcardXbox() {}
     virtual void Init();
-    virtual void Terminate() { Memcard::Terminate(); }
+    virtual void Terminate();
     virtual void Poll();
     virtual void SetContainerName(const char *);
     virtual void SetContainerDisplayName(const wchar_t *);

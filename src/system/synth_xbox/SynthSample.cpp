@@ -30,7 +30,7 @@ void *SampleAlloc(int size, const char *file, int line, const char *name, int) {
 
 void SampleFree(void *mem, const char *, int, const char *) {
     if (mem)
-        MemFree(mem, __FILE__, __LINE__, "");
+        PhysicalFreeTracked(mem, __FILE__, __LINE__, "");
 }
 
 SynthSample360::SynthSample360() {}

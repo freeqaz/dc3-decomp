@@ -2181,10 +2181,10 @@ void HamDirector::LoadRoutineBuilderData(
     } else {
         ObjectDir *moveMgrDir = TheMoveMgr->MoveDataDir();
         if (!moveMgrDir) {
-            MILO_LOG("Move data missing from %s", TheGameData->GetSong().Str());
+            MILO_NOTIFY("Move data missing from %s", TheGameData->GetSong().Str());
         } else {
             ObjectDir *movesDir = GetWorld()->Find<ObjectDir>("moves", true);
-            int movesDirHash = movesDir->HashTableSize() + moveMgrDir->HashTableSize();
+            int movesDirHash = moveMgrDir->HashTableSize() + movesDir->HashTableSize();
             int movesDirStr = movesDir->StrTableSize() + moveMgrDir->StrTableSize();
             movesDir->Reserve(movesDirHash, movesDirStr);
             std::vector<Hmx::Object *> objects;

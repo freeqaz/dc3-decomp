@@ -385,6 +385,11 @@ MCResult MCContainerXbox::PrintDir(const char *cc, bool b2) {
 
 void MemcardXbox::Init() { Memcard::Init(); }
 
+// Out-of-line and empty: retail's ?Terminate@MemcardXbox@@UAAXXZ ICF-folded
+// with ?Terminate@VirtualKeyboard@@QAAXXZ (a bare blr), so it cannot have
+// contained the call to the out-of-line, also-empty Memcard::Terminate.
+void MemcardXbox::Terminate() {}
+
 void MemcardXbox::Poll() {
     Memcard::Poll();
     if (mSelectorPending && mXOverlapped.InternalLow != 0x3E5) {

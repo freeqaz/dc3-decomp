@@ -50,6 +50,9 @@
 
 const char *gNullStr = "";
 
+// Defined in utl/MemMgr.cpp; SystemTerminate is its only caller.
+void MemTerminate();
+
 static GfxMode gGfxMode;
 
 bool gHostConfig;
@@ -496,11 +499,11 @@ void SystemInit(const char *config) {
     TheLocale.Init();
     CheatsInit();
     TheMC.Init();
+    FileCache::Init();
     CacheMgrInit();
 #ifndef HX_NATIVE
     NetCacheMgrInit();
 #endif
-    FileCache::Init();
     TheDataPointMgr.Init();
     TheWebSvcMgr.Init();
     ThePlatformMgr.Init();
@@ -681,7 +684,7 @@ void SystemTerminate() {
     TrigTableTerminate();
     gSystemConfig->Release();
     DataTerminate();
-    Symbol::Terminate();
+    MemTerminate();
     AppChild::Terminate();
     TheSystemArgs.clear();
     TerminateMakeString();

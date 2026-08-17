@@ -285,7 +285,7 @@ bool PropSyncSubDirs(
         ObjDirPtr<ObjectDir> &ptr = *subdirIt;
         if (op == kPropSet || op == kPropInsert) {
             FilePath valPath = val.Str();
-            FilePath relative =
+            String relative =
                 FileRelativePath(FilePath::Root().c_str(), valPath.c_str());
             FOREACH (it, subdirs) {
                 if (it != subdirIt) {

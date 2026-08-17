@@ -347,9 +347,9 @@ bool HolmesClientInitOpcode(bool quiet) {
         *gHolmesStream >> response;
         fail = response != 0;
     } else {
-        WaitForAnyResponse(Holmes::kVersion);
+        WaitForResponse(Holmes::kVersion);
     }
-    s32 host_ver = -1;
+    int host_ver = -1;
     if (!fail) {
         *gHolmesStream >> host_ver;
         fail = host_ver != HOLMES_CURRENT_VERSION;
