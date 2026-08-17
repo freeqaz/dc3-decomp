@@ -96,6 +96,19 @@ END_HANDLERS
         }                                                                                \
     }
 
+// same editability gate as SYNC_MAT_PROP, but the property does not dirty the material
+#define SYNC_MAT_EDIT_PROP(s, member)                                                    \
+    {                                                                                    \
+        _NEW_STATIC_SYMBOL(s)                                                            \
+        if (sym == _s) {                                                                 \
+            Symbol action(#s "_edit_action");                                            \
+            if (!(_op & (kPropSize | kPropGet)) && !IsEditable(action)) {                \
+                return true;                                                             \
+            }                                                                            \
+            return PropSync(member, _val, _prop, _i + 1, _op);                           \
+        }                                                                                \
+    }
+
 #define SYNC_PERF_PROP(s, member)                                                        \
     {                                                                                    \
         _NEW_STATIC_SYMBOL(s)                                                            \
@@ -137,7 +150,7 @@ BEGIN_PROPSYNCS(RndMat)
     SYNC_PROP_MODIFY(alpha_threshold, mAlphaThreshold, mDirty |= 2)
     SYNC_MAT_PROP(alpha_write, mAlphaWrite, 2)
     SYNC_PROP(force_alpha_write, mForceAlphaWrite)
-    SYNC_MAT_PROP(next_pass, mNextPass, 2)
+    SYNC_MAT_EDIT_PROP(next_pass, mNextPass)
     SYNC_MAT_PROP(cull, (int &)mCull, 2)
     SYNC_MAT_PROP(per_pixel_lit, mPerPixelLit, 2)
     SYNC_MAT_PROP(emissive_multiplier, mEmissiveMultiplier, 2)
@@ -177,56 +190,12 @@ BEGIN_PROPSYNCS(RndMat)
     SYNC_MAT_PROP(refract_strength, mRefractStrength, 2)
     SYNC_MAT_PROP(refract_normal_map, mRefractNormalMap, 2)
     SYNC_MAT_PROP(screen_aligned, mScreenAligned, 2)
-    SYNC_MAT_PROP(shader_variation, (int &)mShaderVariation, 2) {
-        static Symbol _s("point_lights");
-        if (sym == _s) {
-            Symbol action("point_lights_edit_action");
-            if (!(_op & (kPropSize | kPropGet)) && !IsEditable(action)) {
-                return true;
-            }
-            return PropSync(mPointLights, _val, _prop, _i + 1, _op);
-        }
-    }
-    {
-        static Symbol _s("fog");
-        if (sym == _s) {
-            Symbol action("fog_edit_action");
-            if (!(_op & (kPropSize | kPropGet)) && !IsEditable(action)) {
-                return true;
-            }
-            return PropSync(mFog, _val, _prop, _i + 1, _op);
-        }
-    }
-    {
-        static Symbol _s("fade_out");
-        if (sym == _s) {
-            Symbol action("fade_out_edit_action");
-            if (!(_op & (kPropSize | kPropGet)) && !IsEditable(action)) {
-                return true;
-            }
-            return PropSync(mFadeout, _val, _prop, _i + 1, _op);
-        }
-    }
-    {
-        static Symbol _s("color_adjust");
-        if (sym == _s) {
-            Symbol action("color_adjust_edit_action");
-            if (!(_op & (kPropSize | kPropGet)) && !IsEditable(action)) {
-                return true;
-            }
-            return PropSync(mColorAdjust, _val, _prop, _i + 1, _op);
-        }
-    }
-    {
-        static Symbol _s("fur");
-        if (sym == _s) {
-            Symbol action("fur_edit_action");
-            if (!(_op & (kPropSize | kPropGet)) && !IsEditable(action)) {
-                return true;
-            }
-            return PropSync(mFur, _val, _prop, _i + 1, _op);
-        }
-    }
+    SYNC_MAT_PROP(shader_variation, (int &)mShaderVariation, 2)
+    SYNC_MAT_EDIT_PROP(point_lights, mPointLights)
+    SYNC_MAT_EDIT_PROP(fog, mFog)
+    SYNC_MAT_EDIT_PROP(fade_out, mFadeout)
+    SYNC_MAT_EDIT_PROP(color_adjust, mColorAdjust)
+    SYNC_MAT_EDIT_PROP(fur, mFur)
     SYNC_PERF_PROP(recv_proj_lights, mPerfSettings.mRecvProjLights)
     SYNC_PERF_PROP(recv_point_cube_tex, mPerfSettings.mRecvPointCubeTex)
     SYNC_PERF_PROP(ps3_force_trilinear, mPerfSettings.mPS3ForceTrilinear)
