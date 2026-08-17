@@ -211,7 +211,7 @@ protected:
     DataNode OnShotOver(DataArray *);
     DataNode OnPostProcInterp(DataArray *);
     DataNode OnSaveSong(DataArray *);
-    DataNode OnSaveFaceAnims(DataArray *);
+    DataNode OnSaveFaceanims(DataArray *);
     DataNode OnFileLoaded(DataArray *);
     DataNode OnFileMerged(DataArray *);
     DataNode OnLoadSong(DataArray *);

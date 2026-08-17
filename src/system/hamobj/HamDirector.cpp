@@ -146,7 +146,7 @@ BEGIN_HANDLERS(HamDirector)
     HANDLE(shot_over, OnShotOver)
     HANDLE(postproc_interp, OnPostProcInterp)
     HANDLE(save_song, OnSaveSong)
-    HANDLE(save_face_anims, OnSaveFaceAnims)
+    HANDLE(save_face_anims, OnSaveFaceanims)
     HANDLE(on_file_loaded, OnFileLoaded)
     HANDLE(on_file_merged, OnFileMerged)
     HANDLE(load_song, OnLoadSong)
@@ -439,7 +439,7 @@ void HamDirector::CollideList(const Segment &s, std::list<Collision> &colls) {
 }
 
 DataNode HamDirector::OnSaveSong(DataArray *) { return 0; }
-DataNode HamDirector::OnSaveFaceAnims(DataArray *) { return 0; }
+DataNode HamDirector::OnSaveFaceanims(DataArray *) { return 0; }
 DataNode HamDirector::OnFileMerged(DataArray *a) {
 #ifdef HX_NATIVE
     Symbol cat = a->Sym(2);
