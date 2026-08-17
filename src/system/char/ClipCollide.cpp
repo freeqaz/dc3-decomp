@@ -104,8 +104,9 @@ void ClipCollide::SyncChar() {
 }
 
 void ClipCollide::SyncWaypoint() {
-    if (!mChar || !mWaypoint)
+    if (!mChar || !mWaypoint) {
         return;
+    }
     static Symbol front("front");
     static Symbol back("back");
     static Symbol left("left");

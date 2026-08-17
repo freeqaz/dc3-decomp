@@ -1582,9 +1582,9 @@ DataMergeFilter::DataMergeFilter(const DataNode &node, Subdirs subs)
 
 MergeFilter::Action
 DataMergeFilter::Filter(Hmx::Object *from, Hmx::Object *to, class ObjectDir *dir) {
-    if (mType == kDataInt) {
+    if (mType == kDataInt)
         return (MergeFilter::Action)mInt;
-    } else {
+    else {
         static DataArrayPtr d(new DataArray(3));
         d->Node(1) = from;
         d->Node(2) = to;
