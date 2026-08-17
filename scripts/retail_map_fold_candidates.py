@@ -239,33 +239,92 @@ def comdat_contents(path: Path, wanted):
     return out
 
 
-def content_verdict(ours, tgt, va, mode):
+def content_verdict(ours, tgt, va, mode, canon=None):
     """Does our COMDAT satisfy /OPT:ICF's own test against the survivor's?
 
     Returns (ok, reason).  `mode` is "strict" (exact equality) or "align"
     (exact equality, or our bytes followed by alignment slack -- see module
     docstring for the measurement that licenses the slack).
+
+    `canon` (optional) renames a relocation TARGET to a fold-class id before
+    the comparison; see `reloc_canon`.  Two spellings the retail linker put at
+    one address are one pointer in the image, so a relocation to either is the
+    same relocation -- refusing the class because the two sides SPELL that
+    pointer differently would refuse a fold on the strength of a second fold
+    the same map states.  Only names the map itself buckets together are ever
+    equated; anything else still has to match by name, so the gate stays
+    fail-closed.  `strict` mode does not use it.
+
+    Extent relaxation (`align` only).  dtk's splitter sizes a target symbol by
+    the gap to the next name it can resolve, so an unnamed datum following the
+    survivor lands INSIDE the survivor's carved COMDAT -- the same attribution
+    the module docstring establishes for trailing padding, except the tail here
+    is live content rather than zeros.  It is distinguishable from real extra
+    content the cheap way: the tail carries its own RELOCATIONS.  When it does,
+    our COMDAT is compared over our own extent only (bytes, plus every target
+    relocation landing inside it).  When the tail has no relocations the old
+    zero-padding rule applies unchanged, so the 176/254-vs-254 measurement the
+    `align` default rests on is untouched.
     """
     ob, orel = ours
     tb, trel = tgt
-    if orel != trel:
+    c = canon or (lambda n: n)
+
+    def norm(rel):
+        return tuple((off, ty, c(nm)) for off, ty, nm in rel)
+
+    orel_n, trel_n = norm(orel), norm(trel)
+    note = ("; relocation targets equal modulo an ICF fold the retail map "
+            "states" if orel != trel and orel_n == trel_n else "")
+    n = len(ob)
+    if orel_n == trel_n:
+        if ob == tb:
+            return True, "identical" + note
+        if mode == "strict":
+            return False, "contents differ"
+    elif mode == "strict":
         return False, "relocation targets differ"
-    if ob == tb:
-        return True, "identical"
+
     if mode == "strict":
         return False, "contents differ"
-    pad = len(tb) - len(ob)
-    if pad <= 0:
-        return False, "contents differ"
-    if tb[:len(ob)] != ob:
-        return False, "contents differ"
-    if any(tb[len(ob):]):
+    if len(tb) <= n or tb[:n] != ob:
+        return False, ("relocation targets differ" if orel_n != trel_n
+                       else "contents differ")
+
+    if any(off >= n for off, _, _ in trel_n):
+        # Live tail: the splitter attributed a following, unnamed datum to the
+        # survivor. Compare over our extent.
+        if tuple(r for r in trel_n if r[0] < n) != orel_n:
+            return False, "relocation targets differ"
+        return True, (f"identical over our {n}-byte extent{note}; the target "
+                      f"COMDAT continues for {len(tb) - n} more relocated "
+                      f"byte(s) dtk's splitter attributed to the survivor")
+
+    if orel_n != trel_n:
+        return False, "relocation targets differ"
+    pad = len(tb) - n
+    if any(tb[n:]):
         return False, "target is longer and the extra bytes are not zero"
     if pad >= PAD_ALIGN:
         return False, f"{pad} trailing zeros is more than alignment slack"
     if (va + len(tb)) % PAD_ALIGN:
         return False, "trailing zeros do not land on an alignment boundary"
-    return True, f"identical modulo {pad} bytes of alignment padding"
+    return True, f"identical modulo {pad} bytes of alignment padding{note}"
+
+
+def reloc_canon(v2n):
+    """name -> fold-class id, for names the retail map buckets with another.
+
+    A name alone at its address maps to ITSELF, so a name in a fold class never
+    compares equal to one outside it.
+    """
+    fold = {}
+    for va, names in v2n.items():
+        real = [n for n in names if not NOT_A_FOLD.match(n)]
+        if len(real) > 1:
+            for n in real:
+                fold[n] = f"#icf@{va:08x}"
+    return lambda nm: fold.get(nm, nm)
 
 
 SYMBOLS = REPO / "config" / "373307D9" / "symbols.txt"
@@ -498,6 +557,7 @@ def main():
     # Second pass: only the candidate members are read, so the whole
     # 153k-definition symbol space never has to be held as bytes.
     refused, checks = [], []
+    canon = None if args.identity == "strict" else reloc_canon(v2n)
     if args.identity != "off":
         wanted = {n for g in groups for n in (g["survivor"], *g["folded"])}
         ours_c, tgt_c, conflict = {}, {}, set()
@@ -533,7 +593,8 @@ def main():
                     mine = ours_c.get(m)
                     if mine is None:
                         continue          # not defined by us: nothing to check
-                    ok, why = content_verdict(mine, surv, va, args.identity)
+                    ok, why = content_verdict(mine, surv, va, args.identity,
+                                              canon)
                     checks.append({"group": g["name"], "member": m,
                                    "ok": ok, "reason": why})
                     (ok_names if ok else bad).append(

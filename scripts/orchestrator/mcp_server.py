@@ -83,6 +83,36 @@ _NON_TITLE_DIRS = frozenset({
 })
 
 
+def format_match_percent(pct: "float | int | None",
+                         none_text: str = "unimplemented") -> str:
+    """Render a match percentage so that ONLY a real 100 reads as 100.
+
+    `f"{pct:.1f}%"` rounds every value from 99.95 upwards to the string
+    "100.0%", so `query_functions` printed `Match: 100.0%` for
+    `?Terminate@Synth360@@UAAXXZ` (99.95385 fuzzy) and
+    `??0?$StandardEffect@VWahEffect@@@@QAA@XZ` (99.98276) -- both `is_stub=1`
+    rows with unfinished work.  100 is the one number in this repo that is a
+    CLAIM rather than a measurement (it is what a COMPLETE verdict is granted
+    on), so it is the one value a display must never manufacture.
+
+    Widening the format to a fixed `.2f` only moves the boundary to 99.995 and
+    would still print "100.00%" for a function with real residual mismatches.
+    Instead the precision grows until the rendered number is honestly below
+    100, so 99.95385 -> "100.0%" becomes "99.95%", 99.99231 -> "99.99%", and a
+    value inside a ten-thousandth of 100 renders as "<100%" rather than
+    pretending to a precision that would round away.
+    """
+    if pct is None:
+        return none_text
+    if pct >= 100.0:
+        return "100.0%"
+    for places in (1, 2, 3, 4):
+        rendered = f"{pct:.{places}f}"
+        if float(rendered) < 100.0:
+            return rendered + "%"
+    return "<100%"
+
+
 def _looks_like_title_id(name: str) -> bool:
     """True for 8-hex-digit title IDs such as '373307D9' (DC3) or '45410914' (RB3 xenon)."""
     return len(name) == 8 and all(c in "0123456789abcdefABCDEF" for c in name)
@@ -1141,7 +1171,15 @@ class DecompMCPServer:
         output += ":\n\n"
         for func in results[:max_display]:
             pct = func.get("current_percent")
-            pct_str = f"{pct:.1f}%" if pct is not None else "unimplemented"
+            pct_str = format_match_percent(pct)
+            # A stub row's current_percent is the LEAST trustworthy number in
+            # the table: scripts/sync_match_percent.py drops any report entry
+            # with no `fuzzy_match_percent` (which is every target-only symbol,
+            # i.e. every real stub), so the column keeps whatever it last held
+            # and can read 100 for a function this build does not emit. Say so
+            # on the line rather than leaving the percentage to speak alone.
+            if func.get("is_stub"):
+                pct_str += " [STUB: no body emitted; % is stale]"
             verdict = func.get("verdict")
             verdict_reason = func.get("verdict_reason")
             verdict_str = f" | Verdict: {verdict}" if verdict else ""
@@ -1632,7 +1670,7 @@ class DecompMCPServer:
             suggestions = []
             for r in results:
                 pct = r.get("current_percent")
-                pct_str = f" ({pct:.1f}%)" if pct is not None else ""
+                pct_str = f" ({format_match_percent(pct, '')})" if pct is not None else ""
                 suggestions.append(f"`{r['symbol']}`{pct_str}")
             return suggestions
         except Exception:
@@ -1998,7 +2036,12 @@ class DecompMCPServer:
                 if fuzzy_pct is not None and raw_pct is not None:
                     output = re.sub(
                         r"Match: [\d.]+% normalized \([\d.]+% raw\)",
-                        f"Match: {fuzzy_pct:.1f}% normalized ({raw_pct:.1f}% raw)",
+                        # Same never-manufacture-100 rule as query_functions:
+                        # ?Save@ObjectDir@@UAAXAAVBinStream@@@Z is 99.997
+                        # normalized with two real diff_arg instructions and
+                        # this headline called it "100.0% normalized".
+                        f"Match: {format_match_percent(fuzzy_pct)} normalized "
+                        f"({format_match_percent(raw_pct)} raw)",
                         output,
                         count=1,
                     )
