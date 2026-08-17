@@ -29,7 +29,7 @@ void SampleInst360::SetFXCore(FXCore core) {}
 
 float SampleInst360::GetProgress() {
     XAUDIO2_VOICE_STATE state;
-    ((IXAudio2SourceVoice *)mVoice->mSourceVoice)->GetState(&state, 0);
+    ((IXAudio2SourceVoice *)mVoice->mPoolVoice.sourceVoice)->GetState(&state, 0);
     Voice *voice = mVoice;
     int pos = (unsigned int)state.SamplesPlayed;
     if (voice->mLoopStart >= 0) {
@@ -61,7 +61,7 @@ void SampleInst360::SetADSR(const ADSRImpl &adsr) {
 
 float SampleInst360::ElapsedTime() {
     XAUDIO2_VOICE_STATE state;
-    ((IXAudio2SourceVoice *)mVoice->mSourceVoice)->GetState(&state, 0);
+    ((IXAudio2SourceVoice *)mVoice->mPoolVoice.sourceVoice)->GetState(&state, 0);
     float samples = (double)state.SamplesPlayed;
     return samples / (float)mSample->GetSampleRate();
 }
