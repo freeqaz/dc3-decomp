@@ -34,6 +34,8 @@ from ppc_il_lifter import (
     _op_category,
     _split_instruction,
     _parse_immediate,
+    _parse_load_offset,
+    _parse_load_base_reg,
 )
 
 
@@ -1433,6 +1435,48 @@ class TestShapeFactsSparseSwitch(unittest.TestCase):
         sparse_facts = [f for f in facts if f["kind"] == "sparse_switch"]
         self.assertGreater(len(sparse_facts), 0)
         self.assertEqual(sparse_facts[0]["category"], "linear_scan")
+
+
+class TestMasmMemoryOperandSpelling(unittest.TestCase):
+    """`_parse_load_offset` / `_parse_load_base_reg` accepted only the C hex
+    spelling (`0x60(r1)`) and decimal. Real MSVC .cod listings use MASM:
+    measured 2026-08-17 over `msvc-src/results/branch_polarity.json`, 5
+    occurrences of `NNh(rN)` -- including `stwu r1,-60h(r1)` -- and ZERO of
+    `0xNN(rN)`. On the one input shape that is actually on disk, every hex
+    displacement parsed as None, which reads downstream as "no offset" rather
+    than as "could not parse".
+
+    `lift_instruction` takes instruction TEXT and has no production caller
+    today (only this file imports the module), so this is latent -- fixed now
+    for the same reason: a text parser that cannot read the real spelling is a
+    parser that ships broken."""
+
+    def _op(self, mem):
+        return LiftedOp("LOAD", dest="r3", args=(mem,))
+
+    def test_masm_hex_displacement(self):
+        self.assertEqual(_parse_load_offset(self._op("60h(r1)")), 0x60)
+        self.assertEqual(_parse_load_offset(self._op("0Ch(r30)")), 0x0C)
+
+    def test_negative_masm_hex_displacement(self):
+        # the exact operand on disk: `stwu r1,-60h(r1)`
+        self.assertEqual(_parse_load_offset(self._op("-60h(r1)")), -0x60)
+
+    def test_base_register_survives_the_masm_spelling(self):
+        self.assertEqual(_parse_load_base_reg(self._op("60h(r1)")), "r1")
+        self.assertEqual(_parse_load_base_reg(self._op("0Ch(r30)")), "r30")
+
+    def test_the_older_spellings_are_unchanged(self):
+        for mem, off, base in (("0x10(r3)", 0x10, "r3"),
+                               ("0(r31)", 0, "r31"),
+                               ("-0x8(r1)", -0x8, "r1"),
+                               ("-8(r1)", -8, "r1")):
+            self.assertEqual(_parse_load_offset(self._op(mem)), off, mem)
+            self.assertEqual(_parse_load_base_reg(self._op(mem)), base, mem)
+
+    def test_a_non_operand_still_yields_None(self):
+        self.assertIsNone(_parse_load_offset(self._op("r3")))
+        self.assertIsNone(_parse_load_base_reg(self._op("r3")))
 
 
 if __name__ == "__main__":

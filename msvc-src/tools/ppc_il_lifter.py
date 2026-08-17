@@ -899,11 +899,18 @@ def _parse_load_offset(op: LiftedOp) -> int | None:
     if not op.args:
         return None
     mem = op.args[0]
-    # Match patterns like "0x10(r3)" or "0(r31)"
+    # Match "0x10(r3)", "0(r31)" -- and the MASM "60h(r1)" spelling, which is
+    # what real MSVC .cod listings actually use. Measured 2026-08-17 over
+    # msvc-src/results/branch_polarity.json: 5 occurrences of `NNh(rN)` (e.g.
+    # `stwu r1,-60h(r1)`) and ZERO of `0xNN(rN)`. Accepting only the C spelling
+    # meant returning None -- "no offset" -- for every hex displacement on the
+    # one input shape that is on disk.
     import re
-    m = re.match(r"(-?0x[0-9a-fA-F]+|-?\d+)\(", mem)
+    m = re.match(r"(-?0x[0-9a-fA-F]+|-?[0-9a-fA-F]+h|-?\d+)\(", mem)
     if m:
         val = m.group(1)
+        if val.endswith("h"):
+            return int(val[:-1], 16)
         return int(val, 16) if val.startswith(("0x", "-0x")) else int(val)
     return None
 
@@ -914,7 +921,8 @@ def _parse_load_base_reg(op: LiftedOp) -> str | None:
         return None
     mem = op.args[0]
     import re
-    m = re.match(r"-?(?:0x[0-9a-fA-F]+|\d+)\((\w+)\)", mem)
+    # Same three spellings as _parse_load_offset -- see the note there.
+    m = re.match(r"-?(?:0x[0-9a-fA-F]+|[0-9a-fA-F]+h|\d+)\((\w+)\)", mem)
     return m.group(1) if m else None
 
 
