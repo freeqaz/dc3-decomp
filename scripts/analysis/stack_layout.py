@@ -1202,6 +1202,13 @@ def print_report(rows: list[Row], tgt_prol: Prologue, base_prol: Prologue,
         elif frame_delta == 0:
             print("    • User-slot layouts match. If diff is still poor, root cause is not "
                   "stack-layout (check regswaps / replaces / inserts).")
+        elif callee_bytes is None:
+            # ★ 2026-08-17. `None == frame_delta` is False, so this case used to
+            #   fall into the catch-all below and blame the fingerprint matcher
+            #   for a frame Δ it could not attribute. Name the real reason.
+            print("    • Frame Δ exists and the callee-saved counts are UNKNOWN on at "
+                  "least one side — it cannot be attributed, and this is NOT an "
+                  "AT_LIMIT finding.")
         elif callee_bytes == frame_delta:
             print("    • Pure callee-saved-register shift. AT_LIMIT.")
         else:
@@ -1761,6 +1768,37 @@ def selftest():
           and parse_prologue(tgt_only, "base").saves_known,
           False)
 
+    # 9c — the INVARIANT that decides whether each consumer's guard is live.
+    # frame_known IMPLIES saves_known, and the implication runs one way only.
+    # Both are settled by the same "did we look at this side" question, so a
+    # consumer that leaves frame_size alone cannot reach the unknown-saves
+    # branch: by the time it has a frame it has counts. One that OVERWRITES
+    # frame_size from another source (objdiff's structured PrologueMismatchInfo)
+    # CAN, and must guard. If this ever fails, the guards changed status.
+    #
+    # The converse is FALSE and the `weird` fixture is why: `stwux r1, r1, r7`
+    # is an allocation we cannot decode, so the frame is UNKNOWN — but we
+    # scanned an instruction, so the counts are a measured 0. UNKNOWN frame with
+    # KNOWN saves is a real state; KNOWN frame with UNKNOWN saves is not.
+    _all_fixtures = [(mixed, "target"), (mixed, "base"), (plain, "target"),
+                     (leaf, "target"), (stub, "base"), (obj, "target"),
+                     (tgt_only, "target"), (tgt_only, "base"), ([], "target"),
+                     (saves_no_frame, "target"), (weird, "target")]
+    _states = [(parse_prologue(i, k).frame_known, parse_prologue(i, k).saves_known)
+               for i, k in _all_fixtures]
+    # ANTI-VACUITY (rule 4): "no counterexample" is satisfied by an empty or
+    # one-sided battery, so assert the battery actually spans both states first.
+    check("the battery spans both known and unknown frames",
+          (sum(1 for st in _states if st == (True, True)) >= 6,
+           sum(1 for st in _states if st == (False, False)) >= 2),
+          (True, True))
+    check("frame_known implies saves_known on every fixture in this battery",
+          [st for st in _states if st == (True, False)], [])
+    check("...and the converse does NOT hold (weird: undecodable alloc, "
+          "scanned saves)",
+          (parse_prologue(weird, "target").frame_known,
+           parse_prologue(weird, "target").saves_known), (False, True))
+
     # 9b — print_report must survive the tri-state and print UNKNOWN, not 0.
     # This is the consumer the defect actually reached; without it the fields
     # could be tri-state and the report still fabricate.
@@ -1792,6 +1830,48 @@ def selftest():
               "Callee-saved GPRs")[1].split("\n")[0], True)
     check("a scanned pair prints no saves-evidence line",
           "saves evidence:" in _txt2, False)
+
+    # 9d — KNOWN frame, UNKNOWN saves. 9c says parse_prologue never produces
+    # this pair, so it is reachable only through a caller that sets frame_size
+    # from somewhere else — which is exactly what dc3-decomp's mcp_server does
+    # with objdiff's structured PrologueMismatchInfo. print_report accepts
+    # Prologue objects from its caller, so build the pair directly rather than
+    # asserting a branch nobody can enter.
+    out.append("9d — known frame + unknown saves must not become AT_LIMIT:")
+    _pt = Prologue(frame_size=0x80, frame_evidence="structured (objdiff)")
+    _pb = Prologue(frame_size=0x90, frame_evidence="structured (objdiff)")
+    check("the constructed pair really is (frame known, saves unknown)",
+          [(_pt.frame_known, _pt.saves_known), (_pb.frame_known, _pb.saves_known)],
+          [(True, False), (True, False)])
+    _buf3 = io.StringIO()
+    with contextlib.redirect_stdout(_buf3):
+        print_report([], _pt, _pb, show_equal=False, show_callee_save=False,
+                     dominant_delta=0)
+    _txt3 = _buf3.getvalue()
+    check("the frame Δ is still reported", "Δ +0x10" in _txt3, True)
+    check("it is NOT attributed to callee saves",
+          "cannot be attributed" in _txt3, True)
+    # NB substring care: the refusal text itself contains the word AT_LIMIT
+    # ("NOT an AT_LIMIT finding"), so match the two VERDICT spellings instead.
+    check("and no AT_LIMIT verdict is issued",
+          ("AT_LIMIT (not source-fixable)" in _txt3,
+           "Pure callee-saved-register shift" in _txt3), (False, False))
+    # CONTROL: the same delta WITH counts must still reach AT_LIMIT, or the
+    # three checks above pass on a print_report that never says AT_LIMIT.
+    _buf4 = io.StringIO()
+    with contextlib.redirect_stdout(_buf4):
+        print_report([], Prologue(frame_size=0x80, saved_gpr_count=0,
+                                  saved_fpr_count=0, saved_vmx_count=0),
+                     Prologue(frame_size=0x90, saved_gpr_count=2,
+                              saved_fpr_count=0, saved_vmx_count=0),
+                     show_equal=False, show_callee_save=False, dominant_delta=0)
+    _txt4 = _buf4.getvalue()
+    check("a 2-GPR difference over a 0x10 frame Δ IS AT_LIMIT",
+          "AT_LIMIT" in _txt4, True)
+    check("...and the summary block calls it a pure callee-saved shift",
+          "Pure callee-saved-register shift" in _txt4, True)
+    check("...while the unknown-saves report names the reason in the summary",
+          "NOT an AT_LIMIT finding" in _txt3, True)
 
     return ok, out
 
