@@ -112,7 +112,7 @@ void PlaylistSortNode::OnContentMounted(const char *contentName, const char *) {
 
 BEGIN_HANDLERS(PlaylistHeaderNode)
     HANDLE_EXPR(get_challenge_count, mChallengeCount)
-    HANDLE_SUPERCLASS(NavListSortNode)
+    HANDLE_SUPERCLASS(NavListHeaderNode)
 END_HANDLERS
 
 PlaylistHeaderNode::PlaylistHeaderNode(NavListItemSortCmp *cmp, Symbol s, bool b)

@@ -10,10 +10,13 @@
 #include "os\UserMgr.h"
 #include <vector>
 
-float gDefaultHoldMs = -1.0f;
-float gDefaultRepeatMs = -1.0f;
-
 namespace {
+    // Anonymous namespace, not file scope: the target spells these
+    // `?gDefaultHoldMs@?A0x831dd776@@3MA`, i.e. inside an unnamed namespace.
+    // At file scope they get external linkage and mangle as `?gDefaultHoldMs@@3MA`.
+    float gDefaultHoldMs = -1.0f;
+    float gDefaultRepeatMs = -1.0f;
+
     bool gInited = false;
     std::vector<JoypadClient *> gClients;
 

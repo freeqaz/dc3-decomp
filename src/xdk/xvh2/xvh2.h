@@ -40,4 +40,7 @@ struct IXHV2Engine { /* Size=0x4 */
     IXHV2Engine &operator=(const IXHV2Engine &);
 };
 
-extern void *_xhv_voicechat_mode;
+// C linkage: the shipped image resolves this to xhv2:voicechat.obj's plain
+// `_xhv_voicechat_mode` (linker map 0x822869d4).  Declaring it as C++ made us
+// emit `?_xhv_voicechat_mode@@3PAXA`, which is a different symbol.
+extern "C" void *_xhv_voicechat_mode;
