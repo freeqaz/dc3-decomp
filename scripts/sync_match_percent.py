@@ -14,6 +14,13 @@ Normalized dual-store (roadmap 0.2/0.4):
     verdict off **normalized == 100**, so the ~206 functions that are 100%
     normalized but <100 fuzzy become promotable.
 
+Unpaired (target-only) symbols:
+    objdiff emits no `fuzzy_match_percent` for a target symbol our objects do
+    not define -- there is nothing to pair it with -- only
+    `match_percent_normalized: 0.0`. Those entries are scored 0, not skipped;
+    skipping them is what let 395 rows keep a fossil `current_percent` of 100
+    (see the comment in `load_report`).
+
 Demote / freshness (roadmap 0.3/0.7):
     --demote   reverts COMPLETE -> NULL when current_percent < 100 (sync was
                previously promote-only and never demoted, leaving stale-COMPLETE
@@ -81,6 +88,26 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
+def _round_pct(v: "float | None") -> "float | None":
+    """Two decimals, except that rounding may never REACH 100 from below.
+
+    The stored percentage is not just a display: `--promote` and `--demote`
+    both compare it against 100, and 100 is the value a COMPLETE verdict is
+    granted on. `round(99.9967, 2)` is 100.0, so nine functions carried a
+    COMPLETE cert while measurably not matching -- among them
+    ?Save@ObjectDir@@UAAXAAVBinStream@@@Z, whose residual is a real pair of
+    diff_arg instructions (an offset swap of 0x58 against 0xa4) and not noise.
+    Only 10 rows binary-wide sit in [99.995, 100), so this clamps that band
+    rather than dropping the 2-decimal convention the column has always had.
+    """
+    if v is None:
+        return None
+    r = round(v, 2)
+    if r >= 100.0 and v < 100.0:
+        return 99.99
+    return r
+
+
 def load_report(report_path: Path) -> tuple[dict[str, dict], set[str]]:
     """Load report.json and return ({symbol: info}, {units_at_100%}).
 
@@ -111,15 +138,40 @@ def load_report(report_path: Path) -> tuple[dict[str, dict], set[str]]:
         for fn in fns:
             pct = fn.get("fuzzy_match_percent")
             if pct is None:
-                continue
+                # A report entry with NO `fuzzy_match_percent` is not missing
+                # data -- it is objdiff saying the base object defines nothing
+                # to pair the target symbol with, so there is no fuzzy score to
+                # compute. It still carries `match_percent_normalized: 0.0`.
+                #
+                # `continue` here meant those rows were never written and never
+                # demotable, so `current_percent` kept whatever it last held
+                # from a build where the pairing DID exist. Measured 2026-08-17
+                # on main: 847 non-SDK entries, of which 395 sat at
+                # current_percent 100 with verdict COMPLETE for a symbol this
+                # build emits nothing for -- the whole "335 COMPLETE rows at
+                # literal 0%" cohort of the cert-rot audit, plus 60 excluded.
+                # It is also why an is_stub row could print a 100% match.
+                #
+                # Checked against the objects (task #101): for all 335 the
+                # TARGET object defines the symbol and OUR object does not, and
+                # not one is an ??_E/??_G weak-external spelling difference. So
+                # this is not a rename to be repaired by aliasing -- it is a
+                # function the target emits out of line and our build does not,
+                # and 0 is the honest score for it.
+                #
+                # Expect a one-time spike in the "Regressions" counter the first
+                # time this runs against a database written by the old rule.
+                if fn.get("match_percent_normalized") is None:
+                    continue
+                pct = 0.0
             symbol = fn["name"]
             size = int(fn.get("size", 0))
             demangled = fn.get("metadata", {}).get("demangled_name")
             norm = fn.get("match_percent_normalized")
             functions[symbol] = {
                 "unit": unit_name,
-                "percent": round(pct, 2),
-                "normalized": round(norm, 2) if norm is not None else None,
+                "percent": _round_pct(pct),
+                "normalized": _round_pct(norm),
                 "size": size,
                 "demangled": demangled,
             }
