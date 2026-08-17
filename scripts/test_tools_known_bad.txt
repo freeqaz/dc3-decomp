@@ -1,0 +1,129 @@
+# Known-bad entries for `python3 scripts/test_tools.py` — this repo's test lane.
+#
+# Baseline measured 2026-08-17 on this box at branch point 37614e655, one pytest
+# process per collection root. The runner reports these and does not fail on
+# them; anything NOT listed here that fails makes the runner exit non-zero.
+#
+# Format: one pytest id per line, `#` starts a comment. A file path covers every
+# test in that file; a `file::test` id covers its parametrizations.
+#
+# THE POINT OF THIS FILE IS TO SHRINK. Fixing an entry means DELETING its line
+# (the runner reports a listed entry that now passes as STALE). Deleting the
+# TEST instead of fixing it is not a fix — several of these are correct
+# assertions reporting real defects, and that is precisely why the lane exists.
+#
+# Classification:
+#   [dep]   missing optional dependency in this venv
+#   [env]   needs external state (built target tree, toolchain, live artifact)
+#           in a shape this box does not currently have
+#   [bug]   genuine defect in shipped code — a correct assertion, unattended
+#   [drift] fixture/expectation the code moved past
+#
+# NOT LISTED HERE, because a manifest entry still RUNS and running this one
+# CORRUPTS THE REPO: msvc-src/tools/test_il_fixtures.py::
+# TestCrossBundleConsistency::test_stable_json_export re-exports bundle.json in
+# place over a tracked fixture. scripts/test_tools.py --deselect's it and prints
+# the deselection on every run. See the note in STATIC_ROOTS.
+#
+# NOT LISTED HERE either, because they were never real: the pre-lane audit
+# recorded 45 reds under scripts/unicorn_runner/tests reporting `ImportError:
+# cannot import name 'Uc' from 'unicorn'`, and one more in
+# msvc-src/tools/test_il_permuter.py. The first 45 were a worktree
+# path-resolution bug plus a package-name collision (fixed; see
+# scripts/unicorn_runner/unicorn_dep.py) and the last was pollution from the
+# fixture-corrupting test above (verified: 6 passed on a clean fixture).
+
+# ── scripts/analysis/tests ────────────────────────────────────────────────────
+
+# [bug] extract_frame_size returns 0 where the test requires None on the
+# no-stwu fallback path. Owned by lane T1, which is repairing
+# scripts/analysis/stack_layout.py — do NOT edit that file or this test from
+# another lane. Listed so the rest of the lane can be green while T1 works.
+scripts/analysis/tests/test_frame_size_fields.py::TestExtractFrameSize::test_fallback_returns_none_when_no_stwu
+
+# ── scripts/orchestrator/tests ────────────────────────────────────────────────
+
+# [drift] agent_runner's env builder no longer emits the keys the tests read:
+# KeyError HTTP_PROXY (test_agent_runner.py:112), ALL_PROXY (:121),
+# ANTHROPIC_BASE_URL (:151). Either the proxy/auth plumbing moved or it was
+# dropped; the tests are the only thing still asserting it exists.
+scripts/orchestrator/tests/test_agent_runner.py::TestBuildEnv::test_env_includes_proxy_when_set
+scripts/orchestrator/tests/test_agent_runner.py::TestBuildEnv::test_env_includes_socks_proxy_when_set
+scripts/orchestrator/tests/test_agent_runner.py::TestBuildAuthEnv::test_openrouter_env_when_enabled
+
+# [drift] `mock.patch` targets `scripts.orchestrator.agent_runner.
+# ClaudeAgentOptions`, which the module does not define — the SDK symbol it used
+# to import is gone, so all four TestBuildSdkOptions cases die in mock's
+# attribute check before reaching an assertion.
+scripts/orchestrator/tests/test_agent_runner.py::TestBuildSdkOptions::test_custom_disallowed_tools
+scripts/orchestrator/tests/test_agent_runner.py::TestBuildSdkOptions::test_custom_tools_passed_through
+scripts/orchestrator/tests/test_agent_runner.py::TestBuildSdkOptions::test_default_tools_when_none
+scripts/orchestrator/tests/test_agent_runner.py::TestBuildSdkOptions::test_disallowed_tools_default
+
+# [drift] context_collector's rendered output moved past the tests' string
+# expectations ("Callers (N total):" is no longer the xref header) and one case
+# asserts on an absolute path under the temp worktree.
+scripts/orchestrator/tests/test_context_collector.py::TestCollectPreRunContextSuccess::test_collect_pre_run_context_success
+scripts/orchestrator/tests/test_context_collector.py::TestCollectContextGhidraUnavailable::test_collect_context_ghidra_unavailable
+scripts/orchestrator/tests/test_context_collector.py::TestXrefsFileCreation::test_xrefs_file_created
+scripts/orchestrator/tests/test_context_collector.py::TestExceptionHandling::test_collect_context_xrefs_after_client_error
+
+# [drift] the refactor prompt no longer contains "./bin/objdiff-cli diff", and
+# the pass now runs on haiku where the test still expects sonnet. A model-choice
+# change nobody propagated to the test.
+scripts/orchestrator/tests/test_refactor_pass.py::TestBuildRefactorPrompt::test_prompt_includes_objdiff_instruction
+scripts/orchestrator/tests/test_refactor_pass.py::TestRefactorPassIntegration::test_refactor_runs_when_changes_exist
+
+# ── scripts/unicorn_runner/tests ──────────────────────────────────────────────
+
+# [drift] classify_divergence's taxonomy and the tests' expectations disagree in
+# ONE direction: the tests assert the coarse two-value vocabulary
+# ("logic" / "build_env") while the shipped comparator returns the refined
+# ~20-value one it grew ("merged_call", "call_count", "error", "fpr_precision",
+# "merged_arg", ...). Identical files and identical failures in rb3-xenon, whose
+# copies were ported from here. Updating the expectations needs someone who
+# knows which fine-grained class each case is meant to land in; it is NOT a code
+# bug.
+#   expects build_env, gets merged_call
+scripts/unicorn_runner/tests/test_comparator.py::TestClassifyDivergence::test_build_env_call_count_merged
+#   expects build_env, gets merged_arg
+scripts/unicorn_runner/tests/test_comparator.py::TestClassifyDivergence::test_build_env_merged_symbol_warning
+#   expects logic, gets call_count
+scripts/unicorn_runner/tests/test_comparator.py::TestClassifyDivergence::test_logic_call_count_no_merged
+#   expects logic, gets error
+scripts/unicorn_runner/tests/test_comparator.py::TestClassifyDivergence::test_logic_decomp_error
+#   expects logic, gets error
+scripts/unicorn_runner/tests/test_comparator.py::TestClassifyDivergence::test_logic_error_mismatch
+#   expects logic, gets fpr_precision
+scripts/unicorn_runner/tests/test_comparator.py::TestClassifyDivergence::test_logic_fpr_mismatch
+
+# [drift] asserts the string "Equiv fills:" appears in format_probe_result's
+# output; prober.py:454 now writes "  Runs: N (x equiv, y div, z err)".
+scripts/unicorn_runner/tests/test_prober.py::TestFormatProbeResult::test_format_input_sensitive
+
+# ── tests/ ────────────────────────────────────────────────────────────────────
+
+# [bug] the unimplemented-function ingest path. One case counts 0 rows where 1
+# is required; the other reaches assertAlmostEqual with None on the left of a
+# subtraction (`TypeError: unsupported operand type(s) for -: 'NoneType' and
+# 'float'`), i.e. the ingest wrote NULL where it should have written a percent.
+# Both look like correct assertions against a live defect — the best candidates
+# in this file for someone to actually fix.
+tests/test_ingest_report.py::TestIngestUnimplementedFunctions::test_mix_of_implemented_and_unimplemented
+tests/test_ingest_report.py::TestIngestUnimplementedFunctions::test_update_unimplemented_function
+
+# ── tools/ ────────────────────────────────────────────────────────────────────
+
+# [env] a wall-clock assertion ("Get should be very fast (<10ms)"). Nothing is
+# wrong with the cache; the test measures the box. It fails under any concurrent
+# load, which a test lane running eight roots is. Should be marked as a
+# benchmark or given a much looser bound, not "fixed".
+tools/test_cache.py::test_cache_performance
+
+# [env] every BSF-trace test needs the 32-bit debug wibo build driving the real
+# MSVC c2.dll under GDB: `RuntimeError: c2.dll never hit wibo PE-mapping
+# breakpoint (loader.cpp:452)`. 13 of them, one cause, no toolchain on this box.
+# Whole-file entry: the 32 that pass here are the ones that do not need the
+# tracer, and they stay green because the manifest matches ids, not files, at
+# report time.
+tools/compiler_trace/tests/test_bsf_engine.py
