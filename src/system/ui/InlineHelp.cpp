@@ -228,7 +228,7 @@ void InlineHelp::Poll() {
             float f1 = uisecs - sRotationTime;
             if (f1 >= 1.0f) {
                 sHasFlippedTextThisRotation = false;
-                sRotationTime = uisecs + 5.0f;
+                sRotationTime = uisecs + sRotateDelay;
                 SetLabelRotationPcts(0);
             } else {
                 if (!sHasFlippedTextThisRotation && f1 >= 0.5f) {
@@ -290,7 +290,7 @@ String InlineHelp::GetIconStringFromAction(int idx) {
 void InlineHelp::ResetRotation() {
     sRotated = 0;
     sHasFlippedTextThisRotation = 0;
-    sRotationTime = TheTaskMgr.UISeconds() + 5.0f;
+    sRotationTime = TheTaskMgr.UISeconds() + sRotateDelay;
     sLabelRot = -0.0f;
 }
 

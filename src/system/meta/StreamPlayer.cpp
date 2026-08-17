@@ -54,7 +54,7 @@ void StreamPlayer::Init() {
     mStream->SetPan(0, -1.0f);
     mStream->SetPan(1, 1.0f);
     if (mLoop) {
-        mStream->SetJump(-0.25, 0, 0);
+        mStream->SetJump(Stream::kStreamEndMs, 0, 0);
     }
 }
 
