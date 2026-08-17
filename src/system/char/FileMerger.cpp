@@ -21,7 +21,7 @@
 #ifdef HX_NATIVE
 bool FileMerger::sDisableAll;
 #endif
-FileMerger *FileMerger::sFmDeleting;
+Hmx::Object *FileMerger::sFmDeleting;
 
 class NullLoader : public Loader {
 public:
@@ -139,7 +139,7 @@ FileMerger::FileMerger()
 }
 
 FileMerger::~FileMerger() {
-    FileMerger *old = sFmDeleting;
+    Hmx::Object *old = sFmDeleting;
     sFmDeleting = this;
     Clear();
     sFmDeleting = old;

@@ -85,5 +85,10 @@ public:
     DWORD mSelectedCount;                       // Count of items selected by user
 
 private:
+    // The overlapped block for the async marketplace call is a class static in the
+    // target (?sOverlapped@XboxMultipleItemsPurchaser@@0U_XOVERLAPPED@@A), not a
+    // function-local static of Initiate().
+    static XOVERLAPPED sOverlapped;
+
     DataNode OnMsg(UIChangedMsg const &);
 };
