@@ -66,14 +66,14 @@ void Leaderboards::Text(int, int data, UIListLabel *slot, UILabel *label) const 
             if (!(!mFetchingScores)) {
                 label->SetTextToken(gNullStr);
             } else {
-                if (mRows[data].mIsPercentile && mMode != 2) {
+                if (!mRows[data].mIsPercentile || mMode == 2) {
+                    static Symbol rank_fmt("rank_fmt");
+                    label->SetInt(mRows[data].mRank, false);
+                } else {
                     static char sBuffer[20];
                     Hx_snprintf(sBuffer, 20, "%d%% ", mRows[data].mRank);
                     String str58(sBuffer);
                     label->SetTextToken(str58.c_str());
-                } else {
-                    static Symbol rank_fmt("rank_fmt");
-                    label->SetInt(mRows[data].mRank, false);
                 }
             }
         } else if (slot->Matches("difficulty")) {
