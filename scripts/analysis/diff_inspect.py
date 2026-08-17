@@ -1358,6 +1358,32 @@ def _get_prologue_mismatch_info(data: dict) -> "dict | None":
 
     JSON path: data["analysis"]["patterns"][i]["details"]["info"]
     where pattern == "PROLOGUE_MISMATCH".
+
+    ★ 2026-08-17, MEASURED against the live objdiff-cli 4.2.3 (88b425bc3bad),
+      because the claim in circulation was that this whole path is dead — that
+      4.2.3 emits no `analysis` key at all and only the unit tests ever
+      exercise it. That is WRONG, and the correction matters:
+
+        - `analysis` is emitted for EVERY symbol when `--analyze` or
+          `--verdict` is passed (50/50 on a batch of unit default/App;
+          2463/2463 on every partial-match function in the repo).
+        - PROLOGUE_MISMATCH is a live 4.2.3 pattern (`objdiff-cli doc-links`
+          lists it) and fired on 238 of those 2,463 functions (9.7%).
+        - 234 of the 238 carry target_frame_size/base_frame_size. The other 4
+          — e.g. `?Init@RndShader@@SAXXZ`, which has `bl __savegprlr_27` and no
+          allocation — OMIT the two keys entirely rather than emitting null, so
+          the `in info` guard below is the right shape and no null ever
+          reaches a caller.
+
+      What IS dead is the path FROM THIS FILE: `cmd_stack_layout`'s objdiff
+      invocation passes `--include-instructions --build --incremental` and no
+      `--analyze`/`--verdict`, so `data` here never has an `analysis` key and
+      `prologue_info` is always None. Same for scripts/analysis/stack_layout.py.
+      That is a CALLER property, fixable by adding the flag; it is not a
+      property of objdiff. scripts/orchestrator/mcp_server.py does pass
+      `--verdict`, so the twin of this function there is live on real runs.
+      Deliberately left as-is: adding `--analyze` changes what those two CLIs
+      cost and what they print, which is a separate decision from this repair.
     """
     try:
         for pattern in data.get("analysis", {}).get("patterns", []):
@@ -1418,7 +1444,12 @@ def _extract_frame_size_from_instrs(instrs, side='target', prologue_info=None):
     for; one of them (empty instrs) is now satisfied. See the commit body for
     why `test_fallback_returns_none_when_no_stwu` is NOT, and is left red.
     """
-    # Prefer structured field when available (objdiff v4.1+)
+    # Prefer structured field when available (objdiff v4.1+).
+    # ★ The `abs()` here and the raw read in mcp_server._stack_signal_summary
+    #   were two different sign conventions on ONE JSON field. Reconciled
+    #   2026-08-17 by giving mcp_server the same abs(); measured evidence that
+    #   it is a no-op on 4.2.3 (468 values, all positive, 112..8672) is in the
+    #   comment there. Keep the two spellings identical.
     if prologue_info is not None:
         key = "target_frame_size" if side == "target" else "base_frame_size"
         val = prologue_info.get(key)
