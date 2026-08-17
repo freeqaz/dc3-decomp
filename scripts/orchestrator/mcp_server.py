@@ -2771,12 +2771,16 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
         if not class_name or not offset_str:
             return [TextContent(type="text", text="Error: class_name and offset are required.")]
 
-        # Parse offset (hex or decimal)
+        # Parse offset (hex or decimal). Use the shared helper rather than
+        # re-rolling the prefix test: the hand-rolled version here was
+        # `startswith("0x")` only, so `-0x8` and `0X38` fell to the bare
+        # `int()`, raised, and came back as "Invalid offset format" -- a
+        # refusal, not a wrong answer, but a refusal on spellings the agent
+        # reads straight out of a diff (rb3-xenon carries real negative vbase
+        # displacements such as `-0x38`). _parse_hex_or_int already accepts
+        # ('0x','0X','-0x','-0X') and is what _resolve_offset_mismatches uses.
         try:
-            if offset_str.startswith("0x"):
-                offset = int(offset_str, 16)
-            else:
-                offset = int(offset_str)
+            offset = self._parse_hex_or_int(offset_str)
         except ValueError:
             return [TextContent(type="text", text=f"Error: Invalid offset format: {offset_str}")]
 
