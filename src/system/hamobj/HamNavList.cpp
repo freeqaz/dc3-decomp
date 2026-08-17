@@ -910,7 +910,7 @@ void HamNavList::SetNavProvider(HamNavProvider *provider) {
 
 void HamNavList::ScrollToIndex(int idx, int firstShowing) {
     bool gesturingWithVoice = TheGestureMgr && TheGestureMgr->GesturingWithVoice();
-    if (gesturingWithVoice && mListState.IsScrolling()) {
+    if (gesturingWithVoice && mListState.ScrollPastMinDisplay()) {
         mScrollBehavior.Exit();
     }
     mListState.SetSelected(idx, firstShowing, true);
