@@ -11,7 +11,7 @@ public:
     T *mRes; // 0x4
     RefRes() : mRefs(0), mRes(0) {}
 
-    T *Data() const { return mRes; }
+    T *const &Data() const { return mRes; }
     void AddRef() { mRefs++; }
     void Release() { mRefs--; }
     void SetData(T *data) { mRes = data; }
@@ -47,7 +47,7 @@ public:
 
     void ReserveRes(Hmx::CRC key, T *data) {
         RefRes<T> &res = mResources[key];
-        MILO_ASSERT(res.mRes == NULL, 0x50);
+        MILO_ASSERT(res.Data() == NULL, 0x50);
         res.SetData(data);
         res.AddRef();
     }

@@ -1,4 +1,5 @@
 #pragma once
+#include "os/OnlineID.h"
 #include "game\HamUser.h"
 #include "hamobj\Difficulty.h"
 #include "hamobj\HamLabel.h"
@@ -11,7 +12,6 @@
 #include "meta_ham\MoveRatingHistory.h"
 #include "meta_ham\Playlist.h"
 #include "meta_ham\SongStatusMgr.h"
-#include "os\OnlineID.h"
 #include "utl/JobMgr.h"
 #include "utl\Symbol.h"
 

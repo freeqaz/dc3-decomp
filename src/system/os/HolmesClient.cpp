@@ -107,7 +107,7 @@ namespace {
     void WaitForAnyResponse(Holmes::Protocol prot) {
         if (gPendingResponse == Holmes::kInvalidOpcode
             && gHolmesStream->Eof() != NotEof) {
-            AutoSlowFrame frame(__FUNCTION__, 5);
+            AutoSlowFrame frame("Holmes::WaitForAnyResponse", 5);
             gProfile[prot].wait.Start();
             float split = gProfile[prot].wait.SplitMs();
             float f9 = 2000;
