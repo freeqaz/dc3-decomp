@@ -117,11 +117,37 @@ STATIC_ROOTS: list[dict] = [
     {"path": "scripts/analysis/tests", "timeout": 600},
     # test_context_collector.py measured ~80 s.
     {"path": "scripts/orchestrator/tests", "timeout": 900},
+    # A single file, not a directory: scripts/orchestrator/ holds production
+    # modules, so a root there would try to collect them. Landed 2026-08-17
+    # beside the lookup_struct_offset parse fix; the lane reported it UNCOVERED
+    # on the first run after that merge, which is the check working.
+    {"path": "scripts/orchestrator/test_lookup_struct_offset_parse.py",
+     "timeout": 300},
     {"path": "scripts/unicorn_runner/tests", "timeout": 600},
     # tools/ top level only — the two test packages below are their own roots.
     {"path": "tools", "timeout": 600,
      "ignore": ["tools/compiler_trace", "tools/state_diff"]},
-    {"path": "tools/compiler_trace/tests", "timeout": 600},
+    {"path": "tools/compiler_trace/tests", "timeout": 600,
+     "deselect": [
+         # HANG, and only in a tree that HAS a build — which is why the manifest
+         # first recorded these as 13 ordinary [env] failures. Both files drive
+         # gdb against wibo to trace c2.dll. In a fresh worktree with no build
+         # they fail fast (measured: test_bsf_engine 13 failed in 4.2s, with
+         # "c2.dll never hit wibo PE-mapping breakpoint"). In the primary
+         # checkout, where the build exists, gdb attaches and never returns:
+         # measured 2026-08-17, both files rc=124 at a 90s bound, and the whole
+         # root hit its 600s wall-clock.
+         #
+         # A known-bad entry cannot hold a hang — a manifested test still RUNS,
+         # so the root times out and every OTHER entry inside it goes unjudged.
+         # That is what happened on the first post-merge run. Hence a deselect.
+         #
+         # Reviving them needs the 32-bit debug wibo the error text asks for
+         # (cmake -DCMAKE_BUILD_TYPE=Debug) or an updated WIBO_LOADER_BP; until
+         # then a bounded red would be an improvement over an unbounded hang.
+         "tools/compiler_trace/tests/test_bsf_engine.py",
+         "tools/compiler_trace/tests/test_bsf_pipeline.py",
+     ]},
     {"path": "tools/state_diff/tests", "timeout": 600},
 ]
 
@@ -456,8 +482,19 @@ def main() -> int:
             else:
                 new_failures.append(obs)
 
+    # A root that TIMED OUT or came back BROKEN produced no trustworthy
+    # observation list, so every manifest entry inside it looks like it passed.
+    # Reporting those as stale would tell the reader to delete entries that were
+    # never actually re-checked — silence read as success, which is the exact
+    # failure mode this lane exists to prevent. Measured 2026-08-17: after
+    # tools/compiler_trace/tests hit its wall-clock, its whole-file manifest
+    # entry was reported STALE alongside a genuine one, and following that
+    # advice would have deleted live coverage.
+    untrusted = {r["root"] for r in results if r["timed_out"] or r["broken"]}
+
     # A manifest entry for a root we did not run this time is not stale, and
-    # neither is one inside a root's ``ignore`` subtree.
+    # neither is one inside a root's ``ignore`` subtree, nor one inside a root
+    # whose result we cannot trust.
     def _in_scope(entry: str) -> bool:
         for r in roots:
             if not (entry == r["path"]
@@ -466,10 +503,16 @@ def main() -> int:
             if any(entry == i or entry.startswith(i.rstrip("/") + "/")
                    for i in r.get("ignore", [])):
                 continue
+            if r["path"] in untrusted:
+                return False
             return True
         return False
 
     stale = [e for e in known_bad if e not in expected_hit and _in_scope(e)]
+    shielded = sorted(e for e in known_bad
+                      if e not in expected_hit and not _in_scope(e)
+                      and any(e == u or e.startswith(u.rstrip("/") + "/")
+                              for u in untrusted))
 
     timeouts = [r["root"] for r in results if r["timed_out"]]
     timeouts += [r["path"] for r in script_results if r["timed_out"]]
@@ -486,6 +529,14 @@ def main() -> int:
         print(f"STALE known-bad entries — these PASSED, drop them from "
               f"{MANIFEST.relative_to(REPO_ROOT)} ({len(stale)}):")
         for e in sorted(stale):
+            print(f"    {e}")
+        print()
+    if shielded:
+        print(f"NOT JUDGED — these manifest entries live in a root that timed "
+              f"out or came back broken, so this run never re-checked them. "
+              f"They are NOT stale; do not delete them on the strength of a "
+              f"run that could not see them ({len(shielded)}):")
+        for e in shielded:
             print(f"    {e}")
         print()
     if gaps:

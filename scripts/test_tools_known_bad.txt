@@ -35,11 +35,13 @@
 
 # ── scripts/analysis/tests ────────────────────────────────────────────────────
 
-# [bug] extract_frame_size returns 0 where the test requires None on the
-# no-stwu fallback path. Owned by lane T1, which is repairing
-# scripts/analysis/stack_layout.py — do NOT edit that file or this test from
-# another lane. Listed so the rest of the lane can be green while T1 works.
-scripts/analysis/tests/test_frame_size_fields.py::TestExtractFrameSize::test_fallback_returns_none_when_no_stwu
+# RESOLVED 2026-08-17 by lane T1 (merge caf9a1d34) — entry removed, and the
+# lane's own STALE check is what said so. The test was not made to pass: its
+# INPUT moved to a genuine no-evidence case and it was renamed
+# test_fallback_returns_none_when_side_absent, because greening it as written
+# would have encoded "mflr implies a frame", which a survey of all 69,307
+# functions refutes (306 carry mflr r12 with no allocation). A sibling asserting
+# 0 on the OLD input landed alongside it. File is 21 passed.
 
 # ── scripts/orchestrator/tests ────────────────────────────────────────────────
 
@@ -126,4 +128,12 @@ tools/test_cache.py::test_cache_performance
 # Whole-file entry: the 32 that pass here are the ones that do not need the
 # tracer, and they stay green because the manifest matches ids, not files, at
 # report time.
-tools/compiler_trace/tests/test_bsf_engine.py
+#
+# SUPERSEDED 2026-08-17 — MOVED TO A DESELECT, not resolved. The 13-failures
+# reading was taken in a worktree with NO BUILD, where gdb fails fast (4.2s).
+# In the primary checkout, where the build exists, gdb attaches and never
+# returns: both this file and test_bsf_pipeline.py measured rc=124 at a 90s
+# bound, and the whole root hit its 600s wall-clock. A manifest entry cannot
+# hold a hang, because a manifested test still RUNS — and when the root times
+# out, every OTHER entry in it goes unjudged. See the deselect block in
+# test_tools.py. Still needs the 32-bit debug wibo to revive.
