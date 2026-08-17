@@ -36,6 +36,17 @@ measures the main repo, and your edits appear to have done nothing.
 The rule: query the DB to *choose* a target, run `run_objdiff` to *know* where it
 is. Never quote a `current_percent` as a match percentage.
 
+**`ninja <single>.obj` does not run the obj patchers, so it measures an
+UNPATCHED object.** The patcher stamps (`anon_ns_patched`, `guard_patched`,
+`atexit_scope_patched`, `bool_mangle_patched`, `dynamic_init_patched`) are
+separate ninja targets; a targeted single-object build leaves the fresh `.obj`
+without them and the row can read roughly half a point low — `?Init@JoypadClient@@AAAXXZ`
+measured **99.10 %** that way, *worse* than the 99.68 % it started at, while a
+full `ninja` put it at **100.0 %**, because the un-run anonymous-namespace hash
+patcher left our `?A0xf41ae7e0` against the target's `?A0x831dd776`. A
+single-object build is fine for "did it compile"; **always take the number from
+a full `ninja`**, and never conclude a fix regressed from one.
+
 ### Columns you cannot trust
 
 | Column | Problem |
@@ -221,6 +232,19 @@ The instrument is the **shipped linker map**, not the symbol map:
 grep ' <mangled-name>' orig/373307D9/ham_xbox_r.map
 ```
 
+**Start with the adjudication, not with the alias file.** A name charge has two
+explanations that demand opposite actions — a legitimate `/OPT:ICF` fold (install
+an alias) or a wrong callee in our source (fix the source) — and getting it wrong
+in the fold direction is fail-open: an alias does not close a gap, it stops the
+gap from ever being measured again.
+[`../analysis/2026-08-17-comdat-fold-adjudication.md`](../analysis/2026-08-17-comdat-fold-adjudication.md)
+adjudicates the whole population with three instruments and finds that the
+bucket the map could not settle **is not a bucket of hidden folds**: of 119 rows
+/ 44,760 B, 3 rows / 504 B are provable folds and 108 rows / 42,024 B are refuted
+— 94 % of the bytes were real source differences the charges were reporting
+faithfully. It also lists every refuted pair by sub-class with an owner, which is
+where the remaining work in this section lives.
+
 Prior work and method: `docs/analysis/namecheck-residency-split-20260812/`,
 `docs/analysis/namecheck-source-lanes-20260812.md`,
 `docs/analysis/anon-namespace-hash-lane-20260812/`,
@@ -260,7 +284,7 @@ right about which of these you are in.
 | 90–99.9 %, small residual, no offset or constant errors | **permuter** (`permute` skill / decomp-synth) | Beam search over behaviour-neutral source transforms. Wins concentrate in structural diffs in the 90–95 band; the ≥99 % near-miss band is largely exhausted in this repo. |
 | Function exists at 100 % in a sibling decomp tree (`../rb3`, `../og-dc3-decomp`) | **reference port** | Port the source verbatim, then re-guard. See [`UPSTREAM_PORT_WORKFLOW.md`](UPSTREAM_PORT_WORKFLOW.md). `lookup_rb3` finds candidates. og-ports arrive with `HX_NATIVE` guards stripped — restore them. |
 | 0 %, or `is_stub = 1`, no sibling reference | **asm archaeology** | Reconstruct from the target assembly (Ghidra + m2c + `recon`). This is how `synth_xbox`/`rnddx9` get built. Slow, but it is the only route there. |
-| Zero instruction residual, relocation-name charge only | **`name_check` adjudication** | Section 5 above. Not a codegen problem. |
+| Zero instruction residual, relocation-name charge only | **`name_check` adjudication** | Section 5 above. Not a codegen problem. Adjudicate it *before* routing: [`../analysis/2026-08-17-comdat-fold-adjudication.md`](../analysis/2026-08-17-comdat-fold-adjudication.md) classifies the whole population and the REFUTED classes are **routed work, not noise** — `LOCAL_STATIC_SCOPE_SKEW` (26 rows / 19,052 B, the prize), `STRING_LITERAL` (21 / 6,516, probably one build-config root cause), `STORAGE_CLASS_SKEW` (10 / 2,564). Installing an alias for any of them would hide a real source difference permanently. |
 | Same `off:+N` shift across several functions in one unit | **struct field order** | A header has fields in the wrong order. Fix the header, re-measure the whole TU — and read the header-inlining warning below. |
 | Unicorn DIVERGENT, real class, any percentage | **behavioural fix** | Fix the logic. The percentage may not move at all; the bug still gets fixed. |
 | Diff is a pure register permutation with no other residual | **probably a floor** | Plain two-term same-register commutative swaps are a backend floor. Do not permute them. Check `patterns/INDEX.md` before spending time. |
