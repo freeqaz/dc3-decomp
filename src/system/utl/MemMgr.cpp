@@ -322,6 +322,8 @@ void *MemOrPoolAllocSTL(int size, const char *file, int line, const char *name) 
 #endif
 }
 
+void MemTerminate() {}
+
 void MemInit() {
     gMemLock = new CriticalSection();
     gMemStackLock = new CriticalSection();
