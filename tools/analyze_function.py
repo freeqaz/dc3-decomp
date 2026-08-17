@@ -1,5 +1,23 @@
 #!/usr/bin/env python3
 """
+VOID-OUTPUT WINDOW 2026-08-16 -> 2026-08-17. objdiff-cli fdc5113 ("ruler I")
+changed the JSON `args` spelling and took parse_offset_from_args to ZERO hits,
+so BOTH struct-offset mismatch detection (extract_offset_mismatches) and the
+vtable-slot heuristic (detect_vtable_mismatches) reported nothing at all --
+including through MCP `run_analyze_function`, the agent-facing path. An empty
+offset list from this window means "the parser was dead", NOT "no offset
+mismatches"; re-run before concluding anything from one. Measured on real
+objdiff-cli 4.2.3 JSON: 0 vs 498 OffsetMismatch rows over 60 rb3-xenon
+functions, 0 vs 3 vtable slot pairs.
+
+Window bound: the first rebuild carrying fdc5113 (committed 2026-08-16
+08:34:03 UTC with its release binary deliberately NOT rebuilt; confirmed live
+by 21:30 that day) through the repair below. Audit: `ARGS_READER_AUDIT.md` in
+decomp-bench `archive/runs/objdiff-silent-flags-and-dead-controls-2026-08-16/`
+(task #96); repair task #103. Swept 2026-08-17: no committed artifact in this
+repo falls inside that window -- this note exists for agent transcripts and
+outputs held outside git.
+
 analyze-function: Combined objdiff + Ghidra MCP analysis for decompilation work.
 
 Provides a unified view of:
