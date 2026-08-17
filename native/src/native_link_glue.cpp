@@ -277,6 +277,16 @@ BINSTREAM_OP_OBJPTRVEC(SpotlightDrawer)
 // BinStream operator<< for ObjOwnerPtr<T>
 // ============================================================================
 
+// The primary template these specialize used to be declared in
+// src/system/obj/ObjPtr_p.h; 3a57a05cd commented that declaration out. Nothing
+// in src/ streams an ObjOwnerPtr, so the decomp build never missed it, but the
+// explicit specializations below then had nothing to specialize and stopped
+// compiling. Re-declare it here rather than uncommenting the header line: this
+// file is native-only, whereas a declaration reinstated in ObjPtr_p.h would
+// re-enter overload resolution in every PPC translation unit that includes it.
+template <class T1>
+BinStream &operator<<(BinStream &bs, const ObjOwnerPtr<T1> &ptr);
+
 #define BINSTREAM_OP_OBJOWNERPTR(T) \
 template <> \
 BinStream &operator<<(BinStream &bs, const ObjOwnerPtr<T> &ptr) { \

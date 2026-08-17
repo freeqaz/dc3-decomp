@@ -19,6 +19,16 @@
 struct VarStack;
 extern VarStack *gVarStackPtr;
 
+// The "current DTA file" symbol used to be DataArray::gFile. d07e4f2a0 moved it
+// out of the class to file scope in src/system/obj/DataArray.cpp, because retail
+// mangles it `?gFile@@3VSymbol@@A` -- the `3` says non-member -- rather than
+// `?gFile@DataArray@@2VSymbol@@A`. That commit dropped the header declaration on
+// the grounds that no TU outside DataArray.cpp names it, which was true of src/
+// but not of this native-only file. It still has external linkage, so re-declare
+// it here the same way gVarStackPtr above is re-declared. DataArray::SetFile()
+// is still the public writer; only the read needed a new spelling.
+extern Symbol gFile;
+
 namespace DtaEval {
 
 // ---------------------------------------------------------------------------
@@ -374,7 +384,7 @@ ScriptStateGuard::ScriptStateGuard() : mRestored(false) {
     mDataThis = (void *)gDataThis;
     mDataDir = (void *)gDataDir;
     mVarStackPtr = (void *)gVarStackPtr;
-    mDataFile = DataArray::gFile.Str();
+    mDataFile = gFile.Str();
 
     MemHeapStack &heap = ThreadMemStack(true);
     mMemHeapDepth = heap.mSize;
@@ -418,7 +428,7 @@ std::string ScriptStateGuard::Restore() {
         repaired += repaired.empty() ? "var stack" : "; var stack";
         gVarStackPtr = (VarStack *)mVarStackPtr;
     }
-    if (DataArray::gFile.Str() != mDataFile) {
+    if (gFile.Str() != mDataFile) {
         DataArray::SetFile(STR_TO_SYM(mDataFile));
     }
 
