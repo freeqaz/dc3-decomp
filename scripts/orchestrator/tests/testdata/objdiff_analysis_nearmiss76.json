@@ -1,0 +1,377 @@
+{
+ "symbol": "MakeBSPTree",
+ "fuzzy_match_percent": 76.40633,
+ "analysis": {
+  "patterns": [
+   {
+    "pattern": "LINKER_MERGED",
+    "confidence": "medium",
+    "instruction_count": 2,
+    "fixability": "rarely_hand_fixable",
+    "details": {
+     "merged_functions": [
+      {
+       "name": "ICF:__restgprlr_14 (cross-function merge)",
+       "count": 1
+      },
+      {
+       "name": "ICF:__savegprlr_14 (cross-function merge)",
+       "count": 1
+      }
+     ]
+    },
+    "doc_urls": [
+     "docs/decomp/patterns/verifiable-icf.md#linker-merged-icf",
+     "docs/decomp/patterns/at-limit-systemic.md#2-linker_merged-icf-identical-comdat-folding"
+    ]
+   },
+   {
+    "pattern": "REGISTER_SWAP",
+    "confidence": "medium",
+    "instruction_count": 170,
+    "fixability": "maybe_fixable",
+    "details": {
+     "swaps": [
+      {
+       "target_reg": "r10",
+       "base_reg": "r11",
+       "count": 37
+      },
+      {
+       "target_reg": "r24",
+       "base_reg": "r25",
+       "count": 15
+      },
+      {
+       "target_reg": "r10",
+       "base_reg": "r9",
+       "count": 14
+      },
+      {
+       "target_reg": "r11",
+       "base_reg": "r30",
+       "count": 13
+      },
+      {
+       "target_reg": "r16",
+       "base_reg": "r18",
+       "count": 11
+      },
+      {
+       "target_reg": "f0",
+       "base_reg": "f13",
+       "count": 10
+      },
+      {
+       "target_reg": "r15",
+       "base_reg": "r17",
+       "count": 8
+      },
+      {
+       "target_reg": "r10",
+       "base_reg": "r8",
+       "count": 7
+      },
+      {
+       "target_reg": "r20",
+       "base_reg": "r24",
+       "count": 6
+      },
+      {
+       "target_reg": "r28",
+       "base_reg": "r30",
+       "count": 6
+      },
+      {
+       "target_reg": "r19",
+       "base_reg": "r21",
+       "count": 5
+      },
+      {
+       "target_reg": "r21",
+       "base_reg": "r22",
+       "count": 5
+      },
+      {
+       "target_reg": "r8",
+       "base_reg": "r9",
+       "count": 4
+      },
+      {
+       "target_reg": "r11",
+       "base_reg": "r31",
+       "count": 4
+      },
+      {
+       "target_reg": "r25",
+       "base_reg": "r26",
+       "count": 4
+      },
+      {
+       "target_reg": "r29",
+       "base_reg": "r30",
+       "count": 4
+      },
+      {
+       "target_reg": "r30",
+       "base_reg": "r31",
+       "count": 4
+      },
+      {
+       "target_reg": "r31",
+       "base_reg": "r8",
+       "count": 4
+      },
+      {
+       "target_reg": "r3",
+       "base_reg": "r4",
+       "count": 3
+      },
+      {
+       "target_reg": "r14",
+       "base_reg": "r16",
+       "count": 3
+      },
+      {
+       "target_reg": "r27",
+       "base_reg": "r30",
+       "count": 3
+      }
+     ]
+    },
+    "doc_urls": [
+     "docs/decomp/patterns/fixable-declarations.md#pre-compute-references-before-clobbering-calls",
+     "docs/decomp/patterns/PERMUTER_ROI_ANALYSIS.md#instruction-scheduling",
+     "docs/decomp/patterns/fixable-liveness.md#diagnostic-order-for-a-register-swap-residual",
+     "docs/decomp/patterns/fixable-declarations.md#variable-declaration-order"
+    ]
+   },
+   {
+    "pattern": "CONTROL_FLOW",
+    "confidence": "medium",
+    "instruction_count": 5,
+    "fixability": "likely_fixable",
+    "details": {
+     "branch_diffs": [
+      {
+       "index": 84,
+       "target_opcode": "cmplw",
+       "base_opcode": "b",
+       "match_type": "replace"
+      },
+      {
+       "index": 413,
+       "target_opcode": "b",
+       "base_opcode": "bl",
+       "match_type": "diff_op"
+      },
+      {
+       "index": 422,
+       "target_opcode": "bl",
+       "base_opcode": "b",
+       "match_type": "diff_op"
+      },
+      {
+       "index": 430,
+       "target_opcode": "b",
+       "base_opcode": "bl",
+       "match_type": "diff_op"
+      },
+      {
+       "index": 434,
+       "target_opcode": "b",
+       "base_opcode": "bl",
+       "match_type": "diff_op"
+      }
+     ]
+    },
+    "doc_urls": [
+     "docs/decomp/patterns/fixable-control-flow.md#branch-polarity-steering-beqbne-blebge",
+     "docs/decomp/patterns/fixable-comparison.md#unsigned-zero-comparison"
+    ]
+   },
+   {
+    "pattern": "OFFSET_SWAP",
+    "confidence": "high",
+    "instruction_count": 8,
+    "fixability": "likely_fixable",
+    "details": {
+     "swaps": [
+      {
+       "indices": [
+        105,
+        240
+       ],
+       "target_offsets": [
+        81,
+        8
+       ],
+       "base_offsets": [
+        8,
+        81
+       ]
+      },
+      {
+       "indices": [
+        112,
+        113
+       ],
+       "target_offsets": [
+        80,
+        81
+       ],
+       "base_offsets": [
+        81,
+        80
+       ]
+      },
+      {
+       "indices": [
+        243,
+        247
+       ],
+       "target_offsets": [
+        81,
+        80
+       ],
+       "base_offsets": [
+        80,
+        81
+       ]
+      },
+      {
+       "indices": [
+        403,
+        408
+       ],
+       "target_offsets": [
+        104,
+        88
+       ],
+       "base_offsets": [
+        88,
+        104
+       ]
+      }
+     ]
+    },
+    "doc_urls": [
+     "docs/decomp/patterns/fixable-declarations.md#offset-swap",
+     "docs/decomp/patterns/fixable-liveness.md#lever-4-scope-a-declaration-into-the-block-that-uses-it-stack-lever-not-a-register-lever"
+    ]
+   },
+   {
+    "pattern": "PROLOGUE_MISMATCH",
+    "confidence": "high",
+    "instruction_count": 1,
+    "fixability": "rarely_hand_fixable",
+    "details": {
+     "info": {
+      "target_first_reg": 16,
+      "base_first_reg": 14,
+      "target_frame_size": 432,
+      "base_frame_size": 448
+     }
+    },
+    "doc_urls": [
+     "docs/decomp/patterns/fixable-declarations.md#pre-compute-references-before-clobbering-calls",
+     "docs/decomp/patterns/fixable-liveness.md#diagnostic-order-for-a-register-swap-residual",
+     "docs/decomp/patterns/fixable-declarations.md#variable-declaration-order"
+    ]
+   },
+   {
+    "pattern": "ADDRESS_RELOCATION_NOISE",
+    "confidence": "high",
+    "instruction_count": 5,
+    "fixability": "rarely_hand_fixable",
+    "details": {
+     "info": {
+      "count": 5,
+      "pair_count": 1
+     }
+    },
+    "doc_urls": [
+     "docs/decomp/patterns/unfixable-compiler.md#address-relocation-noise"
+    ]
+   }
+  ],
+  "patterns_checked": [
+   "LINKER_MERGED",
+   "BOOL_MASK",
+   "REGISTER_SWAP",
+   "COMPARISON_STYLE",
+   "CONTROL_FLOW",
+   "COMMUTATIVE_OP_ORDER",
+   "OFFSET_SWAP",
+   "ANONYMOUS_NAMESPACE_HASH",
+   "STATIC_GUARD_COUNTER",
+   "DYNAMIC_CAST_MISMATCH",
+   "DEAD_STORE_ELIMINATION",
+   "PROLOGUE_MISMATCH",
+   "ALLOCA_MISMATCH",
+   "SCOPE_COUNTER_MISMATCH",
+   "MAKESTRING_TEMPLATE_MISMATCH",
+   "ADDRESS_RELOCATION_NOISE",
+   "BOOLEAN_NEGATION",
+   "FLOAT_PRECISION_MISMATCH",
+   "FSEL_TERNARY",
+   "FLOAT_TO_INT_TO_FLOAT",
+   "SIGNEDNESS_MISMATCH"
+  ],
+  "unattributed_mismatches": 61
+ },
+ "verdict": {
+  "classification": "LIKELY_FIXABLE",
+  "confidence": "medium",
+  "explanation": "16 control flow difference(s) detected with low merged ratio (0.8%).",
+  "factors": [
+   {
+    "name": "bool_mask_detected",
+    "value": false,
+    "result": "not_detected"
+   },
+   {
+    "name": "merged_call_ratio",
+    "value": 0.007936508394777775,
+    "threshold": 0.8,
+    "result": "below_threshold"
+   },
+   {
+    "name": "control_flow_diffs",
+    "value": 16,
+    "threshold": 1.0,
+    "result": "detected"
+   }
+  ],
+  "recommendation": "Investigate control flow structure.",
+  "suggestions": [
+   {
+    "action": "4 condition inversion(s) (b\u2194bl), 1 replacement(s) (cmplw\u2194b)",
+    "doc_url": "docs/decomp/patterns/fixable-control-flow.md#branch-polarity-steering-beqbne-blebge"
+   },
+   {
+    "action": "idx 84: cmplw vs b (replace)"
+   },
+   {
+    "action": "idx 413: b vs bl (diff_op)"
+   },
+   {
+    "action": "Try `> 0` vs `!= 0`, `>=` vs `>`, if/else inversion",
+    "doc_url": "docs/decomp/patterns/fixable-comparison.md#unsigned-zero-comparison"
+   }
+  ],
+  "doc_urls": [
+   "docs/decomp/patterns/PERMUTER_ROI_ANALYSIS.md#instruction-scheduling",
+   "docs/decomp/patterns/at-limit-systemic.md#2-linker_merged-icf-identical-comdat-folding",
+   "docs/decomp/patterns/fixable-comparison.md#unsigned-zero-comparison",
+   "docs/decomp/patterns/fixable-control-flow.md#branch-polarity-steering-beqbne-blebge",
+   "docs/decomp/patterns/fixable-declarations.md#offset-swap",
+   "docs/decomp/patterns/fixable-declarations.md#pre-compute-references-before-clobbering-calls",
+   "docs/decomp/patterns/fixable-declarations.md#variable-declaration-order",
+   "docs/decomp/patterns/fixable-liveness.md#diagnostic-order-for-a-register-swap-residual",
+   "docs/decomp/patterns/fixable-liveness.md#lever-4-scope-a-declaration-into-the-block-that-uses-it-stack-lever-not-a-register-lever",
+   "docs/decomp/patterns/unfixable-compiler.md#address-relocation-noise",
+   "docs/decomp/patterns/verifiable-icf.md#linker-merged-icf"
+  ]
+ }
+}

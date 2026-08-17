@@ -1194,19 +1194,90 @@ DIFF_PATTERNS = {
 }
 
 
+# objdiff's own pattern names -> the guidance we have for them. objdiff-cli
+# --verdict already classifies; where its name and ours describe the same thing
+# we reuse our guidance text, and where it does not we pass objdiff's through.
+_OBJDIFF_PATTERN_GUIDANCE = {
+    "OFFSET_SWAP": "STRUCT_OFFSET",
+    "REGISTER_SWAP": "REGISTER_SWAP",
+    "BOOL_MASK": "BOOL_MASK",
+    "CONTROL_FLOW": "CONTROL_FLOW",
+    "LINKER_MERGED": "LINKER_MERGED",
+    "PROLOGUE_MISMATCH": "STACK_FRAME",
+}
+
+# objdiff's per-pattern `fixability` -> our four-level vocabulary.
+_OBJDIFF_FIXABILITY = {
+    "fixable": "FIXABLE",
+    "likely_fixable": "FIXABLE",
+    "maybe_fixable": "MAYBE_FIXABLE",
+    "near_unfixable": "NEAR_UNFIXABLE",
+    "unfixable": "UNFIXABLE",
+}
+
+
+def _looks_like_objdiff_json(text: str) -> bool:
+    """True if `text` is (the beginning of) objdiff-cli's `-f json` output.
+
+    Deliberately shape-based rather than a json.loads: the caller hands us a
+    4KB PREFIX of a 160KB single-line document, so it never parses."""
+    t = (text or "").lstrip()
+    return t.startswith("{") and '"fuzzy_match_percent"' in t[:2000]
+
+
+def _classify_from_objdiff_analysis(analysis: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Pattern dicts built from objdiff's OWN structured analysis."""
+    detected = []
+    for pat in analysis.get("patterns") or []:
+        if not isinstance(pat, dict):
+            continue
+        name = pat.get("pattern") or "UNKNOWN"
+        ours = DIFF_PATTERNS.get(_OBJDIFF_PATTERN_GUIDANCE.get(name, ""), {})
+        detected.append({
+            "pattern": name,
+            "fixability": _OBJDIFF_FIXABILITY.get(
+                str(pat.get("fixability", "")).lower(),
+                ours.get("fixability", "MAYBE_FIXABLE")),
+            "description": pat.get("details") or ours.get(
+                "description", f"objdiff pattern {name}"),
+            "guidance": ours.get("guidance") or pat.get("doc_url")
+                        or "See objdiff --verdict output for detail.",
+            "source": "objdiff",
+        })
+    return detected
+
+
 def classify_diff_patterns(
     objdiff_output: str,
     objdiff_result: Any = None,
+    objdiff_json: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
     Classify diff patterns from objdiff output (Experiment 1).
 
-    Analyzes objdiff text output to identify specific patterns and
-    their fixability, providing actionable guidance to agents.
+    Prefers objdiff's OWN structured analysis (`objdiff_json["analysis"]`,
+    produced by `--verdict`). Falls back to the regex table below only for
+    genuine TEXT output.
+
+    NEVER runs the regex table against JSON. Measured 2026-08-17 on four real
+    dc3 symbols: against the 4KB JSON preview the table fired on 6/6 symbols
+    -- including `CopyTypeProperties` at fuzzy 100.00%, where objdiff reports
+    zero patterns -- because the indicators were matching objdiff's own schema
+    vocabulary. `offset.*mismatch` hit the string
+    `OFFSET_SWAP",...,"DYNAMIC_CAST_MISMATCH"` inside the `patterns_checked`
+    enum list; `bool.*mask` hit the literal `BOOL_MASK` in that same list;
+    `stack.*frame` hit a doc_url. Those are not diff content, and `.` does not
+    stop at a newline because the document has none. The table was also
+    ANTI-correlated on the one pattern it shares: objdiff reported REGISTER_SWAP
+    on 4/6 and the table on 0/6, since the `r<N> vs r<N>` indicator needs a
+    " vs " the JSON
+    never contains.
 
     Args:
-        objdiff_output: Raw objdiff text output (from --verdict or JSON)
+        objdiff_output: objdiff TEXT output. A JSON prefix is detected and
+            refused rather than pattern-matched.
         objdiff_result: Optional ObjdiffResult object for additional data
+        objdiff_json: Parsed objdiff-cli `-f json` document. Preferred input.
 
     Returns:
         Dict with:
@@ -1214,32 +1285,47 @@ def classify_diff_patterns(
         - summary: Human-readable summary
         - fixability: Overall fixability assessment
         - guidance: Prioritized list of suggested actions
+        - source: "objdiff" | "text-heuristics" | "none"
     """
     result = {
         "patterns": [],
         "summary": "",
         "fixability": "UNKNOWN",
         "guidance": [],
+        "source": "none",
     }
 
-    if not objdiff_output:
+    analysis = (objdiff_json or {}).get("analysis") if isinstance(objdiff_json, dict) else None
+    if isinstance(analysis, dict):
+        detected = _classify_from_objdiff_analysis(analysis)
+        result["source"] = "objdiff"
+    elif not objdiff_output:
         result["summary"] = "No objdiff output to analyze"
         return result
+    elif _looks_like_objdiff_json(objdiff_output):
+        # Fail loud rather than fabricate. The caller has the parsed document
+        # (run_objdiff_cli returns it as ["json"]) and should pass it.
+        result["summary"] = ("objdiff JSON was passed as text and no parsed "
+                             "document was supplied -- not classified. The "
+                             "regex table below reads TEXT output only.")
+        return result
+    else:
+        output_lower = objdiff_output.lower()
+        detected = []
+        result["source"] = "text-heuristics"
 
-    output_lower = objdiff_output.lower()
-    detected = []
-
-    # Check each pattern
-    for pattern_name, pattern_info in DIFF_PATTERNS.items():
-        for indicator in pattern_info["indicators"]:
-            if re.search(indicator, output_lower, re.IGNORECASE):
-                detected.append({
-                    "pattern": pattern_name,
-                    "fixability": pattern_info["fixability"],
-                    "description": pattern_info["description"],
-                    "guidance": pattern_info["guidance"],
-                })
-                break  # Only add each pattern once
+        # Check each pattern
+        for pattern_name, pattern_info in DIFF_PATTERNS.items():
+            for indicator in pattern_info["indicators"]:
+                if re.search(indicator, output_lower, re.IGNORECASE):
+                    detected.append({
+                        "pattern": pattern_name,
+                        "fixability": pattern_info["fixability"],
+                        "description": pattern_info["description"],
+                        "guidance": pattern_info["guidance"],
+                        "source": "text-heuristics",
+                    })
+                    break  # Only add each pattern once
 
     result["patterns"] = detected
 
@@ -2345,6 +2431,7 @@ def run_objdiff_cli(
         "output_file_absolute": None,
         "line_count": 0,
         "preview": None,
+        "json": None,
         "error": None,
     }
 
@@ -2392,6 +2479,10 @@ def run_objdiff_cli(
 
             if json_line:
                 data = json.loads(json_line)
+                # Keep the PARSED document: the 4KB `preview` is a prefix of a
+                # single-line 160KB JSON blob and cannot be parsed or pattern
+                # matched by anything downstream.
+                result["json"] = data
                 result["match_percent"] = data.get("fuzzy_match_percent")
                 verdict_data = data.get("verdict", {})
                 if isinstance(verdict_data, dict):
@@ -2854,6 +2945,7 @@ def collect_pre_run_context(
                     classification = classify_diff_patterns(
                         cli_result.get("preview", ""),
                         objdiff_result=None,  # Could pass objdiff_result if available
+                        objdiff_json=cli_result.get("json"),
                     )
                     result["pattern_classification"] = classification
                     result["pattern_classification_summary"] = format_pattern_classification(classification)

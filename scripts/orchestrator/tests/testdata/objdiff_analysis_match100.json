@@ -1,0 +1,45 @@
+{
+ "symbol": "CopyTypeProperties",
+ "fuzzy_match_percent": 100.0,
+ "analysis": {
+  "patterns": [],
+  "patterns_checked": [
+   "LINKER_MERGED",
+   "BOOL_MASK",
+   "REGISTER_SWAP",
+   "COMPARISON_STYLE",
+   "CONTROL_FLOW",
+   "COMMUTATIVE_OP_ORDER",
+   "OFFSET_SWAP",
+   "ANONYMOUS_NAMESPACE_HASH",
+   "STATIC_GUARD_COUNTER",
+   "DYNAMIC_CAST_MISMATCH",
+   "DEAD_STORE_ELIMINATION",
+   "PROLOGUE_MISMATCH",
+   "ALLOCA_MISMATCH",
+   "SCOPE_COUNTER_MISMATCH",
+   "MAKESTRING_TEMPLATE_MISMATCH",
+   "ADDRESS_RELOCATION_NOISE",
+   "BOOLEAN_NEGATION",
+   "FLOAT_PRECISION_MISMATCH",
+   "FSEL_TERNARY",
+   "FLOAT_TO_INT_TO_FLOAT",
+   "SIGNEDNESS_MISMATCH"
+  ],
+  "unattributed_mismatches": 0
+ },
+ "verdict": {
+  "classification": "COMPLETE",
+  "confidence": "high",
+  "explanation": "Function matches 100%.",
+  "factors": [
+   {
+    "name": "total_mismatches",
+    "value": 0,
+    "result": "complete"
+   }
+  ],
+  "recommendation": "No action needed.",
+  "suggestions": []
+ }
+}
