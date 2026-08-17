@@ -968,8 +968,12 @@ D3DDevice_CreateQueryTiled(D3DDevice *pDevice, D3DQUERYTYPE Type, UINT TileCapac
 void D3DDevice_SetVertexShader(D3DDevice *pDevice, D3DVertexShader *pShader);
 void D3DDevice_SetPixelShader(D3DDevice *pDevice, D3DPixelShader *pShader);
 
-void D3DXSetDXT3DXT5(int enable);
-
 #ifdef __cplusplus
 }
 #endif
+
+// C++ linkage, deliberately outside the extern "C" block above: the retail
+// linker map spells this ?D3DXSetDXT3DXT5@@YAXH@Z (0005:008b5c10,
+// d3dx9:d3dx9tex.obj), so d3dx9 exported it mangled and every caller
+// relocates the mangled name.
+void D3DXSetDXT3DXT5(int enable);
