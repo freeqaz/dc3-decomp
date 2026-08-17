@@ -1534,9 +1534,18 @@ set_source_files_properties(
     PROPERTIES LANGUAGE C
 )
 
-# json-c third-party C sources: compile as C, skip the C++ PCH, and disable
-# -fms-compatibility (its __sigbits/global-inline quirk plus the win_types.h
-# shim breaks these vendor TUs the same way it breaks tomcrypt).
+# json-c third-party sources: named .c, but the PPC build compiles every one of
+# them as C++ (`/TP` — see the msvc cflags in build.ninja), and the sources rely
+# on it: since 38e9e7655 they free through `::operator delete` to reproduce the
+# ??3@YAXPAX@Z relocations retail's objects carry. Clang picks the language from
+# the .c suffix, so LANGUAGE C made those lines "expected expression". Compile
+# them as CXX to match the PPC translation mode. Every json-c header already
+# wraps its declarations in `extern "C"`, so the exported symbols stay C-mangled
+# and the C++ callers link unchanged.
+#
+# Still skip the C++ PCH and disable -fms-compatibility (its __sigbits/global-
+# inline quirk plus the win_types.h shim breaks these vendor TUs the same way it
+# breaks tomcrypt).
 set_source_files_properties(
     ${CMAKE_SOURCE_DIR}/../src/system/net/json-c/arraylist.c
     ${CMAKE_SOURCE_DIR}/../src/system/net/json-c/debug.c
@@ -1544,7 +1553,7 @@ set_source_files_properties(
     ${CMAKE_SOURCE_DIR}/../src/system/net/json-c/json_tokener.c
     ${CMAKE_SOURCE_DIR}/../src/system/net/json-c/linkhash.c
     ${CMAKE_SOURCE_DIR}/../src/system/net/json-c/printbuf.c
-    PROPERTIES LANGUAGE C
+    PROPERTIES LANGUAGE CXX
                SKIP_PRECOMPILE_HEADERS ON
                COMPILE_OPTIONS "-fno-ms-extensions;-fno-ms-compatibility"
 )
