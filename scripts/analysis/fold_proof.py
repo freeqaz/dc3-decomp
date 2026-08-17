@@ -131,7 +131,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from scripts.analysis.coff_bodies import (  # noqa: E402
-    IMAGE_REL_PPC_PAIR, function_bodies, iter_objects)
+    IMAGE_REL_PPC_PAIR, data_bodies, function_bodies, iter_objects)
 
 PROVEN = "PROVEN_FOLD"
 PROVEN_MOD = "PROVEN_MOD_ALIAS"
@@ -177,29 +177,27 @@ class BodyIndex:
     each side matches.
     """
 
-    def __init__(self, roots, verbose=False, keep_pair_relocs=False):
+    def __init__(self, roots, verbose=False, keep_pair_relocs=False,
+                 include_data=False):
         self.roots = [str(r) for r in roots]
         self.keep_pair_relocs = keep_pair_relocs
+        self.include_data = include_data
         self.by_name: dict[str, list] = collections.defaultdict(list)
+        self.kind: dict[str, str] = {}
         self.n_objects = 0
         self.n_slices = 0
+        self.n_data_slices = 0
         t0 = time.time()
+        readers = [("code", function_bodies)]
+        if include_data:
+            readers.append(("data", data_bodies))
         for obj in iter_objects(roots):
             self.n_objects += 1
             try:
-                for name, body, relocs, _entry in function_bodies(obj):
-                    self.n_slices += 1
-                    # A type-18 PAIR record's "VirtualAddress" is a DISPLACEMENT,
-                    # not an offset, so the `v <= o < end` slice filter in
-                    # coff_bodies can keep it on one side and drop it on the
-                    # other for two genuinely identical bodies.  It also carries
-                    # no information the REFHI/REFLO record it belongs to does
-                    # not already carry -- same target symbol, same site.  Drop
-                    # it by default so it cannot manufacture a false REFUTED.
-                    self.by_name[name].append(
-                        (str(obj), body, tuple(sorted(
-                            (o, ty, tn) for (o, tn, ty) in relocs
-                            if keep_pair_relocs or ty != IMAGE_REL_PPC_PAIR))))
+                for kind, reader in readers:
+                    for name, body, relocs, _entry in reader(obj):
+                        self._add(obj, kind, name, body, relocs,
+                                  keep_pair_relocs)
             except Exception as exc:                      # malformed .obj
                 if verbose:
                     print(f"  ! skipped {obj}: {exc}", file=sys.stderr)
@@ -209,8 +207,44 @@ class BodyIndex:
                   f"{len(self.by_name)} distinct symbols, "
                   f"{self.build_seconds:.1f}s", file=sys.stderr)
 
+    def _add(self, obj, kind, name, body, relocs, keep_pair_relocs):
+        # A type-18 PAIR record's "VirtualAddress" is a DISPLACEMENT, not an
+        # offset, so the `v <= o < end` slice filter in coff_bodies can keep it
+        # on one side and drop it on the other for two genuinely identical
+        # bodies.  It also carries no information the REFHI/REFLO record it
+        # belongs to does not already carry -- same target symbol, same site.
+        # Drop it by default so it cannot manufacture a false REFUTED.
+        if kind == "data":
+            self.n_data_slices += 1
+        self.kind.setdefault(name, kind)
+        self.n_slices += 1
+        self.by_name[name].append((str(obj), body, tuple(sorted(
+            (o, ty, tn) for (o, tn, ty) in relocs
+            if keep_pair_relocs or ty != IMAGE_REL_PPC_PAIR))))
+
     def get(self, name):
         return self.by_name.get(name, [])
+
+
+#: A data COMDAT this small (or all-zero) coincides too easily to mean anything.
+CHEAP_DATA_BYTES = 8
+
+
+def _identity_is_cheap(kind, body):
+    """Is byte-identity of a relocation-free `kind` COMDAT uninformative?
+
+    For CODE, always yes: every unimplemented `{ return 0; }` stub in the tree
+    compiles to the same 16 relocation-free bytes, so identity carries no
+    information about whether the TARGET folded the two.  This is the guard that
+    keeps `?Handle@HamDirector@@`'s pair honest.
+
+    For DATA there is no stub analogue -- a string literal or a vtable that is
+    byte-identical to another really is what /OPT:ICF folds on -- so identity is
+    informative EXCEPT on tiny or all-zero COMDATs, where coincidence is likely.
+    """
+    if kind != "data":
+        return True
+    return len(body) < CHEAP_DATA_BYTES or not any(body)
 
 
 def _first_word_diffs(a, b, limit=8):
@@ -258,18 +292,24 @@ def prove_pair(index, survivor, folded, canon=None):
     same_rels_mod = same_rels or (
         canonicalise(srel, canon) == canonicalise(frel, canon))
     rec.update({
+        "kind": index.kind.get(survivor) or index.kind.get(folded) or "code",
         "survivor_obj": sobj, "folded_obj": fobj,
         "survivor_size": len(sbody), "folded_size": len(fbody),
         "survivor_relocs": len(srel), "folded_relocs": len(frel),
         "same_bytes": same_bytes, "same_relocs": same_rels,
         "same_relocs_mod_alias": same_rels_mod,
     })
+    kind = rec.get("kind", "code")
     if same_bytes and same_rels_mod:
-        if not srel:
+        if not srel and _identity_is_cheap(kind, sbody):
             rec["verdict"] = UNDECIDABLE
-            rec["reason"] = ("bodies identical but ZERO relocations -- an "
-                             "unimplemented stub in our tree compiles to this "
-                             "too, so identity here is CHEAP and proves nothing")
+            rec["reason"] = (
+                "bodies identical but ZERO relocations -- an unimplemented stub "
+                "in our tree compiles to this too, so identity here is CHEAP "
+                "and proves nothing"
+                if kind == "code" else
+                f"data COMDATs identical but trivial ({len(sbody)} B, no "
+                f"relocations, all-zero={not any(sbody)}) -- too cheap to prove")
         elif same_rels:
             rec["verdict"] = PROVEN
             rec["reason"] = (f"byte- AND relocation-set-identical "
@@ -347,6 +387,10 @@ def main(argv=None):
                          "fold classes canonicalise relocation target names. "
                          "Enables the WEAKER PROVEN_MOD_ALIAS tier -- read the "
                          "module docstring before citing one.")
+    ap.add_argument("--include-data", action="store_true",
+                    help="also index DATA COMDATs (string literals, vtables, "
+                         "fp constants, local statics). /OPT:ICF folds those "
+                         "too and a large share of name charges name them.")
     ap.add_argument("--keep-pair-relocs", action="store_true",
                     help="include IMAGE_REL_PPC_PAIR records in the relocation "
                          "set (they are displacements, not offsets, and are "
@@ -385,7 +429,8 @@ def main(argv=None):
         print(f"equivalences: {len(canon)} names canonicalised from "
               f"{args.equiv_json} (PROVEN_MOD_ALIAS tier enabled)")
     index = BodyIndex(args.objects, verbose=args.verbose,
-                      keep_pair_relocs=args.keep_pair_relocs)
+                      keep_pair_relocs=args.keep_pair_relocs,
+                      include_data=args.include_data)
 
     recs = []
     for s, f in pairs:
@@ -398,8 +443,9 @@ def main(argv=None):
             print()
 
     counts = collections.Counter(r["verdict"] for r in recs)
-    print(f"index: {index.n_objects} objects, {index.n_slices} function slices, "
-          f"{len(index.by_name)} distinct symbols ({index.build_seconds:.1f}s)")
+    print(f"index: {index.n_objects} objects, {index.n_slices} slices "
+          f"({index.n_data_slices} data), {len(index.by_name)} distinct symbols "
+          f"({index.build_seconds:.1f}s)")
     print(f"pairs: {len(recs)}   " + "  ".join(
         f"{k}={counts.get(k, 0)}" for k in VERDICTS))
     if args.json_out:

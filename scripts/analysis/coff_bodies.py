@@ -194,6 +194,53 @@ def function_bodies(path, stats=None):
             yield name, raw[v:end], rl, v
 
 
+def data_bodies(path, stats=None):
+    """Yield ``(name, bytes, relocs, offset)`` for each DATA-section slice.
+
+    /OPT:ICF folds identical read-only DATA COMDATs as well as functions, and a
+    large share of `name_check`'s relocation-name charges name data symbols --
+    string literals (``??_C@``), fp constants (``__real@``), vtables (``??_7``),
+    local-static guards (``??_B``) and function-local statics.  Those cannot be
+    adjudicated from a code-only index, so the same consecutive-value slicing is
+    applied to non-code sections.
+
+    No EH-prefix trim here: the 8-byte prefix is a `.text` layout artifact.
+    """
+    data = Path(path).read_bytes()
+    secs, syms = read_coff(data)
+    if not secs:
+        return
+    idx_name = {}
+    by_sec = collections.defaultdict(list)
+    for s in syms:
+        idx_name[s.index] = s.name
+        if s.sec > 0:
+            by_sec[s.sec - 1].append(s)
+    for si, sec in enumerate(secs):
+        if sec.is_code or not sec.data:
+            continue
+        defs = [s for s in by_sec.get(si, [])
+                if s.name != sec.name
+                and s.cls in (IMAGE_SYM_CLASS_EXTERNAL, IMAGE_SYM_CLASS_STATIC)]
+        if not defs:
+            continue
+        raw = sec.data
+        pts = sorted({(s.value, s.name) for s in defs})
+        bounds = sorted({v for v, _n in pts} | {len(raw)})
+        nxt = {v: bounds[i + 1] for i, v in enumerate(bounds[:-1])}
+        for v, name in pts:
+            if v >= len(raw):
+                if stats is not None:
+                    stats["data_skip_bad_off"] += 1
+                continue
+            end = nxt.get(v, len(raw))
+            if stats is not None:
+                stats["data_slices"] += 1
+            rl = [(o - v, idx_name.get(i, "?"), t)
+                  for (o, i, t) in sec.relocs if v <= o < end]
+            yield name, raw[v:end], rl, v
+
+
 def iter_objects(roots):
     """Yield every ``*.obj`` under each root (a file root yields itself)."""
     for root in roots:
