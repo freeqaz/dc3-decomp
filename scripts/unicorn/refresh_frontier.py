@@ -46,10 +46,14 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(_
 # dir contains `unicorn/` (this package), which would shadow the `unicorn`
 # engine bindings module the runner imports. Import via the `scripts.*` package
 # path instead (needs PROJECT_ROOT on path), and put the unicorn bindings FIRST.
-_UNICORN_DIR = "/home/free/code/milohax/unicorn"
-sys.path.insert(0, os.path.join(_UNICORN_DIR, "bindings", "python"))
 sys.path.insert(0, PROJECT_ROOT)
-os.environ.setdefault("LIBUNICORN_PATH", os.path.join(_UNICORN_DIR, "build"))
+# The bindings location is resolved (env override -> repo-adjacent -> the real
+# repo's sibling when this is a worktree -> ~/code/milohax) rather than
+# hardcoded to one absolute machine path, and is inserted at sys.path[0] so it
+# outranks the shadow described above.
+from scripts.unicorn_runner.unicorn_dep import ensure_unicorn_on_path  # noqa: E402
+
+ensure_unicorn_on_path()
 
 from scripts.authorable import SDK_UNIT_PREFIXES  # noqa: E402
 from scripts.unicorn_runner.run import (  # noqa: E402

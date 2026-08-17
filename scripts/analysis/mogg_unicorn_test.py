@@ -14,11 +14,14 @@ import sys
 import os
 from pathlib import Path
 
-# Setup Unicorn from local checkout
-MILOHAX_DIR = Path(__file__).resolve().parent.parent.parent.parent
-UNICORN_DIR = MILOHAX_DIR / "unicorn"
-sys.path.insert(0, str(UNICORN_DIR / "bindings" / "python"))
-os.environ["LIBUNICORN_PATH"] = str(UNICORN_DIR / "build")
+# Setup Unicorn from local checkout. The `parent.parent.parent.parent` walk that
+# used to be here is correct only when the repo sits directly under
+# ~/code/milohax — in a git worktree it names a directory that does not exist,
+# and the sys.path insert becomes a silent no-op.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+from scripts.unicorn_runner.unicorn_dep import ensure_unicorn_on_path  # noqa: E402
+
+UNICORN_DIR = ensure_unicorn_on_path()
 
 from unicorn import Uc, UC_ARCH_PPC, UC_MODE_PPC32, UC_MODE_BIG_ENDIAN
 from unicorn import UC_HOOK_CODE, UC_HOOK_MEM_READ_UNMAPPED, UC_HOOK_MEM_WRITE_UNMAPPED

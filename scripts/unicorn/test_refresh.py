@@ -5,11 +5,34 @@ Covers the deterministic logic — source-hash gate + flip-cause adjudicator +
 the source_hash COFF fingerprint on a real frontier .obj. Does NOT run the
 emulator (that's exercised by the live sweep).
 
-Run (use unittest, consistent with scripts/unicorn_runner/tests/* — the
-`scripts/unicorn` package name clashes with the `unicorn` engine bindings under
-pytest's rootdir import mode, so pytest is not the supported runner here):
+Run (unittest or direct — NOT pytest; see below):
     python3 -m unittest scripts.unicorn.test_refresh -v
     python3 scripts/unicorn/test_refresh.py
+
+scripts/test_tools.py runs this file in its script-mode arm, which is what
+gives it a caller.
+
+Why not pytest, precisely
+-------------------------
+Under pytest's ``prepend`` import mode the basedir for this file is ``scripts/``
+(the first ancestor without an ``__init__.py``), so pytest names the module
+``unicorn.test_refresh`` — inside a package called ``unicorn``, which is also
+the name of the third-party emulator bindings. Once anything has imported the
+real bindings, ``sys.modules['unicorn']`` is the emulator and pytest's import
+fails with ``ModuleNotFoundError: No module named 'unicorn.test_refresh'``.
+
+That is a *module-naming* collision, and unlike the ``sys.path``-ordering
+collision that ``unicorn_dep`` fixes, ordering cannot help: whichever package
+wins the name, the other one is unreachable. The two real fixes are renaming
+this package or adding ``scripts/__init__.py`` (which would move the basedir to
+the repo root and make the module ``scripts.unicorn.test_refresh``). Both change
+import semantics for every test tree under ``scripts/``, so they are deliberately
+left alone here and the file is run as a script instead.
+
+What DID change: the hardcoded ``/home/free/code/milohax/unicorn/bindings/python``
+on the old line 22 is gone. It violated the no-machine-paths rule and was simply
+wrong on any other box or in any worktree; the location is now resolved by
+``scripts/unicorn_runner/unicorn_dep.py``.
 """
 import os
 import sys
@@ -17,10 +40,13 @@ import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(os.path.dirname(HERE))
-# Unicorn bindings FIRST so `import unicorn` resolves to the engine, not the
-# scripts/unicorn package. Then PROJECT_ROOT for the scripts.* package imports.
-sys.path.insert(0, "/home/free/code/milohax/unicorn/bindings/python")
+# PROJECT_ROOT first for the scripts.* package imports below...
 sys.path.insert(0, PROJECT_ROOT)
+# ...then the unicorn bindings, inserted at position 0 by the resolver so
+# `import unicorn` cannot resolve to this package.
+from scripts.unicorn_runner.unicorn_dep import ensure_unicorn_on_path  # noqa: E402
+
+ensure_unicorn_on_path()
 
 from scripts.unicorn.refresh_frontier import classify_flip, classify_flip_cause
 from scripts.unicorn.source_hash import function_source_hash
