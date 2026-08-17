@@ -998,20 +998,37 @@ def parse_offset_from_args(args: str) -> Optional[Tuple[int, str]]:
     """
     Parse an offset and base register from an instruction's args string.
 
-    Handles formats like:
-        "r11, 0x2c, r30" -> (0x2c, "r30")
-        "r3, -0x8, r1" -> (-0x8, "r1")
+    Handles BOTH objdiff `args` spellings, because the JSON display format
+    changed under us (objdiff-cli fdc5113, "ruler I", 2026-08-16):
+
+        "r11, 0x2c(r30)" -> (0x2c, "r30")   # current: d-form, parenthesised
+        "r3, -0x8(r1)"   -> (-0x8, "r1")
+        "r11, 0x2c, r30" -> (0x2c, "r30")   # pre-fdc5113 flat comparison-join
+        "r3, -0x8, r1"   -> (-0x8, "r1")
+
+    Accepting both is deliberate: this is a pure display-string parser called
+    with whatever `args` the caller happened to read, and archived/cached
+    objdiff JSON in this repo predates the change.  We do NOT rebuild the
+    operand list from `typed_args` here — that would re-append the trailing
+    non-displayed relocation Symbol, and a reloc-bearing load (`SYM@l(r30)`)
+    is a global access, not the numeric struct displacement this function
+    exists to report.
 
     Returns:
         Tuple of (offset, base_register) or None if not a memory access
     """
     import re
-    # Pattern for PPC memory access: "dest_reg, offset, base_reg"
-    pattern = re.compile(r'r\d+,\s*(-?0x[0-9a-fA-F]+),\s*(r\d+)')
+    # PPC memory access: "dest_reg, offset(base_reg)" or "dest_reg, offset, base_reg"
+    pattern = re.compile(
+        r'r\d+,\s*'
+        r'(-?0x[0-9a-fA-F]+)\s*'       # displacement
+        r'(?:\(\s*(r\d+)\s*\)'         # ruler-I d-form:   0x2c(r30)
+        r'|,\s*(r\d+)\b)'              # pre-ruler-I flat: 0x2c, r30
+    )
     match = pattern.search(args)
     if match:
         offset_str = match.group(1)
-        base_reg = match.group(2)
+        base_reg = match.group(2) or match.group(3)
         try:
             offset = int(offset_str, 16)
             return (offset, base_reg)
