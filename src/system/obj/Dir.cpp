@@ -32,7 +32,14 @@
 const char *kNotObjectMsg = "Could not find %s in dir \"%s\"";
 ObjectDir *ObjectDir::sMainDir;
 ObjectDir *gDir;
-std::map<std::pair<Symbol, Symbol>, bool> sSuperClassMap;
+// File-scope static, not an ObjectDir class static and not extern: the retail
+// map's own dynamic initializer is ??__EsSuperClassMap@@YAXXZ, i.e. the BARE
+// variable name -- a class static mangles as ??__E?<full>@@YAXXZ there (111
+// such names in the map, e.g. ??__E?sCritSec@SkeletonUpdateHandle@@0V...@@YAXXZ).
+// And the variable itself is not among the map's publics, which an
+// external-linkage ?sSuperClassMap@@3V...A would have to be, so it had
+// internal linkage and MSVC gave it the unmangled label.
+static std::map<std::pair<Symbol, Symbol>, bool> sSuperClassMap;
 
 #ifdef HX_NATIVE
 namespace {

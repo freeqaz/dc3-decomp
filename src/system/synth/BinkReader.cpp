@@ -5,9 +5,13 @@
 #include "utl\Symbol.h"
 #include "utl\MakeString.h"
 
+// NOT a Bink SDK entry point and NOT extern "C": BinkInit is ours, defined in
+// utl/BinkIntegration.cpp, and the retail linker map spells it
+// ?BinkInit@@YAXXZ (0005:00b2dbf0, utl:BinkIntegration.obj) -- C++ linkage.
+void BinkInit(void);
+
 // External declarations - C functions from Bink SDK
 extern "C" {
-void BinkInit(void);
 void BinkSetSoundTrack(int, int);
 BINK *BinkOpen(File *, unsigned int);
 void BinkSetVideoOnOff(BINK *, int);

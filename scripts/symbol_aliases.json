@@ -100,12 +100,25 @@
    "decomp_synth_validator": "validate_groups rejects 102 of these on gate (a) alone -- survivor absent from scripts/target_symbol_map.json, which holds 0 data symbols in 69,132 names and has the same function-only blindness. Gates 4 and 5 make that check directly against the objects. load_validated therefore drops them and decomp-synth grades stricter than this file; objdiff reads the rendered map and honours them."
   },
   "retail_map_group_extensions": {
-   "installed_by": "task #101 DB-hygiene lane, in place",
+   "installed_by": "task #101 DB-hygiene lane, in place; extended by the alias-install lane 2026-08-17",
    "what": "Members added to an EXISTING group of another tier on orig/373307D9/ham_xbox_r.map address-sharing evidence. The retail-map data generator refuses these addresses at its collision gate rather than on evidence, so they cannot come from a tier installer. Each carries a per-group 'map_extended' record naming what was added and what would drop it.",
    "groups": [
-    "fn_82E21268@0x82e21268"
+    "fn_82E21268@0x82e21268",
+    "retailmap:?OnGetOccluded@CamShot@@IAA?AVDataNode@@PAVDataArray@@@Z",
+    "OnlyReturns@0x823e3b70",
+    "retailmap:?DeleteChecksum@FileStream@@AAAXXZ"
    ],
-   "n_names_added": 1
+   "n_names_added": 4,
+   "note_2026_08_17": "retailmap:?DeleteChecksum@FileStream@@AAAXXZ is a NEW group, not an extension of an existing one: no group claimed 0x827e1170. It is listed here because it has the same in-place provenance -- the retail-map tier installer's member gate could not see it until the access specifier on BufStream::DeleteChecksum was corrected in the same commit, so a tier re-run (not available in-repo; the installer lives in bench-bank/archive/runs/dc3-retail-map-authority-20260810) should now mint it on its own."
+  },
+  "bodytest_group_additions": {
+   "installed_by": "alias-install lane 2026-08-17, in place",
+   "what": "Groups added at the BODY-TEST tier without going through decomp-synth's build_icf_alias_inputs.py, which mints that tier only from a probe_icf_foldtest --folded corpus. Each was proved with scripts/analysis/fold_proof.py (byte- AND relocation-set-identical COMDATs with at least one relocation, so the zero-relocation cheapness guard did not carry the verdict) and carries an 'installed_by'/'installed_note' pair saying what would drop it.",
+   "groups": [
+    "bodytest:??$__destroy_range@PAV?$vector@PAUUnlockable@?A0x9d17dd81@@...@@stlpmtx_std@@"
+   ],
+   "n_groups_added": 1,
+   "source": "docs/analysis/2026-08-17-comdat-fold-adjudication.md, NOT_IN_MAP -> PROVEN_FOLD (3 rows / 504 B). The other two PROVEN_FOLD rows are the SAME name pair (?DeleteChecksum@FileStream@@AAAXXZ vs BufStream's), charged once from ?StartChecksum@BufStream@@QAAXPBD@Z and once from ??1BufStream@@UAA@XZ; the linker map turned out to state that fold outright, so it was installed at the retail-map tier instead and the source's access specifier fixed."
   }
  },
  "_rejected_at_install": [
@@ -6456,6 +6469,7 @@
     "?MakePhysicsDriven@PhysicsManager@@UAAXPAVObject@Hmx@@@Z",
     "?MakeSessionJobComplete@DingoServer@@UAAX_N@Z",
     "?Mats@RndDrawable@@UAAXAAV?$list@PAVRndMat@@V?$StlNodeAlloc@PAVRndMat@@@stlpmtx_std@@@stlpmtx_std@@_N@Z",
+    "?MemTerminate@@YAXXZ",
     "?ModalDraw@Rnd@@MAAXW4ModalType@Debug@@PBD@Z",
     "?Mount@Content@@UAAXXZ",
     "?Move@PhysicsManager@@UAAXPAVObject@Hmx@@ABVVector3@@_N@Z",
@@ -6805,7 +6819,16 @@
    ],
    "sites": 60,
    "survivor_candidates": 1,
-   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 57 folded spelling(s), 60 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 57 folded spelling(s), 60 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE. EXTENDED 2026-08-17 with 1 member on retail-linker-map evidence: orig/373307D9/ham_xbox_r.map line 39371 puts ?MemTerminate@@YAXXZ (utl:MemMgr.obj) at 0005:000b3b70 / 0x823e3b70, which is this group's address -- 769 public names share it, and OnlyReturns is dtk's shape-derived placeholder for the survivor.",
+   "map_extended": {
+    "added": [
+     "?MemTerminate@@YAXXZ"
+    ],
+    "date": "2026-08-17",
+    "why": "The body-test tier had no witness for this name -- probe_icf_foldtest scores per CALL SITE, and this build's only reference to MemTerminate is the one inside ?SystemTerminate@@YAXXZ, whose row was itself below 100% when the probe corpus was minted. The linker map states the fold outright, so the member is added in place on that evidence instead. A regeneration of the body-test tier (decomp-synth tools/il_witness/build_icf_alias_inputs.py, which needs a fresh probe_icf_foldtest --folded corpus and mints the body-test class ONLY) would drop it -- re-apply from this record.",
+    "worth": "216 B ?SystemTerminate@@YAXXZ, whose last charge under functionRelocDiffs=name_check is target bl OnlyReturns vs ours bl ?MemTerminate@@YAXXZ.",
+    "why_not_a_source_fix": "MemTerminate is a real empty function (src/system/utl/MemMgr.cpp:325) that SystemTerminate really calls; the target names the fold survivor because /OPT:ICF kept one spelling out of 769. There is nothing to fix in the source."
+   }
   },
   {
    "name": "curlx_uztosz@0x8256d8e8",
@@ -7263,6 +7286,20 @@
      "?BinkFree@@YAXPAX@Z"
     ]
    }
+  },
+  {
+   "name": "bodytest:??$__destroy_range@PAV?$vector@PAUUnlockable@?A0x9d17dd81@@...@@stlpmtx_std@@",
+   "survivor": "??$__destroy_range@PAV?$vector@PAUUnlockable@?A0x9d17dd81@@V?$StlNodeAlloc@PAUUnlockable@?A0x9d17dd81@@@stlpmtx_std@@@stlpmtx_std@@V12@@stlpmtx_std@@YAXPAV?$vector@PAUUnlockable@?A0x9d17dd81@@V?$StlNodeAlloc@PAUUnlockable@?A0x9d17dd81@@@stlpmtx_std@@@0@00@Z",
+   "address": "0x828b4a08",
+   "folded": [
+    "??$__destroy_mv_srcs@PAV?$vector@PAUUnlockable@?A0xf8e4b4b5@@V?$StlNodeAlloc@PAUUnlockable@?A0xf8e4b4b5@@@stlpmtx_std@@@stlpmtx_std@@V12@@stlpmtx_std@@YAXPAV?$vector@PAUUnlockable@?A0xf8e4b4b5@@V?$StlNodeAlloc@PAUUnlockable@?A0xf8e4b4b5@@@stlpmtx_std@@@0@00@Z"
+   ],
+   "sites": 1,
+   "survivor_candidates": 1,
+   "evidence": "Body test, within-build (scripts/analysis/fold_proof.py): the two COMDATs in build/373307D9/src/lazer/meta_ham/MetagameRank.obj are byte- AND relocation-set-identical (84 B, 1 relocation each -- so the zero-relocation cheapness guard did not have to fire), which is exactly the condition /OPT:ICF tests. Survivor address from scripts/target_symbol_map.json. Both names are legitimately called from the SAME function: stlpmtx_std::vector::_M_erase(first, last, __true_type) in src/system/stlport/stl/_vector.h:548 calls _Destroy_Range (-> __destroy_range) on one arm and _Destroy_Moved_Range (-> __destroy_mv_srcs) on the other, and for an element type with a non-trivial destructor and an incomplete move both lower to the same loop -- so this is not a wrong-callee charge, it is a fold. Weaker tier than the linker map by construction: the proof is a fact about OUR build, so if the target's two instantiations had differed the target did not fold them.",
+   "installed_by": "alias-install lane 2026-08-17, in place, from docs/analysis/2026-08-17-comdat-fold-adjudication.md NOT_IN_MAP -> PROVEN_FOLD",
+   "installed_note": "decomp-synth tools/il_witness/build_icf_alias_inputs.py mints the body-test tier from its own probe corpus and would drop this group on a regeneration -- re-apply from this record. The two spellings carry DIFFERENT unnamed-namespace hashes (target ?A0x9d17dd81, ours ?A0xf8e4b4b5) because scripts/obj_anon_ns_patcher.py rewrites only part of MetagameRank.obj (22 of 902 anon-ns names); if that lane ever patches the rest, the folded spelling here must be re-derived.",
+   "worth": "292 B ?_M_erase@?$vector@V?$vector@PAUUnlockable@...@Z, charged on this one relocation name under functionRelocDiffs=name_check."
   },
   {
    "name": "weakalias:??_G?$BloomTextures@$02@NgPostProc@@UAAPAXI@Z",
@@ -21230,12 +21267,40 @@
     "?OnListFlowLabels@RndAnimatable@@UAA?AVDataNode@@PAVDataArray@@@Z",
     "?OnMsg@ShellInput@@AAA?AVDataNode@@ABVSpeechRecoMessage@@@Z",
     "?OnRebuild@WorldCrowd@@IAA?AVDataNode@@PAVDataArray@@@Z",
+    "?OnSaveFaceanims@HamDirector@@IAA?AVDataNode@@PAVDataArray@@@Z",
     "?OnSaveSong@HamDirector@@IAA?AVDataNode@@PAVDataArray@@@Z",
     "?OnSetAllCrowdChars3D@CamShot@@IAA?AVDataNode@@PAVDataArray@@@Z",
     "?OnSetSize@RndTex@@IAA?AVDataNode@@HH@Z",
     "?OnShowFontPicker@UIFontImporter@@IAA?AVDataNode@@PAVDataArray@@@Z"
    ],
-   "evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors share an address"
+   "evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors share an address. EXTENDED 2026-08-17 with 1 member on the same evidence: the map puts THIRTEEN public names at 0x82901c78 and ?OnSaveFaceanims@HamDirector@@IAA?AVDataNode@@PAVDataArray@@@Z (line 65251, hamobj:HamDirector.obj) is one of them. The retail-map installer could not have emitted it: until 2026-08-17 no object in our build spelled the name -- our source had invented ?OnSaveFaceAnims@ with a capital A -- so the tier's member gate saw it referenced by zero compiled objects. The rename landed in a85f55ef7; this is the alias half of that fix.",
+   "map_extended": {
+    "added": [
+     "?OnSaveFaceanims@HamDirector@@IAA?AVDataNode@@PAVDataArray@@@Z"
+    ],
+    "date": "2026-08-17",
+    "why": "scripts/retail_map_fold_candidates.py refuses this address at its collision gate (an installed retailmap group already claims 0x82901c78), so the member cannot come from a tier re-run; it is applied in place. A regeneration of the retail-map tier would drop it -- re-apply from this record. Worth 9,004 B: ?Handle@HamDirector@@UAA?AVDataNode@@PAVDataArray@@_N@Z sits at 99.99778% on the graded ruler (functionRelocDiffs=name_check) on ONE charge, target bl ?OnGetOccluded@CamShot@@ vs ours bl ?OnSaveFaceanims@HamDirector@@, and goes to 100.0% with this line.",
+    "map_names_at_address": [
+     "?OnGetOccluded@CamShot@@IAA?AVDataNode@@PAVDataArray@@@Z",
+     "?OnSaveSong@HamDirector@@IAA?AVDataNode@@PAVDataArray@@@Z",
+     "??0DataNode@@QAA@XZ",
+     "?OnMsg@ShellInput@@AAA?AVDataNode@@ABVSpeechRecoMessage@@@Z",
+     "?OnFileMerged@HamDirector@@IAA?AVDataNode@@PAVDataArray@@@Z",
+     "?OnSaveFaceanims@HamDirector@@IAA?AVDataNode@@PAVDataArray@@@Z",
+     "?OnSetAllCrowdChars3D@CamShot@@IAA?AVDataNode@@PAVDataArray@@@Z",
+     "?OnListFlowLabels@RndAnimatable@@UAA?AVDataNode@@PAVDataArray@@@Z",
+     "??0CatLex@NUISPEECH@@QAA@XZ",
+     "?OnShowFontPicker@UIFontImporter@@IAA?AVDataNode@@PAVDataArray@@@Z",
+     "?OnRebuild@WorldCrowd@@IAA?AVDataNode@@PAVDataArray@@@Z",
+     "?OnSetSize@RndTex@@IAA?AVDataNode@@HH@Z",
+     "?DataNop@@YA?AVDataNode@@PAVDataArray@@@Z"
+    ],
+    "not_added_because_unused": [
+     "??0CatLex@NUISPEECH@@QAA@XZ"
+    ],
+    "not_added_why": "NUISPEECH catlex is not decompiled; neither side's objects in this tree reference the name, so the member would be inert. Add it if catlex ever lands.",
+    "fold_proof_declines_this_pair": "scripts/analysis/fold_proof.py REFUSES ?OnGetOccluded@CamShot@@ vs ?OnSaveFaceanims@HamDirector@@ and refusing is correct: both are { return 0; }, i.e. the same 16-byte ZERO-relocation body every stub in the tree compiles to, so within-build identity carries no information about whether the TARGET folded them. The linker map is the instrument that settles it, and it is the only one that can."
+   }
   },
   {
    "name": "retailmap:?OnCancel@SongSortMgr@@UAA?AVDataNode@@XZ",
@@ -22869,6 +22934,27 @@
     "?NumData@PracticeOptionsProvider@@UBAHXZ"
    ],
    "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it"
+  },
+  {
+   "name": "retailmap:?DeleteChecksum@FileStream@@AAAXXZ",
+   "survivor": "?DeleteChecksum@FileStream@@AAAXXZ",
+   "address": "0x827e1170",
+   "folded": [
+    "?DeleteChecksum@BufStream@@AAAXXZ"
+   ],
+   "evidence": "orig/373307D9/ham_xbox_r.map lines 60480-60481: ?DeleteChecksum@FileStream@@AAAXXZ (utl:FileStream.obj) and ?DeleteChecksum@BufStream@@AAAXXZ (utl:BufStream.obj) both sit at 0005:004b1170 / 0x827e1170; /OPT:ICF folds byte-identical COMDATs, so that is the fold set stated by the linker that made the image. The target objects define exactly one member -- ?DeleteChecksum@FileStream@@AAAXXZ, the survivor. Corroborated within-build by scripts/analysis/fold_proof.py: PROVEN_FOLD, byte- AND relocation-set-identical (72 B, 1 relocation).",
+   "map_extended": {
+    "added": [
+     "?DeleteChecksum@BufStream@@AAAXXZ"
+    ],
+    "date": "2026-08-17",
+    "why": "The retail-map tier installer could not emit this address before today. Its member gate requires each folded name to be one our objects reference, and until 2026-08-17 our BufStream.h declared DeleteChecksum PUBLIC, so our objects spelled it ?DeleteChecksum@BufStream@@QAAXXZ -- a name that is in neither the map nor the target. The map's own spelling has AAA (private), matching FileStream::DeleteChecksum, so the access specifier in our header was the error; it is fixed in this commit and the group installed in place. A re-run of the retail-map tier installer should now emit this group on its own; if it does, this record can go.",
+    "map_names_at_address": [
+     "?DeleteChecksum@FileStream@@AAAXXZ",
+     "?DeleteChecksum@BufStream@@AAAXXZ"
+    ],
+    "worth": "124 B ?StartChecksum@BufStream@@QAAXPBD@Z + 88 B ??1BufStream@@UAA@XZ, both charged on this one relocation name under functionRelocDiffs=name_check."
+   }
   },
   {
    "name": "retailmap-data:??_8CharBonesAlloc@@7B@@0x82008400",

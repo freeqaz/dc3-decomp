@@ -13,12 +13,17 @@ public:
     virtual const char *Name() const;
     virtual int Size();
 
-    void DeleteChecksum();
     void StartChecksum(const char *);
     bool ValidateChecksum();
     void SetName(const char *);
 
 private:
+    // Private, not public: the retail linker map spells this
+    // ?DeleteChecksum@BufStream@@AAAXXZ (0005:004b1170), i.e. private access,
+    // and every call site is a BufStream member. FileStream::DeleteChecksum is
+    // private for the same reason.
+    void DeleteChecksum();
+
     char *mBuffer; // 0x10
     bool mFail; // 0x14
     int mTell; // 0x18
