@@ -1009,9 +1009,72 @@ Decoding both target and base mangled names reveals whether the mismatch is due 
 
 ---
 
+## Header Edits Shift Inlining TU-Wide (2026-03-10, salvaged 2026-08-17)
+
+*Mechanism finding salvaged from `docs/decomp/HEADER_REGRESSION_ANALYSIS.md`
+before that document was archived. The document's regression counts and its
+action-item list were a 2026-03-10 snapshot and are long superseded; the
+mechanism it isolated is durable and is the reason header edits are risky.
+Archived copy: [`../archive/2026-08-17-doc-audit/decomp-planning/HEADER_REGRESSION_ANALYSIS.md`](../archive/2026-08-17-doc-audit/decomp-planning/HEADER_REGRESSION_ANALYSIS.md).*
+
+**The finding.** MSVC for Xbox 360 makes inlining decisions from the set of
+function *bodies visible in the translation unit*. Adding, removing, or moving
+an inline body in a header therefore perturbs register allocation and
+instruction scheduling in **unrelated functions in every TU that includes that
+header** — not just in callers of the function you touched. A header edit is a
+TU-wide codegen event, and a diff of the header tells you nothing about the
+blast radius.
+
+**The counter-intuitive part.** When 523 headers had drifted from the
+`og-dc3-decomp` baseline and 72 functions had regressed, the obvious suspect —
+`#ifdef HX_NATIVE` native-port guards — was **not** the dominant cause. Only 62
+of the 523 changed headers carried native guards, under 1% of the diff lines,
+and pure `#ifdef HX_NATIVE` blocks are invisible to the PPC compiler by
+construction. The regressions were driven by, in descending order:
+
+1. **New declarations and bodies** — 308 headers with new declarations, 68 with
+   new virtual declarations, 53 with new inline bodies. New virtuals are the
+   worst: they change vtable layout *and* the inlining budget.
+2. **Iterator/operator semantic changes in `Object.h`** — `Object.h` is in the
+   PCH, so its diff reaches literally every TU. Changing
+   `ObjPtrVec::iterator::operator+` from mutating to copy-returning re-shaped
+   `end()`, which cascaded into every `find() != end()` in the project.
+3. **Variable renames inside inline bodies** — these *should* be free, and are
+   free for codegen, but the debug-symbol strings differ, which can move
+   `.data` layout and string-literal dedup.
+
+**Practical rules that follow.**
+
+| Change to a header | Safe? | Why |
+|---|---|---|
+| Member/local variable rename outside an inline body | Yes | Debug info only |
+| Comment change | Yes | — |
+| New `#ifdef HX_NATIVE` block | Yes | Invisible to the PPC compiler |
+| New inline function body | **No** | Directly changes the inlining budget for the whole TU |
+| New virtual declaration | **No** | Changes vtable layout and inlining decisions |
+| Iterator/operator semantic change | **No** | Cascades through every template instantiation |
+| Access-specifier change | **No** | Can change optimization decisions |
+| Enum value insertion/reorder | **No** | Rewrites constants baked into switch statements |
+
+`Object.h` and `Debug.h` are the two PCH headers; treat them as sacred. Any
+native-port need in them must be `#ifdef HX_NATIVE`-guarded.
+
+Because the blast radius is TU-wide and invisible to inspection, **measure a
+header edit, do not reason about it**: build and re-diff every affected TU, not
+just the function you were aiming at. This is the same lesson recorded in
+`docs/decomp/patterns/` as the decomposition-test standard for cross-cutting
+headers.
+
+One structural remedy was ruled out at the time and should stay ruled out:
+maintaining parallel PPC and native copies of the ~523 headers ("header
+bifurcation") would recover everything and cost two divergent codebases. Do not
+implement it.
+
+---
+
 ## See Also
 
 - [RB3_REFERENCE.md](RB3_REFERENCE.md) - Using RB3 as reference
-- [LOW_HANGING_FRUIT.md](LOW_HANGING_FRUIT.md) - Prioritized function list
-- [SUBAGENT_STRATEGY.md](SUBAGENT_STRATEGY.md) - Parallel AI agent workflow
-- [../WORKSESSION.md](../WORKSESSION.md) - Main session notes
+- [REMAINING_WORK.md](REMAINING_WORK.md) - How to find work (queries, not worklists)
+- [../STATE_OF_THE_DECOMP.md](../STATE_OF_THE_DECOMP.md) - Where the project actually is
+- [patterns/INDEX.md](patterns/INDEX.md) - Fixable/unfixable codegen pattern catalog
