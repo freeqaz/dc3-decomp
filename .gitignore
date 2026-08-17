@@ -64,6 +64,12 @@ bin/objdiff-cli
 _CL_*
 agent-home/
 archive/
+# ...but docs/archive/ is the documentation archive and IS tracked. Without
+# this negation the bare `archive/` rule above silently swallows every new
+# file added under it (the 2026-08-17 audit's README and MANIFEST were both
+# invisible to `git status` until this was fixed) — `git mv` only got its
+# files in because a mv stages explicitly.
+!docs/archive/
 tmp/
 logs/
 ghidra_projects/

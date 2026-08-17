@@ -183,7 +183,8 @@ Xbox-specific with no RB3 reference. Lower priority.
   stubs that already match from existing code
 - **Process functions by size** within each unit (smallest first)
 - **Use parallel subagents** for independent units (see
-  `docs/decomp/SUBAGENT_STRATEGY.md`)
+  `docs/tools/WORKFLOW.md`; the archived `SUBAGENT_STRATEGY.md` predates the
+  orchestrator tooling)
 - A focused session can do **20-30 trivial stubs** or **5-10 medium functions**
 - **Expect high false-negative rate**: Early testing found ~88% of "reset" stubs
   already had matching code. `batch_check` resolves these automatically.

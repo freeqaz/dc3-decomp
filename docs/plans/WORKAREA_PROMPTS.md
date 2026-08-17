@@ -32,9 +32,8 @@ Quick reference for continuing DC3 decomp work. Each section has context and a c
 - RB3 reference available for system/ code via `mcp__orchestrator__lookup_rb3`
 
 **Relevant docs:**
-- `docs/decomp/GAP_ANALYSIS.md` — subsystem priorities
-- `docs/decomp/SUBAGENT_STRATEGY.md` — parallel agent approach
-- `docs/decomp/LOW_HANGING_FRUIT.md` — easy targets (may be stale)
+- `docs/STATE_OF_THE_DECOMP.md` — where the project is, with denominators
+- `docs/decomp/REMAINING_WORK.md` — how to find targets (queries; replaces the archived GAP_ANALYSIS / SUBAGENT_STRATEGY / LOW_HANGING_FRUIT)
 - `docs/decomp/TECHNICAL_NOTES.md` — compiler patterns
 
 ### Prompt: Sweep a specific unit

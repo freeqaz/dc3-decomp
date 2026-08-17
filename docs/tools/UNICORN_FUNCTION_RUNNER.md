@@ -342,7 +342,7 @@ python3 tools/unicorn_runner.py \
 
 ### Detailed Phase Designs
 
-- **Phase 1**: [docs/unicorn_runner/PHASE1_DESIGN.md](../unicorn_runner/PHASE1_DESIGN.md) — COFF extraction, relocation patching, trampoline mocking, execution-sequence comparison
+- **Phase 1** (archived 2026-08-17, pre-build design): [docs/archive/2026-08-17-doc-audit/experiments/PHASE1_DESIGN.md](../archive/2026-08-17-doc-audit/experiments/PHASE1_DESIGN.md) — COFF extraction, relocation patching, trampoline mocking, execution-sequence comparison
 
 ### DONE: Phase 0 — Proof of Concept (Feb 11, 2026)
 

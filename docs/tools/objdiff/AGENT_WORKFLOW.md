@@ -4,6 +4,8 @@
 
 This document analyzes agent workflows and what queries they need, based on review of `docs/sessions/2026-01-worksession-archive.md`, `docs/decomp/SUBAGENT_STRATEGY.md`, and `docs/decomp/LOW_HANGING_FRUIT.md`.
 
+> **Note (2026-08-17):** the latter two were archived to [`docs/archive/2026-08-17-doc-audit/decomp-planning/`](../../archive/2026-08-17-doc-audit/decomp-planning/) — `SUBAGENT_STRATEGY.md` predates the orchestrator MCP tooling, and `LOW_HANGING_FRUIT.md` was a 2026-02 worklist whose "2 remaining workable functions" claim was wrong by three orders of magnitude. The analysis below still describes the *shape* of agent queries correctly; for current targets use [`docs/decomp/REMAINING_WORK.md`](../../decomp/REMAINING_WORK.md).
+
 ---
 
 ## Queries Agents Actually Need
@@ -41,7 +43,7 @@ objdiff report query report.json --functions --max-percent 0
 
 ## Agent Tiering
 
-Based on `LOW_HANGING_FRUIT.md`:
+Based on `LOW_HANGING_FRUIT.md` (archived — [`docs/archive/2026-08-17-doc-audit/decomp-planning/LOW_HANGING_FRUIT.md`](../../archive/2026-08-17-doc-audit/decomp-planning/LOW_HANGING_FRUIT.md)):
 
 | Tier | Criteria | Recommended Agent |
 |------|----------|-------------------|

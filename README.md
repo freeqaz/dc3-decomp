@@ -28,6 +28,16 @@ Status snapshot (auto-generated, may be stale):
 
 For live numbers run `scripts/measure_progress.sh --functions --detailed HEAD`.
 
+> **Correction (2026-08-17).** The snapshot above is stale *and* was measured on
+> a different ruler. Measured 2026-08-17 on a fresh build: **91.21 % of
+> authorable functions** (29,383 / 32,213) and **77.41 % of authorable code
+> bytes**; whole-binary (XDK-diluted) **60.81 % functions / 43.18 % bytes**. The
+> byte figures dropped ~2 pp in 2026-08 because the report switched from
+> `functionRelocDiffs=None` to `name_check`, a stricter relocation ruler — that
+> was a measurement correction, not lost code. Numbers from before the switch
+> cannot be differenced against numbers after it. See
+> [`docs/STATE_OF_THE_DECOMP.md`](docs/STATE_OF_THE_DECOMP.md).
+
 Sister project
 ==============
 
@@ -69,6 +79,8 @@ Native port debug surface
 Where to read more
 ------------------
 
+- [`docs/STATE_OF_THE_DECOMP.md`](docs/STATE_OF_THE_DECOMP.md) — **where the project actually is**: both headline metrics with their denominators, how to regenerate them, and what the remaining gap is made of.
+- [`docs/decomp/REMAINING_WORK.md`](docs/decomp/REMAINING_WORK.md) — how to find work: queries, not worklists.
 - [`docs/INDEX.md`](docs/INDEX.md) — full docs sitemap.
 - [`docs/tools/INDEX.md`](docs/tools/INDEX.md) — agent tool selection guide and workflow.
 - [`docs/decomp/TECHNICAL_NOTES.md`](docs/decomp/TECHNICAL_NOTES.md) — compiler quirks and matching patterns.

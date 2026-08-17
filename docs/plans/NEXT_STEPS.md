@@ -422,7 +422,7 @@ m2c decompilation of the target.
 Offset deltas that appeared to be struct errors were actually **stack frame size differences**
 caused by `__FILE__` string length mismatches and compiler scheduling. See
 `docs/sessions/2026-02-27-saturation-analysis.md` for the original hypotheses and
-`docs/decomp/LOW_HANGING_FRUIT.md` for the corrected analysis.
+`docs/archive/2026-08-17-doc-audit/decomp-planning/LOW_HANGING_FRUIT.md` for the corrected analysis (archived 2026-08-17).
 
 ### What Actually Blocks the Remaining Functions
 
@@ -495,7 +495,7 @@ Prioritize by:
 5. **Bulk AT_LIMIT** — report ~400 functions that are effectively unfixable
 
 ### Parallel Agent Strategy
-Use `docs/decomp/SUBAGENT_STRATEGY.md` for batch decomp work:
+Use `docs/tools/WORKFLOW.md` for batch decomp work (the archived `SUBAGENT_STRATEGY.md` predates the orchestrator tooling):
 - Assign units to parallel worktree agents
 - Each agent focuses on pushing one unit to 100%
 - Use pattern docs to guide fixes
