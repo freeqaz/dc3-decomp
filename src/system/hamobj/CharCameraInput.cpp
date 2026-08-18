@@ -21,14 +21,15 @@ CharCameraInput::CharCameraInput(Character *c) : mChar(c), unk2430(0) {
     memset(&mCharFrame, 0, sizeof(SkeletonFrame));
     mCharFrame.mFloorNormal.Set(0, 1, 0);
     mCharFrame.mFloorClipPlane.Set(0, 0, 0, 0);
+    mCharFrame.mFrameNumber = 0;
     mCharFrame.mElapsedMs = 33;
-    auto& _skeletonDatas = mCharFrame.mSkeletonDatas;
     for (int i = 0; i < 6; i++) {
+        SkeletonData &data = mCharFrame.mSkeletonDatas[i];
         if (i == 0) {
-            _skeletonDatas[i].mTracking = kSkeletonTracked;
-            _skeletonDatas[i].mQualityFlags = 0;
+            data.mTracking = kSkeletonTracked;
+            data.mQualityFlags = 0;
             for (int j = 0; j < kNumJoints; j++) {
-                _skeletonDatas[i].mJointTrackingState[j] = kSkeletonTracked;
+                data.mJointTrackingState[j] = kSkeletonTracked;
             }
         }
     }
