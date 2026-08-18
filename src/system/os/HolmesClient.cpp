@@ -55,7 +55,7 @@ namespace {
     char gShareName[NETBIOS_NAME_MAX] = { 0 };
     bool gStackTraced;
 
-    Holmes::Protocol gPendingResponse;
+    Holmes::Protocol gPendingResponse = Holmes::kInvalidOpcode;
     int gRealMaxBufferSize;
     HolmesProfileData gProfile[20]; // to match protocol count
     CriticalSection gCrit;

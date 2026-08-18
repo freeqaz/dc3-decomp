@@ -7,7 +7,7 @@
 #include "rndobj\Rnd.h"
 #include <cmath>
 
-float CharClipDisplay::sZoom;
+float CharClipDisplay::sZoom = 1.0f;
 float CharClipDisplay::sEm;
 ObjectDir *CharClipDisplay::sDir;
 
