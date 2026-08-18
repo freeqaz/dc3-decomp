@@ -86,14 +86,41 @@ VERDICTS
 ========
     PROVEN_FOLD   byte- AND relocation-set-identical, and the body carries at
                   least one relocation.  /OPT:ICF must merge these.
+    PROVEN_MOD_MAP
+                  identical only after relocation target names are canonicalised
+                  through fold classes the SHIPPED LINKER MAP itself states
+                  (--map).  Weaker than PROVEN_FOLD but backed by external ground
+                  truth, not by our own inferences -- see below.
     PROVEN_MOD_ALIAS
                   identical only after relocation target names are canonicalised
                   through an ALREADY-ESTABLISHED fold class (--equiv-json).  A
                   strictly WEAKER tier -- see below.
     REFUTED       found on both sides and NOT identical.  The names are not
                   interchangeable; a name charge between them is a real bug.
-    UNDECIDABLE   one or both spellings absent from the objects scanned, or the
-                  bodies are identical but relocation-free (too cheap to prove).
+    UNDECIDABLE   one or both spellings absent from the objects scanned, the
+                  bodies are identical but relocation-free (too cheap to prove),
+                  or -- with --map -- the definition the linker actually SELECTED
+                  is not one our build emits (COMDAT_SELECTION_MISSING, below).
+
+COMDAT SELECTION: WHY "FOUND ON BOTH SIDES" IS NOT ENOUGH
+=========================================================
+A template instantiation is emitted as a COMDAT into EVERY translation unit that
+uses it, and the linker keeps exactly ONE.  If those TUs were compiled with
+different flags the copies are not interchangeable, and the copy this tool
+happens to index first may not be the copy the linker kept.
+
+Measured on dc3-decomp: `config/373307D9/config.json` gives the `net_xbox` group
+`/GS`, so `MakeString<...>` is 116 B with a `__security_cookie` prologue there
+and 88 B without one everywhere else.  All seventeen occupants of the fold class
+at 0x82563b08 are `net:` objects and the target body is 0x74 = 116 B, so the
+linker kept a `net` copy -- but our build emits that particular spelling only
+from `obj/DirLoader.obj` and `rndobj/TransAnim.obj`, and comparing an 88 B body
+against a 116 B one REFUTED five map-CONFIRMED memberships that are not bugs.
+
+With `--map`, a REFUTED verdict whose map-attributed defining object is absent
+from our build is downgraded to UNDECIDABLE / COMDAT_SELECTION_MISSING, naming
+the object the linker used and the objects we have.  This can only ever WEAKEN a
+verdict -- UNDECIDABLE licenses nothing -- so it cannot fail open.
 
 WHY `PROVEN_MOD_ALIAS` EXISTS, AND WHY IT IS A SEPARATE TIER
 ============================================================
@@ -117,6 +144,19 @@ then be cited to install another alias.  Never let that loop close -- treat
 `PROVEN_MOD_ALIAS` as "consistent with a fold", never as an independent proof,
 and never chain it into new alias installs without a second instrument (the
 linker map, or the target's own bytes).
+
+`--map` is that second instrument, and it does not close the loop, because the
+shipped map is external to this project: it is what the linker that built the
+retail image wrote down.  Names it co-lists at one address ARE one fold class, by
+construction.  Canonicalising relocation targets through those classes yields
+`PROVEN_MOD_MAP`, which is still weaker than `PROVEN_FOLD` (the two bodies are
+identical only up to a fold we did not re-derive) but does not inherit any of our
+own guesses.  Worked example on dc3-decomp: `??_7bad_typeid@std@@6B@`,
+`??_7bad_cast@std@@6B@` and `??_7__non_rtti_object@std@@6B@` are all 8 all-zero
+bytes with two relocations, differing only in which `??_E<class>` deleting
+destructor slot 0 names -- and the map co-lists those three destructors at
+0x8299dc60.  The vtables therefore fold; the strict name test simply could not
+see one level down.
 """
 
 from __future__ import annotations
@@ -124,6 +164,7 @@ from __future__ import annotations
 import argparse
 import collections
 import json
+import re
 import sys
 import time
 from pathlib import Path
@@ -134,10 +175,52 @@ from scripts.analysis.coff_bodies import (  # noqa: E402
     IMAGE_REL_PPC_PAIR, data_bodies, function_bodies, iter_objects)
 
 PROVEN = "PROVEN_FOLD"
+PROVEN_MOD_MAP = "PROVEN_MOD_MAP"
 PROVEN_MOD = "PROVEN_MOD_ALIAS"
 REFUTED = "REFUTED"
 UNDECIDABLE = "UNDECIDABLE"
-VERDICTS = (PROVEN, PROVEN_MOD, REFUTED, UNDECIDABLE)
+VERDICTS = (PROVEN, PROVEN_MOD_MAP, PROVEN_MOD, REFUTED, UNDECIDABLE)
+
+#: ` 0005:00233b08       ?Sym@@... 82563b08 f i net:WebSvcMgr.obj`
+_MAP_LINE = re.compile(
+    r"^\s*[0-9A-Fa-f]{4}:[0-9A-Fa-f]{8}\s+(?P<name>\S+)\s+"
+    r"(?P<addr>[0-9A-Fa-f]{8})\b(?P<rest>.*)$")
+
+
+def load_map(path):
+    """Parse an MSVC linker map into its two facts about fold classes.
+
+    Returns ``(canon, defining_obj)``:
+
+    ``canon``  name -> canonical representative of the set of names the map
+               places at ONE address.  /OPT:ICF folds byte-identical COMDATs and
+               the map co-lists every folded name at the survivor's address, so
+               this partition is the linker's own, not ours.
+    ``defining_obj``
+               name -> BASENAME of the object the linker took the definition
+               from (`net:WebSvcMgr.obj` -> `WebSvcMgr.obj`).  A name emitted as
+               a COMDAT into many TUs has exactly one entry here: the copy that
+               survived.  Used by the COMDAT_SELECTION_MISSING guard.
+    """
+    by_addr = collections.defaultdict(list)
+    defining_obj = {}
+    for line in Path(path).read_text(errors="replace").splitlines():
+        m = _MAP_LINE.match(line)
+        if not m:
+            continue
+        name, addr = m.group("name"), m.group("addr").lower()
+        by_addr[addr].append(name)
+        tail = m.group("rest").split()
+        if tail and tail[-1].lower().endswith(".obj"):
+            defining_obj[name] = tail[-1].rsplit(":", 1)[-1]
+    canon = {}
+    for names in by_addr.values():
+        if len(names) < 2:
+            continue
+        rep = min(names)
+        for n in names:
+            canon[n] = rep
+    return canon, defining_obj
 
 
 def load_equivalences(path):
@@ -252,9 +335,29 @@ def _first_word_diffs(a, b, limit=8):
     return [i for i in range(0, n, 4) if a[i:i + 4] != b[i:i + 4]][:limit]
 
 
-def prove_pair(index, survivor, folded, canon=None):
+def _selection_missing(index, name, defining_obj):
+    """The map's chosen definition of `name`, if our build does not emit it.
+
+    Returns ``(map_obj, our_objs)`` when the linker took `name` from an object
+    whose basename is not among the objects that define it in our tree, else
+    ``None``.  See "COMDAT SELECTION" in the module docstring: comparing a copy
+    the linker discarded against a copy it kept is not a test of anything.
+    """
+    want = defining_obj.get(name)
+    if not want:
+        return None
+    ours = {Path(o).name for (o, _b, _r) in index.get(name)}
+    if want in ours:
+        return None
+    return want, sorted(ours)
+
+
+def prove_pair(index, survivor, folded, canon=None, map_canon=None,
+               defining_obj=None):
     """Return a verdict dict for one claimed fold of `folded` into `survivor`."""
     canon = canon or {}
+    map_canon = map_canon or {}
+    defining_obj = defining_obj or {}
     sdefs = index.get(survivor)
     fdefs = index.get(folded)
     rec = {
@@ -274,33 +377,37 @@ def prove_pair(index, survivor, folded, canon=None):
                          f"the objects scanned -- 'not found' is not 'identical'")
         return rec
 
+    def _same_mod(a, b, table):
+        return bool(table) and canonicalise(a, table) == canonicalise(b, table)
+
     best = None
     for sobj, sbody, srel in sdefs:
         for fobj, fbody, frel in fdefs:
             same_bytes = sbody == fbody
             same_rels = srel == frel
-            same_rels_mod = same_rels or (
-                canonicalise(srel, canon) == canonicalise(frel, canon))
-            score = (same_bytes and same_rels, same_bytes and same_rels_mod,
-                     same_bytes, same_rels)
+            same_rels_map = same_rels or _same_mod(srel, frel, map_canon)
+            same_rels_mod = same_rels or _same_mod(srel, frel, canon)
+            score = (same_bytes and same_rels, same_bytes and same_rels_map,
+                     same_bytes and same_rels_mod, same_bytes, same_rels)
             cand = (score, sobj, sbody, srel, fobj, fbody, frel)
             if best is None or cand[0] > best[0]:
                 best = cand
     (_score, sobj, sbody, srel, fobj, fbody, frel) = best
     same_bytes = sbody == fbody
     same_rels = srel == frel
-    same_rels_mod = same_rels or (
-        canonicalise(srel, canon) == canonicalise(frel, canon))
+    same_rels_map = same_rels or _same_mod(srel, frel, map_canon)
+    same_rels_mod = same_rels or _same_mod(srel, frel, canon)
     rec.update({
         "kind": index.kind.get(survivor) or index.kind.get(folded) or "code",
         "survivor_obj": sobj, "folded_obj": fobj,
         "survivor_size": len(sbody), "folded_size": len(fbody),
         "survivor_relocs": len(srel), "folded_relocs": len(frel),
         "same_bytes": same_bytes, "same_relocs": same_rels,
+        "same_relocs_mod_map": same_rels_map,
         "same_relocs_mod_alias": same_rels_mod,
     })
     kind = rec.get("kind", "code")
-    if same_bytes and same_rels_mod:
+    if same_bytes and (same_rels_map or same_rels_mod):
         if not srel and _identity_is_cheap(kind, sbody):
             rec["verdict"] = UNDECIDABLE
             rec["reason"] = (
@@ -316,7 +423,10 @@ def prove_pair(index, survivor, folded, canon=None):
                              f"({len(sbody)} B, {len(srel)} relocations) => "
                              f"/OPT:ICF must merge them")
         else:
-            rec["verdict"] = PROVEN_MOD
+            # The map is external ground truth, the alias file is our own
+            # inference, so prefer the map class when both would bridge.
+            via_map = same_rels_map
+            rec["verdict"] = PROVEN_MOD_MAP if via_map else PROVEN_MOD
             differing = sorted(
                 (o, tn, fn) for ((o, _t, tn), (_o2, _t2, fn)) in zip(srel, frel)
                 if tn != fn)
@@ -324,9 +434,30 @@ def prove_pair(index, survivor, folded, canon=None):
             rec["reason"] = (
                 f"byte-identical ({len(sbody)} B, {len(srel)} relocations) and "
                 f"relocation-set-identical ONLY after {len(differing)} target "
-                f"name(s) were canonicalised through an existing fold class -- "
-                f"WEAKER tier, inherits that class's evidence")
+                f"name(s) were canonicalised through "
+                + ("fold classes the SHIPPED LINKER MAP co-lists at one address "
+                   "-- weaker than PROVEN_FOLD, but external evidence"
+                   if via_map else
+                   "an existing fold class -- WEAKER tier, inherits that "
+                   "class's evidence"))
         return rec
+
+    # Before calling this a real difference: did we even compare the two COMDATs
+    # the linker compared?  See "COMDAT SELECTION" in the module docstring.
+    for side, name in (("survivor", survivor), ("folded", folded)):
+        miss = _selection_missing(index, name, defining_obj)
+        if miss:
+            map_obj, our_objs = miss
+            rec["verdict"] = UNDECIDABLE
+            rec["selection_missing"] = {"side": side, "name": name,
+                                        "map_obj": map_obj, "our_objs": our_objs}
+            rec["reason"] = (
+                f"COMDAT_SELECTION_MISSING: the linker took {side} "
+                f"{name[:60]} from {map_obj}, which our build does not emit it "
+                f"from (we have it in {', '.join(our_objs[:4]) or 'nothing'}); "
+                f"copies from different TUs need not be interchangeable, so the "
+                f"two bodies compared are not the two the linker compared")
+            return rec
 
     rec["verdict"] = REFUTED
     why = []
@@ -387,6 +518,14 @@ def main(argv=None):
                          "fold classes canonicalise relocation target names. "
                          "Enables the WEAKER PROVEN_MOD_ALIAS tier -- read the "
                          "module docstring before citing one.")
+    ap.add_argument("--map",
+                    help="shipped MSVC linker map (dc3: "
+                         "orig/373307D9/ham_xbox_r.map). Enables the "
+                         "PROVEN_MOD_MAP tier -- relocation targets are "
+                         "canonicalised through fold classes the LINKER states "
+                         "-- and the COMDAT_SELECTION_MISSING guard, which "
+                         "downgrades a REFUTED to UNDECIDABLE when the "
+                         "definition the linker selected is not one we emit.")
     ap.add_argument("--include-data", action="store_true",
                     help="also index DATA COMDATs (string literals, vtables, "
                          "fp constants, local statics). /OPT:ICF folds those "
@@ -428,13 +567,18 @@ def main(argv=None):
     if canon:
         print(f"equivalences: {len(canon)} names canonicalised from "
               f"{args.equiv_json} (PROVEN_MOD_ALIAS tier enabled)")
+    map_canon, defining_obj = load_map(args.map) if args.map else ({}, {})
+    if args.map:
+        print(f"linker map: {len(map_canon)} names in multi-name fold classes, "
+              f"{len(defining_obj)} name->object attributions from {args.map} "
+              f"(PROVEN_MOD_MAP tier + COMDAT_SELECTION_MISSING guard enabled)")
     index = BodyIndex(args.objects, verbose=args.verbose,
                       keep_pair_relocs=args.keep_pair_relocs,
                       include_data=args.include_data)
 
     recs = []
     for s, f in pairs:
-        rec = prove_pair(index, s, f, canon)
+        rec = prove_pair(index, s, f, canon, map_canon, defining_obj)
         if (s, f) in extras:
             rec.update(extras[(s, f)])
         recs.append(rec)

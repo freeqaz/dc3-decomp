@@ -854,6 +854,44 @@ constructors, and three 8–80 B pairs
 `?Parent@Node@?$ObjPtrVec@...` vs `?MinDisplay@UIListState@@`,
 `?StopLog@Debug@@` vs `?ClearAllTypeProps@Object@Hmx@@`).
 
+### Follow-up, 2026-08-18 — all nine adjudicated; REFUTED is now 0
+
+Worked by the `fix/self-refuted-folds` lane. Three were our source, two classes
+were the proof's own limits. Nothing was edited to satisfy a tool.
+
+| membership | wrong side | defect | outcome |
+|---|---|---|---|
+| `?GetCacheName@CacheXbox@@` ↔ `?MaxDisplay@UIListState@@` | ours (`MaxDisplay`) | returned a hardcoded `1`; retail returns `mMaxDisplay` (0x18) | fixed, `dbee4005a` |
+| `?Parent@Node@?$ObjPtrVec@…` ↔ `?MinDisplay@UIListState@@` | ours (`MinDisplay`) | returned a hardcoded `1`; retail returns `mMinDisplay` (0x10) | fixed, `dbee4005a` |
+| `?StopLog@Debug@@` ↔ `?ClearAllTypeProps@Object@Hmx@@` | ours (`ClearAllTypeProps`) | a redundant `if (mTypeProps)` around `RELEASE`, which hoists the null test and branches past the `= null` store | fixed, `45599639a` |
+| 5 × `MakeString` array-extent rows | NEITHER — instrument | `net_xbox` is a `/GS` cflags group, so `MakeString<…>` is 116 B there and 88 B elsewhere; all 17 occupants of 0x82563b08 are `net:` objects and the target body is 0x74 = 116 B, so the linker kept a `net` copy, but our build emits that spelling only from `obj/DirLoader.obj` and `rndobj/TransAnim.obj` | `COMDAT_SELECTION_MISSING`, `ae174bedc` |
+| `??_7bad_typeid@std@@6B@` ↔ `??_7bad_cast@` / `??_7__non_rtti_object@` | NEITHER — instrument | 8 all-zero bytes, 2 relocations, differing only in which `??_E<class>` slot 0 names — and the map co-lists those three destructors at 0x8299dc60 | `PROVEN_MOD_MAP`, `ae174bedc` |
+
+The three source fixes are metric-invisible in both directions: none of
+`?MinDisplay@UIListState@@`, `?MaxDisplay@UIListState@@` or
+`?ClearAllTypeProps@Object@Hmx@@` survives into `config/373307D9/symbols.txt`
+(the linker folded them away), and a full `ninja` before and after in one tree
+gives 29,398 matched functions / 4,950,860 matched code bytes both ways.
+`MinDisplay`/`MaxDisplay` are nonetheless live bugs — `UIList::Save` serialised
+them, `UIList::Copy` copied `1`/`1` over the real values, and HamNavList's
+scroll arithmetic used a constant 1 where `mMinDisplay` defaults to 0 and
+`mMaxDisplay` defaults to −1 ("no limit", which callers test for explicitly).
+
+Positive control after the lane, 2,611 → 2,612 map-confirmed body-test alias
+memberships (one more because the census's pair enumeration is inclusive of the
+group's own survivor row): **PROVEN_FOLD 1,400 · PROVEN_MOD_MAP 257 ·
+UNDECIDABLE 955 · REFUTED 0.** The 257 formerly `PROVEN_MOD_ALIAS` rows are all
+independently bridged by the map, which is a validation of
+`scripts/symbol_aliases.json` rather than a weakening of it.
+
+One thing this lane found and did NOT fix, recorded so it is not rediscovered as
+a fold problem: the target's
+`??$MakeString@$$BY0O@$$CBDH$$BY04$$CBD@@…` at 0x82563b08 (116 B) is scored a
+**0% stub** in `default/system/net/JsonUtils`, because no net TU of ours
+instantiates that exact `(char[14], int, char[5])` extent triple — retail's came
+from `WebSvcMgr.obj`. That is a format-string-length gap in the `net` sources,
+visible in the metric and not hidden by ICF, so it belongs to a different lane.
+
 ## Appendix — reproducing every number here
 
 ```bash
@@ -873,6 +911,13 @@ python3 scripts/analysis/fold_adjudicate.py --pairs /tmp/census_pairs.json \
 # 3. one pair on its own
 python3 scripts/analysis/fold_proof.py --objects build/373307D9/src --include-data \
     --pair '?DeleteChecksum@FileStream@@AAAXXZ' '?DeleteChecksum@BufStream@@QAAXXZ'
+
+# 3b. (2026-08-18) with the linker map: adds the PROVEN_MOD_MAP tier and the
+#     COMDAT_SELECTION_MISSING guard.  Off by default -- omitting --map
+#     reproduces every number above unchanged.
+python3 scripts/analysis/fold_proof.py --objects build/373307D9/src --include-data \
+    --map orig/373307D9/ham_xbox_r.map \
+    --pair '??_7bad_typeid@std@@6B@' '??_7bad_cast@std@@6B@'
 
 # 4. the port's positive/negative controls
 python3 scripts/analysis/ruler.py --selftest .

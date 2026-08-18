@@ -535,9 +535,9 @@ void UIListState::SetSelectedSimulateScroll(int i) {
     }
 }
 
-int UIListState::MinDisplay() const { return 1; }
+int UIListState::MinDisplay() const { return mMinDisplay; }
 
-int UIListState::MaxDisplay() const { return 1; }
+int UIListState::MaxDisplay() const { return mMaxDisplay; }
 
 bool UIListState::ScrollPastMinDisplay() const { return mScrollPastMinDisplay; }
 
