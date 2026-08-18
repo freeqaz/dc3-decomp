@@ -62,18 +62,16 @@ public:
 
     // see: merged_82401EF0
     void operator=(T *obj) {
-        Hmx::Object *hmxObj;
+        Hmx::Object *hmxObj = obj;
         const char *nameStr;
         if (obj) {
-            hmxObj = obj;
             nameStr = hmxObj->Name();
         } else {
-            hmxObj = 0;
             nameStr = 0;
         }
         int state = GetInitialState(hmxObj);
-        Symbol sym(nameStr);
-        Symbol name = sym;
+        Symbol name;
+        name = Symbol(nameStr);
         mObjPtr.SetObjConcrete(obj);
         mObjName = name;
         mState = state;
