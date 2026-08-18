@@ -27,8 +27,22 @@ struct MemDiffEntry {
     int mHeap; // 0x44
     // total: 0x48 = 72 bytes
 
+    // Two-key ordering: primary heap ascending, secondary size-diff descending.
+    // Reducing this to the single `mHeap` key made every MemDiffEntry sort
+    // helper compare on the wrong predicate (8 of them were stuck at 16-82%).
+    // The shipped binary's secondary key is a *non-strict* `>=` — see the
+    // `subfc`/`adde`/`clrlwi.` sequence reached by the `beq` at 0x58 in the
+    // target's inlined __linear_insert. That makes comp(a, a) true, which
+    // STLport's unguarded insertion sort tolerates only because the table is
+    // tiny; libstdc++ does not, so the native build uses the strict form.
     bool operator<(const MemDiffEntry &other) const {
-        return mHeap < other.mHeap;
+        if (mHeap != other.mHeap)
+            return mHeap < other.mHeap;
+#ifdef HX_NATIVE
+        return mSizeDiff > other.mSizeDiff;
+#else
+        return mSizeDiff >= other.mSizeDiff;
+#endif
     }
 };
 
