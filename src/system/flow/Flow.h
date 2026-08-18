@@ -62,6 +62,9 @@ public:
     // ObjectDir
     virtual void SyncObjects();
     // RndPollable
+    /** A Flow is driven by Enter()/Exit(), never per-frame polled, so it reports
+     *  PollEnabled()==false and RndDir sorts it into mEnters rather than mPolls. */
+    virtual bool PollEnabled() const { return false; }
     virtual void Enter();
     virtual void Exit();
     // FlowQueueable
