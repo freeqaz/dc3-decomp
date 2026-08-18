@@ -309,9 +309,9 @@ void CheckDistortionOpts(RndMat *mat, ShaderOptions &opts) {
     }
     RndShockwave *shockwave = RndShockwave::sSelected;
     if (shockwave) {
-        bool ampBad = Abs(shockwave->mAmplitude) < 0.0001f;
+        bool ampBad = NearlyZero(shockwave->mAmplitude);
         if (!ampBad && mat->mAllowDistortionEffects) {
-            bool multBad = Abs(mat->mShockwaveMult) < 0.0001f;
+            bool multBad = NearlyZero(mat->mShockwaveMult);
             if (!multBad) {
                 opts.flags |= (u64)1 << 60;
             }
@@ -329,9 +329,9 @@ void CheckDistortion(RndMat *mat) {
     }
     RndShockwave *shock = RndShockwave::sSelected;
     if (shock) {
-        bool ampBad = Abs(shock->mAmplitude) < 0.0001f;
+        bool ampBad = NearlyZero(shock->mAmplitude);
         if (!ampBad && mat->mAllowDistortionEffects) {
-            bool multBad = Abs(mat->mShockwaveMult) < 0.0001f;
+            bool multBad = NearlyZero(mat->mShockwaveMult);
             if (!multBad) {
                 shock->PrepareShader(mat->mShockwaveMult);
             }
