@@ -155,6 +155,21 @@ vanished because our build stopped emitting it, which is the *Cause 1* gap and a
 real bug rather than bookkeeping. They need the same per-object check the 335
 got.
 
+> **Closed 2026-08-18 (task #104).** All 140 got that check, against every one of
+> the 2,223 objects under `build/373307D9/obj/`. **The target defines none of
+> them** — 136 appear in no target object at all and 4 only as COFF
+> storage-class-6 labels — so there is no report/pairing defect and no row in the
+> *Cause 1* class here (0 B). They are 48 stale spellings of an `/OPT:ICF`
+> survivor now named `merged_<addr>`, 40 stale spellings superseded by a
+> corrected name, 30 unreferenced inline COMDATs in `utl/DebugGraph` that no
+> linker would keep, 18 deliberately retired `link_glue` stubs, and 4 labels;
+> all now `excluded=1` with a per-class reason. Reproduce with
+> `scripts/analysis/report_absent_census.py`; the before state of every row is in
+> `report-absent-rows-20260818/excluded.json`. The one live thread is
+> `report-absent-rows-20260818/recoverable-merged-names.json`: 48 addresses,
+> 5,420 B, where we emit the body, the target has it, and the live `merged_<addr>`
+> row scores 0 % only because objdiff has no name to pair on.
+
 **`current_percent` remains untrustworthy for any row absent from the report.**
 Sync reports these but never mutates them, by design. `query_functions` now
 marks `is_stub` rows explicitly for this reason.
