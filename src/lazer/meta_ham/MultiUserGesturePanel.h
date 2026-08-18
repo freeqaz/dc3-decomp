@@ -25,6 +25,7 @@ public:
     virtual void FinishLoad();
     virtual bool HasNavList() const;
     virtual bool Exiting() const;
+    virtual bool ShouldUseLocalNavlist() const { return false; }
 
     NEW_OBJ(MultiUserGesturePanel)
 

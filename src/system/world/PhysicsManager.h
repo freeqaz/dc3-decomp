@@ -44,6 +44,9 @@ public:
     PhysicsManager(RndDir *);
     virtual ~PhysicsManager();
     virtual DataNode Handle(DataArray *, bool);
+    /** Explicit in the target: ?RefOwner@PhysicsManager@@ folds into the
+     *  'li r3,0; blr' group, where Hmx::Object::RefOwner does not. */
+    virtual Hmx::Object *RefOwner() const { return nullptr; }
     // there's a LOT of return void stubs here,
     // i can't verify their order
     virtual void Init() {} // 0x58 - tentative

@@ -22,14 +22,14 @@ public:
 };
 
 template <typename T = void>
-class VBLock : public BufLock<D3DVertexBuffer> {
+struct VBLock : public BufLock<D3DVertexBuffer> {
 public:
     VBLock(D3DVertexBuffer *buf, uint flags) : BufLock(buf, flags) {}
     virtual ~VBLock() {}
 };
 
 template <typename T = void>
-class IBLock : public BufLock<D3DIndexBuffer> {
+struct IBLock : public BufLock<D3DIndexBuffer> {
 public:
     IBLock(D3DIndexBuffer *buf, uint flags) : BufLock(buf, flags) {}
     virtual ~IBLock() {}

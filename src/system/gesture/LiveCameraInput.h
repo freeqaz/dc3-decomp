@@ -52,6 +52,8 @@ public:
         RndTex *mTex; // 0x0
     };
     virtual bool IsConnected() const { return mConnected; }
+    /** The live NUI camera is the real device, not a stand-in override. */
+    virtual bool IsOverride() const { return false; }
     virtual void PollTracking();
 
     int MaxSnapshots() const { return mMaxSnapshots; }

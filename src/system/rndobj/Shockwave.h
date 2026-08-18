@@ -16,6 +16,8 @@ public:
     virtual void Save(BinStream &);
     virtual void Copy(const Hmx::Object *, Hmx::Object::CopyType);
     virtual void Load(BinStream &);
+    /** Driven by Enter()/Exit(), never per-frame polled. */
+    virtual bool PollEnabled() const { return false; }
     virtual void Enter();
     virtual void Exit();
 

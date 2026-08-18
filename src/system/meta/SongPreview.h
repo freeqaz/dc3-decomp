@@ -24,6 +24,9 @@ public:
     virtual ~SongPreview();
     virtual void ContentMounted(const char *, const char *);
     virtual void ContentFailed(const char *);
+    /** No content sub-directory: ContentMgr::PollMounting skips the FileMakePath
+     *  when ContentDir() is null (the base returns "."). */
+    virtual const char *ContentDir() { return nullptr; }
 
     // Hmx::Object
     virtual DataNode Handle(DataArray *, bool);

@@ -13,6 +13,8 @@ public:
     virtual void UpdateMix();
     virtual void OnParametersChanged();
     virtual void SyncEffectParams(IXAudio2SubmixVoice *) const;
+    /** Not a standard send: UpdateVolumes must not push effect params per voice. */
+    virtual bool IsStandard() const { return false; }
 
     NEW_OBJ(FxSendPitchShift360)
 
