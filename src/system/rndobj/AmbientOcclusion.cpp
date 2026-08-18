@@ -317,9 +317,11 @@ void RndAmbientOcclusion::Clean() {
 }
 
 void RndAmbientOcclusion::BuildSHCoeff(const Vector3 &inVector, float *fArr) const {
-    float diff = 1.0f - Length(inVector);
-    if (diff <= 0) diff = -diff;
-    MILO_ASSERT(diff <= kSmallFloat, 0x298);
+    // og-dc3 source spells this `Abs(...)`; the explicit <float> is required here
+    // because our math/Utl.h carries a non-retail `inline float Abs(float)` shim
+    // (see docs/decomp/patterns/fixable-abs-overload-shim.md). Retail's header had
+    // only the template, so the template is what this assert must instantiate.
+    MILO_ASSERT(Abs<float>(1.0f - Length(inVector)) <= kSmallFloat, 0x298);
     fArr[0] = 0.2820948f;
     fArr[1] = inVector.y * 0.48860252f;
     fArr[2] = inVector.z * 0.48860252f;

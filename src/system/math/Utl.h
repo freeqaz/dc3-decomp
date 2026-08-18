@@ -153,6 +153,14 @@ inline bool MaxEq(float &x, const float &y) {
     return x != tmp;
 }
 
+// NOT IN RETAIL'S HEADER. Retail's math/Utl.h declared only the Abs template
+// below; og-dc3-decomp and rb3 both agree. This float overload is a decomp shim
+// standing in for call sites we have spelled `Abs(f)` where the real source said
+// `NearlyZero` / `NearlyEqual` / `fabs`. Deleting it was measured whole-build and
+// is a net loss (-199 instruction-weighted bytes across 5 functions); it can only
+// be removed after those call sites are respelled one at a time.
+// Prefer `Abs<float>(x)` when you specifically want the template's fcmpu/bgt/fneg.
+// See docs/decomp/patterns/fixable-abs-overload-shim.md.
 inline float Abs(float x) { return fabsf(x); }
 
 template <class T>
