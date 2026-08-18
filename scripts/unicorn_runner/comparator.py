@@ -8,7 +8,42 @@ import struct
 # scope, and this module is pure logic over recorded results. Importing engine
 # here made all 41 comparator tests fail on a box without the emulator.
 from .call_log import CL_INDEX, CL_TRAMP_ADDR, CL_SRC_OFFSET, CL_R3, CL_R4, CL_R5, CL_R6
-from .memory_map import STACK_BASE, OBJECT_BASE, GLOBAL_BASE, REGION_SIZE
+from .memory_map import (STACK_BASE, OBJECT_BASE, GLOBAL_BASE, REGION_SIZE,
+                         RDATA_BASE, TRAMPOLINE_BASE)
+
+
+# Regions whose addresses are assigned by the harness, independently per side.
+#
+# assign_addresses() walks each side's relocation list in that side's own order,
+# and prepare_data_sections() packs each side's data sections in that side's own
+# COFF section order. The decomp .obj (MSVC emit order) and the original .obj
+# (splitter-recovered order) therefore hand the SAME symbol DIFFERENT addresses.
+# A raw compare of any value drawn from these regions is meaningless: it is
+# reporting where the harness happened to put a thing, not what the code did
+# with it. Only STACK_BASE and OBJECT_BASE are laid out identically on both
+# sides and so carry real signal.
+_HARNESS_LAID_OUT_REGIONS = (GLOBAL_BASE, RDATA_BASE, TRAMPOLINE_BASE)
+
+
+def _u32(value):
+    """Normalise a register value to unsigned 32-bit.
+
+    The two call-log implementations disagree on signedness: the C trampoline
+    hook yields unsigned words, the pure-Python fallback yields Python ints that
+    can be negative. Every region test here compares against unsigned bases, so
+    an address at or above 0x80000000 -- which is ALL of CODE, TRAMPOLINE and
+    RDATA -- silently failed every check whenever the Python path was in use.
+    That is why the pre-existing GLOBAL_BASE tests appeared to work (0x30000000
+    is positive) while nothing above 2GB was ever recognised.
+    """
+    return value & 0xFFFFFFFF
+
+
+def _is_harness_address(value):
+    """True if `value` points into a region the harness lays out per-side."""
+    value = _u32(value)
+    return any(base <= value < base + REGION_SIZE
+               for base in _HARNESS_LAID_OUT_REGIONS)
 
 
 class ComparisonResult:
@@ -308,6 +343,10 @@ def classify_divergence(result, decomp_result, orig_result, decomp_relocs, orig_
         'stack_layout'  — call_arg_mismatch with stack-region values (hard to fix)
         'fpr_precision' — float return value differs (FMA/precision, unfixable)
         'object_memory' — memory_mismatch with object region diffs (maybe fixable)
+        'data_layout'   — the only differing values are addresses the harness
+                          assigns independently per side (GLOBAL / RDATA /
+                          TRAMPOLINE). Same operand, different placement.
+                          ARTIFACT — do not chase these as decomp bugs.
         'error'         — execution error on decomp side (real bug)
         'orig_error'    — execution error on original side only (test infra, unfixable)
         'call_count'    — call count mismatch without merged indicators (real bug)
@@ -365,19 +404,19 @@ def classify_divergence(result, decomp_result, orig_result, decomp_relocs, orig_
         diff_regs = [r for r in ("r3", "r4", "r5", "r6")
                      if d_args.get(r) != o_args.get(r)]
 
-        # Check if ALL differing args point to globals region (string refs)
-        all_globals = True
-        for reg in diff_regs:
-            d_val = d_args.get(reg, 0)
-            o_val = o_args.get(reg, 0)
-            d_in_globals = GLOBAL_BASE <= d_val < GLOBAL_BASE + REGION_SIZE
-            o_in_globals = GLOBAL_BASE <= o_val < GLOBAL_BASE + REGION_SIZE
-            if not (d_in_globals and o_in_globals):
-                all_globals = False
-                break
-
-        if all_globals:
-            return "build_env"
+        # If EVERY differing arg is an address the harness assigned per-side,
+        # the two sides are passing the same operand and only the harness's
+        # placement of it differs. Not a decomp defect. (This used to check
+        # GLOBAL_BASE alone and call it build_env; RDATA_BASE was missing, so
+        # every pointer-to-string-literal argument -- the single most common
+        # shape in this codebase -- fell through and was reported as a real
+        # call_arg bug. Resolving both sides' addresses back to symbols showed
+        # 61 of 68 such rows denote the identical symbol or byte-identical
+        # string.)
+        if all(_is_harness_address(d_args.get(reg, 0))
+               and _is_harness_address(o_args.get(reg, 0))
+               for reg in diff_regs):
+            return "data_layout"
 
         # Check if merged symbol warning covers the mismatching call
         if has_merged:
@@ -439,22 +478,30 @@ def classify_divergence(result, decomp_result, orig_result, decomp_relocs, orig_
         return "call_count"
 
     if reason == "return_value_mismatch":
-        # Check if both values are globals-region pointers (string return)
+        # A returned pointer into a harness-laid-out region says nothing: both
+        # sides returned the same object, the harness just put it elsewhere.
+        # DataNode::DataTypeString is the canonical example -- 100% match,
+        # returns 0x8002009E vs 0x80020000, both the same string literal.
         d_r3 = details.get("decomp_r3", 0)
         o_r3 = details.get("orig_r3", 0)
-        if (GLOBAL_BASE <= d_r3 < GLOBAL_BASE + REGION_SIZE
-                and GLOBAL_BASE <= o_r3 < GLOBAL_BASE + REGION_SIZE):
-            return "build_env"
+        if _is_harness_address(d_r3) and _is_harness_address(o_r3):
+            return "data_layout"
         return "return_value"
 
     if reason == "memory_mismatch":
-        # Memory diffs in globals region could be string-related
         obj_diffs = details.get("object_diffs", [])
         glob_diffs = details.get("globals_diffs", [])
         if not obj_diffs and glob_diffs:
             # Only globals diffs — could be __FILE__ written to memory
             return "build_env"
         if obj_diffs:
+            # A stored word that is a harness-assigned address on both sides is
+            # the same pointer under two placements. This is what every
+            # ??_G / ??1 destructor row was: the vtable pointer store, decomp
+            # 0x80020004 vs orig 0x80020000.
+            if all(_is_harness_address(d) and _is_harness_address(o)
+                   for _addr, d, o in obj_diffs):
+                return "data_layout"
             return "object_memory"
         return "logic"
 
