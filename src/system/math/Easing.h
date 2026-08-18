@@ -360,7 +360,27 @@ typedef float EaseFunc(float, float, float);
 // into every one of the 445 translation units that include this header.
 extern EaseFunc *gEaseFuncs[35];
 
-inline EaseFunc *GetEaseFunction(EaseType e) {
+// The shipped build expanded GetEaseFunction at two call sites -- PropertyTask's
+// ctor (flow/FlowSetProperty) and AnimTask's ctor (rndobj/Anim) both load
+// gEaseFuncs inline and carry this header's __FILE__ in the range assert -- while
+// leaving synth/Faders' three call sites (Fader::Copy / ::Load / ::SyncProperty)
+// as real `bl`s to the out-of-line COMDAT that Faders.obj emits. Under our /O1
+// (favor-size) flags MSVC's inliner declines this 132-byte body everywhere, so
+// one keyword cannot express both halves. A TU that wants the expansion opts in
+// *before its first include*:
+//
+//     #define EASING_FORCE_INLINE_GET_EASE_FUNCTION 1
+//     #include "..."
+//
+// Everyone else keeps the plain `inline` out-of-line call. Semantics are
+// identical either way; only the inline boundary moves.
+#ifdef EASING_FORCE_INLINE_GET_EASE_FUNCTION
+#define EASING_GET_EASE_FUNCTION_INLINE __forceinline
+#else
+#define EASING_GET_EASE_FUNCTION_INLINE inline
+#endif
+
+EASING_GET_EASE_FUNCTION_INLINE EaseFunc *GetEaseFunction(EaseType e) {
     MILO_ASSERT(e >= kEaseLinear && e <= kEaseQuarterHalfStairstep, 0x16B);
     return gEaseFuncs[e];
 }

@@ -1,3 +1,6 @@
+// MSVC expanded GetEaseFunction() inline here in the shipped build; see the
+// opt-in note in math/Easing.h. Must precede the first include.
+#define EASING_FORCE_INLINE_GET_EASE_FUNCTION 1
 #include "rndobj\Anim.h"
 #include "math/Easing.h"
 #include "math\Utl.h"
