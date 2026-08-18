@@ -1,5 +1,6 @@
 """Relocation patching for the Unicorn Function Runner."""
 
+import re
 import struct
 
 from .memory_map import TRAMPOLINE_BASE, GLOBAL_BASE, RDATA_BASE
@@ -191,9 +192,6 @@ def prepare_data_sections(coff, relocs, existing_rdata_bytes=None, existing_over
                         data_sections[sec_idx] = set()
                     data_sections[sec_idx].add(reloc["symbol_name"])
 
-    if not data_sections:
-        return existing_rdata_bytes, existing_override or {}
-
     # Start after any existing rdata content
     base_rdata = bytearray()
     if existing_rdata_bytes:
@@ -222,10 +220,62 @@ def prepare_data_sections(coff, relocs, existing_rdata_bytes=None, existing_over
 
         base_rdata.extend(sec_data)
 
+    _synthesize_float_constants(coff, relocs, base_rdata, globals_override)
+
     if len(base_rdata) == 0:
         return None, globals_override
 
     return bytes(base_rdata), globals_override
+
+
+# MSVC names a floating-point literal pool entry after its own bytes:
+# `__real@3f800000` IS 1.0f, `__real@3ff0000000000000` IS 1.0. The hex digits
+# are the big-endian value, which is what the Xenon loads.
+_REAL_RE = re.compile(r'^__real@([0-9a-fA-F]{8}|[0-9a-fA-F]{16})$')
+
+
+def _synthesize_float_constants(coff, relocs, base_rdata, globals_override):
+    """Materialise `__real@…` constants that this COFF does not define.
+
+    The decomp .obj defines its float literals in a real `.rdata` section, so
+    the loop above maps them and the decomp side loads the right values. The
+    *original* .obj — reconstructed by the splitter from the XEX — carries them
+    as UNDEFINED externals (section 0). Nothing mapped them, so they landed in a
+    plain zero-filled GLOBAL slot and the original side loaded 0.0f wherever the
+    decomp loaded 1.0f, -1.0f, 1e30f, …
+
+    That is a harness asymmetry, not a decomp bug, and it was the single largest
+    source of DIVERGENT verdicts in the database: it makes the original compute
+    different arithmetic, take different branches (whole `wild_jump_match`
+    clusters), and store different words into the object. Since the mangled name
+    carries the bytes, we can rebuild the constant exactly without the section.
+
+    Only fills symbols that are undefined here AND not already mapped, so the
+    decomp side — where these are real defined data — is untouched.
+    """
+    wanted = []
+    seen = set()
+    for reloc in relocs:
+        if reloc["type_name"] not in ("REFHI", "REFLO", "ADDR32"):
+            continue
+        name = reloc["symbol_name"]
+        if name in globals_override or name in seen:
+            continue
+        m = _REAL_RE.match(name)
+        if not m:
+            continue
+        sym = coff.symbol_map.get(name)
+        if sym and sym.get('section', 0) > 0:
+            continue          # genuinely defined in this object; leave it alone
+        seen.add(name)
+        wanted.append((name, bytes.fromhex(m.group(1))))
+
+    for name, raw in wanted:
+        align = len(raw)      # 4 for float, 8 for double
+        pad = (-len(base_rdata)) % align
+        base_rdata.extend(b'\x00' * pad)
+        globals_override[name] = RDATA_BASE + len(base_rdata)
+        base_rdata.extend(raw)
 
 
 def prepare_switch_tables(coff, func_symbol, relocs, code_base):
