@@ -1,3 +1,6 @@
+// MSVC expanded GetEaseFunction() inline here in the shipped build; see the
+// opt-in note in math/Easing.h. Must precede the first include.
+#define EASING_FORCE_INLINE_GET_EASE_FUNCTION 1
 #include "FlowSetProperty.h"
 #include "obj\Msg.h"
 #include "flow\DrivenPropertyEntry.h"
@@ -66,22 +69,26 @@ FlowSetProperty::FlowSetProperty()
 PropertyTask::PropertyTask(Hmx::Object *target, DataNode &prop, DataNode &val, TaskUnits units, float dur, EaseType e, float power, bool flag, Hmx::Object *listener)
     : mTarget(this, nullptr), mProperty(prop), mValue(val), mStartValue(0),
       mDuration(dur), mEasePower(power), mIsColorInterp(flag),
-      mListener(this, nullptr), mEaseFunc(GetEaseFunction(e)) {
-    auto refsEnd = target->Refs().end();
+      mListener(this, nullptr) {
     MILO_ASSERT(target, 0x4D);
-    MILO_ASSERT(e >= kEaseLinear && e <= kEaseQuarterHalfStairstep, 0x16B);
+    // GetEaseFunction() is inline in math/Easing.h and carries the
+    // e >= kEaseLinear && e <= kEaseQuarterHalfStairstep assert (line 0x16B)
+    // with it -- that assert must come from the header, not from here, or the
+    // file string baked into the call is FlowSetProperty.cpp instead of
+    // Easing.h. Assigning in the body (not the mem-initializer list) is what
+    // gets it inlined into the table load the target uses.
+    mEaseFunc = GetEaseFunction(e);
+    auto refsEnd = target->Refs().end();
 
     // Loop through target's refs to find existing PropertyTasks with same property
     for (ObjRef::iterator it = target->Refs().begin(); it != refsEnd; ++it) {
         Hmx::Object *refOwner = it->RefOwner();
         if (refOwner != nullptr && refOwner->ClassName() == PropertyTask::StaticClassName()) {
             PropertyTask *task = static_cast<PropertyTask *>(refOwner);
-            DataArray *myProp = mProperty.Array();
-            DataArray *taskProp = task->mProperty.Array();
-            if (taskProp->Size() == myProp->Size()) {
+            if (task->mProperty.Array()->Size() == mProperty.Array()->Size()) {
                 bool match = true;
-                for (int i = 0; i < myProp->Size(); i++) {
-                    if (taskProp->Node(i) != myProp->Node(i)) {
+                for (int i = 0; i < mProperty.Array()->Size(); i++) {
+                    if (mProperty.Array()->Node(i) != task->mProperty.Array()->Node(i)) {
                         match = false;
                         break;
                     }
@@ -96,7 +103,7 @@ PropertyTask::PropertyTask(Hmx::Object *target, DataNode &prop, DataNode &val, T
 
     mListener = listener;
     mTarget = target;
-    mStartValue = *target->Property(mProperty.Array(), true);
+    mStartValue = *mTarget.Ptr()->Property(mProperty.Array(), true);
 
     // Cache the original start value type so SetProperty can decide whether
     // to format-as-string when assigning the (possibly interpolated) value
