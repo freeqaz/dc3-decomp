@@ -324,11 +324,11 @@ def seed_image_globals(coff, relocs, globals_map, rdata_bytes, image=None):
       the global still lands in the region the comparator diffs. Scalars are
       the overwhelming majority (723 of 749 decomp-side seeds in a 60-unit
       survey) and are the shape that gets written.
-    * larger objects (strings, vtables, RTTI records, tables) move into the
-      RDATA buffer, which is the only place with room for them. Writes there
-      are not compared -- acceptable, because aggregates of this kind are
-      read-only in practice, and because the alternative is resizing every
-      GLOBAL slot, which perturbs the per-side address assignment that the
+    * larger objects -- in practice string literals, since anything made of
+      pointers is excluded above -- move into the RDATA buffer, the only place
+      with room for them. Writes there are not compared, which is acceptable
+      for string literals and much cheaper than the alternative: resizing
+      GLOBAL slots would perturb the per-side address assignment that the
       cross-side call-arg alignment depends on.
 
     Mutates globals_map for relocated symbols. Returns (rdata_bytes,

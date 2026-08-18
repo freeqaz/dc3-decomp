@@ -541,6 +541,42 @@ Local repos:
 
 **Implication**: PPC32 BE mode is production-ready for scalar PPC functions. Functions using `std`/`ld` (PPC64 load/store — common for callee-saved register preservation on Xenon) are handled via byte-rewriting to `stw`/`lwz` (Phase 2). PPC64 mode is unusable. AltiVec/VMX128 functions cannot be tested until Unicorn exposes vector register access.
 
+### Where a global's initial value comes from (Aug 2026)
+
+The two sides do not define the same globals, and for a long time whichever
+side left a symbol undefined simply read zero for it. The decomp compiles one
+`.cpp`, so `static float kSampleRate = 48000.0f` is real `.data`; the splitter,
+carving the same function out of the linked image, emits it as an UNDEFINED
+external because the word lives in another split object. The decomp divided by
+48000, the original divided by zero, and the runner filed a 100% assembly match
+as an `object_memory` bug.
+
+Both sides now start from one initial global image (`scripts/unicorn_runner/image.py`,
+`patcher.seed_image_globals`), sourced from `orig/373307D9/ham_xbox_r.exe` +
+`config/373307D9/symbols.txt`. Read the rules before diagnosing anything that
+involves a global:
+
+- **Only symbols the executing `.obj` does not define are seeded.** A symbol
+  the `.obj` defines keeps its own bytes, `.bss` zeros included — that is how a
+  dropped initializer (`float sZoom;` reading 0 where the target holds 1.0f)
+  still shows up as a divergence. See 4f8b6e036 for seven live examples.
+- **Pointers are never seeded.** The harness maps no image memory, so a
+  pointer into the image would aim at an on-demand zero page. Null is the
+  truer answer, and it is what every other pointer in the fixture is. This
+  excludes vtables and RTTI, whose every word is such a pointer.
+- **The image is a link-time image, not a snapshot of a running console.**
+  `.data` has vsize `0x287214` but only `0x58600` bytes of file content, so
+  the `.bss` tail reads zero here exactly as it does at load. Seeding cannot
+  introduce a value the game only establishes at runtime.
+- **A GLOBAL word that neither side wrote is not compared** (`comparator.
+  compare_written_memory`). The sides seed different slots, so the region no
+  longer starts identical; an untouched difference is placement, the same
+  non-signal as the `data_layout` class. Anything either side writes is
+  compared as before.
+
+Missing `ham_xbox_r.exe` (it is gitignored) disables seeding and restores the
+older behaviour rather than producing a different wrong answer.
+
 ### What This Cannot Validate
 
 - **Full program state coherence**: Only tests one function at a time. Cross-function state corruption won't be caught.
