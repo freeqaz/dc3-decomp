@@ -14,7 +14,7 @@ public:
     virtual void Set(const RndCam *, float, float, float, float) {}
     virtual void UnSet() {}
     virtual bool Enabled() const { return 0; }
-    virtual int Blur() { return 0; }
+    virtual bool Blur() { return false; }
     virtual float FocalPlane() { return 1; }
     virtual float BlurDepth() { return 1; }
     virtual float MaxBlur() { return 0; }

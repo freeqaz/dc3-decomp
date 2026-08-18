@@ -47,6 +47,7 @@ import re
 import struct
 import subprocess
 import sys
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -103,25 +104,43 @@ ICF_LITERAL = {'OnlyReturns', 'merged_Returns1', 'Returns1', 'Returns0',
 _MAP_ADDR = None
 
 
+_MAP_LOCK = threading.Lock()
+
+
 def load_map_addresses(project):
+    """Symbol -> linker address, from the original's .map.
+
+    MUST be race-free: this is called from every worker thread, and the whole
+    point of the index is the *authoritative* ICF verdict.  Publishing a
+    half-filled dict (the old code assigned `_MAP_ADDR = {}` and then populated
+    it, so a second thread could observe an incomplete index) made
+    same_icf_address() return None for symbols that were merely not-read-yet, and
+    those rows fell through to `bug_rows` -- proven ICF folds reported as
+    candidate bugs, differently on every run.  Build into a local, publish once,
+    under a lock.
+    """
     global _MAP_ADDR
     if _MAP_ADDR is not None:
         return _MAP_ADDR
-    _MAP_ADDR = {}
-    mp = os.path.join(project, 'orig', '373307D9', 'ham_xbox_r.map')
-    if not os.path.exists(mp):
+    with _MAP_LOCK:
+        if _MAP_ADDR is not None:  # another thread finished while we waited
+            return _MAP_ADDR
+        idx = {}
+        mp = os.path.join(project, 'orig', '373307D9', 'ham_xbox_r.map')
+        if os.path.exists(mp):
+            # lines like: " 0005:003d26f0   ?Sym@@...  827026f0 f   obj"
+            rx = re.compile(
+                r'^\s*[0-9a-fA-F]{4}:[0-9a-fA-F]{8}\s+(\S+)\s+([0-9a-fA-F]{8})\s')
+            try:
+                with open(mp, 'r', errors='replace') as f:
+                    for line in f:
+                        m = rx.match(line)
+                        if m:
+                            idx[m.group(1)] = m.group(2).lower()
+            except OSError:
+                pass
+        _MAP_ADDR = idx
         return _MAP_ADDR
-    # lines like: " 0005:003d26f0   ?Sym@@...  827026f0 f   obj"
-    rx = re.compile(r'^\s*[0-9a-fA-F]{4}:[0-9a-fA-F]{8}\s+(\S+)\s+([0-9a-fA-F]{8})\s')
-    try:
-        with open(mp, 'r', errors='replace') as f:
-            for line in f:
-                m = rx.match(line)
-                if m:
-                    _MAP_ADDR[m.group(1)] = m.group(2).lower()
-    except OSError:
-        pass
-    return _MAP_ADDR
 
 
 def same_icf_address(project, a, b):
@@ -413,6 +432,9 @@ def main():
             return ('error', unit, sym, kind, err, None)
         verdict, detail = triage_symbol(sym, kind, dd, project=project)
         return (verdict, unit, sym, kind, None, detail)
+
+    # Warm the linker-map index on the main thread so no worker ever races on it.
+    load_map_addresses(project)
 
     with ThreadPoolExecutor(max_workers=args.workers) as ex:
         futs = [ex.submit(work, t) for t in tasks]

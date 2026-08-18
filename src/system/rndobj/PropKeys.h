@@ -117,7 +117,7 @@ public:
     /** Set the value of the keyframe at the supplied index, to the current value of
      * mTarget's property mProp. */
     virtual void SetToCurrentVal(int idx) {}
-    virtual int SetFrameException(float) { return 0; }
+    virtual bool SetFrameException(float) { return false; }
     /** Save the keys to a BinStream. */
     virtual void Save(BinStream &);
     /** Load the keys from a BinStream. */
