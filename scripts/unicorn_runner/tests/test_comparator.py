@@ -334,8 +334,8 @@ class TestClassifyDivergence(unittest.TestCase):
         cls = self.classify(result, decomp, orig, [], [])
         self.assertEqual(cls, "data_layout")
 
-    def test_build_env_merged_symbol_warning(self):
-        """Merged symbol in warning at same call index = build_env."""
+    def test_merged_arg_merged_symbol_warning(self):
+        """Merged symbol in warning at same call index = merged_arg."""
         d_log = [make_call_log_entry(0, r3=1, source_offset=0x10)]
         o_log = [make_call_log_entry(0, r3=2, source_offset=0x10)]
         decomp = MockExecutionResult(call_log=d_log)
@@ -352,10 +352,10 @@ class TestClassifyDivergence(unittest.TestCase):
             "orig_args": {"r3": 2, "r4": 0, "r5": 0, "r6": 0},
         }, warnings=["Call #0: decomp targets merged_82004C00, original targets RealFunc"])
         cls = self.classify(result, decomp, orig, [], [])
-        self.assertEqual(cls, "build_env")
+        self.assertEqual(cls, "merged_arg")
 
-    def test_build_env_call_count_merged(self):
-        """Call count mismatch with merged symbol warning = build_env."""
+    def test_merged_call_count_merged(self):
+        """Call count mismatch with merged symbol warning = merged_call."""
         d_log = [make_call_log_entry(0)]
         o_log = [make_call_log_entry(0), make_call_log_entry(1)]
         decomp = MockExecutionResult(call_log=d_log)
@@ -368,7 +368,7 @@ class TestClassifyDivergence(unittest.TestCase):
             "matched_prefix": 1,
         }, warnings=["Call #0: decomp targets merged_82004C00, original targets RealFunc"])
         cls = self.classify(result, decomp, orig, [], [])
-        self.assertEqual(cls, "build_env")
+        self.assertEqual(cls, "merged_call")
 
     def test_data_layout_return_globals(self):
         """Returned pointer into a harness-laid-out region = data_layout."""
@@ -410,36 +410,39 @@ class TestClassifyDivergence(unittest.TestCase):
         cls = self.classify(result, decomp, orig, [], [])
         self.assertEqual(cls, "regalloc")
 
-    def test_logic_error_mismatch(self):
+    def test_error_mismatch(self):
+        """Different errors on the two sides = error (a real bug)."""
         decomp = MockExecutionResult(error="fetch 0x00")
         orig = MockExecutionResult(error="fetch 0xFF")
         result = self.compare(decomp, orig, [], [])
         cls = self.classify(result, decomp, orig, [], [])
-        self.assertEqual(cls, "logic")
+        self.assertEqual(cls, "error")
 
-    def test_logic_decomp_error(self):
+    def test_decomp_error(self):
+        """Only the decomp errored = error (a real bug)."""
         decomp = MockExecutionResult(error="crash")
         orig = MockExecutionResult()
         result = self.compare(decomp, orig, [], [])
         cls = self.classify(result, decomp, orig, [], [])
-        self.assertEqual(cls, "logic")
+        self.assertEqual(cls, "error")
 
-    def test_logic_fpr_mismatch(self):
+    def test_fpr_mismatch(self):
+        """Float return differences are precision, not logic."""
         decomp = MockExecutionResult(r3=0, f1=0x3FF0000000000000)
         orig = MockExecutionResult(r3=0, f1=0x4000000000000000)
         result = self.compare(decomp, orig, [], [])
         cls = self.classify(result, decomp, orig, [], [])
-        self.assertEqual(cls, "logic")
+        self.assertEqual(cls, "fpr_precision")
 
-    def test_logic_call_count_no_merged(self):
-        """Call count mismatch without merged warning = logic."""
+    def test_call_count_no_merged(self):
+        """Call count mismatch without merged indicators = call_count."""
         d_log = [make_call_log_entry(0)]
         o_log = [make_call_log_entry(0), make_call_log_entry(1)]
         decomp = MockExecutionResult(call_log=d_log)
         orig = MockExecutionResult(call_log=o_log)
         result = self.compare(decomp, orig, [], [])
         cls = self.classify(result, decomp, orig, [], [])
-        self.assertEqual(cls, "logic")
+        self.assertEqual(cls, "call_count")
 
 
 class TestFormatJsonResult(unittest.TestCase):
