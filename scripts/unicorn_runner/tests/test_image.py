@@ -8,7 +8,6 @@ pin what it must NOT do: a symbol our own .obj defines keeps our bytes, so a
 dropped initializer still shows up as a divergence.
 """
 
-import os
 import struct
 import unittest
 
