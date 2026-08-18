@@ -109,8 +109,17 @@ class UnicornEngine:
     between executions. Avoids the ~50ms Uc() teardown cost per function.
     """
 
+    # Number of engines that hold an open native Unicorn handle (and therefore
+    # a multi-megabyte QEMU translator buffer). Tests assert this stays bounded;
+    # it is the only leak metric that is deterministic, since a *closed* engine
+    # can still linger as a Python shell until the cycle collector runs.
+    live_engines = 0
+
     def __init__(self):
         self._mu = Uc(UC_ARCH_PPC, UC_MODE_PPC32 + UC_MODE_BIG_ENDIAN)
+        UnicornEngine.live_engines += 1
+        self._closed = False
+        self._hook_handles = []
         for base in _ALL_REGIONS:
             self._mu.mem_map(base, REGION_SIZE)
 
@@ -163,12 +172,84 @@ class UnicornEngine:
                 TRAMPOLINE_BASE + REGION_SIZE - 1,
                 CODE_BASE)
         else:
-            self._mu.hook_add(
+            self._hook_handles.append(self._mu.hook_add(
                 UC_HOOK_BLOCK, self._on_trampoline,
-                begin=TRAMPOLINE_BASE, end=TRAMPOLINE_BASE + REGION_SIZE - 1)
-        self._mu.hook_add(
+                begin=TRAMPOLINE_BASE, end=TRAMPOLINE_BASE + REGION_SIZE - 1))
+        self._hook_handles.append(self._mu.hook_add(
             UC_HOOK_MEM_READ_UNMAPPED | UC_HOOK_MEM_WRITE_UNMAPPED,
-            self._on_unmapped)
+            self._on_unmapped))
+
+    # ---- deterministic teardown -------------------------------------------
+    #
+    # A Uc instance owns a multi-megabyte native translator buffer that
+    # Python's GC heuristics cannot see: to the collector a dead engine looks
+    # like a handful of small objects, so it feels no pressure to run. And the
+    # engine is only ever reclaimable by the *cycle* collector, never by
+    # refcounting, because hook_add() stores a ctypes wrapper around a BOUND
+    # METHOD of this object in Uc._callbacks:
+    #
+    #     UnicornEngine._mu -> Uc._callbacks[h] -> self._on_trampoline -> self
+    #
+    # execute_function() built one engine per call and dropped it, so dead
+    # engines accumulated until QEMU refused to allocate another buffer:
+    # "Could not allocate dynamic translator buffer", reproducibly at ~22 live
+    # Uc objects. close() breaks the cycle (hook_del removes the callback from
+    # Uc._callbacks) and then runs Uc's own weakref finalizer, which calls
+    # uc_close() and frees the native buffer right now instead of whenever the
+    # collector happens to notice.
+    def close(self):
+        """Release the native Unicorn engine. Idempotent; safe after use."""
+        if self._closed:
+            return
+        self._closed = True
+        UnicornEngine.live_engines -= 1
+
+        mu, self._mu = self._mu, None
+        if mu is None:
+            return
+
+        for handle in self._hook_handles:
+            try:
+                mu.hook_del(handle)
+            except Exception:
+                pass
+        self._hook_handles = []
+
+        # Drop every remaining engine->self edge before releasing the handle.
+        callbacks = getattr(mu, "_callbacks", None)
+        if callbacks is not None:
+            callbacks.clear()
+
+        # Uc registers weakref.finalize(self, Uc.release_handle, self._uch) in
+        # its constructor; calling that finalizer is the supported way to run
+        # uc_close() early, and it is a no-op if it has already fired.
+        finalizer = getattr(mu, "_Uc__finalizer", None)
+        if finalizer is not None:
+            finalizer()
+        else:                      # pragma: no cover — older bindings
+            release = getattr(mu, "release_handle", None)
+            uch = getattr(mu, "_uch", None)
+            if release is not None and uch is not None:
+                release(uch)
+
+        self._uch = None
+        self._batch_ptrs = None
+        self._batch_vals = None
+        self._batch_regs = None
+        self._batch_count = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        self.close()
+        return False
+
+    def __del__(self):
+        try:
+            self.close()
+        except Exception:
+            pass
 
     def _on_trampoline(self, uc, address, size, user_data):
         if address & 7:
@@ -265,6 +346,8 @@ class UnicornEngine:
         dominating batch time via expensive Python hook callbacks.
         arg_registers: optional dict mapping register IDs to values (e.g., {UC_PPC_REG_4: 1})
         """
+        if self._closed:
+            raise RuntimeError("UnicornEngine.execute() called after close()")
         mu = self._mu
 
         # Reset execution context
@@ -421,12 +504,15 @@ def execute_function(patched_code, trampolines, func_size, timeout=5_000_000,
                      max_insns=50_000, object_memory=None, arg_registers=None):
     """Execute a patched function in Unicorn and return the result.
 
-    Standalone version — creates a fresh engine each call.
+    Standalone version — creates a fresh engine each call and closes it before
+    returning. The close is not optional: without it the dead engines pile up
+    (see UnicornEngine.close) and the process dies with "Could not allocate
+    dynamic translator buffer" after a couple of dozen calls.
     For batch use, prefer UnicornEngine for reuse across functions.
     """
-    engine = UnicornEngine()
-    return engine.execute(patched_code, trampolines, func_size,
-                          timeout=timeout, verbose=verbose,
-                          rdata_bytes=rdata_bytes, fill_pattern=fill_pattern,
-                          max_insns=max_insns, object_memory=object_memory,
-                          arg_registers=arg_registers)
+    with UnicornEngine() as engine:
+        return engine.execute(patched_code, trampolines, func_size,
+                              timeout=timeout, verbose=verbose,
+                              rdata_bytes=rdata_bytes, fill_pattern=fill_pattern,
+                              max_insns=max_insns, object_memory=object_memory,
+                              arg_registers=arg_registers)
