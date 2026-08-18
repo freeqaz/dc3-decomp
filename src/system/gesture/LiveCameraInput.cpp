@@ -34,7 +34,7 @@ public:
 };
 extern DxRnd TheDxRnd;
 
-float gTempPortraitOffset;
+float gTempPortraitOffset = 0.125f;
 
 namespace {
     bool gDebugDepth;

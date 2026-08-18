@@ -1,6 +1,6 @@
 #include "rndobj\wordwrap.h"
 
-unsigned int g_uOption;
+unsigned int g_uOption = 1;
 LineBreakEntry g_LineBreakTable[146];
 
 void WordWrap_SetOption(unsigned int option) { g_uOption = option; }

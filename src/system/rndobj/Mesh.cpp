@@ -119,7 +119,7 @@ void FaceCenter(RndMesh *mesh, RndMesh::Face *face, Vector3 &center) {
 }
 
 bool RndMesh::sRawCollide;
-int RndMesh::sLastCollide;
+int RndMesh::sLastCollide = -1;
 
 RndMesh::RndMesh()
     : mMat(this), mGeomOwner(this, this), mBones(this), mMutable(0),

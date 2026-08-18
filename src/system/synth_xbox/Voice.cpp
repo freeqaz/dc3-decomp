@@ -18,9 +18,11 @@
 #include "xdk\xapilibi\xbase.h"
 #include "xdk\xapilibi\xbox.h"
 
-HANDLE gEvent;
-HANDLE gVoiceThread;
-int Voice::sHeadsetTarget;
+// Original has these three in initialized data, not .bss:
+// gEvent / gVoiceThread = 0xFFFFFFFF (INVALID_HANDLE_VALUE), sHeadsetTarget = -1.
+HANDLE gEvent = INVALID_HANDLE_VALUE;
+HANDLE gVoiceThread = INVALID_HANDLE_VALUE;
+int Voice::sHeadsetTarget = -1;
 CriticalSection gLockPendingLists;
 CriticalSection gVoiceGC;
 std::list<Voice *> gPendingVoices;

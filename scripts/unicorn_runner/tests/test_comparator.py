@@ -307,8 +307,13 @@ class TestClassifyDivergence(unittest.TestCase):
         result = self.compare(decomp, orig, [], [])
         self.assertIsNone(self.classify(result, decomp, orig, [], []))
 
-    def test_build_env_globals_arg_mismatch(self):
-        """Args pointing to globals region = likely __FILE__ string diff."""
+    def test_data_layout_globals_arg_mismatch(self):
+        """Args pointing to a harness-laid-out region = data_layout, not a bug.
+
+        The harness assigns these addresses per-side (see
+        _HARNESS_LAID_OUT_REGIONS), so two different values here denote the
+        same operand under two placements.
+        """
         d_log = [make_call_log_entry(0, r4=self.GLOBAL_BASE + 0x100)]
         o_log = [make_call_log_entry(0, r4=self.GLOBAL_BASE + 0x200)]
         decomp = MockExecutionResult(call_log=d_log)
@@ -316,7 +321,18 @@ class TestClassifyDivergence(unittest.TestCase):
         result = self.compare(decomp, orig, [], [])
         self.assertEqual(result.verdict, "DIVERGENT")
         cls = self.classify(result, decomp, orig, [], [])
-        self.assertEqual(cls, "build_env")
+        self.assertEqual(cls, "data_layout")
+
+    def test_data_layout_rdata_arg_mismatch(self):
+        """RDATA too -- this is the case that used to be misfiled as call_arg."""
+        from scripts.unicorn_runner.memory_map import RDATA_BASE
+        d_log = [make_call_log_entry(0, r4=RDATA_BASE + 0x18C)]
+        o_log = [make_call_log_entry(0, r4=RDATA_BASE + 0xB4)]
+        decomp = MockExecutionResult(call_log=d_log)
+        orig = MockExecutionResult(call_log=o_log)
+        result = self.compare(decomp, orig, [], [])
+        cls = self.classify(result, decomp, orig, [], [])
+        self.assertEqual(cls, "data_layout")
 
     def test_build_env_merged_symbol_warning(self):
         """Merged symbol in warning at same call index = build_env."""
@@ -354,13 +370,22 @@ class TestClassifyDivergence(unittest.TestCase):
         cls = self.classify(result, decomp, orig, [], [])
         self.assertEqual(cls, "build_env")
 
-    def test_build_env_return_globals(self):
-        """Return value in globals region = build_env (string return)."""
+    def test_data_layout_return_globals(self):
+        """Returned pointer into a harness-laid-out region = data_layout."""
         decomp = MockExecutionResult(r3=self.GLOBAL_BASE + 0x50)
         orig = MockExecutionResult(r3=self.GLOBAL_BASE + 0x100)
         result = self.compare(decomp, orig, [], [])
         cls = self.classify(result, decomp, orig, [], [])
-        self.assertEqual(cls, "build_env")
+        self.assertEqual(cls, "data_layout")
+
+    def test_data_layout_return_rdata(self):
+        """DataNode::DataTypeString shape: 100% match, two string-pool addrs."""
+        from scripts.unicorn_runner.memory_map import RDATA_BASE
+        decomp = MockExecutionResult(r3=RDATA_BASE + 0x9E)
+        orig = MockExecutionResult(r3=RDATA_BASE)
+        result = self.compare(decomp, orig, [], [])
+        cls = self.classify(result, decomp, orig, [], [])
+        self.assertEqual(cls, "data_layout")
 
     def test_build_env_globals_only_memory(self):
         """Only globals diffs (no object diffs) = build_env."""

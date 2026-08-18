@@ -7,7 +7,7 @@
 #include "ui\UI.h"
 #include "utl/BinStream.h"
 
-int UIComponent::sSelectFrames = 0;
+int UIComponent::sSelectFrames = 10;
 
 Symbol UIComponentStateToSym(UIComponent::State s) {
     static Symbol syms[5] = { "normal", "focused", "disabled", "selecting", "selected" };
