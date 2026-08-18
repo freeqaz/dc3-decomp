@@ -237,6 +237,12 @@ class _MissingImage:
     def symbol_bytes(self, name, size=None):
         return None
 
+    def is_image_pointer(self, value):
+        return False
+
+    def contains_image_pointer(self, content):
+        return False
+
 
 def project_root():
     return os.path.dirname(os.path.dirname(os.path.dirname(
