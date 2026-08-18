@@ -46,7 +46,7 @@ private:
     friend class DxShader;
 };
 
-class DxShaderInclude : public ID3DXInclude {
+struct DxShaderInclude : public ID3DXInclude {
 public:
     virtual HRESULT Open(
         D3DXINCLUDE_TYPE IncludeType,
