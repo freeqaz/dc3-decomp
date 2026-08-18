@@ -21,6 +21,7 @@ public:
     static void operator delete(void *v) { MemFree(v, __FILE__, 0x14, "AsyncFile"); }
 
 protected:
+    virtual bool GetFileHandle(void *&) { return false; }
     virtual bool Truncate(int);
     virtual void _OpenAsync();
     virtual bool _OpenDone() { return true; }

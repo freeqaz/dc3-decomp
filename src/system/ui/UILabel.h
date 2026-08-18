@@ -46,6 +46,8 @@ public:
     // UIComponent
     virtual void Poll();
     virtual void Highlight();
+    /** A label is display-only -- it never takes focus. */
+    virtual bool CanHaveFocus() { return false; }
     // TextHolder
     virtual void SetTextToken(Symbol);
     virtual void SetInt(int, bool);
