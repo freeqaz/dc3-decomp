@@ -166,6 +166,40 @@ def check_call_targets(decomp_relocs, orig_relocs, decomp_log, orig_log):
     return warnings
 
 
+def has_icf_folded_callsites(decomp_relocs, orig_relocs):
+    """True if the original folded call sites that the decomp keeps distinct.
+
+    Identical COMDAT Folding does not always show up as a `merged_<addr>`
+    placeholder. When the linker folds several template instantiations with
+    identical bodies, the splitter recovers ONE of the real names and points
+    every folded call site at it. RndDir::RemovingObject is the clean example:
+    the decomp calls VectorRemove<RndDrawable*>, <RndPollable*> (twice) and
+    <RndAnimatable*> at +0x24/+0x30/+0x3C/+0x48, and the original calls
+    VectorRemove<RndAnimatable*> at all four.
+
+    That wrecks the co-loader, which loads intra-TU callees as real code
+    (unlogged) and leaves the rest as logged trampolines. On the original side
+    all four sites match the co-loaded symbol and log nothing; on the decomp
+    side only one does, so three extra trampoline calls appear and the runner
+    reports a call_count divergence for two functions that are both 100%
+    assembly matches. `has_merged` misses it because no name starts with
+    `merged_`.
+
+    Detection: some symbol on the original side is the target of several call
+    sites that the decomp side aims at DIFFERENT symbols.
+    """
+    d_by_off = {r["offset"]: r["symbol_name"]
+                for r in (decomp_relocs or []) if r["type_name"] == "REL24"}
+    o_by_off = {r["offset"]: r["symbol_name"]
+                for r in (orig_relocs or []) if r["type_name"] == "REL24"}
+
+    decomp_names_per_orig_name = {}
+    for off in set(d_by_off) & set(o_by_off):
+        decomp_names_per_orig_name.setdefault(o_by_off[off], set()).add(d_by_off[off])
+
+    return any(len(v) > 1 for v in decomp_names_per_orig_name.values())
+
+
 def compare(decomp_result, orig_result, decomp_relocs, orig_relocs):
     """Compare two execution results and produce a verdict.
 
@@ -371,6 +405,10 @@ def classify_divergence(result, decomp_result, orig_result, decomp_relocs, orig_
             if r.get("symbol_name", "").startswith("merged_"):
                 has_merged = True
                 break
+    # ...and for ICF folding that the splitter recorded under a real name
+    # rather than a merged_ placeholder (see has_icf_folded_callsites).
+    if not has_merged and has_icf_folded_callsites(decomp_relocs, orig_relocs):
+        has_merged = True
 
     # Error-based divergences — distinguish orig-only (unfixable) from decomp (real bug)
     if reason == "orig_error":
