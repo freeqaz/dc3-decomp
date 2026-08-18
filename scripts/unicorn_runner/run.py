@@ -191,7 +191,7 @@ def _run_comparison_core(symbol, decomp_coff, orig_coff, timeout=5_000_000,
         common = set(d_callees.keys()) & set(o_callees.keys())
         if common:
             layout = build_coload_layout(
-                symbol, decomp_bytes, common, d_callees, o_callees,
+                symbol, decomp_bytes, orig_bytes, common, d_callees, o_callees,
                 decomp_coff, orig_coff)
 
     # 4. Prepare both sides
