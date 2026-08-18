@@ -577,6 +577,15 @@ involves a global:
 Missing `ham_xbox_r.exe` (it is gitignored) disables seeding and restores the
 older behaviour rather than producing a different wrong answer.
 
+One known consequence: a function that used to finish only because its globals
+were zero can now run the real path and exceed the 50,000-instruction cap.
+`CharIKMidi::Highlight` and `CharLipSyncDriver::Highlight` do exactly that —
+`gCharHighlightY` really is -1.0f at load (it is the "not positioned yet"
+sentinel, and no decomp TU defines the symbol at all; the link takes it from
+the original data object), so both sides take the first-time branch and both
+hit the cap. `cap_exhausted_both` is a probe-budget outcome, not a bug claim,
+and `refresh_frontier` already files it as expected churn.
+
 ### What This Cannot Validate
 
 - **Full program state coherence**: Only tests one function at a time. Cross-function state corruption won't be caught.
