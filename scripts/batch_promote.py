@@ -388,6 +388,21 @@ def process_unit(unit_name, funcs, unit_info, args):
             print(f"  WARNING: UnicornEngine init failed for {unit_name}: {e}", file=sys.stderr)
 
     results = []
+    try:
+        results = _analyze_unit_functions(
+            funcs, decomp_coff, orig_coff, engine, args, unit_name)
+    finally:
+        # One engine per unit is fine; one LEAKED engine per unit is not.
+        # Each holds a multi-MB QEMU translator buffer that only the cycle
+        # collector would ever free, and the process dies at ~22 of them.
+        if engine is not None:
+            engine.close()
+    return results
+
+
+def _analyze_unit_functions(funcs, decomp_coff, orig_coff, engine, args,
+                            unit_name):
+    results = []
     for func in funcs:
         try:
             r = analyze_function(func, decomp_coff, orig_coff, engine, args)

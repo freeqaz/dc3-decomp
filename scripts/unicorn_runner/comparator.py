@@ -124,6 +124,46 @@ def compare_memory(decomp_mem, orig_mem, base, size):
     return diffs
 
 
+def compare_written_memory(decomp_mem, orig_mem, decomp_init, orig_init,
+                           base, size):
+    """Compare two memory regions, ignoring words neither side wrote.
+
+    The GLOBAL region no longer starts identical on both sides. A symbol the
+    .obj does not define is seeded with the shipped image's content in its
+    GLOBAL slot (patcher.seed_image_globals), and the sides do not seed the
+    same slots -- when the decomp defines `kSampleRate` in .data it reads the
+    constant from RDATA, while the original, which has it only as an extern,
+    has 48000.0f parked in GLOBAL slot 0. Raw-diffing the region would report
+    that as a memory divergence, which is backwards: the seeding exists to
+    make the two sides AGREE about the value.
+
+    So a word only counts if at least one side actually changed it from its
+    own starting point. Untouched words differ solely in where the harness
+    parked a constant, which is the same non-signal as the `data_layout`
+    class.
+
+    Falls back to a plain compare when a side has no recorded initial image.
+    """
+    if decomp_init is None or orig_init is None:
+        return compare_memory(decomp_mem, orig_mem, base, size)
+
+    if decomp_mem[:size] == orig_mem[:size]:
+        return []
+
+    diffs = []
+    for i in range(0, size, 4):
+        dw_d = struct.unpack_from(">I", decomp_mem, i)[0]
+        dw_o = struct.unpack_from(">I", orig_mem, i)[0]
+        if dw_d == dw_o:
+            continue
+        init_d = struct.unpack_from(">I", decomp_init, i)[0]
+        init_o = struct.unpack_from(">I", orig_init, i)[0]
+        if dw_d == init_d and dw_o == init_o:
+            continue          # neither side wrote here — placement, not logic
+        diffs.append((base + i, dw_d, dw_o))
+    return diffs
+
+
 def unmapped_fingerprint(unmapped_log):
     """Hash the set of suspicious unmapped accesses for cross-side comparison.
 
@@ -309,8 +349,10 @@ def compare(decomp_result, orig_result, decomp_relocs, orig_relocs):
     obj_diffs = compare_memory(
         decomp_result.object_memory, orig_result.object_memory,
         OBJECT_BASE, REGION_SIZE)
-    globals_diffs = compare_memory(
+    globals_diffs = compare_written_memory(
         decomp_result.globals_memory, orig_result.globals_memory,
+        getattr(decomp_result, "globals_initial", None),
+        getattr(orig_result, "globals_initial", None),
         GLOBAL_BASE, REGION_SIZE)
 
     if obj_diffs or globals_diffs:
