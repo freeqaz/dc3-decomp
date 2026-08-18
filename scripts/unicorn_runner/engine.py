@@ -52,11 +52,18 @@ class ExecutionResult:
         accesses in suspicious regions (page 0, kernel range). Used by
         the comparator to fingerprint null-deref-style divergences that
         would otherwise be hidden by on-demand page mapping.
+    globals_initial: the GLOBAL region as it looked BEFORE execution. Not
+        necessarily all-fill any more: globals this side's .obj does not
+        define are seeded from the shipped image, and the two sides do not
+        seed the same slots (one side may define the symbol and read it from
+        .data instead). The comparator needs the starting point to tell "this
+        word differs because the function wrote something different" from
+        "this word differs because only one side has a constant parked here".
     """
 
     def __init__(self, call_log, r3, f1, object_memory, globals_memory,
                  error=None, terminated_normally=False, cap_exhausted=False,
-                 final_pc=0, unmapped_log=None):
+                 final_pc=0, unmapped_log=None, globals_initial=None):
         self.call_log = call_log
         self.r3 = r3
         self.f1 = f1
@@ -67,6 +74,7 @@ class ExecutionResult:
         self.cap_exhausted = cap_exhausted
         self.final_pc = final_pc
         self.unmapped_log = unmapped_log or []
+        self.globals_initial = globals_initial
 
 
 # Call log tuple indices (flat tuple instead of nested dicts for speed).
@@ -338,13 +346,19 @@ class UnicornEngine:
 
     def execute(self, patched_code, trampolines, func_size, timeout=5_000_000,
                 verbose=False, rdata_bytes=None, fill_pattern=None,
-                max_insns=50_000, object_memory=None, arg_registers=None):
+                max_insns=50_000, object_memory=None, arg_registers=None,
+                globals_init=None):
         """Execute a patched function, resetting state from any previous run.
 
         Same interface as the standalone execute_function().
         max_insns caps instruction count to prevent runaway loops from
         dominating batch time via expensive Python hook callbacks.
         arg_registers: optional dict mapping register IDs to values (e.g., {UC_PPC_REG_4: 1})
+        globals_init: optional {address: bytes} written into the GLOBAL region
+            after the fill. Carries the shipped image's content for globals the
+            executing .obj does not define (patcher.seed_image_globals), so a
+            static like kSampleRate reads 48000.0f on the side whose .obj has
+            it only as an extern, instead of 0.
         """
         if self._closed:
             raise RuntimeError("UnicornEngine.execute() called after close()")
@@ -379,6 +393,20 @@ class UnicornEngine:
             mu.mem_write(base, fill_buf)
         mu.mem_write(CODE_BASE, _ZERO_REGION)
         mu.mem_write(TRAMPOLINE_BASE, _ZERO_REGION)
+
+        # Seed globals whose content comes from the shipped image. After the
+        # fill (so it is not clobbered) and before execution. The same edits
+        # are replayed into a host-side copy so the comparator knows what this
+        # side started from without paying a second 64KB mem_read.
+        globals_initial = fill_buf
+        if globals_init:
+            seeded = bytearray(fill_buf)
+            for addr, data in globals_init.items():
+                data = bytes(data)
+                mu.mem_write(addr, data)
+                off = addr - GLOBAL_BASE
+                seeded[off:off + len(data)] = data
+            globals_initial = bytes(seeded)
 
         # Reset on-demand mapped pages
         page_fill = self._get_fill_page(fill_pattern)
@@ -496,12 +524,14 @@ class UnicornEngine:
             cap_exhausted=cap_exhausted,
             final_pc=final_pc,
             unmapped_log=list(self._unmapped_log),
+            globals_initial=globals_initial,
         )
 
 
 def execute_function(patched_code, trampolines, func_size, timeout=5_000_000,
                      verbose=False, rdata_bytes=None, fill_pattern=None,
-                     max_insns=50_000, object_memory=None, arg_registers=None):
+                     max_insns=50_000, object_memory=None, arg_registers=None,
+                     globals_init=None):
     """Execute a patched function in Unicorn and return the result.
 
     Standalone version — creates a fresh engine each call and closes it before
@@ -515,4 +545,5 @@ def execute_function(patched_code, trampolines, func_size, timeout=5_000_000,
                               timeout=timeout, verbose=verbose,
                               rdata_bytes=rdata_bytes, fill_pattern=fill_pattern,
                               max_insns=max_insns, object_memory=object_memory,
-                              arg_registers=arg_registers)
+                              arg_registers=arg_registers,
+                              globals_init=globals_init)

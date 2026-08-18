@@ -235,12 +235,14 @@ def _run_comparison_core(symbol, decomp_coff, orig_coff, timeout=5_000_000,
             decomp_side.code, decomp_side.trampolines, decomp_side.func_size,
             timeout=timeout, verbose=False, rdata_bytes=decomp_side.rdata_bytes,
             fill_pattern=fill_pattern, object_memory=object_memory,
-            arg_registers=arg_registers, **exec_kwargs)
+            arg_registers=arg_registers,
+            globals_init=decomp_side.globals_init, **exec_kwargs)
         orig_result = _exec(
             orig_side.code, orig_side.trampolines, orig_side.func_size,
             timeout=timeout, verbose=False, rdata_bytes=orig_side.rdata_bytes,
             fill_pattern=fill_pattern, object_memory=object_memory,
-            arg_registers=arg_registers, **exec_kwargs)
+            arg_registers=arg_registers,
+            globals_init=orig_side.globals_init, **exec_kwargs)
     except Exception as e:
         return EXIT_ERROR, None, [], f"ERROR: Execution failed: {e}"
 
