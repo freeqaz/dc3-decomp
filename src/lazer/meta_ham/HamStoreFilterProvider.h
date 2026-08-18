@@ -20,6 +20,7 @@ public:
     virtual void Text(int, int, UIListLabel *, UILabel *) const;
     virtual Symbol DataSymbol(int) const;
     virtual int NumData() const;
+    virtual RndMat *Mat(int, int, UIListMesh *) const { return nullptr; }
 
     HamStoreFilterProvider(std::vector<HamStoreFilter *> *);
 

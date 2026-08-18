@@ -35,6 +35,7 @@ public:
     // ContentMgr::Callback
     virtual void ContentMounted(char const *, char const *);
     virtual void ContentFailed(char const *);
+    virtual const char *ContentDir() { return nullptr; }
 
     NEW_OBJ(PreloadPanel)
     static FileCache *sCache;

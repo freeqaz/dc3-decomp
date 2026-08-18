@@ -20,6 +20,7 @@ public:
     virtual void ContentMounted(char const *, char const *);
     virtual void ContentFailed(const char *);
     virtual void ContentDone();
+    virtual const char *ContentDir() { return nullptr; }
 
     NEW_OBJ(ContentLoadingPanel)
 
