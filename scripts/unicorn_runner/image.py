@@ -127,6 +127,12 @@ class GlobalImage:
             raise ValueError("not a PE image")
         _machine, nsec, _ts, _symtab, _nsym, opt_size, _chars = \
             struct.unpack_from("<HHIIIHH", d, pe + 4)
+        # PE32 only: ImageBase sits at optional-header +28 and is 4 bytes.
+        # PE32+ would put it at +24 as 8 bytes, and every section address we
+        # computed from it would be silently wrong.
+        magic = struct.unpack_from("<H", d, pe + 24)[0]
+        if magic != 0x010B:
+            raise ValueError(f"not a PE32 image (optional header magic 0x{magic:04X})")
         image_base = struct.unpack_from("<I", d, pe + 24 + 28)[0]
         sec_off = pe + 24 + opt_size
         for i in range(nsec):
