@@ -212,19 +212,38 @@ sweep rather than real differences.
 
 Ordered by size. Everything here is real work, not an artifact.
 
-- **`JoypadPollCommon`, 2 644 B, `os/Joypad`** — plain `f` in os:Joypad.obj, declared
-  (`Joypad.h:301`), called (`Joypad_Xbox.cpp:55`), never defined. rb3's copy is itself an
-  unfinished two-`MILO_WARN` stub, so it is not a reference. Delegated to
-  `fix/joypadpollcommon`.
+- **`JoypadPollCommon`, 2 644 B, `os/Joypad`** — **0% -> 96.73%** on
+  `fix/joypadpollcommon`. Plain `f` in os:Joypad.obj, declared (`Joypad.h:301`), called
+  (`Joypad_Xbox.cpp:55`), defined nowhere; rb3's copy is an unfinished two-`MILO_WARN` stub
+  and rb3-xenon/og-dc3 do not have the function at all, so it was full synthesis from the
+  disassembly. `og-rb3/doc/rb2_dump/.../os/Joypad.cpp` (an RB2 DWARF dump, no bodies) gave
+  the local variable names. The lane also named `JoypadData` 0x98-0xd8 from the asm
+  (`mEepromWriteState`, `mEepromBytesLeft`, `mEepromTotalBytes`, `mEepromChunkSize`,
+  `mEepromTimeout`, `mEepromData[0x10]`, `mEepromPacket[0x14]`, `mLastActivityMs`) and
+  corrected 0x9c, previously guessed as `mSuppressWriteCallback`, to a byte counter.
+  Residual there: MSVC promotes `0.0f` into a third callee-saved FPR where the target
+  reloads it from `.rdata`; an `r18`/`r19` transposition; and a `JoypadData` copy the target
+  takes before the EEPROM block that is reproduced but not explained.
+- **New, found by that lane:** `ReadSingleJoypad` and `JoypadSendKeepAlive` (both
+  `os/Joypad_Xbox.obj` in the target) are the same shape — declared, called, defined
+  nowhere.
 - ~~`BinkMovieImpl` 5 rows, 2 664 B~~ — **DONE on this branch.** `SetRect`, `FinishOpen`,
   `EndianSwapBuffer`, `BeginFrame` and `EndFrame` were all 0% and all reach 100%.
   Reference-less: og-dc3 defines none of them either.
-- **`gesture/DrawUtl` `CopyDepth` (360) + `CopyPlayerMask` (152) + `YUVtoRGB` (176)** plus the
-  three conversion loops missing from `UpdateBufferTex` (1 284 B at 60.6%) — delegated to
-  `fix/drawutl-buffer-copies`. `YUVtoRGB`'s row is expected to stay 0% regardless: it folded
-  with LiveCameraInput.obj's same-named anon-namespace copy and dtk named the survivor with
-  LiveCameraInput's hash (`?A0x8e584365`) while parking it in DrawUtl's range, so our
-  DrawUtl.obj can only ever emit `?A0xad24ca77`. Instance of negative result 2.
+- ~~`gesture/DrawUtl` `CopyDepth` + `CopyPlayerMask` + `YUVtoRGB` + `UpdateBufferTex`~~ —
+  **done on `fix/drawutl-buffer-copies`.** `CopyDepth` 0 -> 100%, `UpdateBufferTex`
+  60.6 -> 100%, `YUVtoRGB` 0 -> 96.4%, `CopyPlayerMask` 0 -> 87.4%; unit 66.3 -> 99.1%.
+  **My `YUVtoRGB` prediction in this file was WRONG and is corrected here:** I claimed the
+  row could never pair because dtk named the ICF survivor with LiveCameraInput's
+  anonymous-namespace hash (`?A0x8e584365`) while our DrawUtl.obj emits its own. It pairs
+  fine — **objdiff normalizes `?A0x<hex>` anonymous-namespace hashes in symbol names**, so
+  the row scores. No split-config or `symbols.txt` change was needed or made. (Note the raw
+  plane still sees the hash, which is why several rows in this lane read 100% normalized /
+  ~98.5-99.6% raw.) Two findings from that lane worth carrying: `inline` on `YUVtoRGB` is
+  load-bearing for `UpdateBufferTex` (+4.1%, it changes the callee-saved allocation even
+  though MSVC does not actually inline it — both `bl` sites survive), and the depth ramp's
+  constant is `0x3ECCCCCC`, the float value of `1.0f - 0.6f`, not a literal `0.4f`
+  (`0x3ECCCCCD`), which costs 7% on its own.
 - **19 ICF naming artifacts in the core set** (2 138 B) — blocked on the dtk rule above.
 - **4 phantom odr-uses** (296 B) + the HamDirector `vector<DancerFrame>` cluster (~1 012 B) —
   closed as unrecoverable, see negative result 1. Do not reopen without new evidence.
