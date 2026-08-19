@@ -189,3 +189,26 @@ def test_display_only_allowlist_entries_all_carry_a_reason():
     for path, reason in HL.ALLOW_DISPLAY_ONLY.items():
         assert len(reason) > 20, f"{path}: allowlist entry needs a real justification"
         assert os.path.exists(os.path.join(REPO, path)), f"{path}: stale allowlist entry"
+
+
+def test_allowlist_has_no_dead_entries():
+    """An entry that excuses a finding the file no longer produces must be removed.
+
+    A dead exemption is its own small lie: it asserts "we looked at this and it
+    is fine" about a site the checker never examined. Four of the five original
+    entries were dead — two because the file was fixed properly, two because the
+    slice was written inline rather than self-assigning, so E2 could never have
+    matched them in the first place. This test is what stops the list growing
+    back.
+    """
+    dead = []
+    for path in HL.ALLOW_DISPLAY_ONLY:
+        full = os.path.join(REPO, path)
+        if not os.path.exists(full):
+            continue
+        src = open(full, errors="replace").read()
+        if not HL.check_uncounted_cap(path, src):
+            dead.append(path)
+    assert not dead, (
+        "ALLOW_DISPLAY_ONLY entries that no longer excuse anything — delete them:\n  "
+        + "\n  ".join(dead))

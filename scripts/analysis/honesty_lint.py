@@ -79,18 +79,18 @@ ALLOW_UNESCAPED_LIKE = {
 # analysis.  Each entry needs a reason; an unexplained entry is how an allowlist
 # turns back into the bug it was meant to prevent.
 ALLOW_DISPLAY_ONLY: Dict[str, str] = {
-    "scripts/analysis/remaining_work.py":
-        "max_per_cat shortens a per-category printout; the totals above it are full",
-    "scripts/analysis/compare_progress.py":
-        "limit shortens the regression/improvement listings; the headline deltas are full",
-    "scripts/at_limit_rb3_candidates.py":
-        "limit shortens the candidate printout; 'DC3 AT_LIMIT pool ...: N' prints the full N",
-    "scripts/validate_symbols.py":
-        "limit shortens sample_errors; the error COUNT is reported separately",
     "scripts/orchestrator/context_collector.py":
         "MAX_CALLEE_SIGNATURES budgets an LLM prompt, not a measured population; "
         "nothing downstream reads it as a count",
 }
+# NOTE: this list started with five entries and is down to one.  Four were
+# either fixed properly (remaining_work, compare_progress now route through
+# CoverageReport) or had never fired at all (at_limit_rb3_candidates,
+# validate_symbols slice inline rather than self-assigning, so E2 could never
+# match them).  A speculative allowlist entry is its own small lie: it asserts
+# "we looked at this and it's fine" about a site the checker never examined.
+# test_allowlist_has_no_dead_entries keeps the list honest by failing on any
+# entry whose file no longer produces the finding it excuses.
 
 CAP_NAME_RE = re.compile(r"(limit|max|top|cap|sample|budget|head|first)", re.I)
 # ...but a bound named for CHARACTERS is truncating a STRING for display, not

@@ -102,7 +102,12 @@ denominator is a scanner bug, never a user choice.
    it a slug (`below---min-pct`) and it costs one line.
 3. **A cap must announce itself.** Default it to "no cap" if you can. If it is
    display-only, print `showing N of M` and register the site in
-   `honesty_lint.ALLOW_DISPLAY_ONLY` **with a reason**.
+   `honesty_lint.ALLOW_DISPLAY_ONLY` **with a reason**. That list started at
+   five entries and is down to one: two files were fixed properly, and two had
+   never fired at all. A speculative exemption is its own small lie — it claims
+   "we looked and it's fine" about a site the checker never examined — so
+   `test_allowlist_has_no_dead_entries` fails on any entry that no longer
+   excuses a real finding.
 4. **A missing input is never a clean verdict.** Print `INCONCLUSIVE` on
    **stdout** (the exculpatory count must travel with the verdict) or exit
    non-zero.
@@ -136,6 +141,10 @@ python3 scripts/analysis/honesty_lint.py --warnings   # 0 = clean
 python3 scripts/analysis/determinism_check.py         # 0 = every scanner agreed with itself
 python3 -m pytest scripts/analysis/tests/ -q
 ```
+
+State as of the 2026-08-19 pass: **0 lint errors** (39 W-rule warnings remain as
+a backlog), **9/9 scanners agree with themselves on a non-empty output**, and
+**248 tests pass**, of which 155 are the negative controls added here.
 
 ### Negative controls, not tautologies
 
@@ -208,7 +217,29 @@ doing nothing proves nothing.** The harness now treats an empty output, an
 
 ---
 
-## 5. If you are writing the next scanner
+## 5. Corrections the audit made to itself
+
+Recorded because a wrong diagnosis that goes unrecorded gets re-filed. Every one
+of these was found by *trying to write the negative control* and discovering the
+premise did not hold.
+
+| claim | what was actually true |
+|---|---|
+| `sync_objdiff.py` and `compare_progress.py` use the reloc-sensitive ruler | **Refuted.** `fuzzy_match_percent` names **two different rulers** depending on who wrote the JSON. `objdiff-cli diff` writes the *normalized* value into both `normalized_match_percent` and `fuzzy_match_percent` (`diff.rs:1262`), and `report.json`'s **unit-level** `measures.fuzzy_match_percent` is the size-weighted mean of per-function *normalized* values (`report.rs:1096`, verified 471/471 units). Both were already canonical — by coincidence of naming, now pinned deliberately. |
+| `scope_index_census.py` is not byte-identical across two runs | **Refuted as stated.** Five consecutive pre-fix runs *were* identical; `readdir` order is stable for an unchanged directory. The order-dependence is real (`objs != sorted(objs)`, 989 objects) but **latent**. And the mechanism differed: 566 of the 568 conflicting pairs conflict *inside one object* (`_s` declared once per `MILO_ASSERT`), only 2 across objects. The real exposure was not "flips between runs" but "decided by an arbitrary tie-break" — last-write-wins 1289/30, min 1287/32, max 1281/38. |
+| `reclassify_at_limit.py` reports 1,517 candidates | **1,368.** 1,517 was the count after the source-path filter only. And the demangler-**parse-failure** class — the accidental-blindness bucket — is **149 rows**, not zero. |
+| all 16,920 missing-fuzzy rows have `normalized == 0.0` | **Off by one.** `RndShaderDepthVolume::CalcShaderOpts` has `normalized == 3.59375` and no fuzzy score. It now carries its own drop slug so the justification cannot silently over-generalise — which is how the original defects survived. |
+| `inlining_catalog.py`'s regex makes nested-brace accessors invisible | **Worse than that.** It captures them *truncated at the first `}`*, so `int Clamped() const { if (mV<0) { return 0; } return mV; }` is recorded as a trivial one-statement body and filed as a move-to-`.cpp` candidate. 349 of 5,462. |
+| `ceiling_calculator.py`'s `current_percent IS NOT NULL` hides 1,231 rows | True of the column, **not of this tool**: all 1,231 are also `excluded=1`, which the tool filters anyway. Still a NULL trap, now stated rather than inferred. |
+| `reclassify_at_limit.py`'s unqualified `UPDATE ... WHERE symbol = ?` is live | **Latent.** The schema declares `symbol TEXT NOT NULL UNIQUE` and no symbol is in two units today. Fixed anyway; the test reconstructs a schema without the constraint, which is the only honest way to test a latent bug. |
+
+And one found in this work's own instrument: the first `determinism_check.py`
+reported **"8/8 scanners agreed with themselves"** while three of the eight had
+produced zero bytes. See §3.
+
+---
+
+## 6. If you are writing the next scanner
 
 1. Import `CoverageReport`. Call `universe()` first and `emit()` last.
 2. Route every `continue` through `drop()`. If `emit()` returns 4, you missed one.
