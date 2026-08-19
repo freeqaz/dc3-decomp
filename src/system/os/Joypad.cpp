@@ -1,4 +1,5 @@
 #include "os\Joypad.h"
+#include <algorithm>
 #include "obj\Data.h"
 #include "obj\DataFunc.h"
 #include "obj\Msg.h"
@@ -580,9 +581,9 @@ void JoypadPollCommon() {
                 case 2: {
                     int offset =
                         gJoypadData[i].mEepromTotalBytes - gJoypadData[i].mEepromBytesLeft;
-                    int len = gJoypadData[i].mEepromBytesLeft < gJoypadData[i].mEepromChunkSize
-                        ? gJoypadData[i].mEepromBytesLeft
-                        : gJoypadData[i].mEepromChunkSize;
+                    int len = std::min(
+                        gJoypadData[i].mEepromBytesLeft, gJoypadData[i].mEepromChunkSize
+                    );
                     gJoypadData[i].mEepromPacket[0] = offset;
                     gJoypadData[i].mEepromPacket[1] = 0;
                     gJoypadData[i].mEepromPacket[2] = gJoypadData[i].mEepromTotalBytes;
@@ -619,30 +620,35 @@ void JoypadPollCommon() {
                 padType = kJoypadNone;
                 data.mLastActivityMs = SystemMs() + 0x7FFFFFFF;
             }
-            if (padType) {
+            if (padType == kJoypadNone) {
+                if (data.mConnected) {
+                    currButtons = 0;
+                    justDisconnected = true;
+                    data.mConnected = false;
+                } else {
+                    continue;
+                }
+            } else {
                 if (!data.mConnected) {
                     data.mControllerType = Symbol();
                     justConnected = true;
                     data.mConnected = true;
                 }
                 data.mType = (JoypadType)padType;
-            } else {
-                if (!data.mConnected)
-                    continue;
-                currButtons = 0;
-                justDisconnected = true;
-                data.mConnected = false;
             }
             if (data.mControllerType.Null()) {
                 Symbol type = JoypadControllerTypePadNum(i);
             }
 
             for (int k = 0; k < kNumAnalogSticks; k++) {
-                float x = 0.0f;
-                float y = 0.0f;
-                if (k < data.mNumAnalogSticks) {
-                    y = sticks[k][1] / 127.0f;
+                float x;
+                float y;
+                if (data.mNumAnalogSticks > k) {
                     x = sticks[k][0] / 127.0f;
+                    y = sticks[k][1] / 127.0f;
+                } else {
+                    x = 0.0f;
+                    y = 0.0f;
                 }
                 data.mSticks[k][0] = x;
                 data.mSticks[k][1] = y;
@@ -652,8 +658,7 @@ void JoypadPollCommon() {
                 changed |= data.mTriggers[t] != v;
                 data.mTriggers[t] = v;
             }
-            for (int s = 0; s < 3; s++)
-                data.mSensors[s] = sensors[s];
+            memcpy(data.mSensors, sensors, sizeof(sensors));
             for (int p = 0; p < kNumPressureButtons; p++) {
                 changed |= data.mPressures[p] != pressures[p];
                 data.mPressures[p] = pressures[p];
@@ -671,9 +676,9 @@ void JoypadPollCommon() {
             if (data.mTranslateSticks)
                 TranslateSticksToButs(data, currButtons);
             currButtons &= ~data.mIgnoreButtonMask;
-            unsigned int newBtnDowns = (data.mButtons ^ currButtons) & currButtons;
-            unsigned int newBtnUps = (data.mButtons ^ currButtons) & ~currButtons;
-            if (changed || (data.mButtons ^ currButtons) != 0
+            unsigned int newBtnDowns = (currButtons ^ data.mButtons) & currButtons;
+            unsigned int newBtnUps = (currButtons ^ data.mButtons) & ~currButtons;
+            if (changed || (currButtons ^ data.mButtons) != 0
                 || ThePlatformMgr.GuideShowing()) {
                 data.mLastActivityMs = SystemMs();
             }
@@ -682,7 +687,7 @@ void JoypadPollCommon() {
             {
                 unsigned int changedBits = data.mButtons ^ currButtons;
                 data.mNewPressed = changedBits & currButtons;
-                data.mNewReleased = data.mButtons & changedBits;
+                data.mNewReleased = changedBits & data.mButtons;
                 data.mButtons = currButtons;
             }
             if ((data.mGreenCymbalMask & currButtons) == data.mGreenCymbalMask)
