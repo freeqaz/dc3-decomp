@@ -244,9 +244,16 @@ def _format_data_diff(data: dict, max_rows: int = 80) -> str:
         for r in changed[:max_rows]:
             off = r.get("offset")
             base = r.get("base_target_symbol")
-            # objdiff emits base_target_symbol ONLY when it differs, so a blank
-            # here means both sides name the same symbol.
-            base_txt = f"`{base}`" if base else "_(same symbol)_"
+            # For `replace`, objdiff emits base_target_symbol ONLY when it
+            # differs, so a blank means both sides name the same symbol. For
+            # `delete` the base side has no slot at all -- rendering that as
+            # "same symbol" reads as a match when it is the opposite.
+            if base:
+                base_txt = f"`{base}`"
+            elif r.get("kind") == "delete":
+                base_txt = "_(no slot on our side)_"
+            else:
+                base_txt = "_(same symbol)_"
             tgt = r.get("target_symbol")
             tgt_txt = f"`{tgt}`" if tgt else "_(absent)_"
             lines.append(

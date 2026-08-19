@@ -7,8 +7,7 @@ never calls `args.get()` for it looks like a working capability and is worse
 than no capability, because an agent will trust the answer.
 
 Also pins that the tool LIST is a superset of what CLAUDE.md tells agents to
-use, so the documented rule ("do not call objdiff-cli directly") stays
-followable.
+use, and that CLAUDE.md no longer states a rule the tools cannot satisfy.
 
 Hermetic: reads the module source, builds no server, runs no objdiff.
 """
@@ -145,6 +144,56 @@ class TestDocsAgreeWithTheSurface(unittest.TestCase):
                        "Still legitimate direct CLI use"):
             self.assertTrue(marker in text,
                             f"REFERENCE.md is missing `{marker}`")
+
+
+class TestDataDiffRendering(unittest.TestCase):
+    """`_format_data_diff` must not read a `delete` row as a match.
+
+    objdiff omits `base_target_symbol` in two different situations that mean
+    opposite things: on `replace` it means "both sides name the same symbol",
+    on `delete` it means "our side has no slot here at all". The first draft
+    rendered both as "(same symbol)".
+    """
+
+    def setUp(self):
+        sys.path.insert(0, str(ORCH.parent))
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "_mcp_probe", ORCH / "mcp_server.py")
+        # importing the whole server pulls in `mcp`; grab the function via exec
+        # of its source instead so the test stays hermetic.
+        src = MCP_SRC
+        start = src.index("def _format_data_diff(")
+        end = src.index("\ndef _stack_signal_summary(")
+        ns = {}
+        exec(src[start:end], ns)  # noqa: S102 - single pure function
+        self.fmt = ns["_format_data_diff"]
+
+    def test_delete_row_is_not_rendered_as_same_symbol(self):
+        out = self.fmt({"data_diff": {
+            "match_percent": 45.0, "total_byte_count": 24, "mismatch_byte_count": 4,
+            "relocations": [
+                {"offset": 0x14, "kind": "delete",
+                 "target_symbol": "??_R4Flow@@6BObjectDir@@@"},
+            ],
+            "segments": [],
+        }})
+        self.assertIn("no slot on our side", out)
+        self.assertNotIn("same symbol", out)
+
+    def test_replace_without_base_is_same_symbol(self):
+        out = self.fmt({"data_diff": {
+            "match_percent": 90.0, "total_byte_count": 8, "mismatch_byte_count": 0,
+            "relocations": [
+                {"offset": 8, "kind": "replace", "target_symbol": "?Enter@Flow@@UAAXXZ"},
+            ],
+            "segments": [],
+        }})
+        self.assertIn("same symbol", out)
+
+    def test_absent_data_diff_explains_itself(self):
+        out = self.fmt({})
+        self.assertIn("CODE symbol", out)
 
 
 if __name__ == "__main__":
