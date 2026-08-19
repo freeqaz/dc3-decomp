@@ -264,8 +264,16 @@ void LiveCameraInput::TextureStore::UpdateFromColorBuffer(LiveCameraInput *cam) 
                 ((unsigned short *)destPtr)[1] = YUVtoRGB(pixel & 0xff, cr, cb);
                 destPtr += 4;
             }
-            destPtr += ((pitch >> 1) - 640) * 2;
-            srcPtr += (lockedRect.mPitch >> 2) - 320;
+            // (int) casts, matching UpdateFromColorBufferClip's destStride
+            // below. Both right-hand sides are `unsigned int` subtractions: if
+            // the texel pitch is narrower than 640 texels (or the source pitch
+            // narrower than 320 dwords) the result wraps to ~4e9 instead of
+            // going negative. On 32-bit PPC that wrap still steps the pointer
+            // correctly backwards, so this is codegen-neutral there; on the
+            // LP64 native build it zero-extends and jumps ~8 GB / ~16 GB
+            // forward.
+            destPtr += (int)((pitch >> 1) - 640) * 2;
+            srcPtr += (int)((lockedRect.mPitch >> 2) - 320);
         }
         D3DCubeTexture_UnlockRect((D3DCubeTexture *)bufferData, (D3DCUBEMAP_FACES)0, 0);
     }
@@ -386,7 +394,7 @@ void LiveCameraInput::TextureStore::UpdateFromColorBufferClip(
                 }
             }
             destPtr += destStride;
-            srcPtr += (srcPitch - 320);
+            srcPtr += (int)(srcPitch - 320);  // same unsigned-wrap hazard as line 267
         }
         D3DCubeTexture_UnlockRect((D3DCubeTexture *)bufferData, (D3DCUBEMAP_FACES)0, 0);
     }

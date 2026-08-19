@@ -126,8 +126,22 @@ void FileEnumerate(
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
             continue;
 
+        // Mirror File_Win.cpp:107-111 exactly. When the qualified directory is
+        // ".", the Win32 path builds the *bare* filename, not "./name" -- and
+        // `buf` is what FileMatch() (File.cpp:229-251) prefix-matches against
+        // the caller's pattern, and what recursion descends into. Since
+        // FileQualifiedFilename() prepends gNativeDataDir (default "."), an
+        // unconditional "%s/%s" here produced a data-dir-qualified `buf` while
+        // the pattern was not, so FileMatch's literal-prefix-up-to-first-
+        // wildcard test failed for every pattern that does not begin with a
+        // wildcard: an *empty enumeration rather than an error*. Callers that
+        // hit it: ShaderProgram.cpp:53 ("%s/shaders/*.fx"), obj/Utl.cpp:482,517.
         char buf[512];
-        snprintf(buf, sizeof(buf), "%s/%s", qualified, entry->d_name);
+        if (strcmp(qualified, ".") == 0) {
+            snprintf(buf, sizeof(buf), "%s", entry->d_name);
+        } else {
+            snprintf(buf, sizeof(buf), "%s/%s", qualified, entry->d_name);
+        }
 
         struct stat st;
         if (stat(buf, &st) != 0) continue;
