@@ -76,9 +76,10 @@ import io
 import json
 import os
 import re
+import subprocess
 import sys
 import tokenize
-from typing import Dict, Iterable, List, NamedTuple
+from typing import Dict, Iterable, List, NamedTuple, Optional
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -305,6 +306,29 @@ def lint_file(path: str, rel: str) -> List[Finding]:
     return out
 
 
+def _tracked_py_files(root: str, dirs: Iterable[str]) -> Optional[List[str]]:
+    """Tracked *.py under `dirs`, via git.  None when this is not a git tree.
+
+    The lint governs code that is IN THE REPOSITORY.  Walking the filesystem
+    instead made its verdict depend on whatever untracked scratch a developer
+    happened to have lying about: a gitignored
+    `scripts/scratch/find_effective_complete.py` containing the historical
+    `LIKE '??_9%'` made the repo ratchet fail on a clean checkout, for a file
+    no clean checkout contains.  A gate whose result depends on untracked local
+    files is not a gate.
+    """
+    try:
+        out = subprocess.run(
+            ["git", "-C", root, "ls-files", "-z", "--", *[f"{d}/*.py" for d in dirs]],
+            capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if out.returncode != 0:
+        return None
+    rels = [p for p in out.stdout.split("\0") if p.endswith(".py")]
+    return sorted(os.path.join(root, p) for p in rels)
+
+
 def scan_files(root: str = REPO, dirs: Iterable[str] = LINT_DIRS) -> List[str]:
     """The .py files this lint would examine, sorted.
 
@@ -313,7 +337,15 @@ def scan_files(root: str = REPO, dirs: Iterable[str] = LINT_DIRS) -> List[str]:
     different claims, and this checker used to print them identically -- sub-
     shape 3 (missing input => clean bill of health) inside the tool written to
     catch sub-shape 3.
+
+    Prefers `git ls-files` so untracked/gitignored scratch cannot change the
+    verdict; falls back to a filesystem walk outside a git tree (a tarball
+    export, a vendored copy) rather than reporting an empty universe, which
+    would be that same sub-shape again.
     """
+    tracked = _tracked_py_files(root, dirs)
+    if tracked is not None:
+        return tracked
     files = []
     for d in dirs:
         for dirpath, dirnames, filenames in os.walk(os.path.join(root, d)):

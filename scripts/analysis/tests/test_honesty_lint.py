@@ -342,3 +342,55 @@ def test_scan_files_is_the_denominator_and_is_sorted():
     assert files == sorted(files), "unsorted => nondeterministic output order"
     assert len(files) > 100, "the repo must really have files, or the test above is vacuous"
     assert HL.scan_files("/does/not/exist/at/all") == []
+
+
+# --------------------------------------------------------------------------- #
+# The lint's verdict must not depend on untracked local files.
+#
+# `scan_files` walked the filesystem, so a gitignored
+# scripts/scratch/find_effective_complete.py containing the historical
+# `LIKE '??_9%'` made test_repo_has_no_unexpected_honesty_errors FAIL on a
+# clean checkout — for a file no clean checkout contains. A gate whose result
+# depends on whatever scratch a developer has lying about is not a gate.
+# --------------------------------------------------------------------------- #
+
+def test_untracked_scratch_cannot_change_the_verdict(tmp_path):
+    scratch = os.path.join(REPO, "scripts", "scratch")
+    marker = os.path.join(scratch, "_honesty_lint_probe_delete_me.py")
+    os.makedirs(scratch, exist_ok=True)
+    created = not os.path.exists(marker)
+    try:
+        # The verbatim historical defect, in an untracked file.
+        with open(marker, "w") as fh:
+            fh.write("Q = \"SELECT s FROM f WHERE symbol NOT LIKE '??_%'\"\n")
+
+        # (b) It must really BE a finding, or this test proves nothing.
+        assert HL.check_unescaped_like("scripts/scratch/probe.py",
+                                       open(marker).read()), (
+            "the probe must contain a real E1, or this control is vacuous")
+        # ...and it must really be untracked, or likewise.
+        rc = subprocess.run(["git", "-C", REPO, "ls-files", "--error-unmatch",
+                             "scripts/scratch/_honesty_lint_probe_delete_me.py"],
+                            capture_output=True).returncode
+        assert rc != 0, "the probe must be untracked for this to be a control"
+
+        assert marker not in HL.scan_files(REPO), (
+            "scan_files must not pick up untracked files")
+        unexpected = [f for f in HL.lint_repo(REPO)
+                      if f.severity == "ERROR" and "scratch" in f.path]
+        assert not unexpected, (
+            f"an untracked scratch file changed the repo verdict: {unexpected}")
+    finally:
+        if created and os.path.exists(marker):
+            os.remove(marker)
+
+
+def test_scan_files_falls_back_outside_a_git_tree(tmp_path):
+    """Outside git it must still find files — returning an empty universe would
+    be the missing-input-means-clean-verdict shape all over again."""
+    d = tmp_path / "scripts" / "analysis"
+    d.mkdir(parents=True)
+    (d / "thing.py").write_text("x = 1\n")
+    found = HL.scan_files(str(tmp_path))
+    assert [os.path.basename(p) for p in found] == ["thing.py"]
+    assert HL._tracked_py_files(str(tmp_path), HL.LINT_DIRS) in (None, [])
