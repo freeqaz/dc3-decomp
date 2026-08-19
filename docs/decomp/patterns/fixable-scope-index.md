@@ -58,7 +58,27 @@ the index.** Verified to the digit on all five `_dw` in
 `WorldCrowd::DrawShowing` (42, 54).
 
 `MILO_ASSERT`'s 5 is just the table applied to its expansion: `do`(1) +
-block(1) + `if`(2) + block(1).
+block(1) + `if`(2) + block(1). A static declared *inside* a construct's braced
+body reads the same number as one declared just after the whole construct — the
+counter only ever goes up.
+
+Further rows, all measured against the shipping cl.exe on 2026-08-19:
+
+| construct | cost |
+|---|---:|
+| `else if (c) stmt;` | +3 |
+| unbraced `while` / `for` body | +1 |
+| `if (a) if (b) stmt;` | +4 (only `&&` collapses it to 2) |
+| `MILO_NOTIFY` (not `_ONCE`) | 0 |
+
+Two things that cost **nothing**, and both are traps because the intuition says
+otherwise:
+
+* **Inlining.** An inline callee whose body contains a bare block, an `if (){}`,
+  or a `for(){}` adds 0 to the *caller's* counter, at `/O1 /Oi /EHsc` and with
+  the call in a condition. The counter is a front-end lexical thing.
+* **A temporary with a destructor in the static's initialiser.** `static D
+  a("a", T(0))` with `~T()` numbers exactly like `static D a("a", P(0))` without.
 
 Worked example — `_SYNC_PROP_BITFIELD` in `system/obj/Object.h` predicts 39 for
 the gap between two `_s` statics in `CamShot::SyncProperty`, and 39 is what the
@@ -89,6 +109,36 @@ This bit the census twice, and both traps are easy to walk into by hand as well.
   `run_diff_inspect mode=clusters` and read the `lis`/`addi` pairs: it lines our
   `?_dw@?DG@` up against the target's `?_dw@?CK@`, which is how you learn that
   two indices that happen to be equal belong to different declarations.
+
+## Calibrating it yourself
+
+Do not reason about a new construct — compile it. A standalone TU with no
+includes is enough, and it takes seconds:
+
+```sh
+cat > /tmp/cal.cpp <<'EOF'
+struct S { S(const char*); int i; };
+extern void sink(int); extern bool c();
+void f_top()  { static S a("a"); sink(a.i); }
+void f_ifb()  { if (c()) { sink(1); } static S a("a"); sink(a.i); }
+void f_bare() { if (!c()) { sink(9); } static S a("a"); sink(a.i); }
+EOF
+WIBO_PATH_MAP='' ~/code/milohax/wibo/build/release/wibo \
+  build/compilers/X360/16.00.11886.00/cl.exe /nologo /c /GR /O1 /Oi /EHsc /TP /GS- \
+  /tmp/cal.cpp /Fo/tmp/cal.obj
+strings -a /tmp/cal.obj | grep -o '?a@?[^ ]*@4US@@A' | sort -u
+```
+
+## Compute the brace-only floor FIRST
+
+Before hunting for a construct, work out the **minimum index any legal source
+shape can reach**: unbrace every body that legally permits it, collapse nested
+ifs onto dangling elses, swap inverted arms. If the target's index is at or
+above that floor, the answer is a brace and you should go find it. **If the
+target is strictly BELOW the floor, stop — no brace can get you there**, and the
+answer is a declaration the original has and we lack, a branch polarity swap
+that moves the static into the other arm, or (rarely, see below) a differently
+spelled macro.
 
 ## Using it
 
@@ -180,27 +230,145 @@ examples, left open on purpose:
 
 ## The one that is not brace-shaped: assert spelling
 
-`MILO_ASSERT`'s do/while form (cost 5) is right for the overwhelming majority —
-changing `system/os/Debug.h` to the expression form
-`((cond) || (TheDebugFailer << ..., 0))` moved 50 functions OFF a correct
-numbering and cost 7,716 B of matched code; the bare-`if` form (cost 3) cost
-8,600 B. Both were measured whole-build and reverted.
+**The shipping binary contains more than one assert spelling.** That was an open
+question until 2026-08-19; it is now measured.
 
-But a residue of functions can only be reconciled if their asserts cost **3**
-(`CampaignMqCrewProvider::Text` and `::UpdateList`, two asserts each, both
-land exactly; `Automator::FillButtonMsg`; `CampaignSongProvider::Text`) or
-**0** (`ShellInput::Init`, three asserts; `MonthToken`;
-`Hmx::Object::ExportPropertyChange`), while `Accomplishment::Configure` and
-~1,280 others require **5**. The instruction streams of all of these match, so
-the assert code is present on both sides in every case; only the block structure
-around it differs. Either the original had more than one assert spelling with
-the same message format, or those functions differ from ours in some other way
-that happens to be a multiple of the assert cost. **Do not "fix" these by
-rewriting asserts longhand or by adding a second assert macro** — the evidence
-does not identify which, and a whole-build measurement is the only thing that
-has ever settled a question in this class.
+### The population is tiny — only ~24 functions constrain the assert cost
 
-The expression form is also refuted on its own terms wherever the assert
-condition builds a temporary: in `TexLoadPanel::LoadMoggClip` the target
-destroys the `String` temporary BEFORE the failure branch, which only the
-statement form does.
+Most of the 1,800-odd tracked statics have no assert between the function's
+opening brace and their declaration, so they are insensitive to the spelling and
+tell you nothing. A whole-build A/B (swap `system/os/Debug.h` to the expression
+form `((cond) || (TheDebugFailer << MakeString(...), 0))`, rebuild, re-census)
+isolates exactly the sensitive set:
+
+| spelling in `Debug.h` | census pairs | match | differ |
+|---|---:|---:|---:|
+| `do { if (!(c)) { fail; } } while (0)` — cost 5 | 1817 | 1765 | 52 |
+| `((c) \|\| (fail, 0))` — cost 0 | 1813 | 1661 | 152 |
+
+The swap moves **109 statics in 16 functions OFF** a correct numbering and
+**9 statics in 4 functions ON**. Whole-build cost of the global swap:
+**−10,556 B** of matched code (an older note in this file said 7,716 B; that was
+an underestimate). The bare-`if` form (cost 3) cost 8,600 B when it was tried.
+So the do/while form stays as the default and always will.
+
+Functions that require cost **5** (do/while): `Accomplishment::Configure` (24
+statics), `RhythmBattlePlayer::UpdateAnimations` (22),
+`Campaign::UpdateEraSongUnlockInstructions` (17), `MetagameRank::UpdateScore`
+(11), `SkeletonChooser::IsSinglePlayerMode` (8),
+`SkeletonIdentifier::OnMsg(SkeletonIdentifiedMsg)` (6),
+`MainMenuPanel::MotdPickNextText` (4), `MetagameStats::Text` (4), plus
+`MyFindClip`, `RhythmBattle::OnBeat`, `Synth360::ReleaseMic`,
+`SaveLoadManager::SetState`, `HelpBarPanel::SyncToPanel`,
+`UpdateFriendsListJob::OnMsg`, `MoveDir::FinalPoseStateMachine`,
+`BeginMemTrackObjectName`.
+
+### Cost 0: solved, and the fix is landed
+
+Four functions require an assert that opens **no** lexical scope:
+
+| function | static | ours (cost 5) | target |
+|---|---|---:|---:|
+| `Hmx::Object::ExportPropertyChange` | `msg` | 10 | 5 |
+| `` `anonymous namespace'::MonthToken `` | `month_symbols` | 7 | 2 |
+| `ShellInput::Init` | `reset_controller_mode_timeout`, `$S2` | 17 | 2 |
+| `KinectSharePanel::OnPostLink` | 5 × `fb_link_*` | 12 | 7 |
+
+In each of these the asserts are the *only* scopes before the declaration, so
+the target sits below the brace-only floor and no brace can explain it.
+
+The obvious alternative — **"the static is simply declared earlier in the
+original"** — predicts every one of those target numbers exactly, and it is
+**refuted by the instruction stream**:
+
+* `ExportPropertyChange`: moving `static Message msg` above the assert gives
+  index 5 *and* drops the function from 83/83 equal to **32.5%** (28 insert /
+  28 delete) — the guarded init moves above the assert branch, which the target
+  does not do.
+* `MonthToken`: same move gives index 2 and **100% → 55.4%** — the target
+  range-checks first.
+
+MSVC does not sink a local static's guarded initialiser, so declaration position
+*is* code position; you cannot trade one against the other. Whereas rewriting
+the assert in the 0-scope form gives the target's index **and** a byte-identical
+instruction stream (83/83, 87/87, 187/187 equal; `OnPostLink` unchanged at 263
+instructions / 28 diff_arg). For `ShellInput::Init` even the guard's *name*
+comes out right — `?$S2@?1??Init@ShellInput@@QAAXXZ@4IA`, digit for digit.
+
+Positive identification of the spelling: the sibling RB3 decomp of the same Milo
+engine defines it verbatim, `../rb3/src/system/os/Debug.h:89`:
+
+```c
+#define MILO_ASSERT(cond, line) \
+    ((cond) || (TheDebugFailer << (MakeString(kAssertStr, __FILE__, line, #cond)), 0))
+```
+
+(`og-dc3-decomp` and `rb3-xenon` both use the do/while form, but og-dc3 shares
+this tree's lineage, so it is not an independent witness.)
+
+`MILO_ASSERT_EXPR` therefore lives beside `MILO_ASSERT` in `system/os/Debug.h`
+and is used at exactly those six call sites. Whole build: matched_code
+4,961,036 → 4,962,492 (**+1,456 B**), census 1765/52 → 1776/43, nine statics
+fixed and zero regressed. **Do not use it anywhere else** — every new call site
+needs a target scope index that demands it.
+
+The expression form remains refuted as a *global* macro, and separately refuted
+wherever the assert condition builds a temporary: in `TexLoadPanel::LoadMoggClip`
+the target destroys the `String` temporary BEFORE the failure branch, which only
+the statement form does.
+
+### Cost 3: still open, and do NOT invent a third macro
+
+Four functions reconcile at an assert costing **3** (`if (!(c)) { fail; }`):
+
+| function | static | ours | target | asserts before | delta |
+|---|---|---:|---:|---:|---:|
+| `Automator::FillButtonMsg` | `button_down` | 7 | 5 | 1 | −2 |
+| `CampaignMqCrewProvider::UpdateList` | `mq_difficulty` | 12 | 8 | 2 | −4 |
+| `CampaignMqCrewProvider::Text` | `mq_difficulty`, `stars_fraction` | 23 | 19 | 2 | −4 |
+| `CampaignSongProvider::Text` | `tan_battle_song` | 23 | 19 | 2 | −4 |
+| | `campaign_song_locked` | 25 | 21 | 2 | −4 |
+| | `song_select_song_prefix` | 41 | 39 | 2 | **−2** |
+
+All four are below their brace-only floor at cost 5 (`FillButtonMsg` floor 7 vs
+target 5; `UpdateList` 12 vs 8; `CampaignMqCrewProvider::Text` 21 vs 19 even
+with both single-statement arms unbraced), so this is not a brace either. And
+the first five rows land *exactly* at cost 3.
+
+But it is not landed, for two reasons:
+
+1. **No witness.** The bare-`if` spelling exists in no sibling decomp. The
+   cost-0 form was landed only because rb3 has it verbatim; there is nothing
+   equivalent here.
+2. **It is not even self-consistent.** `CampaignSongProvider::Text`'s last
+   static needs a further **+2** on top of cost 3. Two `else if` rungs written
+   as `else { if ... }` would supply exactly that and are code-neutral — but the
+   sibling `CampaignMqCrewProvider::Text` must *not* have that rewrite, so the
+   combined story needs a per-file style split as well as a per-file macro.
+
+Enough to keep the row on the worklist; nowhere near enough to add a macro.
+
+### The atexit `??__F` names are NOT a second probe
+
+`??__F<name>@?<scope>??<fn>@YAXXZ` looks like an independent reading of the same
+block structure. It is not usable as one:
+
+* Our own objects' `??__F` names are **rewritten to the target's values** by
+  `scripts/obj_atexit_scope_patcher.py`, which runs as a build step. Reading
+  them out of `build/373307D9/src/**/*.obj` after a full build and comparing
+  against the target is circular. (A single-object `ninja build/.../X.obj`
+  skips the patcher, so the same file gives different answers depending on how
+  you built it — which is how this trap was found.)
+* On raw compiler output the thunk index always equals the variable's, in every
+  synthetic shape tested. In the *target*, 20 of 161 pairs disagree, including
+  `ExportPropertyChange` where the variable reads 5 and the thunk reads 8.
+* **Never fold target `??__F` scopes into the target's variable list** to
+  "enumerate statics". Because the two indices can differ, that manufactures a
+  phantom extra target static and makes a single static look like two. It did
+  exactly that for `ExportPropertyChange`, which has one `static Message msg`
+  on both sides.
+
+A census must compare `?<name>@?<scope>??<fn>` on both sides only, and must
+compare **lists** per name — several `_dw`, `_s`, `msg` or `$S<n>` statics can
+share a name inside one function, and keying `name -> int` silently compares two
+unrelated statics.
