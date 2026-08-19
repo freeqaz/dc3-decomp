@@ -48,7 +48,16 @@ void DelayEffect::SetParameter(int param, float value) {
 static const int kMaxDelaySamps = 96000;
 
 void DelayEffect::Process(float *buf, int numSamples, int numChans) {
-    if (!mBuffer) return;
+#ifdef HX_NATIVE
+    // Native-only crash guard. f8a417405 ("native: v0xE mogg audio pipeline")
+    // added it for the reload race its own message describes -- "Null guard in
+    // DelayEffect::Process for freed mBuffer" -- and left it unguarded, so it
+    // was also compiling into the Xbox plane. The target has no such test: at
+    // 82E58400 it goes straight from the prologue to the numChans assert
+    // (cmpwi cr6, r6, 0x2 / ble .L_82E58460), never loading mBuffer first.
+    if (!mBuffer)
+        return;
+#endif
     MILO_ASSERT(numChans <= 2, 0x27);
     int writePos = mWritePos;
     if (numChans == 1) {
