@@ -47,8 +47,10 @@ public:
         }
 
         void AllocateTextures(unsigned int w, unsigned int h) {
+            BloomTextureSet *tex = mTextures;
             for (int i = N; i != 0; i--) {
-                mTextures[i].AllocateTextures(w, h);
+                tex->AllocateTextures(w, h);
+                tex++;
             }
         }
 
