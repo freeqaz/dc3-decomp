@@ -258,6 +258,26 @@ python3 tools/decompctx.py src/path/to/file.cpp -I include -I src
 
 ## objdiff-cli through MCP: what maps to what
 
+> ### ⚠ The MCP server runs the **main repo's** code — `project_dir` does not change that
+>
+> `mcp_server.py` sets `self.project_root = Path(__file__).resolve().parent.parent.parent`
+> — the tree the *server module was loaded from* — and `.mcp.json` launches it as
+> `python -m scripts.orchestrator.mcp_server` from the session's cwd, which is
+> normally `/home/free/code/milohax/dc3-decomp`. **`project_dir` selects the build
+> tree that gets diffed, not the code that does the diffing.**
+>
+> Consequence, and it bites every time someone changes this file: **a fix to
+> `mcp_server.py` on a branch or in a worktree has no effect on any running agent
+> until the MCP server is restarted from a tree that contains it.** If a newly
+> added parameter answers "unknown argument", or a fixed tool still misbehaves
+> exactly as before, check this before debugging anything else. Landing on `main`
+> is necessary but *not sufficient* — already-running servers keep the old module
+> in memory.
+>
+> To exercise wrapper changes before a restart, drive the code directly
+> (`exec` the module fragment, as `scripts/orchestrator/tests/` does) rather than
+> through the `mcp__orchestrator__` tools.
+
 `CLAUDE.md` tells agents to use the `mcp__orchestrator__` tools rather than the
 raw CLI. That rule was unfollowable until 2026-08-19.
 
