@@ -414,7 +414,7 @@ def scan(repo, signals=("blame", "content"), verbose=False):
         files = files_touched(repo, list(ncommits))
     else:
         files = []
-    if "content" in signals:
+    if "content" in signals or "shape" in signals:
         allsrc = [
             f
             for f in git(repo, "ls-files", "src").splitlines()
@@ -475,6 +475,12 @@ def scan(repo, signals=("blame", "content"), verbose=False):
             if mask[i] or NOISE_RE.match(text):
                 continue
             why = []
+            if "shape" in signals and GUARD_SHAPE_RE.match(text):
+                # History-independent sweep: EVERY unguarded defensive guard,
+                # regardless of who wrote it.  Bounds the population from above
+                # without trusting commit messages at all -- a leak added by a
+                # commit titled "progress: ..." is invisible to `blame`.
+                why.append("shape-static")
             sha = shas[i] if i < len(shas) else None
             if sha and sha in ncommits:
                 why.append("blame")
@@ -526,9 +532,16 @@ def self_test(repo):
         print(f"SELF-TEST SKIPPED: anchor not found in {CONTROL_FILE}", file=sys.stderr)
         return 2
 
-    dirty = git(repo, "status", "--porcelain", "--", CONTROL_FILE).strip()
+    # The rollback below is `git reset --hard`, which destroys ANY uncommitted
+    # change in the worktree, not just the injected one.  It ate an unrelated
+    # edit to this very file once.  Refuse to run unless the tree is clean.
+    dirty = git(repo, "status", "--porcelain").strip()
     if dirty:
-        print(f"SELF-TEST ABORTED: {CONTROL_FILE} has uncommitted changes", file=sys.stderr)
+        print(
+            "SELF-TEST ABORTED: worktree is dirty and the rollback is a hard "
+            "reset, which would destroy these changes:\n" + dirty,
+            file=sys.stderr,
+        )
         return 2
 
     branch = git(repo, "rev-parse", "--abbrev-ref", "HEAD").strip()
@@ -551,7 +564,11 @@ def self_test(repo):
         # 2. strip the guard, exactly as the pre-866ba1082 source had it
         injected = original.replace(
             CONTROL_ANCHOR,
-            CONTROL_ANCHOR + "\n    // reintroduced native-only crash guard (self-test)\n    if (!t2)\n        return;",
+            # Verbatim as 5d19777db left it: no comment, no guard, nothing that
+            # names the native port.  With an explanatory comment the `content`
+            # signal fires for free and the test stops exercising blame +
+            # guard-shape, which are the signals that actually matter.
+            CONTROL_ANCHOR + "\n    if (!t2) return;",
             1,
         )
         open(full, "w").write(injected)
@@ -602,7 +619,7 @@ def self_test(repo):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--repo", default=os.getcwd())
-    ap.add_argument("--signal", choices=["blame", "content", "both"], default="both")
+    ap.add_argument("--signal", choices=["blame", "content", "shape", "both", "all"], default="both")
     ap.add_argument("--json", metavar="OUT")
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--all-tier1", action="store_true",
@@ -616,8 +633,37 @@ def main():
     if args.self_test:
         sys.exit(self_test(repo))
 
-    signals = ("blame", "content") if args.signal == "both" else (args.signal,)
+    if args.signal == "both":
+        signals = ("blame", "content")
+    elif args.signal == "all":
+        signals = ("blame", "content", "shape")
+    else:
+        signals = (args.signal,)
     hits = scan(repo, signals=signals, verbose=args.verbose)
+
+    static = [h for h in hits if "shape-static" in h["signals"]]
+    if static:
+        sub = [
+            h
+            for h in static
+            if h["fn_match_percent"] is not None and h["fn_match_percent"] < 99.995
+        ]
+        withnative = [h for h in static if "blame" in h["signals"] or "content" in h["signals"]]
+        print(
+            f"TIER S (history-independent): {len(static)} unguarded defensive guards in src/\n"
+            f"  in a function below 100%       : {len(sub)}   <-- can be costing match\n"
+            f"  also carrying a native signal  : {len(withnative)}\n"
+            f"  NOTE: most of these are target-faithful. The Xbox build genuinely\n"
+            f"  null-checks. This is an UPPER BOUND on the population, not a bug list.\n"
+        )
+        for h in sorted(sub, key=lambda x: x["fn_match_percent"])[: (args.limit or 40)]:
+            extra = "+".join(s for s in h["signals"] if s != "shape-static")
+            extra = f" [{extra}]" if extra else ""
+            print(
+                f"  {h['fn_match_percent']:6.2f}%  {h['file']}:{h['line']}"
+                f" ({h['function']}){extra}\n           {h['text'].strip()[:100]}"
+            )
+        print()
 
     shaped = [h for h in hits if "guard-shape" in h["signals"]]
     interp = [h for h in hits if "interpolated" in h["signals"] and "guard-shape" not in h["signals"]]
