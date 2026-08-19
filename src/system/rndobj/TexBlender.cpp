@@ -201,7 +201,7 @@ void RndTexBlender::DrawShowing() {
                 }
             }
             if (unkc0 || !nearList.empty() || !farList.empty() || !customList.empty()
-                || mRenderedStates != 1) {
+                || (unsigned int)mRenderedStates != 1) {
                 unkc0 = false;
                 RndCam *cam = TheRnd.GetDefaultCam();
                 RndCam *prevCam = RndCam::Current();
