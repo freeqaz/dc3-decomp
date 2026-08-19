@@ -14,6 +14,7 @@ Run as: python3 -m scripts.orchestrator.mcp_server --db decomp.db
 
 import argparse
 import asyncio
+import collections
 import json
 import os
 import re
@@ -1451,11 +1452,26 @@ class DecompMCPServer:
     _MEM_ARG_RE = re.compile(r'r(\d+),\s*(-?0x[0-9a-fA-F]+|-?\d+)\(r(\d+)\)')
     # Regex for parsing PPC immediate operands: rX, rY, IMM
     _SHIFT_ARG_RE = re.compile(r'r(\d+),\s*r(\d+),\s*(\d+)')
-    # Memory opcodes that access struct fields
+    # Memory opcodes that access struct fields.
+    #
+    # `stwu` is deliberately ABSENT. On this target it is overwhelmingly the
+    # frame-allocation instruction -- `stwu r1, -0x470(r1)` -- and having it here
+    # meant the prologue's own frame size was resolved as a struct field
+    # (CamShot::Load index 6, RndText::Load index 4, both measured 2026-08-19).
+    # The r1/frame-pointer base check below independently catches that case; this
+    # removal makes the intent explicit rather than relying on one guard. The
+    # other update forms stay: they are rare here and are not frame setup.
     _MEM_OPCODES = frozenset([
         'lwz', 'stw', 'lfs', 'stfs', 'lhz', 'sth', 'lbz', 'stb', 'lfd', 'stfd',
-        'lwzu', 'stwu', 'lfsu', 'stfsu', 'lha', 'lhau',
+        'lwzu', 'lfsu', 'stfsu', 'lha', 'lhau',
     ])
+    # Prologue forms that derive a FRAME POINTER from r1. MSVC/Xenon emits
+    # `subi rN, r1, <frame>` (objdiff's disassembler spells it `subi`, NOT
+    # `addi rN, r1, -<frame>`) -- matching only the `addi` spelling finds nothing.
+    #   CamShot::Load   subi r31, r1, 0x470
+    #   RndText::Load   subi r31, r1, 0x1c0
+    _FRAME_PTR_RE = re.compile(r'^r(\d+),\s*r1\b')
+    _FRAME_PTR_OPCODES = frozenset(['addi', 'subi', 'mr', 'or', 'addic'])
     # Shift/rotate opcodes
     _SHIFT_OPCODES = frozenset(['slwi', 'srwi', 'slw', 'srw', 'rlwinm'])
 
@@ -1473,12 +1489,92 @@ class DecompMCPServer:
             return int(s, 16)
         return int(s)
 
+    @staticmethod
+    def _fmt_offset(v: int) -> str:
+        """Format a signed offset as valid hex. `f"0x{-0x470:x}"` yields the
+        nonsense literal `0x-470`, which is what the offset block printed for
+        every negative (stack) offset."""
+        return f"-0x{-v:x}" if v < 0 else f"0x{v:x}"
+
+    @classmethod
+    def _frame_pointer_regs(cls, instructions: list, side: str) -> set:
+        """Registers that hold a FRAME POINTER on `side` ('target'/'base').
+
+        Detected from the prologue form, never from the register number.
+        `r31` is the usual frame pointer here, but `FxSendChorus::Load` does
+        `mr r31, r3` -- there r31 IS `this`, and suppressing by number would
+        turn a false-positive generator into a false-negative one.
+
+        Only r1-DERIVED registers count. `mr rN, r3` is deliberately not a hit.
+
+        Restricted to NON-VOLATILE registers (r14-r31). A frame pointer must
+        survive calls, so it lives in a callee-saved register; `addi r4, r1, 0x58`
+        (a stack address for one call's out-argument -- `CharBonesSamples::Save`
+        index 10 does exactly this) says nothing about r4 five hundred
+        instructions later, and treating it as a frame pointer for the whole
+        function would suppress genuine field rows. That is the false-NEGATIVE
+        half of the trade and it is just as bad as the false positive.
+
+        Known limitation: a stack access through a *volatile* r1-derived
+        register is still classified `object-field`. It has not been observed
+        producing an offset-mismatch pair, and widening the rule costs real
+        findings.
+        """
+        regs = set()
+        for instr in instructions:
+            operand = instr.get(side) or {}
+            opcode = operand.get("opcode", "")
+            if opcode not in cls._FRAME_PTR_OPCODES:
+                continue
+            m = cls._FRAME_PTR_RE.match((operand.get("args") or "").strip())
+            if m:
+                reg = int(m.group(1))
+                if 14 <= reg <= 31:
+                    regs.add(reg)
+        return regs
+
+    @staticmethod
+    def _prologue_visible(instructions: list) -> bool:
+        """Did we get the top of the function?
+
+        With `full_listing=false` the instruction list is only mismatches plus
+        `-C` context, so the prologue may be absent -- and then a register's
+        frame-pointer status is UNKNOWN, not 'false'. Claiming otherwise is how
+        a suppression rule silently becomes a licence to report anyway.
+        """
+        indices = [i.get("index") for i in instructions if isinstance(i.get("index"), int)]
+        return bool(indices) and min(indices) == 0
+
     def _resolve_offset_mismatches(self, data: dict) -> list[dict]:
         """
         Scan instruction diffs for memory offset mismatches and resolve
         them to struct field names using StructDB.
 
         Returns list of offset mismatch records with field names.
+
+        ONLY object-relative accesses are resolved. Until 2026-08-19 this read
+        the offset and ignored the BASE REGISTER entirely, so a pure stack slot
+        resolved against the class struct exactly like a `this`-relative field.
+        Measured on real objects that day: `CamShot::Load` produced 29 rows and
+        `RndText::Load` 25, and **every one of the 54 was r31-relative where
+        r31 is a frame pointer** (`subi r31, r1, 0x470` / `subi r31, r1, 0x1c0`).
+        The block was not occasionally wrong on those functions; it was entirely
+        wrong, while naming plausible members (`RndText::mScrollOutIndex`,
+        `RndTransformable::mConstraint`) in the same shape as a true positive.
+        One such row is the named lead in
+        docs/decomp/patterns/rounded-100-hides-real-bugs.md that sent a lane
+        after a nonexistent `FxSend` member.
+
+        Rows are now classified, and the caller is told how many were dropped:
+          object-field   base register is neither r1 nor an r1-derived frame
+                         pointer -- resolved, with a fix hint
+          stack-slot     base is r1
+          frame-slot     base is an r1-derived frame pointer
+          mixed-base     the two sides index DIFFERENT registers, so this is not
+                         one object's field being compared at all
+          unverified     the prologue was not in the instruction window, so
+                         frame-pointer status is unknown -- reported WITHOUT a
+                         fix hint rather than asserted either way
         """
         instructions = data.get("instructions") or data.get("mismatch_instructions") or []
         demangled = data.get("demangled", "")
@@ -1490,6 +1586,10 @@ class DecompMCPServer:
         struct_db_path = self.project_root / "struct_db.sqlite"
         if not struct_db_path.exists():
             return []
+
+        fp_target = self._frame_pointer_regs(instructions, "target")
+        fp_base = self._frame_pointer_regs(instructions, "base")
+        prologue_seen = self._prologue_visible(instructions)
 
         mismatches = []
         try:
@@ -1522,32 +1622,64 @@ class DecompMCPServer:
                     if off_t == off_b:
                         continue  # Same offset, different register — not a struct mismatch
 
+                    # ---- the base register decides whether this is a FIELD ----
+                    reg_t = int(m_t.group(3))
+                    reg_b = int(m_b.group(3))
+
+                    if reg_t != reg_b:
+                        kind = "mixed-base"
+                    elif reg_t == 1:
+                        kind = "stack-slot"
+                    elif reg_t in fp_target or reg_b in fp_base:
+                        kind = "frame-slot"
+                    elif not prologue_seen:
+                        kind = "unverified"
+                    else:
+                        kind = "object-field"
+
+                    entry = {
+                        "index": instr.get("index"),
+                        "opcode": opcode_t,
+                        "kind": kind,
+                        "base_register": f"r{reg_t}" if reg_t == reg_b else f"r{reg_t}/r{reg_b}",
+                        "target_offset": self._fmt_offset(off_t),
+                        "base_offset": self._fmt_offset(off_b),
+                    }
+
+                    if kind in ("stack-slot", "frame-slot", "mixed-base"):
+                        # Not a field access. Recorded so the caller can report
+                        # the count, never rendered as a struct-field finding.
+                        mismatches.append(entry)
+                        continue
+
                     # Resolve field names
                     target_field = None
                     base_field = None
+                    name_t = name_b = None
 
                     if class_name:
                         result_t = db.lookup(class_name, off_t)
                         result_b = db.lookup(class_name, off_b)
                         if result_t:
+                            name_t = result_t[1]
                             target_field = f"{result_t[0]}::{result_t[1]} ({result_t[2]})"
                         if result_b:
+                            name_b = result_b[1]
                             base_field = f"{result_b[0]}::{result_b[1]} ({result_b[2]})"
 
-                    entry = {
-                        "index": instr.get("index"),
-                        "opcode": opcode_t,
-                        "target_offset": f"0x{off_t:x}",
-                        "base_offset": f"0x{off_b:x}",
-                    }
                     if target_field:
                         entry["target_field"] = target_field
                     if base_field:
                         entry["base_field"] = base_field
-                    if target_field and base_field:
+                    # Take the member name from the DB tuple. Re-deriving it by
+                    # splitting the FORMATTED string on '::' and ' (' mangles any
+                    # qualified or templated type: `RndText::mAltStyle
+                    # (ObjPtr<Hmx::Object>)` came out as the field name
+                    # "Object>)" in a shipped hint (measured 2026-08-19).
+                    if name_t and name_b and kind == "object-field":
                         entry["fix_hint"] = (
-                            f"Source accesses '{base_field.split('::')[-1].split(' (')[0]}' "
-                            f"but target accesses '{target_field.split('::')[-1].split(' (')[0]}' — wrong field?"
+                            f"Source accesses '{name_b}' but target accesses "
+                            f"'{name_t}' — wrong field?"
                         )
 
                     mismatches.append(entry)
@@ -1924,25 +2056,52 @@ class DecompMCPServer:
         offset_mismatches = data.get("offset_mismatches", [])
         if offset_mismatches:
             lines.append("")
-            lines.append("## Offset Mismatches (resolved)")
-            lines.append("")
-            for om in offset_mismatches:
-                idx = om.get("index", "?")
-                opcode = om.get("opcode", "?")
-                t_off = om.get("target_offset", "?")
-                b_off = om.get("base_offset", "?")
-                t_field = om.get("target_field", "")
-                b_field = om.get("base_field", "")
-                hint = om.get("fix_hint", "")
-                line = f"- [{idx}] `{opcode}`: target {t_off}"
-                if t_field:
-                    line += f" ({t_field})"
-                line += f" vs base {b_off}"
-                if b_field:
-                    line += f" ({b_field})"
-                if hint:
-                    line += f" -- {hint}"
-                lines.append(line)
+            # Only OBJECT-relative rows are field findings. Stack/frame/mixed-base
+            # rows are counted and named, never rendered as struct fields.
+            _NON_FIELD = {"stack-slot": "stack slot (base r1)",
+                          "frame-slot": "frame slot (r1-derived frame pointer)",
+                          "mixed-base": "different base register on each side"}
+            field_rows = [om for om in offset_mismatches
+                          if om.get("kind", "object-field") not in _NON_FIELD]
+            suppressed = collections.Counter(
+                om["kind"] for om in offset_mismatches if om.get("kind") in _NON_FIELD)
+
+            if field_rows:
+                lines.append("## Offset Mismatches (resolved)")
+                lines.append("")
+                for om in field_rows:
+                    idx = om.get("index", "?")
+                    opcode = om.get("opcode", "?")
+                    t_off = om.get("target_offset", "?")
+                    b_off = om.get("base_offset", "?")
+                    t_field = om.get("target_field", "")
+                    b_field = om.get("base_field", "")
+                    hint = om.get("fix_hint", "")
+                    reg = om.get("base_register", "")
+                    line = f"- [{idx}] `{opcode}`" + (f" ({reg})" if reg else "") + f": target {t_off}"
+                    if t_field:
+                        line += f" ({t_field})"
+                    line += f" vs base {b_off}"
+                    if b_field:
+                        line += f" ({b_field})"
+                    if om.get("kind") == "unverified":
+                        line += ("  ⚠ base register UNVERIFIED — the prologue was outside the "
+                                 "instruction window, so this may be a stack slot. Re-run with "
+                                 "`full_listing=true` to classify it.")
+                    elif hint:
+                        line += f" -- {hint}"
+                    lines.append(line)
+                lines.append("")
+                lines.append("*Field names come from the class struct and are only meaningful for "
+                             "`this`-relative accesses. Rows whose base register is `r1` or an "
+                             "r1-derived frame pointer are stack slots and are excluded above.*")
+
+            if suppressed:
+                if field_rows:
+                    lines.append("")
+                detail = ", ".join(f"{n} {_NON_FIELD[k]}" for k, n in suppressed.most_common())
+                lines.append(f"*Offset mismatches examined: {len(offset_mismatches)}; "
+                             f"{sum(suppressed.values())} excluded as non-field ({detail}).*")
 
         # Shift annotations
         shift_annotations = data.get("shift_annotations", [])
