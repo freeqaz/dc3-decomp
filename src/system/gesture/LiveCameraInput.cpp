@@ -40,7 +40,30 @@ namespace {
     bool gDebugDepth;
     bool GetExposureRegion(NUI_CAMERA_AE_ROI &);
     long GetColorCameraProperty(NUI_CAMERA_PROPERTY);
-    unsigned short YUVtoRGB(int y, int cr, int cb);
+    /** Convert one YCbCr sample to RGB565 -- the same body DrawUtl.cpp carries.
+     *
+     *  This TU used to only *declare* it. On the PPC build that was harmless
+     *  (the linker map shows ?YUVtoRGB@?A0x8e584365@@ contributed by
+     *  gesture:LiveCameraInput.obj and ICF-folded with gesture:DrawUtl.obj's
+     *  copy, i.e. the original was one header definition included by both TUs).
+     *  On the native port it was a live bug: clang emitted an *undefined*
+     *  reference to an internal-linkage symbol, and the weak asm-label stub
+     *  `_stub_yuvtorgb` in native/src/engine_stubs_generated.cpp satisfied it,
+     *  so every Kinect colour texel came out 0 -- the camera feed was solid
+     *  black in UpdateFromColorBuffer and UpdateFromColorBufferClip.
+     *
+     *  `inline` is load-bearing for the same reason it is in DrawUtl.cpp: as an
+     *  inline COMDAT the body is deferred and the call sites stay conservative.
+     */
+    inline unsigned short YUVtoRGB(int y, int u, int v) {
+        int r = y + ((91881 * v) >> 16);
+        int g = y + ((-46802 * v - 22553 * u) >> 16);
+        int b = y + ((116130 * u) >> 16);
+        r = r > 255 ? 255 : (r < 0 ? 0 : r);
+        g = g > 255 ? 255 : (g < 0 ? 0 : g);
+        b = b > 255 ? 255 : (b < 0 ? 0 : b);
+        return (unsigned short)(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
+    }
 
     void SetColorCameraProperty(NUI_CAMERA_PROPERTY prop, long value) {
         HRESULT hr = NuiCameraSetProperty(NUI_CAMERA_TYPE_COLOR, prop, value);

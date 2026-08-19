@@ -355,18 +355,16 @@ extern "C" __attribute__((weak)) int XNetServerToInAddr() { HX_STUB_TRACE("XNetS
 __attribute__((weak, used)) char _stub_vt_15[1024] __asm__(ASM_SYM("_ZTI5DxTex")) = {};
 // typeinfo for FFmpegMovieImpl
 __attribute__((weak, used)) char _stub_ti_ffmpeg[128] __asm__(ASM_SYM("_ZTI15FFmpegMovieImpl")) = {};
-// (anonymous namespace)::YUVtoRGB(int, int, int)
-// LOAD-BEARING, do not delete alongside _stub_fn_111. `nm` says
-// gesture/LiveCameraInput.cpp.o REFERENCES this symbol (U) and no object in the
-// tree defines it — LiveCameraInput.cpp declares an anonymous-namespace
-// YUVtoRGB it never defines, which is a real decomp gap: ham_xbox_r.map has
-// ?YUVtoRGB@?A0x8e584365@@ contributed by gesture:LiveCameraInput.obj. The
-// DrawUtl copy recovered on fix/drawutl-buffer-copies does NOT satisfy this
-// reference — anonymous-namespace entities have internal linkage, so DrawUtl's
-// body is local to its own TU. Delete this only when LiveCameraInput.cpp gets
-// its own body.
-extern "C" __attribute__((weak, used)) long _stub_yuvtorgb() __asm__(ASM_SYM("_ZN12_GLOBAL__N_18YUVtoRGBEiii"));
-extern "C" long _stub_yuvtorgb() { HX_STUB_TRACE("_stub_yuvtorgb"); return 0; }
+// (anonymous namespace)::YUVtoRGB(int, int, int) — STUB DELETED 2026-08-19.
+// The condition the old comment set for deleting it ("delete this only when
+// LiveCameraInput.cpp gets its own body") is now met: LiveCameraInput.cpp
+// carries the real `inline unsigned short YUVtoRGB(int y, int u, int v)` body,
+// copied from the DrawUtl.cpp copy the linker map says was ICF-folded with it.
+// While the stub existed it was not merely dead weight — it was the *only*
+// definition of a symbol LiveCameraInput.cpp.o referenced (U), so it silently
+// won every call and returned 0, i.e. the Kinect colour texture was solid black
+// in UpdateFromColorBuffer / UpdateFromColorBufferClip.  The PPC match for both
+// functions is unchanged by the source fix (95.5% / 84.4% before and after).
 
 // =============================================================================
 // Asm-label stubs for remaining undefined symbols (ObjPtrVec/ObjPtrList related)
