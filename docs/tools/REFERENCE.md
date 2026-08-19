@@ -259,18 +259,34 @@ python3 tools/decompctx.py src/path/to/file.cpp -I include -I src
 ## objdiff-cli through MCP: what maps to what
 
 `CLAUDE.md` tells agents to use the `mcp__orchestrator__` tools rather than the
-raw CLI. That rule was unfollowable until 2026-08-19: a sweep of 474 session
-transcripts found **464 tool calls that shell out to `bin/objdiff-cli`**, and the
-largest single pattern (84) was `diff -u <unit> '??_7…' --include-data`, which no
-MCP tool could express. Use this table before reaching for the binary.
+raw CLI. That rule was unfollowable until 2026-08-19. A sweep of 474 session
+transcripts found 483 tool calls mentioning `objdiff-cli`, of which **296
+actually invoke it — 259 against DC3 or a DC3 worktree** (the rest are
+`rb3-xenon`/`rb3`, where MCP refuses by design, or the objdiff fork's own tests).
+By flag, those 259 DC3 invocations break down as:
+
+| flag reached for | n | now |
+|---|---|---|
+| `-f json` (parse it myself) | 181 | `output_format="json"` |
+| `--include-data` (vtables, RTTI) | 88 | `include_data=true` |
+| `--batch` (bulk) | 49 | `run_symbol_sweep` |
+| `-c functionRelocDiffs=…` | 31 | `diff_mode=` |
+| `--full-listing` | 28 | already existed (`full_listing`) |
+| `-1/-2` object pair | 25 | mostly `build=false`; true arbitrary pairs stay CLI |
+| `report generate`/`query` | 12 | infrastructure — stays CLI |
+| `--map-file` | 10 | automatic |
+| `doc-links` | 3 | infrastructure — stays CLI |
+
+Use this table before reaching for the binary.
 
 | Raw invocation | Sanctioned equivalent |
 |---|---|
 | `diff <sym> -f markdown --verdict` | `run_objdiff(symbol, project_dir)` |
 | `diff <sym> -f json --include-instructions` | `run_objdiff(..., output_format="json")` |
 | `diff <sym> --include-data` (vtables, RTTI, string pools) | `run_objdiff(..., include_data=true, unit="…")` |
-| `diff <sym>` with **no** `-c functionRelocDiffs=none` | `run_objdiff(..., diff_mode="raw")` |
+| `-c functionRelocDiffs=all` (count relocations) | `run_objdiff(..., diff_mode="raw")` |
 | `-c functionRelocDiffs=name_check` (report.json's ruler) | `run_objdiff(..., diff_mode="name_check")` |
+| `diff -1 <target.obj> -2 <base.obj> <sym>` merely to skip the build | `run_objdiff(..., build=false)` |
 | `diff <sym> -C 5` / `--full-listing` | `run_objdiff(..., context=5)` / `full_listing=true` |
 | `diff -u <unit> <sym>` (disambiguate) | `run_objdiff(..., unit="…")` |
 | a shell loop over many symbols | `run_symbol_sweep(kind="functions", symbols=[…])` |
@@ -282,9 +298,37 @@ MCP tool could express. Use this table before reaching for the binary.
 * the ninja `report generate` rule, `tools/none_guard.py`, `tools/project.py`,
   `scripts/measure_progress.sh`, `scripts/sync_match_percent.py` — these *are*
   the measurement layer;
-* `-1/-2` (diff two arbitrary object files with no project), `doc-links`,
-  `report query`/`report function` — no MCP surface, and none is needed for
-  ordinary decomp work.
+* `-1/-2` where the two objects genuinely are **not** this project's
+  target/base pair for one unit — e.g. `-1 $TGT -2 $TGT` to read the target's
+  own listing, or comparing a saved candidate `.obj`. (If you only wanted to
+  avoid a rebuild, use `build=false`.)
+* `doc-links`, `report query`/`report function` — no MCP surface, and none is
+  needed for ordinary decomp work.
+* **Anything in another repo.** `run_objdiff` raises `CrossProjectError` for a
+  foreign `project_dir` on purpose; 19 of the 296 transcript invocations were
+  `rb3-xenon` work correctly routed around MCP. Prefer that repo's own
+  orchestrator when one exists.
+
+### The relocation ruler, and a defect it hid
+
+Measured on this fork (objdiff-cli 4.2.3, `?Load@CamShot@@UAAXAAVBinStream@@@Z`,
+2026-08-19):
+
+| `-c functionRelocDiffs=` | fuzzy% | non-equal rows | reloc_ignored |
+|---|---|---|---|
+| *(flag omitted)* | 99.85558 | 119 | 22 |
+| `none` | 99.85558 | 119 | 22 |
+| `name_check` | 99.85558 | 119 | 22 |
+| `all` | 99.66141 | **151** | 11 |
+
+The fork's **default is already normalized**, so "raw" cannot be spelled by
+omitting the flag — only `all` counts relocations. `run_diff_inspect` shipped
+`diff_mode="raw"` as *omit `-c`* and was therefore **inert**: every raw request
+returned the normalized answer, while the schema promised "raw includes
+relocation diffs so you can inspect which relocations differ". That matters most
+for the wrong-vtable-slot class (`Splash::Suspend`/`Resume`), which lives
+entirely in the plane normalized scoring discards. Fixed 2026-08-19; both tools
+now route through one `RELOC_RULER` table in `mcp_server.py`.
 
 ### `run_symbol_sweep`
 
