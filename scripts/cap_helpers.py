@@ -39,6 +39,7 @@ STW_R12_LR_SLOT = 0x9181FFF8   # stw   r12, -0x8(r1)
 LWZ_R12_LR_SLOT = 0x8181FFF8   # lwz   r12, -0x8(r1)
 MTLR_R12        = 0x7D8803A6   # mtlr  r12
 BLR             = 0x4E800020   # blr
+NOP             = 0x60000000   # ori r0,r0,0
 
 
 def uses_helpers(relocs):
@@ -47,23 +48,70 @@ def uses_helpers(relocs):
                for r in relocs)
 
 
+class UnsupportedShape(Exception):
+    """The function's helper usage is a shape this rewriter cannot emulate."""
+
+
+def _kind(sym):
+    if sym.startswith("__savegprlr_"):
+        return "save_gpr"
+    if sym.startswith("__restgprlr_"):
+        return "rest_gpr"
+    if sym.startswith(("__savefpr_", "__savevmx_")):
+        return "save_other"
+    if sym.startswith(("__restfpr_", "__restvmx_")):
+        return "rest_other"
+    return None
+
+
 def neutralize(code, relocs):
-    """Rewrite helper call sites. Returns (new_code, kept_relocs)."""
+    """Rewrite helper call sites. Returns (new_code, kept_relocs).
+
+    Classification is by SYMBOL, not by the link bit: MSVC emits
+    `bl __restfpr_28` immediately followed by `b __restgprlr_27`, so keying on
+    LK misreads the FPR restore as a save and corrupts the LR slot. That bug
+    manufactured decomp-only UC_ERR_EXCEPTION faults in exactly the functions
+    that spill FPRs (CharBonesSamples::Relativize et al).
+
+      __savegprlr_N (bl)  -> stw r12, -0x8(r1)     the LR spill; r12 = mflr'd LR
+      __savefpr_N   (bl)  -> nop                   FPR spill only, no LR
+      __restfpr_N   (bl)  -> nop                   ditto
+      __restgprlr_N (b)   -> b <appendix>          lwz r12,-0x8(r1); mtlr r12; blr
+
+    -0x8(r1) is the top word of the frame the callee just released, which MSVC
+    reserves for this save area, so nothing else can be living there.
+
+    A tail-branched FPR restore in a function with no GPR save helper has no
+    LR spill to recover and raises UnsupportedShape rather than emitting
+    something that silently returns to a garbage address.
+    """
     if code is None or not uses_helpers(relocs):
         return code, relocs
     buf = bytearray(code)
     kept = []
     restore_sites = []
+    saw_save_gpr = any(_kind(r["symbol_name"]) == "save_gpr"
+                       for r in relocs if r["type_name"] == "REL24")
+
     for r in relocs:
         sym, off = r["symbol_name"], r["offset"]
-        if r["type_name"] == "REL24" and any(sym.startswith(p) for p in HELPER_PREFIXES):
-            insn = struct.unpack_from(">I", buf, off)[0]
-            if insn & 1:          # bl  -> save helper: open-code the LR spill
-                struct.pack_into(">I", buf, off, STW_R12_LR_SLOT)
-            else:                 # b   -> restore helper: needs 3 insns, relay
-                restore_sites.append(off)
-        else:
+        kind = _kind(sym) if r["type_name"] == "REL24" else None
+        if kind is None:
             kept.append(r)
+            continue
+        insn = struct.unpack_from(">I", buf, off)[0]
+        tail = not (insn & 1)          # `b` (no link) = tail branch
+        if kind == "save_gpr":
+            struct.pack_into(">I", buf, off, STW_R12_LR_SLOT)
+        elif kind in ("save_other",) or (kind == "rest_other" and not tail):
+            struct.pack_into(">I", buf, off, NOP)
+        elif kind in ("rest_gpr", "rest_other"):
+            if tail:
+                if not saw_save_gpr:
+                    raise UnsupportedShape(f"tail {sym} with no GPR save helper")
+                restore_sites.append(off)
+            else:
+                struct.pack_into(">I", buf, off, NOP)
 
     if restore_sites:
         appendix = len(buf)
