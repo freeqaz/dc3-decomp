@@ -476,3 +476,23 @@ sites at `EQEffect.cpp:600,607,615`.
 function `?SetParameter@EQEffect@@UAAXIM@Z`. **No such symbol exists.** The real
 one is `?SetParameter@EQEffect@@QAAXHM@Z` at `.text:0x82E59430` — public
 **non-virtual** (`Q`, not `U`), taking `(int, float)` (`HM`, not `IM`).
+
+**Re-measured at merge time (2026-08-19), rebased onto `main` `112f59ee3`**, with
+the branch and a freshly-built baseline worktree at that same `main`. This run
+covers not only the `createFilter` fix but also the `FILTER::numpoles` field and
+the three `(int)` casts in `LiveCameraInput.cpp`:
+
+```
+functions enumerated:              A=48344   B=48344
+match_percent_normalized  removed=0 added=0 differ=0
+fuzzy_match_percent       removed=0 added=0 differ=1
+    default/system/dsp/EQEffect :: ?SetParameter@EQEffect@@QAAXHM@Z
+        84.49353 -> 84.521255
+top-level measures identical: True     per-unit measures identical: True
+matched_functions: 29508 both sides
+```
+
+Negative control on the comparator itself, so "0 differences" is not vacuous: a
+perturbed copy of the branch report (one function's normalized score set to 42.0,
+one function deleted) was detected as exactly 1 removed and 1 differing, naming
+both.
