@@ -227,9 +227,13 @@ READING_A = _mangle("_s", "2", ENCLOSING)     # digit 2 decodes to 3
 READING_B = _mangle("_s", "6", ENCLOSING)     # digit 6 decodes to 7
 # The map key is whatever the parser itself calls the enclosing function -- taken
 # FROM the parser rather than re-spelled here, so the test cannot pass by
-# agreeing with a constant this file invented.
-FN_KEY = sic.parse(READING_A)[2]
-assert sic.parse(READING_B)[2] == FN_KEY
+# agreeing with a constant this file invented.  RAW_FN_KEY is the bare parse
+# output (what the historical last-write-wins map keyed on); FN_KEY is what the
+# index keys on today, after `data_key` strips the static's type and blanks the
+# MSVC back-reference digits so a data symbol and its ??__F helper collide.
+RAW_FN_KEY = sic.parse(READING_A)[2]
+FN_KEY = sic.data_key(RAW_FN_KEY)
+assert sic.parse(READING_B)[2] == RAW_FN_KEY
 assert sic.parse(READING_A)[1] != sic.parse(READING_B)[1]
 
 
@@ -253,7 +257,7 @@ def test_conflicting_scopes_were_order_dependent_and_now_are_not():
     assert forward != reverse, (
         "the historical storage must be shown to be order-dependent, or this "
         "test is not a control")
-    assert forward[FN_KEY]["_s"] != reverse[FN_KEY]["_s"]
+    assert forward[RAW_FN_KEY]["_s"] != reverse[RAW_FN_KEY]["_s"]
 
     # The fix: order-independent, and lossless.
     fwd = sic.ScopeIndex("t")
@@ -306,8 +310,10 @@ def test_glob_results_are_sorted_before_use(tmp_path):
     for sub, n in (("z", "z1.obj"), ("a", "a1.obj"), ("z", "z0.obj")):
         (objdir / sub / n).write_text(READING_A + "\n")
     idx = sic.ScopeIndex("ours")
-    objs, failures = sic.load_ours(str(objdir), idx, shutil.which("strings"))
+    objs, failures, skipped_manual = sic.load_ours(
+        str(objdir), idx, shutil.which("strings"))
     assert failures == []
+    assert skipped_manual == 0
     assert objs == sorted(objs), "load_ours must not inherit readdir order"
 
 
@@ -316,10 +322,18 @@ def test_glob_results_are_sorted_before_use(tmp_path):
 # --------------------------------------------------------------------------- #
 
 def _tiny_project(tmp_path):
-    """A project with one target local static and one object that holds it."""
-    cfg = tmp_path / "config" / "373307D9"
-    cfg.mkdir(parents=True)
-    (cfg / "symbols.txt").write_text(f"{READING_A} = .text:0x82000000;\n")
+    """A project with one target local static and one object that holds it.
+
+    The target side is the ORIGINAL image's linker map, not
+    `config/373307D9/symbols.txt` -- 1,194 of symbols.txt's 2,192 local-static
+    names were synthesised from our own build, so diffing against them is a
+    tautology.  The map line shape is `<sect>:<offset> <symbol> ...`.
+    """
+    orig = tmp_path / "orig" / "373307D9"
+    orig.mkdir(parents=True)
+    (orig / "ham_xbox_r.map").write_text(
+        " Address         Publics by Value\n"
+        f" 0001:00000000  {READING_A}  82000000 f   u.obj\n")
     src = tmp_path / "build" / "373307D9" / "src"
     src.mkdir(parents=True)
     # `strings` on a text file returns its text, so this stands in for a COFF
@@ -356,6 +370,27 @@ def test_failing_strings_is_loud_and_nonzero(tmp_path):
     assert "FAILED" in broken.stderr
     # the count of failed objects must be stated, not merely admitted
     assert "1 of 1 objects" in broken.stderr, broken.stderr
+
+
+def test_missing_target_map_is_fatal_not_a_clean_census(tmp_path):
+    """The other half of the same shape, on the side the 2026-08-19 pass moved.
+
+    With the target authority absent the target index is EMPTY, so every
+    function falls into `ours-only` and the tool prints `match=0 diff=0`, which
+    reads as "no skew" -- the missing-input-means-clean-verdict sub-shape, on
+    the very tool that was fixed for it.  It must exit non-zero instead.
+    """
+    proj = _tiny_project(tmp_path)
+    healthy = _run_scope(proj)
+    (proj / "orig" / "373307D9" / "ham_xbox_r.map").unlink()
+    absent = _run_scope(proj)
+
+    assert healthy.returncode == EXIT_OK
+    assert absent.returncode == sic.EXIT_TOOL_FAILURE
+    assert absent.returncode != healthy.returncode
+    assert "diff=0" not in absent.stdout, (
+        "an absent target authority must not be able to print a no-skew line")
+    assert "not found" in absent.stderr
 
 
 def test_missing_strings_binary_is_fatal(tmp_path):

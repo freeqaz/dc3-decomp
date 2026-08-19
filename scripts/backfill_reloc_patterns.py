@@ -106,10 +106,20 @@ def main():
     rows = conn.execute(
         "SELECT id, symbol FROM functions WHERE excluded = 0 ORDER BY id"
     ).fetchall()
+    # `rows = rows[:args.limit]` ran BEFORE the count below, so `--limit`
+    # silently rewrote the denominator this tool then wrote back to the DB.
+    universe = len(rows)
+    truncated = bool(args.limit) and args.limit < universe
     if args.limit:
         rows = rows[:args.limit]
-    print(f"Scanning {len(rows)} functions with "
-          f"functionRelocDiffs={args.reloc_config} ...")
+    if truncated:
+        print(f"TRUNCATED by --limit: scanning {len(rows)} of {universe} "
+              f"functions with functionRelocDiffs={args.reloc_config} -- "
+              f"the histogram below is a SAMPLE, and only the scanned rows "
+              f"are updated")
+    else:
+        print(f"Scanning {len(rows)} of {universe} functions with "
+              f"functionRelocDiffs={args.reloc_config} ...")
 
     # run_batch now returns (results, line_stats); the stats count the JSONL
     # lines the workers discarded, which used to be two bare `continue`s.
@@ -124,13 +134,14 @@ def main():
     for r in results:
         for p in (r.detected_patterns or []):
             hist[p] += 1
-    print(f"\nPattern histogram ({len(results)} results):")
+    print(f"\nPattern histogram ({len(results)} results of {universe} "
+          f"functions in the DB):")
     for k, v in hist.most_common():
         mark = "  <- reloc-sensitive" if k in RELOC_SENSITIVE else ""
         print(f"  {k:34s} {v:6d}{mark}")
 
     if args.histogram:
-        return 0
+        return 3 if truncated else 0
 
     updates = []
     for r in results:
@@ -142,15 +153,22 @@ def main():
     for value, _db_id, column in updates:
         if value:
             by_col[column] += 1
+    # `before` counts the WHOLE table; `by_col` counts only what was scanned.
+    # Under --limit those are different denominators, so say which is which
+    # rather than rendering them as a before/after pair.
     print("\nWould set:")
     for column in RELOC_SENSITIVE.values():
         before = conn.execute(
             f"SELECT COUNT(*) FROM functions WHERE {column} = 1").fetchone()[0]
-        print(f"  {column}: {before} -> {by_col[column]}")
+        if truncated:
+            print(f"  {column}: {before} set across all {universe} rows "
+                  f"-> {by_col[column]} within the {len(results)} scanned")
+        else:
+            print(f"  {column}: {before} -> {by_col[column]}")
 
     if not args.apply:
         print("\n(dry run) Re-run with --apply to write.")
-        return 0
+        return 3 if truncated else 0
 
     for column in RELOC_SENSITIVE.values():
         payload = [(v, i) for v, i, c in updates if c == column]
@@ -161,8 +179,10 @@ def main():
     for column in RELOC_SENSITIVE.values():
         n = conn.execute(
             f"SELECT COUNT(*) FROM functions WHERE {column} = 1").fetchone()[0]
-        print(f"\nApplied: {column} = 1 on {n} rows")
-    return 0
+        print(f"\nApplied: {column} = 1 on {n} rows "
+              f"({len(results)} of {universe} functions were rescanned)")
+    # Exit 3 == TRUNCATED, matching scripts/analysis/coverage.py.
+    return 3 if truncated else 0
 
 
 if __name__ == "__main__":
