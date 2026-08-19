@@ -60,19 +60,7 @@ void Invert(const Hmx::Matrix3 &min, Hmx::Matrix3 &mout) {
     );
 }
 
-void Multiply(const Hmx::Matrix3 &a, const Hmx::Matrix3 &b, Hmx::Matrix3 &out) {
-    out.Set(
-        a.x.x * b.x.x + a.x.y * b.y.x + a.x.z * b.z.x,
-        a.x.x * b.x.y + a.x.y * b.y.y + a.x.z * b.z.y,
-        a.x.x * b.x.z + a.x.y * b.y.z + a.x.z * b.z.z,
-        a.y.x * b.x.x + a.y.y * b.y.x + a.y.z * b.z.x,
-        a.y.x * b.x.y + a.y.y * b.y.y + a.y.z * b.z.y,
-        a.y.x * b.x.z + a.y.y * b.y.z + a.y.z * b.z.z,
-        a.z.x * b.x.x + a.z.y * b.y.x + a.z.z * b.z.x,
-        a.z.x * b.x.y + a.z.y * b.y.y + a.z.z * b.z.y,
-        a.z.x * b.x.z + a.z.y * b.y.z + a.z.z * b.z.z
-    );
-}
+// Multiply(Matrix3, Matrix3, Matrix3) is inline in Mtx.h -- see the note there.
 
 void Multiply(const Transform &a, const Transform &b, Transform &out) {
 #ifdef HX_NATIVE
@@ -161,17 +149,7 @@ void FastInvert(const Hmx::Matrix3 &min, Hmx::Matrix3 &mout) {
 
 QuatXfm::QuatXfm(const Transform &tf) : v(tf.v), q(tf.m) {}
 
-void Transform::LookAt(const Vector3 &target, const Vector3 &up) {
-    // Engine camera convention: m.y = forward (view direction toward target),
-    // m.z = up. The previous decomp wrote these rows swapped AND aliased the
-    // up-hint (callers pass xfm.m.z as `up`); writing m.z first made m.y == the
-    // just-computed forward vector -> degenerate basis -> chaotic camera roll.
-    // Target asm (?LookAt@Transform@@QAAXABVVector3@@0@Z) stores (target - v) at
-    // m.y (0x10) and copies up into m.z (0x20), matching og-dc3.
-    Subtract(target, v, m.y);
-    m.z = up;
-    Normalize(m, m);
-}
+// Transform::LookAt is defined in-class in Mtx.h -- see the note there.
 
 // Matrix4 operator*(Matrix4, Matrix4) is inline in Mtx.h
 

@@ -1,5 +1,6 @@
 #pragma once
 #include "math\Mtx.h"
+#include "math\Trig.h"
 #include "math\Vec.h"
 
 #define PI 3.1415927f
@@ -24,9 +25,29 @@ void MakeRotMatrix(const Vector3 &, const Vector3 &, Hmx::Matrix3 &);
 void MakeRotMatrix(const Hmx::Quat &, Hmx::Matrix3 &);
 void RotateAboutX(const Hmx::Matrix3 &, float, Hmx::Matrix3 &);
 void RotateAboutZ(const Hmx::Matrix3 &, float, Hmx::Matrix3 &);
-void MakeRotMatrixX(float, Hmx::Matrix3 &);
-void MakeRotMatrixY(float, Hmx::Matrix3 &);
-void MakeRotMatrixZ(float, Hmx::Matrix3 &);
+// These three are `inline` in the header, NOT out-of-line in Rot.cpp: the
+// target has exactly one out-of-line copy of each, and it sits in the address
+// range the split attributes to char/CharBonesMeshes -- i.e. the original
+// emitted them as a COMDAT from every user TU and the linker kept one. With
+// them in Rot.cpp, CharBonesMeshes.obj has no body at all and objdiff scores
+// all three at 0%. Matches ../og-dc3-decomp/src/system/math/Rot.h verbatim.
+inline void MakeRotMatrixX(float angle, Hmx::Matrix3 &m) {
+    float c = Cosine(angle);
+    float s = Sine(angle);
+    m.Set(1.0f, 0.0f, 0.0f, 0.0f, c, s, 0.0f, -s, c);
+}
+
+inline void MakeRotMatrixY(float angle, Hmx::Matrix3 &m) {
+    float c = Cosine(angle);
+    float s = Sine(angle);
+    m.Set(c, 0.0f, -s, 0.0f, 1.0f, 0.0f, s, 0.0f, c);
+}
+
+inline void MakeRotMatrixZ(float angle, Hmx::Matrix3 &m) {
+    float c = Cosine(angle);
+    float s = Sine(angle);
+    m.Set(c, s, 0.0f, -s, c, 0.0f, 0.0f, 0.0f, 1.0f);
+}
 void NormalizeAboutX(Hmx::Matrix3 &);
 void MakeEuler(const Hmx::Quat &, Vector3 &);
 void MakeRotQuat(const Vector3 &, const Vector3 &, Hmx::Quat &);

@@ -228,6 +228,13 @@ inline BinStream &operator>>(BinStream &bs, Hmx::Quat &q) {
     return bs;
 }
 
+// Declared here so Transform::LookAt (defined in-class, below) can call it.
+// og-dc3's Mtx.h reaches the same result by placing the whole Matrix3
+// Normalize/NormalizeAboutX/NormalizeAboutY block above class Transform; a
+// forward declaration is the smaller edit and leaves the definition where the
+// rest of this header expects it.
+inline void Normalize(const Hmx::Matrix3 &in, Hmx::Matrix3 &out);
+
 class Transform {
 private:
     static Transform sID;
@@ -257,7 +264,23 @@ public:
         v = vec;
     }
 
-    void LookAt(const Vector3 &, const Vector3 &);
+    // Defined IN-CLASS (implicitly inline), not out-of-line in mtx.cpp: the
+    // target's single copy of ?LookAt@Transform@@QAAXABVVector3@@0@Z sits in
+    // char/ClipCollide's address range -- a header COMDAT the linker folded,
+    // not a member emitted by mtx.cpp. Same shape and same body as
+    // ../og-dc3-decomp/src/system/math/Mtx.h.
+    //
+    // Engine camera convention: m.y = forward (view direction toward target),
+    // m.z = up. An older decomp wrote these rows swapped AND aliased the
+    // up-hint (callers pass xfm.m.z as `up`); writing m.z first made m.y ==
+    // the just-computed forward vector -> degenerate basis -> chaotic camera
+    // roll. Target asm stores (target - v) at m.y (0x10) and copies up into
+    // m.z (0x20). Do not reorder these two statements.
+    void LookAt(const Vector3 &target, const Vector3 &up) {
+        Subtract(target, v, m.y);
+        m.z = up;
+        Normalize(m, m);
+    }
     void Zero() {
         m.Zero();
         v.Zero();
@@ -387,7 +410,23 @@ inline void Normalize(const Hmx::Matrix3 &in, Hmx::Matrix3 &out) {
     );
 }
 
-void Multiply(const Hmx::Matrix3 &, const Hmx::Matrix3 &, Hmx::Matrix3 &);
+// Header inline, not out-of-line in mtx.cpp: the target's only copy of
+// ?Multiply@@YAXABVMatrix3@Hmx@@0AAV12@@Z (680B, fully unrolled) sits in
+// char/CharLookAt's address range, which is where a folded header COMDAT
+// lands, not where mtx.cpp's members go. Body unchanged.
+inline void Multiply(const Hmx::Matrix3 &a, const Hmx::Matrix3 &b, Hmx::Matrix3 &out) {
+    out.Set(
+        a.x.x * b.x.x + a.x.y * b.y.x + a.x.z * b.z.x,
+        a.x.x * b.x.y + a.x.y * b.y.y + a.x.z * b.z.y,
+        a.x.x * b.x.z + a.x.y * b.y.z + a.x.z * b.z.z,
+        a.y.x * b.x.x + a.y.y * b.y.x + a.y.z * b.z.x,
+        a.y.x * b.x.y + a.y.y * b.y.y + a.y.z * b.z.y,
+        a.y.x * b.x.z + a.y.y * b.y.z + a.y.z * b.z.z,
+        a.z.x * b.x.x + a.z.y * b.y.x + a.z.z * b.z.x,
+        a.z.x * b.x.y + a.z.y * b.y.y + a.z.z * b.z.y,
+        a.z.x * b.x.z + a.z.y * b.y.z + a.z.z * b.z.z
+    );
+}
 void Multiply(const Vector3 &, const Transform &, Vector3 &);
 
 inline void MultiplyTranspose(const Vector3 &v, const Transform &t, Vector3 &out) {

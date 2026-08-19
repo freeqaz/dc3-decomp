@@ -41,6 +41,26 @@ The signal (per function, from objdiff-cli --include-instructions JSON):
       field-load   our body is a single lwz/lfs off this + return        -> return mX;
       small        a handful of real insns                               -> partial
 
+TWO TIERS, AND THE ONE THAT WAS INVISIBLE UNTIL 2026-08-19:
+  Tier 1 "we wrote a WRONG/SHORT body"  — our object defines the symbol, objdiff
+      scores it, the row carries `fuzzy_match_percent`. This is what the scanner
+      measured from wave 14 through wave 23, and this tier really is exhausted
+      (broad sweeps re-find only Synth360::PreInit, MemAlloc, NgEnviron::Select).
+  Tier 2 "we wrote NO body at all"      — the target defines the symbol, our
+      object does not. objdiff emits `match_percent_normalized: 0.0` and OMITS
+      `fuzzy_match_percent` entirely. `gather_candidates` used to `continue` on
+      the missing key, so **1030 authorable rows (849 >= 24B) never entered the
+      candidate set**, and four consecutive broad sweeps reported the pool
+      "EXHAUSTED" while never having looked at them. Fixed; see gather_candidates.
+      Triage note: tier 2 is dominated by non-authorable noise — per-TU template
+      instantiations, MSVC COMDAT copies of header inlines, `merged_`/`fn_` ICF
+      and EH artifacts, and the xdk/binkxenon SDK trees. Filter those before
+      reading a count. The residue that IS actionable is the COMDAT-PLACEMENT
+      class: a function we define out-of-line in a .cpp that the original had
+      `inline` in a header, so the target's single folded copy lands in some
+      other TU's address range and we score 0 there (fixed for MakeRotMatrixX/
+      Y/Z in Rot.h, 3 x 144B, 0 -> 100%).
+
 DISTINGUISHED FROM (deliberately NOT flagged):
   - hard divergences where OUR body is *substantial but wrong* (e.g. RndShader
     CalcShaderOpts at 36% with hundreds of our-side instructions): those are
@@ -197,8 +217,23 @@ def scan_one(objdiff, project, symbol, unit, our_pct, target_size):
 
 
 def gather_candidates(report_path, max_pct, min_target_size, units_grep):
+    """Candidate rows from report.json.
+
+    BIT-ROT FIX (2026-08-19): the report does NOT always carry
+    `fuzzy_match_percent`.  For a function whose symbol has **no base body at
+    all** — the target defines it, our object does not — objdiff emits only
+    `match_percent_normalized` (0.0) and omits the fuzzy key entirely.  The old
+    code did `if pct is None: continue`, which silently discarded **1030
+    authorable rows (849 of them >= 24B)** — and those are precisely the most
+    extreme fake-impl class: functions we never wrote.  `DxShaderMgr::
+    SetVConstant(VShaderConstant, const Vector4&)` (22 insns, "Stub (High)")
+    sat in that hole from wave-14 through wave-23, across four broad sweeps
+    that all reported the pool "EXHAUSTED".  Fall back to the normalized key,
+    and never drop a row without counting it.
+    """
     rep = json.load(open(report_path))
     out = []
+    skipped_no_pct = []
     for u in rep["units"]:
         un = u.get("name") or ""
         if un.startswith(NON_AUTHORABLE_PREFIXES):
@@ -207,16 +242,23 @@ def gather_candidates(report_path, max_pct, min_target_size, units_grep):
             continue
         for f in (u.get("functions") or []):
             pct = f.get("fuzzy_match_percent")
+            if pct is None:
+                # No fuzzy score => no base body was diffed. The normalized key
+                # is still present and is the honest score (0.0 = absent).
+                pct = f.get("match_percent_normalized")
             sz = int(f.get("size") or 0)
             if pct is None:
+                skipped_no_pct.append((f.get("name"), un))
                 continue
             if pct > max_pct:
                 continue
             if sz < min_target_size:
                 continue
             out.append((f["name"], un, pct, sz))
-    out.sort(key=lambda r: (r[2], -r[3]))  # lowest pct, largest target first
-    return out
+    # Tie-break on symbol so the candidate order (and every downstream sort that
+    # inherits it) is byte-stable across runs.
+    out.sort(key=lambda r: (r[2], -r[3], r[0]))  # lowest pct, largest target first
+    return out, skipped_no_pct
 
 
 # Wave-13 known positives — the scanner MUST re-find these (recall validation).
@@ -266,7 +308,12 @@ def main():
     report = args.report or os.path.join(project, "build", "373307D9", "report.json")
     objdiff = args.objdiff if os.path.isfile(args.objdiff) else os.path.join(REPO, "bin", "objdiff-cli")
 
-    cands = gather_candidates(report, args.max_pct, args.min_target_size, args.units_grep)
+    cands, skipped_no_pct = gather_candidates(
+        report, args.max_pct, args.min_target_size, args.units_grep)
+    if skipped_no_pct:
+        print(f"[fake_impl_scan] WARNING: {len(skipped_no_pct)} authorable rows carried "
+              f"neither fuzzy_match_percent nor match_percent_normalized and were skipped",
+              file=sys.stderr)
     capped = False
     if args.limit and len(cands) > args.limit:
         cands = cands[:args.limit]
@@ -277,8 +324,9 @@ def main():
           f"{' (CAPPED)' if capped else ''}", file=sys.stderr)
 
     results = []
+    unscannable = []          # objdiff produced no instruction rows at all
     with ThreadPoolExecutor(max_workers=args.workers) as ex:
-        futs = {ex.submit(scan_one, objdiff, project, sym, un, pct, sz): sym
+        futs = {ex.submit(scan_one, objdiff, project, sym, un, pct, sz): (sym, un)
                 for sym, un, pct, sz in cands}
         done = 0
         for fut in as_completed(futs):
@@ -288,6 +336,12 @@ def main():
                 print(f"  scanned {done}/{len(cands)}", file=sys.stderr)
             if r:
                 results.append(r)
+            else:
+                # scan_one returns None when objdiff emitted no instructions (or
+                # no target side). Do NOT let these vanish: a dropped row is
+                # indistinguishable from a clean one in the summary.
+                sym, un = futs[fut]
+                unscannable.append({"symbol": sym, "unit": un})
 
     errors = [r for r in results if r.get("error")]
     scanned = [r for r in results if not r.get("error")]
@@ -315,7 +369,9 @@ def main():
                    or (r["verdict"] == "incomplete-impl" and not is_fake(r))]
 
     order = {"empty-stub": 0, "trivial-stub": 1, "partial-stub": 2, "incomplete-impl": 3}
-    fakes.sort(key=lambda r: (order.get(r["verdict"], 9), -r["target_size"], r["our_pct"]))
+    # symbol last = total order, so two runs emit byte-identical lists
+    fakes.sort(key=lambda r: (order.get(r["verdict"], 9), -r["target_size"],
+                              r["our_pct"], r["symbol"]))
 
     out = {
         "scanned": len(cands),
@@ -327,6 +383,9 @@ def main():
         "fake_count": len(fakes),
         "divergence_count": len(divergences),
         "error_count": len(errors),
+        "unscannable_count": len(unscannable),
+        "skipped_no_pct_count": len(skipped_no_pct),
+        "unscannable": sorted(unscannable, key=lambda r: (r["unit"], r["symbol"])),
         "fakes": fakes,
         "divergences": divergences if args.include_divergences else [],
         "errors": [{"symbol": e["symbol"], "unit": e["unit"], "error": e["error"]}
@@ -367,6 +426,7 @@ def main():
     print(f"scanned       : {len(cands)}", file=sys.stderr)
     print(f"FAKE IMPLS    : {len(fakes)} (trivial body vs substantial target)", file=sys.stderr)
     print(f"divergences   : {len(divergences)} (real-but-wrong code, NOT stubs)", file=sys.stderr)
+    print(f"unscannable   : {len(unscannable)} (objdiff emitted no instruction rows)", file=sys.stderr)
     print(f"errors        : {len(errors)}", file=sys.stderr)
     print(f"out           : {args.out}", file=sys.stderr)
     for h in fakes:

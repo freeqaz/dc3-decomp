@@ -64,7 +64,25 @@ inline BinStream &operator>>(BinStream &bs, Hmx::Rect &rect) {
 
 class Triangle {
 public:
-    void Set(const Vector3 &v0, const Vector3 &v1, const Vector3 &v2);
+    // In-class (implicitly inline), not out-of-line in Geo.cpp: the target's
+    // only copy of ?Set@Triangle@@QAAXABVVector3@@00@Z sits in rndobj/Mesh's
+    // address range -- a folded header COMDAT, and RndMesh::UpdateBSP is the
+    // TU that odr-uses it. Body unchanged.
+    // frame.x / frame.y are the two EDGE vectors (v1-v0, v2-v0) and frame.z is
+    // the face NORMAL. The decomp had y and z swapped -- it put edge 2 in
+    // frame.z and the normal in frame.y -- while every consumer in the tree
+    // reads the target convention: Box::Contains and Intersect(Triangle,Box)
+    // reconstruct v1/v2 from frame.x/frame.y, Intersect(Segment,Triangle) and
+    // RndMesh's BSP build (`Plane(tri.origin, tri.frame.z)`) take frame.z as
+    // the normal. So every BSP plane built from a triangle got an edge vector
+    // where it wanted a normal. Target asm stores edge 2 at 0x20 (frame.y) and
+    // the cross product at 0x30 (frame.z).
+    void Set(const Vector3 &v0, const Vector3 &v1, const Vector3 &v2) {
+        origin = v0;
+        Subtract(v1, v0, frame.x);
+        Subtract(v2, v0, frame.y);
+        Cross(frame.x, frame.y, frame.z);
+    }
 
     Vector3 origin;
     Hmx::Matrix3 frame;
