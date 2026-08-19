@@ -317,11 +317,19 @@ void RndAmbientOcclusion::Clean() {
 }
 
 void RndAmbientOcclusion::BuildSHCoeff(const Vector3 &inVector, float *fArr) const {
-    // og-dc3 source spells this `Abs(...)`; the explicit <float> is required here
-    // because our math/Utl.h carries a non-retail `inline float Abs(float)` shim
-    // (see docs/decomp/patterns/fixable-abs-overload-shim.md). Retail's header had
-    // only the template, so the template is what this assert must instantiate.
-    MILO_ASSERT(Abs<float>(1.0f - Length(inVector)) <= kSmallFloat, 0x298);
+    // og-dc3 source spells this `Abs(...)` and so does the target: the assert
+    // string baked into .rdata is 44 bytes, "Abs(1.0f - Length(inVector)) <= "
+    // "kSmallFloat", where the `Abs<float>` spelling produced a 51-byte string.
+    // MILO_ASSERT stringifies its argument, so the explicit <float> that
+    // docs/decomp/patterns/fixable-abs-overload-shim.md prescribes for the
+    // *lowering* is visible in the image as the wrong text -- and no percentage
+    // charges it, because objdiff folds relocation names into arg_diff_score.
+    // The lowering still has to be the template's, so the shim is bypassed with
+    // a file-local macro: `#` suppresses expansion of the stringified argument,
+    // so the recorded text is `Abs(...)` while the emitted call is `Abs<float>`.
+#define Abs(x) Abs<float>(x)
+    MILO_ASSERT(Abs(1.0f - Length(inVector)) <= kSmallFloat, 0x298);
+#undef Abs
     fArr[0] = 0.2820948f;
     fArr[1] = inVector.y * 0.48860252f;
     fArr[2] = inVector.z * 0.48860252f;

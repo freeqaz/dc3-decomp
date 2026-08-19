@@ -767,7 +767,7 @@ void BinkMovieImpl::SetRect() {
     CHECK_THREAD;
     float availWidth, availHeight, fullHeight;
     if (mWidth != 0) {
-        MILO_ASSERT(mHeight, 0x466);
+        MILO_ASSERT(mHeight != 0, 0x466);
         // ASSIGNMENT order matters here and declaration order does not (the
         // documented DC3 lever): with mWidth assigned first the compiler emits
         // both fcfid's then both frsp's and the function tops out at 97.1%.

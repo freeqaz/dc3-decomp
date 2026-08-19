@@ -16,7 +16,6 @@
 
 Archive *TheArchive;
 bool gDebugArkOrder;
-int kArkBlockSize = 0x10000;
 
 #pragma region ArkHash
 

@@ -94,8 +94,17 @@ void BinkSetMemory(void *(*)(unsigned int), void (*)(void *)) {}
 void BinkSetIO(int (*)(BINKIO *, const char *, unsigned int)) {}
 #else
 extern void BinkFree(void *);
-extern void BinkSetMemory(void *(*)(unsigned int), void (*)(void *));
-extern void BinkSetIO(int (*)(BINKIO *, const char *, unsigned int));
+// The Bink SDK is C: binkxenon/bink.h declares these RADEXPFUNC/RADEXPLINK and
+// the target's linker map carries them UNMANGLED (`BinkSetIO` @82ee7c38,
+// `BinkSetMemory` @82ee9e20, both from binkxenon:binkread.obj). Declaring them
+// as C++ here made BinkInit reference `?BinkSetIO@@YAXP6AHPAUBINKIO@@PBDI@Z@Z`
+// instead -- the same shape as the createFilter bug, and equally invisible:
+// relocation names are folded into arg_diff_score, so BinkInit read 100% with
+// zero mismatches while calling symbols that do not exist in the image.
+// (src/link_glue.cpp carries /ALTERNATENAME entries that were papering over
+// exactly this; they become inert rather than load-bearing.)
+extern "C" void BinkSetMemory(void *(*)(unsigned int), void (*)(void *));
+extern "C" void BinkSetIO(int (*)(BINKIO *, const char *, unsigned int));
 extern "C" unsigned int RADTimerRead();
 #endif
 

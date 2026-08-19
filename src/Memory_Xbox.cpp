@@ -20,7 +20,12 @@ void MemDeltaFullReport();
 
 namespace {
     int gPhysicalUsage;
-    char *gPhysicalType = (char *)gNullStr;
+    // ?gPhysicalType@?A0x2be09a71@@3PBDB -- MSVC repeats a pointee const in
+    // the trailing cv slot, so PBD..B is `const char *`, not `const char *const`
+    // (the target stores to it: `stw r4, gPhysicalType@l(r11)`). We had `char *`,
+    // mangled PAD..A, so all three PhysMemTypeTracker functions referenced a
+    // symbol the image does not contain.
+    const char *gPhysicalType = gNullStr;
 
     const char *AllocType(unsigned long p1) {
         bool isPhys = (p1 & 0x80000000) != 0;
@@ -335,7 +340,7 @@ INT XMemSize(LPVOID ptr, DWORD attrs) {
 
 PhysMemTypeTracker::PhysMemTypeTracker(Symbol name) {
     if (gPhysicalType == gNullStr) {
-        gPhysicalType = (char *)name.Str();
+        gPhysicalType = name.Str();
         mActive = true;
     } else {
         mActive = false;
@@ -344,7 +349,7 @@ PhysMemTypeTracker::PhysMemTypeTracker(Symbol name) {
 
 PhysMemTypeTracker::~PhysMemTypeTracker() {
     if (mActive) {
-        gPhysicalType = (char *)gNullStr;
+        gPhysicalType = gNullStr;
     }
 }
 

@@ -1,5 +1,11 @@
-#include "movie\MovieSys.h"
+// Order matters and is observable in the image: __FILE__ records the path
+// by which a header was FIRST reached, and MSVC bakes that into the
+// MEM_OVERLOAD / MILO_ASSERT strings. This TU's target strings spell
+// `...\src\movie\MovieImpl_p.h` (backslash, i.e. reached bare from this
+// directory); BinkMovieSys.cpp's spell `...\src\movie/MovieImpl_p.h`
+// (forward slash, i.e. reached through the -I path as `movie/...`).
 #include "MovieImpl_p.h"
+#include "movie\MovieSys.h"
 #include "MovieSys.h"
 #include "TexMovie.h"
 #include "obj/Object.h"

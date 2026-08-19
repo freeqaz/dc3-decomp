@@ -101,4 +101,4 @@ private:
 extern Archive *TheArchive;
 void ArchiveInit();
 
-extern int kArkBlockSize;
+extern const int kArkBlockSize;
