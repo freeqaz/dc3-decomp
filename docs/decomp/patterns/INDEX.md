@@ -469,4 +469,5 @@ From 143 successful fine-tuning attempts (90%+ start, 100% end):
 - [verifiable-icf.md](verifiable-icf.md) — ICF, LTCG, float constant pooling
 - [harmful-avoid.md](harmful-avoid.md) — Member aliasing, child pointer in loop
 - [behavioral-divergence.md](behavioral-divergence.md) — **Metric-invisible bugs**: non-commutative swaps, float reassociation, dropped guards, aliased self-clobber, reversed container args, wrong 0%-stub bodies; the "regalloc floor" false-cert anti-pattern
+- [dropped-static-initializer.md](dropped-static-initializer.md) — **Metric-invisible bugs**: a static in our `.bss` that the image defines in `.data` with content. objdiff scores these 100% forever. `scripts/analysis/bss_initializer_scan.py`; all ten in the binary are fixed
 - [PERMUTER_ROI_ANALYSIS.md](PERMUTER_ROI_ANALYSIS.md) — Pattern automation ROI rankings, permuter coverage gaps

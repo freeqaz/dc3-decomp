@@ -20,11 +20,20 @@ Cost of each construct, measured against the shipping compiler
     if (c) { stmt; }             3      while/for/do + braces    2
     else stmt;                   +1     bare block { ... }       1
     else { stmt; }               +2     ternary, &&, ||          0
-    MILO_ASSERT(c, line)         5      (do 1 + block 1 + if 2 + block 1)
+    else if (c) stmt;            +3     unbraced while/for body  +1
+    if (a) if (b) stmt;          +4     MILO_NOTIFY_ONCE/_WARN   1
+    MILO_ASSERT(c, line)         5      START_AUTO_TIMER         0
+                                        MILO_NOTIFY (not ONCE)   0
 
-A function's first construct starts at 2.  Statics declared in the same scope
-share one index, and a static declared after an inner block keeps that block's
-number (the counter never goes back down).
+THE COUNTER STARTS AT 2 BECAUSE THE FUNCTION BODY IS ITSELF SCOPE 2 -- a static
+declared ahead of every construct reads 2.  Start at 2 and add the table in
+source order.  A static declared after an inner block keeps that block's number;
+the counter never goes back down, so two statics at the SAME lexical scope get
+DIFFERENT indices when constructs sit between them.
+
+Inlining does not feed the counter, and a destructor-bearing temporary in the
+static's initialiser does not open a scope.  Both measured, both counterintuitive.
+See docs/decomp/patterns/fixable-scope-index.md.
 
 Usage:
     python3 scripts/analysis/scope_index_census.py            # whole build
@@ -96,6 +105,24 @@ def strip_type(fnpart):
     return fnpart
 
 
+BACKREF = re.compile(r'@(\d)@')
+
+
+def loose(fnpart):
+    """Function key with MSVC back-reference digits blanked.
+
+    A `??__F` atexit helper mangles its enclosing function with FEWER preceding
+    name components than the data symbol does, so MSVC numbers the SAME function's
+    back-references differently on the two sides.  `FileMerger::PostMerge` is
+    `PAUMerger@2@` in `?msg@?5??PostMerge@...` and `PAUMerger@1@` in
+    `??__Fmsg@?5??PostMerge@...`.  Since the map supplies the target's atexit keys
+    and our objects supply data keys, an unblanked key never meets its partner:
+    both of PostMerge's real target helpers were invisible, and the second `msg`
+    we correctly declare was reported as invented.
+    """
+    return BACKREF.sub('@#@', fnpart)
+
+
 def read_map(path):
     """Local statics of the ORIGINAL image, from its own linker map.
 
@@ -124,12 +151,13 @@ def read_map(path):
         sym = parts[1]
         r = parse(sym, ATEXIT)
         if r:
+            r = (r[0], r[1], loose(r[2]))
             complete.add((r[2], r[0]))
         else:
             r = parse(sym)
             if not r:
                 continue
-            r = (r[0], r[1], strip_type(r[2]))
+            r = (r[0], r[1], loose(strip_type(r[2])))
         bucket = out[r[2]][r[0]]
         if r[1] not in bucket:
             bucket.append(r[1])
@@ -168,7 +196,7 @@ def main():
         for ln in out.splitlines():
             r = parse(ln.strip())  # data symbols ONLY -- see ATEXIT comment
             if r:
-                bucket = our[strip_type(r[2])][r[0]]
+                bucket = our[loose(strip_type(r[2]))][r[0]]
                 if r[1] not in bucket:
                     bucket.append(r[1])
 

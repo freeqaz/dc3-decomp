@@ -31,9 +31,13 @@ public:
     Locale() : mSize(0), mSymTable(0), mStrTable(0), mStringData(0),
         mUploadedFlags(0), mNumFilesLoaded(0), mInitialized(true), mMagnuStrings(0) {}
 #else
-    // PPC: BSS zeroes all members. Only Symbol mFile needs construction (sets gNullStr).
-    // mInitialized is UB in original binary — never written, happens to be nonzero.
-    Locale() {}
+    // PPC: the shipped image places TheLocale in .data with 0x01 at offset 0x1c,
+    // so mInitialized is STATICALLY TRUE -- it is not the uninitialized-read it
+    // was long documented as. MSVC folds this constant member-init into the data
+    // section and leaves only the non-constant mFile store in ??__ETheLocale, so
+    // the dynamic initializer's instruction stream is unchanged. Everything else
+    // is zero-initialized by the data image, as before.
+    Locale() : mInitialized(true) {}
 #endif
     ~Locale() {
         if (mMagnuStrings) {
