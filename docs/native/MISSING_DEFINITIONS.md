@@ -228,3 +228,19 @@ ninja -C native/build -t commands dc3-native | tail -1 \
   is what links; `native/CMakeLists.txt` `REMOVE_ITEM`s the DC3 copy of every
   file in that list. Editing DC3's copy changes only `dc3-web` and the export
   tools. This is how the `DspAllocate` bug survived a fix to the DC3 file.
+
+## Runtime A/B on the 2026-08-19 fixes — a negative result worth recording
+
+`DC3_STUB_TRACE=1` + `/api/stubs` on a 1200-frame headless boot gives an
+*identical* table before and after the YUVtoRGB / ValidateThreadId / DspAllocate
+fixes: 171 hits across 4 stubs (`OutputDebugStringA` 100, `vorbis_synthesis_poll`
+69, `DmGetSystemInfo` 1, `DmMapDevkitDrive` 1). None of the three fire in a
+menu-only boot — `YUVtoRGB` needs a Kinect colour stream, `DspAllocate` needs a
+delay/flanger effect instantiated, and `ValidateThreadId` only runs on a
+per-thread-table *miss*, which a single-threaded menu never reaches.
+
+So the stub-hit counter is a good worklist for boot-path stubs and useless as a
+regression gate for anything gated behind gameplay or hardware. For those, the
+evidence is the disassembly, and it should be quoted as such — the runs above
+only establish that the fixed binary boots and runs 900/1200 frames to a clean
+`DC3_EXIT: code=0`.
