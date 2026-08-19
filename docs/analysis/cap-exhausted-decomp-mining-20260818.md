@@ -68,7 +68,8 @@ one defect.** The real fix is owned by `fix/unicorn-helper-stubs`.
 
 ## Residual
 
-`cap_triage_helpers.json` — 59 rows with per-row PC/call/verdict at 1× and 10× cap. None
+`docs/analysis/cap-mining-20260818/cap_triage_helpers.json` — 59 rows with per-row
+PC/call/verdict at 1× and 10× cap. None
 is a loop bug. The 29 still-DIVERGENT rows now sit in other classes and should be
 re-ingested only after the harness fix lands.
 
