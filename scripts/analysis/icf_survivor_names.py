@@ -355,6 +355,10 @@ def main():
         REPO, 'docs/analysis/report-absent-rows-20260818/recoverable-merged-names.json'))
     ap.add_argument('--json', help='write the full adjudication here')
     ap.add_argument('--verbose', action='store_true')
+    ap.add_argument('--apply', action='store_true',
+                    help='rewrite the proven names into config/373307D9/symbols.txt')
+    ap.add_argument('--include-weak', action='store_true',
+                    help='with --apply, also install the WEAK_NO_RELOC tier')
     args = ap.parse_args()
 
     project = os.path.abspath(args.project)
@@ -387,6 +391,25 @@ def main():
     if args.json:
         json.dump(res, open(args.json, 'w'), indent=1)
         print('\nwrote %s' % args.json)
+
+    if args.apply:
+        want = {r['split_name']: r['name'] for r in res
+                if r['verdict'] == 'PROVEN_BODY'
+                or (args.include_weak and r['verdict'] == 'WEAK_NO_RELOC')}
+        p = os.path.join(project, 'config', '373307D9', 'symbols.txt')
+        lines = open(p, errors='replace').read().splitlines(True)
+        done = 0
+        for i, line in enumerate(lines):
+            m = SYMLINE_RE.match(line)
+            if m and m.group(1) in want:
+                lines[i] = line.replace(m.group(1), want[m.group(1)], 1)
+                done += 1
+        if done != len(want):
+            print('REFUSING to write: matched %d placeholder lines, wanted %d'
+                  % (done, len(want)))
+            return 1
+        open(p, 'w').write(''.join(lines))
+        print('\nrewrote %d placeholder names in %s' % (done, p))
 
 
 if __name__ == '__main__':
