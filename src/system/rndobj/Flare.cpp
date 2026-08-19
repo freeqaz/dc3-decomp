@@ -90,7 +90,7 @@ BEGIN_LOADS(RndFlare)
         mSizes.y = mSizes.x;
     }
     if (d.rev > 1) {
-        bs >> mRange >> mOffset;
+        bs >> mRange >> mSteps;
     }
     if (d.rev > 4) {
         d >> mPointTest;
