@@ -112,6 +112,28 @@ metric certifies as done. This is the same wrong-call-target false-100% risk the
 audit flagged for the lenient reloc mode — here it bit a *source* callsite, not the
 scorer.
 
+> **Lesson 4 amended 2026-08-19 — the headline holds, the prescribed instrument does not.**
+>
+> "Normalized 100% is not proof for virtual dispatch" is **correct and worth keeping**.
+> What is wrong is *"it only surfaced via `run_diff_inspect diff_mode=raw`"*: that flag
+> was **inert** — it omitted `-c` entirely, so it measured objdiff-cli's built-in default
+> (`data_value` at the time; `name_check` after `c8c545a56`, 2026-08-12), never `all`.
+> Whatever surfaced the `0x13c`/`0x138` diff, it was not the ruler this sentence names.
+>
+> Re-measured today, post-fix (non-equal instruction rows, `-p` = this repo):
+>
+> | | `none` | `name_check` | `all` |
+> |---|---|---|---|
+> | `?Suspend@Splash@@QAAXXZ` | 0 | 0 | 9 |
+> | `?Resume@Splash@@QAAXXZ` | 0 | 0 | 16 |
+>
+> and **all 25 `all`-only rows are the same symbol on both sides** — `??_C@…Splash?4cpp`,
+> `?SetMutableState@Splash@@…`, `?WaitForState@Splash@@…` — i.e. pure link-address
+> noise, zero signal. **`name_check`, not `raw`, is the wrong-callee ruler**
+> (`KinectShareConnection::Poll`: 0 rows under `none`, 1 real wrong callee under
+> `name_check`). See
+> [docs/tools/REFERENCE.md](../tools/REFERENCE.md#the-relocation-ruler-three-rulers-and-which-one-to-reach-for).
+
 ### 5. Fixing a measurement bug is itself decomp progress
 
 The `??_%` fix didn't just correct a number — it **surfaced 112 workable functions
@@ -144,9 +166,20 @@ the set the queries could see* — and the queries were lying.
 - **Decomposition-test-on-merged-main as a harvest step**: bake a "for each
   shared-header hunk, revert/rebuild/run-suite on integrated main" gate into the
   wave harvest protocol, not just the per-lane verifier (lesson 2).
-- **A raw-mode vtable-dispatch sweep tool**: enumerate functions at 100% normalized
+- ~~**A raw-mode vtable-dispatch sweep tool**: enumerate functions at 100% normalized
   whose raw residual is an `lwz rN, 0xNN(r12)`-style vtable-load arg diff, and
-  flag them for wrong-target dispatch review (lesson 4).
+  flag them for wrong-target dispatch review (lesson 4).~~
+  **Superseded 2026-08-19 — built, but not on this ruler.** Landed as
+  `run_symbol_sweep(kind="vtable_slots")` (`scripts/orchestrator/symbol_sweep.py`),
+  which sweeps the `??_7` **data** symbols slot-by-slot rather than hunting arg diffs
+  in code, and adjudicates each slot against `ham_xbox_r.map` + `icf_aliases.map` so a
+  proven ICF fold is not reported as a divergence.
+  **Do not build the raw-mode version as specified**: `raw` = `functionRelocDiffs=all`
+  is an *addend* view and would be almost pure noise here — on the very functions that
+  motivated it, `Splash::Suspend`/`Resume`, it produces 25 rows of which **0** carry
+  signal. Over a 14-function sample `all` added 997 rows on top of `name_check` and
+  99.8% were address noise. If you want the code-side sweep anyway, the ruler is
+  `name_check`.
 - **Two-path denominator check** in `progress_metrics.py` / `certify_floor.py`:
   compute the authorable total two independent ways and assert equality, so a
   filter bug like lesson 1 fails loudly instead of silently undercounting.

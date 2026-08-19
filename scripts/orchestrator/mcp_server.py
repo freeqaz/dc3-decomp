@@ -14,6 +14,7 @@ Run as: python3 -m scripts.orchestrator.mcp_server --db decomp.db
 
 import argparse
 import asyncio
+import collections
 import json
 import os
 import re
@@ -214,6 +215,178 @@ def _extract_prologue_mismatch_info(data: dict) -> "dict | None":
     except (AttributeError, TypeError):
         pass
     return None
+
+
+# The relocation ruler, in one place, because getting it wrong is silent.
+#
+# MEASURED on this fork (objdiff-cli 4.2.3, 2026-08-19) against
+# `?Load@CamShot@@UAAXAAVBinStream@@@Z`, holding the ICF alias map constant:
+#
+#   fork's own built-in default .... fuzzy 99.68568, 147 non-equal rows, ignored 15
+#   no -c, under THIS repo's -p .... fuzzy 99.85558, 119 non-equal rows, ignored 22
+#   functionRelocDiffs=none ........ identical to the 119 row
+#   functionRelocDiffs=name_check .. identical to the 119 row
+#   functionRelocDiffs=all ......... fuzzy 99.66141, 151 non-equal rows, ignored 11
+#
+# WHY omitting -c is not raw -- and it is NOT "the fork's default is already
+# normalized", which was this table's original rationale and is false. The
+# fork's built-in CLI default is `FunctionRelocDiffs::DataValue`
+# (objdiff-cli/src/cmd/diff.rs, build_config_from_args), which is a THIRD
+# ruler and gives a third row count: 147. Omitting -c lands on `name_check`
+# only because THIS REPO'S `objdiff.json` sets
+#
+#     "options": { "functionRelocDiffs": "name_check" }
+#
+# which `apply_project_options` (objdiff-core/src/config/mod.rs) stamps over
+# the built-in default whenever `-p` loads the project. The behaviour travels
+# with the PROJECT CONFIG, not with the binary -- and that distinction is load
+# bearing here, because `bin/objdiff-cli` is a symlink shared with ../rb3 and
+# ../rb3-xenon, whose objdiff.json may set a different value. Blaming the fork
+# would predict the same rows in all three trees; blaming objdiff.json (right)
+# does not.
+#
+# Corollary worth knowing: the `none == name_check == 119` coincidence is
+# itself contingent on the ICF alias map being loaded. Drop `--map-file` and
+# `name_check` rises to 130 while `none` stays at 119 -- the two rulers are
+# genuinely different, they only agree here because icf_aliases.map already
+# proves the folds that name_check would otherwise charge.
+#
+# `run_diff_inspect` shipped `raw` as "omit -c" and so returned the
+# `name_check` answer under a "raw" label. It was MISLABELLED, not blind:
+# `name_check` charges relocation NAME mismatches, which is exactly the
+# wrong-callee / wrong-vtable-slot plane. See RULER_GUIDANCE below.
+RELOC_RULER = {
+    "normalized": "functionRelocDiffs=none",
+    "raw": "functionRelocDiffs=all",
+    "name_check": "functionRelocDiffs=name_check",
+}
+
+# Which ruler to reach for, measured rather than assumed (2026-08-19).
+#
+# `name_check` is the wrong-callee ruler. `?Poll@KinectShareConnection@@QAAXXZ`
+# scores 100.0% with ZERO mismatch rows under `none`, and `name_check` finds
+# exactly 1 -- a real divergence, `bl ??$MakeString@E@@...` (unsigned char) in
+# the target vs `bl ??$MakeString@D@@...` (char) in ours.
+#
+# `all` (= our "raw") is the ADDEND view, and it is noisier, not more capable.
+# Over a 14-function sample it added 997 rows on top of `name_check`, of which
+#   531 (53.3%) same symbol on both sides -- pure address/addend noise
+#   352 (35.3%) lbl_* vs a named static
+#   112 (11.2%) register-only rows with no symbol on either side
+#     2 ( 0.2%) an actual name divergence
+# i.e. 99.8% noise. `?Handle@CampaignPerformer@@...` goes from 0 rows under
+# `name_check` to 605 under `all`. Reach for `all` when you care about
+# relocation ADDENDS; reach for `name_check` when you are hunting a wrong
+# callee.
+RULER_GUIDANCE = (
+    "name_check = wrong-callee ruler (relocation NAME mismatches). "
+    "raw/all = addend view; ~99.8% of what it adds over name_check is "
+    "address noise. normalized/none = code shape only."
+)
+
+# `run_diff_inspect` modes that build their own objdiff command somewhere other
+# than this file, and therefore cannot see `diff_mode`.  Handing back a
+# normalized report under a "raw" label is how a measurement silently becomes
+# wrong, so every one of these prints a banner instead.
+RULER_DEAF_MODES = {
+    "diagnose":     "scripts/analysis/diff_inspect.py",
+    "clusters":     "scripts/analysis/diff_inspect.py",
+    "regswaps":     "scripts/analysis/diff_inspect.py",
+    "offsets":      "scripts/analysis/diff_inspect.py",
+    "replaces":     "scripts/analysis/diff_inspect.py",
+    "asm_listing":  "the /FAs compile path (a compiler listing, not an objdiff run)",
+    "stack-layout": "scripts/analysis/stack_layout.py",
+    "attributed":   "scripts/analysis/diff_inspect.py --attributed",
+}
+
+
+def _ruler_ignored_banner(diff_mode: str, mode: str) -> str:
+    """Banner for a mode that cannot honour `diff_mode`. '' when not applicable.
+
+    The schema is honest about which modes honour the ruler; before this the
+    runtime banner only covered the five diff_inspect analysis modes, so
+    `asm_listing`, `stack-layout` and `attributed` accepted a ruler and
+    silently ignored it.
+    """
+    if diff_mode == "normalized" or mode not in RULER_DEAF_MODES:
+        return ""
+    return (
+        f"> **`diff_mode={diff_mode}` was IGNORED for mode=`{mode}`.** "
+        f"This mode is produced by {RULER_DEAF_MODES[mode]}, which builds its own "
+        f"command with no relocation-ruler switch; the report below is NORMALIZED. "
+        f"For a relocation-aware diff use `run_objdiff(diff_mode=\"{diff_mode}\")`, or "
+        f"`run_diff_inspect(mode=\"mismatches\")` which does honour the ruler. "
+        f"({RULER_GUIDANCE})\n\n"
+    )
+
+
+def _format_data_diff(data: dict, max_rows: int = 80) -> str:
+    """Render objdiff's `data_diff` block: pointer slots first, then raw bytes.
+
+    This is the reporting half of `--include-data`. Passing the flag without
+    rendering its output would leave the capability present but invisible,
+    which is how a tool acquires a reputation for not working.
+    """
+    dd = data.get("data_diff")
+    if not dd:
+        return ("\n## Data diff\n\nNo `data_diff` returned. Expected on a CODE symbol "
+                "(`--include-data` is a no-op there). On a DATA symbol, the `unit` must "
+                "name the object that DEFINES it — an undefined external reference "
+                "answers 'Symbol not found in target'.")
+    lines = ["", "## Data diff",
+             f"\n{dd.get('match_percent')}% of {dd.get('total_byte_count')} bytes "
+             f"({dd.get('mismatch_byte_count')} mismatched)"]
+
+    relocs = dd.get("relocations") or []
+    changed = [r for r in relocs if r.get("kind") != "equal"]
+    lines.append("")
+    lines.append(f"### Pointer slots — {len(changed)} of {len(relocs)} differ")
+    if changed:
+        lines.append("")
+        lines.append("| +off | kind | target resolves to | our build resolves to |")
+        lines.append("|---|---|---|---|")
+        for r in changed[:max_rows]:
+            off = r.get("offset")
+            base = r.get("base_target_symbol")
+            # For `replace`, objdiff emits base_target_symbol ONLY when it
+            # differs, so a blank means both sides name the same symbol. For
+            # `delete` the base side has no slot at all -- rendering that as
+            # "same symbol" reads as a match when it is the opposite.
+            if base:
+                base_txt = f"`{base}`"
+            elif r.get("kind") == "delete":
+                base_txt = "_(no slot on our side)_"
+            else:
+                base_txt = "_(same symbol)_"
+            tgt = r.get("target_symbol")
+            tgt_txt = f"`{tgt}`" if tgt else "_(absent)_"
+            lines.append(
+                f"| {('0x%x' % off) if isinstance(off, int) else off} | {r.get('kind')} "
+                f"| {tgt_txt} | {base_txt} |"
+            )
+        if len(changed) > max_rows:
+            lines.append(f"| ... | | +{len(changed) - max_rows} more | |")
+        lines.append("")
+        lines.append("A slot naming two DIFFERENT symbols is only a real bug when the two "
+                     "resolve to different addresses — equal addresses are a proven ICF fold. "
+                     "`run_symbol_sweep(kind='vtable_slots')` does that adjudication for you.")
+
+    segs = [s for s in (dd.get("segments") or []) if s.get("kind") != "equal"]
+    if segs:
+        lines.append("")
+        lines.append(f"### Raw bytes — {len(segs)} differing segments")
+        lines.append("")
+        lines.append("| +off | kind | target bytes | our bytes |")
+        lines.append("|---|---|---|---|")
+        for s in segs[:max_rows]:
+            off = s.get("offset")
+            lines.append(
+                f"| {('0x%x' % off) if isinstance(off, int) else off} | {s.get('kind')} "
+                f"| `{s.get('bytes', '')}` | `{s.get('base_bytes', '')}` |"
+            )
+        if len(segs) > max_rows:
+            lines.append(f"| ... | | +{len(segs) - max_rows} more | |")
+    return "\n".join(lines)
 
 
 def _stack_signal_summary(instrs: list, data: "dict | None" = None) -> "str | None":
@@ -872,8 +1045,80 @@ class DecompMCPServer:
                                 "type": "string",
                                 "description": "Unit name to disambiguate when a symbol exists in multiple units (e.g. 'default/link_glue'). Required when objdiff reports 'Multiple instances found'.",
                             },
+                            "include_data": {
+                                "type": "boolean",
+                                "description": "Diff the DATA section too: vtables (??_7), RTTI (??_R*), pointer/jump tables, string pools, static initializers. Adds a 'Data diff' section listing each pointer slot and which symbol the target vs our build resolves it to. No-op on code symbols, so it is safe when unsure. Default: false.",
+                            },
+                            "diff_mode": {
+                                "type": "string",
+                                "enum": ["normalized", "raw", "name_check"],
+                                "description": "Relocation ruler. 'normalized' (default, functionRelocDiffs=none) scores code shape only and ignores link-time address noise. 'name_check' is report.json's ruler and is the one to use for WRONG-CALLEE / wrong-vtable-slot hunting -- it charges relocation NAME mismatches (KinectShareConnection::Poll: 0 mismatch rows under 'normalized', 1 real wrong callee under 'name_check'). 'raw' (functionRelocDiffs=all) additionally charges relocation ADDENDS; it is the addend view, and ~99.8% of what it adds over 'name_check' is address noise, so it is noisier rather than more capable for the wrong-callee class.",
+                            },
+                            "output_format": {
+                                "type": "string",
+                                "enum": ["markdown", "json"],
+                                "description": "'markdown' (default) is the rendered report. 'json' returns objdiff's raw JSON for scripted consumption -- use when you would otherwise shell out to objdiff-cli to parse it yourself.",
+                            },
+                            "build": {
+                                "type": "boolean",
+                                "description": "Rebuild the unit before diffing. Default true. Set false to diff already-built objects read-only -- safe alongside the build/permuter fleet, and the answer is then about the tree as last built, NOT your unsaved edits.",
+                            },
                         },
                         "required": ["symbol", "project_dir"],
+                    },
+                ),
+                Tool(
+                    name="run_symbol_sweep",
+                    description=(
+                        "Diff MANY symbols in one call -- the bulk shape that a per-symbol diff cannot express.\n\n"
+                        "kind='vtable_slots' reproduces the published vtable adjudication: every ??_7 symbol defined in "
+                        "every target object, --include-data diffed, keeping relocation rows whose two sides resolve to "
+                        "different addresses across ham_xbox_r.map + icf_aliases.map (equal address = proven ICF fold = benign).\n"
+                        "kind='data_symbols' is the same engine with your own symbol glob (??_R4*, ??_C@*, ...).\n"
+                        "kind='functions' batch-diffs a supplied symbol list through objdiff --batch (one process, not N).\n\n"
+                        "ALWAYS reports its denominator: universe, examined, and every drop reason. A truncated run says "
+                        "TRUNCATED. Read-only -- diffs already-built objects, never runs ninja, never writes decomp.db."
+                    ),
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "project_dir": {
+                                "type": "string",
+                                "description": "Project directory to sweep. Pass your worktree directory. Must be a worktree of THIS project (title 373307D9).",
+                            },
+                            "kind": {
+                                "type": "string",
+                                "enum": ["vtable_slots", "data_symbols", "functions"],
+                                "description": "vtable_slots (default): every ??_7 vtable. data_symbols: any data symbol glob. functions: batch-diff a supplied symbol list.",
+                            },
+                            "symbol_glob": {
+                                "type": "string",
+                                "description": "fnmatch glob over symbol names. Default '??_7*' for vtable_slots. Ignored for kind='functions'.",
+                            },
+                            "unit_glob": {
+                                "type": "string",
+                                "description": "fnmatch glob over unit names, e.g. 'default/lazer/*'. Default '*' (whole binary). A restricted sweep still reports the full denominator it restricted from.",
+                            },
+                            "symbols": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "kind='functions': the symbols to batch-diff.",
+                            },
+                            "max_symbols": {
+                                "type": "integer",
+                                "description": "TRUNCATE the sweep. Omit for a complete run. A truncated result is labelled TRUNCATED in the coverage block -- this tool will not present a sample as a total.",
+                            },
+                            "workers": {
+                                "type": "integer",
+                                "description": "Parallel objdiff processes (default 12). A whole-binary vtable sweep is ~5100 diffs, roughly 6 min at 16 workers.",
+                            },
+                            "output_format": {
+                                "type": "string",
+                                "enum": ["markdown", "json"],
+                                "description": "markdown (default) or the full JSON result.",
+                            },
+                        },
+                        "required": ["project_dir"],
                     },
                 ),
                 Tool(
@@ -932,8 +1177,8 @@ class DecompMCPServer:
                             },
                             "diff_mode": {
                                 "type": "string",
-                                "enum": ["normalized", "raw"],
-                                "description": "Diff scoring mode. 'normalized' (default) ignores relocation address differences (functionRelocDiffs=none). 'raw' includes relocation diffs so you can inspect which relocations differ.",
+                                "enum": ["normalized", "raw", "name_check"],
+                                "description": "Relocation ruler. 'normalized' (default, functionRelocDiffs=none) scores code shape only. 'name_check' charges relocation NAME mismatches -- the wrong-callee / wrong-vtable-slot ruler, and report.json's. 'raw' (functionRelocDiffs=all) also charges addends; ~99.8% of what it adds over 'name_check' is address noise. ⚠ HONOURED ONLY by modes 'mismatches', 'compare' and 'save_baseline'. The other eight modes (diagnose/clusters/regswaps/offsets/replaces/asm_listing/stack-layout/attributed) build their own commands with no ruler switch -- they IGNORE this and say so loudly in their output. Use run_objdiff(diff_mode='name_check') for those.",
                             },
                         },
                         "required": ["symbol", "mode", "project_dir"],
@@ -1008,6 +1253,8 @@ class DecompMCPServer:
                 return await self._lookup_rb3(arguments)
             elif name == "run_objdiff":
                 return await self._run_objdiff(arguments)
+            elif name == "run_symbol_sweep":
+                return await self._run_symbol_sweep(arguments)
             elif name == "run_analyze_function":
                 return await self._run_analyze_function(arguments)
             elif name == "run_diff_inspect":
@@ -1286,11 +1533,26 @@ class DecompMCPServer:
     _MEM_ARG_RE = re.compile(r'r(\d+),\s*(-?0x[0-9a-fA-F]+|-?\d+)\(r(\d+)\)')
     # Regex for parsing PPC immediate operands: rX, rY, IMM
     _SHIFT_ARG_RE = re.compile(r'r(\d+),\s*r(\d+),\s*(\d+)')
-    # Memory opcodes that access struct fields
+    # Memory opcodes that access struct fields.
+    #
+    # `stwu` is deliberately ABSENT. On this target it is overwhelmingly the
+    # frame-allocation instruction -- `stwu r1, -0x470(r1)` -- and having it here
+    # meant the prologue's own frame size was resolved as a struct field
+    # (CamShot::Load index 6, RndText::Load index 4, both measured 2026-08-19).
+    # The r1/frame-pointer base check below independently catches that case; this
+    # removal makes the intent explicit rather than relying on one guard. The
+    # other update forms stay: they are rare here and are not frame setup.
     _MEM_OPCODES = frozenset([
         'lwz', 'stw', 'lfs', 'stfs', 'lhz', 'sth', 'lbz', 'stb', 'lfd', 'stfd',
-        'lwzu', 'stwu', 'lfsu', 'stfsu', 'lha', 'lhau',
+        'lwzu', 'lfsu', 'stfsu', 'lha', 'lhau',
     ])
+    # Prologue forms that derive a FRAME POINTER from r1. MSVC/Xenon emits
+    # `subi rN, r1, <frame>` (objdiff's disassembler spells it `subi`, NOT
+    # `addi rN, r1, -<frame>`) -- matching only the `addi` spelling finds nothing.
+    #   CamShot::Load   subi r31, r1, 0x470
+    #   RndText::Load   subi r31, r1, 0x1c0
+    _FRAME_PTR_RE = re.compile(r'^r(\d+),\s*r1\b')
+    _FRAME_PTR_OPCODES = frozenset(['addi', 'subi', 'mr', 'or', 'addic'])
     # Shift/rotate opcodes
     _SHIFT_OPCODES = frozenset(['slwi', 'srwi', 'slw', 'srw', 'rlwinm'])
 
@@ -1308,12 +1570,92 @@ class DecompMCPServer:
             return int(s, 16)
         return int(s)
 
+    @staticmethod
+    def _fmt_offset(v: int) -> str:
+        """Format a signed offset as valid hex. `f"0x{-0x470:x}"` yields the
+        nonsense literal `0x-470`, which is what the offset block printed for
+        every negative (stack) offset."""
+        return f"-0x{-v:x}" if v < 0 else f"0x{v:x}"
+
+    @classmethod
+    def _frame_pointer_regs(cls, instructions: list, side: str) -> set:
+        """Registers that hold a FRAME POINTER on `side` ('target'/'base').
+
+        Detected from the prologue form, never from the register number.
+        `r31` is the usual frame pointer here, but `FxSendChorus::Load` does
+        `mr r31, r3` -- there r31 IS `this`, and suppressing by number would
+        turn a false-positive generator into a false-negative one.
+
+        Only r1-DERIVED registers count. `mr rN, r3` is deliberately not a hit.
+
+        Restricted to NON-VOLATILE registers (r14-r31). A frame pointer must
+        survive calls, so it lives in a callee-saved register; `addi r4, r1, 0x58`
+        (a stack address for one call's out-argument -- `CharBonesSamples::Save`
+        index 10 does exactly this) says nothing about r4 five hundred
+        instructions later, and treating it as a frame pointer for the whole
+        function would suppress genuine field rows. That is the false-NEGATIVE
+        half of the trade and it is just as bad as the false positive.
+
+        Known limitation: a stack access through a *volatile* r1-derived
+        register is still classified `object-field`. It has not been observed
+        producing an offset-mismatch pair, and widening the rule costs real
+        findings.
+        """
+        regs = set()
+        for instr in instructions:
+            operand = instr.get(side) or {}
+            opcode = operand.get("opcode", "")
+            if opcode not in cls._FRAME_PTR_OPCODES:
+                continue
+            m = cls._FRAME_PTR_RE.match((operand.get("args") or "").strip())
+            if m:
+                reg = int(m.group(1))
+                if 14 <= reg <= 31:
+                    regs.add(reg)
+        return regs
+
+    @staticmethod
+    def _prologue_visible(instructions: list) -> bool:
+        """Did we get the top of the function?
+
+        With `full_listing=false` the instruction list is only mismatches plus
+        `-C` context, so the prologue may be absent -- and then a register's
+        frame-pointer status is UNKNOWN, not 'false'. Claiming otherwise is how
+        a suppression rule silently becomes a licence to report anyway.
+        """
+        indices = [i.get("index") for i in instructions if isinstance(i.get("index"), int)]
+        return bool(indices) and min(indices) == 0
+
     def _resolve_offset_mismatches(self, data: dict) -> list[dict]:
         """
         Scan instruction diffs for memory offset mismatches and resolve
         them to struct field names using StructDB.
 
         Returns list of offset mismatch records with field names.
+
+        ONLY object-relative accesses are resolved. Until 2026-08-19 this read
+        the offset and ignored the BASE REGISTER entirely, so a pure stack slot
+        resolved against the class struct exactly like a `this`-relative field.
+        Measured on real objects that day: `CamShot::Load` produced 29 rows and
+        `RndText::Load` 25, and **every one of the 54 was r31-relative where
+        r31 is a frame pointer** (`subi r31, r1, 0x470` / `subi r31, r1, 0x1c0`).
+        The block was not occasionally wrong on those functions; it was entirely
+        wrong, while naming plausible members (`RndText::mScrollOutIndex`,
+        `RndTransformable::mConstraint`) in the same shape as a true positive.
+        One such row is the named lead in
+        docs/decomp/patterns/rounded-100-hides-real-bugs.md that sent a lane
+        after a nonexistent `FxSend` member.
+
+        Rows are now classified, and the caller is told how many were dropped:
+          object-field   base register is neither r1 nor an r1-derived frame
+                         pointer -- resolved, with a fix hint
+          stack-slot     base is r1
+          frame-slot     base is an r1-derived frame pointer
+          mixed-base     the two sides index DIFFERENT registers, so this is not
+                         one object's field being compared at all
+          unverified     the prologue was not in the instruction window, so
+                         frame-pointer status is unknown -- reported WITHOUT a
+                         fix hint rather than asserted either way
         """
         instructions = data.get("instructions") or data.get("mismatch_instructions") or []
         demangled = data.get("demangled", "")
@@ -1325,6 +1667,10 @@ class DecompMCPServer:
         struct_db_path = self.project_root / "struct_db.sqlite"
         if not struct_db_path.exists():
             return []
+
+        fp_target = self._frame_pointer_regs(instructions, "target")
+        fp_base = self._frame_pointer_regs(instructions, "base")
+        prologue_seen = self._prologue_visible(instructions)
 
         mismatches = []
         try:
@@ -1357,32 +1703,64 @@ class DecompMCPServer:
                     if off_t == off_b:
                         continue  # Same offset, different register — not a struct mismatch
 
+                    # ---- the base register decides whether this is a FIELD ----
+                    reg_t = int(m_t.group(3))
+                    reg_b = int(m_b.group(3))
+
+                    if reg_t != reg_b:
+                        kind = "mixed-base"
+                    elif reg_t == 1:
+                        kind = "stack-slot"
+                    elif reg_t in fp_target or reg_b in fp_base:
+                        kind = "frame-slot"
+                    elif not prologue_seen:
+                        kind = "unverified"
+                    else:
+                        kind = "object-field"
+
+                    entry = {
+                        "index": instr.get("index"),
+                        "opcode": opcode_t,
+                        "kind": kind,
+                        "base_register": f"r{reg_t}" if reg_t == reg_b else f"r{reg_t}/r{reg_b}",
+                        "target_offset": self._fmt_offset(off_t),
+                        "base_offset": self._fmt_offset(off_b),
+                    }
+
+                    if kind in ("stack-slot", "frame-slot", "mixed-base"):
+                        # Not a field access. Recorded so the caller can report
+                        # the count, never rendered as a struct-field finding.
+                        mismatches.append(entry)
+                        continue
+
                     # Resolve field names
                     target_field = None
                     base_field = None
+                    name_t = name_b = None
 
                     if class_name:
                         result_t = db.lookup(class_name, off_t)
                         result_b = db.lookup(class_name, off_b)
                         if result_t:
+                            name_t = result_t[1]
                             target_field = f"{result_t[0]}::{result_t[1]} ({result_t[2]})"
                         if result_b:
+                            name_b = result_b[1]
                             base_field = f"{result_b[0]}::{result_b[1]} ({result_b[2]})"
 
-                    entry = {
-                        "index": instr.get("index"),
-                        "opcode": opcode_t,
-                        "target_offset": f"0x{off_t:x}",
-                        "base_offset": f"0x{off_b:x}",
-                    }
                     if target_field:
                         entry["target_field"] = target_field
                     if base_field:
                         entry["base_field"] = base_field
-                    if target_field and base_field:
+                    # Take the member name from the DB tuple. Re-deriving it by
+                    # splitting the FORMATTED string on '::' and ' (' mangles any
+                    # qualified or templated type: `RndText::mAltStyle
+                    # (ObjPtr<Hmx::Object>)` came out as the field name
+                    # "Object>)" in a shipped hint (measured 2026-08-19).
+                    if name_t and name_b and kind == "object-field":
                         entry["fix_hint"] = (
-                            f"Source accesses '{base_field.split('::')[-1].split(' (')[0]}' "
-                            f"but target accesses '{target_field.split('::')[-1].split(' (')[0]}' — wrong field?"
+                            f"Source accesses '{name_b}' but target accesses "
+                            f"'{name_t}' — wrong field?"
                         )
 
                     mismatches.append(entry)
@@ -1759,25 +2137,52 @@ class DecompMCPServer:
         offset_mismatches = data.get("offset_mismatches", [])
         if offset_mismatches:
             lines.append("")
-            lines.append("## Offset Mismatches (resolved)")
-            lines.append("")
-            for om in offset_mismatches:
-                idx = om.get("index", "?")
-                opcode = om.get("opcode", "?")
-                t_off = om.get("target_offset", "?")
-                b_off = om.get("base_offset", "?")
-                t_field = om.get("target_field", "")
-                b_field = om.get("base_field", "")
-                hint = om.get("fix_hint", "")
-                line = f"- [{idx}] `{opcode}`: target {t_off}"
-                if t_field:
-                    line += f" ({t_field})"
-                line += f" vs base {b_off}"
-                if b_field:
-                    line += f" ({b_field})"
-                if hint:
-                    line += f" -- {hint}"
-                lines.append(line)
+            # Only OBJECT-relative rows are field findings. Stack/frame/mixed-base
+            # rows are counted and named, never rendered as struct fields.
+            _NON_FIELD = {"stack-slot": "stack slot (base r1)",
+                          "frame-slot": "frame slot (r1-derived frame pointer)",
+                          "mixed-base": "different base register on each side"}
+            field_rows = [om for om in offset_mismatches
+                          if om.get("kind", "object-field") not in _NON_FIELD]
+            suppressed = collections.Counter(
+                om["kind"] for om in offset_mismatches if om.get("kind") in _NON_FIELD)
+
+            if field_rows:
+                lines.append("## Offset Mismatches (resolved)")
+                lines.append("")
+                for om in field_rows:
+                    idx = om.get("index", "?")
+                    opcode = om.get("opcode", "?")
+                    t_off = om.get("target_offset", "?")
+                    b_off = om.get("base_offset", "?")
+                    t_field = om.get("target_field", "")
+                    b_field = om.get("base_field", "")
+                    hint = om.get("fix_hint", "")
+                    reg = om.get("base_register", "")
+                    line = f"- [{idx}] `{opcode}`" + (f" ({reg})" if reg else "") + f": target {t_off}"
+                    if t_field:
+                        line += f" ({t_field})"
+                    line += f" vs base {b_off}"
+                    if b_field:
+                        line += f" ({b_field})"
+                    if om.get("kind") == "unverified":
+                        line += ("  ⚠ base register UNVERIFIED — the prologue was outside the "
+                                 "instruction window, so this may be a stack slot. Re-run with "
+                                 "`full_listing=true` to classify it.")
+                    elif hint:
+                        line += f" -- {hint}"
+                    lines.append(line)
+                lines.append("")
+                lines.append("*Field names come from the class struct and are only meaningful for "
+                             "`this`-relative accesses. Rows whose base register is `r1` or an "
+                             "r1-derived frame pointer are stack slots and are excluded above.*")
+
+            if suppressed:
+                if field_rows:
+                    lines.append("")
+                detail = ", ".join(f"{n} {_NON_FIELD[k]}" for k, n in suppressed.most_common())
+                lines.append(f"*Offset mismatches examined: {len(offset_mismatches)}; "
+                             f"{sum(suppressed.values())} excluded as non-field ({detail}).*")
 
         # Shift annotations
         shift_annotations = data.get("shift_annotations", [])
@@ -1893,6 +2298,9 @@ class DecompMCPServer:
         concise = args.get("concise", True)
         full_listing = args.get("full_listing", False)
         unit = args.get("unit", None)
+        include_data = args.get("include_data", False)
+        diff_mode = args.get("diff_mode", "normalized")
+        output_format = args.get("output_format", "markdown")
 
         if not symbol:
             return [TextContent(type="text", text="Error: No symbol provided.")]
@@ -1930,19 +2338,31 @@ class DecompMCPServer:
         # Use functionRelocDiffs=none to ignore address relocation noise
         # (lis/addi pairs with different link-time addresses for same symbol).
         # This matches the behavior of objdiff's report command.
-        base_args = [
-            str(objdiff_cli),
-            "diff",
-            "-p", str(project_dir),
-            symbol,
-            "--verdict",
-            "-c", "functionRelocDiffs=none",
-        ]
-        if unit:
-            base_args.extend(["-u", unit])
+        reloc_cfg = RELOC_RULER.get(diff_mode, RELOC_RULER["normalized"])
 
-        build_flag = ["--build"]
-        if full_build:
+        def _mk_base_args(sym: str) -> list:
+            a = [
+                str(objdiff_cli),
+                "diff",
+                "-p", str(project_dir),
+                sym,
+                "--verdict",
+            ]
+            if reloc_cfg:
+                a.extend(["-c", reloc_cfg])
+            if unit:
+                a.extend(["-u", unit])
+            return a
+
+        base_args = _mk_base_args(symbol)
+
+        # 25 of the DC3 `-1/-2` bypasses were not about arbitrary object pairs
+        # at all -- they were about NOT building. `run_objdiff` unconditionally
+        # passed --build, so any read-only look at an already-built tree had to
+        # go around it. build=false is that, without leaving the sanctioned path.
+        want_build = args.get("build", True)
+        build_flag = ["--build"] if want_build else []
+        if full_build and want_build:
             build_flag.append("--full-build")
 
         # --include-instructions only for JSON run (enrichment/m2c pipeline).
@@ -1953,6 +2373,8 @@ class DecompMCPServer:
             json_extra.append("--full-listing")
         elif context:
             json_extra.extend(["-C", str(context)])
+        if include_data:
+            json_extra.append("--include-data")
 
         try:
             # 1) JSON run (with build) - for enrichment data
@@ -1984,16 +2406,7 @@ class DecompMCPServer:
                     resolved = _resolve_ambiguous_symbol(combined_output, param_hint)
                     if resolved:
                         # Update base_args with the resolved symbol
-                        base_args = [
-                            str(objdiff_cli),
-                            "diff",
-                            "-p", str(project_dir),
-                            resolved,
-                            "--verdict",
-                            "-c", "functionRelocDiffs=none",
-                        ]
-                        if unit:
-                            base_args.extend(["-u", unit])
+                        base_args = _mk_base_args(resolved)
 
                         # Retry JSON run
                         json_cmd = base_args + json_extra + build_flag + ["-f", "json"]
@@ -2036,6 +2449,12 @@ class DecompMCPServer:
             _json_start = json_output.find("{")
             if _json_start > 0:
                 json_output = json_output[_json_start:]
+
+            # 1b) Machine-readable escape hatch. Agents were shelling out to
+            # `objdiff-cli ... -f json` purely to parse the JSON themselves;
+            # there was no MCP path to it at all.
+            if output_format == "json":
+                return [TextContent(type="text", text=json_output.strip())]
 
             # 2) Markdown run (no build, already built) - for display
             # Explicit -f markdown avoids TUI fallback when no TTY is present
@@ -2098,6 +2517,17 @@ class DecompMCPServer:
 
             if enrichment:
                 output += "\n" + enrichment
+
+            # 3a) Data-section diff. The markdown renderer does not show it, so
+            # without this the --include-data flag would be silently inert -- a
+            # worse failure than not having the flag.
+            if include_data:
+                try:
+                    output += "\n" + _format_data_diff(json.loads(json_output))
+                except (json.JSONDecodeError, KeyError):
+                    output += ("\n\n**include_data requested but no data_diff was returned** "
+                               "— this is expected on code symbols; on a data symbol, check "
+                               "that `unit` names the object that DEFINES it.")
 
             # 3b) Stack-layout one-liner (only when actionable signal exists)
             try:
@@ -2195,6 +2625,72 @@ class DecompMCPServer:
             return [TextContent(type="text", text="Error: objdiff timed out after 5 minutes.")]
         except Exception as e:
             return [TextContent(type="text", text=f"Error running objdiff: {e}")]
+
+    async def _run_symbol_sweep(self, args: dict) -> list[TextContent]:
+        """Handle run_symbol_sweep — the bulk / data-symbol shape.
+
+        A sweep is minutes of work, so it runs in a thread rather than blocking
+        the event loop, and its answer always leads with the denominator.
+        """
+        try:
+            project_dir = self._resolve_project_dir(args.get("project_dir"))
+        except FileNotFoundError as e:
+            return [TextContent(type="text", text=f"Error: {e}")]
+
+        kind = args.get("kind", "vtable_slots")
+        output_format = args.get("output_format", "markdown")
+        max_symbols = args.get("max_symbols")
+        workers = int(args.get("workers", 12) or 12)
+
+        try:
+            from . import symbol_sweep
+        except ImportError:  # running as a loose script rather than a package
+            import symbol_sweep  # type: ignore
+
+        def _run():
+            if kind == "functions":
+                syms = args.get("symbols") or []
+                if not syms:
+                    raise ValueError("kind='functions' requires a non-empty `symbols` array")
+                return symbol_sweep.sweep_functions(
+                    str(project_dir), syms, unit=args.get("unit"),
+                    max_symbols=max_symbols,
+                )
+            glob = args.get("symbol_glob") or ("??_7*" if kind == "vtable_slots" else "*")
+            return symbol_sweep.sweep_data_symbols(
+                str(project_dir),
+                symbol_glob=glob,
+                unit_glob=args.get("unit_glob", "*"),
+                max_symbols=max_symbols,
+                workers=workers,
+                scanner_name=f"symbol_sweep.{kind}",
+            )
+
+        try:
+            result = await asyncio.to_thread(_run)
+        except Exception as e:  # noqa: BLE001
+            return [TextContent(type="text", text=f"Sweep failed: {e}")]
+
+        if output_format == "json":
+            text = json.dumps(result, indent=2)
+        else:
+            text = symbol_sweep.render_markdown(result)
+
+        # Large sweeps go to a file rather than the context window, same policy
+        # as run_objdiff. The COVERAGE block always comes back inline.
+        if len(text) > 60000:
+            tmp = Path(tempfile.mktemp(suffix=".json", dir="/tmp/claude"))
+            tmp.parent.mkdir(parents=True, exist_ok=True)
+            tmp.write_text(json.dumps(result, indent=2))
+            head = result.get("_coverage_render", "")
+            summary = symbol_sweep.render_markdown(result, top=25)
+            text = (
+                f"{summary}\n\n---\n**Full result ({len(text)} chars) written to `{tmp}`** — "
+                f"read it with jq rather than pulling it into context.\n"
+            )
+            if head and head not in text:
+                text = head + "\n" + text
+        return [TextContent(type="text", text=text)]
 
     async def _run_analyze_function(self, args: dict) -> list[TextContent]:
         """
@@ -2362,7 +2858,18 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
 
         # In "normalized" mode (default), ignore relocation address noise.
         # In "raw" mode, include relocation diffs so they can be inspected.
-        reloc_config = ["-c", "functionRelocDiffs=none"] if diff_mode != "raw" else []
+        #
+        # `raw` used to be spelled "omit -c entirely", which returned the
+        # `name_check` answer under a "raw" label -- because THIS REPO'S
+        # objdiff.json sets `"functionRelocDiffs": "name_check"` in `options`,
+        # which overrides the fork's own built-in default (`DataValue`). It is
+        # not that "the fork already normalizes": the fork's default is a third
+        # ruler giving a third row count. Measured on
+        # ?Load@CamShot@@UAAXAAVBinStream@@@Z (2026-08-19, ICF map held
+        # constant): fork default 147 rows; no -c / =none / =name_check under
+        # `-p` all 119; `=all` 151. See RELOC_RULER for why that distinction
+        # matters when the shared objdiff-cli symlink is used from ../rb3.
+        reloc_config = ["-c", RELOC_RULER.get(diff_mode, RELOC_RULER["normalized"])]
 
         try:
             # ── save_baseline mode ──
@@ -2529,7 +3036,14 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
                 raw_pct = data.get("raw_match_percent", data.get("fuzzy_match_percent", "?"))
                 header = f"## Mismatched Instructions ({len(mismatches)} of {total} total) — {raw_pct}% raw match\n"
                 if diff_mode == "raw":
-                    header += "*Raw mode: relocation diffs included*\n"
+                    header += ("*Raw mode (`functionRelocDiffs=all`): relocation names AND addends "
+                               "counted. This is the addend view — most of what it adds over "
+                               "`name_check` is `addr_reloc` noise (same symbol, different link "
+                               "address), tagged as such in the Note column. If you are hunting a "
+                               "wrong callee, `diff_mode=\"name_check\"` is the sharper ruler.*\n")
+                elif diff_mode == "name_check":
+                    header += ("*name_check mode: relocation NAME mismatches counted, addends "
+                               "ignored — the wrong-callee / wrong-vtable-slot ruler.*\n")
                 if truncated:
                     header += f"*Showing {MAX_MISMATCHES} of {len(mismatches)} mismatches*\n"
 
@@ -2545,8 +3059,11 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
                     t_str = _fmt_instr(t).strip()
                     b_str = _fmt_instr(b).strip()
                     note = _diff_annotation(ins).strip() if mt == "diff_arg" else ""
-                    # In raw mode, extract relocation symbol info for diff_arg
-                    if diff_mode == "raw" and mt == "diff_arg" and not note:
+                    # For either relocation-aware ruler, name the symbols each
+                    # side resolves to, so "same symbol, different address"
+                    # (noise) is distinguishable at a glance from a real
+                    # wrong-callee row.
+                    if diff_mode in ("raw", "name_check") and mt == "diff_arg" and not note:
                         t_syms = [a["value"] for a in (t or {}).get("typed_args", []) if a.get("type") == "Symbol"]
                         b_syms = [a["value"] for a in (b or {}).get("typed_args", []) if a.get("type") == "Symbol"]
                         if t_syms and b_syms:
@@ -2567,7 +3084,11 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
 
             # ── asm_listing mode (compile with /FAs, return annotated assembly) ──
             elif mode == "asm_listing":
-                return await self._run_asm_listing(symbol, project_dir)
+                listing = await self._run_asm_listing(symbol, project_dir)
+                banner = _ruler_ignored_banner(diff_mode, mode)
+                if banner and listing and getattr(listing[0], "text", None):
+                    listing[0] = TextContent(type="text", text=banner + listing[0].text)
+                return listing
 
             # ── stack-layout mode (per-slot diff with base-side variable names) ──
             elif mode == "stack-layout":
@@ -2587,7 +3108,7 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
                     timeout=300,
                 )
 
-                output = result.stdout
+                output = _ruler_ignored_banner(diff_mode, mode) + result.stdout
                 if result.stderr:
                     filtered_stderr = _filter_build_output(result.stderr)
                     if filtered_stderr:
@@ -2627,7 +3148,7 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
                     timeout=300,
                 )
 
-                output = result.stdout
+                output = _ruler_ignored_banner(diff_mode, mode) + result.stdout
                 if result.stderr:
                     filtered_stderr = _filter_build_output(result.stderr)
                     if filtered_stderr:
@@ -2664,6 +3185,14 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
                 )
 
                 output = result.stdout
+                # These five modes delegate to scripts/analysis/diff_inspect.py,
+                # which builds its OWN objdiff command and has no switch for the
+                # relocation ruler -- so `reloc_config` above never reaches them
+                # and the answer is normalized whatever `diff_mode` said. Say so
+                # instead of handing back a normalized report under a raw label;
+                # the class of bug people ask for a relocation ruler about
+                # (wrong vtable slot, wrong callee) is what this would hide.
+                output = _ruler_ignored_banner(diff_mode, mode) + output
                 if result.stderr:
                     filtered_stderr = _filter_build_output(result.stderr)
                     if filtered_stderr:

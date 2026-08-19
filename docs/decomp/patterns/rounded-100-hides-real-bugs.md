@@ -70,26 +70,53 @@ A full sweep of this fingerprint was run over every serializer in the binary. It
 (below), but three things in the earlier text are wrong and cost time:
 
 **1. `r31` is not reliably `this` — and it is not reliably the frame pointer either.** In a function
-with a large frame MSVC parks the *frame pointer* in `r31` (`addi r31, r1, -<framesize>` in the
-prologue), so `<off>(r31)` is a stack slot and `this` lives elsewhere (r30 in both cases below):
+with a large frame MSVC parks the *frame pointer* in `r31`, so `<off>(r31)` is a stack slot and
+`this` lives elsewhere (r30 in both cases below):
 
 | function | prologue | what `r31` is |
 |---|---|---|
-| `CamShot::Load` | `addi r31, r1, -0x470` (base `-0x490`) | frame pointer, 119 rows of stack diff |
-| `RndText::Load` | `addi r31, r1, -0x1c0` (base `-0x1b0`) | frame pointer |
+| `CamShot::Load` | `subi r31, r1, 0x470` (base `0x490`) | frame pointer, 119 rows of stack diff |
+| `RndText::Load` | `subi r31, r1, 0x1c0` (base `0x1b0`) | frame pointer |
 | `FxSendChorus::Load` | `mr r31, r3` | **`this`** — frame only 0xb0, no frame pointer at all |
+
+⚠ **The prologue spelling is `subi rN, r1, <frame>`, not `addi rN, r1, -<frame>`** (corrected
+2026-08-19 — the earlier text had the `addi` form). objdiff's disassembler emits `subi` here, so a
+detector matching only `addi` finds **zero** frame pointers in this binary and silently classifies
+every stack slot as a field.
 
 `FxSendChorus::Load` is the one to remember: its ten differing rows *are* stack slots, but they are
 `(r1)`-relative (`0x54/0x50`, `0x58/0x54`, `0x50/0x58`, `0x50/0x5c`) and `r31` is genuinely the
 receiver. So the rule is **read the prologue**, not "assume `r31` is a frame pointer" — that
 substitution just trades a false positive for a false negative.
 
-**2. `run_objdiff`'s "Offset Mismatches (resolved)" enrichment does not check the base register.**
-It resolves *any* offset against the class struct, so it will invent a field-disagreement story out
-of a stack diff. The named lead in the earlier text —
+**2. `run_objdiff`'s "Offset Mismatches (resolved)" enrichment did not check the base register —
+FIXED 2026-08-19.** It resolved *any* offset against the class struct, so it invented a
+field-disagreement story out of a stack diff. The named lead in the earlier text —
 `FxSendChorus::Load`, *"Source accesses 'mInputGain' but target accesses 'mReverbMixDb'"* — is
 exactly this false positive; `FxSend`'s layout has no hole (`FxSend::Save` 74/74 and
-`FxSend::Load` 151/151 are byte-identical). Treat that enrichment as a lead, never a finding.
+`FxSend::Load` 151/151 are byte-identical).
+
+The scale was larger than "will invent": measured on real objects the day it was fixed,
+`CamShot::Load` emitted **29 rows, all 29 `r31`-relative** and `RndText::Load` **25, all 25** — i.e.
+**54 of 54 rows were false**, naming plausible members (`RndText::mScrollOutIndex`,
+`RndTransformable::mConstraint`) in a form indistinguishable from a true positive.
+
+The enrichment now reads the base register and classifies each row —
+`object-field` / `stack-slot` / `frame-slot` / `mixed-base` / `unverified` — rendering only
+`object-field` as a struct finding and printing how many it excluded and why. Frame pointers are
+detected **from the prologue**, only from r1-derived **non-volatile** registers, so `mr r31, r3`
+(`FxSendChorus`, `CharBonesSamples::Save`) still resolves correctly. `CamShot`/`RndText` now emit
+zero field rows; `CharBonesSamples::Save` still emits its two genuine `this`-relative ones.
+
+Two adjacent defects fixed at the same time: `stwu` was in the memory-opcode set, so the frame
+*allocation* (`stwu r1, -0x470(r1)`) resolved as a field; and the hint re-derived the member name by
+splitting the formatted string on `::` and ` (`, so
+`RndText::mAltStyle (ObjPtr<Hmx::Object>)` shipped with the field name `Object>)`.
+
+**It is still a lead, not a finding** — a stack access through a *volatile* r1-derived register is
+not detected, and when the prologue is outside the instruction window (`full_listing=false`) rows
+are labelled `unverified` rather than classified. Re-run with `full_listing=true` before trusting
+one. Regression tests: `scripts/orchestrator/tests/test_offset_mismatch_base_register.py`.
 
 **3. `report.json`'s `match_percent_normalized` does not "round" — it is byte-score weighted, and
 it deliberately forgives register permutation.** Each instruction is worth 100 points and a

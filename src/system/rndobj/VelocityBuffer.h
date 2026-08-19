@@ -31,6 +31,16 @@ struct ViewProjXfm {
 // size 0x36c84
 class RndVelocityBuffer {
 public:
+    // DECOMP BUG (open, 2026-08-19): this destructor was PRIVATE in the
+    // original.  ham_xbox_r.map:54065-6 spells its deleting-destructor thunks
+    // `??_ERndVelocityBuffer@@EAAPAXI@Z` / `??_G...@@EAAPAXI@Z` -- `E` =
+    // private virtual -- where we emit `U` = public virtual, and
+    // docs/dc_symbols.txt:54004-5 independently reads "private: virtual".
+    // Invisible to every diff, because our `U` spelling is also what
+    // config/373307D9/symbols.txt:147328 applies to the TARGET symbol at
+    // 0x826B17E8.  Fixing it means moving this under `private:` AND correcting
+    // symbols.txt + scripts/target_symbol_map.json together.  See
+    // docs/analysis/dispatch-data-rescan-20260818.md.
     virtual ~RndVelocityBuffer() { FreeData(); }
 
     void CacheCameraSettings(RndCam *);

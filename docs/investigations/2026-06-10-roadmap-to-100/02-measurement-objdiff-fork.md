@@ -136,7 +136,50 @@ a benign addend diff. `run_objdiff` reports it `100.0% normalized (99.1% raw)`. 
 risk number (11,052) is partly stale and overwhelmingly benign; the true wrong-symbol subset is
 small but currently uncounted (F3).
 
+> **F7 REHABILITATED, 2026-08-19.** The *conclusion* — benign-addend dominance — is
+> independently confirmed and stronger than stated here. Across a 14-function sample,
+> `functionRelocDiffs=all` added **997** non-equal instruction rows on top of
+> `name_check`, of which 531 (53.3%) were the same symbol on both sides, 352 (35.3%)
+> `lbl_*` vs a named static, 112 (11.2%) register-only, and **2 (0.2%)** an actual name
+> divergence — 99.8% benign, exactly the shape F7 inferred from one function.
+> Two caveats on the *specifics*: (a) `?IsLockedIn@ArcDetector@@QBA_NXZ` is now
+> **100.0% with 0 non-equal rows under `none`, `name_check` AND `all`**, so its
+> particular claim is moot; (b) the "FRESH `run_diff_inspect` (raw mode)" reading was
+> not `all` — `raw` omitted `-c` and so measured whatever the project config said (see
+> the F8 correction below). The `addr_reloc`-same-name observation still stands, and
+> the renderer now tags such rows as `addr_reloc` deliberately.
+
 ### F8. Config consistency confirmed for the report->db path; the MCP path uses a third, different mode.
+
+> **CORRECTED 2026-08-19 — two claims in this section are no longer true, one of
+> which was never true.**
+>
+> 1. **"`raw` mode = `name_address`" was never true.** MCP's `raw` was spelled *omit
+>    `-c` entirely*; it never passed `name_address`. Under `-p` it therefore returned
+>    whatever the project config said — since 2026-08-12 that is **`name_check`**.
+>    (`name_address` *is* a real value, so the line reads plausibly; it is simply not
+>    what the tool did.)
+> 2. **"objdiff.json sets NO diff options" was true when written and is now stale.**
+>    `c8c545a56` (2026-08-12, *"Ship functionRelocDiffs=name_check"*) added
+>    `"options": {"functionRelocDiffs": "name_check"}`, which `apply_project_options`
+>    stamps over the CLI default for every `-p` invocation in this repo.
+>
+> The full ruler set is **six** values, not three. Measured on
+> `?Load@CamShot@@UAAXAAVBinStream@@@Z` with the ICF alias map held constant
+> (non-equal instruction rows):
+>
+> | `functionRelocDiffs=` | fuzzy% | non-equal rows |
+> |---|---|---|
+> | `none` | 99.85558 | 119 |
+> | `name_only` | 99.78883 | 130 |
+> | `name_check` | 99.85558 | 119 |
+> | `name_address` | 99.68568 | 151 |
+> | `data_value` **(objdiff-cli's built-in default)** | 99.68568 | **147** |
+> | `all` | 99.66141 | 151 |
+> | *(flag omitted)* | 99.68568 | **147** — identical to `data_value`, confirming the default |
+>
+> See [docs/tools/REFERENCE.md](../../tools/REFERENCE.md#the-relocation-ruler-three-rulers-and-which-one-to-reach-for).
+
 - report.json -> sync_match_percent.py -> decomp.db: all consistently use `None` (most lenient).
 - MCP `run_objdiff`/`run_diff_inspect`: `DataValue` (default), with `raw` mode = `name_address`.
 - The historical producer bug (MEMORY `e9f84f40`) was a `--noise-filter`/`functionRelocDiffs=none`

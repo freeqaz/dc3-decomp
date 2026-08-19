@@ -256,6 +256,241 @@ tools/decompile.sh "CharMirror::Load" --context
 python3 tools/decompctx.py src/path/to/file.cpp -I include -I src
 ```
 
+## objdiff-cli through MCP: what maps to what
+
+> ### ⚠ The MCP server runs the **main repo's** code — `project_dir` does not change that
+>
+> `mcp_server.py` sets `self.project_root = Path(__file__).resolve().parent.parent.parent`
+> — the tree the *server module was loaded from* — and `.mcp.json` launches it as
+> `python -m scripts.orchestrator.mcp_server` from the session's cwd, which is
+> normally `/home/free/code/milohax/dc3-decomp`. **`project_dir` selects the build
+> tree that gets diffed, not the code that does the diffing.**
+>
+> Consequence, and it bites every time someone changes this file: **a fix to
+> `mcp_server.py` on a branch or in a worktree has no effect on any running agent
+> until the MCP server is restarted from a tree that contains it.** If a newly
+> added parameter answers "unknown argument", or a fixed tool still misbehaves
+> exactly as before, check this before debugging anything else. Landing on `main`
+> is necessary but *not sufficient* — already-running servers keep the old module
+> in memory.
+>
+> To exercise wrapper changes before a restart, drive the code directly
+> (`exec` the module fragment, as `scripts/orchestrator/tests/` does) rather than
+> through the `mcp__orchestrator__` tools.
+
+`CLAUDE.md` tells agents to use the `mcp__orchestrator__` tools rather than the
+raw CLI. That rule was unfollowable until 2026-08-19.
+
+**The method is now in the tree — re-run it rather than quoting this table:**
+
+```sh
+python3 scripts/orchestrator/transcript_cli_sweep.py
+```
+
+> **The originally published figures did not reproduce, and are corrected here.**
+> This section used to claim *"a sweep of 474 session transcripts found 483 tool
+> calls mentioning `objdiff-cli`, of which 296 actually invoke it — 259 against
+> DC3"*, with `--include-data` at 88 and `--batch` at 49. Re-measured 2026-08-19
+> over the **whole** corpus, those numbers are a small unrecorded subset: there
+> are **16,661** transcript files, not 474, because subagent transcripts nest two
+> and three levels below the project dir and a flat `*.jsonl` glob sees only 231
+> of them (1.4%). That flat-glob slice yields 297 real invocations — the
+> published 296 to within one — which is almost certainly what was measured.
+
+Full-corpus numbers, 2026-08-19:
+
+| | n |
+|---|---|
+| transcript files scanned | 16,661 |
+| files with ≥1 real invocation | 774 |
+| **real direct invocations** | **2,722** |
+| — DC3-scoped by what the command names | 304 |
+| — command names no tree, session was DC3 | 230 |
+| — explicitly another repo | 583 |
+| excluded: mentioned but not run | 4,378 |
+
+By flag, on the DC3-scoped invocations:
+
+| flag reached for | n | now |
+|---|---|---|
+| `-p <project>` | 154 | implicit in `project_dir` |
+| `-1` / `-2` object pair | 113 / 94 | mostly `build=false`; true arbitrary pairs stay CLI |
+| `-u <unit>` | 89 | `unit="…"` |
+| `--include-instructions` | 89 | default |
+| `report generate`/`query` | 85 | infrastructure — stays CLI |
+| `--full-listing` | 29 | already existed (`full_listing`) |
+| `--batch` (bulk) | 18 | `run_symbol_sweep` |
+| `--include-data` (vtables, RTTI) | 15 | `include_data=true` |
+| `--analyze` | 9 | default |
+
+The conclusion the guidance rests on is unchanged and holds on any slice: direct
+invocation was **routine, not exceptional**, and it reached for `--include-data`
+and `--batch` — capabilities the wrappers genuinely lacked. Only the arithmetic
+was wrong.
+
+Use this table before reaching for the binary.
+
+| Raw invocation | Sanctioned equivalent |
+|---|---|
+| `diff <sym> -f markdown --verdict` | `run_objdiff(symbol, project_dir)` |
+| `diff <sym> -f json --include-instructions` | `run_objdiff(..., output_format="json")` |
+| `diff <sym> --include-data` (vtables, RTTI, string pools) | `run_objdiff(..., include_data=true, unit="…")` |
+| `-c functionRelocDiffs=all` (count relocations) | `run_objdiff(..., diff_mode="raw")` |
+| `-c functionRelocDiffs=name_check` (report.json's ruler) | `run_objdiff(..., diff_mode="name_check")` |
+| `diff -1 <target.obj> -2 <base.obj> <sym>` merely to skip the build | `run_objdiff(..., build=false)` |
+| `diff <sym> -C 5` / `--full-listing` | `run_objdiff(..., context=5)` / `full_listing=true` |
+| `diff -u <unit> <sym>` (disambiguate) | `run_objdiff(..., unit="…")` |
+| a shell loop over many symbols | `run_symbol_sweep(kind="functions", symbols=[…])` |
+| a shell loop over every `??_7` in every unit | `run_symbol_sweep(kind="vtable_slots")` |
+| `--map-file` for ICF equivalence | automatic — objdiff loads `build/373307D9/icf_aliases.map` from `objdiff.json`, and `run_symbol_sweep` reads it again for address adjudication |
+
+**Still legitimate direct CLI use** (do not route these through MCP):
+
+* the ninja `report generate` rule, `tools/none_guard.py`, `tools/project.py`,
+  `scripts/measure_progress.sh`, `scripts/sync_match_percent.py` — these *are*
+  the measurement layer;
+* `-1/-2` where the two objects genuinely are **not** this project's
+  target/base pair for one unit — e.g. `-1 $TGT -2 $TGT` to read the target's
+  own listing, or comparing a saved candidate `.obj`. (If you only wanted to
+  avoid a rebuild, use `build=false`.)
+* `doc-links`, `report query`/`report function` — no MCP surface, and none is
+  needed for ordinary decomp work.
+* **Anything in another repo.** `run_objdiff` raises `CrossProjectError` for a
+  foreign `project_dir` on purpose; **583** of the 2,722 transcript invocations
+  explicitly name another repo — `rb3-xenon`, `rb3`, `cea-decomp`,
+  `decomp-synth` — and were correctly routed around MCP. Prefer that repo's own
+  orchestrator when one exists.
+
+### The relocation ruler: three rulers, and which one to reach for
+
+All counts below are **non-equal instruction rows** from `objdiff-cli
+--include-instructions`, not headline percentages. Measured on this fork
+(objdiff-cli 4.2.3, `?Load@CamShot@@UAAXAAVBinStream@@@Z`, 2026-08-19), with
+the ICF alias map held constant via `--map-file` so the project option is the
+only variable:
+
+| ruler | fuzzy% | non-equal rows | reloc_ignored |
+|---|---|---|---|
+| **objdiff-cli's own built-in default** (`DataValue`) | 99.68568 | **147** | 15 |
+| *(flag omitted, under this repo's `-p`)* | 99.85558 | 119 | 22 |
+| `none` | 99.85558 | 119 | 22 |
+| `name_check` | 99.85558 | 119 | 22 |
+| `all` | 99.66141 | **151** | 11 |
+
+**Why omitting `-c` is not raw.** Not because "the fork's default is already
+normalized" — that was the original explanation here and it is **false**. The
+fork's built-in CLI default is `FunctionRelocDiffs::DataValue`
+(`objdiff-cli/src/cmd/diff.rs`, `build_config_from_args`), a *third* ruler
+with a third row count: **147**. Omitting the flag lands on `name_check` only
+because **this repo's `objdiff.json`** carries
+
+```json
+"options": { "functionRelocDiffs": "name_check" }
+```
+
+which `apply_project_options` (`objdiff-core/src/config/mod.rs`) stamps over the
+built-in default whenever `-p` loads the project.
+
+That distinction is load-bearing, not pedantry: **`bin/objdiff-cli` is a symlink
+shared with `../rb3` and `../rb3-xenon`**, whose `objdiff.json` may set a
+different value. "The fork normalizes" predicts the same row counts in all three
+trees. It travels with the **project config**, not with the binary.
+
+A second contingency worth knowing: the `none == name_check == 119` coincidence
+holds only while the ICF alias map is loaded. Drop `--map-file` and `name_check`
+rises to **130** while `none` stays at **119** — the two rulers genuinely
+differ; they agree here only because `icf_aliases.map` already proves the folds
+`name_check` would otherwise charge.
+
+#### What `raw` actually was: mislabelled, not blind
+
+`run_diff_inspect` shipped `diff_mode="raw"` as *omit `-c`*, which under this
+repo's `-p` returned the **`name_check`** answer under a "raw" label. It was
+**mislabelled, not inert-and-blind**: `name_check` charges relocation *name*
+mismatches, which is precisely the wrong-callee / wrong-vtable-slot plane. An
+earlier draft of this note claimed an agent hunting a wrong-slot bug "would have
+concluded there was none"; that is **overstated and retracted**.
+
+**`name_check` is the wrong-callee ruler — prefer it.**
+`?Poll@KinectShareConnection@@QAAXXZ` scores 100.0% with **0** mismatch rows
+under `none`, and `name_check` finds exactly **1**, a genuine wrong callee:
+
+```
+bl ??$MakeString@E@@YAPBDPBDABE@Z   (target, unsigned char)
+bl ??$MakeString@D@@YAPBDPBDABD@Z   (ours,   char)
+```
+
+**`raw`/`all` is the addend view, and it is noisier rather than more capable**
+for that class. Over a 14-function sample, `all` added **997** rows on top of
+`name_check`:
+
+| what the added row was | rows | share |
+|---|---|---|
+| same symbol on both sides (pure address/addend noise) | 531 | 53.3% |
+| `lbl_*` vs a named static | 352 | 35.3% |
+| register-only, no symbol either side | 112 | 11.2% |
+| **an actual name divergence** | **2** | **0.2%** |
+
+i.e. **99.8% noise**. `?Handle@CampaignPerformer@@…` goes from **0** rows under
+`name_check` to **605** under `all`. Use `all` when you care about relocation
+*addends*; use `name_check` when you are hunting a wrong callee. Both tools now
+route through one `RELOC_RULER` table in `mcp_server.py`, and the `mismatches`
+renderer tags same-symbol rows `addr_reloc` so the noise is visible as noise.
+
+Anything concluded from `run_diff_inspect(diff_mode="raw")` **before
+2026-08-19** was measured with `name_check`, not `all` — so it is a *sharper*
+ruler than `none` for wrong-callee work, but it is not what the label said and
+it never counted addends.
+
+#### `diff_mode` still reaches only 3 of `run_diff_inspect`'s 11 modes
+
+`mismatches`, `compare` and `save_baseline` build their objdiff command in
+`mcp_server.py` and honour the ruler. The other eight do not:
+
+* `diagnose`, `clusters`, `regswaps`, `offsets`, `replaces`, `attributed` —
+  delegate to `scripts/analysis/diff_inspect.py`, which builds its *own* command
+  and exposes no ruler switch. **That file is owned by another lane and was
+  deliberately not modified here.**
+* `stack-layout` — same, via `scripts/analysis/stack_layout.py`.
+* `asm_listing` — a `/FAs` compiler listing; there is no objdiff run to rule.
+
+All eight **print a banner saying the ruler was ignored** rather than returning a
+normalized report under a raw label. If you need a relocation-aware answer, use
+`run_objdiff(diff_mode="name_check")` or `run_diff_inspect(mode="mismatches")`.
+
+> **Not affected:** the ubiquitous `Match: 100.0% normalized (99.8% raw)`
+> strings. That "raw" is `raw_match_percent`, a different axis entirely, and
+> none of the above changes it.
+
+### `run_symbol_sweep`
+
+The bulk shape. Three kinds:
+
+* `vtable_slots` (default) — every `??_7` symbol **defined** in every target
+  split object, one-shot `--include-data` diffed, keeping relocation rows where
+  both sides name a symbol and the two names resolve to **different** addresses
+  across `orig/373307D9/ham_xbox_r.map` + `build/373307D9/icf_aliases.map`.
+  Equal addresses are a proven ICF fold and benign. `insert`/`delete` rows —
+  where only one side has a slot at all — are a separate **length** tier.
+  ~2,900 diffs, ~3 min at 16 workers.
+* `data_symbols` — same engine, your own `symbol_glob` (`??_R4*`, `??_C@*`, …).
+* `functions` — batch-diff a supplied symbol list through objdiff `--batch`
+  (one process, not N). `--batch` refuses `--include-data`; that is an
+  objdiff-side restriction, not a wrapper omission.
+
+Every sweep leads with a COVERAGE block naming its **universe**, how many rows it
+examined, and every drop reason. `max_symbols` truncation is labelled
+`TRUNCATED`. This is the same contract `scripts/analysis/coverage.py` enforces;
+`symbol_sweep` imports that module when present and falls back to a
+same-shaped local implementation otherwise.
+
+Sweeps are read-only: they diff already-built objects, never run ninja, never
+write `decomp.db`. Safe to run alongside the build/permuter fleet.
+
+CLI form, for scripts: `python3 -m scripts.orchestrator.symbol_sweep --project .
+--kind vtable_slots --format json --out /tmp/x.json` (exit 3 = truncated,
+4 = unaccounted rows).
+
 ## Compiler Documentation
 
 | Doc | Description |

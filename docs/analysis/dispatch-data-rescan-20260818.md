@@ -174,3 +174,142 @@ wrong**). Everything on this branch is reconstruction from target asm + the link
 ## Not touched, still true
 
 The `??_R1` access-attribute and `??_R2` virtual-base ordering floors above stand.
+
+---
+
+# Follow-up, 2026-08-19: the method is now a tool, and the count was 139 → 50
+
+The "Method used for the worklist (reproducible, does not need the scanner)"
+section above described a real procedure in prose. It is now
+`mcp__orchestrator__run_symbol_sweep(kind="vtable_slots")` /
+`python3 -m scripts.orchestrator.symbol_sweep --kind vtable_slots`
+(`scripts/orchestrator/symbol_sweep.py`, branch `tools/mcp-capability-gaps`).
+
+Re-running the published measurement through the tool, on freshly built trees at
+both commits:
+
+| | published (prose method) | tool |
+|---|---|---|
+| `49ad7cfd5` | 141 | **139** |
+| after `fix/missing-override-bodies` | 52 | **50** |
+| delta | 89 | **89** |
+
+The delta is identical, and it agrees with `56ac7c6f0`'s own subject line
+("89 vtable slots stop diverging"). Both endpoints are lower by exactly the same
+**2**, and those two are identified:
+
+* `??_7JsonObject@@6B@` and `??_7RndVelocityBuffer@@6B@`, slot `+0x0`,
+  `??_G…` (target) vs `??_E…` (ours) — the deleting-destructor thunk pair this
+  doc already called "Cosmetic ICF naming".
+
+> **CORRECTED 2026-08-19.** The paragraph that stood here made two factual
+> errors, and a real decomp bug was hiding behind them. `50` is still the
+> correct residual — the conclusion survives, the reasoning did not.
+>
+> It claimed *"neither `??_G` nor `??_E` appears in `ham_xbox_r.map` at all"* and
+> that they form *"one weak-alias group at `0x826B17E8`"*. Both are wrong, and the
+> first is **internally inconsistent with the tool it was describing**: absence
+> from the map is exactly the `unresolved-target` class
+> (`symbol_sweep.py`, `cls = "wrong-target" if (ta and ba) else "unresolved-target"`,
+> and `SLOT_CLASSES = {"wrong-target", "unresolved-target"}`), so if they really
+> were absent the sweep would have **kept** both rows, not dropped them. The
+> answer would have been 52, not 50.
+>
+> **All four are in `ham_xbox_r.map`**, in **two** groups, each pair at one address:
+>
+> ```
+> 47873: ??_GJsonObject@@MAAPAXI@Z         82563bf0  net:JsonUtils.obj
+> 47874: ??_EJsonObject@@MAAPAXI@Z         82563bf0  net:JsonUtils.obj
+> 54065: ??_ERndVelocityBuffer@@EAAPAXI@Z  826b17e8  rndobj:VelocityBuffer.obj
+> 54066: ??_GRndVelocityBuffer@@EAAPAXI@Z  826b17e8  rndobj:VelocityBuffer.obj
+> ```
+>
+> The grep that "found nothing" searched the **`U`** mangling *our own build
+> emits*, which is genuinely absent from the map. The map spells them **`M`**
+> (protected) and **`E`** (private).
+>
+> ### The real finding: we declare both deleting destructors `public`
+>
+> That mangling difference is **not cosmetic — it is an unrecorded decomp bug.**
+> MSVC encodes member access in the mangled name, and the original's is not ours:
+>
+> | | original (`ham_xbox_r.map`) | our build | access |
+> |---|---|---|---|
+> | `JsonObject` | `??_GJsonObject@@`**`M`**`AAPAXI@Z` | `??_GJsonObject@@`**`U`**`AAPAXI@Z` | **protected** vs public |
+> | `RndVelocityBuffer` | `??_ERndVelocityBuffer@@`**`E`**`AAPAXI@Z` | `??_ERndVelocityBuffer@@`**`U`**`AAPAXI@Z` | **private** vs public |
+>
+> (`M` = protected virtual, `E` = private virtual, `U` = public virtual.) Both
+> destructors sit under `public:` in our headers —
+> `src/system/net/JsonUtils.h` (`virtual ~JsonObject()`) and
+> `src/system/rndobj/VelocityBuffer.h` (`virtual ~RndVelocityBuffer()`) — where the
+> original had them protected and private respectively. `docs/dc_symbols.txt:54004-5`
+> independently records RndVelocityBuffer's as *"private: virtual"*; the ground
+> truth was already in the tree.
+>
+> **It is invisible to every diff by construction**, not merely metric-invisible.
+> Our `U` spelling has been baked into the symbol naming applied to the *target*:
+>
+> ```
+> config/373307D9/symbols.txt:137107  ??_GJsonObject@@UAAPAXI@Z        = .text:0x82563BF0;
+> config/373307D9/symbols.txt:147328  ??_GRndVelocityBuffer@@UAAPAXI@Z = .text:0x826B17E8;
+> scripts/target_symbol_map.json      "0x82563bf0": "??_GJsonObject@@UAAPAXI@Z"
+> scripts/target_symbol_map.json      "0x826b17e8": "??_GRndVelocityBuffer@@UAAPAXI@Z"
+> ```
+>
+> so the split relabels the target's own symbols with *our* mangling and both sides
+> then agree. `orig/373307D9/ham_xbox_r.map` is the only artefact in the tree where
+> the original access survives. On top of that, **the ICF-fold drop rule introduced
+> alongside this doc now hides the row in the vtable sweep as well** — which is
+> precisely why this is written down here rather than left for the sweep to re-find.
+> It also matches the project's standing rule in `CLAUDE.md`: *"Keep members
+> protected/private unless confirmed public via DWARF or asserts."*
+>
+> **Follow-up (open), two parts:**
+>
+> 1. Tighten both destructors to match the original access. Not done on this
+>    tooling branch — it is a source change with caller-visibility consequences
+>    (a `protected` `~JsonObject` forbids `delete` through a `JsonObject*`) and
+>    belongs in a lane that can rebuild and re-verify the dependents. Markers
+>    left at both declaration sites so the next reader of the header finds this.
+> 2. Correct the two `symbols.txt` / `target_symbol_map.json` entries once (1) is
+>    done, so the target stops being relabelled with our mangling. Note that
+>    editing `config/373307D9/symbols.txt` re-triggers SPLIT, and `dtk xex split`
+>    must remain a fixed point of its input — see
+>    [docs/tools/BUILD_SYSTEM.md](../tools/BUILD_SYSTEM.md). Do the two together
+>    or the build and the map will disagree in the other direction.
+>
+> **Method note for whoever audits this class next:** the lane that wrote the
+> original paragraph grepped the mangling *its own build emits*. Any "absent from
+> `ham_xbox_r.map`" claim about a member function should be re-run across the
+> access letters (`A`/`E`/`I`/`M`/`Q`/`U` …) or against the demangled name in
+> `docs/dc_symbols.txt`, which is access-annotated in plain English and would have
+> answered this in one grep.
+
+The fold that the sweep actually proves is the one in
+`build/373307D9/icf_aliases.map`, which speaks our build's `U` mangling and so
+resolves both names in each pair to a single address — **two** weak-alias groups,
+`??_GJsonObject@@UAAPAXI@Z`/`??_EJsonObject@@UAAPAXI@Z` at `0x82563BF0` and
+`??_GRndVelocityBuffer@@UAAPAXI@Z`/`??_ERndVelocityBuffer@@UAAPAXI@Z` at
+`0x826B17E8`. `ham_xbox_r.map` independently proves the same two folds under the
+`M`/`E` spellings. Either map is sufficient; reading both is what drops the rows.
+**50 is the correct residual**; the doc's own prose verdict on those two rows was
+right and its arithmetic was two high.
+
+The tool also reports the denominator the prose method never stated: the
+universe is **5,132** `(unit, symbol)` pairs matching `??_7*` in the target split
+objects, of which **2,863 are examined** and **2,269 are undefined external
+references** (COFF section index 0 — vtables a TU merely *uses*; objdiff answers
+"Symbol not found in target" for those). `lazer/` measures **0** divergent slots,
+confirming this doc's "lazer/ is now completely clean".
+
+Two things the prose method did not separate, which the tool reports as a second
+tier: `insert`/`delete` relocation rows, where only one side has a slot at all.
+There are 1,078 of them binary-wide (1,027 target-only, dominated by `??_R4`
+RTTI-locator slots; 51 base-only, e.g. `FlowRun`'s `Object` sub-object vtable
+where `target_size` is 44 and ours is 88). They are real signal but they are not
+slot-for-slot divergences and were never part of the 141/52 count.
+
+The blind spot this doc names — "name-matched slots with the WRONG BODY" — is
+**unchanged**. The tool filters equal-address rows exactly as the prose method
+did, so it still cannot see a wrong body behind a right name. Whoever picks that
+up still needs the ICF-group disassembly step described above.
