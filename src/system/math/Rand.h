@@ -57,6 +57,20 @@ public:
 
     static Rand sRand;
 
+#ifdef HX_NATIVE
+    // Native-only test hook. Seed() builds the whole 256-entry table that every
+    // RandomInt/RandomFloat draw reads, and the sign-extension defect this class
+    // has a regression test for (`srawi` vs `srwi`) is a property OF THE TABLE,
+    // not of the draw stream: Int() returns `table[i] ^ table[j]`, and XOR
+    // destroys the `0xFFFFxxxx` signature (two poisoned words cancel to
+    // `0x0000xxxx`), which is why the original draw-level probe could never fire.
+    // Expose the raw words so the guard can assert the invariant directly.
+    // Guarded by HX_NATIVE: the PPC build never sees this and its codegen is
+    // byte-identical.
+    unsigned int TableWordForTest(int i) const { return mRandTable[i]; }
+    static int TableSizeForTest() { return 256; }
+#endif
+
     MEM_OVERLOAD(Rand, 0x16)
 
 private:

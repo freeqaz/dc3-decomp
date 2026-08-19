@@ -67,4 +67,9 @@ TEST(Sha1, ThousandA) {
 // dtor + ctor path the real HDCache / StreamChecksum users rely on).
 TEST(Sha1, Deterministic) {
     EXPECT_EQ(Sha1Hex("milo"), Sha1Hex("milo"));
+    // Self-consistency alone is unfalsifiable: the 2026-08-19 audit showed this
+    // test passing with the Sha1Bswap32 byteswap removed from SHA1.cpp. Pin the
+    // real digest (cross-checked against coreutils `printf 'milo' | sha1sum`),
+    // so a wrong-but-stable implementation cannot satisfy it.
+    EXPECT_EQ(Sha1Hex("milo"), "a8da9cad44f6114c16e7a052878a8dc106a740dd");
 }
