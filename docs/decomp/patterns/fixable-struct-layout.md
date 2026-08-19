@@ -181,10 +181,35 @@ stored. That is FixedString-then-TextStream, i.e. the order the tree already shi
 
 Two gotchas when reading a constructor this way:
 
-- **Use raw diff mode.** The target's call there disassembles as
-  `bl ??1?$StackString@$0IA@@@UAA@XZ` in the slot where we emit
-  `bl ??0TextStream@@QAA@XZ` — ICF merged the two empty functions, so *normalized* mode
-  scores the constructor 100% and hides the evidence. `run_diff_inspect diff_mode=raw`.
+- **Read the target's own listing — no diff ruler will show you this.** The target's
+  call there disassembles as `bl ??1?$StackString@$0IA@@@UAA@XZ` in the slot where we
+  emit `bl ??0TextStream@@QAA@XZ`; ICF merged the two empty functions, so the
+  constructor scores 100% and the evidence is masked.
+
+  > **Corrected 2026-08-19.** This bullet used to say *"use raw diff mode —
+  > `run_diff_inspect diff_mode=raw`"*. That does not work, and did not work then.
+  > Re-measured on `??0String@@QAA@ABV0@@Z` (non-equal instruction rows):
+  > `none` **0**, `name_check` **0**, `all` **7** — and all 7 of the `all` rows are the
+  > *same symbol on both sides* (`?gEmpty@@3PADA`, `??_7String@@6B@`,
+  > `??4String@@QAAAAV0@PBD@Z`), i.e. pure addend noise. **The
+  > `??1?$StackString@…` row appears under no ruler at all**, because
+  > `build/373307D9/icf_aliases.map` proves the fold and objdiff masks it as
+  > `reloc_ignored` regardless. On top of that, `diff_mode` never reached
+  > `run_diff_inspect`'s analysis modes in the first place (see
+  > [docs/tools/REFERENCE.md](../../tools/REFERENCE.md#the-relocation-ruler-three-rulers-and-which-one-to-reach-for)).
+
+  What actually works is diffing the target object **against itself** and reading the
+  target column — one of the named legitimate direct-CLI uses:
+
+  ```sh
+  T=build/373307D9/obj/system/utl/Str.obj
+  bin/objdiff-cli diff -1 $T -2 $T '??0String@@QAA@ABV0@@Z' --include-instructions
+  #   ... bl ??1?$StackString@$0IA@@@UAA@XZ      <- the merged name, visible
+  ```
+
+  If you want a *diff* that charges wrong callees generally, the ruler is
+  `name_check`, not `raw` — but for an ICF fold the alias map has already
+  forgiven it, which is the whole reason you must go to the listing.
 - **You cannot repair a base-order regression from the mem-init list.** MSVC reorders a
   mem-init list back to declaration order, so rewriting it changes nothing.
 
