@@ -22,7 +22,10 @@ public:
         static Symbol by_song("by_song");
         SetSortName(by_song);
     }
-    virtual ~SongSortBySong();
+    // Inline, like SongSortByLocation: ??_GSongSortBySong folds into
+    // ??_GSongSortByLocation at 0x829613A0, which stores both SongSort
+    // vptrs inline before calling ??1NavListSort.
+    virtual ~SongSortBySong() {}
 
     virtual NavListItemNode *NewItemNode(void *) const;
     virtual NavListShortcutNode *NewShortcutNode(NavListItemNode *) const;

@@ -137,7 +137,6 @@ void MQSongHeaderNode::Renumber(std::vector<NavListSortNode *> &vec) {
     }
 }
 
-MQSongSortNode::~MQSongSortNode() {}
 
 Symbol MQSongSortNode::OnSelect() { return Select(); }
 

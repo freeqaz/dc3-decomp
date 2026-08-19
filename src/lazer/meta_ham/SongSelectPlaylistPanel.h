@@ -26,7 +26,9 @@ public:
 class SongSelectPlaylistPanel : public HamPanel {
 public:
     // Hmx::Object
-    virtual ~SongSelectPlaylistPanel();
+    // No user-declared destructor: ham_xbox_r.map folds ??_GSongSelectPlaylistPanel into
+    // ??_GSongSelectPlaylistCustomizePanel at 0x8294D538, whose body has no vptr store --
+    // declaring one made MSVC inline the derived dtor into ??_G.
     OBJ_CLASSNAME(SongSelectPlaylistPanel)
     OBJ_SET_TYPE(SongSelectPlaylistPanel)
     virtual DataNode Handle(DataArray *, bool);
