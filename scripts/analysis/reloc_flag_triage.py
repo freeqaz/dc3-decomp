@@ -51,6 +51,12 @@ def main() -> int:
     ap.add_argument("--all-jsonl", required=True)
     ap.add_argument("--namecheck-jsonl", required=True)
     ap.add_argument("--pattern", required=True)
+    ap.add_argument("--report", required=True,
+                    help="build/373307D9/report.json -- the ONLY source of "
+                         "match_percent_normalized. objdiff's --batch JSONL "
+                         "carries `match_percent_normalized: null` on every "
+                         "row, so reading it from there silently classifies "
+                         "every function as norm=0 and class B comes out empty.")
     ap.add_argument("--list", choices=["A", "B", "C"], default=None)
     ap.add_argument("--json-out", default=None)
     args = ap.parse_args()
@@ -63,6 +69,17 @@ def main() -> int:
     A = load(args.all_jsonl)
     N = load(args.namecheck_jsonl)
 
+    norm_of = {}
+    with open(args.report) as fh:
+        rep = json.load(fh)
+
+    def rec(node):
+        for f in node.get("functions") or []:
+            norm_of[f["name"]] = f.get("match_percent_normalized")
+        for c in node.get("units") or []:
+            rec(c)
+    rec(rep)
+
     cls = collections.Counter()
     rows = {"A": [], "B": [], "C": []}
     for sym, ra in A.items():
@@ -73,9 +90,10 @@ def main() -> int:
             cls["missing_namecheck"] += 1
             continue
         survives = bool(pats(rn) & wanted)
-        norm = rn.get("normalized")
+        norm = norm_of.get(sym)
         if norm is None:
-            norm = 0.0
+            cls["missing_from_report"] += 1
+            continue
         rec = {"symbol": sym, "unit": rn.get("unit"),
                "size": rn.get("target_size") or 0,
                "norm": norm, "fuzzy": rn.get("fuzzy"),
