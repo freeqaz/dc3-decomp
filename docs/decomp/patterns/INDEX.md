@@ -141,6 +141,22 @@ match (some at 0% as unpaired stubs). Several were *introduced* by match-neutral
 Includes the **"regalloc floor" false-certification** anti-pattern + the floor-cert
 standard, and the instrument→stub-test→audit→retry→runtime-verify workflow.
 
+**A wrong CALLEE is in this class and is not in that table.**
+`match_percent_normalized = diff_score − arg_diff_score` and objdiff folds
+relocation penalties into `arg_diff_score` by design, so calling an entirely
+different symbol costs **zero** normalized points under every
+`functionRelocDiffs` value — and produces **zero instruction mismatches**, which
+defeats the "zero-mismatch instruction count" escape hatch too. 73 named
+functions / 28,328 B on this tree were 100% relocation-blind and below 100% on
+the graded ruler, **all with `other_charges == 0`**. Confirmed instances: a
+wrong base constructor (`Task` vs `Hmx::Object`), `MakeString<char>` vs
+`<unsigned char>`, an `extern "C"` mangling mismatch, a local overload shadowing
+a template. Standing check: `scripts/analysis/reloc_name_gate.py` (with a
+`--selftest` negative control). Full write-up:
+**[relocation-names-are-unmetered.md](relocation-names-are-unmetered.md)** — read
+its "Check the instrument first" section before triaging a row, because three of
+the loudest findings there were config defects rather than source bugs.
+
 ## Fixable Patterns
 
 These patterns can often be fixed with source changes. Sorted by ROI (impact x success rate).
