@@ -413,20 +413,11 @@ inline void Normalize(const Hmx::Matrix3 &in, Hmx::Matrix3 &out) {
 // Header inline, not out-of-line in mtx.cpp: the target's only copy of
 // ?Multiply@@YAXABVMatrix3@Hmx@@0AAV12@@Z (680B, fully unrolled) sits in
 // char/CharLookAt's address range, which is where a folded header COMDAT
-// lands, not where mtx.cpp's members go. Body unchanged.
-inline void Multiply(const Hmx::Matrix3 &a, const Hmx::Matrix3 &b, Hmx::Matrix3 &out) {
-    out.Set(
-        a.x.x * b.x.x + a.x.y * b.y.x + a.x.z * b.z.x,
-        a.x.x * b.x.y + a.x.y * b.y.y + a.x.z * b.z.y,
-        a.x.x * b.x.z + a.x.y * b.y.z + a.x.z * b.z.z,
-        a.y.x * b.x.x + a.y.y * b.y.x + a.y.z * b.z.x,
-        a.y.x * b.x.y + a.y.y * b.y.y + a.y.z * b.z.y,
-        a.y.x * b.x.z + a.y.y * b.y.z + a.y.z * b.z.z,
-        a.z.x * b.x.x + a.z.y * b.y.x + a.z.z * b.z.x,
-        a.z.x * b.x.y + a.z.y * b.y.y + a.z.z * b.z.y,
-        a.z.x * b.x.z + a.z.y * b.y.z + a.z.z * b.z.z
-    );
-}
+// lands, not where mtx.cpp's members go. The definition is further down, just
+// after Multiply(const Vector3 &, const Hmx::Matrix3 &, Vector3 &), because it
+// is written in terms of that overload and MSVC will not inline a callee whose
+// body it has not seen yet.
+inline void Multiply(const Hmx::Matrix3 &a, const Hmx::Matrix3 &b, Hmx::Matrix3 &out);
 void Multiply(const Vector3 &, const Transform &, Vector3 &);
 
 inline void MultiplyTranspose(const Vector3 &v, const Transform &t, Vector3 &out) {
@@ -468,6 +459,35 @@ inline void Multiply(const Vector3 &v, const Hmx::Matrix3 &m, Vector3 &vout) {
         m.x.y * v.x + m.y.y * v.y + m.z.y * v.z,
         m.x.z * v.x + m.y.z * v.y + m.z.z * v.z
     );
+}
+
+// Declared above; defined here so the row helper's body is already visible.
+//
+// Two paths behind an aliasing test.  The target opens with
+//   cmplw cr6, r4, r5 ; beq cr6, <buffered>
+// i.e. it compares &b against &out and falls through to the fast path, so the
+// source shape is "if (&b != &out) { fast } else { buffered }".  The fast path
+// stores each output row the moment it is computed (stfs to 0x0/0x4/0x8 of the
+// row, three floats -- a Vector3::Set), which is only alias-safe when b and out
+// are distinct.  The buffered path computes each row into a stack Vector3 and
+// copies it out with Vector3's implicit operator=, which is a 16-byte copy
+// because of the trailing PAD word -- that is why the target's tail moves four
+// words per row (lwz/stw at +0x0/+0x4/+0x8/+0xc) instead of three, and why it
+// writes garbage into out's pad slots.
+inline void Multiply(const Hmx::Matrix3 &a, const Hmx::Matrix3 &b, Hmx::Matrix3 &out) {
+    if (&b != &out) {
+        Multiply(a.x, b, out.x);
+        Multiply(a.y, b, out.y);
+        Multiply(a.z, b, out.z);
+    } else {
+        Vector3 vx, vy, vz;
+        Multiply(a.x, b, vx);
+        Multiply(a.y, b, vy);
+        Multiply(a.z, b, vz);
+        out.x = vx;
+        out.y = vy;
+        out.z = vz;
+    }
 }
 
 inline void Multiply(const Transform &t, const Hmx::Matrix3 &m, Transform &out) {
