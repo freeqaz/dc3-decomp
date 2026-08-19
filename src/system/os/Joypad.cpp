@@ -561,6 +561,10 @@ void JoypadPollCommon() {
                 pro_guitar
             );
 
+            // The target really does take a full 0xdc-byte copy of the pad here
+            // and then tests only mEepromBytesLeft on the copy while the state
+            // machine below mutates the live struct. Reproduced as-is; the
+            // reason for the copy is not recoverable from the binary.
             JoypadData padData = data;
             if (padData.mEepromBytesLeft > 0) {
                 switch (gJoypadData[i].mEepromWriteState) {
@@ -637,6 +641,8 @@ void JoypadPollCommon() {
                 data.mType = (JoypadType)padType;
             }
             if (data.mControllerType.Null()) {
+                // Called for the side effect: it fills in mControllerType and the
+                // per-type masks. The returned Symbol is discarded.
                 Symbol type = JoypadControllerTypePadNum(i);
             }
 
@@ -750,6 +756,8 @@ void JoypadPollCommon() {
                 Export(msg);
             }
 
+            // Line 1029 in the original Joypad.cpp; our file cannot reproduce
+            // the target's line numbering, so the constant is written out.
             MILO_ASSERT(!(justDisconnected && justConnected), 0x405);
 
             if (justDisconnected) {
