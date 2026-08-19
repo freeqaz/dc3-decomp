@@ -80,3 +80,45 @@ the second `MILO_ASSERT`'s fail block *unconditionally* (no `cmpwi r31,0xff; bne
 the condition folds to a compile-time constant), and its `MakeString` instantiation takes a
 **35-byte** expression array where ours takes 22 (`"fmt != D3DFMT_UNKNOWN"`), plus a
 duplicated epilogue. Our assert expression text is wrong.
+
+### Follow-up 2026-08-19: half of that lead was ICF noise, the other half is real but not landable
+
+Worked in `fix/multiply-and-assert`. Leaving the section above as written; this is the
+correction.
+
+**"Our assert expression text is wrong" — REFUTED.** The 35-vs-22 byte expression array is
+an ICF artifact, not a text difference. Both instantiations resolve to the same address in
+`build/373307D9/icf_aliases.map`:
+
+```
+??$MakeString@$$BY07$$CBDH$$BY0CD@$$CBD@@...   824D1870   <- the name the target's map picked
+??$MakeString@$$BY07$$CBDH$$BY0BG@$$CBD@@...   824D1870   <- ours
+```
+
+Every `MakeString<char[N], int, char[M]>` in the binary folds to one body, so the linker
+names the survivor after an arbitrary instantiation. The same function's diff shows the
+target "calling" `MakeString<CamShotFrame::BlendEaseMode>` where we call `MakeString<int>`
+(both `82610090`) — obviously the same artifact, and it should have been the tell. The
+decisive evidence is the string literal, which is byte-identical on both sides:
+`??_C@_0BG@PPIAGPFI@fmt?5?$CB?$DN?5D3DFMT_UNKNOWN?$AA@` — `_0BG` = 0x16 = 22 = `"fmt !=
+D3DFMT_UNKNOWN"` + NUL. There is no 34-character expression to find.
+
+**The missing guard is real, and the cause is which variable `fmt` names.** The condition
+folds to *false* (the block is emitted, not elided), which is impossible for the masked
+bitmap order: in the dxt default arm MSVC knows only that it is none of 0/8/0x10/0x18/0x20,
+and in the bpp arm that it is 0. It folds if `fmt` is the **result**, still holding its
+initialiser on both default paths. Rewriting it that way reproduces the target's prologue
+(`std r30/r31` + `stwu -0x70`, no `__savegprlr_29`), its inline epilogue, and the absent
+guard — the third callee-saved GPR existed only to keep the order value live across
+`Debug::Fail`.
+
+**It still scored 3.4% and was reverted.** MSVC then cross-jumps the two default arms later
+than the target: the target shares everything from `bl MakeString` onward; we duplicate ten
+instructions and merge only inside the assert block, growing base 340 → 380 bytes against a
+340-byte target. The blocker is one stack slot — the target parks the line-number temp at
+`0x54` in *both* arms, we park it at `0x50` in the dxt arm and `0x54` in the bpp arm, so the
+tails are not identical and cannot be merged. `return`-per-case (the `../og-dc3-decomp`
+shape) is worse again at 0.2%: it dissolves the `r30` result register the target keeps.
+
+Next lever is stack-slot colouring, not the assert text. Full write-up in the comment above
+the function in `src/system/rnddx9/Rnd.cpp`.
