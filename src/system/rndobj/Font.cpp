@@ -162,6 +162,8 @@ RndFont::RndFont()
 
 RndFont::~RndFont() { RELEASE(mKerningTable); }
 
+bool RndFont::BitmapFont() const { return true; }
+
 bool RndFont::Replace(ObjRef *from, Hmx::Object *to) {
     if (&mTextureOwner == from) {
         RndFont *replace;
