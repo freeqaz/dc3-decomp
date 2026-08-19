@@ -681,52 +681,51 @@ float FreestyleMoveRecorder::CompareSkeletonPositions(
 float FreestyleMoveRecorder::CompareSkeletonJointDisplacement(
     const FreestyleMoveFrame *frames, int frameIdx, const BaseSkeleton *liveSkel, float &outTotalWeight
 ) const {
-    // Compute trackedCount from vector pointers: (end - begin) >> 2 (4 bytes per element)
-    auto _tmp0 = mTrackedJoints.end();
-    auto _tmp1 = mTrackedJoints.begin();
-    int trackedCount = (int)(_tmp0 - _tmp1) >> 2;
-    // Compute clamped prev-frame index: max(0, frameIdx-1)
-    unsigned int clampedPrev = (~((int)(unsigned int)(frameIdx - 1) >> 31)) & (unsigned int)(frameIdx - 1);
+    // Clamped prev-frame index: max(frameIdx - 1, 0)
+    int clampedPrev = frameIdx - 1 > 0 ? frameIdx - 1 : 0;
+    const std::vector<SkeletonJoint> &trackedJoints = mTrackedJoints;
     float totalScore = 0.0f;
     float totalWeight = 0.0f;
-    if (trackedCount != 0) {
-        const FreestyleMoveFrame *prevFrame = &frames[clampedPrev];
+    if (trackedJoints.end() - trackedJoints.begin() != 0) {
         const FreestyleMoveFrame *curFrame = &frames[frameIdx];
+        const FreestyleMoveFrame *prevFrame = &frames[clampedPrev];
         unsigned int i = 0;
         do {
-            SkeletonJoint joint = mTrackedJoints[i];
+            SkeletonJoint joint = trackedJoints[i];
             Vector3 curJointPos, prevJointPos;
             curFrame->skeleton.JointPos(kCoordCamera, joint, curJointPos);
             prevFrame->skeleton.JointPos(kCoordCamera, joint, prevJointPos);
             int beatDiff = (int)(curFrame->mBeat - prevFrame->mBeat);
-            // Build displacement vector (y=0.0 zeroed — ignore depth component)
+            // Build displacement vector (y=0.0 zeroed — ignore vertical component)
             Vector3 dispOffset;
             dispOffset.x = curJointPos.x - prevJointPos.x;
             dispOffset.y = 0.0f;
             dispOffset.z = curJointPos.z - prevJointPos.z;
+            Vector3 liveDisp;
+            int liveCount = 0;
+            // The handle is a temporary: it dies at the end of this full
+            // expression, well before the Displacement() call below.
+            const SkeletonHistory *history = SkeletonUpdate::InstanceHandle().History();
+#ifdef HX_NATIVE
+            // History may be null before GestureMgr init or after terminate
+            if (history) {
+#endif
+            bool hasDisp = liveSkel->Displacement(history, kCoordCamera, joint, beatDiff, liveDisp, liveCount);
+            liveDisp.y = 0.0f;
             float similarity = 0.0f;
             float maxDisp = 0.0f;
-            {
-                SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
-                const SkeletonHistory *history = handle.History();
-#ifdef HX_NATIVE
-                // History may be null before GestureMgr init or after terminate
-                if (history) {
-#endif
-                Vector3 liveDisp;
-                int liveCount = 0;
-                bool hasDisp = liveSkel->Displacement(history, kCoordCamera, joint, beatDiff, liveDisp, liveCount);
-                if (hasDisp) {
-                    CompareDisplacementVectors(dispOffset, beatDiff, liveDisp, liveCount, similarity, maxDisp);
-                }
-#ifdef HX_NATIVE
-                }
-#endif
+            if (hasDisp) {
+                CompareDisplacementVectors(dispOffset, beatDiff, liveDisp, liveCount, similarity, maxDisp);
             }
             i++;
-            totalScore += similarity * maxDisp;
-            totalWeight += similarity;
-        } while (i < (unsigned int)trackedCount);
+            totalScore += maxDisp * similarity;
+            totalWeight += maxDisp;
+#ifdef HX_NATIVE
+            } else {
+                i++;
+            }
+#endif
+        } while (i < (unsigned int)(trackedJoints.end() - trackedJoints.begin()));
         if (0.0f < totalWeight) {
             totalScore /= totalWeight;
         }
