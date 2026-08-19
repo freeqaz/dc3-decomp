@@ -13,6 +13,13 @@ public:
 
     bool ParseResponse();
 
+protected:
+    /** Both at 0x82E2AB00 ('li r3,1; blr'), 'f'. */
+    virtual bool CheckReqResult();
+    virtual bool MustFinishBeforeNext();
+
+public:
+
     friend class DingoServer;
 
 private:
