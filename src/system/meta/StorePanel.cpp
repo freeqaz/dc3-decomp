@@ -197,18 +197,16 @@ void StorePanel::Poll() {
                             static Message msg("enum_finished");
                             HandleType(msg.mData);
                             TheUI->Handle(msg.mData, false);
-                        } else if (mPurchaser->NeedsEnum()) {
-                            if (mCheckoutProfile != 0) {
-                                PostPurchaseEnumJob *job = new PostPurchaseEnumJob(
-                                        this,
-                                        mCheckoutProfile,
-                                        mCheckoutItem->songID,
-                                        mPurchaser->mSource,
-                                        mPurchaser->mUserIndex
-                                    );
-                                mPostPurchaseJob = job;
-                                purchaseMade = true;
-                            }
+                        } else if (mPurchaser->NeedsEnum() && mCheckoutProfile != 0) {
+                            PostPurchaseEnumJob *job = new PostPurchaseEnumJob(
+                                    this,
+                                    mCheckoutProfile,
+                                    mCheckoutItem->songID,
+                                    mPurchaser->mSource,
+                                    mPurchaser->mUserIndex
+                                );
+                            mPostPurchaseJob = job;
+                            purchaseMade = true;
                         }
                     }
                 }
