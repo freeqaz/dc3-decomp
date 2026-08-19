@@ -208,6 +208,46 @@ lane with a whole-build A/B, not a drive-by. The other three rows
 `??_GSynthSample360@@`) are unexamined and may still be peer-selection artifacts of the
 sweep rather than real differences.
 
+
+## Native link integrity after these three branches (verified on an integrated build)
+
+Checked by merging `fix/comdat-placement-tier2` -> `fix/joypadpollcommon` ->
+`fix/drawutl-buffer-copies` into a scratch worktree and diffing `nm -u` against the
+pre-lane `dc3-native`. **Net: one fewer undefined symbol** (6 removed, 5 added).
+
+Removed — these were declared, called, and defined nowhere before:
+`BinkMovieImpl::{BeginFrame,EndFrame,SetRect,FinishOpen}`,
+`(anonymous namespace)::EndianSwapBuffer`, and the 4-argument
+`NuiTransformSkeletonToDepthImage`.
+
+Added, and **none is reachable in a shipping configuration**:
+
+| symbol | referenced from | why it cannot run |
+|---|---|---|
+| `BinkGetSummary` | `BinkMovieImpl::FinishOpen` | `BinkMovieSys::CreateMovieImpl()` returns `FFmpegMovieImpl` on desktop (`ENABLE_FFMPEG` defaults ON, CMakeLists.txt:141) and `WebMovieImpl` on Emscripten (CMakeLists.txt:106 forces `ENABLE_FFMPEG OFF`). `BinkMovieImpl` is never instantiated in either. |
+| `BinkSetSoundOnOff` | `BinkMovieImpl::FinishOpen` | same |
+| `BinkMovieSys::PlatformStoreCache` | `BinkMovieImpl::EndFrame` -> anon `StoreCache` | same; the only definition is in `BinkMovieSys_Xbox.cpp`, not compiled natively |
+| `ReadSingleJoypad` | `JoypadPollCommon` | `nm` over all objects: `JoypadPollCommon` is defined (`T`) in `Joypad.cpp.o` and **referenced by nothing**. Native `JoypadPoll()` comes from `native/src/platform/Joypad_Native.cpp` and does not call it; `Joypad_Xbox.cpp` (the only caller) is not compiled natively. |
+| `requestBreedWrite` | `JoypadPollCommon` | same |
+
+`JoypadSendKeepAlive` does not appear at all at -O2 (clang drops the block because
+`gPadsToKeepAlive` has internal linkage and is never set non-zero); at -O0 it reappears, but
+still only from the unreachable `JoypadPollCommon`.
+
+The one configuration that *would* instantiate `BinkMovieImpl` is a desktop build with
+`-DENABLE_FFMPEG=OFF` — not shipping, and that path was already broken there before these
+branches, because `FinishOpen` itself was one of the undefined symbols. The change moves
+the undefined call one level deeper without making any new path reachable.
+
+### Latent hazard the Nui stub exposed
+
+`native/src/engine_stubs_generated.cpp` holds 47 asm-label stubs; 14 shadow a symbol some
+real object also defines. Seven (`PropSync<ObjPtrVec<T>>` instantiations) are weak-vs-weak,
+the same shape as `_stub_fn_111`. All 14 currently resolve to the real body — disassembled
+in the linked binary — because unlike the Nui case a real definition exists and precedes the
+stub in link order. `-Wl,--allow-multiple-definition` (CMakeLists.txt:201) means link order
+is the only thing deciding, silently. That is the case for the post-link `ldd -r` diff gate.
+
 ## Residual worklist
 
 Ordered by size. Everything here is real work, not an artifact.
