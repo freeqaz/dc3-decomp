@@ -776,8 +776,18 @@ def test_the_never_rechecked_population_has_its_own_slug():
     # leftovers while this was being written: the self-reassignment site that
     # nothing disposed, and the positional-access bump that skipped the ledger.
     assert "UNACCOUNTED" not in blob, blob[-1500:]
-    assert "of 274 total" in blob, (
-        "the denominator must be DISTINCT sites (274), not site events (331)")
+    # NOT a literal count.  The site population is a property of how many
+    # source files the tree happens to contain -- 274 in a bare worktree
+    # (2,288 files), 2,133 in the main checkout (5,140 files, including
+    # untracked/generated ones).  Pinning "274" here would have been the very
+    # mistake this suite is about: a number that is a property of the
+    # ENVIRONMENT asserted as a property of the code.  The distinct-vs-events
+    # claim is checked relationally in
+    # test_the_published_rates_are_distinct_sites_not_site_events.
+    m = re.search(r"among (\d+) verifiable call sites \(of (\d+) total\)", blob)
+    assert m, blob[-800:]
+    verifiable, total = int(m.group(1)), int(m.group(2))
+    assert 0 < verifiable <= total, (verifiable, total)
 
 
 # --------------------------------------------------------------------------- #
