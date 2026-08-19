@@ -191,9 +191,9 @@ def asm_addresses(asmpath):
     this one -- the map lookup returning "not-in-map" -- fires FIRST and is why
     ``merged_ObjPtrVecErase`` looked clean. Only once the address resolves does
     the second defect (``target_body`` matching ``.fn "NAME"`` only, while dtk
-    emits synthetic labels BARE -- census: 72 bare, 0 quoted in the first 400
-    ``.s`` files) become reachable at all. Fixing the quoting alone would have
-    changed nothing.
+    emits synthetic labels BARE -- the load-bearing census figure is that the
+    QUOTED count is 0, in every sample) become reachable at all. Fixing the
+    quoting alone would have changed nothing.
     """
     m = {}
     if not os.path.exists(asmpath):
