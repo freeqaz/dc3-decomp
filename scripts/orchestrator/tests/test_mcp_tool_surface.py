@@ -130,13 +130,64 @@ class TestDocsAgreeWithTheSurface(unittest.TestCase):
         """`bin/objdiff-cli` has legitimate infrastructure callers (the ninja
         report rule, sync/measure scripts, the objdiff fork's own test
         harnesses). A blanket 'never' is false on its face, and a rule known to
-        be false gets ignored wholesale."""
+        be false gets ignored wholesale.
+
+        This used to assert the absence of ONE exact sentence, so a reworded
+        blanket ban ("Never call `objdiff-cli` directly") would have sailed
+        straight through -- the test would have passed while the defect it
+        exists to catch was back in the file. Match the FAMILY of phrasings,
+        and pair it with a positive assertion, so deleting the guidance
+        outright cannot pass either.
+        """
         text = (self.root / "CLAUDE.md").read_text()
-        self.assertFalse(
-            "Do not call `objdiff-cli` directly." in text,
-            "CLAUDE.md still carries the unqualified prohibition; name the "
-            "legitimate exceptions instead",
+
+        prohibition = re.compile(
+            r"(?:do\s+not|do\s?n't|don'?t|never|avoid|no\s+need\s+to)\s+"
+            r"(?:ever\s+)?"
+            r"(?:calling|call|invoking|invoke|using|use|running|run|"
+            r"shell(?:ing)?\s+out\s+to)\s+"
+            r"[`'\"]?(?:bin/)?objdiff-cli",
+            re.IGNORECASE,
         )
+        hits = [m.group(0) for m in prohibition.finditer(text)]
+        # A prohibition is only acceptable if it is qualified on the same line
+        # (e.g. "do not call objdiff-cli directly *except* for ...").
+        unqualified = []
+        for line in text.splitlines():
+            if not prohibition.search(line):
+                continue
+            if re.search(r"except|unless|other than|only for|see below|named below|"
+                         r"legitimate|exception", line, re.IGNORECASE):
+                continue
+            unqualified.append(line.strip())
+        self.assertFalse(
+            unqualified,
+            "CLAUDE.md carries an UNQUALIFIED prohibition on objdiff-cli; name "
+            "the legitimate exceptions instead. Offending line(s):\n  "
+            + "\n  ".join(unqualified),
+        )
+
+        # Negative control: the regex must actually fire on the phrasings we
+        # are trying to exclude, or the assertion above is vacuous.
+        for phrasing in (
+            "Do not call `objdiff-cli` directly.",
+            "Never call objdiff-cli directly.",
+            "Don't use bin/objdiff-cli.",
+            "Avoid invoking `objdiff-cli`.",
+        ):
+            self.assertTrue(
+                prohibition.search(phrasing),
+                f"prohibition regex failed to match {phrasing!r} -- the "
+                f"absence assertion above is vacuous",
+            )
+
+        # Positive: the exceptions must be named, so this cannot be satisfied
+        # by deleting the guidance instead of qualifying it.
+        self.assertTrue(
+            re.search(r"legitimate direct", text, re.IGNORECASE),
+            "CLAUDE.md no longer names the legitimate direct objdiff-cli uses",
+        )
+        del hits
 
     def test_reference_carries_the_invocation_mapping_table(self):
         text = (self.root / "docs" / "tools" / "REFERENCE.md").read_text()
@@ -201,14 +252,29 @@ class TestRelocRuler(unittest.TestCase):
 
     It did not, twice. `run_diff_inspect` shipped raw as "omit -c", and the
     first draft of run_objdiff's diff_mode copied that. Measured on this fork
-    (objdiff-cli 4.2.3, ?Load@CamShot@@UAAXAAVBinStream@@@Z, 2026-08-19):
+    (objdiff-cli 4.2.3, ?Load@CamShot@@UAAXAAVBinStream@@@Z, 2026-08-19, with
+    the ICF alias map held constant so the project option is the only
+    variable):
 
-        no -c / =none / =name_check  -> fuzzy 99.85558, 119 non-equal rows
-        =all                         -> fuzzy 99.66141, 151 non-equal rows
+        objdiff-cli's OWN default (data_value) -> 99.68568, 147 non-equal rows
+        no -c under this repo's -p             -> 99.85558, 119 non-equal rows
+        =none / =name_check                    -> 99.85558, 119 non-equal rows
+        =all                                   -> 99.66141, 151 non-equal rows
 
-    Only `all` counts relocations. A tool that advertises a raw mode and
-    returns the normalized answer is worse than one with no raw mode, because
-    an agent hunting a wrong-vtable-slot bug concludes there is not one.
+    Omitting `-c` is not raw -- but NOT because "the fork's default is already
+    normalized", which was the original rationale here and is false (the fork's
+    default is a third ruler, 147 rows). It is because THIS REPO'S objdiff.json
+    sets `"functionRelocDiffs": "name_check"`, which apply_project_options
+    stamps over the CLI default. The behaviour travels with the project config,
+    not the binary -- and bin/objdiff-cli is a symlink shared with ../rb3 and
+    ../rb3-xenon.
+
+    Severity, corrected: the old raw was MISLABELLED, not blind. It silently
+    measured `name_check`, which charges relocation NAME mismatches -- the
+    wrong-callee plane. The earlier claim that an agent hunting a wrong-slot
+    bug "concludes there is not one" is retracted. `name_check` is in fact the
+    sharpest ruler for that class; `all` is the addend view and adds ~99.8%
+    noise on top of it.
     """
 
     def test_raw_maps_to_all_not_to_omitting_the_flag(self):
@@ -245,9 +311,49 @@ class TestDiffInspectRulerHonesty(unittest.TestCase):
     """
 
     def test_analysis_modes_announce_that_they_ignored_the_ruler(self):
-        src = _handler_source("_run_diff_inspect")
-        self.assertIn("was IGNORED for mode=", src,
+        # The banner lives in the module-level `_ruler_ignored_banner` helper,
+        # so assert against the whole source, not just the handler body.
+        self.assertIn("was IGNORED for mode=", MCP_SRC,
                       "analysis modes silently normalize a raw request")
+
+    def test_every_ruler_deaf_mode_gets_the_banner(self):
+        """The schema is honest about which modes honour `diff_mode`; the
+        runtime banner must cover the same set.
+
+        It originally covered only the five diff_inspect analysis modes, so
+        `asm_listing`, `stack-layout` and `attributed` accepted a ruler and
+        silently ignored it -- the exact defect the banner exists to prevent,
+        in the three modes nobody checked.
+        """
+        ns = {}
+        start = MCP_SRC.index("RULER_DEAF_MODES = {")
+        end = MCP_SRC.index("\n}", start) + 2
+        exec(MCP_SRC[start:end], ns)  # noqa: S102
+        deaf = ns["RULER_DEAF_MODES"]
+        for mode in ("diagnose", "clusters", "regswaps", "offsets", "replaces",
+                     "asm_listing", "stack-layout", "attributed"):
+            self.assertIn(mode, deaf,
+                          f"mode {mode!r} cannot honour diff_mode but is not "
+                          f"in RULER_DEAF_MODES, so it will ignore the ruler "
+                          f"silently")
+
+        # The three honouring modes must NOT be in the set, or a correct
+        # measurement would get a banner saying it was ignored.
+        for mode in ("mismatches", "compare", "save_baseline"):
+            self.assertNotIn(mode, deaf,
+                             f"mode {mode!r} DOES honour diff_mode; bannering "
+                             f"it would tell the caller their correct "
+                             f"measurement was discarded")
+
+        # Every deaf mode must actually be wired to the helper at its call
+        # site, not merely listed in the table.
+        handler = _handler_source("_run_diff_inspect")
+        self.assertGreaterEqual(
+            handler.count("_ruler_ignored_banner("), 4,
+            "RULER_DEAF_MODES lists modes the handler never banners; expected "
+            "call sites for the generic analysis branch plus asm_listing, "
+            "stack-layout and attributed",
+        )
 
     def test_schema_admits_the_partial_support(self):
         props = _tool_schemas()["run_diff_inspect"]["properties"]
