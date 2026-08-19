@@ -48,6 +48,16 @@ Usage:
     python3 scripts/analysis/vtable_dispatch_scan.py [--project DIR]
     python3 scripts/analysis/vtable_dispatch_scan.py --min-norm 98 --workers 8 --out /tmp/scan.json
     python3 scripts/analysis/vtable_dispatch_scan.py --all   # don't bound by norm>=min (every fn with raw<norm)
+
+COVERAGE (see scripts/analysis/coverage.py)
+  This scanner's CAP handling was already honest before the coverage retrofit:
+  `--limit` defaults to 0 ("no cap"), `capped` was surfaced in stderr AND in the
+  JSON, and objdiff errors were counted.  What it did NOT do was state its
+  DENOMINATOR: `scanned : 1642` was the size of the post-filter candidate set,
+  and the run behind docs/analysis/dispatch-data-rescan-20260818.md concluded
+  "the wrong-target-dispatch class looks exhausted" without ever printing the
+  48,344 rows in report.json or the 16,920 of them it discarded.  Both numbers
+  are now in the COVERAGE block, along with the justification for the discard.
 """
 import argparse
 import json
@@ -59,6 +69,8 @@ import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, REPO)
+from scripts.analysis.coverage import CoverageReport, add_coverage_args  # noqa: E402
 
 # PPC indexed/word loads that show up in a vcall chain. The slot load is the one
 # whose displacement we care about (the vtable pointer load is usually 0x0).
@@ -246,9 +258,29 @@ def scan_one(objdiff, project, symbol, unit):
     }
 
 
-def gather_candidates(report_path, min_norm, all_gap):
+def gather_candidates(report_path, min_norm, all_gap, cov=None):
     """Bound the candidate set from report.json: functions where normalized >= min_norm
-    and raw < normalized (the raw-vs-norm GAP). No silent cap — returns ALL."""
+    and raw < normalized (the raw-vs-norm GAP). No silent cap — returns ALL.
+
+    DENOMINATOR NOTE — the `raw is None` skip, justified and counted.
+    `fuzzy_match_percent` (here: `raw`) is a key objdiff only emits for
+    functions WE DEFINE; 16,920 of the 48,344 rows in this tree lack it.  That
+    is the same population the `fake_impl_scan` bare `continue` hid, so the skip
+    is written down rather than left implicit.
+
+    Why the skip is SUBSTANTIVELY DEFENSIBLE here (unlike in fake_impl_scan):
+    this scanner hunts a raw-vs-norm GAP, and a row with no raw score cannot
+    exhibit one.  16,919 of the 16,920 also carry `match_percent_normalized ==
+    0.0` — there is no body on our side, so there is no vtable slot load to
+    compare and nothing for this lens to see.
+
+    ...but the justification is NOT universal, and the code says so.  Exactly
+    one row breaks the "all of them are norm == 0.0" claim:
+    `RndShaderDepthVolume::CalcShaderOpts` (default/system/rndobj/Shader) has
+    `match_percent_normalized == 3.59375` and no `fuzzy_match_percent`.  It gets
+    its own drop slug so that a future reader can see the exception exists
+    instead of inheriting a rounded-off generalisation.
+    """
     rep = json.load(open(report_path))
     out = []
     for u in rep["units"]:
@@ -256,14 +288,37 @@ def gather_candidates(report_path, min_norm, all_gap):
         for f in (u.get("functions") or []):
             n = f.get("match_percent_normalized")
             raw = f.get("fuzzy_match_percent")
-            if n is None or raw is None:
+            if n is None:
+                if cov:
+                    cov.drop("no-normalized-percent", 1,
+                             note="row carries no match_percent_normalized")
+                continue
+            if raw is None:
+                if cov:
+                    if n:
+                        cov.drop("no-fuzzy-percent-but-nonzero-norm", 1,
+                                 note="NOT covered by the norm==0 justification — a "
+                                      "gap is unmeasurable here, not impossible")
+                    else:
+                        cov.drop("no-fuzzy-percent-norm-zero", 1,
+                                 note="objdiff emits no fuzzy_match_percent for functions "
+                                      "we do not define; norm==0 so no raw-vs-norm gap "
+                                      "can exist")
                 continue
             if raw >= n:  # no gap
+                if cov:
+                    cov.drop("no-raw-vs-norm-gap", 1,
+                             note="raw >= normalized: nothing hidden by normalization")
                 continue
             if not all_gap and n < min_norm:
+                if cov:
+                    cov.drop("below---min-norm", 1,
+                             note=f"normalized < {min_norm}; use --all to include")
                 continue
             out.append((f["name"], un, raw, n))
-    out.sort(key=lambda r: r[2])  # lowest raw first
+    # Full tie-break on the symbol: rows sharing a raw% must not be able to swap
+    # places between runs, or a `--limit` cut becomes nondeterministic.
+    out.sort(key=lambda r: (r[2], r[0]))  # lowest raw first
     return out
 
 
@@ -280,17 +335,30 @@ def main():
     ap.add_argument("--limit", type=int, default=0, help="0 = no cap (honest)")
     ap.add_argument("--out", default=os.path.join(
         os.environ.get("TMPDIR", "/tmp"), "vtable_dispatch_scan.json"))
+    add_coverage_args(ap)
     args = ap.parse_args()
 
     project = os.path.abspath(args.project)
     report = args.report or os.path.join(project, "build", "373307D9", "report.json")
     objdiff = args.objdiff if os.path.isfile(args.objdiff) else os.path.join(REPO, "bin", "objdiff-cli")
 
-    cands = gather_candidates(report, args.min_norm, args.all_gap)
+    cov = CoverageReport("vtable_dispatch_scan", args=args)
+    with open(report) as _f:
+        cov.universe(sum(len(u.get("functions") or [])
+                         for u in json.load(_f).get("units", [])),
+                     "function rows in report.json")
+    cov.extra("report", report)
+    cov.extra("project", project)
+
+    cands = gather_candidates(report, args.min_norm, args.all_gap, cov=cov)
     capped = False
+    n_cands = len(cands)
     if args.limit and len(cands) > args.limit:
         cands = cands[:args.limit]
         capped = True
+        cov.cap("--limit", args.limit, before=n_cands, after=len(cands),
+                note="never examined; the cut is off the TOP of a raw%-ascending sort")
+    cov.extra("candidates", n_cands)
     print(f"[vtable_dispatch_scan] project={project}", file=sys.stderr)
     print(f"[vtable_dispatch_scan] candidate gap set (raw<norm, "
           f"{'all' if args.all_gap else f'norm>={args.min_norm}'}): {len(cands)}"
@@ -311,8 +379,19 @@ def main():
 
     errors = [r for r in results if r.get("error")]
     hits = [r for r in results if r.get("hits")]
+    # An objdiff failure means the function was NOT inspected — it is a drop,
+    # not a silent clean. The remainder really were diffed.
+    cov.drop("objdiff-failed", len(errors), note="function was NOT inspected")
+    cov.examine(len(cands) - len(errors))
+
+    # DETERMINISM: `results` is appended in as_completed() order, which is thread
+    # scheduling. Every collection below therefore needs a TOTAL order —
+    # (confidence, raw) alone ties constantly, and `errors[:20]` used to slice a
+    # completion-ordered list, so the 20 errors you saw depended on the weather.
     hits.sort(key=lambda r: ({"strong": 0, "medium": 1, "weak": 2}[r["best_confidence"]],
-                             r["raw"] or 0))
+                             r["raw"] if r["raw"] is not None else 0,
+                             r["symbol"]))
+    errors.sort(key=lambda r: (r["symbol"], r.get("unit") or ""))
 
     out = {
         "scanned": len(cands),
@@ -324,15 +403,24 @@ def main():
         "hits": hits,
         "errors": [{"symbol": e["symbol"], "unit": e["unit"], "error": e["error"]}
                    for e in errors][:20],
+        "errors_truncated_in_this_listing": max(0, len(errors) - 20),
+        "_coverage": cov.as_dict(),
     }
     json.dump(out, open(args.out, "w"), indent=1)
 
     print("\n" + "=" * 72, file=sys.stderr)
     print("VTABLE-DISPATCH OFFSET-DIFF SCAN", file=sys.stderr)
     print("=" * 72, file=sys.stderr)
-    print(f"scanned     : {len(cands)}", file=sys.stderr)
+    # `scanned` is the POST-FILTER candidate count. Print the whole chain so it
+    # can never again be read as "we looked at everything".
+    _d = cov.as_dict()
+    print(f"report rows : {_d['universe']} (the denominator)", file=sys.stderr)
+    print(f"candidates  : {n_cands} (raw<norm"
+          f"{'' if args.all_gap else f' and norm>={args.min_norm}'})", file=sys.stderr)
+    print(f"scanned     : {len(cands)} (candidates after --limit)", file=sys.stderr)
+    print(f"inspected   : {_d['examined']} (candidates objdiff actually diffed)", file=sys.stderr)
     print(f"hits        : {len(hits)} (fns with a pure-immediate word-load offset diff)", file=sys.stderr)
-    print(f"errors      : {len(errors)}", file=sys.stderr)
+    print(f"errors      : {len(errors)} (NOT inspected)", file=sys.stderr)
     print(f"out         : {args.out}", file=sys.stderr)
     for h in hits:
         print(f"\n[{h['best_confidence']}] {h['unit']}  raw=%.2f norm=%.2f" % (h["raw"], h["norm"]),
@@ -345,6 +433,8 @@ def main():
                   file=sys.stderr)
             print(f"      TGT: {hh['tgt']}", file=sys.stderr)
             print(f"      SRC: {hh['src']}", file=sys.stderr)
+
+    sys.exit(cov.emit())
 
 
 if __name__ == "__main__":

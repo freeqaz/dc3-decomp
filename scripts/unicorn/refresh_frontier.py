@@ -442,10 +442,20 @@ def main() -> int:
             continue
         dp, op = all_units[name]
         work.append((name, dp, op, by_unit[name], args.timeout))
-    if args.limit_units:
+    n_units_before = len(work)
+    n_fns_before = sum(len(w[3]) for w in work)
+    if args.limit_units and n_units_before > args.limit_units:
         work = work[:args.limit_units]
+        # A frontier sweep is a census. Truncating it and printing only the
+        # swept count turns a sample into a total -- the data_symbol_scan shape.
+        print(f"!! TRUNCATED by --limit-units={args.limit_units}: "
+              f"{n_units_before - len(work)} of {n_units_before} units "
+              f"({n_fns_before - sum(len(w[3]) for w in work)} of {n_fns_before} fns) "
+              f"were NEVER SWEPT -- this run is a SAMPLE, not a frontier census",
+              file=sys.stderr)
 
-    print(f"Sweeping {len(work)} units, {sum(len(w[3]) for w in work)} fns, "
+    print(f"Sweeping {len(work)} of {n_units_before} units, "
+          f"{sum(len(w[3]) for w in work)} of {n_fns_before} fns, "
           f"{args.jobs} workers", file=sys.stderr)
 
     build = git_short_rev()

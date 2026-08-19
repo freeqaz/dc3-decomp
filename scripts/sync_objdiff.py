@@ -20,12 +20,40 @@ Usage:
     python3 scripts/sync_objdiff.py --unit 'system/char/*'  # filter by unit
     python3 scripts/sync_objdiff.py --dry-run               # preview
     python3 scripts/sync_objdiff.py --skip-100              # skip already-COMPLETE
+
+TWO WRITERS, ONE COLUMN -- read this before trusting `current_percent`
+======================================================================
+`functions.current_percent` is written by at least three scripts, each with a
+DIFFERENT ruler, and they overwrite each other:
+
+  sync_match_percent.py  writes report.json's `fuzzy_match_percent`, which in
+                         THAT file is the RAW, relocation-sensitive scorer, and
+                         separately maintains `match_percent_normalized`.  Its
+                         --promote/--demote gates read the NORMALIZED column
+                         (sync_match_percent.py:419).
+  sync_objdiff.py (this) writes `objdiff-cli diff`'s `fuzzy_match_percent`,
+                         which in THAT payload is an alias of
+                         `normalized_match_percent` (objdiff-cli
+                         diff.rs:1262).  Same key name, different ruler,
+                         different file.  Its --promote/demote gates read that.
+  batch_check.py         used to write `instruction_summary.equal_percent`, a
+                         third ruler entirely (fixed 2026-08-19).
+
+Concretely, in the DB as of 2026-08-19: 374 rows carry verdict=COMPLETE with
+`current_percent` in [96.46, 100) and `match_percent_normalized` >= 100.  Run
+this script with the default promotion/demotion behaviour and its demotion arm
+(`old_verdict == 'COMPLETE' and match_percent < 100`) targets exactly that
+population, while sync_match_percent.py --promote puts it straight back.  If
+you see COMPLETE verdicts flapping, this is why.
+
+CHANGED DEFAULT (2026-08-19): `--auto-at-limit` is now OFF.  See its help.
 """
 from __future__ import annotations
 
 import argparse
 import json
 import math
+import os
 import re
 import sqlite3
 import subprocess
@@ -36,6 +64,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+from scripts.analysis.coverage import CoverageReport, add_coverage_args  # noqa: E402
+
 OBJDIFF_CLI = REPO_ROOT / "bin" / "objdiff-cli"
 DEFAULT_DB = REPO_ROOT / "decomp.db"
 
@@ -162,6 +194,31 @@ class FunctionResult:
     verdict_classification: str | None = None
     unit: str | None = None
     error: str | None = None
+    ruler: str | None = None      # which key `match_percent` came from
+
+
+def match_percent_from_diff(data: dict) -> tuple[float | None, str]:
+    """(percent, ruler) from one `objdiff-cli diff --batch` JSONL record.
+
+    RULER.  `objdiff-cli diff` writes the canonical normalized score into BOTH
+    `normalized_match_percent` and the key literally named
+    `fuzzy_match_percent` (objdiff-cli diff.rs:1262-1263), and exposes the
+    relocation-sensitive one separately as `raw_match_percent`.  report.json
+    uses the SAME key name `fuzzy_match_percent` for the RAW score and a
+    different key, `match_percent_normalized`, for the canonical one.
+
+    So `data.get("fuzzy_match_percent")` here was already normalized -- reading
+    `normalized_match_percent` first pins the ruler BY NAME instead of by
+    coincidence, and survives an upstream rename.  This script also passes
+    `functionRelocDiffs=none`, under which normalized == primary anyway.
+    """
+    n = data.get("normalized_match_percent")
+    if n is not None:
+        return float(n), "normalized"
+    f = data.get("fuzzy_match_percent")
+    if f is not None:
+        return float(f), "normalized-via-fuzzy-key"
+    return None, "none"
 
 
 def _extract_patterns_from_analysis(result: FunctionResult, data: dict) -> None:
@@ -245,10 +302,17 @@ def _extract_patterns_from_analysis(result: FunctionResult, data: dict) -> None:
 
 
 def _run_single_batch(functions: list[tuple[int, str]], project_dir: str,
-                      reloc_config: str = "none") -> list[FunctionResult]:
+                      reloc_config: str = "none",
+                      ) -> tuple[list[FunctionResult], dict[str, int]]:
     """Run a single objdiff-cli --batch process for a chunk of functions.
 
     Top-level function for ProcessPoolExecutor pickling.
+
+    Returns `(results, line_stats)`.  The counters travel back in the RETURN
+    VALUE rather than being accumulated in the worker, because a CoverageReport
+    is main-thread-only by contract (its docstring: counting inside a pool is
+    the data_symbol_scan race shape).  `line_stats` counts the JSONL lines this
+    worker discarded -- previously two bare `continue`s that nothing reported.
 
     `reloc_config` is the `functionRelocDiffs` value. The default `none` is the
     project's canonical ruler -- but it MASKS relocation differences, and some
@@ -277,6 +341,14 @@ def _run_single_batch(functions: list[tuple[int, str]], project_dir: str,
 
     stdin_data = "\n".join(lookup_names) + "\n"
 
+    line_stats: dict[str, int] = {
+        "stdout_lines": 0,
+        "blank_lines": 0,
+        "malformed_json_lines": 0,
+        "unrequested_symbol_lines": 0,
+        "parsed_records": 0,
+    }
+
     try:
         proc = subprocess.run(
             [str(OBJDIFF_CLI), "diff", "-p", project_dir,
@@ -285,23 +357,29 @@ def _run_single_batch(functions: list[tuple[int, str]], project_dir: str,
             timeout=600,
         )
     except subprocess.TimeoutExpired:
-        return [FunctionResult(db_id=db_id, symbol=sym, error="timeout")
-                for db_id, sym in functions]
+        return ([FunctionResult(db_id=db_id, symbol=sym, error="timeout")
+                 for db_id, sym in functions], line_stats)
     except Exception as e:
-        return [FunctionResult(db_id=db_id, symbol=sym, error=str(e))
-                for db_id, sym in functions]
+        return ([FunctionResult(db_id=db_id, symbol=sym, error=str(e))
+                 for db_id, sym in functions], line_stats)
 
     # Parse JSONL output
     results: list[FunctionResult] = []
     seen_lookups: set[str] = set()
 
     for line in proc.stdout.splitlines():
+        line_stats["stdout_lines"] += 1
         line = line.strip()
         if not line:
+            line_stats["blank_lines"] += 1
             continue
         try:
             data = json.loads(line)
         except json.JSONDecodeError:
+            # A line objdiff emitted that is not JSON.  Previously a bare
+            # `continue`: an objdiff-side format change would have silently
+            # shrunk every count this script produced.
+            line_stats["malformed_json_lines"] += 1
             continue
 
         symbol_name = data.get("symbol", "")
@@ -309,7 +387,11 @@ def _run_single_batch(functions: list[tuple[int, str]], project_dir: str,
 
         info = lookup_to_info.get(symbol_name)
         if not info:
+            # objdiff answered about a symbol we did not ask for (e.g. a
+            # resolved alias).  Also previously a bare `continue`.
+            line_stats["unrequested_symbol_lines"] += 1
             continue
+        line_stats["parsed_records"] += 1
         db_id, original_symbol = info
 
         result = FunctionResult(db_id=db_id, symbol=original_symbol)
@@ -320,7 +402,7 @@ def _run_single_batch(functions: list[tuple[int, str]], project_dir: str,
             results.append(result)
             continue
 
-        result.match_percent = data.get("fuzzy_match_percent")
+        result.match_percent, result.ruler = match_percent_from_diff(data)
         result.size = data.get("target_size") or data.get("base_size")
         result.demangled = data.get("demangled")
 
@@ -338,45 +420,63 @@ def _run_single_batch(functions: list[tuple[int, str]], project_dir: str,
         result.verdict_classification = verdict.get("classification")
         results.append(result)
 
-    # Mark missing symbols as not_found
-    for lookup, (db_id, original_symbol) in lookup_to_info.items():
+    # Mark missing symbols as not_found (sorted: dict order is insertion order,
+    # but sorting makes the tail of the result list order-independent)
+    for lookup in sorted(lookup_to_info):
+        db_id, original_symbol = lookup_to_info[lookup]
         if lookup not in seen_lookups:
             results.append(FunctionResult(
                 db_id=db_id, symbol=original_symbol, error="not_found"))
 
-    return results
+    return results, line_stats
 
 
 def run_batch(functions: list[tuple[int, str]], project_dir: str,
               jobs: int = 4, verbose: bool = False,
-              reloc_config: str = "none") -> list[FunctionResult]:
+              reloc_config: str = "none",
+              ) -> tuple[list[FunctionResult], dict[str, int]]:
     """Run objdiff-cli in batch mode, splitting across parallel workers.
 
     Each worker gets a chunk of symbols and runs its own --batch process.
     Within each process, objdiff groups symbols by unit for efficient loading.
+
+    DETERMINISM: futures are consumed with `as_completed`, so results arrive in
+    whatever order the workers happen to finish.  They are reassembled in CHUNK
+    INDEX order before returning, and the final list is sorted by (db_id,
+    symbol), so two runs over the same inputs produce identical output.
     """
     if not functions:
-        return []
+        return [], {}
 
     # Split into chunks for parallel processing
     chunk_size = max(1, math.ceil(len(functions) / jobs))
     chunks = [functions[i:i + chunk_size] for i in range(0, len(functions), chunk_size)]
     actual_workers = len(chunks)
 
-    all_results: list[FunctionResult] = []
+    def _emit_verbose(rs):
+        for r in sorted(rs, key=lambda x: (x.symbol, x.db_id)):
+            if r.error:
+                print(f"  SKIP {r.symbol}: {r.error}")
+            else:
+                pats = ",".join(r.detected_patterns) if r.detected_patterns else "-"
+                pct = "  n/a " if r.match_percent is None else f"{r.match_percent:6.2f}"
+                print(f"  {pct}% {r.symbol} [{pats}]")
+
+    totals: dict[str, int] = {}
+
+    def _merge(stats):
+        for k, v in stats.items():
+            totals[k] = totals.get(k, 0) + v
 
     if actual_workers == 1:
         # Single chunk — run directly, print verbose inline
-        results = _run_single_batch(chunks[0], project_dir, reloc_config)
+        results, stats = _run_single_batch(chunks[0], project_dir, reloc_config)
+        _merge(stats)
         if verbose:
-            for r in results:
-                if r.error:
-                    print(f"  SKIP {r.symbol}: {r.error}")
-                else:
-                    pats = ",".join(r.detected_patterns) if r.detected_patterns else "-"
-                    print(f"  {r.match_percent:6.2f}% {r.symbol} [{pats}]")
-        return results
+            _emit_verbose(results)
+        return sorted(results, key=lambda r: (r.db_id, r.symbol)), totals
 
+    by_chunk: dict[int, list[FunctionResult]] = {}
     with ProcessPoolExecutor(max_workers=actual_workers) as pool:
         futures = {
             pool.submit(_run_single_batch, chunk, project_dir, reloc_config): i
@@ -385,21 +485,26 @@ def run_batch(functions: list[tuple[int, str]], project_dir: str,
 
         for future in as_completed(futures):
             chunk_idx = futures[future]
-            chunk_results = future.result()
-            all_results.extend(chunk_results)
+            chunk_results, stats = future.result()
+            by_chunk[chunk_idx] = chunk_results
+            _merge(stats)
 
-            if verbose:
-                for r in chunk_results:
-                    if r.error:
-                        print(f"  SKIP {r.symbol}: {r.error}")
-                    else:
-                        pats = ",".join(r.detected_patterns) if r.detected_patterns else "-"
-                        print(f"  {r.match_percent:6.2f}% {r.symbol} [{pats}]")
+            # LIVE progress only, and deliberately WITHOUT the worker index:
+            # these lines arrive in completion order, which varies run to run,
+            # so an index here would make the output nondeterministic for no
+            # information gain (chunks are equal-sized and their numbering is
+            # arbitrary).  The ordered per-chunk table is printed below.
+            print(f"  worker finished ({len(chunk_results)} functions)",
+                  file=sys.stderr)
 
-            print(f"  Worker {chunk_idx + 1}/{actual_workers} done "
-                  f"({len(chunk_results)} functions)")
+    all_results: list[FunctionResult] = []
+    for i in sorted(by_chunk):                 # chunk order, not completion order
+        all_results.extend(by_chunk[i])
+        print(f"  Worker {i + 1}/{actual_workers}: {len(by_chunk[i])} functions")
+    if verbose:
+        _emit_verbose(all_results)
 
-    return all_results
+    return sorted(all_results, key=lambda r: (r.db_id, r.symbol)), totals
 
 
 def parse_args() -> argparse.Namespace:
@@ -422,15 +527,31 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("-j", "--jobs", type=int, default=4,
                    help="Number of parallel batch workers (default: 4)")
     p.add_argument("--divergent", action="store_true", default=True,
-                   help="Only scan functions with unicorn_verdict = DIVERGENT (default)")
+                   help="Only scan functions with unicorn_verdict = DIVERGENT "
+                        "(DEFAULT, unchanged). NOTE this also excludes rows with "
+                        "unicorn_verdict NULL -- i.e. everything never behaviourally "
+                        "tested. The default run is a population-shaped subset; the "
+                        "summary now prints how many rows it excluded.")
     p.add_argument("--all", action="store_false", dest="divergent",
                    help="Scan all functions, not just divergent")
+    p.add_argument("--auto-at-limit", action="store_true", default=False,
+                   help="Auto-write verdict='AT_LIMIT' / verdict_reason='auto: all "
+                        "mismatches unfixable' for rows at >=95%% whose detected "
+                        "patterns are all in PRACTICALLY_UNFIXABLE, or whose objdiff "
+                        "classification is AT_LIMIT. CHANGED DEFAULT 2026-08-19: this "
+                        "was ON and unconditional; it is now OFF. It manufactures "
+                        "AT_LIMIT certificates from `detected_patterns`, and "
+                        "certify_floor.py:69 states that pattern data is stale/noisy "
+                        "and must never be evidence. 18,648 rows in the DB already "
+                        "carry that exact verdict_reason.")
     p.add_argument("-v", "--verbose", action="store_true")
+    add_coverage_args(p)
     return p.parse_args()
 
 
 def main():
     args = parse_args()
+    cov = CoverageReport("sync_objdiff", args=args)
 
     if not OBJDIFF_CLI.exists():
         print(f"Error: objdiff-cli not found at {OBJDIFF_CLI}", file=sys.stderr)
@@ -445,7 +566,9 @@ def main():
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode = WAL")
 
-    query = "SELECT id, symbol, unit, current_percent, best_percent, verdict, is_stub FROM functions WHERE 1=1"
+    SELECT_COLS = ("id, symbol, unit, current_percent, best_percent, verdict, "
+                   "is_stub, match_percent_normalized")
+    query = f"SELECT {SELECT_COLS} FROM functions WHERE 1=1"
     params: list = []
 
     # Exclude SDK
@@ -479,23 +602,62 @@ def main():
     if args.skip_100:
         query += " AND (verdict IS NULL OR verdict != 'COMPLETE')"
 
+    # The DENOMINATOR: identical query WITHOUT the --divergent clause.  The
+    # default run scans only unicorn_verdict='DIVERGENT', which also excludes
+    # every NULL (never behaviourally tested) row -- a population-shaped subset
+    # that the mode line named but never sized.
+    query_before_divergent = query
+    params_before_divergent = list(params)
+
     if args.divergent:
         query += " AND unicorn_verdict = 'DIVERGENT'"
 
+    # Deterministic order: the query had no ORDER BY, so chunk membership --
+    # and therefore worker assignment and output order -- varied between runs.
+    query += " ORDER BY unit ASC, symbol ASC, id ASC"
+
     rows = conn.execute(query, params).fetchall()
     functions = [(row["id"], row["symbol"]) for row in rows]
+
+    universe_rows = conn.execute(
+        query_before_divergent.replace(f"SELECT {SELECT_COLS}", "SELECT count(*)", 1),
+        params_before_divergent).fetchone()[0]
+    excluded_by_divergent = universe_rows - len(functions) if args.divergent else 0
+    never_unicorn_tested = conn.execute(
+        query_before_divergent.replace(f"SELECT {SELECT_COLS}", "SELECT count(*)", 1) + " AND unicorn_verdict IS NULL",
+        params_before_divergent).fetchone()[0]
+
+    # Read-only: how many rows already carry the auto-AT_LIMIT reason string
+    # this script writes.  certify_floor.py:69 says `primary_pattern` is
+    # stale/noisy and must never be evidence, so this is a count worth seeing
+    # before enabling --auto-at-limit.
+    auto_reason_rows = conn.execute(
+        "SELECT count(*) FROM functions WHERE verdict_reason = ?",
+        ("auto: all mismatches unfixable",)).fetchone()[0]
+    auto_reason_by_verdict = conn.execute(
+        "SELECT COALESCE(verdict, '(NULL)') AS v, count(*) AS n FROM functions "
+        "WHERE verdict_reason = ? GROUP BY v ORDER BY n DESC, v ASC",
+        ("auto: all mismatches unfixable",)).fetchall()
     # Build lookup for verdict downgrade decisions
     function_meta: dict[int, dict] = {
         row["id"]: {
             "verdict": row["verdict"],
             "best_percent": row["best_percent"],
             "is_stub": row["is_stub"],
+            "match_percent_normalized": row["match_percent_normalized"],
         }
         for row in rows
     }
     conn.close()
 
-    print(f"Functions to scan: {len(functions)}")
+    print(f"Functions to scan: {len(functions)} of {universe_rows} "
+          f"selected by the same query WITHOUT --divergent")
+    if args.divergent:
+        pct = (100.0 * excluded_by_divergent / universe_rows) if universe_rows else 0.0
+        print(f"  excluded_by_--divergent: {excluded_by_divergent} of {universe_rows} "
+              f"({pct:.1f}%), of which "
+              f"{never_unicorn_tested} have unicorn_verdict NULL (never tested). "
+              f"Pass --all to scan them.")
     print(f"Workers: {args.jobs}")
     filters = []
     if args.dry_run:
@@ -503,22 +665,48 @@ def main():
     if args.divergent:
         filters.append("DIVERGENT only")
     filters.append("BATCH mode")
+    filters.append("auto-AT_LIMIT " + ("ON" if args.auto_at_limit else "OFF"))
     print(f"Mode: {', '.join(filters)}")
+    print(f"Rows already carrying verdict_reason='auto: all mismatches unfixable': "
+          f"{auto_reason_rows}"
+          + ("  [" + ", ".join(f"{r['v']}={r['n']}" for r in auto_reason_by_verdict) + "]"
+             if auto_reason_by_verdict else ""))
     print()
+
+    cov.universe(universe_rows,
+                 "DB rows selected by the unit/percent/skip-100 filters "
+                 "(i.e. before --divergent)")
+    if excluded_by_divergent:
+        cov.drop("excluded-by---divergent", excluded_by_divergent,
+                 note=f"unicorn_verdict != 'DIVERGENT'; {never_unicorn_tested} of "
+                      f"these are NULL (never behaviourally tested)")
+    cov.extra("auto_at_limit_reason_rows_in_db", auto_reason_rows)
+    cov.extra("auto_at_limit_enabled", bool(args.auto_at_limit))
 
     if not functions:
         print("Nothing to scan.")
-        return
+        sys.exit(cov.emit())
 
     # Run batch objdiff
     project_dir = str(REPO_ROOT)
     start_time = time.time()
 
-    results = run_batch(functions, project_dir, jobs=args.jobs, verbose=args.verbose)
+    results, line_stats = run_batch(functions, project_dir, jobs=args.jobs,
+                                    verbose=args.verbose)
 
     elapsed = time.time() - start_time
     rate = len(results) / elapsed if elapsed > 0 else 0
-    print(f"\nScan complete: {len(results)} functions in {elapsed:.1f}s ({rate:.0f}/s)")
+    print(f"\nScan complete: {len(results)} result records for {len(functions)} "
+          f"requested functions in {elapsed:.1f}s ({rate:.0f}/s)")
+    if line_stats:
+        print(f"  objdiff stdout: {line_stats.get('stdout_lines', 0)} lines -> "
+              f"{line_stats.get('parsed_records', 0)} parsed; "
+              f"{line_stats.get('blank_lines', 0)} blank, "
+              f"{line_stats.get('malformed_json_lines', 0)} not-JSON, "
+              f"{line_stats.get('unrequested_symbol_lines', 0)} about symbols we "
+              f"did not request")
+    for k, v in sorted(line_stats.items()):
+        cov.extra(f"objdiff_{k}", v)
 
     # Compute stats
     stats: dict[str, int] = {
@@ -688,6 +876,14 @@ def main():
                 # False COMPLETE — demote back to NULL so it's workable
                 demotions.append(r.db_id)
                 stats["demoted_complete"] += 1
+                # ...but sync_match_percent.py promotes on
+                # `match_percent_normalized >= 100` (that file, line 419).  A row
+                # that satisfies BOTH conditions is a verdict the two writers
+                # will flip back and forth forever.  Counted, not silently done.
+                db_norm = meta.get("match_percent_normalized")
+                if db_norm is not None and db_norm >= 100.0:
+                    stats["demoted_but_db_normalized_100"] = \
+                        stats.get("demoted_but_db_normalized_100", 0) + 1
 
             # Auto-promote to AT_LIMIT when objdiff says all mismatches
             # are unfixable (verdict_classification == AT_LIMIT)
@@ -708,8 +904,13 @@ def main():
                       and set(r.detected_patterns).issubset(PRACTICALLY_UNFIXABLE)):
                     should_promote = True
                 if should_promote:
-                    at_limit_promotions.append(r.db_id)
-                    stats["auto_at_limit"] = stats.get("auto_at_limit", 0) + 1
+                    # Counted either way, so turning the flag on or off never
+                    # changes the reported number -- only whether it is written.
+                    stats["auto_at_limit_candidates"] = \
+                        stats.get("auto_at_limit_candidates", 0) + 1
+                    if args.auto_at_limit:
+                        at_limit_promotions.append(r.db_id)
+                        stats["auto_at_limit"] = stats.get("auto_at_limit", 0) + 1
 
     # Apply to DB
     if not args.dry_run and (pct_updates or enrich_updates or promotions or at_limit_promotions or demotions or stub_updates or stub_clears):
@@ -807,10 +1008,36 @@ def main():
         conn.commit()
         conn.close()
 
+    # Coverage accounting on the main thread: every result record is either
+    # examined (a real measurement) or dropped with a reason.
+    cov.examine(stats["matched"])
+    for slug, key in (("not-found", "not_found"),
+                      ("skippable-stub", "skipped"),
+                      ("unimplemented", "unimplemented"),
+                      ("objdiff-error", "errors")):
+        if stats.get(key):
+            cov.drop(slug, stats[key])
+    if stats.get("comdat_elsewhere"):
+        cov.drop("comdat-emitted-in-another-tu", stats["comdat_elsewhere"])
+    ruler_counts: dict[str, int] = {}
+    for r in results:
+        if r.ruler:
+            ruler_counts[r.ruler] = ruler_counts.get(r.ruler, 0) + 1
+    cov.extra("ruler_counts", dict(sorted(ruler_counts.items())))
+    cov.note("ruler: normalized_match_percent from objdiff-cli diff --batch "
+             "(objdiff's `diff` command aliases that value into the key named "
+             "fuzzy_match_percent; report.json uses that same name for the RAW "
+             "score, so the two files disagree on what `fuzzy` means)")
+
     # Print summary
     mode = " (DRY RUN)" if args.dry_run else ""
     print(f"\n--- Sync Results{mode} ---")
-    print(f"  Scanned:            {stats['scanned']}")
+    print(f"  Universe:           {universe_rows} (DB rows the filters selected, "
+          f"before --divergent)")
+    print(f"  Requested:          {len(functions)}"
+          + (f"  ({excluded_by_divergent} excluded by --divergent)"
+             if excluded_by_divergent else ""))
+    print(f"  Result records:     {stats['scanned']}")
     print(f"  Matched:            {stats['matched']}")
     print(f"  Not found:          {stats['not_found']}")
     print(f"  Skipped:            {stats['skipped']} (boilerplate/third-party with no base code)")
@@ -818,12 +1045,28 @@ def main():
     print(f"  Unimplemented:      {stats['unimplemented']}")
     print(f"  Stub cleared:       {stats.get('stub_cleared', 0)} (was stub, now has base code)")
     print(f"  Errors:             {stats['errors']}")
+    bucket_sum = (stats["matched"] + stats["not_found"] + stats["skipped"]
+                  + stats.get("comdat_elsewhere", 0) + stats["unimplemented"]
+                  + stats["errors"])
+    print(f"  Bucket sum:         {bucket_sum} of {stats['scanned']} result records"
+          + ("" if bucket_sum == stats["scanned"]
+             else f"   <-- MISMATCH of {stats['scanned'] - bucket_sum}"))
     print(f"  Percent updated:    {stats['pct_updated']}")
     print(f"  Promoted:           {stats['promoted']} (-> COMPLETE)")
-    print(f"  Auto AT_LIMIT:      {stats.get('auto_at_limit', 0)} (all mismatches unfixable)")
+    print(f"  Auto AT_LIMIT:      {stats.get('auto_at_limit', 0)} written"
+          f"  / {stats.get('auto_at_limit_candidates', 0)} candidates"
+          f"  [--auto-at-limit {'ON' if args.auto_at_limit else 'OFF (default since 2026-08-19)'}]")
     print(f"  Demoted COMPLETE:   {stats['demoted_complete']} (-> NULL)")
+    if stats.get("demoted_but_db_normalized_100"):
+        print(f"  !! of those, {stats['demoted_but_db_normalized_100']} have "
+              f"match_percent_normalized >= 100 in the DB, which is exactly what "
+              f"sync_match_percent.py --promote promotes on. Those two writers will "
+              f"flip these verdicts against each other.")
     print(f"  Demoted AT_LIMIT:   {stats['demoted_at_limit']} (-> NULL)")
     print(f"  Patterns set:       {stats['patterns_set']}")
+    if ruler_counts:
+        print(f"  Ruler:              "
+              + ", ".join(f"{k}={v}" for k, v in sorted(ruler_counts.items())))
     pattern_labels = [
         ("merged", "Merged"),
         ("bool_mask", "Bool mask"),
@@ -877,7 +1120,10 @@ def main():
             return "Other"
 
         total = sum(len(v) for v in unimplemented_by_unit.values())
-        sorted_units = sorted(unimplemented_by_unit.items(), key=lambda x: -len(x[1]))
+        # Full tie-break: ties on count must not depend on dict insertion order,
+        # which (before the ORDER BY above) varied run to run.
+        sorted_units = sorted(unimplemented_by_unit.items(),
+                              key=lambda x: (-len(x[1]), x[0]))
 
         # Aggregate by category
         cat_counts: dict[str, int] = {}
@@ -891,7 +1137,7 @@ def main():
             print(f"  {unit:50s} {len(funcs):4d}  [{cat}]")
 
         print(f"\n  --- Unimplemented by Category ---")
-        for cat, count in sorted(cat_counts.items(), key=lambda x: -x[1]):
+        for cat, count in sorted(cat_counts.items(), key=lambda x: (-x[1], x[0])):
             print(f"  {cat + ':':16s}{count}")
 
     # Print partial match breakdown by percentage bucket
@@ -922,10 +1168,12 @@ def main():
             if not bucket_data:
                 continue
             total_b = sum(len(v) for v in bucket_data.values())
-            sorted_b = sorted(bucket_data.items(), key=lambda x: -len(x[1]))
+            sorted_b = sorted(bucket_data.items(), key=lambda x: (-len(x[1]), x[0]))
             print(f"\n  --- {label} by Unit ({total_b} functions) ---")
             for unit, funcs in sorted_b:
                 print(f"  {unit:50s} {len(funcs):4d}")
+
+    sys.exit(cov.emit())
 
 
 if __name__ == "__main__":

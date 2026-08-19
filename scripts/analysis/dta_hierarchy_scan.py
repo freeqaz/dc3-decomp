@@ -21,12 +21,93 @@ Usage:
 import re
 import sys
 import os
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
+
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if REPO not in sys.path:
+    sys.path.insert(0, REPO)
+from scripts.analysis.coverage import CoverageReport, add_coverage_args  # noqa: E402
+
+# --------------------------------------------------------------------------
+# Empty-corpus gate — shared by every DTA scanner in this directory
+#
+# `orig-assets/` is NOT tracked by git: it exists in the main checkout and is
+# absent from every worktree.  Each of these scanners loaded its config behind a
+# bare `if path.exists():` with no `else`, so from a worktree they parsed ZERO
+# files, every key became unresolvable, every check short-circuited, and they
+# printed "No ... issues found." to STDOUT while the only hint (`Parsed 0 DTA
+# files`) went to STDERR.  Redirect stdout to a file and all you keep is the
+# reassuring half.  A scanner with an empty corpus checked NOTHING and must say
+# so, on stdout, and exit non-zero.
+# --------------------------------------------------------------------------
+
+# Distinct from coverage.EXIT_TRUNCATED (3) / EXIT_UNACCOUNTED (4) so a caller
+# can tell "my input was missing" from "the scanner's arithmetic is broken".
+EXIT_EMPTY_CORPUS = 5
+
+_BAR = "=" * 78
+
+CORPUS_HINT = (
+    "orig-assets/ is present in the main checkout but is NOT tracked by git, so "
+    "it is absent from every worktree. Run from the main checkout, or point "
+    "--dta-dir / --main-configs at a real corpus."
+)
+
+
+def parent_key_for(parent_name, key, line_no):
+    """Identity of an assignment site, shared by the two passes that see it.
+
+    The FINDARRAY_RE pass counts the site; the deferred assign_checks loop
+    disposes of it.  They must agree on what "the same site" means or the
+    coverage arithmetic cannot balance.
+    """
+    return (parent_name, key, line_no)
+
+
+def empty_corpus_banner(scanner, dta_count, key_count, sources):
+    """Return the loud INCONCLUSIVE block, or None when the corpus is non-empty.
+
+    Printed on STDOUT on purpose: the whole failure mode was that the warning
+    went to stderr and only the clean verdict survived a redirect.
+    """
+    if dta_count > 0 and key_count > 0:
+        return None
+    L = [_BAR,
+         f"INCONCLUSIVE: {scanner} parsed {dta_count} DTA files "
+         f"({key_count} unique keys) — THIS RUN CHECKED NOTHING.",
+         _BAR,
+         "Every key lookup resolves against an empty hierarchy, so every check",
+         "short-circuits and no finding can possibly be produced. A clean result",
+         "here means 'no input', NOT 'no bugs'.",
+         "",
+         f"  {CORPUS_HINT}",
+         "",
+         "  Searched:"]
+    for s in sources:
+        L.append(f"    {s}")
+    L.append(_BAR)
+    return "\n".join(L)
+
 
 # --------------------------------------------------------------------------
 # DTA Parser (minimal S-expression parser)
 # --------------------------------------------------------------------------
+
+# Parser-level losses that used to be invisible.  An unresolvable `#include`
+# silently yields a TRUNCATED hierarchy tree, and the hierarchy is what every
+# check in this family depends on — so a silent one shrinks the audit itself.
+#
+# MAIN-THREAD ONLY (same rule as CoverageReport): these scanners are
+# single-threaded; do not increment these from a worker pool.
+PARSE_STATS = Counter()
+# include name -> number of times it could not be resolved / read
+UNRESOLVED_INCLUDES = Counter()
+
+
+def reset_parse_stats():
+    PARSE_STATS.clear()
+    UNRESOLVED_INCLUDES.clear()
 
 class DTANode:
     """A node in the parsed DTA tree."""
@@ -198,6 +279,10 @@ def tokenize_dta(text):
 def parse_dta(text, source_file=None, base_dir=None, include_depth=0):
     """Parse DTA text into a DTANode tree, resolving #include directives."""
     if include_depth > 10:
+        # Silent depth cap: the subtree below this point is simply missing from
+        # the hierarchy.  Count it so a deep #include chain cannot quietly
+        # shrink the corpus every check is measured against.
+        PARSE_STATS['include-depth-capped'] += 1
         return DTANode(is_root=True)  # prevent infinite recursion
 
     tokens = tokenize_dta(text)
@@ -228,6 +313,8 @@ def parse_dta(text, source_file=None, base_dir=None, include_depth=0):
         """Parse an #include file and add its contents to target_node."""
         filepath = resolve_include(filename)
         if filepath is None:
+            PARSE_STATS['include-unresolved'] += 1
+            UNRESOLVED_INCLUDES[filename] += 1
             return
         try:
             with open(filepath, encoding='utf-8', errors='replace') as f:
@@ -238,8 +325,10 @@ def parse_dta(text, source_file=None, base_dir=None, include_depth=0):
             # Add included file's root children to target node
             for child in inc_root.children:
                 target_node.children.append(child)
+            PARSE_STATS['include-resolved'] += 1
         except (IOError, UnicodeDecodeError):
-            pass
+            PARSE_STATS['include-unreadable'] += 1
+            UNRESOLVED_INCLUDES[filename] += 1
 
     def parse_list():
         """Parse a parenthesized list into a DTANode."""
@@ -293,6 +382,7 @@ def parse_dta_file(filepath):
             text = f.read()
         return parse_dta(text, str(filepath), str(Path(filepath).parent))
     except Exception as e:
+        PARSE_STATS['dta-file-unparseable'] += 1
         print(f"Warning: failed to parse {filepath}: {e}", file=sys.stderr)
         return None
 
@@ -315,9 +405,15 @@ class DTAHierarchy:
         self.roots = {}
 
     def add_file(self, filepath):
+        """Parse and index one DTA file. Returns True iff it was added.
+
+        The return value is new; callers that ignore it behave exactly as
+        before, but a caller counting its corpus can no longer credit itself
+        with a file that failed to parse.
+        """
         root = parse_dta_file(filepath)
         if root is None:
-            return
+            return False
         self.roots[str(filepath)] = root
         tags = root.all_tags_recursive()
         for tag, parents in tags.items():
@@ -325,6 +421,7 @@ class DTAHierarchy:
             self.key_files[tag].add(str(filepath))
             for p in parents:
                 self.edges[(p, tag)].add(str(filepath))
+        return True
 
     def is_root_key(self, key):
         """Check if key ever appears at root level in any DTA file."""
@@ -394,24 +491,91 @@ def _resolve_effective_parent(receiver, var_config, var_parent, var_key):
     return None
 
 
-def scan_source_against_hierarchy(src_dir, hierarchy):
-    """Scan source files and cross-reference FindArray calls against DTA hierarchy."""
+def scan_source_against_hierarchy(src_dir, hierarchy, cov_files=None,
+                                  cov_sites=None, unverifiable=None):
+    """Scan source files and cross-reference FindArray calls against DTA hierarchy.
+
+    `cov_files` / `cov_sites` are optional CoverageReports: the first counts
+    SOURCE FILES (denominator known up front), the second counts Find* CALL
+    SITES.  `unverifiable` is an optional Counter that receives the
+    key-absent-from-every-DTA population — the typo'd-FindArray bug class,
+    which this scanner used to `continue` past uncounted.
+
+    All three are keyword-only-in-practice additions; existing two-argument
+    callers behave exactly as before.
+    """
     findings = []
+    n_sites = 0          # independent tally: the denominator for cov_sites
+    # DISTINCT sites, not site EVENTS.  Every `var = recv->FindArray("k")` is
+    # matched twice -- once by the ASSIGN_FINDARRAY_RE pass and once by the
+    # FINDARRAY_RE pass -- and both passes bumped n_sites and both disposed of
+    # it.  Measured 2026-08-19: 331 events over 274 distinct sites, 57 of them
+    # counted twice.  The published "21%" was 70/331; the honest distinct-site
+    # figure is 70/274 = 25.5%.
+    #
+    # Note this is INVISIBLE to the exit-4 tripwire: because each event bumps
+    # the universe and lands in exactly one of examined/dropped, a
+    # double-counted site balances perfectly.  The contract catches an
+    # UNCOUNTED row; it cannot catch a TWICE-COUNTED one.
+    seen_sites = set()
+    #: (parent, key, line) of every assignment that really reaches assign_checks
+    assign_sites = {}
+    #: site key -> the deferred check that will dispose of it
+    deferred = {}
+
+    def site_new(key):
+        """True the first time this textual site is offered for counting."""
+        if key in seen_sites:
+            return False
+        seen_sites.add(key)
+        return True
+
+    # A site is counted ONCE in the universe and disposed ONCE.  Assignment
+    # sites are counted by the FINDARRAY_RE pass and disposed later by the
+    # deferred assign_checks loop, so disposition has to be keyed too or the
+    # arithmetic double-counts on the other side of the ledger.
+    disposed = set()
+
+    def site_drop(reason, note="", key=None):
+        if key is not None:
+            if key in disposed:
+                return
+            disposed.add(key)
+        if cov_sites is not None:
+            cov_sites.drop(reason, note=note)
+
+    def site_keep(key=None):
+        if key is not None:
+            if key in disposed:
+                return
+            disposed.add(key)
+        if cov_sites is not None:
+            cov_sites.examine()
 
     # Collect all source files
     src_path = Path(src_dir)
     files = list(src_path.rglob('*.cpp')) + list(src_path.rglob('*.h'))
+    if cov_files is not None:
+        cov_files.universe(len(files), f"source files under {src_dir} (.cpp/.h)")
 
     for filepath in sorted(files):
         try:
             with open(filepath) as f:
                 lines = f.readlines()
         except (IOError, UnicodeDecodeError):
+            if cov_files is not None:
+                cov_files.drop("source-unreadable", note=str(filepath))
             continue
 
         # Quick check — need any Find* method
         if not any('Find' in l and '->' in l for l in lines):
+            if cov_files is not None:
+                cov_files.drop("no-find-call-syntax",
+                               note="file contains no `->Find*(` at all")
             continue
+
+        if cov_files is not None:
+            cov_files.examine()
 
         # Track variable -> config name mapping (rough)
         # e.g., DataArray *cfg = SystemConfig("metagame_rank")
@@ -436,26 +600,94 @@ def scan_source_against_hierarchy(src_dir, hierarchy):
             # Track FindArray assignments AND check them against hierarchy
             for m in ASSIGN_FINDARRAY_RE.finditer(line):
                 var_name, parent_name, key = m.groups()
+                # NOT counted here: the FINDARRAY_RE pass below sees the very
+                # same text and counts it there.  Counting in both passes is
+                # what made 274 sites read as 331.
                 # Skip self-reassignment (def = def->FindArray("editor"))
                 # which creates circular references in the tracker
                 if var_name == parent_name:
                     continue
                 var_parent[var_name] = parent_name
                 var_key[var_name] = key
-                # Also check this assignment's key against hierarchy
+                # Also check this assignment's key against hierarchy.  The
+                # site key travels with it: the FINDARRAY_RE pass below counts
+                # this site into the universe, and THIS deferred check is what
+                # disposes of it.
+                assign_sites[(parent_name, key, line_no)] = None
                 assign_checks.append((line_no, parent_name, key))
 
             # Check all Find* calls
             for m in FINDARRAY_RE.finditer(line):
                 receiver, key = m.groups()
+                if not site_new((str(filepath), line_no, m.span())):
+                    continue          # already counted; do not double-dispose
+                n_sites += 1
 
-                # Skip if this is an assignment (we handle those above)
+                # Skip if this is an assignment (we handle those above).
+                #
+                # THE REASON HAD TO BE MADE TRUE.  This predicate matched the
+                # bare prefix `\w+ = receiver->FindArray` with no constraint on
+                # the arguments, while ASSIGN_FINDARRAY_RE -- the regex that
+                # actually feeds assign_checks -- requires the closing paren
+                # immediately after the key, i.e. it matches ONE-ARGUMENT
+                # FindArray only.  So every `var = recv->FindArray("k", true)`
+                # was dropped with the note "re-examined via assign_checks"
+                # while assign_checks never received it.  Measured on this tree
+                # 2026-08-19: 106 sites carried the label, 57 were captured by
+                # ASSIGN_FINDARRAY_RE, and 49 were captured by nothing.
+                #
+                # A drop with a FALSE reason is worse than an uncounted drop:
+                # an uncounted drop is invisible, but this one told the reader
+                # the population was covered elsewhere when it was not.  The
+                # two populations are now separate slugs, so the coverage block
+                # states the real size of the hole.
                 if re.search(rf'\w+\s*=\s*{re.escape(receiver)}->FindArray', line):
+                    matching_assigns = [
+                        am for am in ASSIGN_FINDARRAY_RE.finditer(line)
+                        if am.group(2) == receiver and am.group(3) == key]
+                    really_rechecked = bool(matching_assigns)
+                    # `def = def->FindArray("editor")` IS captured by
+                    # ASSIGN_FINDARRAY_RE but the assign pass drops it as
+                    # circular before it ever reaches assign_checks -- so
+                    # nothing downstream disposes of it either.  Exactly one
+                    # site on this tree (src/system/flow/Flow.cpp:701), and it
+                    # was found by the exit-4 check firing at -1 after the
+                    # de-duplication above.
+                    self_reassign = any(am.group(1) == am.group(2)
+                                        for am in matching_assigns)
+                    if self_reassign:
+                        site_drop("assign-self-reassignment",
+                                  note="def = def->FindArray(..) — circular in "
+                                       "the tracker, so the assign pass drops "
+                                       "it and assign_checks never sees it",
+                                  key=(str(filepath), line_no, m.span()))
+                    elif really_rechecked:
+                        # Do NOT dispose here: the deferred assign_checks loop
+                        # is the real check for this site and will dispose it
+                        # with its own reason.  Disposing in both places is the
+                        # mirror image of counting in both places.
+                        deferred[(parent_key_for(receiver, key, line_no))] = \
+                            (str(filepath), line_no, m.span())
+                    else:
+                        # TODO(heuristic): widening ASSIGN_FINDARRAY_RE to accept
+                        # trailing arguments would let these be checked -- but
+                        # that CHANGES WHAT THIS TOOL FINDS, which does not
+                        # belong in an honesty pass.  Left as a counted,
+                        # honestly-named gap, the same way findarray_receiver_scan
+                        # left its gate widening.
+                        site_drop("assignment-site-NOT-rechecked-anywhere",
+                                  note="looks like an assignment, so the Find* "
+                                       "pass skips it -- but ASSIGN_FINDARRAY_RE "
+                                       "matches one-argument FindArray only, so "
+                                       "assign_checks never receives it. Nothing "
+                                       "checks these. 49 of 106 on this tree")
                     continue
 
                 # Skip optional lookups: FindData("key", var, false)
                 # These intentionally handle missing keys
                 if re.search(rf'{re.escape(receiver)}->FindData\(\s*"{re.escape(key)}".*,\s*false\s*\)', line):
+                    site_drop("optional-lookup-allowed-to-miss",
+                              note="FindData(\"k\", v, false) intentionally tolerates a miss")
                     continue
 
                 # Resolve the receiver's depth in the hierarchy
@@ -482,18 +714,31 @@ def scan_source_against_hierarchy(src_dir, hierarchy):
                 # Check if the key exists at the expected depth
                 parents = hierarchy.get_parents(key)
                 if not parents:
-                    continue  # Key not found in any DTA — can't verify
+                    # Key not found in ANY DTA. This is NOT "nothing to see" —
+                    # it is the typo'd-FindArray population, the most valuable
+                    # thing this scanner could report. Count it and surface it.
+                    if unverifiable is not None:
+                        unverifiable[key] += 1
+                    site_drop("key-absent-from-every-dta",
+                              note="key exists in no parsed DTA — typo'd-FindArray candidates")
+                    continue
 
                 if effective_parent is None:
-                    # Can't determine parent (e.g., function parameter)
-                    # Only flag if key NEVER appears at root level
-                    # AND there's no config context
+                    # Can't determine parent (e.g., function parameter).
+                    # Likely the MAJORITY of call sites — never let that be
+                    # invisible, or "0 findings" reads as "0 bugs".
+                    site_drop("receiver-unresolvable",
+                              note="receiver is a function parameter / untracked expr")
                     continue
+
+                site_keep()
 
                 if effective_parent == '__ROOT__':
                     # Looking up from true root
                     if not hierarchy.is_root_key(key):
-                        actual_parents = parents - {'__ROOT__'}
+                        # sorted list, not a set: a raw set interpolates into
+                        # the text report in hash order (nondeterministic).
+                        actual_parents = sorted(parents - {'__ROOT__'})
                         findings.append({
                             'file': str(filepath),
                             'line': line_no,
@@ -509,7 +754,9 @@ def scan_source_against_hierarchy(src_dir, hierarchy):
                     # Looking up from a known DTA node
                     if effective_parent not in parents:
                         # Key is NOT a child of where we're looking
-                        actual_parents = parents - {'__ROOT__'}
+                        # sorted list, not a set: a raw set interpolates into
+                        # the text report in hash order (nondeterministic).
+                        actual_parents = sorted(parents - {'__ROOT__'})
                         findings.append({
                             'file': str(filepath),
                             'line': line_no,
@@ -524,12 +771,25 @@ def scan_source_against_hierarchy(src_dir, hierarchy):
 
         # Process deferred assignment checks
         for line_no, parent_name, key in assign_checks:
+            skey = deferred.get(parent_key_for(parent_name, key, line_no))
             effective_parent = _resolve_effective_parent(
                 parent_name, var_config, var_parent, var_key
             )
             parents = hierarchy.get_parents(key)
-            if not parents or effective_parent is None:
+            if not parents:
+                if unverifiable is not None:
+                    unverifiable[key] += 1
+                site_drop("key-absent-from-every-dta",
+                          note="key exists in no parsed DTA — typo'd-FindArray candidates",
+                          key=skey)
                 continue
+            if effective_parent is None:
+                site_drop("receiver-unresolvable",
+                          note="receiver is a function parameter / untracked expr",
+                          key=skey)
+                continue
+
+            site_keep(key=skey)
 
             chain = [parent_name]
             root_var = parent_name
@@ -544,7 +804,7 @@ def scan_source_against_hierarchy(src_dir, hierarchy):
 
             if effective_parent == '__ROOT__':
                 if not hierarchy.is_root_key(key):
-                    actual_parents = parents - {'__ROOT__'}
+                    actual_parents = sorted(parents - {'__ROOT__'})
                     findings.append({
                         'file': str(filepath),
                         'line': line_no,
@@ -558,7 +818,7 @@ def scan_source_against_hierarchy(src_dir, hierarchy):
                     })
             else:
                 if effective_parent not in parents:
-                    actual_parents = parents - {'__ROOT__'}
+                    actual_parents = sorted(parents - {'__ROOT__'})
                     findings.append({
                         'file': str(filepath),
                         'line': line_no,
@@ -571,6 +831,16 @@ def scan_source_against_hierarchy(src_dir, hierarchy):
                         'severity': 'HIGH',
                     })
 
+    if cov_sites is not None:
+        # Declared LAST but tallied INDEPENDENTLY of the dispositions above, so
+        # a `continue` that forgets to call site_drop() shows up as UNACCOUNTED
+        # instead of silently shrinking the denominator.
+        cov_sites.universe(n_sites, "Find*() call sites in scanned source")
+        # See dta_access_audit: a balanced run that examined 0 sites is
+        # arithmetically clean and epistemically empty.
+        cov_sites.require_examined(
+            "no Find*() call site in the scanned sources could be checked -- "
+            "the corpus parsed, but every site was dropped")
     return findings
 
 
@@ -589,6 +859,8 @@ def main():
                         default=['orig-assets/extracted/config/ham_keep.dta',
                                  'orig-assets/extracted/(..)/(..)/system/run/config/default.dta'],
                         help='Main config files to parse with #include resolution')
+    parser.add_argument('--extra-root', default='orig-assets/extracted',
+                        help='extra DTA tree swept IN ADDITION to --dta-dir, relative to CWD (default: orig-assets/extracted). This sweep used to be hardcoded and unconditional, so --dta-dir could not actually bound the corpus: pointing it at an empty path still picked up 247 files whenever CWD happened to have orig-assets. Pass a nonexistent path to disable.')
     parser.add_argument('--src-dir', default='src/',
                         help='Source directory to scan')
     parser.add_argument('--dump-hierarchy', action='store_true',
@@ -597,59 +869,126 @@ def main():
                         help='Query a specific key to see where it exists in hierarchy')
     parser.add_argument('--json', action='store_true',
                         help='Output findings as JSON')
+    add_coverage_args(parser)
     args = parser.parse_args()
 
     # Build hierarchy from main config files first (with #include resolution)
     # These give us the TRUE hierarchy with proper nesting
     hierarchy = DTAHierarchy()
     dta_count = 0
+    searched = []
+    missing_inputs = []
 
     for main_cfg in args.main_configs:
         main_path = Path(main_cfg)
         if main_path.exists():
-            hierarchy.add_file(main_path)
-            dta_count += 1
+            if hierarchy.add_file(main_path):
+                dta_count += 1
+            searched.append(f"{main_cfg}  [main config: parsed]")
+        else:
+            # Was silently skipped — while the --dta-dir branch below DID warn.
+            # A missing main config is the single biggest corpus loss there is.
+            print(f"Warning: main config {main_cfg} does not exist", file=sys.stderr)
+            missing_inputs.append(main_cfg)
+            searched.append(f"{main_cfg}  [main config: MISSING]")
 
     # Then add individual DTA files (for keys not in main configs)
     for dta_dir in args.dta_dir:
         dta_path = Path(dta_dir)
         if not dta_path.exists():
             print(f"Warning: {dta_dir} does not exist", file=sys.stderr)
+            missing_inputs.append(dta_dir)
+            searched.append(f"{dta_dir}  [dta dir: MISSING]")
             continue
+        n = 0
         for dta_file in sorted(dta_path.rglob('*.dta')):
             if str(dta_file) not in hierarchy.roots:
-                hierarchy.add_file(dta_file)
-                dta_count += 1
+                if hierarchy.add_file(dta_file):
+                    dta_count += 1
+                    n += 1
+        searched.append(f"{dta_dir}  [dta dir: {n} files]")
 
     # Also scan all DTA files in orig-assets
-    for dta_file in sorted(Path('orig-assets/extracted').rglob('*.dta')):
-        if str(dta_file) not in hierarchy.roots:
-            hierarchy.add_file(dta_file)
-            dta_count += 1
+    extra_root = Path(args.extra_root)
+    if not extra_root.exists():
+        print(f"Warning: {extra_root} does not exist", file=sys.stderr)
+        missing_inputs.append(str(extra_root))
+        searched.append(f"{extra_root}  [tree: MISSING]")
+    else:
+        n = 0
+        for dta_file in sorted(extra_root.rglob('*.dta')):
+            if str(dta_file) not in hierarchy.roots:
+                if hierarchy.add_file(dta_file):
+                    dta_count += 1
+                    n += 1
+        searched.append(f"{extra_root}  [tree: {n} files]")
 
-    print(f"Parsed {dta_count} DTA files, {len(hierarchy.key_parents)} unique keys",
-          file=sys.stderr)
+    key_count = len(hierarchy.key_parents)
+    print(f"Parsed {dta_count} DTA files, {key_count} unique keys", file=sys.stderr)
+
+    cov = CoverageReport("dta_hierarchy_scan", args=args)
+    cov.extra("dta_files_parsed", dta_count)
+    cov.extra("dta_unique_keys", key_count)
+    cov.extra("missing_inputs", sorted(missing_inputs))
+    cov.extra("parse_stats", dict(sorted(PARSE_STATS.items())))
+    cov.extra("unresolved_includes",
+              dict(sorted(UNRESOLVED_INCLUDES.items())))
+    if missing_inputs:
+        cov.note(f"{len(missing_inputs)} declared corpus input(s) DO NOT EXIST: "
+                 + ", ".join(sorted(missing_inputs)))
+    for slug in ('include-unresolved', 'include-unreadable', 'include-depth-capped',
+                 'dta-file-unparseable'):
+        if PARSE_STATS.get(slug):
+            cov.note(f"hierarchy TRUNCATED at parse time: {slug} x{PARSE_STATS[slug]} "
+                     f"(the tree every check runs against is smaller than the corpus)")
+
+    # ---- the empty-corpus gate: a clean verdict is FORBIDDEN from here ----
+    banner = empty_corpus_banner("dta_hierarchy_scan", dta_count, key_count, searched)
+    if banner is not None:
+        print(banner)                       # STDOUT — survives a redirect
+        cov.universe(0, "DTA files parsed")
+        sys.exit(cov.emit() or EXIT_EMPTY_CORPUS)
 
     if args.query:
         key = args.query
         parents = hierarchy.get_parents(key)
         if not parents:
-            print(f"Key '{key}' not found in any DTA file.")
+            print(f"Key '{key}' not found in any of the {dta_count} parsed DTA files.")
         else:
-            print(f"Key '{key}' appears as child of: {parents}")
-            print(f"  Files: {hierarchy.key_files.get(key, set())}")
+            print(f"Key '{key}' appears as child of: {sorted(parents)}")
+            print(f"  Files: {sorted(hierarchy.key_files.get(key, set()))}")
             is_root = hierarchy.is_root_key(key)
             print(f"  Is root-level: {is_root}")
-        return
+        cov.universe(dta_count, "DTA files parsed")
+        cov.examine(dta_count)
+        sys.exit(cov.emit())
 
     if args.dump_hierarchy:
         for filepath, root in sorted(hierarchy.roots.items()):
             root.print_tree()
             print()
-        return
+        cov.universe(dta_count, "DTA files parsed")
+        cov.examine(dta_count)
+        sys.exit(cov.emit())
 
     # Scan source code
-    findings = scan_source_against_hierarchy(args.src_dir, hierarchy)
+    cov_sites = CoverageReport("dta_hierarchy_scan:call-sites",
+                               allow_truncation=args.allow_truncation)
+    unverifiable = Counter()
+    findings = scan_source_against_hierarchy(args.src_dir, hierarchy,
+                                             cov_files=cov, cov_sites=cov_sites,
+                                             unverifiable=unverifiable)
+    cov.extra("call_sites", cov_sites.as_dict())
+    cov.extra("keys_absent_from_every_dta",
+              dict(sorted(unverifiable.items(), key=lambda kv: (-kv[1], kv[0]))))
+
+    def finish():
+        """Emit BOTH coverage blocks; the worst exit code wins."""
+        rc_sites = cov_sites.emit(sys.stderr)
+        rc_files = cov.emit()
+        return rc_files or rc_sites
+
+    site_d = cov_sites.as_dict()
 
     if args.json:
         import json
@@ -657,11 +996,29 @@ def main():
         for f in findings:
             f['actual_parents'] = sorted(f['actual_parents'])
         print(json.dumps(findings, indent=2))
-        return
+        sys.exit(finish())
+
+    # The key-absent population is NOT "nothing to report": it is the typo'd-
+    # FindArray bug class, which this scanner used to drop with a bare continue.
+    if unverifiable:
+        n_sites_absent = sum(unverifiable.values())
+        print(f"\n=== UNVERIFIABLE: key present in NO parsed DTA "
+              f"({n_sites_absent} call sites, {len(unverifiable)} distinct keys) ===\n")
+        print("  These are not clean — they are unchecked. A typo'd key looks")
+        print("  exactly like a key whose DTA we simply did not parse.\n")
+        ranked = sorted(unverifiable.items(), key=lambda kv: (-kv[1], kv[0]))
+        for key, n in ranked[:20]:
+            print(f"  {n:5d}x  {key}")
+        if len(ranked) > 20:
+            print(f"  ... and {len(ranked) - 20} more distinct keys "
+                  f"(full list in --coverage-json)")
 
     if not findings:
-        print("No DTA hierarchy mismatches found.")
-        return
+        # NEVER a bare "No ... found." — the denominator travels with it.
+        print(f"\nNo DTA hierarchy mismatches found "
+              f"among {site_d['examined']} verifiable call sites "
+              f"(of {site_d['universe']} total) against {dta_count} DTA files.")
+        sys.exit(finish())
 
     # Report
     high = [f for f in findings if f['severity'] == 'HIGH']
@@ -687,7 +1044,10 @@ def main():
             print(f"    Actually under: {f['actual_parents']}")
             print()
 
-    print(f"Total: {len(high)} HIGH, {len(medium)} MEDIUM")
+    print(f"Total: {len(high)} HIGH, {len(medium)} MEDIUM "
+          f"from {site_d['examined']} verifiable call sites "
+          f"(of {site_d['universe']} total) against {dta_count} DTA files")
+    sys.exit(finish())
 
 
 if __name__ == '__main__':

@@ -35,6 +35,19 @@ member (HamAudio, NgPostProc -- both reached 100%).
 
 Reads COFF objects directly -- no objdiff run needed.
 
+COVERAGE (scripts/analysis/coverage.py)
+=======================================
+This tool compares TARGET function bodies against OUR bodies of the same name,
+and most target bodies have no counterpart of ours.  Until 2026-08-19 it said
+so nowhere: `# N rows` on stderr, with no denominator anywhere.  Measured here:
+
+    1,245 of 2,224 objdiff.json units have no target/base pair on disk
+    23,479 target bodies have no body of ours to compare against
+    the `# 30046 rows` of an --all run is drawn from ~44% of the declared units
+
+Every one of those skips is now a counted drop, so the row count arrives with
+the population it came from.
+
 Usage:
     python3 scripts/analysis/home_store_census.py --min 90 --max 99.9
     python3 scripts/analysis/home_store_census.py --json /tmp/home.json --all
@@ -45,6 +58,13 @@ import json
 import os
 import struct
 import sys
+from collections import defaultdict
+
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if REPO not in sys.path:
+    sys.path.insert(0, REPO)
+
+from scripts.analysis.coverage import CoverageReport, add_coverage_args  # noqa: E402
 
 IMAGE_SYM_DTYPE_FUNCTION = 0x20
 
@@ -220,6 +240,16 @@ def home_stores(words, frame_regs=(1, 31)):
 
 
 # ------------------------------------------------------------------ main
+
+#: Which ruler the `%` column is on.  A percentage without its ruler is not a
+#: measurement (scripts/analysis/ruler.py); `match_percent_normalized` is the
+#: LOOSE ruler and this tree grades on functionRelocDiffs=name_check.
+PERCENT_RULER_LABEL = ("percent column = report.json `match_percent_normalized` "
+                       "(the LOOSE ruler; this tree GRADES on "
+                       "functionRelocDiffs=name_check == `fuzzy_match_percent`), "
+                       "falling back to fuzzy_match_percent, then 0.0")
+
+
 def load_report(project_dir):
     path = os.path.join(project_dir, "build/373307D9/report.json")
     rep = json.load(open(path))
@@ -242,38 +272,60 @@ def main():
     ap.add_argument("--max", type=float, default=99.99)
     ap.add_argument("--all", action="store_true", help="ignore percent filter")
     ap.add_argument("--json")
-    ap.add_argument("--limit", type=int, default=60)
+    ap.add_argument("--limit", type=int, default=60,
+                    help="shorten the PRINTOUT to N rows (default 60; 0 = all). "
+                         "The row COUNT below the list, and --json, are always "
+                         "the full set -- the list now says 'showing N of M'.")
+    add_coverage_args(ap)
     args = ap.parse_args()
 
     pd = os.path.abspath(args.project_dir)
     cfg = json.load(open(os.path.join(pd, "objdiff.json")))
     pct = load_report(pd)
 
+    # Stage 1 denominator: units.  1,245 of 2,224 have no pair on disk.
+    ucov = CoverageReport("home_store_census/units", allow_truncation=True)
+    ucov.universe(len(cfg["units"]), "units in objdiff.json")
+
     rows = []
-    for unit in cfg["units"]:
+    n_bodies = 0
+    drops = defaultdict(int)
+    for unit in sorted(cfg["units"], key=lambda u: u.get("name", "")):
         if "target_path" not in unit or "base_path" not in unit:
+            ucov.drop("no-target-or-base-path",
+                      note="objdiff.json unit declares only one side")
             continue
         tp = os.path.join(pd, unit["target_path"])
         bp = os.path.join(pd, unit["base_path"])
         if not (os.path.isfile(tp) and os.path.isfile(bp)):
+            ucov.drop("object-file-missing",
+                      note="declared path is not on disk (unbuilt unit)")
             continue
         try:
             tb = function_bodies(tp)
             bb = function_bodies(bp)
         except Exception as e:
+            ucov.drop("coff-parse-error", note="function_bodies raised")
             print(f"# skip {unit['name']}: {e}", file=sys.stderr)
             continue
-        for name, twords in tb.items():
+        ucov.examine()
+        n_bodies += len(tb)
+        for name in sorted(tb):
+            twords = tb[name]
             if name not in bb:
+                drops["no-body-of-ours"] += 1
                 continue
             p, unm, size, dem = pct.get(name, (None, unit["name"], 0, name))
             if p is None:
+                drops["no-percent-in-report"] += 1
                 continue
             if not args.all and not (args.min <= p <= args.max):
+                drops["outside-percent-window"] += 1
                 continue
             ths = home_stores(twords)
             bhs = home_stores(bb[name])
             if len(ths) == len(bhs) and not args.all:
+                drops["delta-zero"] += 1
                 continue
             rows.append({
                 "symbol": name, "demangled": dem, "unit": unit["name"],
@@ -286,14 +338,45 @@ def main():
                                for _, _, b, o, f in bhs],
             })
 
-    rows.sort(key=lambda r: (-abs(r["delta"]), -r["percent"]))
+    # Stage 2 denominator: target function bodies in the units we could read.
+    cov = CoverageReport("home_store_census", args=args)
+    cov.universe(n_bodies,
+                 "TARGET function bodies in the unit pairs we read")
+    cov.examine(len(rows))
+    for reason, n in sorted(drops.items()):
+        cov.drop(reason, n, note={
+            "no-body-of-ours": "the target defines it; our object does not -- "
+                               "nothing to diff (structurally necessary)",
+            "no-percent-in-report": "report.json carries no percent for this "
+                                    "symbol (the fake_impl_scan shape)",
+            "outside-percent-window": "excluded by --min/--max; pass --all",
+            "delta-zero": "same home-store count on both sides; pass --all to keep",
+        }.get(reason, ""))
+    cov.note(PERCENT_RULER_LABEL)
+    cov.extra("units_coverage", ucov.as_dict())
+
+    # symbol as the final tie-break: -abs(delta) and -percent tie constantly and
+    # a stable sort then leaks COFF enumeration order into the printed head.
+    rows.sort(key=lambda r: (-abs(r["delta"]), -r["percent"], r["symbol"]))
     if args.json:
         json.dump(rows, open(args.json, "w"), indent=1)
-    for r in rows[:args.limit]:
+
+    # DISPLAY-ONLY: `rows` is complete here and stays complete.
+    shown = rows[:args.limit] if args.limit else rows
+    print(f"# {PERCENT_RULER_LABEL}")
+    if len(shown) < len(rows):
+        print(f"# showing {len(shown)} of {len(rows)} rows (--limit {args.limit}); "
+              f"--json and the count below are the FULL set")
+    for r in shown:
         print(f"{r['percent']:6.2f}%  d={r['delta']:+d} (t={r['tgt']} b={r['base']}) "
               f"{r['size']:5d}B  {r['unit']:38s} {r['demangled'][:80]}")
-    print(f"# {len(rows)} rows", file=sys.stderr)
+    print(f"# {len(rows)} rows of {n_bodies} target bodies examined "
+          f"({ucov.as_dict()['examined']} of {len(cfg['units'])} units read)",
+          file=sys.stderr)
+
+    ucov.emit()
+    return cov.emit()
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

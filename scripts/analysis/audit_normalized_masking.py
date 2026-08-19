@@ -21,6 +21,12 @@ Usage:
     python3 scripts/analysis/audit_normalized_masking.py            # inflated set (norm==100 & raw<100)
     python3 scripts/analysis/audit_normalized_masking.py --all-gap  # every fn where norm>raw
     python3 scripts/analysis/audit_normalized_masking.py --workers 4 --limit 50
+
+--out JSON shape: ``{"_coverage": {...}, "results": [...]}``.  It used to be the
+bare ``[...]`` list; the denominator now travels with the results so a consumer
+cannot quote a count without being able to see what was never audited.  Rows are
+sorted by (unit, symbol) — ``as_completed()`` made the old file's order
+thread-timing-dependent, so two runs of the same input were not byte-identical.
 """
 import argparse
 import json
@@ -33,6 +39,9 @@ from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if REPO not in sys.path:
+    sys.path.insert(0, REPO)
+from scripts.analysis.coverage import CoverageReport, add_coverage_args  # noqa: E402
 # DC3 ships an older bin/objdiff-cli (Mar 24); pin to the metric-tweak build
 # directly so the fresh per-fn diffs use honest immediates instead of the
 # stale inflated metric that wrote report.json originally.
@@ -99,7 +108,25 @@ def norm_sym(s):
         return "POOL"
     # Anonymous-namespace discriminators and permuter working-copy artifacts.
     s = re.sub(r"@unnamed@.*$", "", s)
-    s = re.sub(r"@.*$", "", s)
+    # --- BEGIN HEURISTIC CHANGE (not a coverage fix) -------------------------
+    # WAS: s = re.sub(r"@.*$", "", s)
+    #
+    # That stripped from the FIRST '@', which in MSVC mangling is the separator
+    # before the CLASS name — so `?Load@RndFlare@@UAEXAAVBinStream@@@Z` and
+    # `?Load@RndText@@UAEXAAVBinStream@@@Z` both collapsed to `?Load`, and
+    # `?Save@FxSendBitCrush@@` / `?Save@FxSendDistortion@@` both to `?Save`.
+    # Two calls to DIFFERENT classes' same-named method then CANCELLED out of
+    # the leftover multiset, `reloc_target` never fired, and the verdict came
+    # back BENIGN — fail-open in this tool's own headline bug category.
+    #
+    # Keep the class qualifier; strip only the SIGNATURE after '@@' (which is
+    # where genuinely benign parameter-mangling noise lives). Symbols with no
+    # '@@' keep the old behaviour exactly.
+    if "@@" in s:
+        s = re.sub(r"@@.*$", "@@", s)
+    else:
+        s = re.sub(r"@.*$", "", s)
+    # --- END HEURISTIC CHANGE ------------------------------------------------
     # Compiler discriminators: __FUNCTION__$58088, foo__123 (benign renumbering).
     s = re.sub(r"\$\d+$", "", s)
     s = re.sub(r"__\d+$", "", s)
@@ -282,31 +309,87 @@ def diff_one(symbol, unit):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--workers", type=int, default=6)
-    ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--limit", type=int, default=0,
+                    help="cap the number of functions AUDITED (0 = uncapped, the "
+                         "default). A non-zero value truncates the ANALYSIS, not "
+                         "just the printout, and is reported as such.")
     ap.add_argument("--all-gap", action="store_true",
                     help="audit every fn where norm>raw (not just norm==100)")
+    ap.add_argument("--near-100", type=float, default=0.0, metavar="EPS",
+                    help="treat normalized >= 100-EPS as 'the metric calls it "
+                         "matched'. Default 0.0 = the historical exact `== 100.0` "
+                         "test, which is an exact float comparison against a "
+                         "ROUNDING surface (99.97 renders as 100.0).")
     ap.add_argument("--out", default=os.path.join(AUDIT_TMP, "results.json"))
+    add_coverage_args(ap)
     args = ap.parse_args()
 
     os.makedirs(AUDIT_TMP, exist_ok=True)
     print(f"OBJDIFF: {OBJDIFF}", file=sys.stderr)
     print(f"REPORT : {REPORT}", file=sys.stderr)
     rep = json.load(open(REPORT))
+
+    cov = CoverageReport("audit_normalized_masking", args=args)
+    cov.extra("report_json", REPORT)
+    try:
+        cov.extra("report_json_mtime", os.path.getmtime(REPORT))
+    except OSError:
+        pass
+    cov.note("selection ruler: "
+             + ("normalized > fuzzy (--all-gap)" if args.all_gap
+                else f"normalized >= {100.0 - args.near_100} and fuzzy < 100"))
+
+    n_rows = 0
     targets = []
+    near_100_band = 0
     for u in rep["units"]:
         un = u.get("name")
         for f in (u.get("functions") or []):
+            n_rows += 1
             n = f.get("match_percent_normalized")
             raw = f.get("fuzzy_match_percent")
-            if n is None or raw is None:
+            # THE fake_impl_scan DEFECT, VERBATIM, ON THE SAME FIELD.
+            # objdiff only emits `fuzzy_match_percent` for functions WE define a
+            # body for; every function we never wrote has it as null. Dropping
+            # those with a bare `continue` made ~35% of report.json invisible to
+            # every count this tool ever printed.
+            if n is None:
+                cov.drop("missing-normalized-percent",
+                         note="no match_percent_normalized in report.json")
                 continue
-            keep = (n > raw) if args.all_gap else (n == 100.0 and raw < 100.0)
-            if keep:
-                targets.append((f["name"], un, raw, n, int(f.get("size", 0))))
-    targets.sort(key=lambda t: t[2])  # lowest raw first
+            if raw is None:
+                cov.drop("missing-fuzzy-percent",
+                         note="objdiff emits fuzzy_match_percent only for functions "
+                              "we define a body for — this is the 'we wrote nothing' tier")
+                continue
+            if not args.all_gap and 99.9 <= n < 100.0:
+                near_100_band += 1
+            keep = ((n > raw) if args.all_gap
+                    else (n >= 100.0 - args.near_100 and raw < 100.0))
+            if not keep:
+                cov.drop("not-selected-by-gap-filter",
+                         note="normalized metric is not masking anything here")
+                continue
+            targets.append((f["name"], un, raw, n, int(f.get("size", 0))))
+    cov.universe(n_rows, "function rows in report.json")
+    cov.extra("near_100_band_rows", near_100_band)
+    if near_100_band and not args.all_gap:
+        cov.note(f"{near_100_band} function(s) sit in [99.9,100) — every % surface "
+                 f"in this project ROUNDS, so they render as '100.0' but fail the "
+                 f"exact `== 100.0` selection. Use --near-100 0.1 to include them.")
+
+    # Deterministic order: (raw, unit, symbol). Sorting on `raw` alone left ties
+    # in report.json order, so the audited SET under --limit depended on it.
+    targets.sort(key=lambda t: (t[2], t[1] or "", t[0]))
+    before = len(targets)
     if args.limit:
         targets = targets[:args.limit]
-    print(f"Auditing {len(targets)} functions with {args.workers} workers (read-only)...",
+        # A cap that truncates the ANALYSIS — not a printout. Say so.
+        cov.cap("--limit", args.limit, before=before, after=len(targets),
+                note="functions selected but never diffed")
+    cov.examine(len(targets))
+    print(f"Auditing {len(targets)} of {before} selected functions "
+          f"(from {n_rows} report.json rows) with {args.workers} workers (read-only)...",
           file=sys.stderr)
 
     results = []
@@ -319,31 +402,46 @@ def main():
             if done % 100 == 0:
                 print(f"  {done}/{len(targets)}", file=sys.stderr)
 
-    json.dump(results, open(args.out, "w"), indent=1)
+    # as_completed() yields in thread-COMPLETION order, so the on-disk JSON was
+    # not byte-identical between two runs of the same input. Sort before dumping.
+    results.sort(key=lambda r: (r.get("unit") or "", r.get("symbol") or ""))
+
+    errors = [r for r in results if r.get("error")]
     review = [r for r in results if r.get("verdict") == "REVIEW"]
     benign = [r for r in results if r.get("verdict") == "BENIGN"]
-    errors = [r for r in results if r.get("error")]
 
     agg = Counter()
     for r in results:
         for k, v in (r.get("cats") or {}).items():
             agg[k] += v
 
+    payload = {"_coverage": cov.as_dict(), "results": results}
+    with open(args.out, "w") as fh:
+        json.dump(payload, fh, indent=1, sort_keys=False)
+
+    cov_d = cov.as_dict()
     print("\n" + "=" * 70)
     print("NORMALIZED-METRIC MASKING AUDIT")
     print("=" * 70)
-    print(f"audited     : {len(results)}")
+    print(f"report rows : {cov_d['universe']}  (every function row in report.json)")
+    print(f"selected    : {before}  (the rest are accounted for in the COVERAGE block)")
+    print(f"audited     : {len(results)}  (of which {len(errors)} errored and were "
+          f"NOT classified)")
+    print(f"classified  : {len(results) - len(errors)}")
     print(f"  BENIGN    : {len(benign)}  (only reg/branch/frame/sda diffs)")
     print(f"  REVIEW    : {len(review)}  (has reloc-target / member-offset / constant diffs)")
     print(f"  errors    : {len(errors)}")
     print("\nUnmatched value-sig totals by category (genuine value differences only;")
     print("register renames and instruction reorders already cancelled out):")
-    for k, v in agg.most_common():
+    # most_common() breaks ties by insertion order → nondeterministic listing.
+    for k, v in sorted(agg.items(), key=lambda kv: (-kv[1], kv[0])):
         tag = {"frame": "benign", "pool": "benign", "addr_const": "REVIEW",
                "constant": "REVIEW", "member": "REVIEW", "reloc_target": "REVIEW"}.get(k, "?")
         print(f"  {k:14s}: {v:6d}  [{tag}]")
 
-    review.sort(key=lambda r: -r.get("severity", 0))
+    # Full tie-break: severity alone left equal-severity rows in completion order.
+    review.sort(key=lambda r: (-r.get("severity", 0), r.get("unit") or "",
+                               r.get("symbol") or ""))
     print("\n" + "-" * 70)
     print("TOP REVIEW CANDIDATES (metric may be hiding a real semantic diff)")
     print("-" * 70)
@@ -354,7 +452,11 @@ def main():
         print(f"      {flags}")
         for cat, tgt, src in r.get("concerns", [])[:4]:
             print(f"        [{cat}]  TGT {tgt[:42]:42s}  SRC {src[:42]}")
+    if len(review) > 50:
+        print(f"\n(listing shows the 50 highest-severity of {len(review)} REVIEW rows; "
+              f"all {len(review)} are in {args.out})")
     print(f"\nFull results: {args.out}")
+    sys.exit(cov.emit())
 
 
 if __name__ == "__main__":

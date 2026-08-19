@@ -24,7 +24,7 @@ def main():
     # Find affected functions
     rows = conn.execute(
         "SELECT id, symbol, unit FROM functions "
-        "WHERE verdict_reason LIKE '%base_size=0%' AND verdict = 'COMPLETE'"
+        "WHERE verdict_reason LIKE '%base\\_size=0%' ESCAPE '\\' AND verdict = 'COMPLETE'"
     ).fetchall()
 
     if not rows:
@@ -46,7 +46,7 @@ def main():
         "SET verdict = NULL, "
         "    verdict_reason = 'reset: was false COMPLETE from base_size=0 objdiff bug', "
         "    current_percent = NULL "
-        "WHERE verdict_reason LIKE '%base_size=0%' AND verdict = 'COMPLETE'"
+        "WHERE verdict_reason LIKE '%base\\_size=0%' ESCAPE '\\' AND verdict = 'COMPLETE'"
     )
     conn.commit()
     conn.close()

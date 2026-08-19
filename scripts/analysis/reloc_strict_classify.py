@@ -43,6 +43,12 @@ import os
 import subprocess
 import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from pathlib import Path
+
+_REPO = str(Path(__file__).resolve().parent.parent.parent)
+if _REPO not in sys.path:
+    sys.path.insert(0, _REPO)
+from scripts.analysis.coverage import CoverageReport, add_coverage_args  # noqa: E402
 
 # Units that are not source-authorable (vendor/SDK). Kept in sync with
 # scripts/authorable.py / SDK_UNIT_PREFIXES; duplicated minimally here so the
@@ -69,13 +75,36 @@ def load_report_fn_percents(path):
     return out, sizes
 
 
-def find_candidates(lenient, strict):
-    """Functions 100% lenient (None) but <100% strict (NameOnly)."""
+def find_candidates(lenient, strict, cov=None):
+    """Functions 100% lenient (None) but <100% strict (NameOnly).
+
+    `sp is not None` is a SILENT DROP: a key scored in the lenient report but
+    absent from (or unscored in) the strict one vanishes here with no count, and
+    it is exactly the interesting population -- a row that the strict pass never
+    scored is not a row the strict pass cleared.  Counting it does not change
+    which candidates come back; it changes whether the denominator is knowable.
+    """
     cands = []
     for key, lp in lenient.items():
         sp = strict.get(key)
-        if lp >= 100.0 and sp is not None and sp < 100.0:
-            cands.append(key)
+        if lp < 100.0:
+            if cov is not None:
+                cov.drop("not-100-on-lenient",
+                         note="only lenient-100 rows can be false-100s")
+            continue
+        if sp is None:
+            if cov is not None:
+                cov.drop("no-strict-score",
+                         note="scored lenient-100 but the strict report has no "
+                              "percent for it -- NOT the same as strict-clean")
+            continue
+        if sp >= 100.0:
+            if cov is not None:
+                cov.drop("strict-also-100", note="agrees under both rulers")
+            continue
+        if cov is not None:
+            cov.examine()
+        cands.append(key)
     return cands
 
 
@@ -337,19 +366,35 @@ def main():
     ap.add_argument("--limit", type=int, default=0, help="cap candidates (debug)")
     ap.add_argument("--authorable-only", action="store_true",
                     help="restrict the candidate diffing to authorable units")
+    add_coverage_args(ap)
     args = ap.parse_args()
 
     lenient, lsizes = load_report_fn_percents(args.lenient)
     strict, _ = load_report_fn_percents(args.strict)
-    cands = find_candidates(lenient, strict)
-    if args.authorable_only:
-        cands = [c for c in cands if is_authorable(c[0])]
-    cands.sort()
-    if args.limit:
-        cands = cands[: args.limit]
 
-    print(f"[reloc-strict] candidates (lenient-100 & strict-NameOnly-<100): {len(cands)}",
-          file=sys.stderr)
+    cov = CoverageReport("reloc_strict_classify", args=args)
+    cov.universe(len(lenient), "function rows in the LENIENT report")
+    cands = find_candidates(lenient, strict, cov=cov)
+    if args.authorable_only:
+        before_auth = len(cands)
+        cands = [c for c in cands if is_authorable(c[0])]
+        cov.drop("not-authorable", before_auth - len(cands),
+                 note="--authorable-only")
+    cands.sort()
+    n_cands = len(cands)
+    cov.extra("candidates_before_limit", n_cands)
+    if args.limit and n_cands > args.limit:
+        cands = cands[: args.limit]
+        cov.cap("--limit", args.limit, before=n_cands, after=len(cands),
+                note="never diffed; --limit is a debug flag")
+        # The candidate count below is this tool's headline. Print the cut BEFORE
+        # it, or a debug run's sample gets quoted as the population size.
+        print(f"[reloc-strict] !! TRUNCATED by --limit={args.limit}: "
+              f"{n_cands - args.limit} of {n_cands} candidates were NEVER diffed. "
+              f"This run is a SAMPLE, not a census.", file=sys.stderr)
+
+    print(f"[reloc-strict] candidates (lenient-100 & strict-NameOnly-<100): "
+          f"{len(cands)} of {n_cands}", file=sys.stderr)
     print(f"[reloc-strict] diffing with {args.jobs} workers via {args.objdiff}",
           file=sys.stderr)
 
@@ -397,7 +442,13 @@ def main():
 
     out = {
         "summary": {
-            "candidates_total": len(cands),
+            # PRE-truncation.  This used to be len(cands), i.e. the count
+            # AFTER --limit, so a debug sample serialised as the population
+            # size.  The exculpatory number has to travel with the verdict, not
+            # only on stderr where a redirect drops it.
+            "candidates_total": n_cands,
+            "candidates_diffed": len(cands),
+            "truncated": bool(args.limit and n_cands > args.limit),
             "by_class": dict(by_class),
             "by_class_authorable": dict(by_class_auth),
             "bytes_by_class": dict(bytes_by_class),
@@ -416,7 +467,10 @@ def main():
 
     # Summary table to stdout.
     print("\n=== STRICT-RELOC RE-CERTIFICATION (NameOnly) ===")
-    print(f"candidates (lenient-100 & strict-<100): {len(cands)}")
+    if len(cands) != n_cands:
+        print(f"!! TRUNCATED by --limit={args.limit}: this table describes "
+              f"{len(cands)} of {n_cands} candidates. It is a SAMPLE.")
+    print(f"candidates (lenient-100 & strict-<100): {len(cands)} of {n_cands}")
     print(f"{'class':<32} {'all':>8} {'authorable':>12} {'bytes':>12}")
     order = ["genuine_wrong_target", "template_instantiation_variant", "missing_reloc",
              "target_split_label", "benign_string_path", "benign_build_artifact",
@@ -430,6 +484,10 @@ def main():
     for un, c in by_unit_genuine.most_common(12):
         print(f"  {c:4d}  {un}")
     print(f"\nWrote {args.out} ({len(genuine_auth)} authorable genuine records)")
+    out["summary"]["_coverage"] = cov.as_dict()
+    with open(args.out, "w") as fh:
+        json.dump(out, fh, indent=1)
+    sys.exit(cov.emit())
 
 
 if __name__ == "__main__":

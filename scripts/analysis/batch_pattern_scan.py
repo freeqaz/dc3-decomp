@@ -8,9 +8,23 @@ Scans all functions in a match% range for known fixable instruction patterns:
   - comparison encoding (> 0 vs != 0)
 
 Usage:
-    python scripts/analysis/batch_pattern_scan.py [--min 90] [--max 99.9] [--limit 200]
+    python scripts/analysis/batch_pattern_scan.py [--min 90] [--max 99.9] [--limit 0]
     python scripts/analysis/batch_pattern_scan.py --unit 'src/system/*' --min 95
-    python scripts/analysis/batch_pattern_scan.py --pattern extrwi  # filter by pattern type
+    python scripts/analysis/batch_pattern_scan.py --pattern extrwi_rlwinm  # filter by pattern type
+    (this line used to read `--pattern extrwi`, which is NOT a pattern_type this
+     scanner ever emits.  `--pattern` was unvalidated, so the documented example
+     ran happily and reported zero hits — indistinguishable from "that pattern
+     class is exhausted".  `--pattern` now has `choices=`.)
+
+COVERAGE (see scripts/analysis/coverage.py)
+    Every run prints a COVERAGE block naming its DENOMINATOR: how many function
+    rows existed in report.json, how many were dropped and why, and how many
+    objdiff never actually managed to inspect.  Historically this scanner
+    printed `Range: 90.0%-99.9% | Scanned: 12 | Hits: 0` where `Scanned` was the
+    count AFTER a silent `--limit 200` truncation of a 1,751-function band, and
+    where 16,920 of the 48,344 rows in report.json had already been discarded by
+    a bare `continue`.  A `TOTAL: 0 hit(s)` line from that scanner was
+    indistinguishable from "objdiff-cli is broken and every scan failed".
 """
 
 from __future__ import annotations
@@ -27,6 +41,9 @@ from typing import Optional
 PROJECT_DIR = Path(__file__).resolve().parent.parent.parent
 OBJDIFF_CLI = PROJECT_DIR / "bin" / "objdiff-cli"
 REPORT_JSON = PROJECT_DIR / "build" / "373307D9" / "report.json"
+
+sys.path.insert(0, str(PROJECT_DIR))
+from scripts.analysis.coverage import CoverageReport, add_coverage_args  # noqa: E402
 
 
 @dataclass
@@ -453,34 +470,99 @@ def _detect_fma_mismatch(instructions: list[dict]) -> list[PatternHit]:
 # ---- Report parsing ----
 
 def load_functions_from_report(report_path: Path, min_pct: float, max_pct: float,
-                                unit_filter: str | None = None) -> list[dict]:
-    """Load function list from report.json filtered by match%."""
+                               unit_filter: str | None = None,
+                               cov: CoverageReport | None = None) -> list[dict]:
+    """Load function list from report.json filtered by match%.
+
+    DENOMINATOR NOTE — this is the `fake_impl_scan` defect, verbatim.  The old
+    body opened with
+
+        pct = func.get("fuzzy_match_percent")
+        if pct is None:
+            continue
+
+    `fuzzy_match_percent` is a key objdiff only emits for functions WE DEFINE.
+    In this tree 16,920 of 48,344 rows (35.0%) do not have it, and that bare
+    `continue` discarded every one of them without ever mentioning them.  Four
+    waves called a pool "exhausted" on the strength of a scanner with exactly
+    this shape.
+
+    THE FIX IS PURELY ABOUT THE DENOMINATOR, and says so loudly: a row with no
+    `fuzzy_match_percent` now falls back to `match_percent_normalized` SO THAT
+    IT GETS COUNTED AT ALL.  It is NOT a change of ruler: any row that HAS a
+    `fuzzy_match_percent` is still selected on that value, so the set of
+    functions this scanner examines at the default band is unchanged.  In
+    practice every fallback row scores ~0 (16,919 are exactly 0.0), so at the
+    default `--min 90` they land in the `no-base-body-outside-band` drop
+    bucket — visible, named, and countable, instead of invisible.
+
+    TODO(heuristic): `fuzzy_match_percent` is the RELOC-SENSITIVE ruler, and
+    `measure_progress.sh` was already burned by it (phantom regressions from
+    ICF/atexit churn).  Switching the primary ruler to
+    `match_percent_normalized` moves the 90.0-99.9 band from 1,751 rows to
+    1,395 — i.e. it CHANGES WHAT THIS SCANNER FINDS — so it is deliberately
+    NOT done here.  That switch is separate work; the coverage block names the
+    ruler in use so no reader has to guess which one produced a count.
+    """
     with open(report_path) as f:
         report = json.load(f)
 
     results = []
     for unit in report.get("units", []):
         unit_name = unit.get("name", "")
+        funcs = unit.get("functions") or []
         if unit_filter and unit_filter not in unit_name:
+            # DELIBERATE, user-requested — but still counted, so `--unit` can
+            # never be mistaken for "there is nothing else out there".
+            if cov:
+                cov.drop("excluded-by---unit", len(funcs),
+                         note=f"unit name does not contain {unit_filter!r}")
             continue
-        for func in unit.get("functions", []):
+        for func in funcs:
             pct = func.get("fuzzy_match_percent")
+            fell_back = False
             if pct is None:
+                # See the DENOMINATOR NOTE above: fallback exists so the row is
+                # COUNTED, not so it is scored on a different ruler.
+                pct = func.get("match_percent_normalized")
+                fell_back = True
+            if pct is None:
+                if cov:
+                    cov.drop("no-percent-of-any-kind", 1,
+                             note="row has neither fuzzy_match_percent nor "
+                                  "match_percent_normalized")
                 continue
-            if min_pct <= pct <= max_pct:
-                results.append({
-                    "symbol": func["name"],
-                    "unit": unit_name,
-                    "match_percent": pct,
-                    "size": int(func.get("size", 0)),
-                })
+            if not (min_pct <= pct <= max_pct):
+                if cov:
+                    cov.drop(
+                        "no-base-body-outside-band" if fell_back else "below---min-pct",
+                        1,
+                        note=("objdiff emits no fuzzy_match_percent for functions we do "
+                              "not define; scored via match_percent_normalized"
+                              if fell_back else
+                              f"fuzzy_match_percent outside [{min_pct}, {max_pct}]"))
+                continue
+            results.append({
+                "symbol": func["name"],
+                "unit": unit_name,
+                "match_percent": pct,
+                "size": int(func.get("size", 0)),
+                "percent_from_normalized_fallback": fell_back,
+            })
     return results
 
 
 # ---- objdiff-cli runner ----
 
-def run_objdiff_json(symbol: str) -> dict | None:
-    """Run objdiff-cli and get JSON instruction diff for a function."""
+def run_objdiff_json(symbol: str) -> tuple[dict | None, str]:
+    """Run objdiff-cli and get the JSON instruction diff for a function.
+
+    Returns `(data, error)`.  The old signature returned a bare `None` for
+    every failure mode, so a timeout, a missing binary and "this function is
+    clean" were indistinguishable to the caller — and the caller then dropped
+    errored scans on the floor entirely, which is why a total objdiff outage
+    used to render as a confident `TOTAL: 0 hit(s)`.
+    """
     cmd = [
         str(OBJDIFF_CLI), "diff",
         "-p", str(PROJECT_DIR),
@@ -497,10 +579,14 @@ def run_objdiff_json(symbol: str) -> dict | None:
             timeout=30,
         )
         if result.returncode != 0:
-            return None
-        return json.loads(result.stdout)
-    except (subprocess.TimeoutExpired, json.JSONDecodeError, FileNotFoundError):
-        return None
+            return None, f"objdiff rc={result.returncode}: {(result.stderr or '').strip()[-200:]}"
+        return json.loads(result.stdout), ""
+    except subprocess.TimeoutExpired:
+        return None, "objdiff timed out after 30s"
+    except json.JSONDecodeError as e:
+        return None, f"objdiff emitted unparseable JSON: {e}"
+    except FileNotFoundError:
+        return None, f"objdiff-cli not executable at {OBJDIFF_CLI}"
 
 
 # ---- Main scan logic ----
@@ -516,9 +602,9 @@ def scan_function(func_info: dict) -> FunctionScan:
         total_instructions=0,
     )
 
-    data = run_objdiff_json(symbol)
+    data, error = run_objdiff_json(symbol)
     if data is None:
-        scan.error = "objdiff failed"
+        scan.error = error or "objdiff failed"
         return scan
 
     # JSON structure: top-level keys include "instructions", "demangled", etc.
@@ -532,16 +618,60 @@ def scan_function(func_info: dict) -> FunctionScan:
     return scan
 
 
+PATTERN_CHOICES = [
+    "extrwi_rlwinm",
+    "bool_negate",
+    "bool_mask",        # umbrella: bool_mask_24 + bool_mask_31
+    "bool_mask_24",
+    "bool_mask_31",
+    "cmp_encoding",
+    "fma_mismatch",
+]
+
+
+def count_report_rows(report_path: Path) -> int:
+    """Total function rows in report.json — the DENOMINATOR, before any filter."""
+    with open(report_path) as f:
+        report = json.load(f)
+    return sum(len(u.get("functions") or []) for u in report.get("units", []))
+
+
 def main():
     parser = argparse.ArgumentParser(description="Batch scan for encoding patterns")
     parser.add_argument("--min", type=float, default=90.0, help="Minimum match%% (default: 90)")
     parser.add_argument("--max", type=float, default=99.9, help="Maximum match%% (default: 99.9)")
-    parser.add_argument("--limit", type=int, default=200, help="Max functions to scan (default: 200)")
+    parser.add_argument("--limit", type=int, default=0,
+                        help="Max functions to scan; 0 = NO CAP (default). "
+                             "The old default was 200, which silently truncated the "
+                             "1,751-function 90.0-99.9%% band to its top 200 rows — and "
+                             "because the sort is by DESCENDING match%%, the cut was "
+                             "systematically biased: only 99.58-99.90%% was ever examined "
+                             "and the whole 90.0-99.58%% range was invisible. Any non-zero "
+                             "value prints a TRUNCATED banner and sets truncated=true in "
+                             "the JSON. It still exits 0: answering an explicit "
+                             "request for a sample with an error code makes "
+                             "every recipe that passes --limit look broken. "
+                             "Use --no-allow-explicit-limit for CI.")
     parser.add_argument("--unit", type=str, default=None, help="Filter by unit name substring")
-    parser.add_argument("--pattern", type=str, default=None,
-                        help="Filter output by pattern type: extrwi_rlwinm, bool_negate, bool_mask (=24+31), bool_mask_24, bool_mask_31, cmp_encoding")
-    parser.add_argument("--json", action="store_true", help="Output as JSON")
+    parser.add_argument("--pattern", type=str, default=None, choices=PATTERN_CHOICES,
+                        help="Filter output by pattern type. Validated: a typo used to be "
+                             "accepted silently and yield zero hits, which reads exactly "
+                             "like 'this pattern is exhausted'.")
+    parser.add_argument("--json", action="store_true",
+                        help="Output as JSON. The top level is a LIST of "
+                             "functions, unchanged since this tool was written, "
+                             "so `for f in json.load(fh)` keeps working.")
+    parser.add_argument("--json-envelope", action="store_true",
+                        help="With --json, wrap the list in an object carrying "
+                             "functions/errors/_coverage. Opt-in, because "
+                             "changing a top-level JSON type breaks every "
+                             "existing consumer silently.")
+    parser.add_argument("--no-allow-explicit-limit", action="store_true",
+                        help="Exit 3 even when --limit was passed deliberately. "
+                             "For CI, where a sample presented as a census is a "
+                             "failure regardless of who asked for it.")
     parser.add_argument("--verbose", "-v", action="store_true", help="Show progress")
+    add_coverage_args(parser)
     args = parser.parse_args()
 
     if not REPORT_JSON.exists():
@@ -557,18 +687,47 @@ def main():
     if args.verbose:
         print(f"Loading functions from {REPORT_JSON}...", file=sys.stderr)
 
-    functions = load_functions_from_report(REPORT_JSON, args.min, args.max, args.unit)
-    functions.sort(key=lambda f: -f["match_percent"])  # highest match first
+    cov = CoverageReport("batch_pattern_scan", args=args)
+    cov.universe(count_report_rows(REPORT_JSON), "function rows in report.json")
+    cov.note(f"band = [{args.min}, {args.max}] on fuzzy_match_percent "
+             f"(reloc-sensitive ruler; see load_functions_from_report)")
+    cov.extra("report_json", str(REPORT_JSON))
+    cov.extra("band_min", args.min)
+    cov.extra("band_max", args.max)
+
+    functions = load_functions_from_report(REPORT_JSON, args.min, args.max, args.unit, cov=cov)
+    # Full tie-break on the symbol: two rows at the same match% must not be able
+    # to swap places between runs, or a --limit cut becomes nondeterministic.
+    functions.sort(key=lambda f: (-f["match_percent"], f["symbol"]))
+    in_band = len(functions)
+    cov.extra("in_band", in_band)
 
     if args.limit and len(functions) > args.limit:
         functions = functions[:args.limit]
+        cov.cap("--limit", args.limit, before=in_band, after=len(functions),
+                note="never examined; the cut is off the BOTTOM of a match%-descending sort")
+        # An EXPLICIT --limit is a REQUEST for a sample, and answering a request
+        # with exit 3 turns every documented recipe that passes one into a
+        # command that "started failing" -- docs/plans/compiler-instrumentation.md
+        # passes --limit 500.  The banner and the JSON still say TRUNCATED, so
+        # the caller is informed, not obstructed.  What must never exit 0 is a
+        # cap the caller did NOT ask for, and there is no longer one: the
+        # default is 0 = no cap.
+        if not args.no_allow_explicit_limit:
+            cov.allow_truncation = True
+            cov.note("--limit was passed explicitly, so this SAMPLE exits 0. "
+                     "The TRUNCATED banner above and truncated=true in the "
+                     "JSON still say it is a sample -- do not quote its counts "
+                     "as totals. --no-allow-explicit-limit exits 3 instead.")
 
     if args.verbose:
         print(f"Scanning {len(functions)} functions ({args.min}%-{args.max}%)...", file=sys.stderr)
 
     # Scan each function
     results: list[FunctionScan] = []
+    errored: list[FunctionScan] = []
     hits_count = 0
+    inspected = 0          # functions objdiff actually diffed (mirrors cov.examine)
 
     for idx, func in enumerate(functions):
         if args.verbose:
@@ -576,6 +735,20 @@ def main():
             print(f"  [{idx+1}/{len(functions)}] {func['symbol'][:60]}... ({pct:.1f}%)", file=sys.stderr, end="")
 
         scan = scan_function(func)
+
+        if scan.error:
+            # An objdiff failure means this function was NOT inspected. Counting
+            # it as "scanned and clean" is how a total objdiff outage used to
+            # render as `TOTAL: 0 hit(s)`.
+            errored.append(scan)
+            cov.drop("objdiff-failed", 1, note="function was NOT inspected")
+            if args.verbose:
+                print(f" ERROR: {scan.error}", file=sys.stderr)
+            continue
+
+        cov.examine()
+        inspected += 1
+
         if scan.patterns:
             # Filter by pattern type if requested
             if args.pattern:
@@ -591,12 +764,17 @@ def main():
                     print(f" -> {len(scan.patterns)} pattern(s)!", file=sys.stderr)
             elif args.verbose:
                 print(" (no matching patterns)", file=sys.stderr)
-        else:
-            if args.verbose:
-                if scan.error:
-                    print(f" ERROR: {scan.error}", file=sys.stderr)
-                else:
-                    print(" (clean)", file=sys.stderr)
+        elif args.verbose:
+            print(" (clean)", file=sys.stderr)
+
+    # Deterministic output order: match% descending, then symbol. `results` is
+    # already appended in that order, but an explicit key survives any future
+    # reordering of the scan loop (e.g. a worker pool).
+    results.sort(key=lambda s: (-s.match_percent, s.symbol))
+    errored.sort(key=lambda s: s.symbol)
+    cov.extra("objdiff_failures", len(errored))
+    cov.extra("hit_functions", len(results))
+    cov.extra("hit_patterns", hits_count)
 
     # Output results
     if args.json:
@@ -620,12 +798,34 @@ def main():
                     for p in scan.patterns
                 ],
             })
-        print(json.dumps(output, indent=2))
+        # --json's top level is a LIST, as it has always been.  Flipping it to
+        # an object to make room for a `_coverage` key was a hard break for
+        # every `for f in json.load(...)` consumer -- and a SILENT one, since a
+        # dict iterates its keys rather than raising.  That is precisely the
+        # shape this scanner exists to prevent, committed by the fix for it.
+        #
+        # The coverage block still travels, by three routes that cost the
+        # caller nothing: the banner on STDERR, the machine-readable
+        # --coverage-json file, and the EXIT CODE.  A consumer that ignores all
+        # three was never going to read a `_coverage` key either.
+        # --json-envelope opts in to the object form.
+        if args.json_envelope:
+            print(json.dumps({
+                "functions": output,
+                "errors": [{"symbol": s.symbol, "unit": s.unit, "error": s.error}
+                           for s in errored],
+                "_coverage": cov.as_dict(),
+            }, indent=2))
+        else:
+            print(json.dumps(output, indent=2))
     else:
         # Human-readable output
         print(f"\n{'='*80}")
         print(f"BATCH PATTERN SCAN RESULTS")
-        print(f"Range: {args.min}%-{args.max}% | Scanned: {len(functions)} | Hits: {hits_count}")
+        # `Scanned:` used to be the POST-truncation count. State the whole chain.
+        print(f"Range: {args.min}%-{args.max}% | In band: {in_band} | "
+              f"Inspected: {inspected} | objdiff failures: {len(errored)} | "
+              f"Hits: {hits_count}")
         print(f"{'='*80}\n")
 
         # Group by pattern type
@@ -633,6 +833,8 @@ def main():
         for scan in results:
             for pattern in scan.patterns:
                 by_type.setdefault(pattern.pattern_type, []).append((scan, pattern))
+        for items in by_type.values():
+            items.sort(key=lambda sp: (sp[0].symbol, sp[1].indices[0] if sp[1].indices else -1))
 
         for ptype, items in sorted(by_type.items()):
             fixable = items[0][1].fixable
@@ -649,7 +851,13 @@ def main():
                 print()
 
         if not results:
-            print("No encoding patterns found in scanned functions.")
+            if errored and not inspected:
+                print(f"NO FUNCTIONS WERE INSPECTED — all {len(errored)} objdiff "
+                      f"invocations failed. This is a TOOL FAILURE, not a clean result.")
+                for s in errored[:5]:
+                    print(f"    {s.symbol}: {s.error}")
+            else:
+                print("No encoding patterns found in the functions that were inspected.")
 
         # Summary
         print(f"\n{'='*80}")
@@ -658,7 +866,12 @@ def main():
         for ptype, items in sorted(by_type.items()):
             fixable_count = sum(1 for _, p in items if p.fixable)
             print(f"  {ptype:20s}: {len(items):3d} hit(s), {fixable_count} fixable")
-        print(f"  {'TOTAL':20s}: {hits_count:3d} hit(s)")
+        print(f"  {'TOTAL':20s}: {hits_count:3d} hit(s) "
+              f"across {inspected} inspected function(s)")
+        if errored:
+            print(f"  {'objdiff failures':20s}: {len(errored):3d} function(s) NOT inspected")
+
+    sys.exit(cov.emit())
 
 
 if __name__ == "__main__":

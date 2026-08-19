@@ -8,6 +8,7 @@ Which tool to use for decomp work. For scripts, commands, and reference material
 |-----|-------------|
 | **[WORKFLOW.md](WORKFLOW.md)** | **Decision guide: which tool to use when** |
 | [BUILD_SYSTEM.md](BUILD_SYSTEM.md) | The split pipeline: how `ninja` gets from `default.xex` to target objects, the `symbols.txt` dependency (already wired — settled), dtk's fixed-point invariant, and why nothing rebuilds `dtk`/`objdiff-cli` for you |
+| **[SCANNER_TRUTHFULNESS.md](SCANNER_TRUTHFULNESS.md)** | **Read before believing any scanner's count, and before writing a new one.** The lying-by-omission failure shape (a silent `continue`/cap/filter plus a summary that reports only what was processed), the `CoverageReport` convention every scanner now follows, the full audit table, and the standing rule |
 
 ## MCP Orchestrator Tools (Primary Interface)
 
@@ -109,12 +110,22 @@ python3 msvc-src/tools/il_diff.py variant_a.cpp variant_b.cpp -f FunctionName
 |------|-------------|-----|
 | Register Swap Patcher | Patches .obj register fields using objdiff diff as oracle (manual, not run by default) | [REFERENCE.md](REFERENCE.md#register-swap-patcher) |
 
+## Scanner Honesty (measurement hygiene)
+
+See [SCANNER_TRUTHFULNESS.md](SCANNER_TRUTHFULNESS.md). Run all three before trusting — or shipping — a scanner's count.
+
+| Tool | Description | Usage |
+|------|-------------|-------|
+| `coverage.py` | `CoverageReport`: declare the universe, count every discard, refuse to print a clean summary when the denominator does not balance (exit 3 TRUNCATED / 4 UNACCOUNTED) | `from scripts.analysis.coverage import CoverageReport` |
+| `honesty_lint.py` | Static check for unescaped SQL `LIKE` wildcards and self-truncating slices that never announce the truncation | `python3 scripts/analysis/honesty_lint.py --warnings` |
+| `determinism_check.py` | Runs each scanner twice under two `PYTHONHASHSEED` values and diffs it against itself. An empty/failed run is `INCONCLUSIVE`, never a pass | `python3 scripts/analysis/determinism_check.py` |
+
 ## Analysis & Diagnostic Tools
 
 | Tool | Description | Usage |
 |------|-------------|-------|
-| Function Health | Unified diagnostic: match%, mismatch breakdown, ceiling, pattern suggestions, fixability verdict | `python scripts/analysis/function_health.py --symbol "..." --json` |
-| Batch Health | Scan functions by unit/match% range, rank by workability | `python scripts/analysis/function_health.py --unit "system/*" --top 20` |
+| Function Health | **Single-symbol mode is BROKEN and always has been** — it shells out to `objdiff-cli diff --symbol <s>`, but the symbol is POSITIONAL (`objdiff-cli diff [<symbol>]`), so every call exits 1 and the report comes back `verdict=error`. Left unrepaired on purpose (`TODO(repair)` in the source): fixing the call changes what the tool FINDS, which is not an honesty change. Use `mcp__orchestrator__run_objdiff` / `run_analyze_function` instead. | *(broken)* `python scripts/analysis/function_health.py --symbol "..." --json` |
+| Batch Health | Scan functions by unit/match% range, rank by workability. This mode WORKS (its SQL named two columns `decomp.db` does not have, so it answered "No functions found matching criteria." to every query ever asked; repaired). | `python scripts/analysis/function_health.py --unit "system/*" --top 20` |
 | Regswap Classify | Classify callee-saved register swaps by variable type | `python scripts/analysis/regswap_classify.py --verbose` |
 | Reclassify AT_LIMIT | Scan AT_LIMIT functions, diagnose fixable vs unfixable, reopen fixable ones | `python -m scripts.analysis.reclassify_at_limit --apply --unit 'system/char/*'` |
 

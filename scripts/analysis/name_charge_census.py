@@ -46,6 +46,32 @@ way the target spells it.  (dc3-decomp, 2026-08-17: `?Handle@HamDirector@@`'s
 the map, which looked like decisive evidence against a fold.  The target spells
 it `OnSaveFaceanims` and co-lists it with twelve other names at 0x82901c78.  The
 map was never silent; our source had a capitalisation typo.)
+
+COVERAGE (scripts/analysis/coverage.py) -- and the 16,780-row hole
+==================================================================
+Until 2026-08-19 the row selector read
+
+    fz = F(f.get("fuzzy_match_percent"))          # F() turns None into 0.0
+    if fz >= 100.0 or fz <= 0.0 or nm.startswith(("fn_", "lbl_")):
+        continue
+
+`fuzzy_match_percent` is a key objdiff emits only for functions WE DEFINE, so a
+MISSING field was masked by a default that collides with a real 0.0 and left
+through the `<= 0.0` arm.  Measured on this tree: 48,344 function rows, of which
+16,920 (35.0%) carry no `fuzzy_match_percent` at all -- 16,780 of them excluding
+`fn_`/`lbl_` shapes, worth 5,129,540 B -- against an examined population of
+2,238 rows / 1,264,412 B.  The scanner was reporting on 4.6% of the rows and
+printed three numerators with no denominator anywhere.
+
+EXCLUDING those rows remains correct: a row we emit no body for has no
+relocations to charge, so it cannot carry a relocation-NAME charge.  The defect
+was never the exclusion, it was the SILENCE.  They are now a named drop with
+their byte total, and the `<= 0.0` arm is a separate branch that (today) fires
+on exactly zero rows -- proof that arm only ever existed to swallow the None.
+
+Every other discard is counted too: per-unit objdiff timeouts (which are a
+TRUNCATION and now force a non-zero exit), empty objdiff output, per-symbol
+`error` records, and symbols we asked about that no record came back for.
 """
 
 from __future__ import annotations
@@ -61,6 +87,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from scripts.analysis import ruler as ruler_mod  # noqa: E402
+from scripts.analysis.coverage import CoverageReport, add_coverage_args  # noqa: E402
 
 #: `<sect>:<offset> <name> <address> ...` -- parse_msvc_map's shape.
 MAP_LINE = re.compile(r"^\s*[0-9A-Fa-f]{4}:[0-9A-Fa-f]{8}\s+(\S+)\s+([0-9A-Fa-f]{8})\b")
@@ -104,26 +131,74 @@ def map_verdict(index, target_name, base_name):
     return "MAP_CONFIRMS_FOLD" if set(ta) & set(ba) else "MAP_REFUTES_FOLD"
 
 
-def collect_rows(project: Path, report: Path, rk, unit_pattern, cli, timeout):
-    """Re-diff every sub-100 row and split its charges into name pairs vs other."""
-    rep = json.loads(report.read_text())
-    units = [u for u in rep["units"]
-             if not unit_pattern or unit_pattern in u.get("name", "")]
+def select_rows(rep, unit_pattern, cov):
+    """`(unit, symbol) -> size` for the rows worth re-diffing, with a denominator.
+
+    Split out of `collect_rows` in 2026-08-19 so the selector -- the part that
+    carried the 16,780-row hole -- is testable without an objdiff-cli run.  It
+    declares the universe on `cov` and routes EVERY discard through `cov.drop`.
+    """
+    all_rows = [(u, f) for u in rep["units"] for f in (u.get("functions") or [])]
+    cov.universe(len(all_rows), "function rows in report.json")
 
     want = {}
-    for u in units:
-        for f in (u.get("functions") or []):
-            fz = F(f.get("fuzzy_match_percent"))
-            nm = f.get("name", "")
-            if fz >= 100.0 or fz <= 0.0 or nm.startswith(("fn_", "lbl_")):
-                continue
-            want[(u["name"], nm)] = I(f.get("size"))
+    skipped_bytes = collections.Counter()
+    for u, f in all_rows:
+        nm = f.get("name", "")
+        size = I(f.get("size"))
+        if unit_pattern and unit_pattern not in u.get("name", ""):
+            cov.drop("outside--unit-filter", note=f"unit name lacks {unit_pattern!r}")
+            skipped_bytes["outside--unit-filter"] += size
+            continue
+        # >>> the 16,780-row hole: an ABSENT field, not a zero score. <<<
+        p = f.get("fuzzy_match_percent")
+        if p is None:
+            reason = ("no-fuzzy-score-phantom-name" if nm.startswith(("fn_", "lbl_"))
+                      else "no-fuzzy-score")
+            cov.drop(reason, note="objdiff emits fuzzy_match_percent only for "
+                                  "functions we DEFINE; a row with no body of "
+                                  "ours has no relocation to charge")
+            skipped_bytes[reason] += size
+            continue
+        if nm.startswith(("fn_", "lbl_")):
+            cov.drop("phantom-name-shape", note="dtk fn_/lbl_ placeholder name")
+            skipped_bytes["phantom-name-shape"] += size
+            continue
+        fz = float(p)
+        if fz >= 100.0:
+            cov.drop("already-100-on-the-graded-ruler")
+            skipped_bytes["already-100-on-the-graded-ruler"] += size
+            continue
+        if fz <= 0.0:
+            # A REAL 0.0, now that None can no longer reach here.  Measured
+            # 2026-08-19: this fires on 0 rows, i.e. the arm only ever existed
+            # to swallow the missing field above.
+            cov.drop("graded-score-is-zero")
+            skipped_bytes["graded-score-is-zero"] += size
+            continue
+        want[(u["name"], nm)] = size
+    for reason, b in sorted(skipped_bytes.items()):
+        cov.extra(f"bytes_{reason.replace('-', '_')}", b)
+    return want
+
+
+def collect_rows(project: Path, report: Path, rk, unit_pattern, cli, timeout, cov):
+    """Re-diff every sub-100 row and split its charges into name pairs vs other.
+
+    `cov` is a CoverageReport; `select_rows` declares the universe on it and
+    this function routes every further discard through it.  See the COVERAGE
+    section of the module docstring.
+    """
+    rep = json.loads(report.read_text())
+    cov.note(f"report: {report}")
+    want = select_rows(rep, unit_pattern, cov)
 
     out_rows = []
     by_unit = collections.defaultdict(list)
-    for (uname, sym) in want:
+    for (uname, sym) in sorted(want):
         by_unit[uname].append(sym)
 
+    n_timed_out = 0
     for n, (uname, syms) in enumerate(sorted(by_unit.items()), 1):
         cmd = [cli, "diff", "-p", str(project), "-u", uname, "--batch",
                "-f", "json", "-o", "-", "--include-instructions"] + rk.args
@@ -131,20 +206,37 @@ def collect_rows(project: Path, report: Path, rk, unit_pattern, cli, timeout):
             r = subprocess.run(cmd, capture_output=True, text=True,
                                timeout=timeout, input="\n".join(syms) + "\n")
         except subprocess.TimeoutExpired:
-            print(f"  ! timeout on {uname}", file=sys.stderr)
+            # A whole unit's rows: this is a TRUNCATION of the analysis, so it
+            # goes through cov.cap() and makes the run exit non-zero.
+            print(f"  ! timeout on {uname} after {timeout}s "
+                  f"({len(syms)} rows NEVER EXAMINED)", file=sys.stderr)
+            n_timed_out += len(syms)
             continue
         txt = r.stdout.strip()
         if not txt:
+            print(f"  ! objdiff-cli emitted nothing for {uname} "
+                  f"(rc={r.returncode}, {len(syms)} rows) "
+                  f"{(r.stderr or '').strip()[:160]}", file=sys.stderr)
+            cov.drop("objdiff-emitted-no-output", len(syms),
+                     note="objdiff-cli produced empty stdout for the whole unit")
             continue
         try:
             j = json.loads(txt)
             recs = j if isinstance(j, list) else [j]
         except json.JSONDecodeError:
             recs = [json.loads(x) for x in txt.splitlines() if x.strip()]
+        seen = set()
         for rec in recs:
             sym = rec.get("symbol") or rec.get("name") or ""
-            if (uname, sym) not in want or rec.get("error"):
+            if (uname, sym) not in want:
+                continue          # not a row we asked about; not in the universe
+            if rec.get("error"):
+                seen.add(sym)
+                cov.drop("objdiff-record-error", note="the diff record for this "
+                                                      "symbol carries an `error`")
                 continue
+            seen.add(sym)
+            cov.examine()
             namepairs = []
             other = 0
             for i in rec.get("instructions", []) or []:
@@ -174,9 +266,23 @@ def collect_rows(project: Path, report: Path, rk, unit_pattern, cli, timeout):
                     "other_charges": other,
                     "pairs": sorted({tuple(p) for p in namepairs}),
                 })
+        # Symbols we asked about that no record came back for.  Before 2026-08-19
+        # these were indistinguishable from "examined and found clean".
+        absent = [s for s in syms if s not in seen]
+        if absent:
+            cov.drop("no-diff-record-returned", len(absent),
+                     note="we asked objdiff-cli about this symbol and it "
+                          "returned no record for it")
         if n % 100 == 0:
             print(f"  ... {n}/{len(by_unit)} units", file=sys.stderr)
-    out_rows.sort(key=lambda r: -r["size"])
+
+    if n_timed_out:
+        cov.cap("--timeout", timeout, before=len(want),
+                after=len(want) - n_timed_out,
+                note="whole units whose objdiff-cli run exceeded --timeout")
+
+    # -size alone ties constantly; symbol keeps the order reproducible.
+    out_rows.sort(key=lambda r: (-r["size"], r["unit"], r["symbol"]))
     return out_rows
 
 
@@ -195,26 +301,51 @@ def main(argv=None):
     ap.add_argument("--json-out", help="write the full row records here")
     ap.add_argument("--pairs-json", help="write charged pairs in fold_proof's "
                                          "--pairs-json shape")
-    ap.add_argument("--timeout", type=int, default=900)
+    ap.add_argument("--timeout", type=int, default=900,
+                    help="per-unit objdiff-cli timeout in seconds (default 900). "
+                         "A unit that exceeds it loses ALL its rows; since "
+                         "2026-08-19 that is a counted TRUNCATION and the run "
+                         "exits non-zero rather than printing a clean total.")
+    add_coverage_args(ap)
     args = ap.parse_args(argv)
 
     project = Path(args.project).resolve()
     report = find_report(project, args.report)
     rk = ruler_mod.resolve_ruler(project)
+    # PRESERVED (and the reason this was the only honest scanner of the eight):
+    # it discloses which ruler produced its percentages.  A percentage without
+    # its ruler is not a measurement.
     print(rk.banner())
     print(f"report: {report}")
     cli = args.objdiff_cli or str(project / "bin" / "objdiff-cli")
 
-    rows = collect_rows(project, report, rk, args.unit, cli, args.timeout)
+    cov = CoverageReport("name_charge_census", args=args)
+    cov.note(rk.label())
+    rows = collect_rows(project, report, rk, args.unit, cli, args.timeout, cov)
     clean = [r for r in rows if r["other_charges"] == 0]
     dirty = [r for r in rows if r["other_charges"] > 0]
+
+    d = cov.as_dict()
+    examined, universe = d["examined"], d["universe"]
     print()
+    print(f"DENOMINATOR: {examined} rows re-diffed, of {universe} function rows "
+          f"in report.json")
+    print(f"             {d['dropped_total']} rows dropped before the re-diff "
+          f"(see the COVERAGE block on stderr); "
+          f"{d.get('bytes_no_fuzzy_score', 0)} B of that is "
+          f"{d['dropped'].get('no-fuzzy-score', 0)} rows we emit NO BODY for")
     print(f"rows with >=1 relocation-NAME charge : {len(rows):>5}  "
-          f"{sum(r['size'] for r in rows):>8} B")
+          f"{sum(r['size'] for r in rows):>8} B   "
+          f"({len(rows)}/{examined} examined)")
     print(f"  ONLY name charges (row crosses)    : {len(clean):>5}  "
-          f"{sum(r['size'] for r in clean):>8} B")
+          f"{sum(r['size'] for r in clean):>8} B   "
+          f"({len(clean)}/{examined} examined)")
     print(f"  other charges too (row will not)   : {len(dirty):>5}  "
-          f"{sum(r['size'] for r in dirty):>8} B")
+          f"{sum(r['size'] for r in dirty):>8} B   "
+          f"({len(dirty)}/{examined} examined)")
+    print(f"  no relocation-NAME charge at all   : "
+          f"{examined - len(rows):>5}          -   "
+          f"({examined - len(rows)}/{examined} examined)")
 
     kept = clean if args.clean_only else rows
 
@@ -249,7 +380,7 @@ def main(argv=None):
                               "map_verdict": r.get("map_verdict")})
         Path(args.pairs_json).write_text(json.dumps(pairs, indent=1))
         print(f"wrote {args.pairs_json} ({len(pairs)} pairs)")
-    return 0
+    return cov.emit()
 
 
 if __name__ == "__main__":

@@ -107,9 +107,20 @@ def main() -> int:
         symbols = [r[0] for r in conn.execute(
             f"SELECT symbol FROM functions WHERE {args.flag}=1 AND excluded=0 "
             f"ORDER BY symbol")]
+    # The count printed below used to be the count AFTER the slice, so
+    # `--limit 500` silently rewrote the denominator of everything downstream.
+    # Keep the universe and say when the census is a sample.
+    universe = len(symbols)
+    truncated = bool(args.limit) and args.limit < universe
     if args.limit:
         symbols = symbols[:args.limit]
-    print(f"{len(symbols)} symbols, functionRelocDiffs={args.reloc}")
+    if truncated:
+        print(f"TRUNCATED by --limit: {len(symbols)} of {universe} symbols, "
+              f"functionRelocDiffs={args.reloc} -- this run is a SAMPLE, "
+              f"not a census")
+    else:
+        print(f"{len(symbols)} of {universe} symbols, "
+              f"functionRelocDiffs={args.reloc}")
 
     chunk = max(1, math.ceil(len(symbols) / args.jobs))
     chunks = [symbols[i:i + chunk] for i in range(0, len(symbols), chunk)]
@@ -127,8 +138,11 @@ def main() -> int:
     with open(args.out, "w") as fh:
         for r in sorted(results, key=lambda r: r["symbol"]):
             fh.write(json.dumps(r) + "\n")
-    print(f"wrote {len(results)} rows -> {args.out}")
-    return 0
+    print(f"wrote {len(results)} rows of {universe} symbols -> {args.out}")
+    # Exit 3 == TRUNCATED, matching scripts/analysis/coverage.py.  A caller that
+    # asked for a sample can ignore it; a caller that thought it got a census
+    # cannot miss it.
+    return 3 if truncated else 0
 
 
 if __name__ == "__main__":
