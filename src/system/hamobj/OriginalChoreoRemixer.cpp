@@ -232,24 +232,36 @@ void OriginalChoreoRemixer::BridgeGapsInMoveParents(int i1) {
             }
             setVec.clear();
             setVec.resize(mTotalMeasures);
+            // Seed the two measures that bracket the gap: the last good one
+            // before it and the first good one after it.
             setVec[i - 1].insert(moveParentsByDiff[i - 1]);
-            setVec[i].insert(moveParentsByDiff[i]);
-            for (int j = i12 - 1; j >= 0; j--) {
+            setVec[i12].insert(moveParentsByDiff[i12]);
+            for (int j = i12 - 1; j >= i; j--) {
                 BuildSetOfPrevAdjacentMoveParents(setVec[j], setVec[j + 1]);
             }
-            for (; i < i12; i++) {
-                std::set<const MoveParent *> &curSet = setVec[i];
-                const MoveParent *curMoveParentByDiff = moveParentsByDiff[i];
+            for (int k = i; k < i12; k++) {
+                std::set<const MoveParent *> &curSet = setVec[k];
+                const MoveParent *prevMoveParent = moveParentsByDiff[k - 1];
+                const MoveParent *chosen = nullptr;
                 FOREACH (it, curSet) {
-                    if ((*it)->HasPrevAdjacent(curMoveParentByDiff)) {
-                        moveParentsByDiff[i] = *it;
-                        break; // needs to go to the next iteration of the i < i12 loop
+                    const MoveParent *candidate = *it;
+                    if (candidate->HasPrevAdjacent(prevMoveParent)) {
+                        chosen = candidate;
+                        break; // needs to go to the next iteration of the k < i12 loop
                     }
                 }
-                if (curSet.size() == 0) {
-                } else {
-                    moveParentsByDiff[i] = *curSet.begin();
+                if (!chosen) {
+                    if (curSet.size() == 0) {
+                        if (prevMoveParent->NextAdjacents().size() != 0) {
+                            chosen = *prevMoveParent->NextAdjacents().begin();
+                        } else {
+                            chosen = prevMoveParent;
+                        }
+                    } else {
+                        chosen = *curSet.begin();
+                    }
                 }
+                moveParentsByDiff[k] = chosen;
             }
         }
     }
