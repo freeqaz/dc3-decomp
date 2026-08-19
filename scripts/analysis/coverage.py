@@ -227,11 +227,16 @@ class CoverageReport:
         return self._examined / float(self._universe)
 
     def is_clean(self) -> bool:
-        """True iff the whole universe is accounted for and nothing was truncated."""
-        if self.truncated:
-            return False
-        u = self.unaccounted
-        return u == 0 or (self._universe is not None and u == 0)
+        """True iff the whole universe is ACCOUNTED FOR and nothing was truncated.
+
+        Note "accounted for", not "examined".  A run that looked at 500 rows and
+        counted 1,024 deliberate drops is a complete census — it can tell you
+        what it did not look at.  A run that looked at 500 and cannot say what
+        happened to the other 1,024 is not, no matter how clean it prints.
+        """
+        return (self._universe is not None
+                and not self.truncated
+                and self.unaccounted == 0)
 
     # -- output ------------------------------------------------------------ #
 
@@ -253,9 +258,7 @@ class CoverageReport:
         # A rendered percentage ROUNDS: 99.97 prints as 100.0, and this project
         # has already lost two real bugs to exactly that.  Carry the raw
         # integers alongside so a consumer never has to trust the rendering.
-        d["complete"] = (self._universe is not None
-                         and self._examined == self._universe
-                         and not self.truncated)
+        d["complete"] = self.is_clean()
         d.update(self._extra)
         return d
 
