@@ -149,7 +149,6 @@ class TestDocsAgreeWithTheSurface(unittest.TestCase):
             r"[`'\"]?(?:bin/)?objdiff-cli",
             re.IGNORECASE,
         )
-        hits = [m.group(0) for m in prohibition.finditer(text)]
         # A prohibition is only acceptable if it is qualified on the same line
         # (e.g. "do not call objdiff-cli directly *except* for ...").
         unqualified = []
@@ -187,7 +186,6 @@ class TestDocsAgreeWithTheSurface(unittest.TestCase):
             re.search(r"legitimate direct", text, re.IGNORECASE),
             "CLAUDE.md no longer names the legitimate direct objdiff-cli uses",
         )
-        del hits
 
     def test_reference_carries_the_invocation_mapping_table(self):
         text = (self.root / "docs" / "tools" / "REFERENCE.md").read_text()
