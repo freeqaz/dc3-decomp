@@ -440,7 +440,9 @@ void CacheMgrXbox::PollMount() {
                     "CacheMgrXbox::PollMount(): error %u (0x%08X) occurred, but the device is no longer connected, so changing to %u.\n",
                     extErr,
                     extErr,
-                    0x48F
+                    // MakeString<unsigned long, unsigned long, unsigned long> in
+                    // the target; a bare 0x48F makes the third argument an int.
+                    0x48FUL
                 );
                 extErr = 0x48F;
             }
