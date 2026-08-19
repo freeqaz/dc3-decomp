@@ -68,16 +68,16 @@ Transform XfmOnCircleEdge(float circumference, float pos) {
     float sinA = Sine(angle);
 
     float negSign = -sign;
-    xfm.m.y.y = sinA * negSign;
     xfm.v.Set(cosA, sinA, 0.0f);
-    xfm.m.y.x = cosA * negSign;
-    xfm.m.y.z = 0.0f * negSign;
+    xfm.m.y.y = xfm.v.y * negSign;
+    xfm.m.y.x = xfm.v.x * negSign;
+    xfm.m.y.z = xfm.v.z * negSign;
 
     xfm.m.x.z = xfm.m.y.x * xfm.m.z.y - xfm.m.z.x * xfm.m.y.y;
     xfm.m.x.x = xfm.m.z.z * xfm.m.y.y - xfm.m.y.z * xfm.m.z.y;
     xfm.m.x.y = xfm.m.y.z * xfm.m.z.x - xfm.m.z.z * xfm.m.y.x;
 
-    float radius = (sign * (circumference * 0.15915494f));
+    float radius = (sign * circumference) * 0.15915494f;
     xfm.v *= radius;
 
     return xfm;
