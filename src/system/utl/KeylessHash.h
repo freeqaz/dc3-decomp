@@ -120,15 +120,20 @@ inline AllocInfo **KeylessHash<void *, AllocInfo *>::Insert(AllocInfo *const &va
     if (mEntries[i] == mEmpty) {
         mNumEntries++;
         if (mNumEntries > mSize / 2) {
-            if (mOwnEntries) {
+            // NB: the polarity here is load-bearing. The target's `_dw` local
+            // static for the MILO_NOTIFY_ONCE below carries lexical scope index
+            // 32, which is only reachable if the notify-once arm is the THEN
+            // arm of an inverted test (see
+            // docs/decomp/patterns/fixable-scope-index.md).
+            if (!mOwnEntries) {
+                MILO_NOTIFY_ONCE("Hash table half full (%d)", mSize / 2);
+            } else {
                 MILO_ASSERT(mSize, 0xB3);
                 Resize(mSize * 2, 0);
                 if (!TheLoadMgr.EditMode()) {
                     MILO_NOTIFY("Resizing hash table (%d)", mSize);
                 }
                 return Insert(val);
-            } else {
-                MILO_NOTIFY_ONCE("Hash table half full (%d)", mSize / 2);
             }
         }
         if (mNumEntries >= mSize) {
@@ -211,15 +216,17 @@ T2 *KeylessHash<T1, T2>::Insert(const T2 &val) {
     if (mEntries[i] == mEmpty) {
         mNumEntries++;
         if (mNumEntries > mSize / 2) {
-            if (mOwnEntries) {
+            // See the specialization above: inverted test, notify-once in the
+            // THEN arm, to reproduce the target's scope index 32 for `_dw`.
+            if (!mOwnEntries) {
+                MILO_NOTIFY_ONCE("Hash table half full (%d)", mSize / 2);
+            } else {
                 MILO_ASSERT(mSize, 0xB3);
                 Resize(mSize * 2, 0);
                 if (!TheLoadMgr.EditMode()) {
                     MILO_NOTIFY("Resizing hash table (%d)", mSize);
                 }
                 return Insert(val);
-            } else {
-                MILO_NOTIFY_ONCE("Hash table half full (%d)", mSize / 2);
             }
         }
         if (mNumEntries >= mSize) {
