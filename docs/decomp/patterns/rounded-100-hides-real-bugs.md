@@ -39,12 +39,65 @@ and never the DB's or `report.json`'s. If you are about to dismiss a divergence 
 
 A serializer whose diff is **one `this`-relative address** (`subi rN,r31,<offset>`) is a
 Save/Load field disagreement until proven otherwise. Sweeping that fingerprint across the 90-100%
-band is how `RndFlare::Load` was found after `CharUpperTwist::Load`. The related
-`BEGIN_SAVES`/`BEGIN_LOADS` *permutation* sweep (same member multiset, different order) is
-exhausted — zero remaining — but ~70 `Load`/`Save`/`operator>>` symbols are still sub-100 in that
-band, and `run_objdiff` flags at least one outright:
-`FxSendChorus::Load` — *"Source accesses 'mInputGain' but target accesses 'mReverbMixDb' — wrong
-field?"*
+band is how `RndFlare::Load` was found after `CharUpperTwist::Load`.
 
 A wrong field in a serializer silently corrupts every saved or loaded object of that type, and costs
 almost no match% — which is exactly why this class survives to the 99% band.
+
+## 2026-08-19 sweep: three corrections to the above
+
+A full sweep of this fingerprint was run over every serializer in the binary. It found real bugs
+(below), but three things in the earlier text are wrong and cost time:
+
+**1. `r31` is not `this`.** In any function with a large frame MSVC uses `r31` as the *frame
+pointer* (`subi r31, r1, <framesize>` in the prologue), so `<off>(r31)` is a stack slot. Three of
+the loudest apparent "field disagreements" were pure stack-layout diffs: `FxSendChorus::Load`
+(r31 = r1-0x?? , 10 rows), `CamShot::Load` (**119** rows, frame 0x470 vs 0x490) and `RndText::Load`
+(frame 0x1c0 vs 0x1b0). Always read the prologue before believing an `r31` offset.
+
+**2. `run_objdiff`'s "Offset Mismatches (resolved)" enrichment does not check the base register.**
+It resolves *any* offset against the class struct, so it will invent a field-disagreement story out
+of a stack diff. The named lead in the earlier text —
+`FxSendChorus::Load`, *"Source accesses 'mInputGain' but target accesses 'mReverbMixDb'"* — is
+exactly this false positive; `FxSend`'s layout has no hole (`FxSend::Save` 74/74 and
+`FxSend::Load` 151/151 are byte-identical). Treat that enrichment as a lead, never a finding.
+
+**3. `report.json`'s `match_percent_normalized` does not "round" — it is byte-score weighted, and
+it deliberately forgives register permutation.** Each instruction is worth 100 points and a
+`diff_arg` costs 1, so `100 - score/max*100` is exact: `CamShot::Load` with 119 wrong offsets out
+of 824 instructions renders **99.856%**, and one wrong field in a 300-instruction serializer
+renders 99.9967%. That is a real sub-100 value, not a rounded 100 — the *displays* that round to
+one decimal (`decomp.db`, `get_progress`) are where the information is lost.
+
+Separately, it forgives register-only diffs entirely, so `100.0` there means "no non-register
+mismatch", not "byte-identical": 31 of the 1888 authorable serializers it calls exactly 100.0 do
+have mismatches. **But all 295 of those mismatch rows are register permutation, ICF/relocation
+naming, or relocation addends — zero are `this`-relative offset differences.** So for a *field*
+hunt, `report.json < 100.0` is a sound and complete filter; for a byte-identity claim it is not.
+
+The `BEGIN_SAVES`/`BEGIN_LOADS` member-ORDER permutation class was re-tested at source level
+(parse both bodies, compare the member sequence). It really is empty: all 9 raw hits were artifacts
+of rev-gated legacy branches, and in every case where the parse still disagreed after stripping
+them, either both sides were byte-identical to the target (`FxSend`, `RndTransformable`,
+`UIListArrow`, `CharWeightSetter`) or the Load-side diff was pure regalloc (`RndGenerator`,
+`CharDriver`).
+
+### What the sweep did find
+
+- **`RndMatAnim::Load`** — `ASSERT_REVS(0, 7)` with its arguments swapped (target proves `(7, 0)`,
+  and `SAVE_REVS(7,0)`/`INIT_REVS(7,0)` agree). The emitted test was `if (d.rev > 0) MILO_FAIL`,
+  so *every* MatAnim ever authored tripped the assert. A whole-tree audit of `ASSERT_REVS` against
+  each file's `INIT_REVS`/`SAVE_REVS` found this was the only swapped pair in 238 sites — and that
+  a *more permissive* assert is legitimate (`CharHair::Load` is byte-identical with
+  `ASSERT_REVS(13,0)` over `INIT_REVS(11,0)`).
+- **`ObjOwnerPtr::operator=`** — the class declared only `operator=(T*)`, so `a = b` used the
+  *implicit* copy-assignment and also overwrote `mOwner` with the source's owner, leaving the copy
+  reporting the wrong `RefOwner()`/`Replace()` target. Found by comparing the **multiset** of
+  non-frame memory offsets per side (regalloc and scheduling preserve it; a wrong field does not) —
+  five `*Anim::Copy` functions returned the identical base-only `lwz <mKeysOwner+0x10>` /
+  `stw 0x10` pair. Fixing it made 5 functions byte-identical, including `RndLight::Replace`
+  (80.9% → 100%).
+
+The offset-multiset comparison is the better instrument than the single-`subi` fingerprint: it is
+alignment-independent, immune to the frame-pointer confusion, and it is what surfaced the
+`ObjOwnerPtr` bug, which no single-instruction fingerprint would have flagged.
