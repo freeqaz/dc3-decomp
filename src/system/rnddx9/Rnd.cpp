@@ -320,6 +320,48 @@ void DxRnd::PopClipPlanesInternal(ObjPtrVec<RndTransformable> &planes) {
     D3DDevice_SetRenderState_ClipPlaneEnable(TheDxRnd.mD3DDevice, enableMask);
 }
 
+// 77.1%. Two things were investigated here on 2026-08-19; read this before
+// touching the MILO_ASSERTs, because one of them is a REFUTED lead and the
+// other is a real diagnosis that costs more than it buys.
+//
+// REFUTED -- "our assert expression text is wrong, find the 34-char one".
+//   The lead came from the target calling
+//     ??$MakeString@$$BY07$$CBDH$$BY0CD@$$CBD@@...     (expr array = 0x23 = 35)
+//   where we call
+//     ??$MakeString@$$BY07$$CBDH$$BY0BG@$$CBD@@...     (expr array = 0x16 = 22)
+//   That is pure ICF naming noise. Both symbols resolve to 824D1870 in
+//   build/373307D9/icf_aliases.map -- every MakeString<char[N], int, char[M]>
+//   in the binary folds to one body, and the linker's map happens to name it
+//   after a 35-char instantiation. The same diff shows the target "calling"
+//   MakeString<CamShotFrame::BlendEaseMode> where we call MakeString<int>
+//   (both fold to 82610090), which nobody would read as a real difference.
+//   The decisive evidence is the string literal itself: target and base both
+//   reference ??_C@_0BG@PPIAGPFI@fmt?5?$CB?$DN?5D3DFMT_UNKNOWN?$AA@ -- _0BG =
+//   0x16 = 22 bytes = "fmt != D3DFMT_UNKNOWN" + NUL. The text is CORRECT.
+//
+// REAL, but not landable as-is -- the missing `cmpwi r31,0xff; bne` guard.
+//   The target runs the second assert's fail block unconditionally, so its
+//   condition folds at compile time, and to FALSE (the block is emitted, not
+//   elided). That cannot happen with `fmt` bound to the masked bitmap order:
+//   in the dxt default arm MSVC only knows fmt is none of 0/8/0x10/0x18/0x20,
+//   and in the bpp arm it knows fmt == 0 -- neither folds against 0xff. It
+//   does happen if `fmt` is the RESULT, still holding its initialiser on both
+//   default paths. Rewriting it that way (order/bpp/fmt, `D3DFORMAT fmt =
+//   D3DFMT_UNKNOWN`) reproduces the target exactly where it counts: guard
+//   gone, prologue back to std r30/r31 + stwu -0x70 with no __savegprlr_29,
+//   inline epilogue, and it frees the third callee-saved GPR that only existed
+//   to keep the order value live across Debug::Fail.
+//   It still scored 3.4% (run_objdiff, worktree plane), because MSVC then
+//   cross-jumps the two default arms LATER than the target does: the target
+//   shares everything from `bl MakeString` onward, we duplicate ten
+//   instructions and only merge inside the assert block. The blocker is one
+//   stack slot -- the target parks the line-number temp at 0x54 in BOTH arms,
+//   we park it at 0x50 in the dxt arm and 0x54 in the bpp arm, so the tails
+//   are not identical. Base grows 340 -> 380 bytes. Reverted.
+//   The `return`-per-case shape (as in ../og-dc3-decomp) is worse again, 0.2%:
+//   it dissolves the r30 result register the target keeps.
+//   Whoever picks this up needs the slot-colouring lever, not another guess at
+//   the assert text.
 D3DFORMAT DxRnd::D3DFormatForBitmap(const RndBitmap &bitmap) {
     int fmt = bitmap.Order() & 0x38;
     int bpp = bitmap.Bpp();
