@@ -181,6 +181,18 @@ fi
 echo "==> orig/  (reflink copy — target binaries)"
 reflink_dir "$MAIN_REPO/orig" "$WORKTREE_PATH/orig"
 
+# ---- orig-assets/ : symlink (huge, read-only, and the native gate needs it) --
+# Without this the native test suite cannot open gen/main_xbox.hdr and
+# DirLoaderTest aborts the whole binary before any test body runs. That has been
+# written off in more than one lane as "a worktree asset-availability artifact,
+# not a regression" -- true, but it silently removed the tests that actually
+# exercise loading from every worktree gate. With the symlink the suite runs
+# whole: 441 tests, 357 passed, 84 skipped, 0 failed.
+if [ -e "$MAIN_REPO/orig-assets" ] && [ ! -e "$WORKTREE_PATH/orig-assets" ]; then
+    echo "==> orig-assets/  (symlink — extracted game assets, read-only)"
+    ln -s "$MAIN_REPO/orig-assets" "$WORKTREE_PATH/orig-assets"
+fi
+
 # ---- build/compilers, build/tools : symlinks (read-only toolchain) ----------
 mkdir -p "$WORKTREE_PATH/build"
 for d in compilers tools binutils; do
