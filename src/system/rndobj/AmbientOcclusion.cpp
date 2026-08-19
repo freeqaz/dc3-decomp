@@ -706,68 +706,66 @@ bool kdTree<Triangle>::Intersect(
 ) const {
     float tNear, tFar;
     bool boxHit = ::Intersect(origin, direction, mBounds, tNear, tFar);
-    if (!boxHit)
-        return false;
+    if (boxHit) {
+        bool found = false;
+        int stackDepth = 0;
+        hitDist = FLT_MAX;
+        kdTreeNode *nodes = mNodes;
+        tFar = (tFar - maxDist >= 0.0f) ? maxDist : tFar;
 
-    bool found = false;
-    int stackDepth = 0;
-    hitDist = FLT_MAX;
-    kdTreeNode *nodes = mNodes;
-    tFar = (tFar - maxDist >= 0.0f) ? maxDist : tFar;
-
-    kdTreeNode *node = nodes;
-    if (nodes) {
+        kdTreeNode *node = nodes;
         static kdTreeNode::Stack nodeStack[128];
-        do {
-                if (hitDist < tNear)
-                    break;
-                if (!node->GetIsLeaf()) {
-                    float splitVal = node->mData.real;
-                    unsigned int axis = node->mData.index & 3;
-                    float tSplit = (splitVal - origin[axis]) / direction[axis];
+        while (node) {
+            if (hitDist < tNear)
+                break;
+            if (!node->GetIsLeaf()) {
+                float splitVal = node->mData.real;
+                unsigned int axis = node->mData.index & 3;
+                float tSplit = (splitVal - origin[axis]) / direction[axis];
 
-                    kdTreeNode *children[2];
-                    children[0] = &nodes[(node->mFlags & 0x7FFF) * 2 + 1];
-                    children[1] = &nodes[(node->mFlags & 0x7FFF) * 2 + 2];
+                kdTreeNode *children[2];
+                children[0] = &nodes[(node->mFlags & 0x7FFF) * 2 + 1];
+                children[1] = &nodes[(node->mFlags & 0x7FFF) * 2 + 2];
 
-                    bool isAbove = origin[axis] > splitVal;
+                bool isAbove = origin[axis] > splitVal;
 
-                    if (tSplit < 0.0f || tSplit > tFar) {
-                        node = children[isAbove];
-                    } else if (tSplit >= tNear) {
-                        nodeStack[stackDepth].tFar = tFar;
-                        nodeStack[stackDepth].tNear = tSplit;
-                        tFar = tSplit;
-                        stackDepth++;
-                        node = children[isAbove];
-                        nodeStack[stackDepth - 1].node = children[!isAbove];
-                    } else {
-                        node = children[!isAbove];
-                    }
+                if (tSplit < 0.0f || tSplit > tFar) {
+                    node = children[isAbove];
+                } else if (tSplit >= tNear) {
+                    nodeStack[stackDepth].tFar = tFar;
+                    nodeStack[stackDepth].tNear = tSplit;
+                    tFar = tSplit;
+                    stackDepth++;
+                    node = children[isAbove];
+                    nodeStack[stackDepth - 1].node = children[!isAbove];
                 } else {
-                    kdTriList *triList = node->GetTriList();
-                    if (triList) {
-                        do {
-                            float dist = FLT_MAX;
-                            bool triHit
-                                = ::Intersect(origin, direction, *triList->GetItem(), dist);
-                            if (triHit) {
-                                found = true;
-                                hitDist = (hitDist - dist >= 0.0f) ? dist : hitDist;
-                            }
-                            triList++;
-                        } while (!triList->IsEnd());
-                    }
-                    if (stackDepth == 0)
-                        break;
-                    stackDepth--;
-                    tNear = nodeStack[stackDepth].tNear;
-                    node = nodeStack[stackDepth].node;
-                    tFar = nodeStack[stackDepth].tFar;
+                    node = children[!isAbove];
                 }
-            } while (node);
+            } else {
+                kdTriList *triList = node->GetTriList();
+                if (triList) {
+                    do {
+                        float dist = FLT_MAX;
+                        bool triHit
+                            = ::Intersect(origin, direction, *triList->GetItem(), dist);
+                        if (triHit) {
+                            found = true;
+                            hitDist = (hitDist - dist >= 0.0f) ? dist : hitDist;
+                        }
+                        triList++;
+                    } while (!triList->IsEnd());
+                }
+                if (stackDepth == 0)
+                    break;
+                stackDepth--;
+                tNear = nodeStack[stackDepth].tNear;
+                node = nodeStack[stackDepth].node;
+                tFar = nodeStack[stackDepth].tFar;
+            }
+        }
+        return found;
     }
-    return found;
+    return false;
 }
 
 void RndAmbientOcclusion::CalculateAOAtPoint(

@@ -181,20 +181,16 @@ template <class T>
 bool PropSync(Key<T> &key, DataNode &node, DataArray *prop, int i, PropOp op) {
     if (op == kPropUnknown0x40)
         return false;
-    else if (i == prop->Size()) {
+    if (i == prop->Size())
         return true;
-    } else {
-        Symbol sym = prop->Sym(i++);
-        {
-            static Symbol frame("frame");
-            if (sym == frame)
-                return PropSync(key.frame, node, prop, i, op);
-        }
-        {
-            static Symbol value("value");
-            if (sym == value)
-                return PropSync(key.value, node, prop, i, op);
-        }
+    Symbol sym = prop->Sym(i++);
+    static Symbol frame("frame");
+    if (sym == frame) {
+        return PropSync(key.frame, node, prop, i, op);
+    }
+    static Symbol value("value");
+    if (sym == value) {
+        return PropSync(key.value, node, prop, i, op);
     }
     return false;
 }

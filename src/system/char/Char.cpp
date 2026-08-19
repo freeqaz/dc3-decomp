@@ -215,9 +215,9 @@ void CharDebug::SetObjects(DataArray *msg) {
 
 void CharDebug::DisplayObject(Hmx::Object *obj) {
     RndHighlightable *rh = dynamic_cast<RndHighlightable *>(obj);
-    if (rh) {
+    if (rh)
         rh->Highlight();
-    } else {
+    else {
         RndTex *tex = dynamic_cast<RndTex *>(obj);
         if (tex) {
             static RndMesh *mesh = nullptr;
