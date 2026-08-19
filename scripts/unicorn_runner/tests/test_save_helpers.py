@@ -28,7 +28,7 @@ from scripts.unicorn_runner.unicorn_dep import HAS_UNICORN, SKIP_REASON
 from scripts.unicorn_runner import save_helpers as SH
 from scripts.unicorn_runner.memory_map import (
     CODE_BASE, TRAMPOLINE_BASE, HELPER_BASE, HELPER_SLOT_SIZE, REGION_SIZE,
-    OBJECT_BASE, SENTINEL_ADDR,
+    OBJECT_BASE, SENTINEL_ADDR, RDATA_BASE,
 )
 from scripts.unicorn_runner.patcher import assign_addresses, patch_function
 
@@ -135,9 +135,19 @@ class TestLayout(unittest.TestCase):
 
     def test_addresses_do_not_collide_with_other_regions(self):
         """REL24 reach and region separation."""
-        for base in (CODE_BASE, TRAMPOLINE_BASE):
+        for base in (CODE_BASE, TRAMPOLINE_BASE, RDATA_BASE):
             self.assertFalse(base <= HELPER_BASE < base + REGION_SIZE)
         self.assertLess(abs(HELPER_BASE - CODE_BASE), 0x2000000)
+
+    def test_unmapped_guard_between_rdata_and_the_helper_bodies(self):
+        """Nothing upstream clamps the packed rdata buffer to its window.
+
+        If HELPER sat immediately above RDATA, an oversized buffer would
+        overwrite executable helper bodies and present as a decomp bug. Keep at
+        least one region-sized hole so the write faults instead.
+        """
+        self.assertGreaterEqual(HELPER_BASE - (RDATA_BASE + REGION_SIZE),
+                                REGION_SIZE)
 
     def test_region_contains_every_body(self):
         region = SH.helper_region()
@@ -434,6 +444,25 @@ class TestExecution(unittest.TestCase):
         self.assertEqual(result.final_pc, SENTINEL_ADDR)
         self.assertEqual(result.r3, OBJECT_BASE)
         self.assertEqual(len(result.call_log), 1)
+
+
+@unittest.skipUnless(HAS_UNICORN, SKIP_REASON)
+class TestRdataIsClamped(unittest.TestCase):
+    """An oversized rdata buffer must fail loudly, not spill into a neighbour."""
+
+    def test_oversized_rdata_raises(self):
+        from scripts.unicorn_runner.engine import execute_function
+        code = bytearray(assemble(ppc_blr()))
+        with self.assertRaises(ValueError):
+            execute_function(code, {}, len(code),
+                             rdata_bytes=b"\x00" * (REGION_SIZE + 4))
+
+    def test_exactly_region_sized_rdata_is_accepted(self):
+        from scripts.unicorn_runner.engine import execute_function
+        code = bytearray(assemble(ppc_blr()))
+        result = execute_function(code, {}, len(code),
+                                  rdata_bytes=b"\x00" * REGION_SIZE)
+        self.assertIsNone(result.error)
 
 
 @unittest.skipUnless(HAS_UNICORN, SKIP_REASON)

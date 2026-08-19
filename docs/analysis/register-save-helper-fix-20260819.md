@@ -28,13 +28,14 @@ in a trampoline was recorded `terminated_normally=True`.
 ## The fix
 
 `scripts/unicorn_runner/save_helpers.py` installs the helpers' **real bodies** at
-fixed addresses in a new HELPER region (`0x80030000`), and
+fixed addresses in a new HELPER region (`0x80040000`, one unmapped 64KB guard
+above RDATA), and
 `patcher.assign_addresses` points the relocation there instead of at a stub. The
 code under test is not edited. All 72 GPR/FPR entry-point bodies are asserted
 byte-for-byte equal to the shipped image at their `symbols.txt` addresses;
 `std`/`ld` are lowered by the same `rewrite_ppc64_insns` that already lowers every
 function body. VMX is the one documented approximation (no vector state is
-modelled; only r0's final `-0x10` is reproduced).
+modelled; only r11's final `-0x10` is reproduced).
 
 Two earlier prototypes (`scripts/cap_helpers.py`,
 `scripts/unicorn_runner/prologue_helper_probe.py`) rewrote the **call sites**

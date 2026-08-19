@@ -440,6 +440,15 @@ class UnicornEngine:
 
         # RDATA region
         if rdata_bytes is not None:
+            # The RDATA window is REGION_SIZE and nothing upstream clamps the
+            # packed data-section buffer to it. Unicorn would happily write
+            # past the end into whatever is mapped next, so refuse instead:
+            # a loud harness error beats silently rewriting the region above.
+            # (Measured max across the 1,838-function frontier: 0x63C0.)
+            if len(rdata_bytes) > REGION_SIZE:
+                raise ValueError(
+                    f"rdata buffer is {len(rdata_bytes):#x} bytes, exceeds the "
+                    f"{REGION_SIZE:#x} RDATA window")
             if not self._rdata_mapped:
                 mu.mem_map(RDATA_BASE, REGION_SIZE)
                 self._rdata_mapped = True
