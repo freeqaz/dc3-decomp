@@ -19,7 +19,7 @@ than dead.
 |---|---:|---:|---:|---:|
 | `has_linker_merged` | 1,310 | **1,052** | **≥ 65.0 %** proven-benign, and only **1.9 %** of the bucket names an ICF fold at all | 18 named rows, most already adjudicated by two earlier lanes |
 | `has_prologue_mismatch` | 221 | **218** | **100 %** as an *independent* finding — 0 of 218 carry the prologue as their only pattern | 0 rows where the prologue is the limiting defect; it is a liveness co-signal, as the docs already say |
-| `has_makestring_mismatch` | 63 | **63** | **77.8 %** (38 forgiven by the graded ruler + 11 same-fold-class renames) | **14 rows, each a concrete wrong-callee bug** |
+| `has_makestring_mismatch` | 63 | **63** | **77.8 %** (38 forgiven by the graded ruler + 11 same-fold-class renames) | **14 rows, each a concrete wrong-callee bug (5 fixed)** |
 
 **Three findings matter more than the fixes:**
 
@@ -33,8 +33,9 @@ than dead.
 3. **The recorded population does not reproduce.** Two settled build trees at
    essentially the same commit give 1,052 and 1,069 LINKER_MERGED rows. Neither is 1,310.
 
-Four fixes landed. Whole-build effect predicted **+1 function / +308 B** on the canonical
-ruler and observed **+1 / +308**, with exactly two rows moving and zero regressions.
+Five fixes landed, four reverted with their reasoning recorded. Whole-build effect
+predicted **+1 function / +308 B** on the canonical ruler and observed **+1 / +308**, with
+exactly two rows moving there, five on the graded ruler, and zero regressions anywhere.
 
 ---
 
@@ -270,19 +271,36 @@ thing in the build that names it.
 
 ### The trap in this bucket
 
-**The instantiation names the fix, not the site, and not the mechanism.** Two of six
+**The instantiation names the fix, not the site, and not the mechanism.** Three of eight
 attempts regressed and were reverted:
 
 | function | attempt | result |
 |---|---|---|
-| `VoiceInputPanel::ActivateVoiceContext` | `.Str()` on the three `Symbol` format arguments | 86.6 % → **83.8 %**, reverted |
-| `Locale::Init` | `.Str()` on `SystemLanguage()` | 92.1 % → **91.7 %**, reverted |
+| `VoiceInputPanel::ActivateVoiceContext` | `.Str()` on the three `Symbol` format arguments | 86.6 % → **83.8 %** normalized, reverted |
+| `Locale::Init` | `.Str()` on `SystemLanguage()` | 92.1 % → **91.7 %** normalized, reverted |
+| `GetMotdJob::GetMotdData` (first attempt) | dropped the `int i =` temp on `challenge_interval` | 99.99 % → **99.57 %** name_check, reverted |
+| `EnvelopeGenerator::DoProcess` | `(int)numChannels` at the `MILO_PRINT_ONCE` | charge cleared but 90.8 % → **88.7 %** name_check — the cast needs a stack temp where the unsigned parameter could be referenced in place. Reverted |
 
 In `Locale::Init` the target does not call `SystemLanguage()` at that point at all — it
 reuses a value already in `r14`. The `char*`-vs-`Symbol` tell was true and the `.Str()`
-inference was still wrong. **Attribute the site before editing** (`run_diff_inspect
-mode=asm_listing`, or read the unit's `build/373307D9/asm/**.s`), and prefer functions
-with a single candidate call site.
+inference was still wrong.
+
+**The payload carries the discriminator and it should be used.** Every
+`MakeStringMismatchInfo` records the **instruction index** of the charged site.
+`GetMotdData` is the worked example: the obvious candidate is the
+`challenge_interval` log near the top of the function, and editing it cost 0.42 pp. The
+recorded index is **174**, which lands on the `num_toasts` log much further down;
+`int numToasts` → `unsigned int numToasts` took the row to **100.0 % with an empty pattern
+list**, and incidentally fixed the signed/unsigned comparison in the loop on the very next
+line.
+
+So: **read the index, then edit.** `run_diff_inspect mode=asm_listing` or the unit's
+`build/373307D9/asm/**.s` will map it to a source line.
+
+Second rule, from `EnvelopeGenerator::DoProcess`: **prefer changing a variable's declared
+type over inserting a cast at the call site.** `MakeString<T>` takes `const T&`, so a cast
+materialises a stack temporary that binding to an existing variable does not — the name
+charge clears and the function gets worse.
 
 ---
 
@@ -313,14 +331,15 @@ on it.**
 
 ## Fixes landed
 
-Four of the 14 real MakeString rows.
+Five of the 14 real MakeString rows.
 
 | function | before | after | ruler |
 |---|---:|---:|---|
 | `DingoJob::Start` | 94.6 % | **100.0 %, 77/77 equal** | normalized, zero-mismatch |
 | `DataArray::Execute` | 94.4 % | **95.8 %** (276 → 272 instructions) | normalized |
-| `UIListSlot::Draw` | +0.026 | caller codegen unchanged; the `bl` now reaches the right overload | name_check |
-| `CacheMgrXbox::PollMount` | +0.023 | caller codegen unchanged; same | name_check |
+| `GetMotdJob::GetMotdData` | 99.987 % | **100.0 %, no patterns left** | name_check |
+| `UIListSlot::Draw` | 99.963 % | 99.989 %; caller codegen unchanged, the `bl` now reaches the right overload | name_check |
+| `CacheMgrXbox::PollMount` | 95.841 % | 95.864 %; caller codegen unchanged, same | name_check |
 
 **`DingoJob::Start`** is the substantive one and the only one that is a behavioural bug.
 The retail instantiation is `MakeString<const char*, const char*, const char*, const char*>`
@@ -349,25 +368,28 @@ temp, and the retail instantiation (`MakeString<unsigned long, int>`) agrees.
 
 ### Whole-build verification
 
-Predicted before rebuilding: `DingoJob::Start` crosses 100 (+1 function, +308 B), the
-other three do not change `match_percent_normalized`.
+Predicted before rebuilding: `DingoJob::Start` crosses 100 (+1 function, +308 B), and the
+other four do not change `match_percent_normalized` at all, because a relocation-name
+difference is `arg_diff_score` and the normalized figure subtracts that out.
 
 ```
-norm==100:            29,491 -> 29,492   (+1)
+norm==100:            29,491 -> 29,492        (+1)
 bytes at norm==100:  5,120,436 -> 5,120,744   (+308)
-rows moved on normalized: 2 up, 0 down
-  +4.74   308  ?Start@DingoJob@@UAAXXZ
-  +1.19  1076  ?Execute@DataArray@@QAA?AVDataNode@@_N@Z
+match_percent_normalized: 2 rows moved, both up
+  +4.740   308  ?Start@DingoJob@@UAAXXZ
+  +1.193  1076  ?Execute@DataArray@@QAA?AVDataNode@@_N@Z
 ```
 
-Predicted and observed agree exactly. On the graded `name_check` ruler exactly four rows
-move — the four functions touched — and nothing else in the build moves at all:
+Predicted and observed agree exactly. On the graded `name_check` ruler exactly five rows
+move — the five functions touched — and nothing else in the build moves at all:
 
 ```
+fuzzy_match_percent (name_check): 5 rows moved, all up
   +5.519   308  ?Start@DingoJob@@UAAXXZ
   +1.361  1076  ?Execute@DataArray@@QAA?AVDataNode@@_N@Z
   +0.026   768  ?Draw@UIListSlot@@…
   +0.023   884  ?PollMount@CacheMgrXbox@@AAAXXZ
+  +0.013  1568  ?GetMotdData@GetMotdJob@@…
 ```
 
 ---
@@ -376,7 +398,7 @@ move — the four functions touched — and nothing else in the build moves at a
 
 Small and specific, so it does not rot into a fiction:
 
-1. **The 10 unfixed real MakeString rows.** Each already carries its answer in the
+1. **The 9 unfixed real MakeString rows.** Each already carries its answer in the
    instantiation name. In descending order of expected value:
    `ArcDetector::UpdateOverlay`
    (`MakeString<float>` vs `<float,float>`: an argument we invented),
