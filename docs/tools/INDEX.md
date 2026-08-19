@@ -8,6 +8,7 @@ Which tool to use for decomp work. For scripts, commands, and reference material
 |-----|-------------|
 | **[WORKFLOW.md](WORKFLOW.md)** | **Decision guide: which tool to use when** |
 | [BUILD_SYSTEM.md](BUILD_SYSTEM.md) | The split pipeline: how `ninja` gets from `default.xex` to target objects, the `symbols.txt` dependency (already wired — settled), dtk's fixed-point invariant, and why nothing rebuilds `dtk`/`objdiff-cli` for you |
+| **[SCANNER_TRUTHFULNESS.md](SCANNER_TRUTHFULNESS.md)** | **Read before believing any scanner's count, and before writing a new one.** The lying-by-omission failure shape (a silent `continue`/cap/filter plus a summary that reports only what was processed), the `CoverageReport` convention every scanner now follows, the full audit table, and the standing rule |
 
 ## MCP Orchestrator Tools (Primary Interface)
 
@@ -108,6 +109,16 @@ python3 msvc-src/tools/il_diff.py variant_a.cpp variant_b.cpp -f FunctionName
 | Tool | Description | Doc |
 |------|-------------|-----|
 | Register Swap Patcher | Patches .obj register fields using objdiff diff as oracle (manual, not run by default) | [REFERENCE.md](REFERENCE.md#register-swap-patcher) |
+
+## Scanner Honesty (measurement hygiene)
+
+See [SCANNER_TRUTHFULNESS.md](SCANNER_TRUTHFULNESS.md). Run all three before trusting — or shipping — a scanner's count.
+
+| Tool | Description | Usage |
+|------|-------------|-------|
+| `coverage.py` | `CoverageReport`: declare the universe, count every discard, refuse to print a clean summary when the denominator does not balance (exit 3 TRUNCATED / 4 UNACCOUNTED) | `from scripts.analysis.coverage import CoverageReport` |
+| `honesty_lint.py` | Static check for unescaped SQL `LIKE` wildcards and self-truncating slices that never announce the truncation | `python3 scripts/analysis/honesty_lint.py --warnings` |
+| `determinism_check.py` | Runs each scanner twice under two `PYTHONHASHSEED` values and diffs it against itself. An empty/failed run is `INCONCLUSIVE`, never a pass | `python3 scripts/analysis/determinism_check.py` |
 
 ## Analysis & Diagnostic Tools
 
