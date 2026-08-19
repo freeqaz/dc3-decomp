@@ -283,6 +283,10 @@ public:
     virtual Hmx::Object *RefOwner() const;
     virtual void Replace(Hmx::Object *obj) { mOwner->Replace(this, obj); }
     void operator=(T *obj) { SetObjConcrete(obj); }
+    // Retargets this reference only. Must NOT be the implicit copy-assignment,
+    // which would also overwrite mOwner with the source's owner and leave this
+    // ObjOwnerPtr reporting the wrong RefOwner()/Replace() target.
+    void operator=(const ObjOwnerPtr &o) { SetObjConcrete(o.Ptr()); }
     T *Ptr() const { return mObject; }
 };
 
