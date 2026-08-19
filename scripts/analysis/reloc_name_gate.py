@@ -1,0 +1,418 @@
+#!/usr/bin/env python3
+"""List every function whose RELOCATION TARGET NAMES disagree with the target's.
+
+WHY THIS EXISTS
+===============
+`match_percent_normalized` is defined as `diff_score - arg_diff_score`, and
+objdiff folds relocation penalties into `arg_diff_score` by design
+(`objdiff-core/src/diff/code.rs`).  **No `-c` flag makes a wrong callee cost a
+normalized point.**  `scripts/orchestrator/mcp_server.py` and
+`scripts/sync_objdiff.py` additionally hard-code `functionRelocDiffs=none`, so
+`decomp.db.current_percent` is blind as well.
+
+Demonstrated on this tree (2026-08-19): repointing all 13 `bl` sites of a
+100 %-matched function at a nonexistent decoy -- changing ZERO instruction
+bytes -- left `run_objdiff` printing 64 equal / **0 mismatches** and normalized
+at exactly 100.0.  A function can therefore call entirely the wrong callees and
+score a perfect, zero-mismatch 100 %.
+
+Two confirmed bugs of that shape:
+  * `createFilter`  -- `EQEffect.cpp` declared it `extern "C"`, so the object
+    referenced an unmangled symbol while the target calls
+    `?createFilter@@YAXW4FilterType@@...`.
+  * `KinectShareConnection::Poll` -- calls `MakeString<char>` where the target
+    calls `MakeString<unsigned char>` (`8268f6e8` vs `825f7ae0`, two distinct
+    addresses in `orig/373307D9/ham_xbox_r.map`, not an ICF fold).
+
+WHAT IT DOES -- AND WHAT IT DELIBERATELY DOES NOT
+=================================================
+It **lists**.  It does not classify a row away.  The one classifier this project
+already had for this class (`split_reloc_residency.py`) would have buried
+`createFilter` as a candidate ICF fold, so every row here is printed with the
+evidence that would let you adjudicate it, and nothing is dropped on the floor.
+
+The only judgement applied is a set of named, individually-countable
+`--exempt` buckets, and **the count of every bucket is always printed** so the
+denominator is never hidden.  `--no-exempt` prints the raw population.
+
+DENOMINATOR
+===========
+Every run prints:  rows scanned / rows in the population / bytes, plus the
+per-bucket counts.  A numerator without its denominator is not a measurement.
+
+THE POPULATION
+==============
+A row qualifies when it scores 100 % under `functionRelocDiffs=none` but below
+100 % under the graded ruler (`name_check`, read from `report.json`'s own
+`provenance.diff_config` via `scripts/analysis/ruler.py`).  That delta isolates
+the relocation-NAME class exactly: `none` and the graded ruler differ in one
+key, so nothing else can move between the two legs.  Both legs load
+`build/373307D9/icf_aliases.map`, so folds the project has already adjudicated
+are forgiven before a row ever reaches this tool.
+
+ADJUDICATION
+============
+Each charged pair (target_name, our_name) is resolved in the shipped MSVC linker
+map `orig/373307D9/ham_xbox_r.map`:
+
+    FOLD                both names occupy the same address  -> ICF, benign
+    DIFFERENT_ADDRESS   both present, different addresses    -> REAL divergence
+    BASE_NOT_IN_MAP     our name absent from the image       -> lead (weak: an
+                        ICF fold loser can also be absent)
+    TARGET_NOT_IN_MAP   dtk synthetic (`merged_*`/`OnlyReturns`) -> usually fold
+    NEITHER_IN_MAP      static/local-scope symbols the map never lists
+
+NEGATIVE CONTROL
+================
+`--selftest` re-applies the `createFilter` bug **in memory** (no build, no edit)
+against a recorded fixture of the charge and asserts the tool reports it.  For
+the end-to-end control, re-declare `createFilter` `extern "C"` in
+`src/system/synth/EQEffect.cpp`, rebuild, and re-run: the row must appear with
+the pair
+    ?createFilter@@YAXW4FilterType@@MMMMPAUFilterCoeff@@@Z  vs  createFilter
+See docs/decomp/patterns/relocation-names-are-unmetered.md.
+
+USAGE
+=====
+    python3 scripts/analysis/reloc_name_gate.py --project . --map orig/373307D9/ham_xbox_r.map
+    python3 scripts/analysis/reloc_name_gate.py --project . --json-out /tmp/rows.json
+    python3 scripts/analysis/reloc_name_gate.py --selftest
+"""
+
+from __future__ import annotations
+
+import argparse
+import collections
+import json
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+
+from scripts.analysis import ruler as ruler_mod  # noqa: E402
+
+MAP_LINE = re.compile(r"^\s*[0-9A-Fa-f]{4}:[0-9A-Fa-f]{8}\s+(\S+)\s+([0-9A-Fa-f]{8})\b")
+
+# ── Exemption buckets ────────────────────────────────────────────────────────
+# Each is a named, counted bucket.  Nothing is silently dropped: --no-exempt
+# turns them all off and the per-bucket counts print either way.
+
+#: dtk placeholder for an anonymous namespace whose hash it could not recover:
+#: `?x@?A@@3MA` (target) vs `?x@?A0xf503845b@@3MA` (ours).  Same variable.
+_ANON_NS = re.compile(r"@\?A(0x[0-9a-f]+)?@")
+
+#: MSVC lexical-scope counter on a function-local static:
+#: `?_s@?HP@??Foo@@...` vs `?_s@?JD@??Foo@@...`.  Same variable, different
+#: number of preceding scopes -- an inlining-shape signal, not a wrong callee.
+#: Two encodings appear: a bare digit (`?9??Foo`) for 0..9 and a letter run
+#: terminated by `@` (`?M@??Foo`, `?HP@??Foo`) above that, so both must match or
+#: the exemption silently misses half the class.
+_SCOPE = re.compile(r"^(\?[^@?]*@)\?(?:[0-9]|[A-P]+@)(\?\?.*)$")
+
+#: dtk synthetics for ICF fold winners it could not name.
+_SYNTHETIC = re.compile(r"^(merged_|OnlyReturns$|Returns\d)")
+
+
+def _strip_anon(name: str) -> str:
+    return _ANON_NS.sub("@?A@", name)
+
+
+def _strip_scope(name: str) -> str | None:
+    m = _SCOPE.match(name)
+    return (m.group(1) + m.group(2)) if m else None
+
+
+def classify_exempt(target: str, base: str) -> str | None:
+    """Named exemption bucket for a pair, or None if the pair stands."""
+    if _strip_anon(target) == _strip_anon(base):
+        return "anon_ns_placeholder"
+    ts, bs = _strip_scope(target), _strip_scope(base)
+    if ts is not None and bs is not None and ts == bs:
+        return "scope_counter"
+    if _SYNTHETIC.match(target):
+        return "dtk_synthetic_fold_name"
+    return None
+
+
+def load_map_index(path: str) -> dict[str, list[str]]:
+    idx: dict[str, set] = collections.defaultdict(set)
+    with open(path, errors="replace") as fh:
+        for line in fh:
+            m = MAP_LINE.match(line)
+            if m:
+                idx[m.group(1)].add(m.group(2).lower())
+    return {k: sorted(v) for k, v in idx.items()}
+
+
+def map_verdict(idx, target: str, base: str) -> str:
+    ta, ba = idx.get(target), idx.get(base)
+    if not ta and not ba:
+        return "NEITHER_IN_MAP"
+    if not ta:
+        return "TARGET_NOT_IN_MAP"
+    if not ba:
+        return "BASE_NOT_IN_MAP"
+    return "FOLD" if set(ta) & set(ba) else "DIFFERENT_ADDRESS"
+
+
+def gen_report(cli: str, project: Path, extra: list[str], out: Path) -> None:
+    cmd = [cli, "report", "generate", "-p", str(project), "-o", str(out)] + extra
+    subprocess.run(cmd, check=True, capture_output=True, text=True)
+
+
+def index_report(path: Path) -> dict:
+    rep = json.loads(Path(path).read_text())
+    out = {}
+    for u in rep["units"]:
+        for f in (u.get("functions") or []):
+            out[(u["name"], f["name"])] = (
+                float(f.get("fuzzy_match_percent") or 0.0),
+                int(f.get("size") or 0),
+            )
+    return out
+
+
+def charged_pairs(cli, project, ruler, population, timeout):
+    """(unit, sym) -> {'pairs': [...], 'other': n} for the population rows."""
+    by_unit = collections.defaultdict(list)
+    for u, s in population:
+        by_unit[u].append(s)
+    out = {}
+    for unit, syms in sorted(by_unit.items()):
+        cmd = [cli, "diff", "-p", str(project), "-u", unit, "--batch",
+               "-f", "json", "-o", "-", "--include-instructions"] + ruler.args
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True,
+                               input="\n".join(syms) + "\n", timeout=timeout)
+        except subprocess.TimeoutExpired:
+            print(f"  ! timeout on {unit}", file=sys.stderr)
+            continue
+        txt = r.stdout.strip()
+        if not txt:
+            print(f"  ! empty diff for {unit}", file=sys.stderr)
+            continue
+        try:
+            j = json.loads(txt)
+            recs = j if isinstance(j, list) else [j]
+        except json.JSONDecodeError:
+            recs = [json.loads(x) for x in txt.splitlines() if x.strip()]
+        for rec in recs:
+            sym = rec.get("symbol") or rec.get("name") or ""
+            if sym not in syms:
+                continue
+            pairs, other = set(), 0
+            for ins in rec.get("instructions", []) or []:
+                mt = ins.get("match_type")
+                if mt == "equal":
+                    continue
+                t, b = ins.get("target") or {}, ins.get("base") or {}
+                kinds, sp = set(), None
+                for x, y in zip(t.get("typed_args", []) or [],
+                                b.get("typed_args", []) or []):
+                    if x.get("value") != y.get("value"):
+                        kinds.add(x.get("type"))
+                        if x.get("type") == "Symbol":
+                            sp = (x.get("value"), y.get("value"))
+                if mt == "diff_arg" and kinds == {"Symbol"} and sp:
+                    pairs.add(sp)
+                else:
+                    other += 1
+            out[(unit, sym)] = {"pairs": sorted(pairs), "other": other}
+    return out
+
+
+# ── Negative control ─────────────────────────────────────────────────────────
+#: The charge the `createFilter` bug produces, recorded verbatim from the tree
+#: on 2026-08-19 while the bug was re-applied.  --selftest replays it through
+#: the same adjudication path a live run uses; if a future edit makes the tool
+#: classify this away, the selftest fails.
+_CREATEFILTER_FIXTURE = (
+    "?createFilter@@YAXW4FilterType@@MMMMPAUFilterCoeff@@@Z",
+    "createFilter",
+)
+
+
+def _selftest() -> int:
+    ok = True
+
+    def check(label, cond, detail=""):
+        nonlocal ok
+        print(f"  [{'PASS' if cond else 'FAIL'}] {label}"
+              f"{(' - ' + detail) if detail else ''}")
+        ok = ok and cond
+
+    t, b = _CREATEFILTER_FIXTURE
+    check("createFilter pair is NOT exempted", classify_exempt(t, b) is None,
+          f"bucket={classify_exempt(t, b)}")
+
+    # Exemptions must fire on their own shapes, or they are decoration.
+    check("anon-ns placeholder is exempted",
+          classify_exempt("?gXboxDeadzone@?A@@3MA",
+                          "?gXboxDeadzone@?A0xf503845b@@3MA")
+          == "anon_ns_placeholder")
+    # Both MSVC scope encodings, taken verbatim from this tree's charges.
+    check("scope counter (digit vs letter-run) is exempted",
+          classify_exempt(
+              "?msg@?9??OnMsg@PreloadPanel@@AAA?AVDataNode@@"
+              "ABVUITransitionCompleteMsg@@@Z@4VMessage@@A",
+              "?msg@?M@??OnMsg@PreloadPanel@@AAA?AVDataNode@@"
+              "ABVUITransitionCompleteMsg@@@Z@4VMessage@@A")
+          == "scope_counter")
+    check("scope counter (letter-run vs letter-run) is exempted",
+          classify_exempt(
+              "?_s@?HP@??SyncProperty@CamShot@@UAA_NAAVDataNode@@"
+              "PAVDataArray@@HW4PropOp@@@Z@4VSymbol@@A",
+              "?_s@?JD@??SyncProperty@CamShot@@UAA_NAAVDataNode@@"
+              "PAVDataArray@@HW4PropOp@@@Z@4VSymbol@@A")
+          == "scope_counter")
+    # ...but it must NOT swallow a pair where the VARIABLE differs, only the
+    # scope counter.  A scanner that ate this would hide ThreeDSound::Load.
+    check("different local-static names are NOT exempted",
+          classify_exempt(
+              "?gRevs@?1??Load@ThreeDSound@@UAAXAAVBinStream@@@Z@4QBGB",
+              "gAltRev") is None)
+    check("same scope, different variable is NOT exempted",
+          classify_exempt("?omg@?CM@??Foo@@QAA@Z@4V5@A",
+                          "?wtf@?CM@??Foo@@QAA@Z@4V5@A") is None)
+    check("dtk synthetic is exempted",
+          classify_exempt("merged_SetObjConcrete", "?SetObj@@QAA@Z")
+          == "dtk_synthetic_fold_name")
+
+    # A real wrong-callee pair with two different spellings must NOT be exempt.
+    check("MakeString<E> vs MakeString<D> is NOT exempted",
+          classify_exempt("??$MakeString@E@@YAPBDPBDABE@Z",
+                          "??$MakeString@D@@YAPBDPBDABD@Z") is None)
+    check("Task vs Hmx::Object base ctor is NOT exempted",
+          classify_exempt("??0Object@Hmx@@QAA@XZ", "??0Task@@QAA@XZ") is None)
+
+    print("PASS" if ok else "FAIL")
+    return 0 if ok else 1
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap.add_argument("--project", default=".")
+    ap.add_argument("--map", default=None,
+                    help="MSVC linker map (default: orig/<title>/ham_xbox_r.map)")
+    ap.add_argument("--objdiff-cli", default=None)
+    ap.add_argument("--json-out")
+    ap.add_argument("--no-exempt", action="store_true",
+                    help="print the raw population with no exemption buckets")
+    ap.add_argument("--include-synthetic", action="store_true",
+                    help="also list fn_*/lbl_* rows (EH funclets etc.)")
+    ap.add_argument("--timeout", type=int, default=900)
+    ap.add_argument("--fail-on", type=int, default=None,
+                    help="exit 1 if the standing (non-exempt) row count exceeds N")
+    ap.add_argument("--selftest", action="store_true")
+    args = ap.parse_args(argv)
+
+    if args.selftest:
+        print("# reloc_name_gate selftest (negative control)")
+        return _selftest()
+
+    project = Path(args.project).resolve()
+    cli = args.objdiff_cli or str(project / "bin" / "objdiff-cli")
+    graded = ruler_mod.resolve_ruler(project, ruler_mod.RULER_GRADED)
+    blind = ruler_mod.resolve_ruler(project, ruler_mod.RULER_NONE)
+    print(graded.banner())
+    print(f"blind leg: functionRelocDiffs={blind.reloc_mode}")
+
+    mapfile = args.map
+    if not mapfile:
+        cand = sorted(project.glob("orig/*/ham_xbox_r.map"))
+        if not cand:
+            raise SystemExit("no orig/<title>/ham_xbox_r.map; pass --map")
+        mapfile = str(cand[0])
+
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        none_json = Path(td) / "report_none.json"
+        gen_report(cli, project, blind.args, none_json)
+        N = index_report(none_json)
+    graded_report = ruler_mod._find_report_json(project)
+    if graded_report is None:
+        raise SystemExit("no build/<title>/report.json -- run ninja first")
+    G = index_report(graded_report)
+
+    scanned = len(N)
+    pop = [k for k in N if N[k][0] >= 100.0 and G.get(k, (0.0, 0))[0] < 100.0]
+    if not args.include_synthetic:
+        pop = [k for k in pop if not k[1].startswith(("fn_", "lbl_"))]
+    pop_bytes = sum(N[k][1] for k in pop)
+
+    print(f"\nrows scanned (denominator)          : {scanned}")
+    print(f"rows 100% blind but <100% graded    : {len(pop)}  ({pop_bytes} B)")
+    if not args.include_synthetic:
+        print("  (fn_*/lbl_* funclet rows excluded; --include-synthetic to keep)")
+
+    idx = load_map_index(mapfile)
+    print(f"linker map                          : {mapfile} ({len(idx)} names)")
+
+    detail = charged_pairs(cli, project, graded, pop, args.timeout)
+
+    buckets = collections.Counter()
+    rows = []
+    for key in sorted(pop, key=lambda k: -N[k][1]):
+        d = detail.get(key, {"pairs": [], "other": 0})
+        kept, exempted = [], collections.Counter()
+        for t, b in d["pairs"]:
+            bucket = None if args.no_exempt else classify_exempt(t, b)
+            if bucket:
+                exempted[bucket] += 1
+                buckets[bucket] += 1
+                continue
+            kept.append({"target": t, "base": b,
+                         "verdict": map_verdict(idx, t, b),
+                         "target_addrs": idx.get(t, []),
+                         "base_addrs": idx.get(b, [])})
+        if not d["pairs"]:
+            buckets["no_symbol_pair_extracted"] += 1
+        rows.append({"unit": key[0], "symbol": key[1], "size": N[key][1],
+                     "graded_fuzzy": G[key][0], "other_charges": d["other"],
+                     "pairs": kept, "exempted": dict(exempted)})
+
+    standing = [r for r in rows if r["pairs"]]
+    fold = [r for r in standing
+            if all(p["verdict"] == "FOLD" for p in r["pairs"])]
+    print(f"\nexemption buckets (counted, never hidden):")
+    for k, v in sorted(buckets.items()):
+        print(f"  {k:<28} {v:>5} pairs")
+    if not buckets:
+        print("  (none)")
+    print(f"\nrows still standing after exemptions : {len(standing)}"
+          f"  ({sum(r['size'] for r in standing)} B)")
+    print(f"  of which every pair is a proven FOLD: {len(fold)}")
+
+    vcount = collections.Counter(p["verdict"] for r in standing for p in r["pairs"])
+    print("\npair verdicts (standing rows):")
+    for k, v in vcount.most_common():
+        print(f"  {k:<20} {v:>5}")
+
+    print("\n" + "=" * 78)
+    for r in standing:
+        if r in fold:
+            continue
+        print(f"\n{r['size']:>7} B  graded={r['graded_fuzzy']:.4f}  "
+              f"other_charges={r['other_charges']}")
+        print(f"  {r['unit']} :: {r['symbol']}")
+        for p in r["pairs"]:
+            print(f"    [{p['verdict']}]")
+            print(f"      TARGET {p['target']}  @{p['target_addrs'] or '-'}")
+            print(f"      OURS   {p['base']}  @{p['base_addrs'] or '-'}")
+        if r["exempted"]:
+            print(f"    (also exempted: {r['exempted']})")
+
+    if args.json_out:
+        Path(args.json_out).write_text(json.dumps(rows, indent=1))
+        print(f"\nwrote {args.json_out}")
+
+    if args.fail_on is not None and len(standing) > args.fail_on:
+        print(f"\nFAIL: {len(standing)} standing rows > --fail-on {args.fail_on}")
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
