@@ -43,7 +43,22 @@ complex expj(double) { HX_STUB_TRACE("expj"); return {0, 0}; }
 __attribute__((weak)) int FileRecursePattern() { HX_STUB_TRACE("FileRecursePattern"); return 0; }
 int FileTimeToSystemTime() { HX_STUB_TRACE("FileTimeToSystemTime"); return 0; }
 #endif // !__EMSCRIPTEN__
-void* gCharHighlightY = 0;
+// gCharHighlightY: char/Char.h declares `extern float gCharHighlightY;`, and the
+// symbol table agrees -- ?gCharHighlightY@@3MA is .data:0x82F08480, size 0x4,
+// data:float -- with the split asm giving its initialiser as `.float -1`.
+// This was `void* gCharHighlightY = 0`, which is the wrong type (8 bytes on
+// LP64, so the extra 4 are simply wasted) and, more importantly, the wrong
+// initial value: -1.0f is the "no highlight pending" sentinel that
+// CharDriver::Highlight() tests (`if (gCharHighlightY == -1.0f)
+// CharDeferHighlight(this);`) and that CharDebug::UpdateOverlay restores on the
+// way out. Starting at 0.0f made the very first Highlight() take the else
+// branch and highlight at y = 0 instead of deferring. Debug-overlay only, but
+// it costs nothing to be right.
+//
+// The other typed data stubs in this file were checked against the same split
+// asm at the same time and are correct: lbl_82F0BE80 `.float 2`, lbl_82F0E8A4
+// `.4byte 4`, lbl_830A4100 / lbl_830A4104 `.4byte 0`, lbl_8316EB70 `.double 0`.
+float gCharHighlightY = -1.0f;
 // void* gCheatsManager = 0; // now defined in Cheats.cpp
 // void* gDataThisPtr = 0; // now defined in DataFunc.cpp
 // void* gDebugDepth = 0; // now defined in LiveCameraInput.cpp
