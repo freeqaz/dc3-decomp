@@ -290,9 +290,9 @@ void RndRibbon::UpdateChase() {
 
         unsigned int numKeys = mTransforms.size();
         unsigned int removeCount = 0;
+        unsigned int i = 0;
         if (numKeys != 0) {
             float cutoff = now - mDecay;
-            unsigned int i = 0;
             do {
                 if (mTransforms[i].frame >= cutoff) {
                     break;
