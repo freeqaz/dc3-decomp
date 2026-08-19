@@ -262,26 +262,36 @@ spelled macro.
 ## Using it
 
 1. `python3 scripts/analysis/scope_index_census.py` — whole-build census of
-   target vs our indices, grouped by enclosing function. After the 2026-08-19
-   multiset fix: 1,259 functions agree and 60 do not. (The older "1,289 / 30"
-   figures came from a census that kept only the last static parsed under each
-   name; 33 of the 60 were hiding behind that collapse, and most of them are
-   `COUNT tgt/ours=(2,1)` — a warn-once the target has and we do not.)
-## Using it
-
-1. `python3 scripts/analysis/scope_index_census.py` — whole-build census of
-   target vs our indices, grouped by enclosing function. Since it started
-   reading `ham_xbox_r.map`: **970 functions agree and 203 do not**, with two
-   COUNT rows. Earlier figures are not comparable and should not be quoted:
+   target vs our indices, grouped by enclosing function. Reading
+   `ham_xbox_r.map`, with back-reference digits blanked and after the assert
+   spellings landed: **977 agree, 204 do not, 131 target-only**, with two COUNT
+   rows. Earlier figures are not comparable and should not be quoted:
    "1,259 / 60" (2026-08-19 multiset fix) and "1,289 / 30" before it were both
    measured against `symbols.txt`, i.e. against ourselves for the majority of
    rows, and their `COUNT tgt/ours=(2,1)` class was an artifact end to end.
 2. For one function, decode both sides and walk the source with the table. The
    delta localises to the exact stretch between two statics.
-3. Fix the source, rebuild the one `.obj`, and read the new names back with
-   `strings -a <obj> | grep '??<function>'`. The obj patchers do not touch scope
-   indices, so a single-object build is enough for this check (it is NOT enough
-   for a match percentage — see BUILD_SYSTEM.md).
+3. Fix the source, rebuild the one `.obj`, and read the new **data** symbol back
+   with `strings -a <obj> | grep '?<name>@?'`. The obj patchers do not touch
+   *data* scope indices, so a single-object build is enough for this check (it
+   is NOT enough for a match percentage — see BUILD_SYSTEM.md).
+
+   **Two ways this step lies, and both have already cost a session.** First,
+   `ninja build/373307D9/src/<x>.obj` on an object that is already up to date
+   does *nothing* — you then read the object the full build left behind, whose
+   `??__F` names `obj_atexit_scope_patcher.py` has rewritten to the *target's*.
+   That is how a "control" came to report our data index against the target's
+   helper index and appeared to prove that the two counters differ. Second, the
+   patcher renames in place when the byte lengths match (`?_dw@?1@` and
+   `?_dw@?2@` are the same length), so `strings` cannot recover our original
+   atexit index at all. **Never read our side from `??__F`, and touch the source
+   file before rebuilding if you want to be sure the compiler actually ran.**
+
+   To settle a question about the counter itself, do not use a build product —
+   compile a standalone probe (see *Calibrating it yourself*). That is what
+   finally established that our own `cl.exe` emits the *same* index for a
+   static's data symbol and its `??__F` helper: a probe TU emits `?a@?M@??f@`
+   and `??__Fa@?M@??f@` for one static.
 4. Confirm with `run_objdiff` that the instruction stream is untouched. **If an
    edit moves a single instruction it is the wrong edit**: these are pure
    structure, and the compiler emits the same code for braced and unbraced
@@ -513,3 +523,53 @@ A census must compare `?<name>@?<scope>??<fn>` on both sides only, and must
 compare **lists** per name — several `_dw`, `_s`, `msg` or `$S<n>` statics can
 share a name inside one function, and keying `name -> int` silently compares two
 unrelated statics.
+
+## Two claims about this instrument that were tested and REFUTED (2026-08-19)
+
+Six lanes worked this class in one session and two of them reached opposite
+conclusions. Both are recorded here so neither gets re-derived.
+
+**REFUTED: "the `??__F` atexit helper does not carry the same counter as the
+data symbol."** Offered on the strength of 30 disagreements out of 179
+`(name, function)` pairs where `symbols.txt` names both, with `_dw` disagreeing
+19 times in 26. The measurement is real; the inference is not. `symbols.txt`
+never contains two *map-backed* names for one static — a control over
+`ham_xbox_r.map` alone finds **zero** `(name, fn)` pairs carrying both a data
+symbol and a helper — so every one of those 179 pairs has a synthesised data
+name on one side, carrying **our** index. A disagreement is therefore the
+census's own signal (our index ≠ the target's), not a fact about MSVC. The
+direct probe settles it the other way: one static, one index, on both symbols.
+
+The lane that raised it (`fix/scope-idx-5-20260819`) was **not merged**. Its
+census rewrite discards the atexit evidence in favour of data-vs-data with
+subset semantics, which blinds the instrument for exactly the destructor-bearing
+statics (`_dw`, `msg`) it is best at, and its `DingoJob::SendCallback` fix
+(82.6% → 90.9%) is superseded by lane 6's (→ 99.1%). One thing was salvaged: the
+back-reference blanking, which is real and is described under
+*Reading the two sides correctly*.
+
+**REFUTED: "the implied assert costs are mutually inconsistent, so there is no
+second spelling."** Argued from four brace-only floors. One of the four,
+`KinectSharePanel::OnPostLink`, was computed wrong — its static is in the `else`
+arm, worth +2, which the floor omitted — and a whole-build A/B then *measured*
+that function at cost 0, landing it exactly on the target. The floor technique
+is sound and worth keeping; a floor is only as good as the arm you counted the
+static into. Recompute a floor before you build an argument on it.
+
+## Still open
+
+* **The cost-3 residue.** Five functions (`Automator::FillButtonMsg`,
+  `CampaignMqCrewProvider::Text` / `::UpdateList`, `CampaignSongProvider::Text`,
+  `PreloadPanel::OnMsg(const UITransitionCompleteMsg &)`) reconcile only at an
+  assert costing 3, all are zero-mismatch on instructions, and
+  `CampaignSongProvider::Text` is not self-consistent even at 3. No sibling
+  decomp witnesses a bare-`if` spelling, so no third macro was written.
+* **`RndTexBlender::DrawShowing`**, the last COUNT row with evidence behind it:
+  three target helpers against our five `_dw`, because we hand-inlined
+  `DrawBlendList` into both loops. Route through the real function instead —
+  but check its body first, since its `state != 2 ? mNearMap : mFarMap`
+  contradicts the near loop's `mRenderedStates |= 2`.
+* **`BustAMovePanel::OnBeat`**: we invented a `static Message playMsg` and are
+  missing the original's third `matchedMessage`; the beat-dedup `if` around
+  `sLastBeat` is ours and is not guarded by `HX_NATIVE`. Blocked behind a wrong
+  class layout, not behind the scope index.
