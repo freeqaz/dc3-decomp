@@ -1,13 +1,31 @@
-# A rendered "100.0%" is not byte-identity — three surfaces round
+# A displayed "100.0%" is not byte-identity — but `report.json` is NOT one of the liars
 
-**Established 2026-08-19.** Every percentage this project renders is rounded, so **99.97% displays
-as `100.0`**. Three independent surfaces do it:
+**Established 2026-08-19, corrected the same day** after an independent verification read objdiff's
+scoring source and built its own COFF reader + PPC disassembler. The original version of this
+document said *"every percentage surface rounds"* and named `report.json` among them. **That was
+wrong**, and it was wrong in the dangerous direction: it told readers to distrust the one surface
+that is exact.
 
-| surface | what it showed | truth |
+| surface | rounds? | notes |
 |---|---|---|
-| `decomp.db.current_percent` | `100.0` | `99.971695` |
-| `run_objdiff` headline | `Match: 100.0% normalized (99.8% raw)` | 3 `diff_arg` rows in its own table below |
-| `report.json.match_percent_normalized` | `100.00` | `run_objdiff` 99.9%, 4 real mismatches |
+| `decomp.db.current_percent` | **yes, inconsistently** | holds `99.85558` for one row and `95.38` for another — precision depends on which writer wrote it |
+| `run_objdiff` headline | **yes** | printed `Match: 100.0% normalized` above a table listing 3 mismatches |
+| `report.json.match_percent_normalized` | **NO — exact f32, no rounding** | written raw by `objdiff-cli/src/cmd/report.rs` |
+
+`match_percent_normalized` is score-weighted, not rounded: `max_score = n_instructions * 100`, and
+an **immediate** arg diff costs 1 point and is deliberately *not* folded into `arg_diff_score`
+(`objdiff-core/src/diff/code.rs`, carve-out added 2026-05-26). So a wrong field really does show up:
+
+- `CamShot::Load`, 119 wrong offsets in 824 instructions → `99.85558` = `100 − 119/(824·100)·100`
+- the `RndFlare::Load` bug re-injected as a control → `99.992905` = `100 − 1/(141·100)·100`
+
+Neither renders as `100.00`. **A single-field serializer bug is fully visible in `report.json`.**
+
+What normalization *does* forgive is register permutation, branch-target and relocation-name
+differences. So `100.0` there means "no non-register mismatch", not "byte-identical" — which is a
+real caveat, just a different one from rounding. Measured over 1,397 serializers scoring exactly
+`100.0`: 23 have instruction differences, 274 rows in total, **every one register permutation, zero
+offset diffs** — so for a *field* hunt, `report.json < 100.0` is a sound and complete filter.
 
 ## Why it matters
 
@@ -28,12 +46,14 @@ Two real bugs were sitting under a rendered `100.0`:
 
 ## The rule
 
-> **"100% ⇒ artifact" may only be applied to an instruction count of ZERO MISMATCHES — never to any
-> rendered percentage.**
+> **"100% ⇒ artifact" may only be applied to an instruction count of ZERO MISMATCHES — never to a
+> *displayed* percentage.**
 
 Use `run_objdiff`'s instruction summary (`all equal` vs a mismatch table), not its headline number,
-and never the DB's or `report.json`'s. If you are about to dismiss a divergence because "it's at
-100%", re-measure and look at the table first.
+and not `decomp.db`'s. `report.json`'s normalized value *is* trustworthy as a filter — it is exact,
+and it cannot hide a wrong field — but it still forgives register permutation, so it answers "no
+non-register mismatch", not "byte-identical". If you are about to dismiss a divergence because "it's
+at 100%", re-measure and look at the table first.
 
 ## The fingerprint this exposes
 
@@ -49,11 +69,20 @@ almost no match% — which is exactly why this class survives to the 99% band.
 A full sweep of this fingerprint was run over every serializer in the binary. It found real bugs
 (below), but three things in the earlier text are wrong and cost time:
 
-**1. `r31` is not `this`.** In any function with a large frame MSVC uses `r31` as the *frame
-pointer* (`subi r31, r1, <framesize>` in the prologue), so `<off>(r31)` is a stack slot. Three of
-the loudest apparent "field disagreements" were pure stack-layout diffs: `FxSendChorus::Load`
-(r31 = r1-0x?? , 10 rows), `CamShot::Load` (**119** rows, frame 0x470 vs 0x490) and `RndText::Load`
-(frame 0x1c0 vs 0x1b0). Always read the prologue before believing an `r31` offset.
+**1. `r31` is not reliably `this` — and it is not reliably the frame pointer either.** In a function
+with a large frame MSVC parks the *frame pointer* in `r31` (`addi r31, r1, -<framesize>` in the
+prologue), so `<off>(r31)` is a stack slot and `this` lives elsewhere (r30 in both cases below):
+
+| function | prologue | what `r31` is |
+|---|---|---|
+| `CamShot::Load` | `addi r31, r1, -0x470` (base `-0x490`) | frame pointer, 119 rows of stack diff |
+| `RndText::Load` | `addi r31, r1, -0x1c0` (base `-0x1b0`) | frame pointer |
+| `FxSendChorus::Load` | `mr r31, r3` | **`this`** — frame only 0xb0, no frame pointer at all |
+
+`FxSendChorus::Load` is the one to remember: its ten differing rows *are* stack slots, but they are
+`(r1)`-relative (`0x54/0x50`, `0x58/0x54`, `0x50/0x58`, `0x50/0x5c`) and `r31` is genuinely the
+receiver. So the rule is **read the prologue**, not "assume `r31` is a frame pointer" — that
+substitution just trades a false positive for a false negative.
 
 **2. `run_objdiff`'s "Offset Mismatches (resolved)" enrichment does not check the base register.**
 It resolves *any* offset against the class struct, so it will invent a field-disagreement story out
