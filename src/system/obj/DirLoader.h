@@ -62,7 +62,15 @@ public:
     static bool SaveObjects(const char *, ObjectDir *, bool);
     static void SaveObjects(BinStream &, ObjectDir *);
     static void WriteTypeMemDump(TextFileStream *);
-    static Loader *New(const FilePath &, LoaderPos);
+    // In-class (implicitly inline), not out-of-line in DirLoader.cpp: the target's
+    // only copy of ?New@DirLoader@@SAPAVLoader@@ABVFilePath@@W4LoaderPos@@@Z is a
+    // folded header COMDAT (`f i` in ham_xbox_r.map) parked in obj:Dir.obj's range
+    // -- Dir.cpp odr-uses it ten times via TheLoadMgr.RegisterFactory(..., &New).
+    // With the definition in DirLoader.cpp, Dir.obj carries no body and objdiff
+    // scores it 0%.
+    static Loader *New(const FilePath &fp, LoaderPos pos) {
+        return new DirLoader(fp, pos, nullptr, nullptr, nullptr, false, nullptr);
+    }
     static DirLoader *Find(const FilePath &);
     static DirLoader *FindLast(const FilePath &);
     static ObjectDir *LoadObjects(const FilePath &, Callback *, BinStream *);

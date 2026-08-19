@@ -29,9 +29,7 @@ TextFileStream *DirLoader::sObjectMemDumpFile;
 TextFileStream *DirLoader::sTypeMemDumpFile;
 std::map<String, MemPointDelta> DirLoader::sMemPointMap;
 
-Loader *DirLoader::New(const FilePath &fp, LoaderPos pos) {
-    return new DirLoader(fp, pos, nullptr, nullptr, nullptr, false, nullptr);
-}
+// DirLoader::New is defined in-class in DirLoader.h -- see the note there.
 
 DirLoader::DirLoader(
     const FilePath &fp,

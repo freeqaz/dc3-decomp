@@ -8,7 +8,12 @@
 class FlowTrigger : public FlowQueueable {
 public:
     struct PropTriggerDefn {
-        PropTriggerDefn(Hmx::Object *);
+        // In-struct (implicitly inline), not out-of-line in FlowTrigger.cpp: the
+        // target's only copy of ??0PropTriggerDefn@FlowTrigger@@QAA@PAVObject@Hmx@@@Z
+        // is a folded header COMDAT (`f i` in ham_xbox_r.map) parked in
+        // flow:Flow.obj's range -- Flow.cpp:358 constructs
+        // ObjList<FlowTrigger::PropTriggerDefn>. Body unchanged.
+        PropTriggerDefn(Hmx::Object *owner) : mProvider(owner) { mProperty = 0; }
 
         DataNode GetPathDisplay(DataArray *);
 
