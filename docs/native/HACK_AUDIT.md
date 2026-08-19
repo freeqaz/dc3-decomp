@@ -477,7 +477,14 @@ by one before you change anything else):
 |---|---|---|---|---|
 | `eda64e956` (merge-base) | original regex | 814 | 107 | — (never a script output; hand-counted as "24") |
 | `eda64e956` | corrected regex + attribution | 688 | 156 | 42 |
-| branch head on `00cf7aa4d` | corrected regex + attribution | 686 | 154 | **41** |
+| branch head on `8455b09be` | original regex | 812 | 106 | — |
+| branch head on `8455b09be` | corrected regex + attribution | 686 | 154 | **41** |
+
+The third row is the whole argument for the provenance banner. The audit was written
+saying "814 / 107" flatly. One of those 814 was the guard the audit itself fixed, so on
+its own branch it was already 813 / 106 — and after a rebase onto three more merges of
+`main`, 812 / 106. Three different true answers to "how many?", none of them wrong, and
+the doc named no tree. Re-run the scanner: it prints the commit it scanned.
 
 The subset is now a flag, not a hand count: `--leading-stmts 2` prints it and lists it.
 The count rose from ~24-27 to 41 because the attribution fix resolves enclosing
