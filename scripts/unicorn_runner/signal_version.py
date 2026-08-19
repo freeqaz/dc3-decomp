@@ -40,6 +40,45 @@ import hashlib
 #         unmapped_access_mismatch DIVERGENT
 SIGNAL_VERSION = 3
 
+# Current HARNESS version. SIGNAL_VERSION describes the *comparator semantics*;
+# HARNESS_VERSION describes the *emulation environment* those semantics are
+# applied to. They are independent: eight defects fixed 2026-08-18/19 changed
+# what the machine actually did without touching a single comparator rule, so
+# SIGNAL_VERSION stayed 3 and the DB had no column that could tell a verdict
+# produced by the broken harness from one produced by the fixed harness. Rows
+# from before a bump are stale even when their signal_version matches.
+#
+# h1 — everything up to and including the 2026-03 whole-DB sweep and the
+#      2026-05/06 partial refreshes. All four float/region/ICF defects live.
+# h2 — merge ccd4c8036 (2026-08-18). Defects 1-4:
+#       * float literals read as 0.0f on the ORIGINAL side (__real@... was an
+#         undefined extern there) — hit 139 of 168 genuinely-divergent rows
+#       * region checks ignored RDATA/TRAMPOLINE
+#       * region checks were signedness-blind, so nothing above 0x80000000 was
+#         ever checked
+#       * ICF folding recorded under a real name defeated has_merged
+# h3 — merge 897d0220f (2026-08-18). Defects 5-7:
+#       * both sides now start from one shared initial global image (the
+#         splitter's per-function .objs carry cross-unit globals as UNDEFINED
+#         externals: 4,977 undefined data relocs, 2,474 with nonzero content)
+#       * co-loader ROOT slot was sized from the decomp side only
+#       * execute_function leaked an emulator per call (ref cycle)
+# h4 — merge 0871d63df (2026-08-19). Defect 8, the largest:
+#       * MSVC's register save/restore helpers (__savegprlr_N / __restgprlr_N /
+#         __savefpr_N / __restfpr_N / __savevmx_N / __restvmx_N) are external
+#         REL24 targets and were being given the generic `li r3,0; blr` stub.
+#         So `bl __savegprlr_29` zeroed r3 (this/arg0) at instruction #2 of the
+#         prologue, and `b __restgprlr_29` returned to whatever LR held, making
+#         every helper-using function that called anything re-enter its own tail
+#         and spin to the 50k cap. 1,609 of 1,838 swept functions (87.5%) use a
+#         helper on both sides. Fixed by synthesising the helpers' real bodies
+#         into a HELPER region at 0x80040000.
+#       * cap_exhausted now fires for PC anywhere in CODE u TRAMPOLINE u HELPER,
+#         not just inside the root function's byte range.
+#      Effect on the frontier sweep: DIVERGENT 1364->938, EQUIVALENT 472->898,
+#      cap_exhausted 1037->328, wall clock 44.4s->22.2s.
+HARNESS_VERSION = 4
+
 
 def compute_schedule_hash(per_run_entries):
     """Hash a probe schedule for provenance.
