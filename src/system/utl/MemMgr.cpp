@@ -18,30 +18,66 @@
 #include <cstring>
 
 extern MemTracker *gMemTracker;
-CriticalSection *gMemLock;
 
 #define MAX_HEAPS 16
 #define MAX_BUF_THREADS 32
 
 const char *gStlAllocName = "StlAlloc";
-bool gStlAllocNameLookup = false;
 
-bool gbUseLowestMip = false;
-bool gInsideMemFunc = false;
 extern bool gMemoryUsageTest;
-int gCheckConsistency;
-int gNewOperatorAlign;
-int gSingleHeap;
 extern String gMemLogType;
+
+// This TU's zero-initialised globals are emitted into .bss in reverse
+// declaration order (with alignment gap-filling), so the block below reads as
+// the reverse of the target's layout. Addresses from config symbols.txt,
+// relative to gNullMemStack at 0x830E4B08 -- MemMgr's whole .bss is the
+// 0xc08 bytes from there to 0x830E5710:
+//
+//   +0x000 gNullMemStack   +0x048 gThreadBuf   +0x948 gSingleHeap
+//   +0x94c (align pad)     +0x950 gHeaps       +0xbd0..3 four bools
+//   +0xbd4 gThreadBufCurrentIndex               +0xbd8 gNumThreads
+//   +0xbe4 gNumHeaps       +0xbec gNewOperatorAlign
+//   +0xbf0 gStlAllocNameLookup  +0xbf4 gMemLock  +0xbf8 gMemStackLock
+//   +0xbfc gUseLowestMipExceptions
+//
+// gNullMemStack, gNumThreads, gThreadBufCurrentIndex, gInitted and
+// gCheckConsistency have internal linkage: the linker map named every public
+// global in this TU and left exactly those as bare lbl_ addresses, and nothing
+// outside MemMgr.cpp refers to them.
 std::vector<String> gUseLowestMipExceptions;
-MemHeapStack gNullMemStack;
-int gNumThreads;
-int gThreadIds[MAX_BUF_THREADS];
-
-bool gInitted;
-
-MemHeap gHeaps[MAX_HEAPS];
+CriticalSection *gMemLock;
+bool gStlAllocNameLookup = false;
+int gNewOperatorAlign;
 int gNumHeaps;
+// The target's gThreadIds is not in this TU's .bss at all -- ThreadMemStack
+// references it as an undefined external, resolved to 0x82F18920, an
+// initialised int[32] whose first word is -1. That is the same array
+// MakeString.cpp keeps (there as `static int gThreadIds[32] = { -1 }`), so in
+// the original the two thread-slot tables were one shared global. Keeping our
+// private copy for now, but declared above gNumThreads so it does not disturb
+// the +0xbd4 / +0xbd8 displacements ThreadMemStack depends on.
+static int gThreadIds[MAX_BUF_THREADS] = { -1 };
+static int gNumThreads;
+static int gThreadBufCurrentIndex;
+bool gInsideMemFunc = false; // +0xbd3
+bool gbUseLowestMip = false; // +0xbd2
+// The target packs four byte-sized globals into +0xbd0..+0xbd3, two of them
+// unnamed. gInitted is one: it lives at 0x830E56D9, proved by the three
+// functions whose relocations point there -- MemInit, MemPushHeap and
+// MemFindHeap, exactly the three that read or write it. The other unnamed byte
+// is unrecoverable (no instruction anywhere in the split image forms its
+// address). We only need those four bytes to exist, not to be named: one real
+// bool plus three bytes of alignment padding in front of the 4-aligned
+// gThreadBufCurrentIndex gets the same +0xbd4 / +0xbd8 displacements.
+static bool gInitted; // +0xbd0
+MemHeap gHeaps[MAX_HEAPS]; // +0x950 (8-aligned)
+// +0x94c. gHeaps is 8-aligned so a four-byte hole opens up behind gSingleHeap,
+// and it has to be an int that fills it. MSVC's .bss packer will otherwise
+// drop a byte-sized global in here -- it picked gInitted -- which leaves
+// nothing between gHeaps and gThreadBufCurrentIndex and slides
+// gThreadBufCurrentIndex / gNumThreads down to +0xbd0 / +0xbd4.
+static int gCheckConsistency; // +0x94c
+int gSingleHeap; // +0x948
 
 #ifdef HX_NATIVE
 // On native, do NOT override global operator new/delete.
@@ -574,14 +610,14 @@ void MemFreeBlockStats(
 }
 
 static MemHeapStack gThreadBuf[MAX_BUF_THREADS];
-static int gThreadBufCurrentIndex;
+// ThreadMemStack materialises this object's address once and reaches
+// gThreadBuf (+0x48), gThreadBufCurrentIndex (+0xbd4) and gNumThreads
+// (+0xbd8) from it, so it has to be the lowest object in this TU's .bss.
+static MemHeapStack gNullMemStack;
 
 MemHeapStack &ThreadMemStack(bool createIfMissing) {
     int idx;
-    CriticalSection *lock = gMemStackLock;
-    if (lock) {
-        lock->Enter();
-    }
+    CritSecTracker tracker(gMemStackLock);
     if (gNumThreads == 0) {
         gNumThreads = 1;
         gThreadIds[0] = GetCurrentThreadId();
@@ -603,9 +639,6 @@ MemHeapStack &ThreadMemStack(bool createIfMissing) {
                 } while (idx < gNumThreads);
             }
             if (!createIfMissing) {
-                if (lock) {
-                    lock->Exit();
-                }
                 return gNullMemStack;
             }
             if (idx == gNumThreads) {
@@ -636,9 +669,6 @@ MemHeapStack &ThreadMemStack(bool createIfMissing) {
     }
     gThreadBufCurrentIndex = idx;
     MemHeapStack &result = gThreadBuf[gThreadBufCurrentIndex];
-    if (lock) {
-        lock->Exit();
-    }
     return result;
 }
 int GetCurrentHeapNum() {
