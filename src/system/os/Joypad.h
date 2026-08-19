@@ -246,23 +246,22 @@ public:
     Hmx::Object *mBreedCallback; // 0x84 - callback object for breed data read/write results
     BreedData mBreedData; // 0x88
     BreedData *mBreedDataDest; // 0x94
-    int unk98; // 0x98
-    int mSuppressWriteCallback; // 0x9c
-    int unka0; // 0xa0
-    int unka4; // 0xa4
-    int unka8; // 0xa8
+    // EEPROM ("breed data") write state machine, driven from JoypadPollCommon:
+    //   0 = idle/start handshake, 1 = waiting for handshake ack,
+    //   2 = send next data chunk,  3 = waiting for chunk ack, 4 = timed out
+    int mEepromWriteState; // 0x98
+    // Bytes still to be sent. Non-zero also means "a multi-packet write is in
+    // flight", which is why JoypadHandleEepromWriteResponse suppresses the
+    // user callback while it is set.
+    int mEepromBytesLeft; // 0x9c
+    int mEepromTotalBytes; // 0xa0
+    int mEepromChunkSize; // 0xa4
+    int mEepromTimeout; // 0xa8
     int unkac; // 0xac
-    int unkb0; // 0xb0
-    int unkb4; // 0xb4
-    int unkb8; // 0xb8
-    int unkbc; // 0xbc
-    bool mEepromWriteDone; // 0xc0
-    int unkc4; // 0xc4
-    int unkc8; // 0xc8
-    int unkcc; // 0xcc
-    int unkd0; // 0xd0
-    int unkd4; // 0xd4
-    int unkd8; // 0xd8
+    unsigned char mEepromData[0x10]; // 0xb0 - source bytes for the write
+    bool mEepromWriteDone; // 0xc0 - set by JoypadHandleEepromWriteResponse
+    unsigned char mEepromPacket[0x14]; // 0xc1 - outgoing packet handed to requestBreedWrite
+    int mLastActivityMs; // 0xd8
 
     JoypadData();
     float GetAxis(Symbol) const;
@@ -310,6 +309,23 @@ void AssociateUserAndPad(LocalUser *iUser, int iPadNum);
 void ResetAllUsersPads();
 
 bool requestBreedWrite(int, unsigned char *);
+
+// Platform back end (Joypad_Xbox.cpp). Fills in the raw per-pad state and
+// returns the detected JoypadType (kJoypadNone when nothing is attached).
+int ReadSingleJoypad(
+    int pad,
+    unsigned int *buttons,
+    char *lx,
+    char *ly,
+    char *rx,
+    char *ry,
+    char *lt,
+    char *rt,
+    float *sensors,
+    float *pressures,
+    unsigned char *pro_guitar
+);
+void JoypadSendKeepAlive(int pad_mask);
 }
 
 void JoypadInit();
