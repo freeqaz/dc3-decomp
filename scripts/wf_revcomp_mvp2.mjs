@@ -34,7 +34,7 @@ Floor signals, cheapest first:
     Read ${DC3}/scripts/analysis/codeview_locals.py + stack_layout.py to learn the CodeView decode API and
     WHERE CodeView lives. If a /Z7 recompile is required, do it for a SAMPLE only and extrapolate — never
     thousands of recompiles. State clearly which signals are zero-compile vs sampled.
- 3. Existing decomp.db.functions labels (read the schema): is_stub, verdict, reachable_100, has_ltcg_pooling,
+ 3. Existing decomp.db.functions labels (read the schema): is_stub, verdict, reachable_100,
     merged_symbol_count/has_linker_merged, has_prologue_mismatch. Memory documents ~361 block-sinking
     (PGO-gated) + ~1,367 EH funclet stubs + ICF merged_<addr> — CROSS-CHECK your counts against these.
 

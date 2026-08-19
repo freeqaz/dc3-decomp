@@ -88,11 +88,19 @@ sqlite3 decomp.db "SELECT symbol, current_percent FROM functions" # vs report.js
 python3 scripts/sync_match_percent.py --build --promote   # rebuild report.json + resync (~2-3 min)
 ```
 
-**`has_prologue_mismatch` is identically 0 for every row.** The detector never
-populated it — `SELECT SUM(has_prologue_mismatch), COUNT(DISTINCT
-has_prologue_mismatch) FROM functions` returns `0 | 1` over all 52,546 rows.
-Filtering on it selects everything; filtering on `=1` selects nothing. It is not
-evidence of anything.
+**The `has_*` pattern flags come from a reloc-BLIND pass** (fixed 2026-08-19).
+`sync_objdiff.py` runs objdiff with `-c functionRelocDiffs=none` — the canonical
+ruler — which masks relocation differences. Four detectors read exactly those, so
+`has_linker_merged`, `has_prologue_mismatch`, `has_scope_counter_mismatch` and
+`has_makestring_mismatch` were `0` on all 52,547 rows while `verdict_reason` on
+708 of them said `LINKER_MERGED`. Re-running the same 3,000 functions with
+`functionRelocDiffs=all` gave 119 / 20 / 9 / 7. Over the full 31,446 authorable
+functions: **1,310 / 221 / 81 / 63**. Refresh with
+`python3 scripts/backfill_reloc_patterns.py --apply`; `sync_objdiff` no longer
+writes `has_linker_merged` so it cannot zero the result. `has_assert_revs` and
+`has_ltcg_pooling` were **dropped** — always 0, no writer, no detector.
+`has_alloca_mismatch` / `has_dynamic_cast_mismatch` are still 0, but that is now a
+*measured* zero under the permissive config, not an unmeasured one.
 
 **There is no `decomp.db` in a git worktree, deliberately.** A worktree `ninja`
 used to create a shadow one — every row, **0 verdicts and 0 percentages** — and

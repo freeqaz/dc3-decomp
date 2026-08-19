@@ -71,7 +71,7 @@ Tool-specific deep docs live in subdirectories:
 |-----|-------------|
 | [reference/STYLEGUIDE.md](reference/STYLEGUIDE.md) | Code style conventions |
 | [reference/MACROS.md](reference/MACROS.md) | Project macros (MILO_ASSERT, OBJ_MEM_OVERLOAD, etc.) |
-| [reference/DATABASE_SCHEMA.md](reference/DATABASE_SCHEMA.md) | decomp.db SQLite schema — **incl. the columns you cannot trust for triage** (`verdict`, `current_percent`, `has_prologue_mismatch`) |
+| [reference/DATABASE_SCHEMA.md](reference/DATABASE_SCHEMA.md) | decomp.db SQLite schema — **incl. the columns you cannot trust for triage** (`verdict`, `current_percent`) and the reloc-blind pattern pass repaired 2026-08-19 |
 | [reference/FREE60_XEX_FORMAT.md](reference/FREE60_XEX_FORMAT.md) | Xbox 360 XEX executable format |
 
 ## Code Transformation

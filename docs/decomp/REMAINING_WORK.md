@@ -54,7 +54,7 @@ a full `ninja`**, and never conclude a fix regressed from one.
 | `current_percent` | Not written by the ninja sync; drifts from the moment it is set. |
 | `verdict` | `COMPLETE` is wrong on **875 rows** that are not 100 % in a fresh report (540 in the 90–99.99 band, 335 at 0 %). `AT_LIMIT` is a prior, not a proof — a 2026-08-04 blind audit of regswap AT_LIMIT certificates scored **3/10**, and 640 AT_LIMIT rows carry a real-bug unicorn divergence class. |
 | `verdict_reason` | Free text, stale, inconsistently populated. |
-| `has_prologue_mismatch` | **Identically 0 for every row.** It measures nothing. |
+| `has_prologue_mismatch` and friends | **Fixed 2026-08-19; refresh before use.** Four flags (`has_linker_merged`, `has_prologue_mismatch`, `has_scope_counter_mismatch`, `has_makestring_mismatch`) were identically 0 because `sync_objdiff` runs objdiff with `functionRelocDiffs=none`, masking the relocation diffs those detectors read. A reloc-visible pass sets them to 1,310 / 221 / 81 / 63. Run `python3 scripts/backfill_reloc_patterns.py --apply` after a build. `has_assert_revs` / `has_ltcg_pooling` were dropped (always 0, no writer, no detector). |
 | `reachable_100`, `primary_pattern`, `priority_score`, `ease_score`, `fan_in` | Products of a 2026-02 scoring experiment that was never re-run. Present, unmaintained. |
 
 Columns that *are* reliable: `symbol`, `demangled`, `unit`, `size`, `excluded`,

@@ -353,6 +353,17 @@ def init_database(
     return conn
 
 
+# Dropped 2026-08-19 and deliberately NOT re-added by any migration below:
+#   has_assert_revs, has_ltcg_pooling
+# Both were identically 0 over all 52,547 rows, had no writer anywhere in live
+# code, and objdiff has no ASSERT_REVS or LTCG_POOLING detector at all -- they are
+# vestigial schema from the archived 2026-03 meta-strategy experiment. A column
+# that is always 0 silently answers "no" to every filter built on it, which is
+# strictly worse than the column not existing. Do not resurrect them; if the
+# concepts come back, add a detector first and a column second.
+_DROPPED_DEAD_COLUMNS = ("has_assert_revs", "has_ltcg_pooling")
+
+
 def _run_migrations(conn: sqlite3.Connection, from_version: int, to_version: int) -> None:
     """Run database migrations from from_version to to_version."""
     print(f"Running database migrations: v{from_version} -> v{to_version}")
