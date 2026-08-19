@@ -787,8 +787,8 @@ void RhythmBattle::OnBeat() {
         mPlayerTwo->SetActive(true);
         mPlayerOne->SetInTheZone(0, false, false);
         mPlayerTwo->SetInTheZone(0, false, false);
-        static Message finish_intro("finished_intro");
-        focusPanel->HandleType(finish_intro);
+        static Message finished_intro("finished_intro");
+        focusPanel->HandleType(finished_intro);
     }
     if (mFullKTB) {
         if (!(mEndBeat < curBeat && !mFinale)) {
