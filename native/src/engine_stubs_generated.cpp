@@ -515,17 +515,16 @@ extern "C" long _stub_apple_hamstore_getoffers() { HX_STUB_TRACE("HamStorePanel:
 
 // --- Completely missing stubs (libc++ ABI) ---
 
-// Hmx::Matrix4::Col3(int) const
-extern "C" __attribute__((weak, used)) long _stub_apple_matrix4_col3() __asm__("__ZNK3Hmx7Matrix44Col3Ei");
-extern "C" long _stub_apple_matrix4_col3() { HX_STUB_TRACE("Hmx::Matrix4::Col3"); return 0; }
+// Hmx::Matrix4::Col3 and RecursePatternInternal deliberately have NO stub here.
+// Both now have real bodies (Col3 in native_link_glue.cpp, RecursePatternInternal
+// un-#ifndef'd in obj/DirUnloader.cpp), so a weak return-0 stub under the Mach-O
+// mangling would shadow the real definition on an Apple build -- exactly the
+// failure mode this file's own gate (scripts/native/check_stub_shadow.py) exists
+// to catch. Inert on Linux ELF, which is why they survived this long.
 
 // ScaleAddEq(Transform&, const Transform&, float)
 extern "C" __attribute__((weak, used)) long _stub_apple_scaleaddeq() __asm__("__Z10ScaleAddEqR9TransformRKS_f");
 extern "C" long _stub_apple_scaleaddeq() { HX_STUB_TRACE("ScaleAddEq"); return 0; }
-
-// RecursePatternInternal(const char*, void(*)(const char*, const char*), bool, bool)
-extern "C" __attribute__((weak, used)) long _stub_apple_recursepattern() __asm__("__Z22RecursePatternInternalPKcPFvS0_S0_Ebb");
-extern "C" long _stub_apple_recursepattern() { HX_STUB_TRACE("RecursePatternInternal"); return 0; }
 
 // Waypoint::sWaypoints (static member, std::list<Waypoint*>)
 extern "C" __attribute__((weak, used)) long _stub_apple_waypoint_swaypoints __asm__("__ZN8Waypoint10sWaypointsE");

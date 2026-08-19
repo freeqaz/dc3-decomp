@@ -380,15 +380,29 @@ UNRESOLVED_BASELINE = {
     #     EEPROM ("breed data") write path that no native code drives.
     "ReadSingleJoypad",
     "requestBreedWrite",
-    # --- toolchain, not a decomp gap -------------------------------------
-    # libstdc++ 15 on this box does not export _ZNKSt9type_infoeqERKS_ at all
-    # (`nm -D /usr/lib/libstdc++.so.6 | grep 9type_infoeq` is empty); the
-    # comparison is normally inlined.  The four references come from libstdc++'s
-    # own header-instantiated templates -- regex_traits::transform_primary and
-    # _Sp_counted_ptr_inplace::_M_get_deleter -- not from DC3 code.  There is no
-    # DC3 body to recover, and defining a member of std::type_info ourselves is
-    # reserved-name UB.  _M_get_deleter has 0 call sites (it is vtable-only,
-    # reachable solely via std::get_deleter, which nothing here calls).
+    # --- toolchain mismatch, low-probability latent abort -----------------
+    # NOT "dead code" -- see below.  libstdc++ 15 on this box does not export
+    # _ZNKSt9type_infoeqERKS_ at all (`nm -D --defined-only
+    # /usr/lib/libstdc++.so.6 | grep 9type_infoeq` is empty); the comparison is
+    # normally inlined.  All four references come from libstdc++'s own
+    # header-instantiated templates in HttpServer.cpp.o, not from DC3 code, and
+    # they are NOT uniformly unreachable:
+    #
+    #   _Sp_counted_ptr_inplace<_NFA<regex_traits<char>>,...>::_M_get_deleter   0 callers
+    #   _Sp_counted_ptr_inplace<httplib::detail::mmap,...>::_M_get_deleter      0 callers
+    #   regex_traits<char>::transform_primary<const char*>                      4 callers
+    #   regex_traits<char>::transform_primary<char*>                            4 callers
+    #
+    # The transform_primary pair is reached from std::__detail::
+    # _BracketMatcher::_M_apply's outlined equivalence-class lambda, so a regex
+    # containing an equivalence class ("[[=x=]]") would abort the process on
+    # first use.  Quoting "_M_get_deleter has 0 call sites" as the whole
+    # justification covers only 2 of the 4 references and overstates the case.
+    #
+    # It stays on this list anyway because it is still not a decomp gap: there
+    # is no DC3 body to recover, and defining a member of std::type_info
+    # ourselves is reserved-name UB ([namespace.std]).  The correct framing is
+    # "toolchain mismatch we accept, with a low-probability latent abort".
     "_ZNKSt9type_infoeqERKS_",                                # std::type_info::operator==
     #
     # RESOLVED on fix/kinect-camera-path (2026-08-19), kept here as a record of

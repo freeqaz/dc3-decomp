@@ -123,7 +123,7 @@ have bodies. What is left that is *not* in that bucket:
 | symbol | status |
 |---|---|
 | `ReadSingleJoypad`, `requestBreedWrite` | Xbox controller HID back end. **Unreachable**, not latent: their only caller `JoypadPollCommon` has zero call sites and is not address-taken in `dc3-native` (native input runs through `Joypad_Native.cpp`'s own `JoypadPoll`). |
-| `std::type_info::operator==(std::type_info const&) const` | **Not a decomp gap.** libstdc++ 15 on this box does not export `_ZNKSt9type_infoeqERKS_` at all; the four references come from libstdc++'s own templates (`regex_traits::transform_primary`, `_Sp_counted_ptr_inplace::_M_get_deleter`, the latter with 0 call sites). No DC3 body exists to recover. |
+| `std::type_info::operator==(std::type_info const&) const` | **Not a decomp gap, but not dead code either — "toolchain mismatch, low-probability latent abort".** libstdc++ 15 on this box does not export `_ZNKSt9type_infoeqERKS_` at all. All four references come from libstdc++'s own header-instantiated templates in `HttpServer.cpp.o`, and only two of them are unreachable: the two `_Sp_counted_ptr_inplace<…>::_M_get_deleter` instantiations have 0 callers, but `regex_traits<char>::transform_primary<const char*>` and `<char*>` have **4 callers each**, reached from `std::__detail::_BracketMatcher::_M_apply`'s outlined equivalence-class lambda. A regex containing an equivalence class (`[[=x=]]`) would abort the process on first use. Still nothing to decompile — no DC3 body exists and defining a member of `std::type_info` is reserved-name UB ([namespace.std]) — but the earlier "`_M_get_deleter` has 0 call sites, therefore dead" covered only half the references. |
 
 Closed on 2026-08-19 (`fix/kinect-camera-path`), recorded so they are not
 re-opened:
@@ -131,9 +131,40 @@ re-opened:
 | symbol | it was never missing — it was |
 |---|---|
 | `LiveCameraInput::LockStream` / `UnlockStream` | Recovered and 100% (25/25 and 6/6 instructions). Sitting inside the `#else` arm of an `#ifdef HX_NATIVE` in `LiveCameraInput.cpp`. Guard removed. |
-| `RecursePatternInternal` | Same: `#ifndef HX_NATIVE` in `os/File.cpp`, around a body whose only platform primitive (`FileEnumerate`) has had a POSIX implementation all along. |
+| `RecursePatternInternal` | Same guard shape — `#ifndef HX_NATIVE` in `os/File.cpp` — but **not a recovered body**: it is a **~80% reconstruction** (240 instructions / **117 mismatches**, 80.1% normalized), derived from a Ghidra decompile as its own in-source comment says, with a 16-instruction target-only cluster and a `String::substr` call the base never makes. Un-guarding it is still right (it closes a hole `FileRecursePattern` and `OnEnumerateFrameRateResults` jump to), but do not read this row as a match. Its POSIX primitive `FileEnumerate` needed a fix of its own — see below. |
 | `Hmx::Matrix4::Col3`, `CDGetError`, `_hypot` | Bodies in Xbox-only TUs (`rnddx9/Cam.cpp`, `os/CDReader.cpp`) or the MSVC CRT. Hosted in `native/src/native_link_glue.cpp`. `Col3` had 16 call sites in `Hmx::operator*(const Transform&, const Hmx::Matrix4&)`. |
 | `createFilter` | A **signature-drift bug in the decomp**, not a native gap. `dsp/EQEffect.cpp` declared it `extern "C"`, so it referenced an unmangled `createFilter`; the target's symbol is `?createFilter@@YAXW4FilterType@@W4FilterBand@@IMMPAUFILTER@@H@Z` and `synth/filterdesign.cpp` defines it with C++ linkage. objdiff cannot see this class of bug — normalized mode discards relocation targets. |
+
+### Un-guarding `RecursePatternInternal` needed a fix in the *engine*, not here
+
+`RecursePatternInternal`'s only platform primitive is `FileEnumerate`, and the
+POSIX implementation was missing `File_Win.cpp:107-111`'s `qualified == "."`
+special case. Because `FileQualifiedFilename` prepends `gNativeDataDir`
+(default `"."`), the path string it prefix-matched against the caller's pattern
+was data-dir-qualified while the pattern was not, and `FileMatch`
+(`os/File.cpp:229-251`) requires a literal prefix match up to the first
+wildcard. **Every pattern not beginning with a wildcard therefore enumerated
+empty rather than failing** — no log, no assert, no error return. So un-guarding
+the function without this fix would have replaced an unresolved-symbol crash
+with a silent wrong answer, which is strictly worse. Known callers reaching it:
+`ShaderProgram.cpp:53` (`"%s/shaders/*.fx"`), `obj/Utl.cpp:482,517`.
+
+**The trap: DC3's own `native/src/platform/File_Native.cpp` is not what
+`dc3-native` links.** `native/CMakeLists.txt:1166` `REMOVE_ITEM`s it from
+`DC3_NATIVE_CORE_SOURCES_ENGINE`, so `dc3-native`, `milo-viewer`, `render-test`
+and `milo-tests` all get **`milo-native-engine`'s** copy — confirmed by `nm`,
+which shows the single `T FileEnumerate` in `dc3-native` coming from
+`milo-engine.dir/src/platform/File_Native.cpp.o` and nothing from DC3's object.
+Fixing only DC3's copy would have been a no-op for every binary that matters.
+Both were fixed: the engine side landed as `milo-native-engine` `84f9a8d`
+(branch `fix/fileenumerate-dot-prefix`), DC3's copy separately because it is
+still live for `dc3-web` (`DC3_WEB_CORE_SOURCES`) and the export tools.
+
+This is the same shape as the `SynthCommon_Stub.cpp` finding recorded during
+`fix/native-stub-shadow`'s verification. **Before editing anything under
+`native/src/platform/`, check the `REMOVE_ITEM` block at
+`native/CMakeLists.txt:1156-1189` and confirm with `nm` which object actually
+defines the symbol.**
 
 Tightening the flag to `report-all` requires giving all 24 a body or an explicit
 stub first. Until then, the `ldd -r` baseline in `check_stub_shadow.py` is the
@@ -300,7 +331,19 @@ would have to be fixed before a live feed is possible:
 
 1. **LP64 pointer truncation.** The four `TextureStore::UpdateFrom*Buffer*`
    bodies held texel and source pointers in `unsigned int`. Fixed to `uintptr_t`
-   (identical type on PPC, so all four objdiff numbers are unchanged).
+   (identical type on PPC, so all four objdiff numbers are unchanged:
+   75/26, 158/71, 87/22, 117/38 instructions/mismatches).
+1b. **LP64 pointer *wrap*, a third hazard the first pass missed.**
+   `LiveCameraInput.cpp:267-268` advanced the row pointers by
+   `((pitch>>1) - 640) * 2` and `(mPitch>>2) - 320`, both **unsigned int**
+   subtractions; `:385` had the same shape. If the texel pitch is narrower than
+   640 texels the result wraps to ~4e9 instead of going negative. On 32-bit PPC
+   that still steps the pointer correctly backwards; on LP64 it zero-extends and
+   jumps ~8 GB / ~16 GB forward. Now cast to `int` first, matching what
+   `UpdateFromColorBufferClip`'s `destStride` already did. Also PPC-neutral
+   (same four counts), with a directed negative control: perturbing the `640` to
+   `641` moved `UpdateFromColorBuffer` 95.5 → 95.4 normalized and added
+   `off:+1` to mismatch `[41] subi`, so the flat numbers are not vacuous.
 2. **The decode is endian-dependent.** It reads the UYVY byte stream as 32-bit
    words and takes `>>24` as Cb and `>>8` as Cr, which is the big-endian layout.
    A native NUI shim must hand it big-endian-ordered words, or red and blue come
@@ -322,6 +365,34 @@ the real `UpdateFromColorBuffer` and checks the output against the published
 BT.601 matrix (301920 / 307200 texels non-zero, 64 distinct RGB565 values).
 It has a recorded negative control: stubbing `YUVtoRGB` back to `return 0` fails
 exactly the two colour assertions and leaves the two control cases passing.
+
+The evidence is genuinely non-tautological — the test object defines no decode
+symbol at all (`YUVtoRGB` is an anonymous-namespace `inline` that is fully
+inlined and has no symbol), so any mutation of the decode necessarily mutates
+the code under test. **But the test is narrower than it reads, in three ways
+that must be stated wherever it is cited as evidence:**
+
+1. **It is byte-order-blind by construction, so it does NOT test the
+   endianness point above.** The input frame is built as a
+   `std::vector<uint32_t>` through a `PackUYVY()` helper whose shift positions
+   were *copied from the code under test*, then read back through
+   `unsigned int*`. Host endianness therefore cancels on both sides. Feeding
+   the identical four bytes as a big-endian **byte** stream makes the same
+   assertions fail hard (`got(21,63,19)` vs `want(29,3,1)`). The test file
+   admits this scoping; earlier commit messages and doc text did not.
+2. **Its coefficient resolution is roughly 10%, not exact.** The ±1 tolerance
+   is about 2× looser than the measured Q16-vs-double drift (which is 0), so
+   subtler coefficient errors slip through. Measured, each a real
+   rebuild-and-relink: `cr`/`cb` swapped at both call sites → **caught**;
+   red Q16 91881 → 101069 (+10%) → **caught**; RGB565 green shift `<<5` →
+   `<<6` → **caught**; red 91881 → 96475 (**+5%**) → **passes silently**;
+   green-U 22553 → 24808 (**+10%**) → **passes silently**.
+3. **All chroma discrimination lives in one test.**
+   `LumaRampReachesTheTextureAsNonZeroPixels` pins chroma at neutral and
+   reported an unchanged `301920 / 64` under every one of those five
+   mutations. Its "monotonic left-to-right" claim is a **two-endpoint
+   assertion**, not a per-column scan (full-row instrumentation does confirm
+   monotonicity holds — 0 inversions — but the test does not check it).
 
 ### Checking PPC neutrality of a shared-`src/` edit: not raw `report.json` md5
 
@@ -350,7 +421,16 @@ print(a['measures'] == b['measures'],
 
 Run against a worktree built from the branch point, this is exact: for the
 2026-08-19 `fix/kinect-camera-path` changes it reported one changed function out
-of 48,344 (`EQEffect::SetParameter`, 84.49353 → 84.521255 fuzzy, from the
-`createFilter` relocation name now matching the target) and identical top-level
-and per-unit measures. Note `fuzzy_match_percent` is relocation-sensitive, which
-is what makes it able to see a mangling fix that normalized mode cannot.
+of 48,344 — `?SetParameter@EQEffect@@QAAXHM@Z`, 84.49353 → 84.521255 fuzzy, from
+the `createFilter` relocation name now matching the target — with identical
+top-level and per-unit measures, and **0** functions changed on
+`match_percent_normalized`. Note `fuzzy_match_percent` is relocation-sensitive,
+which is what makes it able to see a mangling fix that normalized mode cannot.
+The mechanism is confirmed in raw mode: the function goes from 341 equal / 24
+symbol-relocation arg diffs to 344 / 21 — exactly the **3** `createFilter` call
+sites at `EQEffect.cpp:600,607,615`.
+
+**Symbol-name correction.** Earlier write-ups of this lane named the changed
+function `?SetParameter@EQEffect@@UAAXIM@Z`. **No such symbol exists.** The real
+one is `?SetParameter@EQEffect@@QAAXHM@Z` at `.text:0x82E59430` — public
+**non-virtual** (`Q`, not `U`), taking `(int, float)` (`HM`, not `IM`).
