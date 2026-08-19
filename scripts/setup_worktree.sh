@@ -307,6 +307,26 @@ if [ -d "$MAIN_REPO/venv" ]; then
     ln -sfn "$MAIN_REPO/venv" "$WORKTREE_PATH/venv"
 fi
 
+# ---- unicorn runner's C trampoline hook
+# The .so is gitignored, so a fresh worktree has none and the runner silently
+# falls back to its slower Python hook. That fallback is not merely slower --
+# it used to compute call-site offsets wrongly, which made the wrong-callee
+# check's dict lookup miss every time and dropped its warnings entirely, so
+# the same sabotage produced different output in a worktree than in the main
+# repo. Link the main repo's build if there is one, else build it; either way,
+# never leave the worktree on a silently different code path.
+UNICORN_SO=$(ls "$MAIN_REPO"/scripts/unicorn_runner/_trampoline_hook*.so 2>/dev/null | head -1)
+if [ -n "$UNICORN_SO" ]; then
+    echo "==> Symlinking unicorn trampoline hook ($(basename "$UNICORN_SO"))"
+    ln -sfn "$UNICORN_SO" "$WORKTREE_PATH/scripts/unicorn_runner/$(basename "$UNICORN_SO")"
+elif command -v gcc >/dev/null 2>&1; then
+    echo "==> Building unicorn trampoline hook"
+    make -s -C "$WORKTREE_PATH/scripts/unicorn_runner" 2>/dev/null \
+        || echo "    (build failed — unicorn runner will use the Python fallback)"
+else
+    echo "==> No unicorn trampoline hook and no gcc; runner will use the Python fallback"
+fi
+
 # ---- configure.py : bake absolute tool paths into this worktree's build.ninja
 echo "==> Running configure.py with absolute tool paths"
 (

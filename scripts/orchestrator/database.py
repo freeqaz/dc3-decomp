@@ -877,7 +877,7 @@ def query_functions(
 
     query = f"""
         SELECT id, symbol, demangled, unit, size, current_percent, best_percent,
-               verdict, verdict_reason, locked_by, attempt_count,
+               verdict, verdict_reason, locked_by, attempt_count, is_stub,
                unicorn_verdict, unicorn_class, unicorn_harness_version
         FROM functions
         WHERE {glob_clause}

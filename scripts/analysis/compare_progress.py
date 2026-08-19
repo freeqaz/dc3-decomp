@@ -288,9 +288,17 @@ def compare_functions(baseline: dict, current: dict, min_diff: float = 0.5,
             for func in unit.get("functions", []):
                 fname = func.get("name", "")
                 pct = func.get("fuzzy_match_percent", None)
+                # Carry the canonical ruler too. fuzzy_match_percent is
+                # relocation-sensitive, so a pure .text layout shuffle (ICF
+                # re-folding, an atexit/dynamic-init thunk moving) moves it
+                # while match_percent_normalized -- the ruler the project's
+                # headline is computed on -- does not budge. Without this the
+                # table cannot tell a phantom from a real regression.
+                norm = func.get("match_percent_normalized", None)
                 demangled = func.get("metadata", {}).get("demangled_name", "")
                 entry = {
                     "pct": pct,
+                    "norm": norm,
                     "size": int(func.get("size", 0)),
                     "demangled": demangled,
                 }
@@ -323,6 +331,13 @@ def compare_functions(baseline: dict, current: dict, min_diff: float = 0.5,
             if abs(diff) >= min_diff:
                 unit_name, func_name = key
                 display = curr["demangled"] or base["demangled"] or func_name
+                base_norm = base["norm"]
+                curr_norm = curr["norm"]
+                # "Phantom" = fuzzy moved but the canonical ruler did not.
+                # Only claim that when BOTH sides actually carry a normalized
+                # figure; a missing one is unknown, not unchanged.
+                phantom = (base_norm is not None and curr_norm is not None
+                           and float(base_norm) == float(curr_norm))
                 results.append({
                     "unit": unit_name,
                     "name": func_name,
@@ -330,6 +345,11 @@ def compare_functions(baseline: dict, current: dict, min_diff: float = 0.5,
                     "base_pct": base_pct,
                     "curr_pct": curr_pct,
                     "diff_pct": diff,
+                    "base_norm": base_norm,
+                    "curr_norm": curr_norm,
+                    "norm_diff": (None if base_norm is None or curr_norm is None
+                                  else float(curr_norm) - float(base_norm)),
+                    "phantom": phantom,
                     "size": curr["size"],
                 })
 
@@ -464,6 +484,24 @@ def print_function_table(results: list, limit: int = 100):
     regressions = [r for r in results if r["diff_pct"] < 0]
     improvements = [r for r in results if r["diff_pct"] > 0]
 
+    # This table is scored on fuzzy_match_percent, which is relocation
+    # sensitive. Say so, and say up front how much of what follows the
+    # canonical ruler does not see -- a reader who takes an ICF thunk shuffle
+    # for a regression reverts good work chasing it.
+    phantom_reg = [r for r in regressions if r.get("phantom")]
+    phantom_imp = [r for r in improvements if r.get("phantom")]
+    print()
+    print("Ruler: fuzzy_match_percent (relocation-sensitive). "
+          "CANONICAL is match_percent_normalized.")
+    if phantom_reg or phantom_imp:
+        print(f"  {len(phantom_reg)} of {len(regressions)} regressions and "
+              f"{len(phantom_imp)} of {len(improvements)} improvements are "
+              f"FUZZY-ONLY (marked '~'):")
+        print("  the canonical ruler is unchanged for them. Typically .text "
+              "layout / ICF re-folding,")
+        print("  not a source change. Confirm against the canonical ruler "
+              "before acting on one.")
+
     if regressions:
         print()
         reg_count = min(limit, len(regressions))
@@ -492,7 +530,7 @@ def print_function_table(results: list, limit: int = 100):
 
 def _print_func_rows(results: list):
     """Print rows for function comparison."""
-    headers = ["Function", "Unit", "Base", "Curr", "Change", "Size"]
+    headers = ["Function", "Unit", "Base", "Curr", "Change", "Norm", "Size"]
     rows = []
     for r in results:
         # Truncate long demangled names
@@ -503,12 +541,23 @@ def _print_func_rows(results: list):
         # Shorten unit path
         if len(unit) > 30:
             unit = "..." + unit[-27:]
+        # Norm column: the same delta on the canonical ruler. "~" means the
+        # canonical ruler did not move at all, i.e. the fuzzy change beside it
+        # is layout noise rather than a codegen change.
+        nd = r.get("norm_diff")
+        if r.get("phantom"):
+            norm_cell = "~"
+        elif nd is None:
+            norm_cell = "?"
+        else:
+            norm_cell = f"{nd:+.1f}%"
         rows.append([
             display,
             unit,
             f"{r['base_pct']:.1f}%",
             f"{r['curr_pct']:.1f}%",
             f"{r['diff_pct']:+.1f}%",
+            norm_cell,
             str(r["size"]),
         ])
 
@@ -528,7 +577,7 @@ def _print_func_rows(results: list):
                 parts.append(cell.ljust(widths[i]))
         return "| " + " | ".join(parts) + " |"
 
-    align = [False, False, True, True, True, True]
+    align = [False, False, True, True, True, True, True]
     print(fmt_row(headers))
     print("|" + "|".join("-" * (w + 2) for w in widths) + "|")
     for row in rows:

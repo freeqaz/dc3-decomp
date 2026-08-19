@@ -2062,17 +2062,33 @@ class DecompMCPServer:
                 fuzzy_pct = data.get("fuzzy_match_percent")
                 raw_pct = data.get("raw_match_percent")
                 if fuzzy_pct is not None and raw_pct is not None:
-                    output = re.sub(
-                        r"Match: [\d.]+% normalized \([\d.]+% raw\)",
-                        # Same never-manufacture-100 rule as query_functions:
-                        # ?Save@ObjectDir@@UAAXAAVBinStream@@@Z is 99.997
-                        # normalized with two real diff_arg instructions and
-                        # this headline called it "100.0% normalized".
+                    # Same never-manufacture-100 rule as query_functions:
+                    # ?Save@ObjectDir@@UAAXAAVBinStream@@@Z is 99.997
+                    # normalized with two real diff_arg instructions and
+                    # this headline called it "100.0% normalized".
+                    honest_headline = (
                         f"Match: {format_match_percent(fuzzy_pct)} normalized "
-                        f"({format_match_percent(raw_pct)} raw)",
+                        f"({format_match_percent(raw_pct)} raw)"
+                    )
+                    output, n_subbed = re.subn(
+                        r"Match: [\d.]+% normalized \([\d.]+% raw\)",
+                        honest_headline.replace("\\", "\\\\"),
                         output,
                         count=1,
                     )
+                    if n_subbed == 0:
+                        # The rewrite is the ONLY thing keeping a rounding
+                        # headline ("100.0% normalized" over a table with real
+                        # mismatches) out of this output.  re.sub fails *open*:
+                        # if objdiff-cli's markdown ever stops matching this
+                        # pattern the lying headline silently survives and
+                        # nothing says so.  Make that loud instead.
+                        output = (
+                            f"**{honest_headline}**  "
+                            f"<- authoritative; headline rewrite did not match "
+                            f"the markdown below, treat any 'Match:' line in it "
+                            f"as unverified\n\n"
+                        ) + output
             except (json.JSONDecodeError, KeyError):
                 pass
 
@@ -2142,9 +2158,13 @@ class DecompMCPServer:
                 summary = ""
                 try:
                     data = json.loads(json_output)
-                    match_pct = data.get("fuzzy_match_percent", "?")
+                    match_pct = data.get("fuzzy_match_percent")
                     verdict = data.get("verdict", {}).get("classification", "UNKNOWN")
-                    summary = f"**Match: {match_pct}% | Verdict: {verdict}**\n\n"
+                    # Route through the same never-manufacture-100 formatter as
+                    # every other Match surface; this is the large-output path
+                    # and was the last one still interpolating a bare float.
+                    pct_str = format_match_percent(match_pct, "?")
+                    summary = f"**Match: {pct_str} | Verdict: {verdict}**\n\n"
                 except (json.JSONDecodeError, KeyError):
                     pass
 

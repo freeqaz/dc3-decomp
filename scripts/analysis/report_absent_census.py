@@ -193,6 +193,15 @@ def main():
             klass = 'B_split_config_renamed_real'
         elif unit == 'default/link_glue':
             klass = 'D_retired_link_glue_stub'
+        elif td is not None and bd is not None and sym in td and sym in bd:
+            # BOTH objects define it and the report still omits it. That is a
+            # report/pairing defect -- the thing this census exists to surface
+            # -- and it must be tested BEFORE class C, which is defined as
+            # "defined by NO target object". C's predicate only asks about the
+            # base side, so it used to swallow this case and mislabel it as a
+            # benign unreferenced inline COMDAT. Only the independently
+            # computed `both` list below kept it visible at all.
+            klass = 'G_defined_both_sides_report_omits'
         elif bd is not None and sym in bd:
             klass = 'C_unreferenced_inline_comdat'
         elif sym not in all_tgt:

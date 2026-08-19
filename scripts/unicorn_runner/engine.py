@@ -289,14 +289,28 @@ class UnicornEngine:
         uclib.uc_reg_read_batch(
             self._uch, self._batch_regs, self._batch_ptrs, self._batch_count)
         vals = self._batch_vals
+        # ctypes.c_int is SIGNED, and CODE_BASE is 0x80000000, so LR reads back
+        # negative here and the subtraction produced e.g. -4294967264 where the
+        # call-site offset is 0x20. The C hook does not have this bug -- it
+        # casts to uint32_t (`_trampoline_hook.c:52`) -- so the two paths
+        # disagreed on the same input, and only the Python one was wrong.
+        #
+        # It mattered: check_call_targets() looks the offset up in a dict keyed
+        # by real offsets, so under the Python fallback every lookup missed and
+        # the wrong-callee warning was silently lost entirely. The .so is
+        # gitignored and setup_worktree.sh does not build it, so every fresh
+        # worktree took this degraded path.
+        #
+        # Mask exactly as the C hook does, so the two implementations agree
+        # field for field.
         entry = (
             len(self._call_log),
             address,
-            vals[0].value - self._code_base_plus4,
-            vals[1].value,
-            vals[2].value,
-            vals[3].value,
-            vals[4].value,
+            (vals[0].value - self._code_base_plus4) & 0xFFFFFFFF,
+            vals[1].value & 0xFFFFFFFF,
+            vals[2].value & 0xFFFFFFFF,
+            vals[3].value & 0xFFFFFFFF,
+            vals[4].value & 0xFFFFFFFF,
         )
         self._call_log.append(entry)
 

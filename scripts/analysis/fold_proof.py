@@ -163,6 +163,7 @@ from __future__ import annotations
 
 import argparse
 import collections
+import functools
 import json
 import re
 import sys
@@ -270,15 +271,23 @@ class BodyIndex:
         self.n_objects = 0
         self.n_slices = 0
         self.n_data_slices = 0
+        self.writable: set[str] = set()
         t0 = time.time()
         readers = [("code", function_bodies)]
         if include_data:
-            readers.append(("data", data_bodies))
+            readers.append(("data", functools.partial(data_bodies,
+                                                      with_chars=True)))
         for obj in iter_objects(roots):
             self.n_objects += 1
             try:
                 for kind, reader in readers:
-                    for name, body, relocs, _entry in reader(obj):
+                    for rec in reader(obj):
+                        name, body, relocs = rec[0], rec[1], rec[2]
+                        # data_bodies(with_chars=True) appends the section
+                        # characteristics; remember which symbols live in a
+                        # WRITABLE section, because /OPT:ICF will not fold one.
+                        if len(rec) > 4 and (rec[4] & IMAGE_SCN_MEM_WRITE):
+                            self.writable.add(name)
                         self._add(obj, kind, name, body, relocs,
                                   keep_pair_relocs)
             except Exception as exc:                      # malformed .obj
@@ -311,6 +320,9 @@ class BodyIndex:
 
 #: A data COMDAT this small (or all-zero) coincides too easily to mean anything.
 CHEAP_DATA_BYTES = 8
+#: COFF section characteristic.  /OPT:ICF folds READ-ONLY COMDATs; a writable
+#: one is never a fold candidate however identical two copies look.
+IMAGE_SCN_MEM_WRITE = 0x80000000
 
 
 def _identity_is_cheap(kind, body):
@@ -407,6 +419,23 @@ def prove_pair(index, survivor, folded, canon=None, map_canon=None,
         "same_relocs_mod_alias": same_rels_mod,
     })
     kind = rec.get("kind", "code")
+    # A WRITABLE data COMDAT is not a fold candidate at all. /OPT:ICF folds
+    # read-only COMDATs; two mutable statics that happen to hold the same
+    # initialiser keep separate addresses because the program can write one
+    # without writing the other. The size/all-zero guard below does not catch
+    # this -- ?sX@Vector3@@1V1@A and ?sX@Vector4@@1V1@A are 16 identical
+    # non-zero bytes and were certified PROVEN_FOLD, while the shipped map puts
+    # them at 0x82f0f720 and 0x82f0f750. Certifying that licenses an alias that
+    # would permanently stop a real gap from being measured, so refuse first.
+    writable = (survivor in index.writable) or (folded in index.writable)
+    if same_bytes and kind == "data" and writable:
+        rec["verdict"] = UNDECIDABLE
+        rec["writable_data"] = True
+        rec["reason"] = (
+            "data COMDATs identical but at least one lives in a WRITABLE "
+            "section -- /OPT:ICF folds read-only data only, so identity here "
+            "proves nothing about whether the linker merged them")
+        return rec
     if same_bytes and (same_rels_map or same_rels_mod):
         if not srel and _identity_is_cheap(kind, sbody):
             rec["verdict"] = UNDECIDABLE
