@@ -94,6 +94,18 @@ has_prologue_mismatch) FROM functions` returns `0 | 1` over all 52,546 rows.
 Filtering on it selects everything; filtering on `=1` selects nothing. It is not
 evidence of anything.
 
+**There is no `decomp.db` in a git worktree, deliberately.** A worktree `ninja`
+used to create a shadow one — every row, **0 verdicts and 0 percentages** — and
+anything defaulting to `--db decomp.db` answered out of it. Identical queries,
+2026-08-19: AT_LIMIT certs `0` vs `3,796` in main; near-misses `0` vs `89`; the
+80-95 band `0` vs `325`. Worse than empty, actually: `query_functions` treats a
+NULL percent as passing a range filter, so an 80-95 query returned **20 rows
+with no percentages at all**. Since 2026-08-19 the worktree carries a *tripwire*
+file at `decomp.db` that is not a valid SQLite database, `orchestrator.database`
+raises `ShadowDatabaseError` naming both paths, and the ninja sync edge skips.
+Pass the main repo's path explicitly. MCP tools are unaffected — they resolve
+the DB against the server's project root, not your cwd.
+
 **Always re-measure before acting.** Use `mcp__orchestrator__run_objdiff` and
 **pass `project_dir`**. Omitting it silently measures the *main repo* instead of
 your worktree, so your edits are invisible and the number looks frozen — the most

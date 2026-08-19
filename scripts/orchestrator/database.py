@@ -5,6 +5,7 @@ attempts, and worktrees.
 """
 
 import json
+import os
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -163,11 +164,144 @@ CREATE INDEX IF NOT EXISTS idx_xrefs_address ON xrefs(address);
 _migrated_dbs: set[str] = set()  # Track which DB paths have been migration-checked
 
 
-def get_connection(db_path: str | Path = DEFAULT_DB_PATH) -> sqlite3.Connection:
+# ============================================================================
+# Worktree shadow-DB guard
+# ============================================================================
+#
+# `ninja` (and anything else that opens a RELATIVE `decomp.db`) run inside a git
+# worktree creates a brand-new database *there*. That is deliberately safe for
+# writes -- a worktree build can never corrupt the shared DB -- but it is a trap
+# for reads. The shadow carries every row and NO judgement: 48,325 rows, zero
+# verdicts, zero percentages. Measured 2026-08-19, identical queries:
+#
+#     AT_LIMIT certs to re-audit        shadow=0   main=3796
+#     near-miss finishing (>=99, <100)  shadow=0   main=89
+#     80-95 band, workable              shadow=0   main=325
+#
+# An empty result set reads as "this class is exhausted" -- the precise failure
+# mode this project has a standing rule against. Worse, `query_functions`
+# treats a NULL percent as passing a range filter, so the shadow does not even
+# reliably return nothing: it returned 20 rows with no percentages at all.
+#
+# So: refuse. Never auto-create, auto-migrate, or answer from a worktree-local
+# decomp.db while the main checkout has a real one. Fail loudly, name both
+# paths. Opt in with allow_shadow=True or DC3_ALLOW_SHADOW_DB=1 if you really
+# do want a throwaway per-worktree database.
+
+
+class ShadowDatabaseError(RuntimeError):
+    """A decomp.db read would be answered by a verdict-less worktree shadow."""
+
+
+def _main_checkout_for(path: Path) -> Path | None:
+    """Return the main checkout if `path` lives inside a *linked* git worktree.
+
+    Returns None for the main checkout itself and for anything not in a repo.
+    A linked worktree's `.git` is a FILE holding `gitdir: <main>/.git/worktrees/<name>`.
+    """
+    try:
+        start = path.resolve()
+    except OSError:
+        return None
+    for d in (start, *start.parents):
+        git = d / ".git"
+        if git.is_dir():
+            return None                      # main checkout
+        if git.is_file():
+            try:
+                text = git.read_text(errors="replace").strip()
+            except OSError:
+                return None
+            if not text.startswith("gitdir:"):
+                return None
+            gitdir = Path(text.split(":", 1)[1].strip())
+            if not gitdir.is_absolute():
+                gitdir = (d / gitdir).resolve()
+            for parent in gitdir.parents:    # <main>/.git/worktrees/<name> -> <main>
+                if parent.name == ".git":
+                    return parent.parent
+            return None
+    return None
+
+
+def shadow_target(db_path: str | Path) -> Path | None:
+    """Return the main checkout's decomp.db if `db_path` is a worktree shadow.
+
+    None means "this path is fine". Checked against the DB's OWN directory, not
+    the cwd -- an absolute path to the main repo's decomp.db passed from inside
+    a worktree is fine, and is the documented way to work from a worktree.
+    """
+    p = Path(db_path)
+    if p.name != "decomp.db":
+        return None                          # scratch/test DBs are none of our business
+    main = _main_checkout_for(p.parent if str(p.parent) not in ("", ".") else Path.cwd())
+    if main is None:
+        return None                          # not in a linked worktree
+    main_db = main / "decomp.db"
+    if not main_db.exists():
+        return None                          # nothing better to point at
+    try:
+        if p.exists() and p.resolve() == main_db.resolve():
+            return None                      # already symlinked to the real one
+    except OSError:
+        pass
+    return main_db
+
+
+def check_is_shadow(db_path: str | Path) -> bool:
+    """True if `db_path` is (or would be) a worktree-local shadow decomp.db."""
+    return shadow_target(db_path) is not None
+
+
+def check_not_shadow_db(db_path: str | Path, *, allow_shadow: bool = False) -> None:
+    """Raise ShadowDatabaseError if `db_path` is a worktree-local decomp.db.
+
+    Checked against the DB's OWN directory, not the cwd -- passing an absolute
+    path to the main repo's decomp.db from inside a worktree is fine and is the
+    documented way to work from a worktree.
+    """
+    if allow_shadow or os.environ.get("DC3_ALLOW_SHADOW_DB") == "1":
+        return
+    main_db = shadow_target(db_path)
+    if main_db is None:
+        return
+    p = Path(db_path)
+    main = main_db.parent
+    if not p.exists():
+        state = "does not exist yet"
+    else:
+        try:
+            is_sqlite = p.open("rb").read(16).startswith(b"SQLite format 3")
+        except OSError:
+            is_sqlite = True
+        state = ("exists but has no verdicts" if is_sqlite
+                 else "is the tripwire file setup_worktree.sh plants, not a database")
+    raise ShadowDatabaseError(
+        f"refusing to use a worktree-local decomp.db -- it would answer "
+        f"plausibly and wrongly.\n"
+        f"  requested   : {p}  ({state})\n"
+        f"  main checkout: {main}\n"
+        f"  real DB      : {main_db}\n"
+        f"A worktree build writes a shadow decomp.db with every row and NO "
+        f"verdicts/percentages, so work queries come back empty and read as "
+        f"'this class is exhausted'.\n"
+        f"Fix: pass --db {main_db} (or db_path=...) explicitly.\n"
+        f"If you genuinely want a throwaway per-worktree DB, set "
+        f"DC3_ALLOW_SHADOW_DB=1."
+    )
+
+
+def get_connection(
+    db_path: str | Path = DEFAULT_DB_PATH,
+    *,
+    allow_shadow: bool = False,
+) -> sqlite3.Connection:
     """Get a database connection with row factory enabled.
 
     Automatically runs pending migrations on first access per DB path.
+    Raises ShadowDatabaseError for a worktree-local `decomp.db` (see above).
     """
+    check_not_shadow_db(db_path, allow_shadow=allow_shadow)
     db_str = str(db_path)
     conn = sqlite3.connect(db_str)
     conn.row_factory = sqlite3.Row
@@ -187,9 +321,18 @@ def get_connection(db_path: str | Path = DEFAULT_DB_PATH) -> sqlite3.Connection:
     return conn
 
 
-def init_database(db_path: str | Path = DEFAULT_DB_PATH) -> sqlite3.Connection:
-    """Initialize database with schema. Safe to call multiple times."""
-    conn = get_connection(db_path)
+def init_database(
+    db_path: str | Path = DEFAULT_DB_PATH,
+    *,
+    allow_shadow: bool = False,
+) -> sqlite3.Connection:
+    """Initialize database with schema. Safe to call multiple times.
+
+    Refuses to CREATE a worktree-local `decomp.db` -- that is where the shadow
+    comes from in the first place. Pass allow_shadow=True only if a throwaway
+    per-worktree database is genuinely what you want.
+    """
+    conn = get_connection(db_path, allow_shadow=allow_shadow)
 
     # Check if already initialized
     cursor = conn.execute(

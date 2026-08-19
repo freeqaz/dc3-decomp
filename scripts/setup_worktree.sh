@@ -412,6 +412,55 @@ echo "==> Priming ninja state (scoped to config.json — no object builds)"
 )
 fi
 
+# ---------------------------------------------------------------------------
+# decomp.db tripwire
+# ---------------------------------------------------------------------------
+# A worktree must never grow its own decomp.db. Running `ninja` here used to
+# create one -- every row, ZERO verdicts and ZERO percentages -- and every
+# analysis script that defaults to `--db decomp.db` then answered out of it.
+# Measured 2026-08-19, identical queries: AT_LIMIT certs 0 vs 3,796 in main;
+# near-misses 0 vs 89; the 80-95 band 0 vs 325. An empty result set reads as
+# "this class is exhausted", which is the one failure mode this project has a
+# standing rule against.
+#
+# scripts/orchestrator/database.py now refuses to open a worktree-local
+# decomp.db, but ~50 scripts call sqlite3.connect() directly and would sail
+# straight past a Python-side guard. So plant a file that is deliberately NOT a
+# valid SQLite database: any reader, in any language, gets
+# "file is not a database" on its first query instead of a plausible answer,
+# and `cat decomp.db` explains why.
+#
+# NB: $MAIN_REPO is wherever this script was invoked from, which may itself be a
+# worktree. The canonical decomp.db lives in the MAIN checkout, so resolve that
+# separately -- `--git-common-dir` is <main>/.git from anywhere in the repo.
+CANON_REPO="$MAIN_REPO"
+_common="$(git -C "$MAIN_REPO" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
+if [ -n "$_common" ]; then
+    CANON_REPO="$(dirname "$_common")"
+fi
+if [ ! -e "$WORKTREE_PATH/decomp.db" ]; then
+    cat > "$WORKTREE_PATH/decomp.db" <<TRIPWIRE
+This is NOT a database. It is a tripwire, planted by scripts/setup_worktree.sh.
+
+A worktree-local decomp.db carries every row and no judgement: 0 verdicts, 0
+percentages. Work queries against it return nothing, which reads exactly like
+"this class is exhausted" -- so it answers plausibly and wrongly. Failing loudly
+is the point of this file.
+
+The real database is:   $CANON_REPO/decomp.db
+
+Pass it explicitly:     --db $CANON_REPO/decomp.db
+                        db_path="$CANON_REPO/decomp.db"
+
+The MCP orchestrator tools are unaffected -- they resolve decomp.db against the
+server's own project root, not your cwd. Keep using project_dir="$WORKTREE_PATH".
+
+If you genuinely want a throwaway per-worktree database, delete this file and
+set DC3_ALLOW_SHADOW_DB=1.
+TRIPWIRE
+    echo "==> decomp.db tripwire planted (reads fail loudly; real DB stays in $CANON_REPO)"
+fi
+
 echo ""
 echo "Worktree ready:  $WORKTREE_PATH"
 echo "  branch:        $BRANCH  (from $BASE_COMMIT on $BASE_BRANCH)"

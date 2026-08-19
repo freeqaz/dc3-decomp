@@ -60,6 +60,14 @@ For a complete collection of patterns, find then under ./docs/decomp/patterns/ -
 
 Use `scripts/setup_worktree.sh <path> <branch>` to create worktrees with a working build system (configures ninja, symlinks tools/compilers/target objects).
 
+**`decomp.db` does not exist in a worktree, on purpose.** A worktree `ninja` used to grow its own shadow DB — every row, **zero verdicts, zero percentages** — and every script defaulting to `--db decomp.db` then answered out of it. Identical work queries, measured 2026-08-19: AT_LIMIT certs `0` vs `3,796`; near-misses `0` vs `89`; the 80-95 band `0` vs `325`. An empty result reads as *"this class is exhausted"*. Three layers now stop that (fixed 2026-08-19):
+
+- `setup_worktree.sh` plants a **tripwire** at `<worktree>/decomp.db` that is deliberately not a valid SQLite file, so *any* reader — including the ~50 scripts that call `sqlite3.connect()` directly — gets `file is not a database` instead of a plausible answer. `cat` it for the explanation.
+- `orchestrator.database` raises **`ShadowDatabaseError`** naming both paths, and refuses to auto-create or auto-migrate a worktree-local DB.
+- The ninja db-sync edge **skips** in a worktree rather than creating one.
+
+From a worktree, pass the real DB explicitly: `--db /home/free/code/milohax/dc3-decomp/decomp.db`. The **MCP orchestrator tools are unaffected** — they resolve `decomp.db` against the server's own project root — so keep using `project_dir="<worktree>"`. `DC3_ALLOW_SHADOW_DB=1` is the escape hatch if you really do want a throwaway local DB.
+
 ## Project Structure
 
 - `src/` - Decompiled C++ source (mirrors original structure)
