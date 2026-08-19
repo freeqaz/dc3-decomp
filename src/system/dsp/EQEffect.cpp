@@ -112,11 +112,14 @@ void EQEffect::Reset() {
         puVar11[8] = 0;
 
         // Band 3/4 bandpass delay lines
+        int baseA = iVar10 - 4;
+        int baseC = iVar10 + 4;
+        int baseD = iVar10 + 8;
         for (int tap = 0; tap < 2; tap++) {
-            int a = iVar10 - 4 + iVar12;
+            int a = baseA + iVar12;
             int b = iVar10 + iVar12;
-            int c = iVar10 + 4 + iVar12;
-            int d = iVar10 + 8 + iVar12;
+            int c = baseC + iVar12;
+            int d = baseD + iVar12;
             iVar12 = iVar12 + 1;
             ((float *)this)[a] = 0;
             ((float *)this)[b] = 0;

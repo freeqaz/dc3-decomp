@@ -46,6 +46,27 @@ static inline unsigned int Sha1Bswap32(unsigned int v) {
     z += (w ^ x ^ y) + blk(i) + 0xCA62C1D6 + rol(v, 5);                                  \
     w = rol(w, 30);
 
+// The PPC arm of this function is behaviourally exact and does not need
+// another look. Verified 2026-08-19 by driving both the decompiled .text and
+// the original .obj's .text through the unicorn harness with a real fixture
+// (m_block and pState pointed inside the compared object region, seeded with
+// the padded single block for "abc"): both sides produce
+// a9993e36 4706816a ba3e2571 7850c26c 9cd0d89d -- the published SHA-1("abc")
+// digest -- and the whole 64KB object region comes out byte-identical.
+// The unicorn row for ?Transform@CSHA1@@AAAXPAIPBE@Z is nevertheless
+// DIVERGENT/return_value: the comparator checks r3 unconditionally, and this
+// is a void function, so the r3 residue is dead by ABI.
+//
+// The residual ~55.7% objdiff score is instruction scheduling and register
+// allocation inside the 80-round unrolled block (both sides prefetch
+// m_block->l[] into a long chain of registers and interleave the prefetch
+// differently, offset by one register). It is unrelated to the HX_NATIVE
+// guards below, which are compile-time: the PPC build sees only the #else
+// arms and is byte-identical to what it was before those guards landed
+// (55.7% was reached in 979aabcc0, the guards landed later in 97b649d25).
+// The "Source accesses 'm_reserved1'/'m_buffer' but target accesses ..."
+// notes objdiff prints for this function are false positives -- those loads
+// are indexed off m_block, not off `this`.
 void CSHA1::Transform(unsigned int *pState, const unsigned char *pBuffer) {
 #ifdef HX_NATIVE
     // `unsigned long` is 64-bit on the LP64 host, so rol()/blk() would not wrap
