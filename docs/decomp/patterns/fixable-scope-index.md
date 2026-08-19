@@ -105,8 +105,25 @@ and the census duly printed `COUNT tgt/ours=(2,1)` — "the original declares a
 `MILO_NOTIFY_ONCE` we do not." It does not. `NavListSortMgr::DataIndex` is
 100% with **52/52 instructions equal** and contains exactly one
 `MILO_NOTIFY_ONCE`, and **our own compiler emits the same index for a static's
-data symbol and its `??__F` helper** (verified in our `.obj`), so those two
-names cannot describe two declarations. The map lists only the `?1`.
+data symbol and its `??__F` helper**, so those two names cannot describe two
+declarations. The map lists only the `?1`.
+
+That last fact is the linchpin — it is what licenses reading our *data*
+indices against the map's *atexit* indices at all — so it is worth the four
+lines of evidence. Read both lists out of the same freshly built `.obj`:
+
+```
+NavListSortMgr.obj   ?_dw@?2                ??__F_dw@?2                  (3, 3)
+MainMenuPanel.obj    ?msg@?CF@ ?msg@?CL@    ??__Fmsg@?CF@ ??__Fmsg@?CL@  (37/43)
+ShellInput.obj       ?...@?9 ?...@?N@ ?BE@  ??__F...@?9 ?N@ ?BE@         (10/13/20)
+RhythmBattle.obj     ?finished_intro@?DN@   ??__Ffinished_intro@?DN@     (61, 61)
+```
+
+Equal on every one, and equal *before* `obj_atexit_scope_patcher.py` gets a
+say (it pairs by canonical key = name with the counter stripped, so it does
+nothing at all when our variable name differs from the target's — which is
+also why "helpers vs data symbols are two different rulers" is the wrong
+diagnosis for these rows).
 
 Three more instrument rules, all learned by having them bite:
 
