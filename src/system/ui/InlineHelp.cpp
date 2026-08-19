@@ -324,10 +324,10 @@ void InlineHelp::SetLabelRotationPcts(float f) {
 
 void InlineHelp::DrawShowing() {
     int numLabels = mTextLabels.size();
-    const Transform &parentXfm = mTemplateLabel->WorldXfm();
+    const Transform &parentXfm = WorldXfm();
     Transform worldXfm;
     memcpy(&worldXfm, &parentXfm, sizeof(Transform));
-    UILabel *t = mTemplateLabel;
+    const DataArray *t = TypeDef();
     MILO_ASSERT(t, 0x117);
 
     Transform offsetXfm;

@@ -263,15 +263,15 @@ void NgPostProc::Init() {
 
 void NgPostProc::RebuildTex() {
     ReleaseTex();
-    int w = 0x80;
-    int h = 0x80;
+    unsigned int w = 0x80;
+    unsigned int h = 0x80;
     if (TheLoadMgr.GetPlatform() != kPlatformNone) {
         MILO_ASSERT(TheNgRnd.PreProcessTexture(), 0x3AB );
         w = TheNgRnd.PreProcessTexture()->Width();
         h = TheNgRnd.PreProcessTexture()->Height();
     }
     RndVelocityBuffer::Singleton().AllocateData(w, h, TheRnd.Bpp());
-    sBloom.AllocateTextures(w * 4, h * 4);
+    sBloom.AllocateTextures(w / 4, h / 4);
 }
 
 #ifdef HX_NATIVE
