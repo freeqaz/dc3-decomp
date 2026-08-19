@@ -19,12 +19,20 @@ Usage:
 import re
 import sys
 import os
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
+
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if REPO not in sys.path:
+    sys.path.insert(0, REPO)
+if str(Path(__file__).parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).parent))
+from scripts.analysis.coverage import CoverageReport, add_coverage_args  # noqa: E402
 
 # Import the DTA parser from the hierarchy scanner
 from dta_hierarchy_scan import (
-    parse_dta_file, DTANode, DTAHierarchy
+    parse_dta_file, DTANode, DTAHierarchy,
+    empty_corpus_banner, EXIT_EMPTY_CORPUS, PARSE_STATS, UNRESOLVED_INCLUDES,
 )
 
 
@@ -139,7 +147,8 @@ def _build_key_node_map(main_roots):
     return key_nodes
 
 
-def _check_key_based_accesses(lines, filepath, all_key_nodes):
+def _check_key_based_accesses(lines, filepath, all_key_nodes,
+                              cov_sites=None, unverifiable=None, site_totals=None):
     """Check FindArray("key")->Accessor(N) against all DTA nodes named "key".
 
     For each chained access, verifies:
@@ -148,6 +157,9 @@ def _check_key_based_accesses(lines, filepath, all_key_nodes):
 
     Only flags if ALL instances of the key fail the check (to avoid
     false positives from same-named keys in different contexts).
+
+    The optional coverage arguments are additive: a two/three-argument caller
+    behaves exactly as before.
     """
     findings = []
 
@@ -160,10 +172,24 @@ def _check_key_based_accesses(lines, filepath, all_key_nodes):
             key = m.group(2)
             accessor = m.group(3)
             index = int(m.group(4))
+            if site_totals is not None:
+                site_totals['sites'] += 1
 
             nodes = all_key_nodes.get(key, [])
             if not nodes:
-                continue  # Key not found in any DTA — can't verify
+                # NOT "nothing to verify" — this is the key-does-not-exist-
+                # ANYWHERE population, i.e. the typo'd-FindArray bug class and
+                # the single most valuable thing this scanner could report.
+                # It used to vanish through a bare `continue`.
+                if unverifiable is not None:
+                    unverifiable[key] += 1
+                if cov_sites is not None:
+                    cov_sites.drop("key-absent-from-every-dta",
+                                   note="key exists in no parsed DTA — "
+                                        "typo'd-FindArray candidates")
+                continue
+            if cov_sites is not None:
+                cov_sites.examine()
 
             # Check bounds: does ANY instance have enough elements?
             any_has_bounds = False
@@ -205,6 +231,9 @@ def _check_key_based_accesses(lines, filepath, all_key_nodes):
                     info = get_element_info(node, index)
                     if info:
                         types_found.add(info[0])
+                # sorted(): a raw set renders in hash order, so the same run
+                # produced different finding text from one invocation to the next.
+                types_found = sorted(types_found)
                 findings.append({
                     'file': str(filepath),
                     'line': line_no,
@@ -219,22 +248,50 @@ def _check_key_based_accesses(lines, filepath, all_key_nodes):
     return findings
 
 
-def trace_dta_accesses(filepath, hierarchy, main_roots, all_key_nodes=None):
+def trace_dta_accesses(filepath, hierarchy, main_roots, all_key_nodes=None,
+                       cov_files=None, cov_sites=None, unverifiable=None,
+                       site_totals=None):
     """Trace all DTA access chains in a source file.
 
     Returns list of findings with validation results.
+
+    The coverage arguments are optional and additive.  Without them this
+    behaves exactly as before — but then an unreadable file and a clean file
+    produce the identical empty list, which is the shape this whole contract
+    exists to outlaw.
     """
     findings = []
+
+    def site_drop(reason, note=""):
+        if cov_sites is not None:
+            cov_sites.drop(reason, note=note)
+
+    def site_keep():
+        if cov_sites is not None:
+            cov_sites.examine()
+
+    def bump():
+        if site_totals is not None:
+            site_totals['sites'] += 1
 
     try:
         with open(filepath) as f:
             lines = f.readlines()
     except (IOError, UnicodeDecodeError):
+        # An unreadable source file is NOT a clean source file.
+        if cov_files is not None:
+            cov_files.drop("source-unreadable", note=str(filepath))
         return findings
 
     # Quick check
     if not any('Find' in l or 'SystemConfig' in l for l in lines):
+        if cov_files is not None:
+            cov_files.drop("no-dta-access-syntax",
+                           note="no `Find` / `SystemConfig` token anywhere in the file")
         return findings
+
+    if cov_files is not None:
+        cov_files.examine()
 
     # Track variable context
     var_config = {}   # var -> config section name
@@ -318,17 +375,25 @@ def trace_dta_accesses(filepath, hierarchy, main_roots, all_key_nodes=None):
             key = m.group(2)
             accessor = m.group(3)  # Int, Float, Sym, Str
             index = int(m.group(4))
+            bump()
 
             # Try to resolve the receiver's DTA context
             if receiver:
                 parent_node = get_var_node(receiver)
                 if parent_node is None:
+                    site_drop("receiver-unresolvable",
+                              note="receiver's DTA context could not be traced "
+                                   "(function parameter / cross-function flow)")
                     continue
 
                 # Find the child array
                 target_node = parent_node.find_array(key)
             else:
-                continue  # can't trace without receiver
+                site_drop("inline-chain-no-receiver",
+                          note="FindArray(..)->Acc(N) with no named receiver to anchor")
+                continue
+
+            site_keep()
 
             if target_node is None:
                 findings.append({
@@ -398,17 +463,25 @@ def trace_dta_accesses(filepath, hierarchy, main_roots, all_key_nodes=None):
             receiver = m.group(1)
             accessor = m.group(2)
             index = int(m.group(3))
+            bump()
 
             # Skip if this is part of a chained expression (handled above)
             if f'FindArray' in line and f'->{accessor}({index})' in line:
                 pos = m.start()
                 before = line[:pos]
                 if 'FindArray' in before and ')' in before[before.rfind('FindArray'):]:
+                    site_drop("part-of-chained-expression",
+                              note="already examined by the CHAINED_RE pass above")
                     continue
 
             node = get_var_node(receiver)
             if node is None:
+                site_drop("receiver-unresolvable",
+                          note="receiver's DTA context could not be traced "
+                               "(function parameter / cross-function flow)")
                 continue
+
+            site_keep()
 
             # Check bounds
             elem_info = get_element_info(node, index)
@@ -427,7 +500,9 @@ def trace_dta_accesses(filepath, hierarchy, main_roots, all_key_nodes=None):
     # ----- Key-based validation (no chain resolution needed) -----
     # For any FindArray("key")->Accessor(N), verify "key" arrays in DTA
     findings.extend(
-        _check_key_based_accesses(lines, filepath, all_key_nodes)
+        _check_key_based_accesses(lines, filepath, all_key_nodes,
+                                  cov_sites=cov_sites, unverifiable=unverifiable,
+                                  site_totals=site_totals)
     )
 
     return findings
@@ -450,15 +525,24 @@ def main():
                         help='Check positional access bounds and types')
     parser.add_argument('--json', action='store_true',
                         help='Output as JSON')
+    parser.add_argument('--main-configs', nargs='*',
+                        default=['orig-assets/extracted/config/ham_keep.dta',
+                                 'orig-assets/extracted/(..)/(..)/system/run/config/default.dta'],
+                        help='Main config files to parse with #include resolution '
+                             '(default: the two orig-assets paths this tool always used)')
+    parser.add_argument('--dta-root', default='orig-assets/extracted',
+                        help='Tree searched recursively for *.dta '
+                             '(default: orig-assets/extracted, as before)')
+    add_coverage_args(parser)
     args = parser.parse_args()
 
     # Build hierarchy and keep root nodes for direct access
-    main_configs = [
-        'orig-assets/extracted/config/ham_keep.dta',
-        'orig-assets/extracted/(..)/(..)/system/run/config/default.dta',
-    ]
+    main_configs = list(args.main_configs)
     main_roots = {}
     hierarchy = DTAHierarchy()
+    dta_count = 0
+    searched = []
+    missing_inputs = []
 
     for cfg in main_configs:
         p = Path(cfg)
@@ -466,24 +550,79 @@ def main():
             root = parse_dta_file(str(p))
             if root:
                 main_roots[cfg] = root
-                hierarchy.add_file(p)
+                if hierarchy.add_file(p):
+                    dta_count += 1
+                searched.append(f"{cfg}  [main config: parsed]")
+            else:
+                # parse_dta_file already printed the reason; do not let an
+                # unparseable main config read as "loaded".
+                missing_inputs.append(cfg)
+                searched.append(f"{cfg}  [main config: UNPARSEABLE]")
+        else:
+            # Was a bare `if p.exists():` with NO else. From any worktree this
+            # loaded 0 configs and every downstream check short-circuited.
+            print(f"Warning: main config {cfg} does not exist", file=sys.stderr)
+            missing_inputs.append(cfg)
+            searched.append(f"{cfg}  [main config: MISSING]")
 
-    for f in Path('orig-assets/extracted').rglob('*.dta'):
-        if str(f) not in hierarchy.roots:
-            hierarchy.add_file(f)
+    dta_root = Path(args.dta_root)
+    if not dta_root.exists():
+        print(f"Warning: {dta_root} does not exist", file=sys.stderr)
+        missing_inputs.append(str(dta_root))
+        searched.append(f"{dta_root}  [tree: MISSING]")
+    else:
+        n = 0
+        # sorted(): the sibling scanners sort their rglob; an unsorted walk made
+        # parse order (and therefore warning order) filesystem-dependent.
+        for f in sorted(dta_root.rglob('*.dta')):
+            if str(f) not in hierarchy.roots:
+                if hierarchy.add_file(f):
+                    dta_count += 1
+                    n += 1
+        searched.append(f"{dta_root}  [tree: {n} files]")
 
-    print(f"Loaded {len(main_roots)} main configs, "
-          f"{len(hierarchy.key_parents)} unique keys", file=sys.stderr)
+    key_count = len(hierarchy.key_parents)
+    print(f"Loaded {len(main_roots)} main configs, {dta_count} DTA files, "
+          f"{key_count} unique keys", file=sys.stderr)
+
+    cov = CoverageReport("dta_access_audit", args=args)
+    cov.extra("main_configs_loaded", len(main_roots))
+    cov.extra("dta_files_parsed", dta_count)
+    cov.extra("dta_unique_keys", key_count)
+    cov.extra("missing_inputs", sorted(missing_inputs))
+    cov.extra("parse_stats", dict(sorted(PARSE_STATS.items())))
+    cov.extra("unresolved_includes", dict(sorted(UNRESOLVED_INCLUDES.items())))
+    if missing_inputs:
+        cov.note(f"{len(missing_inputs)} declared corpus input(s) DO NOT EXIST: "
+                 + ", ".join(sorted(missing_inputs)))
+    for slug in ('include-unresolved', 'include-unreadable', 'include-depth-capped',
+                 'dta-file-unparseable'):
+        if PARSE_STATS.get(slug):
+            cov.note(f"hierarchy TRUNCATED at parse time: {slug} x{PARSE_STATS[slug]} "
+                     f"(the tree every check runs against is smaller than the corpus)")
+
+    # ---- the empty-corpus gate: a clean verdict is FORBIDDEN from here ----
+    banner = empty_corpus_banner("dta_access_audit", dta_count, key_count, searched)
+    if banner is not None:
+        print(banner)                       # STDOUT — survives a redirect
+        cov.universe(0, "DTA files parsed")
+        sys.exit(cov.emit() or EXIT_EMPTY_CORPUS)
 
     # SystemConfig section validation
     if args.check_sections:
         sections = set()
         src_path = Path(args.src_dir)
-        for f in list(src_path.rglob('*.cpp')) + list(src_path.rglob('*.h')):
+        src_files = sorted(list(src_path.rglob('*.cpp')) + list(src_path.rglob('*.h')))
+        cov.universe(len(src_files), f"source files under {args.src_dir} (.cpp/.h)")
+        for f in src_files:
             try:
                 text = f.read_text()
-            except:
+            # A bare `except:` also swallows KeyboardInterrupt and SystemExit —
+            # ^C during a scan looked like "one more clean file".
+            except (OSError, UnicodeDecodeError, ValueError) as e:
+                cov.drop("source-unreadable", note=f"{f}: {type(e).__name__}")
                 continue
+            cov.examine()
             for m in SYSCONFIG_RE.finditer(text):
                 sections.add(m.group(1))
 
@@ -505,10 +644,12 @@ def main():
                 print(f"  BAD {section}")
                 bad.append(section)
         if bad:
-            print(f"\n{len(bad)} sections not found: {bad}")
+            print(f"\n{len(bad)} of {len(sections)} sections not found "
+                  f"(checked against {dta_count} DTA files): {sorted(bad)}")
         else:
-            print(f"\nAll {len(sections)} sections valid.")
-        return
+            print(f"\nAll {len(sections)} sections valid "
+                  f"(checked against {dta_count} DTA files, {key_count} keys).")
+        sys.exit(cov.emit())
 
     # Trace accesses
     if args.trace:
@@ -521,20 +662,69 @@ def main():
     all_key_nodes = _build_key_node_map(main_roots)
     print(f"Built key-node map: {len(all_key_nodes)} unique keys with DTA nodes",
           file=sys.stderr)
+    cov.extra("key_node_map_keys", len(all_key_nodes))
+    if not all_key_nodes:
+        # The main configs are what _build_key_node_map walks: an empty map
+        # means every key-based check below is a no-op even if the wider
+        # hierarchy parsed fine.
+        cov.note("key-node map is EMPTY — every key-based bounds/type check "
+                 "below short-circuits; only chain-resolved checks can fire")
+
+    cov.universe(len(files), "source files to trace (.cpp/.h)")
+    cov_sites = CoverageReport("dta_access_audit:access-sites",
+                               allow_truncation=args.allow_truncation)
+    unverifiable = Counter()
+    site_totals = Counter()
 
     all_findings = []
     for f in files:
-        findings = trace_dta_accesses(str(f), hierarchy, main_roots, all_key_nodes)
+        findings = trace_dta_accesses(str(f), hierarchy, main_roots, all_key_nodes,
+                                      cov_files=cov, cov_sites=cov_sites,
+                                      unverifiable=unverifiable,
+                                      site_totals=site_totals)
         all_findings.extend(findings)
+
+    # Declared last, tallied independently: a `continue` that forgets to drop
+    # shows up as UNACCOUNTED rather than shrinking the denominator.
+    cov_sites.universe(site_totals['sites'], "DTA access sites in scanned source")
+    site_d = cov_sites.as_dict()
+    cov.extra("access_sites", site_d)
+    cov.extra("keys_absent_from_every_dta",
+              dict(sorted(unverifiable.items(), key=lambda kv: (-kv[1], kv[0]))))
+
+    def finish():
+        """Emit BOTH coverage blocks; the worst exit code wins."""
+        rc_sites = cov_sites.emit(sys.stderr)
+        rc_files = cov.emit()
+        return rc_files or rc_sites
 
     if args.json:
         import json
         print(json.dumps(all_findings, indent=2))
-        return
+        sys.exit(finish())
+
+    # The key-absent population is its own reported category. It is NOT a clean
+    # result: a typo'd FindArray key and a key whose DTA we never parsed are
+    # indistinguishable from here, and the first is a real bug class.
+    if unverifiable:
+        n_absent = sum(unverifiable.values())
+        print(f"\n=== UNVERIFIABLE: key present in NO parsed DTA "
+              f"({n_absent} access sites, {len(unverifiable)} distinct keys) ===\n")
+        ranked = sorted(unverifiable.items(), key=lambda kv: (-kv[1], kv[0]))
+        for key, n in ranked[:20]:
+            print(f"  {n:5d}x  {key}")
+        if len(ranked) > 20:
+            print(f"  ... and {len(ranked) - 20} more distinct keys "
+                  f"(full list in --coverage-json)")
 
     if not all_findings:
-        print("No DTA access issues found.")
-        return
+        # NEVER a bare "No DTA access issues found." — the denominator travels
+        # with the verdict, always.
+        print(f"\nNo DTA access issues found among {site_d['examined']} verifiable "
+              f"access sites (of {site_d['universe']} total) in "
+              f"{cov.as_dict()['examined']} source files, checked against "
+              f"{dta_count} DTA files / {key_count} keys.")
+        sys.exit(finish())
 
     # Group by type
     by_type = defaultdict(list)
@@ -550,7 +740,11 @@ def main():
             print()
 
     print(f"Total: {sum(len(v) for v in by_type.values())} findings "
-          f"({', '.join(f'{k}:{len(v)}' for k,v in sorted(by_type.items()))})")
+          f"({', '.join(f'{k}:{len(v)}' for k,v in sorted(by_type.items()))}) "
+          f"from {site_d['examined']} verifiable access sites of "
+          f"{site_d['universe']} total, in {cov.as_dict()['examined']} source "
+          f"files, against {dta_count} DTA files / {key_count} keys")
+    sys.exit(finish())
 
 
 if __name__ == '__main__':
