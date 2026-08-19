@@ -72,7 +72,12 @@ void GetMotdJob::GetMotdData(
             }
             JsonObject *numToastsName = c.GetByName(o, "num_toasts");
             if (numToastsName) {
-                int numToasts = numToastsName->Int();
+                // MakeString's retail instantiation for this log is in the
+                // FormatString::operator<< fold class at 0x827ca848 (unsigned int
+                // / long / unsigned long / void* / ...), not the standalone
+                // operator<<(int) at 0x827ca420 -- so numToasts is unsigned, which
+                // is also what the loop below already compares against.
+                unsigned int numToasts = numToastsName->Int();
                 MILO_LOG(">>>>>>>>>> [num_toasts] = %i\n", numToasts);
                 for (unsigned int i = 0; i < numToasts; i++) {
                     char num[4];
