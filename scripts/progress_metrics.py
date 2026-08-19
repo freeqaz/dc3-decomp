@@ -243,7 +243,8 @@ def fmt_bytes(n: int) -> str:
     return f"{n} bytes"
 
 
-def print_metrics(all_m: Metrics, auth_m: Metrics) -> None:
+def print_metrics(all_m: Metrics, auth_m: Metrics,
+                  report_path: "Path | None" = None) -> None:
     """Print a human-readable summary to stdout."""
     xdk_bytes = all_m.total_code - auth_m.total_code
     xdk_pct = 100.0 * xdk_bytes / all_m.total_code if all_m.total_code else 0.0
@@ -252,6 +253,30 @@ def print_metrics(all_m: Metrics, auth_m: Metrics) -> None:
     print("DC3 Decomp — Progress Metrics")
     print("=" * 60)
     print()
+    # The markdown path has carried the provenance banner and the
+    # "forgives register permutation" caveat since the functionRelocDiffs
+    # hardcoding was fixed, but this stdout path -- the one
+    # STATE_OF_THE_DECOMP tells you to run for the headline -- printed the
+    # canonical number bare.  A percentage without its ruler is not
+    # comparable to another percentage, and this ruler is more forgiving
+    # than readers assume: ?roll@@YAHH@Z scores match_percent_normalized
+    # 100.0 (so it counts as MATCHED here) with 8 of its 12 instructions
+    # differing, because every difference is register allocation.
+    if report_path is not None:
+        try:
+            prov = read_provenance(report_path)
+            built = datetime.fromtimestamp(
+                report_path.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
+            print(f"  Report built: {built} · objdiff-cli "
+                  f"{prov.get('tool_version', '?')} "
+                  f"(commit {prov.get('tool_commit', '?')}) · "
+                  f"functionRelocDiffs={reloc_mode(prov)}")
+        except (OSError, ValueError, KeyError):
+            print("  Report provenance: UNREADABLE — treat these numbers as unattributed")
+        print("  CANONICAL ruler = match_percent_normalized == 100. It forgives")
+        print("  register permutation and benign reloc addends; it does NOT forgive")
+        print("  wrong constants, offsets or vtable slots. It is not byte identity.")
+        print()
     print("  Excluded prefixes (SDK/vendor, not authorable):")
     for p in SDK_UNIT_PREFIXES:
         print(f"    {p}")
@@ -467,9 +492,9 @@ def main() -> int:
         args.out.parent.mkdir(parents=True, exist_ok=True)
         args.out.write_text(md, encoding="utf-8")
         print(f"Generated: {args.out}")
-        print_metrics(all_m, auth_m)
+        print_metrics(all_m, auth_m, args.report)
     else:
-        print_metrics(all_m, auth_m)
+        print_metrics(all_m, auth_m, args.report)
 
     return 0
 
