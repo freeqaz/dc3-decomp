@@ -1,7 +1,16 @@
 #!/usr/bin/env python3
 """Neutralize the MSVC prologue/epilogue register-save helpers for emulation.
 
-The unicorn harness stubs every external REL24 target with `li r3,0; blr`
+SUPERSEDED (2026-08-19) by scripts/unicorn_runner/save_helpers.py, which
+installs the helpers' REAL bodies in production. Do NOT call install() any
+more: the harness already emulates the helpers, so the monkeypatch now
+*removes* fidelity — it drops the r14-r31 / f14-f31 spill this module never
+modelled — instead of adding it, and --neutralize-helpers is a no-op at best.
+Kept, with its recorded mining output under docs/analysis/, because
+`uses_helpers()` is still the static predicate cap_blastradius.py
+cross-tabulates with.
+
+The unicorn harness stubbed every external REL24 target with `li r3,0; blr`
 (memory_map.TRAMPOLINE_STUB). MSVC's `__savegprlr_N` / `__restgprlr_N` /
 `__savefpr_N` / `__restfpr_N` helpers are external REL24 targets, so they get
 that stub too — which is catastrophic for two reasons:
