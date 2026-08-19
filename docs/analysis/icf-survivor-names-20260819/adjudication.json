@@ -1,0 +1,4011 @@
+[
+ {
+  "address": "0x82331448",
+  "split_name": "merged_ObjRefConcreteGetObj",
+  "size": 40,
+  "unit": "default/App",
+  "recoverable_name": "?GetObj@?$ObjRefConcrete@VMoveDir@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+  "live_row_id": 51053,
+  "map_members": [
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VMoveDir@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "game:Game.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VCamShot@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "world:Dir.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VUILabel@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "ui:UIList.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VRndDir@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "char:CharClipSet.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VCharEyes@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "hamobj:HamCharacter.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VUIComponent@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "ui:UIComponent.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VCharacter@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "char:CharTransDraw.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VFlow@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "flow:FlowRun.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VRndAnimatable@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "char:CharClip.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VLightPreset@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "world:Dir.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VHamCamShot@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "hamobj:HamDirector.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VCharFaceServo@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "char:CharEyes.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VRndMultiMesh@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "rndobj:PartLauncher.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VCharWeightSetter@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "char:CharWeightSetter.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VUILabelDir@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "hamobj:MoveDir.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VRndCam@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "hamobj:HamVisDir.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VHamListRibbon@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "hamobj:HamNavList.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VRndCamAnim@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "rndobj:CamAnim.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VFlowOutPort@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "flow:Flow.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VHamVisDir@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "hamobj:HamDirector.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VRndWind@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "char:CharHair.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VRndParticleSys@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "hamobj:RhythmBattlePlayer.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VRndParticleSysAnim@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "rndobj:PartAnim.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VRndPropAnim@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "char:CharLipSync.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VSkeletonClip@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "hamobj:HamMove.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VHamIKSkeleton@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "hamobj:HamIKEffector.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VWaypoint@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "char:CharServoBone.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VFlowLabel@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "flow:Flow.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VRndMatAnim@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "rndobj:MatAnim.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VTexMovie@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "meta:SongPreview.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VRndDrawable@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "char:Character.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VHamLabel@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "hamobj:HamListRibbon.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VCharCollide@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "char:CharIKHand.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VHamCharacter@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "gesture:SkeletonViz.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VCharLipSyncDriver@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "char:CharLipSyncDriver.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VWorldCrowd@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "hamobj:HamCamTransform.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VRndMeshAnim@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "rndobj:MeshAnim.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VTransConstraint@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "hamobj:RhythmBattlePlayer.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VHamScrollSpeedIndicator@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "hamobj:HamNavList.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VRndLine@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "hamobj:CharFeedback.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VRhythmDetector@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "hamobj:RhythmDetectorGroup.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VHamPhraseMeter@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "hamobj:RhythmBattlePlayer.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VSpotlight@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "world:CameraShot.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VRndGroup@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "char:Character.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VWorldDir@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "hamobj:HamDirector.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VRndTransformable@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "char:CharBonesMeshes.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VCharPollable@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "char:CharPollGroup.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VRndLight@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "rndobj:Env.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VCharServoBone@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "char:CharMirror.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VRndEnviron@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "char:Character.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VCharWeightable@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "char:CharWeightable.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VSpotlightDrawer@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "world:LightPreset.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VCharInterest@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "char:CharEyes.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VCameraInput@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "gesture:SkeletonUpdate.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VCharIKFoot@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "hamobj:HamRegulate.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VThreeDSound@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "world:ThreeDSoundManager.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VRndTexRenderer@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "hamobj:HamDirector.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VRndTransAnim@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "rndobj:TransAnim.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VUIList@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "ui:UIListSubList.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VUIListDir@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "hamobj:HamNavList.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VObjectDir@@V1@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "App.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VRhythmDetectorGroup@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "hamobj:RhythmBattle.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VEventTrigger@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "rndobj:EventTrigger.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VFlowNode@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "flow:FlowManager.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VCharDriver@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "char:CharWeightSetter.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VWorldInstance@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "world:Instance.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VHamMove@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "hamobj:HamMove.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VRhythmBattlePlayer@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "hamobj:RhythmBattle.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VRndLightAnim@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "rndobj:LitAnim.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VFlowTimer@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "flow:FlowTimer.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VCharLookAt@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "char:CharEyes.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VRndMesh@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "char:CharCollide.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VDepthBuffer3D@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "hamobj:RhythmBattlePlayer.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VHamIKEffector@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "hamobj:HamIKEffector.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VDancerSequence@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "hamobj:HamMove.obj"
+   },
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VRndPartLauncher@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "rndobj:EventTrigger.obj"
+   }
+  ],
+  "target_size": 40,
+  "candidates": [
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VObjectDir@@V1@@@UBAPAVObject@Hmx@@XZ",
+    "obj": "App.obj",
+    "unit_owned": true
+   }
+  ],
+  "name": "?GetObj@?$ObjRefConcrete@VObjectDir@@V1@@@UBAPAVObject@Hmx@@XZ",
+  "map_obj": "App.obj",
+  "unit_owned": true,
+  "nreloc": 0,
+  "fold_twins_in_unit": [],
+  "verdict": "WEAK_NO_RELOC",
+  "why": "body test passes but the body has ZERO relocations, so byte-identity does not discriminate between fold members",
+  "tried": [
+   {
+    "sym": "?GetObj@?$ObjRefConcrete@VObjectDir@@V1@@@UBAPAVObject@Hmx@@XZ",
+    "map_obj": "App.obj",
+    "result": "ok",
+    "nreloc": 0
+   }
+  ]
+ },
+ {
+  "address": "0x8235E578",
+  "split_name": "merged_8235E578",
+  "size": 360,
+  "unit": "default/system/char/CharBoneOffset",
+  "recoverable_name": "?Handle@PhotoSpotlightPositioner@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+  "live_row_id": 1435,
+  "map_members": [
+   {
+    "sym": "?Handle@PhotoSpotlightPositioner@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "flags": "f",
+    "obj": "hamobj:PhotoSpotlightPositioner.obj"
+   },
+   {
+    "sym": "?Handle@CharBoneOffset@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "flags": "f",
+    "obj": "char:CharBoneOffset.obj"
+   }
+  ],
+  "target_size": 360,
+  "candidates": [
+   {
+    "sym": "?Handle@CharBoneOffset@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "obj": "char:CharBoneOffset.obj",
+    "unit_owned": true
+   },
+   {
+    "sym": "?Handle@PhotoSpotlightPositioner@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "obj": "hamobj:PhotoSpotlightPositioner.obj",
+    "unit_owned": false
+   }
+  ],
+  "name": "?Handle@CharBoneOffset@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+  "map_obj": "char:CharBoneOffset.obj",
+  "unit_owned": true,
+  "nreloc": 19,
+  "fold_twins_in_unit": [
+   "?Handle@PhotoSpotlightPositioner@@UAA?AVDataNode@@PAVDataArray@@_N@Z"
+  ],
+  "verdict": "PROVEN_BODY",
+  "why": "body test: 360 B identical, 19 relocations agreeing by target name",
+  "tried": [
+   {
+    "sym": "?Handle@CharBoneOffset@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "map_obj": "char:CharBoneOffset.obj",
+    "result": "ok",
+    "nreloc": 19
+   }
+  ]
+ },
+ {
+  "address": "0x8237A778",
+  "split_name": "merged_8237A778",
+  "size": 60,
+  "unit": "default/system/char/CharEyes",
+  "recoverable_name": "??$_Copy_Construct@UEyeDesc@CharEyes@@@stlpmtx_std@@YAXPAUEyeDesc@CharEyes@@ABU12@@Z",
+  "live_row_id": 1920,
+  "map_members": [
+   {
+    "sym": "??$_Copy_Construct@UEyeDesc@CharEyes@@@stlpmtx_std@@YAXPAUEyeDesc@CharEyes@@ABU12@@Z",
+    "flags": "f i",
+    "obj": "char:CharEyes.obj"
+   },
+   {
+    "sym": "??$_Param_Construct@UEyeDesc@CharEyes@@U12@@stlpmtx_std@@YAXPAUEyeDesc@CharEyes@@ABU12@@Z",
+    "flags": "f i",
+    "obj": "char:CharEyes.obj"
+   }
+  ],
+  "target_size": 60,
+  "candidates": [
+   {
+    "sym": "??$_Copy_Construct@UEyeDesc@CharEyes@@@stlpmtx_std@@YAXPAUEyeDesc@CharEyes@@ABU12@@Z",
+    "obj": "char:CharEyes.obj",
+    "unit_owned": true
+   },
+   {
+    "sym": "??$_Param_Construct@UEyeDesc@CharEyes@@U12@@stlpmtx_std@@YAXPAUEyeDesc@CharEyes@@ABU12@@Z",
+    "obj": "char:CharEyes.obj",
+    "unit_owned": true
+   }
+  ],
+  "name": "??$_Copy_Construct@UEyeDesc@CharEyes@@@stlpmtx_std@@YAXPAUEyeDesc@CharEyes@@ABU12@@Z",
+  "map_obj": "char:CharEyes.obj",
+  "unit_owned": true,
+  "nreloc": 1,
+  "fold_twins_in_unit": [
+   "??$_Param_Construct@UEyeDesc@CharEyes@@U12@@stlpmtx_std@@YAXPAUEyeDesc@CharEyes@@ABU12@@Z"
+  ],
+  "verdict": "PROVEN_BODY",
+  "why": "body test: 60 B identical, 1 relocations agreeing by target name",
+  "tried": [
+   {
+    "sym": "??$_Copy_Construct@UEyeDesc@CharEyes@@@stlpmtx_std@@YAXPAUEyeDesc@CharEyes@@ABU12@@Z",
+    "map_obj": "char:CharEyes.obj",
+    "result": "ok",
+    "nreloc": 1
+   }
+  ]
+ },
+ {
+  "address": "0x8237A7E8",
+  "split_name": "merged_8237A7E8",
+  "size": 84,
+  "unit": "default/system/char/CharEyes",
+  "recoverable_name": "??$_Param_Construct@UCharInterestState@CharEyes@@U12@@stlpmtx_std@@YAXPAUCharInterestState@CharEyes@@ABU12@@Z",
+  "live_row_id": 1922,
+  "map_members": [
+   {
+    "sym": "??$_Param_Construct@UCharInterestState@CharEyes@@U12@@stlpmtx_std@@YAXPAUCharInterestState@CharEyes@@ABU12@@Z",
+    "flags": "f i",
+    "obj": "char:CharEyes.obj"
+   },
+   {
+    "sym": "??$_Copy_Construct@UCharInterestState@CharEyes@@@stlpmtx_std@@YAXPAUCharInterestState@CharEyes@@ABU12@@Z",
+    "flags": "f i",
+    "obj": "char:CharEyes.obj"
+   }
+  ],
+  "target_size": 84,
+  "candidates": [
+   {
+    "sym": "??$_Copy_Construct@UCharInterestState@CharEyes@@@stlpmtx_std@@YAXPAUCharInterestState@CharEyes@@ABU12@@Z",
+    "obj": "char:CharEyes.obj",
+    "unit_owned": true
+   },
+   {
+    "sym": "??$_Param_Construct@UCharInterestState@CharEyes@@U12@@stlpmtx_std@@YAXPAUCharInterestState@CharEyes@@ABU12@@Z",
+    "obj": "char:CharEyes.obj",
+    "unit_owned": true
+   }
+  ],
+  "verdict": "REFUSE_BODY_DIFFERS",
+  "why": "every map member our object defines fails the body test",
+  "tried": [
+   {
+    "sym": "??$_Copy_Construct@UCharInterestState@CharEyes@@@stlpmtx_std@@YAXPAUCharInterestState@CharEyes@@ABU12@@Z",
+    "map_obj": "char:CharEyes.obj",
+    "result": "size 84 vs 60",
+    "nreloc": 3
+   },
+   {
+    "sym": "??$_Param_Construct@UCharInterestState@CharEyes@@U12@@stlpmtx_std@@YAXPAUCharInterestState@CharEyes@@ABU12@@Z",
+    "map_obj": "char:CharEyes.obj",
+    "result": "size 84 vs 60",
+    "nreloc": 3
+   }
+  ]
+ },
+ {
+  "address": "0x8237B768",
+  "split_name": "merged_8237B768",
+  "size": 112,
+  "unit": "default/system/char/CharEyes",
+  "recoverable_name": "?_M_clear@?$vector@UEyeDesc@CharEyes@@V?$StlNodeAlloc@UEyeDesc@CharEyes@@@stlpmtx_std@@@stlpmtx_std@@IAAXXZ",
+  "live_row_id": 1939,
+  "map_members": [
+   {
+    "sym": "?_M_clear@?$vector@UEyeDesc@CharEyes@@V?$StlNodeAlloc@UEyeDesc@CharEyes@@@stlpmtx_std@@@stlpmtx_std@@IAAXXZ",
+    "flags": "f i",
+    "obj": "char:CharEyes.obj"
+   },
+   {
+    "sym": "?_M_clear_after_move@?$vector@UEyeDesc@CharEyes@@V?$StlNodeAlloc@UEyeDesc@CharEyes@@@stlpmtx_std@@@stlpmtx_std@@IAAXXZ",
+    "flags": "f i",
+    "obj": "char:CharEyes.obj"
+   }
+  ],
+  "target_size": 112,
+  "candidates": [
+   {
+    "sym": "?_M_clear@?$vector@UEyeDesc@CharEyes@@V?$StlNodeAlloc@UEyeDesc@CharEyes@@@stlpmtx_std@@@stlpmtx_std@@IAAXXZ",
+    "obj": "char:CharEyes.obj",
+    "unit_owned": true
+   },
+   {
+    "sym": "?_M_clear_after_move@?$vector@UEyeDesc@CharEyes@@V?$StlNodeAlloc@UEyeDesc@CharEyes@@@stlpmtx_std@@@stlpmtx_std@@IAAXXZ",
+    "obj": "char:CharEyes.obj",
+    "unit_owned": true
+   }
+  ],
+  "name": "?_M_clear@?$vector@UEyeDesc@CharEyes@@V?$StlNodeAlloc@UEyeDesc@CharEyes@@@stlpmtx_std@@@stlpmtx_std@@IAAXXZ",
+  "map_obj": "char:CharEyes.obj",
+  "unit_owned": true,
+  "nreloc": 2,
+  "fold_twins_in_unit": [
+   "?_M_clear_after_move@?$vector@UEyeDesc@CharEyes@@V?$StlNodeAlloc@UEyeDesc@CharEyes@@@stlpmtx_std@@@stlpmtx_std@@IAAXXZ"
+  ],
+  "verdict": "PROVEN_BODY",
+  "why": "body test: 112 B identical, 2 relocations agreeing by target name",
+  "tried": [
+   {
+    "sym": "?_M_clear@?$vector@UEyeDesc@CharEyes@@V?$StlNodeAlloc@UEyeDesc@CharEyes@@@stlpmtx_std@@@stlpmtx_std@@IAAXXZ",
+    "map_obj": "char:CharEyes.obj",
+    "result": "ok",
+    "nreloc": 2
+   }
+  ]
+ },
+ {
+  "address": "0x8237B7D8",
+  "split_name": "merged_8237B7D8",
+  "size": 112,
+  "unit": "default/system/char/CharEyes",
+  "recoverable_name": "?_M_clear@?$vector@UCharInterestState@CharEyes@@V?$StlNodeAlloc@UCharInterestState@CharEyes@@@stlpmtx_std@@@stlpmtx_std@@IAAXXZ",
+  "live_row_id": 1940,
+  "map_members": [
+   {
+    "sym": "?_M_clear@?$vector@UCharInterestState@CharEyes@@V?$StlNodeAlloc@UCharInterestState@CharEyes@@@stlpmtx_std@@@stlpmtx_std@@IAAXXZ",
+    "flags": "f i",
+    "obj": "char:CharEyes.obj"
+   },
+   {
+    "sym": "?_M_clear_after_move@?$vector@UCharInterestState@CharEyes@@V?$StlNodeAlloc@UCharInterestState@CharEyes@@@stlpmtx_std@@@stlpmtx_std@@IAAXXZ",
+    "flags": "f i",
+    "obj": "char:CharEyes.obj"
+   }
+  ],
+  "target_size": 112,
+  "candidates": [
+   {
+    "sym": "?_M_clear@?$vector@UCharInterestState@CharEyes@@V?$StlNodeAlloc@UCharInterestState@CharEyes@@@stlpmtx_std@@@stlpmtx_std@@IAAXXZ",
+    "obj": "char:CharEyes.obj",
+    "unit_owned": true
+   },
+   {
+    "sym": "?_M_clear_after_move@?$vector@UCharInterestState@CharEyes@@V?$StlNodeAlloc@UCharInterestState@CharEyes@@@stlpmtx_std@@@stlpmtx_std@@IAAXXZ",
+    "obj": "char:CharEyes.obj",
+    "unit_owned": true
+   }
+  ],
+  "name": "?_M_clear@?$vector@UCharInterestState@CharEyes@@V?$StlNodeAlloc@UCharInterestState@CharEyes@@@stlpmtx_std@@@stlpmtx_std@@IAAXXZ",
+  "map_obj": "char:CharEyes.obj",
+  "unit_owned": true,
+  "nreloc": 2,
+  "fold_twins_in_unit": [
+   "?_M_clear_after_move@?$vector@UCharInterestState@CharEyes@@V?$StlNodeAlloc@UCharInterestState@CharEyes@@@stlpmtx_std@@@stlpmtx_std@@IAAXXZ"
+  ],
+  "verdict": "PROVEN_BODY",
+  "why": "body test: 112 B identical, 2 relocations agreeing by target name",
+  "tried": [
+   {
+    "sym": "?_M_clear@?$vector@UCharInterestState@CharEyes@@V?$StlNodeAlloc@UCharInterestState@CharEyes@@@stlpmtx_std@@@stlpmtx_std@@IAAXXZ",
+    "map_obj": "char:CharEyes.obj",
+    "result": "ok",
+    "nreloc": 2
+   }
+  ]
+ },
+ {
+  "address": "0x8239EA20",
+  "split_name": "merged_8239EA20",
+  "size": 436,
+  "unit": "default/system/char/CharTransDraw",
+  "recoverable_name": "?Handle@CharTransDraw@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+  "live_row_id": 2498,
+  "map_members": [
+   {
+    "sym": "?Handle@CharTransDraw@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "flags": "f",
+    "obj": "char:CharTransDraw.obj"
+   },
+   {
+    "sym": "?Handle@RndSoftParticles@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "flags": "f",
+    "obj": "rndobj:SoftParticles.obj"
+   }
+  ],
+  "target_size": 436,
+  "candidates": [
+   {
+    "sym": "?Handle@CharTransDraw@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "obj": "char:CharTransDraw.obj",
+    "unit_owned": true
+   }
+  ],
+  "name": "?Handle@CharTransDraw@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+  "map_obj": "char:CharTransDraw.obj",
+  "unit_owned": true,
+  "nreloc": 22,
+  "fold_twins_in_unit": [],
+  "verdict": "PROVEN_BODY",
+  "why": "body test: 436 B identical, 22 relocations agreeing by target name",
+  "tried": [
+   {
+    "sym": "?Handle@CharTransDraw@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "map_obj": "char:CharTransDraw.obj",
+    "result": "ok",
+    "nreloc": 22
+   }
+  ]
+ },
+ {
+  "address": "0x823AAA20",
+  "split_name": "merged_823AAA20",
+  "size": 436,
+  "unit": "default/system/char/CharSignalApplier",
+  "recoverable_name": "?Handle@CharBoneTwist@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+  "live_row_id": 2747,
+  "map_members": [
+   {
+    "sym": "?Handle@CharBoneTwist@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "flags": "f",
+    "obj": "char:CharBoneTwist.obj"
+   },
+   {
+    "sym": "?Handle@CharSignalApplier@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "flags": "f",
+    "obj": "char:CharSignalApplier.obj"
+   }
+  ],
+  "target_size": 436,
+  "candidates": [
+   {
+    "sym": "?Handle@CharSignalApplier@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "obj": "char:CharSignalApplier.obj",
+    "unit_owned": true
+   }
+  ],
+  "verdict": "REFUSE_BODY_DIFFERS",
+  "why": "every map member our object defines fails the body test",
+  "tried": [
+   {
+    "sym": "?Handle@CharSignalApplier@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "map_obj": "char:CharSignalApplier.obj",
+    "result": "size 436 vs 64",
+    "nreloc": 1
+   }
+  ]
+ },
+ {
+  "address": "0x823DA6C8",
+  "split_name": "merged_ObjPtrListLink",
+  "size": 136,
+  "unit": "default/system/char/CharacterTest",
+  "recoverable_name": "?Link@?$ObjPtrList@VObject@Hmx@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z",
+  "live_row_id": 51288,
+  "map_members": [
+   {
+    "sym": "?Link@?$ObjPtrList@VObject@Hmx@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z",
+    "flags": "f i",
+    "obj": "char:Char.obj"
+   },
+   {
+    "sym": "?Link@?$ObjPtrList@VRndMesh@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z",
+    "flags": "f i",
+    "obj": "char:CharCuff.obj"
+   },
+   {
+    "sym": "?Link@?$ObjPtrList@VCharBone@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z",
+    "flags": "f i",
+    "obj": "char:CharBoneDir.obj"
+   },
+   {
+    "sym": "?Link@?$ObjPtrList@VObjectDir@@V1@@@AAAXViterator@1@PAUNode@1@@Z",
+    "flags": "f i",
+    "obj": "char:FileMerger.obj"
+   },
+   {
+    "sym": "?Link@?$ObjPtrList@VRndPartLauncher@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z",
+    "flags": "f i",
+    "obj": "rndobj:EventTrigger.obj"
+   },
+   {
+    "sym": "?Link@?$ObjPtrList@VUILabel@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z",
+    "flags": "f i",
+    "obj": "ui:UIList.obj"
+   },
+   {
+    "sym": "?Link@?$ObjPtrList@VCharWeightable@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z",
+    "flags": "f i",
+    "obj": "char:CharWeightSetter.obj"
+   },
+   {
+    "sym": "?Link@?$ObjPtrList@VRndAnimatable@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z",
+    "flags": "f i",
+    "obj": "hamobj:HamCamShot.obj"
+   },
+   {
+    "sym": "?Link@?$ObjPtrList@VWorldCrowd@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z",
+    "flags": "f i",
+    "obj": "world:CameraManager.obj"
+   },
+   {
+    "sym": "?Link@?$ObjPtrList@VCharLookAt@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z",
+    "flags": "f i",
+    "obj": "char:CharEyes.obj"
+   },
+   {
+    "sym": "?Link@?$ObjPtrList@VSfxInst@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z",
+    "flags": "f i",
+    "obj": "synth:Sfx.obj"
+   },
+   {
+    "sym": "?Link@?$ObjPtrList@VCamShot@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z",
+    "flags": "f i",
+    "obj": "world:Dir.obj"
+   },
+   {
+    "sym": "?Link@?$ObjPtrList@VCharPollable@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z",
+    "flags": "f i",
+    "obj": "char:CharPollGroup.obj"
+   },
+   {
+    "sym": "?Link@?$ObjPtrList@VCharacter@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z",
+    "flags": "f i",
+    "obj": "char:CharTransDraw.obj"
+   },
+   {
+    "sym": "?Link@?$ObjPtrList@VRndFontBase@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z",
+    "flags": "f i",
+    "obj": "ui:UIFontImporter.obj"
+   },
+   {
+    "sym": "?Link@?$ObjPtrList@VRndTexBlendController@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z",
+    "flags": "f i",
+    "obj": "rndobj:TexBlender.obj"
+   },
+   {
+    "sym": "?Link@?$ObjPtrList@VCharInterest@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z",
+    "flags": "f i",
+    "obj": "hamobj:HamWardrobe.obj"
+   },
+   {
+    "sym": "?Link@?$ObjPtrList@VRndDrawable@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z",
+    "flags": "f i",
+    "obj": "hamobj:HamCamShot.obj"
+   },
+   {
+    "sym": "?Link@?$ObjPtrList@VNoteVoiceInst@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z",
+    "flags": "f i",
+    "obj": "synth:MidiInstrument.obj"
+   },
+   {
+    "sym": "?Link@?$ObjPtrList@VRndMat@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z",
+    "flags": "f i",
+    "obj": "ui:UIFontImporter.obj"
+   },
+   {
+    "sym": "?Link@?$ObjPtrList@VFlowNode@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z",
+    "flags": "f i",
+    "obj": "flow:FlowNode.obj"
+   },
+   {
+    "sym": "?Link@?$ObjPtrList@VCharCollide@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z",
+    "flags": "f i",
+    "obj": "char:CharHair.obj"
+   },
+   {
+    "sym": "?Link@?$ObjPtrList@VHamCamShot@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z",
+    "flags": "f i",
+    "obj": "hamobj:HamCamShot.obj"
+   },
+   {
+    "sym": "?Link@?$ObjPtrList@VTask@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z",
+    "flags": "f i",
+    "obj": "rndobj:EventTrigger.obj"
+   },
+   {
+    "sym": "?Link@?$ObjPtrList@VRndTransformable@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z",
+    "flags": "f i",
+    "obj": "char:CharBoneTwist.obj"
+   },
+   {
+    "sym": "?Link@?$ObjPtrList@VRndLight@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z",
+    "flags": "f i",
+    "obj": "rndobj:Env.obj"
+   },
+   {
+    "sym": "?Link@?$ObjPtrList@VWaypoint@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z",
+    "flags": "f i",
+    "obj": "char:CharacterTest.obj"
+   },
+   {
+    "sym": "?Link@?$ObjPtrList@VFader@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z",
+    "flags": "f i",
+    "obj": "synth:Faders.obj"
+   },
+   {
+    "sym": "?Link@?$ObjPtrList@VSeqInst@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z",
+    "flags": "f i",
+    "obj": "synth:Sequence.obj"
+   },
+   {
+    "sym": "?Link@?$ObjPtrList@VSequence@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z",
+    "flags": "f i",
+    "obj": "rndobj:EventTrigger.obj"
+   },
+   {
+    "sym": "?Link@?$ObjPtrList@VThreeDSound@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z",
+    "flags": "f i",
+    "obj": "world:ThreeDSoundManager.obj"
+   },
+   {
+    "sym": "?Link@?$ObjPtrList@VEventTrigger@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z",
+    "flags": "f i",
+    "obj": "rndobj:EventTrigger.obj"
+   },
+   {
+    "sym": "?Link@?$ObjPtrList@VCharWeightSetter@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z",
+    "flags": "f i",
+    "obj": "char:CharWeightSetter.obj"
+   }
+  ],
+  "target_size": 136,
+  "candidates": [
+   {
+    "sym": "?Link@?$ObjPtrList@VWaypoint@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z",
+    "obj": "char:CharacterTest.obj",
+    "unit_owned": true
+   }
+  ],
+  "name": "?Link@?$ObjPtrList@VWaypoint@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z",
+  "map_obj": "char:CharacterTest.obj",
+  "unit_owned": true,
+  "nreloc": 0,
+  "fold_twins_in_unit": [],
+  "verdict": "WEAK_NO_RELOC",
+  "why": "body test passes but the body has ZERO relocations, so byte-identity does not discriminate between fold members",
+  "tried": [
+   {
+    "sym": "?Link@?$ObjPtrList@VWaypoint@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z",
+    "map_obj": "char:CharacterTest.obj",
+    "result": "ok",
+    "nreloc": 0
+   }
+  ]
+ },
+ {
+  "address": "0x823E5850",
+  "split_name": "merged_823E5850",
+  "size": 60,
+  "unit": "default/system/char/ClipDistMap",
+  "recoverable_name": "??$_Copy_Construct@UDistEntry@@@stlpmtx_std@@YAXPAUDistEntry@@ABU1@@Z",
+  "live_row_id": 3767,
+  "map_members": [
+   {
+    "sym": "??$_Copy_Construct@UDistEntry@@@stlpmtx_std@@YAXPAUDistEntry@@ABU1@@Z",
+    "flags": "f i",
+    "obj": "char:ClipDistMap.obj"
+   },
+   {
+    "sym": "??$_Param_Construct@UDistEntry@@U1@@stlpmtx_std@@YAXPAUDistEntry@@ABU1@@Z",
+    "flags": "f i",
+    "obj": "char:ClipDistMap.obj"
+   }
+  ],
+  "target_size": 60,
+  "candidates": [
+   {
+    "sym": "??$_Copy_Construct@UDistEntry@@@stlpmtx_std@@YAXPAUDistEntry@@ABU1@@Z",
+    "obj": "char:ClipDistMap.obj",
+    "unit_owned": true
+   },
+   {
+    "sym": "??$_Param_Construct@UDistEntry@@U1@@stlpmtx_std@@YAXPAUDistEntry@@ABU1@@Z",
+    "obj": "char:ClipDistMap.obj",
+    "unit_owned": true
+   }
+  ],
+  "name": "??$_Copy_Construct@UDistEntry@@@stlpmtx_std@@YAXPAUDistEntry@@ABU1@@Z",
+  "map_obj": "char:ClipDistMap.obj",
+  "unit_owned": true,
+  "nreloc": 1,
+  "fold_twins_in_unit": [
+   "??$_Param_Construct@UDistEntry@@U1@@stlpmtx_std@@YAXPAUDistEntry@@ABU1@@Z"
+  ],
+  "verdict": "PROVEN_BODY",
+  "why": "body test: 60 B identical, 1 relocations agreeing by target name",
+  "tried": [
+   {
+    "sym": "??$_Copy_Construct@UDistEntry@@@stlpmtx_std@@YAXPAUDistEntry@@ABU1@@Z",
+    "map_obj": "char:ClipDistMap.obj",
+    "result": "ok",
+    "nreloc": 1
+   }
+  ]
+ },
+ {
+  "address": "0x823E8A38",
+  "split_name": "merged_823E8A38",
+  "size": 84,
+  "unit": "default/system/flow/FlowManager",
+  "recoverable_name": "?Set@?$ObjPtrVec@VRndEnviron@@VObjectDir@@@@QAAXViterator@1@PAVRndEnviron@@@Z",
+  "live_row_id": 3812,
+  "map_members": [
+   {
+    "sym": "?Set@?$ObjPtrVec@VRndEnviron@@VObjectDir@@@@QAAXViterator@1@PAVRndEnviron@@@Z",
+    "flags": "f i",
+    "obj": "world:LightPreset.obj"
+   },
+   {
+    "sym": "?Set@?$ObjPtrVec@VFlowNode@@VObjectDir@@@@QAAXViterator@1@PAVFlowNode@@@Z",
+    "flags": "f i",
+    "obj": "flow:FlowManager.obj"
+   },
+   {
+    "sym": "?Set@?$ObjPtrVec@VSpotlightDrawer@@VObjectDir@@@@QAAXViterator@1@PAVSpotlightDrawer@@@Z",
+    "flags": "f i",
+    "obj": "world:LightPreset.obj"
+   },
+   {
+    "sym": "?Set@?$ObjPtrVec@VRndLight@@VObjectDir@@@@QAAXViterator@1@PAVRndLight@@@Z",
+    "flags": "f i",
+    "obj": "world:LightPreset.obj"
+   }
+  ],
+  "target_size": 84,
+  "candidates": [
+   {
+    "sym": "?Set@?$ObjPtrVec@VFlowNode@@VObjectDir@@@@QAAXViterator@1@PAVFlowNode@@@Z",
+    "obj": "flow:FlowManager.obj",
+    "unit_owned": true
+   },
+   {
+    "sym": "?Set@?$ObjPtrVec@VRndEnviron@@VObjectDir@@@@QAAXViterator@1@PAVRndEnviron@@@Z",
+    "obj": "world:LightPreset.obj",
+    "unit_owned": false
+   }
+  ],
+  "name": "?Set@?$ObjPtrVec@VFlowNode@@VObjectDir@@@@QAAXViterator@1@PAVFlowNode@@@Z",
+  "map_obj": "flow:FlowManager.obj",
+  "unit_owned": true,
+  "nreloc": 2,
+  "fold_twins_in_unit": [
+   "?Set@?$ObjPtrVec@VRndEnviron@@VObjectDir@@@@QAAXViterator@1@PAVRndEnviron@@@Z"
+  ],
+  "verdict": "PROVEN_BODY",
+  "why": "body test: 84 B identical, 2 relocations agreeing by target name",
+  "tried": [
+   {
+    "sym": "?Set@?$ObjPtrVec@VFlowNode@@VObjectDir@@@@QAAXViterator@1@PAVFlowNode@@@Z",
+    "map_obj": "flow:FlowManager.obj",
+    "result": "ok",
+    "nreloc": 2
+   }
+  ]
+ },
+ {
+  "address": "0x823E8A90",
+  "split_name": "merged_ObjPtrVecNodeRefOwner",
+  "size": 12,
+  "unit": "default/system/flow/FlowManager",
+  "recoverable_name": "?RefOwner@Node@?$ObjPtrVec@VRndTransformable@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+  "live_row_id": 51152,
+  "map_members": [
+   {
+    "sym": "?RefOwner@Node@?$ObjPtrVec@VRndTransformable@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "char:CharBonesMeshes.obj"
+   },
+   {
+    "sym": "?RefOwner@Node@?$ObjPtrVec@VWaypoint@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "char:Waypoint.obj"
+   },
+   {
+    "sym": "?RefOwner@Node@?$ObjPtrVec@VFlowNode@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "flow:FlowManager.obj"
+   },
+   {
+    "sym": "?RefOwner@Node@?$ObjPtrVec@VFlow@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "hamobj:HamListRibbon.obj"
+   },
+   {
+    "sym": "?RefOwner@Node@?$ObjPtrVec@VFlowLabel@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "flow:Flow.obj"
+   },
+   {
+    "sym": "?RefOwner@Node@?$ObjPtrVec@VRhythmDetector@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "hamobj:RhythmDetectorGroup.obj"
+   },
+   {
+    "sym": "?RefOwner@Node@?$ObjPtrVec@VHamCharacter@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "hamobj:HamWardrobe.obj"
+   },
+   {
+    "sym": "?RefOwner@Node@?$ObjPtrVec@VRndEnviron@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "world:LightPreset.obj"
+   },
+   {
+    "sym": "?RefOwner@Node@?$ObjPtrVec@VFlowOutPort@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "flow:Flow.obj"
+   },
+   {
+    "sym": "?RefOwner@Node@?$ObjPtrVec@VSpotlightDrawer@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "world:LightPreset.obj"
+   },
+   {
+    "sym": "?RefOwner@Node@?$ObjPtrVec@VRndMat@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "rndobj:Font.obj"
+   },
+   {
+    "sym": "?RefOwner@Node@?$ObjPtrVec@VRndDrawable@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "char:Character.obj"
+   },
+   {
+    "sym": "?RefOwner@Node@?$ObjPtrVec@VCharClip@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "char:CharClipGroup.obj"
+   },
+   {
+    "sym": "?RefOwner@Node@?$ObjPtrVec@VHamMove@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "hamobj:MoveDir.obj"
+   },
+   {
+    "sym": "?RefOwner@Node@?$ObjPtrVec@VObject@Hmx@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "flow:FlowMultiSetProperty.obj"
+   },
+   {
+    "sym": "?RefOwner@Node@?$ObjPtrVec@VRndGroup@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "char:Character.obj"
+   },
+   {
+    "sym": "?RefOwner@Node@?$ObjPtrVec@VRndTex@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "gesture:StreamRecorder.obj"
+   },
+   {
+    "sym": "?RefOwner@Node@?$ObjPtrVec@VRndLight@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "world:LightPreset.obj"
+   },
+   {
+    "sym": "?RefOwner@Node@?$ObjPtrVec@VSpotlight@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "flags": "f i",
+    "obj": "world:LightPreset.obj"
+   }
+  ],
+  "target_size": 12,
+  "candidates": [
+   {
+    "sym": "?RefOwner@Node@?$ObjPtrVec@VFlowNode@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "obj": "flow:FlowManager.obj",
+    "unit_owned": true
+   },
+   {
+    "sym": "?RefOwner@Node@?$ObjPtrVec@VRndTransformable@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "obj": "char:CharBonesMeshes.obj",
+    "unit_owned": false
+   }
+  ],
+  "name": "?RefOwner@Node@?$ObjPtrVec@VFlowNode@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+  "map_obj": "flow:FlowManager.obj",
+  "unit_owned": true,
+  "nreloc": 0,
+  "fold_twins_in_unit": [
+   "?RefOwner@Node@?$ObjPtrVec@VRndTransformable@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ"
+  ],
+  "verdict": "WEAK_NO_RELOC",
+  "why": "body test passes but the body has ZERO relocations, so byte-identity does not discriminate between fold members",
+  "tried": [
+   {
+    "sym": "?RefOwner@Node@?$ObjPtrVec@VFlowNode@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
+    "map_obj": "flow:FlowManager.obj",
+    "result": "ok",
+    "nreloc": 0
+   }
+  ]
+ },
+ {
+  "address": "0x823EA0B8",
+  "split_name": "merged_ObjPtrVecErase",
+  "size": 240,
+  "unit": "default/system/flow/FlowManager",
+  "recoverable_name": "?erase@?$ObjPtrVec@VFlowNode@@VObjectDir@@@@QAA?AViterator@1@V21@@Z",
+  "live_row_id": 51154,
+  "map_members": [
+   {
+    "sym": "?erase@?$ObjPtrVec@VFlowNode@@VObjectDir@@@@QAA?AViterator@1@V21@@Z",
+    "flags": "f i",
+    "obj": "flow:FlowManager.obj"
+   },
+   {
+    "sym": "?erase@?$ObjPtrVec@VRndEnviron@@VObjectDir@@@@QAA?AViterator@1@V21@@Z",
+    "flags": "f i",
+    "obj": "world:LightPreset.obj"
+   },
+   {
+    "sym": "?erase@?$ObjPtrVec@VSpotlightDrawer@@VObjectDir@@@@QAA?AViterator@1@V21@@Z",
+    "flags": "f i",
+    "obj": "world:LightPreset.obj"
+   },
+   {
+    "sym": "?erase@?$ObjPtrVec@VRndLight@@VObjectDir@@@@QAA?AViterator@1@V21@@Z",
+    "flags": "f i",
+    "obj": "world:LightPreset.obj"
+   }
+  ],
+  "target_size": 240,
+  "candidates": [
+   {
+    "sym": "?erase@?$ObjPtrVec@VFlowNode@@VObjectDir@@@@QAA?AViterator@1@V21@@Z",
+    "obj": "flow:FlowManager.obj",
+    "unit_owned": true
+   },
+   {
+    "sym": "?erase@?$ObjPtrVec@VRndEnviron@@VObjectDir@@@@QAA?AViterator@1@V21@@Z",
+    "obj": "world:LightPreset.obj",
+    "unit_owned": false
+   }
+  ],
+  "verdict": "REFUSE_BODY_DIFFERS",
+  "why": "every map member our object defines fails the body test",
+  "tried": [
+   {
+    "sym": "?erase@?$ObjPtrVec@VFlowNode@@VObjectDir@@@@QAA?AViterator@1@V21@@Z",
+    "map_obj": "flow:FlowManager.obj",
+    "result": "byte mismatch at 0xc: 7c7b1b78 vs 7c7d1b78",
+    "nreloc": 4
+   },
+   {
+    "sym": "?erase@?$ObjPtrVec@VRndEnviron@@VObjectDir@@@@QAA?AViterator@1@V21@@Z",
+    "map_obj": "world:LightPreset.obj",
+    "result": "byte mismatch at 0xc: 7c7b1b78 vs 7c7d1b78",
+    "nreloc": 4
+   }
+  ]
+ },
+ {
+  "address": "0x823FB1A8",
+  "split_name": "merged_823FB1A8",
+  "size": 60,
+  "unit": "default/system/flow/FlowNode",
+  "recoverable_name": "??$_Param_Construct@VFlowMathOp@@V1@@stlpmtx_std@@YAXPAVFlowMathOp@@ABV1@@Z",
+  "live_row_id": 4203,
+  "map_members": [
+   {
+    "sym": "??$_Param_Construct@VFlowMathOp@@V1@@stlpmtx_std@@YAXPAVFlowMathOp@@ABV1@@Z",
+    "flags": "f i",
+    "obj": "flow:FlowNode.obj"
+   },
+   {
+    "sym": "??$_Copy_Construct@VFlowMathOp@@@stlpmtx_std@@YAXPAVFlowMathOp@@ABV1@@Z",
+    "flags": "f i",
+    "obj": "flow:FlowNode.obj"
+   }
+  ],
+  "target_size": 60,
+  "candidates": [
+   {
+    "sym": "??$_Copy_Construct@VFlowMathOp@@@stlpmtx_std@@YAXPAVFlowMathOp@@ABV1@@Z",
+    "obj": "flow:FlowNode.obj",
+    "unit_owned": true
+   },
+   {
+    "sym": "??$_Param_Construct@VFlowMathOp@@V1@@stlpmtx_std@@YAXPAVFlowMathOp@@ABV1@@Z",
+    "obj": "flow:FlowNode.obj",
+    "unit_owned": true
+   }
+  ],
+  "name": "??$_Copy_Construct@VFlowMathOp@@@stlpmtx_std@@YAXPAVFlowMathOp@@ABV1@@Z",
+  "map_obj": "flow:FlowNode.obj",
+  "unit_owned": true,
+  "nreloc": 1,
+  "fold_twins_in_unit": [
+   "??$_Param_Construct@VFlowMathOp@@V1@@stlpmtx_std@@YAXPAVFlowMathOp@@ABV1@@Z"
+  ],
+  "verdict": "PROVEN_BODY",
+  "why": "body test: 60 B identical, 1 relocations agreeing by target name",
+  "tried": [
+   {
+    "sym": "??$_Copy_Construct@VFlowMathOp@@@stlpmtx_std@@YAXPAVFlowMathOp@@ABV1@@Z",
+    "map_obj": "flow:FlowNode.obj",
+    "result": "ok",
+    "nreloc": 1
+   }
+  ]
+ },
+ {
+  "address": "0x823FBFF8",
+  "split_name": "merged_823FBFF8",
+  "size": 60,
+  "unit": "default/system/flow/FlowNode",
+  "recoverable_name": "??$_Copy_Construct@VDrivenPropertyEntry@@@stlpmtx_std@@YAXPAVDrivenPropertyEntry@@ABV1@@Z",
+  "live_row_id": 4224,
+  "map_members": [
+   {
+    "sym": "??$_Copy_Construct@VDrivenPropertyEntry@@@stlpmtx_std@@YAXPAVDrivenPropertyEntry@@ABV1@@Z",
+    "flags": "f i",
+    "obj": "flow:FlowNode.obj"
+   },
+   {
+    "sym": "??$_Param_Construct@VDrivenPropertyEntry@@V1@@stlpmtx_std@@YAXPAVDrivenPropertyEntry@@ABV1@@Z",
+    "flags": "f i",
+    "obj": "flow:FlowNode.obj"
+   }
+  ],
+  "target_size": 60,
+  "candidates": [
+   {
+    "sym": "??$_Copy_Construct@VDrivenPropertyEntry@@@stlpmtx_std@@YAXPAVDrivenPropertyEntry@@ABV1@@Z",
+    "obj": "flow:FlowNode.obj",
+    "unit_owned": true
+   },
+   {
+    "sym": "??$_Param_Construct@VDrivenPropertyEntry@@V1@@stlpmtx_std@@YAXPAVDrivenPropertyEntry@@ABV1@@Z",
+    "obj": "flow:FlowNode.obj",
+    "unit_owned": true
+   }
+  ],
+  "name": "??$_Copy_Construct@VDrivenPropertyEntry@@@stlpmtx_std@@YAXPAVDrivenPropertyEntry@@ABV1@@Z",
+  "map_obj": "flow:FlowNode.obj",
+  "unit_owned": true,
+  "nreloc": 1,
+  "fold_twins_in_unit": [
+   "??$_Param_Construct@VDrivenPropertyEntry@@V1@@stlpmtx_std@@YAXPAVDrivenPropertyEntry@@ABV1@@Z"
+  ],
+  "verdict": "PROVEN_BODY",
+  "why": "body test: 60 B identical, 1 relocations agreeing by target name",
+  "tried": [
+   {
+    "sym": "??$_Copy_Construct@VDrivenPropertyEntry@@@stlpmtx_std@@YAXPAVDrivenPropertyEntry@@ABV1@@Z",
+    "map_obj": "flow:FlowNode.obj",
+    "result": "ok",
+    "nreloc": 1
+   }
+  ]
+ },
+ {
+  "address": "0x82412D08",
+  "split_name": "merged_BinStreamEnumRead",
+  "size": 80,
+  "unit": "default/system/flow/FlowSetProperty",
+  "recoverable_name": "??$?5W4Rate@RndAnimatable@@@@YAAAVBinStreamRev@@AAV0@AAV?$BinStreamEnum@W4Rate@RndAnimatable@@@@@Z",
+  "live_row_id": 51189,
+  "map_members": [
+   {
+    "sym": "??$?5W4Rate@RndAnimatable@@@@YAAAVBinStreamRev@@AAV0@AAV?$BinStreamEnum@W4Rate@RndAnimatable@@@@@Z",
+    "flags": "f i",
+    "obj": "flow:FlowSetProperty.obj"
+   },
+   {
+    "sym": "??$?5W4EaseType@@@@YAAAVBinStreamRev@@AAV0@AAV?$BinStreamEnum@W4EaseType@@@@@Z",
+    "flags": "f i",
+    "obj": "flow:FlowSetProperty.obj"
+   },
+   {
+    "sym": "??$?5W4NavInputType@HamNavList@@@@YAAAVBinStreamRev@@AAV0@AAV?$BinStreamEnum@W4NavInputType@HamNavList@@@@@Z",
+    "flags": "f i",
+    "obj": "hamobj:HamNavList.obj"
+   },
+   {
+    "sym": "??$?5W4StreamPlaybackSpeed@@@@YAAAVBinStreamRev@@AAV0@AAV?$BinStreamEnum@W4StreamPlaybackSpeed@@@@@Z",
+    "flags": "f i",
+    "obj": "gesture:StreamRecorder.obj"
+   },
+   {
+    "sym": "??$?5W4StopMode@FlowNode@@@@YAAAVBinStreamRev@@AAV0@AAV?$BinStreamEnum@W4StopMode@FlowNode@@@@@Z",
+    "flags": "f i",
+    "obj": "flow:FlowSetProperty.obj"
+   }
+  ],
+  "target_size": 80,
+  "candidates": [
+   {
+    "sym": "??$?5W4EaseType@@@@YAAAVBinStreamRev@@AAV0@AAV?$BinStreamEnum@W4EaseType@@@@@Z",
+    "obj": "flow:FlowSetProperty.obj",
+    "unit_owned": true
+   },
+   {
+    "sym": "??$?5W4Rate@RndAnimatable@@@@YAAAVBinStreamRev@@AAV0@AAV?$BinStreamEnum@W4Rate@RndAnimatable@@@@@Z",
+    "obj": "flow:FlowSetProperty.obj",
+    "unit_owned": true
+   },
+   {
+    "sym": "??$?5W4StopMode@FlowNode@@@@YAAAVBinStreamRev@@AAV0@AAV?$BinStreamEnum@W4StopMode@FlowNode@@@@@Z",
+    "obj": "flow:FlowSetProperty.obj",
+    "unit_owned": true
+   }
+  ],
+  "name": "??$?5W4EaseType@@@@YAAAVBinStreamRev@@AAV0@AAV?$BinStreamEnum@W4EaseType@@@@@Z",
+  "map_obj": "flow:FlowSetProperty.obj",
+  "unit_owned": true,
+  "nreloc": 1,
+  "fold_twins_in_unit": [
+   "??$?5W4Rate@RndAnimatable@@@@YAAAVBinStreamRev@@AAV0@AAV?$BinStreamEnum@W4Rate@RndAnimatable@@@@@Z",
+   "??$?5W4StopMode@FlowNode@@@@YAAAVBinStreamRev@@AAV0@AAV?$BinStreamEnum@W4StopMode@FlowNode@@@@@Z"
+  ],
+  "verdict": "PROVEN_BODY",
+  "why": "body test: 80 B identical, 1 relocations agreeing by target name",
+  "tried": [
+   {
+    "sym": "??$?5W4EaseType@@@@YAAAVBinStreamRev@@AAV0@AAV?$BinStreamEnum@W4EaseType@@@@@Z",
+    "map_obj": "flow:FlowSetProperty.obj",
+    "result": "ok",
+    "nreloc": 1
+   }
+  ]
+ },
+ {
+  "address": "0x824131A8",
+  "split_name": "merged_ObjOwnerPtrReplace",
+  "size": 32,
+  "unit": "default/system/flow/FlowSetProperty",
+  "recoverable_name": "?Replace@?$ObjOwnerPtr@VRndParticleSysAnim@@@@UAAXPAVObject@Hmx@@@Z",
+  "live_row_id": 51190,
+  "map_members": [
+   {
+    "sym": "?Replace@?$ObjOwnerPtr@VRndParticleSysAnim@@@@UAAXPAVObject@Hmx@@@Z",
+    "flags": "f i",
+    "obj": "rndobj:PartAnim.obj"
+   },
+   {
+    "sym": "?Replace@?$ObjOwnerPtr@VRndFont@@@@UAAXPAVObject@Hmx@@@Z",
+    "flags": "f i",
+    "obj": "rndobj:Font.obj"
+   },
+   {
+    "sym": "?Replace@?$ObjOwnerPtr@VRndMesh@@@@UAAXPAVObject@Hmx@@@Z",
+    "flags": "f i",
+    "obj": "rndobj:Mesh.obj"
+   },
+   {
+    "sym": "?Replace@?$ObjOwnerPtr@VSpotlight@@@@UAAXPAVObject@Hmx@@@Z",
+    "flags": "f i",
+    "obj": "world:Spotlight.obj"
+   },
+   {
+    "sym": "?Replace@?$ObjOwnerPtr@VCharInterest@@@@UAAXPAVObject@Hmx@@@Z",
+    "flags": "f i",
+    "obj": "char:CharEyes.obj"
+   },
+   {
+    "sym": "?Replace@?$ObjOwnerPtr@VCharLookAt@@@@UAAXPAVObject@Hmx@@@Z",
+    "flags": "f i",
+    "obj": "char:CharEyes.obj"
+   },
+   {
+    "sym": "?Replace@?$ObjOwnerPtr@VRndMatAnim@@@@UAAXPAVObject@Hmx@@@Z",
+    "flags": "f i",
+    "obj": "rndobj:MatAnim.obj"
+   },
+   {
+    "sym": "?Replace@?$ObjOwnerPtr@VRndEnviron@@@@UAAXPAVObject@Hmx@@@Z",
+    "flags": "f i",
+    "obj": "rndobj:Env.obj"
+   },
+   {
+    "sym": "?Replace@?$ObjOwnerPtr@VRndWind@@@@UAAXPAVObject@Hmx@@@Z",
+    "flags": "f i",
+    "obj": "rndobj:Wind.obj"
+   },
+   {
+    "sym": "?Replace@?$ObjOwnerPtr@VTask@@@@UAAXPAVObject@Hmx@@@Z",
+    "flags": "f i",
+    "obj": "flow:FlowSetProperty.obj"
+   },
+   {
+    "sym": "?Replace@?$ObjOwnerPtr@VRndAnimatable@@@@UAAXPAVObject@Hmx@@@Z",
+    "flags": "f i",
+    "obj": "rndobj:Anim.obj"
+   },
+   {
+    "sym": "?Replace@?$ObjOwnerPtr@VEventTrigger@@@@UAAXPAVObject@Hmx@@@Z",
+    "flags": "f i",
+    "obj": "rndobj:EventTrigger.obj"
+   },
+   {
+    "sym": "?Replace@?$ObjOwnerPtr@VObject@Hmx@@@@UAAXPAVObject@Hmx@@@Z",
+    "flags": "f i",
+    "obj": "flow:FlowSetProperty.obj"
+   },
+   {
+    "sym": "?Replace@?$ObjOwnerPtr@VRndMeshAnim@@@@UAAXPAVObject@Hmx@@@Z",
+    "flags": "f i",
+    "obj": "rndobj:MeshAnim.obj"
+   },
+   {
+    "sym": "?Replace@?$ObjOwnerPtr@VCharClip@@@@UAAXPAVObject@Hmx@@@Z",
+    "flags": "f i",
+    "obj": "char:CharClipGroup.obj"
+   },
+   {
+    "sym": "?Replace@?$ObjOwnerPtr@VCharWeightable@@@@UAAXPAVObject@Hmx@@@Z",
+    "flags": "f i",
+    "obj": "char:CharWeightable.obj"
+   },
+   {
+    "sym": "?Replace@?$ObjOwnerPtr@VObjectDir@@@@UAAXPAVObject@Hmx@@@Z",
+    "flags": "f i",
+    "obj": "obj:DirLoader.obj"
+   },
+   {
+    "sym": "?Replace@?$ObjOwnerPtr@VFxSend@@@@UAAXPAVObject@Hmx@@@Z",
+    "flags": "f i",
+    "obj": "synth:FxSend.obj"
+   },
+   {
+    "sym": "?Replace@?$ObjOwnerPtr@VAnimTask@@@@UAAXPAVObject@Hmx@@@Z",
+    "flags": "f i",
+    "obj": "flow:FlowAnimate.obj"
+   },
+   {
+    "sym": "?Replace@?$ObjOwnerPtr@VRndTransformable@@@@UAAXPAVObject@Hmx@@@Z",
+    "flags": "f i",
+    "obj": "char:Character.obj"
+   },
+   {
+    "sym": "?Replace@?$ObjOwnerPtr@VRndLight@@@@UAAXPAVObject@Hmx@@@Z",
+    "flags": "f i",
+    "obj": "rndobj:Lit.obj"
+   },
+   {
+    "sym": "?Replace@?$ObjOwnerPtr@VRndTex@@@@UAAXPAVObject@Hmx@@@Z",
+    "flags": "f i",
+    "obj": "rndobj:Movie.obj"
+   },
+   {
+    "sym": "?Replace@?$ObjOwnerPtr@VRndTransAnim@@@@UAAXPAVObject@Hmx@@@Z",
+    "flags": "f i",
+    "obj": "rndobj:TransAnim.obj"
+   },
+   {
+    "sym": "?Replace@?$ObjOwnerPtr@VRndFont3d@@@@UAAXPAVObject@Hmx@@@Z",
+    "flags": "f i",
+    "obj": "rndobj:Font3d.obj"
+   },
+   {
+    "sym": "?Replace@?$ObjOwnerPtr@VRndDrawable@@@@UAAXPAVObject@Hmx@@@Z",
+    "flags": "f i",
+    "obj": "rndobj:EventTrigger.obj"
+   },
+   {
+    "sym": "?Replace@?$ObjOwnerPtr@VRndLightAnim@@@@UAAXPAVObject@Hmx@@@Z",
+    "flags": "f i",
+    "obj": "rndobj:LitAnim.obj"
+   },
+   {
+    "sym": "?Replace@?$ObjOwnerPtr@VCameraInput@@@@UAAXPAVObject@Hmx@@@Z",
+    "flags": "f i",
+    "obj": "gesture:SkeletonUpdate.obj"
+   },
+   {
+    "sym": "?Replace@?$ObjOwnerPtr@VRndCamAnim@@@@UAAXPAVObject@Hmx@@@Z",
+    "flags": "f i",
+    "obj": "rndobj:CamAnim.obj"
+   }
+  ],
+  "target_size": 32,
+  "candidates": [
+   {
+    "sym": "?Replace@?$ObjOwnerPtr@VObject@Hmx@@@@UAAXPAVObject@Hmx@@@Z",
+    "obj": "flow:FlowSetProperty.obj",
+    "unit_owned": true
+   },
+   {
+    "sym": "?Replace@?$ObjOwnerPtr@VTask@@@@UAAXPAVObject@Hmx@@@Z",
+    "obj": "flow:FlowSetProperty.obj",
+    "unit_owned": true
+   }
+  ],
+  "name": "?Replace@?$ObjOwnerPtr@VObject@Hmx@@@@UAAXPAVObject@Hmx@@@Z",
+  "map_obj": "flow:FlowSetProperty.obj",
+  "unit_owned": true,
+  "nreloc": 0,
+  "fold_twins_in_unit": [
+   "?Replace@?$ObjOwnerPtr@VTask@@@@UAAXPAVObject@Hmx@@@Z"
+  ],
+  "verdict": "WEAK_NO_RELOC",
+  "why": "body test passes but the body has ZERO relocations, so byte-identity does not discriminate between fold members",
+  "tried": [
+   {
+    "sym": "?Replace@?$ObjOwnerPtr@VObject@Hmx@@@@UAAXPAVObject@Hmx@@@Z",
+    "map_obj": "flow:FlowSetProperty.obj",
+    "result": "ok",
+    "nreloc": 0
+   }
+  ]
+ },
+ {
+  "address": "0x824131C8",
+  "split_name": "merged_824131C8",
+  "size": 120,
+  "unit": "default/system/flow/FlowSetProperty",
+  "recoverable_name": "??_E?$ObjRefConcrete@VPropertyTask@@VObjectDir@@@@UAAPAXI@Z",
+  "live_row_id": 4694,
+  "map_members": [
+   {
+    "sym": "??_E?$ObjRefConcrete@VPropertyTask@@VObjectDir@@@@UAAPAXI@Z",
+    "flags": "f i",
+    "obj": "flow:FlowSetProperty.obj"
+   },
+   {
+    "sym": "??_G?$ObjRefConcrete@VPropertyTask@@VObjectDir@@@@UAAPAXI@Z",
+    "flags": "f i",
+    "obj": "flow:FlowSetProperty.obj"
+   },
+   {
+    "sym": "??_E?$ObjPtr@VPropertyTask@@@@UAAPAXI@Z",
+    "flags": "f i",
+    "obj": "flow:FlowSetProperty.obj"
+   },
+   {
+    "sym": "??_G?$ObjPtr@VPropertyTask@@@@UAAPAXI@Z",
+    "flags": "f i",
+    "obj": "flow:FlowSetProperty.obj"
+   }
+  ],
+  "target_size": 120,
+  "candidates": [
+   {
+    "sym": "??_G?$ObjPtr@VPropertyTask@@@@UAAPAXI@Z",
+    "obj": "flow:FlowSetProperty.obj",
+    "unit_owned": true
+   },
+   {
+    "sym": "??_G?$ObjRefConcrete@VPropertyTask@@VObjectDir@@@@UAAPAXI@Z",
+    "obj": "flow:FlowSetProperty.obj",
+    "unit_owned": true
+   }
+  ],
+  "name": "??_G?$ObjPtr@VPropertyTask@@@@UAAPAXI@Z",
+  "map_obj": "flow:FlowSetProperty.obj",
+  "unit_owned": true,
+  "nreloc": 5,
+  "fold_twins_in_unit": [
+   "??_G?$ObjRefConcrete@VPropertyTask@@VObjectDir@@@@UAAPAXI@Z"
+  ],
+  "verdict": "PROVEN_BODY",
+  "why": "body test: 120 B identical, 5 relocations agreeing by target name",
+  "tried": [
+   {
+    "sym": "??_G?$ObjPtr@VPropertyTask@@@@UAAPAXI@Z",
+    "map_obj": "flow:FlowSetProperty.obj",
+    "result": "ok",
+    "nreloc": 5
+   }
+  ]
+ },
+ {
+  "address": "0x8253FA40",
+  "split_name": "merged_8253FA40",
+  "size": 80,
+  "unit": "default/system/meta/DataArraySongInfo",
+  "recoverable_name": "??$_Copy_Construct@U?$pair@$$CBVSymbol@@V?$vector@HV?$StlNodeAlloc@H@stlpmtx_std@@@stlpmtx_std@@@stlpmtx_std@@@stlpmtx_std@@YAXPAU?$pair@$$CBVSymbol@@V?$vector@HV?$StlNodeAlloc@H@stlpmtx_std@@@stlpmtx_std@@@0@ABU10@@Z",
+  "live_row_id": 9839,
+  "map_members": [
+   {
+    "sym": "??$_Copy_Construct@U?$pair@$$CBVSymbol@@V?$vector@HV?$StlNodeAlloc@H@stlpmtx_std@@@stlpmtx_std@@@stlpmtx_std@@@stlpmtx_std@@YAXPAU?$pair@$$CBVSymbol@@V?$vector@HV?$StlNodeAlloc@H@stlpmtx_std@@@stlpmtx_std@@@0@ABU10@@Z",
+    "flags": "f i",
+    "obj": "meta:SongMgr.obj"
+   },
+   {
+    "sym": "??$_Copy_Construct@UTrackChannels@@@stlpmtx_std@@YAXPAUTrackChannels@@ABU1@@Z",
+    "flags": "f i",
+    "obj": "meta:DataArraySongInfo.obj"
+   },
+   {
+    "sym": "??$_Param_Construct@UTrackChannels@@U1@@stlpmtx_std@@YAXPAUTrackChannels@@ABU1@@Z",
+    "flags": "f i",
+    "obj": "meta:DataArraySongInfo.obj"
+   }
+  ],
+  "target_size": 80,
+  "candidates": [
+   {
+    "sym": "??$_Copy_Construct@UTrackChannels@@@stlpmtx_std@@YAXPAUTrackChannels@@ABU1@@Z",
+    "obj": "meta:DataArraySongInfo.obj",
+    "unit_owned": true
+   },
+   {
+    "sym": "??$_Param_Construct@UTrackChannels@@U1@@stlpmtx_std@@YAXPAUTrackChannels@@ABU1@@Z",
+    "obj": "meta:DataArraySongInfo.obj",
+    "unit_owned": true
+   }
+  ],
+  "name": "??$_Copy_Construct@UTrackChannels@@@stlpmtx_std@@YAXPAUTrackChannels@@ABU1@@Z",
+  "map_obj": "meta:DataArraySongInfo.obj",
+  "unit_owned": true,
+  "nreloc": 1,
+  "fold_twins_in_unit": [
+   "??$_Param_Construct@UTrackChannels@@U1@@stlpmtx_std@@YAXPAUTrackChannels@@ABU1@@Z"
+  ],
+  "verdict": "PROVEN_BODY",
+  "why": "body test: 80 B identical, 1 relocations agreeing by target name",
+  "tried": [
+   {
+    "sym": "??$_Copy_Construct@UTrackChannels@@@stlpmtx_std@@YAXPAUTrackChannels@@ABU1@@Z",
+    "map_obj": "meta:DataArraySongInfo.obj",
+    "result": "ok",
+    "nreloc": 1
+   }
+  ]
+ },
+ {
+  "address": "0x825C6868",
+  "split_name": "merged_ObjPtrListRemove",
+  "size": 100,
+  "unit": "default/system/obj/TypeProps",
+  "recoverable_name": "?remove@?$ObjPtrList@VRndLight@@VObjectDir@@@@QAA_NPAVRndLight@@@Z",
+  "live_row_id": 52116,
+  "map_members": [
+   {
+    "sym": "?remove@?$ObjPtrList@VRndLight@@VObjectDir@@@@QAA_NPAVRndLight@@@Z",
+    "flags": "f i",
+    "obj": "rndobj:Env.obj"
+   },
+   {
+    "sym": "?remove@?$ObjPtrList@VRndDrawable@@VObjectDir@@@@QAA_NPAVRndDrawable@@@Z",
+    "flags": "f i",
+    "obj": "rndobj:Rnd.obj"
+   },
+   {
+    "sym": "?remove@?$ObjPtrList@VThreeDSound@@VObjectDir@@@@QAA_NPAVThreeDSound@@@Z",
+    "flags": "f i",
+    "obj": "world:ThreeDSoundManager.obj"
+   },
+   {
+    "sym": "?remove@?$ObjPtrList@VFlowNode@@VObjectDir@@@@QAA_NPAVFlowNode@@@Z",
+    "flags": "f i",
+    "obj": "flow:FlowQueueable.obj"
+   },
+   {
+    "sym": "?remove@?$ObjPtrList@VObject@Hmx@@VObjectDir@@@@QAA_NPAVObject@Hmx@@@Z",
+    "flags": "f i",
+    "obj": "obj:TypeProps.obj"
+   }
+  ],
+  "target_size": 100,
+  "candidates": [
+   {
+    "sym": "?remove@?$ObjPtrList@VObject@Hmx@@VObjectDir@@@@QAA_NPAVObject@Hmx@@@Z",
+    "obj": "obj:TypeProps.obj",
+    "unit_owned": true
+   },
+   {
+    "sym": "?remove@?$ObjPtrList@VRndLight@@VObjectDir@@@@QAA_NPAVRndLight@@@Z",
+    "obj": "rndobj:Env.obj",
+    "unit_owned": false
+   }
+  ],
+  "verdict": "REFUSE_BODY_DIFFERS",
+  "why": "every map member our object defines fails the body test",
+  "tried": [
+   {
+    "sym": "?remove@?$ObjPtrList@VObject@Hmx@@VObjectDir@@@@QAA_NPAVObject@Hmx@@@Z",
+    "map_obj": "obj:TypeProps.obj",
+    "result": "size 100 vs 88",
+    "nreloc": 1
+   },
+   {
+    "sym": "?remove@?$ObjPtrList@VRndLight@@VObjectDir@@@@QAA_NPAVRndLight@@@Z",
+    "map_obj": "rndobj:Env.obj",
+    "result": "size 100 vs 96",
+    "nreloc": 1
+   }
+  ]
+ },
+ {
+  "address": "0x825D6820",
+  "split_name": "merged_825D6820",
+  "size": 96,
+  "unit": "default/system/os/PlatformMgr_Xbox",
+  "recoverable_name": "?SetPurchaseMade@SingleItemEnumCompleteMsg@@QAAX_N@Z",
+  "live_row_id": 12465,
+  "map_members": [
+   {
+    "sym": "?SetPurchaseMade@SingleItemEnumCompleteMsg@@QAAX_N@Z",
+    "flags": "f i",
+    "obj": "os:PlatformMgr_Xbox.obj"
+   },
+   {
+    "sym": "?SetPurchaseMade@MultipleItemsEnumCompleteMsg@@QAAX_N@Z",
+    "flags": "f i",
+    "obj": "os:PlatformMgr_Xbox.obj"
+   }
+  ],
+  "target_size": 96,
+  "candidates": [
+   {
+    "sym": "?SetPurchaseMade@MultipleItemsEnumCompleteMsg@@QAAX_N@Z",
+    "obj": "os:PlatformMgr_Xbox.obj",
+    "unit_owned": true
+   }
+  ],
+  "name": "?SetPurchaseMade@MultipleItemsEnumCompleteMsg@@QAAX_N@Z",
+  "map_obj": "os:PlatformMgr_Xbox.obj",
+  "unit_owned": true,
+  "nreloc": 3,
+  "fold_twins_in_unit": [],
+  "verdict": "PROVEN_BODY",
+  "why": "body test: 96 B identical, 3 relocations agreeing by target name",
+  "tried": [
+   {
+    "sym": "?SetPurchaseMade@MultipleItemsEnumCompleteMsg@@QAAX_N@Z",
+    "map_obj": "os:PlatformMgr_Xbox.obj",
+    "result": "ok",
+    "nreloc": 3
+   }
+  ]
+ },
+ {
+  "address": "0x825D6BB8",
+  "split_name": "merged_825D6BB8",
+  "size": 96,
+  "unit": "default/system/os/PlatformMgr_Xbox",
+  "recoverable_name": "?SetSuccess@LinkingCodeRetrievedMsg@@QAAX_N@Z",
+  "live_row_id": 12469,
+  "map_members": [
+   {
+    "sym": "?SetSuccess@LinkingCodeRetrievedMsg@@QAAX_N@Z",
+    "flags": "f i",
+    "obj": "meta_ham:OptionsPanel.obj"
+   },
+   {
+    "sym": "?SetSuccess@SingleItemEnumCompleteMsg@@QAAX_N@Z",
+    "flags": "f i",
+    "obj": "os:PlatformMgr_Xbox.obj"
+   },
+   {
+    "sym": "?SetSuccess@TokenRedeemedMsg@@QAAX_N@Z",
+    "flags": "f i",
+    "obj": "meta_ham:OptionsPanel.obj"
+   },
+   {
+    "sym": "?SetSuccess@ControllerReqOpCompleteMsg@@QAAX_N@Z",
+    "flags": "f i",
+    "obj": "os:PlatformMgr_Xbox.obj"
+   },
+   {
+    "sym": "?SetSuccess@MultipleItemsEnumCompleteMsg@@QAAX_N@Z",
+    "flags": "f i",
+    "obj": "os:PlatformMgr_Xbox.obj"
+   }
+  ],
+  "target_size": 96,
+  "candidates": [
+   {
+    "sym": "?SetSuccess@MultipleItemsEnumCompleteMsg@@QAAX_N@Z",
+    "obj": "os:PlatformMgr_Xbox.obj",
+    "unit_owned": true
+   }
+  ],
+  "name": "?SetSuccess@MultipleItemsEnumCompleteMsg@@QAAX_N@Z",
+  "map_obj": "os:PlatformMgr_Xbox.obj",
+  "unit_owned": true,
+  "nreloc": 3,
+  "fold_twins_in_unit": [],
+  "verdict": "PROVEN_BODY",
+  "why": "body test: 96 B identical, 3 relocations agreeing by target name",
+  "tried": [
+   {
+    "sym": "?SetSuccess@MultipleItemsEnumCompleteMsg@@QAAX_N@Z",
+    "map_obj": "os:PlatformMgr_Xbox.obj",
+    "result": "ok",
+    "nreloc": 3
+   }
+  ]
+ },
+ {
+  "address": "0x825E1CE8",
+  "split_name": "merged_Get0x5C",
+  "size": 8,
+  "unit": "default/system/os/PlatformMgr",
+  "recoverable_name": "?GetRegion@PlatformMgr@@QBA?AW4PlatformRegion@@XZ",
+  "live_row_id": 52125,
+  "map_members": [
+   {
+    "sym": "?GetRegion@PlatformMgr@@QBA?AW4PlatformRegion@@XZ",
+    "flags": "f",
+    "obj": "os:PlatformMgr.obj"
+   },
+   {
+    "sym": "?GetRegistry@XGRAPHICS@@YAPAU_SSM_REGISTRY@1@PAX@Z",
+    "flags": "f",
+    "obj": "xgraphics:ssmdevice.obj"
+   },
+   {
+    "sym": "?Artist@HamSongMetadata@@QBAPBDXZ",
+    "flags": "f",
+    "obj": "meta_ham:HamSongMetadata.obj"
+   },
+   {
+    "sym": "?GetTrigramStore@CSRTopicSLM@NUISPEECH@@UAAPAVCTrigramStore@2@XZ",
+    "flags": "f",
+    "obj": "nuispeech:topic.obj"
+   }
+  ],
+  "target_size": 8,
+  "candidates": [
+   {
+    "sym": "?GetRegion@PlatformMgr@@QBA?AW4PlatformRegion@@XZ",
+    "obj": "os:PlatformMgr.obj",
+    "unit_owned": true
+   }
+  ],
+  "name": "?GetRegion@PlatformMgr@@QBA?AW4PlatformRegion@@XZ",
+  "map_obj": "os:PlatformMgr.obj",
+  "unit_owned": true,
+  "nreloc": 0,
+  "fold_twins_in_unit": [],
+  "verdict": "WEAK_NO_RELOC",
+  "why": "body test passes but the body has ZERO relocations, so byte-identity does not discriminate between fold members",
+  "tried": [
+   {
+    "sym": "?GetRegion@PlatformMgr@@QBA?AW4PlatformRegion@@XZ",
+    "map_obj": "os:PlatformMgr.obj",
+    "result": "ok",
+    "nreloc": 0
+   }
+  ]
+ },
+ {
+  "address": "0x825F9508",
+  "split_name": "merged_GetB0x8",
+  "size": 8,
+  "unit": "default/system/os/AsyncFile",
+  "recoverable_name": "?IsMaxGain@RecipeTable@TrueColor@@QBA_NXZ",
+  "live_row_id": 52097,
+  "map_members": [
+   {
+    "sym": "?IsMaxGain@RecipeTable@TrueColor@@QBA_NXZ",
+    "flags": "f",
+    "obj": "nuiapi:recipetable.obj"
+   },
+   {
+    "sym": "?Fail@AsyncFile@@UAA_NXZ",
+    "flags": "f",
+    "obj": "os:AsyncFile.obj"
+   }
+  ],
+  "target_size": 8,
+  "candidates": [
+   {
+    "sym": "?Fail@AsyncFile@@UAA_NXZ",
+    "obj": "os:AsyncFile.obj",
+    "unit_owned": true
+   }
+  ],
+  "name": "?Fail@AsyncFile@@UAA_NXZ",
+  "map_obj": "os:AsyncFile.obj",
+  "unit_owned": true,
+  "nreloc": 0,
+  "fold_twins_in_unit": [],
+  "verdict": "WEAK_NO_RELOC",
+  "why": "body test passes but the body has ZERO relocations, so byte-identity does not discriminate between fold members",
+  "tried": [
+   {
+    "sym": "?Fail@AsyncFile@@UAA_NXZ",
+    "map_obj": "os:AsyncFile.obj",
+    "result": "ok",
+    "nreloc": 0
+   }
+  ]
+ },
+ {
+  "address": "0x825F9510",
+  "split_name": "merged_Get0x1C",
+  "size": 8,
+  "unit": "default/system/os/AsyncFile",
+  "recoverable_name": "?AnimTarget@RndMatAnim@@UAAPAVObject@Hmx@@XZ",
+  "live_row_id": 52098,
+  "map_members": [
+   {
+    "sym": "?AnimTarget@RndMatAnim@@UAAPAVObject@Hmx@@XZ",
+    "flags": "f",
+    "obj": "rndobj:MatAnim.obj"
+   },
+   {
+    "sym": "?Size@BufStream@@UAAHXZ",
+    "flags": "f",
+    "obj": "meta:FixedSizeSaveableStream.obj"
+   },
+   {
+    "sym": "?GetErrorCount@CTErrors@D3DXShader@@QAAIXZ",
+    "flags": "f",
+    "obj": "d3dx9:ctokenize.obj"
+   },
+   {
+    "sym": "?Size@AsyncFile@@UAAHXZ",
+    "flags": "f",
+    "obj": "os:AsyncFile.obj"
+   },
+   {
+    "sym": "?FirstClip@LayerClip@HamDriver@@UAAPAVCharClip@@XZ",
+    "flags": "f",
+    "obj": "hamobj:HamDriver.obj"
+   },
+   {
+    "sym": "?GetBeatMap@HamSongData@@UBAPAVBeatMap@@XZ",
+    "flags": "f",
+    "obj": "hamobj:HamSongData.obj"
+   }
+  ],
+  "target_size": 8,
+  "candidates": [
+   {
+    "sym": "?Size@AsyncFile@@UAAHXZ",
+    "obj": "os:AsyncFile.obj",
+    "unit_owned": true
+   }
+  ],
+  "name": "?Size@AsyncFile@@UAAHXZ",
+  "map_obj": "os:AsyncFile.obj",
+  "unit_owned": true,
+  "nreloc": 0,
+  "fold_twins_in_unit": [],
+  "verdict": "WEAK_NO_RELOC",
+  "why": "body test passes but the body has ZERO relocations, so byte-identity does not discriminate between fold members",
+  "tried": [
+   {
+    "sym": "?Size@AsyncFile@@UAAHXZ",
+    "map_obj": "os:AsyncFile.obj",
+    "result": "ok",
+    "nreloc": 0
+   }
+  ]
+ },
+ {
+  "address": "0x825F9518",
+  "split_name": "merged_Get0x20",
+  "size": 8,
+  "unit": "default/system/os/AsyncFile",
+  "recoverable_name": "?Provider@UIListState@@QAAPAVUIListProvider@@XZ",
+  "live_row_id": 52099,
+  "map_members": [
+   {
+    "sym": "?Provider@UIListState@@QAAPAVUIListProvider@@XZ",
+    "flags": "f",
+    "obj": "ui:UIListState.obj"
+   },
+   {
+    "sym": "?UncompressedSize@AsyncFile@@UAAHXZ",
+    "flags": "f",
+    "obj": "os:AsyncFile.obj"
+   },
+   {
+    "sym": "?GetFailType@NetCacheLoader@@QBA?AW4NetCacheMgrFailType@@XZ",
+    "flags": "f",
+    "obj": "utl:NetCacheLoader.obj"
+   },
+   {
+    "sym": "?Provider@UIListState@@QBAPBVUIListProvider@@XZ",
+    "flags": "f",
+    "obj": "ui:UIListState.obj"
+   },
+   {
+    "sym": "?Tell@ArkFile@@UAAHXZ",
+    "flags": "f",
+    "obj": "os:ArkFile.obj"
+   },
+   {
+    "sym": "?GetDevice@XGRAPHICS@@YAPAXPAU_SSM_OBJINFO@1@@Z",
+    "flags": "f",
+    "obj": "xgraphics:ssmobject.obj"
+   }
+  ],
+  "target_size": 8,
+  "candidates": [
+   {
+    "sym": "?UncompressedSize@AsyncFile@@UAAHXZ",
+    "obj": "os:AsyncFile.obj",
+    "unit_owned": true
+   }
+  ],
+  "name": "?UncompressedSize@AsyncFile@@UAAHXZ",
+  "map_obj": "os:AsyncFile.obj",
+  "unit_owned": true,
+  "nreloc": 0,
+  "fold_twins_in_unit": [],
+  "verdict": "WEAK_NO_RELOC",
+  "why": "body test passes but the body has ZERO relocations, so byte-identity does not discriminate between fold members",
+  "tried": [
+   {
+    "sym": "?UncompressedSize@AsyncFile@@UAAHXZ",
+    "map_obj": "os:AsyncFile.obj",
+    "result": "ok",
+    "nreloc": 0
+   }
+  ]
+ },
+ {
+  "address": "0x825FA5C8",
+  "split_name": "merged_GetB0x24",
+  "size": 8,
+  "unit": "default/system/os/ArkFile",
+  "recoverable_name": "?Fail@ArkFile@@UAA_NXZ",
+  "live_row_id": 51437,
+  "map_members": [
+   {
+    "sym": "?Fail@ArkFile@@UAA_NXZ",
+    "flags": "f",
+    "obj": "os:ArkFile.obj"
+   },
+   {
+    "sym": "?IsDirty@CustomPlaylist@@UAA_NXZ",
+    "flags": "f",
+    "obj": "meta_ham:Playlist.obj"
+   },
+   {
+    "sym": "?Fail@IDataChunk@@UAA_NXZ",
+    "flags": "f",
+    "obj": "utl:WaveFile.obj"
+   }
+  ],
+  "target_size": 8,
+  "candidates": [
+   {
+    "sym": "?Fail@ArkFile@@UAA_NXZ",
+    "obj": "os:ArkFile.obj",
+    "unit_owned": true
+   }
+  ],
+  "name": "?Fail@ArkFile@@UAA_NXZ",
+  "map_obj": "os:ArkFile.obj",
+  "unit_owned": true,
+  "nreloc": 0,
+  "fold_twins_in_unit": [],
+  "verdict": "WEAK_NO_RELOC",
+  "why": "body test passes but the body has ZERO relocations, so byte-identity does not discriminate between fold members",
+  "tried": [
+   {
+    "sym": "?Fail@ArkFile@@UAA_NXZ",
+    "map_obj": "os:ArkFile.obj",
+    "result": "ok",
+    "nreloc": 0
+   }
+  ]
+ },
+ {
+  "address": "0x828A7508",
+  "split_name": "merged_828A7508",
+  "size": 112,
+  "unit": "default/lazer/meta_ham/Leaderboards",
+  "recoverable_name": "?_M_clear_after_move@?$vector@VLeaderboardRow@@V?$StlNodeAlloc@VLeaderboardRow@@@stlpmtx_std@@@stlpmtx_std@@IAAXXZ",
+  "live_row_id": 25159,
+  "map_members": [
+   {
+    "sym": "?_M_clear_after_move@?$vector@VLeaderboardRow@@V?$StlNodeAlloc@VLeaderboardRow@@@stlpmtx_std@@@stlpmtx_std@@IAAXXZ",
+    "flags": "f i",
+    "obj": "meta_ham:AppMiniLeaderboardDisplay.obj"
+   },
+   {
+    "sym": "?_M_clear@?$vector@VLeaderboardRow@@V?$StlNodeAlloc@VLeaderboardRow@@@stlpmtx_std@@@stlpmtx_std@@IAAXXZ",
+    "flags": "f i",
+    "obj": "meta_ham:Leaderboards.obj"
+   }
+  ],
+  "target_size": 112,
+  "candidates": [
+   {
+    "sym": "?_M_clear@?$vector@VLeaderboardRow@@V?$StlNodeAlloc@VLeaderboardRow@@@stlpmtx_std@@@stlpmtx_std@@IAAXXZ",
+    "obj": "meta_ham:Leaderboards.obj",
+    "unit_owned": true
+   }
+  ],
+  "name": "?_M_clear@?$vector@VLeaderboardRow@@V?$StlNodeAlloc@VLeaderboardRow@@@stlpmtx_std@@@stlpmtx_std@@IAAXXZ",
+  "map_obj": "meta_ham:Leaderboards.obj",
+  "unit_owned": true,
+  "nreloc": 2,
+  "fold_twins_in_unit": [],
+  "verdict": "PROVEN_BODY",
+  "why": "body test: 112 B identical, 2 relocations agreeing by target name",
+  "tried": [
+   {
+    "sym": "?_M_clear@?$vector@VLeaderboardRow@@V?$StlNodeAlloc@VLeaderboardRow@@@stlpmtx_std@@@stlpmtx_std@@IAAXXZ",
+    "map_obj": "meta_ham:Leaderboards.obj",
+    "result": "ok",
+    "nreloc": 2
+   }
+  ]
+ },
+ {
+  "address": "0x828DC218",
+  "split_name": "merged_828DC218",
+  "size": 156,
+  "unit": "default/lazer/meta_ham/ProfileMgr",
+  "recoverable_name": "?GetSignedIn@ProfileMgr@@QAA?AV?$vector@PAVHamProfile@@V?$StlNodeAlloc@PAVHamProfile@@@stlpmtx_std@@@stlpmtx_std@@XZ",
+  "live_row_id": 25999,
+  "map_members": [
+   {
+    "sym": "?GetSignedIn@ProfileMgr@@QAA?AV?$vector@PAVHamProfile@@V?$StlNodeAlloc@PAVHamProfile@@@stlpmtx_std@@@stlpmtx_std@@XZ",
+    "flags": "f",
+    "obj": "meta_ham:ProfileMgr.obj"
+   },
+   {
+    "sym": "?GetSignedInProfiles@ProfileMgr@@QAA?AV?$vector@PAVHamProfile@@V?$StlNodeAlloc@PAVHamProfile@@@stlpmtx_std@@@stlpmtx_std@@XZ",
+    "flags": "f",
+    "obj": "meta_ham:ProfileMgr.obj"
+   }
+  ],
+  "target_size": 156,
+  "candidates": [
+   {
+    "sym": "?GetSignedIn@ProfileMgr@@QAA?AV?$vector@PAVHamProfile@@V?$StlNodeAlloc@PAVHamProfile@@@stlpmtx_std@@@stlpmtx_std@@XZ",
+    "obj": "meta_ham:ProfileMgr.obj",
+    "unit_owned": true
+   },
+   {
+    "sym": "?GetSignedInProfiles@ProfileMgr@@QAA?AV?$vector@PAVHamProfile@@V?$StlNodeAlloc@PAVHamProfile@@@stlpmtx_std@@@stlpmtx_std@@XZ",
+    "obj": "meta_ham:ProfileMgr.obj",
+    "unit_owned": true
+   }
+  ],
+  "name": "?GetSignedIn@ProfileMgr@@QAA?AV?$vector@PAVHamProfile@@V?$StlNodeAlloc@PAVHamProfile@@@stlpmtx_std@@@stlpmtx_std@@XZ",
+  "map_obj": "meta_ham:ProfileMgr.obj",
+  "unit_owned": true,
+  "nreloc": 7,
+  "fold_twins_in_unit": [
+   "?GetSignedInProfiles@ProfileMgr@@QAA?AV?$vector@PAVHamProfile@@V?$StlNodeAlloc@PAVHamProfile@@@stlpmtx_std@@@stlpmtx_std@@XZ"
+  ],
+  "verdict": "PROVEN_BODY",
+  "why": "body test: 156 B identical, 7 relocations agreeing by target name",
+  "tried": [
+   {
+    "sym": "?GetSignedIn@ProfileMgr@@QAA?AV?$vector@PAVHamProfile@@V?$StlNodeAlloc@PAVHamProfile@@@stlpmtx_std@@@stlpmtx_std@@XZ",
+    "map_obj": "meta_ham:ProfileMgr.obj",
+    "result": "ok",
+    "nreloc": 7
+   }
+  ]
+ },
+ {
+  "address": "0x8290B1D0",
+  "split_name": "merged_8290B1D0",
+  "size": 212,
+  "unit": "default/lazer/meta_ham/SongStatusMgr",
+  "recoverable_name": "?Handle@SongStatusMgr@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+  "live_row_id": 26622,
+  "map_members": [
+   {
+    "sym": "?Handle@SongStatusMgr@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "flags": "f",
+    "obj": "meta_ham:SongStatusMgr.obj"
+   },
+   {
+    "sym": "?Handle@WebSvcMgr@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "flags": "f",
+    "obj": "net:WebSvcMgr.obj"
+   }
+  ],
+  "target_size": 212,
+  "candidates": [
+   {
+    "sym": "?Handle@SongStatusMgr@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "obj": "meta_ham:SongStatusMgr.obj",
+    "unit_owned": true
+   }
+  ],
+  "name": "?Handle@SongStatusMgr@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+  "map_obj": "meta_ham:SongStatusMgr.obj",
+  "unit_owned": true,
+  "nreloc": 16,
+  "fold_twins_in_unit": [],
+  "verdict": "PROVEN_BODY",
+  "why": "body test: 212 B identical, 16 relocations agreeing by target name",
+  "tried": [
+   {
+    "sym": "?Handle@SongStatusMgr@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "map_obj": "meta_ham:SongStatusMgr.obj",
+    "result": "ok",
+    "nreloc": 16
+   }
+  ]
+ },
+ {
+  "address": "0x82910F90",
+  "split_name": "merged_82910F90",
+  "size": 60,
+  "unit": "default/lazer/meta_ham/ChallengeSortMgr",
+  "recoverable_name": "??$_Copy_Construct@VChallengeRecord@@@stlpmtx_std@@YAXPAVChallengeRecord@@ABV1@@Z",
+  "live_row_id": 26755,
+  "map_members": [
+   {
+    "sym": "??$_Copy_Construct@VChallengeRecord@@@stlpmtx_std@@YAXPAVChallengeRecord@@ABV1@@Z",
+    "flags": "f i",
+    "obj": "meta_ham:ChallengeSortMgr.obj"
+   },
+   {
+    "sym": "??$_Param_Construct@VChallengeRecord@@V1@@stlpmtx_std@@YAXPAVChallengeRecord@@ABV1@@Z",
+    "flags": "f i",
+    "obj": "meta_ham:ChallengeSortMgr.obj"
+   }
+  ],
+  "target_size": 60,
+  "candidates": [
+   {
+    "sym": "??$_Copy_Construct@VChallengeRecord@@@stlpmtx_std@@YAXPAVChallengeRecord@@ABV1@@Z",
+    "obj": "meta_ham:ChallengeSortMgr.obj",
+    "unit_owned": true
+   },
+   {
+    "sym": "??$_Param_Construct@VChallengeRecord@@V1@@stlpmtx_std@@YAXPAVChallengeRecord@@ABV1@@Z",
+    "obj": "meta_ham:ChallengeSortMgr.obj",
+    "unit_owned": true
+   }
+  ],
+  "name": "??$_Copy_Construct@VChallengeRecord@@@stlpmtx_std@@YAXPAVChallengeRecord@@ABV1@@Z",
+  "map_obj": "meta_ham:ChallengeSortMgr.obj",
+  "unit_owned": true,
+  "nreloc": 1,
+  "fold_twins_in_unit": [
+   "??$_Param_Construct@VChallengeRecord@@V1@@stlpmtx_std@@YAXPAVChallengeRecord@@ABV1@@Z"
+  ],
+  "verdict": "PROVEN_BODY",
+  "why": "body test: 60 B identical, 1 relocations agreeing by target name",
+  "tried": [
+   {
+    "sym": "??$_Copy_Construct@VChallengeRecord@@@stlpmtx_std@@YAXPAVChallengeRecord@@ABV1@@Z",
+    "map_obj": "meta_ham:ChallengeSortMgr.obj",
+    "result": "ok",
+    "nreloc": 1
+   }
+  ]
+ },
+ {
+  "address": "0x82920BA0",
+  "split_name": "merged_82920BA0",
+  "size": 60,
+  "unit": "default/lazer/meta_ham/AppMiniLeaderboardDisplay",
+  "recoverable_name": "??$_Param_Construct@VLeaderboardRow@@V1@@stlpmtx_std@@YAXPAVLeaderboardRow@@ABV1@@Z",
+  "live_row_id": 27042,
+  "map_members": [
+   {
+    "sym": "??$_Param_Construct@VLeaderboardRow@@V1@@stlpmtx_std@@YAXPAVLeaderboardRow@@ABV1@@Z",
+    "flags": "f i",
+    "obj": "meta_ham:Leaderboards.obj"
+   },
+   {
+    "sym": "??$_Copy_Construct@VLeaderboardRow@@@stlpmtx_std@@YAXPAVLeaderboardRow@@ABV1@@Z",
+    "flags": "f i",
+    "obj": "meta_ham:AppMiniLeaderboardDisplay.obj"
+   }
+  ],
+  "target_size": 60,
+  "candidates": [
+   {
+    "sym": "??$_Copy_Construct@VLeaderboardRow@@@stlpmtx_std@@YAXPAVLeaderboardRow@@ABV1@@Z",
+    "obj": "meta_ham:AppMiniLeaderboardDisplay.obj",
+    "unit_owned": true
+   },
+   {
+    "sym": "??$_Param_Construct@VLeaderboardRow@@V1@@stlpmtx_std@@YAXPAVLeaderboardRow@@ABV1@@Z",
+    "obj": "meta_ham:Leaderboards.obj",
+    "unit_owned": false
+   }
+  ],
+  "name": "??$_Copy_Construct@VLeaderboardRow@@@stlpmtx_std@@YAXPAVLeaderboardRow@@ABV1@@Z",
+  "map_obj": "meta_ham:AppMiniLeaderboardDisplay.obj",
+  "unit_owned": true,
+  "nreloc": 1,
+  "fold_twins_in_unit": [
+   "??$_Param_Construct@VLeaderboardRow@@V1@@stlpmtx_std@@YAXPAVLeaderboardRow@@ABV1@@Z"
+  ],
+  "verdict": "PROVEN_BODY",
+  "why": "body test: 60 B identical, 1 relocations agreeing by target name",
+  "tried": [
+   {
+    "sym": "??$_Copy_Construct@VLeaderboardRow@@@stlpmtx_std@@YAXPAVLeaderboardRow@@ABV1@@Z",
+    "map_obj": "meta_ham:AppMiniLeaderboardDisplay.obj",
+    "result": "ok",
+    "nreloc": 1
+   }
+  ]
+ },
+ {
+  "address": "0x829292C0",
+  "split_name": "merged_829292C0",
+  "size": 100,
+  "unit": "default/lazer/meta_ham/CampaignSongSelectPanel",
+  "recoverable_name": "??1CampaignSongProvider@@UAA@XZ",
+  "live_row_id": 27221,
+  "map_members": [
+   {
+    "sym": "??1CampaignSongProvider@@UAA@XZ",
+    "flags": "f i",
+    "obj": "meta_ham:CampaignSongSelectPanel.obj"
+   },
+   {
+    "sym": "??1CampaignMqCrewProvider@@UAA@XZ",
+    "flags": "f i",
+    "obj": "meta_ham:CampaignMasterQuestCrewSelectPanel.obj"
+   }
+  ],
+  "target_size": 100,
+  "candidates": [
+   {
+    "sym": "??1CampaignSongProvider@@UAA@XZ",
+    "obj": "meta_ham:CampaignSongSelectPanel.obj",
+    "unit_owned": true
+   }
+  ],
+  "name": "??1CampaignSongProvider@@UAA@XZ",
+  "map_obj": "meta_ham:CampaignSongSelectPanel.obj",
+  "unit_owned": true,
+  "nreloc": 2,
+  "fold_twins_in_unit": [],
+  "verdict": "PROVEN_BODY",
+  "why": "body test: 100 B identical, 2 relocations agreeing by target name",
+  "tried": [
+   {
+    "sym": "??1CampaignSongProvider@@UAA@XZ",
+    "map_obj": "meta_ham:CampaignSongSelectPanel.obj",
+    "result": "ok",
+    "nreloc": 2
+   }
+  ]
+ },
+ {
+  "address": "0x82945418",
+  "split_name": "merged_82945418",
+  "size": 112,
+  "unit": "default/lazer/meta_ham/MultiUserGesturePanel",
+  "recoverable_name": "??1CharacterProvider@@UAA@XZ",
+  "live_row_id": 27666,
+  "map_members": [
+   {
+    "sym": "??1CharacterProvider@@UAA@XZ",
+    "flags": "f i",
+    "obj": "meta_ham:MultiUserGesturePanel.obj"
+   },
+   {
+    "sym": "??1VenueProvider@@UAA@XZ",
+    "flags": "f i",
+    "obj": "meta_ham:MultiUserGesturePanel.obj"
+   }
+  ],
+  "target_size": 112,
+  "candidates": [
+   {
+    "sym": "??1CharacterProvider@@UAA@XZ",
+    "obj": "meta_ham:MultiUserGesturePanel.obj",
+    "unit_owned": true
+   },
+   {
+    "sym": "??1VenueProvider@@UAA@XZ",
+    "obj": "meta_ham:MultiUserGesturePanel.obj",
+    "unit_owned": true
+   }
+  ],
+  "name": "??1CharacterProvider@@UAA@XZ",
+  "map_obj": "meta_ham:MultiUserGesturePanel.obj",
+  "unit_owned": true,
+  "nreloc": 4,
+  "fold_twins_in_unit": [
+   "??1VenueProvider@@UAA@XZ"
+  ],
+  "verdict": "PROVEN_BODY",
+  "why": "body test: 112 B identical, 4 relocations agreeing by target name",
+  "tried": [
+   {
+    "sym": "??1CharacterProvider@@UAA@XZ",
+    "map_obj": "meta_ham:MultiUserGesturePanel.obj",
+    "result": "ok",
+    "nreloc": 4
+   }
+  ]
+ },
+ {
+  "address": "0x82946770",
+  "split_name": "merged_82946770",
+  "size": 100,
+  "unit": "default/lazer/meta_ham/OptionsPanel",
+  "recoverable_name": "?SetOfferString@TokenRedeemedMsg@@QAAXABVString@@@Z",
+  "live_row_id": 27701,
+  "map_members": [
+   {
+    "sym": "?SetOfferString@TokenRedeemedMsg@@QAAXABVString@@@Z",
+    "flags": "f i",
+    "obj": "meta_ham:OptionsPanel.obj"
+   },
+   {
+    "sym": "?SetLinkingCode@LinkingCodeRetrievedMsg@@QAAXABVString@@@Z",
+    "flags": "f i",
+    "obj": "meta_ham:OptionsPanel.obj"
+   }
+  ],
+  "target_size": 100,
+  "candidates": [
+   {
+    "sym": "?SetOfferString@TokenRedeemedMsg@@QAAXABVString@@@Z",
+    "obj": "meta_ham:OptionsPanel.obj",
+    "unit_owned": true
+   }
+  ],
+  "name": "?SetOfferString@TokenRedeemedMsg@@QAAXABVString@@@Z",
+  "map_obj": "meta_ham:OptionsPanel.obj",
+  "unit_owned": true,
+  "nreloc": 4,
+  "fold_twins_in_unit": [],
+  "verdict": "PROVEN_BODY",
+  "why": "body test: 100 B identical, 4 relocations agreeing by target name",
+  "tried": [
+   {
+    "sym": "?SetOfferString@TokenRedeemedMsg@@QAAXABVString@@@Z",
+    "map_obj": "meta_ham:OptionsPanel.obj",
+    "result": "ok",
+    "nreloc": 4
+   }
+  ]
+ },
+ {
+  "address": "0x82948D30",
+  "split_name": "merged_82948D30",
+  "size": 60,
+  "unit": "default/lazer/meta_ham/PracticeChoosePanel",
+  "recoverable_name": "??$_Copy_Construct@VStepMoves@@@stlpmtx_std@@YAXPAVStepMoves@@ABV1@@Z",
+  "live_row_id": 27740,
+  "map_members": [
+   {
+    "sym": "??$_Copy_Construct@VStepMoves@@@stlpmtx_std@@YAXPAVStepMoves@@ABV1@@Z",
+    "flags": "f i",
+    "obj": "meta_ham:PracticeChoosePanel.obj"
+   },
+   {
+    "sym": "??$_Param_Construct@VStepMoves@@V1@@stlpmtx_std@@YAXPAVStepMoves@@ABV1@@Z",
+    "flags": "f i",
+    "obj": "meta_ham:PracticeChoosePanel.obj"
+   }
+  ],
+  "target_size": 60,
+  "candidates": [
+   {
+    "sym": "??$_Copy_Construct@VStepMoves@@@stlpmtx_std@@YAXPAVStepMoves@@ABV1@@Z",
+    "obj": "meta_ham:PracticeChoosePanel.obj",
+    "unit_owned": true
+   },
+   {
+    "sym": "??$_Param_Construct@VStepMoves@@V1@@stlpmtx_std@@YAXPAVStepMoves@@ABV1@@Z",
+    "obj": "meta_ham:PracticeChoosePanel.obj",
+    "unit_owned": true
+   }
+  ],
+  "name": "??$_Copy_Construct@VStepMoves@@@stlpmtx_std@@YAXPAVStepMoves@@ABV1@@Z",
+  "map_obj": "meta_ham:PracticeChoosePanel.obj",
+  "unit_owned": true,
+  "nreloc": 1,
+  "fold_twins_in_unit": [
+   "??$_Param_Construct@VStepMoves@@V1@@stlpmtx_std@@YAXPAVStepMoves@@ABV1@@Z"
+  ],
+  "verdict": "PROVEN_BODY",
+  "why": "body test: 60 B identical, 1 relocations agreeing by target name",
+  "tried": [
+   {
+    "sym": "??$_Copy_Construct@VStepMoves@@@stlpmtx_std@@YAXPAVStepMoves@@ABV1@@Z",
+    "map_obj": "meta_ham:PracticeChoosePanel.obj",
+    "result": "ok",
+    "nreloc": 1
+   }
+  ]
+ },
+ {
+  "address": "0x8295F418",
+  "split_name": "merged_8295F418",
+  "size": 316,
+  "unit": "default/lazer/meta_ham/FitnessCalorieSortMgr",
+  "recoverable_name": "?Handle@MQSongSortMgr@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+  "live_row_id": 28095,
+  "map_members": [
+   {
+    "sym": "?Handle@MQSongSortMgr@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "flags": "f",
+    "obj": "meta_ham:MQSongSortMgr.obj"
+   },
+   {
+    "sym": "?Handle@FitnessCalorieSortMgr@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "flags": "f",
+    "obj": "meta_ham:FitnessCalorieSortMgr.obj"
+   }
+  ],
+  "target_size": 316,
+  "candidates": [
+   {
+    "sym": "?Handle@FitnessCalorieSortMgr@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "obj": "meta_ham:FitnessCalorieSortMgr.obj",
+    "unit_owned": true
+   },
+   {
+    "sym": "?Handle@MQSongSortMgr@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "obj": "meta_ham:MQSongSortMgr.obj",
+    "unit_owned": false
+   }
+  ],
+  "name": "?Handle@FitnessCalorieSortMgr@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+  "map_obj": "meta_ham:FitnessCalorieSortMgr.obj",
+  "unit_owned": true,
+  "nreloc": 19,
+  "fold_twins_in_unit": [
+   "?Handle@MQSongSortMgr@@UAA?AVDataNode@@PAVDataArray@@_N@Z"
+  ],
+  "verdict": "PROVEN_BODY",
+  "why": "body test: 316 B identical, 19 relocations agreeing by target name",
+  "tried": [
+   {
+    "sym": "?Handle@FitnessCalorieSortMgr@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "map_obj": "meta_ham:FitnessCalorieSortMgr.obj",
+    "result": "ok",
+    "nreloc": 19
+   }
+  ]
+ },
+ {
+  "address": "0x82975658",
+  "split_name": "merged_82975658",
+  "size": 292,
+  "unit": "default/lazer/meta_ham/NavListNode",
+  "recoverable_name": "?Handle@NavListFunctionNode@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+  "live_row_id": 28500,
+  "map_members": [
+   {
+    "sym": "?Handle@NavListFunctionNode@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "flags": "f",
+    "obj": "meta_ham:NavListNode.obj"
+   },
+   {
+    "sym": "?Handle@NavListItemNode@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "flags": "f",
+    "obj": "meta_ham:NavListNode.obj"
+   },
+   {
+    "sym": "?Handle@NavListHeaderNode@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "flags": "f",
+    "obj": "meta_ham:NavListNode.obj"
+   }
+  ],
+  "target_size": 292,
+  "candidates": [
+   {
+    "sym": "?Handle@NavListFunctionNode@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "obj": "meta_ham:NavListNode.obj",
+    "unit_owned": true
+   },
+   {
+    "sym": "?Handle@NavListHeaderNode@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "obj": "meta_ham:NavListNode.obj",
+    "unit_owned": true
+   },
+   {
+    "sym": "?Handle@NavListItemNode@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "obj": "meta_ham:NavListNode.obj",
+    "unit_owned": true
+   }
+  ],
+  "name": "?Handle@NavListFunctionNode@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+  "map_obj": "meta_ham:NavListNode.obj",
+  "unit_owned": true,
+  "nreloc": 19,
+  "fold_twins_in_unit": [
+   "?Handle@NavListHeaderNode@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+   "?Handle@NavListItemNode@@UAA?AVDataNode@@PAVDataArray@@_N@Z"
+  ],
+  "verdict": "PROVEN_BODY",
+  "why": "body test: 292 B identical, 19 relocations agreeing by target name",
+  "tried": [
+   {
+    "sym": "?Handle@NavListFunctionNode@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "map_obj": "meta_ham:NavListNode.obj",
+    "result": "ok",
+    "nreloc": 19
+   }
+  ]
+ },
+ {
+  "address": "0x82979158",
+  "split_name": "merged_82979158",
+  "size": 292,
+  "unit": "default/lazer/meta_ham/ChallengeSortNode",
+  "recoverable_name": "?Handle@MQSongSortNode@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+  "live_row_id": 28574,
+  "map_members": [
+   {
+    "sym": "?Handle@MQSongSortNode@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "flags": "f",
+    "obj": "meta_ham:MQSongSortNode.obj"
+   },
+   {
+    "sym": "?Handle@ChallengeSortNode@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "flags": "f",
+    "obj": "meta_ham:ChallengeSortNode.obj"
+   },
+   {
+    "sym": "?Handle@SongFunctionNode@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "flags": "f",
+    "obj": "meta_ham:SongSortNode.obj"
+   },
+   {
+    "sym": "?Handle@PlaylistSortNode@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "flags": "f",
+    "obj": "meta_ham:PlaylistSortNode.obj"
+   },
+   {
+    "sym": "?Handle@FitnessCalorieSortNode@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "flags": "f",
+    "obj": "meta_ham:FitnessCalorieSortNode.obj"
+   },
+   {
+    "sym": "?Handle@FitnessCalorieHeaderNode@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "flags": "f",
+    "obj": "meta_ham:FitnessCalorieSortNode.obj"
+   }
+  ],
+  "target_size": 292,
+  "candidates": [
+   {
+    "sym": "?Handle@ChallengeSortNode@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "obj": "meta_ham:ChallengeSortNode.obj",
+    "unit_owned": true
+   },
+   {
+    "sym": "?Handle@MQSongSortNode@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "obj": "meta_ham:MQSongSortNode.obj",
+    "unit_owned": false
+   }
+  ],
+  "name": "?Handle@ChallengeSortNode@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+  "map_obj": "meta_ham:ChallengeSortNode.obj",
+  "unit_owned": true,
+  "nreloc": 19,
+  "fold_twins_in_unit": [
+   "?Handle@MQSongSortNode@@UAA?AVDataNode@@PAVDataArray@@_N@Z"
+  ],
+  "verdict": "PROVEN_BODY",
+  "why": "body test: 292 B identical, 19 relocations agreeing by target name",
+  "tried": [
+   {
+    "sym": "?Handle@ChallengeSortNode@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "map_obj": "meta_ham:ChallengeSortNode.obj",
+    "result": "ok",
+    "nreloc": 19
+   }
+  ]
+ },
+ {
+  "address": "0x82984FC8",
+  "split_name": "merged_82984FC8",
+  "size": 76,
+  "unit": "default/lazer/meta_ham/PlaylistSongProvider",
+  "recoverable_name": "??1PackSongListProvider@@UAA@XZ",
+  "live_row_id": 28770,
+  "map_members": [
+   {
+    "sym": "??1PackSongListProvider@@UAA@XZ",
+    "flags": "f i",
+    "obj": "meta_ham:HamStoreProvider.obj"
+   },
+   {
+    "sym": "??1WeightInputProvider@@UAA@XZ",
+    "flags": "f i",
+    "obj": "meta_ham:MetaPanel.obj"
+   },
+   {
+    "sym": "??1PlaylistSongProvider@@UAA@XZ",
+    "flags": "f i",
+    "obj": "meta_ham:PlaylistSongProvider.obj"
+   },
+   {
+    "sym": "??1HamStoreFilterProvider@@UAA@XZ",
+    "flags": "f i",
+    "obj": "meta_ham:HamStoreFilterProvider.obj"
+   }
+  ],
+  "target_size": 76,
+  "candidates": [
+   {
+    "sym": "??1PlaylistSongProvider@@UAA@XZ",
+    "obj": "meta_ham:PlaylistSongProvider.obj",
+    "unit_owned": true
+   },
+   {
+    "sym": "??1PackSongListProvider@@UAA@XZ",
+    "obj": "meta_ham:HamStoreProvider.obj",
+    "unit_owned": false
+   }
+  ],
+  "verdict": "REFUSE_BODY_DIFFERS",
+  "why": "every map member our object defines fails the body test",
+  "tried": [
+   {
+    "sym": "??1PlaylistSongProvider@@UAA@XZ",
+    "map_obj": "meta_ham:PlaylistSongProvider.obj",
+    "result": "size 76 vs 100",
+    "nreloc": 7
+   },
+   {
+    "sym": "??1PackSongListProvider@@UAA@XZ",
+    "map_obj": "meta_ham:HamStoreProvider.obj",
+    "result": "size 76 vs 100",
+    "nreloc": 7
+   }
+  ]
+ },
+ {
+  "address": "0x8298DFF0",
+  "split_name": "merged_8298DFF0",
+  "size": 152,
+  "unit": "default/lazer/meta_ham/PlaylistSortNode",
+  "recoverable_name": "?SetItemCountString@MQSongHeaderNode@@UBAXPAVUILabel@@@Z",
+  "live_row_id": 28932,
+  "map_members": [
+   {
+    "sym": "?SetItemCountString@MQSongHeaderNode@@UBAXPAVUILabel@@@Z",
+    "flags": "f",
+    "obj": "meta_ham:MQSongSortNode.obj"
+   },
+   {
+    "sym": "?SetItemCountString@ChallengeHeaderNode@@UBAXPAVUILabel@@@Z",
+    "flags": "f",
+    "obj": "meta_ham:ChallengeSortNode.obj"
+   },
+   {
+    "sym": "?SetItemCountString@PlaylistHeaderNode@@UBAXPAVUILabel@@@Z",
+    "flags": "f",
+    "obj": "meta_ham:PlaylistSortNode.obj"
+   }
+  ],
+  "target_size": 152,
+  "candidates": [
+   {
+    "sym": "?SetItemCountString@PlaylistHeaderNode@@UBAXPAVUILabel@@@Z",
+    "obj": "meta_ham:PlaylistSortNode.obj",
+    "unit_owned": true
+   },
+   {
+    "sym": "?SetItemCountString@MQSongHeaderNode@@UBAXPAVUILabel@@@Z",
+    "obj": "meta_ham:MQSongSortNode.obj",
+    "unit_owned": false
+   }
+  ],
+  "name": "?SetItemCountString@PlaylistHeaderNode@@UBAXPAVUILabel@@@Z",
+  "map_obj": "meta_ham:PlaylistSortNode.obj",
+  "unit_owned": true,
+  "nreloc": 7,
+  "fold_twins_in_unit": [
+   "?SetItemCountString@MQSongHeaderNode@@UBAXPAVUILabel@@@Z"
+  ],
+  "verdict": "PROVEN_BODY",
+  "why": "body test: 152 B identical, 7 relocations agreeing by target name",
+  "tried": [
+   {
+    "sym": "?SetItemCountString@PlaylistHeaderNode@@UBAXPAVUILabel@@@Z",
+    "map_obj": "meta_ham:PlaylistSortNode.obj",
+    "result": "ok",
+    "nreloc": 7
+   }
+  ]
+ },
+ {
+  "address": "0x82993050",
+  "split_name": "merged_82993050",
+  "size": 60,
+  "unit": "default/lazer/net_ham/ChallengeSystemJobs",
+  "recoverable_name": "??$_Copy_Construct@U?$pair@$$CBVString@@VChallengeBadgeInfo@@@stlpmtx_std@@@stlpmtx_std@@YAXPAU?$pair@$$CBVString@@VChallengeBadgeInfo@@@0@ABU10@@Z",
+  "live_row_id": 29008,
+  "map_members": [
+   {
+    "sym": "??$_Copy_Construct@U?$pair@$$CBVString@@VChallengeBadgeInfo@@@stlpmtx_std@@@stlpmtx_std@@YAXPAU?$pair@$$CBVString@@VChallengeBadgeInfo@@@0@ABU10@@Z",
+    "flags": "f i",
+    "obj": "net_ham:ChallengeSystemJobs.obj"
+   },
+   {
+    "sym": "??$_Copy_Construct@UNetLoaderRef@@@stlpmtx_std@@YAXPAUNetLoaderRef@@ABU1@@Z",
+    "flags": "f i",
+    "obj": "utl:NetCacheMgr.obj"
+   }
+  ],
+  "target_size": 60,
+  "candidates": [
+   {
+    "sym": "??$_Copy_Construct@U?$pair@$$CBVString@@VChallengeBadgeInfo@@@stlpmtx_std@@@stlpmtx_std@@YAXPAU?$pair@$$CBVString@@VChallengeBadgeInfo@@@0@ABU10@@Z",
+    "obj": "net_ham:ChallengeSystemJobs.obj",
+    "unit_owned": true
+   }
+  ],
+  "name": "??$_Copy_Construct@U?$pair@$$CBVString@@VChallengeBadgeInfo@@@stlpmtx_std@@@stlpmtx_std@@YAXPAU?$pair@$$CBVString@@VChallengeBadgeInfo@@@0@ABU10@@Z",
+  "map_obj": "net_ham:ChallengeSystemJobs.obj",
+  "unit_owned": true,
+  "nreloc": 1,
+  "fold_twins_in_unit": [],
+  "verdict": "PROVEN_BODY",
+  "why": "body test: 60 B identical, 1 relocations agreeing by target name",
+  "tried": [
+   {
+    "sym": "??$_Copy_Construct@U?$pair@$$CBVString@@VChallengeBadgeInfo@@@stlpmtx_std@@@stlpmtx_std@@YAXPAU?$pair@$$CBVString@@VChallengeBadgeInfo@@@0@ABU10@@Z",
+    "map_obj": "net_ham:ChallengeSystemJobs.obj",
+    "result": "ok",
+    "nreloc": 1
+   }
+  ]
+ },
+ {
+  "address": "0x829930B8",
+  "split_name": "merged_829930B8",
+  "size": 96,
+  "unit": "default/lazer/net_ham/ChallengeSystemJobs",
+  "recoverable_name": "?_M_lower_bound@?$_Rb_tree@VString@@U?$less@VString@@@stlpmtx_std@@U?$pair@$$CBVString@@V?$vector@VChallengeRow@@V?$StlNodeAlloc@VChallengeRow@@@stlpmtx_std@@@stlpmtx_std@@@3@U?$_Select1st@U?$pair@$$CBVString@@V?$vector@VChallengeRow@@V?$StlNodeAlloc@VChallengeRow@@@stlpmtx_std@@@stlpmtx_std@@@stlpmtx_std@@@3@U?$_MapTraitsT@U?$pair@$$CBVString@@V?$vector@VChallengeRow@@V?$StlNodeAlloc@VChallengeRow@@@stlpmtx_std@@@stlpmtx_std@@@stlpmtx_std@@@priv@3@V?$StlNodeAlloc@U?$pair@$$CBVString@@V?$vector@VChallengeRow@@V?$StlNodeAlloc@VChallengeRow@@@stlpmtx_std@@@stlpmtx_std@@@stlpmtx_std@@@3@@stlpmtx_std@@ABAPAU_Rb_tree_node_base@2@ABVString@@@Z",
+  "live_row_id": 29010,
+  "map_members": [
+   {
+    "sym": "?_M_lower_bound@?$_Rb_tree@VString@@U?$less@VString@@@stlpmtx_std@@U?$pair@$$CBVString@@V?$vector@VChallengeRow@@V?$StlNodeAlloc@VChallengeRow@@@stlpmtx_std@@@stlpmtx_std@@@3@U?$_Select1st@U?$pair@$$CBVString@@V?$vector@VChallengeRow@@V?$StlNodeAlloc@VChallengeRow@@@stlpmtx_std@@@stlpmtx_std@@@stlpmtx_std@@@3@U?$_MapTraitsT@U?$pair@$$CBVString@@V?$vector@VChallengeRow@@V?$StlNodeAlloc@VChallengeRow@@@stlpmtx_std@@@stlpmtx_std@@@stlpmtx_std@@@priv@3@V?$StlNodeAlloc@U?$pair@$$CBVString@@V?$vector@VChallengeRow@@V?$StlNodeAlloc@VChallengeRow@@@stlpmtx_std@@@stlpmtx_std@@@stlpmtx_std@@@3@@stlpmtx_std@@ABAPAU_Rb_tree_node_base@2@ABVString@@@Z",
+    "flags": "f i",
+    "obj": "net_ham:ChallengeSystemJobs.obj"
+   },
+   {
+    "sym": "?_M_lower_bound@?$_Rb_tree@VString@@U?$less@VString@@@stlpmtx_std@@U?$pair@$$CBVString@@VChallengeBadgeInfo@@@3@U?$_Select1st@U?$pair@$$CBVString@@VChallengeBadgeInfo@@@stlpmtx_std@@@3@U?$_MapTraitsT@U?$pair@$$CBVString@@VChallengeBadgeInfo@@@stlpmtx_std@@@priv@3@V?$StlNodeAlloc@U?$pair@$$CBVString@@VChallengeBadgeInfo@@@stlpmtx_std@@@3@@stlpmtx_std@@ABAPAU_Rb_tree_node_base@2@ABVString@@@Z",
+    "flags": "f i",
+    "obj": "net_ham:ChallengeSystemJobs.obj"
+   },
+   {
+    "sym": "?_M_lower_bound@?$_Rb_tree@VString@@U?$less@VString@@@stlpmtx_std@@U?$pair@$$CBVString@@VDataNode@@@3@U?$_Select1st@U?$pair@$$CBVString@@VDataNode@@@stlpmtx_std@@@3@U?$_MapTraitsT@U?$pair@$$CBVString@@VDataNode@@@stlpmtx_std@@@priv@3@V?$StlNodeAlloc@U?$pair@$$CBVString@@VDataNode@@@stlpmtx_std@@@3@@stlpmtx_std@@ABAPAU_Rb_tree_node_base@2@ABVString@@@Z",
+    "flags": "f i",
+    "obj": "obj:DataFile.obj"
+   }
+  ],
+  "target_size": 96,
+  "candidates": [
+   {
+    "sym": "?_M_lower_bound@?$_Rb_tree@VString@@U?$less@VString@@@stlpmtx_std@@U?$pair@$$CBVString@@V?$vector@VChallengeRow@@V?$StlNodeAlloc@VChallengeRow@@@stlpmtx_std@@@stlpmtx_std@@@3@U?$_Select1st@U?$pair@$$CBVString@@V?$vector@VChallengeRow@@V?$StlNodeAlloc@VChallengeRow@@@stlpmtx_std@@@stlpmtx_std@@@stlpmtx_std@@@3@U?$_MapTraitsT@U?$pair@$$CBVString@@V?$vector@VChallengeRow@@V?$StlNodeAlloc@VChallengeRow@@@stlpmtx_std@@@stlpmtx_std@@@stlpmtx_std@@@priv@3@V?$StlNodeAlloc@U?$pair@$$CBVString@@V?$vector@VChallengeRow@@V?$StlNodeAlloc@VChallengeRow@@@stlpmtx_std@@@stlpmtx_std@@@stlpmtx_std@@@3@@stlpmtx_std@@ABAPAU_Rb_tree_node_base@2@ABVString@@@Z",
+    "obj": "net_ham:ChallengeSystemJobs.obj",
+    "unit_owned": true
+   },
+   {
+    "sym": "?_M_lower_bound@?$_Rb_tree@VString@@U?$less@VString@@@stlpmtx_std@@U?$pair@$$CBVString@@VChallengeBadgeInfo@@@3@U?$_Select1st@U?$pair@$$CBVString@@VChallengeBadgeInfo@@@stlpmtx_std@@@3@U?$_MapTraitsT@U?$pair@$$CBVString@@VChallengeBadgeInfo@@@stlpmtx_std@@@priv@3@V?$StlNodeAlloc@U?$pair@$$CBVString@@VChallengeBadgeInfo@@@stlpmtx_std@@@3@@stlpmtx_std@@ABAPAU_Rb_tree_node_base@2@ABVString@@@Z",
+    "obj": "net_ham:ChallengeSystemJobs.obj",
+    "unit_owned": true
+   }
+  ],
+  "name": "?_M_lower_bound@?$_Rb_tree@VString@@U?$less@VString@@@stlpmtx_std@@U?$pair@$$CBVString@@V?$vector@VChallengeRow@@V?$StlNodeAlloc@VChallengeRow@@@stlpmtx_std@@@stlpmtx_std@@@3@U?$_Select1st@U?$pair@$$CBVString@@V?$vector@VChallengeRow@@V?$StlNodeAlloc@VChallengeRow@@@stlpmtx_std@@@stlpmtx_std@@@stlpmtx_std@@@3@U?$_MapTraitsT@U?$pair@$$CBVString@@V?$vector@VChallengeRow@@V?$StlNodeAlloc@VChallengeRow@@@stlpmtx_std@@@stlpmtx_std@@@stlpmtx_std@@@priv@3@V?$StlNodeAlloc@U?$pair@$$CBVString@@V?$vector@VChallengeRow@@V?$StlNodeAlloc@VChallengeRow@@@stlpmtx_std@@@stlpmtx_std@@@stlpmtx_std@@@3@@stlpmtx_std@@ABAPAU_Rb_tree_node_base@2@ABVString@@@Z",
+  "map_obj": "net_ham:ChallengeSystemJobs.obj",
+  "unit_owned": true,
+  "nreloc": 3,
+  "fold_twins_in_unit": [
+   "?_M_lower_bound@?$_Rb_tree@VString@@U?$less@VString@@@stlpmtx_std@@U?$pair@$$CBVString@@VChallengeBadgeInfo@@@3@U?$_Select1st@U?$pair@$$CBVString@@VChallengeBadgeInfo@@@stlpmtx_std@@@3@U?$_MapTraitsT@U?$pair@$$CBVString@@VChallengeBadgeInfo@@@stlpmtx_std@@@priv@3@V?$StlNodeAlloc@U?$pair@$$CBVString@@VChallengeBadgeInfo@@@stlpmtx_std@@@3@@stlpmtx_std@@ABAPAU_Rb_tree_node_base@2@ABVString@@@Z"
+  ],
+  "verdict": "PROVEN_BODY",
+  "why": "body test: 96 B identical, 3 relocations agreeing by target name",
+  "tried": [
+   {
+    "sym": "?_M_lower_bound@?$_Rb_tree@VString@@U?$less@VString@@@stlpmtx_std@@U?$pair@$$CBVString@@V?$vector@VChallengeRow@@V?$StlNodeAlloc@VChallengeRow@@@stlpmtx_std@@@stlpmtx_std@@@3@U?$_Select1st@U?$pair@$$CBVString@@V?$vector@VChallengeRow@@V?$StlNodeAlloc@VChallengeRow@@@stlpmtx_std@@@stlpmtx_std@@@stlpmtx_std@@@3@U?$_MapTraitsT@U?$pair@$$CBVString@@V?$vector@VChallengeRow@@V?$StlNodeAlloc@VChallengeRow@@@stlpmtx_std@@@stlpmtx_std@@@stlpmtx_std@@@priv@3@V?$StlNodeAlloc@U?$pair@$$CBVString@@V?$vector@VChallengeRow@@V?$StlNodeAlloc@VChallengeRow@@@stlpmtx_std@@@stlpmtx_std@@@stlpmtx_std@@@3@@stlpmtx_std@@ABAPAU_Rb_tree_node_base@2@ABVString@@@Z",
+    "map_obj": "net_ham:ChallengeSystemJobs.obj",
+    "result": "ok",
+    "nreloc": 3
+   }
+  ]
+ },
+ {
+  "address": "0x82996510",
+  "split_name": "merged_82996510",
+  "size": 60,
+  "unit": "default/lazer/net_ham/PlaylistJobs",
+  "recoverable_name": "??$_Copy_Construct@VCustomPlaylist@@@stlpmtx_std@@YAXPAVCustomPlaylist@@ABV1@@Z",
+  "live_row_id": 29044,
+  "map_members": [
+   {
+    "sym": "??$_Copy_Construct@VCustomPlaylist@@@stlpmtx_std@@YAXPAVCustomPlaylist@@ABV1@@Z",
+    "flags": "f i",
+    "obj": "net_ham:PlaylistJobs.obj"
+   },
+   {
+    "sym": "??$_Param_Construct@VCustomPlaylist@@V1@@stlpmtx_std@@YAXPAVCustomPlaylist@@ABV1@@Z",
+    "flags": "f i",
+    "obj": "net_ham:PlaylistJobs.obj"
+   }
+  ],
+  "target_size": 60,
+  "candidates": [
+   {
+    "sym": "??$_Copy_Construct@VCustomPlaylist@@@stlpmtx_std@@YAXPAVCustomPlaylist@@ABV1@@Z",
+    "obj": "net_ham:PlaylistJobs.obj",
+    "unit_owned": true
+   },
+   {
+    "sym": "??$_Param_Construct@VCustomPlaylist@@V1@@stlpmtx_std@@YAXPAVCustomPlaylist@@ABV1@@Z",
+    "obj": "net_ham:PlaylistJobs.obj",
+    "unit_owned": true
+   }
+  ],
+  "name": "??$_Copy_Construct@VCustomPlaylist@@@stlpmtx_std@@YAXPAVCustomPlaylist@@ABV1@@Z",
+  "map_obj": "net_ham:PlaylistJobs.obj",
+  "unit_owned": true,
+  "nreloc": 1,
+  "fold_twins_in_unit": [
+   "??$_Param_Construct@VCustomPlaylist@@V1@@stlpmtx_std@@YAXPAVCustomPlaylist@@ABV1@@Z"
+  ],
+  "verdict": "PROVEN_BODY",
+  "why": "body test: 60 B identical, 1 relocations agreeing by target name",
+  "tried": [
+   {
+    "sym": "??$_Copy_Construct@VCustomPlaylist@@@stlpmtx_std@@YAXPAVCustomPlaylist@@ABV1@@Z",
+    "map_obj": "net_ham:PlaylistJobs.obj",
+    "result": "ok",
+    "nreloc": 1
+   }
+  ]
+ },
+ {
+  "address": "0x8299A938",
+  "split_name": "merged_8299A938",
+  "size": 60,
+  "unit": "default/lazer/net_ham/HamStoreCartJobs",
+  "recoverable_name": "??$_Param_Construct@VCartRow@@V1@@stlpmtx_std@@YAXPAVCartRow@@ABV1@@Z",
+  "live_row_id": 29085,
+  "map_members": [
+   {
+    "sym": "??$_Param_Construct@VCartRow@@V1@@stlpmtx_std@@YAXPAVCartRow@@ABV1@@Z",
+    "flags": "f i",
+    "obj": "net_ham:HamStoreCartJobs.obj"
+   },
+   {
+    "sym": "??$_Copy_Construct@VCartRow@@@stlpmtx_std@@YAXPAVCartRow@@ABV1@@Z",
+    "flags": "f i",
+    "obj": "net_ham:HamStoreCartJobs.obj"
+   }
+  ],
+  "target_size": 60,
+  "candidates": [
+   {
+    "sym": "??$_Copy_Construct@VCartRow@@@stlpmtx_std@@YAXPAVCartRow@@ABV1@@Z",
+    "obj": "net_ham:HamStoreCartJobs.obj",
+    "unit_owned": true
+   },
+   {
+    "sym": "??$_Param_Construct@VCartRow@@V1@@stlpmtx_std@@YAXPAVCartRow@@ABV1@@Z",
+    "obj": "net_ham:HamStoreCartJobs.obj",
+    "unit_owned": true
+   }
+  ],
+  "name": "??$_Copy_Construct@VCartRow@@@stlpmtx_std@@YAXPAVCartRow@@ABV1@@Z",
+  "map_obj": "net_ham:HamStoreCartJobs.obj",
+  "unit_owned": true,
+  "nreloc": 1,
+  "fold_twins_in_unit": [
+   "??$_Param_Construct@VCartRow@@V1@@stlpmtx_std@@YAXPAVCartRow@@ABV1@@Z"
+  ],
+  "verdict": "PROVEN_BODY",
+  "why": "body test: 60 B identical, 1 relocations agreeing by target name",
+  "tried": [
+   {
+    "sym": "??$_Copy_Construct@VCartRow@@@stlpmtx_std@@YAXPAVCartRow@@ABV1@@Z",
+    "map_obj": "net_ham:HamStoreCartJobs.obj",
+    "result": "ok",
+    "nreloc": 1
+   }
+  ]
+ },
+ {
+  "address": "0x82E1C530",
+  "split_name": "merged_82E1C530",
+  "size": 92,
+  "unit": "default/system/meta/HeldButtonPanel",
+  "recoverable_name": "??$_Param_Construct@VActionRec@@V1@@stlpmtx_std@@YAXPAVActionRec@@ABV1@@Z",
+  "live_row_id": 43840,
+  "map_members": [
+   {
+    "sym": "??$_Param_Construct@VActionRec@@V1@@stlpmtx_std@@YAXPAVActionRec@@ABV1@@Z",
+    "flags": "f i",
+    "obj": "meta:HeldButtonPanel.obj"
+   },
+   {
+    "sym": "??$_Copy_Construct@VActionRec@@@stlpmtx_std@@YAXPAVActionRec@@ABV1@@Z",
+    "flags": "f i",
+    "obj": "meta:HeldButtonPanel.obj"
+   }
+  ],
+  "target_size": 92,
+  "candidates": [
+   {
+    "sym": "??$_Copy_Construct@VActionRec@@@stlpmtx_std@@YAXPAVActionRec@@ABV1@@Z",
+    "obj": "meta:HeldButtonPanel.obj",
+    "unit_owned": true
+   },
+   {
+    "sym": "??$_Param_Construct@VActionRec@@V1@@stlpmtx_std@@YAXPAVActionRec@@ABV1@@Z",
+    "obj": "meta:HeldButtonPanel.obj",
+    "unit_owned": true
+   }
+  ],
+  "name": "??$_Copy_Construct@VActionRec@@@stlpmtx_std@@YAXPAVActionRec@@ABV1@@Z",
+  "map_obj": "meta:HeldButtonPanel.obj",
+  "unit_owned": true,
+  "nreloc": 1,
+  "fold_twins_in_unit": [
+   "??$_Param_Construct@VActionRec@@V1@@stlpmtx_std@@YAXPAVActionRec@@ABV1@@Z"
+  ],
+  "verdict": "PROVEN_BODY",
+  "why": "body test: 92 B identical, 1 relocations agreeing by target name",
+  "tried": [
+   {
+    "sym": "??$_Copy_Construct@VActionRec@@@stlpmtx_std@@YAXPAVActionRec@@ABV1@@Z",
+    "map_obj": "meta:HeldButtonPanel.obj",
+    "result": "ok",
+    "nreloc": 1
+   }
+  ]
+ },
+ {
+  "address": "0x82E2AB00",
+  "split_name": "merged_Returns1",
+  "size": 8,
+  "unit": "default/system/os/User",
+  "recoverable_name": "?IsLoadConst@IRLoadConst@XGRAPHICS@@UBA?B_NXZ",
+  "live_row_id": 51506,
+  "map_members": [
+   {
+    "sym": "?IsLoadConst@IRLoadConst@XGRAPHICS@@UBA?B_NXZ",
+    "flags": "f",
+    "obj": "xgraphics:irinst.obj"
+   },
+   {
+    "sym": "?CheckError@RndShaderFur@@UAA_NW4MatFlagErrorType@RndShader@@@Z",
+    "flags": "f",
+    "obj": "rndobj:Shader.obj"
+   },
+   {
+    "sym": "?HasSpecificSongsToLaunch@AccomplishmentDiscSongConditional@@UBA_NXZ",
+    "flags": "f",
+    "obj": "meta_ham:AccomplishmentDiscSongConditional.obj"
+   },
+   {
+    "sym": "?OperationInputs@IRUnary@XGRAPHICS@@UBA?BHXZ",
+    "flags": "f",
+    "obj": "xgraphics:irinst.obj"
+   },
+   {
+    "sym": "?fIsCJKLocale@CEngineLocaleHandlerJPN@NUISPEECH@@MAA_NXZ",
+    "flags": "f",
+    "obj": "nuispeech:srdrv1.obj"
+   },
+   {
+    "sym": "?IsDirPtr@?$ObjDirPtr@VRndDir@@@@UAA_NXZ",
+    "flags": "f",
+    "obj": "hamobj:HamDirector.obj"
+   },
+   {
+    "sym": "?OperationInputs@IRLoopIndex@XGRAPHICS@@UBA?BHXZ",
+    "flags": "f",
+    "obj": "xgraphics:irinst.obj"
+   },
+   {
+    "sym": "?MustFinishBeforeNext@AuthenticateReqJob@@MAA_NXZ",
+    "flags": "f",
+    "obj": "net:DingoAuthJob.obj"
+   },
+   {
+    "sym": "?IsTimelineResetAllowed@UIManager@@UBA_NXZ",
+    "flags": "f",
+    "obj": "ui:UI.obj"
+   },
+   {
+    "sym": "?ValidateCRC@CRC@Hmx@@SA_NHPBD@Z",
+    "flags": "f",
+    "obj": "utl:Crc.obj"
+   },
+   {
+    "sym": "?IsVertexFetch@IRVertexFetch@XGRAPHICS@@UBA?B_NXZ",
+    "flags": "f",
+    "obj": "xgraphics:irinst.obj"
+   },
+   {
+    "sym": "InitSRXModule",
+    "flags": "f",
+    "obj": "nuispeech:msasrx.obj"
+   },
+   {
+    "sym": "?GetCPInfo@NUISPEECH@@YAHIPAU_cpinfo@@@Z",
+    "flags": "f",
+    "obj": "nuispeech:xboxutil.obj"
+   },
+   {
+    "sym": "?IsExit@IRExit@XGRAPHICS@@UBA?B_NXZ",
+    "flags": "f",
+    "obj": "xgraphics:irinst.obj"
+   },
+   {
+    "sym": "InitSRModule",
+    "flags": "f",
+    "obj": "nuispeech:srdrv1.obj"
+   },
+   {
+    "sym": "?_WriteDone@AsyncFileHolmes@@MAA_NXZ",
+    "flags": "f",
+    "obj": "os:AsyncFileHolmes.obj"
+   },
+   {
+    "sym": "?IsTemp@TempValue@XGRAPHICS@@UBA_NXZ",
+    "flags": "f",
+    "obj": "xgraphics:vreginfo.obj"
+   },
+   {
+    "sym": "?IsAlu@IRAlu@XGRAPHICS@@UBA?B_NXZ",
+    "flags": "f",
+    "obj": "xgraphics:opt.obj"
+   },
+   {
+    "sym": "?SupportsScrolling@FontMap@RndText@@UBA_NXZ",
+    "flags": "f",
+    "obj": "rndobj:Text.obj"
+   },
+   {
+    "sym": "?IsMounted@ContentMgr@@UAA_NVSymbol@@@Z",
+    "flags": "f",
+    "obj": "os:ContentMgr_Xbox.obj"
+   },
+   {
+    "sym": "?ShouldDrawPanel@Rnd@@UAA_NPBVUIPanel@@@Z",
+    "flags": "f",
+    "obj": "rnddx9:Rnd_Xbox.obj"
+   },
+   {
+    "sym": "?Release@CInterpreterSite@NUISPEECH@@UAAKXZ",
+    "flags": "f",
+    "obj": "nuispeech:cfgtransparser.obj"
+   },
+   {
+    "sym": "?_OpenDone@AsyncFileWin@@MAA_NXZ",
+    "flags": "f",
+    "obj": "os:AsyncFile_Win.obj"
+   },
+   {
+    "sym": "?SendDoneImpl@StreamReceiverFile@@MAA_NXZ",
+    "flags": "f",
+    "obj": "synth:StreamReceiverFile.obj"
+   },
+   {
+    "sym": "?IsDeviceValid@Memcard@@UAA_NABUContainerId@@@Z",
+    "flags": "f",
+    "obj": "os:Memcard.obj"
+   },
+   {
+    "sym": "?HashKey2@?$CSPHash@PAVCGramNode@NUISPEECH@@PAV12@@NUISPEECH@@MBAIPAVCGramNode@2@@Z",
+    "flags": "f",
+    "obj": "nuispeech:backend.obj"
+   },
+   {
+    "sym": "?length@charNode@@UBAHXZ",
+    "flags": "f",
+    "obj": "LIBCMT:undname.obj"
+   },
+   {
+    "sym": "?IsProjection@IRProjection@XGRAPHICS@@UBA?B_NXZ",
+    "flags": "f",
+    "obj": "xgraphics:irinst.obj"
+   },
+   {
+    "sym": "?HasValidLicenseBits@Content@@UAA_NXZ",
+    "flags": "f",
+    "obj": "os:ContentMgr_Xbox.obj"
+   },
+   {
+    "sym": "?IsActive@NavListItemNode@@UBA_NXZ",
+    "flags": "f",
+    "obj": "meta_ham:NavListNode.obj"
+   },
+   {
+    "sym": "?IsRelevantForSong@AccomplishmentCountConditional@@UBA_NVSymbol@@@Z",
+    "flags": "f",
+    "obj": "meta_ham:AccomplishmentCountConditional.obj"
+   },
+   {
+    "sym": "?IsExit@ExitBlock@XGRAPHICS@@UBA_NXZ",
+    "flags": "f",
+    "obj": "xgraphics:block.obj"
+   },
+   {
+    "sym": "?IsInterpolator@Interpolator@XGRAPHICS@@UBA_NXZ",
+    "flags": "f",
+    "obj": "xgraphics:vreginfo.obj"
+   },
+   {
+    "sym": "?HashKey2@?$CSPHash@PBU_GUID@@PB_W@NUISPEECH@@MBAIPBU_GUID@@@Z",
+    "flags": "f",
+    "obj": "nuispeech:femanager.obj"
+   },
+   {
+    "sym": "?OperationOutputs@IRExport@XGRAPHICS@@UBA?BHXZ",
+    "flags": "f",
+    "obj": "xgraphics:irinst.obj"
+   },
+   {
+    "sym": "?BitmapFont@RndFont@@UBA_NXZ",
+    "flags": "f",
+    "obj": "rndobj:Font.obj"
+   },
+   {
+    "sym": "?DoHueConverge@RndPostProc@@QBA_NXZ",
+    "flags": "f",
+    "obj": "rndobj:PostProc.obj"
+   },
+   {
+    "sym": "?CanSelect@UIListProvider@@UBA_NH@Z",
+    "flags": "f",
+    "obj": "hamobj:HamNavList.obj"
+   },
+   {
+    "sym": "?HeadDetector_IsImplemented@@YAHXZ",
+    "flags": "f",
+    "obj": "ST:headdetect.obj"
+   },
+   {
+    "sym": "?FileReadOnly@@YA_NPBD@Z",
+    "flags": "f",
+    "obj": "os:File.obj"
+   },
+   {
+    "sym": "?CheckReqResult@WebSvcRequest@@MAA_NXZ",
+    "flags": "f",
+    "obj": "net:WebSvcReq.obj"
+   },
+   {
+    "sym": "?HashKey2@?$CHash@PBUToken@NUISPEECH@@PAU12@@NUISPEECH@@MBAIPBUToken@2@@Z",
+    "flags": "f",
+    "obj": "nuispeech:ctransducer.obj"
+   },
+   {
+    "sym": "?HashKey2@?$CSPHash@PB_WPAVCWordPron@CPronBlobLookUp@NUISPEECH@@@NUISPEECH@@MBAIPB_W@Z",
+    "flags": "f",
+    "obj": "nuispeech:cfglexicon.obj"
+   },
+   {
+    "sym": "?FillDone@StandardStream@@UBA_NXZ",
+    "flags": "f",
+    "obj": "synth:StandardStream.obj"
+   },
+   {
+    "sym": "?CanPushParameters@FxSend@@UAA_NXZ",
+    "flags": "f",
+    "obj": "synth:FxSendReverb.obj"
+   },
+   {
+    "sym": "?IsSafeToDelete@HttpReq@@UBA_NXZ",
+    "flags": "f",
+    "obj": "net:HttpReq.obj"
+   },
+   {
+    "sym": "?NeedsEnum@XboxMultipleItemsPurchaser@@UBA_NXZ",
+    "flags": "f",
+    "obj": "meta:StorePurchaser.obj"
+   },
+   {
+    "sym": "?OperationOutputs@IRAlloc@XGRAPHICS@@UBA?BHXZ",
+    "flags": "f",
+    "obj": "xgraphics:irinst.obj"
+   },
+   {
+    "sym": "?IsConnected@CameraInput@@UBA_NXZ",
+    "flags": "f",
+    "obj": "gesture:StubCameraInput.obj"
+   },
+   {
+    "sym": "?Constrain@CProgram@D3DXShader@@MAAJXZ",
+    "flags": "f",
+    "obj": "d3dx9:cprogram.obj"
+   },
+   {
+    "sym": "?DidCallSucceed@DingoJob@@MAA_NXZ",
+    "flags": "f",
+    "obj": "net:DingoAuthJob.obj"
+   },
+   {
+    "sym": "?CheckReturned@DingoJob@@MAA_NXZ",
+    "flags": "f",
+    "obj": "net:DingoAuthJob.obj"
+   },
+   {
+    "sym": "?GetType@CmdGetFitnessGoalFromRC@@UAAHXZ",
+    "flags": "f",
+    "obj": "meta_ham:FitnessGoalMgr.obj"
+   },
+   {
+    "sym": "?HashKey2@?$CSPHash@PBU_GUID@@PAVCFEClassInfo@NUISPEECH@@@NUISPEECH@@MBAIPBU_GUID@@@Z",
+    "flags": "f",
+    "obj": "nuispeech:femanager.obj"
+   },
+   {
+    "sym": "?IsLoopFooter@LoopFooter@XGRAPHICS@@UBA_NXZ",
+    "flags": "f",
+    "obj": "xgraphics:block.obj"
+   },
+   {
+    "sym": "?VoiceType@CX2SourceVoiceXMA@XAUDIO2@@UBA?AW4EVoiceType@CX2Voice@2@XZ",
+    "flags": "f",
+    "obj": "xaudio2:x2voicexma.obj"
+   },
+   {
+    "sym": "?IsFixed@FixedValue@XGRAPHICS@@UBA_NXZ",
+    "flags": "f",
+    "obj": "xgraphics:vreginfo.obj"
+   },
+   {
+    "sym": "?IsRelevantForSong@AccomplishmentCharacterListConditional@@UBA_NVSymbol@@@Z",
+    "flags": "f",
+    "obj": "meta_ham:AccomplishmentCharacterListConditional.obj"
+   },
+   {
+    "sym": "?IsEntry@EntryBlock@XGRAPHICS@@UBA_NXZ",
+    "flags": "f",
+    "obj": "xgraphics:block.obj"
+   },
+   {
+    "sym": "?CanHaveFocus@UIComponent@@UAA_NXZ",
+    "flags": "f",
+    "obj": "hamobj:StarsDisplay.obj"
+   },
+   {
+    "sym": "?IsEntry@IREntry@XGRAPHICS@@UBA?B_NXZ",
+    "flags": "f",
+    "obj": "xgraphics:irinst.obj"
+   },
+   {
+    "sym": "?HasRoomForVector@R400ConstantModel@XGRAPHICS@@UAA_NXZ",
+    "flags": "f",
+    "obj": "xgraphics:sched.obj"
+   },
+   {
+    "sym": "?HashKey2@?$CHash@PAUCPhoneMatch@NUISPEECH@@PAU12@@NUISPEECH@@MBAIPAUCPhoneMatch@2@@Z",
+    "flags": "f",
+    "obj": "nuispeech:phonedec.obj"
+   },
+   {
+    "sym": "?IsActive@UIListProvider@@UBA_NH@Z",
+    "flags": "f",
+    "obj": "hamobj:HamNavList.obj"
+   },
+   {
+    "sym": "?CheckReqResult@AuthenticateReqJob@@MAA_NXZ",
+    "flags": "f",
+    "obj": "net:DingoAuthJob.obj"
+   },
+   {
+    "sym": "?MountContent@ContentMgr@@UAA_NVSymbol@@@Z",
+    "flags": "f",
+    "obj": "os:ContentMgr_Xbox.obj"
+   },
+   {
+    "sym": "?ShouldUseLocalNavlist@HamPanel@@UBA_NXZ",
+    "flags": "f",
+    "obj": "game:BustAMovePanel.obj"
+   },
+   {
+    "sym": "?MyClientCheckTSRetired@XGRAPHICS@@YIIPAXPA_KI@Z",
+    "flags": "f",
+    "obj": "xgraphics:r500assembler.obj"
+   },
+   {
+    "sym": "?IsBreak@BreakBlock@XGRAPHICS@@UBA_NXZ",
+    "flags": "f",
+    "obj": "xgraphics:block.obj"
+   },
+   {
+    "sym": "?CheckError@RndShaderStandard@@UAA_NW4MatFlagErrorType@RndShader@@@Z",
+    "flags": "f",
+    "obj": "rndobj:Shader.obj"
+   },
+   {
+    "sym": "?IsStandard@FxSend360@@UBA_NXZ",
+    "flags": "f",
+    "obj": "synth_xbox:FxSendBitCrush.obj"
+   },
+   {
+    "sym": "?HasValidLoginCandidate@DingoServer@@UBA_NXZ",
+    "flags": "f",
+    "obj": "net:DingoSvr_Xbox.obj"
+   },
+   {
+    "sym": "?IsDirPtr@?$ObjDirPtr@VWorldInstance@@@@UAA_NXZ",
+    "flags": "f",
+    "obj": "world:Instance.obj"
+   },
+   {
+    "sym": "?HasRoomForScalar@R400ConstantModel@XGRAPHICS@@UAA_NXZ",
+    "flags": "f",
+    "obj": "xgraphics:sched.obj"
+   },
+   {
+    "sym": "?IsMov@IRMov@XGRAPHICS@@UBA?B_NXZ",
+    "flags": "f",
+    "obj": "xgraphics:irinst.obj"
+   },
+   {
+    "sym": "?ST_SeatedTrackingSupported@@YAHXZ",
+    "flags": "f",
+    "obj": "ST:st.obj"
+   },
+   {
+    "sym": "XGCompareVertexShaders",
+    "flags": "f",
+    "obj": "xgraphics:valpub.obj"
+   },
+   {
+    "sym": "?GetNumTempoChangePoints@SimpleTempoMap@@UBAHXZ",
+    "flags": "f",
+    "obj": "utl:TempoMap.obj"
+   },
+   {
+    "sym": "?DeleteContent@ContentMgr@@UAA_NVSymbol@@@Z",
+    "flags": "f",
+    "obj": "os:ContentMgr_Xbox.obj"
+   },
+   {
+    "sym": "?MyClientUpdateCmdBuffSpace@XGRAPHICS@@YIIPAXIPA_K@Z",
+    "flags": "f",
+    "obj": "xgraphics:r500assembler.obj"
+   },
+   {
+    "sym": "?SendDoneImpl@StreamReceiver360@@MAA_NXZ",
+    "flags": "f",
+    "obj": "synth_xbox:StreamReceiver.obj"
+   },
+   {
+    "sym": "?CanDoMllr@CMllr@NUISPEECH@@SA_NXZ",
+    "flags": "f",
+    "obj": "nuispeech:mllr_stub.obj"
+   },
+   {
+    "sym": "?IsDirPtr@?$ObjDirPtr@VHamScrollSpeedIndicator@@@@UAA_NXZ",
+    "flags": "f",
+    "obj": "hamobj:HamNavList.obj"
+   },
+   {
+    "sym": "?Translate@CProgram@D3DXShader@@MAAJXZ",
+    "flags": "f",
+    "obj": "d3dx9:cprogram.obj"
+   },
+   {
+    "sym": "?IsRelevantForSong@AccomplishmentCampaignConditional@@UBA_NVSymbol@@@Z",
+    "flags": "f",
+    "obj": "meta_ham:AccomplishmentCampaignConditional.obj"
+   },
+   {
+    "sym": "?ContentDiscovered@Callback@ContentMgr@@UAA_NVSymbol@@@Z",
+    "flags": "f",
+    "obj": "meta:SongMgr.obj"
+   },
+   {
+    "sym": "?GetItemCount@NavListItemNode@@UAAHXZ",
+    "flags": "f",
+    "obj": "meta_ham:ChallengeSortByScore.obj"
+   },
+   {
+    "sym": "?CanDoAlign@CMllr@NUISPEECH@@SA_NXZ",
+    "flags": "f",
+    "obj": "nuispeech:mllr_align.obj"
+   },
+   {
+    "sym": "?HashKey2@?$CSPHash@KPAVCRule@NUISPEECH@@@NUISPEECH@@MBAIK@Z",
+    "flags": "f",
+    "obj": "nuispeech:sapi.obj"
+   },
+   {
+    "sym": "?IsReady@StreamNull@@UBA_NXZ",
+    "flags": "f",
+    "obj": "synth:StreamNull.obj"
+   },
+   {
+    "sym": "?ContentTitleDiscovered@Callback@ContentMgr@@UAA_NIVSymbol@@@Z",
+    "flags": "f",
+    "obj": "meta:SongMgr.obj"
+   },
+   {
+    "sym": "?IsSafeToDelete@NetLoaderXbox@@UBA_NXZ",
+    "flags": "f",
+    "obj": "utl:NetLoader_Xbox.obj"
+   },
+   {
+    "sym": "?ValidateInterest@Character@@UAA_NPAVCharInterest@@PAVObjectDir@@@Z",
+    "flags": "f",
+    "obj": "char:Character.obj"
+   },
+   {
+    "sym": "?HashKey2@?$CHash@PAUCSimplePhoneMatch@NUISPEECH@@PAU12@@NUISPEECH@@MBAIPAUCSimplePhoneMatch@2@@Z",
+    "flags": "f",
+    "obj": "nuispeech:confumat.obj"
+   },
+   {
+    "sym": "?Eof@NullFile@@UAA_NXZ",
+    "flags": "f",
+    "obj": "os:File.obj"
+   },
+   {
+    "sym": "?SendReady@CXLrcCloudTransport@@UAAHXZ",
+    "flags": "f",
+    "obj": "os:xlrccloudtransport.obj"
+   },
+   {
+    "sym": "?HashKey2@?$CSPHash@PB_WPBU_GUID@@@NUISPEECH@@MBAIPB_W@Z",
+    "flags": "f",
+    "obj": "nuispeech:femanager.obj"
+   },
+   {
+    "sym": "?IsSLMTopic@CSRTopicSLM@NUISPEECH@@UAA_NXZ",
+    "flags": "f",
+    "obj": "nuispeech:topic.obj"
+   },
+   {
+    "sym": "?GetType@NavListShortcutNode@@UBA?AW4NavListNodeType@@XZ",
+    "flags": "f",
+    "obj": "meta_ham:NavListNode.obj"
+   },
+   {
+    "sym": "?IsDoneLoading@NetCacheMgr@@MBA_NXZ",
+    "flags": "f",
+    "obj": "utl:NetCacheMgr.obj"
+   },
+   {
+    "sym": "?IsFetch@IRFetch@XGRAPHICS@@UBA?B_NXZ",
+    "flags": "f",
+    "obj": "xgraphics:irinst.obj"
+   },
+   {
+    "sym": "?IsWebSvcRequest@WebSvcRequest@@UBA_NXZ",
+    "flags": "f",
+    "obj": "net:WebSvcReq.obj"
+   },
+   {
+    "sym": "?IsSafeToDelete@NetLoaderStub@@UBA_NXZ",
+    "flags": "f",
+    "obj": "utl:NetLoader.obj"
+   },
+   {
+    "sym": "?GetType@AccomplishmentSongListConditional@@UBA?AW4AccomplishmentType@@XZ",
+    "flags": "f",
+    "obj": "meta_ham:AccomplishmentSongListConditional.obj"
+   },
+   {
+    "sym": "?Release@CSpBasicErrorLog@NUISPEECH@@UAAKXZ",
+    "flags": "f",
+    "obj": "nuispeech:srgrammar.obj"
+   },
+   {
+    "sym": "?LocalizeToken@NavListNode@@UBA_NXZ",
+    "flags": "f",
+    "obj": "meta_ham:NavListNode.obj"
+   },
+   {
+    "sym": "?IsLoadTemp@IRLoadTemp@XGRAPHICS@@UBA?B_NXZ",
+    "flags": "f",
+    "obj": "xgraphics:irinst.obj"
+   },
+   {
+    "sym": "?IsAlloc@IRAlloc@XGRAPHICS@@UBA?B_NXZ",
+    "flags": "f",
+    "obj": "xgraphics:irinst.obj"
+   },
+   {
+    "sym": "?OperationInputs@IRFetch@XGRAPHICS@@UBA?BHXZ",
+    "flags": "f",
+    "obj": "xgraphics:irinst.obj"
+   },
+   {
+    "sym": "?AllowContentToBeAdded@SongMgr@@MAA_NPAVDataArray@@W4ContentLocT@@@Z",
+    "flags": "f",
+    "obj": "meta:SongMgr.obj"
+   },
+   {
+    "sym": "?IsPseudo@IRPseudo@XGRAPHICS@@UBA?B_NXZ",
+    "flags": "f",
+    "obj": "xgraphics:irinst.obj"
+   },
+   {
+    "sym": "?IsRunning@MicNull@@UBA_NXZ",
+    "flags": "f",
+    "obj": "synth:MicNull.obj"
+   },
+   {
+    "sym": "?SkipFirstFrame@BaseDisplacementNode@@UBA_NXZ",
+    "flags": "f",
+    "obj": "hamobj:ErrorNode.obj"
+   },
+   {
+    "sym": "?NeedsEnum@XboxPurchaser@@UBA_NXZ",
+    "flags": "f",
+    "obj": "meta:StorePurchaser.obj"
+   },
+   {
+    "sym": "XGComparePixelShaders",
+    "flags": "f",
+    "obj": "xgraphics:valpub.obj"
+   },
+   {
+    "sym": "?OperationInputs@IRProjection@XGRAPHICS@@UBA?BHXZ",
+    "flags": "f",
+    "obj": "xgraphics:irinst.obj"
+   },
+   {
+    "sym": "?IsIfHeader@IfHeader@XGRAPHICS@@UBA_NXZ",
+    "flags": "f",
+    "obj": "xgraphics:block.obj"
+   },
+   {
+    "sym": "?IsDirPtr@?$ObjDirPtr@VUIListDir@@@@UAA_NXZ",
+    "flags": "f",
+    "obj": "hamobj:HamNavList.obj"
+   },
+   {
+    "sym": "?FillDone@StreamNull@@UBA_NXZ",
+    "flags": "f",
+    "obj": "synth:StreamNull.obj"
+   },
+   {
+    "sym": "?OperationOutputs@IRProjection@XGRAPHICS@@UBA?BHXZ",
+    "flags": "f",
+    "obj": "xgraphics:irinst.obj"
+   },
+   {
+    "sym": "?IsDoneUnloading@NetCacheMgr@@MBA_NXZ",
+    "flags": "f",
+    "obj": "utl:NetCacheMgr.obj"
+   },
+   {
+    "sym": "?IsTemp@AutoIndexVtx@XGRAPHICS@@UBA_NXZ",
+    "flags": "f",
+    "obj": "xgraphics:vreginfo.obj"
+   },
+   {
+    "sym": "?Reschedule@CFXLProgram@D3DXShader@@MAAJXZ",
+    "flags": "f",
+    "obj": "d3dx9:cfxlprogram.obj"
+   },
+   {
+    "sym": "?HashKey2@?$CSPHash@PAUSPPHRASERULEHANDLE__@NUISPEECH@@PAVCPhraseRule@2@@NUISPEECH@@MBAIPAUSPPHRASERULEHANDLE__@2@@Z",
+    "flags": "f",
+    "obj": "nuispeech:spphrase.obj"
+   },
+   {
+    "sym": "?IsMovBase@IRMovBase@XGRAPHICS@@UBA?B_NXZ",
+    "flags": "f",
+    "obj": "xgraphics:irinst.obj"
+   },
+   {
+    "sym": "?IsResource@Resource@XGRAPHICS@@UBA_NXZ",
+    "flags": "f",
+    "obj": "xgraphics:vreginfo.obj"
+   },
+   {
+    "sym": "?IsContinue@ContinueBlock@XGRAPHICS@@UBA_NXZ",
+    "flags": "f",
+    "obj": "xgraphics:block.obj"
+   },
+   {
+    "sym": "?IsTextureFetch@IRTextureFetch@XGRAPHICS@@UBA?B_NXZ",
+    "flags": "f",
+    "obj": "xgraphics:irinst.obj"
+   },
+   {
+    "sym": "?OperationOutputs@IRLoopIndex@XGRAPHICS@@UBA?BHXZ",
+    "flags": "f",
+    "obj": "xgraphics:irinst.obj"
+   },
+   {
+    "sym": "?IsDirPtr@?$ObjDirPtr@VUILabelDir@@@@UAA_NXZ",
+    "flags": "f",
+    "obj": "hamobj:MoveDir.obj"
+   },
+   {
+    "sym": "?PollEnabled@RndPollable@@UBA_NXZ",
+    "flags": "f",
+    "obj": "char:Character.obj"
+   },
+   {
+    "sym": "?NumDrawPasses@Rnd@@UBAHXZ",
+    "flags": "f",
+    "obj": "rnddx9:Rnd_Xbox.obj"
+   },
+   {
+    "sym": "?Reschedule@CProgram@D3DXShader@@MAAJXZ",
+    "flags": "f",
+    "obj": "d3dx9:cprogram.obj"
+   },
+   {
+    "sym": "?IsLocal@LocalUser@@UBA_NXZ",
+    "flags": "f",
+    "obj": "os:User.obj"
+   },
+   {
+    "sym": "?IsDirPtr@?$ObjDirPtr@VObjectDir@@@@UAA_NXZ",
+    "flags": "f",
+    "obj": "App.obj"
+   },
+   {
+    "sym": "?IsOverride@CameraInput@@UBA_NXZ",
+    "flags": "f",
+    "obj": "gesture:StubCameraInput.obj"
+   },
+   {
+    "sym": "?IsIfFooter@IfFooter@XGRAPHICS@@UBA_NXZ",
+    "flags": "f",
+    "obj": "xgraphics:block.obj"
+   },
+   {
+    "sym": "?IsValidLoginCandidate@DingoServer@@UBA_NH@Z",
+    "flags": "f",
+    "obj": "net:DingoSvr_Xbox.obj"
+   },
+   {
+    "sym": "?IsDirPtr@?$ObjDirPtr@VHamListRibbon@@@@UAA_NXZ",
+    "flags": "f",
+    "obj": "hamobj:HamNavList.obj"
+   },
+   {
+    "sym": "?HasSpecificSongsToLaunch@AccomplishmentSongListConditional@@UBA_NXZ",
+    "flags": "f",
+    "obj": "meta_ham:AccomplishmentSongListConditional.obj"
+   },
+   {
+    "sym": "?GetType@CmdGetPlaylistsFromRC@@UAAHXZ",
+    "flags": "f",
+    "obj": "meta_ham:PlaylistSortMgr.obj"
+   },
+   {
+    "sym": "?_OpenDone@AsyncFileHolmes@@MAA_NXZ",
+    "flags": "f",
+    "obj": "os:AsyncFileHolmes.obj"
+   },
+   {
+    "sym": "?CompileWithMSAAFilterFunctionPoint@XGRAPHICS@@YA?AW4_SSM_COMPILEWITH_RESULT@1@PAUCompAState@1@HPAU_CS_COMPILED_SHADER@1@P6AXPAXPBDZZ2@Z",
+    "flags": "f",
+    "obj": "xgraphics:compilertossm.obj"
+   },
+   {
+    "sym": "?IsLoopIndexedSet@LoopIndexedSet@XGRAPHICS@@UBA_NXZ",
+    "flags": "f",
+    "obj": "xgraphics:vreginfo.obj"
+   },
+   {
+    "sym": "?SetPropertyString@CSREngine@NUISPEECH@@UAAJW4SPPROPSRC@@PAXPB_W2@Z",
+    "flags": "f",
+    "obj": "nuispeech:engine.obj"
+   },
+   {
+    "sym": "?HashKey2@?$CHash@PBDPAD@NUISPEECH@@MBAIPBD@Z",
+    "flags": "f",
+    "obj": "nuispeech:lochand.obj"
+   },
+   {
+    "sym": "?IsDeleteDone@ContentMgr@@UAA_NVSymbol@@@Z",
+    "flags": "f",
+    "obj": "os:ContentMgr_Xbox.obj"
+   },
+   {
+    "sym": "?IsCustom@CustomPlaylist@@UBA_NXZ",
+    "flags": "f",
+    "obj": "meta_ham:Playlist.obj"
+   },
+   {
+    "sym": "?CanHaveFocus@UIButton@@UAA_NXZ",
+    "flags": "f",
+    "obj": "ui:UIButton.obj"
+   },
+   {
+    "sym": "?HeadersSelectable@NavListSortMgr@@UAA_NXZ",
+    "flags": "f",
+    "obj": "meta_ham:NavListSortMgr.obj"
+   },
+   {
+    "sym": "?GetHeader@CFEStreamEncoder@NUISPEECH@@UAAJPAPBXPAI@Z",
+    "flags": "f",
+    "obj": "nuispeech:streamcoder.obj"
+   },
+   {
+    "sym": "?IsLoopHeader@LoopHeader@XGRAPHICS@@UBA_NXZ",
+    "flags": "f",
+    "obj": "xgraphics:block.obj"
+   },
+   {
+    "sym": "?HashKey2@?$CHash@UTRIPH@NUISPEECH@@G@NUISPEECH@@MBAIUTRIPH@2@@Z",
+    "flags": "f",
+    "obj": "nuispeech:main.obj"
+   },
+   {
+    "sym": "?IdToPhone_GetLexType@CVendorPhoneConverterSAPI2SR@NUISPEECH@@MAA?AW4SPLEXICONTYPE@@XZ",
+    "flags": "f",
+    "obj": "nuispeech:srdrv1.obj"
+   },
+   {
+    "sym": "?OperationInputs@IRMovBase@XGRAPHICS@@UBA?BHXZ",
+    "flags": "f",
+    "obj": "xgraphics:irinst.obj"
+   },
+   {
+    "sym": "?CanBeLaunched@AccomplishmentConditional@@UBA_NXZ",
+    "flags": "f",
+    "obj": "meta_ham:AccomplishmentConditional.obj"
+   },
+   {
+    "sym": "?IsStatic@IfHeaderStatic@XGRAPHICS@@UBA_NXZ",
+    "flags": "f",
+    "obj": "xgraphics:block.obj"
+   },
+   {
+    "sym": "InitSAPIModule",
+    "flags": "f",
+    "obj": "nuispeech:sapi.obj"
+   },
+   {
+    "sym": "?OperationOutputs@IRMovBase@XGRAPHICS@@UBA?BHXZ",
+    "flags": "f",
+    "obj": "xgraphics:irinst.obj"
+   },
+   {
+    "sym": "?CheckError@RndShaderSyncTrack@@UAA_NW4MatFlagErrorType@RndShader@@@Z",
+    "flags": "f",
+    "obj": "rndobj:Shader.obj"
+   },
+   {
+    "sym": "?ShouldRemoveReq@AuthenticateReqJob@@MAA_NXZ",
+    "flags": "f",
+    "obj": "net:DingoAuthJob.obj"
+   },
+   {
+    "sym": "?GetType@CVoiceSkin@LEAPCORE@@UBA?AW4LeapFilterType@@XZ",
+    "flags": "f",
+    "obj": "xaudio2:voiceskin.obj"
+   },
+   {
+    "sym": "?IsDifficultyUnlockedForProfile@HamProfile@@QAA_NVSymbol@@0@Z",
+    "flags": "f",
+    "obj": "meta_ham:HamProfile.obj"
+   }
+  ],
+  "target_size": 8,
+  "candidates": [
+   {
+    "sym": "?IsLocal@LocalUser@@UBA_NXZ",
+    "obj": "os:User.obj",
+    "unit_owned": true
+   }
+  ],
+  "name": "?IsLocal@LocalUser@@UBA_NXZ",
+  "map_obj": "os:User.obj",
+  "unit_owned": true,
+  "nreloc": 0,
+  "fold_twins_in_unit": [],
+  "verdict": "WEAK_NO_RELOC",
+  "why": "body test passes but the body has ZERO relocations, so byte-identity does not discriminate between fold members",
+  "tried": [
+   {
+    "sym": "?IsLocal@LocalUser@@UBA_NXZ",
+    "map_obj": "os:User.obj",
+    "result": "ok",
+    "nreloc": 0
+   }
+  ]
+ },
+ {
+  "address": "0x82E2AB08",
+  "split_name": "merged_82E2AB08",
+  "size": 8,
+  "unit": "default/system/os/User",
+  "recoverable_name": "?GetLocalUser@LocalUser@@UAAPAV1@XZ",
+  "live_row_id": 44112,
+  "map_members": [
+   {
+    "sym": "?GetLocalUser@LocalUser@@UAAPAV1@XZ",
+    "flags": "f",
+    "obj": "os:User.obj"
+   },
+   {
+    "sym": "?GetLocalUser@LocalUser@@UBAPBV1@XZ",
+    "flags": "f",
+    "obj": "os:User.obj"
+   }
+  ],
+  "target_size": 8,
+  "candidates": [
+   {
+    "sym": "?GetLocalUser@LocalUser@@UAAPAV1@XZ",
+    "obj": "os:User.obj",
+    "unit_owned": true
+   },
+   {
+    "sym": "?GetLocalUser@LocalUser@@UBAPBV1@XZ",
+    "obj": "os:User.obj",
+    "unit_owned": true
+   }
+  ],
+  "name": "?GetLocalUser@LocalUser@@UAAPAV1@XZ",
+  "map_obj": "os:User.obj",
+  "unit_owned": true,
+  "nreloc": 0,
+  "fold_twins_in_unit": [
+   "?GetLocalUser@LocalUser@@UBAPBV1@XZ"
+  ],
+  "verdict": "WEAK_NO_RELOC",
+  "why": "body test passes but the body has ZERO relocations, so byte-identity does not discriminate between fold members",
+  "tried": [
+   {
+    "sym": "?GetLocalUser@LocalUser@@UAAPAV1@XZ",
+    "map_obj": "os:User.obj",
+    "result": "ok",
+    "nreloc": 0
+   }
+  ]
+ }
+]
