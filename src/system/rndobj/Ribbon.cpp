@@ -370,7 +370,7 @@ void RndRibbon::UpdateChase() {
                 float angle = -1.0f;
                 if (2 < i) {
                     Vector3 prevDir;
-                    Subtract(prev.value.v, mTransforms[i - 2].value.v, prevDir);
+                    Subtract(prev.value.v, (&prev)[-1].value.v, prevDir);
                     float dot = Clamp(0.0f, 1.0f, Dot(prevDir, dir));
                     angle = std::acos(dot);
                     Vector3 scaledPrev = prevDir;
