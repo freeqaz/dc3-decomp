@@ -359,7 +359,6 @@ void RndRibbon::UpdateChase() {
         // it in the same iteration, since `angle` is reset to -1 every iteration and
         // gates both.
         Vector3 smoothDir;
-        float prevAngle = -1.0f;
         for (int i = firstDirty; i < mTransforms.size(); ++i) {
             if (i != 0) {
                 Key<Transform> &cur = mTransforms[i];
@@ -375,7 +374,7 @@ void RndRibbon::UpdateChase() {
                     float dot = Clamp(0.0f, 1.0f, Dot(prevDir, dir));
                     angle = std::acos(dot);
                     Vector3 scaledPrev = prevDir;
-                    scaledPrev *= prevAngle;
+                    scaledPrev *= -1.0f;
                     Interp(dir, scaledPrev, 0.5f, smoothDir);
                     Normalize(smoothDir, smoothDir);
                 }
@@ -426,7 +425,6 @@ void RndRibbon::UpdateChase() {
                 }
 
                 cur.value.m = result.m;
-                prevAngle = angle;
             }
         }
     }
