@@ -729,15 +729,13 @@ typename ObjPtrList<T1, T2>::Node *ObjPtrList<T1, T2>::Unlink(Node *node) {
         // Removing head: the successor (or NULL) becomes the new head, and is
         // also what we return. The target keeps a single `mSize--` and a single
         // return for all three arms, so do not early-return from any of them.
-        Node *head;
         if (mNodes->next != nullptr) {
             mNodes->next->prev = mNodes->prev;
-            head = mNodes->next;
+            mNodes = mNodes->next;
         } else {
-            head = nullptr;
+            mNodes = nullptr;
         }
-        mNodes = head;
-        next = head;
+        next = mNodes;
     } else if (node == mNodes->prev) {
         // Removing tail
         mNodes->prev = mNodes->prev->prev;
