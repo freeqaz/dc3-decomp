@@ -121,15 +121,20 @@ public:
 protected:
     RndTex();
 
-public:
+    // Both mangle 'MAA' (protected) in ham_xbox_r.map, not 'UAA', so on the
+    // PPC/matching side they live in the protected section. The native port's
+    // shared engine (milo-native-engine MaterialSetup.cpp) drives
+    // PresyncBitmap() from outside the class, so HX_NATIVE keeps them public.
 #ifdef HX_NATIVE
+public:
     virtual void PresyncBitmap();
     virtual void SyncBitmap();
+protected:
 #else
+protected:
     virtual void PresyncBitmap() {}
     virtual void SyncBitmap() {}
 #endif
-protected:
 
     /** Handler to set this texture's bitmap.
      * @param [in] arr The supplied DataArray.

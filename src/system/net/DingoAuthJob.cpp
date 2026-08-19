@@ -22,6 +22,10 @@ void AuthenticateReqJob::Start() {
     StartImpl();
 }
 
+bool AuthenticateReqJob::CheckReqResult() { return true; }
+
+bool AuthenticateReqJob::MustFinishBeforeNext() { return true; }
+
 bool AuthenticateReqJob::ParseResponse() {
     mSessionID = "";
     if (mJsonResponse) {

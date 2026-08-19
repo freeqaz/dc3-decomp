@@ -8,6 +8,8 @@ public:
     virtual ~HighFiveGestureFilter();
     OBJ_CLASSNAME(HighFiveGestureFilter)
     OBJ_SET_TYPE(HighFiveGestureFilter)
+    virtual DataNode Handle(DataArray *, bool);
+    virtual bool SyncProperty(DataNode &, DataArray *, int, PropOp);
 
     bool CheckHighFive();
     void Update(const Skeleton *, const Skeleton *);

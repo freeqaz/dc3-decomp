@@ -37,6 +37,7 @@ public:
     OBJ_CLASSNAME(FitnessFilter)
     OBJ_SET_TYPE(FitnessFilterObj)
     virtual DataNode Handle(DataArray *, bool);
+    virtual bool SyncProperty(DataNode &, DataArray *, int, PropOp);
     virtual void Save(BinStream &);
     virtual void Copy(Hmx::Object const *, Hmx::Object::CopyType);
     virtual void Load(BinStream &);

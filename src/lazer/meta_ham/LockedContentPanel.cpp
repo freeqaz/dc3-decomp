@@ -269,3 +269,7 @@ BEGIN_HANDLERS(LockedContentPanel)
     HANDLE_ACTION(set_voice_over, SetVoiceOver(_msg->Obj<Sound>(2), false))
     HANDLE_SUPERCLASS(UIPanel)
 END_HANDLERS
+
+BEGIN_PROPSYNCS(LockedContentPanel)
+    SYNC_SUPERCLASS(Hmx::Object)
+END_PROPSYNCS

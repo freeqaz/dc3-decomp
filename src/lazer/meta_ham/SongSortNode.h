@@ -13,6 +13,7 @@ public:
     virtual Symbol Select();
     virtual Symbol OnSelectDone();
     virtual void OnHighlight();
+    virtual void OnUnHighlight();
     virtual int GetItemCount();
     virtual NavListSortNode *GetFirstActive();
     virtual void Text(UIListLabel *, UILabel *) const;
@@ -40,6 +41,7 @@ public:
     virtual Symbol Select();
     virtual Symbol OnSelect();
     virtual void OnContentMounted(const char *, const char *);
+    virtual const char *GetAlbumArtPath();
 
     void SetInPlaylist(bool);
     bool IsCoverSong(Symbol) const;
@@ -59,6 +61,7 @@ public:
     SongFunctionNode(NavListItemSortCmp *cmp, Symbol sym, const char *path)
         : NavListFunctionNode(cmp, sym, path) {}
     virtual ~SongFunctionNode() {}
+    virtual DataNode Handle(DataArray *, bool);
     virtual Symbol OnSelect();
     virtual void OnHighlight();
     virtual void Text(UIListLabel *, UILabel *) const;

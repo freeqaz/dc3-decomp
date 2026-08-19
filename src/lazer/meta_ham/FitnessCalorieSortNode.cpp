@@ -12,6 +12,10 @@
 
 #pragma region FitnessCalorieSortNode
 
+BEGIN_HANDLERS(FitnessCalorieSortNode)
+    HANDLE_SUPERCLASS(NavListItemNode)
+END_HANDLERS
+
 Symbol FitnessCalorieSortNode::GetToken() const {
     return MakeString("calorie_node_%i", mCalories);
 }
@@ -37,7 +41,20 @@ void FitnessCalorieSortNode::Text(UIListLabel *uiListLabel, UILabel *uiLabel) co
 FitnessCalorieHeaderNode::FitnessCalorieHeaderNode(
     NavListItemSortCmp *cmp, Symbol s, bool b
 )
-    : NavListHeaderNode(cmp, s, b), unk58() {}
+    : NavListHeaderNode(cmp, s, b), mItemCount() {}
+
+BEGIN_HANDLERS(FitnessCalorieHeaderNode)
+    HANDLE_SUPERCLASS(NavListHeaderNode)
+END_HANDLERS
+
+Symbol FitnessCalorieHeaderNode::Select() {
+    return SelectChildren(mChildren, mItemCount);
+}
+
+void FitnessCalorieHeaderNode::UpdateItemCount(NavListItemNode *item) {
+    if (item)
+        mItemCount++;
+}
 
 bool FitnessCalorieHeaderNode::IsActive() const {
     return TheFitnessCalorieSortMgr->HeadersSelectable() != false;

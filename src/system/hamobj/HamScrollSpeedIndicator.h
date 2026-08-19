@@ -19,6 +19,8 @@ public:
     virtual void Copy(const Hmx::Object *, Hmx::Object::CopyType);
     virtual void PreLoad(BinStream &);
     virtual void PostLoad(BinStream &);
+    /** Empty in the original ('f i' at 0x823E3B70); the slot ran RndDir::Poll. */
+    virtual void Poll() {}
     // ObjectDir
     virtual void SyncObjects() { RndDir::SyncObjects(); }
     // RndDrawable

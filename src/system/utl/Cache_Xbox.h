@@ -13,6 +13,7 @@ public:
     virtual ~CacheIDXbox() {}
     virtual const char *GetCachePath(const char *);
     virtual const char *GetCacheSearchPath(const char *);
+    virtual unsigned int GetDeviceID() const { return mContentData.DeviceID; }
 
     const char *Name() const { return mStrCacheName.c_str(); }
     DWORD DeviceID() const { return mContentData.DeviceID; }

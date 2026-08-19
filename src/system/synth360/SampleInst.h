@@ -32,6 +32,7 @@ protected:
     virtual void SetSendImpl(FxSend *);
     virtual void SetReverbMixDbImpl(float);
     virtual void SetReverbEnableImpl(bool);
+    virtual void EndLoopImpl();
 
 private:
     Voice *mVoice; // 0xa8

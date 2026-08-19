@@ -19,6 +19,10 @@
 
 SongSort::SongSort() {};
 
+BEGIN_HANDLERS(SongSort)
+    HANDLE_SUPERCLASS(NavListSort)
+END_HANDLERS
+
 void SongSort::BuildTree() {
     NavListSort::DeleteTree();
     Init();

@@ -20,6 +20,9 @@ public:
     virtual void Load(BinStream &);
     virtual void PreLoad(BinStream &);
     virtual void PostLoad(BinStream &);
+    /** Empty in the original ('f i' at 0x823E3B70); the slot ran
+     * UIComponent::Poll. */
+    virtual void Poll() {}
     // RndDrawable
     virtual void DrawShowing();
 

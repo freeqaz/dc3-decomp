@@ -46,6 +46,8 @@ void SampleInst360::StartImpl() { mVoice->Start(); }
 
 void SampleInst360::StopImpl(bool b) { mVoice->Stop(b); }
 
+void SampleInst360::EndLoopImpl() { mVoice->EndLoop(); }
+
 void SampleInst360::SetVolumeImpl(float vol) { mVoice->SetVolume(vol); }
 
 void SampleInst360::SetPanImpl(float pan) { mVoice->SetPan(pan); }

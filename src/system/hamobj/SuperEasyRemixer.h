@@ -26,6 +26,10 @@ public:
 protected:
     SuperEasyRemixer();
 
+    /** ?UpdateHamDirector@SuperEasyRemixer@@ mangles 'MAA' and is empty in the
+     * original ('f i' at 0x823E3B70); the slot ran DanceRemixer's real body. */
+    virtual void UpdateHamDirector() {}
+
     virtual std::vector<const MoveParent *> &GetMoveParentsByDifficulty(int);
     virtual std::vector<const MoveVariant *> &GetMoveVariantsByDifficulty(int);
 

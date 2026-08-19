@@ -15,6 +15,10 @@
 
 FitnessCalorieSort::FitnessCalorieSort() {}
 
+BEGIN_HANDLERS(FitnessCalorieSort)
+    HANDLE_SUPERCLASS(NavListSort)
+END_HANDLERS
+
 void FitnessCalorieSort::Text(
     int, int idx, UIListLabel *uiListLabel, UILabel *uiLabel
 ) const {

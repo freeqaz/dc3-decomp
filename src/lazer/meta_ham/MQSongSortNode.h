@@ -9,13 +9,18 @@ public:
     DataNode Handle(DataArray *, bool);
     virtual ~MQSongHeaderNode() {}
     virtual Symbol OnSelect();
+    virtual Symbol Select();
     virtual Symbol OnSelectDone();
     virtual void OnHighlight();
     virtual void OnUnHighlight();
+    /** Inline in the original (`f i` in ham_xbox_r.map, ICF-folded at
+     * 0x82B05A48 with the other *HeaderNode::GetItemCount overrides). */
+    virtual int GetItemCount() { return mChallengeCount; }
     virtual NavListSortNode *GetFirstActive();
     virtual void Text(UIListLabel *, UILabel *) const;
     virtual bool IsActive() const;
     virtual const char *GetAlbumArtPath();
+    virtual void UpdateItemCount(NavListItemNode *);
     virtual void SetItemCountString(UILabel *) const;
     virtual void SetCollapseStateIcon(bool) const;
     virtual void Renumber(std::vector<NavListSortNode *> &);
@@ -34,6 +39,7 @@ public:
     virtual Symbol OnSelect();
     virtual void Text(UIListLabel *, UILabel *) const;
     virtual void Custom(UIListCustom *, Hmx::Object *) const;
+    virtual const char *GetAlbumArtPath();
 
     void SetCharacter(Symbol c) { mCharacter = c; }
     Symbol GetCharacter() const { return mCharacter; }

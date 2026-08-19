@@ -185,13 +185,15 @@ public:
     virtual void FinishSort(NavListSort *) {}
     virtual Symbol OnSelect() { return gNullStr; }
     virtual Symbol Select() { return gNullStr; }
-    virtual Symbol OnSelectDone() { return gNullStr; }
+    // NOTE: no OnSelectDone / OnContentMounted override here. The original has
+    // no ?OnSelectDone@NavListItemNode@@ / ?OnContentMounted@NavListItemNode@@
+    // in ham_xbox_r.map at all -- both slots inherit NavListSortNode's
+    // (0x82696CC8 'return gNullStr' and 0x823E3B70 empty).
     virtual void OnHighlight() {}
     virtual void OnUnHighlight() {}
     virtual void SetCollapseIconLabel(UILabel *) {}
     virtual int GetItemCount() { return 1; }
     virtual NavListSortNode *GetFirstActive();
-    virtual void OnContentMounted(const char *, const char *) {}
     virtual void Text(UIListLabel *, UILabel *) const;
     virtual void Custom(UIListCustom *, Hmx::Object *) const {}
     virtual RndMat *Mat(UIListMesh *) const;
@@ -219,7 +221,13 @@ public:
     virtual DataNode Handle(DataArray *, bool);
     virtual NavListNodeType GetType() const { return kNodeFunction; }
     virtual Symbol GetToken() const { return mFunctionToken; }
+    /** ?OnSelect@NavListFunctionNode@@ is at 0x82696CC8 ('f i'), the
+     * `return gNullStr` ICF group -- without it slot 0x6c took _purecall. */
+    virtual Symbol OnSelect() { return gNullStr; }
     virtual Symbol Select();
+    /** ?OnHighlight@NavListFunctionNode@@ is at 0x823E3B70 ('f i'), the empty
+     * body ICF group -- without it slot 0x78 took _purecall. */
+    virtual void OnHighlight() {}
     virtual void OnUnHighlight() {}
     virtual void SetCollapseIconLabel(UILabel *) {}
     virtual int GetItemCount() { return 0; }
@@ -249,7 +257,8 @@ public:
     virtual void FinishSort(NavListSort *sort) { NavListSortNode::FinishSort(sort); }
     virtual Symbol OnSelect() { return gNullStr; }
     virtual Symbol Select();
-    virtual Symbol OnSelectDone() { return gNullStr; }
+    // NOTE: no OnSelectDone override here either -- the original has no
+    // ?OnSelectDone@NavListHeaderNode@@; the slot inherits NavListSortNode's.
     virtual void OnHighlight() {}
     virtual void OnUnHighlight() {}
     virtual void SetCollapseIconLabel(UILabel *label) { mCollapseIconLabel = label; }

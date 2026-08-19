@@ -15,6 +15,7 @@ public:
     OBJ_CLASSNAME(SigninScreen);
     OBJ_SET_TYPE(SigninScreen);
     virtual DataNode Handle(DataArray *, bool);
+    virtual bool SyncProperty(DataNode &, DataArray *, int, PropOp);
     virtual void Poll();
     virtual void Enter(UIScreen *);
     virtual void Exit(UIScreen *);

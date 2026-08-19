@@ -35,9 +35,6 @@ public:
     // UIComponent
     virtual void Enter();
     virtual void SetCurrent(int);
-    // ScrollSelect
-    virtual int SelectedAux() const;
-
     OBJ_MEM_OVERLOAD(0x18);
     NEW_OBJ(UISlider)
     static void Init();
@@ -53,6 +50,8 @@ private:
 protected:
     UISlider();
 
+    // ScrollSelect -- mangles 'MBA' (protected const) in ham_xbox_r.map, not 'UBA'.
+    virtual int SelectedAux() const;
     virtual void SetSelectedAux(int);
     virtual void OldResourcePreload(BinStream &);
 

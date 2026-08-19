@@ -30,6 +30,7 @@
 #include "ui\UIScreen.h"
 #include "utl\Std.h"
 #include "utl\Symbol.h"
+#include <cstdio>
 
 #pragma region ChallengeHeaderNode
 ChallengeHeaderNode::ChallengeHeaderNode(NavListItemSortCmp *cmp, Symbol sym, bool b)
@@ -107,11 +108,27 @@ void ChallengeHeaderNode::OnHighlight() {
     SetCollapseStateIcon(true);
 }
 
+void ChallengeHeaderNode::OnUnHighlight() { SetCollapseStateIcon(false); }
+
 bool ChallengeHeaderNode::IsActive() const {
     return TheChallengeSortMgr->HeadersSelectable() != false;
 }
 
-Symbol ChallengeHeaderNode::Select() { return gNullStr; }
+Symbol ChallengeHeaderNode::Select() {
+    return SelectChildren(mChildren, mChallengeCount);
+}
+
+void ChallengeHeaderNode::UpdateItemCount(NavListItemNode *item) {
+    if (item)
+        mChallengeCount++;
+}
+
+void ChallengeHeaderNode::SetItemCountString(UILabel *label) const {
+    char buffer[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+    sprintf(buffer, "(%d)", mChallengeCount);
+    Symbol sym = buffer;
+    label->SetPrelocalizedString(String(sym));
+}
 
 Symbol ChallengeHeaderNode::OnSelect() {
     if (TheChallengeSortMgr->IsHeaderCollapsed(GetToken())) {

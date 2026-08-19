@@ -3,6 +3,8 @@
 #include "ui\UILabel.h"
 #include "utl/BinStream.h"
 
+bool UIButton::CanHaveFocus() { return true; }
+
 void UIButton::Load(BinStream &bs) {
     PreLoad(bs);
     PostLoad(bs);

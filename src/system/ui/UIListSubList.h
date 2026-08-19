@@ -27,11 +27,12 @@ public:
     NEW_OBJ(UIListSubList)
     OBJ_MEM_OVERLOAD(0x11)
 
-    virtual RndTransformable *RootTrans() { return mList; }
-
     static int sNextFillSelection;
 
 protected:
+    // Mangles 'MAA' (protected) in ham_xbox_r.map, not 'UAA'.
+    virtual RndTransformable *RootTrans() { return mList; }
+
     virtual UIListSlotElement *CreateElement(UIList *);
 
     UIListSubList();

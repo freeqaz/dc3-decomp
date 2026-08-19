@@ -21,6 +21,8 @@ public:
     virtual void Load(BinStream &);
     virtual void PreLoad(BinStream &);
     virtual void PostLoad(BinStream &);
+    /** ?CanHaveFocus@UIButton@@ is at 0x82E2AB00 ('li r3,1; blr'), 'f'. */
+    virtual bool CanHaveFocus();
 
     OBJ_MEM_OVERLOAD(0x15);
     NEW_OBJ(UIButton)

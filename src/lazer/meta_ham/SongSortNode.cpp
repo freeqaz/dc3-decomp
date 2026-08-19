@@ -36,6 +36,8 @@ void SongHeaderNode::OnHighlight() {
     SetCollapseStateIcon(true);
 }
 
+void SongHeaderNode::OnUnHighlight() { SetCollapseStateIcon(false); }
+
 void SongHeaderNode::SetCollapseStateIcon(bool b) const {
     Symbol s = gNullStr;
     UILabel *iconLabel = GetCollapseIconLabel();
@@ -417,6 +419,14 @@ END_HANDLERS
 BEGIN_HANDLERS(SongSortNode)
     HANDLE_MEMBER_PTR(const_cast<HamSongMetadata *>(unk_0x48->Metadata()))
     HANDLE_SUPERCLASS(NavListItemNode)
+END_HANDLERS
+
+const char *SongSortNode::GetAlbumArtPath() {
+    return TheHamSongMgr.GetAlbumArtPath(GetToken());
+}
+
+BEGIN_HANDLERS(SongFunctionNode)
+    HANDLE_SUPERCLASS(NavListFunctionNode)
 END_HANDLERS
 
 void SongFunctionNode::OnHighlight() { TheSongSortMgr->GetSongPreview()->Start(0, 0); }

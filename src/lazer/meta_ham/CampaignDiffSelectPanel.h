@@ -30,6 +30,9 @@ public:
     OBJ_CLASSNAME(CampaignDiffSelectPanel)
     OBJ_SET_TYPE(CampaignDiffSelectPanel)
     virtual DataNode Handle(DataArray *, bool);
+
+    // UIPanel
+    virtual void Enter() { HamPanel::Enter(); }
     virtual void Unload();
     virtual void FinishLoad();
 

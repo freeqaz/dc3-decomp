@@ -17,6 +17,7 @@ public:
 
     // UIPanel
     virtual void Draw();
+    virtual void FinishLoad() { UIPanel::FinishLoad(); }
     virtual void Enter();
     virtual void Exit();
     virtual void Poll();

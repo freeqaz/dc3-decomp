@@ -21,6 +21,12 @@ public:
     virtual void Copy(const Hmx::Object *, Hmx::Object::CopyType);
     virtual void Load(BinStream &);
     // RndAnimatable
+    /** All three are empty in the original ('f i' at 0x823E3B70); declaring
+     * them here is what makes MSVC emit the $4PPPPPPPM@A@ virtual-base
+     * adjustor thunks at 0x8245B0D8 that the target's vtable points at. */
+    virtual void StartAnim() {}
+    virtual void EndAnim() {}
+    virtual void SetFrame(float, float) {}
     virtual float EndFrame();
     virtual void ListAnimChildren(std::list<RndAnimatable *> &) const;
     // RndPollable

@@ -40,12 +40,14 @@ public:
     static void Init() { REGISTER_OBJ_FACTORY(RndTexRenderer) }
 
     void DrawToTexture();
-    virtual void DrawBefore() {}
-    virtual void DrawAfter() {}
     void SetOutputTexture(RndTex *tex) { mOutputTexture = tex; }
     RndTex* GetOutputTexture() const { return mOutputTexture; }
 
 protected:
+    // Both mangle 'MAA' (protected) in ham_xbox_r.map, not 'UAA'.
+    virtual void DrawBefore() {}
+    virtual void DrawAfter() {}
+
     RndTexRenderer();
     void InitTexture();
 

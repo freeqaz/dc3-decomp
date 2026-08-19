@@ -38,7 +38,9 @@ public:
     virtual float FontUnit() const { return 0; }
     virtual float FontUnitInverse() const { return 1.0f / FontUnit(); }
     virtual void Print() const {}
-    virtual bool BitmapFont() const { return true; }
+    /** 0x82AEAE70 'li r3,0; blr' -- FALSE in the original; only RndFont
+     * overrides it to true, RndFont3d inherits this. */
+    virtual bool BitmapFont() const { return false; }
 
     OBJ_MEM_OVERLOAD(0x1C)
     NEW_OBJ(RndFontBase)
@@ -106,6 +108,8 @@ public:
     };
     virtual ~RndFont();
     virtual bool Replace(ObjRef *, Hmx::Object *);
+    /** ?BitmapFont@RndFont@@ is at 0x82E2AB00 ('li r3,1; blr'), 'f'. */
+    virtual bool BitmapFont() const;
     OBJ_CLASSNAME(Font);
     OBJ_SET_TYPE(Font);
     virtual DataNode Handle(DataArray *, bool);
