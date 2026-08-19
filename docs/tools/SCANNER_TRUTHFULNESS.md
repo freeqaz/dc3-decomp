@@ -221,11 +221,11 @@ doing nothing proves nothing.** The harness now treats an empty output, an
 
 | script | what it could silently drop | fixed? |
 |---|---|---|
-| `data_symbol_scan.py` | `--max-symbols` default 4000 against an 18,549-symbol universe (verified at `903be2231`: 2,224 units, 50,160 data symbols, 18,549 non-string) | ✅ default → 0; `TRUNCATED` banner + exit 3; every drop counted; results sorted. **Findings are a strict superset** (20 → 73 candidate-bugs, 0 only-old) but it is **3.2× slower**: measured 246 s capped at 4,000 vs **790 s** uncapped. Budget ~15 min, not 4 — an agent with a 10-minute timeout will read a killed run as a broken scanner. |
+| `data_symbol_scan.py` | `--max-symbols` default 4000 against an 18,549-symbol universe (verified at `903be2231`: 2,224 units, 50,160 data symbols, 18,549 non-string) | ✅ default → 0; `TRUNCATED` banner + exit 3; every drop counted; results sorted. **Findings are a strict superset** (20 → 73 candidate-bugs, 0 only-old) but it is **~3× slower**: measured at `903be2231`, 246 s capped at 4,000 vs **790 s** uncapped (3.2×; an earlier measurement read 7 min → 21 min). Budget the ratio — an agent with a 10-minute timeout will read a killed run as a broken scanner. |
 | `fake_impl_scan.py` | the ~1,024-row "no body at all" tier behind `pct is None` | ✅ (2026-08-19, pre-existing) — normalized fallback + a counted skip |
 | `certify_floor.py` | 6,835 functions behind `NOT LIKE '??_%'` | ✅ (pre-existing) — and it carries a two-path SQL-vs-Python `denominator_self_check` that exits non-zero on disagreement. **The control the other scripts lack; clone it.** |
 | `audit_normalized_masking.py` | 16,920 of 48,344 rows behind `if n is None or raw is None: continue`; `norm_sym` stripping the class qualifier so two different classes' `Load` cancel out — fail-open in the tool's own headline category | ✅ |
-| `batch_pattern_scan.py` | 16,920 rows on `pct is None`, **and** `--limit` default 200 applied *after* a descending sort, so only 99.58–99.90 was ever examined and the entire 90.0–99.58 band was invisible (1,551 of 1,751 dropped) | ✅ default → 0 (200 → 1,751 inspected, 1 → 115 hits) — but **8.9× slower**, ~2.2 min → ~19.3 min. Two breaks shipped with that fix and are corrected: `--json`'s top level flipped **list → dict** (a silent break — a dict iterates its keys rather than raising; the list is back, `--json-envelope` opts into the object), and an explicit `--limit N` began **exiting 3**, which made every doc'd recipe that passes one look broken (`docs/plans/compiler-instrumentation.md:900` passes `--limit 500`). An explicit `--limit` now exits 0 with the TRUNCATED banner and `truncated: true` intact; `--no-allow-explicit-limit` restores exit 3 for CI. |
+| `batch_pattern_scan.py` | 16,920 rows on `pct is None`, **and** `--limit` default 200 applied *after* a descending sort, so only 99.58–99.90 was ever examined and the entire 90.0–99.58 band was invisible (1,551 of 1,751 dropped) | ✅ default → 0 (200 → 1,751 inspected, **1 → 115 hits**) — but **~9× slower**: measured at `903be2231`, 70 s at `--limit 200` vs **635 s** uncapped (9.1×; an earlier measurement on a busier machine read 2.2 min → 19.3 min, so budget the *ratio*, not the absolute). Two breaks shipped with that fix and are corrected: `--json`'s top level flipped **list → dict** (a silent break — a dict iterates its keys rather than raising; the list is back, `--json-envelope` opts into the object), and an explicit `--limit N` began **exiting 3**, which made every doc'd recipe that passes one look broken (`docs/plans/compiler-instrumentation.md:900` passes `--limit 500`). An explicit `--limit` now exits 0 with the TRUNCATED banner and `truncated: true` intact; `--no-allow-explicit-limit` restores exit 3 for CI. |
 | `findarray_receiver_scan.py` | a relevance gate counting only `FindArray` while `LOOKUP_METHODS` has six entries (39 files, 30.7% of the relevant set); a relative default path making any non-root cwd print "no patterns found"; `0 SHADOW_PARENT` printed while 14 existed | ✅ coverage + loud path error; the gate widening left as `TODO(heuristic)` |
 | `vtable_dispatch_scan.py` | 16,920 rows uncounted — *substantively* defensible, but never stated | ✅ (its cap handling was already honest — `--limit` default 0, `capped` in both stderr and JSON) |
 | `header_cluster.py` | 16,920 rows behind a `pct <= 0` guard meant for true zeros, of which there are none; `Loaded 2241 non-complete functions` where the true population is 19,193 | ✅ |
@@ -317,6 +317,30 @@ universe and lands in exactly one of examined/dropped, so a twice-counted site
 balances perfectly. The contract catches an *uncounted* row; it cannot catch a
 *twice-counted* one, and it says nothing about whether a drop's stated reason is
 true. Both now have their own controls.
+
+---
+
+## 5.2 Open, deliberately not touched here
+
+- **`scripts/analysis/native_guard_leak_scan.py` overlaps this contract and is
+  outside it.** It landed on a different branch (`fix/native-guard-leaks`) as a
+  file ADD, so resolving the overlap here would mean editing another lane's
+  work in a merge commit. It passes `honesty_lint` clean, but it does **not**
+  import `CoverageReport` — so it is one of the ~30 `scripts/analysis/` scripts
+  the runtime ratchet does not cover, and its counts carry no denominator. It
+  should be brought under the contract by whoever owns it. Flagged, not fixed.
+- **The 42 W-rule warnings** (`W1` error→empty-result, `W2` global rebound in a
+  worker-pool module) remain a backlog. `W1` in particular is the same shape as
+  defect 4 in §1 — `except Exception: return []` is how `function_health`
+  answered "no work exists" to every query for months.
+- **`function_health.py`'s single-symbol mode** stays broken on purpose
+  (`TODO(repair)`): repairing the `objdiff-cli` invocation changes what the
+  tool FINDS, which does not belong in an honesty pass. `docs/tools/INDEX.md`
+  now says so instead of advertising the mode.
+- **`dta_hierarchy_scan`'s 49 never-re-checked assignment sites** are now
+  counted and honestly named, but still unchecked: widening
+  `ASSIGN_FINDARRAY_RE` to accept trailing arguments is a finding change.
+  `TODO(heuristic)`, same disposition as `findarray_receiver_scan`'s gate.
 
 ---
 
