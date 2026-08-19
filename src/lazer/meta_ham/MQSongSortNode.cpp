@@ -1,6 +1,7 @@
 #include "MQSongSortNode.h"
 
 #include "AppLabel.h"
+#include "HamSongMgr.h"
 #include "HamUI.h"
 #include "MQSongSortMgr.h"
 #include "HamStarsDisplay.h"
@@ -139,6 +140,10 @@ void MQSongHeaderNode::Renumber(std::vector<NavListSortNode *> &vec) {
 MQSongSortNode::~MQSongSortNode() {}
 
 Symbol MQSongSortNode::OnSelect() { return Select(); }
+
+const char *MQSongSortNode::GetAlbumArtPath() {
+    return TheHamSongMgr.GetAlbumArtPath(GetToken());
+}
 
 void MQSongSortNode::Text(UIListLabel *listlabel, UILabel *label) const {
     if (listlabel->Matches("song")) {

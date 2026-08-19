@@ -421,6 +421,14 @@ BEGIN_HANDLERS(SongSortNode)
     HANDLE_SUPERCLASS(NavListItemNode)
 END_HANDLERS
 
+const char *SongSortNode::GetAlbumArtPath() {
+    return TheHamSongMgr.GetAlbumArtPath(GetToken());
+}
+
+BEGIN_HANDLERS(SongFunctionNode)
+    HANDLE_SUPERCLASS(NavListFunctionNode)
+END_HANDLERS
+
 void SongFunctionNode::OnHighlight() { TheSongSortMgr->GetSongPreview()->Start(0, 0); }
 
 bool SongFunctionNode::IsActive() const {

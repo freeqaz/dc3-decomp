@@ -11,12 +11,14 @@
 
 class PlaylistSortNode : public NavListItemNode {
 public:
+    virtual DataNode Handle(DataArray *, bool);
     virtual Symbol GetToken() const;
     virtual Symbol Select();
     virtual void Text(UIListLabel *, UILabel *) const;
     virtual void Custom(UIListCustom *, Hmx::Object *) const;
     virtual Symbol OnSelect();
     virtual void OnContentMounted(char const *, char const *);
+    virtual const char *GetAlbumArtPath();
 
     PlaylistSortNode(NavListItemSortCmp *, Playlist *);
 

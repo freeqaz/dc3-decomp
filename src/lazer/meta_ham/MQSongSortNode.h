@@ -39,6 +39,7 @@ public:
     virtual Symbol OnSelect();
     virtual void Text(UIListLabel *, UILabel *) const;
     virtual void Custom(UIListCustom *, Hmx::Object *) const;
+    virtual const char *GetAlbumArtPath();
 
     void SetCharacter(Symbol c) { mCharacter = c; }
     Symbol GetCharacter() const { return mCharacter; }

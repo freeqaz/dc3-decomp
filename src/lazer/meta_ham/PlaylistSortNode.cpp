@@ -25,6 +25,14 @@
 
 #pragma region PlaylistSortNode
 
+BEGIN_HANDLERS(PlaylistSortNode)
+    HANDLE_SUPERCLASS(NavListItemNode)
+END_HANDLERS
+
+const char *PlaylistSortNode::GetAlbumArtPath() {
+    return TheHamSongMgr.GetAlbumArtPath(GetToken());
+}
+
 Symbol PlaylistSortNode::OnSelect() {
     if (UseQuickplayPerformer()) {
         MetaPerformer::Current()->ResetSongs();
