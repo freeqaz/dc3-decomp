@@ -270,6 +270,38 @@ Other build-hygiene tools:
   build system (ninja configured, tools/compilers/target objects symlinked, ninja
   state primed).
 
+### A fresh worktree's `report.json` describes *main*, not your branch
+
+`setup_worktree.sh` gives the new worktree `build/373307D9/` as a **reflink copy
+of the main repo's build dir** at creation time — that is deliberate, it is what
+makes the first build incremental instead of a 45-minute cold start. The
+consequence catches people out: `build/373307D9/report.json` is copied along
+with everything else, so **until a full `ninja` has run in the worktree, that
+file describes the source tree main had when the worktree was made.** Nothing
+about the file says so; it has a plausible mtime and every symbol in it.
+
+This matters for any tool that reads `report.json` rather than running objdiff —
+`scripts/analysis/*` censuses, match-percent filters, "which functions are below
+100%" worklists. They will happily report main's numbers for your branch's code.
+Two rules:
+
+- Run `ninja` in the worktree before trusting `report.json` there. `ninja -n
+  build/373307D9/report.json` printing `no work to do` is the check;
+  `measure_progress.sh` and `native_guard_leak_scan.py` both gate on it and say
+  so in their output.
+- Running `run_objdiff` / `diff_inspect.py` **invalidates it again** — those do
+  an incremental `.obj` build, which makes `report.json` older than its inputs.
+  A freshness check that passed before your objdiff run will fail after it.
+
+A related trap when grepping `report.json` by hand: a symbol substring can match
+a template wrapper rather than the function you meant. Grepping for
+`DelayEffect` + `Process` hits
+`?Process@?$CSampleXAPOBase@VDelayEffect@@UParams@1@@ATG@@...` — the XAPO
+wrapper, 100.0 — before it hits `?Process@DelayEffect@@QAAXPAMHH@Z`, which is
+95.67308. That produced a "report.json says 100.0 but objdiff says 95.7"
+tool-defect report in 2026-08 that was really a grep hitting the wrong symbol.
+Match the full mangled name, or read the `demangled_name` in `metadata`.
+
 ## Related
 
 - [REFERENCE.md § Progress Measurement](REFERENCE.md#progress-measurement) — the staleness gate that catches a report built against a different config or dtk

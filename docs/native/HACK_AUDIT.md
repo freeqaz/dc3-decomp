@@ -427,7 +427,12 @@ Two confirmed instances so far:
 | Function | Introduced by | Cost | Fixed |
 |---|---|---|---|
 | `HamIKSkeleton::SetBone` — `if (!t2) return;` | `5d19777db` *native: venue rendering* | 6 instructions, 92.4% → 99.0% | `866ba1082` |
-| `DelayEffect::Process` — `if (!mBuffer) return;` | `f8a417405` *native: v0xE mogg audio pipeline*, whose own body says "Null guard in DelayEffect::Process for freed mBuffer" | 4 inserts + 1 replace + 1 delete, 95.7% → 99.4% | this audit |
+| `DelayEffect::Process` — `if (!mBuffer) return;` | `f8a417405` *native: v0xE mogg audio pipeline*, whose own body says "Null guard in DelayEffect::Process for freed mBuffer" | instruction table 160 instrs / 26 mismatches (20 diff_arg, 1 replace, 1 delete, 4 insert; base size 636) → 156 / 16 (all diff_arg, 0 insert/replace/delete; base size 624 = target size) | this audit |
+
+The `Cost` column quotes instruction-table counts, not the rendered percentage. The
+percentages for that row would be 95.7 % → 99.4 % normalized, but a rendered percentage
+rounds and a mismatch count does not; see
+[docs/decomp/patterns/rounded-100-hides-real-bugs.md](../decomp/patterns/rounded-100-hides-real-bugs.md).
 
 ### Detector
 
@@ -454,19 +459,80 @@ signal cannot fire for free — on a scratch commit, asserts the scanner reports
 asserts the currently-guarded site stays silent. It refuses to run on a dirty tree
 because its rollback is a hard reset.
 
+Every run opens with a provenance banner naming the commit it scanned, the
+`report.json` it filtered with, whether `ninja -n` still has work to do for that
+report, and the file denominators. **Every number below is relative to a commit** —
+see the next section for why that is not pedantry.
+
 ### The result that matters most
 
 **A hit is not a verdict, and the false-positive rate is high by nature.** The Xbox
-build is full of genuine null checks, empty checks and early returns. Of 814 unguarded
-defensive guards tree-wide, 107 sit in sub-100% functions; the 24 that are the *first
-or second statement* of such a function — the exact shape of both confirmed leaks —
-adjudicate as 22 target-faithful and 2 regex artifacts. Exactly one real leak in the
-whole tree.
+build is full of genuine null checks, empty checks and early returns.
 
-The only thing that settles a candidate is the target disassembly: read the function's
-prologue in `build/373307D9/asm/`, or look for `insert` entries in `run_objdiff`. A
-leaked guard shows up as an *inserted* load/compare/branch our side emits and the
-target does not — `DelayEffect::Process` had 4 inserts before the fix and 0 after.
-Five sites handed to this audit as "reported unguarded" were all target-faithful, and
-two of them come straight back out of this scanner's own TIER S, which is a fair
-description of what the signal is worth without that adjudication step.
+Counts, each with the tree it came from (they are not interchangeable — the guard this
+audit fixed was itself one of the 814, so the merge-base and the branch head disagree
+by one before you change anything else):
+
+| Tree | Criterion | TIER S | in sub-100% fns | TIER S-lead (first 2 statements) |
+|---|---|---|---|---|
+| `eda64e956` (merge-base) | original regex | 814 | 107 | — (never a script output; hand-counted as "24") |
+| `eda64e956` | corrected regex + attribution | 688 | 156 | 42 |
+| branch head on `00cf7aa4d` | corrected regex + attribution | 686 | 154 | **41** |
+
+The subset is now a flag, not a hand count: `--leading-stmts 2` prints it and lists it.
+The count rose from ~24-27 to 41 because the attribution fix resolves enclosing
+functions the old walk-backwards heuristic missed (a multi-line signature used to
+charge every hit in its body to the *previous* function), not because more guards
+appeared.
+
+All 41 are target-faithful. **Exactly one real leak in the whole tree, and it was
+`DelayEffect::Process`.**
+
+### Do NOT use the `insert` count as the discriminator
+
+An earlier revision of this section said the cheap discriminator for a leaked guard is
+objdiff's `insert` count, reasoning that a leaked guard is a load/compare/branch our
+side emits and the target does not. **That is refuted.** Measured over the 41
+adjudicated target-faithful sites above:
+
+| Screen | Fires on target-faithful sites | False-positive rate |
+|---|---|---|
+| `insert > 0` | 31 / 41 | **76 %** |
+| `insert > 0` at instruction index ≤ 12 | 4 / 41 | 10 % |
+| our-side-only compare/branch in the first 20 instructions | 0 / 41 | 0 % |
+
+`insert > 0` is *necessary-ish and nowhere near sufficient*. Anyone who reads this
+table and starts deleting null checks because a function has inserts will remove code
+the Xbox build genuinely has — a correctness regression dressed up as a match
+improvement.
+
+The "low index" refinement does not rescue it either, and it fails on this lane's own
+flagship example. `LiveCameraInput::NuiAudioDataCallback` was cited as proof of
+target-faithfulness — the target has all three of its chained null tests — and it
+carries inserts at indices **5 and 8**:
+
+```
+[5] insert  TGT: ---   SRC: addi  r8, r11, 0x1444
+[8] insert  TGT: ---   SRC: lwz   r10, 0x0(r8)
+```
+
+That is address recomputation the target folds into a displacement, nothing to do with
+a guard.
+
+The screen that does discriminate is the third row: an **our-side-only compare/branch**
+in the prologue region — an `insert` whose SRC is a `cmp*`/`b*`, or a `replace` whose
+SRC is one and whose TGT is not. That is the shape a leaked early-out actually takes.
+Positive control: at the merge-base, `DelayEffect::Process` showed
+
+```
+[ 9] insert  TGT: ---   SRC: cmplwi  cr6, r11, 0x0
+[10] insert  TGT: ---   SRC: beq     cr6, 0x274
+```
+
+It fires on that one real leak and on none of the 41. Even so it is a screen, not a
+verdict — the thing that settles a candidate is still the target disassembly: read the
+function's prologue in `build/373307D9/asm/`.
+
+Two further calibrations of what a hit is worth: five sites handed to this audit as
+"reported unguarded" were *all* target-faithful, and two of them come straight back out
+of this scanner's own TIER S.
