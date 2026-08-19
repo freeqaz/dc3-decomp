@@ -32,6 +32,8 @@ from __future__ import annotations
 import json
 import os
 import re
+import pathlib
+import re
 import subprocess
 import sys
 
@@ -699,3 +701,185 @@ def test_dataflow_bare_clean_sentence_is_gone_from_the_source():
     # as something the program can print on its own.
     assert 'print("No DTA access issues found.")' not in src
     assert "print('No DTA access issues found.')" not in src
+
+
+# --------------------------------------------------------------------------- #
+# A drop with a FALSE REASON is worse than an uncounted drop.
+#
+# dta_hierarchy_scan dropped 106 Find* sites saying "re-examined via
+# assign_checks". The skip predicate matched the bare prefix
+# `\w+ = receiver->FindArray`; ASSIGN_FINDARRAY_RE -- the regex that actually
+# feeds assign_checks -- requires the closing paren immediately after the key,
+# so it matches ONE-ARGUMENT FindArray only. Every two-argument
+# `var = recv->FindArray("k", true)` was therefore labelled "covered elsewhere"
+# and covered nowhere.
+#
+# An uncounted drop is invisible; this one was worse, because it actively told
+# the reader the population had been handled.
+# --------------------------------------------------------------------------- #
+
+def test_the_assign_recheck_claim_is_true_of_every_site_that_carries_it():
+    """Re-derive both populations from the SOURCE regexes, not from the tool's
+    own printed counts, so this cannot pass by agreeing with the thing it
+    checks."""
+    labelled, captured = set(), set()
+    for path in sorted(pathlib.Path(os.path.join(REPO, "src")).rglob("*")):
+        if path.suffix not in (".cpp", ".h") or not path.is_file():
+            continue
+        try:
+            lines = path.read_text(errors="replace").splitlines()
+        except OSError:
+            continue
+        for ln, line in enumerate(lines, 1):
+            for m in HS.ASSIGN_FINDARRAY_RE.finditer(line):
+                captured.add((str(path), ln, m.group(2), m.group(3)))
+            for m in HS.FINDARRAY_RE.finditer(line):
+                recv, key = m.groups()
+                if re.search(rf'\w+\s*=\s*{re.escape(recv)}->FindArray', line):
+                    labelled.add((str(path), ln, recv, key))
+
+    orphans = labelled - captured
+    # (b) The defect must be REAL and non-trivial, or this is not a control.
+    assert orphans, ("no orphaned sites — the tree changed shape; re-measure "
+                     "rather than deleting this test")
+    assert len(labelled) > len(captured & labelled)
+
+    # ...and it must be a two-argument FindArray in every case, which is the
+    # mechanism, derived rather than asserted.
+    for path, ln, recv, key in sorted(orphans)[:20]:
+        src = open(path, errors="replace").read().splitlines()[ln - 1]
+        assert re.search(rf'{re.escape(recv)}->FindArray\(\s*"{re.escape(key)}"\s*,',
+                         src), (f"{path}:{ln} is orphaned for some OTHER reason "
+                                f"than the trailing-argument one: {src.strip()}")
+
+
+@pytest.mark.skipif(not os.path.isdir(os.path.join(REPO, "orig-assets")),
+                    reason="needs the DTA corpus (absent from worktrees)")
+def test_the_never_rechecked_population_has_its_own_slug():
+    """The two populations must be told apart in the coverage block, with the
+    honest one saying plainly that nothing checks these."""
+    r = run([HIERARCHY, "--extra-root",
+             os.path.join(REPO, "orig-assets", "extracted")])
+    blob = r.stderr + r.stdout
+    assert "assignment-site-NOT-rechecked-anywhere" in blob, (
+        "the sites nothing re-checks must not share a slug with the sites "
+        "something does")
+    assert "Nothing checks these" in blob
+    # The sites that ARE re-checked no longer carry a drop slug at all: the
+    # deferred assign_checks loop disposes of them under its own real reason
+    # (examined / key-absent / receiver-unresolvable). A slug that merely
+    # promises a later check is exactly the claim that turned out to be false,
+    # so it must not survive as a category.
+    assert "assignment-site-checked-separately" not in blob
+
+    # ...and the whole thing must still BALANCE, which is what caught the two
+    # leftovers while this was being written: the self-reassignment site that
+    # nothing disposed, and the positional-access bump that skipped the ledger.
+    assert "UNACCOUNTED" not in blob, blob[-1500:]
+    assert "of 274 total" in blob, (
+        "the denominator must be DISTINCT sites (274), not site events (331)")
+
+
+# --------------------------------------------------------------------------- #
+# DOUBLE-COUNTING IS INVISIBLE TO THE EXIT-4 TRIPWIRE.
+#
+# Both DTA site scanners walked the same lines twice with the same regex and
+# both bumped the universe AND disposed, so one site entered the books twice
+# and left twice. `universe == examined + dropped` held perfectly. The coverage
+# contract catches an UNCOUNTED row; it cannot catch a TWICE-COUNTED one, so
+# this needs its own control.
+#
+#   access_audit    1,679 events / 1,658 distinct — 21 doubled, 8 of them
+#                   examined twice -> 37/1,679 = 2.2%  becomes 29/1,658 = 1.75%
+#   hierarchy_scan    331 events /   274 distinct — 57 doubled, none examined
+#                   twice           -> 70/331 = 21%    becomes 70/274 = 25.5%
+#
+# The two rates move in OPPOSITE directions, which is why quoting them as a
+# comparable pair was misleading on top of being wrong.
+# --------------------------------------------------------------------------- #
+
+def test_site_ledger_counts_a_site_once_and_lets_a_check_upgrade_a_drop():
+    led = AA.SiteLedger()
+    k = ("f.cpp", 10, (0, 5))
+
+    # (b) The historical shape: two passes, one site. The first must register
+    # it and the second must NOT.
+    assert led.bump(k) is True
+    assert led.bump(k) is False, "a second pass must not re-enter the universe"
+    assert led.distinct == 1
+
+    # Pass 1 could not resolve the receiver; pass 2 checked bounds fine. Two
+    # passes checking different things are two chances to examine ONE site.
+    led.drop(k, "receiver-unresolvable")
+    led.examine(k)
+    assert led.distinct == 1
+
+    class _Sink:
+        def __init__(self):
+            self.examined = 0
+            self.drops = []
+
+        def examine(self, n=1):
+            self.examined += n
+
+        def drop(self, reason, n=1, note=""):
+            self.drops.append(reason)
+
+    sink = _Sink()
+    led.flush(sink)
+    assert sink.examined == 1 and sink.drops == [], (
+        "a site that ANY pass managed to check is examined, once")
+
+
+def test_site_ledger_does_not_downgrade_an_examine():
+    led = AA.SiteLedger()
+    k = ("f.cpp", 1, (0, 1))
+    led.bump(k)
+    led.examine(k)
+    led.drop(k, "receiver-unresolvable")   # a later pass fails; irrelevant
+    assert led.distinct == 1
+    class _Sink:
+        def __init__(self): self.examined = 0; self.drops = []
+        def examine(self, n=1): self.examined += n
+        def drop(self, reason, n=1, note=""): self.drops.append(reason)
+    sink = _Sink()
+    led.flush(sink)
+    assert sink.examined == 1 and not sink.drops
+
+
+@pytest.mark.skipif(not os.path.isdir(os.path.join(REPO, "orig-assets")),
+                    reason="needs the DTA corpus (absent from worktrees)")
+def test_the_published_rates_are_distinct_sites_not_site_events():
+    """Recount the distinct sites here, by a different expression than the tool,
+    and require the tool's denominator to equal it."""
+    import collections
+    events, distinct = 0, set()
+    for path in sorted(pathlib.Path(os.path.join(REPO, "src")).rglob("*")):
+        if path.suffix not in (".cpp", ".h") or not path.is_file():
+            continue
+        try:
+            lines = path.read_text(errors="replace").splitlines()
+        except OSError:
+            continue
+        for ln, line in enumerate(lines, 1):
+            if line.strip().startswith("//"):
+                continue
+            for m in HS.FINDARRAY_RE.finditer(line):
+                events += 1
+                distinct.add((str(path), ln, m.span()))
+            for m in HS.ASSIGN_FINDARRAY_RE.finditer(line):
+                events += 1     # the historical second count of the same text
+
+    # (b) The over-count must be REAL, or this is not a control.
+    assert events > len(distinct), (
+        "the two passes must really see overlapping text, or nothing was "
+        "ever double-counted")
+
+    r = run([HIERARCHY, "--extra-root",
+             os.path.join(REPO, "orig-assets", "extracted")])
+    blob = r.stderr + r.stdout
+    m = re.search(r"universe\s+:\s+(\d+)\s+\(Find\*\(\) call sites", blob)
+    assert m, blob[-1200:]
+    assert int(m.group(1)) == len(distinct), (
+        f"denominator {m.group(1)} is not the distinct-site count "
+        f"{len(distinct)} (site EVENTS would be {events})")

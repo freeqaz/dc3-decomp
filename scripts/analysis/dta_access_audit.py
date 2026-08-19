@@ -147,8 +147,72 @@ def _build_key_node_map(main_roots):
     return key_nodes
 
 
+
+class SiteLedger:
+    """One row per DISTINCT access site, however many passes look at it.
+
+    `trace_dta_accesses` walks each line with CHAINED_RE and disposes of every
+    match; `_check_key_based_accesses` then re-walks THE SAME LINES with THE
+    SAME REGEX and disposes again.  Both also bumped `site_totals['sites']`, so
+    a chained site entered the universe twice and left it twice.  Measured
+    2026-08-19: 1,679 site events over 1,658 distinct sites -- 21 counted
+    twice, of which 8 were EXAMINED twice.  The published "2.2%" was 37/1,679;
+    the honest distinct-site figure is 29/1,658 = 1.75%.
+
+    Note this was INVISIBLE to the exit-4 tripwire: each event bumped the
+    universe and landed in exactly one of examined/dropped, so a double-counted
+    site balanced perfectly.  The coverage contract catches an UNCOUNTED row;
+    it cannot catch a TWICE-COUNTED one.
+
+    Resolution rule: a site is EXAMINED if ANY pass managed to check it, and
+    dropped only if none did.  Two passes checking different things (receiver
+    resolution vs bounds/type) are two chances to examine one site, not two
+    sites.
+    """
+
+    def __init__(self):
+        self._examined = {}      # key -> True
+        self._dropped = {}       # key -> (reason, note)
+
+    def bump(self, key):
+        """Register a site. Returns True the first time this site is seen."""
+        first = key not in self._examined and key not in self._dropped
+        if first:
+            self._dropped[key] = None      # placeholder: seen, not yet disposed
+        return first
+
+    def examine(self, key):
+        self._examined[key] = True
+        self._dropped.pop(key, None)
+
+    def drop(self, key, reason, note=""):
+        if key in self._examined:
+            return                          # a check DID run on this site
+        if self._dropped.get(key) is None:
+            self._dropped[key] = (reason, note)
+
+    def flush(self, cov_sites):
+        """Emit exactly one disposition per distinct site."""
+        if cov_sites is None:
+            return
+        for _ in self._examined:
+            cov_sites.examine()
+        for key, val in sorted(self._dropped.items(), key=lambda kv: str(kv[0])):
+            if val is None:
+                cov_sites.drop("site-seen-but-never-disposed",
+                               note="registered by a pass that then neither "
+                                    "examined nor dropped it")
+            else:
+                cov_sites.drop(val[0], note=val[1])
+
+    @property
+    def distinct(self):
+        return len(self._examined) + len(self._dropped)
+
+
 def _check_key_based_accesses(lines, filepath, all_key_nodes,
-                              cov_sites=None, unverifiable=None, site_totals=None):
+                              cov_sites=None, unverifiable=None, site_totals=None,
+                              ledger=None):
     """Check FindArray("key")->Accessor(N) against all DTA nodes named "key".
 
     For each chained access, verifies:
@@ -172,7 +236,14 @@ def _check_key_based_accesses(lines, filepath, all_key_nodes,
             key = m.group(2)
             accessor = m.group(3)
             index = int(m.group(4))
-            if site_totals is not None:
+            # Same site the CHAINED_RE pass in trace_dta_accesses already
+            # registered: the ledger counts it once and lets a check here
+            # UPGRADE an earlier drop to an examine.
+            skey = (str(filepath), line_no, m.span())
+            if ledger is not None:
+                if ledger.bump(skey) and site_totals is not None:
+                    site_totals['sites'] += 1
+            elif site_totals is not None:
                 site_totals['sites'] += 1
 
             nodes = all_key_nodes.get(key, [])
@@ -183,12 +254,18 @@ def _check_key_based_accesses(lines, filepath, all_key_nodes,
                 # It used to vanish through a bare `continue`.
                 if unverifiable is not None:
                     unverifiable[key] += 1
-                if cov_sites is not None:
+                if ledger is not None:
+                    ledger.drop(skey, "key-absent-from-every-dta",
+                                note="key exists in no parsed DTA — "
+                                     "typo'd-FindArray candidates")
+                elif cov_sites is not None:
                     cov_sites.drop("key-absent-from-every-dta",
                                    note="key exists in no parsed DTA — "
                                         "typo'd-FindArray candidates")
                 continue
-            if cov_sites is not None:
+            if ledger is not None:
+                ledger.examine(skey)
+            elif cov_sites is not None:
                 cov_sites.examine()
 
             # Check bounds: does ANY instance have enough elements?
@@ -261,16 +338,29 @@ def trace_dta_accesses(filepath, hierarchy, main_roots, all_key_nodes=None,
     exists to outlaw.
     """
     findings = []
+    # One ledger per FILE, shared with the second pass below, so a chained site
+    # both passes see is one row rather than two.  See SiteLedger.
+    ledger = SiteLedger()
+    _cur = {"key": None}
 
     def site_drop(reason, note=""):
-        if cov_sites is not None:
+        if _cur["key"] is not None:
+            ledger.drop(_cur["key"], reason, note)
+        elif cov_sites is not None:
             cov_sites.drop(reason, note=note)
 
     def site_keep():
-        if cov_sites is not None:
+        if _cur["key"] is not None:
+            ledger.examine(_cur["key"])
+        elif cov_sites is not None:
             cov_sites.examine()
 
-    def bump():
+    def bump(key=None):
+        if key is not None:
+            _cur["key"] = key
+            if ledger.bump(key) and site_totals is not None:
+                site_totals['sites'] += 1
+            return
         if site_totals is not None:
             site_totals['sites'] += 1
 
@@ -375,7 +465,7 @@ def trace_dta_accesses(filepath, hierarchy, main_roots, all_key_nodes=None,
             key = m.group(2)
             accessor = m.group(3)  # Int, Float, Sym, Str
             index = int(m.group(4))
-            bump()
+            bump((str(filepath), line_no, m.span()))
 
             # Try to resolve the receiver's DTA context
             if receiver:
@@ -463,7 +553,10 @@ def trace_dta_accesses(filepath, hierarchy, main_roots, all_key_nodes=None,
             receiver = m.group(1)
             accessor = m.group(2)
             index = int(m.group(3))
-            bump()
+            # A bare `x->Int(N)` is its own site (no key), but it must go
+            # through the same ledger or it inflates the universe without ever
+            # appearing on the disposition side.
+            bump((str(filepath), line_no, ("pos",) + m.span()))
 
             # Skip if this is part of a chained expression (handled above)
             if f'FindArray' in line and f'->{accessor}({index})' in line:
@@ -502,9 +595,12 @@ def trace_dta_accesses(filepath, hierarchy, main_roots, all_key_nodes=None,
     findings.extend(
         _check_key_based_accesses(lines, filepath, all_key_nodes,
                                   cov_sites=cov_sites, unverifiable=unverifiable,
-                                  site_totals=site_totals)
+                                  site_totals=site_totals, ledger=ledger)
     )
 
+    # Exactly one disposition per DISTINCT site, after both passes have had
+    # their chance to check it.
+    ledger.flush(cov_sites)
     return findings
 
 

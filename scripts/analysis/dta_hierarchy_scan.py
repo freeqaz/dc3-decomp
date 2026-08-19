@@ -55,6 +55,16 @@ CORPUS_HINT = (
 )
 
 
+def parent_key_for(parent_name, key, line_no):
+    """Identity of an assignment site, shared by the two passes that see it.
+
+    The FINDARRAY_RE pass counts the site; the deferred assign_checks loop
+    disposes of it.  They must agree on what "the same site" means or the
+    coverage arithmetic cannot balance.
+    """
+    return (parent_name, key, line_no)
+
+
 def empty_corpus_banner(scanner, dta_count, key_count, sources):
     """Return the loud INCONCLUSIVE block, or None when the corpus is non-empty.
 
@@ -496,12 +506,49 @@ def scan_source_against_hierarchy(src_dir, hierarchy, cov_files=None,
     """
     findings = []
     n_sites = 0          # independent tally: the denominator for cov_sites
+    # DISTINCT sites, not site EVENTS.  Every `var = recv->FindArray("k")` is
+    # matched twice -- once by the ASSIGN_FINDARRAY_RE pass and once by the
+    # FINDARRAY_RE pass -- and both passes bumped n_sites and both disposed of
+    # it.  Measured 2026-08-19: 331 events over 274 distinct sites, 57 of them
+    # counted twice.  The published "21%" was 70/331; the honest distinct-site
+    # figure is 70/274 = 25.5%.
+    #
+    # Note this is INVISIBLE to the exit-4 tripwire: because each event bumps
+    # the universe and lands in exactly one of examined/dropped, a
+    # double-counted site balances perfectly.  The contract catches an
+    # UNCOUNTED row; it cannot catch a TWICE-COUNTED one.
+    seen_sites = set()
+    #: (parent, key, line) of every assignment that really reaches assign_checks
+    assign_sites = {}
+    #: site key -> the deferred check that will dispose of it
+    deferred = {}
 
-    def site_drop(reason, note=""):
+    def site_new(key):
+        """True the first time this textual site is offered for counting."""
+        if key in seen_sites:
+            return False
+        seen_sites.add(key)
+        return True
+
+    # A site is counted ONCE in the universe and disposed ONCE.  Assignment
+    # sites are counted by the FINDARRAY_RE pass and disposed later by the
+    # deferred assign_checks loop, so disposition has to be keyed too or the
+    # arithmetic double-counts on the other side of the ledger.
+    disposed = set()
+
+    def site_drop(reason, note="", key=None):
+        if key is not None:
+            if key in disposed:
+                return
+            disposed.add(key)
         if cov_sites is not None:
             cov_sites.drop(reason, note=note)
 
-    def site_keep():
+    def site_keep(key=None):
+        if key is not None:
+            if key in disposed:
+                return
+            disposed.add(key)
         if cov_sites is not None:
             cov_sites.examine()
 
@@ -553,27 +600,87 @@ def scan_source_against_hierarchy(src_dir, hierarchy, cov_files=None,
             # Track FindArray assignments AND check them against hierarchy
             for m in ASSIGN_FINDARRAY_RE.finditer(line):
                 var_name, parent_name, key = m.groups()
-                n_sites += 1
+                # NOT counted here: the FINDARRAY_RE pass below sees the very
+                # same text and counts it there.  Counting in both passes is
+                # what made 274 sites read as 331.
                 # Skip self-reassignment (def = def->FindArray("editor"))
                 # which creates circular references in the tracker
                 if var_name == parent_name:
-                    site_drop("assign-self-reassignment",
-                              note="def = def->FindArray(..) — circular in the tracker")
                     continue
                 var_parent[var_name] = parent_name
                 var_key[var_name] = key
-                # Also check this assignment's key against hierarchy
+                # Also check this assignment's key against hierarchy.  The
+                # site key travels with it: the FINDARRAY_RE pass below counts
+                # this site into the universe, and THIS deferred check is what
+                # disposes of it.
+                assign_sites[(parent_name, key, line_no)] = None
                 assign_checks.append((line_no, parent_name, key))
 
             # Check all Find* calls
             for m in FINDARRAY_RE.finditer(line):
                 receiver, key = m.groups()
+                if not site_new((str(filepath), line_no, m.span())):
+                    continue          # already counted; do not double-dispose
                 n_sites += 1
 
-                # Skip if this is an assignment (we handle those above)
+                # Skip if this is an assignment (we handle those above).
+                #
+                # THE REASON HAD TO BE MADE TRUE.  This predicate matched the
+                # bare prefix `\w+ = receiver->FindArray` with no constraint on
+                # the arguments, while ASSIGN_FINDARRAY_RE -- the regex that
+                # actually feeds assign_checks -- requires the closing paren
+                # immediately after the key, i.e. it matches ONE-ARGUMENT
+                # FindArray only.  So every `var = recv->FindArray("k", true)`
+                # was dropped with the note "re-examined via assign_checks"
+                # while assign_checks never received it.  Measured on this tree
+                # 2026-08-19: 106 sites carried the label, 57 were captured by
+                # ASSIGN_FINDARRAY_RE, and 49 were captured by nothing.
+                #
+                # A drop with a FALSE reason is worse than an uncounted drop:
+                # an uncounted drop is invisible, but this one told the reader
+                # the population was covered elsewhere when it was not.  The
+                # two populations are now separate slugs, so the coverage block
+                # states the real size of the hole.
                 if re.search(rf'\w+\s*=\s*{re.escape(receiver)}->FindArray', line):
-                    site_drop("assignment-site-checked-separately",
-                              note="same textual site is re-examined via assign_checks")
+                    matching_assigns = [
+                        am for am in ASSIGN_FINDARRAY_RE.finditer(line)
+                        if am.group(2) == receiver and am.group(3) == key]
+                    really_rechecked = bool(matching_assigns)
+                    # `def = def->FindArray("editor")` IS captured by
+                    # ASSIGN_FINDARRAY_RE but the assign pass drops it as
+                    # circular before it ever reaches assign_checks -- so
+                    # nothing downstream disposes of it either.  Exactly one
+                    # site on this tree (src/system/flow/Flow.cpp:701), and it
+                    # was found by the exit-4 check firing at -1 after the
+                    # de-duplication above.
+                    self_reassign = any(am.group(1) == am.group(2)
+                                        for am in matching_assigns)
+                    if self_reassign:
+                        site_drop("assign-self-reassignment",
+                                  note="def = def->FindArray(..) — circular in "
+                                       "the tracker, so the assign pass drops "
+                                       "it and assign_checks never sees it",
+                                  key=(str(filepath), line_no, m.span()))
+                    elif really_rechecked:
+                        # Do NOT dispose here: the deferred assign_checks loop
+                        # is the real check for this site and will dispose it
+                        # with its own reason.  Disposing in both places is the
+                        # mirror image of counting in both places.
+                        deferred[(parent_key_for(receiver, key, line_no))] = \
+                            (str(filepath), line_no, m.span())
+                    else:
+                        # TODO(heuristic): widening ASSIGN_FINDARRAY_RE to accept
+                        # trailing arguments would let these be checked -- but
+                        # that CHANGES WHAT THIS TOOL FINDS, which does not
+                        # belong in an honesty pass.  Left as a counted,
+                        # honestly-named gap, the same way findarray_receiver_scan
+                        # left its gate widening.
+                        site_drop("assignment-site-NOT-rechecked-anywhere",
+                                  note="looks like an assignment, so the Find* "
+                                       "pass skips it -- but ASSIGN_FINDARRAY_RE "
+                                       "matches one-argument FindArray only, so "
+                                       "assign_checks never receives it. Nothing "
+                                       "checks these. 49 of 106 on this tree")
                     continue
 
                 # Skip optional lookups: FindData("key", var, false)
@@ -664,6 +771,7 @@ def scan_source_against_hierarchy(src_dir, hierarchy, cov_files=None,
 
         # Process deferred assignment checks
         for line_no, parent_name, key in assign_checks:
+            skey = deferred.get(parent_key_for(parent_name, key, line_no))
             effective_parent = _resolve_effective_parent(
                 parent_name, var_config, var_parent, var_key
             )
@@ -672,14 +780,16 @@ def scan_source_against_hierarchy(src_dir, hierarchy, cov_files=None,
                 if unverifiable is not None:
                     unverifiable[key] += 1
                 site_drop("key-absent-from-every-dta",
-                          note="key exists in no parsed DTA — typo'd-FindArray candidates")
+                          note="key exists in no parsed DTA — typo'd-FindArray candidates",
+                          key=skey)
                 continue
             if effective_parent is None:
                 site_drop("receiver-unresolvable",
-                          note="receiver is a function parameter / untracked expr")
+                          note="receiver is a function parameter / untracked expr",
+                          key=skey)
                 continue
 
-            site_keep()
+            site_keep(key=skey)
 
             chain = [parent_name]
             root_var = parent_name
