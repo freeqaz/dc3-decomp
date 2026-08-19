@@ -97,7 +97,7 @@ INIT_REVS(0x18, 0)
 void CharClipSet::PreLoad(BinStream &bs) {
     LOAD_REVS(bs);
     ASSERT_REVS(0x18, 0);
-    MILO_ASSERT(d.rev > 3, 0x4E);
+    MILO_ASSERT(d.rev > 3, 0x97);
     ObjectDir::PreLoad(bs);
     bs.PushRev(packRevs(d.altRev, d.rev), this);
 }

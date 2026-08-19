@@ -60,10 +60,10 @@ void StorePanel::Load() {
     if (TheNetCacheMgr)
 #endif
     TheNetCacheMgr->Load((NetCacheMgr::CacheSize)1);
-    MILO_ASSERT(!mStorePreviewMgr, 0x84);
+    MILO_ASSERT(!mStorePreviewMgr, 0xAD);
     mStorePreviewMgr = new StorePreviewMgr();
     mStorePreviewMgr->AddSink(this);
-    MILO_ASSERT(!mPurchaser, 0x88);
+    MILO_ASSERT(!mPurchaser, 0xB1);
     unk94 = 2;
 }
 

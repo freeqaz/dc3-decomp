@@ -1460,7 +1460,7 @@ void ObjectDir::PostLoad(BinStream &bs) {
     if (d.rev > 0x17) {
         int revs2 = d.stream.Cached() ? 0 : bs.PopRev(this);
         int offset = bs.PopRev(this);
-        MILO_ASSERT_RANGE_EQ(offset, 0, mSubDirs.size(), 0x466);
+        MILO_ASSERT_RANGE_EQ(offset, 0, mSubDirs.size(), 0x45D);
         if (revs2 != 2) {
             for (int i = mSubDirs.size() - offset - 1; i >= 0; i--) {
                 bool bbb = false;
