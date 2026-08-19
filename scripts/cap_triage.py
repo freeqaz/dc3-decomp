@@ -38,6 +38,34 @@ from scripts.unicorn_runner.memory_map import CODE_BASE, TRAMPOLINE_BASE, FILL_B
 SENTINEL = 0xDEAD0000
 
 
+def helper_asymmetry(symbol, dcoff, ocoff):
+    """Do the two sides disagree about using the MSVC register-save helpers?
+
+    If they do, the harness's `li r3,0; blr` stub zeroes `this` at entry on the
+    helper-using side and never restores LR on its tail-branch epilogue, so any
+    verdict for that function is fixture noise. Returns "decomp"/"orig"/"both"/"".
+    """
+    from scripts.unicorn_runner import extractor
+    from scripts.cap_helpers import uses_helpers
+    # install() replaces the module-level extractors; use the stashed originals
+    # so this probe always sees the real, un-neutralized relocation set.
+    _d = getattr(extractor, "_cap_orig_decomp", extractor.extract_from_decomp)
+    _o = getattr(extractor, "_cap_orig_original", extractor.extract_from_original)
+    try:
+        _, dr = _d(dcoff, symbol)
+        _, orl = _o(ocoff, symbol)
+    except Exception:
+        return "?"
+    du, ou = uses_helpers(dr), uses_helpers(orl)
+    if du and ou:
+        return "both"
+    if du:
+        return "decomp"
+    if ou:
+        return "orig"
+    return ""
+
+
 def probe(symbol, dcoff, ocoff, cap, fill=None):
     code, bundle, _, err = _run_comparison_core(
         symbol, dcoff, ocoff, max_insns=cap, fill_pattern=fill)
@@ -95,7 +123,14 @@ def main():
     ap.add_argument("--cap", type=int, default=50000)
     ap.add_argument("--out", default="cap_triage.json")
     ap.add_argument("--only", default=None, help="substring filter on symbol")
+    ap.add_argument("--neutralize-helpers", action="store_true",
+                    help="Open-code __savegprlr_N/__restgprlr_N instead of letting "
+                         "the harness stub them (see scripts/cap_helpers.py)")
     a = ap.parse_args()
+
+    if a.neutralize_helpers:
+        from scripts.cap_helpers import install
+        install()
 
     conn = sqlite3.connect(a.db)
     rows = conn.execute(
@@ -118,14 +153,17 @@ def main():
                 dp, op = resolve_unit(short)
                 coff_cache[short] = (COFFParser(dp), COFFParser(op))
             dcoff, ocoff = coff_cache[short]
+            helper_skew = helper_asymmetry(sym, dcoff, ocoff)
             r1 = probe(sym, dcoff, ocoff, a.cap)
             r10 = probe(sym, dcoff, ocoff, a.cap * 10)
             verdict, why = adjudicate(r1, r10)
         except Exception as e:
-            verdict, why, r1, r10 = "ERROR", f"{type(e).__name__}: {e}", {}, {}
+            verdict, why, r1, r10, helper_skew = "ERROR", f"{type(e).__name__}: {e}", {}, {}, "?"
         out.append({"symbol": sym, "unit": unit, "pct": pct,
-                    "triage": verdict, "why": why, "r1x": r1, "r10x": r10})
-        print(f"[{i+1}/{len(rows)}] {verdict:<19} {pct:>5}  {sym[:70]}", flush=True)
+                    "triage": verdict, "why": why, "helper_skew": helper_skew,
+                    "r1x": r1, "r10x": r10})
+        hs = f" [helper-skew:{helper_skew}]" if helper_skew not in ("", "both") else ""
+        print(f"[{i+1}/{len(rows)}] {verdict:<19} {pct:>5}  {sym[:70]}{hs}", flush=True)
         print(f"      {why}", flush=True)
 
     with open(a.out, "w") as f:
