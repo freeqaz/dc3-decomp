@@ -120,11 +120,13 @@ void UIListSlot::Draw(
 #endif
         int thesize = drawstate.mElements.size();
         if (thesize > mElements.size()) {
-            int numSlotElements = mElements.size();
 #ifdef HX_NATIVE
             return;
 #else
-            MILO_FAIL("%i isn't enough elements (need %i)", numSlotElements, thesize);
+            // The retail build instantiates MakeString<unsigned long, int> here,
+            // so the first argument is mElements.size() itself -- not an `int`
+            // temporary. RB3's UIListSlot::Draw spells it the same way.
+            MILO_FAIL("%i isn't enough elements (need %i)", mElements.size(), thesize);
 #endif
         }
         const Transform &rootWorldXfm = root->WorldXfm();
