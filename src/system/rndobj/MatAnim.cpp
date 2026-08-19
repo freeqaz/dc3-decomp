@@ -73,7 +73,7 @@ INIT_REVS(7, 0)
 
 BEGIN_LOADS(RndMatAnim)
     LOAD_REVS(bs)
-    ASSERT_REVS(0, 7)
+    ASSERT_REVS(7, 0)
     if (d.rev > 5) {
         LOAD_SUPERCLASS(Hmx::Object)
     }

@@ -698,14 +698,14 @@ void CharBonesSamples::Save(BinStream &bs) {
             }
         }
         if (mCompression != kCompressNone) {
-            short *endOffset = (short *)(mStart + mOffsets[TYPE_END]);
-            for (short *it = (short *)(mStart + mOffsets[TYPE_ROTX]); it < endOffset;
+            for (short *it = (short *)(mStart + mOffsets[TYPE_ROTX]);
+                 it < (short *)(mStart + mOffsets[TYPE_END]);
                  ++it) {
                 bs << *it;
             }
         } else {
-            float *endOffset = (float *)(mStart + mOffsets[TYPE_END]);
-            for (float *it = (float *)(mStart + mOffsets[TYPE_ROTX]); it < endOffset;
+            for (float *it = (float *)(mStart + mOffsets[TYPE_ROTX]);
+                 it < (float *)(mStart + mOffsets[TYPE_END]);
                  ++it) {
                 bs << *it;
             }

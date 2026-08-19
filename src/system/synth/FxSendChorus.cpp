@@ -53,12 +53,11 @@ BEGIN_LOADS(FxSendChorus)
     }
     bs >> mDelayMs >> mRate >> mDepth;
     if (d.rev < 4) {
-        int feedbackInt;
-        bs >> feedbackInt;
-        mFeedbackPct = feedbackInt;
-        int offsetInt;
-        bs >> offsetInt;
-        mOffsetPct = offsetInt;
+        int pct;
+        bs >> pct;
+        mFeedbackPct = pct;
+        bs >> pct;
+        mOffsetPct = pct;
     } else {
         bs >> mFeedbackPct >> mOffsetPct;
     }

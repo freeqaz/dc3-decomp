@@ -50,7 +50,7 @@ void RndFont3d::Save(BinStream &bs) {
 BEGIN_COPYS(RndFont3d)
     COPY_SUPERCLASS(RndFontBase)
     CREATE_COPY_AS(RndFont3d, f)
-    MILO_ASSERT(f, 0xEB);
+    MILO_ASSERT(f, 0x91);
     mMat.CopyRef(f->mMat);
     mCellSize = f->mCellSize;
     mInvCellSize = f->mInvCellSize;
