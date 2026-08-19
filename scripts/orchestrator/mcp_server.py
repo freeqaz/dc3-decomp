@@ -743,12 +743,24 @@ class DecompMCPServer:
                                 "type": "string",
                                 "description": (
                                     "Filter by divergence class (only when unicorn_verdict='DIVERGENT'). "
-                                    "Real bugs: 'logic', 'call_count', 'call_arg', 'return_value', "
-                                    "'object_memory', 'error', 'wild_jump_match', 'cap_exhausted', "
-                                    "'cap_exhausted_decomp'. "
-                                    "Unfixable artifacts: 'build_env', 'regalloc', 'merged_call', "
-                                    "'merged_arg', 'stack_layout', 'fpr_precision', 'orig_error', "
-                                    "'cap_exhausted_orig'."
+                                    "PINPOINTED (adjudicate individually): 'error' (decomp side faults "
+                                    "where the original does not -- the highest-precision signal in the "
+                                    "oracle), 'logic', 'call_arg', 'object_memory', 'return_value' "
+                                    "(check the return type first: the comparator compares r3 without "
+                                    "knowing it, so void/float-returning functions are false positives). "
+                                    "MEASURED ARTIFACTS -- do not report these as bugs: 'data_layout' "
+                                    "(the only differing values are addresses the harness assigns per "
+                                    "side; 79% of all divergent rows), 'cap_exhausted' 72%, "
+                                    "'cap_exhausted_decomp' 97%, 'cap_exhausted_orig' 98%, 'call_count' "
+                                    "83%, 'build_env', 'regalloc', 'merged_call', 'merged_arg', "
+                                    "'stack_layout', 'fpr_precision', 'orig_error'. NOT PINPOINTED: "
+                                    "'wild_jump_match' (both sides crashed somewhere DIFFERENT -- a "
+                                    "whole-function-rewrite signal, not a defect), "
+                                    "'unmapped_access_mismatch' (manufactured by the trampoline stub "
+                                    "returning 0 where a ctor returns this). "
+                                    "A pinpointed class on a 100%-matched function is STRUCTURALLY an "
+                                    "artifact: identical bytes and identical inputs cannot behave "
+                                    "differently. Pair with min_unicorn_harness_version=4."
                                 ),
                                 "enum": [
                                     "logic", "build_env", "regalloc",
@@ -756,7 +768,8 @@ class DecompMCPServer:
                                     "object_memory", "error", "orig_error",
                                     "merged_call", "merged_arg",
                                     "stack_layout", "fpr_precision",
-                                    "wild_jump_match",
+                                    "wild_jump_match", "data_layout",
+                                    "unmapped_access_mismatch",
                                     "cap_exhausted", "cap_exhausted_decomp",
                                     "cap_exhausted_orig",
                                 ],
@@ -772,6 +785,19 @@ class DecompMCPServer:
                                     "high", "stable_divergent",
                                     "input_sensitive", "fixture_sensitive",
                                 ],
+                            },
+                            "min_unicorn_harness_version": {
+                                "type": "integer",
+                                "description": (
+                                    "Only rows whose unicorn verdict was produced by emulation-harness "
+                                    "version >= N. Pass 4 to exclude every verdict measured before the "
+                                    "2026-08-18/19 defect fixes -- that harness stubbed MSVC's "
+                                    "register-save helpers, so bl __savegprlr_N zeroed this/arg0 at the "
+                                    "second instruction of the prologue and 87.5% of functions spun to "
+                                    "the instruction cap; it overstated real bugs ~8x. Rows with no "
+                                    "recorded harness version are excluded by this filter. Changelog: "
+                                    "scripts/unicorn_runner/signal_version.py:HARNESS_VERSION."
+                                ),
                             },
                             "is_stub": {
                                 "type": "boolean",
@@ -1098,6 +1124,7 @@ class DecompMCPServer:
         unicorn_verdict = args.get("unicorn_verdict")
         unicorn_class = args.get("unicorn_class")
         unicorn_confidence = args.get("unicorn_confidence")
+        min_unicorn_harness_version = args.get("min_unicorn_harness_version")
         is_stub = args.get("is_stub")
 
         # Map status filter to database query params
@@ -1131,6 +1158,7 @@ class DecompMCPServer:
             unicorn_verdict=unicorn_verdict,
             unicorn_class=unicorn_class,
             unicorn_confidence=unicorn_confidence,
+            min_unicorn_harness_version=min_unicorn_harness_version,
             is_stub=is_stub,
         )
 

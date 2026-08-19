@@ -14,7 +14,7 @@ from typing import Any
 DEFAULT_DB_PATH = "decomp.db"
 
 # Schema version for migrations
-SCHEMA_VERSION = 15
+SCHEMA_VERSION = 16
 
 # Default maximum attempts before deprioritizing a function
 # Functions with >= this many attempts are excluded from normal queries
@@ -484,6 +484,32 @@ def _run_migrations(conn: sqlite3.Connection, from_version: int, to_version: int
                 if "duplicate column" not in str(e).lower():
                     raise
 
+    if from_version < 16 <= to_version:
+        # Migration v15 -> v16: Add unicorn HARNESS provenance columns.
+        #
+        # v15's unicorn_signal_version describes the COMPARATOR semantics. It
+        # says nothing about the emulation harness those semantics ran on, and
+        # eight harness defects fixed 2026-08-18/19 changed verdicts wholesale
+        # without touching one comparator rule -- so signal_version stayed 3 and
+        # nothing in the DB distinguished a verdict from the broken harness
+        # (which overstated real bugs by roughly 8x) from a verdict from the
+        # fixed one. These two columns close that gap.
+        #   unicorn_harness_version  — see scripts/unicorn_runner/signal_version.py
+        #                              HARNESS_VERSION for the h1..hN changelog.
+        #                              NULL or 1 == pre-2026-08-18, do not trust.
+        #   unicorn_harness_build    — git short rev of the tree that measured it.
+        print("  Migration v16: Adding unicorn harness provenance columns...")
+        new_columns = [
+            ("unicorn_harness_version", "INTEGER"),
+            ("unicorn_harness_build", "TEXT"),
+        ]
+        for col_name, col_def in new_columns:
+            try:
+                conn.execute(f"ALTER TABLE functions ADD COLUMN {col_name} {col_def}")
+            except sqlite3.OperationalError as e:
+                if "duplicate column" not in str(e).lower():
+                    raise
+
     # Update schema version
     conn.execute("UPDATE schema_version SET version = ?", (to_version,))
     conn.commit()
@@ -817,6 +843,7 @@ def query_functions(
     unicorn_verdict: str | None = None,
     unicorn_class: str | None = None,
     unicorn_confidence: str | None = None,
+    min_unicorn_harness_version: int | None = None,
     is_stub: bool | None = None,
 ) -> list[dict[str, Any]]:
     """
@@ -831,6 +858,12 @@ def query_functions(
         unicorn_class: Filter by divergence class (logic, build_env, regalloc, ...)
         unicorn_confidence: Filter by confidence (high, stable_divergent,
                             input_sensitive, fixture_sensitive)
+        min_unicorn_harness_version: Only rows whose unicorn verdict was produced
+                            by harness version >= N. Pass 4 to exclude every
+                            verdict measured before the 2026-08-18/19 defect
+                            fixes (that harness overstated real bugs ~8x). NULL
+                            harness_version rows are always excluded by this
+                            filter. See scripts/unicorn_runner/signal_version.py.
 
     Returns list of function dicts.
     """
@@ -844,7 +877,8 @@ def query_functions(
 
     query = f"""
         SELECT id, symbol, demangled, unit, size, current_percent, best_percent,
-               verdict, verdict_reason, locked_by, attempt_count
+               verdict, verdict_reason, locked_by, attempt_count,
+               unicorn_verdict, unicorn_class, unicorn_harness_version
         FROM functions
         WHERE {glob_clause}
           AND (current_percent IS NULL OR (current_percent >= ? AND current_percent <= ?))
@@ -887,6 +921,10 @@ def query_functions(
 
     if unicorn_confidence:
         query += f" AND unicorn_confidence = '{unicorn_confidence}'"
+
+    if min_unicorn_harness_version is not None:
+        query += (f" AND unicorn_harness_version IS NOT NULL"
+                  f" AND unicorn_harness_version >= {int(min_unicorn_harness_version)}")
 
     # Exclude functions that have been tried too many times
     if max_attempts is not None:

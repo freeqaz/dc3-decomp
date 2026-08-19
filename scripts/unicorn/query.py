@@ -16,17 +16,47 @@ from scripts.orchestrator.database import get_connection
 
 DEFAULT_DB = os.path.join(PROJECT_ROOT, "decomp.db")
 
+# Divergence classes that are properties of the EMULATION HARNESS, not of our
+# source. Measured artifact rates where known are in the note. Printing a raw
+# DIVERGENT count without this split is how the oracle acquired its reputation
+# for overstating bugs ~8x.
+ARTIFACT_CLASS_NOTES = {
+    "data_layout": "ARTIFACT: only differing values are addresses the harness "
+                   "assigns per side (GLOBAL/RDATA/TRAMPOLINE)",
+    "build_env": "ARTIFACT: __FILE__ strings / merged-symbol calls",
+    "regalloc": "ARTIFACT: register values only",
+    "stack_layout": "ARTIFACT: differing frame addresses",
+    "merged_call": "ARTIFACT: ICF-merged callee",
+    "merged_arg": "ARTIFACT: ICF-merged callee argument",
+    "fpr_precision": "ARTIFACT: FMA/precision on a float return",
+    "orig_error": "ARTIFACT: the ORIGINAL binary faults; property of the target",
+    "cap_exhausted": "ARTIFACT ~72%: instruction cap hit on both sides",
+    "cap_exhausted_orig": "ARTIFACT ~98%: cap hit on the original side",
+    "cap_exhausted_decomp": "ARTIFACT ~97%: cap hit on our side",
+    "call_count": "ARTIFACT ~83%: often just how many stub hits fit the budget",
+    "wild_jump_match": "NOT PINPOINTED: both sides crashed somewhere different; "
+                       "whole-function-rewrite signal, not a defect",
+    "unmapped_access_mismatch": "SUSPECT: trampoline stubs return 0 where a ctor "
+                                "returns this, which manufactures these",
+}
+
 
 def query_functions(args):
     conn = get_connection(args.db)
 
     select = """
         SELECT symbol, demangled, unit, current_percent, best_percent, verdict,
-               unicorn_verdict, unicorn_class, unicorn_confidence, unicorn_tested_at
+               unicorn_verdict, unicorn_class, unicorn_confidence, unicorn_tested_at,
+               unicorn_harness_version
         FROM functions
         WHERE unicorn_verdict IS NOT NULL
     """
     params = []
+
+    if args.min_harness is not None:
+        select += (" AND unicorn_harness_version IS NOT NULL"
+                   " AND unicorn_harness_version >= ?")
+        params.append(args.min_harness)
 
     if args.verdict:
         select += " AND unicorn_verdict = ?"
@@ -64,6 +94,11 @@ def print_summary(conn, args):
     """Print counts by verdict and class."""
     where = "WHERE unicorn_verdict IS NOT NULL"
     params = []
+
+    if args.min_harness is not None:
+        where += (" AND unicorn_harness_version IS NOT NULL"
+                  " AND unicorn_harness_version >= ?")
+        params.append(args.min_harness)
 
     if args.unit:
         pattern = args.unit.replace("*", "%")
@@ -104,8 +139,29 @@ def print_summary(conn, args):
     if class_rows:
         div_total = sum(r["cnt"] for r in class_rows)
         print(f"\nDivergence class breakdown ({div_total} divergent):")
+        n_artifact = 0
         for r in class_rows:
-            print(f"  {r['unicorn_class']:16s}  {r['cnt']:>5d}")
+            note = ARTIFACT_CLASS_NOTES.get(r["unicorn_class"], "")
+            if note.startswith("ARTIFACT"):
+                n_artifact += r["cnt"]
+            print(f"  {r['unicorn_class']:24s}  {r['cnt']:>5d}"
+                  + (f"   {note}" if note else ""))
+        print(f"  {'-' * 24}  {'-' * 5}")
+        print(f"  {'known-artifact classes':24s}  {n_artifact:>5d}   "
+              f"({100.0 * n_artifact / div_total:.1f}% of divergent)")
+
+    # PROVENANCE. Never print a unicorn count without saying which harness
+    # produced it: h1 (pre-2026-08-18) overstated real bugs by roughly 8x.
+    hv_rows = conn.execute(
+        f"""SELECT COALESCE(unicorn_harness_version, 1) AS hv, COUNT(*) AS cnt
+            FROM functions {where} GROUP BY hv ORDER BY hv DESC""",
+        params,
+    ).fetchall()
+    if hv_rows:
+        print("\nHarness provenance (see scripts/unicorn_runner/signal_version.py):")
+        for r in hv_rows:
+            note = "" if r["hv"] >= 4 else "   <-- STALE, do not trust"
+            print(f"  h{r['hv']:<15d}  {r['cnt']:>5d}{note}")
 
 
 def print_table(rows):
@@ -114,8 +170,9 @@ def print_table(rows):
         print("No functions matched the query.")
         return
 
-    print(f"\n{'Symbol':<60s} {'Match%':>6s} {'Verdict':>10s} {'Class':>10s} {'Status':>10s}")
-    print("-" * 100)
+    print(f"\n{'Symbol':<60s} {'Match%':>6s} {'Verdict':>10s} {'Class':>16s} "
+          f"{'Status':>10s} {'Hrn':>4s}")
+    print("-" * 112)
 
     for r in rows:
         name = r["demangled"] or r["symbol"]
@@ -125,7 +182,10 @@ def print_table(rows):
         u_verdict = r["unicorn_verdict"] or ""
         u_class = r["unicorn_class"] or ""
         status = r["verdict"] or ""
-        print(f"{name:<60s} {pct:>6s} {u_verdict:>10s} {u_class:>10s} {status:>10s}")
+        hv = r["unicorn_harness_version"]
+        hv_s = f"h{hv}" if hv is not None else "h1?"
+        print(f"{name:<60s} {pct:>6s} {u_verdict:>10s} {u_class:>16s} "
+              f"{status:>10s} {hv_s:>4s}")
 
     print(f"\nTotal: {len(rows)} functions")
 
@@ -139,8 +199,11 @@ def main():
         help="Filter by unicorn verdict"
     )
     parser.add_argument(
-        "--class", dest="cls", type=str, choices=["logic", "build_env", "regalloc"],
-        help="Filter by divergence class"
+        "--class", dest="cls", type=str,
+        help="Filter by divergence class (logic, build_env, regalloc, data_layout, "
+             "stack_layout, call_count, call_arg, cap_exhausted[_orig|_decomp], "
+             "wild_jump_match, merged_call, merged_arg, fpr_precision, orig_error, "
+             "error, return_value, object_memory, unmapped_access_mismatch)"
     )
     parser.add_argument(
         "--unit", type=str,
@@ -150,6 +213,11 @@ def main():
         "--status", type=str, choices=["workable", "complete", "at_limit", "all"],
         default=None,
         help="Filter by function status"
+    )
+    parser.add_argument(
+        "--min-harness", type=int, default=None, metavar="N",
+        help="Only rows measured by unicorn harness version >= N. Pass 4 to "
+             "exclude every verdict from before the 2026-08-18/19 defect fixes."
     )
     parser.add_argument(
         "--limit", type=int, default=None,

@@ -1,0 +1,4600 @@
+{
+  "class_counts": {
+    "DIVERGENT/build_env": 217,
+    "DIVERGENT/call_arg": 4,
+    "DIVERGENT/call_count": 53,
+    "DIVERGENT/cap_exhausted": 2096,
+    "DIVERGENT/cap_exhausted_decomp": 8,
+    "DIVERGENT/cap_exhausted_orig": 6,
+    "DIVERGENT/data_layout": 9815,
+    "DIVERGENT/fpr_precision": 1,
+    "DIVERGENT/merged_arg": 1,
+    "DIVERGENT/merged_call": 21,
+    "DIVERGENT/object_memory": 7,
+    "DIVERGENT/orig_error": 7,
+    "DIVERGENT/regalloc": 6,
+    "DIVERGENT/return_value": 10,
+    "DIVERGENT/stack_layout": 107,
+    "DIVERGENT/unmapped_access_mismatch": 1,
+    "DIVERGENT/wild_jump_match": 47,
+    "EQUIVALENT/None": 16943,
+    "ERROR/None": 8,
+    "SKIPPED/None": 344
+  },
+  "pinpointed_rows": [
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 99.98,
+      "reason": "call_arg_mismatch",
+      "symbol": "?KinectGuideThread@@YAKPAX@Z",
+      "unit": "default/App",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "return_value",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 85.26,
+      "reason": "return_value_mismatch",
+      "symbol": "?getMasher@KeyChain@@YAXPAE@Z",
+      "unit": "default/keygen_xbox",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "return_value",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "return_value_mismatch",
+      "symbol": "?getKeyImpl@@YAXPAEPAD0@Z",
+      "unit": "default/keygen_xbox",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FcountInMsg@?CF@??OnBeat@BustAMovePanel@@QAAXXZ@YAXXZ",
+      "unit": "default/lazer/game/BustAMovePanel",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FplayVOMsg@?1??PlayVO@BustAMovePanel@@QAAXVSymbol@@@Z@YAXXZ",
+      "unit": "default/lazer/game/BustAMovePanel",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FcountInMsg@?1??CountIn@BustAMovePanel@@AAAXH@Z@YAXXZ",
+      "unit": "default/lazer/game/BustAMovePanel",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FmoveFinishedMsg@?1??ShowMoveRating@BustAMovePanel@@AAAXW4MoveRating@@H@Z@YAXXZ",
+      "unit": "default/lazer/game/BustAMovePanel",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FresultMessage@?1??SetRoundFailure@BustAMovePanel@@AAAXXZ@YAXXZ",
+      "unit": "default/lazer/game/BustAMovePanel",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FvoLengthMsg@?1??GetMovePromptVOLength@BustAMovePanel@@AAAMXZ@YAXXZ",
+      "unit": "default/lazer/game/BustAMovePanel",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FvoLengthMsg@?3??PlayIntroVO@BustAMovePanel@@AAAXXZ@YAXXZ",
+      "unit": "default/lazer/game/BustAMovePanel",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FgetReadyMsg@?1??ShowGetReadyCard@BustAMovePanel@@AAAXVSymbol@@W4SkeletonSide@@@Z@YAXXZ",
+      "unit": "default/lazer/game/BustAMovePanel",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fpause_game@?N@??PauseForSkeletonLoss@Game@@AAAXXZ@YAXXZ",
+      "unit": "default/lazer/game/Game",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fmsg@?BC@??SetPaused@Game@@AAAX_N0@Z@YAXXZ",
+      "unit": "default/lazer/game/Game",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fmsg@?BA@??SetPaused@Game@@AAAX_N0@Z@YAXXZ",
+      "unit": "default/lazer/game/Game",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "merged_call",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 92.02,
+      "reason": "call_count_mismatch",
+      "symbol": "?OnCycleTestDancer@@YA?AVDataNode@@PAVDataArray@@@Z",
+      "unit": "default/lazer/game/Game",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fload_game_hud@?1??SetGameplayMode@GameMode@@QAAXVSymbol@@_N@Z@YAXXZ",
+      "unit": "default/lazer/game/GameMode",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__EgLoopVizCallback@@YAXXZ",
+      "unit": "default/lazer/game/GamePanel",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FgLoopVizCallback@@YAXXZ",
+      "unit": "default/lazer/game/GamePanel",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FgGamePanelCallback@@YAXXZ",
+      "unit": "default/lazer/game/GamePanel",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fpick_intro@?1??StartIntro@GamePanel@@AAAXXZ@YAXXZ",
+      "unit": "default/lazer/game/GamePanel",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fentermsg@?1??ReloadData@GamePanel@@IAAXXZ@YAXXZ",
+      "unit": "default/lazer/game/GamePanel",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fexit@?1??SetTypeDef@GamePanel@@UAAXPAVDataArray@@@Z@YAXXZ",
+      "unit": "default/lazer/game/GamePanel",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 96.31,
+      "reason": "call_arg_mismatch",
+      "symbol": "?OnMsg@GamePanel@@IAA?AVDataNode@@ABVEndGameMsg@@@Z",
+      "unit": "default/lazer/game/GamePanel",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FcGetSelectedDiffMsg@?4??GetSelectedDiff@CampaignDiffSelectPanel@@QAA?AW4Difficulty@@XZ@YAXXZ",
+      "unit": "default/lazer/meta_ham/CampaignDiffSelectPanel",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FcGetSelectedCrewMsg@?1??GetSelectedCrew@CampaignMasterQuestCrewSelectPanel@@QAA?AVSymbol@@XZ@YAXXZ",
+      "unit": "default/lazer/meta_ham/CampaignMasterQuestCrewSelectPanel",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_arg_mismatch",
+      "symbol": "?UpdateEraSong@CampaignProgress@@QAAXVSymbol@@0H@Z",
+      "unit": "default/lazer/meta_ham/CampaignProgress",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FchallengesFailedLiveMsg@?1??ReadPlayerChallengesComplete@Challenges@@AAAX_N@Z@YAXXZ",
+      "unit": "default/lazer/meta_ham/Challenges",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FchallengesFailedRcMsg@?1??ReadPlayerChallengesComplete@Challenges@@AAAX_N@Z@YAXXZ",
+      "unit": "default/lazer/meta_ham/Challenges",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FallUpdatedMsg@?1??ReadPlayerChallengesComplete@Challenges@@AAAX_N@Z@YAXXZ",
+      "unit": "default/lazer/meta_ham/Challenges",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FchallengesFailedLiveMsg@?1??ReadOfficialChallengesComplete@Challenges@@AAAX_N@Z@YAXXZ",
+      "unit": "default/lazer/meta_ham/Challenges",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FchallengesFailedRcMsg@?1??ReadOfficialChallengesComplete@Challenges@@AAAX_N@Z@YAXXZ",
+      "unit": "default/lazer/meta_ham/Challenges",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FallUpdatedMsg@?1??ReadOfficialChallengesComplete@Challenges@@AAAX_N@Z@YAXXZ",
+      "unit": "default/lazer/meta_ham/Challenges",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FchallengesFailedLiveMsg@?1??ReadBadgeInfo@Challenges@@AAAX_N@Z@YAXXZ",
+      "unit": "default/lazer/meta_ham/Challenges",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FchallengesFailedRcMsg@?1??ReadBadgeInfo@Challenges@@AAAX_N@Z@YAXXZ",
+      "unit": "default/lazer/meta_ham/Challenges",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FbadgeUpdatedMsg@?1??ReadBadgeInfo@Challenges@@AAAX_N@Z@YAXXZ",
+      "unit": "default/lazer/meta_ham/Challenges",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fmsg@?1??SaveLoadComplete@HamProfile@@UAAXW4ProfileSaveState@@@Z@YAXXZ",
+      "unit": "default/lazer/meta_ham/HamProfile",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Finit@?1??OnMsg@HamUI@@IAA?AVDataNode@@ABVContentReadFailureMsg@@@Z@YAXXZ",
+      "unit": "default/lazer/meta_ham/HamUI",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FresetControllerModeTimeoutMsg@?1??OnMsg@HamUI@@IAA?AVDataNode@@ABVButtonDownMsg@@@Z@YAXXZ",
+      "unit": "default/lazer/meta_ham/HamUI",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FethernetDisconnectedMsg@?7??Poll@Leaderboards@@QAAXXZ@YAXXZ",
+      "unit": "default/lazer/meta_ham/Leaderboards",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FleaderboardsFailedLiveMsg@?6??ReadScoresComplete@Leaderboards@@QAAX_N0@Z@YAXXZ",
+      "unit": "default/lazer/meta_ham/Leaderboards",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FleaderboardsFailedRcMsg@?6??ReadScoresComplete@Leaderboards@@QAAX_N0@Z@YAXXZ",
+      "unit": "default/lazer/meta_ham/Leaderboards",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FleaderboardsLoadedMsg@?6??ReadScoresComplete@Leaderboards@@QAAX_N0@Z@YAXXZ",
+      "unit": "default/lazer/meta_ham/Leaderboards",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fmsg@?1??PostProcScores@Leaderboards@@AAAXXZ@YAXXZ",
+      "unit": "default/lazer/meta_ham/Leaderboards",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FtickerCommandsMsg@?BD@??SyncToPanel@LetterboxPanel@@QAAXPAVUIPanel@@@Z@YAXXZ",
+      "unit": "default/lazer/meta_ham/LetterboxPanel",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?ToggleUnlockAll@MetaPanel@@SA?AVDataNode@@PAVDataArray@@@Z",
+      "unit": "default/lazer/meta_ham/MetaPanel",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?ToggleMotdCheat@MetaPanel@@SA?AVDataNode@@PAVDataArray@@@Z",
+      "unit": "default/lazer/meta_ham/MetaPanel",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "wild_jump_match",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 94.99,
+      "reason": "wild_jump_match",
+      "symbol": "?CheckRecommendedPracticeMove@MetaPerformer@@IBA_NVString@@H@Z",
+      "unit": "default/lazer/meta_ham/MetaPerformer",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "merged_call",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_count_mismatch",
+      "symbol": "?_M_erase@?$vector@V?$vector@PAUUnlockable@?A0xf8e4b4b5@@V?$StlNodeAlloc@PAUUnlockable@?A0xf8e4b4b5@@@stlpmtx_std@@@stlpmtx_std@@V?$StlNodeAlloc@V?$vector@PAUUnlockable@?A0xf8e4b4b5@@V?$StlNodeAlloc@PAUUnlockable@?A0xf8e4b4b5@@@stlpmtx_std@@@stlpmtx_std@@@2@@stlpmtx_std@@IAAPAV?$vector@PAUUnlockable@?A0xf8e4b4b5@@V?$StlNodeAlloc@PAUUnlockable@?A0xf8e4b4b5@@@stlpmtx_std@@@2@PAV32@0ABU__true_type@2@@Z",
+      "unit": "default/lazer/meta_ham/MetagameRank",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fmsg@?1??OnSelectShortcut@NavListSort@@UAAXH@Z@YAXXZ",
+      "unit": "default/lazer/meta_ham/NavListSort",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FjoinMsg@?1??SetPlaying@OvershellSlot@@QAAX_N@Z@YAXXZ",
+      "unit": "default/lazer/meta_ham/Overshell",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FquitMsg@?1??SetPlaying@OvershellSlot@@QAAX_N@Z@YAXXZ",
+      "unit": "default/lazer/meta_ham/Overshell",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FcSetup1AlertMsg@?N@??ClearPassiveMessage@PassiveMessageQueue@@IAAXXZ@YAXXZ",
+      "unit": "default/lazer/meta_ham/PassiveMessenger",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FcSetup0AlertMsg@?8??ClearPassiveMessage@PassiveMessageQueue@@IAAXXZ@YAXXZ",
+      "unit": "default/lazer/meta_ham/PassiveMessenger",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FcSetupAlertMsg@?4??ClearPassiveMessage@PassiveMessageQueue@@IAAXXZ@YAXXZ",
+      "unit": "default/lazer/meta_ham/PassiveMessenger",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Finit@?1??TriggerSignoutEvent@ProfileMgr@@AAAXXZ@YAXXZ",
+      "unit": "default/lazer/meta_ham/ProfileMgr",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fmsg@?1??UpdateStatus@SaveLoadManager@@IAAXW4SaveLoadMgrStatus@@@Z@YAXXZ",
+      "unit": "default/lazer/meta_ham/SaveLoadManager",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FcontrollerModeExited@?3??ExitControllerMode@ShellInput@@QAAX_N@Z@YAXXZ",
+      "unit": "default/lazer/meta_ham/ShellInput",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fpost_sides_switched@?1??ForceSwapPlayerSides@SkeletonChooser@@AAAXXZ@YAXXZ",
+      "unit": "default/lazer/meta_ham/SkeletonChooser",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FcSwapPlayersMsg@?1??ForceSwapPlayerSides@SkeletonChooser@@AAAXXZ@YAXXZ",
+      "unit": "default/lazer/meta_ham/SkeletonChooser",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fmsg@?4??MoveOn@SongSortMgr@@UAA?AVSymbol@@XZ@YAXXZ",
+      "unit": "default/lazer/meta_ham/SongSortMgr",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FrefreshAlbumArtMsg@?1??ContentMounted@VoiceControlPanel@@UAAXPBD0@Z@YAXXZ",
+      "unit": "default/lazer/meta_ham/VoiceControlPanel",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "orig_error",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "orig_error",
+      "symbol": "?GetKgForPounds@WeightInputProvider@@QBAMM@Z",
+      "unit": "default/lazer/meta_ham/WeightInput",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fmsg@?4??SendCallback@RCJob@@MAAX_N0@Z@YAXXZ",
+      "unit": "default/lazer/net_ham/RCJobDingo",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fmsg@?4??OnMsg@RockCentral@@QAA?AVDataNode@@ABVRCJobCompleteMsg@@@Z@YAXXZ",
+      "unit": "default/lazer/net_ham/RockCentral",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__ETheCharDebug@@YAXXZ",
+      "unit": "default/system/char/Char",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__F?sFacingRotAndPos@FacingSet@CharClip@@2UFacingBones@12@A@@YAXXZ",
+      "unit": "default/system/char/CharClip",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__F?sFacingPos@FacingSet@CharClip@@2UFacingBones@12@A@@YAXXZ",
+      "unit": "default/system/char/CharClip",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "cap_exhausted_orig",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "cap_exhausted_orig",
+      "symbol": "?resize@?$vector@V?$map@HMU?$less@H@stlpmtx_std@@V?$StlNodeAlloc@U?$pair@$$CBHM@stlpmtx_std@@@2@@stlpmtx_std@@V?$StlNodeAlloc@V?$map@HMU?$less@H@stlpmtx_std@@V?$StlNodeAlloc@U?$pair@$$CBHM@stlpmtx_std@@@2@@stlpmtx_std@@@2@@stlpmtx_std@@QAAXIABV?$map@HMU?$less@H@stlpmtx_std@@V?$StlNodeAlloc@U?$pair@$$CBHM@stlpmtx_std@@@2@@2@@Z",
+      "unit": "default/system/char/CharClip",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 93.83,
+      "reason": "call_arg_mismatch",
+      "symbol": "??$sort@UAlphabetically@@@?$ObjPtrVec@VCharClip@@VObjectDir@@@@QAAXABUAlphabetically@@@Z",
+      "unit": "default/system/char/CharClipGroup",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_arg_mismatch",
+      "symbol": "?Sort@CharClipGroup@@QAAXXZ",
+      "unit": "default/system/char/CharClipGroup",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 99.99,
+      "reason": "call_arg_mismatch",
+      "symbol": "?Load@CharCuff@@UAAXAAVBinStream@@@Z",
+      "unit": "default/system/char/CharCuff",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 100.0,
+      "reason": "call_arg_mismatch",
+      "symbol": "?Load@CharCuff@@$4PPPPPPPM@A@AAXAAVBinStream@@@Z",
+      "unit": "default/system/char/CharCuff",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 96.08,
+      "reason": "call_arg_mismatch",
+      "symbol": "?LidTrackAndClampingUpdate@CharEyes@@IAAXAAUEyeDesc@1@M@Z",
+      "unit": "default/system/char/CharEyes",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 90.95,
+      "reason": "call_arg_mismatch",
+      "symbol": "?NextLook@CharEyes@@IAAXXZ",
+      "unit": "default/system/char/CharEyes",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fviseme_list@?3??SetClips@PlayBack@CharLipSync@@QAAXV?$ObjPtr@VObjectDir@@@@@Z@YAXXZ",
+      "unit": "default/system/char/CharLipSync",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fviseme_list@?3??Poll@PlayBack@CharLipSync@@QAAXM@Z@YAXXZ",
+      "unit": "default/system/char/CharLipSync",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 99.71,
+      "reason": "call_arg_mismatch",
+      "symbol": "?DrawBounds@@YAXVVector3@@ABVMatrix3@Hmx@@ABV1@PAVRndGraph@@@Z",
+      "unit": "default/system/char/CharLookAt",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 89.08,
+      "reason": "call_arg_mismatch",
+      "symbol": "?SortPolls@CharPollGroup@@QAAXXZ",
+      "unit": "default/system/char/CharPollGroup",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?OnToggleCharTaskGraph@?A0xcbf35356@@YA?AVDataNode@@PAVDataArray@@@Z",
+      "unit": "default/system/char/CharTaskMgr",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??1AutoSetCurrentCharacter@@QAA@XZ",
+      "unit": "default/system/char/Character",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fvw@?1??ValidWaypoint@ClipCollide@@IAA_NPAVWaypoint@@@Z@YAXXZ",
+      "unit": "default/system/char/ClipCollide",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_count_mismatch",
+      "symbol": "?FindNodes@ClipDistMap@@QAAXMMM@Z",
+      "unit": "default/system/char/ClipDistMap",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fmsg@?4??Clear@Merger@FileMerger@@QAAX_N@Z@YAXXZ",
+      "unit": "default/system/char/FileMerger",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fmsg@?1??StartLoadInternal@FileMerger@@IAA_N_N0@Z@YAXXZ",
+      "unit": "default/system/char/FileMerger",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fmsg@?5??PostMerge@FileMerger@@IAAXPAUMerger@1@PAVDirLoader@@_N@Z@YAXXZ",
+      "unit": "default/system/char/FileMerger",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "cap_exhausted_decomp",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 97.65,
+      "reason": "cap_exhausted_decomp",
+      "symbol": "?_M_insert_overflow_aux@?$vector@UMerger@FileMerger@@V?$StlNodeAlloc@UMerger@FileMerger@@@stlpmtx_std@@@stlpmtx_std@@IAAXPAUMerger@FileMerger@@ABU34@ABU__false_type@2@I_N@Z",
+      "unit": "default/system/char/FileMerger",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "return_value",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 86.48,
+      "reason": "return_value_mismatch",
+      "symbol": "?Reset@EQEffect@@QAAXXZ",
+      "unit": "default/system/dsp/EQEffect",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "regalloc",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_arg_mismatch",
+      "symbol": "??0EQEffect@@QAA@PAUIXAudioBatchAllocator@@@Z",
+      "unit": "default/system/dsp/EQEffect",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 90.08,
+      "reason": "call_arg_mismatch",
+      "symbol": "??1Flow@@UAA@XZ",
+      "unit": "default/system/flow/Flow",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "orig_error",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 93.45,
+      "reason": "orig_error",
+      "symbol": "?PostLoad@Flow@@UAAXAAVBinStream@@@Z",
+      "unit": "default/system/flow/Flow",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "orig_error",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "orig_error",
+      "symbol": "?PostLoad@Flow@@$4PPPPPPPM@A@AAXAAVBinStream@@@Z",
+      "unit": "default/system/flow/Flow",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_arg_mismatch",
+      "symbol": "??_GFlow@@UAAPAXI@Z",
+      "unit": "default/system/flow/Flow",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 93.83,
+      "reason": "call_arg_mismatch",
+      "symbol": "??$sort@UObjNameSort@@@?$ObjPtrVec@VObject@Hmx@@VObjectDir@@@@QAAXABUObjNameSort@@@Z",
+      "unit": "default/system/flow/FlowMultiSetProperty",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fmsg@?L@??Poll@PropertyTask@@UAAXM@Z@YAXXZ",
+      "unit": "default/system/flow/FlowSetProperty",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "orig_error",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 98.73,
+      "reason": "orig_error",
+      "symbol": "?ReActivate@FlowSetProperty@@QAAXXZ",
+      "unit": "default/system/flow/FlowSetProperty",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 93.83,
+      "reason": "call_arg_mismatch",
+      "symbol": "??$sort@$$A6A_NPAVFlowNode@@0@Z@?$ObjPtrVec@VFlowNode@@VObjectDir@@@@QAAXA6A_NPAVFlowNode@@0@Z@Z",
+      "unit": "default/system/flow/FlowSlider",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "object_memory",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?ResetHoverTimer@ArcDetector@@QAAXXZ",
+      "unit": "default/system/gesture/ArcDetector",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "object_memory",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??0ArcDetector@@QAA@XZ",
+      "unit": "default/system/gesture/ArcDetector",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 93.47,
+      "reason": "call_arg_mismatch",
+      "symbol": "?UpdateAttachment@DepthBuffer3D@@IAAXAAUDepthBuffer3DAttachment@@ABVVector4@@1@Z",
+      "unit": "default/system/gesture/DepthBuffer3D",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 78.6,
+      "reason": "call_arg_mismatch",
+      "symbol": "?Save@DepthBuffer3D@@UAAXAAVBinStream@@@Z",
+      "unit": "default/system/gesture/DepthBuffer3D",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 77.34,
+      "reason": "call_arg_mismatch",
+      "symbol": "?Load@DepthBuffer3D@@UAAXAAVBinStream@@@Z",
+      "unit": "default/system/gesture/DepthBuffer3D",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_arg_mismatch",
+      "symbol": "?Save@DepthBuffer3D@@$4PPPPPPPM@A@AAXAAVBinStream@@@Z",
+      "unit": "default/system/gesture/DepthBuffer3D",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 100.0,
+      "reason": "call_arg_mismatch",
+      "symbol": "?Load@DepthBuffer3D@@$4PPPPPPPM@A@AAXAAVBinStream@@@Z",
+      "unit": "default/system/gesture/DepthBuffer3D",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 93.1,
+      "reason": "call_arg_mismatch",
+      "symbol": "?IsValidSwipePosition@DirectionGestureFilterSingleUser@@ABA_NABVSkeleton@@@Z",
+      "unit": "default/system/gesture/DirectionGestureFilter",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_arg_mismatch",
+      "symbol": "?Draw@DirectionGestureFilterSingleUser@@UAAXABVSkeleton@@AAVSkeletonViz@@@Z",
+      "unit": "default/system/gesture/DirectionGestureFilter",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 99.95,
+      "reason": "call_arg_mismatch",
+      "symbol": "?IsValidScrollPos@DirectionGestureFilterSingleUser@@UBA_NABVSkeleton@@@Z",
+      "unit": "default/system/gesture/DirectionGestureFilter",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_arg_mismatch",
+      "symbol": "?IsHandValid@DirectionGestureFilterSingleUser@@UBA_NABVSkeleton@@@Z",
+      "unit": "default/system/gesture/DirectionGestureFilter",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FenrollmentChangedMsg@?1??OnMsg@GestureMgr@@AAA?AVDataNode@@ABVKinectUserBindingChangedMsg@@@Z@YAXXZ",
+      "unit": "default/system/gesture/GestureMgr",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 81.99,
+      "reason": "call_arg_mismatch",
+      "symbol": "?CalcInPose@HandInvokeGestureFilter@@AAA_NABVSkeleton@@M@Z",
+      "unit": "default/system/gesture/HandInvokeGestureFilter",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fmsg@?7??PostUpdate@IdentityInfo@@QAAXXZ@YAXXZ",
+      "unit": "default/system/gesture/IdentityInfo",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 91.8,
+      "reason": "call_arg_mismatch",
+      "symbol": "?GetColorCameraProperty@?A0x8e584365@@YAJW4_NUI_CAMERA_PROPERTY@@@Z",
+      "unit": "default/system/gesture/LiveCameraInput",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "merged_call",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_count_mismatch",
+      "symbol": "?DumpProperties@LiveCameraInput@@QAAXXZ",
+      "unit": "default/system/gesture/LiveCameraInput",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_arg_mismatch",
+      "symbol": "?GetAutoexposure@LiveCameraInput@@QBA_NXZ",
+      "unit": "default/system/gesture/LiveCameraInput",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 69.88,
+      "reason": "call_arg_mismatch",
+      "symbol": "?GetTweakedAutoexposure@LiveCameraInput@@QBA_NXZ",
+      "unit": "default/system/gesture/LiveCameraInput",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?OnCameraDebugDepth@@YA?AVDataNode@@PAVDataArray@@@Z",
+      "unit": "default/system/gesture/LiveCameraInput",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "wild_jump_match",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 88.59,
+      "reason": "wild_jump_match",
+      "symbol": "?RecordedFrameAt@SkeletonClip@@SAPBURecordedFrame@@ABV?$vector@URecordedFrame@@V?$StlNodeAlloc@URecordedFrame@@@stlpmtx_std@@@stlpmtx_std@@MAAH1@Z",
+      "unit": "default/system/gesture/SkeletonClip",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "wild_jump_match",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 82.28,
+      "reason": "wild_jump_match",
+      "symbol": "?ApplyToMeshVerts@SkeletonExtentTracker@@QBAXPAVRndMesh@@_N@Z",
+      "unit": "default/system/gesture/SkeletonExtentTracker",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 95.07,
+      "reason": "call_arg_mismatch",
+      "symbol": "?SetCamera@SkeletonViz@@AAAXABUSkeletonFrame@@ABVTransform@@M@Z",
+      "unit": "default/system/gesture/SkeletonViz",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 80.29,
+      "reason": "call_arg_mismatch",
+      "symbol": "??0SkeletonViz@@IAA@XZ",
+      "unit": "default/system/gesture/SkeletonViz",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FspeechEnableMsg@?1??DisableAndUnloadGrammars@SpeechMgr@@QAAXXZ@YAXXZ",
+      "unit": "default/system/gesture/SpeechMgr",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "object_memory",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?RestoreDefaultForwardFacingCutoff@StandingStillGestureFilter@@QAAXXZ",
+      "unit": "default/system/gesture/StandingStillGestureFilter",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "object_memory",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??0StandingStillGestureFilter@@QAA@XZ",
+      "unit": "default/system/gesture/StandingStillGestureFilter",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "merged_arg",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 95.66,
+      "reason": "call_arg_mismatch",
+      "symbol": "?Save@StreamRenderer@@UAAXAAVBinStream@@@Z",
+      "unit": "default/system/gesture/StreamRenderer",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_arg",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_arg_mismatch",
+      "symbol": "?Save@StreamRenderer@@$4PPPPPPPM@A@AAXAAVBinStream@@@Z",
+      "unit": "default/system/gesture/StreamRenderer",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FcWaveGestureEnabledMsg@?7??EnableWaveState@WaveToTurnOnLight@@QAAXXZ@YAXXZ",
+      "unit": "default/system/gesture/WaveToTurnOnLight",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FcWaveGestureDisabledMsg@?7??DisableWaveState@WaveToTurnOnLight@@QAAXXZ@YAXXZ",
+      "unit": "default/system/gesture/WaveToTurnOnLight",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FwaveCompleteMsg@?BG@??Poll@WaveToTurnOnLight@@QAAXXZ@YAXXZ",
+      "unit": "default/system/gesture/WaveToTurnOnLight",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "wild_jump_match",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 93.04,
+      "reason": "wild_jump_match",
+      "symbol": "?SetJump@DanceRemixer@@QAAXHH@Z",
+      "unit": "default/system/hamobj/DanceRemixer",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 94.48,
+      "reason": "call_arg_mismatch",
+      "symbol": "?Load@DancerSequence@@UAAXAAVBinStream@@@Z",
+      "unit": "default/system/hamobj/DancerSequence",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 100.0,
+      "reason": "call_arg_mismatch",
+      "symbol": "?Load@DancerSequence@@$4PPPPPPPM@A@AAXAAVBinStream@@@Z",
+      "unit": "default/system/hamobj/DancerSequence",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "wild_jump_match",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 94.81,
+      "reason": "wild_jump_match",
+      "symbol": "?Poll@FilterQueue@@QAAXABUSkeletonUpdateData@@@Z",
+      "unit": "default/system/hamobj/FilterQueue",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FsLastComparedDancerSkel@@YAXXZ",
+      "unit": "default/system/hamobj/FreestyleMoveRecorder",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "return_value",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 82.43,
+      "reason": "return_value_mismatch",
+      "symbol": "?CompareSkeletonJointDisplacement@FreestyleMoveRecorder@@ABAMPBUFreestyleMoveFrame@@HPBVBaseSkeleton@@AAM@Z",
+      "unit": "default/system/hamobj/FreestyleMoveRecorder",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 91.35,
+      "reason": "call_arg_mismatch",
+      "symbol": "?DrawDebug@FreestyleMoveRecorder@@QAAXXZ",
+      "unit": "default/system/hamobj/FreestyleMoveRecorder",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__E?sCache@HamCamShot@@1V?$list@UTargetCache@HamCamShot@@V?$StlNodeAlloc@UTargetCache@HamCamShot@@@stlpmtx_std@@@stlpmtx_std@@A@@YAXXZ",
+      "unit": "default/system/hamobj/HamCamShot",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fmsg@?1??FindTarget@HamCamShot@@QAAPAVRndTransformable@@VSymbol@@@Z@YAXXZ",
+      "unit": "default/system/hamobj/HamCamShot",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fmsg@?4??TeleportTarget@HamCamShot@@QAAXPAVRndTransformable@@ABVTransform@@_N@Z@YAXXZ",
+      "unit": "default/system/hamobj/HamCamShot",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fmsg@?1??OnListTargets@HamCamShot@@AAA?AVDataNode@@PBVDataArray@@@Z@YAXXZ",
+      "unit": "default/system/hamobj/HamCamShot",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 99.85,
+      "reason": "call_arg_mismatch",
+      "symbol": "??6@YAAAVBinStream@@AAV0@ABUTarget@HamCamShot@@@Z",
+      "unit": "default/system/hamobj/HamCamShot",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 77.67,
+      "reason": "call_arg_mismatch",
+      "symbol": "?Save@TransformCrowd@@QBAXAAVBinStream@@@Z",
+      "unit": "default/system/hamobj/HamCamTransform",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fmsg@?4??SetWorldEvent@HamDirector@@IAAXVSymbol@@@Z@YAXXZ",
+      "unit": "default/system/hamobj/HamDirector",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fmsg@?1??SendCurWorldMsg@HamDirector@@IAAXVSymbol@@_N@Z@YAXXZ",
+      "unit": "default/system/hamobj/HamDirector",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 99.38,
+      "reason": "call_arg_mismatch",
+      "symbol": "?LoadCrew@HamDirector@@QAAXVSymbol@@0@Z",
+      "unit": "default/system/hamobj/HamDirector",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 92.25,
+      "reason": "call_arg_mismatch",
+      "symbol": "?ClosestMove@HamDirector@@IAA?AVSymbol@@XZ",
+      "unit": "default/system/hamobj/HamDirector",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_count_mismatch",
+      "symbol": "?TriggerNextIntro@HamDirector@@QAAXXZ",
+      "unit": "default/system/hamobj/HamDirector",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 93.93,
+      "reason": "call_arg_mismatch",
+      "symbol": "?OnSelectCamera@HamDirector@@IAA?AVDataNode@@PAVDataArray@@@Z",
+      "unit": "default/system/hamobj/HamDirector",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fside_moved@?6??SwapPlayerSides@HamGameData@@QAAXXZ@YAXXZ",
+      "unit": "default/system/hamobj/HamGameData",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FposeFound@?1??HandlePoseFound@HamGameData@@QAAXH@Z@YAXXZ",
+      "unit": "default/system/hamobj/HamGameData",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 96.44,
+      "reason": "call_arg_mismatch",
+      "symbol": "?SetAssociatedPadNum@HamGameData@@QAA_NHH@Z",
+      "unit": "default/system/hamobj/HamGameData",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "wild_jump_match",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 92.13,
+      "reason": "wild_jump_match",
+      "symbol": "?Draw@HamListRibbon@@QAAXABVTransform@@ABV?$vector@UHamListRibbonDrawState@@V?$StlNodeAlloc@UHamListRibbonDrawState@@@stlpmtx_std@@@stlpmtx_std@@_N2@Z",
+      "unit": "default/system/hamobj/HamListRibbon",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fmsg@?4??RefreshBarks@HamMove@@QAAXXZ@YAXXZ",
+      "unit": "default/system/hamobj/HamMove",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__E?sListStateMaxDisplay@HamNavList@@0HB@@YAXXZ",
+      "unit": "default/system/hamobj/HamNavList",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?DoSelectFor@HamNavList@@QAAXH@Z",
+      "unit": "default/system/hamobj/HamNavList",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "wild_jump_match",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 95.84,
+      "reason": "wild_jump_match",
+      "symbol": "?DetermineHighlightedItem@HamNavList@@AAAXXZ",
+      "unit": "default/system/hamobj/HamNavList",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 92.75,
+      "reason": "call_count_mismatch",
+      "symbol": "?Update@HamNavList@@IAAXXZ",
+      "unit": "default/system/hamobj/HamNavList",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "wild_jump_match",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 98.99,
+      "reason": "wild_jump_match",
+      "symbol": "?Poll@HamNavList@@UAAXXZ",
+      "unit": "default/system/hamobj/HamNavList",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 100.0,
+      "reason": "call_count_mismatch",
+      "symbol": "?PostLoad@HamNavList@@UAAXAAVBinStream@@@Z",
+      "unit": "default/system/hamobj/HamNavList",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "merged_call",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 100.0,
+      "reason": "call_count_mismatch",
+      "symbol": "?Copy@HamNavList@@UAAXPBVObject@Hmx@@W4CopyType@23@@Z",
+      "unit": "default/system/hamobj/HamNavList",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 100.0,
+      "reason": "call_count_mismatch",
+      "symbol": "?PostLoad@HamNavList@@$4PPPPPPPM@A@AAXAAVBinStream@@@Z",
+      "unit": "default/system/hamobj/HamNavList",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 100.0,
+      "reason": "call_count_mismatch",
+      "symbol": "?Copy@HamNavList@@$4PPPPPPPM@A@AAXPBVObject@Hmx@@W4CopyType@23@@Z",
+      "unit": "default/system/hamobj/HamNavList",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 4.08,
+      "reason": "call_count_mismatch",
+      "symbol": "?_M_erase@?$vector@V?$Key@VTransform@@@@V?$StlNodeAlloc@V?$Key@VTransform@@@@@stlpmtx_std@@@stlpmtx_std@@IAAPAV?$Key@VTransform@@@@PAV3@0ABU__false_type@2@@Z",
+      "unit": "default/system/hamobj/HamRibbon",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_count_mismatch",
+      "symbol": "?resize@?$vector@V?$Key@VTransform@@@@V?$StlNodeAlloc@V?$Key@VTransform@@@@@stlpmtx_std@@@stlpmtx_std@@QAAXIABV?$Key@VTransform@@@@@Z",
+      "unit": "default/system/hamobj/HamRibbon",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fmsg@?4??LoadCrowdClips@HamWardrobe@@IAAXVSymbol@@0_N@Z@YAXXZ",
+      "unit": "default/system/hamobj/HamWardrobe",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "merged_call",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 74.97,
+      "reason": "call_count_mismatch",
+      "symbol": "?GetDanceBattleBackupOutfit@@YA?AVSymbol@@V1@0@Z",
+      "unit": "default/system/hamobj/HamWardrobe",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 97.28,
+      "reason": "call_count_mismatch",
+      "symbol": "?OnSetVenue@HamWardrobe@@IAA?AVDataNode@@PAVDataArray@@@Z",
+      "unit": "default/system/hamobj/HamWardrobe",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 93.05,
+      "reason": "call_arg_mismatch",
+      "symbol": "?RecordClipName@@YA?AVString@@PBDH@Z",
+      "unit": "default/system/hamobj/MoveDir",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "merged_call",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_count_mismatch",
+      "symbol": "?_M_erase@?$vector@V?$set@PBVMoveParent@@U?$less@PBVMoveParent@@@stlpmtx_std@@V?$StlNodeAlloc@PBVMoveParent@@@3@@stlpmtx_std@@V?$StlNodeAlloc@V?$set@PBVMoveParent@@U?$less@PBVMoveParent@@@stlpmtx_std@@V?$StlNodeAlloc@PBVMoveParent@@@3@@stlpmtx_std@@@2@@stlpmtx_std@@IAAPAV?$set@PBVMoveParent@@U?$less@PBVMoveParent@@@stlpmtx_std@@V?$StlNodeAlloc@PBVMoveParent@@@3@@2@PAV32@0ABU__true_type@2@@Z",
+      "unit": "default/system/hamobj/OriginalChoreoRemixer",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fmsg@?L@??Poll@PoseFatalities@@QAAXXZ@YAXXZ",
+      "unit": "default/system/hamobj/PoseFatalities",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FendFatalityMsg@?1??EndFatal@PoseFatalities@@AAAXH@Z@YAXXZ",
+      "unit": "default/system/hamobj/PoseFatalities",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FplayVOMsg@?1??PlayVO@PoseFatalities@@AAAXVSymbol@@@Z@YAXXZ",
+      "unit": "default/system/hamobj/PoseFatalities",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FstopVOMsg@?1??PlayVO@PoseFatalities@@AAAXVSymbol@@@Z@YAXXZ",
+      "unit": "default/system/hamobj/PoseFatalities",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "merged_call",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_count_mismatch",
+      "symbol": "??$_M_range_insert_aux@PBVPracticeStep@@@?$vector@VPracticeStep@@V?$StlNodeAlloc@VPracticeStep@@@stlpmtx_std@@@stlpmtx_std@@AAAXPAVPracticeStep@@PBV2@1IABU__false_type@1@@Z",
+      "unit": "default/system/hamobj/PracticeSection",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "cap_exhausted_orig",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 97.33,
+      "reason": "cap_exhausted_orig",
+      "symbol": "??$_M_range_insert_realloc@PBVPracticeStep@@@?$vector@VPracticeStep@@V?$StlNodeAlloc@VPracticeStep@@@stlpmtx_std@@@stlpmtx_std@@AAAXPAVPracticeStep@@PBV2@1I@Z",
+      "unit": "default/system/hamobj/PracticeSection",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_count_mismatch",
+      "symbol": "?push_back@?$vector@VPracticeStep@@V?$StlNodeAlloc@VPracticeStep@@@stlpmtx_std@@@stlpmtx_std@@QAAXABVPracticeStep@@@Z",
+      "unit": "default/system/hamobj/PracticeSection",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_count_mismatch",
+      "symbol": "?AddStep@PracticeSection@@QAAXVPracticeStep@@@Z",
+      "unit": "default/system/hamobj/PracticeSection",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fgame_outro_finale@?BJK@??OnBeat@RhythmBattle@@AAAXXZ@YAXXZ",
+      "unit": "default/system/hamobj/RhythmBattle",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fworked_it_progress@?BEG@??OnBeat@RhythmBattle@@AAAXXZ@YAXXZ",
+      "unit": "default/system/hamobj/RhythmBattle",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fmsg@?PC@??OnBeat@RhythmBattle@@AAAXXZ@YAXXZ",
+      "unit": "default/system/hamobj/RhythmBattle",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fmsg@?NC@??OnBeat@RhythmBattle@@AAAXXZ@YAXXZ",
+      "unit": "default/system/hamobj/RhythmBattle",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FtanPhaseIn@?N@??PlayTanClip@RhythmBattle@@AAAXH_N@Z@YAXXZ",
+      "unit": "default/system/hamobj/RhythmBattle",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FtanPhaseIn@?8??PlayTanClip@RhythmBattle@@AAAXH_N@Z@YAXXZ",
+      "unit": "default/system/hamobj/RhythmBattle",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FtanPhaseIn@?4??PlayTanClip@RhythmBattle@@AAAXH_N@Z@YAXXZ",
+      "unit": "default/system/hamobj/RhythmBattle",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FshowCharProjection@?1??PlayTanClip@RhythmBattle@@AAAXH_N@Z@YAXXZ",
+      "unit": "default/system/hamobj/RhythmBattle",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 96.84,
+      "reason": "call_arg_mismatch",
+      "symbol": "?OnBeat@RhythmBattle@@AAAXXZ",
+      "unit": "default/system/hamobj/RhythmBattle",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 98.44,
+      "reason": "call_arg_mismatch",
+      "symbol": "?BlendFrameDataToBeat@@YA?AUFrame@RhythmDetector@@ABU12@0M@Z",
+      "unit": "default/system/hamobj/RhythmDetector",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 91.12,
+      "reason": "call_arg_mismatch",
+      "symbol": "?ProcessFrames@RhythmDetector@@AAAXXZ",
+      "unit": "default/system/hamobj/RhythmDetector",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "wild_jump_match",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 82.96,
+      "reason": "wild_jump_match",
+      "symbol": "?AddDebugGraphs@RhythmDetectorGroup@@QAAXXZ",
+      "unit": "default/system/hamobj/RhythmDetectorGroup",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "orig_error",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 41.67,
+      "reason": "orig_error",
+      "symbol": "?DetectFracToRatingFrac@@YAMMPBV?$vector@MV?$StlNodeAlloc@M@stlpmtx_std@@@stlpmtx_std@@@Z",
+      "unit": "default/system/hamobj/ScoreUtl",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "merged_call",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 100.0,
+      "reason": "call_count_mismatch",
+      "symbol": "??$_M_range_insert_aux@PBVSongPattern@@@?$vector@VSongPattern@@V?$StlNodeAlloc@VSongPattern@@@stlpmtx_std@@@stlpmtx_std@@AAAXPAVSongPattern@@PBV2@1IABU__false_type@1@@Z",
+      "unit": "default/system/hamobj/SongLayout",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 97.8,
+      "reason": "call_count_mismatch",
+      "symbol": "?SetDefaultPattern@SongLayout@@QAAXH@Z",
+      "unit": "default/system/hamobj/SongLayout",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 97.8,
+      "reason": "call_arg_mismatch",
+      "symbol": "?LoadAllVariants@SuperEasyRemixer@@SAXXZ",
+      "unit": "default/system/hamobj/SuperEasyRemixer",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 80.31,
+      "reason": "call_arg_mismatch",
+      "symbol": "?SaveSuperEasyMoveParents@SuperEasyRemixer@@IAAXXZ",
+      "unit": "default/system/hamobj/SuperEasyRemixer",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 89.06,
+      "reason": "call_arg_mismatch",
+      "symbol": "?Intersect@@YA_NABVSegment@@PBVBSPNode@@AAMAAVPlane@@@Z",
+      "unit": "default/system/math/Geo",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "wild_jump_match",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 96.09,
+      "reason": "wild_jump_match",
+      "symbol": "?Clip@@YAXABVPolygon@Hmx@@ABVRay@2@AAV12@@Z",
+      "unit": "default/system/math/Geo",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "return_value",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 61.99,
+      "reason": "return_value_mismatch",
+      "symbol": "?Transform@CSHA1@@AAAXPAIPBE@Z",
+      "unit": "default/system/math/SHA1",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "regalloc",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_arg_mismatch",
+      "symbol": "?Final@CSHA1@@QAAABUDigest@1@XZ",
+      "unit": "default/system/math/SHA1",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__E?sID@Matrix2@Hmx@@0V12@A@@YAXXZ",
+      "unit": "default/system/math/mtx",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__E?sID@Matrix3@Hmx@@0V12@A@@YAXXZ",
+      "unit": "default/system/math/mtx",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fmsg@?4??CheckForLostConnection@ConnectionStatusPanel@@IAAXXZ@YAXXZ",
+      "unit": "default/system/meta/ConnectionStatusPanel",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FmsgButtonDown@?6??OnMsg@HeldButtonPanel@@AAA?AVDataNode@@ABVProcessedButtonDownMsg@@@Z@YAXXZ",
+      "unit": "default/system/meta/HeldButtonPanel",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FmsgButtonHeld@?4??OnMsg@HeldButtonPanel@@AAA?AVDataNode@@ABVProcessedButtonDownMsg@@@Z@YAXXZ",
+      "unit": "default/system/meta/HeldButtonPanel",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fmsg@?1??SaveLoadAllComplete@MemcardMgr@@QAAXXZ@YAXXZ",
+      "unit": "default/system/meta/MemcardMgr",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fmsg@?9??OnMsg@PreloadPanel@@AAA?AVDataNode@@ABVUITransitionCompleteMsg@@@Z@YAXXZ",
+      "unit": "default/system/meta/PreloadPanel",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 63.84,
+      "reason": "call_arg_mismatch",
+      "symbol": "?HandleNetCacheMgrFailure@StorePanel@@QAAXXZ",
+      "unit": "default/system/meta/StorePanel",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 75.68,
+      "reason": "call_count_mismatch",
+      "symbol": "?ValidateOffers@StorePanel@@IAAXAAV?$vector@PAVStoreOffer@@V?$StlNodeAlloc@PAVStoreOffer@@@stlpmtx_std@@@stlpmtx_std@@@Z",
+      "unit": "default/system/meta/StorePanel",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__E?sParsers@MidiParser@@0V?$list@PAVMidiParser@@V?$StlNodeAlloc@PAVMidiParser@@@stlpmtx_std@@@stlpmtx_std@@A@@YAXXZ",
+      "unit": "default/system/midi/MidiParser",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__E?kMThd@MidiChunkID@@2V1@B@@YAXXZ",
+      "unit": "default/system/midi/MidiReader",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__E?kMTrk@MidiChunkID@@2V1@B@@YAXXZ",
+      "unit": "default/system/midi/MidiReader",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__EgBinkMovieSys@@YAXXZ",
+      "unit": "default/system/moviebink/BinkMovieSys",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fmsg@?L@??SendCallback@DingoJob@@UAAX_N0@Z@YAXXZ",
+      "unit": "default/system/net/DingoJob",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "cap_exhausted_orig",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 83.36,
+      "reason": "cap_exhausted_orig",
+      "symbol": "?AddContent@DingoJob@@MAAXPAVHttpReq@@@Z",
+      "unit": "default/system/net/DingoJob",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__EgWebSvcMgr@@YAXXZ",
+      "unit": "default/system/net/WebSvcMgrCurl",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FgWebSvcMgr@@YAXXZ",
+      "unit": "default/system/net/WebSvcMgrCurl",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 75.25,
+      "reason": "call_arg_mismatch",
+      "symbol": "?FindAndFinish@WebSvcMgrCurl@@AAAXPAX_NI@Z",
+      "unit": "default/system/net/WebSvcMgrCurl",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 99.98,
+      "reason": "call_arg_mismatch",
+      "symbol": "?Poll@WebSvcMgrCurl@@UAAXXZ",
+      "unit": "default/system/net/WebSvcMgrCurl",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fmsg@?4??SendCallback@WebSvcRequest@@MAAX_N0@Z@YAXXZ",
+      "unit": "default/system/net/WebSvcReq",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 73.58,
+      "reason": "call_count_mismatch",
+      "symbol": "curl_global_init",
+      "unit": "default/system/net/curl/lib/easy",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 100.0,
+      "reason": "call_count_mismatch",
+      "symbol": "curl_easy_init",
+      "unit": "default/system/net/curl/lib/easy",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?SetFile@DataArray@@SAXVSymbol@@@Z",
+      "unit": "default/system/obj/DataArray",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_count_mismatch",
+      "symbol": "??0DataCallStackFrame@@QAA@PAVDataArray@@@Z",
+      "unit": "default/system/obj/DataArray",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "merged_call",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 94.64,
+      "reason": "call_count_mismatch",
+      "symbol": "?Execute@DataArray@@QAA?AVDataNode@@_N@Z",
+      "unit": "default/system/obj/DataArray",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 97.85,
+      "reason": "call_arg_mismatch",
+      "symbol": "?Load@DataArray@@QAAXAAVBinStream@@@Z",
+      "unit": "default/system/obj/DataArray",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 99.18,
+      "reason": "call_count_mismatch",
+      "symbol": "?ExecuteScript@DataArray@@QAA?AVDataNode@@HPAVObject@Hmx@@PBV1@H@Z",
+      "unit": "default/system/obj/DataArray",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "cap_exhausted_orig",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 99.94,
+      "reason": "cap_exhausted_orig",
+      "symbol": "yylex",
+      "unit": "default/system/obj/DataFlex",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_count_mismatch",
+      "symbol": "?DataPushVar@@YAXPAVDataNode@@@Z",
+      "unit": "default/system/obj/DataUtl",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?DataSetThis@@YAPAVObject@Hmx@@PAV12@@Z",
+      "unit": "default/system/obj/DataUtl",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fmsg@?1??GetSubDirPath@ObjectDir@@QAA?AVFilePath@@ABV2@ABVBinStream@@@Z@YAXXZ",
+      "unit": "default/system/obj/Dir",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_count_mismatch",
+      "symbol": "?SaveInlined@ObjectDir@@IAAXABVFilePath@@_NW4InlineDirType@@@Z",
+      "unit": "default/system/obj/Dir",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_count_mismatch",
+      "symbol": "?PreLoadInlined@ObjectDir@@IAAXABVFilePath@@_NW4InlineDirType@@@Z",
+      "unit": "default/system/obj/Dir",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 99.58,
+      "reason": "call_arg_mismatch",
+      "symbol": "?PreLoad@ObjectDir@@UAAXAAVBinStream@@@Z",
+      "unit": "default/system/obj/Dir",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 100.0,
+      "reason": "call_arg_mismatch",
+      "symbol": "?PreLoad@ObjectDir@@$4PPPPPPPM@A@AAXAAVBinStream@@@Z",
+      "unit": "default/system/obj/Dir",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 95.4,
+      "reason": "call_arg_mismatch",
+      "symbol": "?AddTypeObjectMemDelta@DirLoader@@ABAXPBVObject@Hmx@@ABUMemPointDelta@@@Z",
+      "unit": "default/system/obj/DirLoader",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 84.96,
+      "reason": "call_count_mismatch",
+      "symbol": "?Save@TypeProps@@QAAXAAVBinStream@@@Z",
+      "unit": "default/system/obj/TypeProps",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "fpr_precision",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "fpr_return_mismatch",
+      "symbol": "vorbis_fromdBlook",
+      "unit": "default/system/oggvorbis/lsp",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "wild_jump_match",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 85.59,
+      "reason": "wild_jump_match",
+      "symbol": "mdct_butterfly_first",
+      "unit": "default/system/oggvorbis/mdct",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "wild_jump_match",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 97.88,
+      "reason": "wild_jump_match",
+      "symbol": "seed_curve",
+      "unit": "default/system/oggvorbis/psy",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 95.8,
+      "reason": "call_arg_mismatch",
+      "symbol": "?Merge@Archive@@QAAXAAV1@@Z",
+      "unit": "default/system/os/Archive",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "orig_error",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 90.69,
+      "reason": "orig_error",
+      "symbol": "?Seek@AsyncFile@@UAAHHH@Z",
+      "unit": "default/system/os/AsyncFile",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?GetFreeBuffer@@YAHXZ",
+      "unit": "default/system/os/BlockMgr",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fmsg@?4??OnToggleFakeFileErrors@@YA?AVDataNode@@PAVDataArray@@@Z@YAXXZ",
+      "unit": "default/system/os/File",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 79.84,
+      "reason": "call_arg_mismatch",
+      "symbol": "?FileLocalize@@YAPBDPBDPAD@Z",
+      "unit": "default/system/os/File",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 81.42,
+      "reason": "call_count_mismatch",
+      "symbol": "?RecursePatternInternal@@YAXPBDP6AX00@Z_N2@Z",
+      "unit": "default/system/os/File",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_count_mismatch",
+      "symbol": "FileRecursePattern",
+      "unit": "default/system/os/File",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_count_mismatch",
+      "symbol": "?OnEnumerateFrameRateResults@@YA?AVDataNode@@PAVDataArray@@@Z",
+      "unit": "default/system/os/File",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__EgCaches@@YAXXZ",
+      "unit": "default/system/os/FileCache",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?RegisterResourceCacheHelper@FileCache@@SAXPAVFileCacheHelper@@@Z",
+      "unit": "default/system/os/FileCache",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?RegisterWavCacheHelper@FileCache@@SAXPAVFileCacheHelper@@@Z",
+      "unit": "default/system/os/FileCache",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?BeginCmd@?A0x49b544a7@@YAXW4Protocol@Holmes@@_N@Z",
+      "unit": "default/system/os/HolmesClient",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?EndCmd@?A0x49b544a7@@YAXW4Protocol@Holmes@@@Z",
+      "unit": "default/system/os/HolmesClient",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "AssociateUserAndPad",
+      "unit": "default/system/os/Joypad",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?XinputJoypadThreadDestruction@@YAXXZ",
+      "unit": "default/system/os/Joypad_Xbox",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?JoypadTerminate@@YAXXZ",
+      "unit": "default/system/os/Joypad_Xbox",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "return_value",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 100.0,
+      "reason": "return_value_mismatch",
+      "symbol": "?GetBreedData@@YAPAUBreedData@@H@Z",
+      "unit": "default/system/os/Joypad_Xbox",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "regalloc",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_arg_mismatch",
+      "symbol": "?JoypadGetCachedXInputCaps@@YA_NHPAU_XINPUT_CAPABILITIES@@_N@Z",
+      "unit": "default/system/os/Joypad_Xinput",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FgOverride@@YAXXZ",
+      "unit": "default/system/os/Keyboard",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "object_memory",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?TryDemangleParams@@YAXPADPBD@Z",
+      "unit": "default/system/os/MapFile_Xbox",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_arg_mismatch",
+      "symbol": "?IPStringToInt@NetworkSocket@@SAIABVString@@@Z",
+      "unit": "default/system/os/NetworkSocket_Win",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_arg_mismatch",
+      "symbol": "?IPIntToString@NetworkSocket@@SA?AVString@@I@Z",
+      "unit": "default/system/os/NetworkSocket_Win",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_arg_mismatch",
+      "symbol": "?GetHostName@NetworkSocket@@SA?AVString@@XZ",
+      "unit": "default/system/os/NetworkSocket_Win",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_arg_mismatch",
+      "symbol": "?ResolveHostName@NetworkSocket@@SAIVString@@@Z",
+      "unit": "default/system/os/NetworkSocket_Win",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_arg_mismatch",
+      "symbol": "??0WinSockSocket@@QAA@_N@Z",
+      "unit": "default/system/os/NetworkSocket_Win",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fmsg@?6??SetDiskError@PlatformMgr@@QAAXW4DiskError@@@Z@YAXXZ",
+      "unit": "default/system/os/PlatformMgr",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "wild_jump_match",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 79.22,
+      "reason": "wild_jump_match",
+      "symbol": "?UpdateSigninState@PlatformMgr@@QAAXXZ",
+      "unit": "default/system/os/PlatformMgr_Xbox",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?XbcSendMsg@?A0x8a9ffbf2@@YAXKPBVDataArray@@@Z",
+      "unit": "default/system/os/PlatformMgr_Xbox",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "cap_exhausted_decomp",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 72.46,
+      "reason": "cap_exhausted_decomp",
+      "symbol": "?JsonToDta@?A0x8a9ffbf2@@YA?AVDataArrayPtr@@PAUHJSONREADER__@@_N@Z",
+      "unit": "default/system/os/PlatformMgr_Xbox",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?ClearSlowFrame@Timer@@SAXXZ",
+      "unit": "default/system/os/System",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?SetGfxMode@@YAXW4GfxMode@@@Z",
+      "unit": "default/system/os/System",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?SetDiskErrorCallback@@YAP6AXXZP6AXXZ@Z",
+      "unit": "default/system/os/System_Xbox",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?ThreadCall@@YAXP6AHXZP6AXH@Z@Z",
+      "unit": "default/system/os/ThreadCall_Win",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?ThreadCall@@YAXPAVThreadCallback@@@Z",
+      "unit": "default/system/os/ThreadCall_Win",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__E?sTimers@AutoTimer@@0V?$list@U?$pair@VTimer@@VTimerStats@@@stlpmtx_std@@V?$StlNodeAlloc@U?$pair@VTimer@@VTimerStats@@@stlpmtx_std@@@2@@stlpmtx_std@@A@@YAXXZ",
+      "unit": "default/system/os/Timer",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__EsConditionalTimersEnabled@@YAXXZ",
+      "unit": "default/system/os/Timer",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?Init@Timer@@SAXXZ",
+      "unit": "default/system/os/Timer",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?EnableCallback@AutoGlitchReport@@SAXXZ",
+      "unit": "default/system/os/Timer",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?SetTheUserMgr@@YAXPAVUserMgr@@@Z",
+      "unit": "default/system/os/UserMgr",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "wild_jump_match",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 95.11,
+      "reason": "wild_jump_match",
+      "symbol": "?SetViewport@DxCam@@QAAXXZ",
+      "unit": "default/system/rnddx9/Cam",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "wild_jump_match",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 83.46,
+      "reason": "wild_jump_match",
+      "symbol": "?Select@DxCam@@UAAXXZ",
+      "unit": "default/system/rnddx9/Cam",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 81.9,
+      "reason": "call_count_mismatch",
+      "symbol": "?Sync@DxCubeTex@@EAAXXZ",
+      "unit": "default/system/rnddx9/CubeTex",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "wild_jump_match",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 96.19,
+      "reason": "wild_jump_match",
+      "symbol": "?PackVector@@YAXAAIABVVector4@@EEEE_N@Z",
+      "unit": "default/system/rnddx9/Mesh",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 80.52,
+      "reason": "call_count_mismatch",
+      "symbol": "?UpdateGeometryBuffers@DxMultiMesh@@AAAXXZ",
+      "unit": "default/system/rnddx9/MultiMesh",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "wild_jump_match",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 94.74,
+      "reason": "wild_jump_match",
+      "symbol": "?Init@RndRenderState@@QAAXXZ",
+      "unit": "default/system/rnddx9/RenderState",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 79.67,
+      "reason": "call_count_mismatch",
+      "symbol": "?D3DFormatForBitmap@DxRnd@@QAA?AW4_D3DFORMAT@@ABVRndBitmap@@@Z",
+      "unit": "default/system/rnddx9/Rnd",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 85.19,
+      "reason": "call_arg_mismatch",
+      "symbol": "?InitBuffers@DxRnd@@AAAXXZ",
+      "unit": "default/system/rnddx9/Rnd_Xbox",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "wild_jump_match",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 89.93,
+      "reason": "wild_jump_match",
+      "symbol": "?CalculateAOAtPoint@RndAmbientOcclusion@@IBAXABVVector3@@0PAM@Z",
+      "unit": "default/system/rndobj/AmbientOcclusion",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 69.52,
+      "reason": "call_arg_mismatch",
+      "symbol": "?SmoothResults@RndAmbientOcclusion@@IBAXPAVRndMesh@@@Z",
+      "unit": "default/system/rndobj/AmbientOcclusion",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fmsg@?CC@??Poll@AnimTask@@UAAXM@Z@YAXXZ",
+      "unit": "default/system/rndobj/Anim",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 66.3,
+      "reason": "call_arg_mismatch",
+      "symbol": "?ApplyQueuedLights@BoxMapLighting@@QBAXPIAVColor@Hmx@@PBVVector3@@@Z",
+      "unit": "default/system/rndobj/BoxMap",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?GetCamFrustum@RndCam@@QAAXAAVVector3@@AAY03V2@@Z",
+      "unit": "default/system/rndobj/Cam",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?Select@RndCam@@UAAXXZ",
+      "unit": "default/system/rndobj/Cam",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "wild_jump_match",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 70.26,
+      "reason": "wild_jump_match",
+      "symbol": "?SetVHBlurWeights@@YAX_NHH@Z",
+      "unit": "default/system/rndobj/DOFProc_NG",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "merged_call",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_count_mismatch",
+      "symbol": "?RemovingObject@RndDir@@MAAXPAVObject@Hmx@@@Z",
+      "unit": "default/system/rndobj/Dir",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?Select@RndEnviron@@UAAXPBVVector3@@@Z",
+      "unit": "default/system/rndobj/Env",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 80.29,
+      "reason": "call_arg_mismatch",
+      "symbol": "?Load@RndEnviron@@UAAXAAVBinStream@@@Z",
+      "unit": "default/system/rndobj/Env",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 100.0,
+      "reason": "call_arg_mismatch",
+      "symbol": "?Load@RndEnviron@@$4PPPPPPPM@A@AAXAAVBinStream@@@Z",
+      "unit": "default/system/rndobj/Env",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "wild_jump_match",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 97.02,
+      "reason": "wild_jump_match",
+      "symbol": "?CalcRect@RndFlare@@IAAAAVRect@Hmx@@AAVVector2@@AAM@Z",
+      "unit": "default/system/rndobj/Flare",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "wild_jump_match",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 89.79,
+      "reason": "wild_jump_match",
+      "symbol": "?DrawShowing@RndFlare@@UAAXXZ",
+      "unit": "default/system/rndobj/Flare",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "wild_jump_match",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 86.37,
+      "reason": "wild_jump_match",
+      "symbol": "?SetCharInfo@RndFont@@IAAXPAUCharInfo@1@AAVRndBitmap@@ABVVector2@@H@Z",
+      "unit": "default/system/rndobj/Font",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 95.42,
+      "reason": "call_count_mismatch",
+      "symbol": "?Print@RndFont@@UBAXXZ",
+      "unit": "default/system/rndobj/Font",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 98.19,
+      "reason": "call_arg_mismatch",
+      "symbol": "?Load@RndFont@@UAAXAAVBinStream@@@Z",
+      "unit": "default/system/rndobj/Font",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__EsFakes@@YAXXZ",
+      "unit": "default/system/rndobj/Graph",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "wild_jump_match",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 87.63,
+      "reason": "wild_jump_match",
+      "symbol": "??0BmpCache@HiResScreen@@QAA@II@Z",
+      "unit": "default/system/rndobj/HiResScreen",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "wild_jump_match",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 76.91,
+      "reason": "wild_jump_match",
+      "symbol": "?UpdateLine@RndLine@@IAAXPAVPoint@1@0@Z",
+      "unit": "default/system/rndobj/Line",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 77.76,
+      "reason": "call_count_mismatch",
+      "symbol": "?Projection@RndLight@@QAA?AVTransform@@XZ",
+      "unit": "default/system/rndobj/Lit",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 99.96,
+      "reason": "call_arg_mismatch",
+      "symbol": "?Save@RndLight@@UAAXAAVBinStream@@@Z",
+      "unit": "default/system/rndobj/Lit",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_arg_mismatch",
+      "symbol": "?Save@RndLight@@$4PPPPPPPM@A@AAXAAVBinStream@@@Z",
+      "unit": "default/system/rndobj/Lit",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "merged_call",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 93.44,
+      "reason": "call_count_mismatch",
+      "symbol": "?Copy@RndLight@@UAAXPBVObject@Hmx@@W4CopyType@23@@Z",
+      "unit": "default/system/rndobj/Lit",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_count_mismatch",
+      "symbol": "?Copy@RndLight@@$4PPPPPPPM@A@AAXPBVObject@Hmx@@W4CopyType@23@@Z",
+      "unit": "default/system/rndobj/Lit",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 54.27,
+      "reason": "call_arg_mismatch",
+      "symbol": "?SphereConeTest@NgLight@@IAA_NABVVector3@@M@Z",
+      "unit": "default/system/rndobj/Lit_NG",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "wild_jump_match",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 92.79,
+      "reason": "wild_jump_match",
+      "symbol": "?BlurShadowRT@NgLight@@MAAXXZ",
+      "unit": "default/system/rndobj/Lit_NG",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?SetupShader@NgMat@@QAAX_N0@Z",
+      "unit": "default/system/rndobj/Mat_NG",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "merged_call",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_count_mismatch",
+      "symbol": "??6@YAAAVBinStream@@AAV0@ABVVert@RndMesh@@@Z",
+      "unit": "default/system/rndobj/Mesh",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "unmapped_access_mismatch",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 94.74,
+      "reason": "unmapped_access_mismatch",
+      "symbol": "?FaceCenter@@YAXPAVRndMesh@@PAVFace@1@AAVVector3@@@Z",
+      "unit": "default/system/rndobj/Mesh",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "wild_jump_match",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 96.99,
+      "reason": "wild_jump_match",
+      "symbol": "?LoadVertices@RndMesh@@UAAXAAVBinStreamRev@@@Z",
+      "unit": "default/system/rndobj/Mesh",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "merged_call",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_count_mismatch",
+      "symbol": "?_M_erase@?$vector@V?$vector@GV?$StlNodeAlloc@G@stlpmtx_std@@@stlpmtx_std@@V?$StlNodeAlloc@V?$vector@GV?$StlNodeAlloc@G@stlpmtx_std@@@stlpmtx_std@@@2@@stlpmtx_std@@IAAPAV?$vector@GV?$StlNodeAlloc@G@stlpmtx_std@@@2@PAV32@0ABU__true_type@2@@Z",
+      "unit": "default/system/rndobj/Mesh",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 99.32,
+      "reason": "call_arg_mismatch",
+      "symbol": "?SetEditAction@MetaMaterial@@IAAXW4MatProp@@W4MatPropEditAction@@@Z",
+      "unit": "default/system/rndobj/MetaMaterial",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__E?sProxyPool@RndMultiMesh@@1V?$list@U?$pair@PAVRndMultiMeshProxy@@H@stlpmtx_std@@V?$StlNodeAlloc@U?$pair@PAVRndMultiMeshProxy@@H@stlpmtx_std@@@2@@stlpmtx_std@@A@@YAXXZ",
+      "unit": "default/system/rndobj/MultiMesh",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__E?sOverlays@RndOverlay@@0V?$list@PAVRndOverlay@@V?$StlNodeAlloc@PAVRndOverlay@@@stlpmtx_std@@@stlpmtx_std@@A@@YAXXZ",
+      "unit": "default/system/rndobj/Overlay",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_arg",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 85.35,
+      "reason": "call_arg_mismatch",
+      "symbol": "??0RndPartLauncher@@IAA@XZ",
+      "unit": "default/system/rndobj/PartLauncher",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fenter@?1??Enter@RndPollable@@UAAXXZ@YAXXZ",
+      "unit": "default/system/rndobj/Poll",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fexit@?1??Exit@RndPollable@@UAAXXZ@YAXXZ",
+      "unit": "default/system/rndobj/Poll",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fmsg@?1??OnSelect@RndPostProc@@MAAXXZ@YAXXZ",
+      "unit": "default/system/rndobj/PostProc",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fmsg@?1??OnUnselect@RndPostProc@@MAAXXZ@YAXXZ",
+      "unit": "default/system/rndobj/PostProc",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?Select@RndPostProc@@UAAXXZ",
+      "unit": "default/system/rndobj/PostProc",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 99.86,
+      "reason": "call_arg_mismatch",
+      "symbol": "?Save@RndPostProc@@UAAXAAVBinStream@@@Z",
+      "unit": "default/system/rndobj/PostProc",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 96.68,
+      "reason": "call_arg_mismatch",
+      "symbol": "?Load@RndPostProc@@UAAXAAVBinStream@@@Z",
+      "unit": "default/system/rndobj/PostProc",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?OnRemoveKeyframe@RndPropAnim@@QAA?AVDataNode@@PAVDataArray@@@Z",
+      "unit": "default/system/rndobj/PropAnim",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__F?sInterpMessage@PropKeys@@2VMessage@@A@@YAXXZ",
+      "unit": "default/system/rndobj/PropKeys",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "cap_exhausted_orig",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 97.33,
+      "reason": "cap_exhausted_orig",
+      "symbol": "??$_M_range_insert_realloc@PBV?$Key@VObjectStage@@@@@?$vector@V?$Key@VObjectStage@@@@V?$StlNodeAlloc@V?$Key@VObjectStage@@@@@stlpmtx_std@@@stlpmtx_std@@AAAXPAV?$Key@VObjectStage@@@@PBV2@1I@Z",
+      "unit": "default/system/rndobj/PropKeys",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "merged_call",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_count_mismatch",
+      "symbol": "??$_M_range_insert_aux@PBV?$Key@VObjectStage@@@@@?$vector@V?$Key@VObjectStage@@@@V?$StlNodeAlloc@V?$Key@VObjectStage@@@@@stlpmtx_std@@@stlpmtx_std@@AAAXPAV?$Key@VObjectStage@@@@PBV2@1IABU__false_type@1@@Z",
+      "unit": "default/system/rndobj/PropKeys",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 85.99,
+      "reason": "call_arg_mismatch",
+      "symbol": "?UpdateRate@Rnd@@IAAXXZ",
+      "unit": "default/system/rndobj/Rnd",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?OnMsg@ModalKeyListener@@QAA?AVDataNode@@ABVKeyboardKeyMsg@@@Z",
+      "unit": "default/system/rndobj/Rnd",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?Handle@ModalKeyListener@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+      "unit": "default/system/rndobj/Rnd",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?FailKeepGoing@@YA?AVDataNode@@PAVDataArray@@@Z",
+      "unit": "default/system/rndobj/Rnd",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?FailRestartConsole@@YA?AVDataNode@@PAVDataArray@@@Z",
+      "unit": "default/system/rndobj/Rnd",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 100.0,
+      "reason": "call_arg_mismatch",
+      "symbol": "?UpdateOverlay@Rnd@@MAAMPAVRndOverlay@@M@Z",
+      "unit": "default/system/rndobj/Rnd",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 80.65,
+      "reason": "call_count_mismatch",
+      "symbol": "?OnToggleHeap@Rnd@@IAA?AVDataNode@@PBVDataArray@@@Z",
+      "unit": "default/system/rndobj/Rnd",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "cap_exhausted_decomp",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 85.66,
+      "reason": "cap_exhausted_decomp",
+      "symbol": "?DrawPreClear@Rnd@@MAAXXZ",
+      "unit": "default/system/rndobj/Rnd",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 73.4,
+      "reason": "memory_mismatch",
+      "symbol": "?Init@RndShader@@SAXXZ",
+      "unit": "default/system/rndobj/Shader",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "wild_jump_match",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 15.39,
+      "reason": "wild_jump_match",
+      "symbol": "?CalcShaderOpts@RndShaderParticles@@MAA_KPAVNgMat@@W4ShaderType@@_N@Z",
+      "unit": "default/system/rndobj/Shader",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "wild_jump_match",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 13.35,
+      "reason": "wild_jump_match",
+      "symbol": "?CalcShaderOpts@RndShaderMultimesh@@MAA_KPAVNgMat@@W4ShaderType@@_N@Z",
+      "unit": "default/system/rndobj/Shader",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "wild_jump_match",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 38.55,
+      "reason": "wild_jump_match",
+      "symbol": "?CalcShaderOpts@RndShaderStandard@@MAA_KPAVNgMat@@W4ShaderType@@_N@Z",
+      "unit": "default/system/rndobj/Shader",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "wild_jump_match",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 26.67,
+      "reason": "wild_jump_match",
+      "symbol": "?CalcShaderOpts@RndShaderUnwrapUV@@MAA_KPAVNgMat@@W4ShaderType@@_N@Z",
+      "unit": "default/system/rndobj/Shader",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "wild_jump_match",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 41.43,
+      "reason": "wild_jump_match",
+      "symbol": "?CalcShaderOpts@RndShaderVelocity@@MAA_KPAVNgMat@@W4ShaderType@@_N@Z",
+      "unit": "default/system/rndobj/Shader",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "wild_jump_match",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 3.59,
+      "reason": "wild_jump_match",
+      "symbol": "?CalcShaderOpts@RndShaderDepthVolume@@MAA_KPAVNgMat@@W4ShaderType@@_N@Z",
+      "unit": "default/system/rndobj/Shader",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "wild_jump_match",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 46.62,
+      "reason": "wild_jump_match",
+      "symbol": "?CalcShaderOpts@RndShaderFur@@MAA_KPAVNgMat@@W4ShaderType@@_N@Z",
+      "unit": "default/system/rndobj/Shader",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "wild_jump_match",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 41.48,
+      "reason": "wild_jump_match",
+      "symbol": "?CalcShaderOpts@RndShaderSyncTrack@@MAA_KPAVNgMat@@W4ShaderType@@_N@Z",
+      "unit": "default/system/rndobj/Shader",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 18.34,
+      "reason": "call_count_mismatch",
+      "symbol": "??DHmx@@YA?AVMatrix4@0@ABV10@0@Z",
+      "unit": "default/system/rndobj/Shader",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "wild_jump_match",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 97.27,
+      "reason": "wild_jump_match",
+      "symbol": "?CopyErrorShader@RndShaderProgram@@IAAXW4ShaderType@@ABUShaderOptions@@@Z",
+      "unit": "default/system/rndobj/ShaderProgram",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 63.4,
+      "reason": "call_arg_mismatch",
+      "symbol": "?SyncDeformedCtrlPoints@RndSpline@@ABAXHH@Z",
+      "unit": "default/system/rndobj/Spline",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "wild_jump_match",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 93.87,
+      "reason": "wild_jump_match",
+      "symbol": "?GetBlendState@RndTexBlendController@@QBA?AW4BlendState@1@AAMM@Z",
+      "unit": "default/system/rndobj/TexBlendController",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__E?sFontMapCache@RndText@@1V?$list@PAVFontMapBase@RndText@@V?$StlNodeAlloc@PAVFontMapBase@RndText@@@stlpmtx_std@@@stlpmtx_std@@A@@YAXXZ",
+      "unit": "default/system/rndobj/Text",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "regalloc",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 86.33,
+      "reason": "call_arg_mismatch",
+      "symbol": "?XfmOnCircleEdge@@YA?AVTransform@@MM@Z",
+      "unit": "default/system/rndobj/Text",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 84.14,
+      "reason": "call_arg_mismatch",
+      "symbol": "?SetupCharacter@FontMap3d@RndText@@UAAXGAAMMABVStyleState@2@GMW4FitType@2@M@Z",
+      "unit": "default/system/rndobj/Text",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 85.04,
+      "reason": "call_arg_mismatch",
+      "symbol": "?SetupCharacter@FontMap@RndText@@UAAXGAAMMABVStyleState@2@GMW4FitType@2@M@Z",
+      "unit": "default/system/rndobj/Text",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 77.43,
+      "reason": "call_arg_mismatch",
+      "symbol": "?DrawShowing@RndText@@UAAXXZ",
+      "unit": "default/system/rndobj/Text",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_arg_mismatch",
+      "symbol": "?DrawShowing@RndText@@$4PPPPPPPM@A@AAXXZ",
+      "unit": "default/system/rndobj/Text",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 91.86,
+      "reason": "call_arg_mismatch",
+      "symbol": "?ConvertTextToWide@RndText@@IAAHPBDAAV?$vector@GV?$StlNodeAlloc@G@stlpmtx_std@@@stlpmtx_std@@@Z",
+      "unit": "default/system/rndobj/Text",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_arg_mismatch",
+      "symbol": "?ComputeCharWidthsForText@RndText@@QAAMVString@@@Z",
+      "unit": "default/system/rndobj/Text",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__EgChildPolys@@YAXXZ",
+      "unit": "default/system/rndobj/Utl",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__EgParentPolys@@YAXXZ",
+      "unit": "default/system/rndobj/Utl",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?SetRndSplasherCallback@@YAXP6AXXZ00@Z",
+      "unit": "default/system/rndobj/Utl",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "wild_jump_match",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 82.64,
+      "reason": "wild_jump_match",
+      "symbol": "?UtilDrawCigar@@YAXABVTransform@@QBM1ABVColor@Hmx@@H@Z",
+      "unit": "default/system/rndobj/Utl",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 79.22,
+      "reason": "call_count_mismatch",
+      "symbol": "?FixVertOrder@@YAXPBVRndMesh@@PAV1@@Z",
+      "unit": "default/system/rndobj/Utl",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 71.57,
+      "reason": "call_arg_mismatch",
+      "symbol": "?CacheResource@@YAPBDPBDAAW4CacheResourceResult@@@Z",
+      "unit": "default/system/rndobj/Utl",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 93.42,
+      "reason": "call_arg_mismatch",
+      "symbol": "?UtilDrawPlane@@YAXABVPlane@@ABVVector3@@ABVColor@Hmx@@HM_N@Z",
+      "unit": "default/system/rndobj/Utl",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 87.28,
+      "reason": "call_arg_mismatch",
+      "symbol": "?TestTextureSize@@YAXPAVObjectDir@@HHHHH@Z",
+      "unit": "default/system/rndobj/Utl",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 73.3,
+      "reason": "call_arg_mismatch",
+      "symbol": "?TessellateMesh@@YAXPAVRndMesh@@@Z",
+      "unit": "default/system/rndobj/Utl",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "merged_call",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_count_mismatch",
+      "symbol": "?SpliceKeys@@YAXPAVRndTransAnim@@0MM@Z",
+      "unit": "default/system/rndobj/Utl",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__F?sSingleton@RndVelocityBuffer@@0V1@A@@YAXXZ",
+      "unit": "default/system/rndobj/VelocityBuffer",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 81.37,
+      "reason": "call_arg_mismatch",
+      "symbol": "?DrawMesh@RndVelocityBuffer@@QBAXPAVRndMesh@@@Z",
+      "unit": "default/system/rndobj/VelocityBuffer",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__E?sPollables@SynthPollable@@0V?$list@PAVSynthPollable@@V?$StlNodeAlloc@PAVSynthPollable@@@stlpmtx_std@@@stlpmtx_std@@A@@YAXXZ",
+      "unit": "default/system/synth/Pollable",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?SetAllocator@SampleData@@SAXP6APAXHPBDH0H@ZP6AXPAX0H0@Z@Z",
+      "unit": "default/system/synth/SampleData",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 99.85,
+      "reason": "call_arg_mismatch",
+      "symbol": "?Save@SampleData@@QBAXAAVBinStream@@@Z",
+      "unit": "default/system/synth/SampleData",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "wild_jump_match",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 55.38,
+      "reason": "wild_jump_match",
+      "symbol": "?DrawMeter@Synth@@QAAXAAMMMPBD@Z",
+      "unit": "default/system/synth/Synth",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_count_mismatch",
+      "symbol": "??0Synth@@QAA@XZ",
+      "unit": "default/system/synth/Synth",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?Disable@SynthSample@@SAXXZ",
+      "unit": "default/system/synth/SynthSample",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 94.23,
+      "reason": "call_arg_mismatch",
+      "symbol": "?Highlight@ThreeDSound@@UAAXXZ",
+      "unit": "default/system/synth/ThreeDSound",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_arg_mismatch",
+      "symbol": "?Highlight@ThreeDSound@@$4PPPPPPPM@A@AAXXZ",
+      "unit": "default/system/synth/ThreeDSound",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "merged_call",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_count_mismatch",
+      "symbol": "?_M_erase@?$vector@V?$vector@FV?$StlNodeAlloc@F@stlpmtx_std@@@stlpmtx_std@@V?$StlNodeAlloc@V?$vector@FV?$StlNodeAlloc@F@stlpmtx_std@@@stlpmtx_std@@@2@@stlpmtx_std@@IAAPAV?$vector@FV?$StlNodeAlloc@F@stlpmtx_std@@@2@PAV32@0ABU__true_type@2@@Z",
+      "unit": "default/system/synth/VorbisReader",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?SetAllocator@WavMgr@@SAXP6APAXHPBDH0H@ZP6AXPAX0H0@Z@Z",
+      "unit": "default/system/synth/WavMgr",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 74.11,
+      "reason": "call_arg_mismatch",
+      "symbol": "?compute_apres@@YAXXZ",
+      "unit": "default/system/synth/filterdesign",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "rijndael_setup",
+      "unit": "default/system/synth/tomcrypt/aes",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "return_value",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "return_value_mismatch",
+      "symbol": "rijndael_ecb_encrypt",
+      "unit": "default/system/synth/tomcrypt/aes",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "return_value",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "return_value_mismatch",
+      "symbol": "rijndael_ecb_decrypt",
+      "unit": "default/system/synth/tomcrypt/aes",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "return_value",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "return_value_mismatch",
+      "symbol": "rijndael_test",
+      "unit": "default/system/synth/tomcrypt/aes",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "cipher_is_valid",
+      "unit": "default/system/synth/tomcrypt/crypt",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "object_memory",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??0SynapseAPOParams@DSP@@QAA@XZ",
+      "unit": "default/system/synth_xbox/FxSendSynapse",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "regalloc",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 82.15,
+      "reason": "call_arg_mismatch",
+      "symbol": "?_M_insert_overflow@?$vector@MV?$XboxAllocator@M@@@stlpmtx_std@@IAAXPAMABMABU__true_type@2@I_N@Z",
+      "unit": "default/system/synth_xbox/SpectralAnalysis",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "wild_jump_match",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 96.75,
+      "reason": "wild_jump_match",
+      "symbol": "?ProcessInPlace@Synapse@1DSP@@QAAXIPAM@Z",
+      "unit": "default/system/synth_xbox/Synapse_dsp",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "cap_exhausted_orig",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "cap_exhausted_orig",
+      "symbol": "?resize@?$vector@V?$vector@MV?$StlNodeAlloc@M@stlpmtx_std@@@stlpmtx_std@@V?$StlNodeAlloc@V?$vector@MV?$StlNodeAlloc@M@stlpmtx_std@@@stlpmtx_std@@@2@@stlpmtx_std@@QAAXIABV?$vector@MV?$StlNodeAlloc@M@stlpmtx_std@@@2@@Z",
+      "unit": "default/system/synth_xbox/Synapse_dsp",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "wild_jump_match",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 72.79,
+      "reason": "wild_jump_match",
+      "symbol": "??0Synapse@0DSP@@QAA@M@Z",
+      "unit": "default/system/synth_xbox/Synapse_dsp",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__EgPendingVoices@@YAXXZ",
+      "unit": "default/system/synth_xbox/Voice",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__EgPendingSyncVoices@@YAXXZ",
+      "unit": "default/system/synth_xbox/Voice",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__EgInProgressVoices@@YAXXZ",
+      "unit": "default/system/synth_xbox/Voice",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__EgInProgressSyncVoices@@YAXXZ",
+      "unit": "default/system/synth_xbox/Voice",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?TerminateVoiceThread@@YAXXZ",
+      "unit": "default/system/synth_xbox/Voice",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?ResetRotation@InlineHelp@@KAXXZ",
+      "unit": "default/system/ui/InlineHelp",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_count_mismatch",
+      "symbol": "?SetActionToken@InlineHelp@@QAAXW4JoypadAction@@AAVDataNode@@@Z",
+      "unit": "default/system/ui/InlineHelp",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FdirMsg@?1??SendTransition@PanelDir@@IAAXABVMessage@@VSymbol@@1@Z@YAXXZ",
+      "unit": "default/system/ui/PanelDir",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fscroll_select_msg@?1??SendScrollSelected@ScrollSelect@@AAA?AVDataNode@@PAVUIComponent@@PAVLocalUser@@@Z@YAXXZ",
+      "unit": "default/system/ui/ScrollSelect",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fmsg@?4??CurScreenName@Automator@@AAA?AVSymbol@@XZ@YAXXZ",
+      "unit": "default/system/ui/UI",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fb_msg@?1??Poll@Automator@@QAAXXZ@YAXXZ",
+      "unit": "default/system/ui/UI",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fselect_msg@?6??FinishSelecting@UIComponent@@AAAXXZ@YAXXZ",
+      "unit": "default/system/ui/UIComponent",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "merged_call",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 100.0,
+      "reason": "call_count_mismatch",
+      "symbol": "?Save@UIFontImporter@@UAAXAAVBinStream@@@Z",
+      "unit": "default/system/ui/UIFontImporter",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 100.0,
+      "reason": "call_count_mismatch",
+      "symbol": "?Save@UIFontImporter@@$4PPPPPPPM@A@AAXAAVBinStream@@@Z",
+      "unit": "default/system/ui/UIFontImporter",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?RefreshFontMat@UILabel@@IAAXH@Z",
+      "unit": "default/system/ui/UILabel",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 98.93,
+      "reason": "call_arg_mismatch",
+      "symbol": "?PreLoad@UILabel@@UAAXAAVBinStream@@@Z",
+      "unit": "default/system/ui/UILabel",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 100.0,
+      "reason": "call_arg_mismatch",
+      "symbol": "?PreLoad@UILabel@@$4PPPPPPPM@A@AAXAAVBinStream@@@Z",
+      "unit": "default/system/ui/UILabel",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_count_mismatch",
+      "symbol": "?BoundingBoxTriangles@UIList@@IAAXAAV?$vector@V?$vector@VVector3@@V?$StlNodeAlloc@VVector3@@@stlpmtx_std@@@stlpmtx_std@@V?$StlNodeAlloc@V?$vector@VVector3@@V?$StlNodeAlloc@VVector3@@@stlpmtx_std@@@stlpmtx_std@@@2@@stlpmtx_std@@@Z",
+      "unit": "default/system/ui/UIList",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 99.91,
+      "reason": "call_count_mismatch",
+      "symbol": "?CollideShowing@UIList@@UAAPAVRndDrawable@@ABVSegment@@AAMAAVPlane@@@Z",
+      "unit": "default/system/ui/UIList",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_count_mismatch",
+      "symbol": "?CollidePlane@UIList@@UAAHABVPlane@@@Z",
+      "unit": "default/system/ui/UIList",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 99.78,
+      "reason": "call_arg_mismatch",
+      "symbol": "?Save@UIListDir@@UAAXAAVBinStream@@@Z",
+      "unit": "default/system/ui/UIListDir",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "wild_jump_match",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 89.4,
+      "reason": "wild_jump_match",
+      "symbol": "?BuildDrawState@UIListDir@@QBAXAAUUIListWidgetDrawState@@ABVUIListState@@W4State@UIComponent@@M_N@Z",
+      "unit": "default/system/ui/UIListDir",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_arg_mismatch",
+      "symbol": "?Save@UIListDir@@$4PPPPPPPM@A@AAXAAVBinStream@@@Z",
+      "unit": "default/system/ui/UIListDir",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 99.86,
+      "reason": "call_arg_mismatch",
+      "symbol": "?Load@UIListLabel@@UAAXAAVBinStream@@@Z",
+      "unit": "default/system/ui/UIListLabel",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FmsgMat@?3??Mat@DataProvider@@UBAPAVRndMat@@HHPAVUIListMesh@@@Z@YAXXZ",
+      "unit": "default/system/ui/UIListProvider",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_count_mismatch",
+      "symbol": "?push_back@?$vector@V?$vector@V?$ObjPtr@VUIColor@@@@V?$StlNodeAlloc@V?$ObjPtr@VUIColor@@@@@stlpmtx_std@@@stlpmtx_std@@V?$StlNodeAlloc@V?$vector@V?$ObjPtr@VUIColor@@@@V?$StlNodeAlloc@V?$ObjPtr@VUIColor@@@@@stlpmtx_std@@@stlpmtx_std@@@2@@stlpmtx_std@@QAAXABV?$vector@V?$ObjPtr@VUIColor@@@@V?$StlNodeAlloc@V?$ObjPtr@VUIColor@@@@@stlpmtx_std@@@2@@Z",
+      "unit": "default/system/ui/UIListWidget",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fmsg@?1??FinishLoad@UIPanel@@MAAXXZ@YAXXZ",
+      "unit": "default/system/ui/UIPanel",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fmsg@?1??Poll@UIPanel@@UAAXXZ@YAXXZ",
+      "unit": "default/system/ui/UIPanel",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fmsg@?BH@??Enter@UIScreen@@UAAXPAV1@@Z@YAXXZ",
+      "unit": "default/system/ui/UIScreen",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "wild_jump_match",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 93.53,
+      "reason": "wild_jump_match",
+      "symbol": "?Beat@BeatMap@@QBAMM@Z",
+      "unit": "default/system/utl/BeatMap",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 99.91,
+      "reason": "call_arg_mismatch",
+      "symbol": "?PollSearch@CacheMgrXbox@@AAAXXZ",
+      "unit": "default/system/utl/CacheMgr_Xbox",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 95.93,
+      "reason": "call_arg_mismatch",
+      "symbol": "?PollMount@CacheMgrXbox@@AAAXXZ",
+      "unit": "default/system/utl/CacheMgr_Xbox",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fmsg@?7??WriteAsync@CacheXbox@@UAA_NPBDPAXIPAVObject@Hmx@@@Z@YAXXZ",
+      "unit": "default/system/utl/Cache_Xbox",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 87.38,
+      "reason": "call_arg_mismatch",
+      "symbol": "?ThreadGetFileSize@CacheXbox@@IAAHXZ",
+      "unit": "default/system/utl/Cache_Xbox",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "merged_call",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 85.76,
+      "reason": "call_count_mismatch",
+      "symbol": "?ThreadGetDir@CacheXbox@@IAAHVString@@0@Z",
+      "unit": "default/system/utl/Cache_Xbox",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__EkListChunkID@@YAXXZ",
+      "unit": "default/system/utl/ChunkIDs",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__EkRiffChunkID@@YAXXZ",
+      "unit": "default/system/utl/ChunkIDs",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__EkMidiChunkID@@YAXXZ",
+      "unit": "default/system/utl/ChunkIDs",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__EkMidiHeaderChunkID@@YAXXZ",
+      "unit": "default/system/utl/ChunkIDs",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__EkMidiTrackChunkID@@YAXXZ",
+      "unit": "default/system/utl/ChunkIDs",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__EkWaveChunkID@@YAXXZ",
+      "unit": "default/system/utl/ChunkIDs",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__EkWaveFormatChunkID@@YAXXZ",
+      "unit": "default/system/utl/ChunkIDs",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__EkWaveDataChunkID@@YAXXZ",
+      "unit": "default/system/utl/ChunkIDs",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__EkWaveFactChunkID@@YAXXZ",
+      "unit": "default/system/utl/ChunkIDs",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__EkWaveInstChunkID@@YAXXZ",
+      "unit": "default/system/utl/ChunkIDs",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__EkWaveSampleChunkID@@YAXXZ",
+      "unit": "default/system/utl/ChunkIDs",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__EkWaveCueChunkID@@YAXXZ",
+      "unit": "default/system/utl/ChunkIDs",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__EkWaveLabelChunkID@@YAXXZ",
+      "unit": "default/system/utl/ChunkIDs",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__EkWaveTextChunkID@@YAXXZ",
+      "unit": "default/system/utl/ChunkIDs",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__EkWaveAdditionalChunkID@@YAXXZ",
+      "unit": "default/system/utl/ChunkIDs",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?SetActiveChunkObject@@YAXPAVObject@Hmx@@@Z",
+      "unit": "default/system/utl/ChunkStream",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?StartDecompressionThread@?A0x7ea4e606@@YAXXZ",
+      "unit": "default/system/utl/ChunkStream",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": null,
+      "confidence": null,
+      "match_percent_normalized": 100.0,
+      "reason": "ERROR: Execution failed: rdata buffer is 0x175d8 bytes, exceeds the 0x10000 RDATA window",
+      "symbol": "??__ETheGlitchFinder@@YAXXZ",
+      "unit": "default/system/utl/GlitchFinder",
+      "verdict": "ERROR"
+    },
+    {
+      "class": null,
+      "confidence": null,
+      "match_percent_normalized": 100.0,
+      "reason": "ERROR: Execution failed: rdata buffer is 0x175d3 bytes, exceeds the 0x10000 RDATA window",
+      "symbol": "??__FTheGlitchFinder@@YAXXZ",
+      "unit": "default/system/utl/GlitchFinder",
+      "verdict": "ERROR"
+    },
+    {
+      "class": null,
+      "confidence": null,
+      "match_percent_normalized": 100.0,
+      "reason": "ERROR: Execution failed: rdata buffer is 0x176e0 bytes, exceeds the 0x10000 RDATA window",
+      "symbol": "??1AutoGlitchPoker@@QAA@XZ",
+      "unit": "default/system/utl/GlitchFinder",
+      "verdict": "ERROR"
+    },
+    {
+      "class": null,
+      "confidence": null,
+      "match_percent_normalized": 100.0,
+      "reason": "ERROR: Execution failed: rdata buffer is 0x17750 bytes, exceeds the 0x10000 RDATA window",
+      "symbol": "?GlitchFindScriptImpl@@YA?AVDataNode@@PAVDataArray@@H@Z",
+      "unit": "default/system/utl/GlitchFinder",
+      "verdict": "ERROR"
+    },
+    {
+      "class": null,
+      "confidence": null,
+      "match_percent_normalized": 100.0,
+      "reason": "ERROR: Execution failed: rdata buffer is 0x17750 bytes, exceeds the 0x10000 RDATA window",
+      "symbol": "?OnGlitchFind@GlitchFinder@@CA?AVDataNode@@PAVDataArray@@@Z",
+      "unit": "default/system/utl/GlitchFinder",
+      "verdict": "ERROR"
+    },
+    {
+      "class": null,
+      "confidence": null,
+      "match_percent_normalized": 100.0,
+      "reason": "ERROR: Execution failed: rdata buffer is 0x17750 bytes, exceeds the 0x10000 RDATA window",
+      "symbol": "?OnGlitchFindBudget@GlitchFinder@@CA?AVDataNode@@PAVDataArray@@@Z",
+      "unit": "default/system/utl/GlitchFinder",
+      "verdict": "ERROR"
+    },
+    {
+      "class": null,
+      "confidence": null,
+      "match_percent_normalized": 100.0,
+      "reason": "ERROR: Execution failed: rdata buffer is 0x17750 bytes, exceeds the 0x10000 RDATA window",
+      "symbol": "?OnGlitchFindLeaves@GlitchFinder@@CA?AVDataNode@@PAVDataArray@@@Z",
+      "unit": "default/system/utl/GlitchFinder",
+      "verdict": "ERROR"
+    },
+    {
+      "class": null,
+      "confidence": null,
+      "match_percent_normalized": 100.0,
+      "reason": "ERROR: Execution failed: rdata buffer is 0x17720 bytes, exceeds the 0x10000 RDATA window",
+      "symbol": "?OnGlitchFindPoke@GlitchFinder@@CA?AVDataNode@@PAVDataArray@@@Z",
+      "unit": "default/system/utl/GlitchFinder",
+      "verdict": "ERROR"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 88.89,
+      "reason": "memory_mismatch",
+      "symbol": "?OnToggleLastKnownIssues@KnownIssues@@SA?AVDataNode@@PAVDataArray@@@Z",
+      "unit": "default/system/utl/KnownIssues",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?OnToggleAllowKnownIssues@KnownIssues@@SA?AVDataNode@@PAVDataArray@@@Z",
+      "unit": "default/system/utl/KnownIssues",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??0Licenses@@QAA@PBDW4Requirement@0@@Z",
+      "unit": "default/system/utl/Licenses",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?DataToggleShowTokensCheat@@YA?AVDataNode@@PAVDataArray@@@Z",
+      "unit": "default/system/utl/Locale",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "merged_call",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 92.7,
+      "reason": "call_count_mismatch",
+      "symbol": "?Init@Locale@@QAAXXZ",
+      "unit": "default/system/utl/Locale",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_count_mismatch",
+      "symbol": "?SyncReloadLocale@@YAXXZ",
+      "unit": "default/system/utl/Locale",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 100.0,
+      "reason": "call_count_mismatch",
+      "symbol": "?InitMakeString@@YAXXZ",
+      "unit": "default/system/utl/MakeString",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "cap_exhausted_decomp",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "cap_exhausted_decomp",
+      "symbol": "?NextBuf@@YAPADXZ",
+      "unit": "default/system/utl/MakeString",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "cap_exhausted_decomp",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "cap_exhausted_decomp",
+      "symbol": "??0FormatString@@IAA@XZ",
+      "unit": "default/system/utl/MakeString",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "cap_exhausted_decomp",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "cap_exhausted_decomp",
+      "symbol": "?Str@FormatString@@QAAPBDXZ",
+      "unit": "default/system/utl/MakeString",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "cap_exhausted_decomp",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "cap_exhausted_decomp",
+      "symbol": "??6FormatString@@QAAAAV0@PBD@Z",
+      "unit": "default/system/utl/MakeString",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "cap_exhausted_decomp",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "cap_exhausted_decomp",
+      "symbol": "??0FormatString@@QAA@PBD@Z",
+      "unit": "default/system/utl/MakeString",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?MemForceNewOperatorAlign@@YAXH@Z",
+      "unit": "default/system/utl/MemMgr",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_count_mismatch",
+      "symbol": "??2@YAPAXI@Z",
+      "unit": "default/system/utl/MemMgr",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_count_mismatch",
+      "symbol": "??_U@YAPAXI@Z",
+      "unit": "default/system/utl/MemMgr",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_count_mismatch",
+      "symbol": "?MemOrPoolAlloc@@YAPAXHPBDH0@Z",
+      "unit": "default/system/utl/MemMgr",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 98.57,
+      "reason": "call_arg_mismatch",
+      "symbol": "?AddHeap@@YAXHHPAVDataArray@@@Z",
+      "unit": "default/system/utl/MemMgr",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 95.14,
+      "reason": "call_count_mismatch",
+      "symbol": "?_MemAllocTemp@@YAPAXHPBDH0H@Z",
+      "unit": "default/system/utl/MemMgr",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 96.71,
+      "reason": "call_count_mismatch",
+      "symbol": "?MemOrPoolAllocSTL@@YAPAXHPBDH0@Z",
+      "unit": "default/system/utl/MemMgr",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 97.22,
+      "reason": "call_count_mismatch",
+      "symbol": "?MemInit@@YAXXZ",
+      "unit": "default/system/utl/MemMgr",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 84.36,
+      "reason": "call_arg_mismatch",
+      "symbol": "?ReportMemoryUsageOverview@MemTracker@@QAAXPBD@Z",
+      "unit": "default/system/utl/MemTracker",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 99.91,
+      "reason": "call_arg_mismatch",
+      "symbol": "?PointForTime@MultiTempoTempoMap@@ABAPBUTempoInfoPoint@1@M@Z",
+      "unit": "default/system/utl/MultiTempoTempoMap",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "merged_call",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 97.95,
+      "reason": "call_count_mismatch",
+      "symbol": "?SetState@NetCacheLoader@@IAAXW4State@1@@Z",
+      "unit": "default/system/utl/NetCacheLoader",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_count_mismatch",
+      "symbol": "?WriteToCache@NetCacheLoader@@IAAXXZ",
+      "unit": "default/system/utl/NetCacheLoader",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "merged_call",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_count_mismatch",
+      "symbol": "??0NetCacheLoader@@QAA@PAVFileCache@@ABVString@@@Z",
+      "unit": "default/system/utl/NetCacheLoader",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_count_mismatch",
+      "symbol": "??1NetCacheLoader@@QAA@XZ",
+      "unit": "default/system/utl/NetCacheLoader",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "orig_error",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 71.08,
+      "reason": "orig_error",
+      "symbol": "?IsLoadedOrFailed@NetLoaderRef@@QAA_NXZ",
+      "unit": "default/system/utl/NetCacheMgr",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?Terminate@Symbol@@SAXXZ",
+      "unit": "default/system/utl/Symbol",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 96.55,
+      "reason": "call_arg_mismatch",
+      "symbol": "?ASCIItoUTF8@@YAXPADHPBD@Z",
+      "unit": "default/system/utl/UTF8",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "return_value",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 100.0,
+      "reason": "return_value_mismatch",
+      "symbol": "?get_free_node@Trie@@QAAIXZ",
+      "unit": "default/system/utl/trie",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Ffirst_shot_ok@?1??FirstShotOk@CameraManager@@AAAXVSymbol@@@Z@YAXXZ",
+      "unit": "default/system/world/CameraManager",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fmsg@?1??SetShotOver@CamShot@@IAAXXZ@YAXXZ",
+      "unit": "default/system/world/CameraShot",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__Fmsg@?1??ShotOk@CamShot@@QAA_NPAV1@@Z@YAXXZ",
+      "unit": "default/system/world/CameraShot",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "??__FnullFrame@?7??SetFrame@CamShot@@UAAXMM@Z@YAXXZ",
+      "unit": "default/system/world/CameraShot",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 99.86,
+      "reason": "call_arg_mismatch",
+      "symbol": "?Load@CamShot@@UAAXAAVBinStream@@@Z",
+      "unit": "default/system/world/CameraShot",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 100.0,
+      "reason": "call_arg_mismatch",
+      "symbol": "?Load@CamShot@@$4PPPPPPPM@A@AAXAAVBinStream@@@Z",
+      "unit": "default/system/world/CameraShot",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 100.0,
+      "reason": "call_count_mismatch",
+      "symbol": "?CollideList@WorldCrowd@@UAAXABVSegment@@AAV?$list@UCollision@RndDrawable@@V?$StlNodeAlloc@UCollision@RndDrawable@@@stlpmtx_std@@@stlpmtx_std@@@Z",
+      "unit": "default/system/world/Crowd",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 87.71,
+      "reason": "call_arg_mismatch",
+      "symbol": "?DrawShowing@WorldCrowd@@UAAXXZ",
+      "unit": "default/system/world/Crowd",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "regalloc",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_arg_mismatch",
+      "symbol": "?BuildBillboard@WorldCrowd@@IAAPAVRndMesh@@PAVCharacter@@M@Z",
+      "unit": "default/system/world/Crowd",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_count_mismatch",
+      "symbol": "?push_back@?$vector@UChar3D@CharData@WorldCrowd@@V?$StlNodeAlloc@UChar3D@CharData@WorldCrowd@@@stlpmtx_std@@@stlpmtx_std@@QAAXABUChar3D@CharData@WorldCrowd@@@Z",
+      "unit": "default/system/world/Crowd",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_count",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_count_mismatch",
+      "symbol": "??0WorldCrowd@@IAA@XZ",
+      "unit": "default/system/world/Crowd",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_arg",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_arg_mismatch",
+      "symbol": "?AddSpotlight@LightPreset@@IAAXPAVSpotlight@@_N@Z",
+      "unit": "default/system/world/LightPreset",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "call_arg",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "call_arg_mismatch",
+      "symbol": "?SetSpotlight@LightPreset@@QAAXPAVSpotlight@@H@Z",
+      "unit": "default/system/world/LightPreset",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 96.82,
+      "reason": "call_arg_mismatch",
+      "symbol": "?DrawShowing@Spotlight@@UAAXXZ",
+      "unit": "default/system/world/Spotlight",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "wild_jump_match",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 71.41,
+      "reason": "wild_jump_match",
+      "symbol": "?BuildNGCone@Spotlight@@IAAXAAUBeamDef@1@H@Z",
+      "unit": "default/system/world/Spotlight",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "wild_jump_match",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 88.05,
+      "reason": "wild_jump_match",
+      "symbol": "?BuildNGQuad@Spotlight@@IAAXAAUBeamDef@1@W4Constraint@RndTransformable@@@Z",
+      "unit": "default/system/world/Spotlight",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "wild_jump_match",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "wild_jump_match",
+      "symbol": "?BuildNGShaft@Spotlight@@IAAXAAUBeamDef@1@@Z",
+      "unit": "default/system/world/Spotlight",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "wild_jump_match",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 89.75,
+      "reason": "wild_jump_match",
+      "symbol": "?BuildCone@Spotlight@@IAAXAAUBeamDef@1@@Z",
+      "unit": "default/system/world/Spotlight",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "wild_jump_match",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 71.4,
+      "reason": "wild_jump_match",
+      "symbol": "?BuildBeam@Spotlight@@IAAXAAUBeamDef@1@@Z",
+      "unit": "default/system/world/Spotlight",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?Select@SpotlightDrawer@@QAAXXZ",
+      "unit": "default/system/world/SpotlightDrawer",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "build_env",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "?DrawShowing@SpotlightDrawer@@MAAXXZ",
+      "unit": "default/system/world/SpotlightDrawer",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "stack_layout",
+      "confidence": "input_sensitive",
+      "match_percent_normalized": 95.81,
+      "reason": "call_arg_mismatch",
+      "symbol": "?Poll@ThreeDSoundManager@@QAAXXZ",
+      "unit": "default/system/world/ThreeDSoundManager",
+      "verdict": "DIVERGENT"
+    },
+    {
+      "class": "object_memory",
+      "confidence": "stable_divergent",
+      "match_percent_normalized": 100.0,
+      "reason": "memory_mismatch",
+      "symbol": "_tr_flush_block",
+      "unit": "default/system/zlib/trees",
+      "verdict": "DIVERGENT"
+    }
+  ],
+  "summary": {
+    "build": "eda64e956",
+    "elapsed_s": 277.4,
+    "flip_DIVERGENT_to_EQUIVALENT": 420,
+    "flip_EQUIVALENT_to_DIVERGENT": 10030,
+    "flip_cause_artifact": 231,
+    "flip_cause_candidate_bug": 8425,
+    "flip_cause_dist": {
+      "artifact": 231,
+      "candidate_bug": 8425,
+      "other": 19252,
+      "recovered": 420,
+      "signal_version": 1374
+    },
+    "flip_cause_signal_version": 1374,
+    "flips_total": 10497,
+    "fns_tested": 29702,
+    "harness_version": 4,
+    "new_evidence": 1931,
+    "new_evidence_DIVERGENT": 661,
+    "new_evidence_DIVERGENT_artifact": 17,
+    "new_evidence_DIVERGENT_realbug": 3,
+    "new_evidence_EQUIVALENT": 965,
+    "prior_EQUIVALENT_flipped": 10065,
+    "prior_EQUIVALENT_stayed_EQUIVALENT": 15558,
+    "prior_EQUIVALENT_tested": 25623,
+    "probe_schedule_hash": "f70be3b1338800c9",
+    "scope": "all",
+    "signal_version": 3,
+    "tested_at": "2026-08-19 07:39:44",
+    "units_swept": 966,
+    "verdict_dist": {
+      "DIVERGENT": 12407,
+      "EQUIVALENT": 16943,
+      "ERROR": 8,
+      "SKIPPED": 344
+    }
+  }
+}

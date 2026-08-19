@@ -36,7 +36,30 @@ LIVE_DB = "/home/free/code/milohax/dc3-decomp/decomp.db"
 NEW_COLUMNS = [
     ("unicorn_source_hash", "TEXT"),
     ("unicorn_source_hash_at", "TEXT"),
+    # PROVENANCE. unicorn_signal_version describes the COMPARATOR semantics;
+    # these two describe the EMULATION HARNESS the comparator was applied to.
+    # Eight harness defects fixed 2026-08-18/19 changed verdicts wholesale
+    # without touching one comparator rule, so signal_version stayed 3 and there
+    # was no column in the DB that could tell a verdict produced by the broken
+    # harness from one produced by the fixed one. See
+    # scripts/unicorn_runner/signal_version.py:HARNESS_VERSION for the changelog.
+    #   unicorn_harness_version  INTEGER  h1..h4; NULL/1 == pre-2026-08-18, do
+    #                                     not trust (measured ~8x overstatement
+    #                                     of real bugs).
+    #   unicorn_harness_build    TEXT     git short rev of the tree that ran it.
+    ("unicorn_harness_version", "INTEGER"),
+    ("unicorn_harness_build", "TEXT"),
 ]
+
+# Rows that already carry a verdict but were NOT re-measured by this results DB
+# were produced by the pre-fix harness. Stamp them h1 rather than leaving
+# harness_version NULL, so `WHERE unicorn_harness_version >= 4` is a complete
+# filter and nobody has to guess again.
+LEGACY_HARNESS_VERSION = 1
+
+
+def _has_col(conn, table, col):
+    return col in {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
 
 
 def existing_columns(conn, table):
@@ -66,6 +89,11 @@ def main():
     ap.add_argument("--only-fresh-source", action="store_true",
                     help="Only update rows whose live source_hash differs/absent "
                          "(skip rows already carrying this exact hash).")
+    ap.add_argument("--stamp-legacy", action="store_true",
+                    help="After applying, stamp every row that still carries a "
+                         f"verdict but no harness_version as h{LEGACY_HARNESS_VERSION} "
+                         "(pre-2026-08-18 harness, do not trust). Makes "
+                         "`WHERE unicorn_harness_version >= N` a complete filter.")
     args = ap.parse_args()
 
     if not Path(args.results).exists():
@@ -79,13 +107,18 @@ def main():
     res.row_factory = sqlite3.Row
     rows = res.execute(
         "SELECT symbol, verdict, class, confidence, reason, source_hash, "
-        "signal_version, probe_schedule_hash, tested_at FROM unicorn_refresh "
+        "signal_version, "
+        + ("harness_version, " if _has_col(res, "unicorn_refresh", "harness_version")
+           else "NULL AS harness_version, ")
+        + "build, probe_schedule_hash, tested_at FROM unicorn_refresh "
         "WHERE verdict IN ('EQUIVALENT','DIVERGENT')"
     ).fetchall()
     res.close()
     print(f"Results rows (EQUIVALENT/DIVERGENT): {len(rows)}")
 
-    conn = sqlite3.connect(args.db)
+    # The live DB is WAL-mode and concurrent agents write it; a 29k-row UPDATE
+    # will collide with them without a busy timeout.
+    conn = sqlite3.connect(args.db, timeout=120.0)
     conn.row_factory = sqlite3.Row
     if args.apply and Path(args.db).resolve() == Path(LIVE_DB).resolve():
         print("WARNING: --apply targets the LIVE decomp.db (orchestrator single-writer).",
@@ -113,11 +146,13 @@ def main():
                 "unicorn_verdict=?, unicorn_class=?, unicorn_confidence=?, "
                 "unicorn_reason=?, unicorn_tested_at=?, unicorn_signal_version=?, "
                 "unicorn_probe_schedule_hash=?, unicorn_source_hash=?, "
-                "unicorn_source_hash_at=?, updated_at=CURRENT_TIMESTAMP "
+                "unicorn_source_hash_at=?, unicorn_harness_version=?, "
+                "unicorn_harness_build=?, updated_at=CURRENT_TIMESTAMP "
                 "WHERE symbol=?",
                 (r["verdict"], r["class"], r["confidence"], r["reason"],
                  r["tested_at"], r["signal_version"], r["probe_schedule_hash"],
-                 r["source_hash"], r["tested_at"], r["symbol"]),
+                 r["source_hash"], r["tested_at"], r["harness_version"],
+                 r["build"], r["symbol"]),
             )
             if c.rowcount > 0:
                 updated += 1
@@ -131,6 +166,17 @@ def main():
             else:
                 missing += 1
 
+    stamped_legacy = 0
+    if args.stamp_legacy:
+        sql = ("UPDATE functions SET unicorn_harness_version=? "
+               "WHERE unicorn_verdict IS NOT NULL AND unicorn_harness_version IS NULL")
+        if args.apply:
+            stamped_legacy = conn.execute(sql, (LEGACY_HARNESS_VERSION,)).rowcount
+        else:
+            stamped_legacy = conn.execute(
+                "SELECT COUNT(*) FROM functions WHERE unicorn_verdict IS NOT NULL "
+                "AND unicorn_harness_version IS NULL").fetchone()[0]
+
     if args.apply:
         conn.commit()
     conn.close()
@@ -140,6 +186,9 @@ def main():
     print(f"  not in live DB:        {missing}")
     if args.only_fresh_source:
         print(f"  skipped (hash unchanged): {skipped_fresh}")
+    if args.stamp_legacy:
+        print(f"  {'STAMPED' if args.apply else 'WOULD STAMP'} legacy "
+              f"h{LEGACY_HARNESS_VERSION}: {stamped_legacy}")
     if not args.apply:
         print()
         print("  (dry-run — pass --apply to write)")

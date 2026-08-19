@@ -65,7 +65,7 @@ from scripts.unicorn_runner.coff import COFFParser  # noqa: E402
 from scripts.unicorn_runner.comparator import classify_divergence  # noqa: E402
 from scripts.unicorn_runner.memory_map import FILL_BYTE  # noqa: E402
 from scripts.unicorn_runner.signal_version import (  # noqa: E402
-    SIGNAL_VERSION, compute_schedule_hash,
+    SIGNAL_VERSION, HARNESS_VERSION, compute_schedule_hash,
 )
 from scripts.unicorn.source_hash import function_source_hash  # noqa: E402
 
@@ -95,19 +95,43 @@ def _like_prefix_clause(column: str, prefix: str, negate: bool = True) -> str:
     return f"{column} {op} '{esc}%' ESCAPE '~'"
 
 
-def is_authorable_sql() -> str:
+SCOPES = ("frontier", "all")
+
+
+def is_authorable_sql(scope: str = "frontier") -> str:
+    """Row filter for the sweep.
+
+    scope='frontier' (default, historical behaviour): the AUTHORABLE PARTIAL
+        frontier only — 0 < match% < 100, no SDK units, no artifact-prefix
+        symbols. ~1,830 rows.
+    scope='all': every row that a verdict could apply to, i.e. every non-stub
+        function that appears in the diff AT ALL (including 100%-matched and
+        0%-matched), PLUS every row that already carries a unicorn verdict
+        (so a re-ingest can overwrite stale evidence wherever it lives, rather
+        than refreshing the frontier and leaving ~26k pre-defect-fix rows to
+        keep lying to query_functions). ~27k rows.
+    """
+    if scope not in SCOPES:
+        raise ValueError(f"unknown scope {scope!r}; expected one of {SCOPES}")
     sdk = " AND ".join(
         f"(unit IS NULL OR {_like_prefix_clause('unit', p)})" for p in SDK_UNIT_PREFIXES)
     art = " AND ".join(_like_prefix_clause("symbol", p) for p in ARTIFACT_PREFIXES)
+    if scope == "frontier":
+        return (
+            f"excluded=0 AND is_stub=0 AND {sdk} AND {art} "
+            "AND match_percent_normalized IS NOT NULL "
+            "AND match_percent_normalized > 0 AND match_percent_normalized < 100"
+        )
+    # scope == "all"
     return (
-        f"excluded=0 AND is_stub=0 AND {sdk} AND {art} "
-        "AND match_percent_normalized IS NOT NULL "
-        "AND match_percent_normalized > 0 AND match_percent_normalized < 100"
+        f"((excluded=0 AND is_stub=0 AND {sdk} AND {art} "
+        "  AND match_percent_normalized IS NOT NULL) "
+        " OR unicorn_verdict IS NOT NULL)"
     )
 
 
-def load_frontier(live_db: str) -> dict:
-    """Return {symbol: row_dict} for the authorable partial frontier."""
+def load_frontier(live_db: str, scope: str = "frontier") -> dict:
+    """Return {symbol: row_dict} for the swept population (see is_authorable_sql)."""
     conn = sqlite3.connect(live_db)
     conn.row_factory = sqlite3.Row
     rows = conn.execute(
@@ -115,7 +139,7 @@ def load_frontier(live_db: str) -> dict:
         f"unicorn_verdict, unicorn_class, unicorn_confidence, "
         f"unicorn_tested_at, unicorn_signal_version, "
         f"floor_certificate, merged_symbol_count "
-        f"FROM functions WHERE {is_authorable_sql()}"
+        f"FROM functions WHERE {is_authorable_sql(scope)}"
     ).fetchall()
     conn.close()
     return {r["symbol"]: dict(r) for r in rows}
@@ -236,6 +260,7 @@ CREATE TABLE IF NOT EXISTS unicorn_refresh (
     reason               TEXT,
     source_hash          TEXT,
     signal_version       INTEGER,
+    harness_version      INTEGER,
     probe_schedule_hash  TEXT,
     tested_at            TEXT,
     build                TEXT,
@@ -374,12 +399,17 @@ def main() -> int:
     ap.add_argument("--timeout", type=int, default=5_000_000)
     ap.add_argument("--limit-units", type=int, default=0,
                     help="Only the first N frontier units (smoke test).")
+    ap.add_argument("--scope", choices=SCOPES, default="frontier",
+                    help="'frontier' (default): authorable 0<match%%<100 only. "
+                         "'all': every diffable non-stub function plus every row "
+                         "that already carries a unicorn verdict -- use this for a "
+                         "whole-DB re-ingest.")
     args = ap.parse_args()
 
-    frontier = load_frontier(args.live_db)
+    frontier = load_frontier(args.live_db, args.scope)
     units = frontier_units(frontier)
-    print(f"Authorable partial frontier: {len(frontier)} fns across {len(units)} units",
-          file=sys.stderr)
+    print(f"Sweep population (scope={args.scope}): {len(frontier)} fns "
+          f"across {len(units)} units", file=sys.stderr)
 
     if args.plan and not args.run:
         # quick provenance census of the live DB's prior verdicts
@@ -438,6 +468,7 @@ def main() -> int:
                 "confidence": res["confidence"], "reason": res.get("reason"),
                 "source_hash": res.get("source_hash"),
                 "signal_version": SIGNAL_VERSION,
+                "harness_version": HARNESS_VERSION,
                 "probe_schedule_hash": _SCHEDULE_HASH,
                 "tested_at": now_str, "build": build,
                 "prev_verdict": prev, "prev_class": fr.get("unicorn_class"),
@@ -470,10 +501,10 @@ def main() -> int:
     out.executemany(
         "INSERT OR REPLACE INTO unicorn_refresh "
         "(symbol, unit, verdict, class, confidence, reason, source_hash, "
-        " signal_version, probe_schedule_hash, tested_at, build, "
+        " signal_version, harness_version, probe_schedule_hash, tested_at, build, "
         " prev_verdict, prev_class, prev_tested_at, flip, flip_cause) VALUES "
         "(:symbol,:unit,:verdict,:class,:confidence,:reason,:source_hash,"
-        " :signal_version,:probe_schedule_hash,:tested_at,:build,"
+        " :signal_version,:harness_version,:probe_schedule_hash,:tested_at,:build,"
         " :prev_verdict,:prev_class,:prev_tested_at,:flip,:flip_cause)",
         rows_out,
     )
@@ -501,7 +532,8 @@ def main() -> int:
 
     summary = {
         "tested_at": now_str, "build": build,
-        "signal_version": SIGNAL_VERSION, "probe_schedule_hash": _SCHEDULE_HASH,
+        "signal_version": SIGNAL_VERSION, "harness_version": HARNESS_VERSION,
+        "scope": args.scope, "probe_schedule_hash": _SCHEDULE_HASH,
         "elapsed_s": round(elapsed, 1),
         "units_swept": len(work), "fns_tested": len(rows_out),
         "verdict_dist": vdist,
