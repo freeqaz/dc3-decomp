@@ -170,6 +170,48 @@ Tightening the flag to `report-all` requires giving all 24 a body or an explicit
 stub first. Until then, the `ldd -r` baseline in `check_stub_shadow.py` is the
 guard: any *new* unresolved symbol fails the gate.
 
+## The native gate for this lane, stated honestly
+
+Measured 2026-08-19 in `/home/free/code/milohax/wt/kinect-stream`, against
+`milo-native-engine` `84f9a8d`.
+
+| gate | result |
+|---|---|
+| `cmake --build native/build --target dc3-native milo-tests` | green, 0 errors |
+| `ldd -r native/build/dc3-native` | **24** undefined — the branch's baseline, unchanged |
+| `ctest` | **361 executed and passed, 84 skipped, of 445 registered**; 0 failures |
+| the four `CameraYuvDecode` tests | `#439`–`#442`, all `status="run"`, all Passed |
+
+**Do not quote this as "445/445".** That is literally what `ctest` prints — it
+counts skips as passes and exits 0 — and it is the number `CLAUDE.md` explicitly
+warns against repeating. The skipped 84 are the whole end-to-end tier
+(`DC3_GAMEPLAY_TESTS`, `DC3_DTA_FLOW_TESTS`, `DC3_AUDIO_TESTS`, `MILO_LIB`),
+which is where live bugs actually live. The executed count also drifts with the
+environment: an independent run on the same branch a few hours earlier measured
+360 executed / 85 skipped, so quote the split you measured, with its date.
+
+Also remember `MILO_ASSERT` is non-fatal on native, so a clean exit code is not
+by itself evidence of anything. The load-bearing signal in a headless run is a
+zero `FAIL:` count, with a control that produces `FAIL:` lines on known-bad
+input.
+
+### Known issue, pre-existing and not from this lane
+
+`cmake --build native/build` with **no target** (i.e. all targets) fails on
+`wgpu-window-test`. Two stale includes of `gfx/GpuDevice.h` survive a header
+that no longer exists at that path:
+
+```
+native/src/gfx/GpuDevice.cpp:1:10: fatal error: 'gfx/GpuDevice.h' file not found
+native/src/main.cpp:5:10:          fatal error: 'gfx/GpuDevice.h' file not found
+```
+
+The header was moved into `milo-native-engine` by `5cfbcba9b`
+("build(native): dedup platform/gfx TUs onto milo-engine"), which did not update
+these two references. **Pre-existing on `main` and entirely unrelated to this
+lane** — both `#include` lines are present in `main`'s tree today — but it means
+**"the native build is green" must always be qualified by target**.
+
 ## Root Causes
 
 ### 1. PPC-only definitions in `link_glue.cpp`
