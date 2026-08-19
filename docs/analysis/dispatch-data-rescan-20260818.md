@@ -174,3 +174,56 @@ wrong**). Everything on this branch is reconstruction from target asm + the link
 ## Not touched, still true
 
 The `??_R1` access-attribute and `??_R2` virtual-base ordering floors above stand.
+
+---
+
+# Follow-up, 2026-08-19: the method is now a tool, and the count was 139 → 50
+
+The "Method used for the worklist (reproducible, does not need the scanner)"
+section above described a real procedure in prose. It is now
+`mcp__orchestrator__run_symbol_sweep(kind="vtable_slots")` /
+`python3 -m scripts.orchestrator.symbol_sweep --kind vtable_slots`
+(`scripts/orchestrator/symbol_sweep.py`, branch `tools/mcp-capability-gaps`).
+
+Re-running the published measurement through the tool, on freshly built trees at
+both commits:
+
+| | published (prose method) | tool |
+|---|---|---|
+| `49ad7cfd5` | 141 | **139** |
+| after `fix/missing-override-bodies` | 52 | **50** |
+| delta | 89 | **89** |
+
+The delta is identical, and it agrees with `56ac7c6f0`'s own subject line
+("89 vtable slots stop diverging"). Both endpoints are lower by exactly the same
+**2**, and those two are identified:
+
+* `??_7JsonObject@@6B@` and `??_7RndVelocityBuffer@@6B@`, slot `+0x0`,
+  `??_G…` (target) vs `??_E…` (ours) — the deleting-destructor thunk pair this
+  doc already called "Cosmetic ICF naming".
+
+Neither `??_G` nor `??_E` appears in `ham_xbox_r.map` at all, so a map-only
+lookup cannot prove the fold and has to keep the row. They appear in
+`build/373307D9/icf_aliases.map` as one **weak-alias** group at `0x826B17E8`.
+Reading both maps proves the fold and drops the rows. **50 is the correct
+residual**; the doc's own prose verdict on those two rows was right and its
+arithmetic was two high.
+
+The tool also reports the denominator the prose method never stated: the
+universe is **5,132** `(unit, symbol)` pairs matching `??_7*` in the target split
+objects, of which **2,863 are examined** and **2,269 are undefined external
+references** (COFF section index 0 — vtables a TU merely *uses*; objdiff answers
+"Symbol not found in target" for those). `lazer/` measures **0** divergent slots,
+confirming this doc's "lazer/ is now completely clean".
+
+Two things the prose method did not separate, which the tool reports as a second
+tier: `insert`/`delete` relocation rows, where only one side has a slot at all.
+There are 1,078 of them binary-wide (1,027 target-only, dominated by `??_R4`
+RTTI-locator slots; 51 base-only, e.g. `FlowRun`'s `Object` sub-object vtable
+where `target_size` is 44 and ours is 88). They are real signal but they are not
+slot-for-slot divergences and were never part of the 141/52 count.
+
+The blind spot this doc names — "name-matched slots with the WRONG BODY" — is
+**unchanged**. The tool filters equal-address rows exactly as the prose method
+did, so it still cannot see a wrong body behind a right name. Whoever picks that
+up still needs the ICF-group disassembly step described above.
