@@ -28,7 +28,7 @@ Use the `mcp__orchestrator__` tools for all decomp analysis. Do not call `objdif
   - ⚠ **`project_dir` selects a *worktree of this project*, never a different project.** These tools are pinned to DC3's `decomp.db`, `report.json`, struct DB and title ID (`373307D9`). Pointing `project_dir` at a foreign repo — `../rb3-xenon`, `../rb3` — used to answer out of DC3's database and return a plausible wrong number (2026-08-04: 93.3%, DC3's baseline, where rb3-xenon's was 92.2%; and DC3's `ObjectDir::Iterate` 100.0% where rb3-xenon's is ~60%). **Since `2d39e6cc` (2026-08-04) this raises `CrossProjectError`** naming both paths and both title IDs — it can no longer answer silently. To work in another decomp tree, use that tree's own orchestrator (`<repo>/scripts/orchestrator/mcp_server.py`). Note the DB-only tools (`query_functions`, `get_attempts`, `lookup_struct_offset`, `lookup_merged_symbol`) take no `project_dir` and are *always* about DC3.
 - `run_diff_inspect` — deeper analysis: `diagnose` (root cause), `mismatches` (instruction table), `clusters`, `regswaps`, etc.
 - `run_analyze_function` — combines objdiff with struct offset resolution for field-level mismatch context.
-- `query_functions` — find workable functions by unit pattern and match range. A work-selection index, not a measurement: `current_percent` drifts (the ninja DB sync deliberately does not write it) and `has_prologue_mismatch` is identically 0 for every row. Re-measure with `run_objdiff` before acting — see `docs/tools/REFERENCE.md`.
+- `query_functions` — find workable functions by unit pattern and match range. A work-selection index, not a measurement: `current_percent` drifts (the ninja DB sync deliberately does not write it). The `has_*` pattern flags were repaired 2026-08-19 — four of them (`has_linker_merged`, `has_prologue_mismatch`, `has_scope_counter_mismatch`, `has_makestring_mismatch`) read 0 on every row because `sync_objdiff` runs objdiff with `functionRelocDiffs=none`, which masks the relocation diffs those detectors read; refresh them with `scripts/backfill_reloc_patterns.py --apply`. `has_assert_revs`/`has_ltcg_pooling` were dropped. Re-measure with `run_objdiff` before acting — see `docs/tools/REFERENCE.md`.
 - `lookup_rb3` — grep RB3 codebase for reference implementations (shared Milo engine).
 
 ## Code Style
@@ -60,6 +60,14 @@ For a complete collection of patterns, find then under ./docs/decomp/patterns/ -
 
 Use `scripts/setup_worktree.sh <path> <branch>` to create worktrees with a working build system (configures ninja, symlinks tools/compilers/target objects).
 
+**`decomp.db` does not exist in a worktree, on purpose.** A worktree `ninja` used to grow its own shadow DB — every row, **zero verdicts, zero percentages** — and every script defaulting to `--db decomp.db` then answered out of it. Identical work queries, measured 2026-08-19: AT_LIMIT certs `0` vs `3,796`; near-misses `0` vs `89`; the 80-95 band `0` vs `325`. An empty result reads as *"this class is exhausted"*. Three layers now stop that (fixed 2026-08-19):
+
+- `setup_worktree.sh` plants a **tripwire** at `<worktree>/decomp.db` that is deliberately not a valid SQLite file, so *any* reader — including the ~50 scripts that call `sqlite3.connect()` directly — gets `file is not a database` instead of a plausible answer. `cat` it for the explanation.
+- `orchestrator.database` raises **`ShadowDatabaseError`** naming both paths, and refuses to auto-create or auto-migrate a worktree-local DB.
+- The ninja db-sync edge **skips** in a worktree rather than creating one.
+
+From a worktree, pass the real DB explicitly: `--db /home/free/code/milohax/dc3-decomp/decomp.db`. The **MCP orchestrator tools are unaffected** — they resolve `decomp.db` against the server's own project root — so keep using `project_dir="<worktree>"`. `DC3_ALLOW_SHADOW_DB=1` is the escape hatch if you really do want a throwaway local DB.
+
 ## Project Structure
 
 - `src/` - Decompiled C++ source (mirrors original structure)
@@ -74,7 +82,11 @@ Use `scripts/setup_worktree.sh <path> <branch>` to create worktrees with a worki
 
 DC3's native port consumes the shared **`../milo-native-engine`** repo (sibling at `/home/free/code/milohax/milo-native-engine`) — a game-agnostic LP64 modern-C++ runtime that owns gfx (WebGPU), audio (miniaudio/FFmpeg), input, file I/O, the host-STL shim, and POSIX impls of the `os/` interfaces. As of Phase 0, **all four native consumers — `dc3-native`, `milo-viewer`, `render-test`, `milo-tests` — link `libmilo-engine.a`** (built via `add_subdirectory(${MILO_ENGINE_PATH})`). `milo-tests` registers 441 tests: **362 execute and pass, 79 skip** (measured 2026-08-19). `ctest` reports that as "100% tests passed out of 441" and exits 0 — the skips are counted as passes, and the skipped set is the whole end-to-end tier (`DC3_GAMEPLAY_TESTS`, `DC3_DTA_FLOW_TESTS`, `DC3_AUDIO_TESTS`, `MILO_LIB`), which is where the live bugs are. The older **371/371** figure is stale; so is treating a green default run as coverage.
 
-The engine is pulled in with a soft SHA pin: `MILO_ENGINE_PIN` in **`native/CMakeLists.txt`**; a mismatch with the engine's `git HEAD` warns but never fails. ⚠ **`scripts/bump-engine.sh` does not work against an existing build directory** — the pin is `set(... CACHE STRING ...)` *without* `FORCE`, so `CMakeCache.txt` permanently shadows the source value and the warning quotes the cached pin, not the one in the file. Verified 2026-08-19 with four different values live at once (engine HEAD `6d5dc0f`, source `77eb428b`, cache `12455b0a`, this doc's former `8282103`). Delete the cache entry or add `FORCE` before trusting a bump. Engine roadmap/status: `../milo-native-engine/README.md` and `rb3/docs/native/NATIVE_PORT_ROADMAP.md`.
+The engine is pulled in with a soft SHA pin: `MILO_ENGINE_PIN` in **`native/CMakeLists.txt`** (currently `d62700c`); a mismatch with the engine's `git HEAD` warns but never fails. Bump it with `scripts/bump-engine.sh --apply`.
+
+*History (2026-08-19, fixed):* the pin used to be `set(... CACHE STRING ...)` **without `FORCE`**, so `CMakeCache.txt` permanently shadowed the source value — the warning quoted the cached pin, not the one in the file, and `bump-engine.sh --apply` was a no-op against every existing build dir. Four values were live at once (engine HEAD, source `77eb428b`, cache `12455b0a`, this doc's `8282103`). The pin now carries `FORCE`, so the source always wins; `bump-engine.sh` **refuses to write** if someone removes `FORCE` again, and lists any build dir whose cached pin still disagrees. `MILO_ENGINE_PATH` deliberately keeps *no* `FORCE` (`-D` override must keep working) but its default now falls back to the main checkout's sibling via `git rev-parse --git-common-dir`, so it resolves correctly inside a worktree.
+
+Engine roadmap/status: `../milo-native-engine/README.md` and `rb3/docs/native/NATIVE_PORT_ROADMAP.md`.
 
 ## Assets
 ./orig-assets/ and ./orig-assets/extracted/ contain DC3 game assets.

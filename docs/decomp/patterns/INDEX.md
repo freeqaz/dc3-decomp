@@ -414,7 +414,7 @@ item below is measured on a blind stratified sample, not speculated:
 |---|---|
 | `verdict='AT_LIMIT'` | Wrong **≥30%** of the time here. 3 of 10 blind-sampled functions had real, byte-exact source fixes. |
 | `current_percent` | **Staleness is unbounded, not merely large.** The ninja `SYNC DB` step deliberately does not write this column but *does* bump `updated_at`, so **`updated_at` is not a freshness signal**, and it exits 0 even when the fleet holds the DB lock. Measured minutes after a sync: 818 of 31,387 comparable rows off by >0.5pp, worst ~65pp, both directions. Never band on it — re-measure with `mcp__orchestrator__run_objdiff` passing `project_dir`. Mechanism: [tools/REFERENCE.md](../../tools/REFERENCE.md#trust-caveats--read-before-believing-a-column). |
-| `has_prologue_mismatch` | **Identically 0 for every row** (`SUM=0`, `COUNT(DISTINCT)=1` over all 52,546 rows) — the detector never populated it. The "PROLOGUE_MISMATCH is a positive indicator" heuristic cannot be applied from the DB at all. |
+| `has_prologue_mismatch` | **Was identically 0; repaired 2026-08-19 (221 rows).** The detector was fine — `sync_objdiff` ran objdiff with `functionRelocDiffs=none`, which masks the relocation diffs it reads. Same fault hid `has_linker_merged` (1,310), `has_scope_counter_mismatch` (81) and `has_makestring_mismatch` (63). The "PROLOGUE_MISMATCH is a positive indicator" heuristic **is** now applicable from the DB, but only after `python3 scripts/backfill_reloc_patterns.py --apply`. |
 | `has_register_swap=1` | Can be **pure noise**. One sampled function was 88 inserts / 88 deletes — an incomplete reconstruction, not a swap case. |
 
 > **Retracted 2026-08-04: the `tier=` finding.** An earlier draft of this section reported

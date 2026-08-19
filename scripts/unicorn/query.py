@@ -203,7 +203,8 @@ def main():
         help="Filter by divergence class (logic, build_env, regalloc, data_layout, "
              "stack_layout, call_count, call_arg, cap_exhausted[_orig|_decomp], "
              "wild_jump_match, merged_call, merged_arg, fpr_precision, orig_error, "
-             "error, return_value, object_memory, unmapped_access_mismatch)"
+             "error, return_value, scratch_return_reg, object_memory, "
+             "unmapped_access_mismatch)"
     )
     parser.add_argument(
         "--unit", type=str,

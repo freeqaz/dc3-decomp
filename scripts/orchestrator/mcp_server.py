@@ -746,14 +746,17 @@ class DecompMCPServer:
                                     "PINPOINTED (adjudicate individually): 'error' (decomp side faults "
                                     "where the original does not -- the highest-precision signal in the "
                                     "oracle), 'logic', 'call_arg', 'object_memory', 'return_value' "
-                                    "(check the return type first: the comparator compares r3 without "
-                                    "knowing it, so void/float-returning functions are false positives). "
+                                    "(now return-type-aware: r3 is only compared when the mangled name "
+                                    "says the function returns in r3; void/float returns are filed as "
+                                    "'scratch_return_reg' instead). "
                                     "MEASURED ARTIFACTS -- do not report these as bugs: 'data_layout' "
                                     "(the only differing values are addresses the harness assigns per "
                                     "side; 79% of all divergent rows), 'cap_exhausted' 72%, "
                                     "'cap_exhausted_decomp' 97%, 'cap_exhausted_orig' 98%, 'call_count' "
                                     "83%, 'build_env', 'regalloc', 'merged_call', 'merged_arg', "
-                                    "'stack_layout', 'fpr_precision', 'orig_error'. NOT PINPOINTED: "
+                                    "'stack_layout', 'fpr_precision', 'orig_error', 'scratch_return_reg' "
+                                    "(r3/f1 differs on a function that does not return in that "
+                                    "register). NOT PINPOINTED: "
                                     "'wild_jump_match' (both sides crashed somewhere DIFFERENT -- a "
                                     "whole-function-rewrite signal, not a defect), "
                                     "'unmapped_access_mismatch' (manufactured by the trampoline stub "
@@ -765,6 +768,7 @@ class DecompMCPServer:
                                 "enum": [
                                     "logic", "build_env", "regalloc",
                                     "call_count", "call_arg", "return_value",
+                                    "scratch_return_reg",
                                     "object_memory", "error", "orig_error",
                                     "merged_call", "merged_arg",
                                     "stack_layout", "fpr_precision",

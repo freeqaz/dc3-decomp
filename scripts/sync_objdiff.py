@@ -7,7 +7,10 @@ all functions efficiently (grouping by unit to avoid redundant object
 file loading), then updates enrichment columns:
 
   - current_percent, best_percent, size, demangled
-  - has_linker_merged, has_bool_mask, primary_pattern, reachable_100
+  - has_bool_mask, primary_pattern, reachable_100
+    (NOT has_linker_merged -- see _run_single_batch: this pass runs with
+     functionRelocDiffs=none, which masks the relocation diffs that
+     detector needs. scripts/backfill_reloc_patterns.py owns it.)
   - pattern detection columns from Rust analysis engine
   - verdict (COMPLETE for 100%, optionally AT_LIMIT for flagged patterns)
 
@@ -171,6 +174,22 @@ def _extract_patterns_from_analysis(result: FunctionResult, data: dict) -> None:
     if not pattern_types:
         return
 
+    # objdiff spells this pattern TWO ways and we read the one it does NOT use
+    # here. The JSON `patterns[].pattern` field is serde-derived from the enum
+    # variant `MakeStringTemplateMismatch` under
+    # `rename_all = "SCREAMING_SNAKE_CASE"`, which splits the internal capital
+    # in "String" and emits MAKE_STRING_TEMPLATE_MISMATCH. `PatternType::to_str`
+    # -- used for `patterns_checked` and for the human output -- returns
+    # MAKESTRING_TEMPLATE_MISMATCH. The constant below was the second spelling,
+    # so `"MAKESTRING_TEMPLATE_MISMATCH" in pattern_types` was never true and
+    # has_makestring_mismatch could not be set on any row, ever. Accept both.
+    # (Measured 2026-08-19: 7 hits in a 3,000-function sample.)
+    # Canonicalise on the to_str spelling so `detected_patterns` does not end
+    # up carrying the same pattern twice under two names.
+    if "MAKE_STRING_TEMPLATE_MISMATCH" in pattern_types:
+        pattern_types.discard("MAKE_STRING_TEMPLATE_MISMATCH")
+        pattern_types.add("MAKESTRING_TEMPLATE_MISMATCH")
+
     # Set boolean flags from pattern types
     result.has_merged = "LINKER_MERGED" in pattern_types
     result.has_bool_mask = "BOOL_MASK" in pattern_types
@@ -225,10 +244,28 @@ def _extract_patterns_from_analysis(result: FunctionResult, data: dict) -> None:
             break
 
 
-def _run_single_batch(functions: list[tuple[int, str]], project_dir: str) -> list[FunctionResult]:
+def _run_single_batch(functions: list[tuple[int, str]], project_dir: str,
+                      reloc_config: str = "none") -> list[FunctionResult]:
     """Run a single objdiff-cli --batch process for a chunk of functions.
 
     Top-level function for ProcessPoolExecutor pickling.
+
+    `reloc_config` is the `functionRelocDiffs` value. The default `none` is the
+    project's canonical ruler -- but it MASKS relocation differences, and some
+    pattern detectors read exactly those. `detect_linker_merged` only inspects
+    `bl`/`b` instructions whose match_type is `diff_arg`, i.e. calls whose
+    relocation targets differ; under `none` those instructions are reported as
+    equal and the detector is structurally starved. Measured 2026-08-19 on
+    ?Handle@StorePanel@@UAA?AVDataNode@@PAVDataArray@@_N@Z:
+
+        -c functionRelocDiffs=none       patterns = []
+        -c functionRelocDiffs=name_only  patterns = [ADDRESS_RELOCATION_NOISE]
+        -c functionRelocDiffs=all        patterns = [LINKER_MERGED,
+                                                     ADDRESS_RELOCATION_NOISE]
+
+    That -- not a missing detector -- is why has_linker_merged read 0 on all
+    52,547 rows while `verdict_reason` on 708 of them says LINKER_MERGED.
+    See scripts/backfill_reloc_patterns.py.
     """
     # Build lookup map: lookup_name -> (db_id, original_symbol)
     lookup_to_info: dict[str, tuple[int, str]] = {}
@@ -243,7 +280,7 @@ def _run_single_batch(functions: list[tuple[int, str]], project_dir: str) -> lis
     try:
         proc = subprocess.run(
             [str(OBJDIFF_CLI), "diff", "-p", project_dir,
-             "-c", "functionRelocDiffs=none", "--batch"],
+             "-c", f"functionRelocDiffs={reloc_config}", "--batch"],
             input=stdin_data, capture_output=True, text=True,
             timeout=600,
         )
@@ -311,7 +348,8 @@ def _run_single_batch(functions: list[tuple[int, str]], project_dir: str) -> lis
 
 
 def run_batch(functions: list[tuple[int, str]], project_dir: str,
-              jobs: int = 4, verbose: bool = False) -> list[FunctionResult]:
+              jobs: int = 4, verbose: bool = False,
+              reloc_config: str = "none") -> list[FunctionResult]:
     """Run objdiff-cli in batch mode, splitting across parallel workers.
 
     Each worker gets a chunk of symbols and runs its own --batch process.
@@ -329,7 +367,7 @@ def run_batch(functions: list[tuple[int, str]], project_dir: str,
 
     if actual_workers == 1:
         # Single chunk — run directly, print verbose inline
-        results = _run_single_batch(chunks[0], project_dir)
+        results = _run_single_batch(chunks[0], project_dir, reloc_config)
         if verbose:
             for r in results:
                 if r.error:
@@ -341,7 +379,7 @@ def run_batch(functions: list[tuple[int, str]], project_dir: str,
 
     with ProcessPoolExecutor(max_workers=actual_workers) as pool:
         futures = {
-            pool.submit(_run_single_batch, chunk, project_dir): i
+            pool.submit(_run_single_batch, chunk, project_dir, reloc_config): i
             for i, chunk in enumerate(chunks)
         }
 
@@ -593,8 +631,13 @@ def main():
                 r.demangled,
                 r.db_id,
             ))
+            # NOTE: has_linker_merged is deliberately NOT written here. This
+            # pass runs with functionRelocDiffs=none, which masks the very
+            # relocation differences detect_linker_merged reads, so it would
+            # write 0 for every row and wipe whatever
+            # scripts/backfill_reloc_patterns.py established. See the docstring
+            # on _run_single_batch.
             enrich_updates.append((
-                1 if r.has_merged else 0,
                 1 if r.has_bool_mask else 0,
                 1 if r.has_makestring_mismatch else 0,
                 1 if r.has_address_relocation else 0,
@@ -688,8 +731,7 @@ def main():
         if enrich_updates:
             conn.executemany(
                 """UPDATE functions
-                   SET has_linker_merged = ?,
-                       has_bool_mask = ?,
+                   SET has_bool_mask = ?,
                        has_makestring_mismatch = ?,
                        has_address_relocation = ?,
                        has_boolean_negation = ?,

@@ -38,12 +38,51 @@ Primary table tracking all symbols in the project.
 | Column | Type | Description |
 |--------|------|-------------|
 | `excluded` | INTEGER | 1 if XDK/external code, skip during work selection |
-| `has_linker_merged` | BOOLEAN | 1 if function has ICF-merged calls (unfixable) |
+| `has_linker_merged` | BOOLEAN | 1 if function has ICF-merged calls (unfixable). **Written only by `scripts/backfill_reloc_patterns.py`** — `sync_objdiff.py` cannot see this pattern; see below. |
 | `has_bool_mask` | BOOLEAN | 1 if bool mask pattern detected |
-| `has_assert_revs` | BOOLEAN | 1 if ASSERT_REVS scheduling issues |
-| `has_ltcg_pooling` | BOOLEAN | 1 if LTCG address pooling (usually N/A for debug builds) |
 | `primary_pattern` | TEXT | Primary pattern tag (e.g., `REGISTER_SWAP`, `LINKER_MERGED`) |
 | `reachable_100` | BOOLEAN | 1 if function can theoretically reach 100% match |
+
+### The reloc-blind pattern pass (fixed 2026-08-19)
+
+`sync_objdiff.py` runs objdiff with `-c functionRelocDiffs=none` — the canonical
+ruler — which **masks relocation differences**. Four pattern detectors read exactly
+those differences, so they were structurally starved and their columns read `0` on
+all 52,547 rows. Same 3,000 functions, two configs:
+
+| pattern | `none` (canonical) | `all` |
+|---|--:|--:|
+| `LINKER_MERGED` | 0 | 119 |
+| `PROLOGUE_MISMATCH` | 0 | 20 |
+| `SCOPE_COUNTER_MISMATCH` | 0 | 9 |
+| `MAKE_STRING_TEMPLATE_MISMATCH` | 0 | 7 |
+
+Over the full 31,446 authorable functions the reloc-visible pass sets
+**`has_linker_merged` 1,310 / `has_prologue_mismatch` 221 /
+`has_scope_counter_mismatch` 81 / `has_makestring_mismatch` 63**. Run
+`scripts/backfill_reloc_patterns.py --apply` after a build to refresh them;
+`sync_objdiff.py` no longer writes `has_linker_merged` at all, so its reloc-blind
+pass cannot zero what the reloc-visible one established.
+
+`has_makestring_mismatch` had a second, independent bug: the JSON emits
+`MAKE_STRING_TEMPLATE_MISMATCH` (serde, from the enum variant) while
+`PatternType::to_str` returns `MAKESTRING_TEMPLATE_MISMATCH`. `sync_objdiff`
+compared against the latter, so the column could never be set. Both spellings are
+now accepted and canonicalised.
+
+**Dropped 2026-08-19:** `has_assert_revs` and `has_ltcg_pooling`. Identically 0 on
+every row, no writer anywhere in live code, and objdiff has no `ASSERT_REVS` or
+`LTCG_POOLING` detector — vestigial schema from the archived 2026-03 meta-strategy
+experiment. A column that is always 0 silently answers "no" to every filter built on
+it, which is worse than the column not existing. `v_pattern_summary` was rebuilt
+without them.
+
+**Measured zero, not assumed:** `has_alloca_mismatch` and
+`has_dynamic_cast_mismatch` are still 0 — but that is now a *measurement*. Both
+detectors appear in objdiff's `patterns_checked` and both were exercised over all
+31,446 authorable functions under `functionRelocDiffs=all` with 0 hits. (The
+2026-05-30 re-triage did record one `ALLOCA_MISMATCH`, so the detector demonstrably
+can fire.)
 
 **Columns you cannot trust for triage:**
 

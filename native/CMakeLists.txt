@@ -222,19 +222,53 @@ endif()
 # Sibling repo + soft SHA pin (warn on mismatch). See
 # rb3/docs/native/NATIVE_PORT_ROADMAP.md.
 # ============================================================================
-set(MILO_ENGINE_PATH "${CMAKE_SOURCE_DIR}/../../milo-native-engine"
+# MILO_ENGINE_PATH stays overridable (-DMILO_ENGINE_PATH=... must keep working),
+# so no FORCE here -- but the default has to be right in a git worktree too. A
+# worktree lives at <...>/wt/<name>, where the "sibling of the checkout" guess
+# lands in the worktree pool rather than next to the main checkout.
+set(_milo_engine_default "${CMAKE_SOURCE_DIR}/../../milo-native-engine")
+if(NOT EXISTS "${_milo_engine_default}/.git")
+    execute_process(COMMAND git rev-parse --path-format=absolute --git-common-dir
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        OUTPUT_VARIABLE _milo_git_common OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET)
+    if(_milo_git_common)
+        get_filename_component(_milo_main_checkout "${_milo_git_common}" DIRECTORY)
+        get_filename_component(_milo_repos_root "${_milo_main_checkout}" DIRECTORY)
+        if(EXISTS "${_milo_repos_root}/milo-native-engine/.git")
+            set(_milo_engine_default "${_milo_repos_root}/milo-native-engine")
+        endif()
+    endif()
+endif()
+set(MILO_ENGINE_PATH "${_milo_engine_default}"
     CACHE PATH "Path to milo-native-engine checkout")
-set(MILO_ENGINE_PIN "77eb428b1c8a05c8abcead3a1062dfbcbca49973"
-    CACHE STRING "Engine commit SHA verified against")
+# MILO_ENGINE_PIN is a SOURCE-OF-TRUTH value, not a user setting: bumping the
+# line below (by hand or via scripts/bump-engine.sh --apply) has to take effect.
+# A plain `set(... CACHE STRING ...)` does the exact opposite -- once ANY value
+# lands in CMakeCache.txt the source line can never be read again. The
+# 2026-08-19 toolchain audit caught this: four different pin values were live at
+# once (engine HEAD, this file, native/build's cache, CLAUDE.md), setting the
+# source pin to the engine's actual HEAD still warned quoting the cached value,
+# and `bump-engine.sh --apply` was a no-op against every existing build dir.
+# FORCE makes the source win on every reconfigure, including over a stale cache.
+# Consequence, deliberately accepted: `-DMILO_ENGINE_PIN=...` on the cmake
+# command line no longer sticks. There is no legitimate reason to override a
+# provenance pin from the command line; edit this line instead.
+set(MILO_ENGINE_PIN "d62700c40bd2d196d7dc55d2d2b8dbedea1f615c"
+    CACHE STRING "Engine commit SHA verified against" FORCE)
 if(EXISTS "${MILO_ENGINE_PATH}/.git")
     execute_process(COMMAND git rev-parse HEAD
         WORKING_DIRECTORY ${MILO_ENGINE_PATH}
         OUTPUT_VARIABLE _milo_engine_head OUTPUT_STRIP_TRAILING_WHITESPACE)
+    # SOFT pin, by design: this warns and never fails. Do not promote it to
+    # FATAL_ERROR -- the engine is a live sibling checkout and a mismatch is the
+    # normal state mid-development.
     if(NOT _milo_engine_head MATCHES "^${MILO_ENGINE_PIN}")
         message(WARNING
             "milo-native-engine HEAD is ${_milo_engine_head}\n"
             "  but dc3-native pins ${MILO_ENGINE_PIN}\n"
-            "  (update MILO_ENGINE_PIN once the new engine state is canonical)")
+            "  (update MILO_ENGINE_PIN once the new engine state is canonical:\n"
+            "   scripts/bump-engine.sh --apply)")
     endif()
 endif()
 

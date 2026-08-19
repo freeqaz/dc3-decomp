@@ -712,9 +712,11 @@ It is a **filter for what to open, not a predictor of what will close.**
 ### Two signals that are routinely misread as floor evidence
 
 - **`PROLOGUE_MISMATCH` is the fingerprint of a value held across a call.** It is a
-  *liveness* tell — Lever 2 territory — **not** floor evidence. (It is also unusable from
-  `decomp.db`: `has_prologue_mismatch` is identically 0 for every row, the detector never
-  populated it.)
+  *liveness* tell — Lever 2 territory — **not** floor evidence. (It used to be unusable
+  from `decomp.db` — `has_prologue_mismatch` was identically 0 — but that was
+  `sync_objdiff` running objdiff with `functionRelocDiffs=none`, which masks the
+  relocation diffs the detector reads. Repaired 2026-08-19: 221 rows. Refresh with
+  `python3 scripts/backfill_reloc_patterns.py --apply`.)
 - **A funclet score wobble is the parent's frame size, not noise, and must not veto a
   parent fix.** See
   [objdiff LEARNINGS: Pattern 6](../../tools/objdiff/LEARNINGS.md#pattern-6-eh-funclet-score-wobble).
