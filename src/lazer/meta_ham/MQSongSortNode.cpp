@@ -29,6 +29,15 @@ void MQSongHeaderNode::OnUnHighlight() {
     SetCollapseStateIcon(false);
 }
 
+Symbol MQSongHeaderNode::Select() {
+    return SelectChildren(mChildren, mChallengeCount);
+}
+
+void MQSongHeaderNode::UpdateItemCount(NavListItemNode *item) {
+    if (item)
+        mChallengeCount++;
+}
+
 Symbol MQSongHeaderNode::OnSelect() {
     if (!TheMQSongSortMgr->IsInHeaderMode()) {
         TheMQSongSortMgr->SetHeaderMode(true);
