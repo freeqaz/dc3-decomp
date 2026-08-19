@@ -232,5 +232,30 @@ class TestRelocRuler(unittest.TestCase):
                          "the inert 'raw == omit -c' spelling is back")
 
 
+class TestDiffInspectRulerHonesty(unittest.TestCase):
+    """`diff_mode` reaches only 3 of run_diff_inspect's 11 modes.
+
+    The five analysis modes (diagnose/clusters/regswaps/offsets/replaces)
+    delegate to scripts/analysis/diff_inspect.py, which builds its OWN objdiff
+    command and has no ruler switch -- so `reloc_config` never reaches them.
+    That file belongs to another lane, so the wrapper cannot fix it; what it
+    CAN do is refuse to hand back a normalized report under a raw label.
+    Measured 2026-08-19: mode='mismatches' now returns 119 mismatches
+    normalized vs 151 raw; mode='diagnose' returns 119 either way.
+    """
+
+    def test_analysis_modes_announce_that_they_ignored_the_ruler(self):
+        src = _handler_source("_run_diff_inspect")
+        self.assertIn("was IGNORED for mode=", src,
+                      "analysis modes silently normalize a raw request")
+
+    def test_schema_admits_the_partial_support(self):
+        props = _tool_schemas()["run_diff_inspect"]["properties"]
+        desc = props["diff_mode"]["description"]
+        self.assertIn("HONOURED ONLY", desc)
+        for m in ("mismatches", "compare", "save_baseline"):
+            self.assertIn(m, desc)
+
+
 if __name__ == "__main__":
     unittest.main()

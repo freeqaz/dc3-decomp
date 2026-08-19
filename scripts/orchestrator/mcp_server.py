@@ -1096,7 +1096,7 @@ class DecompMCPServer:
                             "diff_mode": {
                                 "type": "string",
                                 "enum": ["normalized", "raw"],
-                                "description": "Diff scoring mode. 'normalized' (default) ignores relocation address differences (functionRelocDiffs=none). 'raw' includes relocation diffs so you can inspect which relocations differ.",
+                                "description": "Diff scoring mode. 'normalized' (default) ignores relocation address differences (functionRelocDiffs=none); 'raw' is functionRelocDiffs=all, which actually counts them. ⚠ HONOURED ONLY by modes 'mismatches', 'compare' and 'save_baseline'. The analysis modes (diagnose/clusters/regswaps/offsets/replaces) delegate to scripts/analysis/diff_inspect.py, which builds its own objdiff command with no ruler switch -- they IGNORE this and say so loudly in their output. Use run_objdiff(diff_mode='raw') for those.",
                             },
                         },
                         "required": ["symbol", "mode", "project_dir"],
@@ -2927,6 +2927,22 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
                 )
 
                 output = result.stdout
+                # These five modes delegate to scripts/analysis/diff_inspect.py,
+                # which builds its OWN objdiff command and has no switch for the
+                # relocation ruler -- so `reloc_config` above never reaches them
+                # and the answer is normalized whatever `diff_mode` said. Say so
+                # instead of handing back a normalized report under a raw label;
+                # the class of bug people ask for raw about (wrong vtable slot,
+                # wrong callee) is exactly the class this would hide.
+                if diff_mode != "normalized":
+                    output = (
+                        f"> **`diff_mode={diff_mode}` was IGNORED for mode=`{mode}`.** "
+                        f"This mode delegates to `scripts/analysis/diff_inspect.py`, which "
+                        f"builds its own objdiff command with no ruler switch; the report "
+                        f"below is NORMALIZED. For a real relocation-counting diff use "
+                        f"`run_objdiff(diff_mode=\"raw\")`, or `run_diff_inspect(mode=\"mismatches\")` "
+                        f"which does honour the ruler.\n\n"
+                    ) + output
                 if result.stderr:
                     filtered_stderr = _filter_build_output(result.stderr)
                     if filtered_stderr:

@@ -329,6 +329,22 @@ relocation diffs so you can inspect which relocations differ". That matters most
 for the wrong-vtable-slot class (`Splash::Suspend`/`Resume`), which lives
 entirely in the plane normalized scoring discards. Fixed 2026-08-19; both tools
 now route through one `RELOC_RULER` table in `mcp_server.py`.
+`run_diff_inspect(mode="mismatches")` now genuinely differs by ruler: 119
+mismatches normalized, 151 raw, on that same function.
+
+**`run_diff_inspect`'s `diff_mode` still reaches only 3 of its 11 modes.**
+`mismatches`, `compare` and `save_baseline` build their objdiff command in
+`mcp_server.py` and honour it. The five analysis modes — `diagnose`, `clusters`,
+`regswaps`, `offsets`, `replaces` — delegate to `scripts/analysis/diff_inspect.py`,
+which builds its *own* command and exposes no ruler switch, so the ruler cannot
+reach them from the wrapper at all. That file is owned by another lane and was
+deliberately not modified here. In the meantime those modes **print a banner
+saying the ruler was ignored** rather than returning a normalized report under a
+raw label. If you need raw for one of them, use `run_objdiff(diff_mode="raw")`
+or `run_diff_inspect(mode="mismatches")`.
+
+Anything concluded from `run_diff_inspect(diff_mode="raw")` **before
+2026-08-19** rests on a normalized measurement, in every mode.
 
 ### `run_symbol_sweep`
 
