@@ -12,8 +12,18 @@ namespace {
     /** Convert one YCbCr sample to RGB565. The Kinect colour stream hands us
      *  full-range Y with 128-biased U/V, so the standard 16.16 fixed-point
      *  BT.601 matrix applies directly and every channel is clamped to 8 bits
-     *  before it is packed. */
-    unsigned short YUVtoRGB(int y, int u, int v) {
+     *  before it is packed.
+     *
+     *  `inline` is load-bearing, not cosmetic. Without it MSVC emits this body
+     *  eagerly, learns that it clobbers no volatile register, and lets
+     *  UpdateBufferTex park u/v/dst in r4/r5/r6 across both calls -- which the
+     *  target does not do. As an inline COMDAT the body is deferred, the call
+     *  sites become conservative, and UpdateBufferTex goes 92.6% -> 96.7%.
+     *  The linker map agrees: the same symbol appears under two different
+     *  anonymous-namespace hashes (gesture:LiveCameraInput.obj and
+     *  gesture:DrawUtl.obj) ICF-folded to one address, i.e. it was a header
+     *  definition included by both translation units. */
+    inline unsigned short YUVtoRGB(int y, int u, int v) {
         int r = y + ((91881 * v) >> 16);
         int g = y + ((-46802 * v - 22553 * u) >> 16);
         int b = y + ((116130 * u) >> 16);
@@ -276,24 +286,17 @@ bool UpdateBufferTex(LiveCameraInput *cam, RndTex *tex, LiveCameraInput::BufferT
         void *bufStream = cam->StreamBufferData(bufType);
         LiveCameraInput::LockedRect lockedRect;
         cam->LockStream(bufStream, lockedRect);
+        const unsigned short *src = (const unsigned short *)lockedRect.mBits;
         MILO_ASSERT(width == 320 && height == 240, 0x19a);
-        if (lockedRect.mBits) {
+        if (src) {
             int srcExtraStride = lockedRect.mPitch / 2 - 320;
             int dstExtraStride = tex->TexelsPitch() / 2 - 320;
             if (bufType == LiveCameraInput::kBufferDepth) {
-                CopyDepth(
-                    dstExtraStride,
-                    srcExtraStride,
-                    texels,
-                    (const unsigned short *)lockedRect.mBits
-                );
+                CopyDepth(dstExtraStride, srcExtraStride, texels, src);
             } else {
                 MILO_ASSERT(LiveCameraInput::kBufferPlayer == bufType, 0x1a5);
                 CopyPlayerMask(
-                    srcExtraStride,
-                    texels,
-                    (const unsigned short *)lockedRect.mBits,
-                    gm->GetActiveSkeletonIndex()
+                    srcExtraStride, texels, src, gm->GetActiveSkeletonIndex()
                 );
             }
         }
