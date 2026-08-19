@@ -276,6 +276,20 @@ EXECUTED: -74`. It now parses both forms and refuses to print a number at all
 
 **Result: 445 registered, 371 execute and pass, 74 skip, 0 fail.**
 
+**Operational note on `--all-gates`.** `gtest_discover_tests` registers one
+CTest test per gtest case and CTest runs each in its own process, so each of the
+48 `GameplayTelemetryTest` cases re-runs the suite's shared 9050-frame engine
+fixture from scratch — ~40 s each, ~35 min for the tier. Running the binary
+directly shares one fixture and covers the same 48 assertions in ~2 minutes:
+
+```
+cd orig-assets && DC3_GAMEPLAY_TESTS=1 \
+    native/build/milo-tests --gtest_filter='GameplayTelemetryTest.*'
+```
+
+This is also why leaving `DC3_GAMEPLAY_TESTS` off by default is the right call
+rather than laziness: under `ctest` it is a 35-minute gate, not a 2-minute one.
+
 The `371` coinciding with CLAUDE.md's long-stale `371/371` is a coincidence —
 that figure was stale for a different reason (441 registered, 362 executing).
 

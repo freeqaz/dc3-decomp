@@ -26,6 +26,17 @@
 # Usage:
 #   scripts/native_test.sh                  # default gates
 #   scripts/native_test.sh --all-gates      # also DC3_GAMEPLAY_TESTS / audio / long
+#
+# NOTE on --all-gates cost. gtest_discover_tests registers one CTest test per
+# gtest case, and CTest runs each in its own process -- so each of the 48
+# GameplayTelemetryTest cases re-runs the suite's shared 9050-frame engine
+# fixture from scratch (~40 s each, ~35 min for the tier). To exercise that tier
+# quickly, run the binary directly so the fixture is built once:
+#
+#   cd orig-assets && DC3_GAMEPLAY_TESTS=1 \
+#       native/build/milo-tests --gtest_filter='GameplayTelemetryTest.*'
+#
+# That is ~2 minutes for the same 48 assertions.
 #   scripts/native_test.sh -R SomeRegex     # extra args pass through to ctest
 #   SKIP_BUDGET_UPDATE=1 scripts/native_test.sh   # rewrite the budget file
 
