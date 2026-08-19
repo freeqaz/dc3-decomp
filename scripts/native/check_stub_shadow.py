@@ -131,6 +131,19 @@ class Sym:
     name: str
     stub: Defn
     reals: list[Defn] = field(default_factory=list)
+    refs: list[str] = field(default_factory=list)   # objects that reference it
+
+
+def nm_undefined(path: str) -> set[str]:
+    """Names this object/archive references but does not define."""
+    out = run(["nm", "--undefined-only", "--no-demangle", path])
+    res = set()
+    for line in out.splitlines():
+        parts = line.split()
+        if parts and parts[-2:-1] in (["U"], ["w"]) or (
+                len(parts) >= 2 and parts[-2] in ("U", "w")):
+            res.add(parts[-1])
+    return res
 
 
 def nm_defined(path: str) -> list[tuple[str, str, int]]:
@@ -190,6 +203,15 @@ def collect(build_dir: str, target: str, verbose: bool):
                 continue
             where = f"{path}({member})" if member else path
             s.reals.append(Defn(where, t, size))
+        # Arm 2: who *references* the stub symbol?  A stub that is the only
+        # definition AND is referenced is a live call into a return-0 body —
+        # that is the class NuiTransformSkeletonToDepthImage and
+        # (anonymous namespace)::YUVtoRGB belonged to, and it is invisible to
+        # the duplicate-definition test above.
+        for name in nm_undefined(path):
+            s = syms.get(name)
+            if s is not None:
+                s.refs.append(path)
     return syms, objs, archives
 
 
@@ -230,16 +252,45 @@ def disasm(binary: str, addr: int, size: int) -> str:
 
 
 def looks_like_stub(text: str) -> bool:
-    if any(m in text for m in STUB_MARKERS):
-        return True
-    # bare `xor %eax,%eax ; ret` (or `ret` alone) with nothing else
+    # Only instruction lines. objdump prints the symbol's own name in the
+    # `0000... <name>:` label line, so scanning the whole listing made every
+    # function whose *name* contains a marker look like a stub -- the --self-test
+    # NEGATIVE case (dc3::StubTraceHit itself) caught exactly that.
     body = [l.split("\t", 1)[-1].strip()
             for l in text.splitlines() if re.match(r"^\s+[0-9a-f]+:", l)]
     body = [b for b in body if b and not b.startswith("nop")]
     if not body:
         return False
-    return all(re.match(r"^(xor\s+%eax,%eax|ret|retq|xor\s+%rax,%rax)$", b)
-               for b in body) and len(body) <= 3
+    body = [re.sub(r"\s*#.*$", "", b).strip() for b in body]   # drop comments
+
+    # A stub body is *entirely* the HX_STUB_TRACE preamble plus a zero return:
+    #     lea gStubTraceEnabled(%rip),%rax ; cmpb $1,(%rax) ; jne .Lout
+    #     push %rbp ; mov %rsp,%rbp ; lea "name"(%rip),%rdi
+    #     call dc3::StubTraceHit ; pop %rbp
+    #   .Lout: xor %eax,%eax ; ret
+    # Requiring EVERY instruction to be stub-shaped -- rather than "some
+    # instruction mentions a marker" -- is what keeps a real function that
+    # happens to call StubTraceHit from being misread as a stub. The --self-test
+    # NEGATIVE case pins that.
+    ALLOWED = {"xor", "ret", "retq", "push", "pop", "mov", "leave", "lea",
+               "cmpb", "jne", "je", "jmp", "endbr64"}
+    calls_only_trace = True
+    for b in body:
+        op = b.split()[0]
+        if op == "call" or op == "callq":
+            if "StubTraceHit" not in b:
+                calls_only_trace = False
+            continue
+        if op not in ALLOWED:
+            return False
+        if op in ("mov", "push", "pop") and "%rbp" not in b and "%rsp" not in b:
+            return False
+    if not calls_only_trace:
+        return False
+    # ...and the return value must be a hard zero (or void).
+    return any(re.match(r"^xor\s+%(e|r)ax,%(e|r)ax$", b) for b in body) or \
+        all(b.split()[0] in ("ret", "retq", "push", "pop", "mov", "endbr64",
+                             "leave") for b in body)
 
 
 def verdict(binary: str, sym: Sym, bsyms) -> tuple[str, str]:
@@ -263,6 +314,75 @@ def verdict(binary: str, sym: Sym, bsyms) -> tuple[str, str]:
     return "OK", f"0x{addr:x} size 0x{size:x} does not match the stub fingerprint"
 
 
+# ---------------------------------------------------------------------------
+# 5. the other half of the silence: --unresolved-symbols=ignore-all
+# ---------------------------------------------------------------------------
+#
+# The native link passes -Wl,--unresolved-symbols=ignore-all, so a symbol that
+# nothing defines does not fail the link either -- it becomes a dynamic UND with
+# a JUMP_SLOT relocation to 0, and the process dies with "symbol lookup error"
+# only if that code path is ever executed.  `ldd -r` enumerates exactly the same
+# set as relinking with --unresolved-symbols=report-all (verified 2026-08-19:
+# both produced the same 31 symbols for dc3-native), and it takes seconds
+# instead of a full relink, so it is the practical gate.
+#
+# The baseline below is the accepted set as of 2026-08-19.  The gate fails on
+# anything NOT in it; shrinking the baseline is the way to tighten the link.
+
+UNRESOLVED_BASELINE = {
+    # --- Bink video SDK (proprietary, not shipped) -----------------------
+    "BinkDoFrame",
+    "BinkDoFrameAsync",
+    "BinkDoFrameAsyncWait",
+    "BinkGetFrameBuffersInfo",
+    "BinkGetSummary",
+    "BinkOpenTrack",
+    "BinkPause",
+    "BinkRegisterFrameBuffers",
+    "BinkSetSoundOnOff",
+    "BinkSetVolume",
+    "BinkShouldSkip",
+    "BinkWait",
+    "_ZN12BinkMovieSys18PlatformStoreCacheEPvj",
+    "_ZN13BinkMovieImpl17PlatformCacheFileEPKc",
+    # --- Kinect / Xbox SDK ----------------------------------------------
+    "DmIsDebuggerPresent",
+    "NuiIdentityEnroll",
+    "NuiSkeletonGetNextFrame",
+    "XNotifyCreateListener",
+    "_Z23NuiTransformMatrixLevel9__vector4",
+    # --- PPC intrinsics with no x86 lowering ------------------------------
+    "__vmaddfp",
+    "__vspltw",
+    # --- MSVC CRT ---------------------------------------------------------
+    "_hypot",
+    # --- unrecovered decomp bodies: THESE ARE THE ACTIONABLE ONES. --------
+    # Every one is a real function some object calls. The call goes through a
+    # PLT entry whose JUMP_SLOT relocation resolves to 0, so the first call at
+    # runtime aborts with "symbol lookup error" (lazy binding means it does not
+    # fail at startup, only when the path executes).
+    "createFilter",
+    "requestBreedWrite",
+    "ReadSingleJoypad",
+    "_Z10CDGetErrorv",                                        # CDGetError()
+    "_Z22RecursePatternInternalPKcPFvS0_S0_Ebb",              # RecursePatternInternal
+    "_ZN15LiveCameraInput10LockStreamEPKvRNS_10LockedRectE",  # LiveCameraInput::LockStream
+    "_ZN15LiveCameraInput12UnlockStreamEPKv",                 # LiveCameraInput::UnlockStream
+    "_ZNK3Hmx7Matrix44Col3Ei",                                # Hmx::Matrix4::Col3
+    "_ZNKSt9type_infoeqERKS_",                                # std::type_info::operator==
+}
+
+
+def check_unresolved(binary: str) -> list[str]:
+    out = subprocess.run(["ldd", "-r", binary], capture_output=True, text=True)
+    found = set()
+    for line in (out.stdout + out.stderr).splitlines():
+        m = re.search(r"undefined symbol:\s*(\S+)", line)
+        if m:
+            found.add(m.group(1))
+    return sorted(found)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -274,6 +394,12 @@ def main() -> int:
     ap.add_argument("--all", action="store_true",
                     help="also list stub symbols with no competing definition")
     ap.add_argument("-v", "--verbose", action="store_true")
+    ap.add_argument("--skip-unresolved", action="store_true",
+                    help="skip the `ldd -r` unresolved-symbol check")
+    ap.add_argument("--self-test", action="store_true",
+                    help="prove the stub fingerprint is not vacuous: it must "
+                         "identify a body known to be a stub and reject one "
+                         "known to be real, in the same binary")
     args = ap.parse_args()
 
     build_dir = os.path.abspath(args.build_dir)
@@ -281,8 +407,29 @@ def main() -> int:
     if not os.path.exists(binary):
         die(f"{binary} not found — build {args.target} first")
 
+    bsyms_pre = binary_symbols(binary)
+    if args.self_test:
+        # A gate whose detector always says "not a stub" would report zero
+        # SHADOWED forever and look healthy. Pin both directions against bodies
+        # whose nature is not in question.
+        POSITIVE = "D3DCubeTexture_UnlockRect"       # a stub, by construction
+        NEGATIVE = "_ZN3dc312StubTraceHitEPKc"       # a real body, by construction
+        ok = True
+        for name, want in ((POSITIVE, True), (NEGATIVE, False)):
+            ent = bsyms_pre.get(name)
+            if ent is None:
+                print(f"self-test: {name} not in {binary} — cannot run")
+                return 2
+            got = looks_like_stub(disasm(binary, ent[0], ent[1]))
+            flag = "PASS" if got == want else "FAIL"
+            if got != want:
+                ok = False
+            print(f"self-test {flag}: looks_like_stub({name}) = {got}, "
+                  f"expected {want}")
+        return 0 if ok else 1
+
     syms, objs, archives = collect(build_dir, args.target, args.verbose)
-    bsyms = binary_symbols(binary)
+    bsyms = bsyms_pre
 
     dup = {n: s for n, s in syms.items() if s.reals}
     report = {"target": args.target, "binary": binary,
@@ -301,12 +448,26 @@ def main() -> int:
         report[{"SHADOWED": "shadowed", "OK": "ok",
                 "ABSENT": "absent"}[v]].append(rec)
 
-    if args.all:
-        for name, s in sorted(syms.items()):
-            if not s.reals:
-                report["solo"].append({"symbol": name,
-                                       "demangled": run(["c++filt", name]).strip() or name,
-                                       "stub_type": s.stub.sym_type})
+    for name, s in sorted(syms.items()):
+        if s.reals:
+            continue
+        report["solo"].append({
+            "symbol": name,
+            "demangled": run(["c++filt", name]).strip() or name,
+            "stub_type": s.stub.sym_type,
+            "n_referencing_objects": len(s.refs),
+            "referencing_objects": [os.path.basename(p) for p in sorted(s.refs)][:12],
+        })
+    report["solo_live"] = [r for r in report["solo"] if r["n_referencing_objects"]]
+    report["solo_dead"] = [r for r in report["solo"] if not r["n_referencing_objects"]]
+
+    new_unresolved = []
+    if not args.skip_unresolved:
+        found = check_unresolved(binary)
+        report["unresolved"] = found
+        new_unresolved = [s for s in found if s not in UNRESOLVED_BASELINE]
+        report["unresolved_new"] = new_unresolved
+        report["unresolved_fixed"] = sorted(UNRESOLVED_BASELINE - set(found))
 
     if args.json:
         print(json.dumps(report, indent=2))
@@ -323,13 +484,31 @@ def main() -> int:
             print(f"   evidence: {rec['evidence']}")
             for d in rec["real_defs"]:
                 print(f"   real def: [{d['type']}] size 0x{d['size']:x} {d['where']}")
-        if args.all and report["solo"]:
-            print(f"\n-- {len(report['solo'])} stub symbols with no competing "
-                  f"definition (informational)")
-            for rec in report["solo"]:
-                print(f"   {rec['demangled']}")
+        print(f"\nstub symbols that are the ONLY definition : {len(report['solo'])}")
+        print(f"  LIVE   (referenced by a real object) : {len(report['solo_live'])}")
+        print(f"  unused (nothing references them)     : {len(report['solo_dead'])}")
+        if args.all:
+            print("\n-- LIVE stubs: every call to these reaches a return-0 body.\n"
+                  "   Not a gate failure (there is no real definition to prefer),\n"
+                  "   but this is the worklist the YUVtoRGB / "
+                  "NuiTransformSkeletonToDepthImage bugs came off.")
+            for rec in report["solo_live"]:
+                print(f"   [{rec['n_referencing_objects']:3d} refs] {rec['demangled']}")
+                print(f"              {', '.join(rec['referencing_objects'])}")
 
-    return 1 if report["shadowed"] else 0
+    if not args.json and not args.skip_unresolved:
+        print(f"\nunresolved at link (`ldd -r`) : {len(report['unresolved'])} "
+              f"(baseline {len(UNRESOLVED_BASELINE)})")
+        if report["unresolved_fixed"]:
+            print("  RESOLVED since the baseline (shrink UNRESOLVED_BASELINE):")
+            for s in report["unresolved_fixed"]:
+                print(f"    {run(['c++filt', s]).strip() or s}")
+        for s in new_unresolved:
+            print(f"!! NEW UNRESOLVED {run(['c++filt', s]).strip() or s}")
+            print(f"   mangled: {s}  -- calls to this reach a JUMP_SLOT "
+                  f"relocated to 0")
+
+    return 1 if (report["shadowed"] or new_unresolved) else 0
 
 
 if __name__ == "__main__":

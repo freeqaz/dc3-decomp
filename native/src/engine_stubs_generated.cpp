@@ -209,9 +209,10 @@ extern "C" int XNetRandom(unsigned char *pb, unsigned int cb) {
 // CloseHandle(int)
 extern "C" __attribute__((weak, used)) long _stub_fn_7() __asm__(ASM_SYM("_Z11CloseHandlei"));
 extern "C" long _stub_fn_7() { HX_STUB_TRACE("CloseHandle"); return 0; }
-// DspAllocate(float*&, int, IXAudioBatchAllocator*)
-extern "C" __attribute__((weak, used)) long _stub_fn_8() __asm__(ASM_SYM("_Z11DspAllocateRPfiP21IXAudioBatchAllocator"));
-extern "C" long _stub_fn_8() { HX_STUB_TRACE("DspAllocate"); return 0; }
+// DspAllocate(float*&, int, IXAudioBatchAllocator*) -- STUB DELETED 2026-08-19.
+// The real native body lives in native/src/platform/SynthCommon_Stub.cpp; it
+// used to declare the third parameter as void*, which mangles differently, so
+// this stub silently won and the DSP delay/flanger buffers were never allocated.
 // SetupHXDrums(int, _XINPUT_CAPABILITIES const&)
 extern "C" __attribute__((weak, used)) long _stub_fn_20() __asm__(ASM_SYM("_Z12SetupHXDrumsiRK20_XINPUT_CAPABILITIES"));
 extern "C" long _stub_fn_20() { HX_STUB_TRACE("SetupHXDrums"); return 0; }
@@ -237,9 +238,10 @@ extern "C" long _stub_fn_46() { HX_STUB_TRACE("XNetDnsRelease"); return 0; }
 // merged_82610090(char const*, int volatile*)
 extern "C" __attribute__((weak, used)) long _stub_fn_47() __asm__(ASM_SYM("_Z15merged_82610090PKcPVi"));
 extern "C" long _stub_fn_47() { HX_STUB_TRACE("merged_82610090"); return 0; }
-// ValidateThreadId(unsigned long)
-extern "C" __attribute__((weak, used)) long _stub_fn_61() __asm__(ASM_SYM("_Z16ValidateThreadIdm"));
-extern "C" long _stub_fn_61() { HX_STUB_TRACE("ValidateThreadId"); return 0; }
+// ValidateThreadId(unsigned long) -- STUB DELETED 2026-08-19.
+// src/system/utl/MakeString.cpp has an HX_NATIVE body; it used to spell the
+// parameter DWORD, which is `unsigned int` on native and so defined a different
+// symbol than the one os/OSFuncs.h declares and both call sites reference.
 // jpeg_set_defaults(jpeg_compress_struct*)
 extern "C" __attribute__((weak, used)) long _stub_fn_65() __asm__(ASM_SYM("_Z17jpeg_set_defaultsP20jpeg_compress_struct"));
 extern "C" long _stub_fn_65() { HX_STUB_TRACE("jpeg_set_defaults"); return 0; }

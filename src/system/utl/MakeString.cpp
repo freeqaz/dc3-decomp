@@ -40,7 +40,18 @@ void TerminateMakeString() {}
 bool MakeStringInitted() { return gLock != nullptr; }
 
 #ifdef HX_NATIVE
-bool ValidateThreadId(DWORD) {
+// The parameter type must be spelled `unsigned long`, exactly as os/OSFuncs.h
+// declares it, NOT `DWORD`. On the Xbox toolchain those are the same type, but
+// the native xdk shim makes DWORD a 32-bit `unsigned int`, so writing DWORD here
+// defined _Z16ValidateThreadIdj while every caller referenced
+// _Z16ValidateThreadIdm -- `nm` on MakeString.cpp.o showed the file *defining*
+// ValidateThreadId(unsigned int) and *referencing* ValidateThreadId(unsigned
+// long) at the same time. The unresolved `unsigned long` overload was then
+// satisfied by the weak stub _stub_fn_61 in engine_stubs_generated.cpp, which
+// returns 0, so `!ValidateThreadId(...)` was permanently true and both callers
+// (this file's per-thread buffer table and MemMgr::GetMemStack) immediately
+// reclaimed slot 0 from a live thread on every miss.
+bool ValidateThreadId(unsigned long) {
     return true; // Thread validation not meaningful on native
 }
 #else
