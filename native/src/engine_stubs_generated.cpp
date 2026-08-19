@@ -43,7 +43,22 @@ complex expj(double) { HX_STUB_TRACE("expj"); return {0, 0}; }
 __attribute__((weak)) int FileRecursePattern() { HX_STUB_TRACE("FileRecursePattern"); return 0; }
 int FileTimeToSystemTime() { HX_STUB_TRACE("FileTimeToSystemTime"); return 0; }
 #endif // !__EMSCRIPTEN__
-void* gCharHighlightY = 0;
+// gCharHighlightY: char/Char.h declares `extern float gCharHighlightY;`, and the
+// symbol table agrees -- ?gCharHighlightY@@3MA is .data:0x82F08480, size 0x4,
+// data:float -- with the split asm giving its initialiser as `.float -1`.
+// This was `void* gCharHighlightY = 0`, which is the wrong type (8 bytes on
+// LP64, so the extra 4 are simply wasted) and, more importantly, the wrong
+// initial value: -1.0f is the "no highlight pending" sentinel that
+// CharDriver::Highlight() tests (`if (gCharHighlightY == -1.0f)
+// CharDeferHighlight(this);`) and that CharDebug::UpdateOverlay restores on the
+// way out. Starting at 0.0f made the very first Highlight() take the else
+// branch and highlight at y = 0 instead of deferring. Debug-overlay only, but
+// it costs nothing to be right.
+//
+// The other typed data stubs in this file were checked against the same split
+// asm at the same time and are correct: lbl_82F0BE80 `.float 2`, lbl_82F0E8A4
+// `.4byte 4`, lbl_830A4100 / lbl_830A4104 `.4byte 0`, lbl_8316EB70 `.double 0`.
+float gCharHighlightY = -1.0f;
 // void* gCheatsManager = 0; // now defined in Cheats.cpp
 // void* gDataThisPtr = 0; // now defined in DataFunc.cpp
 // void* gDebugDepth = 0; // now defined in LiveCameraInput.cpp
@@ -209,9 +224,10 @@ extern "C" int XNetRandom(unsigned char *pb, unsigned int cb) {
 // CloseHandle(int)
 extern "C" __attribute__((weak, used)) long _stub_fn_7() __asm__(ASM_SYM("_Z11CloseHandlei"));
 extern "C" long _stub_fn_7() { HX_STUB_TRACE("CloseHandle"); return 0; }
-// DspAllocate(float*&, int, IXAudioBatchAllocator*)
-extern "C" __attribute__((weak, used)) long _stub_fn_8() __asm__(ASM_SYM("_Z11DspAllocateRPfiP21IXAudioBatchAllocator"));
-extern "C" long _stub_fn_8() { HX_STUB_TRACE("DspAllocate"); return 0; }
+// DspAllocate(float*&, int, IXAudioBatchAllocator*) -- STUB DELETED 2026-08-19.
+// The real native body lives in native/src/platform/SynthCommon_Stub.cpp; it
+// used to declare the third parameter as void*, which mangles differently, so
+// this stub silently won and the DSP delay/flanger buffers were never allocated.
 // SetupHXDrums(int, _XINPUT_CAPABILITIES const&)
 extern "C" __attribute__((weak, used)) long _stub_fn_20() __asm__(ASM_SYM("_Z12SetupHXDrumsiRK20_XINPUT_CAPABILITIES"));
 extern "C" long _stub_fn_20() { HX_STUB_TRACE("SetupHXDrums"); return 0; }
@@ -237,9 +253,10 @@ extern "C" long _stub_fn_46() { HX_STUB_TRACE("XNetDnsRelease"); return 0; }
 // merged_82610090(char const*, int volatile*)
 extern "C" __attribute__((weak, used)) long _stub_fn_47() __asm__(ASM_SYM("_Z15merged_82610090PKcPVi"));
 extern "C" long _stub_fn_47() { HX_STUB_TRACE("merged_82610090"); return 0; }
-// ValidateThreadId(unsigned long)
-extern "C" __attribute__((weak, used)) long _stub_fn_61() __asm__(ASM_SYM("_Z16ValidateThreadIdm"));
-extern "C" long _stub_fn_61() { HX_STUB_TRACE("ValidateThreadId"); return 0; }
+// ValidateThreadId(unsigned long) -- STUB DELETED 2026-08-19.
+// src/system/utl/MakeString.cpp has an HX_NATIVE body; it used to spell the
+// parameter DWORD, which is `unsigned int` on native and so defined a different
+// symbol than the one os/OSFuncs.h declares and both call sites reference.
 // jpeg_set_defaults(jpeg_compress_struct*)
 extern "C" __attribute__((weak, used)) long _stub_fn_65() __asm__(ASM_SYM("_Z17jpeg_set_defaultsP20jpeg_compress_struct"));
 extern "C" long _stub_fn_65() { HX_STUB_TRACE("jpeg_set_defaults"); return 0; }
@@ -355,18 +372,16 @@ extern "C" __attribute__((weak)) int XNetServerToInAddr() { HX_STUB_TRACE("XNetS
 __attribute__((weak, used)) char _stub_vt_15[1024] __asm__(ASM_SYM("_ZTI5DxTex")) = {};
 // typeinfo for FFmpegMovieImpl
 __attribute__((weak, used)) char _stub_ti_ffmpeg[128] __asm__(ASM_SYM("_ZTI15FFmpegMovieImpl")) = {};
-// (anonymous namespace)::YUVtoRGB(int, int, int)
-// LOAD-BEARING, do not delete alongside _stub_fn_111. `nm` says
-// gesture/LiveCameraInput.cpp.o REFERENCES this symbol (U) and no object in the
-// tree defines it — LiveCameraInput.cpp declares an anonymous-namespace
-// YUVtoRGB it never defines, which is a real decomp gap: ham_xbox_r.map has
-// ?YUVtoRGB@?A0x8e584365@@ contributed by gesture:LiveCameraInput.obj. The
-// DrawUtl copy recovered on fix/drawutl-buffer-copies does NOT satisfy this
-// reference — anonymous-namespace entities have internal linkage, so DrawUtl's
-// body is local to its own TU. Delete this only when LiveCameraInput.cpp gets
-// its own body.
-extern "C" __attribute__((weak, used)) long _stub_yuvtorgb() __asm__(ASM_SYM("_ZN12_GLOBAL__N_18YUVtoRGBEiii"));
-extern "C" long _stub_yuvtorgb() { HX_STUB_TRACE("_stub_yuvtorgb"); return 0; }
+// (anonymous namespace)::YUVtoRGB(int, int, int) — STUB DELETED 2026-08-19.
+// The condition the old comment set for deleting it ("delete this only when
+// LiveCameraInput.cpp gets its own body") is now met: LiveCameraInput.cpp
+// carries the real `inline unsigned short YUVtoRGB(int y, int u, int v)` body,
+// copied from the DrawUtl.cpp copy the linker map says was ICF-folded with it.
+// While the stub existed it was not merely dead weight — it was the *only*
+// definition of a symbol LiveCameraInput.cpp.o referenced (U), so it silently
+// won every call and returned 0, i.e. the Kinect colour texture was solid black
+// in UpdateFromColorBuffer / UpdateFromColorBufferClip.  The PPC match for both
+// functions is unchanged by the source fix (95.5% / 84.4% before and after).
 
 // =============================================================================
 // Asm-label stubs for remaining undefined symbols (ObjPtrVec/ObjPtrList related)
@@ -500,17 +515,16 @@ extern "C" long _stub_apple_hamstore_getoffers() { HX_STUB_TRACE("HamStorePanel:
 
 // --- Completely missing stubs (libc++ ABI) ---
 
-// Hmx::Matrix4::Col3(int) const
-extern "C" __attribute__((weak, used)) long _stub_apple_matrix4_col3() __asm__("__ZNK3Hmx7Matrix44Col3Ei");
-extern "C" long _stub_apple_matrix4_col3() { HX_STUB_TRACE("Hmx::Matrix4::Col3"); return 0; }
+// Hmx::Matrix4::Col3 and RecursePatternInternal deliberately have NO stub here.
+// Both now have real bodies (Col3 in native_link_glue.cpp, RecursePatternInternal
+// un-#ifndef'd in obj/DirUnloader.cpp), so a weak return-0 stub under the Mach-O
+// mangling would shadow the real definition on an Apple build -- exactly the
+// failure mode this file's own gate (scripts/native/check_stub_shadow.py) exists
+// to catch. Inert on Linux ELF, which is why they survived this long.
 
 // ScaleAddEq(Transform&, const Transform&, float)
 extern "C" __attribute__((weak, used)) long _stub_apple_scaleaddeq() __asm__("__Z10ScaleAddEqR9TransformRKS_f");
 extern "C" long _stub_apple_scaleaddeq() { HX_STUB_TRACE("ScaleAddEq"); return 0; }
-
-// RecursePatternInternal(const char*, void(*)(const char*, const char*), bool, bool)
-extern "C" __attribute__((weak, used)) long _stub_apple_recursepattern() __asm__("__Z22RecursePatternInternalPKcPFvS0_S0_Ebb");
-extern "C" long _stub_apple_recursepattern() { HX_STUB_TRACE("RecursePatternInternal"); return 0; }
 
 // Waypoint::sWaypoints (static member, std::list<Waypoint*>)
 extern "C" __attribute__((weak, used)) long _stub_apple_waypoint_swaypoints __asm__("__ZN8Waypoint10sWaypointsE");

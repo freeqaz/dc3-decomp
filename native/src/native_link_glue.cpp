@@ -369,3 +369,32 @@ void *OggCalloc(int n, int sz) { return calloc((size_t)n, (size_t)sz); }
 void *OggRealloc(void *p, int n) { return realloc(p, (size_t)n); }
 void OggFree(void *p) { free(p); }
 }
+
+// ---------------------------------------------------------------------------
+// Bodies whose owning PPC translation unit is not in the native build.
+//
+// These are NOT stubs: each is the same body the decomp already carries, hosted
+// here because its TU (rnddx9/Cam.cpp, os/CDReader.cpp) is Xbox-only. Before
+// this, `ldd -r dc3-native` listed them as undefined; the native link passes
+// -Wl,--unresolved-symbols=ignore-all, so each call site got a PLT entry whose
+// JUMP_SLOT relocation resolves to 0 and the process would die with "symbol
+// lookup error" the first time the path executed.
+// ---------------------------------------------------------------------------
+
+// Hmx::Matrix4::Col3 — body from src/system/rnddx9/Cam.cpp (a DX9 TU: DxCam,
+// D3D device state; it cannot join the native build). 16 call sites, all inside
+// Hmx::operator*(const Transform&, const Hmx::Matrix4&), which is reached from
+// RndCam::GetInfiniteViewProj, NgLight::SetShadowTransforms, CheckShadow,
+// CheckExtrude and RndVelocityBuffer::CacheCameraSettings.
+#include "math/Mtx.h"
+Vector3 Hmx::Matrix4::Col3(int col) const { return Vector3(x[col], y[col], z[col]); }
+
+// CDGetError — body from src/system/os/CDReader.cpp (Xbox DVD/ARK reader).
+// Referenced by BlockMgr.cpp.
+#include "os/CDReader.h"
+int CDGetError() { return 0; }
+
+// _hypot — the MSVC CRT spelling. src/system/synth/filterdesign.cpp calls it
+// from createFilter() and csqrt(); libm only provides the C99 `hypot`.
+#include <cmath>
+extern "C" double _hypot(double x, double y) { return ::hypot(x, y); }

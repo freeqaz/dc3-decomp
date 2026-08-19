@@ -15,15 +15,34 @@ inline double __fsel(double a, double b, double c) { return a >= 0.0 ? b : c; }
 enum FilterType { kFilterButterworth = 1 };
 enum FilterBand { kFilterLowpass = 0, kFilterHighpass = 1, kFilterBandpass = 2 };
 
+// Must stay layout-compatible with synth/filterdesign.cpp's FILTER, which is
+// what createFilter() actually writes through. filterdesign's is 0x1014 bytes
+// (xcoeffs[0x200] / ycoeffs[0x200] / gain / gain2 / invgain2 / numzeros /
+// numpoles); this declaration names only the fields EQEffect reads, but it must
+// still be the same *size* -- copyresults() (filterdesign.cpp:353) ends with
+// `out->numpoles = zplane.numpoles`, so a 0x1010-byte FILTER here means every
+// createFilter() call below writes 4 bytes past the end of the local `filter`.
+// The trailing numpoles below exists purely to absorb that store. On PPC this
+// is codegen-neutral (measured: frame stays 0x10f0, 573 instructions /
+// 213 mismatches either way) because the frame delta is callee-save GPR counts,
+// not this struct.
 struct FILTER {
     char _pad[0x800];
     float coeffs[0x200];    // 0x800
     float gain;             // 0x1000
     char _pad2[8];          // 0x1004
     int numCoeffs;          // 0x100C
+    int numpoles;           // 0x1010 -- written by copyresults(), never read here
 };
 
-extern "C" void createFilter(FilterType, FilterBand, unsigned int, float, float, FILTER *, int);
+// NOT extern "C". The target binary's symbol is the C++-mangled
+// ?createFilter@@YAXW4FilterType@@W4FilterBand@@IMMPAUFILTER@@H@Z
+// (config/373307D9/symbols.txt, .text:0x82E5C228) and synth/filterdesign.cpp
+// defines it with C++ linkage too. An `extern "C"` here emitted a reference to
+// a plain `createFilter` that nothing defines -- invisible to objdiff, which
+// normalizes relocation targets away, but it left the native link with an
+// unresolved symbol that EQEffect::SetParameter jumps to.
+void createFilter(FilterType, FilterBand, unsigned int, float, float, FILTER *, int);
 
 EQEffect::EQEffect(IXAudioBatchAllocator *) {
     mBand0Enabled = false;

@@ -40,7 +40,30 @@ namespace {
     bool gDebugDepth;
     bool GetExposureRegion(NUI_CAMERA_AE_ROI &);
     long GetColorCameraProperty(NUI_CAMERA_PROPERTY);
-    unsigned short YUVtoRGB(int y, int cr, int cb);
+    /** Convert one YCbCr sample to RGB565 -- the same body DrawUtl.cpp carries.
+     *
+     *  This TU used to only *declare* it. On the PPC build that was harmless
+     *  (the linker map shows ?YUVtoRGB@?A0x8e584365@@ contributed by
+     *  gesture:LiveCameraInput.obj and ICF-folded with gesture:DrawUtl.obj's
+     *  copy, i.e. the original was one header definition included by both TUs).
+     *  On the native port it was a live bug: clang emitted an *undefined*
+     *  reference to an internal-linkage symbol, and the weak asm-label stub
+     *  `_stub_yuvtorgb` in native/src/engine_stubs_generated.cpp satisfied it,
+     *  so every Kinect colour texel came out 0 -- the camera feed was solid
+     *  black in UpdateFromColorBuffer and UpdateFromColorBufferClip.
+     *
+     *  `inline` is load-bearing for the same reason it is in DrawUtl.cpp: as an
+     *  inline COMDAT the body is deferred and the call sites stay conservative.
+     */
+    inline unsigned short YUVtoRGB(int y, int u, int v) {
+        int r = y + ((91881 * v) >> 16);
+        int g = y + ((-46802 * v - 22553 * u) >> 16);
+        int b = y + ((116130 * u) >> 16);
+        r = r > 255 ? 255 : (r < 0 ? 0 : r);
+        g = g > 255 ? 255 : (g < 0 ? 0 : g);
+        b = b > 255 ? 255 : (b < 0 ? 0 : b);
+        return (unsigned short)(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
+    }
 
     void SetColorCameraProperty(NUI_CAMERA_PROPERTY prop, long value) {
         HRESULT hr = NuiCameraSetProperty(NUI_CAMERA_TYPE_COLOR, prop, value);
@@ -219,14 +242,17 @@ update:
 void LiveCameraInput::TextureStore::UpdateFromColorBuffer(LiveCameraInput *cam) {
     void *texels = nullptr;
     mTex->TexelsLock(texels);
-    unsigned int destPtr = (unsigned int)texels;
+    // uintptr_t, not unsigned int: on the PPC target these are the same 32-bit
+    // type (src/types.h) so the codegen is unchanged, but the native LP64 build
+    // was truncating every texel and source pointer to its low 32 bits.
+    uintptr_t destPtr = (uintptr_t)texels;
     g_colorBufferUpdate1++;
     void *bufferData = cam->StreamBufferData(kBufferColor);
     if (bufferData) {
         LockedRect lockedRect;
         cam->LockStream(bufferData, lockedRect);
         g_colorBufferUpdate2++;
-        unsigned int *srcPtr = (unsigned int *)((int)lockedRect.mBits - 4);
+        unsigned int *srcPtr = (unsigned int *)((uintptr_t)lockedRect.mBits - 4);
         unsigned int pitch = mTex->TexelsPitch();
         for (int row = 0; row < 480; row++) {
             for (int col = 0; col < 320; col++) {
@@ -238,8 +264,16 @@ void LiveCameraInput::TextureStore::UpdateFromColorBuffer(LiveCameraInput *cam) 
                 ((unsigned short *)destPtr)[1] = YUVtoRGB(pixel & 0xff, cr, cb);
                 destPtr += 4;
             }
-            destPtr += ((pitch >> 1) - 640) * 2;
-            srcPtr += (lockedRect.mPitch >> 2) - 320;
+            // (int) casts, matching UpdateFromColorBufferClip's destStride
+            // below. Both right-hand sides are `unsigned int` subtractions: if
+            // the texel pitch is narrower than 640 texels (or the source pitch
+            // narrower than 320 dwords) the result wraps to ~4e9 instead of
+            // going negative. On 32-bit PPC that wrap still steps the pointer
+            // correctly backwards, so this is codegen-neutral there; on the
+            // LP64 native build it zero-extends and jumps ~8 GB / ~16 GB
+            // forward.
+            destPtr += (int)((pitch >> 1) - 640) * 2;
+            srcPtr += (int)((lockedRect.mPitch >> 2) - 320);
         }
         D3DCubeTexture_UnlockRect((D3DCubeTexture *)bufferData, (D3DCUBEMAP_FACES)0, 0);
     }
@@ -248,12 +282,12 @@ void LiveCameraInput::TextureStore::UpdateFromColorBuffer(LiveCameraInput *cam) 
 void LiveCameraInput::TextureStore::UpdateFromDepthBuffer(LiveCameraInput *cam) {
     void *texels = nullptr;
     mTex->TexelsLock(texels);
-    unsigned int destBase = (unsigned int)texels;
+    uintptr_t destBase = (uintptr_t)texels;
     void *bufferData = cam->StreamBufferData(kBufferDepth);
     if (bufferData) {
         LockedRect lockedRect;
         cam->LockStream(bufferData, lockedRect);
-        unsigned int srcBase = (unsigned int)lockedRect.mBits;
+        uintptr_t srcBase = (uintptr_t)lockedRect.mBits;
         unsigned int rowIdx = 0;
         do {
             unsigned int x = 0;
@@ -332,7 +366,9 @@ void LiveCameraInput::TextureStore::UpdateFromColorBufferClip(
     }
     void *texels = nullptr;
     mTex->TexelsLock(texels);
-    unsigned int destPtr = (unsigned int)texels;
+    // uintptr_t: see the note in UpdateFromColorBuffer. Same width as
+    // `unsigned int` on PPC, 64-bit on the native LP64 build.
+    uintptr_t destPtr = (uintptr_t)texels;
     void *bufferData = cam->StreamBufferData(kBufferColor);
     if (bufferData) {
         LockedRect lockedRect;
@@ -340,7 +376,7 @@ void LiveCameraInput::TextureStore::UpdateFromColorBufferClip(
         g_colorBufferUpdate4++;
         int destWidth = mTex->Width();
         unsigned int srcPitch = lockedRect.mPitch >> 2;
-        int srcOffset = srcPitch * clippedY * 4 + (int)lockedRect.mBits;
+        uintptr_t srcOffset = srcPitch * clippedY * 4 + (uintptr_t)lockedRect.mBits;
         unsigned int destPitch = mTex->TexelsPitch();
         int destStride = (int)((destPitch >> 1) - destWidth) * 2;
         unsigned int *srcPtr = (unsigned int *)(srcOffset - 4);
@@ -358,7 +394,7 @@ void LiveCameraInput::TextureStore::UpdateFromColorBufferClip(
                 }
             }
             destPtr += destStride;
-            srcPtr += (srcPitch - 320);
+            srcPtr += (int)(srcPitch - 320);  // same unsigned-wrap hazard as line 267
         }
         D3DCubeTexture_UnlockRect((D3DCubeTexture *)bufferData, (D3DCUBEMAP_FACES)0, 0);
     }
@@ -371,7 +407,7 @@ void LiveCameraInput::TextureStore::UpdateFromDepthBufferClip(
     unsigned int clippedX = (1 - (int)(clipLeft * -640.0f)) & 0xfffe;
     clippedX = clippedX % 640;
     mTex->TexelsLock(texels);
-    unsigned int destBase = (unsigned int)texels;
+    uintptr_t destBase = (uintptr_t)texels;
     void *bufferData = cam->StreamBufferData(kBufferDepth);
     if (bufferData) {
         LockedRect lockedRect;
@@ -379,7 +415,7 @@ void LiveCameraInput::TextureStore::UpdateFromDepthBufferClip(
         unsigned int srcPitch = lockedRect.mPitch >> 1;
         unsigned int clippedY = (1 - (int)(clipTop * -480.0f)) & 0xfffe;
         clippedY = clippedY % 480;
-        int srcBase = (int)((clippedY >> 1) * srcPitch * 2 + (int)lockedRect.mBits);
+        uintptr_t srcBase = (clippedY >> 1) * srcPitch * 2 + (uintptr_t)lockedRect.mBits;
         unsigned int rowIdx = 0;
         if (mTex->Height() > 0) {
             do {
@@ -1135,11 +1171,13 @@ bool GetExposureRegion(NUI_CAMERA_AE_ROI &region) {
 
 } // namespace
 
-#ifdef HX_NATIVE
-DataNode OnCameraDumpUnique(DataArray *) { return DataNode(0); }
-DataNode OnCameraDebugDepth(DataArray *) { return DataNode(0); }
-#else
-
+// LockStream / UnlockStream are NOT platform-specific: they are the recovered
+// PPC bodies (100% match, 25 and 6 instructions) and they only call through the
+// D3D texture-lock entry points, which the native build shims. They used to sit
+// inside the `#else` arm below, which is why `ldd -r dc3-native` reported
+// LiveCameraInput::LockStream / UnlockStream as undefined -- the eight call
+// sites in UpdateFromColorBuffer / UpdateFromDepthBuffer / the two Clip
+// variants / UpdateBufferTex all pointed at a JUMP_SLOT relocated to 0.
 void LiveCameraInput::LockStream(const void *buf, LockedRect &rect) {
     D3DLOCKED_RECT d3dRect;
     if (buf) {
@@ -1157,6 +1195,11 @@ void LiveCameraInput::UnlockStream(const void *buf) {
         D3DLineTexture_UnlockRect((D3DLineTexture *)buf, 0);
     }
 }
+
+#ifdef HX_NATIVE
+DataNode OnCameraDumpUnique(DataArray *) { return DataNode(0); }
+DataNode OnCameraDebugDepth(DataArray *) { return DataNode(0); }
+#else
 
 DataNode OnCameraDebugDepth(DataArray *) {
     gDebugDepth = !gDebugDepth;

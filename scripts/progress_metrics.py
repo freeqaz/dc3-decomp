@@ -11,9 +11,27 @@ Reads ``build/373307D9/report.json`` (produced by ``ninja``) and computes:
       normalized == 100 %).
 
 The "authorable normalized %" is the canonical metric: it uses the
-``match_percent_normalized`` per-function field (which does not forgive wrong
-constants, offsets, or vtable-slot values — only register permutation, branch
-layout, and benign relocation-addend diffs are normalized away).
+``match_percent_normalized`` per-function field, which does not forgive wrong
+constants, offsets, or vtable-slot values. What it *does* normalize away is
+register permutation, branch layout, and — this is stronger than the wording
+that used to sit here — **the entire relocation target name, not merely a
+benign relocation addend**.
+
+That is structural, not a ruler setting. ``match_percent_normalized =
+diff_score - arg_diff_score`` and relocation penalties are deliberately folded
+into ``arg_diff_score`` (objdiff-core ``src/diff/code.rs:1626-1641``), so a call
+to the *wrong symbol entirely* costs exactly zero normalized points under any
+``functionRelocDiffs`` setting. Demonstrated 2026-08-19: repointing all 13
+``bl`` sites of a 100%-matched function at a nonexistent decoy symbol, changing
+zero instruction bytes, left ``match_percent_normalized`` at 100.0 and left
+``run_objdiff`` reporting 64 equal / 0 mismatches; only ``fuzzy_match_percent``
+moved (100.0 -> 98.98). A real ``extern "C"`` mangling bug in
+``EQEffect::SetParameter`` was invisible here for the same reason.
+
+So: 198 functions (37,496 bytes) currently score 100% under the relocation-blind
+ruler while scoring <100% under ``name_check``. If you need to see wrong
+callees, read ``fuzzy_match_percent``, ``report_raw.json``, or
+``scripts/analysis/name_charge_census.py`` — not this metric.
 
 ``--markdown`` mode regenerates ``docs/PROGRESS_METRICS.md``.
 
