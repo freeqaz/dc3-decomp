@@ -71,8 +71,34 @@ DEFAULT_MIN_SIZE = 10240  # 10KB
 # The UNIT-level `measures.fuzzy_match_percent` is a different animal despite
 # the shared name: objdiff computes it as the size-weighted mean of the
 # per-function *normalized* values (objdiff-cli report.rs:1096 +
-# calc_fuzzy_match_percent), verified here against 471/471 units of the current
-# report.  So the unit tables are ALREADY on the canonical ruler; it is only
+# calc_fuzzy_match_percent).
+#
+# This comment used to claim "verified against 471/471 units".  NOTHING IN THIS
+# REPO COMPUTES 471, and nine candidate derivations from the report (units
+# total, units with functions, units with the fuzzy key, total_code > 0,
+# fuzzy == 100, complete_units == 1, 0 < fuzzy < 100, ...) all miss it.  A
+# hand-written verification count that no code reproduces is indistinguishable
+# from a remembered one -- which is the failure mode this whole file is about.
+# The honest recompute, and it is now a TEST
+# (test_unit_measure_really_is_the_normalized_weighted_mean) rather than a
+# comment, so it cannot rot again:
+#
+#     2,224 units total
+#       169 skipped -- measures.total_code == 0, empty `functions`, so the
+#           weighted mean is 0/0 and undefined.  Not a disagreement.
+#     2,055 checked, 2,055 agree at a 1e-5 tolerance
+#           (max |delta| 7.27e-6, at default/system/os/HDCache -- f32
+#           serialisation rounding; at 1e-6 only 1,646 pass, so 1e-5 is the
+#           honest tolerance, not a fudge)
+#
+# CAVEAT that has to travel with the number: 1,085 of those 2,055 carry NO
+# `fuzzy_match_percent` key at all -- serde omits the 0.0 default -- and they
+# agree only under the convention "key absent => 0.0".  Require the key present
+# and the verification covers 970.  Negative control: weighting the per-function
+# *fuzzy* values instead of the normalized ones agrees on only 1,570, so the
+# check discriminates rather than passing vacuously.
+#
+# So the unit tables are ALREADY on the canonical ruler; it is only
 # the `matched_code_percent` fallback that is raw.  Do not "fix" it by
 # swapping the key -- state which one you used, which is what
 # `unit_match_percent_with_ruler` now does.
@@ -244,8 +270,13 @@ def unit_match_percent_with_ruler(measures: dict) -> tuple[float | None, str]:
     `measures.fuzzy_match_percent` is misnamed upstream: objdiff builds it as
     the size-weighted mean of the per-function `match_percent_normalized`
     values, so it is the CANONICAL ruler even though the key says fuzzy
-    (objdiff-cli report.rs:1096; verified against 471/471 units of the current
-    report.json).  `matched_code_percent` -- the fallback -- is the raw one:
+    (objdiff-cli report.rs:1096).  Verified against 2,055 of the 2,224 units of
+    the current report.json -- 169 skipped for `total_code == 0`, all 2,055
+    agreeing to 1e-5 -- by
+    test_unit_measure_really_is_the_normalized_weighted_mean.  This docstring
+    used to claim "471/471" instead -- a count nothing in this repo computes.
+    See the header for the caveats that belong with that number.
+    `matched_code_percent` -- the fallback -- is the raw one:
     matched_code counts only symbols whose RAW match_percent hit 100.
     """
     fp = measures.get("fuzzy_match_percent", None)

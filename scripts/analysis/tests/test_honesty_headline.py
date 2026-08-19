@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sqlite3
 import subprocess
 import sys
@@ -842,3 +843,105 @@ def test_the_contested_classes_are_the_ones_ceiling_calculator_names():
         "the class ceiling_calculator calls the most fixable must be contested "
         "here too, or the two tools disagree in silence")
     assert "regswap" not in contested and "merged" not in contested
+
+
+# =========================================================================== #
+# compare_progress.py's "verified 471/471 units" — a hand-written verification
+# count that NOTHING in the repo computes.
+#
+# The claim it backs is true and load-bearing (the unit-level
+# `measures.fuzzy_match_percent` really is the size-weighted mean of the
+# per-function NORMALIZED values, despite the key name). The evidence for it
+# was a number in a comment, twice, which is exactly as checkable as a
+# remembered one. It is a test now.
+# =========================================================================== #
+
+REPORT = os.path.join(REPO, "build", "373307D9", "report.json")
+needs_the_report = pytest.mark.skipif(
+    not os.path.exists(REPORT), reason="needs a built tree: report.json")
+
+UNIT_TOLERANCE = 1e-5   # f32 serialisation; see the assertion below
+
+
+def _weighted(fns, key):
+    num = sum(int(f.get("size", 0)) * float(f.get(key) or 0.0) for f in fns)
+    den = sum(int(f.get("size", 0)) for f in fns)
+    return (num / den) if den else None
+
+
+@needs_the_report
+def test_unit_measure_really_is_the_normalized_weighted_mean():
+    units = json.load(open(REPORT)).get("units", [])
+    checked = skipped = agreed = 0
+    worst, worst_unit = 0.0, None
+    key_absent = 0
+
+    for u in units:
+        fns = u.get("functions") or []
+        if not (u.get("measures", {}).get("total_code") or 0):
+            skipped += 1          # empty unit: the weighted mean is 0/0
+            continue
+        recomputed = _weighted(fns, "match_percent_normalized")
+        if recomputed is None:
+            skipped += 1
+            continue
+        stored = u["measures"].get("fuzzy_match_percent")
+        if stored is None:
+            key_absent += 1       # serde omits the 0.0 default
+            stored = 0.0
+        checked += 1
+        d = abs(float(stored) - recomputed)
+        if d > worst:
+            worst, worst_unit = d, u["name"]
+        if d <= UNIT_TOLERANCE:
+            agreed += 1
+
+    # (a) The arithmetic identity — no fixture value makes this vacuous.
+    assert checked + skipped == len(units)
+    assert agreed == checked, (
+        f"{checked - agreed} units disagree; worst {worst:.3g} at {worst_unit}")
+
+    # (c) The tolerance is honest, not a fudge: it must be tight enough that
+    # the WRONG ruler fails it.
+    assert worst < UNIT_TOLERANCE, f"max delta {worst:.3g} at {worst_unit}"
+    assert checked > 1000, "too few units checked for this to mean anything"
+
+    # (b) THE NEGATIVE CONTROL. Weighting the per-function *fuzzy* values must
+    # NOT reproduce the unit measure — otherwise the test passes no matter
+    # which ruler objdiff actually used, and proves nothing.
+    fuzzy_agree = 0
+    for u in units:
+        fns = u.get("functions") or []
+        if not (u.get("measures", {}).get("total_code") or 0):
+            continue
+        alt = _weighted(fns, "fuzzy_match_percent")
+        stored = u["measures"].get("fuzzy_match_percent") or 0.0
+        if alt is not None and abs(float(stored) - alt) <= UNIT_TOLERANCE:
+            fuzzy_agree += 1
+    assert fuzzy_agree < agreed, (
+        "weighting the FUZZY values agrees just as often — this test cannot "
+        "tell the two rulers apart and is therefore not evidence")
+
+
+@needs_the_report
+def test_the_471_claim_is_gone_and_the_replacement_is_computable():
+    """The number in the comment must be one this file can produce."""
+    src = open(os.path.join(REPO, "scripts", "analysis", "compare_progress.py"),
+               errors="replace").read()
+    units = json.load(open(REPORT)).get("units", [])
+    total = len(units)
+    skipped = sum(1 for u in units
+                  if not (u.get("measures", {}).get("total_code") or 0))
+
+    # The historical claim may be QUOTED -- a refuted number that goes
+    # unrecorded gets re-filed -- but it must never stand as a live one. Every
+    # occurrence has to sit inside the paragraph that refutes it.
+    for m in re.finditer(r"471", src):
+        window = src[max(0, m.start() - 400):m.start() + 400]
+        assert "used to claim" in window or "NOTHING IN THIS REPO COMPUTES" in window, (
+            "a bare '471' is back as a live verification count")
+    assert f"{total:,}" in src, (
+        f"the comment must state the real unit total ({total:,})")
+    assert f"{total - skipped:,}" in src, (
+        f"...and the real checked count ({total - skipped:,})")
+    assert str(skipped) in src, f"...and why {skipped} were skipped"

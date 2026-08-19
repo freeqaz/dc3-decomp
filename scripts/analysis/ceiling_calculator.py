@@ -644,9 +644,21 @@ def print_summary(results: list[FunctionCeiling], db_stats: dict,
               f"({total_unfixable/m*100:.1f}%)   incl. immediate + insert/delete + other")
         print(f"  Unfixable (OPTIMISTIC):   {hard_unfixable:6d} "
               f"({hard_unfixable/m*100:.1f}%)   regswap/merged/reloc/sched/save-restore only")
-        print(f"    ↳ the gap between them ({agg.soft_unfixable + agg.other} mismatches: "
-              f"{agg.immediate} immediate, {agg.insert_delete} insert/delete, "
-              f"{agg.other} other) is a JUDGEMENT, not a measurement.")
+        # PRINT THE PERCENTAGE. This line used to give the gap as a bare count
+        # of three terms and leave the reader to divide -- and commit 547b459f3
+        # duly did it by hand and got it wrong, publishing
+        # "35,039 + 12,424 + 3,203 = 47.3% of ALL mismatches" when the sum is
+        # 68.4%; 47.3% is insert_delete ALONE. A tool that computes a
+        # denominator and then withholds the ratio is inviting exactly that.
+        gap = agg.soft_unfixable + agg.other
+        print(f"    ↳ the gap between them: {gap} mismatches = {gap/m*100:.1f}% "
+              f"of all {m}, made up of "
+              f"{agg.immediate} immediate ({agg.immediate/m*100:.1f}%), "
+              f"{agg.insert_delete} insert/delete ({agg.insert_delete/m*100:.1f}%), "
+              f"{agg.other} other ({agg.other/m*100:.1f}%).")
+        print(f"      Those are shares of the SAME denominator, so they add to "
+              f"the gap -- do not quote one of them as the sum. This is a "
+              f"JUDGEMENT, not a measurement.")
         print(f"  Fixable (pattern-matched): {total_fixable:6d} ({total_fixable/m*100:.1f}%)")
 
     # Ceiling distribution

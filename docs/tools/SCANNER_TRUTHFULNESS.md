@@ -84,12 +84,47 @@ sys.exit(cov.emit())
 | `0` | full census: `universe == examined + sum(drops)`, nothing truncated |
 | `3` | `TRUNCATED` — a cap cut rows out of the **analysis**. `--allow-truncation` downgrades to 0; the JSON still says `truncated: true` |
 | `4` | `UNACCOUNTED` — `universe != examined + sum(drops)`. **Nothing downgrades this.** |
-| `5` | `EXIT_NO_INPUT` — the corpus was empty, an input was missing, or a sub-tool failed. Raised by the scanner (`sys.exit(cov.emit() or EXIT_NO_INPUT)`), not by `emit()` |
+| `5` | `EXIT_NO_INPUT` — the corpus was empty, an input was missing, a sub-tool failed, **or `require_examined()` was set and nothing was examined** |
+| `6` | `EXIT_NO_DENOMINATOR` — `universe()` was never called and no reason was given. See below |
 
 Exit 4 is the part with teeth. It fires whenever some bare `continue` skipped
 `drop()`, which means it catches the *next* instance of this bug without anyone
 having anticipated the specific field or filter involved. An unbalanced
 denominator is a scanner bug, never a user choice.
+
+**And exit 4 had a one-line bypass.** `unaccounted` is
+`universe - (examined + drops)`, so with no `universe()` call it is `None` —
+falsy. **Omitting the call entirely** therefore disarmed the check that catches
+every future instance of this bug class, and `emit()` returned **0** while
+stdout said `out of None rows` and the banner said `NO DENOMINATOR`. One
+deleted line restored the old silence, and nothing objected. Closed at both
+ends:
+
+- **runtime**: `emit()` returns `EXIT_NO_DENOMINATOR` (6). `universe_unknown(reason)`
+  is the honest escape hatch — it still exits 0 and prints the stated reason,
+  so *forgetting* is now distinguishable from *admitting*.
+- **static**: `honesty_lint` `E3` flags a `CoverageReport` built in a file that
+  mentions neither `universe(` nor `universe_unknown(`. Matched per **file**,
+  not per variable, because a scanner may legitimately build the report in one
+  function and declare the universe in another.
+
+**Balanced is not the same as non-empty.** Drop every row for good reasons and
+`universe == examined + drops` holds at `examined == 0` — arithmetically clean,
+epistemically empty. `cov.require_examined(note)` makes that `EXIT_NO_INPUT`;
+set it on a code path whose purpose is to CHECK something, not on a `--stats`
+survey that legitimately checks nothing.
+
+**What the tripwire still cannot see.** It catches an *uncounted* row. It does
+not catch a **twice-counted** one — a site counted into the universe twice and
+disposed twice balances perfectly (§5.1) — and it says nothing about whether a
+drop's stated **reason** is true. Both of those need their own controls.
+
+**The ratchet covers about half the surface.** Only **24 of the 54** scripts
+under `scripts/analysis/` import `CoverageReport` (measured at `903be2231`;
+`grep -l CoverageReport scripts/analysis/*.py | wc -l`) — and several of the
+uncovered ones are scripts the audit table above *cleared*. A ✅ in §4 that rests on reading the code is a weaker
+claim than one that rests on the runtime contract, and the two are not
+distinguished in that table.
 
 `coverage.py` also carries `like_escape()` / `like_prefix_clause()` so the
 `'??_%'` wildcard defect has one correct implementation to reach for.
@@ -142,9 +177,17 @@ python3 scripts/analysis/determinism_check.py         # 0 = every scanner agreed
 python3 -m pytest scripts/analysis/tests/ -q
 ```
 
-State as of the 2026-08-19 pass: **0 lint errors** (39 W-rule warnings remain as
-a backlog), **9/9 scanners agree with themselves on a non-empty output**, and
-**248 tests pass**, of which 155 are the negative controls added here.
+State at `903be2231` (merge pass, 2026-08-19): **0 lint errors, 42 W-rule
+warnings** over 223 files; **9/9 scanners agree with themselves on a non-empty
+output**; **293 tests collected**, 291 passing with the DTA corpus present and
+289 passing + 2 corpus-gated skips without it.
+
+The earlier line here said "**248 tests pass**", and that number was never
+reproducible — the lane tip collects **249**, of which only 232 pass in a bare
+worktree (17 skip for want of a built tree). A pass-count is a property of the
+ENVIRONMENT, not of the suite; quoting one as a fixed fact is the same mistake
+as quoting a truncated census as a total. State the collected count, then state
+what each environment does with it.
 
 ### Negative controls, not tautologies
 
@@ -178,42 +221,58 @@ doing nothing proves nothing.** The harness now treats an empty output, an
 
 | script | what it could silently drop | fixed? |
 |---|---|---|
-| `data_symbol_scan.py` | `--max-symbols` default 4000 against an 18,549-symbol universe (verified: 2,224 units, 50,160 data symbols, 18,549 non-string) | ✅ default → 0; `TRUNCATED` banner + exit 3; every drop counted; results sorted |
+| `data_symbol_scan.py` | `--max-symbols` default 4000 against an 18,549-symbol universe (verified at `903be2231`: 2,224 units, 50,160 data symbols, 18,549 non-string) | ✅ default → 0; `TRUNCATED` banner + exit 3; every drop counted; results sorted. **Findings are a strict superset** (20 → 73 candidate-bugs, 0 only-old) but it is **3.2× slower**: measured 246 s capped at 4,000 vs **790 s** uncapped. Budget ~15 min, not 4 — an agent with a 10-minute timeout will read a killed run as a broken scanner. |
 | `fake_impl_scan.py` | the ~1,024-row "no body at all" tier behind `pct is None` | ✅ (2026-08-19, pre-existing) — normalized fallback + a counted skip |
 | `certify_floor.py` | 6,835 functions behind `NOT LIKE '??_%'` | ✅ (pre-existing) — and it carries a two-path SQL-vs-Python `denominator_self_check` that exits non-zero on disagreement. **The control the other scripts lack; clone it.** |
 | `audit_normalized_masking.py` | 16,920 of 48,344 rows behind `if n is None or raw is None: continue`; `norm_sym` stripping the class qualifier so two different classes' `Load` cancel out — fail-open in the tool's own headline category | ✅ |
-| `batch_pattern_scan.py` | 16,920 rows on `pct is None`, **and** `--limit` default 200 applied *after* a descending sort, so only 99.58–99.90 was ever examined and the entire 90.0–99.58 band was invisible (1,551 of 1,751 dropped) | ✅ |
+| `batch_pattern_scan.py` | 16,920 rows on `pct is None`, **and** `--limit` default 200 applied *after* a descending sort, so only 99.58–99.90 was ever examined and the entire 90.0–99.58 band was invisible (1,551 of 1,751 dropped) | ✅ default → 0 (200 → 1,751 inspected, 1 → 115 hits) — but **8.9× slower**, ~2.2 min → ~19.3 min. Two breaks shipped with that fix and are corrected: `--json`'s top level flipped **list → dict** (a silent break — a dict iterates its keys rather than raising; the list is back, `--json-envelope` opts into the object), and an explicit `--limit N` began **exiting 3**, which made every doc'd recipe that passes one look broken (`docs/plans/compiler-instrumentation.md:900` passes `--limit 500`). An explicit `--limit` now exits 0 with the TRUNCATED banner and `truncated: true` intact; `--no-allow-explicit-limit` restores exit 3 for CI. |
 | `findarray_receiver_scan.py` | a relevance gate counting only `FindArray` while `LOOKUP_METHODS` has six entries (39 files, 30.7% of the relevant set); a relative default path making any non-root cwd print "no patterns found"; `0 SHADOW_PARENT` printed while 14 existed | ✅ coverage + loud path error; the gate widening left as `TODO(heuristic)` |
 | `vtable_dispatch_scan.py` | 16,920 rows uncounted — *substantively* defensible, but never stated | ✅ (its cap handling was already honest — `--limit` default 0, `capped` in both stderr and JSON) |
 | `header_cluster.py` | 16,920 rows behind a `pct <= 0` guard meant for true zeros, of which there are none; `Loaded 2241 non-complete functions` where the true population is 19,193 | ✅ |
 | `inlining_catalog.py` | `.get("fuzzy_match_percent", 100.0)` — the most optimistic default — then `if pct >= 100: continue` | ✅ |
-| `function_health.py` | **the whole tool**: batch SQL named `source_path`/`match_percent`, neither of which exists; `except Exception: return []` turned the `OperationalError` into `No functions found matching criteria.` | ✅ query repaired, failures propagate |
+| `function_health.py` | **batch mode**: SQL named `source_path`/`match_percent`, neither of which exists; `except Exception: return []` turned the `OperationalError` into `No functions found matching criteria.` to every query ever asked. **Single-symbol mode** never worked either: it shells out to `objdiff-cli diff --symbol <s>`, but the symbol is POSITIONAL. **Blast radius ≈ zero** — the only reference was a doc marked *Planned* whose recipe passed a flag the tool never had. | ✅ batch query repaired, failures propagate. Single-symbol left as `TODO(repair)` on purpose: fixing the call changes what the tool FINDS. `docs/tools/INDEX.md` now says the mode is broken instead of advertising it. Its `insert_delete` classification — the defect the lane fixed in `ceiling_calculator` — survived here and fed an `at_limit` verdict; now **contested**, so a hard floor still certifies and this class no longer does. |
 | `compare_progress.py` | function-level comparison on `fuzzy` only (395 rows are `normalized==100, fuzzy<100`); base-only and current-only keys dropped with no count | ✅ (its `Regressions (N functions, showing top M)` line was already the right pattern) |
 | `name_charge_census.py` | 16,780 rows / 5,129,540 B behind `F(None) → 0.0` colliding with a real 0.0; examined population was only 2,238 rows | ✅ |
 | `scope_index_census.py` | an unsorted recursive `glob` into a last-write-wins dict: **568 of 6,675 (function, static) pairs hold conflicting scopes**, so those functions' verdicts flipped between runs | ✅ |
 | `ceiling_calculator.py` | `insert_delete` (the most *fixable* class) counted as unfixable, systematically manufacturing "at limit"; 1,231 `current_percent IS NULL` rows silently outside the band | ✅ |
 | `reclassify_at_limit.py` | funnel 3,796 → 1,701 → 1,517 with only `1517 candidates` printed; no `excluded = 0`; `UPDATE ... WHERE symbol = ?` **with no unit qualifier** | ✅ |
 | `remaining_work.py` | headline `140 functions` where 363 fell to a hardcoded skip list and 314 to `--min-bytes 500` — 83% of ~817; plus `total = done + partial + len(stubs)` double-counting partials in 216 of 218 units | ✅ |
-| `dta_access_audit.py`, `dta_hierarchy_scan.py`, `dta_dataflow.py`, `dta_trace_validator.py` | **missing input ⇒ clean verdict**: `orig-assets/` is absent from every worktree, so all four print "No … issues found." having checked nothing | ✅ |
+| `dta_access_audit.py`, `dta_hierarchy_scan.py`, `dta_trace_validator.py` | **missing input ⇒ clean verdict**: `orig-assets/` is absent from every worktree, so they print "No … issues found." having checked nothing | ✅ |
+| `dta_dataflow.py` | the same defect — and this row was ✅ for a file **nobody had touched**. Byte-identical blob (`14e2135036…`) at the merge base, at the lane tip and on `main`. The lane's own commit body says "all **three**". | ✅ *(2026-08-19, in the merge pass)* — same `empty_corpus_banner`, same `INCONCLUSIVE` on stdout, same exit 5. Measured before: corpus absent → **28 B** `No DTA access issues found.` exit 0; corpus present → **50,302 B** `Total: 30 findings` exit 0 |
 | `home_store_census.py`, `frame_deficit_census.py`, `report_absent_census.py` | uncounted unit/body skips (1,245 units; 65,661 of 114,857 unreadable target frames); unsorted `os.walk` + no `ORDER BY` | ✅ |
 | `reset_false_complete.py` | `LIKE '%base_size=0%'` — unescaped `_`, on the predicate of an `UPDATE` | ✅ |
-| `patches/apply_safe.py`, `unicorn/refresh_frontier.py`, `reloc_strict_classify.py`, `decomp_orchestrate.py` | `--limit` truncating a patch queue / a frontier sweep / a candidate census with no notice | ✅ |
+| `patches/apply_safe.py`, `unicorn/refresh_frontier.py`, `decomp_orchestrate.py` | `--limit` truncating a patch queue / a frontier sweep with no notice | ✅ |
+| `reloc_strict_classify.py` | `--limit` truncating a candidate census with no notice. **This script was listed in BOTH tables**, and "honest already" was false: the lane modified it, and `honesty_lint` raises `E2` on the pre-lane form (`cands = cands[: args.limit]`, line 349). The first fix was also only half of one — see §4.1 | ✅ *(completed 2026-08-19)* — `candidates_total` is the PRE-truncation figure, `candidates_diffed` the post; both stdout lines carry `N of M`; the `sp is not None` silent drop is three counted slugs; exits via `cov.emit()` |
 | `find_hidden_work.py`, `batch_check.py`, `sync_objdiff.py` | fuzzy-ruler writes to `verdict`; `current_percent IS NOT NULL` hiding never-measured COMPLETE rows; a substring SDK filter swallowing 4 authorable units; `elif match_pct > 0` leaving exactly-0% rows in no bucket at all | ✅ |
 
 ### Honest already — the premise was wrong for these
 
 | script | why |
 |---|---|
-| `reloc_strict_classify.py` | every candidate lands in exactly one labelled class including `error`; `--limit` defaults to 0 and is documented "debug"; denominators on stderr, stdout **and** in the JSON; display slices are named `_sample` |
 | `progress_metrics.py` | prints **both** rulers side by side with the canonical one marked, and *reads* `functionRelocDiffs` from the report rather than hardcoding it, with the comment "or this document will confidently state the wrong ruler" |
 | `certify_floor.py` | see above — the `denominator_self_check` |
 | `report_absent_census.py` | a denominator at every stage plus a recorded load-bearing **negative**, and a docstring that says "Re-run this before ever concluding otherwise" |
 | `fold_proof.py` | prints every verdict class including the ones that conclude nothing; three explicit refusals-to-certify (vacuity guard, cheap-identity guard, `COMDAT_SELECTION_MISSING`); `UNDECIDABLE` is first-class, not a fallthrough |
-| `grindarray_divergence.py` | full 64×256×256 population, no sampling, and it prints an explicit negative result. (Its trailing `CONCLUSION:` block was an unconditional `print` of a fixed string — noted, not load-bearing.) |
-| `dta_trace_validator.py` | the only DTA tool that prints a real denominator on **both** the clean and the dirty outcome, and that counts unresolvable rows instead of vanishing them |
+| `grindarray_divergence.py` | full 64×256×256 population, no sampling, and it prints an explicit negative result. **Its trailing `CONCLUSION:` block was NOT "noted, not load-bearing" — see §4.1. Now gated; the row stands only for the population claim.** |
 | `scan_behavioral_idioms.py` | no caps, no slices, sorted `rglob`, and a git failure printed to stderr rather than swallowed |
 | `frame_deficit_census.py` (`--max-percent` default **101.0**) | defaulted *above* 100 on purpose, with the comment "so the filter never silently drops the function under test". The corrected form of this whole bug class. |
 | `lp64_scanner.py` (worker pool) | uses `Pool(initializer=...)` so each process fully initialises before any work item — the **correct** pattern, not the `data_symbol_scan` race |
+
+---
+
+## 4.1 Corrections to THIS TABLE, found in the merge review
+
+Three ✅ rows above were false, and a lane whose whole subject is "do not print
+a clean verdict you did not earn" cannot ship those. All three are now fixed in
+the tools and corrected above; recorded here because a wrong diagnosis that
+goes unrecorded gets re-filed.
+
+| row | what the table said | what was true |
+|---|---|---|
+| `dta_dataflow.py` | ✅, grouped with its three siblings | **Never touched.** Same sha256 at merge-base, lane tip and `main`. Still had `if p.exists():` with no `else` and a bare `print("No DTA access issues found.")`. Same script, corpus the only variable: **28 B all-clear, exit 0** vs **50,302 B / `Total: 30 findings`, exit 0**. `honesty_lint` emits nothing for that shape. The lane's own commit body says "all *three*" — the table said four. |
+| `reloc_strict_classify.py` | in **both** the Fixed and the Honest-already table | Cannot be both, and the second is false: the lane modified it and `E2` fires on the pre-lane form. The fix was half a fix — stdout printed `candidates: 5` and the JSON `candidates_total: 5`, both POST-truncation, with the real denominator only on **stderr**, which is the stream a redirect drops. It also exited 0 when truncated, and carried an uncleared silent drop (`sp is not None` — a row scored lenient-100 whose strict score is *absent*, which is not the same as strict-clean). |
+| `grindarray_divergence.py` | "Its trailing `CONCLUSION:` block was an unconditional `print` of a fixed string — **noted, not load-bearing**" | The population claim is true; "not load-bearing" is not. Sabotage every `x64_op` to return `(ppc + 1) & 0xFF` and the script prints `[DIVERGENCE FOUND]`, `[NO MATCH]` and `*** DIVERGE ***` — then, sixty lines later, prints the conclusion **byte-identical to the clean run** (1,296 B, empty diff), exit 0 both times, still saying *"Investigate the key derivation pipeline BEFORE GrindArray."* A hardcoded verdict that routes the next engineer is load-bearing by definition. Now gated on the computed result — specifically on the ops that **fire**, since op5 diverges and never fires, which is the conclusion's own premise. |
+| `dta_trace_validator.py` | in **both** tables | The Fixed row is correct; the duplicate is deleted. |
 
 ---
 
@@ -236,6 +295,28 @@ premise did not hold.
 And one found in this work's own instrument: the first `determinism_check.py`
 reported **"8/8 scanners agreed with themselves"** while three of the eight had
 produced zero bytes. See §3.
+
+### 5.1 Numbers this document and its commits got wrong
+
+Measured on tree `903be2231` unless stated. **Every census count below carries
+a tree SHA**, because several drifted inside a single day — and because
+`build/373307D9/report.json` is a build artifact, not a checked-in fact: the
+worktree's copy (15,204,230 B, mtime 07:27) selects **395** audit targets where
+the main checkout's (15,213,836 B, mtime 09:42) selects **384**.
+
+| claim | where it came from | what is true |
+|---|---|---|
+| commit `547b459f3`: "35,039 + 12,424 + 3,203 = **47.3 %** of ALL mismatches" | `ceiling_calculator.py` printed the gap as a bare COUNT of three terms and left the reader to divide. The commit divided by hand. | The three-term sum is **68.4 %** (50,666 of 74,051). **47.3 % is `insert_delete` alone** (35,039). The other two are 16.8 % and 4.3 %. Cross-check from the commit's own figures: 73,600 − 22,934 = 50,666. Re-measured on a DB snapshot at `903be2231`: 12,394 / 35,000 / 3,201 of 73,874 → gap 68.5 %, insert_delete 47.4 % — same ordering, ~0.1 % drift. **Fixed at the source**: the tool now prints every share against the stated denominator, so nobody has to divide by hand again. |
+| `compare_progress.py:74` and `:247`: "verified **471/471** units" | Hand-written. Nothing in this repo computes 471; nine candidate derivations from the report all miss it. | **2,055 / 2,055**, of **2,224** units — 169 skipped for `measures.total_code == 0` (empty `functions`, so the weighted mean is 0/0 and undefined). Tolerance **1e-5**; max \|Δ\| **7.27e-6** at `default/system/os/HDCache`, f32 serialisation. At 1e-6 only 1,646 pass, so the tolerance is honest rather than a fudge. **Caveat that must travel with it:** 1,085 of the 2,055 carry no `fuzzy_match_percent` key at all (serde omits the 0.0 default) and agree only under "absent ⇒ 0.0"; require the key and it covers 970. It is now `test_unit_measure_really_is_the_normalized_weighted_mean`, with a negative control — weighting the per-function *fuzzy* values agrees on only 1,570 — so the check discriminates instead of passing vacuously. |
+| "56 `audit_normalized_masking` verdicts flipped BENIGN→REVIEW" | The lane. | **Correct — the merge review's challenge to it was refuted.** Both sides re-run pinned to the same `objdiff-cli` (4.2.3 `88b425bc3bad-dirty`): pre-lane **251 BENIGN / 144 REVIEW**, post-lane **195 / 200**, per-symbol join over 395 common keys giving **56 BENIGN→REVIEW and 0 REVIEW→BENIGN** — strictly one-directional. Reproduced exactly on a second run. The competing 250/145 → 185/210 (65 flips) is not reproducible here; the likely cause is a standing hazard in the tool rather than an error by either party — **`report.json` is stale relative to the build**, mtime 07:27 against 989 base `.obj` files rebuilt by 08:01, so the audit *selects* its 395 targets from one point in time and *classifies* them by diffing objects from another. |
+| DTA coverage "2.2 %" and "21 %" | `CoverageReport.render()`, on site-level reports that counted site EVENTS. | Both **double-counted**. `access_audit` walks each line with `CHAINED_RE` and disposes, then `_check_key_based_accesses` re-walks the same lines with the same regex and disposes again: 1,679 events over **1,658 distinct** sites, 21 doubled, 8 examined twice → **29 / 1,658 = 1.75 %**. `hierarchy_scan`'s assign and find passes both count the same textual call: 331 events over **274 distinct**, 57 doubled → **70 / 274 = 25.5 %**. They move in **opposite directions**, so the pair was never comparable — and the denominators do not measure the same thing (access-sites includes bare positional `x->Int(N)`; call-sites is `Find*()` only). Fixed in both scanners. |
+| `dta_hierarchy_scan` drops 106 sites "checked separately via assign_checks" | The skip predicate matched the bare prefix `\w+ = receiver->FindArray`; `ASSIGN_FINDARRAY_RE`, which actually feeds `assign_checks`, requires the closing paren right after the key — **one-argument `FindArray` only**. | **57** are captured by that regex; **49 are captured by nothing** (every one a two-argument call), and one more — `def = def->FindArray("editor")`, `Flow.cpp:701` — is captured but dropped as circular before reaching `assign_checks`, so **50 of 106 are re-checked by nothing at all**. A drop with a false *reason* is worse than an uncounted drop: an uncounted drop is invisible, this one asserted the population had been handled. Now two slugs, the honest one reading "Nothing checks these". |
+
+**Double-counting is invisible to the exit-4 tripwire.** Each event bumps the
+universe and lands in exactly one of examined/dropped, so a twice-counted site
+balances perfectly. The contract catches an *uncounted* row; it cannot catch a
+*twice-counted* one, and it says nothing about whether a drop's stated reason is
+true. Both now have their own controls.
 
 ---
 
