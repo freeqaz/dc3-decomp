@@ -114,6 +114,52 @@ bool RndTexBlender::MakeWorldSphere(Sphere &sphere, bool b) {
         return false;
 }
 
+void RndTexBlender::DrawBlendList(
+    const std::vector<std::pair<RndTexBlendController *, float> > &list, TexState state
+) {
+    RndTex *texmap = state == 2 ? mNearMap : mFarMap;
+    if ((texmap || (state == 8)) && !list.empty()) {
+        mRenderedStates |= state;
+        RndMat *work = TheShaderMgr.GetWork();
+        Transform xfm;
+        xfm.Reset();
+        TheShaderMgr.SetVConstant(kVS_ViewProjMatrix, Hmx::Matrix4(xfm));
+        TheShaderMgr.SetTransform(xfm);
+        SetupMaterial(work, texmap);
+        work->SetBlend(BaseMaterial::kBlendSrcAlpha);
+        float alpha = -1;
+        FOREACH (it, list) {
+            RndTexBlendController *blendCtrlr = it->first;
+            float f17 = it->second;
+            if (state == 8) {
+                work->SetDiffuseTex(blendCtrlr->Tex());
+            }
+            if (f17 != alpha || state == 8) {
+                work->SetAlpha(f17);
+                RndShader::SelectConfig(work, (ShaderType)0x16, false);
+                alpha = f17;
+            }
+            RndMesh *mesh = blendCtrlr->Mesh();
+            if (mesh->IsSkinned()) {
+                MILO_NOTIFY_ONCE(
+                    "%s: \"%s\" should not be a skinned mesh",
+                    PathName(this),
+                    mesh->Name()
+                );
+            }
+            // The shipped build calls through mGeomOwner (mesh + 0x148), not through
+            // the mesh itself: 'lwz r3, 0x148(r26)' before the vtable load.
+            mesh->GetGeomOwner()->DrawFacesInRange(0, -1);
+        }
+        work->SetAlpha(1);
+        if (RndCam::Current()) {
+            TheShaderMgr.SetVConstant(
+                kVS_ViewProjMatrix, RndCam::Current()->GetViewProjMatrix()
+            );
+        }
+    }
+}
+
 void RndTexBlender::DrawShowing() {
     if (TheRnd.GetDrawMode() == Rnd::kDrawNormal
         && ((TheRnd.ProcCmds() & kProcessWorld) != 0 || TheRnd.ProcCmds() == 0)
@@ -188,77 +234,8 @@ void RndTexBlender::DrawShowing() {
                 }
                 std::sort(nearList.begin(), nearList.end(), BlendSorter());
                 std::sort(farList.begin(), farList.end(), BlendSorter());
-                RndTex *nearMap = mNearMap;
-                if (nearMap && !nearList.empty()) {
-                    mRenderedStates |= 2;
-                    RndMat *work = TheShaderMgr.GetWork();
-                    Transform xfm;
-                    xfm.Reset();
-                    TheShaderMgr.SetVConstant((VShaderConstant)4, Hmx::Matrix4(xfm));
-                    TheShaderMgr.SetTransform(xfm);
-                    SetupMaterial(work, nearMap);
-                    work->SetBlend(BaseMaterial::kBlendSrcAlpha);
-                    float alpha = -1;
-                    FOREACH (it, nearList) {
-                        RndTexBlendController *blendCtrlr = it->first;
-                        float f17 = it->second;
-                        if (f17 != alpha) {
-                            work->SetAlpha(f17);
-                            RndShader::SelectConfig(work, (ShaderType)0x16, false);
-                            alpha = f17;
-                        }
-                        RndMesh *mesh = blendCtrlr->Mesh();
-                        if (mesh->IsSkinned()) {
-                            MILO_NOTIFY_ONCE(
-                                "%s: \"%s\" should not be a skinned mesh",
-                                PathName(this),
-                                mesh->Name()
-                            );
-                        }
-                        mesh->DrawFacesInRange(0, -1);
-                    }
-                    work->SetAlpha(1);
-                    if (RndCam::Current()) {
-                        TheShaderMgr.SetVConstant(
-                            (VShaderConstant)4, RndCam::Current()->GetViewProjMatrix()
-                        );
-                    }
-                }
-                if (mFarMap && !farList.empty()) {
-                    mRenderedStates |= 4;
-                    RndMat *work = TheShaderMgr.GetWork();
-                    Transform xfm;
-                    xfm.Reset();
-                    TheShaderMgr.SetVConstant((VShaderConstant)4, Hmx::Matrix4(xfm));
-                    TheShaderMgr.SetTransform(xfm);
-                    SetupMaterial(work, mFarMap);
-                    work->SetBlend(BaseMaterial::kBlendSrcAlpha);
-                    float alpha = -1;
-                    FOREACH (it, farList) {
-                        RndTexBlendController *blendCtrlr = it->first;
-                        float f17 = it->second;
-                        if (f17 != alpha) {
-                            work->SetAlpha(f17);
-                            RndShader::SelectConfig(work, (ShaderType)0x16, false);
-                            alpha = f17;
-                        }
-                        RndMesh *mesh = blendCtrlr->Mesh();
-                        if (mesh->IsSkinned()) {
-                            MILO_NOTIFY_ONCE(
-                                "%s: \"%s\" should not be a skinned mesh",
-                                PathName(this),
-                                mesh->Name()
-                            );
-                        }
-                        mesh->DrawFacesInRange(0, -1);
-                    }
-                    work->SetAlpha(1);
-                    if (RndCam::Current()) {
-                        TheShaderMgr.SetVConstant(
-                            (VShaderConstant)4, RndCam::Current()->GetViewProjMatrix()
-                        );
-                    }
-                }
+                DrawBlendList(nearList, kTexNear);
+                DrawBlendList(farList, kTexFar);
                 DrawBlendList(customList, (TexState)8);
                 cam->SetTargetTex(nullptr);
                 prevCam->Select();
@@ -277,53 +254,6 @@ RndMat *RndTexBlender::SetupMaterial(RndMat *mat, RndTex *tex) {
     mat->SetTexWrap(kTexWrapClamp);
     mat->SetDiffuseTex(tex);
     return mat;
-}
-
-void RndTexBlender::DrawBlendList(
-    const std::vector<std::pair<RndTexBlendController *, float> > &list,
-    TexState state
-) {
-    RndTex *texmap = state == 2 ? mNearMap : mFarMap;
-    if ((texmap || (state == 8)) && !list.empty()) {
-        mRenderedStates |= state;
-        RndMat *work = TheShaderMgr.GetWork();
-        Transform xfm;
-        xfm.Reset();
-        TheShaderMgr.SetVConstant(kVS_ViewProjMatrix, Hmx::Matrix4(xfm));
-        TheShaderMgr.SetTransform(xfm);
-        SetupMaterial(work, texmap);
-        work->SetBlend(BaseMaterial::kBlendSrcAlpha);
-        float alpha = -1;
-        FOREACH (it, list) {
-            RndTexBlendController *blendCtrlr = it->first;
-            float f17 = it->second;
-            if (state == 8) {
-                work->SetDiffuseTex(blendCtrlr->Tex());
-            }
-            if (f17 != alpha || state == 8) {
-                work->SetAlpha(f17);
-                RndShader::SelectConfig(work, (ShaderType)0x16, false);
-                alpha = f17;
-            }
-            RndMesh *mesh = blendCtrlr->Mesh();
-            if (mesh->IsSkinned()) {
-                MILO_NOTIFY_ONCE(
-                    "%s: \"%s\" should not be a skinned mesh",
-                    PathName(this),
-                    mesh->Name()
-                );
-            }
-            // The shipped build calls through mGeomOwner (mesh + 0x148), not through
-            // the mesh itself: 'lwz r3, 0x148(r26)' before the vtable load.
-            mesh->GetGeomOwner()->DrawFacesInRange(0, -1);
-        }
-        work->SetAlpha(1);
-        if (RndCam::Current()) {
-            TheShaderMgr.SetVConstant(
-                kVS_ViewProjMatrix, RndCam::Current()->GetViewProjMatrix()
-            );
-        }
-    }
 }
 
 DataNode RndTexBlender::OnGetRenderTextures(DataArray *) {
