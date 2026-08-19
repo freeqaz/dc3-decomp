@@ -67,9 +67,16 @@ now identical *and* relocation-free, which is exactly what the cheapness guard i
 ## Whole-build effect: zero, and that is the finding
 
 Predicted 2 measurable rows (the two fold classes whose SPLIT name is one of the
-wrong bodies). Observed 0. Against `eda64e956`, `report.json` moves by
-**0 regressions / 0 new matched functions**; the only deltas are four 32-byte `fn_*`
-EH funclets in `HamProfile`/`OptionsPanel` that objdiff re-paired.
+wrong bodies). Observed 0. Measured twice -- against the branch point `eda64e956`
+and again after rebasing onto `55a4f5491` (which already contains #112's
+ICF-survivor-name lane and the `fold_proof --include-data` writable-data fix) --
+`report.json` moves by **0 regressions / 0 new matched functions** both times; the
+only deltas are four 32-byte `fn_*` EH funclets in `HamProfile`/`OptionsPanel` that
+objdiff re-paired (three canonical, one fuzzy-only).
+
+The `fold_proof` change on main (`a25466c9c`) does not touch this lane: it refuses
+identical WRITABLE **data** COMDATs, and all 135 rows here are `kind=code`. Re-run
+on the rebased tree with the new tool, the census is unchanged: 135 -> 5.
 
 The disagreement is structural, not a measurement error:
 
@@ -98,6 +105,20 @@ loop) but it took `ShaderOptions::GenerateMacros` from 100.0% to 97.3% normalize
 **-3612 B whole-build** -- a LINKER_MERGED row traded for 3.6 KB of measured code.
 Reverted; the reasoning lives in `src/system/rndobj/ShaderOptions.h` so it is not
 retried. Same shape as the rejected `kArkBlockSize const` experiment.
+
+## Native gate
+
+`scripts/check_native_compiles.sh`: PASS (`dc3-native` + `milo-tests` link).
+`milo-tests` run from `orig-assets/`: **357 passed, 0 failed**, remainder skipped.
+This matters because seven of the fixes change runtime behaviour, not just codegen
+-- `HamUI::OnMsg(ConnectionStatusChangedMsg)` loses a `TriggerEvent` call,
+`CharServoBone::PollDeps` stops pushing itself onto the dependency list,
+`UIListState::SetScrollPastMaxDisplay` starts writing its member,
+`XboxEnumeration::IsEnumerating` reads a different field, and
+`WorldDir::MatOverride`'s writer drops a field from the save stream.
+`ObjPtrList<T>::RefOwner/Replace` keep their walking bodies under `HX_NATIVE`
+precisely because the port has not been proven not to reach them through an
+`ObjRefOwner*`.
 
 ## The 135, by fold class
 
