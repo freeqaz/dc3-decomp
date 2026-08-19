@@ -3,7 +3,7 @@
 > **Auto-generated** by `scripts/progress_metrics.py`.  Do not edit manually.
 > Re-generate with `python3 scripts/progress_metrics.py --markdown`.
 
-> Report built: **2026-08-19 02:58** · objdiff-cli `4.2.3` (commit `88b425bc3bad-dirty`) · relocation mode `functionRelocDiffs=name_check`.
+> Report built: **2026-08-19 03:19** · objdiff-cli `4.2.3` (commit `88b425bc3bad-dirty`) · relocation mode `functionRelocDiffs=name_check`.
 > A number without those three facts is not comparable to another number.
 
 ## Why there are three headline numbers
@@ -30,9 +30,9 @@ they cannot be confused.
 
 | Metric | Value | Notes |
 |--------|-------|-------|
-| **XDK-diluted fuzzy** | 43.60 % | `matched_code_percent` in report.json measures root node; counts vendor bytes in denominator |
-| **Authorable fuzzy** | 78.15 % | Raw matched-code bytes over authorable-only total; best apples-to-apples byte signal |
-| **Authorable normalized %** ✅ | **91.33 %** | **CANONICAL.** Functions where `match_percent_normalized == 100` over authorable total. Forgives register permutation / benign reloc-addend, but NOT wrong constants, offsets, or vtable slots |
+| **XDK-diluted fuzzy** | 43.62 % | `matched_code_percent` in report.json measures root node; counts vendor bytes in denominator |
+| **Authorable fuzzy** | 78.19 % | Raw matched-code bytes over authorable-only total; best apples-to-apples byte signal |
+| **Authorable normalized %** ✅ | **91.36 %** | **CANONICAL.** Functions where `match_percent_normalized == 100` over authorable total. Forgives register permutation / benign reloc-addend, but NOT wrong constants, offsets, or vtable slots |
 
 ## Relocation-mode caveat
 
@@ -57,22 +57,22 @@ numbers after it.  See
 | | Value |
 |---|---|
 | Total authorable code | 6,343,156 bytes (6.34 MB) |
-| Matched code (raw bytes) | 4,957,448 bytes → **78.15 %** |
-| Matched fns (fuzzy == 100) | 29,029 / 32,213 → 90.12 % |
-| **Matched fns (normalized == 100)** | **29,421 / 32,213 → 91.33 %** |
-| Complete units (all fns norm==100) | 419 / 967 → 43.33 % |
-| Remaining fns (norm < 100) | 2,792 |
-| Remaining bytes (norm < 100) | 1,238,544 bytes (1.24 MB) |
+| Matched code (raw bytes) | 4,959,996 bytes → **78.19 %** |
+| Matched fns (fuzzy == 100) | 29,035 / 32,213 → 90.13 % |
+| **Matched fns (normalized == 100)** | **29,430 / 32,213 → 91.36 %** |
+| Complete units (all fns norm==100) | 420 / 967 → 43.43 % |
+| Remaining fns (norm < 100) | 2,783 |
+| Remaining bytes (norm < 100) | 1,233,052 bytes (1.23 MB) |
 
 ### Full XEX (XDK-diluted, for reference only)
 
 | | Value |
 |---|---|
 | Total code | 11,373,424 bytes (11.37 MB) |
-| Matched code (raw bytes) | 4,958,488 bytes → 43.60 % |
-| Matched fns (fuzzy == 100) | 29,044 / 48,344 → 60.08 % |
-| Matched fns (normalized == 100) | 29,436 / 48,344 → 60.89 % |
-| Complete units | 419 / 2055 → 20.39 % |
+| Matched code (raw bytes) | 4,961,036 bytes → 43.62 % |
+| Matched fns (fuzzy == 100) | 29,050 / 48,344 → 60.09 % |
+| Matched fns (normalized == 100) | 29,445 / 48,344 → 60.91 % |
+| Complete units | 420 / 2055 → 20.44 % |
 
 ## How to re-compute
 
