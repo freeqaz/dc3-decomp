@@ -427,7 +427,10 @@ void DxRnd::CopyPostProcess() {
     mat->SetBlend((BaseMaterial::Blend)1);
     mat->SetZMode((ZMode)0);
     TheShaderMgr.unk30 = 1;
-    static bool sCopyPostInited;
+    // Starts TRUE in the shipped image (.data holds 01), so this block runs on
+    // every CopyPostProcess -- the inner store is redundant, not a one-shot latch.
+    // Dropping the initializer left it in .bss reading 0, which made the block dead.
+    static bool sCopyPostInited = true;
     if (sCopyPostInited) {
         sCopyPostInited = true;
         D3DDevice_SetSamplerState_MinFilter(TheDxRnd.Device(), 0xE, 1);

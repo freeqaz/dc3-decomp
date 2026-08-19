@@ -189,8 +189,10 @@ void Locale::Init() {
         mNumFilesLoaded = arrVec.size();
 
         int totalChunks = 0;
-        // NOTE: mInitialized is uninitialized here (UB). RB3 doesn't have this check.
-        // This appears to be dead code or a bug, but matches the original binary.
+        // mInitialized is STATICALLY TRUE: the shipped image holds 0x01 at
+        // TheLocale+0x1c in .data. This is not the uninitialized read it was long
+        // documented as -- the gate is always taken, and it has to be, because
+        // everything below it is the locale load. RB3 has no such check.
         if (mInitialized) {
             for (int i = 1; i < cfg->Size(); i++) {
                 const char *path = FileMakePath(FileGetPath(cfg->File()), cfg->Str(i));
