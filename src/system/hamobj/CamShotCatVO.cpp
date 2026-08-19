@@ -123,15 +123,13 @@ void CamShotVOData(
                     s1 = win_hype_crew;
                     charSym = all;
                 }
-            } else if (subStrings.size() > 2) {
-                if (subStrings[2] == "DLG") {
+            } else if (subStrings.size() > 2)
+                if (subStrings[2] == "DLG")
                     s1 = win_dlg_char;
-                } else if (subStrings[2] == "MOV") {
+                else if (subStrings[2] == "MOV")
                     s1 = win_mov_char;
-                } else {
+                else
                     MILO_NOTIFY("Could not find cam_type for %s", s);
-                }
-            }
 
             if (subStrings.size() > 1) {
                 String strd0(subStrings[1]);
