@@ -52,19 +52,24 @@ manufactured `error`-class divergences in exactly the FPR-spilling functions.
 
 ## A/B: full frontier sweep, same box, same day
 
-`refresh_frontier.py --run -j 8`, 455 units, 1,838 functions, both trees at
-`5f3c79c17` for source. Base = main (`5f3c79c17`), fix = `acc6866bc`.
-Wall clock **46.6 s → 22.2 s** — the sweep was spending half its time spinning.
+`refresh_frontier.py --run -j 8`, 455 units, 1,838 functions. Base = main
+`03e0202ac`, fix = `110660cf6` rebased onto it. Wall clock **44.4 s → 22.2 s** —
+the sweep was spending half its time spinning.
+
+(An earlier run of the same A/B at `5f3c79c17` gave identical figures except that
+one row sits in `stack_layout` there and `data_layout` here, on both sides — the
+`src/system/math` merge in `03e0202ac`, not this change. The set of 47
+EQUIVALENT→DIVERGENT symbols is byte-identical between the two runs.)
 
 | verdict | class | base | fix | delta |
 |---|---|---:|---:|---:|
 | DIVERGENT | cap_exhausted | 1037 | 328 | **−709** |
 | EQUIVALENT | — | 472 | 898 | **+426** |
-| DIVERGENT | data_layout | 126 | 420 | +294 |
+| DIVERGENT | data_layout | 127 | 421 | +294 |
 | DIVERGENT | cap_exhausted_decomp | 58 | 3 | −55 |
 | DIVERGENT | wild_jump_match | 52 | 46 | −6 |
 | DIVERGENT | cap_exhausted_orig | 46 | 4 | −42 |
-| DIVERGENT | stack_layout | 25 | 81 | +56 |
+| DIVERGENT | stack_layout | 24 | 80 | +56 |
 | DIVERGENT | call_count | 12 | 20 | +8 |
 | DIVERGENT | call_arg | 1 | 8 | +7 |
 | DIVERGENT | merged_call | 2 | 7 | +5 |
@@ -89,8 +94,8 @@ Artifact rate per base class (rows whose verdict-or-class changed):
 | call_count | 12 | 10 | 83.3% | 6 |
 | cap_exhausted | 1037 | 749 | 72.2% | 409 |
 | wild_jump_match | 52 | 12 | 23.1% | 7 |
-| stack_layout | 25 | 5 | 20.0% | 2 |
-| data_layout | 126 | 24 | 19.0% | 4 |
+| stack_layout | 24 | 5 | 20.8% | 2 |
+| data_layout | 127 | 24 | 18.9% | 4 |
 
 `call_arg` and `merged_call` changed 100%, on 1 and 2 rows.
 
@@ -134,6 +139,21 @@ instead of a 4-instruction cycle). `?IsValidSwipePosition@...@@`'s
 16,616-iteration spin becomes a plain stack-address difference. `this` is
 `OBJECT_BASE` again instead of 0, so field-access maps stop degenerating to
 `READ 0x000`.
+
+## Known weaknesses in the result, accepted
+
+* **58 of the new EQUIVALENT rows are weak certificates** that rest on the
+  pre-existing "both sides hit an identical error at an identical PC → EQUIVALENT"
+  rule, not on both sides completing. That rule predates this lane and is
+  unchanged by it. Counted two ways over the whole sweep: strictly (every probe in
+  the schedule rests on the rule) the channel *shrinks*, 217/472 → 189/898, and
+  clean certificates go 255 → 709; loosely (any probe) it grows 271/472 → 300/898
+  with clean 201 → 598. Either way the growth in EQUIVALENT is overwhelmingly
+  clean, but **these rows must not be consumed as proof of equivalence.**
+* **411 of 660 completions log zero calls.** Honest, but fixture-limited: zero-fill
+  makes loop bounds 0, so a function whose calls all sit inside a loop runs the
+  loop zero times and its EQUIVALENT says only "both sides skipped the loop
+  identically". Fixture design, not a defect in this fix.
 
 ## What is left
 
