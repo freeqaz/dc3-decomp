@@ -387,21 +387,25 @@ this project has ever written rotted within weeks.
 
 ---
 
-## Caveat: the build is not deterministic to a single function
+## REFUTED (2026-08-19): the build *is* deterministic
 
-Two clean builds of the *same commit* differ by roughly **±160 functions**.
-Almost all of the delta is 12–52-byte dynamic-initializer and atexit thunks
-(`??__E*`, `??__F*`), whose codegen depends on ordering that is not fully
-pinned.
+This section previously claimed two clean builds of the same commit differ by
+roughly **±160 functions**, mostly 12–52-byte dynamic-initializer and atexit
+thunks. **That does not reproduce.** Measured in the toolchain audit
+(`docs/analysis/2026-08-19-toolchain-audit.md`, merge `691174927`): two clean
+builds produce `cmp`-identical `report.json`, with **0 of 48,344 functions
+differing**.
 
-Practical consequences:
+All 980 rebuilt `.obj` files *do* differ, but only by **2 bytes** — the COFF
+timestamp and the embedded path. That object-level churn is almost certainly
+what the ±160 figure was really measuring, via a metric that was reading the
+relocation-sensitive *fuzzy* percent rather than the canonical one.
 
-- **A single-function delta on a thunk-shaped symbol is noise.** Do not report
-  it as a win or a regression.
-- Compare aggregate headline numbers, not individual thunk rows, when checking
-  whether a change helped.
-- `query_functions(skip_boilerplate=True)` (the default) filters these out of
-  work selection for exactly this reason.
+**Do not quote ±160, and do not dismiss a single-function delta as build
+noise.** If a function moves between two builds of the same commit, something
+real changed — investigate it. (Thunks are still filtered out of *work
+selection* by `query_functions(skip_boilerplate=True)`, but that is an
+ergonomics choice, not a noise floor.)
 
 ---
 
