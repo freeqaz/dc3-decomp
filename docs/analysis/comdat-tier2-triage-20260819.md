@@ -35,9 +35,9 @@ Two oracles that were not being used, and together they decide every row without
 
 | disposition | rows | bytes | meaning |
 |---|---:|---:|---|
-| RECOVERED this lane | 8 | 856 | see the commits on `fix/comdat-placement-tier2` |
+| RECOVERED this lane | 11 | 2 036 | see the commits on `fix/comdat-placement-tier2` |
 | ICF naming artifact | 19 | 2 138 | our bytes are already there under the fold partner's name |
-| Genuinely absent body | 9 | 5 048 | real work; `JoypadPollCommon` + BinkMovieImpl + DrawUtl |
+| Genuinely absent body | 6 | 3 868 | real work; `JoypadPollCommon`, BinkMovieImpl x2, DrawUtl x2 |
 | Phantom odr-use | 4 | 296 | the target proves there is no call site to find |
 | Delegated / in flight | 2 | 308 | DrawUtl `YUVtoRGB`, HamDirector `DancerSkeleton` copy ctor |
 
@@ -110,12 +110,14 @@ Ordered by size. Everything here is real work, not an artifact.
   (`Joypad.h:301`), called (`Joypad_Xbox.cpp:55`), never defined. rb3's copy is itself an
   unfinished two-`MILO_WARN` stub, so it is not a reference. Delegated to
   `fix/joypadpollcommon`.
-- **`BinkMovieImpl` 5 rows, 2 664 B** — `BeginFrame` (964), `SetRect` (564), `EndFrame`
-  (520), `FinishOpen` (420), anon `EndianSwapBuffer` (196). All declared in
-  `BinkMovieImpl.h`, all called from `BinkMovieImpl.cpp`, none defined — and og-dc3 does not
-  define them either. Reference-less Bink-API reconstruction; `docs/analysis/
-  dispatch-data-rescan-20260818.md` already lists BinkMovieImpl as a certified floor for a
-  different reason. Untouched.
+- **`BinkMovieImpl`: `BeginFrame` (964 B) and `EndFrame` (520 B)** — the two of the
+  original five still at 0%. `SetRect`, `FinishOpen` and `EndianSwapBuffer` were recovered
+  to 100% on this branch. `EndFrame` is decoded structurally (CHECK_THREAD; on `mMidFrame`
+  call vtable slot 0x74 on all four of `mInternalBufs`' Y/Cr/Cb/A textures indexed
+  `[unkb0][unkb4]`, `StoreCache()` the same four indexed `[mBuffers.FrameNum][X]`, clear
+  `sAsyncMovie` and `mMidFrame`, else warn `"mMidFrame"`) but `X` is a `subfc`/`adde`
+  materialisation of `unk40 >= mBuffers.TotalFrames` whose meaning needs `BeginFrame` first,
+  and `unkb0`/`unkb4` are unnamed. Left at 0% rather than guessed.
 - **`gesture/DrawUtl` `CopyDepth` (360) + `CopyPlayerMask` (152) + `YUVtoRGB` (176)** plus the
   three conversion loops missing from `UpdateBufferTex` (1 284 B at 60.6%) — delegated to
   `fix/drawutl-buffer-copies`. `YUVtoRGB`'s row is expected to stay 0% regardless: it folded
