@@ -322,3 +322,35 @@ the real `UpdateFromColorBuffer` and checks the output against the published
 BT.601 matrix (301920 / 307200 texels non-zero, 64 distinct RGB565 values).
 It has a recorded negative control: stubbing `YUVtoRGB` back to `return 0` fails
 exactly the two colour assertions and leaves the two control cases passing.
+
+### Checking PPC neutrality of a shared-`src/` edit: not raw `report.json` md5
+
+Comparing `md5sum build/373307D9/report.json` between two full `ninja` runs is
+the cheap whole-build neutrality check, but **the raw md5 is not stable across
+runs of the same tree**: `report.json`'s `provenance` block carries
+`cache_hits` / `cache_misses`, which depend on how warm the objdiff cache was.
+A cold build writes `cache_misses: 2224` and no `cache_hits`; an incremental
+rerun of the identical tree writes `cache_hits: 2223, cache_misses: 1` and a
+different md5. Two runs of the same source produced
+`b2640ec2c78e721e5bfc0b7a182bb498` and `b138b343668d46311ba863a0b3484d2d` this
+way, with zero semantic difference.
+
+Compare the measures instead:
+
+```python
+import json
+a = json.load(open('<baseline>/build/373307D9/report.json'))
+b = json.load(open('<branch>/build/373307D9/report.json'))
+flat = lambda r: {(u['name'], f['name']): f['fuzzy_match_percent']
+                  for u in r['units'] for f in u.get('functions', [])}
+fa, fb = flat(a), flat(b)
+print(a['measures'] == b['measures'],
+      [(k, fa[k], fb[k]) for k in fa.keys() & fb.keys() if fa[k] != fb[k]])
+```
+
+Run against a worktree built from the branch point, this is exact: for the
+2026-08-19 `fix/kinect-camera-path` changes it reported one changed function out
+of 48,344 (`EQEffect::SetParameter`, 84.49353 → 84.521255 fuzzy, from the
+`createFilter` relocation name now matching the target) and identical top-level
+and per-unit measures. Note `fuzzy_match_percent` is relocation-sensitive, which
+is what makes it able to see a mangling fix that normalized mode cannot.
