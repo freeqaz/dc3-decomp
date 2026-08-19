@@ -485,7 +485,7 @@ public:
     void clear() { mNodes.clear(); }
     void reserve(unsigned int n) { mNodes.reserve(n); }
     void unique();
-    __declspec(noinline) void Set(iterator it, T1 *obj);
+    void Set(iterator it, T1 *obj);
     void merge(const ObjPtrVec &);
     Hmx::Object *Owner() const { return mOwner; }
     ObjListMode Mode() const { return mListMode; }
