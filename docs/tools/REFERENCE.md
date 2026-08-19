@@ -309,42 +309,106 @@ Use this table before reaching for the binary.
   `rb3-xenon` work correctly routed around MCP. Prefer that repo's own
   orchestrator when one exists.
 
-### The relocation ruler, and a defect it hid
+### The relocation ruler: three rulers, and which one to reach for
 
-Measured on this fork (objdiff-cli 4.2.3, `?Load@CamShot@@UAAXAAVBinStream@@@Z`,
-2026-08-19):
+All counts below are **non-equal instruction rows** from `objdiff-cli
+--include-instructions`, not headline percentages. Measured on this fork
+(objdiff-cli 4.2.3, `?Load@CamShot@@UAAXAAVBinStream@@@Z`, 2026-08-19), with
+the ICF alias map held constant via `--map-file` so the project option is the
+only variable:
 
-| `-c functionRelocDiffs=` | fuzzy% | non-equal rows | reloc_ignored |
+| ruler | fuzzy% | non-equal rows | reloc_ignored |
 |---|---|---|---|
-| *(flag omitted)* | 99.85558 | 119 | 22 |
+| **objdiff-cli's own built-in default** (`DataValue`) | 99.68568 | **147** | 15 |
+| *(flag omitted, under this repo's `-p`)* | 99.85558 | 119 | 22 |
 | `none` | 99.85558 | 119 | 22 |
 | `name_check` | 99.85558 | 119 | 22 |
 | `all` | 99.66141 | **151** | 11 |
 
-The fork's **default is already normalized**, so "raw" cannot be spelled by
-omitting the flag — only `all` counts relocations. `run_diff_inspect` shipped
-`diff_mode="raw"` as *omit `-c`* and was therefore **inert**: every raw request
-returned the normalized answer, while the schema promised "raw includes
-relocation diffs so you can inspect which relocations differ". That matters most
-for the wrong-vtable-slot class (`Splash::Suspend`/`Resume`), which lives
-entirely in the plane normalized scoring discards. Fixed 2026-08-19; both tools
-now route through one `RELOC_RULER` table in `mcp_server.py`.
-`run_diff_inspect(mode="mismatches")` now genuinely differs by ruler: 119
-mismatches normalized, 151 raw, on that same function.
+**Why omitting `-c` is not raw.** Not because "the fork's default is already
+normalized" — that was the original explanation here and it is **false**. The
+fork's built-in CLI default is `FunctionRelocDiffs::DataValue`
+(`objdiff-cli/src/cmd/diff.rs`, `build_config_from_args`), a *third* ruler
+with a third row count: **147**. Omitting the flag lands on `name_check` only
+because **this repo's `objdiff.json`** carries
 
-**`run_diff_inspect`'s `diff_mode` still reaches only 3 of its 11 modes.**
-`mismatches`, `compare` and `save_baseline` build their objdiff command in
-`mcp_server.py` and honour it. The five analysis modes — `diagnose`, `clusters`,
-`regswaps`, `offsets`, `replaces` — delegate to `scripts/analysis/diff_inspect.py`,
-which builds its *own* command and exposes no ruler switch, so the ruler cannot
-reach them from the wrapper at all. That file is owned by another lane and was
-deliberately not modified here. In the meantime those modes **print a banner
-saying the ruler was ignored** rather than returning a normalized report under a
-raw label. If you need raw for one of them, use `run_objdiff(diff_mode="raw")`
-or `run_diff_inspect(mode="mismatches")`.
+```json
+"options": { "functionRelocDiffs": "name_check" }
+```
+
+which `apply_project_options` (`objdiff-core/src/config/mod.rs`) stamps over the
+built-in default whenever `-p` loads the project.
+
+That distinction is load-bearing, not pedantry: **`bin/objdiff-cli` is a symlink
+shared with `../rb3` and `../rb3-xenon`**, whose `objdiff.json` may set a
+different value. "The fork normalizes" predicts the same row counts in all three
+trees. It travels with the **project config**, not with the binary.
+
+A second contingency worth knowing: the `none == name_check == 119` coincidence
+holds only while the ICF alias map is loaded. Drop `--map-file` and `name_check`
+rises to **130** while `none` stays at **119** — the two rulers genuinely
+differ; they agree here only because `icf_aliases.map` already proves the folds
+`name_check` would otherwise charge.
+
+#### What `raw` actually was: mislabelled, not blind
+
+`run_diff_inspect` shipped `diff_mode="raw"` as *omit `-c`*, which under this
+repo's `-p` returned the **`name_check`** answer under a "raw" label. It was
+**mislabelled, not inert-and-blind**: `name_check` charges relocation *name*
+mismatches, which is precisely the wrong-callee / wrong-vtable-slot plane. An
+earlier draft of this note claimed an agent hunting a wrong-slot bug "would have
+concluded there was none"; that is **overstated and retracted**.
+
+**`name_check` is the wrong-callee ruler — prefer it.**
+`?Poll@KinectShareConnection@@QAAXXZ` scores 100.0% with **0** mismatch rows
+under `none`, and `name_check` finds exactly **1**, a genuine wrong callee:
+
+```
+bl ??$MakeString@E@@YAPBDPBDABE@Z   (target, unsigned char)
+bl ??$MakeString@D@@YAPBDPBDABD@Z   (ours,   char)
+```
+
+**`raw`/`all` is the addend view, and it is noisier rather than more capable**
+for that class. Over a 14-function sample, `all` added **997** rows on top of
+`name_check`:
+
+| what the added row was | rows | share |
+|---|---|---|
+| same symbol on both sides (pure address/addend noise) | 531 | 53.3% |
+| `lbl_*` vs a named static | 352 | 35.3% |
+| register-only, no symbol either side | 112 | 11.2% |
+| **an actual name divergence** | **2** | **0.2%** |
+
+i.e. **99.8% noise**. `?Handle@CampaignPerformer@@…` goes from **0** rows under
+`name_check` to **605** under `all`. Use `all` when you care about relocation
+*addends*; use `name_check` when you are hunting a wrong callee. Both tools now
+route through one `RELOC_RULER` table in `mcp_server.py`, and the `mismatches`
+renderer tags same-symbol rows `addr_reloc` so the noise is visible as noise.
 
 Anything concluded from `run_diff_inspect(diff_mode="raw")` **before
-2026-08-19** rests on a normalized measurement, in every mode.
+2026-08-19** was measured with `name_check`, not `all` — so it is a *sharper*
+ruler than `none` for wrong-callee work, but it is not what the label said and
+it never counted addends.
+
+#### `diff_mode` still reaches only 3 of `run_diff_inspect`'s 11 modes
+
+`mismatches`, `compare` and `save_baseline` build their objdiff command in
+`mcp_server.py` and honour the ruler. The other eight do not:
+
+* `diagnose`, `clusters`, `regswaps`, `offsets`, `replaces`, `attributed` —
+  delegate to `scripts/analysis/diff_inspect.py`, which builds its *own* command
+  and exposes no ruler switch. **That file is owned by another lane and was
+  deliberately not modified here.**
+* `stack-layout` — same, via `scripts/analysis/stack_layout.py`.
+* `asm_listing` — a `/FAs` compiler listing; there is no objdiff run to rule.
+
+All eight **print a banner saying the ruler was ignored** rather than returning a
+normalized report under a raw label. If you need a relocation-aware answer, use
+`run_objdiff(diff_mode="name_check")` or `run_diff_inspect(mode="mismatches")`.
+
+> **Not affected:** the ubiquitous `Match: 100.0% normalized (99.8% raw)`
+> strings. That "raw" is `raw_match_percent`, a different axis entirely, and
+> none of the above changes it.
 
 ### `run_symbol_sweep`
 

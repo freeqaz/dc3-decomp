@@ -3036,7 +3036,14 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
                 raw_pct = data.get("raw_match_percent", data.get("fuzzy_match_percent", "?"))
                 header = f"## Mismatched Instructions ({len(mismatches)} of {total} total) — {raw_pct}% raw match\n"
                 if diff_mode == "raw":
-                    header += "*Raw mode: relocation diffs included*\n"
+                    header += ("*Raw mode (`functionRelocDiffs=all`): relocation names AND addends "
+                               "counted. This is the addend view — most of what it adds over "
+                               "`name_check` is `addr_reloc` noise (same symbol, different link "
+                               "address), tagged as such in the Note column. If you are hunting a "
+                               "wrong callee, `diff_mode=\"name_check\"` is the sharper ruler.*\n")
+                elif diff_mode == "name_check":
+                    header += ("*name_check mode: relocation NAME mismatches counted, addends "
+                               "ignored — the wrong-callee / wrong-vtable-slot ruler.*\n")
                 if truncated:
                     header += f"*Showing {MAX_MISMATCHES} of {len(mismatches)} mismatches*\n"
 
@@ -3052,8 +3059,11 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
                     t_str = _fmt_instr(t).strip()
                     b_str = _fmt_instr(b).strip()
                     note = _diff_annotation(ins).strip() if mt == "diff_arg" else ""
-                    # In raw mode, extract relocation symbol info for diff_arg
-                    if diff_mode == "raw" and mt == "diff_arg" and not note:
+                    # For either relocation-aware ruler, name the symbols each
+                    # side resolves to, so "same symbol, different address"
+                    # (noise) is distinguishable at a glance from a real
+                    # wrong-callee row.
+                    if diff_mode in ("raw", "name_check") and mt == "diff_arg" and not note:
                         t_syms = [a["value"] for a in (t or {}).get("typed_args", []) if a.get("type") == "Symbol"]
                         b_syms = [a["value"] for a in (b or {}).get("typed_args", []) if a.get("type") == "Symbol"]
                         if t_syms and b_syms:
