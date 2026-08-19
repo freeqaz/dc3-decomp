@@ -310,18 +310,22 @@ void LiveCameraInput::TextureStore::UpdateFromColorBufferClip(
     LiveCameraInput *cam, float clipLeft, float clipTop
 ) {
     int texWidth = mTex->Width();
-    unsigned int startX = ~((int)(clipLeft * 640.0f) >> 31) & (int)(clipLeft * 640.0f);
-    if ((int)(texWidth + startX - 1) > 639) {
+    int startX = (int)(clipLeft * 640.0f);
+    if (startX < 0)
+        startX = 0;
+    if (texWidth + startX - 1 >= 640) {
         startX = 640 - texWidth;
     }
     int texHeight = mTex->Height();
-    unsigned int startY = (unsigned int)(clipTop * 480.0f);
-    startY = ~((int)startY >> 31) & startY;
-    if ((int)(texHeight + startY - 1) > 479) {
+    int startY = (int)(clipTop * 480.0f);
+    if (startY < 0)
+        startY = 0;
+    if (texHeight + startY - 1 >= 480) {
         startY = 480 - texHeight;
     }
     g_colorBufferUpdate3++;
-    unsigned int clippedX = (startX + 1 & 0xfffe) % 640;
+    int clippedX = ((startX + 1) & 0xfffe) % 640;
+    int clippedY = ((startY + 1) & 0xfffe) % 480;
     if (!g_startMetering) {
         g_startMetering = true;
         g_ColorNoFrameDataCnt = 0;
@@ -336,31 +340,25 @@ void LiveCameraInput::TextureStore::UpdateFromColorBufferClip(
         g_colorBufferUpdate4++;
         int destWidth = mTex->Width();
         unsigned int srcPitch = lockedRect.mPitch >> 2;
-        unsigned int clippedY = (startY + 1 & 0xfffe) % 480;
         int srcOffset = srcPitch * clippedY * 4 + (int)lockedRect.mBits;
         unsigned int destPitch = mTex->TexelsPitch();
         int destStride = (int)((destPitch >> 1) - destWidth) * 2;
-        int row = 0;
-        if (mTex->Height() > 0) {
-            unsigned int *srcPtr = (unsigned int *)(srcOffset - 4);
-            do {
-                int col = 0;
-                do {
-                    srcPtr++;
-                    unsigned int pixel = *srcPtr;
-                    if (col >= (int)(clippedX >> 1) && col < (int)((destWidth + clippedX) >> 1)) {
-                        int cr = (pixel >> 24) - 0x80;
-                        int cb = (pixel >> 8 & 0xff) - 0x80;
-                        *(unsigned short *)destPtr = YUVtoRGB(pixel >> 16 & 0xff, cr, cb);
-                        ((unsigned short *)destPtr)[1] = YUVtoRGB(pixel & 0xff, cr, cb);
-                        destPtr += 4;
-                    }
-                    col++;
-                } while (col < 320);
-                row++;
-                destPtr += destStride;
-                srcPtr += (srcPitch - 320);
-            } while (row < mTex->Height());
+        unsigned int *srcPtr = (unsigned int *)(srcOffset - 4);
+        for (int row = 0; row < mTex->Height(); row++) {
+            for (int col = 0; col < 320; col++) {
+                srcPtr++;
+                unsigned int pixel = *srcPtr;
+                if (col >= clippedX / 2 && col < (mTex->Width() + clippedX) / 2) {
+                    int cr = (pixel >> 24) - 0x80;
+                    int cb = (pixel >> 8 & 0xff) - 0x80;
+                    *(unsigned short *)destPtr = YUVtoRGB(pixel >> 16 & 0xff, cr, cb);
+                    destPtr += 2;
+                    *(unsigned short *)destPtr = YUVtoRGB(pixel & 0xff, cr, cb);
+                    destPtr += 2;
+                }
+            }
+            destPtr += destStride;
+            srcPtr += (srcPitch - 320);
         }
         D3DCubeTexture_UnlockRect((D3DCubeTexture *)bufferData, (D3DCUBEMAP_FACES)0, 0);
     }
