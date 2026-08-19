@@ -47,12 +47,14 @@ BUILD_DIR="${MILO_TEST_BUILD_DIR:-$REPO_ROOT/native/build}"
 BUDGET_FILE="$REPO_ROOT/native/tests/skip_budget.txt"
 
 CTEST_ARGS=()
+ALL_GATES=0
 for arg in "$@"; do
     case "$arg" in
         --all-gates)
             export DC3_GAMEPLAY_TESTS=1
             export DC3_AUDIO_TESTS=1
             export MILO_LONG_TEST=1
+            ALL_GATES=1
             ;;
         *) CTEST_ARGS+=("$arg") ;;
     esac
@@ -119,6 +121,16 @@ if [ "${SKIP_BUDGET_UPDATE:-0}" = "1" ]; then
 fi
 
 rc=$CTEST_RC
+# The budget describes the DEFAULT configuration. --all-gates deliberately runs
+# wider, so it will always come in under budget; checking the ratchet there
+# would report "coverage improved, lock it in" on every single run and train
+# people to ignore the message.
+if [ "$ALL_GATES" = "1" ]; then
+    echo
+    echo "(--all-gates: skip budget not enforced; the budget describes the"
+    echo " default gate set. $skipped skipped here vs a default budget of ${budget:-n/a}.)"
+    budget=""
+fi
 if [ -n "$budget" ]; then
     if [ "$skipped" -gt "$budget" ]; then
         echo
