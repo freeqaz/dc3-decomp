@@ -1,7 +1,16 @@
 #!/usr/bin/env python3
 """Neutralize the MSVC prologue/epilogue register-save helpers for emulation.
 
-The unicorn harness stubs every external REL24 target with `li r3,0; blr`
+SUPERSEDED (2026-08-19) by scripts/unicorn_runner/save_helpers.py, which
+installs the helpers' REAL bodies in production. Do NOT call install() any
+more: the harness already emulates the helpers, so the monkeypatch now
+*removes* fidelity — it drops the r14-r31 / f14-f31 spill this module never
+modelled — instead of adding it, and --neutralize-helpers is a no-op at best.
+Kept, with its recorded mining output under docs/analysis/, because
+`uses_helpers()` is still the static predicate cap_blastradius.py
+cross-tabulates with.
+
+The unicorn harness stubbed every external REL24 target with `li r3,0; blr`
 (memory_map.TRAMPOLINE_STUB). MSVC's `__savegprlr_N` / `__restgprlr_N` /
 `__savefpr_N` / `__restfpr_N` helpers are external REL24 targets, so they get
 that stub too — which is catastrophic for two reasons:
@@ -124,7 +133,26 @@ def neutralize(code, relocs):
 
 
 def install():
-    """Monkeypatch the extractors so both sides get helper-free code."""
+    """REMOVED. The harness emulates the helpers in production; see the header.
+
+    This used to monkeypatch the extractors so both sides got helper-free code.
+    Applied on top of scripts/unicorn_runner/save_helpers.py it would strip the
+    helper relocations back out and hand the sides the open-coded rewrite,
+    which drops the r14-r31 / f14-f31 spill this module never modelled -- so it
+    now REDUCES fidelity, and any triage run that used it would be measuring a
+    worse harness than production while believing it was measuring a better
+    one. Raise rather than no-op: a control condition that is silently false is
+    the failure mode this whole lane exists to remove.
+    """
+    raise RuntimeError(
+        "cap_helpers.install() is superseded by "
+        "scripts/unicorn_runner/save_helpers.py, which installs the real "
+        "helper bodies in production. Re-run the probe without it; if you "
+        "need the old behaviour for a historical comparison, check out "
+        "8fe9d04a7 (fix/cap-exhausted-decomp-mining) in a worktree.")
+
+
+def _install_disabled():                      # pragma: no cover — kept for the record
     from scripts.unicorn_runner import extractor
     import scripts.unicorn_runner.run as run_mod
 

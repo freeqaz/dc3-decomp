@@ -5,6 +5,7 @@ import struct
 
 from .image import get_global_image
 from .memory_map import TRAMPOLINE_BASE, GLOBAL_BASE, RDATA_BASE, REGION_SIZE
+from .save_helpers import helper_address
 
 
 def rewrite_ppc64_insns(code):
@@ -42,6 +43,15 @@ def assign_addresses(relocs):
     """Assign Unicorn addresses to all relocation targets.
 
     Returns (trampolines, globals_map) dicts mapping symbol_name -> address.
+
+    MSVC's register save/restore helpers are the one exception: they resolve
+    to a fixed address in the HELPER region, where save_helpers has installed
+    the real body. They are NOT given a trampoline slot, for two reasons.
+    A `li r3,0; blr` stub is catastrophic for them (see save_helpers), and the
+    slot numbering itself is per-side: the two sides do not agree on which
+    functions need `__savegprlr_N`, so letting the helpers consume slots
+    shifted every later symbol's trampoline address on one side only, and the
+    prologue call showed up in the call log as a call the function had made.
     """
     trampolines = {}   # symbol_name -> trampoline address
     globals_map = {}    # symbol_name -> global slot address
@@ -52,6 +62,10 @@ def assign_addresses(relocs):
         sym = reloc["symbol_name"]
         if reloc["type_name"] in ("REL24", "REL14"):
             if sym not in trampolines:
+                helper = helper_address(sym)
+                if helper is not None:
+                    trampolines[sym] = helper
+                    continue
                 trampolines[sym] = next_trampoline
                 next_trampoline += 8   # each stub is 8 bytes
         elif reloc["type_name"] in ("REFHI", "REFLO"):

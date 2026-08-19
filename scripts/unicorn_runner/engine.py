@@ -33,7 +33,9 @@ from .memory_map import (
     STACK_BASE, OBJECT_BASE, GLOBAL_BASE, TRAMPOLINE_BASE, CODE_BASE,
     RDATA_BASE, VTABLE_BASE, SENTINEL_ADDR, REGION_SIZE, STACK_INIT,
     MSR_FP_BIT, TRAMPOLINE_STUB, VTABLE_SLOTS, VTABLE_TRAMP_OFFSET,
+    HELPER_BASE,
 )
+from .save_helpers import helper_region
 
 
 class ExecutionResult:
@@ -107,7 +109,25 @@ _ZERO_PAGE = bytes(0x1000)
 
 _DATA_REGIONS = (STACK_BASE, OBJECT_BASE, GLOBAL_BASE, VTABLE_BASE)
 _ALL_REGIONS = (STACK_BASE, OBJECT_BASE, GLOBAL_BASE,
-                TRAMPOLINE_BASE, CODE_BASE, VTABLE_BASE)
+                TRAMPOLINE_BASE, CODE_BASE, VTABLE_BASE, HELPER_BASE)
+
+# Regions that hold executable image: the function under test plus its
+# co-loaded callees (CODE), the external-call stubs (TRAMPOLINE), and the
+# register save/restore helper bodies (HELPER). PC sitting in ANY of them when
+# the instruction cap fires means the function had not finished.
+#
+# This used to be gated on the ROOT function's byte range alone, so a side
+# spinning just as hard as the other but caught inside a trampoline at that
+# instant was recorded terminated_normally=True. That is how 52 of 59 purely
+# SYMMETRIC infinite loops got filed as one-sided `cap_exhausted_decomp`:
+# the class was decided by loop-body phase alignment, not by behaviour.
+_EXECUTABLE_REGIONS = (CODE_BASE, TRAMPOLINE_BASE, HELPER_BASE)
+
+
+def _in_executable_image(pc):
+    """True if `pc` is anywhere in the loaded image (code, stubs, helpers)."""
+    pc &= 0xFFFFFFFF
+    return any(base <= pc < base + REGION_SIZE for base in _EXECUTABLE_REGIONS)
 
 
 class UnicornEngine:
@@ -131,6 +151,7 @@ class UnicornEngine:
         for base in _ALL_REGIONS:
             self._mu.mem_map(base, REGION_SIZE)
 
+        self._helper_region = helper_region()
         self._rdata_mapped = False
         self._ondemand_pages = set()
         # Phase 3.1: pages in suspicious ranges (null/kernel) that we
@@ -393,6 +414,10 @@ class UnicornEngine:
             mu.mem_write(base, fill_buf)
         mu.mem_write(CODE_BASE, _ZERO_REGION)
         mu.mem_write(TRAMPOLINE_BASE, _ZERO_REGION)
+        # Reinstall the register save/restore helper bodies. Rewritten every
+        # run rather than once at map time so a stray store into 0x8003xxxx in
+        # one function cannot silently poison the next one.
+        mu.mem_write(HELPER_BASE, self._helper_region)
 
         # Seed globals whose content comes from the shipped image. After the
         # fill (so it is not clobbered) and before execution. The same edits
@@ -415,6 +440,15 @@ class UnicornEngine:
 
         # RDATA region
         if rdata_bytes is not None:
+            # The RDATA window is REGION_SIZE and nothing upstream clamps the
+            # packed data-section buffer to it. Unicorn would happily write
+            # past the end into whatever is mapped next, so refuse instead:
+            # a loud harness error beats silently rewriting the region above.
+            # (Measured max across the 1,838-function frontier: 0x63C0.)
+            if len(rdata_bytes) > REGION_SIZE:
+                raise ValueError(
+                    f"rdata buffer is {len(rdata_bytes):#x} bytes, exceeds the "
+                    f"{REGION_SIZE:#x} RDATA window")
             if not self._rdata_mapped:
                 mu.mem_map(RDATA_BASE, REGION_SIZE)
                 self._rdata_mapped = True
@@ -427,9 +461,12 @@ class UnicornEngine:
         # Load function code
         mu.mem_write(CODE_BASE, bytes(patched_code))
 
-        # Write trampoline stubs
+        # Write trampoline stubs. Save/restore-helper symbols resolve to the
+        # HELPER region (patcher.assign_addresses), where a real body already
+        # sits — stubbing those addresses would overwrite it.
         for addr in trampolines.values():
-            mu.mem_write(addr, TRAMPOLINE_STUB)
+            if TRAMPOLINE_BASE <= addr < TRAMPOLINE_BASE + REGION_SIZE:
+                mu.mem_write(addr, TRAMPOLINE_STUB)
 
         # Override object region with typed memory if provided
         if object_memory is not None:
@@ -472,15 +509,18 @@ class UnicornEngine:
             # 1. We reached the function's end address (CODE_BASE+func_size).
             #    The function ran off the end without a blr — unusual but
             #    occasionally happens with tail calls; treat as normal.
-            # 2. We hit the instruction count cap. PC will be somewhere
-            #    inside the function. This is the cap_exhausted case —
-            #    the function did not actually finish, so we can't trust
-            #    the captured state.
-            pc_after = mu.reg_read(UC_PPC_REG_PC)
-            if CODE_BASE <= pc_after < CODE_BASE + func_size:
+            # 2. We hit the instruction count cap. PC will be somewhere in
+            #    the loaded image — inside the root function, inside a
+            #    co-loaded callee, in a trampoline stub, or in a save/restore
+            #    helper. All four mean the function did not finish, so we
+            #    can't trust the captured state.
+            pc_after = mu.reg_read(UC_PPC_REG_PC) & 0xFFFFFFFF
+            if pc_after == (CODE_BASE + func_size) & 0xFFFFFFFF:
+                # Reached the emu_start terminator: ran off the end.
+                terminated_normally = True
+            elif _in_executable_image(pc_after):
                 cap_exhausted = True
             else:
-                # PC at or past the function-end terminator.
                 terminated_normally = True
         except UcError as e:
             if e.errno == UC_ERR_FETCH_UNMAPPED:

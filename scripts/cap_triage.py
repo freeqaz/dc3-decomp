@@ -124,13 +124,19 @@ def main():
     ap.add_argument("--out", default="cap_triage.json")
     ap.add_argument("--only", default=None, help="substring filter on symbol")
     ap.add_argument("--neutralize-helpers", action="store_true",
-                    help="Open-code __savegprlr_N/__restgprlr_N instead of letting "
-                         "the harness stub them (see scripts/cap_helpers.py)")
+                    help="REMOVED — the harness now emulates __savegprlr_N and "
+                         "friends in production (unicorn_runner/save_helpers.py). "
+                         "Passing this flag is an error.")
     a = ap.parse_args()
 
     if a.neutralize_helpers:
-        from scripts.cap_helpers import install
-        install()
+        # Do NOT quietly ignore it. The flag used to mean "measure a harness
+        # better than production"; production overtook it, so honouring it now
+        # measures a WORSE harness (the open-coded rewrite drops the r14-r31 /
+        # f14-f31 spill) while the operator believes the opposite.
+        ap.error("--neutralize-helpers is removed: the harness emulates the "
+                 "register save/restore helpers in production. Re-run without "
+                 "the flag; results are already helper-correct.")
 
     conn = sqlite3.connect(a.db)
     rows = conn.execute(
