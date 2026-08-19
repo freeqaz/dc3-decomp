@@ -4,6 +4,11 @@
 ranges with this tree; every symbol, address and number below is dc3's, measured on
 `fix/pattern-flag-triage-20260819` off `07fdaeea7` in a fully-rebuilt worktree.
 
+Rebased onto main `8455b09be` and rebuilt after the fact; both `DingoJob::Start`
+(100.000 normalized / 100.000 name_check) and `DataArray::Execute` (95.833) hold there.
+The whole-build A/B below is measured at the branch point, where the only difference
+between the two trees is this lane.
+
 Task #121. Population handed over: `has_linker_merged` 1,310 / `has_prologue_mismatch`
 221 / `has_makestring_mismatch` 63, first populated by `scripts/backfill_reloc_patterns.py`
 (merge `07fdaeea7`) after the discovery that these detectors were reloc-starved rather
