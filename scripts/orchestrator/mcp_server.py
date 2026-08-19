@@ -216,6 +216,68 @@ def _extract_prologue_mismatch_info(data: dict) -> "dict | None":
     return None
 
 
+def _format_data_diff(data: dict, max_rows: int = 80) -> str:
+    """Render objdiff's `data_diff` block: pointer slots first, then raw bytes.
+
+    This is the reporting half of `--include-data`. Passing the flag without
+    rendering its output would leave the capability present but invisible,
+    which is how a tool acquires a reputation for not working.
+    """
+    dd = data.get("data_diff")
+    if not dd:
+        return ("\n## Data diff\n\nNo `data_diff` returned. Expected on a CODE symbol "
+                "(`--include-data` is a no-op there). On a DATA symbol, the `unit` must "
+                "name the object that DEFINES it — an undefined external reference "
+                "answers 'Symbol not found in target'.")
+    lines = ["", "## Data diff",
+             f"\n{dd.get('match_percent')}% of {dd.get('total_byte_count')} bytes "
+             f"({dd.get('mismatch_byte_count')} mismatched)"]
+
+    relocs = dd.get("relocations") or []
+    changed = [r for r in relocs if r.get("kind") != "equal"]
+    lines.append("")
+    lines.append(f"### Pointer slots — {len(changed)} of {len(relocs)} differ")
+    if changed:
+        lines.append("")
+        lines.append("| +off | kind | target resolves to | our build resolves to |")
+        lines.append("|---|---|---|---|")
+        for r in changed[:max_rows]:
+            off = r.get("offset")
+            base = r.get("base_target_symbol")
+            # objdiff emits base_target_symbol ONLY when it differs, so a blank
+            # here means both sides name the same symbol.
+            base_txt = f"`{base}`" if base else "_(same symbol)_"
+            tgt = r.get("target_symbol")
+            tgt_txt = f"`{tgt}`" if tgt else "_(absent)_"
+            lines.append(
+                f"| {('0x%x' % off) if isinstance(off, int) else off} | {r.get('kind')} "
+                f"| {tgt_txt} | {base_txt} |"
+            )
+        if len(changed) > max_rows:
+            lines.append(f"| ... | | +{len(changed) - max_rows} more | |")
+        lines.append("")
+        lines.append("A slot naming two DIFFERENT symbols is only a real bug when the two "
+                     "resolve to different addresses — equal addresses are a proven ICF fold. "
+                     "`run_symbol_sweep(kind='vtable_slots')` does that adjudication for you.")
+
+    segs = [s for s in (dd.get("segments") or []) if s.get("kind") != "equal"]
+    if segs:
+        lines.append("")
+        lines.append(f"### Raw bytes — {len(segs)} differing segments")
+        lines.append("")
+        lines.append("| +off | kind | target bytes | our bytes |")
+        lines.append("|---|---|---|---|")
+        for s in segs[:max_rows]:
+            off = s.get("offset")
+            lines.append(
+                f"| {('0x%x' % off) if isinstance(off, int) else off} | {s.get('kind')} "
+                f"| `{s.get('bytes', '')}` | `{s.get('base_bytes', '')}` |"
+            )
+        if len(segs) > max_rows:
+            lines.append(f"| ... | | +{len(segs) - max_rows} more | |")
+    return "\n".join(lines)
+
+
 def _stack_signal_summary(instrs: list, data: "dict | None" = None) -> "str | None":
     """Compute a one-line stack-layout signal from already-parsed objdiff
     instructions. Returns None when no actionable signal exists (frame matches
@@ -872,8 +934,76 @@ class DecompMCPServer:
                                 "type": "string",
                                 "description": "Unit name to disambiguate when a symbol exists in multiple units (e.g. 'default/link_glue'). Required when objdiff reports 'Multiple instances found'.",
                             },
+                            "include_data": {
+                                "type": "boolean",
+                                "description": "Diff the DATA section too: vtables (??_7), RTTI (??_R*), pointer/jump tables, string pools, static initializers. Adds a 'Data diff' section listing each pointer slot and which symbol the target vs our build resolves it to. No-op on code symbols, so it is safe when unsure. Default: false.",
+                            },
+                            "diff_mode": {
+                                "type": "string",
+                                "enum": ["normalized", "raw", "name_check"],
+                                "description": "Relocation ruler. 'normalized' (default, functionRelocDiffs=none) ignores link-time address noise. 'raw' counts relocations and immediates -- needed to see wrong-vtable-slot and wrong-callee bugs that normalized scoring hides. 'name_check' is report.json's ruler.",
+                            },
+                            "output_format": {
+                                "type": "string",
+                                "enum": ["markdown", "json"],
+                                "description": "'markdown' (default) is the rendered report. 'json' returns objdiff's raw JSON for scripted consumption -- use when you would otherwise shell out to objdiff-cli to parse it yourself.",
+                            },
                         },
                         "required": ["symbol", "project_dir"],
+                    },
+                ),
+                Tool(
+                    name="run_symbol_sweep",
+                    description=(
+                        "Diff MANY symbols in one call -- the bulk shape that a per-symbol diff cannot express.\n\n"
+                        "kind='vtable_slots' reproduces the published vtable adjudication: every ??_7 symbol defined in "
+                        "every target object, --include-data diffed, keeping relocation rows whose two sides resolve to "
+                        "different addresses across ham_xbox_r.map + icf_aliases.map (equal address = proven ICF fold = benign).\n"
+                        "kind='data_symbols' is the same engine with your own symbol glob (??_R4*, ??_C@*, ...).\n"
+                        "kind='functions' batch-diffs a supplied symbol list through objdiff --batch (one process, not N).\n\n"
+                        "ALWAYS reports its denominator: universe, examined, and every drop reason. A truncated run says "
+                        "TRUNCATED. Read-only -- diffs already-built objects, never runs ninja, never writes decomp.db."
+                    ),
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "project_dir": {
+                                "type": "string",
+                                "description": "Project directory to sweep. Pass your worktree directory. Must be a worktree of THIS project (title 373307D9).",
+                            },
+                            "kind": {
+                                "type": "string",
+                                "enum": ["vtable_slots", "data_symbols", "functions"],
+                                "description": "vtable_slots (default): every ??_7 vtable. data_symbols: any data symbol glob. functions: batch-diff a supplied symbol list.",
+                            },
+                            "symbol_glob": {
+                                "type": "string",
+                                "description": "fnmatch glob over symbol names. Default '??_7*' for vtable_slots. Ignored for kind='functions'.",
+                            },
+                            "unit_glob": {
+                                "type": "string",
+                                "description": "fnmatch glob over unit names, e.g. 'default/lazer/*'. Default '*' (whole binary). A restricted sweep still reports the full denominator it restricted from.",
+                            },
+                            "symbols": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "kind='functions': the symbols to batch-diff.",
+                            },
+                            "max_symbols": {
+                                "type": "integer",
+                                "description": "TRUNCATE the sweep. Omit for a complete run. A truncated result is labelled TRUNCATED in the coverage block -- this tool will not present a sample as a total.",
+                            },
+                            "workers": {
+                                "type": "integer",
+                                "description": "Parallel objdiff processes (default 12). A whole-binary vtable sweep is ~5100 diffs, roughly 6 min at 16 workers.",
+                            },
+                            "output_format": {
+                                "type": "string",
+                                "enum": ["markdown", "json"],
+                                "description": "markdown (default) or the full JSON result.",
+                            },
+                        },
+                        "required": ["project_dir"],
                     },
                 ),
                 Tool(
@@ -1008,6 +1138,8 @@ class DecompMCPServer:
                 return await self._lookup_rb3(arguments)
             elif name == "run_objdiff":
                 return await self._run_objdiff(arguments)
+            elif name == "run_symbol_sweep":
+                return await self._run_symbol_sweep(arguments)
             elif name == "run_analyze_function":
                 return await self._run_analyze_function(arguments)
             elif name == "run_diff_inspect":
@@ -1893,6 +2025,9 @@ class DecompMCPServer:
         concise = args.get("concise", True)
         full_listing = args.get("full_listing", False)
         unit = args.get("unit", None)
+        include_data = args.get("include_data", False)
+        diff_mode = args.get("diff_mode", "normalized")
+        output_format = args.get("output_format", "markdown")
 
         if not symbol:
             return [TextContent(type="text", text="Error: No symbol provided.")]
@@ -1930,16 +2065,32 @@ class DecompMCPServer:
         # Use functionRelocDiffs=none to ignore address relocation noise
         # (lis/addi pairs with different link-time addresses for same symbol).
         # This matches the behavior of objdiff's report command.
-        base_args = [
-            str(objdiff_cli),
-            "diff",
-            "-p", str(project_dir),
-            symbol,
-            "--verdict",
-            "-c", "functionRelocDiffs=none",
-        ]
-        if unit:
-            base_args.extend(["-u", unit])
+        # diff_mode selects the relocation ruler. 'normalized' is the historical
+        # (and still default) behaviour; 'raw' is what a wrong-vtable-slot or
+        # wrong-callee hunt needs, because normalized scoring discards exactly
+        # the relocation/immediate plane those bugs live in.
+        _RELOC_CFG = {
+            "normalized": "functionRelocDiffs=none",
+            "raw": None,
+            "name_check": "functionRelocDiffs=name_check",
+        }
+        reloc_cfg = _RELOC_CFG.get(diff_mode, "functionRelocDiffs=none")
+
+        def _mk_base_args(sym: str) -> list:
+            a = [
+                str(objdiff_cli),
+                "diff",
+                "-p", str(project_dir),
+                sym,
+                "--verdict",
+            ]
+            if reloc_cfg:
+                a.extend(["-c", reloc_cfg])
+            if unit:
+                a.extend(["-u", unit])
+            return a
+
+        base_args = _mk_base_args(symbol)
 
         build_flag = ["--build"]
         if full_build:
@@ -1953,6 +2104,8 @@ class DecompMCPServer:
             json_extra.append("--full-listing")
         elif context:
             json_extra.extend(["-C", str(context)])
+        if include_data:
+            json_extra.append("--include-data")
 
         try:
             # 1) JSON run (with build) - for enrichment data
@@ -1984,16 +2137,7 @@ class DecompMCPServer:
                     resolved = _resolve_ambiguous_symbol(combined_output, param_hint)
                     if resolved:
                         # Update base_args with the resolved symbol
-                        base_args = [
-                            str(objdiff_cli),
-                            "diff",
-                            "-p", str(project_dir),
-                            resolved,
-                            "--verdict",
-                            "-c", "functionRelocDiffs=none",
-                        ]
-                        if unit:
-                            base_args.extend(["-u", unit])
+                        base_args = _mk_base_args(resolved)
 
                         # Retry JSON run
                         json_cmd = base_args + json_extra + build_flag + ["-f", "json"]
@@ -2036,6 +2180,12 @@ class DecompMCPServer:
             _json_start = json_output.find("{")
             if _json_start > 0:
                 json_output = json_output[_json_start:]
+
+            # 1b) Machine-readable escape hatch. Agents were shelling out to
+            # `objdiff-cli ... -f json` purely to parse the JSON themselves;
+            # there was no MCP path to it at all.
+            if output_format == "json":
+                return [TextContent(type="text", text=json_output.strip())]
 
             # 2) Markdown run (no build, already built) - for display
             # Explicit -f markdown avoids TUI fallback when no TTY is present
@@ -2098,6 +2248,17 @@ class DecompMCPServer:
 
             if enrichment:
                 output += "\n" + enrichment
+
+            # 3a) Data-section diff. The markdown renderer does not show it, so
+            # without this the --include-data flag would be silently inert -- a
+            # worse failure than not having the flag.
+            if include_data:
+                try:
+                    output += "\n" + _format_data_diff(json.loads(json_output))
+                except (json.JSONDecodeError, KeyError):
+                    output += ("\n\n**include_data requested but no data_diff was returned** "
+                               "— this is expected on code symbols; on a data symbol, check "
+                               "that `unit` names the object that DEFINES it.")
 
             # 3b) Stack-layout one-liner (only when actionable signal exists)
             try:
@@ -2195,6 +2356,72 @@ class DecompMCPServer:
             return [TextContent(type="text", text="Error: objdiff timed out after 5 minutes.")]
         except Exception as e:
             return [TextContent(type="text", text=f"Error running objdiff: {e}")]
+
+    async def _run_symbol_sweep(self, args: dict) -> list[TextContent]:
+        """Handle run_symbol_sweep — the bulk / data-symbol shape.
+
+        A sweep is minutes of work, so it runs in a thread rather than blocking
+        the event loop, and its answer always leads with the denominator.
+        """
+        try:
+            project_dir = self._resolve_project_dir(args.get("project_dir"))
+        except FileNotFoundError as e:
+            return [TextContent(type="text", text=f"Error: {e}")]
+
+        kind = args.get("kind", "vtable_slots")
+        output_format = args.get("output_format", "markdown")
+        max_symbols = args.get("max_symbols")
+        workers = int(args.get("workers", 12) or 12)
+
+        try:
+            from . import symbol_sweep
+        except ImportError:  # running as a loose script rather than a package
+            import symbol_sweep  # type: ignore
+
+        def _run():
+            if kind == "functions":
+                syms = args.get("symbols") or []
+                if not syms:
+                    raise ValueError("kind='functions' requires a non-empty `symbols` array")
+                return symbol_sweep.sweep_functions(
+                    str(project_dir), syms, unit=args.get("unit"),
+                    max_symbols=max_symbols,
+                )
+            glob = args.get("symbol_glob") or ("??_7*" if kind == "vtable_slots" else "*")
+            return symbol_sweep.sweep_data_symbols(
+                str(project_dir),
+                symbol_glob=glob,
+                unit_glob=args.get("unit_glob", "*"),
+                max_symbols=max_symbols,
+                workers=workers,
+                scanner_name=f"symbol_sweep.{kind}",
+            )
+
+        try:
+            result = await asyncio.to_thread(_run)
+        except Exception as e:  # noqa: BLE001
+            return [TextContent(type="text", text=f"Sweep failed: {e}")]
+
+        if output_format == "json":
+            text = json.dumps(result, indent=2)
+        else:
+            text = symbol_sweep.render_markdown(result)
+
+        # Large sweeps go to a file rather than the context window, same policy
+        # as run_objdiff. The COVERAGE block always comes back inline.
+        if len(text) > 60000:
+            tmp = Path(tempfile.mktemp(suffix=".json", dir="/tmp/claude"))
+            tmp.parent.mkdir(parents=True, exist_ok=True)
+            tmp.write_text(json.dumps(result, indent=2))
+            head = result.get("_coverage_render", "")
+            summary = symbol_sweep.render_markdown(result, top=25)
+            text = (
+                f"{summary}\n\n---\n**Full result ({len(text)} chars) written to `{tmp}`** — "
+                f"read it with jq rather than pulling it into context.\n"
+            )
+            if head and head not in text:
+                text = head + "\n" + text
+        return [TextContent(type="text", text=text)]
 
     async def _run_analyze_function(self, args: dict) -> list[TextContent]:
         """

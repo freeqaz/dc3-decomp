@@ -11,11 +11,12 @@ Which tool to use for decomp work. For scripts, commands, and reference material
 
 ## MCP Orchestrator Tools (Primary Interface)
 
-Prefer `mcp__orchestrator__` tools for decomp analysis. Use CLI directly for advanced flags not yet exposed through MCP.
+Prefer `mcp__orchestrator__` tools for decomp analysis. The set of flags that still require the raw CLI is now short and named — see [REFERENCE.md § objdiff-cli through MCP](REFERENCE.md#objdiff-cli-through-mcp-what-maps-to-what) for the invocation→tool table and the two categories of legitimate direct use.
 
 | Tool | Description |
 |------|-------------|
-| `run_objdiff` | Build + diff a function. Returns match%, verdict. Source of truth for percentages. Supports `full_listing` for complete instruction output. **Always pass `project_dir`** — omitting it silently measures the main repo instead of your worktree, making your edits invisible. |
+| `run_objdiff` | Build + diff a function. Returns match%, verdict. Source of truth for percentages. `full_listing` for complete instruction output, `include_data` for vtables/RTTI/string pools, `diff_mode="raw"` to see the relocation plane normalized scoring hides, `output_format="json"` for machine-readable output. **Always pass `project_dir`** — omitting it silently measures the main repo instead of your worktree, making your edits invisible. |
+| `run_symbol_sweep` | Diff MANY symbols in one call — the bulk shape a per-symbol diff cannot express. `kind="vtable_slots"` adjudicates every `??_7` in the binary against the linker + ICF-alias maps; `kind="data_symbols"` takes any glob; `kind="functions"` batch-diffs a symbol list. Always reports its denominator. Read-only. |
 | `run_diff_inspect` | Deep mismatch analysis: `diagnose`, `mismatches`, `clusters`, `regswaps`, `offsets`, `replaces`, `compare`, `asm_listing` |
 | `run_analyze_function` | Combined objdiff + struct offset resolution for field-level context |
 | `query_functions` | Find workable functions by unit pattern and match range. **Work-selection index, not a measurement** — `current_percent` drifts (818/31,387 rows off by >0.5pp, worst ~65pp, measured 2026-08-04) and the `has_*` pattern flags need `scripts/backfill_reloc_patterns.py` to be current (they are written by a reloc-*blind* objdiff pass that cannot see four of them). Re-measure with `run_objdiff`; see [REFERENCE.md § Trust caveats](REFERENCE.md#trust-caveats--read-before-believing-a-column) |

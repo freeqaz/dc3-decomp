@@ -1,0 +1,316 @@
+"""Regression tests for scripts/orchestrator/symbol_sweep.py.
+
+Every test here pins a defect that a hand-rolled version of this sweep actually
+had — measured, not imagined — while reproducing the published vtable count in
+docs/analysis/dispatch-data-rescan-20260818.md:
+
+  * the ICF alias map was not read, so the binary's most common benign fold
+    (`OnlyReturns` @0x823e3b70) counted as a divergence and flow/ measured 184
+    slots instead of 11;
+  * undefined external COFF symbols were diffed and their "Symbol not found in
+    target" answers counted as tool errors — 43% of the flow/ sweep;
+  * objdiff's stderr banner was reported as the error text, so every failure
+    looked identical;
+  * a truncated run must not present a sample as a total.
+
+They are hermetic: no objdiff-cli, no build, no database.
+"""
+import json
+import sys
+import types
+import unittest
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from orchestrator import symbol_sweep as S  # noqa: E402
+
+
+MAP_TEXT = """\
+ Address         Publics by Value              Rva+Base       Lib:Object
+
+ 0001:00000b58       ??_7FilePath@@6B@          82001158     App.obj
+ 0001:00001000       ?RefOwner@Object@Hmx@@UBAPAV12@XZ 823e3b70 f i char:Character.obj
+ 0001:00002000       ?Poll@RndPollable@@UAAXXZ  823e3b70 f i flow:Flow.obj
+ 0001:00003000       ?Enter@Flow@@UAAXXZ        82112233 f i flow:Flow.obj
+ 0001:00004000       ?Exit@Flow@@UAAXXZ         82445566 f i flow:Flow.obj
+ 0001:00000000 000005b4H .idata$5                DATA
+"""
+
+ICF_TEXT = """\
+; SYNTHETIC ICF-alias map
+; --- ICF group OnlyReturns@0x823e3b70 @ 823E3B70 ---
+ 0001:00000000       OnlyReturns                     823E3B70  f i icf_aliases.synthetic
+; --- ICF group retailmap:merged_Thing @ 82331448 ---
+ 0001:00000000       merged_Thing                    82331448  f i icf_aliases.synthetic
+"""
+
+
+def _write_project(tmp: Path) -> Path:
+    (tmp / "orig" / "373307D9").mkdir(parents=True)
+    (tmp / "orig" / "373307D9" / "ham_xbox_r.map").write_text(MAP_TEXT)
+    (tmp / "build" / "373307D9").mkdir(parents=True)
+    (tmp / "build" / "373307D9" / "icf_aliases.map").write_text(ICF_TEXT)
+    return tmp
+
+
+class TestLinkerMapParsing(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        self.tmp = Path(tempfile.mkdtemp())
+        _write_project(self.tmp)
+
+    def test_data_rows_without_flags_are_parsed(self):
+        """`??_7...` rows carry no `f i` flag column.
+
+        icf_pairing_bodytest.read_map()'s regex REQUIRES that column, which is
+        why the vtable question needed its own reader: with that regex every
+        vtable in the binary is invisible.
+        """
+        sym2addr, _ = S.parse_linker_map(self.tmp)
+        self.assertEqual(sym2addr["??_7FilePath@@6B@"], "82001158")
+
+    def test_icf_alias_names_resolve(self):
+        """Without this merge, `OnlyReturns` is unresolvable and every fold
+        against it reads as a wrong-target divergence."""
+        sym2addr, stats = S.parse_linker_map(self.tmp)
+        self.assertTrue(stats["icf_alias_map_present"])
+        self.assertEqual(sym2addr["OnlyReturns"], "823e3b70")
+        self.assertEqual(sym2addr["merged_Thing"], "82331448")
+
+    def test_missing_icf_map_is_declared_not_assumed(self):
+        (self.tmp / "build" / "373307D9" / "icf_aliases.map").unlink()
+        sym2addr, stats = S.parse_linker_map(self.tmp)
+        self.assertFalse(stats["icf_alias_map_present"])
+        self.assertNotIn("OnlyReturns", sym2addr)
+
+    def test_section_header_rows_are_counted_not_silently_skipped(self):
+        _, stats = S.parse_linker_map(self.tmp)
+        self.assertEqual(stats["rows_rowlike_unparsed"], 1)
+
+
+class TestAdjudication(unittest.TestCase):
+    def setUp(self):
+        self.sym2addr = {
+            "OnlyReturns": "823e3b70",
+            "?RefOwner@Object@Hmx@@UBAPAV12@XZ": "823e3b70",
+            "?Poll@RndPollable@@UAAXXZ": "823e3b70",
+            "?Enter@Flow@@UAAXXZ": "82112233",
+            "?Exit@Flow@@UAAXXZ": "82445566",
+        }
+
+    def _adj(self, relocs):
+        return S.adjudicate_relocations({"relocations": relocs}, self.sym2addr)
+
+    def test_equal_rows_are_never_kept(self):
+        self.assertEqual(
+            self._adj([{"offset": 0, "kind": "equal", "target_symbol": "?Enter@Flow@@UAAXXZ"}]),
+            [],
+        )
+
+    def test_same_address_is_a_proven_icf_fold_and_benign(self):
+        """The single most common row in the binary: the target names the ICF
+        representative, we name our real method, both live at one address."""
+        rows = self._adj([{
+            "offset": 4, "kind": "replace",
+            "target_symbol": "OnlyReturns",
+            "base_target_symbol": "?RefOwner@Object@Hmx@@UBAPAV12@XZ",
+        }])
+        self.assertEqual(rows, [])
+
+    def test_different_addresses_is_a_wrong_target(self):
+        rows = self._adj([{
+            "offset": 8, "kind": "replace",
+            "target_symbol": "?Enter@Flow@@UAAXXZ",
+            "base_target_symbol": "?Exit@Flow@@UAAXXZ",
+        }])
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["class"], "wrong-target")
+
+    def test_absent_base_target_symbol_means_same_symbol_both_sides(self):
+        """objdiff emits base_target_symbol ONLY when it differs. Treating a
+        blank as 'the base has nothing' invents divergences on every slot."""
+        rows = self._adj([{
+            "offset": 12, "kind": "replace",
+            "target_symbol": "?Enter@Flow@@UAAXXZ",
+        }])
+        self.assertEqual(rows, [])
+
+    def test_base_only_and_target_only_are_a_separate_tier(self):
+        rows = self._adj([
+            {"offset": 44, "kind": "insert", "target_symbol": "",
+             "base_target_symbol": "?Exit@Flow@@UAAXXZ"},
+            {"offset": 48, "kind": "delete", "target_symbol": "??_R4Flow@@6B@"},
+        ])
+        self.assertEqual({r["class"] for r in rows}, {"base-only", "target-only"})
+
+    def test_unresolvable_side_is_labelled_not_asserted(self):
+        rows = self._adj([{
+            "offset": 16, "kind": "replace",
+            "target_symbol": "merged_NeverSeen",
+            "base_target_symbol": "?Enter@Flow@@UAAXXZ",
+        }])
+        self.assertEqual(rows[0]["class"], "unresolved-target")
+
+
+class TestVtableClassName(unittest.TestCase):
+    def test_plain(self):
+        self.assertEqual(S.vtable_class_name("??_7Flow@@6BRndPollable@@@"), "Flow")
+
+    def test_template(self):
+        self.assertEqual(
+            S.vtable_class_name("??_7?$ObjPtrVec@VFlowLabel@@VObjectDir@@@@6B@"),
+            "?$ObjPtrVec@VFlowLabel@@VObjectDir@@",
+        )
+
+
+class _FakeSym:
+    def __init__(self, name, sec):
+        self.name = name
+        self.sec = sec
+
+
+class TestEnumeration(unittest.TestCase):
+    """The universe must include, and separately count, undefined externals."""
+
+    def setUp(self):
+        import tempfile
+        self.tmp = Path(tempfile.mkdtemp())
+        objdir = self.tmp / "build" / "373307D9" / "obj"
+        objdir.mkdir(parents=True)
+        (objdir / "A.obj").write_bytes(b"x")
+        (objdir / "B.obj").write_bytes(b"x")
+        (self.tmp / "objdiff.json").write_text(json.dumps({"units": [
+            {"name": "default/A", "target_path": "build/373307D9/obj/A.obj"},
+            {"name": "default/B", "target_path": "build/373307D9/obj/B.obj"},
+            {"name": "default/gone", "target_path": "build/373307D9/obj/gone.obj"},
+        ]}))
+        fake = types.ModuleType("coffx")
+        table = {
+            b"x": [
+                _FakeSym("??_7Defined@@6B@", 7),
+                _FakeSym("??_7Referenced@@6B@", 0),   # UNDEFINED external
+                _FakeSym("?NotAVtable@@YAXXZ", 3),
+            ]
+        }
+        fake.read_coff = lambda data: (None, table[data])  # noqa: E731
+        self._saved = sys.modules.get("coffx")
+        sys.modules["coffx"] = fake
+        S._load_coffx = lambda: fake
+
+    def tearDown(self):
+        if self._saved is not None:
+            sys.modules["coffx"] = self._saved
+        else:
+            sys.modules.pop("coffx", None)
+
+    def test_undefined_externals_are_dropped_but_counted(self):
+        pairs, stats = S.enumerate_target_symbols(self.tmp, "??_7*", "*")
+        self.assertEqual([p[1] for p in pairs], ["??_7Defined@@6B@"] * 2)
+        self.assertEqual(stats["matched"], 4)          # 2 units x 2 vtables
+        self.assertEqual(stats["undefined_external"], 2)
+        # universe == kept + dropped: the arithmetic that makes a denominator
+        # checkable rather than decorative.
+        self.assertEqual(stats["matched"], len(pairs) + stats["undefined_external"])
+
+    def test_missing_target_object_is_counted(self):
+        _, stats = S.enumerate_target_symbols(self.tmp, "??_7*", "*")
+        self.assertEqual(stats["units_missing_object"], 1)
+        self.assertEqual(stats["units_selected"], 3)
+
+    def test_unit_glob_restricts(self):
+        pairs, stats = S.enumerate_target_symbols(self.tmp, "??_7*", "default/A")
+        self.assertEqual(len(pairs), 1)
+        self.assertEqual(stats["units_selected"], 1)
+
+
+class TestCoverageContract(unittest.TestCase):
+    def test_clean_run_accounts_for_every_row(self):
+        cov = S.make_coverage("t")
+        cov.universe(10, "things")
+        for _ in range(7):
+            cov.examine()
+        cov.drop("reason-a", 3)
+        d = cov.as_dict()
+        self.assertEqual(d["unaccounted"], 0)
+        self.assertFalse(d["truncated"])
+        self.assertTrue(d["complete"])
+
+    def test_unaccounted_rows_are_surfaced(self):
+        cov = S.make_coverage("t")
+        cov.universe(10, "things")
+        cov.examine()
+        d = cov.as_dict()
+        self.assertEqual(d["unaccounted"], 9)
+        self.assertFalse(d["complete"])
+
+    def test_truncation_is_never_presented_as_a_total(self):
+        cov = S.make_coverage("t")
+        cov.universe(18549, "symbols")
+        cov.cap("--max-symbols", 4000, 14549)
+        cov.drop("capped-by---max-symbols", 14549)
+        for _ in range(4000):
+            cov.examine()
+        d = cov.as_dict()
+        self.assertTrue(d["truncated"])
+        self.assertFalse(d["complete"])
+        self.assertIn("TRUNCATED", cov.render())
+        self.assertIn("18549", cov.render())
+
+    def test_render_states_the_denominator(self):
+        cov = S.make_coverage("t")
+        cov.universe(100, "widgets")
+        for _ in range(40):
+            cov.examine()
+        cov.drop("nope", 60)
+        text = cov.render()
+        self.assertIn("40/100", text)
+        self.assertIn("nope", text)
+
+
+class TestErrorExtraction(unittest.TestCase):
+    def test_stderr_banner_is_not_reported_as_the_error(self):
+        """objdiff prints 'Loaded N ICF equivalence entries' on EVERY run."""
+        import subprocess
+        from unittest import mock
+
+        proc = subprocess.CompletedProcess(
+            args=[], returncode=1,
+            stdout="",
+            stderr=("Loaded 8719 ICF equivalence entries from ./build/373307D9/icf_aliases.map\n"
+                    "Failed: Symbol not found in target: ??_7ObjRef@@6B@\n"),
+        )
+        with mock.patch("subprocess.run", return_value=proc):
+            with self.assertRaises(RuntimeError) as ctx:
+                S.diff_symbol("/nowhere", "u", "??_7ObjRef@@6B@")
+        self.assertIn("Symbol not found in target", str(ctx.exception))
+        self.assertNotIn("ICF equivalence entries", str(ctx.exception))
+
+
+class TestRenderMarkdown(unittest.TestCase):
+    def test_coverage_block_leads_the_report(self):
+        cov = S.make_coverage("x")
+        cov.universe(3, "syms")
+        cov.examine(3)
+        result = {
+            "kind": "vtable_slots",
+            "divergent_slots": 1,
+            "length_findings": 0,
+            "divergent_rows_before_dedup": 1,
+            "by_class": {"Flow": 1},
+            "by_finding_class": {"wrong-target": 1},
+            "slots": [{"class_name": "Flow", "offset": 8, "class": "wrong-target",
+                       "target_symbol": "?A@@", "base_target_symbol": "?B@@"}],
+            "length": [],
+            "errors": [], "error_count": 0,
+            "_coverage": cov.as_dict(), "_coverage_render": cov.render(),
+        }
+        md = S.render_markdown(result)
+        self.assertTrue(md.startswith("="))
+        self.assertIn("COVERAGE", md.splitlines()[1])
+        self.assertIn("Divergent slots: 1", md)
+        self.assertIn("0x8", md)
+
+
+if __name__ == "__main__":
+    unittest.main()

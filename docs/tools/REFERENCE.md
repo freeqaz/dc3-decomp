@@ -256,6 +256,65 @@ tools/decompile.sh "CharMirror::Load" --context
 python3 tools/decompctx.py src/path/to/file.cpp -I include -I src
 ```
 
+## objdiff-cli through MCP: what maps to what
+
+`CLAUDE.md` tells agents to use the `mcp__orchestrator__` tools rather than the
+raw CLI. That rule was unfollowable until 2026-08-19: a sweep of 474 session
+transcripts found **464 tool calls that shell out to `bin/objdiff-cli`**, and the
+largest single pattern (84) was `diff -u <unit> '??_7…' --include-data`, which no
+MCP tool could express. Use this table before reaching for the binary.
+
+| Raw invocation | Sanctioned equivalent |
+|---|---|
+| `diff <sym> -f markdown --verdict` | `run_objdiff(symbol, project_dir)` |
+| `diff <sym> -f json --include-instructions` | `run_objdiff(..., output_format="json")` |
+| `diff <sym> --include-data` (vtables, RTTI, string pools) | `run_objdiff(..., include_data=true, unit="…")` |
+| `diff <sym>` with **no** `-c functionRelocDiffs=none` | `run_objdiff(..., diff_mode="raw")` |
+| `-c functionRelocDiffs=name_check` (report.json's ruler) | `run_objdiff(..., diff_mode="name_check")` |
+| `diff <sym> -C 5` / `--full-listing` | `run_objdiff(..., context=5)` / `full_listing=true` |
+| `diff -u <unit> <sym>` (disambiguate) | `run_objdiff(..., unit="…")` |
+| a shell loop over many symbols | `run_symbol_sweep(kind="functions", symbols=[…])` |
+| a shell loop over every `??_7` in every unit | `run_symbol_sweep(kind="vtable_slots")` |
+| `--map-file` for ICF equivalence | automatic — objdiff loads `build/373307D9/icf_aliases.map` from `objdiff.json`, and `run_symbol_sweep` reads it again for address adjudication |
+
+**Still legitimate direct CLI use** (do not route these through MCP):
+
+* the ninja `report generate` rule, `tools/none_guard.py`, `tools/project.py`,
+  `scripts/measure_progress.sh`, `scripts/sync_match_percent.py` — these *are*
+  the measurement layer;
+* `-1/-2` (diff two arbitrary object files with no project), `doc-links`,
+  `report query`/`report function` — no MCP surface, and none is needed for
+  ordinary decomp work.
+
+### `run_symbol_sweep`
+
+The bulk shape. Three kinds:
+
+* `vtable_slots` (default) — every `??_7` symbol **defined** in every target
+  split object, one-shot `--include-data` diffed, keeping relocation rows where
+  both sides name a symbol and the two names resolve to **different** addresses
+  across `orig/373307D9/ham_xbox_r.map` + `build/373307D9/icf_aliases.map`.
+  Equal addresses are a proven ICF fold and benign. `insert`/`delete` rows —
+  where only one side has a slot at all — are a separate **length** tier.
+  ~2,900 diffs, ~3 min at 16 workers.
+* `data_symbols` — same engine, your own `symbol_glob` (`??_R4*`, `??_C@*`, …).
+* `functions` — batch-diff a supplied symbol list through objdiff `--batch`
+  (one process, not N). `--batch` refuses `--include-data`; that is an
+  objdiff-side restriction, not a wrapper omission.
+
+Every sweep leads with a COVERAGE block naming its **universe**, how many rows it
+examined, and every drop reason. `max_symbols` truncation is labelled
+`TRUNCATED`. This is the same contract `scripts/analysis/coverage.py` enforces;
+`symbol_sweep` imports that module when present and falls back to a
+same-shaped local implementation otherwise.
+
+Sweeps are read-only: they diff already-built objects, never run ninja, never
+write `decomp.db`. Safe to run alongside the build/permuter fleet.
+
+CLI form, for scripts: `python3 -m scripts.orchestrator.symbol_sweep --project .
+--kind vtable_slots --format json --out /tmp/x.json` (exit 3 = truncated,
+4 = unaccounted rows).
+
 ## Compiler Documentation
 
 | Doc | Description |

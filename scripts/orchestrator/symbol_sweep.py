@@ -442,10 +442,15 @@ def adjudicate_relocations(
             continue
         tgt = r.get("target_symbol") or ""
         base = r.get("base_target_symbol") or ""
-        if tgt and not base:
-            # objdiff only emits base_target_symbol when it DIFFERS, so a row
-            # with a target name and no base name means both sides name the
-            # same symbol.  Same name -> same address -> benign.
+        if kind not in ("insert", "delete") and tgt and not base:
+            # For `replace`, objdiff emits base_target_symbol ONLY when it
+            # DIFFERS, so a target name with no base name means both sides name
+            # the same symbol: same name -> same address -> benign.
+            #
+            # That reading is WRONG for `delete`, where the base side genuinely
+            # has no slot at all.  Applying it unconditionally (the first draft
+            # here) silently discarded every target-only slot -- including the
+            # `??_R4` RTTI locators -- as if they matched.  Gate on `kind`.
             continue
         ta = sym2addr.get(tgt) if tgt else None
         ba = sym2addr.get(base) if base else None
