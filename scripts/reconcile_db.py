@@ -155,10 +155,21 @@ def reconcile(args: argparse.Namespace) -> int:
         return True
 
     # (a) db.current_percent vs report.fuzzy differ >= threshold (shared non-SDK)
+    #
+    # Honour `excluded`, as every other check here does via is_authorable().
+    # Without this, the 1,275 rows pinned to the `default/link_glue` pseudo-unit
+    # are compared anyway: 11 of them name a symbol that also lives in a real
+    # unit at 100 %, their glue row is permanently 0.0 (sync skips glue entries
+    # because report.json gives them a null fuzzy), and (a) reported a standing
+    # "11 drift items" on a database that was correct. A check that never reads
+    # clean is a check nobody looks at — real drift would have hidden behind the
+    # constant.
     a_drift: list[str] = []
     for r in rows:
         sym = r["symbol"]
         if sym not in report:
+            continue
+        if has_excluded and r["excluded"]:
             continue
         cp = r["current_percent"]
         if cp is None:

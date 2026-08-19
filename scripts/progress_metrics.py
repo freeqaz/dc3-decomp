@@ -39,6 +39,15 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_REPORT = REPO_ROOT / "build" / "373307D9" / "report.json"
 DEFAULT_MD = REPO_ROOT / "docs" / "PROGRESS_METRICS.md"
 
+# The link-glue pseudo-unit. It is not a translation unit of the original
+# binary: it holds ALTERNATENAME scaffolding this repo invented so the link
+# resolves. dtk emits an entry here for every glue symbol, and some of those
+# names ALSO name a real function that lives in a real unit. When that happens
+# report.json contains the symbol twice -- once in its real unit (scored) and
+# once here (always 0 %) -- so a function that is fully matched still drags one
+# unmatched row into the denominator. See dedup_glue_shadows().
+GLUE_UNIT = "default/link_glue"
+
 
 # ---------------------------------------------------------------------------
 # Data structures
@@ -77,6 +86,10 @@ class Metrics:
     total_units: int = 0
     complete_units: int = 0       # all fns normalized == 100
 
+    # Rows dropped from the denominator as link-glue shadows of an
+    # already-matched real function. Reported, never silent.
+    glue_shadows_dropped: int = 0
+
     @property
     def matched_code_pct(self) -> float:
         if self.total_code == 0:
@@ -106,6 +119,43 @@ class Metrics:
 # Parser
 # ---------------------------------------------------------------------------
 
+def dedup_glue_shadows(data: dict) -> set[str]:
+    """Names in the link-glue pseudo-unit that shadow an already-matched function.
+
+    ``default/link_glue`` is scaffolding, not a translation unit of the original
+    binary, and every row in it scores 0 %. When one of those rows carries the
+    name of a function that ALSO exists in a real unit at normalized 100 %, the
+    same function is counted twice: once as matched, once as unmatched. That is
+    a double-count, and it makes the headline understate progress.
+
+    Return the set of link-glue names to skip. Deliberately narrow: only names
+    whose real counterpart is *fully matched* are dropped. The ~36 link-glue
+    rows with no real counterpart (``_strnicmp``, ``gethostbyname``,
+    ``__link_glue_noop``, the curl/jpeg/zlib allocator hooks, …) stay in the
+    denominator, because some of them do name genuine unwritten work
+    (``FormatString::operator<<`` overloads, ``HDCache::Flush``) and hiding them
+    would be the exact failure this project keeps finding in its own tooling.
+    """
+    real_matched: set[str] = set()
+    for unit in data.get("units", []):
+        if unit.get("name", "") == GLUE_UNIT:
+            continue
+        for fn in unit.get("functions", []) or []:
+            norm = fn.get("match_percent_normalized")
+            if norm is not None and float(norm) >= 100.0:
+                real_matched.add(fn.get("name", ""))
+
+    shadows: set[str] = set()
+    for unit in data.get("units", []):
+        if unit.get("name", "") != GLUE_UNIT:
+            continue
+        for fn in unit.get("functions", []) or []:
+            name = fn.get("name", "")
+            if name in real_matched:
+                shadows.add(name)
+    return shadows
+
+
 def parse_report(report_path: Path) -> tuple[Metrics, Metrics]:
     """Parse report.json; return (all_metrics, authorable_metrics)."""
     with open(report_path) as f:
@@ -113,10 +163,16 @@ def parse_report(report_path: Path) -> tuple[Metrics, Metrics]:
 
     all_m = Metrics()
     auth_m = Metrics()
+    glue_shadows = dedup_glue_shadows(data)
 
     for unit in data.get("units", []):
         unit_name = unit.get("name", "")
-        fns = unit.get("functions", [])
+        fns = unit.get("functions", []) or []
+        if unit_name == GLUE_UNIT and glue_shadows:
+            dropped = sum(1 for fn in fns if fn.get("name", "") in glue_shadows)
+            fns = [fn for fn in fns if fn.get("name", "") not in glue_shadows]
+            all_m.glue_shadows_dropped += dropped
+            auth_m.glue_shadows_dropped += dropped
         measures = unit.get("measures", {})
 
         unit_total_code = int(measures.get("total_code", 0))
@@ -200,6 +256,9 @@ def print_metrics(all_m: Metrics, auth_m: Metrics) -> None:
     for p in SDK_UNIT_PREFIXES:
         print(f"    {p}")
     print(f"  SDK/vendor bytes excluded: {fmt_bytes(xdk_bytes)} ({xdk_pct:.1f}% of XEX)")
+    if auth_m.glue_shadows_dropped:
+        print(f"  link-glue shadow rows deduped: {auth_m.glue_shadows_dropped}"
+              f"  (same symbol counted twice: 100% in its real unit, 0% in {GLUE_UNIT})")
     print()
     print(f"  [XEX total — XDK-diluted headline]")
     print(f"    Matched code (raw bytes):  {all_m.matched_code_pct:.2f}%"
