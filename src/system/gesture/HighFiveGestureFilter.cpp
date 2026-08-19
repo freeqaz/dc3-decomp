@@ -9,6 +9,14 @@ HighFiveGestureFilter::HighFiveGestureFilter() : mHighFived(false) {}
 
 HighFiveGestureFilter::~HighFiveGestureFilter() {}
 
+BEGIN_HANDLERS(HighFiveGestureFilter)
+    HANDLE_SUPERCLASS(Hmx::Object)
+END_HANDLERS
+
+BEGIN_PROPSYNCS(HighFiveGestureFilter)
+    SYNC_SUPERCLASS(Hmx::Object)
+END_PROPSYNCS
+
 bool HighFiveGestureFilter::CheckHighFive() {
     // One-shot check: returns true once after a high-five is detected,
     // then resets for the next detection

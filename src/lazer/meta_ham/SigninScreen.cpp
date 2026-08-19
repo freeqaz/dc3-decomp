@@ -17,6 +17,10 @@ BEGIN_HANDLERS(SigninScreen)
     HANDLE_SUPERCLASS(HamScreen)
 END_HANDLERS
 
+BEGIN_PROPSYNCS(SigninScreen)
+    SYNC_SUPERCLASS(Hmx::Object)
+END_PROPSYNCS
+
 void SigninScreen::Poll() { UIScreen::Poll(); }
 
 void SigninScreen::Enter(UIScreen *screen) {
