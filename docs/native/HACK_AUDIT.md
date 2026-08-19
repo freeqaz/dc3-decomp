@@ -488,6 +488,16 @@ appeared.
 All 41 are target-faithful. **Exactly one real leak in the whole tree, and it was
 `DelayEffect::Process`.**
 
+The "2 regex artifacts" in the original hand-counted 24 was also low. Re-deriving that
+subset mechanically (old regex, corrected statement counting, at `eda64e956`) gives 25
+sites of which **3** are not guards at all — the missed one is `GetScoreBonus`'s
+`if (!ratings) ratings = &sDefaultRatingThresholds;`, the *same* substitution pattern
+that was correctly identified one function earlier in `DetectFracToRatingFrac`. Across
+the whole 107-site sub-100 % population the old regex admitted **26** non-guards:
+substitutions (`if (!cam) cam = RndCam::Current();`), `goto`s, `MILO_NOTIFY` + `else`.
+The corrected `guard_shape()` excludes all 26 rather than tallying and apologising for
+them.
+
 ### Do NOT use the `insert` count as the discriminator
 
 An earlier revision of this section said the cheap discriminator for a leaked guard is
