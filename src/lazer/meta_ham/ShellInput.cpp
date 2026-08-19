@@ -112,13 +112,13 @@ void ShellInput::Init() {
     SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
     handle.AddCallback(this);
     mCursorPanel = ObjectDir::Main()->Find<UIPanel>("cursor_panel");
-    MILO_ASSERT(mCursorPanel->CheckIsLoaded(), 95);
-    MILO_ASSERT(mCursorPanel->LoadedDir(), 96);
+    MILO_ASSERT_EXPR(mCursorPanel->CheckIsLoaded(), 95);
+    MILO_ASSERT_EXPR(mCursorPanel->LoadedDir(), 96);
     mDepthBuffer = new DepthBuffer();
     mDepthBuffer->Init(mCursorPanel);
     mWrongHandPosAnim =
         mCursorPanel->DataDir()->Find<RndAnimatable>("wrong_hand_position.anim", true);
-    MILO_ASSERT(TheGameData, 102);
+    MILO_ASSERT_EXPR(TheGameData, 102);
     mSkelIdentifier = new SkeletonIdentifier;
     mSkelIdentifier->Init();
     mSkelChooser = new SkeletonChooser;

@@ -97,6 +97,27 @@ extern const char *kAssertStr;
         }                                                                                \
     } while (0)
 
+// Same emitted code as MILO_ASSERT, but opens NO lexical scope.
+//
+// The shipping DC3 binary contains more than one assert spelling.  MSVC stamps
+// a per-function "scopes opened so far" counter into every function-local
+// static's mangled name, so the binary tells us how many scopes each assert
+// opened.  The do/while form above opens five; 16 functions' statics can only
+// be reconciled at five, and swapping the whole build to this expression form
+// costs 10,556 B of matched code (measured 2026-08-19).  But four functions --
+// Hmx::Object::ExportPropertyChange, `anonymous namespace'::MonthToken,
+// ShellInput::Init and KinectSharePanel::OnPostLink -- require an assert that
+// opens NONE, and this is the spelling that satisfies them.  It is also the
+// spelling the sibling RB3 decomp settled on (../rb3/src/system/os/Debug.h).
+// Both forms compile to byte-identical instructions; only the numbering of the
+// statics that follow them differs.
+//
+// DO NOT use this at a new call site unless the target's scope index for a
+// local static in that same function demands it.  See
+// docs/decomp/patterns/fixable-scope-index.md.
+#define MILO_ASSERT_EXPR(cond, line)                                                     \
+    ((cond) || (TheDebugFailer << MakeString(kAssertStr, __FILE__, line, #cond), 0))
+
 #define MILO_ASSERT_FMT(cond, ...)                                                       \
     do {                                                                                 \
         if (!(cond)) {                                                                   \

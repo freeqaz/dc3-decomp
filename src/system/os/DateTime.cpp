@@ -100,7 +100,7 @@ void DateTime::FromFileTime(const FILETIME &ft) {
 
 namespace {
     Symbol MonthToken(int month) {
-        MILO_ASSERT((0) <= (month) && (month) <= (11), 0x1A1);
+        MILO_ASSERT_EXPR((0) <= (month) && (month) <= (11), 0x1A1);
         static Symbol month_symbols[12] = {
             "month_january",   "month_february", "month_march",    "month_april",
             "month_may",       "month_june",     "month_july",     "month_august",
