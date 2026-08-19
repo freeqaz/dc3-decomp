@@ -330,7 +330,8 @@ Four functions reconcile at an assert costing **3** (`if (!(c)) { fail; }`):
 | | `campaign_song_locked` | 25 | 21 | 2 | −4 |
 | | `song_select_song_prefix` | 41 | 39 | 2 | **−2** |
 
-All four are below their brace-only floor at cost 5 (`FillButtonMsg` floor 7 vs
+All four are zero-mismatch on instructions (146, 135, 142, 187, all equal), and
+all four are below their brace-only floor at cost 5 (`FillButtonMsg` floor 7 vs
 target 5; `UpdateList` 12 vs 8; `CampaignMqCrewProvider::Text` 21 vs 19 even
 with both single-statement arms unbraced), so this is not a brace either. And
 the first five rows land *exactly* at cost 3.
@@ -341,10 +342,15 @@ But it is not landed, for two reasons:
    cost-0 form was landed only because rb3 has it verbatim; there is nothing
    equivalent here.
 2. **It is not even self-consistent.** `CampaignSongProvider::Text`'s last
-   static needs a further **+2** on top of cost 3. Two `else if` rungs written
-   as `else { if ... }` would supply exactly that and are code-neutral — but the
-   sibling `CampaignMqCrewProvider::Text` must *not* have that rewrite, so the
-   combined story needs a per-file style split as well as a per-file macro.
+   static needs a further **+2** on top of cost 3. Rewriting its two `else if`
+   rungs as `else { if ... }` supplies exactly that — measured 2026-08-19:
+   `song_select_song_prefix` 41 → 43, the two earlier statics unmoved, and the
+   function still 187/187 instructions equal, so the rewrite is genuinely
+   code-neutral. But it only helps *in combination with* cost-3 asserts (alone
+   it moves 41 → 43 away from the target's 39), and the sibling
+   `CampaignMqCrewProvider::Text` must *not* have the rewrite or its statics
+   overshoot. So the combined story needs a per-file brace style as well as a
+   per-file macro, which is two unwitnessed assumptions to buy four rows.
 
 Enough to keep the row on the worklist; nowhere near enough to add a macro.
 
