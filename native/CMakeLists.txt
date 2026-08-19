@@ -1123,6 +1123,7 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/Synth_Stub.cpp
     src/platform/Skeleton_Native.cpp
     src/platform/GestureMgr_Native.cpp
+    src/platform/NuiImageSurface_Native.cpp
     $<$<BOOL:${ENABLE_NCNN}>:src/pose/PoseEstimator.cpp>
     $<$<BOOL:${ENABLE_NCNN}>:src/pose/PoseTracker.cpp>
     $<$<BOOL:${ENABLE_NCNN}>:src/pose/CameraCapture.cpp>
@@ -1288,6 +1289,7 @@ set(DC3_WEB_CORE_SOURCES
     src/platform/Synth_Stub.cpp
     src/platform/Skeleton_Native.cpp
     src/platform/GestureMgr_Native.cpp
+    src/platform/NuiImageSurface_Native.cpp
     # ThreadCall_Native.cpp lifted to milo-engine (engine 0.2b drop-xdk POSIX
     # graduation); compiled via DC3_WEB_LIFTED_ENGINE_SOURCES below.
     $<$<BOOL:${ENABLE_NCNN}>:src/pose/PoseEstimator.cpp>
@@ -1905,6 +1907,7 @@ if(BUILD_TESTS)
         tests/test_threadtask_replace.cpp
         tests/test_shaderprogram_cache_logic.cpp
         tests/test_dta_eval_endpoint.cpp
+        tests/test_camera_yuv_decode.cpp
         src/dc3_render_hook.cpp       # Phase 0.2a: HamRenderHook (registers with milo-engine)
         ${DC3_ENGINE_SOURCES}
         ${DC3_NATIVE_CORE_SOURCES_ENGINE}
