@@ -84,6 +84,7 @@ sys.exit(cov.emit())
 | `0` | full census: `universe == examined + sum(drops)`, nothing truncated |
 | `3` | `TRUNCATED` — a cap cut rows out of the **analysis**. `--allow-truncation` downgrades to 0; the JSON still says `truncated: true` |
 | `4` | `UNACCOUNTED` — `universe != examined + sum(drops)`. **Nothing downgrades this.** |
+| `5` | `EXIT_NO_INPUT` — the corpus was empty, an input was missing, or a sub-tool failed. Raised by the scanner (`sys.exit(cov.emit() or EXIT_NO_INPUT)`), not by `emit()` |
 
 Exit 4 is the part with teeth. It fires whenever some bare `continue` skipped
 `drop()`, which means it catches the *next* instance of this bug without anyone

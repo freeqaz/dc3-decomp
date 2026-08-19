@@ -92,6 +92,7 @@ __all__ = [
     "add_coverage_args",
     "EXIT_TRUNCATED",
     "EXIT_UNACCOUNTED",
+    "EXIT_NO_INPUT",
 ]
 
 # Distinct exit codes so a caller (or CI) can tell the two failure shapes apart
@@ -99,6 +100,14 @@ __all__ = [
 EXIT_OK = 0
 EXIT_TRUNCATED = 3
 EXIT_UNACCOUNTED = 4
+# The run had nothing to look at: the corpus was empty, an input path was
+# missing, or a sub-tool failed.  A scanner in this state must NOT print a clean
+# verdict — "no input" and "no bugs" are different findings, and four DTA
+# scanners spent months printing the second when they meant the first (their
+# corpus lives in `orig-assets/`, which is untracked and therefore absent from
+# every git worktree).  `emit()` never returns this on its own; raise it from
+# the scanner:  sys.exit(cov.emit() or EXIT_NO_INPUT)
+EXIT_NO_INPUT = 5
 
 _BAR = "=" * 78
 
