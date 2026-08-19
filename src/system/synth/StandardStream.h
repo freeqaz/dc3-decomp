@@ -61,7 +61,6 @@ public:
     virtual void SetFXCore(int, FXCore) {}
     virtual FXCore GetFXCore(int) const { return kFXCoreNone; }
     virtual void SetFXSend(int, FxSend *);
-    virtual void SetADSR(int, const ADSR &) {}
     virtual void SetSpeed(float);
     virtual float GetSpeed() const { return mSpeed; }
     virtual void LoadMarkerList(const char *);
@@ -82,7 +81,13 @@ public:
     virtual FaderGroup &ChannelFaders(int);
     virtual void AddVirtualChannels(int);
     virtual void RemapChannel(int, int);
-    StreamReceiver *GetChannel(int i) const { return mChannels[i]; }
+    // VIRTUAL, and declared here rather than with the non-virtual accessors:
+    // the target's ??_7StandardStream@@6BStream@@@ has
+    // ?GetChannel@StandardStream@@UBAPAVStreamReceiver@@H@Z at slot +0xc8,
+    // between RemapChannel (+0xc4) and UpdateTime (+0xcc). `UBA` is
+    // public-virtual-const. With it non-virtual our vtable was one slot short
+    // and every slot from +0xc8 down was shifted by four bytes.
+    virtual StreamReceiver *GetChannel(int i) const { return mChannels[i]; }
     virtual void UpdateTime();
     virtual void UpdateTimeByFiltering();
     virtual float GetRawTime();

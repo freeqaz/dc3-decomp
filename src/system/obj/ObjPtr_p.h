@@ -724,30 +724,31 @@ void ObjPtrList<T1, T2>::Link(iterator it, Node *node) {
 template <class T1, class T2>
 typename ObjPtrList<T1, T2>::Node *ObjPtrList<T1, T2>::Unlink(Node *node) {
     MILO_ASSERT(node != NULL && mNodes != NULL, 0x26B);
+    Node *next;
     if (node == mNodes) {
+        // Removing head: the successor (or NULL) becomes the new head, and is
+        // also what we return. The target keeps a single `mSize--` and a single
+        // return for all three arms, so do not early-return from any of them.
         if (mNodes->next != nullptr) {
             mNodes->next->prev = mNodes->prev;
             mNodes = mNodes->next;
         } else {
             mNodes = nullptr;
-            mSize--;
-            return nullptr;
         }
+        next = mNodes;
     } else if (node == mNodes->prev) {
         // Removing tail
-        mNodes->prev = node->prev;
+        mNodes->prev = mNodes->prev->prev;
         mNodes->prev->next = nullptr;
-        mSize--;
-        return mNodes->prev;
+        next = mNodes->prev;
     } else {
         // Middle node
         node->prev->next = node->next;
         node->next->prev = node->prev;
-        mSize--;
-        return node->next;
+        next = node->next;
     }
     mSize--;
-    return mNodes;
+    return next;
 }
 
 template <class T1, class T2>
@@ -788,8 +789,10 @@ ObjPtrVec<T1, T2>::erase(typename ObjPtrVec<T1, T2>::iterator it) {
 
 template <class T1, class T2>
 typename ObjPtrVec<T1, T2>::iterator ObjPtrVec<T1, T2>::FindRef(ObjRef *ref) {
-    for (iterator it = begin(); it != end(); ++it) {
-        if (&(*it) == ref) return it;
+    // A Node's Parent() *is* the ObjPtrVec that owns it, so the linear scan the
+    // decomp used to do is unnecessary: ask the ref who owns it.
+    if (ref->Parent() == this) {
+        return iterator(static_cast<Node *>(ref));
     }
     return end();
 }

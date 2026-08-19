@@ -485,7 +485,7 @@ public:
     void clear() { mNodes.clear(); }
     void reserve(unsigned int n) { mNodes.reserve(n); }
     void unique();
-    __declspec(noinline) void Set(iterator it, T1 *obj);
+    void Set(iterator it, T1 *obj);
     void merge(const ObjPtrVec &);
     Hmx::Object *Owner() const { return mOwner; }
     ObjListMode Mode() const { return mListMode; }
@@ -573,11 +573,20 @@ private:
     virtual bool Replace(ObjRef *, Hmx::Object *);
 #else
     // The shipped linker map co-lists ObjPtrList<T>::RefOwner / ::Replace with
-    // ObjPtrVec<T>::RefOwner / ::Replace at 0x8285ae50 (>100 names, /OPT:ICF),
-    // so retail's container-level overrides are the SAME "should never be
-    // called" stub ObjPtrVec carries -- the list's own ObjRefOwner slots are
-    // never used (Node::Replace calls ObjPtrList::ReplaceNode, which forwards
-    // to the OUTER mOwner->Replace).
+    // ObjPtrVec<T>::RefOwner / ::Replace at 0x8285ae50 -- exactly 104 names
+    // under /OPT:ICF: 33 ObjPtrList::Replace + 33 ObjPtrList::RefOwner +
+    // 19 ObjPtrVec::Replace + 19 ObjPtrVec::RefOwner. So retail's
+    // container-level overrides are the SAME "should never be called" stub
+    // ObjPtrVec carries -- the list's own ObjRefOwner slots are never used
+    // (Node::Replace calls ObjPtrList::ReplaceNode, which forwards to the
+    // OUTER mOwner->Replace).
+    //
+    // What proves the body is this stub is not the return types (`return
+    // false` and `return nullptr` both lower to `li r3,0; blr` and fold
+    // happily): it is that the body at 0x8285ae50 does
+    // `lis r11,0x8201; addi r4,r11,-0x7EE8` = &0x82008118, and 0x82008118 in
+    // .rdata is the literal string "should never be called".
+    // See docs/analysis/objptr-icf-fold-bodies-20260819.md.
     virtual Hmx::Object *RefOwner() const {
         MILO_FAIL("should never be called");
         return nullptr;
