@@ -118,9 +118,8 @@ void LoopVizCallback::DrawHashMarks(
 }
 
 float LoopVizCallback::UpdateOverlay(RndOverlay *o, float y) {
-    if (!TheMaster || !TheMaster->GetAudio() || !TheMaster->GetAudio()->GetSongStream()) {
+    if (!TheMaster || !TheMaster->GetAudio() || !TheMaster->GetAudio()->GetSongStream())
         return y;
-    }
 
     mLoopStartChangeTimer -= TheTaskMgr.DeltaSeconds();
     mLoopEndChangeTimer -= TheTaskMgr.DeltaSeconds();
