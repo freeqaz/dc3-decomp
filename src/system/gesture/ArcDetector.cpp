@@ -391,7 +391,10 @@ float ArcDetector::UpdateOverlay(RndOverlay *overlay, float y) {
         }
     }
     if (jointPathCopy.begin() != jointPathCopy.end()) {
-        float aspectRatio = (float)TheRnd.Width() / (float)TheRnd.Height();
+        // The shipped build loads mWidth (TheRnd+0x40) first; MSVC evaluates the
+        // operands right to left, so Width() is the *divisor*.  Cross-checked against
+        // rb3-xenon's ArcDetector::UpdateOverlay, which spells Height() / Width().
+        float aspectRatio = (float)TheRnd.Height() / (float)TheRnd.Width();
         float halfArcScale = aspectRatio / (mSwipeExtentX * 2.0f);
         float drawY = y;
 
