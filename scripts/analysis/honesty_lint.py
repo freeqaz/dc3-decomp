@@ -81,8 +81,6 @@ ALLOW_UNESCAPED_LIKE = {
 ALLOW_DISPLAY_ONLY: Dict[str, str] = {
     "scripts/analysis/remaining_work.py":
         "max_per_cat shortens a per-category printout; the totals above it are full",
-    "scripts/analysis/header_cluster.py":
-        "limit shortens the cluster printout; cluster counts are computed first",
     "scripts/analysis/compare_progress.py":
         "limit shortens the regression/improvement listings; the headline deltas are full",
     "scripts/at_limit_rb3_candidates.py":

@@ -20,6 +20,35 @@ Usage:
 
     # JSON output
     python scripts/analysis/function_health.py --symbol "..." --json
+
+COVERAGE / HONESTY NOTES  (see scripts/analysis/coverage.py)
+------------------------------------------------------------
+**Batch mode was answering "no work exists" to every query.**  The SQL was
+
+    SELECT symbol, demangled, unit, source_path, match_percent FROM functions ...
+
+and `decomp.db`'s `functions` table has NEITHER a `source_path` NOR a
+`match_percent` column — they are `current_percent` and
+`match_percent_normalized`.  Every execution raised `sqlite3.OperationalError`,
+`except Exception: return []` swallowed it, and the caller printed
+`No functions found matching criteria.` and exited 1.  A schema error and an
+empty result were indistinguishable, so the tool reported an empty pool for
+every unit anyone asked about.  Verified before the fix:
+`--unit 'default/system/rndobj/*' --min 90` -> `No functions found matching
+criteria.`; after the fix the same query returns 255 rows.
+
+The database PATH was wrong too: it pointed at `build/373307D9/decomp.db`,
+which is a zero-byte placeholder.  The populated database is `decomp.db` at the
+repo root.  A zero-byte file passes `.exists()` and `sqlite3.connect()` happily,
+so this failed as "no such table" — swallowed by the same handler.  Path
+resolution is now explicit, overridable with `--db`, and a database with no
+`functions` table is a LOUD error.
+
+Other changes: the pool size is measured with `COUNT(*)` before `--limit` is
+applied, so a truncated run knows and prints its own denominator; the batch
+`ORDER BY` gained a `symbol` tie-break (without it, *which* 50 rows the cap kept
+was undefined); and match percentages render with enough precision that 99.97
+can no longer print as `100.0`.
 """
 
 from __future__ import annotations
@@ -27,6 +56,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sqlite3
 import subprocess
 import sys
 from dataclasses import dataclass, field, asdict
@@ -35,6 +65,48 @@ from typing import Optional
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_DIR))
+
+from scripts.analysis.coverage import CoverageReport, add_coverage_args  # noqa: E402
+
+
+# Columns that actually exist on `functions`.  `match_percent` and
+# `source_path` DO NOT — see the module docstring.
+PERCENT_COLUMNS = ("match_percent_normalized", "current_percent")
+DEFAULT_PERCENT_COLUMN = "match_percent_normalized"
+
+# Candidate database locations, in the order they are tried.  The first entry
+# is the real one; the second is the path the old code hardcoded and is kept
+# only so a stale tree still resolves.
+DB_CANDIDATES = ("decomp.db", "build/373307D9/decomp.db")
+
+
+class DatabaseUnavailableError(RuntimeError):
+    """No usable decomp.db.  Raised instead of returning an empty pool.
+
+    "The database is missing/empty" and "there is no work in this unit" used to
+    print identically (`No functions found matching criteria.`), which is how
+    this tool spent its life reporting an exhausted pool it had never queried.
+    """
+
+
+class QueryFailedError(RuntimeError):
+    """The batch SQL raised.  Never swallowed into an empty result."""
+
+
+def _fmt_pct(p: float | None, width: int = 0) -> str:
+    """Render a percentage without letting a sub-100 value print as `100.0`.
+
+    Every percentage surface in this project rounds; two real bugs have already
+    hidden under a rendered `100.0` that was really 99.97 (see
+    docs/decomp/patterns/rounded-100-hides-real-bugs.md).  Anything strictly
+    below 100 that would round up renders as `<100` instead.
+    """
+    if p is None:
+        return "n/a".rjust(width) if width else "n/a"
+    s = f"{p:.3f}"
+    if p < 100.0 and float(s) >= 100.0:
+        s = "<100"
+    return s.rjust(width) if width else s
 
 
 @dataclass
@@ -84,17 +156,39 @@ class HealthReport:
     # Workability score (higher = more worth working on)
     workability_score: float = 0.0
 
+    # Anything that went wrong while building this report.  Previously these
+    # were `except ...: pass` / `return None`, so a failed objdiff and a clean
+    # function looked the same in JSON.
+    errors: list[str] = field(default_factory=list)
+
 
 # ---------------------------------------------------------------------------
 # Analysis helpers
 # ---------------------------------------------------------------------------
 
 
-def _run_objdiff(symbol: str) -> dict | None:
-    """Run objdiff and return parsed JSON data."""
+def _run_objdiff(symbol: str) -> tuple[dict | None, str]:
+    """Run objdiff and return ``(data, error)``.
+
+    Returns the reason alongside the None so that "objdiff is not built",
+    "objdiff timed out" and "this symbol has no diff" stop being the same
+    result.  The old signature returned a bare None for all three.
+    """
+    # TODO(repair): this invocation CANNOT SUCCEED and never has.  objdiff-cli
+    # takes the symbol as a POSITIONAL argument — there is no `--symbol` flag —
+    # so every call exits 1 with "Unrecognized argument: --symbol".  Combined
+    # with the old `except Exception: return None`, that made EVERY single-
+    # function report come back `verdict=error / "objdiff failed"` with no
+    # reason attached, indistinguishable from a genuinely undiffable symbol.
+    # Verified on this tree 2026-08-19 (objdiff-cli diff --help).
+    # NOT fixed here on purpose: repairing the call changes what this tool
+    # FINDS, which does not belong in an honesty pass.  What changed is that
+    # the failure now names itself instead of vanishing.  See also the project
+    # rule that analysis should go through the orchestrator MCP tools rather
+    # than calling objdiff-cli directly.
     cli = PROJECT_DIR / "bin" / "objdiff-cli"
     if not cli.exists():
-        return None
+        return None, f"objdiff-cli not found at {cli}"
     try:
         result = subprocess.run(
             [str(cli), "diff", "--symbol", symbol,
@@ -102,11 +196,18 @@ def _run_objdiff(symbol: str) -> dict | None:
             capture_output=True, text=True, timeout=60,
             cwd=str(PROJECT_DIR),
         )
-        if result.returncode != 0:
-            return None
-        return json.loads(result.stdout)
-    except Exception:
-        return None
+    except subprocess.TimeoutExpired:
+        return None, "objdiff-cli timed out after 60s"
+    except OSError as exc:
+        return None, f"could not launch objdiff-cli: {exc}"
+    if result.returncode != 0:
+        tail = (result.stderr or "").strip().splitlines()
+        return None, (f"objdiff-cli exited {result.returncode}"
+                      + (f": {tail[-1][:200]}" if tail else ""))
+    try:
+        return json.loads(result.stdout), ""
+    except json.JSONDecodeError as exc:
+        return None, f"objdiff-cli emitted unparseable JSON: {exc}"
 
 
 def _classify_mismatches(instructions: list[dict]) -> tuple[list[MismatchCategory], int]:
@@ -340,14 +441,17 @@ def analyze_function(symbol: str) -> HealthReport:
     demangled = ""
     unit = ""
     source_path = ""
+    lookup_error = ""
     try:
         from scripts.orchestrator.db_helpers import resolve_symbol_info
         info = resolve_symbol_info(symbol)
         demangled = info.get("demangled", "")
         unit = info.get("unit", "")
         source_path = info.get("source_path", "")
-    except Exception:
-        pass
+    except Exception as exc:
+        # Was a bare `pass`: a broken DB lookup and a symbol with no metadata
+        # produced identical output.  Recorded, not swallowed.
+        lookup_error = f"resolve_symbol_info failed: {exc.__class__.__name__}: {exc}"
 
     report = HealthReport(
         symbol=symbol,
@@ -357,12 +461,15 @@ def analyze_function(symbol: str) -> HealthReport:
         match_percent=0.0,
         total_instructions=0,
     )
+    if lookup_error:
+        report.errors.append(lookup_error)
 
     # Run objdiff
-    data = _run_objdiff(symbol)
+    data, objdiff_error = _run_objdiff(symbol)
     if data is None:
         report.verdict = "error"
-        report.verdict_reason = "objdiff failed"
+        report.verdict_reason = f"objdiff failed: {objdiff_error}"
+        report.errors.append(objdiff_error)
         return report
 
     report.match_percent = data.get("normalized_match_percent", 0.0)
@@ -403,39 +510,156 @@ def analyze_function(symbol: str) -> HealthReport:
 # ---------------------------------------------------------------------------
 
 
-def _query_functions(unit_pattern: str | None, min_pct: float, max_pct: float,
-                     limit: int) -> list[dict]:
-    """Query functions from the orchestrator DB."""
-    import sqlite3
-    db_path = PROJECT_DIR / "build" / "373307D9" / "decomp.db"
-    if not db_path.exists():
-        return []
+def _has_functions_table(path: Path) -> bool:
+    """True iff `path` is a database that actually carries a `functions` table.
 
-    conn = sqlite3.connect(str(db_path))
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-
-    query = """
-        SELECT symbol, demangled, unit, source_path, match_percent
-        FROM functions
-        WHERE match_percent >= ? AND match_percent < ?
+    A zero-byte file passes `Path.exists()` and `sqlite3.connect()` without
+    complaint — which is precisely how the old hardcoded
+    `build/373307D9/decomp.db` (0 bytes on every tree checked) turned into
+    `No functions found matching criteria.`
     """
-    params: list = [min_pct, max_pct]
-
-    if unit_pattern:
-        query += " AND unit GLOB ?"
-        params.append(unit_pattern)
-
-    query += " ORDER BY match_percent DESC LIMIT ?"
-    params.append(limit)
-
     try:
-        cursor.execute(query, params)
-        return [dict(row) for row in cursor.fetchall()]
-    except Exception:
-        return []
+        conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    except sqlite3.Error:
+        return False
+    try:
+        row = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='functions'"
+        ).fetchone()
+        return row is not None
+    except sqlite3.Error:
+        return False
     finally:
         conn.close()
+
+
+def resolve_db_path(explicit: str | Path | None = None) -> Path:
+    """Find a decomp.db that has a `functions` table, or raise loudly.
+
+    Never returns a path it has not proven usable, and never degrades into an
+    empty result set.
+    """
+    if explicit:
+        p = Path(explicit)
+        if not p.exists():
+            raise DatabaseUnavailableError(f"--db {p} does not exist")
+        if not _has_functions_table(p):
+            raise DatabaseUnavailableError(
+                f"--db {p} exists ({p.stat().st_size} bytes) but has no `functions` "
+                f"table — an empty/placeholder database, not an empty pool")
+        return p
+
+    tried: list[str] = []
+    for rel in DB_CANDIDATES:
+        p = PROJECT_DIR / rel
+        if not p.exists():
+            tried.append(f"{p}: missing")
+            continue
+        size = p.stat().st_size
+        if not _has_functions_table(p):
+            tried.append(f"{p}: {size} bytes, no `functions` table")
+            continue
+        return p
+
+    raise DatabaseUnavailableError(
+        "no usable decomp.db found (a database with a `functions` table). Tried:\n  "
+        + "\n  ".join(tried)
+        + "\nPass --db PATH. NOTE: this is a MISSING DATABASE, not an empty "
+          "result — do not read it as 'no work exists'.")
+
+
+def _query_functions(unit_pattern: str | None, min_pct: float, max_pct: float,
+                     limit: int, *,
+                     cov: Optional[CoverageReport] = None,
+                     db_path: str | Path | None = None,
+                     percent_column: str = DEFAULT_PERCENT_COLUMN) -> list[dict]:
+    """Query functions from the orchestrator DB.
+
+    ***REPAIR — see the module docstring.***  The previous query named two
+    columns that do not exist on `functions` (`source_path`, `match_percent`),
+    so it raised `OperationalError` on every invocation; the exception was
+    swallowed into `return []` and the caller printed "No functions found
+    matching criteria."  The real columns are `current_percent` and
+    `match_percent_normalized`.
+
+    `match_percent_normalized` is the default ruler because it is the one the
+    single-function path already uses (`normalized_match_percent` from
+    objdiff).  `--percent-column current_percent` selects the older, drifting
+    work-selection index instead.  Rows where the chosen column is NULL are
+    COUNTED as a named drop, never silently skipped.
+    """
+    if percent_column not in PERCENT_COLUMNS:
+        raise QueryFailedError(
+            f"unknown percent column {percent_column!r}; choose from {PERCENT_COLUMNS}")
+
+    path = resolve_db_path(db_path)
+    conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    conn.row_factory = sqlite3.Row
+    col = percent_column          # validated against a literal allowlist above
+
+    def count(where: str, params: list) -> int:
+        sql = f"SELECT COUNT(*) FROM functions WHERE {where}"
+        try:
+            return conn.execute(sql, params).fetchone()[0]
+        except sqlite3.Error as exc:
+            # LOUD.  A schema mismatch must never look like an empty pool again.
+            raise QueryFailedError(f"{exc.__class__.__name__}: {exc}\n  SQL: {sql}\n"
+                                   f"  DB : {path}") from exc
+
+    try:
+        # The denominator is measured BEFORE --limit, so a capped run still
+        # knows how big the pool it sampled from was.
+        total = count("1", [])
+        n_null = count(f"{col} IS NULL", [])
+        n_below = count(f"{col} IS NOT NULL AND {col} < ?", [min_pct])
+        n_above = count(f"{col} IS NOT NULL AND {col} >= ?", [max_pct])
+        window = f"{col} IS NOT NULL AND {col} >= ? AND {col} < ?"
+        n_window = count(window, [min_pct, max_pct])
+
+        where = window
+        params: list = [min_pct, max_pct]
+        if unit_pattern:
+            where += " AND unit GLOB ?"
+            params = params + [unit_pattern]
+        n_pool = count(where, params)
+
+        # `ORDER BY <pct> DESC` alone left ties in an undefined order, so WHICH
+        # rows a --limit kept was not reproducible.  Tie-break on symbol.
+        sql = (f"SELECT symbol, demangled, unit, "
+               f"       {col} AS match_percent, "
+               f"       current_percent, match_percent_normalized "
+               f"FROM functions WHERE {where} "
+               f"ORDER BY {col} DESC, symbol ASC")
+        row_params = list(params)
+        if limit and limit > 0:
+            sql += " LIMIT ?"
+            row_params.append(limit)
+        try:
+            rows = [dict(r) for r in conn.execute(sql, row_params).fetchall()]
+        except sqlite3.Error as exc:
+            raise QueryFailedError(f"{exc.__class__.__name__}: {exc}\n  SQL: {sql}\n"
+                                   f"  DB : {path}") from exc
+    finally:
+        conn.close()
+
+    if cov is not None:
+        cov.universe(total, f"rows in `functions` of {path}")
+        cov.extra("db_path", str(path))
+        cov.extra("percent_column", col)
+        cov.extra("pool_size_before_limit", n_pool)
+        cov.note(f"ruler = `{col}`; `--percent-column` switches it "
+                 f"(the two disagree — they are different measurements)")
+        cov.drop("percent-is-null", n_null, note=(
+            f"{col} IS NULL — never measured on this ruler; NOT 'zero percent'"))
+        cov.drop("below---min", n_below, note=f"{col} < {min_pct} (deliberate filter)")
+        cov.drop("at-or-above---max", n_above, note=f"{col} >= {max_pct} (deliberate filter)")
+        if unit_pattern:
+            cov.drop("unit-glob-not-matched", n_window - n_pool,
+                     note=f"unit does not match GLOB {unit_pattern!r}")
+        cov.cap("--limit", limit, before=n_pool, after=len(rows),
+                note="rows in the pool that were never analyzed")
+        cov.examine(len(rows))
+    return rows
 
 
 # ---------------------------------------------------------------------------
@@ -455,13 +679,18 @@ def _format_report(report: HealthReport) -> str:
         lines.append(f"  Unit:       {report.unit}")
     if report.source_path:
         lines.append(f"  Source:     {report.source_path}")
-    lines.append(f"  Match:      {report.match_percent:.2f}%")
-    lines.append(f"  Ceiling:    {report.ceiling_percent:.1f}%")
-    lines.append(f"  Headroom:   {report.headroom:.1f}%")
+    # 3 decimals + a `<100` guard: a rendered `100.0` has already hidden two
+    # real bugs in this project (99.97 rounding up).
+    lines.append(f"  Match:      {_fmt_pct(report.match_percent)}%")
+    lines.append(f"  Ceiling:    {_fmt_pct(report.ceiling_percent)}%")
+    lines.append(f"  Headroom:   {report.headroom:.3f}%")
     lines.append(f"  Verdict:    {report.verdict} — {report.verdict_reason}")
     if report.workability_score > 0:
         lines.append(f"  Score:      {report.workability_score:.1f}")
     lines.append(f"  Instructions: {report.total_instructions}")
+    if report.errors:
+        for e in report.errors:
+            lines.append(f"  !! error:   {e}")
     lines.append("")
 
     if report.categories:
@@ -488,15 +717,17 @@ def _format_report(report: HealthReport) -> str:
 def _format_batch_table(reports: list[HealthReport]) -> str:
     """Format batch results as a compact table."""
     lines = []
-    lines.append(f"{'Match%':>7} {'Ceiling':>8} {'Room':>5} {'Fix':>4} {'Unfix':>5} "
+    lines.append(f"{'Match%':>8} {'Ceiling':>8} {'Room':>7} {'Fix':>4} {'Unfix':>5} "
                  f"{'Score':>6} {'Verdict':10} Symbol")
-    lines.append(f"{'─' * 7} {'─' * 8} {'─' * 5} {'─' * 4} {'─' * 5} "
+    lines.append(f"{'─' * 8} {'─' * 8} {'─' * 7} {'─' * 4} {'─' * 5} "
                  f"{'─' * 6} {'─' * 10} {'─' * 50}")
     for r in reports:
         symbol_short = r.demangled[:50] if r.demangled else r.symbol[:50]
+        # `{:6.1f}` rendered 99.97 as `100.0` here — the exact surface named in
+        # docs/decomp/patterns/rounded-100-hides-real-bugs.md.
         lines.append(
-            f"{r.match_percent:6.1f}% {r.ceiling_percent:7.1f}% "
-            f"{r.headroom:4.1f}% {r.fixable_mismatches:4d} {r.unfixable_mismatches:5d} "
+            f"{_fmt_pct(r.match_percent, 7)}% {_fmt_pct(r.ceiling_percent, 7)}% "
+            f"{r.headroom:6.3f}% {r.fixable_mismatches:4d} {r.unfixable_mismatches:5d} "
             f"{r.workability_score:6.1f} {r.verdict:10s} {symbol_short}"
         )
     return "\n".join(lines)
@@ -516,9 +747,26 @@ def main():
     parser.add_argument("--unit", help="Unit glob pattern for batch mode")
     parser.add_argument("--min", type=float, default=90.0, help="Min match%% (default: 90)")
     parser.add_argument("--max", type=float, default=99.99, help="Max match%% (default: 99.99)")
-    parser.add_argument("--limit", type=int, default=50, help="Max functions to analyze (default: 50)")
+    parser.add_argument(
+        "--limit", type=int, default=50,
+        help="Max functions to ANALYZE (default: 50, unchanged). This truncates "
+             "the analysis, not just the printout: --top N ranks the N best of "
+             "these 50, not of the pool. The pool size is now always reported and "
+             "a capped run exits 3 (TRUNCATED). Use --limit 0 for a full census, "
+             "or --allow-truncation to accept the sample.")
     parser.add_argument("--top", type=int, help="Show top N most workable functions")
     parser.add_argument("--json", action="store_true", help="JSON output")
+    parser.add_argument("--db", default=None,
+                        help="Path to decomp.db. Default: the first of "
+                             + ", ".join(DB_CANDIDATES)
+                             + " that actually contains a `functions` table.")
+    parser.add_argument("--percent-column", default=DEFAULT_PERCENT_COLUMN,
+                        choices=list(PERCENT_COLUMNS),
+                        help=f"Which DB column is the ruler (default: "
+                             f"{DEFAULT_PERCENT_COLUMN}). The old code named a "
+                             f"`match_percent` column that does not exist, so "
+                             f"every batch query raised and returned nothing.")
+    add_coverage_args(parser)
     args = parser.parse_args()
 
     if args.symbol:
@@ -528,16 +776,33 @@ def main():
             print(json.dumps(asdict(report), indent=2))
         else:
             print(_format_report(report))
+        sys.exit(2 if report.verdict == "error" else 0)
     else:
         # Batch mode
-        functions = _query_functions(
-            args.unit, args.min, args.max, args.limit,
-        )
+        cov = CoverageReport("function_health.batch", args=args)
+        try:
+            functions = _query_functions(
+                args.unit, args.min, args.max, args.limit,
+                cov=cov, db_path=args.db, percent_column=args.percent_column,
+            )
+        except (DatabaseUnavailableError, QueryFailedError) as exc:
+            # LOUD.  This is the whole point: the old handler turned exactly
+            # this into "No functions found matching criteria." + exit 1.
+            print(f"error: batch query could not run — this is NOT an empty pool:\n"
+                  f"{exc}", file=sys.stderr)
+            sys.exit(2)
+
+        pool = cov.as_dict().get("pool_size_before_limit", len(functions))
         if not functions:
-            print("No functions found matching criteria.", file=sys.stderr)
+            print(f"No functions matched the criteria "
+                  f"(pool={pool}, universe={cov.as_dict()['universe']} rows in "
+                  f"`functions`). The query RAN — see the COVERAGE block for what "
+                  f"was filtered.", file=sys.stderr)
+            cov.emit()
             sys.exit(1)
 
-        print(f"Analyzing {len(functions)} functions...", file=sys.stderr)
+        print(f"Analyzing {len(functions)} of {pool} functions in the pool "
+              f"({cov.as_dict()['universe']} rows in the DB)...", file=sys.stderr)
 
         reports = []
         for i, func in enumerate(functions):
@@ -558,36 +823,90 @@ def main():
 
         print(f"\nDone analyzing {len(reports)} functions.", file=sys.stderr)
 
-        # Sort by workability score
-        reports.sort(key=lambda r: -r.workability_score)
+        # Sort by workability score, with a full tie-break so two runs over the
+        # same DB emit the same ordering.
+        reports.sort(key=lambda r: (-r.workability_score, -r.match_percent, r.symbol))
 
+        all_reports = list(reports)      # the full analyzed set, never sliced
+        analyzed_total = len(all_reports)
+        top_hidden = 0
         if args.top:
+            # This truncates a DISPLAY of an already-analyzed set, so it is a
+            # note rather than a cap — but it must still print its remainder.
+            top_hidden = max(0, len(reports) - args.top)
             reports = reports[:args.top]
+            if top_hidden:
+                cov.note(f"--top {args.top} hides {top_hidden} of {analyzed_total} "
+                         f"ANALYZED functions from the output (they were analyzed, "
+                         f"just not printed)")
 
         if args.json:
-            print(json.dumps([asdict(r) for r in reports], indent=2))
+            payload = {
+                "reports": [asdict(r) for r in reports],
+                "analyzed_total": analyzed_total,
+                "reports_emitted": len(reports),
+                "pool_size_before_limit": pool,
+                "_coverage": cov.as_dict(),
+            }
+            # Back-compat: the old JSON was a bare list. Emit the list on
+            # stdout and the accounting on stderr.
+            print(json.dumps(payload["reports"], indent=2))
+            print(json.dumps({k: v for k, v in payload.items() if k != "reports"},
+                             indent=2), file=sys.stderr)
         else:
-            # Summary stats
-            workable = [r for r in reports if r.verdict == "workable"]
-            marginal = [r for r in reports if r.verdict == "marginal"]
-            at_limit = [r for r in reports if r.verdict == "at_limit"]
-            complete = [r for r in reports if r.verdict == "complete"]
-            errors = [r for r in reports if r.verdict == "error"]
+            # Summary stats over EVERY analyzed report, not the --top slice.
+            # Counting them over `reports` (already truncated by --top) printed
+            # `Analyzed: 3` above `Errors: 2` for three all-error functions —
+            # the same "sample under a total's label" shape this pass exists to
+            # remove.
+            workable = [r for r in all_reports if r.verdict == "workable"]
+            marginal = [r for r in all_reports if r.verdict == "marginal"]
+            at_limit = [r for r in all_reports if r.verdict == "at_limit"]
+            complete = [r for r in all_reports if r.verdict == "complete"]
+            errors = [r for r in all_reports if r.verdict == "error"]
+            other = [r for r in all_reports
+                     if r.verdict not in ("workable", "marginal", "at_limit",
+                                          "complete", "error")]
 
             print(f"\nFunction Health Summary")
             print(f"{'=' * 60}")
-            print(f"  Analyzed:   {len(reports)}")
+            # `Analyzed: {len(reports)}` used to be the --limit (50) with no
+            # denominator: a sample presented as a total.
+            print(f"  Analyzed:   {analyzed_total} of {pool} in the pool "
+                  f"(DB holds {cov.as_dict()['universe']} rows)")
+            if top_hidden:
+                print(f"  Shown:      {len(reports)}  "
+                      f"(--top {args.top}; {top_hidden} analyzed but not printed)")
+            if pool > analyzed_total:
+                print(f"  !! NOT ANALYZED: {pool - analyzed_total} pool rows were "
+                      f"never looked at (--limit {args.limit}). Do NOT read this "
+                      f"summary as a census of the pool.")
             print(f"  Workable:   {len(workable)}")
             print(f"  Marginal:   {len(marginal)}")
             print(f"  AT_LIMIT:   {len(at_limit)}")
             print(f"  Complete:   {len(complete)}")
             if errors:
                 print(f"  Errors:     {len(errors)}")
+            if other:
+                print(f"  Unclassified: {len(other)}  "
+                      f"(verdicts: {sorted({r.verdict for r in other})})")
+            bucketed = (len(workable) + len(marginal) + len(at_limit)
+                        + len(complete) + len(errors) + len(other))
+            if bucketed != analyzed_total:
+                print(f"  !! {analyzed_total - bucketed} analyzed functions fell into "
+                      f"NO bucket — the summary does not add up")
             print()
 
             if workable or marginal:
-                show = (workable + marginal)[:args.top or 30]
+                candidates = workable + marginal
+                show = candidates[:args.top or 30]
                 print(_format_batch_table(show))
+                if len(candidates) > len(show):
+                    print(f"  ... and {len(candidates) - len(show)} more "
+                          f"workable/marginal functions not shown "
+                          f"(showing {len(show)} of {len(candidates)})")
+
+        sys.exit(cov.emit())
 
 
 if __name__ == "__main__":
