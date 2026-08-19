@@ -8,6 +8,19 @@ Quick reference for all documented decompilation patterns in DC3 (Dance Central 
 
 ## Corrections — read before trusting an older section
 
+- **2026-08-19 — a redundant `virtual` override is not free: MSVC slots overloaded
+  virtuals as one name-group at the name's *first* declaration.** One `virtual void
+  SetADSR(int, const ADSR &) {}` in `StandardStream` — an override whose body is identical
+  to the base's and which ICF-folds away, so it moves no function percentage — pushed
+  every vtable slot from `+0xc8` down out of place. Three minimal cases compiled with the
+  project's own `cl.exe` are in
+  [../experiments/msvc-vtable-overload-grouping/](../experiments/msvc-vtable-overload-grouping/);
+  the rule and its DC3 instance are in
+  [msvc-vtable-overload-name-grouping.md](msvc-vtable-overload-name-grouping.md).
+  The earlier phrasing "MSVC hoists a new virtual to the **front** of the derived
+  new-virtual block" is only the special case where the override precedes every other new
+  virtual — case `t3` disproves the general form. Do not re-cite "front".
+
 - **2026-08-04 — the AT_LIMIT + `REGISTER_SWAP` bucket is 836 functions, and its verdict
   is wrong at least 30% of the time.** Blind stratified audit (selection rule fixed before
   any diff was looked at: 6 match bands, ordered within each by `md5(symbol)`, max one
@@ -228,6 +241,7 @@ These patterns can often be fixed with source changes. Sorted by ROI (impact x s
 | ObjPtr DeferOwner Constructor | [fixable-declarations.md](fixable-declarations.md#objptr-constructor-deferred-owner-initialization) |
 | IsNaN vs Threshold Check | [fixable-comparison.md](fixable-comparison.md#isnan-vs-threshold-check) |
 | Iterator Index Comparison | [fixable-comparison.md](fixable-comparison.md#iterator-index-comparison) |
+| Overloaded-virtual vtable slot grouping | [msvc-vtable-overload-name-grouping.md](msvc-vtable-overload-name-grouping.md) |
 
 ---
 
