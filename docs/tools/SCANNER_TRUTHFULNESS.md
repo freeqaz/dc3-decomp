@@ -177,10 +177,10 @@ python3 scripts/analysis/determinism_check.py         # 0 = every scanner agreed
 python3 -m pytest scripts/analysis/tests/ -q
 ```
 
-State at `903be2231` (merge pass, 2026-08-19): **0 lint errors, 42 W-rule
-warnings** over 223 files; **9/9 scanners agree with themselves on a non-empty
-output**; **293 tests collected**, 291 passing with the DTA corpus present and
-289 passing + 2 corpus-gated skips without it.
+State at the merge commit (2026-08-19): **0 lint errors, 42 W-rule warnings**
+over 231 files; **9/9 scanners agree with themselves on a non-empty output**;
+**293 tests collected** — 293 passing with the DTA corpus present, 291 passing
++ 2 corpus-gated skips without it (i.e. in any git worktree).
 
 The earlier line here said "**248 tests pass**", and that number was never
 reproducible — the lane tip collects **249**, of which only 232 pass in a bare
