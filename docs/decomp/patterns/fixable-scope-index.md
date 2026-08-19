@@ -84,6 +84,102 @@ Worked example — `_SYNC_PROP_BITFIELD` in `system/obj/Object.h` predicts 39 fo
 the gap between two `_s` statics in `CamShot::SyncProperty`, and 39 is what the
 compiler emits.
 
+## The target side is `ham_xbox_r.map`, NOT `symbols.txt` (2026-08-19)
+
+**`config/373307D9/symbols.txt` is not evidence about the original's local
+statics.** It names 2,192 local-static data symbols; only **998** of them exist
+in `orig/373307D9/ham_xbox_r.map`, the shipped image's own linker map. The
+other 1,194 were synthesised from *our* build — **97.9% are byte-identical to a
+name our objects already emit**, against 85.9% for the map-backed ones. Diffing
+our indices against those is a tautology wearing a lab coat.
+
+Where it is not a tautology it is worse. A synthesised data name sitting beside
+a *real* atexit helper for the same single static looks like **two** statics:
+
+```
+symbols.txt:  ??__F_dw@?1??DataIndex@NavListSortMgr@@UBAHVSymbol@@@Z@YAXXZ   <- map, real, scope 2
+              ?_dw@?2??DataIndex@NavListSortMgr@@UBAHVSymbol@@@Z@4V...A      <- synthesised from US, scope 3
+```
+
+and the census duly printed `COUNT tgt/ours=(2,1)` — "the original declares a
+`MILO_NOTIFY_ONCE` we do not." It does not. `NavListSortMgr::DataIndex` is
+100% with **52/52 instructions equal** and contains exactly one
+`MILO_NOTIFY_ONCE`, and **our own compiler emits the same index for a static's
+data symbol and its `??__F` helper** (verified in our `.obj`), so those two
+names cannot describe two declarations. The map lists only the `?1`.
+
+Three more instrument rules, all learned by having them bite:
+
+* **Key both sides by NAME ONLY.** The data symbol carries the static's type
+  (`...@Z@4VMessage@@A`) and the atexit helper does not. Prefix-folding the
+  helpers into type-keyed buckets doubles them: `OptionsPanel::OnMsg` declares
+  `?msg@?BA@...VLinkingCodeRetrievedMsg` at 16 and `?msg@?M@...VTokenRedeemedMsg`
+  at 12, both **correct and matching**, and came out as two rows reading
+  `tgt=[12,16] ours=[16]` and `tgt=[12,16] ours=[12]`.
+* **Strip the type at the FIRST `@4` that ends a mangling, not the last.** A
+  templated static's type can contain a `@4` back-reference
+  (`...@4V?$vector@MV?$StlNodeAlloc@M@stlpmtx_std@@@4@A`), and an `rsplit` cuts
+  inside it. That desynchronised `AnalyzeData`'s `normalized`/`raw` from their
+  own helpers and reported both as missing.
+* **`build/373307D9/src/**/*.obj` includes `*.manual.obj`, which ninja neither
+  builds nor links.** `ContentLoadingPanel.manual.obj`'s stale `?types@?4` was
+  reported as an extra static next to the real `?types@?5` in
+  `ContentLoadingPanel.obj` — which matches the map exactly.
+
+**A count row is evidence only when it is atexit-backed.** One `??__F` helper
+for an fn/name proves that type has a destructor, and the map names every
+helper in the image, so the enumeration is complete in both directions. A
+data-only key is not: a trivially destructible static (`Symbol`, `DataArray *`,
+`const char *`) has no helper, and if the map also lacks its data name it is
+simply **invisible**. The whole `_s`/`SYNC_PROP` class hides exactly here — the
+map carries **511 `SyncProperty` symbols and zero `_s` statics**, so
+`RndRibbon::SyncProperty _s tgt=[7] ours=[7,18,30,...,78]` says nothing at all
+about the original and must never be used to delete nine `_SYNC_PROP` entries.
+
+After all four fixes the census reads **970 agree / 203 disagree** (the old one
+said 1,259/60 — it was comparing us to ourselves for most rows) and the COUNT
+class went from ~33 rows to **2**.
+
+### What the COUNT class actually was
+
+Nine of the ten evidence-backed count rows were **local-static variable names
+we had guessed**. The map's helper carries the declaring identifier, so these
+are the original's own names, recovered for free and instruction-neutral:
+`change_proxies`→`msg` (`ObjectDir::PostLoad`), `finish_intro`→`finished_intro`
+(`RhythmBattle::OnBeat`), `on_set_frame_msg`→`start`
+(`LightPreset::SetFrameEx`), `sPlayMsg`→`playMsg` (`GamePanel::UpdateLatency`),
+`utility_image_loaded`→`msg` (`MainMenuPanel::UpdateArtLoaders`, whose map has
+*two* `??__Fmsg` at 34/40 beside our `msg`/`utility_image_loaded` pair),
+`refresh_complete`→`self_msg` (`HamStorePanel::FinishSpecialOfferEnum`), and
+three in `ShellInput::SyncVoiceControl`. Watch the trap: a regex over the whole
+declaration line rewrites the message **string** too —
+`Message refresh_complete("refresh_complete")` became
+`Message self_msg("self_msg")` before it was caught.
+
+The one row that was a real missing declaration is worked below
+(`DingoJob::SendCallback`); the two that survive are
+`RndTexBlender::DrawShowing` (5 ours / 3 target, hand-inlined `DrawBlendList`)
+and `BustAMovePanel::OnBeat` (2 ours / 3 target `matchedMessage`, in a
+3,044-instruction function at 97.5% whose dominant problem is member offsets).
+
+### A count row that WAS real: `DingoJob::SendCallback` (82.6% -> 99.1%)
+
+The map has two helpers, `??__Fmsg@?L@` (11) and `??__Fmsg@?O@` (14); we
+declared only the first. The second is a different type — a static
+`ServerStatusChangedMsg` — at the tail of a failure block our source had
+truncated. **11 -> 14 is +3, i.e. exactly one braced `if`**, which is what
+identified the three nested `if`s in our source as a single
+`!success && TheServer.IsAuthenticated() && !cancelled`; three would have been
++9. The rest fell out of the instruction stream and was corroborated
+line-for-line by `DingoServer::OnMsg(const DingoJobCompleteMsg &)` in
+`src/system/net/DingoSvr.cpp`, which ends with the identical
+severity/project + `RecordDebugDataPoint` + `CancelOutstandingCalls` +
+`Logout()` + `Export(ServerStatusChangedMsg(kServerStatusDisconnected))`
+sequence. Two `AddPair`s were missing outright, `AddPair("sync", "sync")` was
+really `AddPair("project", "sync")`, and the trailing call was `Logout()`
+(vtable 0x68) not `Poll()` (0x70). **This is what a real count row looks like:
+it carries instructions, so fixing it moves the match.**
+
 ## Reading the two sides correctly
 
 This bit the census twice, and both traps are easy to walk into by hand as well.
@@ -94,17 +190,23 @@ This bit the census twice, and both traps are easy to walk into by hand as well.
   to whatever the target says, so objdiff can pair the bodies. Reading them back
   tells you the target's structure with our filename on it. (It also leaves the
   pre-patch string behind in the COFF string table, so `strings` shows both.)
-* **The target's indices are the other way round.** dtk leaves most of the
-  `.data` objects as bare `lbl_<addr>`, so `symbols.txt` names only a minority of
-  the target's statics — but it names *every* `??__F<name>@?<scope>??<fn>@YAXXZ`,
-  and that helper carries the same counter. The atexit list is the only complete
-  enumeration of a target function's statics. `RndTexBlender::DrawShowing` has
-  one named `_dw` in `.data` and three atexit helpers; the three are the truth.
+* **The target's indices come from `orig/373307D9/ham_xbox_r.map`.** The map is
+  the shipped image's own linker map and it names every
+  `??__F<name>@?<scope>??<fn>@YAXXZ` (486 of them) plus 1,038 local-static
+  `.data` symbols. The atexit list is the only *complete* enumeration of a
+  target function's statics — and only for types that have a destructor.
+  `RndTexBlender::DrawShowing` has three atexit helpers; the three are the
+  truth. **Do not read the target off `symbols.txt`** — see the section above.
 * **A function can declare many statics under one name** — one `_dw` per
   `MILO_NOTIFY_ONCE`, one `msg` per static `Message`, one `_s` per `SYNC_PROP`.
-  Compare the sorted *lists*. If the lengths differ, the count is the finding:
-  we invented or dropped a declaration, and no amount of brace-shuffling will
-  reconcile it.
+  Compare the sorted *lists*. If the lengths differ **and the key is
+  atexit-backed**, the count is the finding: we invented or dropped a
+  declaration, and no amount of brace-shuffling will reconcile it. If it is
+  not atexit-backed, the map is blind and the row is noise.
+* **A count row is usually a NAME, not a declaration.** The helper carries the
+  variable's identifier, so `tgt=[X] ours=None` most often means our variable
+  is spelled differently. Check for an ours-only name at a nearby index before
+  concluding anything is missing — nine of ten did in the 2026-08-19 sweep.
 * **objdiff's relocation pairing tells you which static is which.** Run
   `run_diff_inspect mode=clusters` and read the `lis`/`addi` pairs: it lines our
   `?_dw@?DG@` up against the target's `?_dw@?CK@`, which is how you learn that
@@ -148,6 +250,15 @@ spelled macro.
    figures came from a census that kept only the last static parsed under each
    name; 33 of the 60 were hiding behind that collapse, and most of them are
    `COUNT tgt/ours=(2,1)` — a warn-once the target has and we do not.)
+## Using it
+
+1. `python3 scripts/analysis/scope_index_census.py` — whole-build census of
+   target vs our indices, grouped by enclosing function. Since it started
+   reading `ham_xbox_r.map`: **970 functions agree and 203 do not**, with two
+   COUNT rows. Earlier figures are not comparable and should not be quoted:
+   "1,259 / 60" (2026-08-19 multiset fix) and "1,289 / 30" before it were both
+   measured against `symbols.txt`, i.e. against ourselves for the majority of
+   rows, and their `COUNT tgt/ours=(2,1)` class was an artifact end to end.
 2. For one function, decode both sides and walk the source with the table. The
    delta localises to the exact stretch between two statics.
 3. Fix the source, rebuild the one `.obj`, and read the new names back with
@@ -329,6 +440,13 @@ Four functions reconcile at an assert costing **3** (`if (!(c)) { fail; }`):
 | `CampaignSongProvider::Text` | `tan_battle_song` | 23 | 19 | 2 | −4 |
 | | `campaign_song_locked` | 25 | 21 | 2 | −4 |
 | | `song_select_song_prefix` | 41 | 39 | 2 | **−2** |
+
+A fifth joined them on 2026-08-19 once the census read the linker map:
+`PreloadPanel::OnMsg(const UITransitionCompleteMsg &)`, whose three `msg`
+statics sit at 10/12/20 against the map's 8/10/16 — flat −2 on the first two and
+−4 on the third, exactly its two `MILO_ASSERT`s at 3 instead of 5. Its 183
+instructions are all equal, so as with the rest there is nothing to fix in the
+code, only in the numbering.
 
 All four are zero-mismatch on instructions (146, 135, 142, 187, all equal), and
 all four are below their brace-only floor at cost 5 (`FillButtonMsg` floor 7 vs
