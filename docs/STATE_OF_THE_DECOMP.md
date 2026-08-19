@@ -63,6 +63,41 @@ build time, objdiff-cli version and relocation mode in its header. Do not
 hand-edit it; `scripts/progress_metrics.py` hardcodes that path as its default
 output.
 
+### The link-glue pseudo-unit (2026-08-19)
+
+`default/link_glue` is not a translation unit of the original binary. It holds
+the ALTERNATENAME scaffolding this repo invented so the link resolves, and every
+one of its 55 report rows scores 0 %.
+
+Eleven of those rows name a symbol that **also** lives in a real unit at
+normalized 100 % — `floor0_unpack`, `curlx_ultous`, `MemOrPoolFree`,
+`FormatString::operator<<(size_t)`, and friends. report.json therefore contained
+those functions twice, and the canonical headline counted each one once as
+matched and once as unmatched. `progress_metrics.py` now drops exactly those
+eleven and prints the count; the authorable denominator went 32,213 → 32,202 and
+the headline 91.36 % → 91.39 %.
+
+**The dedup is deliberately narrow.** The other ~36 glue rows have no real
+counterpart and stay in the denominator, because some of them name genuine
+unwritten work (`FormatString::operator<<` float/long/uint overloads,
+`HDCache::Flush`, `HolmesClientPrint`) alongside the pure scaffolding
+(`__link_glue_noop`, `_strnicmp`, `gethostbyname`, the curl/jpeg/zlib allocator
+hooks). Dropping the whole unit would be one line and would hide real work —
+`scripts/test_progress_metrics.py` exists mostly to hold that line, and three of
+its six cases are negative controls that fail against exactly that mutation.
+
+Note the curl / jpeg / zlib / Holmes members of that set are low-priority for
+the native port; nobody should mine this list for work.
+
+On the database side there was **no** defect: all 1,275 `default/link_glue` rows
+in `decomp.db` already carry `excluded = 1`. What was wrong was
+`reconcile_db.py`'s check (a), which compared percentages without honouring the
+`excluded` flag that every other check honours via `is_authorable()`. It reported
+a standing "11 drift items" against a correct database. That is worth
+remembering as its own failure shape: **a check that never reads clean is a
+check nobody reads**, and real drift would have sat unnoticed behind the
+constant. Reconcile now exits 0 on a clean tree.
+
 ---
 
 ## The 2026-08 ruler change
