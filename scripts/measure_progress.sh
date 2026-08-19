@@ -330,8 +330,35 @@ else
     echo "No usable cached baseline for ${BASELINE_SHORT}, building..."
     echo "Using worktree: ${WORKTREE}"
 
-    # --- Create worktree if it doesn't exist ---
-    if [[ ! -d "${WORKTREE}" ]]; then
+    # --- Create worktree if it isn't already a git worktree ---
+    #
+    # The test here has to be "is this a git worktree", NOT "does this path
+    # exist". Anything can leave the path behind -- a killed run, a `mkdir -p`
+    # from another script, a tmpfiles sweep that recreates the parent -- and an
+    # empty leftover directory used to make this branch skip `worktree add`
+    # entirely and then fail on the very next line with
+    #
+    #     fatal: not a git repository (or any parent up to mount point /)
+    #
+    # exiting 128 with no hint that the cause was a stale directory. It looked
+    # like a --current-dir bug (it is not: it hits plain baseline builds too,
+    # since this block runs whenever the baseline is not cached).
+    if git -C "${WORKTREE}" rev-parse --git-dir >/dev/null 2>&1; then
+        :
+    else
+        if [[ -e "${WORKTREE}" ]]; then
+            if [[ -d "${WORKTREE}" ]] && [[ -z "$(ls -A "${WORKTREE}" 2>/dev/null)" ]]; then
+                echo "Removing empty non-worktree leftover at ${WORKTREE}..."
+                rmdir "${WORKTREE}"
+            else
+                echo "Error: ${WORKTREE} exists but is not a git worktree, and is not empty."
+                echo "       Inspect it and remove it, or pass --worktree <other path>."
+                exit 1
+            fi
+        fi
+        # A worktree git still has registered but whose directory is gone would
+        # make `worktree add` refuse; prune those first.
+        git -C "${MAIN_REPO}" worktree prune >/dev/null 2>&1 || true
         echo "Creating worktree at ${WORKTREE}..."
         git -C "${MAIN_REPO}" worktree add --detach "${WORKTREE}" HEAD --quiet
         CREATED_WORKTREE=1
