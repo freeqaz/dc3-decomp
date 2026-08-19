@@ -1518,6 +1518,9 @@ void ComputeFaceTangentBasis(RndMesh *m, int faceIdx, Hmx::Matrix3 &outBasis) {
             float du31 = uv3.x - uv1.x;
             float dv31 = uv3.y - uv1.y;
 
+            Vector3 edge21(dx21, dy21, dz21);
+            Vector3 edge31(dx31, dy31, dz31);
+
             bool zero21 = dx21 == 0.0f && dy21 == 0.0f && dz21 == 0.0f;
             if (!zero21) {
                 bool zero31 = dx31 == 0.0f && dy31 == 0.0f && dz31 == 0.0f;
@@ -1530,14 +1533,12 @@ void ComputeFaceTangentBasis(RndMesh *m, int faceIdx, Hmx::Matrix3 &outBasis) {
                             // dz21*dx31 - dx21*dz31 -- previously written with
                             // its sign flipped, which made the third basis row
                             // non-orthogonal to the first two.
-                            float crossX = dz31 * dy21 - dy31 * dz21;
-                            float crossY = dx31 * dz21 - dz31 * dx21;
-                            float crossZ = dy31 * dx21 - dx31 * dy21;
-                            Hmx::Matrix3 edgeMat(
-                                Vector3(dx21, dy21, dz21),
-                                Vector3(dx31, dy31, dz31),
-                                Vector3(crossX, crossY, crossZ)
+                            Vector3 faceNormal(
+                                dz31 * dy21 - dy31 * dz21,
+                                dx31 * dz21 - dz31 * dx21,
+                                dy31 * dx21 - dx31 * dy21
                             );
+                            Hmx::Matrix3 edgeMat(edge21, edge31, faceNormal);
 
                             Invert(edgeMat, edgeMat);
 
