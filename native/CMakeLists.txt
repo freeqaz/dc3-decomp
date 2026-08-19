@@ -1860,6 +1860,7 @@ if(BUILD_TESTS)
     add_executable(milo-tests
         tests/test_helpers.cpp
         tests/telemetry_parser.cpp
+        tests/test_gates.cpp
         tests/test_gameplay_telemetry.cpp
         tests/test_binstream.cpp
         tests/test_charbones_serialization.cpp
@@ -1991,10 +1992,79 @@ if(BUILD_TESTS)
     # gtest_discover_tests populates the test list (if(TEST) doesn't work in
     # CTest include context, so we apply unconditionally and tolerate warnings
     # for tests that don't exist in a given configuration).
+    # ------------------------------------------------------------------
+    # Optional-suite gates
+    # ------------------------------------------------------------------
+    # A large part of the suite is env-gated and therefore SKIPS by default,
+    # while `ctest` still prints "100% tests passed" — skips are counted as
+    # passes. The 2026-08-19 toolchain audit found 79 of 441 skipping, and the
+    # skipped tier is where two live native bugs were hiding.
+    #
+    # Gates whose prerequisites we can *prove* are present at configure time are
+    # turned on here, so the default run is as wide as the box allows. Each one
+    # is probed, never assumed: on a machine without the assets the probe fails,
+    # the gate stays off, and the suite degrades to skipping rather than failing.
+    #
+    # MILO_TEST_GATE_STATUS is compiled into the binary so a test can check that
+    # what CMake decided actually reached the test process (see TestGates below).
+    set(MILO_TEST_ENV "TMPDIR=${CMAKE_CURRENT_BINARY_DIR}/tmp")
+    set(MILO_TEST_GATES_ON "")
+    set(MILO_TEST_GATES_OFF "")
+
+    # MILO_LIB — extracted DC3 milo-rnd-library. Gates CharClipGroupTest (2) and
+    # parts of MiloViewerScreenshot / merge-parity. test_asset_loading.cpp's
+    # GetMiloLibRoot() already defaults to this path, so the two CharClipGroup
+    # tests were skipping on a box where the assets are present.
+    set(MILO_LIB_DIR "")
+    foreach(_cand
+            "$ENV{MILO_LIB}"
+            "$ENV{HOME}/code/milohax/milo-engine-libs/harmonix-repos/milo-rnd-library/dc3")
+        if(_cand AND EXISTS "${_cand}/char/crowd/anim/gen/female_base.milo_xbox")
+            set(MILO_LIB_DIR "${_cand}")
+            break()
+        endif()
+    endforeach()
+    if(MILO_LIB_DIR)
+        list(APPEND MILO_TEST_ENV "MILO_LIB=${MILO_LIB_DIR}")
+        list(APPEND MILO_TEST_GATES_ON "MILO_LIB")
+    else()
+        list(APPEND MILO_TEST_GATES_OFF "MILO_LIB(no milo-rnd-library/dc3)")
+    endif()
+
+    # DC3_DTA_FLOW_TESTS — 7 DtaFlowTest cases. They need the game assets, which
+    # is exactly what MILO_TEST_ASSET_DIR was just proven to contain. The audit
+    # confirmed all 7 pass when enabled; they were pure lost coverage.
+    if(EXISTS "${MILO_TEST_ASSET_DIR}/gen/main_xbox.hdr")
+        list(APPEND MILO_TEST_ENV "DC3_DTA_FLOW_TESTS=1")
+        list(APPEND MILO_TEST_GATES_ON "DC3_DTA_FLOW_TESTS")
+    else()
+        list(APPEND MILO_TEST_GATES_OFF "DC3_DTA_FLOW_TESTS(no game assets)")
+    endif()
+
+    # Deliberately NOT defaulted on, with the reason recorded so the next person
+    # does not have to re-derive it:
+    #   DC3_GAMEPLAY_TESTS — 48 tests behind one ~2-minute 9050-frame engine run.
+    #                        Too slow for the default loop; run it explicitly.
+    #   DC3_AUDIO_TESTS    — real audio device; contends under ctest -j.
+    #   MILO_LONG_TEST     — HeadlessBootTest.LongRunStability, ~5 minutes.
+    list(APPEND MILO_TEST_GATES_OFF
+        "DC3_GAMEPLAY_TESTS(slow - 48 tests behind one ~2min engine run)"
+        "DC3_AUDIO_TESTS(audio device contention)"
+        "MILO_LONG_TEST(~5min)")
+
+    string(REPLACE ";" "," _gates_on_str "${MILO_TEST_GATES_ON}")
+    string(REPLACE ";" "," _gates_off_str "${MILO_TEST_GATES_OFF}")
+    target_compile_definitions(milo-tests PRIVATE
+        "MILO_TEST_GATES_ON_STR=\"${_gates_on_str}\""
+        "MILO_TEST_GATES_OFF_STR=\"${_gates_off_str}\"")
+
+    message(STATUS "milo-tests gates ON : ${_gates_on_str}")
+    message(STATUS "milo-tests gates OFF: ${_gates_off_str}")
+
     gtest_discover_tests(milo-tests
         WORKING_DIRECTORY "${MILO_TEST_ASSET_DIR}"
         PROPERTIES
-            ENVIRONMENT "TMPDIR=${CMAKE_CURRENT_BINARY_DIR}/tmp"
+            ENVIRONMENT "${MILO_TEST_ENV}"
     )
 endif()
 
