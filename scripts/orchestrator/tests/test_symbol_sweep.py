@@ -312,5 +312,48 @@ class TestRenderMarkdown(unittest.TestCase):
         self.assertIn("0x8", md)
 
 
+class TestBatchFunctionSweep(unittest.TestCase):
+    """objdiff emits {"error":"not_found","symbol":...} as a normal JSONL row.
+
+    Counting that as `examined` puts an unmeasurable symbol into the numerator
+    of the coverage fraction -- the exact shape of the six instrument defects
+    this project found in one week.
+    """
+
+    def _run(self, stdout):
+        import subprocess
+        from unittest import mock
+        proc = subprocess.CompletedProcess(args=[], returncode=0, stdout=stdout, stderr="")
+        with mock.patch("subprocess.run", return_value=proc):
+            return S.sweep_functions("/nowhere", ["?A@@YAXXZ", "?B@@YAXXZ", "?C@@YAXXZ"])
+
+    def test_error_rows_are_dropped_not_examined(self):
+        out = self._run(
+            '{"symbol":"?A@@YAXXZ","normalized_match_percent":90.0}\n'
+            '{"error":"not_found","symbol":"?B@@YAXXZ"}\n'
+            '{"symbol":"?C@@YAXXZ","normalized_match_percent":100.0}\n'
+        )
+        cov = out["_coverage"]
+        self.assertEqual(cov["universe"], 3)
+        self.assertEqual(cov["examined"], 2)
+        self.assertEqual(cov["dropped"], {"objdiff-not_found": 1})
+        self.assertEqual(cov["unaccounted"], 0)
+        self.assertEqual(out["errored_count"], 1)
+        self.assertEqual(len(out["rows"]), 2)
+
+    def test_symbols_with_no_row_at_all_are_counted(self):
+        out = self._run('{"symbol":"?A@@YAXXZ","normalized_match_percent":90.0}\n')
+        self.assertEqual(out["missing_count"], 2)
+        self.assertEqual(out["_coverage"]["unaccounted"], 0)
+
+    def test_truncation_is_declared(self):
+        import subprocess
+        from unittest import mock
+        proc = subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+        with mock.patch("subprocess.run", return_value=proc):
+            out = S.sweep_functions("/nowhere", ["a", "b", "c"], max_symbols=1)
+        self.assertTrue(out["_coverage"]["truncated"])
+
+
 if __name__ == "__main__":
     unittest.main()

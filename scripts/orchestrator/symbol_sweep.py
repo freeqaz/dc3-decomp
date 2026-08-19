@@ -649,6 +649,7 @@ def sweep_functions(
         cwd=str(project),
     )
     rows: List[Dict[str, Any]] = []
+    errored: List[Dict[str, str]] = []
     seen = set()
     for line in proc.stdout.splitlines():
         line = line.strip()
@@ -659,8 +660,17 @@ def sweep_functions(
         except json.JSONDecodeError:
             cov.drop("jsonl-unparseable")
             continue
+        sym = d.get("symbol")
+        seen.add(sym)
+        if d.get("error"):
+            # objdiff emits {"error":"not_found","symbol":...} as a normal JSONL
+            # row.  Counting it as `examined` would put a symbol we could not
+            # measure into the denominator's numerator -- the exact shape of the
+            # six instrument defects this project found in one week.
+            cov.drop(f"objdiff-{d['error']}")
+            errored.append({"symbol": sym, "error": d["error"]})
+            continue
         cov.examine()
-        seen.add(d.get("symbol"))
         rows.append(d)
     missing = [s for s in symbols if s not in seen]
     if missing:
@@ -668,6 +678,8 @@ def sweep_functions(
     return {
         "kind": "functions",
         "rows": rows,
+        "errored_symbols": errored[:50],
+        "errored_count": len(errored),
         "missing_symbols": missing[:50],
         "missing_count": len(missing),
         "stderr_tail": (proc.stderr or "").strip().splitlines()[-3:],
@@ -702,9 +714,15 @@ def render_markdown(result: Dict[str, Any], top: int = 60) -> str:
             )
         if len(rows_sorted) > top:
             L.append(f"| ... | | +{len(rows_sorted) - top} more (use format=json) | |")
+        if result.get("errored_count"):
+            L.append("")
+            L.append(f"**{result['errored_count']} symbols objdiff could not diff** "
+                     "(dropped, NOT scored as 0): "
+                     + ", ".join(f"`{e['symbol']}` ({e['error']})"
+                                 for e in result["errored_symbols"][:5]))
         if result.get("missing_count"):
             L.append("")
-            L.append(f"**{result['missing_count']} supplied symbols produced no row** "
+            L.append(f"**{result['missing_count']} supplied symbols produced no row at all** "
                      f"(first few: {', '.join(result['missing_symbols'][:5])})")
         return "\n".join(L)
 
