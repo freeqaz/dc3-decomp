@@ -216,6 +216,28 @@ def _extract_prologue_mismatch_info(data: dict) -> "dict | None":
     return None
 
 
+# The relocation ruler, in one place, because getting it wrong is silent.
+#
+# MEASURED on this fork (objdiff-cli 4.2.3, 2026-08-19) against
+# `?Load@CamShot@@UAAXAAVBinStream@@@Z`:
+#
+#   no -c ................ fuzzy 99.85558, 119 non-equal rows, reloc_ignored 22
+#   functionRelocDiffs=none ....... identical to the above
+#   functionRelocDiffs=name_check . identical to the above
+#   functionRelocDiffs=all ....... fuzzy 99.66141, 151 non-equal rows, ignored 11
+#
+# So the fork's DEFAULT is already normalized, and "raw" cannot be spelled by
+# omitting the flag -- only `all` actually counts relocations. `run_diff_inspect`
+# shipped `raw` as "omit -c" and was therefore inert; that is fixed by routing
+# both tools through this table. `name_check` is kept because it is the ruler
+# report.json is generated with, even though it coincides with `none` here.
+RELOC_RULER = {
+    "normalized": "functionRelocDiffs=none",
+    "raw": "functionRelocDiffs=all",
+    "name_check": "functionRelocDiffs=name_check",
+}
+
+
 def _format_data_diff(data: dict, max_rows: int = 80) -> str:
     """Render objdiff's `data_diff` block: pointer slots first, then raw bytes.
 
@@ -954,6 +976,10 @@ class DecompMCPServer:
                                 "type": "string",
                                 "enum": ["markdown", "json"],
                                 "description": "'markdown' (default) is the rendered report. 'json' returns objdiff's raw JSON for scripted consumption -- use when you would otherwise shell out to objdiff-cli to parse it yourself.",
+                            },
+                            "build": {
+                                "type": "boolean",
+                                "description": "Rebuild the unit before diffing. Default true. Set false to diff already-built objects read-only -- safe alongside the build/permuter fleet, and the answer is then about the tree as last built, NOT your unsaved edits.",
                             },
                         },
                         "required": ["symbol", "project_dir"],
@@ -2072,16 +2098,7 @@ class DecompMCPServer:
         # Use functionRelocDiffs=none to ignore address relocation noise
         # (lis/addi pairs with different link-time addresses for same symbol).
         # This matches the behavior of objdiff's report command.
-        # diff_mode selects the relocation ruler. 'normalized' is the historical
-        # (and still default) behaviour; 'raw' is what a wrong-vtable-slot or
-        # wrong-callee hunt needs, because normalized scoring discards exactly
-        # the relocation/immediate plane those bugs live in.
-        _RELOC_CFG = {
-            "normalized": "functionRelocDiffs=none",
-            "raw": None,
-            "name_check": "functionRelocDiffs=name_check",
-        }
-        reloc_cfg = _RELOC_CFG.get(diff_mode, "functionRelocDiffs=none")
+        reloc_cfg = RELOC_RULER.get(diff_mode, RELOC_RULER["normalized"])
 
         def _mk_base_args(sym: str) -> list:
             a = [
@@ -2099,8 +2116,13 @@ class DecompMCPServer:
 
         base_args = _mk_base_args(symbol)
 
-        build_flag = ["--build"]
-        if full_build:
+        # 25 of the DC3 `-1/-2` bypasses were not about arbitrary object pairs
+        # at all -- they were about NOT building. `run_objdiff` unconditionally
+        # passed --build, so any read-only look at an already-built tree had to
+        # go around it. build=false is that, without leaving the sanctioned path.
+        want_build = args.get("build", True)
+        build_flag = ["--build"] if want_build else []
+        if full_build and want_build:
             build_flag.append("--full-build")
 
         # --include-instructions only for JSON run (enrichment/m2c pipeline).
@@ -2596,7 +2618,14 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
 
         # In "normalized" mode (default), ignore relocation address noise.
         # In "raw" mode, include relocation diffs so they can be inspected.
-        reloc_config = ["-c", "functionRelocDiffs=none"] if diff_mode != "raw" else []
+        #
+        # `raw` used to be spelled "omit -c entirely", which was INERT: this
+        # fork's default already normalizes, so omitting the flag and passing
+        # `functionRelocDiffs=none` produce byte-identical JSON. Measured on
+        # ?Load@CamShot@@UAAXAAVBinStream@@@Z (2026-08-19): no -c / =none /
+        # =name_check all give fuzzy 99.85558 with 119 non-equal rows;
+        # `=all` gives 99.66141 with 151. Only `all` is raw. See RELOC_RULER.
+        reloc_config = ["-c", RELOC_RULER.get(diff_mode, RELOC_RULER["normalized"])]
 
         try:
             # ── save_baseline mode ──

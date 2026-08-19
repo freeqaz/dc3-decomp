@@ -196,5 +196,41 @@ class TestDataDiffRendering(unittest.TestCase):
         self.assertIn("CODE symbol", out)
 
 
+class TestRelocRuler(unittest.TestCase):
+    """`diff_mode="raw"` must actually change the ruler.
+
+    It did not, twice. `run_diff_inspect` shipped raw as "omit -c", and the
+    first draft of run_objdiff's diff_mode copied that. Measured on this fork
+    (objdiff-cli 4.2.3, ?Load@CamShot@@UAAXAAVBinStream@@@Z, 2026-08-19):
+
+        no -c / =none / =name_check  -> fuzzy 99.85558, 119 non-equal rows
+        =all                         -> fuzzy 99.66141, 151 non-equal rows
+
+    Only `all` counts relocations. A tool that advertises a raw mode and
+    returns the normalized answer is worse than one with no raw mode, because
+    an agent hunting a wrong-vtable-slot bug concludes there is not one.
+    """
+
+    def test_raw_maps_to_all_not_to_omitting_the_flag(self):
+        ns = {}
+        start = MCP_SRC.index("RELOC_RULER = {")
+        end = MCP_SRC.index("}", start) + 1
+        exec(MCP_SRC[start:end], ns)  # noqa: S102
+        ruler = ns["RELOC_RULER"]
+        self.assertEqual(ruler["raw"], "functionRelocDiffs=all")
+        self.assertEqual(ruler["normalized"], "functionRelocDiffs=none")
+        self.assertEqual(ruler["name_check"], "functionRelocDiffs=name_check")
+        self.assertEqual(len(set(ruler.values())), 3,
+                         "two modes resolve to the same ruler -- one of them is inert")
+
+    def test_both_tools_route_through_the_one_table(self):
+        for handler in ("_run_objdiff", "_run_diff_inspect"):
+            src = _handler_source(handler)
+            self.assertIn("RELOC_RULER", src,
+                          f"{handler} does not use the shared ruler table")
+        self.assertNotIn('if diff_mode != "raw" else []', MCP_SRC,
+                         "the inert 'raw == omit -c' spelling is back")
+
+
 if __name__ == "__main__":
     unittest.main()
