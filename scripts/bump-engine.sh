@@ -42,6 +42,18 @@ done
 # CMakeLists.txt sets MILO_ENGINE_PATH relative to CMAKE_SOURCE_DIR (native/),
 # so its ../../milo-native-engine = repo_root/../milo-native-engine (a sibling).
 ENGINE_DEFAULT="${REPO_ROOT}/../milo-native-engine"
+if [ ! -d "${ENGINE_DEFAULT}/.git" ]; then
+    # A git worktree lives at <...>/wt/<name>, so the sibling guess above lands
+    # in the worktree pool, not next to the main checkout. `--git-common-dir`
+    # resolves to <main-checkout>/.git from anywhere in the repo.
+    _common="$(git -C "${REPO_ROOT}" rev-parse --path-format=absolute \
+                   --git-common-dir 2>/dev/null || true)"
+    if [ -n "${_common}" ]; then
+        _main_checkout="$(dirname "${_common}")"
+        _alt="$(dirname "${_main_checkout}")/milo-native-engine"
+        [ -d "${_alt}/.git" ] && ENGINE_DEFAULT="${_alt}"
+    fi
+fi
 ENGINE_PATH="${MILO_ENGINE_PATH:-${ENGINE_DEFAULT}}"
 ENGINE_PATH="$(cd "${ENGINE_PATH}" 2>/dev/null && pwd)" || {
     echo "ERROR: milo-native-engine not found at ${ENGINE_DEFAULT}" >&2
@@ -72,6 +84,25 @@ if [ -z "${OLD_SHA}" ]; then
     echo "ERROR: could not parse MILO_ENGINE_PIN from ${CMAKE_FILE}" >&2
     exit 1
 fi
+
+# ---- guard: the source pin must actually be able to take effect ----
+# `set(MILO_ENGINE_PIN ... CACHE STRING ...)` WITHOUT `FORCE` is permanently
+# shadowed by CMakeCache.txt, which made every previous run of this script a
+# silent no-op against any existing build dir (toolchain audit, 2026-08-19).
+# Refuse to write a value that cannot be read back, rather than reporting
+# success for a change nobody will ever see.
+PIN_SET_LINE="$(grep -n -A1 -E 'set\(MILO_ENGINE_PIN ' "${CMAKE_FILE}" | tr '\n' ' ')"
+case "${PIN_SET_LINE}" in
+    *CACHE*FORCE*) ;;
+    *CACHE*)
+        echo "ERROR: MILO_ENGINE_PIN is set with CACHE but without FORCE in" >&2
+        echo "       ${CMAKE_FILE}." >&2
+        echo "       CMakeCache.txt would permanently shadow the source value," >&2
+        echo "       so bumping the pin here would have no effect. Restore FORCE" >&2
+        echo "       (see the comment above the set() call) and re-run." >&2
+        exit 1 ;;
+    *) ;;   # not a cache variable at all -- source always wins, fine
+esac
 
 # ---- report ----
 echo "milo-native-engine: ${ENGINE_PATH}"
@@ -110,6 +141,26 @@ fi
 mv "${TMP_FILE}" "${CMAKE_FILE}"
 echo "Updated ${CMAKE_FILE}"
 echo ""
+
+# ---- report build dirs whose cached pin still disagrees ----
+# With FORCE these are overwritten on the next configure, but listing them makes
+# the "N different pin values are live at once" state visible instead of latent.
+STALE=0
+for cache in "${REPO_ROOT}"/native/build*/CMakeCache.txt; do
+    [ -f "${cache}" ] || continue
+    cached="$(sed -n 's/^MILO_ENGINE_PIN:STRING=//p' "${cache}")"
+    [ -n "${cached}" ] || continue
+    if [ "${cached}" != "${NEW_SHA}" ]; then
+        if [ "${STALE}" = "0" ]; then
+            echo "Build dirs whose cached pin still disagrees (FORCE rewrites these"
+            echo "on the next configure -- listed so the drift is visible):"
+        fi
+        echo "  ${cached}  <-  $(dirname "${cache}")"
+        STALE=1
+    fi
+done
+[ "${STALE}" = "1" ] && echo ""
+
 echo "Remember to:"
 echo "  1. Run  ninja -C native/build  (or equivalent) to rebuild with the new engine."
 echo "  2. Commit the CMakeLists.txt change with a message like:"
