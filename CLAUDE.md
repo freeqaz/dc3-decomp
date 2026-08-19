@@ -36,6 +36,7 @@ Use the `mcp__orchestrator__` tools for all decomp analysis. Do not call `objdif
 - Keep members protected/private unless confirmed public via DWARF or asserts. For external access, add getters/setters rather than making members public. Use friend classes for closely related types (e.g., Foo and FooHandle).
 
 ## Known Patterns
+- **A rendered "100.0%" is NOT byte-identity**: every percentage surface rounds, so 99.97% displays as `100.0` — in `decomp.db`, in `report.json`, *and* in `run_objdiff`'s own headline (which printed `Match: 100.0% normalized` above a table listing 3 mismatches). The standing rule "a behavioral divergence on a 100%-matched function must be a harness artifact" is correct reasoning but **may only be applied to a zero-mismatch instruction count, never to a rendered number** — two real bugs were hiding under a rounded 100.0 (`CharUpperTwist::Load` Save/Load member-order permutation, `RndFlare::Load` reading the wrong field). See [docs/decomp/patterns/rounded-100-hides-real-bugs.md](docs/decomp/patterns/rounded-100-hides-real-bugs.md).
 - **Unsigned zero comparisons**: Use `x > 0` instead of `x != 0` for unsigned types (generates `ble` vs `beq`)
 - **Merged symbols**: `merged_<addr>` names indicate Identical COMDAT Folding (ICF) where the linker merged functions with identical machine code to a single address
 - **Automatic header tracking**: Ninja tracks all header dependencies via `/showIncludes` + wibo path rewriting. Touching any header automatically rebuilds only the affected .obj files. No manual `touch` needed.
