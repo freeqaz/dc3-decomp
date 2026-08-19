@@ -2,7 +2,7 @@
 name: data-diff
 description: Diff a DATA symbol (vtable ??_7Class@@6B@, RTTI, pointer/jump table, string pool, static initializer) between the target and the decompiled build, showing byte differences and — for each relocation slot — which function/symbol each side points to. Use when a data symbol is below 100%, or to find which vtable slot resolves to the wrong function. Prefer `mcp__orchestrator__run_objdiff(include_data=true)`; this skill documents the underlying flags and the JSON schema.
 argument-hint: "<symbol> [--unit UNIT]"
-allowed-tools: Bash(bin/objdiff-cli *), Bash(nm *), Read, Grep, Glob
+allowed-tools: Bash(bin/objdiff-cli report *), Bash(nm *), Read, Grep, Glob
 ---
 
 # Data Diff
@@ -40,14 +40,19 @@ data symbol — slot by slot, byte by byte. It's the data analogue of `/compare-
    once use `mcp__orchestrator__run_symbol_sweep(kind="vtable_slots")` — it also
    adjudicates ICF folds by address, which reading slots by hand does not.
 
-   The equivalent raw invocation, for reference:
+   The equivalent raw invocation, **documented for reference, not for running**
+   — the MCP path above covers it, so this skill no longer grants
+   `Bash(bin/objdiff-cli diff *)`:
 
    ```bash
    bin/objdiff-cli diff -p . -u <unit> "$0" -f json-pretty --include-data
    ```
 
-   If you don't know the unit, find which object defines the symbol, or use
-   `report query` to locate the data symbol's unit.
+   If you don't know the unit, find which object defines the symbol (`nm`), or use
+   `bin/objdiff-cli report query` — which **is** one of the named legitimate direct
+   uses (it has no MCP surface), and is the only `objdiff-cli` subcommand this
+   skill is allowed to invoke. See
+   [docs/tools/REFERENCE.md](../../../docs/tools/REFERENCE.md#objdiff-cli-through-mcp-what-maps-to-what).
 
 2. **Read `data_diff.relocations`** — the actionable part for vtables/pointer
    tables. Each entry is one pointer slot:
@@ -94,7 +99,16 @@ reference or the virtual-function order so it points to `String::Print`.
   to add when unsure whether a symbol is code or data.
 - A slot naming two *different* symbols is only a bug when they resolve to
   different addresses — equal addresses are a proven ICF fold. `??_E` vs `??_G`
-  deleting-destructor thunks are the classic false positive: they are usually one
-  weak-alias group at a single address, and they appear only in
-  `build/373307D9/icf_aliases.map`, never in `ham_xbox_r.map`.
+  deleting-destructor thunks are the classic false positive: each pair is one
+  weak-alias group at a single address. **Check both maps** —
+  `build/373307D9/icf_aliases.map` *and* `orig/373307D9/ham_xbox_r.map`; either
+  is sufficient to prove a fold.
+- ⚠ **When grepping `ham_xbox_r.map` for a member function, do not grep the
+  mangling your own build emits.** MSVC encodes member access in the name, so a
+  symbol we declare `public` (`U`) is spelled `M` (protected) or `E` (private)
+  there, and a `U`-shaped grep reports "absent from the map" for a symbol that is
+  sitting in it. That mistake was made on exactly these two thunk pairs and hid a
+  real access-specifier decomp bug in `JsonObject` and `RndVelocityBuffer` — see
+  [docs/analysis/dispatch-data-rescan-20260818.md](../../../docs/analysis/dispatch-data-rescan-20260818.md).
+  Grep the demangled, access-annotated name in `docs/dc_symbols.txt` instead.
 - Full schema (including the instruction branch graph): `docs/tools/objdiff/JSON_EXTENSIONS.md`.

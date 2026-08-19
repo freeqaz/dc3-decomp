@@ -259,23 +259,54 @@ python3 tools/decompctx.py src/path/to/file.cpp -I include -I src
 ## objdiff-cli through MCP: what maps to what
 
 `CLAUDE.md` tells agents to use the `mcp__orchestrator__` tools rather than the
-raw CLI. That rule was unfollowable until 2026-08-19. A sweep of 474 session
-transcripts found 483 tool calls mentioning `objdiff-cli`, of which **296
-actually invoke it — 259 against DC3 or a DC3 worktree** (the rest are
-`rb3-xenon`/`rb3`, where MCP refuses by design, or the objdiff fork's own tests).
-By flag, those 259 DC3 invocations break down as:
+raw CLI. That rule was unfollowable until 2026-08-19.
+
+**The method is now in the tree — re-run it rather than quoting this table:**
+
+```sh
+python3 scripts/orchestrator/transcript_cli_sweep.py
+```
+
+> **The originally published figures did not reproduce, and are corrected here.**
+> This section used to claim *"a sweep of 474 session transcripts found 483 tool
+> calls mentioning `objdiff-cli`, of which 296 actually invoke it — 259 against
+> DC3"*, with `--include-data` at 88 and `--batch` at 49. Re-measured 2026-08-19
+> over the **whole** corpus, those numbers are a small unrecorded subset: there
+> are **16,661** transcript files, not 474, because subagent transcripts nest two
+> and three levels below the project dir and a flat `*.jsonl` glob sees only 231
+> of them (1.4%). That flat-glob slice yields 297 real invocations — the
+> published 296 to within one — which is almost certainly what was measured.
+
+Full-corpus numbers, 2026-08-19:
+
+| | n |
+|---|---|
+| transcript files scanned | 16,661 |
+| files with ≥1 real invocation | 774 |
+| **real direct invocations** | **2,722** |
+| — DC3-scoped by what the command names | 304 |
+| — command names no tree, session was DC3 | 230 |
+| — explicitly another repo | 583 |
+| excluded: mentioned but not run | 4,378 |
+
+By flag, on the DC3-scoped invocations:
 
 | flag reached for | n | now |
 |---|---|---|
-| `-f json` (parse it myself) | 181 | `output_format="json"` |
-| `--include-data` (vtables, RTTI) | 88 | `include_data=true` |
-| `--batch` (bulk) | 49 | `run_symbol_sweep` |
-| `-c functionRelocDiffs=…` | 31 | `diff_mode=` |
-| `--full-listing` | 28 | already existed (`full_listing`) |
-| `-1/-2` object pair | 25 | mostly `build=false`; true arbitrary pairs stay CLI |
-| `report generate`/`query` | 12 | infrastructure — stays CLI |
-| `--map-file` | 10 | automatic |
-| `doc-links` | 3 | infrastructure — stays CLI |
+| `-p <project>` | 154 | implicit in `project_dir` |
+| `-1` / `-2` object pair | 113 / 94 | mostly `build=false`; true arbitrary pairs stay CLI |
+| `-u <unit>` | 89 | `unit="…"` |
+| `--include-instructions` | 89 | default |
+| `report generate`/`query` | 85 | infrastructure — stays CLI |
+| `--full-listing` | 29 | already existed (`full_listing`) |
+| `--batch` (bulk) | 18 | `run_symbol_sweep` |
+| `--include-data` (vtables, RTTI) | 15 | `include_data=true` |
+| `--analyze` | 9 | default |
+
+The conclusion the guidance rests on is unchanged and holds on any slice: direct
+invocation was **routine, not exceptional**, and it reached for `--include-data`
+and `--batch` — capabilities the wrappers genuinely lacked. Only the arithmetic
+was wrong.
 
 Use this table before reaching for the binary.
 
@@ -305,8 +336,9 @@ Use this table before reaching for the binary.
 * `doc-links`, `report query`/`report function` — no MCP surface, and none is
   needed for ordinary decomp work.
 * **Anything in another repo.** `run_objdiff` raises `CrossProjectError` for a
-  foreign `project_dir` on purpose; 19 of the 296 transcript invocations were
-  `rb3-xenon` work correctly routed around MCP. Prefer that repo's own
+  foreign `project_dir` on purpose; **583** of the 2,722 transcript invocations
+  explicitly name another repo — `rb3-xenon`, `rb3`, `cea-decomp`,
+  `decomp-synth` — and were correctly routed around MCP. Prefer that repo's own
   orchestrator when one exists.
 
 ### The relocation ruler: three rulers, and which one to reach for
