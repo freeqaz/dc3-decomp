@@ -29,6 +29,11 @@ Task::~Task() {
 
 #ifdef HX_NATIVE
 bool Task::IsLive(Task *t) { return LiveTasks().count(t) > 0; }
+
+// Incremented by TaskMgr::Poll when it refuses to delete a queued task that a
+// DeleteObjects cascade already destroyed. See the comment at the drain loop.
+static int sDanglingQueuedTasksSkipped = 0;
+int TaskMgr::DanglingQueuedTasksSkipped() { return sDanglingQueuedTasksSkipped; }
 #endif
 
 TaskMgr TheTaskMgr;
@@ -454,6 +459,45 @@ void TaskMgr::Poll() {
         mTimelines[i].Poll();
     }
     for (int i = 0; i < unk84.size(); i++) {
+#ifdef HX_NATIVE
+        // A queued entry can be DANGLING by the time we get here, and deleting
+        // it dispatches a virtual destructor through recycled heap memory.
+        // Observed as an intermittent SIGSEGV at exactly this line (~1 run in 8)
+        // on the autosave_warning_screen -> title_screen transition; gdb showed
+        // a queued pointer inside [heap] whose vptr read back as an unmapped
+        // address, and Task::IsLive() false for it.
+        //
+        // Chain: a MessageTask is queued here while alive. A screen transition
+        // then runs ObjectDir::DeleteObjects, whose cascade destroys the task's
+        // target object; the ring walk calls MessageTask::Replace(&mObj, null),
+        // which does `delete this`. Hmx::Object::~Object deliberately SKIPS
+        // ReplaceRefs(nullptr) while InDeleteObjects() is true (Object.cpp), and
+        // the cascade's Phase-0 NullifyAllRefs only walks objects reachable from
+        // the dir being deleted -- TheTaskMgr is not one of them. So nothing
+        // nullifies this ObjPtr, and Phase 2 defer-frees the block underneath it.
+        //
+        // QueueTaskDelete already refuses to enqueue DURING a cascade for the
+        // same reason, but that cannot help entries enqueued BEFORE it started.
+        //
+        // Consult the same liveness registry TaskTimeline::Poll already uses
+        // above, and drop the reference with NullifyObj() -- which clears
+        // mObject and self-loops the ring without touching the freed block.
+        // Plain `unk84.clear()` would not be safe on its own: ~ObjRefConcrete
+        // calls mObject->Release(this) whenever the cascade/sRingsDirty guards
+        // happen to be false.
+        Task *queued = unk84[i].Ptr();
+        if (queued && !Task::IsLive(queued)) {
+            if (sDanglingQueuedTasksSkipped++ == 0) {
+                MILO_LOG(
+                    "TaskMgr::Poll: dropped a queued task destroyed by an "
+                    "ObjectDir::DeleteObjects cascade without its ObjPtr being "
+                    "nullified. Deleting it would have been a use-after-free.\n"
+                );
+            }
+            unk84[i].NullifyObj();
+            continue;
+        }
+#endif
         delete unk84[i].Ptr();
     }
     unk84.clear();
