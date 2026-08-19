@@ -47,9 +47,13 @@ public:
     virtual void PreLoad(BinStream &);
     virtual void PostLoad(BinStream &);
     virtual void Select(int) {}
+
+protected:
+    // Both mangle 'MAA' (protected) in ham_xbox_r.map, not 'UAA'.
     virtual void Reset() {}
     virtual void Sync() {}
 
+public:
     OBJ_MEM_OVERLOAD(0x17);
     NEW_OBJ(RndCubeTex)
     static void Init() { REGISTER_OBJ_FACTORY(RndCubeTex) }
