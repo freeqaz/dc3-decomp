@@ -702,7 +702,10 @@
             "system/synth/WavReader.cpp": "Matching",
             "system/synth/complex.cpp": "Matching",
             "system/synth/filterdesign.cpp": "Matching",
-            "system/synth/tomcrypt/aes.c": "Matching",
+            "system/synth/tomcrypt/aes.c": {
+                "status": "Matching",
+                "extra_cflags": ["/TP"]
+            },
             "system/synth/tomcrypt/crypt.c": "Matching",
             "system/synth/tomcrypt/ctr.c": {
                 "status": "Matching",
