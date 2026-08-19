@@ -81,8 +81,19 @@ def strip_type(fnpart):
     prefix-folding both atexit helpers into both type-keyed buckets rendered
     them as `tgt=[12,16] ours=[16]` and `tgt=[12,16] ours=[12]`.
     """
-    head = fnpart.rsplit('@4', 1)[0]
-    return head if head.endswith('Z') else fnpart
+    # Split at the FIRST `@4` whose head is a complete function mangling
+    # (they all end in `@Z`).  rsplit is wrong: a templated static's type can
+    # itself contain `@4` -- `?normalized@?P@??AnalyzeData@?A0x5c754947@@...@Z
+    # @4V?$vector@MV?$StlNodeAlloc@M@stlpmtx_std@@@4@A` ends in a `@4@A`
+    # back-reference, so rsplit cut inside the type, left a head that did not
+    # end in Z, gave up, and the data key never matched the atexit key -- which
+    # rendered two statics we do have as `COUNT tgt/ours=(1,0)`.
+    pos = fnpart.find('@4')
+    while pos != -1:
+        if fnpart[:pos].endswith('Z'):
+            return fnpart[:pos]
+        pos = fnpart.find('@4', pos + 1)
+    return fnpart
 
 
 def read_map(path):
