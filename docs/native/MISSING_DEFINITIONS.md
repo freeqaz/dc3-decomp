@@ -131,10 +131,16 @@ The PPC decomp build uses `src/link_glue.cpp` which defines many template instan
 Some methods are declared in headers but never defined in any .cpp (copy ctors, operator=, constructors). The native build's different template instantiation patterns may pull them in.
 
 ### 3. Not-yet-decomp'd functions
-Many stubs (~1000) are Milo engine functions that exist in the original binary but haven't been decompiled yet. These require actual reverse engineering work.
+Milo engine functions that exist in the original binary but haven't been reverse
+engineered yet. The historical "~1000" here is wrong — see the measured table at
+the top; run the gate with `--all` for the current list.
 
-### 4. Xbox/3rd-party only (~1500)
-Bink, D3D, NUI, XNet, json_object, Kinect — these are 3rd party or Xbox-specific and will never be decomp'd. They need native replacements or are safely stubbed.
+### 4. Xbox/3rd-party only
+Bink, D3D, NUI, XNet, Kinect — 3rd party or Xbox-specific, will never be
+decomp'd. They need native replacements or are safely stubbed, and they dominate
+the 119 LIVE stubs. (`json_object` is no longer among them: the real json-c
+sources were wired in, see `0abd4ad43`.) The historical "~1500" is wrong for the
+same reason as above.
 
 ## Progress
 
