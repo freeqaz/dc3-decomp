@@ -108,33 +108,50 @@ plane ignores anyway:
 
 So the row is 0% purely because objdiff cannot pair the two names. Nothing is missing.
 
-**Swept over all 292 rows** (script kept in the session, not committed — it is 60 lines of
-COFF section/reloc parsing plus the `.s` byte-comment scraper): mask every `b`/`bc`
-displacement and the low 16 bits at each relocation offset, then compare our fold peer's
-COMDAT body to the target body.
+**Swept over all 292 rows** with `scripts/analysis/icf_pairing_bodytest.py` (added on this
+branch): mask every `b`/`bc` displacement and the low 16 bits at each relocated offset, then
+compare our fold peer's COMDAT body to the target body.
 
-    203 / 292  IDENTICAL   — proven artifact, our bytes are already right
-     89 / 292  not proven  — 86 differ, 3 differ in length
+    286 / 292  BYTE-IDENTICAL  -- witnessed artifact, our bytes are already right
+      6 / 292  DIFFERENT       -- listed below, worth a second look
 
-The 89 are **not** thereby real bugs. The test is crude in both directions and its limits
-matter more than its score:
+All **20** of the core-set ICF rows are in the 286.
 
-- It masks branch displacements ENTIRELY, so it cannot see a `bl` to a *different* callee.
-  That is a false-**positive** risk on the 203, bounded by the fact that `/OPT:ICF` only
-  folds COMDATs whose relocations resolve identically.
-- Most of the 89 are `??_E<T>` (vector deleting destructor) rows whose only peer in our
-  object is `??_G<T>` (scalar). MSVC declares `??_E` as an undefined weak external
-  resolving to `??_G` — that is the second evidence class in
-  `scripts/symbol_aliases.json` — so the target symbol is a thunk, not the same body, and
-  a raw byte compare is the wrong instrument.
-- The three length mismatches are `?erase@ObjPtrVec<T>@@` instantiations where our COMDAT
-  section carries alignment padding the target's extracted range does not.
+**A correction worth keeping.** The first version of that sweep reported 203/292 and 89
+differences. It was wrong: it masked relocated immediates on OUR side only, so every
+`lis rX, sym@ha` / `lfs fY, sym@l(rX)` pair read as a difference. Hand-diffing
+`?UpdateSphere@RndParticleSys@@` against our `?UpdateSphere@RndGenerator@@` showed the two
+"differences" were at offsets `0x10` and `0x24` and were exactly `3d60821c` vs `3d600000`
+and `c00b2fc8` vs `c00b0000` -- the resolved vs unresolved halves of one relocation. Mask
+both sides with the same offset set and it is 286. Recorded because an 89-difference number
+would have looked like 89 bugs.
 
-Stated this way deliberately: the project's own rule (`symbol_aliases.json`'s `_comment`)
-is that **name shapes are arguments, not witnesses** — an earlier triage called every
-`merged_` target benign from its name and the body test found 9 of 33 were genuinely
-different functions. 203 rows now have a witness. The other 89 have a mechanism and no
-witness, and should get decomp-synth's `probe_icf_foldtest.py` rather than this sweep.
+The 6 that still differ are a LEAD, not a conclusion, and they point the other way from the
+rest of this file: `/OPT:ICF` folding proves the ORIGINAL's two bodies were byte-identical,
+so if our fold peer is not identical to the target's folded body, **our peer is the wrong
+one** -- and its own row has no target counterpart to score against, so the metric cannot
+see it. Five are template instantiations whose fold set has several members in our object
+(the sweep takes the first that matches, so a miss may just be peer selection), and one is
+`??_GSynthSample@@` vs `??_GSynthSample360@@`:
+
+| row | unit | peer tried |
+|---|---|---|
+| `?Unlink@ObjPtrList<EventTrigger>` | `ui/UIList` | `ObjPtrList<Hmx::Object>` |
+| `?erase@ObjPtrVec<HamMove>` | `world/LightPreset` | `ObjPtrVec<Spotlight>` |
+| `?erase@ObjPtrVec<RndTex>` | `rndobj/Font` | `ObjPtrVec<RndMat>` |
+| `?FindRef@ObjPtrVec<RndTransformable>` | `world/LightPreset` | `ObjPtrVec<RndLight>` |
+| `?Replace@ObjPtrList<CamShot>` | `world/ThreeDSoundManager` | `ObjPtrList<ThreeDSound>` |
+| `??_GSynthSample@@` | `synth_xbox/SynthSample` | `??_GSynthSample360@@` |
+
+Two limits of the instrument, stated because they bound what a pass means: it masks branch
+displacements ENTIRELY, so it cannot see a `bl` to a *different* callee (a false-positive
+risk on the 286, bounded by ICF requiring identical relocation resolution); and `??_E<T>`
+rows resolve through a COFF weak external to `??_G<T>`, so the target symbol is a thunk
+rather than the same body. For a stronger verdict use decomp-synth's
+`probe_icf_foldtest.py`. This still respects the project rule that **name shapes are
+arguments, not witnesses** (`scripts/symbol_aliases.json`'s `_comment`, after an earlier
+triage called 33 `merged_` rows benign from their names and the body test found 9 genuinely
+different): 286 rows now have a witness rather than a name.
 
 **281 of the 292 (32 288 B) would be fixed by one rule in dtk's splitter:** when an address
 carries several names, prefer the fold member whose contributing .obj is the .obj that owns
