@@ -19,6 +19,7 @@ Test case:
 """
 
 import struct
+import sys
 
 # ============================================================================
 # Constants
@@ -1195,7 +1196,7 @@ def run_grindarray_test():
             marker = " <-- DIFF" if ppc_result[i] != x64_result[i] else ""
             print(f"    byte[{i:2d}]: ppc=0x{ppc_result[i]:02x}  x64=0x{x64_result[i]:02x}{marker}")
 
-    return ppc_result, x64_result
+    return ppc_result, x64_result, x64_result == expected_x64
 
 
 # ============================================================================
@@ -1278,6 +1279,9 @@ def check_native_vs_ppc():
         print("  --> The 'native x64 output' was produced by DTA ops with 64-bit unsigned long!")
     else:
         print("  [NO MATCH] x64 DTA model does NOT match expected output")
+    # Returned, not merely printed: the CONCLUSION block below is gated on it.
+    return {"ppc32_matches_expected": ppc_result == expected_x64,
+            "x64_dta_matches_expected": x64_result == expected_x64}
 
 
 # ============================================================================
@@ -1338,6 +1342,15 @@ def trace_specific_ops():
 
     # Now trace byte 0 in detail
     print("\n  Detailed trace for byte[0] (initial foo=0xdf):")
+    # The stored conclusion turns on "op5 is NEVER called during this key's
+    # grind". That is a claim about THIS run's data, so compute it here and
+    # hand it back rather than letting the conclusion assert it.
+    ops_that_fire = set()
+    for b in pre_grind:
+        h = hashMap[b & 0xFF]
+        if h < maxCase and caseToOpIdx[h] >= 0:
+            ops_that_fire.add(caseToOpIdx[h])
+    diverged_in_trace = False
     arr = list(pre_grind)
     foo = arr[0]
     ix = 0
@@ -1354,6 +1367,8 @@ def trace_specific_ops():
                 op_idx = caseToOpIdx[h]
                 ppc_result = ppc_ops[op_idx](operand, foo)
                 x64_result = x64_ops[op_idx](operand, foo)
+                if ppc_result != x64_result:
+                    diverged_in_trace = True
                 marker = " *** DIVERGE ***" if ppc_result != x64_result else ""
                 print(f"    step {step}: ix={ix-1}->bar[{ix-1}]=0x{barVal:02x} hash={h} -> "
                       f"op{op_idx}(operand=0x{operand:02x}, foo=0x{old_foo:02x}) "
@@ -1365,6 +1380,8 @@ def trace_specific_ops():
             step += 1
         ix += 1
     print(f"    Final foo (PPC): 0x{foo:02x}")
+    print(f"\n  Ops that actually FIRE for this key: {sorted(ops_that_fire)}")
+    return {"ops_that_fire": ops_that_fire, "diverged_in_trace": diverged_in_trace}
 
 
 # ============================================================================
@@ -1373,10 +1390,10 @@ def trace_specific_ops():
 
 if __name__ == "__main__":
     divergent_ops = scan_all_ops_exhaustive()
-    ppc_result, x64_result = run_grindarray_test()
+    ppc_result, x64_result, x64_matched_expected = run_grindarray_test()
     run_verbose_trace()
-    check_native_vs_ppc()
-    trace_specific_ops()
+    native_checks = check_native_vs_ppc()
+    fired = trace_specific_ops()
 
     print("\n" + "=" * 70)
     print("SUMMARY")
@@ -1390,7 +1407,67 @@ if __name__ == "__main__":
         print("  The divergence must come from the GrindArray loop logic itself,")
         print("  or from the native nop* implementations having a bug vs the DTA ops.")
 
+    # ------------------------------------------------------------------ #
+    # The CONCLUSION block below used to be an UNCONDITIONAL print of a fixed
+    # string.  Verified 2026-08-19 by sabotaging every x64_op to return
+    # (ppc + 1) & 0xFF: the script duly printed `[DIVERGENCE FOUND]`,
+    # `[NO MATCH]` and `*** DIVERGE ***` -- and then, sixty lines later, this
+    # block printed BYTE-IDENTICAL to the clean run (1,296 B, empty diff, exit
+    # 0 both times), still asserting "GrindArray is NOT the divergence source"
+    # and still routing the reader to "Investigate the key derivation pipeline
+    # BEFORE GrindArray".
+    #
+    # A hardcoded verdict that tells the next engineer where NOT to look is
+    # load-bearing by definition.  It is now gated on the evidence this script
+    # actually computes, and the refuting case prints the refutation instead.
+    # ------------------------------------------------------------------ #
+    # The premise is NOT "no op diverges" -- op5 does, and the conclusion says
+    # so.  It is "no op that FIRES for this key diverges".  Compute exactly
+    # that, from the two sets this run produced.
+    divergent_idxs = {o[0] for o in divergent_ops}
+    firing_and_divergent = sorted(divergent_idxs & fired["ops_that_fire"])
+    supports_conclusion = (
+        not firing_and_divergent
+        and not fired["diverged_in_trace"]
+        and ppc_result == x64_result
+        and x64_matched_expected
+        and native_checks["ppc32_matches_expected"]
+        and native_checks["x64_dta_matches_expected"]
+    )
+
     print("\n" + "=" * 70)
+    if not supports_conclusion:
+        print("NO CONCLUSION: this run's own evidence CONTRADICTS the "
+              "GrindArray-is-innocent finding")
+        print("=" * 70)
+        print("  The stored conclusion below was reached on a run where all of "
+              "the following held.")
+        print("  This run disagrees, so it is NOT reproduced -- re-derive it "
+              "before quoting it.\n")
+        for label, ok in (
+            ("no op that FIRES for this key diverges (op5 diverges but is "
+             "never called -- that is the conclusion's own premise)",
+             not firing_and_divergent),
+            ("no divergence observed in the step-by-step trace",
+             not fired["diverged_in_trace"]),
+            ("PPC and x64 GrindArray outputs are identical", ppc_result == x64_result),
+            ("x64 GrindArray output matches the expected vector", x64_matched_expected),
+            ("PPC 32-bit model matches the expected vector",
+             native_checks["ppc32_matches_expected"]),
+            ("x64 DTA model matches the expected vector",
+             native_checks["x64_dta_matches_expected"]),
+        ):
+            print(f"    [{'ok ' if ok else 'FAIL'}] {label}")
+        if firing_and_divergent:
+            print(f"\n  op(s) that BOTH fire for this key AND diverge: "
+                  f"{firing_and_divergent}")
+        if divergent_ops:
+            print(f"  divergent op(s) overall: {sorted(divergent_idxs)} "
+                  f"(ops that fire: {sorted(fired['ops_that_fire'])})")
+        print("\n  GrindArray is a LIVE SUSPECT on this run. Do not skip it.")
+        print("=" * 70)
+        sys.exit(1)
+
     print("CONCLUSION: GrindArray is NOT the divergence source")
     print("=" * 70)
     print("""

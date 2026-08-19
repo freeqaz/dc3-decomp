@@ -24,11 +24,16 @@ tmp_path SQLite built by the test.
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
+import subprocess
 import sys
 from pathlib import Path
 
 import pytest
+
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__)))))
 
 import scripts.analysis.remaining_work as RW
 import scripts.analysis.ceiling_calculator as CC
@@ -674,3 +679,101 @@ def test_ceiling_calculator_db_handle_is_read_only(tmp_path):
     with pytest.raises(sqlite3.OperationalError):
         conn.execute("UPDATE functions SET verdict = 'X'")
     conn.close()
+
+
+# =========================================================================== #
+# grindarray_divergence — a hardcoded verdict that routes the next engineer.
+#
+# The audit table filed its trailing `CONCLUSION:` block as "noted, not
+# load-bearing". The population claim above it is true — full 64x256x256, no
+# sampling — but the block was an unconditional `print` of a fixed string, and
+# it does not merely conclude: it says *"Investigate the key derivation
+# pipeline BEFORE GrindArray."* A stored verdict that tells the next engineer
+# where NOT to look is load-bearing by definition.
+#
+# Sabotage every x64 op to return (ppc + 1) & 0xFF and the script printed
+# `[DIVERGENCE FOUND]`, `[NO MATCH]` and `*** DIVERGE ***` — then, sixty lines
+# later, printed the conclusion BYTE-IDENTICAL to the clean run (1,296 B, empty
+# diff), exit 0 both times.
+# =========================================================================== #
+
+GRIND = os.path.join(REPO, "scripts", "analysis", "grindarray_divergence.py")
+
+_SABOTAGE_ANCHOR = ('if __name__ == "__main__":\n'
+                    '    divergent_ops = scan_all_ops_exhaustive()')
+_SABOTAGE = '''if __name__ == "__main__":
+    def _mk(i):
+        return lambda operand, w: (ppc_ops[i](operand, w) + 1) & 0xFF
+    for _i in range(len(x64_ops)):
+        x64_ops[_i] = _mk(_i)
+    divergent_ops = scan_all_ops_exhaustive()'''
+
+
+def _run_grind(path):
+    return subprocess.run([sys.executable, path], capture_output=True,
+                          text=True, cwd=REPO, timeout=1800)
+
+
+def _conclusion_block(stdout):
+    """The trailing verdict only — the part that routes the reader."""
+    for marker in ("CONCLUSION:", "NO CONCLUSION:"):
+        i = stdout.find(marker)
+        if i != -1:
+            return stdout[i:]
+    return ""
+
+
+def test_grindarray_conclusion_is_gated_on_the_computed_result(tmp_path):
+    src = open(GRIND, errors="replace").read()
+    assert _SABOTAGE_ANCHOR in src, "the entry point moved; re-derive this control"
+    sab = tmp_path / "grind_sabotaged.py"
+    sab.write_text(src.replace(_SABOTAGE_ANCHOR, _SABOTAGE))
+
+    clean = _run_grind(GRIND)
+    broken = _run_grind(str(sab))
+
+    # (a) The sabotage must really break the computation, or this is not a
+    # control. Assert on the tool's OWN divergence markers, upstream of the
+    # block under test.
+    assert "[DIVERGENCE FOUND]" in broken.stdout
+    assert "*** DIVERGE ***" in broken.stdout
+    assert "[DIVERGENCE FOUND]" not in clean.stdout
+
+    # (b) The verdict must now DISAGREE with itself across the two runs. This
+    # is the assertion the historical form failed: the two blocks were byte
+    # identical.
+    assert _conclusion_block(clean.stdout) != _conclusion_block(broken.stdout), (
+        "the conclusion block is byte-identical on a clean run and on a run "
+        "whose own output says [DIVERGENCE FOUND] — it is hardcoded")
+
+    # The clean run still reaches the stored conclusion: the gate must not have
+    # simply deleted a true finding.
+    assert "CONCLUSION: GrindArray is NOT the divergence source" in clean.stdout
+    assert clean.returncode == 0
+
+    # The refuted run must not reproduce it, and above all must not reproduce
+    # the ROUTING — that sentence is what sends the next engineer elsewhere.
+    assert "CONCLUSION: GrindArray is NOT the divergence source" not in broken.stdout
+    assert "Investigate the key derivation pipeline BEFORE GrindArray" not in broken.stdout
+    assert "GrindArray is a LIVE SUSPECT" in broken.stdout
+    assert broken.returncode != 0
+    assert broken.returncode != clean.returncode
+
+
+def test_grindarray_gate_uses_ops_that_fire_not_ops_that_exist():
+    """The conclusion's own premise is 'op5 diverges but is NEVER called'.
+
+    A gate on `not divergent_ops` would be wrong in the other direction: it
+    would refuse to reproduce a TRUE finding, because op5 really does diverge
+    on this tree. The clean run proves the distinction is live — it must report
+    a divergent op AND still reach the conclusion.
+    """
+    clean = _run_grind(GRIND)
+    assert "op5" in clean.stdout or "op 5" in clean.stdout
+    assert "Ops that actually FIRE for this key:" in clean.stdout
+    fired = clean.stdout.split("Ops that actually FIRE for this key:")[1]
+    fired = fired.split("\n")[0]
+    assert "5" not in fired.replace("15", "").replace("25", "").replace(
+        "35", "").replace("45", "").replace("53", "").replace("55", ""), (
+        f"op5 must not be in the firing set, or the premise is false: {fired}")
+    assert "CONCLUSION: GrindArray is NOT the divergence source" in clean.stdout
