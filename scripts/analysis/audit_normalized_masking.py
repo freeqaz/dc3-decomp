@@ -108,7 +108,25 @@ def norm_sym(s):
         return "POOL"
     # Anonymous-namespace discriminators and permuter working-copy artifacts.
     s = re.sub(r"@unnamed@.*$", "", s)
-    s = re.sub(r"@.*$", "", s)
+    # --- BEGIN HEURISTIC CHANGE (not a coverage fix) -------------------------
+    # WAS: s = re.sub(r"@.*$", "", s)
+    #
+    # That stripped from the FIRST '@', which in MSVC mangling is the separator
+    # before the CLASS name — so `?Load@RndFlare@@UAEXAAVBinStream@@@Z` and
+    # `?Load@RndText@@UAEXAAVBinStream@@@Z` both collapsed to `?Load`, and
+    # `?Save@FxSendBitCrush@@` / `?Save@FxSendDistortion@@` both to `?Save`.
+    # Two calls to DIFFERENT classes' same-named method then CANCELLED out of
+    # the leftover multiset, `reloc_target` never fired, and the verdict came
+    # back BENIGN — fail-open in this tool's own headline bug category.
+    #
+    # Keep the class qualifier; strip only the SIGNATURE after '@@' (which is
+    # where genuinely benign parameter-mangling noise lives). Symbols with no
+    # '@@' keep the old behaviour exactly.
+    if "@@" in s:
+        s = re.sub(r"@@.*$", "@@", s)
+    else:
+        s = re.sub(r"@.*$", "", s)
+    # --- END HEURISTIC CHANGE ------------------------------------------------
     # Compiler discriminators: __FUNCTION__$58088, foo__123 (benign renumbering).
     s = re.sub(r"\$\d+$", "", s)
     s = re.sub(r"__\d+$", "", s)
