@@ -194,8 +194,14 @@ def function_bodies(path, stats=None):
             yield name, raw[v:end], rl, v
 
 
-def data_bodies(path, stats=None):
+def data_bodies(path, stats=None, with_chars=False):
     """Yield ``(name, bytes, relocs, offset)`` for each DATA-section slice.
+
+    With ``with_chars=True`` each tuple gains a fifth element, the containing
+    section's COFF characteristics word.  Callers that adjudicate /OPT:ICF need
+    it: the linker folds read-only COMDATs, and a writable one
+    (``IMAGE_SCN_MEM_WRITE``) is never a fold candidate no matter how identical
+    two copies look.
 
     /OPT:ICF folds identical read-only DATA COMDATs as well as functions, and a
     large share of `name_check`'s relocation-name charges name data symbols --
@@ -238,7 +244,10 @@ def data_bodies(path, stats=None):
                 stats["data_slices"] += 1
             rl = [(o - v, idx_name.get(i, "?"), t)
                   for (o, i, t) in sec.relocs if v <= o < end]
-            yield name, raw[v:end], rl, v
+            if with_chars:
+                yield name, raw[v:end], rl, v, sec.chars
+            else:
+                yield name, raw[v:end], rl, v
 
 
 def iter_objects(roots):
