@@ -116,7 +116,9 @@ def main():
     res.close()
     print(f"Results rows (EQUIVALENT/DIVERGENT): {len(rows)}")
 
-    conn = sqlite3.connect(args.db)
+    # The live DB is WAL-mode and concurrent agents write it; a 29k-row UPDATE
+    # will collide with them without a busy timeout.
+    conn = sqlite3.connect(args.db, timeout=120.0)
     conn.row_factory = sqlite3.Row
     if args.apply and Path(args.db).resolve() == Path(LIVE_DB).resolve():
         print("WARNING: --apply targets the LIVE decomp.db (orchestrator single-writer).",

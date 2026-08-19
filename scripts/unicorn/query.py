@@ -16,6 +16,30 @@ from scripts.orchestrator.database import get_connection
 
 DEFAULT_DB = os.path.join(PROJECT_ROOT, "decomp.db")
 
+# Divergence classes that are properties of the EMULATION HARNESS, not of our
+# source. Measured artifact rates where known are in the note. Printing a raw
+# DIVERGENT count without this split is how the oracle acquired its reputation
+# for overstating bugs ~8x.
+ARTIFACT_CLASS_NOTES = {
+    "data_layout": "ARTIFACT: only differing values are addresses the harness "
+                   "assigns per side (GLOBAL/RDATA/TRAMPOLINE)",
+    "build_env": "ARTIFACT: __FILE__ strings / merged-symbol calls",
+    "regalloc": "ARTIFACT: register values only",
+    "stack_layout": "ARTIFACT: differing frame addresses",
+    "merged_call": "ARTIFACT: ICF-merged callee",
+    "merged_arg": "ARTIFACT: ICF-merged callee argument",
+    "fpr_precision": "ARTIFACT: FMA/precision on a float return",
+    "orig_error": "ARTIFACT: the ORIGINAL binary faults; property of the target",
+    "cap_exhausted": "ARTIFACT ~72%: instruction cap hit on both sides",
+    "cap_exhausted_orig": "ARTIFACT ~98%: cap hit on the original side",
+    "cap_exhausted_decomp": "ARTIFACT ~97%: cap hit on our side",
+    "call_count": "ARTIFACT ~83%: often just how many stub hits fit the budget",
+    "wild_jump_match": "NOT PINPOINTED: both sides crashed somewhere different; "
+                       "whole-function-rewrite signal, not a defect",
+    "unmapped_access_mismatch": "SUSPECT: trampoline stubs return 0 where a ctor "
+                                "returns this, which manufactures these",
+}
+
 
 def query_functions(args):
     conn = get_connection(args.db)
@@ -115,8 +139,16 @@ def print_summary(conn, args):
     if class_rows:
         div_total = sum(r["cnt"] for r in class_rows)
         print(f"\nDivergence class breakdown ({div_total} divergent):")
+        n_artifact = 0
         for r in class_rows:
-            print(f"  {r['unicorn_class']:16s}  {r['cnt']:>5d}")
+            note = ARTIFACT_CLASS_NOTES.get(r["unicorn_class"], "")
+            if note.startswith("ARTIFACT"):
+                n_artifact += r["cnt"]
+            print(f"  {r['unicorn_class']:24s}  {r['cnt']:>5d}"
+                  + (f"   {note}" if note else ""))
+        print(f"  {'-' * 24}  {'-' * 5}")
+        print(f"  {'known-artifact classes':24s}  {n_artifact:>5d}   "
+              f"({100.0 * n_artifact / div_total:.1f}% of divergent)")
 
     # PROVENANCE. Never print a unicorn count without saying which harness
     # produced it: h1 (pre-2026-08-18) overstated real bugs by roughly 8x.
