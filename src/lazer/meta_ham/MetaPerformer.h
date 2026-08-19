@@ -227,7 +227,9 @@ protected:
 class QuickplayPerformer : public MetaPerformer {
 public:
     QuickplayPerformer(const HamSongMgr &);
-    virtual ~QuickplayPerformer() {}
+    // No user-declared destructor: ham_xbox_r.map folds ??_GQuickplayPerformer into
+    // ??_GMetaPerformer at 0x828D3980, whose body has no vptr store --
+    // declaring one made MSVC inline the derived dtor into ??_G.
     virtual DataNode Handle(DataArray *, bool);
     virtual bool IsWinning() const { return IsCheatWinning() != false; }
     virtual void SelectSong(Symbol song, int);

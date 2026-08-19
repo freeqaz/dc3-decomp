@@ -63,7 +63,6 @@ Playlist *SongSelectPlaylistProvider::GetPlaylist(int i_iIndex) const {
 SongSelectPlaylistPanel::SongSelectPlaylistPanel()
     : m_pSongSelectPlaylistProvider(0), m_pPlaylistSongProvider(0) {}
 
-SongSelectPlaylistPanel::~SongSelectPlaylistPanel() {}
 
 void SongSelectPlaylistPanel::Unload() {
     UIPanel::Unload();

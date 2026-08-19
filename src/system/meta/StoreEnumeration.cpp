@@ -87,7 +87,10 @@ error_path:
 }
 
 bool XboxEnumeration::IsEnumerating() const {
-    return mEnumerating;
+    // 0x824B0BE8 (ICF survivor HamMove::Mirrored) reads the WORD at 0x3c and
+    // returns `!= 0`; at 0x3c XboxEnumeration has mHandle, not mEnumerating
+    // (which is a byte at 0x1c and would have been an lbz).
+    return mHandle != 0;
 }
 
 void XboxEnumeration::Poll() {

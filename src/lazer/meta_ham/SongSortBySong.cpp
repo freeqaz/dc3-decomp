@@ -6,7 +6,6 @@
 #include "ui\UIListWidget.h"
 #include <cstdio>
 
-SongSortBySong::~SongSortBySong() {}
 
 SongCmp::~SongCmp() {}
 

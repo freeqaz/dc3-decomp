@@ -78,7 +78,9 @@ class PlaylistSortMgr : public NavListSortMgr {
 public:
     virtual DataNode Handle(DataArray *, bool);
     virtual bool SelectionIs(Symbol) { return 0; }
-    virtual Symbol MoveOn() { return 0; }
+    // ICF-folded with RndText::TextToken at 0x82696CC8, which builds the
+    // Symbol from gNullStr rather than from a null pointer.
+    virtual Symbol MoveOn() { return gNullStr; }
     virtual void OnEnter();
 
     int ConvertListIndexToPlaylistIndex(int);

@@ -758,21 +758,8 @@ typename ObjPtrList<T1, T2>::iterator ObjPtrList<T1, T2>::erase(iterator it) {
     return iterator(next);
 }
 
-template <class T1, class T2>
-Hmx::Object *ObjPtrList<T1, T2>::RefOwner() const {
-    return mOwner ? mOwner->RefOwner() : 0;
-}
-
-template <class T1, class T2>
-bool ObjPtrList<T1, T2>::Replace(ObjRef *ref, Hmx::Object *obj) {
-    for (iterator it = begin(); it != end(); ++it) {
-        if (it.mNode == ref) {
-            ReplaceNode(it.mNode, obj);
-            return true;
-        }
-    }
-    return false;
-}
+// ObjPtrList<T>::RefOwner / ::Replace are NOT defined here on Xbox: retail
+// folds them into ObjPtrVec's "should never be called" stub (see Object.h).
 
 template <class T1, class T2>
 Hmx::Object *ObjPtrList<T1, T2>::Node::RefOwner() const {

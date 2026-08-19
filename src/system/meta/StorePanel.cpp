@@ -587,7 +587,9 @@ DataNode StorePanel::OnMsg(SigninChangedMsg const &msg) {
     return 0;
 }
 
-DataNode StorePanel::OnMsg(ProfileSwappedMsg const &) { return 0; }
+// Folded with MetaPerformer::OnMsg(RCJobCompleteMsg) at 0x82E13DD8, which
+// stores 1 (not 0) into the returned DataNode.
+DataNode StorePanel::OnMsg(ProfileSwappedMsg const &) { return 1; }
 
 DataNode StorePanel::OnMsg(SingleItemEnumCompleteMsg const &msg) {
     bool ok = msg.Success() && msg.HasOfferID();

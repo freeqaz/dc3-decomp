@@ -238,9 +238,11 @@ void CharServoBone::MoveToFacing(Transform &tf) {
 }
 
 void CharServoBone::PollDeps(
-    std::list<Hmx::Object *> &changedBy, std::list<Hmx::Object *> &change
+    std::list<Hmx::Object *> &, std::list<Hmx::Object *> &change
 ) {
-    change.push_back(this);
+    // ICF-folded with CharFaceServo::PollDeps at 0x82371970:
+    //   mr r4,r5 ; addi r3,r3,8 ; b CharBonesMeshes::StuffMeshes
+    StuffMeshes(change);
 }
 
 BEGIN_HANDLERS(CharServoBone)

@@ -126,8 +126,8 @@ void LockedContentPanel::SetUpCampaignMasterQuestHeader(Symbol song) {
     if (!pAccomplishment) {
         MILO_NOTIFY("Could not find accomplishment for %s", song);
     } else {
-        if (pAccomplishment->GetType() == kAccomplishmentTypeLessonSongListConditional
-            || pAccomplishment->GetType() == kAccomplishmentTypeTourConditional) {
+        if (pAccomplishment->GetType() == kAccomplishmentTypeOneShot
+            || pAccomplishment->GetType() == kAccomplishmentTypeCampaignConditional) {
             AccomplishmentCountConditional *pAccomplishmentCountConditional =
                 dynamic_cast<AccomplishmentCountConditional *>(pAccomplishment);
             Flow *pFlow = DataDir()->Find<Flow>("one_shot.flow");
@@ -162,8 +162,8 @@ void LockedContentPanel::SetUp(Symbol song) {
     if (!pAccomplishment) {
         MILO_NOTIFY("Could not find accomplishment for %s", song);
     } else {
-        if (pAccomplishment->GetType() == kAccomplishmentTypeLessonSongListConditional
-            || pAccomplishment->GetType() == kAccomplishmentTypeTourConditional) {
+        if (pAccomplishment->GetType() == kAccomplishmentTypeOneShot
+            || pAccomplishment->GetType() == kAccomplishmentTypeCampaignConditional) {
             AccomplishmentCountConditional *pAccomplishmentCountConditional =
                 dynamic_cast<AccomplishmentCountConditional *>(pAccomplishment);
             Flow *pFlow = DataDir()->Find<Flow>("one_shot.flow");

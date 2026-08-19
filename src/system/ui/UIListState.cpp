@@ -121,7 +121,11 @@ void UIListState::SetScrollPastMinDisplay(bool b) {
     mSelectedDisplay = x;
 }
 
-void UIListState::SetScrollPastMaxDisplay(bool) {}
+void UIListState::SetScrollPastMaxDisplay(bool scroll) {
+    // 0x82DE9AA8 (ICF survivor DirectionGestureFilterSingleUser::SetEngaged):
+    // stb r4, 0x1c(r3); blr -- the setter really does write the member.
+    mScrollPastMaxDisplay = scroll;
+}
 
 int UIListState::Selected() const { return Display2Showing(SelectedDisplay()); }
 

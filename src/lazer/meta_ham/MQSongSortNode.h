@@ -33,7 +33,11 @@ class MQSongSortNode : public NavListItemNode {
 public:
     MQSongSortNode(NavListItemSortCmp *cmp, Symbol shortName, Symbol character)
         : NavListItemNode(cmp), mShortName(shortName), mCharacter(character) {}
-    virtual ~MQSongSortNode();
+    // Inline, like NavListItemNode: ??_GMQSongSortNode folds into
+    // ??_GNavListItemNode at 0x82986170, a body that stores the vptr and
+    // calls ??1NavListSortNode -- i.e. the derived dtor is inlined, not
+    // called out of line.
+    virtual ~MQSongSortNode() {}
     virtual DataNode Handle(DataArray *, bool);
     virtual Symbol GetToken() const { return mShortName; }
     virtual Symbol OnSelect();

@@ -48,7 +48,9 @@ class Ham1FilterVersion : public FilterVersion {
 public:
     Ham1FilterVersion(FilterVersionType t, const DataArray *cfg)
         : FilterVersion(t, cfg) {}
-    virtual ~Ham1FilterVersion() {}
+    // No user-declared destructor: ham_xbox_r.map folds ??_GHam1FilterVersion into
+    // ??_GFilterVersion at 0x82527920, whose body has no vptr store --
+    // declaring one made MSVC inline the derived dtor into ??_G.
     virtual void NodeInput(int, const DetectFrame *, MoveMode, ErrorNodeInput &) const;
     // Ham1 era error nodes:
     // Euclidean (4): l_elbow, l_hand, r_elbow, r_hand
@@ -63,7 +65,9 @@ class Ham2FilterVersion : public FilterVersion {
 public:
     Ham2FilterVersion(FilterVersionType t, const DataArray *cfg)
         : FilterVersion(t, cfg) {}
-    virtual ~Ham2FilterVersion() {}
+    // No user-declared destructor: ham_xbox_r.map folds ??_GHam2FilterVersion into
+    // ??_GFilterVersion at 0x82527920, whose body has no vptr store --
+    // declaring one made MSVC inline the derived dtor into ??_G.
     virtual void NodeInput(int, const DetectFrame *, MoveMode, ErrorNodeInput &) const;
     // Ham2 era error nodes:
     // Displacement (17):

@@ -210,7 +210,9 @@ public:
 class SfxSeq : public SerialGroupSeq {
 public:
     SfxSeq();
-    virtual ~SfxSeq() {}
+    // No user-declared destructor: ham_xbox_r.map folds ??_GSfxSeq into
+    // ??_GGroupSeq at 0x8274B700, whose body has no vptr store --
+    // declaring one made MSVC inline the derived dtor into ??_G.
     OBJ_CLASSNAME(SfxSeq);
     OBJ_SET_TYPE(SfxSeq);
     virtual void Save(BinStream &);

@@ -16,7 +16,13 @@ HolmesInput::~HolmesInput() {
     RELEASE(mJoypadStream);
 }
 
-DataNode HolmesInput::Handle(DataArray *, bool) { return DataNode(0); }
+// 0x827026F0 in ham_xbox_r.map is the 292-byte fold class every plain
+// `BEGIN_HANDLERS(X) HANDLE_SUPERCLASS(Hmx::Object) END_HANDLERS` lands in
+// (UIListWidget, RndFur, ADSR, ColorPalette, ... 100+ names).  HolmesInput's
+// Handle was a 16-byte stub.
+BEGIN_HANDLERS(HolmesInput)
+    HANDLE_SUPERCLASS(Hmx::Object)
+END_HANDLERS
 
 unsigned int HolmesInput::SendJoypadMessages() {
     static DataNode &n = DataVariable("fake_controllers");

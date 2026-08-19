@@ -66,7 +66,9 @@ bool XboxPurchaser::PurchaseMade() const {
 }
 
 bool XboxPurchaser::IsPurchasing() const {
-    return mState == purchasestate1;
+    // ICF-folded with XboxMultipleItemsPurchaser::IsPurchasing at 0x82E171B0,
+    // which is the three-way state test, not `== purchasestate1`.
+    return mState != purchasestate0 && mState != kSuccess && mState != purchasestate3;
 }
 
 DataNode XboxPurchaser::OnMsg(UIChangedMsg const &msg) {
