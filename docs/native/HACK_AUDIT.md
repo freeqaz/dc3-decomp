@@ -411,3 +411,151 @@ These are correct and should remain:
 - 7 `HX_NATIVE` guards removed or restructured (2026-03-16)
 - 14 more guards removed in FileMerger convergence Phase 3+4 (2026-03-17): Game.cpp bypasses (2), GamePanel StartIntro block, Song::SyncState guard + stub, HamDirector SetNativeVenueWorld + DebugWorldLoad (2 files) + Enter/GetWorld (2)
 - Phase 5 (2026-03-17): gNativeHudDir removed (~330 lines loading+drawing), DirLoader parent chain + FindObject ProxyDir fallback added, ObjPtrVec::Node::RefOwner pre-existing bug fixed
+
+---
+
+## The inverse audit: native fixes that were never guarded (2026-08-19)
+
+This document audits guards that exist. The inverse defect is a native fix written
+**without** a guard, so it compiles into the Xbox plane too and silently changes the
+code the decomp is trying to match. It is nearly invisible: the match% moves by a few
+instructions, which reads as ordinary residual noise, and nothing about the source
+says "native".
+
+Two confirmed instances so far:
+
+| Function | Introduced by | Cost | Fixed |
+|---|---|---|---|
+| `HamIKSkeleton::SetBone` — `if (!t2) return;` | `5d19777db` *native: venue rendering* | 6 instructions, 92.4% → 99.0% | `866ba1082` |
+| `DelayEffect::Process` — `if (!mBuffer) return;` | `f8a417405` *native: v0xE mogg audio pipeline*, whose own body says "Null guard in DelayEffect::Process for freed mBuffer" | instruction table 160 instrs / 26 mismatches (20 diff_arg, 1 replace, 1 delete, 4 insert; base size 636) → 156 / 16 (all diff_arg, 0 insert/replace/delete; base size 624 = target size) | this audit |
+
+The `Cost` column quotes instruction-table counts, not the rendered percentage. The
+percentages for that row would be 95.7 % → 99.4 % normalized, but a rendered percentage
+rounds and a mismatch count does not; see
+[docs/decomp/patterns/rounded-100-hides-real-bugs.md](../decomp/patterns/rounded-100-hides-real-bugs.md).
+
+### Detector
+
+```bash
+python3 scripts/analysis/native_guard_leak_scan.py --repo . --signal all
+python3 scripts/analysis/native_guard_leak_scan.py --repo . --signal all --leading-stmts 2
+python3 scripts/analysis/native_guard_leak_scan.py --self-test   # negative control
+```
+
+Run `ninja` in the worktree first. The scanner filters on `build/373307D9/report.json`,
+and in a fresh worktree that file is a reflink copy of main's — see
+[BUILD_SYSTEM.md](../tools/BUILD_SYSTEM.md#a-fresh-worktrees-reportjson-describes-main-not-your-branch).
+The provenance banner runs `ninja -n` and says STALE when it is.
+
+Four signals, reported as separate tiers so each can be judged on its own:
+
+- **blame** — line still attributed (`git blame -w -M`) to a commit whose *subject*
+  marks it native-port work, and outside any guard-macro conditional.
+- **interpolated** — that commit owns ≤10 lines and ≤40% of a function body somebody
+  else decompiled. Authoring a whole function is not leaking.
+- **guard-shape** — the line is the defensive idiom this document's Guiding Principles
+  already name: a null/empty check whose body is `return`/`continue`/`break`.
+- **shape-static** — every unguarded defensive guard in `src/`, ignoring history
+  entirely. The blame signal cannot see a leak landed under a subject like
+  `progress: ...`; this one can, at the cost of being an upper bound.
+
+`--self-test` is the negative control: it re-injects `if (!t2) return;` into
+`HamIKSkeleton::SetBone` verbatim as `5d19777db` left it — no comment, so the content
+signal cannot fire for free — on a scratch commit, asserts the scanner reports it, and
+asserts the currently-guarded site stays silent. It refuses to run on a dirty tree
+because its rollback is a hard reset.
+
+Every run opens with a provenance banner naming the commit it scanned, the
+`report.json` it filtered with, whether `ninja -n` still has work to do for that
+report, and the file denominators. **Every number below is relative to a commit** —
+see the next section for why that is not pedantry.
+
+### The result that matters most
+
+**A hit is not a verdict, and the false-positive rate is high by nature.** The Xbox
+build is full of genuine null checks, empty checks and early returns.
+
+Counts, each with the tree it came from. They are not interchangeable: the guard this
+audit fixed was itself one of the 814, so the merge-base and the branch head disagree
+before you change any criterion at all.
+
+| Tree | Criterion | TIER S | in sub-100% fns | TIER S-lead (first 2 statements) |
+|---|---|---|---|---|
+| `eda64e956` (merge-base) | original regex | 814 | 107 | — (never a script output; hand-counted as "24") |
+| `eda64e956` | corrected regex + attribution | 688 | 156 | 42 |
+| branch head on `8455b09be` | original regex | 812 | 106 | — |
+| branch head on `8455b09be` | corrected regex + attribution | 686 | 154 | **41** |
+
+The third row is the whole argument for the provenance banner. The audit was written
+saying "814 / 107" flatly. One of those 814 was the guard the audit itself fixed, so on
+its own branch it was already 813 / 106 — and after a rebase onto three more merges of
+`main`, 812 / 106. Three different true answers to "how many?", none of them wrong, and
+the doc named no tree. Re-run the scanner: it prints the commit it scanned.
+
+The subset is now a flag, not a hand count: `--leading-stmts 2` prints it and lists it.
+The count rose from ~24-27 to 41 because the attribution fix resolves enclosing
+functions the old walk-backwards heuristic missed (a multi-line signature used to
+charge every hit in its body to the *previous* function), not because more guards
+appeared.
+
+All 41 are target-faithful. **Exactly one real leak in the whole tree, and it was
+`DelayEffect::Process`.**
+
+The "2 regex artifacts" in the original hand-counted 24 was also low. Re-deriving that
+subset mechanically (old regex, corrected statement counting, at `eda64e956`) gives 25
+sites of which **3** are not guards at all — the missed one is `GetScoreBonus`'s
+`if (!ratings) ratings = &sDefaultRatingThresholds;`, the *same* substitution pattern
+that was correctly identified one function earlier in `DetectFracToRatingFrac`. Across
+the whole 107-site sub-100 % population the old regex admitted **26** non-guards:
+substitutions (`if (!cam) cam = RndCam::Current();`), `goto`s, `MILO_NOTIFY` + `else`.
+The corrected `guard_shape()` excludes all 26 rather than tallying and apologising for
+them.
+
+### Do NOT use the `insert` count as the discriminator
+
+An earlier revision of this section said the cheap discriminator for a leaked guard is
+objdiff's `insert` count, reasoning that a leaked guard is a load/compare/branch our
+side emits and the target does not. **That is refuted.** Measured over the 41
+adjudicated target-faithful sites above:
+
+| Screen | Fires on target-faithful sites | False-positive rate |
+|---|---|---|
+| `insert > 0` | 31 / 41 | **76 %** |
+| `insert > 0` at instruction index ≤ 12 | 4 / 41 | 10 % |
+| our-side-only compare/branch in the first 20 instructions | 0 / 41 | 0 % |
+
+`insert > 0` is *necessary-ish and nowhere near sufficient*. Anyone who reads this
+table and starts deleting null checks because a function has inserts will remove code
+the Xbox build genuinely has — a correctness regression dressed up as a match
+improvement.
+
+The "low index" refinement does not rescue it either, and it fails on this lane's own
+flagship example. `LiveCameraInput::NuiAudioDataCallback` was cited as proof of
+target-faithfulness — the target has all three of its chained null tests — and it
+carries inserts at indices **5 and 8**:
+
+```
+[5] insert  TGT: ---   SRC: addi  r8, r11, 0x1444
+[8] insert  TGT: ---   SRC: lwz   r10, 0x0(r8)
+```
+
+That is address recomputation the target folds into a displacement, nothing to do with
+a guard.
+
+The screen that does discriminate is the third row: an **our-side-only compare/branch**
+in the prologue region — an `insert` whose SRC is a `cmp*`/`b*`, or a `replace` whose
+SRC is one and whose TGT is not. That is the shape a leaked early-out actually takes.
+Positive control: at the merge-base, `DelayEffect::Process` showed
+
+```
+[ 9] insert  TGT: ---   SRC: cmplwi  cr6, r11, 0x0
+[10] insert  TGT: ---   SRC: beq     cr6, 0x274
+```
+
+It fires on that one real leak and on none of the 41. Even so it is a screen, not a
+verdict — the thing that settles a candidate is still the target disassembly: read the
+function's prologue in `build/373307D9/asm/`.
+
+Two further calibrations of what a hit is worth: five sites handed to this audit as
+"reported unguarded" were *all* target-faithful, and two of them come straight back out
+of this scanner's own TIER S.
