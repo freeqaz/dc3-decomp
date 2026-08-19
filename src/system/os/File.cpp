@@ -659,8 +659,14 @@ void FileRecursePattern(
     RecursePatternInternal(pattern, cb, recurse, false);
 }
 
-#ifndef HX_NATIVE
-// PPC (Xbox 360) implementation — logic derived from Ghidra decompile
+// Logic derived from the Ghidra decompile of the PPC body.
+//
+// This used to sit behind #ifndef HX_NATIVE, which left dc3-native with an
+// unresolved `RecursePatternInternal` that FileRecursePattern and
+// OnEnumerateFrameRateResults both jump to. Nothing about the body is
+// Xbox-specific -- the one platform primitive it reaches for, FileEnumerate,
+// has a POSIX implementation in native/src/platform/File_Native.cpp -- so the
+// guard was simply wrong.
 void RecursePatternInternal(
     const char *pttn,
     void (*cb)(const char *, const char *),
@@ -741,4 +747,3 @@ void RecursePatternInternal(
     }
     FileEnumerate(dirStr.c_str(), cb, recurse, pttnStr.c_str(), recurse_dirs);
 }
-#endif

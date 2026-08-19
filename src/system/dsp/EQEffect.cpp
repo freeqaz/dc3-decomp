@@ -23,7 +23,14 @@ struct FILTER {
     int numCoeffs;          // 0x100C
 };
 
-extern "C" void createFilter(FilterType, FilterBand, unsigned int, float, float, FILTER *, int);
+// NOT extern "C". The target binary's symbol is the C++-mangled
+// ?createFilter@@YAXW4FilterType@@W4FilterBand@@IMMPAUFILTER@@H@Z
+// (config/373307D9/symbols.txt, .text:0x82E5C228) and synth/filterdesign.cpp
+// defines it with C++ linkage too. An `extern "C"` here emitted a reference to
+// a plain `createFilter` that nothing defines -- invisible to objdiff, which
+// normalizes relocation targets away, but it left the native link with an
+// unresolved symbol that EQEffect::SetParameter jumps to.
+void createFilter(FilterType, FilterBand, unsigned int, float, float, FILTER *, int);
 
 EQEffect::EQEffect(IXAudioBatchAllocator *) {
     mBand0Enabled = false;

@@ -242,14 +242,17 @@ update:
 void LiveCameraInput::TextureStore::UpdateFromColorBuffer(LiveCameraInput *cam) {
     void *texels = nullptr;
     mTex->TexelsLock(texels);
-    unsigned int destPtr = (unsigned int)texels;
+    // uintptr_t, not unsigned int: on the PPC target these are the same 32-bit
+    // type (src/types.h) so the codegen is unchanged, but the native LP64 build
+    // was truncating every texel and source pointer to its low 32 bits.
+    uintptr_t destPtr = (uintptr_t)texels;
     g_colorBufferUpdate1++;
     void *bufferData = cam->StreamBufferData(kBufferColor);
     if (bufferData) {
         LockedRect lockedRect;
         cam->LockStream(bufferData, lockedRect);
         g_colorBufferUpdate2++;
-        unsigned int *srcPtr = (unsigned int *)((int)lockedRect.mBits - 4);
+        unsigned int *srcPtr = (unsigned int *)((uintptr_t)lockedRect.mBits - 4);
         unsigned int pitch = mTex->TexelsPitch();
         for (int row = 0; row < 480; row++) {
             for (int col = 0; col < 320; col++) {
@@ -271,12 +274,12 @@ void LiveCameraInput::TextureStore::UpdateFromColorBuffer(LiveCameraInput *cam) 
 void LiveCameraInput::TextureStore::UpdateFromDepthBuffer(LiveCameraInput *cam) {
     void *texels = nullptr;
     mTex->TexelsLock(texels);
-    unsigned int destBase = (unsigned int)texels;
+    uintptr_t destBase = (uintptr_t)texels;
     void *bufferData = cam->StreamBufferData(kBufferDepth);
     if (bufferData) {
         LockedRect lockedRect;
         cam->LockStream(bufferData, lockedRect);
-        unsigned int srcBase = (unsigned int)lockedRect.mBits;
+        uintptr_t srcBase = (uintptr_t)lockedRect.mBits;
         unsigned int rowIdx = 0;
         do {
             unsigned int x = 0;
@@ -355,7 +358,9 @@ void LiveCameraInput::TextureStore::UpdateFromColorBufferClip(
     }
     void *texels = nullptr;
     mTex->TexelsLock(texels);
-    unsigned int destPtr = (unsigned int)texels;
+    // uintptr_t: see the note in UpdateFromColorBuffer. Same width as
+    // `unsigned int` on PPC, 64-bit on the native LP64 build.
+    uintptr_t destPtr = (uintptr_t)texels;
     void *bufferData = cam->StreamBufferData(kBufferColor);
     if (bufferData) {
         LockedRect lockedRect;
@@ -363,7 +368,7 @@ void LiveCameraInput::TextureStore::UpdateFromColorBufferClip(
         g_colorBufferUpdate4++;
         int destWidth = mTex->Width();
         unsigned int srcPitch = lockedRect.mPitch >> 2;
-        int srcOffset = srcPitch * clippedY * 4 + (int)lockedRect.mBits;
+        uintptr_t srcOffset = srcPitch * clippedY * 4 + (uintptr_t)lockedRect.mBits;
         unsigned int destPitch = mTex->TexelsPitch();
         int destStride = (int)((destPitch >> 1) - destWidth) * 2;
         unsigned int *srcPtr = (unsigned int *)(srcOffset - 4);
@@ -394,7 +399,7 @@ void LiveCameraInput::TextureStore::UpdateFromDepthBufferClip(
     unsigned int clippedX = (1 - (int)(clipLeft * -640.0f)) & 0xfffe;
     clippedX = clippedX % 640;
     mTex->TexelsLock(texels);
-    unsigned int destBase = (unsigned int)texels;
+    uintptr_t destBase = (uintptr_t)texels;
     void *bufferData = cam->StreamBufferData(kBufferDepth);
     if (bufferData) {
         LockedRect lockedRect;
@@ -402,7 +407,7 @@ void LiveCameraInput::TextureStore::UpdateFromDepthBufferClip(
         unsigned int srcPitch = lockedRect.mPitch >> 1;
         unsigned int clippedY = (1 - (int)(clipTop * -480.0f)) & 0xfffe;
         clippedY = clippedY % 480;
-        int srcBase = (int)((clippedY >> 1) * srcPitch * 2 + (int)lockedRect.mBits);
+        uintptr_t srcBase = (clippedY >> 1) * srcPitch * 2 + (uintptr_t)lockedRect.mBits;
         unsigned int rowIdx = 0;
         if (mTex->Height() > 0) {
             do {
@@ -1158,11 +1163,13 @@ bool GetExposureRegion(NUI_CAMERA_AE_ROI &region) {
 
 } // namespace
 
-#ifdef HX_NATIVE
-DataNode OnCameraDumpUnique(DataArray *) { return DataNode(0); }
-DataNode OnCameraDebugDepth(DataArray *) { return DataNode(0); }
-#else
-
+// LockStream / UnlockStream are NOT platform-specific: they are the recovered
+// PPC bodies (100% match, 25 and 6 instructions) and they only call through the
+// D3D texture-lock entry points, which the native build shims. They used to sit
+// inside the `#else` arm below, which is why `ldd -r dc3-native` reported
+// LiveCameraInput::LockStream / UnlockStream as undefined -- the eight call
+// sites in UpdateFromColorBuffer / UpdateFromDepthBuffer / the two Clip
+// variants / UpdateBufferTex all pointed at a JUMP_SLOT relocated to 0.
 void LiveCameraInput::LockStream(const void *buf, LockedRect &rect) {
     D3DLOCKED_RECT d3dRect;
     if (buf) {
@@ -1180,6 +1187,11 @@ void LiveCameraInput::UnlockStream(const void *buf) {
         D3DLineTexture_UnlockRect((D3DLineTexture *)buf, 0);
     }
 }
+
+#ifdef HX_NATIVE
+DataNode OnCameraDumpUnique(DataArray *) { return DataNode(0); }
+DataNode OnCameraDebugDepth(DataArray *) { return DataNode(0); }
+#else
 
 DataNode OnCameraDebugDepth(DataArray *) {
     gDebugDepth = !gDebugDepth;
