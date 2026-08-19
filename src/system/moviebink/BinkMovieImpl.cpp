@@ -33,6 +33,10 @@
 
 std::vector<BinkMovieImpl *> BinkMovieImpl::sActiveMovies;
 int BinkMovieImpl::sActivePending;
+// Declared in the header but never defined until BeginFrame/EndFrame gave it a
+// user. ?sAsyncMovie@BinkMovieImpl@@0PAV1@A is a 4-byte .data object in the
+// target's moviebink:BinkMovieImpl.obj.
+BinkMovieImpl *BinkMovieImpl::sAsyncMovie;
 
 namespace {
     void StoreCache(RndTex *t) {
@@ -242,7 +246,7 @@ void BinkMovieLoader::DoneLoading() {}
 BinkMovieImpl::BinkMovieImpl()
     : mLoader(0), mMovieLoader(0), mBink(0), unk18(0), mPreloadBuf(0), mBufferSize(0),
       unk24(0), unk40(0), mWidth(0), mHeight(0), mPaused(0), unkb8(kNoHandle), unkd4(0),
-      unkd5(0), mThreadId(gMainThreadID), mVolume(0x8000), mInternalBufs(0) {
+      mMidFrame(0), mThreadId(gMainThreadID), mVolume(0x8000), mInternalBufs(0) {
     CHECK_THREAD;
 }
 
@@ -549,12 +553,12 @@ void BinkMovieImpl::SetPaused(bool paused) {
         if (!paused) {
             LockThread();
         }
-        if (unkd6 && paused && unkd5) {
+        if (unkd6 && paused && mMidFrame) {
             BinkDoFrameAsyncWait(mBink, -1);
             EndFrame();
         }
         BinkPause(mBink, paused);
-        if (unkd6 && !paused && !unkd5) {
+        if (unkd6 && !paused && !mMidFrame) {
             BeginFrame();
             BinkDoFrameAsync(mBink, TheBinkMovieSys.Core0(), TheBinkMovieSys.Core1());
         }
@@ -683,6 +687,70 @@ void BinkMovieImpl::DiscContentionPublish() {
         MILO_NOTIFY("Streaming Bink Thrashed with %d files: (%s)", count, str);
         unkbc.clear();
     }
+}
+
+// Never written before: the target defines ?EndFrame@BinkMovieImpl@@AAAXXZ in
+// moviebink:BinkMovieImpl.obj (ham_xbox_r.map, plain `f`, 520B); nothing defined
+// it, here or in ../og-dc3-decomp.
+//
+// The mirror of BeginFrame: unlock the four texture-backed Bink planes, push each
+// one through StoreCache, and release the async-decode slot.
+void BinkMovieImpl::EndFrame() {
+    CHECK_THREAD;
+    if (mMidFrame) {
+        mInternalBufs->YTex[unkb0][unkb4]->TexelsUnlock();
+        mInternalBufs->CrTex[unkb0][unkb4]->TexelsUnlock();
+        mInternalBufs->CbTex[unkb0][unkb4]->TexelsUnlock();
+        mInternalBufs->ATex[unkb0][unkb4]->TexelsUnlock();
+        // NOT unkb0/unkb4: the target re-derives the pair here, and the second
+        // index is a bare `unk40 >= TotalFrames` with no modulo, unlike
+        // BeginFrame's `(unk40 + 1) % (GetUnk10() * TotalFrames) >= TotalFrames`.
+        // Written as the target has it rather than "tidied" into BeginFrame's form.
+        int texSet = unk40 >= mInternalBufs->mBuffers.TotalFrames;
+        int frame = mInternalBufs->mBuffers.FrameNum;
+        StoreCache(mInternalBufs->YTex[frame][texSet]);
+        StoreCache(mInternalBufs->CrTex[frame][texSet]);
+        StoreCache(mInternalBufs->CbTex[frame][texSet]);
+        StoreCache(mInternalBufs->ATex[frame][texSet]);
+        sAsyncMovie = nullptr;
+        mMidFrame = false;
+    } else {
+        MILO_NOTIFY("mMidFrame");
+    }
+}
+
+// Never written before: the target defines ?BeginFrame@BinkMovieImpl@@AAAXXZ in
+// moviebink:BinkMovieImpl.obj (ham_xbox_r.map, plain `f`, 964B); DoFrame calls it
+// and nothing defined it, here or in ../og-dc3-decomp.
+//
+// Claims the async-decode slot, picks the frame buffer Bink will decompress into
+// (unkb0) and which of the two texture sets backs it (unkb4), publishes each
+// plane's pitch and locks the four textures' texels straight into the Bink plane
+// pointers so the decoder writes into GPU memory.
+void BinkMovieImpl::BeginFrame() {
+    CHECK_THREAD;
+    if (sAsyncMovie) {
+        sAsyncMovie->SetPaused(true);
+    }
+    sAsyncMovie = this;
+    mMidFrame = true;
+    unkb0 = (mInternalBufs->mBuffers.FrameNum + 1) % mInternalBufs->mBuffers.TotalFrames;
+    unkb4 = (unk40 + 1)
+            % (TheBinkMovieSys.GetUnk10() * mInternalBufs->mBuffers.TotalFrames)
+        >= mInternalBufs->mBuffers.TotalFrames;
+    BINKFRAMEPLANESET &frame = mInternalBufs->mBuffers.Frames[unkb0];
+    frame.YPlane.BufferPitch = mInternalBufs->YTex[unkb0][unkb4]->TexelsPitch();
+    frame.cRPlane.BufferPitch = mInternalBufs->CrTex[unkb0][unkb4]->TexelsPitch();
+    frame.cBPlane.BufferPitch = mInternalBufs->CbTex[unkb0][unkb4]->TexelsPitch();
+    frame.APlane.BufferPitch = mInternalBufs->ATex[unkb0][unkb4]->TexelsPitch();
+    mInternalBufs->YTex[unkb0][unkb4]->TexelsLock(frame.YPlane.Buffer);
+    mInternalBufs->CrTex[unkb0][unkb4]->TexelsLock(frame.cRPlane.Buffer);
+    mInternalBufs->CbTex[unkb0][unkb4]->TexelsLock(frame.cBPlane.Buffer);
+    mInternalBufs->ATex[unkb0][unkb4]->TexelsLock(frame.APlane.Buffer);
+    MILO_ASSERT(frame.YPlane.Buffer != NULL, 0x4FD);
+    MILO_ASSERT(frame.cRPlane.Buffer != NULL, 0x4FE);
+    MILO_ASSERT(frame.cBPlane.Buffer != NULL, 0x4FF);
+    MILO_ASSERT(frame.APlane.Buffer != NULL, 0x500);
 }
 
 // Never written before: the target defines ?SetRect@BinkMovieImpl@@AAAXXZ in
@@ -836,7 +904,7 @@ void BinkMovieImpl::MovieOpen(const char *name, unsigned int flags) {
 
 void BinkMovieImpl::MovieClose() {
     CHECK_THREAD;
-    if (unkd6 && unkd5) {
+    if (unkd6 && mMidFrame) {
         BinkDoFrameAsyncWait(mBink, -1);
         EndFrame();
     }
