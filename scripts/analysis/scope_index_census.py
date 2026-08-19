@@ -40,6 +40,15 @@ import subprocess
 import sys
 
 NAME = re.compile(r'^\?([^@?]+)@\?([0-9]|[A-P]+@)(\?\?.*)$')
+# Atexit destructor helper for a function-local static:
+#   ??__F<name>@?<scope>??<enclosing function>@YAXXZ
+# Its scope counter is the same number the data symbol carries, and dtk names
+# ALL of them, whereas it leaves most of the .data objects as bare `lbl_<addr>`.
+# So on the TARGET side this is the only complete enumeration of a function's
+# statics.  It is useless on OUR side: scripts/obj_atexit_scope_patcher.py
+# rewrites these names in build/373307D9/src/**.obj to whatever the target says,
+# precisely so objdiff can pair the bodies.  Never read our indices from them.
+ATEXIT = re.compile(r'^\?\?__F([^@?]+)@\?([0-9]|[A-P]+@)(\?\?.*)@YAXXZ$')
 
 
 def decode(tok):
@@ -52,8 +61,8 @@ def decode(tok):
     return v
 
 
-def parse(sym):
-    m = NAME.match(sym)
+def parse(sym, rx=NAME):
+    m = rx.match(sym)
     if not m:
         return None
     return m.group(1), decode(m.group(2)), m.group(3)
@@ -70,19 +79,53 @@ def main():
     syms = a.symbols or os.path.join(a.project, 'config/373307D9/symbols.txt')
     objdir = a.objects or os.path.join(a.project, 'build/373307D9/src')
 
-    tgt = collections.defaultdict(dict)
+    # name -> SORTED LIST of scope indices.  A function may declare several
+    # statics that share a name -- every MILO_NOTIFY_ONCE in a function declares
+    # a `_dw`, every static Message a `msg`.  Keying name -> single int silently
+    # kept whichever one was parsed last on each side and then compared two
+    # unrelated statics, which is how RndTexBlender::DrawShowing (5 `_dw` ours,
+    # 3 target) came out as a one-line "tgt=15 ours=9" row.
+    tgt = collections.defaultdict(lambda: collections.defaultdict(list))
+    atexits = []
     for ln in open(syms):
-        r = parse(ln.split(' =')[0])
+        sym = ln.split(' =')[0]
+        r = parse(sym)
         if r:
-            tgt[r[2]][r[0]] = r[1]
+            bucket = tgt[r[2]][r[0]]
+            if r[1] not in bucket:
+                bucket.append(r[1])
+            continue
+        r = parse(sym, ATEXIT)
+        if r:
+            atexits.append(r)
 
-    our = collections.defaultdict(dict)
+    # Fold the atexit helpers into the buckets their data symbol already opened.
+    # The data key carries the static's type suffix (`...@Z@4VDebugNotifyOncer@@A`)
+    # and the atexit key does not, so match on prefix.  Deliberately do NOT open
+    # a new function key from an atexit alone: our side has no atexit evidence to
+    # compare it against (the patcher rewrote those names), so it would only
+    # inflate `target-only`.
+    for name, idx, fn in atexits:
+        for k in tgt:
+            if k == fn or k.startswith(fn + '@'):
+                bucket = tgt[k].get(name)
+                if bucket is not None and idx not in bucket:
+                    bucket.append(idx)
+
+    our = collections.defaultdict(lambda: collections.defaultdict(list))
     for o in glob.glob(os.path.join(objdir, '**', '*.obj'), recursive=True):
         out = subprocess.run(['strings', '-a', o], capture_output=True, text=True).stdout
         for ln in out.splitlines():
-            r = parse(ln.strip())
+            r = parse(ln.strip())  # data symbols ONLY -- see ATEXIT comment
             if r:
-                our[r[2]][r[0]] = r[1]
+                bucket = our[r[2]][r[0]]
+                if r[1] not in bucket:
+                    bucket.append(r[1])
+
+    for side in (tgt, our):
+        for names in side.values():
+            for k in names:
+                names[k].sort()
 
     match = missing = 0
     rows = []
@@ -99,8 +142,16 @@ def main():
     print(f"enclosing functions: match={match} diff={len(rows)} target-only={missing}")
     if not a.quiet:
         for fn, bad in rows:
-            deltas = sorted({(o - t) for _, t, o in bad if o is not None})
-            print(f"\n{fn}   delta={deltas}")
+            # Positional deltas are only meaningful when both sides declare the
+            # same number of statics under that name; otherwise the count itself
+            # is the finding (we invented or dropped a declaration).
+            deltas = sorted({o - t for _, tl, ol in bad
+                             if ol and len(ol) == len(tl)
+                             for t, o in zip(tl, ol)})
+            counts = sorted({(len(tl), len(ol or [])) for _, tl, ol in bad
+                             if len(tl) != len(ol or [])})
+            note = f"   COUNT tgt/ours={counts}" if counts else ""
+            print(f"\n{fn}   delta={deltas}{note}")
             for n, t, o in bad:
                 print(f"   {n:44} tgt={t} ours={o}")
     if a.json:
