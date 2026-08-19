@@ -262,6 +262,11 @@ def validate_traces(trace_file, main_roots, cov=None):
         # forgets to drop() surfaces as UNACCOUNTED instead of shrinking the
         # denominator.
         cov.universe(stats['marker_lines'], "log lines containing 'DTA_TRACE:'")
+        # See dta_access_audit: a balanced run that examined 0 rows is
+        # arithmetically clean and epistemically empty.
+        cov.require_examined(
+            "no DTA_TRACE row in the log could be checked -- the log parsed, "
+            "but every row was dropped")
     return findings, stats
 
 
@@ -284,6 +289,8 @@ def main():
                         default=['orig-assets/extracted/config',
                                  'orig-assets/extracted/(..)/(..)/system/run/config'],
                         help='Directories containing DTA files')
+    parser.add_argument('--extra-root', default='orig-assets/extracted',
+                        help='extra DTA tree swept IN ADDITION to --dta-dir, relative to CWD (default: orig-assets/extracted). This sweep used to be hardcoded and unconditional, so --dta-dir could not actually bound the corpus: pointing it at an empty path still picked up 247 files whenever CWD happened to have orig-assets. Pass a nonexistent path to disable.')
     parser.add_argument('--main-configs', nargs='*',
                         default=['orig-assets/extracted/config/ham_keep.dta',
                                  'orig-assets/extracted/(..)/(..)/system/run/config/default.dta'],
@@ -335,7 +342,7 @@ def main():
         searched.append(f"{dta_dir}  [dta dir: {n} files]")
 
     # Also scan all DTA files under orig-assets
-    orig_assets = Path('orig-assets/extracted')
+    orig_assets = Path(args.extra_root)
     if orig_assets.exists():
         n = 0
         for dta_file in sorted(orig_assets.rglob('*.dta')):

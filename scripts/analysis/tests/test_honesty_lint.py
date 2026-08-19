@@ -21,6 +21,9 @@ import textwrap
 
 import pytest
 
+import subprocess
+import sys
+
 from scripts.analysis import honesty_lint as HL
 
 REPO = HL.REPO
@@ -212,3 +215,130 @@ def test_allowlist_has_no_dead_entries():
     assert not dead, (
         "ALLOW_DISPLAY_ONLY entries that no longer excuse anything — delete them:\n  "
         + "\n  ".join(dead))
+
+
+# --------------------------------------------------------------------------- #
+# E3 — a CoverageReport that is never given a denominator.
+#
+# The static half of the exit-4 bypass. `unaccounted` is
+# `universe - (examined + drops)`, so with no `universe()` call it is None, the
+# arithmetic tripwire cannot fire, and emit() used to return 0 under a banner
+# reading NO DENOMINATOR. One deleted line restored the old silence, and no
+# static rule objected.
+# --------------------------------------------------------------------------- #
+
+_E3_BYPASS = textwrap.dedent("""
+    from scripts.analysis.coverage import CoverageReport
+    def main(rows, args):
+        cov = CoverageReport("scan", args=args)
+        for r in rows:
+            if r is None:
+                continue
+            cov.examine()
+        return cov.emit()
+""")
+
+
+def test_e3_fires_on_a_coverage_report_with_no_denominator():
+    found = HL.check_coverage_without_denominator("scripts/analysis/scan.py",
+                                                  _E3_BYPASS)
+    assert len(found) == 1
+    assert found[0].rule == "E3" and found[0].severity == "ERROR"
+
+
+def test_e3_is_quiet_when_the_universe_is_declared():
+    """The fixed form. An over-firing rule gets muted and then protects nothing."""
+    fixed = _E3_BYPASS.replace('cov = CoverageReport("scan", args=args)',
+                               'cov = CoverageReport("scan", args=args)\n'
+                               '        cov.universe(len(rows), "rows")')
+    assert HL.check_coverage_without_denominator("scripts/analysis/scan.py",
+                                                 fixed) == []
+
+
+def test_e3_is_quiet_on_a_declared_unknown_denominator():
+    """The honest escape hatch must not read as the accident."""
+    declared = _E3_BYPASS.replace(
+        'cov = CoverageReport("scan", args=args)',
+        'cov = CoverageReport("scan", args=args)\n'
+        '        cov.universe_unknown("the producer never states a total")')
+    assert HL.check_coverage_without_denominator("scripts/analysis/scan.py",
+                                                 declared) == []
+
+
+def test_e3_is_quiet_on_a_file_that_never_builds_one():
+    """Control for the control: no CoverageReport, no finding."""
+    assert HL.check_coverage_without_denominator(
+        "scripts/analysis/plain.py", "def f(xs):\n    return sorted(xs)\n") == []
+
+
+def test_e3_accepts_a_universe_declared_in_another_function():
+    """A scanner may build the report in one function and declare the universe
+    in another (dta_access_audit does). A per-variable rule would flag that,
+    get switched off, and protect nothing -- so the rule is per-FILE."""
+    split = textwrap.dedent("""
+        from scripts.analysis.coverage import CoverageReport
+        def build(args):
+            cov = CoverageReport("scan", args=args)
+            return cov
+        def run(cov, rows):
+            cov.universe(len(rows), "rows")
+    """)
+    assert HL.check_coverage_without_denominator("scripts/analysis/split.py",
+                                                 split) == []
+
+
+def test_e3_still_fires_outside_the_tests_directory():
+    """The tests/ exemption must be scoped to the DIRECTORY, not to the rule.
+
+    scripts/analysis/tests/ is exempt because those files build denominator-less
+    CoverageReports on purpose -- they are this rule's negative controls. If the
+    exemption ever widened to the rule itself it would be invisible, so pin both
+    halves.
+    """
+    assert HL.check_coverage_without_denominator(
+        "scripts/analysis/tests/test_x.py", _E3_BYPASS) == []
+    assert HL.check_coverage_without_denominator(
+        "scripts/analysis/real_scanner.py", _E3_BYPASS)
+
+
+# --------------------------------------------------------------------------- #
+# The lint had the lane's own sub-shape 3: missing input => clean bill of health.
+# --------------------------------------------------------------------------- #
+
+def _run_lint(*args):
+    return subprocess.run(
+        [sys.executable, os.path.join(REPO, "scripts", "analysis",
+                                      "honesty_lint.py"), *args],
+        capture_output=True, text=True)
+
+
+def test_a_root_with_no_files_is_inconclusive_not_clean(tmp_path):
+    """`--root /does/not/exist` printed `0 error(s), 0 warning(s)` and exited 0.
+
+    os.walk on a missing path yields nothing and raises nothing, so the checker
+    written to catch "missing input => clean verdict" had a missing input and
+    gave a clean verdict. Reconstructed here against a real, EMPTY root as well
+    as a nonexistent one -- both examine zero files and both must say so.
+    """
+    real = _run_lint("--root", REPO)
+    assert real.returncode in (0, 1), real.stderr
+    assert "files under" in real.stderr, (
+        "a passing run must state its denominator, or the two runs below are "
+        "not distinguishable from it")
+
+    for root in ("/does/not/exist/at/all", str(tmp_path)):
+        r = _run_lint("--root", root)
+        assert r.returncode == HL.EXIT_NO_INPUT, (root, r.stdout, r.stderr)
+        assert r.returncode != real.returncode or real.returncode != 0
+        assert "INCONCLUSIVE" in r.stdout, r.stdout
+        assert "CHECKED NOTHING" in r.stdout
+        # ...and on STDOUT, so it survives the redirect that kept only the
+        # reassuring half in the original four DTA scanners.
+        assert "0 error(s)" not in r.stdout
+
+
+def test_scan_files_is_the_denominator_and_is_sorted():
+    files = HL.scan_files(REPO)
+    assert files == sorted(files), "unsorted => nondeterministic output order"
+    assert len(files) > 100, "the repo must really have files, or the test above is vacuous"
+    assert HL.scan_files("/does/not/exist/at/all") == []

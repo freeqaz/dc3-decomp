@@ -29,6 +29,25 @@ E2  uncounted-cap
     shortens a PRINTOUT of an already-complete count — say so, and register the
     site in ALLOW_DISPLAY_ONLY below with a reason.
 
+E3  coverage-without-denominator
+    A file that constructs a `CoverageReport` but never calls `universe()` or
+    `universe_unknown()` on it.  This is the exit-4 BYPASS, and it is a one-line
+    regression: `unaccounted` is `universe - (examined + drops)`, so with no
+    universe it is `None`, the arithmetic tripwire cannot fire, and `emit()`
+    used to return 0 under a banner reading NO DENOMINATOR.  Deleting the
+    `cov.universe(...)` line restored the exact silence the whole module exists
+    to end, and no static check objected.
+    `emit()` now returns EXIT_NO_DENOMINATOR (6) at runtime; this rule catches
+    it at commit time, which is cheaper.
+    Fix: call `cov.universe(n, "what")` before filtering — or, if you genuinely
+    cannot compute one, `cov.universe_unknown("why")`, which exits 0 and prints
+    the reason.
+    NOT applied under `scripts/analysis/tests/`: those files construct
+    `CoverageReport` objects as FIXTURES to exercise this very contract, and a
+    denominator-less one there is the negative control for this rule, not an
+    instance of it.  `test_e3_still_fires_outside_the_tests_directory` pins that
+    the exemption is scoped to the directory and not to the rule.
+
 RULES (WARN — reported, do not fail)
 ------------------------------------
 W1  swallowed-empty
@@ -47,7 +66,8 @@ Usage:
     python3 scripts/analysis/honesty_lint.py                  # lint the repo
     python3 scripts/analysis/honesty_lint.py --json
     python3 scripts/analysis/honesty_lint.py --warnings       # include W rules
-Exit code 0 = no ERROR findings, 1 = ERROR findings.
+Exit code 0 = no ERROR findings, 1 = ERROR findings,
+5 = the lint examined no files at all (see EXIT_NO_INPUT below).
 """
 from __future__ import annotations
 
@@ -61,6 +81,11 @@ import tokenize
 from typing import Dict, Iterable, List, NamedTuple
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+#: Same code and same meaning as scripts/analysis/coverage.EXIT_NO_INPUT: this
+#: run had nothing to look at.  Kept as a literal rather than imported so the
+#: lint stays runnable standalone from any cwd.
+EXIT_NO_INPUT = 5
 
 # Directories linted by default: everything that measures or counts.
 LINT_DIRS = ("scripts",)
@@ -103,6 +128,9 @@ LIKE_RE = re.compile(r"\bLIKE\b", re.I)
 # is to catch SILENT caps, not to mandate one spelling.
 TRUNCATION_EVIDENCE = ("TRUNCAT", "CAPPED", "(capped", "coverage.cap", ".cap(",
                        "CoverageReport", "was_capped", "capped=")
+# E3: a CoverageReport built but never given a denominator.
+COVERAGE_CTOR_RE = re.compile(r"^[ \t]*([A-Za-z_][\w]*)\s*=\s*CoverageReport\s*\(", re.M)
+UNIVERSE_CALL_RE = re.compile(r"\.universe(?:_unknown)?\s*\(")
 SWALLOW_RE = re.compile(
     r"except[^\n:]*:\s*\n\s*return\s*(\[\]|None|\{\}|0)\s*(?:#.*)?$", re.M)
 
@@ -198,6 +226,42 @@ def check_uncounted_cap(path: str, src: str) -> List[Finding]:
 
 
 # --------------------------------------------------------------------------- #
+# E3 — a CoverageReport with no denominator: the exit-4 bypass
+# --------------------------------------------------------------------------- #
+
+#: E3 is about SCANNERS.  The negative-control files deliberately build
+#: denominator-less reports to prove the runtime check fires, so linting them
+#: for it would flag the control as the bug.
+E3_EXEMPT_PREFIXES = ("scripts/analysis/tests/",)
+
+
+def check_coverage_without_denominator(path: str, src: str) -> List[Finding]:
+    """Flag a `CoverageReport` that is never told its universe.
+
+    Matched per FILE rather than per variable: a scanner may build the report in
+    one function and declare the universe in another (dta_access_audit does),
+    and a per-variable rule would false-positive on that and get switched off --
+    which is how the original defects survived.  A file that builds one and
+    mentions neither `universe(` nor `universe_unknown(` anywhere has no such
+    excuse.
+    """
+    found: List[Finding] = []
+    if path.replace(os.sep, "/").startswith(E3_EXEMPT_PREFIXES):
+        return found
+    if UNIVERSE_CALL_RE.search(src):
+        return found
+    for m in COVERAGE_CTOR_RE.finditer(src):
+        line = src[:m.start()].count("\n") + 1
+        found.append(Finding(
+            "E3", "ERROR", path, line, m.group(0).strip(),
+            f"`{m.group(1)}` is a CoverageReport that is never given a denominator: "
+            f"no universe() or universe_unknown() call anywhere in this file. "
+            f"`unaccounted` stays None, so the exit-4 arithmetic check cannot fire "
+            f"-- the tripwire is disarmed by omission"))
+    return found
+
+
+# --------------------------------------------------------------------------- #
 # Warnings
 # --------------------------------------------------------------------------- #
 
@@ -235,13 +299,21 @@ def lint_file(path: str, rel: str) -> List[Finding]:
         out += check_unescaped_like(rel, src)
     if rel not in ALLOW_DISPLAY_ONLY:
         out += check_uncounted_cap(rel, src)
+    out += check_coverage_without_denominator(rel, src)
     out += check_swallowed_empty(rel, src)
     out += check_worker_mutated_global(rel, src)
     return out
 
 
-def lint_repo(root: str = REPO, dirs: Iterable[str] = LINT_DIRS) -> List[Finding]:
-    out: List[Finding] = []
+def scan_files(root: str = REPO, dirs: Iterable[str] = LINT_DIRS) -> List[str]:
+    """The .py files this lint would examine, sorted.
+
+    Split out from `lint_repo` so a caller can state the DENOMINATOR of a lint
+    run.  `0 error(s)` over zero files and `0 error(s)` over 600 files are
+    different claims, and this checker used to print them identically -- sub-
+    shape 3 (missing input => clean bill of health) inside the tool written to
+    catch sub-shape 3.
+    """
     files = []
     for d in dirs:
         for dirpath, dirnames, filenames in os.walk(os.path.join(root, d)):
@@ -250,7 +322,12 @@ def lint_repo(root: str = REPO, dirs: Iterable[str] = LINT_DIRS) -> List[Finding
             for fn in sorted(filenames):
                 if fn.endswith(".py"):
                     files.append(os.path.join(dirpath, fn))
-    for p in sorted(files):                      # sorted => deterministic output
+    return sorted(files)                         # sorted => deterministic output
+
+
+def lint_repo(root: str = REPO, dirs: Iterable[str] = LINT_DIRS) -> List[Finding]:
+    out: List[Finding] = []
+    for p in scan_files(root, dirs):
         out += lint_file(p, os.path.relpath(p, root))
     return sorted(out, key=lambda f: (f.rule, f.path, f.line))
 
@@ -262,9 +339,23 @@ def main() -> int:
     ap.add_argument("--warnings", action="store_true", help="also print W-rule findings")
     args = ap.parse_args()
 
+    scanned = scan_files(args.root)
     findings = lint_repo(args.root)
     errors = [f for f in findings if f.severity == "ERROR"]
     warns = [f for f in findings if f.severity == "WARN"]
+
+    # A lint that examined NOTHING must not print like a lint that passed.
+    # `--root /does/not/exist` returned `0 error(s), 0 warning(s)` and exit 0:
+    # os.walk on a missing path yields nothing and raises nothing, so the
+    # checker for "missing input => clean verdict" had a missing input and gave
+    # a clean verdict.  EXIT_NO_INPUT (5), same code the scanners use.
+    if not scanned:
+        print(f"INCONCLUSIVE: honesty_lint examined 0 files under {args.root} "
+              f"-- THIS RUN CHECKED NOTHING.")
+        print(f"  Looked for *.py under: "
+              f"{', '.join(os.path.join(args.root, d) for d in LINT_DIRS)}")
+        print("  '0 errors' here means 'no input', not 'no findings'.")
+        return EXIT_NO_INPUT
 
     if args.json:
         print(json.dumps({"errors": [f._asdict() for f in errors],
@@ -276,7 +367,7 @@ def main() -> int:
             for f in warns:
                 print(f"{f.path}:{f.line}: [{f.rule}] {f.text}\n    -> {f.detail}")
         print(f"\nhonesty_lint: {len(errors)} error(s), {len(warns)} warning(s) "
-              f"across {args.root}", file=sys.stderr)
+              f"across {len(scanned)} files under {args.root}", file=sys.stderr)
     return 1 if errors else 0
 
 

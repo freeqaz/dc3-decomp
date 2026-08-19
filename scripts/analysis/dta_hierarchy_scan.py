@@ -726,6 +726,11 @@ def scan_source_against_hierarchy(src_dir, hierarchy, cov_files=None,
         # a `continue` that forgets to call site_drop() shows up as UNACCOUNTED
         # instead of silently shrinking the denominator.
         cov_sites.universe(n_sites, "Find*() call sites in scanned source")
+        # See dta_access_audit: a balanced run that examined 0 sites is
+        # arithmetically clean and epistemically empty.
+        cov_sites.require_examined(
+            "no Find*() call site in the scanned sources could be checked -- "
+            "the corpus parsed, but every site was dropped")
     return findings
 
 
@@ -744,6 +749,8 @@ def main():
                         default=['orig-assets/extracted/config/ham_keep.dta',
                                  'orig-assets/extracted/(..)/(..)/system/run/config/default.dta'],
                         help='Main config files to parse with #include resolution')
+    parser.add_argument('--extra-root', default='orig-assets/extracted',
+                        help='extra DTA tree swept IN ADDITION to --dta-dir, relative to CWD (default: orig-assets/extracted). This sweep used to be hardcoded and unconditional, so --dta-dir could not actually bound the corpus: pointing it at an empty path still picked up 247 files whenever CWD happened to have orig-assets. Pass a nonexistent path to disable.')
     parser.add_argument('--src-dir', default='src/',
                         help='Source directory to scan')
     parser.add_argument('--dump-hierarchy', action='store_true',
@@ -792,7 +799,7 @@ def main():
         searched.append(f"{dta_dir}  [dta dir: {n} files]")
 
     # Also scan all DTA files in orig-assets
-    extra_root = Path('orig-assets/extracted')
+    extra_root = Path(args.extra_root)
     if not extra_root.exists():
         print(f"Warning: {extra_root} does not exist", file=sys.stderr)
         missing_inputs.append(str(extra_root))

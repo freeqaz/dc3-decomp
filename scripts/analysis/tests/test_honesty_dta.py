@@ -46,11 +46,14 @@ sys.path.insert(0, REPO)
 from scripts.analysis import dta_hierarchy_scan as HS          # noqa: E402
 from scripts.analysis import dta_access_audit as AA            # noqa: E402
 from scripts.analysis import audit_normalized_masking as ANM   # noqa: E402
-from scripts.analysis.coverage import EXIT_UNACCOUNTED         # noqa: E402
+from scripts.analysis.coverage import (                        # noqa: E402
+    EXIT_UNACCOUNTED, EXIT_NO_INPUT,
+)
 
 HIERARCHY = os.path.join(ANALYSIS, "dta_hierarchy_scan.py")
 ACCESS = os.path.join(ANALYSIS, "dta_access_audit.py")
 TRACE = os.path.join(ANALYSIS, "dta_trace_validator.py")
+DATAFLOW = os.path.join(ANALYSIS, "dta_dataflow.py")
 
 # Phrases that, standing alone, tell a reader "I looked and there was nothing
 # wrong". Any of these on stdout with an empty corpus is the bug.
@@ -61,13 +64,38 @@ CLEAN_VERDICTS = (
 )
 
 
+#: A path that cannot exist, used to switch OFF the implicit corpus sweep.
+NO_CORPUS = "/nonexistent/dta-corpus-that-must-not-be-found"
+
+
 def run(argv, cwd=None, seed=None):
+    """Run a scanner with its corpus BOUNDED BY THE ARGUMENTS, never by the CWD.
+
+    Three of these scanners used to sweep a hardcoded `orig-assets/extracted`
+    relative to the working directory, unconditionally and IN ADDITION to
+    --dta-dir. So --dta-dir could not actually bound the corpus, and every
+    "empty corpus" control in this file was passing only because git worktrees
+    do not contain orig-assets/ (it is untracked). Symlink the corpus in -- or
+    simply run the suite from the main checkout, which is the merge target --
+    and four of these controls silently stopped being controls: the scanner
+    found 247 DTA files and printed real findings where the test expected
+    INCONCLUSIVE. A control that passes because of where you ran it is not a
+    control. `--extra-root` now names that sweep, and this helper switches it
+    off unless a test asks for it, so the fixture corpus is the whole corpus.
+    """
     env = dict(os.environ)
     env["PYTHONPATH"] = REPO
     if seed is not None:
         env["PYTHONHASHSEED"] = str(seed)
+    if "--extra-root" not in argv and _supports_extra_root(argv[0]):
+        argv = argv + ["--extra-root", NO_CORPUS]
     return subprocess.run([sys.executable] + argv, cwd=cwd or REPO, env=env,
                           capture_output=True, text=True, timeout=900)
+
+
+def _supports_extra_root(script):
+    """Read it off the tool rather than hardcoding a list that can rot."""
+    return "--extra-root" in open(script, errors="replace").read()
 
 
 # --------------------------------------------------------------------------- #
@@ -344,7 +372,6 @@ def test_total_format_drift_is_reported_not_rendered_as_an_empty_success(
     r = run([TRACE, str(log), "--json",
              "--main-configs", str(corpus["main"]),
              "--dta-dir", str(corpus["dta"])])
-    assert r.returncode == 0, r.stdout + r.stderr
     d = json.loads(r.stdout)
     st = d["stats"]
     assert st["marker_lines"] == marker_lines
@@ -354,6 +381,33 @@ def test_total_format_drift_is_reported_not_rendered_as_an_empty_success(
     assert st["marker_lines"] > st["total_traces"]
     assert d["_coverage"]["dropped"]["trace-line-malformed"] == marker_lines
     assert d["_coverage"]["unaccounted"] == 0
+
+    # ...and BALANCED IS NOT NON-EMPTY.  The books add up perfectly here --
+    # 3 marker lines, 0 examined, 3 dropped, unaccounted 0 -- and this run
+    # still checked nothing.  It used to exit 0, i.e. exactly like a run that
+    # validated every trace in the log.  That is the residue of the DTA
+    # defect: the corpus gate keys on "the corpus was empty", not on "this run
+    # examined nothing".  The interesting claim is the DISAGREEMENT with a run
+    # that did work, so assert against that rather than against a constant.
+    assert d["_coverage"]["examined"] == 0
+    assert d["_coverage"]["examined_nothing"] is True
+    assert r.returncode == EXIT_NO_INPUT, r.stdout + r.stderr
+
+    # The disagreement, measured rather than asserted: the SAME log plus one
+    # parseable line must not exit the same way.
+    ok_log = tmp_path / "one_good.log"
+    ok_log.write_text(log.read_text() +
+                      "DTA_TRACE: metagame_rank.tasks.one_time[1] via Int "
+                      "(file main.dta, line 3)\n")
+    ok = run([TRACE, str(ok_log), "--json",
+              "--main-configs", str(corpus["main"]),
+              "--dta-dir", str(corpus["dta"])])
+    ok_d = json.loads(ok.stdout)
+    assert ok_d["_coverage"]["examined"] > 0, "the control must really do work"
+    assert ok_d["_coverage"]["examined_nothing"] is False
+    assert ok.returncode != r.returncode, (
+        "a run that validated nothing must not exit like one that validated "
+        "something")
 
 
 def test_mixed_log_reports_both_halves(corpus, tmp_path):
@@ -577,3 +631,71 @@ def test_a_bare_continue_in_the_audit_selection_would_be_caught():
     assert cov.emit(open(os.devnull, "w")) == EXIT_UNACCOUNTED
     assert cov.unaccounted == sum(1 for r in rows
                                   if r.get("fuzzy_match_percent") is None)
+
+
+# --------------------------------------------------------------------------- #
+# CONTROL — dta_dataflow, the fourth DTA scanner.
+#
+# It was listed as fixed alongside its three siblings and was never touched:
+# byte-identical blob at the merge base, at the lane tip and on main. It kept
+# `if p.exists():` with no `else` and a bare `print("No DTA access issues
+# found.")`. Measured on this tree, same script, corpus the only variable:
+#
+#     corpus absent      28 B  "No DTA access issues found."   exit 0
+#     corpus present  50,302 B  "Total: 30 findings"           exit 0
+#
+# 30 real findings and a 28-byte all-clear, told apart by nothing a caller can
+# branch on. Its own paths are relative to CWD (no --dta-dir flag), so the
+# control runs it from a directory that has a src tree and no orig-assets --
+# which is precisely what a git worktree is.
+# --------------------------------------------------------------------------- #
+
+def test_dataflow_with_no_corpus_does_not_print_a_clean_verdict(tmp_path, corpus):
+    (tmp_path / "src").mkdir(exist_ok=True)
+    for f in corpus["src"].iterdir():
+        (tmp_path / "src" / f.name).write_text(f.read_text())
+    assert not (tmp_path / "orig-assets").exists(), (
+        "the fixture must really lack the corpus, or this is not a control")
+
+    r = run([DATAFLOW, "--src-dir", str(tmp_path / "src")], cwd=str(tmp_path))
+
+    assert "No DTA access issues found." not in r.stdout, (
+        f"the verbatim historical sentence, from a run that checked nothing:\n"
+        f"{r.stdout[:400]}")
+    assert "INCONCLUSIVE" in r.stdout, r.stdout
+    assert "CHECKED NOTHING" in r.stdout
+    assert "0 DTA files" in r.stdout
+    assert r.returncode != 0, "an inconclusive run must not exit 0"
+
+
+def test_dataflow_states_its_denominator_when_it_does_have_a_corpus(tmp_path, corpus):
+    """Control for the control: with a corpus it must run, and its verdict must
+    carry the exculpatory count on the SAME stream as the verdict."""
+    (tmp_path / "src").mkdir(exist_ok=True)
+    for f in corpus["src"].iterdir():
+        (tmp_path / "src" / f.name).write_text(f.read_text())
+    extracted = tmp_path / "orig-assets" / "extracted"
+    (extracted / "config").mkdir(parents=True)
+    (extracted / "config" / "ham_keep.dta").write_text(GOOD_DTA)
+
+    r = run([DATAFLOW, "--src-dir", str(tmp_path / "src"),
+             "--extra-root", str(extracted)], cwd=str(tmp_path))
+
+    assert "INCONCLUSIVE" not in r.stdout, r.stdout
+    # The count must not be able to appear without its denominator.
+    assert "checkable DTA access sites of" in r.stdout, r.stdout
+    assert "Total:" in r.stdout
+
+
+def test_dataflow_bare_clean_sentence_is_gone_from_the_source():
+    """The sentence itself, not just its current reachability.
+
+    A future edit that restores an unconditional `print("No DTA access issues
+    found.")` would pass every behavioural test above only until the corpus gate
+    moved. Pin the string.
+    """
+    src = open(DATAFLOW, errors="replace").read()
+    # It survives inside a comment documenting the defect; it must not survive
+    # as something the program can print on its own.
+    assert 'print("No DTA access issues found.")' not in src
+    assert "print('No DTA access issues found.')" not in src

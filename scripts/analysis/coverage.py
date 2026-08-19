@@ -93,6 +93,7 @@ __all__ = [
     "EXIT_TRUNCATED",
     "EXIT_UNACCOUNTED",
     "EXIT_NO_INPUT",
+    "EXIT_NO_DENOMINATOR",
 ]
 
 # Distinct exit codes so a caller (or CI) can tell the two failure shapes apart
@@ -108,6 +109,16 @@ EXIT_UNACCOUNTED = 4
 # every git worktree).  `emit()` never returns this on its own; raise it from
 # the scanner:  sys.exit(cov.emit() or EXIT_NO_INPUT)
 EXIT_NO_INPUT = 5
+# The scanner never declared a denominator at all.  This is the exit-4 BYPASS:
+# `universe()` is what makes `unaccounted` computable, so DELETING THAT ONE LINE
+# made `unaccounted` None, made the arithmetic check vacuous, and returned the
+# tripwire to silence -- while stdout went on printing "... out of None rows".
+# The banner said NO DENOMINATOR and the exit code said fine.
+#
+# An honest "I cannot know my denominator" is still allowed, but it has to be
+# SAID: call `universe_unknown("why")` and the run exits 0 with the reason in
+# the banner.  Forgetting is now distinguishable from admitting.
+EXIT_NO_DENOMINATOR = 6
 
 _BAR = "=" * 78
 
@@ -139,6 +150,8 @@ class CoverageReport:
         self._stream = stream if stream is not None else sys.stderr
         self._universe: Optional[int] = None
         self._universe_what: str = ""
+        self._universe_unknown_reason: Optional[str] = None
+        self._require_examined: Optional[str] = None
         self._examined = 0
         self._drops: Dict[str, int] = {}
         self._drop_notes: Dict[str, str] = {}
@@ -162,6 +175,39 @@ class CoverageReport:
         """
         self._universe = int(n)
         self._universe_what = what
+
+    def universe_unknown(self, reason: str) -> None:
+        """Declare, deliberately, that this scanner cannot compute a denominator.
+
+        The ONLY sanctioned way to emit without a universe.  Without it, a
+        missing `universe()` call is treated as the accident it almost always
+        is (EXIT_NO_DENOMINATOR), because that single missing line silently
+        disables the exit-4 arithmetic check -- `unaccounted` is None, so
+        nothing can fail to balance, and the most valuable tripwire in this
+        module degrades to a stderr banner and exit 0.
+
+        `reason` is printed in the coverage block, so the claim is auditable
+        rather than a shrug.
+        """
+        if not reason:
+            raise ValueError("universe_unknown() requires a reason: an "
+                             "unexplained missing denominator is the bug")
+        self._universe_unknown_reason = reason
+
+    def require_examined(self, note: str = "") -> None:
+        """Make `examined == 0` a failure rather than a clean census.
+
+        A run can be perfectly BALANCED and still have looked at nothing: drop
+        every row for good reasons and `universe == examined + drops` holds with
+        `examined == 0`.  That is arithmetically clean and epistemically empty,
+        and it is the residue of the DTA defect -- the corpus gate keys on "the
+        corpus was empty", not on "this run checked nothing", so a corpus that
+        parsed fine but resolved no checkable site still exited 0.
+
+        Call this on a code path whose whole purpose is to CHECK something.  Do
+        not call it on a survey/--stats path, which legitimately checks nothing.
+        """
+        self._require_examined = note or "this run examined 0 rows"
 
     def note(self, text: str) -> None:
         """Free-form caveat printed inside the coverage block (e.g. a ruler choice)."""
@@ -245,7 +291,15 @@ class CoverageReport:
         """
         return (self._universe is not None
                 and not self.truncated
-                and self.unaccounted == 0)
+                and self.unaccounted == 0
+                and not self.examined_nothing)
+
+    @property
+    def examined_nothing(self) -> bool:
+        """A run that was required to check something and checked nothing."""
+        return bool(self._require_examined
+                    and self._examined == 0
+                    and (self._universe or 0) > 0)
 
     # -- output ------------------------------------------------------------ #
 
@@ -260,6 +314,8 @@ class CoverageReport:
             "caps": self._caps,
             "truncated": self.truncated,
             "unaccounted": self.unaccounted,
+            "universe_unknown_reason": self._universe_unknown_reason,
+            "examined_nothing": self.examined_nothing,
             "notes": list(self._notes),
         }
         cf = self.coverage_fraction
@@ -276,12 +332,15 @@ class CoverageReport:
         L: List[str] = []
         L.append(_BAR)
         L.append(f"COVERAGE  {self.name}")
-        if self._universe is None:
-            L.append("  universe            : UNKNOWN  "
-                     "(scanner never called cov.universe() — its totals are unverifiable)")
-        else:
+        if self._universe is not None:
             what = f"  ({self._universe_what})" if self._universe_what else ""
             L.append(f"  universe            : {self._universe}{what}")
+        elif self._universe_unknown_reason:
+            L.append(f"  universe            : UNKNOWN, DECLARED  "
+                     f"({self._universe_unknown_reason})")
+        else:
+            L.append("  universe            : UNKNOWN  "
+                     "(scanner never called cov.universe() — its totals are unverifiable)")
         pct = self.coverage_fraction
         pct_s = "" if pct is None else f"  ({self._examined}/{self._universe} = {pct * 100.0:.2f}%)"
         L.append(f"  examined            : {self._examined}{pct_s}")
@@ -315,9 +374,27 @@ class CoverageReport:
             L.append(_BAR)
             L.append("UNACCOUNTED ROWS — the denominator does not balance, so these counts "
                      "are not a census.")
+        elif self._universe is None and not self._universe_unknown_reason:
+            L.append(_BAR)
+            L.append("NO DENOMINATOR — this scanner never called cov.universe(), so the "
+                     "arithmetic check")
+            L.append("that catches an uncounted `continue` could not run at all. This is "
+                     "NOT a clean census;")
+            L.append("it is a census with its own tripwire disarmed. Declare the "
+                     "denominator, or say why you")
+            L.append("cannot with cov.universe_unknown(reason).")
         elif self._universe is None:
             L.append(_BAR)
-            L.append("NO DENOMINATOR — this scanner cannot say what it did not look at.")
+            L.append("NO DENOMINATOR, DECLARED — this scanner has stated why it cannot say "
+                     "what it did not look at.")
+        if self.examined_nothing:
+            L.append(_BAR)
+            L.append(f"EXAMINED NOTHING — {self._require_examined}. The books balance "
+                     f"({self._universe} rows all")
+            L.append("accounted for), but every one of them was dropped, so this run "
+                     "checked nothing and")
+            L.append("cannot support a clean verdict. Balanced is not the same as "
+                     "non-empty.")
         L.append(_BAR)
         return "\n".join(L)
 
@@ -325,11 +402,20 @@ class CoverageReport:
         """Print the coverage block and return the process exit code.
 
         0  full census
-        3  EXIT_TRUNCATED    a cap cut rows out of the ANALYSIS
-        4  EXIT_UNACCOUNTED  the arithmetic does not balance (a bare `continue`)
+        3  EXIT_TRUNCATED       a cap cut rows out of the ANALYSIS
+        4  EXIT_UNACCOUNTED     the arithmetic does not balance (a bare `continue`)
+        5  EXIT_NO_INPUT        `require_examined()` was set and nothing was examined
+        6  EXIT_NO_DENOMINATOR  `universe()` was never called and no reason given
 
         `--allow-truncation` downgrades 3 to 0; nothing downgrades 4, because an
         unbalanced denominator is always a scanner bug and never a user choice.
+
+        6 exists because 4 could be BYPASSED BY DELETING ONE LINE.  `unaccounted`
+        is `universe - (examined + drops)`; with no universe it is None, which is
+        falsy, so the check that catches every future instance of this bug class
+        silently did not run -- and `emit()` returned 0 under a banner reading
+        NO DENOMINATOR.  A disarmed tripwire must not exit like a passing one.
+        `universe_unknown(reason)` is the honest escape hatch and still exits 0.
         """
         st = stream if stream is not None else self._stream
         print(self.render(), file=st)
@@ -338,8 +424,12 @@ class CoverageReport:
                 json.dump(self.as_dict(), f, indent=2)
         if self.unaccounted:
             return EXIT_UNACCOUNTED
+        if self._universe is None and not self._universe_unknown_reason:
+            return EXIT_NO_DENOMINATOR
         if self.truncated and not self.allow_truncation:
             return EXIT_TRUNCATED
+        if self.examined_nothing:
+            return EXIT_NO_INPUT
         return EXIT_OK
 
     def assert_complete(self) -> None:
@@ -352,6 +442,9 @@ class CoverageReport:
                 f"{self.name}: {self.unaccounted} rows unaccounted for")
         if self._universe is None:
             raise TruncationError(f"{self.name}: no universe declared")
+        if self.examined_nothing:
+            raise TruncationError(
+                f"{self.name}: balanced but examined 0 of {self._universe} rows")
 
 
 def add_coverage_args(ap) -> None:

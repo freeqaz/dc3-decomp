@@ -687,6 +687,12 @@ def main():
     # Declared last, tallied independently: a `continue` that forgets to drop
     # shows up as UNACCOUNTED rather than shrinking the denominator.
     cov_sites.universe(site_totals['sites'], "DTA access sites in scanned source")
+    # Balanced is not the same as non-empty: drop every site for good reasons
+    # and the books still balance at examined == 0.  The corpus gate above keys
+    # on "the corpus was empty"; this keys on "this run checked nothing".
+    cov_sites.require_examined(
+        "no DTA access site in the scanned sources could be checked -- the "
+        "corpus parsed, but every site was dropped")
     site_d = cov_sites.as_dict()
     cov.extra("access_sites", site_d)
     cov.extra("keys_absent_from_every_dta",

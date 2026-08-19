@@ -31,10 +31,18 @@ from tree_sitter import Language, Parser, Node
 
 # Import DTA hierarchy tools
 sys.path.insert(0, str(Path(__file__).parent))
-from dta_hierarchy_scan import parse_dta_file, DTANode, DTAHierarchy
+from dta_hierarchy_scan import (
+    parse_dta_file, DTANode, DTAHierarchy,
+    empty_corpus_banner, EXIT_EMPTY_CORPUS, PARSE_STATS, UNRESOLVED_INCLUDES,
+)
 from dta_access_audit import (
     _build_key_node_map, get_element_info, classify_atom
 )
+
+_REPO = str(Path(__file__).resolve().parent.parent.parent)
+if _REPO not in sys.path:
+    sys.path.insert(0, _REPO)
+from scripts.analysis.coverage import CoverageReport, add_coverage_args  # noqa: E402
 
 CPP_LANGUAGE = Language(tscpp.language())
 _PARSER = Parser(CPP_LANGUAGE)
@@ -1203,33 +1211,81 @@ def main():
                         help='Show analysis statistics')
     parser.add_argument('--json', action='store_true',
                         help='Output as JSON')
+    parser.add_argument('--extra-root', default='orig-assets/extracted',
+                        help='extra DTA tree swept IN ADDITION to --dta-dir, relative to CWD (default: orig-assets/extracted). This sweep used to be hardcoded and unconditional, so --dta-dir could not actually bound the corpus: pointing it at an empty path still picked up 247 files whenever CWD happened to have orig-assets. Pass a nonexistent path to disable.')
+    add_coverage_args(parser)
     args = parser.parse_args()
 
     # Load DTA hierarchy
     main_configs = {
-        'ham': 'orig-assets/extracted/config/ham_keep.dta',
-        'default': 'orig-assets/extracted/(..)/(..)/system/run/config/default.dta',
+        'ham': str(Path(args.extra_root) / 'config/ham_keep.dta'),
+        'default': str(Path(args.extra_root)
+                       / '(..)/(..)/system/run/config/default.dta'),
     }
     main_roots = {}
+    missing_inputs = []
     hierarchy = DTAHierarchy()
     for name, cfg in main_configs.items():
         p = Path(cfg)
-        if p.exists():
-            root = parse_dta_file(str(p))
-            if root:
-                main_roots[cfg] = root
-                hierarchy.add_file(p)
-    for f in Path('orig-assets/extracted').rglob('*.dta'):
-        if str(f) not in hierarchy.roots:
-            hierarchy.add_file(f)
+        # `if p.exists():` with no `else` was the whole defect: the corpus lives
+        # in orig-assets/, which is absent from every git worktree, so this loop
+        # did nothing, the rglob below found nothing, every check ran against an
+        # empty hierarchy and short-circuited, and the tool printed
+        # "No DTA access issues found." to STDOUT and exited 0.  Measured
+        # 2026-08-19 on this tree, same script, corpus the only variable:
+        #     corpus absent    28 B  "No DTA access issues found."   exit 0
+        #     corpus present   50,302 B  "Total: 30 findings"        exit 0
+        # 30 real findings and a 28-byte all-clear were indistinguishable by
+        # exit code.  A missing input is never a clean verdict.
+        if not p.exists():
+            missing_inputs.append(cfg)
+            continue
+        root = parse_dta_file(str(p))
+        if root:
+            main_roots[cfg] = root
+            hierarchy.add_file(p)
+    extracted = Path(args.extra_root)
+    if not extracted.exists():
+        missing_inputs.append(str(extracted))
+    else:
+        for f in extracted.rglob('*.dta'):
+            if str(f) not in hierarchy.roots:
+                hierarchy.add_file(f)
 
     all_key_nodes = _build_key_node_map(main_roots)
-    print(f"DTA: {len(hierarchy.key_parents)} keys, {len(all_key_nodes)} node entries",
+    dta_count = len(hierarchy.roots)
+    key_count = len(hierarchy.key_parents)
+    print(f"DTA: {key_count} keys, {len(all_key_nodes)} node entries",
           file=sys.stderr)
 
-    # Analyze source
+    cov = CoverageReport("dta_dataflow", args=args)
+    cov.extra("main_configs_loaded", len(main_roots))
+    cov.extra("dta_files_parsed", dta_count)
+    cov.extra("dta_unique_keys", key_count)
+    cov.extra("key_node_map_keys", len(all_key_nodes))
+    cov.extra("missing_inputs", sorted(missing_inputs))
+    cov.extra("parse_stats", dict(sorted(PARSE_STATS.items())))
+    cov.extra("unresolved_includes", dict(sorted(UNRESOLVED_INCLUDES.items())))
+    if missing_inputs:
+        cov.note(f"{len(missing_inputs)} declared corpus input(s) DO NOT EXIST: "
+                 + ", ".join(sorted(missing_inputs)))
+
+    # ---- the empty-corpus gate: a clean verdict is FORBIDDEN from here ----
+    # Same gate, same banner, same exit code as the three sibling DTA scanners.
+    searched = sorted(set(list(main_configs.values()) + [str(extracted)]))
+    banner = empty_corpus_banner("dta_dataflow", dta_count, key_count, searched)
+    if banner is not None:
+        print(banner)                       # STDOUT: it must survive a redirect
+        cov.universe(0, "DTA files parsed")
+        sys.exit(cov.emit() or EXIT_EMPTY_CORPUS)
+
+    # Analyze source.  The universe is DTA ACCESS SITES, not source files:
+    # the question this tool answers is "how many of the accesses could be
+    # resolved to a context and checked", and a file-level denominator hides
+    # exactly that.
     if args.trace:
         project = {args.trace: analyze_file(args.trace)}
+        cov.note(f"--trace: ONE file ({args.trace}), not a census")
     else:
         project = analyze_project(args.src_dir)
 
@@ -1251,6 +1307,13 @@ def main():
           file=sys.stderr)
     print(f"  Outgoing DA calls: {total_calls}", file=sys.stderr)
 
+    cov.universe(total_accesses, "DTA access sites found in the analysed sources")
+    cov.extra("files_analysed", len(project))
+    cov.extra("functions_analysed", total_funcs)
+    cov.extra("functions_with_dataarray_params", total_da_funcs)
+    cov.extra("outgoing_dataarray_calls", total_calls)
+    cov.extra("resolved_before_phase2", resolved_accesses)
+
     # Phase 2: Inter-procedural context propagation
     if not args.stats and not args.dump_graph:
         call_graph = build_call_graph(project)
@@ -1259,6 +1322,7 @@ def main():
                                 for f in funcs for a in f.accesses if a.context)
         print(f"  After Phase 2: {resolved_accesses} with context "
               f"({resolved_accesses*100//max(total_accesses,1)}%)", file=sys.stderr)
+        cov.extra("resolved_after_phase2", resolved_accesses)
 
     if args.stats:
         # Show detailed stats
@@ -1283,7 +1347,11 @@ def main():
                         ctx_counts[access.context.config_section] += 1
         for section, count in sorted(ctx_counts.items(), key=lambda x: -x[1]):
             print(f"  {section}: {count} accesses")
-        return
+        # A survey, not a verdict: it never claims "no issues", so it owes no
+        # finding count -- but it still owes its denominator.
+        cov.drop("stats-mode-no-validation", total_accesses,
+                 note="--stats prints distributions and runs no check")
+        sys.exit(cov.emit())
 
     if args.dump_graph:
         call_graph = build_call_graph(project)
@@ -1293,20 +1361,34 @@ def main():
                 contexts = [str(s.context) for s in sites if s.context]
                 print(f"  {callee}: {len(sites)} call sites"
                       f"{' — contexts: ' + ', '.join(set(contexts)) if contexts else ''}")
-        return
+        cov.drop("dump-graph-mode-no-validation", total_accesses,
+                 note="--dump-graph prints the call graph and runs no check")
+        sys.exit(cov.emit())
 
     # Validate
     if args.validate:
         findings = validate_accesses(project, hierarchy, main_roots, all_key_nodes)
 
-        if not findings:
-            print("No DTA access issues found.")
-            return
+        # An access with no resolved context cannot be checked against the
+        # hierarchy -- it is a DROP, not a pass.  Counting it as examined is
+        # what let a run that resolved almost nothing print a clean verdict.
+        checkable = resolved_accesses
+        # See dta_access_audit: a balanced run that examined 0 sites is
+        # arithmetically clean and epistemically empty.
+        cov.require_examined(
+            "no DTA access site could be resolved to a context, so no check "
+            "ran -- the corpus parsed, but every site was dropped")
+        cov.examine(checkable)
+        cov.drop("no-resolved-context", total_accesses - checkable,
+                 note="the dataflow could not tie this access to a config "
+                      "section, so no check could run against it")
+        cov.extra("findings", len(findings))
 
         if args.json:
             import json
-            print(json.dumps(findings, indent=2))
-            return
+            print(json.dumps({"findings": findings,
+                              "_coverage": cov.as_dict()}, indent=2))
+            sys.exit(cov.emit())
 
         by_type = defaultdict(list)
         for f in findings:
@@ -1322,7 +1404,24 @@ def main():
                 print()
 
         total = sum(len(v) for v in by_type.values())
-        print(f"Total: {total} findings")
+        # The exculpatory count must travel WITH the verdict, on the same
+        # stream.  "No DTA access issues found." on its own is the sentence
+        # this whole branch exists to delete: it was printed by a run that
+        # checked 0 of 0 accesses and by a run that checked thousands, with the
+        # same exit code.
+        print(f"Total: {total} findings from {checkable} checkable DTA access "
+              f"sites of {total_accesses} found "
+              f"({checkable*100.0/max(total_accesses,1):.2f}% resolvable), "
+              f"across {len(project)} files and {dta_count} DTA files "
+              f"({key_count} keys)")
+        if total == 0:
+            print("No DTA access issues found IN THAT POPULATION -- which is "
+                  "not the same as none existing.")
+        sys.exit(cov.emit())
+
+    cov.drop("validation-disabled", total_accesses,
+             note="--no-validate / --validate off: nothing was checked")
+    sys.exit(cov.emit())
 
 
 if __name__ == '__main__':

@@ -22,6 +22,8 @@ from scripts.analysis.coverage import (
     EXIT_OK,
     EXIT_TRUNCATED,
     EXIT_UNACCOUNTED,
+    EXIT_NO_INPUT,
+    EXIT_NO_DENOMINATOR,
     like_escape,
     like_prefix_clause,
 )
@@ -265,3 +267,132 @@ def test_like_escape_handles_percent_and_backslash():
     got = [r[0] for r in db.execute(
         f"SELECT s FROM f WHERE {like_prefix_clause('s', '100%')}")]
     assert got == ["100%"]
+
+
+# --------------------------------------------------------------------------- #
+# NEGATIVE CONTROL — the exit-4 BYPASS.
+#
+# Exit 4 is the tripwire with teeth: it fires whenever a bare `continue` skipped
+# drop(), so it catches the NEXT instance of this bug class without anyone
+# having anticipated the field involved.  But `unaccounted` is
+# `universe - (examined + drops)`, which is None when no universe was declared,
+# and None is falsy.  So DELETING THE `cov.universe(...)` LINE -- one line --
+# disarmed the check entirely: emit() returned 0 while stdout said "out of None
+# rows" and the banner said NO DENOMINATOR.
+#
+# Everything below asserts the disarmed form and the armed form now exit
+# DIFFERENTLY, and that the honest "I cannot know" case is still allowed.
+# --------------------------------------------------------------------------- #
+
+class _A:
+    allow_truncation = False
+    coverage_json = None
+
+
+def _lying_scanner(rows, declare_universe):
+    """A scanner with a bare `continue` -- the defect -- built two ways."""
+    cov = CoverageReport("lying_scanner", args=_A())
+    if declare_universe:
+        cov.universe(len(rows), "rows")
+    for r in rows:
+        if r is None:
+            continue                       # THE BUG: no cov.drop()
+        cov.examine()
+    return cov
+
+
+def test_omitting_universe_no_longer_silences_the_unaccounted_check():
+    rows = [1, None, 2, None, None]
+
+    # (b) With the denominator declared, the tripwire fires: this is the
+    # behaviour the module is FOR.
+    armed = _lying_scanner(rows, declare_universe=True)
+    assert armed.unaccounted == sum(1 for r in rows if r is None)
+    assert armed.emit() == EXIT_UNACCOUNTED
+
+    # The bypass: the SAME scanner with the SAME bug, minus one line.
+    disarmed = _lying_scanner(rows, declare_universe=False)
+    assert disarmed.unaccounted is None, (
+        "the mechanism must really be disarmed, or this is not a control")
+
+    # Historically this returned EXIT_OK -- indistinguishable from a clean
+    # census.  The interesting claim is the DISAGREEMENT with EXIT_OK, not the
+    # specific code.
+    rc = disarmed.emit()
+    assert rc != EXIT_OK, (
+        "a scanner whose own arithmetic check could not run must not exit like "
+        "one that passed it")
+    assert rc == EXIT_NO_DENOMINATOR
+
+
+def test_a_declared_unknown_denominator_is_still_allowed():
+    """Control for the control: the rule must not punish an honest admission."""
+    cov = CoverageReport("honest", args=_A())
+    cov.universe_unknown("streaming input; the producer never states a total")
+    cov.examine(7)
+    assert cov.emit() == EXIT_OK
+    assert "UNKNOWN, DECLARED" in cov.render()
+    assert cov.as_dict()["universe_unknown_reason"]
+
+
+def test_universe_unknown_demands_a_reason():
+    """An unexplained missing denominator is the bug, not the escape hatch."""
+    cov = CoverageReport("shrug", args=_A())
+    with pytest.raises(ValueError):
+        cov.universe_unknown("")
+
+
+# --------------------------------------------------------------------------- #
+# NEGATIVE CONTROL — balanced, and yet it looked at nothing.
+#
+# The residue of the DTA defect: the corpus gate keys on "the corpus was
+# empty", not on "this run checked nothing".  Drop every row for perfectly good
+# reasons and `universe == examined + drops` holds at examined == 0 -- clean
+# arithmetic, empty epistemics, exit 0.
+# --------------------------------------------------------------------------- #
+
+def test_a_balanced_run_that_examined_nothing_is_not_a_clean_verdict():
+    def build(require):
+        cov = CoverageReport("empty_run", args=_A())
+        cov.universe(100, "rows")
+        if require:
+            cov.require_examined("every row was dropped")
+        cov.drop("no-resolved-context", 100)
+        return cov
+
+    lax, strict = build(False), build(True)
+
+    # (a) The arithmetic identity holds on BOTH -- that is the whole point.
+    assert lax.unaccounted == 0 and strict.unaccounted == 0
+
+    # (b) ...and yet they must not exit the same way.
+    assert lax.emit() == EXIT_OK
+    assert strict.emit() == EXIT_NO_INPUT
+    assert strict.emit() != lax.emit()
+    assert "EXAMINED NOTHING" in strict.render()
+    assert not strict.is_clean()
+    assert strict.as_dict()["examined_nothing"] is True
+    with pytest.raises(TruncationError):
+        strict.assert_complete()
+
+
+def test_require_examined_is_quiet_when_something_was_examined():
+    """Control for the control: it must not fire on a run that did work."""
+    cov = CoverageReport("real_run", args=_A())
+    cov.universe(100, "rows")
+    cov.require_examined("every row was dropped")
+    cov.examine(1)
+    cov.drop("filtered", 99)
+    assert cov.emit() == EXIT_OK
+    assert "EXAMINED NOTHING" not in cov.render()
+    assert cov.is_clean()
+
+
+def test_require_examined_does_not_fire_on_an_empty_universe():
+    """universe == 0 is the CORPUS-empty case, which has its own gate and its
+    own exit code; this check must not shadow it with a different one."""
+    cov = CoverageReport("no_corpus", args=_A())
+    cov.universe(0, "rows")
+    cov.require_examined("every row was dropped")
+    assert cov.examined_nothing is False
+    assert cov.emit() == EXIT_OK
