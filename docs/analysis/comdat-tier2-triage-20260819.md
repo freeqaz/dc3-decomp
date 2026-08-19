@@ -108,6 +108,34 @@ plane ignores anyway:
 
 So the row is 0% purely because objdiff cannot pair the two names. Nothing is missing.
 
+**Swept over all 292 rows** (script kept in the session, not committed — it is 60 lines of
+COFF section/reloc parsing plus the `.s` byte-comment scraper): mask every `b`/`bc`
+displacement and the low 16 bits at each relocation offset, then compare our fold peer's
+COMDAT body to the target body.
+
+    203 / 292  IDENTICAL   — proven artifact, our bytes are already right
+     89 / 292  not proven  — 86 differ, 3 differ in length
+
+The 89 are **not** thereby real bugs. The test is crude in both directions and its limits
+matter more than its score:
+
+- It masks branch displacements ENTIRELY, so it cannot see a `bl` to a *different* callee.
+  That is a false-**positive** risk on the 203, bounded by the fact that `/OPT:ICF` only
+  folds COMDATs whose relocations resolve identically.
+- Most of the 89 are `??_E<T>` (vector deleting destructor) rows whose only peer in our
+  object is `??_G<T>` (scalar). MSVC declares `??_E` as an undefined weak external
+  resolving to `??_G` — that is the second evidence class in
+  `scripts/symbol_aliases.json` — so the target symbol is a thunk, not the same body, and
+  a raw byte compare is the wrong instrument.
+- The three length mismatches are `?erase@ObjPtrVec<T>@@` instantiations where our COMDAT
+  section carries alignment padding the target's extracted range does not.
+
+Stated this way deliberately: the project's own rule (`symbol_aliases.json`'s `_comment`)
+is that **name shapes are arguments, not witnesses** — an earlier triage called every
+`merged_` target benign from its name and the body test found 9 of 33 were genuinely
+different functions. 203 rows now have a witness. The other 89 have a mechanism and no
+witness, and should get decomp-synth's `probe_icf_foldtest.py` rather than this sweep.
+
 **281 of the 292 (32 288 B) would be fixed by one rule in dtk's splitter:** when an address
 carries several names, prefer the fold member whose contributing .obj is the .obj that owns
 the address range, instead of the first-seen name. Verified mechanically — for 281 rows a
