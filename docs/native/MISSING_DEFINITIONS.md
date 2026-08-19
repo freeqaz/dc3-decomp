@@ -27,7 +27,7 @@ across the file's whole history. Measured from the linked binary:
 | ...stub is the only definition | 143 |
 | ...**of those, referenced by a real object (LIVE)** | **119** |
 | ...unreferenced (dead weight) | 24 |
-| still genuinely unresolved (`ldd -r`) | 31 |
+| still genuinely unresolved (`ldd -r`) | 24 |
 
 Run `python3 scripts/native/check_stub_shadow.py --build-dir native/build` to
 re-derive all of these. Do not quote them from here.
@@ -96,27 +96,46 @@ looks healthy.
 
 ## `--unresolved-symbols=ignore-all`: can it be tightened?
 
-Yes, and cheaply. Relinking with `--unresolved-symbols=report-all` leaves
-**31 distinct undefined symbols** — `ldd -r` on the normal binary reports exactly
-the same 31 in seconds, so `ldd -r` is the practical gate and a full strict
-relink is unnecessary. Each of the 31 gets a PLT entry whose `JUMP_SLOT`
-relocation resolves to 0; lazy binding means the process does not fail at
-startup, only when that path first executes.
+Yes, and cheaply. `ldd -r` on the normal binary reports the same set as
+relinking with `--unresolved-symbols=report-all`, in seconds, so `ldd -r` is the
+practical gate and a strict relink is unnecessary. The count was 31; it is now
+**24**, after `fix/kinect-camera-path` closed seven.
 
-Most are Bink / Kinect / Xbox SDK / PPC intrinsics that will never have bodies.
-These are real decomp gaps and are the ones worth closing:
+**The old wording here said each one "gets a PLT entry whose `JUMP_SLOT`
+relocation resolves to 0". That is wrong** and it misled at least one downstream
+brief. The zero `readelf` shows is `st_value`, which is zero for *every*
+undefined symbol including `printf`'s, and the `.got.plt` slots hold PLT+6 — the
+ordinary lazy trampoline. The deferral to first call is plain lazy binding, not
+anything specific to this binary. The check that actually settles whether a hole
+is real:
 
-| symbol | referenced from |
+```
+LD_BIND_NOW=1 ./native/build/dc3-native     # dies at startup, naming the first hole
+```
+
+Verified both directions on 2026-08-19: before the recoveries this died on
+`undefined symbol: _hypot`; after `_hypot` was given a body it died on
+`undefined symbol: BinkOpenTrack` instead.
+
+Most of the 24 are Bink / Kinect / Xbox SDK / PPC intrinsics that will never
+have bodies. What is left that is *not* in that bucket:
+
+| symbol | status |
 |---|---|
-| `LiveCameraInput::LockStream(void const*, LockedRect&)` | `LiveCameraInput.cpp`, `DrawUtl.cpp` |
-| `LiveCameraInput::UnlockStream(void const*)` | `LiveCameraInput.cpp`, `DrawUtl.cpp` |
-| `Hmx::Matrix4::Col3(int) const` | math |
-| `CDGetError()` | CD/loader |
-| `RecursePatternInternal(char const*, void(*)(char const*, char const*), bool, bool)` | file utils |
-| `ReadSingleJoypad`, `createFilter`, `requestBreedWrite` | input / gesture |
-| `std::type_info::operator==(std::type_info const&) const` | host-STL shim |
+| `ReadSingleJoypad`, `requestBreedWrite` | Xbox controller HID back end. **Unreachable**, not latent: their only caller `JoypadPollCommon` has zero call sites and is not address-taken in `dc3-native` (native input runs through `Joypad_Native.cpp`'s own `JoypadPoll`). |
+| `std::type_info::operator==(std::type_info const&) const` | **Not a decomp gap.** libstdc++ 15 on this box does not export `_ZNKSt9type_infoeqERKS_` at all; the four references come from libstdc++'s own templates (`regex_traits::transform_primary`, `_Sp_counted_ptr_inplace::_M_get_deleter`, the latter with 0 call sites). No DC3 body exists to recover. |
 
-Tightening the flag to `report-all` requires giving all 31 a body or an explicit
+Closed on 2026-08-19 (`fix/kinect-camera-path`), recorded so they are not
+re-opened:
+
+| symbol | it was never missing — it was |
+|---|---|
+| `LiveCameraInput::LockStream` / `UnlockStream` | Recovered and 100% (25/25 and 6/6 instructions). Sitting inside the `#else` arm of an `#ifdef HX_NATIVE` in `LiveCameraInput.cpp`. Guard removed. |
+| `RecursePatternInternal` | Same: `#ifndef HX_NATIVE` in `os/File.cpp`, around a body whose only platform primitive (`FileEnumerate`) has had a POSIX implementation all along. |
+| `Hmx::Matrix4::Col3`, `CDGetError`, `_hypot` | Bodies in Xbox-only TUs (`rnddx9/Cam.cpp`, `os/CDReader.cpp`) or the MSVC CRT. Hosted in `native/src/native_link_glue.cpp`. `Col3` had 16 call sites in `Hmx::operator*(const Transform&, const Hmx::Matrix4&)`. |
+| `createFilter` | A **signature-drift bug in the decomp**, not a native gap. `dsp/EQEffect.cpp` declared it `extern "C"`, so it referenced an unmangled `createFilter`; the target's symbol is `?createFilter@@YAXW4FilterType@@W4FilterBand@@IMMPAUFILTER@@H@Z` and `synth/filterdesign.cpp` defines it with C++ linkage. objdiff cannot see this class of bug — normalized mode discards relocation targets. |
+
+Tightening the flag to `report-all` requires giving all 24 a body or an explicit
 stub first. Until then, the `ldd -r` baseline in `check_stub_shadow.py` is the
 guard: any *new* unresolved symbol fails the gate.
 
@@ -205,7 +224,7 @@ grep '_stub_fn_' native/src/engine_stubs_generated.cpp | \
 ## How to Regenerate Stubs
 
 `ldd -r native/build/dc3-native` gives the undefined set directly and matches a
-`--unresolved-symbols=report-all` relink exactly (both: 31 symbols, verified
+`--unresolved-symbols=report-all` relink exactly (both: 31 symbols at the time, verified
 2026-08-19). Prefer it — the strict relink takes minutes, `ldd -r` takes seconds.
 
 ```bash
@@ -250,3 +269,56 @@ regression gate for anything gated behind gameplay or hardware. For those, the
 evidence is the disassembly, and it should be quoted as such — the runs above
 only establish that the fixed binary boots and runs 900/1200 frames to a clean
 `DC3_EXIT: code=0`.
+
+## The Kinect colour path is not black — it is unreachable (2026-08-19)
+
+The `YUVtoRGB` fix above is correct, and on the PPC target it was never a bug at
+all (the linker map shows one ICF-folded body contributed by both
+`gesture:LiveCameraInput.obj` and `gesture:DrawUtl.obj`). But the follow-up
+question — "so does the camera feed work now?" — has a blunter answer than
+either "yes" or "still black":
+
+**`dc3-native` never constructs a `LiveCameraInput` at all.** Chain, all of it
+checked against the linked binary rather than the source:
+
+* `LiveCameraInput::sInstance` is written in exactly two places,
+  `LiveCameraInput::PreInit` (set) and `LiveCameraInput::Terminate` (clear).
+* `PreInit` has exactly one caller in the binary: `LiveCameraInput::Init`.
+* `LiveCameraInput::Init` has **zero** callers and is not address-taken — no
+  `call`, and no relocation naming it in any data section. `App.cpp`'s call is
+  inside `#ifndef HX_NATIVE`, and `GestureMgr::Init` returns early on native
+  before reaching its own `PreInit` call.
+
+So `sInstance` and `GestureMgr::mLiveCamInput` are provably always null, and
+every consumer is guarded: `HamUI::Store*BufferAt` tests
+`if (TheGestureMgr->GetLiveCameraInput())`, and `HamUI::DrawDebug` — the only
+route to `DrawGestureMgr` → `UpdateBufferTex` — returns early under `HX_NATIVE`.
+All eight `LockStream` call sites are dead.
+
+Two further reasons the path could not have worked as written, either of which
+would have to be fixed before a live feed is possible:
+
+1. **LP64 pointer truncation.** The four `TextureStore::UpdateFrom*Buffer*`
+   bodies held texel and source pointers in `unsigned int`. Fixed to `uintptr_t`
+   (identical type on PPC, so all four objdiff numbers are unchanged).
+2. **The decode is endian-dependent.** It reads the UYVY byte stream as 32-bit
+   words and takes `>>24` as Cb and `>>8` as Cr, which is the big-endian layout.
+   A native NUI shim must hand it big-endian-ordered words, or red and blue come
+   out transposed. (Incidentally, the locals in `LiveCameraInput.cpp` name those
+   two `cr` and `cb` the wrong way round; the arithmetic is right.)
+
+Where the data would have to come from on a machine with no Kinect:
+`NuiImageStreamGetNextFrame` → `Buffer::mFrames[]` → `StreamBufferData()` →
+`NUI_IMAGE_FRAME::pFrameTexture` → `LockStream()` →
+`D3DLineTexture_LockRect`. The last hop now has a native implementation
+(`native/src/platform/NuiImageSurface_Native.cpp`); the rest does not, and
+enabling it means giving `LiveCameraInput`'s constructor native `NuiInitialize`
+/ `NuiImageStreamOpen` / `NuiAudioCreate` / `CreateCameraBufferMat`. That is a
+separate piece of work.
+
+Until then the decode is proved at unit level, not in the running port:
+`native/tests/test_camera_yuv_decode.cpp` pushes a synthetic UYVY frame through
+the real `UpdateFromColorBuffer` and checks the output against the published
+BT.601 matrix (301920 / 307200 texels non-zero, 64 distinct RGB565 values).
+It has a recorded negative control: stubbing `YUVtoRGB` back to `return 0` fails
+exactly the two colour assertions and leaves the two control cases passing.
