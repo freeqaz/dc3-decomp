@@ -1,5 +1,12 @@
 # Full unicorn re-sweep, 2026-08-19 — NOT APPLIED, and why; plus a 49-row harvest
 
+> **SUPERSEDED, same day.** A parallel lane ran the same measurement, reached the opposite
+> decision, and **applied** it (`c47db2afe`). Its argument is better than the one below; see
+> [the reconciliation at the end of this file](#reconciliation-2026-08-19-the-other-lane-was-right-to-apply)
+> and `docs/analysis/2026-08-19-unicorn-reingest.md`. The analysis below is preserved as
+> written because its *measurements* stand and were independently corroborated — only the
+> apply/don't-apply conclusion is overturned.
+
 Ran `batch_to_db.py --force` over the whole binary at `eda64e956` **against a copy of
 decomp.db**, never the live one. 30,058 functions in 154 s. The result is not applicable
 as a wholesale replacement; the reason is worth writing down, and one genuine worklist
@@ -131,3 +138,50 @@ alone. Each row is a lead to be confirmed with objdiff's instruction table and b
 the target asm. What makes this list worth keeping is not its verdicts but its *shape*: it
 is small, it is concentrated in serializers and container mutators, and it points at
 functions no percentage-based query will ever surface.
+
+---
+
+## Reconciliation, 2026-08-19: the other lane was right to apply
+
+Two lanes ran the whole-binary sweep within an hour of each other, unaware of one another.
+The measurements agree to within run noise — **12,862 DIVERGENT / 9,960 `data_layout` here
+vs 12,419 / 9,815 there** — which is the useful part: two independent runs corroborate the
+numbers above. The conclusions differed. That lane applied; this one did not.
+
+**Its argument is the stronger one, and this document concedes it.**
+
+The case made here for withholding was that overwriting 25,628 curated `EQUIVALENT`
+verdicts with a self-declared artifact class would cost the oracle its signal. That reasoning
+depends on an assumption I did not examine: **that the artifact rows would be
+indistinguishable from real ones once written.** The other lane removed exactly that
+assumption. It added a `HARNESS_VERSION` (`h1..h4`) beside the existing `SIGNAL_VERSION`,
+stamped legacy rows, and surfaced the filter through `query_functions`, the MCP tool and
+`query.py`. With provenance recorded, `DIVERGENT / data_layout / h4` is *labelled*
+uninformative, whereas a bare `2026-03-04 EQUIVALENT` is not labelled at all — it merely
+looks trustworthy. Given the choice between noise you can filter and silence you cannot
+date, the filterable noise is better, and the cost I was protecting against does not exist
+once the label does.
+
+The gap that made this necessary is worth remembering on its own: `unicorn_signal_version`
+describes the **comparator**, and it sat at 3 across the entire period when eight *harness*
+defects were live, because not one of those fixes touched a comparator rule. Date was the
+only discriminator, and only for a reader who already knew which dates were bad. A version
+field that cannot express the failure it is supposed to expose is the same shape as the six
+instruments this project found lying by omission the same week.
+
+That lane also checked the downstream consumers rather than waving them away
+(`sync_objdiff` scans 6× more functions — slower, not wrong; `batch_promote` and
+`certify_floor` act only on partial functions, whose rows moved by ±5), and it archived the
+pre-ingest image separately as `decomp.db.2026-08-19.pre-unicorn-reingest.xz` after noticing
+that `scripts/backup-db.sh` overwrites its dated archive on every run, so the ordinary
+"back up first" reflex would have destroyed the undo path.
+
+**Still standing from this document:** the sweep measurements; the mechanical explanation of
+why `data_layout` concentrates on 100 %-matched functions; the 97.6 % agreement between the
+two harness paths on the 1,982 rows both measured at signal_version 3; and the 49-row
+harvest — all 49 were verified present in the applied ingest with matching classes, which
+turns the JSON worklist below into a live SQL query.
+
+**Withdrawn:** the "not applicable / do not apply" conclusion, and the implied task that
+`batch_to_db --force` should refuse to write a live DB. The correct fix was provenance, not
+prohibition.
