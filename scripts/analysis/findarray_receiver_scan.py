@@ -32,6 +32,20 @@ Usage:
   python3 scripts/analysis/findarray_receiver_scan.py
   python3 scripts/analysis/findarray_receiver_scan.py --all     # include weaker signals
   python3 scripts/analysis/findarray_receiver_scan.py --json
+
+COVERAGE (see scripts/analysis/coverage.py)
+  Every run prints a COVERAGE block naming its DENOMINATOR: how many source
+  files were considered, how many were unreadable, and how many were skipped by
+  the relevance gate (broken out so the gate's known blind spot is a NUMBER and
+  not a silence).  Three ways this scanner used to be able to print a confident
+  "No suspicious receiver confusion patterns found":
+
+    * run from any cwd but the repo root — the default path `src/` is RELATIVE
+      and a non-existent path was skipped with no `else`, so the file list came
+      out empty and the scan reported a clean bill of health for zero files;
+    * a file that raised UnicodeDecodeError became `return []`, i.e. "no bugs";
+    * without `--all`, SHADOW_PARENT findings were filtered out BEFORE counting
+      and the summary then printed `0 SHADOW_PARENT` while 14 existed.
 """
 
 import re
@@ -39,6 +53,10 @@ import sys
 import os
 from collections import defaultdict
 from pathlib import Path
+
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, REPO)
+from scripts.analysis.coverage import CoverageReport, add_coverage_args  # noqa: E402
 
 # ============================================================================
 # Shared utilities
@@ -138,7 +156,11 @@ def scan_findarray(func_lines, filepath, func_start_line):
 
     # Now detect suspicious patterns
     for parent, children in stored_children.items():
-        child_vars = {c[0] for c in children}
+        # DETERMINISM: this used to be a `set`, and it is ITERATED below to build
+        # `child_info`, so string hash randomisation drove the order of the
+        # emitted findings — four distinct output hashes under four
+        # PYTHONHASHSEED values. Sorted list, so two runs agree.
+        child_vars = sorted({c[0] for c in children})
         child_var_map = {c[0]: (c[1], c[2]) for c in children}
 
         # Get direct calls on this parent AFTER the first child assignment
@@ -372,12 +394,25 @@ def scan_objdiriter(func_lines, filepath, func_start_line):
 # ============================================================================
 
 def scan_file(filepath, checks=('findarray', 'objdiriter')):
-    """Scan a single file for suspicious patterns."""
+    """Scan a single file for suspicious patterns.
+
+    Returns `(findings, disposition)`.  The disposition is one of:
+
+      'examined'                   the file passed a relevance gate and was parsed
+      'unreadable'                 open()/decode failed — NOT the same as "clean"
+      'gate-missed-non-findarray'  >= 2 lookup calls, but < 2 of them spelled
+                                   `FindArray`, so the FindArray gate skips it
+      'not-relevant'               no lookup pattern of any kind
+
+    The old signature returned a bare `[]` for the last three, which made
+    "this file could not be decoded" and "this file has no bugs" print
+    identically — and made the gate's blind spot unobservable.
+    """
     try:
         with open(filepath) as f:
             lines = f.readlines()
     except (IOError, UnicodeDecodeError):
-        return []
+        return [], 'unreadable'
 
     # Quick relevance check
     content = ''.join(lines)
@@ -385,7 +420,19 @@ def scan_file(filepath, checks=('findarray', 'objdiriter')):
     has_objdiriter = 'ObjDirItr' in content and 'SetName' in content
 
     if not has_findarray and not has_objdiriter:
-        return []
+        # TODO(heuristic): WIDEN THIS GATE — separate work, deliberately not done
+        # here.  `LOOKUP_METHODS` (and therefore ASSIGN_RE / CALL_RE) covers six
+        # methods: FindArray, FindStr, FindFloat, FindInt, FindData, FindVar —
+        # but the gate above only counts the string 'FindArray'.  A file that
+        # does `DataArray *a = cfg->FindArray("x"); ... cfg->FindStr("y")` is
+        # skipped before the regexes ever run.  In this tree 127 files have >= 2
+        # lookup calls; only 88 have >= 2 spelled FindArray, so 39 files (30.7%)
+        # are invisible to the receiver check.  Widening the gate CHANGES WHAT
+        # THIS SCANNER FINDS, so it is counted here and left for its own change.
+        n_lookups = sum(content.count(m) for m in LOOKUP_METHODS)
+        if n_lookups >= 2:
+            return [], 'gate-missed-non-findarray'
+        return [], 'not-relevant'
 
     functions = extract_functions(lines)
     all_findings = []
@@ -396,7 +443,7 @@ def scan_file(filepath, checks=('findarray', 'objdiriter')):
         if 'objdiriter' in checks and has_objdiriter:
             all_findings.extend(scan_objdiriter(func_lines, filepath, func_start))
 
-    return all_findings
+    return all_findings, 'examined'
 
 
 # ============================================================================
@@ -404,7 +451,13 @@ def scan_file(filepath, checks=('findarray', 'objdiriter')):
 # ============================================================================
 
 def print_findarray_findings(findings, show_shadow=False):
-    """Print FindArray receiver findings."""
+    """Print FindArray receiver findings.
+
+    `findings` must be the UNFILTERED list; SHADOW_PARENT suppression happens
+    here, at print time, so the count is taken before the filter.  Filtering
+    them out upstream is what let the summary print `0 SHADOW_PARENT` while 14
+    existed.
+    """
     mixed = [f for f in findings if f['severity'] == 'MIXED_RECEIVER']
     shadow = [f for f in findings if f['severity'] == 'SHADOW_PARENT']
 
@@ -418,6 +471,9 @@ def print_findarray_findings(findings, show_shadow=False):
                 used = f" (also used: {', '.join(c['findarray_keys'])})" if c['used_for_findarray'] else ""
                 print(f"    {c['var']} = {f['parent']}->FindArray(\"{c['key']}\") at line {c['assigned_line']}{used}")
             print()
+
+    if shadow and not show_shadow:
+        print(f"=== SHADOW_PARENT: {len(shadow)} finding(s) SUPPRESSED (use --all to show) ===\n")
 
     if shadow and show_shadow:
         print(f"\n=== SHADOW_PARENT ({len(shadow)} findings) ===")
@@ -464,6 +520,49 @@ def print_objdiriter_findings(findings):
     return len(iter_dest), len(parallel)
 
 
+def resolve_paths(raw_paths):
+    """Turn CLI path arguments into (files, resolved, errors).
+
+    COVERAGE FIX, not a heuristic change.  The default `src/` is RELATIVE, and
+    the old loop was
+
+        if p.is_dir():   ...
+        elif p.is_file(): ...
+                                # <- no else
+
+    so from any cwd but the repo root the path simply did not exist, the file
+    list came out EMPTY, and the scan printed "No suspicious receiver confusion
+    patterns found."  A missing input path is now a LOUD ERROR.  As a
+    convenience a relative path that does not exist in the cwd is retried
+    against the repo root (announced on stderr), because the documented
+    invocation is `python3 scripts/analysis/findarray_receiver_scan.py` with the
+    implied `src/` — but if neither location exists we stop, we do not scan zero
+    files and call it clean.
+    """
+    files, resolved, errors = [], [], []
+    for raw in raw_paths:
+        p = Path(raw)
+        if not p.exists() and not p.is_absolute():
+            alt = Path(REPO) / raw
+            if alt.exists():
+                print(f"[findarray_receiver_scan] {raw!r} not found in {os.getcwd()}; "
+                      f"using {alt}", file=sys.stderr)
+                p = alt
+        if p.is_dir():
+            found = sorted(set(list(p.rglob('*.cpp')) + list(p.rglob('*.h'))))
+            if not found:
+                errors.append(f"{p}: directory contains no .cpp/.h files")
+            files.extend(found)
+            resolved.append(str(p))
+        elif p.is_file():
+            files.append(p)
+            resolved.append(str(p))
+        else:
+            errors.append(f"{raw}: no such file or directory "
+                          f"(cwd={os.getcwd()}, repo={REPO})")
+    return sorted(set(files)), resolved, errors
+
+
 def main():
     import argparse
     parser = argparse.ArgumentParser(
@@ -477,6 +576,7 @@ def main():
                         help='Which checker(s) to run (default: both)')
     parser.add_argument('--json', action='store_true',
                         help='Output as JSON')
+    add_coverage_args(parser)
     args = parser.parse_args()
 
     checks = set()
@@ -485,32 +585,73 @@ def main():
     if args.check in ('objdiriter', 'both'):
         checks.add('objdiriter')
 
-    files = []
-    for p in args.paths:
-        p = Path(p)
-        if p.is_dir():
-            files.extend(p.rglob('*.cpp'))
-            files.extend(p.rglob('*.h'))
-        elif p.is_file():
-            files.append(p)
+    files, resolved, path_errors = resolve_paths(args.paths)
+    if path_errors:
+        for e in path_errors:
+            print(f"ERROR: {e}", file=sys.stderr)
+        print("ERROR: refusing to scan — an input path did not resolve. A scan of "
+              "zero files is not a clean result.", file=sys.stderr)
+        sys.exit(2)
+
+    cov = CoverageReport("findarray_receiver_scan", args=args)
+    cov.universe(len(files), "source files (*.cpp/*.h) under the requested paths")
+    cov.extra("paths", sorted(resolved))
+    cov.extra("checks", sorted(checks))
 
     all_findings = []
-    for f in sorted(files):
-        findings = scan_file(str(f), checks)
-        all_findings.extend(findings)
+    for f in files:
+        findings, disposition = scan_file(str(f), checks)
+        if disposition == 'examined':
+            cov.examine()
+            all_findings.extend(findings)
+        elif disposition == 'unreadable':
+            cov.drop('file-unreadable', 1,
+                     note='open()/decode failed — NOT the same as "no bugs here"')
+        elif disposition == 'gate-missed-non-findarray':
+            cov.drop('relevance-gate-counts-only-FindArray', 1,
+                     note='>=2 lookups but <2 spelled FindArray; see TODO(heuristic) '
+                          'in scan_file — widening the gate is separate work')
+        else:
+            cov.drop('no-lookup-pattern', 1,
+                     note='<2 lookup calls and no ObjDirItr+SetName')
 
-    # Filter weak signals unless --all
-    if not args.all:
-        all_findings = [f for f in all_findings if f['severity'] != 'SHADOW_PARENT']
+    # DETERMINISM: findings arrive per-file in rglob order and per-function in
+    # dict order. Pin a total order with the file path as the primary key.
+    all_findings.sort(key=lambda f: (f['file'], f['line'], f['severity'],
+                                     f.get('parent', ''), f.get('key', '')))
+
+    # Count BEFORE any display filter. The old code filtered SHADOW_PARENT out
+    # of `all_findings` here, so the summary's shadow_count was structurally
+    # pinned to 0 whenever --all was off.
+    by_sev = {}
+    for f in all_findings:
+        by_sev[f['severity']] = by_sev.get(f['severity'], 0) + 1
+    for sev in ('MIXED_RECEIVER', 'SHADOW_PARENT', 'ITER_DEST', 'PARALLEL_MISMATCH'):
+        cov.extra(f"findings_{sev}", by_sev.get(sev, 0))
+    if not args.all and by_sev.get('SHADOW_PARENT'):
+        cov.note(f"{by_sev['SHADOW_PARENT']} SHADOW_PARENT finding(s) exist and are "
+                 f"SUPPRESSED from the listing (use --all); they are still counted here")
 
     if args.json:
         import json
-        print(json.dumps(all_findings, indent=2))
-        return
+        shown = all_findings if args.all else [
+            f for f in all_findings if f['severity'] != 'SHADOW_PARENT']
+        # The payload is now an OBJECT, not a bare list: a consumer handed only
+        # a list has no way to learn how many files were skipped, how many were
+        # unreadable, or that SHADOW_PARENT rows were withheld. `findings` holds
+        # exactly what the old top-level list held.
+        print(json.dumps({
+            "findings": shown,
+            "counts_before_display_filter": dict(sorted(by_sev.items())),
+            "_coverage": cov.as_dict(),
+        }, indent=2))
+        sys.exit(cov.emit())
 
     if not all_findings:
-        print("No suspicious receiver confusion patterns found.")
-        return
+        print(f"No suspicious receiver confusion patterns found "
+              f"(in the {cov.as_dict()['examined']} file(s) that passed the relevance "
+              f"gate, out of {len(files)} scanned — see the COVERAGE block).")
+        sys.exit(cov.emit())
 
     # Split by checker type
     fa_findings = [f for f in all_findings
@@ -533,10 +674,17 @@ def main():
     # Summary
     parts = []
     if 'findarray' in checks:
-        parts.append(f"{mixed_count} MIXED_RECEIVER, {shadow_count} SHADOW_PARENT")
+        suppressed = "" if args.all else " (suppressed, use --all)"
+        parts.append(f"{mixed_count} MIXED_RECEIVER, "
+                     f"{shadow_count} SHADOW_PARENT{suppressed if shadow_count else ''}")
     if 'objdiriter' in checks:
         parts.append(f"{iter_count} ITER_DEST, {parallel_count} PARALLEL_MISMATCH")
+    d = cov.as_dict()
     print(f"Total: {', '.join(parts)}")
+    print(f"  ...from {d['examined']} file(s) examined out of {d['universe']} scanned "
+          f"({d['dropped_total']} dropped — see the COVERAGE block for why)")
+
+    sys.exit(cov.emit())
 
 
 if __name__ == '__main__':
