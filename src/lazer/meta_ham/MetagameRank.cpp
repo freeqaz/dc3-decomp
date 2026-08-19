@@ -410,7 +410,7 @@ bool compare_deferred_points(DeferredPoints a, DeferredPoints b) {
     static Symbol campaign_completed_on_hard_disp("campaign_completed_on_hard_disp");
     static Symbol five_star_a_characters_songlist_disp("five_star_a_characters_songlist_disp");
 
-    static Symbol award_sort_indices[] = {
+    static Symbol award_sort_order[] = {
         play_first_time_disp,
         combined_xp_disp,
         double_xp_weekend_disp,
@@ -477,28 +477,28 @@ bool compare_deferred_points(DeferredPoints a, DeferredPoints b) {
     };
 
     static bool initted = false;
-    static std::map<Symbol, int> award_sort_map;
+    static std::map<Symbol, int> award_sort_indices;
     if (!initted) {
         for (unsigned int i = 0; i < 0x3f; i++) {
-            award_sort_map.insert(std::make_pair(award_sort_indices[i], (int)i));
+            award_sort_indices.insert(std::make_pair(award_sort_order[i], (int)i));
         }
         initted = true;
     }
 
-    std::map<Symbol, int>::iterator ait = award_sort_map.find(a.mSource);
-    std::map<Symbol, int>::iterator bit = award_sort_map.find(b.mSource);
+    std::map<Symbol, int>::iterator ait = award_sort_indices.find(a.mSource);
+    std::map<Symbol, int>::iterator bit = award_sort_indices.find(b.mSource);
 
     int aIdx = 0x7fffffff;
     int bIdx = 0x7fffffff;
 
-    if (ait != award_sort_map.end()) {
+    if (ait != award_sort_indices.end()) {
         aIdx = ait->second;
     } else {
         const char *aSym = a.mSource.Str();
         TheDebug << MakeString("WARNING: XP Task for %s not in sort order. It should be added.\n", aSym);
     }
 
-    if (bit != award_sort_map.end()) {
+    if (bit != award_sort_indices.end()) {
         bIdx = bit->second;
     } else {
         const char *bSym = b.mSource.Str();

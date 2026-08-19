@@ -6,6 +6,14 @@
 #include "os\Debug.h"
 #include "utl\MakeString.h"
 
+// The target instantiates ??$MakeString@PBDPBDPBD@@ (@823a32f8) -- three
+// `const char*` -- and takes the reference argument straight out of a static
+// slot (`lis r11, lbl_8206643C@h; addi r4, r11, ...@l`). A string literal
+// passed inline deduces `const char(&)[2]` and instantiates a different
+// template; casting it deduces the right one but materialises a stack temp.
+// A file-scope pointer reproduces both.
+static const char *const kApiVersion = "1";
+
 AuthenticateReqJob::AuthenticateReqJob(
     char const *url, const DataPoint &point, Hmx::Object *callback
 )
@@ -18,7 +26,7 @@ AuthenticateReqJob::~AuthenticateReqJob() {}
 void AuthenticateReqJob::Start() {
     MILO_ASSERT(GetURL(), 0x24);
     MILO_ASSERT(strlen(GetURL()) != 0, 0x25);
-    SetURL(MakeString("/%s/%s/%s", "1", TheServer.GetPlatform(), GetURL()));
+    SetURL(MakeString("/%s/%s/%s", kApiVersion, TheServer.GetPlatform(), GetURL()));
     StartImpl();
 }
 

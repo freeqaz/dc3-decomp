@@ -17,11 +17,9 @@ static std::unordered_set<Task *> &LiveTasks() {
 }
 #endif
 
-Task::Task() {
 #ifdef HX_NATIVE
-    LiveTasks().insert(this);
+Task::Task() { LiveTasks().insert(this); }
 #endif
-}
 
 #ifdef HX_NATIVE
 Task::~Task() {

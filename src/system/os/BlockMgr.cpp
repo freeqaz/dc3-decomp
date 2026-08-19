@@ -10,6 +10,11 @@
 
 #define kNumBlockBuffers 0x13
 
+// ?kArkBlockSize@@3HB -- an extern CONST int, and the shipped map puts it in
+// os:BlockMgr.obj. Defining it in Archive.cpp made the initialiser visible to
+// GetArkfileNumBlocks, which then constant-folded the division (99 -> 62.5).
+extern const int kArkBlockSize = 0x10000;
+
 static char gBuffers[kNumBlockBuffers * 0x10000];
 int gCurrBuffNum;
 int Block::sCurrTimestamp;

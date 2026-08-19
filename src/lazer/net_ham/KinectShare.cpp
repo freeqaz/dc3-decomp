@@ -145,7 +145,16 @@ void KinectShareConnection::Poll() {
             mState = 3;
         } else if (mKinectShare->IsDownloaded()) {
             if (mKinectShare->GetBufferSize() == 5) {
-                char *response = mKinectShare->DetachBuffer();
+                // The response byte is UNSIGNED in the target: the MILO_LOG
+                // below instantiates ??$MakeString@E@@YAPBDPBDABE@Z (@825f7ae0),
+                // where a `char` deduces ??$MakeString@D@@YAPBDPBDABD@Z
+                // (@8268f6e8) -- two distinct addresses in ham_xbox_r.map, so
+                // not an ICF fold. MakeString takes its argument by const
+                // reference, so no integral promotion happens and the encoding
+                // is identical either way; the only difference is which
+                // function this calls, and no ruler charges that.
+                unsigned char *response =
+                    (unsigned char *)mKinectShare->DetachBuffer();
                 MILO_ASSERT(response, 0xEA);
                 if (response[4] == 1) {
                     mState = 2;

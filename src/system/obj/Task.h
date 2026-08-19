@@ -19,8 +19,16 @@ enum TaskUnits {
  */
 class Task : public Hmx::Object {
 public:
-    Task();
+    // NO user-declared default constructor on the Xbox build. `??0Task@@QAA@XZ`
+    // appears nowhere in orig/373307D9/ham_xbox_r.map, and PropertyTask's and
+    // AnimTask's constructors call `??0Object@Hmx@@QAA@XZ` directly with a
+    // single `bl` and one vptr store -- the shape MSVC emits when it inlines an
+    // *implicit* intermediate base constructor and elides its vptr store. With
+    // an out-of-line `Task()` here we emitted `bl ??0Task@@QAA@XZ` instead: one
+    // instruction, byte-identical encoding, pointing at a symbol that does not
+    // exist in the image, and no ruler charges it.
 #ifdef HX_NATIVE
+    Task();
     virtual ~Task();
 #endif
     virtual void Poll(float) = 0;

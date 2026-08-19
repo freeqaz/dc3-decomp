@@ -53,15 +53,14 @@ BEGIN_COPYS(HamCamTransform)
     END_COPYING_MEMBERS
 END_COPYS
 
-BinStream &operator>>(BinStreamRev &d, ObjVector<TransformArea> &areas) {
-    int count;
-    d.stream >> count;
-    areas.resize(count);
-    for (int i = 0; i < count; i++) {
-        areas[i].Load(d);
-    }
-    return d.stream;
-}
+// The local `operator>>(BinStreamRev&, ObjVector<TransformArea>&)` overload that
+// used to live here SHADOWED the generic template in obj/Object.h, so
+// HamCamTransform::Load called `??5@YAAAVBinStream@@AAVBinStreamRev@@AAV?$ObjVector@VTransformArea@@@@@Z`
+// where the target calls the template instantiation
+// `??$?5VTransformArea@@@@YAAAVBinStream@@AAVBinStreamRev@@AAV?$ObjVector@VTransformArea@@@@@Z`
+// (@824af8f8). One `bl`, same encoding, a symbol absent from the image, and no
+// ruler charges the difference. The element-wise `operator>>(BinStreamRev&,
+// TransformArea&)` below is what the template's `bs >> *it` resolves to.
 
 BEGIN_LOADS(HamCamTransform)
     LOAD_REVS(bs)

@@ -134,7 +134,7 @@ DataFunc *gPreExecuteFunc;
 // ?gFile@@3VSymbol@@A -- retail spells this at FILE scope; a static member
 // of DataArray would mangle ?gFile@DataArray@@2VSymbol@@A.
 Symbol gFile;
-std::list<bool> gDataArrayConditional;
+std::list<bool> gConditional;
 
 class DataCallStackFrame {
 public:
@@ -154,7 +154,7 @@ public:
         // This is reachable in practice: /api/dta/eval evaluates agent-supplied
         // script, and a crashing eval used to leak frames off this stack
         // permanently (fixed in 26cc0088, but Debug::mTry and
-        // gDataArrayConditional could not be restored there, so drift can still
+        // gConditional could not be restored there, so drift can still
         // accumulate). Refuse the out-of-bounds store and say so once. The
         // pointer is still advanced so the destructor's matching decrement keeps
         // the depth balanced, and gPreExecuteFunc is skipped while overflowed.
@@ -195,8 +195,8 @@ DataNode *NodesAlloc(int size) {
 void NodesFree(int size, DataNode *mem) { MemOrPoolFree(size, mem); }
 
 bool DataArrayDefined() {
-    for (std::list<bool>::iterator it = gDataArrayConditional.begin();
-         it != gDataArrayConditional.end();
+    for (std::list<bool>::iterator it = gConditional.begin();
+         it != gConditional.end();
          it++) {
         if (*it == false)
             return false;
@@ -571,35 +571,35 @@ void DataArray::Load(BinStream &bs) {
             DataSetMacro(node.UncheckedSym(), nullptr);
             size -= 1;
         } else if (node.Type() == kDataIfdef) {
-            gDataArrayConditional.push_back(
+            gConditional.push_back(
                 DataGetMacro(node.UncheckedSym()) != nullptr
             );
             size -= 1;
         } else if (node.Type() == kDataIfndef) {
-            gDataArrayConditional.push_back(
+            gConditional.push_back(
                 DataGetMacro(node.UncheckedSym()) == nullptr
             );
             size -= 1;
         } else if (node.Type() == kDataElse) {
 #ifdef HX_NATIVE
-            if (gDataArrayConditional.empty()) {
+            if (gConditional.empty()) {
                 printf("WARNING: DataArray::Load: kDataElse with empty conditional stack, skipping\n");
             } else {
-                gDataArrayConditional.back() = !gDataArrayConditional.back();
+                gConditional.back() = !gConditional.back();
             }
 #else
-            gDataArrayConditional.back() = !gDataArrayConditional.back();
+            gConditional.back() = !gConditional.back();
 #endif
             size -= 1;
         } else if (node.Type() == kDataEndif) {
 #ifdef HX_NATIVE
-            if (gDataArrayConditional.empty()) {
+            if (gConditional.empty()) {
                 printf("WARNING: DataArray::Load: kDataEndif with empty conditional stack, skipping\n");
             } else {
-                gDataArrayConditional.pop_back();
+                gConditional.pop_back();
             }
 #else
-            gDataArrayConditional.pop_back();
+            gConditional.pop_back();
 #endif
             size -= 1;
         } else if (node.Type() == kDataInclude || node.Type() == kDataMerge) {
