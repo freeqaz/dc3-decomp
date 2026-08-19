@@ -479,9 +479,23 @@ def mentions_guard(expr):
 
 
 SIG_RE = re.compile(
-    r"([A-Za-z_~][\w:~]*(?:\s*<[^<>();]*>)?)\s*\([^;{]*\)\s*"
+    r"((?:[A-Za-z_~][\w~]*(?:\s*<[^<>();]*>)?::)*"
+    r"(?:operator\s*(?:\(\s*\)|\[\s*\]|[-+*/%^&|~!=<>]{1,3})|[A-Za-z_~][\w~]*)"
+    r"(?:\s*<[^<>();]*>)?)"
+    r"\s*\([^;{]*\)\s*"
     r"(?:const\s*)?(?:throw\s*\([^)]*\)\s*)?(?::[^{;]*)?\{\s*$"
 )
+
+# `if (x) {` is not a function definition.  Without this, a signature SIG_RE
+# cannot parse (an `operator<` overload, before operators were added above)
+# leaves the scanner believing it is at file scope inside that body, and the
+# next `if (...) {` opens a span called "if" -- every hit in it attributed to a
+# keyword.  Seen on PracticeChoosePanel.cpp's StepMoves::operator<.
+NOT_A_FUNCTION_NAME = {
+    "if", "for", "while", "switch", "catch", "do", "else", "return",
+    "sizeof", "typedef", "struct", "class", "union", "enum", "namespace",
+    "template", "and", "or", "not",
+}
 
 
 def _strip_code(line, in_block_comment):
@@ -570,7 +584,7 @@ def function_spans(lines):
             joined = re.sub(r"\s+", " ", " ".join(c.strip() for c in codes[j : i + 1]))
             head = joined[: joined.index("{") + 1]
             m = SIG_RE.search(head)
-            if m:
+            if m and m.group(1).rsplit("::", 1)[-1] not in NOT_A_FUNCTION_NAME:
                 name, start = m.group(1), j
                 break
         if name is None:
