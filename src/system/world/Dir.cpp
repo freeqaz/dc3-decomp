@@ -201,7 +201,12 @@ BinStream &operator<<(BinStream &bs, const WorldDir::BitmapOverride &o) {
 }
 
 BinStream &operator<<(BinStream &bs, const WorldDir::MatOverride &o) {
-    bs << o.mesh << o.mat << o.mat2;
+    // mat2 is scratch state for Sync(), not saved: the reader
+    // (operator>>) and BEGIN_CUSTOM_PROPSYNC only touch mesh+mat, and
+    // ham_xbox_r.map folds the list writer for MatOverride into the one for
+    // PresetOverride at 0x82805960 -- a 120-byte body with exactly TWO
+    // per-element ObjRef writes.
+    bs << o.mesh << o.mat;
     return bs;
 }
 

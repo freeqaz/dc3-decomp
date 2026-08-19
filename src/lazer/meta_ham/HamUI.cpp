@@ -672,11 +672,10 @@ DataNode HamUI::OnMsg(const UITransitionCompleteMsg &msg) {
     return DATA_UNHANDLED;
 }
 
-DataNode HamUI::OnMsg(const ConnectionStatusChangedMsg &msg) {
-    static Symbol connection_status_changed("connection_status_changed");
-    TheUIEventMgr->TriggerEvent(connection_status_changed, 0);
-    return 1;
-}
+// Folded with MetaPerformer::OnMsg(RCJobCompleteMsg) at 0x82E13DD8, a bare
+// 20-byte `return 1`.  The TriggerEvent body that used to be here was
+// invented -- retail's handler does nothing but accept the message.
+DataNode HamUI::OnMsg(const ConnectionStatusChangedMsg &) { return 1; }
 
 DataNode HamUI::OnMsg(const DiskErrorMsg &) {
     static Symbol disc_error("disc_error");

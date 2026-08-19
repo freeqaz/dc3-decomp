@@ -664,12 +664,13 @@ DataNode op57(DataArray *msg) {
 }
 
 DataNode op58(DataArray *msg) {
+    // nop58 == nop40 (`bar ^ ROTR8(foo, 6) ^ 0x01`), and retail proves it:
+    // ham_xbox_r.map folds op58 into op40 at 0x8276C078.  The old spelling
+    // produced a different rlwinm mask at +0x50.
     u32 operand = msg->Int(1);
-    u8 w = msg->Int(2);
+    u32 w = (u8)msg->Int(2);
 
-    u32 working2 = (w ^ 0x65u);
-    u32 working3 = (w << 8) ^ 0x3Cu;
-    u32 tmp = ((working2 | working3) >> 6);
+    u32 tmp = (((w << 8) | (w ^ 0x5Cu)) >> 6);
     return u8(tmp ^ operand);
 }
 

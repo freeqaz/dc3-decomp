@@ -267,7 +267,9 @@ void MicXbox::SetCompressor(bool b) {}
 bool MicXbox::GetCompressor() const { return false; }
 void MicXbox::SetCompressorParam(float f) {}
 float MicXbox::GetCompressorParam() const { return 0.0f; }
-int MicXbox::GetSampleRate() const { return 16000; }
+// ham_xbox_r.map folds MicXbox::GetSampleRate into MicNull::GetSampleRate at
+// 0x82E3DC20, whose body is `lis r3,0; ori r3,r3,0xbb80` = 48000, not 16000.
+int MicXbox::GetSampleRate() const { return 48000; }
 
 void MicXbox::OnMicConnected(unsigned long ul, bool b, Symbol const &s) {
     unkc = b;

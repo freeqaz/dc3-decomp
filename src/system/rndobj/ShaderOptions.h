@@ -48,11 +48,11 @@ enum ShaderType {
 struct ShaderMacro {
     ShaderMacro(const char *n = nullptr, const char *v = nullptr) : Name(n), Value(v) {}
 
-    ShaderMacro &operator=(const ShaderMacro &other) {
-        this->Name = other.Name;
-        this->Value = other.Value;
-        return *this;
-    }
+    // No user-defined operator= : with one, MSVC lowers
+    // __uninitialized_fill_n<ShaderMacro*> to a countdown loop, but retail
+    // folds that instantiation into __uninitialized_fill_n<pair<int,int>*>
+    // at 0x82461B08, which is the mtctr/bdnz form the IMPLICIT assignment
+    // produces.  The implicit one copies exactly the same two pointers.
 
     const char *Name; // 0x0
     const char *Value; // 0x4

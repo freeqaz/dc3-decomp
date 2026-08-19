@@ -9,6 +9,20 @@
 #include "os\Debug.h"
 #include "rndobj\Trans.h"
 
+// Key<Hmx::Quat> reads its value through the BinStream& overload of
+// operator>>, so retail streams via bs.stream and caches the BinStream
+// pointer across both reads -- exactly like Key<Hmx::Color>.  ham_xbox_r.map
+// proves it: both readers are one function at 0x8267C7C0, and the value
+// readers they call (operator>>(BinStream&, Color&/Quat&)) are themselves one
+// function at 0x82628210.  Declared here rather than in math/Key.h because
+// that header does not (and must not, for include-order reasons) see Hmx::Quat.
+template <>
+__declspec(noinline) inline BinStreamRev &
+operator>><Hmx::Quat>(BinStreamRev &bs, Key<Hmx::Quat> &key) {
+    bs.stream >> key.value >> key.frame;
+    return bs;
+}
+
 class ObjKeys : public Keys<ObjectStage, Hmx::Object *> {
 public:
     ObjKeys(Hmx::Object *o) : mOwner(o) {}

@@ -1190,7 +1190,8 @@ void Automator::HandleMessage(Symbol msgType) {
 }
 
 DataNode Automator::OnMsg(const UIComponentSelectMsg &msg) {
-    HandleMessage(msg.Data()->Sym(1));
+    Symbol s = msg.Data()->Sym(1);
+    HandleMessage(s);
     return DATA_UNHANDLED;
 }
 
@@ -1201,12 +1202,14 @@ DataNode Automator::OnMsg(const UIComponentScrollMsg &msg) {
 }
 
 DataNode Automator::OnMsg(const UIComponentFocusChangeMsg &msg) {
-    HandleMessage(msg.Data()->Sym(1));
+    Symbol s = msg.Data()->Sym(1);
+    HandleMessage(s);
     return DATA_UNHANDLED;
 }
 
 DataNode Automator::OnMsg(const UIScreenChangeMsg &msg) {
-    HandleMessage(msg.Data()->Sym(1));
+    Symbol s = msg.Data()->Sym(1);
+    HandleMessage(s);
     return DATA_UNHANDLED;
 }
 
