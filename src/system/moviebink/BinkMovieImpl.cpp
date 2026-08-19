@@ -12,6 +12,7 @@
 #include "obj/Object.h"
 #include "os\BlockMgr_p.h"
 #include "os\Debug.h"
+#include "os\Endian.h"
 #include "os\File.h"
 #include "os\OSFuncs.h"
 #include "os\Platform.h"
@@ -44,7 +45,26 @@ namespace {
         }
     }
 
-    void EndianSwapBuffer(void *buffer, int size);
+    // The target's assert message for this function is the stringified
+    // condition "size % sizeof(uint32) == 0", so the original TU had a `uint32`
+    // spelling in scope. Nothing in this tree defines one (we have `u32` in
+    // src/types.h), and guessing which header it came from would be worse than
+    // keeping it local, so it is local. This is an inference from the message
+    // text, not from a declaration we can see.
+    typedef unsigned int uint32;
+
+    // Never written before: only a forward declaration existed here, plus the two
+    // call sites in BeginFromBuffer. The target defines it in
+    // moviebink:BinkMovieImpl.obj (ham_xbox_r.map, plain `f`, 196B).
+    // Bink asset buffers ship little-endian; this flips a whole preload buffer
+    // in place before handing it to BinkOpen.
+    void EndianSwapBuffer(void *buffer, int size) {
+        MILO_ASSERT(size % sizeof(uint32) == 0, 0x4B);
+        uint32 *end = (uint32 *)((char *)buffer + size);
+        for (uint32 *cur = (uint32 *)buffer; cur < end; cur++) {
+            EndianSwapEq(*cur);
+        }
+    }
 }
 
 #pragma region MovieInternalBuffers
@@ -663,6 +683,97 @@ void BinkMovieImpl::DiscContentionPublish() {
         MILO_NOTIFY("Streaming Bink Thrashed with %d files: (%s)", count, str);
         unkbc.clear();
     }
+}
+
+// Never written before: the target defines ?SetRect@BinkMovieImpl@@AAAXXZ in
+// moviebink:BinkMovieImpl.obj (ham_xbox_r.map, plain `f`, 564B) and FinishOpen /
+// Draw call it, but no definition existed anywhere in this tree -- nor in
+// ../og-dc3-decomp. Reconstructed from the target assembly.
+//
+// Letterboxes the movie into the available area. mWidth/mHeight override the
+// render target when non-zero; otherwise the area is the framebuffer, height
+// clipped to TheRnd.YRatio() (vtable slot 0xd4, confirmed against
+// ??_7DxRnd@@6BObject@Hmx@@@) times the width -- i.e. the safe/letterbox band.
+// unk28 selects which axis is fitted first.
+void BinkMovieImpl::SetRect() {
+    CHECK_THREAD;
+    float availWidth, availHeight, fullHeight;
+    if (mWidth != 0) {
+        MILO_ASSERT(mHeight, 0x466);
+        // ASSIGNMENT order matters here and declaration order does not (the
+        // documented DC3 lever): with mWidth assigned first the compiler emits
+        // both fcfid's then both frsp's and the function tops out at 97.1%.
+        // Assigning the height pair first reproduces the target's interleave
+        // (fcfid/frsp height, fcfid width, fmr, frsp width) and it matches.
+        availHeight = mHeight;
+        fullHeight = availHeight;
+        availWidth = mWidth;
+    } else {
+        availWidth = TheRnd.Width();
+        fullHeight = TheRnd.Height();
+        availHeight = Min(TheRnd.YRatio() * availWidth, fullHeight);
+    }
+    MILO_ASSERT(mAspect, 0x479);
+    float w, h;
+    if (unk28) {
+        h = mAspect * availWidth;
+        w = availWidth;
+        if (h > availHeight) {
+            h = availHeight;
+            w = availHeight / mAspect;
+        }
+    } else {
+        w = availHeight / mAspect;
+        h = availHeight;
+        if (w > availWidth) {
+            w = availWidth;
+            h = mAspect * availWidth;
+        }
+    }
+    // Centre, then re-derive the extent from the margin so the two edges stay
+    // symmetric (the target really does compute w as availWidth - 2*x, not w).
+    float x = (availWidth - w) * 0.5f;
+    unk30.x = x;
+    unk30.w = availWidth - x * 2.0f;
+    float y = (fullHeight - Min(h / availHeight * fullHeight, fullHeight)) * 0.5f;
+    unk30.y = y;
+    unk30.h = fullHeight - y * 2.0f;
+}
+
+// Never written before: the target defines ?FinishOpen@BinkMovieImpl@@AAAXXZ in
+// moviebink:BinkMovieImpl.obj (ham_xbox_r.map, plain `f`, 420B) and SharedFinishOpen
+// below calls it, but no definition existed anywhere in this tree -- nor in
+// ../og-dc3-decomp. Reconstructed from the target assembly.
+void BinkMovieImpl::FinishOpen() {
+    CHECK_THREAD;
+    if (!mBink) {
+        MILO_NOTIFY("BinkOpen '%s' error: %s", mName, BinkGetError());
+        return;
+    }
+    BinkSetSoundOnOff(mBink, !unk27);
+    BINKSUMMARY summary;
+    BinkGetSummary(mBink, &summary);
+    // The two remainders are named locals, not repeated `& 15` expressions: the
+    // target computes both before the divide (clrlwi. on Width at the aspect
+    // loads, clrlwi on Height right after) and then tests the SAVED values with
+    // signed cmpwi, which is what `int` locals give.
+    int wRem = summary.Width & 15;
+    int hRem = summary.Height & 15;
+    mAspect = (float)summary.Height / (float)summary.Width;
+    // The Xenon Bink decoder needs both dimensions to be multiples of 16; the
+    // message tells the artist what to resize to.
+    MILO_ASSERT_FMT(
+        wRem == 0 && hRem == 0,
+        "Bink movie %s must have multiples of 16 for its width and height.\nTry "
+        "changing from %d x %d to %d x %d.",
+        mName.c_str(),
+        summary.Width,
+        summary.Height,
+        summary.Width + (wRem != 0 ? 16 - wRem : 0),
+        summary.Height + (hRem != 0 ? 16 - hRem : 0)
+    );
+    SetRect();
+    SetPaused(true);
 }
 
 void BinkMovieImpl::SharedFinishOpen(bool b1) {
