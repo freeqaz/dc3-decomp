@@ -438,8 +438,14 @@ rounds and a mismatch count does not; see
 
 ```bash
 python3 scripts/analysis/native_guard_leak_scan.py --repo . --signal all
+python3 scripts/analysis/native_guard_leak_scan.py --repo . --signal all --leading-stmts 2
 python3 scripts/analysis/native_guard_leak_scan.py --self-test   # negative control
 ```
+
+Run `ninja` in the worktree first. The scanner filters on `build/373307D9/report.json`,
+and in a fresh worktree that file is a reflink copy of main's — see
+[BUILD_SYSTEM.md](../tools/BUILD_SYSTEM.md#a-fresh-worktrees-reportjson-describes-main-not-your-branch).
+The provenance banner runs `ninja -n` and says STALE when it is.
 
 Four signals, reported as separate tiers so each can be judged on its own:
 
@@ -469,9 +475,9 @@ see the next section for why that is not pedantry.
 **A hit is not a verdict, and the false-positive rate is high by nature.** The Xbox
 build is full of genuine null checks, empty checks and early returns.
 
-Counts, each with the tree it came from (they are not interchangeable — the guard this
+Counts, each with the tree it came from. They are not interchangeable: the guard this
 audit fixed was itself one of the 814, so the merge-base and the branch head disagree
-by one before you change anything else):
+before you change any criterion at all.
 
 | Tree | Criterion | TIER S | in sub-100% fns | TIER S-lead (first 2 statements) |
 |---|---|---|---|---|
