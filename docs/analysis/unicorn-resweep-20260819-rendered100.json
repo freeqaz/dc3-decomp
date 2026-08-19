@@ -1,0 +1,394 @@
+[
+ {
+  "symbol": "?Save@StreamRenderer@@$4PPPPPPPM@A@AAXAAVBinStream@@@Z",
+  "unit": "default/system/gesture/StreamRenderer",
+  "cls": "call_arg",
+  "pct": 100.0,
+  "prior_live": "EQUIVALENT",
+  "reason": "call_arg_mismatch"
+ },
+ {
+  "symbol": "?AddSpotlight@LightPreset@@IAAXPAVSpotlight@@_N@Z",
+  "unit": "default/system/world/LightPreset",
+  "cls": "call_arg",
+  "pct": 100.0,
+  "prior_live": "EQUIVALENT",
+  "reason": "call_arg_mismatch"
+ },
+ {
+  "symbol": "?SetSpotlight@LightPreset@@QAAXPAVSpotlight@@H@Z",
+  "unit": "default/system/world/LightPreset",
+  "cls": "call_arg",
+  "pct": 100.0,
+  "prior_live": "EQUIVALENT",
+  "reason": "call_arg_mismatch"
+ },
+ {
+  "symbol": "?FindNodes@ClipDistMap@@QAAXMMM@Z",
+  "unit": "default/system/char/ClipDistMap",
+  "cls": "call_count",
+  "pct": 100.0,
+  "prior_live": "EQUIVALENT",
+  "reason": "call_count_mismatch"
+ },
+ {
+  "symbol": "?TriggerNextIntro@HamDirector@@QAAXXZ",
+  "unit": "default/system/hamobj/HamDirector",
+  "cls": "call_count",
+  "pct": 100.0,
+  "prior_live": "DIVERGENT",
+  "reason": "call_count_mismatch"
+ },
+ {
+  "symbol": "?PostLoad@HamNavList@@UAAXAAVBinStream@@@Z",
+  "unit": "default/system/hamobj/HamNavList",
+  "cls": "call_count",
+  "pct": 100.0,
+  "prior_live": "DIVERGENT",
+  "reason": "call_count_mismatch"
+ },
+ {
+  "symbol": "?PostLoad@HamNavList@@$4PPPPPPPM@A@AAXAAVBinStream@@@Z",
+  "unit": "default/system/hamobj/HamNavList",
+  "cls": "call_count",
+  "pct": 100.0,
+  "prior_live": "DIVERGENT",
+  "reason": "call_count_mismatch"
+ },
+ {
+  "symbol": "?Copy@HamNavList@@$4PPPPPPPM@A@AAXPBVObject@Hmx@@W4CopyType@23@@Z",
+  "unit": "default/system/hamobj/HamNavList",
+  "cls": "call_count",
+  "pct": 100.0,
+  "prior_live": "DIVERGENT",
+  "reason": "call_count_mismatch"
+ },
+ {
+  "symbol": "?resize@?$vector@V?$Key@VTransform@@@@V?$StlNodeAlloc@V?$Key@VTransform@@@@@stlpmtx_std@@@stlpmtx_std@@QAAXIABV?$Key@VTransform@@@@@Z",
+  "unit": "default/system/hamobj/HamRibbon",
+  "cls": "call_count",
+  "pct": 100.0,
+  "prior_live": null,
+  "reason": "call_count_mismatch"
+ },
+ {
+  "symbol": "?push_back@?$vector@VPracticeStep@@V?$StlNodeAlloc@VPracticeStep@@@stlpmtx_std@@@stlpmtx_std@@QAAXABVPracticeStep@@@Z",
+  "unit": "default/system/hamobj/PracticeSection",
+  "cls": "call_count",
+  "pct": 100.0,
+  "prior_live": "DIVERGENT",
+  "reason": "call_count_mismatch"
+ },
+ {
+  "symbol": "?AddStep@PracticeSection@@QAAXVPracticeStep@@@Z",
+  "unit": "default/system/hamobj/PracticeSection",
+  "cls": "call_count",
+  "pct": 100.0,
+  "prior_live": "DIVERGENT",
+  "reason": "call_count_mismatch"
+ },
+ {
+  "symbol": "curl_easy_init",
+  "unit": "default/system/net/curl/lib/easy",
+  "cls": "call_count",
+  "pct": 100.0,
+  "prior_live": "DIVERGENT",
+  "reason": "call_count_mismatch"
+ },
+ {
+  "symbol": "??0DataCallStackFrame@@QAA@PAVDataArray@@@Z",
+  "unit": "default/system/obj/DataArray",
+  "cls": "call_count",
+  "pct": 100.0,
+  "prior_live": "EQUIVALENT",
+  "reason": "call_count_mismatch"
+ },
+ {
+  "symbol": "?DataPushVar@@YAXPAVDataNode@@@Z",
+  "unit": "default/system/obj/DataUtl",
+  "cls": "call_count",
+  "pct": 100.0,
+  "prior_live": "EQUIVALENT",
+  "reason": "call_count_mismatch"
+ },
+ {
+  "symbol": "?SaveInlined@ObjectDir@@IAAXABVFilePath@@_NW4InlineDirType@@@Z",
+  "unit": "default/system/obj/Dir",
+  "cls": "call_count",
+  "pct": 100.0,
+  "prior_live": "DIVERGENT",
+  "reason": "call_count_mismatch"
+ },
+ {
+  "symbol": "?PreLoadInlined@ObjectDir@@IAAXABVFilePath@@_NW4InlineDirType@@@Z",
+  "unit": "default/system/obj/Dir",
+  "cls": "call_count",
+  "pct": 100.0,
+  "prior_live": "DIVERGENT",
+  "reason": "call_count_mismatch"
+ },
+ {
+  "symbol": "FileRecursePattern",
+  "unit": "default/system/os/File",
+  "cls": "call_count",
+  "pct": 100.0,
+  "prior_live": null,
+  "reason": "call_count_mismatch"
+ },
+ {
+  "symbol": "?OnEnumerateFrameRateResults@@YA?AVDataNode@@PAVDataArray@@@Z",
+  "unit": "default/system/os/File",
+  "cls": "call_count",
+  "pct": 100.0,
+  "prior_live": "EQUIVALENT",
+  "reason": "call_count_mismatch"
+ },
+ {
+  "symbol": "?Copy@RndLight@@$4PPPPPPPM@A@AAXPBVObject@Hmx@@W4CopyType@23@@Z",
+  "unit": "default/system/rndobj/Lit",
+  "cls": "call_count",
+  "pct": 100.0,
+  "prior_live": "EQUIVALENT",
+  "reason": "call_count_mismatch"
+ },
+ {
+  "symbol": "??0Synth@@QAA@XZ",
+  "unit": "default/system/synth/Synth",
+  "cls": "call_count",
+  "pct": 100.0,
+  "prior_live": "EQUIVALENT",
+  "reason": "call_count_mismatch"
+ },
+ {
+  "symbol": "?SetActionToken@InlineHelp@@QAAXW4JoypadAction@@AAVDataNode@@@Z",
+  "unit": "default/system/ui/InlineHelp",
+  "cls": "call_count",
+  "pct": 100.0,
+  "prior_live": "EQUIVALENT",
+  "reason": "call_count_mismatch"
+ },
+ {
+  "symbol": "?Save@UIFontImporter@@$4PPPPPPPM@A@AAXAAVBinStream@@@Z",
+  "unit": "default/system/ui/UIFontImporter",
+  "cls": "call_count",
+  "pct": 100.0,
+  "prior_live": "EQUIVALENT",
+  "reason": "call_count_mismatch"
+ },
+ {
+  "symbol": "?BoundingBoxTriangles@UIList@@IAAXAAV?$vector@V?$vector@VVector3@@V?$StlNodeAlloc@VVector3@@@stlpmtx_std@@@stlpmtx_std@@V?$StlNodeAlloc@V?$vector@VVector3@@V?$StlNodeAlloc@VVector3@@@stlpmtx_std@@@stlpmtx_std@@@2@@stlpmtx_std@@@Z",
+  "unit": "default/system/ui/UIList",
+  "cls": "call_count",
+  "pct": 100.0,
+  "prior_live": "DIVERGENT",
+  "reason": "call_count_mismatch"
+ },
+ {
+  "symbol": "?CollidePlane@UIList@@UAAHABVPlane@@@Z",
+  "unit": "default/system/ui/UIList",
+  "cls": "call_count",
+  "pct": 100.0,
+  "prior_live": "DIVERGENT",
+  "reason": "call_count_mismatch"
+ },
+ {
+  "symbol": "?push_back@?$vector@V?$vector@V?$ObjPtr@VUIColor@@@@V?$StlNodeAlloc@V?$ObjPtr@VUIColor@@@@@stlpmtx_std@@@stlpmtx_std@@V?$StlNodeAlloc@V?$vector@V?$ObjPtr@VUIColor@@@@V?$StlNodeAlloc@V?$ObjPtr@VUIColor@@@@@stlpmtx_std@@@stlpmtx_std@@@2@@stlpmtx_std@@QAAXABV?$vector@V?$ObjPtr@VUIColor@@@@V?$StlNodeAlloc@V?$ObjPtr@VUIColor@@@@@stlpmtx_std@@@2@@Z",
+  "unit": "default/system/ui/UIListWidget",
+  "cls": "call_count",
+  "pct": 100.0,
+  "prior_live": "DIVERGENT",
+  "reason": "call_count_mismatch"
+ },
+ {
+  "symbol": "?SyncReloadLocale@@YAXXZ",
+  "unit": "default/system/utl/Locale",
+  "cls": "call_count",
+  "pct": 100.0,
+  "prior_live": null,
+  "reason": "call_count_mismatch"
+ },
+ {
+  "symbol": "?InitMakeString@@YAXXZ",
+  "unit": "default/system/utl/MakeString",
+  "cls": "call_count",
+  "pct": 100.0,
+  "prior_live": "EQUIVALENT",
+  "reason": "call_count_mismatch"
+ },
+ {
+  "symbol": "??2@YAPAXI@Z",
+  "unit": "default/system/utl/MemMgr",
+  "cls": "call_count",
+  "pct": 100.0,
+  "prior_live": "DIVERGENT",
+  "reason": "call_count_mismatch"
+ },
+ {
+  "symbol": "??_U@YAPAXI@Z",
+  "unit": "default/system/utl/MemMgr",
+  "cls": "call_count",
+  "pct": 100.0,
+  "prior_live": "DIVERGENT",
+  "reason": "call_count_mismatch"
+ },
+ {
+  "symbol": "?MemOrPoolAlloc@@YAPAXHPBDH0@Z",
+  "unit": "default/system/utl/MemMgr",
+  "cls": "call_count",
+  "pct": 100.0,
+  "prior_live": "EQUIVALENT",
+  "reason": "call_count_mismatch"
+ },
+ {
+  "symbol": "?WriteToCache@NetCacheLoader@@IAAXXZ",
+  "unit": "default/system/utl/NetCacheLoader",
+  "cls": "call_count",
+  "pct": 100.0,
+  "prior_live": "EQUIVALENT",
+  "reason": "call_count_mismatch"
+ },
+ {
+  "symbol": "??1NetCacheLoader@@QAA@XZ",
+  "unit": "default/system/utl/NetCacheLoader",
+  "cls": "call_count",
+  "pct": 100.0,
+  "prior_live": "EQUIVALENT",
+  "reason": "call_count_mismatch"
+ },
+ {
+  "symbol": "?CollideList@WorldCrowd@@UAAXABVSegment@@AAV?$list@UCollision@RndDrawable@@V?$StlNodeAlloc@UCollision@RndDrawable@@@stlpmtx_std@@@stlpmtx_std@@@Z",
+  "unit": "default/system/world/Crowd",
+  "cls": "call_count",
+  "pct": 100.0,
+  "prior_live": "EQUIVALENT",
+  "reason": "call_count_mismatch"
+ },
+ {
+  "symbol": "?push_back@?$vector@UChar3D@CharData@WorldCrowd@@V?$StlNodeAlloc@UChar3D@CharData@WorldCrowd@@@stlpmtx_std@@@stlpmtx_std@@QAAXABUChar3D@CharData@WorldCrowd@@@Z",
+  "unit": "default/system/world/Crowd",
+  "cls": "call_count",
+  "pct": 100.0,
+  "prior_live": "DIVERGENT",
+  "reason": "call_count_mismatch"
+ },
+ {
+  "symbol": "??0WorldCrowd@@IAA@XZ",
+  "unit": "default/system/world/Crowd",
+  "cls": "call_count",
+  "pct": 100.0,
+  "prior_live": "DIVERGENT",
+  "reason": "call_count_mismatch"
+ },
+ {
+  "symbol": "?ResetHoverTimer@ArcDetector@@QAAXXZ",
+  "unit": "default/system/gesture/ArcDetector",
+  "cls": "object_memory",
+  "pct": 100.0,
+  "prior_live": "EQUIVALENT",
+  "reason": "memory_mismatch"
+ },
+ {
+  "symbol": "??0ArcDetector@@QAA@XZ",
+  "unit": "default/system/gesture/ArcDetector",
+  "cls": "object_memory",
+  "pct": 100.0,
+  "prior_live": "EQUIVALENT",
+  "reason": "memory_mismatch"
+ },
+ {
+  "symbol": "?RestoreDefaultForwardFacingCutoff@StandingStillGestureFilter@@QAAXXZ",
+  "unit": "default/system/gesture/StandingStillGestureFilter",
+  "cls": "object_memory",
+  "pct": 100.0,
+  "prior_live": "EQUIVALENT",
+  "reason": "memory_mismatch"
+ },
+ {
+  "symbol": "??0StandingStillGestureFilter@@QAA@XZ",
+  "unit": "default/system/gesture/StandingStillGestureFilter",
+  "cls": "object_memory",
+  "pct": 100.0,
+  "prior_live": "EQUIVALENT",
+  "reason": "memory_mismatch"
+ },
+ {
+  "symbol": "?TryDemangleParams@@YAXPADPBD@Z",
+  "unit": "default/system/os/MapFile_Xbox",
+  "cls": "object_memory",
+  "pct": 100.0,
+  "prior_live": "EQUIVALENT",
+  "reason": "memory_mismatch"
+ },
+ {
+  "symbol": "??0SynapseAPOParams@DSP@@QAA@XZ",
+  "unit": "default/system/synth_xbox/FxSendSynapse",
+  "cls": "object_memory",
+  "pct": 100.0,
+  "prior_live": "EQUIVALENT",
+  "reason": "memory_mismatch"
+ },
+ {
+  "symbol": "_tr_flush_block",
+  "unit": "default/system/zlib/trees",
+  "cls": "object_memory",
+  "pct": 100.0,
+  "prior_live": "EQUIVALENT",
+  "reason": "memory_mismatch"
+ },
+ {
+  "symbol": "?getKeyImpl@@YAXPAEPAD0@Z",
+  "unit": "default/keygen_xbox",
+  "cls": "return_value",
+  "pct": 100.0,
+  "prior_live": "DIVERGENT",
+  "reason": "return_value_mismatch"
+ },
+ {
+  "symbol": "?GetBreedData@@YAPAUBreedData@@H@Z",
+  "unit": "default/system/os/Joypad_Xbox",
+  "cls": "return_value",
+  "pct": 100.0,
+  "prior_live": "EQUIVALENT",
+  "reason": "return_value_mismatch"
+ },
+ {
+  "symbol": "rijndael_ecb_encrypt",
+  "unit": "default/system/synth/tomcrypt/aes",
+  "cls": "return_value",
+  "pct": 100.0,
+  "prior_live": "EQUIVALENT",
+  "reason": "return_value_mismatch"
+ },
+ {
+  "symbol": "rijndael_ecb_decrypt",
+  "unit": "default/system/synth/tomcrypt/aes",
+  "cls": "return_value",
+  "pct": 100.0,
+  "prior_live": "EQUIVALENT",
+  "reason": "return_value_mismatch"
+ },
+ {
+  "symbol": "rijndael_test",
+  "unit": "default/system/synth/tomcrypt/aes",
+  "cls": "return_value",
+  "pct": 100.0,
+  "prior_live": "DIVERGENT",
+  "reason": "return_value_mismatch"
+ },
+ {
+  "symbol": "?get_free_node@Trie@@QAAIXZ",
+  "unit": "default/system/utl/trie",
+  "cls": "return_value",
+  "pct": 100.0,
+  "prior_live": "DIVERGENT",
+  "reason": "return_value_mismatch"
+ },
+ {
+  "symbol": "?BuildNGShaft@Spotlight@@IAAXAAUBeamDef@1@@Z",
+  "unit": "default/system/world/Spotlight",
+  "cls": "wild_jump_match",
+  "pct": 100.0,
+  "prior_live": "EQUIVALENT",
+  "reason": "wild_jump_match"
+ }
+]
