@@ -94,6 +94,20 @@ bytes are already correct and already ours. Worked example:
     splits.txt:  0x82760708 lies in system/synth/FxSendDistortion.cpp's .text range
     our FxSendDistortion.obj defines ?Save@FxSendDistortion@@ (COFF symbol table)
 
+**Verified at the byte level, not inferred.** Extracting the target's body from
+`build/373307D9/asm/system/synth/FxSendDistortion.s` and our
+`?Save@FxSendDistortion@@` from the `.text` COMDAT in
+`build/373307D9/src/system/synth/FxSendDistortion.obj`, the two 112-byte bodies are
+identical **except for the displacement field of three `bl` instructions** — i.e. exactly
+the relocations, which is what `/OPT:ICF` folding requires and what objdiff's normalized
+plane ignores anyway:
+
+    target  ... 38810050 4807d3a9 7fc4f378 7fe3fb78 48008fed c01f0060 ...
+    ours    ... 38810050 4bffffd1 7fc4f378 7fe3fb78 4bffffc5 c01f0060 ...
+                         ^^^^^^^^                   ^^^^^^^^
+
+So the row is 0% purely because objdiff cannot pair the two names. Nothing is missing.
+
 **281 of the 292 (32 288 B) would be fixed by one rule in dtk's splitter:** when an address
 carries several names, prefer the fold member whose contributing .obj is the .obj that owns
 the address range, instead of the first-seen name. Verified mechanically — for 281 rows a
