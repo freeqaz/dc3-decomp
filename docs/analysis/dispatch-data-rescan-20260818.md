@@ -64,7 +64,12 @@ where `../og-dc3-decomp` is the right source, not synthesis:
   `HamProfile`): target entries carry vdisp/`FA`=0x50 `BCD_VBOFCONTOBJ` where ours are
   direct bases; converting to virtual inheritance would move every offset.
 
-## Open lead
+## Open lead — ~~OPEN~~ **CLOSED, AND WRONG AS WRITTEN. See the 2026-08-19 follow-up below.**
+
+> The paragraph that follows is preserved as written on 2026-08-18 and is a **misreading**.
+> 0x823E3B70 is the generic 769-member empty-body ICF group, not a RefOwner body, and on PPC
+> a `const` method returning `this` compiles to exactly `blr` (this arrives in r3, the return
+> goes out in r3). **Our source was never wrong.** Independently re-verified from the PE.
 
 `Hmx::Object::RefOwner`: the original's body at 0x823E3B70 is a bare `blr` — it falls off
 the end without setting `r3`; ours is `return const_cast<Object *>(this);`
