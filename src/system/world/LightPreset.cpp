@@ -1029,8 +1029,8 @@ void LightPreset::SetFrameEx(float frame, float blend, bool b) {
                 (*it)->Trigger();
             }
         }
-        static Message on_set_frame_msg("on_set_frame");
-        Handle(on_set_frame_msg, false);
+        static Message start("on_set_frame");
+        Handle(start, false);
     }
 }
 

@@ -660,8 +660,8 @@ void GamePanel::UpdateLatency() {
             }
             sBeep = dir->Find<Hmx::Object>("beep.cue", true);
         }
-        static Message sPlayMsg("play");
-        DataNode result = sBeep->Handle(sPlayMsg, true);
+        static Message playMsg("play");
+        DataNode result = sBeep->Handle(playMsg, true);
     }
     static int sToggle = 0;
     static float sMs[2] = {0, 0};

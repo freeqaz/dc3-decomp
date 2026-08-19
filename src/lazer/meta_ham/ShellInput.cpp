@@ -377,8 +377,8 @@ void ShellInput::SyncVoiceControl() { // almost done
     if (!TheSpeechMgr) {
         mVoiceControlEnabled = false;
         static Symbol hide_microphone_icon("hide_microphone_icon");
-        static Message hide_microphone_msg(hide_microphone_icon);
-        TheHamProvider->Handle(hide_microphone_msg, false);
+        static Message hideMicrophoneMsg(hide_microphone_icon);
+        TheHamProvider->Handle(hideMicrophoneMsg, false);
         static Symbol voice_commander_help_hide("voice_commander_help_hide");
         static Message voiceCommanderHelpHide(voice_commander_help_hide);
         TheHamProvider->Handle(voiceCommanderHelpHide, false);
@@ -400,12 +400,12 @@ void ShellInput::SyncVoiceControl() { // almost done
         mVoiceControlEnabled = true;
 
         static Symbol show_microphone_icon("show_microphone_icon");
-        static Message show_microphone_msg(show_microphone_icon);
-        TheHamProvider->Handle(show_microphone_msg, false);
+        static Message showMicrophoneMsg(show_microphone_icon);
+        TheHamProvider->Handle(showMicrophoneMsg, false);
         if (TheProfileMgr.GetShowVoiceTip()) {
             static Symbol voice_commander_help("voice_commander_help");
-            static Message voice_commander_help_msg(voice_commander_help);
-            TheHamProvider->Handle(voice_commander_help_msg, false);
+            static Message voiceCommanderHelp(voice_commander_help);
+            TheHamProvider->Handle(voiceCommanderHelp, false);
         }
         static Symbol voice_commander_tip_temporary("voice_commander_tip_temporary");
         const DataNode *voiceProp =
@@ -419,8 +419,8 @@ void ShellInput::SyncVoiceControl() { // almost done
         TheSpeechMgr->SetRecognizing(false);
         mVoiceControlEnabled = false;
         static Symbol hide_microphone_icon("hide_microphone_icon");
-        static Message hide_microphone_msg(hide_microphone_icon);
-        TheHamProvider->Handle(hide_microphone_msg, false);
+        static Message hideMicrophoneMsg(hide_microphone_icon);
+        TheHamProvider->Handle(hideMicrophoneMsg, false);
         static Symbol voice_commander_help_hide("voice_commander_help_hide");
         static Message voiceCommanderHelpHide(voice_commander_help_hide);
         TheHamProvider->Handle(voiceCommanderHelpHide, false);

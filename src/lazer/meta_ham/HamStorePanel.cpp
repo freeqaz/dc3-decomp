@@ -493,9 +493,9 @@ void HamStorePanel::FinishSpecialOfferEnum(std::vector<bool> const &vec, bool b)
             }
         }
     }
-    static Message refresh_complete("refresh_complete", 0);
-    refresh_complete[0] = b;
-    TheUI->Handle(refresh_complete, false);
+    static Message self_msg("refresh_complete", 0);
+    self_msg[0] = b;
+    TheUI->Handle(self_msg, false);
 }
 
 BEGIN_HANDLERS(HamStorePanel)

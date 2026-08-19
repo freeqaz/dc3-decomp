@@ -539,8 +539,8 @@ void MainMenuPanel::UpdateArtLoaders() {
                 if (TheRockCentral.GetUtilityImage() == loader->GetRemotePath()) {
                     mDownloadedTexture2->SetBitmap(bitmap, nullptr, false, RndTex::kRegular);
                     if (mState == 1) {
-                        static Message utility_image_loaded("utility_image_loaded");
-                        Handle(utility_image_loaded, false);
+                        static Message msg("utility_image_loaded");
+                        Handle(msg, false);
                     }
                 }
                 if (TheRockCentral.GetMiscImage() == loader->GetRemotePath()) {
