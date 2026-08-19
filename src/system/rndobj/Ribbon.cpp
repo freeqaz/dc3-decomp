@@ -332,16 +332,17 @@ void RndRibbon::UpdateChase() {
                 // (85.8% vs 86.7%) — the shipped build reloads mTransforms.mEnd every
                 // iteration instead of keeping it live. Do not re-try.
                 key.frame = mTransforms.back().frame + step;
+                Key<Transform> &last = mTransforms.back();
                 Interp(
-                    mTransforms.back().value.v,
+                    last.value.v,
                     followed,
                     step / (now - mTransforms.back().frame),
                     key.value.v
                 );
                 Vector3 delta;
-                Subtract(mTransforms.back().value.v, key.value.v, delta);
+                Subtract(last.value.v, key.value.v, delta);
                 if (LengthSquared(delta) < minDistSq) {
-                    mTransforms.back().frame = key.frame;
+                    last.frame = key.frame;
                 } else {
                     mTransforms.push_back(key);
                     added++;
