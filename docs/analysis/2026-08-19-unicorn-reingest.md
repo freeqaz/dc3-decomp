@@ -206,6 +206,64 @@ after a change and look for new `error`-class rows — and that is what the
 provenance columns are for: a verdict you cannot date to a harness version
 cannot serve as a baseline.
 
+## Disagreement with `docs/analysis/unicorn-full-resweep-20260819.md`
+
+A parallel lane ran essentially the same whole-binary sweep the same hour and
+landed on main as `452d0cc3c` with the opposite decision: **it deliberately did
+not apply**, on the grounds that writing 12.8k rows dominated by `data_layout`
+"over 25,628 curated EQUIVALENT verdicts would cost the oracle its signal for no
+gain." Its numbers and mine agree to within run noise (their 12,862 DIVERGENT /
+9,960 `data_layout` vs my 12,419 / 9,815 — they used `batch_to_db --force` over
+30,058 rows, I used `refresh_frontier --scope all` over 29,702). **This lane
+applied it.** That disagreement should be visible, not smoothed over.
+
+The case for applying:
+
+* The 25,628 EQUIVALENT verdicts were not curated. They are a single 2026-03-04
+  batch run on the harness that zeroed `this` in the prologue. "Do not overwrite
+  them" preserves a number nobody has grounds to believe.
+* Both states are uninformative at the 100% band. The difference is that
+  `DIVERGENT/data_layout/h4` is *labelled* uninformative and a stale
+  `EQUIVALENT` with no harness column is not. Provenance is what makes the
+  overwrite safe, and it did not exist until this branch added it.
+* **All 49 rows of that lane's harvest are in this ingest, with matching
+  classes** (3 `call_arg`, 32 `call_count`, 7 `object_memory`, 6
+  `return_value`, 1 `wild_jump_match`). Applying turns their JSON worklist into
+  a live query:
+  ```sql
+  SELECT symbol FROM functions
+   WHERE unicorn_harness_version >= 4
+     AND unicorn_class IN ('call_arg','object_memory','return_value')
+     AND match_percent_normalized >= 100;
+  ```
+  Not applying leaves those leads in a file that will rot.
+
+The case against, taken seriously: `unicorn_verdict = 'DIVERGENT'` is read by
+`sync_objdiff.py` (default `--only-divergent`), `batch_promote.py` and
+`certify_floor.py`. Checked: `sync_objdiff` scans 6x more functions (slower, not
+wrong); `batch_promote` and `certify_floor` only act on partial functions, whose
+rows moved by ±5. No downstream behaviour changes incorrectly. That lane's
+closing recommendation — "`batch_to_db --force` should refuse to write a live
+DB" — remains sound and is untouched here; this ingest went through
+`apply_refresh.py`, which is the reviewed single-writer path.
+
+**To revert the DB half of this lane without touching the tooling half:**
+
+```sh
+scripts/backup-db.sh                       # current state, before undoing
+xz -dc ~/code/db-backups/decomp.db.2026-08-19.pre-unicorn-reingest.xz > /tmp/pre.db
+# then restore wholesale, or re-apply only the frontier results from it
+```
+
+That archive is deliberately named apart from the dated one:
+`scripts/backup-db.sh` names its output `decomp.db.<date>.xz` and **overwrites
+today's file on every run**, so the plain dated backup would be destroyed by the
+next agent who follows the standing "back up first" rule.
+
+The schema, the `HARNESS_VERSION` changelog, `--scope all`, `--min-harness`, the
+MCP enum fix and the artifact annotations are independent of that choice and
+should survive either way.
+
 ## Reproduce
 
 ```sh
