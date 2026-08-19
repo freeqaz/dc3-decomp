@@ -319,14 +319,32 @@ def verdict(binary: str, sym: Sym, bsyms) -> tuple[str, str]:
 # ---------------------------------------------------------------------------
 #
 # The native link passes -Wl,--unresolved-symbols=ignore-all, so a symbol that
-# nothing defines does not fail the link either -- it becomes a dynamic UND with
-# a JUMP_SLOT relocation to 0, and the process dies with "symbol lookup error"
-# only if that code path is ever executed.  `ldd -r` enumerates exactly the same
-# set as relinking with --unresolved-symbols=report-all (verified 2026-08-19:
-# both produced the same 31 symbols for dc3-native), and it takes seconds
-# instead of a full relink, so it is the practical gate.
+# nothing defines does not fail the link either -- it becomes an ordinary
+# undefined dynamic symbol, and the process dies with "symbol lookup error" the
+# first time that code path executes.
 #
-# The baseline below is the accepted set as of 2026-08-19.  The gate fails on
+# CORRECTION (2026-08-19): an earlier version of this comment said the symbol
+# gets "a JUMP_SLOT relocation to 0" and that this is why the failure is
+# deferred.  Both halves are wrong.  The zero readelf prints is `st_value`,
+# which is zero for *every* undefined symbol including printf's, and the
+# .got.plt slots hold PLT+6 -- the ordinary lazy-binding trampoline.  The
+# deferral is just default lazy binding, nothing specific to this binary.  The
+# check that actually settles it:
+#
+#     LD_BIND_NOW=1 ./dc3-native      # dies at startup, naming the first symbol
+#
+# Verified both directions on 2026-08-19: the pre-fix binary died immediately on
+# `undefined symbol: _hypot`, and after _hypot was defined the same command died
+# on `undefined symbol: BinkOpenTrack` instead.  So every name below is a real
+# hole, and LD_BIND_NOW is the cheap way to prove any individual one still is.
+#
+# `ldd -r` enumerates the same set as relinking with
+# --unresolved-symbols=report-all (verified 2026-08-19: both produced the same
+# 31 symbols for dc3-native), and it takes seconds instead of a full relink, so
+# it is the practical gate.
+#
+# The baseline below is the accepted set as of 2026-08-19, after the
+# fix/kinect-camera-path recoveries took it from 31 to 24.  The gate fails on
 # anything NOT in it; shrinking the baseline is the way to tighten the link.
 
 UNRESOLVED_BASELINE = {
@@ -354,22 +372,34 @@ UNRESOLVED_BASELINE = {
     # --- PPC intrinsics with no x86 lowering ------------------------------
     "__vmaddfp",
     "__vspltw",
-    # --- MSVC CRT ---------------------------------------------------------
-    "_hypot",
-    # --- unrecovered decomp bodies: THESE ARE THE ACTIONABLE ONES. --------
-    # Every one is a real function some object calls. The call goes through a
-    # PLT entry whose JUMP_SLOT relocation resolves to 0, so the first call at
-    # runtime aborts with "symbol lookup error" (lazy binding means it does not
-    # fail at startup, only when the path executes).
-    "createFilter",
-    "requestBreedWrite",
+    # --- Xbox controller HID back end (os/Joypad_Xbox.cpp, not in the native
+    #     build; native input goes through native/src/platform/Joypad_Native.cpp
+    #     instead).  Their only caller, JoypadPollCommon, has zero callers and is
+    #     not address-taken in dc3-native, so these are unreachable rather than
+    #     latent.  Recovering them would mean inventing behaviour for an XInput
+    #     EEPROM ("breed data") write path that no native code drives.
     "ReadSingleJoypad",
-    "_Z10CDGetErrorv",                                        # CDGetError()
-    "_Z22RecursePatternInternalPKcPFvS0_S0_Ebb",              # RecursePatternInternal
-    "_ZN15LiveCameraInput10LockStreamEPKvRNS_10LockedRectE",  # LiveCameraInput::LockStream
-    "_ZN15LiveCameraInput12UnlockStreamEPKv",                 # LiveCameraInput::UnlockStream
-    "_ZNK3Hmx7Matrix44Col3Ei",                                # Hmx::Matrix4::Col3
+    "requestBreedWrite",
+    # --- toolchain, not a decomp gap -------------------------------------
+    # libstdc++ 15 on this box does not export _ZNKSt9type_infoeqERKS_ at all
+    # (`nm -D /usr/lib/libstdc++.so.6 | grep 9type_infoeq` is empty); the
+    # comparison is normally inlined.  The four references come from libstdc++'s
+    # own header-instantiated templates -- regex_traits::transform_primary and
+    # _Sp_counted_ptr_inplace::_M_get_deleter -- not from DC3 code.  There is no
+    # DC3 body to recover, and defining a member of std::type_info ourselves is
+    # reserved-name UB.  _M_get_deleter has 0 call sites (it is vtable-only,
+    # reachable solely via std::get_deleter, which nothing here calls).
     "_ZNKSt9type_infoeqERKS_",                                # std::type_info::operator==
+    #
+    # RESOLVED on fix/kinect-camera-path (2026-08-19), kept here as a record of
+    # what left the list and why -- do NOT re-add without re-checking:
+    #   _hypot, CDGetError, Hmx::Matrix4::Col3  -> hosted in native_link_glue.cpp
+    #   RecursePatternInternal, LockStream, UnlockStream
+    #                                           -> #ifndef HX_NATIVE guards that
+    #                                              should never have been there
+    #   createFilter                            -> EQEffect.cpp declared it
+    #                                              extern "C"; the target symbol
+    #                                              is C++-mangled
 }
 
 
