@@ -15,6 +15,7 @@ public:
     OBJ_CLASSNAME(LockedContentPanel)
     OBJ_SET_TYPE(LockedContentPanel)
     virtual DataNode Handle(DataArray *, bool);
+    virtual bool SyncProperty(DataNode &, DataArray *, int, PropOp);
 
     // UIPanel
     virtual void Enter();

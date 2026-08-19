@@ -26,6 +26,9 @@ public:
     virtual DataNode Handle(DataArray *, bool);
 
     // UIPanel
+    /** Both empty in the original ('f i' at 0x823E3B70). */
+    virtual void Draw() {}
+    virtual void PollForLoading() {}
     virtual void Load();
     virtual void Enter();
     virtual void Exit();

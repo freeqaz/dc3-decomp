@@ -17,6 +17,7 @@ public:
 
     // UIPanel
     virtual void Enter();
+    virtual bool Exiting() const { return HamPanel::Exiting(); }
     virtual void Poll();
     virtual void Unload();
     virtual void FinishLoad();

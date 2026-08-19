@@ -14,6 +14,7 @@ public:
     virtual DataNode Handle(DataArray *, bool);
 
     // HamPanel
+    virtual void Enter() { HamPanel::Enter(); }
     virtual void Unload();
     virtual void FinishLoad();
 
