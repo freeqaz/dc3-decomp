@@ -29,8 +29,12 @@
 #undef st_mtime
 #endif
 
-static File *gOpenCaptureFile;
+// MSVC emits this TU's uninitialized statics into .bss in *reverse* declaration
+// order, so the declaration order below is the reverse of the target's data
+// layout: gSystemRoot, gExecRoot, gRoot, gOpenCaptureFile, gCaptureFileMode at
+// +0x000/+0x100/+0x200/+0x300/+0x304. Verified against the split .obj.
 static int gCaptureFileMode;
+static File *gOpenCaptureFile;
 static char gRoot[256];
 static char gExecRoot[256];
 static char gSystemRoot[256];
