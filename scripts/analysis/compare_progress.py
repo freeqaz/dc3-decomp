@@ -32,14 +32,90 @@ Examples:
 import argparse
 import fnmatch
 import json
+import os
 import re
 import sys
 from pathlib import Path
+
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if REPO not in sys.path:
+    sys.path.insert(0, REPO)
+from scripts.analysis.coverage import CoverageReport, add_coverage_args  # noqa: E402
 
 
 # Subsystems to exclude by default (third-party, XDK, tiny standalone files)
 EXCLUDED_PREFIXES = ("xdk/", "lib/", "default/")
 DEFAULT_MIN_SIZE = 10240  # 10KB
+
+
+# --------------------------------------------------------------------------- #
+# THE RULER.  Read this before changing any percentage in this file.
+#
+# report.json carries TWO per-function percentages and they are NOT the same
+# number:
+#
+#   fuzzy_match_percent        the RAW scorer.  Relocation-SENSITIVE, so ICF /
+#                              atexit-thunk churn moves it without any source
+#                              change -- the phantom-regression source.  objdiff
+#                              OMITS THE KEY ENTIRELY for functions we never
+#                              defined: 16,920 of 48,344 rows in the current
+#                              report have no `fuzzy_match_percent` at all.
+#   match_percent_normalized   the canonical scorer.  Present on ALL 48,344
+#                              rows.  395 functions are normalized==100 while
+#                              fuzzy<100; every one of those reads as a
+#                              regression under the fuzzy ruler.
+#
+# NORMALIZED IS CANONICAL HERE, with fuzzy as the fallback -- the same order
+# `count_matched_functions` has always used.
+#
+# The UNIT-level `measures.fuzzy_match_percent` is a different animal despite
+# the shared name: objdiff computes it as the size-weighted mean of the
+# per-function *normalized* values (objdiff-cli report.rs:1096 +
+# calc_fuzzy_match_percent), verified here against 471/471 units of the current
+# report.  So the unit tables are ALREADY on the canonical ruler; it is only
+# the `matched_code_percent` fallback that is raw.  Do not "fix" it by
+# swapping the key -- state which one you used, which is what
+# `unit_match_percent_with_ruler` now does.
+# --------------------------------------------------------------------------- #
+
+RULER_NORMALIZED = "normalized"
+RULER_FUZZY = "fuzzy"
+RULER_NONE = "none"
+
+# A rendered percentage ROUNDS, and this project has already lost two real bugs
+# to `99.97` printing as `100.0`.  Mirror of scripts/sync_match_percent.py's
+# `_round_pct`: rounding may never REACH 100 from below.
+def clamp_below_100(v: float, decimals: int = 2) -> float:
+    """round(v, decimals), except that a sub-100 value never becomes 100."""
+    r = round(v, decimals)
+    if r >= 100.0 and v < 100.0:
+        return 100.0 - 10.0 ** (-decimals)
+    return r
+
+
+def fmt_pct(v: float | None, decimals: int = 2, sign: bool = False) -> str:
+    """Render a percentage that can never lie upward across the 100 boundary."""
+    if v is None:
+        return "-"
+    r = clamp_below_100(v, decimals)
+    return f"{r:+.{decimals}f}%" if sign else f"{r:.{decimals}f}%"
+
+
+def function_percent_with_ruler(fn: dict) -> tuple[float | None, str]:
+    """(percent, ruler) for ONE report.json function row.
+
+    Returns `(None, "none")` when the row carries neither percentage, so the
+    caller can COUNT that population instead of silently coercing it to 0 --
+    the None->0 coercion is what made "we finally wrote a body" and "+95%
+    improvement" print identically.
+    """
+    n = fn.get("match_percent_normalized")
+    if n is not None:
+        return float(n), RULER_NORMALIZED
+    f = fn.get("fuzzy_match_percent")
+    if f is not None:
+        return float(f), RULER_FUZZY
+    return None, RULER_NONE
 
 
 # Default map file for merged symbol resolution
@@ -90,16 +166,16 @@ def count_matched_functions(unit: dict) -> tuple[int, int]:
 
     Uses match_percent_normalized (which excludes arg-only diffs like
     register/offset swaps) if available, otherwise falls back to
-    fuzzy_match_percent.
+    fuzzy_match_percent.  This was already the correct ruler order before the
+    honesty pass; `function_percent_with_ruler` is the same policy, factored
+    out so the function-level comparison can share it.
     """
     functions = unit.get("functions", [])
     total = len(functions)
     matched = 0
     for f in functions:
-        pct = f.get("match_percent_normalized")
-        if pct is None:
-            pct = f.get("fuzzy_match_percent") or 0
-        if pct >= 100.0:
+        pct, _ruler = function_percent_with_ruler(f)
+        if pct is not None and pct >= 100.0:
             matched += 1
     return matched, total
 
@@ -162,32 +238,50 @@ def load_report(path: Path) -> dict:
         return json.load(f)
 
 
-def get_unit_match_percent(measures: dict) -> float | None:
-    """Get the best available match percentage for a unit.
+def unit_match_percent_with_ruler(measures: dict) -> tuple[float | None, str]:
+    """(percent, ruler) for a unit's `measures` block.
 
-    Prefers fuzzy_match_percent, falls back to matched_code_percent.
-    Returns None if no match data is available.
+    `measures.fuzzy_match_percent` is misnamed upstream: objdiff builds it as
+    the size-weighted mean of the per-function `match_percent_normalized`
+    values, so it is the CANONICAL ruler even though the key says fuzzy
+    (objdiff-cli report.rs:1096; verified against 471/471 units of the current
+    report.json).  `matched_code_percent` -- the fallback -- is the raw one:
+    matched_code counts only symbols whose RAW match_percent hit 100.
     """
     fp = measures.get("fuzzy_match_percent", None)
     if fp is not None:
-        return fp
+        return float(fp), RULER_NORMALIZED
     mcp = measures.get("matched_code_percent", None)
     if mcp is not None:
-        return mcp
-    # If we have matched_code/total_code, compute it
+        return float(mcp), RULER_FUZZY
+    # If we have matched_code/total_code, compute it (still the raw ruler)
     tc = int(measures.get("total_code", 0) or 0)
     mc = int(measures.get("matched_code", 0) or 0)
     if tc > 0 and mc > 0:
-        return 100.0 * mc / tc
-    return None
+        return 100.0 * mc / tc, RULER_FUZZY
+    return None, RULER_NONE
 
 
-def aggregate_by_subsystem(units: list) -> dict:
+def get_unit_match_percent(measures: dict) -> float | None:
+    """Back-compat wrapper: percentage only, ruler discarded.
+
+    Prefer `unit_match_percent_with_ruler` in new code so the caller can SAY
+    which ruler it used.
+    """
+    return unit_match_percent_with_ruler(measures)[0]
+
+
+def aggregate_by_subsystem(units: list, ruler_counts: dict | None = None) -> dict:
     """Aggregate unit stats by subsystem using best available match percentages.
 
-    Prefers fuzzy_match_percent, falls back to matched_code_percent.
+    Prefers the normalized-weighted `measures.fuzzy_match_percent`, falls back
+    to the raw `matched_code_percent` (see `unit_match_percent_with_ruler`).
     Units without any match data are counted for total_functions but not
     for percentage calculations.
+
+    Pass `ruler_counts` (a dict) to learn how many units landed on each ruler;
+    that is the number a caller needs in order to state which ruler a table is
+    actually on rather than assuming.
     """
     agg = {}
     for u in units:
@@ -202,7 +296,9 @@ def aggregate_by_subsystem(units: list) -> dict:
             }
         measures = u.get("measures", {})
         tc = int(measures.get("total_code", 0) or 0)
-        pct = get_unit_match_percent(measures)
+        pct, ruler = unit_match_percent_with_ruler(measures)
+        if ruler_counts is not None:
+            ruler_counts[ruler] = ruler_counts.get(ruler, 0) + 1
         agg[sub]["total_code"] += tc
         if pct is not None and tc > 0:
             agg[sub]["fuzzy_code"] += tc
@@ -237,7 +333,9 @@ def compare_subsystems(baseline: dict, current: dict) -> list:
                     "total_code": curr["total_code"],
                 })
 
-    results.sort(key=lambda x: x["diff_pct"], reverse=True)
+    # Full tie-break: `diff_pct` alone leaves ties in float-comparison order,
+    # which is not stable across runs of a dict-ordered aggregation.
+    results.sort(key=lambda x: (-x["diff_pct"], x["subsystem"]))
     return results
 
 
@@ -247,7 +345,7 @@ def compare_units(baseline: dict, current: dict, min_diff: float = 0.01) -> list
     current_units = {u["name"]: u for u in current["units"]}
 
     results = []
-    for name, curr in current_units.items():
+    for name, curr in sorted(current_units.items()):
         if name in baseline_units:
             base = baseline_units[name]
             base_measures = base.get("measures", {})
@@ -268,18 +366,36 @@ def compare_units(baseline: dict, current: dict, min_diff: float = 0.01) -> list
                     "curr_funcs": f"{curr_matched}/{curr_total}",
                 })
 
-    results.sort(key=lambda x: x["diff_pct"], reverse=True)
+    results.sort(key=lambda x: (-x["diff_pct"], x["name"]))
     return results
 
 
 def compare_functions(baseline: dict, current: dict, min_diff: float = 0.5,
-                      merged_resolver: MergedSymbolResolver = None) -> list:
+                      merged_resolver: MergedSymbolResolver = None,
+                      cov: CoverageReport = None) -> dict:
     """Compare individual function match percentages between two reports.
 
-    Returns a list of functions whose fuzzy_match_percent changed, sorted by
-    regression severity (most regressed first).
+    Returns a dict of populations, not a bare list, because "changed by N%" is
+    only ONE of the things that can happen to a function between two reports
+    and the other four used to vanish silently:
+
+        changed       both sides scored; |diff| >= min_diff
+        unchanged     both sides scored; |diff| <  min_diff   (COUNT only)
+        appeared      no percent in baseline, a percent now   ("we wrote a body")
+        vanished      a percent in baseline, none now
+        only_current  the key is absent from the baseline map entirely
+        only_baseline the key is absent from the current map entirely
+        no_percent    neither side carries any percent
+
+    RULER: normalized-first with a fuzzy fallback (`function_percent_with_ruler`),
+    mirroring `count_matched_functions`.  The previous version read
+    `fuzzy_match_percent` ONLY, which (a) is relocation-sensitive, so ICF and
+    atexit-thunk churn manufactured regressions, and (b) is absent on 16,920 of
+    the 48,344 rows in the current report -- those became `pct or 0`, so a
+    function that gained a body at 95% printed as a +95% improvement and one
+    whose key moved printed as a -95% regression.
     """
-    # Build function lookup: (unit_name, func_name) -> fuzzy_match_percent
+    # Build function lookup: (unit_name, func_name) -> entry
     def build_func_map(report):
         fmap = {}
         merged_entries = []  # (unit_name, merged_name, entry) for second pass
@@ -287,18 +403,22 @@ def compare_functions(baseline: dict, current: dict, min_diff: float = 0.5,
             unit_name = unit["name"]
             for func in unit.get("functions", []):
                 fname = func.get("name", "")
-                pct = func.get("fuzzy_match_percent", None)
-                # Carry the canonical ruler too. fuzzy_match_percent is
-                # relocation-sensitive, so a pure .text layout shuffle (ICF
-                # re-folding, an atexit/dynamic-init thunk moving) moves it
-                # while match_percent_normalized -- the ruler the project's
-                # headline is computed on -- does not budge. Without this the
-                # table cannot tell a phantom from a real regression.
+                pct, ruler = function_percent_with_ruler(func)
+                # Carry BOTH raw rulers alongside the resolved one.  The
+                # headline diff is now computed on `pct` (normalized-first),
+                # but 5ecc641d9's phantom classification still needs the two
+                # rulers separately: fuzzy_match_percent is relocation-
+                # sensitive, so a pure .text layout shuffle (ICF re-folding, an
+                # atexit/dynamic-init thunk moving) moves it while
+                # match_percent_normalized does not budge.
                 norm = func.get("match_percent_normalized", None)
+                fuzzy = func.get("fuzzy_match_percent", None)
                 demangled = func.get("metadata", {}).get("demangled_name", "")
                 entry = {
                     "pct": pct,
+                    "ruler": ruler,
                     "norm": norm,
+                    "fuzzy": fuzzy,
                     "size": int(func.get("size", 0)),
                     "demangled": demangled,
                 }
@@ -317,45 +437,117 @@ def compare_functions(baseline: dict, current: dict, min_diff: float = 0.5,
     base_funcs = build_func_map(baseline)
     curr_funcs = build_func_map(current)
 
-    results = []
-    for key, curr in curr_funcs.items():
-        if key in base_funcs:
-            base = base_funcs[key]
-            # Skip functions with no match data in either
-            if base["pct"] is None and curr["pct"] is None:
-                continue
-            base_pct = base["pct"] or 0
-            curr_pct = curr["pct"] or 0
-            diff = curr_pct - base_pct
+    all_keys = sorted(set(base_funcs) | set(curr_funcs))
+    if cov is not None:
+        cov.universe(len(all_keys),
+                     "distinct (unit, symbol) keys in the UNION of the two reports")
+        cov.note(f"function ruler: normalized-first, fuzzy fallback "
+                 f"(baseline rows={len(base_funcs)}, current rows={len(curr_funcs)})")
 
-            if abs(diff) >= min_diff:
-                unit_name, func_name = key
-                display = curr["demangled"] or base["demangled"] or func_name
-                base_norm = base["norm"]
-                curr_norm = curr["norm"]
-                # "Phantom" = fuzzy moved but the canonical ruler did not.
-                # Only claim that when BOTH sides actually carry a normalized
-                # figure; a missing one is unknown, not unchanged.
-                phantom = (base_norm is not None and curr_norm is not None
-                           and float(base_norm) == float(curr_norm))
-                results.append({
-                    "unit": unit_name,
-                    "name": func_name,
-                    "display": display,
-                    "base_pct": base_pct,
-                    "curr_pct": curr_pct,
-                    "diff_pct": diff,
-                    "base_norm": base_norm,
-                    "curr_norm": curr_norm,
-                    "norm_diff": (None if base_norm is None or curr_norm is None
-                                  else float(curr_norm) - float(base_norm)),
-                    "phantom": phantom,
-                    "size": curr["size"],
-                })
+    out = {
+        "changed": [],
+        "appeared": [],
+        "vanished": [],
+        "only_current": [],
+        "only_baseline": [],
+        "unchanged": 0,
+        "ruler_used": {},
+    }
 
-    # Sort: most regressed first, then most improved
-    results.sort(key=lambda x: x["diff_pct"])
-    return results
+    def _bump(r):
+        out["ruler_used"][r] = out["ruler_used"].get(r, 0) + 1
+
+    for key in all_keys:
+        unit_name, func_name = key
+        base = base_funcs.get(key)
+        curr = curr_funcs.get(key)
+
+        if base is None:
+            # Present now, absent from the baseline map: a new / renamed /
+            # re-ICF'd symbol.  There is no comparable baseline percent, so
+            # this is NOT a +100% improvement -- it is its own population.
+            if cov is not None:
+                cov.drop("absent-from-baseline",
+                         note="new, renamed or re-ICF'd key; no baseline percent to diff")
+            out["only_current"].append({
+                "unit": unit_name, "name": func_name,
+                "display": curr["demangled"] or func_name,
+                "curr_pct": curr["pct"], "size": curr["size"],
+            })
+            continue
+        if curr is None:
+            if cov is not None:
+                cov.drop("absent-from-current",
+                         note="deleted, renamed or re-ICF'd key; no current percent to diff")
+            out["only_baseline"].append({
+                "unit": unit_name, "name": func_name,
+                "display": base["demangled"] or func_name,
+                "base_pct": base["pct"], "size": base["size"],
+            })
+            continue
+
+        if base["pct"] is None and curr["pct"] is None:
+            if cov is not None:
+                cov.drop("no-percent-either-side",
+                         note="neither report scored this row")
+            continue
+
+        if cov is not None:
+            cov.examine()
+        _bump(curr["ruler"] if curr["pct"] is not None else base["ruler"])
+
+        if base["pct"] is None or curr["pct"] is None:
+            # One-sided.  Coercing the missing side to 0 is what made
+            # "a body appeared" indistinguishable from a +95% improvement.
+            bucket = "appeared" if base["pct"] is None else "vanished"
+            out[bucket].append({
+                "unit": unit_name, "name": func_name,
+                "display": (curr["demangled"] or base["demangled"] or func_name),
+                "base_pct": base["pct"], "curr_pct": curr["pct"],
+                "size": curr["size"] or base["size"],
+            })
+            continue
+
+        diff = curr["pct"] - base["pct"]
+        if abs(diff) < min_diff:
+            out["unchanged"] += 1
+            continue
+
+        display = curr["demangled"] or base["demangled"] or func_name
+        base_norm, curr_norm = base["norm"], curr["norm"]
+        # "Phantom" = the reloc-sensitive ruler moved but the canonical one did
+        # not.  Only claim that when BOTH sides actually carry a normalized
+        # figure; a missing one is unknown, not unchanged.  With the headline
+        # diff now computed normalized-first, a phantom can only reach this
+        # list when one of the two sides fell back to fuzzy -- which is exactly
+        # the case worth flagging rather than silently mixing rulers.
+        phantom = (base_norm is not None and curr_norm is not None
+                   and float(base_norm) == float(curr_norm))
+        out["changed"].append({
+            "unit": unit_name,
+            "name": func_name,
+            "display": display,
+            "base_pct": base["pct"],
+            "curr_pct": curr["pct"],
+            "diff_pct": diff,
+            "base_norm": base_norm,
+            "curr_norm": curr_norm,
+            "norm_diff": (None if base_norm is None or curr_norm is None
+                          else float(curr_norm) - float(base_norm)),
+            "phantom": phantom,
+            "size": curr["size"],
+        })
+
+    # Sort: most regressed first, then most improved.  Full tie-break so two
+    # runs over the same pair of reports are byte-identical.
+    out["changed"].sort(key=lambda x: (x["diff_pct"], x["unit"], x["name"]))
+    for k in ("appeared", "vanished", "only_current", "only_baseline"):
+        out[k].sort(key=lambda x: (x["unit"], x["name"]))
+    if cov is not None:
+        cov.extra("unchanged_within_min_diff", out["unchanged"])
+        cov.extra("min_diff", min_diff)
+        cov.extra("ruler_used", dict(sorted(out["ruler_used"].items())))
+    return out
 
 
 def print_subsystem_table(results: list, baseline: dict, current: dict):
@@ -365,8 +557,14 @@ def print_subsystem_table(results: list, baseline: dict, current: dict):
     curr_total = current.get("measures", {}).get("fuzzy_match_percent", 0)
 
     print()
-    print(f"Overall fuzzy: {base_total:.2f}% -> {curr_total:.2f}% ({curr_total-base_total:+.2f}%)")
-    print(f"Subsystems changed: {len(results)}, {total_funcs:+d} matched functions")
+    # `measures.fuzzy_match_percent` is objdiff's size-weighted mean of the
+    # per-function NORMALIZED percentages, despite the key name.
+    print(f"Overall normalized-weighted: {fmt_pct(base_total)} -> {fmt_pct(curr_total)} "
+          f"({curr_total-base_total:+.2f}%)")
+    n_base_subs = len(aggregate_by_subsystem(baseline.get("units", [])))
+    n_curr_subs = len(aggregate_by_subsystem(current.get("units", [])))
+    print(f"Subsystems changed: {len(results)} of {n_curr_subs} in current "
+          f"({n_base_subs} in baseline), {total_funcs:+d} matched functions")
     print()
 
     # Calculate column widths
@@ -375,8 +573,8 @@ def print_subsystem_table(results: list, baseline: dict, current: dict):
     for r in results:
         rows.append([
             r["subsystem"],
-            f"{r['base_pct']:.2f}%",
-            f"{r['curr_pct']:.2f}%",
+            fmt_pct(r["base_pct"]),
+            fmt_pct(r["curr_pct"]),
             f"{r['diff_pct']:+.2f}%",
             fmt_bytes_plain(r["total_code"]),
         ])
@@ -404,24 +602,42 @@ def print_subsystem_table(results: list, baseline: dict, current: dict):
         print(fmt_row(row, align))
 
 
+NEAR_100 = 99.99   # the band a `%.2f` render collapses onto "100.00"
+
+
 def count_100pct_units(baseline: dict, current: dict) -> tuple:
-    """Count units at 100% in current and how many are new since baseline."""
+    """(at_100, newly_100, near_100, total_with_pct) for the current report.
+
+    `at_100` is now STRICTLY `>= 100.0`.  It used to be `>= 99.99`, which
+    counted a unit sitting at 99.995 as complete -- the same rounded-100 shape
+    that hid two real bugs in this repo.  The [99.99, 100) band is still
+    reported, as `near_100`, because it is a useful worklist; it is just no
+    longer added to the "at 100%" total.
+    """
     baseline_units = {u["name"]: u for u in baseline.get("units", [])}
     current_units = {u["name"]: u for u in current.get("units", [])}
 
     at_100 = 0
     newly_100 = 0
-    for name, cu in current_units.items():
-        curr_pct = get_unit_match_percent(cu.get("measures", {}))
-        if curr_pct is not None and curr_pct >= 99.99:
+    near_100 = 0
+    with_pct = 0
+    for name in sorted(current_units):
+        cu = current_units[name]
+        curr_pct, _ruler = unit_match_percent_with_ruler(cu.get("measures", {}))
+        if curr_pct is None:
+            continue
+        with_pct += 1
+        if curr_pct >= 100.0:
             at_100 += 1
             if name in baseline_units:
-                base_pct = get_unit_match_percent(baseline_units[name].get("measures", {})) or 0
-                if base_pct < 99.99:
+                base_pct = get_unit_match_percent(baseline_units[name].get("measures", {}))
+                if base_pct is None or base_pct < 100.0:
                     newly_100 += 1
             else:
                 newly_100 += 1  # new unit not in baseline
-    return at_100, newly_100
+        elif curr_pct >= NEAR_100:
+            near_100 += 1
+    return at_100, newly_100, near_100, with_pct
 
 
 def print_unit_table(results: list, limit: int = 50, baseline: dict = None, current: dict = None):
@@ -433,9 +649,11 @@ def print_unit_table(results: list, limit: int = 50, baseline: dict = None, curr
 
     # Show 100% summary from raw reports
     if baseline is not None and current is not None:
-        at_100, newly_100 = count_100pct_units(baseline, current)
-        if at_100:
-            print(f"  Units at 100%: {at_100} ({newly_100} new since baseline)")
+        at_100, newly_100, near_100, with_pct = count_100pct_units(baseline, current)
+        if at_100 or near_100:
+            print(f"  Units at 100% (strictly >= 100.00): {at_100} of {with_pct} scored "
+                  f"({newly_100} new since baseline)")
+            print(f"  Units in [{NEAR_100}, 100) -- render as 100.0 but are NOT: {near_100}")
             print()
 
     headers = ["Unit Path", "Baseline", "Current", "Change", "Funcs (base)", "Funcs (curr)"]
@@ -443,8 +661,8 @@ def print_unit_table(results: list, limit: int = 50, baseline: dict = None, curr
     for r in results[:limit]:
         rows.append([
             r["name"].replace("default/", ""),
-            f"{r['base_pct']:.2f}%",
-            f"{r['curr_pct']:.2f}%",
+            fmt_pct(r["base_pct"]),
+            fmt_pct(r["curr_pct"]),
             f"{r['diff_pct']:+.2f}%",
             r["base_funcs"],
             r["curr_funcs"],
@@ -473,32 +691,49 @@ def print_unit_table(results: list, limit: int = 50, baseline: dict = None, curr
         print(fmt_row(row, align))
 
 
-def print_function_table(results: list, limit: int = 100):
-    """Print function-level comparison table."""
-    count = min(limit, len(results))
-    if not results:
-        print("\nNo function-level changes found.")
-        return
+def print_function_table(populations: dict, limit: int = 100,
+                         regressions_only: bool = False):
+    """Print function-level comparison tables for every population.
 
-    # Separate regressions and improvements
-    regressions = [r for r in results if r["diff_pct"] < 0]
-    improvements = [r for r in results if r["diff_pct"] > 0]
+    The `Regressions (N functions, showing top M)` caption below is the pattern
+    the rest of this repo should copy: it prints the FULL count and the
+    displayed count as two separate numbers, so a `--limit` can shorten the
+    listing without ever shortening the total.
+    """
+    changed = populations["changed"]
+    if regressions_only:
+        changed = [r for r in changed if r["diff_pct"] < 0]
 
-    # This table is scored on fuzzy_match_percent, which is relocation
-    # sensitive. Say so, and say up front how much of what follows the
-    # canonical ruler does not see -- a reader who takes an ICF thunk shuffle
-    # for a regression reverts good work chasing it.
+    regressions = [r for r in changed if r["diff_pct"] < 0]
+    improvements = [r for r in changed if r["diff_pct"] > 0]
+
+    if not changed:
+        print("\nNo function-level changes found "
+              f"(both sides scored and agreed within min-diff on "
+              f"{populations['unchanged']} functions).")
+
+    # State the ruler that was ACTUALLY used, with the per-ruler row counts, so
+    # nobody has to infer it from the column header.  The diff below is
+    # normalized-first with a fuzzy fallback; a row that fell back is the only
+    # way relocation sensitivity can still reach this table, and those get
+    # marked so a reader does not take an ICF thunk shuffle for a regression
+    # and revert good work chasing it.
     phantom_reg = [r for r in regressions if r.get("phantom")]
     phantom_imp = [r for r in improvements if r.get("phantom")]
+    ruler_used = populations.get("ruler_used") or {}
     print()
-    print("Ruler: fuzzy_match_percent (relocation-sensitive). "
-          "CANONICAL is match_percent_normalized.")
+    print("Ruler: match_percent_normalized (CANONICAL), "
+          "falling back to fuzzy_match_percent (relocation-sensitive) "
+          "only where the canonical value is absent.")
+    if ruler_used:
+        print("  rows by ruler: "
+              + ", ".join(f"{k}={v}" for k, v in sorted(ruler_used.items())))
     if phantom_reg or phantom_imp:
         print(f"  {len(phantom_reg)} of {len(regressions)} regressions and "
-              f"{len(phantom_imp)} of {len(improvements)} improvements are "
-              f"FUZZY-ONLY (marked '~'):")
-        print("  the canonical ruler is unchanged for them. Typically .text "
-              "layout / ICF re-folding,")
+              f"{len(phantom_imp)} of {len(improvements)} improvements moved "
+              f"while the canonical ruler did NOT (marked '~'):")
+        print("  those necessarily came off the fuzzy fallback. Typically "
+              ".text layout / ICF re-folding,")
         print("  not a source change. Confirm against the canonical ruler "
               "before acting on one.")
 
@@ -512,20 +747,44 @@ def print_function_table(results: list, limit: int = 100):
     if improvements:
         print()
         imp_count = min(limit, len(improvements))
-        # Show improvements sorted best-first
-        imp_sorted = sorted(improvements, key=lambda x: x["diff_pct"], reverse=True)
+        # Show improvements sorted best-first (full tie-break for determinism)
+        imp_sorted = sorted(improvements,
+                            key=lambda x: (-x["diff_pct"], x["unit"], x["name"]))
         print(f"Improvements ({len(improvements)} functions, showing top {imp_count}):")
         print()
         _print_func_rows(imp_sorted[:limit])
 
-    # Summary
+    # --- The populations that used to be invisible ------------------------- #
+    for key, caption, pct_key in (
+        ("appeared", "Body APPEARED (no baseline percent -> scored now; NOT an N% improvement)", "curr_pct"),
+        ("vanished", "Body VANISHED (scored in baseline -> no percent now; NOT an N% regression)", "base_pct"),
+        ("only_current", "Key only in CURRENT (new / renamed / re-ICF'd symbol)", "curr_pct"),
+        ("only_baseline", "Key only in BASELINE (deleted / renamed / re-ICF'd symbol)", "base_pct"),
+    ):
+        rows = populations.get(key) or []
+        if not rows or regressions_only and key in ("appeared", "only_current"):
+            continue
+        shown = min(limit, len(rows))
+        print()
+        print(f"{caption}: {len(rows)} functions, showing first {shown}")
+        print()
+        for r in rows[:limit]:
+            unit = r["unit"].replace("default/", "")
+            print(f"  {fmt_pct(r.get(pct_key)):>9s}  {unit[-34:]:34s}  {r['display'][:60]}")
+
+    # Summary — every population, with its denominator
     total_reg = len(regressions)
     total_imp = len(improvements)
     reg_bytes = sum(r["size"] for r in regressions)
     imp_bytes = sum(r["size"] for r in improvements)
     print()
     print(f"Summary: {total_reg} regressions ({fmt_bytes_plain(reg_bytes)} affected), "
-          f"{total_imp} improvements ({fmt_bytes_plain(imp_bytes)} affected)")
+          f"{total_imp} improvements ({fmt_bytes_plain(imp_bytes)} affected), "
+          f"{populations['unchanged']} unchanged, "
+          f"{len(populations['appeared'])} appeared, "
+          f"{len(populations['vanished'])} vanished, "
+          f"{len(populations['only_current'])} only-in-current, "
+          f"{len(populations['only_baseline'])} only-in-baseline")
 
 
 def _print_func_rows(results: list):
@@ -554,8 +813,8 @@ def _print_func_rows(results: list):
         rows.append([
             display,
             unit,
-            f"{r['base_pct']:.1f}%",
-            f"{r['curr_pct']:.1f}%",
+            fmt_pct(r["base_pct"], 1),
+            fmt_pct(r["curr_pct"], 1),
             f"{r['diff_pct']:+.1f}%",
             norm_cell,
             str(r["size"]),
@@ -603,8 +862,11 @@ def print_overview(report: dict):
 
     # Build results with category
     results = []
-    for sub, stats in agg.items():
-        if stats["total_code"] > 0:
+    skipped_no_code = 0
+    for sub, stats in sorted(agg.items()):
+        if stats["total_code"] <= 0:
+            skipped_no_code += 1
+        else:
             pct = stats["weighted_fuzzy"] / stats["fuzzy_code"] if stats["fuzzy_code"] > 0 else 0
             results.append({
                 "subsystem": sub,
@@ -624,20 +886,24 @@ def print_overview(report: dict):
 
     print()
     print(f"{'='*70}")
-    print(f"  DECOMP OVERVIEW: {total_pct:.2f}% fuzzy match")
+    print(f"  DECOMP OVERVIEW: {fmt_pct(total_pct)} normalized-weighted match")
     print(f"  Code: {fmt_bytes_plain(total_code)}")
     print(f"  Functions: {total_funcs_matched:,} / {total_funcs:,}")
+    print(f"  Subsystems: {len(results)} of {len(agg)} "
+          f"({skipped_no_code} have no code and are not shown)")
     print(f"{'='*70}")
 
     # Group by category
     categories = ["Game Code", "Milo Engine", "Third-Party", "XDK", "Standalone"]
+    shown_cat_total = 0
     for cat in categories:
         cat_results = [r for r in results if r["category"] == cat]
         if not cat_results:
             continue
+        shown_cat_total += len(cat_results)
 
-        # Sort by size within category
-        cat_results.sort(key=lambda x: x["total_code"], reverse=True)
+        # Sort by size within category (full tie-break)
+        cat_results.sort(key=lambda x: (-x["total_code"], x["subsystem"]))
 
         # Category totals
         cat_total = sum(r["total_code"] for r in cat_results)
@@ -647,10 +913,10 @@ def print_overview(report: dict):
         cat_funcs_total = sum(r["total_funcs"] for r in cat_results)
 
         print()
-        print(f"## {cat}: {cat_pct:.1f}% ({fmt_bytes_plain(cat_total)}, {cat_funcs_matched}/{cat_funcs_total} funcs)")
+        print(f"## {cat}: {fmt_pct(cat_pct, 1)} ({fmt_bytes_plain(cat_total)}, {cat_funcs_matched}/{cat_funcs_total} funcs)")
         print()
 
-        headers = ["Subsystem", "Fuzzy %", "Total", "Funcs"]
+        headers = ["Subsystem", "Norm %", "Total", "Funcs"]
         rows = []
         for r in cat_results:
             # Trim category prefix for cleaner display
@@ -668,7 +934,7 @@ def print_overview(report: dict):
 
             rows.append([
                 name,
-                f"{r['percent']:.1f}%",
+                fmt_pct(r["percent"], 1),
                 fmt_bytes_plain(r["total_code"]),
                 f"{r['matched_funcs']}/{r['total_funcs']}",
             ])
@@ -702,33 +968,41 @@ def print_snapshot(report: dict, sort_by: str = "percent", show_all: bool = Fals
     """Print current snapshot of all subsystems."""
     agg = aggregate_by_subsystem(report.get("units", []))
 
-    # Build results list with filtering
+    # Build results list with filtering.  Every skip is COUNTED: a table that
+    # silently drops 60% of its subsystems is a sample presented as a total.
     results = []
-    for sub, stats in agg.items():
-        if stats["total_code"] > 0:
-            # Filter out excluded prefixes and small subsystems unless --all
-            if not show_all:
-                if any(sub.startswith(prefix) for prefix in EXCLUDED_PREFIXES):
-                    continue
-                if stats["total_code"] < DEFAULT_MIN_SIZE:
-                    continue
+    hidden_excluded_prefix = 0
+    hidden_too_small = 0
+    hidden_no_code = 0
+    for sub, stats in sorted(agg.items()):
+        if stats["total_code"] <= 0:
+            hidden_no_code += 1
+            continue
+        # Filter out excluded prefixes and small subsystems unless --all
+        if not show_all:
+            if any(sub.startswith(prefix) for prefix in EXCLUDED_PREFIXES):
+                hidden_excluded_prefix += 1
+                continue
+            if stats["total_code"] < DEFAULT_MIN_SIZE:
+                hidden_too_small += 1
+                continue
 
-            pct = stats["weighted_fuzzy"] / stats["fuzzy_code"] if stats["fuzzy_code"] > 0 else 0
-            results.append({
-                "subsystem": sub,
-                "total_code": stats["total_code"],
-                "percent": pct,
-                "matched_funcs": stats["matched_functions"],
-                "total_funcs": stats["total_functions"],
-            })
+        pct = stats["weighted_fuzzy"] / stats["fuzzy_code"] if stats["fuzzy_code"] > 0 else 0
+        results.append({
+            "subsystem": sub,
+            "total_code": stats["total_code"],
+            "percent": pct,
+            "matched_funcs": stats["matched_functions"],
+            "total_funcs": stats["total_functions"],
+        })
 
-    # Sort
+    # Sort (full tie-break on subsystem name so repeat runs are identical)
     if sort_by == "percent":
-        results.sort(key=lambda x: x["percent"], reverse=True)
+        results.sort(key=lambda x: (-x["percent"], x["subsystem"]))
     elif sort_by == "size":
-        results.sort(key=lambda x: x["total_code"], reverse=True)
+        results.sort(key=lambda x: (-x["total_code"], x["subsystem"]))
     elif sort_by == "matched":
-        results.sort(key=lambda x: x["percent"] * x["total_code"], reverse=True)
+        results.sort(key=lambda x: (-(x["percent"] * x["total_code"]), x["subsystem"]))
     else:  # name
         results.sort(key=lambda x: x["subsystem"])
 
@@ -740,16 +1014,23 @@ def print_snapshot(report: dict, sort_by: str = "percent", show_all: bool = Fals
     total_funcs = int(measures.get("total_functions", 0) or 0)
 
     print()
-    print(f"Overall fuzzy: {total_pct:.2f}% ({fmt_bytes_plain(total_code)})")
+    print(f"Overall normalized-weighted: {fmt_pct(total_pct)} "
+          f"({fmt_bytes_plain(total_code)})")
     print(f"Functions: {total_funcs_matched}/{total_funcs}")
+    hidden_total = hidden_excluded_prefix + hidden_too_small + hidden_no_code
+    print(f"Subsystems shown: {len(results)} of {len(agg)}"
+          + (f"  (hidden: {hidden_excluded_prefix} by EXCLUDED_PREFIXES"
+             f"{EXCLUDED_PREFIXES}, {hidden_too_small} below "
+             f"DEFAULT_MIN_SIZE={DEFAULT_MIN_SIZE}B, {hidden_no_code} with no code"
+             f" -- pass --all to include them)" if hidden_total else ""))
     print()
 
-    headers = ["Subsystem", "Fuzzy %", "Total", "Functions"]
+    headers = ["Subsystem", "Norm %", "Total", "Functions"]
     rows = []
     for r in results:
         rows.append([
             r["subsystem"],
-            f"{r['percent']:.2f}%",
+            fmt_pct(r["percent"]),
             fmt_bytes_plain(r["total_code"]),
             f"{r['matched_funcs']}/{r['total_funcs']}",
         ])
@@ -862,8 +1143,10 @@ def main():
         action="store_true",
         help="Disable merged symbol resolution (skip map file parsing)",
     )
+    add_coverage_args(parser)
 
     args = parser.parse_args()
+    cov = CoverageReport("compare_progress", args=args)
 
     # Overview mode - grouped by category
     if args.overview:
@@ -878,10 +1161,21 @@ def main():
             sys.exit(1)
 
         report = load_report(report_path)
+        all_units = report.get("units", [])
         if args.filter:
-            report["units"] = filter_units(report.get("units", []), args.filter)
+            kept = filter_units(all_units, args.filter)
+            cov.universe(len(all_units), "units in the report")
+            cov.drop("filtered-out-by---filter", len(all_units) - len(kept),
+                     note=f"patterns={args.filter}")
+            cov.examine(len(kept))
+            report["units"] = kept
+        else:
+            cov.universe(len(all_units), "units in the report")
+            cov.examine(len(all_units))
+        cov.note("unit ruler: measures.fuzzy_match_percent, which objdiff builds "
+                 "from per-function match_percent_normalized (canonical)")
         print_overview(report)
-        return
+        sys.exit(cov.emit())
 
     # Snapshot mode - show current state without comparison
     if args.snapshot:
@@ -896,10 +1190,22 @@ def main():
             sys.exit(1)
 
         report = load_report(report_path)
+        all_units = report.get("units", [])
+        cov.universe(len(all_units), "units in the report")
         if args.filter:
-            report["units"] = filter_units(report.get("units", []), args.filter)
+            kept = filter_units(all_units, args.filter)
+            cov.drop("filtered-out-by---filter", len(all_units) - len(kept),
+                     note=f"patterns={args.filter}")
+            report["units"] = kept
+        else:
+            kept = all_units
+        cov.examine(len(kept))
+        cov.note("unit ruler: measures.fuzzy_match_percent, which objdiff builds "
+                 "from per-function match_percent_normalized (canonical)")
+        cov.note("--all / DEFAULT_MIN_SIZE additionally hide subsystems from the "
+                 "TABLE below; see the 'subsystems hidden' line printed with it")
         print_snapshot(report, sort_by=args.sort, show_all=args.all)
-        return
+        sys.exit(cov.emit())
 
     # Comparison mode - need both reports
     if not args.baseline or not args.current:
@@ -925,10 +1231,17 @@ def main():
         merged_resolver = MergedSymbolResolver(args.map_file)
 
     # Always show subsystem summary
+    ruler_counts: dict = {}
+    aggregate_by_subsystem(current.get("units", []), ruler_counts)
     subsystem_results = compare_subsystems(baseline, current)
     if args.regressions:
         subsystem_results = [r for r in subsystem_results if r["diff_pct"] < 0]
     print_subsystem_table(subsystem_results, baseline, current)
+    print(f"  ruler for the subsystem/unit tables: "
+          f"{ruler_counts.get(RULER_NORMALIZED, 0)} units scored by the "
+          f"normalized-weighted measures.fuzzy_match_percent, "
+          f"{ruler_counts.get(RULER_FUZZY, 0)} by the RAW matched_code_percent "
+          f"fallback, {ruler_counts.get(RULER_NONE, 0)} unscored")
 
     # Optionally show detailed unit breakdown
     if args.detailed:
@@ -939,10 +1252,18 @@ def main():
 
     # Optionally show function-level breakdown
     if args.functions:
-        func_results = compare_functions(baseline, current, merged_resolver=merged_resolver)
-        if args.regressions:
-            func_results = [r for r in func_results if r["diff_pct"] < 0]
-        print_function_table(func_results, args.limit)
+        populations = compare_functions(baseline, current,
+                                        merged_resolver=merged_resolver, cov=cov)
+        print_function_table(populations, args.limit,
+                             regressions_only=args.regressions)
+    else:
+        # Still declare a denominator for the run we DID do.
+        n_units = len(current.get("units", []))
+        cov.universe(n_units, "units in the current report (function view not requested)")
+        cov.examine(n_units)
+        cov.note("pass --functions for the per-function census")
+
+    sys.exit(cov.emit())
 
 
 if __name__ == "__main__":

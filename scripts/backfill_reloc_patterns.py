@@ -111,8 +111,14 @@ def main():
     print(f"Scanning {len(rows)} functions with "
           f"functionRelocDiffs={args.reloc_config} ...")
 
-    results = run_batch([(i, s) for i, s in rows], args.project_dir,
-                        jobs=args.jobs, reloc_config=args.reloc_config)
+    # run_batch now returns (results, line_stats); the stats count the JSONL
+    # lines the workers discarded, which used to be two bare `continue`s.
+    results, line_stats = run_batch([(i, s) for i, s in rows], args.project_dir,
+                                    jobs=args.jobs, reloc_config=args.reloc_config)
+    if line_stats:
+        print("  objdiff JSONL lines: "
+              + ", ".join(f"{k}={v}" for k, v in sorted(line_stats.items())),
+              file=sys.stderr)
 
     hist = collections.Counter()
     for r in results:
