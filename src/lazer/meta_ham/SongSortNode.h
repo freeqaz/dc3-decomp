@@ -13,6 +13,7 @@ public:
     virtual Symbol Select();
     virtual Symbol OnSelectDone();
     virtual void OnHighlight();
+    virtual void OnUnHighlight();
     virtual int GetItemCount();
     virtual NavListSortNode *GetFirstActive();
     virtual void Text(UIListLabel *, UILabel *) const;

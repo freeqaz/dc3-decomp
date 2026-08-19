@@ -36,6 +36,8 @@ void SongHeaderNode::OnHighlight() {
     SetCollapseStateIcon(true);
 }
 
+void SongHeaderNode::OnUnHighlight() { SetCollapseStateIcon(false); }
+
 void SongHeaderNode::SetCollapseStateIcon(bool b) const {
     Symbol s = gNullStr;
     UILabel *iconLabel = GetCollapseIconLabel();
