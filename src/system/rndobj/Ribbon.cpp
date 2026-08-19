@@ -410,14 +410,15 @@ void RndRibbon::UpdateChase() {
                     // shared off-diagonal at m.x.z / m.z.x (stack 0x120/0x148 and
                     // 0x128/0x140), with the identity row in y.  Cross-checked against
                     // rb3-xenon's RndRibbon::UpdateChase, which spells the same shape.
+                    float offDiag = (s * (1.0f - invCos)) * 0.5f;
                     Hmx::Matrix3 bend(
                         ((c + 1.0f) * (invCos - 1.0f)) * 0.5f + 1.0f,
                         0.0f,
-                        (s * (1.0f - invCos)) * 0.5f,
+                        offDiag,
                         0.0f,
                         1.0f,
                         0.0f,
-                        (s * (1.0f - invCos)) * 0.5f,
+                        offDiag,
                         0.0f,
                         ((1.0f - c) * (invCos - 1.0f)) * 0.5f + 1.0f
                     );
