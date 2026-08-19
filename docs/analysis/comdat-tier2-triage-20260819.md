@@ -168,6 +168,46 @@ Note the existing ICF machinery does **not** cover this: `scripts/symbol_aliases
 members equal **as relocation targets**. It does not make objdiff *pair two differently-named
 functions* for diffing, which is what these rows need.
 
+## Lead — the 6 non-identical ICF rows are metric-invisible divergences in core containers
+
+Worth pulling out of the table above, because it inverts the direction of the rest of this
+file. `/OPT:ICF` only folds COMDATs that are byte-identical, so the ORIGINAL's fold members
+were the same bytes. If our fold peer is **not** identical to the target's folded body, our
+peer is the wrong one — and since every instantiation folds, the target names the survivor
+exactly once and **no instantiation of that method is scored anywhere in the build**. The
+metric cannot see these at all.
+
+Three of the six are `ObjPtr` container methods, i.e. engine-wide:
+
+| method | target | ours | delta |
+|---|---:|---:|---|
+| `ObjPtrList<T,U>::Unlink(Node*)` | 284 B | 312 B | +28, 36 differing words from offset 0x8c |
+| `ObjPtrVec<T,U>::erase(iterator)` | 276 B | 240 B | -36 |
+| `ObjPtrList<T,U>::Replace(ObjRef*, Object*)` | 80 B | 76 B | -4 |
+
+`Unlink` is diagnosed. `src/system/obj/ObjPtr_p.h:725` returns early from three of its four
+branches and repeats `mSize--` in each. The target has **one** `mSize--` and **one**
+`return`, with every path funnelling its result into `r3` and falling through to a shared
+tail (`lwz r11, 0x4(r31); subi r11, r11, 1; stw r11, 0x4(r31)` at 0xf8, reached by `b` from
+each branch). Its head-removal branch also merges the has-next and no-next cases before the
+store — both paths land on `stw r11, 0x8(r31)` / `mr r3, r11` with `r11 = nullptr` on the
+empty path — where ours has a separate `mNodes = nullptr; mSize--; return nullptr;`. So the
+target's shape is:
+
+    Node *ret;
+    if (node == mNodes)            { ...; mNodes = n; ret = n; }
+    else if (node == mNodes->prev) { ...; ret = mNodes->prev; }
+    else                           { ...; ret = node->next; }
+    mSize--;
+    return ret;
+
+**Not attempted here.** `ObjPtr_p.h` is included by most of the tree and `erase()` inlines
+`Unlink`, so re-shaping it will move scored functions in both directions; it needs its own
+lane with a whole-build A/B, not a drive-by. The other three rows
+(`ObjPtrVec::FindRef`, `ObjPtrList<CamShot>::Replace`, `??_GSynthSample@@` vs
+`??_GSynthSample360@@`) are unexamined and may still be peer-selection artifacts of the
+sweep rather than real differences.
+
 ## Residual worklist
 
 Ordered by size. Everything here is real work, not an artifact.
