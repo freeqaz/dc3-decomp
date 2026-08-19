@@ -146,6 +146,37 @@ def load_map_index(path: str) -> dict[str, list[str]]:
     return {k: sorted(v) for k, v in idx.items()}
 
 
+CFG_LINE = re.compile(r"^\s*(\S+)\s*=\s*[.\w]+:0x([0-9A-Fa-f]+)")
+
+
+def load_config_symbols(path: str) -> dict[str, int]:
+    """symbol -> address, from config/<title>/symbols.txt (dtk's split input)."""
+    out: dict[str, int] = {}
+    with open(path, errors="replace") as fh:
+        for line in fh:
+            m = CFG_LINE.match(line)
+            if m:
+                out.setdefault(m.group(1), int(m.group(2), 16))
+    return out
+
+
+def config_map_disagreements(cfg: dict[str, int], idx: dict[str, list[str]]):
+    """Config symbols whose address contradicts the shipped linker map.
+
+    A single one of these manufactures a *false* wrong-callee story: it stamps a
+    real symbol's name onto whatever block it lands in, and every downstream
+    reader -- objdiff, this gate, a lane triaging the row -- repeats it. On
+    2026-08-19 exactly one existed in 107,552 shared names
+    (`?sJointParents@BaseSkeleton@@...`, config 0x8202EE20 vs map 0x8202EEC0),
+    and it was the row that read as "MirrorJoint indexes the joint-PARENT table",
+    i.e. a shipped gameplay bug. It was not one.
+    """
+    shared = [k for k in cfg if k in idx]
+    bad = [(k, cfg[k], idx[k]) for k in shared
+           if f"{cfg[k]:08x}" not in idx[k]]
+    return len(shared), sorted(bad)
+
+
 def map_verdict(idx, target: str, base: str) -> str:
     ta, ba = idx.get(target), idx.get(base)
     if not ta and not ba:
@@ -297,6 +328,8 @@ def main(argv=None) -> int:
     ap.add_argument("--map", default=None,
                     help="MSVC linker map (default: orig/<title>/ham_xbox_r.map)")
     ap.add_argument("--objdiff-cli", default=None)
+    ap.add_argument("--config", default=None,
+                    help="dtk symbols.txt (default: config/<title>/symbols.txt)")
     ap.add_argument("--json-out")
     ap.add_argument("--no-exempt", action="store_true",
                     help="print the raw population with no exemption buckets")
@@ -349,6 +382,26 @@ def main(argv=None) -> int:
 
     idx = load_map_index(mapfile)
     print(f"linker map                          : {mapfile} ({len(idx)} names)")
+
+    # ── Instrument check, run before any row is adjudicated ───────────────────
+    # A config symbol at the wrong address stamps a real name onto the wrong
+    # block, and every row that references that block then reads as a
+    # wrong-callee bug. Check the instrument before believing its output.
+    cfgfile = args.config or next(
+        (str(p) for p in sorted(project.glob("config/*/symbols.txt"))), None)
+    if cfgfile:
+        cfg = load_config_symbols(cfgfile)
+        shared, bad = config_map_disagreements(cfg, idx)
+        print(f"config symbols vs map               : {len(cfg)} config, "
+              f"{shared} present in both, {len(bad)} DISAGREE")
+        for name, caddr, maddrs in bad:
+            print(f"  !! config 0x{caddr:08X}  map {maddrs}  {name}")
+        if bad and args.fail_on is not None:
+            print("  (a config/map disagreement is an INSTRUMENT defect: fix "
+                  "the address before triaging any row that names this symbol)")
+    else:
+        print("config symbols vs map               : no config/*/symbols.txt "
+              "found -- INSTRUMENT UNCHECKED")
 
     detail = charged_pairs(cli, project, graded, pop, args.timeout)
 
