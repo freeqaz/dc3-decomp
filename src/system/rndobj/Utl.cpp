@@ -1483,6 +1483,7 @@ void MakeTangentsLate(RndMesh *m) {
 
 void ComputeFaceTangentBasis(RndMesh *m, int faceIdx, Hmx::Matrix3 &outBasis) {
     MILO_ASSERT(m, 0x250);
+    RndMesh::Face &face = m->Faces()[faceIdx];
     outBasis.x.x = 1.0f;
     outBasis.x.y = 0.0f;
     outBasis.x.z = 0.0f;
@@ -1493,35 +1494,44 @@ void ComputeFaceTangentBasis(RndMesh *m, int faceIdx, Hmx::Matrix3 &outBasis) {
     outBasis.z.y = 0.0f;
     outBasis.z.z = 1.0f;
 
-    RndMesh::Face &face = m->Faces()[faceIdx];
     if (face.v1 != face.v2 && face.v2 != face.v3 && face.v3 != face.v1) {
         RndMesh::Vert &vert1 = m->Verts()[face.v1];
         RndMesh::Vert &vert2 = m->Verts()[face.v2];
         RndMesh::Vert &vert3 = m->Verts()[face.v3];
 
-        if (!BadUV(vert1.tex) && !BadUV(vert2.tex) && !BadUV(vert3.tex)) {
+        // BadUV() takes its argument by non-const reference and *snaps* near-zero
+        // components to exactly 0. The original passes copies, so the snap never
+        // reaches the mesh's own vertex UVs -- take the copies here too.
+        Vector2 uv1 = vert1.tex;
+        Vector2 uv2 = vert2.tex;
+        Vector2 uv3 = vert3.tex;
+        if (!BadUV(uv1) && !BadUV(uv2) && !BadUV(uv3)) {
             float dx21 = vert2.pos.x - vert1.pos.x;
             float dy21 = vert2.pos.y - vert1.pos.y;
             float dz21 = vert2.pos.z - vert1.pos.z;
+            float dx31 = vert3.pos.x - vert1.pos.x;
             float dy31 = vert3.pos.y - vert1.pos.y;
             float dz31 = vert3.pos.z - vert1.pos.z;
 
-            float du21 = vert2.tex.x - vert1.tex.x;
-            float dv21 = vert2.tex.y - vert1.tex.y;
-            float du31 = vert3.tex.x - vert1.tex.x;
-            float dv31 = vert3.tex.y - vert1.tex.y;
+            float du21 = uv2.x - uv1.x;
+            float dv21 = uv2.y - uv1.y;
+            float du31 = uv3.x - uv1.x;
+            float dv31 = uv3.y - uv1.y;
 
             bool zero21 = dx21 == 0.0f && dy21 == 0.0f && dz21 == 0.0f;
             if (!zero21) {
-                float dx31 = vert3.pos.x - vert1.pos.x;
                 bool zero31 = dx31 == 0.0f && dy31 == 0.0f && dz31 == 0.0f;
                 if (!zero31) {
                     bool zeroUV21 = du21 == 0.0f && dv21 == 0.0f;
                     if (!zeroUV21) {
                         bool zeroUV31 = du31 == 0.0f && dv31 == 0.0f;
                         if (!zeroUV31) {
+                            // Cross product e21 x e31. The y term is
+                            // dz21*dx31 - dx21*dz31 -- previously written with
+                            // its sign flipped, which made the third basis row
+                            // non-orthogonal to the first two.
                             float crossX = dz31 * dy21 - dy31 * dz21;
-                            float crossY = dz31 * dx21 - dx31 * dz21;
+                            float crossY = dx31 * dz21 - dz31 * dx21;
                             float crossZ = dy31 * dx21 - dx31 * dy21;
                             Hmx::Matrix3 edgeMat(
                                 Vector3(dx21, dy21, dz21),
