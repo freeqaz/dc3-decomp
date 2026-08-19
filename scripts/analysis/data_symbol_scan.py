@@ -51,6 +51,8 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, REPO)
+from scripts.analysis.coverage import CoverageReport, add_coverage_args  # noqa: E402
 
 # --------------------------------------------------------------------------- #
 # COFF symbol enumeration (reused from scripts/dump_vtable.py)
@@ -371,13 +373,19 @@ def main():
     ap.add_argument('--include-strings', action='store_true',
                     help='Also scan ??_C string-pool symbols (noisy)')
     ap.add_argument('--workers', type=int, default=8)
-    ap.add_argument('--max-symbols', type=int, default=4000,
-                    help='Hard cap on total data symbols diffed (bound runtime)')
+    ap.add_argument('--max-symbols', type=int, default=0,
+                    help='Hard cap on total data symbols diffed. 0 = NO CAP (default). '
+                         'A non-zero value makes the run a SAMPLE: it prints a TRUNCATED '
+                         'banner and exits 3 unless --allow-truncation is given. '
+                         '(Was 4000 until 2026-08-19, which silently turned an '
+                         '18,549-symbol census into a 22%% sample.)')
     ap.add_argument('--out', default=None)
+    add_coverage_args(ap)
     args = ap.parse_args()
 
     project = os.path.abspath(args.project)
     units = load_units(project)
+    cov = CoverageReport('data_symbol_scan', args=args)
 
     # Select units
     sel = []
@@ -386,19 +394,28 @@ def main():
         if args.units_grep and args.units_grep not in nm:
             continue
         sel.append(u)
+    cov.extra('units_total', len(units))
+    cov.extra('units_selected', len(sel))
+    if len(sel) != len(units):
+        cov.note(f'--units-grep={args.units_grep!r} selected {len(sel)} of {len(units)} units; '
+                 f'the data symbols of the other {len(units) - len(sel)} were never enumerated')
 
-    # Build (unit, symbol, kind) tasklist
+    # Build (unit, symbol, kind) tasklist.  Every discard below goes through
+    # cov.drop(), so `universe - examined - dropped` must come out at zero; if it
+    # does not, emit() says so instead of printing a clean total.
     tasks = []
-    dropped = {'no-target-obj': 0, 'capped': 0, 'string-skipped': 0}
+    universe = 0
+    no_target_obj_units = 0
     classes_lc = set(args.classes)
     for u in sel:
         dsyms = enum_data_symbols(project, u)
         _tp = u.get('target_path')
         if not dsyms and (not _tp or not os.path.exists(os.path.join(project, _tp))):
-            dropped['no-target-obj'] += 1
+            no_target_obj_units += 1
+        universe += len(dsyms)
         for (sym, kind) in dsyms:
             if kind == 'string-pool' and not args.include_strings:
-                dropped['string-skipped'] += 1
+                cov.drop('string-pool-not-requested', note='pass --include-strings')
                 continue
             if classes_lc:
                 # restrict to symbols whose owner/declaring class matches
@@ -408,19 +425,29 @@ def main():
                 if m:
                     rtti_owner = m.group(1)
                 if owner not in classes_lc and rtti_owner not in classes_lc:
+                    cov.drop('class-not-in---classes')
                     continue
-            elif not args.all_vtables and kind == 'vtable-layout':
-                # default mode without --classes/--all-vtables: nothing selected
-                pass
             tasks.append((u['name'], sym, kind))
 
-    if not classes_lc and not args.all_vtables and not args.include_strings:
-        print('No selector given (--classes / --all-vtables / --units-grep + --all-vtables). '
-              'Nothing to scan.', file=sys.stderr)
+    cov.universe(universe, 'data symbols (??_7/??_R*/??_C) in the selected units\' target .obj files')
+    if no_target_obj_units:
+        cov.note(f'{no_target_obj_units} selected unit(s) had no readable target .obj — their '
+                 f'data symbols are absent from the universe entirely, so this denominator '
+                 f'is itself a lower bound')
 
-    if len(tasks) > args.max_symbols:
-        dropped['capped'] = len(tasks) - args.max_symbols
+    # NOTE: without --classes/--all-vtables the scanner scans EVERY vtable it
+    # enumerated.  It used to print "Nothing to scan." here while doing exactly
+    # that, which is its own small lie; the coverage block now states the real
+    # examined count either way.
+    if not classes_lc and not args.all_vtables and not args.include_strings:
+        cov.note('no selector given (--classes/--all-vtables): scanning every enumerated '
+                 'vtable and RTTI symbol')
+
+    if args.max_symbols and len(tasks) > args.max_symbols:
+        cov.cap('--max-symbols', args.max_symbols, before=len(tasks), after=args.max_symbols,
+                note='rows beyond the cap were NEVER diffed')
         tasks = tasks[:args.max_symbols]
+    cov.examine(len(tasks))
 
     results = {'candidate-bug': [], 'review-insert': [], 'icf-benign': 0,
                'clean': 0, 'no-data': 0, 'errors': []}
@@ -448,10 +475,20 @@ def main():
             elif verdict in ('icf-benign', 'clean', 'no-data'):
                 results[verdict] += 1
 
+    # Thread completion order is not a sort key.  Two runs of a census must be
+    # byte-identical or the census is not a measurement.
+    for k in ('candidate-bug', 'review-insert'):
+        results[k].sort(key=lambda r: (r['unit'], r['sym']))
+    results['errors'].sort(key=lambda r: (r['unit'], r['sym']))
+
+    results['_coverage'] = cov.as_dict()
+    # Kept for backward compatibility with existing consumers of _summary.
     results['_summary'] = {
         'units_selected': len(sel),
         'symbols_scanned': len(tasks),
-        'dropped': dropped,
+        'symbols_total': universe,
+        'dropped': cov.as_dict()['dropped'],
+        'truncated': cov.truncated,
     }
 
     out = json.dumps(results, indent=2)
@@ -463,8 +500,9 @@ def main():
           f"review-insert={len(results['review-insert'])} "
           f"icf-benign={results['icf-benign']} clean={results['clean']} "
           f"no-data={results['no-data']} errors={len(results['errors'])} "
-          f"scanned={len(tasks)}", file=sys.stderr)
+          f"scanned={len(tasks)} of {universe}", file=sys.stderr)
+    return cov.emit()
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())
