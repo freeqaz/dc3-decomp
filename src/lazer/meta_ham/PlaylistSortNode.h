@@ -37,6 +37,9 @@ public:
     virtual Symbol Select();
     virtual Symbol OnSelectDone();
     virtual void OnHighlight();
+    /** Inline in the original (`f i` in ham_xbox_r.map, ICF-folded at
+     * 0x82B05A48 with the other *HeaderNode::GetItemCount overrides). */
+    virtual int GetItemCount() { return mChallengeCount; }
     NavListSortNode *GetFirstActive();
     virtual void Text(UIListLabel *, UILabel *) const;
     virtual bool IsActive() const;
