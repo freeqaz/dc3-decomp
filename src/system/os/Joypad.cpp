@@ -667,8 +667,8 @@ void JoypadPollCommon() {
             bool hasProGuitar =
                 padType != kJoypadDigital && padType != kJoypadAnalog
                 && padType != kJoypadDualShock;
-            unsigned char *pro_dst = (unsigned char *)&data.mProGuitarData;
             for (int j = 0; j < (int)sizeof(ProGuitarData); j++) {
+                unsigned char *pro_dst = (unsigned char *)&data.mProGuitarData;
                 changed |= hasProGuitar && pro_dst[j] != pro_guitar[j];
                 pro_dst[j] = pro_guitar[j];
             }
