@@ -48,11 +48,20 @@ enum ShaderType {
 struct ShaderMacro {
     ShaderMacro(const char *n = nullptr, const char *v = nullptr) : Name(n), Value(v) {}
 
-    // No user-defined operator= : with one, MSVC lowers
-    // __uninitialized_fill_n<ShaderMacro*> to a countdown loop, but retail
-    // folds that instantiation into __uninitialized_fill_n<pair<int,int>*>
-    // at 0x82461B08, which is the mtctr/bdnz form the IMPLICIT assignment
-    // produces.  The implicit one copies exactly the same two pointers.
+    // REVERTED EXPERIMENT (2026-08-19).  Retail's
+    // __uninitialized_fill_n<ShaderMacro*> is ICF-folded into the
+    // <pair<int,int>*> instantiation at 0x82461B08, whose loop is mtctr/bdnz;
+    // ours is a countdown loop, and dropping this hand-written operator= is
+    // what makes MSVC emit the mtctr form.  But that instantiation is
+    // LINKER_MERGED (invisible to the metric) while GenerateMacros is not:
+    // removing the operator= took ShaderOptions::GenerateMacros from 100% to
+    // 97.3% normalized, -3612 B whole-build.  Right diagnosis, wrong code --
+    // do not retry without a spelling that keeps GenerateMacros at 100%.
+    ShaderMacro &operator=(const ShaderMacro &other) {
+        this->Name = other.Name;
+        this->Value = other.Value;
+        return *this;
+    }
 
     const char *Name; // 0x0
     const char *Value; // 0x4
