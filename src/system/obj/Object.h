@@ -562,8 +562,27 @@ private:
     ObjRefOwner *mOwner; // 0xc
     ObjListMode mListMode; // 0x10
 
+#ifdef HX_NATIVE
+    // Native keeps the walking implementations in ObjPtr_p.h; the port has
+    // never been proven not to reach them polymorphically through ObjRefOwner.
     virtual Hmx::Object *RefOwner() const;
     virtual bool Replace(ObjRef *, Hmx::Object *);
+#else
+    // The shipped linker map co-lists ObjPtrList<T>::RefOwner / ::Replace with
+    // ObjPtrVec<T>::RefOwner / ::Replace at 0x8285ae50 (>100 names, /OPT:ICF),
+    // so retail's container-level overrides are the SAME "should never be
+    // called" stub ObjPtrVec carries -- the list's own ObjRefOwner slots are
+    // never used (Node::Replace calls ObjPtrList::ReplaceNode, which forwards
+    // to the OUTER mOwner->Replace).
+    virtual Hmx::Object *RefOwner() const {
+        MILO_FAIL("should never be called");
+        return nullptr;
+    }
+    virtual bool Replace(ObjRef *, Hmx::Object *) {
+        MILO_FAIL("should never be called");
+        return false;
+    }
+#endif
     void ReplaceNode(Node *, Hmx::Object *);
 
 public:
