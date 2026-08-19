@@ -411,3 +411,62 @@ These are correct and should remain:
 - 7 `HX_NATIVE` guards removed or restructured (2026-03-16)
 - 14 more guards removed in FileMerger convergence Phase 3+4 (2026-03-17): Game.cpp bypasses (2), GamePanel StartIntro block, Song::SyncState guard + stub, HamDirector SetNativeVenueWorld + DebugWorldLoad (2 files) + Enter/GetWorld (2)
 - Phase 5 (2026-03-17): gNativeHudDir removed (~330 lines loading+drawing), DirLoader parent chain + FindObject ProxyDir fallback added, ObjPtrVec::Node::RefOwner pre-existing bug fixed
+
+---
+
+## The inverse audit: native fixes that were never guarded (2026-08-19)
+
+This document audits guards that exist. The inverse defect is a native fix written
+**without** a guard, so it compiles into the Xbox plane too and silently changes the
+code the decomp is trying to match. It is nearly invisible: the match% moves by a few
+instructions, which reads as ordinary residual noise, and nothing about the source
+says "native".
+
+Two confirmed instances so far:
+
+| Function | Introduced by | Cost | Fixed |
+|---|---|---|---|
+| `HamIKSkeleton::SetBone` — `if (!t2) return;` | `5d19777db` *native: venue rendering* | 6 instructions, 92.4% → 99.0% | `866ba1082` |
+| `DelayEffect::Process` — `if (!mBuffer) return;` | `f8a417405` *native: v0xE mogg audio pipeline*, whose own body says "Null guard in DelayEffect::Process for freed mBuffer" | 4 inserts + 1 replace + 1 delete, 95.7% → 99.4% | this audit |
+
+### Detector
+
+```bash
+python3 scripts/analysis/native_guard_leak_scan.py --repo . --signal all
+python3 scripts/analysis/native_guard_leak_scan.py --self-test   # negative control
+```
+
+Four signals, reported as separate tiers so each can be judged on its own:
+
+- **blame** — line still attributed (`git blame -w -M`) to a commit whose *subject*
+  marks it native-port work, and outside any guard-macro conditional.
+- **interpolated** — that commit owns ≤10 lines and ≤40% of a function body somebody
+  else decompiled. Authoring a whole function is not leaking.
+- **guard-shape** — the line is the defensive idiom this document's Guiding Principles
+  already name: a null/empty check whose body is `return`/`continue`/`break`.
+- **shape-static** — every unguarded defensive guard in `src/`, ignoring history
+  entirely. The blame signal cannot see a leak landed under a subject like
+  `progress: ...`; this one can, at the cost of being an upper bound.
+
+`--self-test` is the negative control: it re-injects `if (!t2) return;` into
+`HamIKSkeleton::SetBone` verbatim as `5d19777db` left it — no comment, so the content
+signal cannot fire for free — on a scratch commit, asserts the scanner reports it, and
+asserts the currently-guarded site stays silent. It refuses to run on a dirty tree
+because its rollback is a hard reset.
+
+### The result that matters most
+
+**A hit is not a verdict, and the false-positive rate is high by nature.** The Xbox
+build is full of genuine null checks, empty checks and early returns. Of 814 unguarded
+defensive guards tree-wide, 107 sit in sub-100% functions; the 24 that are the *first
+or second statement* of such a function — the exact shape of both confirmed leaks —
+adjudicate as 22 target-faithful and 2 regex artifacts. Exactly one real leak in the
+whole tree.
+
+The only thing that settles a candidate is the target disassembly: read the function's
+prologue in `build/373307D9/asm/`, or look for `insert` entries in `run_objdiff`. A
+leaked guard shows up as an *inserted* load/compare/branch our side emits and the
+target does not — `DelayEffect::Process` had 4 inserts before the fix and 0 after.
+Five sites handed to this audit as "reported unguarded" were all target-faithful, and
+two of them come straight back out of this scanner's own TIER S, which is a fair
+description of what the signal is worth without that adjudication step.
