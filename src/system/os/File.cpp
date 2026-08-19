@@ -29,16 +29,29 @@
 #undef st_mtime
 #endif
 
-static File *gOpenCaptureFile;
+// MSVC emits this TU's uninitialized globals into .bss in *reverse* declaration
+// order, so the block below is the reverse of the target's data layout, which
+// symbols.txt gives verbatim from gSystemRoot at 0x82F658B8:
+//
+//   gSystemRoot +0x000  gExecRoot +0x100  gRoot +0x200
+//   gOpenCaptureFile +0x300  gCaptureFileMode +0x304
+//   gFakeFileErrors +0x308  gNullFiles +0x309  kNoHandle +0x30c
+//   gFrameRateArray +0x310
+//
+// The four public globals therefore have to be declared *before* the five
+// statics, not after: FileInit materialises the address of gSystemRoot once
+// and reaches gExecRoot, gRoot and gOpenCaptureFile from it as +0x100, +0x200
+// and +0x300, which only works if gSystemRoot is the first object in .bss.
+DataArray *gFrameRateArray;
+void *kNoHandle;
+bool gNullFiles;
+bool gFakeFileErrors;
+
 static int gCaptureFileMode;
+static File *gOpenCaptureFile;
 static char gRoot[256];
 static char gExecRoot[256];
 static char gSystemRoot[256];
-
-bool gFakeFileErrors;
-bool gNullFiles;
-void *kNoHandle;
-DataArray *gFrameRateArray;
 
 std::vector<File *> gFiles(0x80); // 0x10...?
 std::vector<String> gDirList;
