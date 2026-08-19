@@ -17,6 +17,11 @@ public:
     OBJ_SET_TYPE(HamGameData)
     virtual DataNode Handle(DataArray *, bool);
     virtual bool SyncProperty(DataNode &, DataArray *, int, PropOp);
+    /** All three are EMPTY in the original ('f i' at 0x823E3B70): HamGameData
+     * deliberately does not serialize or copy itself. */
+    virtual void Save(BinStream &) {}
+    virtual void Copy(const Hmx::Object *, Hmx::Object::CopyType) {}
+    virtual void Load(BinStream &) {}
 
     OBJ_MEM_OVERLOAD(0x3B)
     NEW_OBJ(HamGameData)

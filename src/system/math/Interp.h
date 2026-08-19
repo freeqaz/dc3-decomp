@@ -7,7 +7,9 @@ class Interpolator {
 public:
     virtual float Eval(float) const = 0;
     virtual float ClampEval(float f) const { return Eval(f); }
-    virtual void Reset(const DataArray *) = 0;
+    /** NOT pure in the original: ?Reset@Interpolator@@ is an empty body
+     * ('f i' at 0x823E3B70). The slot held _purecall on our side. */
+    virtual void Reset(const DataArray *) {}
     virtual ~Interpolator();
 
     MEM_OVERLOAD(Interpolator, 0x28);

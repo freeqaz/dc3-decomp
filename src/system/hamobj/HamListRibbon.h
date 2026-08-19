@@ -60,6 +60,9 @@ public:
     OBJ_SET_TYPE(HamListRibbon);
     virtual DataNode Handle(DataArray *, bool);
     virtual bool SyncProperty(DataNode &, DataArray *, int, PropOp);
+    /** ?Poll@HamListRibbon@@ is empty in the original ('f i' at 0x823E3B70);
+     * without it the slot ran RndDir::Poll. */
+    virtual void Poll() {}
     virtual void Save(BinStream &);
     virtual void Copy(const Hmx::Object *, Hmx::Object::CopyType);
     virtual void PreLoad(BinStream &);

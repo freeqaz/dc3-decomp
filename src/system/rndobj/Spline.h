@@ -34,6 +34,9 @@ public:
     }
     OBJ_CLASSNAME(Spline);
     OBJ_SET_TYPE(Spline);
+    /** ?Enter@RndSpline@@ is empty in the original ('f i' at 0x823E3B70);
+     * the slot ran RndPollable::Enter. */
+    virtual void Enter() {}
     virtual DataNode Handle(DataArray *, bool);
     virtual bool SyncProperty(DataNode &, DataArray *, int, PropOp);
     virtual void Save(BinStream &);
