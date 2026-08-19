@@ -134,6 +134,32 @@ Same shape as the correction recorded in `comdat-tier2-triage-20260819.md`
 refusals are a claim about the instrument until the instrument has a negative
 control.**
 
+### `fold_proof.py`'s zero-relocation refusal re-verified
+
+The brief required checking that the existing suite's cheapness guard still
+fires before trusting anything downstream of it. Exercised directly:
+
+```
+code, zero-reloc, real stub bytes    -> cheap = True
+code, zero-reloc, 400 B unique body  -> cheap = True     <-- CODE is always cheap when reloc-free
+data, 4 B                            -> cheap = True
+data, 64 B all-zero                  -> cheap = True
+data, 64 B nonzero                   -> cheap = False
+```
+
+Intact, and *stricter* than this lane's WEAK tier: `fold_proof.py` refuses any
+relocation-free **code** body regardless of length, which is the guard that kept
+`?Handle@HamDirector@@`'s `OnSaveFaceanims` pair honest. This lane's WEAK rows
+are consistent with it — they are likewise not certified on bytes, and are
+installed on the map instead.
+
+One thing that is **not** a defect, recorded so it is not "fixed" later:
+`icf_pairing_bodytest.py` also ignores `IMAGE_REL_PPC_PAIR`'s bogus symbol
+index, but only incidentally — it collects relocated offsets into a *set* and
+uses them only for masking, and a PAIR shares its REFHI's offset, so the set is
+unchanged. The defect only bites a tool that maps offset → *name*, which is what
+this lane's test does. `fold_proof.py` already filters PAIR explicitly.
+
 ## The ambiguity, stated rather than hidden
 
 **27 of the 43 addresses have more than one member our own object defines that
@@ -211,6 +237,20 @@ is now proven at 100 %, so it is a direct template for writing
 
 Not attempted here; all five want their own lane, and the `ObjPtr` two touch
 `src/system/obj/ObjPtr_p.h`, which is included by most of the tree.
+
+### Coordination note for the `ObjPtr` lane
+
+`fix/objptr-icf-bodies` is concurrently experimenting on exactly these
+containers (`EXPERIMENT: drop __declspec(noinline) from ObjPtrVec::Set, restore
+plain erase body`). It does not touch any file this lane touches, so there is no
+merge collision — but there is a **measurement** interaction worth knowing:
+
+`?Set@?$ObjPtrVec@VFlowNode@@VObjectDir@@@@…` at `0x823E8A38` was scored
+*nowhere* before this lane and is now a live 84 B row at 100 %. That lane
+therefore gains a regression gate it did not have: a change to `ObjPtrVec::Set`
+that was previously invisible to the metric will now show up. `erase` at
+`0x823EA0B8` remains unscored (refused above), so it still needs the body test
+rather than the metric to evaluate.
 
 ## What was deliberately not touched
 
