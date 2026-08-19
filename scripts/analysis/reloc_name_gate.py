@@ -124,8 +124,16 @@ def _strip_scope(name: str) -> str | None:
     return (m.group(1) + m.group(2)) if m else None
 
 
-def classify_exempt(target: str, base: str) -> str | None:
-    """Named exemption bucket for a pair, or None if the pair stands."""
+def classify_exempt(target, base) -> str | None:
+    """Named exemption bucket for a pair, or None if the pair stands.
+
+    A `Symbol` typed_arg can carry a non-string value (or None) when one side has
+    no relocation at all.  Such a pair is NOT exempt -- a missing relocation
+    where the target has one is the loudest possible version of this bug -- so it
+    falls through to the map adjudication rather than being dropped here.
+    """
+    if not isinstance(target, str) or not isinstance(base, str):
+        return None
     if _strip_anon(target) == _strip_anon(base):
         return "anon_ns_placeholder"
     ts, bs = _strip_scope(target), _strip_scope(base)
@@ -299,7 +307,8 @@ def charged_pairs(cli, project, ruler, population, timeout):
                     pairs.add(sp)
                 else:
                     other += 1
-            out[(unit, sym)] = {"pairs": sorted(pairs), "other": other}
+            out[(unit, sym)] = {"pairs": sorted(pairs, key=lambda p: (str(p[0]), str(p[1]))),
+                                "other": other}
     return out
 
 
@@ -382,6 +391,9 @@ def main(argv=None) -> int:
     ap.add_argument("--json-out")
     ap.add_argument("--no-exempt", action="store_true",
                     help="print the raw population with no exemption buckets")
+    ap.add_argument("--limit", type=int, default=40,
+                    help="print at most N standing rows (counts are always "
+                         "complete; --limit 0 for all)")
     ap.add_argument("--include-synthetic", action="store_true",
                     help="also list fn_*/lbl_* rows (EH funclets etc.)")
     ap.add_argument("--timeout", type=int, default=900)
@@ -419,15 +431,34 @@ def main(argv=None) -> int:
     G = index_report(graded_report)
 
     scanned = len(N)
-    pop = [k for k in N if N[k][0] >= 100.0 and G.get(k, (0.0, 0))[0] < 100.0]
+    # ── The population ────────────────────────────────────────────────────────
+    # ANY row the graded ruler scores below the relocation-blind ruler carries a
+    # relocation-name charge. Nothing else can move between the two legs -- they
+    # differ in exactly one config key.
+    #
+    # ⚠ This used to read `N == 100 and G < 100`, i.e. only rows that were
+    #   otherwise PERFECT. That is a defensible reporting slice and an indefensible
+    #   population: it silently dropped every wrong-callee bug sitting on a row
+    #   that also had instruction mismatches. The end-to-end negative control
+    #   caught it -- re-applying the `createFilter` bug produced NO output,
+    #   because EQEffect::SetParameter is 84.7% blind and the filter threw it
+    #   away. 42 rows survived that filter; the honest population is 508.
+    pop = [k for k in N if G.get(k, (0.0, 0))[0] < N[k][0] - 1e-9]
+    synthetic = [k for k in pop if k[1].startswith(("fn_", "lbl_"))]
     if not args.include_synthetic:
-        pop = [k for k in pop if not k[1].startswith(("fn_", "lbl_"))]
+        pop = [k for k in pop if k not in set(synthetic)]
     pop_bytes = sum(N[k][1] for k in pop)
+    # Rows whose ONLY defect is the name: closing it crosses the row and pays
+    # its full size, because matched_code is all-or-nothing per row.
+    crossers = [k for k in pop if N[k][0] >= 100.0]
 
     print(f"\nrows scanned (denominator)          : {scanned}")
-    print(f"rows 100% blind but <100% graded    : {len(pop)}  ({pop_bytes} B)")
+    print(f"rows graded < blind (ANY name charge): {len(pop)}  ({pop_bytes} B)")
+    print(f"  of which otherwise PERFECT         : {len(crossers)}  "
+          f"({sum(N[k][1] for k in crossers)} B)  <- closing the name crosses the row")
     if not args.include_synthetic:
-        print("  (fn_*/lbl_* funclet rows excluded; --include-synthetic to keep)")
+        print(f"  fn_*/lbl_* funclet rows excluded    : {len(synthetic)}  "
+              "(--include-synthetic to keep)")
 
     idx = load_map_index(mapfile)
     print(f"linker map                          : {mapfile} ({len(idx)} names)")
@@ -476,14 +507,17 @@ def main(argv=None) -> int:
                 exempted[bucket] += 1
                 buckets[bucket] += 1
                 continue
-            kept.append({"target": t, "base": b,
-                         "verdict": map_verdict(idx, t, b),
-                         "target_addrs": idx.get(t, []),
-                         "base_addrs": idx.get(b, [])})
+            ts, bs = (t if isinstance(t, str) else repr(t),
+                      b if isinstance(b, str) else repr(b))
+            kept.append({"target": ts, "base": bs,
+                         "verdict": map_verdict(idx, ts, bs),
+                         "target_addrs": idx.get(ts, []),
+                         "base_addrs": idx.get(bs, [])})
         if not d["pairs"]:
             buckets["no_symbol_pair_extracted"] += 1
         rows.append({"unit": key[0], "symbol": key[1], "size": N[key][1],
-                     "graded_fuzzy": G[key][0], "other_charges": d["other"],
+                     "graded_fuzzy": G[key][0], "blind_fuzzy": N[key][0],
+                     "other_charges": d["other"], "crosses": N[key][0] >= 100.0,
                      "pairs": kept, "exempted": dict(exempted)})
 
     standing = [r for r in rows if r["pairs"]]
@@ -503,12 +537,17 @@ def main(argv=None) -> int:
     for k, v in vcount.most_common():
         print(f"  {k:<20} {v:>5}")
 
+    listed = [r for r in standing if r not in fold]
+    shown = listed if not args.limit else listed[:args.limit]
     print("\n" + "=" * 78)
-    for r in standing:
-        if r in fold:
-            continue
-        print(f"\n{r['size']:>7} B  graded={r['graded_fuzzy']:.4f}  "
-              f"other_charges={r['other_charges']}")
+    print(f"listing {len(shown)} of {len(listed)} non-FOLD standing rows"
+          + ("" if not args.limit else f" (--limit {args.limit}; "
+             "the COUNT above is the finding, the listing is a convenience)"))
+    for r in shown:
+        print(f"\n{r['size']:>7} B  blind={r['blind_fuzzy']:.4f} "
+              f"graded={r['graded_fuzzy']:.4f}  "
+              f"other_charges={r['other_charges']}"
+              f"{'  [CROSSES: name is the only defect]' if r['crosses'] else ''}")
         print(f"  {r['unit']} :: {r['symbol']}")
         for p in r["pairs"]:
             print(f"    [{p['verdict']}]")

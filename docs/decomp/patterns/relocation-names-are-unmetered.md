@@ -36,33 +36,44 @@ The isolating measurement is the **delta between two reports that differ in
 exactly one config key**:
 
 ```
-100% under functionRelocDiffs=none   AND   <100% under the graded name_check ruler
+graded (name_check) score  <  relocation-blind (none) score
 ```
 
-Both legs load `build/373307D9/icf_aliases.map`, so folds the project has
-already adjudicated never enter the population.
+Nothing else can move between the two legs. Both legs load
+`build/373307D9/icf_aliases.map`, so folds the project has already adjudicated
+never enter the population.
 
-## The population, re-derived
+## The population, re-derived — and the filter that nearly hid half of it
 
 | | rows | bytes |
 |---|---|---|
 | functions scored | 48,344 | — |
-| 100% blind, <100% graded (incl. `fn_`/`lbl_` funclets) | 186 | 32,388 |
-| …of which `fn_`/`lbl_` MSVC EH funclets | 113 | 4,060 |
-| **named functions** | **73** | **28,328** |
+| **carry ≥1 relocation-name charge** (graded < blind, named) | **508** | **433,788** |
+| …`fn_`/`lbl_` MSVC EH funclets, excluded by default | 120 | — |
+| …of the 508, **otherwise PERFECT** (100% blind) | 42 | 17,084 |
 
-An earlier scoping run quoted **198 / 37,496**; that was the same measurement on
-a slightly older tree and it did not separate the funclets. **113 of the 186 are
-funclets**, so the actionable population is roughly a third of the headline. If
-you want one number for this class, use the named one.
+⚠ **The first version of this write-up, and of the gate, defined the population
+as "100% blind and <100% graded" — 186 rows / 32,388 B, of which 113 funclets
+and 73 named.** That is a defensible *reporting slice* (on those rows, closing
+the name crosses the row and pays its full size, because `matched_code` is
+all-or-nothing) and an **indefensible population**: it silently drops every
+wrong-callee bug that happens to sit on a row which *also* has instruction
+mismatches. Which is most of them — 42 of 508, i.e. **8%**.
 
-A *wider* set — `match_percent_normalized == 100` with graded `fuzzy < 100` — is
-384 rows / 145,968 B, but that set is contaminated with register permutations,
-which normalization also forgives. Do not use it for this class.
+It was the end-to-end negative control that caught this, not review. Re-applying
+the `createFilter` bug produced **no output at all**, because
+`EQEffect::SetParameter` is 84.7% under the blind ruler and the filter threw it
+away. That is precisely the "silent `continue` on exactly the population that
+mattered" failure this project has now found eight times.
 
-**Every one of the 186 had `other_charges == 0`**: the relocation-name charge was
-the *only* thing wrong with the row. That is what makes the class worth a lane —
-closing the name closes the row.
+A related trap: under the old definition, *every* row necessarily had
+`other_charges == 0`, and the first draft reported that as a finding. It was a
+tautology — the filter had selected for it.
+
+A *different* wider set — `match_percent_normalized == 100` with graded
+`fuzzy < 100` — is 384 rows / 145,968 B, but that set is contaminated with
+register permutations, which normalization also forgives. Do not use it for this
+class.
 
 ## The discriminator
 
@@ -175,7 +186,14 @@ second TU's own bare include above the shared header gives both what they want.
 **Read the decoded string, never the mangled name.** `??_C@_0DD@KHGMMELO@…` and
 `??_C@_0DD@LAENHEGL@…` truncate to the same 32 characters and look identical.
 
-## What is left (24 standing rows, 7,372 B)
+## What is left
+
+427 of the 508 rows still carry a non-exempt charge (354,492 B), but most of
+those are rows with hundreds of instruction mismatches whose float-constant-pool
+relocations differ *because* of the other bugs. The tranche worth reading first
+is the **24 rows that are otherwise perfect** (7,372 B) — on those the name is
+the only defect:
+
 
 * **`__FILE__` header-provenance, 11 rows ≈1,100 B.** Ours records a bare
   `.cpp` basename where the target records a header — our class declaration or
@@ -218,20 +236,33 @@ judgement is three named exemption buckets (anon-namespace placeholder, MSVC
 scope counter, dtk synthetic fold name) and **every bucket's count prints on
 every run, next to the denominator** (48,344 rows scanned).
 
-`--selftest` is the negative control: it replays the recorded `createFilter`
-charge through the same adjudication path and asserts it is **not** exempted,
-plus five more must-not-swallow cases. Two of those exist because the first
+`--selftest` is the *unit-level* negative control: it replays the recorded
+`createFilter` charge through the same adjudication path and asserts it is
+**not** exempted, plus five more must-not-swallow cases. **It is not sufficient
+on its own** — it passed while the end-to-end control was failing, because the
+defect was in the population filter, upstream of anything `--selftest` touches.
+Run both. Two of those exist because the first
 version of the scope-counter exemption was wrong — its regex matched only the
 letter-run encoding (`?HP@??Foo`) and silently missed the bare-digit one
 (`?9??Foo`), and it has to *not* fire when the variable differs rather than the
 counter, or it would have swallowed `ThreeDSound::Load`.
 
-End-to-end control: re-declare `createFilter` `extern "C"` in
-`src/system/synth/EQEffect.cpp`, rebuild, re-run; the row must appear with
+End-to-end control (**run this, not just `--selftest`**): re-declare
+`createFilter` `extern "C"` in `src/system/dsp/EQEffect.cpp`, rebuild, re-run.
+The row must appear with
 
 ```
-?createFilter@@YAXW4FilterType@@MMMMPAUFilterCoeff@@@Z   vs   createFilter
+2164 B  blind=84.7153 graded=84.4935  other_charges=213
+  default/system/dsp/EQEffect :: ?SetParameter@EQEffect@@QAAXHM@Z
+    [BASE_NOT_IN_MAP]
+      TARGET ?createFilter@@YAXW4FilterType@@W4FilterBand@@IMMPAUFILTER@@H@Z  @['82e5c228']
+      OURS   createFilter  @-
 ```
+
+Assert on the **pair**, not on the population count: that row is in the
+population either way (its float-pool relocations also differ), so the count is
+508 with and without the bug. Reverting must take the `createFilter` pair to
+zero occurrences in the output.
 
 ## See also
 

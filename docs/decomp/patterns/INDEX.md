@@ -146,9 +146,9 @@ standard, and the instrument→stub-test→audit→retry→runtime-verify workfl
 relocation penalties into `arg_diff_score` by design, so calling an entirely
 different symbol costs **zero** normalized points under every
 `functionRelocDiffs` value — and produces **zero instruction mismatches**, which
-defeats the "zero-mismatch instruction count" escape hatch too. 73 named
-functions / 28,328 B on this tree were 100% relocation-blind and below 100% on
-the graded ruler, **all with `other_charges == 0`**. Confirmed instances: a
+defeats the "zero-mismatch instruction count" escape hatch too. 508 named
+functions / 433,788 B on this tree carry at least one relocation-name charge; **42
+of them (17,084 B) are otherwise perfect**, so closing the name crosses the row. Confirmed instances: a
 wrong base constructor (`Task` vs `Hmx::Object`), `MakeString<char>` vs
 `<unsigned char>`, an `extern "C"` mangling mismatch, a local overload shadowing
 a template. Standing check: `scripts/analysis/reloc_name_gate.py` (with a
