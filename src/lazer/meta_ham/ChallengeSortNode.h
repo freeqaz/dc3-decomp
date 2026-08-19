@@ -14,9 +14,15 @@ public:
     virtual Symbol Select();
     virtual Symbol OnSelectDone();
     virtual void OnHighlight();
+    virtual void OnUnHighlight();
+    /** Inline in the original (`f i` in ham_xbox_r.map, ICF-folded at
+     * 0x82B05A48 with the other *HeaderNode::GetItemCount overrides). */
+    virtual int GetItemCount() { return mChallengeCount; }
     virtual NavListSortNode *GetFirstActive();
     virtual bool IsActive() const;
     virtual const char *GetAlbumArtPath();
+    virtual void UpdateItemCount(NavListItemNode *);
+    virtual void SetItemCountString(UILabel *) const;
     virtual void SetCollapseStateIcon(bool) const;
     virtual void Renumber(std::vector<NavListSortNode *> &);
 
