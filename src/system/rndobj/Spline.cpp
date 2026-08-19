@@ -336,7 +336,11 @@ void RndSpline::SyncDeformedCtrlPoints(int iStartIndex, int iEndIndex) const {
 void RndSpline::PrepareShader(float f1, float f2) const {
     if (mDeformedCtrlPoints.size() >= 2) {
         int endCtrlPt = mEndCtrlPoint;
-        int startCtrlPt = Max(mStartCtrlPoint, 0);
+        // Not Max(x, 0): the target's branchless idiom is
+        //   addi r10, r11, 1 / subfic r10, r10, 0 / subfe r10, r10, r10 / and
+        // i.e. mask = -(x != -1), so the guard is 'x == -1', not 'x < 0'.
+        // Max() would emit srwi/subi/and off the sign bit, which is what we had.
+        int startCtrlPt = mStartCtrlPoint == -1 ? 0 : mStartCtrlPoint;
         if (endCtrlPt == -1) {
             endCtrlPt = mCtrlPoints.size() - 1;
         }

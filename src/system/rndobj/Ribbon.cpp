@@ -252,8 +252,7 @@ void RndRibbon::UpdateMesh() {
                         }
                         row++;
                         vert.norm = norm;
-                        vert.tex.x =
-                            1.0f - (latestFrame - segFrame) / mDecay;
+                        vert.tex.x = 1.0f - (latestFrame - segFrame) / mDecay;
                         vert.tex.y = uFrac;
                     } while (row < 2);
                     numSides = mNumSides;
@@ -291,9 +290,9 @@ void RndRibbon::UpdateChase() {
 
         unsigned int numKeys = mTransforms.size();
         unsigned int removeCount = 0;
+        unsigned int i = 0;
         if (numKeys != 0) {
             float cutoff = now - mDecay;
-            unsigned int i = 0;
             do {
                 if (mTransforms[i].frame >= cutoff) {
                     break;
@@ -332,16 +331,17 @@ void RndRibbon::UpdateChase() {
                 // (85.8% vs 86.7%) — the shipped build reloads mTransforms.mEnd every
                 // iteration instead of keeping it live. Do not re-try.
                 key.frame = mTransforms.back().frame + step;
+                Key<Transform> &last = mTransforms.back();
                 Interp(
-                    mTransforms.back().value.v,
+                    last.value.v,
                     followed,
                     step / (now - mTransforms.back().frame),
                     key.value.v
                 );
                 Vector3 delta;
-                Subtract(mTransforms.back().value.v, key.value.v, delta);
+                Subtract(last.value.v, key.value.v, delta);
                 if (LengthSquared(delta) < minDistSq) {
-                    mTransforms.back().frame = key.frame;
+                    last.frame = key.frame;
                 } else {
                     mTransforms.push_back(key);
                     added++;
@@ -351,74 +351,78 @@ void RndRibbon::UpdateChase() {
         }
     }
 
-    int firstDirty = mTransforms.size() - added;
-    if (firstDirty < mTransforms.size()) {
-        // Declared outside the loop: the shipped build keeps its three components in
-        // callee-saved FPRs across iterations (the preheader loads their stack homes
-        // before anything writes them). Only read when the `2 < i` branch below wrote
-        // it in the same iteration, since `angle` is reset to -1 every iteration and
-        // gates both.
-        Vector3 smoothDir;
-        float prevAngle = -1.0f;
-        for (int i = firstDirty; i < mTransforms.size(); ++i) {
-            if (i != 0) {
-                Key<Transform> &cur = mTransforms[i];
-                Key<Transform> &prev = mTransforms[i - 1];
-                Vector3 dir;
-                Subtract(cur.value.v, prev.value.v, dir);
-                Normalize(dir, dir);
+    // smoothDir is declared outside the loop: the shipped build keeps its three
+    // components in callee-saved FPRs across iterations (the preheader loads their
+    // stack homes before anything writes them). Only read when the `2 < i` branch
+    // below wrote it in the same iteration, since `angle` is reset to -1 every
+    // iteration and gates both.
+    Vector3 smoothDir;
+    for (int i = mTransforms.size() - added; i < mTransforms.size(); ++i) {
+        if (i != 0) {
+            Key<Transform> &cur = mTransforms[i];
+            Key<Transform> &prev = mTransforms[i - 1];
+            Vector3 dir;
+            Subtract(cur.value.v, prev.value.v, dir);
+            Normalize(dir, dir);
 
-                float angle = -1.0f;
-                if (2 < i) {
-                    Vector3 prevDir;
-                    Subtract(prev.value.v, mTransforms[i - 2].value.v, prevDir);
-                    float dot = Clamp(0.0f, 1.0f, Dot(prevDir, dir));
-                    angle = std::acos(dot);
-                    Vector3 scaledPrev = prevDir;
-                    scaledPrev *= prevAngle;
-                    Interp(dir, scaledPrev, 0.5f, smoothDir);
-                    Normalize(smoothDir, smoothDir);
-                }
-
-                static Vector3 up(0.0f, 0.0f, 1.0f);
-                Transform invPrev;
-                Invert(prev.value, invPrev);
-                Vector3 localPos;
-                Multiply(cur.value.v, invPrev, localPos);
-                Transform tf = Transform::IDXfm();
-                tf.LookAt(localPos, up);
-                Transform result;
-                Multiply(tf, prev.value.m, result);
-                Normalize(result.m, result.m);
-                result.v = cur.value.v;
-
-                if (angle != -1.0f) {
-                    Hmx::Matrix3 inv;
-                    Invert(result.m, inv);
-                    Multiply(smoothDir, inv, smoothDir);
-                    float clamped = Clamp(0.0f, 1.0f, smoothDir.x);
-                    float a = std::acos(clamped);
-                    float cosHalf = std::cos(angle * 0.5f);
-                    float invCos = 1.0f / cosHalf;
-                    float c = std::cos(a * 2.0f);
-                    float s = std::sin(a * 2.0f);
-                    Hmx::Matrix3 bend(
-                        ((c + 1.0f) * (invCos - 1.0f)) * 0.5f + 1.0f,
-                        (s * (1.0f - invCos)) * 0.5f,
-                        0.0f,
-                        (s * (1.0f - invCos)) * 0.5f,
-                        ((1.0f - c) * (invCos - 1.0f)) * 0.5f + 1.0f,
-                        0.0f,
-                        0.0f,
-                        0.0f,
-                        1.0f
-                    );
-                    Multiply(bend, result.m, result.m);
-                }
-
-                cur.value.m = result.m;
-                prevAngle = angle;
+            float angle = -1.0f;
+            if (2 < i) {
+                Vector3 prevDir;
+                Subtract(prev.value.v, (&cur)[-2].value.v, prevDir);
+                float dot = Clamp(0.0f, 1.0f, Dot(prevDir, dir));
+                angle = std::acos(dot);
+                Vector3 scaledPrev = prevDir;
+                scaledPrev *= -1.0f;
+                Interp(dir, scaledPrev, 0.5f, smoothDir);
+                Normalize(smoothDir, smoothDir);
             }
+
+            static Vector3 up(0.0f, 0.0f, 1.0f);
+            Transform invPrev;
+            Invert(prev.value, invPrev);
+            Vector3 localPos;
+            Multiply(cur.value.v, invPrev, localPos);
+            Transform tf = Transform::IDXfm();
+            tf.LookAt(localPos, up);
+            Transform result;
+            Multiply(tf, prev.value.m, result);
+            Normalize(result.m, result.m);
+            result.v = cur.value.v;
+
+            if (angle != -1.0f) {
+                Hmx::Matrix3 inv;
+                Invert(result.m, inv);
+                Multiply(smoothDir, inv, smoothDir);
+                // The clamp result is written back into smoothDir.x: the shipped
+                // build defers the store of Multiply()'s x output until after the
+                // two fsels and then stores the clamped value to smoothDir's home.
+                smoothDir.x = Clamp(0.0f, 1.0f, smoothDir.x);
+                float a = std::acos(smoothDir.x);
+                float cosHalf = std::cos(angle * 0.5f);
+                float invCos = 1.0f / cosHalf;
+                float c = std::cos(a * 2.0f);
+                float s = std::sin(a * 2.0f);
+                // The bend is a rotation in the x-z plane, not x-y: the shipped
+                // build stores the two computed terms at m.x.x / m.z.z and the
+                // shared off-diagonal at m.x.z / m.z.x (stack 0x120/0x148 and
+                // 0x128/0x140), with the identity row in y.  Cross-checked against
+                // rb3-xenon's RndRibbon::UpdateChase, which spells the same shape.
+                float offDiag = (s * (1.0f - invCos)) * 0.5f;
+                Hmx::Matrix3 bend(
+                    ((c + 1.0f) * (invCos - 1.0f)) * 0.5f + 1.0f,
+                    0.0f,
+                    offDiag,
+                    0.0f,
+                    1.0f,
+                    0.0f,
+                    offDiag,
+                    0.0f,
+                    ((1.0f - c) * (invCos - 1.0f)) * 0.5f + 1.0f
+                );
+                Multiply(bend, result.m, result.m);
+            }
+
+            cur.value.m = result.m;
         }
     }
 
