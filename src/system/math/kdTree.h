@@ -163,40 +163,44 @@ public:
             unsigned int vecIdx = mData.index;
             float idxDiff = box.mMax[vecIdx] - box.mMin[vecIdx];
 
+            // The split value shares its word with the 2-bit axis index: store
+            // the float, then put the axis bits back (rlwimi in the target).
+            float midSplit = idxDiff / 2.0f + box.mMin[mData.index];
+            unsigned int splitAxis = mData.index;
             unsigned int numContains = 0;
-            mData.real = idxDiff / 2.0f + box.mMin[mData.index];
-            mData.index = 3;
+            mData.real = midSplit;
+            mData.index = splitAxis;
 
             double fsum = 0.0;
             if (!items.empty()) {
                 FOREACH (it, items) {
                     Triangle *cur = *it;
+                    // A Triangle is origin + two EDGE vectors (frame.x, frame.y);
+                    // frame.z is the face normal, not a vertex. The three vertices
+                    // are therefore origin, origin+frame.x, origin+frame.y.
                     Vector3 v[3];
-                    v[0].Set(
+                    v[0] = cur->origin;
+                    v[1].Set(
                         cur->origin.x + cur->frame.x.x,
                         cur->origin.y + cur->frame.x.y,
                         cur->origin.z + cur->frame.x.z
                     );
-                    v[1].Set(
+                    v[2].Set(
                         cur->origin.x + cur->frame.y.x,
                         cur->origin.y + cur->frame.y.y,
                         cur->origin.z + cur->frame.y.z
                     );
-                    v[2].Set(
-                        cur->origin.x + cur->frame.z.x,
-                        cur->origin.y + cur->frame.z.y,
-                        cur->origin.z + cur->frame.z.z
-                    );
                     for (int i = 0; i < 3; i++) {
                         if (box.Contains(v[i])) {
-                            fsum += v[i][vecIdx];
+                            fsum += v[i][mData.index];
                             numContains++;
                         }
                     }
                 }
                 if (numContains != 0) {
+                    unsigned int meanAxis = mData.index;
                     mData.real = (float)(fsum / numContains);
-                    mData.index = 3;
+                    mData.index = meanAxis;
                 }
             }
             return true;
