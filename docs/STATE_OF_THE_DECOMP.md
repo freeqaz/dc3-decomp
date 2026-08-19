@@ -1,10 +1,25 @@
 # State of the Decomp
 
-**Measured 2026-08-17** against `924ab0c5e`, re-verified in a clean worktree at
-`2b7382e93` (identical results). Every number below was produced by a fresh
-`ninja` build plus queries against `decomp.db`; each section says how to
-regenerate it. If you are reading this more than a month after that date,
-regenerate before quoting.
+**Measured 2026-08-19** against `eda64e956`, from a clean full `ninja` in a
+worktree, with objdiff-cli `4.2.3` (`88b425bc3bad-dirty`,
+`functionRelocDiffs=name_check`), plus queries against the shared `decomp.db`.
+Each section says how to regenerate it. If you are reading this more than a
+month after that date, regenerate before quoting.
+
+> `main` moved to `2184a9641` during the audit that refreshed this file. That
+> commit's link-glue dedup drops 11 shadow rows from the authorable
+> denominator, so on `main` today the MATCHED headline reads **91.39 %
+> (29,430 / 32,202)** rather than the 91.36 % / 32,213 recorded below. Same
+> numerator, smaller denominator; nothing else moves. The DB-side numbers are
+> from the live shared database and are identical either way.
+
+> **Know which ruler you are quoting.** The canonical headline counts
+> `match_percent_normalized == 100`, which **forgives register permutation**
+> and benign relocation addends. It is *not* byte identity. `?roll@@YAHH@Z`
+> (keygen_xbox) scores 100.0 on it and is counted as matched, and 8 of its 12
+> instructions differ — every difference is register allocation. 395 authorable
+> functions / 150,108 bytes are in that state, 1.34 % of the matched set. The
+> ruler does not forgive wrong constants, offsets or vtable slots.
 
 > This document exists because five predecessor status documents rotted into
 > mutually contradictory headlines and had to be archived. The way to keep this
@@ -23,23 +38,30 @@ denominators and they will never agree.
 |---|---|---|
 | Source | `build/373307D9/report.json` (objdiff) | `decomp.db` (`functions` table) |
 | Question it answers | *Does our build produce the target's bytes?* | *Has a human or agent adjudicated this function?* |
-| Denominator | 32,213 authorable functions | 33,560 non-excluded rows |
-| Headline | **91.21 %** functions (29,383 / 32,213) | **COMPLETE 29,655 + AT_LIMIT 3,628** |
-| Byte headline | **77.41 %** code bytes (4,910,452 / 6,343,156) | — (the DB's byte sums are not a build measurement) |
-| Units | 416 / 967 authorable units complete (43.02 %) | — |
-| Remaining | 2,830 fns / 1,250,152 bytes | 277 rows with no verdict |
+| Denominator | 32,213 authorable functions | 31,425 non-excluded rows |
+| Headline | **91.36 %** functions (29,430 / 32,213) | **COMPLETE 28,722 + AT_LIMIT 1,618** |
+| Byte headline | **78.19 %** code bytes (4,959,996 / 6,343,156) | — (the DB's byte sums are not a build measurement) |
+| Units | 420 / 967 authorable units complete (43.43 %) | — |
+| Remaining | 2,783 fns / 1,233,052 bytes | 1,085 rows with no verdict |
 
-**Always state the denominator.** "91.21 %" and "COMPLETE + AT_LIMIT = 99.2 %"
+**Always state the denominator.** "91.36 %" and "COMPLETE + AT_LIMIT = 96.55 %"
 are both true and describe different facts: the first is a build measurement,
-the second is a bookkeeping measurement that includes 3,628 rows certified
-*unfixable* and a further 875 rows whose COMPLETE certificate no longer holds
-(see [Cert rot](#cert-rot)).
+the second is a bookkeeping measurement that includes 1,618 rows certified
+*unfixable*.
+
+The DONE-WITH-CERTS denominator fell **33,560 → 31,425** on 2026-08-17/18, when
+tasks #101 and #104 excluded ~2,135 rows that `report.json` can never score:
+`merged_<addr>` ICF fold survivors, `fn_<addr>` MSVC EH funclets, stale split
+spellings and unreferenced inline COMDATs. They were excluded, not deleted
+(21,122 rows carry `excluded = 1` in total). Any DONE-WITH-CERTS figure recorded
+before that date is on the old denominator and is not comparable to this one.
 
 A third number floats around and should be labelled when used: the **XEX-total**
-(XDK-diluted) headline of **60.81 % functions / 43.18 % bytes**. It divides by
-the whole 11.37 MB image including 5.03 MB of Microsoft XDK and RAD Bink code
-that has no source in this repo and never will. It is permanently capped near
-56 % and is only useful for "how much of the shipped image do we reproduce".
+(XDK-diluted) headline of **60.91 % functions / 43.62 % bytes**. It divides by
+the whole 11.37 MB image including 5.03 MB (44.2 %) of Microsoft XDK and RAD
+Bink code that has no source in this repo and never will. It is permanently
+capped near 56 % and is only useful for "how much of the shipped image do we
+reproduce".
 
 ### Regenerating them
 
@@ -53,7 +75,7 @@ python3 scripts/progress_metrics.py --markdown \
 
 ```sql
 -- DONE-WITH-CERTS (sqlite3 decomp.db)
-SELECT COUNT(*) FROM functions WHERE excluded = 0;                 -- 33,560
+SELECT COUNT(*) FROM functions WHERE excluded = 0;                 -- 31,425
 SELECT verdict, COUNT(*), SUM(size) FROM functions
 WHERE excluded = 0 GROUP BY verdict ORDER BY 2 DESC;               -- COMPLETE / AT_LIMIT / NULL
 ```
@@ -159,25 +181,28 @@ not. The audit split those 272 into:
 
 ## What the remaining 1.25 MB is made of
 
-2,830 authorable functions / 1,250,152 bytes are below 100 % normalized. Joining
-the fresh report against `decomp.db`:
+2,783 authorable functions / 1,233,052 bytes are below 100 % normalized. Joining
+the fresh report against `decomp.db` by symbol (2,779 fns / 1,233,008 B resolve;
+the residue is name-shape mismatch):
 
 | Shape | fns | bytes | share of gap |
 |---|--:|--:|--:|
-| Certified **AT_LIMIT** | 1,651 | 939,372 | 75 % |
-| DB says **COMPLETE**, report says otherwise (*cert rot*) | 875 | 178,992 | 14 % |
-| **Unverdicted** (no adjudication at all) | 151 | 92,764 | 7 % |
-| In the report, absent from the DB | 120 | 36,444 | 3 % |
-| Flagged `is_stub` and still non-zero | 33 | 2,580 | <1 % |
+| Certified **AT_LIMIT** | 1,618 | 924,696 | 75 % |
+| **Unverdicted** (no adjudication at all) | 1,050 | 274,576 | 22 % |
+| In the report, absent from the DB | 111 | 33,736 | 3 % |
 
-Cross-cut a different way: **844 functions / 125,604 bytes sit at literally 0 %**
-— that is 10 % of the gap in functions that produce nothing resembling the
-target, which is usually a missing implementation rather than a codegen fight.
+Cross-cutting (these overlap the rows above, they are not extra): **452 fns /
+112,260 bytes** are flagged `is_stub` and still non-zero, and **813 functions /
+116,956 bytes sit at literally 0 %** — 9.5 % of the gap in bytes but **29 % of
+the gap in functions**, which is usually a missing implementation rather than a
+codegen fight.
 
-*(The audit's own join reported the AT_LIMIT slice as 1,702 fns / 966,036 B.
-The 51-function difference is join-method sensitivity around ICF placeholder
-symbols; both figures round to the same story, which is "three quarters of the
-gap is behind a certificate".)*
+**Cert rot is gone.** The 875-row "DB says COMPLETE, report says otherwise"
+slice was closed by task #101: `verdict = 'COMPLETE' AND
+match_percent_normalized < 100` now returns **zero** rows. Do **not** re-derive
+this check from `current_percent` — that column holds the *fuzzy* percent, and
+374 COMPLETE rows are below 100 fuzzy while sitting at exactly 100 normalized.
+Quoting it would resurrect a phantom 374-row rot population that does not exist.
 
 ### By subsystem
 
@@ -211,21 +236,30 @@ fixes real behaviour long before it moves a percentage.
 
 ## Stubs
 
-`is_stub = 1`, non-excluded: **494 functions / 117,920 bytes**. These are bodies
+`is_stub = 1`, non-excluded: **455 functions / 113,688 bytes**. These are bodies
 we never wrote — the target has code, our source has `{}` or `return 0`.
 
-By subsystem: `synth_xbox` 219, `os` 101, `rnddx9` 52. The largest single files:
+By subsystem: `synth_xbox` 216, `os` 92, `rnddx9` 51. The largest single files:
 
 | Unit | stubs | bytes |
 |---|--:|--:|
-| `default/system/os/PlatformMgr_Xbox` | 69 | 12,592 |
+| `default/system/os/PlatformMgr_Xbox` | 67 | 12,420 |
 | `default/system/synth_xbox/ExternalMic` | 43 | 6,312 |
-| `default/system/synth_xbox/Synth` | 42 | 9,344 |
+| `default/system/synth_xbox/Synth` | 41 | 9,280 |
 | `default/system/synth_xbox/GranularSynth` | 15 | 3,872 |
-| `default/system/synth_xbox/Mic` | 13 | 5,084 |
 | `default/system/rnddx9/ShaderMgr` | 13 | 1,304 |
-| `default/system/os/NetworkSocket_Win` | 12 | 1,580 |
+| `default/system/synth_xbox/Mic` | 12 | 4,972 |
 | `default/system/rnddx9/Tex` | 11 | 6,532 |
+| `default/system/os/NetworkSocket_Win` | 10 | 1,436 |
+| `default/system/synth_xbox/PitchDetector` | 9 | 2,168 |
+| `default/system/rnddx9/Mesh` | 9 | 4,040 |
+
+A stub's `current_percent` is the least trustworthy number in the table:
+`scripts/sync_match_percent.py` drops any report entry with no
+`fuzzy_match_percent`, which is every target-only symbol, so the column keeps
+whatever it last held and can read 99.9 % for a function this build emits no
+body for. `query_functions` now says so inline (`[STUB: no body emitted; % is
+stale]`).
 
 ```sql
 SELECT unit, COUNT(*), SUM(size) FROM functions
@@ -244,32 +278,52 @@ GROUP BY unit ORDER BY 2 DESC LIMIT 20;
 function cannot reach 100 %. Three independent lines of evidence say a large
 minority of those conclusions are wrong.
 
-**1. Most AT_LIMIT rows are not even in the report.** Of 3,628 AT_LIMIT rows,
-**1,910 are `merged_*` ICF placeholders** (163,252 bytes) — synthetic names for
-addresses where the linker folded identical machine code. They are bookkeeping,
-not work. Report-visible AT_LIMIT is 1,651 functions / 939,372 bytes.
+**1. The ICF/funclet placeholders are no longer in the population.** The DB
+holds 3,796 AT_LIMIT rows, but **2,178 of them are now `excluded = 1`** — 1,917
+`merged_*` ICF fold survivors (synthetic names for addresses where the linker
+folded identical machine code), the rest `fn_*` MSVC EH funclets and stale split
+spellings. They are bookkeeping, not work, and `report.json` emits no entry for
+them. Report-visible AT_LIMIT is **1,618 functions / 924,696 bytes**, of which
+only 34 are still `merged_*`.
 
-**2. Unicorn says 640 of them still behave differently from the target.**
+**2. Unicorn says 136 of them still behave differently from the target.**
 Filtering AT_LIMIT rows to divergence classes that indicate *real* behavioural
-difference (as opposed to build-environment or register-allocation artefacts):
+difference (as opposed to build-environment or register-allocation artefacts).
+Re-measured 2026-08-19 after the harness fixes and the oracle re-ingest; the
+pre-fix figure was 640 fns / 466,036 bytes and was ~87 % harness artefact:
 
-| class | fns |
-|---|--:|
-| `cap_exhausted` | 377 |
-| `cap_exhausted_decomp` | 144 |
-| `wild_jump_match` | 50 |
-| `call_arg` | 31 |
-| `call_count` | 24 |
-| `object_memory` | 9 |
-| `error` | 3 |
-| `return_value` | 2 |
-| **total** | **640 fns / 466,036 bytes** |
+| class | fns | bytes |
+|---|--:|--:|
+| `cap_exhausted` | 71 | 37,716 |
+| `wild_jump_match` | 40 | 32,896 |
+| `call_count` | 20 | 13,896 |
+| `return_value` | 3 | 6,708 |
+| `cap_exhausted_decomp` | 1 | 1,132 |
+| `call_arg` | 1 | 328 |
+| **total** | **136** | **92,676** |
 
-466,036 bytes is **41 % of all AT_LIMIT bytes** (1,130,304). Nearly half of what
-is filed as "certified unfixable" carries a live signal that it is not merely
-unmatched but *wrong*.
+92,676 bytes is **10.0 % of all report-visible AT_LIMIT bytes** (924,696) — down
+from the 41 % the pre-fix oracle claimed. A tenth of what is filed as "certified
+unfixable" still carries a live signal that it is not merely unmatched but
+*wrong*.
 
-Across the whole DB, real-class DIVERGENT is **1,145 functions / 650,972 bytes**.
+Across the whole non-excluded DB, real-class DIVERGENT is **2,205 functions /
+479,528 bytes**.
+
+**Read `EQUIVALENT` narrowly.** The oracle's two verdicts are not symmetric.
+DIVERGENT is informative and well localised — it names the object offset, call
+index or register. EQUIVALENT means only "no difference in r3/f1, in r3–r6 at
+each logged call, or in the object and global regions, under a single
+uniform-byte fixture". Audited 2026-08-19 with six deliberate sabotages: three
+were caught, and three still reported EQUIVALENT — calling a *different*
+function with identical arguments (detected, but emitted as a warning on the
+EQUIVALENT path and never persisted, so `unicorn_reason` is NULL for all 16,989
+EQUIVALENT rows); swapping two object fields in a subtraction (the object region
+is filled with one repeated byte, so every field holds the same value and
+field-confusion bugs are structurally invisible — this is the `RndFlare::Load`
+bug class); and a change upstream of a fault both sides hit identically.
+`--dual-fixture` does not rescue this: it varies the fill *byte*, not the
+per-field values, so its `confidence=high` means "two blind fixtures agreed".
 
 **3. A blind audit of the certificates failed.** On 2026-08-04 a blind sample of
 regswap-class AT_LIMIT certificates scored **3 out of 10** — and that sample was
@@ -286,24 +340,28 @@ WHERE excluded = 0 AND verdict = 'AT_LIMIT' AND unicorn_verdict = 'DIVERGENT'
 GROUP BY 1 ORDER BY 2 DESC;
 ```
 
-### Cert rot
+### Cert rot — closed
 
-The mirror-image problem: **875 rows marked COMPLETE in `decomp.db` are not at
-100 % in a fresh report** (178,992 bytes).
+The mirror-image problem used to be 875 rows marked COMPLETE in `decomp.db` that
+were not at 100 % in a fresh report. **Task #101 closed it.** As of 2026-08-19:
 
-| | fns | bytes |
-|---|--:|--:|
-| in the 90–99.99 % band | 540 | 143,888 |
-| at 0 % | 335 | 35,104 |
+```sql
+SELECT COUNT(*) FROM functions
+WHERE excluded = 0 AND verdict = 'COMPLETE' AND match_percent_normalized < 100;
+-- 0
+```
 
-The 335 at 0 % are the alarming ones — a COMPLETE certificate over a function
-that now produces nothing. Most of this is drift: certificates recorded under
-the old relocation ruler, or against builds that have since moved.
+**Do not re-derive this check from `current_percent`.** That column mirrors
+`report.json`'s *fuzzy* percent, not the canonical normalized one — verified
+2026-08-19 across 30,647 comparable rows: 29,290 agree with fuzzy exactly and
+the largest disagreement is 0.013 pp, while against the normalized ruler 885
+rows differ by more than 0.5 pp and 577 by more than 1 pp, up to 7.6 pp. So
+`verdict = 'COMPLETE' AND current_percent < 100` returns 374 rows that are all
+at exactly 100 normalized — a phantom rot population.
 
-**DB hygiene is a separate lane already in flight (coordinator task #101). Do
-not go fix the database from here.** What follows for a reader of this document
-is only the working rule: `verdict` and `current_percent` are hints. Re-measure
-with `run_objdiff` before you act on either.
+The working rule for a reader of this document is unchanged: `verdict` and
+`current_percent` are hints. Re-measure with `run_objdiff` before acting on
+either.
 
 ---
 
@@ -313,11 +371,14 @@ Ordered by how tractable the shape is, not by size:
 
 | Shape | size | where to start |
 |---|---|---|
-| **277 unverdicted rows** | 109,676 B | Nobody has looked. Cheapest possible triage. |
-| **494 stubs** | 117,920 B | Missing implementations; `synth_xbox`/`os`/`rnddx9` dominate. Reconstruction from target asm. |
-| **272 name_check-only residuals** | 66,828 B | 96 adjudicated real bugs, 8 alias gaps, 115 unadjudicated. Symbol spelling, not codegen. |
-| **1,145 real-class unicorn DIVERGENT** | 650,972 B | Overlaps AT_LIMIT heavily; the best post-plateau bug oracle in the project. |
-| **540 rotted COMPLETE certs in the 90–99.99 band** | 143,888 B | Near-misses with a stale certificate; often a small real fix. |
+| **1,085 unverdicted rows** | 280,788 B | Nobody has looked. Cheapest possible triage; 1,050 of them are below 100 % in the report. |
+| **455 stubs** | 113,688 B | Missing implementations; `synth_xbox`/`os`/`rnddx9` dominate. Reconstruction from target asm. |
+| **813 functions at literally 0 %** | 116,956 B | 29 % of the gap by function count but only 9.5 % by bytes. Usually a missing implementation, not a codegen fight. |
+| **272 name_check-only residuals** | 66,828 B | *Figures as of the 2026-08-12 audit; not re-measured since.* 96 adjudicated real bugs, 8 alias gaps, 115 unadjudicated. Symbol spelling, not codegen. |
+| **2,205 real-class unicorn DIVERGENT** | 479,528 B | Overlaps AT_LIMIT heavily; still the best post-plateau bug oracle, but read the EQUIVALENT caveat above before trusting a class label. |
+
+The "540 rotted COMPLETE certs" row that used to sit here has been removed: that
+population is now zero (see [Cert rot](#cert-rot--closed)).
 
 Queries for all five are in
 [`decomp/REMAINING_WORK.md`](decomp/REMAINING_WORK.md). That document ships
