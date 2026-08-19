@@ -19,7 +19,7 @@ than dead.
 |---|---:|---:|---:|---:|
 | `has_linker_merged` | 1,310 | **1,052** | **≥ 65.0 %** proven-benign, and only **1.9 %** of the bucket names an ICF fold at all | 18 named rows, most already adjudicated by two earlier lanes |
 | `has_prologue_mismatch` | 221 | **218** | **100 %** as an *independent* finding — 0 of 218 carry the prologue as their only pattern | 0 rows where the prologue is the limiting defect; it is a liveness co-signal, as the docs already say |
-| `has_makestring_mismatch` | 63 | **63** | **76.2 %** (38 forgiven by the graded ruler + 10 same-overload folds) | **15 rows, each a concrete argument-type bug** |
+| `has_makestring_mismatch` | 63 | **63** | **77.8 %** (38 forgiven by the graded ruler + 11 same-fold-class renames) | **14 rows, each a concrete wrong-callee bug** |
 
 **Three findings matter more than the fixes:**
 
@@ -204,28 +204,69 @@ Every one of the 25 rows that survives `name_check` is `sub_type = type`. **Zero
 neutralises the `__FILE__`-length class, so it cannot reach this bucket. The 38 class-A
 rows are folds the alias map already covers.
 
-`MakeString<T…>` is not opaque: it forwards each argument to a `FormatString::operator<<`
-overload (`void*`, `int`, `unsigned int`, `long`, `unsigned long`, `long long`,
-`unsigned long long`, `const DataNode&`, `const char*`, `float`, `double`,
-`const String&`, `const FixedString&`, `Symbol`). So the two instantiation names can be
-decided:
+`MakeString<T…>` is not opaque: its whole body is `FormatString fs(c); fs << t…; return
+fs.Str();`, so an instantiation is decided entirely by *which `FormatString::operator<<`
+overload each argument binds to*. And **`orig/373307D9/ham_xbox_r.map` publishes the fold
+classes of those overloads directly** — it is the linker's own statement, not an
+inference:
 
-* **If both argument lists resolve to the same overload chain, the two instantiations
-  compile to identical code and `/OPT:ICF` folds them.** The target simply names the
-  survivor. Artifact.
-* **If they resolve to different overloads, the call sites genuinely differ.** Real.
+| address | folded overloads |
+|---|---|
+| `0x827ca420` | `int` — **alone** |
+| `0x827ca618` | `const char *` |
+| `0x827ca848` | `unsigned int`, `long`, `unsigned long`, `long long`, `unsigned long long`, `void *` |
+| `0x827ca928` | `float`, `double` |
+| `0x827caa18` | `const String &` |
+| `0x827caaf8` | `const FixedString &` |
+| `0x827cabd8` | `Symbol` |
+| `0x827cadf8` | `const DataNode &` |
+
+The surprise, and the reason this had to be read off the map rather than guessed: **`int`
+does *not* fold with the rest of the integer family.** `operator<<(int)` is the one
+overload whose "doesn't start with kInt" diagnostic is written out longhand
+(`FormatString str(...); str << mFmt << mFmtBuf;`) instead of via `MILO_NOTIFY` — our own
+source already carries a `// for whatever reason, this has the FormatString expanded out`
+comment on it — so it is 504 B where the folded family is smaller, and it is its own fold
+class of one.
+
+So the decision procedure is: map each template argument through the usual conversions
+(`enum`/`char`/`unsigned char`/`short` → `int`; `char[N]` and `char*` → `const char*`;
+`StackString<N>` and `FilePath` → `const String&`), then compare the resulting **fold
+class** lists.
+
+* Same fold-class list → the two instantiations are the same machine code under a
+  different name. Artifact.
+* Different fold-class list, or different arity → **the two builds call different
+  functions**. Real.
 
 | class | rows | examples |
 |---|---:|---|
-| same overload chain → fold artifact | 10 | `MakeString<enum A>` vs `MakeString<enum B>` (both → `operator<<(int)`); `MakeString<int>` vs `MakeString<ReqType>`; `char*` vs `const char*`; `const char[N]` vs `const char*`; `char` vs `unsigned char` |
-| different overload chain → real bug | 15 | `Symbol` vs `const char*`; `unsigned long` vs `int`; `void*` vs `int`; `String` vs `const char*`; `unsigned int` vs `int`; different **arity**; `StackString<0x800>` vs `StackString<0x80>` |
+| same fold classes → artifact | 11 | `enum` vs `enum` (both `int`); `enum` vs `int`; `char` vs `unsigned char`; `char[N]` vs `const char*`; `char*` vs `const char*`; `StackString<0x800>` vs `StackString<0x80>` |
+| different fold classes or arity → **real** | 14 | `void*` vs `int`; `unsigned long` vs `int`; `unsigned int` vs `enum`; `Symbol` vs `const char*`; `String` vs `const char*`; `FilePath` vs `const char*`; three arity mismatches |
 
-Bucket artifact rate: **(38 + 10) / 63 = 76.2 %**. Real: 15 rows.
+Bucket artifact rate: **(38 + 11) / 63 = 77.8 %**. Real: **14 rows**.
 
 The four `MakeString<CamShotFrame::BlendEaseMode>` rows are worth naming explicitly: that
-is the *survivor* of the fold class containing every `MakeString<SomeEnum>` in the build.
-`SaveLoadManager::Poll`, `DingoServer::OnMsg` and `FlowSetProperty::Execute` are all
-correct; they just lost the naming lottery.
+is the *survivor* of the fold class containing every `MakeString<SomeEnum>` in the build,
+because every enum promotes to `int`. `SaveLoadManager::Poll`, `DingoServer::OnMsg` and
+`FlowSetProperty::Execute` are all correct; they just lost the naming lottery.
+
+### These are wrong-callee bugs that `match_percent_normalized` cannot see
+
+`UIListSlot::Draw` and `CacheMgrXbox::PollMount` are the clean demonstration. Fixing each
+left the calling function's instruction stream **byte-identical** — 192 and 223
+instructions, the same mismatches before and after — because the difference is entirely in
+the relocation target of one `bl`. The canonical ruler forgives relocation names (they are
+`arg_diff_score`, which `match_percent_normalized` subtracts out), so **neither row moves
+the headline at all.**
+
+They are still real. `MILO_FAIL("%i isn't enough elements (need %i)", …)` was reaching
+`FormatString::operator<<(int)` at `0x827ca420` where retail reaches the folded family at
+`0x827ca848` — a *different function at a different address*, formatting through a
+different code path. This is exactly the channel the toolchain audit found unicorn blind
+to as well ("called a different function with identical args → EQUIVALENT"). Two
+independent oracles cannot see this class; the MakeString detector can, and it is the only
+thing in the build that names it.
 
 ### The trap in this bucket
 
@@ -272,12 +313,14 @@ on it.**
 
 ## Fixes landed
 
+Four of the 14 real MakeString rows.
+
 | function | before | after | ruler |
 |---|---:|---:|---|
 | `DingoJob::Start` | 94.6 % | **100.0 %, 77/77 equal** | normalized, zero-mismatch |
 | `DataArray::Execute` | 94.4 % | **95.8 %** (276 → 272 instructions) | normalized |
-| `UIListSlot::Draw` | — | codegen unchanged, charge cleared | name_check |
-| `CacheMgrXbox::PollMount` | — | codegen unchanged, charge cleared | name_check |
+| `UIListSlot::Draw` | +0.026 | caller codegen unchanged; the `bl` now reaches the right overload | name_check |
+| `CacheMgrXbox::PollMount` | +0.023 | caller codegen unchanged; same | name_check |
 
 **`DingoJob::Start`** is the substantive one and the only one that is a behavioural bug.
 The retail instantiation is `MakeString<const char*, const char*, const char*, const char*>`
@@ -333,18 +376,23 @@ move — the four functions touched — and nothing else in the build moves at a
 
 Small and specific, so it does not rot into a fiction:
 
-1. **The 13 unfixed real MakeString rows.** Each already carries its answer in the
+1. **The 10 unfixed real MakeString rows.** Each already carries its answer in the
    instantiation name. In descending order of expected value:
-   `Debug::Fail` (`StackString<0x800>` vs `<0x80>`, and it is also in the prologue bucket
-   — two detectors on one function), `ArcDetector::UpdateOverlay`
+   `ArcDetector::UpdateOverlay`
    (`MakeString<float>` vs `<float,float>`: an argument we invented),
    `RndText::OnComputeCharWidths` (`FilePath` vs `const char*`),
    `XboxEnumeration::Poll`, `MoveDir::UpdateOverlay` and `GetMotdJob::GetMotdData`
    (`void*` vs `int`), `EnvelopeGenerator::DoProcess` (`unsigned int` vs `int`),
-   `RndVelocityBuffer::DrawMesh`, `SuperFormatString::SuperFormatString`,
    `SuperEasyRemixer::SaveSuperEasyMoveParents`, `FlowTrigger::ActivateWithParams`,
-   `MemMgr::MemPrintOverview`, `HttpGet::Poll`.
+   `VoiceInputPanel::ActivateVoiceContext` and `Locale::Init`.
    **Attribute the call site first** — see the two reverts above.
+
+   Separately, `Debug::Fail`'s `StackString<0x800>` vs `StackString<0x80>` is a *name*
+   artifact (both bind to `operator<<(const String&)`), but the size it names is real
+   information about the target's local, and `Debug::Fail` is the one function carrying
+   both a MakeString and a prologue flag. Its frame is 8,672 B in the target and 8,528 B
+   in ours; a straight `StackString<128>` → `StackString<2048>` does not reconcile that
+   (it would overshoot by 1,776 B), so the local being logged is probably not `msgStr`.
 2. **Make `backfill_reloc_patterns.py` refuse a drifted tree.** One
    `verify_objs_patched.py --verify-manifest` call before the scan. As it stands the
    columns record whatever the tree happened to be at that minute.
