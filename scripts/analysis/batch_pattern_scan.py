@@ -647,13 +647,29 @@ def main():
                              "because the sort is by DESCENDING match%%, the cut was "
                              "systematically biased: only 99.58-99.90%% was ever examined "
                              "and the whole 90.0-99.58%% range was invisible. Any non-zero "
-                             "value now prints a TRUNCATED banner and exits 3.")
+                             "value prints a TRUNCATED banner and sets truncated=true in "
+                             "the JSON. It still exits 0: answering an explicit "
+                             "request for a sample with an error code makes "
+                             "every recipe that passes --limit look broken. "
+                             "Use --no-allow-explicit-limit for CI.")
     parser.add_argument("--unit", type=str, default=None, help="Filter by unit name substring")
     parser.add_argument("--pattern", type=str, default=None, choices=PATTERN_CHOICES,
                         help="Filter output by pattern type. Validated: a typo used to be "
                              "accepted silently and yield zero hits, which reads exactly "
                              "like 'this pattern is exhausted'.")
-    parser.add_argument("--json", action="store_true", help="Output as JSON")
+    parser.add_argument("--json", action="store_true",
+                        help="Output as JSON. The top level is a LIST of "
+                             "functions, unchanged since this tool was written, "
+                             "so `for f in json.load(fh)` keeps working.")
+    parser.add_argument("--json-envelope", action="store_true",
+                        help="With --json, wrap the list in an object carrying "
+                             "functions/errors/_coverage. Opt-in, because "
+                             "changing a top-level JSON type breaks every "
+                             "existing consumer silently.")
+    parser.add_argument("--no-allow-explicit-limit", action="store_true",
+                        help="Exit 3 even when --limit was passed deliberately. "
+                             "For CI, where a sample presented as a census is a "
+                             "failure regardless of who asked for it.")
     parser.add_argument("--verbose", "-v", action="store_true", help="Show progress")
     add_coverage_args(parser)
     args = parser.parse_args()
@@ -690,6 +706,19 @@ def main():
         functions = functions[:args.limit]
         cov.cap("--limit", args.limit, before=in_band, after=len(functions),
                 note="never examined; the cut is off the BOTTOM of a match%-descending sort")
+        # An EXPLICIT --limit is a REQUEST for a sample, and answering a request
+        # with exit 3 turns every documented recipe that passes one into a
+        # command that "started failing" -- docs/plans/compiler-instrumentation.md
+        # passes --limit 500.  The banner and the JSON still say TRUNCATED, so
+        # the caller is informed, not obstructed.  What must never exit 0 is a
+        # cap the caller did NOT ask for, and there is no longer one: the
+        # default is 0 = no cap.
+        if not args.no_allow_explicit_limit:
+            cov.allow_truncation = True
+            cov.note("--limit was passed explicitly, so this SAMPLE exits 0. "
+                     "The TRUNCATED banner above and truncated=true in the "
+                     "JSON still say it is a sample -- do not quote its counts "
+                     "as totals. --no-allow-explicit-limit exits 3 instead.")
 
     if args.verbose:
         print(f"Scanning {len(functions)} functions ({args.min}%-{args.max}%)...", file=sys.stderr)
@@ -769,15 +798,26 @@ def main():
                     for p in scan.patterns
                 ],
             })
-        # The JSON payload is now an OBJECT, not a bare list: a consumer that
-        # gets only a list has no way to learn the run was a 200-of-1,751
-        # sample. `functions` holds exactly what the old top-level list held.
-        print(json.dumps({
-            "functions": output,
-            "errors": [{"symbol": s.symbol, "unit": s.unit, "error": s.error}
-                       for s in errored],
-            "_coverage": cov.as_dict(),
-        }, indent=2))
+        # --json's top level is a LIST, as it has always been.  Flipping it to
+        # an object to make room for a `_coverage` key was a hard break for
+        # every `for f in json.load(...)` consumer -- and a SILENT one, since a
+        # dict iterates its keys rather than raising.  That is precisely the
+        # shape this scanner exists to prevent, committed by the fix for it.
+        #
+        # The coverage block still travels, by three routes that cost the
+        # caller nothing: the banner on STDERR, the machine-readable
+        # --coverage-json file, and the EXIT CODE.  A consumer that ignores all
+        # three was never going to read a `_coverage` key either.
+        # --json-envelope opts in to the object form.
+        if args.json_envelope:
+            print(json.dumps({
+                "functions": output,
+                "errors": [{"symbol": s.symbol, "unit": s.unit, "error": s.error}
+                           for s in errored],
+                "_coverage": cov.as_dict(),
+            }, indent=2))
+        else:
+            print(json.dumps(output, indent=2))
     else:
         # Human-readable output
         print(f"\n{'='*80}")

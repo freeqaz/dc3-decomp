@@ -325,6 +325,87 @@ def test_total_objdiff_failure_does_not_render_as_a_clean_scan(monkeypatch, caps
     assert "In band:" in out.out and "Inspected:" in out.out
 
 
+# --------------------------------------------------------------------------- #
+# NEGATIVE CONTROL 5 — the two BREAKS that came in with the default change.
+#
+# The default-200 fix was right (200 -> 1,751 inspected, 1 -> 115 hits). Two
+# things rode in with it that were not:
+#
+#   * --json's top level flipped LIST -> DICT to make room for a `_coverage`
+#     key. `for f in json.load(fh)` then iterates the KEYS -- it does not raise,
+#     so the break is silent, and it is the exact shape this scanner exists to
+#     prevent.
+#   * an explicit `--limit N` began exiting 3, so every documented recipe that
+#     passes one (docs/plans/compiler-instrumentation.md:900 passes --limit 500)
+#     started "failing".
+# --------------------------------------------------------------------------- #
+
+def _run_bps(*extra):
+    return subprocess.run(
+        [sys.executable, os.path.join(REPO, "scripts", "analysis",
+                                      "batch_pattern_scan.py"), *extra],
+        capture_output=True, text=True, cwd=REPO, timeout=1800)
+
+
+@needs_report
+def test_json_top_level_is_a_list_so_existing_consumers_keep_working():
+    r = _run_bps("--json", "--limit", "2", "--min", "99.89", "--max", "99.9")
+    payload = json.loads(r.stdout)
+
+    # (b) Reconstruct the break: a dict does NOT raise here, it iterates keys.
+    # That is why the flip was silent and why asserting the type is the point.
+    as_dict = {"functions": payload, "errors": [], "_coverage": {}}
+    consumed_from_dict = [f for f in as_dict]
+    assert consumed_from_dict == ["functions", "errors", "_coverage"], (
+        "the historical break must really be silent, or this is not a control")
+
+    assert isinstance(payload, list), (
+        "--json's top level must stay a list; changing it breaks every "
+        "`for f in json.load(fh)` consumer without raising")
+    for f in payload:
+        assert isinstance(f, dict) and "symbol" in f and "patterns" in f
+
+
+@needs_report
+def test_json_envelope_is_opt_in_and_carries_the_coverage_block():
+    """The information the flip was FOR is still available -- just not by
+    silently changing the type out from under existing callers."""
+    r = _run_bps("--json", "--json-envelope", "--limit", "2",
+                 "--min", "99.89", "--max", "99.9")
+    payload = json.loads(r.stdout)
+    assert isinstance(payload, dict)
+    assert set(payload) == {"functions", "errors", "_coverage"}
+    assert payload["_coverage"]["truncated"] is True
+    assert isinstance(payload["functions"], list)
+
+
+@needs_report
+def test_an_explicitly_requested_sample_is_answered_not_rejected():
+    """--limit is a REQUEST. Honouring it must not look like a failure."""
+    limited = _run_bps("--json", "--limit", "2", "--min", "99.0", "--max", "99.9")
+    assert limited.returncode == EXIT_OK, limited.stderr[-600:]
+    # ...and the caller is still TOLD it was a sample, on stderr and in the JSON.
+    assert "TRUNCATED" in limited.stderr
+    env = json.loads(_run_bps("--json", "--json-envelope", "--limit", "2",
+                              "--min", "99.0", "--max", "99.9").stdout)
+    assert env["_coverage"]["truncated"] is True
+    assert env["_coverage"]["dropped_total"] > 0
+
+    # CI can still demand a census: the opt-out must really change the code.
+    ci = _run_bps("--json", "--limit", "2", "--min", "99.0", "--max", "99.9",
+                  "--no-allow-explicit-limit")
+    assert ci.returncode == EXIT_TRUNCATED
+    assert ci.returncode != limited.returncode
+
+
+def test_the_documented_recipe_still_parses():
+    """docs/plans/compiler-instrumentation.md:900 -- if a doc'd invocation stops
+    parsing, the doc is what people will call broken."""
+    parser = _build_batch_parser()
+    a = parser.parse_args(["--min", "80", "--max", "99.5", "--limit", "500"])
+    assert a.limit == 500 and a.min == 80.0 and a.max == 99.5
+
+
 # =========================================================================== #
 # findarray_receiver_scan
 # =========================================================================== #
