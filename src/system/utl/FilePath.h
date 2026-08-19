@@ -33,14 +33,19 @@ inline BinStream &operator<<(BinStream &bs, const FilePath &fp) {
     return bs << FileRelativePath(FilePath::Root().c_str(), fp.c_str());
 }
 
-BinStream &operator>>(BinStream &, FilePath &);
-
-// inline BinStream &operator>>(BinStream &bs, FilePath &fp) {
-//     char buf[0x100];
-//     bs.ReadString(buf, 0x100);
-//     fp.SetRoot(buf);
-//     return bs;
-// }
+// `inline` here, NOT out-of-line in FilePath.cpp: ham_xbox_r.map flags the
+// target's only copy of ??5@YAAAVBinStream@@AAV0@AAVFilePath@@@Z as `f i`
+// (function, inline) and parks it in char:CharDriver.obj -- where a folded
+// header COMDAT lands, not where FilePath.cpp's own definition would go. With
+// the definition in the .cpp, CharDriver.obj carried no body and objdiff
+// scored it 0%. Body unchanged; this is the form that was already sitting
+// commented out right here.
+inline BinStream &operator>>(BinStream &bs, FilePath &fp) {
+    char buf[0x100];
+    bs.ReadString(buf, 0x100);
+    fp.SetRoot(buf);
+    return bs;
+}
 
 class FilePathTracker {
 public:
