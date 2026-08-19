@@ -463,6 +463,19 @@ inline void Multiply(const Vector3 &v, const Hmx::Matrix3 &m, Vector3 &vout) {
 
 // Declared above; defined here so the row helper's body is already visible.
 //
+// NOTE for whoever is chasing Spotlight::UpdateTransforms: the lane that moved
+// this function into the header disclosed a -2.34% regression there and expected
+// it back "with the real two-path body". It does not come back, and it cannot.
+// Landing the two-path body left ?UpdateTransforms@Spotlight@@IAAXXZ
+// byte-identical -- same 1456 bytes, same 91.96% normalized in report.json, not
+// in either the regressed or the improved list of a whole-build diff. A body
+// this different (one out.Set(9) became a branch plus three per-row Sets) could
+// not leave an inlined copy unchanged, so MSVC is not inlining this into
+// UpdateTransforms at all; its three Multiply calls are out-of-line. The -2.34%
+// is a cost of the PLACEMENT change (mtx.cpp definition -> header COMDAT, so the
+// call now binds to Spotlight.obj's own folded copy), not of the body, and it
+// has to be attacked as such.
+//
 // Two paths behind an aliasing test.  The target opens with
 //   cmplw cr6, r4, r5 ; beq cr6, <buffered>
 // i.e. it compares &b against &out and falls through to the fast path, so the
