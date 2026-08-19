@@ -283,60 +283,45 @@ void RndTexBlender::DrawBlendList(
     const std::vector<std::pair<RndTexBlendController *, float> > &list,
     TexState state
 ) {
-    RndTex *texmap = (state != 2) ? mNearMap : mFarMap;
-
-    bool texValid = (texmap != nullptr);
-    if ((texValid || (state == 8)) && (!list.empty())) {
+    RndTex *texmap = state == 2 ? mNearMap : mFarMap;
+    if ((texmap || (state == 8)) && !list.empty()) {
         mRenderedStates |= state;
-
-        RndMat *mat = TheShaderMgr.GetWork();
-        float f31 = 1.0f;
-        float f29 = -1.0f;
-
+        RndMat *work = TheShaderMgr.GetWork();
         Transform xfm;
         xfm.Reset();
-        Hmx::Matrix4 viewProjMtx = Hmx::Matrix4(xfm);
-        TheShaderMgr.SetVConstant(kVS_ViewProjMatrix, viewProjMtx);
+        TheShaderMgr.SetVConstant(kVS_ViewProjMatrix, Hmx::Matrix4(xfm));
         TheShaderMgr.SetTransform(xfm);
-        SetupMaterial(mat, texmap);
-
-        mat->SetBlend(BaseMaterial::kBlendSrcAlpha);
-
-        for (std::vector<std::pair<RndTexBlendController *, float> >::const_iterator it =
-                 list.begin();
-             it != list.end();
-             ++it) {
-            RndTexBlendController *controller = it->first;
-            float alpha = it->second;
-
+        SetupMaterial(work, texmap);
+        work->SetBlend(BaseMaterial::kBlendSrcAlpha);
+        float alpha = -1;
+        FOREACH (it, list) {
+            RndTexBlendController *blendCtrlr = it->first;
+            float f17 = it->second;
             if (state == 8) {
-                mat->SetDiffuseTex(controller->Tex());
+                work->SetDiffuseTex(blendCtrlr->Tex());
             }
-
-            if (alpha != f29 || state == 8) {
-                mat->SetAlpha(alpha);
-                RndShader::SelectConfig(mat, (ShaderType)0x16, false);
-                f29 = alpha;
+            if (f17 != alpha || state == 8) {
+                work->SetAlpha(f17);
+                RndShader::SelectConfig(work, (ShaderType)0x16, false);
+                alpha = f17;
             }
-
-            RndMesh *mesh = controller->Mesh();
-            if (mesh) {
-                if (mesh->IsSkinned()) {
-                    MILO_NOTIFY_ONCE(
-                        "%s: \"%s\" should not be a skinned mesh",
-                        PathName(this),
-                        mesh->Name()
-                    );
-                }
-                mesh->DrawFacesInRange(0, -1);
+            RndMesh *mesh = blendCtrlr->Mesh();
+            if (mesh->IsSkinned()) {
+                MILO_NOTIFY_ONCE(
+                    "%s: \"%s\" should not be a skinned mesh",
+                    PathName(this),
+                    mesh->Name()
+                );
             }
+            // The shipped build calls through mGeomOwner (mesh + 0x148), not through
+            // the mesh itself: 'lwz r3, 0x148(r26)' before the vtable load.
+            mesh->GetGeomOwner()->DrawFacesInRange(0, -1);
         }
-
-        mat->SetAlpha(f31);
-
-        RndCam *cam = RndCam::Current();
-        if (cam) {
-            TheShaderMgr.SetVConstant(kVS_ViewProjMatrix, cam->GetViewProjMatrix());
+        work->SetAlpha(1);
+        if (RndCam::Current()) {
+            TheShaderMgr.SetVConstant(
+                kVS_ViewProjMatrix, RndCam::Current()->GetViewProjMatrix()
+            );
         }
     }
 }
