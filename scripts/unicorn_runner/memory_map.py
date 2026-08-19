@@ -7,6 +7,12 @@ GLOBAL_BASE     = 0x30000000
 CODE_BASE       = 0x80000000
 TRAMPOLINE_BASE = 0x80010000  # Must be within ±32MB of CODE_BASE for REL24
 RDATA_BASE      = 0x80020000  # Switch table / jump table data
+# Real bodies for MSVC's __savegprlr_N / __restgprlr_N / __savefpr_N /
+# __restfpr_N / __savevmx_N / __restvmx_N (see save_helpers.py). Deliberately
+# OUTSIDE the trampoline region: the call-log hook covers that range, and a
+# prologue helper is not a call the function made.
+HELPER_BASE     = 0x80030000  # Within ±32MB of CODE_BASE for REL24
+HELPER_SLOT_SIZE = 0x60       # Bytes per entry point; longest body is 0x54
 VTABLE_BASE     = 0x40000000  # Mock vtable data region
 SENTINEL_ADDR   = 0xDEAD0000
 REGION_SIZE     = 0x10000  # 64KB each
