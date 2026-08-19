@@ -89,6 +89,9 @@ ALLOW_DISPLAY_ONLY: Dict[str, str] = {
         "limit shortens the candidate printout; 'DC3 AT_LIMIT pool ...: N' prints the full N",
     "scripts/validate_symbols.py":
         "limit shortens sample_errors; the error COUNT is reported separately",
+    "scripts/orchestrator/context_collector.py":
+        "MAX_CALLEE_SIGNATURES budgets an LLM prompt, not a measured population; "
+        "nothing downstream reads it as a count",
 }
 
 CAP_NAME_RE = re.compile(r"(limit|max|top|cap|sample|budget|head|first)", re.I)

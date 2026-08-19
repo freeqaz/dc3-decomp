@@ -279,8 +279,13 @@ def main():
     # Sort by delta descending
     candidates.sort(key=lambda e: e.get("delta", 0), reverse=True)
 
-    if args.limit > 0:
+    n_before = len(candidates)
+    if args.limit > 0 and n_before > args.limit:
         candidates = candidates[:args.limit]
+        # Say so. A patch run that applies 10 of 300 and prints only "10" reads
+        # identically to one where 10 was the whole queue.
+        print(f"!! TRUNCATED by --limit={args.limit}: {n_before - args.limit} of "
+              f"{n_before} eligible patches were NOT applied", file=sys.stderr)
 
     if not candidates:
         print(f"No patches to apply (category={args.category}, "

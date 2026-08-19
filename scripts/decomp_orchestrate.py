@@ -1243,8 +1243,12 @@ def cmd_patch_refresh(args):
             # Sort by delta descending (biggest improvements first)
             candidates.sort(key=lambda e: e.get("delta", 0), reverse=True)
 
-        if args.limit and args.limit > 0:
+        n_eligible = len(candidates)
+        if args.limit and args.limit > 0 and n_eligible > args.limit:
             candidates = candidates[:args.limit]
+            # Otherwise "showing 20" and "there are 20" print identically.
+            print(f"!! TRUNCATED by --limit={args.limit}: {n_eligible - args.limit} "
+                  f"of {n_eligible} eligible {category} patches are not shown")
 
         if not candidates:
             print(f"No {category} patches found matching criteria.")

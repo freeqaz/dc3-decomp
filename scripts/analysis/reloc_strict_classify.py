@@ -345,11 +345,17 @@ def main():
     if args.authorable_only:
         cands = [c for c in cands if is_authorable(c[0])]
     cands.sort()
-    if args.limit:
+    n_cands = len(cands)
+    if args.limit and n_cands > args.limit:
         cands = cands[: args.limit]
+        # The candidate count below is this tool's headline. Print the cut BEFORE
+        # it, or a debug run's sample gets quoted as the population size.
+        print(f"[reloc-strict] !! TRUNCATED by --limit={args.limit}: "
+              f"{n_cands - args.limit} of {n_cands} candidates were NEVER diffed. "
+              f"This run is a SAMPLE, not a census.", file=sys.stderr)
 
-    print(f"[reloc-strict] candidates (lenient-100 & strict-NameOnly-<100): {len(cands)}",
-          file=sys.stderr)
+    print(f"[reloc-strict] candidates (lenient-100 & strict-NameOnly-<100): "
+          f"{len(cands)} of {n_cands}", file=sys.stderr)
     print(f"[reloc-strict] diffing with {args.jobs} workers via {args.objdiff}",
           file=sys.stderr)
 
