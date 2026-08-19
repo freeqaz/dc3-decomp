@@ -779,15 +779,7 @@ ObjPtrVec<T1, T2>::erase(typename ObjPtrVec<T1, T2>::iterator it) {
         if ((unsigned int)idx != last) {
             T1 *lastObj = mNodes.back().Obj();
             mNodes.pop_back();
-            // Swapping a NULL tail into the hole would leave a null entry in a
-            // vec that forbids them, so recurse instead: the pop_back above has
-            // already shortened the vec, so the retry either swaps in a
-            // non-null tail or falls through to the shifting erase.
-            if (lastObj == nullptr && mListMode == kObjListNoNull) {
-                erase(begin() + idx);
-            } else {
-                Set(begin() + idx, lastObj);
-            }
+            Set(begin() + idx, lastObj);
             return it;
         }
     }
