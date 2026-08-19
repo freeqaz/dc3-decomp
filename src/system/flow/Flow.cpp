@@ -155,15 +155,8 @@ END_PROPSYNCS
 
 BinStream &operator<<(BinStream &bs, const Flow::DynamicPropertyEntry &entry) {
     int type = entry.mType;
-    bs << entry.mName;
-    bs << type;
-    entry.mDefaultVal.Save(bs);
-    bs << entry.mHelp;
-    bs << entry.mObjectClass;
-    bool exposed = entry.mExposed;
-    bs << exposed;
-    entry.mSymbolList.Save(bs);
-    bs << entry.mObjectType;
+    bs << entry.mName << type << entry.mDefaultVal << entry.mHelp << entry.mObjectClass
+       << entry.mExposed << entry.mSymbolList << entry.mObjectType;
     return bs;
 }
 
