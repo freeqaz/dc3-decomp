@@ -73,6 +73,36 @@ report.json hid rows in two ways at once -- fake_impl_scan pre-filters to
 "not-in-map" for every synthetic dtk label. Use ``--report``; it is a 60-second
 sweep of all ~48k scored rows and it is the only population worth quoting.
 
+HOW LITTLE OF THE BINARY THIS ACTUALLY TESTS (measured 2026-08-19 by
+``icf_bucket_census.py``, which re-derives these buckets from scratch)
+--------------------------------------------------------------------------
+Of **48,344** report.json rows, only **373** ever reach the byte comparison:
+
+    30,141  we-define-it        (no artifact to diagnose)
+    15,764  no-object           (no built .obj for the unit)
+     1,893  no-fold-peer
+       373  TESTED   <-- 0.8% of the binary
+       163  no-address
+        10  addr-not-in-map
+
+So "this class is clean" out of this instrument is a statement about **0.8 %**
+of the binary, not about the binary. Quote the denominator whenever you quote a
+pass rate.
+
+Of the map-blind rows the second pass recovered: **1,687** report rows carry a
+symbol that is absent from ``ham_xbox_r.map``, of which **1,512** are synthetic
+``merged_*`` / ``fn_*`` dtk labels. (An earlier draft of this docstring said
+"~1,730"; that figure was never derived and should not be re-cited.)
+
+Whole-binary byte-test failures are INSTRUMENT-DEPENDENT, not a fact about the
+binary. Three passes over the same tree produced 9, then 17, then -- with the
+independent PE/.pdata instrument (``icf_foldcheck_pe.py``) -- 14 real DIFFER
+plus a remainder whose target bodies do not decode (4-byte ICF branch thunks and
+``$4PPPPPPPM@A@`` vtordisp adjustors, which have no ``.pdata`` entry). Post-fix
+on this lane's tree the same instrument reports **8 DIFFER + 16 no-target-body**
+out of 373 TESTED. Report the instrument and the tree alongside the number, or
+the number means nothing.
+
 Read-only. Reads the built objects, the split asm and the retail map; writes
 nothing.
 
@@ -153,8 +183,17 @@ def asm_addresses(asmpath):
     writes SYNTHETIC labels (``merged_<addr>``, ``merged_ObjPtrVecErase``,
     ``fn_<addr>``) into symbols.txt for folded and EH-funclet bodies, and those
     are absent from the map -- so a map-only lookup silently drops every one of
-    them. In this tree that is ~1,730 report rows, and one of them
+    them. In this tree that is **1,512** synthetic labels inside **1,687** rows
+    whose symbol is not in the map at all, and one of them
     (``merged_ObjPtrVecErase``) is a real ObjPtrVec::erase fold group.
+
+    ORDER OF THE TWO DEFECTS, because the lane that found them got it backwards:
+    this one -- the map lookup returning "not-in-map" -- fires FIRST and is why
+    ``merged_ObjPtrVecErase`` looked clean. Only once the address resolves does
+    the second defect (``target_body`` matching ``.fn "NAME"`` only, while dtk
+    emits synthetic labels BARE -- census: 72 bare, 0 quoted in the first 400
+    ``.s`` files) become reachable at all. Fixing the quoting alone would have
+    changed nothing.
     """
     m = {}
     if not os.path.exists(asmpath):

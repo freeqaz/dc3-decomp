@@ -3,8 +3,10 @@
 Independent of scripts/analysis/icf_pairing_bodytest.py -- written from the
 report.json + linker map + our COFF objects + dtk's split .s headers."""
 import json,os,re,sys,collections,struct,glob
-sys.path.insert(0,"/tmp/vfy")
-import foldcheck as F
+# The instrument this leans on lives next door. It was written in /tmp during
+# verification; importing it from there is why the committed copy did not run.
+sys.path.insert(0,os.path.dirname(os.path.abspath(__file__)))
+import icf_foldcheck_pe as F
 
 ROOT=sys.argv[1]
 REPORT=sys.argv[2] if len(sys.argv)>2 else ROOT+"/build/373307D9/report.json"
