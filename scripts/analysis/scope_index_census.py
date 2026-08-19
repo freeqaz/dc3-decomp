@@ -68,15 +68,84 @@ def parse(sym, rx=NAME):
     return m.group(1), decode(m.group(2)), m.group(3)
 
 
+def strip_type(fnpart):
+    """`??<fn>@4VMessage@@A` -> `??<fn>`.
+
+    A local-static DATA symbol carries the static's type after the enclosing
+    function's mangling; the ??__F atexit helper does not.  Both sides must be
+    keyed the same way or two `msg` statics of DIFFERENT types in one function
+    look like two competing lists for one declaration.  That is exactly what
+    produced the two bogus `OptionsPanel::OnMsg` rows in the 2026-08-19 census:
+    ?msg@?BA@...@4VLinkingCodeRetrievedMsg@@A and
+    ?msg@?M@...@4VTokenRedeemedMsg@@A are two correct, matching statics, but
+    prefix-folding both atexit helpers into both type-keyed buckets rendered
+    them as `tgt=[12,16] ours=[16]` and `tgt=[12,16] ours=[12]`.
+    """
+    # Split at the FIRST `@4` whose head is a complete function mangling
+    # (they all end in `@Z`).  rsplit is wrong: a templated static's type can
+    # itself contain `@4` -- `?normalized@?P@??AnalyzeData@?A0x5c754947@@...@Z
+    # @4V?$vector@MV?$StlNodeAlloc@M@stlpmtx_std@@@4@A` ends in a `@4@A`
+    # back-reference, so rsplit cut inside the type, left a head that did not
+    # end in Z, gave up, and the data key never matched the atexit key -- which
+    # rendered two statics we do have as `COUNT tgt/ours=(1,0)`.
+    pos = fnpart.find('@4')
+    while pos != -1:
+        if fnpart[:pos].endswith('Z'):
+            return fnpart[:pos]
+        pos = fnpart.find('@4', pos + 1)
+    return fnpart
+
+
+def read_map(path):
+    """Local statics of the ORIGINAL image, from its own linker map.
+
+    THIS, not `config/373307D9/symbols.txt`, is the target authority.
+    symbols.txt names 2,192 local-static data symbols but only 998 of them
+    appear in `orig/373307D9/ham_xbox_r.map`; the other 1,194 were synthesised
+    from OUR build, and 97.9% of them are byte-identical to a name our own
+    objects already emit (vs 85.9% for the map-backed ones).  Diffing our
+    indices against those is a tautology dressed up as evidence -- and where it
+    is not a tautology it is worse: a synthesised `?_dw@?2??DataIndex@
+    NavListSortMgr...` sat next to the map's real `??__F_dw@?1??DataIndex@...`
+    and made one static look like two, which is how the whole `COUNT
+    tgt/ours=(2,1)` class was manufactured.  (NavListSortMgr::DataIndex is 100%
+    with 52/52 instructions equal and contains exactly one MILO_NOTIFY_ONCE.)
+
+    Returns fn -> name -> sorted list of indices, and the set of fn/name keys
+    that rest on an atexit helper (a COMPLETE enumeration for statics that have
+    a destructor) rather than on a data symbol (a partial one).
+    """
+    out = collections.defaultdict(lambda: collections.defaultdict(list))
+    complete = set()
+    for ln in open(path, errors='replace'):
+        parts = ln.split()
+        if len(parts) < 2 or ':' not in parts[0]:
+            continue
+        sym = parts[1]
+        r = parse(sym, ATEXIT)
+        if r:
+            complete.add((r[2], r[0]))
+        else:
+            r = parse(sym)
+            if not r:
+                continue
+            r = (r[0], r[1], strip_type(r[2]))
+        bucket = out[r[2]][r[0]]
+        if r[1] not in bucket:
+            bucket.append(r[1])
+    return out, complete
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--project', default=os.getcwd())
-    ap.add_argument('--symbols', default=None)
+    ap.add_argument('--map', default=None,
+                    help='original linker map (target authority)')
     ap.add_argument('--objects', default=None)
     ap.add_argument('--json', default=None)
     ap.add_argument('--quiet', action='store_true')
     a = ap.parse_args()
-    syms = a.symbols or os.path.join(a.project, 'config/373307D9/symbols.txt')
+    mapfile = a.map or os.path.join(a.project, 'orig/373307D9/ham_xbox_r.map')
     objdir = a.objects or os.path.join(a.project, 'build/373307D9/src')
 
     # name -> SORTED LIST of scope indices.  A function may declare several
@@ -85,40 +154,21 @@ def main():
     # kept whichever one was parsed last on each side and then compared two
     # unrelated statics, which is how RndTexBlender::DrawShowing (5 `_dw` ours,
     # 3 target) came out as a one-line "tgt=15 ours=9" row.
-    tgt = collections.defaultdict(lambda: collections.defaultdict(list))
-    atexits = []
-    for ln in open(syms):
-        sym = ln.split(' =')[0]
-        r = parse(sym)
-        if r:
-            bucket = tgt[r[2]][r[0]]
-            if r[1] not in bucket:
-                bucket.append(r[1])
-            continue
-        r = parse(sym, ATEXIT)
-        if r:
-            atexits.append(r)
-
-    # Fold the atexit helpers into the buckets their data symbol already opened.
-    # The data key carries the static's type suffix (`...@Z@4VDebugNotifyOncer@@A`)
-    # and the atexit key does not, so match on prefix.  Deliberately do NOT open
-    # a new function key from an atexit alone: our side has no atexit evidence to
-    # compare it against (the patcher rewrote those names), so it would only
-    # inflate `target-only`.
-    for name, idx, fn in atexits:
-        for k in tgt:
-            if k == fn or k.startswith(fn + '@'):
-                bucket = tgt[k].get(name)
-                if bucket is not None and idx not in bucket:
-                    bucket.append(idx)
+    tgt, complete = read_map(mapfile)
 
     our = collections.defaultdict(lambda: collections.defaultdict(list))
     for o in glob.glob(os.path.join(objdir, '**', '*.obj'), recursive=True):
+        # *.manual.obj is not a linked build product -- it is a hand-assembled
+        # leftover that ninja neither produces nor links.  Sweeping it in gave
+        # ContentLoadingPanel::SetType a phantom second `types` static at scope
+        # 5 alongside the real one at 6 (which matches the map exactly).
+        if o.endswith('.manual.obj'):
+            continue
         out = subprocess.run(['strings', '-a', o], capture_output=True, text=True).stdout
         for ln in out.splitlines():
             r = parse(ln.strip())  # data symbols ONLY -- see ATEXIT comment
             if r:
-                bucket = our[r[2]][r[0]]
+                bucket = our[strip_type(r[2])][r[0]]
                 if r[1] not in bucket:
                     bucket.append(r[1])
 
@@ -148,12 +198,28 @@ def main():
             deltas = sorted({o - t for _, tl, ol in bad
                              if ol and len(ol) == len(tl)
                              for t, o in zip(tl, ol)})
-            counts = sorted({(len(tl), len(ol or [])) for _, tl, ol in bad
-                             if len(tl) != len(ol or [])})
-            note = f"   COUNT tgt/ours={counts}" if counts else ""
+            # A count row is evidence in BOTH directions only when the key is
+            # atexit-backed: one ??__F helper for that fn/name proves the type
+            # has a destructor, and the map names every helper in the image, so
+            # the enumeration is complete.  A data-only key is not -- a
+            # trivially destructible static (Symbol, DataArray*, const char*)
+            # has no helper, and if the map also lacks its data name it is
+            # simply invisible.  The whole `_s`/SYNC_PROP class hides here: the
+            # map carries 511 SyncProperty symbols and ZERO `_s` statics, so
+            # `RndRibbon::SyncProperty _s tgt=[7] ours=[7,18,30,...]` says
+            # nothing about the target at all.
+            counts = sorted({(len(tl), len(ol or []), (fn, n) in complete)
+                             for n, tl, ol in bad if len(tl) != len(ol or [])})
+            note = ''
+            if counts:
+                blind = all(t < o and not ax for t, o, ax in counts)
+                note = ('   COUNT tgt/ours=%s%s'
+                        % ([(t, o) for t, o, _ in counts],
+                           '  [target-side blind spot, not evidence]' if blind else ''))
             print(f"\n{fn}   delta={deltas}{note}")
             for n, t, o in bad:
-                print(f"   {n:44} tgt={t} ours={o}")
+                src = 'atexit' if (fn, n) in complete else 'data-only'
+                print(f"   {n:44} tgt={t} ours={o}   [{src}]")
     if a.json:
         json.dump({'tgt': tgt, 'our': our}, open(a.json, 'w'))
     return 0

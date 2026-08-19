@@ -1511,8 +1511,8 @@ void ObjectDir::PostLoad(BinStream &bs) {
         Hmx::Object::Load(bs);
     }
 
-    static Message change_proxies("change_proxies");
-    HandleType(change_proxies);
+    static Message msg("change_proxies");
+    HandleType(msg);
 
     if (mProxyOverride) {
         mProxyOverride = false;

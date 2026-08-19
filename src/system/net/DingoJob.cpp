@@ -36,11 +36,6 @@ void DingoJob::Start() {
     StartImpl();
 }
 
-template <class _T>
-__declspec(noinline) auto _outline_c_str(_T *_obj) -> decltype(_obj->c_str()) {
-    return _obj->c_str();
-}
-
 void DingoJob::SendCallback(bool success, bool cancelled) {
     // Validate the response if the request succeeded
     if (success) {
@@ -59,26 +54,25 @@ void DingoJob::SendCallback(bool success, bool cancelled) {
         msg[1] = success;
         mCallback->Handle(msg, true);
 
-        // Additional check: if success is 0, do extra handling
-        if (success == 0) {
-            // Call IsAuthenticated before checking condition
-            bool isAuth = TheServer.IsAuthenticated();
-
-            if (isAuth && !cancelled) {
-                DataPoint pt("dingo_job_failed");
-                pt.AddPair("location", "DingoJob::SendCallback");
-                pt.AddPair("mResult", mResult);
-                pt.AddPair("mJsonResponse", mJsonResponse ? "non-NULL" : "NULL");
-                pt.AddPair("mBaseUrl", _outline_c_str(&mBaseUrl));
-                pt.AddPair("mResponseStatusCode", (int)GetResponseStatusCode());
-                pt.AddPair("mResponseStr", _outline_c_str(&mResponseStr));
-                pt.AddPair("player", TheServer.mOnlineId.ToString());
-                pt.AddPair("severity", "warn");
-                pt.AddPair("sync", "sync");
-                TheDataPointMgr.RecordDebugDataPoint(pt);
-                TheWebSvcMgr.CancelOutstandingCalls();
-                TheServer.Poll();
-            }
+        // On failure, report a debug data point and drop the session.
+        if (!success && TheServer.IsAuthenticated() && !cancelled) {
+            DataPoint pt("dingo_job_failed");
+            pt.AddPair("location", "DingoJob::SendCallback");
+            pt.AddPair("mResult", mResult);
+            pt.AddPair("mJsonResponse", mJsonResponse ? "non-NULL" : "NULL");
+            pt.AddPair("mResponseStr", mResponseStr.c_str());
+            pt.AddPair("mBaseUrl", mBaseUrl.c_str());
+            pt.AddPair("mResponseStatusCode", (int)GetResponseStatusCode());
+            pt.AddPair("session_id", TheServer.unk40.c_str());
+            OnlineID onlineId(TheServer.mOnlineId);
+            pt.AddPair("player", onlineId.ToString());
+            pt.AddPair("severity", "warn");
+            pt.AddPair("project", "sync");
+            TheDataPointMgr.RecordDebugDataPoint(pt);
+            TheWebSvcMgr.CancelOutstandingCalls();
+            TheServer.Logout();
+            static ServerStatusChangedMsg msg(kServerStatusDisconnected);
+            TheServer.Export(msg, true);
         }
     }
 }
