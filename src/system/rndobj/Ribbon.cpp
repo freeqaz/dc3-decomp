@@ -396,22 +396,30 @@ void RndRibbon::UpdateChase() {
                     Hmx::Matrix3 inv;
                     Invert(result.m, inv);
                     Multiply(smoothDir, inv, smoothDir);
-                    float clamped = Clamp(0.0f, 1.0f, smoothDir.x);
-                    float a = std::acos(clamped);
+                    // The clamp result is written back into smoothDir.x: the shipped
+                    // build defers the store of Multiply()'s x output until after the
+                    // two fsels and then stores the clamped value to smoothDir's home.
+                    smoothDir.x = Clamp(0.0f, 1.0f, smoothDir.x);
+                    float a = std::acos(smoothDir.x);
                     float cosHalf = std::cos(angle * 0.5f);
                     float invCos = 1.0f / cosHalf;
                     float c = std::cos(a * 2.0f);
                     float s = std::sin(a * 2.0f);
+                    // The bend is a rotation in the x-z plane, not x-y: the shipped
+                    // build stores the two computed terms at m.x.x / m.z.z and the
+                    // shared off-diagonal at m.x.z / m.z.x (stack 0x120/0x148 and
+                    // 0x128/0x140), with the identity row in y.  Cross-checked against
+                    // rb3-xenon's RndRibbon::UpdateChase, which spells the same shape.
                     Hmx::Matrix3 bend(
                         ((c + 1.0f) * (invCos - 1.0f)) * 0.5f + 1.0f,
-                        (s * (1.0f - invCos)) * 0.5f,
                         0.0f,
                         (s * (1.0f - invCos)) * 0.5f,
-                        ((1.0f - c) * (invCos - 1.0f)) * 0.5f + 1.0f,
                         0.0f,
+                        1.0f,
                         0.0f,
+                        (s * (1.0f - invCos)) * 0.5f,
                         0.0f,
-                        1.0f
+                        ((1.0f - c) * (invCos - 1.0f)) * 0.5f + 1.0f
                     );
                     Multiply(bend, result.m, result.m);
                 }
