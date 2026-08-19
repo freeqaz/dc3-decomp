@@ -76,7 +76,14 @@ public:
     String unk181ac; // previous file name (stack push/pop)
     String unk181b4; // current object name
 private:
-    char mAllocInfoName[64]; // 0x181bc
+    char mAllocInfoName[64]; // 0x181bc -- extent proved by SetAllocInfoName's `li r4, 0x40`
+    // 0x181fc..0x1820b. MemTrackInit calls MemTracker::operator new with
+    // 0x1820c, so these 16 bytes are part of sizeof(MemTracker), but a scan of
+    // every .obj in the split image finds no instruction that forms an address
+    // in this range -- the tail is never read or written. Kept as an explicit
+    // member so the allocation size is right without pretending to know what
+    // used to live here.
+    char mUnusedTail[16]; // 0x181fc
 };
 
 void MemTrackInit(int, int, bool);

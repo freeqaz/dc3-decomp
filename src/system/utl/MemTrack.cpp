@@ -13,15 +13,6 @@
 #include "utl\PoolAlloc.h"
 #include "utl\TextFileStream.h"
 
-AllocInfo *gAllocInfoHeap;
-MemTracker *gMemTracker;
-bool gMemTrackerTracking;
-bool gMemoryUsageTest;
-// HeapTracker* gHeapTracker;
-int gNumDiffs;
-TextFileStream *gLog;
-String gMemTrackSourceFile;
-String gMemTrackSourceObject;
 // Struct packing: array of 65 pointer-sized entries (260 = 0x104 bytes) followed immediately
 // by an int stack position counter. This ensures counter is at array_base + 0x104 so the
 // compiler can access it as lwz r11, 0x104(r_array_base).
@@ -29,8 +20,42 @@ struct MemTrackStack {
     char ptrs[260]; // (STACK_SIZE+1) * sizeof(void*) = 65 * 4 = 260 bytes
     int pos;        // stack position, at offset 0x104 from ptrs base
 };
-static MemTrackStack s_MemTrackObjectNameStack; // MemTrackObjectName + s_MemTrackObjectNameStackPos
+
+class HeapTracker; // only ever referenced through the pointer below
+
+// This TU's zero-initialised globals are emitted into .bss in *reverse*
+// declaration order, so the block below is the reverse of the target's data
+// layout (config/373307D9/symbols.txt, 0x830E57D8 upward):
+//
+//   gAllocInfoHeap 0x830E57D8   gMemTracker    0x830E57DC
+//   gMemTrackerTracking  ..E0   gMemoryUsageTest     ..E1
+//   gHeapTracker         ..E4   gNumDiffs            ..E8
+//   gLog                 ..EC   s_MemTrackObjectNameStack 0x830E57F0
+//   s_MemTrackFileNameStack 0x830E58F8
+//
+// gHeapTracker is unreferenced in this TU but is a real global in the target
+// (?gHeapTracker@@3PAVHeapTracker@@A); without it gNumDiffs slides down four
+// bytes and both MemTrackStacks land at the wrong displacement.
 static MemTrackStack s_MemTrackFileNameStack;   // CharArrayArray + s_MemTrackFileNameStackPos
+static MemTrackStack s_MemTrackObjectNameStack; // MemTrackObjectName + s_MemTrackObjectNameStackPos
+TextFileStream *gLog;
+// gNumDiffs and gAllocInfoHeap are `static`: the linker map named every other
+// global in this block but left 0x830E57E8 and 0x830E57D8 as bare lbl_
+// addresses, i.e. they were never public. Internal linkage is also what lets
+// MSVC fold &gAllocInfoHeap into the base register it then reaches
+// s_MemTrackObjectNameStack / s_MemTrackFileNameStack from.
+static int gNumDiffs;
+HeapTracker *gHeapTracker;
+bool gMemoryUsageTest;
+bool gMemTrackerTracking;
+MemTracker *gMemTracker;
+static AllocInfo *gAllocInfoHeap;
+
+// Dynamically initialised, so these are not part of the reversed block: they
+// follow s_MemTrackFileNameStack in declaration order (0x830E5A00, 0x830E5A08).
+String gMemTrackSourceFile;
+String gMemTrackSourceObject;
+
 #define MemTrackObjectName s_MemTrackObjectNameStack.ptrs
 #define CharArrayArray s_MemTrackFileNameStack.ptrs
 #define s_MemTrackObjectNameStackPos s_MemTrackObjectNameStack.pos
@@ -287,12 +312,12 @@ void MemTrackInit(int heap, int numAllocs, bool heapOnly) {
     AllocInfoInit();
     int i = 0;
     do {
-        void *mem = MemAlloc(0x80, __FILE__, 0x9a, "MemTrackStack", 0);
-        *(void **)((int)CharArrayArray + i) = mem;
-        memset(mem, 0, 0x80);
-        mem = MemAlloc(0x80, __FILE__, 0x9c, "MemTrackStack", 0);
-        *(void **)((int)MemTrackObjectName + i) = mem;
-        memset(mem, 0, 0x80);
+        void *fileNameMem = MemAlloc(0x80, __FILE__, 0x9a, "MemTrackStack", 0);
+        *(void **)((int)CharArrayArray + i) = fileNameMem;
+        memset(fileNameMem, 0, 0x80);
+        void *objectNameMem = MemAlloc(0x80, __FILE__, 0x9c, "MemTrackStack", 0);
+        *(void **)((int)MemTrackObjectName + i) = objectNameMem;
+        memset(objectNameMem, 0, 0x80);
         i += 4;
     } while (i <= 0x100);
 }
