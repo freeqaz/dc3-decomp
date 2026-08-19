@@ -49,7 +49,69 @@ HRESULT NuiSkeletonSetTrackedSkeletons(DWORD *TrackingIDs);
 
 // these have C++ definitions
 XMMATRIX NuiTransformMatrixLevel(XMVECTOR vNormalToGravity);
-void NuiTransformSkeletonToDepthImage(
+
+// Focal length of the 320x240 depth camera, in pixels. The SDK header spells
+// this NUI_CAMERA_SKELETON_TO_DEPTH_IMAGE_MULTIPLIER_320x240; the target's
+// constant pool holds it as the raw float 0x438ed0a4.
+#define NUI_CAMERA_SKELETON_TO_DEPTH_IMAGE_MULTIPLIER_320x240 285.63f
+
+// FLT_EPSILON, spelled as a bare literal. Two reasons it is not the macro:
+// this tree's src/xdk/LIBCMT/float.h defines FLT_EPSILON with a C99 hex-float
+// literal (0x1.000000P-23F) that the 2008-era Xenon cl.exe rejects, and a
+// named `static const float` makes the compiler emit a NAMED constant where the
+// target emits the anonymous pool entry __real@34000000 (100% normalized but
+// only 98.8% raw).
+#define NUI_SKELETON_DEPTH_EPSILON 1.192092896e-07F
+
+// Both overloads are `inline` HERE, not out-of-line in any .cpp: ham_xbox_r.map
+// flags each as `f i` (function, inline) with its single folded copy parked in
+// gesture:JointUtl.obj -- JointUtl.cpp's two JointScreenPos() overloads are the
+// only odr-uses in the binary. We had them declared and never defined at all, so
+// JointUtl.obj carried no body and objdiff scored both 0%.
+//
+// Reconstructed from the target assembly, which is the stock Kinect SDK body:
+// centre of the depth sensor is (0,0,0) in skeleton space and (160,120) in depth
+// image coordinates, and +Y is up in skeleton space but down in image space,
+// hence the sign flip on the Y term (target: `fnmsubs`). The single `fdivs` +
+// two `fmuls` rather than two divisions is /fp:fast folding both divisions by
+// vPoint.z into one reciprocal -- see docs/decomp/patterns.
+inline void
+NuiTransformSkeletonToDepthImage(XMVECTOR vPoint, FLOAT *pfDepthX, FLOAT *pfDepthY) {
+    if (pfDepthX && pfDepthY) {
+        if (vPoint.z > NUI_SKELETON_DEPTH_EPSILON) {
+            *pfDepthX = 160.0f
+                + vPoint.x / vPoint.z
+                    * NUI_CAMERA_SKELETON_TO_DEPTH_IMAGE_MULTIPLIER_320x240;
+            *pfDepthY = 120.0f
+                - vPoint.y / vPoint.z
+                    * NUI_CAMERA_SKELETON_TO_DEPTH_IMAGE_MULTIPLIER_320x240;
+        } else {
+            *pfDepthX = 0.0f;
+            *pfDepthY = 0.0f;
+        }
+    }
+}
+
+// Depth is metres in skeleton space; the depth image pixel format is millimetres
+// shifted left by 3.
+inline void NuiTransformSkeletonToDepthImage(
     XMVECTOR vPoint, LONG *plDepthX, LONG *plDepthY, USHORT *pusDepthValue
-);
-void NuiTransformSkeletonToDepthImage(XMVECTOR vPoint, FLOAT *pfDepthX, FLOAT *pfDepthY);
+) {
+    if (plDepthX && plDepthY && pusDepthValue) {
+        if (vPoint.z > NUI_SKELETON_DEPTH_EPSILON) {
+            *plDepthX = (LONG
+            )(160.0f
+              + vPoint.x / vPoint.z
+                  * NUI_CAMERA_SKELETON_TO_DEPTH_IMAGE_MULTIPLIER_320x240);
+            *plDepthY = (LONG
+            )(120.0f
+              - vPoint.y / vPoint.z
+                  * NUI_CAMERA_SKELETON_TO_DEPTH_IMAGE_MULTIPLIER_320x240);
+            *pusDepthValue = (USHORT)(vPoint.z * 1000) << 3;
+        } else {
+            *plDepthX = 0;
+            *plDepthY = 0;
+            *pusDepthValue = 0;
+        }
+    }
+}
