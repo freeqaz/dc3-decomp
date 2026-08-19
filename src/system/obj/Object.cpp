@@ -507,7 +507,7 @@ void Hmx::Object::ExportPropertyChange(DataArray *a, Symbol s) {
     }
 #endif
     if (!s.Null()) {
-        MILO_ASSERT(mSinks, 0x17F);
+        MILO_ASSERT_EXPR(mSinks, 0x17F);
         static Message msg("blah", 0);
         msg.SetType(s);
         msg[0] = a;

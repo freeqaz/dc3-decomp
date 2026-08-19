@@ -228,7 +228,7 @@ DataNode KinectSharePanel::OnMsg(const RockCentralOpCompleteMsg &msg) {
 }
 
 DataNode KinectSharePanel::OnPostLink(DataArray *a) {
-    MILO_ASSERT(!mBuf && ! mPreviewBuf, 0x163);
+    MILO_ASSERT_EXPR(!mBuf && ! mPreviewBuf, 0x163);
     MILO_LOG(
         "KinectSharePanel::OnUpload() - mTex:[%d %d %d %d]\n",
         mTex->Width(),
