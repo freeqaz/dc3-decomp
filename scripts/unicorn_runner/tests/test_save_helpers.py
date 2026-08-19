@@ -190,10 +190,16 @@ class TestBodies(unittest.TestCase):
         self.assertEqual(body[-1], ppc_blr())
 
     def test_vmx_is_the_documented_approximation(self):
-        """No vector state is modelled; only r0's final value is reproduced."""
-        for sym in ("__savevmx_14", "__restvmx_127"):
+        """No vector state is modelled; only r11's final value is reproduced.
+
+        r11, not r0: the shipped routines end `li r11,-0x10; <vector op>; blr`
+        in both banks. The first cut of save_helpers misread rD in 0x3960FFF0
+        as 0, so this test pins the register against the encoding below.
+        """
+        self.assertEqual(ppc_li(11, -0x10), 0x3960FFF0)     # as in the image
+        for sym in ("__savevmx_14", "__restvmx_127", "__savevmx_64"):
             body = words(SH.emulated_body(sym))
-            self.assertEqual(body, [ppc_li(0, -0x10), ppc_blr()], sym)
+            self.assertEqual(body, [ppc_li(11, -0x10), ppc_blr()], sym)
 
 
 class TestAgainstShippedImage(unittest.TestCase):
@@ -234,6 +240,28 @@ class TestAgainstShippedImage(unittest.TestCase):
             self.assertEqual(self.image.read(addr, len(body)), body, sym)
             checked += 1
         self.assertEqual(checked, 72)      # 18 entry points x 4 banks
+
+    def test_vmx_r11_matches_the_word_the_image_ends_each_bank_with(self):
+        """The VMX body is an approximation, but its one word is not invented.
+
+        Every bank of __savevmx/__restvmx ends `li r11,-0x10; <vector op>; blr`.
+        Locate those `blr`s in the image and check the word two back is exactly
+        what emulated_body emits. This is what catches an rD misread.
+        """
+        if not self.image.available or not self.addrs:
+            self.skipTest("shipped image or symbols.txt unavailable")
+        expected = words(SH.emulated_body("__savevmx_14"))[0]
+        found = 0
+        for base in ("__savevmx", "__restvmx"):
+            addr = self.addrs[base]
+            blob = self.image.read(addr, 0x298)
+            ws = words(blob)
+            for i, w in enumerate(ws):
+                if w == 0x4E800020 and i >= 2:      # blr ends a bank
+                    self.assertEqual(ws[i - 2], expected,
+                                     f"{base} bank ending at 0x{addr + i * 4:08X}")
+                    found += 1
+        self.assertEqual(found, 4)                  # two banks x two routines
 
 
 class TestAddressAssignment(unittest.TestCase):

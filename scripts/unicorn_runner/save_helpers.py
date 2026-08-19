@@ -76,11 +76,21 @@ VMX: APPROXIMATED, AND SAID SO
 `__savevmx_N`/`__restvmx_N` move vector registers with `stvx`/`lvx` (and, for
 N >= 64, VMX128 opcodes Unicorn does not implement at all). The harness models
 no vector state and compares none, so there is nothing to preserve. Their one
-GPR-visible effect is that they leave r0 holding the last offset they used,
-which is -0x10 for every entry point in both banks; we reproduce that and
-return. This is an approximation, unlike the GPR/FPR bodies -- but it is
-strictly better than the old stub, which returned to a stale LR and zeroed r3.
-39 REL24 references in the original objects, 2 in the decomp, touch these.
+GPR-visible effect is that they leave **r11** holding the last offset they
+used -- `li r11, -0x10` immediately precedes the final vector op in BOTH banks
+of both routines (0x82E5DEB8/0x82E5E0BC in __savevmx, 0x82E5E150/
+0x82E5E354 in __restvmx) -- and the
+base register they index off is r12, which they do not write. We reproduce the
+r11 value and return. This is an approximation, unlike the GPR/FPR bodies, but
+it is strictly better than the old stub, which returned to a stale LR and
+zeroed r3. 39 REL24 references in the original objects, 2 in the decomp, touch
+these.
+
+The first cut of this module wrote `li r0` here, having misread rD in
+`3960FFF0` as 0. Nothing observable depended on it -- VMX appears in two units
+only (synth_xbox/FFT, xdk/nuiapi/headtracker) and both swept functions there
+were EQUIVALENT either way -- but it was wrong against the image, which is the
+standard the rest of this module is held to.
 """
 
 import re
@@ -210,7 +220,7 @@ def raw_body(symbol):
             off = -8 * (32 - f)
             words.append(_stfd(f, off, 12) if op == "save" else _lfd(f, off, 12))
     else:                                # vmx — see the module docstring
-        words.append(_li(0, -0x10))
+        words.append(_li(11, -0x10))
     words.append(_BLR)
     return b"".join(struct.pack(">I", w) for w in words)
 
