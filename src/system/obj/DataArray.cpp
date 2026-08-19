@@ -980,24 +980,25 @@ DataNode DataArray::Execute(bool fail) {
             Node(0).Print(str, true, 0);
             String str2;
             node.Print(str2, true, 0);
-            const char *msg;
-            bool sameText = (str == str2);
-            if (sameText) {
-                msg = MakeString(
+            // Retail formats straight into MILO_FAIL_DTA: the only MakeString
+            // instantiations reachable from here are
+            // MakeString<const char*, Symbol, short> and
+            // MakeString<const char*, const char*, Symbol, short>. Routing
+            // through a `const char *msg` temp adds a MakeString<const char*>
+            // that the target does not have.
+            if (str == str2) {
+                MILO_FAIL_DTA(
                     "%s not function or object (file %s, line %d)", str.c_str(), mFile, mLine
                 );
             } else {
-                const char *evaluatedText = str2.c_str();
-                const char *commandText = str.c_str();
-                msg = MakeString(
+                MILO_FAIL_DTA(
                     "%s = %s not function or object (file %s, line %d)",
-                    evaluatedText,
-                    commandText,
+                    str2.c_str(),
+                    str.c_str(),
                     mFile,
                     mLine
                 );
             }
-            MILO_FAIL_DTA("%s", msg);
         }
         return 0;
     }
