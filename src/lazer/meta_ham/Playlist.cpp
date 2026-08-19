@@ -124,13 +124,7 @@ void Playlist::InsertSong(int index1, int index2) {
 
 int Playlist::GetNumSongs() const { return m_vSongs.size(); }
 
-Playlist &Playlist::operator=(const Playlist &other) {
-    mName = other.mName;
-    mIsBattlePlaylist = other.mIsBattlePlaylist;
-    mIsFriendPlaylist = other.mIsFriendPlaylist;
-    m_vSongs = other.m_vSongs;
-    return *this;
-}
+// Playlist::operator= is defined in-class in Playlist.h -- see the note there.
 
 #pragma endregion Playlist
 #pragma region CustomPlaylist

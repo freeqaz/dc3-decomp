@@ -54,7 +54,18 @@ public:
     bool GetIsBattlePlaylist() const { return mIsBattlePlaylist; }
     void SetIsFriendPlaylist(bool b) { mIsFriendPlaylist = b; }
     bool GetIsFriendPlaylist() const { return mIsFriendPlaylist; }
-    Playlist &operator=(const Playlist &);
+    // In-class (implicitly inline), not out-of-line in Playlist.cpp: ham_xbox_r.map
+    // flags the target's only copy of ??4Playlist@@QAAAAV0@ABV0@@Z as `f i` and
+    // parks it in meta_ham:PlaylistSortMgr.obj -- CustomPlaylist::operator=
+    // (PlaylistSortMgr.cpp:255) chains to it, and that is the TU the linker kept
+    // the folded COMDAT from. Body unchanged.
+    Playlist &operator=(const Playlist &other) {
+        mName = other.mName;
+        mIsBattlePlaylist = other.mIsBattlePlaylist;
+        mIsFriendPlaylist = other.mIsFriendPlaylist;
+        m_vSongs = other.m_vSongs;
+        return *this;
+    }
 
 protected:
     virtual void HandleChange() {}

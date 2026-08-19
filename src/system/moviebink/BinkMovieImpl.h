@@ -100,7 +100,7 @@ private:
     void *unkb8; // 0xb8 - file handle, retrieved from mName
     std::map<void *, String> unkbc; // 0xbc - key = loader ptr, val = loader file?
     bool unkd4;
-    bool unkd5; // 0xd5 - mMidFrame?
+    bool mMidFrame; // 0xd5 -- named by the target: EndFrame's MILO_NOTIFY string is literally "mMidFrame"
     bool unkd6;
     DWORD mThreadId; // 0xd8
     int mLocalizationTrack; // 0xdc

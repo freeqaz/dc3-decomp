@@ -93,6 +93,7 @@ void HolmesClientTerminate();
 void HolmesClientInit();
 NetAddress HolmesResolveIP();
 void HolmesClientPollKeyboard();
+unsigned int HolmesClientPollJoypad();
 int HolmesClientGetStat(const char *, FileStat &);
 int HolmesClientDelete(const char *);
 int HolmesClientMkDir(const char *);

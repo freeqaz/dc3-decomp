@@ -163,9 +163,8 @@ bool FlowTrigger::ActivateWithParams(Hmx::Object *o, DataArray *a) {
     return ret;
 }
 
-FlowTrigger::PropTriggerDefn::PropTriggerDefn(Hmx::Object *owner) : mProvider(owner) {
-    mProperty = 0;
-}
+// FlowTrigger::PropTriggerDefn::PropTriggerDefn is defined in-struct in
+// FlowTrigger.h -- see the note there.
 
 DataNode FlowTrigger::PropTriggerDefn::GetPathDisplay(DataArray *a) {
     if (!mProvider || mProperty.Type() != kDataArray || mProperty.Array()->Size() == 0)

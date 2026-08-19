@@ -264,9 +264,27 @@ extern "C" long _stub_fn_90() { HX_STUB_TRACE("jpeg_write_scanlines"); return 0;
 // GetXinputSinceLastFrame(int, _XINPUT_STATE*, unsigned int*)
 extern "C" __attribute__((weak, used)) long _stub_fn_102() __asm__(ASM_SYM("_Z23GetXinputSinceLastFrameiP13_XINPUT_STATEPj"));
 extern "C" long _stub_fn_102() { HX_STUB_TRACE("GetXinputSinceLastFrame"); return 0; }
-// NuiTransformSkeletonToDepthImage(__vector4, float*, float*)
-extern "C" __attribute__((weak, used)) long _stub_fn_111() __asm__(ASM_SYM("_Z32NuiTransformSkeletonToDepthImage9__vector4PfS0_"));
-extern "C" long _stub_fn_111() { HX_STUB_TRACE("NuiTransformSkeletonToDepthImage"); return 0; }
+// NuiTransformSkeletonToDepthImage(__vector4, float*, float*) — STUB DELETED
+// 2026-08-19. Both overloads are now real `inline` bodies in
+// src/xdk/nui/nuiskeleton.h, reconstructed from the target assembly.
+//
+// Leaving the stub here was actively harmful, and it is the exact shape to watch
+// for: the stub is `weak`, the real body is `weak_odr`, and at -O2 clang inlines
+// the real one into both JointScreenPos() overloads and emits NO out-of-line
+// copy at all — so the ONLY definition of this symbol in the link was the stub,
+// and `nm`/objdump on dc3-native showed the out-of-line symbol as
+// StubTraceHit + `xor eax,eax; ret`. `-Wl,--allow-multiple-definition`
+// (CMakeLists.txt:201) meant no diagnostic either way. That is harmless at -O2
+// because nothing calls the out-of-line copy — but the web/WASM build is -O0
+// (DC3_WEB_OPT_LEVEL, CMakeLists.txt:1464), where every call site DOES go
+// out-of-line, so on web the stub reinstated the bug the real body fixes: it
+// returns 0 WITHOUT WRITING its out-parameters, and JointScreenPos then reads
+// back the uninitialised `FLOAT fDepthX, fDepthY;` it just passed by address.
+// Consumers: Skeleton.cpp:265, HighFiveGestureFilter.cpp:55-56 (the high-five
+// gesture test), DepthBuffer3D.cpp:33.
+//
+// NOTE the sibling below (_stub_yuvtorgb) is NOT dead in the same way — see the
+// comment there before deleting it.
 // altCfg: removed — was most vexing parse in Locale.cpp (now fixed, no function exists)
 // LightPreset stubs removed — real impl in LightPreset.cpp
 // RndFontBase::Load(BinStream&) — now implemented in FontBase.cpp
@@ -338,6 +356,15 @@ __attribute__((weak, used)) char _stub_vt_15[1024] __asm__(ASM_SYM("_ZTI5DxTex")
 // typeinfo for FFmpegMovieImpl
 __attribute__((weak, used)) char _stub_ti_ffmpeg[128] __asm__(ASM_SYM("_ZTI15FFmpegMovieImpl")) = {};
 // (anonymous namespace)::YUVtoRGB(int, int, int)
+// LOAD-BEARING, do not delete alongside _stub_fn_111. `nm` says
+// gesture/LiveCameraInput.cpp.o REFERENCES this symbol (U) and no object in the
+// tree defines it — LiveCameraInput.cpp declares an anonymous-namespace
+// YUVtoRGB it never defines, which is a real decomp gap: ham_xbox_r.map has
+// ?YUVtoRGB@?A0x8e584365@@ contributed by gesture:LiveCameraInput.obj. The
+// DrawUtl copy recovered on fix/drawutl-buffer-copies does NOT satisfy this
+// reference — anonymous-namespace entities have internal linkage, so DrawUtl's
+// body is local to its own TU. Delete this only when LiveCameraInput.cpp gets
+// its own body.
 extern "C" __attribute__((weak, used)) long _stub_yuvtorgb() __asm__(ASM_SYM("_ZN12_GLOBAL__N_18YUVtoRGBEiii"));
 extern "C" long _stub_yuvtorgb() { HX_STUB_TRACE("_stub_yuvtorgb"); return 0; }
 

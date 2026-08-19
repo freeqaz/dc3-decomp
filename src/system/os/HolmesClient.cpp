@@ -5,6 +5,7 @@
 #include "os\CritSec.h"
 #include "os\Debug.h"
 #include "os\File.h"
+#include "os\HolmesKeyboard.h"
 #include "os\HolmesUtl.h"
 #include "os\NetworkSocket.h"
 #include "os\System.h"
@@ -27,12 +28,12 @@
 String gLastCachedResource;
 CacheResourceResult gLastCacheResult;
 
-class HolmesInput {
-public:
-    void LoadKeyboard(BinStream &bs);
-    void LoadJoypad(BinStream &bs);
-    void SendKeyboardMessages();
-};
+// HolmesInput comes from os/HolmesKeyboard.h. This file used to carry a local
+// stand-in declaration with the same name and NO members, which made the
+// gInput below one byte wide while HolmesKeyboard.cpp's methods read
+// mJoypadStream/mKeyboardStream at +0x30/+0x34 -- an ODR violation that also
+// wrote past the object. The target's ?gInput@ is 0x3C bytes with a real
+// dynamic initializer (??__EgInput, 0x38B) and atexit destructor (??__FgInput).
 
 namespace {
     struct HolmesProfileData {
@@ -62,7 +63,7 @@ namespace {
     std::list<ReadRequest> gRequests;
     String gServerName;
 
-    HolmesInput gInput;
+    HolmesInput gInput(nullptr);
 
     String gHolmesTarget;
     bool gPollStreamEof;
@@ -305,6 +306,24 @@ void HolmesClientPollKeyboard() {
         gInput.SendKeyboardMessages();
         gInputPolling = false;
     }
+}
+
+// Never written before: the target defines ?HolmesClientPollJoypad@@YAIXZ in
+// os/HolmesClient.obj (ham_xbox_r.map, plain `f`) and we had no body at all.
+// Same shape as HolmesClientPollKeyboard, but it returns the button mask
+// HolmesInput::SendJoypadMessages() built, and 0 if the re-entrancy guard is
+// already held.
+unsigned int HolmesClientPollJoypad() {
+    unsigned int ret;
+    HolmesClientPollInternal(true);
+    if (gInputPolling) {
+        ret = 0;
+    } else {
+        gInputPolling = true;
+        ret = gInput.SendJoypadMessages();
+        gInputPolling = false;
+    }
+    return ret;
 }
 
 DataNode DumpHolmesLog(DataArray *) {

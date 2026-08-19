@@ -10,14 +10,8 @@
 #include "flow\FlowNode.h"
 #include <math.h>
 
-FlowMathOp &FlowMathOp::operator=(const FlowMathOp &other) {
-    mDefault = other.mDefault;
-    mOp = other.mOp;
-    mLhs = other.mLhs;
-    mRhs = other.mRhs;
-    mDrivenObj = other.mDrivenObj;
-    return *this;
-}
+// FlowMathOp::operator= is defined in-class in DrivenPropertyMathOps.h -- see the
+// note there.
 
 FlowMathOp::~FlowMathOp() {}
 

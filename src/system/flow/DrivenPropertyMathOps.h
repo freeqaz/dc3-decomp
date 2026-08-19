@@ -42,7 +42,18 @@ public:
     FlowMathOp(const FlowMathOp &other)
         : mDefault(other.mDefault), mOp(other.mOp), mLhs(other.mLhs), mRhs(other.mRhs),
           mDrivenObj(other.mDrivenObj) {}
-    FlowMathOp &operator=(const FlowMathOp &);
+    // In-class (implicitly inline), not out-of-line in DrivenPropertyMathOps.cpp:
+    // the target's only copy of ??4FlowMathOp@@QAAAAV0@ABV0@@Z is a folded header
+    // COMDAT (`f i` in ham_xbox_r.map) parked in flow:FlowNode.obj's range, which
+    // is the TU that odr-uses it (ObjVector<FlowMathOp> assignment). Body unchanged.
+    FlowMathOp &operator=(const FlowMathOp &other) {
+        mDefault = other.mDefault;
+        mOp = other.mOp;
+        mLhs = other.mLhs;
+        mRhs = other.mRhs;
+        mDrivenObj = other.mDrivenObj;
+        return *this;
+    }
     ~FlowMathOp();
     void Save(BinStream &);
     void Load(BinStream &, ObjectDir *);
