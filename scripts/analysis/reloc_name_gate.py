@@ -177,6 +177,55 @@ def config_map_disagreements(cfg: dict[str, int], idx: dict[str, list[str]]):
     return len(shared), sorted(bad)
 
 
+_ASM_OBJ = re.compile(r'^\.obj\s+"([^"]+)",')
+_ASM_VTBL = re.compile(r'^\t\.4byte\s+"(\?\?_7([A-Za-z0-9_@$?]+)@@6B@)"')
+#: `?name@@3V<Class>@@A` -- a global object of class type.
+_DECL_CLASS = re.compile(r"^\?[^@]+@@3V([A-Za-z0-9_@$?]+)@@A$")
+
+
+def vtable_type_disagreements(asm_root: Path):
+    """Global objects whose config NAME contradicts the vtable they hold.
+
+    A global of class type starts with its own vtable pointer, so
+    `?gShaderStandard@@3VRndShaderStandard@@A` holding `??_7RndShaderMultimesh@@6B@`
+    is internally impossible: the config named the wrong slot.
+
+    This catches a class the config-vs-map check cannot -- .data globals are not
+    listed in the shipped linker map, so a whole run of them can be shifted by
+    one slot with the map staying silent. That is exactly what had happened to
+    all twelve RndShader globals (fixed 2026-08-19): every ??__FgShaderX thunk
+    charged a relocation naming the NEXT shader, which reads as twelve source
+    bugs and was one config edit.
+
+    Returns (checked, [(file, symbol, vtable_symbol)]).
+    """
+    bad, checked = [], 0
+    for path in sorted(asm_root.rglob("*.s")):
+        cur, first = None, False
+        try:
+            fh = open(path, errors="replace")
+        except OSError:
+            continue
+        with fh:
+            for line in fh:
+                m = _ASM_OBJ.match(line)
+                if m:
+                    cur, first = m.group(1), True
+                    continue
+                if cur is None:
+                    continue
+                if first and line.startswith("\t.4byte"):
+                    first = False
+                    d, v = _DECL_CLASS.match(cur), _ASM_VTBL.match(line)
+                    if d and v:
+                        checked += 1
+                        if v.group(2) != d.group(1):
+                            bad.append((str(path), cur, v.group(1)))
+                elif line.startswith(".endobj"):
+                    cur = None
+    return checked, bad
+
+
 def map_verdict(idx, target: str, base: str) -> str:
     ta, ba = idx.get(target), idx.get(base)
     if not ta and not ba:
@@ -402,6 +451,17 @@ def main(argv=None) -> int:
     else:
         print("config symbols vs map               : no config/*/symbols.txt "
               "found -- INSTRUMENT UNCHECKED")
+
+    asm_root = next((p for p in sorted(project.glob("build/*/asm"))), None)
+    if asm_root is not None:
+        nchecked, vbad = vtable_type_disagreements(asm_root)
+        print(f"global vtable vs declared type      : {nchecked} checked, "
+              f"{len(vbad)} DISAGREE")
+        for path, sym, vt in vbad:
+            print(f"  !! {sym}\n       holds {vt}  ({path})")
+    else:
+        print("global vtable vs declared type      : no build/*/asm -- "
+              "INSTRUMENT UNCHECKED")
 
     detail = charged_pairs(cli, project, graded, pop, args.timeout)
 
