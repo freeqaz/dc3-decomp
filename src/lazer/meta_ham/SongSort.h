@@ -10,6 +10,7 @@ class SongSort : public NavListSort {
 public:
     SongSort();
     virtual ~SongSort() {};
+    virtual DataNode Handle(DataArray *, bool);
     virtual void BuildTree();
     virtual void DeleteItemList();
     virtual void BuildItemList();

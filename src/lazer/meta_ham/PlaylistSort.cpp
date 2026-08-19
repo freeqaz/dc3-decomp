@@ -12,6 +12,10 @@
 
 PlaylistSort::PlaylistSort() {}
 
+BEGIN_HANDLERS(PlaylistSort)
+    HANDLE_SUPERCLASS(NavListSort)
+END_HANDLERS
+
 void PlaylistSort::DeleteItemList() {
     NavListSort::DeleteItemList();
     ThePlaylistSortMgr->ClearHeaders();

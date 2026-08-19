@@ -6,6 +6,9 @@
 
 class FitnessCalorieSort : public NavListSort {
 public:
+    // Hmx::Object
+    virtual DataNode Handle(DataArray *, bool);
+
     // UIListProvider
     virtual void Text(int, int, UIListLabel *, UILabel *) const;
 
