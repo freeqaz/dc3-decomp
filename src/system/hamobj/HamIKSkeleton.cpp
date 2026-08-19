@@ -193,13 +193,21 @@ void HamIKSkeleton::NeutralWorldXfm(RndTransformable *t, Transform &xfm) {
 }
 
 void HamIKSkeleton::SetBone(RndTransformable *t1, RndTransformable *t2) {
-    if (!t2) return;
+#ifdef HX_NATIVE
+    // Native-only crash guard, added by 5d19777db (venue rendering) and left
+    // unguarded, which cost 6 instructions of match. The Xbox build has no such
+    // test: the target goes straight to `lbz r11, 0xbd(r5)`, so t2 is always
+    // dereferenced. Keep the guard only where the bone graph can be incomplete.
+    if (!t2)
+        return;
+#endif
     if (t2->Dirty()) {
         if (!t1) {
             MILO_NOTIFY_ONCE("%s bone is NULL, neutral is %s", PathName(this), t2->Name());
         } else {
             SetBone(t1->TransParent(), t2->TransParent());
-            t2->SetLocalRot(t1->LocalXfm().m);
+            const Hmx::Matrix3 &rot = t1->LocalXfm().m;
+            t2->SetLocalRot(rot);
             t2->WorldXfm();
         }
     }
