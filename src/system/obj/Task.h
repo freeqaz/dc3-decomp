@@ -186,6 +186,21 @@ public:
     void SetSongPos(const SongPos &pos) { mSongPos = pos; }
     const SongPos &GetSongPos() const { return mSongPos; }
 
+#ifdef HX_NATIVE
+    /** Number of entries currently queued for deferred delete. */
+    int QueuedDeleteCountForTest() const { return (int)unk84.size(); }
+    /** Raw (possibly dangling) pointer of queued entry `i`, without any
+     *  liveness filtering — the point is to be able to observe the dangling
+     *  state a DeleteObjects cascade leaves behind. */
+    Task *QueuedDeleteRawForTest(int i) const {
+        return const_cast<ObjPtr<Task> &>(unk84[i]).Ptr();
+    }
+    /** Running count of queued entries `Poll()` refused to delete because the
+     *  Task had already been destroyed without this ObjPtr being nullified
+     *  (see the comment in TaskMgr::Poll). Zero on a healthy frame. */
+    static int DanglingQueuedTasksSkipped();
+#endif
+
 private:
     DataNode OnTimeTilNext(DataArray *);
 

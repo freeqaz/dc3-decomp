@@ -41,30 +41,124 @@ std::vector<uint32_t> Draws(Rand &r, int seed, int n) {
 
 }  // namespace
 
-// The seeded table must never contain a `0xFFFFxxxx` high word — that signature
-// is the sign-extension bug (the buggy native form produced 0xFFFFD3DC etc.).
-// We probe this behaviorally: the first Int() draw of seed 12345 was
-// 0x8BE0DFDE in the buggy form (bit 31 set, from the poisoned table) and is
-// 0x531BDFDE in the corrected form. Every corrected first-draw below has bit 31
-// clear because both OR operands keep it clear.
+// GUARD for the `srawi`-vs-`srwi` sign-extension defect in Rand::Seed.
+//
+// HISTORY — rewritten 2026-08-19 (toolchain-audit follow-up). The previous
+// version of this test was VACUOUS: with `(unsigned int)` deleted from
+// Rand::Seed — the exact defect it is named after — it still PASSED. Two
+// independent reasons, both worth recording because each defeats an "obvious"
+// replacement probe:
+//
+//  1. It probed the DRAW STREAM. `Int()` returns `table[i1] ^ table[i2]`, and
+//     XOR destroys any high-half signature: two poisoned words cancel, and one
+//     poisoned against one clean word yields the complement of the clean high
+//     half. Across 5 seeds x 16 draws the 0xFFFF pattern never appeared.
+//
+//  2. The 0xFFFFxxxx signature the old comment described does not occur in the
+//     current source at all. Rand::Seed deliberately combines with `+`, not
+//     `|` (a disjoint `|` folds to `rlwimi` and costs ~10pp of PPC match). With
+//     `+`, sign extension of `j >> 16` adds 0xFFFF0000, which simply *carries*:
+//     the word comes out as (correct - 0x10000), e.g. seed 12345 table[0] is
+//     0x2704D3DC correct and 0x2703D3DC buggy. Bit 31 stays clear, the high
+//     half stays <= 0x7FFF, and the low half is byte-identical. So EVERY
+//     structural invariant of the form "no 0xFFFF high word" / "bit 31 clear"
+//     is ALSO vacuous against the real defect. Verified by rebuilding with the
+//     sabotage in place, not assumed.
+//
+// What actually discriminates is comparing the production table against an
+// independent reference implementation of the target's semantics. The test
+// carries its OWN NEGATIVE CONTROL: it computes both the logical-shift
+// reference (what PPC `srwi` does, the correct semantics) and the
+// arithmetic-shift twin (what `srawi` does, the defect), asserts the two
+// DIFFER on the seed set — proving the probe has discriminating power and the
+// seeds reach the defect — and only then asserts that production matches the
+// logical one. If someone weakens the seed set until the defect is no longer
+// reachable, the control assertion fails rather than the test silently
+// becoming a no-op.
+namespace {
+
+struct SeedTables {
+    std::vector<uint32_t> logical;  // PPC `srwi` — correct
+    std::vector<uint32_t> arith;    // PPC `srawi` — the defect
+};
+
+// Independent reference for `Rand::Seed`, transcribed from the target
+// instruction sequence rather than from Rand.cpp. All arithmetic is done in
+// uint32_t so the multiply wraps without signed-overflow UB, matching the
+// target's `mullw`.
+SeedTables ReferenceSeed(int seed, int n) {
+    SeedTables t;
+    t.logical.reserve(n);
+    t.arith.reserve(n);
+    uint32_t s = static_cast<uint32_t>(seed);
+    for (int i = 0; i < n; ++i) {
+        uint32_t j = s * 0x41C64E6Du + 0x3039u;
+        s = j * 0x41C64E6Du + 0x3039u;
+        uint32_t hi = s & 0x7FFF0000u;
+        uint32_t shifted_logical = j >> 16;  // srwi
+        // srawi, spelled portably (do not rely on >> of a negative int32_t).
+        uint32_t shifted_arith =
+            (j & 0x80000000u) ? (shifted_logical | 0xFFFF0000u) : shifted_logical;
+        t.logical.push_back(shifted_logical + hi);
+        t.arith.push_back(shifted_arith + hi);
+    }
+    return t;
+}
+
+}  // namespace
+
 TEST(RandSeed, NoSignExtensionPoison) {
     Rand r(0);
-    // Seeds whose draws expose a bit-31-set intermediate `j` (the trigger).
-    for (int seed : {0x29A, 1, 12345, -1, 7777}) {
-        auto draws = Draws(r, seed, 16);
-        for (size_t i = 0; i < draws.size(); ++i) {
-            // The corrected high word is bounded by (0x7FFF0000 | 0xFFFF) before
-            // the XOR feedback; after one XOR feedback round the top bit can only
-            // be set if a 0x8000xxxx table word existed — which the corrected
-            // algorithm never produces. Assert no draw has the 0xFFFF poison
-            // pattern in the top half that the buggy form injects.
-            uint32_t hi = draws[i] >> 16;
-            EXPECT_NE(hi, 0xFFFFu)
-                << "seed " << seed << " draw " << i
-                << " has 0xFFFF high word (sign-extension poison): 0x"
-                << std::hex << draws[i];
+    const int n = Rand::TableSizeForTest();
+    for (int seed : {0x29A, 1, 12345, -1, 7777, 0, 0x7FFFFFFF}) {
+        SeedTables ref = ReferenceSeed(seed, n);
+
+        // --- in-test negative control -------------------------------------
+        // The two reference variants must disagree on this seed, or the
+        // assertion below cannot distinguish a fixed build from a broken one.
+        int differing = 0;
+        for (int i = 0; i < n; ++i)
+            if (ref.logical[i] != ref.arith[i])
+                ++differing;
+        ASSERT_GE(differing, n / 4)
+            << "seed " << seed << ": only " << differing << " of " << n
+            << " reference entries differ between srwi and srawi, so this seed "
+               "does not exercise the sign-extension path and the check below "
+               "would be vacuous for it. Fix the seed list, not the engine.";
+
+        // --- the actual guard ---------------------------------------------
+        r.Seed(seed);
+        std::vector<uint32_t> actual;
+        actual.reserve(n);
+        for (int i = 0; i < n; ++i)
+            actual.push_back(r.TableWordForTest(i));
+
+        for (int i = 0; i < n; ++i) {
+            ASSERT_EQ(actual[i], ref.logical[i])
+                << "seed " << seed << " table[" << i << "]: got 0x" << std::hex
+                << actual[i] << ", srwi reference 0x" << ref.logical[i]
+                << ", srawi (bug) would give 0x" << ref.arith[i]
+                << (actual[i] == ref.arith[i]
+                        ? "  <-- MATCHES THE SIGN-EXTENSION BUG"
+                        : "");
         }
     }
+}
+
+// Golden table words for seed 12345 — the entry the unicorn differential named.
+// Independent of the reference implementation above (these are literals), so a
+// mistake shared between Rand::Seed and ReferenceSeed still fails here.
+TEST(RandSeed, Seed12345TableWords) {
+    Rand r(0);
+    r.Seed(12345);
+    std::vector<uint32_t> first8;
+    for (int i = 0; i < 8; ++i)
+        first8.push_back(r.TableWordForTest(i));
+    // buggy (srawi) first word is 0x2703D3DC — one less in the high half.
+    std::vector<uint32_t> expected = {0x2704D3DCu, 0x0DAAD665u, 0x3EADC21Fu,
+                                      0x2F5ACD1Du, 0x2FE520DAu, 0x161B69ACu,
+                                      0x525F261Eu, 0x7E706513u};
+    EXPECT_EQ(first8, expected);
 }
 
 // Canonical first-8 Int() sequence for seed 0x29A (the default sRand seed).
@@ -109,4 +203,13 @@ TEST(RandSeed, SeedMinusOneSequence) {
 TEST(RandSeed, Deterministic) {
     Rand r(0);
     EXPECT_EQ(Draws(r, 424242, 12), Draws(r, 424242, 12));
+    // Self-consistency alone is unfalsifiable — it passes on any wrong-but-stable
+    // algorithm, and the 2026-08-19 audit confirmed it passes with the srawi bug
+    // reintroduced. Pin the value too, so "deterministic" means "deterministically
+    // correct". Goldens from the srwi reference (see ReferenceSeed above).
+    std::vector<uint32_t> expected = {0x40912B19u, 0x217419D6u, 0x49F26827u,
+                                      0x0F9D3B5Fu, 0x070A6FC6u, 0x06F712EAu,
+                                      0x4E027E16u, 0x18A15B1Du, 0x049EABFDu,
+                                      0x0DEFDA7Au, 0x23935C96u, 0x29D1C310u};
+    EXPECT_EQ(Draws(r, 424242, 12), expected);
 }

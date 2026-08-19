@@ -5,6 +5,8 @@
 #include "test_helpers.h"
 
 #include "obj/Dir.h"
+#include "obj/Task.h"
+#include "obj/Data.h"
 #include "obj/DirLoader.h"
 #include "obj/Object.h"
 #include "ui/UIPanel.h"
@@ -1255,6 +1257,94 @@ TEST_F(ObjectLifetimeTest, CascadeDeleteCleansUpExternalObjPtrList) {
 
     delete dir;
     delete externalOwner;
+}
+
+// ---------------------------------------------------------------------------
+// TaskMgr deferred-delete queue vs. the DeleteObjects cascade
+// ---------------------------------------------------------------------------
+// Regression for an intermittent SIGSEGV at Task.cpp's drain loop
+// (`delete unk84[i].Ptr()`), reproduced ~1 run in 8 of the scripted
+// boot->gameplay flow at the autosave_warning_screen -> title_screen
+// transition. Under gdb the queued pointer was inside [heap] but its vptr read
+// back as an unmapped address, and Task::IsLive() was false for it: the Task
+// had been destroyed and its block recycled, yet the ObjPtr still pointed at it.
+//
+// Why the ObjPtr survives its target: Hmx::Object::~Object deliberately SKIPS
+// ReplaceRefs(nullptr) while ObjectDir::InDeleteObjects() is true, and the
+// cascade's Phase-0 NullifyAllRefs only walks objects reachable from the dir
+// being deleted. TheTaskMgr is a global, not a dir member, so nothing nullifies
+// its queue entries. In the shipped path the producer is
+// `AnimTask::~AnimTask() { TheTaskMgr.QueueTaskDelete(mBlendTask); }` firing
+// during UIScreen::UnloadPanels -- note UnloadPanels already carries a native
+// workaround for exactly this hazard (ClearTimelineTasks before the cascade),
+// but it covers mTimelines and not the deferred-delete queue.
+//
+// This test reproduces the shape rather than the specific screen: an object in
+// the dir deletes a queued Task from its destructor, so the delete happens with
+// InDeleteObjects() true. The dangling precondition is asserted directly, so
+// the test cannot quietly stop covering the crash.
+namespace {
+class CascadeTestTask : public Task {
+public:
+    void Poll(float) override {}
+};
+
+// Destroys a Task from inside the cascade, the way ~AnimTask does.
+class TaskKiller : public Hmx::Object {
+public:
+    Task *mTask = nullptr;
+    ~TaskKiller() override {
+        if (mTask) {
+            delete mTask;
+            mTask = nullptr;
+        }
+    }
+};
+}  // namespace
+
+TEST_F(ObjectLifetimeTest, PollSkipsQueuedTaskDestroyedByDeleteObjectsCascade) {
+    const int skippedBefore = TaskMgr::DanglingQueuedTasksSkipped();
+
+    ObjectDir *dir = Hmx::Object::New<ObjectDir>();
+    CascadeTestTask *task = new CascadeTestTask();
+    // Plain `new` (not Hmx::Object::New<>) — TaskKiller is a test-local type
+    // with no factory registration. It still routes through Hmx::Object's
+    // NEW_OBJ operator new, so the cascade's Phase-2 free() is well-matched.
+    TaskKiller *killer = new TaskKiller();
+    killer->mTask = task;
+    killer->SetName("killer.obj", dir);
+
+    TheTaskMgr.QueueTaskDelete(task);
+    ASSERT_EQ(TheTaskMgr.QueuedDeleteCountForTest(), 1);
+    ASSERT_TRUE(Task::IsLive(task));
+
+    // Delete through ~ObjectDir, not DeleteObjects() directly: only ~ObjectDir
+    // bumps sDeleteObjectsDepth, and it is that depth which makes
+    // Hmx::Object::~Object skip ReplaceRefs(nullptr). Calling DeleteObjects()
+    // by hand runs the cascade at depth 0, where refs ARE nullified and the bug
+    // cannot occur -- which is how this test first came up green-for-the-wrong-
+    // reason and why the precondition assertions below exist.
+    delete dir;
+
+    // Precondition of the crash: the Task is destroyed, the queue entry is not
+    // nullified. If either of these stops holding, the test below is vacuous
+    // and this assertion says so instead of passing silently.
+    ASSERT_FALSE(Task::IsLive(task))
+        << "the cascade was expected to destroy the queued Task via ~TaskKiller; "
+           "if it no longer does, this test has stopped covering the crash";
+    ASSERT_EQ(TheTaskMgr.QueuedDeleteCountForTest(), 1);
+    ASSERT_EQ(TheTaskMgr.QueuedDeleteRawForTest(0), task)
+        << "the queued ObjPtr should still hold the dangling pointer -- that is "
+           "precisely what Poll() must not delete";
+
+    // The fix: Poll drops the reference instead of dispatching a virtual
+    // destructor through freed memory.
+    TheTaskMgr.Poll();
+
+    EXPECT_EQ(TheTaskMgr.QueuedDeleteCountForTest(), 0);
+    EXPECT_EQ(TaskMgr::DanglingQueuedTasksSkipped(), skippedBefore + 1)
+        << "Poll() must have recognised and skipped exactly one dangling queued "
+           "task. 0 here means it deleted freed memory instead (the crash).";
 }
 
 } // namespace

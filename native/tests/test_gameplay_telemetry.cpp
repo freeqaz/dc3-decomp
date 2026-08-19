@@ -9,6 +9,7 @@
 
 #include <gtest/gtest.h>
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -1110,50 +1111,103 @@ TEST_F(GameplayTelemetryTest, NoAnkleLocalXfmNaNDuringGameplay) {
 
 TEST_F(GameplayTelemetryTest, NoAnkleSuddenJumpsDuringGameplay) {
     // "Flying feet" manifests as sudden large jumps in ankle world position
-    // between frames. Normal dance choreography produces ankle deltas of
-    // ~0.5-5 units per telemetry sample (10 frames at 30fps). A delta > 20
-    // units between samples indicates the ankle teleported — the IK system
-    // produced a wildly different result frame-to-frame.
+    // between samples. Normal dance choreography produces ankle deltas of
+    // ~0.5-5 units per telemetry sample (10 frames at 30fps).
     //
-    // Common causes:
-    // - mLocalXfm back-computation hack writing stale cross-referenced
-    //   transforms (the back-computation was removed as it WAS the bug)
-    // - Constraint target changing suddenly (animation transition)
-    // - NeutralWorldXfm returning garbage for one frame
+    // 2026-08-19: this test was reporting a 130.6-unit L-ankle jump at frame
+    // 1070 as flying feet. It is NOT flying feet, and the distinction matters
+    // enough to encode. `lAnkleWorldDelta` is a WORLD-space delta, so on its
+    // own it cannot tell "the foot moved relative to the body" (the IK bug)
+    // from "the body moved and carried the foot with it" (character placement).
+    // At frame 1070 of the 9050-frame ymca run, the evidence is unambiguous
+    // that it was the latter:
+    //
+    //   lAnkle      (30.0, -21.6) -> ( 57.9, -149.1)   delta 130.55
+    //   rAnkle      (-4.5, -27.5) -> ( 24.3, -152.1)   delta 127.95
+    //   lHand       (18.0, -37.7) -> ( 40.8, -164.0)   same XY delta
+    //   rHand       (-9.4, -28.7) -> ( 14.7, -154.0)   same XY delta
+    //   ankleSeparation   35.0 -> 33.8   (its normal 33-35 range)
+    //   pelvisToLAnkle    29.5 -> 30.2   (unchanged)
+    //   lAnkleZ/rAnkleZ   4.2/3.9 -> 4.2/3.9  (height above floor unchanged)
+    //   lAnkleLocal      18.48/0/0 -> 18.48/0/0  (bit-identical)
+    //   charClipLayers       2 -> 1
+    //
+    // Every internal body relationship is preserved and both hands move by the
+    // same vector: the whole character was rigidly translated in XY, coincident
+    // with a clip layer being dropped. The causes this test names in its own
+    // failure message -- stale mLocalXfm, a constraint target changing,
+    // NeutralWorldXfm garbage -- would all DISTORT the body, not translate it.
+    //
+    // So classify instead of thresholding. A jump is only "flying feet" if the
+    // body articulated: the two ankles moved by materially different amounts,
+    // or the ankle-to-ankle / pelvis-to-ankle distances changed. A jump where
+    // everything moved together is a reposition, reported separately (and still
+    // bounded, so a regression that starts teleporting the dancer repeatedly
+    // goes red rather than being explained away by this comment).
     auto playing = gameplaySamples();
     ASSERT_FALSE(playing.empty())
         << "Never observed real gameplay on game_screen. " << progressSummary();
 
     // Threshold: 40 units accommodates large dance moves (YMCA has
-    // ~30-unit XY displacements). State transitions (loading→intro,
-    // intro→playing) can produce larger jumps but are filtered below.
+    // ~30-unit XY displacements).
     const float kMaxDelta = 40.0f;
-    int footSamples = 0;
-    int lJumpCount = 0;
-    int rJumpCount = 0;
-    float worstLDelta = 0.0f;
-    float worstRDelta = 0.0f;
-    int worstLFrame = 0;
-    int worstRFrame = 0;
+    // Two ankles count as moving "together" if their deltas agree to within
+    // 15% of the larger one. The observed reposition agreed to 2%.
+    const float kRigidRatio = 0.15f;
+    // ...and the body must not have deformed while doing it.
+    const float kMaxShapeChange = 5.0f;
 
+    int footSamples = 0;
+    int articulatedJumps = 0;   // real flying feet
+    int rigidRepositions = 0;   // whole-character moves
+    float worstArticulated = 0.0f;
+    int worstArticulatedFrame = 0;
+    float worstRigid = 0.0f;
+    int worstRigidFrame = 0;
+    std::string rigidDetail;
+
+    float prevSep = -1.0f, prevPelvis = -1.0f;
     for (auto &s : playing) {
         if (!s.getBool("footDataValid")) continue;
         // Skip state transitions — character placement and animation
         // rewinds produce legitimate large position changes.
-        std::string state = s.getString("state");
-        if (state != "playing") continue;
+        if (s.getString("state") != "playing") continue;
         footSamples++;
 
         float ld = s.getFloat("lAnkleWorldDelta");
         float rd = s.getFloat("rAnkleWorldDelta");
+        float sep = s.getFloat("ankleSeparation");
+        float pelvis = s.getFloat("pelvisToLAnkle");
+        float sepChange = (prevSep < 0.0f) ? 0.0f : std::fabs(sep - prevSep);
+        float pelvisChange = (prevPelvis < 0.0f) ? 0.0f : std::fabs(pelvis - prevPelvis);
+        prevSep = sep;
+        prevPelvis = pelvis;
 
-        if (ld > kMaxDelta) {
-            lJumpCount++;
-            if (ld > worstLDelta) { worstLDelta = ld; worstLFrame = s.frame; }
-        }
-        if (rd > kMaxDelta) {
-            rJumpCount++;
-            if (rd > worstRDelta) { worstRDelta = rd; worstRFrame = s.frame; }
+        float big = std::max(ld, rd);
+        if (big <= kMaxDelta) continue;
+
+        bool movedTogether = big > 0.0f
+            && std::fabs(ld - rd) / big <= kRigidRatio
+            && sepChange <= kMaxShapeChange
+            && pelvisChange <= kMaxShapeChange;
+
+        if (movedTogether) {
+            rigidRepositions++;
+            if (big > worstRigid) {
+                worstRigid = big;
+                worstRigidFrame = s.frame;
+                std::ostringstream d;
+                d << "L=" << ld << " R=" << rd << " sepChange=" << sepChange
+                  << " pelvisChange=" << pelvisChange
+                  << " charClipLayers=" << s.getString("charClipLayers");
+                rigidDetail = d.str();
+            }
+        } else {
+            articulatedJumps++;
+            if (big > worstArticulated) {
+                worstArticulated = big;
+                worstArticulatedFrame = s.frame;
+            }
         }
     }
 
@@ -1161,25 +1215,33 @@ TEST_F(GameplayTelemetryTest, NoAnkleSuddenJumpsDuringGameplay) {
         GTEST_SKIP() << "No foot data samples during gameplay";
     }
 
-    // Log statistics regardless of pass/fail
-    printf("  Ankle jump detection (%d samples, threshold=%.0f units):\n", footSamples, kMaxDelta);
-    printf("    L-ankle jumps: %d, worst delta: %.1f at frame %d\n", lJumpCount, worstLDelta, worstLFrame);
-    printf("    R-ankle jumps: %d, worst delta: %.1f at frame %d\n", rJumpCount, worstRDelta, worstRFrame);
+    printf("  Ankle jump classification (%d samples, threshold=%.0f units):\n",
+           footSamples, kMaxDelta);
+    printf("    articulated (flying feet): %d, worst %.1f at frame %d\n",
+           articulatedJumps, worstArticulated, worstArticulatedFrame);
+    printf("    rigid repositions        : %d, worst %.1f at frame %d  %s\n",
+           rigidRepositions, worstRigid, worstRigidFrame, rigidDetail.c_str());
 
-    EXPECT_EQ(lJumpCount, 0)
-        << "Left ankle teleported (delta > " << kMaxDelta << " units) in "
-        << lJumpCount << "/" << footSamples << " gameplay samples. "
-        << "Worst jump: " << worstLDelta << " units at frame " << worstLFrame
-        << ". This is the 'flying feet' bug — IKElbow or dirty cascade is "
-        << "producing wildly different ankle positions frame-to-frame. "
+    EXPECT_EQ(articulatedJumps, 0)
+        << "An ankle moved " << worstArticulated << " units at frame "
+        << worstArticulatedFrame << " WITHOUT the rest of the body moving with "
+        << "it (the other ankle disagreed by more than "
+        << (kRigidRatio * 100.0f) << "%, or ankle separation / pelvis-to-ankle "
+        << "distance changed by more than " << kMaxShapeChange << " units). "
+        << "That is the 'flying feet' bug: the IK solve produced a wildly "
+        << "different ankle position while the body stayed put. "
         << progressSummary();
 
-    EXPECT_EQ(rJumpCount, 0)
-        << "Right ankle teleported (delta > " << kMaxDelta << " units) in "
-        << rJumpCount << "/" << footSamples << " gameplay samples. "
-        << "Worst jump: " << worstRDelta << " units at frame " << worstRFrame
-        << ". This is the 'flying feet' bug — IKElbow or dirty cascade is "
-        << "producing wildly different ankle positions frame-to-frame. "
+    // A whole-character reposition is not an IK bug, but it is a visible
+    // teleport and there should be at most the one known clip-layer handoff.
+    // Bounded, not ignored -- if the dancer starts hopping around the stage
+    // this still fails, it just fails with the right diagnosis.
+    EXPECT_LE(rigidRepositions, 1)
+        << "The character was rigidly repositioned " << rigidRepositions
+        << " times mid-gameplay (worst " << worstRigid << " units at frame "
+        << worstRigidFrame << "; " << rigidDetail << "). One handoff at the "
+        << "start of the routine is known and tolerated; more than that is a "
+        << "character-placement regression, NOT an IK/flying-feet bug. "
         << progressSummary();
 }
 
@@ -1262,31 +1324,66 @@ TEST_F(GameplayTelemetryTest, NoHandNaNDuringGameplay) {
 }
 
 TEST_F(GameplayTelemetryTest, HandBonesNotFlyingDuringGameplay) {
-    // Hand bones are also affected by IKElbow. Check that hand positions
-    // stay within a reasonable bounding box around the character.
-    // Character is at world origin, hands should be within ~100 units.
+    // Hand bones are also affected by IKElbow. "Flying hands" means a hand
+    // detaches from the BODY -- so measure the hand relative to the body.
+    //
+    // 2026-08-19: this test used to assert |world coordinate| <= 200 on the
+    // premise, stated in its own comment, that "character is at world origin".
+    // The game violates that premise: the dancer is repositioned to roughly
+    // (25..75, -150) once at the start of the routine (see the classification
+    // in NoAnkleSuddenJumpsDuringGameplay). Measured over an audit run:
+    //
+    //   world-space max-abs coordinate : p50 160.8  p99 191.0  max 199.5
+    //   body-relative hand distance    : p50  44.5  p99  74.4  max  79.6
+    //
+    // The old assertion was passing with 0.5 units of margin out of 200 -- a
+    // 0.25% margin against a number that tracks where the dancer happens to
+    // stand, not whether their hands are attached. It went red on a rerun where
+    // the reposition landed slightly further out, which is how this was found.
+    //
+    // The ankle midpoint is used as the character-root proxy; the telemetry
+    // does not carry a pelvis world position, and the ankles are already
+    // validated as a rigid pair by the jump classifier.
     auto playing = gameplaySamples();
     ASSERT_FALSE(playing.empty())
         << "Never observed real gameplay on game_screen. " << progressSummary();
 
-    const float kMaxPos = 200.0f;
+    // ~2x headroom over the observed 79.6 max. A genuine flying hand is off by
+    // hundreds of units (the IKElbow failure mode writes garbage transforms),
+    // so this stays sensitive to the bug while being immune to where the
+    // character is standing.
+    const float kMaxFromBody = 150.0f;
     int footSamples = 0;
     int flyingCount = 0;
+    int nanCount = 0;
     float worstVal = 0.0f;
+    int worstFrame = 0;
 
     for (auto &s : playing) {
         if (!s.getBool("footDataValid")) continue;
         footSamples++;
 
-        float vals[] = {
-            s.getFloat("lHandX"), s.getFloat("lHandY"), s.getFloat("lHandZ"),
-            s.getFloat("rHandX"), s.getFloat("rHandY"), s.getFloat("rHandZ")
-        };
-        for (float v : vals) {
-            float av = std::fabs(v);
-            if (av > kMaxPos || std::isnan(v)) {
+        const float cx = (s.getFloat("lAnkleX") + s.getFloat("rAnkleX")) * 0.5f;
+        const float cy = (s.getFloat("lAnkleY") + s.getFloat("rAnkleY")) * 0.5f;
+        const float cz = (s.getFloat("lAnkleZ") + s.getFloat("rAnkleZ")) * 0.5f;
+
+        const char *hands[] = {"lHand", "rHand"};
+        for (const char *h : hands) {
+            float x = s.getFloat(std::string(h) + "X");
+            float y = s.getFloat(std::string(h) + "Y");
+            float z = s.getFloat(std::string(h) + "Z");
+            if (std::isnan(x) || std::isnan(y) || std::isnan(z)) {
+                nanCount++;
+                break;
+            }
+            float dx = x - cx, dy = y - cy, dz = z - cz;
+            float dist = std::sqrt(dx * dx + dy * dy + dz * dz);
+            if (dist > worstVal) {
+                worstVal = dist;
+                worstFrame = s.frame;
+            }
+            if (dist > kMaxFromBody) {
                 flyingCount++;
-                if (av > worstVal) worstVal = av;
                 break;
             }
         }
@@ -1296,11 +1393,22 @@ TEST_F(GameplayTelemetryTest, HandBonesNotFlyingDuringGameplay) {
         GTEST_SKIP() << "No foot data samples during gameplay";
     }
 
+    printf("  Hand-to-body distance: worst %.1f at frame %d (limit %.0f), "
+           "%d/%d samples over limit\n",
+           worstVal, worstFrame, kMaxFromBody, flyingCount, footSamples);
+
+    EXPECT_EQ(nanCount, 0)
+        << "Hand bone position was NaN in " << nanCount << "/" << footSamples
+        << " gameplay samples. " << progressSummary();
+
     EXPECT_EQ(flyingCount, 0)
-        << "Hand bones had positions > " << kMaxPos << " units from origin in "
-        << flyingCount << "/" << footSamples << " gameplay samples. "
-        << "Worst value: " << worstVal << ". "
-        << "This is the 'flying hands' variant of the IKElbow bug. "
+        << "A hand bone was more than " << kMaxFromBody << " units from the "
+        << "character's own body (ankle midpoint) in " << flyingCount << "/"
+        << footSamples << " gameplay samples. Worst: " << worstVal
+        << " units at frame " << worstFrame << ". "
+        << "This is the 'flying hands' variant of the IKElbow bug -- and unlike "
+        << "the old world-space check, it cannot be triggered merely by the "
+        << "dancer standing somewhere other than the origin. "
         << progressSummary();
 }
 
