@@ -247,7 +247,10 @@ def _run_comparison_core(symbol, decomp_coff, orig_coff, timeout=5_000_000,
         return EXIT_ERROR, None, [], f"ERROR: Execution failed: {e}"
 
     # 6. Compare
-    result = compare(decomp_result, orig_result, decomp_relocs, orig_relocs)
+    # `symbol` makes the return-value comparison ABI-correct: r3 is the return
+    # register only for integer/pointer returns (void has none, float uses f1).
+    result = compare(decomp_result, orig_result, decomp_relocs, orig_relocs,
+                     symbol=symbol)
 
     if coloaded_count > 0:
         verbose_lines.append(f"  Co-loaded: {coloaded_count} callees, {decomp_side.func_size}B combined code")

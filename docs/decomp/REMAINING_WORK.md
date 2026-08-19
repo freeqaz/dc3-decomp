@@ -126,7 +126,14 @@ Split the classes before you use them:
 
 | Real bugs (work on these) | Unfixable artefacts (ignore) |
 |---|---|
-| `logic`, `call_count`, `call_arg`, `return_value`, `object_memory`, `error`, `wild_jump_match`, `cap_exhausted`, `cap_exhausted_decomp` | `build_env`, `regalloc`, `merged_call`, `merged_arg`, `stack_layout`, `fpr_precision`, `orig_error`, `cap_exhausted_orig` |
+| `logic`, `call_count`, `call_arg`, `return_value`, `object_memory`, `error`, `wild_jump_match`, `cap_exhausted`, `cap_exhausted_decomp` | `build_env`, `regalloc`, `merged_call`, `merged_arg`, `stack_layout`, `fpr_precision`, `orig_error`, `cap_exhausted_orig`, `scratch_return_reg` |
+
+`scratch_return_reg` (added 2026-08-19) is `r3`/`f1` differing on a function that does not
+return in that register — a **void** function has no return register and a
+**float/double** function returns in `f1`. Those used to be filed as `return_value`:
+5 of the 10 rows in that class were mislabelled (4 void + 1 float), including 4 of the
+6 rows below 100%. `return_value` is now only assigned once the mangled name says `r3`
+really is the return register.
 
 ```sql
 -- the real-bug population: 1,145 fns / 650,972 bytes DB-wide

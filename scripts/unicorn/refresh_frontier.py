@@ -294,6 +294,9 @@ _SIGNAL_ARTIFACT_REASONS = ("cap_exhausted_both", "wild_jump_match")
 _ARTIFACT_CLASSES = (
     "build_env", "regalloc", "stack_layout",
     "merged_call", "merged_arg", "fpr_precision", "orig_error",
+    # r3/f1 differ on a function that does not return in that register (void
+    # returns nothing; float returns in f1). Scratch, not a return value.
+    "scratch_return_reg",
 )
 # Classes that indicate a real behavioral divergence to adjudicate (candidate bug).
 _REAL_BUG_CLASSES = (
