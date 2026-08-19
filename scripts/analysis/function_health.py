@@ -9,17 +9,20 @@ Combines multiple analysis signals into a single diagnostic:
 - Fixability verdict (worth attempting vs AT_LIMIT)
 
 Usage:
-    # Single function
-    python scripts/analysis/function_health.py --symbol "?Poll@LabelNumberTicker@@UAAXXZ"
-
     # By unit + match range (batch mode)
     python scripts/analysis/function_health.py --unit "system/rndobj/*" --min 90 --max 99.9
 
     # Top N most workable functions
     python scripts/analysis/function_health.py --top 20
 
-    # JSON output
-    python scripts/analysis/function_health.py --symbol "..." --json
+    # Single function -- BROKEN, see TODO(repair) in _run_objdiff below.
+    # objdiff-cli takes the symbol POSITIONALLY (`objdiff-cli diff [<symbol>]`),
+    # so `--symbol` exits 1 and every single-function report comes back
+    # `verdict=error`. It is left unrepaired deliberately: fixing the call
+    # changes what this tool FINDS, which does not belong in an honesty pass.
+    # The failure now names itself instead of vanishing. Use the orchestrator
+    # MCP tools (run_objdiff / run_analyze_function) for a single symbol.
+    python scripts/analysis/function_health.py --symbol "..." --json   # exits with verdict=error
 
 COVERAGE / HONESTY NOTES  (see scripts/analysis/coverage.py)
 ------------------------------------------------------------
@@ -111,11 +114,20 @@ def _fmt_pct(p: float | None, width: int = 0) -> str:
 
 @dataclass
 class MismatchCategory:
-    """Counts for a mismatch category."""
+    """Counts for a mismatch category.
+
+    `fixable` is a THREE-state claim wearing a two-state type, which is how
+    `insert_delete` came to be filed as a hard floor.  `contested` marks the
+    classes ceiling_calculator.py reports two ways precisely because the
+    project does not agree they are floors -- see its "TWO CEILINGS, NOT ONE"
+    header.  A category can be `fixable=False, contested=True`: not known
+    fixable, not known unfixable.
+    """
     name: str
     count: int
     fixable: bool
     description: str
+    contested: bool = False
 
 
 @dataclass
@@ -141,6 +153,9 @@ class HealthReport:
     total_mismatches: int = 0
     fixable_mismatches: int = 0
     unfixable_mismatches: int = 0
+    #: Included in `unfixable_mismatches`, and NOT a floor. See
+    #: MismatchCategory.contested and ceiling_calculator's two ceilings.
+    contested_mismatches: int = 0
 
     # Ceiling
     ceiling_percent: float = 100.0
@@ -208,6 +223,31 @@ def _run_objdiff(symbol: str) -> tuple[dict | None, str]:
         return json.loads(result.stdout), ""
     except json.JSONDecodeError as exc:
         return None, f"objdiff-cli emitted unparseable JSON: {exc}"
+
+
+_MISMATCH_DESCS = {
+    "regswap": ("Register swap", False, "Callee-saved register allocation difference"),
+    "merged": ("Merged symbol", False, "ICF-merged call target difference"),
+    "relocation": ("Relocation", False, "Address/symbol relocation difference"),
+    "scheduling": ("Scheduling", False, "Instruction reorder (same opcodes)"),
+    "save_restore": ("Save/Restore", False, "Prologue/epilogue stub difference"),
+    "encoding": ("Encoding", True, "Fixable opcode encoding (extrwi/rlwinm)"),
+    "fma": ("FMA", True, "FMA instruction form difference"),
+    # CONTESTED, not unfixable.  ceiling_calculator.py calls insert_delete
+    # "the single most FIXABLE class" and excludes it from its optimistic
+    # floor; this file went on counting it as a hard floor, and at line
+    # ~408 that fed straight into `Only unfixable mismatches remain` ->
+    # verdict at_limit.  The lane fixed the classification in
+    # ceiling_calculator and left it standing in this sibling, which it
+    # edited in the same branch.  Now neither tool silently picks a side.
+    "insert_delete": ("Insert/Delete", False,
+                      "Extra/missing instructions — CONTESTED: "
+                      "ceiling_calculator treats this as reachable, not a floor",
+                      True),
+    "other": ("Other", False,
+              "Unclassified opcode difference — CONTESTED: unclassified is "
+              "not the same as unfixable", True),
+}
 
 
 def _classify_mismatches(instructions: list[dict]) -> tuple[list[MismatchCategory], int]:
@@ -281,23 +321,14 @@ def _classify_mismatches(instructions: list[dict]) -> tuple[list[MismatchCategor
                     counts["other"] += 1
 
     categories = []
-    descs = {
-        "regswap": ("Register swap", False, "Callee-saved register allocation difference"),
-        "merged": ("Merged symbol", False, "ICF-merged call target difference"),
-        "relocation": ("Relocation", False, "Address/symbol relocation difference"),
-        "scheduling": ("Scheduling", False, "Instruction reorder (same opcodes)"),
-        "save_restore": ("Save/Restore", False, "Prologue/epilogue stub difference"),
-        "encoding": ("Encoding", True, "Fixable opcode encoding (extrwi/rlwinm)"),
-        "fma": ("FMA", True, "FMA instruction form difference"),
-        "insert_delete": ("Insert/Delete", False, "Extra/missing instructions"),
-        "other": ("Other", False, "Unclassified opcode difference"),
-    }
+    descs = _MISMATCH_DESCS
 
     for key, count in counts.items():
         if count > 0:
-            name, fixable, desc = descs[key]
+            name, fixable, desc, *rest = descs[key]
             categories.append(MismatchCategory(
                 name=name, count=count, fixable=fixable, description=desc,
+                contested=bool(rest[0]) if rest else False,
             ))
 
     return categories, total
@@ -395,6 +426,11 @@ def _compute_verdict(
     """Compute workability verdict and score."""
     fixable = sum(c.count for c in categories if c.fixable)
     unfixable = sum(c.count for c in categories if not c.fixable)
+    # Of the "unfixable" total, how much is actually CONTESTED rather than a
+    # known floor.  Counting contested instructions as a floor is what let this
+    # tool hand out `at_limit` on the strength of insert_delete alone.
+    contested = sum(c.count for c in categories if c.contested)
+    hard_unfixable = unfixable - contested
 
     if match_pct >= 100.0:
         return "complete", "Already at 100%", 0.0
@@ -403,6 +439,17 @@ def _compute_verdict(
         return "at_limit", f"Ceiling {ceiling:.1f}% — no room to improve", 0.0
 
     if fixable == 0 and unfixable > 0:
+        if contested > 0:
+            # Do not certify a floor out of a class the project reports two
+            # ways.  Say what is known and what is not, and let the reader
+            # decide -- the same refusal ceiling_calculator makes.
+            return ("contested",
+                    f"No KNOWN-fixable mismatches, but {contested} of "
+                    f"{unfixable} remaining instructions are in contested "
+                    f"classes (insert/delete, unclassified) that "
+                    f"ceiling_calculator treats as reachable; "
+                    f"{hard_unfixable} are hard floors. Not an at_limit "
+                    f"certificate.", 0.0)
         return "at_limit", f"Only unfixable mismatches remain ({unfixable} instructions)", 0.0
 
     # Compute workability score
@@ -431,6 +478,11 @@ def _compute_verdict(
         return "workable", f"{fixable} fixable mismatches, ceiling {ceiling:.1f}%", score
     elif score > 3.0:
         return "marginal", f"Some potential ({fixable} fixable), but limited headroom", score
+    elif contested > 0:
+        return ("contested",
+                f"Low known fixability ({fixable}/{total_mm}), but {contested} "
+                f"instructions are in contested classes — not an at_limit "
+                f"certificate", score)
     else:
         return "at_limit", f"Low fixability ({fixable}/{total_mm})", score
 
@@ -487,6 +539,7 @@ def analyze_function(symbol: str) -> HealthReport:
     report.total_mismatches = sum(c.count for c in categories)
     report.fixable_mismatches = sum(c.count for c in categories if c.fixable)
     report.unfixable_mismatches = sum(c.count for c in categories if not c.fixable)
+    report.contested_mismatches = sum(c.count for c in categories if c.contested)
 
     # Compute ceiling
     if total > 0:

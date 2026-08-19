@@ -124,8 +124,8 @@ See [SCANNER_TRUTHFULNESS.md](SCANNER_TRUTHFULNESS.md). Run all three before tru
 
 | Tool | Description | Usage |
 |------|-------------|-------|
-| Function Health | Unified diagnostic: match%, mismatch breakdown, ceiling, pattern suggestions, fixability verdict | `python scripts/analysis/function_health.py --symbol "..." --json` |
-| Batch Health | Scan functions by unit/match% range, rank by workability | `python scripts/analysis/function_health.py --unit "system/*" --top 20` |
+| Function Health | **Single-symbol mode is BROKEN and always has been** — it shells out to `objdiff-cli diff --symbol <s>`, but the symbol is POSITIONAL (`objdiff-cli diff [<symbol>]`), so every call exits 1 and the report comes back `verdict=error`. Left unrepaired on purpose (`TODO(repair)` in the source): fixing the call changes what the tool FINDS, which is not an honesty change. Use `mcp__orchestrator__run_objdiff` / `run_analyze_function` instead. | *(broken)* `python scripts/analysis/function_health.py --symbol "..." --json` |
+| Batch Health | Scan functions by unit/match% range, rank by workability. This mode WORKS (its SQL named two columns `decomp.db` does not have, so it answered "No functions found matching criteria." to every query ever asked; repaired). | `python scripts/analysis/function_health.py --unit "system/*" --top 20` |
 | Regswap Classify | Classify callee-saved register swaps by variable type | `python scripts/analysis/regswap_classify.py --verbose` |
 | Reclassify AT_LIMIT | Scan AT_LIMIT functions, diagnose fixable vs unfixable, reopen fixable ones | `python -m scripts.analysis.reclassify_at_limit --apply --unit 'system/char/*'` |
 

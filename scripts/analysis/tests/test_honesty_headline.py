@@ -777,3 +777,68 @@ def test_grindarray_gate_uses_ops_that_fire_not_ops_that_exist():
         "35", "").replace("45", "").replace("53", "").replace("55", ""), (
         f"op5 must not be in the firing set, or the premise is false: {fired}")
     assert "CONCLUSION: GrindArray is NOT the divergence source" in clean.stdout
+
+
+# =========================================================================== #
+# function_health — the insert_delete classification the lane fixed in
+# ceiling_calculator and left standing in a sibling it edited in the same
+# branch.
+#
+# ceiling_calculator.py's header calls insert_delete "the single most FIXABLE
+# class" and excludes it from the optimistic floor. function_health.py went on
+# filing it `fixable=False`, and that fed straight into
+# `Only unfixable mismatches remain` -> verdict at_limit — an AT_LIMIT
+# certificate manufactured out of the class the project had already ruled
+# reachable.
+# =========================================================================== #
+
+import scripts.analysis.function_health as FH  # noqa: E402
+
+
+def _cat(name, count, fixable=False, contested=False):
+    return FH.MismatchCategory(name=name, count=count, fixable=fixable,
+                               description="x", contested=contested)
+
+
+def test_insert_delete_alone_no_longer_certifies_at_limit():
+    # (b) The two classes must be treated DIFFERENTLY — that is the finding.
+    # A hard floor still certifies; a contested class must not.
+    hard, _, _ = FH._compute_verdict(95.0, [_cat("Register swap", 12)], 100.0, 5.0)
+    soft, reason, _ = FH._compute_verdict(
+        95.0, [_cat("Insert/Delete", 12, contested=True)], 100.0, 5.0)
+
+    assert hard == "at_limit", "a genuine hard floor must still certify"
+    assert soft != "at_limit", (
+        "insert_delete alone must not manufacture an at_limit certificate — "
+        "ceiling_calculator treats it as reachable")
+    assert soft == "contested"
+    assert "not an at_limit certificate" in reason.lower()
+    # ...and it must say how much is contested vs how much is a real floor.
+    assert "12" in reason and "0 are hard floors" in reason
+
+
+def test_a_mixed_function_reports_both_populations():
+    _, reason, _ = FH._compute_verdict(
+        95.0,
+        [_cat("Register swap", 3), _cat("Insert/Delete", 9, contested=True)],
+        100.0, 5.0)
+    assert "9 of 12" in reason
+    assert "3 are hard floors" in reason
+
+
+def test_the_contested_classes_are_the_ones_ceiling_calculator_names():
+    """Derive the set from the OTHER tool rather than restating a constant here.
+
+    ceiling_calculator's optimistic floor is the hard classes only, so the
+    classes it omits are exactly the ones function_health must not treat as
+    floors.
+    """
+    cc = open(os.path.join(REPO, "scripts", "analysis",
+                           "ceiling_calculator.py"), errors="replace").read()
+    assert "insert_delete" in cc and "hard_unfixable" in cc
+    contested = {k for k, v in FH._MISMATCH_DESCS.items()
+                 if len(v) > 3 and v[3]}
+    assert "insert_delete" in contested, (
+        "the class ceiling_calculator calls the most fixable must be contested "
+        "here too, or the two tools disagree in silence")
+    assert "regswap" not in contested and "merged" not in contested
