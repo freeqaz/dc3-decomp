@@ -35,11 +35,18 @@ Two oracles that were not being used, and together they decide every row without
 
 | disposition | rows | bytes | meaning |
 |---|---:|---:|---|
-| RECOVERED this lane | 11 | 2 036 | see the commits on `fix/comdat-placement-tier2` |
-| ICF naming artifact | 19 | 2 138 | our bytes are already there under the fold partner's name |
-| Genuinely absent body | 6 | 3 868 | real work; `JoypadPollCommon`, BinkMovieImpl x2, DrawUtl x2 |
+| RECOVERED this lane | 13 | 3 592 | see the commits on `fix/comdat-placement-tier2` |
+| ICF naming artifact | 20 | 1 924 | our bytes are already there under the fold partner's name |
+| Genuinely absent body | 3 | 3 156 | `JoypadPollCommon` + DrawUtl's two copy loops, both delegated |
 | Phantom odr-use | 4 | 296 | the target proves there is no call site to find |
-| Delegated / in flight | 2 | 308 | DrawUtl `YUVtoRGB`, HamDirector `DancerSkeleton` copy ctor |
+| Placement / call-site, open | 2 | 308 | DrawUtl `YUVtoRGB` (delegated), HamDirector `DancerSkeleton` copy ctor |
+
+Whole-build effect of the 13: `build/373307D9/report.json` on
+`match_percent_normalized` against the merge base `03e0202ac` — 17 rows move, 16 of them
+0 -> 100%; 29 419 -> 29 435 functions at 100%. The one down-row is a documented
+`__unwind$` funclet-pairing phantom in `meta_ham/HamProfile` (objdiff pairs EH funclets by
+byte signature; the unit's own object is unchanged apart from MSVC's internal `$M<n>`
+label numbering).
 
 ## Negative result 1 — PHANTOM ODR-USE is a real, unrecoverable class
 
@@ -110,14 +117,9 @@ Ordered by size. Everything here is real work, not an artifact.
   (`Joypad.h:301`), called (`Joypad_Xbox.cpp:55`), never defined. rb3's copy is itself an
   unfinished two-`MILO_WARN` stub, so it is not a reference. Delegated to
   `fix/joypadpollcommon`.
-- **`BinkMovieImpl`: `BeginFrame` (964 B) and `EndFrame` (520 B)** — the two of the
-  original five still at 0%. `SetRect`, `FinishOpen` and `EndianSwapBuffer` were recovered
-  to 100% on this branch. `EndFrame` is decoded structurally (CHECK_THREAD; on `mMidFrame`
-  call vtable slot 0x74 on all four of `mInternalBufs`' Y/Cr/Cb/A textures indexed
-  `[unkb0][unkb4]`, `StoreCache()` the same four indexed `[mBuffers.FrameNum][X]`, clear
-  `sAsyncMovie` and `mMidFrame`, else warn `"mMidFrame"`) but `X` is a `subfc`/`adde`
-  materialisation of `unk40 >= mBuffers.TotalFrames` whose meaning needs `BeginFrame` first,
-  and `unkb0`/`unkb4` are unnamed. Left at 0% rather than guessed.
+- ~~`BinkMovieImpl` 5 rows, 2 664 B~~ — **DONE on this branch.** `SetRect`, `FinishOpen`,
+  `EndianSwapBuffer`, `BeginFrame` and `EndFrame` were all 0% and all reach 100%.
+  Reference-less: og-dc3 defines none of them either.
 - **`gesture/DrawUtl` `CopyDepth` (360) + `CopyPlayerMask` (152) + `YUVtoRGB` (176)** plus the
   three conversion loops missing from `UpdateBufferTex` (1 284 B at 60.6%) — delegated to
   `fix/drawutl-buffer-copies`. `YUVtoRGB`'s row is expected to stay 0% regardless: it folded
