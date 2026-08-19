@@ -220,23 +220,104 @@ def _extract_prologue_mismatch_info(data: dict) -> "dict | None":
 # The relocation ruler, in one place, because getting it wrong is silent.
 #
 # MEASURED on this fork (objdiff-cli 4.2.3, 2026-08-19) against
-# `?Load@CamShot@@UAAXAAVBinStream@@@Z`:
+# `?Load@CamShot@@UAAXAAVBinStream@@@Z`, holding the ICF alias map constant:
 #
-#   no -c ................ fuzzy 99.85558, 119 non-equal rows, reloc_ignored 22
-#   functionRelocDiffs=none ....... identical to the above
-#   functionRelocDiffs=name_check . identical to the above
-#   functionRelocDiffs=all ....... fuzzy 99.66141, 151 non-equal rows, ignored 11
+#   fork's own built-in default .... fuzzy 99.68568, 147 non-equal rows, ignored 15
+#   no -c, under THIS repo's -p .... fuzzy 99.85558, 119 non-equal rows, ignored 22
+#   functionRelocDiffs=none ........ identical to the 119 row
+#   functionRelocDiffs=name_check .. identical to the 119 row
+#   functionRelocDiffs=all ......... fuzzy 99.66141, 151 non-equal rows, ignored 11
 #
-# So the fork's DEFAULT is already normalized, and "raw" cannot be spelled by
-# omitting the flag -- only `all` actually counts relocations. `run_diff_inspect`
-# shipped `raw` as "omit -c" and was therefore inert; that is fixed by routing
-# both tools through this table. `name_check` is kept because it is the ruler
-# report.json is generated with, even though it coincides with `none` here.
+# WHY omitting -c is not raw -- and it is NOT "the fork's default is already
+# normalized", which was this table's original rationale and is false. The
+# fork's built-in CLI default is `FunctionRelocDiffs::DataValue`
+# (objdiff-cli/src/cmd/diff.rs, build_config_from_args), which is a THIRD
+# ruler and gives a third row count: 147. Omitting -c lands on `name_check`
+# only because THIS REPO'S `objdiff.json` sets
+#
+#     "options": { "functionRelocDiffs": "name_check" }
+#
+# which `apply_project_options` (objdiff-core/src/config/mod.rs) stamps over
+# the built-in default whenever `-p` loads the project. The behaviour travels
+# with the PROJECT CONFIG, not with the binary -- and that distinction is load
+# bearing here, because `bin/objdiff-cli` is a symlink shared with ../rb3 and
+# ../rb3-xenon, whose objdiff.json may set a different value. Blaming the fork
+# would predict the same rows in all three trees; blaming objdiff.json (right)
+# does not.
+#
+# Corollary worth knowing: the `none == name_check == 119` coincidence is
+# itself contingent on the ICF alias map being loaded. Drop `--map-file` and
+# `name_check` rises to 130 while `none` stays at 119 -- the two rulers are
+# genuinely different, they only agree here because icf_aliases.map already
+# proves the folds that name_check would otherwise charge.
+#
+# `run_diff_inspect` shipped `raw` as "omit -c" and so returned the
+# `name_check` answer under a "raw" label. It was MISLABELLED, not blind:
+# `name_check` charges relocation NAME mismatches, which is exactly the
+# wrong-callee / wrong-vtable-slot plane. See RULER_GUIDANCE below.
 RELOC_RULER = {
     "normalized": "functionRelocDiffs=none",
     "raw": "functionRelocDiffs=all",
     "name_check": "functionRelocDiffs=name_check",
 }
+
+# Which ruler to reach for, measured rather than assumed (2026-08-19).
+#
+# `name_check` is the wrong-callee ruler. `?Poll@KinectShareConnection@@QAAXXZ`
+# scores 100.0% with ZERO mismatch rows under `none`, and `name_check` finds
+# exactly 1 -- a real divergence, `bl ??$MakeString@E@@...` (unsigned char) in
+# the target vs `bl ??$MakeString@D@@...` (char) in ours.
+#
+# `all` (= our "raw") is the ADDEND view, and it is noisier, not more capable.
+# Over a 14-function sample it added 997 rows on top of `name_check`, of which
+#   531 (53.3%) same symbol on both sides -- pure address/addend noise
+#   352 (35.3%) lbl_* vs a named static
+#   112 (11.2%) register-only rows with no symbol on either side
+#     2 ( 0.2%) an actual name divergence
+# i.e. 99.8% noise. `?Handle@CampaignPerformer@@...` goes from 0 rows under
+# `name_check` to 605 under `all`. Reach for `all` when you care about
+# relocation ADDENDS; reach for `name_check` when you are hunting a wrong
+# callee.
+RULER_GUIDANCE = (
+    "name_check = wrong-callee ruler (relocation NAME mismatches). "
+    "raw/all = addend view; ~99.8% of what it adds over name_check is "
+    "address noise. normalized/none = code shape only."
+)
+
+# `run_diff_inspect` modes that build their own objdiff command somewhere other
+# than this file, and therefore cannot see `diff_mode`.  Handing back a
+# normalized report under a "raw" label is how a measurement silently becomes
+# wrong, so every one of these prints a banner instead.
+RULER_DEAF_MODES = {
+    "diagnose":     "scripts/analysis/diff_inspect.py",
+    "clusters":     "scripts/analysis/diff_inspect.py",
+    "regswaps":     "scripts/analysis/diff_inspect.py",
+    "offsets":      "scripts/analysis/diff_inspect.py",
+    "replaces":     "scripts/analysis/diff_inspect.py",
+    "asm_listing":  "the /FAs compile path (a compiler listing, not an objdiff run)",
+    "stack-layout": "scripts/analysis/stack_layout.py",
+    "attributed":   "scripts/analysis/diff_inspect.py --attributed",
+}
+
+
+def _ruler_ignored_banner(diff_mode: str, mode: str) -> str:
+    """Banner for a mode that cannot honour `diff_mode`. '' when not applicable.
+
+    The schema is honest about which modes honour the ruler; before this the
+    runtime banner only covered the five diff_inspect analysis modes, so
+    `asm_listing`, `stack-layout` and `attributed` accepted a ruler and
+    silently ignored it.
+    """
+    if diff_mode == "normalized" or mode not in RULER_DEAF_MODES:
+        return ""
+    return (
+        f"> **`diff_mode={diff_mode}` was IGNORED for mode=`{mode}`.** "
+        f"This mode is produced by {RULER_DEAF_MODES[mode]}, which builds its own "
+        f"command with no relocation-ruler switch; the report below is NORMALIZED. "
+        f"For a relocation-aware diff use `run_objdiff(diff_mode=\"{diff_mode}\")`, or "
+        f"`run_diff_inspect(mode=\"mismatches\")` which does honour the ruler. "
+        f"({RULER_GUIDANCE})\n\n"
+    )
 
 
 def _format_data_diff(data: dict, max_rows: int = 80) -> str:
@@ -971,7 +1052,7 @@ class DecompMCPServer:
                             "diff_mode": {
                                 "type": "string",
                                 "enum": ["normalized", "raw", "name_check"],
-                                "description": "Relocation ruler. 'normalized' (default, functionRelocDiffs=none) ignores link-time address noise. 'raw' counts relocations and immediates -- needed to see wrong-vtable-slot and wrong-callee bugs that normalized scoring hides. 'name_check' is report.json's ruler.",
+                                "description": "Relocation ruler. 'normalized' (default, functionRelocDiffs=none) scores code shape only and ignores link-time address noise. 'name_check' is report.json's ruler and is the one to use for WRONG-CALLEE / wrong-vtable-slot hunting -- it charges relocation NAME mismatches (KinectShareConnection::Poll: 0 mismatch rows under 'normalized', 1 real wrong callee under 'name_check'). 'raw' (functionRelocDiffs=all) additionally charges relocation ADDENDS; it is the addend view, and ~99.8% of what it adds over 'name_check' is address noise, so it is noisier rather than more capable for the wrong-callee class.",
                             },
                             "output_format": {
                                 "type": "string",
@@ -1096,8 +1177,8 @@ class DecompMCPServer:
                             },
                             "diff_mode": {
                                 "type": "string",
-                                "enum": ["normalized", "raw"],
-                                "description": "Diff scoring mode. 'normalized' (default) ignores relocation address differences (functionRelocDiffs=none); 'raw' is functionRelocDiffs=all, which actually counts them. ⚠ HONOURED ONLY by modes 'mismatches', 'compare' and 'save_baseline'. The analysis modes (diagnose/clusters/regswaps/offsets/replaces) delegate to scripts/analysis/diff_inspect.py, which builds its own objdiff command with no ruler switch -- they IGNORE this and say so loudly in their output. Use run_objdiff(diff_mode='raw') for those.",
+                                "enum": ["normalized", "raw", "name_check"],
+                                "description": "Relocation ruler. 'normalized' (default, functionRelocDiffs=none) scores code shape only. 'name_check' charges relocation NAME mismatches -- the wrong-callee / wrong-vtable-slot ruler, and report.json's. 'raw' (functionRelocDiffs=all) also charges addends; ~99.8% of what it adds over 'name_check' is address noise. ⚠ HONOURED ONLY by modes 'mismatches', 'compare' and 'save_baseline'. The other eight modes (diagnose/clusters/regswaps/offsets/replaces/asm_listing/stack-layout/attributed) build their own commands with no ruler switch -- they IGNORE this and say so loudly in their output. Use run_objdiff(diff_mode='name_check') for those.",
                             },
                         },
                         "required": ["symbol", "mode", "project_dir"],
@@ -2778,12 +2859,16 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
         # In "normalized" mode (default), ignore relocation address noise.
         # In "raw" mode, include relocation diffs so they can be inspected.
         #
-        # `raw` used to be spelled "omit -c entirely", which was INERT: this
-        # fork's default already normalizes, so omitting the flag and passing
-        # `functionRelocDiffs=none` produce byte-identical JSON. Measured on
-        # ?Load@CamShot@@UAAXAAVBinStream@@@Z (2026-08-19): no -c / =none /
-        # =name_check all give fuzzy 99.85558 with 119 non-equal rows;
-        # `=all` gives 99.66141 with 151. Only `all` is raw. See RELOC_RULER.
+        # `raw` used to be spelled "omit -c entirely", which returned the
+        # `name_check` answer under a "raw" label -- because THIS REPO'S
+        # objdiff.json sets `"functionRelocDiffs": "name_check"` in `options`,
+        # which overrides the fork's own built-in default (`DataValue`). It is
+        # not that "the fork already normalizes": the fork's default is a third
+        # ruler giving a third row count. Measured on
+        # ?Load@CamShot@@UAAXAAVBinStream@@@Z (2026-08-19, ICF map held
+        # constant): fork default 147 rows; no -c / =none / =name_check under
+        # `-p` all 119; `=all` 151. See RELOC_RULER for why that distinction
+        # matters when the shared objdiff-cli symlink is used from ../rb3.
         reloc_config = ["-c", RELOC_RULER.get(diff_mode, RELOC_RULER["normalized"])]
 
         try:
@@ -2989,7 +3074,11 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
 
             # ── asm_listing mode (compile with /FAs, return annotated assembly) ──
             elif mode == "asm_listing":
-                return await self._run_asm_listing(symbol, project_dir)
+                listing = await self._run_asm_listing(symbol, project_dir)
+                banner = _ruler_ignored_banner(diff_mode, mode)
+                if banner and listing and getattr(listing[0], "text", None):
+                    listing[0] = TextContent(type="text", text=banner + listing[0].text)
+                return listing
 
             # ── stack-layout mode (per-slot diff with base-side variable names) ──
             elif mode == "stack-layout":
@@ -3009,7 +3098,7 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
                     timeout=300,
                 )
 
-                output = result.stdout
+                output = _ruler_ignored_banner(diff_mode, mode) + result.stdout
                 if result.stderr:
                     filtered_stderr = _filter_build_output(result.stderr)
                     if filtered_stderr:
@@ -3049,7 +3138,7 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
                     timeout=300,
                 )
 
-                output = result.stdout
+                output = _ruler_ignored_banner(diff_mode, mode) + result.stdout
                 if result.stderr:
                     filtered_stderr = _filter_build_output(result.stderr)
                     if filtered_stderr:
@@ -3091,17 +3180,9 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
                 # relocation ruler -- so `reloc_config` above never reaches them
                 # and the answer is normalized whatever `diff_mode` said. Say so
                 # instead of handing back a normalized report under a raw label;
-                # the class of bug people ask for raw about (wrong vtable slot,
-                # wrong callee) is exactly the class this would hide.
-                if diff_mode != "normalized":
-                    output = (
-                        f"> **`diff_mode={diff_mode}` was IGNORED for mode=`{mode}`.** "
-                        f"This mode delegates to `scripts/analysis/diff_inspect.py`, which "
-                        f"builds its own objdiff command with no ruler switch; the report "
-                        f"below is NORMALIZED. For a real relocation-counting diff use "
-                        f"`run_objdiff(diff_mode=\"raw\")`, or `run_diff_inspect(mode=\"mismatches\")` "
-                        f"which does honour the ruler.\n\n"
-                    ) + output
+                # the class of bug people ask for a relocation ruler about
+                # (wrong vtable slot, wrong callee) is what this would hide.
+                output = _ruler_ignored_banner(diff_mode, mode) + output
                 if result.stderr:
                     filtered_stderr = _filter_build_output(result.stderr)
                     if filtered_stderr:
