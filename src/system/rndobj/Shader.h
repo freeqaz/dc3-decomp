@@ -73,6 +73,11 @@ protected:
 };
 
 class RndShaderStandard : public RndShader {
+public:
+    /** ?CheckError@RndShaderStandard@@ is at 0x82E2AB00 ('li r3,1; blr'), 'f'
+     * (out-of-line) -- the base returns false. */
+    virtual bool CheckError(MatFlagErrorType);
+
 protected:
     virtual void Select(RndMat *, ShaderType, bool);
     virtual u64 CalcShaderOpts(NgMat *, ShaderType, bool);
@@ -103,12 +108,22 @@ protected:
 };
 
 class RndShaderFur : public RndShader {
+public:
+    /** ?CheckError@RndShaderFur@@ is at 0x82E2AB00 ('li r3,1; blr'), 'f'
+     * (out-of-line) -- the base returns false. */
+    virtual bool CheckError(MatFlagErrorType);
+
 protected:
     virtual void Select(RndMat *, ShaderType, bool);
     virtual u64 CalcShaderOpts(NgMat *, ShaderType, bool);
 };
 
 class RndShaderSyncTrack : public RndShader {
+public:
+    /** ?CheckError@RndShaderSyncTrack@@ is at 0x82E2AB00 ('li r3,1; blr'), 'f'
+     * (out-of-line) -- the base returns false. */
+    virtual bool CheckError(MatFlagErrorType);
+
 protected:
     virtual void Select(RndMat *, ShaderType, bool);
     virtual u64 CalcShaderOpts(NgMat *, ShaderType, bool);

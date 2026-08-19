@@ -283,6 +283,12 @@ void RndShaderSimple::Select(RndMat *mat, ShaderType s, bool b) {
     }
 }
 
+bool RndShaderStandard::CheckError(MatFlagErrorType) { return true; }
+
+bool RndShaderFur::CheckError(MatFlagErrorType) { return true; }
+
+bool RndShaderSyncTrack::CheckError(MatFlagErrorType) { return true; }
+
 bool RndShaderMultimesh::CheckError(MatFlagErrorType type) {
     return type == (MatFlagErrorType)0 || type == (MatFlagErrorType)1 || type == (MatFlagErrorType)2;
 }
