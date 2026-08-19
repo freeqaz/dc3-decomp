@@ -30,9 +30,20 @@ void DingoJob::Start() {
     MILO_ASSERT(GetURL(), 0x49);
     MILO_ASSERT(strlen(GetURL()) != 0, 0x4A);
 
-    const char *url = GetURL();
-    TheServer.Poll();
-    SetURL(MakeString("/%s/%s/%s/%s", lbl_82066608, TheServer.unk40, url));
+    // The retail instantiation is MakeString<const char*, const char*, const char*,
+    // const char*>: four arguments, all char pointers, for the four %s in the
+    // format. Ours passed three, and the second was a String object rather than
+    // its c_str(). The target's asm evaluates them right to left --
+    // GetURL() -> 0x50(r1), TheServer+0x44 (unk40's mStr) -> 0x54(r1), and the
+    // vtable+0x80 call (GetPlatform) -> 0x58(r1) -- so the missing argument is
+    // the platform string, and there is no TheServer.Poll() call here at all.
+    SetURL(MakeString(
+        "/%s/%s/%s/%s",
+        lbl_82066608,
+        TheServer.GetPlatform(),
+        TheServer.unk40.c_str(),
+        GetURL()
+    ));
     StartImpl();
 }
 
