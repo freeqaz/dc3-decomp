@@ -606,16 +606,23 @@ bugs, because a function with no body silently does nothing at runtime. Largest
 single items: `PlatformMgr::Poll` (4,844 B), `Synth360::SetGlobalReverbPreset`
 (3,416 B).
 
-### 5. Fix `function_health.py`'s objdiff invocation
-**One line.** It converts a tool that produces 2,705 wrong records into the
-project's only batch fixability oracle. Until it is fixed, every "no workable
-functions" answer from it is meaningless — and it exits 0 while saying so.
+### 5. Rebuild the ceiling on objdiff's own weighted score
+**The single highest-leverage tooling fix left, and the reason lanes 2, 6, 10
+and every AT_LIMIT re-triage are currently flying blind.** The ceiling is an
+unweighted instruction ratio; the measurement is a score-weighted score; 94.3 %
+of the comparisons come out negative (§5.2). This lane fixed
+`function_health.py`'s invocation and guarded it from certifying nonsense, but
+**the ceiling model itself is untouched** — nothing currently tells you which
+of the 1,567 AT_LIMIT functions has headroom.
 
-### 6. Surface `ceiling_percent_optimistic`, or delete `ceiling_percent`
-944 AT_LIMIT functions show headroom on the optimistic ceiling and 43 on the
-headline one. Pick a side in the `insert_delete` argument and make the tool say
-which. Retire the AT_LIMIT verdicts the clamped tool produced; they cannot be
-distinguished from the clamp.
+The fix is to compute the ceiling as *the normalized score we would reach if the
+fixable mismatches were closed*, on objdiff's own scale, rather than as a raw
+instruction count. Once it exists, every AT_LIMIT verdict produced through the
+old path should be retired: they cannot be distinguished from the scale error.
+Meanwhile `ceiling_calculator.py`'s clamp should go — it converts a visible
+absurdity into an invisible one, and its `ceiling_percent` field should either
+surface `ceiling_percent_optimistic` (944 rows with headroom vs the headline's
+43) or be deleted.
 
 ### 7. Repair `authorable_done`: stop counting stubs as done, fix `is_stub`, narrow the `??_` filter
 Three edits: drop `is_stub = 1` from the `is_done` CASE (recovers 301 rows into
