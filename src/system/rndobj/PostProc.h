@@ -85,6 +85,12 @@ public:
     bool DoMotionBlur() const;
     bool DoGradientMap() const;
     bool DoRefraction() const;
+    /** Gate for NgPostProc::CheckHueConverge, the sibling of DoGradientMap /
+     *  DoRefraction / HallOfTime.  `?DoHueConverge@RndPostProc@@QBA_NXZ` is in
+     *  ham_xbox_r.map at 82E2AB00, i.e. it ICF-folded into the `li r3,1; blr`
+     *  class -- the shipped build returns true unconditionally.  It must stay
+     *  out-of-line: the target makes a real `bl` at 826A9998. */
+    bool DoHueConverge() const;
     bool ColorXfmEnabled() const;
     float EmulateFPS() const { return mEmulateFPS; }
 

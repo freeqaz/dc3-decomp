@@ -35,8 +35,6 @@ public:
     void SetMinPitch(float);
     void SetMaxPitch(float);
 
-    static bool sDisableJitter;
-
     friend class CharEyes;
 
     RndTransformable *GetSource() const {
@@ -45,6 +43,14 @@ public:
     }
 
 protected:
+    /** The linker map spells this `?sDisableJitter@CharLookAt@@1_NA` -- MSVC's
+     *  `@1` is a PROTECTED static data member (`@0` private, `@2` public).  It
+     *  was declared public here, so every reference (CharLookAt::Poll,
+     *  CharEyes::Poll, CharEyes::Load) emitted `@2` and named a symbol that is
+     *  not in the image.  `friend class CharEyes` above is what lets CharEyes
+     *  keep reaching it. */
+    static bool sDisableJitter;
+
     CharLookAt();
 
     void SyncLimits();

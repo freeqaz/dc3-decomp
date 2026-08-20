@@ -106,7 +106,11 @@ public:
     void SetGlobalOptionsSaveState(ProfileSaveState);
     void SaveGlobalOptions(FixedSizeSaveableStream &);
     void LoadGlobalOptions(FixedSizeSaveableStream &);
-    static int GetGlobalOptionsSize();
+    /** ham_xbox_r.map spells this ?GetGlobalOptionsSize@ProfileMgr@@QAAHXZ --
+     *  `QAA` is a NON-STATIC public member (`SA` would be static).  Declared
+     *  static it mangled ?...@@SAHXZ, a symbol not in the image, at five
+     *  SaveLoadManager call sites that already spell it TheProfileMgr.<call>. */
+    int GetGlobalOptionsSize();
     bool HasActiveProfile(bool) const;
     std::vector<HamProfile *> GetNewlySignedIn();
     std::vector<HamProfile *> GetShouldAutosave();

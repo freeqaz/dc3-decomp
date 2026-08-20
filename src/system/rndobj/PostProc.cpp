@@ -630,6 +630,8 @@ bool RndPostProc::DoGradientMap() const {
 
 bool RndPostProc::DoRefraction() const { return mRefractMap && mRefractDist; }
 
+bool RndPostProc::DoHueConverge() const { return true; }
+
 // Checks if any color transformation effects are active
 bool RndPostProc::ColorXfmEnabled() const {
     // Color modulation or basic color adjustments

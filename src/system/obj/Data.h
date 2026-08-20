@@ -329,10 +329,15 @@ private:
     const char *mContextPath; // DTA context tracking for runtime validation
 #endif
 
+    /** The linker map spells this `?sDefaultHandler@DataArray@@0P6A?AVDataNode@@PAV1@@ZA`
+     *  -- MSVC's `@0` is a PRIVATE static data member (`@1` protected, `@2`
+     *  public).  Declared public it mangled to `@2`, a symbol the image does
+     *  not contain.  Only DataArray::Execute reads it. */
+    static DataFunc *sDefaultHandler;
+
     ~DataArray();
 
 public:
-    static DataFunc *sDefaultHandler;
     static void SetFile(Symbol);
 
     const char *File() const { return mFile.Str(); }

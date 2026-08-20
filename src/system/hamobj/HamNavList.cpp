@@ -926,7 +926,13 @@ void HamNavList::Disengage() {
     }
 }
 
-bool HamNavList::IsScrollable() const { return mListState.IsScrolling(); }
+// The target inlines this into GetDisabledCount as a call on &mListState to
+// 826018C8, whose body is `lbz r3, 0x14(r3); blr` -- offset 0x14 of
+// UIListState is mScrollPastMinDisplay, and ham_xbox_r.map names that
+// address ?ScrollPastMinDisplay@UIListState@@QBA_NXZ.  We called
+// IsScrolling() instead, which is a distinct function at 82782DB0
+// (mFirstShowing != mTargetShowing).  Single caller, the 0x313 assert.
+bool HamNavList::IsScrollable() const { return mListState.ScrollPastMinDisplay(); }
 
 int HamNavList::GetDisabledCount(int count) const {
     int disabled = 0;

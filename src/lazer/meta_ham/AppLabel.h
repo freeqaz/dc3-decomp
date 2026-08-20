@@ -17,7 +17,12 @@
 class AppLabel : public HamLabel {
 public:
     // Hmx::Object
-    virtual ~AppLabel();
+    // NO destructor is declared here on purpose.  The target's
+    // ??_7AppLabel@@6BObject@Hmx@@@ carries `??_EHamLabel@@$4PPPPPPPM@BII@AAPAXI@Z`
+    // in slot 0, and ??_DAppLabel@@QAAXXZ (@828C5378) calls ??1HamLabel@@UAA@XZ
+    // directly -- ??1AppLabel@@UAA@XZ is in no linker-map entry.  Declaring
+    // `virtual ~AppLabel();` made every reference name a symbol the image does
+    // not contain.
     // no, this is not an oversight
     // the StaticClassName for AppLabel is in fact, HamLabel
     OBJ_CLASSNAME(HamLabel);

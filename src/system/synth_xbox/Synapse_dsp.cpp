@@ -4,6 +4,18 @@
 #include <cstring>
 #include <cmath>
 
+// The target spells this `?Time2IirA@?A0xa7b3dd7d@@YAMMM@Z` -- an anonymous
+// namespace at FILE scope, not one nested inside DSP::Synapse (which would
+// mangle `?Time2IirA@?A0x...@Synapse@DSP@@YAMMM@Z`).  Three call sites named a
+// symbol the image does not contain: Synapse::Synapse, SetAttackSmoothing and
+// SetReleaseSmoothing.
+namespace {
+float Time2IirA(float time, float sampleRate) {
+    if (time <= 0.0f) return 1.0f;
+    return 1.0f - expf(-1.0f / (time * sampleRate));
+}
+}
+
 namespace DSP {
 
 void LowpassCoefficients(float *const, float, float, float);
@@ -81,13 +93,6 @@ public:
 };
 
 static const float kBiquadParams[] = { 7902.13f, 0.7071068f, 340.0f };
-
-namespace {
-float Time2IirA(float time, float sampleRate) {
-    if (time <= 0.0f) return 1.0f;
-    return 1.0f - expf(-1.0f / (time * sampleRate));
-}
-}
 
 void Synapse::SetVoiceTargetNote(unsigned int idx, float val) {
     *(float *)((char *)&mVoices[idx] + 4) = val;

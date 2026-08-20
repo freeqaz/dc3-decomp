@@ -663,28 +663,51 @@ extern "C" const char __link_glue_empty_str[] = "";
     linker,                                                                                 \
     "/ALTERNATENAME:?copy@?$char_traits@_W@stlpmtx_std@@SAPA_WPA_WPB_WI@Z=__link_glue_noop" \
 )
-#pragma comment(linker, "/ALTERNATENAME:BinkInit=__link_glue_noop")
+// ---------------------------------------------------------------------------
+// The createFilter shape: an UNMANGLED alternatename standing in for a symbol
+// the image spells C++-MANGLED.  An entry like this cannot ever be satisfied by
+// the real function -- it silently redirects the reference to a no-op, and
+// objdiff's normalized ruler charges nothing for it.  Audited 2026-08-20
+// against orig/373307D9/ham_xbox_r.map; six of the thirty unmangled entries
+// were of this shape, and all six now have a C++-linkage declaration in the
+// tree, so the entries below are dead.  Deleted rather than left as traps:
+//     BinkInit        -> ?BinkInit@@YAXXZ           utl:BinkIntegration.obj
+//     D3DXSetDXT3DXT5 -> ?D3DXSetDXT3DXT5@@YAXH@Z   d3dx9:d3dx9tex.obj
+//     FFTRealForward  -> ?FFTRealForward@@YAHPAMK0@Z synth_xbox:FFT.obj
+//     cexp            -> ?cexp@@YA?AUcomplex@@U1@@Z  synth:complex.obj
+//     expj            -> ?expj@@YA?AUcomplex@@N@Z    synth:complex.obj
+//     expand          -> ?expand@@YAXQAUcomplex@@H0@Z synth:filterdesign.obj
+// The D3DTexture_* entries below are NOT of that shape -- the map carries them
+// unmangled (d3d9i:texture.obj), so they are genuine C symbols.
 #pragma comment(linker, "/ALTERNATENAME:D3DTexture_GetLevelDesc=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:D3DTexture_LockRect=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:D3DTexture_UnlockRect=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:D3DXSetDXT3DXT5=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:FFTRealForward=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:__real_0000000000000000=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:__real_3f50624dd2f1a9fc=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:__real_3fe0000000000000=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:__real_4000000000000000=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:__real_400921fb60000000=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:__real_401921fb60000000=__link_glue_noop")
+// MSVC spells a literal-pool constant `__real@<hex>` / `__vmx@<hex>`; `@` is
+// not a valid identifier character, so src/system/synth_xbox/FFT.cpp declares
+// the VMX ones with `_`.  Pointing that spelling at __link_glue_noop meant
+// `*(XMVECTOR *)__vmx_00000000000000000000000000000000` loaded the first 16
+// bytes of a no-op FUNCTION BODY instead of a zero vector -- a live
+// wrong-data bug of exactly the createFilter shape, and one the normalized
+// ruler charges nothing for.  Redirect to the real .rdata symbols instead
+// (config/373307D9/symbols.txt: 0x82142500, 0x822639A0, 0x822639B0).
 #pragma comment(                                                                         \
-    linker, "/ALTERNATENAME:__vmx_00000000000000000000000000000000=__link_glue_noop"     \
+    linker,                                                                              \
+    "/ALTERNATENAME:__vmx_00000000000000000000000000000000="                             \
+    "__vmx@00000000000000000000000000000000"                                             \
 )
 #pragma comment(                                                                         \
-    linker, "/ALTERNATENAME:__vmx_bf8000003f800000bf8000003f800000=__link_glue_noop"     \
+    linker,                                                                              \
+    "/ALTERNATENAME:__vmx_3f800000bf8000003f800000bf800000="                             \
+    "__vmx@3f800000bf8000003f800000bf800000"                                             \
 )
+#pragma comment(                                                                         \
+    linker,                                                                              \
+    "/ALTERNATENAME:__vmx_bf8000003f800000bf8000003f800000="                             \
+    "__vmx@bf8000003f800000bf8000003f800000"                                             \
+)
+// The six `__real_<hex>` entries that stood here were dead: no translation unit
+// in the tree references that spelling (only link_glue named them).  Removed.
 #pragma comment(linker, "/ALTERNATENAME:_close=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:cexp=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:expand=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:expj=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:hypot=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:wmemcpy=__link_glue_noop")
 

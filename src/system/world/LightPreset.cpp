@@ -858,16 +858,18 @@ void LightPreset::CacheFrames() {
 }
 
 void LightPreset::GetKey(float frame, int &prevIdx, int &curIdx, float &blend) const {
-    float theframe = frame;
-    if (theframe <= 0.0f || mEndFrame <= 0.0f) {
+    // MILO_ASSERT stringifies, and the target's assert text at 0x317 reads
+    // "frame >= mKeyframes[before].mFrame ...", so the original mutated the
+    // parameter instead of copying it into a `theframe` local.
+    if (frame <= 0.0f || mEndFrame <= 0.0f) {
         prevIdx = -1;
         curIdx = 0;
         blend = 1.0f;
         return;
     } else {
         if (mLooping) {
-            theframe = std::fmod(frame, mEndFrame);
-            if (theframe >= mKeyframes.back().mFrame) {
+            frame = std::fmod(frame, mEndFrame);
+            if (frame >= mKeyframes.back().mFrame) {
                 if (mKeyframes.back().mFadeOutTime <= 0.0f) {
                     prevIdx = -1;
                     curIdx = mKeyframes.size() - 1;
@@ -875,11 +877,11 @@ void LightPreset::GetKey(float frame, int &prevIdx, int &curIdx, float &blend) c
                     return;
                 }
                 float framedur = mKeyframes.back().mFrame + mKeyframes.back().mDuration;
-                if (theframe > framedur) {
+                if (frame > framedur) {
                     MILO_ASSERT(mKeyframes.back().mFadeOutTime > 0, 0x2e8);
                     prevIdx = mKeyframes.size() - 1;
                     curIdx = 0;
-                    blend = (theframe - framedur) / mKeyframes.back().mFadeOutTime;
+                    blend = (frame - framedur) / mKeyframes.back().mFadeOutTime;
                     return;
                 }
                 prevIdx = -1;
@@ -887,7 +889,7 @@ void LightPreset::GetKey(float frame, int &prevIdx, int &curIdx, float &blend) c
                 blend = 1.0f;
                 return;
             }
-        } else if (theframe >= mKeyframes.back().mFrame) {
+        } else if (frame >= mKeyframes.back().mFrame) {
             prevIdx = -1;
             curIdx = mKeyframes.size() - 1;
             blend = 1.0f;
@@ -898,26 +900,26 @@ void LightPreset::GetKey(float frame, int &prevIdx, int &curIdx, float &blend) c
         int before;
         for (before = 0; after > before + 1;) {
             int mid = (before + after) >> 1;
-            if (theframe == mKeyframes[mid].mFrame) {
+            if (frame == mKeyframes[mid].mFrame) {
                 prevIdx = -1;
                 curIdx = mid;
                 blend = 1.0f;
                 return;
             }
-            if (!(theframe <= mKeyframes[mid].mFrame)) {
+            if (!(frame <= mKeyframes[mid].mFrame)) {
                 before = mid;
             } else {
                 after = mid;
             }
         }
 
-        MILO_ASSERT(theframe >= mKeyframes[before].mFrame && theframe < mKeyframes[after].mFrame, 0x317);
+        MILO_ASSERT(frame >= mKeyframes[before].mFrame && frame < mKeyframes[after].mFrame, 0x317);
         float dur = mKeyframes[before].mFrame + mKeyframes[before].mDuration;
-        if (theframe > dur) {
+        if (frame > dur) {
             MILO_ASSERT(mKeyframes[before].mFadeOutTime > 0, 0x31c);
             prevIdx = before;
             curIdx = after;
-            blend = (theframe - dur) / mKeyframes[before].mFadeOutTime;
+            blend = (frame - dur) / mKeyframes[before].mFadeOutTime;
         } else {
             prevIdx = -1;
             curIdx = before;
