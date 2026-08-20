@@ -15,6 +15,10 @@
 #   scripts/backup-db.sh                          # back up BOTH default DBs -> ~/code/db-backups/
 #   scripts/backup-db.sh <db_path> [archive_dir]  # back up a single DB
 #   DB_BACKUP_DIR=/some/dir scripts/backup-db.sh   # override the archive dir
+#   DB_BACKUP_LABEL=pre-reingest scripts/backup-db.sh  # tag this one archive
+#
+# Archives are named <db>.<YYYY-MM-DDTHHMMSS>[.<label>].xz -- one per RUN, never
+# one per day, and an existing file is never overwritten (see backup_one).
 
 set -euo pipefail
 
@@ -24,20 +28,30 @@ DEFAULT_ARCHIVE="${DB_BACKUP_DIR:-$HOME/code/db-backups}"
 backup_one() {
     local db_path="$1"
     local archive_dir="$2"
-    local date base backup_file tmp
+    local stamp base label backup_file tmp
 
     if [[ ! -f "$db_path" ]]; then
         echo "Error: database not found: $db_path" >&2
         return 1
     fi
 
-    date="$(date +%Y-%m-%d)"
+    # Timestamp to the SECOND, not the date. A date-only name made the second
+    # run of any day overwrite the first, so the standing "back up first" rule
+    # destroyed the undo it was there to create: on 2026-08-19 the pre-ingest
+    # image had to be archived by hand as decomp.db.2026-08-19.pre-unicorn-
+    # reingest.xz because the next agent's routine backup would have clobbered
+    # the dated one (docs/analysis/2026-08-19-unicorn-reingest.md).
+    stamp="$(date +%Y-%m-%dT%H%M%S)"
     base="$(basename "$db_path")"                 # name the archive by the DB's
-    backup_file="$archive_dir/$base.$date.xz"     # OWN name (not hardcoded)
+    label="${DB_BACKUP_LABEL:+.$DB_BACKUP_LABEL}" # OWN name (not hardcoded)
+    backup_file="$archive_dir/$base.$stamp$label.xz"
 
     mkdir -p "$archive_dir"
-    if [[ -f "$backup_file" ]]; then
-        echo "Overwriting today's existing backup: $backup_file"
+    # Belt and braces: two runs inside one second, or an explicit repeated
+    # label, must not silently eat an existing archive.
+    if [[ -e "$backup_file" ]]; then
+        echo "Error: refusing to overwrite an existing backup: $backup_file" >&2
+        return 1
     fi
 
     # Take a CONSISTENT snapshot via sqlite3 .backup first. A raw `xz < live.db`
