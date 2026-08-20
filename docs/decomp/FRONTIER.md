@@ -16,10 +16,12 @@ Every figure below is on the pre-fix ruler.
 `main` moved repeatedly during this lane (`d505987fa` → `5d251aa85`) as other
 lanes landed, including one of this lane's own certificate audits (§6.2).
 **Every number below is on the pinned snapshot above**, and `report.json` has
-since been regenerated. Measured against `main` at `5d251aa85` the canonical
-headline reads **91.67 % (29,520 / 32,202)** and remaining is **2,682 fns /
-1,200,592 B** — five functions closed, one complete unit gained, nothing else
-moved. Regenerate before quoting anything as current.
+since been regenerated. Measured against `main` at `a587401d1` — after all
+three certificate audits landed — the canonical headline reads **91.71 %
+(29,531 / 32,202)**, remaining **2,671 fns / 1,195,828 B**, complete units
+**437 / 967**. That is **+16 functions and +3 complete units in one day, all of
+it from re-auditing certificates this document's §6 called into question**.
+Regenerate before quoting anything as current.
 
 **This document contains no worklist.** Per
 [`REMAINING_WORK.md`](REMAINING_WORK.md), the queries are the deliverable; the
@@ -179,7 +181,7 @@ exhausted. The rest rest on an inference that does not hold. From
 
 | certificate | rows | what the DB flag says | what the certificate is read as |
 |---|---|---|---|
-| `equivalent` | 727 | `unicorn_verdict = 'EQUIVALENT'` — the emulator saw the same behaviour on its probe inputs | "the residual byte diff is provably cosmetic" |
+| `equivalent` | 727 | `unicorn_verdict = 'EQUIVALENT'` — the emulator saw the same behaviour on its probe inputs. **Fired with no match-percent floor, no pattern gate and no size gate; all rows carry a byte-identical evidence blob** | "the residual byte diff is provably cosmetic" — **audited 10/10 wrong, §6.3** |
 | `artifact:*` | 123 | `unicorn_verdict = 'DIVERGENT'` with a class on the known-artifact list | "the divergence is an emulation artifact, not a bug" |
 | `icf_merged` | 37 | `merged_symbol_count > 0` | the reloc name is benign — **this one is sound** |
 | `permuter_exhausted` | 164 | ≥1 attempt ended at_limit/stuck and none beat the current percent | the permuter found no headroom — **a real, if weak, search claim** |
@@ -214,9 +216,10 @@ Blind-sample audits of this population are recorded in §6.
 
 ## 5. Scanners: what the repairs fixed, and what is still lying
 
-Seven tools were re-run against their repaired code. **Three defects were still
-live**, and the deepest one was *created visible* by a repair rather than fixed
-by it. Summary:
+Eight tools were re-run against their repaired code. **Four defects were still
+live.** The deepest was *made visible* by a repair rather than fixed by it, and
+the widest-reaching one is in the measurement tool every other lane trusts.
+Summary:
 
 | tool | after its documented repair | this lane |
 |---|---|---|
@@ -227,6 +230,7 @@ by it. Summary:
 | `batch_pattern_scan.py` | uncapped by default | verified — **68 of its 69 current hits were invisible under the old cap** (§5.5) |
 | `fake_impl_scan.py` | NULL-skip fixed | verified; two small disclosure gaps found (§5.6) |
 | `data_symbol_scan.py` | uncapped by default | verified (§5.5) |
+| **`objdiff-cli diff` / `run_objdiff`** | not part of the honesty pass | **its `normalized_match_percent` is the FUZZY score — reproduced on 4 symbols, gap up to 7.6 pp (§5.8)** |
 
 Every tool named here was run **twice** and its output diffed; all were
 byte-identical, including two full 1,568-row `ceiling_calculator` runs (identical
@@ -279,6 +283,7 @@ $ bin/objdiff-cli diff --symbol '?Poll@BlockMgr@@QAAXXZ' --format json
 rc 1, empty stdout, "Unrecognized argument: --symbol"
 $ bin/objdiff-cli diff '?Poll@BlockMgr@@QAAXXZ' --format json
 rc 0, {"symbol":...,"normalized_match_percent":99.98214,...}
+       (that field is fuzzy despite its name -- see §5.8; here the two agree)
 ```
 
 The symbol is now passed positionally and the tool produces real verdicts.
@@ -331,6 +336,10 @@ and *before* the guard was added, so it is exactly what the tool emits unguarded
 | **`workable`** | **1** |
 
 - **1,309 of 2,705 rows (48.4 %) have a ceiling below their own measured percent.**
+  (The "measured" column here is `objdiff-cli diff`'s `normalized_match_percent`,
+  which is **fuzzy** — see §5.8. The canonical normalized score is *higher* than
+  fuzzy on every function checked, so the true gap is **larger** than these
+  figures, never smaller. The finding is unaffected in direction.)
 - **1,309 of the 2,318 `at_limit` verdicts (56.5 %) were manufactured by that
   impossible comparison.** Worst: `CSampleXAPOBase<HeadsetXferEffect>`'s
   destructor, measured **88.29 %**, assigned a ceiling of **0.00 %**.
@@ -555,23 +564,88 @@ cannot be read as covering them.
 
 ---
 
+### 5.8 STILL LYING, and it is the one every lane trusts — `objdiff-cli diff` reports FUZZY under the name "normalized"
+
+Found by the `equivalent` audit lane, independently reproduced here. **The
+one-shot `objdiff-cli diff` path collapses all three percent fields to the
+fuzzy value.** Only `objdiff-cli report generate` — the path that writes
+`report.json` — computes a genuine normalized score.
+
+| symbol | `diff` fuzzy | `diff` **normalized** | `diff` raw | `report.json` **normalized** |
+|---|---|---|---|---|
+| `Vector2DESmoother::Smooth` | 87.156 | **87.156** | 87.156 | **94.753** |
+| `mash` | 94.167 | **94.167** | 94.167 | **99.833** |
+| `Multiply(Vector3, Quat)` | 84.833 | **84.833** | 84.833 | **91.500** |
+| `CSHA1::Transform` | 55.691 | **55.691** | 55.691 | **61.986** |
+
+`run_objdiff` renders that field, so its headline —
+`Match: 87.2% normalized (87.2% raw)` on the first row — **is the fuzzy score
+wearing the canonical score's name**, and both parenthesised numbers are the
+same number. `CLAUDE.md` calls `run_objdiff` the *"source of truth for decomp
+percentages"*; for the **canonical** percentage it is not.
+
+**Reproduce in one command:**
+
+```bash
+bin/objdiff-cli diff '?Smooth@Vector2DESmoother@@QAAXVVector2@@M_N@Z' --format json   | python3 -c 'import json,sys; d=json.load(sys.stdin);       print({k:v for k,v in d.items() if "percent" in k})'
+# {'fuzzy_match_percent': 87.155846, 'normalized_match_percent': 87.155846,
+#  'raw_match_percent': 87.155846}      <- report.json says 94.753
+```
+
+**What this invalidates.** Any lane that "re-measured with `run_objdiff`" and
+compared the result against `decomp.db.match_percent_normalized` or against
+`report.json` saw a **phantom delta of exactly the fuzzy-vs-normalized gap** and
+had no way to tell it from staleness. That gap reaches **7.6 pp** in this
+sample. §6.1's "the DB disagreed with the canonical ruler on 8 of 10" was
+exactly this and is retracted there. **Before attributing any percentage
+disagreement to database drift, check which ruler produced each side.**
+
+**What it does not invalidate.** Everything in §1–§4 of this document reads
+`report.json` directly and is unaffected. A **zero-mismatch-row** claim is
+ruler-independent, so the "driven to exactly 100.0 % with zero mismatched
+instructions" results in §6 stand as recorded. §5.2's ceiling finding
+strengthens rather than weakens: its "measured" column was fuzzy, and canonical
+is higher than fuzzy on every function checked, so the impossible gap is wider
+than reported.
+
+**Scope not established.** Only the one-shot `diff` path was tested. `--batch`
+emitted nothing on stdout for the unit tried and is **unverified** — do not
+assume either way.
+
 ## 6. Which "exhausted" verdicts survive contact
 
 Three blind, fixed-seed samples were drawn from the AT_LIMIT population and
 handed to independent auditors with no knowledge of each other's results. The
 sampling queries are in §8 so the draw can be reproduced or re-drawn.
 
-**Across the two completed samples: 10 of 20 certificates busted, 8 functions
-driven to exactly 100.0 %, and 4 of those were real behavioural bugs** — an
-infinite loop, a pair of swapped `int&` out-parameters, a dead pause branch, and
-a mis-paired MDCT trig table. A *floor* certificate asserts the residual is
-cosmetic. On this evidence the label carries no information at a 50 % bust rate,
-and the population it covers is 1,567 functions.
+**Across all three samples: 20 of 30 certificates busted, and roughly ten of the
+closures were live behavioural bugs** — an infinite loop, swapped `int&`
+out-parameters, a dead pause branch, a mis-paired MDCT trig table, a function
+activating the wrong `Flow` object, a wrong 8bpp lookup table, a label string
+rebuilt every frame, a missing text-wrap overflow penalty, and an animation
+argument dropped so one player drove another's slot.
+
+A *floor* certificate asserts the residual is **cosmetic**. Ten
+counter-examples out of thirty audited rows is about as direct a refutation as
+the label admits, and the population it covers is **1,567 functions**.
+
+The bust rate is **not uniform across the vocabulary**, and the ordering is the
+useful part:
+
+| certificate | sampled | busted | what the label actually rests on |
+|---|---|---|---|
+| `equivalent` | 10 | **10 / 10** | a unicorn behavioural verdict, ungated |
+| `permuter_exhausted` | 10 | **8 / 10** | a real but weak search-exhaustion claim |
+| mixed, ≥ 99.9 % band | 10 | **2 / 10** | mostly `equivalent`; the two busts were both from that group |
+
+**The weakest evidence produced the highest bust rate, and it covers the most
+rows.** That is the opposite of how a certificate vocabulary should be
+distributed.
 
 | population | size | sampled | busted |
 |---|---|---|---|
 | `AT_LIMIT` at norm ≥ 99.9 | 83 | 10 | **2** (both driven to exactly 100.0 and landed) |
-| `floor_certificate = 'equivalent'`, still < 100 | 726 | 10 | **in flight at time of writing** — branch `audit/cert-equiv-20260820` and six sub-lanes (`audit/ce-{bmp,lip,misc,movedir,rbp,text}-20260820`). At least four already at 100 % on their branches (`HamVisDir::PostUpdate` 82.2→100, `RndBitmap::GenerateMips` 89.1→100, `NetLoaderRef::NeedsToDownload` 95.1→100, `MeterDisplay::DrawShowing`→100). **Do not quote a bust rate from this row until the lane reports** — read the branches. |
+| `floor_certificate = 'equivalent'`, still < 100 | 726 | 10 | **10** — all ten source-reachable, six were live behavioural bugs. Landed `bac96b0af`…`f2498de25` |
 | `floor_certificate = 'permuter_exhausted'`, still < 100 | 164 | 10 | **8** (6 driven to 100, 4 were real behavioural bugs) — landed as `c0f854bf5` |
 
 ### 6.1 The ≥ 99.9 % sample: 2 of 10 busted
@@ -606,10 +680,13 @@ count in a shared STLport header.
    label in the vocabulary that is actually a search-exhaustion claim. **726
    rows carry `equivalent`** — a third of the AT_LIMIT population is labelled
    with a behavioural verdict being read as a reachability verdict.
-2. **`current_percent` disagreed with the canonical ruler on 8 of 10**,
-   understating by up to 0.29 pp (`SetRegularShaderConst`: DB 99.698 vs
-   canonical 99.992). `match_percent_normalized` in the DB agreed on all 10 to
-   its rounding. Select work with the normalized column, never `current_percent`.
+2. ~~**`current_percent` disagreed with the canonical ruler on 8 of 10.**~~
+   **RETRACTED — this was the instrument, not the database.** The lane compared
+   `run_objdiff`'s headline against the DB and read the gap as drift. That
+   headline is *fuzzy*, not canonical (§5.8), so the comparison was between two
+   different rulers. **The DB percentages were not stale.** Selecting work with
+   `match_percent_normalized` rather than `current_percent` is still right — for
+   the reasons in §1 — but this sample is not evidence for it.
 3. **`run_objdiff`'s `ADDRESS_RELOCATION_NOISE` verdict was wrong on both
    functions where it fired at high confidence** (`LocalizeFloat`,
    `BlockMgr::Poll`). Both are genuine static-data *layout* deltas — the
@@ -700,6 +777,61 @@ explores behaviour-neutral C++ transforms only, so it structurally cannot find a
 fix that changes what the code does — a wrong field, a missing branch, a
 differently-shaped loop. The label means "the permuter ran out of moves", and
 should never be read as "no source change exists".
+
+---
+
+### 6.3 The `equivalent` sample: 10 of 10 busted, and it was structural
+
+Landed `bac96b0af`…`f2498de25` across six sub-lanes. Sample mean **90.07 →
+97.46** normalized, **0 regressions across 48,306 comparable functions**.
+
+| symbol | was | after | evidence |
+|---|---|---|---|
+| `HamVisDir::PostUpdate` | 84.09 | **100.00** | passed bare `i` where the target masks it (`firstTracked ? i : 0`) — **with player 0 absent, player 1 drove player 2's anim slot**; plus `Update()` called before the filter, and `Pose::Update` mutates state |
+| `MeterDisplay::DrawShowing` | 90.43 | **100.00** | `UpdateDisplay()` is reachable only via the `f1 >= mAnimPeriod` arm at `0x13c`; **we rebuilt the localized label every frame** |
+| `RndBitmap::GenerateMips` | 91.19 | **100.00** | `j * 2` vs `j << 1` decides the induction-variable set — visible as `__savegprlr_14` against the target's `_15` |
+| `NetLoaderRef::NeedsToDownload` | 95.27 | **100.00** | MSVC re-normalizes a bool crossing an **inlined return boundary** before feeding `\|\|` |
+| `RhythmBattlePlayer::AnimateBoxyState` | 84.91 | 99.55 | **activated the wrong `Flow`** — we fall back to `mOutTheZoneOkFlow` on a path where the target re-tests `useBadFlow` at `0x530` and activates nothing |
+| `MoveDir::Draw` | 97.18 | 99.57 | passed `baseSkeleton` where the target passes the `__RTDynamicCast` result |
+| `CharLipSync::PlayBack::Poll` | 96.79 | 99.11 | a hoisted `ls` local moved a member reload out of the loop the target keeps it in |
+| `RndText::WrapText` | 83.81 | 94.51 | **dropped the `pen = 2010` overflow penalty** (an over-wide line scored like a fitting one); and `StyleState::brk` is at `0x40`, not `0x41`, so **`<nobreak>` never worked** |
+| `RndBitmap::PixelOffset` | 78.34 | 83.17 | indexed the 128-entry `hbytes` tables where the target's `lbzx` relocations resolve to two `size 0x40` symbols — **every 8bpp swizzled pixel read the wrong table** |
+| `ClipPlayer::AnnotatePractice` | 98.73 | 98.73 | 2 of 4 rows closed by dropping two locals; canonical ruler did not move, but the residual was source-reachable |
+
+**Why 10 of 10 was predictable, and this is the part that generalises.**
+`certify_floor.py::classify_function()` fires `equivalent` on
+`unicorn_verdict == 'EQUIVALENT'` **with no other condition** — no
+match-percent floor, no pattern gate, no size gate. All 912 rows carry the
+byte-identical evidence blob `{"evidence":"unicorn_equivalent"}`. **The label is
+a rename of the unicorn verdict**, and it therefore inherits every limitation
+the project already documents for that verdict — including that field-confusion
+bugs are structurally invisible to a uniform-byte fixture, and that 3 of 6
+deliberate sabotages once passed it.
+
+The population shows the inheritance plainly: **certified rows run down to 37 %
+normalized, 98 sit below 85 %, and 238 of 729 carry a `has_control_flow`
+signal.** A control-flow difference is not on anyone's list of backend floors.
+
+`AnimateBoxyState` is the clean demonstration of §4.1's non-sequitur: **the
+unicorn probe never drove the `bad && !badFlow` input combination**, so
+"behaviourally equivalent under emulation" certified a function that activates
+the wrong object. Equivalence on the inputs a harness happened to run is not
+equivalence, and it was never reachability.
+
+Two functions in the sample had been ported character-for-character from
+`../rb3-xenon` — **a different binary** — and never checked against DC3's
+target. Compare §6.1's `PointForTime`, where the RB3 reference is what put the
+wrong shape in our source. **Upstream ports need a DC3 diff, not just a clean
+compile.**
+
+Follow-up the lane left on the table: `NetLoaderRef::IsLoadedOrFailed`, same
+file, **71.1 %**, same `BOOL_MASK`+`CONTROL_FLOW` class, same certificate. The
+inlined-return-boundary bool lever that closed `NeedsToDownload` is **not yet in
+`docs/decomp/patterns/fixable-bool-mask.md`**.
+
+Native-port caveat: the `MeterDisplay::DrawShowing` fix changes native behaviour
+(correctly — it stops a per-frame allocation storm) and wants a
+`scripts/native_test.sh` run. So does `mdct_backward` from §6.2.
 
 ---
 
@@ -931,6 +1063,10 @@ stubs = [(u["name"], f["name"], int(f["size"]))
   question clamps three quarters of its own answers (§5.2).
 - **It does not claim any specific certificate is wrong** outside §6's audited
   samples. It claims 517 of them were never issued.
+- **It does not claim `run_objdiff` is unusable.** Its instruction table, its
+  zero-mismatch verdict and its pattern detectors are what closed most of the
+  functions in §6. What is unreliable is its *percentage*, which is fuzzy under
+  a canonical name (§5.8). Read rows, not the headline.
 - **A displayed 100.0 is not byte identity.** 395 authorable functions
   (150,108 bytes) counted as matched here have permuted registers, and a wrong
   callee costs zero normalized points until `../objdiff` `b14ba45` is built.
