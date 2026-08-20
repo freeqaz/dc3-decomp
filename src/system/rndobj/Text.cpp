@@ -881,16 +881,16 @@ void RndText::WrapText(
                 }
                 MILO_ASSERT(bestWp != -1, 0x6ed);
                 MILO_ASSERT(numWp < wLen + 1, 0x6ef);
-                nxt->charIdx = endI;
+                nxt->lineWidth = bestLineLen;
                 nxt->cost = bestC;
                 nxt->bestPrevIdx = bestWp;
                 nxt->isLineEnd = true;
                 nxt->nextIdx = -1;
-                nxt->lineWidth = bestLineLen;
+                nxt->charIdx = (int)(cur - wideChars);
                 nxt->isHardBreak = true;
                 numWp++; wpI++;
                 wps[bestWp].isLineEnd = false;
-                if (ch == 0) goto buildLines;
+                if (*cur == 0) goto buildLines;
             } else {
                 unsigned short mc = ch;
                 if (ch == 0x3c) {
