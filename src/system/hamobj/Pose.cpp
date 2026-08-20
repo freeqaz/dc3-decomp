@@ -97,8 +97,13 @@ float BoneAngleRangePoseElement::Score(const Skeleton &skeleton) const {
     skeleton.BoneVec(mBone, kCoordCamera, boneDir);
     Normalize(boneDir, boneDir);
     const Vector3& angle = mAngle;
-    MILO_ASSERT(1.0f - 0.001f <= Length(angle) && Length(angle) <= 1.0f + 0.001f, 0x21);
-    float dot = boneDir.x * angle.x + boneDir.y * angle.y + boneDir.z * angle.z;
+    // The assert literal in the shipped image is, byte for byte,
+    //   "(1.0f)-(0.001f) <= (Length(mAngle)) && (Length(mAngle)) <= (1.0f)+(0.001f)"
+    // (?? _C@_0EL@EIPCKLDA@ at 0x8205d490).  The parenthesisation is the shape a
+    // range-check macro leaves behind, and it names the member, not the local
+    // alias -- so spell it that way here.
+    MILO_ASSERT((1.0f)-(0.001f) <= (Length(mAngle)) && (Length(mAngle)) <= (1.0f)+(0.001f), 0x21);
+    float dot = Dot(boneDir, angle);
     float acosAngle = acosf(dot);
     if (acosAngle <= unk1c)
         return 1.0f;
