@@ -1335,6 +1335,12 @@ bool HamNavList::InVoiceMode() const {
     return TheGestureMgr && TheGestureMgr->InVoiceMode();
 }
 
+// The shipped binary keeps this in .data (0x82F0C91C) and re-loads it after
+// every call inside DetermineHighlightedItem, so it is a mutable file-scope
+// float, not a literal. Nothing in the retail .text ever stores to it, so the
+// value the console actually runs is 0.1f.
+static float gNavListHighlightMargin = 0.1f;
+
 void HamNavList::DetermineHighlightedItem() {
     MILO_ASSERT(!InControllerMode(), 0x2b7);
     MILO_ASSERT(!TheLoadMgr.EditMode(), 0x2b8);
@@ -1344,7 +1350,7 @@ void HamNavList::DetermineHighlightedItem() {
     float maxItemF = (float)(double)maxItem;
     float numItemsF = (float)(double)numItems;
 
-    float threshold = (1.0f - maxItemF * 0.15f) / numItemsF;
+    float threshold = (1.0f - maxItemF * gNavListHighlightMargin) / numItemsF;
 
     int highlightItem = GetHighlightItem();
     bool gathering = mListState.ScrollPastMinDisplay();
@@ -1389,7 +1395,7 @@ void HamNavList::DetermineHighlightedItem() {
     }
 
     float handDiff = fabsf(mHandHeight - targetPos);
-    float halfThreshold = threshold * 0.5f + 0.15f;
+    float halfThreshold = threshold * 0.5f + gNavListHighlightMargin;
     if (!(handDiff >= halfThreshold)) {
         if (mScrollBehavior.AtBottom()) {
             mScrollBehavior.mScrollDir = 0;

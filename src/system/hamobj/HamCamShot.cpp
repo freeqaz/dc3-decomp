@@ -1,4 +1,5 @@
 #include "hamobj\HamCamShot.h"
+#include <float.h>
 #include "char\Character.h"
 #include "flow\PropertyEventProvider.h"
 #include "hamobj\HamDirector.h"
@@ -106,7 +107,7 @@ void HamCamShot::SetPreFrame(float frame, float blend) {
                 mCurrentShot->StartAnim();
                 mNextShotDuration = mCurrentShot->GetTotalDuration();
             } else {
-                mNextShotDuration = kHugeFloat;
+                mNextShotDuration = FLT_MAX;
             }
         }
     }
