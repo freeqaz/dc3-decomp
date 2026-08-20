@@ -129,6 +129,19 @@ def bucket_for(match_pct: float | None, classification: str, is_stub: bool) -> s
 def batch_check(unit_pattern: str, dry_run: bool = False, skip_boilerplate: bool = False,
                 cov: CoverageReport = None, db_path: str = None) -> str:
     """Run batch check and return formatted results."""
+    # This loop used to pass `--build` once PER FUNCTION -- i.e. `ninja
+    # <one>.obj` N times over the same unit -- so a batch-check of a unit
+    # unpatched that unit's object on every iteration and then wrote the
+    # resulting verdicts into decomp.db as COMPLETE. Build the tree ONCE,
+    # through `post-compile` so the patchers run, and refuse if it will not
+    # settle. See scripts/orchestrator/patch_guard.py.
+    from orchestrator.patch_guard import UnpatchedTreeError, ensure_patched_tree
+    try:
+        print(f"[patch-guard] {ensure_patched_tree(PROJECT_ROOT, build=True)}",
+              file=sys.stderr)
+    except UnpatchedTreeError as e:
+        return f"REFUSING to batch-check: {e}"
+
     db_path = db_path or DB_PATH
     conn = get_connection(db_path)
     norm_pattern = normalize_unit_pattern(unit_pattern)
@@ -229,7 +242,7 @@ def batch_check(unit_pattern: str, dry_run: bool = False, skip_boilerplate: bool
         try:
             result = subprocess.run(
                 [str(OBJDIFF_CLI), "diff", "-p", str(PROJECT_ROOT),
-                 lookup_symbol, "--build", "--verdict", "-f", "json"],
+                 lookup_symbol, "--verdict", "-f", "json"],
                 capture_output=True, text=True, timeout=90,
                 cwd=str(PROJECT_ROOT),
             )

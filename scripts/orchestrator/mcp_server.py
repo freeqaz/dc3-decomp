@@ -54,6 +54,7 @@ from orchestrator.database import (
     BOILERPLATE_SYMBOL_PREFIXES,
     DEFAULT_EXCLUDE_PATTERNS,
 )
+from orchestrator.patch_guard import UnpatchedTreeError, ensure_patched_tree
 from orchestrator.rb3_pairing import find_rb3_file
 from tools.struct_db import StructDB
 from tools.merged_symbols import MergedSymbolLookup
@@ -1013,7 +1014,7 @@ class DecompMCPServer:
                 ),
                 Tool(
                     name="run_objdiff",
-                    description="Build and diff a function, returning match% and verdict. Handles large output automatically.\n\n⚠️ CRITICAL: Pass project_dir parameter when in a worktree or your edits won't be tested! Without project_dir, the tool tests the main repo code instead of your changes, making edits invisible to match%.",
+                    description="Build and diff a function, returning match% and verdict. Handles large output automatically.\n\n⚠️ CRITICAL: Pass project_dir parameter when in a worktree or your edits won't be tested! Without project_dir, the tool tests the main repo code instead of your changes, making edits invisible to match%.\n\nBuilds via the `post-compile` ninja target so the obj patchers always run, and refuses to answer from a tree that fails `verify_objs_patched.py --verify-manifest`. Costs ~0s on an unchanged tree, ~12s after an edit.",
                     inputSchema={
                         "type": "object",
                         "properties": {
@@ -1023,7 +1024,7 @@ class DecompMCPServer:
                             },
                             "full_build": {
                                 "type": "boolean",
-                                "description": "Force full rebuild (slower but more accurate). Default: false (incremental)",
+                                "description": "DEPRECATED / no-op. Every build now goes through the `post-compile` ninja target, which reaches all objects via `all_source` and then runs the five obj patchers -- a superset of what --full-build forced. Single-object builds are gone because they skipped the patchers and biased every measurement LOW.",
                             },
                             "project_dir": {
                                 "type": "string",
@@ -2361,9 +2362,25 @@ class DecompMCPServer:
         # passed --build, so any read-only look at an already-built tree had to
         # go around it. build=false is that, without leaving the sanctioned path.
         want_build = args.get("build", True)
-        build_flag = ["--build"] if want_build else []
-        if full_build and want_build:
-            build_flag.append("--full-build")
+        #
+        # `--build` is NOT passed to objdiff-cli any more. Without --full-build
+        # it means `ninja <base_obj_path>`, a single-object target, and ninja
+        # builds only a target's ANCESTORS -- which stops one edge short of the
+        # six `post-compile` patcher edges while the fresh compile overwrites
+        # the bytes they had already patched. That made every post-edit
+        # measurement read a raw compiler object, one-directionally LOW, and
+        # left the tree that way for whatever measured next. See
+        # orchestrator/patch_guard.py for the numbers.
+        #
+        # `full_build` is retained for compatibility but is now a no-op:
+        # `post-compile` already reaches every object through `all_source`, so
+        # it is a superset of what --full-build used to force.
+        del full_build
+        build_flag: list[str] = []
+        try:
+            patch_note = ensure_patched_tree(project_dir, build=want_build)
+        except UnpatchedTreeError as e:
+            return [TextContent(type="text", text=f"Error: {e}")]
 
         # --include-instructions only for JSON run (enrichment/m2c pipeline).
         # The markdown run uses --verdict alone which already contains the
@@ -2568,6 +2585,14 @@ class DecompMCPServer:
                 except (json.JSONDecodeError, KeyError, subprocess.TimeoutExpired, Exception):
                     pass  # Best-effort, never break run_objdiff
 
+            # The tree state this number was taken from. objdiff-cli used to
+            # print `Building incremental: <obj>` here -- which was itself a
+            # lie whenever ninja had nothing to do -- and said nothing at all
+            # about whether the object had been through the patchers.
+            stderr_text = "\n".join(
+                s for s in (f"[patch-guard] {patch_note}", stderr_text) if s
+            )
+
             if stderr_text:
                 output += f"\n\n[stderr]\n{stderr_text}"
 
@@ -2727,6 +2752,17 @@ class DecompMCPServer:
         except FileNotFoundError as e:
             return [TextContent(type="text", text=f"Error: {e}")]
 
+        # tools/analyze_function.py never passed --build at all, so this tool
+        # has always read whatever objects were on disk -- including the
+        # single unpatched object a `run_objdiff` call had just left there.
+        # Building through `post-compile` makes the docstring's promise
+        # ("pass project_dir so builds test your changes") true for the first
+        # time, and the manifest assertion makes a tree it cannot repair loud.
+        try:
+            ensure_patched_tree(project_dir, build=True)
+        except UnpatchedTreeError as e:
+            return [TextContent(type="text", text=f"Error: {e}")]
+
         # Find analyze-function script in the determined project directory
         analyze_script = project_dir / "bin" / "analyze-function"
 
@@ -2871,6 +2907,18 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
         # matters when the shared objdiff-cli symlink is used from ../rb3.
         reloc_config = ["-c", RELOC_RULER.get(diff_mode, RELOC_RULER["normalized"])]
 
+        # Same gap as run_objdiff: the objdiff invocations below used to pass
+        # `--build --incremental`, i.e. `ninja <one>.obj`, which skips all six
+        # post-compile patcher edges and overwrites their output. Build through
+        # `post-compile` and assert the manifest instead. The modes that shell
+        # out to diff_inspect.py still let it run its own `--build`, but after
+        # this call that is provably a no-op: the patchers preserve each
+        # object's mtime, so ninja sees the object as up to date.
+        try:
+            ensure_patched_tree(project_dir, build=True)
+        except UnpatchedTreeError as e:
+            return [TextContent(type="text", text=f"Error: {e}")]
+
         try:
             # ── save_baseline mode ──
             if mode == "save_baseline":
@@ -2882,7 +2930,7 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
                     str(objdiff_cli), "diff",
                     "-p", str(project_dir),
                     symbol,
-                    "--include-instructions", "--build", "--incremental",
+                    "--include-instructions",
                     *reloc_config,
                     "-f", "json",
                 ]
@@ -2924,7 +2972,7 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
                     str(objdiff_cli), "diff",
                     "-p", str(project_dir),
                     symbol,
-                    "--include-instructions", "--build", "--incremental",
+                    "--include-instructions",
                     *reloc_config,
                     "-f", "json",
                 ]
@@ -2977,7 +3025,7 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
                     str(objdiff_cli), "diff",
                     "-p", str(project_dir),
                     symbol,
-                    "--include-instructions", "--build", "--incremental",
+                    "--include-instructions",
                     *reloc_config,
                     "-f", "json",
                 ]

@@ -1268,11 +1268,24 @@ def run_objdiff_for_symbol(symbol: str, project_dir: Optional[str] = None,
     objdiff = _find_objdiff_cli(project_dir)
 
     print(f"Running objdiff for: {symbol}", file=sys.stderr)
+
+    # No `--build`: it is `ninja <one>.obj`, which stops one edge short of
+    # configure.py's post-compile patcher edges and overwrites their output.
+    # See scripts/orchestrator/patch_guard.py.
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from orchestrator.patch_guard import UnpatchedTreeError, ensure_patched_tree
+    try:
+        print(f"[patch-guard] {ensure_patched_tree(project_dir, build=True)}",
+              file=sys.stderr)
+    except UnpatchedTreeError as e:
+        print(f"[patch-guard] {e}", file=sys.stderr)
+        sys.exit(1)
+
     cmd = [
         objdiff, "diff",
         "-p", project_dir,
         symbol,
-        "--include-instructions", "--build", "--incremental",
+        "--include-instructions",
         "-f", "json", "-o", json_path,
     ]
     if unit:
