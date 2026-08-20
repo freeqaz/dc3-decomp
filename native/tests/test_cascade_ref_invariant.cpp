@@ -6,18 +6,26 @@
 //     When a cascade destroys an object, every ObjRef pointing at that
 //     object must be nullified before the object's memory is freed.
 //
-// Phase 0 (NullifyAllRefs) enforces this for objects *reachable from the dir
-// being deleted*.  Hmx::Object::~Object deliberately skips ReplaceRefs(nullptr)
-// while InDeleteObjects() is true (Object.cpp), so an object destroyed DURING a
-// cascade but NOT in the dir's iteration set gets neither path -- its ref ring
-// is never walked and every holder is left dangling.
+// Phase 0 (NullifyAllRefs) enforces this only for objects *reachable from the
+// dir being deleted*.  ~Object used to simply SKIP ref cleanup while
+// InDeleteObjects() was true, so an object destroyed DURING a cascade but not
+// in the dir's iteration set got neither path -- its ring was never walked and
+// every holder was left dangling.  That gap produced the TaskMgr::Poll crash
+// (a queued ObjPtr<Task> in TheTaskMgr, which is in no dir).
 //
-// That gap is what produced the TaskMgr::Poll crash (a queued ObjPtr<Task> in
-// TheTaskMgr, which is not in any dir being deleted).  Site-specific guards fix
-// the symptom one holder at a time; these tests pin the invariant itself.
+// Fixed 2026-08-20: ~Object now calls NullifyAllRefs() during a cascade instead
+// of skipping.  Because the ring belongs to the REFERENT, that covers every
+// ObjPtr / ObjPtrList / ObjPtrVec / ObjOwnerPtr / ObjDirPtr holder regardless
+// of where the holder lives.  These tests are the regression gate on that.
 //
-// Each test states the invariant from the *holder's* point of view, so it fails
-// deterministically at a named line rather than relying on a crash reproducing.
+// NOT covered, by construction: raw `Hmx::Object*` holders. They register no
+// ObjRef, so no ring walk can ever reach them.  gDataVars, TheHamUI's panel
+// pointers and the `static UIPanel* = Find<>(...)` caches are that separate
+// class -- see docs/analysis/2026-08-20-objdir-cascade-class.md.
+//
+// Each test states the invariant from the *holder's* point of view, so a
+// regression fails deterministically at a named line rather than as an
+// intermittent SIGSEGV that a suite cannot gate on.
 
 #include "test_helpers.h"
 
@@ -151,4 +159,57 @@ TEST_F(CascadeRefInvariantTest, QueuedTaskDestroyedByCascadeIsNullified) {
         << "TaskMgr::Poll had to fall back on its dangling-task guard, which "
            "means the cascade left a dangling ObjPtr<Task> in the delete "
            "queue. The guard masks the symptom; the invariant is violated.";
+}
+
+// ---------------------------------------------------------------------------
+// Adversarial: Task::IsLive() is address-keyed, so it is ABA-unsound.
+//
+// LiveTasks() is an unordered_set<Task*> populated in Task::Task and erased in
+// Task::~Task. It answers "is a Task alive at this ADDRESS", not "is THIS task
+// alive".  Free a Task and allocate another of the same size and the allocator
+// hands back the same block -- at which point IsLive(stalePointer) is true
+// again and TaskMgr::Poll's guard waves the stale entry through to
+// `delete unk84[i].Ptr()`, destroying a live, in-use Task.
+//
+// This is not currently reachable: with ~Object nullifying ref rings during a
+// cascade, no dangling pointer survives to reach Poll(). The guard is defence
+// in depth and this test records that its predicate cannot carry the load on
+// its own -- so nobody generalises the pattern to a new site believing it can.
+//
+// Skips rather than fails if the allocator does not reuse the block; the claim
+// is "reuse defeats the predicate", not "reuse always happens".
+// ---------------------------------------------------------------------------
+namespace {
+class ProbeTask : public Task {
+public:
+    void Poll(float) override {}
+};
+} // namespace
+
+TEST_F(CascadeRefInvariantTest, IsLiveIsAddressKeyedAndThereforeABAUnsound) {
+    Task *first = new ProbeTask();
+    Task *staleAddress = first;
+    ASSERT_TRUE(Task::IsLive(first));
+
+    delete first;
+    ASSERT_FALSE(Task::IsLive(staleAddress))
+        << "erase-on-destroy is the whole basis of the predicate";
+
+    Task *second = new ProbeTask();
+    if (second != staleAddress) {
+        delete second;
+        GTEST_SKIP() << "allocator did not reuse the block; ABA not observable "
+                        "in this run (the unsoundness is unchanged)";
+    }
+
+    // Same address, different object. The predicate cannot tell them apart.
+    EXPECT_TRUE(Task::IsLive(staleAddress));
+    EXPECT_EQ(second, staleAddress)
+        << "ABA CONFIRMED: a stale Task* now reports live because a new Task "
+           "was allocated at the same address. TaskMgr::Poll's guard would "
+           "delete the NEW task through the OLD pointer. Any future use of "
+           "this predicate as a liveness oracle needs a generation counter, "
+           "not an address set.";
+
+    delete second;
 }

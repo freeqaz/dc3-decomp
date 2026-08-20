@@ -128,9 +128,18 @@ Hmx::Object::~Object() {
     // the wrong tool mid-cascade: it fires Replace callbacks, which re-enter
     // (MessageTask::Replace does `delete this`) while Phase 1 is walking a
     // todo list. NullifyAllRefs is the mechanism Phase 0 already trusts for
-    // exactly this situation -- purely mechanical, no callbacks, no deletes,
-    // and it skips ring nodes whose mAliveSentinel was cleared, which is the
-    // freed-ObjPtrVec-buffer hazard the old comment here cited.
+    // exactly this situation, and it skips ring nodes whose mAliveSentinel was
+    // cleared -- the freed-ObjPtrVec-buffer hazard the old comment cited.
+    //
+    // NOT callback-free, and do not describe it that way: ObjPtrList::Node and
+    // ObjPtrVec::Node override NullifyObj, and in kObjListNoNull mode they
+    // unlink from the holder's container (the list variant also `delete this`).
+    // What it never does is destroy a referent OBJECT or re-enter ~Object, so
+    // it cannot deepen the cascade the way a Replace callback can. The holder's
+    // container must still be alive to be mutated -- which holds for the same
+    // reason it holds in Phase 0: a node whose owner was already destroyed has
+    // a cleared sentinel and is skipped, and Phase 2 defers every free until
+    // the outermost ~ObjectDir returns.
     //
     // Idempotent by construction: Phase 0 leaves the sentinel self-looped, so
     // a second call on a dir-resident object walks zero nodes.
