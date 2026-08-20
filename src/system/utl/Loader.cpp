@@ -54,11 +54,12 @@ Loader::Loader(const FilePath &fp, LoaderPos pos)
     TheLoadMgr.Loaders().push_front(this);
     if (mPos == kLoadFront) {
         TheLoadMgr.Loading().push_front(this);
-    } else if (!(!(mPos == kLoadStayBack))) {
+    } else if (mPos == kLoadStayBack) {
         TheLoadMgr.Loading().push_back(this);
     } else {
-        auto it = TheLoadMgr.Loading().begin();
-        for (; it != TheLoadMgr.Loading().end();) {
+        std::list<Loader *>::iterator it = TheLoadMgr.Loading().end();
+        while (it != TheLoadMgr.Loading().begin()) {
+            --it;
             if ((*it)->GetPos() <= kLoadBack) {
                 ++it;
                 break;

@@ -104,16 +104,23 @@ void SkeletonClip::LoadFrame(BinStream &bs, RecordedFrame &frame, int version) {
     }
 }
 
+struct RecordedFrameCmp {
+    bool operator()(const RecordedFrame &frame, const float &seconds) const {
+        return frame.mSongSeconds < seconds;
+    }
+};
+
 const RecordedFrame *SkeletonClip::RecordedFrameAt(
-    const std::vector<RecordedFrame> &frames, float seconds, int &loopCount, int &frameIdx
+    const std::vector<RecordedFrame> &frames, float seconds, int &frameIdx, int &loopCount
 ) {
     loopCount = 0;
     if (frames.empty()) {
         return nullptr;
     }
 
+    int numFrames = frames.size();
     while (seconds > frames.back().mSongSeconds) {
-        if (loopCount >= (int)frames.size()) {
+        if (loopCount >= numFrames) {
             return nullptr;
         }
         seconds -= frames.back().mSongSeconds;
@@ -121,11 +128,8 @@ const RecordedFrame *SkeletonClip::RecordedFrameAt(
     }
 
     auto _tmp0 = frames.begin();
-    std::vector<RecordedFrame>::const_iterator it = std::lower_bound(
-        _tmp0, frames.end(), seconds, [](const RecordedFrame &f, float value) {
-            return f.mSongSeconds < value;
-        }
-    );
+    std::vector<RecordedFrame>::const_iterator it =
+        std::lower_bound(_tmp0, frames.end(), seconds, RecordedFrameCmp());
     if (it != frames.end()) {
         frameIdx = it - frames.begin();
         return &(*it);
@@ -133,16 +137,16 @@ const RecordedFrame *SkeletonClip::RecordedFrameAt(
     return nullptr;
 }
 
-const RecordedFrame *SkeletonClip::CurRecordedFrame(int &loopCount, int &frameIdx) const {
+const RecordedFrame *SkeletonClip::CurRecordedFrame(int &frameIdx, int &loopCount) const {
     if (!IsRecording()) {
         if (TheHamDirector) {
-            return RecordedFrameAt(*mRecordedFrames, MoveDir::SongSeconds(), loopCount, frameIdx);
+            return RecordedFrameAt(*mRecordedFrames, MoveDir::SongSeconds(), frameIdx, loopCount);
         }
         if (mRecordedFrames->size() > 0) {
             float frame = GetFrame();
             if ((float)mRecordedFrames->size() > frame) {
-                frameIdx = 0;
-                loopCount = (int)frame;
+                loopCount = 0;
+                frameIdx = (int)frame;
                 return &(*mRecordedFrames)[(int)frame];
             }
         }
@@ -260,15 +264,15 @@ bool SkeletonClip::PrevSkeleton(
     const Skeleton &skeleton, int targetMs, ArchiveSkeleton &archive, int &elapsedMs
 ) const {
     if (skeleton.SkeletonIndex() == 0) {
-        int loopCount, frameIdx;
-        const RecordedFrame *curRecorded = CurRecordedFrame(loopCount, frameIdx);
+        int frameIdx, loopCount;
+        const RecordedFrame *curRecorded = CurRecordedFrame(frameIdx, loopCount);
         if (curRecorded) {
             float curTime =
                 mRecordedFrames->back().mSongSeconds * loopCount + curRecorded->mSongSeconds;
             float prevTime = curTime - targetMs * 0.00100000005f;
 
             const RecordedFrame *prevRecorded =
-                RecordedFrameAt(*mRecordedFrames, prevTime, loopCount, frameIdx);
+                RecordedFrameAt(*mRecordedFrames, prevTime, frameIdx, loopCount);
             if (prevRecorded) {
                 elapsedMs = (curTime - prevTime) * 1000.0f;
                 SkeletonFrame frame;

@@ -47,8 +47,10 @@ void ArcDetector::Clear() {
 
 void ArcDetector::PrintJointPath() const {
     MILO_LOG("*** Hand path:\n");
-    FOREACH (it, mJointPath) {
-        MILO_LOG("%f, %f, %f,\n", it->x, it->y, it->z);
+    for (std::list<Vector3>::const_reverse_iterator it = mJointPath.rbegin();
+         it != mJointPath.rend(); ++it) {
+        const Vector3 &pos = *it;
+        MILO_LOG("%f, %f, %f,\n", pos.x, pos.y, pos.z);
     }
     MILO_LOG("GetPathLength() %f\n", GetPathLength());
     MILO_LOG(

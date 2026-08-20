@@ -229,15 +229,12 @@ void Synth360::Init() {
     REGISTER_OBJ_FACTORY(FxSendSynapse360)
 
     Symbol enableHeadsetSym("enable_headset_output");
-    DataArray *synthCfg = SystemConfig(Symbol("synth"));
-    if (synthCfg->FindArray(enableHeadsetSym, true)->Int(1)) {
+    if (SystemConfig(Symbol("synth"))->FindArray(enableHeadsetSym, true)->Int(1)) {
         SetupHeadsetSubmixes();
     }
 
     float micVolume = 0.0f;
-    Symbol volumeSym("volume");
-    DataArray *micCfg = SystemConfig(Symbol("synth"), Symbol("mic"));
-    micCfg->FindData(volumeSym, micVolume, false);
+    SystemConfig(Symbol("synth"), Symbol("mic"))->FindData(Symbol("volume"), micVolume, false);
 
     if (GetNumMics() > 0) {
         MicManagerXbox::GetInstance()->Init();

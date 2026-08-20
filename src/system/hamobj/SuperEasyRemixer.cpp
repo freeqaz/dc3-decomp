@@ -67,8 +67,9 @@ void SuperEasyRemixer::Init() {
     SaveSuperEasyMoveParents();
     for (Difficulty d = EasiestDifficulty(); d != kNumDifficulties;
          d = DifficultyOneHarder(d)) {
-        unsigned int numParents = GetMoveParentsByDifficulty(d).size();
-        if (numParents != mTotalMeasures) {
+        std::vector<const MoveParent *> &parents = GetMoveParentsByDifficulty(d);
+        if (parents.size() != mTotalMeasures) {
+            unsigned int numParents = parents.size();
             MILO_NOTIFY(
                 "this song has wrong number of measures in %s track (has %d, want %d)",
                 DifficultyToSym(d).Str(),
