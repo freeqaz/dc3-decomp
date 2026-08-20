@@ -94,6 +94,19 @@ BEGIN_COPYS(ThreeDSound)
     CalculateFaderVolume();
 END_COPYS
 
+// FINDING (2026-08-20, relocation-name lane).  INIT_REVS declares two FILE-SCOPE
+// statics, gRev and gAltRev.  The shipped image does not: the symbol this Load
+// references is
+//     ?gRevs@?1??Load@ThreeDSound@@UAAXAAVBinStream@@@Z@4QBGB
+// -- a FUNCTION-LOCAL static named `gRevs`, of type `unsigned short const []`.
+// So the original wrote something on the order of
+//     static const unsigned short gRevs[] = { rev, alt };
+// INSIDE Load(), and ASSERT_REVS read gRevs[0]/gRevs[1].  Under the new
+// name_check ruler that costs this function 0.075pp (99.925 vs 100.0); it is
+// the only one of the 54 newly-unmatched functions where the reference is live
+// enough to be charged, but the macro shape is wrong for every Load() in the
+// tree.  Not changed here: INIT_REVS lives in obj/Object.h, which is inside the
+// PCH, so re-shaping it is a whole-binary experiment and needs its own A/B.
 INIT_REVS(6, 0)
 
 BEGIN_LOADS(ThreeDSound)
