@@ -70,7 +70,8 @@ void ChatReceiver::ActivateProcessing(bool b1) {
 }
 
 void ChatReceiver::ProcessChatData(void *data, unsigned int size, int *flag) {
-    float w = gLowCut * 0.000392699f;
+    // pi / 8000 in float precision (0x39cde32e); 0.000392699f is a ulp short.
+    float w = gLowCut * 0.0003926991f;
     float b1 = Sine(w + 1.5707964f) * -2.0f;
     float a1 = -b1;
     float disc = b1 * b1 - (Sine(w + 1.5707964f) * 8.0f - 7.0f) * 4.0f;
