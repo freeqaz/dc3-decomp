@@ -184,7 +184,7 @@ RndText::StyleState::StyleState(RndText *text, float size) {
     mFontMapIdx = text->FontMapIndex(mStyle->mFont, mStyle->mBlacklight);
     mBaseSize = size;
     mSize *= size;
-    mActive = true;
+    brk = true;
 }
 
 BinStream &operator<<(BinStream &bs, const RndText::Style &s) {
@@ -799,7 +799,7 @@ void RndText::WrapText(
         l0.mWidth = SegmentLength(0, wLen, charWidths, wideChars, scale);
     } else {
         WrapPoint *wps = (WrapPoint *)_alloca((wLen + 1) * sizeof(WrapPoint));
-        bool activeMarkup = style.mActive;
+        bool activeMarkup = style.brk;
         int numWp = 1;
         int cCount = 0;
         const unsigned short *cur = wideChars;
@@ -900,7 +900,7 @@ void RndText::WrapText(
                     cCount--;
                     brkW = &BRKWIDE_BASE[cCount];
                     cur--;
-                    if (style.mActive) {
+                    if (style.brk) {
                         activeMarkup = true;
                     }
                 }
@@ -952,7 +952,7 @@ void RndText::WrapText(
                             wps[bestWp].isLineEnd = false;
                         }
                     }
-                    if (activeMarkup != style.mActive) {
+                    if (activeMarkup != style.brk) {
                         MILO_ASSERT(style.brk == false, 0x6a2);
                         activeMarkup = false;
                     }
