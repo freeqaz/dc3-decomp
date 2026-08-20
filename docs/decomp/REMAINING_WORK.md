@@ -330,6 +330,9 @@ headline, none of it ever gets done.
 
 ## See also
 
+- [`FRONTIER.md`](FRONTIER.md) — the frontier re-derived 2026-08-20: banded counts with
+  denominators, the three denominators in daily use and why they disagree, three
+  scanner defects that survived their own repairs, and a ranked lane list
 - [`../STATE_OF_THE_DECOMP.md`](../STATE_OF_THE_DECOMP.md) — the numbers and the ruler
 - [`patterns/INDEX.md`](patterns/INDEX.md) — fixable/unfixable catalogue (read its **Corrections** section first)
 - [`../tools/REFERENCE.md`](../tools/REFERENCE.md) — scripts, symbol lookup, measurement
