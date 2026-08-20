@@ -554,7 +554,7 @@ and the population it covers is 1,567 functions.
 | population | size | sampled | busted |
 |---|---|---|---|
 | `AT_LIMIT` at norm ≥ 99.9 | 83 | 10 | **2** (both driven to exactly 100.0 and landed) |
-| `floor_certificate = 'equivalent'`, still < 100 | 726 | 10 | *audit lane still running at time of writing* |
+| `floor_certificate = 'equivalent'`, still < 100 | 726 | 10 | **in flight at time of writing** — branch `audit/cert-equiv-20260820` and six sub-lanes (`audit/ce-{bmp,lip,misc,movedir,rbp,text}-20260820`). At least four already at 100 % on their branches (`HamVisDir::PostUpdate` 82.2→100, `RndBitmap::GenerateMips` 89.1→100, `NetLoaderRef::NeedsToDownload` 95.1→100, `MeterDisplay::DrawShowing`→100). **Do not quote a bust rate from this row until the lane reports** — read the branches. |
 | `floor_certificate = 'permuter_exhausted'`, still < 100 | 164 | 10 | **8** (6 driven to 100, 4 were real behavioural bugs) — landed as `c0f854bf5` |
 
 ### 6.1 The ≥ 99.9 % sample: 2 of 10 busted
