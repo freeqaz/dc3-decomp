@@ -800,12 +800,12 @@ void RndText::WrapText(
     } else {
         WrapPoint *wps = (WrapPoint *)_alloca((wLen + 1) * sizeof(WrapPoint));
         bool activeMarkup = style.mActive;
-        wps[0].charIdx = 0;
         wps[0].lineWidth = 0.0f;
+        wps[0].charIdx = 0;
         wps[0].cost = 0;
-        wps[0].isLineEnd = false;
         wps[0].bestPrevIdx = -1;
         wps[0].nextIdx = -1;
+        wps[0].isLineEnd = true;
         wps[0].isHardBreak = true;
         float minW = _ref0 * 0.7f;
         float goodW = _ref0 * 0.95f;
@@ -966,23 +966,26 @@ void RndText::WrapText(
             } while (idx != 0);
         }
         Line ol;
-        int chi = wps[0].nextIdx;
-        while (chi != -1) {
-            WrapPoint *wp = &wps[chi];
-            WrapPoint *pw = &wps[wp->bestPrevIdx];
-            const unsigned short *cs = wideChars + (pw->charIdx & 0x7fffffff);
-            const unsigned short *ce = wideChars + (wp->charIdx & 0x7fffffff);
-            while (cs < ce && (*cs == ' ' || *cs == '\t')) cs++;
-            while (ce > cs) {
-                unsigned short p = *(ce - 1);
-                if (p != ' ' && p != '\n' && p != '\t') break;
-                ce--;
+        WrapPoint *wp = &wps[0];
+        while (wp->nextIdx != -1) {
+            WrapPoint *nx = &wps[wp->nextIdx];
+            ol.mWidth = nx->lineWidth;
+            ol.mEnd = wideChars + nx->charIdx;
+            ol.mStart = wideChars + wp->charIdx;
+            for (;;) {
+                unsigned short p = *ol.mStart;
+                if (p != ' ' && p != '\t') break;
+                if (ol.mEnd <= ol.mStart) break;
+                ol.mStart++;
             }
-            ol.mStart = cs;
-            ol.mEnd = ce;
-            ol.mWidth = wp->lineWidth;
+            for (;;) {
+                unsigned short p = ol.mEnd[-1];
+                if (p != ' ' && p != '\n' && p != '\t') break;
+                if (ol.mEnd <= ol.mStart) break;
+                ol.mEnd--;
+            }
             lines.push_back(ol);
-            chi = wp->nextIdx;
+            wp = &wps[wp->nextIdx];
         }
         if (lines.size() == 0) {
             ol.mWidth = 0.0f;
