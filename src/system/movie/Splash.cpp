@@ -349,9 +349,12 @@ bool Splash::SetImmutableState(Splash::SplashState state) {
     MILO_ASSERT(state > kResumed, 0x150);
     CritSecTracker tracker(&mStateLock);
     // Only allow transition to terminal states in specific sequences
-    if (mState < kResumed || state <= mState) {
+    // mState is volatile, so it must be read exactly once here -- the target
+    // has a single lwz of +0x94 in this block.
+    int curState = mState;
+    if (curState < kResumed || state <= curState) {
         // Allow WaitingForTerminating -> kTerminating transition
-        if (state != kWaitingForTerminating || mState != kTerminating) {
+        if (state != kWaitingForTerminating || curState != kTerminating) {
             return false;
         }
     }
