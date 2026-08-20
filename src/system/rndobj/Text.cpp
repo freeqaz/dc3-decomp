@@ -966,8 +966,9 @@ void RndText::WrapText(
             } while (idx != 0);
         }
         Line ol;
+        if (wps[0].nextIdx != -1) {
         WrapPoint *wp = &wps[0];
-        while (wp->nextIdx != -1) {
+        do {
             WrapPoint *nx = &wps[wp->nextIdx];
             ol.mWidth = nx->lineWidth;
             ol.mEnd = wideChars + nx->charIdx;
@@ -986,6 +987,7 @@ void RndText::WrapText(
             }
             lines.push_back(ol);
             wp = &wps[wp->nextIdx];
+        } while (wp->nextIdx != -1);
         }
         if (lines.size() == 0) {
             ol.mWidth = 0.0f;
