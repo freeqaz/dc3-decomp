@@ -592,13 +592,33 @@ bin/objdiff-cli diff '?Smooth@Vector2DESmoother@@QAAXVVector2@@M_N@Z' --format j
 #  'raw_match_percent': 87.155846}      <- report.json says 94.753
 ```
 
+**The standing remedy is circular, and that is the real finding.**
+`STATE_OF_THE_DECOMP.md` already establishes (2026-08-19, over 30,647 rows) that
+`decomp.db.current_percent` mirrors the **fuzzy** percent — 885 rows differ from
+the normalized ruler by more than 0.5 pp, **up to 7.6 pp**. Its prescribed fix is
+printed two lines later:
+
+> *"`verdict` and `current_percent` are hints. **Re-measure with `run_objdiff`**
+> before acting on either."*
+
+**`run_objdiff`'s headline is the same fuzzy ruler.** So the documented cure for
+a fuzzy number is a second fuzzy number labelled "normalized" — and 7.6 pp is
+the identical figure on both sides of that sentence, because it is the identical
+ruler gap. A lane following the standing advice cannot detect the problem by
+following it harder.
+
 **What this invalidates.** Any lane that "re-measured with `run_objdiff`" and
 compared the result against `decomp.db.match_percent_normalized` or against
 `report.json` saw a **phantom delta of exactly the fuzzy-vs-normalized gap** and
-had no way to tell it from staleness. That gap reaches **7.6 pp** in this
-sample. §6.1's "the DB disagreed with the canonical ruler on 8 of 10" was
-exactly this and is retracted there. **Before attributing any percentage
-disagreement to database drift, check which ruler produced each side.**
+had no way to tell it from staleness. §6.1's "the DB disagreed with the
+canonical ruler on 8 of 10" was exactly this and is retracted there. **Before
+attributing any percentage disagreement to database drift, check which ruler
+produced each side.**
+
+The correct re-measurement today is `report.json`'s
+`match_percent_normalized` — i.e. `frontier.py`, `progress_metrics.py`, or a
+direct read — **not** `run_objdiff`'s headline. Use `run_objdiff` for its
+instruction table and its zero-mismatch verdict, which are ruler-independent.
 
 **What it does not invalidate.** Everything in §1–§4 of this document reads
 `report.json` directly and is unaffected. A **zero-mismatch-row** claim is
@@ -824,6 +844,9 @@ target. Compare §6.1's `PointForTime`, where the RB3 reference is what put the
 wrong shape in our source. **Upstream ports need a DC3 diff, not just a clean
 compile.**
 
+Recorded upstream by that lane as `STATE_OF_THE_DECOMP.md` §3a; this section is
+the frontier-side cross-reference, not a second source.
+
 Follow-up the lane left on the table: `NetLoaderRef::IsLoadedOrFailed`, same
 file, **71.1 %**, same `BOOL_MASK`+`CONTROL_FLOW` class, same certificate. The
 inlined-return-boundary bool lever that closed `NeedsToDownload` is **not yet in
@@ -848,6 +871,17 @@ a call diff, treat register swaps as symptoms) converts unit-completion progress
 and certificate-busting into a single pass. The blind samples put the bust rate
 at 10 of 20; the one-away list says which busts also close a unit.
 
+### 0. Make `run_objdiff` report the canonical percent, or rename the field
+**Blocks the honest evaluation of every other lane.** `objdiff-cli diff` puts
+the fuzzy score in `normalized_match_percent`, `run_objdiff` renders it as
+`Match: X% normalized`, and `CLAUDE.md` calls that the source of truth for decomp
+percentages (§5.8). The gap reaches 7.6 pp, and the project's standing advice
+for a suspect number — *"re-measure with `run_objdiff`"* — routes straight back
+into the same ruler. Either compute the normalized score on the one-shot path
+(the `report generate` path already does it) or rename the field to what it
+holds. Then check `--batch`, which is untested. Cheapest high-leverage fix in
+this document; everything else here is measured through it.
+
 ### 1. Close the 151 units that are ONE function from complete
 **151 functions, 99,948 bytes.** Complete authorable units go **434 → 585 of 967
 (44.9 % → 60.5 %)** — the largest single move available on any headline.
@@ -865,10 +899,15 @@ body. The lever survives the check.
 Query: `frontier.py --section near-complete --max-remaining 1`.
 Extend to `--max-remaining 2` for **247 units / 343 fns / 179,512 B**.
 
-### 2. Re-audit the AT_LIMIT population, starting at ≥ 99.9 %
-**Promoted on evidence: the two completed blind samples busted 10 of 20** (§6),
-so this is no longer a speculative audit — it is the highest-yield lane in the
-document. 83 functions sit at ≥ 99.9 % (40,992 bytes), one or two instructions
+### 2. Re-audit the AT_LIMIT population — start with the 727 `equivalent` rows
+**Promoted twice on evidence: all three blind samples together busted 20 of 30**
+(§6), and the `equivalent` class alone went **10 of 10** with a structural
+explanation for why (§6.3). This is the highest-yield lane in the document, and
+`equivalent` — **727 rows, 476,832 bytes, the largest single certificate
+class** — is where to start, not the ≥ 99.9 % band. Prioritise within it by the
+signals that predicted busts: `has_control_flow` (238 of 729 carry it, and a
+control-flow difference is not a backend floor) and rows far below 100 (98 sit
+under 85 %, some as low as 37 %). 83 functions sit at ≥ 99.9 % (40,992 bytes), one or two instructions
 each: 55 certified `equivalent`, 14 `permuter_exhausted`, 6 uncertified. Every
 bust is an immediate matched function, and 4 of the 8 closed so far were real
 behavioural bugs rather than codegen cosmetics.
