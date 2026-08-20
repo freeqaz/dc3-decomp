@@ -779,7 +779,7 @@ void GamePanel::SetPausedHelper(bool paused, bool pauseSound) {
     }
 
     // Guard: already in desired pause state
-    if (mPaused == paused) {
+    if (paused == mPaused) {
         return;
     }
 
@@ -793,30 +793,28 @@ void GamePanel::SetPausedHelper(bool paused, bool pauseSound) {
             );
         }
         mPauseCountInTimer->Reset();
+    } else if (mNormalPauseEnabled && mState == kGamePlaying && !paused
+               && TheGameMode->Property("pause_count_in")->Int() != 0) {
+        // Start the count-in timer instead of immediately unpausing
+        mPauseCountInTimer->Start();
     } else {
-        // Check if we should start pause count-in when unpausing during gameplay
-        if (mNormalPauseEnabled && mState == kGamePlaying && !paused) {
-            if (TheGameMode->Property("pause_count_in")->Int() != 0) {
-                // Start the count-in timer instead of immediately unpausing
-                mPauseCountInTimer->Start();
-            } else {
-                // No count-in configured, unpause immediately
-                mGame->SetGamePaused(paused, mState >= kGamePlaying, pauseSound);
+        // No count-in configured (or not an in-gameplay unpause): apply now
+        mGame->SetGamePaused(paused, mState >= kGamePlaying, pauseSound);
 
-                // Pause/unpause venue movie textures
-                WorldDir *dir = TheHamDirector->GetVenueWorld();
-                for (ObjDirItr<TexMovie> it(dir, true); it != nullptr; ++it) {
-                    if (it->IsOpen()) {
-                        it->SetPaused(paused);
-                    }
-                }
-
-                TheWaveToTurnOnLight->SetPaused(paused);
-
-                // When unpausing, wait for disc to spin up
-                while (!paused && !FileDiscSpinUp())
-                    ;
+        // Pause/unpause venue movie textures
+        WorldDir *dir = TheHamDirector->GetVenueWorld();
+        for (ObjDirItr<TexMovie> it(dir, true); it != nullptr; ++it) {
+            if (it->IsOpen()) {
+                it->SetPaused(paused);
             }
+        }
+
+        TheWaveToTurnOnLight->SetPaused(paused);
+
+        // When unpausing, wait for disc to spin up
+        if (!paused) {
+            while (!FileDiscSpinUp())
+                ;
         }
     }
     UpdateNowBar();
