@@ -113,8 +113,10 @@ void EQEffect::SetParameters(EQEffect::Params const &params) {
     SetParameter(12, params.mBand5Freq);
 }
 
-// kSmoothBase = 0x3fd78d4fe0000000 as double
-static const double kSmoothBase = 4.6414757e-01;
+// The smoothing base is the float 0.368f widened to double
+// (0x3fd78d4fe0000000 == 0.36800000071525574) -- i.e. ~1/e, a one-pole
+// time constant. The target inlines it; it is not a named static.
+#define kSmoothBase 0.368f
 
 void EQEffect::Reset() {
     // Zero all per-channel filter delay state

@@ -263,7 +263,6 @@ void CharIKHand::PollDeps(
 
 void CharIKHand::Poll() {
     float charWeight = Weight();
-    static const float kHalfPi = 1.570796370506287f;
     static const float kMinWeight = 0.001f;
 
     static const float kMaxWeight = 144.0f;
@@ -425,7 +424,7 @@ void CharIKHand::Poll() {
         Vector3 handX(handMat.x);
         Vector3 handY(handMat.y);
         Vector3 handZ(handMat.z);
-        float acosDot = acosf(Dot(elbowMat.x, handZ)) - kHalfPi;
+        float acosDot = acosf(Dot(elbowMat.x, handZ)) - PI * 0.5f;
         float absAcosDot = acosDot;
         if (acosDot <= 0.0f)
             absAcosDot = -acosDot;
