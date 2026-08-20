@@ -24,11 +24,15 @@ enum FilterBand { kLowpass = 0, kHighpass = 1, kBandpass = 2, kBandstop = 3, kAl
 struct FILTER {
     float xcoeffs[0x200];
     float ycoeffs[0x200];
-    float gain;
-    float gain2;
-    float invgain2;
-    int numzeros;
-    int numpoles;
+    float gain;     // 0x1000
+    float gain2;    // 0x1004
+    float invgain2; // 0x1008
+    /* numpoles precedes numzeros -- copyresults() stores zplane.numpoles to
+       +0x100c and zplane.numzeros to +0x1010.  0x100c is the field EQEffect.cpp
+       reads as `numCoeffs`, and it memcpy's that many floats out of the +0x800
+       array (ycoeffs), which copyresults fills with exactly numpoles entries. */
+    int numpoles; // 0x100c
+    int numzeros; // 0x1010
 };
 
 struct pzrep {
@@ -237,7 +241,7 @@ static void compute_z_mzt() {
 
 static complex reflect(complex z) {
     complex r = hypot(z);
-    return z / (r * r);
+    return z / sqr(r);
 }
 
 /* compute Z-plane pole & zero positions for allpass resonator */
@@ -252,10 +256,10 @@ static void compute_bpres() {
     zplane.numpoles = zplane.numzeros = 2;
     zplane.zeros[0] = 1.0;
     zplane.zeros[1] = -1.0;
-    /* where we want the peak to be */
-    double theta = TWOPI * raw_alpha1;
     complex topcoeffs[MAXPZ + 1];
     expand(zplane.zeros, zplane.numzeros, topcoeffs);
+    /* where we want the peak to be */
+    double theta = TWOPI * raw_alpha1;
     double r = exp(-theta / (2.0 * qfactor));
     double thm = theta, th1 = 0.0, th2 = PI;
     bool cvg = false;
@@ -360,8 +364,8 @@ static void copyresults(FilterBand band, FILTER *out) {
         out->xcoeffs[i] = (float)xcoeffs[i];
     for (i = 0; i < zplane.numpoles; i++)
         out->ycoeffs[i] = (float)ycoeffs[i];
-    out->numzeros = zplane.numzeros;
     out->numpoles = zplane.numpoles;
+    out->numzeros = zplane.numzeros;
 }
 
 global void createFilter(
