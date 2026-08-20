@@ -773,16 +773,17 @@ void RndText::WrapText(
     StyleState style(this, scale);
     auto& _ref0 = mWidth;
     auto& _ref1 = mAlignment;
-    if (mFontMaps.size() == 0 || wLen == 0 || mStyles[0].mFont == 0) {
+    if (mFontMaps.empty() || wLen == 0 || mStyles[0].mFont == 0) {
         Line emptyLine;
         emptyLine.mStart = 0;
         emptyLine.mEnd = 0;
         emptyLine.mWidth = 0.0f;
         if (lines.size() > 1) lines.erase(lines.begin() + 1, lines.end());
         else lines.insert(lines.end(), 1 - lines.size(), emptyLine);
-        lines[0].mWidth = 0.0f;
-        lines[0].mStart = wideChars;
-        lines[0].mEnd = wideChars;
+        Line &l0 = lines[0];
+        l0.mWidth = 0.0f;
+        l0.mStart = wideChars;
+        l0.mEnd = wideChars;
     } else if (_ref0 == 0.0f) {
         Line emptyLine;
         emptyLine.mStart = 0;
@@ -790,11 +791,12 @@ void RndText::WrapText(
         emptyLine.mWidth = 0.0f;
         if (lines.size() > 1) lines.erase(lines.begin() + 1, lines.end());
         else lines.insert(lines.end(), 1 - lines.size(), emptyLine);
-        lines[0].mYPos = 0.0f;
-        lines[0].mXStart = 0.0f;
-        lines[0].mStart = wideChars;
-        lines[0].mEnd = wideChars + wLen;
-        lines[0].mWidth = SegmentLength(0, wLen, charWidths, wideChars, scale);
+        Line &l0 = lines[0];
+        l0.mXStart = 0.0f;
+        l0.mStart = wideChars;
+        l0.mYPos = 0.0f;
+        l0.mEnd = wideChars + wLen;
+        l0.mWidth = SegmentLength(0, wLen, charWidths, wideChars, scale);
     } else {
         WrapPoint *wps = (WrapPoint *)_alloca((wLen + 1) * sizeof(WrapPoint));
         bool activeMarkup = style.mActive;
