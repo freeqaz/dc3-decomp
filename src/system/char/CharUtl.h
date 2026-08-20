@@ -41,8 +41,11 @@ public:
     CharClip *mClip; // 0x0
     void *mAngChannel; // 0x4
     void *mPosChannel; // 0x8
+    // Vector3 is 16 bytes (it carries a u32 PAD for SIMD alignment), so the
+    // offsets below are 16-byte-strided, not 12. Confirmed against the target
+    // asm in CharServoBone::DoRegulate: mPos loads from +0xc, mAng from +0x1c.
     Vector3 mPos; // 0xc
-    float mAng; // 0x18
-    Vector3 mLastPos; // 0x1c
-    float mLastAng; // 0x28
+    float mAng; // 0x1c
+    Vector3 mLastPos; // 0x20
+    float mLastAng; // 0x30
 };
