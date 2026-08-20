@@ -155,17 +155,21 @@ static void normalize(FilterBand band) {
     double w2 = TWOPI * warped_alpha2;
     /* transform prototype into appropriate filter type (lp/hp/bp/bs) */
     switch (band) {
+    /* NB: unlike upstream mkfilter, DC3 fuses the pole loop and the zero loop
+       of each band into a SINGLE loop. Both loops ran `i < splane.numpoles`
+       and neither touched numpoles, so this is value-identical -- but it is
+       not codegen-identical: fused, the zero constants become loop-invariant
+       across the whole body and MSVC hoists them into stack temps ahead of it,
+       instead of pinning 0.0 (and w0) in callee-saved FPRs across the calls in
+       the pole loop. */
     case kBandstop: {
         double w0 = sqrt(w1 * w2), bw = w2 - w1;
-        int i;
-        for (i = 0; i < splane.numpoles; i++) {
+        for (int i = 0; i < splane.numpoles; i++) {
             complex hba = 0.5 * (bw / splane.poles[i]);
             complex temp = csqrt(1.0 - sqr(w0 / hba));
             splane.poles[i] = hba * (1.0 + temp);
             splane.poles[splane.numpoles + i] = hba * (1.0 - temp);
-        }
-        /* also 2N zeros at (0, +-w0) */
-        for (i = 0; i < splane.numpoles; i++) {
+            /* also 2N zeros at (0, +-w0) */
             splane.zeros[i] = complex(0.0, +w0);
             splane.zeros[splane.numpoles + i] = complex(0.0, -w0);
         }
@@ -176,28 +180,25 @@ static void normalize(FilterBand band) {
 
     case kBandpass: {
         double w0 = sqrt(w1 * w2), bw = w2 - w1;
-        int i;
-        for (i = 0; i < splane.numpoles; i++) {
+        for (int i = 0; i < splane.numpoles; i++) {
             complex hba = 0.5 * (splane.poles[i] * bw);
             complex temp = csqrt(1.0 - sqr(w0 / hba));
             splane.poles[i] = hba * (1.0 + temp);
             splane.poles[splane.numpoles + i] = hba * (1.0 - temp);
-        }
-        /* also N zeros at (0,0) */
-        for (i = 0; i < splane.numpoles; i++)
+            /* also N zeros at (0,0) */
             splane.zeros[i] = 0.0;
+        }
         splane.numzeros = splane.numpoles;
         splane.numpoles *= 2;
         break;
     }
 
     case kHighpass: {
-        int i;
-        for (i = 0; i < splane.numpoles; i++)
+        for (int i = 0; i < splane.numpoles; i++) {
             splane.poles[i] = w1 / splane.poles[i];
-        /* also N zeros at (0,0) */
-        for (i = 0; i < splane.numpoles; i++)
+            /* also N zeros at (0,0) */
             splane.zeros[i] = 0.0;
+        }
         splane.numzeros = splane.numpoles;
         break;
     }
