@@ -274,88 +274,90 @@ void EQEffect::Process(float *samples, int numSamples, int numChans) {
         // Biquad filter path
         MILO_ASSERT(numChans <= 2, 0xd9);
         if (numChans > 0) {
-            float *z1Band0 = &mBand0DelayZ1[0];
-            float *z1Band2 = &mBand2DelayZ1[0];
             for (int chan = 0; chan < numChans; chan++) {
                 if (numSamples > 0) {
+                    float *s = &samples[chan];
                     for (int i = 0; i < numSamples; i++) {
-                        float *s = &samples[i * numChans + chan];
                         if (mBand0Enabled) {
+                            // Band 0: low shelf, one-pole allpass
                             float x = *s;
-                            float z1 = *z1Band0;
+                            float z1 = mBand0DelayZ1[chan];
                             float coeff = mBand0Z1;
-                            float y = -(coeff * z1 - x);
+                            float y = x - z1 * coeff;
                             *s = (x - (coeff * y + z1)) * mBand0A2 + x;
-                            *z1Band0 = y;
+                            mBand0DelayZ1[chan] = y;
                         }
                         if (mBand1Enabled) {
+                            // Band 1: bell/peaking, two-pole allpass
                             float x = *s;
                             float b0 = mBand1B0;
                             float cosCoeff = mBand1Z2;
-                            float gainCur = mBand1Z1;
-                            float xn1 = mBand1DelayXn[chan];
+                            float xn = mBand1DelayXn[chan];
                             float xn2 = mBand1DelayXn1[chan];
-                            mBand1DelayXn1[chan] = xn1;
+                            float gainCur = mBand1Z1;
+                            float zn = mBand1DelayZ[chan];
+                            mBand1DelayXn1[chan] = xn;
                             float zn1 = mBand1DelayZ1[chan];
-                            mBand1DelayXn[chan] = x;
-                            mBand1DelayZ1[chan] = mBand1DelayZ[chan];
-                            float y = zn1 * b0 + -(mBand1DelayZ[chan] * cosCoeff - (xn1 * cosCoeff + -(x * b0) + xn2));
+                            mBand1DelayXn[chan] = *s;
+                            mBand1DelayZ1[chan] = zn;
+                            float y = zn1 * b0 + -(zn * cosCoeff - (-(x * b0) + xn * cosCoeff + xn2));
                             mBand1DelayZ[chan] = y;
                             *s = (x - y) * gainCur + x;
                         }
                         if (mBand2Enabled) {
+                            // Band 2: high shelf, one-pole allpass
                             float x = *s;
-                            float z1 = z1Band2[chan];
+                            float z1 = mBand2DelayZ1[chan];
                             float coeff = mBand2Z1;
-                            float y = -(z1 * coeff - x);
+                            float y = x - z1 * coeff;
                             *s = (coeff * y + z1 + x) * mBand2A2 + x;
-                            z1Band2[chan] = y;
+                            mBand2DelayZ1[chan] = y;
                         }
                         if (mBand3Enabled) {
-                            float x = *s;
-                            float b0 = mBand3B0;
+                            // Band 3: bandpass biquad
                             float b1 = mBand3B1;
+                            float xn = mBand3DelayX[chan][0];
+                            float b0 = mBand3B0;
+                            float x = *s;
                             float b2 = mBand3B2;
+                            float xn1 = mBand3DelayX[chan][1];
                             float a1 = mBand3A1;
                             float a2 = mBand3A2;
-                            float xn = mBand3DelayX[chan][0];
-                            float xn1 = mBand3DelayX[chan][1];
+                            mBand3DelayX[chan][1] = xn;
                             float zn = mBand3DelayZ[chan][0];
                             float zn1 = mBand3DelayZ[chan][1];
-                            mBand3DelayX[chan][1] = xn;
-                            mBand3DelayX[chan][0] = x;
+                            mBand3DelayX[chan][0] = *s;
                             mBand3DelayZ[chan][1] = zn;
-                            float out = -(a2 * zn1 - -(a1 * zn - (b2 * xn1 + b0 * x + b1 * xn)));
+                            float out = -(a2 * zn1 - -(a1 * zn - (b1 * xn + b0 * x + b2 * xn1)));
                             mBand3DelayZ[chan][0] = out;
                             *s = out;
                         }
                         if (mBand4Enabled) {
+                            // Band 4: bandpass biquad
                             float x = *s;
                             float b0 = mBand4B0;
                             float b1 = mBand4B1;
-                            float b2 = mBand4B2;
-                            float a1 = mBand4A1;
-                            float a2 = mBand4A2;
                             float xn = mBand4DelayX[chan][0];
+                            float b2 = mBand4B2;
                             float xn1 = mBand4DelayX[chan][1];
+                            float a1 = mBand4A1;
                             float zn = mBand4DelayZ[chan][0];
+                            float a2 = mBand4A2;
                             float zn1 = mBand4DelayZ[chan][1];
                             mBand4DelayX[chan][1] = xn;
-                            mBand4DelayX[chan][0] = x;
+                            mBand4DelayX[chan][0] = *s;
                             mBand4DelayZ[chan][1] = zn;
-                            float out = -(a2 * zn1 - -(a1 * zn - (b2 * xn1 + b0 * x + b1 * xn)));
+                            float out = -(a2 * zn1 - -(a1 * zn - (b0 * x + b1 * xn + b2 * xn1)));
                             mBand4DelayZ[chan][0] = out;
                             *s = out;
                         }
                         // Smooth interpolated coefficients
-                        float k = mSmoothCoeff;
-                        mBand0A2 = (mBand0A2 - mBand0A1) * k + mBand0A1;
-                        mBand1Z1 = (mBand1Z1 - mBand1A2) * k + mBand1A2;
-                        mBand2A2 = (mBand2A2 - mBand2A1) * k + mBand2A1;
+                        mBand0A2 = (mBand0A2 - mBand0A1) * mSmoothCoeff + mBand0A1;
+                        mBand1Z1 = (mBand1Z1 - mBand1A2) * mSmoothCoeff + mBand1A2;
+                        mBand2A2 = (mBand2A2 - mBand2A1) * mSmoothCoeff + mBand2A1;
+                        s += numChans;
                     }
                 }
-                z1Band0++;
-                z1Band2++;
             }
         }
     }
