@@ -363,8 +363,8 @@ void CharLipSync::PlayBack::Poll(float time) {
             mFrame++;
         } while (mFrame < frameIdx);
     } else if (mFrame >= 0 && mFrame == frameIdx) {
-        int idx = mOldIndex + 1;
-        int count = lipSync->mData[mOldIndex];
+        int idx = mOldIndex;
+        int count = lipSync->mData[idx++];
         if (count != 0) {
             for (int i = count; i != 0; i--) {
                 int wIdx = lipSync->mData[idx];
