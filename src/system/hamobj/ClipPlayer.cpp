@@ -99,10 +99,8 @@ DataNode ClipPlayer::AnnotatePractice() {
     if (!TheLoadMgr.EditMode() || !TheHamDirector->NoTransitions()) {
         CharClip *inClip = mInClip;
         if (inClip) {
-            const char *name = inClip->Name();
             float f31 = mPracticeStart + f30;
-            float clipLen = ClipLength(inClip);
-            Annotate(arr, f31 - clipLen, name);
+            Annotate(arr, f31 - ClipLength(inClip), inClip->Name());
             Annotate(arr, mPracticeStart + f30, "");
         }
     }
