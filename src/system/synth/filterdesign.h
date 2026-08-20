@@ -18,7 +18,12 @@
 // Microsoft C++ does not define M_PI !
 #define PI 3.14159265358979323846
 #define TWOPI (2.0 * PI)
-#define EPS 1e-10
+// Upstream mkfilter uses 1e-10 here. DC3's build does NOT: the bisection in
+// compute_bpres() loads __real@3f50624dd2f1a9fc (= 1e-3) as its convergence
+// threshold, the same tolerance expand() uses for its "coefficients are not
+// real" check. This is a real numeric difference, not a codegen artifact --
+// the resonator pole search stops many bisection steps earlier.
+#define EPS 1e-3
 #define MAXORDER 10
 #define MAXPZ 512
 // .ge. 2*MAXORDER, to allow for doubling of poles in BP filter;

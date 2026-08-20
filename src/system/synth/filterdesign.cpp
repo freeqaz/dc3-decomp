@@ -24,11 +24,15 @@ enum FilterBand { kLowpass = 0, kHighpass = 1, kBandpass = 2, kBandstop = 3, kAl
 struct FILTER {
     float xcoeffs[0x200];
     float ycoeffs[0x200];
-    float gain;
-    float gain2;
-    float invgain2;
-    int numzeros;
-    int numpoles;
+    float gain;     // 0x1000
+    float gain2;    // 0x1004
+    float invgain2; // 0x1008
+    /* numpoles precedes numzeros -- copyresults() stores zplane.numpoles to
+       +0x100c and zplane.numzeros to +0x1010.  0x100c is the field EQEffect.cpp
+       reads as `numCoeffs`, and it memcpy's that many floats out of the +0x800
+       array (ycoeffs), which copyresults fills with exactly numpoles entries. */
+    int numpoles; // 0x100c
+    int numzeros; // 0x1010
 };
 
 struct pzrep {
@@ -36,12 +40,20 @@ struct pzrep {
     int numpoles, numzeros;
 };
 
-static double xcoeffs[MAXPZ + 1], ycoeffs[MAXPZ + 1];
+/* NB: MSVC emits plain (statically-initialized) file-scope statics into .bss in
+   REVERSE declaration order, so this list is the target's address order read
+   backwards: ycoeffs, xcoeffs, polemask, order, qfactor, chebrip, warped_alpha2,
+   warped_alpha1, raw_alphaz, raw_alpha2, raw_alpha1.  In particular xcoeffs/ycoeffs
+   must be declared LAST (as in upstream mkfilter) or every access to the scalars
+   below is reached at the wrong displacement from the ycoeffs anchor.
+   splane/zplane/dc_gain/fc_gain/hf_gain have a user-provided complex ctor, so they
+   are dynamically initialized and land in a separate group in FORWARD order. */
 static double raw_alpha1, raw_alpha2, raw_alphaz;
 static double warped_alpha1, warped_alpha2;
 static double chebrip, qfactor;
 static int order;
 static uint polemask;
+static double xcoeffs[MAXPZ + 1], ycoeffs[MAXPZ + 1];
 static pzrep splane, zplane;
 static complex dc_gain, fc_gain, hf_gain;
 
@@ -143,17 +155,27 @@ static void normalize(FilterBand band) {
     double w2 = TWOPI * warped_alpha2;
     /* transform prototype into appropriate filter type (lp/hp/bp/bs) */
     switch (band) {
+    /* NB: unlike upstream mkfilter, DC3 fuses the pole loop and the zero loop
+       of each band into a SINGLE loop. Both loops ran `i < splane.numpoles`
+       and neither touched numpoles, so this is value-identical -- but it is
+       not codegen-identical: fused, the zero constants become loop-invariant
+       across the whole body and MSVC hoists them into stack temps ahead of it,
+       instead of pinning 0.0 (and w0) in callee-saved FPRs across the calls in
+       the pole loop. */
     case kBandstop: {
         double w0 = sqrt(w1 * w2), bw = w2 - w1;
-        int i;
-        for (i = 0; i < splane.numpoles; i++) {
+        for (int i = 0; i < splane.numpoles; i++) {
             complex hba = 0.5 * (bw / splane.poles[i]);
             complex temp = csqrt(1.0 - sqr(w0 / hba));
             splane.poles[i] = hba * (1.0 + temp);
+            /* The two `splane.numpoles + i` adds here are the unit's last two
+               mismatches: target `add r11, r29, r11` (i first) vs our
+               `add r11, r11, r29`. Spelling them `i + splane.numpoles` changes
+               NOTHING -- measured, byte-identical output -- so MSVC canonicalizes
+               the operand order of the commutative add and the source cannot
+               steer it. Left in upstream's spelling; do not re-try the flip. */
             splane.poles[splane.numpoles + i] = hba * (1.0 - temp);
-        }
-        /* also 2N zeros at (0, +-w0) */
-        for (i = 0; i < splane.numpoles; i++) {
+            /* also 2N zeros at (0, +-w0) */
             splane.zeros[i] = complex(0.0, +w0);
             splane.zeros[splane.numpoles + i] = complex(0.0, -w0);
         }
@@ -164,28 +186,25 @@ static void normalize(FilterBand band) {
 
     case kBandpass: {
         double w0 = sqrt(w1 * w2), bw = w2 - w1;
-        int i;
-        for (i = 0; i < splane.numpoles; i++) {
+        for (int i = 0; i < splane.numpoles; i++) {
             complex hba = 0.5 * (splane.poles[i] * bw);
             complex temp = csqrt(1.0 - sqr(w0 / hba));
             splane.poles[i] = hba * (1.0 + temp);
             splane.poles[splane.numpoles + i] = hba * (1.0 - temp);
-        }
-        /* also N zeros at (0,0) */
-        for (i = 0; i < splane.numpoles; i++)
+            /* also N zeros at (0,0) */
             splane.zeros[i] = 0.0;
+        }
         splane.numzeros = splane.numpoles;
         splane.numpoles *= 2;
         break;
     }
 
     case kHighpass: {
-        int i;
-        for (i = 0; i < splane.numpoles; i++)
+        for (int i = 0; i < splane.numpoles; i++) {
             splane.poles[i] = w1 / splane.poles[i];
-        /* also N zeros at (0,0) */
-        for (i = 0; i < splane.numpoles; i++)
+            /* also N zeros at (0,0) */
             splane.zeros[i] = 0.0;
+        }
         splane.numzeros = splane.numpoles;
         break;
     }
@@ -227,13 +246,16 @@ static void compute_z_mzt() {
         zplane.zeros[i] = cexp(splane.zeros[i]);
 }
 
+static complex reflect(complex z) {
+    complex r = hypot(z);
+    return z / sqr(r);
+}
+
 /* compute Z-plane pole & zero positions for allpass resonator */
 static void compute_apres() {
     compute_bpres(); /* iterate to place poles */
-    complex r0 = hypot(zplane.poles[0]);
-    zplane.zeros[0] = zplane.poles[0] / (r0 * r0);
-    complex r1 = hypot(zplane.poles[1]);
-    zplane.zeros[1] = zplane.poles[1] / (r1 * r1);
+    zplane.zeros[0] = reflect(zplane.poles[0]);
+    zplane.zeros[1] = reflect(zplane.poles[1]);
 }
 
 /* compute Z-plane pole & zero positions for bandpass resonator */
@@ -241,10 +263,10 @@ static void compute_bpres() {
     zplane.numpoles = zplane.numzeros = 2;
     zplane.zeros[0] = 1.0;
     zplane.zeros[1] = -1.0;
-    /* where we want the peak to be */
-    double theta = TWOPI * raw_alpha1;
     complex topcoeffs[MAXPZ + 1];
     expand(zplane.zeros, zplane.numzeros, topcoeffs);
+    /* where we want the peak to be */
+    double theta = TWOPI * raw_alpha1;
     double r = exp(-theta / (2.0 * qfactor));
     double thm = theta, th1 = 0.0, th2 = PI;
     bool cvg = false;
@@ -349,8 +371,8 @@ static void copyresults(FilterBand band, FILTER *out) {
         out->xcoeffs[i] = (float)xcoeffs[i];
     for (i = 0; i < zplane.numpoles; i++)
         out->ycoeffs[i] = (float)ycoeffs[i];
-    out->numzeros = zplane.numzeros;
     out->numpoles = zplane.numpoles;
+    out->numzeros = zplane.numzeros;
 }
 
 global void createFilter(
@@ -358,12 +380,21 @@ global void createFilter(
     int ord
 ) {
     order = ord;
-    if (!(mask & opt_p))
-        polemask = ~0;
+    /* Store both alphas before the polemask test: the target sinks these two
+       stores above the branch, which lets alpha2 die immediately. Assigning
+       them after the `if` instead forces alpha2 to be kept in a second FPR
+       across it (a spurious `fmr f13, f2`). */
     raw_alpha1 = alpha1;
     raw_alpha2 = alpha2;
+    if (!(mask & opt_p))
+        polemask = ~0;
+    /* raw_alpha1, not alpha1: alpha1 is float and raw_alpha1 is double, so
+       `raw_alpha1 = alpha1` materializes the widened value in its own register
+       (the otherwise-dead `fmr f0, f1` at entry). Re-reading the global here
+       consumes that widened value; assigning from the float parameter again
+       would emit a second conversion and store f1. */
     if (band != kBandpass && band != kBandstop)
-        raw_alpha2 = alpha1;
+        raw_alpha2 = raw_alpha1;
     if (type == kResonator) { /* resonator */
         if (band == kBandpass) /* bandpass resonator */
             compute_bpres();
@@ -376,20 +407,26 @@ global void createFilter(
         }
         if (band == kAllpass) /* allpass resonator */
             compute_apres();
-    } else if (type == kProportionalIntegral) { /* proportional-integral */
-        applyWarp((mask & (opt_w | opt_z)) == 0);
-        splane.poles[0] = 0.0;
-        splane.zeros[0] = -TWOPI * warped_alpha1;
-        splane.numpoles = splane.numzeros = 1;
     } else {
-        compute_s(type);
-        applyWarp((mask & (opt_w | opt_z)) == 0);
-        normalize(band);
+        /* NB: the z-transform lives INSIDE this else, as in upstream mkfilter.
+           The resonator paths above compute zplane directly and must not be
+           followed by compute_z_blt()/compute_z_mzt(), which would overwrite
+           zplane from a splane those paths never populate. */
+        if (type == kProportionalIntegral) { /* proportional-integral */
+            applyWarp((mask & (opt_w | opt_z)) == 0);
+            splane.poles[0] = 0.0;
+            splane.zeros[0] = -TWOPI * warped_alpha1;
+            splane.numpoles = splane.numzeros = 1;
+        } else {
+            compute_s(type);
+            applyWarp((mask & (opt_w | opt_z)) == 0);
+            normalize(band);
+        }
+        if (mask & opt_z)
+            compute_z_mzt();
+        else
+            compute_z_blt();
     }
-    if (mask & opt_z)
-        compute_z_mzt();
-    else
-        compute_z_blt();
     if (mask & opt_Z)
         add_extra_zero();
     expandpoly();

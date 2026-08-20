@@ -17,12 +17,12 @@ enum FilterBand { kFilterLowpass = 0, kFilterHighpass = 1, kFilterBandpass = 2 }
 
 // Must stay layout-compatible with synth/filterdesign.cpp's FILTER, which is
 // what createFilter() actually writes through. filterdesign's is 0x1014 bytes
-// (xcoeffs[0x200] / ycoeffs[0x200] / gain / gain2 / invgain2 / numzeros /
-// numpoles); this declaration names only the fields EQEffect reads, but it must
-// still be the same *size* -- copyresults() (filterdesign.cpp:353) ends with
-// `out->numpoles = zplane.numpoles`, so a 0x1010-byte FILTER here means every
+// (xcoeffs[0x200] / ycoeffs[0x200] / gain / gain2 / invgain2 / numpoles /
+// numzeros); this declaration names only the fields EQEffect reads, but it must
+// still be the same *size* -- copyresults() ends with
+// `out->numzeros = zplane.numzeros`, so a 0x1010-byte FILTER here means every
 // createFilter() call below writes 4 bytes past the end of the local `filter`.
-// The trailing numpoles below exists purely to absorb that store. On PPC this
+// The trailing numzeros below exists purely to absorb that store. On PPC this
 // is codegen-neutral (measured: frame stays 0x10f0, 573 instructions /
 // 213 mismatches either way) because the frame delta is callee-save GPR counts,
 // not this struct.
@@ -31,8 +31,10 @@ struct FILTER {
     float coeffs[0x200];    // 0x800
     float gain;             // 0x1000
     char _pad2[8];          // 0x1004
-    int numCoeffs;          // 0x100C
-    int numpoles;           // 0x1010 -- written by copyresults(), never read here
+    // 0x100C is filterdesign's FILTER::numpoles -- the count of entries
+    // copyresults() writes into the +0x800 array, which is what `coeffs` aliases.
+    int numCoeffs;          // 0x100C -- filterdesign's numpoles
+    int numzeros;           // 0x1010 -- written by copyresults(), never read here
 };
 
 // NOT extern "C". The target binary's symbol is the C++-mangled
