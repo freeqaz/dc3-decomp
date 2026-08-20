@@ -245,7 +245,7 @@ void RndAmbientOcclusion::BuildTrees(Quality quality) {
         int packDepth = kQualityLUT[quality + 2];
         BuildSphereStratified(kQualityLUT[quality], mSampleDirs);
 
-        Box box(Vector3(-FLT_MAX, -FLT_MAX, -FLT_MAX), Vector3(FLT_MAX, FLT_MAX, FLT_MAX));
+        Box box(Vector3(FLT_MAX, FLT_MAX, FLT_MAX), Vector3(-FLT_MAX, -FLT_MAX, -FLT_MAX));
 
         {
             auto it = mObjectsCast.begin();
