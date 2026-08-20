@@ -407,7 +407,13 @@ void NgPostProc::CheckGradientMap() {
 }
 
 void NgPostProc::CheckHueConverge() {
-    if (ColorXfmEnabled()) {
+    // The target calls ?DoHueConverge@RndPostProc@@QBA_NXZ here (bl @826A9998
+    // -> 82E2AB00, the merged_Returns1 ICF class), not ColorXfmEnabled --
+    // which has a real body at 8266B0A8 and can be false.  This was a genuine
+    // wrong-callee: the hue-converge constants were being skipped whenever no
+    // colour transform was configured.  Relocation names are unmetered by the
+    // normalized ruler, so the row read 100.0% with zero mismatches either way.
+    if (DoHueConverge()) {
         Vector4 hueParams(mHueTarget * (1.0f / 360.0f) + 0.5f, mHueFocus, mBlendAmount, mBrightnessPower);
         TheShaderMgr.SetPConstant(kPS_HueConverge, hueParams);
         TheShaderMgr.unk2a = (0.0f < mBlendAmount);

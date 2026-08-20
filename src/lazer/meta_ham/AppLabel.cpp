@@ -27,7 +27,6 @@
 #include "utl\Locale.h"
 #include "utl\Symbol.h"
 
-AppLabel::~AppLabel() {}
 
 BEGIN_HANDLERS(AppLabel)
     HANDLE(set_user_name, OnSetUserName)

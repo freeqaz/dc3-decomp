@@ -48,8 +48,15 @@ void CamShotVOData(
     static Symbol win_hype_solo("win_hype_solo");
     static Symbol win_hype_crew("win_hype_crew");
     static Symbol win_hype_diff_crew("win_hype_diff_crew");
-    static Symbol lose_camp_char("lose_camp_char");
+    // Declaration order is observable: each function-local static takes the
+    // next bit of the `?$S3@` guard word and the next .data slot.  The target
+    // constructs win_camp_crew (bit 0x1000, 0x82F61C68) before lose_camp_char
+    // (bit 0x2000, 0x82F61C64) -- see build/373307D9/asm/system/hamobj/
+    // CamShotCatVO.s @82518D4C/82518D78 -- so these two were declared the wrong
+    // way round here.  The *uses* below were always correct; only the order was
+    // wrong.
     static Symbol win_camp_crew("win_camp_crew");
+    static Symbol lose_camp_char("lose_camp_char");
     static Symbol battle_outro_crew("battle_outro_crew");
     static Symbol all("all");
     static Symbol active("active");
