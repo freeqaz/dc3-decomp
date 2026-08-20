@@ -436,7 +436,7 @@ void CharHair::Hookup(ObjPtrList<CharCollide> &collides) {
             col->SyncWorldState();
 
             Vector3 colPos(col->WorldXfm().v);
-            float colAdjust = 0.0f;
+            float colAdjust = kHugeFloat;
 
             if (col->GetFlags() != 0) {
                 int shape = (int)col->GetShape();
