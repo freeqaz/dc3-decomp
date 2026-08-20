@@ -115,7 +115,7 @@ BEGIN_PROPSYNCS(RndTransformable)
         SetTransConstraint(mConstraint, mTarget, _val.Int())
     )
     SYNC_PROP_MODIFY(local_xfm, mLocalXfm, SetDirty())
-    SYNC_PROP_MODIFY(world_xfm, mWorldXfm, ComputeLocalXfm(mLocalXfm))
+    SYNC_PROP_MODIFY(world_xfm, mWorldXfm, ComputeLocalXfm(mWorldXfm))
     SYNC_VIRTUAL_SUPERCLASS(Hmx::Object)
 END_PROPSYNCS
 
