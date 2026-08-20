@@ -168,6 +168,12 @@ static void normalize(FilterBand band) {
             complex hba = 0.5 * (bw / splane.poles[i]);
             complex temp = csqrt(1.0 - sqr(w0 / hba));
             splane.poles[i] = hba * (1.0 + temp);
+            /* The two `splane.numpoles + i` adds here are the unit's last two
+               mismatches: target `add r11, r29, r11` (i first) vs our
+               `add r11, r11, r29`. Spelling them `i + splane.numpoles` changes
+               NOTHING -- measured, byte-identical output -- so MSVC canonicalizes
+               the operand order of the commutative add and the source cannot
+               steer it. Left in upstream's spelling; do not re-try the flip. */
             splane.poles[splane.numpoles + i] = hba * (1.0 - temp);
             /* also 2N zeros at (0, +-w0) */
             splane.zeros[i] = complex(0.0, +w0);
