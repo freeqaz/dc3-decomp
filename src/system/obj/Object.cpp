@@ -109,11 +109,34 @@ Hmx::Object::~Object() {
     Hmx::Object *old = sDeleting;
     sDeleting = this;
 #ifdef HX_NATIVE
-    // During cascading ObjectDir::DeleteObjects, ReplaceRefs is called
-    // in a separate pre-pass while all memory is still valid. Calling it
-    // here would be unsafe: derived member destructors have already freed
-    // ObjPtrVec buffers, leaving stale ring entries that crash SnapshotRing.
-    if (!ObjectDir::InDeleteObjects())
+    // Nullify, don't skip.
+    //
+    // ObjectDir::DeleteObjects rests on one invariant: when a cascade destroys
+    // an object, every ObjRef pointing at it is nullified before Phase 2 hands
+    // the block to free(). Phase 0 (NullifyAllRefs) enforces that only for
+    // objects reachable from the dir being deleted.
+    //
+    // This used to be a bare `if (!ObjectDir::InDeleteObjects())` -- i.e. an
+    // object destroyed DURING a cascade but not in the dir's iteration set got
+    // NEITHER path, and every holder of a ref to it was left dangling. That is
+    // the whole population of cascade collateral: ~AnimTask's blend task,
+    // ~Sequence's instruments, ~HamCharacter's mWaypoint, any `delete` reached
+    // from a Phase-1 destructor. It is what crashed TaskMgr::Poll, and it is
+    // why three separate holders needed site-specific dangling-pointer guards.
+    //
+    // Calling ReplaceRefs(nullptr) here is what the PPC build does, but it is
+    // the wrong tool mid-cascade: it fires Replace callbacks, which re-enter
+    // (MessageTask::Replace does `delete this`) while Phase 1 is walking a
+    // todo list. NullifyAllRefs is the mechanism Phase 0 already trusts for
+    // exactly this situation -- purely mechanical, no callbacks, no deletes,
+    // and it skips ring nodes whose mAliveSentinel was cleared, which is the
+    // freed-ObjPtrVec-buffer hazard the old comment here cited.
+    //
+    // Idempotent by construction: Phase 0 leaves the sentinel self-looped, so
+    // a second call on a dir-resident object walks zero nodes.
+    if (ObjectDir::InDeleteObjects())
+        NullifyAllRefs();
+    else
 #endif
     ReplaceRefs(nullptr);
     sDeleting = old;
