@@ -316,13 +316,14 @@ bool NetLoaderRef::IsValid() const {
     return (!mCacheLoader || !mNetLoader) && (mCacheLoader || mNetLoader);
 }
 
+static inline bool CacheLoaderStillDownloading(NetCacheLoader *loader) {
+    int state = (int)loader->mState;
+    return state == 1 || state == 2;
+}
+
 bool NetLoaderRef::NeedsToDownload() {
     MILO_ASSERT(IsValid(), 0x31B);
-    if (mCacheLoader) {
-        int state = (int)mCacheLoader->mState;
-        return state == 1 || state == 2;
-    }
-    return true;
+    return !mCacheLoader || CacheLoaderStillDownloading(mCacheLoader);
 }
 
 bool NetLoaderRef::IsDownloading() {
