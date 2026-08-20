@@ -273,6 +273,14 @@ Verified by formula on **25 of 25** functions in `default/system/math/*`
 impossible. `Multiply(Vector3 const&, Quat const&, Vector3&)` is measured at
 84.8 % and assigned a ceiling of 16.0 %.
 
+Across the whole `[99, 99.99)` band — 244 functions, every one re-measured by a
+fresh objdiff run — **230 (94.3 %) come out with a ceiling below their own
+measured percent.** Only 10 survive as a genuine `at_limit`. Without the guard
+this lane added, those 230 would each have been emitted as
+`at_limit — "Ceiling N % — no room to improve"` on a function within 1 % of
+perfect. Worst case in that band: `?mash@@YAXPAE0@Z`, measured 94.17 %, ceiling
+23.33 %.
+
 **This is the mechanism behind the clamp.** `ceiling_calculator.py` reports
 `ceilings_clamped_up_to_current: 1172 / 1568 = 74.7 %` and its source calls the
 clamp *"the classifier disagreeing with the grader"*. It is not a disagreement,
