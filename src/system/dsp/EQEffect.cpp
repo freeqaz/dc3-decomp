@@ -494,18 +494,16 @@ void EQEffect::SetParameter(int param, float value) {
         mBand0B1 = (float)gainTarget;
         float shelfTarget = (gainFf - one) * half;
         mBand0A1 = shelfTarget;
-        if (mBand0A2 != zero || shelfTarget != zero) {
-            mBand0Enabled = true;
+        mBand0Enabled = (mBand0A2 != zero || shelfTarget != zero);
+        // Both arms share the (t - 1) / (t + 1) tail in the target; only the
+        // numerator base differs, so it must be one division, not two.
+        float allpassBase;
+        if (mBand1Gain > zero) {
+            allpassBase = mBand0B0;
         } else {
-            mBand0Enabled = false;
+            allpassBase = gainFf * mBand0B0;
         }
-        float coeff;
-        if (mBand1Gain <= zero) {
-            coeff = (float)((double)gainFf * (double)mBand0B0 - one) / (float)((double)gainFf * (double)mBand0B0 + one);
-        } else {
-            coeff = (mBand0B0 - one) / (mBand0B0 + one);
-        }
-        mBand0Z1 = coeff;
+        mBand0Z1 = (allpassBase - one) / (allpassBase + one);
     } else if (updateBand1) {
         // Bell/peaking filter (band 1)
         double tanFreq = tan((double)(mBand2Freq * 6.544985e-05f));
@@ -516,16 +514,12 @@ void EQEffect::SetParameter(int param, float value) {
         mBand1A2 = (gainFf - one) * half;
         double cosQ = cos((double)(mBand1Q * 0.0001308997f));
         mBand1Z2 = -(float)cosQ;
-        if (mBand1Z1 != zero || mBand1A2 != zero) {
-            mBand1Enabled = true;
-        } else {
-            mBand1Enabled = false;
-        }
+        mBand1Enabled = (mBand1Z1 != zero || mBand1A2 != zero);
         float coeff1;
-        if (mBand2Gain <= zero) {
-            coeff1 = ((float)tanFreq - gainFf) / ((float)tanFreq + gainFf);
-        } else {
+        if (mBand2Gain > zero) {
             coeff1 = ((float)tanFreq - one) / ((float)tanFreq + one);
+        } else {
+            coeff1 = ((float)tanFreq - mBand1B2) / ((float)tanFreq + mBand1B2);
         }
         mBand1B0 = coeff1;
         mBand1Z2 = (one - coeff1) * (-(float)cosQ);
@@ -538,16 +532,12 @@ void EQEffect::SetParameter(int param, float value) {
         mBand2B1 = (float)gainTarget;
         float shelfTarget = (gainFf - one) * half;
         mBand2A1 = shelfTarget;
-        if (mBand2A2 != zero || shelfTarget != zero) {
-            mBand2Enabled = true;
-        } else {
-            mBand2Enabled = false;
-        }
+        mBand2Enabled = (mBand2A2 != zero || shelfTarget != zero);
         float coeff;
-        if (mBand3Freq <= zero) {
-            coeff = (mBand2B0 - gainFf) / (mBand2B0 + gainFf);
-        } else {
+        if (mBand3Freq > zero) {
             coeff = (mBand2B0 - one) / (mBand2B0 + one);
+        } else {
+            coeff = (mBand2B0 - gainFf) / (mBand2B0 + gainFf);
         }
         mBand2Z1 = coeff;
     } else if (updateBand3) {
