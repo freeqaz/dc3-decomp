@@ -3,7 +3,10 @@
 
 Usage:
     # Generate JSON diff first:
-    ./bin/objdiff-cli diff "symbol_name" --include-instructions --build --incremental -f json -o /tmp/claude/diff.json
+    # (NOTE: no --build. That is `ninja <one>.obj`, which skips the six
+    #  post-compile patcher edges; run `ninja post-compile` first instead.)
+    ninja post-compile
+    ./bin/objdiff-cli diff "symbol_name" --include-instructions -f json -o /tmp/claude/diff.json
 
     # Then inspect it:
     python3 scripts/analysis/diff_inspect.py /tmp/claude/diff.json                  # show all non-equal
@@ -1376,7 +1379,8 @@ def _get_prologue_mismatch_info(data: dict) -> "dict | None":
           reaches a caller.
 
       What IS dead is the path FROM THIS FILE: `cmd_stack_layout`'s objdiff
-      invocation passes `--include-instructions --build --incremental` and no
+      invocation passes `--include-instructions` (2026-08-20: no longer
+      `--build --incremental`) and no
       `--analyze`/`--verdict`, so `data` here never has an `analysis` key and
       `prologue_info` is always None. Same for scripts/analysis/stack_layout.py.
       That is a CALLER property, fixable by adding the flag; it is not a
@@ -2135,6 +2139,22 @@ def run_objdiff_for_symbol(symbol, project_dir=None, unit=None, normalize=False)
     print(f"Running objdiff for: {symbol}", file=sys.stderr)
     print(f"Output: {json_path}", file=sys.stderr)
 
+    # `--build` used to be on the objdiff command below. Without --full-build
+    # that is `ninja <one>.obj`, and ninja builds only a target's ANCESTORS --
+    # which stops one edge short of configure.py's six `post-compile` patcher
+    # edges while the fresh compile overwrites the bytes they had patched. The
+    # result was a diff of raw compiler output, biased one-directionally LOW,
+    # and a tree left degraded for the next reader. Build `post-compile`
+    # instead and assert the manifest; see scripts/orchestrator/patch_guard.py.
+    sys.path.insert(0, os.path.join(script_repo_root, "scripts"))
+    from orchestrator.patch_guard import UnpatchedTreeError, ensure_patched_tree
+    try:
+        note = ensure_patched_tree(effective_project_dir, build=True)
+        print(f"[patch-guard] {note}", file=sys.stderr)
+    except UnpatchedTreeError as e:
+        print(f"[patch-guard] {e}", file=sys.stderr)
+        sys.exit(1)
+
     cmd = [objdiff_bin, "diff", "-p", str(effective_project_dir)]
     if normalize:
         # Mirror the source-of-truth (run_objdiff / objdiff.json): drop relocation
@@ -2144,7 +2164,7 @@ def run_objdiff_for_symbol(symbol, project_dir=None, unit=None, normalize=False)
         cmd += ["-c", "functionRelocDiffs=none"]
     cmd += [
         symbol,
-        "--include-instructions", "--build", "--incremental",
+        "--include-instructions",
         "-f", "json", "-o", json_path
     ]
     if unit:

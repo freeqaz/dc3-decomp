@@ -238,6 +238,37 @@ which needs no toolchain and no COFF parsing. It is content-keyed on purpose:
 because part 2 preserves mtimes, **the patch state of this tree is not visible
 in any timestamp**, and no age-based check can substitute.
 
+### The measurement tools were the hole (fixed 2026-08-20)
+
+That "targeted `ninja …/Foo.obj`" was not a hypothetical an agent might type by
+hand — it was `mcp__orchestrator__run_objdiff` on **every** call.
+`objdiff-cli diff --build` without `--full-build` *is* `ninja <base_obj_path>`,
+and `run_objdiff` passed `--build` unconditionally, so the decomp inner loop
+unpatched one object per call, answered from it, and left the tree that way for
+whatever measured next. Reproduced on `default/lazer/game/BustAMovePanel`:
+
+| ruler | patched | after one `run_objdiff` |
+|---|---|---|
+| unit `matched_code_percent` | 44.18098 | **43.693924** |
+| unit `matched_functions_percent` | 93.902435 | **92.68293** |
+| `?SetUpMoveNames@BustAMovePanel@@AAAXXZ` | 100.0 | **99.86842** |
+| whole-build `matched_code_percent` | 43.987103 | 43.985767 |
+
+`run_objdiff` itself reported `100.0% canonical — Complete (High)` in **both**
+states, under all three of its rulers, so the damage was invisible on the tool
+that caused it and surfaced on `report.json` instead. The bias is one-way LOW:
+it manufactures phantom regressions, never phantom wins.
+
+Every orchestrator measurement path now goes through
+`scripts/orchestrator/patch_guard.py::ensure_patched_tree()`, which builds the
+`post-compile` target (a superset — it reaches the object through `all_source`)
+and then asserts `--verify-manifest`, raising `UnpatchedTreeError` rather than
+returning a number. Cost: ~0.6 s on an unchanged tree (`ninja: no work to do.`
+plus the manifest hash), the patch passes' 12–17 s on the call after an edit.
+
+**If you write a new tool that reads `build/373307D9/src/**/*.obj`, call
+`ensure_patched_tree()` first.** Do not add `--build` back.
+
 ## Expected steady state
 
 A fully built, unmodified tree should behave like this:
