@@ -168,6 +168,43 @@ assertion. 348 of those 517 are the unwritten bodies from §3.
 perfect. That is the cheapest re-audit in the project and the highest-yield
 place to test whether the certificates mean anything.
 
+### 4.1 What the certificate vocabulary actually asserts
+
+Only **164 of the 1,567 (10 %)** carry a label that even claims a *search* was
+exhausted. The rest rest on an inference that does not hold. From
+`certify_floor.py`'s own evidence model:
+
+| certificate | rows | what the DB flag says | what the certificate is read as |
+|---|---|---|---|
+| `equivalent` | 727 | `unicorn_verdict = 'EQUIVALENT'` — the emulator saw the same behaviour on its probe inputs | "the residual byte diff is provably cosmetic" |
+| `artifact:*` | 123 | `unicorn_verdict = 'DIVERGENT'` with a class on the known-artifact list | "the divergence is an emulation artifact, not a bug" |
+| `icf_merged` | 37 | `merged_symbol_count > 0` | the reloc name is benign — **this one is sound** |
+| `permuter_exhausted` | 164 | ≥1 attempt ended at_limit/stuck and none beat the current percent | the permuter found no headroom — **a real, if weak, search claim** |
+
+The `equivalent` docstring reads *"behaviorally identical under emulation, **so**
+the residual byte diff is provably cosmetic"*. **That "so" is a non-sequitur.**
+Behavioural equivalence on the probe inputs the harness happened to run says
+nothing about whether a *source* change can reach the target's instruction
+sequence. Two spellings can be behaviourally identical and structurally
+different — a stack temp MSVC merges across disjoint scopes, or a
+`TempoInfoPoint` our source builds and DC3 does not. **Both busts in §6.1 are
+exactly that**, and both came from this group (one `equivalent`, one
+`artifact:stack_layout`).
+
+**Negative result, and it matters:** this is *not* stale-harness rot. Checked
+against `unicorn_harness_version` — the provenance field CLAUDE.md warns about —
+**1,050 of the 1,051 certified rows rest on harness v4 or later**, exactly one
+on the pre-fix h1. The data behind the certificates is current. The defect is
+the inference drawn from it, which no amount of re-running the oracle will fix.
+
+```sql
+-- reproduce: certificate provenance vs harness version
+SELECT floor_certificate, unicorn_harness_version, COUNT(*) FROM functions
+WHERE excluded = 0 AND verdict = 'AT_LIMIT'
+  AND match_percent_normalized < 100 AND floor_certificate IS NOT NULL
+GROUP BY 1, 2 ORDER BY 1, 2;
+```
+
 Blind-sample audits of this population are recorded in §6.
 
 ---
