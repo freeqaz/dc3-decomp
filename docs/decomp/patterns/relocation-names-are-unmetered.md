@@ -1,5 +1,15 @@
 # Relocation names are unmetered: a function can call the wrong callee at 100%
 
+> **STATUS 2026-08-20: FIXED for `name_check`, in the objdiff fork.** The
+> mechanism described below was real and is worth reading — it is why this class
+> went unmeasured for months — but `match_percent_normalized` is no longer blind
+> to it *provided your `bin/objdiff-cli` postdates the fix*. Nothing rebuilds
+> that binary for you, and it is a symlink shared with `../rb3` and
+> `../rb3-xenon`, so check its mtime before trusting a row. See
+> [the 2026-08-20 analysis](../../analysis/2026-08-20-reloc-normalized-unfold.md)
+> for the whole-binary A/B, the three noise carve-outs, and the adjudication of
+> every function that left the matched set.
+
 **Project: dc3-decomp (Dance Central 3, Xbox 360, MSVC PPC, title `373307D9`).**
 Every number below is dc3-decomp's, measured 2026-08-19 at `main` = `49bb1f8bf`.
 `../rb3` and `../rb3-xenon` share symbol names and address ranges; do not

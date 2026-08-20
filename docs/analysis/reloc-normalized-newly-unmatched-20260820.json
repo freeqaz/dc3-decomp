@@ -1,0 +1,380 @@
+[
+ {
+  "unit": "default/system/os/Joypad_Xinput",
+  "name": "?JoypadInitXboxPCDeadzone@@YAXPAVDataArray@@@Z",
+  "old": 100.0,
+  "new": 99.28571,
+  "size": 112
+ },
+ {
+  "unit": "default/system/net/DingoSvr",
+  "name": "?OnMsg@DingoServer@@IAA?AVDataNode@@ABVDingoJobCompleteMsg@@@Z",
+  "old": 100.0,
+  "new": 99.89796,
+  "size": 980
+ },
+ {
+  "unit": "default/system/utl/FileStream",
+  "name": "??_GFileStream@@UAAPAXI@Z",
+  "old": 100.0,
+  "new": 99.583336,
+  "size": 96
+ },
+ {
+  "unit": "default/system/meta/PreloadPanel",
+  "name": "??__Fmsg@?9??OnMsg@PreloadPanel@@AAA?AVDataNode@@ABVUITransitionCompleteMsg@@@Z@YAXXZ",
+  "old": 100.0,
+  "new": 97.85714,
+  "size": 28
+ },
+ {
+  "unit": "default/system/synth_xbox/SampleInst360",
+  "name": "??0SampleInst360@@QAA@PAVSynthSample360@@_NHH@Z",
+  "old": 100.0,
+  "new": 99.927536,
+  "size": 276
+ },
+ {
+  "unit": "default/system/net/curl/lib/base64",
+  "name": "Curl_base64_encode",
+  "old": 100.0,
+  "new": 99.82906,
+  "size": 468
+ },
+ {
+  "unit": "default/system/ui/UI",
+  "name": "?GotoFirstScreen@UIManager@@QAAXXZ",
+  "old": 100.0,
+  "new": 99.42857,
+  "size": 140
+ },
+ {
+  "unit": "default/system/os/Memcard_Xbox",
+  "name": "?GetDisplayName@Memcard@@UAAPB_WXZ",
+  "old": 100.0,
+  "new": 96.666664,
+  "size": 12
+ },
+ {
+  "unit": "default/system/os/Joypad_Xbox",
+  "name": "?XinputJoypadThreadDestruction@@YAXXZ",
+  "old": 100.0,
+  "new": 98.75,
+  "size": 80
+ },
+ {
+  "unit": "default/system/utl/trie",
+  "name": "?get_free_node@Trie@@QAAIXZ",
+  "old": 100.0,
+  "new": 99.7619,
+  "size": 168
+ },
+ {
+  "unit": "default/system/flow/Flow",
+  "name": "??3FlowSetProperty@@SAXPAX@Z",
+  "old": 100.0,
+  "new": 99.47369,
+  "size": 76
+ },
+ {
+  "unit": "default/system/gesture/DrawUtl",
+  "name": "?CopyDepth@?A0xad24ca77@@YAXHHPIAGPIBG@Z",
+  "old": 100.0,
+  "new": 99.666664,
+  "size": 360
+ },
+ {
+  "unit": "default/lazer/meta_ham/SongSelectPlaylistPanel",
+  "name": "?Text@SongSelectPlaylistProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z",
+  "old": 100.0,
+  "new": 99.88189,
+  "size": 508
+ },
+ {
+  "unit": "default/system/synth/FxSend",
+  "name": "?Copy@FxSend@@UAAXPBVObject@Hmx@@W4CopyType@23@@Z",
+  "old": 100.0,
+  "new": 99.88372,
+  "size": 172
+ },
+ {
+  "unit": "default/system/hamobj/HamNavList",
+  "name": "?GetDisabledCount@HamNavList@@ABAHH@Z",
+  "old": 100.0,
+  "new": 99.921875,
+  "size": 256
+ },
+ {
+  "unit": "default/lazer/meta_ham/CampaignSongSelectPanel",
+  "name": "?Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z",
+  "old": 100.0,
+  "new": 99.786095,
+  "size": 748
+ },
+ {
+  "unit": "default/system/os/UsbMidiGuitar",
+  "name": "?Initialize@Queue@@QAAXH@Z",
+  "old": 100.0,
+  "new": 99.8,
+  "size": 200
+ },
+ {
+  "unit": "default/system/rndobj/PostProc_NG",
+  "name": "?CheckHueConverge@NgPostProc@@IAAXXZ",
+  "old": 100.0,
+  "new": 99.888885,
+  "size": 180
+ },
+ {
+  "unit": "default/system/gesture/SkeletonUpdate",
+  "name": "??0SkeletonFrame@@QAA@XZ",
+  "old": 100.0,
+  "new": 99.2,
+  "size": 100
+ },
+ {
+  "unit": "default/lazer/meta_ham/HamStoreProvider",
+  "name": "?PopulateOffersInCart@HamStoreProvider@@AAAXXZ",
+  "old": 100.0,
+  "new": 99.95536,
+  "size": 448
+ },
+ {
+  "unit": "default/system/os/Joypad_Xinput",
+  "name": "?TranslateStick@@YAXPADF_N1@Z",
+  "old": 100.0,
+  "new": 99.76744,
+  "size": 172
+ },
+ {
+  "unit": "default/system/meta/PreloadPanel",
+  "name": "?OnMsg@PreloadPanel@@AAA?AVDataNode@@ABVUITransitionCompleteMsg@@@Z",
+  "old": 100.0,
+  "new": 99.94536,
+  "size": 732
+ },
+ {
+  "unit": "default/lazer/meta_ham/OptionsPanel",
+  "name": "?OnMsg@OptionsPanel@@IAA?AVDataNode@@ABVRCJobCompleteMsg@@@Z",
+  "old": 100.0,
+  "new": 99.98588,
+  "size": 1416
+ },
+ {
+  "unit": "default/system/hamobj/MiniGameMgr",
+  "name": "?UpdateCascadeMovePool@MiniGameMgr@@QAAXAAVMoveGraph@@AAV?$vector@PBVMoveVariant@@V?$StlNodeAlloc@PBVMoveVariant@@@stlpmtx_std@@@stlpmtx_std@@1@Z",
+  "old": 100.0,
+  "new": 99.9,
+  "size": 400
+ },
+ {
+  "unit": "default/system/synth/ThreeDSound",
+  "name": "?Load@ThreeDSound@@UAAXAAVBinStream@@@Z",
+  "old": 100.0,
+  "new": 99.95,
+  "size": 800
+ },
+ {
+  "unit": "default/system/flow/Flow",
+  "name": "??2FlowSetProperty@@SAPAXI@Z",
+  "old": 100.0,
+  "new": 99.47369,
+  "size": 76
+ },
+ {
+  "unit": "default/system/rndobj/MultiMesh",
+  "name": "??_GFixedSizeAlloc@@UAAPAXI@Z",
+  "old": 100.0,
+  "new": 99.545456,
+  "size": 88
+ },
+ {
+  "unit": "default/system/synth_xbox/Synapse_dsp",
+  "name": "?SetReleaseSmoothing@Synapse@1DSP@@QAAXM@Z",
+  "old": 100.0,
+  "new": 99.875,
+  "size": 160
+ },
+ {
+  "unit": "default/lazer/meta_ham/CampaignMasterQuestCrewSelectPanel",
+  "name": "?Text@CampaignMqCrewProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z",
+  "old": 100.0,
+  "new": 99.823944,
+  "size": 568
+ },
+ {
+  "unit": "default/system/gesture/DirectionGestureFilter",
+  "name": "?Draw@DirectionGestureFilterSingleUser@@UAAXABVSkeleton@@AAVSkeletonViz@@@Z",
+  "old": 100.0,
+  "new": 99.77273,
+  "size": 352
+ },
+ {
+  "unit": "default/lazer/meta_ham/CampaignMasterQuestCrewSelectPanel",
+  "name": "?UpdateList@CampaignMqCrewProvider@@QAAXXZ",
+  "old": 100.0,
+  "new": 99.77778,
+  "size": 540
+ },
+ {
+  "unit": "default/system/os/Joypad_Xbox",
+  "name": "?XinputJoypadThreadStart@@YAXXZ",
+  "old": 100.0,
+  "new": 99.431816,
+  "size": 176
+ },
+ {
+  "unit": "default/system/rndobj/AmbientOcclusion",
+  "name": "??$GatherObjectsFromGroup@VRndMesh@@@@YAIPAVRndGroup@@AAV?$vector@PAVRndMesh@@V?$StlNodeAlloc@PAVRndMesh@@@stlpmtx_std@@@stlpmtx_std@@@Z",
+  "old": 100.0,
+  "new": 99.69697,
+  "size": 396
+ },
+ {
+  "unit": "default/lazer/meta_ham/MetagameRank",
+  "name": "??0?$vector@PAUUnlockable@?A0xf8e4b4b5@@V?$StlNodeAlloc@PAUUnlockable@?A0xf8e4b4b5@@@stlpmtx_std@@@stlpmtx_std@@QAA@ABV01@@Z",
+  "old": 100.0,
+  "new": 99.82143,
+  "size": 112
+ },
+ {
+  "unit": "default/system/char/CharBones",
+  "name": "?MakeShortAng@@YAFM@Z",
+  "old": 100.0,
+  "new": 99.7619,
+  "size": 168
+ },
+ {
+  "unit": "default/system/synth/tomcrypt/aes",
+  "name": "rijndael_test",
+  "old": 100.0,
+  "new": 99.97513,
+  "size": 1608
+ },
+ {
+  "unit": "default/lazer/meta_ham/MetaPanel",
+  "name": "??_DAppLabel@@QAAXXZ",
+  "old": 100.0,
+  "new": 99.81481,
+  "size": 108
+ },
+ {
+  "unit": "default/system/rndobj/AmbientOcclusion",
+  "name": "??$GatherObjectsFromDir@VRndMesh@@@@YAIPAVObjectDir@@AAV?$vector@PAVRndMesh@@V?$StlNodeAlloc@PAVRndMesh@@@stlpmtx_std@@@stlpmtx_std@@@Z",
+  "old": 100.0,
+  "new": 99.756096,
+  "size": 328
+ },
+ {
+  "unit": "default/system/rnddx9/Rnd",
+  "name": "?DrawRectDepth@DxRnd@@UAAXABVVector3@@AAY03$$CBV2@ABVVector4@@PAVRndMat@@W4ShaderType@@@Z",
+  "old": 100.0,
+  "new": 99.88636,
+  "size": 352
+ },
+ {
+  "unit": "default/system/os/HDCache",
+  "name": "??3CriticalSection@@SAXPAX@Z",
+  "old": 100.0,
+  "new": 98.333336,
+  "size": 24
+ },
+ {
+  "unit": "default/system/hamobj/Pose",
+  "name": "?Score@BoneAngleRangePoseElement@@UBAMABVSkeleton@@@Z",
+  "old": 100.0,
+  "new": 99.87013,
+  "size": 308
+ },
+ {
+  "unit": "default/system/char/CharHair",
+  "name": "?Hookup@CharHair@@QAAXAAV?$ObjPtrList@VCharCollide@@VObjectDir@@@@@Z",
+  "old": 100.0,
+  "new": 99.9631,
+  "size": 1084
+ },
+ {
+  "unit": "default/system/utl/WaveFile",
+  "name": "??$__introsort_loop@PAUCuePoint@?A0x81ddebd1@@U12@HP6A_NABU12@0@Z@stlpmtx_std@@YAXPAUCuePoint@?A0x81ddebd1@@00HP6A_NABU12@1@Z@Z",
+  "old": 100.0,
+  "new": 99.893616,
+  "size": 188
+ },
+ {
+  "unit": "default/system/utl/AllocInfo",
+  "name": "?AllocInfoInit@@YAXXZ",
+  "old": 100.0,
+  "new": 99.73684,
+  "size": 152
+ },
+ {
+  "unit": "default/system/world/Instance",
+  "name": "?DeleteTransientObjects@WorldInstance@@AAAXXZ",
+  "old": 100.0,
+  "new": 99.75309,
+  "size": 648
+ },
+ {
+  "unit": "default/system/rndobj/MultiMesh",
+  "name": "??3FixedSizeAlloc@@SAXPAX@Z",
+  "old": 100.0,
+  "new": 98.333336,
+  "size": 24
+ },
+ {
+  "unit": "default/system/flow/FlowSlider",
+  "name": "?UpdateEase@FlowSlider@@IAAXXZ",
+  "old": 100.0,
+  "new": 99.72973,
+  "size": 148
+ },
+ {
+  "unit": "default/system/meta/StoreEnumeration",
+  "name": "?Start@XboxEnumeration@@UAAXXZ",
+  "old": 100.0,
+  "new": 99.90099,
+  "size": 404
+ },
+ {
+  "unit": "default/system/synth_xbox/Synapse_dsp",
+  "name": "?SetAttackSmoothing@Synapse@1DSP@@QAAXM@Z",
+  "old": 100.0,
+  "new": 99.875,
+  "size": 160
+ },
+ {
+  "unit": "default/system/world/LightPreset",
+  "name": "?GetKey@LightPreset@@IBAXMAAH0AAM@Z",
+  "old": 100.0,
+  "new": 99.947914,
+  "size": 768
+ },
+ {
+  "unit": "default/system/ui/UI",
+  "name": "?FillButtonMsg@Automator@@AAAXAAVButtonDownMsg@@H@Z",
+  "old": 100.0,
+  "new": 99.828766,
+  "size": 584
+ },
+ {
+  "unit": "default/system/world/Crowd",
+  "name": "?Mats@WorldCrowd@@UAAXAAV?$list@PAVRndMat@@V?$StlNodeAlloc@PAVRndMat@@@stlpmtx_std@@@stlpmtx_std@@_N@Z",
+  "old": 100.0,
+  "new": 99.9371,
+  "size": 636
+ },
+ {
+  "unit": "default/system/os/UsbMidiGuitar",
+  "name": "??1Queue@@QAA@XZ",
+  "old": 100.0,
+  "new": 99.52381,
+  "size": 84
+ },
+ {
+  "unit": "default/system/utl/WaveFile",
+  "name": "?push_back@?$vector@ULabel@?A0x81ddebd1@@V?$StlNodeAlloc@ULabel@?A0x81ddebd1@@@stlpmtx_std@@@stlpmtx_std@@QAAXABULabel@?A0x81ddebd1@@@Z",
+  "old": 100.0,
+  "new": 99.82758,
+  "size": 116
+ }
+]

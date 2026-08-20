@@ -1,0 +1,1038 @@
+{
+ "REAL:different_symbol_in_anon_ns": [
+  {
+   "unit": "default/system/os/Joypad_Xinput",
+   "name": "?JoypadInitXboxPCDeadzone@@YAXPAVDataArray@@@Z",
+   "target": "?gXboxDeadzone@?A@@3MA",
+   "ours": "?gXboxDeadzone@?A0xf503845b@@3MA"
+  },
+  {
+   "unit": "default/system/os/Joypad_Xinput",
+   "name": "?JoypadInitXboxPCDeadzone@@YAXPAVDataArray@@@Z",
+   "target": "?gXboxDeadzone@?A@@3MA",
+   "ours": "?gXboxDeadzone@?A0xf503845b@@3MA"
+  },
+  {
+   "unit": "default/system/os/Joypad_Xinput",
+   "name": "?JoypadInitXboxPCDeadzone@@YAXPAVDataArray@@@Z",
+   "target": "?gXboxDeadzone@?A@@3MA",
+   "ours": "?gXboxDeadzone@?A0xf503845b@@3MA"
+  },
+  {
+   "unit": "default/system/os/Joypad_Xinput",
+   "name": "?JoypadInitXboxPCDeadzone@@YAXPAVDataArray@@@Z",
+   "target": "?gXboxDeadzone@?A@@3MA",
+   "ours": "?gXboxDeadzone@?A0xf503845b@@3MA"
+  },
+  {
+   "unit": "default/system/os/Joypad_Xbox",
+   "name": "?XinputJoypadThreadDestruction@@YAXXZ",
+   "target": "?sThreadData@?A@@3U<unnamed-type-sThreadData>@1@A",
+   "ours": "?sThreadData@?A0x439b694a@@3U<unnamed-type-sThreadData>@1@A"
+  },
+  {
+   "unit": "default/system/os/Joypad_Xbox",
+   "name": "?XinputJoypadThreadDestruction@@YAXXZ",
+   "target": "?sThreadData@?A@@3U<unnamed-type-sThreadData>@1@A",
+   "ours": "?sThreadData@?A0x439b694a@@3U<unnamed-type-sThreadData>@1@A"
+  },
+  {
+   "unit": "default/system/os/Joypad_Xbox",
+   "name": "?XinputJoypadThreadDestruction@@YAXXZ",
+   "target": "?sThreadData@?A@@3U<unnamed-type-sThreadData>@1@A",
+   "ours": "?sThreadData@?A0x439b694a@@3U<unnamed-type-sThreadData>@1@A"
+  },
+  {
+   "unit": "default/system/os/Joypad_Xbox",
+   "name": "?XinputJoypadThreadDestruction@@YAXXZ",
+   "target": "?sThreadData@?A@@3U<unnamed-type-sThreadData>@1@A",
+   "ours": "?sThreadData@?A0x439b694a@@3U<unnamed-type-sThreadData>@1@A"
+  },
+  {
+   "unit": "default/system/os/Joypad_Xbox",
+   "name": "?XinputJoypadThreadDestruction@@YAXXZ",
+   "target": "?sThreadData@?A@@3U<unnamed-type-sThreadData>@1@A",
+   "ours": "?sThreadData@?A0x439b694a@@3U<unnamed-type-sThreadData>@1@A"
+  },
+  {
+   "unit": "default/system/os/Joypad_Xbox",
+   "name": "?XinputJoypadThreadDestruction@@YAXXZ",
+   "target": "?sThreadData@?A@@3U<unnamed-type-sThreadData>@1@A",
+   "ours": "?sThreadData@?A0x439b694a@@3U<unnamed-type-sThreadData>@1@A"
+  },
+  {
+   "unit": "default/system/os/Joypad_Xinput",
+   "name": "?TranslateStick@@YAXPADF_N1@Z",
+   "target": "?gXboxDeadzone@?A@@3MA",
+   "ours": "?gXboxDeadzone@?A0xf503845b@@3MA"
+  },
+  {
+   "unit": "default/system/os/Joypad_Xinput",
+   "name": "?TranslateStick@@YAXPADF_N1@Z",
+   "target": "?gXboxDeadzone@?A@@3MA",
+   "ours": "?gXboxDeadzone@?A0xf503845b@@3MA"
+  },
+  {
+   "unit": "default/system/synth_xbox/Synapse_dsp",
+   "name": "?SetReleaseSmoothing@Synapse@1DSP@@QAAXM@Z",
+   "target": "?Time2IirA@?A0xa7b3dd7d@@YAMMM@Z",
+   "ours": "?Time2IirA@?A0x8ac5fa56@Synapse@DSP@@YAMMM@Z"
+  },
+  {
+   "unit": "default/system/os/Joypad_Xbox",
+   "name": "?XinputJoypadThreadStart@@YAXXZ",
+   "target": "?sThreadData@?A@@3U<unnamed-type-sThreadData>@1@A",
+   "ours": "?sThreadData@?A0x439b694a@@3U<unnamed-type-sThreadData>@1@A"
+  },
+  {
+   "unit": "default/system/os/Joypad_Xbox",
+   "name": "?XinputJoypadThreadStart@@YAXXZ",
+   "target": "?sThreadData@?A@@3U<unnamed-type-sThreadData>@1@A",
+   "ours": "?sThreadData@?A0x439b694a@@3U<unnamed-type-sThreadData>@1@A"
+  },
+  {
+   "unit": "default/system/os/Joypad_Xbox",
+   "name": "?XinputJoypadThreadStart@@YAXXZ",
+   "target": "?sThreadData@?A@@3U<unnamed-type-sThreadData>@1@A",
+   "ours": "?sThreadData@?A0x439b694a@@3U<unnamed-type-sThreadData>@1@A"
+  },
+  {
+   "unit": "default/system/os/Joypad_Xbox",
+   "name": "?XinputJoypadThreadStart@@YAXXZ",
+   "target": "?sThreadData@?A@@3U<unnamed-type-sThreadData>@1@A",
+   "ours": "?sThreadData@?A0x439b694a@@3U<unnamed-type-sThreadData>@1@A"
+  },
+  {
+   "unit": "default/system/os/Joypad_Xbox",
+   "name": "?XinputJoypadThreadStart@@YAXXZ",
+   "target": "?sThreadData@?A@@3U<unnamed-type-sThreadData>@1@A",
+   "ours": "?sThreadData@?A0x439b694a@@3U<unnamed-type-sThreadData>@1@A"
+  },
+  {
+   "unit": "default/lazer/meta_ham/MetagameRank",
+   "name": "??0?$vector@PAUUnlockable@?A0xf8e4b4b5@@V?$StlNodeAlloc@PAUUnlockable@?A0xf8e4b4b5@@@stlpmtx_std@@@stlpmtx_std@@QAA@ABV01@@Z",
+   "target": "OnlyReturns",
+   "ours": "?get_allocator@?$vector@PAUUnlockable@?A0xf8e4b4b5@@V?$StlNodeAlloc@PAUUnlockable@?A0xf8e4b4b5@@@stlpmtx_std@@@stlpmtx_std@@QBA?AV?$StlNodeAlloc@PAUUnlockable@?A0xf8e4b4b5@@@2@XZ"
+  },
+  {
+   "unit": "default/system/rnddx9/Rnd",
+   "name": "?DrawRectDepth@DxRnd@@UAAXABVVector3@@AAY03$$CBV2@ABVVector4@@PAVRndMat@@W4ShaderType@@@Z",
+   "target": "?sDepthRectVerts@?A@@3PAUDepthRectVert@1@A",
+   "ours": "?sDepthRectVerts@?A0xc0d8487b@@3PAUDepthRectVert@1@A"
+  },
+  {
+   "unit": "default/system/rnddx9/Rnd",
+   "name": "?DrawRectDepth@DxRnd@@UAAXABVVector3@@AAY03$$CBV2@ABVVector4@@PAVRndMat@@W4ShaderType@@@Z",
+   "target": "?sDepthRectVerts@?A@@3PAUDepthRectVert@1@A",
+   "ours": "?sDepthRectVerts@?A0xc0d8487b@@3PAUDepthRectVert@1@A"
+  },
+  {
+   "unit": "default/system/rnddx9/Rnd",
+   "name": "?DrawRectDepth@DxRnd@@UAAXABVVector3@@AAY03$$CBV2@ABVVector4@@PAVRndMat@@W4ShaderType@@@Z",
+   "target": "?sDepthRectVerts@?A@@3PAUDepthRectVert@1@A",
+   "ours": "?sDepthRectVerts@?A0xc0d8487b@@3PAUDepthRectVert@1@A"
+  },
+  {
+   "unit": "default/system/rnddx9/Rnd",
+   "name": "?DrawRectDepth@DxRnd@@UAAXABVVector3@@AAY03$$CBV2@ABVVector4@@PAVRndMat@@W4ShaderType@@@Z",
+   "target": "?sDepthRectVerts@?A@@3PAUDepthRectVert@1@A",
+   "ours": "?sDepthRectVerts@?A0xc0d8487b@@3PAUDepthRectVert@1@A"
+  },
+  {
+   "unit": "default/system/rnddx9/Rnd",
+   "name": "?DrawRectDepth@DxRnd@@UAAXABVVector3@@AAY03$$CBV2@ABVVector4@@PAVRndMat@@W4ShaderType@@@Z",
+   "target": "?sDepthRectVerts@?A@@3PAUDepthRectVert@1@A",
+   "ours": "?sDepthRectVerts@?A0xc0d8487b@@3PAUDepthRectVert@1@A"
+  },
+  {
+   "unit": "default/system/rnddx9/Rnd",
+   "name": "?DrawRectDepth@DxRnd@@UAAXABVVector3@@AAY03$$CBV2@ABVVector4@@PAVRndMat@@W4ShaderType@@@Z",
+   "target": "?sDepthRectVerts@?A@@3PAUDepthRectVert@1@A",
+   "ours": "?sDepthRectVerts@?A0xc0d8487b@@3PAUDepthRectVert@1@A"
+  },
+  {
+   "unit": "default/system/rnddx9/Rnd",
+   "name": "?DrawRectDepth@DxRnd@@UAAXABVVector3@@AAY03$$CBV2@ABVVector4@@PAVRndMat@@W4ShaderType@@@Z",
+   "target": "?sDepthRectVerts@?A@@3PAUDepthRectVert@1@A",
+   "ours": "?sDepthRectVerts@?A0xc0d8487b@@3PAUDepthRectVert@1@A"
+  },
+  {
+   "unit": "default/system/rnddx9/Rnd",
+   "name": "?DrawRectDepth@DxRnd@@UAAXABVVector3@@AAY03$$CBV2@ABVVector4@@PAVRndMat@@W4ShaderType@@@Z",
+   "target": "?sDepthRectVerts@?A@@3PAUDepthRectVert@1@A",
+   "ours": "?sDepthRectVerts@?A0xc0d8487b@@3PAUDepthRectVert@1@A"
+  },
+  {
+   "unit": "default/system/rnddx9/Rnd",
+   "name": "?DrawRectDepth@DxRnd@@UAAXABVVector3@@AAY03$$CBV2@ABVVector4@@PAVRndMat@@W4ShaderType@@@Z",
+   "target": "?sDepthRectVerts@?A@@3PAUDepthRectVert@1@A",
+   "ours": "?sDepthRectVerts@?A0xc0d8487b@@3PAUDepthRectVert@1@A"
+  },
+  {
+   "unit": "default/system/utl/WaveFile",
+   "name": "??$__introsort_loop@PAUCuePoint@?A0x81ddebd1@@U12@HP6A_NABU12@0@Z@stlpmtx_std@@YAXPAUCuePoint@?A0x81ddebd1@@00HP6A_NABU12@1@Z@Z",
+   "target": "??$__median@PAVAllocInfo@@P6A_NABQAV1@0@Z@stlpmtx_std@@YAABQAVAllocInfo@@ABQAV1@00P6A_N00@Z@Z",
+   "ours": "??$__median@UCuePoint@?A0x81ddebd1@@P6A_NABU12@0@Z@stlpmtx_std@@YAABUCuePoint@?A0x81ddebd1@@ABU12@00P6A_N00@Z@Z"
+  },
+  {
+   "unit": "default/system/synth_xbox/Synapse_dsp",
+   "name": "?SetAttackSmoothing@Synapse@1DSP@@QAAXM@Z",
+   "target": "?Time2IirA@?A0xa7b3dd7d@@YAMMM@Z",
+   "ours": "?Time2IirA@?A0x8ac5fa56@Synapse@DSP@@YAMMM@Z"
+  },
+  {
+   "unit": "default/system/utl/WaveFile",
+   "name": "?push_back@?$vector@ULabel@?A0x81ddebd1@@V?$StlNodeAlloc@ULabel@?A0x81ddebd1@@@stlpmtx_std@@@stlpmtx_std@@QAAXABULabel@?A0x81ddebd1@@@Z",
+   "target": "??$_Copy_Construct@U?$pair@$$CBVString@@I@stlpmtx_std@@@stlpmtx_std@@YAXPAU?$pair@$$CBVString@@I@0@ABU10@@Z",
+   "ours": "??$_Copy_Construct@ULabel@?A0x81ddebd1@@@stlpmtx_std@@YAXPAULabel@?A0x81ddebd1@@ABU12@@Z"
+  }
+ ],
+ "REAL:different_symbol": [
+  {
+   "unit": "default/system/net/DingoSvr",
+   "name": "?OnMsg@DingoServer@@IAA?AVDataNode@@ABVDingoJobCompleteMsg@@@Z",
+   "target": "??$MakeString@W4BlendEaseMode@CamShotFrame@@@@YAPBDPBDABW4BlendEaseMode@CamShotFrame@@@Z",
+   "ours": "??$MakeString@W4AuthState@DingoServer@@@@YAPBDPBDABW4AuthState@DingoServer@@@Z"
+  },
+  {
+   "unit": "default/system/net/DingoSvr",
+   "name": "?OnMsg@DingoServer@@IAA?AVDataNode@@ABVDingoJobCompleteMsg@@@Z",
+   "target": "??_R0?AVAuthenticateReqJob@@@8",
+   "ours": "??_R0?AVDingoJob@@@8"
+  },
+  {
+   "unit": "default/system/net/DingoSvr",
+   "name": "?OnMsg@DingoServer@@IAA?AVDataNode@@ABVDingoJobCompleteMsg@@@Z",
+   "target": "??_R0?AVDingoJob@@@8",
+   "ours": "??_R0?AVAuthenticateReqJob@@@8"
+  },
+  {
+   "unit": "default/system/meta/PreloadPanel",
+   "name": "??__Fmsg@?9??OnMsg@PreloadPanel@@AAA?AVDataNode@@ABVUITransitionCompleteMsg@@@Z@YAXXZ",
+   "target": "?msg@?9??OnMsg@PreloadPanel@@AAA?AVDataNode@@ABVUITransitionCompleteMsg@@@Z@4VMessage@@A",
+   "ours": "?msg@?M@??OnMsg@PreloadPanel@@AAA?AVDataNode@@ABVUITransitionCompleteMsg@@@Z@4VMessage@@A"
+  },
+  {
+   "unit": "default/system/meta/PreloadPanel",
+   "name": "??__Fmsg@?9??OnMsg@PreloadPanel@@AAA?AVDataNode@@ABVUITransitionCompleteMsg@@@Z@YAXXZ",
+   "target": "?msg@?9??OnMsg@PreloadPanel@@AAA?AVDataNode@@ABVUITransitionCompleteMsg@@@Z@4VMessage@@A",
+   "ours": "?msg@?M@??OnMsg@PreloadPanel@@AAA?AVDataNode@@ABVUITransitionCompleteMsg@@@Z@4VMessage@@A"
+  },
+  {
+   "unit": "default/system/meta/PreloadPanel",
+   "name": "??__Fmsg@?9??OnMsg@PreloadPanel@@AAA?AVDataNode@@ABVUITransitionCompleteMsg@@@Z@YAXXZ",
+   "target": "?msg@?9??OnMsg@PreloadPanel@@AAA?AVDataNode@@ABVUITransitionCompleteMsg@@@Z@4VMessage@@A",
+   "ours": "?msg@?M@??OnMsg@PreloadPanel@@AAA?AVDataNode@@ABVUITransitionCompleteMsg@@@Z@4VMessage@@A"
+  },
+  {
+   "unit": "default/system/meta/PreloadPanel",
+   "name": "??__Fmsg@?9??OnMsg@PreloadPanel@@AAA?AVDataNode@@ABVUITransitionCompleteMsg@@@Z@YAXXZ",
+   "target": "?msg@?9??OnMsg@PreloadPanel@@AAA?AVDataNode@@ABVUITransitionCompleteMsg@@@Z@4VMessage@@A",
+   "ours": "?msg@?M@??OnMsg@PreloadPanel@@AAA?AVDataNode@@ABVUITransitionCompleteMsg@@@Z@4VMessage@@A"
+  },
+  {
+   "unit": "default/system/synth_xbox/SampleInst360",
+   "name": "??0SampleInst360@@QAA@PAVSynthSample360@@_NHH@Z",
+   "target": "?DrawHighlightMat@RndShaderMgr@@UAAPAVRndMat@@XZ",
+   "ours": "?GetDataAddr@SynthSample360@@QBAIXZ"
+  },
+  {
+   "unit": "default/system/net/curl/lib/base64",
+   "name": "Curl_base64_encode",
+   "target": "table64",
+   "ours": "??_C@_06BHJPINKK@?$CFc?$CFc?$DN?$DN?$AA@"
+  },
+  {
+   "unit": "default/system/net/curl/lib/base64",
+   "name": "Curl_base64_encode",
+   "target": "??_C@_06BHJPINKK@?$CFc?$CFc?$DN?$DN?$AA@",
+   "ours": "table64"
+  },
+  {
+   "unit": "default/system/ui/UI",
+   "name": "?GotoFirstScreen@UIManager@@QAAXXZ",
+   "target": "??_R0?AVUIScreen@@@8",
+   "ours": "??_R0?AVObject@Hmx@@@8"
+  },
+  {
+   "unit": "default/system/ui/UI",
+   "name": "?GotoFirstScreen@UIManager@@QAAXXZ",
+   "target": "??_R0?AVObject@Hmx@@@8",
+   "ours": "??_R0?AVUIScreen@@@8"
+  },
+  {
+   "unit": "default/lazer/meta_ham/SongSelectPlaylistPanel",
+   "name": "?Text@SongSelectPlaylistProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z",
+   "target": "?playlist_create@?BB@??Text@SongSelectPlaylistProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4VSymbol@@A",
+   "ours": "?playlist_create@?BJ@??Text@SongSelectPlaylistProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4VSymbol@@A"
+  },
+  {
+   "unit": "default/lazer/meta_ham/SongSelectPlaylistPanel",
+   "name": "?Text@SongSelectPlaylistProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z",
+   "target": "?playlist_create@?BB@??Text@SongSelectPlaylistProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4VSymbol@@A",
+   "ours": "?playlist_create@?BJ@??Text@SongSelectPlaylistProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4VSymbol@@A"
+  },
+  {
+   "unit": "default/lazer/meta_ham/SongSelectPlaylistPanel",
+   "name": "?Text@SongSelectPlaylistProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z",
+   "target": "?playlist_create@?BB@??Text@SongSelectPlaylistProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4VSymbol@@A",
+   "ours": "?playlist_create@?BJ@??Text@SongSelectPlaylistProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4VSymbol@@A"
+  },
+  {
+   "unit": "default/lazer/meta_ham/SongSelectPlaylistPanel",
+   "name": "?Text@SongSelectPlaylistProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z",
+   "target": "?playlist_create@?BB@??Text@SongSelectPlaylistProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4VSymbol@@A",
+   "ours": "?playlist_create@?BJ@??Text@SongSelectPlaylistProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4VSymbol@@A"
+  },
+  {
+   "unit": "default/system/synth/FxSend",
+   "name": "?Copy@FxSend@@UAAXPBVObject@Hmx@@W4CopyType@23@@Z",
+   "target": "merged_SetObjConcrete",
+   "ours": "?SetObj@?$ObjRefConcrete@VFxSend@@VObjectDir@@@@QAAPAVObject@Hmx@@PAV23@@Z"
+  },
+  {
+   "unit": "default/system/hamobj/HamNavList",
+   "name": "?GetDisabledCount@HamNavList@@ABAHH@Z",
+   "target": "?gathering@CUgtFilter@NUISPEECH@@QAA_NXZ",
+   "ours": "?IsScrolling@UIListState@@QBA_NXZ"
+  },
+  {
+   "unit": "default/lazer/meta_ham/CampaignSongSelectPanel",
+   "name": "?Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z",
+   "target": "?tan_battle_song@?BD@??Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4VSymbol@@A",
+   "ours": "?tan_battle_song@?BH@??Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4VSymbol@@A"
+  },
+  {
+   "unit": "default/lazer/meta_ham/CampaignSongSelectPanel",
+   "name": "?Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z",
+   "target": "?tan_battle_song@?BD@??Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4VSymbol@@A",
+   "ours": "?tan_battle_song@?BH@??Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4VSymbol@@A"
+  },
+  {
+   "unit": "default/lazer/meta_ham/CampaignSongSelectPanel",
+   "name": "?Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z",
+   "target": "?tan_battle_song@?BD@??Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4VSymbol@@A",
+   "ours": "?tan_battle_song@?BH@??Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4VSymbol@@A"
+  },
+  {
+   "unit": "default/lazer/meta_ham/CampaignSongSelectPanel",
+   "name": "?Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z",
+   "target": "?tan_battle_song@?BD@??Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4VSymbol@@A",
+   "ours": "?tan_battle_song@?BH@??Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4VSymbol@@A"
+  },
+  {
+   "unit": "default/lazer/meta_ham/CampaignSongSelectPanel",
+   "name": "?Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z",
+   "target": "?campaign_song_locked@?BF@??Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4VSymbol@@A",
+   "ours": "?campaign_song_locked@?BJ@??Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4VSymbol@@A"
+  },
+  {
+   "unit": "default/lazer/meta_ham/CampaignSongSelectPanel",
+   "name": "?Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z",
+   "target": "?campaign_song_locked@?BF@??Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4VSymbol@@A",
+   "ours": "?campaign_song_locked@?BJ@??Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4VSymbol@@A"
+  },
+  {
+   "unit": "default/lazer/meta_ham/CampaignSongSelectPanel",
+   "name": "?Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z",
+   "target": "?campaign_song_locked@?BF@??Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4VSymbol@@A",
+   "ours": "?campaign_song_locked@?BJ@??Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4VSymbol@@A"
+  },
+  {
+   "unit": "default/lazer/meta_ham/CampaignSongSelectPanel",
+   "name": "?Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z",
+   "target": "?campaign_song_locked@?BF@??Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4VSymbol@@A",
+   "ours": "?campaign_song_locked@?BJ@??Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4VSymbol@@A"
+  },
+  {
+   "unit": "default/lazer/meta_ham/CampaignSongSelectPanel",
+   "name": "?Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z",
+   "target": "?song_select_song_prefix@?CH@??Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4VSymbol@@A",
+   "ours": "?song_select_song_prefix@?CJ@??Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4VSymbol@@A"
+  },
+  {
+   "unit": "default/lazer/meta_ham/CampaignSongSelectPanel",
+   "name": "?Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z",
+   "target": "?song_select_song_prefix@?CH@??Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4VSymbol@@A",
+   "ours": "?song_select_song_prefix@?CJ@??Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4VSymbol@@A"
+  },
+  {
+   "unit": "default/lazer/meta_ham/CampaignSongSelectPanel",
+   "name": "?Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z",
+   "target": "?song_select_song_prefix@?CH@??Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4VSymbol@@A",
+   "ours": "?song_select_song_prefix@?CJ@??Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4VSymbol@@A"
+  },
+  {
+   "unit": "default/lazer/meta_ham/CampaignSongSelectPanel",
+   "name": "?Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z",
+   "target": "?song_select_song_prefix@?CH@??Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4VSymbol@@A",
+   "ours": "?song_select_song_prefix@?CJ@??Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4VSymbol@@A"
+  },
+  {
+   "unit": "default/system/rndobj/PostProc_NG",
+   "name": "?CheckHueConverge@NgPostProc@@IAAXXZ",
+   "target": "?IsLocal@LocalUser@@UBA_NXZ",
+   "ours": "?ColorXfmEnabled@RndPostProc@@QBA_NXZ"
+  },
+  {
+   "unit": "default/system/gesture/SkeletonUpdate",
+   "name": "??0SkeletonFrame@@QAA@XZ",
+   "target": "OnlyReturns",
+   "ours": "??0PaddedJointPos@@QAA@XZ"
+  },
+  {
+   "unit": "default/system/gesture/SkeletonUpdate",
+   "name": "??0SkeletonFrame@@QAA@XZ",
+   "target": "OnlyReturns",
+   "ours": "??0PaddedJointPos@@QAA@XZ"
+  },
+  {
+   "unit": "default/system/gesture/SkeletonUpdate",
+   "name": "??0SkeletonFrame@@QAA@XZ",
+   "target": "OnlyReturns",
+   "ours": "??0PaddedJointPos@@QAA@XZ"
+  },
+  {
+   "unit": "default/system/gesture/SkeletonUpdate",
+   "name": "??0SkeletonFrame@@QAA@XZ",
+   "target": "OnlyReturns",
+   "ours": "??0PaddedJointPos@@QAA@XZ"
+  },
+  {
+   "unit": "default/system/meta/PreloadPanel",
+   "name": "?OnMsg@PreloadPanel@@AAA?AVDataNode@@ABVUITransitionCompleteMsg@@@Z",
+   "target": "?msg@?9??OnMsg@PreloadPanel@@AAA?AVDataNode@@ABVUITransitionCompleteMsg@@@Z@4VMessage@@A",
+   "ours": "?msg@?M@??OnMsg@PreloadPanel@@AAA?AVDataNode@@ABVUITransitionCompleteMsg@@@Z@4VMessage@@A"
+  },
+  {
+   "unit": "default/system/meta/PreloadPanel",
+   "name": "?OnMsg@PreloadPanel@@AAA?AVDataNode@@ABVUITransitionCompleteMsg@@@Z",
+   "target": "?msg@?9??OnMsg@PreloadPanel@@AAA?AVDataNode@@ABVUITransitionCompleteMsg@@@Z@4VMessage@@A",
+   "ours": "?msg@?M@??OnMsg@PreloadPanel@@AAA?AVDataNode@@ABVUITransitionCompleteMsg@@@Z@4VMessage@@A"
+  },
+  {
+   "unit": "default/system/meta/PreloadPanel",
+   "name": "?OnMsg@PreloadPanel@@AAA?AVDataNode@@ABVUITransitionCompleteMsg@@@Z",
+   "target": "?msg@?9??OnMsg@PreloadPanel@@AAA?AVDataNode@@ABVUITransitionCompleteMsg@@@Z@4VMessage@@A",
+   "ours": "?msg@?M@??OnMsg@PreloadPanel@@AAA?AVDataNode@@ABVUITransitionCompleteMsg@@@Z@4VMessage@@A"
+  },
+  {
+   "unit": "default/system/meta/PreloadPanel",
+   "name": "?OnMsg@PreloadPanel@@AAA?AVDataNode@@ABVUITransitionCompleteMsg@@@Z",
+   "target": "?msg@?9??OnMsg@PreloadPanel@@AAA?AVDataNode@@ABVUITransitionCompleteMsg@@@Z@4VMessage@@A",
+   "ours": "?msg@?M@??OnMsg@PreloadPanel@@AAA?AVDataNode@@ABVUITransitionCompleteMsg@@@Z@4VMessage@@A"
+  },
+  {
+   "unit": "default/lazer/meta_ham/OptionsPanel",
+   "name": "?OnMsg@OptionsPanel@@IAA?AVDataNode@@ABVRCJobCompleteMsg@@@Z",
+   "target": "?SetOfferString@TokenRedeemedMsg@@QAAXABVString@@@Z",
+   "ours": "?SetOfferString@LinkingCodeRetrievedMsg@@QAAXABVString@@@Z"
+  },
+  {
+   "unit": "default/system/synth/ThreeDSound",
+   "name": "?Load@ThreeDSound@@UAAXAAVBinStream@@@Z",
+   "target": "?gRevs@?1??Load@ThreeDSound@@UAAXAAVBinStream@@@Z@4QBGB",
+   "ours": "gAltRev"
+  },
+  {
+   "unit": "default/system/synth/ThreeDSound",
+   "name": "?Load@ThreeDSound@@UAAXAAVBinStream@@@Z",
+   "target": "?gRevs@?1??Load@ThreeDSound@@UAAXAAVBinStream@@@Z@4QBGB",
+   "ours": "gAltRev"
+  },
+  {
+   "unit": "default/system/synth/ThreeDSound",
+   "name": "?Load@ThreeDSound@@UAAXAAVBinStream@@@Z",
+   "target": "?gRevs@?1??Load@ThreeDSound@@UAAXAAVBinStream@@@Z@4QBGB",
+   "ours": "gAltRev"
+  },
+  {
+   "unit": "default/lazer/meta_ham/CampaignMasterQuestCrewSelectPanel",
+   "name": "?Text@CampaignMqCrewProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z",
+   "target": "?mq_difficulty@?BD@??Text@CampaignMqCrewProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4AAVDataNode@@A",
+   "ours": "?mq_difficulty@?BH@??Text@CampaignMqCrewProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4AAVDataNode@@A"
+  },
+  {
+   "unit": "default/lazer/meta_ham/CampaignMasterQuestCrewSelectPanel",
+   "name": "?Text@CampaignMqCrewProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z",
+   "target": "?mq_difficulty@?BD@??Text@CampaignMqCrewProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4AAVDataNode@@A",
+   "ours": "?mq_difficulty@?BH@??Text@CampaignMqCrewProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4AAVDataNode@@A"
+  },
+  {
+   "unit": "default/lazer/meta_ham/CampaignMasterQuestCrewSelectPanel",
+   "name": "?Text@CampaignMqCrewProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z",
+   "target": "?mq_difficulty@?BD@??Text@CampaignMqCrewProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4AAVDataNode@@A",
+   "ours": "?mq_difficulty@?BH@??Text@CampaignMqCrewProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4AAVDataNode@@A"
+  },
+  {
+   "unit": "default/lazer/meta_ham/CampaignMasterQuestCrewSelectPanel",
+   "name": "?Text@CampaignMqCrewProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z",
+   "target": "?stars_fraction@?BD@??Text@CampaignMqCrewProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4VSymbol@@A",
+   "ours": "?stars_fraction@?BH@??Text@CampaignMqCrewProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4VSymbol@@A"
+  },
+  {
+   "unit": "default/lazer/meta_ham/CampaignMasterQuestCrewSelectPanel",
+   "name": "?Text@CampaignMqCrewProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z",
+   "target": "?stars_fraction@?BD@??Text@CampaignMqCrewProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4VSymbol@@A",
+   "ours": "?stars_fraction@?BH@??Text@CampaignMqCrewProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4VSymbol@@A"
+  },
+  {
+   "unit": "default/lazer/meta_ham/CampaignMasterQuestCrewSelectPanel",
+   "name": "?Text@CampaignMqCrewProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z",
+   "target": "?stars_fraction@?BD@??Text@CampaignMqCrewProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4VSymbol@@A",
+   "ours": "?stars_fraction@?BH@??Text@CampaignMqCrewProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4VSymbol@@A"
+  },
+  {
+   "unit": "default/lazer/meta_ham/CampaignMasterQuestCrewSelectPanel",
+   "name": "?Text@CampaignMqCrewProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z",
+   "target": "?stars_fraction@?BD@??Text@CampaignMqCrewProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4VSymbol@@A",
+   "ours": "?stars_fraction@?BH@??Text@CampaignMqCrewProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4VSymbol@@A"
+  },
+  {
+   "unit": "default/lazer/meta_ham/CampaignMasterQuestCrewSelectPanel",
+   "name": "?UpdateList@CampaignMqCrewProvider@@QAAXXZ",
+   "target": "?mq_difficulty@?7??UpdateList@CampaignMqCrewProvider@@QAAXXZ@4AAVDataNode@@A",
+   "ours": "?mq_difficulty@?M@??UpdateList@CampaignMqCrewProvider@@QAAXXZ@4AAVDataNode@@A"
+  },
+  {
+   "unit": "default/lazer/meta_ham/CampaignMasterQuestCrewSelectPanel",
+   "name": "?UpdateList@CampaignMqCrewProvider@@QAAXXZ",
+   "target": "?mq_difficulty@?7??UpdateList@CampaignMqCrewProvider@@QAAXXZ@4AAVDataNode@@A",
+   "ours": "?mq_difficulty@?M@??UpdateList@CampaignMqCrewProvider@@QAAXXZ@4AAVDataNode@@A"
+  },
+  {
+   "unit": "default/lazer/meta_ham/CampaignMasterQuestCrewSelectPanel",
+   "name": "?UpdateList@CampaignMqCrewProvider@@QAAXXZ",
+   "target": "?mq_difficulty@?7??UpdateList@CampaignMqCrewProvider@@QAAXXZ@4AAVDataNode@@A",
+   "ours": "?mq_difficulty@?M@??UpdateList@CampaignMqCrewProvider@@QAAXXZ@4AAVDataNode@@A"
+  },
+  {
+   "unit": "default/system/rndobj/AmbientOcclusion",
+   "name": "??$GatherObjectsFromGroup@VRndMesh@@@@YAIPAVRndGroup@@AAV?$vector@PAVRndMesh@@V?$StlNodeAlloc@PAVRndMesh@@@stlpmtx_std@@@stlpmtx_std@@@Z",
+   "target": "??_R0?AVObject@Hmx@@@8",
+   "ours": "??_R0?AVRndMesh@@@8"
+  },
+  {
+   "unit": "default/system/rndobj/AmbientOcclusion",
+   "name": "??$GatherObjectsFromGroup@VRndMesh@@@@YAIPAVRndGroup@@AAV?$vector@PAVRndMesh@@V?$StlNodeAlloc@PAVRndMesh@@@stlpmtx_std@@@stlpmtx_std@@@Z",
+   "target": "??_R0?AVWorldInstance@@@8",
+   "ours": "??_R0?AVObject@Hmx@@@8"
+  },
+  {
+   "unit": "default/system/rndobj/AmbientOcclusion",
+   "name": "??$GatherObjectsFromGroup@VRndMesh@@@@YAIPAVRndGroup@@AAV?$vector@PAVRndMesh@@V?$StlNodeAlloc@PAVRndMesh@@@stlpmtx_std@@@stlpmtx_std@@@Z",
+   "target": "??_R0?AVRndMesh@@@8",
+   "ours": "??_R0?AVWorldInstance@@@8"
+  },
+  {
+   "unit": "default/system/synth/tomcrypt/aes",
+   "name": "rijndael_test",
+   "target": "?Component@?1??GetSwizzleVectorSrc@@YA?AU__vector4@@W4_D3DFORMAT@@@Z@4QBIB",
+   "ours": "?key192@?1??rijndael_test@@9@4QBEB"
+  },
+  {
+   "unit": "default/system/synth/tomcrypt/aes",
+   "name": "rijndael_test",
+   "target": "?Component@?1??GetSwizzleVectorSrc@@YA?AU__vector4@@W4_D3DFORMAT@@@Z@4QBIB",
+   "ours": "?key192@?1??rijndael_test@@9@4QBEB"
+  },
+  {
+   "unit": "default/system/synth/tomcrypt/aes",
+   "name": "rijndael_test",
+   "target": "?Component@?1??GetSwizzleVectorSrc@@YA?AU__vector4@@W4_D3DFORMAT@@@Z@4QBIB",
+   "ours": "?key192@?1??rijndael_test@@9@4QBEB"
+  },
+  {
+   "unit": "default/lazer/meta_ham/MetaPanel",
+   "name": "??_DAppLabel@@QAAXXZ",
+   "target": "??1HamLabel@@UAA@XZ",
+   "ours": "??1AppLabel@@UAA@XZ"
+  },
+  {
+   "unit": "default/system/rndobj/AmbientOcclusion",
+   "name": "??$GatherObjectsFromDir@VRndMesh@@@@YAIPAVObjectDir@@AAV?$vector@PAVRndMesh@@V?$StlNodeAlloc@PAVRndMesh@@@stlpmtx_std@@@stlpmtx_std@@@Z",
+   "target": "??_R0?AVWorldInstance@@@8",
+   "ours": "??_R0?AVRndMesh@@@8"
+  },
+  {
+   "unit": "default/system/rndobj/AmbientOcclusion",
+   "name": "??$GatherObjectsFromDir@VRndMesh@@@@YAIPAVObjectDir@@AAV?$vector@PAVRndMesh@@V?$StlNodeAlloc@PAVRndMesh@@@stlpmtx_std@@@stlpmtx_std@@@Z",
+   "target": "??_R0?AVRndMesh@@@8",
+   "ours": "??_R0?AVWorldInstance@@@8"
+  },
+  {
+   "unit": "default/system/world/Instance",
+   "name": "?DeleteTransientObjects@WorldInstance@@AAAXXZ",
+   "target": "??_R0?AVObject@Hmx@@@8",
+   "ours": "??_C@_0N@NDCALLOJ@Instance?4cpp?$AA@"
+  },
+  {
+   "unit": "default/system/world/Instance",
+   "name": "?DeleteTransientObjects@WorldInstance@@AAAXXZ",
+   "target": "??_R0?AVRndMesh@@@8",
+   "ours": "??_C@_0CE@LDMMODFL@obj?9?$DOClassName?$CI?$CJ?5?$DN?$DN?5to?9?$DOClassNam@"
+  },
+  {
+   "unit": "default/system/world/Instance",
+   "name": "?DeleteTransientObjects@WorldInstance@@AAAXXZ",
+   "target": "??_C@_0N@NDCALLOJ@Instance?4cpp?$AA@",
+   "ours": "??_R0?AVObject@Hmx@@@8"
+  },
+  {
+   "unit": "default/system/world/Instance",
+   "name": "?DeleteTransientObjects@WorldInstance@@AAAXXZ",
+   "target": "??_C@_0CE@LDMMODFL@obj?9?$DOClassName?$CI?$CJ?5?$DN?$DN?5to?9?$DOClassNam@",
+   "ours": "??_R0?AVRndMesh@@@8"
+  },
+  {
+   "unit": "default/system/ui/UI",
+   "name": "?FillButtonMsg@Automator@@AAAXAAVButtonDownMsg@@H@Z",
+   "target": "?button_down@?4??FillButtonMsg@Automator@@AAAXAAVButtonDownMsg@@H@Z@4VSymbol@@A",
+   "ours": "?button_down@?6??FillButtonMsg@Automator@@AAAXAAVButtonDownMsg@@H@Z@4VSymbol@@A"
+  },
+  {
+   "unit": "default/system/ui/UI",
+   "name": "?FillButtonMsg@Automator@@AAAXAAVButtonDownMsg@@H@Z",
+   "target": "?button_down@?4??FillButtonMsg@Automator@@AAAXAAVButtonDownMsg@@H@Z@4VSymbol@@A",
+   "ours": "?button_down@?6??FillButtonMsg@Automator@@AAAXAAVButtonDownMsg@@H@Z@4VSymbol@@A"
+  },
+  {
+   "unit": "default/system/ui/UI",
+   "name": "?FillButtonMsg@Automator@@AAAXAAVButtonDownMsg@@H@Z",
+   "target": "?button_down@?4??FillButtonMsg@Automator@@AAAXAAVButtonDownMsg@@H@Z@4VSymbol@@A",
+   "ours": "?button_down@?6??FillButtonMsg@Automator@@AAAXAAVButtonDownMsg@@H@Z@4VSymbol@@A"
+  },
+  {
+   "unit": "default/system/ui/UI",
+   "name": "?FillButtonMsg@Automator@@AAAXAAVButtonDownMsg@@H@Z",
+   "target": "?button_down@?4??FillButtonMsg@Automator@@AAAXAAVButtonDownMsg@@H@Z@4VSymbol@@A",
+   "ours": "?button_down@?6??FillButtonMsg@Automator@@AAAXAAVButtonDownMsg@@H@Z@4VSymbol@@A"
+  },
+  {
+   "unit": "default/system/world/Crowd",
+   "name": "?Mats@WorldCrowd@@UAAXAAV?$list@PAVRndMat@@V?$StlNodeAlloc@PAVRndMat@@@stlpmtx_std@@@stlpmtx_std@@_N@Z",
+   "target": "?gImpostorMat@@3PAVRndMat@@A",
+   "ours": "gImpostorMat"
+  },
+  {
+   "unit": "default/system/world/Crowd",
+   "name": "?Mats@WorldCrowd@@UAAXAAV?$list@PAVRndMat@@V?$StlNodeAlloc@PAVRndMat@@@stlpmtx_std@@@stlpmtx_std@@_N@Z",
+   "target": "?gImpostorMat@@3PAVRndMat@@A",
+   "ours": "gImpostorMat"
+  }
+ ],
+ "REAL:different_string_literal": [
+  {
+   "unit": "default/system/utl/FileStream",
+   "name": "??_GFileStream@@UAAPAXI@Z",
+   "target": "??_C@_0DA@OKFJPFIG@e?3?2lazer_build_gmc1?2system?2src?2u@",
+   "ours": "??_C@_0DA@HMFHGDBI@e?3?2lazer_build_gmc1?2system?2src?2u@"
+  },
+  {
+   "unit": "default/system/utl/FileStream",
+   "name": "??_GFileStream@@UAAPAXI@Z",
+   "target": "??_C@_0DA@OKFJPFIG@e?3?2lazer_build_gmc1?2system?2src?2u@",
+   "ours": "??_C@_0DA@HMFHGDBI@e?3?2lazer_build_gmc1?2system?2src?2u@"
+  },
+  {
+   "unit": "default/system/os/Memcard_Xbox",
+   "name": "?GetDisplayName@Memcard@@UAAPB_WXZ",
+   "target": "??_C@_01LOCGONAA@?$AA?$AA@",
+   "ours": "??_C@_11LOCGONAA@?$AA?$AA@"
+  },
+  {
+   "unit": "default/system/os/Memcard_Xbox",
+   "name": "?GetDisplayName@Memcard@@UAAPB_WXZ",
+   "target": "??_C@_01LOCGONAA@?$AA?$AA@",
+   "ours": "??_C@_11LOCGONAA@?$AA?$AA@"
+  },
+  {
+   "unit": "default/system/utl/trie",
+   "name": "?get_free_node@Trie@@QAAIXZ",
+   "target": "??_C@_0CK@PKKCHHDL@e?3?2lazer_build_gmc1?2system?2src?2u@",
+   "ours": "??_C@_08DAHHKAJE@trie?4cpp?$AA@"
+  },
+  {
+   "unit": "default/system/utl/trie",
+   "name": "?get_free_node@Trie@@QAAIXZ",
+   "target": "??_C@_0CK@PKKCHHDL@e?3?2lazer_build_gmc1?2system?2src?2u@",
+   "ours": "??_C@_08DAHHKAJE@trie?4cpp?$AA@"
+  },
+  {
+   "unit": "default/system/flow/Flow",
+   "name": "??3FlowSetProperty@@SAXPAX@Z",
+   "target": "??_C@_0DG@OIPKDGFP@e?3?2lazer_build_gmc1?2system?2src?2f@",
+   "ours": "??_C@_0BE@OIHEFLCP@FlowSetProperty?4cpp?$AA@"
+  },
+  {
+   "unit": "default/system/flow/Flow",
+   "name": "??3FlowSetProperty@@SAXPAX@Z",
+   "target": "??_C@_0DG@OIPKDGFP@e?3?2lazer_build_gmc1?2system?2src?2f@",
+   "ours": "??_C@_0BE@OIHEFLCP@FlowSetProperty?4cpp?$AA@"
+  },
+  {
+   "unit": "default/system/os/UsbMidiGuitar",
+   "name": "?Initialize@Queue@@QAAXH@Z",
+   "target": "??_C@_0DC@LGNOKIGB@e?3?2lazer_build_gmc1?2system?2src?2o@",
+   "ours": "??_C@_0CL@DPNOGJEF@e?3?2lazer_build_gmc1?2system?2src?2m@"
+  },
+  {
+   "unit": "default/system/os/UsbMidiGuitar",
+   "name": "?Initialize@Queue@@QAAXH@Z",
+   "target": "??_C@_0DC@LGNOKIGB@e?3?2lazer_build_gmc1?2system?2src?2o@",
+   "ours": "??_C@_0CL@DPNOGJEF@e?3?2lazer_build_gmc1?2system?2src?2m@"
+  },
+  {
+   "unit": "default/system/os/UsbMidiGuitar",
+   "name": "?Initialize@Queue@@QAAXH@Z",
+   "target": "??_C@_0DC@LGNOKIGB@e?3?2lazer_build_gmc1?2system?2src?2o@",
+   "ours": "??_C@_0CL@DPNOGJEF@e?3?2lazer_build_gmc1?2system?2src?2m@"
+  },
+  {
+   "unit": "default/system/os/UsbMidiGuitar",
+   "name": "?Initialize@Queue@@QAAXH@Z",
+   "target": "??_C@_0DC@LGNOKIGB@e?3?2lazer_build_gmc1?2system?2src?2o@",
+   "ours": "??_C@_0CL@DPNOGJEF@e?3?2lazer_build_gmc1?2system?2src?2m@"
+  },
+  {
+   "unit": "default/system/flow/Flow",
+   "name": "??2FlowSetProperty@@SAPAXI@Z",
+   "target": "??_C@_0DG@OIPKDGFP@e?3?2lazer_build_gmc1?2system?2src?2f@",
+   "ours": "??_C@_0BE@OIHEFLCP@FlowSetProperty?4cpp?$AA@"
+  },
+  {
+   "unit": "default/system/flow/Flow",
+   "name": "??2FlowSetProperty@@SAPAXI@Z",
+   "target": "??_C@_0DG@OIPKDGFP@e?3?2lazer_build_gmc1?2system?2src?2f@",
+   "ours": "??_C@_0BE@OIHEFLCP@FlowSetProperty?4cpp?$AA@"
+  },
+  {
+   "unit": "default/system/rndobj/MultiMesh",
+   "name": "??_GFixedSizeAlloc@@UAAPAXI@Z",
+   "target": "??_C@_0CP@ODNEEFIH@e?3?2lazer_build_gmc1?2system?2src?2u@",
+   "ours": "??_C@_0CP@OEOKFFMN@e?3?2lazer_build_gmc1?2system?2src?2u@"
+  },
+  {
+   "unit": "default/system/rndobj/MultiMesh",
+   "name": "??_GFixedSizeAlloc@@UAAPAXI@Z",
+   "target": "??_C@_0CP@ODNEEFIH@e?3?2lazer_build_gmc1?2system?2src?2u@",
+   "ours": "??_C@_0CP@OEOKFFMN@e?3?2lazer_build_gmc1?2system?2src?2u@"
+  },
+  {
+   "unit": "default/system/char/CharBones",
+   "name": "?MakeShortAng@@YAFM@Z",
+   "target": "??_C@_0DA@NLAEAONH@e?3?2lazer_build_gmc1?2system?2src?2c@",
+   "ours": "??_C@_0O@PGLFHJBG@CharBones?4cpp?$AA@"
+  },
+  {
+   "unit": "default/system/char/CharBones",
+   "name": "?MakeShortAng@@YAFM@Z",
+   "target": "??_C@_0DA@NLAEAONH@e?3?2lazer_build_gmc1?2system?2src?2c@",
+   "ours": "??_C@_0O@PGLFHJBG@CharBones?4cpp?$AA@"
+  },
+  {
+   "unit": "default/system/os/HDCache",
+   "name": "??3CriticalSection@@SAXPAX@Z",
+   "target": "??_C@_0CM@BHOIGAFK@e?3?2lazer_build_gmc1?2system?2src?2o@",
+   "ours": "??_C@_0CM@HACIFEKI@e?3?2lazer_build_gmc1?2system?2src?2o@"
+  },
+  {
+   "unit": "default/system/os/HDCache",
+   "name": "??3CriticalSection@@SAXPAX@Z",
+   "target": "??_C@_0CM@BHOIGAFK@e?3?2lazer_build_gmc1?2system?2src?2o@",
+   "ours": "??_C@_0CM@HACIFEKI@e?3?2lazer_build_gmc1?2system?2src?2o@"
+  },
+  {
+   "unit": "default/system/hamobj/Pose",
+   "name": "?Score@BoneAngleRangePoseElement@@UBAMABVSkeleton@@@Z",
+   "target": "??_C@_0EL@EIPCKLDA@?$CI1?40f?$CJ?9?$CI0?4001f?$CJ?5?$DM?$DN?5?$CILength?$CImAngl@",
+   "ours": "??_C@_0EB@JICFFNLG@1?40f?5?9?50?4001f?5?$DM?$DN?5Length?$CIangle?$CJ?5?$CG@"
+  },
+  {
+   "unit": "default/system/hamobj/Pose",
+   "name": "?Score@BoneAngleRangePoseElement@@UBAMABVSkeleton@@@Z",
+   "target": "??_C@_0EL@EIPCKLDA@?$CI1?40f?$CJ?9?$CI0?4001f?$CJ?5?$DM?$DN?5?$CILength?$CImAngl@",
+   "ours": "??_C@_0EB@JICFFNLG@1?40f?5?9?50?4001f?5?$DM?$DN?5Length?$CIangle?$CJ?5?$CG@"
+  },
+  {
+   "unit": "default/system/utl/AllocInfo",
+   "name": "?AllocInfoInit@@YAXXZ",
+   "target": "??_C@_0CK@PKKCHHDL@e?3?2lazer_build_gmc1?2system?2src?2u@",
+   "ours": "??_C@_0O@DICHBELF@AllocInfo?4cpp?$AA@"
+  },
+  {
+   "unit": "default/system/utl/AllocInfo",
+   "name": "?AllocInfoInit@@YAXXZ",
+   "target": "??_C@_0CK@PKKCHHDL@e?3?2lazer_build_gmc1?2system?2src?2u@",
+   "ours": "??_C@_0O@DICHBELF@AllocInfo?4cpp?$AA@"
+  },
+  {
+   "unit": "default/system/rndobj/MultiMesh",
+   "name": "??3FixedSizeAlloc@@SAXPAX@Z",
+   "target": "??_C@_0CP@ODNEEFIH@e?3?2lazer_build_gmc1?2system?2src?2u@",
+   "ours": "??_C@_0CP@OEOKFFMN@e?3?2lazer_build_gmc1?2system?2src?2u@"
+  },
+  {
+   "unit": "default/system/rndobj/MultiMesh",
+   "name": "??3FixedSizeAlloc@@SAXPAX@Z",
+   "target": "??_C@_0CP@ODNEEFIH@e?3?2lazer_build_gmc1?2system?2src?2u@",
+   "ours": "??_C@_0CP@OEOKFFMN@e?3?2lazer_build_gmc1?2system?2src?2u@"
+  },
+  {
+   "unit": "default/system/flow/FlowSlider",
+   "name": "?UpdateEase@FlowSlider@@IAAXXZ",
+   "target": "??_C@_0CN@GGKIFLBP@e?3?2lazer_build_gmc1?2system?2src?2m@",
+   "ours": "??_C@_0P@CCHKPLEA@FlowSlider?4cpp?$AA@"
+  },
+  {
+   "unit": "default/system/flow/FlowSlider",
+   "name": "?UpdateEase@FlowSlider@@IAAXXZ",
+   "target": "??_C@_0CN@GGKIFLBP@e?3?2lazer_build_gmc1?2system?2src?2m@",
+   "ours": "??_C@_0P@CCHKPLEA@FlowSlider?4cpp?$AA@"
+  },
+  {
+   "unit": "default/system/meta/StoreEnumeration",
+   "name": "?Start@XboxEnumeration@@UAAXXZ",
+   "target": "??_C@_0M@JIDBCDOM@?$CBmCurOffers?$AA@",
+   "ours": "??_C@_0N@GCCEDENK@?$CBmEnumBuffer?$AA@"
+  },
+  {
+   "unit": "default/system/meta/StoreEnumeration",
+   "name": "?Start@XboxEnumeration@@UAAXXZ",
+   "target": "??_C@_0M@JIDBCDOM@?$CBmCurOffers?$AA@",
+   "ours": "??_C@_0N@GCCEDENK@?$CBmEnumBuffer?$AA@"
+  },
+  {
+   "unit": "default/system/world/LightPreset",
+   "name": "?GetKey@LightPreset@@IBAXMAAH0AAM@Z",
+   "target": "??_C@_0EH@EJMEMEHA@frame?5?$DO?$DN?5mKeyframes?$FLbefore?$FN?4mFra@",
+   "ours": "??_C@_0EN@JNCOJILL@theframe?5?$DO?$DN?5mKeyframes?$FLbefore?$FN?4m@"
+  },
+  {
+   "unit": "default/system/world/LightPreset",
+   "name": "?GetKey@LightPreset@@IBAXMAAH0AAM@Z",
+   "target": "??_C@_0EH@EJMEMEHA@frame?5?$DO?$DN?5mKeyframes?$FLbefore?$FN?4mFra@",
+   "ours": "??_C@_0EN@JNCOJILL@theframe?5?$DO?$DN?5mKeyframes?$FLbefore?$FN?4m@"
+  },
+  {
+   "unit": "default/system/os/UsbMidiGuitar",
+   "name": "??1Queue@@QAA@XZ",
+   "target": "??_C@_0DC@LGNOKIGB@e?3?2lazer_build_gmc1?2system?2src?2o@",
+   "ours": "??_C@_0CL@DPNOGJEF@e?3?2lazer_build_gmc1?2system?2src?2m@"
+  },
+  {
+   "unit": "default/system/os/UsbMidiGuitar",
+   "name": "??1Queue@@QAA@XZ",
+   "target": "??_C@_0DC@LGNOKIGB@e?3?2lazer_build_gmc1?2system?2src?2o@",
+   "ours": "??_C@_0CL@DPNOGJEF@e?3?2lazer_build_gmc1?2system?2src?2m@"
+  }
+ ],
+ "REAL:wrong_float_constant": [
+  {
+   "unit": "default/system/gesture/DrawUtl",
+   "name": "?CopyDepth@?A0xad24ca77@@YAXHHPIAGPIBG@Z",
+   "target": "__real@3ecccccc",
+   "ours": "__real@3f19999a"
+  },
+  {
+   "unit": "default/system/gesture/DrawUtl",
+   "name": "?CopyDepth@?A0xad24ca77@@YAXHHPIAGPIBG@Z",
+   "target": "__real@3a83126f",
+   "ours": "__real@3ecccccc"
+  },
+  {
+   "unit": "default/system/gesture/DrawUtl",
+   "name": "?CopyDepth@?A0xad24ca77@@YAXHHPIAGPIBG@Z",
+   "target": "__real@3f19999a",
+   "ours": "__real@3a83126f"
+  },
+  {
+   "unit": "default/system/gesture/DrawUtl",
+   "name": "?CopyDepth@?A0xad24ca77@@YAXHHPIAGPIBG@Z",
+   "target": "__real@3ecccccc",
+   "ours": "__real@3f19999a"
+  },
+  {
+   "unit": "default/system/gesture/DrawUtl",
+   "name": "?CopyDepth@?A0xad24ca77@@YAXHHPIAGPIBG@Z",
+   "target": "__real@3a83126f",
+   "ours": "__real@3ecccccc"
+  },
+  {
+   "unit": "default/system/gesture/DrawUtl",
+   "name": "?CopyDepth@?A0xad24ca77@@YAXHHPIAGPIBG@Z",
+   "target": "__real@3f19999a",
+   "ours": "__real@3a83126f"
+  },
+  {
+   "unit": "default/system/gesture/DirectionGestureFilter",
+   "name": "?Draw@DirectionGestureFilterSingleUser@@UAAXABVSkeleton@@AAVSkeletonViz@@@Z",
+   "target": "__real@3dcccccd",
+   "ours": "__real@3e4ccccd"
+  },
+  {
+   "unit": "default/system/gesture/DirectionGestureFilter",
+   "name": "?Draw@DirectionGestureFilterSingleUser@@UAAXABVSkeleton@@AAVSkeletonViz@@@Z",
+   "target": "__real@3e4ccccd",
+   "ours": "__real@3dcccccd"
+  },
+  {
+   "unit": "default/system/gesture/DirectionGestureFilter",
+   "name": "?Draw@DirectionGestureFilterSingleUser@@UAAXABVSkeleton@@AAVSkeletonViz@@@Z",
+   "target": "__real@3dcccccd",
+   "ours": "__real@3e4ccccd"
+  },
+  {
+   "unit": "default/system/gesture/DirectionGestureFilter",
+   "name": "?Draw@DirectionGestureFilterSingleUser@@UAAXABVSkeleton@@AAVSkeletonViz@@@Z",
+   "target": "__real@3e4ccccd",
+   "ours": "__real@3dcccccd"
+  },
+  {
+   "unit": "default/system/char/CharHair",
+   "name": "?Hookup@CharHair@@QAAXAAV?$ObjPtrList@VCharCollide@@VObjectDir@@@@@Z",
+   "target": "__real@7149f2ca",
+   "ours": "__real@00000000"
+  },
+  {
+   "unit": "default/system/char/CharHair",
+   "name": "?Hookup@CharHair@@QAAXAAV?$ObjPtrList@VCharCollide@@VObjectDir@@@@@Z",
+   "target": "__real@7149f2ca",
+   "ours": "__real@00000000"
+  }
+ ],
+ "NOISE:local_static_guard_counter": [
+  {
+   "unit": "default/lazer/meta_ham/SongSelectPlaylistPanel",
+   "name": "?Text@SongSelectPlaylistProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z",
+   "target": "??_B?BB@??Text@SongSelectPlaylistProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@5BB@",
+   "ours": "?$S2@?BJ@??Text@SongSelectPlaylistProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4IA"
+  },
+  {
+   "unit": "default/lazer/meta_ham/SongSelectPlaylistPanel",
+   "name": "?Text@SongSelectPlaylistProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z",
+   "target": "??_B?BB@??Text@SongSelectPlaylistProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@5BB@",
+   "ours": "?$S2@?BJ@??Text@SongSelectPlaylistProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4IA"
+  },
+  {
+   "unit": "default/lazer/meta_ham/SongSelectPlaylistPanel",
+   "name": "?Text@SongSelectPlaylistProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z",
+   "target": "??_B?BB@??Text@SongSelectPlaylistProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@5BB@",
+   "ours": "?$S2@?BJ@??Text@SongSelectPlaylistProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4IA"
+  },
+  {
+   "unit": "default/lazer/meta_ham/CampaignSongSelectPanel",
+   "name": "?Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z",
+   "target": "??_B?BD@??Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@5BD@",
+   "ours": "?$S1@?BH@??Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4IA"
+  },
+  {
+   "unit": "default/lazer/meta_ham/CampaignSongSelectPanel",
+   "name": "?Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z",
+   "target": "??_B?BD@??Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@5BD@",
+   "ours": "?$S1@?BH@??Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4IA"
+  },
+  {
+   "unit": "default/lazer/meta_ham/CampaignSongSelectPanel",
+   "name": "?Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z",
+   "target": "??_B?BD@??Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@5BD@",
+   "ours": "?$S1@?BH@??Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4IA"
+  },
+  {
+   "unit": "default/lazer/meta_ham/CampaignSongSelectPanel",
+   "name": "?Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z",
+   "target": "??_B?BD@??Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@5BD@",
+   "ours": "?$S1@?BH@??Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4IA"
+  },
+  {
+   "unit": "default/lazer/meta_ham/CampaignSongSelectPanel",
+   "name": "?Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z",
+   "target": "??_B?BD@??Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@5BD@",
+   "ours": "?$S1@?BH@??Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4IA"
+  },
+  {
+   "unit": "default/lazer/meta_ham/CampaignSongSelectPanel",
+   "name": "?Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z",
+   "target": "??_B?BD@??Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@5BD@",
+   "ours": "?$S1@?BH@??Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4IA"
+  },
+  {
+   "unit": "default/lazer/meta_ham/CampaignSongSelectPanel",
+   "name": "?Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z",
+   "target": "??_B?BD@??Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@5BD@",
+   "ours": "?$S1@?BH@??Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4IA"
+  },
+  {
+   "unit": "default/lazer/meta_ham/CampaignSongSelectPanel",
+   "name": "?Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z",
+   "target": "??_B?BD@??Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@5BD@",
+   "ours": "?$S1@?BH@??Text@CampaignSongProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4IA"
+  },
+  {
+   "unit": "default/lazer/meta_ham/CampaignMasterQuestCrewSelectPanel",
+   "name": "?Text@CampaignMqCrewProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z",
+   "target": "??_B?BD@??Text@CampaignMqCrewProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@5BD@",
+   "ours": "?$S1@?BH@??Text@CampaignMqCrewProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4IA"
+  },
+  {
+   "unit": "default/lazer/meta_ham/CampaignMasterQuestCrewSelectPanel",
+   "name": "?Text@CampaignMqCrewProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z",
+   "target": "??_B?BD@??Text@CampaignMqCrewProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@5BD@",
+   "ours": "?$S1@?BH@??Text@CampaignMqCrewProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4IA"
+  },
+  {
+   "unit": "default/lazer/meta_ham/CampaignMasterQuestCrewSelectPanel",
+   "name": "?Text@CampaignMqCrewProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z",
+   "target": "??_B?BD@??Text@CampaignMqCrewProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@5BD@",
+   "ours": "?$S1@?BH@??Text@CampaignMqCrewProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4IA"
+  },
+  {
+   "unit": "default/lazer/meta_ham/CampaignMasterQuestCrewSelectPanel",
+   "name": "?Text@CampaignMqCrewProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z",
+   "target": "??_B?BD@??Text@CampaignMqCrewProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@5BD@",
+   "ours": "?$S1@?BH@??Text@CampaignMqCrewProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4IA"
+  },
+  {
+   "unit": "default/lazer/meta_ham/CampaignMasterQuestCrewSelectPanel",
+   "name": "?Text@CampaignMqCrewProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z",
+   "target": "??_B?BD@??Text@CampaignMqCrewProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@5BD@",
+   "ours": "?$S1@?BH@??Text@CampaignMqCrewProvider@@UBAXHHPAVUIListLabel@@PAVUILabel@@@Z@4IA"
+  },
+  {
+   "unit": "default/lazer/meta_ham/CampaignMasterQuestCrewSelectPanel",
+   "name": "?UpdateList@CampaignMqCrewProvider@@QAAXXZ",
+   "target": "??_B?7??UpdateList@CampaignMqCrewProvider@@QAAXXZ@57",
+   "ours": "?$S2@?M@??UpdateList@CampaignMqCrewProvider@@QAAXXZ@4IA"
+  },
+  {
+   "unit": "default/lazer/meta_ham/CampaignMasterQuestCrewSelectPanel",
+   "name": "?UpdateList@CampaignMqCrewProvider@@QAAXXZ",
+   "target": "??_B?7??UpdateList@CampaignMqCrewProvider@@QAAXXZ@57",
+   "ours": "?$S2@?M@??UpdateList@CampaignMqCrewProvider@@QAAXXZ@4IA"
+  },
+  {
+   "unit": "default/lazer/meta_ham/CampaignMasterQuestCrewSelectPanel",
+   "name": "?UpdateList@CampaignMqCrewProvider@@QAAXXZ",
+   "target": "??_B?7??UpdateList@CampaignMqCrewProvider@@QAAXXZ@57",
+   "ours": "?$S2@?M@??UpdateList@CampaignMqCrewProvider@@QAAXXZ@4IA"
+  },
+  {
+   "unit": "default/system/ui/UI",
+   "name": "?FillButtonMsg@Automator@@AAAXAAVButtonDownMsg@@H@Z",
+   "target": "??_B?4??FillButtonMsg@Automator@@AAAXAAVButtonDownMsg@@H@Z@54",
+   "ours": "?$S7@?6??FillButtonMsg@Automator@@AAAXAAVButtonDownMsg@@H@Z@4IA"
+  },
+  {
+   "unit": "default/system/ui/UI",
+   "name": "?FillButtonMsg@Automator@@AAAXAAVButtonDownMsg@@H@Z",
+   "target": "??_B?4??FillButtonMsg@Automator@@AAAXAAVButtonDownMsg@@H@Z@54",
+   "ours": "?$S7@?6??FillButtonMsg@Automator@@AAAXAAVButtonDownMsg@@H@Z@4IA"
+  },
+  {
+   "unit": "default/system/ui/UI",
+   "name": "?FillButtonMsg@Automator@@AAAXAAVButtonDownMsg@@H@Z",
+   "target": "??_B?4??FillButtonMsg@Automator@@AAAXAAVButtonDownMsg@@H@Z@54",
+   "ours": "?$S7@?6??FillButtonMsg@Automator@@AAAXAAVButtonDownMsg@@H@Z@4IA"
+  }
+ ]
+}
