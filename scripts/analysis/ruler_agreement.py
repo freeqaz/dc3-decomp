@@ -154,8 +154,22 @@ def main():
             mismatches.append((r, None, "canonical_match_percent ABSENT from CLI output"))
             continue
         checked += 1
-        if abs(float(canon) - r["canonical"]) > args.tolerance:
-            mismatches.append((r, float(canon), "value disagrees with report.json"))
+        if abs(float(canon) - r["canonical"]) <= args.tolerance:
+            continue
+        # Distinguish the two failure modes. If the CLI and report.json also
+        # disagree on FUZZY, they did not score the same diff differently --
+        # they diffed different things (symbol/base-object resolution), which
+        # is a separate defect from any scoring bug.
+        cli_fuzzy = out.get("fuzzy_match_percent")
+        if cli_fuzzy is not None and abs(float(cli_fuzzy) - r["fuzzy"]) > args.tolerance:
+            why = (f"PAIRING: the two paths disagree on FUZZY too "
+                   f"(cli {float(cli_fuzzy):.5f} vs report {r['fuzzy']:.5f}), so they "
+                   f"diffed different things -- not a scoring bug")
+        elif cli_fuzzy is not None and abs(float(canon) - float(cli_fuzzy)) <= args.tolerance:
+            why = "SCORING: canonical equals the CLI's own fuzzy -- the 2026-08-20 regression"
+        else:
+            why = "SCORING: same diff, different canonical score"
+        mismatches.append((r, float(canon), why))
 
     print(f"\nchecked:   {checked}")
     print(f"errors:    {len(errors)}")
