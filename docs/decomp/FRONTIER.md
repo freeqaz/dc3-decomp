@@ -318,21 +318,90 @@ inside units `report.json` marks complete**, so 16,132 functions in incomplete
 units are out of scope by construction. It is a near-complete-unit finder, not a
 frontier tool.
 
-### 5.5 HONEST — `batch_pattern_scan.py`, `data_symbol_scan.py`
+### 5.5 HONEST, and the uncap recovered almost everything — `batch_pattern_scan.py`
 
-Both now default to **no cap** (`--limit 0`, `--max-symbols 0`), print a
-`TRUNCATED` banner and set `truncated=true` when a cap is passed, and
-`batch_pattern_scan` validates `--pattern` against a literal allowlist so a typo
-can no longer read as "this pattern is exhausted". `batch_pattern_scan`'s
-uncapped 90.0–99.9 run takes well over 10 minutes — budget for it rather than
-reaching for `--limit`.
+Both this and `data_symbol_scan.py` now default to **no cap** (`--limit 0`,
+`--max-symbols 0`), print a `TRUNCATED` banner and set `truncated=true` when a
+cap is passed, and `batch_pattern_scan` validates `--pattern` against a literal
+allowlist so a typo can no longer read as "this pattern is exhausted".
 
-### 5.6 HONEST — `fake_impl_scan.py`
+The uncapped run (universe 48,344; **1,703 examined**; drops named:
+`below---min-pct` 29,769, `no-base-body-outside-band` 16,872) finds **69
+functions carrying a mechanically-fixable encoding pattern**:
+
+| pattern | hits |
+|---|---|
+| `bool_mask_24` | 54 |
+| `fma_mismatch` | 49 |
+| `extrwi_rlwinm` | 6 |
+| `bool_mask_31` | 6 |
+| `cmp_encoding` | 1 |
+
+**68 of the 69 score below 99.58 %** — meaning the old `--limit 200` default,
+which sorted descending *before* slicing, could see exactly **one** of them.
+The truncation bug was not "a sample"; on this metric it was a ~99 % miss. The
+recovered hits are ordinary engine code — `hamobj` 14, `rndobj` 10, `char` 9,
+`world` 5, `gesture` 5, `utl` 5, `math` 4.
+
+Caveat to carry: this tool bands on **`fuzzy_match_percent`**, the
+relocation-sensitive ruler, not the canonical normalized one. Its own coverage
+block says so.
+
+### 5.6 HONEST — `fake_impl_scan.py`, with two small disclosure gaps
 
 The `if pct is None: continue` is replaced by a fallback to
 `match_percent_normalized` with the skipped rows counted, not dropped. Its own
 docstring records that the hole sat open "from wave-14 through wave-23, across
 four broad sweeps that all reported the pool EXHAUSTED".
+
+Full run (candidate set 701 at `pct <= 70`, `target >= 80 B`; 0 errors,
+0 unscannable, 0 skipped-for-no-percent):
+
+- **625 fake implementations** — trivial body against a substantial target.
+  **486 are authorable** (107,604 bytes); the other **139 are Bink**.
+- **76 real-code divergences** (57,472 bytes) — bodies that are substantial and
+  *wrong*. 73 `real-code-divergence`, 3 `incomplete-impl`. Concentrated in
+  `rndobj` (27 fns / 22,668 B), `math` (3 / 8,904 B), `gesture` (7 / 7,088 B).
+
+Two gaps worth closing, neither fatal:
+
+1. **It rolls its own non-authorable prefix list** — `("xdk/", "default/xdk/",
+   "thirdparty/", "default/thirdparty/")` — instead of importing
+   `scripts/authorable.py`'s `is_authorable()`, which is the whole reason that
+   module exists. `default/lib/binkxenon/` is missing, so **22 % of its
+   headline finding count is vendor code nobody will ever write**.
+2. **`divergence_count` and the `divergences` array disagree unless you pass a
+   flag.** Without `--include-divergences` the JSON reads
+   `{"divergence_count": 76, "divergences": []}`. A consumer reading the array
+   sees zero. Smaller than §5.1's failure but the same shape.
+
+The 76 divergences are the highest-value bug-hunting output any scanner
+produced in this pass: a substantial-but-wrong body is invisible to the native
+port's tests *and* looks like ordinary decomp work in the metric. Largest:
+
+| target | norm % | missing | unit / symbol |
+|---|---|---|---|
+| 5,856 B | 55.69 | 19.9 % | `math/SHA1` `CSHA1::Transform` |
+| 5,188 B | 64.70 | 14.0 % | `gesture/DepthBuffer3D` `DrawShowing` |
+| 2,800 B | 67.27 | 17.3 % | `math/mtx` `Invert(Matrix4 const&, Matrix4&)` |
+| 2,104 B | 32.72 | 53.8 % | `world/SpotlightDrawer_NG` `NgSpotlightDrawer::SetupXSection` |
+| 2,100 B | 36.45 | 30.1 % | `rndobj/Shader` `RndShaderStandard::CalcShaderOpts` |
+| 1,668 B | 11.76 | 41.5 % | `rndobj/Shader` `RndShaderMultimesh::CalcShaderOpts` |
+
+### 5.7 Determinism
+
+`scripts/analysis/determinism_check.py` was extended from 9 curated cases to 13,
+adding `progress_metrics`, `frontier`, `function_health` and
+`certify_floor --summary` — all four are work-selection oracles, the class whose
+nondeterminism reads as "exhausted", and none had ever been checked. **13/13
+agree with themselves** on non-empty output.
+
+`ceiling_calculator` was checked by hand outside the harness: two full 1,568-row
+runs produced identical output including row order
+(`ceilings_clamped_up_to_current = 1172` both times). `batch_pattern_scan`,
+`data_symbol_scan` and `fake_impl_scan` are too expensive to run twice inside
+the harness and are now **named in its output as UNCHECKED**, so a green 13/13
+cannot be read as covering them.
 
 ---
 
@@ -425,18 +494,33 @@ the open set); rebuild `is_stub` from `report.json`'s missing
 (recovers 144 real functions, 12,884 B). The 97.86 % DONE-WITH-CERTS headline
 will fall — that is the point.
 
-### 8. The `[80,90)` band, 239 of 263 already labelled `AT_LIMIT`
+### 8. The 76 substantial-but-wrong bodies from `fake_impl_scan`
+**76 functions, 57,472 bytes**, all authorable. These are the ones that look
+like ordinary decomp work in the metric and are silently wrong at runtime, so
+they carry native-port value on top of the percentage. `rndobj` holds 27 of
+them (22,668 B), of which 3 are `CalcShaderOpts` overloads at 11–39 %.
+Query: `fake_impl_scan.py --include-divergences` (**the flag is mandatory** —
+without it the JSON reports 76 and hands you an empty array).
+
+### 9. The 69 mechanical encoding-pattern hits
+**69 functions**, each with a named fix (`bool_mask_24` ×54, `fma_mismatch`
+×49, `extrwi_rlwinm` ×6, `bool_mask_31` ×6, `cmp_encoding` ×1). 68 of the 69
+were invisible to every previous sweep because of the `--limit 200` sort-before-
+slice bug, so this pool is effectively untouched despite the tool being old.
+Query: `batch_pattern_scan.py --min 90 --max 99.9 --limit 0` (budget >10 min).
+
+### 10. The `[80,90)` band, 239 of 263 already labelled `AT_LIMIT`
 **263 functions, 162,912 bytes.** Structurally-different-source territory, where
 `insert_delete` clusters dominate and objdiff's pairing is unreliable. High
 bytes-per-function (620 B avg) and the class §5.2 most likely mis-certified. Do
 these *after* the ceiling tool can tell you which have headroom.
 
-### 9. The 285 functions `authorable_done` cannot see
+### 11. The 285 functions `authorable_done` cannot see
 **50,008 bytes.** 144 `??_E`/`??_G`/`??__` compiler-generated bodies, 35 `fn_`
 funclets, 6 `merged_`, 100 DB-excluded-but-report-authorable. Not hard work —
 work that no work-selection query currently emits. Needs §7 first.
 
-### 10. `rndobj/Text` and `rndobj/Utl`
+### 12. `rndobj/Text` and `rndobj/Utl`
 **94 functions, 49,176 bytes** across two units, the two largest single-unit
 remainders. `Utl` is STL instantiation surface (56 fns, many small); `Text` is
 the marquee/wrapping family with a documented bug history
@@ -510,6 +594,21 @@ SELECT unit, symbol, match_percent_normalized, size FROM functions
 WHERE excluded = 0 AND verdict = 'AT_LIMIT'
   AND floor_certificate = 'equivalent' AND match_percent_normalized < 100
 ORDER BY unit, symbol;                       -- 726 rows; sample with a fixed seed
+```
+
+```bash
+# Lane 8: substantial-but-WRONG bodies. --include-divergences is MANDATORY;
+# without it the JSON says divergence_count=76 and hands you an empty array.
+python3 scripts/analysis/fake_impl_scan.py --project "$PWD" --workers 8 \
+        --include-divergences --out /tmp/fake_impl.json
+
+# Lane 9: mechanical encoding patterns. --limit 0 is the default and must stay
+# that way -- the old --limit 200 sorted DESC before slicing and could see 1 of
+# the 69 current hits.
+python3 scripts/analysis/batch_pattern_scan.py --min 90 --max 99.9 --limit 0 --json
+
+# Are the scanners still agreeing with themselves? Read the NOT CHECKED line too.
+python3 scripts/analysis/determinism_check.py
 ```
 
 ```python
