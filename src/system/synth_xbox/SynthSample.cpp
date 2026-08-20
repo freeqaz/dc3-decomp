@@ -52,8 +52,14 @@ int SynthSample360::GetNumBytes() const {
     return mSampleData.GetSizeBytes();
 }
 
-unsigned int SynthSample360::GetDataAddr() const {
-    return mSampleData.DataAddr();
+const void *SynthSample360::GetData() const {
+#ifdef HX_NATIVE
+    // DataAddr() truncates the pointer to 32 bits, which is a no-op on the
+    // Xbox target and fatal on LP64.
+    return mSampleData.DataPtr();
+#else
+    return (const void *)mSampleData.DataAddr();
+#endif
 }
 
 float SynthSample360::LengthMs() const {

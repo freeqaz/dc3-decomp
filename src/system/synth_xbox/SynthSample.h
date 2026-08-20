@@ -17,7 +17,12 @@ public:
     bool IsXMA() const;
     int GetNumSamples() const;
     int GetNumBytes() const;
-    unsigned int GetDataAddr() const;
+    /** ham_xbox_r.map spells this ?GetData@SynthSample360@@QBAPBXXZ -- it
+     *  returns `const void *`, not an address-as-unsigned-int, and it is
+     *  named GetData.  (It ICF-folded at 8261D060 with
+     *  ?Sample@Sound@@QAAPAVSynthSample@@XZ and
+     *  ?DrawHighlightMat@RndShaderMgr@@UAAPAVRndMat@@XZ.) */
+    const void *GetData() const;
 
     NEW_OBJ(SynthSample360)
     static void Register() { REGISTER_OBJ_FACTORY(SynthSample360) }

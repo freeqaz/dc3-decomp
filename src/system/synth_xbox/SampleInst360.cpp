@@ -6,7 +6,7 @@ SampleInst360::SampleInst360(SynthSample360 *sample, bool loop, int startSample,
     : SampleInst(sample) {
     mVoice = new Voice(sample->IsXMA(), sample->GetNumChannels(), false);
     mVoice->SetSampleRate(sample->GetSampleRate());
-    mVoice->SetData((const void *)sample->GetDataAddr(), sample->GetNumBytes(), sample->GetNumSamples());
+    mVoice->SetData(sample->GetData(), sample->GetNumBytes(), sample->GetNumSamples());
     if (loop) {
         mVoice->SetLoopRegion(startSample, endSample);
     }
