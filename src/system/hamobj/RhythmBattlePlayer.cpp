@@ -757,10 +757,11 @@ void RhythmBattlePlayer::AnimateBoxyState(int state, bool transition, bool bad) 
                 delay = 4.0f;
             }
             static Symbol loop("loop");
+            Symbol loopSym = loop;
             mRhythmBattleAnim->Animate(
                 0.0f, false, delay, rate,
                 12.0f, 20.0f, 0.0f, 1.0f,
-                loop, nullptr, kEaseLinear, 0.0f, false
+                loopSym, nullptr, kEaseLinear, 0.0f, false
             );
         } else if (state == 0) {
             if (transition) {
@@ -780,10 +781,11 @@ void RhythmBattlePlayer::AnimateBoxyState(int state, bool transition, bool bad) 
                 delay = 4.0f;
             }
             static Symbol loop("loop");
+            Symbol loopSym = loop;
             mRhythmBattleAnim->Animate(
                 0.0f, false, delay, rate,
                 0.0f, 8.0f, 0.0f, 1.0f,
-                loop, nullptr, kEaseLinear, 0.0f, false
+                loopSym, nullptr, kEaseLinear, 0.0f, false
             );
         } else if (state < 0) {
             if (transition) {
@@ -803,10 +805,11 @@ void RhythmBattlePlayer::AnimateBoxyState(int state, bool transition, bool bad) 
                 delay = 4.0f;
             }
             static Symbol loop("loop");
+            Symbol loopSym = loop;
             mRhythmBattleAnim->Animate(
                 0.0f, false, delay, rate,
                 28.0f, 36.0f, 0.0f, 1.0f,
-                loop, nullptr, kEaseLinear, 0.0f, false
+                loopSym, nullptr, kEaseLinear, 0.0f, false
             );
         }
     }
