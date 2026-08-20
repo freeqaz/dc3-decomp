@@ -2441,6 +2441,17 @@ def run_objdiff_cli(
         result["error"] = f"objdiff-cli not found at {objdiff_cli}"
         return result
 
+    # This runs in the MAIN repo, so its `--build` was the worst instance of
+    # the post-compile gap: `--build` is `ninja <one>.obj`, which skips the six
+    # patcher edges and overwrites their bytes, degrading the tree every OTHER
+    # lane then measures. Build through `post-compile` and assert the manifest.
+    from orchestrator.patch_guard import UnpatchedTreeError, ensure_patched_tree
+    try:
+        ensure_patched_tree(project_dir, build=True)
+    except UnpatchedTreeError as e:
+        result["error"] = str(e)
+        return result
+
     # Build command - run from main project dir (where objdiff.json lives)
     # Note: This builds in main repo, not worktree - for pre-computed context only
     # Include --include-instructions for m2c pipeline (objdiff_to_m2c.py)
@@ -2449,7 +2460,6 @@ def run_objdiff_cli(
         "diff",
         "-p", project_dir,
         symbol,
-        "--build",
         "--verdict",
         "--include-instructions",
         "-f", "json",
