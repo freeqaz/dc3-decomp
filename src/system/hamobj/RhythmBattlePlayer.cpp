@@ -741,7 +741,7 @@ void RhythmBattlePlayer::UpdateScore(Hmx::Object *handler) {
 }
 
 void RhythmBattlePlayer::AnimateBoxyState(int state, bool transition, bool bad) {
-    bool useBadFlow = (mInTheZone != -1) & bad;
+    bool useBadFlow = mInTheZone != -1 ? bad : false;
     if (mRhythmBattleAnim) {
         float delay = 0.0f;
         static Symbol none("none");
