@@ -293,7 +293,9 @@ BEGIN_LOADS(PhysicsVolume)
     Vector3 halfExt;
     HalfExtends(halfExt);
     Sphere s;
-    s.radius = Length(halfExt);
+    s.radius = std::sqrt(
+        halfExt.x * halfExt.x + halfExt.z * halfExt.z + halfExt.y * halfExt.y
+    );
     s.center = WorldXfm().v;
     SetSphere(s);
 END_LOADS
