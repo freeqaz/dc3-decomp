@@ -29,15 +29,26 @@ all, so the reloc-blind pass can no longer wipe what this one establishes.
 
 Nothing here touches `current_percent`, `verdict`, or any percentage.
 
+The precondition
+----------------
+Every flag here is measured from `--project-dir`'s object tree, so it is only
+as settled as that tree. This script now runs
+`verify_objs_patched.py --verify-manifest` first and exits 4 rather than
+recording a tree that a concurrent `ninja` is rewriting -- see
+`require_settled_tree` for the run that motivated it.
+
 Usage:
     python3 scripts/backfill_reloc_patterns.py --db <path>              # dry run
     python3 scripts/backfill_reloc_patterns.py --db <path> --apply
     python3 scripts/backfill_reloc_patterns.py --db <path> --histogram  # survey only
+
+Exit codes: 0 ok, 3 truncated by --limit, 4 unsettled build tree.
 """
 
 import argparse
 import collections
 import sqlite3
+import subprocess
 import sys
 from pathlib import Path
 
@@ -83,6 +94,51 @@ RELOC_SENSITIVE = {
 }
 
 
+def require_settled_tree(project_dir: str, skip: bool) -> None:
+    """Refuse to measure a build tree that is being rewritten under us.
+
+    2026-08-19: this script recorded 1,310 `has_linker_merged` rows where a
+    settled clean worktree gives 1,052 and main's tree 1,069 -- and the two
+    settled trees agree with each other on 1,051. The flags carry `updated_at`
+    between 09:11:03 and 09:11:36, against main commits at 09:12/09:16/09:17/
+    09:18 with at least two other worktrees mid-`ninja`. The only bucket that
+    reproduced exactly (MAKESTRING) is the one whose detector does not read
+    patched symbol names. Nothing was wrong with the scan: it measured a moving
+    tree and wrote the result into a column that reads like a fact about the
+    build. See docs/analysis/2026-08-19-reloc-pattern-flag-triage.md finding 2.
+
+    `verify_objs_patched.py --verify-manifest` is the cheap outside check: it
+    recomputes `build/<version>/patch_state.json` and reports drift with no
+    toolchain and no COFF parsing. Exit 0 = settled, 1 = drifted, 2 = never
+    verified (no manifest).
+    """
+    if skip:
+        print(f"WARNING: --skip-verify -- writing flags measured from "
+              f"{project_dir} WITHOUT checking that the tree is settled. Any "
+              f"row this run writes is a fact about a moment, not the build.",
+              file=sys.stderr)
+        return
+    verifier = Path(__file__).resolve().parent / "verify_objs_patched.py"
+    proc = subprocess.run(
+        [sys.executable, str(verifier), "--repo", project_dir,
+         "--verify-manifest", "--quiet"])
+    if proc.returncode == 0:
+        return
+    why = {1: "the tree DRIFTED since it was last verified patched",
+           2: "the tree has NEVER been verified patched (no manifest)"}.get(
+               proc.returncode, f"the verifier exited {proc.returncode}")
+    print(f"\nREFUSING to backfill reloc pattern flags: {why}.\n"
+          f"  tree: {project_dir}\n"
+          f"These flags are read back as facts about the build, so measuring a "
+          f"tree that another `ninja` is rewriting silently records a moment "
+          f"instead (2026-08-19: 1,310 LINKER_MERGED rows where two settled "
+          f"trees agree on 1,051).\n"
+          f"Fix: run a full `ninja` in that tree, wait for concurrent builds to "
+          f"finish, and re-run. To record a survey anyway (never with --apply "
+          f"unless you mean it), pass --skip-verify.", file=sys.stderr)
+    sys.exit(4)
+
+
 def main():
     ap = argparse.ArgumentParser(
         description=__doc__,
@@ -100,7 +156,15 @@ def main():
     ap.add_argument("--histogram", action="store_true",
                     help="Print the full pattern histogram under this config "
                          "and exit without writing")
+    ap.add_argument("--skip-verify", "--force", dest="skip_verify",
+                    action="store_true",
+                    help="Skip the verify_objs_patched.py --verify-manifest "
+                         "precondition on --project-dir. The flags then "
+                         "describe whatever the tree was at that minute; see "
+                         "the 2026-08-19 triage. Exit 4 == unsettled tree.")
     args = ap.parse_args()
+
+    require_settled_tree(args.project_dir, args.skip_verify)
 
     conn = sqlite3.connect(args.db)
     rows = conn.execute(
