@@ -101,8 +101,8 @@ unsigned int Trie::get_free_node() {
     // Allocate new node - increment node count
     int &_nodeCount = *(int *)((char *)this + HEADER_OFFSET);
     MILO_ASSERT(_nodeCount < MAX_NODES, 0x82);
-    unsigned int newIdx = _nodeCount + 1;
-    _nodeCount = newIdx;
+    unsigned int newIdx = _nodeCount;
+    _nodeCount = newIdx + 1;
     return newIdx;
 }
 
