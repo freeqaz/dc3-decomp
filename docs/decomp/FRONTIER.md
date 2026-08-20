@@ -691,6 +691,14 @@ should never be read as "no source change exists".
 Ranked by *matched functions per unit of effort*, weighted toward code the
 native port runs. Evidence for each ranking is the section it points at.
 
+**Lanes 1 and 2 are the same work seen two ways, and should be run as one.**
+100 of the 151 one-away functions carry an `AT_LIMIT` verdict (67 `equivalent`,
+18 `permuter_exhausted`) — so a lane that walks the one-away list *using lane 2's
+method* (re-measure first, ignore the certificate, resolve ICF before believing
+a call diff, treat register swaps as symptoms) converts unit-completion progress
+and certificate-busting into a single pass. The blind samples put the bust rate
+at 10 of 20; the one-away list says which busts also close a unit.
+
 ### 1. Close the 151 units that are ONE function from complete
 **151 functions, 99,948 bytes.** Complete authorable units go **434 → 585 of 967
 (44.9 % → 60.5 %)** — the largest single move available on any headline.
