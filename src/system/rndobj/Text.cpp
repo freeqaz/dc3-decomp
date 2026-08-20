@@ -817,15 +817,14 @@ void RndText::WrapText(
             unsigned short *stripped = (unsigned short *)_alloca((wLen + 1) * 2);
             brkChars = stripped;
             const unsigned short *s = wideChars;
-            unsigned short c = *s;
-            while (c != 0) {
+            while (*s != 0) {
+                unsigned short c = *s;
+                unsigned short t = c;
                 if (c == 0x3c) {
-                    unsigned short t = c;
                     do { if (t == 0x3e) break; s++; t = *s; } while (t != 0);
-                    if (t == 0) { c = *s; continue; }
+                    if (t == 0) continue;
                 } else { *stripped = c; stripped++; }
                 s++;
-                c = *s;
             }
             *stripped = 0;
         }
