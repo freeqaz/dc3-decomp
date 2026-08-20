@@ -989,7 +989,7 @@ void RndText::WrapText(
                 ol.mEnd--;
             }
             lines.push_back(ol);
-            wp = &wps[wp->nextIdx];
+            wp = nx;
         } while (wp->nextIdx != -1);
         }
         if (lines.size() == 0) {
