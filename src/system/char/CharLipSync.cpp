@@ -314,8 +314,8 @@ void CharLipSync::PlayBack::Poll(float time) {
             float one = 1.0f;
             CharLipSync *ls = mLipSync;
             for (; numVisemes < end; visIdx++, numVisemes++) {
-                Symbol visemeSym = result.Array(0)->Sym(visIdx);
-                float weight = ls->Property(visemeSym, true)->Float(0);
+                float weight =
+                    ls->Property(result.Array(0)->Sym(visIdx), true)->Float(0);
                 if ((unsigned int)numVisemes < mWeights.size()) {
                     mWeights[numVisemes].mCurWeight = Clamp(zero, one, weight);
                 }
@@ -347,8 +347,9 @@ void CharLipSync::PlayBack::Poll(float time) {
     if (mFrame < frameIdx) {
         float conv = 1.0f / 255.0f;
         do {
-            mOldIndex = mIndex++;
-            int count = lipSync->mData[mOldIndex];
+            int oldIndex = mIndex++;
+            mOldIndex = oldIndex;
+            int count = lipSync->mData[oldIndex];
             if (count != 0) {
                 for (int i = count; i != 0; i--) {
                     int idx = lipSync->mData[mIndex++];
