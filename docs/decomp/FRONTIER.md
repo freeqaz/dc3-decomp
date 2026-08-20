@@ -13,10 +13,13 @@ the binary that produced any number here. When it is built, wrong-callee bugs
 begin costing normalized points and the headline is expected to fall ~0.11 pp.
 Every figure below is on the pre-fix ruler.
 
-`main` moved during this lane (`d505987fa` → `b25928dfb`; other lanes landing
-near-miss and string-literal work). **`build/373307D9/report.json` did not** —
-it still hashes to the value above, so every number here is current against the
-tree as last built. Re-run `ninja` and re-measure if that stops being true.
+`main` moved repeatedly during this lane (`d505987fa` → `5d251aa85`) as other
+lanes landed, including one of this lane's own certificate audits (§6.2).
+**Every number below is on the pinned snapshot above**, and `report.json` has
+since been regenerated. Measured against `main` at `5d251aa85` the canonical
+headline reads **91.67 % (29,520 / 32,202)** and remaining is **2,682 fns /
+1,200,592 B** — five functions closed, one complete unit gained, nothing else
+moved. Regenerate before quoting anything as current.
 
 **This document contains no worklist.** Per
 [`REMAINING_WORK.md`](REMAINING_WORK.md), the queries are the deliverable; the
@@ -541,11 +544,18 @@ Three blind, fixed-seed samples were drawn from the AT_LIMIT population and
 handed to independent auditors with no knowledge of each other's results. The
 sampling queries are in §8 so the draw can be reproduced or re-drawn.
 
+**Across the two completed samples: 10 of 20 certificates busted, 8 functions
+driven to exactly 100.0 %, and 4 of those were real behavioural bugs** — an
+infinite loop, a pair of swapped `int&` out-parameters, a dead pause branch, and
+a mis-paired MDCT trig table. A *floor* certificate asserts the residual is
+cosmetic. On this evidence the label carries no information at a 50 % bust rate,
+and the population it covers is 1,567 functions.
+
 | population | size | sampled | busted |
 |---|---|---|---|
 | `AT_LIMIT` at norm ≥ 99.9 | 83 | 10 | **2** (both driven to exactly 100.0 and landed) |
 | `floor_certificate = 'equivalent'`, still < 100 | 726 | 10 | *audit lane still running at time of writing* |
-| `floor_certificate = 'permuter_exhausted'`, still < 100 | 164 | 10 | *audit lane still running at time of writing* |
+| `floor_certificate = 'permuter_exhausted'`, still < 100 | 164 | 10 | **8** (6 driven to 100, 4 were real behavioural bugs) — landed as `c0f854bf5` |
 
 ### 6.1 The ≥ 99.9 % sample: 2 of 10 busted
 
@@ -591,6 +601,64 @@ count in a shared STLport header.
    any mismatch carrying a relocation as noise without checking whether the
    displacement also moved. That is the same failure shape as the
    "Offset Mismatches (resolved)" block already documented in `CLAUDE.md`.
+
+### 6.2 The `permuter_exhausted` sample: 8 of 10 busted, and 4 were real bugs
+
+Landed on `main` as `c0f854bf5`. Verified against a full build: **0 functions
+regressed, 35 improved.** **Six taken to exactly 100.0 % with zero mismatched
+instructions.**
+
+| symbol | was | now | verdict |
+|---|---|---|---|
+| `SkeletonClip::RecordedFrameAt` | 87.3 | **100.0** | BUSTED |
+| `Loader::Loader` | 92.9 | **100.0** | BUSTED |
+| `ArcDetector::PrintJointPath` | 95.5 | **100.0** | BUSTED |
+| `SuperEasyRemixer::Init` | 96.2 | **100.0** | BUSTED |
+| `GamePanel::SetPausedHelper` | 98.1 | **100.0** | BUSTED |
+| `mdct_backward` | 99.7 | **100.0** | BUSTED |
+| `Synth360::Init` | 95.8 | 97.9 | BUSTED, not closed |
+| `HollaBackMinigame::OnBeat` | 99.83 | 99.84 | BUSTED marginally |
+| `FlowQueueable::ChildFinished` | 99.3 | 99.3 | not busted |
+| `CamShot::GetCam` | 96.8 | 96.8 | not busted — **but the certificate's stated class is wrong**: the residual is a whole-prologue-shape difference (the target dedicates r31 as a frame pointer and saves r26), not a regalloc floor |
+
+**Four of the six 100 %s were real behavioural bugs**, not codegen cosmetics —
+which is the strongest available refutation of the certificate's meaning, since
+a *floor* certificate asserts the residual is cosmetic:
+
+- **`Loader::Loader`** — the insertion scan ran forward from `begin()` and
+  advanced the iterator only on the break path. **Any list whose first `Loader`
+  has `GetPos() > kLoadBack` spins forever.** The target scans backward from
+  `end()`.
+- **`SkeletonClip::RecordedFrameAt`** — the two `int&` out-parameters were
+  swapped. Identical mangling, so **invisible to every name-based check**; only
+  `stw r11, 0x0(r6)` vs `0x0(r5)` shows it. Callers received the loop count
+  where they expected the frame index.
+- **`GamePanel::SetPausedHelper`** — the `SetGamePaused` block was nested one
+  level too deep. With `mNormalPauseEnabled` false, or when pausing rather than
+  unpausing, the function set `mPaused` and did nothing else.
+- **`mdct_backward`** — every trig-table index paired the wrong way round.
+  **This changes what the native Vorbis decoder computes** — toward the shipped
+  binary, but it wants an ear on the native port, not just a green objdiff.
+
+**Instrument warning, and it cost this lane time three separate ways.** The
+loudest signal in three of these functions was an **ICF artifact, not a bug**:
+`Synth360::Init`'s call diff advertised `GetLatency@CXboxRendererConnection` vs
+`Synth::GetNumMics` and `vector<unsigned int>::erase` vs `vector<Mic*>::erase`;
+`Loader`'s advertised two different `MakeString` instantiations; `GetCam`'s
+advertised `MakeString<char*>` vs `<const char*>`. **Every one of those rows
+compares EQUAL** — identical code the linker folded. Acting on the
+"Function Call Diff" block alone sends you hunting a wrong container type that
+does not exist. Resolve the ICF group first
+(`mcp__orchestrator__lookup_merged_symbol`).
+
+Second instrument note: **`run_objdiff`'s `REGISTER_SWAP` pattern was a symptom
+every time it fired here.** `PrintJointPath`'s 28-instruction r28–r31 rotation
+and `SetPausedHelper`'s 14-instruction r10/r11 set **both collapsed to zero from
+a single non-register source edit**. A register-swap diagnosis is a description
+of the output, not of the cause, and the P1 floor-predictor doc already puts the
+true-floor rate in that bucket near 21 %.
+
+---
 
 Independent of any sample, three "exhausted" claims are **refuted by
 construction** from the data in this document:
@@ -640,12 +708,23 @@ body. The lever survives the check.
 Query: `frontier.py --section near-complete --max-remaining 1`.
 Extend to `--max-remaining 2` for **247 units / 343 fns / 179,512 B**.
 
-### 2. Re-audit the 83 `AT_LIMIT` certificates at ≥ 99.9 %
-**83 functions, 40,992 bytes.** One or two instructions each. 55 are certified
-`equivalent`, 14 `permuter_exhausted`, 6 uncertified. Cheapest possible test of
-whether the certificate vocabulary means anything, and every bust is an
-immediate matched function. Precedent: the regswap AT_LIMIT blind sample busted
-3 of 10.
+### 2. Re-audit the AT_LIMIT population, starting at ≥ 99.9 %
+**Promoted on evidence: the two completed blind samples busted 10 of 20** (§6),
+so this is no longer a speculative audit — it is the highest-yield lane in the
+document. 83 functions sit at ≥ 99.9 % (40,992 bytes), one or two instructions
+each: 55 certified `equivalent`, 14 `permuter_exhausted`, 6 uncertified. Every
+bust is an immediate matched function, and 4 of the 8 closed so far were real
+behavioural bugs rather than codegen cosmetics.
+
+Two rules the samples produced, both of which cost auditor time:
+**resolve the ICF group before believing a "Function Call Diff" row** (three of
+ten `permuter_exhausted` functions advertised a wrong callee that compares
+EQUAL), and **treat `REGISTER_SWAP` as a symptom, never a cause** — a
+28-instruction r28–r31 rotation and a 14-instruction r10/r11 set each collapsed
+to zero from one non-register source edit.
+
+Prior precedent, now corroborated twice over: the regswap AT_LIMIT blind sample
+busted 3 of 10.
 
 ### 3. Work the 1,016 never-adjudicated functions in the 90–99 bands
 **567 functions, 148,924 bytes** (271 in `[95,99)`, 296 in `[90,95)`) plus 65 in
