@@ -373,10 +373,14 @@ global void createFilter(
     int ord
 ) {
     order = ord;
-    if (!(mask & opt_p))
-        polemask = ~0;
+    /* Store both alphas before the polemask test: the target sinks these two
+       stores above the branch, which lets alpha2 die immediately. Assigning
+       them after the `if` instead forces alpha2 to be kept in a second FPR
+       across it (a spurious `fmr f13, f2`). */
     raw_alpha1 = alpha1;
     raw_alpha2 = alpha2;
+    if (!(mask & opt_p))
+        polemask = ~0;
     if (band != kBandpass && band != kBandstop)
         raw_alpha2 = alpha1;
     if (type == kResonator) { /* resonator */
