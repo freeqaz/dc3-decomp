@@ -6,7 +6,7 @@
 
 
 XboxEnumeration::XboxEnumeration(int i, std::vector<unsigned long long> *offerIDs)
-    : mUserIndex(i), mOfferIDCount(0), mOfferIDsBegin(0), mCurOffers(0), mEnumerating(false), mHandle(0), mBufferSize(0), mEnumBuffer(0) {
+    : mUserIndex(i), mOfferIDCount(0), mOfferIDsBegin(0), mOfferIDsCur(0), mEnumerating(false), mHandle(0), mBufferSize(0), mCurOffers(0) {
     if (offerIDs != 0) {
         mOfferIDCount = (offerIDs->end() - offerIDs->begin());
         MILO_ASSERT(mOfferIDCount, 0x197);
@@ -16,7 +16,7 @@ XboxEnumeration::XboxEnumeration(int i, std::vector<unsigned long long> *offerID
         }
         mOfferIDsBegin = (unsigned long long *)new char[allocSize];
         memcpy(mOfferIDsBegin, &(*offerIDs)[0], mOfferIDCount << 3);
-        mCurOffers = mOfferIDsBegin;
+        mOfferIDsCur = mOfferIDsBegin;
     }
 }
 
@@ -37,8 +37,8 @@ XboxEnumeration::~XboxEnumeration() {
         mHandle = 0;
     }
 
-    delete mEnumBuffer;
-    mEnumBuffer = 0;
+    delete mCurOffers;
+    mCurOffers = 0;
 }
 
 bool XboxEnumeration::IsSuccess() const {
@@ -51,33 +51,31 @@ void XboxEnumeration::Start() {
     if (mHandle == 0) {
         unsigned int error;
         mBufferSize = 0;
-        if (mCurOffers == mOfferIDsBegin) {
+        if (mOfferIDsCur == mOfferIDsBegin) {
             mContentList.clear();
         }
         if (mOfferIDsBegin == 0) {
             error = XMarketplaceCreateOfferEnumerator(mUserIndex, 0x100002, 0xFFFFFFFFFFFFFFFFULL, 99, &mBufferSize, &mHandle);
         } else {
-            int remaining = (int)(mOfferIDCount - (u32)(mCurOffers - mOfferIDsBegin));
+            int remaining = (int)(mOfferIDCount - (u32)(mOfferIDsCur - mOfferIDsBegin));
             if (remaining >= 99) remaining = 99;
-            error = XMarketplaceCreateOfferEnumeratorByOffering(mUserIndex, remaining, mCurOffers, (WORD)remaining, &mBufferSize, &mHandle);
-            mCurOffers += remaining;
+            error = XMarketplaceCreateOfferEnumeratorByOffering(mUserIndex, remaining, mOfferIDsCur, (WORD)remaining, &mBufferSize, &mHandle);
+            mOfferIDsCur += remaining;
         }
-        // NOTE: the shipped binary's assert literal here is "!mCurOffers", but the
-    // instruction it guards loads offset 0x44 -- the buffer this header calls
-    // mEnumBuffer.  Spelling the assert the original way makes the code test
-    // 0x14 instead and costs 10 extra register mismatches, so the literal can
-    // only be closed by renaming the 0x44 member, not by editing this line.
-    // See the lane report.
-    MILO_ASSERT(!mEnumBuffer, 0x1EA);
-        mEnumBuffer = new char[mBufferSize];
+        // Resolved 2026-08-20: the 0x44 member IS the original's `mCurOffers`
+        // (the assert literal names it and the guarded instruction loads 0x44),
+        // so the header was renamed rather than this line.  The old cursor name
+        // moved to mOfferIDsCur.
+        MILO_ASSERT(!mCurOffers, 0x1EA);
+        mCurOffers = new char[mBufferSize];
         if (error != 0) {
             goto error_path;
         }
     }
-    memset(mEnumBuffer, 0, mBufferSize);
+    memset(mCurOffers, 0, mBufferSize);
     memset(&mOverlapped, 0, 0x1c);
     {
-        DWORD result = XEnumerate(mHandle, mEnumBuffer, mBufferSize, 0, &mOverlapped);
+        DWORD result = XEnumerate(mHandle, mCurOffers, mBufferSize, 0, &mOverlapped);
         if (result == 0x3e5) {
             return;
         }
@@ -87,9 +85,9 @@ error_path:
         CloseHandle(mHandle);
         mHandle = 0;
     }
-    delete[] (char*)mEnumBuffer;
+    delete[] (char*)mCurOffers;
     mEnumerating = false;
-    mEnumBuffer = 0;
+    mCurOffers = 0;
 }
 
 bool XboxEnumeration::IsEnumerating() const {
@@ -114,7 +112,7 @@ void XboxEnumeration::Poll() {
         while (productCount < bytesReceived) {
             char buf[256];
             String str;
-            u8 *entryPtr = (u8 *)mEnumBuffer + offset;
+            u8 *entryPtr = (u8 *)mCurOffers + offset;
             WideCharToMultiByte(0, 0, *(LPCWSTR *)(entryPtr + 0x14), *(int *)(entryPtr + 0x10), buf, 0xFF, 0, 0);
             str = buf;
 
@@ -139,8 +137,8 @@ void XboxEnumeration::Poll() {
         mHandle = 0;
     }
 
-    delete mEnumBuffer;
-    mEnumBuffer = 0;
+    delete mCurOffers;
+    mCurOffers = 0;
 
     if (overlappedResult == 0) {
         goto done;
@@ -178,7 +176,7 @@ handle_12:
 
 check_more_offers:
     if (mOfferIDsBegin != 0) {
-        if (mCurOffers < mOfferIDsBegin + mOfferIDCount) {
+        if (mOfferIDsCur < mOfferIDsBegin + mOfferIDCount) {
             goto continue_enum;
         }
     }
@@ -194,7 +192,7 @@ error_no_more:
 
 continue_enum:
     if (mOfferIDsBegin != 0) {
-        if (mCurOffers < mOfferIDsBegin + mOfferIDCount) {
+        if (mOfferIDsCur < mOfferIDsBegin + mOfferIDCount) {
             Start();
             return;
         }
