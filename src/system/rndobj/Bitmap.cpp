@@ -331,8 +331,9 @@ int RndBitmap::PixelOffset(int x, int y, bool &nibble) const {
             int xHalf = x >> 1;
             int doubleRowStride = (int)mRowBytes * 2;
             int returnBase = ((yHalf & 0xFFFFFFFE) * doubleRowStride) + ((xHalf & 0x3FFFFFF8) * 4);
-            int lookupIdx = (y % 4) * 0x10 + (x % 16);
-            int lookupOffset = (unsigned char)(((y >> 2) % 4) & 1 ? hbytes13 : hbytes02)[lookupIdx];
+            int lookupOffset =
+                (unsigned char)(((y >> 2) % 4) & 1 ? bytes13
+                                                   : bytes02)[(y % 4) * 0x10 + (x % 16)];
             if (lookupOffset > 0x1F) {
                 lookupOffset = (lookupOffset + doubleRowStride) - 0x20;
             }
@@ -345,7 +346,8 @@ int RndBitmap::PixelOffset(int x, int y, bool &nibble) const {
                 + ((x >> 1) & 0xFFFFFFC0);
             tiledOffsetY = (((int)(x - ((x / 128) << 7)) >> 2) & 0xFFFFFFF8)
                 + ((y >> 2) & 0xFFFFFFE0) + (yQuadMod * 2);
-            tiledStride = (((_ref3 - (((int)_ref3 / 128) << 7)) & 0xFFFFFFF0)
+            int heightVal = _ref3;
+            tiledStride = (((heightVal - ((heightVal / 128) << 7)) & 0xFFFFFFF0)
                            + (mWidth & 0xFFFFFF80))
                 * 2;
         } else {
@@ -353,7 +355,7 @@ int RndBitmap::PixelOffset(int x, int y, bool &nibble) const {
             tiledOffsetY = ((x >> 2) & 0xFFFFFFF8) + (yQuadMod * 2);
             tiledStride = (int)_ref3 * 2;
         }
-        int lookupIdx2 = ((y % 4) << 5) + (x - ((x / 32) << 5));
+        int lookupIdx2 = ((y % 4) << 5) + (x % 32);
         int tiledBase = (tiledStride * tiledOffsetY) + (tiledOffsetX * 4);
         int nibbleOffset = (unsigned char)(yQuadMod & 1 ? hbytes13 : hbytes02)[lookupIdx2];
         nibble = nibbleOffset & 1;
@@ -370,9 +372,8 @@ int RndBitmap::PixelOffset(int x, int y, bool &nibble) const {
             blockSize = 4;
         }
         unsigned short width = mWidth;
-        int bppOffset = bpp - 0x10;
+        int blockWidth = bpp < 0x10 ? 8 : 4;
         nibble = x & 1;
-        int blockWidth = (((bppOffset - bppOffset) - !(bppOffset >> 31)) & 4) + 4;
         int pixelScale = (((bpp - 0x20) == 0) & 1) + 1;
         int xModBlockWidth = x % blockWidth;
         int tiledBaseOffset =
@@ -600,22 +601,22 @@ void RndBitmap::GenerateMips() {
         for (int i = 0; i < cur->mMip->mHeight; i++) {
             for (int j = 0; j < cur->mMip->mWidth; j++) {
                 unsigned char r, g, b, a;
-                cur->PixelColor(j * 2, i * 2, r, g, b, a);
+                cur->PixelColor(j << 1, i << 1, r, g, b, a);
                 int rsum = r;
                 int gsum = g;
-                int asum = a;
                 int bsum = b;
-                cur->PixelColor(j * 2 + 1, i * 2, r, g, b, a);
+                int asum = a;
+                cur->PixelColor((j << 1) + 1, i << 1, r, g, b, a);
                 rsum += r;
                 gsum += g;
                 bsum += b;
                 asum += a;
-                cur->PixelColor(j * 2, i * 2 + 1, r, g, b, a);
+                cur->PixelColor(j << 1, (i << 1) + 1, r, g, b, a);
                 rsum += r;
                 gsum += g;
                 bsum += b;
                 asum += a;
-                cur->PixelColor(j * 2 + 1, i * 2 + 1, r, g, b, a);
+                cur->PixelColor((j << 1) + 1, (i << 1) + 1, r, g, b, a);
                 rsum += r;
                 gsum += g;
                 bsum += b;
