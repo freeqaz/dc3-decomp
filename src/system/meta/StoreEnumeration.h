@@ -60,11 +60,14 @@ public:
 protected:
     u32 mOfferIDCount;                      // 0xC - total count of offer IDs
     unsigned long long *mOfferIDsBegin;              // 0x10 - begin pointer of offer IDs array
-    unsigned long long *mCurOffers;         // 0x14 - current position pointer in offer IDs array
+    unsigned long long *mOfferIDsCur;       // 0x14 - cursor into the offer-ID array
     int mUserIndex;                              // 0x18 - user index
     bool mEnumerating;                             // 0x1c - enumerating flag
     XOVERLAPPED mOverlapped;                // 0x20 - Xbox overlapped I/O structure (28 bytes)
     HANDLE mHandle;                         // 0x3C - enumeration handle
     u32 mBufferSize;                              // 0x40 - buffer size
-    void *mEnumBuffer;                      // 0x44 - buffer for enumeration results
+    // 0x44 is named mCurOffers by the original: the assert at Start()+0x1EA
+    // stringifies as "!mCurOffers" and the instruction it guards loads 0x44.
+    // It holds the XEnumerate output buffer -- the offers enumerated so far.
+    void *mCurOffers;                       // 0x44
 };
