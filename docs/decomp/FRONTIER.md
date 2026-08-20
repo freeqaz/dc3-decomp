@@ -318,13 +318,30 @@ Verified by formula on **25 of 25** functions in `default/system/math/*`
 impossible. `Multiply(Vector3 const&, Quat const&, Vector3&)` is measured at
 84.8 % and assigned a ceiling of 16.0 %.
 
-Across the whole `[99, 99.99)` band — 244 functions, every one re-measured by a
-fresh objdiff run — **230 (94.3 %) come out with a ceiling below their own
-measured percent.** Only 10 survive as a genuine `at_limit`. Without the guard
-this lane added, those 230 would each have been emitted as
-`at_limit — "Ceiling N % — no room to improve"` on a function within 1 % of
-perfect. Worst case in that band: `?mash@@YAXPAE0@Z`, measured 94.17 %, ceiling
-23.33 %.
+**Measured over the whole pool.** A full `--min 0 --max 99.99 --limit 0` run —
+2,705 rows, each re-diffed by a fresh objdiff process, with the invocation fixed
+and *before* the guard was added, so it is exactly what the tool emits unguarded:
+
+| verdict | rows |
+|---|---|
+| `at_limit` | **2,318** |
+| `contested` | 288 |
+| `error` (genuinely undiffable — 43 `merged_*`, plus jpeg/curl/`FormatString` symbols absent from the build) | 78 |
+| `complete` (already 100 — DB row was stale) | 20 |
+| **`workable`** | **1** |
+
+- **1,309 of 2,705 rows (48.4 %) have a ceiling below their own measured percent.**
+- **1,309 of the 2,318 `at_limit` verdicts (56.5 %) were manufactured by that
+  impossible comparison.** Worst: `CSampleXAPOBase<HeadsetXferEffect>`'s
+  destructor, measured **88.29 %**, assigned a ceiling of **0.00 %**.
+- And the punchline for a *work-selection* oracle: over 2,705 remaining
+  functions it nominates **one** as workable
+  (`NgFur::Shell`, 96.8 %). A tool that answers "there is one thing to do" is
+  the exhausted-shaped answer again, arrived at by a different route than the
+  2,705 error rows it used to return.
+
+Narrower slice, same shape: over `[99, 99.99)` alone (244 functions) **230
+(94.3 %) come out negative** and only 10 survive as a genuine `at_limit`.
 
 **This is the mechanism behind the clamp.** `ceiling_calculator.py` reports
 `ceilings_clamped_up_to_current: 1172 / 1568 = 74.7 %` and its source calls the
