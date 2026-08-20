@@ -142,7 +142,7 @@ Symbol DirLoader::GetDirClass(const char *cc) {
 #else
         EofType t;
         while (t = cs.Eof(), t != NotEof) {
-            MILO_ASSERT(t == TempEof, 0x199);
+            MILO_ASSERT(t == TempEof, 0xc3);
         }
 #endif
         int i;
