@@ -172,10 +172,12 @@ void WahEffect::Process(float *buf, int numSamples, int numChans) {
             float filterDiv = filterFreq / mGain;
             float f17 = f31 - filterDiv;
 
-            // Compute cos/sin for filter (f29 computed before cos for scheduling)
-            float f29 = f17 * f17;
+            // Compute cos/sin for filter.  The target squares f17 AFTER the
+            // cos call; MSVC schedules it before regardless, so moving this
+            // statement either side of the call is byte-identical (measured).
             float cosVal = cos(f28);
             cosVal = (float)cosVal;
+            float f29 = f17 * f17;
             float cosMod = cosVal * f17;
             float f28_scaled = cosMod * f26;
 
