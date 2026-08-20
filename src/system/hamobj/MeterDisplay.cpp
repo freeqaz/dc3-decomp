@@ -198,10 +198,10 @@ void MeterDisplay::DrawShowing() {
                     mCurrentValue = itouse;
                     unk50 = -1;
                     f = (float)mCurrentValue / (float)mMaxValue;
+                    UpdateDisplay();
                 }
             }
         }
-        UpdateDisplay();
     }
     ClampEq(f, 0.0f, 1.0f);
     float diff = mMeterAnim->EndFrame() - mMeterAnim->StartFrame();
