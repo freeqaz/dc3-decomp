@@ -346,7 +346,8 @@ int RndBitmap::PixelOffset(int x, int y, bool &nibble) const {
                 + ((x >> 1) & 0xFFFFFFC0);
             tiledOffsetY = (((int)(x - ((x / 128) << 7)) >> 2) & 0xFFFFFFF8)
                 + ((y >> 2) & 0xFFFFFFE0) + (yQuadMod * 2);
-            tiledStride = (((_ref3 - (((int)_ref3 / 128) << 7)) & 0xFFFFFFF0)
+            int heightVal = _ref3;
+            tiledStride = (((heightVal - ((heightVal / 128) << 7)) & 0xFFFFFFF0)
                            + (mWidth & 0xFFFFFF80))
                 * 2;
         } else {
