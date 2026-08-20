@@ -184,7 +184,7 @@ RndText::StyleState::StyleState(RndText *text, float size) {
     mFontMapIdx = text->FontMapIndex(mStyle->mFont, mStyle->mBlacklight);
     mBaseSize = size;
     mSize *= size;
-    mActive = true;
+    brk = true;
 }
 
 BinStream &operator<<(BinStream &bs, const RndText::Style &s) {
@@ -773,16 +773,17 @@ void RndText::WrapText(
     StyleState style(this, scale);
     auto& _ref0 = mWidth;
     auto& _ref1 = mAlignment;
-    if (mFontMaps.size() == 0 || wLen == 0 || mStyles[0].mFont == 0) {
+    if (mFontMaps.empty() || wLen == 0 || mStyles[0].mFont == 0) {
         Line emptyLine;
         emptyLine.mStart = 0;
         emptyLine.mEnd = 0;
         emptyLine.mWidth = 0.0f;
         if (lines.size() > 1) lines.erase(lines.begin() + 1, lines.end());
         else lines.insert(lines.end(), 1 - lines.size(), emptyLine);
-        lines[0].mWidth = 0.0f;
-        lines[0].mStart = wideChars;
-        lines[0].mEnd = wideChars;
+        Line &l0 = lines[0];
+        l0.mWidth = 0.0f;
+        l0.mStart = wideChars;
+        l0.mEnd = wideChars;
     } else if (_ref0 == 0.0f) {
         Line emptyLine;
         emptyLine.mStart = 0;
@@ -790,20 +791,24 @@ void RndText::WrapText(
         emptyLine.mWidth = 0.0f;
         if (lines.size() > 1) lines.erase(lines.begin() + 1, lines.end());
         else lines.insert(lines.end(), 1 - lines.size(), emptyLine);
-        lines[0].mYPos = 0.0f;
-        lines[0].mXStart = 0.0f;
-        lines[0].mStart = wideChars;
-        lines[0].mEnd = wideChars + wLen;
-        lines[0].mWidth = SegmentLength(0, wLen, charWidths, wideChars, scale);
+        Line &l0 = lines[0];
+        l0.mXStart = 0.0f;
+        l0.mStart = wideChars;
+        l0.mYPos = 0.0f;
+        l0.mEnd = wideChars + wLen;
+        l0.mWidth = SegmentLength(0, wLen, charWidths, wideChars, scale);
     } else {
         WrapPoint *wps = (WrapPoint *)_alloca((wLen + 1) * sizeof(WrapPoint));
-        bool activeMarkup = style.mActive;
-        wps[0].charIdx = 0;
+        bool activeMarkup = style.brk;
+        int numWp = 1;
+        int cCount = 0;
+        const unsigned short *cur = wideChars;
         wps[0].lineWidth = 0.0f;
+        wps[0].charIdx = 0;
         wps[0].cost = 0;
-        wps[0].isLineEnd = false;
         wps[0].bestPrevIdx = -1;
         wps[0].nextIdx = -1;
+        wps[0].isLineEnd = true;
         wps[0].isHardBreak = true;
         float minW = _ref0 * 0.7f;
         float goodW = _ref0 * 0.95f;
@@ -812,15 +817,14 @@ void RndText::WrapText(
             unsigned short *stripped = (unsigned short *)_alloca((wLen + 1) * 2);
             brkChars = stripped;
             const unsigned short *s = wideChars;
-            unsigned short c = *s;
-            while (c != 0) {
+            while (*s != 0) {
+                unsigned short c = *s;
+                unsigned short t = c;
                 if (c == 0x3c) {
-                    unsigned short t = c;
                     do { if (t == 0x3e) break; s++; t = *s; } while (t != 0);
-                    if (t == 0) { c = *s; continue; }
+                    if (t == 0) continue;
                 } else { *stripped = c; stripped++; }
                 s++;
-                c = *s;
             }
             *stripped = 0;
         }
@@ -840,9 +844,7 @@ void RndText::WrapText(
 #define BRKWIDE_BASE ((const wchar_t *)brkChars)
 #endif
 
-        int wpI = 0, numWp = 1;
-        const unsigned short *cur = wideChars;
-        int cCount = 0;
+        int wpI = 0;
         for (;;) {
             unsigned short ch = *cur;
             const wchar_t *brkW = &BRKWIDE_BASE[cCount];
@@ -852,42 +854,43 @@ void RndText::WrapText(
                 int bestWp = -1, bestC = 100000;
                 bool ovf = false;
                 float bestLineLen = 0.0f;
-                int endI = (int)(cur - wideChars);
-                float mxW = _ref0;
                 for (int wi = wpI; wi >= 0; wi--) {
-                    float lineLen = SegmentLength(wps[wi].charIdx, endI, charWidths, wideChars, scale);
+                    float lineLen = SegmentLength(
+                        wps[wi].charIdx, (int)(cur - wideChars), charWidths, wideChars, scale
+                    );
                     unsigned int pen = 10;
-                    if (lineLen > mxW) {
+                    if (lineLen > _ref0) {
                         if (wi != prevI) {
+                            pen = 2010;
                             if (bestWp != -1) { ovf = true; }
                         }
                     } else {
                         if (_ref1 & 0x20) {
                             float fw = SegmentLength(wps[wi].charIdx, wLen, charWidths, wideChars, scale);
-                            if (fw >= mxW) {
-                                pen = (unsigned int)(int)((1.0f - lineLen / mxW) * 30.0f);
+                            if (fw >= _ref0) {
+                                pen = (unsigned int)(int)((1.0f - lineLen / _ref0) * 30.0f);
                                 if (lineLen < minW) pen += 100;
                             }
                         } else {
-                            if (endI - wps[wi].charIdx <= 4) pen = 50;
+                            if ((int)(cur - wideChars) - wps[wi].charIdx <= 4) pen = 50;
                         }
                     }
                     int tc = (int)pen + wps[wi].cost;
-                    if (tc < bestC) { bestC = tc; bestWp = wi; bestLineLen = lineLen; }
+                    if (tc < bestC) { bestWp = wi; bestLineLen = lineLen; bestC = tc; }
                     if (wps[wi].isHardBreak || ovf) break;
                 }
                 MILO_ASSERT(bestWp != -1, 0x6ed);
                 MILO_ASSERT(numWp < wLen + 1, 0x6ef);
-                nxt->charIdx = endI;
+                nxt->lineWidth = bestLineLen;
                 nxt->cost = bestC;
                 nxt->bestPrevIdx = bestWp;
                 nxt->isLineEnd = true;
                 nxt->nextIdx = -1;
-                nxt->lineWidth = bestLineLen;
+                nxt->charIdx = (int)(cur - wideChars);
                 nxt->isHardBreak = true;
                 numWp++; wpI++;
                 wps[bestWp].isLineEnd = false;
-                if (ch == 0) goto buildLines;
+                if (*cur == 0) goto buildLines;
             } else {
                 unsigned short mc = ch;
                 if (ch == 0x3c) {
@@ -896,7 +899,7 @@ void RndText::WrapText(
                     cCount--;
                     brkW = &BRKWIDE_BASE[cCount];
                     cur--;
-                    if (style.mActive) {
+                    if (style.brk) {
                         activeMarkup = true;
                     }
                 }
@@ -904,7 +907,9 @@ void RndText::WrapText(
                 if (mc != 0) {
                     int ci = (int)(cur - wideChars);
                     if (activeMarkup) {
-                        bool canBrk = cCount > 0 && WordWrap_CanBreakLineAt(brkW, BRKWIDE_BASE);
+                        bool canBrk;
+                        if (cCount <= 0) canBrk = false;
+                        else canBrk = WordWrap_CanBreakLineAt(brkW, BRKWIDE_BASE) != 0;
                         if (canBrk) {
                             int bestWp = -1, bestC = 100000;
                             bool ovf = false;
@@ -916,6 +921,7 @@ void RndText::WrapText(
                                 float mxW2 = _ref0;
                                 if (lineLen > mxW2) {
                                     if (wi != prevI) {
+                                        pen = 2010;
                                         if (bestWp != -1) { ovf = true; }
                                     }
                                 } else {
@@ -927,9 +933,9 @@ void RndText::WrapText(
                                         }
                                     }
                                 }
-                                if ((int)(wps[wi].cost + pen) <= bestC) {
-                                    bestC = wps[wi].cost + pen;
-                                    bestWp = wi; bestLineLen = lineLen;
+                                int tc2 = (int)(wps[wi].cost + pen);
+                                if (tc2 <= bestC) {
+                                    bestWp = wi; bestLineLen = lineLen; bestC = tc2;
                                 }
                                 if (wps[wi].isHardBreak || ovf) break;
                             }
@@ -946,7 +952,7 @@ void RndText::WrapText(
                             wps[bestWp].isLineEnd = false;
                         }
                     }
-                    if (activeMarkup != style.mActive) {
+                    if (activeMarkup != style.brk) {
                         MILO_ASSERT(style.brk == false, 0x6a2);
                         activeMarkup = false;
                     }
@@ -964,23 +970,28 @@ void RndText::WrapText(
             } while (idx != 0);
         }
         Line ol;
-        int chi = wps[0].nextIdx;
-        while (chi != -1) {
-            WrapPoint *wp = &wps[chi];
-            WrapPoint *pw = &wps[wp->bestPrevIdx];
-            const unsigned short *cs = wideChars + (pw->charIdx & 0x7fffffff);
-            const unsigned short *ce = wideChars + (wp->charIdx & 0x7fffffff);
-            while (cs < ce && (*cs == ' ' || *cs == '\t')) cs++;
-            while (ce > cs) {
-                unsigned short p = *(ce - 1);
-                if (p != ' ' && p != '\n' && p != '\t') break;
-                ce--;
+        if (wps[0].nextIdx != -1) {
+        WrapPoint *wp = &wps[0];
+        do {
+            WrapPoint *nx = &wps[wp->nextIdx];
+            ol.mWidth = nx->lineWidth;
+            ol.mEnd = wideChars + nx->charIdx;
+            ol.mStart = wideChars + wp->charIdx;
+            for (;;) {
+                unsigned short p = *ol.mStart;
+                if (p != ' ' && p != '\t') break;
+                if (ol.mEnd <= ol.mStart) break;
+                ol.mStart++;
             }
-            ol.mStart = cs;
-            ol.mEnd = ce;
-            ol.mWidth = wp->lineWidth;
+            for (;;) {
+                unsigned short p = ol.mEnd[-1];
+                if (p != ' ' && p != '\n' && p != '\t') break;
+                if (ol.mEnd <= ol.mStart) break;
+                ol.mEnd--;
+            }
             lines.push_back(ol);
-            chi = wp->nextIdx;
+            wp = nx;
+        } while (wp->nextIdx != -1);
         }
         if (lines.size() == 0) {
             ol.mWidth = 0.0f;

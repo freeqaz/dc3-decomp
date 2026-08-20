@@ -132,8 +132,12 @@ public:
         Style *mStyle; // 0x34
         int mFontMapIdx; // 0x38
         float mBaseSize; // 0x3c
-        bool mActive; // 0x40
-        bool brk; // 0x41
+        /** "Line breaking is currently allowed."
+            <nobreak> clears this, </nobreak> restores it. There is exactly one
+            bool here: the shipped binary's assert text at Text.cpp:0x6a2 reads
+            "style.brk == false" and loads offset 0x40, and ParseMarkup's
+            <nobreak> handler stores to 0x40 as well. */
+        bool brk; // 0x40
     };
 
     class BlacklightPacket {
