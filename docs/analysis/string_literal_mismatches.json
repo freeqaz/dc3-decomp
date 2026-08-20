@@ -1,0 +1,326 @@
+[
+ {
+  "unit": "default/system/meta/StoreEnumeration",
+  "name": "?Poll@XboxEnumeration@@UAAXXZ",
+  "target": "??_C@_0CO@HBGGBFHJ@?5store?5enum?3?5funciton?5failed?5wit@",
+  "ours": "??_C@_0CN@DHEFBJFK@?5store?5enum?3?5funciton?5failed?5wit@"
+ },
+ {
+  "unit": "default/system/meta/StoreEnumeration",
+  "name": "?Poll@XboxEnumeration@@UAAXXZ",
+  "target": "??_C@_0CF@FHKHDCPL@?5which?5is?5a?5winsock?5error?0?5so?5fa@",
+  "ours": "??_C@_0CE@CPFCDHGK@?5which?5is?5a?5winsock?5error?0?5so?5fa@"
+ },
+ {
+  "unit": "default/system/meta/StoreEnumeration",
+  "name": "?Poll@XboxEnumeration@@UAAXXZ",
+  "target": "??_C@_0CH@KNELEPMC@?5store?5enum?3?5error?5no?5more?5files@",
+  "ours": "??_C@_0DN@MOLPKANO@?5store?5enum?3?5overlapped?5failed?5w@"
+ },
+ {
+  "unit": "default/system/utl/NetCacheMgr",
+  "name": "?SetState@NetCacheMgr@@IAAXW4NetCacheMgrState@@@Z",
+  "target": "??_C@_0BA@KHEPAPCK@NetCacheMgr?4cpp?$AA@",
+  "ours": "??_C@_0BH@IHPPIKIA@mNetLoaderRefs?4empty?$CI?$CJ?$AA@"
+ },
+ {
+  "unit": "default/system/utl/NetCacheMgr",
+  "name": "?SetState@NetCacheMgr@@IAAXW4NetCacheMgrState@@@Z",
+  "target": "??_C@_0BH@IHPPIKIA@mNetLoaderRefs?4empty?$CI?$CJ?$AA@",
+  "ours": "??_C@_0EI@EOCHHHLE@NetCacheMgr?5attempted?5to?5move?5st@"
+ },
+ {
+  "unit": "default/system/rndobj/Text",
+  "name": "?OnComputeCharWidths@RndText@@IAAHPBGPAM_N@Z",
+  "target": "??_C@_05MKEHGNDJ@?8?5?$CI?$CFs?$AA@",
+  "ours": "??_C@_01BJJEKLCA@?$CC?$AA@"
+ },
+ {
+  "unit": "default/system/rndobj/Text",
+  "name": "?OnComputeCharWidths@RndText@@IAAHPBGPAM_N@Z",
+  "target": "??_C@_07KDJDOMME@0x?$CF02x?5?$AA@",
+  "ours": "??_C@_05MKEHGNDJ@?8?5?$CI?$CFs?$AA@"
+ },
+ {
+  "unit": "default/system/rndobj/Text",
+  "name": "?OnComputeCharWidths@RndText@@IAAHPBGPAM_N@Z",
+  "target": "??_C@_02DKCKIIND@?$CFs?$AA@",
+  "ours": "??_C@_07KDJDOMME@0x?$CF02x?5?$AA@"
+ },
+ {
+  "unit": "default/system/rndobj/Text",
+  "name": "?WrapText@RndText@@QAAXPBGHPAMAAV?$vector@VLine@RndText@@V?$StlNodeAlloc@VLine@RndText@@@stlpmtx_std@@@stlpmtx_std@@AAVRect@Hmx@@M@Z",
+  "target": "??_C@_0BB@NLJCNGKP@numWp?5?$DM?5wLen?5?$CL?51?$AA@",
+  "ours": "??_C@_0BH@OFIEFIBB@lineLen?5?$DO?$DN?5bestLineLen?$AA@"
+ },
+ {
+  "unit": "default/system/rndobj/Text",
+  "name": "?WrapText@RndText@@QAAXPBGHPAMAAV?$vector@VLine@RndText@@V?$StlNodeAlloc@VLine@RndText@@@stlpmtx_std@@@stlpmtx_std@@AAVRect@Hmx@@M@Z",
+  "target": "??_C@_0N@NCIPEI@bestWp?5?$CB?$DN?5?91?$AA@",
+  "ours": "??_C@_0BB@NLJCNGKP@numWp?5?$DM?5wLen?5?$CL?51?$AA@"
+ },
+ {
+  "unit": "default/system/rndobj/Text",
+  "name": "?WrapText@RndText@@QAAXPBGHPAMAAV?$vector@VLine@RndText@@V?$StlNodeAlloc@VLine@RndText@@@stlpmtx_std@@@stlpmtx_std@@AAVRect@Hmx@@M@Z",
+  "target": "??_C@_0BH@OFIEFIBB@lineLen?5?$DO?$DN?5bestLineLen?$AA@",
+  "ours": "??_C@_0N@NCIPEI@bestWp?5?$CB?$DN?5?91?$AA@"
+ },
+ {
+  "unit": "default/system/os/Memcard_Xbox",
+  "name": "?GetDisplayName@Memcard@@UAAPB_WXZ",
+  "target": "??_C@_01LOCGONAA@?$AA?$AA@",
+  "ours": "??_C@_11LOCGONAA@?$AA?$AA@"
+ },
+ {
+  "unit": "default/system/world/Crowd",
+  "name": "?DrawShowing@WorldCrowd@@UAAXXZ",
+  "target": "??_C@_0BK@CDFKKHOA@?$CBgImpostorMat?9?$DONextPass?$CI?$CJ?$AA@",
+  "ours": "??_C@_0DB@BIGAACON@?$CBdynamic_cast?$DMRndMat?$CK?$DO?$CIgImpostor@"
+ },
+ {
+  "unit": "default/system/meta/StorePanel",
+  "name": "?HandleNetCacheMgrFailure@StorePanel@@QAAXXZ",
+  "target": "??_C@_0CD@DGMIFFDH@Unknown?5failure?5?$CFd?5in?5NetCacheMg@",
+  "ours": "??_C@_0CE@ECGEIFNA@Unknown?5failure?5?$CFd?5in?5NetCacheMg@"
+ },
+ {
+  "unit": "default/App",
+  "name": "?RunWithoutDebugging@App@@QAAXXZ",
+  "target": "??_C@_0BJ@BKPPBDEI@GLITCH?3?5?$CFg?5ms?0?5ACTIVE?5?$CFs?$AA@",
+  "ours": "??_C@_04CGFJFPFD@none?$AA@"
+ },
+ {
+  "unit": "default/system/gesture/DepthBuffer3D",
+  "name": "?DrawShowing@DepthBuffer3D@@UAAXXZ",
+  "target": "??_C@_09MDBGFPDD@texSource?$AA@",
+  "ours": "??_C@_03JDBMONBN@tex?$AA@"
+ },
+ {
+  "unit": "default/system/gesture/DepthBuffer3D",
+  "name": "?DrawShowing@DepthBuffer3D@@UAAXXZ",
+  "target": "??_C@_0CE@FPAMCFBM@texZoomParams?$FL0?$FN?5?$DM?5texZoomParams@",
+  "ours": "??_C@_09DGKALMH@tx0?5?$DM?5tx2?$AA@"
+ },
+ {
+  "unit": "default/system/gesture/DepthBuffer3D",
+  "name": "?DrawShowing@DepthBuffer3D@@UAAXXZ",
+  "target": "??_C@_0CE@EJOGCLOL@texZoomParams?$FL1?$FN?5?$DM?5texZoomParams@",
+  "ours": "??_C@_09NGNLDKBI@tx1?5?$DM?5tx3?$AA@"
+ },
+ {
+  "unit": "default/system/gesture/DepthBuffer3D",
+  "name": "?DrawShowing@DepthBuffer3D@@UAAXXZ",
+  "target": "??_C@_0CI@NJAFGNFP@depthZoomParams?$FL0?$FN?5?$DM?5depthZoomPa@",
+  "ours": "??_C@_09OPMNNPIJ@d36?5?$DM?5d37?$AA@"
+ },
+ {
+  "unit": "default/system/world/LightPreset",
+  "name": "?Animate@LightPreset@@IAAXM@Z",
+  "target": "??_C@_0DB@GDHMPBMP@mEnvironments?4size?$CI?$CJ?5?$DN?$DN?5mEnviron@",
+  "ours": "??_C@_0BO@NMPCFAIL@mEnvironments?4size?$CI?$CJ?5?$DN?$DN?5_tmp4?$AA@"
+ },
+ {
+  "unit": "default/system/world/SpotlightDrawer_NG",
+  "name": "?RenderBeams@NgSpotlightDrawer@@IAAXABVMatrix4@Hmx@@@Z",
+  "target": "??_C@_0BH@BCLEPCJM@SpotlightDrawer_NG?4cpp?$AA@",
+  "ours": "??_C@_05LAPONLG@false?$AA@"
+ },
+ {
+  "unit": "default/system/gesture/ArcDetector",
+  "name": "?Update@ArcDetector@@QAAXABVSkeleton@@H@Z",
+  "target": "??_C@_05LAPONLG@false?$AA@",
+  "ours": "??_C@_0N@NEPPEPCN@mInitialized?$AA@"
+ },
+ {
+  "unit": "default/system/synth_xbox/Voice",
+  "name": "?StartVoiceThreadEntry@@YAKPAX@Z",
+  "target": "??_C@_09CKMKIENM@Voice?4cpp?$AA@",
+  "ours": "??_C@_0O@LGHHDKBB@SUCCEEDED?$CIhr?$CJ?$AA@"
+ },
+ {
+  "unit": "default/system/ui/UIListState",
+  "name": "?Scroll@UIListState@@QAAXH_N@Z",
+  "target": "??_C@_0CE@PHFPFCCL@state?4mSelected?5?$DN?$DN?5mSelectedDisp@",
+  "ours": "??_C@_0CL@CMMLOIMC@state?4mSelectedDisplay?5?$DN?$DN?5mSelec@"
+ },
+ {
+  "unit": "default/system/utl/ChunkStream",
+  "name": "?Eof@ChunkStream@@UAA?AW4EofType@@XZ",
+  "target": "??_C@_0L@GPMJIKEC@?4milo_xbox?$AA@",
+  "ours": "??_C@_09OJHNKJCI@?4milo_ps3?$AA@"
+ },
+ {
+  "unit": "default/system/utl/ChunkStream",
+  "name": "?Eof@ChunkStream@@UAA?AW4EofType@@XZ",
+  "target": "??_C@_09OJHNKJCI@?4milo_ps3?$AA@",
+  "ours": "??_C@_09CFEPACOJ@?4milo_wii?$AA@"
+ },
+ {
+  "unit": "default/system/utl/ChunkStream",
+  "name": "?Eof@ChunkStream@@UAA?AW4EofType@@XZ",
+  "target": "??_C@_09CFEPACOJ@?4milo_wii?$AA@",
+  "ours": "??_C@_09IJMMKEAL@?4milo_3ds?$AA@"
+ },
+ {
+  "unit": "default/system/meta/StorePanel",
+  "name": "?ValidateOffers@StorePanel@@IAAXAAV?$vector@PAVStoreOffer@@V?$StlNodeAlloc@PAVStoreOffer@@@stlpmtx_std@@@stlpmtx_std@@@Z",
+  "target": "??_C@_04IMBPGOOC@song?$AA@",
+  "ours": "??_C@_04IPANLPFO@pack?$AA@"
+ },
+ {
+  "unit": "default/system/meta/StorePanel",
+  "name": "?ValidateOffers@StorePanel@@IAAXAAV?$vector@PAVStoreOffer@@V?$StlNodeAlloc@PAVStoreOffer@@@stlpmtx_std@@@stlpmtx_std@@@Z",
+  "target": "??_C@_0BD@EDPJLDDG@dummy_upsell_offer?$AA@",
+  "ours": "??_C@_05MCBBJIDG@album?$AA@"
+ },
+ {
+  "unit": "default/system/meta/StorePanel",
+  "name": "?ValidateOffers@StorePanel@@IAAXAAV?$vector@PAVStoreOffer@@V?$StlNodeAlloc@PAVStoreOffer@@@stlpmtx_std@@@stlpmtx_std@@@Z",
+  "target": "??_C@_0BP@DKJJEIPC@Duplicate?5offer?5short?5name?3?5?$CFs?$AA@",
+  "ours": "??_C@_04IMBPGOOC@song?$AA@"
+ },
+ {
+  "unit": "default/system/rnddx9/MultiMesh",
+  "name": "?UpdateGeometryBuffers@DxMultiMesh@@AAAXXZ",
+  "target": "??_C@_0BE@CAKEIJLA@?$CBowner?9?$DOIsSkinned?$CI?$CJ?$AA@",
+  "ours": "??_C@_0EM@BDHONBCF@?$CB?$CI?$CK?$CIu32?5?$CK?$CJ?$CI?$CIchar?5?$CK?$CJtemp_r30?5?$CL?50x@"
+ },
+ {
+  "unit": "default/system/rnddx9/MultiMesh",
+  "name": "?UpdateGeometryBuffers@DxMultiMesh@@AAAXXZ",
+  "target": "??_C@_0BB@JDEEIHMK@owner?9?$DOMutable?$CI?$CJ?$AA@",
+  "ours": "??_C@_0CL@BAOGLPPN@?$CB?$CI?$CK?$CIs32?5?$CK?$CJ?$CI?$CIchar?5?$CK?$CJtemp_r27?5?$CL?50x@"
+ },
+ {
+  "unit": "default/system/hamobj/HamCharacter",
+  "name": "?SongAnimation@HamCharacter@@QAAHXZ",
+  "target": "??_C@_0BB@BINHEFHO@HamCharacter?4cpp?$AA@",
+  "ours": "??_C@_0BE@IEHDFMHE@c?9?$DOType?$CI?$CJ?5?$DN?$DN?5?$CCmain?$CC?$AA@"
+ },
+ {
+  "unit": "default/system/hamobj/HamCharacter",
+  "name": "?SongAnimation@HamCharacter@@QAAHXZ",
+  "target": "??_C@_0BE@IEHDFMHE@c?9?$DOType?$CI?$CJ?5?$DN?$DN?5?$CCmain?$CC?$AA@",
+  "ours": "??_C@_04GHJNJNPO@main?$AA@"
+ },
+ {
+  "unit": "default/system/char/CharClip",
+  "name": "?Load@CharClip@@UAAXAAVBinStream@@@Z",
+  "target": "??_C@_0DG@HHEEPOFF@?$CFs?5has?5endframe?5?$DN?$DN?5startframe?5?$DN?$DN@",
+  "ours": "??_C@_0DH@OBJJAJAP@?$CFs?5has?5endframe?5?$DN?$DN?5startframe?5?$DN?$DN@"
+ },
+ {
+  "unit": "default/system/hamobj/Pose",
+  "name": "?Score@BoneAngleRangePoseElement@@UBAMABVSkeleton@@@Z",
+  "target": "??_C@_0EL@EIPCKLDA@?$CI1?40f?$CJ?9?$CI0?4001f?$CJ?5?$DM?$DN?5?$CILength?$CImAngl@",
+  "ours": "??_C@_0EB@JICFFNLG@1?40f?5?9?50?4001f?5?$DM?$DN?5Length?$CIangle?$CJ?5?$CG@"
+ },
+ {
+  "unit": "default/Memory_Xbox",
+  "name": "XMemAlloc",
+  "target": "??_C@_0CH@IBIDAHHO@?4?4?2?4?4?2?4?4?2system?2src?2os?2Memory_Xb@",
+  "ours": "??_C@_0BA@LPALIKIG@Memory_Xbox?4cpp?$AA@"
+ },
+ {
+  "unit": "default/system/hamobj/CamShotCatVO",
+  "name": "?CamShotVOData@@YAXVSymbol@@AAV1@111@Z",
+  "target": "??_C@_0O@BIPFKPHI@win_camp_crew?$AA@",
+  "ours": "??_C@_0P@PGKNJEJF@lose_camp_char?$AA@"
+ },
+ {
+  "unit": "default/system/hamobj/CamShotCatVO",
+  "name": "?CamShotVOData@@YAXVSymbol@@AAV1@111@Z",
+  "target": "??_C@_0P@PGKNJEJF@lose_camp_char?$AA@",
+  "ours": "??_C@_0O@BIPFKPHI@win_camp_crew?$AA@"
+ },
+ {
+  "unit": "default/system/utl/UrlEncode",
+  "name": "?URLEncode@@YAXPBDAAVString@@_N@Z",
+  "target": "??_C@_0BB@JGGOGLEG@0123456789ABCDEF?$AA@",
+  "ours": "??_C@_01FGNFDNOH@?$CF?$AA@"
+ },
+ {
+  "unit": "default/system/utl/UrlEncode",
+  "name": "?URLEncode@@YAXPBDAAVString@@_N@Z",
+  "target": "??_C@_0L@NJOJIDEL@$?$CG?$CL?0?1?3?$DL?$DN?$DP?$EA?$AA@",
+  "ours": "??_C@_0BA@LNNMGKHM@?5?$CC?$DM?$DO?$CD?$CF?$HL?$HN?$HM?2?$FO?$HO?$FL?$FN?$GA?$AA@"
+ },
+ {
+  "unit": "default/system/utl/UrlEncode",
+  "name": "?URLEncode@@YAXPBDAAVString@@_N@Z",
+  "target": "??_C@_0BA@LNNMGKHM@?5?$CC?$DM?$DO?$CD?$CF?$HL?$HN?$HM?2?$FO?$HO?$FL?$FN?$GA?$AA@",
+  "ours": "??_C@_0L@NJOJIDEL@$?$CG?$CL?0?1?3?$DL?$DN?$DP?$EA?$AA@"
+ },
+ {
+  "unit": "default/system/utl/UrlEncode",
+  "name": "?URLEncode@@YAXPBDAAVString@@_N@Z",
+  "target": "??_C@_01FGNFDNOH@?$CF?$AA@",
+  "ours": "??_C@_0BB@JGGOGLEG@0123456789ABCDEF?$AA@"
+ },
+ {
+  "unit": "default/system/gesture/ArcDetector",
+  "name": "?UpdateOverlay@ArcDetector@@QAAMPAVRndOverlay@@M@Z",
+  "target": "??_C@_02NJPGOMH@?$CFf?$AA@",
+  "ours": "??_C@_05KCDNKPCA@?$CFf?5?$CFf?$AA@"
+ },
+ {
+  "unit": "default/system/gesture/GestureMgr",
+  "name": "?DrawSkeletonKinectData@GestureMgr@@QAAXXZ",
+  "target": "??_C@_08MGFPAODM@?$CIactive?$CJ?$AA@",
+  "ours": "??_C@_0M@BGELBLFJ@not?5tracked?$AA@"
+ },
+ {
+  "unit": "default/system/gesture/GestureMgr",
+  "name": "?DrawSkeletonKinectData@GestureMgr@@QAAXXZ",
+  "target": "??_C@_0M@BGELBLFJ@not?5tracked?$AA@",
+  "ours": "??_C@_0O@DAMCMDHM@position?5only?$AA@"
+ },
+ {
+  "unit": "default/system/meta/StoreEnumeration",
+  "name": "?Start@XboxEnumeration@@UAAXXZ",
+  "target": "??_C@_0M@JIDBCDOM@?$CBmCurOffers?$AA@",
+  "ours": "??_C@_0N@GCCEDENK@?$CBmEnumBuffer?$AA@"
+ },
+ {
+  "unit": "default/system/hamobj/HamWardrobe",
+  "name": "?UpdateOverlay@HamWardrobe@@QAAXXZ",
+  "target": "??_C@_02JODFHDIE@?$FN?6?$AA@",
+  "ours": "??_C@_01EEMJAFIK@?6?$AA@"
+ },
+ {
+  "unit": "default/system/hamobj/HamWardrobe",
+  "name": "?UpdateOverlay@HamWardrobe@@QAAXXZ",
+  "target": "??_C@_01CLKCMJKC@?5?$AA@",
+  "ours": "??_C@_02JODFHDIE@?$FN?6?$AA@"
+ },
+ {
+  "unit": "default/system/hamobj/HamWardrobe",
+  "name": "?UpdateOverlay@HamWardrobe@@QAAXXZ",
+  "target": "??_C@_06CBHGEMFM@?$DMNULL?$DO?$AA@",
+  "ours": "??_C@_01CLKCMJKC@?5?$AA@"
+ },
+ {
+  "unit": "default/system/hamobj/HamWardrobe",
+  "name": "?UpdateOverlay@HamWardrobe@@QAAXXZ",
+  "target": "??_C@_06DOBMHJOC@?5?5?5?5?$FL?5?$AA@",
+  "ours": "??_C@_06CBHGEMFM@?$DMNULL?$DO?$AA@"
+ },
+ {
+  "unit": "default/system/hamobj/HamWardrobe",
+  "name": "?UpdateOverlay@HamWardrobe@@QAAXXZ",
+  "target": "??_C@_01EEMJAFIK@?6?$AA@",
+  "ours": "??_C@_06DOBMHJOC@?5?5?5?5?$FL?5?$AA@"
+ },
+ {
+  "unit": "default/system/world/LightPreset",
+  "name": "?GetKey@LightPreset@@IBAXMAAH0AAM@Z",
+  "target": "??_C@_0EH@EJMEMEHA@frame?5?$DO?$DN?5mKeyframes?$FLbefore?$FN?4mFra@",
+  "ours": "??_C@_0EN@JNCOJILL@theframe?5?$DO?$DN?5mKeyframes?$FLbefore?$FN?4m@"
+ },
+ {
+  "unit": "default/system/rndobj/VelocityBuffer",
+  "name": "?DrawMesh@RndVelocityBuffer@@QBAXPAVRndMesh@@@Z",
+  "target": "??_C@_0CI@NNPACKME@TheRnd?4DrawMode?$CI?$CJ?5?$DN?$DN?5Rnd?3?3kDrawV@",
+  "ours": "??_C@_0CL@CJKFNJGP@TheRnd?4GetDrawMode?$CI?$CJ?5?$DN?$DN?5Rnd?3?3kDr@"
+ }
+]
