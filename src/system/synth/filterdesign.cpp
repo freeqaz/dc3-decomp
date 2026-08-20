@@ -36,12 +36,20 @@ struct pzrep {
     int numpoles, numzeros;
 };
 
-static double xcoeffs[MAXPZ + 1], ycoeffs[MAXPZ + 1];
+/* NB: MSVC emits plain (statically-initialized) file-scope statics into .bss in
+   REVERSE declaration order, so this list is the target's address order read
+   backwards: ycoeffs, xcoeffs, polemask, order, qfactor, chebrip, warped_alpha2,
+   warped_alpha1, raw_alphaz, raw_alpha2, raw_alpha1.  In particular xcoeffs/ycoeffs
+   must be declared LAST (as in upstream mkfilter) or every access to the scalars
+   below is reached at the wrong displacement from the ycoeffs anchor.
+   splane/zplane/dc_gain/fc_gain/hf_gain have a user-provided complex ctor, so they
+   are dynamically initialized and land in a separate group in FORWARD order. */
 static double raw_alpha1, raw_alpha2, raw_alphaz;
 static double warped_alpha1, warped_alpha2;
 static double chebrip, qfactor;
 static int order;
 static uint polemask;
+static double xcoeffs[MAXPZ + 1], ycoeffs[MAXPZ + 1];
 static pzrep splane, zplane;
 static complex dc_gain, fc_gain, hf_gain;
 
@@ -227,13 +235,16 @@ static void compute_z_mzt() {
         zplane.zeros[i] = cexp(splane.zeros[i]);
 }
 
+static complex reflect(complex z) {
+    complex r = hypot(z);
+    return z / (r * r);
+}
+
 /* compute Z-plane pole & zero positions for allpass resonator */
 static void compute_apres() {
     compute_bpres(); /* iterate to place poles */
-    complex r0 = hypot(zplane.poles[0]);
-    zplane.zeros[0] = zplane.poles[0] / (r0 * r0);
-    complex r1 = hypot(zplane.poles[1]);
-    zplane.zeros[1] = zplane.poles[1] / (r1 * r1);
+    zplane.zeros[0] = reflect(zplane.poles[0]);
+    zplane.zeros[1] = reflect(zplane.poles[1]);
 }
 
 /* compute Z-plane pole & zero positions for bandpass resonator */
