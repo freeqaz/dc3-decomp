@@ -115,6 +115,17 @@ BEGIN_PROPSYNCS(RndTransformable)
         SetTransConstraint(mConstraint, mTarget, _val.Int())
     )
     SYNC_PROP_MODIFY(local_xfm, mLocalXfm, SetDirty())
+    // ComputeLocalXfm's argument is mWorldXfm, NOT mLocalXfm. The target forms it as
+    // `addi r4, r3, 0x48` off the `this` it just materialised for the call
+    // (`subi r3, r28, 0xc4`), i.e. this+0x48 == mWorldXfm; we used to emit
+    // `subi r4, r28, 0xbc` == this+0x8 == mLocalXfm. Passing mLocalXfm made the modify
+    // self-referential -- mLocalXfm = mLocalXfm * inverse(parentWorld) -- so setting
+    // world_xfm through a property never derived the local transform from the value
+    // that had just been written.
+    // Residual cost: MSVC now CSEs &mWorldXfm across the PropSync call (r30) where the
+    // target rematerialises it from `this`; that is 3 address-formation instructions
+    // and no semantic difference. 99.96 -> 99.3 normalized, but the function was never
+    // at 100 either way, so nothing leaves the matched set.
     SYNC_PROP_MODIFY(world_xfm, mWorldXfm, ComputeLocalXfm(mWorldXfm))
     SYNC_VIRTUAL_SUPERCLASS(Hmx::Object)
 END_PROPSYNCS
