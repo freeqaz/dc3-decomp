@@ -331,8 +331,9 @@ int RndBitmap::PixelOffset(int x, int y, bool &nibble) const {
             int xHalf = x >> 1;
             int doubleRowStride = (int)mRowBytes * 2;
             int returnBase = ((yHalf & 0xFFFFFFFE) * doubleRowStride) + ((xHalf & 0x3FFFFFF8) * 4);
-            int lookupIdx = (y % 4) * 0x10 + (x % 16);
-            int lookupOffset = (unsigned char)(((y >> 2) % 4) & 1 ? hbytes13 : hbytes02)[lookupIdx];
+            int lookupOffset =
+                (unsigned char)(((y >> 2) % 4) & 1 ? bytes13
+                                                   : bytes02)[(y % 4) * 0x10 + (x % 16)];
             if (lookupOffset > 0x1F) {
                 lookupOffset = (lookupOffset + doubleRowStride) - 0x20;
             }
@@ -370,9 +371,8 @@ int RndBitmap::PixelOffset(int x, int y, bool &nibble) const {
             blockSize = 4;
         }
         unsigned short width = mWidth;
-        int bppOffset = bpp - 0x10;
+        int blockWidth = bpp < 0x10 ? 8 : 4;
         nibble = x & 1;
-        int blockWidth = (((bppOffset - bppOffset) - !(bppOffset >> 31)) & 4) + 4;
         int pixelScale = (((bpp - 0x20) == 0) & 1) + 1;
         int xModBlockWidth = x % blockWidth;
         int tiledBaseOffset =
