@@ -440,10 +440,10 @@ void mdct_backward(mdct_lookup *init, DATA_TYPE *in, DATA_TYPE *out){
 
   do{
     oX         -= 4;
-    oX[0]       = MULT_NORM(-iX[2] * T[3] - iX[0]  * T[2]);
-    oX[1]       = MULT_NORM (iX[0] * T[3] - iX[2]  * T[2]);
-    oX[2]       = MULT_NORM(-iX[6] * T[1] - iX[4]  * T[0]);
-    oX[3]       = MULT_NORM (iX[4] * T[1] - iX[6]  * T[0]);
+    oX[0]       = MULT_NORM(-iX[2] * T[2] - iX[0]  * T[3]);
+    oX[1]       = MULT_NORM (iX[0] * T[2] - iX[2]  * T[3]);
+    oX[2]       = MULT_NORM(-iX[6] * T[0] - iX[4]  * T[1]);
+    oX[3]       = MULT_NORM (iX[4] * T[0] - iX[6]  * T[1]);
     iX         -= 8;
     T          += 4;
   }while(iX>=in);
@@ -454,10 +454,10 @@ void mdct_backward(mdct_lookup *init, DATA_TYPE *in, DATA_TYPE *out){
 
   do{
     T          -= 4;
-    oX[0]       =  MULT_NORM (iX[4] * T[3] + iX[6] * T[2]);
-    oX[1]       =  MULT_NORM (iX[4] * T[2] - iX[6] * T[3]);
-    oX[2]       =  MULT_NORM (iX[0] * T[1] + iX[2] * T[0]);
-    oX[3]       =  MULT_NORM (iX[0] * T[0] - iX[2] * T[1]);
+    oX[0]       =  MULT_NORM (iX[4] * T[2] + iX[6] * T[3]);
+    oX[1]       =  MULT_NORM (iX[4] * T[3] - iX[6] * T[2]);
+    oX[2]       =  MULT_NORM (iX[0] * T[0] + iX[2] * T[1]);
+    oX[3]       =  MULT_NORM (iX[0] * T[1] - iX[2] * T[0]);
     iX         -= 8;
     oX         += 4;
   }while(iX>=in);
@@ -476,17 +476,17 @@ void mdct_backward(mdct_lookup *init, DATA_TYPE *in, DATA_TYPE *out){
     do{
       oX1-=4;
 
-      oX1[3]  =  MULT_NORM (iX[0] * T[1] - iX[1] * T[0]);
-      oX2[0]  = -MULT_NORM (iX[0] * T[0] + iX[1] * T[1]);
+      oX1[3]  =  MULT_NORM (iX[0] * T[0] - iX[1] * T[1]);
+      oX2[0]  = -MULT_NORM (iX[0] * T[1] + iX[1] * T[0]);
 
-      oX1[2]  =  MULT_NORM (iX[2] * T[3] - iX[3] * T[2]);
-      oX2[1]  = -MULT_NORM (iX[2] * T[2] + iX[3] * T[3]);
+      oX1[2]  =  MULT_NORM (iX[2] * T[2] - iX[3] * T[3]);
+      oX2[1]  = -MULT_NORM (iX[2] * T[3] + iX[3] * T[2]);
 
-      oX1[1]  =  MULT_NORM (iX[4] * T[5] - iX[5] * T[4]);
-      oX2[2]  = -MULT_NORM (iX[4] * T[4] + iX[5] * T[5]);
+      oX1[1]  =  MULT_NORM (iX[4] * T[4] - iX[5] * T[5]);
+      oX2[2]  = -MULT_NORM (iX[4] * T[5] + iX[5] * T[4]);
 
-      oX1[0]  =  MULT_NORM (iX[6] * T[7] - iX[7] * T[6]);
-      oX2[3]  = -MULT_NORM (iX[6] * T[6] + iX[7] * T[7]);
+      oX1[0]  =  MULT_NORM (iX[6] * T[6] - iX[7] * T[7]);
+      oX2[3]  = -MULT_NORM (iX[6] * T[7] + iX[7] * T[6]);
 
       oX2+=4;
       iX    +=   8;
