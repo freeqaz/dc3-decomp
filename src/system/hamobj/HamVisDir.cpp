@@ -270,16 +270,23 @@ void HamVisDir::PostUpdate(const SkeletonUpdateData *data) {
                 mFilter->UpdateFilters(*data);
             }
             if (mRunning) {
-                for (int i = 0; 2 > (unsigned int)i; i++) {
+                bool firstTracked = false;
+                for (int i = 0; i < 2; i++) {
                     HamPlayerData *player_data = TheGameData->Player(i);
                     MILO_ASSERT(player_data, 0x101);
                     if (player_data->IsPlaying()) {
                         Skeleton *cur = data->mSkeletonsLeft[i];
                         if (cur && cur->IsTracked()) {
-                            mYPoses[i].pose->Update(*cur);
-                            UpdateGestureFilter(*cur, i);
+                            int filterIdx = i;
+                            if (i == 0) {
+                                firstTracked = true;
+                            } else if (!firstTracked) {
+                                filterIdx = 0;
+                            }
+                            UpdateGestureFilter(*cur, filterIdx);
                             mSquatPoses[i].pose->Update(*cur);
                             mSquatPoses[i].holder->Update(*cur);
+                            mYPoses[i].pose->Update(*cur);
                             mYPoses[i].holder->Update(*cur);
                             CheckPose(i, mSquatPoses[i]);
                             CheckPose(i, mYPoses[i]);
