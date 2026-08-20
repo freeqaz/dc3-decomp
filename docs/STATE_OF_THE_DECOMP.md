@@ -333,9 +333,10 @@ label is not worthless, but it does not survive being leaned on.
 **3a. `floor_certificate = 'equivalent'` is not a floor claim at all — 10 of 10
 busted (2026-08-20).** A fixed-seed blind sample of the 726 AT_LIMIT rows below
 100 % carrying that label was audited function by function. **Every one was
-source-reachable.** Six went to 100 %, and the sample as a whole moved
-83.8 → 97.9 mean normalized, +141 pp total, with **zero regressions** across
-48,306 comparable functions. Six were live behavioural bugs, not cosmetics:
+source-reachable.** Four went to 100 %, and the sample as a whole moved
+**90.07 → 97.46 mean normalized (+73.9 pp total)**, with **zero regressions**
+across 48,306 comparable functions. Five of the ten carried live behavioural
+bugs — eight distinct defects, none of them cosmetic:
 `RndBitmap::PixelOffset` read the 128-entry `hbytes` tables where the target's
 `lbzx` relocations resolve to two `size 0x40` symbols, so every 8bpp swizzled
 pixel fetch used the wrong table (the correct `bytes02`/`bytes13` pair was
