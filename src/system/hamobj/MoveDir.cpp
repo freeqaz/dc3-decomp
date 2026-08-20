@@ -815,13 +815,13 @@ void MoveDir::PostUpdate(const SkeletonUpdateData *data) {
 
 void MoveDir::Draw(const BaseSkeleton &baseSkeleton, SkeletonViz &skeletonViz) {
     if (unk414) {
-        int actual_ms = unk414->ElapsedMs();
-        if (actual_ms != -1) {
+        int disp_ms = unk414->ElapsedMs();
+        if (disp_ms != -1) {
             for (int i = 0; i < kNumJoints; i++) {
-                int disp_ms;
+                int actual_ms;
                 Vector3 vdisp;
                 unk414->Displacement(
-                    nullptr, kCoordCamera, (SkeletonJoint)i, actual_ms, vdisp, disp_ms
+                    nullptr, kCoordCamera, (SkeletonJoint)i, disp_ms, vdisp, actual_ms
                 );
                 MILO_ASSERT(disp_ms == actual_ms, 0x50F);
                 Vector3 camJointPos = unk414->CamJointPos((SkeletonJoint)i);
@@ -838,20 +838,21 @@ void MoveDir::Draw(const BaseSkeleton &baseSkeleton, SkeletonViz &skeletonViz) {
         const Skeleton *player_skel = dynamic_cast<const Skeleton *>(&baseSkeleton);
         MILO_ASSERT(player_skel, 0x51F);
         SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
-        auto history = handle.History();
-        auto songSpeed = SongSpeed();
+        float songSpeed = SongSpeed();
         ErrorFrameInput input(
-            history, mShowErrorFrames->GetDancerFrame()->mSkeleton, baseSkeleton, songSpeed
+            handle.History(),
+            mShowErrorFrames->GetDancerFrame()->mSkeleton,
+            *player_skel,
+            songSpeed
         );
         ErrorNode **nodePtr = mFilterVer->mErrorNodes;
-        for (int i = 0; i < mFilterVer->NumNodes(); i++) {
+        for (int i = 0; i < mFilterVer->NumNodes(); i++, nodePtr++) {
             ErrorNode *node = *nodePtr;
             if (node->IsTypeJointMatch(mErrorNodeInfo)) {
                 ErrorNodeInput nodeInput;
                 mFilterVer->NodeInput(i, mShowErrorFrames, moveMode, nodeInput);
                 node->VizError(skeletonViz, input, nodeInput);
             }
-            nodePtr++;
         }
     }
 }
