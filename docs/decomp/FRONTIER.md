@@ -13,6 +13,11 @@ the binary that produced any number here. When it is built, wrong-callee bugs
 begin costing normalized points and the headline is expected to fall ~0.11 pp.
 Every figure below is on the pre-fix ruler.
 
+`main` moved during this lane (`d505987fa` → `b25928dfb`; other lanes landing
+near-miss and string-literal work). **`build/373307D9/report.json` did not** —
+it still hashes to the value above, so every number here is current against the
+tree as last built. Re-run `ninja` and re-measure if that stops being true.
+
 **This document contains no worklist.** Per
 [`REMAINING_WORK.md`](REMAINING_WORK.md), the queries are the deliverable; the
 numbers are what they returned on the date above. Regenerate before quoting:
