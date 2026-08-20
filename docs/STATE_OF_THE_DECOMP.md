@@ -330,6 +330,42 @@ regswap-class AT_LIMIT certificates scored **3 out of 10** — and that sample w
 drawn at random, not from the three cases that had motivated the audit. The
 label is not worthless, but it does not survive being leaned on.
 
+**3a. `floor_certificate = 'equivalent'` is not a floor claim at all — 10 of 10
+busted (2026-08-20).** A fixed-seed blind sample of the 726 AT_LIMIT rows below
+100 % carrying that label was audited function by function. **Every one was
+source-reachable.** Six went to 100 %, and the sample as a whole moved
+83.8 → 97.9 mean normalized, +141 pp total, with **zero regressions** across
+48,306 comparable functions. Six were live behavioural bugs, not cosmetics:
+`RndBitmap::PixelOffset` read the 128-entry `hbytes` tables where the target's
+`lbzx` relocations resolve to two `size 0x40` symbols, so every 8bpp swizzled
+pixel fetch used the wrong table (the correct `bytes02`/`bytes13` pair was
+declared in our source and never referenced, so the linker dropped it);
+`HamVisDir::PostUpdate` passed a bare index where the target masks it
+(`firstTracked ? i : 0`), so with player 0 absent player 1 drove player 2's anim
+slot; `RhythmBattlePlayer::AnimateBoxyState` activated `mOutTheZoneOkFlow` on a
+path where the target activates nothing; `MeterDisplay::DrawShowing` rebuilt its
+localized label string every frame; `RndText::WrapText` dropped the `pen = 2010`
+overflow penalty so an over-wide line scored like a fitting one, and wrote
+`StyleState::brk` at 0x41 instead of 0x40 so `<nobreak>` markup did nothing.
+
+The reason is structural, not statistical. `scripts/certify_floor.py`
+`classify_function()` fires `equivalent` on `unicorn_verdict == 'EQUIVALENT'`
+**with no other condition** — no match-percent floor, no pattern gate, no size
+gate. All 912 rows carry the identical evidence blob
+`{"evidence":"unicorn_equivalent"}`. So the label is a *rename of the unicorn
+verdict*, and it inherits every limit of "Read `EQUIVALENT` narrowly" above,
+including that field-confusion bugs are structurally invisible to the fixture.
+That inheritance is visible in the population: the certified pool runs down to
+**37 %** normalized, 98 rows sit below 85 %, and **238 of 729 carry a
+`has_control_flow` signal** — a control-flow difference is not in anyone's list
+of backend floors. Two of the ten had been ported character-for-character from a
+*different binary* (`../rb3-xenon`'s `CharLipSync.cpp`) and never checked against
+DC3's target.
+
+Treat `floor_certificate = 'equivalent'` as "the emulator did not notice a
+difference", never as "the residual is cosmetic". The companion audit of
+`permuter_exhausted` the same day busted 8 of 10.
+
 ```sql
 -- AT_LIMIT rows carrying a real-bug divergence class
 SELECT unicorn_class, COUNT(*), SUM(size) FROM functions
