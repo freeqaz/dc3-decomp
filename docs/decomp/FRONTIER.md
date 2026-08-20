@@ -169,16 +169,25 @@ Blind-sample audits of this population are recorded in §6.
 
 ## 5. Scanners: what the repairs fixed, and what is still lying
 
-Three tools were re-run against the repaired code. Two are now honest. **Three
-defects are still live**, and one of them is worse after the repair than before.
+Seven tools were re-run against their repaired code. **Three defects were still
+live**, and the deepest one was *created visible* by a repair rather than fixed
+by it. Summary:
 
-Every tool named here was run **twice** and its output diffed. All were
-byte-identical across runs, as were `progress_metrics.py`, `remaining_work.py`,
-`function_health.py` and `frontier.py`. `scripts/analysis/determinism_check.py`
-reports **9/9 curated scanners agree with themselves**. Note its own caveat: a
-scanner absent from its `CASES` list has *never been checked*, and
-`ceiling_calculator`, `batch_pattern_scan`, `data_symbol_scan`, `fake_impl_scan`
-and `certify_floor` are all absent from it.
+| tool | after its documented repair | this lane |
+|---|---|---|
+| `function_health.py` | row selection fixed; **analysis half returned 2,705/2,705 error rows serialised as `ceiling 100.0 / headroom 0.0`, exit 0** | fixed the invocation, then guarded the verdict (§5.1, §5.2) |
+| `ceiling_calculator.py` | clamp *disclosed*, not removed — **74.7 % of ceilings still clamped, headline field is an identity function** | root-caused: the ceiling and the measurement are on different rulers (§5.2) |
+| `certify_floor.py` | wildcard escaped correctly; **`is_stub = 1` still counts as DONE, `is_stub` misses 401 of 758, `??_` filter hides 144 real functions** | quantified (§5.3); not repaired |
+| `remaining_work.py` | honest, exemplary coverage block | verified (§5.4) |
+| `batch_pattern_scan.py` | uncapped by default | verified — **68 of its 69 current hits were invisible under the old cap** (§5.5) |
+| `fake_impl_scan.py` | NULL-skip fixed | verified; two small disclosure gaps found (§5.6) |
+| `data_symbol_scan.py` | uncapped by default | verified (§5.5) |
+
+Every tool named here was run **twice** and its output diffed; all were
+byte-identical, including two full 1,568-row `ceiling_calculator` runs (identical
+down to row order). `scripts/analysis/determinism_check.py` was extended from 9
+cases to 13 and reports **13/13 agree** — see §5.7 for what it still does not
+cover, which it now names.
 
 ### 5.1 WAS LYING, NOW REPAIRED — `function_health.py` batch mode returned 2,705 error rows and called them "ceiling 100.0, headroom 0.0"
 
@@ -186,10 +195,10 @@ The SQL repair worked: batch mode now selects **2,705** rows over
 `--min 0 --max 99.99` instead of answering *"No functions found matching
 criteria"* to every query ever put to it.
 
-**But the analysis half has never worked and still does not.** Every row goes
-through `_run_objdiff(symbol)`, which invokes
+**But the analysis half had never worked.** Every row goes
+through `_run_objdiff(symbol)`, which invoked
 `objdiff-cli diff --symbol <sym>` — objdiff-cli takes the symbol
-**positionally**, there is no `--symbol` flag, and the call exits 1 every time.
+**positionally**, there is no `--symbol` flag, and the call exited 1 every time.
 The module's own docstring documents this and says it was left unrepaired
 deliberately because "fixing the call changes what this tool FINDS". The
 consequence was not confined to `--symbol` mode:
