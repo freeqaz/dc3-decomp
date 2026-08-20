@@ -85,7 +85,7 @@ void DxMultiMesh::UpdateGeometryBuffers() {
     s32 temp_r24;
     s32 temp_r28_2;
     s32 temp_r3;
-    DxMesh *temp_r30_ptr;
+    DxMesh *owner;
     s32 temp_r28;
     s32 temp_r10;
     void *temp_r11_4;
@@ -101,12 +101,22 @@ void DxMultiMesh::UpdateGeometryBuffers() {
     u16 temp_r8_2;
     void *temp_r27_ptr;
 
-    temp_r30_ptr = *(DxMesh **)((char *)this + 0x4C);
-    temp_r30 = (void *)temp_r30_ptr;
+    owner = *(DxMesh **)((char *)this + 0x4C);
+    temp_r30 = (void *)owner;
     temp_r11 = (void *)((char *)temp_r30 + 0x150);
     temp_r27_ptr = *(void **)((char *)temp_r30 + 0x148);
     temp_r27 = temp_r27_ptr;
 
+    // The shipped literals here are "!owner->IsSkinned()" and
+    // "owner->Mutable()" (ham_xbox_r.map), i.e. the original wrote the two
+    // asserts against the accessors, not raw offsets.  Spelling them that way
+    // REGRESSES this function -- both accessors re-load through mGeomOwner
+    // where the target uses values already in registers:
+    //   both accessors : norm 80.52147 -> 77.71428
+    //   IsSkinned only : norm 80.52147 -> 78.43559
+    // The body is still raw m2c output (temp_rNN locals, hand-written offset
+    // arithmetic); the literals will close for free once the function is
+    // properly decompiled, and not before.
     MILO_ASSERT(!(*(u32 *)((char *)temp_r30 + 0x150) != *(u32 *)((char *)temp_r30 + 0x154)),
                0x21A);
 
@@ -117,7 +127,7 @@ void DxMultiMesh::UpdateGeometryBuffers() {
 
     if (*(void **)((char *)this + temp_r28) == nullptr) {
         temp_r23 = *(s32 *)((char *)temp_r27 + 0x104);
-        temp_r30_ptr->VertFVF();
+        owner->VertFVF();
         temp_r3 = (s32)D3DDevice_CreateVertexBuffer(temp_r23 * 0x60, 0, (D3DPOOL)0);
         *(s32 *)((char *)this + temp_r28) = temp_r3;
         temp_r10 = temp_r3 - 1;

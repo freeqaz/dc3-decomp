@@ -334,7 +334,7 @@ BEGIN_COPYS(DepthBuffer3D)
 END_COPYS
 
 void DepthBuffer3D::DrawShowing() {
-    if (TheRnd.GetDrawMode() != Rnd::kDrawNormal || !Showing()) {
+    if (TheRnd.DrawMode() != Rnd::kDrawNormal || !Showing()) {
         return;
     }
 
@@ -352,7 +352,8 @@ void DepthBuffer3D::DrawShowing() {
 
     float d38 = 60.0f, d42 = 2.0f, d43 = 1.0f, d44 = 80.0f;
     float d45 = 0.0f, d46 = 8192.0f, d51 = 0.5f;
-    float d36 = 0.0f, d37 = 1.0f, d47 = 0.0f, d48 = 1.0f, d50 = 0.0f, d53 = 1.0f;
+    float depthZoomParams[2] = { 0.0f, 1.0f };
+    float d47 = 0.0f, d48 = 1.0f, d50 = 0.0f, d53 = 1.0f;
     float d41, d49, d52, d39, d40;
     bool has1, has2, has3;
     has1 = has2 = has3 = false;
@@ -365,12 +366,12 @@ void DepthBuffer3D::DrawShowing() {
         if (!cam->mColorPolled) {
             cam->PollNewStream(LiveCameraInput::kBufferColor);
         }
-        RndTex *tex = cam->GetStreamTex(LiveCameraInput::kBufferDepth);
-        depthTex = tex;
-        if (tex == nullptr) {
-            MILO_ASSERT(tex, 0x141);
+        RndTex *texSource = cam->GetStreamTex(LiveCameraInput::kBufferDepth);
+        depthTex = texSource;
+        if (texSource == nullptr) {
+            MILO_ASSERT(texSource, 0x141);
         }
-        if (tex->Width() != 0) {
+        if (texSource->Width() != 0) {
             std::vector<int> p1Cols;
             std::vector<int> p2Cols;
             std::vector<int> rows;
@@ -388,7 +389,7 @@ void DepthBuffer3D::DrawShowing() {
             int p2idx = (s1 == nullptr) ? -1 : (s1->SkeletonIndex() + 1);
 
             void *bits = nullptr;
-            tex->TexelsLock(bits);
+            texSource->TexelsLock(bits);
             const unsigned short *px = (const unsigned short *)bits;
             for (int row = 0; row < 0x3c; ++row) {
                 for (int col = 0; col < 0x50; ++col) {
@@ -409,12 +410,12 @@ void DepthBuffer3D::DrawShowing() {
                     }
                 }
             }
-            tex->TexelsUnlock();
+            texSource->TexelsUnlock();
 
             d53 = d45;
             d48 = d44;
-            d36 = d38;
-            d37 = d45;
+            depthZoomParams[0] = d38;
+            depthZoomParams[1] = d45;
             d47 = d45;
             d50 = d46;
 
@@ -451,17 +452,17 @@ void DepthBuffer3D::DrawShowing() {
             if (!rows.empty()) {
                 std::sort(rows.begin(), rows.end());
                 int n = (int)rows.size() - 1;
-                d36 = (float)(n * 10) * 0.005f;
-                d36 = (d36 <= d45) ? (d36 - d51) : (d36 + d51);
-                d37 = (float)(n * 0x14) * 0.005f;
-                d37 = (d37 <= d45) ? (d37 - d51) : (d37 + d51);
+                depthZoomParams[0] = (float)(n * 10) * 0.005f;
+                depthZoomParams[0] = (depthZoomParams[0] <= d45) ? (depthZoomParams[0] - d51) : (depthZoomParams[0] + d51);
+                depthZoomParams[1] = (float)(n * 0x14) * 0.005f;
+                depthZoomParams[1] = (depthZoomParams[1] <= d45) ? (depthZoomParams[1] - d51) : (depthZoomParams[1] + d51);
                 d41 = (float)n * 0.995f;
                 d41 = (d41 <= d45) ? (d41 - d51) : (d41 + d51);
                 int a = rows[(int)d41] + 1;
-                int b = rows[(int)d36] - 1;
-                int c = (rows[(int)d37] - 1) - (rows[(int)d36] - 1);
-                d37 = (float)a;
-                d36 = (float)(d37 - (float)(d37 - ((float)b - (float)c)));
+                int b = rows[(int)depthZoomParams[0]] - 1;
+                int c = (rows[(int)depthZoomParams[1]] - 1) - (rows[(int)depthZoomParams[0]] - 1);
+                depthZoomParams[1] = (float)a;
+                depthZoomParams[0] = (float)(depthZoomParams[1] - (float)(depthZoomParams[1] - ((float)b - (float)c)));
             }
             if (!depths.empty()) {
                 std::sort(depths.begin(), depths.end());
@@ -488,10 +489,10 @@ void DepthBuffer3D::DrawShowing() {
                 d53 = d44;
                 d48 = d45;
             }
-            has2 = d36 < d37;
+            has2 = depthZoomParams[0] < depthZoomParams[1];
             if (!has2) {
-                d36 = d45;
-                d37 = d38;
+                depthZoomParams[0] = d45;
+                depthZoomParams[1] = d38;
             }
             has3 = d50 < d47;
             if (!has3) {
@@ -507,12 +508,12 @@ void DepthBuffer3D::DrawShowing() {
             if (4096.0f <= d50) {
                 d50 = d41;
             }
-            d52 = d37 - d36;
+            d52 = depthZoomParams[1] - depthZoomParams[0];
             d47 = d53 - d48;
             d49 = d50 - d46;
             d48 = (d48 + d53) * d51;
-            d37 = (d36 + d37) * d51;
-            d36 = (d46 + d50) * d51;
+            depthZoomParams[1] = (depthZoomParams[0] + depthZoomParams[1]) * d51;
+            depthZoomParams[0] = (d46 + d50) * d51;
 
             float dt = TheTaskMgr.DeltaUISeconds();
             float smoothDt = 0.15000000596046448f;
@@ -522,20 +523,20 @@ void DepthBuffer3D::DrawShowing() {
 
             if (has3 && has2 && has1 && !unk28c) {
                 unk270.SetParams(d49, d49, d45);
-                unk25c.SetParams(d36, d36, d45);
+                unk25c.SetParams(depthZoomParams[0], depthZoomParams[0], d45);
                 unk234.SetParams(d52, d52, d45);
-                unk248.SetParams(d37, d37, d45);
+                unk248.SetParams(depthZoomParams[1], depthZoomParams[1], d45);
                 unk20c.SetParams(d47, d47, d45);
                 unk220.SetParams(d48, d48, d45);
             } else if (has3 && has2 && has1) {
                 if (100.0f < Abs(unk270.Level() - d49) ||
-                    50.0f < Abs(unk25c.Level() - d36) ||
+                    50.0f < Abs(unk25c.Level() - depthZoomParams[0]) ||
                     3.0f < Abs(unk234.Level() - d52) ||
-                    1.5f < Abs(unk248.Level() - d37)) {
+                    1.5f < Abs(unk248.Level() - depthZoomParams[1])) {
                     unk270.Smooth(d49, smoothDt);
-                    unk25c.Smooth(d36, smoothDt);
+                    unk25c.Smooth(depthZoomParams[0], smoothDt);
                     unk234.Smooth(d52, smoothDt);
-                    unk248.Smooth(d37, smoothDt);
+                    unk248.Smooth(depthZoomParams[1], smoothDt);
                 }
                 if (4.0f < Abs(unk20c.Level() - d47) ||
                     d42 < Abs(unk220.Level() - d48)) {
@@ -547,16 +548,16 @@ void DepthBuffer3D::DrawShowing() {
 
             d53 = d43 / mMaxZoom;
             d48 = d41 / mMaxDepthZoom;
-            d36 = d53 * d44;
+            depthZoomParams[0] = d53 * d44;
             d47 = d48 * d51;
             d53 = d53 * d38;
-            d37 = d36 * d51;
+            depthZoomParams[1] = depthZoomParams[0] * d51;
             if (d48 < unk270.Level()) {
                 d48 = unk270.Level();
             }
             d50 = d53 * d51;
-            if (d36 < unk20c.Level()) {
-                d36 = unk20c.Level();
+            if (depthZoomParams[0] < unk20c.Level()) {
+                depthZoomParams[0] = unk20c.Level();
             }
             d46 = d47;
             if (d47 < unk25c.Level()) {
@@ -565,8 +566,8 @@ void DepthBuffer3D::DrawShowing() {
             if (d53 < unk234.Level()) {
                 d53 = unk234.Level();
             }
-            d49 = d37;
-            if (d37 < unk220.Level()) {
+            d49 = depthZoomParams[1];
+            if (depthZoomParams[1] < unk220.Level()) {
                 d49 = unk220.Level();
             }
             d52 = d50;
@@ -578,25 +579,25 @@ void DepthBuffer3D::DrawShowing() {
                 d39 = d48;
             }
             d48 = d44;
-            if (d36 < d44) {
-                d48 = d36;
+            if (depthZoomParams[0] < d44) {
+                d48 = depthZoomParams[0];
             }
-            d36 = d38;
+            depthZoomParams[0] = d38;
             if (d53 < d38) {
-                d36 = d53;
+                depthZoomParams[0] = d53;
             }
             d40 = d41 - d47;
             if (d46 < d40) {
                 d40 = d46;
             }
-            d53 = d44 - d37;
+            d53 = d44 - depthZoomParams[1];
             if (d49 < d53) {
                 d53 = d49;
             }
             d48 = d48 * d51;
-            d37 = d38 - d50;
-            if (d52 < d37) {
-                d37 = d52;
+            depthZoomParams[1] = d38 - d50;
+            if (d52 < depthZoomParams[1]) {
+                depthZoomParams[1] = d52;
             }
             d47 = d45;
             if (d45 < (d53 - d48)) {
@@ -606,27 +607,27 @@ void DepthBuffer3D::DrawShowing() {
             if ((d53 + d48) < d44) {
                 d44 = d53 + d48;
             }
-            d36 = d36 * d51;
+            depthZoomParams[0] = depthZoomParams[0] * d51;
             d48 = d44 * 0.012500000186264515f;
             d53 = d45;
-            if (d45 < (d37 - d36)) {
-                d53 = d37 - d36;
+            if (d45 < (depthZoomParams[1] - depthZoomParams[0])) {
+                d53 = depthZoomParams[1] - depthZoomParams[0];
             }
             d50 = d53 * 0.01666666753590107f;
-            if ((d37 + d36) < d38) {
-                d38 = d37 + d36;
+            if ((depthZoomParams[1] + depthZoomParams[0]) < d38) {
+                d38 = depthZoomParams[1] + depthZoomParams[0];
             }
-            d37 = d39 * d51;
+            depthZoomParams[1] = d39 * d51;
             d53 = d38 * 0.01666666753590107f;
-            d36 = d45;
-            if (d45 < (d40 - d37)) {
-                d36 = d40 - d37;
+            depthZoomParams[0] = d45;
+            if (d45 < (d40 - depthZoomParams[1])) {
+                depthZoomParams[0] = d40 - depthZoomParams[1];
             }
-            d36 = d36 * 0.000244140625f;
-            if ((d40 + d37) < d41) {
-                d41 = d40 + d37;
+            depthZoomParams[0] = depthZoomParams[0] * 0.000244140625f;
+            if ((d40 + depthZoomParams[1]) < d41) {
+                d41 = d40 + depthZoomParams[1];
             }
-            d37 = d41 * 0.000244140625f;
+            depthZoomParams[1] = d41 * 0.000244140625f;
         }
 
         RndTex *colorTex = cam->GetStreamTex(LiveCameraInput::kBufferColor);
@@ -695,7 +696,7 @@ void DepthBuffer3D::DrawShowing() {
     Vector4 voxelParams(mScaleVoxel, mScaleVoxelGap, mFishEyeX, mFishEyeY);
     TheShaderMgr.SetVConstant((VShaderConstant)0x45, voxelParams);
 
-    float tx0, tx1, tx2, tx3;
+    float texZoomParams[4];
     float span0 = d48 - d47;
     float span1 = d53 - d50;
     if (span0 <= span1) {
@@ -729,23 +730,23 @@ void DepthBuffer3D::DrawShowing() {
     }
     float depthSpan = d53 - d50;
     float widthSpan = (d48 - d47) * 1.2f;
-    tx2 = (d48 + d47) * d51;
-    tx3 = (d53 + d50) * d51;
+    texZoomParams[2] = (d48 + d47) * d51;
+    texZoomParams[3] = (d53 + d50) * d51;
     if (d43 < widthSpan) {
         depthSpan = depthSpan * (d43 / widthSpan);
         widthSpan = widthSpan * (d43 / widthSpan);
     }
-    tx0 = tx2 - widthSpan * d51;
-    tx2 = tx2 + widthSpan * d51;
-    tx1 = tx3 - depthSpan * d51;
-    tx3 = tx3 + depthSpan * d51;
-    if (tx2 <= tx0) {
-        MILO_ASSERT(tx0 < tx2, 700);
+    texZoomParams[0] = texZoomParams[2] - widthSpan * d51;
+    texZoomParams[2] = texZoomParams[2] + widthSpan * d51;
+    texZoomParams[1] = texZoomParams[3] - depthSpan * d51;
+    texZoomParams[3] = texZoomParams[3] + depthSpan * d51;
+    if (texZoomParams[2] <= texZoomParams[0]) {
+        MILO_ASSERT(texZoomParams[0] < texZoomParams[2], 700);
     }
-    if (tx3 <= tx1) {
-        MILO_ASSERT(tx1 < tx3, 0x2bd);
+    if (texZoomParams[3] <= texZoomParams[1]) {
+        MILO_ASSERT(texZoomParams[1] < texZoomParams[3], 0x2bd);
     }
-    Vector4 texZoom(tx0, tx1, tx2, tx3);
+    Vector4 texZoom(texZoomParams[0], texZoomParams[1], texZoomParams[2], texZoomParams[3]);
     TheShaderMgr.SetVConstant((VShaderConstant)0x46, texZoom);
 
     float playerSel;
@@ -757,10 +758,10 @@ void DepthBuffer3D::DrawShowing() {
     } else {
         playerSel = p1Slot;
     }
-    if (d37 <= d36) {
-        MILO_ASSERT(d36 < d37, 0x2ce);
+    if (depthZoomParams[1] <= depthZoomParams[0]) {
+        MILO_ASSERT(depthZoomParams[0] < depthZoomParams[1], 0x2ce);
     }
-    Vector4 depthZoom(d36, d37, playerSel, d45);
+    Vector4 depthZoom(depthZoomParams[0], depthZoomParams[1], playerSel, d45);
     TheShaderMgr.SetVConstant((VShaderConstant)0x47, depthZoom);
 
     Vector3 jointPos(0.0f, 0.0f, 0.0f);

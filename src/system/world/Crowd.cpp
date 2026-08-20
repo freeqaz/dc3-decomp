@@ -1046,15 +1046,15 @@ void WorldCrowd::DrawShowing() {
     START_AUTO_TIMER("crowd_draw");
     if (!_ref0) return;
     Draw3DChars();
-    if (Rnd::kDrawOcclusionDepth == TheRnd.GetDrawMode()) return;
-    MILO_ASSERT(!dynamic_cast<RndMat*>(gImpostorMat->NextPass()), 0x3A0);
+    if (Rnd::kDrawOcclusionDepth == TheRnd.DrawMode()) return;
+    MILO_ASSERT(!gImpostorMat->NextPass(), 0x3A0);
     std::vector<Hmx::Rect> rects;
     rects.reserve(12);
     FOREACH (charIt, mCharacters) {
         Character *curChar = charIt->mDef.mChar;
         RndMultiMesh *mmesh = charIt->mMMesh;
         if (curChar && mmesh && !mShow3DOnly
-            && TheRnd.GetDrawMode() != Rnd::kDrawOcclusionDepth) {
+            && TheRnd.DrawMode() != Rnd::kDrawOcclusionDepth) {
             int numInstances = 0;
             for (InstanceList::iterator instIt = mmesh->Instances().begin();
                  instIt != mmesh->Instances().end(); ++instIt) {
@@ -1315,7 +1315,7 @@ void WorldCrowd::DrawShowing() {
                 float clampedMaxX = (float)__fsel(maxX - 1.0f, 1.0f, maxX);
 
                 // --- Render character to impostor texture ---
-                if (TheRnd.GetDrawMode() == Rnd::kDrawNormal) {
+                if (TheRnd.DrawMode() == Rnd::kDrawNormal) {
                     if (!mEnviron) {
                         MILO_NOTIFY_ONCE(
                             "%s: Rendering 2D crowd character texture without an environment, set the environ property on the WorldCrowd object.",

@@ -161,7 +161,7 @@ void RndTexBlender::DrawBlendList(
 }
 
 void RndTexBlender::DrawShowing() {
-    if (TheRnd.GetDrawMode() == Rnd::kDrawNormal
+    if (TheRnd.DrawMode() == Rnd::kDrawNormal
         && ((TheRnd.ProcCmds() & kProcessWorld) != 0 || TheRnd.ProcCmds() == 0)
         && mOutputTextures) {
         if ((mOutputTextures->GetType() & RndTex::kRenderedNoZ) != RndTex::kRenderedNoZ) {

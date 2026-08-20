@@ -458,7 +458,7 @@ void DxMesh::DrawShowing() {
     if (geom->Verts().unkc) {
         geom->Sync(0x1f);
     }
-    if (TheRnd.GetDrawMode() == Rnd::kDrawVelocity) {
+    if (TheRnd.DrawMode() == Rnd::kDrawVelocity) {
         RndVelocityBuffer::Singleton().DrawMesh(this);
         return;
     }
@@ -479,7 +479,7 @@ void DxMesh::DrawShowing() {
         if (mMeshVersion != kMaxShaderTypes) {
             st = (ShaderType)mMeshVersion;
         }
-        if (TheRnd.GetDrawMode() == 9) {
+        if (TheRnd.DrawMode() == 9) {
             st = kAllWhiteShader;
         }
         RndShader::SelectConfig(mat, st, false);

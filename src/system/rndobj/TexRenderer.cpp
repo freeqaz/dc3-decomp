@@ -238,7 +238,7 @@ BEGIN_LOADS(RndTexRenderer)
 END_LOADS
 
 void RndTexRenderer::DrawToTexture() {
-    if (TheRnd.GetDrawMode() != 0)
+    if (TheRnd.DrawMode() != 0)
         return;
     ObjPtr<RndDrawable> &_ref0 = mDrawable;
     if (((Hmx::Object *)Dir() == (Hmx::Object *)_ref0) || !Showing())

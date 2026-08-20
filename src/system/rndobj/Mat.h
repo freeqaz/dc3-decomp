@@ -73,6 +73,15 @@ public:
     NEW_OBJ(RndMat);
     OBJ_MEM_OVERLOAD(69); // nice
 
+    // The shipped binary's assert literal in WorldCrowd::DrawShowing reads
+    // "!gImpostorMat->NextPass()" while the instruction stream at that point
+    // still calls __RTDynamicCast with the RndMat/BaseMaterial type
+    // descriptors -- so the cast lives INSIDE this accessor in the original,
+    // not at the call site.  DC3 split RB3's single RndMat into
+    // BaseMaterial + RndMat, and BaseMaterial::mNextPass is an
+    // ObjPtr<BaseMaterial>, so the down-cast has to happen here.
+    RndMat *NextPass() const { return dynamic_cast<RndMat *>(BaseMaterial::NextPass()); }
+
     bool GetRefractEnabled(bool bypass_frame_check);
     float GetRefractStrength();
     RndTex *GetRefractNormalMap();

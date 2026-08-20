@@ -7,7 +7,7 @@ class UIListStateCallback;
 
 struct ScrollState {
     int mFirstShowing;
-    int mSelectedDisplay;
+    int mSelected;
 };
 
 class UIListState {
