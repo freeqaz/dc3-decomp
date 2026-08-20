@@ -744,9 +744,9 @@ void RhythmBattlePlayer::AnimateBoxyState(int state, bool transition, bool bad) 
     bool useBadFlow = (mInTheZone != -1) & bad;
     if (mRhythmBattleAnim) {
         float delay = 0.0f;
-        RndAnimatable::Rate rate = mRhythmBattleAnim->GetRate();
         static Symbol none("none");
-        if (mRhythmBattleAnim && state > 0) {
+        RndAnimatable::Rate rate = mRhythmBattleAnim->GetRate();
+        if (state > 0) {
             if (transition) {
                 mRhythmBattleAnim->Animate(
                     0.0f, false, 0.0f, rate,
@@ -823,21 +823,13 @@ void RhythmBattlePlayer::AnimateBoxyState(int state, bool transition, bool bad) 
         }
         hpd->Provider()->Export(Message(rhythmbattle_inthezone), true);
     } else {
-        Flow *flow;
         if (useBadFlow) {
-            flow = mOutTheZoneBadFlow;
-            if (flow) {
-                if (!mSuppressRhythm)
-                    goto do_activate;
-                goto no_activate;
+            if (mOutTheZoneBadFlow && !mSuppressRhythm) {
+                mOutTheZoneBadFlow->Activate();
             }
+        } else if (mOutTheZoneOkFlow) {
+            mOutTheZoneOkFlow->Activate();
         }
-        flow = mOutTheZoneOkFlow;
-        if (flow) {
-    do_activate:
-            flow->Activate();
-        }
-    no_activate:
         hpd->Provider()->Export(Message(rhythmbattle_outthezone), true);
     }
 }
