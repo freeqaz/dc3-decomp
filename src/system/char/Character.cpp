@@ -851,7 +851,7 @@ void Character::DrawShowing() {
     } else {
         lod = Clamp<int>(0, mLods.size() - 1, mForceLod);
     }
-    bool doSelfShadow = mSelfShadow && TheRnd.GetDrawMode() == 0 && lod <= 1 && (mDrawMode & 1);
+    bool doSelfShadow = mSelfShadow && TheRnd.DrawMode() == 0 && lod <= 1 && (mDrawMode & 1);
     if (doSelfShadow) {
         if (GetGfxMode() == kNewGfx) {
             if (TheNgRnd.Offscreen())
@@ -870,7 +870,7 @@ void Character::DrawShowing() {
     if (doSelfShadow)
         RndShadowMap::EndShadow();
 
-    if (TheLoadMgr.EditMode() && TheRnd.GetDrawMode() == 0) {
+    if (TheLoadMgr.EditMode() && TheRnd.DrawMode() == 0) {
         mTest->Draw();
     }
 
@@ -953,11 +953,11 @@ void Character::SyncShadow() {
 
 void Character::DrawLod(int lod) {
     unsigned char drawMode = mDrawMode & 1;
-    if (TheRnd.GetDrawMode() != 5
-        && (TheRnd.GetDrawMode() != 3 || (mSpotCutout && drawMode))
-        && (TheRnd.GetDrawMode() != 4 || mFloorShadow && drawMode)) {
-        bool cond = TheRnd.GetDrawMode() == 3 || TheRnd.GetDrawMode() == 4
-            || TheRnd.GetDrawMode() == 2;
+    if (TheRnd.DrawMode() != 5
+        && (TheRnd.DrawMode() != 3 || (mSpotCutout && drawMode))
+        && (TheRnd.DrawMode() != 4 || mFloorShadow && drawMode)) {
+        bool cond = TheRnd.DrawMode() == 3 || TheRnd.DrawMode() == 4
+            || TheRnd.DrawMode() == 2;
         DrawLodOrShadow(lod, cond ? (DrawMode)4 : mDrawMode);
     }
 }

@@ -48,7 +48,7 @@ public:
         kDefaultTex_Error = 7,
         kDefaultTex_Max = 8
     };
-    enum DrawMode {
+    enum Mode {
         kDrawNormal = 0,
         kDrawShadowDepth = 1,
         kDrawExtrude = 2,
@@ -148,8 +148,8 @@ public:
     bool WorldEnded() const { return mWorldEnded; }
     bool GetReleaseImmediate() { return mReleaseImmediate; }
     Aspect GetAspect() const { return mAspect; }
-    DrawMode GetDrawMode() { return mDrawMode; }
-    void SetDrawMode(DrawMode d) { mDrawMode = d; }
+    Mode DrawMode() const { return mDrawMode; }
+    void SetDrawMode(Mode d) { mDrawMode = d; }
     RndCam *GetDefaultCam() const { return mDefaultCam; }
     RndCam *GetWorldCamCopy() const { return mWorldCamCopy; }
     ProcessCmd ProcCmds() const { return mProcCmds; }
@@ -291,7 +291,7 @@ protected:
     bool mDrawing; // 0x136
     bool mWorldEnded; // 0x137
     Aspect mAspect; // 0x138
-    DrawMode mDrawMode; // 0x13c
+    Mode mDrawMode; // 0x13c
     bool mResourceCached; // 0x140
     bool mShowShaderCost; // 0x141
     bool mShrinkToSafe; // 0x142

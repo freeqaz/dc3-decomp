@@ -690,7 +690,7 @@ BEGIN_LOADS(CharClip)
     }
     if (EndBeat() == StartBeat() && mFull.NumSamples() > 1) {
         MILO_NOTIFY(
-            "%s has endframe == startframe == %.3f but %d samples!\n",
+            "%s has endframe == startframe == %.3f but %d samples!",
             Name(),
             StartBeat(),
             mFull.NumSamples()

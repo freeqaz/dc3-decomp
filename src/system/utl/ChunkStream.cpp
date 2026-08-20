@@ -301,7 +301,9 @@ EofType ChunkStream::Eof() {
 
         if (strstr(mFilename.c_str(), ".milo_")) {
             mIsCached = true;
-            if (strstr(mFilename.c_str(), ".milo_ps3"))
+            if (strstr(mFilename.c_str(), ".milo_xbox"))
+                SetPlatform(kPlatformXBox);
+            else if (strstr(mFilename.c_str(), ".milo_ps3"))
                 SetPlatform(kPlatformPS3);
             else if (strstr(mFilename.c_str(), ".milo_wii"))
                 SetPlatform(kPlatformWii);

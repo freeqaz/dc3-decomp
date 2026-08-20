@@ -195,7 +195,7 @@ void TexProc::Poll() {
 }
 
 void TexProc::DrawToTexture() {
-    if (TheRnd.GetDrawMode() == Rnd::kDrawNormal && Showing() && mInputTex && mOutputTex) {
+    if (TheRnd.DrawMode() == Rnd::kDrawNormal && Showing() && mInputTex && mOutputTex) {
         RndMat *mat = SetUpWorkingMat();
         ShaderType shaderType;
         switch (mShaderType) {

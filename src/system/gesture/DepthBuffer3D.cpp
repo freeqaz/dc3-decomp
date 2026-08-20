@@ -334,7 +334,7 @@ BEGIN_COPYS(DepthBuffer3D)
 END_COPYS
 
 void DepthBuffer3D::DrawShowing() {
-    if (TheRnd.GetDrawMode() != Rnd::kDrawNormal || !Showing()) {
+    if (TheRnd.DrawMode() != Rnd::kDrawNormal || !Showing()) {
         return;
     }
 

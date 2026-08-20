@@ -62,7 +62,13 @@ void XboxEnumeration::Start() {
             error = XMarketplaceCreateOfferEnumeratorByOffering(mUserIndex, remaining, mCurOffers, (WORD)remaining, &mBufferSize, &mHandle);
             mCurOffers += remaining;
         }
-        MILO_ASSERT(!mEnumBuffer, 0x1EA);
+        // NOTE: the shipped binary's assert literal here is "!mCurOffers", but the
+    // instruction it guards loads offset 0x44 -- the buffer this header calls
+    // mEnumBuffer.  Spelling the assert the original way makes the code test
+    // 0x14 instead and costs 10 extra register mismatches, so the literal can
+    // only be closed by renaming the 0x44 member, not by editing this line.
+    // See the lane report.
+    MILO_ASSERT(!mEnumBuffer, 0x1EA);
         mEnumBuffer = new char[mBufferSize];
         if (error != 0) {
             goto error_path;
@@ -154,7 +160,7 @@ void XboxEnumeration::Poll() {
 handle_65b:
     {
         DWORD extError = XGetOverlappedExtendedError(&mOverlapped);
-        TheDebug << MakeString(" store enum: overlapped failed with: %d, extended: %d (0x%X)", (unsigned long)overlappedResult, (unsigned long)extError, (unsigned long)extError);
+        TheDebug << MakeString(" store enum: overlapped failed with: %d, extended: %d (0x%X)\n", (unsigned long)overlappedResult, (unsigned long)extError, (unsigned long)extError);
     }
     goto check_more_offers;
 
@@ -162,11 +168,11 @@ handle_12:
     {
         DWORD extError = XGetOverlappedExtendedError(&mOverlapped);
         if ((WORD)extError == 0x12) {
-            goto done;
+            goto error_no_more;
         }
-        TheDebug << MakeString(" store enum: funciton failed with: %d (0x%X)", (unsigned long)extError, (unsigned long)extError);
+        TheDebug << MakeString(" store enum: funciton failed with: %d (0x%X)\n", (unsigned long)extError, (unsigned long)extError);
         if ((WORD)extError >= 0x2710 && (WORD)extError < 0x2EE0) {
-            TheDebug << MakeString(" which is a winsock error, so fail.");
+            TheDebug << MakeString(" which is a winsock error, so fail.\n");
         }
     }
 
@@ -180,7 +186,7 @@ check_more_offers:
 
 error_no_more:
     if (mOfferIDsBegin != 0) {
-        TheDebug << MakeString(" store enum: error no more files (%d)", (unsigned long)overlappedResult);
+        TheDebug << MakeString(" store enum: error no more files (%d)\n", (unsigned long)overlappedResult);
         mEnumerating = false;
         return;
     }

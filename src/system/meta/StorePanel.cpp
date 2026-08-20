@@ -300,13 +300,12 @@ void StorePanel::HandleNetCacheMgrFailure() {
     switch (failTy) {
     case kNCMFT_StoreServer:
     case kNCMFT_ClientError:
-        MILO_NOTIFY("Failure %d in NetCacheMgr.\n", failTy);
         break;
     case kNCMFT_NoEthernetCable:
         err = kStoreErrorNoMetadata;
         break;
     default:
-        MILO_NOTIFY("Unknown failure %d in NetCacheMgr.\n", failTy);
+        MILO_NOTIFY("Unknown failure %d in NetCacheMgr.", failTy);
         break;
     }
     if (err != kStoreErrorNoMetadata && !ThePlatformMgr.IsEthernetCableConnected()) {

@@ -311,7 +311,7 @@ bool UIListState::ShouldHoldDisplayInPlace(int i2) const {
 
 bool UIListState::BuildScroll(int direction, int firstShowing, int selectedDisplay, ScrollState &state) const {
     state.mFirstShowing = firstShowing;
-    state.mSelectedDisplay = selectedDisplay;
+    state.mSelected = selectedDisplay;
 
     if (mFirstShowing != firstShowing) {
         int dirSign = direction > 0 ? 1 : -1;
@@ -331,45 +331,45 @@ bool UIListState::BuildScroll(int direction, int firstShowing, int selectedDispl
         }
         state.mFirstShowing = newFirst;
     } else {
-        state.mSelectedDisplay += direction;
+        state.mSelected += direction;
         int scrollMax = ScrollMaxDisplay();
         if (mScrollPastMinDisplay && mMinDisplay >= scrollMax) {
             scrollMax = mMinDisplay;
         }
 
-        if (state.mSelectedDisplay < 0) {
-            state.mFirstShowing += state.mSelectedDisplay;
+        if (state.mSelected < 0) {
+            state.mFirstShowing += state.mSelected;
             int sel = mMinDisplay;
             if (mMinDisplay >= firstShowing) {
                 sel = firstShowing;
             }
-            state.mSelectedDisplay = sel;
-        } else if (state.mSelectedDisplay > scrollMax) {
-            state.mFirstShowing += (state.mSelectedDisplay - scrollMax);
-            state.mSelectedDisplay = scrollMax;
-        } else if (!mScrollPastMinDisplay || state.mSelectedDisplay >= mMinDisplay) {
+            state.mSelected = sel;
+        } else if (state.mSelected > scrollMax) {
+            state.mFirstShowing += (state.mSelected - scrollMax);
+            state.mSelected = scrollMax;
+        } else if (!mScrollPastMinDisplay || state.mSelected >= mMinDisplay) {
             int origFirst = state.mFirstShowing;
-            if (state.mSelectedDisplay < mMinDisplay) {
+            if (state.mSelected < mMinDisplay) {
                 state.mFirstShowing = Max(0, origFirst - 1);
             }
-            state.mSelectedDisplay = (state.mSelectedDisplay - state.mFirstShowing) + origFirst;
+            state.mSelected = (state.mSelected - state.mFirstShowing) + origFirst;
             return origFirst != state.mFirstShowing;
         } else {
-            state.mFirstShowing += (state.mSelectedDisplay - mMinDisplay);
-            state.mSelectedDisplay = mMinDisplay;
+            state.mFirstShowing += (state.mSelected - mMinDisplay);
+            state.mSelected = mMinDisplay;
         }
 
         int result;
-        if (state.mSelectedDisplay > scrollMax) {
+        if (state.mSelected > scrollMax) {
             result = scrollMax;
         } else {
-            if (state.mSelectedDisplay < 0) {
+            if (state.mSelected < 0) {
                 result = 0;
             } else {
-                result = state.mSelectedDisplay;
+                result = state.mSelected;
             }
         }
-        state.mSelectedDisplay = result;
+        state.mSelected = result;
 
         int maxFirst = MaxFirstShowing();
         if (state.mFirstShowing <= maxFirst) {
@@ -382,7 +382,7 @@ bool UIListState::BuildScroll(int direction, int firstShowing, int selectedDispl
         state.mFirstShowing = maxFirst;
     }
 
-    return (state.mSelectedDisplay == selectedDisplay) || (state.mFirstShowing != firstShowing);
+    return (state.mSelected == selectedDisplay) || (state.mFirstShowing != firstShowing);
 }
 
 void UIListState::Scroll(int direction, bool skipActive) {
@@ -394,10 +394,10 @@ void UIListState::Scroll(int direction, bool skipActive) {
 
     if (mCircular) {
         int curFirst = state.mFirstShowing;
-        int curSel = state.mSelectedDisplay;
+        int curSel = state.mSelected;
         if (!skipActive) {
             do {
-                curSel = state.mSelectedDisplay;
+                curSel = state.mSelected;
                 int sel = curSel;
                 if (mCircular)
                     sel = mMinDisplay;
@@ -415,11 +415,11 @@ void UIListState::Scroll(int direction, bool skipActive) {
         }
         accept_circ:
         mTargetShowing = curFirst;
-        MILO_ASSERT(state.mSelectedDisplay == mSelectedDisplay, 0x1d6);
+        MILO_ASSERT(state.mSelected == mSelectedDisplay, 0x1d6);
     } else {
         bool hitBoundary = false;
         int curFirst = state.mFirstShowing;
-        int curSel = state.mSelectedDisplay;
+        int curSel = state.mSelected;
         if (!skipActive) {
             while (true) {
                 int sel = curSel;
@@ -442,7 +442,7 @@ void UIListState::Scroll(int direction, bool skipActive) {
                 if (step == 1) {
                     auto _tmp1 = MaxFirstShowing();
                     if (state.mFirstShowing == _tmp1) {
-                        if (state.mSelectedDisplay == ScrollMaxDisplay()) {
+                        if (state.mSelected == ScrollMaxDisplay()) {
                             hitBoundary = true;
                             goto retry;
                         }
@@ -450,7 +450,7 @@ void UIListState::Scroll(int direction, bool skipActive) {
                 } else {
                     bool atZero = state.mFirstShowing == 0;
                     curFirst = state.mFirstShowing;
-                    curSel = state.mSelectedDisplay;
+                    curSel = state.mSelected;
                     if (mScrollPastMinDisplay) {
                         if (atZero) {
                             if (curSel == mMinDisplay) {
@@ -468,7 +468,7 @@ void UIListState::Scroll(int direction, bool skipActive) {
                 hitBoundary = false;
                 retry:
                 curFirst = state.mFirstShowing;
-                curSel = state.mSelectedDisplay;
+                curSel = state.mSelected;
             }
         }
         mTargetShowing = curFirst;

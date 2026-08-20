@@ -576,7 +576,7 @@ void SpotlightDrawer::DrawWorld() {
                         );
                     }
                     if (!DrawNGSpotlights() && !sNoBeams
-                        && TheRnd.GetDrawMode() != Rnd::kDrawOcclusionDepth) {
+                        && TheRnd.DrawMode() != Rnd::kDrawOcclusionDepth) {
                         DrawBeams(
                             const_cast<SpotlightEntry *>(e1),
                             const_cast<SpotlightEntry *const &>(e2)
