@@ -100,17 +100,51 @@ Real bugs this exposes, none of which were visible before:
   `name_check`.
   *(An earlier revision of this document stated the direction backwards. Acting
   on that would have made the row worse, not better.)*
-- **`GatherObjectsFromGroup<RndMesh>`** — a **3-cycle**, not one wrong type:
-  target `Object@Hmx` → ours `RndMesh`, target `RndMesh` → ours
-  `WorldInstance`, target `WorldInstance` → ours `Object@Hmx`. The cycle says
-  the dynamic_cast ORDER differs, not that a single type is wrong. Same shape
-  in `GatherObjectsFromDir` (2-cycle) and `UIManager::GotoFirstScreen`.
+- ~~`GatherObjectsFromGroup<RndMesh>` RTTI descriptors~~ — **withdrawn, twice.**
+  First reported as one wrong type descriptor, then as a 3-cycle implying a
+  different `dynamic_cast` order. It is neither: the same three descriptors
+  reach the same three **final** registers (`Object@Hmx`→r28,
+  `WorldInstance`→r27, `RndMesh`→r25), and only the emission order of six
+  `lis`/`addi` pairs differs. A hoist-block artifact. `GotoFirstScreen` is the
+  same, and `RunWithoutDebugging`'s block is *shifted* rather than permuted, so
+  it is not adjudicable at all.
 - **Three wrong float constants.** MSVC names float-literal COMDATs by their hex
   value, so `__real@3ecccccc` vs `__real@3f19999a` is **0.4 vs 0.6**. The fold's
   own comment claimed it preserved wrong-constant bugs "because those are
   immediates" — on PPC a float constant is *not* an immediate, it is a
   relocation to a named literal, so that class was being masked by the very
   mechanism documented as protecting it.
+
+## The limit: a charge is only as good as the instruction pairing under it
+
+objdiff aligns two instruction streams before it compares operands. Where a
+function already matches well that alignment is trustworthy; where it does not,
+objdiff is comparing rows it merely lined up, and a relocation-name difference
+between two rows that are not really the same instruction is **manufactured
+signal**. The relocation lane put the practical threshold at a blind score of
+about **95**, and found that of 508 population rows only ~20 are adjudicable at
+all (7 at 100, 13 at 99.5–100, 44 at 95–99.5, **142 below 95**).
+
+Banding the 328 functions this change charges, by their score BEFORE the change:
+
+| band | functions | bytes |
+|---|---:|---:|
+| `== 100` — pairing essentially perfect | **54** | 19,288 |
+| 99.5–100 | 7 | 11,304 |
+| 95–99.5 | 74 | 99,720 |
+| **below 95 — pairing unreliable** | **193** | 160,248 |
+
+**The consequential effect is confined to the safe band by construction.** All
+54 functions that cross the matched boundary sit at exactly 100 beforehand,
+which is precisely the condition under which the alignment is sound. Below 95 a
+charge only nudges an already-imperfect number a little lower; it cannot change
+matched status, and no headline figure depends on it.
+
+What that does NOT license is reading the per-function delta as a bug report.
+For the 193 below-95 rows the delta is not evidence of a wrong callee, and
+anyone mining this change for leads should band by prior score first. Gating the
+un-fold on a score threshold was considered and rejected as circular — the score
+is a function of the charge — so the limit is documented rather than enforced.
 
 ## A known FALSE-POSITIVE class: invented decorated names in `symbols.txt`
 
