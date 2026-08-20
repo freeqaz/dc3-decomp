@@ -10,7 +10,55 @@ from typing import List, Optional
 # Project root (tools/compiler_trace/invoker.py -> project root)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
-WIBO = PROJECT_ROOT / "build" / "tools" / "wibo"
+def _resolve_wibo() -> Path:
+    """Locate the same wibo the ninja build uses.
+
+    `build/tools/wibo` is a legacy download_tool.py artifact that the build
+    stopped using: configure.py defaults `config.wrapper` to the sibling
+    checkout `../wibo/build/release/wibo` (configure.py:174), and every rule in
+    build.ninja names that absolute path. The stale copy under build/tools/ is
+    from 2025-05 and SIGSEGVs on *every* translation unit, so hardcoding it
+    silently killed `run_diff_inspect mode=attributed` for the whole binary
+    (exit -11 on every symbol, which read like a per-TU compiler crash).
+
+    Resolution order, first existing wins:
+      1. $DC3_WIBO                      -- explicit override
+      2. <repo>/../wibo/...             -- sibling of the checkout (main repo)
+      3. <main checkout>/../wibo/...    -- via git-common-dir, so this also
+                                           resolves from inside a worktree,
+                                           where <repo>/.. is the wt/ pool.
+      4. <repo>/build/tools/wibo        -- legacy fallback, kept so a tree that
+                                           genuinely has only this still runs.
+    """
+    import os
+
+    env = os.environ.get("DC3_WIBO")
+    if env:
+        return Path(env)
+
+    rel = Path("wibo") / "build" / "release" / "wibo"
+
+    sibling = PROJECT_ROOT.parent / rel
+    if sibling.exists():
+        return sibling
+
+    try:
+        common = subprocess.run(
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            cwd=PROJECT_ROOT, capture_output=True, text=True, timeout=10,
+        )
+        if common.returncode == 0 and common.stdout.strip():
+            main_checkout = Path(common.stdout.strip()).parent
+            candidate = main_checkout.parent / rel
+            if candidate.exists():
+                return candidate
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+    return PROJECT_ROOT / "build" / "tools" / "wibo"
+
+
+WIBO = _resolve_wibo()
 COMPILER_DIR = PROJECT_ROOT / "build" / "compilers" / "X360" / "16.00.11886.00"
 CL_EXE = COMPILER_DIR / "cl.exe"
 
