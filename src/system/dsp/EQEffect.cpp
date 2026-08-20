@@ -167,115 +167,105 @@ void EQEffect::Reset() {
 
 void EQEffect::Process(float *samples, int numSamples, int numChans) {
     if (mBand4Q != 0.0f) {
-        // Crossover filter path
+        // Crossover filter path.  Three Butterworth sections (low / band /
+        // high), each run twice for 4th order.  Per channel the six delay
+        // sub-lines live at fixed slots inside the 30-float input and output
+        // delay lines:
+        //   0..4   stage 0 pass 1 (lowpass,  3 taps used)
+        //   5..9   stage 0 pass 2
+        //   10..14 stage 1 pass 1 (bandpass, 5 taps)
+        //   15..19 stage 1 pass 2
+        //   20..24 stage 2 pass 1 (highpass, 3 taps used)
+        //   25..29 stage 2 pass 2
         MILO_ASSERT(numChans <= 2, 0x78);
         if (numChans > 0) {
-            float *chanBase = (float *)this;
             for (int chan = 0; chan < numChans; chan++) {
                 if (numSamples > 0) {
+                    float *c1 = mXoverCoeffs[1];
+                    float *yd2b = &mXoverOutputDelay[chan][25];
+                    float *c2 = mXoverCoeffs[2];
+                    float *s = &samples[chan];
                     for (int i = 0; i < numSamples; i++) {
-                        float *s = &samples[i * numChans + chan];
+                        float *xd = &mXoverInputDelay[chan][0];
 
-                        // Crossover filter stage 0 (lowpass): 2nd-order applied twice
-                        // Pass 1
-                        float *xd0 = &mXoverInputDelay[chan][0]; // 5-tap input delay
-                        float *yd0 = &mXoverOutputDelay[chan][0]; // 5-tap output delay
-                        xd0[0] = xd0[1];
-                        xd0[1] = xd0[2];
-                        xd0[2] = *s / mXoverGain[0];
-                        float oldY0 = yd0[0];
-                        yd0[0] = yd0[1];
-                        float fVar2 = xd0[1] * 2.0f + mXoverCoeffs[0][1] * yd0[1]
-                            + mXoverCoeffs[0][0] * oldY0 + xd0[0] + xd0[2];
-                        yd0[1] = fVar2;
+                        // Stage 0 (lowpass), pass 1
+                        xd[0] = xd[1];
+                        xd[1] = xd[2];
+                        xd[2] = *s / mXoverGain[0];
+                        mXoverOutputDelay[chan][0] = mXoverOutputDelay[chan][1];
+                        mXoverOutputDelay[chan][1] = mXoverOutputDelay[chan][2];
+                        float fVar2 = mXoverCoeffs[0][0] * mXoverOutputDelay[chan][0] + mXoverCoeffs[0][1] * mXoverOutputDelay[chan][1]
+                            + (xd[0] + xd[2]) + xd[1] * 2.0f;
+                        mXoverOutputDelay[chan][2] = fVar2;
 
-                        // Pass 2
-                        float *xd0b = &mXoverInputDelay[chan][5];
-                        float *yd0b = &mXoverOutputDelay[chan][5];
-                        float oldX0b = xd0b[1];
-                        xd0b[1] = xd0b[2];
-                        xd0b[0] = oldX0b;
-                        xd0b[2] = fVar2 / mXoverGain[0];
-                        yd0b[0] = yd0b[1];
-                        yd0b[1] = yd0b[2];
-                        float fVar3 = xd0b[1] * 2.0f + mXoverCoeffs[0][1] * yd0b[1]
-                            + mXoverCoeffs[0][0] * yd0b[0] + xd0b[0] + xd0b[2];
-                        yd0b[2] = fVar3;
+                        // Stage 0, pass 2
+                        xd[5] = xd[6];
+                        xd[6] = xd[7];
+                        xd[7] = fVar2 / mXoverGain[0];
+                        mXoverOutputDelay[chan][5] = mXoverOutputDelay[chan][6];
+                        mXoverOutputDelay[chan][6] = mXoverOutputDelay[chan][7];
+                        float fVar3 = mXoverCoeffs[0][0] * mXoverOutputDelay[chan][5] + mXoverCoeffs[0][1] * mXoverOutputDelay[chan][6]
+                            + (xd[5] + xd[7]) + xd[6] * 2.0f;
+                        mXoverOutputDelay[chan][7] = fVar3;
 
-                        // Crossover filter stage 1 (bandpass): 4th-order
-                        // Pass 1
-                        float *xd1 = &mXoverInputDelay[chan][10];
-                        float *yd1 = &mXoverOutputDelay[chan][10];
-                        float oldX1_1 = xd1[1];
-                        xd1[1] = xd1[2];
-                        xd1[2] = xd1[3];
-                        xd1[0] = oldX1_1;
-                        xd1[3] = xd1[4];
-                        xd1[4] = *s / mXoverGain[1];
-                        float oldY1_1 = yd1[1];
-                        yd1[1] = yd1[2];
-                        yd1[0] = oldY1_1;
-                        yd1[2] = yd1[3];
-                        yd1[3] = yd1[4];
-                        fVar2 = mXoverCoeffs[1][0] * yd1[0] + mXoverCoeffs[1][1] * yd1[1]
-                            + mXoverCoeffs[1][2] * yd1[2] + mXoverCoeffs[1][3] * yd1[4]
-                            + -(xd1[2] * 2.0f - (xd1[4] + xd1[0]));
-                        yd1[4] = fVar2;
+                        // Stage 1 (bandpass), pass 1
+                        xd[10] = xd[11];
+                        xd[11] = xd[12];
+                        xd[12] = xd[13];
+                        xd[13] = xd[14];
+                        xd[14] = *s / mXoverGain[1];
+                        mXoverOutputDelay[chan][10] = mXoverOutputDelay[chan][11];
+                        mXoverOutputDelay[chan][11] = mXoverOutputDelay[chan][12];
+                        mXoverOutputDelay[chan][12] = mXoverOutputDelay[chan][13];
+                        mXoverOutputDelay[chan][13] = mXoverOutputDelay[chan][14];
+                        fVar2 = (xd[14] + xd[10]) - xd[12] * 2.0f
+                            + c1[3] * mXoverOutputDelay[chan][14] + c1[2] * mXoverOutputDelay[chan][12]
+                            + c1[1] * mXoverOutputDelay[chan][11] + c1[0] * mXoverOutputDelay[chan][10];
+                        mXoverOutputDelay[chan][14] = fVar2;
 
-                        // Pass 2
-                        float *xd1b = &mXoverInputDelay[chan][15];
-                        float *yd1b = &mXoverOutputDelay[chan][15];
-                        xd1b[0] = xd1b[1];
-                        float oldX1b_2 = xd1b[2];
-                        xd1b[2] = xd1b[3];
-                        xd1b[1] = oldX1b_2;
-                        xd1b[3] = xd1b[4];
-                        xd1b[4] = fVar2 / mXoverGain[1];
-                        yd1b[0] = yd1b[1];
-                        float oldY1b_2 = yd1b[2];
-                        yd1b[2] = yd1b[3];
-                        yd1b[3] = yd1b[4];
-                        yd1b[1] = oldY1b_2;
-                        float fVar4 = mXoverCoeffs[1][0] * yd1b[0] + mXoverCoeffs[1][1] * yd1b[1]
-                            + mXoverCoeffs[1][2] * yd1b[2] + mXoverCoeffs[1][3] * yd1b[4]
-                            + -(xd1b[2] * 2.0f - (xd1b[4] + xd1b[0]));
-                        yd1b[4] = fVar4;
+                        // Stage 1, pass 2
+                        xd[15] = xd[16];
+                        xd[16] = xd[17];
+                        xd[17] = xd[18];
+                        xd[18] = xd[19];
+                        xd[19] = fVar2 / mXoverGain[1];
+                        mXoverOutputDelay[chan][15] = mXoverOutputDelay[chan][16];
+                        mXoverOutputDelay[chan][16] = mXoverOutputDelay[chan][17];
+                        mXoverOutputDelay[chan][17] = mXoverOutputDelay[chan][18];
+                        mXoverOutputDelay[chan][18] = mXoverOutputDelay[chan][19];
+                        float fVar4 = (xd[19] + xd[15]) - xd[17] * 2.0f
+                            + c1[3] * mXoverOutputDelay[chan][19] + c1[2] * mXoverOutputDelay[chan][17]
+                            + c1[1] * mXoverOutputDelay[chan][16] + c1[0] * mXoverOutputDelay[chan][15];
+                        mXoverOutputDelay[chan][19] = fVar4;
 
-                        // Crossover filter stage 2 (highpass): 2nd-order applied twice
-                        // Pass 1
-                        float *xd2 = &mXoverInputDelay[chan][20];
-                        float *yd2 = &mXoverOutputDelay[chan][20];
-                        xd2[0] = xd2[1];
-                        xd2[1] = xd2[2];
-                        xd2[2] = *s / mXoverGain[2];
-                        float oldY2 = yd2[1];
-                        yd2[1] = yd2[2];
-                        yd2[0] = oldY2;
-                        fVar2 = mXoverCoeffs[2][0] * yd2[0] + mXoverCoeffs[2][1] * yd2[2]
-                            + -(xd2[1] * 2.0f - (xd2[0] + xd2[2]));
-                        yd2[2] = fVar2;
+                        // Stage 2 (highpass), pass 1
+                        xd[20] = xd[21];
+                        xd[21] = xd[22];
+                        xd[22] = *s / mXoverGain[2];
+                        mXoverOutputDelay[chan][20] = mXoverOutputDelay[chan][21];
+                        mXoverOutputDelay[chan][21] = mXoverOutputDelay[chan][22];
+                        fVar2 = (xd[20] + xd[22]) - xd[21] * 2.0f
+                            + c2[1] * mXoverOutputDelay[chan][22] + c2[0] * mXoverOutputDelay[chan][20];
+                        mXoverOutputDelay[chan][22] = fVar2;
 
-                        // Pass 2
-                        float *xd2b = &mXoverInputDelay[chan][25];
-                        float *yd2b = &mXoverOutputDelay[chan][25];
-                        xd2b[0] = xd2b[1];
-                        xd2b[1] = xd2b[2];
-                        xd2b[2] = fVar2 / mXoverGain[2];
-                        float oldY2b = yd2b[1];
-                        yd2b[0] = oldY2b;
+                        // Stage 2, pass 2
+                        xd[25] = xd[26];
+                        xd[26] = xd[27];
+                        xd[27] = fVar2 / mXoverGain[2];
+                        yd2b[0] = yd2b[1];
                         yd2b[1] = yd2b[2];
-                        fVar2 = mXoverCoeffs[2][0] * oldY2b + mXoverCoeffs[2][1] * yd2b[2]
-                            + -(xd2b[1] * 2.0f - (xd2b[0] + xd2b[2]));
+                        fVar2 = (xd[25] + xd[27]) - xd[26] * 2.0f
+                            + c2[1] * yd2b[2] + c2[0] * yd2b[0];
                         yd2b[2] = fVar2;
 
                         // Mix crossover bands using smoothed gains
-                        *s = fVar4 * mBand1A1 + fVar2 * mBand0B2 + mBand2B2 * fVar3;
+                        *s = mBand2B2 * fVar3 + fVar2 * mBand0B2 + fVar4 * mBand1A1;
 
                         // Smooth interpolated output mix coefficients
-                        float k = mSmoothCoeff;
-                        mBand0B2 = (mBand0B2 - mBand0B1) * k + mBand0B1;
-                        mBand2B2 = (mBand2B2 - mBand2B1) * k + mBand2B1;
-                        mBand1A1 = (mBand1A1 - mBand1B2) * k + mBand1B2;
+                        mBand0B2 = (mBand0B2 - mBand0B1) * mSmoothCoeff + mBand0B1;
+                        mBand2B2 = (mBand2B2 - mBand2B1) * mSmoothCoeff + mBand2B1;
+                        mBand1A1 = (mBand1A1 - mBand1B2) * mSmoothCoeff + mBand1B2;
+                        s += numChans;
                     }
                 }
             }
