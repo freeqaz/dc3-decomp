@@ -59,7 +59,7 @@ public:
     CriticalSection mStateLock;
     SynchronizationEvent mWorkerEvent;
     SynchronizationEvent mMainEvent;
-    int mState; // 0x94
+    volatile int mState; // 0x94
     CriticalSection mScreenLock;
     std::list<PreparedScreenParams> mPreparedScreens;
     std::list<RndDir *> mOldDirs;

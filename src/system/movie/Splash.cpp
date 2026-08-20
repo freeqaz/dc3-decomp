@@ -162,7 +162,9 @@ void Splash::EndSplasher() {
             MILO_ASSERT(gSplashing, 0xa7);
             MILO_ASSERT(SetImmutableState(kTerminating), 0xa9);
             WaitForState(kTerminated);
-            TheNgRnd.Suspend();
+            // Splash worker is gone; the main thread takes the device back and
+            // RESUMES (target dispatches vtable+0x13c = Resume).
+            TheNgRnd.Resume();
             gSplashing = false;
         } else {
             // Non-threaded mode: manually process remaining screens
@@ -347,9 +349,12 @@ bool Splash::SetImmutableState(Splash::SplashState state) {
     MILO_ASSERT(state > kResumed, 0x150);
     CritSecTracker tracker(&mStateLock);
     // Only allow transition to terminal states in specific sequences
-    if (mState < kResumed || state <= mState) {
+    // mState is volatile, so it must be read exactly once here -- the target
+    // has a single lwz of +0x94 in this block.
+    int curState = mState;
+    if (curState < kResumed || state <= curState) {
         // Allow WaitingForTerminating -> kTerminating transition
-        if (state != kWaitingForTerminating || mState != kTerminating) {
+        if (state != kWaitingForTerminating || curState != kTerminating) {
             return false;
         }
     }
@@ -379,7 +384,9 @@ void Splash::WaitForState(Splash::SplashState state) {
 void Splash::CheckWorkerSuspend(bool b) {
     MILO_ASSERT(!MainThread(), 0x1f0);
     while (mState == kSuspending) {
-        TheNgRnd.Resume();
+        // Worker thread is giving the device up to the main thread: it SUSPENDS
+        // (target dispatches vtable+0x138 = Suspend).
+        TheNgRnd.Suspend();
         if (mCurrentMovie != NULL) {
             mCurrentMovie->SetShowing(false);
             mCurrentMovie->GetMovie().UnlockThread();
@@ -391,7 +398,9 @@ void Splash::CheckWorkerSuspend(bool b) {
             mWorkerEvent.Set();
         }
         WaitForState(kResuming);
-        TheNgRnd.Suspend();
+        // Worker thread is taking the device back: it RESUMES
+        // (target dispatches vtable+0x13c = Resume).
+        TheNgRnd.Resume();
         {
             CritSecTracker cst(&mStateLock);
             MILO_ASSERT(mState == kResuming, 0x209);
@@ -529,7 +538,9 @@ void Splash::UpdateThread() {
         } while (!SetImmutableState(kWaitingForTerminating));
     }
 
-    TheNgRnd.Resume();
+    // Worker thread is finishing: it gives the device up and SUSPENDS
+    // (target dispatches vtable+0x138 = Suspend).
+    TheNgRnd.Suspend();
 
     float elapsed = timer.SplitMs();
     if (TheArchive && Archive::DebugArkOrder()) {

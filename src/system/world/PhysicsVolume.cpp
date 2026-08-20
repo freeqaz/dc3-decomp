@@ -293,7 +293,16 @@ BEGIN_LOADS(PhysicsVolume)
     Vector3 halfExt;
     HalfExtends(halfExt);
     Sphere s;
-    s.radius = Length(halfExt);
+    // Length(halfExt) spelled out: this call site associates the sum as
+    // x*x + (y*y + z*z) (z*z is the standalone fmuls), which the shared
+    // Length() inline does not produce here. Reordering Length() itself in
+    // Vec.h was tested against a full rebuild and is a NET LOSS (+1 -2):
+    // MakeWorldSphere and CreatePhysicsVolume in this same file are 100% with
+    // the x,y,z order and break under x,z,y. Parenthesising is inert under
+    // /fp:fast. Keep the reorder local to this one site.
+    s.radius = std::sqrt(
+        halfExt.x * halfExt.x + halfExt.z * halfExt.z + halfExt.y * halfExt.y
+    );
     s.center = WorldXfm().v;
     SetSphere(s);
 END_LOADS
