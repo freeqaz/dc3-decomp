@@ -800,6 +800,9 @@ void RndText::WrapText(
     } else {
         WrapPoint *wps = (WrapPoint *)_alloca((wLen + 1) * sizeof(WrapPoint));
         bool activeMarkup = style.mActive;
+        int numWp = 1;
+        int cCount = 0;
+        const unsigned short *cur = wideChars;
         wps[0].lineWidth = 0.0f;
         wps[0].charIdx = 0;
         wps[0].cost = 0;
@@ -842,9 +845,7 @@ void RndText::WrapText(
 #define BRKWIDE_BASE ((const wchar_t *)brkChars)
 #endif
 
-        int wpI = 0, numWp = 1;
-        const unsigned short *cur = wideChars;
-        int cCount = 0;
+        int wpI = 0;
         for (;;) {
             unsigned short ch = *cur;
             const wchar_t *brkW = &BRKWIDE_BASE[cCount];
