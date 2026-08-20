@@ -146,6 +146,38 @@ anyone mining this change for leads should band by prior score first. Gating the
 un-fold on a score threshold was considered and rejected as circular — the score
 is a function of the charge — so the limit is documented rather than enforced.
 
+## The sweep's own blind spot: symbol KIND, not just symbol name
+
+The float-constant lane found a failure mode in the sweep that produced its
+worklist, and it is worth stating because any future name-based sweep will hit
+it.
+
+`MicXbox::AddData` was reported here as a sign-flipped microphone clamp —
+target `-32767.0`, ours `+32767.0`. It is not a bug. **The target's `+32767` is
+not a `__real@` COMDAT at all**: it lives at `.rdata 0x82260F30`, and decoding
+the bytes straight out of `ham_xbox_r.exe` gives `46fffe00` = `32767.0f`.
+Tracing the `fsel` chain gives `max(-32767, x)` then `min(32767, x)` on both
+sides. The clamp was always correct.
+
+The sweep paired a `__real@`-named symbol on our side against whatever symbol
+the target row carried, and had no way to notice the two were different **kinds**
+of symbol. A name comparator cannot see that.
+
+So the artifact taxonomy for a relocation-name sweep is **four-way**, not
+two-way:
+
+| class | what it is | detectable by name? |
+|---|---|---|
+| (a) real | genuinely different symbol | yes |
+| (b) diff-alignment | rows that are not the same instruction | no — needs the surrounding block |
+| (c) register-assignment permutation | right constants, different registers, **consumers carry the inverse permutation** | no — needs the consuming arithmetic |
+| (d) symbol-kind mismatch | one side a named COMDAT, the other a plain `.rdata` address | no — needs the target's bytes |
+
+Only (a) is a bug, and only (b) was anticipated when this work started. The
+discriminator for (c) is worth memorising: **a permutation is benign iff the
+consuming instructions carry the inverse permutation**, so both sides compute
+the same value.
+
 ## A known FALSE-POSITIVE class: invented decorated names in `symbols.txt`
 
 `WorldCrowd::Mats` references `gImpostorMat` where the target side shows
