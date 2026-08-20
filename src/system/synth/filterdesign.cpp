@@ -381,8 +381,13 @@ global void createFilter(
     raw_alpha2 = alpha2;
     if (!(mask & opt_p))
         polemask = ~0;
+    /* raw_alpha1, not alpha1: alpha1 is float and raw_alpha1 is double, so
+       `raw_alpha1 = alpha1` materializes the widened value in its own register
+       (the otherwise-dead `fmr f0, f1` at entry). Re-reading the global here
+       consumes that widened value; assigning from the float parameter again
+       would emit a second conversion and store f1. */
     if (band != kBandpass && band != kBandstop)
-        raw_alpha2 = alpha1;
+        raw_alpha2 = raw_alpha1;
     if (type == kResonator) { /* resonator */
         if (band == kBandpass) /* bandpass resonator */
             compute_bpres();
@@ -395,20 +400,26 @@ global void createFilter(
         }
         if (band == kAllpass) /* allpass resonator */
             compute_apres();
-    } else if (type == kProportionalIntegral) { /* proportional-integral */
-        applyWarp((mask & (opt_w | opt_z)) == 0);
-        splane.poles[0] = 0.0;
-        splane.zeros[0] = -TWOPI * warped_alpha1;
-        splane.numpoles = splane.numzeros = 1;
     } else {
-        compute_s(type);
-        applyWarp((mask & (opt_w | opt_z)) == 0);
-        normalize(band);
+        /* NB: the z-transform lives INSIDE this else, as in upstream mkfilter.
+           The resonator paths above compute zplane directly and must not be
+           followed by compute_z_blt()/compute_z_mzt(), which would overwrite
+           zplane from a splane those paths never populate. */
+        if (type == kProportionalIntegral) { /* proportional-integral */
+            applyWarp((mask & (opt_w | opt_z)) == 0);
+            splane.poles[0] = 0.0;
+            splane.zeros[0] = -TWOPI * warped_alpha1;
+            splane.numpoles = splane.numzeros = 1;
+        } else {
+            compute_s(type);
+            applyWarp((mask & (opt_w | opt_z)) == 0);
+            normalize(band);
+        }
+        if (mask & opt_z)
+            compute_z_mzt();
+        else
+            compute_z_blt();
     }
-    if (mask & opt_z)
-        compute_z_mzt();
-    else
-        compute_z_blt();
     if (mask & opt_Z)
         add_extra_zero();
     expandpoly();
