@@ -180,7 +180,7 @@ scanner absent from its `CASES` list has *never been checked*, and
 `ceiling_calculator`, `batch_pattern_scan`, `data_symbol_scan`, `fake_impl_scan`
 and `certify_floor` are all absent from it.
 
-### 5.1 STILL LYING — `function_health.py` batch mode returns 2,705 error rows and calls them "ceiling 100.0, headroom 0.0"
+### 5.1 WAS LYING, NOW REPAIRED — `function_health.py` batch mode returned 2,705 error rows and called them "ceiling 100.0, headroom 0.0"
 
 The SQL repair worked: batch mode now selects **2,705** rows over
 `--min 0 --max 99.99` instead of answering *"No functions found matching
@@ -218,10 +218,69 @@ to remove. It is arguably worse than the original: the original returned an
 empty list, which at least looks empty. This returns 2,705 affirmatively wrong
 records.
 
-**Fix**: drop `--symbol` and pass the symbol positionally, or route through
-`mcp__orchestrator__run_objdiff`. Until then, do not consume this tool's JSON.
+**Fixed by this lane.** Negative control, reproducible on any tree:
 
-### 5.2 STILL LYING — `ceiling_calculator.py` clamps 74.7 % of ceilings and its headline field is an identity function
+```
+$ bin/objdiff-cli diff --symbol '?Poll@BlockMgr@@QAAXXZ' --format json
+rc 1, empty stdout, "Unrecognized argument: --symbol"
+$ bin/objdiff-cli diff '?Poll@BlockMgr@@QAAXXZ' --format json
+rc 0, {"symbol":...,"normalized_match_percent":99.98214,...}
+```
+
+The symbol is now passed positionally and the tool produces real verdicts.
+Two negative-control tests were added to
+`scripts/analysis/tests/test_honesty_clusters.py` and both were sabotage-tested
+(restoring `--symbol` fails one; deleting the ceiling guard fails the other).
+
+**Read §5.2 before consuming the result.** Making the tool run exposed a second,
+deeper defect that the error rows had been hiding.
+
+### 5.2 ROOT CAUSE — the ceiling and the measurement are on different rulers, and `ceiling_calculator.py` clamps the result
+
+**This is the most consequential finding of the pass.** Both `function_health.py`
+and `ceiling_calculator.py` compute a ceiling as
+
+```python
+ceiling = 100.0 - 100.0 * unfixable_mismatches / total_instructions
+```
+
+— an **unweighted instruction-count ratio**. They then subtract it from
+`match_percent`, which is objdiff's **score-weighted** `normalized_match_percent`,
+a number that gives near-full credit to a partially-matching instruction (a
+register-only difference costs almost nothing). **The two are not on the same
+scale and the subtraction is meaningless.** It reads systematically low.
+
+Verified by formula on **25 of 25** functions in `default/system/math/*`
+(`function_health --json`, after its invocation was repaired):
+
+| measured norm % | insns | unfixable | "ceiling" | headroom |
+|---|---|---|---|---|
+| 99.898 | 59 | 6 | 89.83 | **−10.07** |
+| 97.688 | 64 | 22 | 65.63 | **−32.06** |
+| 94.265 | 49 | 31 | 36.74 | **−57.53** |
+| 84.833 | 50 | 42 | 16.00 | **−68.83** |
+
+**21 of the 25 have a ceiling below their own measured percent** — structurally
+impossible. `Multiply(Vector3 const&, Quat const&, Vector3&)` is measured at
+84.8 % and assigned a ceiling of 16.0 %.
+
+**This is the mechanism behind the clamp.** `ceiling_calculator.py` reports
+`ceilings_clamped_up_to_current: 1172 / 1568 = 74.7 %` and its source calls the
+clamp *"the classifier disagreeing with the grader"*. It is not a disagreement,
+it is two rulers — **the 74.7 % clamp rate is a property of the scale mismatch,
+not of the functions**, and it will not move no matter how the classifier is
+tuned. Every `at_limit` verdict either tool produced through this path is
+unsupported, and re-tuning `insert_delete` will not rescue them.
+
+`function_health.py` does not clamp, so with its invocation repaired it began
+emitting `at_limit — "Ceiling 89.8 % — no room to improve"` on a function
+measured at 99.898 %. That is worse than the error row it replaced, so this lane
+added a guard: a ceiling below the measurement now yields verdict
+`ceiling_unusable` with both numbers printed, never a certificate. Computing the
+ceiling on objdiff's own weighted score is the real fix, is a change to what the
+tool *finds*, and needs its own validation — it is not done here.
+
+### 5.2b `ceiling_calculator.py` — the clamp, and its headline field
 
 Full run over the whole AT_LIMIT population (universe 3,780; dropped 2,178
 `excluded=1` and 34 `merged_`; **1,568 examined, 0 objdiff errors**):
@@ -411,20 +470,70 @@ Three blind, fixed-seed samples were drawn from the AT_LIMIT population and
 handed to independent auditors with no knowledge of each other's results. The
 sampling queries are in §8 so the draw can be reproduced or re-drawn.
 
-| population | size | sampled | result |
+| population | size | sampled | busted |
 |---|---|---|---|
-| `AT_LIMIT` at norm ≥ 99.9 | 83 | 10 | *see the audit lane's report* |
-| `floor_certificate = 'equivalent'`, still < 100 | 726 | 10 | *see the audit lane's report* |
-| `floor_certificate = 'permuter_exhausted'`, still < 100 | 164 | 10 | *see the audit lane's report* |
+| `AT_LIMIT` at norm ≥ 99.9 | 83 | 10 | **2** (both driven to exactly 100.0 and landed) |
+| `floor_certificate = 'equivalent'`, still < 100 | 726 | 10 | *audit lane still running at time of writing* |
+| `floor_certificate = 'permuter_exhausted'`, still < 100 | 164 | 10 | *audit lane still running at time of writing* |
+
+### 6.1 The ≥ 99.9 % sample: 2 of 10 busted
+
+Branch `audit/cert-near100-20260820`.
+
+- **`FloatKeys::SetFrame`** 99.96296 → **100.0**. Six off-by-4 stack diffs: the
+  target gives `val` its own slot at 0x54; our source overlaid it on `ref` at
+  0x50 because they lived in disjoint scopes and MSVC merges same-type temps
+  across them. Declaring `ref, val, prev, next` together in the enclosing `if`
+  reproduces the target's ascending assignment.
+- **`MultiTempoTempoMap::PointForTime`** 99.90909 → **100.0**. Our source built
+  a `TempoInfoPoint` to hold the float before calling `upper_bound`; DC3 passes
+  the float straight through. **The RB3 reference does build one** — which is
+  how the wrong shape got into our source in the first place. A standing hazard
+  for every RB3-derived function.
+
+The other eight were judged SOUND on evidence — pure FPR rotation
+(`SetRegularShaderConst`: 27 of 31 mismatches are an f27→f30 rotation costing
+zero normalized points), backend load-order scheduling verified by three
+byte-identical source spellings (`FillCompressedVertex`), or a callee-saved GPR
+count in a shared STLport header.
+
+**Three things this sample escalated:**
+
+1. **`floor_certificate = 'equivalent'` is not a floor proof.** It is a
+   *unicorn behavioural* verdict — "the emulator saw the same behaviour" — which
+   says nothing about whether a source change can reach the target's
+   instructions. Seven of the ten sampled rows carried it, two carried
+   `artifact:stack_layout` (also a unicorn divergence class), and **both busted
+   rows came from that group**. Only one carried `permuter_exhausted`, the only
+   label in the vocabulary that is actually a search-exhaustion claim. **726
+   rows carry `equivalent`** — a third of the AT_LIMIT population is labelled
+   with a behavioural verdict being read as a reachability verdict.
+2. **`current_percent` disagreed with the canonical ruler on 8 of 10**,
+   understating by up to 0.29 pp (`SetRegularShaderConst`: DB 99.698 vs
+   canonical 99.992). `match_percent_normalized` in the DB agreed on all 10 to
+   its rounding. Select work with the normalized column, never `current_percent`.
+3. **`run_objdiff`'s `ADDRESS_RELOCATION_NOISE` verdict was wrong on both
+   functions where it fired at high confidence** (`LocalizeFloat`,
+   `BlockMgr::Poll`). Both are genuine static-data *layout* deltas — the
+   displacement moved, which no linker artifact explains — and `BlockMgr`
+   visibly responded to a declaration reorder. The detector appears to classify
+   any mismatch carrying a relocation as noise without checking whether the
+   displacement also moved. That is the same failure shape as the
+   "Offset Mismatches (resolved)" block already documented in `CLAUDE.md`.
 
 Independent of any sample, three "exhausted" claims are **refuted by
 construction** from the data in this document:
 
 1. **"The AT_LIMIT class is certified."** 517 of 1,567 (33 %) carry no
    certificate, and 348 of those have no body at all. A third of the class is
-   `AT_LIMIT` by assertion.
-2. **"You are already at your ceiling."** Unsupported for the whole population —
-   §5.2. The tool that produced those verdicts clamps 74.7 % of them.
+   `AT_LIMIT` by assertion. A further **726 carry `equivalent`, which is a
+   unicorn behavioural verdict, not a reachability proof** (§6.1) — so only
+   **164 rows in the whole population (10 %) carry a label that even claims a
+   search was exhausted**.
+2. **"You are already at your ceiling."** Unsupported for the whole population.
+   The ceiling is an unweighted instruction ratio and the measurement is a
+   score-weighted score; they are not comparable, 74.7 % of the comparisons come
+   out negative, and the tool clamps them (§5.2). This is not a tuning problem.
 3. **"The stub pool is exhausted."** 758 functions have no body; the tooling
    that queries `is_stub` can see 357 of them and the `authorable_done` view
    counts 305 as *done*.
