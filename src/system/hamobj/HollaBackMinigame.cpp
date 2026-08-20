@@ -580,13 +580,14 @@ void HollaBackMinigame::OnBeat() {
     static Symbol exit_win("exit_win");
 
     HamMaster *master = TheMaster;
+    SongPos *prevSongPos = &master->SongPos2();
     SongPos *songPos = &master->SongPos1();
     MoveDir *theMoveDir = TheHamDirector->GetMoveDir();
     int loopStart, loopEnd;
     master->GetAudio()->GetCurrLoopBeats(loopStart, loopEnd);
 
     float currentBeat = songPos->GetTotalBeat();
-    if (currentBeat < master->TotalBeat2()) {
+    if (currentBeat < prevSongPos->GetTotalBeat()) {
         // Beat jumped backward - reset the midi parsers to the current beat. The
         // beat is re-read from memory for each message (the original reloads rather
         // than reusing currentBeat); the volatile read defeats CSE of the float.

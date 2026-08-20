@@ -54,6 +54,7 @@ public:
     float TotalBeat1() const { return mSongPos.GetTotalBeat(); }
     float TotalBeat2() const { return mPrevSongPos.GetTotalBeat(); }
     SongPos &SongPos1() { return mSongPos; }
+    SongPos &SongPos2() { return mPrevSongPos; }
     HamAudio *GetAudio() const { return mAudio; }
     HamSongData *SongData() const { return mSongData; }
     MidiParserMgr *GetMidiParserMgr() const { return mMidiParserMgr; }
