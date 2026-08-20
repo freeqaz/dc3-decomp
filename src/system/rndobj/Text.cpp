@@ -854,12 +854,12 @@ void RndText::WrapText(
                 int bestWp = -1, bestC = 100000;
                 bool ovf = false;
                 float bestLineLen = 0.0f;
-                int endI = (int)(cur - wideChars);
-                float mxW = _ref0;
                 for (int wi = wpI; wi >= 0; wi--) {
-                    float lineLen = SegmentLength(wps[wi].charIdx, endI, charWidths, wideChars, scale);
+                    float lineLen = SegmentLength(
+                        wps[wi].charIdx, (int)(cur - wideChars), charWidths, wideChars, scale
+                    );
                     unsigned int pen = 10;
-                    if (lineLen > mxW) {
+                    if (lineLen > _ref0) {
                         if (wi != prevI) {
                             pen = 2010;
                             if (bestWp != -1) { ovf = true; }
@@ -867,12 +867,12 @@ void RndText::WrapText(
                     } else {
                         if (_ref1 & 0x20) {
                             float fw = SegmentLength(wps[wi].charIdx, wLen, charWidths, wideChars, scale);
-                            if (fw >= mxW) {
-                                pen = (unsigned int)(int)((1.0f - lineLen / mxW) * 30.0f);
+                            if (fw >= _ref0) {
+                                pen = (unsigned int)(int)((1.0f - lineLen / _ref0) * 30.0f);
                                 if (lineLen < minW) pen += 100;
                             }
                         } else {
-                            if (endI - wps[wi].charIdx <= 4) pen = 50;
+                            if ((int)(cur - wideChars) - wps[wi].charIdx <= 4) pen = 50;
                         }
                     }
                     int tc = (int)pen + wps[wi].cost;
