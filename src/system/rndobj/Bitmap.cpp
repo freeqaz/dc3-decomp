@@ -355,7 +355,7 @@ int RndBitmap::PixelOffset(int x, int y, bool &nibble) const {
             tiledOffsetY = ((x >> 2) & 0xFFFFFFF8) + (yQuadMod * 2);
             tiledStride = (int)_ref3 * 2;
         }
-        int lookupIdx2 = ((y % 4) << 5) + (x - ((x / 32) << 5));
+        int lookupIdx2 = ((y % 4) << 5) + (x % 32);
         int tiledBase = (tiledStride * tiledOffsetY) + (tiledOffsetX * 4);
         int nibbleOffset = (unsigned char)(yQuadMod & 1 ? hbytes13 : hbytes02)[lookupIdx2];
         nibble = nibbleOffset & 1;
