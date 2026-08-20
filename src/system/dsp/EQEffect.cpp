@@ -436,7 +436,7 @@ void EQEffect::SetParameter(int param, float value) {
     }
     case 7: {
         float clamped = (float)__fsel((float)(20000.0f - value), value, 20000.0f);
-        float result = (float)__fsel((float)(20.0f - clamped), clamped, 20.0f);
+        float result = (float)__fsel((float)(20.0f - clamped), 20.0f, clamped);
         if (result == (double)mBand3Gain) break;
         mBand3Gain = (float)result;
         updateBand3 = true;
@@ -452,7 +452,7 @@ void EQEffect::SetParameter(int param, float value) {
     }
     case 9: {
         float clamped = (float)__fsel((float)(20000.0f - value), value, 20000.0f);
-        float result = (float)__fsel((float)(20.0f - clamped), clamped, 20.0f);
+        float result = (float)__fsel((float)(20.0f - clamped), 20.0f, clamped);
         if (result == (double)mBand4Freq) break;
         mBand4Freq = (float)result;
         updateBand4 = true;
@@ -466,16 +466,20 @@ void EQEffect::SetParameter(int param, float value) {
         updateBand4 = true;
         break;
     }
-    case 11:
-        mBand4Q = (float)(value > half);
+    case 11: {
+        bool crossoverOn = value > half;
+        mBand4Q = (float)crossoverOn;
         break;
+    }
     case 12: {
         float clamped = (float)__fsel((float)(5000.0f - value), value, 5000.0f);
-        float result = (float)__fsel((float)(25.0f - clamped), clamped, 25.0f);
+        float result = (float)__fsel((float)(25.0f - clamped), 25.0f, clamped);
         mBand5Freq = (float)result;
-        float smoothCoeff = one;
+        float smoothCoeff;
         if (result != 0.0f) {
             smoothCoeff = (float)pow(kSmoothBase, (double)(1.0f / (float)(result * 48.0f)));
+        } else {
+            smoothCoeff = one;
         }
         mSmoothCoeff = smoothCoeff;
         break;
