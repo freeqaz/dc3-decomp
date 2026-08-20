@@ -1,0 +1,842 @@
+[
+ {
+  "unit": "default/system/synth_xbox/Mic",
+  "name": "?AddData@MicXbox@@QAAXPAXH@Z",
+  "target_sym": "__real@c6fffe00",
+  "ours_sym": "__real@46fffe00",
+  "target_value": -32767.0,
+  "ours_value": 32767.0
+ },
+ {
+  "unit": "default/system/synth_xbox/Mic",
+  "name": "?AddData@MicXbox@@QAAXPAXH@Z",
+  "target_sym": "__real@3f000000",
+  "ours_sym": "__real@c6fffe00",
+  "target_value": 0.5,
+  "ours_value": -32767.0
+ },
+ {
+  "unit": "default/system/rndobj/PostProc",
+  "name": "?SetEmulateFPS@ProcCounter@@AAAIH@Z",
+  "target_sym": "__real@42f00000",
+  "ours_sym": "__real@405e000000000000",
+  "target_value": 120.0,
+  "ours_value": 120.0
+ },
+ {
+  "unit": "default/system/hamobj/HamDirector",
+  "name": "?Poll@HamDirector@@UAAXXZ",
+  "target_sym": "__real@44059d71",
+  "ours_sym": "__real@3b5a740e",
+  "target_value": 534.4600219726562,
+  "ours_value": 0.0033333334140479565
+ },
+ {
+  "unit": "default/system/hamobj/HamDirector",
+  "name": "?Poll@HamDirector@@UAAXXZ",
+  "target_sym": "__real@3b5a740e",
+  "ours_sym": "__real@44059d71",
+  "target_value": 0.0033333334140479565,
+  "ours_value": 534.4600219726562
+ },
+ {
+  "unit": "default/system/hamobj/HamNavList",
+  "name": "?DrawDebug@HamNavList@@QBAXXZ",
+  "target_sym": "__real@00000000",
+  "ours_sym": "__real@3f800000",
+  "target_value": 0.0,
+  "ours_value": 1.0
+ },
+ {
+  "unit": "default/system/hamobj/HamNavList",
+  "name": "?DrawDebug@HamNavList@@QBAXXZ",
+  "target_sym": "__real@3f800000",
+  "ours_sym": "__real@00000000",
+  "target_value": 1.0,
+  "ours_value": 0.0
+ },
+ {
+  "unit": "default/system/synth/filterdesign",
+  "name": "?normalize@@YAXW4FilterBand@@@Z",
+  "target_sym": "__real@0000000000000000",
+  "ours_sym": "__real@3ff0000000000000",
+  "target_value": 0.0,
+  "ours_value": 1.0
+ },
+ {
+  "unit": "default/system/synth_xbox/FFT",
+  "name": "?fft_matrix_forward_columnwise@@YAHPAMJ0@Z",
+  "target_sym": "__real@3f800000",
+  "ours_sym": "__real@4000000000000000",
+  "target_value": 1.0,
+  "ours_value": 2.0
+ },
+ {
+  "unit": "default/lazer/meta_ham/SkeletonChooser",
+  "name": "?ChoosePlayerSides@SkeletonChooser@@AAAXXZ",
+  "target_sym": "__real@be19999a",
+  "ours_sym": "__real@3e19999a",
+  "target_value": -0.15000000596046448,
+  "ours_value": 0.15000000596046448
+ },
+ {
+  "unit": "default/lazer/meta_ham/SkeletonChooser",
+  "name": "?ChoosePlayerSides@SkeletonChooser@@AAAXXZ",
+  "target_sym": "__real@3e19999a",
+  "ours_sym": "__real@be19999a",
+  "target_value": 0.15000000596046448,
+  "ours_value": -0.15000000596046448
+ },
+ {
+  "unit": "default/system/gesture/DrawUtl",
+  "name": "?CopyDepth@?A0xad24ca77@@YAXHHPIAGPIBG@Z",
+  "target_sym": "__real@3ecccccc",
+  "ours_sym": "__real@3f19999a",
+  "target_value": 0.3999999761581421,
+  "ours_value": 0.6000000238418579
+ },
+ {
+  "unit": "default/system/gesture/DrawUtl",
+  "name": "?CopyDepth@?A0xad24ca77@@YAXHHPIAGPIBG@Z",
+  "target_sym": "__real@3a83126f",
+  "ours_sym": "__real@3ecccccc",
+  "target_value": 0.0010000000474974513,
+  "ours_value": 0.3999999761581421
+ },
+ {
+  "unit": "default/system/gesture/DrawUtl",
+  "name": "?CopyDepth@?A0xad24ca77@@YAXHHPIAGPIBG@Z",
+  "target_sym": "__real@3f19999a",
+  "ours_sym": "__real@3a83126f",
+  "target_value": 0.6000000238418579,
+  "ours_value": 0.0010000000474974513
+ },
+ {
+  "unit": "default/system/char/CharIKFoot",
+  "name": "?DoFSM@CharIKFoot@@IAAXPAVCharacter@@AAVTransform@@@Z",
+  "target_sym": "__real@3f7ae148",
+  "ours_sym": "__real@3f800000",
+  "target_value": 0.9800000190734863,
+  "ours_value": 1.0
+ },
+ {
+  "unit": "default/system/synth_xbox/Synapse_dsp",
+  "name": "??0Synapse@0DSP@@QAA@M@Z",
+  "target_sym": "__real@3c05b186",
+  "ours_sym": "__real@3c050000",
+  "target_value": 0.008160000666975975,
+  "ours_value": 0.00811767578125
+ },
+ {
+  "unit": "default/system/rndobj/AmbientOcclusion",
+  "name": "?BuildTrees@RndAmbientOcclusion@@QAAXW4Quality@1@@Z",
+  "target_sym": "__real@ff7fffff",
+  "ours_sym": "__real@7f7fffff",
+  "target_value": -3.4028234663852886e+38,
+  "ours_value": 3.4028234663852886e+38
+ },
+ {
+  "unit": "default/system/rndobj/AmbientOcclusion",
+  "name": "?BuildTrees@RndAmbientOcclusion@@QAAXW4Quality@1@@Z",
+  "target_sym": "__real@7f7fffff",
+  "ours_sym": "__real@ff7fffff",
+  "target_value": 3.4028234663852886e+38,
+  "ours_value": -3.4028234663852886e+38
+ },
+ {
+  "unit": "default/system/gesture/DepthBuffer3D",
+  "name": "?DrawShowing@DepthBuffer3D@@UAAXXZ",
+  "target_sym": "__real@42a00000",
+  "ours_sym": "__real@46000000",
+  "target_value": 80.0,
+  "ours_value": 8192.0
+ },
+ {
+  "unit": "default/system/gesture/DepthBuffer3D",
+  "name": "?DrawShowing@DepthBuffer3D@@UAAXXZ",
+  "target_sym": "__real@42700000",
+  "ours_sym": "__real@40000000",
+  "target_value": 60.0,
+  "ours_value": 2.0
+ },
+ {
+  "unit": "default/system/dsp/FlangerEffect",
+  "name": "?Process@FlangerEffect@@QAAXPAMHH@Z",
+  "target_sym": "__real@3fc90fdb",
+  "ours_sym": "__real@bfc90fdb",
+  "target_value": 1.5707963705062866,
+  "ours_value": -1.5707963705062866
+ },
+ {
+  "unit": "default/system/dsp/FlangerEffect",
+  "name": "?Process@FlangerEffect@@QAAXPAMHH@Z",
+  "target_sym": "__real@bfc90fdb",
+  "ours_sym": "__real@3fc90fdb",
+  "target_value": -1.5707963705062866,
+  "ours_value": 1.5707963705062866
+ },
+ {
+  "unit": "default/system/dsp/FlangerEffect",
+  "name": "?Process@FlangerEffect@@QAAXPAMHH@Z",
+  "target_sym": "__real@3f800000",
+  "ours_sym": "__real@3f000000",
+  "target_value": 1.0,
+  "ours_value": 0.5
+ },
+ {
+  "unit": "default/system/rndobj/Text",
+  "name": "?Load@RndText@@UAAXAAVBinStream@@@Z",
+  "target_sym": "__real@41f00000",
+  "ours_sym": "__real@3f800000",
+  "target_value": 30.0,
+  "ours_value": 1.0
+ },
+ {
+  "unit": "default/system/hamobj/PoseFatalities",
+  "name": "?DrawDebug@PoseFatalities@@QAAXXZ",
+  "target_sym": "__real@3f800000",
+  "ours_sym": "__real@3f000000",
+  "target_value": 1.0,
+  "ours_value": 0.5
+ },
+ {
+  "unit": "default/system/hamobj/PoseFatalities",
+  "name": "?DrawDebug@PoseFatalities@@QAAXXZ",
+  "target_sym": "__real@00000000",
+  "ours_sym": "__real@3f800000",
+  "target_value": 0.0,
+  "ours_value": 1.0
+ },
+ {
+  "unit": "default/system/hamobj/PoseFatalities",
+  "name": "?DrawDebug@PoseFatalities@@QAAXXZ",
+  "target_sym": "__real@3ecccccd",
+  "ours_sym": "__real@00000000",
+  "target_value": 0.4000000059604645,
+  "ours_value": 0.0
+ },
+ {
+  "unit": "default/system/hamobj/PoseFatalities",
+  "name": "?DrawDebug@PoseFatalities@@QAAXXZ",
+  "target_sym": "__real@3f000000",
+  "ours_sym": "__real@3dcccccd",
+  "target_value": 0.5,
+  "ours_value": 0.10000000149011612
+ },
+ {
+  "unit": "default/system/dsp/EQEffect",
+  "name": "?Reset@EQEffect@@QAAXXZ",
+  "target_sym": "__real@3fd78d4fe0000000",
+  "ours_sym": "kSmoothBase",
+  "target_value": 0.36800000071525574,
+  "ours_value": null
+ },
+ {
+  "unit": "default/system/gesture/DirectionGestureFilter",
+  "name": "?Draw@DirectionGestureFilterSingleUser@@UAAXABVSkeleton@@AAVSkeletonViz@@@Z",
+  "target_sym": "__real@3dcccccd",
+  "ours_sym": "__real@3e4ccccd",
+  "target_value": 0.10000000149011612,
+  "ours_value": 0.20000000298023224
+ },
+ {
+  "unit": "default/system/gesture/DirectionGestureFilter",
+  "name": "?Draw@DirectionGestureFilterSingleUser@@UAAXABVSkeleton@@AAVSkeletonViz@@@Z",
+  "target_sym": "__real@3e4ccccd",
+  "ours_sym": "__real@3dcccccd",
+  "target_value": 0.20000000298023224,
+  "ours_value": 0.10000000149011612
+ },
+ {
+  "unit": "default/system/hamobj/HamCamShot",
+  "name": "?SetPreFrame@HamCamShot@@UAAXMM@Z",
+  "target_sym": "__real@7f7fffff",
+  "ours_sym": "__real@7149f2ca",
+  "target_value": 3.4028234663852886e+38,
+  "ours_value": 1.0000000150474662e+30
+ },
+ {
+  "unit": "default/system/hamobj/HamRibbon",
+  "name": "?ConstructMesh@HamRibbon@@QAAXXZ",
+  "target_sym": "__real@3f000000",
+  "ours_sym": "__real@3f800000",
+  "target_value": 0.5,
+  "ours_value": 1.0
+ },
+ {
+  "unit": "default/system/world/Spotlight",
+  "name": "?BuildCone@Spotlight@@IAAXAAUBeamDef@1@@Z",
+  "target_sym": "__real@3ed67750",
+  "ours_sym": "__real@3ed6774f",
+  "target_value": 0.41887903213500977,
+  "ours_value": 0.4188790023326874
+ },
+ {
+  "unit": "default/system/hamobj/MoveDir",
+  "name": "?DrawDetectedBar@?A0xe50ea9df@@YAMMPBDMMM_N1@Z",
+  "target_sym": "__real@42c80000",
+  "ours_sym": "??_C@_06DEKIFKAN@?3?5?$CF?42f?$AA@",
+  "target_value": 100.0,
+  "ours_value": null
+ },
+ {
+  "unit": "default/system/synth_xbox/FilterCoeffs",
+  "name": "?LowpassCoefficients@DSP@@YAXQAMMMM@Z",
+  "target_sym": "__real@401921fb60000000",
+  "ours_sym": "__real@401921fb589aaf42",
+  "target_value": 6.2831854820251465,
+  "ours_value": 6.283185371819686
+ },
+ {
+  "unit": "default/system/dsp/EQEffect",
+  "name": "?SetParameter@EQEffect@@QAAXHM@Z",
+  "target_sym": "__real@3fd78d4fe0000000",
+  "ours_sym": "kSmoothBase",
+  "target_value": 0.36800000071525574,
+  "ours_value": null
+ },
+ {
+  "unit": "default/system/dsp/EQEffect",
+  "name": "?SetParameter@EQEffect@@QAAXHM@Z",
+  "target_sym": "__real@bd4ccccd",
+  "ours_sym": "__real@382ec33e",
+  "target_value": -0.05000000074505806,
+  "ours_value": 4.166666622040793e-05
+ },
+ {
+  "unit": "default/system/dsp/EQEffect",
+  "name": "?SetParameter@EQEffect@@QAAXHM@Z",
+  "target_sym": "__real@382ec33e",
+  "ours_sym": "__real@bd4ccccd",
+  "target_value": 4.166666622040793e-05,
+  "ours_value": -0.05000000074505806
+ },
+ {
+  "unit": "default/system/dsp/EQEffect",
+  "name": "?SetParameter@EQEffect@@QAAXHM@Z",
+  "target_sym": "__real@3e800000",
+  "ours_sym": "__real@40000000",
+  "target_value": 0.25,
+  "ours_value": 2.0
+ },
+ {
+  "unit": "default/system/synth_xbox/Mic",
+  "name": "?ProcessChatData@ChatReceiver@@AAAXPAXIPAH@Z",
+  "target_sym": "__real@39cde32e",
+  "ours_sym": "__real@39cde32b",
+  "target_value": 0.0003926990902982652,
+  "ours_value": 0.00039269900298677385
+ },
+ {
+  "unit": "default/system/os/HolmesClient",
+  "name": "?HolmesClientCacheFile@@YA_NPADPBD@Z",
+  "target_sym": "__real@469c4000",
+  "ours_sym": "__real@41c80000",
+  "target_value": 20000.0,
+  "ours_value": 25.0
+ },
+ {
+  "unit": "default/system/synth/filterdesign",
+  "name": "?compute_bpres@@YAXXZ",
+  "target_sym": "__real@3f50624dd2f1a9fc",
+  "ours_sym": "__real@3ddb7cdfd9d7bdbb",
+  "target_value": 0.001,
+  "ours_value": 1e-10
+ },
+ {
+  "unit": "default/system/rndobj/Rnd_NG",
+  "name": "?EstimateDraw@@YAMH@Z",
+  "target_sym": "__real@3ba3d70a",
+  "ours_sym": "__real@3974aaf1",
+  "target_value": 0.004999999888241291,
+  "ours_value": 0.00023333333956543356
+ },
+ {
+  "unit": "default/system/rndobj/Rnd_NG",
+  "name": "?EstimateDraw@@YAMH@Z",
+  "target_sym": "__real@3974aaf1",
+  "ours_sym": "__real@3ba3d70a",
+  "target_value": 0.00023333333956543356,
+  "ours_value": 0.004999999888241291
+ },
+ {
+  "unit": "default/system/char/CharBonesSamples",
+  "name": "?Relativize@CharBonesSamples@@QAAXPAVCharClip@@@Z",
+  "target_sym": "__real@3d228145",
+  "ours_sym": "__real@3fa45028a05140a3",
+  "target_value": 0.039674062281847,
+  "ours_value": 0.03967406231879635
+ },
+ {
+  "unit": "default/system/synth_xbox/FFT",
+  "name": "?fft_real_forward_scalar@@YAHPAMK0@Z",
+  "target_sym": "__real@0000000000000000",
+  "ours_sym": "__real@3ff0000000000000",
+  "target_value": 0.0,
+  "ours_value": 1.0
+ },
+ {
+  "unit": "default/system/rnddx9/Rnd_Xbox",
+  "name": "?FinishPostProcess@DxRnd@@AAAXXZ",
+  "target_sym": "__real@3e99999a",
+  "ours_sym": "__real@00000000",
+  "target_value": 0.30000001192092896,
+  "ours_value": 0.0
+ },
+ {
+  "unit": "default/system/rndobj/PartLauncher",
+  "name": "??0RndPartLauncher@@IAA@XZ",
+  "target_sym": "??_7?$ObjPtr@VRndTransformable@@@@6B@",
+  "ours_sym": "__real@00000000",
+  "target_value": null,
+  "ours_value": 0.0
+ },
+ {
+  "unit": "default/system/world/Spotlight",
+  "name": "?BuildNGQuad@Spotlight@@IAAXAAUBeamDef@1@W4Constraint@RndTransformable@@@Z",
+  "target_sym": "__real@00000000",
+  "ours_sym": "__real@3f800000",
+  "target_value": 0.0,
+  "ours_value": 1.0
+ },
+ {
+  "unit": "default/system/world/Spotlight",
+  "name": "?BuildNGQuad@Spotlight@@IAAXAAUBeamDef@1@W4Constraint@RndTransformable@@@Z",
+  "target_sym": "__real@3f800000",
+  "ours_sym": "__real@40000000",
+  "target_value": 1.0,
+  "ours_value": 2.0
+ },
+ {
+  "unit": "default/system/world/Spotlight",
+  "name": "?BuildNGQuad@Spotlight@@IAAXAAUBeamDef@1@W4Constraint@RndTransformable@@@Z",
+  "target_sym": "__real@bf800000",
+  "ours_sym": "__real@00000000",
+  "target_value": -1.0,
+  "ours_value": 0.0
+ },
+ {
+  "unit": "default/system/rndobj/HiResScreen",
+  "name": "?ScreenRect@HiResScreen@@QBA?AVRect@Hmx@@PBVRndCam@@ABV23@@Z",
+  "target_sym": "__real@3f800000",
+  "ours_sym": "__real@3ff0000000000000",
+  "target_value": 1.0,
+  "ours_value": 1.0
+ },
+ {
+  "unit": "default/system/synth/MoggClip",
+  "name": "?SetupPanInfo@MoggClip@@QAAXMM_N@Z",
+  "target_sym": "__real@bf000000",
+  "ours_sym": "__real@3fe0000000000000",
+  "target_value": -0.5,
+  "ours_value": 0.5
+ },
+ {
+  "unit": "default/system/char/CharIKHand",
+  "name": "?Poll@CharIKHand@@UAAXXZ",
+  "target_sym": "__real@3fc90fdb",
+  "ours_sym": "?kHalfPi@?1??Poll@CharIKHand@@UAAXXZ@4MB",
+  "target_value": 1.5707963705062866,
+  "ours_value": null
+ },
+ {
+  "unit": "default/system/rndobj/Lit_NG",
+  "name": "?BlurShadowRT@NgLight@@MAAXXZ",
+  "target_sym": "__real@3f800000",
+  "ours_sym": "?kWeights@?1??BlurShadowRT@NgLight@@MAAXXZ@4QBMB",
+  "target_value": 1.0,
+  "ours_value": null
+ },
+ {
+  "unit": "default/system/rndobj/Lit_NG",
+  "name": "?BlurShadowRT@NgLight@@MAAXXZ",
+  "target_sym": "__real@00000000",
+  "ours_sym": "__real@3f800000",
+  "target_value": 0.0,
+  "ours_value": 1.0
+ },
+ {
+  "unit": "default/system/char/Char",
+  "name": "?DisplayObject@CharDebug@@AAAXPAVObject@Hmx@@@Z",
+  "target_sym": "__real@3f800000",
+  "ours_sym": "__real@00000000",
+  "target_value": 1.0,
+  "ours_value": 0.0
+ },
+ {
+  "unit": "default/system/char/Char",
+  "name": "?DisplayObject@CharDebug@@AAAXPAVObject@Hmx@@@Z",
+  "target_sym": "__real@00000000",
+  "ours_sym": "__real@3f800000",
+  "target_value": 0.0,
+  "ours_value": 1.0
+ },
+ {
+  "unit": "default/system/rndobj/Utl",
+  "name": "?BuildVisit@@YAXPAVBSPNode@@@Z",
+  "target_sym": "__real@3f800000",
+  "ours_sym": "__real@00000000",
+  "target_value": 1.0,
+  "ours_value": 0.0
+ },
+ {
+  "unit": "default/system/rndobj/Utl",
+  "name": "?BuildVisit@@YAXPAVBSPNode@@@Z",
+  "target_sym": "__real@3f666666",
+  "ours_sym": "__real@3f800000",
+  "target_value": 0.8999999761581421,
+  "ours_value": 1.0
+ },
+ {
+  "unit": "default/system/char/CharHair",
+  "name": "?Hookup@CharHair@@QAAXAAV?$ObjPtrList@VCharCollide@@VObjectDir@@@@@Z",
+  "target_sym": "__real@7149f2ca",
+  "ours_sym": "__real@00000000",
+  "target_value": 1.0000000150474662e+30,
+  "ours_value": 0.0
+ },
+ {
+  "unit": "default/system/char/CharEyes",
+  "name": "?LidTrackAndClampingUpdate@CharEyes@@IAAXAAUEyeDesc@1@M@Z",
+  "target_sym": "__real@3cf5c28f",
+  "ours_sym": "__real@3d000000",
+  "target_value": 0.029999999329447746,
+  "ours_value": 0.03125
+ },
+ {
+  "unit": "default/system/rndobj/SoftParticleBuffer",
+  "name": "?BlurSurface@RndSoftParticleBuffer@@AAAXXZ",
+  "target_sym": "__real@3dcccccd",
+  "ours_sym": "__real@00000000",
+  "target_value": 0.10000000149011612,
+  "ours_value": 0.0
+ },
+ {
+  "unit": "default/system/rndobj/SoftParticleBuffer",
+  "name": "?BlurSurface@RndSoftParticleBuffer@@AAAXXZ",
+  "target_sym": "__real@3fc00000",
+  "ours_sym": "__real@3f000000",
+  "target_value": 1.5,
+  "ours_value": 0.5
+ },
+ {
+  "unit": "default/system/rndobj/SoftParticleBuffer",
+  "name": "?BlurSurface@RndSoftParticleBuffer@@AAAXXZ",
+  "target_sym": "__real@3e99999a",
+  "ours_sym": "__real@3f800000",
+  "target_value": 0.30000001192092896,
+  "ours_value": 1.0
+ },
+ {
+  "unit": "default/system/rndobj/SoftParticleBuffer",
+  "name": "?BlurSurface@RndSoftParticleBuffer@@AAAXXZ",
+  "target_sym": "__real@3f000000",
+  "ours_sym": "?TheNgRnd@@3AAVNgRnd@@A",
+  "target_value": 0.5,
+  "ours_value": null
+ },
+ {
+  "unit": "default/system/rnddx9/Rnd_Xbox",
+  "name": "?ModalDraw@DxRnd@@MAAXW4ModalType@Debug@@PBD@Z",
+  "target_sym": "__real@3f000000",
+  "ours_sym": "__real@3dcccccd",
+  "target_value": 0.5,
+  "ours_value": 0.10000000149011612
+ },
+ {
+  "unit": "default/system/rnddx9/Rnd_Xbox",
+  "name": "?ModalDraw@DxRnd@@MAAXW4ModalType@Debug@@PBD@Z",
+  "target_sym": "__real@3dcccccd",
+  "ours_sym": "__real@3f000000",
+  "target_value": 0.10000000149011612,
+  "ours_value": 0.5
+ },
+ {
+  "unit": "default/system/gesture/SkeletonExtentTracker",
+  "name": "?ApplyToMeshVerts@SkeletonExtentTracker@@QBAXPAVRndMesh@@_N@Z",
+  "target_sym": "__real@3e4ccccd",
+  "ours_sym": "__real@3f800000",
+  "target_value": 0.20000000298023224,
+  "ours_value": 1.0
+ },
+ {
+  "unit": "default/system/gesture/ArcDetector",
+  "name": "?UpdateOverlay@ArcDetector@@QAAMPAVRndOverlay@@M@Z",
+  "target_sym": "__real@3f19999a",
+  "ours_sym": "__real@3d000000",
+  "target_value": 0.6000000238418579,
+  "ours_value": 0.03125
+ },
+ {
+  "unit": "default/system/gesture/ArcDetector",
+  "name": "?UpdateOverlay@ArcDetector@@QAAMPAVRndOverlay@@M@Z",
+  "target_sym": "__real@3f4ccccd",
+  "ours_sym": "__real@3f19999a",
+  "target_value": 0.800000011920929,
+  "ours_value": 0.6000000238418579
+ },
+ {
+  "unit": "default/system/gesture/GestureMgr",
+  "name": "?DrawSkeletonKinectData@GestureMgr@@QAAXXZ",
+  "target_sym": "__real@00000000",
+  "ours_sym": "__real@3f800000",
+  "target_value": 0.0,
+  "ours_value": 1.0
+ },
+ {
+  "unit": "default/system/synth_xbox/FilterCoeffs",
+  "name": "?HighpassCoefficients@DSP@@YAXQAMMMM@Z",
+  "target_sym": "__real@401921fb60000000",
+  "ours_sym": "__real@401921fb589aaf42",
+  "target_value": 6.2831854820251465,
+  "ours_value": 6.283185371819686
+ },
+ {
+  "unit": "default/system/hamobj/FreestyleMoveRecorder",
+  "name": "?CalcFrameScore@FreestyleMoveRecorder@@QBAXAAUFreestyleFrameScores@@PBUFreestyleMoveFrame@@HPBVBaseSkeleton@@M@Z",
+  "target_sym": "__real@4005bf09a0000000",
+  "ours_sym": "__real@4005bf0a8b145769",
+  "target_value": 2.718280076980591,
+  "ours_value": 2.718281828459045
+ },
+ {
+  "unit": "default/system/char/CharSignalApplier",
+  "name": "?Poll@CharSignalApplier@@UAAXXZ",
+  "target_sym": "__real@3f800000",
+  "ours_sym": "__real@41f00000",
+  "target_value": 1.0,
+  "ours_value": 30.0
+ },
+ {
+  "unit": "default/system/rndobj/AmbientOcclusion",
+  "name": "?CalculateAOAtPoint@RndAmbientOcclusion@@IBAXABVVector3@@0PAM@Z",
+  "target_sym": "__real@3fe0000000000000",
+  "ours_sym": "__real@3f000000",
+  "target_value": 0.5,
+  "ours_value": 0.5
+ },
+ {
+  "unit": "default/system/os/Joypad_Xinput",
+  "name": "?ReadSingleXinputJoypad@@YA?AW4JoypadType@@HHPAIPAD11111QAM2QAE@Z",
+  "target_sym": "__real@c6cf5600",
+  "ours_sym": "__real@c4d1f761",
+  "target_value": -26539.0,
+  "ours_value": -1679.7305908203125
+ },
+ {
+  "unit": "default/system/os/Joypad_Xinput",
+  "name": "?ReadSingleXinputJoypad@@YA?AW4JoypadType@@HHPAIPAD11111QAM2QAE@Z",
+  "target_sym": "__real@3c2c7692",
+  "ours_sym": "__real@43740000",
+  "target_value": 0.010526316240429878,
+  "ours_value": 244.0
+ },
+ {
+  "unit": "default/system/os/Joypad_Xinput",
+  "name": "?ReadSingleXinputJoypad@@YA?AW4JoypadType@@HHPAIPAD11111QAM2QAE@Z",
+  "target_sym": "__real@42f40000",
+  "ours_sym": "__real@43780000",
+  "target_value": 122.0,
+  "ours_value": 248.0
+ },
+ {
+  "unit": "default/system/synth/CompressionEffect",
+  "name": "?Process@CompressionEffect@@QAAXPAMHH@Z",
+  "target_sym": "__real@3f8147ae",
+  "ours_sym": "__real@3f7ffff0",
+  "target_value": 1.0099999904632568,
+  "ours_value": 0.9999990463256836
+ },
+ {
+  "unit": "default/system/synth/CompressionEffect",
+  "name": "?Process@CompressionEffect@@QAAXPAMHH@Z",
+  "target_sym": "__real@47c35000",
+  "ours_sym": "__real@3f147ae1",
+  "target_value": 100000.0,
+  "ours_value": 0.5799999833106995
+ },
+ {
+  "unit": "default/system/synth/CompressionEffect",
+  "name": "?Process@CompressionEffect@@QAAXPAMHH@Z",
+  "target_sym": "__real@3f933333",
+  "ours_sym": "__real@3dcccccd",
+  "target_value": 1.149999976158142,
+  "ours_value": 0.10000000149011612
+ },
+ {
+  "unit": "default/system/synth/CompressionEffect",
+  "name": "?Process@CompressionEffect@@QAAXPAMHH@Z",
+  "target_sym": "__real@3a83126f",
+  "ours_sym": "__real@3e4ccccd",
+  "target_value": 0.0010000000474974513,
+  "ours_value": 0.20000000298023224
+ },
+ {
+  "unit": "default/system/synth/CompressionEffect",
+  "name": "?Process@CompressionEffect@@QAAXPAMHH@Z",
+  "target_sym": "__real@3d4ccccd",
+  "ours_sym": "__real@47c35000",
+  "target_value": 0.05000000074505806,
+  "ours_value": 100000.0
+ },
+ {
+  "unit": "default/system/synth/CompressionEffect",
+  "name": "?Process@CompressionEffect@@QAAXPAMHH@Z",
+  "target_sym": "__real@461c4000",
+  "ours_sym": "__real@3c23d70a",
+  "target_value": 10000.0,
+  "ours_value": 0.009999999776482582
+ },
+ {
+  "unit": "default/system/synth/CompressionEffect",
+  "name": "?Process@CompressionEffect@@QAAXPAMHH@Z",
+  "target_sym": "__real@3b03126f",
+  "ours_sym": "__real@3f800000",
+  "target_value": 0.0020000000949949026,
+  "ours_value": 1.0
+ },
+ {
+  "unit": "default/system/rndobj/TexBlendController",
+  "name": "?GetBlendState@RndTexBlendController@@QBA?AW4BlendState@1@AAMM@Z",
+  "target_sym": "__real@40400000",
+  "ours_sym": "__real@40000000",
+  "target_value": 3.0,
+  "ours_value": 2.0
+ },
+ {
+  "unit": "default/system/rndobj/TexBlendController",
+  "name": "?GetBlendState@RndTexBlendController@@QBA?AW4BlendState@1@AAMM@Z",
+  "target_sym": "__real@c0000000",
+  "ours_sym": "__real@40400000",
+  "target_value": -2.0,
+  "ours_value": 3.0
+ },
+ {
+  "unit": "default/system/char/CharSleeve",
+  "name": "?Poll@CharSleeve@@UAAXXZ",
+  "target_sym": "__real@3f800000",
+  "ours_sym": "__real@c076eddd",
+  "target_value": 1.0,
+  "ours_value": -3.8582680225372314
+ },
+ {
+  "unit": "default/system/char/CharSleeve",
+  "name": "?Poll@CharSleeve@@UAAXXZ",
+  "target_sym": "__real@c076eddc",
+  "ours_sym": "__real@3f800000",
+  "target_value": -3.8582677841186523,
+  "ours_value": 1.0
+ },
+ {
+  "unit": "default/system/synth_xbox/FxSendSynapse",
+  "name": "?SyncEffectParams@FxSendSynapse360@@UBAXPAUIXAudio2SubmixVoice@@@Z",
+  "target_sym": "__real@3f800000",
+  "ours_sym": "__real@00000000",
+  "target_value": 1.0,
+  "ours_value": 0.0
+ },
+ {
+  "unit": "default/system/synth_xbox/FxSendSynapse",
+  "name": "?SyncEffectParams@FxSendSynapse360@@UBAXPAUIXAudio2SubmixVoice@@@Z",
+  "target_sym": "__real@00000000",
+  "ours_sym": "__real@3f800000",
+  "target_value": 0.0,
+  "ours_value": 1.0
+ },
+ {
+  "unit": "default/system/hamobj/HamNavList",
+  "name": "?DetermineHighlightedItem@HamNavList@@AAAXXZ",
+  "target_sym": "__real@3f800000",
+  "ours_sym": "__real@3e19999a",
+  "target_value": 1.0,
+  "ours_value": 0.15000000596046448
+ },
+ {
+  "unit": "default/system/char/CharHair",
+  "name": "?SimulateInternal@CharHair@@IAAXM@Z",
+  "target_sym": "__real@40400000",
+  "ours_sym": "__real@bf000000",
+  "target_value": 3.0,
+  "ours_value": -0.5
+ },
+ {
+  "unit": "default/system/char/CharHair",
+  "name": "?SimulateInternal@CharHair@@IAAXM@Z",
+  "target_sym": "__real@3f000000",
+  "ours_sym": "__real@40400000",
+  "target_value": 0.5,
+  "ours_value": 3.0
+ },
+ {
+  "unit": "default/system/rndobj/Cam",
+  "name": "?GetViewProjectXfms@RndCam@@QBAXAAVTransform@@AAVMatrix4@Hmx@@@Z",
+  "target_sym": "__real@3f000000",
+  "ours_sym": "__real@40000000",
+  "target_value": 0.5,
+  "ours_value": 2.0
+ },
+ {
+  "unit": "default/system/rndobj/Cam",
+  "name": "?GetViewProjectXfms@RndCam@@QBAXAAVTransform@@AAVMatrix4@Hmx@@@Z",
+  "target_sym": "__real@40000000",
+  "ours_sym": "__real@c0000000",
+  "target_value": 2.0,
+  "ours_value": -2.0
+ },
+ {
+  "unit": "default/system/world/SpotlightDrawer",
+  "name": "?Init@SpotlightDrawer@@SAXXZ",
+  "target_sym": "?sDefault@SpotlightDrawer@@1PAV1@A",
+  "ours_sym": "__real@00000000",
+  "target_value": null,
+  "ours_value": 0.0
+ },
+ {
+  "unit": "default/system/world/SpotlightDrawer",
+  "name": "?Init@SpotlightDrawer@@SAXXZ",
+  "target_sym": "__real@00000000",
+  "ours_sym": "?sDefault@SpotlightDrawer@@1PAV1@A",
+  "target_value": 0.0,
+  "ours_value": null
+ },
+ {
+  "unit": "default/system/rndobj/PostProc_NG",
+  "name": "?CheckPosterizeAndKaleidoscope@NgPostProc@@IAAXXZ",
+  "target_sym": "__real@3c8efa35",
+  "ours_sym": "__real@40c90fdb",
+  "target_value": 0.01745329238474369,
+  "ours_value": 6.2831854820251465
+ },
+ {
+  "unit": "default/system/rndobj/PostProc_NG",
+  "name": "?CheckPosterizeAndKaleidoscope@NgPostProc@@IAAXXZ",
+  "target_sym": "__real@40c90fdb",
+  "ours_sym": "__real@3c8efa35",
+  "target_value": 6.2831854820251465,
+  "ours_value": 0.01745329238474369
+ },
+ {
+  "unit": "default/system/synth/Synth",
+  "name": "?DrawMeter@Synth@@QAAXAAMMMPBD@Z",
+  "target_sym": "__real@3f800000",
+  "ours_sym": "__real@00000000",
+  "target_value": 1.0,
+  "ours_value": 0.0
+ },
+ {
+  "unit": "default/system/synth/Synth",
+  "name": "?DrawMeter@Synth@@QAAXAAMMMPBD@Z",
+  "target_sym": "__real@00000000",
+  "ours_sym": "__real@3f800000",
+  "target_value": 0.0,
+  "ours_value": 1.0
+ },
+ {
+  "unit": "default/system/synth/Synth",
+  "name": "?DrawMeter@Synth@@QAAXAAMMMPBD@Z",
+  "target_sym": "__real@3ccccccd",
+  "ours_sym": "__real@3f333333",
+  "target_value": 0.02500000037252903,
+  "ours_value": 0.699999988079071
+ }
+]

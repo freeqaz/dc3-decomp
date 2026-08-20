@@ -146,6 +146,57 @@ anyone mining this change for leads should band by prior score first. Gating the
 un-fold on a score threshold was considered and rejected as circular — the score
 is a function of the charge — so the limit is documented rather than enforced.
 
+## Post-mortem on the sweep: one root cause, found three times independently
+
+Three lanes chased worklists built by the sweep in this document, and all three
+reported the same underlying defect from different directions. It is worth
+naming once, because the sweep's *class-level* output held up well (float
+constants and string literals both yielded real bugs) while its *row-level*
+output did not.
+
+**The sweep pairs things positionally and never verifies the pairing.**
+
+| reported by | symptom | what the pairing actually was |
+|---|---|---|
+| float-constant lane | `MicXbox::AddData` "sign-flipped clamp" | a `__real@` COMDAT paired against a plain `.rdata` address — different KINDS of symbol |
+| float-constant lane | `ChoosePlayerSides` "±0.15 swapped" | right constants in different registers, consumers carrying the inverse permutation |
+| string-literal lane | 21 of 29 functions "off by a character" | relocation rows paired **by index**; one extra or reordered literal shifts every row after it |
+| relocation lane | 193 of 328 charged rows | instruction rows objdiff merely lined up, below a blind score of ~95 |
+
+Every one of these is the same shape: two lists compared element-by-element on
+the assumption that element *i* on the left corresponds to element *i* on the
+right. When that assumption fails the comparison does not fall silent — it
+manufactures a plausible, specific, *wrong* finding, which is far more expensive
+than no finding at all.
+
+The string-literal lane then caught the identical error **in its own
+replacement tool** mid-run: it had collapsed runs of the same symbol assuming
+REFHI/REFLO relocation pairs are adjacent, which the instruction scheduler does
+not guarantee. Correcting that moved its tally from 19 real / 10 artifact to
+**8 real / 21 artifact**. A tool written specifically to fix positional pairing
+reintroduced positional pairing one layer down.
+
+**Two concrete defects in the `__FILE__` filter**, both from the same cause —
+the filter tested the *paired* row's text, which was not the row carrying the
+marker:
+
+1. `Voice::StartVoiceThreadEntry` — the target-only literal genuinely is
+   `e:\lazer_build_gmc1\system\src\synth_xbox\Voice.cpp` and should have been
+   dropped.
+2. `XMemAlloc` — the target is `..\..\..\system\src\os\Memory_Xbox.cpp`: the
+   same `__FILE__` class, but a **relative** path, so a substring test on one
+   absolute prefix cannot see it.
+
+The fix for both is to filter on the *pattern* — path separators inside a
+`.cpp` literal — rather than on the single absolute prefix that happened to
+appear in the first examples.
+
+**What to do differently.** A name-based sweep is fine for discovering that a
+CLASS exists. It is not evidence about any individual row. Before a row becomes
+a lead, something must establish the pairing independently: the surrounding
+block, the consuming arithmetic, the target's actual bytes, or a multiset
+comparison that does not depend on order.
+
 ## The sweep's own blind spot: symbol KIND, not just symbol name
 
 The float-constant lane found a failure mode in the sweep that produced its
