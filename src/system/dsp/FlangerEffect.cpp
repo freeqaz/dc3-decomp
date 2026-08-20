@@ -44,14 +44,13 @@ void FlangerEffect::SetParameters(FlangerEffect::Params const &params) {
 }
 
 void FlangerEffect::Process(float *buf, int numSamples, int numChans) {
-    MILO_ASSERT(numChans <= 2, 0x27);
+    MILO_ASSERT(numChans <= 2, 0x3f);
 
     float phaseOffset[2];
     float curRate;
     float var_f30;
     float var_f26;
     float var_f25;
-    float temp_f0_2;
     float temp_f22;
     float temp_f21;
 
@@ -60,15 +59,19 @@ void FlangerEffect::Process(float *buf, int numSamples, int numChans) {
         phaseOffset[0] = 0.0f;
         phaseOffset[1] = 0.0f;
     } else {
-        phaseOffset[1] = mWetFrac * 1.5707964f;
         phaseOffset[0] = mWetFrac * -1.5707964f;
+        phaseOffset[1] = mWetFrac * 1.5707964f;
     }
     curRate = unk2c;
     var_f25 = curRate;
     var_f30 = unk1c;
-    temp_f0_2 = (double)(numSamples * 20);
-    temp_f22 = (mDepthFrac - var_f30) / temp_f0_2;
-    temp_f21 = (mRateRadians - curRate) / temp_f0_2;
+    // Two separate divisor temps: naming one variable twice makes MSVC's
+    // /fp:fast default strength-reduce both divisions into 1.0f/x + two
+    // multiplies, which the target does not do.
+    float rampSteps1 = (float)(numSamples * 20);
+    float rampSteps2 = (float)(numSamples * 20);
+    temp_f22 = (mDepthFrac - var_f30) / rampSteps1;
+    temp_f21 = (mRateRadians - curRate) / rampSteps2;
 
     if (numSamples > 0) {
         int var_r22 = 0;
