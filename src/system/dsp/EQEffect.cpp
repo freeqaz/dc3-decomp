@@ -119,51 +119,35 @@ void EQEffect::SetParameters(EQEffect::Params const &params) {
 #define kSmoothBase 0.368f
 
 void EQEffect::Reset() {
-    // Zero all per-channel filter delay state
-    // Uses flat indexing to match target's loop structure
-    int lVar5 = 0;
-    int iVar10 = 0x40;
-    float *puVar11 = (float *)this + 0xC8 / 4;
-    do {
-        // Band 0/1/2 allpass and bell delay lines (6 floats per channel, stride 8 bytes)
-        puVar11[-2] = 0;
-        puVar11[0] = 0;
-        int iVar12 = 0;
-        puVar11[2] = 0;
-        puVar11[4] = 0;
-        puVar11[6] = 0;
-        puVar11[8] = 0;
+    // Zero every per-channel filter delay line.  The crossover delay lines are
+    // walked with a single flat index that keeps counting across channels
+    // (30 floats per channel), which is what the target does.
+    int xover = 0;
+    for (int chan = 0; chan < EQ_MAX_CHANS; chan++) {
+        mBand1DelayXn[chan] = 0;
+        mBand1DelayXn1[chan] = 0;
+        mBand1DelayZ[chan] = 0;
+        mBand1DelayZ1[chan] = 0;
+        mBand0DelayZ1[chan] = 0;
+        mBand2DelayZ1[chan] = 0;
 
-        // Band 3/4 bandpass delay lines
-        int baseA = iVar10 - 4;
-        int baseC = iVar10 + 4;
-        int baseD = iVar10 + 8;
         for (int tap = 0; tap < 2; tap++) {
-            int a = baseA + iVar12;
-            int b = iVar10 + iVar12;
-            int c = baseC + iVar12;
-            int d = baseD + iVar12;
-            iVar12 = iVar12 + 1;
-            ((float *)this)[a] = 0;
-            ((float *)this)[b] = 0;
-            ((float *)this)[c] = 0;
-            ((float *)this)[d] = 0;
+            mBand3DelayX[chan][tap] = 0;
+            mBand3DelayZ[chan][tap] = 0;
+            mBand4DelayX[chan][tap] = 0;
+            mBand4DelayZ[chan][tap] = 0;
         }
 
-        // Crossover delay lines - 3 stages, 2 passes, 5 taps each
-        for (int stage = 0; stage < 3; stage++) {
-            for (int pass = 0; pass < 2; pass++) {
-                for (int tap = 0; tap < 5; tap++) {
-                    ((float *)this)[lVar5 + tap + 0x97] = 0;
-                    ((float *)this)[lVar5 + tap + 0x5b] = 0;
+        for (int stage = 0; stage < EQ_NUM_XOVER_STAGES; stage++) {
+            for (int pass = 0; pass < EQ_NUM_XOVER_PASSES; pass++) {
+                for (int tap = 0; tap < EQ_NUM_XOVER_TAPS; tap++) {
+                    mXoverOutputDelay[0][xover + tap] = 0;
+                    mXoverInputDelay[0][xover + tap] = 0;
                 }
-                lVar5 += 5;
+                xover += EQ_NUM_XOVER_TAPS;
             }
         }
-
-        iVar10 += 2;
-        puVar11++;
-    } while (iVar10 < 0x44);
+    }
 
     // Copy target to current for smoothed parameters
     mBand0B2 = mBand0B1;  // band0 gain current = target
