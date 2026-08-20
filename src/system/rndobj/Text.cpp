@@ -861,6 +861,7 @@ void RndText::WrapText(
                     unsigned int pen = 10;
                     if (lineLen > mxW) {
                         if (wi != prevI) {
+                            pen = 2010;
                             if (bestWp != -1) { ovf = true; }
                         }
                     } else {
@@ -875,7 +876,7 @@ void RndText::WrapText(
                         }
                     }
                     int tc = (int)pen + wps[wi].cost;
-                    if (tc < bestC) { bestC = tc; bestWp = wi; bestLineLen = lineLen; }
+                    if (tc < bestC) { bestWp = wi; bestLineLen = lineLen; bestC = tc; }
                     if (wps[wi].isHardBreak || ovf) break;
                 }
                 MILO_ASSERT(bestWp != -1, 0x6ed);
@@ -918,6 +919,7 @@ void RndText::WrapText(
                                 float mxW2 = _ref0;
                                 if (lineLen > mxW2) {
                                     if (wi != prevI) {
+                                        pen = 2010;
                                         if (bestWp != -1) { ovf = true; }
                                     }
                                 } else {
@@ -929,9 +931,9 @@ void RndText::WrapText(
                                         }
                                     }
                                 }
-                                if ((int)(wps[wi].cost + pen) <= bestC) {
-                                    bestC = wps[wi].cost + pen;
-                                    bestWp = wi; bestLineLen = lineLen;
+                                int tc2 = (int)(wps[wi].cost + pen);
+                                if (tc2 <= bestC) {
+                                    bestWp = wi; bestLineLen = lineLen; bestC = tc2;
                                 }
                                 if (wps[wi].isHardBreak || ovf) break;
                             }
