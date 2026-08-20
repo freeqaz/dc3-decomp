@@ -907,8 +907,9 @@ void RndText::WrapText(
                 if (mc != 0) {
                     int ci = (int)(cur - wideChars);
                     if (activeMarkup) {
-                        bool canBrk = false;
-                        if (cCount > 0) canBrk = WordWrap_CanBreakLineAt(brkW, BRKWIDE_BASE) != 0;
+                        bool canBrk;
+                        if (cCount <= 0) canBrk = false;
+                        else canBrk = WordWrap_CanBreakLineAt(brkW, BRKWIDE_BASE) != 0;
                         if (canBrk) {
                             int bestWp = -1, bestC = 100000;
                             bool ovf = false;
