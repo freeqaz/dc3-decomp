@@ -91,20 +91,51 @@ Full per-site data: `reloc-normalized-charged-sites-20260820.json`.
 
 Real bugs this exposes, none of which were visible before:
 
-- **`??_DAppLabel@@QAAXXZ`** calls `??1HamLabel@@UAA@XZ` where the target calls
-  `??1AppLabel@@UAA@XZ` — a vbase destructor running the wrong destructor.
-- **`GatherObjectsFromGroup<RndMesh>`** references `??_R0?AVObject@Hmx@@@8`
-  where the target references `??_R0?AVRndMesh@@@8` — the RTTI type descriptor
-  for the wrong class.
-- **`WorldCrowd::Mats`** references `gImpostorMat` unmangled where the target
-  has `?gImpostorMat@@3PAVRndMat@@A`. Exactly the `createFilter` shape: a
-  linkage declaration that disagrees with the original.
+- **`??_DAppLabel@@QAAXXZ`** — the target calls `??1HamLabel@@UAA@XZ`; we
+  called `??1AppLabel@@UAA@XZ`. `AppLabel` declared no destructor at all in the
+  original: `??1AppLabel@@UAA@XZ` appears in **no** `ham_xbox_r.map` entry,
+  `??1HamLabel@@UAA@XZ` is at `82517e00`, and slot 0 of
+  `??_7AppLabel@@6BObject@Hmx@@@` is `??_EHamLabel@@...`. Fixed by deleting the
+  spurious `virtual ~AppLabel();` — 27 instructions / 0 mismatches under
+  `name_check`.
+  *(An earlier revision of this document stated the direction backwards. Acting
+  on that would have made the row worse, not better.)*
+- **`GatherObjectsFromGroup<RndMesh>`** — a **3-cycle**, not one wrong type:
+  target `Object@Hmx` → ours `RndMesh`, target `RndMesh` → ours
+  `WorldInstance`, target `WorldInstance` → ours `Object@Hmx`. The cycle says
+  the dynamic_cast ORDER differs, not that a single type is wrong. Same shape
+  in `GatherObjectsFromDir` (2-cycle) and `UIManager::GotoFirstScreen`.
 - **Three wrong float constants.** MSVC names float-literal COMDATs by their hex
   value, so `__real@3ecccccc` vs `__real@3f19999a` is **0.4 vs 0.6**. The fold's
   own comment claimed it preserved wrong-constant bugs "because those are
   immediates" — on PPC a float constant is *not* an immediate, it is a
   relocation to a named literal, so that class was being masked by the very
   mechanism documented as protecting it.
+
+## A known FALSE-POSITIVE class: invented decorated names in `symbols.txt`
+
+`WorldCrowd::Mats` references `gImpostorMat` where the target side shows
+`?gImpostorMat@@3PAVRndMat@@A`, which looks exactly like the `createFilter`
+linkage bug. **It is not.** `gImpostorMat` is `static RndMat *gImpostorMat` at
+file scope in `Crowd.cpp` — internal linkage, which MSVC does not decorate.
+
+The decisive check is the linker map: `?gImpostorMat@@3PAVRndMat@@A` appears
+**zero** times in `ham_xbox_r.map`. The only `gImpostorMat` there is inside a
+string-literal COMDAT name — `??_C@_0BK@CDFKKHOA@?$CBgImpostorMat?9?$DONextPass?$CI?$CJ?$AA@`,
+i.e. the text of an assert expression. An externally-linked global would be
+present; the independent control is `os/System.cpp`, where our object emits bare
+`gSystemMs` beside decorated `?gHostConfig@@3_NA` and `?gHostFile@@3PBDB`, and
+`?gSystemMs@@3HA` is likewise absent from the map.
+
+So the decorated spelling exists only because `config/373307D9/symbols.txt`
+**invented** it. No source change closes these rows — the target side is being
+relabelled. This is the same family as the `??_G`/`??_E` access-specifier defect
+(both sides told the same wrong name), except here the config manufactures a
+divergence rather than hiding one, so the new ruler charges a config defect as
+though it were our bug.
+
+Binary-wide this is exactly **2 pairs**. Not worth an exemption, but worth
+knowing before anyone "fixes" a linkage declaration that was already correct.
 
 ## Not exempted, deliberately: `__FILE__`
 
