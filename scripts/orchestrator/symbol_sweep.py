@@ -699,17 +699,37 @@ def render_markdown(result: Dict[str, Any], top: int = 60) -> str:
     if kind == "functions":
         rows = result.get("rows") or []
         L.append(f"# Batch function sweep -- {len(rows)} symbols diffed")
-        rows_sorted = sorted(
-            rows, key=lambda r: (r.get("normalized_match_percent") or r.get("fuzzy_match_percent") or 0.0)
-        )
+        # Prefer `canonical_match_percent` (objdiff >= 4.2.4). The older
+        # `normalized_match_percent` is a DOCUMENTED MISNOMER that carries the
+        # FUZZY score -- objdiff-cli computed all three of its percent fields
+        # from match_percent and never read match_percent_normalized at all.
+        # Labelling that column "norm" invited exactly one comparison: against
+        # report.json's match_percent_normalized, which is a different ruler.
+        # That manufactured four phantom regressions for a lane on 2026-08-20.
+        # Column headers below now say which ruler each one is.
+        def _canon(r):
+            v = r.get("canonical_match_percent")
+            return v if v is not None else r.get("normalized_match_percent")
+
+        rows_sorted = sorted(rows, key=lambda r: (_canon(r) or r.get("fuzzy_match_percent") or 0.0))
         L.append("")
-        L.append("| match% (norm) | match% (raw) | symbol | unit |")
-        L.append("|---|---|---|---|")
+        have_canonical = any(r.get("canonical_match_percent") is not None for r in rows)
+        if not have_canonical:
+            L.append(
+                "> ⚠ This objdiff-cli predates `canonical_match_percent` (4.2.4). The "
+                "`match% (fuzzy)` column below is all that is available; do NOT compare "
+                "it against `report.json.match_percent_normalized` -- different rulers."
+            )
+            L.append("")
+        L.append("| match% (canonical) | match% (fuzzy) | match% (raw) | symbol | unit |")
+        L.append("|---|---|---|---|---|")
         for r in rows_sorted[:top]:
-            n = r.get("normalized_match_percent")
+            c = r.get("canonical_match_percent")
+            fz = r.get("fuzzy_match_percent")
             raw = r.get("raw_match_percent")
             L.append(
-                f"| {n if n is not None else '-'} | {raw if raw is not None else '-'} "
+                f"| {c if c is not None else '-'} | {fz if fz is not None else '-'} "
+                f"| {raw if raw is not None else '-'} "
                 f"| `{r.get('symbol')}` | {r.get('unit', '')} |"
             )
         if len(rows_sorted) > top:
