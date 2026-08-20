@@ -29,8 +29,8 @@ struct UIListElementDrawState {
     float mScaleZ; // 0x1c - scale factor for transform Z axis (written by HamListRibbon as Color.b)
     int unk20; // 0x20 - Color overlay A
     float mAlpha; // 0x24
-    UIComponent::State mComponentState; // 0x28
-    UIListWidgetState mElementState; // 0x2c
+    UIListWidgetState mElementState; // 0x28
+    UIComponent::State mComponentState; // 0x2c
     int mDisplay; // 0x30
     int mShowing; // 0x34
     int mData; // 0x38
