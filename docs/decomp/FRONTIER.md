@@ -21,7 +21,12 @@ three certificate audits landed — the canonical headline reads **91.71 %
 (29,531 / 32,202)**, remaining **2,671 fns / 1,195,828 B**, complete units
 **437 / 967**. That is **+16 functions and +3 complete units in one day, all of
 it from re-auditing certificates this document's §6 called into question**.
-Regenerate before quoting anything as current.
+**`decomp.db` has moved too**: the §6.3 lane re-synced it and mechanically
+invalidated 9 of its 10 certificates via `floor_cert_pct` mismatch, so the
+DB-derived columns in §2 and §4 have already shifted (re-running `frontier.py`
+today reads `AT_LIMIT` 1,554 rather than 1,567). **That is the audits working,
+not drift.** The report-derived columns are unchanged. Regenerate before quoting
+anything as current.
 
 **This document contains no worklist.** Per
 [`REMAINING_WORK.md`](REMAINING_WORK.md), the queries are the deliverable; the
