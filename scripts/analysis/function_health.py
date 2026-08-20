@@ -189,24 +189,32 @@ def _run_objdiff(symbol: str) -> tuple[dict | None, str]:
     "objdiff timed out" and "this symbol has no diff" stop being the same
     result.  The old signature returned a bare None for all three.
     """
-    # TODO(repair): this invocation CANNOT SUCCEED and never has.  objdiff-cli
-    # takes the symbol as a POSITIONAL argument — there is no `--symbol` flag —
-    # so every call exits 1 with "Unrecognized argument: --symbol".  Combined
-    # with the old `except Exception: return None`, that made EVERY single-
-    # function report come back `verdict=error / "objdiff failed"` with no
-    # reason attached, indistinguishable from a genuinely undiffable symbol.
-    # Verified on this tree 2026-08-19 (objdiff-cli diff --help).
-    # NOT fixed here on purpose: repairing the call changes what this tool
-    # FINDS, which does not belong in an honesty pass.  What changed is that
-    # the failure now names itself instead of vanishing.  See also the project
-    # rule that analysis should go through the orchestrator MCP tools rather
-    # than calling objdiff-cli directly.
+    # REPAIRED 2026-08-20 (frontier lane).  This invocation passed the symbol as
+    # `--symbol <sym>`; objdiff-cli takes it POSITIONALLY and has no such flag,
+    # so every call exited 1 with "Unrecognized argument: --symbol" and this
+    # function has never once returned data.  The 2026-08-19 honesty pass
+    # diagnosed it exactly and left it standing, on the reasoning that repairing
+    # the call changes what the tool FINDS.  That scoping was right for an
+    # honesty pass and wrong to leave permanently: batch mode goes through the
+    # same call, so a full-band run returned 2,705 rows of which 2,705 were
+    # `verdict=error` -- and because the error path returns a
+    # default-constructed HealthReport, each one serialised as
+    # `ceiling_percent: 100.0, headroom: 0.0, total_mismatches: 0` with exit 0.
+    # A consumer filtering on `headroom > 0` got nothing, which reads as
+    # "this class is exhausted".  Fixing the call is what makes the tool a
+    # measurement instead of 2,705 confident wrong records.
+    #
+    # Negative control for anyone re-testing:
+    #   bin/objdiff-cli diff --symbol '?Poll@BlockMgr@@QAAXXZ' --format json
+    #     -> rc 1, empty stdout, "Unrecognized argument: --symbol"
+    #   bin/objdiff-cli diff '?Poll@BlockMgr@@QAAXXZ' --format json
+    #     -> rc 0, {"symbol":...,"normalized_match_percent":99.98214,...}
     cli = PROJECT_DIR / "bin" / "objdiff-cli"
     if not cli.exists():
         return None, f"objdiff-cli not found at {cli}"
     try:
         result = subprocess.run(
-            [str(cli), "diff", "--symbol", symbol,
+            [str(cli), "diff", symbol,
              "--format", "json", "--include-instructions"],
             capture_output=True, text=True, timeout=60,
             cwd=str(PROJECT_DIR),
@@ -434,6 +442,35 @@ def _compute_verdict(
 
     if match_pct >= 100.0:
         return "complete", "Already at 100%", 0.0
+
+    # THE CEILING AND THE MEASUREMENT ARE ON DIFFERENT RULERS.  `ceiling` is
+    #     100 - 100 * unfixable_mismatches / total_instructions
+    # -- an UNWEIGHTED instruction-count ratio.  `match_pct` is objdiff's
+    # `normalized_match_percent`, a SCORE-WEIGHTED f32 that gives near-full
+    # credit to a partially-matching instruction (a register-only difference
+    # costs almost nothing).  Subtracting one from the other is meaningless, and
+    # it reads low: measured on this tree 2026-08-20, 21 of 25 functions in
+    # `default/system/math/*` came back with a ceiling BELOW their own measured
+    # percent -- `?OnSide@BSPFace@@` 89.8 % ceiling at 99.9 % measured,
+    # `Multiply(Vector3, Quat)` 16.0 % ceiling at 84.8 % measured.
+    #
+    # This is also the mechanism behind ceiling_calculator.py's clamp: it
+    # reports `ceilings_clamped_up_to_current: 1172 / 1568 (74.7 %)`, and that
+    # rate is a property of the SCALE MISMATCH, not of the functions.  A clamp
+    # hides it; here it would surface as a confident `at_limit` on a
+    # near-perfect function, which is worse.
+    #
+    # So: refuse.  Do not manufacture an at_limit verdict out of a comparison
+    # that cannot be made.  Fixing this properly means computing the ceiling on
+    # objdiff's own weighted score, which is a real change to what the tool
+    # FINDS and needs its own validation -- not a guard.
+    if headroom < 0.0:
+        return ("ceiling_unusable",
+                f"Ceiling model unusable here: it reports {ceiling:.1f} % for a "
+                f"function measured at {match_pct:.2f} %. The ceiling is an "
+                f"unweighted instruction-count ratio and the measurement is "
+                f"objdiff's score-weighted normalized percent; they are not "
+                f"comparable. NOT an at_limit certificate.", 0.0)
 
     if headroom <= 0.5 and ceiling < 100.0:
         return "at_limit", f"Ceiling {ceiling:.1f}% — no room to improve", 0.0

@@ -57,7 +57,28 @@ CASES: list[tuple[str, list[str]]] = [
     ("honesty_lint",          ["python3", "scripts/analysis/honesty_lint.py", "--json"]),
     ("vtable_dispatch_scan",  ["python3", "scripts/analysis/vtable_dispatch_scan.py",
                                "--min-norm", "99.9"]),
+    # Added 2026-08-20 by the frontier lane.  All four are WORK-SELECTION
+    # oracles -- the class of tool whose nondeterminism reads as "this class is
+    # exhausted" -- and none of them had ever been checked.  All four agreed
+    # with themselves on the day they were added.
+    ("progress_metrics",      ["python3", "scripts/progress_metrics.py"]),
+    ("frontier",              ["python3", "scripts/analysis/frontier.py",
+                               "--db", "/home/free/code/milohax/dc3-decomp/decomp.db"]),
+    ("function_health",       ["python3", "scripts/analysis/function_health.py",
+                               "--db", "/home/free/code/milohax/dc3-decomp/decomp.db",
+                               "--min", "99", "--max", "99.99", "--limit", "0", "--json"]),
+    ("certify_floor_summary", ["python3", "scripts/certify_floor.py",
+                               "--db", "/home/free/code/milohax/dc3-decomp/decomp.db",
+                               "--summary"]),
 ]
+
+# NOT in CASES, and the reason is budget rather than confidence: a single
+# uncapped run of ceiling_calculator.py (~1,568 objdiff invocations) or
+# batch_pattern_scan.py (~1,751) takes well over ten minutes, so checking either
+# one costs half an hour.  They have been spot-checked by hand; they have not
+# been checked here.  Absence from CASES means UNCHECKED, never "deterministic".
+UNCHECKED_TOO_EXPENSIVE = ["ceiling_calculator", "batch_pattern_scan",
+                           "data_symbol_scan", "fake_impl_scan"]
 
 TIMEOUT = 900
 
@@ -149,6 +170,11 @@ def main() -> int:
     if inc:
         print("INCONCLUSIVE (produced nothing to compare — NOT a pass): "
               + ", ".join(sorted(inc)))
+    # A green run here covers only what is in CASES. Say what it does not cover,
+    # so "the scanners are deterministic" cannot be read off a number that was
+    # never about them.
+    print("NOT CHECKED (too expensive to run twice here — UNCHECKED, not clean): "
+          + ", ".join(UNCHECKED_TOO_EXPENSIVE))
     # An inconclusive run is a failure of the harness, not a clean bill of
     # health for the scanner, so it must not exit 0.
     return 1 if (diff or inc) else 0

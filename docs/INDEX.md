@@ -25,6 +25,7 @@ Top-level sitemap for the DC3 decomp documentation.
 |-----|-------------|
 | [STATE_OF_THE_DECOMP.md](STATE_OF_THE_DECOMP.md) | **Start here.** The two headline metrics with their denominators, how to regenerate every number, the 2026-08 `name_check` ruler change, how much to trust AT_LIMIT, and the open frontier by shape |
 | [PROGRESS_METRICS.md](PROGRESS_METRICS.md) | Generated headline numbers with build provenance (report time, objdiff version, relocation mode). Regenerate with `scripts/progress_metrics.py --markdown`; never hand-edit |
+| [decomp/FRONTIER.md](decomp/FRONTIER.md) | The 2026-08-20 frontier re-derivation — the 2,687 remaining functions banded with denominators, the three disagreeing denominators, which scanners are still lying and how, and a ranked lane list |
 | [decomp/REMAINING_WORK.md](decomp/REMAINING_WORK.md) | How to *find* work — canonical queries, which DB columns lie, triage routing, and the metric-invisible work class. Ships queries, never worklists |
 
 ## Tools & Workflows

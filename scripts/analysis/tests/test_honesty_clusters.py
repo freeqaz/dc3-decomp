@@ -709,3 +709,82 @@ def test_objdiff_failure_reports_its_reason(monkeypatch):
     assert data is None
     assert "objdiff-cli not found" in err, \
         "the reason must travel with the failure, not be discarded"
+
+
+# =========================================================================== #
+# function_health.py — the 2026-08-20 frontier-lane repairs
+# =========================================================================== #
+
+def test_run_objdiff_passes_the_symbol_positionally_not_as_a_flag(monkeypatch):
+    """`--symbol` is not an objdiff-cli flag and never was.
+
+    While that spelling stood, `_run_objdiff` could not return data under ANY
+    circumstances, so batch mode returned rows whose every analysis field was a
+    dataclass default. Ground truth is objdiff-cli's OWN `--help`, not a string
+    written here: if the tool ever grows a real `--symbol` flag this test
+    retires itself instead of failing.
+    """
+    captured: dict = {}
+
+    class _R:
+        returncode = 0
+        stdout = '{"normalized_match_percent": 42.0, "instructions": []}'
+        stderr = ""
+
+    def fake_run(argv, **kw):
+        captured["argv"] = argv
+        return _R()
+
+    monkeypatch.setattr(fh.subprocess, "run", fake_run)
+    monkeypatch.setattr(fh.Path, "exists", lambda self: True)
+    fh._run_objdiff("?Poll@BlockMgr@@QAAXXZ")
+    argv = captured["argv"]
+
+    assert "--symbol" not in argv, (
+        "objdiff-cli takes the symbol POSITIONALLY; `--symbol` exits 1 with "
+        "'Unrecognized argument' and this function then never returns data")
+    assert argv[argv.index("diff") + 1] == "?Poll@BlockMgr@@QAAXXZ", \
+        "the symbol must be the positional argument immediately after `diff`"
+
+
+def test_a_ceiling_below_the_measurement_is_refused_not_certified():
+    """The ceiling and the measurement are on different rulers.
+
+    `ceiling = 100 - 100 * unfixable / total_instructions` is an UNWEIGHTED
+    instruction ratio; `match_percent` is objdiff's SCORE-WEIGHTED normalized
+    percent. Subtracting them yields negative headroom on most real functions,
+    and the old code turned that straight into a confident `at_limit`.
+
+    The expected values are recomputed from the fixture by the arithmetic the
+    tool itself claims to use — never typed in beside the assertion.
+    """
+    # A near-perfect function whose few mismatches are all "unfixable".
+    total_insns, unfixable, measured = 59, 6, 99.898
+    ceiling = 100.0 - 100.0 * unfixable / total_insns
+    headroom = ceiling - measured
+    assert headroom < 0.0, (
+        "sanity: this fixture must reproduce the impossible case — a ceiling "
+        "BELOW the measured percent")
+
+    cats = [fh.MismatchCategory(name="regswap", count=unfixable,
+                                fixable=False, description="x")]
+    verdict, reason, score = fh._compute_verdict(measured, cats, ceiling, headroom)
+    assert verdict != "at_limit", (
+        "a ceiling below the measurement cannot certify a floor — that is a "
+        "scale error, not a finding")
+    assert verdict == "ceiling_unusable"
+    assert f"{measured:.2f}" in reason and f"{ceiling:.1f}" in reason, \
+        "the refusal must show both numbers so the reader can see the mismatch"
+
+    # NEGATIVE CONTROL: when the two rulers happen to agree, a real floor still
+    # certifies. Without this the test above passes on a tool that refuses
+    # everything.
+    total_insns, unfixable, measured = 103, 2, 98.020
+    ceiling = 100.0 - 100.0 * unfixable / total_insns
+    headroom = ceiling - measured
+    assert 0.0 <= headroom <= 0.5, "sanity: this fixture is the agreeing case"
+    cats = [fh.MismatchCategory(name="regswap", count=unfixable,
+                                fixable=False, description="x")]
+    verdict, _, _ = fh._compute_verdict(measured, cats, ceiling, headroom)
+    assert verdict == "at_limit", \
+        "the guard must not swallow genuine at_limit verdicts"
