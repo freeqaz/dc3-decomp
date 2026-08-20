@@ -15,10 +15,17 @@ BEGIN_HANDLERS(CharUpperTwist)
     HANDLE_SUPERCLASS(Hmx::Object)
 END_HANDLERS
 
+// The shipped binary really does pair the property names with permuted members:
+// "upper_arm" syncs mTwist2, "twist1" syncs mUpperArm, "twist2" syncs mTwist1.
+// This is not a decomp artifact -- the three `subi rN, this, off` immediates in
+// ?SyncProperty@CharUpperTwist@@... prove it, and RB3's independent decomp of a
+// different binary/compiler reaches the same permutation. Save/Load/Copy are
+// permuted the same way (mTwist2, mUpperArm, mTwist1), so the pairing is at least
+// self-consistent on disk; it is the original authors' bug, faithfully preserved.
 BEGIN_PROPSYNCS(CharUpperTwist)
-    SYNC_PROP(upper_arm, mUpperArm)
-    SYNC_PROP(twist1, mTwist1)
-    SYNC_PROP(twist2, mTwist2)
+    SYNC_PROP(upper_arm, mTwist2)
+    SYNC_PROP(twist1, mUpperArm)
+    SYNC_PROP(twist2, mTwist1)
     SYNC_SUPERCLASS(Hmx::Object)
 END_PROPSYNCS
 
