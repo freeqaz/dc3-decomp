@@ -43,7 +43,9 @@ namespace {
 }
 #endif // !HX_NATIVE
 
-static const float kE = 2.71828182845905f;
+// 6 significant digits -- the target's pow() base is the double widening of
+// this float (0x4005bf09a0000000 == 2.718280076980591), not M_E.
+static const float kE = 2.71828f;
 
 DancerSkeleton sLastComparedDancerSkel;
 static int sLastBeatMod;
@@ -762,7 +764,7 @@ void FreestyleMoveRecorder::CalcFrameScore(
                 float distSq = (float)pow((double)dist, 2.0);
                 float halfSq = (float)pow((double)(oscTimeout * 0.5f), 2.0);
                 float ratio = distSq / halfSq;
-                tw.weight = (float)pow(2.718281828459045, (double)(-ratio));
+                tw.weight = (float)pow((double)kE, (double)(-ratio));
                 windows.push_back(tw);
             }
             i++;

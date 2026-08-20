@@ -18,7 +18,9 @@ void LowpassCoefficients(float *const coeffs, float sampleRate, float freq, floa
         return;
     }
 
-    double w0 = freq * 6.2831853718196856 / sampleRate;
+    // 2 * PI evaluated in float precision (PI == 3.1415927f) and widened to
+    // double: 0x401921fb60000000. Not the double-precision 2*pi.
+    double w0 = freq * 6.2831854820251465 / sampleRate;
     double sinw = sin(w0);
     double cosw = cos(w0);
     double alpha = sinw / (q * 2.0f);
@@ -51,7 +53,9 @@ void HighpassCoefficients(float *const coeffs, float sampleRate, float freq, flo
         return;
     }
 
-    double w0 = freq * 6.2831853718196856 / sampleRate;
+    // 2 * PI evaluated in float precision (PI == 3.1415927f) and widened to
+    // double: 0x401921fb60000000. Not the double-precision 2*pi.
+    double w0 = freq * 6.2831854820251465 / sampleRate;
     double sinw = sin(w0);
     double cosw = cos(w0);
     double alpha = sinw / (q * 2.0f);

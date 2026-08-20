@@ -623,7 +623,7 @@ void CharIKFoot::DoFSM(Character *mMe, Transform &tf) {
     float f10;
     bool b2 = false;
     float vecat = mData->LocalXfm().v[mDataIndex];
-    if (!(vecat < 1.0f)) {
+    if (!(vecat < 0.98f)) {
         b2 = true;
     } else {
         if (vecat <= 0.0f) {
