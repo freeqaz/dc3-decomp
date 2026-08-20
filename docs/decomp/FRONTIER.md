@@ -383,7 +383,19 @@ filter hides:
 | 6 | 352 | `??_F`, `??_D`, `??_H`, `??_V` |
 
 **2,309 authorable `??_`-prefixed functions are already at 100 %**, so the class
-is demonstrably matchable and these 144 are simply hidden work. Combined with 35
+is demonstrably matchable and these 144 are simply hidden work. **142 of the 144
+emit no body at all** (12,524 B) — verified directly on one of them:
+
+```
+$ bin/objdiff-cli diff '??_EEnvelopeGenerator@@UAAPAXI@Z' --format json
+{"demangled":"public: virtual void * __cdecl EnvelopeGenerator::
+  `vector deleting destructor'(unsigned int)",
+ "target_size":124, "base_size":0}
+```
+
+124 bytes in the target, **zero in our build**. 114 of the 144 additionally
+carry an `AT_LIMIT` verdict, so they are simultaneously *hidden* from the work
+view and *labelled certified* in the one that can see them. Combined with 35
 `fn_` and 6 `merged_` rows plus the 100 DB-excluded rows, `authorable_done`
 cannot see **285 of the 2,687** (50,008 bytes).
 
