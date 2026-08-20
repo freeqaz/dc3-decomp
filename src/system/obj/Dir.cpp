@@ -25,6 +25,11 @@
 #include "utl/BinStream.h"
 #ifdef HX_NATIVE
 #include <cstdlib>
+#include <cstring>
+#include <malloc.h>
+#endif
+#ifdef HX_NATIVE
+#include <cstdlib>
 #endif
 #include <algorithm>
 #include <utility>
@@ -840,6 +845,67 @@ void ObjectDir::RemovingSubDir(ObjDirPtr<ObjectDir> &subdir) {
 int ObjectDir::sDeleteObjectsDepth = 0;
 bool ObjectDir::sInMergeDirs = false;
 bool ObjectDir::sSuppressFlush = false;
+#endif
+
+#ifdef HX_NATIVE
+// Opt-in poison-and-quarantine for cascade-freed object blocks.
+// Enable with DC3_POISON_FREED_OBJECTS=1. OFF by default: it never returns
+// memory, so a long session grows without bound. This is a diagnostic, not a
+// hardening measure, and it is deliberately not wired to any build type.
+//
+// Why it exists. As of 2026-08-20, ~Object nullifies its ref ring during a
+// cascade, which closes the dangling-holder class for every ObjPtr-family
+// holder -- the ring belongs to the REFERENT, so it reaches holders that live
+// outside any dir. It cannot reach RAW `Hmx::Object*` holders, because those
+// register no ObjRef at all. That population is large (TheHamUI's twelve panel
+// pointers, UIManager's screen stack, UIScreen's PanelRef list, the
+// `static UIPanel* = Find<>(...)` caches in RhythmBattle/RhythmDetector,
+// gDataVars' raw DataNode object values) and no ring walk will ever find it.
+//
+// Those bugs are invisible precisely because free() succeeds and the allocator
+// hands the block to something else: the stale read returns plausible garbage
+// and the failure surfaces later, somewhere unrelated, at a rate like 3 runs in
+// 31. Poisoning to 0xDD and never reusing the address converts that into a
+// deterministic fault AT THE DEREFERENCE, with the offending holder on the
+// stack. A vptr read back as 0xDDDDDDDDDDDDDDDD is non-canonical on x86-64, so
+// the first virtual call through a stale pointer traps immediately.
+//
+// Safe with respect to the sentinel scans in NullifyAllRefs/SnapshotRing: they
+// test for 0xCAFEBABE, and 0xDDDDDDDD is not it, so poisoned nodes read as
+// dead and are skipped. Quarantining makes those reads strictly safer than the
+// status quo, which relies on glibc happening to zero freed memory.
+void ObjectDir::ReleaseCascadeBlock(void *block) {
+    static const bool poison = [] {
+        const char *e = getenv("DC3_POISON_FREED_OBJECTS");
+        bool on = e && *e && strcmp(e, "0") != 0;
+        // Announce unconditionally when on. A diagnostic you cannot confirm was
+        // active is worse than none: a clean run then proves nothing, and this
+        // lane exists partly because "38 runs clean" was read as evidence.
+        if (on) {
+            MILO_LOG("DC3_POISON_FREED_OBJECTS=1: cascade-freed object blocks "
+                     "will be poisoned to 0xDD and quarantined (never reused). "
+                     "Memory grows without bound; diagnostic use only.\n");
+        }
+        return on;
+    }();
+    if (!poison) {
+        free(block);
+        return;
+    }
+    size_t n = malloc_usable_size(block);
+    memset(block, 0xDD, n);
+    // Leak deliberately: reuse of the address is exactly what we are preventing.
+    static size_t quarantined = 0;
+    static size_t bytes = 0;
+    if (++quarantined % 4096 == 0) {
+        MILO_LOG(
+            "DC3_POISON_FREED_OBJECTS: %zu blocks quarantined (%zu KB retained)\n",
+            quarantined, (bytes += n) / 1024
+        );
+    } else {
+        bytes += n;
+    }
+}
 #endif
 
 void ObjectDir::DeleteObjects() {

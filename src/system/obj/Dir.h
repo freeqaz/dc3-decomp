@@ -480,11 +480,19 @@ public:
     static bool InMergeDirs() { return sInMergeDirs; }
     static void SetInMergeDirs(bool v) { sInMergeDirs = v; }
     static void DeferFree(void *block) { sPendingFrees().push_back(block); }
+    /** Release one cascade-freed block.
+     *
+     *  Normally just free(). With DC3_POISON_FREED_OBJECTS=1 the block is
+     *  poisoned and quarantined instead -- see Dir.cpp for why that is the
+     *  tool of choice for hunting RAW Hmx::Object* holders, which register no
+     *  ObjRef and so cannot be reached by any ring walk. Out of line to keep
+     *  <malloc.h> out of this widely-included header. */
+    static void ReleaseCascadeBlock(void *block);
     static void FlushDeferredFrees() {
         auto &v = sPendingFrees();
         if (!v.empty()) {
             for (void *p : v)
-                free(p);
+                ReleaseCascadeBlock(p);
             v.clear();
             Hmx::Object::sRingsDirty = true;
         }

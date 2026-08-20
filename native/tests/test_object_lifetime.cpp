@@ -1281,8 +1281,14 @@ TEST_F(ObjectLifetimeTest, CascadeDeleteCleansUpExternalObjPtrList) {
 //
 // This test reproduces the shape rather than the specific screen: an object in
 // the dir deletes a queued Task from its destructor, so the delete happens with
-// InDeleteObjects() true. The dangling precondition is asserted directly, so
-// the test cannot quietly stop covering the crash.
+// InDeleteObjects() true.
+//
+// 2026-08-20: the root was fixed -- ~Object now calls NullifyAllRefs() during a
+// cascade instead of skipping ref cleanup entirely, so the referent's own ring
+// nullifies every holder, global or not. The assertions below were inverted to
+// match: the queue entry must come back NULL and Poll()'s liveness guard must
+// NOT fire. The precondition (the cascade really does destroy the Task) is
+// still asserted, so the test cannot quietly stop covering the crash.
 namespace {
 class CascadeTestTask : public Task {
 public:
@@ -1333,18 +1339,34 @@ TEST_F(ObjectLifetimeTest, PollSkipsQueuedTaskDestroyedByDeleteObjectsCascade) {
         << "the cascade was expected to destroy the queued Task via ~TaskKiller; "
            "if it no longer does, this test has stopped covering the crash";
     ASSERT_EQ(TheTaskMgr.QueuedDeleteCountForTest(), 1);
-    ASSERT_EQ(TheTaskMgr.QueuedDeleteRawForTest(0), task)
-        << "the queued ObjPtr should still hold the dangling pointer -- that is "
-           "precisely what Poll() must not delete";
 
-    // The fix: Poll drops the reference instead of dispatching a virtual
-    // destructor through freed memory.
+    // THE FIX, checked at the root: ~Object now calls NullifyAllRefs() instead
+    // of skipping ref cleanup during a cascade, so the queue entry is already
+    // null. Nothing dangling ever reaches Poll().
+    //
+    // This assertion replaced its own inverse. Until 2026-08-20 this line read
+    //     ASSERT_EQ(QueuedDeleteRawForTest(0), task)
+    //         << "the queued ObjPtr should still hold the dangling pointer"
+    // -- the test demanded that the bug still be present, because the fix at
+    // the time was a defensive guard inside Poll() and the guard could only be
+    // exercised if something dangling was there to catch. Pinning a symptom
+    // that way makes the real fix look like a regression: closing the root made
+    // this the only failing test in the suite. If a future change reintroduces
+    // the skip, this fails here rather than as an intermittent SIGSEGV.
+    EXPECT_EQ(TheTaskMgr.QueuedDeleteRawForTest(0), nullptr)
+        << "DANGLING: the cascade destroyed the queued Task without nullifying "
+           "TheTaskMgr's ObjPtr. Poll()'s liveness guard would now be the only "
+           "thing standing between this and a virtual destructor dispatched "
+           "through recycled heap memory.";
+
     TheTaskMgr.Poll();
 
     EXPECT_EQ(TheTaskMgr.QueuedDeleteCountForTest(), 0);
-    EXPECT_EQ(TaskMgr::DanglingQueuedTasksSkipped(), skippedBefore + 1)
-        << "Poll() must have recognised and skipped exactly one dangling queued "
-           "task. 0 here means it deleted freed memory instead (the crash).";
+    EXPECT_EQ(TaskMgr::DanglingQueuedTasksSkipped(), skippedBefore)
+        << "Poll() fell back on its dangling-task guard. The guard is retained "
+           "as defence in depth, but with the root fixed it must never fire; "
+           "if it does, some path still destroys objects mid-cascade without "
+           "their ref rings being nullified.";
 }
 
 } // namespace

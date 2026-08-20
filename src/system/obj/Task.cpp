@@ -34,6 +34,11 @@ bool Task::IsLive(Task *t) { return LiveTasks().count(t) > 0; }
 // DeleteObjects cascade already destroyed. See the comment at the drain loop.
 static int sDanglingQueuedTasksSkipped = 0;
 int TaskMgr::DanglingQueuedTasksSkipped() { return sDanglingQueuedTasksSkipped; }
+
+// Incremented by QueueTaskDelete when a caller hands it a Task that has already
+// been destroyed. See the comment there.
+static int sDeadTasksRefused = 0;
+int TaskMgr::DeadTasksRefused() { return sDeadTasksRefused; }
 #endif
 
 TaskMgr TheTaskMgr;
@@ -610,6 +615,39 @@ void TaskMgr::Init() {
 void TaskMgr::QueueTaskDelete(Task *task) {
     if (task) {
 #ifdef HX_NATIVE
+        // Refuse a task that has ALREADY been destroyed.
+        //
+        // This is where the dangling queue entry actually gets created, and it
+        // is not the cascade. Instrumented boot->gameplay runs pair the two
+        // events on the same address:
+        //
+        //   QueueTaskDelete on a task whose mRefs sentinel is already dead:
+        //       0x555bcb67c4c0 (depth=0)
+        //   TaskMgr::Poll dangling entry: queued=0x555bcb67c4c0
+        //
+        // depth=0 -- no cascade is running. A caller (AnimTask::~AnimTask
+        // passes mBlendTask, which can be a stale ObjPtr) hands us a pointer to
+        // an already-destroyed Task. Constructing ObjPtr<Task>(nullptr, task)
+        // then calls AddRef on a dead object, splicing a live ObjRef into a
+        // ring nobody will ever walk again -- so nothing can nullify it, and
+        // Poll later finds it dangling.
+        //
+        // Note this is NOT reachable by fixing ~Object: the object is already
+        // gone before we are called. It has to be refused at the door.
+        //
+        // The pre-existing InDeleteObjects() check below is kept, but it was
+        // never the relevant predicate for this failure -- the observed depth
+        // is 0 every time.
+        if (!Task::IsLive(task)) {
+            if (sDeadTasksRefused++ == 0) {
+                MILO_LOG(
+                    "TaskMgr::QueueTaskDelete: refused an already-destroyed "
+                    "task. Queuing it would splice a live ObjRef into a dead "
+                    "object's ring, and Poll would later delete freed memory.\n"
+                );
+            }
+            return;
+        }
         // During cascade, tasks are being destroyed by Phase 1 and their
         // memory is deferred-freed. Don't queue them — the ObjPtr<Task>
         // constructor calls AddRef which may write to freed ring neighbors,
