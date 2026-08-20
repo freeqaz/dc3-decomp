@@ -1378,16 +1378,70 @@ namespace Hmx {
         const char *AllocHeapName() { return MemHeapName(MemFindAddrHeap(this)); }
         void AddRef(ObjRef *ref) {
 #ifdef HX_NATIVE
-            // During cascade, ~ObjRefConcrete skips Release, leaving dead
-            // entries in the ring. If the last entry is dead (freed), the
-            // ring is corrupted — reset to self-loop before insertion.
-            // Only check after a cascade has completed (flag avoids
-            // no_sanitize cache-miss reads during normal operation).
+            // A dead node can end up linked in this ring: an ObjPtrVec buffer
+            // freed wholesale never runs its nodes' destructors, so they are
+            // still spliced in with mAliveSentinel cleared. Inserting at the
+            // tail writes mRefs.prev->next, so a DEAD TAIL means writing
+            // through a freed pointer. That is the hazard, and it is real.
+            //
+            // This used to respond by doing mRefs.Clear() -- dropping the
+            // WHOLE ring. That is ring amnesia: every LIVE ObjRef in the ring
+            // is orphaned, so when the referent is later destroyed its ring
+            // walk finds nothing and those holders are never nullified. It
+            // reintroduces exactly the dangling-holder bug that the ~Object
+            // fix closed, which is why TaskMgr::Poll's guard kept firing on
+            // ~24% of boot->gameplay runs (12/51) even after that fix.
+            //
+            // Prune instead: rebuild the ring from its live nodes only. Same
+            // read-only traversal of dead nodes that SnapshotRing and
+            // NullifyAllRefs already use, and it writes only to live nodes and
+            // the sentinel -- so it removes the dead tail without losing a
+            // single live reference. Gated identically to the old check, so
+            // the cost profile is unchanged.
             if (sRingsDirty && mRefs.prev != &mRefs && !IsRingPrevAlive())
-                mRefs.Clear();
+                PruneDeadRefs();
 #endif
             ref->AddRef(&mRefs);
         }
+#ifdef HX_NATIVE
+        /** Rebuild mRefs from its live nodes, dropping dead ones. Reads
+         *  next/sentinel out of possibly-freed nodes, hence no_sanitize. */
+        __attribute__((no_sanitize("address")))
+        void PruneDeadRefs() {
+            constexpr size_t kNextOffset = sizeof(void *);
+            constexpr size_t kSentinelOffset = 3 * sizeof(void *);
+            constexpr size_t kMaxRingSize = 100000;
+            ObjRef *liveHead = nullptr;
+            ObjRef *liveTail = nullptr;
+            ObjRef *cur = mRefs.next;
+            size_t count = 0;
+            while (cur != &mRefs) {
+                if ((uintptr_t)cur < 0x10000 || ++count > kMaxRingSize)
+                    break;
+                ObjRef *nxt = *(ObjRef **)((const char *)cur + kNextOffset);
+                uint32_t alive =
+                    *(const uint32_t *)((const char *)cur + kSentinelOffset);
+                if (alive == ObjRef::kAliveSentinel) {
+                    if (!liveHead) {
+                        liveHead = cur;
+                    } else {
+                        liveTail->next = cur;
+                        cur->prev = liveTail;
+                    }
+                    liveTail = cur;
+                }
+                cur = nxt;
+            }
+            if (liveHead) {
+                mRefs.next = liveHead;
+                liveHead->prev = &mRefs;
+                mRefs.prev = liveTail;
+                liveTail->next = &mRefs;
+            } else {
+                mRefs.Clear();
+            }
+        }
+#endif
 #ifdef HX_NATIVE
         __attribute__((no_sanitize("address")))
         bool IsRingPrevAlive() const {

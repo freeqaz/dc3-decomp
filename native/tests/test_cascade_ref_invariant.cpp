@@ -213,3 +213,51 @@ TEST_F(CascadeRefInvariantTest, IsLiveIsAddressKeyedAndThereforeABAUnsound) {
 
     delete second;
 }
+
+// ---------------------------------------------------------------------------
+// QueueTaskDelete must refuse a Task that has already been destroyed.
+//
+// This is the second, independent defect this lane found, and it is the one
+// that actually produced the reported crash. Instrumented boot->gameplay runs
+// showed QueueTaskDelete being handed an already-destroyed Task at cascade
+// depth 0 -- no cascade running at all:
+//
+//   QueueTaskDelete on a task whose mRefs sentinel is already dead:
+//       0x555bcb67c4c0 (depth=0)
+//   TaskMgr::Poll dangling entry: queued=0x555bcb67c4c0
+//
+// Constructing ObjPtr<Task>(nullptr, task) on a dead object calls AddRef on it,
+// splicing a live ObjRef into a ring nobody will ever walk again. Nothing can
+// nullify it afterwards -- not Phase 0, not ~Object, not any ring walk. The
+// only place it can be stopped is at the door.
+//
+// The test deliberately passes a pointer to freed memory, because that is
+// precisely the contract violation being defended against.
+// ---------------------------------------------------------------------------
+TEST_F(CascadeRefInvariantTest, QueueTaskDeleteRefusesAnAlreadyDestroyedTask) {
+    TheTaskMgr.Poll(); // drain
+
+    Task *task = new ProbeTask();
+    ASSERT_TRUE(Task::IsLive(task));
+
+    delete task;
+    ASSERT_FALSE(Task::IsLive(task));
+
+    const int refusedBefore = TaskMgr::DeadTasksRefused();
+    const int queuedBefore = TheTaskMgr.QueuedDeleteCountForTest();
+
+    TheTaskMgr.QueueTaskDelete(task); // stale on purpose
+
+    EXPECT_EQ(TaskMgr::DeadTasksRefused(), refusedBefore + 1)
+        << "QueueTaskDelete accepted a destroyed Task. The resulting ObjPtr is "
+           "unreachable by every nullification path in the engine.";
+    EXPECT_EQ(TheTaskMgr.QueuedDeleteCountForTest(), queuedBefore)
+        << "the dead task must not have been enqueued";
+
+    // And the drain must not have to fall back on its own guard.
+    const int skippedBefore = TaskMgr::DanglingQueuedTasksSkipped();
+    TheTaskMgr.Poll();
+    EXPECT_EQ(TaskMgr::DanglingQueuedTasksSkipped(), skippedBefore)
+        << "Poll's dangling-task guard fired, meaning something dangling still "
+           "reached the queue despite the entry-point check.";
+}

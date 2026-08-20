@@ -195,6 +195,10 @@ public:
     Task *QueuedDeleteRawForTest(int i) const {
         return const_cast<ObjPtr<Task> &>(unk84[i]).Ptr();
     }
+    /** Running count of already-destroyed Tasks that `QueueTaskDelete()`
+     *  refused to accept. Should be the ONLY counter that moves: a nonzero
+     *  DanglingQueuedTasksSkipped() means one got past this check. */
+    static int DeadTasksRefused();
     /** Running count of queued entries `Poll()` refused to delete because the
      *  Task had already been destroyed without this ObjPtr being nullified
      *  (see the comment in TaskMgr::Poll). Zero on a healthy frame. */
