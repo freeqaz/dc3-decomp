@@ -736,7 +736,10 @@ BEGIN_PROPSYNCS(CharBonesSamples)
                 }
                 mPreviewSample = clamped;
                 mStart = mRawData + mTotalSize * clamped;
-            } else if (_op == kPropSize) {
+            } else if (_op == kPropUnknown0x40) {
+                // Same guard SYNC_PROP_SET emits (`_op == (PropOp)0x40`), not kPropSize:
+                // the target compares against 0x40 here, as it does in the `compression`
+                // handler four lines below.
                 return false;
             } else {
                 _val = DataNode(mPreviewSample);

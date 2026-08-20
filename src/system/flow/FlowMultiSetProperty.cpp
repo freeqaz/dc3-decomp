@@ -19,7 +19,7 @@ END_HANDLERS
 
 BEGIN_PROPSYNCS(FlowMultiSetProperty)
     SYNC_PROP_MODIFY(targets, mTargets, (mTargets.sort(ObjNameSort()), mTargets.unique()))
-    SYNC_PROP(value, mProperty)
+    SYNC_PROP(value, mPropertyValue)
     SYNC_SUPERCLASS(FlowNode)
 END_PROPSYNCS
 

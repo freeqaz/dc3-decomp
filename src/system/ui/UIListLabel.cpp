@@ -66,11 +66,11 @@ BEGIN_LOADS(UIListLabel)
     ASSERT_REVS(1, 1)
     LOAD_SUPERCLASS(UIListSlot)
     bs >> mLabel;
-    if (d.altRev < 1) {
+    if (d.rev < 1) {
         String tmp;
         bs >> tmp;
     }
-    if (d.rev >= 1) {
+    if (d.altRev >= 1) {
         d >> mHighlightAltStyles;
     }
 END_LOADS
