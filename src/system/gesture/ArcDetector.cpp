@@ -331,7 +331,9 @@ void ArcDetector::TryToStartSwipe(const Vector3 &pos, const Skeleton &skeleton) 
 }
 
 void ArcDetector::Update(const Skeleton &skeleton, int elapsed) {
-    MILO_ASSERT(mInitialized, 0x4A);
+    if (!mInitialized) {
+        MILO_ASSERT(false, 0x4A);
+    }
     if (!skeleton.IsTracked()) {
         Clear();
     } else {
