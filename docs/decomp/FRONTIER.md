@@ -629,6 +629,14 @@ native port runs. Evidence for each ranking is the section it points at.
 23 of the 151 are already ≥ 99 %; 14 are ≥ 99.9 %. 124 are engine, 27 game.
 Composition: 40 no verdict, 100 `AT_LIMIT` (67 of them `equivalent`, 18
 `permuter_exhausted`), 11 excluded. 37 have no body at all.
+
+**Robustness check** (because a "one away" count is easy to inflate with
+artifacts): of the 151, **139 are ordinary named symbols**, 10 are `??_`
+compiler-generated bodies and 2 are `fn_` funclets; 12 sit in the deprioritised
+subsystems. That leaves **129 named, port-relevant, one-away functions worth
+85,480 bytes** — 19 already ≥ 99 %, 39 in `[95,99)`, 47 below 95, and 24 with no
+body. The lever survives the check.
+
 Query: `frontier.py --section near-complete --max-remaining 1`.
 Extend to `--max-remaining 2` for **247 units / 343 fns / 179,512 B**.
 
