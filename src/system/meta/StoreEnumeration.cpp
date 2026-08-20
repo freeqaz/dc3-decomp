@@ -168,7 +168,7 @@ handle_12:
     {
         DWORD extError = XGetOverlappedExtendedError(&mOverlapped);
         if ((WORD)extError == 0x12) {
-            goto error_no_more;
+            goto done;
         }
         TheDebug << MakeString(" store enum: funciton failed with: %d (0x%X)\n", (unsigned long)extError, (unsigned long)extError);
         if ((WORD)extError >= 0x2710 && (WORD)extError < 0x2EE0) {
