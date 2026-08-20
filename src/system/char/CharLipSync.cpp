@@ -312,10 +312,9 @@ void CharLipSync::PlayBack::Poll(float time) {
         if (numVisemes < end) {
             int visIdx = 0;
             float one = 1.0f;
-            CharLipSync *ls = mLipSync;
             for (; numVisemes < end; visIdx++, numVisemes++) {
                 float weight =
-                    ls->Property(result.Array(0)->Sym(visIdx), true)->Float(0);
+                    mLipSync->Property(result.Array(0)->Sym(visIdx), true)->Float(0);
                 if ((unsigned int)numVisemes < mWeights.size()) {
                     mWeights[numVisemes].mCurWeight = Clamp(zero, one, weight);
                 }
