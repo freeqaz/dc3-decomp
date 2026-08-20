@@ -545,6 +545,11 @@ def parse_args() -> argparse.Namespace:
                         "and must never be evidence. 18,648 rows in the DB already "
                         "carry that exact verdict_reason.")
     p.add_argument("-v", "--verbose", action="store_true")
+    p.add_argument("--skip-patch-check", action="store_true",
+                   help="Skip the verify_objs_patched.py --verify-manifest "
+                        "precondition on REPO_ROOT's object tree. Same escape "
+                        "hatch, and same warning, as "
+                        "backfill_reloc_patterns.py --skip-verify.")
     add_coverage_args(p)
     return p.parse_args()
 
@@ -556,6 +561,35 @@ def main():
     if not OBJDIFF_CLI.exists():
         print(f"Error: objdiff-cli not found at {OBJDIFF_CLI}", file=sys.stderr)
         sys.exit(1)
+
+    # This script writes `detected_patterns` / `has_address_relocation` /
+    # `has_linker_merged` -- flags that are read back as facts about the build
+    # -- and its pattern pass deliberately uses a relocation-SENSITIVE ruler
+    # (`--reloc-config` != none).  That is precisely the ruler the post-compile
+    # patchers move: an object left unpatched by a single-TU build carries raw
+    # `?A0x<hash>` anon-namespace names, unrenamed `??__F` atexit scope
+    # counters and `$S` guards, every one of which reads as a relocation NAME
+    # divergence.  Measured 2026-08-20 on BustAMovePanel: functionRelocDiffs=
+    # none was completely blind to the difference (8/8 functions identical),
+    # while name_check gained phantom rows on 3 of 8 -- +1 on SetUpMoveNames,
+    # +4 on Poll, +23 on OnBeat.  Same precondition, and same escape hatch, as
+    # backfill_reloc_patterns.py (2026-08-19 triage).
+    if not args.skip_patch_check:
+        try:
+            sys.path.insert(0, str(REPO_ROOT / "scripts"))
+            from orchestrator.patch_guard import (UnpatchedTreeError,
+                                                  ensure_patched_tree)
+            ensure_patched_tree(REPO_ROOT, build=False)
+        except UnpatchedTreeError as e:
+            print(f"\nREFUSING to sync objdiff flags:\n{e}\n\n"
+                  f"To record a survey from an unsettled tree anyway (never "
+                  f"with a write unless you mean it), pass --skip-patch-check.",
+                  file=sys.stderr)
+            sys.exit(4)
+    else:
+        print("WARNING: --skip-patch-check -- the flags this run writes "
+              "describe whatever the object tree was at this minute, not the "
+              "build.", file=sys.stderr)
 
     if not args.db.exists():
         print(f"Error: Database not found: {args.db}", file=sys.stderr)
