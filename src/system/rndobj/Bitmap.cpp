@@ -601,22 +601,22 @@ void RndBitmap::GenerateMips() {
         for (int i = 0; i < cur->mMip->mHeight; i++) {
             for (int j = 0; j < cur->mMip->mWidth; j++) {
                 unsigned char r, g, b, a;
-                cur->PixelColor(j * 2, i * 2, r, g, b, a);
+                cur->PixelColor(j << 1, i << 1, r, g, b, a);
                 int rsum = r;
                 int gsum = g;
-                int asum = a;
                 int bsum = b;
-                cur->PixelColor(j * 2 + 1, i * 2, r, g, b, a);
+                int asum = a;
+                cur->PixelColor((j << 1) + 1, i << 1, r, g, b, a);
                 rsum += r;
                 gsum += g;
                 bsum += b;
                 asum += a;
-                cur->PixelColor(j * 2, i * 2 + 1, r, g, b, a);
+                cur->PixelColor(j << 1, (i << 1) + 1, r, g, b, a);
                 rsum += r;
                 gsum += g;
                 bsum += b;
                 asum += a;
-                cur->PixelColor(j * 2 + 1, i * 2 + 1, r, g, b, a);
+                cur->PixelColor((j << 1) + 1, (i << 1) + 1, r, g, b, a);
                 rsum += r;
                 gsum += g;
                 bsum += b;
