@@ -1681,10 +1681,17 @@ def generate_build_ninja(
         # disagrees with.
         ###
         n.comment("Assert the target objects came from the current split config")
+        # `--stamp-out` + `restat`, not `touch $out`. The edge has to be
+        # `always`-dirty (both failure modes are mtime-invisible), but its
+        # OUTPUT must not move unless the split did -- otherwise every `ninja`
+        # re-runs REPORT and REPORT RAW (~14 s) and rewrites report.json on a
+        # tree where nothing changed, which then re-fires SYNC DB. The digest is
+        # of the split stamp, so it moves exactly when a split does.
         n.rule(
             name="split_current_check",
-            command=f"$python {split_guard_script} --check --quiet && touch $out",
+            command=f"$python {split_guard_script} --check --quiet --stamp-out $out",
             description="CHECK SPLIT CURRENT",
+            restat=True,
         )
         n.build(
             outputs=str(split_checked),

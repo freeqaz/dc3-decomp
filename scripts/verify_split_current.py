@@ -212,6 +212,14 @@ def main(argv: list[str] | None = None) -> int:
     mode.add_argument("--check", action="store_true",
                       help="Exit 1 if the target objects do not match the config")
     ap.add_argument("--quiet", action="store_true")
+    ap.add_argument("--stamp-out", default=None,
+                    help="With --check: write a digest of the verified state to "
+                         "this path, but ONLY when it differs. The ninja edge is "
+                         "`always`-dirty by design (both failure modes are "
+                         "mtime-invisible), so without write-if-changed + restat "
+                         "every build would re-run REPORT and REPORT RAW -- ~14 s "
+                         "and a rewritten report.json on a tree where nothing "
+                         "moved, which then churns the decomp.db metadata sync.")
     args = ap.parse_args(argv)
 
     project_dir = Path(args.project_dir).resolve()
@@ -228,6 +236,19 @@ def main(argv: list[str] | None = None) -> int:
     except StaleSplitError as exc:
         print(f"[split-guard] {exc}", file=sys.stderr)
         return 1
+
+    if args.stamp_out:
+        # The digest is of the STAMP, so it moves exactly when a split does and
+        # not one build sooner. A passing check on an unmoved tree leaves the
+        # file byte-identical and (with restat=True) ninja re-stats, sees the
+        # old mtime, and leaves report.json clean.
+        stamp_bytes = (project_dir / STAMP_REL).read_bytes()
+        digest = hashlib.sha256(stamp_bytes).hexdigest() + "\n"
+        out = Path(args.stamp_out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        if not out.exists() or out.read_text() != digest:
+            out.write_text(digest)
+
     if not args.quiet:
         print(f"[split-guard] {note}")
     return 0

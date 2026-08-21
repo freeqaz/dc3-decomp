@@ -25,6 +25,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -228,6 +229,47 @@ class TestPatchGuardIntegration(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             note = patch_guard.ensure_split_current(td)
             self.assertIn("NOT checked", note)
+
+
+class TestConvergence(SplitCurrencyFixture):
+    """The guard must not make every build re-run the report.
+
+    The check edge is `always`-dirty on purpose, so its OUTPUT is what keeps
+    report.json clean. `touch $out` there costs ~14 s of REPORT + REPORT RAW on
+    every ninja and rewrites report.json on a tree where nothing moved -- which
+    then re-fires SYNC DB against decomp.db. Write-if-changed + restat is the
+    fix, and this is the test that would have caught shipping it without them.
+    """
+
+    def _check(self, out):
+        return subprocess.run(
+            [sys.executable, str(CHECKER), "--project-dir", str(self.tmp),
+             "--check", "--quiet", "--stamp-out", str(out)],
+            capture_output=True, text=True,
+        )
+
+    def test_stamp_out_does_not_move_when_nothing_moved(self):
+        self.split()
+        out = self.tmp / "checked.stamp"
+        self.assertEqual(self._check(out).returncode, 0)
+        first = out.stat().st_mtime_ns
+        body = out.read_text()
+        time.sleep(0.05)
+        self.assertEqual(self._check(out).returncode, 0)
+        self.assertEqual(out.stat().st_mtime_ns, first,
+                         "the check rewrote its output on an unchanged tree; "
+                         "restat cannot save report.json from that")
+        self.assertEqual(out.read_text(), body)
+
+        # NEGATIVE CONTROL: it must still move when a split actually happens,
+        # or the edge would be inert and report.json would never re-run.
+        cfg = self.tmp / "config" / vsc.VERSION / "symbols.txt"
+        cfg.write_text(cfg.read_text() + "\n?extra@@YAXXZ = .text:0x82341D00;\n")
+        self.assertEqual(self._check(out).returncode, 1, "drift must still fail")
+        self.split()
+        self.assertEqual(self._check(out).returncode, 0)
+        self.assertNotEqual(out.read_text(), body,
+                            "the digest did not move across a real re-split")
 
 
 if __name__ == "__main__":
