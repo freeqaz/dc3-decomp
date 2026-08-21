@@ -2377,7 +2377,35 @@ void MoveDir::PostUpdateFilters() {
         bool active = feedback && playerData && playerData->IsPlaying();
 
         if (!active) {
+#ifdef HX_NATIVE
+            // Retail bug, faithful above and guarded here. `active` is the
+            // conjunction of THREE tests, one of which is `feedback != null`,
+            // so `!active` is reached with a null `feedback` whenever the venue
+            // world had no player%i/char_feedback.cf to bind (MoveDir.cpp:718)
+            // -- and retail then calls straight through it. Every other
+            // ResetErrors() call site in this file guards (718-722, 808-809,
+            // 899-902); this one alone does not.
+            //
+            // It survives on the 360 because CharFeedback::ResetErrors is
+            // non-virtual and only stores to mLimbStates, at 0x7c..0xe4 -- and
+            // the console maps guest page 0 (0x0-0x10000) as readable/writable
+            // and zeroed, so a store through a null `this` scribbles a zero
+            // page and returns. (Same map fact Xenia has to reproduce for this
+            // title: memory.cc's protect_zero=false path, "the real 360 maps a
+            // readable and writable (zeroed) low page".) On the host, page 0 is
+            // permanently unmapped by vm.mmap_min_addr, so the identical store
+            // is an immediate SIGSEGV. This is a memory-map assumption, not a
+            // pointer-width one: LP64 grows the offsets but they stay far
+            // inside 0x10000, so the width is not what changes the outcome.
+            //
+            // Guarding is behaviour-preserving even on the 360: the store had
+            // no reader, and skipping it only avoids dirtying the zero page.
+            if (feedback) {
+                feedback->ResetErrors();
+            }
+#else
             feedback->ResetErrors();
+#endif
         } else {
             HamMove *move = mMovePlayerData[i].mCurMove;
             DetectFrame *detectFrame = resultFrames[i];

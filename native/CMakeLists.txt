@@ -254,7 +254,7 @@ set(MILO_ENGINE_PATH "${_milo_engine_default}"
 # Consequence, deliberately accepted: `-DMILO_ENGINE_PIN=...` on the cmake
 # command line no longer sticks. There is no legitimate reason to override a
 # provenance pin from the command line; edit this line instead.
-set(MILO_ENGINE_PIN "6e4b216ba92aa331ed7a736366f4ba140922bc98"
+set(MILO_ENGINE_PIN "4c9ff4ab118276f47cbb99219413d5464d9ae6af"
     CACHE STRING "Engine commit SHA verified against" FORCE)
 if(EXISTS "${MILO_ENGINE_PATH}/.git")
     execute_process(COMMAND git rev-parse HEAD
@@ -1899,6 +1899,7 @@ if(BUILD_TESTS)
         tests/test_json_parse.cpp
         tests/test_stub_trace.cpp
         tests/test_native_boot_crashes.cpp
+        tests/test_null_this_guards.cpp
         tests/test_sound_synthpoll.cpp
         tests/test_dxt5_alpha.cpp
         tests/test_crossfade_jump.cpp
@@ -1926,6 +1927,10 @@ if(BUILD_TESTS)
         MILO_DEBUG=1
         _DEBUG=1
         $<$<BOOL:${ENABLE_FFMPEG}>:HX_FFMPEG=1>
+        # Absolute path to the decomp source tree. ctest runs the binary with
+        # WORKING_DIRECTORY=orig-assets, so a test that needs to read decomp
+        # SOURCE (rather than assets) cannot get there by a relative path.
+        "DC3_DECOMP_SRC_DIR=\"${CMAKE_SOURCE_DIR}/../src\""
     )
     target_include_directories(milo-tests PRIVATE
         ${CMAKE_SOURCE_DIR}/src
