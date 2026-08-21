@@ -62,9 +62,16 @@ import json
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
-__all__ = ["UnpatchedTreeError", "ensure_patched_tree", "POST_COMPILE_TARGET"]
+__all__ = [
+    "UnpatchedTreeError",
+    "StaleSplitError",
+    "ensure_patched_tree",
+    "ensure_split_current",
+    "POST_COMPILE_TARGET",
+]
 
 #: The ninja target that owns the patch passes (see `configure.py`
 #: `custom_build_steps`).  Naming the `.obj` instead is the defect.
@@ -76,6 +83,26 @@ _DEFAULT_MAKE = "ninja"
 
 _BUILD_TIMEOUT = 3600
 _VERIFY_TIMEOUT = 600
+
+
+#: How long to wait out a split that is recorded as in-flight before giving up.
+#: `dtk xex split` takes ~12 s on this tree; the ceiling is generous because the
+#: alternative to waiting is answering 341 functions low.
+_SPLIT_WAIT_SECONDS = 180
+_SPLIT_POLL_SECONDS = 2.0
+
+
+class StaleSplitError(RuntimeError):
+    """The TARGET objects do not correspond to the current split config.
+
+    The sibling of `UnpatchedTreeError` for the other side of the diff. The base
+    side is compiled by declared ninja edges; the target side is written by
+    `dtk xex split`, whose 2,223 objects are undeclared outputs that no edge
+    stats and no `provenance` block describes. A report taken over target
+    objects split from a different `config/<v>/symbols.txt` -- or over a tree a
+    split is rewriting right now -- silently reads LOW, because a function whose
+    target-side name no longer matches simply scores 0.0%.
+    """
 
 
 class UnpatchedTreeError(RuntimeError):
@@ -105,6 +132,56 @@ def _make_command(project_dir: Path) -> list[str]:
 def _tail(text: str, n: int = 25) -> str:
     lines = [ln for ln in (text or "").splitlines() if ln.strip()]
     return "\n".join(lines[-n:])
+
+
+def ensure_split_current(project_dir: Path | str, *,
+                         wait_seconds: float = _SPLIT_WAIT_SECONDS) -> str:
+    """Assert `project_dir`'s target objects came from its current split config.
+
+    Returns a one-line note, or raises `StaleSplitError`.
+
+    A split recorded as IN FLIGHT is waited out rather than refused: it is a
+    transient state that resolves in ~12 s, and in the main repo a handful of
+    lanes build concurrently, so refusing outright would turn one lane's `ninja`
+    into another lane's error. A split that is still running at the deadline, or
+    a config that has genuinely drifted, raises.
+    """
+    project_dir = Path(project_dir).resolve()
+    checker = project_dir / "scripts" / "verify_split_current.py"
+    if not checker.exists():
+        # Older trees (and sibling repos) predate the guard. Say so rather than
+        # inventing a verdict -- but do not block: this returns a note the
+        # caller can print, exactly as an absent alias map would.
+        return "split currency NOT checked (scripts/verify_split_current.py absent)"
+
+    sys.path.insert(0, str(project_dir / "scripts"))
+    try:
+        import importlib
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "_dc3_verify_split_current", checker)
+        module = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(module)
+    finally:
+        try:
+            sys.path.remove(str(project_dir / "scripts"))
+        except ValueError:
+            pass
+
+    deadline = time.monotonic() + max(0.0, wait_seconds)
+    last: Exception | None = None
+    while True:
+        try:
+            return str(module.check(project_dir))
+        except module.StaleSplitError as exc:
+            last = exc
+            in_flight = f"`{module.STATE_RUNNING}`" in str(exc)
+            if not in_flight or time.monotonic() >= deadline:
+                break
+            time.sleep(_SPLIT_POLL_SECONDS)
+
+    raise StaleSplitError(str(last))
 
 
 def ensure_patched_tree(project_dir: Path | str, *, build: bool = True) -> str:
@@ -189,4 +266,25 @@ def ensure_patched_tree(project_dir: Path | str, *, build: bool = True) -> str:
         )
 
     notes.append((proc.stdout or proc.stderr or "").strip() or "patch state verified")
+
+    # The other side of the diff. `--verify-manifest` above vouches for
+    # build/<v>/src/**.obj (compiled, declared, stamped); nothing in it looks at
+    # build/<v>/obj/**.obj, which `dtk xex split` writes as an UNDECLARED output
+    # and which decides every target-side symbol name. A tree can be a perfect
+    # post-compile fixed point and still be measured 341 functions low because
+    # the split has not caught up with config/<v>/symbols.txt.
+    #
+    # Narrow carve-out: with `build=False` the caller has explicitly asked not
+    # to run ninja, so a tree that has never recorded a split cannot be fixed
+    # from here. That one case degrades to a note. Drift and a stuck in-flight
+    # split still raise in both modes -- those are wrong answers, not absences.
+    try:
+        notes.append(ensure_split_current(project_dir))
+    except StaleSplitError as exc:
+        never_split = "is missing or unreadable" in str(exc)
+        if never_split and not build:
+            notes.append("split currency UNKNOWN (no stamp; build=False)")
+        else:
+            raise
+
     return " | ".join(n for n in notes if n)
