@@ -1142,23 +1142,14 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
                 }
             }
 
-            // Sort priorities (most negative = highest priority first).
-            // Sort FacePriority* DIRECTLY.  These used to be cast to Key<float>*
-            // -- layout- and comparison-compatible (both are {4 B, float} and
-            // both order on the second member), which is exactly why /OPT:ICF
-            // folded the two instantiations in retail.  But the cast made this
-            // TU emit sort<Key<float>*> where retail's rndobj:AmbientOcclusion.obj
-            // contributed sort<FacePriority*>, so five split rows here
-            // (__unguarded_linear_insert, sort_heap, __partial_sort,
-            // __final_insertion_sort, __introsort_loop) could not pair by name
-            // and scored 0%.  See docs/analysis/icf-fold-pairing-20260821.md.
+            // Sort priorities (most negative = highest priority first)
 #ifdef HX_NATIVE
-            // libstdc++ vector iterators are not raw pointers; go through data().
-            FacePriority *priBegin = priorities.data();
-            FacePriority *priEnd = priorities.data() + priorities.size();
+            // libstdc++ vector iterators are not raw pointers; cast through data().
+            Key<float> *priBegin = (Key<float> *)priorities.data();
+            Key<float> *priEnd = (Key<float> *)(priorities.data() + priorities.size());
 #else
-            FacePriority *priBegin = priorities.begin();
-            FacePriority *priEnd = priorities.end();
+            Key<float> *priBegin = (Key<float> *)priorities.begin();
+            Key<float> *priEnd = (Key<float> *)priorities.end();
 #endif
             std::sort(priBegin, priEnd);
 
@@ -1166,7 +1157,7 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
             unsigned int pi = 0;
             unsigned int priCount = priEnd - priBegin;
             if (priCount != 0) {
-                FacePriority *pPtr = priBegin;
+                FacePriority *pPtr = (FacePriority *)priBegin;
                 do {
                     RndMesh::Face &face = mesh->Faces(pPtr->faceIndex);
                     RndMesh::Vert &vert0 = mesh->Verts(face.v1);
