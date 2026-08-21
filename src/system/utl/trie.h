@@ -118,8 +118,14 @@ public:
 // which is what MSVC emits for an inline definition), while `store` and `remove`
 // on the two lines below them are bare `f`.  It is also what makes
 // get_free_node's MILO_ASSERT name utl\trie.h instead of trie.cpp.
+//
+// __declspec(noinline) is load-bearing: without it MSVC expands all six into
+// Trie::store and Trie::remove, which took store 95.0 -> 79.93 and remove
+// 82.90 -> 75.64.  The image keeps them out of line -- all six have their own
+// address and their own callers in ham_xbox_r.map -- so the attribute restores
+// the shipped inline boundary without giving up the linkage.
 
-inline void Trie::inc_count(unsigned int index) {
+__declspec(noinline) inline void Trie::inc_count(unsigned int index) {
     check_index(index);
     char *node = NodePtr(this, index);
     unsigned int *cf = &CountField(node);
@@ -128,7 +134,7 @@ inline void Trie::inc_count(unsigned int index) {
     *cf = (*cf & 0xFFFFFF00) | (count + 1);
 }
 
-inline void Trie::dec_count(unsigned int index) {
+__declspec(noinline) inline void Trie::dec_count(unsigned int index) {
     check_index(index);
     char *node = NodePtr(this, index);
     unsigned int *cf = &CountField(node);
@@ -137,7 +143,7 @@ inline void Trie::dec_count(unsigned int index) {
     *cf = (*cf & 0xFFFFFF00) | (count - 1);
 }
 
-inline void Trie::inc_dup_count(unsigned int index) {
+__declspec(noinline) inline void Trie::inc_dup_count(unsigned int index) {
     check_index(index);
     char *node = NodePtr(this, index);
     unsigned int dupCount = GetDupCount(CountField(node));
@@ -145,7 +151,7 @@ inline void Trie::inc_dup_count(unsigned int index) {
     CountField(node) = ((dupCount + 1) << 8) | SiblingCount(node);
 }
 
-inline void Trie::dec_dup_count(unsigned int index) {
+__declspec(noinline) inline void Trie::dec_dup_count(unsigned int index) {
     check_index(index);
     unsigned int *cf = &CountField(NodePtr(this, index));
     unsigned int dupCount = GetDupCount(CountField(NodePtr(this, index)));
@@ -153,7 +159,7 @@ inline void Trie::dec_dup_count(unsigned int index) {
     *cf = ((dupCount - 1) << 8) | SiblingCount(NodePtr(this, index));
 }
 
-inline unsigned int Trie::get_free_node() {
+__declspec(noinline) inline unsigned int Trie::get_free_node() {
     unsigned int freeHead = FreeListHead(this);
 
     if (freeHead != 0) {
@@ -172,7 +178,7 @@ inline unsigned int Trie::get_free_node() {
     return newIdx;
 }
 
-inline void Trie::delete_node(unsigned int index) {
+__declspec(noinline) inline void Trie::delete_node(unsigned int index) {
     check_index(index);
     // Clear FirstChild before recomputing node ptr
     FirstChild(NodePtr(this, index)) = 0;
