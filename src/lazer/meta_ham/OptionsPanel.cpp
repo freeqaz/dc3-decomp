@@ -158,7 +158,7 @@ DataNode OptionsPanel::OnMsg(RCJobCompleteMsg const &msg) {
             offer = Localize(linking_code_failure, false, TheLocale);
         }
         msg.SetSuccess(success);
-        msg.SetOfferString(offer);
+        msg.SetLinkingCode(offer);
         UIPanel *panel = ObjectDir::Main()->Find<UIPanel>("options_panel");
         if (panel->GetState() == UIPanel::kUp) {
             panel->HandleType(msg);

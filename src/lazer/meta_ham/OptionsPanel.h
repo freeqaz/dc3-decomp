@@ -54,7 +54,7 @@ END_MESSAGE
 DECLARE_MESSAGE(LinkingCodeRetrievedMsg, "linking_code_retrieved")
     LinkingCodeRetrievedMsg(bool b, const String &str) : Message(Type(), b, str) {}
     void SetSuccess(bool b) { mData->Node(2) = b; }
-    void SetOfferString(const String &s) { mData->Node(3) = s; }
+    void SetLinkingCode(const String &s) { mData->Node(3) = s; }
     bool Success() const { return mData->Int(2); }
     const char *LinkingCode() const { return mData->Str(3); }
 END_MESSAGE

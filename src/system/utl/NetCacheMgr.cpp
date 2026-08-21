@@ -334,24 +334,12 @@ bool NetLoaderRef::IsDownloading() {
 bool NetLoaderRef::IsLoadedOrFailed() {
     MILO_ASSERT(IsValid(), 0x327);
 
-    if (!mCacheLoader) {
-        if (mNetLoader) {
-            return mNetLoader->IsLoaded();
-        }
-        return false;
+    // IsValid() above guarantees exactly one of the two loaders is set, so
+    // neither arm needs its own null check.
+    if (mCacheLoader) {
+        return mCacheLoader->IsLoaded() || mCacheLoader->HasFailed();
     }
-
-    if (!mNetLoader) {
-        return true;
-    }
-
-    bool loaded = mCacheLoader->IsLoaded();
-    if (loaded) {
-        return true;
-    }
-
-    char failed = mCacheLoader->HasFailed();
-    return failed != '\0';
+    return mNetLoader->IsLoaded() || mNetLoader->HasFailed();
 }
 
 void NetCacheMgr::PollLoaders() {
