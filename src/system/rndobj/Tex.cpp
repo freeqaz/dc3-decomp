@@ -37,6 +37,21 @@ RndTex::RndTex()
       mNumMips(0), mOptimizeForPS3(0), mLoader(0) {}
 
 RndTex::~RndTex() {
+#ifdef HX_NATIVE
+    // The native renderer keeps GPU resources in a side table keyed on the
+    // RndTex ADDRESS (sTexGpuData in Tex_Wgpu.cpp). Nothing in that table is
+    // an ObjPtr, so no ring walk can reach it -- this destructor is the only
+    // hook that can keep it honest. Two consequences if it is missing, and the
+    // second is the bad one:
+    //   * the wgpu::Texture/TextureView leak until process exit, and
+    //   * the next RndTex the allocator places at this address inherits the
+    //     dead texture's entry with uploaded=true, so it renders the PREVIOUS
+    //     texture's image. Silent, and invisible to every metric we have.
+    // RndMesh has hooked its equivalent since the cache was written; this one
+    // carried a "TODO: hook into the RndTex destructor" instead.
+    extern void CleanupGpuTex(RndTex *);
+    CleanupGpuTex(this);
+#endif
     delete mLoader;
 }
 

@@ -357,10 +357,27 @@ float AnimTask::TimeUntilEnd() {
 }
 
 void AnimTask::Poll(float time) {
+    // A listener callback made from this function can `delete` this very task:
+    // FlowAnimate::OnAnimEvent("looped") does `delete mAnimTask` when a stop is
+    // deferred, and the AnimTask it deletes is the one whose Poll sent the
+    // event. Everything after that -- `mListener = nullptr`, `mPrevFrame =
+    // frame`, the mAnimTarget reads, and finally QueueTaskDelete(this) -- was a
+    // use-after-free, and it is where TaskMgr's "already-destroyed task"
+    // refusal came from (measured: caller is AnimTask::Poll, not ~AnimTask, and
+    // the pointer is `this`, not mBlendTask).
+    //
+    // The watch is a stack flag ~Object trips; checking it is a load and a
+    // branch. Deliberately NOT Task::IsLive(this): that is address-keyed and
+    // ABA-unsound, so a recycled block would answer "still alive" and send us
+    // straight back into the freed frame.
+    //
+    // Compiles to nothing on PPC, which keeps the original control flow.
+    HX_DEATH_WATCH(this);
     if (!mAnim)
         return;
     if (mActive) {
         mAnim->StartAnim();
+        HX_RETURN_IF_DELETED();
         mPrevFrame = mAnim->GetFrame();
         mActive = false;
     }
@@ -395,6 +412,7 @@ void AnimTask::Poll(float time) {
     if (mLoop) {
         float wrappedFrame = ModRange(mMin, mMax, frame);
         mAnim->SetFrame(wrappedFrame, blend);
+        HX_RETURN_IF_DELETED();
         if (mListener) {
             // Which lap of [mMin, mMax] we are on. Both quotients must stay
             // separate divisions -- sharing a `range` local lets MSVC's reciprocal
@@ -402,6 +420,7 @@ void AnimTask::Poll(float time) {
             if ((int)(mPrevFrame / (mMax - mMin)) != (int)(frame / (mMax - mMin))) {
                 static Message msg("on_anim_event", DataNode(Symbol("looped")));
                 mListener->Handle(msg, false);
+                HX_RETURN_IF_DELETED();
             }
         }
     } else {
@@ -437,6 +456,7 @@ void AnimTask::Poll(float time) {
             setFrame = Clamp(mMin, mMax, frame);
         }
         mAnim->SetFrame(setFrame, blend);
+        HX_RETURN_IF_DELETED();
     }
 
     mPrevFrame = frame;
@@ -456,6 +476,7 @@ void AnimTask::Poll(float time) {
         if (mListener) {
             static Message msg("on_anim_event", DataNode(Symbol("ended")));
             mListener->Handle(msg, false);
+            HX_RETURN_IF_DELETED();
             mListener = nullptr;
         }
         TheTaskMgr.QueueTaskDelete(this);

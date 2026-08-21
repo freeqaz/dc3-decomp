@@ -28,6 +28,44 @@ void MergeObjectsRecurse(ObjectDir *, ObjectDir *, MergeFilter &, bool);
 // structural mutations during ring walks.
 extern bool gInReplaceList;
 
+/** Opt-in ref-ring audit (DC3_REFRING_AUDIT=1). Off by default and
+ *  self-announcing on first use.
+ *
+ *  This is a DIAGNOSTIC, not a mechanism: it maintains a shadow index of
+ *  "which ObjRef nodes currently point at which object" alongside the real
+ *  rings, so ~Object can ask two questions the rings themselves cannot
+ *  answer:
+ *
+ *    1. Is every node that targets me actually LINKED in my ring right now?
+ *       A "no" is ring loss -- a node silently unlinked while still live.
+ *    2. After the walk, does any node still target me? A "yes" is a Replace
+ *       callback that DECLINED to retarget (several Replace overrides return
+ *       true without touching the ref).
+ *
+ *  Those two are the only shapes the dangling-holder bug can take, and they
+ *  want opposite fixes, so telling them apart is the whole point.
+ *
+ *  Deliberately NOT a fix: nothing in the engine consults this index, and it
+ *  must never become load-bearing. The referent's own ring is the mechanism.
+ */
+namespace RefAudit {
+    /** True when DC3_REFRING_AUDIT=1. Cached; announces itself once. */
+    bool Enabled();
+    /** A node's target changed (either side may be null). */
+    void Retarget(ObjRef *node, Hmx::Object *from, Hmx::Object *to);
+    /** A node is being destroyed. */
+    void Forget(ObjRef *node);
+    /** Called from ~Object BEFORE the ring walk: reports nodes that target
+     *  `obj` but are no longer reachable from its ring. */
+    void PreWalk(Hmx::Object *obj, const ObjRef *ring);
+    /** Called from ~Object AFTER the ring walk: reports nodes that still
+     *  target `obj`. */
+    void PostWalk(Hmx::Object *obj);
+    /** Dump what the audit knows about `node` (registration backtrace). */
+    void Describe(const ObjRef *node, const char *why);
+    /** Print a backtrace of the current call site. */
+    void Backtrace(const char *why);
+}
 #endif
 
 #pragma region ObjRef
@@ -223,7 +261,13 @@ public:
     virtual Hmx::Object *GetObj() const { return mObject; }
     virtual void Replace(Hmx::Object *obj) { SetObj(obj); }
 #ifdef HX_NATIVE
-    void NullifyObj() override { mObject = nullptr; ObjRef::NullifyObj(); }
+    void NullifyObj() override {
+        RefAudit::Retarget(
+            this, mObject ? static_cast<Hmx::Object *>(mObject) : nullptr, nullptr
+        );
+        mObject = nullptr;
+        ObjRef::NullifyObj();
+    }
 #endif
 
     T1 *operator->() const { return mObject; }
@@ -1178,6 +1222,10 @@ typedef Hmx::Object *ObjectFunc(void);
 // Hmx::Object implementation
 namespace Hmx {
 
+#ifdef HX_NATIVE
+    class DeathWatch;
+#endif
+
     /**
      * @brief: The base class from which all major Objects used in-game build upon.
      * Original _objects description:
@@ -1187,6 +1235,7 @@ namespace Hmx {
     class Object : public ObjRefOwner {
 #ifdef HX_NATIVE
         friend class ObjRef;
+        friend class DeathWatch;
 #endif
         friend void ::MergeObjectsRecurse(ObjectDir *, ObjectDir *, MergeFilter &, bool);
     private:
@@ -1246,6 +1295,12 @@ namespace Hmx {
     protected:
         /** An Object in the process of being deleted. */
         static Object *sDeleting;
+#ifdef HX_NATIVE
+        /** Head of the intrusive chain of DeathWatch guards currently watching
+         *  this object. Null in the overwhelmingly common case. Native-only,
+         *  and last in the class so it perturbs nothing above it. */
+        DeathWatch *mDeathWatch;
+#endif
     public:
 #ifdef HX_NATIVE
         /** True after FlushDeferredFrees — rings may have dead entries. */
@@ -1565,7 +1620,66 @@ namespace Hmx {
         }
     };
 
+#ifdef HX_NATIVE
+    /** Detect "the callback I just made destroyed me".
+     *
+     *  A DTA/message handler reached from an object's own method can `delete`
+     *  that very object -- FlowAnimate::OnAnimEvent("looped") does exactly
+     *  that to the AnimTask whose Poll() called it. Every member access after
+     *  the callback returns is then a use-after-free, and the engine has no
+     *  general way to notice: an ObjPtr protects the REFERENT's holders, not
+     *  the `this` pointer of a frame already on the stack.
+     *
+     *  DeathWatch is that notice. It links a stack-local flag into the
+     *  object; ~Object trips every flag in the chain. Checking it is a load
+     *  and a branch -- no hash, no allocation -- and unlike an address-keyed
+     *  liveness registry it cannot be fooled by the allocator handing the
+     *  same block to a new object (there is no address comparison at all).
+     *
+     *  Use the HX_DEATH_WATCH / HX_RETURN_IF_DELETED macros so the same
+     *  source compiles to nothing on PPC.
+     */
+    class DeathWatch {
+    public:
+        DeathWatch(Object *obj)
+            : mObj(obj), mPrev(obj->mDeathWatch), mDead(false) {
+            obj->mDeathWatch = this;
+        }
+        ~DeathWatch() {
+            // If the object is gone, mObj is freed memory -- do not touch it.
+            // ~Object already unlinked the whole chain.
+            if (!mDead)
+                mObj->mDeathWatch = mPrev;
+        }
+        /** True once the watched object's ~Object has run. */
+        bool Dead() const { return mDead; }
+
+    private:
+        friend class Object;
+        DeathWatch(const DeathWatch &);
+        DeathWatch &operator=(const DeathWatch &);
+        Object *mObj;
+        DeathWatch *mPrev;
+        bool mDead;
+    };
+#endif
+
 }
+
+#ifdef HX_NATIVE
+/** Arm a death watch on `obj` for the rest of the enclosing scope. */
+#define HX_DEATH_WATCH(obj) Hmx::DeathWatch _hxDeathWatch(obj)
+/** Bail out if the call we just made destroyed us. Compiles away on PPC. */
+#define HX_RETURN_IF_DELETED()                                                           \
+    do {                                                                                 \
+        if (_hxDeathWatch.Dead())                                                        \
+            return;                                                                      \
+    } while (0)
+#else
+// PPC keeps the original control flow exactly: both macros vanish.
+#define HX_DEATH_WATCH(obj) ((void)0)
+#define HX_RETURN_IF_DELETED() ((void)0)
+#endif
 
 extern bool gLoadingProxyFromDisk;
 extern bool gMiloTool;

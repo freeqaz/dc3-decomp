@@ -19,6 +19,27 @@ model of the bug accounted for neither exactly.
    Queuing it splices a live `ObjRef` into a dead object's ring, which nothing will ever
    walk. Fixed by refusing a non-live task at the entry point.
 
+> **CORRECTION, 2026-08-21** (`fix/cascade-refloss-20260821`). §8.2 below — "why
+> is `AnimTask::mBlendTask` stale?", recorded here as *the highest-value open
+> thread* — asked the wrong question. **`mBlendTask` was never stale, and no ref
+> was ever lost from a ring.** Instrumented with a shadow ref index
+> (`DC3_REFRING_AUDIT=1`), 12/12 boot→gameplay runs report **zero** nodes lost
+> from a ring and **zero** `Replace` callbacks declining to retarget, while
+> `QueueTaskDelete` was still handed a dead task in all 12.
+>
+> The real defect is **re-entrant self-destruction**: `FlowAnimate::OnAnimEvent`
+> does `delete mAnimTask` on the very `AnimTask` whose `Poll()` sent it the
+> event, and `AnimTask::Poll` then keeps running on the freed block, ending in
+> `TheTaskMgr.QueueTaskDelete(this)`. The offending pointer is **`this`**, not
+> `mBlendTask`; the caller is **`AnimTask::Poll`** (`Anim.cpp:461`), not
+> `~AnimTask`. §8.2's guess named the wrong pointer and the wrong caller.
+>
+> Also corrected below: §8.3 (the ABA-masking hypothesis) is **refuted by
+> measurement**, and §3.7 (GPU-cache release hooks "zero call sites") was
+> **half wrong** — `~RndMesh` had always called `CleanupGpuMesh`; `~RndTex`
+> called nothing, which was a live rendering bug and is now fixed. See the
+> follow-up section at the end of this file.
+
 **What is still exposed:** raw `Hmx::Object*` holders. They register no `ObjRef`, so no
 ring walk can ever reach them. That population is large and sits in exactly the code a
 screen transition tears down. It is a **different class** with the same symptom, and it
@@ -516,6 +537,10 @@ it is part of measured clean. A follow-up should write the isolated test or reve
 
 ### 8.2 Why is `AnimTask::mBlendTask` stale in the first place?
 
+> **ANSWERED 2026-08-21, and the premise was wrong: it is not.** See the
+> follow-up section at the end of this file. Everything in the rest of this
+> subsection is the 2026-08-20 hypothesis, kept as written.
+
 §2.3 stops the dangling *queue entry* from being created. It does not explain why
 `AnimTask::~AnimTask` has a stale `ObjPtr<AnimTask>` to hand over. `mBlendTask` is a
 normal `ObjPtr`, so the blend task's own `~Object` should have nullified it. That it did
@@ -612,3 +637,224 @@ in `test_object_lifetime.cpp`'s `PollSkipsQueuedTaskDestroyedByDeleteObjectsCasc
 A fix can be correct, unit-tested, suite-green and PPC-byte-identical, and still not fix
 the bug it was written for. The only thing that caught it was running the real flow
 dozens of times and counting. **One clean run is not a result.**
+
+
+---
+
+# Follow-up, 2026-08-21 — `fix/cascade-refloss-20260821`
+
+Task #126 picked up the three open threads. Two are closed, one is enumerated
+and partly closed. Nothing here was concluded from a single run.
+
+## Thread 1 — the ref-loss mechanism is not ref loss
+
+### The instrument
+
+Arguing about ring loss from the source had already produced two refuted
+hypotheses (§2.2), so this lane built an instrument first: `RefAudit`
+(`DC3_REFRING_AUDIT=1`, off by default, self-announcing). It maintains a shadow
+index of *which `ObjRef` node currently targets which object*, updated at every
+`mObject` mutation in `ObjRefConcrete`, and lets `~Object` ask the two questions
+the rings cannot answer about themselves:
+
+| probe | question | a hit means |
+|---|---|---|
+| `PreWalk` | is every node that targets me reachable from my ring? | **ring loss** — a live node was unlinked |
+| `PostWalk`| after the walk, does any node still target me? | **a `Replace` that declined** to retarget |
+
+Those are the only two shapes the dangling-holder bug can take, and they want
+opposite fixes.
+
+**Result: `LOST-FROM-RING` 0 and `WALK-DECLINED` 0 across 12/12 runs** — while
+`QueueTaskDelete`'s refusal fired in all 12. The ring machinery is sound. The
+"global registry of live `ObjRef`s" that §0 argued was unnecessary would also
+have found nothing.
+
+`RefAudit` stays in the tree as a diagnostic. Nothing consults it and nothing
+may: the referent's own ring is the mechanism.
+
+### What is actually happening
+
+The paired backtraces (audit mode journals where each Task died):
+
+```
+QueueTaskDelete refused a dead task
+  #1 TaskMgr::QueueTaskDelete
+  #2 AnimTask::Poll +0x550                 <- Anim.cpp:461, argument is `this`
+  #3 TaskTimeline::Poll
+...that task was destroyed here:
+  #0 ~Task
+  #1 ~AnimTask
+  #2 FlowAnimate::OnAnimEvent              <- `delete mAnimTask`
+  #3 FlowAnimate::Handle
+  #4 AnimTask::Poll +0x24d                 <- the "looped" message it just sent
+```
+
+`FlowAnimate::OnAnimEvent`'s `sLooped` branch does
+`mAnimTask->SetListener(nullptr); delete mAnimTask;` when a stop is deferred.
+`AnimTask::Poll` then resumes on freed memory: `mListener = nullptr` and
+`mPrevFrame = frame` are *writes* to it, the `mAnimTarget` reads are reads of
+it, and `QueueTaskDelete(this)` hands the manager a corpse.
+
+Tasks are merely the victim class that happens to have an `IsLive()` registry to
+notice. The shape — *a DTA/message callback deleting the object whose method is
+on the stack* — is invisible everywhere else.
+
+### The fix: `Hmx::DeathWatch`
+
+An `ObjPtr` protects the **referent's** holders. Nothing protected the `this` of
+a frame already on the stack. `DeathWatch` links a stack-local flag into the
+object; `~Object` trips every flag in the chain before doing anything else, and
+unlinks as it goes so `~DeathWatch` never writes back into a freed block.
+Checking it is a load and a branch.
+
+Deliberately **not** `Task::IsLive(this)`: that is address-keyed, so a recycled
+block answers "still alive" and sends the frame straight back into freed memory.
+`DeathWatch` compares no addresses and has no ABA hole.
+
+`HX_DEATH_WATCH` / `HX_RETURN_IF_DELETED` expand to `((void)0)` off `HX_NATIVE`,
+so the PPC control flow is untouched.
+
+### Rates, not booleans
+
+Counting "`QueueTaskDelete` refused an already-destroyed task" over
+boot→gameplay runs:
+
+| build | audit off | audit on |
+|---|---|---|
+| before | **5 / 40** | **12 / 12** |
+| after  | **0 / 40** | **0 / 12** |
+| after, with the guards deliberately removed again | **40 / 40** | — |
+
+`exit 0` and reached `main_screen` in every run of every arm. The audit build's
+timing makes the fault deterministic, which is the sharper of the two rulers;
+the sabotage arm is sharper still.
+
+## Thread 3 — ABA: designed out where possible, and §8.3 refuted
+
+Every `Task` now carries a monotonic serial. `LiveTasks()` maps address →
+serial, and `IsLive(ptr, serial)` answers "is *this* task alive". The two gates
+that can capture a serial while the pointer is known good now do:
+`TaskTimeline::Poll` (recorded in `TaskInfo` at `AddTask`) and `TaskMgr::Poll`'s
+drain (a native-only vector parallel to `unk84`, recorded at queue time).
+
+**`QueueTaskDelete`'s door check cannot be made sound**, and that is a finding
+rather than an omission: its signature offers nothing but an address, so there
+is no serial to compare. No registry fixes that — only the frame that still owns
+a valid `this` can, which is precisely why Thread 1's fix lives in
+`AnimTask::Poll`.
+
+**§8.3 is refuted for this workload.** That hypothesis — the `Poll` guard's
+~24%-vs-always discrepancy was ABA silently deleting *live* tasks — predicts a
+nonzero count of "address live, serial moved on". Over 80 runs (40 fixed, 40
+sabotaged) that count is **0**. The duller explanation fits the data:
+`QueueTaskDelete`'s door check catches the event first, so `Poll`'s guard never
+sees it (`poll_dropped` 0/40 in both arms while `refused` was 40/40 in the
+sabotaged arm). The ABA hole is real — the unit test still demonstrates it on
+this allocator — it just was not what was happening.
+
+## Thread 2 — the raw-holder enumeration
+
+Re-derived from scratch (620 `Hmx::Object` subclasses, matched against raw
+pointer declarations), not taken from §3's counts. Totals: **472** raw pointer
+members, **116** globals/statics (**69** with no clearing site found), **27**
+function-local resolve-once caches, **96** containers of raw object pointers
+plus **12** containers of by-value structs that embed them.
+
+Two of §3's specific claims were wrong in opposite directions:
+
+* **`TheHamUI` has eleven raw panel members, not twelve.**
+* **§3.7's "zero call sites" grep was wrong.** `~RndMesh` has always called
+  `CleanupGpuMesh`. `~RndTex` called nothing — see below.
+
+### The triage rubric
+
+A raw holder is dangerous iff **the holder outlives the referent** *and* **it is
+dereferenced afterwards without a validity check**. That collapses the 472
+members almost entirely: the overwhelming majority are held by an object in the
+same `ObjectDir` as their referent, so the cascade destroys holder and referent
+together, and the owner back-pointers (`ObjPtr::mOwner`, `ObjPtrVec::mOwner`,
+`TypeProps::mOwner`) are structurally safe because the holder is embedded in the
+owner. The population that matters is the one whose lifetime is *longer* than
+the referent's: process-lifetime globals, class statics, function-local caches,
+and address-keyed side tables.
+
+Applying it to the loudest candidates:
+
+| holder | verdict |
+|---|---|
+| `RndTex` / `RndCubeTex` GPU side tables | **DANGEROUS — confirmed live bug.** Fixed for `RndTex`; see below |
+| `gDataVars` (+ `gReadFiles`, `FlowManager::mEventTimes`) | **Dangerous, and deliberately not fixed.** `DataNode` stores `Hmx::Object *` raw in an 8-byte union whose layout is PPC-critical, so it cannot carry a ring node. The only alternative is a global object→node index maintained on every object-valued `DataNode` assignment — i.e. on the hottest path in script evaluation. Not worth paying blind; let poisoning decide |
+| `Character::sCurrent` | **Fine, but §3 named the wrong reason.** It is not "self-clearing": it is *scope-restored* by the `AutoSetCurrentCharacter` RAII guard, and every `Current()` read is inside such a scope. Same class as the PropSync scratch globals |
+| `GpuResourceRegistry`'s three maps | **Inert — dead code.** No caller anywhere outside its own `.cpp`; a parallel implementation nothing uses |
+| ~16 resolve-once `Find<>` caches (`RhythmDetector`, `RhythmBattle*`, `App.cpp`, `BinkMovieImpl`) | **Dangerous in principle, unexercised in evidence.** `RhythmDetector.cpp:310` dereferences `panel->TypeDef()` with no null and no liveness check. Not reached on any workload run here |
+| `TheHamUI`'s 11 panel members, `UIManager::mCurrentScreen`/`mTransitionScreen`, `UIScreen::PanelRef::mPanel` | **Not converted, on purpose.** Conversion is mechanical but touches PPC-visible layout in `src/`, and nothing observed here fires. §3's "best value per unit of risk" was asserted, never measured |
+
+### The one that was a real bug
+
+`sTexGpuData` is `unordered_map<RndTex*, GpuTexData>`, keyed on the object's
+**address**, holding no `ObjPtr`. `~RndTex` carried this instead of a hook:
+
+```c++
+// Note: RndTex destructor doesn't call us directly yet.
+// For Tier 1, leaked GPU textures are acceptable (cleaned up at shutdown).
+// TODO: Hook into RndTex destructor or add ref-counting.
+```
+
+The leak is the advertised cost and the lesser half. The other half: the next
+`RndTex` the allocator places at that address inherits the dead entry with
+`uploaded=true` and **renders the previous texture's image** — silently, with no
+assert and no log. Fixed by calling `CleanupGpuTex(this)` from `~RndTex`, under
+`HX_NATIVE`, exactly mirroring `~RndMesh`.
+
+The regression test asserts the *outcome* (a fresh `RndTex` at a recycled
+address must have no GPU view), uses the renderer's real `PresyncBitmap` upload
+path rather than a fabricated entry, and uses address reuse as its own
+non-vacuity control — it skips rather than passes if the allocator declines to
+reuse. On this machine it reuses on the first attempt.
+
+`RndCubeTex` has the identical hazard and is **not** fixed: the only
+`Tex_Wgpu.cpp` compiled into `dc3-native`/`milo-tests` is the shared engine's,
+which exports `CleanupGpuTex` but no `CleanupGpuCubeTex`, and adding it means
+editing a repo three decomps build against concurrently plus a pin bump.
+
+Two incidental findings from that attempt, both worth acting on separately:
+
+* **`dc3-native` links cleanly with an undefined symbol.** With
+  `CleanupGpuCubeTex(RndCubeTex*)` undefined the link *succeeded* and the
+  program died at runtime with `symbol lookup error` the first time it was
+  reached. A typo'd or unported `extern` is a runtime landmine here, not a build
+  error.
+* **`native/src/platform/Tex_Wgpu.cpp` produces no object for the built
+  targets.** It is listed in CMake source sets that the native targets do not
+  use (the engine's copy wins). Editing it looks like a fix and compiles
+  nothing.
+
+### The empirical arm: poisoning under a screen-thrash loop
+
+§3's poison result was a **negative measured on the linear boot path**, which
+does almost no repeated unloading — the follow-up list asked for a loop that
+re-enters and unloads the same screens many times. That loop now exists
+(`scripts/dc3-input-flows/screen-thrash.txt`, 25 `main_screen` ↔
+`choose_mode_screen` cycles).
+
+| workload | runs | result |
+|---|---|---|
+| thrash + `DC3_POISON_FREED_OBJECTS=1` | 4 | 25/25 cycles each, exit 0, **12,288 blocks quarantined per run** (poison confirmed active), no fault |
+| thrash + `DC3_REFRING_AUDIT=1` | 2 | 25/25 cycles each, exit 0, `LOST-FROM-RING` **0**, `WALK-DECLINED` **0**, ring corruption **0** |
+
+**Still a negative, and still bounded.** It is much stronger than the boot-path
+negative — every cascade-freed block was filled with `0xDD` and never returned
+to the allocator, so a stale virtual call would have faulted at the dereference
+— but it only covers the screens that flow touches. The resolve-once `Find<>`
+caches live in `RhythmDetector` / `RhythmBattle*`, which need gameplay. Those
+remain unexercised.
+
+## Process note
+
+Two changes in this lane were destroyed by `git checkout -- <file>` used to undo
+a *sabotage* edit on a file whose fix had not been committed yet — checkout took
+the fix along with the sabotage. One of them (`~RndTex`) shipped as a
+test-without-fix and the suite caught it; the accompanying "PPC: 0 of 48,344
+functions differ" claim was vacuous, because there was no change to be neutral
+about. **Commit the fix before sabotaging it.**

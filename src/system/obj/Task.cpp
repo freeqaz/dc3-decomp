@@ -11,24 +11,102 @@
 
 #ifdef HX_NATIVE
 #include <unordered_set>
-static std::unordered_set<Task *> &LiveTasks() {
-    static std::unordered_set<Task *> s;
+#include <unordered_map>
+#include <execinfo.h>
+// Address -> identity of the task currently living at that address. Keyed on
+// the address because that is all a stale pointer gives us; the VALUE is what
+// makes an answer trustworthy.
+static std::unordered_map<Task *, Task::Serial> &LiveTasks() {
+    static std::unordered_map<Task *, Task::Serial> s;
     return s;
+}
+static Task::Serial sNextTaskSerial = 1;
+static int sAbaFalsePositives = 0;
+#endif
+
+#ifdef HX_NATIVE
+Task::Task() {
+    mTaskSerial = sNextTaskSerial++;
+    LiveTasks()[this] = mTaskSerial;
 }
 #endif
 
 #ifdef HX_NATIVE
-Task::Task() { LiveTasks().insert(this); }
-#endif
+// Audit-only journal of where each Task died, so a later "this pointer is not
+// live" report can name the frame that destroyed it. Bounded and opt-in.
+namespace {
+    struct TaskDeath {
+        int depth;
+        void *frames[12];
+    };
+    std::unordered_map<Task *, TaskDeath> &TaskDeaths() {
+        static std::unordered_map<Task *, TaskDeath> m;
+        return m;
+    }
+}
 
-#ifdef HX_NATIVE
 Task::~Task() {
-    LiveTasks().erase(this);
+    if (RefAudit::Enabled()) {
+        TaskDeath &d = TaskDeaths()[this];
+        d.depth = backtrace(d.frames, 12);
+    }
+    // Erase only if the entry is still OURS. If a later task had somehow been
+    // constructed at this address first, erasing blindly would report the live
+    // one as dead.
+    std::unordered_map<Task *, Serial>::iterator it = LiveTasks().find(this);
+    if (it != LiveTasks().end() && it->second == mTaskSerial)
+        LiveTasks().erase(it);
+}
+
+void Task::DescribeDeath(Task *t) {
+    if (!RefAudit::Enabled())
+        return;
+    auto it = TaskDeaths().find(t);
+    if (it == TaskDeaths().end()) {
+        MILO_LOG("REFAUDIT task %p: NEVER seen in ~Task -- it was never constructed "
+                 "as a Task, or the pointer is not a Task at all.\n",
+                 (void *)t);
+        return;
+    }
+    MILO_LOG("REFAUDIT task %p was destroyed here:\n", (void *)t);
+    char **syms = backtrace_symbols(it->second.frames, it->second.depth);
+    for (int i = 0; i < it->second.depth; i++)
+        MILO_LOG("REFAUDIT      #%d %s\n", i, syms ? syms[i] : "?");
+    free(syms);
 }
 #endif
 
 #ifdef HX_NATIVE
 bool Task::IsLive(Task *t) { return LiveTasks().count(t) > 0; }
+
+Task::Serial Task::SerialOf(Task *t) {
+    std::unordered_map<Task *, Serial>::iterator it = LiveTasks().find(t);
+    return it == LiveTasks().end() ? 0 : it->second;
+}
+
+bool Task::IsLive(Task *t, Serial s) {
+    std::unordered_map<Task *, Serial>::iterator it = LiveTasks().find(t);
+    if (it == LiveTasks().end())
+        return false;
+    if (it->second == s)
+        return true;
+    // The address is live but the identity moved on: the allocator recycled
+    // the block. This is precisely the case the one-argument IsLive() cannot
+    // see, and it would have waved a stale pointer through onto a DIFFERENT,
+    // live task.
+    sAbaFalsePositives++;
+    MILO_LOG(
+        "Task::IsLive: ABA -- address %p is live as serial %llu but the caller "
+        "holds serial %llu. An address-keyed check would have accepted this "
+        "stale pointer and operated on the wrong task.\n",
+        (void *)t,
+        (unsigned long long)it->second,
+        (unsigned long long)s
+    );
+    return false;
+}
+
+int Task::AbaFalsePositives() { return sAbaFalsePositives; }
 
 // Incremented by TaskMgr::Poll when it refuses to delete a queued task that a
 // DeleteObjects cascade already destroyed. See the comment at the drain loop.
@@ -331,7 +409,7 @@ void TaskTimeline::Poll() {
         float diff = f2 - f1;
         if ((*it).mTask
 #ifdef HX_NATIVE
-            && Task::IsLive((*it).mTask)
+            && Task::IsLive((*it).mTask, (*it).mSerial)
 #endif
         ) {
             mPollingTask = (*it).mTask;
@@ -491,7 +569,9 @@ void TaskMgr::Poll() {
         // calls mObject->Release(this) whenever the cascade/sRingsDirty guards
         // happen to be false.
         Task *queued = unk84[i].Ptr();
-        if (queued && !Task::IsLive(queued)) {
+        Task::Serial queuedSerial =
+            i < (int)mQueuedSerials.size() ? mQueuedSerials[i] : 0;
+        if (queued && !Task::IsLive(queued, queuedSerial)) {
             if (sDanglingQueuedTasksSkipped++ == 0) {
                 MILO_LOG(
                     "TaskMgr::Poll: dropped a queued task destroyed by an "
@@ -506,6 +586,9 @@ void TaskMgr::Poll() {
         delete unk84[i].Ptr();
     }
     unk84.clear();
+#ifdef HX_NATIVE
+    mQueuedSerials.clear();
+#endif
 }
 
 void TaskMgr::ClearTasks() {
@@ -639,6 +722,8 @@ void TaskMgr::QueueTaskDelete(Task *task) {
         // never the relevant predicate for this failure -- the observed depth
         // is 0 every time.
         if (!Task::IsLive(task)) {
+            RefAudit::Backtrace("QueueTaskDelete refused a dead task");
+            Task::DescribeDeath(task);
             if (sDeadTasksRefused++ == 0) {
                 MILO_LOG(
                     "TaskMgr::QueueTaskDelete: refused an already-destroyed "
@@ -659,6 +744,9 @@ void TaskMgr::QueueTaskDelete(Task *task) {
             if (unk84[i] == task)
                 return;
         }
+#ifdef HX_NATIVE
+        mQueuedSerials.push_back(Task::SerialOf(task));
+#endif
         unk84.push_back(ObjPtr<Task>(nullptr, task));
     }
 }
