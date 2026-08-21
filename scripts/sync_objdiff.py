@@ -790,6 +790,27 @@ def main():
     # auto-AT_LIMIT gate below behaves exactly as it did before -- absence of
     # the scan must not silently become evidence of absence of the bug, so the
     # count of what could not be checked is reported either way.
+    #
+    # ⚠ NOTHING REFRESHES THIS SCAN.  `v_latest_pattern_scan` is written only by
+    # a hand-run `scripts/analysis/pattern_census.py --apply`; there is no ninja
+    # edge and no wrapper that re-derives it, so the gate silently ages against
+    # whatever objdiff-cli happened to be installed the last time somebody ran
+    # the census.  That is not hypothetical: measured 2026-08-21 (task #134), the
+    # recorded scan was still 4.2.6 while the installed binary was 4.2.7, and the
+    # 4.2.6 set did NOT contain `?Copy@FxSend@@` -- the single row in the whole
+    # population that is byte-identical except for one relocation naming a
+    # DIFFERENT function.  The gate had a live hole on exactly the row it most
+    # needed to cover.  Re-run the census after every objdiff-cli change.
+    #
+    # ⚠ And the gate REFUSES rather than JUDGES.  It blocks on the raw pattern,
+    # so of the 138 rows carrying one under 4.2.7 it also withholds a
+    # certificate from the 71 (51%) whose divergent callee pair shares ONE
+    # address in `orig/373307D9/ham_xbox_r.map` (an /OPT:ICF fold) or sits
+    # inside an EH funclet objdiff paired by byte signature.  Cheap in the safe
+    # direction -- those rows merely stay workable -- but it is conservatism,
+    # not correctness.  `scripts/analysis/readjudicate_callee_verdicts.py`
+    # separates the two; teaching this gate to read its adjudication instead of
+    # the raw pattern is the real fix.
     fixable_syms: set[str] = set()
     try:
         _c = sqlite3.connect(str(args.db))
