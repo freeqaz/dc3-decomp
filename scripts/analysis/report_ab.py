@@ -88,7 +88,8 @@ def main():
     print('rows present in both that moved on fuzzy_match_percent: %d (down %d)'
           % (len(fmoved), len(fdown)))
     for k in sorted(fdown)[:a.max_list]:
-        print('  FUZZY DOWN %-46s %-56s %8.4f -> %8.4f'
+        # fuzzy_match_percent is absent (null) on some rows; do not format None
+        print('  FUZZY DOWN %-46s %-56s %8s -> %-8s'
               % (k[0], k[1][:56], fb[k][1], fn[k][1]))
     return 0
 
