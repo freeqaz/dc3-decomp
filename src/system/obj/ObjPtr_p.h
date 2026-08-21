@@ -18,19 +18,30 @@
 
 template <class T1, class T2>
 ObjRefConcrete<T1, T2>::ObjRefConcrete(T1 *obj) : mObject(obj) {
-    if (mObject)
+    if (mObject) {
         mObject->AddRef(this);
+#ifdef HX_NATIVE
+        RefAudit::Retarget(this, nullptr, static_cast<Hmx::Object *>(mObject));
+#endif
+    }
 }
 
 template <class T1, class T2>
 __forceinline ObjRefConcrete<T1, T2>::ObjRefConcrete(const ObjRefConcrete &o)
     : mObject(o.mObject) {
-    if (mObject)
+    if (mObject) {
         mObject->AddRef(this);
+#ifdef HX_NATIVE
+        RefAudit::Retarget(this, nullptr, static_cast<Hmx::Object *>(mObject));
+#endif
+    }
 }
 
 template <class T1, class T2>
 ObjRefConcrete<T1, T2>::~ObjRefConcrete() {
+#ifdef HX_NATIVE
+    RefAudit::Forget(this);
+#endif
     if (mObject) {
 #ifdef HX_NATIVE
         if (ObjectDir::InDeleteObjects() || Hmx::Object::sRingsDirty) {
@@ -45,6 +56,13 @@ ObjRefConcrete<T1, T2>::~ObjRefConcrete() {
 
 template <class T1, class T2>
 void ObjRefConcrete<T1, T2>::SetObjConcrete(T1 *obj) {
+#ifdef HX_NATIVE
+    RefAudit::Retarget(
+        this,
+        mObject ? static_cast<Hmx::Object *>(mObject) : nullptr,
+        obj ? static_cast<Hmx::Object *>(obj) : nullptr
+    );
+#endif
     if (mObject) {
 #ifdef HX_NATIVE
         if (ObjectDir::InDeleteObjects() || Hmx::Object::sRingsDirty) {
@@ -71,6 +89,13 @@ skip_ring_ops:
 template <class T1, class T2>
 void ObjRefConcrete<T1, T2>::CopyRef(const ObjRefConcrete &o) {
     if (&o == this) return;
+#ifdef HX_NATIVE
+    RefAudit::Retarget(
+        this,
+        mObject ? static_cast<Hmx::Object *>(mObject) : nullptr,
+        o.mObject ? static_cast<Hmx::Object *>(o.mObject) : nullptr
+    );
+#endif
     if (mObject) this->ObjRef::Release(nullptr);
     mObject = o.mObject;
     if (!mObject) return;
@@ -143,6 +168,9 @@ bool ObjRefConcrete<T1, T2>::Load(BinStream &bs, bool print, ObjectDir *dir) {
         }
     } else {
         if (mObject) {
+#ifdef HX_NATIVE
+            RefAudit::Retarget(this, static_cast<Hmx::Object *>(mObject), nullptr);
+#endif
             Release(this);
         }
         mObject = nullptr;

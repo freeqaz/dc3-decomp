@@ -11,6 +11,8 @@
 
 #ifdef HX_NATIVE
 #include <unordered_set>
+#include <unordered_map>
+#include <execinfo.h>
 static std::unordered_set<Task *> &LiveTasks() {
     static std::unordered_set<Task *> s;
     return s;
@@ -22,8 +24,42 @@ Task::Task() { LiveTasks().insert(this); }
 #endif
 
 #ifdef HX_NATIVE
+// Audit-only journal of where each Task died, so a later "this pointer is not
+// live" report can name the frame that destroyed it. Bounded and opt-in.
+namespace {
+    struct TaskDeath {
+        int depth;
+        void *frames[12];
+    };
+    std::unordered_map<Task *, TaskDeath> &TaskDeaths() {
+        static std::unordered_map<Task *, TaskDeath> m;
+        return m;
+    }
+}
+
 Task::~Task() {
+    if (RefAudit::Enabled()) {
+        TaskDeath &d = TaskDeaths()[this];
+        d.depth = backtrace(d.frames, 12);
+    }
     LiveTasks().erase(this);
+}
+
+void Task::DescribeDeath(Task *t) {
+    if (!RefAudit::Enabled())
+        return;
+    auto it = TaskDeaths().find(t);
+    if (it == TaskDeaths().end()) {
+        MILO_LOG("REFAUDIT task %p: NEVER seen in ~Task -- it was never constructed "
+                 "as a Task, or the pointer is not a Task at all.\n",
+                 (void *)t);
+        return;
+    }
+    MILO_LOG("REFAUDIT task %p was destroyed here:\n", (void *)t);
+    char **syms = backtrace_symbols(it->second.frames, it->second.depth);
+    for (int i = 0; i < it->second.depth; i++)
+        MILO_LOG("REFAUDIT      #%d %s\n", i, syms ? syms[i] : "?");
+    free(syms);
 }
 #endif
 
@@ -639,6 +675,8 @@ void TaskMgr::QueueTaskDelete(Task *task) {
         // never the relevant predicate for this failure -- the observed depth
         // is 0 every time.
         if (!Task::IsLive(task)) {
+            RefAudit::Backtrace("QueueTaskDelete refused a dead task");
+            Task::DescribeDeath(task);
             if (sDeadTasksRefused++ == 0) {
                 MILO_LOG(
                     "TaskMgr::QueueTaskDelete: refused an already-destroyed "

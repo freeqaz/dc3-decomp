@@ -35,6 +35,8 @@ public:
 
 #ifdef HX_NATIVE
     static bool IsLive(Task *t);
+    /** Audit-only (DC3_REFRING_AUDIT=1): log where `t` was destroyed. */
+    static void DescribeDeath(Task *t);
 #endif
     MEM_OVERLOAD(Task, 0x1A);
 };

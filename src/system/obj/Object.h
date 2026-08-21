@@ -28,6 +28,44 @@ void MergeObjectsRecurse(ObjectDir *, ObjectDir *, MergeFilter &, bool);
 // structural mutations during ring walks.
 extern bool gInReplaceList;
 
+/** Opt-in ref-ring audit (DC3_REFRING_AUDIT=1). Off by default and
+ *  self-announcing on first use.
+ *
+ *  This is a DIAGNOSTIC, not a mechanism: it maintains a shadow index of
+ *  "which ObjRef nodes currently point at which object" alongside the real
+ *  rings, so ~Object can ask two questions the rings themselves cannot
+ *  answer:
+ *
+ *    1. Is every node that targets me actually LINKED in my ring right now?
+ *       A "no" is ring loss -- a node silently unlinked while still live.
+ *    2. After the walk, does any node still target me? A "yes" is a Replace
+ *       callback that DECLINED to retarget (several Replace overrides return
+ *       true without touching the ref).
+ *
+ *  Those two are the only shapes the dangling-holder bug can take, and they
+ *  want opposite fixes, so telling them apart is the whole point.
+ *
+ *  Deliberately NOT a fix: nothing in the engine consults this index, and it
+ *  must never become load-bearing. The referent's own ring is the mechanism.
+ */
+namespace RefAudit {
+    /** True when DC3_REFRING_AUDIT=1. Cached; announces itself once. */
+    bool Enabled();
+    /** A node's target changed (either side may be null). */
+    void Retarget(ObjRef *node, Hmx::Object *from, Hmx::Object *to);
+    /** A node is being destroyed. */
+    void Forget(ObjRef *node);
+    /** Called from ~Object BEFORE the ring walk: reports nodes that target
+     *  `obj` but are no longer reachable from its ring. */
+    void PreWalk(Hmx::Object *obj, const ObjRef *ring);
+    /** Called from ~Object AFTER the ring walk: reports nodes that still
+     *  target `obj`. */
+    void PostWalk(Hmx::Object *obj);
+    /** Dump what the audit knows about `node` (registration backtrace). */
+    void Describe(const ObjRef *node, const char *why);
+    /** Print a backtrace of the current call site. */
+    void Backtrace(const char *why);
+}
 #endif
 
 #pragma region ObjRef
@@ -223,7 +261,13 @@ public:
     virtual Hmx::Object *GetObj() const { return mObject; }
     virtual void Replace(Hmx::Object *obj) { SetObj(obj); }
 #ifdef HX_NATIVE
-    void NullifyObj() override { mObject = nullptr; ObjRef::NullifyObj(); }
+    void NullifyObj() override {
+        RefAudit::Retarget(
+            this, mObject ? static_cast<Hmx::Object *>(mObject) : nullptr, nullptr
+        );
+        mObject = nullptr;
+        ObjRef::NullifyObj();
+    }
 #endif
 
     T1 *operator->() const { return mObject; }

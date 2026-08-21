@@ -57,6 +57,163 @@ static void SnapshotRing(ObjRef *sentinel, std::vector<ObjRef *> &out) {
     }
 }
 
+// ---------------------------------------------------------------------------
+// RefAudit -- opt-in shadow index of "which ObjRef targets which object".
+// See the contract in Object.h. DC3_REFRING_AUDIT=1 to enable; the cost when
+// disabled is one predictable branch per ref mutation.
+// ---------------------------------------------------------------------------
+#include <execinfo.h>
+#include <unordered_map>
+#include <unordered_set>
+
+namespace RefAudit {
+    namespace {
+        struct NodeInfo {
+            Hmx::Object *target;
+            int depth;
+            void *frames[10];
+        };
+        std::unordered_map<const ObjRef *, NodeInfo> &Nodes() {
+            static std::unordered_map<const ObjRef *, NodeInfo> m;
+            return m;
+        }
+        std::unordered_map<const Hmx::Object *, std::unordered_set<const ObjRef *> > &
+        ByTarget() {
+            static std::unordered_map<
+                const Hmx::Object *, std::unordered_set<const ObjRef *> >
+                m;
+            return m;
+        }
+        void PrintFrames(void *const *frames, int depth) {
+            if (depth <= 0)
+                return;
+            char **syms = backtrace_symbols(frames, depth);
+            for (int i = 0; i < depth; i++) {
+                MILO_LOG("REFAUDIT      #%d %s\n", i, syms ? syms[i] : "?");
+            }
+            free(syms);
+        }
+    }
+
+    bool Enabled() {
+        static int cached = -1;
+        if (cached < 0) {
+            const char *v = getenv("DC3_REFRING_AUDIT");
+            cached = (v && *v && *v != '0') ? 1 : 0;
+            if (cached) {
+                MILO_LOG(
+                    "REFAUDIT: DC3_REFRING_AUDIT=1 -- ref-ring shadow index ACTIVE. "
+                    "This is a diagnostic; it costs a hash op per ref mutation and "
+                    "nothing consults it.\n"
+                );
+            }
+        }
+        return cached == 1;
+    }
+
+    void Retarget(ObjRef *node, Hmx::Object *from, Hmx::Object *to) {
+        if (!Enabled())
+            return;
+        if (from) {
+            auto bt = ByTarget().find(from);
+            if (bt != ByTarget().end()) {
+                bt->second.erase(node);
+                if (bt->second.empty())
+                    ByTarget().erase(bt);
+            }
+        }
+        if (to) {
+            NodeInfo &info = Nodes()[node];
+            info.target = to;
+            info.depth = backtrace(info.frames, 10);
+            ByTarget()[to].insert(node);
+        } else {
+            Nodes().erase(node);
+        }
+    }
+
+    void Forget(ObjRef *node) {
+        if (!Enabled())
+            return;
+        auto it = Nodes().find(node);
+        if (it == Nodes().end())
+            return;
+        auto bt = ByTarget().find(it->second.target);
+        if (bt != ByTarget().end()) {
+            bt->second.erase(node);
+            if (bt->second.empty())
+                ByTarget().erase(bt);
+        }
+        Nodes().erase(it);
+    }
+
+    void Describe(const ObjRef *node, const char *why) {
+        if (!Enabled())
+            return;
+        auto it = Nodes().find(node);
+        MILO_LOG(
+            "REFAUDIT   node=%p (%s) target=%p\n",
+            (void *)const_cast<ObjRef *>(node),
+            why,
+            it == Nodes().end() ? nullptr : (void *)it->second.target
+        );
+        if (it != Nodes().end())
+            PrintFrames(it->second.frames, it->second.depth);
+    }
+
+    void Backtrace(const char *why) {
+        if (!Enabled())
+            return;
+        void *frames[16];
+        int depth = backtrace(frames, 16);
+        MILO_LOG("REFAUDIT backtrace (%s):\n", why);
+        PrintFrames(frames, depth);
+    }
+
+    void PreWalk(Hmx::Object *obj, const ObjRef *ring) {
+        if (!Enabled())
+            return;
+        auto bt = ByTarget().find(obj);
+        if (bt == ByTarget().end())
+            return;
+        // Collect what the ring can actually reach, using the same
+        // read-only, dead-node-skipping traversal the walkers use.
+        std::unordered_set<const ObjRef *> reachable;
+        std::vector<ObjRef *> snapshot;
+        SnapshotRing(const_cast<ObjRef *>(ring), snapshot);
+        for (ObjRef *r : snapshot)
+            reachable.insert(r);
+        for (const ObjRef *node : bt->second) {
+            if (reachable.count(node) == 0) {
+                MILO_LOG(
+                    "REFAUDIT LOST-FROM-RING: obj=%p still targeted by a node the "
+                    "ring cannot reach. The ring walk will not nullify it.\n",
+                    (void *)obj
+                );
+                Describe(node, "registered at");
+                Backtrace("~Object");
+            }
+        }
+    }
+
+    void PostWalk(Hmx::Object *obj) {
+        if (!Enabled())
+            return;
+        auto bt = ByTarget().find(obj);
+        if (bt == ByTarget().end())
+            return;
+        std::vector<const ObjRef *> leftovers(bt->second.begin(), bt->second.end());
+        for (const ObjRef *node : leftovers) {
+            MILO_LOG(
+                "REFAUDIT WALK-DECLINED: obj=%p still targeted after the ring walk "
+                "-- a Replace/Nullify path left the ref pointing at freed memory.\n",
+                (void *)obj
+            );
+            Describe(node, "registered at");
+        }
+    }
+}
+
 void ObjRef::ReplaceList(Hmx::Object *obj) {
     // Suppress ObjPtrVec::erase and Transitions::RemoveNodes during ring walk.
     bool wasInReplace = gInReplaceList;
@@ -143,11 +300,15 @@ Hmx::Object::~Object() {
     //
     // Idempotent by construction: Phase 0 leaves the sentinel self-looped, so
     // a second call on a dir-resident object walks zero nodes.
+    RefAudit::PreWalk(this, &mRefs);
     if (ObjectDir::InDeleteObjects())
         NullifyAllRefs();
     else
 #endif
     ReplaceRefs(nullptr);
+#ifdef HX_NATIVE
+    RefAudit::PostWalk(this);
+#endif
     sDeleting = old;
     if (gDataThis == this) {
         gDataThis = nullptr;
