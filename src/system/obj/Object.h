@@ -1295,13 +1295,16 @@ namespace Hmx {
     protected:
         /** An Object in the process of being deleted. */
         static Object *sDeleting;
+#ifdef HX_NATIVE
+        /** Head of the intrusive chain of DeathWatch guards currently watching
+         *  this object. Null in the overwhelmingly common case. Native-only,
+         *  and last in the class so it perturbs nothing above it. */
+        DeathWatch *mDeathWatch;
+#endif
     public:
 #ifdef HX_NATIVE
         /** True after FlushDeferredFrees — rings may have dead entries. */
         static bool sRingsDirty;
-        /** Head of the intrusive chain of DeathWatch guards currently watching
-         *  this object. Null in the overwhelmingly common case. */
-        DeathWatch *mDeathWatch;
 #endif
     protected:
 
