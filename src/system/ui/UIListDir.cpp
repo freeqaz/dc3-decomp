@@ -389,8 +389,8 @@ void UIListDir::BuildDrawState(
     drawState.mHighlightDisplay = selectedDisplay;
 
     if (state.IsScrolling()) {
-        float speed = state.Speed();
-        if (speed > mScrollHighlightChange) {
+        float stepPercent = state.StepPercent();
+        if (stepPercent > mScrollHighlightChange) {
             selected += direction;
             drawState.mHighlightDisplay += direction;
         }
@@ -408,7 +408,7 @@ void UIListDir::BuildDrawState(
     float totalGap = 0.0f;
     Vector3 elemPos;
 
-    float scrollOffset = (float)direction * state.Speed();
+    float scrollOffset = (float)direction * state.StepPercent();
 
     for (int i = 0; i < numDisplayWithData; i++) {
         int dispIndex = i;

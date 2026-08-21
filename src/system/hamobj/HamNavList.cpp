@@ -1743,7 +1743,7 @@ void HamNavList::DrawShowing() {
 
     LinkRibbonDrawState(mRibbonDrawStates, widgetState);
 
-    if (mScrollBehavior.IsScrolling()) {
+    if (mListState.ScrollPastMinDisplay()) {
         for (unsigned int i = 0; i < mRibbonDrawStates.size(); i++) {
             int first = mListState.FirstShowing();
             if ((int)i < first || (int)i >= first + HamListRibbon::sNumListSelectable) {
