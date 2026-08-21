@@ -358,6 +358,67 @@ def objdiff_cli(project: str | os.PathLike) -> Path:
     return Path(project) / "bin" / "objdiff-cli"
 
 
+_VERSION_CACHE: Dict[str, str] = {}
+
+
+def objdiff_version(project: str | os.PathLike) -> str:
+    """`objdiff-cli --version`, verbatim, cached per project.
+
+    The version string carries the git short hash and a build fingerprint, which
+    is a far better provenance record than a binary mtime: `bin/objdiff-cli` is
+    a SYMLINK shared with ../rb3 and ../rb3-xenon and NOTHING in any of the three
+    ninja graphs rebuilds it, so the detector semantics behind a recorded number
+    can change with no edge firing anywhere.  v4.2.6 renamed the population of
+    LINKER_MERGED to ~2% of what v4.2.5 called by that name.
+    """
+    key = str(Path(project).resolve())
+    if key not in _VERSION_CACHE:
+        try:
+            proc = subprocess.run([str(objdiff_cli(project)), "--version"],
+                                  capture_output=True, text=True, timeout=60)
+            _VERSION_CACHE[key] = (proc.stdout or proc.stderr or "").strip() or "unknown"
+        except Exception:  # noqa: BLE001
+            _VERSION_CACHE[key] = "unknown"
+    return _VERSION_CACHE[key]
+
+
+def _project_reloc_ruler(project: str | os.PathLike) -> str:
+    """The `functionRelocDiffs` value `objdiff.json` will impose if we pass none.
+
+    Omitting `-c` does NOT get objdiff's own default; it gets the PROJECT's, and
+    the project config travels with the repo while the binary is shared across
+    three of them.  A census that does not resolve this cannot say which ruler
+    it ran under.
+    """
+    cfg = Path(project) / "objdiff.json"
+    try:
+        doc = json.loads(cfg.read_text())
+    except (OSError, json.JSONDecodeError):
+        return "unknown"
+    val = (doc.get("custom_config") or doc).get("functionRelocDiffs")
+    if val is None:
+        # objdiff.json nests it; scan for the key anywhere one level down.
+        for v in doc.values():
+            if isinstance(v, dict) and "functionRelocDiffs" in v:
+                return str(v["functionRelocDiffs"])
+    return str(val) if val is not None else "unknown"
+
+
+#: objdiff serialises the MakeString variant two ways in ONE document: serde's
+#: `rename_all = "SCREAMING_SNAKE_CASE"` splits the internal capital in
+#: `MakeStringTemplateMismatch` for `patterns[].pattern`, while `as_str` --
+#: which feeds `patterns_checked` and every human-readable surface -- does not.
+#: `sync_objdiff` compared against the second spelling and so could never set
+#: `has_makestring_mismatch` on any row.  Canonicalise onto the `as_str` form.
+_PATTERN_ALIASES = {
+    "MAKE_STRING_TEMPLATE_MISMATCH": "MAKESTRING_TEMPLATE_MISMATCH",
+}
+
+
+def canonical_pattern_name(pattern: str) -> str:
+    return _PATTERN_ALIASES.get(pattern, pattern)
+
+
 def diff_symbol(
     project: str | os.PathLike,
     unit: str,
@@ -607,35 +668,60 @@ def sweep_data_symbols(
     }
 
 
-def sweep_functions(
-    project: str | os.PathLike,
-    symbols: Sequence[str],
-    unit: Optional[str] = None,
-    include_instructions: bool = False,
-    max_symbols: Optional[int] = None,
-    timeout: int = 1800,
-    scanner_name: str = "symbol_sweep.functions",
-) -> Dict[str, Any]:
-    """Batch-diff many FUNCTION symbols in one objdiff process (`--batch`, JSONL).
+#: `functionRelocDiffs` values, and what each one is FOR.  A sweep that does
+#: not state which of these it ran under has not stated its result: the same
+#: objects, the same symbols and the same detectors give different pattern
+#: populations under each.  See CLAUDE.md, "The ruler matters".
+RELOC_RULERS = {
+    # objdiff's relocation-BLIND mode.  `detect_callee_divergences`,
+    # `detect_prologue_mismatch`, `detect_makestring_template_mismatch` and
+    # `detect_scope_counter_mismatch` all read `match_type == "diff_arg"` on a
+    # `bl`, which this mode reports as `equal`.  Under `none` those four
+    # detectors are STRUCTURALLY STARVED and report an honest-looking zero.
+    # Six `has_*` columns in decomp.db died of exactly this.
+    "none": "relocation-blind; the four callee detectors cannot fire",
+    # The project's graded ruler and `report.json`'s (`objdiff.json` sets it).
+    # Consults build/<v>/icf_aliases.map and applies the placeholder / counter /
+    # anchor exemptions, so a pattern that survives here is CHARGED.
+    "name_check": "graded: charges relocation NAMES, forgives proven folds",
+    # Charges every name difference including the ~2,992 adjudicated /OPT:ICF
+    # folds, plus addends.  Measured ~99.8% noise over a 14-function sample.
+    "all": "charges every name AND addend difference; mostly noise",
+}
 
-    `--batch` is ~1 process instead of N, which is the whole reason agents wrote
-    their own loops around it.  It refuses `--include-data` (objdiff-side: batch
-    does not compute data-section diffs), so the data question must go through
-    `sweep_data_symbols`.
+#: The sweep REFUSES this one for a pattern census rather than returning a
+#: plausible zero.  `include_patterns=True` + `reloc_config="none"` is not a
+#: quieter measurement, it is a measurement of a starved detector.
+_PATTERN_BLIND_RULERS = {"none"}
+
+
+class RelocBlindPatternError(RuntimeError):
+    """A pattern sweep was asked to run under a relocation-blind ruler.
+
+    Deliberately a hard error.  The failure this prevents is not a wrong
+    number, it is a CONFIDENT ZERO: `functionRelocDiffs=none` makes
+    LINKER_MERGED / WRONG_CALLEE / TEMPLATE_INSTANTIATION_MISMATCH /
+    REGISTER_SAVE_HELPER_MISMATCH / UNVERIFIABLE_CALLEE_NAME / PROLOGUE_MISMATCH
+    / MAKESTRING_TEMPLATE_MISMATCH / SCOPE_COUNTER_MISMATCH structurally
+    unable to fire, and an empty bucket reads as "this class is exhausted".
     """
-    cov = make_coverage(scanner_name)
-    symbols = [s.strip() for s in symbols if s.strip()]
-    cov.universe(len(symbols), "function symbols supplied to the sweep")
-    if max_symbols is not None and len(symbols) > max_symbols:
-        dropped = len(symbols) - max_symbols
-        symbols = symbols[:max_symbols]
-        cov.cap("--max-symbols", max_symbols, dropped)
-        cov.drop("capped-by---max-symbols", dropped)
 
+
+def _batch_shard(
+    project: str,
+    symbols: List[str],
+    unit: Optional[str],
+    include_instructions: bool,
+    reloc_config: Optional[str],
+    timeout: int,
+) -> Tuple[List[Dict[str, Any]], List[str], int, str]:
+    """One objdiff `--batch` process over one shard.  Returns (rows, raw_lines_bad, rc, stderr)."""
     cmd = [
         str(objdiff_cli(project)), "diff", "-p", str(project),
         "--batch", "-f", "json",
     ]
+    if reloc_config:
+        cmd.extend(["-c", f"functionRelocDiffs={reloc_config}"])
     if unit:
         cmd.extend(["-u", unit])
     if include_instructions:
@@ -649,17 +735,106 @@ def sweep_functions(
         cwd=str(project),
     )
     rows: List[Dict[str, Any]] = []
-    errored: List[Dict[str, str]] = []
-    seen = set()
+    bad: List[str] = []
     for line in proc.stdout.splitlines():
         line = line.strip()
         if not line.startswith("{"):
             continue
         try:
-            d = json.loads(line)
+            rows.append(json.loads(line))
         except json.JSONDecodeError:
-            cov.drop("jsonl-unparseable")
-            continue
+            bad.append(line[:120])
+    return rows, bad, proc.returncode, (proc.stderr or "").strip()
+
+
+def sweep_functions(
+    project: str | os.PathLike,
+    symbols: Sequence[str],
+    unit: Optional[str] = None,
+    include_instructions: bool = False,
+    max_symbols: Optional[int] = None,
+    timeout: int = 1800,
+    scanner_name: str = "symbol_sweep.functions",
+    reloc_config: Optional[str] = None,
+    include_patterns: bool = False,
+    jobs: int = 1,
+) -> Dict[str, Any]:
+    """Batch-diff many FUNCTION symbols in one objdiff process (`--batch`, JSONL).
+
+    `--batch` is ~1 process instead of N, which is the whole reason agents wrote
+    their own loops around it.  It refuses `--include-data` (objdiff-side: batch
+    does not compute data-section diffs), so the data question must go through
+    `sweep_data_symbols`.
+
+    `reloc_config` names the `functionRelocDiffs` ruler.  `None` means "whatever
+    `objdiff.json` says", which in this repo is `name_check` -- fine for a
+    percentage, NOT fine to leave unstated in a pattern census, so the ruler
+    actually used is echoed back in the result as `reloc_ruler`.
+
+    `include_patterns` keeps `analysis.patterns` (the detector payload) on each
+    row and builds a histogram.  It raises `RelocBlindPatternError` under
+    `functionRelocDiffs=none`, where those detectors cannot fire at all.
+
+    `jobs` shards the symbol list across N objdiff processes.  Still one process
+    per SHARD, never one per symbol.
+    """
+    cov = make_coverage(scanner_name)
+    project = str(Path(project).resolve())
+
+    ruler = reloc_config or _project_reloc_ruler(project)
+    if include_patterns and ruler in _PATTERN_BLIND_RULERS:
+        raise RelocBlindPatternError(
+            f"REFUSING a pattern sweep under functionRelocDiffs={ruler}: the "
+            f"callee/prologue/MakeString/scope detectors all key off "
+            f"`match_type == \"diff_arg\"` on a `bl`, and this ruler reports "
+            f"those instructions as equal. Every pattern bucket would come back "
+            f"0 -- not because the build is clean, but because the detector was "
+            f"starved. Use functionRelocDiffs=name_check (the graded ruler, and "
+            f"report.json's) or =all (charges everything, ~99.8% noise)."
+        )
+
+    symbols = [s.strip() for s in symbols if s.strip()]
+    cov.universe(len(symbols), "function symbols supplied to the sweep")
+    cov.note(f"functionRelocDiffs={ruler} -- {RELOC_RULERS.get(ruler, 'unrecognised ruler')}")
+    if reloc_config is None:
+        cov.note("ruler taken from the project's objdiff.json, not from the caller")
+    if max_symbols is not None and len(symbols) > max_symbols:
+        dropped = len(symbols) - max_symbols
+        symbols = symbols[:max_symbols]
+        cov.cap("--max-symbols", max_symbols, dropped)
+        cov.drop("capped-by---max-symbols", dropped)
+
+    jobs = max(1, int(jobs))
+    if jobs > 1 and symbols:
+        size = (len(symbols) + jobs - 1) // jobs
+        shards = [symbols[i:i + size] for i in range(0, len(symbols), size)]
+    else:
+        shards = [symbols] if symbols else []
+
+    raw: List[Dict[str, Any]] = []
+    stderr_tails: List[str] = []
+    if len(shards) == 1:
+        r, bad, _rc, err = _batch_shard(
+            project, shards[0], unit, include_instructions, reloc_config, timeout)
+        raw.extend(r)
+        cov.drop("jsonl-unparseable", len(bad))
+        stderr_tails.extend(err.splitlines()[-3:])
+    elif shards:
+        with ThreadPoolExecutor(max_workers=len(shards)) as pool:
+            futs = [pool.submit(_batch_shard, project, s, unit,
+                                include_instructions, reloc_config, timeout)
+                    for s in shards]
+            for f in as_completed(futs):
+                r, bad, _rc, err = f.result()
+                raw.extend(r)
+                cov.drop("jsonl-unparseable", len(bad))
+                stderr_tails.extend(err.splitlines()[-1:])
+
+    rows: List[Dict[str, Any]] = []
+    errored: List[Dict[str, str]] = []
+    seen = set()
+    pattern_hist: Dict[str, int] = collections.Counter()
+    for d in raw:
         sym = d.get("symbol")
         seen.add(sym)
         if d.get("error"):
@@ -671,21 +846,38 @@ def sweep_functions(
             errored.append({"symbol": sym, "error": d["error"]})
             continue
         cov.examine()
+        if include_patterns:
+            pats = ((d.get("analysis") or {}).get("patterns") or [])
+            for p in pats:
+                pattern_hist[canonical_pattern_name(p.get("pattern", ""))] += 1
+        else:
+            d.pop("analysis", None)
         rows.append(d)
     missing = [s for s in symbols if s not in seen]
     if missing:
         cov.drop("no-jsonl-row-emitted", len(missing))
-    return {
+    out = {
         "kind": "functions",
+        "reloc_ruler": ruler,
+        "reloc_ruler_meaning": RELOC_RULERS.get(ruler, "unrecognised ruler"),
+        "objdiff_version": objdiff_version(project),
+        "shards": len(shards),
         "rows": rows,
         "errored_symbols": errored[:50],
         "errored_count": len(errored),
         "missing_symbols": missing[:50],
         "missing_count": len(missing),
-        "stderr_tail": (proc.stderr or "").strip().splitlines()[-3:],
+        "stderr_tail": stderr_tails[-3:],
         "_coverage": cov.as_dict(),
         "_coverage_render": cov.render(),
     }
+    if include_patterns:
+        out["pattern_histogram"] = dict(pattern_hist.most_common())
+        out["patterns_checked"] = sorted({
+            p for d in raw
+            for p in ((d.get("analysis") or {}).get("patterns_checked") or [])
+        })
+    return out
 
 
 # --------------------------------------------------------------------------
@@ -699,6 +891,20 @@ def render_markdown(result: Dict[str, Any], top: int = 60) -> str:
     if kind == "functions":
         rows = result.get("rows") or []
         L.append(f"# Batch function sweep -- {len(rows)} symbols diffed")
+        L.append("")
+        L.append(f"**Ruler: `functionRelocDiffs={result.get('reloc_ruler')}`** "
+                 f"({result.get('reloc_ruler_meaning')}), "
+                 f"`{result.get('objdiff_version')}`.")
+        if result.get("pattern_histogram") is not None:
+            hist = result["pattern_histogram"]
+            L.append("")
+            L.append(f"## Pattern histogram ({len(hist)} of "
+                     f"{len(result.get('patterns_checked') or [])} checked patterns fired)")
+            L.append("")
+            L.append("| pattern | functions |")
+            L.append("|---|---:|")
+            for k, v in hist.items():
+                L.append(f"| `{k}` | {v} |")
         # Prefer `canonical_match_percent` (objdiff >= 4.2.4). The older
         # `normalized_match_percent` is a DOCUMENTED MISNOMER that carries the
         # FUZZY score -- objdiff-cli computed all three of its percent fields
@@ -799,6 +1005,14 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--max-symbols", type=int, default=None,
                     help="TRUNCATE the sweep (a truncated run is reported as TRUNCATED)")
     ap.add_argument("--workers", type=int, default=12)
+    ap.add_argument("--reloc-config", default=None, choices=sorted(RELOC_RULERS),
+                    help="functions kind: functionRelocDiffs ruler. Default = "
+                         "whatever objdiff.json imposes (name_check here). The "
+                         "ruler used is always echoed in the output.")
+    ap.add_argument("--include-patterns", action="store_true",
+                    help="functions kind: keep analysis.patterns and histogram "
+                         "them. Refuses functionRelocDiffs=none, where the "
+                         "callee detectors cannot fire.")
     ap.add_argument("--format", default="markdown", choices=["markdown", "json"])
     ap.add_argument("--out", default=None)
     args = ap.parse_args(argv)
@@ -810,7 +1024,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         elif not sys.stdin.isatty():
             syms = sys.stdin.read().splitlines()
         result = sweep_functions(args.project, syms, unit=args.unit,
-                                 max_symbols=args.max_symbols)
+                                 max_symbols=args.max_symbols,
+                                 reloc_config=args.reloc_config,
+                                 include_patterns=args.include_patterns,
+                                 jobs=args.workers)
     else:
         glob = args.symbol_glob or ("??_7*" if args.kind == "vtable_slots" else "*")
         result = sweep_data_symbols(
