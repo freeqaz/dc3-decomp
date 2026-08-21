@@ -67,6 +67,24 @@ void GetFitnessGoalJob::GetFitnessGoal(HamProfile *profile) {
         JsonObject *response = mJsonResponse;
         JsonConverter &reader = mJsonReader;
         if (response) {
+#ifdef HX_NATIVE
+            // Sibling of the MoveDir::PostUpdateFilters null-`this` class,
+            // found by the same analyzer sweep. The `if (profile)` immediately
+            // below is the proof that `profile` is nullable here -- and then
+            // BOTH exits of this function call profile->SetFitnessGoal()
+            // unguarded (the valid branch and the invalid branch).
+            // HamProfile::SetFitnessGoal writes members through `this`, so on
+            // the 360 the stores land in the mapped zeroed page 0 and the
+            // response is silently discarded; the host has no page 0 and
+            // SIGSEGVs. Discarding it explicitly is the same outcome, and one
+            // guard covers both call sites -- there is no code after this block
+            // to skip. The dropped MILO_LOGs describe a response that is being
+            // thrown away either way.
+            if (!profile) {
+                MILO_LOG(">>>>>>>>>> fitness goal response with no profile; dropped.\n");
+                return;
+            }
+#endif
             if (profile) {
                 MILO_LOG(">>>>>>>>>> %s\'s fitness goal info.\n", profile->GetName());
             }

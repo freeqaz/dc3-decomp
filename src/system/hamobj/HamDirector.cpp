@@ -2608,8 +2608,22 @@ void HamDirector::PlayNextShot() {
         world->GetCameraManager()->SetBlendTime(
             sameCategory ? s.blendFramesSame : s.blendFramesCross);
     }
-#endif
+    // Sibling of the MoveDir::PostUpdateFilters null-`this` class, found by the
+    // same analyzer sweep, and the clearest-cut member of it: `world` is
+    // assigned nullptr outright twenty lines up when mMerger is null, so this
+    // is not even an inference. RndDir::GetCameraManager() is a non-virtual
+    // accessor reading a member pointer, so on the 360 the load comes out of
+    // the mapped zeroed page 0 as null, and ForceCameraShot then runs on a null
+    // CameraManager writing mShotChanged/mNextShot -- also into page 0. Two
+    // absorbed accesses, two host SIGSEGVs. Skipping the call is what the
+    // console's writes amounted to: with no merger there is no world to aim a
+    // camera in.
+    if (world && world->GetCameraManager()) {
+        world->GetCameraManager()->ForceCameraShot(curShot, false);
+    }
+#else
     world->GetCameraManager()->ForceCameraShot(curShot, false);
+#endif
 }
 
 DataNode HamDirector::OnSelectCamera(DataArray *a) {

@@ -442,6 +442,24 @@ BaseSkeleton *FreestyleMoveRecorder::GetLiveSkeleton() {
 void FreestyleMoveRecorder::UpdateRecordingAttempt(
     const BaseSkeleton *skeleton, float f2
 ) {
+#ifdef HX_NATIVE
+    // Sibling of the MoveDir::PostUpdateFilters null-`this` class, reached one
+    // frame up rather than in this function. The `int` overload of GetScore
+    // leaves skeletonToScore null when the player index is negative AND
+    // GetLiveSkeleton() returns null (both are explicitly conditional), and the
+    // pointer overload then passes it straight here -- while guarding its OWN
+    // other use of it (`liveSkel != nullptr && liveSkel->IsTracked()`), which
+    // is the proof that it is nullable.
+    //
+    // `skeleton.Set(*skeleton)` copies out of the referent, so on the 360 the
+    // read lands in the mapped zeroed page 0 and records an all-zero frame; on
+    // the host, forming and reading through that reference is a SIGSEGV.
+    // Recording nothing is closer to retail's intent than recording zeros, and
+    // it is what happens anyway when there is no clip being recorded.
+    if (skeleton == nullptr) {
+        return;
+    }
+#endif
     if (mClipName != gNullStr) {
         mRecordingFrames[mRecordingFrameCount].skeleton.Set(*skeleton);
         mRecordingFrames[mRecordingFrameCount].mBeat = f2;
