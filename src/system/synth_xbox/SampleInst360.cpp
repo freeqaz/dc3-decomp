@@ -39,7 +39,7 @@ float SampleInst360::GetProgress() {
         pos = offset % len + voice->mStartSamp;
     }
     SynthSample360 *sample = (SynthSample360 *)mSample.Ptr();
-    return pos * 1000.0f / (sample->LengthMs() * sample->GetNumSamples());
+    return pos * 1000.0f / (sample->LengthMs() * sample->GetSampleRate());
 }
 
 void SampleInst360::StartImpl() { mVoice->Start(); }

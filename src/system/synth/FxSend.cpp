@@ -58,7 +58,7 @@ BEGIN_COPYS(FxSend)
     COPY_SUPERCLASS(Hmx::Object)
     CREATE_COPY(FxSend)
     BEGIN_COPYING_MEMBERS
-        mNextSend.SetObj(c->mNextSend);
+        mNextSend = c->mNextSend.Ptr();
         COPY_MEMBER(mStage)
         COPY_MEMBER(mWetGain)
         COPY_MEMBER(mDryGain)
