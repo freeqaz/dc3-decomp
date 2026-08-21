@@ -34,9 +34,37 @@ public:
     virtual void Poll(float) = 0;
 
 #ifdef HX_NATIVE
+    /** Monotonic per-Task identity, handed out at construction and never
+     *  reused. An address alone cannot answer "is THIS task still alive":
+     *  free a Task, allocate another of the same size, and the allocator
+     *  hands back the same block, at which point an address-keyed answer is
+     *  `true` again for a pointer that is stale. Capture the serial while the
+     *  pointer is known good, then ask IsLive(ptr, serial). */
+    typedef unsigned long long Serial;
+    Serial TaskSerial() const { return mTaskSerial; }
+
+    /** ABA-UNSOUND. Answers "is a task alive at this address", not "is THIS
+     *  task alive". Kept for tests and for the "was it destroyed at all"
+     *  question, where reuse is not in play. Never gate a `delete`, a `Poll`
+     *  or an enqueue on it -- use the two-argument form. */
     static bool IsLive(Task *t);
+    /** ABA-sound: true only if the task at `t` is the same one that was
+     *  handed serial `s`. */
+    static bool IsLive(Task *t, Serial s);
+    /** Serial of the task currently at `t`, or 0 if nothing lives there. */
+    static Serial SerialOf(Task *t);
+    /** Number of times a gating site was handed a pointer whose ADDRESS was
+     *  live but whose SERIAL had moved on -- i.e. the number of times the
+     *  address-keyed predicate would have waved a stale pointer through onto
+     *  a recycled, live task. Zero on a healthy run. */
+    static int AbaFalsePositives();
     /** Audit-only (DC3_REFRING_AUDIT=1): log where `t` was destroyed. */
     static void DescribeDeath(Task *t);
+
+private:
+    Serial mTaskSerial;
+
+public:
 #endif
     MEM_OVERLOAD(Task, 0x1A);
 };
@@ -105,9 +133,19 @@ public:
 class TaskTimeline {
 public:
     struct TaskInfo {
+#ifdef HX_NATIVE
+        TaskInfo(Task *t, float f)
+            : mTask(nullptr, t), mStartTime(f), mSerial(Task::SerialOf(t)) {}
+#else
         TaskInfo(Task *t, float f) : mTask(nullptr, t), mStartTime(f) {}
+#endif
         ObjPtr<Task> mTask;
         float mStartTime;
+#ifdef HX_NATIVE
+        /** Identity of the task this entry was created for, so liveness can be
+         *  asked without trusting the address. */
+        Task::Serial mSerial;
+#endif
     };
 
     TaskTimeline();
@@ -217,6 +255,11 @@ private:
     Timer mTime; // 0x50
     float mAVOffset; // 0x80
     std::vector<ObjPtr<Task> > unk84; // 0x84
+#ifdef HX_NATIVE
+    /** Parallel to unk84: the identity each queued task had when it was
+     *  queued. Native-only, so the PPC layout above is untouched. */
+    std::vector<Task::Serial> mQueuedSerials;
+#endif
 };
 
 extern TaskMgr TheTaskMgr;

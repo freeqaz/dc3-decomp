@@ -32,6 +32,7 @@
 #include "obj/Dir.h"
 #include "obj/Object.h"
 #include "obj/Task.h"
+#include "rndobj/Anim.h"
 
 namespace {
 
@@ -162,22 +163,24 @@ TEST_F(CascadeRefInvariantTest, QueuedTaskDestroyedByCascadeIsNullified) {
 }
 
 // ---------------------------------------------------------------------------
-// Adversarial: Task::IsLive() is address-keyed, so it is ABA-unsound.
+// The ABA hole, and the predicate that does not have it.
 //
-// LiveTasks() is an unordered_set<Task*> populated in Task::Task and erased in
-// Task::~Task. It answers "is a Task alive at this ADDRESS", not "is THIS task
-// alive".  Free a Task and allocate another of the same size and the allocator
-// hands back the same block -- at which point IsLive(stalePointer) is true
-// again and TaskMgr::Poll's guard waves the stale entry through to
-// `delete unk84[i].Ptr()`, destroying a live, in-use Task.
+// LiveTasks() is keyed on the ADDRESS, because a stale pointer is all a caller
+// can offer. The one-argument Task::IsLive() therefore answers "is a Task alive
+// at this address", not "is THIS task alive": free a Task, allocate another of
+// the same size, and the allocator hands back the same block -- at which point
+// IsLive(stalePointer) is true again, and any gate built on it waves the stale
+// pointer through onto a DIFFERENT, live task.
 //
-// This is not currently reachable: with ~Object nullifying ref rings during a
-// cascade, no dangling pointer survives to reach Poll(). The guard is defence
-// in depth and this test records that its predicate cannot carry the load on
-// its own -- so nobody generalises the pattern to a new site believing it can.
+// The fix is not a second registry (that would inherit the same hole). It is to
+// stop keying identity on the address at all: every Task gets a monotonic
+// serial at construction, and the ABA-sound predicate compares the serial the
+// caller captured while the pointer was known good.
 //
-// Skips rather than fails if the allocator does not reuse the block; the claim
-// is "reuse defeats the predicate", not "reuse always happens".
+// This test keeps the unsoundness of the one-argument form as its own NEGATIVE
+// CONTROL -- if the address were not reused, the sound form passing would prove
+// nothing -- and skips (rather than passes vacuously) when the allocator
+// declines to reuse.
 // ---------------------------------------------------------------------------
 namespace {
 class ProbeTask : public Task {
@@ -186,32 +189,87 @@ public:
 };
 } // namespace
 
-TEST_F(CascadeRefInvariantTest, IsLiveIsAddressKeyedAndThereforeABAUnsound) {
+TEST_F(CascadeRefInvariantTest, TaskSerialIsABASoundWhereTheAddressIsNot) {
     Task *first = new ProbeTask();
     Task *staleAddress = first;
+    const Task::Serial staleSerial = first->TaskSerial();
     ASSERT_TRUE(Task::IsLive(first));
+    ASSERT_TRUE(Task::IsLive(first, staleSerial));
 
     delete first;
     ASSERT_FALSE(Task::IsLive(staleAddress))
         << "erase-on-destroy is the whole basis of the predicate";
+    ASSERT_FALSE(Task::IsLive(staleAddress, staleSerial));
 
     Task *second = new ProbeTask();
     if (second != staleAddress) {
         delete second;
         GTEST_SKIP() << "allocator did not reuse the block; ABA not observable "
-                        "in this run (the unsoundness is unchanged)";
+                        "in this run (neither claim is weakened)";
     }
 
-    // Same address, different object. The predicate cannot tell them apart.
-    EXPECT_TRUE(Task::IsLive(staleAddress));
-    EXPECT_EQ(second, staleAddress)
-        << "ABA CONFIRMED: a stale Task* now reports live because a new Task "
-           "was allocated at the same address. TaskMgr::Poll's guard would "
-           "delete the NEW task through the OLD pointer. Any future use of "
-           "this predicate as a liveness oracle needs a generation counter, "
-           "not an address set.";
+    // NEGATIVE CONTROL: reuse really did happen, and the address-keyed form is
+    // fooled by it. Without this assertion the next one is vacuous.
+    EXPECT_TRUE(Task::IsLive(staleAddress))
+        << "ABA not actually exercised -- the address-keyed predicate should be "
+           "reporting the RECYCLED task as live for the stale pointer";
+    ASSERT_NE(second->TaskSerial(), staleSerial)
+        << "serials must never be reused";
+
+    // THE CLAIM: the serial-keyed form tells the two apart.
+    EXPECT_FALSE(Task::IsLive(staleAddress, staleSerial))
+        << "ABA: a stale Task* was accepted because a new Task landed at the "
+           "same address. A gate built on this would delete/poll the NEW task "
+           "through the OLD pointer.";
+    EXPECT_TRUE(Task::IsLive(second, second->TaskSerial()))
+        << "the sound predicate must still accept a genuinely live task";
 
     delete second;
+}
+
+// ---------------------------------------------------------------------------
+// DeathWatch: the mechanism for "the callback I just made destroyed me".
+//
+// An ObjPtr protects the REFERENT's holders. Nothing protects the `this` of a
+// frame already on the stack when a DTA/message callback deletes that object --
+// which is what FlowAnimate::OnAnimEvent does to the AnimTask whose Poll() sent
+// it the event. DeathWatch is a stack flag ~Object trips.
+//
+// Unlike an address-keyed liveness registry it compares no addresses, so it has
+// no ABA hole at all.
+// ---------------------------------------------------------------------------
+TEST_F(CascadeRefInvariantTest, DeathWatchNoticesDestructionAndNestsCorrectly) {
+    Hmx::Object *obj = Hmx::Object::New<Hmx::Object>();
+    {
+        Hmx::DeathWatch outer(obj);
+        EXPECT_FALSE(outer.Dead());
+        {
+            Hmx::DeathWatch inner(obj);
+            EXPECT_FALSE(inner.Dead());
+        }
+        // Inner unwound without tripping; the object is still fine and `outer`
+        // must still be armed -- i.e. ~DeathWatch restored the chain head.
+        EXPECT_FALSE(outer.Dead());
+        delete obj;
+        EXPECT_TRUE(outer.Dead())
+            << "~Object failed to trip an armed DeathWatch -- every guard built "
+               "on it is now a silent no-op";
+    }
+    // Leaving the scope must not write back into the freed block. If ~DeathWatch
+    // restored obj->mDeathWatch here, ASAN/poisoning would flag it.
+}
+
+TEST_F(CascadeRefInvariantTest, DeathWatchTripsEveryFrameInTheChain) {
+    Hmx::Object *obj = Hmx::Object::New<Hmx::Object>();
+    Hmx::DeathWatch *outer = new Hmx::DeathWatch(obj);
+    Hmx::DeathWatch *inner = new Hmx::DeathWatch(obj);
+    delete obj;
+    EXPECT_TRUE(inner->Dead());
+    EXPECT_TRUE(outer->Dead())
+        << "only the innermost watch was tripped; an outer frame would resume "
+           "on freed memory";
+    delete inner;
+    delete outer;
 }
 
 // ---------------------------------------------------------------------------
@@ -260,4 +318,91 @@ TEST_F(CascadeRefInvariantTest, QueueTaskDeleteRefusesAnAlreadyDestroyedTask) {
     EXPECT_EQ(TaskMgr::DanglingQueuedTasksSkipped(), skippedBefore)
         << "Poll's dangling-task guard fired, meaning something dangling still "
            "reached the queue despite the entry-point check.";
+}
+
+// ---------------------------------------------------------------------------
+// THE REGRESSION GATE for the ref-loss thread left open on 2026-08-20.
+//
+// That lane recorded "AnimTask::mBlendTask is stale and we do not know why" as
+// its highest-value open item, on the theory that a ref-loss mechanism was
+// loose. Instrumentation (DC3_REFRING_AUDIT=1) refuted it: across 12/12
+// boot->gameplay runs, ZERO refs were lost from a ring and ZERO Replace calls
+// declined -- while QueueTaskDelete was still handed a dead task every time.
+//
+// The real shape, from the paired backtraces:
+//
+//     AnimTask::Poll  -> mListener->Handle("looped"/"ended")
+//                     -> FlowAnimate::OnAnimEvent
+//                     -> delete mAnimTask          <-- deletes the POLLING task
+//     ...and AnimTask::Poll then keeps running on the freed block, ending in
+//        TheTaskMgr.QueueTaskDelete(this).
+//
+// `this`, not mBlendTask. A listener, not a cascade. This test reproduces it in
+// one deterministic call with no dir, no cascade and no timing.
+// ---------------------------------------------------------------------------
+namespace {
+
+// RndAnimatable's constructor is protected; the concrete type is irrelevant.
+class ProbeAnimatable : public RndAnimatable {
+public:
+    ProbeAnimatable() {}
+};
+
+// The FlowAnimate shape, reduced: a listener whose handler deletes the very
+// task that is calling it.
+class TaskKillingListener : public Hmx::Object {
+public:
+    Task *mTask;
+    bool mHandled;
+    TaskKillingListener() : mTask(nullptr), mHandled(false) {}
+    DataNode Handle(DataArray *, bool) override {
+        mHandled = true;
+        if (mTask) {
+            Task *doomed = mTask;
+            mTask = nullptr;
+            delete doomed; // exactly what FlowAnimate::OnAnimEvent does
+        }
+        return DataNode(0);
+    }
+};
+
+} // namespace
+
+TEST_F(CascadeRefInvariantTest, AnimTaskPollSurvivesAListenerThatDeletesIt) {
+    TheTaskMgr.Poll(); // drain anything already queued
+
+    ProbeAnimatable *anim = new ProbeAnimatable();
+    TaskKillingListener *listener = new TaskKillingListener();
+
+    // Non-looping, no blend, so one Poll well past the end reaches the
+    // "ended" notification and then the QueueTaskDelete(this) tail.
+    AnimTask *task = new AnimTask(
+        anim, 0.0f, 1.0f, 30.0f, false, 0.0f, listener, kEaseLinear, 0.0f, false
+    );
+    listener->mTask = task;
+
+    const int refusedBefore = TaskMgr::DeadTasksRefused();
+    const int abaBefore = Task::AbaFalsePositives();
+
+    task->Poll(100.0f);
+
+    // CONTROLS. Without these the expectation below can pass vacuously -- if
+    // the listener never ran, or never deleted anything, there was no bug to
+    // survive in the first place.
+    ASSERT_TRUE(listener->mHandled)
+        << "vacuous: AnimTask::Poll never notified the listener, so the "
+           "delete-under-us path was not exercised at all";
+    ASSERT_FALSE(Task::IsLive(task))
+        << "vacuous: the listener did not actually destroy the task";
+
+    EXPECT_EQ(TaskMgr::DeadTasksRefused(), refusedBefore)
+        << "AnimTask::Poll kept running on a destroyed `this` and handed the "
+           "corpse to TheTaskMgr.QueueTaskDelete. Every member access between "
+           "the listener callback and that call was a use-after-free.";
+    EXPECT_EQ(Task::AbaFalsePositives(), abaBefore)
+        << "a stale Task pointer reached a gate that only its address could "
+           "vouch for";
+
+    delete listener;
+    delete anim;
 }
