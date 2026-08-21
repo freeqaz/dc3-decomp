@@ -213,10 +213,13 @@ the only defect:
   `UsbMidiGuitar`→`os\UsbMidiGuitar.h`). Real and actionable, but each is a
   header-layout change. `MultiMesh`'s is **PCH-pinned**: `PoolAlloc.h` is in
   `decomp_pch.h`, so no per-TU include can change its spelling.
-* **`??_B` vs `?$Sn@` local-static guard spelling, 5 rows ≈2,950 B.** The target
+* ~~**`??_B` vs `?$Sn@` local-static guard spelling, 5 rows ≈2,950 B.** The target
   emits a bit-packed guard (`??_B<scope>@<fn>@5<bit>@`); we emit a per-static
   `unsigned int` guard (`?$Sn@<scope>@<fn>@4IA`). No source lever found —
-  probable compiler-mode floor.
+  probable compiler-mode floor.~~
+  **FIXED 2026-08-21. All five are at a zero-mismatch 100 and the "compiler-mode
+  floor" reading was wrong on both halves** — see
+  [the guard-name section below](#the-b-vs-s-guard-name-was-never-the-defect).
 * **`rijndael_test`, 1,608 B.** `?key192@…@4QBEB` (const `unsigned char[]`) vs a
   const `unsigned int[]` at `820c4fe0` — read-only COMDAT data fold, benign.
 * **`ThreeDSound::Load`, 800 B.** Config artifact, above.
@@ -224,13 +227,102 @@ the only defect:
   image and the target's is a known fold winner (`DrawHighlightMat` ≡
   `Sound::Sample` @8261d060; `~HamLabel` @82517e00). Probable folds the alias
   map does not cover because our spelling is not a target symbol.
-* **`NgPostProc::CheckHueConverge`, 180 B — REAL, unresolved.** The target calls
+* ~~**`NgPostProc::CheckHueConverge`, 180 B — REAL, unresolved.** The target calls
   the 75-member `merged_Returns1` group at `82E2AB00`, i.e. a predicate whose
   body is `li r3,1; blr`. Our `RndPostProc::ColorXfmEnabled()` has a real body,
   and the target's own `?ColorXfmEnabled@RndPostProc@@QBA_NXZ` sits separately at
   `8266b0a8`. So the target's predicate is a different, trivially-true one — and
   none of the 75 fold members is a `PostProc` method, so its name is not
-  recoverable from the map.
+  recoverable from the map.~~
+  **RETIRED 2026-08-21 — it is a fold, and the entry was reading the wrong
+  callee.** `reloc_name_gate.py` resolves the charged pair as
+  `?IsLocal@LocalUser@@UBA_NXZ` (target) vs **`?DoHueConverge@RndPostProc@@QBA_NXZ`**
+  (ours) — not `ColorXfmEnabled` — and both sit at `82e2ab00`, so the map itself
+  says they are the same code. `DoHueConverge` *is* in the 75-member group; the
+  entry above searched the group for a `PostProc` method and concluded there was
+  none, which was a search over the wrong name. See the ICF-fold section below.
+
+## The `??_B` vs `$S` guard name was never the defect
+
+**2026-08-21.** The five rows struck out above closed without anything
+compiler-mode changing. Two facts, both measured against this build's own
+`cl.exe` at `/O1 /Oi /EHsc /TP`:
+
+1. **What picks the name.** MSVC emits `??_B<scope>@<fn>@5<scope>@` for a
+   function-local static inside a **COMDAT** function (inline member, in-class
+   member, function template) and `?$S<n>@<scope>@<fn>@4IA` — `n` a per-TU
+   counter — inside an ordinary out-of-line function. A probe TU with six
+   ordinary shapes gave `$S` six times; one with five COMDAT shapes gave `??_B`
+   five times. Nothing about bit-packing distinguishes them: both forms are one
+   guard word with one bit per static.
+2. **Why we still lost.** `scripts/obj_guard_patcher.py` already renames `$S` to
+   `??_B` to match the original. It keys on the **scope ordinal**, so while ours
+   disagreed it declined to fire — silently, which is why the name looked like
+   the primary defect instead of the shadow of one.
+
+The actual defect is a **third `MILO_ASSERT` spelling**. `MILO_ASSERT`'s
+`do { if (!c) { … } } while (0)` opens 5 lexical scopes and `MILO_ASSERT_EXPR`
+opens 0; these functions need one that opens 3, i.e. the same body with the
+`do`/`while` peeled off. That is now `MILO_ASSERT_IF` in `os/Debug.h`, carrying
+the same "do not use at a new call site unless the target's scope index demands
+it" warning as `MILO_ASSERT_EXPR`, plus a dangling-`else` hazard note.
+
+Two of the five needed one further fact: after the assert fix their ordinal was
+still off by exactly the cost of an `else` (2), **in opposite directions**, which
+identifies which side of the test the original put the token branch on.
+`SongSelectPlaylistProvider::Text` is `if (IsCustom() && IsEmpty())` with the
+static in the `if`; `CampaignSongProvider::Text` is the mirror image. Both
+rewrites are De Morgan duals of what we had and both took the row to 100.
+
+**The general lesson:** when a symbol *name* differs and a patcher exists that is
+supposed to reconcile it, check whether the patcher fired before concluding the
+name is a floor. A patcher that declines silently looks exactly like a compiler
+that cannot be steered.
+
+## Every "tier 1" row of the 2026-08-21 census is an ICF fold
+
+The whole-binary census ranked six rows as "the name is the only defect". Run
+through `reloc_name_gate.py`, **five of the six resolve both names to the same
+address in `ham_xbox_r.map`** — i.e. the linker itself says they are one function:
+
+| row | pair | address |
+|---|---|---|
+| `SaveLoadManager::Poll` / `::SetState` | `GetNumRotFeatures@SkeletonPCAFeatureConverter` ≡ `GetGlobalOptionsSize@ProfileMgr` | `829fb500` |
+| `SampleInst360::SampleInst360` | `DrawHighlightMat@RndShaderMgr` ≡ `GetData@SynthSample360` | `8261d060` |
+| `__introsort_loop<CuePoint>` | `__median<AllocInfo*>` ≡ `__median<CuePoint>` | `8254e800` |
+| `NgPostProc::CheckHueConverge` | `IsLocal@LocalUser` ≡ `DoHueConverge@RndPostProc` | `82e2ab00` |
+| `vector<Label>::push_back` | `_Copy_Construct<pair<const String,unsigned int>>` ≡ `_Copy_Construct<Label>` | `8273b9e8` |
+
+The sixth, `SaveLoadManager::Poll`'s other pair, is `MakeString<CamShotFrame::BlendEaseMode>`
+(@`82610090`) against our `MakeString<SaveLoadMode>`, which is **absent from the
+map** — the fold-loser signature. Every `MakeString<W4 enum>` instantiation has
+an identical body, so there is only ever one survivor.
+
+**None of these is a source edit**; making the source name the survivor would
+mean writing a call the program does not make. The gap is that
+`build/373307D9/icf_aliases.map` does not admit these groups, and
+`gen_icf_alias_map.py` explicitly forbids hand-adding one — the input has to be
+regenerated through decomp-synth's validated
+`tools/il_witness/build_icf_alias_inputs.py`.
+
+## Two families that look like bugs and are register permutation
+
+Worth knowing before re-mining this population, because both are visually loud:
+
+* **RTTI operands to `__RTDynamicCast`.** `UIManager::GotoFirstScreen` shows
+  `??_R0?AVUIScreen@@@8` and `??_R0?AVObject@Hmx@@@8` apparently swapped across
+  four instructions — but the *final* register→value mapping is identical
+  (`r5` = SrcType, `r6` = TargetType on both sides). Only which of `r10`/`r11`
+  stages which `lis` differs. Same story on `GatherObjectsFromGroup<RndMesh>` and
+  `GatherObjectsFromDir<RndMesh>`.
+* **`__real@` float constants.** `DirectionGestureFilterSingleUser::Draw` looks
+  like a 0.1/0.2 swap; it is `f28`/`f29` holding the two constants the other way
+  round, with `f1` and `f2` receiving the correct values at the call.
+
+`name_check` charges these only because the relocation happens to sit on the
+permuted instruction. Canonical normalization forgives register permutation, so
+the row's `match_percent_normalized` is unaffected — which makes a graded-fuzzy
+row with only `__real@`/`??_R0` pairs a weak lead, not a finding.
 
 ## The standing check
 

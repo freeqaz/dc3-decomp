@@ -38,6 +38,8 @@ cost a 2,500 B row.
 | `while` / `for` / `do` (+ its braced body) | 2 |
 | `switch (x) { ... }` (+1 per braced case) | 2 |
 | `MILO_ASSERT(c, line)` | 5 |
+| `MILO_ASSERT_IF(c, line)` | 3 |
+| `MILO_ASSERT_EXPR(c, line)` | 0 |
 | ternary, `&&`, `||` | 0 |
 
 `MILO_NOTIFY_ONCE` / `MILO_WARN_ONCE` cost 1 — the macro body is a bare block,
@@ -58,9 +60,20 @@ the index.** Verified to the digit on all five `_dw` in
 `WorldCrowd::DrawShowing` (42, 54).
 
 `MILO_ASSERT`'s 5 is just the table applied to its expansion: `do`(1) +
-block(1) + `if`(2) + block(1). A static declared *inside* a construct's braced
-body reads the same number as one declared just after the whole construct — the
-counter only ever goes up.
+block(1) + `if`(2) + block(1). **The image contains three assert spellings, not
+two** (2026-08-21): peeling the `do`/`while` off leaves `if`(2) + block(1) = 3,
+which is `MILO_ASSERT_IF`, and it is what five functions require --
+`Automator::FillButtonMsg`, `CampaignSongProvider::Text`,
+`CampaignMqCrewProvider::Text`, `CampaignMqCrewProvider::UpdateList` and
+`SongSelectPlaylistProvider::Text`. On every one of those the ordinal fix also
+flipped the static's guard variable from `?$S<n>@…@4IA` to the target's
+`??_B<scope>@<fn>@5<scope>@`, because `scripts/obj_guard_patcher.py` performs that
+rename but keys on the scope -- so a guard-name mismatch on an otherwise-perfect
+row is a **symptom of a scope-ordinal mismatch**, and this table is where to look
+first. It is not a compiler-mode floor, which is what it had been filed as.
+
+A static declared *inside* a construct's braced body reads the same number as one
+declared just after the whole construct — the counter only ever goes up.
 
 Further rows, all measured against the shipping cl.exe on 2026-08-19:
 
