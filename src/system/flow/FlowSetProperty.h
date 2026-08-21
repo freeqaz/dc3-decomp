@@ -1,4 +1,3 @@
-#line 1 "FlowSetProperty.cpp"
 #pragma once
 #include "flow\FlowNode.h"
 #include "flow\FlowPtr.h"
@@ -9,40 +8,14 @@
 #include "obj/Task.h"
 #include "utl\PoolAlloc.h"
 
-class PropertyTask : public Task {
-public:
-    PropertyTask(
-        Hmx::Object *,
-        DataNode &,
-        DataNode &,
-        TaskUnits,
-        float,
-        EaseType,
-        float,
-        bool,
-        Hmx::Object *
-    );
-    virtual ~PropertyTask();
-    OBJ_CLASSNAME(PropertyTask)
-    virtual bool Replace(ObjRef *, Hmx::Object *);
-    virtual void Poll(float);
-
-    POOL_OVERLOAD(PropertyTask, 0x17)
-
-protected:
-    void SetProperty(DataNode &);
-
-    ObjOwnerPtr<Hmx::Object> mTarget; // 0x2C
-    DataNode mProperty; // 0x40
-    DataNode mValue; // 0x48
-    DataNode mStartValue; // 0x50
-    float mDuration; // 0x58
-    float mEasePower; // 0x5C
-    bool mIsColorInterp; // 0x60
-    ObjPtr<Hmx::Object> mListener; // 0x64
-    int mStartValueType; // 0x78 - cached mStartValue.Type() at ctor time (before atoi conversion)
-    EaseFunc *mEaseFunc; // 0x7C
-};
+// PropertyTask is declared in FlowSetProperty.cpp, not here.  Every one of its
+// symbols in ham_xbox_r.map -- ??3PropertyTask, ??_GPropertyTask,
+// ?StaticClassName@PropertyTask, its vtable and its whole RTTI group -- is
+// contributed by flow:FlowSetProperty.obj and by nothing else, and the __FILE__
+// baked into ??3PropertyTask / ??_GPropertyTask / the ctor is the bare
+// 'FlowSetProperty.cpp'.  A class declared in a header reached through /I gets
+// the absolute e:\lazer_build_gmc1\... form instead, so the original declared it
+// inside the .cpp.  Nothing outside FlowSetProperty.cpp uses the type.
 
 class FlowSetProperty : public FlowNode, public PropertyEventListener {
 protected:
