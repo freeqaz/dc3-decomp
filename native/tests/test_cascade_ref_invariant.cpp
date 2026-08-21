@@ -33,6 +33,8 @@
 #include "obj/Object.h"
 #include "obj/Task.h"
 #include "rndobj/Anim.h"
+#include "rndobj/Tex.h"
+#include <webgpu/webgpu_cpp.h>
 
 namespace {
 
@@ -405,4 +407,55 @@ TEST_F(CascadeRefInvariantTest, AnimTaskPollSurvivesAListenerThatDeletesIt) {
 
     delete listener;
     delete anim;
+}
+
+// ---------------------------------------------------------------------------
+// The RAW-HOLDER class, one confirmed live instance.
+//
+// The ring only protects ObjPtr-family holders. The native renderer keeps GPU
+// resources in a side table keyed on the RndTex ADDRESS (sTexGpuData) -- raw,
+// so unreachable by any ring walk, and the destructor is the only hook that can
+// keep it honest. RndMesh has called CleanupGpuMesh from ~RndMesh since the
+// cache was written. RndTex carried this instead:
+//
+//     // Note: RndTex destructor doesn't call us directly yet.
+//     // For Tier 1, leaked GPU textures are acceptable (cleaned up at shutdown).
+//     // TODO: Hook into RndTex destructor or add ref-counting.
+//
+// The leak is the advertised cost and the lesser one. The real cost is that the
+// next RndTex the allocator places at that address inherits the dead entry with
+// uploaded=true and renders the PREVIOUS texture's image -- silently, and
+// invisible to every metric this project has. This test asserts the outcome,
+// not the bookkeeping, and uses address reuse as its own non-vacuity control.
+// ---------------------------------------------------------------------------
+extern wgpu::TextureView GetGpuTexView(RndTex *tex);
+
+TEST_F(CascadeRefInvariantTest, ARecycledRndTexAddressDoesNotInheritGpuData) {
+    RndTex *first = Hmx::Object::New<RndTex>();
+    first->SetBitmap(4, 4, 32, RndTex::kRegular, false, nullptr);
+    first->PresyncBitmap();
+
+    if (!GetGpuTexView(first)) {
+        delete first;
+        GTEST_SKIP() << "no GPU entry was created for this RndTex in this "
+                        "configuration, so there is nothing to inherit and the "
+                        "test would be vacuous";
+    }
+
+    RndTex *staleAddress = first;
+    delete first;
+
+    RndTex *second = Hmx::Object::New<RndTex>();
+    if (second != staleAddress) {
+        delete second;
+        GTEST_SKIP() << "allocator did not reuse the block; the stale-entry "
+                        "hazard is unchanged, just not observable this run";
+    }
+
+    EXPECT_FALSE(GetGpuTexView(second))
+        << "a brand-new RndTex at a recycled address inherited the destroyed "
+           "texture's GPU entry. Everything drawn with it renders the previous "
+           "texture's image, and ~RndTex is the only place that can prevent it.";
+
+    delete second;
 }
