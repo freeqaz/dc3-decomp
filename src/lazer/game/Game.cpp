@@ -881,6 +881,36 @@ bool Game::IsLoaded() {
     if (mLoadState == 3) {
         return true;
     } else {
+#ifdef HX_NATIVE
+        // Sibling of the MoveDir::PostUpdateFilters null-`this` class. The next
+        // line tests `mMaster` for null -- which is what proves it can BE null
+        // here -- and then the mLoadState==0 arm below calls
+        // mMaster->IsLoaded() unconditionally, and the mLoadState==2 arm calls
+        // mMaster->GetAudio(). Both are reached with mMaster still null,
+        // because the `(int)mMaster &&` test short-circuits to *false* rather
+        // than returning.
+        //
+        // Unlike the other members of this class, retail would not have quietly
+        // absorbed this one in the console's zeroed page 0: HamMaster::IsLoaded
+        // is virtual (HamMaster.h:41), so a null `this` loads a null vptr out
+        // of page 0 and branches to address 0. So this arm is genuinely
+        // unreachable on retail rather than harmlessly reached -- the guard is
+        // only about not turning "impossible" into a host SIGSEGV.
+        //
+        // "Not loaded yet" is the honest answer with no master to ask, and it
+        // is what the caller already handles; the alternative (report loaded)
+        // would hand a null master to everything downstream. One-shot log so a
+        // genuine never-arrives becomes a diagnosable stall rather than a
+        // silent one -- and so it cannot spam once per frame.
+        if (!mMaster) {
+            static bool sWarnedNullMaster = false;
+            if (!sWarnedNullMaster) {
+                sWarnedNullMaster = true;
+                MILO_LOG("Game::IsLoaded() - mMaster is null; reporting not-loaded\n");
+            }
+            return false;
+        }
+#endif
         if ((int)mMaster && !mMaster->IsLoaded()) {
             return false;
         }
