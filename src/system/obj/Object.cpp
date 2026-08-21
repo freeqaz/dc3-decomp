@@ -252,10 +252,25 @@ Hmx::Object::Object()
     : mTypeProps(nullptr), mTypeDef(nullptr), mName(gNullStr), mDir(nullptr),
       mSinks(nullptr) {
     mRefs.DetachSelf();
+#ifdef HX_NATIVE
+    mDeathWatch = nullptr;
+#endif
 }
 
 Hmx::Object::~Object() {
     MILO_ASSERT_FMT(MainThread(), "Can't delete objects outside of the main thread");
+#ifdef HX_NATIVE
+    // Trip every DeathWatch before anything else in the teardown: a watcher is
+    // a frame of OUR OWN that is still on the stack, and it must learn we are
+    // gone even if something below re-enters. Unlink as we go so ~DeathWatch
+    // never writes back into this block.
+    for (Hmx::DeathWatch *w = mDeathWatch; w;) {
+        Hmx::DeathWatch *prev = w->mPrev;
+        w->mDead = true;
+        w = prev;
+    }
+    mDeathWatch = nullptr;
+#endif
     if (mTypeDef) {
         mTypeDef->Release();
         mTypeDef = nullptr;

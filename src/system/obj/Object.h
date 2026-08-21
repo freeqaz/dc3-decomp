@@ -1222,6 +1222,10 @@ typedef Hmx::Object *ObjectFunc(void);
 // Hmx::Object implementation
 namespace Hmx {
 
+#ifdef HX_NATIVE
+    class DeathWatch;
+#endif
+
     /**
      * @brief: The base class from which all major Objects used in-game build upon.
      * Original _objects description:
@@ -1231,6 +1235,7 @@ namespace Hmx {
     class Object : public ObjRefOwner {
 #ifdef HX_NATIVE
         friend class ObjRef;
+        friend class DeathWatch;
 #endif
         friend void ::MergeObjectsRecurse(ObjectDir *, ObjectDir *, MergeFilter &, bool);
     private:
@@ -1294,6 +1299,9 @@ namespace Hmx {
 #ifdef HX_NATIVE
         /** True after FlushDeferredFrees — rings may have dead entries. */
         static bool sRingsDirty;
+        /** Head of the intrusive chain of DeathWatch guards currently watching
+         *  this object. Null in the overwhelmingly common case. */
+        DeathWatch *mDeathWatch;
 #endif
     protected:
 
@@ -1609,7 +1617,66 @@ namespace Hmx {
         }
     };
 
+#ifdef HX_NATIVE
+    /** Detect "the callback I just made destroyed me".
+     *
+     *  A DTA/message handler reached from an object's own method can `delete`
+     *  that very object -- FlowAnimate::OnAnimEvent("looped") does exactly
+     *  that to the AnimTask whose Poll() called it. Every member access after
+     *  the callback returns is then a use-after-free, and the engine has no
+     *  general way to notice: an ObjPtr protects the REFERENT's holders, not
+     *  the `this` pointer of a frame already on the stack.
+     *
+     *  DeathWatch is that notice. It links a stack-local flag into the
+     *  object; ~Object trips every flag in the chain. Checking it is a load
+     *  and a branch -- no hash, no allocation -- and unlike an address-keyed
+     *  liveness registry it cannot be fooled by the allocator handing the
+     *  same block to a new object (there is no address comparison at all).
+     *
+     *  Use the HX_DEATH_WATCH / HX_RETURN_IF_DELETED macros so the same
+     *  source compiles to nothing on PPC.
+     */
+    class DeathWatch {
+    public:
+        DeathWatch(Object *obj)
+            : mObj(obj), mPrev(obj->mDeathWatch), mDead(false) {
+            obj->mDeathWatch = this;
+        }
+        ~DeathWatch() {
+            // If the object is gone, mObj is freed memory -- do not touch it.
+            // ~Object already unlinked the whole chain.
+            if (!mDead)
+                mObj->mDeathWatch = mPrev;
+        }
+        /** True once the watched object's ~Object has run. */
+        bool Dead() const { return mDead; }
+
+    private:
+        friend class Object;
+        DeathWatch(const DeathWatch &);
+        DeathWatch &operator=(const DeathWatch &);
+        Object *mObj;
+        DeathWatch *mPrev;
+        bool mDead;
+    };
+#endif
+
 }
+
+#ifdef HX_NATIVE
+/** Arm a death watch on `obj` for the rest of the enclosing scope. */
+#define HX_DEATH_WATCH(obj) Hmx::DeathWatch _hxDeathWatch(obj)
+/** Bail out if the call we just made destroyed us. Compiles away on PPC. */
+#define HX_RETURN_IF_DELETED()                                                           \
+    do {                                                                                 \
+        if (_hxDeathWatch.Dead())                                                        \
+            return;                                                                      \
+    } while (0)
+#else
+// PPC keeps the original control flow exactly: both macros vanish.
+#define HX_DEATH_WATCH(obj) ((void)0)
+#define HX_RETURN_IF_DELETED() ((void)0)
+#endif
 
 extern bool gLoadingProxyFromDisk;
 extern bool gMiloTool;
