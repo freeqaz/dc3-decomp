@@ -758,6 +758,7 @@ def sweep_functions(
     reloc_config: Optional[str] = None,
     include_patterns: bool = False,
     jobs: int = 1,
+    allow_blind_patterns: bool = False,
 ) -> Dict[str, Any]:
     """Batch-diff many FUNCTION symbols in one objdiff process (`--batch`, JSONL).
 
@@ -782,7 +783,11 @@ def sweep_functions(
     project = str(Path(project).resolve())
 
     ruler = reloc_config or _project_reloc_ruler(project)
-    if include_patterns and ruler in _PATTERN_BLIND_RULERS:
+    # The escape hatch exists for ONE purpose: measuring the starvation itself.
+    # A guard whose premise has never been checked is an assertion; running the
+    # blind ruler deliberately, and labelling the result a negative control, is
+    # what turns it into a fact. It must never be used to source a population.
+    if include_patterns and ruler in _PATTERN_BLIND_RULERS and not allow_blind_patterns:
         raise RelocBlindPatternError(
             f"REFUSING a pattern sweep under functionRelocDiffs={ruler}: the "
             f"callee/prologue/MakeString/scope detectors all key off "

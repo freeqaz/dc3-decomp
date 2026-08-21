@@ -97,7 +97,9 @@ def report_universe(project_dir: Path) -> dict[str, dict]:
                 continue
             out[name] = {
                 "unit": u,
-                "size": f.get("size") or 0,
+                # report.json serialises `size` as a STRING. Multiplying it by
+                # a float raises; comparing it to an int silently compares wrong.
+                "size": int(f.get("size") or 0),
                 "norm": f.get("match_percent_normalized"),
                 "fuzzy": f.get("fuzzy_match_percent"),
             }
@@ -143,6 +145,18 @@ def main() -> int:
                     help="do not build/verify the tree first. The scan is then "
                          "about a moment, and is recorded with tree_verified=0.")
     ap.add_argument("--notes", default=None)
+    ap.add_argument("--negative-control", action="store_true",
+                    help="run the pattern detectors under the BLIND ruler on "
+                         "purpose, to measure which of them it starves. The "
+                         "output is labelled a negative control and --apply is "
+                         "refused. This is how the guard stays a fact.")
+    ap.add_argument("--no-patterns", dest="patterns", action="store_false",
+                    help="percentages only, no detector payload. This is the "
+                         "ONLY legitimate use of --ruler none here: the blind "
+                         "ruler's PERCENTAGE is meaningful (it forgives every "
+                         "relocation name, so the gap to the graded score is "
+                         "exactly what the names cost), while its PATTERNS are "
+                         "starved. See pattern_worklist.py.")
     args = ap.parse_args()
 
     project_dir = Path(args.project_dir).resolve()
@@ -178,8 +192,9 @@ def main() -> int:
 
     try:
         res = symbol_sweep.sweep_functions(
-            project_dir, symbols, include_patterns=True,
+            project_dir, symbols, include_patterns=args.patterns,
             reloc_config=args.ruler, jobs=args.jobs, timeout=7200,
+            allow_blind_patterns=args.negative_control,
             scanner_name=f"pattern_census.{args.ruler}")
     except symbol_sweep.RelocBlindPatternError as e:
         print(f"\n{e}\n", file=sys.stderr)
@@ -212,7 +227,7 @@ def main() -> int:
             "symbol": sym,
             "unit": meta.get("unit") or r.get("unit"),
             "demangled": r.get("demangled"),
-            "size": meta.get("size") or r.get("target_size") or 0,
+            "size": int(meta.get("size") or r.get("target_size") or 0),
             # From report.json. NEVER from the batch row -- it is null there.
             "norm": norm,
             "fuzzy": r.get("fuzzy_match_percent"),
@@ -221,6 +236,10 @@ def main() -> int:
         })
 
     print()
+    if args.negative_control:
+        print("### NEGATIVE CONTROL: deliberately run under the blind ruler. "
+              "Every count below is what a starved detector reports, NOT a "
+              "property of the build. Compare against the name_check census.")
     print(f"# Pattern populations -- functionRelocDiffs={args.ruler}, "
           f"{res['objdiff_version']}")
     print(f"# denominator: {examined} functions examined of {universe} in "
@@ -257,6 +276,15 @@ def main() -> int:
                 fh.write(json.dumps(r) + "\n")
         print(f"\nwrote {len(rows_out)} rows -> {args.out}")
 
+    if args.apply and args.negative_control:
+        print("--apply refused for a negative control: its zeros are the "
+              "artefact being demonstrated, not a finding.", file=sys.stderr)
+        return 2
+    if args.apply and not args.patterns:
+        print("--apply refused with --no-patterns: a scan with no detector "
+              "payload would record every function as 'examined, no patterns', "
+              "which is indistinguishable from a clean build.", file=sys.stderr)
+        return 2
     if args.apply:
         if not args.db:
             print("--apply needs --db (the MAIN checkout's decomp.db; a worktree "
@@ -316,7 +344,86 @@ def write_scan(db_path, args, res, rows_out, uni, universe, examined,
     print(f"\nrecorded scan id={scan_id} ruler={args.ruler}: "
           f"{len(examined_rows)} examined rows, {len(pattern_rows)} pattern rows"
           + (f", {unmatched} symbols had no decomp.db row" if unmatched else ""))
+
+    if args.ruler == "name_check":
+        refresh_legacy_flags(conn, scan_id)
+    else:
+        print(f"  legacy has_* columns NOT refreshed: they are defined against "
+              f"the graded ruler, and this scan is `{args.ruler}`.")
     conn.close()
+
+
+#: The reloc-sensitive `has_*` columns and the pattern each one means.  These are
+#: kept -- not extended -- deliberately.  Existing queries across this repo read
+#: them, and leaving them holding a 2026-08-19 number measured under a VOCABULARY
+#: THAT NO LONGER EXISTS is worse than either updating them or dropping them.
+#: They are refreshed here, from the graded ruler, and stamped with the scan id
+#: so a reader can check provenance.  The four NEW 4.2.6 classes get no column:
+#: `function_patterns` carries them with their payload, which a boolean cannot.
+LEGACY_FLAGS = {
+    "has_linker_merged": "LINKER_MERGED",
+    "has_makestring_mismatch": "MAKESTRING_TEMPLATE_MISMATCH",
+    "has_scope_counter_mismatch": "SCOPE_COUNTER_MISMATCH",
+    "has_alloca_mismatch": "ALLOCA_MISMATCH",
+    "has_dynamic_cast_mismatch": "DYNAMIC_CAST_MISMATCH",
+    "has_address_relocation": "ADDRESS_RELOCATION_NOISE",
+    "has_anonymous_namespace_hash": "ANONYMOUS_NAMESPACE_HASH",
+    "has_static_guard_counter": "STATIC_GUARD_COUNTER",
+    # has_prologue_mismatch is NOT here -- see RETIRED_FLAGS.
+}
+
+#: RETIRED.  Measured whole-binary 2026-08-21 under BOTH name_check and all:
+#: PROLOGUE_MISMATCH and REGISTER_SAVE_HELPER_MISMATCH select the IDENTICAL 219
+#: functions -- set equality, zero rows on either side only, under both rulers.
+#: That is structural, not coincidental: detect_prologue_mismatch fires on a
+#: `__savegprlr_N`/`__savefpr_N` argument disagreement inside the first ten
+#: instructions, and every such site is also a register-save-helper callee
+#: divergence.  Two columns, one predicate.  `has_prologue_mismatch` keeps its
+#: name (it is the one with a documented meaning in
+#: docs/decomp/patterns/fixable-liveness.md and a live consumer in
+#: sync_objdiff's PRACTICALLY_UNFIXABLE set) and REGISTER_SAVE_HELPER_MISMATCH
+#: is left to `function_patterns`, where it costs nothing to carry.
+RETIRED_FLAGS = {"has_prologue_mismatch": "PROLOGUE_MISMATCH"}
+
+
+def refresh_legacy_flags(conn, scan_id: int) -> None:
+    """Re-derive the reloc-sensitive booleans from THIS scan, and stamp them.
+
+    Every column is set on every examined row -- 1 where the pattern fired, 0
+    where it did not -- so a 0 written here means "the graded ruler looked and
+    it is not there".  Rows the scan did not examine are left ALONE rather than
+    zeroed: overwriting an unmeasured row with a confident 0 is the entire
+    failure this exercise is about.
+    """
+    cols = {**LEGACY_FLAGS, **RETIRED_FLAGS}
+    print("\n  refreshing legacy has_* flags from this scan:")
+    for col, pattern in cols.items():
+        before = conn.execute(
+            f"SELECT COUNT(*) FROM functions WHERE {col} = 1").fetchone()[0]
+        conn.execute(f"""
+            UPDATE functions SET {col} = (
+                SELECT CASE WHEN EXISTS (
+                    SELECT 1 FROM function_patterns fp
+                    WHERE fp.scan_id = ? AND fp.function_id = functions.id
+                      AND fp.pattern = ?) THEN 1 ELSE 0 END)
+            WHERE id IN (SELECT function_id FROM pattern_scan_examined
+                         WHERE scan_id = ?)""", (scan_id, pattern, scan_id))
+        after = conn.execute(
+            f"SELECT COUNT(*) FROM functions WHERE {col} = 1").fetchone()[0]
+        tag = "  (RETIRED: co-extensive with REGISTER_SAVE_HELPER_MISMATCH)" \
+            if col in RETIRED_FLAGS else ""
+        print(f"    {col:34s} {before:6d} -> {after:6d}{tag}")
+    conn.execute(
+        "UPDATE functions SET pattern_flags_scan_id = ? "
+        "WHERE id IN (SELECT function_id FROM pattern_scan_examined "
+        "WHERE scan_id = ?)", (scan_id, scan_id))
+    unstamped = conn.execute(
+        "SELECT COUNT(*) FROM functions WHERE pattern_flags_scan_id IS NULL"
+    ).fetchone()[0]
+    conn.commit()
+    print(f"    stamped pattern_flags_scan_id = {scan_id}; {unstamped} rows "
+          f"remain NULL (never examined by any scan -- their has_* values are "
+          f"of unknown provenance and must not be read as measurements)")
 
 
 if __name__ == "__main__":

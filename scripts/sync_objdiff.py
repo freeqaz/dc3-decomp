@@ -269,7 +269,18 @@ def _extract_patterns_from_analysis(result: FunctionResult, data: dict) -> None:
     result.has_alloca_mismatch = "ALLOCA_MISMATCH" in pattern_types
     result.has_scope_counter_mismatch = "SCOPE_COUNTER_MISMATCH" in pattern_types
 
-    # Store all detected patterns as sorted list
+    # Store all detected patterns as sorted list.
+    #
+    # ⚠ THIS LIST IS RULER-SCOPED.  Under `functionRelocDiffs=none` -- this
+    # script's default and the project's canonical percentage ruler -- TEN of
+    # objdiff 4.2.6's 25 detectors are structurally unable to fire, measured
+    # whole-binary 2026-08-21: LINKER_MERGED, WRONG_CALLEE,
+    # TEMPLATE_INSTANTIATION_MISMATCH, REGISTER_SAVE_HELPER_MISMATCH,
+    # UNVERIFIABLE_CALLEE_NAME, PROLOGUE_MISMATCH, MAKESTRING_TEMPLATE_MISMATCH,
+    # SCOPE_COUNTER_MISMATCH, ALLOCA_MISMATCH, DYNAMIC_CAST_MISMATCH.  So an
+    # EMPTY `detected_patterns`, or one that lists only REGISTER_SWAP, is NOT
+    # evidence that nothing else is wrong.  `function_patterns` (schema v17)
+    # carries the reloc-visible view with its ruler recorded.
     result.detected_patterns = sorted(pattern_types)
 
     # Primary pattern: first match in priority order (most impactful first)
@@ -774,6 +785,26 @@ def main():
         "DEAD_STORE_ELIMINATION",
     }
 
+    # Symbols the latest reloc-VISIBLE pattern scan says carry a LikelyFixable
+    # callee divergence.  Empty when no such scan exists, in which case the
+    # auto-AT_LIMIT gate below behaves exactly as it did before -- absence of
+    # the scan must not silently become evidence of absence of the bug, so the
+    # count of what could not be checked is reported either way.
+    fixable_syms: set[str] = set()
+    try:
+        _c = sqlite3.connect(str(args.db))
+        fixable_syms = {
+            row[0] for row in _c.execute(
+                "SELECT symbol FROM v_function_patterns "
+                "WHERE ruler = 'name_check' AND pattern IN "
+                "('WRONG_CALLEE','TEMPLATE_INSTANTIATION_MISMATCH')")
+        }
+        _c.close()
+        stats["likely_fixable_known"] = len(fixable_syms)
+    except sqlite3.Error:
+        # Pre-v17 database, or no scan recorded yet.
+        stats["likely_fixable_known"] = -1
+
     pct_updates: list[tuple] = []
     enrich_updates: list[tuple] = []
     promotions: list[int] = []
@@ -859,10 +890,12 @@ def main():
             # write 0 for every row and wipe whatever
             # scripts/backfill_reloc_patterns.py established. See the docstring
             # on _run_single_batch.
+            # Order must match the UPDATE above, which deliberately no longer
+            # includes the nine reloc-sensitive columns.  The FunctionResult
+            # fields for those are still populated (the histogram and the
+            # AT_LIMIT logic read them); they are simply not written back.
             enrich_updates.append((
                 1 if r.has_bool_mask else 0,
-                1 if r.has_makestring_mismatch else 0,
-                1 if r.has_address_relocation else 0,
                 1 if r.has_boolean_negation else 0,
                 1 if r.has_float_precision else 0,
                 1 if r.has_fsel_ternary else 0,
@@ -872,13 +905,7 @@ def main():
                 1 if r.has_control_flow else 0,
                 1 if r.has_commutative_op_order else 0,
                 1 if r.has_offset_swap else 0,
-                1 if r.has_anonymous_namespace_hash else 0,
-                1 if r.has_static_guard_counter else 0,
-                1 if r.has_dynamic_cast_mismatch else 0,
                 1 if r.has_dead_store_elimination else 0,
-                1 if r.has_prologue_mismatch else 0,
-                1 if r.has_alloca_mismatch else 0,
-                1 if r.has_scope_counter_mismatch else 0,
                 detected_json,
                 r.primary_pattern,
                 reachable,
@@ -925,6 +952,7 @@ def main():
             # unfixable (register swaps, prologue mismatches, etc.)
             PRACTICALLY_UNFIXABLE = UNFIXABLE_PATTERNS | {
                 "REGISTER_SWAP", "PROLOGUE_MISMATCH",
+                "REGISTER_SAVE_HELPER_MISMATCH", "UNVERIFIABLE_CALLEE_NAME",
                 "STATIC_GUARD_COUNTER",
             }
             if (old_verdict is None
@@ -937,6 +965,22 @@ def main():
                       and r.detected_patterns
                       and set(r.detected_patterns).issubset(PRACTICALLY_UNFIXABLE)):
                     should_promote = True
+                # The subset test above is only as good as the list it reads,
+                # and `detected_patterns` comes from THIS script's `none` pass,
+                # under which WRONG_CALLEE and TEMPLATE_INSTANTIATION_MISMATCH
+                # -- the two classes objdiff marks LikelyFixable -- cannot fire
+                # at all.  So a function whose blind list is exactly
+                # {REGISTER_SWAP, ADDRESS_RELOCATION_NOISE} can be carrying a
+                # call to an entirely different function and still satisfy
+                # "all mismatches unfixable".  Measured 2026-08-21: 15 such
+                # rows, 10 of which ALREADY hold an AT_LIMIT certificate issued
+                # this way, including ?Fail@Debug@@ and ?Trigger@UITrigger@@.
+                # A certificate is a claim about the instrument as much as the
+                # code; refuse to issue one the instrument could not support.
+                if should_promote and fixable_syms and r.symbol in fixable_syms:
+                    should_promote = False
+                    stats["at_limit_blocked_likely_fixable"] = \
+                        stats.get("at_limit_blocked_likely_fixable", 0) + 1
                 if should_promote:
                     # Counted either way, so turning the flag on or off never
                     # changes the reported number -- only whether it is written.
@@ -965,10 +1009,30 @@ def main():
 
         if enrich_updates:
             conn.executemany(
+                # RULER-INSENSITIVE COLUMNS ONLY.  Measured whole-binary
+                # 2026-08-21 (48,290 functions, objdiff 4.2.6), `none` vs
+                # `name_check`, same objects: the twelve detectors written here
+                # give byte-identical populations under both, while NINE MORE
+                # that this statement used to write do not.  Writing those from
+                # a `none` pass is not a weaker measurement, it is an
+                # OVERWRITE-WITH-ZERO of whatever a reloc-visible pass
+                # established -- which is precisely how six `has_*` columns in
+                # this database came to read a uniform, confident 0.  They are
+                # now owned by scripts/analysis/pattern_census.py, which records
+                # its ruler.  Do not add them back here.
+                #
+                #   column                          none   name_check
+                #   has_prologue_mismatch              0          219
+                #   has_alloca_mismatch                0            0   (a real zero)
+                #   has_scope_counter_mismatch         0            1
+                #   has_dynamic_cast_mismatch          0            0   (a real zero)
+                #   has_makestring_mismatch            0           19
+                #   has_linker_merged                  0            4
+                #   has_address_relocation           565          826
+                #   has_anonymous_namespace_hash       7           23
+                #   has_static_guard_counter           4           13
                 """UPDATE functions
                    SET has_bool_mask = ?,
-                       has_makestring_mismatch = ?,
-                       has_address_relocation = ?,
                        has_boolean_negation = ?,
                        has_float_precision = ?,
                        has_fsel_ternary = ?,
@@ -978,13 +1042,7 @@ def main():
                        has_control_flow = ?,
                        has_commutative_op_order = ?,
                        has_offset_swap = ?,
-                       has_anonymous_namespace_hash = ?,
-                       has_static_guard_counter = ?,
-                       has_dynamic_cast_mismatch = ?,
                        has_dead_store_elimination = ?,
-                       has_prologue_mismatch = ?,
-                       has_alloca_mismatch = ?,
-                       has_scope_counter_mismatch = ?,
                        detected_patterns = ?,
                        primary_pattern = ?,
                        reachable_100 = ?,
