@@ -170,11 +170,20 @@ void MoveMgr::InsertMoveInSong(const MoveVariant *var, int measure, int player) 
                 );
             }
         }
-        if (!anim) {
+        // TheHamDirector is tested for null in the merge_moves condition above,
+        // which is what proves it can be null here -- and this fallback used to
+        // call straight through it. That is the same shape as the retail
+        // MoveDir::PostUpdateFilters bug, but this block is native-added code,
+        // not decompiled from the target, so there is nothing to stay faithful
+        // to and nothing to wrap in #ifdef: it is simply a missing test.
+        if (!anim && TheHamDirector) {
             anim = TheHamDirector->SongAnim(player);
         }
         // The original PPC binary does not null-check anim here; SongAnim
         // never returns null on Xbox. Native SongAnim/Find can, so guard it.
+        // With no HamDirector at all, anim stays null and we bail here, which
+        // also keeps the null out of the SetKeyVal(TheHamDirector, ...) calls
+        // at the bottom of this function.
         if (!anim) {
             return;
         }
