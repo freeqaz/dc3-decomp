@@ -118,6 +118,38 @@ extern const char *kAssertStr;
 #define MILO_ASSERT_EXPR(cond, line)                                                     \
     ((cond) || (TheDebugFailer << MakeString(kAssertStr, __FILE__, line, #cond), 0))
 
+// Same emitted code as MILO_ASSERT, but opens THREE lexical scopes instead of
+// five -- it is the do/while form with the do/while peeled off, so the cost is
+// `if` (2) + its braced body (1).  A third spelling, in other words, sitting
+// between MILO_ASSERT (5) and MILO_ASSERT_EXPR (0).
+//
+// Five functions in the shipping image can only be reconciled at three:
+// Automator::FillButtonMsg, CampaignSongProvider::Text,
+// CampaignMqCrewProvider::Text, CampaignMqCrewProvider::UpdateList and
+// SongSelectPlaylistProvider::Text.  Each of them holds a function-local
+// static whose scope ordinal is exactly 2 lower per preceding assert than the
+// do/while form produces, and on each the correction ALSO flips the static's
+// guard variable from MSVC's per-TU `?$S<n>@...@4IA` naming to the target's
+// bit-packed `??_B<scope>@<fn>@5<scope>@` -- scripts/obj_guard_patcher.py
+// already performs that rename, but it keys on the scope, so it silently
+// declines to fire while the ordinals disagree.  (The `??_B` vs `$S` split was
+// previously filed as a compiler-mode floor.  It is not: `??_B` is what MSVC
+// emits for a static inside a COMDAT function, `$S<n>` for one inside an
+// ordinary function, and the patcher bridges the two -- when, and only when,
+// the scopes line up.)
+//
+// HAZARD: unlike MILO_ASSERT this is not a single statement, so
+// `if (x) MILO_ASSERT_IF(c, n); else y();` binds the `else` to the macro's own
+// `if`.  Use it only in plain statement position.
+//
+// DO NOT use this at a new call site unless the target's scope index for a
+// local static in that same function demands it.  See
+// docs/decomp/patterns/fixable-scope-index.md.
+#define MILO_ASSERT_IF(cond, line)                                                       \
+    if (!(cond)) {                                                                       \
+        TheDebugFailer << MakeString(kAssertStr, __FILE__, line, #cond);                 \
+    }
+
 #define MILO_ASSERT_FMT(cond, ...)                                                       \
     do {                                                                                 \
         if (!(cond)) {                                                                   \

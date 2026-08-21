@@ -35,17 +35,17 @@ Symbol SongSelectPlaylistProvider::DataSymbol(int i_iData) const {
 void SongSelectPlaylistProvider::Text(
     int, int i_iData, UIListLabel *uiListLabel, UILabel *uiLabel
 ) const {
-    MILO_ASSERT(i_iData < NumData(), 0x34);
+    MILO_ASSERT_IF(i_iData < NumData(), 0x34);
     Playlist *pPlaylist = GetPlaylist(i_iData);
-    MILO_ASSERT(pPlaylist, 0x37);
+    MILO_ASSERT_IF(pPlaylist, 0x37);
     if (uiListLabel->Matches("label")) {
         AppLabel *pHamLabel = dynamic_cast<AppLabel *>(uiLabel);
-        MILO_ASSERT(pHamLabel, 0x3d);
-        if (!pPlaylist->IsCustom() || !pPlaylist->IsEmpty()) {
-            pHamLabel->SetPlaylistName(pPlaylist, true, true);
-        } else {
+        MILO_ASSERT_IF(pHamLabel, 0x3d);
+        if (pPlaylist->IsCustom() && pPlaylist->IsEmpty()) {
             static Symbol playlist_create("playlist_create");
             pHamLabel->SetTextToken(playlist_create);
+        } else {
+            pHamLabel->SetPlaylistName(pPlaylist, true, true);
         }
     } else {
         uiLabel->SetTextToken(uiListLabel->GetDefaultText());

@@ -1059,7 +1059,7 @@ DataNode Automator::OnMsg(const UITransitionCompleteMsg &msg) {
 }
 
 void Automator::FillButtonMsg(ButtonDownMsg &msg, int idx) {
-    MILO_ASSERT(mCurScript, 0x141);
+    MILO_ASSERT_IF(mCurScript, 0x141);
     DataArray *b = mCurScript->Array(idx);
     static Symbol button_down("button_down");
     MILO_ASSERT(b->Sym(0) == button_down, 0x144);
