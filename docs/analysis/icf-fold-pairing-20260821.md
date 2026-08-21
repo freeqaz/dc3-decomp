@@ -2,7 +2,13 @@
 
 **Repo: dc3-decomp (title 373307D9).** `../rb3` and `../rb3-xenon` share symbol
 names and address ranges with this tree; every symbol, address and number below
-is dc3's, measured on `fix/icf-survivors-20260821` off `2f666acc8`.
+is dc3's, measured on `fix/icf-survivors-20260821`. The lane branched from
+`2f666acc8`; `main` advanced to `7bff4701f` mid-run, so the branch was rebased and
+**the whole-build A/B was re-run from scratch against a baseline worktree rebuilt at
+`7bff4701f`**. Both measurements are identical to the digit, and the `dtk xex split`
+fixed point was re-verified after the rebase (`symbols.txt` md5
+`38726dfd2a5f77ed8d0e02762f62f810`, unchanged across two consecutive full `ninja`
+runs).
 
 Task #114, the follow-up to #112 (`docs/analysis/icf-survivor-names-20260819.md`).
 
@@ -11,7 +17,7 @@ Task #114, the follow-up to #112 (`docs/analysis/icf-survivor-names-20260819.md`
 
 **#112's own population is exhausted.** #112 worked the sub-class where dtk's
 splitter had *no* name for a fold survivor and wrote a synthesised
-`merged_<addr>` / `merged_<Shape>` placeholder. At the merge base `2f666acc8`,
+`merged_<addr>` / `merged_<Shape>` placeholder. At the merge base,
 `build/373307D9/report.json` carries **exactly 6** `merged_*` rows, all at 0 %,
 and **5 of the 6 are #112's own documented refusals** — `merged_823AAA20`
 (`CharSignalApplier::Handle`), `merged_8237A7E8` (`CharEyes`
