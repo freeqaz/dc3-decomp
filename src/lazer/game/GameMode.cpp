@@ -211,6 +211,21 @@ void GameMode::FillModeArrayWithParentData(Symbol sym, DataArray *a1, DataArray 
 }
 
 bool IsInLoaderMode(const Symbol &sym) {
+#ifdef HX_NATIVE
+    // Sibling of the MoveDir::PostUpdateFilters null-`this` class. The test
+    // below proves TheGameMode can be null here, yet the mind_control arm a few
+    // lines down calls TheGameMode->InMode("campaign", true) unguarded.
+    // GameMode::InMode is non-virtual and starts by comparing mMode (a Symbol
+    // at a small offset), so on the 360 the load lands in the mapped zeroed
+    // page 0 and the function limps on; on the host it is a SIGSEGV.
+    //
+    // Guarding the whole function rather than just that arm: with no GameMode
+    // object there is no mode to be in, so `false` is the answer for every
+    // `sym`, and it is the answer this function already falls through to.
+    if (!TheGameMode) {
+        return false;
+    }
+#endif
     if (TheGameMode && TheGameMode->InMode(sym, true))
         return true;
 

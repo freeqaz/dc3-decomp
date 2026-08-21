@@ -46,6 +46,7 @@
 #include <gtest/gtest.h>
 
 #include <csignal>
+#include <cstring>
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -262,3 +263,247 @@ TEST(MoveDirFeedbackGuard, PostUpdateFiltersGuardsFeedback) {
            "guard. That is a SIGSEGV on the host; the 360 absorbed it in its "
            "mapped zero page.";
 }
+
+// ---------------------------------------------------------------------------
+// 3. The rest of the class: the sibling sites, pinned the same way.
+// ---------------------------------------------------------------------------
+//
+// The MoveDir detector above is shaped around that one function's `if (!active)`
+// arm. The siblings do not share a single syntactic shape, so they get a
+// generic detector instead: inside the HX_NATIVE-visible text, between a named
+// ANCHOR and the first DEREF after it, at least one of the site's GUARD strings
+// must appear.
+//
+// That detector is weak on its own -- it would accept a guard that happened to
+// sit anywhere in the window. Both of its failure directions are therefore
+// exercised per site, against the REAL file rather than a hand-written copy:
+//
+//   * delete the guard string from the real text -> must read kUnguarded.
+//     (If it still reads guarded, the pin is passing on something other than
+//     the guard, and would keep passing after the guard was deleted for real.)
+//   * flip every `#ifdef HX_NATIVE` in the real text to `#ifndef HX_NATIVE`
+//     -> must read kUnguarded. This is the preprocessor control: a blind grep
+//     calls a backwards fix "guarded", which is wrong in the direction that
+//     ships a crash.
+
+namespace {
+
+enum class SiteVerdict { kNoAnchor, kNoDeref, kGuarded, kUnguarded };
+
+struct GuardSite {
+    const char *label;
+    const char *relPath; // relative to DC3_DECOMP_SRC_DIR
+    const char *anchor;  // where to start looking
+    const char *deref;   // the access that must be guarded
+    const char *guard;   // the test that must precede it
+    const char *why;     // failure message
+};
+
+// Drop `//` comments (respecting string and char literals). Without this the
+// detector reads the guard's OWN explanatory comment: every guard added for this
+// class quotes the expression it is guarding, so `text.find(deref)` lands in the
+// comment ABOVE the guard and the site reports unguarded. Measured, not
+// theorised -- UI.cpp and FitnessGoalJobs.cpp both failed exactly that way
+// before this was added.
+std::string StripLineComments(const std::string &text) {
+    std::string out;
+    out.reserve(text.size());
+    bool inString = false, inChar = false, escaped = false;
+    for (size_t i = 0; i < text.size(); ++i) {
+        const char c = text[i];
+        if (escaped) {
+            escaped = false;
+            out += c;
+            continue;
+        }
+        if (c == '\\' && (inString || inChar)) {
+            escaped = true;
+            out += c;
+            continue;
+        }
+        if (c == '"' && !inChar)
+            inString = !inString;
+        else if (c == '\'' && !inString)
+            inChar = !inChar;
+        else if (c == '/' && !inString && !inChar && i + 1 < text.size() && text[i + 1] == '/') {
+            while (i < text.size() && text[i] != '\n')
+                ++i;
+            if (i < text.size())
+                out += '\n';
+            continue;
+        }
+        out += c;
+    }
+    return out;
+}
+
+SiteVerdict ClassifySite(const std::string &sourceText, const GuardSite &site) {
+    const std::string text = StripLineComments(KeepHxNativeArms(sourceText));
+    const size_t anchor = text.find(site.anchor);
+    if (anchor == std::string::npos)
+        return SiteVerdict::kNoAnchor;
+    const size_t deref = text.find(site.deref, anchor);
+    if (deref == std::string::npos)
+        return SiteVerdict::kNoDeref;
+    const std::string window = text.substr(anchor, deref - anchor);
+    return window.find(site.guard) != std::string::npos ? SiteVerdict::kGuarded
+                                                        : SiteVerdict::kUnguarded;
+}
+
+// Delete the site's guard so the detector has something to catch. Searching
+// from the ANCHOR, not from the start of the file: `if (mProfile) {` occurs
+// earlier in MetagameRank.cpp for an unrelated reason, and deleting THAT one
+// left the real guard in place, so the control passed while proving nothing.
+std::string RemoveGuardAfterAnchor(const std::string &text, const GuardSite &site) {
+    size_t from = text.find(site.anchor);
+    if (from == std::string::npos)
+        from = 0;
+    const size_t at = text.find(site.guard, from);
+    if (at == std::string::npos)
+        return text;
+    return text.substr(0, at) + text.substr(at + std::strlen(site.guard));
+}
+
+std::string FlipHxNativeArms(const std::string &text) {
+    std::string out;
+    const std::string from = "#ifdef HX_NATIVE";
+    const std::string to = "#ifndef HX_NATIVE";
+    size_t pos = 0;
+    for (;;) {
+        const size_t at = text.find(from, pos);
+        if (at == std::string::npos) {
+            out += text.substr(pos);
+            return out;
+        }
+        out += text.substr(pos, at - pos);
+        out += to;
+        pos = at + from.size();
+    }
+}
+
+// Every site is a pointer that some test in the same function proves nullable,
+// dereferenced on a path that skips that test. The console absorbs the access
+// in its mapped, zeroed guest page 0; the host has no page 0.
+const GuardSite kSites[] = {
+    {"UI.cpp FailAppendCallback", "/system/ui/UI.cpp",
+     "void FailAppendCallback(FixedString &str) {", "TheUI->TransitionScreen()",
+     "if (!TheUI) {",
+     "`(TheUI && TheUI->CurrentScreen()) || TheUI->TransitionScreen()` evaluates "
+     "its right operand precisely when TheUI is null. This one runs INSIDE crash "
+     "reporting, so faulting here destroys the report you needed."},
+
+    {"Game.cpp Game::IsLoaded", "/lazer/game/Game.cpp", "bool Game::IsLoaded() {",
+     "if (!mMaster->IsLoaded()) {", "if (!mMaster) {",
+     "`(int)mMaster && !mMaster->IsLoaded()` short-circuits to false rather than "
+     "returning, so the mLoadState==0 and ==2 arms below run with mMaster null."},
+
+    {"GameMode.cpp IsInLoaderMode", "/lazer/game/GameMode.cpp",
+     "bool IsInLoaderMode(const Symbol &sym) {",
+     "if (TheGameMode->InMode(\"campaign\", true)) {", "if (!TheGameMode) {",
+     "`TheGameMode && TheGameMode->InMode(sym, true)` proves TheGameMode nullable; "
+     "the mind_control arm then calls through it unguarded."},
+
+    {"MetagameRank.cpp AwardForRankUp", "/lazer/meta_ham/MetagameRank.cpp",
+     "void MetagameRank::AwardForRankUp(int i1) {", "mProfile->UnlockContent(*sit);",
+     "if (mProfile) {",
+     "`mProfile && mProfile->GetHamUser()` proves mProfile nullable ten lines above "
+     "this loop, which calls through it regardless."},
+
+    {"MoveMgr.cpp InsertMoveInSong", "/system/hamobj/MoveMgr.cpp",
+     "void MoveMgr::InsertMoveInSong(", "anim = TheHamDirector->SongAnim(player);",
+     "if (!anim && TheHamDirector) {",
+     "Native-added code: the merge_moves condition tests `TheHamDirector &&`, then "
+     "the SongAnim fallback called straight through it."},
+
+    {"ShellInput.cpp ShellInput::Poll", "/lazer/meta_ham/ShellInput.cpp",
+     "OverlayPanel *panel = TheHamUI.GetOverlayPanel();", "mHandsUpGestureFilter->Clear();",
+     "if (mHandsUpGestureFilter) {",
+     "mHandsUpGestureFilter is `&&`-tested immediately above and immediately below "
+     "this Clear(), which is guarded only by `panel` -- a different pointer."},
+
+    {"FitnessGoalJobs.cpp GetFitnessGoal", "/lazer/net_ham/FitnessGoalJobs.cpp",
+     "void GetFitnessGoalJob::GetFitnessGoal(HamProfile *profile) {",
+     "profile->SetFitnessGoal(", "if (!profile) {",
+     "`if (profile)` proves it nullable, then both exits call "
+     "profile->SetFitnessGoal() unguarded."},
+
+    {"HamDirector.cpp PlayNextShot", "/system/hamobj/HamDirector.cpp",
+     "void HamDirector::PlayNextShot() {",
+     "world->GetCameraManager()->ForceCameraShot(curShot, false);",
+     "if (world && world->GetCameraManager()) {",
+     "`world` is assigned nullptr outright when mMerger is null, twenty lines above "
+     "this call."},
+
+    {"FreestyleMoveRecorder.cpp UpdateRecordingAttempt",
+     "/system/hamobj/FreestyleMoveRecorder.cpp",
+     "void FreestyleMoveRecorder::UpdateRecordingAttempt(", "skeleton.Set(*skeleton);",
+     "if (skeleton == nullptr) {",
+     "GetScore(int,...) leaves skeletonToScore null when the player index is negative "
+     "and there is no live skeleton, and passes it straight here."},
+};
+
+std::string SitePath(const GuardSite &site) {
+    return std::string(DC3_DECOMP_SRC_DIR) + site.relPath;
+}
+
+} // namespace
+
+class NullThisGuardSite : public ::testing::TestWithParam<GuardSite> {};
+
+TEST_P(NullThisGuardSite, DetectorSeesTheBugWhenTheGuardIsDeleted) {
+    const GuardSite &site = GetParam();
+    const std::string text = ReadFile(SitePath(site));
+    ASSERT_FALSE(text.empty()) << "could not read " << SitePath(site);
+    const std::string sabotaged = RemoveGuardAfterAnchor(text, site);
+    ASSERT_NE(sabotaged, text) << "the guard string `" << site.guard
+                               << "` is not in the file at all -- this control is vacuous";
+    EXPECT_EQ(ClassifySite(sabotaged, site), SiteVerdict::kUnguarded)
+        << "With the guard deleted the detector still calls " << site.label
+        << " guarded, so it is passing on something other than the guard.";
+}
+
+TEST_P(NullThisGuardSite, DetectorIsNotFooledByAGuardInTheNonNativeArm) {
+    const GuardSite &site = GetParam();
+    const std::string text = ReadFile(SitePath(site));
+    ASSERT_FALSE(text.empty()) << "could not read " << SitePath(site);
+    // Every guard in this table lives in an `#ifdef HX_NATIVE` arm. Flipping
+    // those to `#ifndef` puts each one where the native build cannot see it --
+    // the "backwards fix" that a preprocessor-blind grep would accept.
+    const std::string flipped = FlipHxNativeArms(text);
+    ASSERT_NE(flipped, text) << "no `#ifdef HX_NATIVE` in " << SitePath(site)
+                             << " -- this control is vacuous";
+    const SiteVerdict v = ClassifySite(flipped, site);
+    EXPECT_NE(v, SiteVerdict::kGuarded)
+        << "A guard the native build cannot reach is not a guard, but the "
+           "detector accepted it for "
+        << site.label;
+}
+
+TEST_P(NullThisGuardSite, SiteIsGuarded) {
+    const GuardSite &site = GetParam();
+    const std::string text = ReadFile(SitePath(site));
+    ASSERT_FALSE(text.empty()) << "could not read " << SitePath(site);
+
+    const SiteVerdict v = ClassifySite(text, site);
+    ASSERT_NE(v, SiteVerdict::kNoAnchor)
+        << "anchor `" << site.anchor << "` not found in " << SitePath(site)
+        << " -- the code moved and this pin needs re-aiming, not deleting.";
+    ASSERT_NE(v, SiteVerdict::kNoDeref)
+        << "deref `" << site.deref << "` not found after the anchor in "
+        << SitePath(site) << " -- re-aim the pin.";
+    EXPECT_EQ(v, SiteVerdict::kGuarded) << site.label << ": " << site.why;
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    NullThisSiblings,
+    NullThisGuardSite,
+    ::testing::ValuesIn(kSites),
+    [](const ::testing::TestParamInfo<GuardSite> &info) {
+        std::string name(info.param.label);
+        for (char &c : name)
+            if (!isalnum(static_cast<unsigned char>(c)))
+                c = '_';
+        return name;
+    }
+);
+

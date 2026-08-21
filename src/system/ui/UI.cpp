@@ -126,6 +126,39 @@ void TerminateCallback() {
 }
 
 void FailAppendCallback(FixedString &str) {
+#ifdef HX_NATIVE
+    // Sibling of the MoveDir::PostUpdateFilters null-`this` class, and the one
+    // instance of it where the *reflex* fix would be the wrong call, so the
+    // reasoning is written out.
+    //
+    // The retail condition below is `(TheUI && TheUI->CurrentScreen()) ||
+    // TheUI->TransitionScreen()`. Its left operand tests `TheUI` for null, so
+    // the right operand is evaluated precisely when `TheUI` IS null -- and
+    // TransitionScreen() is a non-virtual inline that just loads
+    // mTransitionScreen at 0x4c (UI.h:100). On the 360 that load lands in the
+    // mapped, zeroed guest page 0, yields null, the `||` is false, and the
+    // whole block is skipped. On the host page 0 is unmapped, so the same load
+    // is a SIGSEGV.
+    //
+    // What makes this site different: it is a Debug::AddFailAppendCallback
+    // handler, i.e. it runs *inside* crash reporting, decorating an
+    // already-failing report with the current screen name. Faulting here does
+    // not merely lose this decoration -- it kills the process partway through
+    // emitting the report you needed. So the crash-report-preserving action is
+    // to guard, and the report-DESTROYING action is to leave it unguarded; the
+    // usual "don't swallow errors with an early return" instinct points the
+    // wrong way here. Guarding also loses nothing the console had: with TheUI
+    // null the console skips this block too.
+    //
+    // The early return is not silent, because silence is the failure mode worth
+    // avoiding in a crash report: say that the UI manager was absent, which is
+    // itself a fact about when the crash happened (before UI construction, or
+    // after Terminate()).
+    if (!TheUI) {
+        str += "\nScreen: <no UIManager>";
+        return;
+    }
+#endif
     if ((TheUI && TheUI->CurrentScreen()) || TheUI->TransitionScreen()) {
         str += "\n";
         if (TheUI->CurrentScreen()) {

@@ -1122,9 +1122,30 @@ void MetagameRank::AwardForRankUp(int i1) {
         memcpy(buffer, "no_unlock_", 11);
         if (strncmp(cur->unk4.Str(), buffer, strlen(buffer))) {
             gDeferredAwardQueue.push_back(award);
+#ifdef HX_NATIVE
+            // Sibling of the MoveDir::PostUpdateFilters null-`this` class. Ten
+            // lines up, `if (mProfile && mProfile->GetHamUser())` proves
+            // mProfile can be null on this path -- and this loop then calls
+            // through it regardless. HamProfile::UnlockContent is non-virtual
+            // and reads members from `this`, so on the 360 those loads land in
+            // the mapped, zeroed guest page 0 and the unlock is a silent no-op;
+            // on the host the same load is a SIGSEGV.
+            //
+            // Skipping the loop is exactly what the console does: with a null
+            // profile the content list it would write to does not exist, and
+            // UnlockContent's first act (IsOkToUpdateProfile) reads that same
+            // zero page. The award still goes on gDeferredAwardQueue above, so
+            // nothing else changes shape.
+            if (mProfile) {
+                FOREACH (sit, cur->unk14) {
+                    mProfile->UnlockContent(*sit);
+                }
+            }
+#else
             FOREACH (sit, cur->unk14) {
                 mProfile->UnlockContent(*sit);
             }
+#endif
         }
     }
 }

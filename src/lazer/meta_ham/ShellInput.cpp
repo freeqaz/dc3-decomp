@@ -195,7 +195,19 @@ void ShellInput::Poll() {
 
     OverlayPanel *panel = TheHamUI.GetOverlayPanel();
     if (panel) {
-        mHandsUpGestureFilter->Clear();
+        // Sibling of the MoveDir::PostUpdateFilters null-`this` class, found by
+        // the same analyzer sweep. This whole arm is the HX_NATIVE copy of
+        // Poll(), and the native copy already treats mHandsUpGestureFilter as
+        // nullable on both sides of this line -- `mHandsUpGestureFilter && ...
+        // GetHandsUp()` above, `mHandsUpGestureFilter && ...GetRaisedMs()`
+        // below (retail's #else arm dereferences it bare in both places, which
+        // is why the native arm exists). Only this Clear() was missed; `panel`
+        // is a different pointer and guards nothing about it. Fixed as the
+        // missing test it is, not wrapped in a nested #ifdef, because the PPC
+        // build compiles the #else arm and never sees this line.
+        if (mHandsUpGestureFilter) {
+            mHandsUpGestureFilter->Clear();
+        }
         if (TheHamUI.GetTransitionState() != 0) {
             panel->Dismiss();
         }
