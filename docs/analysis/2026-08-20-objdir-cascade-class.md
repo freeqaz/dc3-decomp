@@ -830,6 +830,26 @@ Two incidental findings from that attempt, both worth acting on separately:
   use (the engine's copy wins). Editing it looks like a fix and compiles
   nothing.
 
+### The empirical arm: poisoning under a screen-thrash loop
+
+§3's poison result was a **negative measured on the linear boot path**, which
+does almost no repeated unloading — the follow-up list asked for a loop that
+re-enters and unloads the same screens many times. That loop now exists
+(`scripts/dc3-input-flows/screen-thrash.txt`, 25 `main_screen` ↔
+`choose_mode_screen` cycles).
+
+| workload | runs | result |
+|---|---|---|
+| thrash + `DC3_POISON_FREED_OBJECTS=1` | 4 | 25/25 cycles each, exit 0, **12,288 blocks quarantined per run** (poison confirmed active), no fault |
+| thrash + `DC3_REFRING_AUDIT=1` | 2 | 25/25 cycles each, exit 0, `LOST-FROM-RING` **0**, `WALK-DECLINED` **0**, ring corruption **0** |
+
+**Still a negative, and still bounded.** It is much stronger than the boot-path
+negative — every cascade-freed block was filled with `0xDD` and never returned
+to the allocator, so a stale virtual call would have faulted at the dereference
+— but it only covers the screens that flow touches. The resolve-once `Find<>`
+caches live in `RhythmDetector` / `RhythmBattle*`, which need gameplay. Those
+remain unexercised.
+
 ## Process note
 
 Two changes in this lane were destroyed by `git checkout -- <file>` used to undo
