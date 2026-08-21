@@ -2441,7 +2441,8 @@ void HamDirector::Reteleport() {
     Vector3 v = Vector3::ZeroVec();
     if (clip) {
         if (frameIdx > 0) {
-            ClipPredict predict(clip, Vector3::ZeroVec(), 0);
+            ClipPredict predict;
+            predict.SetClip(clip);
             predict.PredictDeltaPos(beat - 4.0f, beat);
             v = predict.mPos;
         }
