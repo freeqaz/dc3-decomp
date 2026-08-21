@@ -275,7 +275,7 @@ void CharLipSync::PlayBack::Set(CharLipSync *lipsync, ObjPtr<ObjectDir> clips) {
         ObjPtr<CharClip> &clip = _ref2[i].mClip;
         clip = mClips->Find<CharClip>(mLipSync->mVisemes[i].c_str(), false);
         if (!clip) {
-            MILO_LOG("could not find %s", (char *)mLipSync->mVisemes[i].c_str());
+            MILO_NOTIFY("could not find %s", (char *)mLipSync->mVisemes[i].c_str());
         }
     }
 

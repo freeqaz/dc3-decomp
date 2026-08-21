@@ -669,7 +669,7 @@ bool HolmesClientReadDone(File *f) {
     CritSecTracker cst(&gCrit);
     bool ret = PendingRead(f);
     if (ret) {
-        HolmesClientPoll();
+        HolmesClientPollInternal(false);
         ret = PendingRead(f);
     }
     return !ret;

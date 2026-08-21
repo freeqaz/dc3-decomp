@@ -32,12 +32,24 @@ CharBones *gPropBones;
 // surviving caller, and no `bl` anywhere outside CharBonesSamples::Relativize
 // reaches 823C4D08.  Closing this row needs that missing caller, not an
 // invented reference; the 0.238% it costs is one charged instruction of 42.
+//
+// CORRECTION (2026-08-21, wrong-callee lane).  The last sentence was wrong, and
+// only the last sentence.  Everything above about the header and the failed
+// `inline` move stands -- but the row was never charged on the symbol's COMDAT
+// kind.  It was charged on ONE relocation: the __FILE__ string.  #line restates
+// that provenance without moving the body, so the definition stays out-of-line
+// (which is what keeps CharBones.obj defining it at all) and the string becomes
+// the one the image carries.  99.7619 -> 100.0, zero mismatches.  The missing
+// caller is a real open question about the original's shape; it is not what was
+// standing between this row and 100.
+#line 96 "e:\\lazer_build_gmc1\\system\\src\\char\\CharBones.h"
 short MakeShortAng(float f) {
     f = f * 1638.4f + 0.5f;
     MILO_ASSERT(f < 32768 && f > -32767, 0x60);
     f = floor(f);
     return f;
 }
+#line 30 "CharBones.cpp"
 
 short ShortVector3::ToShort(float f) {
     // Scale float to short range: divide by 1300 scale factor, multiply by short max (32767),

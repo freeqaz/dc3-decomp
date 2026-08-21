@@ -27,10 +27,10 @@ CampaignMqCrewProvider::CampaignMqCrewProvider() : mPanelDir(0) {}
 void CampaignMqCrewProvider::Text(
     int, int i_iData, UIListLabel *uiListLabel, UILabel *uiLabel
 ) const {
-    MILO_ASSERT(i_iData < NumData(), 0x58);
+    MILO_ASSERT_IF(i_iData < NumData(), 0x58);
     Symbol crewSym = DataSymbol(i_iData);
     HamProfile *pProfile = TheProfileMgr.GetActiveProfile(true);
-    MILO_ASSERT(pProfile, 0x5c);
+    MILO_ASSERT_IF(pProfile, 0x5c);
     if (uiListLabel->Matches("crew")) {
         uiLabel->SetTextToken(crewSym);
     } else if (uiListLabel->Matches("lock")) {
@@ -54,10 +54,10 @@ Symbol CampaignMqCrewProvider::DataSymbol(int i_iData) const {
 }
 
 void CampaignMqCrewProvider::UpdateList() {
-    MILO_ASSERT(TheCampaign, 0x36);
+    MILO_ASSERT_IF(TheCampaign, 0x36);
     mMQCrews.clear();
     HamProfile *pProfile = TheProfileMgr.GetActiveProfile(true);
-    MILO_ASSERT(pProfile, 0x3A);
+    MILO_ASSERT_IF(pProfile, 0x3A);
     static DataNode &mq_difficulty = DataVariable("mq_difficulty");
     Difficulty mqDiff = (Difficulty)mq_difficulty.Int();
     DataArray *crewsArr = SystemConfig()->FindArray("selectable_crews", false);

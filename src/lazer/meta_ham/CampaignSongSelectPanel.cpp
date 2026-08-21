@@ -36,11 +36,11 @@ CampaignSongProvider::CampaignSongProvider() : mPanelDir(0) {}
 void CampaignSongProvider::Text(
     int, int i_iData, UIListLabel *slot, UILabel *label
 ) const {
-    MILO_ASSERT(i_iData < NumData(), 0x4D);
+    MILO_ASSERT_IF(i_iData < NumData(), 0x4D);
     Symbol songSym = DataSymbol(i_iData);
     if (slot->Matches("song")) {
         AppLabel *pAppLabel = dynamic_cast<AppLabel *>(label);
-        MILO_ASSERT(pAppLabel, 0x54);
+        MILO_ASSERT_IF(pAppLabel, 0x54);
         if (!IsCrazeSong(songSym)) {
             pAppLabel->SetBlacklightSongName(songSym, -1, false);
         } else {
@@ -62,11 +62,11 @@ void CampaignSongProvider::Text(
             label->SetTextToken(gNullStr);
         }
     } else if (slot->Matches("song_prefix")) {
-        if (TheHamUI.IsBlacklightMode() && !IsCrazeSong(songSym)) {
+        if (!TheHamUI.IsBlacklightMode() || IsCrazeSong(songSym)) {
+            label->SetTextToken(gNullStr);
+        } else {
             static Symbol song_select_song_prefix("song_select_song_prefix");
             label->SetTextToken(song_select_song_prefix);
-        } else {
-            label->SetTextToken(gNullStr);
         }
     } else {
         label->SetTextToken(slot->GetDefaultText());

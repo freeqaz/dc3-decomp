@@ -74,8 +74,7 @@ bool ParseNode() {
         return true;
     }
 
-    static const char bom[3] = { (char)0xEF, (char)0xBB, (char)0xBF };
-    if (gNode == 0 && strncmp(yytext, bom, 3) == 0) {
+    if (gNode == 0 && strncmp(yytext, "\xEF\xBB\xBF", 3) == 0) {
         if (yyleng > 3)
             MILO_FAIL(
                 "%s starts with a ByteOrderMark, put a line return at the top of its file",

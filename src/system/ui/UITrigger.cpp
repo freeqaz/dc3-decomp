@@ -79,7 +79,7 @@ void UITrigger::Trigger() {
         }
     }
     if (mBlockTransition && mEndTime > 5.0f) {
-        MILO_WARN(
+        MILO_NOTIFY(
             "%s (%s) is blocking and really long! (%f seconds)",
             Name(),
             PathName(Dir()),
