@@ -8,6 +8,15 @@ and `../rb3-xenon`; every number here is dc3's. Task #127, branch
 
     objdiff-cli 4.2.6 (bf7405e3fe07, xxh3 af689f2c8bb3be9b)
 
+**Reproduced on a second tree.** Every number below was measured twice: once in the worktree
+above, and again on `main` at `6608a567a` after the branch landed — a different checkout, a
+different build directory, and one PPC source file changed in between (`MoveDir.cpp`, +28 lines
+from `9b294fc25`, which touches `?UpdateOverlay@MoveDir@@`, a row in the tier-2 worklist). All
+23 firing pattern populations, all three tier counts and all three byte totals came back
+**identical**. `pattern_scans` holds both runs (ids 1/2 and 3/4) so the reproduction is
+checkable rather than asserted — which is the point, given that the number this document
+replaces failed to reproduce across two trees by 25%.
+
 This supersedes [2026-08-19-reloc-pattern-flag-triage.md](2026-08-19-reloc-pattern-flag-triage.md).
 That document's *findings* mostly survive; its *populations* do not, because they were
 counting a predicate objdiff 4.2.6 has since split apart.
