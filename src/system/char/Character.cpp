@@ -134,17 +134,15 @@ BEGIN_PROPSYNCS(Character)
     SYNC_SUPERCLASS(RndDir)
 END_PROPSYNCS
 
-template <>
-BinStream &operator<<(BinStream &bs, const ObjPtrVec<RhythmDetector, ObjectDir> &c) {
-    bs << (int)c.size();
-    MILO_ASSERT(c.Owner(), 0x525);
-    for (ObjPtrVec<RhythmDetector, ObjectDir>::const_iterator it = c.begin(); it != c.end(); ++it) {
-        const RhythmDetector *obj = it->Obj();
-        const char *name = obj ? obj->Name() : "";
-        bs << name;
-    }
-    return bs;
-}
+// Explicit instantiation, not a specialisation.  The image attributes this
+// function's MILO_ASSERT to e:\lazer_build_gmc1\system\src\obj\ObjPtr_p.h, i.e.
+// the original compiled ObjPtr_p.h's generic operator<< here; a hand-written
+// specialisation in this .cpp puts Character.cpp in the __FILE__ slot instead.
+// Nothing in this TU streams an ObjPtrVec<RhythmDetector> -- the member the
+// original streamed is not reconstructed -- so without this line MSVC emits
+// nothing at all and the row reads 69/69 insert.
+template BinStream &
+operator<< <RhythmDetector>(BinStream &, const ObjPtrVec<RhythmDetector, ObjectDir> &);
 
 BinStream &operator<<(BinStream &bs, const Character::Lod &lod) {
     bs << lod.mScreenSize;

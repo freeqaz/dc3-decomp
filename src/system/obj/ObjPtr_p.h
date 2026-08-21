@@ -389,9 +389,18 @@ template <class T1>
 BinStream &operator<<(BinStream &bs, const ObjPtrVec<T1, ObjectDir> &c) {
     bs << c.size();
     MILO_ASSERT(c.Owner(), 0x525);
-    for (auto it = c.begin(); it != c.end(); ++it) {
-        if (*it) {
-            bs << (*it)->Name();
+    // Read the object pointer off the Node rather than letting `*it` convert:
+    // the conversion makes MSVC strength-reduce the induction variable to
+    // &node->mObject and then re-derive the node with a subi to compare against
+    // end().  The image keeps the Node itself in the induction register and
+    // loads 0xc(node), and tests it unsigned (cmplwi, i.e. a pointer) rather
+    // than signed.
+    for (typename ObjPtrVec<T1, ObjectDir>::const_iterator it = c.begin();
+         it != c.end();
+         ++it) {
+        const T1 *obj = it->Obj();
+        if (obj) {
+            bs << obj->Name();
         } else {
             bs << "";
         }
