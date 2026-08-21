@@ -1,5 +1,35 @@
 #!/usr/bin/env python3
-"""Populate the pattern flags that a reloc-blind objdiff pass cannot see.
+"""SUPERSEDED by scripts/analysis/pattern_census.py (2026-08-21, task #127).
+
+`--apply` now REFUSES.  `--histogram` still works and is still a fine quick
+survey.
+
+Why it was retired rather than repaired:
+
+* It writes its flags under `functionRelocDiffs=all`, which charges the ~2,992
+  `/OPT:ICF` folds this project has already adjudicated.  Measured whole-binary:
+  58.1% of `WRONG_CALLEE` and 95.5% of `TEMPLATE_INSTANTIATION_MISMATCH` under
+  `all` are folds the graded `name_check` ruler forgives.  The graded ruler is
+  the one `report.json` uses and the one a population should be quoted under.
+* It scans `WHERE excluded = 0`, which is 31,446 of 52,568 rows.  16,922
+  functions that `report.json` scores right now were never in its denominator.
+* It writes BOOLEANS, which cannot distinguish "measured and absent" from "the
+  ruler could not see it" from "never measured".  All three read 0, and that is
+  the mechanism behind every dead `has_*` column in this database.
+* objdiff 4.2.6 split `detect_linker_merged` into five classes, so the
+  `RELOC_SENSITIVE` map below names a vocabulary the binary no longer speaks:
+  `LINKER_MERGED` now selects 4 functions where this script recorded 1,310.
+
+`pattern_census.py` fixes all four: graded ruler by default with the ruler
+recorded NOT NULL on every scan, `report.json` as the universe, one row per
+finding with its payload, and `patch_guard.ensure_patched_tree()` as a
+precondition.  See docs/analysis/2026-08-21-pattern-census-4.2.6.md.
+
+---
+
+Original docstring follows.
+
+Populate the pattern flags that a reloc-blind objdiff pass cannot see.
 
 The problem
 -----------
@@ -163,6 +193,20 @@ def main():
                          "describe whatever the tree was at that minute; see "
                          "the 2026-08-19 triage. Exit 4 == unsettled tree.")
     args = ap.parse_args()
+
+    if args.apply:
+        print(
+            "REFUSING --apply: this script is superseded by\n"
+            "    python3 scripts/analysis/pattern_census.py --ruler name_check --apply\n\n"
+            "It measures under functionRelocDiffs=all (charges the adjudicated "
+            "/OPT:ICF folds), scans only WHERE excluded = 0 (omitting 16,922 "
+            "functions report.json scores), writes booleans that cannot "
+            "distinguish an absent pattern from an unmeasurable one, and its "
+            "RELOC_SENSITIVE map names objdiff's pre-4.2.6 vocabulary. "
+            "--histogram still works. "
+            "See docs/analysis/2026-08-21-pattern-census-4.2.6.md.",
+            file=sys.stderr)
+        return 2
 
     require_settled_tree(args.project_dir, args.skip_verify)
 

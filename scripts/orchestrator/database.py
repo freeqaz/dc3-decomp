@@ -1124,6 +1124,8 @@ def query_functions(
     unicorn_confidence: str | None = None,
     min_unicorn_harness_version: int | None = None,
     is_stub: bool | None = None,
+    objdiff_pattern: str | None = None,
+    pattern_ruler: str = "name_check",
 ) -> list[dict[str, Any]]:
     """
     Query multiple functions matching criteria.
@@ -1143,8 +1145,29 @@ def query_functions(
                             fixes (that harness overstated real bugs ~8x). NULL
                             harness_version rows are always excluded by this
                             filter. See scripts/unicorn_runner/signal_version.py.
+        objdiff_pattern:    Only rows carrying this objdiff pattern in the LATEST
+                            `pattern_scans` row for `pattern_ruler` -- e.g.
+                            'WRONG_CALLEE', 'TEMPLATE_INSTANTIATION_MISMATCH'
+                            (the two 4.2.6 marks LikelyFixable), 'LINKER_MERGED',
+                            'REGISTER_SAVE_HELPER_MISMATCH'. This is NOT a `has_*`
+                            column: it joins `function_patterns`, so a row only
+                            appears if some scan under that ruler actually
+                            examined it and the detector fired.
+        pattern_ruler:      `functionRelocDiffs` value the pattern was measured
+                            under. Defaults to 'name_check', the graded ruler and
+                            report.json's. Passing 'none' RAISES: the callee,
+                            prologue, MakeString and scope detectors cannot fire
+                            under it, so every bucket would come back empty --
+                            an answer that reads exactly like "this class is
+                            exhausted". See docs/analysis/2026-08-21-pattern-
+                            census-4.2.6.md.
 
     Returns list of function dicts.
+
+    Raises:
+        ValueError: `pattern_ruler='none'` with an `objdiff_pattern` set, or a
+                    pattern for which no scan under that ruler exists (absence of
+                    a measurement must not read as absence of the pattern).
     """
     conn = get_connection(db_path)
 
@@ -1191,6 +1214,31 @@ def query_functions(
     # Stub filter
     if is_stub is not None:
         query += f" AND is_stub = {1 if is_stub else 0}"
+
+    # objdiff pattern filter -- joins the measured table, never a has_* column.
+    if objdiff_pattern:
+        if pattern_ruler == "none":
+            raise ValueError(
+                "objdiff_pattern with pattern_ruler='none' is refused: under "
+                "functionRelocDiffs=none, 10 of objdiff 4.2.6's 25 detectors "
+                "cannot fire at all (measured whole-binary 2026-08-21), so the "
+                "result would be an empty set that reads like an exhausted "
+                "class. Use 'name_check' (graded, report.json's) or 'all'."
+            )
+        scan = conn.execute(
+            "SELECT id FROM pattern_scans WHERE ruler = ? ORDER BY id DESC LIMIT 1",
+            (pattern_ruler,)).fetchone()
+        if scan is None:
+            raise ValueError(
+                f"no pattern_scans row for ruler={pattern_ruler!r}, so this "
+                f"query cannot distinguish 'no function has {objdiff_pattern}' "
+                f"from 'nobody has measured it'. Run "
+                f"scripts/analysis/pattern_census.py --ruler {pattern_ruler} "
+                f"--apply first."
+            )
+        query += (" AND id IN (SELECT function_id FROM function_patterns "
+                  "WHERE scan_id = ? AND pattern = ?)")
+        params.extend([scan[0], objdiff_pattern])
 
     # Unicorn verdict filter
     if unicorn_verdict:
