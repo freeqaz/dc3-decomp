@@ -1,5 +1,18 @@
 # Triaging the three newly-populated `has_*` pattern flags — dc3-decomp, 2026-08-19
 
+> **⚠ SUPERSEDED for POPULATIONS by
+> [2026-08-21-pattern-census-4.2.6.md](2026-08-21-pattern-census-4.2.6.md) (task #127).**
+> The *findings* below mostly survive and finding 3 (PROLOGUE is a co-signal, never alone) was
+> confirmed whole-binary. The *counts* do not: objdiff **4.2.6** split the over-broad
+> `detect_linker_merged` into five classes, so `LINKER_MERGED` now names ~2% of the population
+> this document analysed — **4 functions** under the graded ruler, not 1,052 and not 1,310. Its
+> finding 1 ("the three flags are one flag", 284 rows of detector cross-talk) is now fixed
+> upstream rather than merely described: `REGISTER_SAVE_HELPER_MISMATCH`,
+> `TEMPLATE_INSTANTIATION_MISMATCH`, `WRONG_CALLEE` and `UNVERIFIABLE_CALLEE_NAME` carry that
+> cross-talk under their own names, and the MakeString self-suppression it hints at was real
+> (63 → 81 under `all` once removed). Finding 2's recommendation was implemented
+> (`patch_guard`). Do not quote a number from this file.
+
 **Repo: dc3-decomp (title 373307D9).** rb3 and rb3-xenon share symbol names and address
 ranges with this tree; every symbol, address and number below is dc3's, measured on
 `fix/pattern-flag-triage-20260819` off `07fdaeea7` in a fully-rebuilt worktree.

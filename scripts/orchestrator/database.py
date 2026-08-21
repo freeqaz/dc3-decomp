@@ -15,7 +15,7 @@ from typing import Any
 DEFAULT_DB_PATH = "decomp.db"
 
 # Schema version for migrations
-SCHEMA_VERSION = 16
+SCHEMA_VERSION = 17
 
 # Default maximum attempts before deprioritizing a function
 # Functions with >= this many attempts are excluded from normal queries
@@ -664,6 +664,131 @@ def _run_migrations(conn: sqlite3.Connection, from_version: int, to_version: int
                 if "duplicate column" not in str(e).lower():
                     raise
 
+    if from_version < 17 <= to_version:
+        # Migration v16 -> v17: objdiff pattern findings as measured FACTS with
+        # a ruler attached, instead of more `has_*` booleans.
+        #
+        # WHY NOT FOUR MORE COLUMNS.  objdiff 4.2.6 split the over-broad
+        # LINKER_MERGED detector into five classes (WRONG_CALLEE,
+        # TEMPLATE_INSTANTIATION_MISMATCH, REGISTER_SAVE_HELPER_MISMATCH,
+        # UNVERIFIABLE_CALLEE_NAME, and a LINKER_MERGED that keeps ~2% of its
+        # former population).  The obvious move was `has_wrong_callee` and three
+        # siblings.  This table exists because that move is how the LAST six
+        # columns died.
+        #
+        # Six `has_*` columns read a confident, uniform 0 on all 52,568 rows --
+        # not because the build was clean, but because `sync_objdiff.py` runs
+        # objdiff with `functionRelocDiffs=none`, under which the detectors
+        # behind them cannot fire at all.  A boolean column CANNOT DISTINGUISH
+        # "measured, and this function does not have it" from "the ruler in
+        # force could not have seen it" from "never measured".  All three are 0.
+        # `has_assert_revs` and `has_ltcg_pooling` were dropped outright for the
+        # same reason.  The defect was never the detector; it was that the
+        # storage discarded the one fact that decides how to read the value.
+        #
+        # So: every finding is a row, every row belongs to a SCAN, and a scan
+        # carries the ruler, the exact objdiff binary, the tree it measured and
+        # whether that tree was verified patched.  Absence is expressible three
+        # different ways and they are all distinguishable:
+        #
+        #   no pattern_scans row for a ruler        -> never measured
+        #   scan exists, no pattern_scan_examined   -> that function was dropped
+        #                                              (and coverage_json says why)
+        #   examined, no function_patterns row      -> genuinely did not fire
+        #
+        # `pattern_scans.ruler` is NOT NULL by design.  A pattern population
+        # without its ruler is not a weaker number, it is not a number: the same
+        # objects and the same detectors give LINKER_MERGED = 0 under `none`,
+        # and a four-figure count under `all`.
+        #
+        # `patterns_checked` records the detector VOCABULARY of the binary that
+        # ran, so a future rename cannot make an old scan's silence look like a
+        # negative finding -- the 4.2.5 -> 4.2.6 rename is exactly that hazard,
+        # and it is why the stale 1,310 could not simply be adjusted.
+        print("  Migration v17: Adding ruler-tagged objdiff pattern scan tables...")
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS pattern_scans (
+                id INTEGER PRIMARY KEY,
+                ruler TEXT NOT NULL,          -- functionRelocDiffs value. NEVER NULL.
+                tool_version TEXT NOT NULL,   -- `objdiff-cli --version` verbatim
+                project_dir TEXT NOT NULL,    -- the tree that was measured
+                build_rev TEXT,               -- git short rev of that tree
+                tree_verified INTEGER NOT NULL DEFAULT 0,  -- post-compile fixed point asserted
+                universe INTEGER NOT NULL,    -- symbols supplied to the sweep
+                examined INTEGER NOT NULL,    -- symbols objdiff actually diffed
+                coverage_json TEXT,           -- full drop accounting, reason by reason
+                patterns_checked TEXT,        -- JSON array: this binary's vocabulary
+                notes TEXT,
+                started_at TIMESTAMP,
+                finished_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS pattern_scan_examined (
+                scan_id INTEGER NOT NULL REFERENCES pattern_scans(id) ON DELETE CASCADE,
+                function_id INTEGER NOT NULL REFERENCES functions(id),
+                PRIMARY KEY (scan_id, function_id)
+            ) WITHOUT ROWID
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS function_patterns (
+                scan_id INTEGER NOT NULL REFERENCES pattern_scans(id) ON DELETE CASCADE,
+                function_id INTEGER NOT NULL REFERENCES functions(id),
+                pattern TEXT NOT NULL,
+                confidence TEXT,
+                fixability TEXT,              -- LikelyFixable / RarelyHandFixable / ...
+                instruction_count INTEGER,
+                details TEXT,                 -- raw detector payload, e.g. divergent_callees
+                PRIMARY KEY (scan_id, function_id, pattern)
+            ) WITHOUT ROWID
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_function_patterns_pattern "
+                     "ON function_patterns(scan_id, pattern)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_function_patterns_fn "
+                     "ON function_patterns(function_id)")
+        # `pattern_flags_scan_id` is the ONE column added to `functions`, and it
+        # is not another flag: it names the scan the reloc-sensitive `has_*`
+        # booleans on that row were last derived from.  A reader who wants to
+        # know whether `has_linker_merged = 0` means anything can now find out.
+        # NULL == the value predates this table and its ruler is unknown.
+        try:
+            conn.execute("ALTER TABLE functions ADD COLUMN pattern_flags_scan_id INTEGER")
+        except sqlite3.OperationalError as e:
+            if "duplicate column" not in str(e).lower():
+                raise
+        # Latest scan per ruler, so consumers do not each re-derive "which scan".
+        conn.execute("DROP VIEW IF EXISTS v_latest_pattern_scan")
+        conn.execute("""
+            CREATE VIEW v_latest_pattern_scan AS
+            SELECT s.* FROM pattern_scans s
+            WHERE s.id = (SELECT MAX(s2.id) FROM pattern_scans s2
+                          WHERE s2.ruler = s.ruler)
+        """)
+        # The join a caller actually wants.  Restricted to the latest scan per
+        # ruler and carrying the ruler in every row, so a result set cannot be
+        # quoted without it.
+        conn.execute("DROP VIEW IF EXISTS v_function_patterns")
+        conn.execute("""
+            CREATE VIEW v_function_patterns AS
+            SELECT s.ruler        AS ruler,
+                   s.tool_version AS tool_version,
+                   s.id           AS scan_id,
+                   f.id           AS function_id,
+                   f.symbol       AS symbol,
+                   f.demangled    AS demangled,
+                   f.unit         AS unit,
+                   f.size         AS size,
+                   f.match_percent_normalized AS match_percent_normalized,
+                   p.pattern      AS pattern,
+                   p.fixability   AS fixability,
+                   p.confidence   AS confidence,
+                   p.instruction_count AS instruction_count,
+                   p.details      AS details
+            FROM function_patterns p
+            JOIN v_latest_pattern_scan s ON s.id = p.scan_id
+            JOIN functions f ON f.id = p.function_id
+        """)
+
     # Update schema version
     conn.execute("UPDATE schema_version SET version = ?", (to_version,))
     conn.commit()
@@ -999,6 +1124,8 @@ def query_functions(
     unicorn_confidence: str | None = None,
     min_unicorn_harness_version: int | None = None,
     is_stub: bool | None = None,
+    objdiff_pattern: str | None = None,
+    pattern_ruler: str = "name_check",
 ) -> list[dict[str, Any]]:
     """
     Query multiple functions matching criteria.
@@ -1018,8 +1145,29 @@ def query_functions(
                             fixes (that harness overstated real bugs ~8x). NULL
                             harness_version rows are always excluded by this
                             filter. See scripts/unicorn_runner/signal_version.py.
+        objdiff_pattern:    Only rows carrying this objdiff pattern in the LATEST
+                            `pattern_scans` row for `pattern_ruler` -- e.g.
+                            'WRONG_CALLEE', 'TEMPLATE_INSTANTIATION_MISMATCH'
+                            (the two 4.2.6 marks LikelyFixable), 'LINKER_MERGED',
+                            'REGISTER_SAVE_HELPER_MISMATCH'. This is NOT a `has_*`
+                            column: it joins `function_patterns`, so a row only
+                            appears if some scan under that ruler actually
+                            examined it and the detector fired.
+        pattern_ruler:      `functionRelocDiffs` value the pattern was measured
+                            under. Defaults to 'name_check', the graded ruler and
+                            report.json's. Passing 'none' RAISES: the callee,
+                            prologue, MakeString and scope detectors cannot fire
+                            under it, so every bucket would come back empty --
+                            an answer that reads exactly like "this class is
+                            exhausted". See docs/analysis/2026-08-21-pattern-
+                            census-4.2.6.md.
 
     Returns list of function dicts.
+
+    Raises:
+        ValueError: `pattern_ruler='none'` with an `objdiff_pattern` set, or a
+                    pattern for which no scan under that ruler exists (absence of
+                    a measurement must not read as absence of the pattern).
     """
     conn = get_connection(db_path)
 
@@ -1066,6 +1214,31 @@ def query_functions(
     # Stub filter
     if is_stub is not None:
         query += f" AND is_stub = {1 if is_stub else 0}"
+
+    # objdiff pattern filter -- joins the measured table, never a has_* column.
+    if objdiff_pattern:
+        if pattern_ruler == "none":
+            raise ValueError(
+                "objdiff_pattern with pattern_ruler='none' is refused: under "
+                "functionRelocDiffs=none, 10 of objdiff 4.2.6's 25 detectors "
+                "cannot fire at all (measured whole-binary 2026-08-21), so the "
+                "result would be an empty set that reads like an exhausted "
+                "class. Use 'name_check' (graded, report.json's) or 'all'."
+            )
+        scan = conn.execute(
+            "SELECT id FROM pattern_scans WHERE ruler = ? ORDER BY id DESC LIMIT 1",
+            (pattern_ruler,)).fetchone()
+        if scan is None:
+            raise ValueError(
+                f"no pattern_scans row for ruler={pattern_ruler!r}, so this "
+                f"query cannot distinguish 'no function has {objdiff_pattern}' "
+                f"from 'nobody has measured it'. Run "
+                f"scripts/analysis/pattern_census.py --ruler {pattern_ruler} "
+                f"--apply first."
+            )
+        query += (" AND id IN (SELECT function_id FROM function_patterns "
+                  "WHERE scan_id = ? AND pattern = ?)")
+        params.extend([scan[0], objdiff_pattern])
 
     # Unicorn verdict filter
     if unicorn_verdict:
