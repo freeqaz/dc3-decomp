@@ -1,3 +1,8 @@
+// MSVC expanded GetEaseFunction() inline here in the shipped build: the __FILE__
+// UpdateEase's range assert carries is e:\lazer_build_gmc1\system\src\math/Easing.h,
+// not FlowSlider.cpp.  See the opt-in note in math/Easing.h.  Must precede the
+// first include.
+#define EASING_FORCE_INLINE_GET_EASE_FUNCTION 1
 #include "flow\FlowSlider.h"
 #include "flow\FlowDistance.h"
 #include "obj\ObjPtrVec_impl.h"
@@ -152,9 +157,10 @@ void FlowSlider::UpdateIntensity() {
 }
 
 __declspec(noinline) void FlowSlider::UpdateEase() {
-    EaseType e = mEaseType;
-    MILO_ASSERT(e >= kEaseLinear && e <= kEaseQuarterHalfStairstep, 0x16b);
-    mEaseFunc = gEaseFuncs[e];
+    // The assert and the gEaseFuncs load both come from GetEaseFunction() in
+    // math/Easing.h -- open-coding them here put FlowSlider.cpp in the image's
+    // __FILE__ slot where the original has Easing.h.
+    mEaseFunc = GetEaseFunction(mEaseType);
 }
 
 void FlowSlider::UpdateActivations() {

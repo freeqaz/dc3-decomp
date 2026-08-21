@@ -194,15 +194,12 @@ void CharClipGroup::SetClipFlags(int flags) {
     }
 }
 
-#line 391 "e:\\lazer_build_gmc1\\system\\src\\obj\\ObjPtr_p.h"
-template <>
-BinStream &operator<<(BinStream &bs, const ObjPtrVec<RndMat, ObjectDir> &c) {
-    bs << (int)c.size();
-    MILO_ASSERT(c.Owner(), 0x525);
-    for (int i = 0; i < (int)c.size(); i++) {
-        const Hmx::Object *obj = c[i];
-        const char *name = obj ? obj->Name() : "";
-        bs << name;
-    }
-    return bs;
-}
+// Explicit instantiation of ObjPtr_p.h's generic operator<<, not a
+// specialisation of it.  This used to be a hand-written body under a
+// #line 391 "...\\obj\\ObjPtr_p.h" directive -- the #line got the __FILE__ the
+// image carries, but the body was not the image's body (59.3%).  Instantiating
+// the real template gets both, and the #line goes away with it.  The
+// instantiation is needed because nothing in this TU streams an
+// ObjPtrVec<RndMat> and MSVC emits no COMDAT for an uninstantiated template.
+template BinStream &
+operator<< <RndMat>(BinStream &, const ObjPtrVec<RndMat, ObjectDir> &);

@@ -161,7 +161,10 @@ void AllocInfo::FillStackTrace() {
 void AllocInfoInit() {
     Trie *trie;
     if (s_pTrie == nullptr) {
-        void *dst = MemAlloc(0x220008, __FILE__, 0x28, "Trie");
+        // AllocTrieMemory() is in utl/trie.h, and that placement is load-bearing:
+        // the shipped image attributes this MemAlloc to
+        // e:\lazer_build_gmc1\system\src\utl\trie.h line 0x28, not to AllocInfo.cpp.
+        void *dst = AllocTrieMemory();
         if (dst) {
             memset(dst, 0, 0x220008);
             trie = (Trie *)dst;

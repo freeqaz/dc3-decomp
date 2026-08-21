@@ -1,3 +1,8 @@
+// MSVC expanded GetEaseFunction() inline here in the shipped build: the __FILE__
+// CalculateFaderVolume's range assert carries is
+// e:\lazer_build_gmc1\system\src\math/Easing.h, not ThreeDSound.cpp.  See the
+// opt-in note in math/Easing.h.  Must precede the first include.
+#define EASING_FORCE_INLINE_GET_EASE_FUNCTION 1
 #include "synth\ThreeDSound.h"
 #include "math\Decibels.h"
 #include "math/Easing.h"
@@ -256,9 +261,10 @@ void ThreeDSound::CalculateFaderVolume() {
         }
         float invRange = 1.0f / (mMinFalloffDistance - mSilenceDistance);
         float t = invRange * unk20c + (1.0f - mMinFalloffDistance * invRange);
-        EaseType e = mFalloffType;
-        MILO_ASSERT(e >= kEaseLinear && e <= kEaseQuarterHalfStairstep, 0x16B);
-        float eased = gEaseFuncs[e](t, mFalloffParameter, 0);
+        // The assert and the gEaseFuncs load are GetEaseFunction()'s, from
+        // math/Easing.h; open-coding them here put ThreeDSound.cpp in the
+        // image's __FILE__ slot where the original has Easing.h.
+        float eased = GetEaseFunction(mFalloffType)(t, mFalloffParameter, 0);
         eased = Clamp(0.0f, 1.0f, eased);
         vol = RatioToDb(eased);
         vol = Max(vol, -96.0f);

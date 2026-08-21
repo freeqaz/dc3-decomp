@@ -5,7 +5,12 @@
 #include "os\Debug.h"
 #include "rndobj\BaseMaterial.h"
 #include "rndobj\Fur.h"
-#include "rndobj\MeshVertCompress.h"
+// Forward slash on purpose: this TU's copy of PackVector carries
+// e:\lazer_build_gmc1\system\src\rndobj/MeshVertCompress.h in the image, while
+// rndobj/Mesh.cpp's copy carries the backslash form.  The original spelled the
+// two includes differently and MSVC writes __FILE__ the way the file was
+// reached, so the difference is per-TU and has to be reproduced per-TU.
+#include "rndobj/MeshVertCompress.h"
 #include "rndobj\Wind.h"
 #include "rndobj\Rnd.h"
 #include "rndobj\Shader.h"
@@ -82,7 +87,6 @@ unsigned int DxMesh::VertFVF() const {
     return IsSkinned() ? 0x15A : 0x152;
 }
 
-static const unsigned int kBitsOutput = 32;
 
 void ScaleAddEq(Hmx::Matrix3 &m1, const Hmx::Matrix3 &m2, float f) {
     ScaleAdd(m1.x, m2.x, f, m1.x);
@@ -95,50 +99,6 @@ void ScaleAddEq(Transform &tf1, const Transform &tf2, float f) {
     ScaleAdd(tf1.v, tf2.v, f, tf1.v);
 }
 
-void PackVector(
-    unsigned int &output,
-    const Vector4 &vec,
-    unsigned char bitsX,
-    unsigned char bitsY,
-    unsigned char bitsZ,
-    unsigned char bitsW,
-    bool normalize
-) {
-    MILO_ASSERT((bitsX + bitsY + bitsZ + bitsW) == kBitsOutput, 0x39);
-
-    int offsetY = bitsX;
-    int offsetZ = bitsY + bitsX;
-    int normFactor = normalize ? 1 : 0;
-    int kOffsetW = bitsZ + offsetZ;
-
-    int shiftY = bitsY - normFactor;
-    int shiftZ = bitsZ - normFactor;
-    int shiftX = bitsX - normFactor;
-    int shiftW = bitsW - normFactor;
-
-    u32 maskY = (1U << bitsY) - 1;
-    u32 maskZ = (1U << bitsZ) - 1;
-    u32 maskW = (1U << bitsW) - 1;
-    u32 maskX = (1U << bitsX) - 1;
-    int maxX = (1 << shiftX) - 1;
-    int maxY = (1 << shiftY) - 1;
-    int maxZ = (1 << shiftZ) - 1;
-    int maxW = (1 << shiftW) - 1;
-
-    MILO_ASSERT(kOffsetW + bitsW == kBitsOutput, 0x4E);
-
-    f32 fy = (f32)(f64)maxY;
-    f32 fx = (f32)(f64)maxX;
-    f32 fw = (f32)(f64)maxW;
-    f32 fz = (f32)(f64)maxZ;
-
-    u32 py = ((u32)(s32)(vec.y * fy)) & maskY;
-    u32 px = ((u32)(s32)(vec.x * fx)) & maskX;
-    u32 pz = ((u32)(s32)(vec.z * fz)) & maskZ;
-    u32 pw = ((u32)(s32)(vec.w * fw)) & maskW;
-
-    output = (pw << kOffsetW) | (pz << offsetZ) | (py << offsetY) | px;
-}
 
 static inline unsigned short FloatToHalf(float value) {
     unsigned int raw = *(unsigned int *)&value;

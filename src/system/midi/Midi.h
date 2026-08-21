@@ -5,13 +5,12 @@
 #include "utl\MemMgr.h"
 #include <vector>
 
-struct MidiMessage {
-    unsigned int wMsg;
-    unsigned long dwParam1;
-    unsigned long dwParam2;
-    unsigned int wTimeMs;
-    MEM_ARRAY_OVERLOAD(MidiMessage, 0x12)
-};
+// MidiMessage is declared in os/UsbMidiGuitar.h, not here.  It is used by
+// exactly one thing binary-wide, Queue in UsbMidiGuitar, and the __FILE__ its
+// MEM_ARRAY_OVERLOAD bakes into Queue::Initialize and ~Queue in the image is
+// e:\lazer_build_gmc1\system\src\os\UsbMidiGuitar.h.  ham_xbox_r.map agrees from
+// the other side: the "MidiMessage" class-name literal the macro emits is
+// contributed by os:UsbMidiGuitar.obj.
 
 class MidiReader;
 class MidiReceiver;

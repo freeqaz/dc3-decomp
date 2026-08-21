@@ -1,3 +1,14 @@
+// utl/TempoMap.h is opened here, with a forward slash, before anything else in
+// this TU can open it with a backslash.  MSVC spells __FILE__ the way the file
+// was first reached, and the shipped image is not consistent about it: the
+// literal Game::LoadNewSong's assert carries is
+// e:\lazer_build_gmc1\system\src\utl/TempoMap.h, while MidiReader,
+// MultiTempoTempoMap and TempoMap all carry the backslash form (and all three
+// already match).  #pragma once means only the FIRST opener's spelling counts,
+// so the two forms can only coexist per-TU -- hence this line rather than a
+// change to utl\MultiTempoTempoMap.h, which reaches Game.cpp through Game.h and
+// several other units besides.
+#include "utl/TempoMap.h"
 #include "game\Game.h"
 #include "SongDB.h"
 #include "char\FileMerger.h"

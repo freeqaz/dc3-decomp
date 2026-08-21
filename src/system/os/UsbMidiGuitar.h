@@ -3,6 +3,18 @@
 #include "midi\Midi.h"
 #include "os\Joypad.h"
 
+// Declared here rather than in midi/Midi.h: the image spells the __FILE__ of
+// this macro's MemAlloc/MemFree as e:\lazer_build_gmc1\system\src\os\UsbMidiGuitar.h
+// (line 0x12), and ham_xbox_r.map credits the "MidiMessage" literal to
+// os:UsbMidiGuitar.obj.  Nothing outside this header uses the type.
+struct MidiMessage {
+    unsigned int wMsg;
+    unsigned long dwParam1;
+    unsigned long dwParam2;
+    unsigned int wTimeMs;
+    MEM_ARRAY_OVERLOAD(MidiMessage, 0x12)
+};
+
 class UsbMidiGuitar {
 public:
     UsbMidiGuitar();

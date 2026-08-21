@@ -19,6 +19,41 @@
 #include "utl\Str.h"
 #include <cstdlib>
 
+class PropertyTask : public Task {
+public:
+    PropertyTask(
+        Hmx::Object *,
+        DataNode &,
+        DataNode &,
+        TaskUnits,
+        float,
+        EaseType,
+        float,
+        bool,
+        Hmx::Object *
+    );
+    virtual ~PropertyTask();
+    OBJ_CLASSNAME(PropertyTask)
+    virtual bool Replace(ObjRef *, Hmx::Object *);
+    virtual void Poll(float);
+
+    POOL_OVERLOAD(PropertyTask, 0x17)
+
+protected:
+    void SetProperty(DataNode &);
+
+    ObjOwnerPtr<Hmx::Object> mTarget; // 0x2C
+    DataNode mProperty; // 0x40
+    DataNode mValue; // 0x48
+    DataNode mStartValue; // 0x50
+    float mDuration; // 0x58
+    float mEasePower; // 0x5C
+    bool mIsColorInterp; // 0x60
+    ObjPtr<Hmx::Object> mListener; // 0x64
+    int mStartValueType; // 0x78 - cached mStartValue.Type() at ctor time (before atoi conversion)
+    EaseFunc *mEaseFunc; // 0x7C
+};
+
 // Declared extern in math/Easing.h. Retail emitted the out-of-line easing
 // COMDATs from this object (ham_xbox_r.map: ?EaseBackIn@@YAMMMM@Z at
 // 82411d50, flow:FlowSetProperty.obj), so this is where the table lives.
