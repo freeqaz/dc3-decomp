@@ -1566,55 +1566,6 @@ DataNode RndMesh::OnConfigureMesh(const DataArray *da) {
     return 0;
 }
 
-void PackVector(
-    unsigned int &output,
-    const Vector4 &vec,
-    unsigned char bitsX,
-    unsigned char bitsY,
-    unsigned char bitsZ,
-    unsigned char bitsW,
-    bool normalize
-) {
-    if ((u32)(bitsX + bitsY + bitsZ + bitsW) != 0x20U) {
-        MILO_ASSERT(0, 0x39);
-    }
-
-    s32 offsetY = bitsX;
-    s32 offsetZ = bitsX + bitsY;
-    s32 offsetW = bitsX + bitsY + bitsZ;
-    s32 normFactor = normalize ? 1 : 0;
-
-    if ((u32)(bitsW + offsetW) != 0x20U) {
-        MILO_ASSERT(0, 0x4E);
-    }
-
-    s32 shiftZ = bitsZ - normFactor;
-    s32 shiftX = bitsX - normFactor;
-    s32 shiftW = bitsW - normFactor;
-    s32 shiftY = bitsY - normFactor;
-
-    s32 maxZ = (1 << shiftZ) - 1;
-    s32 maxX = (1 << shiftX) - 1;
-    s32 maxW = (1 << shiftW) - 1;
-    s32 maxY = (1 << shiftY) - 1;
-
-    f64 dz = (f64)maxZ;
-    f64 dx = (f64)maxX;
-    f64 dw = (f64)maxW;
-    f64 dy = (f64)maxY;
-
-    f32 fz = (f32)dz;
-    f32 fx = (f32)dx;
-    f32 fw = (f32)dw;
-    f32 fy = (f32)dy;
-
-    u32 px = ((u32)(vec.x * fx)) & ((1U << bitsX) - 1);
-    u32 py = ((u32)(vec.y * fy)) & ((1U << bitsY) - 1);
-    u32 pz = ((u32)(vec.z * fz)) & ((1U << bitsZ) - 1);
-    u32 pw = ((u32)(vec.w * fw)) & ((1U << bitsW) - 1);
-
-    output = (pw << offsetW) | (pz << offsetZ) | (py << offsetY) | px;
-}
 
 static inline unsigned short FloatToHalf(float value) {
     unsigned int raw;
