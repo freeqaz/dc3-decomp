@@ -1349,7 +1349,7 @@ void TestTextureSize(ObjectDir *dir, int iType, int i3, int i4, int i5, int maxB
                 local_bpp = 0x20;
             int product = it->Width() * it->Height() * local_bpp;
             if (product > i3 * i4 * scaleFactor) {
-                MILO_WARN(
+                MILO_NOTIFY(
                     "%s is too big w:%d h:%d bpp:%d",
                     PathName(it),
                     it->Width(),
@@ -1358,7 +1358,7 @@ void TestTextureSize(ObjectDir *dir, int iType, int i3, int i4, int i5, int maxB
                 );
             }
             if (product != 0 && shouldCheckBpp && local_bpp > maxBpp) {
-                MILO_WARN("%s is %d bpp > %d, too big", PathName(it), local_bpp, maxBpp);
+                MILO_NOTIFY("%s is %d bpp > %d, too big", PathName(it), local_bpp, maxBpp);
             }
         }
     }

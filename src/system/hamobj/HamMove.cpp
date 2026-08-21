@@ -718,6 +718,8 @@ const std::vector<MoveFrame> &HamMove::GetMoveFrames() const {
 
 MoveMirrored HamMove::Mirrored() const { return (MoveMirrored)(mMirror != nullptr); }
 
+HamMove *HamMove::Mirror() { return mMirror; }
+
 void HamMove::RefreshBarks() {
     static Symbol hud_panel("hud_panel");
     DataNode &n = DataVariable(hud_panel);

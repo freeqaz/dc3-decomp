@@ -25,10 +25,18 @@ RndGroup::RndGroup()
     : mObjects(this, kObjListOwnerControl), mDrawOnly(this), mSortInWorld(false) {}
 
 bool RndGroup::Replace(ObjRef *ref, Hmx::Object *obj) {
-    if (ref->Parent() == &mObjects) {
+    typedef ObjPtrList<Hmx::Object> ObjList;
+    // ObjPtrList names RndGroup a friend precisely so this can turn the
+    // incoming ObjRef straight back into one of its own nodes: the target
+    // selects the node branchlessly and erases *that* node, rather than
+    // calling remove() and re-finding the object by value.
+    ObjList::iterator it = ref->Parent() == &mObjects
+        ? ObjList::iterator(static_cast<ObjList::Node *>(ref))
+        : mObjects.end();
+    if (it != mObjects.end()) {
         if (!obj) {
             Hmx::Object *theObj = ref->GetObj();
-            mObjects.remove(theObj);
+            mObjects.erase(it);
             VectorRemove(mAnims, theObj);
             VectorRemove(mDraws, theObj);
         } else {

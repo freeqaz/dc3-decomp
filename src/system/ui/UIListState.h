@@ -51,6 +51,7 @@ public:
     int FirstShowing() const { return mFirstShowing; }
     int GridSpan() const { return mGridSpan; }
     float Speed() const;
+    float StepPercent() const;
     int MinDisplay() const;
     int MaxDisplay() const;
     bool ScrollPastMinDisplay() const;

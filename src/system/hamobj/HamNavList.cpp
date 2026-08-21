@@ -1026,7 +1026,7 @@ float HamNavList::GetTargetSwellAmount(int display) {
 #endif
                         int disabledCount = GetDisabledCount(display);
                         int effectivePos = display - disabledCount;
-                        if (mListState.IsScrolling()) {
+                        if (mListState.ScrollPastMinDisplay()) {
                             effectivePos -= (int)mListState.MinDisplay();
                             bool atTop = mScrollBehavior.AtTop();
                             if (!atTop) {
@@ -1059,7 +1059,9 @@ void HamNavList::RealRefresh() {
                 mListState.SetMinDisplay(minDisplayVal);
                 mListState.SetScrollPastMinDisplay(true);
                 mListState.SetMaxDisplay(maxDisplay);
-                mListState.SetCircular((unsigned long)maxDisplay >= numShowing);
+                mListState.SetScrollPastMaxDisplay(
+                    (unsigned long)maxDisplay >= numShowing
+                );
             } else {
                 mListState.SetScrollPastMinDisplay(false);
                 int sel = mListState.Selected();
@@ -1290,7 +1292,7 @@ void HamNavList::SetSelecting(bool selecting) {
     SetRibbonMode(HamListRibbon::kRibbonSelect);
     if (TheGestureMgr && TheGestureMgr->GesturingWithVoice()) {
         TheGestureMgr->SetGesturingWithVoice(false);
-        if (listState.IsScrolling()) {
+        if (listState.ScrollPastMinDisplay()) {
             mScrollBehavior.Enter();
         }
     }
@@ -1741,7 +1743,7 @@ void HamNavList::DrawShowing() {
 
     LinkRibbonDrawState(mRibbonDrawStates, widgetState);
 
-    if (mScrollBehavior.IsScrolling()) {
+    if (mListState.ScrollPastMinDisplay()) {
         for (unsigned int i = 0; i < mRibbonDrawStates.size(); i++) {
             int first = mListState.FirstShowing();
             if ((int)i < first || (int)i >= first + HamListRibbon::sNumListSelectable) {

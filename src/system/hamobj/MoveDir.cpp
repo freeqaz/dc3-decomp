@@ -1263,7 +1263,7 @@ void MoveDir::ResetDetectFrames(int player, Difficulty diff) {
                         const std::vector<MoveFrame> &moveFrames =
                             ((const HamMove *)curMove)->GetMoveFrames();
                         MoveMirrored mirrored =
-                            (MoveMirrored)(curMove->Mirrored() != kMirroredNo);
+                            (MoveMirrored)(curMove->Mirror() != nullptr);
                         for (unsigned int j = 0; j < (unsigned int)moveFrames.size();
                              j++) {
                             if (dfIt->mMoveFrameIdx == (int)j) {
@@ -1785,7 +1785,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
     MILO_ASSERT(TheHamDirector, 0x797);
 
     MoveFrame *closest = ClosestMoveFrame();
-    int mirrored = (move->Mirrored() != kMirroredNo);
+    int mirrored = (move->Mirror() != nullptr);
 
     // Cache character width for overlay column spacing
     if (sCharWidth == 0.0f) {

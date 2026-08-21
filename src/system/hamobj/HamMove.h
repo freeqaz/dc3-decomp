@@ -97,6 +97,7 @@ public:
     std::vector<MoveFrame> &GetMoveFrames();
     const std::vector<MoveFrame> &GetMoveFrames() const;
     MoveMirrored Mirrored() const;
+    HamMove *Mirror();
     void Update(const HamMove *);
     const FilterVersion *FilterVer() const;
     const std::vector<float> *RatingOverride() const;
