@@ -16,6 +16,22 @@
 
 CharBones *gPropBones;
 
+// NEGATIVE RESULT (2026-08-21, task #111).  This belongs in char/CharBones.h and
+// the image says so twice: ham_xbox_r.map flags ?MakeShortAng@@YAFM@Z 'f i' --
+// a pick-any COMDAT, which MSVC only emits for an inline definition -- from
+// char:CharBones.obj, and the __FILE__ the MILO_ASSERT below bakes into the
+// shipped image is e:\lazer_build_gmc1\system\src\char\CharBones.h, not the bare
+// 'CharBones.cpp' an out-of-line definition produces.  Moving it to the header
+// as `inline` was TRIED and REVERTED: nothing in this .cpp calls MakeShortAng,
+// MSVC does not emit an unreferenced inline function, so CharBones.obj stopped
+// defining the symbol altogether and the row went 99.7619% -> 0% (42/42 insert,
+// "Stub").  The original's CharBones.cpp must have referenced it from something
+// that is not in the image -- the assert's condition string
+// ??_C@_0BI@ILEBKJMM@ is referenced from exactly one address binary-wide,
+// 823C4D58, inside MakeShortAng itself, so it was never inlined into a
+// surviving caller, and no `bl` anywhere outside CharBonesSamples::Relativize
+// reaches 823C4D08.  Closing this row needs that missing caller, not an
+// invented reference; the 0.238% it costs is one charged instruction of 42.
 short MakeShortAng(float f) {
     f = f * 1638.4f + 0.5f;
     MILO_ASSERT(f < 32768 && f > -32767, 0x60);
