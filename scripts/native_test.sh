@@ -90,8 +90,37 @@ fi
 executed=$(( total - skipped ))
 passed=$(( executed - failed ))
 
+# The budget file is a PRECONDITION, not an optional decoration.
+#
+# This used to be `budget=""` plus `[ -f ... ] && budget=$(...)`, with no branch
+# for the empty case: both the over-budget check (exit 2) and the ratchet
+# (exit 3) sat inside `if [ -n "$budget" ]`, so an absent or unparseable file
+# skipped the ONLY mechanism enforcing native coverage and the script exited
+# $CTEST_RC -- which is 0, because ctest scores skips as passes. The only
+# visible difference was that the `budget :` line vanished from the banner: an
+# absence, not a signal.
+#
+# Two one-character launderings, both measured 2026-08-22:
+#   rm native/tests/skip_budget.txt            -> gate off, exit 0
+#   rewrite its contents as "budget: 69"       -> `grep -oE '^[0-9]+'` needs
+#      digits at column 1, matches nothing, gate off, exit 0 -- and the diff
+#      reads like a documentation improvement.
+# Both are now exit 5.
 budget=""
-[ -f "$BUDGET_FILE" ] && budget=$(grep -oE '^[0-9]+' "$BUDGET_FILE" | head -1)
+if [ ! -f "$BUDGET_FILE" ]; then
+    echo "error: skip budget file missing: $BUDGET_FILE" >&2
+    echo "       The budget is the only thing enforcing native test coverage." >&2
+    echo "       Refusing to report a pass with the ratchet disarmed." >&2
+    exit 5
+fi
+budget=$(grep -oE '^[0-9]+' "$BUDGET_FILE" | head -1)
+if [ -z "$budget" ]; then
+    echo "error: could not parse a skip budget from $BUDGET_FILE" >&2
+    echo "       Wanted a bare integer at the start of a line; got:" >&2
+    sed -n '1,5p' "$BUDGET_FILE" | sed 's/^/         /' >&2
+    echo "       An unparseable budget used to silently disable the gate." >&2
+    exit 5
+fi
 
 echo
 echo "=============================================================="
@@ -115,8 +144,23 @@ if [ "$skipped" -gt 0 ]; then
 fi
 
 if [ "${SKIP_BUDGET_UPDATE:-0}" = "1" ]; then
+    # Same command ratchets both ways, and the loosening direction exits 0
+    # because ctest scores skips as passes. So `SKIP_BUDGET_UPDATE=1` after
+    # gating out 100 tests wrote the larger number and reported success --
+    # laundering a coverage regression through the mechanism that exists to
+    # catch it. Tightening stays a one-liner; loosening now needs to be said
+    # out loud.
+    if [ "$skipped" -gt "$budget" ] && [ "${ALLOW_BUDGET_LOOSEN:-0}" != "1" ]; then
+        echo
+        echo "REFUSING to loosen the skip budget: $budget -> $skipped (+$((skipped - budget)))."
+        echo "      That records a coverage REGRESSION as the new normal, and"
+        echo "      this command exits 0 either way. If it is genuinely"
+        echo "      intended, re-run with ALLOW_BUDGET_LOOSEN=1 and say why in"
+        echo "      the commit message."
+        exit 5
+    fi
     echo "$skipped" > "$BUDGET_FILE"
-    echo "skip budget updated to $skipped"
+    echo "skip budget updated: $budget -> $skipped"
     exit "$CTEST_RC"
 fi
 
