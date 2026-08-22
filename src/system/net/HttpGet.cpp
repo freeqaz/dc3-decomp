@@ -158,7 +158,7 @@ namespace {
 };
 
 HttpGet::HttpGet(unsigned int ip, unsigned short port, const char *c1, const char *c2)
-    : mSocket(nullptr), mPath(c1), mPort(port), mState(-1), mFlags(false),
+    : mSocket(nullptr), mPath(c1), mPort(port), mState(kHttpGet_Nil), mFlags(false),
       mTimeoutMs(kDefaultTimeoutMs), mIP(ip), mHeaders(c2), mRecvBuf(nullptr), mRecvBufPos(0),
       mFileBuf(nullptr), mFileBufSize(0), mFileBufRecvPos(0), mRetryCount(0), mFailType(),
       mPrevState(kHttpGet_Nil) {
@@ -169,7 +169,7 @@ HttpGet::HttpGet(unsigned int ip, unsigned short port, const char *c1, const cha
 HttpGet::HttpGet(
     unsigned int ip, unsigned short port, const char *c1, unsigned char uc, const char *c2
 )
-    : mSocket(nullptr), mPath(c1), mPort(port), mState(-1), mFlags(uc & 3),
+    : mSocket(nullptr), mPath(c1), mPort(port), mState(kHttpGet_Nil), mFlags(uc & 3),
       mTimeoutMs(kDefaultTimeoutMs), mIP(ip), mHeaders(c2), mRecvBuf(nullptr), mRecvBufPos(0),
       mFileBuf(nullptr), mFileBufSize(0), mFileBufRecvPos(0), mRetryCount(0), mFailType() {
     SetState((uc & 4) == 0 ? kHttpGet_Pending : kHttpGet_Connecting);
@@ -292,7 +292,7 @@ void HttpGet::AddRequiredHeaders() {
 }
 
 void HttpGet::SetState(State newState) {
-    if (mState == (int)newState) return;
+    if (mState == newState) return;
 
     do {
         switch (mState) {
@@ -322,10 +322,10 @@ void HttpGet::SetState(State newState) {
 
         if (((int)newState == kHttpGet_Failed || (int)newState == kHttpGet_FailedSend)
             && mState != kHttpGet_Failed && mState != kHttpGet_FailedSend) {
-            mPrevState = (State)mState;
+            mPrevState = mState;
         }
 
-        mState = (int)newState;
+        mState = newState;
         mTimer.Restart();
 
         switch ((int)newState) {
@@ -356,7 +356,7 @@ void HttpGet::SetState(State newState) {
             }
             break;
         }
-    } while (mState != (int)newState);
+    } while (mState != newState);
 }
 
 void HttpGet::Poll() {
@@ -408,7 +408,7 @@ void HttpGet::Poll() {
         }
         if (recvd == 0) return;
         mTimer.Restart();
-        mRecvBufPos = recvd + mRecvBufPos;
+        mRecvBufPos = mRecvBufPos + recvd;
 
         if ((u32)mFileBuf == 0U) {
             int headerEnd = 0;
@@ -418,10 +418,7 @@ void HttpGet::Poll() {
             }
 
             std::vector<String> lines;
-            {
-                String empty;
-                lines.resize(lineCount, empty);
-            }
+            lines.resize(lineCount, String());
             ParseHeader((char *)mRecvBuf, headerEnd, &lines);
             int statusCode = ParseStatusCode(lines);
             mHttpStatus = statusCode;
@@ -449,43 +446,41 @@ void HttpGet::Poll() {
                     }
                 }
                 SetState(kHttpGet_Failed);
-            } else {
-                if (mFlags & 2) {
-                    SetState(kHttpGet_Downloaded);
-                } else {
-                    int contentLen = GetContentLength(lines);
-                    mFileBufSize = contentLen;
-                    if (contentLen < 0) {
-                        mFailType = kHttpFail_None;
-                        SetState(kHttpGet_Failed);
-                    } else if (contentLen == 0) {
-                        SetState(kHttpGet_Downloaded);
-                    } else {
-                        mFileBuf = (char *)MemAlloc(
-                            contentLen, __FILE__, 0x2BB, "HttpGet", 0
-                        );
-                        MILO_ASSERT(mFileBuf, 0x2BC);
+                return;
+            }
+            if (mFlags & 2) {
+                SetState(kHttpGet_Downloaded);
+                return;
+            }
+            int contentLen = GetContentLength(lines);
+            mFileBufSize = contentLen;
+            if (contentLen < 0) {
+                mFailType = kHttpFail_None;
+                SetState(kHttpGet_Failed);
+                return;
+            }
+            if (contentLen == 0) {
+                SetState(kHttpGet_Downloaded);
+                return;
+            }
+            mFileBuf = (char *)MemAlloc(contentLen, __FILE__, 0x2BB, "HttpGet", 0);
+            MILO_ASSERT(mFileBuf, 0x2BC);
 
-                        int bodyStart = headerEnd + 1;
-                        if (mRecvBufPos > bodyStart) {
-                            int len = mRecvBufPos - bodyStart;
-                            MILO_ASSERT(len <= mFileBufSize, 0x2C8);
-                            memcpy(
-                                mFileBuf,
-                                (char *)mRecvBuf + bodyStart,
-                                len
-                            );
-                            mRecvBufPos = 0;
-                            mFileBufRecvPos = len;
-                            MILO_ASSERT(mFileBufRecvPos <= mFileBufSize, 0x2CE);
-                            if (mFileBufRecvPos == mFileBufSize) {
-                                SetState(kHttpGet_Downloaded);
-                            }
-                        } else {
-                            mRecvBufPos = 0;
-                            mFileBufRecvPos = 0;
-                        }
+            {
+                int bodyStart = headerEnd + 1;
+                if (mRecvBufPos > bodyStart) {
+                    int len = mRecvBufPos - bodyStart;
+                    MILO_ASSERT(len <= mFileBufSize, 0x2C8);
+                    memcpy(mFileBuf, bodyStart + (char *)mRecvBuf, len);
+                    mRecvBufPos = 0;
+                    mFileBufRecvPos = len;
+                    MILO_ASSERT(mFileBufRecvPos <= mFileBufSize, 0x2CE);
+                    if (mFileBufRecvPos == mFileBufSize) {
+                        SetState(kHttpGet_Downloaded);
                     }
+                } else {
+                    mRecvBufPos = 0;
+                    mFileBufRecvPos = 0;
                 }
             }
             return;
@@ -493,7 +488,7 @@ void HttpGet::Poll() {
 
         MILO_ASSERT(mFileBufSize >= mFileBufRecvPos + mRecvBufPos, 0x2E1);
         memcpy(mFileBuf + mFileBufRecvPos, mRecvBuf, mRecvBufPos);
-        mFileBufRecvPos += mRecvBufPos;
+        mFileBufRecvPos = mFileBufRecvPos + mRecvBufPos;
         mRecvBufPos = 0;
         if (mFileBufRecvPos == mFileBufSize) {
             SetState(kHttpGet_Downloaded);

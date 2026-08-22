@@ -133,22 +133,21 @@ void WebSvcMgrCurl::FindAndFinish(void *handle, bool success, unsigned int http_
     return;
 
 found:
-    if (curl_easy_getinfo(static_cast<CURL *>(handle), CURLINFO_COOKIELIST, nullptr) == 0) {
+    curl_slist *cookie_list;
+    if (curl_easy_getinfo(static_cast<CURL *>(handle), CURLINFO_COOKIELIST, &cookie_list)
+        == 0) {
         std::map<String, String> cookies;
-        char *response_headers = nullptr;
 
-        curl_easy_getinfo(static_cast<CURL *>(handle), CURLINFO_COOKIELIST, &response_headers);
-
-        if (response_headers != nullptr) {
+        curl_slist *node = cookie_list;
+        while (node != nullptr) {
             std::vector<String> header_vector;
-            String header_str(response_headers);
+            String header_str(node->data);
             header_str.split("\t", header_vector);
 
-            if ((header_vector.size() * 8) == 0x38) {
-                String k(header_str + 0x28);
-                String v(header_str + 0x30);
-                cookies.insert(std::make_pair(k, v));
+            if ((int)(header_vector.size() << 3) == 0x38) {
+                cookies.insert(std::make_pair(header_vector[5], header_vector[6]));
             }
+            node = node->next;
         }
 
         req->SetCookies(cookies);
@@ -158,8 +157,10 @@ found:
     req->SetStatusCode(http_status);
 
     if (success) {
+        req->MarkSuccess();
         req->OnReqSucceeded();
     } else {
+        req->MarkFailure();
         req->OnReqFailed();
     }
 }
