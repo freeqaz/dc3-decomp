@@ -1419,9 +1419,11 @@ DataNode RndMesh::OnCompareEdgeVerts(const DataArray *da) {
         }
     }
     if (mGeomOwner != this && (mVerts.size() != 0 || mFaces.size() != 0)) {
-        if (mGeomOwner)
-            mGeomOwner->Name();
-        PathName(this);
+        MILO_NOTIFY(
+            "%s has geomowner %s but still has its own verts and faces, which wastes RAM",
+            PathName(this),
+            SafeName(mGeomOwner)
+        );
     }
     return 0;
 }
