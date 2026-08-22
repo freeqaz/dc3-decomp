@@ -68,9 +68,7 @@ void XLSPConnection::Disconnect() {
 }
 
 void XLSPConnection::SetState(State s) {
-    if (mState == s)
-        return;
-    do {
+    while (mState != s) {
         switch ((int)mState) {
         case 1: {
             bool skipCleanup = false;
@@ -98,9 +96,10 @@ void XLSPConnection::SetState(State s) {
             break;
         }
         case 2:
-            if ((int)s == 3)
-                break;
-            // fall through
+            if ((int)s != 3) {
+                SecureDisconnect(*(in_addr *)&unk44);
+            }
+            break;
         case 3:
             SecureDisconnect(*(in_addr *)&unk44);
             break;
@@ -131,7 +130,7 @@ void XLSPConnection::SetState(State s) {
         default:
             return;
         }
-    } while (mState != s);
+    }
 }
 
 void XLSPConnection::Poll() {
