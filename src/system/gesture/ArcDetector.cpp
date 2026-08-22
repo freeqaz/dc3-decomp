@@ -98,32 +98,38 @@ void ArcDetector::CullPath() {
 void ArcDetector::Draw(const Skeleton &skeleton, SkeletonViz &viz) {
     unsigned int count = mJointPath.size();
     if (count != 0U) {
-        std::list<Vector3> arcPath;
-        for (int i = 0; i < 100; i++) {
-            float f0 = (float)i * mSwipeExtentX * 0.02f;
-            int sign = (mSide != 0 ? 1 : -1);
-            float comp = mSwipeExtentX * f0 * 2.0f - (f0 * f0);
-            float arcY = 0.0f;
-            if (comp > 0.0f) {
-                arcY = sqrtf(comp);
+        {
+            // arcPath is block-scoped in the image: there is exactly ONE
+            // _List_base::clear (0x1c0, between the two DrawPath calls) and none
+            // at the epilogue, so the call we had been spelling as an explicit
+            // arcPath.clear() is really the destructor at end of scope.
+            std::list<Vector3> arcPath;
+            for (int i = 0; i < 100; i++) {
+                float f0 = (float)i * mSwipeExtentX * 0.02f;
+                int sign = (mSide != 0 ? 1 : -1);
+                float comp = mSwipeExtentX * f0 * 2.0f - (f0 * f0);
+                float arcY;
+                if (comp <= 0.0f) {
+                    arcY = 0.0f;
+                } else {
+                    arcY = sqrtf(comp);
+                }
+                arcY = -arcY;
+                Vector3 vec(f0 * (float)sign, 0.0f, arcY);
+                arcPath.insert(arcPath.begin(), vec);
             }
-            arcY = -arcY;
-            Vector3 vec(f0 * (float)sign, 0.0f, arcY);
-            arcPath.insert(arcPath.begin(), vec);
+
+            const TrackedJoint *joints = skeleton.TrackedJoints();
+            const Vector3 &jpos = joints[mSecondaryJoint].mJointPos[0];
+            Vector3 pos(
+                jpos.x + mArcOffset.x, jpos.y + mArcOffset.y, jpos.z + mArcOffset.z
+            );
+
+            DrawPath(arcPath, viz, Hmx::Color(1.0f, 1.0f, 0.0f, 1.0f), pos);
         }
 
-        const TrackedJoint *joints = skeleton.TrackedJoints();
-        const Vector3 &jpos = joints[mSecondaryJoint].mJointPos[0];
-        Vector3 pos(
-            jpos.x + mArcOffset.x,
-            jpos.y + mArcOffset.y,
-            jpos.z + mArcOffset.z
-        );
-
-        DrawPath(arcPath, viz, Hmx::Color(1.0f, 1.0f, 0.0f, 1.0f), pos);
-        arcPath.clear();
-
-        const Vector3 &jpos2 = joints[mSecondaryJoint].mJointPos[0];
+        const TrackedJoint *joints2 = skeleton.TrackedJoints();
+        const Vector3 &jpos2 = joints2[mSecondaryJoint].mJointPos[0];
         DrawPath(mJointPath, viz, Hmx::Color(1.0f, 0.0f, 1.0f, 1.0f), jpos2);
     }
 }
