@@ -1358,7 +1358,7 @@ DataNode RndMesh::OnCompareEdgeVerts(const DataArray *da) {
     for (int i = 0; i < Verts().size(); i++) {
         if (vec20[i] == -1) {
             vec20[i] = i;
-            for (int j = i; j < Verts().size(); j++) {
+            for (int j = i + 1; j < Verts().size(); j++) {
                 if (Verts(j).pos == Verts(i).pos) {
                     vec20[j] = i;
                 }
