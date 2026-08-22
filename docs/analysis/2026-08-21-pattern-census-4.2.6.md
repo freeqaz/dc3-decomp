@@ -327,6 +327,18 @@ already carry an `AT_LIMIT` verdict** and 60 carry `COMPLETE`. Re-adjudicating e
 certificates is a verdict change on 67 rows and belongs to whoever owns the AT_LIMIT backlog,
 not to a census. The rows are listed by the query in §7.
 
+> **Superseded 2026-08-22** — the "falls back to prior behaviour when no scan exists" half of
+> the paragraph above is gone, and so is the raw-pattern refusal. The gate is now
+> `scripts/orchestrator/callee_gate.py`, which **raises `StalePatternScanError`** rather than
+> certifying from a scan taken by a different `objdiff-cli` than the installed one (absence of
+> a scan raises too — absence of a measurement must never read as absence of the bug), and
+> which **judges** the finding against `orig/373307D9/ham_xbox_r.map` instead of blocking on
+> the pattern: 72 of the 138 rows are cleared (58 `unverifiable_pairing`, 13 `icf_fold`,
+> 1 `merged_stub`) and 66 still block (63 `real_other_address`, 3 `unresolved`). Read that
+> module's docstring for why the refresh is a reader guard and not a ninja edge, and for why
+> the `icf_fold` sub-case is safe when the fold-group trap that `5aba5e30e` exploited is not.
+> `python3 scripts/verify_pattern_scan_current.py --check` is the standalone assertion.
+
 ---
 
 ## 7. Reproduce / query

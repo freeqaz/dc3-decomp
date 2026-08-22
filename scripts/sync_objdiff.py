@@ -554,7 +554,11 @@ def parse_args() -> argparse.Namespace:
                         "AT_LIMIT certificates from `detected_patterns`, and "
                         "certify_floor.py:69 states that pattern data is stale/noisy "
                         "and must never be evidence. 18,648 rows in the DB already "
-                        "carry that exact verdict_reason.")
+                        "carry that exact verdict_reason. Since 2026-08-22 the "
+                        "wrong-callee gate (scripts/orchestrator/callee_gate.py) "
+                        "RAISES rather than certifying from a pattern scan taken by a "
+                        "different objdiff-cli than the installed one, so this flag "
+                        "exits 5 instead of writing when that scan is stale.")
     p.add_argument("-v", "--verbose", action="store_true")
     p.add_argument("--skip-patch-check", action="store_true",
                    help="Skip the verify_objs_patched.py --verify-manifest "
@@ -785,46 +789,50 @@ def main():
         "DEAD_STORE_ELIMINATION",
     }
 
-    # Symbols the latest reloc-VISIBLE pattern scan says carry a LikelyFixable
-    # callee divergence.  Empty when no such scan exists, in which case the
-    # auto-AT_LIMIT gate below behaves exactly as it did before -- absence of
-    # the scan must not silently become evidence of absence of the bug, so the
-    # count of what could not be checked is reported either way.
+    # The callee gate.  Both of the structural problems recorded here on
+    # 2026-08-21 -- that nothing refreshed the scan this reads, and that it
+    # refused on the raw pattern instead of judging the finding -- are fixed in
+    # scripts/orchestrator/callee_gate.py; read its module docstring for the
+    # design and for why the refresh is a READER guard and not a ninja edge.
     #
-    # ⚠ NOTHING REFRESHES THIS SCAN.  `v_latest_pattern_scan` is written only by
-    # a hand-run `scripts/analysis/pattern_census.py --apply`; there is no ninja
-    # edge and no wrapper that re-derives it, so the gate silently ages against
-    # whatever objdiff-cli happened to be installed the last time somebody ran
-    # the census.  That is not hypothetical: measured 2026-08-21 (task #134), the
-    # recorded scan was still 4.2.6 while the installed binary was 4.2.7, and the
-    # 4.2.6 set did NOT contain `?Copy@FxSend@@` -- the single row in the whole
-    # population that is byte-identical except for one relocation naming a
-    # DIFFERENT function.  The gate had a live hole on exactly the row it most
-    # needed to cover.  Re-run the census after every objdiff-cli change.
+    # Two properties matter at this call site:
     #
-    # ⚠ And the gate REFUSES rather than JUDGES.  It blocks on the raw pattern,
-    # so of the 138 rows carrying one under 4.2.7 it also withholds a
-    # certificate from the 71 (51%) whose divergent callee pair shares ONE
-    # address in `orig/373307D9/ham_xbox_r.map` (an /OPT:ICF fold) or sits
-    # inside an EH funclet objdiff paired by byte signature.  Cheap in the safe
-    # direction -- those rows merely stay workable -- but it is conservatism,
-    # not correctness.  `scripts/analysis/readjudicate_callee_verdicts.py`
-    # separates the two; teaching this gate to read its adjudication instead of
-    # the raw pattern is the real fix.
-    fixable_syms: set[str] = set()
+    #  1. `build_callee_gate` RAISES `StalePatternScanError` when the recorded
+    #     scan was not taken by the installed `bin/objdiff-cli`.  It never
+    #     returns a narrower set, which is how the 4.2.6-scan-read-by-a-4.2.7
+    #     binary hole happened: an aged scan simply did not list
+    #     `?Copy@FxSend@@` and the gate read that as "no wrong callee here".
+    #  2. When the gate is unavailable, NOTHING here counts or certifies.  There
+    #     is no ungated fallback number that could be mistaken for a gated one --
+    #     `auto_at_limit_ungatable` is reported instead of
+    #     `auto_at_limit_candidates`, and `--auto-at-limit` exits non-zero.
+    callee_gate = None
+    gate_refusal: str | None = None
     try:
+        sys.path.insert(0, str(REPO_ROOT / "scripts"))
+        from orchestrator.callee_gate import (LinkerMapError,
+                                              StalePatternScanError,
+                                              build_callee_gate)
         _c = sqlite3.connect(str(args.db))
-        fixable_syms = {
-            row[0] for row in _c.execute(
-                "SELECT symbol FROM v_function_patterns "
-                "WHERE ruler = 'name_check' AND pattern IN "
-                "('WRONG_CALLEE','TEMPLATE_INSTANTIATION_MISMATCH')")
-        }
-        _c.close()
-        stats["likely_fixable_known"] = len(fixable_syms)
-    except sqlite3.Error:
-        # Pre-v17 database, or no scan recorded yet.
-        stats["likely_fixable_known"] = -1
+        try:
+            callee_gate = build_callee_gate(_c, repo_root=REPO_ROOT,
+                                            project_dir=REPO_ROOT)
+        finally:
+            _c.close()
+        stats["callee_gate_blocked"] = len(callee_gate.blocked)
+        stats["callee_gate_cleared"] = len(callee_gate.cleared)
+        for k, v in callee_gate.counts().items():
+            stats[f"callee_gate_{k.replace(':', '_')}"] = v
+    except (StalePatternScanError, LinkerMapError, sqlite3.Error) as e:
+        gate_refusal = f"{type(e).__name__}: {e}"
+        stats["callee_gate_blocked"] = -1
+        if args.auto_at_limit:
+            print(f"\nREFUSING to issue auto-AT_LIMIT certificates:\n{gate_refusal}\n",
+                  file=sys.stderr)
+            sys.exit(5)
+        print(f"\nWARNING: the auto-AT_LIMIT callee gate is unavailable, so no "
+              f"AT_LIMIT candidate can be counted or certified this run:\n"
+              f"{gate_refusal}\n", file=sys.stderr)
 
     pct_updates: list[tuple] = []
     enrich_updates: list[tuple] = []
@@ -998,15 +1006,40 @@ def main():
                 # this way, including ?Fail@Debug@@ and ?Trigger@UITrigger@@.
                 # A certificate is a claim about the instrument as much as the
                 # code; refuse to issue one the instrument could not support.
-                if should_promote and fixable_syms and r.symbol in fixable_syms:
+                #
+                # The gate JUDGES the finding rather than refusing on the raw
+                # pattern: a callee pair the shipped linker map resolves to ONE
+                # address is an /OPT:ICF fold and cannot be why the row is
+                # short, a finding objdiff itself marked Unverifiable sits
+                # inside a byte-signature-guessed pair, and a `merged_*` callee
+                # is #112's config-side refusal class.  Everything else -- two
+                # different addresses, a name absent from the map, a name listed
+                # at more than one address -- still blocks.  See
+                # scripts/orchestrator/callee_gate.py.
+                if should_promote and callee_gate is not None \
+                        and callee_gate.blocks(r.symbol):
                     should_promote = False
+                    why = callee_gate.blocked[r.symbol]
                     stats["at_limit_blocked_likely_fixable"] = \
                         stats.get("at_limit_blocked_likely_fixable", 0) + 1
+                    stats[f"at_limit_blocked_{why}"] = \
+                        stats.get(f"at_limit_blocked_{why}", 0) + 1
+                if should_promote and callee_gate is None:
+                    # The gate could not be built.  Refuse to produce a number
+                    # that looks gated: count these separately and never
+                    # certify.  `--auto-at-limit` already exited above.
+                    should_promote = False
+                    stats["auto_at_limit_ungatable"] = \
+                        stats.get("auto_at_limit_ungatable", 0) + 1
                 if should_promote:
                     # Counted either way, so turning the flag on or off never
                     # changes the reported number -- only whether it is written.
                     stats["auto_at_limit_candidates"] = \
                         stats.get("auto_at_limit_candidates", 0) + 1
+                    if callee_gate is not None and r.symbol in callee_gate.cleared:
+                        why = callee_gate.cleared[r.symbol]
+                        stats[f"at_limit_judged_{why}"] = \
+                            stats.get(f"at_limit_judged_{why}", 0) + 1
                     if args.auto_at_limit:
                         at_limit_promotions.append(r.db_id)
                         stats["auto_at_limit"] = stats.get("auto_at_limit", 0) + 1
