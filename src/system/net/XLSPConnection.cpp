@@ -71,13 +71,12 @@ void XLSPConnection::SetState(State s) {
     if (mState == s)
         return;
     do {
-        State oldState = mState;
-        State newState = s;
-        bool skipCleanup = false;
-        if (oldState == 1) {
+        switch ((int)mState) {
+        case 1: {
+            bool skipCleanup = false;
             if (mEnumHandle != INVALID_HANDLE_VALUE) {
                 if (mXOverlapped.InternalLow == ERROR_IO_PENDING) {
-                    if (newState == 5) {
+                    if ((int)s == 5) {
                         skipCleanup = true;
                     } else {
                         XCancelOverlapped(&mXOverlapped);
@@ -92,39 +91,44 @@ void XLSPConnection::SetState(State s) {
             if (!skipCleanup) {
                 mEnumBufferSize = 0;
                 if (mEnumBuffer) {
-                    MemFree(mEnumBuffer, __FILE__, __LINE__);
+                    MemFree(mEnumBuffer, __FILE__, 0x167);
                     mEnumBuffer = nullptr;
                 }
             }
-        } else if (oldState == 2) {
-            if (newState != 3) {
-                SecureDisconnect(*(in_addr *)&unk44);
-            }
-        } else if (oldState == 3) {
+            break;
+        }
+        case 2:
+            if ((int)s == 3)
+                break;
+            // fall through
+        case 3:
             SecureDisconnect(*(in_addr *)&unk44);
+            break;
         }
 
-        mState = newState;
+        mState = s;
 
-        if (newState == 1) {
+        switch ((int)s) {
+        case 1:
             StartEnumeration();
             return;
-        } else if (newState == 2) {
-            int ret = StartGatewayConnection(*(in_addr *)&unk44);
-            if (ret == 0) {
+        case 2:
+            if (StartGatewayConnection(*(in_addr *)&unk44) == 0) {
                 return;
             }
             s = (State)4;
-        } else if (newState == 4) {
+            break;
+        case 4:
             mReconnectTimer.Restart();
             return;
-        } else if (newState == 5) {
+        case 5:
             if (mEnumHandle != INVALID_HANDLE_VALUE) {
                 ThreadCall(this);
                 return;
             }
             s = (State)0;
-        } else {
+            break;
+        default:
             return;
         }
     } while (mState != s);
