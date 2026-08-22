@@ -449,43 +449,41 @@ void HttpGet::Poll() {
                     }
                 }
                 SetState(kHttpGet_Failed);
-            } else {
-                if (mFlags & 2) {
-                    SetState(kHttpGet_Downloaded);
-                } else {
-                    int contentLen = GetContentLength(lines);
-                    mFileBufSize = contentLen;
-                    if (contentLen < 0) {
-                        mFailType = kHttpFail_None;
-                        SetState(kHttpGet_Failed);
-                    } else if (contentLen == 0) {
-                        SetState(kHttpGet_Downloaded);
-                    } else {
-                        mFileBuf = (char *)MemAlloc(
-                            contentLen, __FILE__, 0x2BB, "HttpGet", 0
-                        );
-                        MILO_ASSERT(mFileBuf, 0x2BC);
+                return;
+            }
+            if (mFlags & 2) {
+                SetState(kHttpGet_Downloaded);
+                return;
+            }
+            int contentLen = GetContentLength(lines);
+            mFileBufSize = contentLen;
+            if (contentLen < 0) {
+                mFailType = kHttpFail_None;
+                SetState(kHttpGet_Failed);
+                return;
+            }
+            if (contentLen == 0) {
+                SetState(kHttpGet_Downloaded);
+                return;
+            }
+            mFileBuf = (char *)MemAlloc(contentLen, __FILE__, 0x2BB, "HttpGet", 0);
+            MILO_ASSERT(mFileBuf, 0x2BC);
 
-                        int bodyStart = headerEnd + 1;
-                        if (mRecvBufPos > bodyStart) {
-                            int len = mRecvBufPos - bodyStart;
-                            MILO_ASSERT(len <= mFileBufSize, 0x2C8);
-                            memcpy(
-                                mFileBuf,
-                                (char *)mRecvBuf + bodyStart,
-                                len
-                            );
-                            mRecvBufPos = 0;
-                            mFileBufRecvPos = len;
-                            MILO_ASSERT(mFileBufRecvPos <= mFileBufSize, 0x2CE);
-                            if (mFileBufRecvPos == mFileBufSize) {
-                                SetState(kHttpGet_Downloaded);
-                            }
-                        } else {
-                            mRecvBufPos = 0;
-                            mFileBufRecvPos = 0;
-                        }
+            {
+                int bodyStart = headerEnd + 1;
+                if (mRecvBufPos > bodyStart) {
+                    int len = mRecvBufPos - bodyStart;
+                    MILO_ASSERT(len <= mFileBufSize, 0x2C8);
+                    memcpy(mFileBuf, (char *)mRecvBuf + bodyStart, len);
+                    mRecvBufPos = 0;
+                    mFileBufRecvPos = len;
+                    MILO_ASSERT(mFileBufRecvPos <= mFileBufSize, 0x2CE);
+                    if (mFileBufRecvPos == mFileBufSize) {
+                        SetState(kHttpGet_Downloaded);
                     }
+                } else {
+                    mRecvBufPos = 0;
+                    mFileBufRecvPos = 0;
                 }
             }
             return;
