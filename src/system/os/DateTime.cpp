@@ -336,8 +336,8 @@ void DateTime::ParseDate(const char *str) {
 
 int DateTimeCmp(const DateTime &a, const DateTime &b) {
     unsigned int dateA = (a.mYear * 256 + a.mMonth) * 256 + a.mDay;
+    unsigned int timeA = a.mSec + (a.mHour * 256 + a.mMin) * 256;
     unsigned int dateB = (b.mYear * 256 + b.mMonth) * 256 + b.mDay;
-    unsigned int timeA = (a.mHour * 256 + a.mMin) * 256 + a.mSec;
     unsigned int timeB = (b.mHour * 256 + b.mMin) * 256 + b.mSec;
     if (dateA < dateB) return -1;
     if (dateA == dateB) {
