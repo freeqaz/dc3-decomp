@@ -121,16 +121,18 @@ void ArcDetector::Draw(const Skeleton &skeleton, SkeletonViz &viz) {
 
             const TrackedJoint *joints = skeleton.TrackedJoints();
             const Vector3 &jpos = joints[mSecondaryJoint].mJointPos[0];
-            Vector3 pos(
-                jpos.x + mArcOffset.x, jpos.y + mArcOffset.y, jpos.z + mArcOffset.z
-            );
+            const Vector3 &off = mArcOffset;
+            Vector3 pos(jpos.x + off.x, jpos.y + off.y, jpos.z + off.z);
 
             DrawPath(arcPath, viz, Hmx::Color(1.0f, 1.0f, 0.0f, 1.0f), pos);
         }
 
-        const TrackedJoint *joints2 = skeleton.TrackedJoints();
-        const Vector3 &jpos2 = joints2[mSecondaryJoint].mJointPos[0];
-        DrawPath(mJointPath, viz, Hmx::Color(1.0f, 0.0f, 1.0f, 1.0f), jpos2);
+        DrawPath(
+            mJointPath,
+            viz,
+            Hmx::Color(1.0f, 0.0f, 1.0f, 1.0f),
+            skeleton.TrackedJoints()[mSecondaryJoint].mJointPos[0]
+        );
     }
 }
 
