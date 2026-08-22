@@ -80,7 +80,8 @@ BEGIN_LOADS(RndParticleSysAnim)
         LOAD_SUPERCLASS(Hmx::Object)
     }
     LOAD_SUPERCLASS(RndAnimatable)
-    d >> mParticleSys >> mStartColorKeys >> mEndColorKeys;
+    d >> mParticleSys;
+    bs >> mStartColorKeys >> mEndColorKeys;
     if (d.rev < 2) {
         float scale = 1.0f;
         Keys<float, float> floatKeys;

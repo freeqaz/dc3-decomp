@@ -557,6 +557,11 @@ template <class T1, class T2 = class ObjectDir>
 class ObjPtrList : public ObjRefOwner {
     friend class RndGroup;
     friend class ThreadTask;
+    // Same reason as RndGroup: DefaultPhysicsManager::Replace turns the ObjRef
+    // it is handed straight back into one of this list's own Nodes and erases
+    // THAT node, which is what the image does (bl ObjPtrList<T>::erase) instead
+    // of remove()-ing the object by value.
+    friend class DefaultPhysicsManager;
 public:
     ObjPtrList(ObjRefOwner *, ObjListMode = kObjListNoNull);
     ObjPtrList(const ObjPtrList &);

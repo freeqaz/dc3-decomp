@@ -51,8 +51,8 @@ BEGIN_LOADS(FlowCommand)
     LOAD_REVS(bs)
     ASSERT_REVS(3, 0)
 
-    std::list<DataNode> datanodes;
     std::list<Symbol> symbols;
+    std::list<DataNode> datanodes;
     if (d.rev > 2) {
         int count;
         bs >> count;

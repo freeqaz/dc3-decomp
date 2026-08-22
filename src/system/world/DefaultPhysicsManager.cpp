@@ -69,12 +69,17 @@ DefaultPhysicsManager::DefaultPhysicsManager(RndDir *d)
     : PhysicsManager(d), mCollidables(this, kObjListOwnerControl) {}
 
 bool DefaultPhysicsManager::Replace(ObjRef *from, Hmx::Object *to) {
-    if (from->Parent() != &mCollidables) {
-        if (to == nullptr) {
-            Hmx::Object *obj = from->GetObj();
-            mCollidables.remove(obj);
-            RemoveCollidable(obj);
-        }
+    typedef ObjPtrList<Hmx::Object> ObjList;
+    // The image selects the node branchlessly -- mask = (Parent() ==
+    // &mCollidables) ? -1 : 0, ANDed with the incoming ObjRef -- and erases
+    // THAT node.  ObjPtrList names DefaultPhysicsManager a friend so this can
+    // be written directly, exactly as RndGroup::Replace does.
+    ObjList::Node *node =
+        from->Parent() == &mCollidables ? static_cast<ObjList::Node *>(from) : nullptr;
+    if (node) {
+        Hmx::Object *obj = from->GetObj();
+        mCollidables.erase(ObjList::iterator(node));
+        RemoveCollidable(obj);
         return true;
     } else {
         return Hmx::Object::Replace(from, to);
