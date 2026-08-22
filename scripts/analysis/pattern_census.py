@@ -45,7 +45,33 @@ Usage:
     python3 scripts/analysis/pattern_census.py --project-dir . \\
         --ruler name_check --db /path/to/main/decomp.db --apply
 
-Exit codes: 0 ok, 3 TRUNCATED by --limit, 4 unsettled/unpatched build tree.
+THE INSTRUMENT MUST HOLD STILL FOR THE LENGTH OF THE MEASUREMENT
+===============================================================
+`bin/objdiff-cli` is a SYMLINK into `../objdiff/target/release/`, shared with
+../rb3 and ../rb3-xenon.  `target/` is mutable shared state: any `cargo build`
+in that checkout -- including one a different session started -- replaces the
+binary under every live consumer, and nothing in any of the three ninja graphs
+notices.  On 2026-08-22 the shared binary changed identity FOUR times in one
+session, twice mid-measurement; two `--version` calls issued in the same message
+answered `87cc0423c05c` and `358c715835cc`.
+
+A whole-binary census is ~30-60s of objdiff invocations, so it is wide open to
+this, and the failure is silent in the worst possible way: the scan row would be
+stamped with the version read at one moment while its measurements came from
+another binary.  That is *precisely* the defect
+`callee_gate.ensure_current_scan()` exists to catch -- laundered into the DB by
+the tool that is supposed to fix it, and undetectable afterwards because the
+stamp would look perfectly current.
+
+So the census brackets its own sweep: `--version` is read (uncached) immediately
+before and immediately again immediately after, and a disagreement REFUSES
+`--apply` and exits 5.  That is a distinct outcome from "could not measure" --
+the measurement may well be fine, but it cannot be attributed, and an
+unattributable certificate is worse than none.  A `--version` read costs ~5ms
+against a ~40s scan, so this is free.
+
+Exit codes: 0 ok, 3 TRUNCATED by --limit, 4 unsettled/unpatched build tree,
+5 the objdiff binary was REPLACED mid-scan (nothing written).
 """
 from __future__ import annotations
 
@@ -66,6 +92,46 @@ from scripts.orchestrator import symbol_sweep  # noqa: E402
 from scripts.orchestrator.patch_guard import (  # noqa: E402
     UnpatchedTreeError, ensure_patched_tree,
 )
+
+
+class InstrumentChangedError(RuntimeError):
+    """`bin/objdiff-cli` was replaced while the census was running."""
+
+
+def render_instrument_change(before: str, after: str, ruler: str) -> str:
+    return (
+        "========================================================================\n"
+        "OBJDIFF BINARY WAS REPLACED MID-SCAN -- NOTHING WRITTEN\n"
+        "========================================================================\n"
+        f"  before scan : {before}\n"
+        f"  after  scan : {after}\n"
+        f"  ruler       : {ruler}\n"
+        "\n"
+        "`bin/objdiff-cli` is a symlink into ../objdiff/target/release, which is\n"
+        "shared with ../rb3 and ../rb3-xenon and rebuilt by hand.  Some part of\n"
+        "this scan was measured by one binary and some by another, and there is\n"
+        "no way afterwards to say which rows came from which.\n"
+        "\n"
+        "This is NOT a failure to measure -- it is a refusal to ATTRIBUTE.  A\n"
+        "pattern_scans row carries `tool_version`, and callee_gate's\n"
+        "ensure_current_scan() trusts it to decide whether a stored finding may\n"
+        "still be certified.  A row stamped with a version that did not take the\n"
+        "measurement would defeat that check while looking perfectly current.\n"
+        "\n"
+        "Re-run once the binary is settled.  `objdiff/scripts/install-versioned.sh`\n"
+        "installs an IMMUTABLE version-named copy precisely so a measurement can\n"
+        "be pinned to a binary that cannot change underneath it."
+    )
+
+
+def read_instrument(project_dir: Path, refresh: bool) -> str:
+    """`objdiff-cli --version` verbatim, including the xxh3 build fingerprint.
+
+    `refresh=True` is mandatory on the closing read: symbol_sweep caches the
+    version per project, so a cached second read cannot disagree with the first
+    and the guard would be a tautology -- a check that cannot fail.
+    """
+    return symbol_sweep.objdiff_version(project_dir, refresh=refresh)
 
 
 def report_universe(project_dir: Path) -> dict[str, dict]:
@@ -190,6 +256,10 @@ def main() -> int:
           f"report.json functions ({uni['duplicate_names']} duplicate names "
           f"collapsed), functionRelocDiffs={args.ruler}")
 
+    # --- bracket the sweep: the instrument must be the same one afterwards ---
+    instrument_before = read_instrument(project_dir, refresh=True)
+    print(f"instrument (pre-scan) : {instrument_before}")
+
     try:
         res = symbol_sweep.sweep_functions(
             project_dir, symbols, include_patterns=args.patterns,
@@ -199,6 +269,14 @@ def main() -> int:
     except symbol_sweep.RelocBlindPatternError as e:
         print(f"\n{e}\n", file=sys.stderr)
         return 4
+
+    instrument_after = read_instrument(project_dir, refresh=True)
+    instrument_changed = instrument_before != instrument_after
+    if instrument_changed:
+        print(f"\n{render_instrument_change(instrument_before, instrument_after, args.ruler)}\n",
+              file=sys.stderr)
+    else:
+        print(f"instrument (post-scan): {instrument_after}  [unchanged across scan]")
 
     print()
     print(res["_coverage_render"])
@@ -260,6 +338,9 @@ def main() -> int:
                 "_scan": {
                     "ruler": args.ruler,
                     "tool_version": res["objdiff_version"],
+                    "instrument_before": instrument_before,
+                    "instrument_after": instrument_after,
+                    "instrument_changed": instrument_changed,
                     "project_dir": str(project_dir),
                     "build_rev": git_rev(project_dir),
                     "tree_verified": tree_verified,
@@ -276,6 +357,24 @@ def main() -> int:
                 fh.write(json.dumps(r) + "\n")
         print(f"\nwrote {len(rows_out)} rows -> {args.out}")
 
+    if instrument_changed:
+        if args.apply:
+            print("--apply REFUSED: the objdiff binary changed identity during "
+                  "this scan (see above). The measurements are not attributable "
+                  "to any one instrument, so they must not be stamped as if they "
+                  "were.", file=sys.stderr)
+        return 5
+    if args.apply and truncated:
+        # `callee_gate.latest_scan()` takes the highest-id scan for the ruler,
+        # full stop.  A --limit run recorded here would BECOME the gate's scan,
+        # and every function past the limit would read as "examined, no pattern"
+        # -- i.e. certified clean by a scan that never looked at it.  The row
+        # does store universe/examined, but nothing consults them.
+        print(f"--apply refused: TRUNCATED scan ({len(symbols)} of {universe}). "
+              f"A partial scan would become the latest scan for ruler="
+              f"{args.ruler} and its silence would be read as absence.",
+              file=sys.stderr)
+        return 3
     if args.apply and args.negative_control:
         print("--apply refused for a negative control: its zeros are the "
               "artefact being demonstrated, not a finding.", file=sys.stderr)
