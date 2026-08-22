@@ -408,7 +408,7 @@ void HttpGet::Poll() {
         }
         if (recvd == 0) return;
         mTimer.Restart();
-        mRecvBufPos = recvd + mRecvBufPos;
+        mRecvBufPos = mRecvBufPos + recvd;
 
         if ((u32)mFileBuf == 0U) {
             int headerEnd = 0;
@@ -418,10 +418,7 @@ void HttpGet::Poll() {
             }
 
             std::vector<String> lines;
-            {
-                String empty;
-                lines.resize(lineCount, empty);
-            }
+            lines.resize(lineCount, String());
             ParseHeader((char *)mRecvBuf, headerEnd, &lines);
             int statusCode = ParseStatusCode(lines);
             mHttpStatus = statusCode;
@@ -474,7 +471,7 @@ void HttpGet::Poll() {
                 if (mRecvBufPos > bodyStart) {
                     int len = mRecvBufPos - bodyStart;
                     MILO_ASSERT(len <= mFileBufSize, 0x2C8);
-                    memcpy(mFileBuf, (char *)mRecvBuf + bodyStart, len);
+                    memcpy(mFileBuf, bodyStart + (char *)mRecvBuf, len);
                     mRecvBufPos = 0;
                     mFileBufRecvPos = len;
                     MILO_ASSERT(mFileBufRecvPos <= mFileBufSize, 0x2CE);
@@ -491,7 +488,7 @@ void HttpGet::Poll() {
 
         MILO_ASSERT(mFileBufSize >= mFileBufRecvPos + mRecvBufPos, 0x2E1);
         memcpy(mFileBuf + mFileBufRecvPos, mRecvBuf, mRecvBufPos);
-        mFileBufRecvPos += mRecvBufPos;
+        mFileBufRecvPos = mFileBufRecvPos + mRecvBufPos;
         mRecvBufPos = 0;
         if (mFileBufRecvPos == mFileBufSize) {
             SetState(kHttpGet_Downloaded);
