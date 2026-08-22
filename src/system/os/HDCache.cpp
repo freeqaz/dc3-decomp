@@ -129,14 +129,23 @@ bool HDCache::ReadAsync(int arkfileNum, int blockNum, void *ptr) {
 }
 
 bool HDCache::WriteAsync(int arkfileNum, int blockNum, const void *ptr) {
-    MILO_ASSERT(WriteDone(), 0x191);
+    MILO_ASSERT(WriteDone(), 0x1C1);
     if (mBlockState[arkfileNum]) {
-        MILO_ASSERT(blockNum < TheArchive->GetArkfileNumBlocks(arkfileNum), 0x196);
-        if ((mBlockState[arkfileNum][(blockNum / 32)] & (1 << (blockNum % 32))) > 0) {
-            MILO_ASSERT(mWriteArkFiles[arkfileNum]->Size() >= ((blockNum + 1) * kArkBlockSize), 0x19D);
-            mWriteFileIdx = arkfileNum;
-            mWriteArkFiles[arkfileNum]->Seek(blockNum * kArkBlockSize, 0);
-            return mWriteArkFiles[mWriteFileIdx]->WriteAsync(ptr, kArkBlockSize);
+        MILO_ASSERT(blockNum < TheArchive->GetArkfileNumBlocks(arkfileNum), 0x1C6);
+        // Only blocks that are NOT already cached get written.
+        if (!(mBlockState[arkfileNum][blockNum / 32] & (1 << (blockNum % 32)))) {
+            if (mWriteArkFiles[arkfileNum]->Size() >= (blockNum + 1) * kArkBlockSize
+                && LockCache()) {
+                mLastCacheWriteMs = SystemMs();
+                mWriteFileIdx = arkfileNum;
+                mWriteBlock = blockNum;
+                mWriteArkFiles[arkfileNum]->Seek(kArkBlockSize * blockNum, 0);
+                bool ok = mWriteArkFiles[mWriteFileIdx]->WriteAsync(ptr, kArkBlockSize);
+                if (!ok) {
+                    WriteDone();
+                }
+                return ok;
+            }
         }
     }
     return false;
