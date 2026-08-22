@@ -231,7 +231,6 @@ void SkeletonClip::FillMoveRatings() {
     TheHamDirector->MoveKeys(mDifficulty, moveDir, moveKeys);
 
     static Symbol defaultSym("default");
-    auto &ratings = mMoveRatings;
     {
         // The image default-constructs the filler and assigns nothing to it: the
         // only stores before the insert are String::String() at 0x60(r31) and the
@@ -239,6 +238,7 @@ void SkeletonClip::FillMoveRatings() {
         // uninitialised, and ~String runs at the join of the if/else -- before the
         // loop, not at end of function -- so the filler is block-scoped.
         MoveRating defaultRating;
+        auto &ratings = mMoveRatings;
         if (moveKeys.size() < ratings.size()) {
             ratings.erase(ratings.begin() + moveKeys.size(), ratings.end());
         } else {
@@ -249,9 +249,9 @@ void SkeletonClip::FillMoveRatings() {
     }
 
     for (int i = 0; i < moveKeys.size(); i++) {
-        ratings[i].mName = moveKeys[i].move->Name();
-        ratings[i].mExpected = defaultSym;
-        ratings[i].mWeightType = 2;
+        mMoveRatings[i].mName = moveKeys[i].move->Name();
+        mMoveRatings[i].mExpected = defaultSym;
+        mMoveRatings[i].mWeightType = 2;
     }
 }
 
