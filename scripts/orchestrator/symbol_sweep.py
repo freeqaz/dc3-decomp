@@ -371,7 +371,7 @@ def objdiff_cli(project: str | os.PathLike) -> Path:
 _VERSION_CACHE: Dict[str, str] = {}
 
 
-def objdiff_version(project: str | os.PathLike) -> str:
+def objdiff_version(project: str | os.PathLike, refresh: bool = False) -> str:
     """`objdiff-cli --version`, verbatim, cached per project.
 
     The version string carries the git short hash and a build fingerprint, which
@@ -380,9 +380,17 @@ def objdiff_version(project: str | os.PathLike) -> str:
     ninja graphs rebuilds it, so the detector semantics behind a recorded number
     can change with no edge firing anywhere.  v4.2.6 renamed the population of
     LINKER_MERGED to ~2% of what v4.2.5 called by that name.
+
+    ``refresh=True`` bypasses the cache and re-execs the binary.  The cache is
+    right for provenance-stamping a single result, but it makes the value
+    USELESS for detecting that the binary was REPLACED while we were using it --
+    the second read would just hand back the first read's answer.  Any caller
+    bracketing a long measurement to prove the instrument held still must pass
+    ``refresh=True`` on the closing read.  See
+    `pattern_census.py::InstrumentChangedError`.
     """
     key = str(Path(project).resolve())
-    if key not in _VERSION_CACHE:
+    if refresh or key not in _VERSION_CACHE:
         try:
             proc = subprocess.run([str(objdiff_cli(project)), "--version"],
                                   capture_output=True, text=True, timeout=60)
