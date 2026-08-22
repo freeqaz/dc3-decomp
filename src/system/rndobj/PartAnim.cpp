@@ -94,7 +94,7 @@ BEGIN_LOADS(RndParticleSysAnim)
         for (Keys<float, float>::iterator it = floatKeys.begin(); it != floatKeys.end();
              ++it) {
             Key<Vector2> vecKey;
-            vecKey.value = Vector2(it->value, it->value * scale);
+            vecKey.value.Set(it->value, it->value * scale);
             vecKey.frame = it->frame;
             mEmitRateKeys.push_back(vecKey);
         }
