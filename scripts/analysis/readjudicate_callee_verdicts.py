@@ -83,8 +83,13 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-MAP_REL = "orig/373307D9/ham_xbox_r.map"
-MAP_LINE = re.compile(r"^\s*[0-9a-fA-F]{4}:[0-9a-fA-F]{8}\s+(\S+)\s+([0-9a-fA-F]{8})\s")
+sys.path.insert(0, str(REPO_ROOT / "scripts"))
+
+# ONE parser for the shipped linker map, shared with the auto-AT_LIMIT gate that
+# reads this tool's adjudication (scripts/orchestrator/callee_gate.py).  Two
+# copies of the map regex would be two things to keep in step, and the gate
+# issues certificates from it.
+from orchestrator.callee_gate import MAP_REL, load_linker_map  # noqa: E402
 
 #: below this canonical percentage objdiff's instruction aligner pairs `bl`s
 #: arbitrarily and a callee finding carries no independent information.
@@ -93,19 +98,8 @@ ALIGNMENT_NOISE_FLOOR = 60.0
 
 def load_map(project: Path) -> tuple[dict[str, str], dict[str, list[str]]]:
     """(symbol -> address, address -> [symbols]) from the shipped linker map."""
-    addr: dict[str, str] = {}
-    byaddr: collections.defaultdict[str, list[str]] = collections.defaultdict(list)
-    path = project / MAP_REL
-    if not path.exists():                       # worktrees symlink orig/; be explicit
-        path = REPO_ROOT / MAP_REL
-    for line in path.open(errors="replace"):
-        m = MAP_LINE.match(line)
-        if m:
-            addr.setdefault(m.group(1), m.group(2))
-            byaddr[m.group(2)].append(m.group(1))
-    if not addr:
-        raise SystemExit(f"parsed 0 symbols from {path} -- refusing to adjudicate blind")
-    return addr, dict(byaddr)
+    lmap = load_linker_map(project)
+    return lmap.addr, lmap.by_addr
 
 
 def classify_pair(addr: dict[str, str], target: str, base: str) -> tuple[str, str | None, str | None]:
