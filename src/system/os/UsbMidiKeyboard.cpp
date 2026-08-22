@@ -48,9 +48,9 @@ void UsbMidiKeyboard::Poll() {
             || ty == kJoypadWiiMidiBoxKeyboard || ty == kJoypadXboxKeytar
             || ty == kJoypadPs3Keytar || ty == kJoypadWiiKeytar
             || gForceDetectKeytar) {
-            int slotCounter = 1;
             ProKeysData *proData =
                 (ProKeysData *)&JoypadGetPadData(i)->mProGuitarData;
+            int slotCounter = 1;
 
             for (int note = 0x30; note - 0x30 < 25; note++) {
                 bool pressed = (proData->unk0[(note - 0x30) / 8]
@@ -124,6 +124,10 @@ void UsbMidiKeyboard::Poll() {
                 SendMessage(msg);
             }
 
+            // NOTE: the image emits four separate fused rlwinm extractions and a
+            // flat add chain (d<<2) + (c<<1) + (e<<3) + b; MSVC here reassociates
+            // any spelling of this sum into a Horner chain instead. Tried '|',
+            // explicit sub-grouping and term reordering -- all identical or worse.
             int highhand = (proData->unkdbool << 2) + (proData->unkcbool << 1)
                 + (proData->unkemiddle << 3) + proData->unkbbool;
             if (highhand != TheKeyboard->GetHighHandPlacement(i)) {
