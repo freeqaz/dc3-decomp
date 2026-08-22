@@ -83,8 +83,8 @@ BEGIN_LOADS(RndParticleSysAnim)
     d >> mParticleSys;
     bs >> mStartColorKeys >> mEndColorKeys;
     if (d.rev < 2) {
-        float scale = 1.0f;
         Keys<float, float> floatKeys;
+        float scale = 1.0f;
         d >> floatKeys >> mKeysOwner;
         if (d.rev == 1) {
             d >> scale;
