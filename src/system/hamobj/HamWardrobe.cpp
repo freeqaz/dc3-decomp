@@ -529,6 +529,12 @@ DataNode HamWardrobe::OnSetVenue(DataArray *a) {
     SetDir(dir);
 
     Symbol venue = TheGameData->Venue();
+    // The image never copies a Symbol here: it keeps the venue's char* in a
+    // callee-saved register for the whole function, overwrites that register
+    // from entryName.Str() on the `contains` hit, and builds a fresh Symbol
+    // from it for the LoadCharacters argument (bl Symbol::Symbol(const char*),
+    // where we had a plain 4-byte member copy).
+    const char *venueName = venue.Str();
     if (venue.Null() && TheWorld) {
         String worldPath(TheWorld->GetPathName());
         unsigned int lastSlash = worldPath.find_last_of('/');
@@ -541,7 +547,7 @@ DataNode HamWardrobe::OnSetVenue(DataArray *a) {
                 MILO_ASSERT(venueEntryArray, 0x27d);
                 Symbol entryName = venueEntryArray->Sym(0);
                 if (worldPath.contains(entryName.Str())) {
-                    venue = entryName;
+                    venueName = entryName.Str();
                     break;
                 }
             }
@@ -550,7 +556,7 @@ DataNode HamWardrobe::OnSetVenue(DataArray *a) {
 
     LoadCharacters(
         Symbol("mo01"), Symbol("emilia01"), Symbol("crew02"), Symbol("crew01"),
-        kBackupDancersOutfit, unk34, venue, false
+        kBackupDancersOutfit, unk34, Symbol(venueName), false
     );
     return 0;
 }
