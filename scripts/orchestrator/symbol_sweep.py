@@ -113,8 +113,18 @@ class _LocalCoverage:
     def drop(self, reason: str, n: int = 1) -> None:
         self._drops[reason] += n
 
-    def cap(self, flag: str, limit: Any, dropped: int) -> None:
-        self._caps.append({"flag": flag, "limit": limit, "dropped": dropped})
+    def cap(self, flag: str, limit: Any, before: int, after: int, note: str = "") -> None:
+        # Signature AND drop-bookkeeping must mirror the shared CoverageReport:
+        # make_coverage() hands callers whichever one is importable, so any
+        # divergence is a crash or a double-count at a call site, not a fallback.
+        n_cut = max(0, int(before) - int(after))
+        self._caps.append({
+            "flag": flag, "limit": limit,
+            "before": int(before), "after": int(after),
+            "dropped": n_cut, "note": note,
+        })
+        if n_cut:
+            self.drop(f"capped-by-{flag.lstrip('-')}", n_cut)
 
     def note(self, text: str) -> None:
         self._notes.append(text)
@@ -586,10 +596,9 @@ def sweep_data_symbols(
     if estats["undefined_external"]:
         cov.drop("undefined-external-reference", estats["undefined_external"])
     if max_symbols is not None and len(pairs) > max_symbols:
-        dropped = len(pairs) - max_symbols
+        before = len(pairs)
         pairs = pairs[:max_symbols]
-        cov.cap("--max-symbols", max_symbols, dropped)
-        cov.drop("capped-by---max-symbols", dropped)
+        cov.cap("--max-symbols", max_symbols, before=before, after=max_symbols)
 
     findings: List[Dict[str, Any]] = []
     errors: List[Dict[str, str]] = []
@@ -804,10 +813,9 @@ def sweep_functions(
     if reloc_config is None:
         cov.note("ruler taken from the project's objdiff.json, not from the caller")
     if max_symbols is not None and len(symbols) > max_symbols:
-        dropped = len(symbols) - max_symbols
+        before = len(symbols)
         symbols = symbols[:max_symbols]
-        cov.cap("--max-symbols", max_symbols, dropped)
-        cov.drop("capped-by---max-symbols", dropped)
+        cov.cap("--max-symbols", max_symbols, before=before, after=max_symbols)
 
     jobs = max(1, int(jobs))
     if jobs > 1 and symbols:
