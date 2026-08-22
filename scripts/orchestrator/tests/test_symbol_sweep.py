@@ -247,8 +247,7 @@ class TestCoverageContract(unittest.TestCase):
     def test_truncation_is_never_presented_as_a_total(self):
         cov = S.make_coverage("t")
         cov.universe(18549, "symbols")
-        cov.cap("--max-symbols", 4000, 14549)
-        cov.drop("capped-by---max-symbols", 14549)
+        cov.cap("--max-symbols", 4000, before=18549, after=4000)
         for _ in range(4000):
             cov.examine()
         d = cov.as_dict()
@@ -357,3 +356,36 @@ class TestBatchFunctionSweep(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestCoverageImplParity(unittest.TestCase):
+    """The shim and the shared CoverageReport must be interchangeable.
+
+    make_coverage() hands a caller whichever is importable, so a divergence in
+    cap()'s signature or its drop bookkeeping is a crash or a double-count at a
+    production call site, not a graceful fallback.
+    """
+
+    def _both(self):
+        impls = [S._LocalCoverage("t")]
+        if S._SHARED_COVERAGE and S._SharedCoverageReport is not None:
+            impls.append(S._SharedCoverageReport("t"))
+        return impls
+
+    def test_cap_agrees_across_implementations(self):
+        seen = []
+        for cov in self._both():
+            cov.universe(18549, "symbols")
+            cov.cap("--max-symbols", 4000, before=18549, after=4000)
+            for _ in range(4000):
+                cov.examine()
+            d = cov.as_dict()
+            seen.append((d["truncated"], d["complete"], cov.dropped_total))
+            self.assertTrue(d["truncated"], type(cov).__name__)
+        self.assertEqual(len(set(seen)), 1, f"implementations disagree: {seen}")
+
+    def test_cap_counts_the_drop_exactly_once(self):
+        for cov in self._both():
+            cov.universe(18549, "symbols")
+            cov.cap("--max-symbols", 4000, before=18549, after=4000)
+            self.assertEqual(cov.dropped_total, 14549, type(cov).__name__)
