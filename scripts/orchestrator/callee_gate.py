@@ -265,6 +265,33 @@ def ensure_current_scan(db: sqlite3.Connection, *, ruler: str = DEFAULT_RULER,
             f"as unfixable.\n"
             f"Re-derive it:\n"
             f"  python3 scripts/analysis/pattern_census.py --ruler {ruler} --apply")
+    if "xxh3 unavailable" in scan["tool_version"] or "xxh3 " not in scan["tool_version"]:
+        # The two strings agree, but on an identity that is only the git commit.
+        # objdiff's own `build_id.rs` is explicit about which half is which: the
+        # `xxh3` field is the xxHash3-64 of the running executable and is
+        # AUTHORITATIVE, while the commit stamp is ADVISORY because cargo
+        # re-runs build.rs only on declared inputs and "a tracked file was
+        # edited but not staged" is not one.  Two binaries with the same commit
+        # and different bytes are a real state, and it is the state that burned
+        # a lane on 2026-08-12.  Without the hash, string equality proves
+        # nothing worth a certificate.
+        #
+        # (A `-dirty` suffix on an otherwise-matching string is deliberately NOT
+        # refused: the xxh3 already distinguishes those bytes from any other
+        # build, so a dirty binary is still a fully identified instrument.  It
+        # is also the normal state of `bin/objdiff-cli` here -- that path is a
+        # symlink shared with ../rb3 and ../rb3-xenon and it went from
+        # `4.2.7 (76c8da87e040)` to `4.2.7 (0a9716466e95-dirty)` mid-session on
+        # 2026-08-22 because another lane rebuilt it.  Refusing dirtiness would
+        # be a guard people turn off.)
+        raise StalePatternScanError(
+            f"pattern scan id={scan['id']} (ruler={ruler}) records a tool_version "
+            f"with no binary hash: {scan['tool_version']!r}\n"
+            f"Only the git commit is advisory (objdiff build_id.rs); without the "
+            f"xxh3 of the executable, matching version strings do not prove the "
+            f"same instrument.  Re-derive the scan with a binary that can read "
+            f"its own executable:\n"
+            f"  python3 scripts/analysis/pattern_census.py --ruler {ruler} --apply")
     if not scan["tree_verified"]:
         raise StalePatternScanError(
             f"pattern scan id={scan['id']} (ruler={ruler}) records tree_verified=0: "
