@@ -129,14 +129,23 @@ bool HDCache::ReadAsync(int arkfileNum, int blockNum, void *ptr) {
 }
 
 bool HDCache::WriteAsync(int arkfileNum, int blockNum, const void *ptr) {
-    MILO_ASSERT(WriteDone(), 0x191);
+    MILO_ASSERT(WriteDone(), 0x1C1);
     if (mBlockState[arkfileNum]) {
-        MILO_ASSERT(blockNum < TheArchive->GetArkfileNumBlocks(arkfileNum), 0x196);
-        if ((mBlockState[arkfileNum][(blockNum / 32)] & (1 << (blockNum % 32))) > 0) {
-            MILO_ASSERT(mWriteArkFiles[arkfileNum]->Size() >= ((blockNum + 1) * kArkBlockSize), 0x19D);
-            mWriteFileIdx = arkfileNum;
-            mWriteArkFiles[arkfileNum]->Seek(blockNum * kArkBlockSize, 0);
-            return mWriteArkFiles[mWriteFileIdx]->WriteAsync(ptr, kArkBlockSize);
+        MILO_ASSERT(blockNum < TheArchive->GetArkfileNumBlocks(arkfileNum), 0x1C6);
+        // Only blocks that are NOT already cached get written.
+        if (!(mBlockState[arkfileNum][blockNum / 32] & (1 << (blockNum % 32)))) {
+            if (mWriteArkFiles[arkfileNum]->Size() >= (blockNum + 1) * kArkBlockSize
+                && LockCache()) {
+                mLastCacheWriteMs = SystemMs();
+                mWriteFileIdx = arkfileNum;
+                mWriteBlock = blockNum;
+                mWriteArkFiles[arkfileNum]->Seek(kArkBlockSize * blockNum, 0);
+                bool ok = mWriteArkFiles[mWriteFileIdx]->WriteAsync(ptr, kArkBlockSize);
+                if (!ok) {
+                    WriteDone();
+                }
+                return ok;
+            }
         }
     }
     return false;
@@ -247,22 +256,44 @@ void HDCache::OpenFiles(int numCachedArkfiles) {
         RELEASE(mHdr[0]);
     } else {
         while (pendingArkfiles.size() != 0) {
-            int i5 = -1;
-            auto max = pendingArkfiles.begin();
+            // Pick the still-pending arkfile with the highest cache priority.
+            std::vector<int>::iterator max = pendingArkfiles.end();
+            int bestPrio = -1;
+            for (std::vector<int>::iterator it = pendingArkfiles.begin();
+                 it != pendingArkfiles.end();
+                 ++it) {
+                int prio = TheArchive->GetArkfileCachePriority(*it);
+                if (prio > bestPrio) {
+                    bestPrio = prio;
+                    max = it;
+                }
+            }
             MILO_ASSERT(max != pendingArkfiles.end(), 0x26F);
-            // there's a pendingArkfiles iteration somewhere here
-            const char *fileFmt = MakeString(mFileFmt.c_str(), i5);
+            int arkfileNum = *max;
+            const char *fileFmt = MakeString(mFileFmt.c_str(), arkfileNum);
             File *file = NewFile(fileFmt, 0x50101);
+            bool reserved = file
+                && file->Truncate(
+                       TheArchive->GetArkfileNumBlocks(arkfileNum) * kArkBlockSize
+                   );
+            if (file) {
+                delete file;
+                if (!reserved) {
+                    FileDelete(fileFmt);
+                }
+            }
             pendingArkfiles.erase(max);
         }
         for (int i = 0; i < numArkfiles; i++) {
             const char *fileFmt = MakeString(mFileFmt.c_str(), i);
-            File *write = NewFile(fileFmt, 0x50002);
-            File *read = NewFile(fileFmt, 0x50001);
-            if (write && read && !write->Fail() && !read->Fail()) {
-                mReadArkFiles[i] = read;
-                mWriteArkFiles[i] = write;
+            File *read = NewFile(fileFmt, 0x50002);
+            File *write = NewFile(fileFmt, 0x50001);
+            if (!read || !write || read->Fail() || write->Fail()) {
+                RELEASE(read);
+                RELEASE(write);
             }
+            mReadArkFiles[i] = read;
+            mWriteArkFiles[i] = write;
         }
     }
 }

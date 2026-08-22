@@ -692,7 +692,7 @@ void RecursePatternInternal(
 
     // If recurse enabled and no & wildcard: check for path-separator past splitPos
     if (recurse && ampPos == (int)FixedString::npos) {
-        int pttnLen = (int)pttnStr.length() - 1;
+        int pttnLen = (int)pttnStr.length();
         // Walk forward from splitPos looking for path separator
         int forwardPos = splitPos;
         while (forwardPos < pttnLen && pttnStr[forwardPos] != '/'
@@ -704,7 +704,9 @@ void RecursePatternInternal(
             recurse = false;
         } else {
             // Path separator found: we need to recurse into subdirectories
-            String subPattern = pttnStr.substr((unsigned int)forwardPos);
+            String subPattern = pttnStr.substr(
+                (unsigned int)forwardPos, (unsigned int)(pttnLen - forwardPos)
+            );
             pttnStr = pttnStr.substr(0, (unsigned int)forwardPos);
 
             // Enumerate subdirectories at this level
@@ -714,13 +716,13 @@ void RecursePatternInternal(
                 gDirList.erase(gDirList.begin(), gDirList.end());
             }
 
+            const char *dirPart = pttnStr.c_str();
             MainThread();
             static char pathBuf[256];
-            const char *dirBase = FileGetPathBuf(pttnStr.c_str(), pathBuf);
+            const char *dirBase = FileGetPathBuf(dirPart, pathBuf);
             pttnStr = dirBase;
 
-            unsigned int numDirs = dirs.size();
-            for (unsigned int i = 0; i < numDirs; i++) {
+            for (unsigned int i = 0; i < dirs.size(); i++) {
                 const char *combined = MakeString(
                     "%s/%s%s", pttnStr, dirs[i], subPattern
                 );
@@ -731,19 +733,11 @@ void RecursePatternInternal(
     }
 
     // Walk backward from splitPos to find last path separator
-    String dirStr;
-    if (splitPos > 0) {
-        int pos = splitPos;
-        while (pos >= 0 && pttnStr[pos] != '/' && pttnStr[pos] != '\\') {
-            pos--;
-        }
-        if (pos > 0) {
-            dirStr = pttnStr.substr(0, (unsigned int)pos);
-        } else {
-            dirStr = ".";
-        }
-    } else {
-        dirStr = ".";
+    int pos = splitPos;
+    while (pos >= 0 && pttnStr[pos] != '/' && pttnStr[pos] != '\\') {
+        pos--;
     }
+    String dirStr;
+    dirStr = pos <= 0 ? String(".") : pttnStr.substr(0, (unsigned int)pos);
     FileEnumerate(dirStr.c_str(), cb, recurse, pttnStr.c_str(), recurse_dirs);
 }
