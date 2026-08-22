@@ -1422,7 +1422,7 @@ DataNode RndMesh::OnCompareEdgeVerts(const DataArray *da) {
         MILO_NOTIFY(
             "%s has geomowner %s but still has its own verts and faces, which wastes RAM",
             PathName(this),
-            SafeName(mGeomOwner)
+            mGeomOwner ? mGeomOwner->Name() : "NULL"
         );
     }
     return 0;
