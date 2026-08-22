@@ -825,7 +825,7 @@ bool HolmesClientCacheFile(char *arg0, const char *arg1) {
     int attrResult = GetFileAttributesExA(arg0, (GET_FILEEX_INFO_LEVELS)0, fileInfo);
     bool result = false;
     bool fileExists = (attrResult - 1) != (-1);
-    if ((str != gLastCachedResource) && (gLastCacheResult > 0 || fileExists)) {
+    if ((str == gLastCachedResource) && (gLastCacheResult > 0 || fileExists)) {
         EndCmd(Holmes::kCacheFile);
         return true;
     }
@@ -844,7 +844,7 @@ bool HolmesClientCacheFile(char *arg0, const char *arg1) {
     HolmesFlushStreamBuffer();
     WaitForResponse(Holmes::kCacheFile);
 
-    u8 response = 0;
+    bool response = false;
     *gHolmesStream >> response;
     gPendingResponse = Holmes::kInvalidOpcode;
 
