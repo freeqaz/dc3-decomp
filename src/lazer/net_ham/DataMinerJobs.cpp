@@ -162,9 +162,10 @@ GameEndedDataPointJob::GameEndedDataPointJob(
         HamProfile *prof = TheProfileMgr.GetProfileFromPad(pData->PadNum());
         if (prof != nullptr && prof->HasValidSaveData()) {
             if (prof->IsSignedIn()) {
+                const char *xuid = GetXUIDStrFromProfile(prof);
                 String xuid_str("xuid"); xuid_str += buf;
-                dataP.AddPair(xuid_str.c_str(), DataNode(GetXUIDStrFromProfile(prof)));
-                
+                dataP.AddPair(xuid_str.c_str(), DataNode(xuid));
+
                 String name_str("player_name"); name_str += buf;
                 dataP.AddPair(name_str.c_str(), DataNode(ThePlatformMgr.GetName(pData->PadNum())));
             }
