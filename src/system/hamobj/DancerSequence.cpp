@@ -75,24 +75,32 @@ BEGIN_LOADS(DancerSequence)
         DancerSkeleton &skeleton = curFrame.mSkeleton;
         if (d.rev < 7) {
             int skeletonRev = 5;
+            // The image funnels all five arms into a single
+            // SetDisplacementElapsedMs(ms) with `ms` a stack local (0x5c(r31)):
+            // -1 on the pre-rev-5 arms, `bs.ReadEndian(&ms, 4)` on BOTH the rev<6
+            // arm and the rev>=6 arm. The rev>=6 arm reading the int is not
+            // cosmetic -- without it a rev-6 DancerSequence desyncs the stream by
+            // four bytes for the rest of the frame, and mElapsedMs is never set.
+            int ms;
             if (d.rev < 2) {
                 skeletonRev = 0;
-                skeleton.SetDisplacementElapsedMs(-1);
+                ms = -1;
             } else if (d.rev < 3) {
                 skeletonRev = 1;
-                skeleton.SetDisplacementElapsedMs(-1);
+                ms = -1;
             } else if (d.rev < 4) {
                 skeletonRev = 2;
-                skeleton.SetDisplacementElapsedMs(-1);
+                ms = -1;
             } else if (d.rev < 5) {
                 skeletonRev = 3;
-                skeleton.SetDisplacementElapsedMs(-1);
-            } else if (d.rev < 6) {
-                skeletonRev = 4;
-                int ms;
+                ms = -1;
+            } else {
+                if (d.rev < 6) {
+                    skeletonRev = 4;
+                }
                 d >> ms;
-                skeleton.SetDisplacementElapsedMs(ms);
             }
+            skeleton.SetDisplacementElapsedMs(ms);
             if (skeletonRev < 3) {
                 bool unusedBool;
                 d >> unusedBool;

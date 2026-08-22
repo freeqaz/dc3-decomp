@@ -231,25 +231,27 @@ void SkeletonClip::FillMoveRatings() {
     TheHamDirector->MoveKeys(mDifficulty, moveDir, moveKeys);
 
     static Symbol defaultSym("default");
-    MoveRating defaultRating;
-    defaultRating.mExpected = defaultSym;
-    defaultRating.mName = gNullStr;
-    defaultRating.mWeightType = 2;
-
-    auto numMoveKeys = moveKeys.size();
-    auto& ratings = mMoveRatings;
-    if (moveKeys.size() < ratings.size()) {
-        ratings.erase(ratings.begin() + moveKeys.size(), ratings.end());
-    } else if (numMoveKeys > ratings.size()) {
-        ratings.insert(
-            ratings.end(), moveKeys.size() - ratings.size(), defaultRating
-        );
+    {
+        // The image default-constructs the filler and assigns nothing to it: the
+        // only stores before the insert are String::String() at 0x60(r31) and the
+        // inlined Symbol::Symbol() (gNullStr) at 0x68(r31). mWeightType is left
+        // uninitialised, and ~String runs at the join of the if/else -- before the
+        // loop, not at end of function -- so the filler is block-scoped.
+        MoveRating defaultRating;
+        auto &ratings = mMoveRatings;
+        if (moveKeys.size() < ratings.size()) {
+            ratings.erase(ratings.begin() + moveKeys.size(), ratings.end());
+        } else {
+            ratings.insert(
+                ratings.end(), moveKeys.size() - ratings.size(), defaultRating
+            );
+        }
     }
 
     for (int i = 0; i < moveKeys.size(); i++) {
-        ratings[i].mName = moveKeys[i].move->Name();
-        ratings[i].mExpected = defaultSym;
-        ratings[i].mWeightType = 2;
+        mMoveRatings[i].mName = moveKeys[i].move->Name();
+        mMoveRatings[i].mExpected = defaultSym;
+        mMoveRatings[i].mWeightType = 2;
     }
 }
 

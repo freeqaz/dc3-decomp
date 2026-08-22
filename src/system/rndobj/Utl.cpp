@@ -1186,6 +1186,29 @@ const char *CacheResource(const char *cc, const Hmx::Object *o) {
     }
 }
 
+// NEGATIVE RESULT (2026-08-22, name_check, objdiff 4.2.8) -- do not retry blindly.
+//
+// The image differs from this function in two known ways and NEITHER is reachable by
+// restructuring the source:
+//
+//  1. Block placement.  The image sinks the whole MovieExtension arm to the end of the
+//     function (bne past the main body to 0x228) where we emit it inline right after
+//     the stricmp pair.  Rewriting this as
+//         if (stricmp(ext,"bmp") == 0 || stricmp(ext,"png") == 0) { ...main...; return ret; }
+//         else { ...movie... }
+//     does NOT move it: MSVC still emitted the movie arm inline and idx 28 stayed
+//     bne-vs-beq.  Measured 71.537 -> 67.9, a 3.6pp REGRESSION, and reverted.
+//
+//  2. Destructor merging.  The image destroys qualifiedPath ONCE (target names
+//     ??1String@@UAA@XZ once, we name it twice), holding the return value in r29 across
+//     the single exit.  Hoisting that into a `const char *ret = cacheFile;` with one
+//     `return ret;` was part of the same reverted experiment and added instructions
+//     rather than merging the two destructor calls -- objdiff classifies this as
+//     DEAD_STORE_ELIMINATION / destructor-merging, RarelyHandFixable.
+//
+// The census WRONG_CALLEE charge here (target MovieExtension vs base ~String) is a
+// consequence of 1: both sides call MovieExtension exactly once, at different points in
+// the function, so the aligner pairs our ~String against it.  It is not a wrong callee.
 const char *CacheResource(const char *cc, CacheResourceResult &res) {
     Platform thisPlatform = TheLoadMgr.GetPlatform();
     res = kCacheUnnecessary;

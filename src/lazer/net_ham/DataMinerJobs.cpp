@@ -69,8 +69,7 @@ GameEndedDataPointJob::GameEndedDataPointJob(
     Symbol songSym = TheGameData->GetSong();
 
     if (TheMaster != nullptr && TheMaster->IsLoaded()) {
-        float streamMs = TheMaster->StreamMs();
-        streamMs = streamMs / TheMaster->SongDurationMs();
+        float streamMs = TheMaster->StreamMs() / TheMaster->SongDurationMs();
         song_pos = -streamMs >= 0.0f ? 0.0f : streamMs;
         song_pos = song_pos - 1.0f >= 0.0f ? 1.0f : song_pos;
     }
@@ -118,9 +117,18 @@ GameEndedDataPointJob::GameEndedDataPointJob(
     const char *perf_move_ratings_str = "perf_move_ratings";
     const char *perf_calories_str = "perf_calories";
     const char *new_rank_str_base = "new_rank";
+    const char *move_ratings_prefix = "move_ratings=";
+    const char *perf_current_score_str = "perf_current_score";
+    const char *diff_str_base = "diff";
     const char *new_content_str_base = "new_content";
     const char *comma_str = ",";
     const char *pract_move_ratings_str = "pract_move_ratings";
+    const char *character_str_base = "character";
+    const char *crew_str_base = "crew";
+    const char *num_playlists_str_base = "num_playlists";
+    const char *perf_fitness_mode_str = "perf_fitness_mode";
+    const char *player_name_str_base = "player_name";
+    const char *xuid_str_base = "xuid";
 
     for (int i = 0; i < 2; i++) {
         HamPlayerData *pData = TheGameData->Player(i);
@@ -130,17 +138,19 @@ GameEndedDataPointJob::GameEndedDataPointJob(
         char buf[32];
         itoa(i, buf, 10);
 
-        String crew_str("crew"); crew_str += buf;
-        String char_str("character"); char_str += buf;
-        String diff_str("diff"); diff_str += buf;
-        String score_str("perf_current_score"); score_str += buf;
+        String crew_str(crew_str_base); crew_str += buf;
+        String char_str(character_str_base); char_str += buf;
+        String diff_str(diff_str_base); diff_str += buf;
+        String score_str(perf_current_score_str); score_str += buf;
         String ratings_str;
-        String move_ratings_str("move_ratings="); move_ratings_str += buf;
+        String move_ratings_str(move_ratings_prefix); move_ratings_str += buf;
 
         bool hasRatings = true;
-        if (lastMode == perform || lastMode == dance_battle || lastMode == perform_legacy ||
-            (perf_move_ratings_str = pract_move_ratings_str, lastMode == practice)) {
+        if (lastMode == perform || lastMode == dance_battle || lastMode == perform_legacy) {
             ratings_str = perf_move_ratings_str;
+            ratings_str += buf;
+        } else if (lastMode == practice) {
+            ratings_str = pract_move_ratings_str;
             ratings_str += buf;
         } else {
             hasRatings = false;
@@ -159,14 +169,16 @@ GameEndedDataPointJob::GameEndedDataPointJob(
         const DataNode *scoreNode = pData->Provider()->Property(score, true);
         dataP.AddPair(score_str.c_str(), scoreNode->Int());
 
-        HamProfile *prof = TheProfileMgr.GetProfileFromPad(pData->PadNum());
+        int padNum = pData->PadNum();
+        HamProfile *prof = TheProfileMgr.GetProfileFromPad(padNum);
         if (prof != nullptr && prof->HasValidSaveData()) {
             if (prof->IsSignedIn()) {
-                String xuid_str("xuid"); xuid_str += buf;
-                dataP.AddPair(xuid_str.c_str(), DataNode(GetXUIDStrFromProfile(prof)));
-                
-                String name_str("player_name"); name_str += buf;
-                dataP.AddPair(name_str.c_str(), DataNode(ThePlatformMgr.GetName(pData->PadNum())));
+                const char *xuid = GetXUIDStrFromProfile(prof);
+                String xuid_str(xuid_str_base); xuid_str += buf;
+                dataP.AddPair(xuid_str.c_str(), DataNode(xuid));
+
+                String name_str(player_name_str_base); name_str += buf;
+                dataP.AddPair(name_str.c_str(), DataNode(ThePlatformMgr.GetName(padNum)));
             }
 
             String acc_str;
@@ -202,7 +214,7 @@ GameEndedDataPointJob::GameEndedDataPointJob(
                     dataP.AddPair(cals_str.c_str(), cals);
                 }
 
-                String fitness_mode_str("perf_fitness_mode"); fitness_mode_str += buf;
+                String fitness_mode_str(perf_fitness_mode_str); fitness_mode_str += buf;
                 dataP.AddPair(fitness_mode_str.c_str(), (int)inFit);
             }
 
@@ -211,7 +223,7 @@ GameEndedDataPointJob::GameEndedDataPointJob(
                 p.GetNumSongs();
             }
 
-            String num_playlists_str("num_playlists"); num_playlists_str += buf;
+            String num_playlists_str(num_playlists_str_base); num_playlists_str += buf;
             dataP.AddPair(num_playlists_str.c_str(), 0);
         }
     }

@@ -80,11 +80,12 @@ BEGIN_LOADS(RndParticleSysAnim)
         LOAD_SUPERCLASS(Hmx::Object)
     }
     LOAD_SUPERCLASS(RndAnimatable)
+    BinStream &s = d.stream;
     d >> mParticleSys;
-    bs >> mStartColorKeys >> mEndColorKeys;
+    s >> mStartColorKeys >> mEndColorKeys;
     if (d.rev < 2) {
-        float scale = 1.0f;
         Keys<float, float> floatKeys;
+        float scale = 1.0f;
         d >> floatKeys >> mKeysOwner;
         if (d.rev == 1) {
             d >> scale;
@@ -94,7 +95,7 @@ BEGIN_LOADS(RndParticleSysAnim)
         for (Keys<float, float>::iterator it = floatKeys.begin(); it != floatKeys.end();
              ++it) {
             Key<Vector2> vecKey;
-            vecKey.value = Vector2(it->value, it->value * scale);
+            vecKey.value.Set(it->value, it->value * scale);
             vecKey.frame = it->frame;
             mEmitRateKeys.push_back(vecKey);
         }

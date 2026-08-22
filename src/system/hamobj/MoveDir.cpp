@@ -1784,6 +1784,19 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
     MILO_ASSERT(mDancerViz, 0x796);
     MILO_ASSERT(TheHamDirector, 0x797);
 
+    // NOTE (measured 2026-08-22, name_check ruler): the shipped image calls these two
+    // in the OPPOSITE order to this source. Target asm proves it: `bl CurrentMoveMode`
+    // sits here (idx 84, its result spilled to 0x68(r31) and reloaded as the `mode`
+    // argument of NodeWeightHam1 at idx 630), while `bl ClosestMoveFrame` sits ~380
+    // instructions later, immediately before `bl HamMove::GetMoveFrames` (idx 465, kept
+    // in r16). Applying that order DOES close the reciprocal WRONG_CALLEE pair and
+    // aligns the whole call sequence -- but MSVC then flips the basic-block layout of
+    // the `mergeVal` if/else below (the non-merged branch stops being sunk past the
+    // `if (closest)` block) and the function falls 88.685 -> 70.7. Isolated: hoisting
+    // CurrentMoveMode alone is what flips it (69.6); sinking ClosestMoveFrame alone is
+    // 87.6; hoist + inverting the mergeVal if/else to try to recover the layout is 64.1.
+    // All four reverted. Do not retry any of those four; a recovery needs a different
+    // mechanism for the block-sinking heuristic.
     MoveFrame *closest = ClosestMoveFrame();
     int mirrored = (move->Mirror() != nullptr);
 

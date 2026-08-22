@@ -71,7 +71,7 @@ protected:
     NetworkSocket *mSocket; // 0x8
     String mPath; // 0xc - URL path for GET/POST requests
     unsigned short mPort; // 0x14
-    int mState; // 0x18
+    State mState; // 0x18
     bool mFlags;
     Timer mTimer; // 0x20
     float mTimeoutMs; // 0x50

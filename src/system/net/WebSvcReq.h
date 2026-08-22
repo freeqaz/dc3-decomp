@@ -8,6 +8,7 @@
 
 class WebSvcRequest : public Hmx::Object {
     friend class WebSvcMgr;
+    friend class WebSvcMgrCurl;
 public:
     enum State {
         kNotStarted = 0,
