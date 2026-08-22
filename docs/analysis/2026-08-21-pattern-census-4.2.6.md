@@ -1,5 +1,26 @@
 # Whole-binary pattern census under objdiff 4.2.6 — dc3-decomp, 2026-08-21
 
+> ⚠ **The counts in this document are the 4.2.6 measurement and are superseded.** Re-derived
+> 2026-08-22 under `objdiff-cli 4.2.8 (358c715835cc, xxh3 9b2bb6f1f3a21062)` as `pattern_scans`
+> **id=6** (`name_check`) and **id=7** (`all`), at `3f51216ee`, over **48,290 of 48,328** rows
+> (all 38 drops `objdiff-not_found`). The five callee classes now read `LINKER_MERGED` **2**,
+> `WRONG_CALLEE` **113**, `TEMPLATE_INSTANTIATION_MISMATCH` **15**,
+> `REGISTER_SAVE_HELPER_MISMATCH` **217**, `UNVERIFIABLE_CALLEE_NAME` **0** — against **4**,
+> **127**, **18**, **219**, **0** below.
+>
+> **That drop is source movement, not a vocabulary change**, and it was established rather than
+> assumed: the full census run with 4.2.7 and 4.2.8 over the *same* tree and objects differs on
+> **0 of 48,290 rows**. The control matters — a cross-version delta is *not* generally readable
+> as a trend here. Under the `all` ruler `UNVERIFIABLE_PAIRING` went 0→801 purely because the
+> detector did not exist in 4.2.6, which would have looked like a finding and was not one.
+>
+> **Everything else in this document stands**: the method, the denominators-and-drop-reasons
+> discipline, the schema rationale, the adjudication of what each class means, and the ranked
+> worklist (whose *rows* are still valid even where the *counts* have moved as they were worked).
+> It is retained as the 4.2.6 record. Re-derive with
+> `python3 scripts/analysis/pattern_census.py --ruler name_check --apply`; a scan taken by a
+> different binary is now refused rather than read (`scripts/verify_pattern_scan_current.py --check`).
+
 **Repo: dc3-decomp (title `373307D9`).** `bin/objdiff-cli` is a symlink shared with `../rb3`
 and `../rb3-xenon`; every number here is dc3's. Task #127, branch
 `fix/pattern-census-20260821` off `2f666acc8`, measured in
