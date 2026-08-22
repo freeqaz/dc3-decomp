@@ -204,8 +204,6 @@ void MemTracker::Alloc(
     gMemTrackerTracking = false;
     AllocInfo::bPrintCsv = true;
     if (!mHeapOnly) {
-        String str1;
-        String str2;
         AllocInfo *info = new AllocInfo(
             requestedSize,
             actualSize,
@@ -216,27 +214,24 @@ void MemTracker::Alloc(
             strat,
             file,
             line,
-            str1,
-            str2
+            unk181b4,
+            unk181ac
         );
         mHashTable->Insert(info);
-        if (pooled || gMemLogType != gNullStr || gMemLogType == type) {
-            if (pooled || mHeap != -1 && heap != mHeap) {
-                if (mLog) {
-                    *mLog << " ((com new) " << "(mem " << memory << ") " << *info << ")\n";
-                }
-                if (mSpew) {
-                    TheDebug << "::Alloc::" << info->mType << " Allocated "
-                             << info->mActSize << " Requested " << info->mReqSize
-                             << " Address " << (unsigned int)info->mMem << " Heap " << info->mHeap
-                             << str1.c_str() << ":" << str2.c_str() << "\n";
-                }
-            }
-        } else {
-            // if !mLog goto above
+        if (!pooled && gMemLogType != gNullStr && gMemLogType == type && mLog) {
             *mLog << " new, ";
             info->PrintCsv(*mLog);
             *mLog << "\n";
+        } else if (!pooled && (mHeap == -1 || heap == mHeap) && strat == 0) {
+            if (mLog) {
+                *mLog << " ((com new) " << "(mem " << memory << ") " << *info << ")\n";
+            }
+            if (mSpew) {
+                TheDebug << "::Alloc::" << info->mType << " Allocated "
+                         << info->mActSize << " Requested " << info->mReqSize
+                         << " Address " << (unsigned int)info->mMem << " Heap " << info->mHeap
+                         << file << ":" << line << "\n";
+            }
         }
     }
     if (!pooled) {
