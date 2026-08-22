@@ -98,20 +98,37 @@ class _LocalCoverage:
         self._universe_what = ""
         self._examined = 0
         self._drops: Dict[str, int] = collections.Counter()
+        self._drop_notes: Dict[str, str] = {}
         self._caps: List[Dict[str, Any]] = []
         self._notes: List[str] = []
         self._extra: Dict[str, Any] = {}
+        self._universe_unknown_reason: Optional[str] = None
 
     # -- the three calls a scanner makes -----------------------------------
     def universe(self, n: int, what: str = "") -> None:
         self._universe = n
         self._universe_what = what
 
+    def universe_unknown(self, reason: str) -> None:
+        # Was entirely MISSING from this shim while the shared class has it.
+        # `make_coverage()` hands out either, so a caller reaching for it got
+        # AttributeError from one implementation and not the other. Found by
+        # TestCoverageImplParity's whole-API grade, 2026-08-22, not by anyone
+        # noticing.
+        if not reason:
+            raise ValueError("universe_unknown() requires a reason: an "
+                             "unexplained missing denominator is the bug")
+        self._universe_unknown_reason = reason
+
     def examine(self, n: int = 1) -> None:
         self._examined += n
 
-    def drop(self, reason: str, n: int = 1) -> None:
+    def drop(self, reason: str, n: int = 1, note: str = "") -> None:
+        # `note` was missing here and present on the shared class -- second
+        # divergence found by the whole-API grade.
         self._drops[reason] += n
+        if note:
+            self._drop_notes[reason] = note
 
     def cap(self, flag: str, limit: Any, before: int, after: int, note: str = "") -> None:
         # Signature AND drop-bookkeeping must mirror the shared CoverageReport:
@@ -129,8 +146,19 @@ class _LocalCoverage:
     def note(self, text: str) -> None:
         self._notes.append(text)
 
-    def extra(self, **kw: Any) -> None:
-        self._extra.update(kw)
+    def extra(self, key: str, value: Any) -> None:
+        # ⚠ SIGNATURE MUST TRACK scripts/analysis/coverage.CoverageReport.extra.
+        # This used to be `extra(self, **kw)` while the shared class has always
+        # been `extra(self, key, value)`. `make_coverage()` returns the SHARED
+        # class whenever it imports (i.e. always, in this tree), so the single
+        # production call site -- `cov.extra(divergent_slots=..., ...)` in
+        # sweep_data_symbols -- raised
+        #     TypeError: CoverageReport.extra() got an unexpected keyword
+        #                argument 'divergent_slots'
+        # and `run_symbol_sweep(kind='vtable_slots')` was DEAD on main. Verified
+        # 2026-08-22 through the MCP tool, not just the CLI.
+        # `TestCoverageImplParity` now grades every public method's signature.
+        self._extra[key] = value
 
     # -- derived ------------------------------------------------------------
     @property
@@ -207,13 +235,51 @@ class _LocalCoverage:
         return "\n".join(L)
 
 
+#: Public methods every coverage implementation must provide with the SAME
+#: signature.  `make_coverage` returns either one, so any divergence here is a
+#: crash at a production call site.
+COVERAGE_API = ("universe", "universe_unknown", "note", "extra", "examine",
+                "drop", "cap", "as_dict")
+
+
+def _api_signature(obj, meth: str) -> str:
+    import inspect
+    fn = getattr(obj, meth, None)
+    if fn is None:
+        return "<MISSING>"
+    try:
+        return str(inspect.signature(fn))
+    except (TypeError, ValueError):  # builtins / C-implemented
+        return "<UNINSPECTABLE>"
+
+
 def make_coverage(name: str):
-    """Return the shared CoverageReport when available, else the local shim."""
+    """Return the shared CoverageReport when available, else the local shim.
+
+    The `try/except` used to wrap only the CONSTRUCTOR, with the comment
+    "signature drift -> fall back rather than crash a sweep".  That is the
+    right intent aimed one level too high: constructing succeeded and
+    `cov.extra(divergent_slots=...)` blew up 500 lines later, which is exactly
+    the sweep-crash the fallback was meant to prevent.  The whole API is now
+    compared up front, so drift in ANY method demotes to the shim instead of
+    reaching a call site.
+    """
     if _SHARED_COVERAGE and _SharedCoverageReport is not None:
         try:
-            return _SharedCoverageReport(name)
-        except Exception:  # signature drift -> fall back rather than crash a sweep
-            pass
+            shared = _SharedCoverageReport(name)
+        except Exception:  # constructor drift
+            return _LocalCoverage(name)
+        local = _LocalCoverage(name)
+        drift = [m for m in COVERAGE_API
+                 if _api_signature(shared, m) != _api_signature(local, m)]
+        if drift:
+            sys.stderr.write(
+                f"[symbol_sweep] coverage API drift on {drift} -- using the "
+                f"local shim. Fix _LocalCoverage to track "
+                f"scripts/analysis/coverage.CoverageReport; "
+                f"TestCoverageImplParity grades this.\n")
+            return local
+        return shared
     return _LocalCoverage(name)
 
 
@@ -662,11 +728,9 @@ def sweep_data_symbols(
 
     by_class = collections.Counter(s["class_name"] for s in slots)
     by_kind = collections.Counter(s["class"] for s in slots)
-    cov.extra(
-        divergent_slots=len(slots),
-        length_findings=len(length),
-        divergent_rows_before_dedup=len(findings),
-    )
+    cov.extra("divergent_slots", len(slots))
+    cov.extra("length_findings", len(length))
+    cov.extra("divergent_rows_before_dedup", len(findings))
     return {
         "kind": "vtable_slots" if symbol_glob == "??_7*" else "data_symbols",
         "symbol_glob": symbol_glob,

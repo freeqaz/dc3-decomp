@@ -26,6 +26,60 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from orchestrator import symbol_sweep as S  # noqa: E402
 
 
+def _uncollected_testcases() -> set:
+    """TestCase classes present in this FILE that the loader did not collect.
+
+    The comparison is against the file's own SOURCE (via `ast`), not against
+    `vars(module)`, and that is the whole point: a stray
+    `if __name__ == "__main__": unittest.main()` placed mid-file stops
+    execution before the later classes are ever *defined*, so `vars(module)`
+    agrees with the loader and the check is vacuous exactly when it matters.
+    The source text is there regardless of where execution stopped.
+
+    Measured 2026-08-22: the guard sat at line 357 and `TestCoverageImplParity`
+    at 361. `python3 test_symbol_sweep.py` printed "Ran 24 tests ... OK" and
+    collected ZERO of that class's tests, while `python3 -m unittest` (which
+    imports the module first) collected 2. The parity test written to prove the
+    coverage shim and the shared CoverageReport are interchangeable had never
+    executed -- and they were not interchangeable, in three separate methods.
+    """
+    import ast
+    import sys as _sys
+    src = Path(__file__).read_text()
+    in_file = set()
+    for node in ast.parse(src).body:
+        if isinstance(node, ast.ClassDef) and any(
+                (isinstance(b, ast.Attribute) and b.attr == "TestCase")
+                or (isinstance(b, ast.Name) and b.id == "TestCase")
+                for b in node.bases):
+            in_file.add(node.name)
+    collected = set()
+    for suite in unittest.defaultTestLoader.loadTestsFromModule(
+            _sys.modules[__name__]):
+        for t in suite:
+            collected.add(type(t).__name__)
+    return in_file - collected
+
+
+def _assert_collects_everything() -> None:
+    """Hard-fail the RUN, not just one test, if classes went uncollected.
+
+    Called from the `__main__` guard so it fires wherever that guard is: if
+    somebody re-introduces the mid-file guard, the classes below it are not
+    defined, `loadTestsFromModule` cannot see them, and this exits 6 instead of
+    printing a green "Ran 24 tests ... OK". A check that lives only inside a
+    test case cannot cover a guard placed above that test case.
+    """
+    missing = _uncollected_testcases()
+    if missing:
+        raise SystemExit(
+            f"REFUSING to report a result: {len(missing)} TestCase class(es) "
+            f"in this file were never collected -- {sorted(missing)}.\n"
+            f"`unittest.main()` must be the LAST statement in the file; "
+            f"anything defined after it never runs and the suite reports OK "
+            f"over a smaller set than it appears to.")
+
+
 MAP_TEXT = """\
  Address         Publics by Value              Rva+Base       Lib:Object
 
@@ -354,16 +408,27 @@ class TestBatchFunctionSweep(unittest.TestCase):
         self.assertTrue(out["_coverage"]["truncated"])
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class TestCoverageImplParity(unittest.TestCase):
     """The shim and the shared CoverageReport must be interchangeable.
 
     make_coverage() hands a caller whichever is importable, so a divergence in
     cap()'s signature or its drop bookkeeping is a crash or a double-count at a
     production call site, not a graceful fallback.
+
+    ⚠ THIS CLASS DID NOT RUN. `if __name__ == "__main__": unittest.main()` was
+    at line 357 and this class started at line 361 -- Python executes top to
+    bottom, so running the file the documented way collected the nine classes
+    above it and reported "Ran 24 tests ... OK" while contributing zero from
+    here. Measured 2026-08-22: `python3 test_symbol_sweep.py -v | grep -c
+    CoverageImplParity` -> 0; `python3 -m unittest ...` (discovery, which
+    imports the whole module first) -> 2. A parity test that cannot run.
+
+    What it would have caught, had it also covered `extra()`: the shim was
+    `extra(self, **kw)` and the shared class `extra(self, key, value)`, so
+    `run_symbol_sweep(kind='vtable_slots')` -- the whole-binary vtable
+    adjudication CLAUDE.md advertises -- raised TypeError on every call.
+    `test_every_public_method_has_a_matching_signature` below now grades the
+    whole API rather than the one method someone thought to test.
     """
 
     def _both(self):
@@ -389,3 +454,68 @@ class TestCoverageImplParity(unittest.TestCase):
             cov.universe(18549, "symbols")
             cov.cap("--max-symbols", 4000, before=18549, after=4000)
             self.assertEqual(cov.dropped_total, 14549, type(cov).__name__)
+
+    def test_every_public_method_has_a_matching_signature(self):
+        """Grade the WHOLE API, not the one method someone remembered.
+
+        Testing `cap()` by hand is how `extra()` drifted unnoticed. This
+        enumerates `S.COVERAGE_API` so a method added to one side and not the
+        other is RED without anybody writing a new test.
+        """
+        if not (S._SHARED_COVERAGE and S._SharedCoverageReport is not None):
+            self.skipTest("shared CoverageReport not importable")
+        shared, local = S._SharedCoverageReport("t"), S._LocalCoverage("t")
+        mismatched = {
+            m: (S._api_signature(shared, m), S._api_signature(local, m))
+            for m in S.COVERAGE_API
+            if S._api_signature(shared, m) != S._api_signature(local, m)
+        }
+        self.assertEqual(mismatched, {},
+                         f"coverage API drift (shared, local): {mismatched}")
+
+    def test_extra_accepts_the_production_call_form(self):
+        """The exact call `sweep_data_symbols` makes, against both impls.
+
+        Negative control for the test above: a signature comparison that was
+        somehow vacuous would still let this one fail.
+        """
+        for cov in self._both():
+            cov.extra("divergent_slots", 7)
+            self.assertEqual(cov.as_dict()["divergent_slots"], 7,
+                             type(cov).__name__)
+
+    def test_make_coverage_returns_something_usable(self):
+        """Whatever make_coverage hands back must survive the production calls.
+
+        `make_coverage`'s fallback used to wrap only the CONSTRUCTOR, so drift
+        in a METHOD was not caught and surfaced 500 lines later as a crashed
+        sweep.
+        """
+        cov = S.make_coverage("t")
+        cov.universe(3, "symbols")
+        cov.note("ruler: name_check")
+        cov.extra("divergent_slots", 1)
+        cov.examine(1)
+        cov.drop("no-object", 2)
+        self.assertEqual(cov.as_dict()["divergent_slots"], 1)
+
+
+class TestThisFileCollectsEveryTestCase(unittest.TestCase):
+    """A test file cannot be trusted to report on classes it never loaded.
+
+    The negative control for the `unittest.main()`-placement bug above: compare
+    what the default loader collects against every TestCase subclass actually
+    defined in this module. If someone re-introduces a class after the
+    `__main__` guard -- or the guard drifts back up -- the counts diverge and
+    this is RED, without anyone having to notice the line numbers.
+    """
+
+    def test_loader_sees_every_testcase_defined_here(self):
+        self.assertEqual(_uncollected_testcases(), set(),
+                         "TestCase classes defined but not collected -- is "
+                         "`if __name__ == \"__main__\"` above them?")
+
+
+if __name__ == "__main__":
+    _assert_collects_everything()
+    unittest.main()
