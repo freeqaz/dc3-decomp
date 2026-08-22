@@ -75,8 +75,9 @@ def make_db(path: Path) -> None:
         # symbol, unit, size, cur, best, verdict, excl, stub, msc, uv, uc, tested, norm
         ("F_equiv_stale",   "default/system/a", 100, 94.0, 94.0, None, 0, 0, 0, "EQUIVALENT", None, old,   94.0),  # equivalent (stale)
         ("F_equiv_fresh",   "default/system/a", 100, 96.0, 96.0, None, 0, 0, 0, "EQUIVALENT", None, fresh, 96.0),  # equivalent (fresh)
-        ("F_artifact",      "default/system/a", 100, 88.0, 88.0, None, 0, 0, 0, "DIVERGENT", "stack_layout", old, 88.0),  # artifact:stack_layout
-        ("F_orig_error",    "default/system/a", 100, 90.0, 90.0, None, 0, 0, 0, "DIVERGENT", "orig_error", old, 90.0),    # artifact:orig_error
+        ("F_artifact",      "default/system/a", 100, 88.0, 88.0, None, 0, 0, 0, "DIVERGENT", "stack_layout", fresh, 88.0),  # artifact:stack_layout
+        ("F_artifact_stale","default/system/a", 100, 87.0, 87.0, None, 0, 0, 0, "DIVERGENT", "stack_layout", old, 87.0),  # WITHHELD: right class, stale evidence
+        ("F_orig_error",    "default/system/a", 100, 90.0, 90.0, None, 0, 0, 0, "DIVERGENT", "orig_error", fresh, 90.0),  # artifact:orig_error
         ("F_icf",           "default/system/a", 100, 82.0, 82.0, None, 0, 0, 3, None, None, None, 82.0),                  # icf_merged
         ("F_permuter",      "default/system/a", 100, 91.0, 91.0, None, 0, 0, 0, None, None, None, 91.0),                  # permuter_exhausted (attempt below)
         ("F_callcount",     "default/system/a", 100, 95.0, 95.0, None, 0, 0, 0, "DIVERGENT", "call_count", old, 95.0),    # NOT certifiable (routable)
@@ -125,7 +126,7 @@ def make_report(path: Path) -> None:
                 "metadata": {"demangled_name": name}}
     report = {"units": [{"name": "default/system/a", "functions": [
         fn("F_equiv_stale", 94.0), fn("F_equiv_fresh", 96.0), fn("F_artifact", 88.0),
-        fn("F_orig_error", 90.0), fn("F_icf", 82.0), fn("F_permuter", 91.0),
+        fn("F_artifact_stale", 87.0), fn("F_orig_error", 90.0), fn("F_icf", 82.0), fn("F_permuter", 91.0),
         fn("F_callcount", 95.0), fn("F_realbug", 70.0), fn("F_untested", 85.0),
         fn("F_matched", 100.0), fn("F_stub", 0.0),
     ]}]}
@@ -152,8 +153,8 @@ def main() -> int:
         print("== certify --db (dry-run default, NO writes) ==")
         p = run([sys.executable, str(CERTIFY), "--db", str(db)])
         check(p.returncode == 0, f"dry-run exits 0 (rc={p.returncode})\n{p.stderr}")
-        check("CERTIFIABLE TODAY (have evidence):        6" in p.stdout,
-              "dry-run reports 6 certifiable (2 equiv + 2 artifact + 1 icf + 1 permuter)")
+        check("CERTIFIABLE TODAY (have evidence):        5" in p.stdout,
+              "dry-run reports 5 certifiable (1 equiv_fresh + 2 artifact + 1 icf + 1 permuter; 2 stale rows withheld)")
         conn = sqlite3.connect(str(db))
         # dry-run must NOT add columns
         cols = {r[1] for r in conn.execute("PRAGMA table_info(functions)")}
@@ -169,8 +170,21 @@ def main() -> int:
                   "floor_cert_at", "floor_cert_evidence"):
             check(c in cols, f"migration added column {c}")
         # per-class certs
-        check(col(conn, "F_equiv_stale", "floor_certificate") == "equivalent",
-              "F_equiv_stale -> equivalent")
+        # ⚠ CONTRACT CHANGED 2026-08-22. This used to assert
+        #     F_equiv_stale -> "equivalent"
+        # i.e. the test ENCODED THE DEFECT: the headline said "blocked on STALE
+        # unicorn" and the row was written anyway. `F_equiv_stale` is 98 days
+        # old against STALE_DAYS=60. Stale-unicorn rows are now WITHHELD unless
+        # --allow-stale-unicorn, and the pair of assertions below is the
+        # negative control -- without the second one, "not certified" would
+        # also be satisfied by a classifier that can no longer certify at all.
+        check(col(conn, "F_equiv_stale", "floor_certificate") is None,
+              "F_equiv_stale NOT certified (unicorn evidence 98d > STALE_DAYS)")
+        check(col(conn, "F_equiv_fresh", "floor_certificate") == "equivalent",
+              "F_equiv_fresh -> equivalent (3d evidence; the control that "
+              "proves the equivalent path still fires)")
+        check(col(conn, "F_artifact_stale", "floor_certificate") is None,
+              "F_artifact_stale NOT certified (right class, 98d evidence)")
         check(col(conn, "F_artifact", "floor_certificate") == "artifact:stack_layout",
               "F_artifact -> artifact:stack_layout")
         check(col(conn, "F_orig_error", "floor_certificate") == "artifact:orig_error",
@@ -195,14 +209,14 @@ def main() -> int:
         check(col(conn, "F_sdk", "floor_certificate") is None,
               "SDK unit NOT certified")
         # provenance: cert_pct + build + evidence recorded
-        check(col(conn, "F_equiv_stale", "floor_cert_pct") == 94.0,
-              "floor_cert_pct captured = 94.0")
-        ev = json.loads(col(conn, "F_equiv_stale", "floor_cert_evidence"))
-        check(ev.get("unicorn_stale") is True,
-              "stale-unicorn provenance recorded (unicorn_stale=true for 98d-old test)")
+        check(col(conn, "F_equiv_fresh", "floor_cert_pct") == 96.0,
+              "floor_cert_pct captured = 96.0")
+        ev = json.loads(col(conn, "F_equiv_fresh", "floor_cert_evidence"))
+        check(ev.get("unicorn_stale") is False,
+              "fresh-unicorn provenance recorded (unicorn_stale=false for 3d-old test)")
         ev2 = json.loads(col(conn, "F_equiv_fresh", "floor_cert_evidence"))
         check(ev2.get("unicorn_stale") is False,
-              "fresh-unicorn provenance recorded (unicorn_stale=false for 3d-old test)")
+              "re-apply keeps fresh-unicorn provenance")
         conn.close()
 
         print("== idempotency: re-apply changes nothing ==")
@@ -214,13 +228,13 @@ def main() -> int:
         c1 = sqlite3.connect(str(db))
         n1 = c1.execute("SELECT count(*) FROM functions WHERE floor_certificate IS NOT NULL").fetchone()[0]
         c1.close()
-        check(n0 == n1 == 6, f"cert count stable across re-apply (n0={n0}, n1={n1})")
+        check(n0 == n1 == 5, f"cert count stable across re-apply (n0={n0}, n1={n1})")
 
         print("== authorable_done view + --summary ==")
         conn = sqlite3.connect(str(db))
         view_rows = conn.execute("SELECT done_state, count(*) FROM authorable_done GROUP BY done_state").fetchall()
         states = dict(view_rows)
-        # 15 authorable rows (merged_ + sdk excluded; ??0Foo ctor INCLUDED):
+        # 16 authorable rows (merged_ + sdk excluded; ??0Foo ctor INCLUDED):
         #   matched=3 (F_matched norm==100 + F_db_only COMPLETE+cur=100+norm NULL
         #              + ??0Foo ctor COMPLETE+cur=100+norm==100)
         #   stub=3 (F_stub + F_native_div(0%) + F_native_div_null(NULL norm),
@@ -228,8 +242,8 @@ def main() -> int:
         #   certified=6, open=3
         check(states.get("matched") == 3, f"view: 3 matched ({states})")
         check(states.get("stub") == 3, f"view: 3 stub (F_stub + uncertified F_native_div + F_native_div_null) ({states})")
-        check(states.get("certified") == 6, f"view: 6 certified ({states})")
-        check(states.get("open") == 3, f"view: 3 open (callcount+realbug+untested) ({states})")
+        check(states.get("certified") == 5, f"view: 5 certified ({states})")
+        check(states.get("open") == 5, f"view: 5 open (callcount+realbug+untested+2 withheld-stale) ({states})")
         # Specifically verify the db-only pattern
         db_only_state = conn.execute(
             "SELECT done_state FROM authorable_done WHERE symbol='F_db_only'"
@@ -243,11 +257,11 @@ def main() -> int:
 
         print("== two-path denominator self-check ==")
         # Healthy DB: the SQL view WHERE and the Python startswith filter must agree
-        # (15 authorable rows: 17 total minus merged_deadbeef + F_sdk).
+        # (16 authorable rows: 18 total minus merged_deadbeef + F_sdk).
         p = run([sys.executable, str(CERTIFY), "--check-denominator", "--db", str(db)])
         check(p.returncode == 0, f"check-denominator exits 0 when consistent (rc={p.returncode})\n{p.stderr}")
         check("AGREE" in p.stdout, "check-denominator reports AGREE on a healthy DB")
-        check("15 fns" in p.stdout, f"both paths count 15 authorable fns\n{p.stdout}")
+        check("16 fns" in p.stdout, f"both paths count 16 authorable fns\n{p.stdout}")
 
         # Inject the wave-9 bug: recreate the view with an UNESCAPED '??_%'-style
         # artifact clause and confirm the self-check fails LOUDLY (nonzero).
@@ -279,7 +293,7 @@ def main() -> int:
               "reconcile (e)=0 on fresh certs")
         # move one cert's normalized away from floor_cert_pct
         conn = sqlite3.connect(str(db))
-        conn.execute("UPDATE functions SET match_percent_normalized=80.0 WHERE symbol='F_equiv_stale'")
+        conn.execute("UPDATE functions SET match_percent_normalized=80.0 WHERE symbol='F_equiv_fresh'")
         conn.commit(); conn.close()
         p = run([sys.executable, str(RECONCILE), "--db", str(db), "--report", str(report)])
         check("(e) stale floor certificates (percent moved/matched): 1" in p.stdout,
@@ -289,7 +303,7 @@ def main() -> int:
         check("(e) cleared stale floor certs:          1" in p.stdout,
               "reconcile --fix clears the stale cert")
         conn = sqlite3.connect(str(db))
-        check(col(conn, "F_equiv_stale", "floor_certificate") is None,
+        check(col(conn, "F_equiv_fresh", "floor_certificate") is None,
               "stale cert columns NULLed by --fix")
         conn.close()
 

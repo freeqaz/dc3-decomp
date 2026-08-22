@@ -42,6 +42,29 @@ Two checks, because there are two ways to reach the degraded state
 The manifest is content-keyed on purpose: `scripts/obj_patch_io.py` preserves
 each object's mtime across the in-place rewrite (see its docstring for why),
 so the patch state of this tree is NOT visible in any timestamp.
+
+An EMPTY object tree is a refusal, not a pass
+---------------------------------------------
+Measured 2026-08-22 on a scratch tree with `build/373307D9/{src,obj}` present
+and empty:
+
+    verify_objs_patched.py --check            -> exit 0   (silent)
+    verify_objs_patched.py --emit             -> "0 objects verified patched,
+                                                  tree_sha256=e3b0c44298fc1c14"
+    verify_objs_patched.py --verify-manifest  -> "OK: 0 objects match"
+
+`e3b0c442...` is the SHA-256 of the empty string.  Every one of the five
+patchers guards `src_dir.exists()` and then iterates a glob, so an existing but
+unpopulated directory yields "0 pending patches" -- which is the same value as
+"this tree is a perfect fixed point."  The claim "the tree is fully patched"
+was true of a tree with nothing in it, and `patch_guard.ensure_patched_tree`
+(which is what stands between an agent and a measurement) accepted it.
+
+That matters because the downstream reading is not "no objects" but "0.0% on
+every function", which is indistinguishable from an unstarted unit -- the false
+`exhausted` shape.  So `--check`, `--emit` and `--verify-manifest` now all
+REFUSE an empty universe (exit 3) and all three PRINT THEIR DENOMINATOR on
+success.  A count with no denominator cannot be audited after the fact.
 """
 
 import argparse
@@ -67,6 +90,15 @@ PATCHERS = [
 
 MANIFEST_VERSION = 1
 
+#: Exit code for "this tree has no objects to vouch for".  Distinct from 1
+#: (pending patches / drift) and 2 (no manifest) so a caller can tell "the
+#: instrument had nothing to measure" from "the instrument measured a problem".
+EXIT_EMPTY_UNIVERSE = 3
+
+
+class EmptyObjectTreeError(RuntimeError):
+    """`build/<version>/src` holds no objects, so nothing can be vouched for."""
+
 
 def src_dir(repo: Path) -> Path:
     return repo / "build" / VERSION / "src"
@@ -84,8 +116,38 @@ def sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+def require_non_empty(repo: Path, mode: str) -> list[Path]:
+    """Return the objects, or REFUSE if there are none.
+
+    The whole file is a statement about a population.  Making that population's
+    size an explicit precondition is the difference between "measured and
+    clean" and "could not measure", which every one of these three modes used
+    to collapse into exit 0.
+    """
+    objs = objects(repo)
+    if objs:
+        return objs
+    d = src_dir(repo)
+    raise EmptyObjectTreeError(
+        f"REFUSING TO VOUCH FOR {repo} ({mode}): {d} contains NO .obj files "
+        f"({'the directory does not exist' if not d.exists() else 'the directory is empty'}).\n\n"
+        f"Every post-compile patcher reports '0 pending' over an empty glob, "
+        f"and 0 pending is the same number a perfectly patched tree reports. "
+        f"A pass here would assert that a tree with nothing in it is a fixed "
+        f"point of five passes that never ran -- and a diff taken against it "
+        f"scores 0.0% on every function, which reads as an unstarted unit "
+        f"rather than as an error.\n\n"
+        f"Run a full `ninja` in that directory first. If DC3_VERSION is set "
+        f"(currently {os.environ.get('DC3_VERSION', '<unset>')!r}), note that "
+        f"the five obj_*_patcher.py scripts HARDCODE 373307D9 while this "
+        f"script honours the variable, so the two halves would describe "
+        f"different trees."
+    )
+
+
 def run_check(repo: Path) -> int:
     """Dry-run every patcher; non-zero if the tree is not a fixed point."""
+    objs = require_non_empty(repo, "--check")
     failures = []
     for script in PATCHERS:
         p = subprocess.run(
@@ -95,6 +157,11 @@ def run_check(repo: Path) -> int:
             failures.append((script, p.returncode,
                              (p.stderr or p.stdout).strip().splitlines()[-3:]))
     if not failures:
+        # State the denominator. "0 pending" is only meaningful next to the
+        # number of objects it was 0 out of.
+        print(f"[patch-state] fixed point: {len(PATCHERS)} passes have no "
+              f"pending work over {len(objs)} objects in "
+              f"{src_dir(repo).relative_to(repo)}")
         return 0
     print("=" * 72, file=sys.stderr)
     print("BUILD TREE IS NOT FULLY PATCHED", file=sys.stderr)
@@ -117,7 +184,7 @@ def run_check(repo: Path) -> int:
 
 
 def emit(repo: Path) -> int:
-    objs = objects(repo)
+    objs = require_non_empty(repo, "--emit")
     entries = {}
     for p in objs:
         st = p.stat()
@@ -157,6 +224,15 @@ def verify_manifest(repo: Path, quiet: bool = False) -> int:
         return 2
     doc = json.loads(mpath.read_text())
     recorded = doc.get("objects") or {}
+    if not recorded:
+        print(f"REFUSE: {mpath} vouches for ZERO objects (n_objects="
+              f"{doc.get('n_objects')}, tree_sha256="
+              f"{str(doc.get('tree_sha256'))[:16]} -- e3b0c442... is the "
+              f"sha256 of the empty string). A manifest of nothing matches a "
+              f"tree of nothing, and this function would have printed "
+              f"'OK: 0 objects match'. Run a full `ninja` and let the "
+              f"post-compile edge re-emit it.", file=sys.stderr)
+        return EXIT_EMPTY_UNIVERSE
     drift, missing, extra = [], [], []
     for rel, ent in sorted(recorded.items()):
         p = repo / rel
@@ -210,14 +286,18 @@ def main() -> int:
     if not (a.check or a.emit or a.verify_manifest):
         a.check = a.emit = True
     rc = 0
-    if a.check:
-        rc = run_check(repo)
-        if rc:
-            return rc
-    if a.emit:
-        rc = emit(repo)
-        if rc:
-            return rc
+    try:
+        if a.check:
+            rc = run_check(repo)
+            if rc:
+                return rc
+        if a.emit:
+            rc = emit(repo)
+            if rc:
+                return rc
+    except EmptyObjectTreeError as exc:
+        print(f"[patch-state] {exc}", file=sys.stderr)
+        return EXIT_EMPTY_UNIVERSE
     if a.verify_manifest:
         rc = verify_manifest(repo, quiet=a.quiet)
     return rc

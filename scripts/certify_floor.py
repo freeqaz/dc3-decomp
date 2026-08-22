@@ -397,7 +397,34 @@ def load_exhausted_ids(conn: sqlite3.Connection) -> set[int]:
     return out
 
 
-def certify(conn: sqlite3.Connection, apply: bool, verbose: bool) -> dict:
+def certify(conn: sqlite3.Connection, apply: bool, verbose: bool,
+            allow_stale_unicorn: bool = False) -> dict:
+    """Issue floor certificates from existing evidence.
+
+    ⚠ `blocked_stale_unicorn` USED TO BE A LIE. `to_write.append(...)` ran
+    unconditionally; `stale_unicorn` was only a counter. So the headline said
+
+        - on FRESH evidence:        1,433
+        - blocked on STALE unicorn:     1
+
+    and `fresh_certifiable = certifiable - blocked_stale` subtracted them as if
+    they had been withheld -- while every one of them was written, as a
+    PERMANENT done-certificate that `authorable_done` immediately counts as
+    `is_done=1`.
+
+    Measured 2026-08-22 on a copy of the live decomp.db: `--migrate --apply`
+    wrote 1,434 certificates stamped with this build, one of which carries
+    `unicorn_stale: True` in its own evidence JSON --
+    `?AddNode@Transitions@CharClip@@QAAXPAV2@ABUCharGraphNode@@@Z`,
+    `unicorn_age_days: 171`. Across the whole DB, 40 certificates carry
+    stale-unicorn evidence, so the label has been misreporting for many builds
+    at roughly that rate.
+
+    Now stale rows are genuinely withheld unless `--allow-stale-unicorn` is
+    passed. STALE_DAYS is 60 and this module's own docstring records the
+    unicorn corpus as ~3 months old, so "we counted it as blocked" had to
+    become "we blocked it" rather than the other way round.
+    """
     """Compute (and optionally apply) floor certificates for the frontier."""
     has_cert_col = "floor_certificate" in existing_columns(conn, "functions")
     ref = datetime.now(timezone.utc)
@@ -417,6 +444,7 @@ def certify(conn: sqlite3.Connection, apply: bool, verbose: bool) -> dict:
     # Buckets
     counts: dict[str, int] = {}
     stale_unicorn = 0
+    stale_rows: list[sqlite3.Row] = []
     no_evidence: list[sqlite3.Row] = []
     samples: dict[str, list[str]] = {}
     to_write: list[tuple] = []
@@ -431,6 +459,15 @@ def certify(conn: sqlite3.Connection, apply: bool, verbose: bool) -> dict:
         counts[key] = counts.get(key, 0) + 1
         if ev and ev.get("unicorn_stale"):
             stale_unicorn += 1
+            if not allow_stale_unicorn:
+                # WITHHELD, which is what "blocked" always claimed. Bucket it
+                # out of `counts` too, so the class breakdown and the number
+                # written cannot drift apart again.
+                counts[key] -= 1
+                if counts[key] == 0:
+                    del counts[key]
+                stale_rows.append(r)
+                continue
         samples.setdefault(key, [])
         if len(samples[key]) < 8:
             samples[key].append(f"{r['symbol']}  ({r['match_percent_normalized']:.1f}%)")
@@ -440,7 +477,10 @@ def certify(conn: sqlite3.Connection, apply: bool, verbose: bool) -> dict:
         ))
 
     certifiable = len(to_write)
-    blocked_stale = stale_unicorn  # subset of certifiable backed by stale unicorn
+    # `certifiable` is now len(to_write) and to_write EXCLUDES the withheld
+    # rows, so `certifiable` and "rows written" are the same number by
+    # construction. That identity is the fix: the old code let them differ.
+    blocked_stale = stale_unicorn
     no_ev = len(no_evidence)
 
     if apply:
@@ -462,6 +502,8 @@ def certify(conn: sqlite3.Connection, apply: bool, verbose: bool) -> dict:
         "certifiable": certifiable,
         "counts": counts,
         "blocked_stale_unicorn": blocked_stale,
+        "stale_unicorn_withheld": (0 if allow_stale_unicorn else blocked_stale),
+        "stale_unicorn_rows": stale_rows,
         "no_evidence": no_ev,
         "no_evidence_rows": no_evidence,
         "samples": samples,
@@ -818,6 +860,11 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--manual-file", type=Path, metavar="JSON",
                    help="Write orchestrator-supplied certs from a backlog JSON "
                         "(see manual_certify docstring). Skips the auto census.")
+    p.add_argument("--allow-stale-unicorn", action="store_true",
+                   help="issue certificates whose unicorn evidence is older "
+                        "than STALE_DAYS. Default is to WITHHOLD them -- the "
+                        "headline used to call them 'blocked' while writing "
+                        "them anyway.")
     p.add_argument("--verbose", "-v", action="store_true",
                    help="Show per-class certifiable samples + no-evidence sample.")
     return p.parse_args()
@@ -904,7 +951,8 @@ def main() -> int:
         return 1 if problems else 0
 
     # Certification census (dry-run unless --apply)
-    res = certify(conn, apply=args.apply, verbose=args.verbose)
+    res = certify(conn, apply=args.apply, verbose=args.verbose,
+                  allow_stale_unicorn=args.allow_stale_unicorn)
     print("=== Floor certification census ===")
     print(f"  build: {res['build']}   mode: {'APPLY' if res['applied'] else 'DRY-RUN'}")
     print(f"  authorable partial frontier (0<norm<100): {res['frontier_total']:,}")
@@ -926,10 +974,31 @@ def main() -> int:
     print()
     # The three headline numbers the lane asks for:
     print("=== HEADLINE (lane B item 4) ===")
-    fresh_certifiable = res["certifiable"] - res["blocked_stale_unicorn"]
-    print(f"  certifiable from existing evidence:       {res['certifiable']:,}")
-    print(f"    - on FRESH evidence:                    {fresh_certifiable:,}")
-    print(f"    - blocked on STALE unicorn:             {res['blocked_stale_unicorn']:,}")
+    # THE CLIFF, stated in advance rather than discovered. Measured 2026-08-22:
+    # all 1,527 existing certificates are unicorn-backed, median evidence age 3
+    # days (the 2026-08-19 re-ingest), so exactly 1 is stale TODAY -- and all
+    # 1,527 cross STALE_DAYS on the same day. Withholding is the correct
+    # behaviour for stale evidence, but a census that silently collapses to
+    # ~zero in one step is its own kind of unreadable, so the horizon is
+    # printed while it is still far away.
+    horizon = conn.execute(
+        f"SELECT COUNT(*) FROM functions WHERE {is_authorable_sql()} "
+        f"AND unicorn_tested_at IS NOT NULL "
+        f"AND julianday('now') - julianday(unicorn_tested_at) "
+        f"    BETWEEN {STALE_DAYS - 30} AND {STALE_DAYS}").fetchone()[0]
+    if horizon:
+        print(f"  ⚠ {horizon:,} row(s) hold unicorn evidence aged "
+              f"{STALE_DAYS - 30}-{STALE_DAYS} days: they go STALE within 30 "
+              f"days and will stop being certifiable. Re-run the unicorn "
+              f"corpus rather than raising STALE_DAYS.")
+    withheld = res["stale_unicorn_withheld"]
+    print(f"  certifiable from existing evidence:       {res['certifiable']:,}"
+          f"   <- this IS the number written under --apply")
+    print(f"    - WITHHELD, stale unicorn (>{STALE_DAYS}d):     {withheld:,}"
+          f"   <- excluded from the line above")
+    if res["blocked_stale_unicorn"] and not withheld:
+        print(f"    - stale-unicorn rows WRITTEN anyway:    "
+              f"{res['blocked_stale_unicorn']:,}   (--allow-stale-unicorn)")
     print(f"  no evidence at all:                       {res['no_evidence']:,}")
     if not res["applied"]:
         print()

@@ -130,11 +130,25 @@ def data_measure(m):
 STRLIT = re.compile(r"^\?\?_C@")
 
 
-def string_fingerprint(repo):
+def string_fingerprint(repo, stats=None):
+    """Multiset of `??_C@` COMDAT names across our own objects.
+
+    `stats`, if given, receives the DENOMINATOR: how many units were in
+    objdiff.json, how many had a base object on disk, and how many failed to
+    parse.  Both drops used to be a bare `continue`, so a fingerprint of {}
+    -- from a wrong root, an unbuilt tree, or a COFF layout the parser stopped
+    understanding -- was indistinguishable from "this build emits no string
+    literals", and `was ^ now` over two empty sets is the empty set, i.e. CLEAN.
+    Measured 2026-08-22 on this tree: 2,224 units, 1,244 with no base object
+    (target-only, legitimate), 980 parsed, 0 parse failures, 28,768 names.
+    """
     names = set()
+    seen = parsed = nofile = failed = 0
     for u in json.loads(Path(repo, "objdiff.json").read_text())["units"]:
+        seen += 1
         p = Path(repo, u.get("base_path") or "")
         if not p.is_file():
+            nofile += 1
             continue
         d = p.read_bytes()
         try:
@@ -151,8 +165,13 @@ def string_fingerprint(repo):
                 if STRLIT.match(nm):
                     names.add((u["name"], nm))
                 i += 1 + rec[17]
+            parsed += 1
         except Exception:
+            failed += 1
             continue
+    if stats is not None:
+        stats.update(units=seen, no_base_obj=nofile, parsed=parsed,
+                     parse_failed=failed, names=len(names))
     return names
 
 
@@ -177,11 +196,26 @@ def main():
     if args.baseline:
         build(repo)
         m, _ = report(repo, Path(args.baseline).resolve())
-        fp = sorted("\t".join(x) for x in string_fingerprint(repo))
+        st = {}
+        fp = sorted("\t".join(x) for x in string_fingerprint(repo, st))
+        if not fp:
+            sys.exit(f"REFUSING to record a baseline: the string fingerprint is "
+                     f"EMPTY ({st}). Every later --check compares `was ^ now`, "
+                     f"and the empty set is symmetric-difference-clean against "
+                     f"anything else that is also empty -- so this baseline "
+                     f"would silently disable the literal check forever. Build "
+                     f"the tree first.")
+        # The denominator travels WITH the baseline. A --check whose tree parses
+        # a different number of units is comparing two different populations,
+        # and 1,244 of 2,224 units legitimately have no base object here, so
+        # "some units dropped" is not by itself the signal -- a CHANGE in how
+        # many dropped is.
         Path(args.baseline).with_suffix(".strings.json").write_text(
-            json.dumps(fp))
+            json.dumps({"version": 2, "coverage": st, "names": fp}))
         print(f"baseline none: {m['matched_code_percent']:.6f}% "
-              f"({m['matched_code']} bytes), {len(fp)} string COMDATs")
+              f"({m['matched_code']} bytes), {len(fp)} string COMDATs "
+              f"from {st['parsed']}/{st['units']} units "
+              f"({st['no_base_obj']} target-only, {st['parse_failed']} failed)")
         return 0
 
     # Guard the BASELINE too, not just the fresh side. A comparison is only as
@@ -209,21 +243,62 @@ def main():
         if dafter[0] < dbefore[0]:
             print("   DATA REGRESSED -- an edit changed a literal, not just a "
                   "name.  `none` alone would have called this clean.")
+        # ⚠ ABSENT IS FAILED, NOT CLEAN -- the same rule this file already
+        # applies to `provenance` in refuse_if_not_a_full_recompute(), and did
+        # NOT apply here. Measured 2026-08-22 on this tree, same commit, same
+        # objects, back to back:
+        #     sidecar present, one entry mutated -> "STRING LITERALS CHANGED: 2
+        #         COMDAT(s) differ", exit 1
+        #     sidecar simply deleted             -> "none is intact -- the edits
+        #         moved no instruction, no datum and no literal", exit 0
+        # The second is a positive claim about a check that never ran, and the
+        # string fingerprint is the ONLY instrument for that class (`none`
+        # cannot see it, and dc3 matches 0.08% of its data so matched_data
+        # cannot either).
         strfile = Path(args.check).with_suffix(".strings.json")
         strmoved = []
-        if strfile.exists():
-            was = set(json.loads(strfile.read_text()))
-            now_fp = {"\t".join(x) for x in string_fingerprint(repo)}
-            strmoved = sorted(was ^ now_fp)
-            if strmoved:
-                print(f"   STRING LITERALS CHANGED: {len(strmoved)} COMDAT(s) "
-                      f"differ from the baseline -- a rename walked into a "
-                      f"literal.  `none` cannot see this.")
-                for s in strmoved[:10]:
-                    print(f"      {s}")
+        if not strfile.exists():
+            sys.exit(f"REFUSING to grade: {strfile} is absent, so the string-"
+                     f"literal fingerprint cannot be compared. `none` is blind "
+                     f"to a rename that walks into a string literal (the "
+                     f"`static Message special_finished(\"special_finished\")` "
+                     f"case in this file's own comment), and matched_data is "
+                     f"too. Passing here would print 'no literal moved' about "
+                     f"a check that did not run.\n"
+                     f"  FIX: re-record with `none_guard.py --baseline "
+                     f"{args.check}` on the PRE-EDIT tree. A baseline written "
+                     f"before 2026-08-22 has no sidecar and is not repairable "
+                     f"after the fact.")
+        doc = json.loads(strfile.read_text())
+        if isinstance(doc, list):          # v1 sidecar: bare list, no coverage
+            was, was_cov = set(doc), None
+        else:
+            was, was_cov = set(doc["names"]), doc.get("coverage")
+        now_cov = {}
+        now_fp = {"\t".join(x) for x in string_fingerprint(repo, now_cov)}
+        if now_cov.get("parse_failed"):
+            sys.exit(f"REFUSING to grade: {now_cov['parse_failed']} object(s) "
+                     f"failed to parse while fingerprinting ({now_cov}). Each "
+                     f"one contributes zero names, which is arithmetically "
+                     f"identical to 'this object has no literals'.")
+        if was_cov and was_cov.get("parsed") != now_cov.get("parsed"):
+            sys.exit(f"REFUSING to grade: the baseline fingerprinted "
+                     f"{was_cov['parsed']} units, this tree fingerprinted "
+                     f"{now_cov['parsed']}. `was ^ now` over two different "
+                     f"populations is not a literal diff.\n"
+                     f"  baseline: {was_cov}\n  now:      {now_cov}")
+        strmoved = sorted(was ^ now_fp)
+        if strmoved:
+            print(f"   STRING LITERALS CHANGED: {len(strmoved)} COMDAT(s) "
+                  f"differ from the baseline -- a rename walked into a "
+                  f"literal.  `none` cannot see this.")
+            for s in strmoved[:10]:
+                print(f"      {s}")
         if not lost and dafter[0] >= dbefore[0] and not strmoved:
-            print("none is intact -- the edits moved no instruction, no datum "
-                  "and no literal")
+            # The claim now carries the denominator it is a claim about.
+            print(f"none is intact -- the edits moved no instruction, no datum "
+                  f"and no literal ({len(now_fp)} string COMDATs compared "
+                  f"across {now_cov['parsed']}/{now_cov['units']} units)")
             return 0
         if not lost and strmoved:
             return 1

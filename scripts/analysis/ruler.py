@@ -97,6 +97,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -374,33 +375,109 @@ __all__ = [
 
 _TOOL_REPO = Path(__file__).resolve().parent.parent.parent
 
-#: Files known to hardcode the ruler on 2026-08-17, at the port.  A RATCHET, not
-#: an allow-list: the guard fails if a file outside this set acquires one.
+#: Files known to hardcode the ruler.  A RATCHET, not an allow-list: the guard
+#: fails if a file outside this set acquires one.
+#
+#: RE-DERIVED 2026-08-22 under a scanner that can see f-strings.  The five-entry
+#: 2026-08-17 baseline was recorded with a pattern blind to the
+#: `"-c", f"functionRelocDiffs={x}"` spelling, so it undercounted by two files
+#: (`reloc_pattern_census.py`, `symbol_sweep.py`) and mis-scored a third
+#: (`sync_objdiff.py`) as migrated.  These two additions are NOT new debt --
+#: both predate the baseline; they were invisible to it.  Do not read this
+#: widening as permission to widen it again: `_selftest_scanner` now fails RED
+#: if the pattern loses a spelling.
 _HARDCODED_RULER_BASELINE = frozenset({
     "scripts/atexit_fuzzy_verify.py",
     "scripts/sync_objdiff.py",
     "scripts/analysis/diff_inspect.py",
+    "scripts/analysis/reloc_pattern_census.py",
     "scripts/analysis/reloc_strict_classify.py",
     "scripts/orchestrator/mcp_server.py",
+    "scripts/orchestrator/symbol_sweep.py",
 })
 
 
-def _scan_hardcoded_ruler() -> set:
-    """Repo-relative paths of .py files that hardcode `-c functionRelocDiffs=`."""
-    import re
+#: The `-c functionRelocDiffs=` call form, in every spelling this repo uses.
+#
+# ⚠ The `(?:[rRbBfFuU]{0,2})?` string prefix is not decoration.  The original
+# pattern required a QUOTE immediately after `"-c",`, so it was structurally
+# blind to the idiomatic form
+#
+#     "-c", f"functionRelocDiffs={reloc}"
+#
+# which is what `scripts/sync_objdiff.py:366` has always used.  Measured
+# 2026-08-22: the scan saw 4 files where the baseline named 5, so
+# `sync_objdiff.py` landed in `gone` and the selftest printed
+# "✔ migrated since the baseline — shrink _HARDCODED_RULER_BASELINE" while
+# `sync_objdiff.py` had not migrated by one character.  A ratchet that reports
+# PASS and asks you to delete its own last-but-one entry is the failure mode
+# this file's own preamble names: "a constant that stops being true while every
+# test keeps passing."  `_selftest_scanner` below is the negative control that
+# makes a repeat of that regression RED.
+_HARDCODED_RULER_RE = re.compile(
+    r"""["']-c["']\s*,\s*(?:[rRbBfFuU]{1,2}\s*)?["']functionRelocDiffs=""")
 
-    pattern = re.compile(r"""["']-c["']\s*,\s*["']functionRelocDiffs=""")
+
+def _scan_hardcoded_ruler() -> tuple[set, list[str]]:
+    """Repo-relative paths of .py files that hardcode `-c functionRelocDiffs=`.
+
+    Returns `(found, unreadable)`.  `unreadable` is returned rather than
+    swallowed: a file the scanner could not open contributes nothing to `found`,
+    which is arithmetically identical to "this file is clean".  The caller
+    treats a non-empty `unreadable` as a FAILURE, because a shrinking `found`
+    must never be explicable by a permissions problem.
+    """
     found = set()
+    unreadable: list[str] = []
+    self_rel = str(Path(__file__).resolve().relative_to(_TOOL_REPO))
     for path in sorted((_TOOL_REPO / "scripts").rglob("*.py")):
         if "__pycache__" in path.parts or "venv" in str(path):
             continue
+        # This file carries both spellings as literal control data
+        # (`_SCANNER_CONTROL`), so a scanner that did not exempt itself would
+        # match itself forever -- the same self-matching trap as a `pgrep -f`
+        # watcher whose pattern is in its own argv.
+        if str(path.relative_to(_TOOL_REPO)) == self_rel:
+            continue
         try:
             text = path.read_text()
-        except OSError:
+        except OSError as exc:
+            unreadable.append(f"{path.relative_to(_TOOL_REPO)}: {exc}")
             continue
-        if pattern.search(text):
+        if _HARDCODED_RULER_RE.search(text):
             found.add(str(path.relative_to(_TOOL_REPO)))
-    return found
+    return found, unreadable
+
+
+#: (spelling, must_match) pairs run against `_HARDCODED_RULER_RE` on every
+#: selftest.  The FALSE rows are the negative control: without them a regex that
+#: matches everything would pass just as happily as a correct one.
+_SCANNER_CONTROL = (
+    ('cmd = [cli, "diff", "-c", "functionRelocDiffs=none", "-p", p]', True),
+    ('cmd = [cli, "diff", "-c", f"functionRelocDiffs={reloc}", "-p", p]', True),
+    ("cmd = [cli, 'diff', '-c', f'functionRelocDiffs={reloc}']", True),
+    ('cmd = [cli, "diff", "-c",  f"functionRelocDiffs=all"]', True),
+    ('# the ruler is `functionRelocDiffs=name_check` in objdiff.json', False),
+    ('cfg = {"functionRelocDiffs": "none"}', False),
+    ('cmd = [cli, "diff", "-c", resolved_ruler_flag()]', False),
+)
+
+
+def _selftest_scanner() -> list[tuple[str, bool, str]]:
+    """Negative control for `_scan_hardcoded_ruler`'s pattern.
+
+    The ratchet's whole value is that `found` shrinking means a migration.  If
+    the pattern cannot see a spelling, `found` shrinks for a reason that has
+    nothing to do with migration and the guard reports the opposite of the
+    truth.  So the pattern is exercised against both spellings AND against
+    strings it must NOT match, in memory, on every run.
+    """
+    rows = []
+    for src, want in _SCANNER_CONTROL:
+        got = bool(_HARDCODED_RULER_RE.search(src))
+        rows.append((f"scanner {'sees' if want else 'ignores'}: {src[:58]}",
+                     got == want, f"matched={got} expected={want}"))
+    return rows
 
 
 def _selftest(project_dir: Path) -> tuple[bool, list[str]]:
@@ -448,17 +525,38 @@ def _selftest(project_dir: Path) -> tuple[bool, list[str]]:
         check("unknown ruler is refused", True)
 
     # ★ Ratchet, not a pass/fail gate — see the note above the baseline.
-    found = _scan_hardcoded_ruler()
+    #
+    # The scanner is graded BEFORE it is trusted.  A ratchet reports migration
+    # by `found` shrinking, and a blind pattern shrinks `found` for a reason
+    # that is not migration -- so the control runs first and its failure is a
+    # hard FAIL, not a note.
+    for label, cond, detail in _selftest_scanner():
+        check(label, cond, detail)
+
+    found, unreadable = _scan_hardcoded_ruler()
     new = found - _HARDCODED_RULER_BASELINE
     gone = _HARDCODED_RULER_BASELINE - found
     out.append(f"hardcoded-ruler scan root: {_TOOL_REPO}/scripts "
                f"(this tool's repo, NOT project_dir)")
     out.append(f"  known debt: {len(_HARDCODED_RULER_BASELINE)} files "
                f"hardcode `-c functionRelocDiffs=`; found {len(found)}")
+    check("every scanned file was readable", not unreadable,
+          f"unreadable: {unreadable}")
     check("no NEW file hardcodes the ruler", not new, f"new: {sorted(new)}")
+    # A baseline entry that has vanished from the scan is EITHER a migration OR
+    # a file that was deleted/renamed/moved out of scan scope.  Those are not
+    # the same event and the old code printed the first as fact.  Only claim a
+    # migration when the file is still there and no longer matches.
     if gone:
-        out.append(f"  ✔ migrated since the baseline — shrink "
-                   f"_HARDCODED_RULER_BASELINE: {sorted(gone)}")
+        migrated = sorted(p for p in gone if (_TOOL_REPO / p).is_file())
+        vanished = sorted(p for p in gone if not (_TOOL_REPO / p).is_file())
+        if migrated:
+            out.append(f"  ✔ migrated since the baseline (file still present, "
+                       f"no longer hardcodes) — shrink "
+                       f"_HARDCODED_RULER_BASELINE: {migrated}")
+        if vanished:
+            out.append(f"  ⚠ baseline entries that NO LONGER EXIST — this is a "
+                       f"deleted/renamed file, NOT a migration: {vanished}")
 
     return ok, out
 

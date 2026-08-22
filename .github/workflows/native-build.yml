@@ -198,7 +198,18 @@ jobs:
           # Asset-dependent tests GTEST_SKIP() when DC3_DATA is unset; we don't
           # set DC3_DATA here because the ~18 GB extracted assets aren't in CI.
           # The full asset-aware gate is a separate manual/release check.
-          ctest -j1 --output-on-failure --no-tests=ignore || echo "CTEST_FAILED=1" >> "$GITHUB_ENV"
+          # `cmd || echo ...` is a compound whose exit status is ECHO'S, so this
+          # step exits 0 no matter what ctest did -- verified locally under
+          # `bash -e`, which is how Actions runs a `run:` block. The `|| echo`
+          # is kept deliberately (the summary and log-upload steps below must
+          # still run on failure) and the job is now failed by the explicit
+          # "Gate on test results" step at the end. Nothing used to read
+          # CTEST_FAILED except the artifact upload.
+          #
+          # --no-tests=error, not =ignore: with =ignore, a CMake edit that stops
+          # registering milo-tests produces zero tests and a green job, which is
+          # indistinguishable from a passing suite.
+          ctest -j1 --output-on-failure --no-tests=error || echo "CTEST_FAILED=1" >> "$GITHUB_ENV"
 
       - name: Compute test summary
         if: always()
@@ -209,11 +220,24 @@ jobs:
             PASSED=$(grep -cE '^\[       OK \]' "$LOG" || true)
             FAILED=$(grep -cE '^\[  FAILED  \]' "$LOG" || true)
             SKIPPED=$(grep -cE '^\[  SKIPPED \]' "$LOG" || true)
-            DISABLED=$(grep -cE 'DISABLED' "$LOG" || true)
+            # gtest's own marker, anchored. A bare `grep -cE 'DISABLED'` counted
+            # every line containing the substring anywhere -- test names, prose
+            # like "You have 1 DISABLED test" -- so the number was not a count
+            # of anything. Verified: a 5-line synthetic log with ONE disabled
+            # test scored 2.
+            DISABLED=$(grep -cE '^\[ DISABLED \]' "$LOG" || true)
             echo "TEST_PASSED=$PASSED" >> "$GITHUB_ENV"
             echo "TEST_FAILED=$FAILED" >> "$GITHUB_ENV"
             echo "TEST_SKIPPED=$SKIPPED" >> "$GITHUB_ENV"
             echo "TEST_DISABLED=$DISABLED" >> "$GITHUB_ENV"
+            echo "TEST_LOG_READ=1" >> "$GITHUB_ENV"
+          else
+            # No `else` used to exist, so the four TEST_* vars stayed unset and
+            # the summary table rendered `?` in rows that otherwise read as
+            # measurements. "could not measure" must not be spelled the same as
+            # a number.
+            echo "::error::$LOG is absent -- no test results were produced."
+            echo "TEST_LOG_READ=0" >> "$GITHUB_ENV"
           fi
 
       - name: Job summary
@@ -240,6 +264,43 @@ jobs:
             echo ""
             echo "Roadmap: \`rb3/docs/native/NATIVE_PORT_ROADMAP.md\` §0.4."
           } >> "$GITHUB_STEP_SUMMARY"
+
+      # THE GATE. Until this step existed, a failing ctest produced a green job
+      # whose only trace was ":warning: ctest reported failures" inside the
+      # markdown summary, and `if: failure()` on the upload step below never
+      # fired because no step had failed. Adding `EXPECT_EQ(1, 2)` to any test
+      # left the PR mergeable.
+      #
+      # It runs `if: always()` so it also catches the case where the test step
+      # was skipped or the log never appeared.
+      - name: Gate on test results
+        if: always()
+        run: |
+          rc=0
+          if [ "${TEST_LOG_READ:-0}" != "1" ]; then
+            echo "FAIL: no LastTest.log -- ctest produced no results at all."
+            rc=1
+          fi
+          if [ "${CTEST_FAILED:-0}" = "1" ]; then
+            echo "FAIL: ctest exited non-zero."
+            rc=1
+          fi
+          if [ "${TEST_FAILED:-0}" != "0" ]; then
+            echo "FAIL: ${TEST_FAILED} GTest case(s) failed."
+            rc=1
+          fi
+          # A green run over zero executed cases is the "empty universe reads as
+          # clean" shape; --no-tests=error covers ctest-level registration, this
+          # covers a suite that registered but ran nothing.
+          if [ "${TEST_LOG_READ:-0}" = "1" ] \
+             && [ "${TEST_PASSED:-0}" = "0" ] && [ "${TEST_FAILED:-0}" = "0" ]; then
+            echo "FAIL: zero GTest cases passed AND zero failed -- nothing ran."
+            rc=1
+          fi
+          if [ "$rc" = "0" ]; then
+            echo "OK: ${TEST_PASSED:-?} passed, ${TEST_FAILED:-?} failed, ${TEST_SKIPPED:-?} skipped."
+          fi
+          exit "$rc"
 
       - name: Upload logs on failure
         if: failure() || env.CTEST_FAILED == '1'
