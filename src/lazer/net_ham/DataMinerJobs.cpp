@@ -69,8 +69,7 @@ GameEndedDataPointJob::GameEndedDataPointJob(
     Symbol songSym = TheGameData->GetSong();
 
     if (TheMaster != nullptr && TheMaster->IsLoaded()) {
-        float streamMs = TheMaster->StreamMs();
-        streamMs = streamMs / TheMaster->SongDurationMs();
+        float streamMs = TheMaster->StreamMs() / TheMaster->SongDurationMs();
         song_pos = -streamMs >= 0.0f ? 0.0f : streamMs;
         song_pos = song_pos - 1.0f >= 0.0f ? 1.0f : song_pos;
     }
@@ -170,7 +169,8 @@ GameEndedDataPointJob::GameEndedDataPointJob(
         const DataNode *scoreNode = pData->Provider()->Property(score, true);
         dataP.AddPair(score_str.c_str(), scoreNode->Int());
 
-        HamProfile *prof = TheProfileMgr.GetProfileFromPad(pData->PadNum());
+        int padNum = pData->PadNum();
+        HamProfile *prof = TheProfileMgr.GetProfileFromPad(padNum);
         if (prof != nullptr && prof->HasValidSaveData()) {
             if (prof->IsSignedIn()) {
                 const char *xuid = GetXUIDStrFromProfile(prof);
@@ -178,7 +178,7 @@ GameEndedDataPointJob::GameEndedDataPointJob(
                 dataP.AddPair(xuid_str.c_str(), DataNode(xuid));
 
                 String name_str(player_name_str_base); name_str += buf;
-                dataP.AddPair(name_str.c_str(), DataNode(ThePlatformMgr.GetName(pData->PadNum())));
+                dataP.AddPair(name_str.c_str(), DataNode(ThePlatformMgr.GetName(padNum)));
             }
 
             String acc_str;
