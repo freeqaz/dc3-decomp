@@ -108,8 +108,14 @@ BEGIN_LOADS(RndMatAnim)
         }
     }
     if (d.rev > 6) {
-        d >> mTransKeys >> mScaleKeys >> mRotKeys;
-        d >> mTexKeys;
+        // The cast to the Keys base is load-bearing: without it, BinStreamRev's member
+        // template operator>>(T&) is an exact match for TexKeys and wins over the free
+        // operator>>(BinStreamRev&, Keys<T1,T2>&) (which needs a derived-to-base
+        // binding), routing the read through the BinStream vector reader instead. That
+        // picks the generic operator>>(BinStream&, Key<TexPtr>&) rather than the
+        // BinStreamRev specialization below, which is the one that does the deferred
+        // TexPtr::Load(s, true, nullptr). Same spelling as LoadStage().
+        d >> mTransKeys >> mScaleKeys >> mRotKeys >> (Keys<TexPtr, RndTex *> &)mTexKeys;
     }
 END_LOADS
 
