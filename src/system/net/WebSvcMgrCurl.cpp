@@ -144,7 +144,7 @@ found:
             String header_str(node->data);
             header_str.split("\t", header_vector);
 
-            if ((int)(header_vector.size() * 8) == 0x38) {
+            if ((int)(header_vector.size() << 3) == 0x38) {
                 cookies.insert(std::make_pair(header_vector[5], header_vector[6]));
             }
             node = node->next;
