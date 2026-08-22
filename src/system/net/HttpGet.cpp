@@ -158,7 +158,7 @@ namespace {
 };
 
 HttpGet::HttpGet(unsigned int ip, unsigned short port, const char *c1, const char *c2)
-    : mSocket(nullptr), mPath(c1), mPort(port), mState(-1), mFlags(false),
+    : mSocket(nullptr), mPath(c1), mPort(port), mState(kHttpGet_Nil), mFlags(false),
       mTimeoutMs(kDefaultTimeoutMs), mIP(ip), mHeaders(c2), mRecvBuf(nullptr), mRecvBufPos(0),
       mFileBuf(nullptr), mFileBufSize(0), mFileBufRecvPos(0), mRetryCount(0), mFailType(),
       mPrevState(kHttpGet_Nil) {
@@ -169,7 +169,7 @@ HttpGet::HttpGet(unsigned int ip, unsigned short port, const char *c1, const cha
 HttpGet::HttpGet(
     unsigned int ip, unsigned short port, const char *c1, unsigned char uc, const char *c2
 )
-    : mSocket(nullptr), mPath(c1), mPort(port), mState(-1), mFlags(uc & 3),
+    : mSocket(nullptr), mPath(c1), mPort(port), mState(kHttpGet_Nil), mFlags(uc & 3),
       mTimeoutMs(kDefaultTimeoutMs), mIP(ip), mHeaders(c2), mRecvBuf(nullptr), mRecvBufPos(0),
       mFileBuf(nullptr), mFileBufSize(0), mFileBufRecvPos(0), mRetryCount(0), mFailType() {
     SetState((uc & 4) == 0 ? kHttpGet_Pending : kHttpGet_Connecting);
@@ -292,7 +292,7 @@ void HttpGet::AddRequiredHeaders() {
 }
 
 void HttpGet::SetState(State newState) {
-    if (mState == (int)newState) return;
+    if (mState == newState) return;
 
     do {
         switch (mState) {
@@ -322,10 +322,10 @@ void HttpGet::SetState(State newState) {
 
         if (((int)newState == kHttpGet_Failed || (int)newState == kHttpGet_FailedSend)
             && mState != kHttpGet_Failed && mState != kHttpGet_FailedSend) {
-            mPrevState = (State)mState;
+            mPrevState = mState;
         }
 
-        mState = (int)newState;
+        mState = newState;
         mTimer.Restart();
 
         switch ((int)newState) {
@@ -356,7 +356,7 @@ void HttpGet::SetState(State newState) {
             }
             break;
         }
-    } while (mState != (int)newState);
+    } while (mState != newState);
 }
 
 void HttpGet::Poll() {
