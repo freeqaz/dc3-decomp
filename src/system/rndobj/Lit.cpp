@@ -95,6 +95,7 @@ Transform RndLight::Projection() {
     Transform result;
     if (mRange == 0.0f) {
         result.Reset();
+        return result;
     } else {
         Vector3 xRow = WorldXfm().m.x;
 
