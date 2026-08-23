@@ -1146,10 +1146,6 @@
      "from": "??$__destroy_range_aux@V?$reverse_iterator@PAVPracticeStep@@@stlpmtx_std@@@stlpmtx_std@@YAXV?$reverse_iterator@PAVPracticeStep@@@0@0ABU__false_type@0@@Z",
      "to": "??$__destroy_range_aux@V?$reverse_iterator@PAULevelData@@@stlpmtx_std@@@stlpmtx_std@@YAXV?$reverse_iterator@PAULevelData@@@0@0ABU__false_type@0@@Z"
     },
-    "0x82738a40": {
-     "from": "??_G?$vector@MV?$StlNodeAlloc@M@stlpmtx_std@@@stlpmtx_std@@QAAPAXI@Z",
-     "to": "??_GDebugGraph@?A0xb39b74bf@@QAAPAXI@Z"
-    },
     "0x8273b9e8": {
      "from": "??$_Copy_Construct@U?$pair@$$CBVString@@I@stlpmtx_std@@@stlpmtx_std@@YAXPAU?$pair@$$CBVString@@I@0@ABU10@@Z",
      "to": "??$_Copy_Construct@VSampleMarker@@@stlpmtx_std@@YAXPAVSampleMarker@@ABV1@@Z"
@@ -1317,14 +1313,6 @@
     "0x827ed2e8": {
      "from": "?_M_erase@?$vector@U?$pair@HH@stlpmtx_std@@V?$StlNodeAlloc@U?$pair@HH@stlpmtx_std@@@2@@stlpmtx_std@@IAAPAU?$pair@HH@2@PAU32@ABU__false_type@2@@Z",
      "to": "?_M_erase@?$vector@UCacheIDStoreEntry@CacheMgr@@V?$StlNodeAlloc@UCacheIDStoreEntry@CacheMgr@@@stlpmtx_std@@@stlpmtx_std@@IAAPAUCacheIDStoreEntry@CacheMgr@@PAU34@ABU__false_type@2@@Z"
-    },
-    "0x827f5860": {
-     "from": "??$__unguarded_partition@PAUGroupDrawDist@@U1@P6A_NABU1@0@Z@stlpmtx_std@@YAPAUGroupDrawDist@@PAU1@0U1@P6A_NABU1@2@Z@Z",
-     "to": "??$__unguarded_partition@PAUCuePoint@?A0x81ddebd1@@U12@P6A_NABU12@0@Z@stlpmtx_std@@YAPAUCuePoint@?A0x81ddebd1@@PAU12@0U12@P6A_NABU12@2@Z@Z"
-    },
-    "0x827f5c90": {
-     "from": "??$__partial_sort@PAUGroupDrawDist@@U1@P6A_NABU1@0@Z@stlpmtx_std@@YAXPAUGroupDrawDist@@000P6A_NABU1@1@Z@Z",
-     "to": "??$__partial_sort@PAUCuePoint@?A0x81ddebd1@@U12@P6A_NABU12@0@Z@stlpmtx_std@@YAXPAUCuePoint@?A0x81ddebd1@@000P6A_NABU12@1@Z@Z"
     },
     "0x827f6dc8": {
      "from": "??1?$pair@VString@@V1@@stlpmtx_std@@QAA@XZ",
@@ -1831,15 +1819,16 @@
    "fresh_tier_prefix": "retailmap-fn:",
    "n_names_added": 100,
    "n_groups_extended": 28,
-   "n_groups_reanchored": 380,
+   "n_groups_reanchored": 377,
    "n_groups_fresh": 11,
    "census": {
     "map addresses examined": 107649,
     "drop: fewer than two members either side uses": 800,
     "drop: fewer than two non-annotation names in the map": 104781,
-    "installed and already complete": 1540,
+    "drop: the group belongs to another tier's own installer": 110,
     "FRESH": 14,
-    "RE-ANCHOR only": 310,
+    "installed and already complete": 1433,
+    "RE-ANCHOR only": 307,
     "EXTEND": 188,
     "  ...of which also RE-ANCHOR": 70,
     "drop: target objects define none of the members": 10,
@@ -27789,9 +27778,9 @@
   {
    "name": "retailmap-data:??_G?$vector@MV?$StlNodeAlloc@M@stlpmtx_@0x82738a40",
    "address": "0x82738a40",
-   "survivor": "??_GDebugGraph@?A0xb39b74bf@@QAAPAXI@Z",
+   "survivor": "??_G?$vector@MV?$StlNodeAlloc@M@stlpmtx_std@@@stlpmtx_std@@QAAPAXI@Z",
    "folded": [
-    "??_G?$vector@MV?$StlNodeAlloc@M@stlpmtx_std@@@stlpmtx_std@@QAAPAXI@Z"
+    "??_GDebugGraph@?A0xb39b74bf@@QAAPAXI@Z"
    ],
    "n_map_names_at_addr": 2,
    "kind": "code",
@@ -27809,9 +27798,9 @@
   {
    "name": "retailmap-data:??$__unguarded_partition@PAUGroupDrawDis@0x827f5860",
    "address": "0x827f5860",
-   "survivor": "??$__unguarded_partition@PAUCuePoint@?A0x81ddebd1@@U12@P6A_NABU12@0@Z@stlpmtx_std@@YAPAUCuePoint@?A0x81ddebd1@@PAU12@0U12@P6A_NABU12@2@Z@Z",
+   "survivor": "??$__unguarded_partition@PAUGroupDrawDist@@U1@P6A_NABU1@0@Z@stlpmtx_std@@YAPAUGroupDrawDist@@PAU1@0U1@P6A_NABU1@2@Z@Z",
    "folded": [
-    "??$__unguarded_partition@PAUGroupDrawDist@@U1@P6A_NABU1@0@Z@stlpmtx_std@@YAPAUGroupDrawDist@@PAU1@0U1@P6A_NABU1@2@Z@Z"
+    "??$__unguarded_partition@PAUCuePoint@?A0x81ddebd1@@U12@P6A_NABU12@0@Z@stlpmtx_std@@YAPAUCuePoint@?A0x81ddebd1@@PAU12@0U12@P6A_NABU12@2@Z@Z"
    ],
    "n_map_names_at_addr": 2,
    "kind": "code",
@@ -27829,9 +27818,9 @@
   {
    "name": "retailmap-data:??$__partial_sort@PAUGroupDrawDist@@U1@P@0x827f5c90",
    "address": "0x827f5c90",
-   "survivor": "??$__partial_sort@PAUCuePoint@?A0x81ddebd1@@U12@P6A_NABU12@0@Z@stlpmtx_std@@YAXPAUCuePoint@?A0x81ddebd1@@000P6A_NABU12@1@Z@Z",
+   "survivor": "??$__partial_sort@PAUGroupDrawDist@@U1@P6A_NABU1@0@Z@stlpmtx_std@@YAXPAUGroupDrawDist@@000P6A_NABU1@1@Z@Z",
    "folded": [
-    "??$__partial_sort@PAUGroupDrawDist@@U1@P6A_NABU1@0@Z@stlpmtx_std@@YAXPAUGroupDrawDist@@000P6A_NABU1@1@Z@Z"
+    "??$__partial_sort@PAUCuePoint@?A0x81ddebd1@@U12@P6A_NABU12@0@Z@stlpmtx_std@@YAXPAUCuePoint@?A0x81ddebd1@@000P6A_NABU12@1@Z@Z"
    ],
    "n_map_names_at_addr": 2,
    "kind": "code",

@@ -121,6 +121,17 @@ ALIAS = REPO / "scripts" / "symbol_aliases.json"
 LEDGER_KEY = "retail_map_reconcile"
 FRESH_TIER = "retailmap-fn:"
 
+# Tiers owned by an installer that REPLACES its own groups wholesale on every
+# run (`install_data_fold_aliases.py` strips every `retailmap-data:` group and
+# re-adds the current candidate set). Editing one of those groups in place is a
+# landmine: the next `--apply` over there silently drops the edit and leaves
+# this ledger describing names the file no longer holds. So they are out of
+# reach here and counted as such, rather than edited and hoped about. Measured:
+# three addresses, all RE-ANCHOR-only, so the exclusion costs nothing -- a
+# re-anchor relabels which member is called `survivor` and objdiff buckets the
+# rendered map by ADDRESS, so it moves no equivalence class either way.
+FOREIGN_TIER_PREFIXES = ("retailmap-data:",)
+
 IMAGE_SYM_CLASS_EXTERNAL = 2
 IMAGE_SYM_CLASS_STATIC = 3
 EH_FUNCLET = re.compile(r"^(?:__unwind\$|__catch\$)")
@@ -319,6 +330,9 @@ def derive(repo: Path, identity: str = "align", verbose=True) -> dict:
                          "kind": "code" if survivor in tgt_code else "data"})
             continue
         gi, g = inst
+        if str(g.get("name", "")).startswith(FOREIGN_TIER_PREFIXES):
+            census["drop: the group belongs to another tier's own installer"] += 1
+            continue
         have = set([g["survivor"]] + list(g.get("folded") or []))
         offer = [n for n in members if n not in have]
         reanchor = g["survivor"] != survivor
