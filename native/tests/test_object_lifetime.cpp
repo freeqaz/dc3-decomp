@@ -193,6 +193,65 @@ TEST_F(ObjectLifetimeTest, ObjDirItrIgnoresNullHashEntriesAfterDelete) {
     delete dir;
 }
 
+// dc3 task #143: the MILO_FAIL in RemoveFromDir IS the guard, and it does not
+// stop on native.
+//
+//     ObjectDir::Entry *entry = mDir->FindEntry(mName, false);
+//     if (!entry || entry->obj != this) {
+//         MILO_FAIL("No entry for %s in %s", ...);      // returns on native
+//     }
+//     entry->obj = nullptr;                             // runs anyway
+//
+// The `!entry` disjunct is a store through page 0 -- absorbed by the 360's
+// mapped, writable, zeroed guest page 0, SIGSEGV here (pinned separately by
+// NullThisStoreDeathTest.HostHasNoWritableLowPage). The `entry->obj != this`
+// disjunct is the one this test reaches: it is memory-SAFE and therefore
+// invisible to a crash-based gate, but it clears a hash entry belonging to a
+// different, LIVE object, which then vanishes from its dir while still holding
+// mDir and mName.
+//
+// The precondition is manufactured by the same class of defect one function
+// away: SetName's `MILO_FAIL("%s already exists")` is non-fatal too, so a
+// duplicate name really does leave entry->obj pointing at the second object.
+// Both preconditions are asserted before the behaviour is, so the test cannot
+// pass by never reaching the situation it exists to cover.
+TEST_F(ObjectLifetimeTest, DuplicateNameDestroyingFirstDoesNotUnregisterSecond) {
+    ExposedDir *dir = new ExposedDir();
+
+    Hmx::Object *first = Hmx::Object::New<Hmx::Object>();
+    first->SetName("dup.obj", dir);
+
+    ObjectDir::Entry *entry = dir->ExposeFindEntry("dup.obj", false);
+    ASSERT_NE(entry, nullptr);
+    ASSERT_EQ(entry->obj, first) << "first object did not take the entry";
+
+    // Non-fatal MILO_FAIL("dup.obj already exists") -> the store below it runs.
+    Hmx::Object *second = Hmx::Object::New<Hmx::Object>();
+    second->SetName("dup.obj", dir);
+
+    entry = dir->ExposeFindEntry("dup.obj", false);
+    ASSERT_NE(entry, nullptr);
+    ASSERT_EQ(entry->obj, second)
+        << "PRECONDITION NOT REPRODUCED: SetName's MILO_FAIL became fatal, or "
+           "duplicate names no longer overwrite the entry. This test proves "
+           "nothing in that state -- re-aim it, do not delete it.";
+
+    // ~Object -> RemoveFromDir. entry->obj is `second`, not `first`.
+    delete first;
+
+    entry = dir->ExposeFindEntry("dup.obj", false);
+    ASSERT_NE(entry, nullptr);
+    EXPECT_EQ(entry->obj, second)
+        << "RemoveFromDir cleared a dir entry owned by another LIVE object. "
+           "On the 360 MILO_FAIL had already stopped the title, so this store "
+           "was unreachable; on native it silently unregisters `second`.";
+    EXPECT_EQ(dir->FindObject("dup.obj", false, false), second)
+        << "`second` is still alive but can no longer be found in its own dir.";
+
+    delete second;
+    delete dir;
+}
+
 // Unit baseline: direct ReplaceRefs redirect works outside merge recursion.
 TEST_F(ObjectLifetimeTest, ReplaceRefsRedirectsObjPtr) {
     Hmx::Object *owner = Hmx::Object::New<Hmx::Object>();
