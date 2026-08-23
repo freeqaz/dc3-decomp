@@ -15,6 +15,7 @@
 #include <sstream>
 #include <string>
 #include <unistd.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 
 // ---------------------------------------------------------------------------
@@ -46,11 +47,45 @@ struct DtaRunResult {
     int signal;
     std::string output;
     bool timedOut;
+    // Non-empty when the run never happened because a prerequisite was absent.
+    // Distinguishing "the flow did not reach game_screen" from "there was no
+    // engine to run" matters: measured 2026-08-23, a lane that built only the
+    // milo-tests target got all seven of these tests red with messages like
+    // "multiuser_screen never transitioned to loading_screen -- enter_gameplay
+    // DTA function didn't fire", and the actual cause was
+    //     timeout: failed to run command '.../native/build/dc3-native':
+    //     No such file or directory
+    // Seven gameplay-shaped failure messages for one missing file. They were
+    // reported up the chain as a pre-existing gameplay regression.
+    std::string setupError;
 };
+
+static bool FileExists(const std::string &p) {
+    struct stat st;
+    return ::stat(p.c_str(), &st) == 0;
+}
 
 static DtaRunResult RunDtaFlow(int maxFrames, int timeout = 120) {
     std::string binary = GetDc3NativePath();
     std::string script = GetScriptDir() + "/ymca.txt";
+
+    // Check the prerequisites BEFORE running, so a missing one is reported as
+    // itself instead of as seven content assertions about gameplay.
+    DtaRunResult pre = {-1, 0, "", false, ""};
+    if (!FileExists(binary)) {
+        pre.setupError =
+            "dc3-native does not exist at:\n    " + binary +
+            "\nThese tests drive the real engine as a subprocess, so without it "
+            "every assertion below is about output that was never produced. "
+            "Build it:\n    cmake --build <build-dir> --target dc3-native\n"
+            "(scripts/native_test.sh builds both milo-tests and dc3-native.)";
+        return pre;
+    }
+    if (!FileExists(script)) {
+        pre.setupError = "input flow script missing:\n    " + script;
+        return pre;
+    }
+
     std::ostringstream cmd;
     cmd << "MILO_HEADLESS=1 MILO_FATAL_FAILS=0 DC3_SHOW_SPLASH=0 DC3_FAST_BOOT=1"
         << " MILO_INPUT_SCRIPT=" << script
@@ -58,8 +93,11 @@ static DtaRunResult RunDtaFlow(int maxFrames, int timeout = 120) {
         << " timeout " << timeout << " " << binary << " 2>&1";
 
     FILE *pipe = popen(cmd.str().c_str(), "r");
-    DtaRunResult result = {-1, 0, "", false};
-    if (!pipe) return result;
+    DtaRunResult result = {-1, 0, "", false, ""};
+    if (!pipe) {
+        result.setupError = "popen() failed for:\n    " + cmd.str();
+        return result;
+    }
 
     char buf[4096];
     while (fgets(buf, sizeof(buf), pipe))
@@ -101,6 +139,17 @@ protected:
         }
         if (!sRanEngine) {
             GTEST_SKIP() << "Engine did not run (SetUpTestSuite failed)";
+        }
+        // A broken setup is a FAILURE, not a fake content assertion, and not a
+        // skip either -- the gate said this suite should run. Abort the body so
+        // the only message the operator sees is the real one.
+        if (!sResult.setupError.empty()) {
+            GTEST_FAIL() << "DtaFlowTest could not run the engine.\n"
+                         << sResult.setupError
+                         << "\nThe assertions in this suite are about engine "
+                            "output; none of them is meaningful here, and all "
+                            "seven would otherwise fail with gameplay-shaped "
+                            "messages that name the wrong cause.";
         }
     }
 

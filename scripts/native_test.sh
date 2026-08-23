@@ -96,8 +96,19 @@ fi
 # that would fail are not in the binary, so ctest cannot run them, so the run is
 # green. See the header comment for the measured 449-vs-504 incident.
 if [ "$DO_BUILD" = "1" ]; then
-    echo "==> building milo-tests / dc3-native in $BUILD_DIR"
-    if ! cmake --build "$BUILD_DIR" --target milo-tests dc3-native; then
+    # `all`, deliberately, NOT a hand-picked target list. The suite drives three
+    # separate binaries as subprocesses -- dc3-native (DtaFlowTest,
+    # HeadlessBootTest, GameplayTelemetryTest) and milo-viewer
+    # (MiloViewerScreenshot, MiloViewerPosePipeline) -- and each one that is
+    # absent silently removes its tests from the run in a DIFFERENT disguise.
+    # Measured 2026-08-23 in this very investigation: building only
+    # `milo-tests dc3-native` left milo-viewer unbuilt, and the 5 viewer tests
+    # SKIPPED, taking the run from 69 skips to 74 and tripping the ratchet with
+    # a message about coverage shrinking. The coverage had not shrunk; the build
+    # was incomplete. Every named-target list is one target away from repeating
+    # that, so there is no list.
+    echo "==> building (all targets) in $BUILD_DIR"
+    if ! cmake --build "$BUILD_DIR"; then
         echo >&2
         echo "error: build FAILED. Not running ctest against the previous" >&2
         echo "       binary -- that would report the old tree's results as" >&2
