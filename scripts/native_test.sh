@@ -258,6 +258,23 @@ if [ -n "$budget" ]; then
         echo "FAIL: $skipped tests skipped, budget is $budget."
         echo "      Coverage shrank. Either restore the gate, or raise the budget"
         echo "      in $BUDGET_FILE with a commit message saying why."
+        # Check the environment before believing the number. The budget was
+        # recorded in the main checkout; archive/ is in .gitignore, so it exists
+        # ONLY there, and exactly one test reads a golden out of it. A worktree
+        # without the symlink is therefore +1 skipped forever, which reads as a
+        # coverage regression and is not one. Both lanes that hit this on
+        # 2026-08-23 were looking at a real exit 2 with an environmental cause.
+        if [ ! -e "$REPO_ROOT/archive/screenshots/pose_regression/goldens/stand_bad_mid.pose.json" ]; then
+            echo
+            echo "      NOTE, before you touch the budget: this checkout has no"
+            echo "        archive/screenshots/pose_regression/goldens/stand_bad_mid.pose.json"
+            echo "      archive/ is gitignored, so it exists only in the main"
+            echo "      checkout. MiloViewerScreenshot.PoseDumpCanMatchGoldenWithTolerance"
+            echo "      skips without it, and accounts for exactly 1 of the"
+            echo "      $skipped skips above. Fix the environment, not the budget:"
+            echo "        ln -s <main-checkout>/archive $REPO_ROOT/archive"
+            echo "      (scripts/setup_worktree.sh now does this for new worktrees.)"
+        fi
         rc=2
     elif [ "$skipped" -lt "$budget" ]; then
         echo
