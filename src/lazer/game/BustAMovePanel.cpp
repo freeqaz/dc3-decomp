@@ -944,9 +944,9 @@ void BustAMovePanel::OnBeat() {
                 int score =
                     (rating == kMoveRatingSuperPerfect) ? 50000 : 40000;
                 IncreaseScore(!mActivePlayer, score);
-                static Message playMsg("bustamove_move_matched", 0);
-                playMsg[0] = DataNode(mMatchCount);
-                TheHamProvider->Handle(playMsg, false);
+                static Message matchedMessage("bustamove_move_matched", 0);
+                matchedMessage[0] = DataNode(mMatchCount);
+                TheHamProvider->Handle(matchedMessage, false);
             }
         }
         mMoveScore = 0.0f;
