@@ -12,13 +12,6 @@
 #include "utl\Cache.h"
 #include "utl\Str.h"
 
-enum SaveLoadMode {
-    kAutoLoad = 0,
-    kAutoSave = 1,
-    kDisableAutoSave = 2,
-    kManualDelete = 3
-};
-
 enum SaveLoadMgrStatus {
 };
 
@@ -28,6 +21,18 @@ enum DeviceIDState {
 
 class SaveLoadManager : public Hmx::Object {
 public:
+    // Nested, not file-scope: retail's map has
+    // ??$MakeString@W4SaveLoadMode@SaveLoadManager@@ at 0x82610090 (the
+    // MakeString<enum> ICF class), and a file-scope enum mangles as
+    // ??$MakeString@W4SaveLoadMode@@ -- a name the shipped image never held.
+    // That one character was Poll's last charged relocation.
+    enum SaveLoadMode {
+        kAutoLoad = 0,
+        kAutoSave = 1,
+        kDisableAutoSave = 2,
+        kManualDelete = 3
+    };
+
     enum State {
         kS_Idle = 0x0,
         kS_Start = 0x1,
