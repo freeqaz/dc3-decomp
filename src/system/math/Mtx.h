@@ -134,37 +134,32 @@ namespace Hmx {
     };
 
     Hmx::Matrix4 operator*(const Transform &, const Hmx::Matrix4 &);
+
+    /** Dot product of a column of the right-hand matrix with a row of the
+     * left-hand one -- the inner loop of Matrix4 * Matrix4. */
+    inline float Dot4(const Vector4 &col, const Vector4 &row) {
+        return col.x * row.x + col.y * row.y + col.z * row.z + col.w * row.w;
+    }
+
     inline Hmx::Matrix4 operator*(const Hmx::Matrix4 &a, const Hmx::Matrix4 &b) {
-        Vector4 c0 = a.Col4(0);
-        Vector4 c1 = a.Col4(1);
-        Vector4 c2 = a.Col4(2);
-        Vector4 c3 = a.Col4(3);
-        return Hmx::Matrix4(
-            Vector4(
-                b.x.x * c0.x + b.x.y * c1.x + b.x.z * c2.x + b.x.w * c3.x,
-                b.x.x * c0.y + b.x.y * c1.y + b.x.z * c2.y + b.x.w * c3.y,
-                b.x.x * c0.z + b.x.y * c1.z + b.x.z * c2.z + b.x.w * c3.z,
-                b.x.x * c0.w + b.x.y * c1.w + b.x.z * c2.w + b.x.w * c3.w
-            ),
-            Vector4(
-                b.y.x * c0.x + b.y.y * c1.x + b.y.z * c2.x + b.y.w * c3.x,
-                b.y.x * c0.y + b.y.y * c1.y + b.y.z * c2.y + b.y.w * c3.y,
-                b.y.x * c0.z + b.y.y * c1.z + b.y.z * c2.z + b.y.w * c3.z,
-                b.y.x * c0.w + b.y.y * c1.w + b.y.z * c2.w + b.y.w * c3.w
-            ),
-            Vector4(
-                b.z.x * c0.x + b.z.y * c1.x + b.z.z * c2.x + b.z.w * c3.x,
-                b.z.x * c0.y + b.z.y * c1.y + b.z.z * c2.y + b.z.w * c3.y,
-                b.z.x * c0.z + b.z.y * c1.z + b.z.z * c2.z + b.z.w * c3.z,
-                b.z.x * c0.w + b.z.y * c1.w + b.z.z * c2.w + b.z.w * c3.w
-            ),
-            Vector4(
-                b.w.x * c0.x + b.w.y * c1.x + b.w.z * c2.x + b.w.w * c3.x,
-                b.w.x * c0.y + b.w.y * c1.y + b.w.z * c2.y + b.w.w * c3.y,
-                b.w.x * c0.z + b.w.y * c1.z + b.w.z * c2.z + b.w.w * c3.z,
-                b.w.x * c0.w + b.w.y * c1.w + b.w.z * c2.w + b.w.w * c3.w
-            )
-        );
+        Hmx::Matrix4 out;
+        out.x.x = Dot4(b.Col4(0), a.x);
+        out.x.y = Dot4(b.Col4(1), a.x);
+        out.x.z = Dot4(b.Col4(2), a.x);
+        out.x.w = Dot4(b.Col4(3), a.x);
+        out.y.x = Dot4(b.Col4(0), a.y);
+        out.y.y = Dot4(b.Col4(1), a.y);
+        out.y.z = Dot4(b.Col4(2), a.y);
+        out.y.w = Dot4(b.Col4(3), a.y);
+        out.z.x = Dot4(b.Col4(0), a.z);
+        out.z.y = Dot4(b.Col4(1), a.z);
+        out.z.z = Dot4(b.Col4(2), a.z);
+        out.z.w = Dot4(b.Col4(3), a.z);
+        out.w.x = Dot4(b.Col4(0), a.w);
+        out.w.y = Dot4(b.Col4(1), a.w);
+        out.w.z = Dot4(b.Col4(2), a.w);
+        out.w.w = Dot4(b.Col4(3), a.w);
+        return out;
     }
 
     class Quat {
