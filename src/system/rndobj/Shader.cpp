@@ -346,23 +346,22 @@ void CheckDistortion(RndMat *mat) {
 }
 
 void CheckShadow() {
-    RndCam *shadowCam = TheNgRnd.GetShadowCam();
+    RndCam *shadowCam = TheRnd.GetShadowCam();
     if (shadowCam) {
         Transform viewXfm;
         Hmx::Matrix4 projMtx;
         shadowCam->GetViewProjectXfms(viewXfm, projMtx);
         Hmx::Matrix4 viewProj = Hmx::operator*(viewXfm, projMtx);
-        static Hmx::Matrix4 sShadowTexMatrix;
-        static bool sInit;
-        if (!sInit) {
-            sShadowTexMatrix.x = Vector4(0.0f, 0.0f, 0.0f, 0.0f);
-            sShadowTexMatrix.y = Vector4(0.0f, -0.5f, 0.0f, 0.0f);
-            sShadowTexMatrix.z = Vector4(0.0f, 0.0f, 1.0f, 0.0f);
-            sShadowTexMatrix.w = Vector4(0.0f, 0.501953125f, 0.0f, 1.0f);
-            sInit = true;
-        }
-        Hmx::Matrix4 result = Hmx::operator*(viewProj, sShadowTexMatrix);
-        TheShaderMgr.SetVConstant((VShaderConstant)0x28, result);
+        // Clip space (-1..1, y down) -> shadow-map texture space (0..1), with the
+        // D3D9 half-texel offset for a 1024x1024 map: 0.5 + 0.5/1024.
+        static Hmx::Matrix4 sShadowTexMatrix(
+            Vector4(0.5f, 0.0f, 0.0f, 0.0f),
+            Vector4(0.0f, -0.5f, 0.0f, 0.0f),
+            Vector4(0.0f, 0.0f, 1.0f, 0.0f),
+            Vector4(0.5009765625f, 0.5009765625f, 0.0f, 1.0f)
+        );
+        viewProj = Hmx::operator*(viewProj, sShadowTexMatrix);
+        TheShaderMgr.SetVConstant((VShaderConstant)0x28, viewProj);
     }
 }
 
