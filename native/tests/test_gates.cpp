@@ -66,6 +66,9 @@
 #ifndef MILO_TEST_NINJA_STR
 #define MILO_TEST_NINJA_STR ""
 #endif
+#ifndef MILO_TEST_REQUIRED_TARGETS_STR
+#define MILO_TEST_REQUIRED_TARGETS_STR ""
+#endif
 
 namespace {
 
@@ -270,8 +273,15 @@ TEST(TestGates, BuildMatchesSources) {
     ASSERT_TRUE(PathExists(build_dir + "/build.ninja"))
         << "no build.ninja in " << build_dir;
 
+    const std::string targets = MILO_TEST_REQUIRED_TARGETS_STR;
+    ASSERT_FALSE(targets.empty())
+        << "MILO_TEST_REQUIRED_TARGETS_STR was not baked in; there is nothing to "
+           "check currency OF, so this test could not fail and would not be a "
+           "test. See native/CMakeLists.txt (MILO_TEST_REQUIRED_TARGETS).";
+    printf("  Build-currency targets: %s\n", targets.c_str());
+
     const std::string cmd = ShellQuote(ninja) + " -C " + ShellQuote(build_dir) +
-                            " -n milo-tests dc3-native 2>&1";
+                            " -n " + targets + " 2>&1";
     const CmdResult r = RunCapture(cmd);
     ASSERT_TRUE(r.ran) << "could not run: " << cmd;
     ASSERT_EQ(r.status, 0) << "ninja dry run failed:\n" << r.output;
@@ -288,7 +298,7 @@ TEST(TestGates, BuildMatchesSources) {
 
     ADD_FAILURE()
         << "The build directory is STALE: ninja still has work to do for "
-           "milo-tests / dc3-native.\n"
+           "" << targets << ".\n"
         << "This test binary is therefore not built from the current source "
            "tree, and every result in this run -- including the registered test "
            "COUNT -- describes an older tree. On 2026-08-23 exactly this "

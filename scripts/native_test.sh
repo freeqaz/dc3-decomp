@@ -96,19 +96,39 @@ fi
 # that would fail are not in the binary, so ctest cannot run them, so the run is
 # green. See the header comment for the measured 449-vs-504 incident.
 if [ "$DO_BUILD" = "1" ]; then
-    # `all`, deliberately, NOT a hand-picked target list. The suite drives three
-    # separate binaries as subprocesses -- dc3-native (DtaFlowTest,
-    # HeadlessBootTest, GameplayTelemetryTest) and milo-viewer
-    # (MiloViewerScreenshot, MiloViewerPosePipeline) -- and each one that is
-    # absent silently removes its tests from the run in a DIFFERENT disguise.
-    # Measured 2026-08-23 in this very investigation: building only
-    # `milo-tests dc3-native` left milo-viewer unbuilt, and the 5 viewer tests
-    # SKIPPED, taking the run from 69 skips to 74 and tripping the ratchet with
-    # a message about coverage shrinking. The coverage had not shrunk; the build
-    # was incomplete. Every named-target list is one target away from repeating
-    # that, so there is no list.
-    echo "==> building (all targets) in $BUILD_DIR"
-    if ! cmake --build "$BUILD_DIR"; then
+    # The target list is NOT maintained here. CMake owns it
+    # (MILO_TEST_REQUIRED_TARGETS in native/CMakeLists.txt) and writes it to the
+    # build dir; TestGates.BuildMatchesSources verifies the currency of the same
+    # list. One definition, two consumers, and if they drift the test fails.
+    #
+    # Why not just `all`: wgpu-window-test has been broken since GpuDevice.h
+    # moved into the shared engine, so `cmake --build <dir>` with no target does
+    # not succeed in this repo. Pre-existing, unrelated, last built 2026-03-25.
+    #
+    # Why a list at all is dangerous, measured 2026-08-23 during this very
+    # investigation: the suite drives THREE binaries as subprocesses --
+    # dc3-native (DtaFlowTest, HeadlessBootTest, GameplayTelemetryTest) and
+    # milo-viewer (MiloViewerScreenshot, MiloViewerPosePipeline). Building only
+    # `milo-tests dc3-native` left milo-viewer absent, its 5 tests SKIPPED, the
+    # run went 69 -> 74 skips, and the ratchet fired saying coverage had shrunk.
+    # Coverage had not shrunk; the build was incomplete. Hence the single source.
+    TARGETS_FILE="$BUILD_DIR/milo_test_required_targets.txt"
+    if [ ! -f "$TARGETS_FILE" ]; then
+        echo "error: $TARGETS_FILE is missing." >&2
+        echo "       CMake generates it from MILO_TEST_REQUIRED_TARGETS. Its" >&2
+        echo "       absence means this build dir predates that, and guessing a" >&2
+        echo "       target list here is exactly the failure mode it replaced." >&2
+        echo "       Reconfigure: cmake $BUILD_DIR" >&2
+        exit 7
+    fi
+    read -r -a BUILD_TARGETS < "$TARGETS_FILE"
+    if [ "${#BUILD_TARGETS[@]}" -eq 0 ]; then
+        echo "error: $TARGETS_FILE is empty; refusing to build nothing and" >&2
+        echo "       report the result as a measurement." >&2
+        exit 7
+    fi
+    echo "==> building ${BUILD_TARGETS[*]} in $BUILD_DIR"
+    if ! cmake --build "$BUILD_DIR" --target "${BUILD_TARGETS[@]}"; then
         echo >&2
         echo "error: build FAILED. Not running ctest against the previous" >&2
         echo "       binary -- that would report the old tree's results as" >&2

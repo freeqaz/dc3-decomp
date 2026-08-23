@@ -2093,13 +2093,33 @@ if(BUILD_TESTS)
         set(_ninja_exe "${CMAKE_MAKE_PROGRAM}")
     endif()
 
+    # Every binary the suite drives, in ONE place.
+    #
+    # `all` would be the honest answer and is not available: wgpu-window-test
+    # has been broken since GpuDevice.h moved into the shared engine (it
+    # deliberately does not link the engine, so it cannot see the header). Its
+    # last successful build here was 2026-03-25. That is pre-existing and out of
+    # scope, but it means `cmake --build <dir>` fails, so a list is forced.
+    #
+    # A hand-maintained list is what let milo-viewer go unbuilt and cost 5 tests
+    # to a skip, so the list is defined once here and BOTH consumers read it:
+    # scripts/native_test.sh builds it (via the generated file below) and
+    # TestGates.BuildMatchesSources verifies its currency. If one drifts, the
+    # other fails.
+    set(MILO_TEST_REQUIRED_TARGETS milo-tests dc3-native milo-viewer)
+    string(REPLACE ";" " " _req_targets_str "${MILO_TEST_REQUIRED_TARGETS}")
+    file(GENERATE
+        OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/milo_test_required_targets.txt"
+        CONTENT "${_req_targets_str}\n")
+
     target_compile_definitions(milo-tests PRIVATE
         "MILO_TEST_GATES_ON_STR=\"${_gates_on_str}\""
         "MILO_TEST_GATES_OFF_STR=\"${_gates_off_str}\""
         "MILO_TEST_GATE_PROBES_STR=\"${_gate_probes_str}\""
         "MILO_TEST_BINARY_DIR_STR=\"${CMAKE_CURRENT_BINARY_DIR}\""
         "MILO_TEST_GENERATOR_STR=\"${CMAKE_GENERATOR}\""
-        "MILO_TEST_NINJA_STR=\"${_ninja_exe}\"")
+        "MILO_TEST_NINJA_STR=\"${_ninja_exe}\""
+        "MILO_TEST_REQUIRED_TARGETS_STR=\"${_req_targets_str}\"")
 
     message(STATUS "milo-tests gates ON : ${_gates_on_str}")
     message(STATUS "milo-tests gates OFF: ${_gates_off_str}")
