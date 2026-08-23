@@ -390,21 +390,21 @@ u64 RndShaderVelocityCamera::CalcShaderOpts(NgMat *mat, ShaderType s, bool b) {
 }
 
 u64 RndShaderVelocity::CalcShaderOpts(NgMat *mat, ShaderType s, bool b) {
-    return ((u64)(TheHiResScreen.IsActive() & 1) << 40
-        | (u64)(TheShaderMgr.BoneCount() > 0)) << 12;
+    u64 skinned = (u64)(TheShaderMgr.BoneCount() > 0) & 1;
+    return (skinned | (u64)TheHiResScreen.IsActive() << 40) << 12;
 }
 
 u64 RndShaderUnwrapUV::CalcShaderOpts(NgMat *mat, ShaderType s, bool b) {
-    return ((u64)(mat->GetDiffuseTex() != nullptr)
-        | 0x10
-        | ((u64)(TheHiResScreen.IsActive() & 1) << 48)) << 4;
+    u64 opts = ((u64)(bool)mat->GetDiffuseTex() & 1) | 0x10;
+    return (opts | ((u64)(TheHiResScreen.IsActive() & 1) << 48)) << 4;
 }
 
 u64 RndShaderDepthVolume::CalcShaderOpts(NgMat *mat, ShaderType s, bool b) {
-    return (((u64)(TheHiResScreen.IsActive() & 1) << 29
-        | (u64)(TheRnd.DrawMode() == Rnd::kDrawShadowColor)) << 23)
-        | (((u64)(TheShaderMgr.BoneCount() != 0) << 11
-        | (u64)(TheShaderMgr.unk1c & 3)) << 1);
+    u64 skinned = (u64)(bool)TheShaderMgr.BoneCount() & 1;
+    u64 opts = (((u64)TheShaderMgr.unk1c & ~0xFFFFFFFCULL) | skinned << 11) << 1;
+    u64 shadow = (u64)(TheRnd.DrawMode() == Rnd::kDrawShadowColor) & 1;
+    u64 hi = (shadow | (u64)TheHiResScreen.IsActive() << 29) << 23;
+    return hi | (opts & ~((1ULL << 23) | (1ULL << 52)));
 }
 
 u64 RndShaderSimple::CalcShaderOpts(NgMat *mat, ShaderType s, bool b) {
