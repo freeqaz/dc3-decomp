@@ -79,6 +79,14 @@ it admits 176 of the 254 rather than all 254.
 
 It does NOT install into `scripts/symbol_aliases.json`; that is
 `scripts/install_data_fold_aliases.py`.
+
+⚠ This script can only CREATE a group. Its collision gate drops an address that
+already carries one -- 2,038 addresses, the largest non-structural skip bucket
+below -- so a class installed before our tree started emitting a spelling, or
+before `config/373307D9/symbols.txt` was rewritten, can never be extended or
+re-anchored here. That is a real gap and it cost `HttpGet::Poll` a row.
+`scripts/retail_map_fold_reconcile.py` is the successor for those two cases; it
+imports this module's gates rather than restating them.
 """
 import argparse
 import collections
@@ -531,6 +539,11 @@ def main():
                     % ("none" if not defined else "several")] += 1
             continue
         if va in have_addr or any(n in spoken for n in members):
+            # NOT a refusal on evidence -- the address is simply out of this
+            # script's reach, and 2,038 addresses land here. 511 of them are
+            # incomplete or stale, not complete: see
+            # scripts/retail_map_fold_reconcile.py, which extends and
+            # re-anchors instead of skipping.
             skipped["collides with an installed alias group"] += 1
             continue
         survivor = defined[0]
