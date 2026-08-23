@@ -49,7 +49,18 @@ void NavListSortMgr::ClearHeaders() {
     mHeadersB.clear();
 }
 
-bool NavListSortMgr::HeadersSelectable() { return mHeadersSelectable; }
+/** Returns the CONSTANT true, not mHeadersSelectable.
+ * ?HeadersSelectable@NavListSortMgr@@UAA_NXZ is at 0x82E2AB00 in
+ * ham_xbox_r.map (`li r3,1; blr`), and slot 27 (0x6c) of
+ * ??_7NavListSortMgr@@6BUIListProvider@@@ names that address too -- while the
+ * neighbouring SelectionIs (0x70) and DataIs (0x74) slots name 0x82AEAE70
+ * (`li r3,0`), so the two constants really are distinguished here.
+ * mHeadersSelectable is a separate thing: it gates AddHeaderIndex and
+ * FinalizeHeaders, is set by SortWithHeaders, and is read directly through
+ * GetHeadersSelectable() -- ChallengeSortNode already calls both spellings at
+ * different sites, which is the tell that they are not the same predicate.
+ * SongSortMgr overrides this with the real game-mode test. */
+bool NavListSortMgr::HeadersSelectable() { return true; }
 
 bool NavListSortMgr::SelectionIs(Symbol) { return false; }
 

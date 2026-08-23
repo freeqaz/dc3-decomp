@@ -255,7 +255,7 @@ CustomPlaylist &CustomPlaylist::operator=(const CustomPlaylist &other) {
     Playlist::operator=(other);
     FixedSizeSaveable::operator=(other);
     mProfile = other.mProfile;
-    unk24 = other.unk24;
+    mDirty = other.mDirty;
     mOnlineID = other.mOnlineID;
     return *this;
 }

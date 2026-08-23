@@ -197,7 +197,13 @@ public:
     virtual void Text(UIListLabel *, UILabel *) const;
     virtual void Custom(UIListCustom *, Hmx::Object *) const {}
     virtual RndMat *Mat(UIListMesh *) const;
-    virtual bool IsEnabled() const { return true; }
+    /** ?IsEnabled@NavListItemNode@@UBA_NXZ is at 0x829747E8, whose body is
+     * `lwz r11,0(r3); lwz r11,0x9c(r11); mtctr r11; bctr` -- a VIRTUAL
+     * tail-call to slot 0x9c, which ??_7NavListHeaderNode@@6B@ index 39 shows
+     * is IsActive.  It is not the constant `true` fold at 0x82E2AB00 (which is
+     * where IsActive itself lives for this class).  NavListHeaderNode does the
+     * mirror image, forwarding IsActive to slot 0xa0. */
+    virtual bool IsEnabled() const { return IsActive(); }
     virtual bool IsActive() const { return true; }
     virtual const char *GetAlbumArtPath() { return nullptr; }
     virtual void Renumber(std::vector<NavListSortNode *> &);
@@ -232,7 +238,13 @@ public:
     virtual void SetCollapseIconLabel(UILabel *) {}
     virtual int GetItemCount() { return 0; }
     virtual NavListSortNode *GetFirstActive() { return nullptr; }
-    virtual bool IsEnabled() const { return true; }
+    /** Same fold as NavListItemNode::IsEnabled -- 0x829747E8, a virtual
+     * tail-call to slot 0x9c (IsActive).  Here that MATTERS behaviourally:
+     * NavListFunctionNode::IsActive is 0x82AEAE70 (`li r3,0`), so a function
+     * node is NOT enabled.  Hardcoding `true` made
+     * NavListShortcutNode::IsActive report a shortcut whose only children are
+     * function nodes as active. */
+    virtual bool IsEnabled() const { return IsActive(); }
     virtual bool IsActive() const { return false; }
     virtual const char *GetAlbumArtPath() { return mAlbumArtPath.c_str(); }
     virtual void Renumber(std::vector<NavListSortNode *> &);

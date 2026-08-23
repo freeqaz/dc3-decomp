@@ -110,18 +110,26 @@ void XboxEnumeration::Poll() {
         std::list<EnumProduct>::iterator it = mContentList.end();
         u32 offset = 0;
         while (productCount < bytesReceived) {
+            // One String, not two: the image constructs EnumProduct FIRST
+            // (??0String@@QAA@XZ into slot 0x60, which is prod.mName -- the
+            // EnumProduct temp occupies 0x60..0x78 with mOfferID at 0x68,
+            // mPurchased at 0x70 and mPrice at 0x74), then assigns the char
+            // buffer straight in with String::operator=(char const*).  The
+            // separate `String str` cost an extra ctor/dtor pair and turned the
+            // assignment into operator=(String const&).
             char buf[256];
-            String str;
+            EnumProduct prod;
             u8 *entryPtr = (u8 *)mCurOffers + offset;
             WideCharToMultiByte(0, 0, *(LPCWSTR *)(entryPtr + 0x14), *(int *)(entryPtr + 0x10), buf, 0xFF, 0, 0);
-            str = buf;
+            prod.mName = buf;
 
-            EnumProduct prod;
-            prod.mName = str;
             prod.mOfferID = *(u64 *)entryPtr;
             prod.mPurchased = *(int *)(entryPtr + 0x48);
-            mContentList.insert(it, prod);
+            // mPrice is written BEFORE the insert (0x82E1D3D8 stores to 0x74,
+            // then bl insert).  Setting it afterwards wrote to the dead local
+            // and every product in mContentList kept price 0.
             prod.mPrice = *(int *)(entryPtr + 0x64);
+            mContentList.insert(it, prod);
 
             offset += 0x68;
             productCount++;
@@ -144,31 +152,39 @@ void XboxEnumeration::Poll() {
         goto done;
     }
 
+    // THE THREE ERROR ARMS WERE ROTATED.  0x82E1D448 sends overlappedResult
+    // == 0x12 (ERROR_NO_MORE_FILES) to .L_82E1D518, the "error no more files"
+    // block -- which in our source was `error_no_more`, and NOTHING BRANCHED TO
+    // IT.  0x82E1D454 sends 0x65b to .L_82E1D488, the extended-error / winsock
+    // block.  And the FALLTHROUGH at 0x82E1D458 is the "overlapped failed
+    // with ... extended ..." message, where our source called
+    // XGetOverlappedExtendedError and threw the result away.
     if (overlappedResult == 0x12) {
-        goto handle_12;
+        goto error_no_more;
     }
 
     if (overlappedResult == 0x65b) {
         goto handle_65b;
     }
 
-    XGetOverlappedExtendedError(&mOverlapped);
+    {
+        DWORD extError = XGetOverlappedExtendedError(&mOverlapped);
+        // The middle argument is the 16-BIT-TRUNCATED error: 0x82E1D45C is
+        // `clrlwi r9, r3, 16`, and 0x54(r31) (arg 2) holds r9 while 0x50(r31)
+        // (arg 3) holds the full value.
+        TheDebug << MakeString(" store enum: overlapped failed with: %d, extended: %d (0x%X)\n", (unsigned long)overlappedResult, (unsigned long)(WORD)extError, (unsigned long)extError);
+    }
     goto check_more_offers;
 
 handle_65b:
     {
         DWORD extError = XGetOverlappedExtendedError(&mOverlapped);
-        TheDebug << MakeString(" store enum: overlapped failed with: %d, extended: %d (0x%X)\n", (unsigned long)overlappedResult, (unsigned long)extError, (unsigned long)extError);
-    }
-    goto check_more_offers;
-
-handle_12:
-    {
-        DWORD extError = XGetOverlappedExtendedError(&mOverlapped);
         if ((WORD)extError == 0x12) {
             goto done;
         }
-        TheDebug << MakeString(" store enum: funciton failed with: %d (0x%X)\n", (unsigned long)extError, (unsigned long)extError);
+        // Same shape at 0x82E1D4A4/0x82E1D4AC: arg 1 is 0x50(r31), the
+        // truncated value, and arg 2 is 0x54(r31), the full one.
+        TheDebug << MakeString(" store enum: funciton failed with: %d (0x%X)\n", (unsigned long)(WORD)extError, (unsigned long)extError);
         if ((WORD)extError >= 0x2710 && (WORD)extError < 0x2EE0) {
             TheDebug << MakeString(" which is a winsock error, so fail.\n");
         }
@@ -184,7 +200,9 @@ check_more_offers:
 
 error_no_more:
     if (mOfferIDsBegin != 0) {
-        TheDebug << MakeString(" store enum: error no more files (%d)\n", (unsigned long)overlappedResult);
+        // MakeString<unsigned int>, not <unsigned long>:
+        // ??$MakeString@I@@YAPBDPBDABI@Z at 0x82E1D530.
+        TheDebug << MakeString(" store enum: error no more files (%d)\n", (unsigned int)overlappedResult);
         mEnumerating = false;
         return;
     }

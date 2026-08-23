@@ -20,7 +20,12 @@ public:
     virtual bool IsPurchasing() const = 0;
     virtual bool IsSuccess() const = 0;
     virtual bool PurchaseMade() const = 0;
-    virtual bool NeedsEnum() const { return true; }
+    /** ham_xbox_r.map puts ?NeedsEnum@StorePurchaser@@UBA_NXZ at 0x82AEAE70
+     * (`li r3,0; blr`), and slot 5 of ??_7StorePurchaser@@6B@ names that same
+     * address -- the base default is FALSE.  Both Xbox overrides below sit at
+     * 0x82E2AB00 (`li r3,1; blr`) instead.  This family was decompiled
+     * inverted; see the note on XboxPurchaser::NeedsEnum. */
+    virtual bool NeedsEnum() const { return false; }
     virtual void Poll() = 0;
 
     StorePurchaser(Symbol s, unsigned int i) : mSource(s), mUserIndex(i) {}
@@ -40,7 +45,14 @@ public:
     virtual bool IsPurchasing() const;
     virtual bool IsSuccess() const;
     virtual bool PurchaseMade() const;
-    virtual bool NeedsEnum() const { return false; }
+    /** TRUE, not false.  ??_7XboxPurchaser@@6BStorePurchaser@@@ slot 5 resolves
+     * to ?IsLocal@LocalUser@@UBA_NXZ == 0x82E2AB00 == `li r3,1; blr`, and the
+     * map lists ?NeedsEnum@XboxPurchaser@@UBA_NXZ at that same address.  An
+     * Xbox marketplace purchase DOES need its offers enumerated first; the
+     * base default (false) is the one that skips the step.  With this
+     * backwards, StorePanel::Poll and OptionsPanel took the no-enum path for
+     * every Xbox purchase. */
+    virtual bool NeedsEnum() const { return true; }
     virtual void Poll() {}
 
     XboxPurchaser(
@@ -72,7 +84,10 @@ public:
     virtual bool IsPurchasing() const;
     virtual bool IsSuccess() const;
     virtual bool PurchaseMade() const;
-    virtual bool NeedsEnum() const { return false; }
+    /** TRUE -- same evidence as XboxPurchaser::NeedsEnum above:
+     * ??_7XboxMultipleItemsPurchaser@@6BStorePurchaser@@@ slot 5 and the map
+     * both land on 0x82E2AB00 (`li r3,1; blr`). */
+    virtual bool NeedsEnum() const { return true; }
     virtual void Poll() {}
 
     XboxMultipleItemsPurchaser(

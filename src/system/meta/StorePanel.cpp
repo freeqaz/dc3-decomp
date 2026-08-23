@@ -451,7 +451,7 @@ void StorePanel::FinishEnum(std::list<EnumProduct> const &enumList, bool arg) {
     mEnumJobID = -1;
 
     if (arg) {
-        StoreError err = UpdateOffers(enumList, arg);
+        StoreError err = UpdateOffers(enumList, false);
 
         if (0 == err || err == 1) {
             if (!mPendingOffers.empty()) {
@@ -460,33 +460,33 @@ void StorePanel::FinishEnum(std::list<EnumProduct> const &enumList, bool arg) {
         }
 
         if (err != 0) {
-            if (err == 1) {
-                if (TheNetCacheMgr->IsDebug() == 0) {
+            if (err != 1 || !TheNetCacheMgr->IsDebug()) {
+                if (err == 1) {
                     FormatString fmt("No offers in this metadata were found in the enumeration!");
                     TheDebug.Notify(fmt.Str());
                 }
-            } else {
                 ExitError(err);
                 return;
             }
-            ExitError(err);
-            return;
         }
 
-        static unsigned char msg_created = (unsigned char)(0);
-        if (!msg_created) {
-            static Symbol sym("enum_finished");
-            msg_created = 1;
-            static Message msg(sym);
-        }
+        static Message msg("enum_finished");
+        HandleType(msg);
+        TheUI->Handle(msg, false);
     } else {
         FormatString fmt("An enumeration failed!");
         TheDebug.Notify(fmt.Str());
 
         if (mLoadOk) {
             mLoadOk = false;
-            void (*func)(void *, int) = (void (*)(void *, int))*(void **)this;
-            func(this, 2);
+            // The image's tail is `lwz r10,0(r30); lwz r11,0x44(r10); mtctr; bctrl`
+            // with r4 = 2 -- vtable slot 0x44 of ??_7StorePanel@@6BUIPanel@@@,
+            // which is index 17 = ExitStore (the first six UIPanel-derived slots
+            // 0x40..0x58 are IsSongInLibrary / ExitStore / StoreProfile /
+            // MakeNewOffer / FindOffer / EnumerateSubsetOfOfferIDs, and 0x54
+            // resolving to the `li r3,0` fold pins that alignment).  The previous
+            // spelling cast the VPTR itself to a function pointer and called it.
+            ExitStore(kStoreErrorCacheNoSpace);
         }
     }
 }
@@ -624,54 +624,59 @@ void StorePanel::ValidateOffers(std::vector<StoreOffer *> &offers) {
     std::vector<Symbol> song_names;
     std::vector<StoreOffer *> song_offers;
 
-    static Symbol pack_sym("pack");
-    static Symbol album_sym("album");
+    // Four ??0Symbol@@QAA@PBD@Z calls under three guard bits of lbl_8316B58C:
+    // bit 0 "song", bit 1 "dummy_upsell_offer", bit 2 the two-element array.
+    // The duplicate test is on the SHORT NAME (mData->Sym(0)), not on
+    // OfferType(): 0x82E16D5C compares the Sym(0) result at slot 0x54 against
+    // dummy_upsell_offer.  The image never calls Symbol::operator==(char const*)
+    // anywhere in this function -- every compare is Symbol vs Symbol, a cmplw
+    // of the two interned pointers.
+    static Symbol song_sym("song");
+    static Symbol dummy_upsell_offer("dummy_upsell_offer");
 
-    std::vector<StoreOffer *>::iterator it;
-    auto _tmp4 = offers.end();
-    for (it = offers.begin(); it != _tmp4; ++it) {
+    for (std::vector<StoreOffer *>::iterator it = offers.begin(); it != offers.end(); ++it) {
         StoreOffer *offer = *it;
-        Symbol offer_type = offer->OfferType();
-
-        if (offer_type != ("dummy_upsell_offer")) {
-            Symbol short_name = offer->StoreOfferData()->Sym(0);
-
-            std::vector<Symbol>::iterator sit =
-                std::find(song_names.begin(), song_names.end(), short_name);
-
-            if (sit != song_names.end()) {
-                TheDebug.Notify(MakeString("Duplicate offer short name: %s", short_name));
-            } else {
-                song_names.push_back(short_name);
-            }
-
-            if (offer_type == ("song")) {
+        // Sym(0) is re-evaluated at each use (four distinct sret slots 0x54,
+        // 0x58, 0x5c, 0x64), so it is not hoisted into a named local here.
+        if (offer->StoreOfferData()->Sym(0) != dummy_upsell_offer
+            && std::find(
+                   song_names.begin(), song_names.end(), offer->StoreOfferData()->Sym(0)
+               ) != song_names.end()) {
+            TheDebug.Notify(
+                MakeString("Duplicate offer short name: %s", offer->StoreOfferData()->Sym(0))
+            );
+        } else {
+            if (offer->OfferType() == song_sym) {
                 song_offers.push_back(offer);
             }
+            song_names.push_back(offer->StoreOfferData()->Sym(0));
         }
     }
 
-    Symbol offer_types[2];
-    offer_types[0] = album_sym;
-    offer_types[1] = pack_sym;
+    static Symbol offer_types[2] = { "album", "pack" };
 
     for (int i = 0; i < 2; i++) {
         Symbol cur_type = offer_types[i];
-        std::vector<StoreOffer *>::iterator nit;
-        for (nit = song_offers.begin(); nit != song_offers.end(); ++nit) {
-            StoreOffer *song_offer = *nit;
+        for (std::vector<StoreOffer *>::iterator nit = song_offers.begin();
+             nit != song_offers.end();
+             ++nit) {
             int count = 0;
-            std::vector<StoreOffer *>::iterator oit;
-            for (oit = offers.begin(); oit != offers.end(); ++oit) {
+            for (std::vector<StoreOffer *>::iterator oit = offers.begin();
+                 oit != offers.end();
+                 ++oit) {
                 StoreOffer *offer_ptr = *oit;
-                if (offer_ptr->OfferType() == cur_type && offer_ptr->HasSong(offer_ptr)) {
+                // HasSong takes the SONG offer, not offer_ptr itself: 0x82E16EC0
+                // loads r4 from *nit while r3 is offer_ptr.
+                if (offer_ptr->OfferType() == cur_type && offer_ptr->HasSong(*nit)) {
                     count++;
                 }
             }
             if (count > 1) {
-                Symbol song_name = song_offer->StoreOfferData()->Sym(0);
-                auto _tmp0 = MakeString("Song %s is in more than one %s", song_name, cur_type);
-                TheDebug.Notify(_tmp0);
+                TheDebug.Notify(MakeString(
+                    "Song %s is in more than one %s",
+                    (*nit)->StoreOfferData()->Sym(0),
+                    cur_type
+                ));
             }
         }
     }
