@@ -30,13 +30,12 @@ bool RndGroup::Replace(ObjRef *ref, Hmx::Object *obj) {
     // incoming ObjRef straight back into one of its own nodes: the target
     // selects the node branchlessly and erases *that* node, rather than
     // calling remove() and re-finding the object by value.
-    ObjList::iterator it = ref->Parent() == &mObjects
-        ? ObjList::iterator(static_cast<ObjList::Node *>(ref))
-        : mObjects.end();
-    if (it != mObjects.end()) {
+    ObjList::Node *node =
+        ref->Parent() == &mObjects ? static_cast<ObjList::Node *>(ref) : nullptr;
+    if (node) {
         if (!obj) {
             Hmx::Object *theObj = ref->GetObj();
-            mObjects.erase(it);
+            mObjects.erase(ObjList::iterator(node));
             VectorRemove(mAnims, theObj);
             VectorRemove(mDraws, theObj);
         } else {
