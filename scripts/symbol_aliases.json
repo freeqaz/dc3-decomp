@@ -503,6 +503,7 @@
     "??$MakeString@$$BY08$$CBDH$$BY0CP@$$CBD@@YAPBDPBDAAY08$$CBDABHAAY0CP@$$CBD@Z",
     "??$MakeString@$$BY08$$CBDH$$BY0DC@$$CBD@@YAPBDPBDAAY08$$CBDABHAAY0DC@$$CBD@Z",
     "??$MakeString@$$BY08$$CBDH$$BY0DH@$$CBD@@YAPBDPBDAAY08$$CBDABHAAY0DH@$$CBD@Z",
+    "??$MakeString@$$BY08$$CBDH$$BY0EL@$$CBD@@YAPBDPBDAAY08$$CBDABHAAY0EL@$$CBD@Z",
     "??$MakeString@$$BY08$$CBDH$$BY0FB@$$CBD@@YAPBDPBDAAY08$$CBDABHAAY0FB@$$CBD@Z",
     "??$MakeString@$$BY08$$CBDH$$BY0L@$$CBD@@YAPBDPBDAAY08$$CBDABHAAY0L@$$CBD@Z",
     "??$MakeString@$$BY08$$CBDH$$BY0M@$$CBD@@YAPBDPBDAAY08$$CBDABHAAY0M@$$CBD@Z",
@@ -523,11 +524,13 @@
     "??$MakeString@$$BY09$$CBDH$$BY0BG@$$CBD@@YAPBDPBDAAY09$$CBDABHAAY0BG@$$CBD@Z",
     "??$MakeString@$$BY09$$CBDH$$BY0BI@$$CBD@@YAPBDPBDAAY09$$CBDABHAAY0BI@$$CBD@Z",
     "??$MakeString@$$BY09$$CBDH$$BY0BJ@$$CBD@@YAPBDPBDAAY09$$CBDABHAAY0BJ@$$CBD@Z",
+    "??$MakeString@$$BY09$$CBDH$$BY0BK@$$CBD@@YAPBDPBDAAY09$$CBDABHAAY0BK@$$CBD@Z",
     "??$MakeString@$$BY09$$CBDH$$BY0BM@$$CBD@@YAPBDPBDAAY09$$CBDABHAAY0BM@$$CBD@Z",
     "??$MakeString@$$BY09$$CBDH$$BY0BO@$$CBD@@YAPBDPBDAAY09$$CBDABHAAY0BO@$$CBD@Z",
     "??$MakeString@$$BY09$$CBDH$$BY0CB@$$CBD@@YAPBDPBDAAY09$$CBDABHAAY0CB@$$CBD@Z",
     "??$MakeString@$$BY09$$CBDH$$BY0CF@$$CBD@@YAPBDPBDAAY09$$CBDABHAAY0CF@$$CBD@Z",
     "??$MakeString@$$BY09$$CBDH$$BY0CI@$$CBD@@YAPBDPBDAAY09$$CBDABHAAY0CI@$$CBD@Z",
+    "??$MakeString@$$BY09$$CBDH$$BY0CJ@$$CBD@@YAPBDPBDAAY09$$CBDABHAAY0CJ@$$CBD@Z",
     "??$MakeString@$$BY09$$CBDH$$BY0CL@$$CBD@@YAPBDPBDAAY09$$CBDABHAAY0CL@$$CBD@Z",
     "??$MakeString@$$BY09$$CBDH$$BY0CP@$$CBD@@YAPBDPBDAAY09$$CBDABHAAY0CP@$$CBD@Z",
     "??$MakeString@$$BY09$$CBDH$$BY0DC@$$CBD@@YAPBDPBDAAY09$$CBDABHAAY0DC@$$CBD@Z",
@@ -657,6 +660,9 @@
     "??$MakeString@$$BY0BC@$$CBDH$$BY0BH@$$CBD@@YAPBDPBDAAY0BC@$$CBDABHAAY0BH@$$CBD@Z",
     "??$MakeString@$$BY0BC@$$CBDH$$BY0BJ@$$CBD@@YAPBDPBDAAY0BC@$$CBDABHAAY0BJ@$$CBD@Z",
     "??$MakeString@$$BY0BC@$$CBDH$$BY0BK@$$CBD@@YAPBDPBDAAY0BC@$$CBDABHAAY0BK@$$CBD@Z",
+    "??$MakeString@$$BY0BC@$$CBDH$$BY0BL@$$CBD@@YAPBDPBDAAY0BC@$$CBDABHAAY0BL@$$CBD@Z",
+    "??$MakeString@$$BY0BC@$$CBDH$$BY0BM@$$CBD@@YAPBDPBDAAY0BC@$$CBDABHAAY0BM@$$CBD@Z",
+    "??$MakeString@$$BY0BC@$$CBDH$$BY0BN@$$CBD@@YAPBDPBDAAY0BC@$$CBDABHAAY0BN@$$CBD@Z",
     "??$MakeString@$$BY0BC@$$CBDH$$BY0BP@$$CBD@@YAPBDPBDAAY0BC@$$CBDABHAAY0BP@$$CBD@Z",
     "??$MakeString@$$BY0BC@$$CBDH$$BY0CC@$$CBD@@YAPBDPBDAAY0BC@$$CBDABHAAY0CC@$$CBD@Z",
     "??$MakeString@$$BY0BC@$$CBDH$$BY0CE@$$CBD@@YAPBDPBDAAY0BC@$$CBDABHAAY0CE@$$CBD@Z",
@@ -711,6 +717,7 @@
     "??$MakeString@$$BY0BD@$$CBDH$$BY0CF@$$CBD@@YAPBDPBDAAY0BD@$$CBDABHAAY0CF@$$CBD@Z",
     "??$MakeString@$$BY0BD@$$CBDH$$BY0CG@$$CBD@@YAPBDPBDAAY0BD@$$CBDABHAAY0CG@$$CBD@Z",
     "??$MakeString@$$BY0BD@$$CBDH$$BY0CH@$$CBD@@YAPBDPBDAAY0BD@$$CBDABHAAY0CH@$$CBD@Z",
+    "??$MakeString@$$BY0BD@$$CBDH$$BY0CI@$$CBD@@YAPBDPBDAAY0BD@$$CBDABHAAY0CI@$$CBD@Z",
     "??$MakeString@$$BY0BD@$$CBDH$$BY0CJ@$$CBD@@YAPBDPBDAAY0BD@$$CBDABHAAY0CJ@$$CBD@Z",
     "??$MakeString@$$BY0BD@$$CBDH$$BY0CK@$$CBD@@YAPBDPBDAAY0BD@$$CBDABHAAY0CK@$$CBD@Z",
     "??$MakeString@$$BY0BD@$$CBDH$$BY0CL@$$CBD@@YAPBDPBDAAY0BD@$$CBDABHAAY0CL@$$CBD@Z",
@@ -723,6 +730,7 @@
     "??$MakeString@$$BY0BD@$$CBDH$$BY0DI@$$CBD@@YAPBDPBDAAY0BD@$$CBDABHAAY0DI@$$CBD@Z",
     "??$MakeString@$$BY0BD@$$CBDH$$BY0DO@$$CBD@@YAPBDPBDAAY0BD@$$CBDABHAAY0DO@$$CBD@Z",
     "??$MakeString@$$BY0BD@$$CBDH$$BY0EE@$$CBD@@YAPBDPBDAAY0BD@$$CBDABHAAY0EE@$$CBD@Z",
+    "??$MakeString@$$BY0BD@$$CBDH$$BY0EF@$$CBD@@YAPBDPBDAAY0BD@$$CBDABHAAY0EF@$$CBD@Z",
     "??$MakeString@$$BY0BD@$$CBDH$$BY0L@$$CBD@@YAPBDPBDAAY0BD@$$CBDABHAAY0L@$$CBD@Z",
     "??$MakeString@$$BY0BD@$$CBDH$$BY0M@$$CBD@@YAPBDPBDAAY0BD@$$CBDABHAAY0M@$$CBD@Z",
     "??$MakeString@$$BY0BD@$$CBDH$$BY0N@$$CBD@@YAPBDPBDAAY0BD@$$CBDABHAAY0N@$$CBD@Z",
@@ -764,9 +772,11 @@
     "??$MakeString@$$BY0BE@$$CBDH$$BY0DB@$$CBD@@YAPBDPBDAAY0BE@$$CBDABHAAY0DB@$$CBD@Z",
     "??$MakeString@$$BY0BE@$$CBDH$$BY0DD@$$CBD@@YAPBDPBDAAY0BE@$$CBDABHAAY0DD@$$CBD@Z",
     "??$MakeString@$$BY0BE@$$CBDH$$BY0DG@$$CBD@@YAPBDPBDAAY0BE@$$CBDABHAAY0DG@$$CBD@Z",
+    "??$MakeString@$$BY0BE@$$CBDH$$BY0DH@$$CBD@@YAPBDPBDAAY0BE@$$CBDABHAAY0DH@$$CBD@Z",
     "??$MakeString@$$BY0BE@$$CBDH$$BY0DN@$$CBD@@YAPBDPBDAAY0BE@$$CBDABHAAY0DN@$$CBD@Z",
     "??$MakeString@$$BY0BE@$$CBDH$$BY0EB@$$CBD@@YAPBDPBDAAY0BE@$$CBDABHAAY0EB@$$CBD@Z",
     "??$MakeString@$$BY0BE@$$CBDH$$BY0ED@$$CBD@@YAPBDPBDAAY0BE@$$CBDABHAAY0ED@$$CBD@Z",
+    "??$MakeString@$$BY0BE@$$CBDH$$BY0EI@$$CBD@@YAPBDPBDAAY0BE@$$CBDABHAAY0EI@$$CBD@Z",
     "??$MakeString@$$BY0BE@$$CBDH$$BY0L@$$CBD@@YAPBDPBDAAY0BE@$$CBDABHAAY0L@$$CBD@Z",
     "??$MakeString@$$BY0BE@$$CBDH$$BY0M@$$CBD@@YAPBDPBDAAY0BE@$$CBDABHAAY0M@$$CBD@Z",
     "??$MakeString@$$BY0BE@$$CBDH$$BY0N@$$CBD@@YAPBDPBDAAY0BE@$$CBDABHAAY0N@$$CBD@Z",
@@ -898,6 +908,7 @@
     "??$MakeString@$$BY0BJ@$$CBDH$$BY09$$CBD@@YAPBDPBDAAY0BJ@$$CBDABHAAY09$$CBD@Z",
     "??$MakeString@$$BY0BJ@$$CBDH$$BY0BA@$$CBD@@YAPBDPBDAAY0BJ@$$CBDABHAAY0BA@$$CBD@Z",
     "??$MakeString@$$BY0BJ@$$CBDH$$BY0BC@$$CBD@@YAPBDPBDAAY0BJ@$$CBDABHAAY0BC@$$CBD@Z",
+    "??$MakeString@$$BY0BJ@$$CBDH$$BY0BD@$$CBD@@YAPBDPBDAAY0BJ@$$CBDABHAAY0BD@$$CBD@Z",
     "??$MakeString@$$BY0BJ@$$CBDH$$BY0BE@$$CBD@@YAPBDPBDAAY0BJ@$$CBDABHAAY0BE@$$CBD@Z",
     "??$MakeString@$$BY0BJ@$$CBDH$$BY0BF@$$CBD@@YAPBDPBDAAY0BJ@$$CBDABHAAY0BF@$$CBD@Z",
     "??$MakeString@$$BY0BJ@$$CBDH$$BY0BG@$$CBD@@YAPBDPBDAAY0BJ@$$CBDABHAAY0BG@$$CBD@Z",
@@ -907,6 +918,7 @@
     "??$MakeString@$$BY0BJ@$$CBDH$$BY0CK@$$CBD@@YAPBDPBDAAY0BJ@$$CBDABHAAY0CK@$$CBD@Z",
     "??$MakeString@$$BY0BJ@$$CBDH$$BY0DA@$$CBD@@YAPBDPBDAAY0BJ@$$CBDABHAAY0DA@$$CBD@Z",
     "??$MakeString@$$BY0BJ@$$CBDH$$BY0DB@$$CBD@@YAPBDPBDAAY0BJ@$$CBDABHAAY0DB@$$CBD@Z",
+    "??$MakeString@$$BY0BJ@$$CBDH$$BY0EF@$$CBD@@YAPBDPBDAAY0BJ@$$CBDABHAAY0EF@$$CBD@Z",
     "??$MakeString@$$BY0BJ@$$CBDH$$BY0L@$$CBD@@YAPBDPBDAAY0BJ@$$CBDABHAAY0L@$$CBD@Z",
     "??$MakeString@$$BY0BJ@$$CBDH$$BY0M@$$CBD@@YAPBDPBDAAY0BJ@$$CBDABHAAY0M@$$CBD@Z",
     "??$MakeString@$$BY0BJ@$$CBDH$$BY0N@$$CBD@@YAPBDPBDAAY0BJ@$$CBDABHAAY0N@$$CBD@Z",
@@ -984,11 +996,14 @@
     "??$MakeString@$$BY0BO@$$CBDH$$BY0BK@$$CBD@@YAPBDPBDAAY0BO@$$CBDABHAAY0BK@$$CBD@Z",
     "??$MakeString@$$BY0BO@$$CBDH$$BY0BP@$$CBD@@YAPBDPBDAAY0BO@$$CBDABHAAY0BP@$$CBD@Z",
     "??$MakeString@$$BY0BO@$$CBDH$$BY0CA@$$CBD@@YAPBDPBDAAY0BO@$$CBDABHAAY0CA@$$CBD@Z",
+    "??$MakeString@$$BY0BO@$$CBDH$$BY0CB@$$CBD@@YAPBDPBDAAY0BO@$$CBDABHAAY0CB@$$CBD@Z",
     "??$MakeString@$$BY0BO@$$CBDH$$BY0CE@$$CBD@@YAPBDPBDAAY0BO@$$CBDABHAAY0CE@$$CBD@Z",
     "??$MakeString@$$BY0BO@$$CBDH$$BY0M@$$CBD@@YAPBDPBDAAY0BO@$$CBDABHAAY0M@$$CBD@Z",
     "??$MakeString@$$BY0BO@$$CBDH$$BY0N@$$CBD@@YAPBDPBDAAY0BO@$$CBDABHAAY0N@$$CBD@Z",
     "??$MakeString@$$BY0BO@$$CBDH$$BY0O@$$CBD@@YAPBDPBDAAY0BO@$$CBDABHAAY0O@$$CBD@Z",
     "??$MakeString@$$BY0BO@$$CBDH$$BY0P@$$CBD@@YAPBDPBDAAY0BO@$$CBDABHAAY0P@$$CBD@Z",
+    "??$MakeString@$$BY0CA@$$CBDH$$BY0BA@$$CBD@@YAPBDPBDAAY0CA@$$CBDABHAAY0BA@$$CBD@Z",
+    "??$MakeString@$$BY0CA@$$CBDH$$BY0BF@$$CBD@@YAPBDPBDAAY0CA@$$CBDABHAAY0BF@$$CBD@Z",
     "??$MakeString@$$BY0CC@$$CBDH$$BY09$$CBD@@YAPBDPBDAAY0CC@$$CBDABHAAY09$$CBD@Z",
     "??$MakeString@$$BY0CC@$$CBDH$$BY0P@$$CBD@@YAPBDPBDAAY0CC@$$CBDABHAAY0P@$$CBD@Z",
     "??$MakeString@$$BY0CD@$$CBDH$$BY09$$CBD@@YAPBDPBDAAY0CD@$$CBDABHAAY09$$CBD@Z",
@@ -1017,6 +1032,7 @@
     "??$MakeString@$$BY0CK@$$CBDH$$BY08$$CBD@@YAPBDPBDAAY0CK@$$CBDABHAAY08$$CBD@Z",
     "??$MakeString@$$BY0CK@$$CBDH$$BY09$$CBD@@YAPBDPBDAAY0CK@$$CBDABHAAY09$$CBD@Z",
     "??$MakeString@$$BY0CK@$$CBDH$$BY0BA@$$CBD@@YAPBDPBDAAY0CK@$$CBDABHAAY0BA@$$CBD@Z",
+    "??$MakeString@$$BY0CK@$$CBDH$$BY0BH@$$CBD@@YAPBDPBDAAY0CK@$$CBDABHAAY0BH@$$CBD@Z",
     "??$MakeString@$$BY0CK@$$CBDH$$BY0BI@$$CBD@@YAPBDPBDAAY0CK@$$CBDABHAAY0BI@$$CBD@Z",
     "??$MakeString@$$BY0CK@$$CBDH$$BY0L@$$CBD@@YAPBDPBDAAY0CK@$$CBDABHAAY0L@$$CBD@Z",
     "??$MakeString@$$BY0CL@$$CBDH$$BY09$$CBD@@YAPBDPBDAAY0CL@$$CBDABHAAY09$$CBD@Z",
@@ -1024,11 +1040,13 @@
     "??$MakeString@$$BY0CL@$$CBDH$$BY0CA@$$CBD@@YAPBDPBDAAY0CL@$$CBDABHAAY0CA@$$CBD@Z",
     "??$MakeString@$$BY0CL@$$CBDH$$BY0L@$$CBD@@YAPBDPBDAAY0CL@$$CBDABHAAY0L@$$CBD@Z",
     "??$MakeString@$$BY0CL@$$CBDH$$BY0N@$$CBD@@YAPBDPBDAAY0CL@$$CBDABHAAY0N@$$CBD@Z",
+    "??$MakeString@$$BY0CL@$$CBDH$$BY0O@$$CBD@@YAPBDPBDAAY0CL@$$CBDABHAAY0O@$$CBD@Z",
     "??$MakeString@$$BY0CM@$$CBDH$$BY03$$CBD@@YAPBDPBDAAY0CM@$$CBDABHAAY03$$CBD@Z",
     "??$MakeString@$$BY0CM@$$CBDH$$BY04$$CBD@@YAPBDPBDAAY0CM@$$CBDABHAAY04$$CBD@Z",
     "??$MakeString@$$BY0CM@$$CBDH$$BY05$$CBD@@YAPBDPBDAAY0CM@$$CBDABHAAY05$$CBD@Z",
     "??$MakeString@$$BY0CM@$$CBDH$$BY08$$CBD@@YAPBDPBDAAY0CM@$$CBDABHAAY08$$CBD@Z",
     "??$MakeString@$$BY0CM@$$CBDH$$BY0BB@$$CBD@@YAPBDPBDAAY0CM@$$CBDABHAAY0BB@$$CBD@Z",
+    "??$MakeString@$$BY0CM@$$CBDH$$BY0BD@$$CBD@@YAPBDPBDAAY0CM@$$CBDABHAAY0BD@$$CBD@Z",
     "??$MakeString@$$BY0CM@$$CBDH$$BY0CE@$$CBD@@YAPBDPBDAAY0CM@$$CBDABHAAY0CE@$$CBD@Z",
     "??$MakeString@$$BY0CM@$$CBDH$$BY0DB@$$CBD@@YAPBDPBDAAY0CM@$$CBDABHAAY0DB@$$CBD@Z",
     "??$MakeString@$$BY0CM@$$CBDH$$BY0DD@$$CBD@@YAPBDPBDAAY0CM@$$CBDABHAAY0DD@$$CBD@Z",
@@ -1049,6 +1067,7 @@
     "??$MakeString@$$BY0CP@$$CBDH$$BY0BF@$$CBD@@YAPBDPBDAAY0CP@$$CBDABHAAY0BF@$$CBD@Z",
     "??$MakeString@$$BY0DA@$$CBDH$$BY05$$CBD@@YAPBDPBDAAY0DA@$$CBDABHAAY05$$CBD@Z",
     "??$MakeString@$$BY0DA@$$CBDH$$BY0BC@$$CBD@@YAPBDPBDAAY0DA@$$CBDABHAAY0BC@$$CBD@Z",
+    "??$MakeString@$$BY0DA@$$CBDH$$BY0BI@$$CBD@@YAPBDPBDAAY0DA@$$CBDABHAAY0BI@$$CBD@Z",
     "??$MakeString@$$BY0DA@$$CBDH$$BY0CF@$$CBD@@YAPBDPBDAAY0DA@$$CBDABHAAY0CF@$$CBD@Z",
     "??$MakeString@$$BY0DA@$$CBDH$$BY0CH@$$CBD@@YAPBDPBDAAY0DA@$$CBDABHAAY0CH@$$CBD@Z",
     "??$MakeString@$$BY0DB@$$CBDH$$BY05$$CBD@@YAPBDPBDAAY0DB@$$CBDABHAAY05$$CBD@Z",
@@ -1056,12 +1075,17 @@
     "??$MakeString@$$BY0DB@$$CBDH$$BY0BE@$$CBD@@YAPBDPBDAAY0DB@$$CBDABHAAY0BE@$$CBD@Z",
     "??$MakeString@$$BY0DB@$$CBDH$$BY0BH@$$CBD@@YAPBDPBDAAY0DB@$$CBDABHAAY0BH@$$CBD@Z",
     "??$MakeString@$$BY0DB@$$CBDH$$BY0CB@$$CBD@@YAPBDPBDAAY0DB@$$CBDABHAAY0CB@$$CBD@Z",
+    "??$MakeString@$$BY0DB@$$CBDH$$BY0EA@$$CBD@@YAPBDPBDAAY0DB@$$CBDABHAAY0EA@$$CBD@Z",
     "??$MakeString@$$BY0DB@$$CBDH$$BY0M@$$CBD@@YAPBDPBDAAY0DB@$$CBDABHAAY0M@$$CBD@Z",
+    "??$MakeString@$$BY0DC@$$CBDH$$BY0BH@$$CBD@@YAPBDPBDAAY0DC@$$CBDABHAAY0BH@$$CBD@Z",
     "??$MakeString@$$BY0DE@$$CBDH$$BY0BF@$$CBD@@YAPBDPBDAAY0DE@$$CBDABHAAY0BF@$$CBD@Z",
+    "??$MakeString@$$BY0DE@$$CBDH$$BY0P@$$CBD@@YAPBDPBDAAY0DE@$$CBDABHAAY0P@$$CBD@Z",
     "??$MakeString@$$BY0DI@$$CBDH$$BY05$$CBD@@YAPBDPBDAAY0DI@$$CBDABHAAY05$$CBD@Z",
     "??$MakeString@$$BY0DI@$$CBDH$$BY09$$CBD@@YAPBDPBDAAY0DI@$$CBDABHAAY09$$CBD@Z",
     "??$MakeString@$$BY0DI@$$CBDH$$BY0BB@$$CBD@@YAPBDPBDAAY0DI@$$CBDABHAAY0BB@$$CBD@Z",
     "??$MakeString@$$BY0DI@$$CBDH$$BY0L@$$CBD@@YAPBDPBDAAY0DI@$$CBDABHAAY0L@$$CBD@Z",
+    "??$MakeString@$$BY0DJ@$$CBDH$$BY0CA@$$CBD@@YAPBDPBDAAY0DJ@$$CBDABHAAY0CA@$$CBD@Z",
+    "??$MakeString@$$BY0DJ@$$CBDH$$BY0CP@$$CBD@@YAPBDPBDAAY0DJ@$$CBDABHAAY0CP@$$CBD@Z",
     "??$MakeString@$$BY0DJ@$$CBDH$$BY0DO@$$CBD@@YAPBDPBDAAY0DJ@$$CBDABHAAY0DO@$$CBD@Z",
     "??$MakeString@$$BY0DK@$$CBDH$$BY0BB@$$CBD@@YAPBDPBDAAY0DK@$$CBDABHAAY0BB@$$CBD@Z",
     "??$MakeString@$$BY0DK@$$CBDH$$BY0BJ@$$CBD@@YAPBDPBDAAY0DK@$$CBDABHAAY0BJ@$$CBD@Z",
@@ -1073,6 +1097,8 @@
     "??$MakeString@$$BY0DK@$$CBDH$$BY0DK@$$CBD@@YAPBDPBDAAY0DK@$$CBDABH1@Z",
     "??$MakeString@$$BY0DL@$$CBDH$$BY05$$CBD@@YAPBDPBDAAY0DL@$$CBDABHAAY05$$CBD@Z",
     "??$MakeString@$$BY0DO@$$CBDH$$BY0CK@$$CBD@@YAPBDPBDAAY0DO@$$CBDABHAAY0CK@$$CBD@Z",
+    "??$MakeString@$$BY0EE@$$CBDH$$BY0BA@$$CBD@@YAPBDPBDAAY0EE@$$CBDABHAAY0BA@$$CBD@Z",
+    "??$MakeString@$$BY0EE@$$CBDH$$BY0P@$$CBD@@YAPBDPBDAAY0EE@$$CBDABHAAY0P@$$CBD@Z",
     "??$MakeString@$$BY0FI@$$CBDH$$BY0BA@$$CBD@@YAPBDPBDAAY0FI@$$CBDABHAAY0BA@$$CBD@Z",
     "??$MakeString@$$BY0FI@$$CBDH$$BY0P@$$CBD@@YAPBDPBDAAY0FI@$$CBDABHAAY0P@$$CBD@Z",
     "??$MakeString@$$BY0L@$$CBDH$$BY01$$CBD@@YAPBDPBDAAY0L@$$CBDABHAAY01$$CBD@Z",
@@ -1102,6 +1128,7 @@
     "??$MakeString@$$BY0L@$$CBDH$$BY0CA@$$CBD@@YAPBDPBDAAY0L@$$CBDABHAAY0CA@$$CBD@Z",
     "??$MakeString@$$BY0L@$$CBDH$$BY0CB@$$CBD@@YAPBDPBDAAY0L@$$CBDABHAAY0CB@$$CBD@Z",
     "??$MakeString@$$BY0L@$$CBDH$$BY0CE@$$CBD@@YAPBDPBDAAY0L@$$CBDABHAAY0CE@$$CBD@Z",
+    "??$MakeString@$$BY0L@$$CBDH$$BY0CF@$$CBD@@YAPBDPBDAAY0L@$$CBDABHAAY0CF@$$CBD@Z",
     "??$MakeString@$$BY0L@$$CBDH$$BY0CG@$$CBD@@YAPBDPBDAAY0L@$$CBDABHAAY0CG@$$CBD@Z",
     "??$MakeString@$$BY0L@$$CBDH$$BY0CH@$$CBD@@YAPBDPBDAAY0L@$$CBDABHAAY0CH@$$CBD@Z",
     "??$MakeString@$$BY0L@$$CBDH$$BY0CL@$$CBD@@YAPBDPBDAAY0L@$$CBDABHAAY0CL@$$CBD@Z",
@@ -1119,6 +1146,7 @@
     "??$MakeString@$$BY0L@$$CBDH$$BY0EM@$$CBD@@YAPBDPBDAAY0L@$$CBDABHAAY0EM@$$CBD@Z",
     "??$MakeString@$$BY0L@$$CBDH$$BY0FD@$$CBD@@YAPBDPBDAAY0L@$$CBDABHAAY0FD@$$CBD@Z",
     "??$MakeString@$$BY0L@$$CBDH$$BY0GH@$$CBD@@YAPBDPBDAAY0L@$$CBDABHAAY0GH@$$CBD@Z",
+    "??$MakeString@$$BY0L@$$CBDH$$BY0GL@$$CBD@@YAPBDPBDAAY0L@$$CBDABHAAY0GL@$$CBD@Z",
     "??$MakeString@$$BY0L@$$CBDH$$BY0L@$$CBD@@YAPBDPBDAAY0L@$$CBDABH1@Z",
     "??$MakeString@$$BY0L@$$CBDH$$BY0M@$$CBD@@YAPBDPBDAAY0L@$$CBDABHAAY0M@$$CBD@Z",
     "??$MakeString@$$BY0L@$$CBDH$$BY0N@$$CBD@@YAPBDPBDAAY0L@$$CBDABHAAY0N@$$CBD@Z",
@@ -1206,6 +1234,7 @@
     "??$MakeString@$$BY0N@$$CBDH$$BY0DH@$$CBD@@YAPBDPBDAAY0N@$$CBDABHAAY0DH@$$CBD@Z",
     "??$MakeString@$$BY0N@$$CBDH$$BY0DM@$$CBD@@YAPBDPBDAAY0N@$$CBDABHAAY0DM@$$CBD@Z",
     "??$MakeString@$$BY0N@$$CBDH$$BY0ED@$$CBD@@YAPBDPBDAAY0N@$$CBDABHAAY0ED@$$CBD@Z",
+    "??$MakeString@$$BY0N@$$CBDH$$BY0EH@$$CBD@@YAPBDPBDAAY0N@$$CBDABHAAY0EH@$$CBD@Z",
     "??$MakeString@$$BY0N@$$CBDH$$BY0EL@$$CBD@@YAPBDPBDAAY0N@$$CBDABHAAY0EL@$$CBD@Z",
     "??$MakeString@$$BY0N@$$CBDH$$BY0EN@$$CBD@@YAPBDPBDAAY0N@$$CBDABHAAY0EN@$$CBD@Z",
     "??$MakeString@$$BY0N@$$CBDH$$BY0EP@$$CBD@@YAPBDPBDAAY0N@$$CBDABHAAY0EP@$$CBD@Z",
@@ -1308,7 +1337,39 @@
    ],
    "sites": 719,
    "survivor_candidates": 1,
-   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 640 folded spelling(s), 719 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 640 folded spelling(s), 719 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE.",
+   "widened_members": [
+    "??$MakeString@$$BY08$$CBDH$$BY0EL@$$CBD@@YAPBDPBDAAY08$$CBDABHAAY0EL@$$CBD@Z",
+    "??$MakeString@$$BY09$$CBDH$$BY0BK@$$CBD@@YAPBDPBDAAY09$$CBDABHAAY0BK@$$CBD@Z",
+    "??$MakeString@$$BY09$$CBDH$$BY0CJ@$$CBD@@YAPBDPBDAAY09$$CBDABHAAY0CJ@$$CBD@Z",
+    "??$MakeString@$$BY0BC@$$CBDH$$BY0BL@$$CBD@@YAPBDPBDAAY0BC@$$CBDABHAAY0BL@$$CBD@Z",
+    "??$MakeString@$$BY0BC@$$CBDH$$BY0BM@$$CBD@@YAPBDPBDAAY0BC@$$CBDABHAAY0BM@$$CBD@Z",
+    "??$MakeString@$$BY0BC@$$CBDH$$BY0BN@$$CBD@@YAPBDPBDAAY0BC@$$CBDABHAAY0BN@$$CBD@Z",
+    "??$MakeString@$$BY0BD@$$CBDH$$BY0CI@$$CBD@@YAPBDPBDAAY0BD@$$CBDABHAAY0CI@$$CBD@Z",
+    "??$MakeString@$$BY0BD@$$CBDH$$BY0EF@$$CBD@@YAPBDPBDAAY0BD@$$CBDABHAAY0EF@$$CBD@Z",
+    "??$MakeString@$$BY0BE@$$CBDH$$BY0DH@$$CBD@@YAPBDPBDAAY0BE@$$CBDABHAAY0DH@$$CBD@Z",
+    "??$MakeString@$$BY0BE@$$CBDH$$BY0EI@$$CBD@@YAPBDPBDAAY0BE@$$CBDABHAAY0EI@$$CBD@Z",
+    "??$MakeString@$$BY0BJ@$$CBDH$$BY0BD@$$CBD@@YAPBDPBDAAY0BJ@$$CBDABHAAY0BD@$$CBD@Z",
+    "??$MakeString@$$BY0BJ@$$CBDH$$BY0EF@$$CBD@@YAPBDPBDAAY0BJ@$$CBDABHAAY0EF@$$CBD@Z",
+    "??$MakeString@$$BY0BO@$$CBDH$$BY0CB@$$CBD@@YAPBDPBDAAY0BO@$$CBDABHAAY0CB@$$CBD@Z",
+    "??$MakeString@$$BY0CA@$$CBDH$$BY0BA@$$CBD@@YAPBDPBDAAY0CA@$$CBDABHAAY0BA@$$CBD@Z",
+    "??$MakeString@$$BY0CA@$$CBDH$$BY0BF@$$CBD@@YAPBDPBDAAY0CA@$$CBDABHAAY0BF@$$CBD@Z",
+    "??$MakeString@$$BY0CK@$$CBDH$$BY0BH@$$CBD@@YAPBDPBDAAY0CK@$$CBDABHAAY0BH@$$CBD@Z",
+    "??$MakeString@$$BY0CL@$$CBDH$$BY0O@$$CBD@@YAPBDPBDAAY0CL@$$CBDABHAAY0O@$$CBD@Z",
+    "??$MakeString@$$BY0CM@$$CBDH$$BY0BD@$$CBD@@YAPBDPBDAAY0CM@$$CBDABHAAY0BD@$$CBD@Z",
+    "??$MakeString@$$BY0DA@$$CBDH$$BY0BI@$$CBD@@YAPBDPBDAAY0DA@$$CBDABHAAY0BI@$$CBD@Z",
+    "??$MakeString@$$BY0DB@$$CBDH$$BY0EA@$$CBD@@YAPBDPBDAAY0DB@$$CBDABHAAY0EA@$$CBD@Z",
+    "??$MakeString@$$BY0DC@$$CBDH$$BY0BH@$$CBD@@YAPBDPBDAAY0DC@$$CBDABHAAY0BH@$$CBD@Z",
+    "??$MakeString@$$BY0DE@$$CBDH$$BY0P@$$CBD@@YAPBDPBDAAY0DE@$$CBDABHAAY0P@$$CBD@Z",
+    "??$MakeString@$$BY0DJ@$$CBDH$$BY0CA@$$CBD@@YAPBDPBDAAY0DJ@$$CBDABHAAY0CA@$$CBD@Z",
+    "??$MakeString@$$BY0DJ@$$CBDH$$BY0CP@$$CBD@@YAPBDPBDAAY0DJ@$$CBDABHAAY0CP@$$CBD@Z",
+    "??$MakeString@$$BY0EE@$$CBDH$$BY0BA@$$CBD@@YAPBDPBDAAY0EE@$$CBDABHAAY0BA@$$CBD@Z",
+    "??$MakeString@$$BY0EE@$$CBDH$$BY0P@$$CBD@@YAPBDPBDAAY0EE@$$CBDABHAAY0P@$$CBD@Z",
+    "??$MakeString@$$BY0L@$$CBDH$$BY0CF@$$CBD@@YAPBDPBDAAY0L@$$CBDABHAAY0CF@$$CBD@Z",
+    "??$MakeString@$$BY0L@$$CBDH$$BY0GL@$$CBD@@YAPBDPBDAAY0L@$$CBDABHAAY0GL@$$CBD@Z",
+    "??$MakeString@$$BY0N@$$CBDH$$BY0EH@$$CBD@@YAPBDPBDAAY0N@$$CBDABHAAY0EH@$$CBD@Z"
+   ],
+   "widen_evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors sharing address 0x824d1870; each admitted member's compiled body is masked-equal to the target's body at that address, is the ONLY body in the target object set with that masked shape, and every relocation site resolves to the same retail address on both sides. Gates MAP-1/MAP-2/TGT/WRITE/BODY/UNIQ/RESOLVE. 32 member(s) of the map group refused."
   },
   {
    "name": "MakeString@0x82e21d80",
@@ -1645,11 +1706,16 @@
    "survivor": "??$MakeString@W4ReqType@@@@YAPBDPBDABW4ReqType@@@Z",
    "folded": [
     "??$MakeString@W4CURLcode@@@@YAPBDPBDABW4CURLcode@@@Z",
+    "??$MakeString@W4State@HttpGet@@@@YAPBDPBDABW4State@HttpGet@@@Z",
     "??$MakeString@W4State@XLSPConnection@@@@YAPBDPBDABW4State@XLSPConnection@@@Z"
    ],
    "sites": 2,
    "survivor_candidates": 1,
-   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 2 folded spelling(s), 2 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 2 folded spelling(s), 2 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE.",
+   "widened_members": [
+    "??$MakeString@W4State@HttpGet@@@@YAPBDPBDABW4State@HttpGet@@@Z"
+   ],
+   "widen_evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors sharing address 0x8255a0a0; each admitted member's compiled body is masked-equal to the target's body at that address, is the ONLY body in the target object set with that masked shape, and every relocation site resolves to the same retail address on both sides. Gates MAP-1/MAP-2/TGT/WRITE/BODY/UNIQ/RESOLVE. 0 member(s) of the map group refused."
   },
   {
    "name": "SaveStdPtr@0x82970e70",
@@ -1691,12 +1757,21 @@
    "survivor": "??$_Copy_Construct@U?$pair@$$CBVString@@I@stlpmtx_std@@@stlpmtx_std@@YAXPAU?$pair@$$CBVString@@I@0@ABU10@@Z",
    "folded": [
     "??$_Copy_Construct@U?$pair@VString@@P6APAVLoader@@ABVFilePath@@W4LoaderPos@@@Z@stlpmtx_std@@@stlpmtx_std@@YAXPAU?$pair@VString@@P6APAVLoader@@ABVFilePath@@W4LoaderPos@@@Z@0@ABU10@@Z",
+    "??$_Copy_Construct@UDeferredAward@?A0xf8e4b4b5@@@stlpmtx_std@@YAXPAUDeferredAward@?A0xf8e4b4b5@@ABU12@@Z",
+    "??$_Copy_Construct@ULabel@?A0x81ddebd1@@@stlpmtx_std@@YAXPAULabel@?A0x81ddebd1@@ABU12@@Z",
     "??$_Copy_Construct@VSampleMarker@@@stlpmtx_std@@YAXPAVSampleMarker@@ABV1@@Z",
+    "??$_Param_Construct@ULabel@?A0x81ddebd1@@U12@@stlpmtx_std@@YAXPAULabel@?A0x81ddebd1@@ABU12@@Z",
     "??$_Param_Construct@VSampleMarker@@V1@@stlpmtx_std@@YAXPAVSampleMarker@@ABV1@@Z"
    ],
    "sites": 1,
    "survivor_candidates": 1,
-   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 1 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 1 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE.",
+   "widened_members": [
+    "??$_Copy_Construct@UDeferredAward@?A0xf8e4b4b5@@@stlpmtx_std@@YAXPAUDeferredAward@?A0xf8e4b4b5@@ABU12@@Z",
+    "??$_Copy_Construct@ULabel@?A0x81ddebd1@@@stlpmtx_std@@YAXPAULabel@?A0x81ddebd1@@ABU12@@Z",
+    "??$_Param_Construct@ULabel@?A0x81ddebd1@@U12@@stlpmtx_std@@YAXPAULabel@?A0x81ddebd1@@ABU12@@Z"
+   ],
+   "widen_evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors sharing address 0x8273b9e8; each admitted member's compiled body is masked-equal to the target's body at that address, is the ONLY body in the target object set with that masked shape, and every relocation site resolves to the same retail address on both sides. Gates MAP-1/MAP-2/TGT/WRITE/BODY/UNIQ/RESOLVE. 0 member(s) of the map group refused."
   },
   {
    "name": "_Copy_Construct@0x826f4f58",
@@ -2557,12 +2632,17 @@
    "address": "0x8254e800",
    "survivor": "??$__median@PAVAllocInfo@@P6A_NABQAV1@0@Z@stlpmtx_std@@YAABQAVAllocInfo@@ABQAV1@00P6A_N00@Z@Z",
    "folded": [
+    "??$__median@UCuePoint@?A0x81ddebd1@@P6A_NABU12@0@Z@stlpmtx_std@@YAABUCuePoint@?A0x81ddebd1@@ABU12@00P6A_N00@Z@Z",
     "??$__median@UGroupDrawDist@@P6A_NABU1@0@Z@stlpmtx_std@@YAABUGroupDrawDist@@ABU1@00P6A_N00@Z@Z",
     "??$__median@UMidi@MidiReader@@P6A_NABU12@0@Z@stlpmtx_std@@YAABUMidi@MidiReader@@ABU12@00P6A_N00@Z@Z"
    ],
    "sites": 1,
    "survivor_candidates": 1,
-   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 1 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 1 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE.",
+   "widened_members": [
+    "??$__median@UCuePoint@?A0x81ddebd1@@P6A_NABU12@0@Z@stlpmtx_std@@YAABUCuePoint@?A0x81ddebd1@@ABU12@00P6A_N00@Z@Z"
+   ],
+   "widen_evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors sharing address 0x8254e800; each admitted member's compiled body is masked-equal to the target's body at that address, is the ONLY body in the target object set with that masked shape, and every relocation site resolves to the same retail address on both sides. Gates MAP-1/MAP-2/TGT/WRITE/BODY/UNIQ/RESOLVE. 0 member(s) of the map group refused."
   },
   {
    "name": "__median@0x823619c0",
@@ -2834,6 +2914,7 @@
     "??$__uninitialized_copy@PAUBuf@StringTable@@PAU12@@stlpmtx_std@@YAPAUBuf@StringTable@@PAU12@00ABU__false_type@0@@Z",
     "??$__uninitialized_copy@PAUCacheIDStoreEntry@CacheMgr@@PAU12@@stlpmtx_std@@YAPAUCacheIDStoreEntry@CacheMgr@@PAU12@00ABU__false_type@0@@Z",
     "??$__uninitialized_copy@PAUChecksumData@@PAU1@@stlpmtx_std@@YAPAUChecksumData@@PAU1@00ABU__false_type@0@@Z",
+    "??$__uninitialized_copy@PAUCuePoint@?A0x81ddebd1@@PAU12@@stlpmtx_std@@YAPAUCuePoint@?A0x81ddebd1@@PAU12@00ABU__false_type@0@@Z",
     "??$__uninitialized_copy@PAUFacePriority@@PAU1@@stlpmtx_std@@YAPAUFacePriority@@PAU1@00ABU__false_type@0@@Z",
     "??$__uninitialized_copy@PAUGroupDrawDist@@PAU1@@stlpmtx_std@@YAPAUGroupDrawDist@@PAU1@00ABU__false_type@0@@Z",
     "??$__uninitialized_copy@PAUJointPos@FreestyleMoveRecorder@@PAU12@@stlpmtx_std@@YAPAUJointPos@FreestyleMoveRecorder@@PAU12@00ABU__false_type@0@@Z",
@@ -2866,7 +2947,11 @@
    ],
    "sites": 6,
    "survivor_candidates": 1,
-   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 6 folded spelling(s), 6 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 6 folded spelling(s), 6 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE.",
+   "widened_members": [
+    "??$__uninitialized_copy@PAUCuePoint@?A0x81ddebd1@@PAU12@@stlpmtx_std@@YAPAUCuePoint@?A0x81ddebd1@@PAU12@00ABU__false_type@0@@Z"
+   ],
+   "widen_evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors sharing address 0x82704b70; each admitted member's compiled body is masked-equal to the target's body at that address, is the ONLY body in the target object set with that masked shape, and every relocation site resolves to the same retail address on both sides. Gates MAP-1/MAP-2/TGT/WRITE/BODY/UNIQ/RESOLVE. 0 member(s) of the map group refused."
   },
   {
    "name": "__uninitialized_copy@0x825dc100",
@@ -4097,12 +4182,21 @@
    "survivor": "?GetItemCount@ChallengeHeaderNode@@UAAHXZ",
    "folded": [
     "?AsyncUnload@LoadMgr@@QBAHXZ",
+    "?GetItemCount@FitnessCalorieHeaderNode@@UAAHXZ",
+    "?GetItemCount@MQSongHeaderNode@@UAAHXZ",
+    "?GetItemCount@PlaylistHeaderNode@@UAAHXZ",
     "?GetNumRestarts@Game@@QBAHXZ",
     "?ParentList@UIListWidget@@QAAPAVUIList@@XZ"
    ],
    "sites": 2,
    "survivor_candidates": 1,
-   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 2 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 1 folded spelling(s), 2 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE.",
+   "widened_members": [
+    "?GetItemCount@FitnessCalorieHeaderNode@@UAAHXZ",
+    "?GetItemCount@MQSongHeaderNode@@UAAHXZ",
+    "?GetItemCount@PlaylistHeaderNode@@UAAHXZ"
+   ],
+   "widen_evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors sharing address 0x82b05a48; each admitted member's compiled body is masked-equal to the target's body at that address, is the ONLY body in the target object set with that masked shape, and every relocation site resolves to the same retail address on both sides. Gates MAP-1/MAP-2/TGT/WRITE/BODY/UNIQ/RESOLVE. 0 member(s) of the map group refused."
   },
   {
    "name": "GetLastResult@0x82e07da0",
@@ -4156,11 +4250,18 @@
     "?GetDynamicPrereqsNumSongs@Accomplishment@@QBAHXZ",
     "?GetPort@DingoServer@@UBAIXZ",
     "?GetSampleRate@SynthSample@@QBAHXZ",
-    "?GetXLSPFilter@NetCacheMgr@@QBAPBDXZ"
+    "?GetXLSPFilter@NetCacheMgr@@QBAPBDXZ",
+    "?Mirror@HamMove@@QAAPAV1@XZ",
+    "?SelectedAux@UISlider@@MBAHXZ"
    ],
    "sites": 2,
    "survivor_candidates": 1,
-   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 2 folded spelling(s), 2 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 2 folded spelling(s), 2 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE.",
+   "widened_members": [
+    "?Mirror@HamMove@@QAAPAV1@XZ",
+    "?SelectedAux@UISlider@@MBAHXZ"
+   ],
+   "widen_evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors sharing address 0x82af68f0; each admitted member's compiled body is masked-equal to the target's body at that address, is the ONLY body in the target object set with that masked shape, and every relocation site resolves to the same retail address on both sides. Gates MAP-1/MAP-2/TGT/WRITE/BODY/UNIQ/RESOLVE. 0 member(s) of the map group refused."
   },
   {
    "name": "GetMoveFrames@0x824b0bc8",
@@ -4205,6 +4306,7 @@
    "survivor": "?GetObj@?$ObjRefConcrete@VMoggClip@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
    "folded": [
     "?GetBaseFileName@SongInfoCopy@@UBAPBDXZ",
+    "?GetDeviceID@CacheIDXbox@@UBAIXZ",
     "?GetFilename@MidiReader@@QBAPBDXZ",
     "?GetObj@?$ObjRefConcrete@VADSR@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
     "?GetObj@?$ObjRefConcrete@VAnimTask@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ",
@@ -4249,7 +4351,11 @@
    ],
    "sites": 4,
    "survivor_candidates": 1,
-   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 4 folded spelling(s), 4 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 4 folded spelling(s), 4 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE.",
+   "widened_members": [
+    "?GetDeviceID@CacheIDXbox@@UBAIXZ"
+   ],
+   "widen_evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors sharing address 0x823c9b80; each admitted member's compiled body is masked-equal to the target's body at that address, is the ONLY body in the target object set with that masked shape, and every relocation site resolves to the same retail address on both sides. Gates MAP-1/MAP-2/TGT/WRITE/BODY/UNIQ/RESOLVE. 0 member(s) of the map group refused."
   },
   {
    "name": "GetRemoteUser@0x82e2aea8",
@@ -4872,9 +4978,11 @@
    "folded": [
     "?BeginFromBuffer@MovieImpl@@UAA_NPAXH_NM111H@Z",
     "?BitmapFont@RndFontBase@@UBA_NXZ",
+    "?Blur@DOFProc@@UAA_NXZ",
     "?CDGetError@@YAHXZ",
     "?Cached@BinStream@@UBA_NXZ",
     "?CamOverride@RndDrawable@@UAAPAVRndCam@@XZ",
+    "?CanHaveFocus@UILabel@@UAA_NXZ",
     "?CanModal@Rnd@@MAA_NW4ModalType@Debug@@@Z",
     "?CanTrick@RhythmBattle@@QAA_NVSymbol@@@Z",
     "?CastVolume@PhysicsManager@@UAA_NPBVSegment@@MIAAPAVObject@Hmx@@AAPAVObjectDir@@AAVVector3@@3@Z",
@@ -4884,6 +4992,9 @@
     "?CheckOpen@MovieImpl@@UAA_N_N@Z",
     "?CollideShowing@RndDrawable@@UAAPAV1@ABVSegment@@AAMAAVPlane@@@Z",
     "?ContentAltDirs@Callback@ContentMgr@@UAAPAV?$vector@VString@@V?$StlNodeAlloc@VString@@@stlpmtx_std@@@stlpmtx_std@@XZ",
+    "?ContentDir@ContentLoadingPanel@@UAAPBDXZ",
+    "?ContentDir@PreloadPanel@@UAAPBDXZ",
+    "?ContentDir@SongPreview@@UAAPBDXZ",
     "?ContentPath@ContentMgr@@UAAPBDH@Z",
     "?CreateElement@UIListSlot@@MAAPAVUIListSlotElement@@PAVUIList@@@Z",
     "?CurrentJumpPoints@Stream@@UAA_NAAUMarker@@0@Z",
@@ -4920,6 +5031,8 @@
     "?GetFX@StreamNull@@UBA_NH@Z",
     "?GetFXChain@Synth@@UBA_NXZ",
     "?GetFXMode@Synth@@UBA?AW4FXMode@@H@Z",
+    "?GetFileHandle@AsyncFileHolmes@@MAA_NAAPAX@Z",
+    "?GetFileHandle@AsyncFileWin@@MAA_NAAPAX@Z",
     "?GetFileHandle@BufFile@@UAA_NAAPAX@Z",
     "?GetFileHandle@FileCacheFile@@UAA_NAAPAX@Z",
     "?GetFileHandle@NullFile@@UAA_NAAPAX@Z",
@@ -4981,13 +5094,19 @@
     "?IsLoaded@HamMasterLoader@@UBA_NXZ",
     "?IsLoaded@HxMaster@@UAA_NXZ",
     "?IsLoaded@NullLoader@@UBA_NXZ",
+    "?IsLoading@MovieImpl@@UBA_NXZ",
     "?IsMicConnected@Synth@@UBA_NH@Z",
     "?IsMultiMicDevice@Mic@@UBA_NXZ",
+    "?IsOpen@MovieImpl@@UBA_NXZ",
+    "?IsOverride@LiveCameraInput@@UBA_NXZ",
     "?IsPaused@Stream@@UBA_NXZ",
     "?IsPlaying@Mic@@UAA_NXZ",
     "?IsPrivate@HamSongMetadata@@QBA_NXZ",
     "?IsRelevantForSong@Accomplishment@@UBA_NVSymbol@@@Z",
     "?IsSnappableAtData@UIListProvider@@UBA_NH@Z",
+    "?IsStandard@FxSendPitchShift360@@UBA_NXZ",
+    "?IsStandard@FxSendReverb360@@UBA_NXZ",
+    "?IsStandard@FxSendSynapse360@@UBA_NXZ",
     "?IsSymbolEntryFulfilled@Accomplishment@@UBA_NPAVHamProfile@@VSymbol@@@Z",
     "?IsUsingDolby@Synth@@UBA_NXZ",
     "?IsWebSvcRequest@DingoJob@@UBA_NXZ",
@@ -4998,6 +5117,8 @@
     "?MarkerAt@Stream@@UBA_NHAAUMarker@@@Z",
     "?MarkerListSize@Stream@@UBAHXZ",
     "?Mat@HamNavProvider@@UBAPAVRndMat@@HHPAVUIListMesh@@@Z",
+    "?Mat@HamStoreFilterProvider@@UBAPAVRndMat@@HHPAVUIListMesh@@@Z",
+    "?Mat@HamStoreProvider@@UBAPAVRndMat@@HHPAVUIListMesh@@@Z",
     "?Mat@NavListSortNode@@UBAPAVRndMat@@PAVUIListMesh@@@Z",
     "?Mat@RndFontBase@@UBAPAVRndMat@@XZ",
     "?MustFinishBeforeNext@WebSvcRequest@@MAA_NXZ",
@@ -5013,6 +5134,9 @@
     "?Parent@ObjRef@@UBAPAVObjRefOwner@@XZ",
     "?Paused@MovieImpl@@UBA_NXZ",
     "?Poll@MovieImpl@@UAA_NXZ",
+    "?PollEnabled@Flow@@UBA_NXZ",
+    "?PollEnabled@RndEnterable@@UBA_NXZ",
+    "?PollEnabled@RndShockwave@@UBA_NXZ",
     "?PollNewFrame@LiveCameraInput@@MAAPBUSkeletonFrame@@XZ",
     "?PostProcessTexture@NgRnd@@UAAPAVRndTex@@XZ",
     "?PreDepthTexture@NgRnd@@UAAPAVRndTex@@XZ",
@@ -5023,6 +5147,7 @@
     "?Ready@MovieImpl@@UBA_NXZ",
     "?RefOwner@DirLoader@@UBAPAVObject@Hmx@@XZ",
     "?RefOwner@ObjRef@@UBAPAVObject@Hmx@@XZ",
+    "?RefOwner@PhysicsManager@@UBAPAVObject@Hmx@@XZ",
     "?RefOwner@PropKeys@@UBAPAVObject@Hmx@@XZ",
     "?RemoveKey@PropKeys@@UAAHH@Z",
     "?RemoveRange@PropKeys@@UAAHMM@Z",
@@ -5031,6 +5156,8 @@
     "?Seek@NullFile@@UAAHHH@Z",
     "?SelectionIs@NavListSortMgr@@UAA_NVSymbol@@@Z",
     "?SelectionIs@PlaylistSortMgr@@UAA_NVSymbol@@@Z",
+    "?SetFrameException@PropKeys@@UAA_NM@Z",
+    "?ShouldUseLocalNavlist@MultiUserGesturePanel@@UBA_NXZ",
     "?ShowBestAfterEarn@AccomplishmentSongConditional@@UBA_NXZ",
     "?Size@NullFile@@UAAHXZ",
     "?SkipFirstFrame@Ham1EuclideanNode@@UBA_NXZ",
@@ -5057,7 +5184,31 @@
    ],
    "sites": 8,
    "survivor_candidates": 1,
-   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 6 folded spelling(s), 8 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 6 folded spelling(s), 8 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE.",
+   "widened_members": [
+    "?Blur@DOFProc@@UAA_NXZ",
+    "?CanHaveFocus@UILabel@@UAA_NXZ",
+    "?ContentDir@ContentLoadingPanel@@UAAPBDXZ",
+    "?ContentDir@PreloadPanel@@UAAPBDXZ",
+    "?ContentDir@SongPreview@@UAAPBDXZ",
+    "?GetFileHandle@AsyncFileHolmes@@MAA_NAAPAX@Z",
+    "?GetFileHandle@AsyncFileWin@@MAA_NAAPAX@Z",
+    "?IsLoading@MovieImpl@@UBA_NXZ",
+    "?IsOpen@MovieImpl@@UBA_NXZ",
+    "?IsOverride@LiveCameraInput@@UBA_NXZ",
+    "?IsStandard@FxSendPitchShift360@@UBA_NXZ",
+    "?IsStandard@FxSendReverb360@@UBA_NXZ",
+    "?IsStandard@FxSendSynapse360@@UBA_NXZ",
+    "?Mat@HamStoreFilterProvider@@UBAPAVRndMat@@HHPAVUIListMesh@@@Z",
+    "?Mat@HamStoreProvider@@UBAPAVRndMat@@HHPAVUIListMesh@@@Z",
+    "?PollEnabled@Flow@@UBA_NXZ",
+    "?PollEnabled@RndEnterable@@UBA_NXZ",
+    "?PollEnabled@RndShockwave@@UBA_NXZ",
+    "?RefOwner@PhysicsManager@@UBAPAVObject@Hmx@@XZ",
+    "?SetFrameException@PropKeys@@UAA_NM@Z",
+    "?ShouldUseLocalNavlist@MultiUserGesturePanel@@UBA_NXZ"
+   ],
+   "widen_evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors sharing address 0x82aeae70; each admitted member's compiled body is masked-equal to the target's body at that address, is the ONLY body in the target object set with that masked shape, and every relocation site resolves to the same retail address on both sides. Gates MAP-1/MAP-2/TGT/WRITE/BODY/UNIQ/RESOLVE. 1 member(s) of the map group refused."
   },
   {
    "name": "SetFromGeneralSelectNode@0x8296a630",
@@ -5242,14 +5393,23 @@
     "?SyncProperty@BaseMaterial@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z",
     "?SyncProperty@DanceRemixer@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z",
     "?SyncProperty@FileMergerOrganizer@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z",
+    "?SyncProperty@FitnessFilterObj@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z",
     "?SyncProperty@HamMaster@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z",
+    "?SyncProperty@HighFiveGestureFilter@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z",
     "?SyncProperty@PoseFatalities@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z",
     "?SyncProperty@RndFontBase@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z",
+    "?SyncProperty@SigninScreen@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z",
     "?SyncProperty@User@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z"
    ],
    "sites": 2,
    "survivor_candidates": 1,
-   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 2 folded spelling(s), 2 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 2 folded spelling(s), 2 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE.",
+   "widened_members": [
+    "?SyncProperty@FitnessFilterObj@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z",
+    "?SyncProperty@HighFiveGestureFilter@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z",
+    "?SyncProperty@SigninScreen@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z"
+   ],
+   "widen_evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors sharing address 0x823c9b10; each admitted member's compiled body is masked-equal to the target's body at that address, is the ONLY body in the target object set with that masked shape, and every relocation site resolves to the same retail address on both sides. Gates MAP-1/MAP-2/TGT/WRITE/BODY/UNIQ/RESOLVE. 0 member(s) of the map group refused."
   },
   {
    "name": "_M_clear_after_move@0x827bd578",
@@ -7112,16 +7272,23 @@
    "survivor": "merged_Returns1",
    "folded": [
     "?AllowContentToBeAdded@SongMgr@@MAA_NPAVDataArray@@W4ContentLocT@@@Z",
+    "?BitmapFont@RndFont@@UBA_NXZ",
     "?CanBeLaunched@AccomplishmentConditional@@UBA_NXZ",
+    "?CanHaveFocus@UIButton@@UAA_NXZ",
     "?CanHaveFocus@UIComponent@@UAA_NXZ",
     "?CanPushParameters@FxSend@@UAA_NXZ",
     "?CanSelect@UIListProvider@@UBA_NH@Z",
+    "?CheckError@RndShaderFur@@UAA_NW4MatFlagErrorType@RndShader@@@Z",
+    "?CheckError@RndShaderStandard@@UAA_NW4MatFlagErrorType@RndShader@@@Z",
+    "?CheckError@RndShaderSyncTrack@@UAA_NW4MatFlagErrorType@RndShader@@@Z",
+    "?CheckReqResult@AuthenticateReqJob@@MAA_NXZ",
     "?CheckReqResult@WebSvcRequest@@MAA_NXZ",
     "?CheckReturned@DingoJob@@MAA_NXZ",
     "?ContentDiscovered@Callback@ContentMgr@@UAA_NVSymbol@@@Z",
     "?ContentTitleDiscovered@Callback@ContentMgr@@UAA_NIVSymbol@@@Z",
     "?DeleteContent@ContentMgr@@UAA_NVSymbol@@@Z",
     "?DidCallSucceed@DingoJob@@MAA_NXZ",
+    "?DoHueConverge@RndPostProc@@QBA_NXZ",
     "?Eof@NullFile@@UAA_NXZ",
     "?FileReadOnly@@YA_NPBD@Z",
     "?FillDone@StandardStream@@UBA_NXZ",
@@ -7170,6 +7337,7 @@
     "?IsWebSvcRequest@WebSvcRequest@@UBA_NXZ",
     "?LocalizeToken@NavListNode@@UBA_NXZ",
     "?MountContent@ContentMgr@@UAA_NVSymbol@@@Z",
+    "?MustFinishBeforeNext@AuthenticateReqJob@@MAA_NXZ",
     "?NeedsEnum@XboxMultipleItemsPurchaser@@UBA_NXZ",
     "?NeedsEnum@XboxPurchaser@@UBA_NXZ",
     "?NumDrawPasses@Rnd@@UBAHXZ",
@@ -7187,7 +7355,18 @@
    ],
    "sites": 4,
    "survivor_candidates": 1,
-   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 4 folded spelling(s), 4 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE."
+   "evidence": "ICF fold class (transitive closure over witnessed pairs) witnessed by tools/revcomp/probes/probe_icf_foldtest.py: retail bytes at the survivor address are relocation-invariantly identical (immediates masked, 60 00 00 00 padding trimmed, one-level thunk chase) to our compiled body for each folded spelling. 4 folded spelling(s), 4 witnessed call site(s). Refused fail-closed if any site for the pair was adjudicated GENUINE.",
+   "widened_members": [
+    "?BitmapFont@RndFont@@UBA_NXZ",
+    "?CanHaveFocus@UIButton@@UAA_NXZ",
+    "?CheckError@RndShaderFur@@UAA_NW4MatFlagErrorType@RndShader@@@Z",
+    "?CheckError@RndShaderStandard@@UAA_NW4MatFlagErrorType@RndShader@@@Z",
+    "?CheckError@RndShaderSyncTrack@@UAA_NW4MatFlagErrorType@RndShader@@@Z",
+    "?CheckReqResult@AuthenticateReqJob@@MAA_NXZ",
+    "?DoHueConverge@RndPostProc@@QBA_NXZ",
+    "?MustFinishBeforeNext@AuthenticateReqJob@@MAA_NXZ"
+   ],
+   "widen_evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors sharing address 0x82e2ab00; each admitted member's compiled body is masked-equal to the target's body at that address, is the ONLY body in the target object set with that masked shape, and every relocation site resolves to the same retail address on both sides. Gates MAP-1/MAP-2/TGT/WRITE/BODY/UNIQ/RESOLVE. 3 member(s) of the map group refused."
   },
   {
    "name": "merged_SetObjConcrete@0x82401cd0",
@@ -17562,6 +17741,7 @@
     "??$__uninitialized_fill_n@PAUBuf@StringTable@@IU12@@stlpmtx_std@@YAPAUBuf@StringTable@@PAU12@IABU12@ABU__false_type@0@@Z",
     "??$__uninitialized_fill_n@PAUCacheIDStoreEntry@CacheMgr@@IU12@@stlpmtx_std@@YAPAUCacheIDStoreEntry@CacheMgr@@PAU12@IABU12@ABU__false_type@0@@Z",
     "??$__uninitialized_fill_n@PAUChecksumData@@IU1@@stlpmtx_std@@YAPAUChecksumData@@PAU1@IABU1@ABU__false_type@0@@Z",
+    "??$__uninitialized_fill_n@PAUCuePoint@?A0x81ddebd1@@IU12@@stlpmtx_std@@YAPAUCuePoint@?A0x81ddebd1@@PAU12@IABU12@ABU__false_type@0@@Z",
     "??$__uninitialized_fill_n@PAUFacePriority@@IU1@@stlpmtx_std@@YAPAUFacePriority@@PAU1@IABU1@ABU__false_type@0@@Z",
     "??$__uninitialized_fill_n@PAUGroupDrawDist@@IU1@@stlpmtx_std@@YAPAUGroupDrawDist@@PAU1@IABU1@ABU__false_type@0@@Z",
     "??$__uninitialized_fill_n@PAUHamMoveKey@@IU1@@stlpmtx_std@@YAPAUHamMoveKey@@PAU1@IABU1@ABU__false_type@0@@Z",
@@ -17584,7 +17764,11 @@
     "??$__uninitialized_fill_n@PAVSpotlightEntry@SpotlightDrawer@@IV12@@stlpmtx_std@@YAPAVSpotlightEntry@SpotlightDrawer@@PAV12@IABV12@ABU__false_type@0@@Z",
     "??$__uninitialized_fill_n@PAVVector2@@IV1@@stlpmtx_std@@YAPAVVector2@@PAV1@IABV1@ABU__false_type@0@@Z"
    ],
-   "evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors share an address"
+   "evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors share an address",
+   "widened_members": [
+    "??$__uninitialized_fill_n@PAUCuePoint@?A0x81ddebd1@@IU12@@stlpmtx_std@@YAPAUCuePoint@?A0x81ddebd1@@PAU12@IABU12@ABU__false_type@0@@Z"
+   ],
+   "widen_evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors sharing address 0x8246e2f0; each admitted member's compiled body is masked-equal to the target's body at that address, is the ONLY body in the target object set with that masked shape, and every relocation site resolves to the same retail address on both sides. Gates MAP-1/MAP-2/TGT/WRITE/BODY/UNIQ/RESOLVE. 0 member(s) of the map group refused."
   },
   {
    "name": "retailmap:??$__uninitialized_copy@PAUPropertyFilter@CameraManager@@PAU12@@stlpmtx_std@@YAPAUPropertyFilter@CameraManager@@PAU12@00ABU__false_type@0@@Z",
@@ -18538,9 +18722,14 @@
    "survivor": "?DrawHighlightMat@RndShaderMgr@@UAAPAVRndMat@@XZ",
    "address": "0x8261d060",
    "folded": [
+    "?GetData@SynthSample360@@QBAPBXXZ",
     "?Sample@Sound@@QAAPAVSynthSample@@XZ"
    ],
-   "evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors share an address"
+   "evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors share an address",
+   "widened_members": [
+    "?GetData@SynthSample360@@QBAPBXXZ"
+   ],
+   "widen_evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors sharing address 0x8261d060; each admitted member's compiled body is masked-equal to the target's body at that address, is the ONLY body in the target object set with that masked shape, and every relocation site resolves to the same retail address on both sides. Gates MAP-1/MAP-2/TGT/WRITE/BODY/UNIQ/RESOLVE. 0 member(s) of the map group refused."
   },
   {
    "name": "retailmap:?DrawRectMat@RndShaderMgr@@UAAPAVRndMat@@XZ",
@@ -19171,12 +19360,17 @@
     "?GetToken@NavListItemNode@@UBA?AVSymbol@@XZ",
     "?MoveOn@NavListSortMgr@@UAA?AVSymbol@@XZ",
     "?MoveOn@PlaylistSortMgr@@UAA?AVSymbol@@XZ",
+    "?OnSelect@NavListFunctionNode@@UAA?AVSymbol@@XZ",
     "?OnSelect@NavListHeaderNode@@UAA?AVSymbol@@XZ",
     "?OnSelect@NavListItemNode@@UAA?AVSymbol@@XZ",
     "?OnSelectDone@NavListSortNode@@UAA?AVSymbol@@XZ",
     "?Select@NavListItemNode@@UAA?AVSymbol@@XZ"
    ],
-   "evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors share an address"
+   "evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors share an address",
+   "widened_members": [
+    "?OnSelect@NavListFunctionNode@@UAA?AVSymbol@@XZ"
+   ],
+   "widen_evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors sharing address 0x82696cc8; each admitted member's compiled body is masked-equal to the target's body at that address, is the ONLY body in the target object set with that masked shape, and every relocation site resolves to the same retail address on both sides. Gates MAP-1/MAP-2/TGT/WRITE/BODY/UNIQ/RESOLVE. 0 member(s) of the map group refused."
   },
   {
    "name": "retailmap:?Print@?$StackString@$0CA@@@UAAXPBD@Z",
@@ -19199,9 +19393,14 @@
    "survivor": "?FocalPlane@NgDOFProc@@UAAMXZ",
    "address": "0x826abb80",
    "folded": [
-    "?GetSpeed@StreamNull@@UBAMXZ"
+    "?GetSpeed@StreamNull@@UBAMXZ",
+    "?StepPercent@UIListState@@QBAMXZ"
    ],
-   "evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors share an address"
+   "evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors share an address",
+   "widened_members": [
+    "?StepPercent@UIListState@@QBAMXZ"
+   ],
+   "widen_evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors sharing address 0x826abb80; each admitted member's compiled body is masked-equal to the target's body at that address, is the ONLY body in the target object set with that masked shape, and every relocation site resolves to the same retail address on both sides. Gates MAP-1/MAP-2/TGT/WRITE/BODY/UNIQ/RESOLVE. 0 member(s) of the map group refused."
   },
   {
    "name": "retailmap:?Enabled@NgDOFProc@@MBA_NXZ",
@@ -19447,6 +19646,7 @@
     "?Handle@HamBattleData@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
     "?Handle@HamPartyJumpData@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
     "?Handle@HamSupereasyData@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "?Handle@HighFiveGestureFilter@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
     "?Handle@HolmesInput@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
     "?Handle@MetaMusicManager@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
     "?Handle@OvershellSlot@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
@@ -19457,7 +19657,11 @@
     "?Handle@UIColor@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
     "?Handle@UIGuide@@UAA?AVDataNode@@PAVDataArray@@_N@Z"
    ],
-   "evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors share an address"
+   "evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors share an address",
+   "widened_members": [
+    "?Handle@HighFiveGestureFilter@@UAA?AVDataNode@@PAVDataArray@@_N@Z"
+   ],
+   "widen_evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors sharing address 0x827026f0; each admitted member's compiled body is masked-equal to the target's body at that address, is the ONLY body in the target object set with that masked shape, and every relocation site resolves to the same retail address on both sides. Gates MAP-1/MAP-2/TGT/WRITE/BODY/UNIQ/RESOLVE. 0 member(s) of the map group refused."
   },
   {
    "name": "retailmap:??1?$ObjOwnerPtr@VRndFont@@@@UAA@XZ",
@@ -20329,9 +20533,14 @@
     "??$__uninitialized_move@PAV?$vector@FV?$StlNodeAlloc@F@stlpmtx_std@@@stlpmtx_std@@PAV12@U__false_type@2@@stlpmtx_std@@YAPAV?$vector@FV?$StlNodeAlloc@F@stlpmtx_std@@@0@PAV10@00U__false_type@0@ABU__true_type@0@@Z",
     "??$__uninitialized_move@PAV?$vector@GV?$StlNodeAlloc@G@stlpmtx_std@@@stlpmtx_std@@PAV12@U__false_type@2@@stlpmtx_std@@YAPAV?$vector@GV?$StlNodeAlloc@G@stlpmtx_std@@@0@PAV10@00U__false_type@0@ABU__true_type@0@@Z",
     "??$__uninitialized_move@PAV?$vector@MV?$StlNodeAlloc@M@stlpmtx_std@@@stlpmtx_std@@PAV12@U__false_type@2@@stlpmtx_std@@YAPAV?$vector@MV?$StlNodeAlloc@M@stlpmtx_std@@@0@PAV10@00U__false_type@0@ABU__true_type@0@@Z",
+    "??$__uninitialized_move@PAV?$vector@PAUUnlockable@?A0xf8e4b4b5@@V?$StlNodeAlloc@PAUUnlockable@?A0xf8e4b4b5@@@stlpmtx_std@@@stlpmtx_std@@PAV12@U__false_type@2@@stlpmtx_std@@YAPAV?$vector@PAUUnlockable@?A0xf8e4b4b5@@V?$StlNodeAlloc@PAUUnlockable@?A0xf8e4b4b5@@@stlpmtx_std@@@0@PAV10@00U__false_type@0@ABU__true_type@0@@Z",
     "??$__uninitialized_move@PAV?$vector@V?$ObjPtr@VUIColor@@@@V?$StlNodeAlloc@V?$ObjPtr@VUIColor@@@@@stlpmtx_std@@@stlpmtx_std@@PAV12@U__false_type@2@@stlpmtx_std@@YAPAV?$vector@V?$ObjPtr@VUIColor@@@@V?$StlNodeAlloc@V?$ObjPtr@VUIColor@@@@@stlpmtx_std@@@0@PAV10@00U__false_type@0@ABU__true_type@0@@Z"
    ],
-   "evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors share an address"
+   "evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors share an address",
+   "widened_members": [
+    "??$__uninitialized_move@PAV?$vector@PAUUnlockable@?A0xf8e4b4b5@@V?$StlNodeAlloc@PAUUnlockable@?A0xf8e4b4b5@@@stlpmtx_std@@@stlpmtx_std@@PAV12@U__false_type@2@@stlpmtx_std@@YAPAV?$vector@PAUUnlockable@?A0xf8e4b4b5@@V?$StlNodeAlloc@PAUUnlockable@?A0xf8e4b4b5@@@stlpmtx_std@@@0@PAV10@00U__false_type@0@ABU__true_type@0@@Z"
+   ],
+   "widen_evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors sharing address 0x827c5a60; each admitted member's compiled body is masked-equal to the target's body at that address, is the ONLY body in the target object set with that masked shape, and every relocation site resolves to the same retail address on both sides. Gates MAP-1/MAP-2/TGT/WRITE/BODY/UNIQ/RESOLVE. 0 member(s) of the map group refused."
   },
   {
    "name": "retailmap:?Handle@UIListCustom@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
@@ -20385,8 +20594,10 @@
     "??1?$pair@VString@@UMemPointDelta@@@stlpmtx_std@@QAA@XZ",
     "??1?$pair@VString@@VNetAddress@@@stlpmtx_std@@QAA@XZ",
     "??1CacheDirEntry@@QAA@XZ",
+    "??1DeferredAward@?A0xf8e4b4b5@@QAA@XZ",
     "??1EnumProduct@@QAA@XZ",
     "??1FilePath@@UAA@XZ",
+    "??1Label@?A0x81ddebd1@@QAA@XZ",
     "??1LeaderboardRow@@QAA@XZ",
     "??1Marker@@QAA@XZ",
     "??1MoveRating@SkeletonClip@@QAA@XZ",
@@ -20394,7 +20605,12 @@
     "??1OSCValue@OSCMessenger@@QAA@XZ",
     "??1SampleMarker@@QAA@XZ"
    ],
-   "evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors share an address"
+   "evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors share an address",
+   "widened_members": [
+    "??1DeferredAward@?A0xf8e4b4b5@@QAA@XZ",
+    "??1Label@?A0x81ddebd1@@QAA@XZ"
+   ],
+   "widen_evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors sharing address 0x827cfe20; each admitted member's compiled body is masked-equal to the target's body at that address, is the ONLY body in the target object set with that masked shape, and every relocation site resolves to the same retail address on both sides. Gates MAP-1/MAP-2/TGT/WRITE/BODY/UNIQ/RESOLVE. 0 member(s) of the map group refused."
   },
   {
    "name": "retailmap:??0?$KeylessHash@PAXPAVAllocInfo@@@@QAA@HABQAVAllocInfo@@0PAPAV1@@Z",
@@ -20509,9 +20725,14 @@
    "survivor": "??$__uninitialized_copy@PBVSampleMarker@@PAV1@@stlpmtx_std@@YAPAVSampleMarker@@PBV1@0PAV1@ABU__false_type@0@@Z",
    "address": "0x827f5a88",
    "folded": [
+    "??$__uninitialized_copy@PAULabel@?A0x81ddebd1@@PAU12@@stlpmtx_std@@YAPAULabel@?A0x81ddebd1@@PAU12@00ABU__false_type@0@@Z",
     "??$__uninitialized_copy@PAVSampleMarker@@PAV1@@stlpmtx_std@@YAPAVSampleMarker@@PAV1@00ABU__false_type@0@@Z"
    ],
-   "evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors share an address"
+   "evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors share an address",
+   "widened_members": [
+    "??$__uninitialized_copy@PAULabel@?A0x81ddebd1@@PAU12@@stlpmtx_std@@YAPAULabel@?A0x81ddebd1@@PAU12@00ABU__false_type@0@@Z"
+   ],
+   "widen_evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors sharing address 0x827f5a88; each admitted member's compiled body is masked-equal to the target's body at that address, is the ONLY body in the target object set with that masked shape, and every relocation site resolves to the same retail address on both sides. Gates MAP-1/MAP-2/TGT/WRITE/BODY/UNIQ/RESOLVE. 0 member(s) of the map group refused."
   },
   {
    "name": "retailmap:??$__introsort_loop@PAUCuePoint@?A0x81ddebd1@@U12@HP6A_NABU12@0@Z@stlpmtx_std@@YAXPAUCuePoint@?A0x81ddebd1@@00HP6A_NABU12@1@Z@Z",
@@ -21325,9 +21546,18 @@
    "survivor": "?Handle@MQSongSort@@W3AA?AVDataNode@@PAVDataArray@@_N@Z",
    "address": "0x82912540",
    "folded": [
-    "?Handle@ChallengeSort@@W3AA?AVDataNode@@PAVDataArray@@_N@Z"
+    "?Handle@ChallengeSort@@W3AA?AVDataNode@@PAVDataArray@@_N@Z",
+    "?Handle@FitnessCalorieSort@@W3AA?AVDataNode@@PAVDataArray@@_N@Z",
+    "?Handle@PlaylistSort@@W3AA?AVDataNode@@PAVDataArray@@_N@Z",
+    "?Handle@SongSort@@W3AA?AVDataNode@@PAVDataArray@@_N@Z"
    ],
-   "evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors share an address"
+   "evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors share an address",
+   "widened_members": [
+    "?Handle@FitnessCalorieSort@@W3AA?AVDataNode@@PAVDataArray@@_N@Z",
+    "?Handle@PlaylistSort@@W3AA?AVDataNode@@PAVDataArray@@_N@Z",
+    "?Handle@SongSort@@W3AA?AVDataNode@@PAVDataArray@@_N@Z"
+   ],
+   "widen_evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors sharing address 0x82912540; each admitted member's compiled body is masked-equal to the target's body at that address, is the ONLY body in the target object set with that masked shape, and every relocation site resolves to the same retail address on both sides. Gates MAP-1/MAP-2/TGT/WRITE/BODY/UNIQ/RESOLVE. 0 member(s) of the map group refused."
   },
   {
    "name": "retailmap:??_EChallengeSort@@W3AAPAXI@Z",
@@ -21442,10 +21672,17 @@
    "survivor": "?Enter@SongSelectPlaylistPanel@@UAAXXZ",
    "address": "0x829476b8",
    "folded": [
+    "?Enter@CampaignDiffSelectPanel@@UAAXXZ",
     "?Enter@PracticeChoosePanel@@UAAXXZ",
+    "?Enter@SongSelectPlaylistCustomizePanel@@UAAXXZ",
     "?Enter@VoiceInputPanel@@UAAXXZ"
    ],
-   "evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors share an address"
+   "evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors share an address",
+   "widened_members": [
+    "?Enter@CampaignDiffSelectPanel@@UAAXXZ",
+    "?Enter@SongSelectPlaylistCustomizePanel@@UAAXXZ"
+   ],
+   "widen_evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors sharing address 0x829476b8; each admitted member's compiled body is masked-equal to the target's body at that address, is the ONLY body in the target object set with that masked shape, and every relocation site resolves to the same retail address on both sides. Gates MAP-1/MAP-2/TGT/WRITE/BODY/UNIQ/RESOLVE. 0 member(s) of the map group refused."
   },
   {
    "name": "retailmap:?Exit@BlacklightPanel@@UAAXXZ",
@@ -21645,9 +21882,18 @@
    "survivor": "?Handle@MQSongSort@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
    "address": "0x8297a210",
    "folded": [
-    "?Handle@ChallengeSort@@UAA?AVDataNode@@PAVDataArray@@_N@Z"
+    "?Handle@ChallengeSort@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "?Handle@FitnessCalorieSort@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "?Handle@PlaylistSort@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "?Handle@SongSort@@UAA?AVDataNode@@PAVDataArray@@_N@Z"
    ],
-   "evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors share an address"
+   "evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors share an address",
+   "widened_members": [
+    "?Handle@FitnessCalorieSort@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "?Handle@PlaylistSort@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "?Handle@SongSort@@UAA?AVDataNode@@PAVDataArray@@_N@Z"
+   ],
+   "widen_evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors sharing address 0x8297a210; each admitted member's compiled body is masked-equal to the target's body at that address, is the ONLY body in the target object set with that masked shape, and every relocation site resolves to the same retail address on both sides. Gates MAP-1/MAP-2/TGT/WRITE/BODY/UNIQ/RESOLVE. 0 member(s) of the map group refused."
   },
   {
    "name": "retailmap:?NumData@MovieProvider@@UBAHXZ",
@@ -21716,9 +21962,16 @@
    "survivor": "?Select@PlaylistHeaderNode@@UAA?AVSymbol@@XZ",
    "address": "0x8298def0",
    "folded": [
-    "?Select@ChallengeHeaderNode@@UAA?AVSymbol@@XZ"
+    "?Select@ChallengeHeaderNode@@UAA?AVSymbol@@XZ",
+    "?Select@FitnessCalorieHeaderNode@@UAA?AVSymbol@@XZ",
+    "?Select@MQSongHeaderNode@@UAA?AVSymbol@@XZ"
    ],
-   "evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors share an address"
+   "evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors share an address",
+   "widened_members": [
+    "?Select@FitnessCalorieHeaderNode@@UAA?AVSymbol@@XZ",
+    "?Select@MQSongHeaderNode@@UAA?AVSymbol@@XZ"
+   ],
+   "widen_evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors sharing address 0x8298def0; each admitted member's compiled body is masked-equal to the target's body at that address, is the ONLY body in the target object set with that masked shape, and every relocation site resolves to the same retail address on both sides. Gates MAP-1/MAP-2/TGT/WRITE/BODY/UNIQ/RESOLVE. 0 member(s) of the map group refused."
   },
   {
    "name": "retailmap:??0NetLoaderRef@@QAA@ABU0@@Z",
@@ -22357,18 +22610,28 @@
    "survivor": "?LockForProcess@?$CSampleXAPOBase@VPitchShiftEffect@@UPitchShiftEffectParams@@@ATG@@UAAJIPBUXAPO_LOCKFORPROCESS_BUFFER_PARAMETERS@@I0@Z",
    "address": "0x82e416b0",
    "folded": [
+    "?LockForProcess@?$CSampleXAPOBase@VHeadsetXferEffect@@UHeadsetXferEffectParams@@@ATG@@UAAJIPBUXAPO_LOCKFORPROCESS_BUFFER_PARAMETERS@@I0@Z",
     "?LockForProcess@?$CSampleXAPOBase@VMeterEffect@@UMeterEffectParams@@@ATG@@UAAJIPBUXAPO_LOCKFORPROCESS_BUFFER_PARAMETERS@@I0@Z"
    ],
-   "evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors share an address"
+   "evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors share an address",
+   "widened_members": [
+    "?LockForProcess@?$CSampleXAPOBase@VHeadsetXferEffect@@UHeadsetXferEffectParams@@@ATG@@UAAJIPBUXAPO_LOCKFORPROCESS_BUFFER_PARAMETERS@@I0@Z"
+   ],
+   "widen_evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors sharing address 0x82e416b0; each admitted member's compiled body is masked-equal to the target's body at that address, is the ONLY body in the target object set with that masked shape, and every relocation site resolves to the same retail address on both sides. Gates MAP-1/MAP-2/TGT/WRITE/BODY/UNIQ/RESOLVE. 0 member(s) of the map group refused."
   },
   {
    "name": "retailmap:?Process@?$CSampleXAPOBase@VPitchShiftEffect@@UPitchShiftEffectParams@@@ATG@@UAAXIPBUXAPO_PROCESS_BUFFER_PARAMETERS@@IPAU3@H@Z",
    "survivor": "?Process@?$CSampleXAPOBase@VPitchShiftEffect@@UPitchShiftEffectParams@@@ATG@@UAAXIPBUXAPO_PROCESS_BUFFER_PARAMETERS@@IPAU3@H@Z",
    "address": "0x82e419f8",
    "folded": [
+    "?Process@?$CSampleXAPOBase@VHeadsetXferEffect@@UHeadsetXferEffectParams@@@ATG@@UAAXIPBUXAPO_PROCESS_BUFFER_PARAMETERS@@IPAU3@H@Z",
     "?Process@?$CSampleXAPOBase@VMeterEffect@@UMeterEffectParams@@@ATG@@UAAXIPBUXAPO_PROCESS_BUFFER_PARAMETERS@@IPAU3@H@Z"
    ],
-   "evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors share an address"
+   "evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors share an address",
+   "widened_members": [
+    "?Process@?$CSampleXAPOBase@VHeadsetXferEffect@@UHeadsetXferEffectParams@@@ATG@@UAAXIPBUXAPO_PROCESS_BUFFER_PARAMETERS@@IPAU3@H@Z"
+   ],
+   "widen_evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors sharing address 0x82e419f8; each admitted member's compiled body is masked-equal to the target's body at that address, is the ONLY body in the target object set with that masked shape, and every relocation site resolves to the same retail address on both sides. Gates MAP-1/MAP-2/TGT/WRITE/BODY/UNIQ/RESOLVE. 0 member(s) of the map group refused."
   },
   {
    "name": "retailmap:?GetNumSamples@SynthSample360@@QBAHXZ",
@@ -22835,9 +23098,14 @@
    "survivor": "merged_82946770",
    "address": "0x82946770",
    "folded": [
+    "?SetLinkingCode@LinkingCodeRetrievedMsg@@QAAXABVString@@@Z",
     "?SetOfferString@TokenRedeemedMsg@@QAAXABVString@@@Z"
    ],
-   "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it"
+   "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it",
+   "widened_members": [
+    "?SetLinkingCode@LinkingCodeRetrievedMsg@@QAAXABVString@@@Z"
+   ],
+   "widen_evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors sharing address 0x82946770; each admitted member's compiled body is masked-equal to the target's body at that address, is the ONLY body in the target object set with that masked shape, and every relocation site resolves to the same retail address on both sides. Gates MAP-1/MAP-2/TGT/WRITE/BODY/UNIQ/RESOLVE. 0 member(s) of the map group refused."
   },
   {
    "name": "retailmap:merged_82975658",
@@ -22856,9 +23124,20 @@
    "address": "0x82979158",
    "folded": [
     "?Handle@ChallengeSortNode@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
-    "?Handle@MQSongSortNode@@UAA?AVDataNode@@PAVDataArray@@_N@Z"
+    "?Handle@FitnessCalorieHeaderNode@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "?Handle@FitnessCalorieSortNode@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "?Handle@MQSongSortNode@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "?Handle@PlaylistSortNode@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "?Handle@SongFunctionNode@@UAA?AVDataNode@@PAVDataArray@@_N@Z"
    ],
-   "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it"
+   "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it",
+   "widened_members": [
+    "?Handle@FitnessCalorieHeaderNode@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "?Handle@FitnessCalorieSortNode@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "?Handle@PlaylistSortNode@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
+    "?Handle@SongFunctionNode@@UAA?AVDataNode@@PAVDataArray@@_N@Z"
+   ],
+   "widen_evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors sharing address 0x82979158; each admitted member's compiled body is masked-equal to the target's body at that address, is the ONLY body in the target object set with that masked shape, and every relocation site resolves to the same retail address on both sides. Gates MAP-1/MAP-2/TGT/WRITE/BODY/UNIQ/RESOLVE. 0 member(s) of the map group refused."
   },
   {
    "name": "retailmap:merged_82984FC8",
@@ -25586,6 +25865,111 @@
     ],
     "padded": []
    }
+  },
+  {
+   "name": "retailwiden:??$MakeString@V?$StackString@$0IAA@@@@@YAPBDPBDABV?$StackString@$0IAA@@@@Z@0x825b12e0",
+   "address": "0x825b12e0",
+   "survivor": "??$MakeString@V?$StackString@$0IAA@@@@@YAPBDPBDABV?$StackString@$0IAA@@@@Z",
+   "folded": [
+    "??$MakeString@V?$StackString@$0BAA@@@@@YAPBDPBDABV?$StackString@$0BAA@@@@Z"
+   ],
+   "sites": 0,
+   "evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors sharing address 0x825b12e0; each admitted member's compiled body is masked-equal to the target's body at that address, is the ONLY body in the target object set with that masked shape, and every relocation site resolves to the same retail address on both sides. Gates MAP-1/MAP-2/TGT/WRITE/BODY/UNIQ/RESOLVE. 0 member(s) of the map group refused."
+  },
+  {
+   "name": "retailwiden:??$_Copy_Construct@UDebugGraph@?A0xb39b74bf@@@stlpmtx_std@@YAXPAUDebugGraph@?A0xb39b74bf@@ABU12@@Z@0x827389d8",
+   "address": "0x827389d8",
+   "survivor": "??$_Copy_Construct@UDebugGraph@?A0xb39b74bf@@@stlpmtx_std@@YAXPAUDebugGraph@?A0xb39b74bf@@ABU12@@Z",
+   "folded": [
+    "??$_Param_Construct@UDebugGraph@?A0xb39b74bf@@U12@@stlpmtx_std@@YAXPAUDebugGraph@?A0xb39b74bf@@ABU12@@Z"
+   ],
+   "sites": 0,
+   "evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors sharing address 0x827389d8; each admitted member's compiled body is masked-equal to the target's body at that address, is the ONLY body in the target object set with that masked shape, and every relocation site resolves to the same retail address on both sides. Gates MAP-1/MAP-2/TGT/WRITE/BODY/UNIQ/RESOLVE. 0 member(s) of the map group refused."
+  },
+  {
+   "name": "retailwiden:?RootTrans@UIListLabel@@MAAPAVRndTransformable@@XZ@0x827c33a0",
+   "address": "0x827c33a0",
+   "survivor": "?RootTrans@UIListLabel@@MAAPAVRndTransformable@@XZ",
+   "folded": [
+    "?RootTrans@UIListSubList@@MAAPAVRndTransformable@@XZ"
+   ],
+   "sites": 0,
+   "evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors sharing address 0x827c33a0; each admitted member's compiled body is masked-equal to the target's body at that address, is the ONLY body in the target object set with that masked shape, and every relocation site resolves to the same retail address on both sides. Gates MAP-1/MAP-2/TGT/WRITE/BODY/UNIQ/RESOLVE. 0 member(s) of the map group refused."
+  },
+  {
+   "name": "retailwiden:?SyncProperty@LetterboxPanel@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z@0x828ffe98",
+   "address": "0x828ffe98",
+   "survivor": "?SyncProperty@LetterboxPanel@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z",
+   "folded": [
+    "?SyncProperty@LockedContentPanel@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z"
+   ],
+   "sites": 0,
+   "evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors sharing address 0x828ffe98; each admitted member's compiled body is masked-equal to the target's body at that address, is the ONLY body in the target object set with that masked shape, and every relocation site resolves to the same retail address on both sides. Gates MAP-1/MAP-2/TGT/WRITE/BODY/UNIQ/RESOLVE. 0 member(s) of the map group refused."
+  },
+  {
+   "name": "retailwiden:?Exiting@MultiUserGesturePanel@@UBA_NXZ@0x829415b0",
+   "address": "0x829415b0",
+   "survivor": "?Exiting@MultiUserGesturePanel@@UBA_NXZ",
+   "folded": [
+    "?Exiting@SingleUserCrewSelectPanel@@UBA_NXZ"
+   ],
+   "sites": 0,
+   "evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors sharing address 0x829415b0; each admitted member's compiled body is masked-equal to the target's body at that address, is the ONLY body in the target object set with that masked shape, and every relocation site resolves to the same retail address on both sides. Gates MAP-1/MAP-2/TGT/WRITE/BODY/UNIQ/RESOLVE. 0 member(s) of the map group refused."
+  },
+  {
+   "name": "retailwiden:?FinishLoad@VoiceInputPanel@@UAAXXZ@0x82957718",
+   "address": "0x82957718",
+   "survivor": "?FinishLoad@VoiceInputPanel@@UAAXXZ",
+   "folded": [
+    "?FinishLoad@LetterboxPanel@@UAAXXZ"
+   ],
+   "sites": 0,
+   "evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors sharing address 0x82957718; each admitted member's compiled body is masked-equal to the target's body at that address, is the ONLY body in the target object set with that masked shape, and every relocation site resolves to the same retail address on both sides. Gates MAP-1/MAP-2/TGT/WRITE/BODY/UNIQ/RESOLVE. 0 member(s) of the map group refused."
+  },
+  {
+   "name": "retailwiden:?GetAlbumArtPath@ChallengeSortNode@@UAAPBDXZ@0x82977ba0",
+   "address": "0x82977ba0",
+   "survivor": "?GetAlbumArtPath@ChallengeSortNode@@UAAPBDXZ",
+   "folded": [
+    "?GetAlbumArtPath@MQSongSortNode@@UAAPBDXZ",
+    "?GetAlbumArtPath@PlaylistSortNode@@UAAPBDXZ",
+    "?GetAlbumArtPath@SongSortNode@@UAAPBDXZ"
+   ],
+   "sites": 0,
+   "evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors sharing address 0x82977ba0; each admitted member's compiled body is masked-equal to the target's body at that address, is the ONLY body in the target object set with that masked shape, and every relocation site resolves to the same retail address on both sides. Gates MAP-1/MAP-2/TGT/WRITE/BODY/UNIQ/RESOLVE. 0 member(s) of the map group refused."
+  },
+  {
+   "name": "retailwiden:?OnUnHighlight@FitnessCalorieHeaderNode@@UAAXXZ@0x8298c7c8",
+   "address": "0x8298c7c8",
+   "survivor": "?OnUnHighlight@FitnessCalorieHeaderNode@@UAAXXZ",
+   "folded": [
+    "?OnUnHighlight@ChallengeHeaderNode@@UAAXXZ",
+    "?OnUnHighlight@SongHeaderNode@@UAAXXZ"
+   ],
+   "sites": 0,
+   "evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors sharing address 0x8298c7c8; each admitted member's compiled body is masked-equal to the target's body at that address, is the ONLY body in the target object set with that masked shape, and every relocation site resolves to the same retail address on both sides. Gates MAP-1/MAP-2/TGT/WRITE/BODY/UNIQ/RESOLVE. 0 member(s) of the map group refused."
+  },
+  {
+   "name": "retailwiden:?UpdateItemCount@PlaylistHeaderNode@@UAAXPAVNavListItemNode@@@Z@0x8298dfd0",
+   "address": "0x8298dfd0",
+   "survivor": "?UpdateItemCount@PlaylistHeaderNode@@UAAXPAVNavListItemNode@@@Z",
+   "folded": [
+    "?UpdateItemCount@ChallengeHeaderNode@@UAAXPAVNavListItemNode@@@Z",
+    "?UpdateItemCount@FitnessCalorieHeaderNode@@UAAXPAVNavListItemNode@@@Z",
+    "?UpdateItemCount@MQSongHeaderNode@@UAAXPAVNavListItemNode@@@Z"
+   ],
+   "sites": 0,
+   "evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors sharing address 0x8298dfd0; each admitted member's compiled body is masked-equal to the target's body at that address, is the ONLY body in the target object set with that masked shape, and every relocation site resolves to the same retail address on both sides. Gates MAP-1/MAP-2/TGT/WRITE/BODY/UNIQ/RESOLVE. 0 member(s) of the map group refused."
+  },
+  {
+   "name": "retailwiden:?GetNumRotFeatures@SkeletonPCAFeatureConverter@Gesture@@YAKXZ@0x829fb500",
+   "address": "0x829fb500",
+   "survivor": "?GetNumRotFeatures@SkeletonPCAFeatureConverter@Gesture@@YAKXZ",
+   "folded": [
+    "?GetGlobalOptionsSize@ProfileMgr@@QAAHXZ"
+   ],
+   "sites": 0,
+   "evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors sharing address 0x829fb500; each admitted member's compiled body is masked-equal to the target's body at that address, is the ONLY body in the target object set with that masked shape, and every relocation site resolves to the same retail address on both sides. Gates MAP-1/MAP-2/TGT/WRITE/BODY/UNIQ/RESOLVE. 0 member(s) of the map group refused."
   }
  ]
 }

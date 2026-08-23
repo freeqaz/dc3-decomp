@@ -50,6 +50,25 @@ Each group carries its OWN ``evidence`` string, and three classes coexist
   or more names our own objects reference, ``__unwind$``/``__catch$``/``$L``/
   ``??_C@`` names are excluded as annotations rather than aliases, and the
   survivor must be the single member the target objects define.
+* **Retail linker map, WIDENED** (2026-08-23; ``evidence``/``widen_evidence``
+  names ``icf_retail_widen.py`` and lists gates
+  ``MAP-1/MAP-2/TGT/WRITE/BODY/UNIQ/RESOLVE``) -- the class above, re-derived
+  from the map on every run instead of from one tree's reference set. "Two or
+  more names OUR OWN OBJECTS REFERENCE" is a snapshot: a spelling our source did
+  not emit on the day the archived producer ran is absent from the group
+  forever, so every later source fix that starts emitting it finds the group too
+  narrow. ``0x82E2AB00`` carried **163** names in the retail map and **74** here;
+  ``0x8255A0A0`` carried 5 and 3, and that one missing membership was the whole
+  of ``HttpGet::Poll``'s residual. Widening is NOT "emit every name at the
+  address": the map states what RETAIL folded, our build folds what OUR bodies
+  say, and the two differ exactly where the decomp is wrong. Each admitted
+  member's compiled body must be masked-equal to the target's body at the
+  address AND every relocation site must resolve, through the same map, to the
+  same address on both sides (``/OPT:ICF``'s own predicate); a reloc-free body,
+  where that second half is vacuous, must additionally be the ONLY body of its
+  masked shape in the whole target object set. Producer, with its per-gate
+  denominator and a negative control that swaps in a decoy survivor:
+  ``decomp-synth tools/il_witness/icf_retail_widen.py --repo <dc3> --out … --report …``.
 
 **Name shapes are arguments, not witnesses** -- an earlier triage declared every
 ``merged_``-prefixed target benign from its name and the body test then found
