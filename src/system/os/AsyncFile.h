@@ -19,7 +19,19 @@ public:
     virtual int UncompressedSize() { return mUCSize; }
     virtual bool ReadDone(int &);
     virtual bool WriteDone(int &i);
+    // AsyncFile deliberately does NOT override File::GetFileHandle. The target's
+    // vtable slot +0x3c holds _purecall, i.e. File's pure declaration is
+    // inherited unchanged and every concrete subclass supplies its own body --
+    // AsyncFileWin and AsyncFileHolmes both do, and ?GetFileHandle@AsyncFile@@
+    // appears nowhere in ham_xbox_r.map or report.json.
+#ifdef HX_NATIVE
+    // The shared engine's AsyncFileNative (milo-native-engine
+    // src/platform/AsyncFile_Native.cpp) is the one concrete subclass that does
+    // NOT declare GetFileHandle, so without this it becomes abstract and the
+    // engine fails to compile. Remove this guard once the engine gains its own
+    // override; it exists only so the PPC vtable can be correct today.
     virtual bool GetFileHandle(void *&) { return false; }
+#endif
 
     void Init();
     static AsyncFile *New(const char *, int);
