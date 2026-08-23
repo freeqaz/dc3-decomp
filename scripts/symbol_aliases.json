@@ -184,6 +184,9 @@
     "0x8255a0a0": [
      "??$MakeString@W4State@HttpGet@@@@YAPBDPBDABW4State@HttpGet@@@Z"
     ],
+    "0x82610090": [
+     "??$MakeString@W4SaveLoadMode@SaveLoadManager@@@@YAPBDPBDABW4SaveLoadMode@SaveLoadManager@@@Z"
+    ],
     "0x8261d060": [
      "?GetData@SynthSample360@@QBAPBXXZ"
     ],
@@ -1826,8 +1829,8 @@
     "0x829fb500"
    ],
    "fresh_tier_prefix": "retailmap-fn:",
-   "n_names_added": 99,
-   "n_groups_extended": 27,
+   "n_names_added": 100,
+   "n_groups_extended": 28,
    "n_groups_reanchored": 380,
    "n_groups_fresh": 11,
    "census": {
@@ -1836,16 +1839,16 @@
     "drop: fewer than two non-annotation names in the map": 104781,
     "installed and already complete": 1540,
     "FRESH": 14,
-    "RE-ANCHOR only": 311,
-    "EXTEND": 187,
-    "  ...of which also RE-ANCHOR": 69,
+    "RE-ANCHOR only": 310,
+    "EXTEND": 188,
+    "  ...of which also RE-ANCHOR": 70,
     "drop: target objects define none of the members": 10,
     "drop: target objects define several of the members": 6,
     "fresh group dropped: no offered name survived gate 5": 3
    },
    "name_census": {
-    "names offered": 528,
-    "admitted: identical": 115,
+    "names offered": 529,
+    "admitted: identical": 116,
     "dropped unproven: our objects define no body for this name": 408,
     "REFUSED by byte identity: relocation targets differ": 5
    },
@@ -3434,6 +3437,7 @@
     "??$MakeString@W4OpType@CacheMgr@@@@YAPBDPBDABW4OpType@CacheMgr@@@Z",
     "??$MakeString@W4OrganizedState@FileMergerOrganizer@@@@YAPBDPBDABW4OrganizedState@FileMergerOrganizer@@@Z",
     "??$MakeString@W4RefType@NetCacheMgr@@@@YAPBDPBDABW4RefType@NetCacheMgr@@@Z",
+    "??$MakeString@W4SaveLoadMode@SaveLoadManager@@@@YAPBDPBDABW4SaveLoadMode@SaveLoadManager@@@Z",
     "??$MakeString@W4SkeletonJoint@@@@YAPBDPBDABW4SkeletonJoint@@@Z",
     "??$MakeString@W4SongInfoAudioType@@@@YAPBDPBDABW4SongInfoAudioType@@@Z",
     "??$MakeString@W4SongMgrState@@@@YAPBDPBDABW4SongMgrState@@@Z",
