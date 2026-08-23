@@ -451,7 +451,7 @@ void StorePanel::FinishEnum(std::list<EnumProduct> const &enumList, bool arg) {
     mEnumJobID = -1;
 
     if (arg) {
-        StoreError err = UpdateOffers(enumList, arg);
+        StoreError err = UpdateOffers(enumList, false);
 
         if (0 == err || err == 1) {
             if (!mPendingOffers.empty()) {
@@ -460,33 +460,33 @@ void StorePanel::FinishEnum(std::list<EnumProduct> const &enumList, bool arg) {
         }
 
         if (err != 0) {
-            if (err == 1) {
-                if (TheNetCacheMgr->IsDebug() == 0) {
+            if (err != 1 || !TheNetCacheMgr->IsDebug()) {
+                if (err == 1) {
                     FormatString fmt("No offers in this metadata were found in the enumeration!");
                     TheDebug.Notify(fmt.Str());
                 }
-            } else {
                 ExitError(err);
                 return;
             }
-            ExitError(err);
-            return;
         }
 
-        static unsigned char msg_created = (unsigned char)(0);
-        if (!msg_created) {
-            static Symbol sym("enum_finished");
-            msg_created = 1;
-            static Message msg(sym);
-        }
+        static Message msg("enum_finished");
+        HandleType(msg);
+        TheUI->Handle(msg, false);
     } else {
         FormatString fmt("An enumeration failed!");
         TheDebug.Notify(fmt.Str());
 
         if (mLoadOk) {
             mLoadOk = false;
-            void (*func)(void *, int) = (void (*)(void *, int))*(void **)this;
-            func(this, 2);
+            // The image's tail is `lwz r10,0(r30); lwz r11,0x44(r10); mtctr; bctrl`
+            // with r4 = 2 -- vtable slot 0x44 of ??_7StorePanel@@6BUIPanel@@@,
+            // which is index 17 = ExitStore (the first six UIPanel-derived slots
+            // 0x40..0x58 are IsSongInLibrary / ExitStore / StoreProfile /
+            // MakeNewOffer / FindOffer / EnumerateSubsetOfOfferIDs, and 0x54
+            // resolving to the `li r3,0` fold pins that alignment).  The previous
+            // spelling cast the VPTR itself to a function pointer and called it.
+            ExitStore(kStoreErrorCacheNoSpace);
         }
     }
 }
