@@ -42,7 +42,10 @@ public:
     virtual bool GetCompressor() const = 0;
     virtual void SetCompressorParam(float) = 0;
     virtual float GetCompressorParam() const = 0;
-    virtual void ClearBuffers() = 0;
+    // Not pure: slot 0x70 of ??_7Mic@@6B@ in
+    // build/373307D9/asm/system/synth/MicNull.s holds OnlyReturns (a bare blr),
+    // not _purecall, so the base ships an empty body.
+    virtual void ClearBuffers() {}
     virtual short *GetRecentBuf(int &) = 0;
     virtual short *GetContinuousBuf(int &) = 0;
     virtual int GetDroppedSamples() { return 0; }
