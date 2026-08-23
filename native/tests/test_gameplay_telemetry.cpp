@@ -20,6 +20,7 @@
 #include <string>
 #include <vector>
 #include <unistd.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 
 #include "telemetry_parser.h"
@@ -55,7 +56,27 @@ struct TelRunResult {
     bool timedOut;
 };
 
+// Same defect class as test_dta_flow.cpp, measured 2026-08-23: a lane that
+// built only the milo-tests target got every engine-driven assertion red with
+// gameplay-shaped messages, and the real cause was
+//     timeout: failed to run command '.../dc3-native': No such file or directory
+// Report the missing prerequisite as itself.
+static std::string sTelSetupError;
+
+static bool Dc3NativeIsPresent() {
+    const std::string binary = GetDc3NativePath();
+    struct stat st;
+    if (::stat(binary.c_str(), &st) == 0) return true;
+    sTelSetupError =
+        "dc3-native does not exist at:\n    " + binary +
+        "\nThis suite drives the real engine as a subprocess; without it every "
+        "assertion is about output that was never produced. Build it:\n"
+        "    cmake --build <build-dir> --target dc3-native";
+    return false;
+}
+
 static TelRunResult RunWithTelemetry(int maxFrames, const char *script, int timeout = 120) {
+    if (!Dc3NativeIsPresent()) return TelRunResult{-1, 0, "", false};
     std::string binary = GetDc3NativePath();
     std::ostringstream cmd;
     cmd << "MILO_HEADLESS=1 MILO_FATAL_FAILS=0 DC3_SHOW_SPLASH=0 DC3_TEL=1 DC3_FAST_BOOT=1"
@@ -112,6 +133,10 @@ protected:
         }
         if (!sRanEngine) {
             GTEST_SKIP() << "Engine did not run (SetUpTestSuite failed)";
+        }
+        if (!sTelSetupError.empty()) {
+            GTEST_FAIL() << "GameplayTelemetryTest could not run the engine.\n"
+                         << sTelSetupError;
         }
     }
 

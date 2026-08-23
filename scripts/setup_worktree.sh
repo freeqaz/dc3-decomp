@@ -193,6 +193,27 @@ if [ -e "$MAIN_REPO/orig-assets" ] && [ ! -e "$WORKTREE_PATH/orig-assets" ]; the
     ln -s "$MAIN_REPO/orig-assets" "$WORKTREE_PATH/orig-assets"
 fi
 
+# ---- archive/ : symlink (untracked, and the skip budget depends on it) -------
+# archive/ is in .gitignore, so it exists ONLY in the main checkout. Exactly one
+# test reads from it -- MiloViewerScreenshot.PoseDumpCanMatchGoldenWithTolerance
+# looks for archive/screenshots/pose_regression/goldens/stand_bad_mid.pose.json
+# -- and without it that test SKIPS.
+#
+# That one skip made the skip budget non-portable, and the cost was measured on
+# 2026-08-23: native/tests/skip_budget.txt says 69, recorded in the main
+# checkout where the golden exists. Every worktree therefore reported 70 and
+# exited 2, "coverage shrank", forever. Two separate lanes hit it the same day
+# and one of them was on its way to raising the budget to absorb it -- which
+# would have laundered a worktree artifact into the evidence file and then
+# hidden a real one-test regression in main behind the new number.
+#
+# The budget is the right instrument; it was being read in the wrong place. Make
+# the place identical instead of weakening the instrument.
+if [ -e "$MAIN_REPO/archive" ] && [ ! -e "$WORKTREE_PATH/archive" ]; then
+    echo "==> archive/  (symlink — untracked pose goldens; keeps the skip budget portable)"
+    ln -s "$MAIN_REPO/archive" "$WORKTREE_PATH/archive"
+fi
+
 # ---- build/compilers, build/tools : symlinks (read-only toolchain) ----------
 mkdir -p "$WORKTREE_PATH/build"
 for d in compilers tools binutils; do

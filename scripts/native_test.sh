@@ -38,7 +38,31 @@
 #
 # That is ~2 minutes for the same 48 assertions.
 #   scripts/native_test.sh -R SomeRegex     # extra args pass through to ctest
+#   scripts/native_test.sh --no-build       # test what is already built (see below)
 #   SKIP_BUDGET_UPDATE=1 scripts/native_test.sh   # rewrite the budget file
+#
+# WHY THIS SCRIPT BUILDS
+# ----------------------
+# It used to run ctest and nothing else, which made it a lying instrument in a
+# second, quieter way than the skip counting it was written to fix. Measured
+# 2026-08-23 in the main checkout: native/build had last been built on Aug 20,
+# the source tree was at Aug 23, and this script happily tested the old binary.
+# It reported
+#
+#     registered : 449   EXECUTED : 380   passed : 380   FAILED : 0
+#     SKIPPED    : 69    budget : 69      exit 0
+#
+# while a freshly configured-and-built tree at the same commit registers 504.
+# Fifty-five tests did not exist in the binary, so they could not fail, so the
+# run was green -- and the skip budget matched exactly, because the budget
+# describes gates and the missing tests were not gated, they were absent.
+# Nothing in the wrapper, in ctest, or in the TestGates suite could see it: all
+# three were correct about a binary that was simply not this tree's.
+#
+# So the build is now part of the measurement. `--no-build` still exists, but
+# it prints a warning and TestGates.BuildMatchesSources will fail the run
+# anyway if the tree has moved -- deliberately, because "I only wanted to
+# re-run ctest" is exactly how the stale reading happened.
 
 set -uo pipefail
 
@@ -48,6 +72,7 @@ BUDGET_FILE="$REPO_ROOT/native/tests/skip_budget.txt"
 
 CTEST_ARGS=()
 ALL_GATES=0
+DO_BUILD=1
 for arg in "$@"; do
     case "$arg" in
         --all-gates)
@@ -56,6 +81,7 @@ for arg in "$@"; do
             export MILO_LONG_TEST=1
             ALL_GATES=1
             ;;
+        --no-build) DO_BUILD=0 ;;
         *) CTEST_ARGS+=("$arg") ;;
     esac
 done
@@ -64,6 +90,57 @@ if [ ! -f "$BUILD_DIR/CTestTestfile.cmake" ]; then
     echo "error: no configured build at $BUILD_DIR" >&2
     echo "       configure it first, or set MILO_TEST_BUILD_DIR." >&2
     exit 1
+fi
+
+# Build BEFORE testing. A stale build dir silently narrows the suite: the tests
+# that would fail are not in the binary, so ctest cannot run them, so the run is
+# green. See the header comment for the measured 449-vs-504 incident.
+if [ "$DO_BUILD" = "1" ]; then
+    # The target list is NOT maintained here. CMake owns it
+    # (MILO_TEST_REQUIRED_TARGETS in native/CMakeLists.txt) and writes it to the
+    # build dir; TestGates.BuildMatchesSources verifies the currency of the same
+    # list. One definition, two consumers, and if they drift the test fails.
+    #
+    # Why not just `all`: wgpu-window-test has been broken since GpuDevice.h
+    # moved into the shared engine, so `cmake --build <dir>` with no target does
+    # not succeed in this repo. Pre-existing, unrelated, last built 2026-03-25.
+    #
+    # Why a list at all is dangerous, measured 2026-08-23 during this very
+    # investigation: the suite drives THREE binaries as subprocesses --
+    # dc3-native (DtaFlowTest, HeadlessBootTest, GameplayTelemetryTest) and
+    # milo-viewer (MiloViewerScreenshot, MiloViewerPosePipeline). Building only
+    # `milo-tests dc3-native` left milo-viewer absent, its 5 tests SKIPPED, the
+    # run went 69 -> 74 skips, and the ratchet fired saying coverage had shrunk.
+    # Coverage had not shrunk; the build was incomplete. Hence the single source.
+    TARGETS_FILE="$BUILD_DIR/milo_test_required_targets.txt"
+    if [ ! -f "$TARGETS_FILE" ]; then
+        echo "error: $TARGETS_FILE is missing." >&2
+        echo "       CMake generates it from MILO_TEST_REQUIRED_TARGETS. Its" >&2
+        echo "       absence means this build dir predates that, and guessing a" >&2
+        echo "       target list here is exactly the failure mode it replaced." >&2
+        echo "       Reconfigure: cmake $BUILD_DIR" >&2
+        exit 7
+    fi
+    read -r -a BUILD_TARGETS < "$TARGETS_FILE"
+    if [ "${#BUILD_TARGETS[@]}" -eq 0 ]; then
+        echo "error: $TARGETS_FILE is empty; refusing to build nothing and" >&2
+        echo "       report the result as a measurement." >&2
+        exit 7
+    fi
+    echo "==> building ${BUILD_TARGETS[*]} in $BUILD_DIR"
+    if ! cmake --build "$BUILD_DIR" --target "${BUILD_TARGETS[@]}"; then
+        echo >&2
+        echo "error: build FAILED. Not running ctest against the previous" >&2
+        echo "       binary -- that would report the old tree's results as" >&2
+        echo "       though they were this one's." >&2
+        exit 6
+    fi
+    # cmake re-runs configure when a CMakeLists changed, which can add or remove
+    # tests. gtest_discover_tests re-runs on relink, so the ctest list is fresh
+    # by the time we get here.
+else
+    echo "==> --no-build: testing whatever is already in $BUILD_DIR"
+    echo "    (TestGates.BuildMatchesSources will fail if it is stale)"
 fi
 
 LOG="$(mktemp -t native_test.XXXXXX.log)"
@@ -181,6 +258,23 @@ if [ -n "$budget" ]; then
         echo "FAIL: $skipped tests skipped, budget is $budget."
         echo "      Coverage shrank. Either restore the gate, or raise the budget"
         echo "      in $BUDGET_FILE with a commit message saying why."
+        # Check the environment before believing the number. The budget was
+        # recorded in the main checkout; archive/ is in .gitignore, so it exists
+        # ONLY there, and exactly one test reads a golden out of it. A worktree
+        # without the symlink is therefore +1 skipped forever, which reads as a
+        # coverage regression and is not one. Both lanes that hit this on
+        # 2026-08-23 were looking at a real exit 2 with an environmental cause.
+        if [ ! -e "$REPO_ROOT/archive/screenshots/pose_regression/goldens/stand_bad_mid.pose.json" ]; then
+            echo
+            echo "      NOTE, before you touch the budget: this checkout has no"
+            echo "        archive/screenshots/pose_regression/goldens/stand_bad_mid.pose.json"
+            echo "      archive/ is gitignored, so it exists only in the main"
+            echo "      checkout. MiloViewerScreenshot.PoseDumpCanMatchGoldenWithTolerance"
+            echo "      skips without it, and accounts for exactly 1 of the"
+            echo "      $skipped skips above. Fix the environment, not the budget:"
+            echo "        ln -s <main-checkout>/archive $REPO_ROOT/archive"
+            echo "      (scripts/setup_worktree.sh now does this for new worktrees.)"
+        fi
         rc=2
     elif [ "$skipped" -lt "$budget" ]; then
         echo
