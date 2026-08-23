@@ -93,11 +93,12 @@ namespace {
             D3DTexture *d3dTex = new D3DTexture;
             int texSize =
                 XGSetTextureHeader(
-                    mWidth, mHeight, 1, 4, (D3DFORMAT)0x1a220058, 0, 0, -1, d3dTex
+                    mWidth, mHeight, 1, 4, (D3DFORMAT)0x1a220058, 0, 0, -1, 0, d3dTex,
+                    nullptr, nullptr
                 );
+            int allocSize = (texSize + 0xFFF) & 0xFFFFF000;
             void *ptr = PhysicalAllocTracked(
-                (texSize + 0xFFF) & 0xFFFFF000, 4, "LiveCameraInput.cpp", 0x66,
-                "Tex(phys)"
+                allocSize, 4, "LiveCameraInput.cpp", 0x66, "Tex(phys)"
             );
             MILO_ASSERT(ptr, 0x67);
             XGOffsetResourceAddress(d3dTex, ptr);
