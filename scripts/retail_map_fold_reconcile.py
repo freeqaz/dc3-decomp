@@ -125,6 +125,28 @@ IMAGE_SYM_CLASS_EXTERNAL = 2
 IMAGE_SYM_CLASS_STATIC = 3
 EH_FUNCLET = re.compile(r"^(?:__unwind\$|__catch\$)")
 
+# `retail_map_fold_candidates.NOT_A_FOLD` excludes four name shapes from a fold
+# class, carried forward from the original installer as "names that share an
+# address with the thing they ANNOTATE rather than aliasing it". That reading is
+# right for `__unwind$` / `__catch$` / `$L` and WRONG for `??_C@`: a string
+# literal is not an annotation on its neighbour, it is a COMDAT the linker pools
+# BY CONTENT, so two `??_C@` names at one address are the same bytes -- which is
+# precisely a fold. Keeping the exclusion cost `Memcard::GetDisplayName` its last
+# row: the target names `math:SHA1.obj`'s narrow empty string and we name
+# `os/Memcard_Xbox`'s wide one, `??_C@_01LOCGONAA@` vs `??_C@_11LOCGONAA@`, both
+# `00 00`, both at `0x8205f1d0`.
+#
+# The blast radius is measured, not argued: dropping `??_C@` makes exactly THREE
+# map addresses newly reachable binary-wide, of which one survives the member
+# gates. It is that small for a structural reason -- the mangled name encodes
+# the content, so identical bytes normally give identical NAMES and one symbol;
+# two names for one address needs the narrow/wide (`_0`/`_1`) split.
+#
+# And it cannot forgive a wrong string. Gate 5 requires our COMDAT's bytes to
+# equal the target survivor's, so a divergent assert text -- different content,
+# therefore a different address, therefore never a candidate -- stays charged.
+NOT_A_FOLD_RECONCILE = re.compile(r"^(?:__unwind\$|__catch\$|\$L)")
+
 COMMENT_ADDITION = [
     "  - retail-map RECONCILE (scripts/retail_map_fold_reconcile.py, group",
     "    names 'retailmap-fn:' plus in-place extensions of existing groups):",
@@ -266,7 +288,7 @@ def derive(repo: Path, identity: str = "align", verbose=True) -> dict:
     work = []
     for va, raw in sorted(v2n.items()):
         census["map addresses examined"] += 1
-        names = [n for n in raw if not NOT_A_FOLD.match(n)]
+        names = [n for n in raw if not NOT_A_FOLD_RECONCILE.match(n)]
         if len(names) < 2:
             census["drop: fewer than two non-annotation names in the map"] += 1
             continue
@@ -569,10 +591,21 @@ def selftest() -> int:
           cut == body, f"{cut!r}")
 
     print("structural controls (gates 1-4, on synthetic maps):")
-    check("an annotation name is not a fold member",
-          bool(NOT_A_FOLD.match("__unwind$1")) and bool(NOT_A_FOLD.match("??_C@_01AA@x@")))
+    check("an EH/label annotation is not a fold member",
+          all(NOT_A_FOLD_RECONCILE.match(n)
+              for n in ("__unwind$1", "__catch$2", "$LN7")))
     check("a real mangled name is not treated as an annotation",
-          not NOT_A_FOLD.match("?Poll@HttpGet@@QAAXXZ"))
+          not NOT_A_FOLD_RECONCILE.match("?Poll@HttpGet@@QAAXXZ"))
+    check("a string literal IS fold-eligible here (it is not an annotation)",
+          not NOT_A_FOLD_RECONCILE.match("??_C@_01LOCGONAA@?$AA?$AA@")
+          and bool(NOT_A_FOLD.match("??_C@_01LOCGONAA@?$AA?$AA@")),
+          "diverges from retail_map_fold_candidates.NOT_A_FOLD on purpose")
+    empty_narrow = (b"\x00\x00", ())
+    other_text = (b"bad assert\x00", ())
+    ok, why = content_verdict(empty_narrow, empty_narrow, 0x8205f1d0, "align", canon)
+    check("...and the wide/narrow empty string pair ADMITS on bytes", ok, why)
+    ok, why = content_verdict(other_text, empty_narrow, 0x8205f1d0, "align", canon)
+    check("...but a DIFFERENT string literal is REFUSED", not ok, why)
 
     print("ledger round-trip:")
     base = {"_comment": ["x"], "_provenance": {},
