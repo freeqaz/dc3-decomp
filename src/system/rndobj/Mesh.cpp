@@ -78,6 +78,20 @@ int PatchVerts::GreaterEq(int iii) const {
     }
 }
 
+// 81.4% under name_check, and 81.4% is not the floor: the target keeps `this`
+// and `vert` in r30/r31 across the GreaterEq call (108 bytes, saves two
+// non-volatiles), where we hold them in r7/r4 -- volatile registers -- and read
+// them back afterwards (88 bytes, saves none).  That only type-checks if MSVC
+// propagated GreaterEq's clobber set into this caller, which it can do for a
+// callee it has already compiled in the same TU.
+//
+// REFUTED EXPERIMENT (2026-08-23): moving this definition ABOVE
+// PatchVerts::GreaterEq, so the callee is no longer compiled first, is
+// completely inert -- HasVert stays at 81.40741 / 80.666664 / 80.48148 on all
+// three rulers, GreaterEq stays at 100.0, and a whole-binary A/B moves no other
+// function.  Source order is not what gates the propagation here.  Do not
+// retry the reorder; look for whatever else makes the target treat GreaterEq
+// as an opaque call.
 bool PatchVerts::HasVert(int vert) const {
     int idx = GreaterEq(vert);
     if (idx < mPatchVerts.size()) {

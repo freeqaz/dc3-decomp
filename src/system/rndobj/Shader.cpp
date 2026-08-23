@@ -346,23 +346,22 @@ void CheckDistortion(RndMat *mat) {
 }
 
 void CheckShadow() {
-    RndCam *shadowCam = TheNgRnd.GetShadowCam();
+    RndCam *shadowCam = TheRnd.GetShadowCam();
     if (shadowCam) {
         Transform viewXfm;
         Hmx::Matrix4 projMtx;
         shadowCam->GetViewProjectXfms(viewXfm, projMtx);
         Hmx::Matrix4 viewProj = Hmx::operator*(viewXfm, projMtx);
-        static Hmx::Matrix4 sShadowTexMatrix;
-        static bool sInit;
-        if (!sInit) {
-            sShadowTexMatrix.x = Vector4(0.0f, 0.0f, 0.0f, 0.0f);
-            sShadowTexMatrix.y = Vector4(0.0f, -0.5f, 0.0f, 0.0f);
-            sShadowTexMatrix.z = Vector4(0.0f, 0.0f, 1.0f, 0.0f);
-            sShadowTexMatrix.w = Vector4(0.0f, 0.501953125f, 0.0f, 1.0f);
-            sInit = true;
-        }
-        Hmx::Matrix4 result = Hmx::operator*(viewProj, sShadowTexMatrix);
-        TheShaderMgr.SetVConstant((VShaderConstant)0x28, result);
+        // Clip space (-1..1, y down) -> shadow-map texture space (0..1), with the
+        // D3D9 half-texel offset for a 1024x1024 map: 0.5 + 0.5/1024.
+        static Hmx::Matrix4 sShadowTexMatrix(
+            Vector4(0.5f, 0.0f, 0.0f, 0.0f),
+            Vector4(0.0f, -0.5f, 0.0f, 0.0f),
+            Vector4(0.0f, 0.0f, 1.0f, 0.0f),
+            Vector4(0.5009765625f, 0.5009765625f, 0.0f, 1.0f)
+        );
+        viewProj = Hmx::operator*(viewProj, sShadowTexMatrix);
+        TheShaderMgr.SetVConstant((VShaderConstant)0x28, viewProj);
     }
 }
 
@@ -390,21 +389,21 @@ u64 RndShaderVelocityCamera::CalcShaderOpts(NgMat *mat, ShaderType s, bool b) {
 }
 
 u64 RndShaderVelocity::CalcShaderOpts(NgMat *mat, ShaderType s, bool b) {
-    return ((u64)(TheHiResScreen.IsActive() & 1) << 40
-        | (u64)(TheShaderMgr.BoneCount() > 0)) << 12;
+    u64 skinned = (u64)(TheShaderMgr.BoneCount() > 0) & 1;
+    return (skinned | (u64)(TheHiResScreen.IsActive() & 1) << 40) << 12;
 }
 
 u64 RndShaderUnwrapUV::CalcShaderOpts(NgMat *mat, ShaderType s, bool b) {
-    return ((u64)(mat->GetDiffuseTex() != nullptr)
-        | 0x10
-        | ((u64)(TheHiResScreen.IsActive() & 1) << 48)) << 4;
+    u64 opts = ((u64)(bool)mat->GetDiffuseTex() & 1) | 0x10;
+    return (opts | ((u64)(TheHiResScreen.IsActive() & 1) << 48)) << 4;
 }
 
 u64 RndShaderDepthVolume::CalcShaderOpts(NgMat *mat, ShaderType s, bool b) {
-    return (((u64)(TheHiResScreen.IsActive() & 1) << 29
-        | (u64)(TheRnd.DrawMode() == Rnd::kDrawShadowColor)) << 23)
-        | (((u64)(TheShaderMgr.BoneCount() != 0) << 11
-        | (u64)(TheShaderMgr.unk1c & 3)) << 1);
+    u64 skinned = (u64)(bool)TheShaderMgr.BoneCount() & 1;
+    u64 opts = (((u64)(uint)TheShaderMgr.unk1c & ~0xFFFFFFFCULL) | skinned << 11) << 1;
+    u64 shadow = (u64)(TheRnd.DrawMode() == Rnd::kDrawShadowColor) & 1;
+    u64 hi = (shadow | (u64)(TheHiResScreen.IsActive() & 1) << 29) << 23;
+    return hi | (opts & ~((1ULL << 23) | (1ULL << 52)));
 }
 
 u64 RndShaderSimple::CalcShaderOpts(NgMat *mat, ShaderType s, bool b) {
