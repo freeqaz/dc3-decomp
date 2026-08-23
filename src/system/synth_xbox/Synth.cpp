@@ -339,7 +339,10 @@ void Synth360::SetupHeadsetSubmixes() {
         HeadsetXferEffect *effect = new HeadsetXferEffect();
 
         XAUDIO2_EFFECT_DESCRIPTOR effectDesc;
-        effectDesc.pEffect = (IUnknown *)effect;
+        // Via IXAPO (the CXAPOBase sub-object at offset 0) -- HeadsetXferEffect
+        // reaches IUnknown through both IXAPO and IXAPOParameters, so a direct
+        // cast is ambiguous. The target stores the pointer unadjusted.
+        effectDesc.pEffect = static_cast<IXAPO *>(effect);
         effectDesc.InitialState = 0;
         effectDesc.OutputChannels = 1;
 

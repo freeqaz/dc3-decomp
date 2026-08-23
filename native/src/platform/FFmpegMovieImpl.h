@@ -31,8 +31,8 @@ public:
     virtual bool Poll() override;
     virtual void Save(BinStream *) override {}
     virtual void End() override;
-    virtual bool IsOpen() override { return mOpen; }
-    virtual bool IsLoading() override { return false; }
+    virtual bool IsOpen() const override { return mOpen; }
+    virtual bool IsLoading() const override { return false; }
     virtual bool CheckOpen(bool) override;
     virtual void SetPaused(bool paused) override;
     virtual bool Paused() const override { return mPaused; }

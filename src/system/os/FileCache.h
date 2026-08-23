@@ -10,7 +10,11 @@
 class FileCacheHelper {
 public:
     virtual ~FileCacheHelper() {}
-    virtual const char *CacheFile(const char *) { return 0; }
+    // Pure: ??_7FileCacheHelper@@6B@ in build/373307D9/asm/system/rndobj/Utl.s
+    // is exactly { ??_GFileCacheHelper, _purecall }, and
+    // ?CacheFile@FileCacheHelper@@... appears nowhere in ham_xbox_r.map.
+    // Both subclasses (ResourceFileCacheHelper, WavFileCacheHelper) override it.
+    virtual const char *CacheFile(const char *) = 0;
 };
 
 class FileCacheEntry;

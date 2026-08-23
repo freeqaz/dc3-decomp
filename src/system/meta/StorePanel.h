@@ -50,13 +50,19 @@ public:
     virtual bool IsLoaded() const;
     virtual void Unload();
     virtual bool Unloading() const;
-    virtual bool IsSongInLibrary(int const &) const { return false; }
-    virtual void ExitStore(StoreError) const;
-    virtual Profile *StoreProfile() const;
+    // Six of these are PURE in the shipped image: slots 0x40/0x44/0x48/
+    // 0x50/0x58/0x74 of ??_7StorePanel@@6BUIPanel@@@ hold _purecall, and none
+    // of the six names appears in ham_xbox_r.map at all. HamStorePanel, the
+    // only subclass, already overrides every one of them.
+    // 0x54 EnumerateSubsetOfOfferIDs is NOT pure -- that slot holds the
+    // `li r3,0; blr` ICF group -- and 0x4c MakeNewOffer already was.
+    virtual bool IsSongInLibrary(int const &) const = 0;
+    virtual void ExitStore(StoreError) const = 0;
+    virtual Profile *StoreProfile() const = 0;
     virtual StoreOffer *MakeNewOffer(DataArray *) = 0;
-    virtual StoreOffer *FindOffer(Symbol) const;
+    virtual StoreOffer *FindOffer(Symbol) const = 0;
     virtual bool EnumerateSubsetOfOfferIDs() const { return false; }
-    virtual void GetOfferIDsToEnumerate(std::vector<u64> &, bool) const {}
+    virtual void GetOfferIDsToEnumerate(std::vector<u64> &, bool) const = 0;
     virtual void LoadArt(char const *, UIPanel *);
 
     StorePanel();
@@ -95,7 +101,7 @@ protected:
     virtual void FinishEnum(std::list<EnumProduct> const &, bool);
     virtual StoreError UpdateOffers(std::list<EnumProduct> const &, bool);
     virtual void UpdateFromEnumProduct(StorePurchaseable *, EnumProduct const *);
-    virtual void StoreUserProfileSwappedToUser(LocalUser *);
+    virtual void StoreUserProfileSwappedToUser(LocalUser *) = 0; // 0x74, _purecall
 
     void StartReEnum();
     DataNode OnMsg(SigninChangedMsg const &);
