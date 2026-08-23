@@ -6,7 +6,9 @@ class NetCacheMgrXbox : public NetCacheMgr {
 public:
     NetCacheMgrXbox();
     virtual ~NetCacheMgrXbox();
-    virtual DataNode Handle(DataArray *, bool);
+    /* No Handle override: ??_7NetCacheMgrXbox@@6B@ slot 0x14 points straight at
+     * NetCacheMgr::Handle in the target, so the forwarding wrapper that used to
+     * live here was a function the original binary does not contain. */
     virtual void Poll();
 
     unsigned int GetIP();
