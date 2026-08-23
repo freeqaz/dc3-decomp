@@ -1062,6 +1062,10 @@ class DecompMCPServer:
                                 "type": "string",
                                 "description": "Model that worked on this (e.g., 'sonnet', 'haiku', 'opus')",
                             },
+                            "project_dir": {
+                                "type": "string",
+                                "description": "The tree you worked in. REQUIRED IN EFFECT for status 'complete'/'at_limit': the verdict is only written if that tree is a verified fixed point of the post-compile patchers, and omitting this checks the MAIN REPO, not your worktree. Defaults to $REPO_ROOT then the server's own repo, same as run_objdiff.",
+                            },
                         },
                         "required": ["symbol", "status", "percent", "notes"],
                     },
@@ -1476,11 +1480,67 @@ class DecompMCPServer:
             if func:
                 start_percent = func.get("current_percent") or 0
 
+                # PATCH GUARD -- refuse to mint a verdict from an unvouchable
+                # tree.
+                #
+                # `complete` and `at_limit` are the two statuses that write a
+                # `verdict` column, and a verdict is a certificate: it removes
+                # the function from `query_functions(status='workable')`
+                # forever. Both used to be written on the agent's word alone
+                # (`at_limit` with no verification whatsoever), and the one
+                # check that existed for `complete` ended in
+                # `except Exception: pass  # allow the report through` -- a
+                # guard whose failure mode is to wave the report through is not
+                # a guard.
+                #
+                # The specific hazard: `ninja <one>.obj` does NOT run the five
+                # post-compile patchers, and patch state is content-keyed
+                # (obj_patch_io.py preserves mtimes), so a tree bypassed that
+                # way is invisible in timestamps and a certificate minted from
+                # it is afterwards indistinguishable from an earned one.
+                #
+                # `build=False`: this is called by a live fleet and must not
+                # kick off a `ninja post-compile` in the main repo from under
+                # another lane. Verification still happens -- reading an
+                # unpatched object is the failure being prevented, not the
+                # build -- so an out-of-date tree is REFUSED rather than fixed.
+                # The agent's own `run_objdiff` call already builds.
+                if status in ("complete", "at_limit"):
+                    try:
+                        guard_dir = self._resolve_project_dir(args.get("project_dir"))
+                    except (FileNotFoundError, CrossProjectError) as e:
+                        return [TextContent(
+                            type="text",
+                            text=f"REFUSING to record `{status}` for {symbol}: {e}",
+                        )]
+                    try:
+                        ensure_patched_tree(guard_dir, build=False)
+                    except UnpatchedTreeError as e:
+                        return [TextContent(
+                            type="text",
+                            text=(
+                                f"REFUSING to record `{status}` for {symbol} — "
+                                f"the tree it was measured in cannot be "
+                                f"vouched for, so the verdict would certify "
+                                f"raw compiler output.\n\n{e}\n\n"
+                                f"Nothing was written to the database. Run "
+                                f"`ninja` in {guard_dir} (NOT "
+                                f"`ninja <one>.obj` — that skips the five "
+                                f"post-compile patchers), re-measure with "
+                                f"run_objdiff, and report again. If you worked "
+                                f"in a worktree, pass `project_dir`."
+                            ),
+                        )]
+
                 # Guard: validate base_size > 0 before accepting COMPLETE
                 if status == "complete":
                     try:
+                        # Measure the tree the agent WORKED IN, not the server's
+                        # own repo. Pointing this at self.project_root meant a
+                        # worktree agent's COMPLETE was adjudicated against
+                        # main's objects.
                         check_result = subprocess.run(
-                            [str(self.project_root / "bin" / "objdiff-cli"), "diff", "-p", str(self.project_root), symbol,
+                            [str(guard_dir / "bin" / "objdiff-cli"), "diff", "-p", str(guard_dir), symbol,
                              "-c", "functionRelocDiffs=none"],
                             capture_output=True, text=True, timeout=60,
                         )

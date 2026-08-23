@@ -6,6 +6,15 @@ marked COMPLETE. Unicorn behavioral testing is the primary verdict driver —
 if a function produces identical results despite assembly differences, those
 differences are cosmetic and the function is COMPLETE.
 
+This script WRITES `verdict='COMPLETE'`, so it refuses an unpatched tree
+--------------------------------------------------------------------------
+`patch_guard.ensure_patched_tree()` runs before any object is read, in every
+mode including `--dry-run`. A certificate minted from a tree that skipped the
+five post-compile patchers describes raw compiler output, and patch state is
+content-keyed (`obj_patch_io.py` preserves mtimes), so afterwards it is
+indistinguishable from an earned one. Filed as F2 in
+docs/analysis/2026-08-22-unfalsifiable-instrument-audit.md.
+
 Usage:
     python3 scripts/batch_promote.py                        # dry-run, all functions
     python3 scripts/batch_promote.py --apply                # write to DB
@@ -179,8 +188,14 @@ def run_objdiff_analysis(symbol):
         if result.returncode != 0:
             return None
         return json.loads(result.stdout)
-    except (subprocess.TimeoutExpired, json.JSONDecodeError, FileNotFoundError):
+    except (subprocess.TimeoutExpired, json.JSONDecodeError):
         return None
+    # FileNotFoundError is deliberately NOT caught. `None` here means "no
+    # objdiff data", and the decision tree promotes on unicorn alone from
+    # there -- so swallowing a vanished binary turned "the instrument is gone"
+    # into a COMPLETE. main() asserts the binary up front; if it disappears
+    # mid-run this now raises, `_analyze_unit_functions` records it as an
+    # ERROR row, and `apply_results` writes nothing for it.
 
 
 def run_unicorn_analysis(symbol, decomp_coff, orig_coff, engine, args, enrichment=None):
@@ -597,7 +612,10 @@ def main():
     parser.add_argument("-o", "--output", type=str, default=None,
                         help="Write full JSON report to this file")
     parser.add_argument("--build", action="store_true",
-                        help="Run ninja build before analysis")
+                        help="Run `ninja post-compile` before analysis. The "
+                             "tree's patch state is VERIFIED either way; this "
+                             "only decides whether an out-of-date tree is "
+                             "fixed or refused.")
 
     args = parser.parse_args()
     dry_run = not args.apply
@@ -605,14 +623,41 @@ def main():
     if dry_run:
         print("=== DRY RUN (use --apply to commit changes) ===\n")
 
-    # Optional build phase
-    if args.build:
-        print("Building objects...")
-        ret = subprocess.run(["ninja"], cwd=PROJECT_ROOT)
-        if ret.returncode != 0:
-            print("ERROR: ninja build failed", file=sys.stderr)
-            return 1
-        print()
+    # REFUSE an unpatched tree before reading a single object.
+    #
+    # This script writes `verdict='COMPLETE'`, and `decide_verdict` grants it on
+    # `unicorn_verdict == 'EQUIVALENT'` with `normalized_pct` possibly None --
+    # the write is `COALESCE(NULL, current_percent)`, so the row keeps its old
+    # percent and gains a COMPLETE indistinguishable from an earned one. A
+    # certificate minted from a tree that skipped the five post-compile
+    # patchers is a measurement of raw compiler output, and because patch state
+    # is content-keyed (obj_patch_io.py preserves mtimes) nothing afterwards can
+    # tell. Measured cost of the bypass: -1.22 pp of a unit's
+    # matched_functions_percent. See scripts/orchestrator/patch_guard.py.
+    #
+    # `--build` used to run a bare `ninja`; it now goes through
+    # `post-compile`, which is the target that owns the patch passes -- and the
+    # verification runs whether or not --build was passed, because reading an
+    # unpatched object is the failure being prevented, not the build.
+    from orchestrator.patch_guard import UnpatchedTreeError, ensure_patched_tree
+    try:
+        note = ensure_patched_tree(PROJECT_ROOT, build=args.build)
+    except UnpatchedTreeError as exc:
+        print(f"REFUSING to batch-promote: {exc}", file=sys.stderr)
+        return 2
+    print(f"[patch-guard] {note}\n", file=sys.stderr)
+
+    # A missing objdiff-cli used to be caught as `FileNotFoundError` and turned
+    # into `None` == "no objdiff data" -- which the decision tree then promoted
+    # to COMPLETE off unicorn alone, reporting `Errors: 0` and exiting 0. The
+    # binary's ABSENCE must not be reported as a measurement.
+    if not os.path.exists(OBJDIFF_CLI):
+        print(f"REFUSING to batch-promote: objdiff-cli is absent at "
+              f"{OBJDIFF_CLI}, so no function in this run can be scored. "
+              f"Every one of them would fall through to the unicorn-only path "
+              f"and be promoted to COMPLETE with `normalized_pct = None`.",
+              file=sys.stderr)
+        return 2
 
     # Initialize DB
     conn = init_database(args.db)

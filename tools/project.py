@@ -518,6 +518,13 @@ def generate_build_ninja(
     split_guard_script = Path("scripts") / "verify_split_current.py"
     split_stamp = build_path / "split_inputs.stamp"
     split_checked = build_path / "split_current_checked.stamp"
+    # The complete-unit guard: objdiff substitutes 100% for a measurement on
+    # every function of a `complete: true` unit that has no BASE object
+    # (report.rs `base.is_none() && object.complete => 100.0`). That is a
+    # sanctioned upstream hatch, so the fix is a local assertion that it is not
+    # firing, not a change to objdiff. See scripts/verify_complete_units.py.
+    complete_units_script = Path("scripts") / "verify_complete_units.py"
+    complete_units_checked = build_path / "complete_units_checked.stamp"
     build_tools_path = config.build_dir / "tools"
     download_tool = config.tools_dir / "download_tool.py"
     n.rule(
@@ -1700,6 +1707,51 @@ def generate_build_ninja(
         )
 
         ###
+        # Assert no unit is credited 100% without a base object to measure.
+        #
+        # objdiff's `metadata.complete: true` is a SUBSTITUTION for a
+        # measurement, not a label: report_object credits every function of a
+        # complete unit at 100% when its base object is absent, and sets
+        # complete_code = total_code outright. Reproduced on this tree
+        # 2026-08-23 by deleting one unit's `base_path` key and changing
+        # nothing else:
+        #
+        #     matched_functions   29,885 -> 29,889      (+4)
+        #     matched_code     5,048,168 -> 5,050,464   (+2,296 B)
+        #     matched_code_percent 44.385647 -> 44.405834
+        #
+        # ...with all 20 of default/keygen_xbox's functions reading 100% and
+        # nothing compared. The headline moved UP, which is the shape a
+        # regression must never take. Open task #142 (a .cpp that compiles to
+        # no object while the link still succeeds) is exactly this input.
+        #
+        # The hatch is deliberately NOT being closed upstream -- objdiff is
+        # shared with ../rb3 and ../rb3-xenon by symlink and every consumer's
+        # tracked percentage would move. So this is a local assertion that it
+        # is not firing here, on the edge that would carry the credit.
+        #
+        # Same `always` + `--stamp-out` + `restat` shape as the split guard
+        # above, for the same reason: a vanished object is mtime-invisible with
+        # respect to objdiff.json, so the edge must be able to fire on a tree
+        # where nothing ninja knows about has moved -- while its OUTPUT must
+        # not move unless the complete-unit set did, or every build re-runs
+        # REPORT and REPORT RAW. The digest deliberately excludes object sizes
+        # so an ordinary recompile leaves it byte-identical.
+        ###
+        n.comment("Assert every `complete: true` unit has a base object")
+        n.rule(
+            name="complete_units_check",
+            command=f"$python {complete_units_script} --check --quiet --stamp-out $out",
+            description="CHECK COMPLETE UNITS",
+            restat=True,
+        )
+        n.build(
+            outputs=str(complete_units_checked),
+            rule="complete_units_check",
+            implicit=[str(complete_units_script), "objdiff.json", "always"],
+        )
+
+        ###
         # BELT AND BRACES: purge the report-cache sidecars when the alias map
         # moves. As of 2026-08-13 this edge is REDUNDANT, and it stays anyway.
         #
@@ -1781,9 +1833,12 @@ def generate_build_ninja(
         # ... and on the split-currency check, because the TARGET side of every
         # diff is written by an edge whose outputs ninja does not know. See the
         # `split_current_check` block above for the 341-function reproduction.
+        # ... and on the complete-unit check, because a unit credited 100% with
+        # no base object inflates this very report and does it silently.
         report_implicit: List[Union[str, Path]] = [
             objdiff, "objdiff.json", "all_source",
             str(icf_map_path), str(icf_map_purged), str(split_checked),
+            str(complete_units_checked),
         ]
         if config.custom_build_steps and "post-compile" in config.custom_build_steps:
             report_implicit.append("post-compile")
@@ -1855,6 +1910,7 @@ def generate_build_ninja(
             implicit=[
                 objdiff, "objdiff.json", "all_source", "always",
                 str(icf_map_path), str(icf_map_purged), str(split_checked),
+                str(complete_units_checked),
             ],
             order_only="post-build",
         )

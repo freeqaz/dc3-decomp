@@ -48,6 +48,36 @@ code change.  Numbers from before the switch are not comparable to
 numbers after it.  See
 [STATE_OF_THE_DECOMP.md](STATE_OF_THE_DECOMP.md#the-2026-08-ruler-change).
 
+## `complete: true` is a substitution for a measurement (task #145)
+
+A unit carrying `metadata.complete: true` in `objdiff.json` and having **no base
+object** has every one of its functions credited at **100 %**, with nothing
+compared.  In `objdiff-cli/src/cmd/report.rs`:
+
+```rust
+None if base.is_none() && object.complete.unwrap_or(false) => 100.0,
+```
+
+`base` is the *decompiled* side.  The unit's `complete_code` is also set to its
+`total_code` outright.  Measured on dc3 `a8fead7b1` by dropping `base_path` from
+one unit and changing nothing else: `matched_functions` 29,885 → 29,889,
+`matched_code` 5,048,168 → 5,050,464 B, headline **44.385647 % → 44.405834 %** —
+all 20 of that unit's functions reading 100 %.  **A silent regression that
+reads as progress.**
+
+This is a sanctioned upstream escape hatch and is deliberately **not** being
+changed: `bin/objdiff-cli` is a symlink shared with `../rb3` and
+`../rb3-xenon`, so closing it would move real percentages in every consumer.
+
+**Census, 2026-08-23: 968 of dc3's 2,224 units are `complete: true`, and all 968
+have a non-empty base object.**  So nothing in the headline is credited without
+measurement today — but that is a property of the tree, not of the build.
+`scripts/verify_complete_units.py --check` is the assertion, wired as an
+implicit input of `report.json`, `report_raw.json` and `baseline.json`; a
+`ninja` whose complete-unit set has lost an object fails **before** REPORT runs,
+so the previous honest report is left in place rather than overwritten with an
+inflated one.
+
 ## Current numbers
 
 *(report: `report.json`, 32,202 authorable functions)*
