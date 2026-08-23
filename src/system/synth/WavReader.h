@@ -35,4 +35,8 @@ public:
 protected:
     virtual void Init();
     virtual int ConsumeData(void **, int, int);
+    /** ??_7WavReader@@6B@ slot +0x20.  ?EndData@WavReader@@MAAXXZ is in
+     *  ham_xbox_r.map at 0x823E3B70 -- the OnlyReturns fold group, i.e. an
+     *  empty body.  Mirrors VorbisReader::EndData at the same slot. */
+    virtual void EndData() {}
 };

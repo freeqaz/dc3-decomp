@@ -11,6 +11,11 @@ public:
     virtual void Save(BinStream &);
     virtual void Load(BinStream &);
     virtual bool IsVersionOK() const = 0;
+    /** ??_7SongMetadata@@6B@ slot +0x5C.
+     *  ?HasAlternatePath@SongMetadata@@UBA_NXZ is in ham_xbox_r.map at
+     *  0x82AEAE70 ("li r3,0; blr"), so the base body returns false.
+     *  HamSongMetadata::HasAlternatePath overrides it. */
+    virtual bool HasAlternatePath() const { return false; }
 
     int ID() const;
     bool IsOnDisc() const;
