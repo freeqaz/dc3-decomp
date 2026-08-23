@@ -231,26 +231,12 @@ BEGIN_SAVES(DepthBuffer3D)
     SAVE_SUPERCLASS(Hmx::Object)
     SAVE_SUPERCLASS(RndDrawable)
     SAVE_SUPERCLASS(RndTransformable)
-    bs << mNobodyColor;
-    bs << mPlayerPalette;
-    bs << mPlayerPaletteOffset;
-    bs << mMinimalMat;
-    bs << mDrawSheet;
-    bs << mMesh;
-    bs << mPlayerPaletteScale;
-    bs << mStretchNearCamera;
-    bs << mOpacity;
-    bs << mDrawPlayer1;
-    bs << mDrawPlayer2;
-    bs << mDrawNonPlayers;
-    bs << mTile;
-    bs << mScaleVoxel;
-    bs << mScaleVoxelGap;
-    bs << mFishEyeX;
-    bs << mFishEyeY;
-    bs << mMaxZoom;
-    bs << mDebugLayout;
-    bs << mMaxDepthZoom;
+    bs << mNobodyColor << mPlayerPalette << mPlayerPaletteOffset;
+    bs << mMinimalMat << mDrawSheet << mMesh;
+    bs << mPlayerPaletteScale << mStretchNearCamera << mOpacity;
+    bs << mDrawPlayer1 << mDrawPlayer2 << mDrawNonPlayers;
+    bs << mTile << mScaleVoxel << mScaleVoxelGap << mFishEyeX << mFishEyeY;
+    bs << mMaxZoom << mDebugLayout << mMaxDepthZoom;
 END_SAVES
 
 INIT_REVS(11, 0)
