@@ -50,10 +50,23 @@ an equivalence when a relocation name actually differs), so gate 3's
 "one side uses it" hygiene condition is not safety-critical here and is not
 re-imposed; gate 4 is.
 
+`--mint-new` (second pass)
+-------------------------
+The same evidence also covers map-shared addresses that carry NO class at all.
+`--mint-new` creates one per address, under gate 4 plus a new gate 5: the
+survivor's address in `config/373307D9/symbols.txt` must equal the map address,
+which stops an anonymous-namespace symbol's TU hash (`?A0xc9fefd64@@`) being
+misread as an address.  Measured 2026-08-23: 534 classes / 1,577 folded names,
+6 addresses refused.  Its measured yield on this tree is SMALL -- 3 functions
+improved, 0 crossed 100.0, 0 regressed -- because most of those spellings are
+in units this build does not compile.  It is a correctness fix to the ruler,
+not a scoring win, and it is separable from the completion pass above.
+
 Usage
 -----
     python3 scripts/install_retail_map_group_completion.py --check
     python3 scripts/install_retail_map_group_completion.py --apply
+    python3 scripts/install_retail_map_group_completion.py --apply --mint-new
 """
 from __future__ import annotations
 
@@ -95,22 +108,33 @@ def retail_map_addresses() -> dict[str, set[str]]:
     return addr2names
 
 
-def target_resident() -> set[str]:
-    names = set()
+# The address must be read from the "= .text:0x…" assignment, NOT the first
+# 0x… on the line: an anonymous-namespace symbol carries its TU hash inside the
+# mangled name (?A0xc9fefd64@@), and a naive search returns that hash instead.
+SYMBOL_ADDR = re.compile(r"=\s*\.\w+:0x([0-9A-Fa-f]{8})")
+
+
+def target_resident() -> dict[str, str | None]:
+    """dtk-named target-resident symbols -> the address symbols.txt gives them."""
+    names: dict[str, str | None] = {}
     with SYMBOLS_TXT.open() as fh:
         for line in fh:
-            if "=" in line:
-                names.add(line.split("=", 1)[0].strip())
+            if "=" not in line:
+                continue
+            name = line.split("=", 1)[0].strip()
+            addr = SYMBOL_ADDR.search(line)
+            names[name] = addr.group(1).lower() if addr else None
     return names
 
 
-def plan():
+def plan(mint_new: bool = False):
     addr2names = retail_map_addresses()
     tres = target_resident()
     doc = json.loads(ALIASES.read_text())
 
     completions = []  # (group, sorted added names)
     refused = []  # (group name, reason, n_names)
+    minted = []  # brand-new groups
 
     for group in doc["groups"]:
         raw = group.get("address")
@@ -124,25 +148,70 @@ def plan():
         extra = names_at - have
         if not extra:
             continue
-        resident = names_at & tres
+        resident = names_at & set(tres)
         if len(resident) != 1:  # gate 4
             refused.append((group["name"], f"{len(resident)} target-resident names", len(extra)))
             continue
         add = sorted(n for n in extra if n not in tres)  # gate 4, second half
         if add:
             completions.append((group, add))
-    return doc, completions, refused
+
+    if mint_new:
+        occupied = {
+            g["address"].lower().removeprefix("0x") for g in doc["groups"] if g.get("address")
+        }
+        for addr, names_at in sorted(addr2names.items()):
+            if len(names_at) < 2 or addr in occupied:  # gates 1, 2
+                continue
+            resident = names_at & set(tres)
+            if len(resident) != 1:  # gate 4
+                refused.append((f"mint@0x{addr}", f"{len(resident)} target-resident names",
+                                len(names_at) - 1))
+                continue
+            survivor = next(iter(resident))
+            if tres[survivor] != addr:  # gate 5: symbols.txt must agree with the map
+                refused.append((f"mint@0x{addr}",
+                                f"symbols.txt puts {survivor} at 0x{tres[survivor]}",
+                                len(names_at) - 1))
+                continue
+            folded = sorted(names_at - {survivor})
+            stem = survivor.lstrip("?").split("@", 1)[0][:40] or "sym"
+            minted.append(
+                {
+                    "name": f"retailmap-mint:{stem}@0x{addr}",
+                    "address": f"0x{addr}",
+                    "survivor": survivor,
+                    "folded": folded,
+                    "sites": 0,
+                    "survivor_candidates": 1,
+                    "evidence": (
+                        f"MINTED from orig/{BUILD_ID}/ham_xbox_r.map ({TIER}): "
+                        f"{len(folded) + 1} spellings share 0x{addr} in the shipped MSVC "
+                        "linker map, i.e. /OPT:ICF folded them. Gate 4: exactly one of "
+                        f"them ({survivor}) is target-resident, so the canonical spelling "
+                        "is deterministic and no target-resident name is folded away. "
+                        "Gate 5: config/" + BUILD_ID + "/symbols.txt agrees with the map "
+                        "about the survivor's address."
+                    ),
+                }
+            )
+
+    return doc, completions, refused, minted
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--apply", action="store_true", help="write scripts/symbol_aliases.json")
     ap.add_argument("--check", action="store_true", help="report only (default)")
+    ap.add_argument("--mint-new", action="store_true",
+                    help="also mint classes for map-shared addresses that carry none")
     args = ap.parse_args()
 
-    doc, completions, refused = plan()
+    doc, completions, refused, minted = plan(mint_new=args.mint_new)
     n_names = sum(len(a) for _, a in completions)
+    n_minted_names = sum(len(g["folded"]) for g in minted)
     print(f"completable classes: {len(completions)}   names to add: {n_names}")
+    print(f"minted classes:      {len(minted)}   folded names: {n_minted_names}")
     print(f"refused by gate 4:   {len(refused)}   names withheld: {sum(r[2] for r in refused)}")
     for name, reason, n in refused:
         print(f"  REFUSED {name}: {reason} ({n} names withheld)")
@@ -164,12 +233,15 @@ def main() -> int:
             "Gate 4 re-checked: exactly one name at the address is "
             "target-resident, and no target-resident name was added."
         )
+    doc["groups"].extend(minted)
     doc.setdefault("_provenance", {}).setdefault("installers", []).append(
         {
             "script": "scripts/install_retail_map_group_completion.py",
             "tier": TIER,
             "classes_completed": len(completions),
             "names_added": n_names,
+            "classes_minted": len(minted),
+            "names_minted": n_minted_names,
             "classes_refused_gate4": len(refused),
             "names_withheld_gate4": sum(r[2] for r in refused),
         }
