@@ -930,8 +930,15 @@ def main() -> int:
 
     # CRT$XCU section: decomp's static initializer function pointers.
     # The linker merges .CRT$XC* subsections into a single .CRT section.
-    if ".CRT" in pe_sections:
-        crt = pe_sections[".CRT"]
+    # This section exists only in the DECOMP PE (the original links its CRT
+    # tables into .data), so it must be read from pe_data -- pe_sections above
+    # prefers the original XEX's PE and silently never contains ".CRT", which
+    # left crt_xcu_* out of every manifest and xenia running on stale compiled
+    # defaults (83627800..83627B44).  Found 2026-08-23 when the first relink
+    # since Aug 4 moved .CRT and boot injected 209 code words as constructors.
+    decomp_sections = parse_pe_section_info(pe_data)
+    if ".CRT" in decomp_sections:
+        crt = decomp_sections[".CRT"]
         address_catalog["crt_xcu_start"] = {"address": crt["address"]}
         address_catalog["crt_xcu_end"] = {"address": crt["address"] + crt["size"]}
 
