@@ -517,10 +517,11 @@ void RndFont::UpdateChars() {
                     // produced no pixels. The re-fetch after LoadPage is NOT
                     // re-tested, and the next two statements call
                     // bmap->Width()/Height() (and SetCharInfo dereferences *bmap
-                    // further down). On the 360 those reads land in the mapped,
-                    // zeroed page 0 and yield a divide-by-zero-ish 0 offset;
-                    // Linux SIGSEGVs. Stop laying out characters -- the same
-                    // thing the out-of-materials arm above does.
+                    // further down). Those are non-virtual member reads, so on
+                    // the 360 they land in the mapped, zeroed page 0 and return
+                    // 0 -- garbage offsets, but the title keeps running. Linux
+                    // has no page 0 and SIGSEGVs. Stop laying out characters --
+                    // the same thing the out-of-materials arm above does.
                     if (!bmap) {
                         break;
                     }
