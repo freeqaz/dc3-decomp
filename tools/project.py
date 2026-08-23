@@ -1737,18 +1737,61 @@ def generate_build_ninja(
         # not move unless the complete-unit set did, or every build re-runs
         # REPORT and REPORT RAW. The digest deliberately excludes object sizes
         # so an ordinary recompile leaves it byte-identical.
+        #
+        # THE ORDER-ONLY DEPENDENCIES BELOW ARE LOAD-BEARING (task #149).
+        #
+        # As first landed this edge listed only [script, objdiff.json, always],
+        # which is no relationship to the compile edges at all -- so under a
+        # parallel `ninja` ninja was free to schedule the check at second zero,
+        # concurrently with 16 running cl.exe processes, and it read objects
+        # that were ZERO BYTES mid-write and failed the build. Another lane hit
+        # that three times in one session; a plain re-run cleared it each time.
+        # That is the worst possible failure for THIS guard in particular: the
+        # hole it covers (968 of 2,224 units are `complete: true`, and a unit
+        # with no base object is credited 100% outright) is only covered as
+        # long as nobody routes around the guard, and a guard that cries wolf
+        # gets routed around.
+        #
+        # Measured in a worktree 2026-08-23, one incremental `ninja -j 16` over
+        # 220 recompiled units, polling the checker in a tight loop: 169
+        # distinct zero-byte windows, min 26 ms / median 58 ms / max 552 ms,
+        # and 264 of 19,852 polls red. Every one was a file PRESENT at zero
+        # bytes -- MSVC creates the .obj and fills it in place rather than
+        # writing a temp and renaming -- which is byte-for-byte what a .cpp
+        # that stopped emitting an object looks like.
+        #
+        # `order_only`, not `implicit`, is exactly the right tool: the edge is
+        # already unconditionally dirty via `always`, so it needs sequencing
+        # and nothing else, and an implicit dep on `all_source` would make the
+        # stamp's re-check depend on object mtimes for no benefit. Both names
+        # are listed because they are different claims -- `all_source` is every
+        # compile edge, `post-compile` is the six patchers that rewrite those
+        # objects afterwards -- and objdiff reads the PATCHED objects.
+        #
+        # Having bought quiescence structurally, the edge spends it:
+        # `--ordered-after-compile` turns OFF the checker's out-of-ninja
+        # tolerance for a build in flight, so a genuine task-#142 object is
+        # reported as exit 1 naming the unit rather than as exit 6
+        # "indeterminate". The flag and these two order-only deps are only
+        # correct together, and tests/test_complete_units.py parses the
+        # generated build.ninja to assert they stay together.
         ###
         n.comment("Assert every `complete: true` unit has a base object")
         n.rule(
             name="complete_units_check",
-            command=f"$python {complete_units_script} --check --quiet --stamp-out $out",
+            command=f"$python {complete_units_script} --check --quiet "
+                    f"--ordered-after-compile --stamp-out $out",
             description="CHECK COMPLETE UNITS",
             restat=True,
         )
+        complete_units_order_only: List[str] = ["all_source"]
+        if config.custom_build_steps and "post-compile" in config.custom_build_steps:
+            complete_units_order_only.append("post-compile")
         n.build(
             outputs=str(complete_units_checked),
             rule="complete_units_check",
             implicit=[str(complete_units_script), "objdiff.json", "always"],
+            order_only=complete_units_order_only,
         )
 
         ###
