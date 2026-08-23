@@ -99,19 +99,27 @@ BEGIN_COPYS(ThreeDSound)
     CalculateFaderVolume();
 END_COPYS
 
-// FINDING (2026-08-20, relocation-name lane).  INIT_REVS declares two FILE-SCOPE
-// statics, gRev and gAltRev.  The shipped image does not: the symbol this Load
-// references is
+// RETRACTED (2026-08-23, relocation-name lane).  The 2026-08-20 FINDING that
+// used to sit here read the target-side symbol
 //     ?gRevs@?1??Load@ThreeDSound@@UAAXAAVBinStream@@@Z@4QBGB
-// -- a FUNCTION-LOCAL static named `gRevs`, of type `unsigned short const []`.
-// So the original wrote something on the order of
-//     static const unsigned short gRevs[] = { rev, alt };
-// INSIDE Load(), and ASSERT_REVS read gRevs[0]/gRevs[1].  Under the new
-// name_check ruler that costs this function 0.075pp (99.925 vs 100.0); it is
-// the only one of the 54 newly-unmatched functions where the reference is live
-// enough to be charged, but the macro shape is wrong for every Load() in the
-// tree.  Not changed here: INIT_REVS lives in obj/Object.h, which is inside the
-// PCH, so re-shaping it is a whole-binary experiment and needs its own A/B.
+// as evidence that retail declared a FUNCTION-LOCAL `static const unsigned
+// short gRevs[] = { rev, alt };` inside Load(), and concluded INIT_REVS's two
+// file-scope statics were the wrong shape "for every Load() in the tree".
+// That name is not evidence of anything: it appears nowhere in
+// orig/373307D9/ham_xbox_r.map.  It was invented by hand in commit 4abc61f0f,
+// which renamed the splitter's own `lbl_820BE6FC` placeholder.  Two facts
+// refute the reading it was built on:
+//   * The only reference to that address in the whole image reads FOUR BYTES
+//     BEFORE it -- the target does `addi rN, r11, <sym>@l` then `subi r7, rN,
+//     0x4` and passes r7 as the `const unsigned short&` rev limit.  A
+//     `const unsigned short gRevs[]` whose sole use is gRevs[-2] is not a
+//     coherent object.
+//   * INIT_REVS's existing two 4-aligned statics reproduce those bytes exactly:
+//     MSVC materialises &gAltRev and reaches gRev as gAltRev-4.  This Load is
+//     100.0000 under the relocation-blind ruler with zero instruction
+//     mismatches, so there is nothing for a re-shape to fix.
+// The symbol is back to lbl_820BE6FC and this function is 100.0000 under
+// name_check as well.  Do not re-invent the name.
 INIT_REVS(6, 0)
 
 BEGIN_LOADS(ThreeDSound)

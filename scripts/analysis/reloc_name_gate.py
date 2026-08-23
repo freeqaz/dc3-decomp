@@ -600,6 +600,33 @@ def main(argv=None) -> int:
           f"  ({sum(r['size'] for r in standing)} B)")
     print(f"  of which every pair is a proven FOLD: {len(fold)}")
 
+    # A blind-100 row is NOT automatically "the name is the only defect", and
+    # the header count above used to say it was. `crossers` is computed from
+    # the two fuzzy legs alone, before any pair is extracted or exempted, so a
+    # row lands in it whenever objdiff charges SOMETHING the blind leg does not
+    # -- including charges this gate cannot name.
+    #
+    # Measured on this tree 2026-08-23: 29 crossing rows, and 13 of them
+    # (8,704 B) have NO surviving pair at all. Every one that was checked is
+    # charged purely on a function-local-static SCOPE ORDINAL -- identical
+    # variable, identical instruction bytes, different per-function counter:
+    #   ?SyncProperty@CamShot@@   ?_s@?HP@... vs ?_s@?JD@...   (8 rows, 3,008 B)
+    #   ?Text@SongSortNode@@      ?ham1@?BH@... vs ?ham1@?CP@... (16, 1,916 B)
+    # Those are a body-shape signal (our function opens more lexical scopes
+    # before that point), not a naming defect, and no rename closes them. They
+    # are also invisible in the listing below, which only walks `standing`, so
+    # the old header promised 29 nameable wins and could only show 16.
+    cross = [r for r in rows if r["crosses"]]
+    cross_named = [r for r in cross if r["pairs"]]
+    cross_unattr = [r for r in cross if not r["pairs"]]
+    print(f"\ncrossing rows (blind leg == 100.0)   : {len(cross)}"
+          f"  ({sum(r['size'] for r in cross)} B)")
+    print(f"  charge attributable to a kept pair : {len(cross_named)}"
+          f"  ({sum(r['size'] for r in cross_named)} B)  <- the nameable slice")
+    print(f"  charge NOT attributable            : {len(cross_unattr)}"
+          f"  ({sum(r['size'] for r in cross_unattr)} B)"
+          "  <- exempt-only or no pair; NOT a name fix")
+
     vcount = collections.Counter(p["verdict"] for r in standing for p in r["pairs"])
     print("\npair verdicts (standing rows):")
     for k, v in vcount.most_common():
@@ -615,7 +642,9 @@ def main(argv=None) -> int:
         print(f"\n{r['size']:>7} B  blind={r['blind_fuzzy']:.4f} "
               f"graded={r['graded_fuzzy']:.4f}  "
               f"other_charges={r['other_charges']}"
-              f"{'  [CROSSES: name is the only defect]' if r['crosses'] else ''}")
+              + ("  [CROSSES: name is the only defect]" if r["crosses"] and r["pairs"]
+                 else "  [CROSSES, but no pair survives -- charge unattributed]"
+                 if r["crosses"] else ""))
         print(f"  {r['unit']} :: {r['symbol']}")
         for p in r["pairs"]:
             print(f"    [{p['verdict']}]")
