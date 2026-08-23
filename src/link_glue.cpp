@@ -18,6 +18,10 @@
 #include "world\Spotlight.h"
 #include "char\Waypoint.h"
 #include "rndobj\Wind.h"
+#include "rndobj\Dir.h"
+#include "ui\UIListDir.h"
+#include "ui\UILabelDir.h"
+#include "hamobj\HamListRibbon.h"
 #include "char\CharPollable.h"
 #include "char\CharWeightSetter.h"
 #include "flow\FlowNode.h"
@@ -717,6 +721,114 @@ extern "C" const char __link_glue_empty_str[] = "";
 #pragma comment(linker, "/ALTERNATENAME:hypot=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:wmemcpy=__link_glue_noop")
 
+// -- ICF fold-group aliases (2026-08-23) --
+// Each alias target is the symbols.txt name that survived at the fold address;
+// in the original image every name in the group IS that one body, so aliasing
+// reproduces the original call graph exactly.  Verified against
+// orig/373307D9/ham_xbox_r.map: the wanted name and the target name share the
+// listed address.
+// 0x82621910:
+#pragma comment(linker, "/ALTERNATENAME:?Highlight@WorldReflection@@UAAXXZ=?Highlight@RndMesh@@UAAXXZ")
+// 0x827118E0:
+#pragma comment(                                                                         \
+    linker,                                                                              \
+    "/ALTERNATENAME:?SyncProperty@WorldCrowd3DCharHandle@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z=" \
+    "?SyncProperty@RndMultiMeshProxy@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z"     \
+)
+// 0x82E2D4F8:
+#pragma comment(                                                                         \
+    linker,                                                                              \
+    "/ALTERNATENAME:?AddRef@CXAPOParametersBase@@UAAKXZ=?AddRef@CAudioSRC@LEAPFX@@UAAKXZ" \
+)
+// 0x82E2D590:
+#pragma comment(                                                                         \
+    linker,                                                                              \
+    "/ALTERNATENAME:?CalcInputFrames@CXAPOBase@@UAAII@Z="                                \
+    "?HashKey@?$CSPHash@KPAVCRule@NUISPEECH@@@NUISPEECH@@MBAIK@Z"                        \
+)
+#pragma comment(                                                                         \
+    linker,                                                                              \
+    "/ALTERNATENAME:?CalcOutputFrames@CXAPOBase@@UAAII@Z="                               \
+    "?HashKey@?$CSPHash@KPAVCRule@NUISPEECH@@@NUISPEECH@@MBAIK@Z"                        \
+)
+// 0x82AEAE70 (li r3,0; blr):
+#pragma comment(                                                                         \
+    linker,                                                                              \
+    "/ALTERNATENAME:?Initialize@CXAPOBase@@UAAJPBXI@Z="                                  \
+    "?SetEngine@CTrigramStore@NUISPEECH@@QAAJPAVCEngine@2@@Z"                            \
+)
+// 0x82E63A38:
+#pragma comment(                                                                         \
+    linker,                                                                              \
+    "/ALTERNATENAME:?IsOutputFormatSupported@CXAPOBase@@UAAJPBUtWAVEFORMATEX@@0PAPAU2@@Z=" \
+    "?IsInputFormatSupported@CXAPOBase@@UAAJPBUtWAVEFORMATEX@@0PAPAU2@@Z"                \
+)
+// 0x823E3B70 (OnlyReturns — the empty-body fold group):
+#pragma comment(linker, "/ALTERNATENAME:?Reset@CXAPOBase@@UAAXXZ=OnlyReturns")
+#pragma comment(linker, "/ALTERNATENAME:?SpewInit@@YAXXZ=OnlyReturns")
+#pragma comment(linker, "/ALTERNATENAME:?SpewTerminate@@YAXXZ=OnlyReturns")
+// 0x82B9BEC0 (Line/Cube UnlockRect fold):
+#pragma comment(                                                                         \
+    linker, "/ALTERNATENAME:D3DLineTexture_UnlockRect=D3DCubeTexture_UnlockRect"         \
+)
+// 0x82E44240: all CSampleXAPOBase<T>::OnSetParameters instantiations fold to one
+// body; GainEffect's is the name symbols.txt kept.
+#define ONSETPARAMS_ALIAS(WANT)                                                          \
+    __pragma(comment(                                                                    \
+        linker,                                                                          \
+        "/ALTERNATENAME:?OnSetParameters@?$CSampleXAPOBase@" WANT                        \
+        "@ATG@@MAAXPBXI@Z="                                                              \
+        "?OnSetParameters@?$CSampleXAPOBase@VGainEffect@@UGainEffectParams@@"            \
+        "@ATG@@MAAXPBXI@Z"                                                               \
+    ))
+ONSETPARAMS_ALIAS("VBitCrushEffect@@UParams@1@")
+ONSETPARAMS_ALIAS("VCompressionEffect@@UParams@1@")
+ONSETPARAMS_ALIAS("VDelayEffect@@UParams@1@")
+ONSETPARAMS_ALIAS("VDistortionEffect@@UParams@1@")
+ONSETPARAMS_ALIAS("VEQEffect@@UParams@1@")
+ONSETPARAMS_ALIAS("VEnvelopeGenerator@@UEnvelopeGeneratorParams@@")
+ONSETPARAMS_ALIAS("VFlangerEffect@@UParams@1@")
+ONSETPARAMS_ALIAS("VHeadsetXferEffect@@UHeadsetXferEffectParams@@")
+ONSETPARAMS_ALIAS("VMeterEffect@@UMeterEffectParams@@")
+ONSETPARAMS_ALIAS("VPitchShiftEffect@@UPitchShiftEffectParams@@")
+ONSETPARAMS_ALIAS("VSynapseAPO@DSP@@USynapseAPOParams@2@")
+ONSETPARAMS_ALIAS("VWahEffect@@UParams@1@")
+#undef ONSETPARAMS_ALIAS
+
+// -- Mangled externs for split-obj lbl_* data (2026-08-23) --
+// Decomp sources declare these as C++ externs, so the reference is mangled;
+// the data-stub .objs define the unmangled name at the correct layout slot.
+#pragma comment(linker, "/ALTERNATENAME:?lbl_82066608@@3PBDB=lbl_82066608")
+#pragma comment(linker, "/ALTERNATENAME:?lbl_82F0E8A4@@3HA=lbl_82F0E8A4")
+#pragma comment(linker, "/ALTERNATENAME:?lbl_830A4100@@3PAVDataArray@@A=lbl_830A4100")
+#pragma comment(linker, "/ALTERNATENAME:?lbl_830A4104@@3HA=lbl_830A4104")
+
+// sprintf/_snprintf: the LIBCMT split objects export these as fn_<addr>.
+// Restoring the real names in symbols.txt does NOT stick: `dtk xex split`
+// rewrites symbols.txt on every run and reverted both renames within one
+// split (tried 2026-08-23; the 1,427-name strip in commit 7274dd67a has the
+// same signature and was likely a committed write-back).  Until jeff stops
+// dropping these names, alias the callers to the auto names.  Addresses per
+// orig map: sprintf=0x829A2760, _snprintf=0x829A1AD0.
+#pragma comment(linker, "/ALTERNATENAME:sprintf=fn_829A2760")
+#pragma comment(linker, "/ALTERNATENAME:_snprintf=fn_829A1AD0")
+
+// getenv: the original's getenv folded into the return-0 group (map:
+// curl_getenv at 0x82AEAE70, li r3,0; blr).  curl_getenv here returns 0, which
+// is byte-for-byte what every original caller got.
+#pragma comment(linker, "/ALTERNATENAME:getenv=curl_getenv")
+// RtlDeleteCriticalSection: not in the original import table, and the original
+// emitted no ~CriticalSection at all (CritSec.obj: ctor/Enter/TryEnter/Abandon
+// only) -- the destructor's delete call has nothing to bind to.
+#pragma comment(linker, "/ALTERNATENAME:RtlDeleteCriticalSection=__link_glue_noop")
+// initialized: curl easy.c's static counter.  Commit 391d1b080 named its
+// address (0x82F63AF8, attributed to WebSvcReq's split range), which moved it
+// out of the lbl_* path create_data_stubs.py re-exports -- the WebSvcReq data
+// stub now drops it and the easy data stub's reloc dangles.  The live counter
+// is src easy.obj's own static; this only parks the stub's dead reloc.  The
+// real fix is teaching create_data_stubs.py to re-export renamed statics.
+#pragma comment(linker, "/ALTERNATENAME:initialized=__link_glue_zero")
+
 // ============================================================================
 // Template instantiation stubs
 // ALTERNATENAME doesn't work for ??$ template symbols. These need actual
@@ -808,6 +920,25 @@ extern "C" const char __link_glue_empty_str[] = "";
     }
 
 #undef BINSTREAM_OP_OBJDIRPTR
+
+// Explicit ObjDirPtr<T> operator<< specializations (2026-08-23).  These are
+// ??$-mangled, so they cannot be ALTERNATENAME'd (see the section header) and
+// need compiled bodies.  In the original all of them fold to one body at
+// 0x82793CA8 that writes the directory's name; this body is that body.
+#define BINSTREAM_OP_OBJDIRPTR_SPEC(T)                                                   \
+    template <>                                                                          \
+    BinStream &operator<<(BinStream &bs, const ObjDirPtr<T> &ptr) {                      \
+        T *dir = ptr;                                                                    \
+        const char *name = dir ? dir->Name() : "";                                       \
+        bs << name;                                                                      \
+        return bs;                                                                       \
+    }
+BINSTREAM_OP_OBJDIRPTR_SPEC(ObjectDir)
+BINSTREAM_OP_OBJDIRPTR_SPEC(RndDir)
+BINSTREAM_OP_OBJDIRPTR_SPEC(UIListDir)
+BINSTREAM_OP_OBJDIRPTR_SPEC(UILabelDir)
+BINSTREAM_OP_OBJDIRPTR_SPEC(HamListRibbon)
+#undef BINSTREAM_OP_OBJDIRPTR_SPEC
 
 // -- PropSync<T> for ObjPtrVec<T> --
 // These are stub implementations that just return false.

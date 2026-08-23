@@ -70,6 +70,41 @@ previously carried `D:` ones. PlatformMgr/ContentMgr code was never affected —
 those units link from decomp-compiled `src/` objects, which always had the
 pristine behavior (`ContentMgr_Xbox.h`'s `ContentPath` returns `"UPDATE:"`).
 
+## Link rot found on the way (fixed 2026-08-23, same branch)
+
+The first relink after the re-split failed with 37 unresolved externals. None
+traced to the image swap (the 4 changed target objects export identical symbol
+tables); all traced to `config/373307D9/symbols.txt` renames made after the
+last successful link, with three downstream consumers never updated:
+
+1. **Stripped names.** Commit `7274dd67a` renamed 1,427 symbols to `fn_*`,
+   including `sprintf` (0x829A2760) and `_snprintf` (0x829A1AD0) — the split
+   LIBCMT objects stopped exporting the names every caller uses. Restoring
+   the names in symbols.txt does NOT stick: `dtk xex split` rewrites
+   symbols.txt on every run and reverted both renames within one split
+   (measured 2026-08-23 — the stamp hash came back identical to pre-edit).
+   The 7274dd67a strip has the same signature and was likely a committed
+   write-back, not a deliberate edit. Worked around with
+   `/ALTERNATENAME:sprintf=fn_829A2760` (and `_snprintf`) in link_glue; the
+   durable fix is in jeff, not this repo.
+2. **ICF fold groups.** New source (vtable sweep, XAPO base cleanup) references
+   names that fold to a shared body in the original (`OnSetParameters`×12 →
+   0x82E44240, trivial stubs → `OnlyReturns` at 0x823E3B70, etc.). Only one
+   name can live at a fold address, so the rest need `/ALTERNATENAME` aliases —
+   added to `src/link_glue.cpp`, each with its fold-address evidence. The five
+   `??$`-mangled BinStream `operator<<` instantiations cannot be aliased and
+   got compiled specializations instead (fold body 0x82793CA8: write the name).
+3. **Renamed statics.** Commit `391d1b080` named curl's `initialized`
+   (0x82F63AF8), which moved it out of the `lbl_*` re-export path in
+   `scripts/create_data_stubs.py`; the easy.c data stub's reloc dangled.
+   Parked on `__link_glue_zero` with a note — the durable fix is teaching the
+   stub generator to re-export renamed statics.
+
+Also: `RtlDeleteCriticalSection` is not in the original import table and the
+original emitted no `~CriticalSection` at all — the decomp destructor's call is
+an invention with nothing to bind to (aliased to noop); `getenv` folded to the
+return-0 group in the original (aliased to `curl_getenv`, which returns 0).
+
 ## If boot regresses under xenia
 
 The `blr` stub suppressed `PlatformMgr::SetDiskError`; the devkit `D:` paths
