@@ -30,8 +30,19 @@ Every "REPRO" below was run. Nothing here is a suspicion.
 
 ## Filed — confirmed by execution, not fixed here
 
+> **F1, F2 and F3 were CLOSED on 2026-08-23** by `fix/measurement-guards-20260823`,
+> together, as the audit recommended — they shared one measurement path. All
+> three now refuse through `scripts/orchestrator/patch_guard.py`; the sabotage
+> table (before/after on a genuinely unpatched tree, exit codes read without a
+> pipe) is in that lane's commit message. Two things it did **not** close, on
+> purpose: `report_result` still never compares the agent's `percent` against a
+> measurement (the remainder of F3 — closing it means re-measuring inside a
+> live-fleet entry point), and `core.py`'s F4 `if not patch and ... == "complete"`
+> exemption is untouched. The sections below are left as written; they are the
+> record of what was measured.
+
 ### F1. `scripts/recheck_stale.py` writes `verdict='COMPLETE'` with no guard, no build, and the wrong ruler
-**Rank: corrupts stored data.**
+**Rank: corrupts stored data.** — **CLOSED 2026-08-23.**
 
 `run_objdiff()` (lines 25-39) has `except Exception: pass`, returns
 `summary.get("equal_percent", 0.0)`, never calls `patch_guard`, never builds,
@@ -51,7 +62,7 @@ Not fixed here because the right fix is "route it through `patch_guard` and
 path, and it shares that path with `batch_promote.py` (below).
 
 ### F2. `scripts/batch_promote.py` — a missing `objdiff-cli` is silently "no objdiff data"
-**Rank: corrupts stored data.**
+**Rank: corrupts stored data.** — **CLOSED 2026-08-23.**
 
 Lines 174-183 catch `FileNotFoundError` explicitly and return `None`. The
 pipeline continues to unicorn and `decide_verdict` promotes to `COMPLETE` on
@@ -68,7 +79,7 @@ scripts/batch_promote.py --apply --unit 'system/char/*'` →
 Same shared measurement path as F1; fix them together.
 
 ### F3. `scripts/orchestrator/mcp_server.py::report_result` — an agent's number is written unverified
-**Rank: corrupts stored data.**
+**Rank: corrupts stored data.** — **PARTIALLY CLOSED 2026-08-23** (patch guard added, `project_dir` added, `at_limit` now gated too; the `percent`-vs-measurement comparison is still missing).
 
 `percent = args.get("percent", 0)` (line 1276) goes straight to
 `update_function_status`. `status="at_limit"` has **no** verification at all.
