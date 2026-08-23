@@ -2087,7 +2087,8 @@ if(BUILD_TESTS)
     # about the current source.
     #
     # There is no heuristic here: the test asks ninja, using the real dependency
-    # graph, whether the two targets the suite exercises are up to date.
+    # graph, whether the targets the suite exercises are up to date. (Three of
+    # them -- see MILO_TEST_REQUIRED_TARGETS below.)
     set(_ninja_exe "")
     if(CMAKE_GENERATOR MATCHES "Ninja")
         set(_ninja_exe "${CMAKE_MAKE_PROGRAM}")
