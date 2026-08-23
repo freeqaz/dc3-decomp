@@ -105,6 +105,25 @@ original emitted no `~CriticalSection` at all — the decomp destructor's call i
 an invention with nothing to bind to (aliased to noop); `getenv` folded to the
 return-0 group in the original (aliased to `curl_getenv`, which returns 0).
 
+## Boot verified (2026-08-23)
+
+The XEX rebuilt from this tree (pristine target objects, repaired link) boots
+under xenia-headless to the title main loop and keeps running — guest threads
+executing, GPU command processor issuing XE_SWAP frame swaps — for the full
+240 s probe window. No disk-error halt anywhere in the log: the `blr`-stub
+fear is retired (PlatformMgr always linked from decomp `src/`, so the
+runnable build never contained the stub in the first place). The SIGTRAP at
+probe end is the known Checked-build teardown assert on SIGTERM
+(`~KernelState` → `ObjectTable::Reset` releasing a live XHostThread), not a
+guest crash.
+
+Getting there surfaced two xenia-side items (branch `dc3-manifest-load-gate`
+in ~/code/milohax/xenia): the early patch-manifest load was dead code (gated
+on a flag assigned 500 lines later), so `Dc3PopulateAddressesFromCatalog`
+had never actually run and kAddr always used compiled-in defaults; and the
+runtime .text fingerprint cache needed the new build's value
+(`0x70E4409032E427C1` — update it after every relink from the runtime log).
+
 ## If boot regresses under xenia
 
 The `blr` stub suppressed `PlatformMgr::SetDiskError`; the devkit `D:` paths
