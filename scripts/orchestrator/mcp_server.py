@@ -115,6 +115,195 @@ def format_match_percent(pct: "float | int | None",
     return "<100%"
 
 
+# ---------------------------------------------------------------------------
+# The match headline: one number, one named field, no contradiction
+# ---------------------------------------------------------------------------
+# This block exists because `run_objdiff` shipped a headline that contradicted
+# the markdown printed directly beneath it AND claimed to be the authority:
+#
+#   **Match: 0.0% normalized (0.0% raw)**  <- authoritative; headline rewrite
+#                                            did not match the markdown below
+#   # ... RndShaderDepthVolume::CalcShaderOpts -- Match: 3.4% canonical (0.0% raw)
+#
+# Two independent defects, both of which this block closes:
+#
+#  1. MISNOMER.  The banner read `fuzzy_match_percent` and printed the word
+#     "normalized".  It is not normalized: objdiff-cli's own `DiffOutput`
+#     documents `normalized_match_percent` as "MISNOMER, kept for
+#     compatibility ... the FUZZY score measured under a relaxed RELOCATION
+#     mode", and 4.2.4 added `canonical_match_percent` to carry objdiff-core's
+#     `match_percent_normalized` -- the number `report generate` writes into
+#     report.json.  On the symbol above that is 3.4375 vs 0.0: a 3.4pp
+#     disagreement rendered as "authoritative".  This is the fifth instance of
+#     the same misnomer family in this project (after `objdiff-cli diff`'s JSON
+#     field, its markdown header, `report.proto`'s `measures.fuzzy_match_percent`
+#     aggregate, and `run_symbol_sweep`'s "match% (norm)" column).
+#
+#  2. UNEARNED AUTHORITY.  The rewrite was a `re.sub` against
+#     `Match: X% normalized (Y% raw)`, a string objdiff-cli stopped emitting
+#     when it renamed the label to "canonical".  The failure path then
+#     *asserted* that the number it had computed was authoritative and the one
+#     it had not was suspect -- exactly backwards, since the un-rewritten
+#     markdown held the canonical score and the banner held fuzzy.
+#
+# The rule enforced below: the banner names the JSON field it came from, and
+# the body is checked afterwards for any surviving `Match:` line that disagrees.
+# A disagreement is reported as a disagreement, naming both sides and both
+# provenances -- never resolved by fiat in favour of whichever side we produced.
+
+#: Both markdown shapes objdiff-cli emits, plus the pre-4.2.4 "normalized"
+#: spelling so an older binary is still rewritten rather than silently left.
+#:   concise:  `# <demangled> -- Match: 3.4% canonical (0.0% raw)`
+#:   full:     `- **Match**: 3.4% canonical (0.0% raw)`
+_MD_MATCH_LINE = re.compile(
+    r"Match(?P<bold>\*\*)?:\s*(?P<pct>[\d.]+)%\s*(?P<label>canonical|normalized)"
+    r"\s*\((?P<raw>[\d.]+)%\s*raw\)"
+)
+
+#: DELIBERATELY BROADER than `_MD_MATCH_LINE`, and that is the entire point.
+#: The first draft ran the survivor scan with the SAME regex it used to
+#: rewrite, which makes the scan vacuous: anything the rewriter can see it has
+#: already rewritten, so the check could never fail. The failure it must catch
+#: is objdiff-cli emitting a match percentage in a shape the rewriter does NOT
+#: recognise -- which is exactly what happened when 4.2.4 renamed the label
+#: from "normalized" to "canonical" and the wrapper's `re.sub` silently stopped
+#: firing. Anything asserting `Match...: <n>%` counts here, whatever follows.
+_MD_MATCH_LOOSE = re.compile(
+    r"\bMatch\b\*{0,2}\s*:\s*[^\n]*?(?P<pct>[\d.]+)\s*%"
+)
+
+
+def match_headline(data: dict) -> dict:
+    """Derive the one honest match headline from objdiff's JSON.
+
+    Returns a dict with:
+      ``text``     -- the headline string, e.g. "Match: 3.44% canonical (0.0% raw)"
+      ``pct``      -- the float the headline leads with (None if objdiff gave none)
+      ``field``    -- the JSON field ``pct`` came from; this is what makes the
+                      banner checkable rather than a bare assertion
+      ``label``    -- "canonical" or "fuzzy"; NEVER the word "normalized",
+                      which in objdiff's JSON vocabulary names a fuzzy score
+      ``caveat``   -- extra line(s) to print under the headline, or ""
+
+    ``canonical_match_percent`` is preferred because it is objdiff-core's
+    ``match_percent_normalized`` -- the same value `report generate` writes, so
+    the headline and report.json cannot drift.  When it is absent (objdiff-cli
+    < 4.2.4) we fall back to the fuzzy score and SAY SO, rather than promoting
+    a fuzzy number under a canonical-sounding word.
+    """
+    canonical = data.get("canonical_match_percent")
+    fuzzy = data.get("fuzzy_match_percent")
+    raw = data.get("raw_match_percent")
+
+    # A self-diff deliberately carries no percentages at all (objdiff >= 4.2.8).
+    # Manufacturing one here would resurrect exactly the "100% by construction"
+    # claim that suppression exists to prevent.
+    if data.get("self_diff"):
+        return {
+            "text": "Match: WITHHELD (self-diff -- both sides are the same object)",
+            "pct": None, "field": None, "label": "none",
+            "caveat": "*No measurement in this output: an object diffed against "
+                      "itself scores 100% by construction.*",
+        }
+
+    if canonical is not None:
+        pct, field, label = canonical, "canonical_match_percent", "canonical"
+        caveat = ""
+        # Disclose the other axis when it differs enough to change a decision.
+        # A large canonical-over-fuzzy gap is the relocation/register-permutation
+        # forgiveness, and agents have quoted the wrong one of these before.
+        if fuzzy is not None and abs(canonical - fuzzy) >= 0.005:
+            caveat = (f"  - fuzzy (relocation-sensitive, `fuzzy_match_percent`): "
+                      f"{format_match_percent(fuzzy, '?')}")
+    elif fuzzy is not None:
+        pct, field, label = fuzzy, "fuzzy_match_percent", "fuzzy"
+        caveat = ("  - ⚠ this objdiff-cli predates `canonical_match_percent` (4.2.4); "
+                  "the number above is FUZZY, not the canonical score report.json "
+                  "reports. Upgrade before quoting it as canonical.")
+    else:
+        return {"text": "Match: unavailable (objdiff returned no percentage)",
+                "pct": None, "field": None, "label": "none", "caveat": ""}
+
+    if raw is not None:
+        text = (f"Match: {format_match_percent(pct)} {label} "
+                f"({format_match_percent(raw)} raw)")
+    else:
+        text = f"Match: {format_match_percent(pct)} {label}"
+    return {"text": text, "pct": pct, "field": field, "label": label, "caveat": caveat}
+
+
+def apply_match_headline(output: str, head: dict) -> str:
+    """Rewrite every `Match:` line in objdiff's markdown to `head`, then VERIFY.
+
+    Three outcomes, and each one is stated rather than assumed:
+
+    * every `Match:` line was rewritten -> nothing to say, the body agrees with
+      the banner by construction;
+    * no `Match:` line was found -> prepend the headline WITH its field name,
+      and say the body was not rewritten. It does NOT claim the body is wrong:
+      an empty body carries no competing number, and if it did carry one under
+      a shape we do not recognise, the survivor scan below finds it;
+    * a `Match:` line survived and disagrees -> print both numbers with both
+      provenances. This is the case the old code decided by fiat.
+
+    Note `count=0`: the old code passed ``count=1`` and would happily leave a
+    second, differently-worded headline behind it.
+    """
+    if head["pct"] is None and not head["field"]:
+        # Nothing computed -> nothing to assert. Leave objdiff's own text alone.
+        return output
+
+    def _sub(m: "re.Match") -> str:
+        bold = m.group("bold") or ""
+        return f"Match{bold}: " + head["text"].removeprefix("Match: ")
+
+    rewritten, n = _MD_MATCH_LINE.subn(_sub, output, count=0)
+
+    provenance = (f"objdiff JSON `{head['field']}`"
+                  + (" = objdiff-core `match_percent_normalized`, the ruler "
+                     "`report generate` writes into report.json"
+                     if head["label"] == "canonical" else ""))
+
+    # Survivor scan, run with the BROAD regex against the rewritten body: after
+    # the rewrite, no line may assert a `Match: <n>%` whose leading number is
+    # not ours. Compare the parsed NUMBER, not the text -- the full-mode line
+    # renders as `Match**: 3.4% ...` and a substring test on the bold marker
+    # alone made every full-mode diff report a phantom disagreement in the
+    # first draft.
+    _expect = _MD_MATCH_LINE.search(head["text"])
+    expect_pct = _expect.group("pct") if _expect else None
+    disagreeing = []
+    for m in _MD_MATCH_LOOSE.finditer(rewritten):
+        if m.group("pct") != expect_pct:
+            line = rewritten[rewritten.rfind("\n", 0, m.start()) + 1:]
+            disagreeing.append(line.split("\n", 1)[0].strip()[:160])
+
+    banner = ""
+    if disagreeing:
+        banner = (
+            f"**{head['text']}**  — from {provenance}.\n\n"
+            f"> ⚠ **The body below disagrees and neither side is assumed right.** "
+            f"Surviving line(s): {', '.join('`' + d + '`' for d in disagreeing)}. "
+            f"Both numbers come from the same diff, so a disagreement means this "
+            f"wrapper and `bin/objdiff-cli` have skewed versions. Check "
+            f"`objdiff-cli --version` (xxh3, not the tag) against "
+            f"`scripts/orchestrator/mcp_server.py`; quote NEITHER number until "
+            f"they agree.\n\n"
+        )
+    elif n == 0:
+        banner = (
+            f"**{head['text']}**  — from {provenance}. "
+            f"(objdiff's markdown below carried no `Match:` line to rewrite.)\n\n"
+        )
+
+    if banner:
+        rewritten = banner + rewritten
+    if head["caveat"] and n == 0:
+        # When the body was rewritten, objdiff prints its own fuzzy disclosure.
+        rewritten = rewritten.replace(head["text"], head["text"] + "\n" + head["caveat"], 1)
+    return rewritten
+
+
 def _looks_like_title_id(name: str) -> bool:
     """True for 8-hex-digit title IDs such as '373307D9' (DC3) or '45410914' (RB3 xenon)."""
     return len(name) == 8 and all(c in "0123456789abcdefABCDEF" for c in name)
@@ -2080,12 +2269,64 @@ class DecompMCPServer:
 
             suggestions = []
             for r in results:
+                # NEVER suggest the string that was just typed. The DB knowing a
+                # symbol and the OBJECT containing it are different questions, so
+                # a name-similarity search happily returned a byte-identical
+                # "did you mean", which reads as a tool malfunction and hides the
+                # real answer (wrong unit / wrong side). The identity case is
+                # information, but it belongs in _symbol_not_found_detail, which
+                # can say WHERE it looked and WHICH side is missing it.
+                if r["symbol"] == symbol:
+                    continue
                 pct = r.get("current_percent")
                 pct_str = f" ({format_match_percent(pct, '')})" if pct is not None else ""
                 suggestions.append(f"`{r['symbol']}`{pct_str}")
             return suggestions
         except Exception:
             return []
+
+    def _symbol_not_found_detail(self, project_dir, symbol: str,
+                                 unit: "str | None") -> str:
+        """The full answer a "Symbol not found" owes: where we looked, and
+        which of the three very different absences this is.
+
+        Composed of, in order:
+          1. an object-level location scan (target side vs base side vs
+             nowhere) -- see orchestrator.symbol_locator for why those three
+             mean completely different things;
+          2. what decomp.db believes, flagged as BELIEF, since the DB's `unit`
+             column is an attribution and has been wrong (it files
+             `?GetNumSongs@Playlist@@QBAHXZ` under `default/system/rndobj/Text`);
+          3. genuinely different near-miss names, if any.
+        """
+        parts: list[str] = []
+        try:
+            from orchestrator.symbol_locator import locate_symbol, format_not_found
+            loc = locate_symbol(project_dir, symbol)
+            parts.append(format_not_found(loc, unit))
+        except Exception as e:  # never let diagnosis replace the error
+            parts.append(f"*(symbol location scan failed: {e})*")
+
+        try:
+            rows = search_functions_by_name(symbol, limit=1, db_path=self.db_path)
+            exact = [r for r in rows if r.get("symbol") == symbol]
+            if exact:
+                r = exact[0]
+                parts.append(
+                    f"\n`decomp.db` DOES have this symbol (unit `{r.get('unit')}`, "
+                    f"{format_match_percent(r.get('current_percent'), 'no percent')}). "
+                    f"That is a BELIEF, not a measurement: the DB's `unit` column is "
+                    f"an attribution and the scan above is what the objects actually "
+                    f"contain. Where the two disagree, the objects win."
+                )
+        except Exception:
+            pass
+
+        sugg = self._suggest_similar_symbols(symbol)
+        if sugg:
+            parts.append("\nOther symbols with similar names:\n"
+                         + "\n".join(f"  - {s}" for s in sugg))
+        return "\n".join(parts)
 
     def _enrich_objdiff_data(self, data: dict) -> dict:
         """
@@ -2450,15 +2691,12 @@ class DecompMCPServer:
                             stdout_has_error = False
 
             if stdout_has_error or (stderr_has_error and not has_json):
-                suggestions = self._suggest_similar_symbols(symbol)
                 # Don't dump raw dtk output - filter it
                 error_msg = _filter_build_output(json_output)
                 if stderr_text:
                     error_msg += f"\n\n[stderr]\n{stderr_text}"
-                if suggestions:
-                    error_msg += "\n\nDid you mean:\n" + "\n".join(
-                        f"  - {s}" for s in suggestions
-                    )
+                error_msg += "\n\n" + self._symbol_not_found_detail(
+                    project_dir, symbol, unit)
                 return [TextContent(type="text", text=error_msg.strip())]
 
             # Strip ninja build preamble (e.g. "ninja: no work to do.\n")
@@ -2496,39 +2734,13 @@ class DecompMCPServer:
                 data = self._enrich_objdiff_data(data)
                 enrichment = self._format_enrichment_sections(data, skip_rb3=concise)
 
-                # Fix match% in markdown header: use fuzzy_match_percent from JSON
-                # (which respects functionRelocDiffs=none) to override the markdown
-                # header which may not apply the config consistently.
-                fuzzy_pct = data.get("fuzzy_match_percent")
-                raw_pct = data.get("raw_match_percent")
-                if fuzzy_pct is not None and raw_pct is not None:
-                    # Same never-manufacture-100 rule as query_functions:
-                    # ?Save@ObjectDir@@UAAXAAVBinStream@@@Z is 99.997
-                    # normalized with two real diff_arg instructions and
-                    # this headline called it "100.0% normalized".
-                    honest_headline = (
-                        f"Match: {format_match_percent(fuzzy_pct)} normalized "
-                        f"({format_match_percent(raw_pct)} raw)"
-                    )
-                    output, n_subbed = re.subn(
-                        r"Match: [\d.]+% normalized \([\d.]+% raw\)",
-                        honest_headline.replace("\\", "\\\\"),
-                        output,
-                        count=1,
-                    )
-                    if n_subbed == 0:
-                        # The rewrite is the ONLY thing keeping a rounding
-                        # headline ("100.0% normalized" over a table with real
-                        # mismatches) out of this output.  re.sub fails *open*:
-                        # if objdiff-cli's markdown ever stops matching this
-                        # pattern the lying headline silently survives and
-                        # nothing says so.  Make that loud instead.
-                        output = (
-                            f"**{honest_headline}**  "
-                            f"<- authoritative; headline rewrite did not match "
-                            f"the markdown below, treat any 'Match:' line in it "
-                            f"as unverified\n\n"
-                        ) + output
+                # Normalise the match headline so the banner and the body
+                # cannot disagree, and so the number is named by the JSON field
+                # it came from.  See match_headline() for the two defects this
+                # replaced (a fuzzy score labelled "normalized", and a failure
+                # path that asserted authority over the number it did NOT
+                # compute while the un-rewritten body held the canonical one).
+                output = apply_match_headline(output, match_headline(data))
             except (json.JSONDecodeError, KeyError):
                 pass
 
@@ -2617,13 +2829,14 @@ class DecompMCPServer:
                 summary = ""
                 try:
                     data = json.loads(json_output)
-                    match_pct = data.get("fuzzy_match_percent")
                     verdict = data.get("verdict", {}).get("classification", "UNKNOWN")
-                    # Route through the same never-manufacture-100 formatter as
-                    # every other Match surface; this is the large-output path
-                    # and was the last one still interpolating a bare float.
-                    pct_str = format_match_percent(match_pct, "?")
-                    summary = f"**Match: {pct_str} | Verdict: {verdict}**\n\n"
+                    # Same headline as the file this preview points at, from the
+                    # same helper.  It used to read `fuzzy_match_percent` and
+                    # print it as a bare, unlabelled "Match:", so the preview and
+                    # the file it summarised could name different rulers -- the
+                    # spill-to-file twin of the banner-vs-body contradiction.
+                    head = match_headline(data)
+                    summary = f"**{head['text']} | Verdict: {verdict}**\n\n"
                 except (json.JSONDecodeError, KeyError):
                     pass
 
@@ -3042,12 +3255,8 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
 
                 stdout_text = result.stdout
                 if "Symbol not found" in stdout_text or "Failed" in stdout_text:
-                    error_msg = stdout_text.strip()
-                    suggestions = self._suggest_similar_symbols(symbol)
-                    if suggestions:
-                        error_msg += "\n\nDid you mean:\n" + "\n".join(
-                            f"  - {s}" for s in suggestions
-                        )
+                    error_msg = stdout_text.strip() + "\n\n" + \
+                        self._symbol_not_found_detail(project_dir, symbol, unit)
                     return [TextContent(type="text", text=error_msg)]
 
                 # Strip ninja build preamble (e.g. "ninja: no work to do.\n")

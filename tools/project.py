@@ -2639,8 +2639,26 @@ def calculate_progress(config: ProjectConfig) -> None:
         progress_print(
             f"  {name}: {matched_code_percent:.2f}% matched, {complete_code_percent:.2f}% linked ({complete_units} / {total_units} files)"
         )
+        # LABEL ONLY -- both numbers are unchanged; this line moved zero digits.
+        #
+        # `measures.fuzzy_match_percent` is the third instance of this project's
+        # recurring misnomer: the aggregate NAMED fuzzy holds the CANONICAL
+        # score. Verified on this tree 2026-08-23 -- report.json's aggregate is
+        # 54.34920, the size-weighted mean of the per-function
+        # `match_percent_normalized` is 54.34926, and the size-weighted mean of
+        # the per-function `fuzzy_match_percent` is 54.27355. Printing it as
+        # "normalized (default)" then compounded the error: in objdiff's JSON
+        # vocabulary "normalized" is itself a documented misnomer for a fuzzy
+        # score, so the one word could not tell a reader which of the two rulers
+        # this line reports. It reports the canonical one, which is also the
+        # ruler `report.json` publishes, so say that.
+        #
+        # The second number comes from `report_raw.json`, generated with
+        # `-c functionRelocDiffs=name_address`; that is a RELOCATION ruler, not
+        # a different score, so it is named by its ruler.
         progress_print(
-            f"    Fuzzy: {fuzzy_match_percent:.2f}% normalized (default), {raw_fuzzy_match_percent:.2f}% raw"
+            f"    Canonical: {fuzzy_match_percent:.2f}% (report.json ruler), "
+            f"{raw_fuzzy_match_percent:.2f}% under functionRelocDiffs=name_address"
         )
         progress_print(
             f"    Code: {matched_code} / {total_code} bytes ({matched_functions} / {total_functions} functions)"

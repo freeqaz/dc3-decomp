@@ -191,7 +191,7 @@ _ASM_VTBL = re.compile(r'^\t\.4byte\s+"(\?\?_7([A-Za-z0-9_@$?]+)@@6B@)"')
 _DECL_CLASS = re.compile(r"^\?[^@]+@@3V([A-Za-z0-9_@$?]+)@@A$")
 
 
-def vtable_type_disagreements(asm_root: Path):
+def vtable_type_disagreements(asm_root: Path, idx: dict[str, list[str]] | None = None):
     """Global objects whose config NAME contradicts the vtable they hold.
 
     A global of class type starts with its own vtable pointer, so
@@ -205,9 +205,36 @@ def vtable_type_disagreements(asm_root: Path):
     charged a relocation naming the NEXT shader, which reads as twelve source
     bugs and was one config edit.
 
-    Returns (checked, [(file, symbol, vtable_symbol)]).
+    ⚠ A NAME disagreement is not an IDENTITY disagreement. Pass `idx` (the
+    linker-map index this module already builds) and a pair whose two names
+    resolve to the SAME address is forgiven as an ICF fold rather than reported:
+    the two names denote one object, so nothing contradicts anything.
+
+    That is not hypothetical -- it was this check's only standing finding.
+    `?g_csOverrideRestore@@3VCCriticalSection@@A` holding `??_7RefCount@Nui@@6B@`
+    looked like a type bug and is six names for one address in
+    `orig/373307D9/ham_xbox_r.map`::
+
+        0001:00164618  ??_7RefCount@Nui@@6B@             82164c18  nuiapi:truecolor.obj
+        0001:00164618  ??_7JSONBufferManager@@6B@        82164c18  os:jsonbuffer.obj
+        0001:00164618  ??_7ControlMethod@TrueColor@@6B@  82164c18  nuiapi:controlmethod.obj
+        0001:00164618  ??_7CCriticalSection@@6B@         82164c18  xmp:xmp.obj
+        ... (6 total)
+
+    all one-slot vtables holding one folded scalar-deleting destructor.
+    `config/373307D9/symbols.txt` records only ONE name for that address
+    (`??_7RefCount@Nui@@6B@`), so dtk renders the relocation with the only name
+    it has. `CCriticalSection` really does have a vptr at +0 -- the dynamic
+    initializer passes `this+4` to `RtlInitializeCriticalSection`, skipping it --
+    so the premise held and only the naming was aliased.
+
+    The forgiveness is narrow ON PURPOSE. All sixteen `RndShader*` vtables sit at
+    distinct map addresses, so the whole 2026-08-19 failure mode still reports;
+    verified by sabotage, see `--selftest`.
+
+    Returns (checked, [(file, symbol, vtable_symbol, verdict)], forgiven).
     """
-    bad, checked = [], 0
+    bad, checked, forgiven = [], 0, []
     for path in sorted(asm_root.rglob("*.s")):
         cur, first = None, False
         try:
@@ -228,10 +255,14 @@ def vtable_type_disagreements(asm_root: Path):
                     if d and v:
                         checked += 1
                         if v.group(2) != d.group(1):
-                            bad.append((str(path), cur, v.group(1)))
+                            declared = f"??_7{d.group(1)}@@6B@"
+                            verdict = (map_verdict(idx, declared, v.group(1))
+                                       if idx else "MAP_NOT_CONSULTED")
+                            row = (str(path), cur, v.group(1), verdict)
+                            (forgiven if verdict == "FOLD" else bad).append(row)
                 elif line.startswith(".endobj"):
                     cur = None
-    return checked, bad
+    return checked, bad, forgiven
 
 
 def map_verdict(idx, target: str, base: str) -> str:
@@ -376,6 +407,38 @@ def _selftest() -> int:
     check("Task vs Hmx::Object base ctor is NOT exempted",
           classify_exempt("??0Object@Hmx@@QAA@XZ", "??0Task@@QAA@XZ") is None)
 
+    # ── global-vtable fold forgiveness, sabotaged before it is trusted ───────
+    # `vtable_type_disagreements` now forgives a name pair whose two names sit
+    # at ONE map address (ICF).  A forgiveness is only safe if it can be shown
+    # NOT to fire on the bug it might swallow, so every row below is graded and
+    # the real 2026-08-19 RndShader defect is included as the thing that must
+    # still report.  Addresses are the live ones from `ham_xbox_r.map`.
+    _vt_idx = {
+        # six names, one address -- the live g_csOverrideRestore row
+        "??_7CCriticalSection@@6B@":      ["82164c18"],
+        "??_7RefCount@Nui@@6B@":          ["82164c18"],
+        # distinct addresses -- the RndShader run the check was built to catch
+        "??_7RndShaderStandard@@6B@":     ["8209ca88"],
+        "??_7RndShaderMultimesh@@6B@":    ["8209ca74"],
+        "??_7RndShaderFur@@6B@":          ["8209cb14"],
+        "??_7RndShaderSyncTrack@@6B@":    ["8209cb28"],
+    }
+    check("ICF fold (two names, one address) is FOLD",
+          map_verdict(_vt_idx, "??_7CCriticalSection@@6B@",
+                      "??_7RefCount@Nui@@6B@") == "FOLD")
+    check("the real RndShader off-by-one-slot bug still reports",
+          map_verdict(_vt_idx, "??_7RndShaderStandard@@6B@",
+                      "??_7RndShaderMultimesh@@6B@") == "DIFFERENT_ADDRESS")
+    check("an adjacent-slot RndShader pair still reports",
+          map_verdict(_vt_idx, "??_7RndShaderFur@@6B@",
+                      "??_7RndShaderSyncTrack@@6B@") == "DIFFERENT_ADDRESS")
+    check("a name absent from the map is NOT forgiven",
+          map_verdict(_vt_idx, "??_7RndShaderFur@@6B@",
+                      "??_7TotallyMadeUpClass@@6B@") == "BASE_NOT_IN_MAP")
+    # Vacuity control: with no map, nothing may be forgiven silently.
+    check("no map index => MAP_NOT_CONSULTED, never FOLD",
+          map_verdict({}, "??_7A@@6B@", "??_7B@@6B@") == "NEITHER_IN_MAP")
+
     print("PASS" if ok else "FAIL")
     return 0 if ok else 1
 
@@ -485,11 +548,16 @@ def main(argv=None) -> int:
 
     asm_root = next((p for p in sorted(project.glob("build/*/asm"))), None)
     if asm_root is not None:
-        nchecked, vbad = vtable_type_disagreements(asm_root)
+        nchecked, vbad, vfold = vtable_type_disagreements(asm_root, idx)
+        # Every bucket's count is printed, forgiven ones included: a silent
+        # exemption is how a suppression turns into a blind spot.
         print(f"global vtable vs declared type      : {nchecked} checked, "
-              f"{len(vbad)} DISAGREE")
-        for path, sym, vt in vbad:
-            print(f"  !! {sym}\n       holds {vt}  ({path})")
+              f"{len(vbad)} DISAGREE, {len(vfold)} forgiven as ICF fold "
+              f"(both names at one map address)")
+        for path, sym, vt, verdict in vbad:
+            print(f"  !! {sym}\n       holds {vt}  [{verdict}]  ({path})")
+        for path, sym, vt, _v in vfold:
+            print(f"  ~~ {sym}\n       holds {vt}  [FOLD -- same address, benign]  ({path})")
     else:
         print("global vtable vs declared type      : no build/*/asm -- "
               "INSTRUMENT UNCHECKED")
