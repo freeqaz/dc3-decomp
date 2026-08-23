@@ -1395,10 +1395,7 @@ DataNode RndMesh::OnCompareEdgeVerts(const DataArray *da) {
         vec30[i].unique();
     }
     for (int i = 0; i < Verts().size(); i++) {
-        {
-            auto it = vec30[i].begin();
-            if (it != vec30[i].end()) {
-                do {
+        FOREACH (it, vec30[i]) {
             int i10 = 0;
             FOREACH (it2, vec30[*it]) {
                 FOREACH (it3, vec30[i]) {
@@ -1413,10 +1410,6 @@ DataNode RndMesh::OnCompareEdgeVerts(const DataArray *da) {
             if (i10 < 2) {
                 vec28.push_back(i);
                 break;
-            }
-        
-                    ++it;
-                } while (it != vec30[i].end());
             }
         }
     }
