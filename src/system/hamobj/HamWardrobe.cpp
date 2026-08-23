@@ -528,14 +528,19 @@ DataNode HamWardrobe::OnSetVenue(DataArray *a) {
     ObjectDir *dir = a->Obj<ObjectDir>(2);
     SetDir(dir);
 
-    Symbol venue = TheGameData->Venue();
     // The image never copies a Symbol here: it keeps the venue's char* in a
     // callee-saved register for the whole function, overwrites that register
     // from entryName.Str() on the `contains` hit, and builds a fresh Symbol
     // from it for the LoadCharacters argument (bl Symbol::Symbol(const char*),
     // where we had a plain 4-byte member copy).
-    const char *venueName = venue.Str();
-    if (venue.Null() && TheWorld) {
+    //
+    // Venue()'s result is an UNNAMED temporary, not a named `Symbol venue`.
+    // A named local pins its 4-byte slot for the whole scope; the temporary
+    // dies at the end of the full expression, so the image reuses that slot
+    // (0x64) for the MILO_ASSERT line number and again for Symbol("crew01").
+    // Naming it shifted every later local by 4 and cost 33 instructions.
+    const char *venueName = TheGameData->Venue().Str();
+    if (venueName == gNullStr && TheWorld) {
         String worldPath(TheWorld->GetPathName());
         unsigned int lastSlash = worldPath.find_last_of('/');
         worldPath = worldPath.substr(lastSlash + 1);

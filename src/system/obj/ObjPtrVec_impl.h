@@ -47,7 +47,7 @@ void ObjPtrVec<T1, T2>::sort(const S &cmp) {
     // inlines to exactly those two bl's.
     MemTemp doTemp;
     std::vector<T1 *> ptrs;
-    ptrs.insert(ptrs.begin(), size(), (T1 *)0);
+    ptrs.resize(size());
     for (unsigned int i = 0; i < size(); i++) {
         ptrs[i] = mNodes[i].Obj();
     }
