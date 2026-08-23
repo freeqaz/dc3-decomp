@@ -69,19 +69,24 @@ def fmt_pct(v: float | None, decimals: int = 1) -> str:
 def match_percent_from_diff(data: dict) -> tuple[float | None, str]:
     """(percent, ruler) from one `objdiff-cli diff -f json` payload.
 
-    RULER.  `objdiff-cli diff` emits THREE numbers and they mean different
+    RULER.  `objdiff-cli diff` emits FOUR numbers and they mean different
     things:
 
-      normalized_match_percent  the canonical scorer (objdiff-cli
-                                diff.rs:1263).  Note that the `diff` command
-                                also copies this value into the key literally
-                                named `fuzzy_match_percent` (diff.rs:1262), so
-                                on THIS payload the two agree -- unlike
-                                report.json, where `fuzzy_match_percent` is the
-                                RAW scorer and a separate
-                                `match_percent_normalized` key carries the
-                                canonical one.  Same key name, two rulers,
-                                two files.
+      canonical_match_percent   objdiff-core's `match_percent_normalized` --
+                                the SAME value `report generate` writes into
+                                report.json, and therefore the ruler a COMPLETE
+                                verdict is granted on.  Added in objdiff-cli
+                                4.2.4.  READ THIS ONE.
+      normalized_match_percent  a DOCUMENTED MISNOMER, kept only for
+                                compatibility.  objdiff-cli's own `DiffOutput`
+                                calls it "MISNOMER ... the FUZZY score measured
+                                under a relaxed RELOCATION mode".  It is not the
+                                canonical scorer and, since 4.2.4, does not
+                                agree with it.
+      fuzzy_match_percent       the fuzzy score.  On a `diff` payload it equals
+                                `normalized_match_percent`; in report.json the
+                                per-function key of the same name is a different
+                                ruler again.  Same key name, three meanings.
       raw_match_percent         relocation-sensitive.
       instruction_summary.equal_percent
                                 the fraction of instructions that compared
@@ -93,14 +98,33 @@ def match_percent_from_diff(data: dict) -> tuple[float | None, str]:
     This script used to prefer `equal_percent` over everything, so the number
     it wrote into `current_percent` -- and gated COMPLETE on -- was a third
     ruler, agreeing with neither sync_objdiff.py nor sync_match_percent.py.
+    It was then changed to prefer `normalized_match_percent`, on the belief --
+    stated verbatim in the docstring this replaces -- that the key held "the
+    canonical scorer".  That was true when it was written and stopped being
+    true at objdiff-cli 4.2.4, silently.
+
+    MEASURED 2026-08-23 on this tree: **308 of 31,813 functions** score
+    canonical 100.0 with `normalized_match_percent` below 100, so this function
+    under-reported every one of them and batch_check could never promote them.
+    `?asciiDigitToHex@@YAED@Z` reads normalized 95.55556 / canonical 100.0;
+    `?parseHex16@@YAXPBDPAE@Z` 96.59091 / 100.0; `?roll@@YAHH@Z` 94.583336 /
+    100.0.  The error was in the SAFE direction -- **0** functions have
+    `normalized` at 100 with canonical below it, so no COMPLETE was ever
+    manufactured -- but a promotion gate reading a ruler its own promotion
+    criterion does not use is a defect either way.
     """
+    c = data.get("canonical_match_percent")
+    if c is not None:
+        return float(c), "canonical"
+    # Pre-4.2.4 binary: neither remaining key is canonical, so SAY so in the
+    # ruler string rather than letting a caller print "normalized" over a fuzzy
+    # number -- that mislabelling is the whole bug above.
     n = data.get("normalized_match_percent")
     if n is not None:
-        return float(n), "normalized"
+        return float(n), "fuzzy (no canonical_match_percent; objdiff < 4.2.4)"
     f = data.get("fuzzy_match_percent")
     if f is not None:
-        # On a `diff` payload this key already holds the normalized value.
-        return float(f), "normalized-via-fuzzy-key"
+        return float(f), "fuzzy (no canonical_match_percent; objdiff < 4.2.4)"
     return None, "none"
 
 

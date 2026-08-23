@@ -200,24 +200,51 @@ class FunctionResult:
 def match_percent_from_diff(data: dict) -> tuple[float | None, str]:
     """(percent, ruler) from one `objdiff-cli diff --batch` JSONL record.
 
-    RULER.  `objdiff-cli diff` writes the canonical normalized score into BOTH
-    `normalized_match_percent` and the key literally named
-    `fuzzy_match_percent` (objdiff-cli diff.rs:1262-1263), and exposes the
-    relocation-sensitive one separately as `raw_match_percent`.  report.json
-    uses the SAME key name `fuzzy_match_percent` for the RAW score and a
-    different key, `match_percent_normalized`, for the canonical one.
+    RULER -- and the paragraph this replaces was wrong, which is the direct
+    cause of the COMPLETE-verdict flapping documented at the top of this file.
 
-    So `data.get("fuzzy_match_percent")` here was already normalized -- reading
-    `normalized_match_percent` first pins the ruler BY NAME instead of by
-    coincidence, and survives an upstream rename.  This script also passes
-    `functionRelocDiffs=none`, under which normalized == primary anyway.
+    It claimed `normalized_match_percent` held "the canonical normalized score"
+    and that "under `functionRelocDiffs=none`, normalized == primary anyway".
+    Neither is true.  objdiff-cli's own `DiffOutput` documents that field as
+    "MISNOMER, kept for compatibility ... the FUZZY score measured under a
+    relaxed RELOCATION mode", and 4.2.4 added `canonical_match_percent` to
+    carry objdiff-core's `match_percent_normalized` -- the value
+    `report generate` publishes and the one every promotion gate here reads.
+
+    MEASURED 2026-08-23, and the second claim is refuted directly: run with
+    `-c functionRelocDiffs=none`, `?asciiDigitToHex@@YAED@Z` returns
+    normalized 95.55556 / canonical 100.0, and `?roll@@YAHH@Z` returns
+    94.583336 / 100.0.  Across report.json, **308 of 31,813 functions** are
+    canonical-100 with the fuzzy score below 100, and **0** are the other way
+    round.
+
+    That population is the flapping described above: this script's demotion arm
+    (`old_verdict == 'COMPLETE' and match_percent < 100`) fires on exactly the
+    rows `sync_match_percent.py --promote` puts back, because the two scripts
+    were reading two different rulers for one column.  Reading
+    `canonical_match_percent` makes them agree.
+
+    ⚠ Landing this fixes the READER, not the DATA.  Rows already written under
+    the old ruler keep their values until this script is re-run.
+
+    Other keys on the payload, for the record:
+      fuzzy_match_percent   equals `normalized_match_percent` here; in
+                            report.json the same key name is a different ruler
+                            again.  One name, three meanings.
+      raw_match_percent     relocation-sensitive.
     """
+    c = data.get("canonical_match_percent")
+    if c is not None:
+        return float(c), "canonical"
+    # Pre-4.2.4 binary: neither remaining key is canonical.  Name the ruler
+    # honestly rather than letting a caller log "normalized" over a fuzzy
+    # number -- that mislabelling is the bug above.
     n = data.get("normalized_match_percent")
     if n is not None:
-        return float(n), "normalized"
+        return float(n), "fuzzy (no canonical_match_percent; objdiff < 4.2.4)"
     f = data.get("fuzzy_match_percent")
     if f is not None:
-        return float(f), "normalized-via-fuzzy-key"
+        return float(f), "fuzzy (no canonical_match_percent; objdiff < 4.2.4)"
     return None, "none"
 
 
