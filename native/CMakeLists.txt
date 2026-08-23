@@ -2016,20 +2016,31 @@ if(BUILD_TESTS)
     set(MILO_TEST_ENV "TMPDIR=${CMAKE_CURRENT_BINARY_DIR}/tmp")
     set(MILO_TEST_GATES_ON "")
     set(MILO_TEST_GATES_OFF "")
+    # MILO_TEST_GATE_PROBES records, for every probed gate, the exact path whose
+    # existence decided it -- ON or OFF. TestGates re-runs those probes at RUN
+    # time and fails if a gate the source's own rule would now turn ON is baked
+    # OFF. Without this the gate decision is frozen at the last configure: the
+    # assets can appear on disk afterwards and nothing re-asks, because CMake
+    # only re-runs when a CMakeLists changes. Format: NAME=path (one per entry).
+    set(MILO_TEST_GATE_PROBES "")
 
     # MILO_LIB — extracted DC3 milo-rnd-library. Gates CharClipGroupTest (2) and
     # parts of MiloViewerScreenshot / merge-parity. test_asset_loading.cpp's
     # GetMiloLibRoot() already defaults to this path, so the two CharClipGroup
     # tests were skipping on a box where the assets are present.
     set(MILO_LIB_DIR "")
-    foreach(_cand
-            "$ENV{MILO_LIB}"
-            "$ENV{HOME}/code/milohax/milo-engine-libs/harmonix-repos/milo-rnd-library/dc3")
+    set(_milo_lib_default
+        "$ENV{HOME}/code/milohax/milo-engine-libs/harmonix-repos/milo-rnd-library/dc3")
+    foreach(_cand "$ENV{MILO_LIB}" "${_milo_lib_default}")
         if(_cand AND EXISTS "${_cand}/char/crowd/anim/gen/female_base.milo_xbox")
             set(MILO_LIB_DIR "${_cand}")
             break()
         endif()
     endforeach()
+    # Probe recorded against the DEFAULT candidate: $ENV{MILO_LIB} is a property
+    # of whoever ran cmake and is not reproducible from the test process.
+    list(APPEND MILO_TEST_GATE_PROBES
+        "MILO_LIB=${_milo_lib_default}/char/crowd/anim/gen/female_base.milo_xbox")
     if(MILO_LIB_DIR)
         list(APPEND MILO_TEST_ENV "MILO_LIB=${MILO_LIB_DIR}")
         list(APPEND MILO_TEST_GATES_ON "MILO_LIB")
@@ -2040,6 +2051,8 @@ if(BUILD_TESTS)
     # DC3_DTA_FLOW_TESTS — 7 DtaFlowTest cases. They need the game assets, which
     # is exactly what MILO_TEST_ASSET_DIR was just proven to contain. The audit
     # confirmed all 7 pass when enabled; they were pure lost coverage.
+    list(APPEND MILO_TEST_GATE_PROBES
+        "DC3_DTA_FLOW_TESTS=${MILO_TEST_ASSET_DIR}/gen/main_xbox.hdr")
     if(EXISTS "${MILO_TEST_ASSET_DIR}/gen/main_xbox.hdr")
         list(APPEND MILO_TEST_ENV "DC3_DTA_FLOW_TESTS=1")
         list(APPEND MILO_TEST_GATES_ON "DC3_DTA_FLOW_TESTS")
@@ -2060,9 +2073,33 @@ if(BUILD_TESTS)
 
     string(REPLACE ";" "," _gates_on_str "${MILO_TEST_GATES_ON}")
     string(REPLACE ";" "," _gates_off_str "${MILO_TEST_GATES_OFF}")
+    string(REPLACE ";" "|" _gate_probes_str "${MILO_TEST_GATE_PROBES}")
+
+    # Build-currency inputs for TestGates.BuildMatchesSources.
+    #
+    # The gate table alone was not enough. On 2026-08-23 the main checkout's
+    # native/build was three days old: `scripts/native_test.sh` runs ctest and
+    # never built, so the suite ran an Aug-20 milo-tests against an Aug-23
+    # source tree. It registered 449 tests where a fresh configure registers
+    # 504, reported 380/380 green, and TestGates PASSED -- because the gates it
+    # checks really were delivered, to a binary that was simply not this tree's.
+    # The instrument verified everything about the run except that the run was
+    # about the current source.
+    #
+    # There is no heuristic here: the test asks ninja, using the real dependency
+    # graph, whether the two targets the suite exercises are up to date.
+    set(_ninja_exe "")
+    if(CMAKE_GENERATOR MATCHES "Ninja")
+        set(_ninja_exe "${CMAKE_MAKE_PROGRAM}")
+    endif()
+
     target_compile_definitions(milo-tests PRIVATE
         "MILO_TEST_GATES_ON_STR=\"${_gates_on_str}\""
-        "MILO_TEST_GATES_OFF_STR=\"${_gates_off_str}\"")
+        "MILO_TEST_GATES_OFF_STR=\"${_gates_off_str}\""
+        "MILO_TEST_GATE_PROBES_STR=\"${_gate_probes_str}\""
+        "MILO_TEST_BINARY_DIR_STR=\"${CMAKE_CURRENT_BINARY_DIR}\""
+        "MILO_TEST_GENERATOR_STR=\"${CMAKE_GENERATOR}\""
+        "MILO_TEST_NINJA_STR=\"${_ninja_exe}\"")
 
     message(STATUS "milo-tests gates ON : ${_gates_on_str}")
     message(STATUS "milo-tests gates OFF: ${_gates_off_str}")

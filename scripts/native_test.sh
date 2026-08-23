@@ -38,7 +38,31 @@
 #
 # That is ~2 minutes for the same 48 assertions.
 #   scripts/native_test.sh -R SomeRegex     # extra args pass through to ctest
+#   scripts/native_test.sh --no-build       # test what is already built (see below)
 #   SKIP_BUDGET_UPDATE=1 scripts/native_test.sh   # rewrite the budget file
+#
+# WHY THIS SCRIPT BUILDS
+# ----------------------
+# It used to run ctest and nothing else, which made it a lying instrument in a
+# second, quieter way than the skip counting it was written to fix. Measured
+# 2026-08-23 in the main checkout: native/build had last been built on Aug 20,
+# the source tree was at Aug 23, and this script happily tested the old binary.
+# It reported
+#
+#     registered : 449   EXECUTED : 380   passed : 380   FAILED : 0
+#     SKIPPED    : 69    budget : 69      exit 0
+#
+# while a freshly configured-and-built tree at the same commit registers 504.
+# Fifty-five tests did not exist in the binary, so they could not fail, so the
+# run was green -- and the skip budget matched exactly, because the budget
+# describes gates and the missing tests were not gated, they were absent.
+# Nothing in the wrapper, in ctest, or in the TestGates suite could see it: all
+# three were correct about a binary that was simply not this tree's.
+#
+# So the build is now part of the measurement. `--no-build` still exists, but
+# it prints a warning and TestGates.BuildMatchesSources will fail the run
+# anyway if the tree has moved -- deliberately, because "I only wanted to
+# re-run ctest" is exactly how the stale reading happened.
 
 set -uo pipefail
 
@@ -48,6 +72,7 @@ BUDGET_FILE="$REPO_ROOT/native/tests/skip_budget.txt"
 
 CTEST_ARGS=()
 ALL_GATES=0
+DO_BUILD=1
 for arg in "$@"; do
     case "$arg" in
         --all-gates)
@@ -56,6 +81,7 @@ for arg in "$@"; do
             export MILO_LONG_TEST=1
             ALL_GATES=1
             ;;
+        --no-build) DO_BUILD=0 ;;
         *) CTEST_ARGS+=("$arg") ;;
     esac
 done
@@ -64,6 +90,26 @@ if [ ! -f "$BUILD_DIR/CTestTestfile.cmake" ]; then
     echo "error: no configured build at $BUILD_DIR" >&2
     echo "       configure it first, or set MILO_TEST_BUILD_DIR." >&2
     exit 1
+fi
+
+# Build BEFORE testing. A stale build dir silently narrows the suite: the tests
+# that would fail are not in the binary, so ctest cannot run them, so the run is
+# green. See the header comment for the measured 449-vs-504 incident.
+if [ "$DO_BUILD" = "1" ]; then
+    echo "==> building milo-tests / dc3-native in $BUILD_DIR"
+    if ! cmake --build "$BUILD_DIR" --target milo-tests dc3-native; then
+        echo >&2
+        echo "error: build FAILED. Not running ctest against the previous" >&2
+        echo "       binary -- that would report the old tree's results as" >&2
+        echo "       though they were this one's." >&2
+        exit 6
+    fi
+    # cmake re-runs configure when a CMakeLists changed, which can add or remove
+    # tests. gtest_discover_tests re-runs on relink, so the ctest list is fresh
+    # by the time we get here.
+else
+    echo "==> --no-build: testing whatever is already in $BUILD_DIR"
+    echo "    (TestGates.BuildMatchesSources will fail if it is stale)"
 fi
 
 LOG="$(mktemp -t native_test.XXXXXX.log)"
