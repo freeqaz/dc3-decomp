@@ -12,6 +12,14 @@ exactly one thing, asserts RED **pinning the reason**, restores, and asserts
 GREEN again.  Pinning the reason matters because several distinct defects all
 raise -- a guard that goes red for the wrong reason must fail these, not pass.
 
+Task #149 added the second half: the guard used to read objects that were zero
+bytes because `cl.exe` was mid-write, and fail a parallel build.  The
+`MidWriteRaceTest` cases below construct that exact condition -- an empty object
+with a REAL process named `ninja` alive in the tree -- and assert the guard goes
+INDETERMINATE rather than red, while the same fixture without the build stays
+red.  Nothing is monkey-patched: `ninja_builds_in_flight` runs unmodified
+against a real `/proc`.
+
 Run:  python3 -m pytest tests/test_complete_units.py -q
       python3 tests/test_complete_units.py            (unittest fallback)
 """
@@ -234,13 +242,228 @@ class CompleteUnitGuardTest(unittest.TestCase):
         968 of 2,224 units on 2026-08-23. If this fails, either an object went
         missing or configure.py's unit table changed -- both are things to look
         at, not to relax the test for.
+
+        This one runs against the REAL tree, so it is the one test here that can
+        collide with a build another lane is running in it. That is reported as
+        an explicit skip naming the pid -- never as a pass, and never as the
+        failure it used to be.
         """
-        note = vcu.check(REPO_ROOT)
+        try:
+            note = vcu.check(REPO_ROOT)
+        except vcu.BuildInFlightError as exc:
+            self.skipTest(f"a ninja is building {REPO_ROOT} right now, so "
+                          f"missing/empty objects cannot be told from mid-write "
+                          f"ones: {str(exc).splitlines()[0]}")
         self.assertIn("`complete: true` units have a non-empty base object", note)
         head, _, _ = note.partition(" ")
         got, _, total = head.partition("/")
         self.assertEqual(got, total, f"some complete units lack an object: {note}")
         self.assertGreater(int(total), 0, "empty population must not read as clean")
+
+
+class MidWriteRaceTest(unittest.TestCase):
+    """Task #149: an object that is empty because it is BEING WRITTEN.
+
+    Measured 2026-08-23 in a worktree, one incremental `ninja -j 16` over 220
+    units: 169 zero-byte windows, median 58 ms, max 552 ms; polling the pre-fix
+    checker through the same build gave 85 build-failing exit-1s in 1,699 runs.
+    Post-fix, over the same build: 0 exit-1s and 83 exit-6s.
+    """
+
+    def _zero_byte_fixture(self, tmp: Path) -> Path:
+        root = _fixture(Path(tmp), HEALTHY_UNITS, dict(HEALTHY_OBJECTS))
+        (root / "build/src/alpha.obj").write_bytes(b"")   # mid-write shape
+        return root
+
+    def _require_control(self, pid, root):
+        if pid is None:
+            self.skipTest(
+                "cannot host the in-flight control on this platform (no /proc, "
+                "or no `sleep` to copy) -- reporting a skip rather than a pass")
+
+    # -- the race itself ----------------------------------------------------
+
+    def test_empty_object_during_a_build_is_indeterminate_not_red(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = self._zero_byte_fixture(Path(td))
+            with vcu.fake_ninja_build(root) as pid:
+                self._require_control(pid, root)
+                with self.assertRaises(vcu.BuildInFlightError) as cm:
+                    vcu.check(root)
+            msg = str(cm.exception)
+            self.assertIn("CANNOT ESTABLISH STATE", msg)
+            self.assertIn(str(pid), msg)
+            self.assertIn("default/alpha", msg)
+            self.assertNotIn("REFUSING TO VOUCH", msg)
+
+    def test_the_same_fixture_is_red_once_the_build_is_quiescent(self):
+        """The other half. Tolerance that never ends is just a disabled guard."""
+        with tempfile.TemporaryDirectory() as td:
+            root = self._zero_byte_fixture(Path(td))
+            with vcu.fake_ninja_build(root) as pid:
+                self._require_control(pid, root)
+                self.assertRaises(vcu.BuildInFlightError, vcu.check, root)
+            # ...control gone, nothing else changed on disk:
+            with self.assertRaises(vcu.UncreditedCompleteUnitError) as cm:
+                vcu.check(root)
+            self.assertIn("ZERO BYTES", str(cm.exception))
+            self.assertIn("default/alpha", str(cm.exception))
+
+    def test_deleted_object_during_a_build_is_also_indeterminate(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = _fixture(Path(td), HEALTHY_UNITS, dict(HEALTHY_OBJECTS))
+            (root / "build/src/alpha.obj").unlink()
+            with vcu.fake_ninja_build(root) as pid:
+                self._require_control(pid, root)
+                self.assertRaises(vcu.BuildInFlightError, vcu.check, root)
+            self.assertRaises(vcu.UncreditedCompleteUnitError, vcu.check, root)
+
+    # -- and the four ways it must NOT become a licence to go quiet ---------
+
+    def test_missing_base_path_KEY_is_red_even_during_a_build(self):
+        """No compiler is ever halfway through writing a config key."""
+        with tempfile.TemporaryDirectory() as td:
+            root = _fixture(Path(td), [_unit("default/alpha", None, True)], {})
+            with vcu.fake_ninja_build(root) as pid:
+                self._require_control(pid, root)
+                with self.assertRaises(vcu.UncreditedCompleteUnitError) as cm:
+                    vcu.check(root)
+            self.assertIn("no `base_path`", str(cm.exception))
+
+    def test_a_mix_of_shapes_is_red_not_indeterminate(self):
+        """One unexcusable offender makes the whole verdict definite."""
+        with tempfile.TemporaryDirectory() as td:
+            units = HEALTHY_UNITS + [_unit("default/delta", None, True)]
+            root = _fixture(Path(td), units, dict(HEALTHY_OBJECTS))
+            (root / "build/src/alpha.obj").write_bytes(b"")
+            with vcu.fake_ninja_build(root) as pid:
+                self._require_control(pid, root)
+                with self.assertRaises(vcu.UncreditedCompleteUnitError) as cm:
+                    vcu.check(root)
+            self.assertIn("default/delta", str(cm.exception))
+            self.assertIn("default/alpha", str(cm.exception))
+
+    def test_ordered_after_compile_is_red_even_during_a_build(self):
+        """What the ninja edge passes, having bought quiescence with deps."""
+        with tempfile.TemporaryDirectory() as td:
+            root = self._zero_byte_fixture(Path(td))
+            with vcu.fake_ninja_build(root) as pid:
+                self._require_control(pid, root)
+                with self.assertRaises(vcu.UncreditedCompleteUnitError) as cm:
+                    vcu.check(root, ordered_after_compile=True)
+            self.assertIn("ZERO BYTES", str(cm.exception))
+            self.assertIn("--ordered-after-compile", str(cm.exception))
+
+    def test_a_build_in_ANOTHER_tree_excuses_nothing(self):
+        """Six lanes build here at once. Only THIS tree's build is an excuse."""
+        with tempfile.TemporaryDirectory() as td, \
+                tempfile.TemporaryDirectory() as elsewhere:
+            root = self._zero_byte_fixture(Path(td))
+            with vcu.fake_ninja_build(Path(elsewhere)) as pid:
+                if pid is None:
+                    self.skipTest("no in-flight control on this platform")
+                # The control is genuinely alive -- just not here.
+                self.assertTrue(vcu.ninja_builds_in_flight(Path(elsewhere)))
+                self.assertEqual(vcu.ninja_builds_in_flight(root), [])
+                self.assertRaises(vcu.UncreditedCompleteUnitError, vcu.check, root)
+
+    def test_detector_is_silent_on_a_quiescent_tree(self):
+        """Negative control on the detector itself.
+
+        A detector stuck at 'yes' would turn every real offence into a skip,
+        and would pass every other test in this class.
+        """
+        with tempfile.TemporaryDirectory() as td:
+            self.assertEqual(vcu.ninja_builds_in_flight(Path(td)), [])
+
+    # -- exit codes, read without a pipe ------------------------------------
+
+    def test_indeterminate_has_its_own_exit_code(self):
+        """6 must differ from 0 AND from 1, or the build cannot act on it."""
+        with tempfile.TemporaryDirectory() as td:
+            root = self._zero_byte_fixture(Path(td))
+            base = [sys.executable, str(CHECKER), "--check", "--quiet",
+                    "--project-dir", str(root)]
+            with vcu.fake_ninja_build(root) as pid:
+                self._require_control(pid, root)
+                self.assertEqual(subprocess.run(base, capture_output=True).returncode, 6)
+                self.assertEqual(
+                    subprocess.run(base + ["--ordered-after-compile"],
+                                   capture_output=True).returncode, 1)
+            self.assertEqual(subprocess.run(base, capture_output=True).returncode, 1)
+
+
+class NinjaEdgeWiringTest(unittest.TestCase):
+    """The primary fix lives in the build graph, so assert the build graph.
+
+    `--ordered-after-compile` disables the mid-write tolerance. It is only
+    sound because the edge is order-only after every compile edge and every
+    post-compile patcher. Either half without the other is a defect:
+
+      * deps without the flag  -> a real task-#142 object reads as exit 6
+        "indeterminate" during the build that would have caught it;
+      * flag without the deps  -> the task-#149 race is back, with the
+        tolerance explicitly switched off.
+
+    So they are asserted together, from the generated build.ninja rather than
+    from configure.py's source, because the generated file is what ninja obeys.
+    """
+
+    EDGE = "build/373307D9/complete_units_checked.stamp"
+
+    def _build_ninja(self) -> str:
+        p = REPO_ROOT / "build.ninja"
+        if not p.exists():
+            self.fail(f"{p} is absent -- run `python3 configure.py` in "
+                      f"{REPO_ROOT} first. Skipping here would make this test "
+                      f"unable to fail.")
+        # Un-wrap ninja's `$`-continuations so each edge is one line.
+        return p.read_text().replace("$\n", "")
+
+    def _edge_line(self, text: str) -> str:
+        for line in text.splitlines():
+            if line.startswith(f"build {self.EDGE}:"):
+                return " ".join(line.split())
+        self.fail(f"no edge produces {self.EDGE} in build.ninja")
+
+    def test_edge_is_order_only_after_all_source_and_post_compile(self):
+        line = self._edge_line(self._build_ninja())
+        self.assertIn("||", line,
+                      f"the complete-unit guard has NO order-only deps, so "
+                      f"ninja may schedule it concurrently with cl.exe and read "
+                      f"a half-written .obj (task #149): {line}")
+        order_only = line.split("||", 1)[1].split()
+        self.assertIn("all_source", order_only, line)
+        self.assertIn("post-compile", order_only, line)
+
+    def test_rule_passes_ordered_after_compile(self):
+        text = self._build_ninja()
+        rule = ""
+        grab = False
+        for line in text.splitlines():
+            if line.startswith("rule complete_units_check"):
+                grab = True
+                continue
+            if grab:
+                if line.startswith((" ", "\t")):
+                    rule += line
+                else:
+                    break
+        self.assertIn("--ordered-after-compile", rule,
+                      "the edge has earned quiescence with order-only deps but "
+                      "does not spend it, so a genuine uncredited unit would be "
+                      "reported as indeterminate instead of as an offence")
+
+    def test_flag_and_deps_are_both_present_or_this_test_says_which(self):
+        """One assertion that names the pairing, so a partial revert is loud."""
+        text = self._build_ninja()
+        has_deps = "||" in self._edge_line(text)
+        has_flag = "--ordered-after-compile" in text
+        self.assertEqual(
+            has_deps, has_flag,
+            f"order-only deps ({has_deps}) and --ordered-after-compile "
+            f"({has_flag}) must travel together; see the comment on the "
+            f"complete_units_check edge in tools/project.py")
 
 
 if __name__ == "__main__":
