@@ -26,8 +26,6 @@ extern "C" void XMemCpy(void *, const void *, int);
 
 MicManagerXbox *sInstance;
 
-float GainEffect::sGain;
-
 // Headset config values. The target lays these out as 5 separate statics that
 // the linker places contiguously at lbl_82F474C8 (noiseThreshold@0x0,
 // gNoiseInt@0x4, lowCut@0x8, localGain@0xc, remoteGain@0x10). The single-store
@@ -475,7 +473,10 @@ void MicManagerXbox::AddRemoteMic(unsigned long long const &xuid,
 
     XAUDIO2_EFFECT_DESCRIPTOR desc;
     desc.OutputChannels = 1;
-    desc.pEffect = (IUnknown *)gainEffect;
+    // Via IXAPO (the CXAPOBase sub-object at offset 0) -- GainEffect reaches
+    // IUnknown through both IXAPO and IXAPOParameters, so a direct cast is
+    // ambiguous. Same idiom as Synth.cpp's HeadsetXferEffect chain.
+    desc.pEffect = static_cast<IXAPO *>(gainEffect);
     XAUDIO2_EFFECT_CHAIN effectChain;
     effectChain.EffectCount = 1;
     effectChain.pEffectDescriptors = &desc;

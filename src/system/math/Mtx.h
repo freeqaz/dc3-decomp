@@ -135,30 +135,40 @@ namespace Hmx {
 
     Hmx::Matrix4 operator*(const Transform &, const Hmx::Matrix4 &);
 
-    /** Dot product of a column of the right-hand matrix with a row of the
-     * left-hand one -- the inner loop of Matrix4 * Matrix4. */
-    inline float Dot4(const Vector4 &col, const Vector4 &row) {
-        return col.x * row.x + col.y * row.y + col.z * row.z + col.w * row.w;
+    /** Dot product of a row of the left-hand matrix with a column of the
+     * right-hand one -- the inner loop of Matrix4 * Matrix4.
+     *
+     * The row comes first so that the caller's `Dot4(a.x, b.Col4(0))` evaluates
+     * the Col4 call before taking the address of the row: MSVC evaluates
+     * arguments right to left, and with the column first the `&a.x` computation
+     * is hoisted above the call and has to live in a callee-saved register.
+     * The z term seeds the accumulator because MSVC swaps the leading pair. */
+    inline float Dot4(const Vector4 &row, const Vector4 &col) {
+        float d = col.z * row.z;
+        d += col.w * row.w;
+        d += col.y * row.y;
+        d += col.x * row.x;
+        return d;
     }
 
     inline Hmx::Matrix4 operator*(const Hmx::Matrix4 &a, const Hmx::Matrix4 &b) {
         Hmx::Matrix4 out;
-        out.x.x = Dot4(b.Col4(0), a.x);
-        out.x.y = Dot4(b.Col4(1), a.x);
-        out.x.z = Dot4(b.Col4(2), a.x);
-        out.x.w = Dot4(b.Col4(3), a.x);
-        out.y.x = Dot4(b.Col4(0), a.y);
-        out.y.y = Dot4(b.Col4(1), a.y);
-        out.y.z = Dot4(b.Col4(2), a.y);
-        out.y.w = Dot4(b.Col4(3), a.y);
-        out.z.x = Dot4(b.Col4(0), a.z);
-        out.z.y = Dot4(b.Col4(1), a.z);
-        out.z.z = Dot4(b.Col4(2), a.z);
-        out.z.w = Dot4(b.Col4(3), a.z);
-        out.w.x = Dot4(b.Col4(0), a.w);
-        out.w.y = Dot4(b.Col4(1), a.w);
-        out.w.z = Dot4(b.Col4(2), a.w);
-        out.w.w = Dot4(b.Col4(3), a.w);
+        out.x.x = Dot4(a.x, b.Col4(0));
+        out.x.y = Dot4(a.x, b.Col4(1));
+        out.x.z = Dot4(a.x, b.Col4(2));
+        out.x.w = Dot4(a.x, b.Col4(3));
+        out.y.x = Dot4(a.y, b.Col4(0));
+        out.y.y = Dot4(a.y, b.Col4(1));
+        out.y.z = Dot4(a.y, b.Col4(2));
+        out.y.w = Dot4(a.y, b.Col4(3));
+        out.z.x = Dot4(a.z, b.Col4(0));
+        out.z.y = Dot4(a.z, b.Col4(1));
+        out.z.z = Dot4(a.z, b.Col4(2));
+        out.z.w = Dot4(a.z, b.Col4(3));
+        out.w.x = Dot4(a.w, b.Col4(0));
+        out.w.y = Dot4(a.w, b.Col4(1));
+        out.w.z = Dot4(a.w, b.Col4(2));
+        out.w.w = Dot4(a.w, b.Col4(3));
         return out;
     }
 
