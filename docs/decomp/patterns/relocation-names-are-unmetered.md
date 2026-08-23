@@ -371,3 +371,121 @@ zero occurrences in the output.
 * [rounded-100-hides-real-bugs.md](rounded-100-hides-real-bugs.md) — the earlier,
   narrower version of this lesson (rounding, not relocation).
 * `CLAUDE.md` → Known Patterns, first bullet.
+
+## Reading a gate row: three measured facts before you touch source
+
+*(dc3-decomp, lane `fix/well-i-relocname-deep`, 2026-08-23. Population re-derived
+in this worktree: 419 rows scanned, **331 standing after exemptions**, 275,716 B,
+727 charged pairs. `objdiff-cli 4.2.8 (358c715835cc, xxh3 9b2bb6f1f3a21062)`.)*
+
+### 1. Half the standing population cannot pay a canonical point — by design
+
+The gate's population is defined on **`fuzzy_match_percent`, blind vs graded**.
+`fuzzy` is charged for every relocation-name difference. `match_percent_normalized`
+— the number `report.json` reports and the number `matched_functions` is gated on
+— is **not**: it still *folds* three noise classes into `arg_diff_score`, register
+save/restore helpers being the big one (see the first bullet of CLAUDE.md → Known
+Patterns). So a row can sit in the population and have literally nothing to win.
+
+Measured directly, by generating a second report under `-c functionRelocDiffs=none`
+and differencing `match_percent_normalized` per row:
+
+| bucket (by class of the charged pairs) | rows | bytes | rows with canonical headroom | those bytes |
+|---|---:|---:|---:|---:|
+| `__savegprlr_N` / `__restgprlr_N` only | 181 | 145,912 | **18** | 18,916 |
+| mixed / named symbol | 117 | 107,156 | 114 | 105,448 |
+| float pool only | 22 | 16,296 | 21 | 14,884 |
+| string literal only | 11 | 6,352 | 11 | 6,352 |
+| **TOTAL** | **331** | **275,716** | **164** | **145,600** |
+
+**167 of 331 rows (50.5%) have zero canonical headroom**, and 163 of those are
+pure register-save-helper rows. The gate is right to list them — it lists rather
+than classifies, on purpose — but a lane costing the class must divide by 164,
+not 331. Reproduce with `bin/objdiff-cli report generate -p . -o blind.json -c
+functionRelocDiffs=none` and diff `match_percent_normalized` against
+`build/373307D9/report.json`.
+
+### 2. 11% of charged pairs are hoist ORDER, and for RTTI it is 100%
+
+The gate pairs relocations **by instruction position**, which is the only pairing
+a positional diff can offer. When MSVC hoists N `lis/addi` pairs to the top of a
+block and schedules them differently, all N pairs charge even though both sides
+reference **the same N symbols**. `scripts/analysis/reloc_order_vs_identity.py`
+compares the two sides' relocation multiset restricted to the class the pair
+straddles; equal multiset means ordering, not naming:
+
+    reg_save_helper  432 pairs,   0 ORDER    rtti              10 pairs,  10 ORDER
+    named_symbol     117 pairs,   0 ORDER    vtable             2 pairs,   2 ORDER
+    float_pool        80 pairs,  32 ORDER    string_literal    37 pairs,  26 ORDER
+    TOTAL            727 pairs,  83 ORDER (11.4%)
+
+**Every RTTI charge in the population is scheduling.** `UIManager::GotoFirstScreen`
+charges `??_R0?AVObject@Hmx@@@8` vs `??_R0?AVUIScreen@@@8` *and* the reverse — a
+pair charged in both directions is the signature, and it is not a `dynamic_cast`
+naming the wrong type. Conversely **0 of 117 named-symbol charges are ordering**:
+when both sides of the pair are ordinary named symbols, the disagreement is real.
+
+The tool ships a `--selftest` that was watched failing under two deliberate
+sabotages (laundering everything as ORDER; dropping the class restriction) before
+being trusted.
+
+### 3. A relocation-name disagreement can be an *anchor* choice, at the same address
+
+`?MemFindAddrHeap@@YAHPAX@Z` charges `?gHeaps@@3PAVMemHeap@@A` (target) vs
+`?gNumHeaps@@3HA` (ours), filed `NEITHER_IN_MAP` because both are file-static and
+the shipped map lists neither. It reads as "we read the wrong global". We do not.
+From `config/373307D9/symbols.txt` — which resolves the statics `ham_xbox_r.map`
+omits — `gHeaps` is `0x830E5458` and `gNumHeaps` is `0x830E56EC`, i.e. exactly
+`gHeaps + 0x294`, and the target's asm is
+
+```
+lis  r11, "?gHeaps@@3PAVMemHeap@@A"@ha
+addi r11, r11, "?gHeaps@@3PAVMemHeap@@A"@l
+lwz  r7,  0x294(r11)          ; <- gNumHeaps, reached off gHeaps' anchor
+```
+
+MSVC materialised `&gHeaps` first and reached the loop bound by displacement
+rather than emitting a second `@ha`. Both sides read the same word of memory. The
+source is not wrong; the *anchor* differs, and no spelling of `i < gNumHeaps`
+changes that on its own. **Adjudicate a `NEITHER_IN_MAP` / `BASE_NOT_IN_MAP` pair
+against `config/373307D9/symbols.txt`, not only against the linker map** — the map
+resolves neither name here, symbols.txt resolves 648 of the 727 pairs.
+
+### Four experiments that made things WORSE — do not retry blind
+
+Every one of these "fixed" the charged constant and cost more in code shape than
+the name was worth. Canonical (`name_check`, `report.json` ruler), whole-`ninja`
+rebuild each time:
+
+| function | change | before | after |
+|---|---|---:|---:|
+| `?ScreenRect@HiResScreen@@…` | `1.0 / (float)tiling` → `1.0f / …` (target's constant) | 80.833 | **77.500** |
+| `?CalculateAOAtPoint@RndAmbientOcclusion@@…` | `val * 0.5f + 0.5f` → `* 0.5 + 0.5` (target's double) | 89.897 | **88.900** |
+| `?SetupPanInfo@MoggClip@@…` | `-f2 / 2.0` → `-f2 * 0.5f` (target emits `fmadds` with `-0.5f`) | 92.742 | **78.387** |
+| `?Relativize@CharBonesSamples@@…` | `1300.0 / 32767.0f` → `1300.0f / …`, matching its two siblings | 97.136 | **94.212** |
+| `?MemFindAddrHeap@@…` | index loop → pointer-increment loop (the file's own idiom, and the target's shape) | 87.292 | **69.000** |
+
+The literal's *type* is an instruction-selection input on Xenon MSVC (`frsp`,
+`fdivs` vs `fmuls`, `fmadds` vs `fsubs` under `/fp:fast`), so the "wrong" spelling
+is frequently the one the rest of the function's shape depends on. Charging the
+constant is a lead about **what the original computed**, not an instruction to
+retype the literal.
+
+### What did work
+
+Three rows, all adjudicated from the target asm rather than from the name:
+
+* `?HolmesClientCacheFile@@YA_NPADPBD@Z` — `AutoSlowFrame`'s threshold is
+  `20000.0f`, we had `25.0f`. A real shipped-behaviour bug. 93.595 → **93.681**.
+* `?BuildCone@Spotlight@@IAAXAAUBeamDef@1@@Z` — `0.4188790f` (0x3ed6774f) is one
+  ULP off the correctly-rounded `2.0f*PI/15.0f` (0x3ed67750) the target holds, and
+  the line above already reads `1.0f / 15.0f`. 89.716 → **89.751**.
+* `?Poll@CharSleeve@@UAAXXZ` — `-3.858268f` → `-3.8582677f` (9.8/2.54). Byte-correct
+  constant, **metric-neutral**: that row's charge was a 1.0f-vs-gravity hoist swap
+  all along, so it is 93.998 canonical before and after. Recorded so nobody
+  re-derives the ULP as a lead.
+
+Whole-binary A/B over all three: `matched_functions` 29,885 → 29,885,
+`matched_code` 5,048,168 → 5,048,168 B, **2 functions up, 0 down**. Both winning
+rows are far from 100%, so neither crosses and neither pays bytes — expected for
+this class, and the reason to report functions-up/down alongside the headline.
