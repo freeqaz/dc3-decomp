@@ -71,7 +71,7 @@ void OSCMessenger::Poll() {
             }
         }
         if (!found) {
-            mValues.push_back(value);
+            mValues.push_front(value);
         }
     }
 }
@@ -88,7 +88,7 @@ int OSCMessenger::GetInt(String str, int intValue) {
         newValue.mAddress = str;
         newValue.mHasNewValue = 0;
         newValue.mType = 'i';
-        mValues.push_back(newValue);
+        mValues.push_front(newValue);
         return intValue;
     }
 }
@@ -136,7 +136,7 @@ float OSCMessenger::GetFloat(String str, float fValue) {
         newValue.mAddress = str;
         newValue.mType = 'f';
         *(float *)newValue.buffer = fValue;
-        mValues.push_back(newValue);
+        mValues.push_front(newValue);
     }
     return fValue;
 }
