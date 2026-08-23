@@ -78,9 +78,9 @@ namespace {
 
     void LoadDebugDepthBuffer(RndTex *&outTex) {
         outTex = nullptr;
-        FilePath fp("../../system/run/gesture/dev_depth.data");
         FileLoader loader(
-            fp, "../../system/run/gesture/dev_depth.data", kLoadFront, 0, false, true,
+            FilePath("../../system/run/gesture/dev_depth.data"),
+            "../../system/run/gesture/dev_depth.data", kLoadFront, 0, false, true,
             nullptr, nullptr
         );
         TheLoadMgr.PollUntilLoaded(&loader, nullptr);
@@ -90,7 +90,7 @@ namespace {
             int mWidth = 320, mHeight = 240, mBpp = 16;
             MILO_ASSERT(sz == mWidth * mHeight * mBpp / 8, 0x5a);
             DxTex *tex = Hmx::Object::New<DxTex>();
-            D3DTexture *d3dTex = new D3DTexture();
+            D3DTexture *d3dTex = new D3DTexture;
             int texSize =
                 XGSetTextureHeader(
                     mWidth, mHeight, 1, 4, (D3DFORMAT)0x1a220058, 0, 0, -1, d3dTex
