@@ -227,8 +227,6 @@ void StorePanel::Poll() {
     }
 }
 
-void StorePanel::ExitStore(StoreError) const {}
-Profile *StorePanel::StoreProfile() const { return nullptr; }
 
 bool StorePanel::IsLoaded() const {
     return (UIPanel::IsLoaded() && TheContentMgr.RefreshDone());
@@ -713,8 +711,6 @@ void StorePanel::SetSource(Symbol src, bool backup) {
         mBackupPurchaseSource = src;
 }
 
-StoreOffer *StorePanel::FindOffer(Symbol) const { return nullptr; }
-void StorePanel::StoreUserProfileSwappedToUser(LocalUser *) {}
 
 BEGIN_HANDLERS(StorePanel)
     HANDLE_EXPR(toggle_test_offers, mShowTestOffers = !mShowTestOffers)
