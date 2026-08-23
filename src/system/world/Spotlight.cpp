@@ -1126,7 +1126,7 @@ void Spotlight::BuildCone(BeamDef &def) {
 
     float angle = 0.0f;
     float uvStep = 1.0f / 15.0f;
-    float angleStep = 0.4188790f;
+    float angleStep = 2.0f * PI / 15.0f;
 
     for (unsigned int i = 0; i - 15; i++) {
         float cosA = std::cos(angle);
