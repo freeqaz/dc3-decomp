@@ -110,6 +110,21 @@ void FlowRun::ResolveTarget() {
         }
         MILO_ASSERT(targetDir, 0x72);
     }
+#ifdef HX_NATIVE
+    // MILO_ASSERT is the guard here, and on native it does not stop: Debug::Fail
+    // prints and returns, so a null `targetDir` reaches the Find<Flow>() below.
+    // ObjectDir::Find is a non-virtual template that immediately calls
+    // FindObject -> FindEntry -> mHashTable.Find(name) through a null `this`.
+    // The 360 maps guest page 0 readable/writable/zeroed, so those reads return
+    // zeroes rather than faulting; Linux has no page 0 and the same read
+    // SIGSEGVs. This is a MEMORY-MAP difference, not a pointer-width one -- the
+    // offsets stay far inside 0x10000 either way. Leave mTarget null (it
+    // already is: the early-out at the top of this function returned if it was
+    // set) and give up on resolving, which is what the assert meant.
+    if (targetDir == nullptr) {
+        return;
+    }
+#endif
     mTarget = targetDir->Find<Flow>(mTargetName.c_str(), false);
 }
 

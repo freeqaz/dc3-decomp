@@ -947,6 +947,29 @@ void Hmx::Object::RemoveFromDir() {
         ObjectDir::Entry *entry = mDir->FindEntry(mName, false);
         if (!entry || entry->obj != this) {
             MILO_FAIL("No entry for %s in %s", PathName(this), PathName(mDir));
+#ifdef HX_NATIVE
+            // MILO_FAIL stops the title on the 360; on native Debug::Fail
+            // prints and returns, so `entry->obj = nullptr` below runs anyway.
+            // Both disjuncts of the test above are then unsafe:
+            //
+            //   entry == nullptr           -> a store through page 0. The 360
+            //     maps guest page 0 readable/writable/zeroed and absorbs it;
+            //     Linux never maps page 0, so it SIGSEGVs. Same memory-map
+            //     difference as the MoveDir::PostUpdateFilters class.
+            //
+            //   entry->obj != this         -> memory-safe but WORSE: it clears
+            //     a hash entry that belongs to a DIFFERENT, live object, so
+            //     that object silently vanishes from its dir while still
+            //     holding mDir/mName. This is reachable today because the
+            //     "%s already exists" MILO_FAIL in SetName() is non-fatal too:
+            //     the second object of a duplicate-name pair overwrites
+            //     entry->obj, and destroying the FIRST one then unregisters
+            //     the second.
+            //
+            // Neither is what the console does, where the title has already
+            // stopped. Leave the dir untouched.
+            return;
+#endif
         }
 
         entry->obj = nullptr;

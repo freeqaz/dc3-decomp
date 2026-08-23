@@ -510,6 +510,22 @@ void RndFont::UpdateChars() {
                     }
                     locker.LoadPage(pageIdx);
                     bmap = locker.mBitmapPtr;
+#ifdef HX_NATIVE
+                    // `bmap` is proved nullable by the `if (bmap)` twenty lines
+                    // above -- BitmapLocker::LoadPage leaves mBitmapPtr null
+                    // whenever the page has no valid texture or the lock/LoadBmp
+                    // produced no pixels. The re-fetch after LoadPage is NOT
+                    // re-tested, and the next two statements call
+                    // bmap->Width()/Height() (and SetCharInfo dereferences *bmap
+                    // further down). Those are non-virtual member reads, so on
+                    // the 360 they land in the mapped, zeroed page 0 and return
+                    // 0 -- garbage offsets, but the title keeps running. Linux
+                    // has no page 0 and SIGSEGVs. Stop laying out characters --
+                    // the same thing the out-of-materials arm above does.
+                    if (!bmap) {
+                        break;
+                    }
+#endif
                     pos.x = 0;
                     pos.y = 0;
                     mMaterialOffsets[pageIdx].x = mCellSize.x / (float)bmap->Width();

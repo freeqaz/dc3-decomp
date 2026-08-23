@@ -45,6 +45,8 @@
 
 #include <gtest/gtest.h>
 
+#include "utl/MemMgr.h"
+
 #include <csignal>
 #include <cstring>
 #include <fstream>
@@ -440,6 +442,47 @@ const GuardSite kSites[] = {
      "if (skeleton == nullptr) {",
      "GetScore(int,...) leaves skeletonToScore null when the player index is negative "
      "and there is no live skeleton, and passes it straight here."},
+
+    // ---- dc3 task #143: the diagnostic ITSELF was the guard ---------------
+    //
+    // These four differ from the nine above in what proves the pointer
+    // nullable: not a `&&` conjunction, but a MILO_ASSERT / MILO_FAIL sitting
+    // directly over the access. On the 360 those stop the title, so the access
+    // is unreachable. Debug::Fail on native prints to stderr and RETURNS
+    // (src/system/os/Debug.cpp), so the access runs with exactly the value the
+    // diagnostic was written to exclude. Same page-0 memory-map story for the
+    // ones that are stores or non-virtual reads; the Lit_NG one is a VIRTUAL
+    // call, which faults on both hosts once it gets a vtable pointer of 0.
+
+    {"FlowRun.cpp ResolveTarget", "/system/flow/FlowRun.cpp",
+     "void FlowRun::ResolveTarget() {", "targetDir->Find<Flow>(",
+     "if (targetDir == nullptr) {",
+     "MILO_ASSERT(targetDir, 0x72) is the only thing between `targetDir = "
+     "ownerFlow->Dir()` (which returns mDir, freely null) and "
+     "ObjectDir::Find<Flow> -- a non-virtual template that walks mHashTable "
+     "through a null `this`."},
+
+    {"Lit_NG.cpp NgLight::RenderShadows", "/system/rndobj/Lit_NG.cpp",
+     "void NgLight::RenderShadows(", "mShadowRT->MakeDrawTarget();",
+     "if (!mShadowRT || !unk188) {",
+     "MILO_ASSERT(mShadowRT && !shadowCasters.empty(), 0x112) then "
+     "mShadowRT->MakeDrawTarget(), which is virtual -- a vtable load from "
+     "address 0. CreateShadowTex() returns null whenever Hmx::Object::New<RndTex> "
+     "hits its own non-fatal MILO_FAIL."},
+
+    {"Object.cpp RemoveFromDir", "/system/obj/Object.cpp",
+     "void Hmx::Object::RemoveFromDir() {", "entry->obj = nullptr;", "return;",
+     "MILO_FAIL(\"No entry for %s in %s\") then `entry->obj = nullptr`. Null "
+     "entry stores through page 0; a non-null entry owned by ANOTHER object is "
+     "memory-safe and silently unregisters that live object from its dir -- see "
+     "ObjectDirDuplicateName.DestroyingTheFirstDoesNotUnregisterTheSecond."},
+
+    {"Font.cpp UpdateChars", "/system/rndobj/Font.cpp", "void RndFont::UpdateChars() {",
+     "mMaterialOffsets[pageIdx].x = mCellSize.x / (float)bmap->Width();",
+     "if (!bmap) {",
+     "`bmap` is null-tested at its first use and then re-fetched from "
+     "BitmapLocker::LoadPage() -- which leaves mBitmapPtr null for a page with "
+     "no valid texture -- without being re-tested."},
 };
 
 std::string SitePath(const GuardSite &site) {
@@ -507,3 +550,43 @@ INSTANTIATE_TEST_SUITE_P(
     }
 );
 
+
+// ---------------------------------------------------------------------------
+// 4. The one site in dc3 task #143 that is NOT guarded, and why.
+// ---------------------------------------------------------------------------
+//
+// MemHeap::InsertFreeBlock opens with
+//
+//     MILO_ASSERT((iBlock != iPrevBlock) && (iBlock != iNextBlock), 0x68);
+//     iBlock->mSizeWords = size;
+//     iBlock->mNextBlock = iNextBlock;      // self-link if iBlock == iNextBlock
+//     ...
+//     if (iPrevBlock) iPrevBlock->mNextBlock = iBlock;   // ditto
+//
+// and a self-link makes every later walk of mFreeBlockChain spin forever. That
+// fall-through IS corrupting -- but it is unreachable on native, so no guard
+// was added. Adding one would have had to choose between returning (leaking the
+// block out of the chain) and continuing (the corruption), and it would have
+// been dead code either way.
+//
+// The reason it is unreachable is a single line in src/system/os/System.cpp:
+// the native arm of SystemInit skips MemInit(), so gNumHeaps stays 0 and no
+// MemHeap is ever Init()ed. MemAlloc/MemFree/MemOrPoolAllocSTL are #ifdef
+// HX_NATIVE'd straight to malloc/free, and the one remaining caller that can
+// still reach MemHeap -- MemTruncate, live via CharClip.cpp -- loops
+// `for (i = 0; i < gNumHeaps; i++) gHeaps[i].Truncate(...)`, which executes
+// zero times. Measured, not only argued: an instrumented build that printed on
+// the first InsertFreeBlock call produced no output across the whole ctest
+// suite, a bare milo-tests run, and a 60k-frame headless engine run that
+// reached gameplay.
+//
+// That reachability argument has exactly one load-bearing fact, so pin it. If
+// somebody re-enables MemInit on native, this fails and points at the analysis
+// instead of letting a heap corruption go looking for a reader.
+TEST(MemHeapInertOnNative, NoHeapsAreInitialisedSoInsertFreeBlockIsUnreachable) {
+    EXPECT_EQ(MemNumHeaps(), 0)
+        << "A MemHeap now exists on native, so MemHeap::Alloc/Free/Truncate can "
+           "run and MemHeap::InsertFreeBlock's non-fatal MILO_ASSERT (self-link "
+           "-> infinite mFreeBlockChain walk) is reachable again. Guard the site "
+           "before raising this number; see dc3 task #143.";
+}
