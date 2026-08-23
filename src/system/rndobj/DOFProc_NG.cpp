@@ -139,13 +139,14 @@ void SetVHBlurWeights(bool vertical, int width, int height) {
         taps = sHorzBlurTaps;
     }
 
-    TheShaderMgr.SetNumTaps(8);
     float fVar = RndPostProc::DOFOverrides().mBlurWidthScale * sDOFWidthFactor;
     float xScale = (float)(long long)width * fVar * 4.8828124e-06f;
     float yScale = (float)(long long)height * fVar * 1.5432099e-05f;
+    TheShaderMgr.SetNumTaps(8);
 
     for (int i = 0; i < 8; i++) {
-        Vector4 tapOffset(taps[i].x * xScale * 5.0f, taps[i].y * yScale * 5.0f, 1.0f, 1.0f);
+        Vector2 tap = taps[i];
+        Vector4 tapOffset(tap.x * xScale * 5.0f, tap.y * yScale * 5.0f, 1.0f, 1.0f);
         TheShaderMgr.SetPConstant((PShaderConstant)(0x8a + i), tapOffset);
         Vector4 weight(weights[i], weights[i], weights[i], weights[i]);
         TheShaderMgr.SetPConstant((PShaderConstant)(0x9a + i), weight);
