@@ -1,6 +1,21 @@
 #pragma once
 #include "os\Debug.h"
 #include "utl/BinStream.h"
+// The backslash here is load-bearing and MEASURED. Data.h is the PCH's first
+// include of PoolAlloc.h, so this spelling fixes __FILE__ for every MEM_OVERLOAD
+// in that header across all 574 PCH TUs -- MSVC builds __FILE__ as
+// <search-dir> + '\\' + <as-written>, so "utl/PoolAlloc.h" would yield
+// e:\lazer_build_gmc1\system\src\utl/PoolAlloc.h. Retail carries BOTH spellings
+// (MultiMesh.obj forward, PoolAlloc.obj backslash); one shared PCH cannot.
+// Flipping it to forward was tried 2026-08-23 and REVERTED -- whole-binary A/B:
+//   UP 2 (MultiMesh ??3FixedSizeAlloc +24 B, ??_GFixedSizeAlloc +88 B)
+//   DOWN 4 (PoolAlloc ??3ChunkAllocator 24, ??_GReclaimableAlloc 96,
+//           ??0ChunkAllocator 132, ?PoolAlloc@@YAPAXHHPBDH0@Z 336)
+//   matched_code 5,045,564 -> 5,045,088 (-476 B), matched_functions -2.
+// Same shape holds for os/CritSec.h (HDCache wants backslash, 5 TUs want
+// forward) and utl/FileStream.h (FileStream.cpp wants backslash, 6 want
+// forward): each is a 1-vs-N trade, so all three lose. Only splitting the PCH
+// per TU could win them, which is not worth 232 B.
 #include "utl\PoolAlloc.h"
 #include "utl\Str.h"
 #include "utl\Symbol.h"
