@@ -57,9 +57,12 @@ void SynapseAPO::OnSetParameters(const SynapseAPOParams& params) {
 }
 
 void SynapseAPO::DoProcess(
-    const SynapseAPOParams &params, float *__restrict buffer, unsigned int frameCount,
-    unsigned int channelCount
-) {}
+    const SynapseAPOParams &, float *__restrict buffer, unsigned int frameCount, unsigned int
+) {
+    if (mSynapse) {
+        mSynapse->ProcessInPlace(frameCount, buffer);
+    }
+}
 
 }  // namespace DSP
 
