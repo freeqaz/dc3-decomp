@@ -18,6 +18,15 @@ public:
     virtual void Save(BinStream &);
     virtual void Copy(const Hmx::Object *, Hmx::Object::CopyType);
     virtual void Load(BinStream &);
+    /** ??_7RndFur@@6B@ slots +0x58 and +0x5C (target 24 slots, we had 22).
+     *  Both ?Prep@RndFur@@UBA_NPAVRndMesh@@PAVRndMat@@@Z and
+     *  ?Shell@RndFur@@UBA_NHPAVRndMesh@@PAVRndMat@@@Z sit at 0x82AEAE70
+     *  ("li r3,0; blr") in ham_xbox_r.map.  Because both bodies ICF-folded to
+     *  the SAME address, the vtable cannot witness their relative order --
+     *  either order reproduces the target bytes.  There are no call sites in
+     *  the tree, so this order is a guess; do not treat it as established. */
+    virtual bool Prep(class RndMesh *, class RndMat *) const { return false; }
+    virtual bool Shell(int, class RndMesh *, class RndMat *) const { return false; }
 
     bool LoadOld(BinStreamRev &);
     RndTex* GetFurDetail() const { return mFurDetail; }

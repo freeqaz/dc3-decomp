@@ -113,7 +113,7 @@ GameplayTelemetry::Snapshot GameplayTelemetry::CaptureSnapshot(int frame) {
 
     // Song anim frame
     if (TheHamDirector) {
-        s.pollEnabled = TheHamDirector->PollEnabled();
+        s.pollEnabled = TheHamDirector->IsPollEnabled();
         s.worldLoaded = TheHamDirector->IsWorldLoaded();
         s.worldPresent = TheHamDirector->GetWorld() != nullptr;
         s.venuePresent = TheHamDirector->GetVenueWorld() != nullptr;

@@ -147,7 +147,15 @@ public:
     FileMerger *GetGameModeMerger() const { return mGameModeMerger; }
     void SetPickingDisabled(bool disable) { mDisablePicking = disable; }
     void SetPollEnabled(bool enable) { mPollEnabled = enable; }
-    bool PollEnabled() const { return mPollEnabled; }
+    /** Whether the `enable_poll` gate is set.  Deliberately NOT named
+     *  `PollEnabled`: that is RndPollable's virtual, which RndDir calls to
+     *  decide whether to sort this object into mPolls or mEnters.  The target
+     *  binary leaves that slot on RndPollable::PollEnabled (`return true`), so
+     *  HamDirector is always polled and the gate is applied INSIDE Poll()
+     *  (`if (!mPollEnabled) return;`).  An accessor spelled `PollEnabled`
+     *  silently overrides the virtual and takes the director out of the poll
+     *  list entirely -- see ??_7HamDirector@@6BRndPollable@@@ slot 0. */
+    bool IsPollEnabled() const { return mPollEnabled; }
     bool IsGameStartHold() const { return mGameStartHold; }
     int StartLoopMargin() const { return mStartLoopMargin; }
     int EndLoopMargin() const { return mEndLoopMargin; }
