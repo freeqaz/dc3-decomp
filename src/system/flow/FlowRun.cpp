@@ -110,6 +110,20 @@ void FlowRun::ResolveTarget() {
         }
         MILO_ASSERT(targetDir, 0x72);
     }
+#ifdef HX_NATIVE
+    // MILO_ASSERT is the guard here, and on native it does not stop: Debug::Fail
+    // prints and returns, so a null `targetDir` reaches the Find<Flow>() below.
+    // ObjectDir::Find is a non-virtual template that immediately calls
+    // FindObject -> FindEntry -> mHashTable.Find(name) through a null `this`.
+    // The 360 maps guest page 0 readable/writable/zeroed, so that walk reads
+    // zeroes, misses, and leaves mTarget null; Linux has no page 0 and the same
+    // read SIGSEGVs. Reproduce the console's outcome (mTarget stays null)
+    // instead of faulting. This is a MEMORY-MAP difference, not a pointer-width
+    // one -- the offsets are far inside 0x10000 either way.
+    if (targetDir == nullptr) {
+        return;
+    }
+#endif
     mTarget = targetDir->Find<Flow>(mTargetName.c_str(), false);
 }
 

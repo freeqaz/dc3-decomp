@@ -193,6 +193,20 @@ void NgLight::SetShadowTransforms() {
 void NgLight::RenderShadows(std::vector<RndDrawable *> &shadowCasters) {
     MILO_ASSERT(mShadowRT && !shadowCasters.empty(), 0x112);
     MILO_ASSERT(WantShadows(), 0x113);
+#ifdef HX_NATIVE
+    // The assert above IS the guard, and it does not stop on native. mShadowRT
+    // is null whenever CreateShadowTex() failed (Hmx::Object::New<RndTex> hits a
+    // non-fatal MILO_FAIL for an unregistered class and returns null) or when
+    // CheckShadowMap's `!mShadowRT && !unk188` arm was skipped because only one
+    // of the pair exists. Falling through calls MakeDrawTarget(), a VIRTUAL on
+    // RndTex, so it loads a vtable pointer from address 0 -- and every
+    // subsequent step (SetAndClearShadowViewport reads mShadowRT->Width(),
+    // BlurShadowRT reads dstTex->Width()) does the same. Nothing here can be
+    // done without the render target, so do what the assert meant to do.
+    if (!mShadowRT || !unk188) {
+        return;
+    }
+#endif
     RndCam *savedCam = RndCam::Current();
     mShadowRT->MakeDrawTarget();
     SetAndClearShadowViewport();
