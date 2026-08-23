@@ -44,6 +44,23 @@ Every write is guarded: a line must still carry the exact size the plan was
 derived against or the run aborts having written nothing.  `--selftest` watches
 that guard both succeed and FAIL on deliberately-broken input.
 
+WHAT THIS SCRIPT DELIBERATELY DOES NOT TOUCH
+--------------------------------------------
+After the repair, 596 of the 2,172 ??_7 symbols with a compiled counterpart are
+STILL recorded longer than our object's vtable, 592 of them by exactly 4.  That
+is a DIFFERENT thing and it must not be "fixed" the same way:
+
+  590 / 592  end in a literal `.4byte 0x00000000` -- not a relocation
+  591 / 592  currently end 8-aligned, and would end 4-aligned if trimmed
+
+i.e. it is the linker's inter-COMDAT alignment padding.  The pad physically
+exists in the image and plausibly belongs to the vtable's own COMDAT; our .obj
+simply never materialises it, because the linker adds it.  Trimming it would be
+making the target match our build, which is laundering rather than evidence, and
+the only oracle that says "trim" is our build itself.  Left alone on purpose.
+The 2 exceptions whose extra word IS a relocation are genuine one-slot
+divergences, not padding.
+
 usage:
   vtable_locator_extent_repair.py --report
   vtable_locator_extent_repair.py --apply [--kind vtables|others|all]
