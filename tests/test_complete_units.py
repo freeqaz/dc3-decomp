@@ -405,11 +405,20 @@ class NinjaEdgeWiringTest(unittest.TestCase):
       * flag without the deps  -> the task-#149 race is back, with the
         tolerance explicitly switched off.
 
-    So they are asserted together, from the generated build.ninja rather than
-    from configure.py's source, because the generated file is what ninja obeys.
+    Asserted on TWO surfaces, because neither alone is enough:
+
+      * `tools/project.py`, which is what review and git see; and
+      * the GENERATED `build.ninja`, which is what ninja actually obeys and
+        which is gitignored, so a correct generator with a stale generated file
+        means the protection is not installed yet.
+
+    A stale `build.ninja` FAILS rather than skips.  Skipping would be a
+    laundering path: delete the deps from the generator, and the generated file
+    goes stale, and a skip-on-stale test turns that into green.
     """
 
     EDGE = "build/373307D9/complete_units_checked.stamp"
+    GENERATOR = REPO_ROOT / "tools" / "project.py"
 
     def _build_ninja(self) -> str:
         p = REPO_ROOT / "build.ninja"
@@ -417,8 +426,31 @@ class NinjaEdgeWiringTest(unittest.TestCase):
             self.fail(f"{p} is absent -- run `python3 configure.py` in "
                       f"{REPO_ROOT} first. Skipping here would make this test "
                       f"unable to fail.")
+        if p.stat().st_mtime < self.GENERATOR.stat().st_mtime:
+            self.fail(
+                f"{p} is OLDER than {self.GENERATOR}, so the edge this test "
+                f"reads is not the edge ninja would run. Re-run `ninja` (or "
+                f"`python3 configure.py`) in {REPO_ROOT}. This is a failure and "
+                f"not a skip on purpose: 'stale generated file' is exactly the "
+                f"state a removed order-only dep would produce.")
         # Un-wrap ninja's `$`-continuations so each edge is one line.
         return p.read_text().replace("$\n", "")
+
+    def test_generator_source_pairs_the_deps_with_the_flag(self):
+        """The surface review sees. Independent of any build having been run."""
+        src = self.GENERATOR.read_text()
+        self.assertIn("--ordered-after-compile", src,
+                      "tools/project.py no longer passes the flag")
+        self.assertIn('complete_units_order_only: List[str] = ["all_source"]', src,
+                      "tools/project.py no longer seeds the guard's order-only "
+                      "deps with all_source -- the task-#149 race is back")
+        self.assertIn('complete_units_order_only.append("post-compile")', src,
+                      "tools/project.py no longer orders the guard after the "
+                      "post-compile patchers, which rewrite the very objects "
+                      "objdiff reads")
+        self.assertIn("order_only=complete_units_order_only", src,
+                      "the order-only list is computed but never attached to "
+                      "the complete_units_check edge")
 
     def _edge_line(self, text: str) -> str:
         for line in text.splitlines():
