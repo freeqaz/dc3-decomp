@@ -153,10 +153,11 @@ void StandardStream::Resync(float f) {
     }
 }
 
-void StandardStream::EnableReads(bool b) {
-    if (mRdr)
-        mRdr->EnableReads(b);
-}
+// No null check on mRdr: ?EnableReads@StandardStream@@UAAX_N@Z is at
+// 0x82A711A0, whose body is `lwz r3,0x1c(r3); lwz r11,0(r3); lwz r11,0xc(r11);
+// mtctr r11; bctr` -- five words, a bare virtual tail-call through mRdr (0x1c)
+// with no branch at all.  Poll/Done/Seek dereference mRdr unguarded too.
+void StandardStream::EnableReads(bool b) { mRdr->EnableReads(b); }
 
 float StandardStream::GetTime() {
     if (!mChannels.empty() && mSampleRate != 0) {

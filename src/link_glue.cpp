@@ -94,7 +94,13 @@ unsigned short curlx_ultous(unsigned long) { return 0; }
 int curlx_uztosz(unsigned int) { return 0; }
 int Curl_multi_canPipeline(void *) { return 0; }
 void *Curl_str2addr(const char *) { return 0; }
-int Curl_gethostname(char *, int) { return 0; }
+// -1, not 0.  ham_xbox_r.map has Curl_gethostname at 0x8261A3C0, whose body is
+// `li r3,-0x1; blr` -- the `#ifndef HAVE_GETHOSTNAME` arm of the real
+// src/system/net/curl/lib/curl_gethostname.c, which this stub stands in for
+// (that TU is not in config/373307D9/objects.json).  Returning 0 claimed
+// SUCCESS and left `name` uninitialised, so smtp.c and curl_ntlm_msgs.c used a
+// garbage local hostname instead of taking their failure path.
+int Curl_gethostname(char *, int) { return -1; }
 char *curl_getenv(const char *) { return 0; }
 
 } // extern "C"

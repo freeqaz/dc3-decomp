@@ -129,7 +129,7 @@ int Playlist::GetNumSongs() const { return m_vSongs.size(); }
 #pragma endregion Playlist
 #pragma region CustomPlaylist
 
-CustomPlaylist::CustomPlaylist() : mProfile(0), unk24(false), mOnlineID(-1) {
+CustomPlaylist::CustomPlaylist() : mProfile(0), mDirty(false), mOnlineID(-1) {
     m_vSongs.clear();
     mSaveSizeMethod = SaveSize;
 }
@@ -139,16 +139,16 @@ CustomPlaylist::~CustomPlaylist() { m_vSongs.clear(); }
 void CustomPlaylist::SaveFixed(FixedSizeSaveableStream &fs) const {
     FixedSizeSaveable::SaveStd(fs, m_vSongs, 20, 4);
     fs << mOnlineID;
-    if (unk24) {
+    if (mDirty) {
         TheRockCentral.ManageJob(new PlaylistChangedJob(0, mName, GetNumSongs()));
     }
-    const_cast<CustomPlaylist *>(this)->unk24 = false;
+    const_cast<CustomPlaylist *>(this)->mDirty = false;
 }
 
 void CustomPlaylist::LoadFixed(FixedSizeSaveableStream &fs, int) {
     FixedSizeSaveable::LoadStd(fs, m_vSongs, 20, 4);
     fs >> mOnlineID;
-    unk24 = false;
+    mDirty = false;
 }
 
 void CustomPlaylist::SetParentProfile(HamProfile *hp) { mProfile = hp; }
@@ -175,7 +175,7 @@ void CustomPlaylist::HandleChange() {
     if (mProfile) {
         mProfile->MakeDirty();
     }
-    unk24 = true;
+    mDirty = true;
 }
 
 #pragma endregion CustomPlaylist
