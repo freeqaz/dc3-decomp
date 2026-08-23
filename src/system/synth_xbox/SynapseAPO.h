@@ -1,52 +1,6 @@
 #pragma once
 #include "synth_xbox\FxSendSynapse.h"
-
-struct XAPO_REGISTRATION_PROPERTIES;
-
-// CXAPOBase: base class for XAPO processing
-// Offset 0x00, size 0x20 bytes (vtable + 0x1c data)
-class CXAPOBase {
-public:
-    virtual void CXAPOBase_virt0();
-
-private:
-    char mCXAPOBasePad[0x1c];
-};
-
-// IXAPOParameters: interface for XAPO parameter get/set
-class IXAPOParameters {
-public:
-    virtual void IXAPOParameters_virt0();
-};
-
-// CXAPOParametersBase: inherits CXAPOBase + IXAPOParameters
-// Total size: 0x40 bytes
-class CXAPOParametersBase : public CXAPOBase, public IXAPOParameters {
-public:
-    CXAPOParametersBase(const XAPO_REGISTRATION_PROPERTIES* pRegProps, unsigned char* pParamBlocks, unsigned int uParamBlockByteSize, int fProducer);
-    virtual ~CXAPOParametersBase();
-
-private:
-    char mCXAPOParametersBasePad[0x1c]; // data from 0x24 to 0x3f
-};
-
-namespace ATG {
-
-template <typename T, typename Params>
-class CSampleXAPOBase : public CXAPOParametersBase {
-protected:
-    virtual ~CSampleXAPOBase() {}
-    __declspec(noinline) CSampleXAPOBase();
-    virtual void OnSetParameters(const Params& params) = 0;
-    virtual void DoProcess(const Params& params, unsigned int* arg1, float& arg2, unsigned int arg3, unsigned int arg4) = 0;
-
-private:
-    static XAPO_REGISTRATION_PROPERTIES m_regProps;
-    Params m_paramBlocks[3]; // 3 parameter blocks for triple-buffering (offset 0x40)
-    char m_extra[0x14]; // remaining state (offset 0x154 to 0x168)
-};
-
-} // namespace ATG
+#include "xdk\xaudio2\xapobase.h"
 
 namespace DSP {
 
@@ -54,18 +8,26 @@ namespace Synapse {
 class Synapse;
 }
 
+// Layout (sizeof == 0x1c8, cross-checked against the inlined `operator new(0x1c8)`
+// in FxSendSynapse::CreateFx):
+//   0x000  CXAPOParametersBase        (0x40)
+//   0x040  CSampleXAPOBase::mParams[3] (3 * 0x5c == 0x114)
+//   0x154  CSampleXAPOBase::mWav      (WAVEFORMATEX, 0x12 padded to 0x14)
+//   0x168  mSynapse
+//   0x16c  mCurrentParams             (0x5c)
 class SynapseAPO : public ATG::CSampleXAPOBase<SynapseAPO, SynapseAPOParams> {
 public:
     SynapseAPO();
     virtual ~SynapseAPO();
     void SetSamplingRate(float rate);
-    void DoProcess(const SynapseAPOParams& params, unsigned int* arg1, float& arg2, unsigned int arg3, unsigned int arg4);
+    virtual void
+    DoProcess(const SynapseAPOParams &, float *__restrict, unsigned int, unsigned int);
 
 private:
-    void OnSetParameters(const SynapseAPOParams& params);
+    virtual void OnSetParameters(const SynapseAPOParams &params);
 
-    Synapse::Synapse* mSynapse;   // at offset 0x168
-    SynapseAPOParams mParams;     // at offset 0x16c
+    Synapse::Synapse *mSynapse; // 0x168
+    SynapseAPOParams mCurrentParams; // 0x16c
 };
 
-}  // namespace DSP
+} // namespace DSP
