@@ -18,8 +18,11 @@ public:
     virtual bool Poll() { return 0; } // 0x18
     virtual void Save(BinStream *); // 0x1c
     virtual void End() {} // 0x20
-    virtual bool IsOpen() { return 0; } // 0x24
-    virtual bool IsLoading() { return 0; } // 0x28
+    // const, per ?IsOpen@MovieImpl@@UBA_NXZ / ?IsLoading@MovieImpl@@UBA_NXZ in
+    // ham_xbox_r.map. Declared non-const here, BinkMovieImpl's const overrides
+    // did not override at all and MSVC appended two extra vtable slots.
+    virtual bool IsOpen() const { return 0; } // 0x24
+    virtual bool IsLoading() const { return 0; } // 0x28
     virtual bool CheckOpen(bool) { return 0; } // 0x2c
     virtual void SetPaused(bool) {} // 0x30
     virtual bool Paused() const { return 0; } // 0x34 ?
