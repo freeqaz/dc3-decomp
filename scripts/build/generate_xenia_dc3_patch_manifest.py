@@ -463,24 +463,56 @@ def decompress_xex_to_pe_data(xex_path: Path) -> bytes:
     size = struct.unpack(">I", data[bff_offset:bff_offset + 4])[0]
     enc_type = struct.unpack(">H", data[bff_offset + 4:bff_offset + 6])[0]
     comp_type = struct.unpack(">H", data[bff_offset + 6:bff_offset + 8])[0]
-    if enc_type != 0:
-        raise ValueError(f"encrypted XEX unsupported (enc_type={enc_type})")
-    if comp_type == 0:
-        pe_data = data[pe_offset:]
-    elif comp_type == 1:
-        num_blocks = (size - 8) // 8
-        out = bytearray()
-        data_offset = pe_offset
-        for i in range(num_blocks):
-            block_off = bff_offset + 8 + i * 8
-            blk_size = struct.unpack(">I", data[block_off:block_off + 4])[0]
-            blk_zeros = struct.unpack(">I", data[block_off + 4:block_off + 8])[0]
-            out.extend(data[data_offset:data_offset + blk_size])
-            data_offset += blk_size
-            out.extend(b"\x00" * blk_zeros)
-        pe_data = bytes(out)
-    else:
+
+    def expand(payload: bytes) -> bytes:
+        if comp_type == 0:
+            return payload
+        if comp_type == 1:
+            num_blocks = (size - 8) // 8
+            out = bytearray()
+            data_offset = 0
+            for i in range(num_blocks):
+                block_off = bff_offset + 8 + i * 8
+                blk_size = struct.unpack(">I", data[block_off:block_off + 4])[0]
+                blk_zeros = struct.unpack(">I", data[block_off + 4:block_off + 8])[0]
+                out.extend(payload[data_offset:data_offset + blk_size])
+                data_offset += blk_size
+                out.extend(b"\x00" * blk_zeros)
+            return bytes(out)
         raise ValueError(f"unsupported XEX compression type {comp_type}")
+
+    payload = data[pe_offset:]
+    if enc_type == 1:
+        # AES-128-CBC (IV=0) over the whole payload; the per-file key sits in
+        # the security info (header +16 -> offset; file key at +336) and is
+        # itself decrypted with the retail or devkit (all-zero) master key.
+        # Same scheme as jeff's src/util/xex.rs; try devkit first since the
+        # decomp targets the debug build.
+        from cryptography.hazmat.primitives.ciphers import (
+            Cipher, algorithms, modes,
+        )
+        sec_off = struct.unpack(">I", data[16:20])[0]
+        file_key = data[sec_off + 336:sec_off + 352]
+        retail_master = bytes([
+            0x20, 0xB1, 0x85, 0xA5, 0x9D, 0x28, 0xFD, 0xC3,
+            0x40, 0x58, 0x3F, 0xBB, 0x08, 0x96, 0xBF, 0x91,
+        ])
+        iv0 = b"\x00" * 16
+        trimmed = payload[:len(payload) - (len(payload) % 16)]
+        for master in (b"\x00" * 16, retail_master):
+            dec = Cipher(algorithms.AES(master), modes.CBC(iv0)).decryptor()
+            session_key = dec.update(file_key) + dec.finalize()
+            dec = Cipher(algorithms.AES(session_key), modes.CBC(iv0)).decryptor()
+            candidate = dec.update(trimmed) + dec.finalize()
+            if expand(candidate[:4096])[:2] == b"MZ":
+                payload = candidate
+                break
+        else:
+            raise ValueError("encrypted XEX: neither devkit nor retail key fits")
+    elif enc_type != 0:
+        raise ValueError(f"unsupported XEX encryption type {enc_type}")
+
+    pe_data = expand(payload)
     if pe_data[:2] != b"MZ":
         raise ValueError("decompressed XEX did not contain a PE")
     return pe_data
@@ -898,8 +930,15 @@ def main() -> int:
 
     # CRT$XCU section: decomp's static initializer function pointers.
     # The linker merges .CRT$XC* subsections into a single .CRT section.
-    if ".CRT" in pe_sections:
-        crt = pe_sections[".CRT"]
+    # This section exists only in the DECOMP PE (the original links its CRT
+    # tables into .data), so it must be read from pe_data -- pe_sections above
+    # prefers the original XEX's PE and silently never contains ".CRT", which
+    # left crt_xcu_* out of every manifest and xenia running on stale compiled
+    # defaults (83627800..83627B44).  Found 2026-08-23 when the first relink
+    # since Aug 4 moved .CRT and boot injected 209 code words as constructors.
+    decomp_sections = parse_pe_section_info(pe_data)
+    if ".CRT" in decomp_sections:
+        crt = decomp_sections[".CRT"]
         address_catalog["crt_xcu_start"] = {"address": crt["address"]}
         address_catalog["crt_xcu_end"] = {"address": crt["address"] + crt["size"]}
 
