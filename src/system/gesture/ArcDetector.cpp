@@ -119,8 +119,8 @@ void ArcDetector::Draw(const Skeleton &skeleton, SkeletonViz &viz) {
                 arcPath.insert(arcPath.begin(), vec);
             }
 
-            const TrackedJoint *joints = skeleton.TrackedJoints();
-            const Vector3 &jpos = joints[mSecondaryJoint].mJointPos[0];
+            const Vector3 &jpos =
+                skeleton.TrackedJoints()[mSecondaryJoint].mJointPos[0];
             const Vector3 &off = mArcOffset;
             Vector3 pos(jpos.x + off.x, jpos.y + off.y, jpos.z + off.z);
 
