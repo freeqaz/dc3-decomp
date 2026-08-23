@@ -809,7 +809,7 @@ void HolmesClientPoll() {
 
 bool HolmesClientCacheFile(char *arg0, const char *arg1) {
     CritSecTracker cst(&gCrit);
-    AutoSlowFrame slow("HolmesClientCacheFile", 25.0f);
+    AutoSlowFrame slow("HolmesClientCacheFile", 20000.0f);
 
     BeginCmd(Holmes::kCacheFile, true);
 
