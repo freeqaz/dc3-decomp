@@ -2,7 +2,10 @@
 #include "os\Debug.h"
 #include "utl\Licenses.h"
 
-Licenses sLicense("system/src/math/Easing.h", Licenses::kRequirementNotification);
+// static like the original (each TU owns its own Licenses object): non-static
+// duplicates of ?sLicense@@3VLicenses@@A merge under /FORCE:MULTIPLE and the
+// shared object gets constructed once per TU.
+static Licenses sLicense("system/src/math/Easing.h", Licenses::kRequirementNotification);
 
 float EaseBounceOut(float t, float, float) {
     MILO_ASSERT(t >= 0 && t <= 1, 0x13);

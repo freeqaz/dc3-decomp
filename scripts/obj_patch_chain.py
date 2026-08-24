@@ -239,7 +239,8 @@ def patch_one(obj_path: Path, unit_rel: str, obj_dir: Path,
     counts = {}
     counts["anon_ns"] = _patch_anon_ns(obj_path, unit_rel, index)
 
-    counts["dynamic_init"] = len(dynamic_init.patch_obj(str(obj_path), apply=True))
+    counts["dynamic_init"] = len(dynamic_init.patch_obj(
+        str(obj_path), apply=True, unit_stem=Path(unit_rel).stem))
 
     orig = obj_dir / unit_rel
     if orig.exists():

@@ -10,7 +10,8 @@
 #include <cstring>
 
 static const char *sVorbisMemName = "Ogg_Internal";
-Licenses sLicense("system/src/oggvorbis", Licenses::kRequirementNotification);
+// static like the original — see the note in math/Easing.cpp.
+static Licenses sLicense("system/src/oggvorbis", Licenses::kRequirementNotification);
 
 void *OggMalloc(int i) { return _MemAllocTemp(i, __FILE__, 0x1C, sVorbisMemName, 0); }
 
