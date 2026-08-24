@@ -133,9 +133,15 @@ ADDRESS_CATALOG = {
     "protocol_debug_string":     "?ProtocolDebugString@Holmes@@YAPBDE@Z",
     # Wind
     "set_wind":                  "?SetWind@@YAXHHMMM@Z",
-    # gConditional / gDataArrayConditional ctor (BSS addr extracted from PPC)
-    "g_conditional_ctor":                "??__EgConditional@@YAXXZ",
-    "g_data_array_conditional_ctor":     "??__EgDataArrayConditional@@YAXXZ",
+    # gConditional / gDataArrayConditional ctor (BSS addr extracted from PPC).
+    # Key names are xenia's historic ones and DON'T track the decomp variable
+    # names: xenia's "g_data_array_conditional" is DataArray.cpp's file-scope
+    # list (evidence-named gConditional in the decomp), while "g_conditional"
+    # is DataFile.cpp's same-named static.  Both thunks are therefore named
+    # ??__EgConditional in the linked map, so these two entries are
+    # obj-qualified (symbol, obj_file) pairs.
+    "g_conditional_ctor":                ("??__EgConditional@@YAXXZ", "DataFile.obj"),
+    "g_data_array_conditional_ctor":     ("??__EgConditional@@YAXXZ", "DataArray.obj"),
     # FileIsLocal
     "file_is_local":             "?FileIsLocal@@YA_NPBD@Z",
     # File system globals
@@ -597,7 +603,7 @@ def parse_map_public_symbols(
     map_path: Path,
     section_remap: Optional[Dict[int, int]] = None,
 ) -> Tuple[Dict[str, int], Dict[str, str]]:
-    """Returns (name->address, name->obj_file) dicts.
+    """Returns (name->address, name->obj_file, (name, obj basename)->address) dicts.
 
     If section_remap is provided, recompute absolute addresses using the
     XEX PE section bases instead of the linker PE addresses.  The remap
@@ -605,6 +611,7 @@ def parse_map_public_symbols(
     """
     symbols: Dict[str, int] = {}
     obj_files: Dict[str, str] = {}
+    qualified: Dict[Tuple[str, str], int] = {}
     with map_path.open("r", encoding="utf-8", errors="replace") as f:
         for line in f:
             m = MAP_PUBLIC_RE.match(line.rstrip("\n"))
@@ -622,7 +629,10 @@ def parse_map_public_symbols(
             obj = m.group("obj")
             if obj:
                 obj_files[name] = obj
-    return symbols, obj_files
+                # Same-named ??__E thunks from different TUs both survive the
+                # link; (name, obj basename) disambiguates them.
+                qualified[(name, obj.split("/")[-1].split("\\")[-1])] = abs_addr
+    return symbols, obj_files, qualified
 
 
 def infer_build_label(pe_path: Path) -> str:
@@ -728,8 +738,9 @@ def main() -> int:
                   f"({', '.join(f'{k}:{d:+#X}' for k, d in section_name_deltas.items())})")
     map_symbols: Dict[str, int] = {}
     map_obj_files: Dict[str, str] = {}
+    map_qualified: Dict[Tuple[str, str], int] = {}
     if map_path and map_path.exists():
-        map_symbols, map_obj_files = parse_map_public_symbols(
+        map_symbols, map_obj_files, map_qualified = parse_map_public_symbols(
             map_path, section_remap=section_remap)
         for name, address in map_symbols.items():
             if name in CRT_SENTINELS:
@@ -818,7 +829,7 @@ def main() -> int:
     # internal (non-public) linkage, catching internal XDK functions that the
     # linker MAP omits.
     if pe_map_path and pe_map_path.exists():
-        pe_map_syms, pe_map_objs = parse_map_public_symbols(
+        pe_map_syms, pe_map_objs, _ = parse_map_public_symbols(
             pe_map_path, section_remap=section_remap)
         pe_map_added = 0
         for name, address in pe_map_syms.items():
@@ -890,6 +901,14 @@ def main() -> int:
     catalog_from_symbols = 0
     catalog_missing = []
     for field_name, map_sym in ADDRESS_CATALOG.items():
+        if isinstance(map_sym, tuple):
+            sym, obj = map_sym
+            if map_path and map_path.exists() and (sym, obj) in map_qualified:
+                address_catalog[field_name] = {"address": map_qualified[(sym, obj)]}
+                catalog_found += 1
+            else:
+                catalog_missing.append(field_name)
+            continue
         if map_symbols and map_sym in map_symbols:
             address_catalog[field_name] = {
                 "address": map_symbols[map_sym],
