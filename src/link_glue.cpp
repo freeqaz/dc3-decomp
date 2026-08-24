@@ -821,13 +821,6 @@ ONSETPARAMS_ALIAS("VWahEffect@@UParams@1@")
 // emitted no ~CriticalSection at all (CritSec.obj: ctor/Enter/TryEnter/Abandon
 // only) -- the destructor's delete call has nothing to bind to.
 #pragma comment(linker, "/ALTERNATENAME:RtlDeleteCriticalSection=__link_glue_noop")
-// initialized: curl easy.c's static counter.  Commit 391d1b080 named its
-// address (0x82F63AF8, attributed to WebSvcReq's split range), which moved it
-// out of the lbl_* path create_data_stubs.py re-exports -- the WebSvcReq data
-// stub now drops it and the easy data stub's reloc dangles.  The live counter
-// is src easy.obj's own static; this only parks the stub's dead reloc.  The
-// real fix is teaching create_data_stubs.py to re-export renamed statics.
-#pragma comment(linker, "/ALTERNATENAME:initialized=__link_glue_zero")
 
 // ============================================================================
 // Template instantiation stubs
