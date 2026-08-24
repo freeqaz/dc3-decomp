@@ -105,17 +105,29 @@ original emitted no `~CriticalSection` at all — the decomp destructor's call i
 an invention with nothing to bind to (aliased to noop); `getenv` folded to the
 return-0 group in the original (aliased to `curl_getenv`, which returns 0).
 
-## Boot verified (2026-08-23)
+## Boot status (corrected 2026-08-24; the 08-23 "verified" claim was wrong)
 
-The XEX rebuilt from this tree (pristine target objects, repaired link) boots
-under xenia-headless to the title main loop and keeps running — guest threads
-executing, GPU command processor issuing XE_SWAP frame swaps — for the full
-240 s probe window. No disk-error halt anywhere in the log: the `blr`-stub
-fear is retired (PlatformMgr always linked from decomp `src/`, so the
-runnable build never contained the stub in the first place). The SIGTRAP at
-probe end is the known Checked-build teardown assert on SIGTERM
-(`~KernelState` → `ObjectTable::Reset` releasing a live XHostThread), not a
-guest crash.
+The 08-23 probes did NOT survive their 240 s windows: coredumpctl timestamps
+show every run SIGTRAP'd in the guest Main XThread ~2 min in (TrapDebugBreak
+from JIT-compiled guest code — a Checked-build `tw` assert), and xenia's
+async logger loses its unflushed tail on the signal, so the log looked
+identical to a healthy run. Probe with `--break_on_debugbreak=false` and
+`--headless_timeout_ms=N` (the internal timeout dumps guest thread status)
+and judge by trap counts and `coredumpctl`, not by log silence.
+
+What was actually breaking, both fixed 2026-08-24 (merge ca1fd024b here,
+xenia merge 440248105): the xenia XCU injection write-protected the 64K page
+of live RW globals around .CRT$XCU (fatal `_cinit` write fault), and
+duplicated `??__E` initializer names were folded by /FORCE:MULTIPLE so
+DataArray.cpp's gConditional was never constructed (see the
+obj_dynamic_init_patcher.py docstring). With both fixed the guest completes
+CRT + XapiInitProcess (63 non-fatal Checked-CRT lock asserts), runs main(),
+opens files, and stalls in an AsyncFile::Read → AsyncFileWin::_ReadDone
+completion poll — the current boot frontier.
+
+Still true from 08-23: no disk-error halt — the `blr`-stub fear is retired
+(PlatformMgr always linked from decomp `src/`, so the runnable build never
+contained the stub in the first place).
 
 Getting there surfaced two xenia-side items (branch `dc3-manifest-load-gate`
 in ~/code/milohax/xenia): the early patch-manifest load was dead code (gated
