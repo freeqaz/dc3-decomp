@@ -97,17 +97,19 @@ def read_string_table(data, sym_offset, num_symbols):
     str_table_size = struct.unpack_from('<I', data, str_table_offset)[0]
     str_table_data = data[str_table_offset:str_table_offset + str_table_size]
 
-    # Build offset -> string map
-    strings = {}
-    pos = 4  # Skip the size field
-    while pos < len(str_table_data):
-        end = str_table_data.find(b'\x00', pos)
-        if end == -1:
-            break
-        strings[pos] = str_table_data[pos:end].decode('ascii', errors='replace')
-        pos = end + 1
+    # Resolve by direct read at offset: COFF name offsets may point into the
+    # middle of a stored string (suffix sharing), which a dict keyed on
+    # nul-boundary start offsets misses (see create_data_stubs.string_at).
+    class StringTable(dict):
+        def get(self, off, default='<unknown>'):
+            if off < 4:
+                return default
+            end = str_table_data.find(b'\x00', off)
+            if end == -1:
+                return default
+            return str_table_data[off:end].decode('ascii', errors='replace')
 
-    return strings
+    return StringTable()
 
 
 def read_symbols(data, header, sections, string_table):

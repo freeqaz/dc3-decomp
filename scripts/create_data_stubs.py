@@ -145,15 +145,21 @@ def create_data_stub(split_obj_path, output_path, verbose=False):
     else:
         str_table_data = struct.pack('<I', 4)  # Empty string table
 
-    # Build string table lookup
-    strings = {}
-    pos = 4
-    while pos < len(str_table_data):
-        end = str_table_data.find(b'\x00', pos)
-        if end == -1:
-            break
-        strings[pos] = str_table_data[pos:end].decode('ascii', errors='replace')
-        pos = end + 1
+    def string_at(off):
+        """Resolve a string-table offset by direct read.
+
+        COFF name offsets may point into the MIDDLE of a stored string
+        (suffix sharing: jeff references `initialized` at offset 95 inside
+        `host_cache_initialized` at 84).  A dict keyed only on nul-boundary
+        start offsets misses those, and the old `strings.get(off,
+        '<unknown>')` fallback silently wrote the symbol into the stub
+        under the literal name '<unknown>' — which is how curl easy.c's
+        `initialized` reloc came to dangle.
+        """
+        end = str_table_data.find(b'\x00', off)
+        if off < 4 or end == -1:
+            return '<unknown>'
+        return str_table_data[off:end].decode('ascii', errors='replace')
 
     # Read ALL symbols (need full table for relocation remapping)
     all_symbols = []
@@ -179,7 +185,7 @@ def create_data_stub(split_obj_path, output_path, verbose=False):
         # Decode name
         if name_bytes[:4] == b'\x00\x00\x00\x00':
             str_off = struct.unpack_from('<I', name_bytes, 4)[0]
-            name = strings.get(str_off, '<unknown>')
+            name = string_at(str_off)
         else:
             name = name_bytes.rstrip(b'\x00').decode('ascii', errors='replace')
 
