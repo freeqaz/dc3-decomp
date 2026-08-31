@@ -724,18 +724,18 @@ void NgSpotlightDrawer::SetupXSection(Spotlight *sl, const Spotlight::BeamDef &d
 
     float rightCos = Dot(rightPlane, axis);
     float invRight;
-    if (rightCos != 0.0f) {
-        invRight = 1.0f / rightCos;
-    } else {
+    if (rightCos == 0.0f) {
         invRight = 0.0f;
+    } else {
+        invRight = 1.0f / rightCos;
     }
 
     float leftCos = Dot(leftPlane, axis);
     float invLeft;
-    if (leftCos != 0.0f) {
-        invLeft = 1.0f / leftCos;
-    } else {
+    if (leftCos == 0.0f) {
         invLeft = 0.0f;
+    } else {
+        invLeft = 1.0f / leftCos;
     }
 
     Vector4 leftEq(
@@ -771,14 +771,17 @@ void NgSpotlightDrawer::SetupXSection(Spotlight *sl, const Spotlight::BeamDef &d
         axisDot = -axisDot;
     }
 
-    float vis = 0.0f;
+    float vis;
     if (axisDot < fade) {
         float slack = fade - axisDot;
-        vis = 1.0f;
         if (slack < 0.02f) {
             float t = -(slack * 50.0f - 1.0f);
             vis = -(t * t * t * t - 1.0f);
+        } else {
+            vis = 1.0f;
         }
+    } else {
+        vis = 0.0f;
     }
 
     Vector4 visConst(vis, 0.0f, 0.0f, 0.0f);
