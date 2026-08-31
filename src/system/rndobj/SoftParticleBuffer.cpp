@@ -56,6 +56,12 @@ void RndSoftParticleBuffer::BlurSurface() {
         workMat->MarkDirty(2);
         dstTex->MakeDrawTarget();
 
+        float texW = dstTex->Width();
+        float texH = dstTex->Height();
+        Hmx::Rect rect(0.0f, 0.0f, texW, texH);
+        float invH = 1.0f / texH;
+        float invW = 1.0f / texW;
+
         // (weight, offset) pairs for the five taps.
         static Vector2 kBlurTaps[5] = {
             Vector2(0.0f, -1.5f),
@@ -64,12 +70,6 @@ void RndSoftParticleBuffer::BlurSurface() {
             Vector2(0.25f, 1.5f),
             Vector2(0.1f, 2.5f)
         };
-
-        float texW = dstTex->Width();
-        float texH = dstTex->Height();
-        Hmx::Rect rect(0.0f, 0.0f, texW, texH);
-        float invH = 1.0f / texH;
-        float invW = 1.0f / texW;
 
         for (int i = 0; i < 5; i++) {
             float weight = kBlurTaps[i].x;
