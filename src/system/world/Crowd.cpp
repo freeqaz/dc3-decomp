@@ -1113,19 +1113,21 @@ void WorldCrowd::DrawShowing() {
                         float upX = meshXfm.m.z.x;
                         float upY = meshXfm.m.z.y;
                         float upZ = meshXfm.m.z.z;
-                        float fwdY, fwdZ, tempA, tempB;
+                        float fwdY, fwdZ, camA, upA, camB, upB;
                         if (mCrowdRotate == kCrowdRotateFace) {
                             const Transform &camWXfm = curCam->WorldXfm();
                             fwdZ = camWXfm.m.y.y * upX - camWXfm.m.y.x * upY;
                             fwdY = camWXfm.m.y.x * upZ - camWXfm.m.y.z * upX;
-                            tempA = upZ; tempB = upY;
+                            camA = camWXfm.m.y.z; upA = upY;
+                            camB = camWXfm.m.y.y; upB = upZ;
                         } else {
                             const Transform &camWXfm = curCam->WorldXfm();
                             fwdY = camWXfm.m.y.z * upX - camWXfm.m.y.x * upZ;
                             fwdZ = camWXfm.m.y.x * upY - camWXfm.m.y.y * upX;
-                            tempA = upY; tempB = upZ;
+                            camA = camWXfm.m.y.y; upA = upZ;
+                            camB = camWXfm.m.y.z; upB = upY;
                         }
-                        charXfm.m.x.x = curCam->WorldXfm().m.y.y * tempB - curCam->WorldXfm().m.y.z * tempA;
+                        charXfm.m.x.x = camA * upA - camB * upB;
                         charXfm.m.x.y = fwdY;
                         charXfm.m.x.z = fwdZ;
                         Normalize(charXfm.m.x, charXfm.m.x);
@@ -1226,22 +1228,26 @@ void WorldCrowd::DrawShowing() {
                     // Cross product of camera Y-axis with mesh up vector,
                     // component swaps determine Face vs Away rotation.
                     // Only two WorldXfm() expansions: reuse the reference.
-                    float tempA, tempB;
+                    float camA, upA, camB, upB;
                     const Transform &camWXfm = curCam->WorldXfm();
                     if (mCrowdRotate == kCrowdRotateFace) {
                         charXfm.m.x.z = camWXfm.m.y.y * charXfm.m.z.x - camWXfm.m.y.x * charXfm.m.z.y;
                         charXfm.m.x.y = camWXfm.m.y.x * charXfm.m.z.z - camWXfm.m.y.z * charXfm.m.z.x;
-                        tempA = charXfm.m.z.z;
-                        tempB = charXfm.m.z.y;
+                        camA = camWXfm.m.y.z;
+                        upA = charXfm.m.z.y;
+                        camB = camWXfm.m.y.y;
+                        upB = charXfm.m.z.z;
                     } else {
                         charXfm.m.x.y = camWXfm.m.y.z * charXfm.m.z.x - camWXfm.m.y.x * charXfm.m.z.z;
                         charXfm.m.x.z = camWXfm.m.y.x * charXfm.m.z.y - camWXfm.m.y.y * charXfm.m.z.x;
-                        tempA = charXfm.m.z.y;
-                        tempB = charXfm.m.z.z;
+                        camA = camWXfm.m.y.y;
+                        upA = charXfm.m.z.z;
+                        camB = camWXfm.m.y.z;
+                        upB = charXfm.m.z.y;
                     }
 
                     // Forward (x-row): normalize cross product result
-                    charXfm.m.x.x = camWXfm.m.y.y * tempB - camWXfm.m.y.z * tempA;
+                    charXfm.m.x.x = camA * upA - camB * upB;
                     Normalize(charXfm.m.x, charXfm.m.x);
 
                     // Right (y-row): forward × up using normalized forward values
