@@ -230,8 +230,8 @@ void NgEnviron::Select(const Vector3 *pos) {
     ReclassifyLights();
 
     NgLight *pointLights[3];
-    NgLight *projLights[1];
     int numPoint = 0;
+    NgLight *projLights[1];
     int numProj = 0;
     for (ObjPtrList<RndLight>::iterator it = mLightsReal.begin();
          it != mLightsReal.end();
