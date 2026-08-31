@@ -1295,17 +1295,17 @@ RndTex *Rnd::CreateDefaultTexture(DefaultTextureType textureType) {
     MILO_ASSERT(textureType < kDefaultTex_Max, 0x5E4);
     static const int sDefSize[kDefaultTex_Max][2] = {
         { 8, 8 }, { 8, 8 }, { 8, 8 }, { 8, 8 },
-        { 8, 8 }, { 8, 8 }, { 8, 8 }, { 8, 8 }
+        { 8, 8 }, { 64, 64 }, { 256, 8 }, { 128, 128 }
     };
     static const unsigned char sDefColor[kDefaultTex_Max][4] = {
         { 0,    0,    0,    0xFF },  // kDefaultTex_Black
-        { 0xFF, 0xFF, 0xFF, 0xFF },  // kDefaultTex_White
-        { 0xFF, 0xFF, 0xFF, 0 },     // kDefaultTex_WhiteTransparent
-        { 0x7f, 0x7f, 0xFF, 0xFF },  // kDefaultTex_FlatNormal
-        { 0,    0,    0,    0xFF },  // kDefaultTex_Unk4 (black)
+        { 0,    0,    0,    0 },     // target row 1
+        { 0xFF, 0xFF, 0xFF, 0xFF },
+        { 0xFF, 0xFF, 0xFF, 0 },
+        { 0x7f, 0x7f, 0xFF, 0xFF },
         { 0xFF, 0xFF, 0xFF, 0xFF },  // kDefaultTex_Gradient
         { 0xFF, 0xFF, 0xFF, 0xFF },  // kDefaultTex_Hue
-        { 0xFF, 0xFF, 0xFF, 0xFF },  // kDefaultTex_Error (checkerboard)
+        { 0,    0,    0,    0xFF },  // kDefaultTex_Error (checkerboard)
     };
     int width = sDefSize[textureType][0];
     int height = sDefSize[textureType][1];
