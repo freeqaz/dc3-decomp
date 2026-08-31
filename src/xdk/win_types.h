@@ -113,6 +113,21 @@ typedef LONG HRESULT;
 #define SUCCEEDED(hr) (((HRESULT)(hr)) >= 0)
 #define FAILED(hr) (((HRESULT)(hr)) < 0)
 
+/* Win32 word/byte composition macros.  These were MISSING: curl's easy.c and
+   telnet.c call MAKEWORD/LOBYTE/HIBYTE, and with no declaration in scope the
+   build resolved them as external functions that link_glue.cpp then aliased to
+   __link_glue_noop -- so the winsock version handshake compared zeroes.  The
+   shipped image inlines them (li r3, 0x101; clrlwi; extrwi). */
+#ifndef LOBYTE
+#define LOBYTE(w) ((BYTE)(((DWORD_PTR)(w)) & 0xff))
+#endif
+#ifndef HIBYTE
+#define HIBYTE(w) ((BYTE)((((DWORD_PTR)(w)) >> 8) & 0xff))
+#endif
+#ifndef MAKEWORD
+#define MAKEWORD(a, b) ((WORD)(((BYTE)(((DWORD_PTR)(a)) & 0xff)) | ((WORD)((BYTE)(((DWORD_PTR)(b)) & 0xff))) << 8))
+#endif
+
 typedef DWORD FOURCC;
 
 #define MAKEFOURCC(ch0, ch1, ch2, ch3)                                                   \

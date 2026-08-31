@@ -164,19 +164,24 @@ void Synapse::SetReleaseSmoothing(float val) {
     }
 }
 
-Synapse::Synapse(float sampleRate) : mTargetPitch(sampleRate) {
-    mDetectionInterval = 64;
+Synapse::Synapse(float sampleRate) : mDetectionInterval(64), mTargetPitch(sampleRate) {
+    // The 0.4 s ring-buffer length is a LOCAL, rounded down to a multiple of
+    // four (the downsampled buffer is a quarter of it).  Only the two period
+    // limits -- 1/650 s and 1/60 s -- reach members 0x1c and 0x20; 0x24 keeps
+    // the 64 from the initialiser list.
+    float prod1 = mTargetPitch * 0.4f;
+    float prod2 = mTargetPitch * 0.0015384615f;
+    float prod3 = mTargetPitch * 0.016666668f;
+    unsigned int inputLen =
+        (unsigned int)(int)(prod1 + (prod1 >= 0.0f ? 0.5f : -0.5f)) & ~3u;
+    mDefaultPitch = (int)(prod2 + (prod2 >= 0.0f ? 0.5f : -0.5f));
+    mField_0x20 = (int)(prod3 + (prod3 >= 0.0f ? 0.5f : -0.5f));
 
-    float prod1 = sampleRate * 0.4f;
-    float prod2 = sampleRate * 0.0015384615f;
-    float prod3 = sampleRate * 0.016666668f;
-    mDefaultPitch = (int)(long long)(prod1 + (prod1 >= 0.0f ? 0.5f : -0.5f));
-    mField_0x20 = (int)(long long)(prod2 + (prod2 >= 0.0f ? 0.5f : -0.5f));
-    mDetectionInterval = (int)(long long)(prod3 + (prod3 >= 0.0f ? 0.5f : -0.5f));
-
-    float zero = 0.0f;
-    mInputBuffer.insert(mInputBuffer.end(), mDefaultPitch, zero);
-    mDownsampledBuffer.insert(mDownsampledBuffer.end(), (unsigned int)mInputBuffer.size() >> 2, zero);
+    // The fill values are unnamed temporaries; the target reuses ONE stack
+    // slot for all of them (and for the ChannelBuffer prototype / coeffs),
+    // which named locals cannot do.
+    mInputBuffer.resize(inputLen, 0.0f);
+    mDownsampledBuffer.resize((unsigned int)mInputBuffer.size() >> 2, 0.0f);
 
     mBufferIndex = 0;
     mGain = 1.0f;
@@ -194,21 +199,21 @@ Synapse::Synapse(float sampleRate) : mTargetPitch(sampleRate) {
     PeakDetector *peak = new PeakDetector(mInputBuffer, mDefaultPitch, mField_0x20);
     mPeakDetector.reset(peak);
 
-    // Voices
-    PitchCorrectedVoice pcv;
-    mVoices.resize(3, pcv);
+    // Voices.  The prototype is an unnamed temporary: the target feeds the
+    // ctor's RETURN value straight into resize and destroys it immediately
+    // after, which a named local cannot express.
+    mVoices.resize(3, PitchCorrectedVoice());
 
     // Channel buffers
 #ifdef HX_NATIVE
-    std::vector<float> emptyVec;
+    typedef std::vector<float> ChannelBuffer;
 #else
-    stlpmtx_std::vector<float, stlpmtx_std::StlNodeAlloc<float> > emptyVec;
+    typedef stlpmtx_std::vector<float, stlpmtx_std::StlNodeAlloc<float> > ChannelBuffer;
 #endif
-    mChannelBuffers.resize((int)mVoices.size(), emptyVec);
+    mChannelBuffers.resize((int)mVoices.size(), ChannelBuffer());
 
     // Output buffers
-    float *nullPtr = 0;
-    mOutputBuffers.insert(mOutputBuffers.end(), (int)mVoices.size(), nullPtr);
+    mOutputBuffers.resize((int)mVoices.size(), (float *)0);
 
     // Resize each channel buffer to 0x2000 floats and set output buffer pointers
     unsigned int i = 0;
@@ -216,9 +221,12 @@ Synapse::Synapse(float sampleRate) : mTargetPitch(sampleRate) {
         int chanOffset = 0;
         int outOffset = 0;
         do {
-            mChannelBuffers[i].insert(mChannelBuffers[i].end(), (size_t)0x2000, zero);
+            ChannelBuffer *chan =
+                (ChannelBuffer *)((char *)mChannelBuffers.begin() + chanOffset);
+            chan->resize((size_t)0x2000, 0.0f);
             i++;
-            mOutputBuffers[outOffset / 4] = mChannelBuffers[(chanOffset) / 12].begin();
+            *(float **)((char *)mOutputBuffers.begin() + outOffset) =
+                *(float **)((char *)mChannelBuffers.begin() + chanOffset);
             chanOffset += 0xC;
             outOffset += 4;
         } while (i < (unsigned int)((int)mChannelBuffers.size()));
@@ -234,7 +242,7 @@ Synapse::Synapse(float sampleRate) : mTargetPitch(sampleRate) {
         int voiceOffset = 0;
         do {
             j++;
-            mGranularSynth->mVoices[voiceOffset / 0x18].mField_0x00 = 0.0f;
+            *(float *)((char *)mGranularSynth->mVoices + voiceOffset) = 0.0f;
             voiceOffset += 0x18;
         } while (j < (unsigned int)((int)mVoices.size()));
     }
