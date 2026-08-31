@@ -105,14 +105,16 @@ scripts/unicorn_runner/tests/test_prober.py::TestFormatProbeResult::test_format_
 
 # ── tests/ ────────────────────────────────────────────────────────────────────
 
-# [bug] the unimplemented-function ingest path. One case counts 0 rows where 1
-# is required; the other reaches assertAlmostEqual with None on the left of a
-# subtraction (`TypeError: unsupported operand type(s) for -: 'NoneType' and
-# 'float'`), i.e. the ingest wrote NULL where it should have written a percent.
-# Both look like correct assertions against a live defect — the best candidates
-# in this file for someone to actually fix.
-tests/test_ingest_report.py::TestIngestUnimplementedFunctions::test_mix_of_implemented_and_unimplemented
-tests/test_ingest_report.py::TestIngestUnimplementedFunctions::test_update_unimplemented_function
+# FIXED 2026-08-31, and the [bug] classification these two carried was WRONG.
+# The entry read "the ingest wrote NULL where it should have written a percent";
+# in fact `ingest_report()` has deliberately written no percent since the
+# 2026-03-04 verdict-pipeline fix (report.json's fuzzy_match_percent reads 100.0
+# for unimplemented stubs, base_size=0, and ingesting it minted thousands of
+# false COMPLETE verdicts).  Both tests were [drift] — expectations from before
+# that fix — and the same file's `test_unimplemented_functions_are_inserted` had
+# been asserting the opposite, current, contract the whole time.  They now assert
+# the real contract (no percent, and a re-ingest must not clobber a measured one)
+# each with a metadata negative control inside it.
 
 # ── tools/ ────────────────────────────────────────────────────────────────────
 

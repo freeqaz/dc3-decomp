@@ -16,6 +16,7 @@ restores and that would take your uncommitted work with it.
 """
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -75,6 +76,11 @@ SABOTAGES = [
      '"REAL_OTHER_ADDR":   (False, "icf_fold"),',
      "test_gate_judges_folds_and_pairing_artifacts_but_blocks_a_different_address"),
 
+    ("S8b the same, vs the REAL population", GATE,
+     '"REAL_OTHER_ADDR":   (True,  "real_other_address"),',
+     '"REAL_OTHER_ADDR":   (False, "icf_fold"),',
+     "test_positive_control_on_the_real_population_both_directions"),
+
     ("S9  clear when ANY pair folds instead of ALL", GATE,
      "        if blocking:\n",
      "        if blocking and len(blocking) == len(verdicts):\n",
@@ -86,12 +92,39 @@ SABOTAGES = [
      'else list(rows)',
      "test_unverifiable_pairing_clears_only_when_every_finding_is_unverifiable"),
 
+    ("S10b a guessed-pair function is blocked, vs REAL", GATE,
+     '            gate.cleared[symbol] = "unverifiable_pairing"',
+     '            gate.blocked[symbol] = "unverifiable_pairing"',
+     "test_positive_control_on_the_real_population_both_directions"),
+
+    ("S13 _callee_rows silently drops a symbol", GATE,
+     "    for r in rows:\n        out[r[\"symbol\"]].append(r)\n    return dict(out)",
+     "    for r in rows:\n        out[r[\"symbol\"]].append(r)\n"
+     "    out.pop(sorted(out)[0], None)\n    return dict(out)",
+     "test_positive_control_on_the_real_population_both_directions"),
+
     ("S11 merged_* stub no longer recognised", GATE,
      "    if MERGED_STUB_RE.search(base) or MERGED_STUB_RE.search(target):\n"
      '        return "MERGED_STUB"',
      "    if False:\n"
      '        return "MERGED_STUB"',
      "test_positive_control_on_the_real_population_both_directions"),
+
+    # S14/S15 sabotage the TEST rather than the gate.  The positive control now
+    # derives its specimens from the live census, which removes an expiry date
+    # and introduces a worse failure mode if the vacuity gate is ever softened:
+    # an empty derivation would pass every `for s in <empty>: assert ...` and
+    # leave the gate unverified with no red.  These prove the empty case is
+    # still loud.
+    ("S14 empty blocking derivation passes quietly", TESTS,
+     "    assert expected_block, (",
+     "    assert True or expected_block, (",
+     "test_the_positive_control_fails_loudly_when_the_census_yields_no_specimen"),
+
+    ("S15 empty clearing derivation passes quietly", TESTS,
+     "    assert guessed, (",
+     "    assert True or guessed, (",
+     "test_the_positive_control_fails_loudly_when_the_census_yields_no_specimen"),
 
     ("S12 sync_objdiff warns instead of exiting 5", SYNC,
      '            print(f"\\nREFUSING to issue auto-AT_LIMIT certificates:\\n{gate_refusal}\\n",\n'
@@ -109,16 +142,48 @@ def dirty() -> list[str]:
     return [l for l in out.splitlines() if l.strip()]
 
 
+def drop_bytecode() -> None:
+    """Delete every `__pycache__` this harness's edits could have staled.
+
+    NOT hygiene -- a MEASURED defect.  CPython validates a cached `.pyc` against
+    the source's (mtime, size), and several sabotages here are byte-length
+    preserving: S10b is `gate.cleared[...]` -> `gate.blocked[...]`, and "cleared"
+    and "blocked" are both seven characters, so the file is the same 34,766 bytes
+    before and after.  Patch and restore land within the same second, mtime
+    granularity is one second, so the interpreter would sometimes load the
+    STALE bytecode and the sabotage silently never ran.  Measured 2026-08-31:
+    S10b alternated CAUGHT / NOT CAUGHT across consecutive whole-harness runs
+    with nothing else changed, while applying the identical patch by hand and
+    running pytest went red every time.
+
+    It failed SAFE -- an unloaded sabotage looks green and is reported NOT
+    CAUGHT, i.e. as a harness failure -- but a flaky verifier is a verifier
+    people learn to re-run until it agrees with them, which is how a real NOT
+    CAUGHT gets waved through.
+    """
+    for pycache in ROOT.rglob("__pycache__"):
+        if "venv" in pycache.parts or ".git" in pycache.parts:
+            continue
+        for f in pycache.glob("*.pyc"):
+            f.unlink(missing_ok=True)
+
+
 def run(node: str) -> bool:
     """True = GREEN."""
-    r = subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider",
-                        f"{TESTS}::{node}"], cwd=ROOT, capture_output=True, text=True)
+    drop_bytecode()
+    env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+    r = subprocess.run([sys.executable, "-B", "-m", "pytest", "-q",
+                        "-p", "no:cacheprovider", f"{TESTS}::{node}"],
+                       cwd=ROOT, capture_output=True, text=True, env=env)
     return r.returncode == 0
 
 
 def restore() -> None:
+    # TESTS is restored too: S14/S15 sabotage the control's own vacuity gate,
+    # which lives in the test file.  `dirty()` has always covered TESTS, so this
+    # cannot take uncommitted work that the refusal above would have allowed.
     subprocess.run(["git", "-C", str(ROOT), "checkout", "--",
-                    str(GATE), str(VERIFY), str(SYNC)], check=True)
+                    str(GATE), str(VERIFY), str(SYNC), str(TESTS)], check=True)
 
 
 def main() -> int:

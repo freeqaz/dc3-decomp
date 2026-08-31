@@ -85,7 +85,27 @@ class TestIngestUnimplementedFunctions(unittest.TestCase):
         self.assertEqual(row[2], "src/system/char/Foo")
 
     def test_mix_of_implemented_and_unimplemented(self):
-        """Both implemented and unimplemented functions must be ingested."""
+        """Both are ingested, and NEITHER gets a percent from report.json.
+
+        This test used to assert `with_pct == 1` -- that the function carrying
+        `fuzzy_match_percent` came out with a `current_percent`.  That was the
+        contract until 2026-03-04, when the verdict-pipeline fix removed all
+        percent- and verdict-setting from `ingest_report()`: objdiff's `report
+        generate` returns `fuzzy_match_percent: 100.0` for unimplemented stubs
+        (a base_size=0 divide-by-zero guard), so ingesting it minted thousands of
+        false COMPLETE verdicts.  `sync_objdiff.py`, which runs a real diff, is
+        the only writer of `current_percent`.
+
+        The expectation, not the code, was stale -- and the same file's
+        `test_unimplemented_functions_are_inserted` has asserted the current
+        contract (`current_percent` IS NULL) the whole time, so the file was
+        asserting both sides of the same question.
+
+        NEGATIVE CONTROL, inside the test: `unit` and `size` -- the metadata
+        ingest DOES own -- must be written for both rows in the same call.
+        Without it, an `ingest_report` that inserted bare symbols and wrote
+        nothing at all would satisfy every assertion above.
+        """
         report = make_report([{
             "name": "src/system/char/Foo",
             "functions": [
@@ -98,41 +118,77 @@ class TestIngestUnimplementedFunctions(unittest.TestCase):
 
         conn = sqlite3.connect(self.db_path)
         total = conn.execute("SELECT COUNT(*) FROM functions").fetchone()[0]
-        with_pct = conn.execute(
-            "SELECT COUNT(*) FROM functions WHERE current_percent IS NOT NULL"
-        ).fetchone()[0]
         without_pct = conn.execute(
             "SELECT COUNT(*) FROM functions WHERE current_percent IS NULL"
         ).fetchone()[0]
+        rows = dict(conn.execute(
+            "SELECT symbol, unit || '/' || size FROM functions").fetchall())
         conn.close()
         self.assertEqual(total, 2)
-        self.assertEqual(with_pct, 1)
-        self.assertEqual(without_pct, 1)
+        self.assertEqual(
+            without_pct, 2,
+            "report.json's fuzzy_match_percent must NOT reach current_percent: "
+            "it reads 100.0 for unimplemented stubs (base_size=0), which is how "
+            "the false-COMPLETE flood of 2026-03-04 happened",
+        )
+        # negative control: the metadata ingest owns really was written
+        self.assertEqual(rows["?Impl@@YAXXZ"], "src/system/char/Foo/64")
+        self.assertEqual(rows["?NoImpl@@YAXXZ"], "src/system/char/Foo/64")
 
-    def test_update_unimplemented_function(self):
-        """Updating an existing unimplemented function should work."""
+    def test_reingest_does_not_clobber_a_measured_percent(self):
+        """A second ingest must leave `current_percent` exactly as it found it.
+
+        This is the property that matters and the reason the percent logic was
+        removed: `ninja` re-ingests `report.json` on every build, so if ingest
+        wrote percentages it would overwrite every verdict `sync_objdiff.py`
+        measured, on a schedule, with a number that is wrong for stubs.
+
+        Was `test_update_unimplemented_function`, which asserted the opposite
+        (that a re-ingest carrying `fuzzy=42.0` set `current_percent` to 42.0)
+        and had been failing since 2026-03-04 with
+        `TypeError: ... 'NoneType' and 'float'` -- i.e. it was reading the NULL
+        the current contract requires.
+
+        NEGATIVE CONTROL, inside the test: the same re-ingest must UPDATE the
+        metadata it owns (unit and size both change here).  A no-op ingest would
+        preserve `current_percent` trivially and prove nothing.
+        """
         report = make_report([{
             "name": "src/system/char/Foo",
             "functions": [make_func("?Bar@@YAXXZ")],
         }])
         self._ingest(report)
 
-        # Now "implement" it
+        # what sync_objdiff.py does: a measured percent, from a real diff
+        conn = sqlite3.connect(self.db_path)
+        conn.execute("UPDATE functions SET current_percent = 42.0 WHERE symbol = ?",
+                     ("?Bar@@YAXXZ",))
+        conn.commit()
+        conn.close()
+
+        # a later build re-ingests report.json, now carrying a percent of its own
         report2 = make_report([{
-            "name": "src/system/char/Foo",
-            "functions": [make_func("?Bar@@YAXXZ", fuzzy=42.0)],
+            "name": "src/system/char/Bar",
+            "functions": [make_func("?Bar@@YAXXZ", size="128", fuzzy=99.9)],
         }])
         result = self._ingest(report2)
         self.assertEqual(result["updated"], 1)
         self.assertEqual(result["inserted"], 0)
 
         conn = sqlite3.connect(self.db_path)
-        pct = conn.execute(
-            "SELECT current_percent FROM functions WHERE symbol = ?",
+        pct, unit, size = conn.execute(
+            "SELECT current_percent, unit, size FROM functions WHERE symbol = ?",
             ("?Bar@@YAXXZ",),
-        ).fetchone()[0]
+        ).fetchone()
         conn.close()
-        self.assertAlmostEqual(pct, 42.0)
+        self.assertAlmostEqual(
+            pct, 42.0,
+            msg="ingest_report overwrote a measured current_percent with "
+                "report.json's fuzzy_match_percent",
+        )
+        # negative control: the UPDATE ran, so the preservation above is real
+        self.assertEqual(unit, "src/system/char/Bar")
+        self.assertEqual(size, 128)
 
 
 class TestIngestDemangledNames(unittest.TestCase):
