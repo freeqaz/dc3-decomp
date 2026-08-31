@@ -436,6 +436,7 @@ int fft_matrix_forward_columnwise(float* data, long size, float* context) {
 
     // Step 1: Row gather -> row FFT -> twiddle multiply + scatter
     int half_cols = cols / 2;
+    int iter = 0;
 
     if (half_cols > 0) {
         int half_rows = rows / 2;
@@ -447,7 +448,6 @@ int fft_matrix_forward_columnwise(float* data, long size, float* context) {
         float pi_f = (float)M_PI;
         float total = (float)(double)((long long)(int)(cols * rows));
 
-        int iter = 0;
         do {
             // Compute twiddle angles
             float angle1 = ((float)(long long)col_idx * pi_f) / total;
@@ -478,21 +478,22 @@ int fft_matrix_forward_columnwise(float* data, long size, float* context) {
             sv.f[3] = (float)cos(angle2);
 
             v_cos_vec = __lvx(&sv, 0);
+
+            // Initialize running twiddle factors
+            w_im2 = v_sign;
+            w_im1 = v_zero;
             v_cos_splat = __vspltw(v_cos_vec, 0);
+            w_re1 = v_cos_splat;
 
             // Phase 3: Overwrite with sin values, load it
             sv.f[2] = (float)s1d;
+            v_cos_merged = __vmrglw(v_cos_vec, v_cos_vec);
+            w_re2 = v_cos_merged;
             sv.f[3] = (float)s2d;
 
             v_sin_vec = __lvx(&sv, 0);
             v_sin_merged = __vmrglw(v_sin_vec, v_sin_vec);
-
-            // Initialize running twiddle factors
-            v_cos_merged = __vmrglw(v_cos_vec, v_cos_vec);
-            w_re1 = v_cos_splat;
-            w_im1 = v_zero;
-            w_re2 = v_cos_merged;
-            w_im2 = __vmaddfp(v_sign, v_sin_merged, v_zero);
+            w_im2 = __vmaddfp(v_sin_merged, w_im2, v_zero);
 
             float* dst1 = temp;
             float* dst2 = temp2;
@@ -601,7 +602,7 @@ int fft_matrix_forward_columnwise(float* data, long size, float* context) {
             ret = FFTComplex(col_ptr, cols, -1, context);
             if (ret != 0) goto cleanup;
             col_i -= 1;
-            col_ptr = (float*)((char*)col_ptr + stride8);
+            col_ptr = (float*)(stride8 + (char*)col_ptr);
         } while (col_i >= 0);
     }
 
