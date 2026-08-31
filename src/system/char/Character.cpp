@@ -963,15 +963,22 @@ void Character::DrawLod(int lod) {
 void Character::DrawLodOrShadow(int lod, DrawMode drawMode) {
     mPollState = (PollState)5;
 #ifdef HX_NATIVE
+    // mLastLod is stored BEFORE the shadow branch on PPC (target 82353E1C stores
+    // 0x20c ahead of the `cmpwi r29, 4` at 82353E20), and the shadow branch falls
+    // back to the virtual DrawOpaque (vtable slot 0x3c) when mShadow is empty.
+    // Both were missing here, so characters with no dedicated shadow geometry cast
+    // no floor shadow and mLastLod went stale across shadow passes.
+    mLastLod = Clamp<int>(0, mLods.size() - 1, lod);
+    Lod *curLod = mLods.empty() ? nullptr : &mLods[mLastLod];
+
     if (drawMode == 4) {
         if (mShadow.size() != 0) {
             mShadow.Draw();
+        } else {
+            DrawOpaque();
         }
         return;
     }
-
-    mLastLod = Clamp<int>(0, mLods.size() - 1, lod);
-    Lod *curLod = mLods.empty() ? nullptr : &mLods[mLastLod];
 
     if (drawMode & 1) {
         RndEnvironTracker tracker(mEnv, &WorldXfm().v);

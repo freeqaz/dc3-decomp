@@ -1654,6 +1654,13 @@ auto& _ref0 = mListState;
         UIListElementDrawState &elem = widgetState.mElements[i];
         ribbonStates[i].mElemDrawState = &elem;
 
+        // Mirrors the PPC arm's `*(int *)&elemPtr->mComponentState = *(int *)(this + 8)`.
+        // Offset 8 of HamNavList is UIComponent::mState: the target loads it with a
+        // 4-byte `lwz r10, 0x8(r27)` and stores it to elem+0x2c (= mComponentState,
+        // declared `UIComponent::State`) at 8244E1E4/8244E1F4, and UIComponent::Exiting
+        // (82784978) reads the same +8 with `lwz` and compares it against kSelecting.
+        elem.mComponentState = mState;
+
         if (elem.mElementState == kUIListWidgetHighlight) {
             bool shouldSet = true;
             if (mListRibbonResource && !mListRibbonResource->TestEntering()
