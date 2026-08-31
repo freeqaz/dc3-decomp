@@ -2129,14 +2129,24 @@ def generate_build_ninja(
         # touches anything and --complete marks it `complete` only on success,
         # so a crashed split leaves the tree explicitly unvouchable rather than
         # quietly half-renamed.
+        # ★ THE TRAILING CLEANUP MUST NOT BECOME THE EDGE'S EXIT STATUS.
+        # This command used to end `...; fi; rm -f $out_dir/config.json.prev`,
+        # and in `sh` the status of a `;`-list is the status of its LAST
+        # member -- `rm -f`, which succeeds unconditionally. So the whole
+        # pipeline's failures were swallowed and ninja recorded SPLIT as
+        # successful: a failing `dtk xex split`, a failing prune, and a failing
+        # split-currency guard all exited 0. Measured here 2026-08-31: the new
+        # fixed-point check printed THE SPLIT REWROTE ITS OWN INPUT and
+        # `ninja` still returned 0. A guard whose failure the build discards is
+        # not a guard. `rc=$?` before the cleanup, `exit $rc` after it.
         command=f"cp $out_dir/config.json $out_dir/config.json.prev 2>/dev/null; "
                 f"$python {split_guard_script} --begin --quiet && "
                 f"{dtk} xex split $in $out_dir && "
                 f"$python tools/prune_split_outputs.py $out_dir && "
                 f"$python {split_guard_script} --complete --quiet && "
-                f"if cmp -s $out_dir/config.json $out_dir/config.json.prev; then "
-                f"touch -r $out_dir/config.json.prev $out_dir/config.json; fi; "
-                f"rm -f $out_dir/config.json.prev",
+                f"{{ if cmp -s $out_dir/config.json $out_dir/config.json.prev; then "
+                f"touch -r $out_dir/config.json.prev $out_dir/config.json; fi; }}; "
+                f"rc=$$?; rm -f $out_dir/config.json.prev; exit $$rc",
         description="SPLIT $in",
         depfile="$out_dir/dep",
         deps="gcc",

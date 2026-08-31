@@ -99,6 +99,32 @@ class StaleSplitError(RuntimeError):
     """The target object tree does not correspond to the current split config."""
 
 
+#: Why `--complete` also asserts a fixed point, on a repo where it has never
+#: fired.
+#:
+#: CLAUDE.md states the contract: "`dtk xex split` must not modify its own
+#: inputs -- its output has to be a fixed point of its input, or the depfile
+#: edge self-refires on every build."  Nothing enforced it.  dc3's
+#: `config/373307D9/splits.txt` IS a fixed point today (measured: four
+#: consecutive full builds, byte-identical, git-clean), so this guard is
+#: prevention, not repair.
+#:
+#: The sibling repo rb3-xenon (title 45410914) is the case for enforcing it.
+#: Its committed splits.txt was not a fixed point, and the symptom was not a
+#: build failure -- it was a WORKING-TREE MODIFICATION, which in a shared
+#: checkout reads as somebody's work in progress.  Three lanes were told to
+#: leave it alone.  It was generated churn the whole time: dtk re-derives each
+#: `.pdata` split from the `.text` split that owns the function the entry
+#: describes, and four hand-written `.pdata` ranges named the wrong TU.  dtk
+#: was right every build and said so only by rewriting the file (it does log
+#: `Writing updated .../splits.txt` at INFO; that was not enough).
+#:
+#: Recovery is one build: the split has already written the corrected file, so
+#: the retry is a fixed point and passes.  Commit what it wrote -- do not hand-
+#: revert it, and do not silence this with --no-fixed-point-check unless you
+#: are deliberately re-deriving generated config in a single build.
+
+
 def _sha256(path: Path) -> str:
     h = hashlib.sha256()
     with open(path, "rb") as fh:
@@ -200,6 +226,38 @@ def check(project_dir: Path) -> str:
     return f"split current ({len(SPLIT_CONFIG_INPUTS)} config inputs match {STAMP_REL})"
 
 
+def _report_self_rewrite(project_dir: Path, was: dict | None) -> int:
+    """Exit 1 if the split changed a file it reads.  Called from ``--complete``.
+
+    ``was`` is the ``running`` record written by ``--begin``, read before the
+    ``complete`` record overwrote it.
+    """
+    if not isinstance(was, dict) or was.get("state") != STATE_RUNNING:
+        # No bracket to compare against (a fresh tree's first split, or a split
+        # not run through --begin).  Returning 0 here is "nothing to say", not
+        # "verified" -- which is why this is a tripwire on top of the existing
+        # checks and not a replacement for any of them.
+        return 0
+    now = read_stamp(project_dir) or {}
+    drift = _describe_drift(was.get("inputs") or {}, now.get("inputs") or {})
+    if not drift:
+        return 0
+    print(
+        "[split-guard] THE SPLIT REWROTE ITS OWN INPUT -- its output is not a "
+        "fixed point of its input.\n"
+        + "\n".join(drift)
+        + "\n\nCLAUDE.md: `dtk xex split` must not modify its own inputs. The "
+          "corrected file is on disk NOW -- inspect it and commit it; the next "
+          "build passes. Do not hand-revert generated config to work around a "
+          "generator bug, and do not assume the committed file was right: in "
+          "rb3-xenon this exact churn was four hand-written `.pdata` ranges "
+          "attributed to the wrong TU, and dtk's re-derivation was correct.\n"
+          "  --no-fixed-point-check opts out for a deliberate re-derivation.",
+        file=sys.stderr,
+    )
+    return 1
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--project-dir", default=str(REPO_ROOT),
@@ -212,6 +270,10 @@ def main(argv: list[str] | None = None) -> int:
     mode.add_argument("--check", action="store_true",
                       help="Exit 1 if the target objects do not match the config")
     ap.add_argument("--quiet", action="store_true")
+    ap.add_argument("--no-fixed-point-check", action="store_true",
+                    help="With --complete: do not fail when the split rewrote "
+                         "one of its own inputs. For deliberately re-deriving "
+                         "generated config in one build instead of two.")
     ap.add_argument("--stamp-out", default=None,
                     help="With --check: write a digest of the verified state to "
                          "this path, but ONLY when it differs. The ninja edge is "
@@ -226,9 +288,17 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.begin or args.complete:
         state = STATE_RUNNING if args.begin else STATE_COMPLETE
+        # Read the `running` record BEFORE overwriting it: the difference
+        # between it and the `complete` record is --complete's only
+        # opportunity to notice an input the split rewrote.
+        was = read_stamp(project_dir) if args.complete else None
         p = write_stamp(project_dir, state)
         if not args.quiet:
             print(f"[split-guard] {state}: {p}")
+        if args.complete and not args.no_fixed_point_check:
+            rc = _report_self_rewrite(project_dir, was)
+            if rc:
+                return rc
         return 0
 
     try:
