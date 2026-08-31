@@ -125,7 +125,7 @@
    "installed_by": "alias-install lane 2026-08-17, in place",
    "what": "Groups added at the BODY-TEST tier without going through decomp-synth's build_icf_alias_inputs.py, which mints that tier only from a probe_icf_foldtest --folded corpus. Each was proved with scripts/analysis/fold_proof.py (byte- AND relocation-set-identical COMDATs with at least one relocation, so the zero-relocation cheapness guard did not carry the verdict) and carries an 'installed_by'/'installed_note' pair saying what would drop it.",
    "groups": [
-    "bodytest:??$__destroy_range@PAV?$vector@PAUUnlockable@?A0x9d17dd81@@...@@stlpmtx_std@@"
+    "bodytest:??$__destroy_range@PAV?$vector@PAUUnlockable@?A0xf8e4b4b5@@...@@stlpmtx_std@@"
    ],
    "n_groups_added": 1,
    "source": "docs/analysis/2026-08-17-comdat-fold-adjudication.md, NOT_IN_MAP -> PROVEN_FOLD (3 rows / 504 B). The other two PROVEN_FOLD rows are the SAME name pair (?DeleteChecksum@FileStream@@AAAXXZ vs BufStream's), charged once from ?StartChecksum@BufStream@@QAAXPBD@Z and once from ??1BufStream@@UAA@XZ; the linker map turned out to state that fold outright, so it was installed at the retail-map tier instead and the source's access specifier fixed."
@@ -9663,8 +9663,8 @@
    "reconciled": "orig/373307D9/ham_xbox_r.map: 6 public name(s) share 0x82e21268; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. The target objects define exactly one member (?RadFree@?A0x6dfd0232@@YAXPAX@Z), which is therefore the survivor. Every name added here additionally passed the byte-identity gate: our COMDAT equals the survivor's with relocation-patched fields masked and relocation targets equal by name (both sides cut at their first EH funclet). Names our objects do not DEFINE were dropped, not admitted."
   },
   {
-   "name": "bodytest:??$__destroy_range@PAV?$vector@PAUUnlockable@?A0x9d17dd81@@...@@stlpmtx_std@@",
-   "survivor": "??$__destroy_range@PAV?$vector@PAUUnlockable@?A0x9d17dd81@@V?$StlNodeAlloc@PAUUnlockable@?A0x9d17dd81@@@stlpmtx_std@@@stlpmtx_std@@V12@@stlpmtx_std@@YAXPAV?$vector@PAUUnlockable@?A0x9d17dd81@@V?$StlNodeAlloc@PAUUnlockable@?A0x9d17dd81@@@stlpmtx_std@@@0@00@Z",
+   "name": "bodytest:??$__destroy_range@PAV?$vector@PAUUnlockable@?A0xf8e4b4b5@@...@@stlpmtx_std@@",
+   "survivor": "??$__destroy_range@PAV?$vector@PAUUnlockable@?A0xf8e4b4b5@@V?$StlNodeAlloc@PAUUnlockable@?A0xf8e4b4b5@@@stlpmtx_std@@@stlpmtx_std@@V12@@stlpmtx_std@@YAXPAV?$vector@PAUUnlockable@?A0xf8e4b4b5@@V?$StlNodeAlloc@PAUUnlockable@?A0xf8e4b4b5@@@stlpmtx_std@@@0@00@Z",
    "address": "0x828b4a08",
    "folded": [
     "??$__destroy_mv_srcs@PAV?$vector@PAUUnlockable@?A0xf8e4b4b5@@V?$StlNodeAlloc@PAUUnlockable@?A0xf8e4b4b5@@@stlpmtx_std@@@stlpmtx_std@@V12@@stlpmtx_std@@YAXPAV?$vector@PAUUnlockable@?A0xf8e4b4b5@@V?$StlNodeAlloc@PAUUnlockable@?A0xf8e4b4b5@@@stlpmtx_std@@@0@00@Z"
@@ -9673,7 +9673,7 @@
    "survivor_candidates": 1,
    "evidence": "Body test, within-build (scripts/analysis/fold_proof.py): the two COMDATs in build/373307D9/src/lazer/meta_ham/MetagameRank.obj are byte- AND relocation-set-identical (84 B, 1 relocation each -- so the zero-relocation cheapness guard did not have to fire), which is exactly the condition /OPT:ICF tests. Survivor address from scripts/target_symbol_map.json. Both names are legitimately called from the SAME function: stlpmtx_std::vector::_M_erase(first, last, __true_type) in src/system/stlport/stl/_vector.h:548 calls _Destroy_Range (-> __destroy_range) on one arm and _Destroy_Moved_Range (-> __destroy_mv_srcs) on the other, and for an element type with a non-trivial destructor and an incomplete move both lower to the same loop -- so this is not a wrong-callee charge, it is a fold. Weaker tier than the linker map by construction: the proof is a fact about OUR build, so if the target's two instantiations had differed the target did not fold them.",
    "installed_by": "alias-install lane 2026-08-17, in place, from docs/analysis/2026-08-17-comdat-fold-adjudication.md NOT_IN_MAP -> PROVEN_FOLD",
-   "installed_note": "decomp-synth tools/il_witness/build_icf_alias_inputs.py mints the body-test tier from its own probe corpus and would drop this group on a regeneration -- re-apply from this record. The two spellings carry DIFFERENT unnamed-namespace hashes (target ?A0x9d17dd81, ours ?A0xf8e4b4b5) because scripts/obj_anon_ns_patcher.py rewrites only part of MetagameRank.obj (22 of 902 anon-ns names); if that lane ever patches the rest, the folded spelling here must be re-derived.",
+   "installed_note": "decomp-synth tools/il_witness/build_icf_alias_inputs.py mints the body-test tier from its own probe corpus and would drop this group on a regeneration -- re-apply from this record. The two spellings carry DIFFERENT unnamed-namespace hashes (target ?A0xf8e4b4b5, ours ?A0xf8e4b4b5) because scripts/obj_anon_ns_patcher.py rewrites only part of MetagameRank.obj (22 of 902 anon-ns names); if that lane ever patches the rest, the folded spelling here must be re-derived.",
    "worth": "292 B ?_M_erase@?$vector@V?$vector@PAUUnlockable@...@Z, charged on this one relocation name under functionRelocDiffs=name_check."
   },
   {

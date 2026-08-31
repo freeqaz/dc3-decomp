@@ -409,6 +409,24 @@ config.custom_build_steps = {
         {
             "outputs": str(stamp_dir / "data_stubs.stamp"),
             "rule": "run_script",
+            # The whole post-compile chain reads the TARGET objects in
+            # build/<v>/obj/**, whose COFF symbol names dtk writes from
+            # config/<v>/symbols.txt. Those objects are an UNDECLARED build
+            # output, and the split deliberately PRESERVES config.json's mtime
+            # when its content is unchanged -- which is exactly the case for a
+            # symbols.txt edit. So without this edge a symbols.txt change
+            # rewrote every target object while every patcher stamp stayed
+            # green, and the patchers kept writing the PREVIOUS names into our
+            # objects. Measured 2026-08-31: correcting three anonymous-namespace
+            # hashes in symbols.txt left our HolmesClient.obj still spelling
+            # `?A0xbd0b8fef` against a target that now said `?A0x49b544a7`,
+            # manufacturing a 9-function / -1,640-byte "regression" that was
+            # purely a stale patch. `split_current_checked.stamp` is the right
+            # dependency and not config.json: it is an `always` edge with
+            # `restat`, so its output moves EXACTLY when a split moved and a
+            # no-op ninja does not re-patch. The report edges already depend on
+            # it; the patchers that feed those reports now do too.
+            "implicit": [str(stamp_dir / "split_current_checked.stamp")],
             "variables": {
                 "cmd": "python3 scripts/create_data_stubs.py",
                 "desc": "GEN data-stub .obj files for lbl_* resolution",
