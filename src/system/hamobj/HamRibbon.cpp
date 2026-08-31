@@ -360,12 +360,12 @@ void HamRibbon::ConstructMesh() {
             int base = seg * mNumSides * 2;
             for (int side = 0; side < mNumSides; side++) {
                 int nextSide = (side + 1) % mNumSides;
+                int idx = base + side;
+                int nextIdx = base + nextSide;
                 int faceIdx = base + side * 2;
-                mMesh->Faces()[faceIdx].Set(
-                    base + side, base + nextSide, mNumSides + base + nextSide
-                );
+                mMesh->Faces()[faceIdx].Set(idx, nextIdx, mNumSides + nextIdx);
                 mMesh->Faces()[faceIdx + 1].Set(
-                    mNumSides + base + nextSide, base + side + mNumSides, base + side
+                    mNumSides + nextIdx, idx + mNumSides, idx
                 );
             }
         }
@@ -384,10 +384,10 @@ void HamRibbon::ConstructMesh() {
                 float u = side * uStep;
 
                 for (int v = 0; v < 2; v++) {
-                    int vertIdx = base + side + v * mNumSides;
+                    int vertIdx = base + side + mNumSides * v;
                     int boneIdx = mMesh->NumBones() - 1;
                     if (seg + v <= boneIdx) {
-                        boneIdx = Max(0, seg + v);
+                        boneIdx = Max(seg + v, 0);
                     }
 
                     float cosA = std::cos(angle);
