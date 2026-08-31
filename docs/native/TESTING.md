@@ -13,7 +13,7 @@ scripts/native_test.sh                    # configures if needed, builds, runs, 
 
 It configures a missing build dir automatically (via `scripts/native_configure.sh`,
 which derives `Dawn_DIR` and the rest from the main checkout), so this works in a
-fresh worktree with no manual steps. If it cannot configure one it exits **8** —
+fresh worktree with no manual steps. If it cannot configure one it exits **9** —
 "NATIVE GATE DID NOT RUN" — rather than a generic failure, because a run that
 examined zero tests must not be reportable as a pass. See the exit-code table in
 the script header.
