@@ -377,16 +377,43 @@ WHERE excluded = 0 AND verdict = 'AT_LIMIT' AND unicorn_verdict = 'DIVERGENT'
 GROUP BY 1 ORDER BY 2 DESC;
 ```
 
-### Cert rot — closed
+### Cert rot — recurring, and re-derivable
 
-The mirror-image problem used to be 875 rows marked COMPLETE in `decomp.db` that
-were not at 100 % in a fresh report. **Task #101 closed it.** As of 2026-08-19:
+The mirror-image problem: rows marked COMPLETE in `decomp.db` that are not at
+100 % in a fresh report. A COMPLETE verdict tells every future agent to stop
+working on the function, so a rotted one is worse than no verdict at all.
 
-```sql
-SELECT COUNT(*) FROM functions
-WHERE excluded = 0 AND verdict = 'COMPLETE' AND match_percent_normalized < 100;
--- 0
+**This is not a closed problem and this document will not tell you the count.**
+It said "closed … this count is 0" from 2026-08-19 (task #101) to 2026-08-31, by
+which date it was 27 rows / 9,176 B. Re-derive it — it takes about six seconds
+on a built tree, and **the number moves every time source lands**:
+
+```bash
+ninja                                        # the report must be fresh
+python3 scripts/analysis/cert_rot_census.py \
+        --db /path/to/main/decomp.db --project . [--include-excluded]
 ```
+
+Two ways the old SQL-only check went wrong, both now handled by that script:
+
+* **Neither DB percentage column is the measurement.** `current_percent` mirrors
+  `report.json`'s *fuzzy* percent (see below) and `match_percent_normalized` is
+  the right ruler but a **cache** — it is written only by
+  `scripts/sync_match_percent.py --promote`, so it is exactly as fresh as the
+  last person who ran that. Measured 2026-08-31, it disagreed with a fresh
+  report *in both directions*: it hid two rows that had rotted since the last
+  sync and listed seven that had since been fixed. The census reads
+  `report.json` and joins the DB only for the verdict.
+* **`fuzzy_match_percent` absent ≠ 0 % match.** objdiff emits it only for
+  symbols we define a body for; a row without it is unpaired, not mismatched.
+  All 66 `default/link_glue` rows are of that shape and contributed nine false
+  positives to a hand-rolled query. The census drops them **and prints the count
+  it dropped**.
+
+⚠ Do not read a matching total as confirmation. On 2026-08-31 a hand-derived
+population of 23 rows / 7,668 B and a re-derived one of 23 rows / 7,668 B were
+*different sets* that happened to sum alike; the re-derived one had two more
+rows and two fewer because a fix had landed in between.
 
 **Do not re-derive this check from `current_percent`.** That column mirrors
 `report.json`'s *fuzzy* percent, not the canonical normalized one — verified

@@ -63,11 +63,18 @@ you are quoting:
 The gap between the first two is 756 rows. The gap between the second and third
 is 3,901, and **285 of the currently-unmatched 2,687 fall into it** — see §5.3.
 
-Reconciliation between `report.json` and the DB is otherwise excellent, and
-worth stating because it is a negative result that saves a lane: **zero rows are
-marked `COMPLETE` in the DB while scoring below 100 in `report.json`.** There is
-no certificate rot on the canonical ruler today. Conversely 15 authorable
-`report.json` rows have no DB row at all.
+Reconciliation between `report.json` and the DB was excellent **on the day this
+was written and is not a standing property**. It used to say "zero rows are
+marked `COMPLETE` in the DB while scoring below 100 in `report.json`"; on
+2026-08-31 that number was 27 (9,176 B) and had been non-zero for some time,
+because nothing re-derives it. Get the current figure — never quote one:
+
+```bash
+ninja && python3 scripts/analysis/cert_rot_census.py \
+        --db /path/to/main/decomp.db --project .
+```
+
+Conversely 15 authorable `report.json` rows have no DB row at all.
 
 ---
 
