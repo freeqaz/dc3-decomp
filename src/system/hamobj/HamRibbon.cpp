@@ -377,14 +377,14 @@ void HamRibbon::ConstructMesh() {
 
         for (int seg = 0; seg < mNumSegments; seg++) {
             float uStep = 1.0f / mNumSides;
-            int base = seg * mNumSides * 2;
-            for (int side = 0; side < mNumSides; side++) {
+            int vertBase = seg * mNumSides * 2;
+            for (int side = 0; side < mNumSides; side++, vertBase++) {
                 Vector4 boneWeights(1.0f, 0.0f, 0.0f, 0.0f);
                 float angle = side * angleStep;
                 float u = side * uStep;
 
                 for (int v = 0; v < 2; v++) {
-                    int vertIdx = base + side + mNumSides * v;
+                    int vertIdx = mNumSides * v + vertBase;
                     int boneIdx = mMesh->NumBones() - 1;
                     if (seg + v <= boneIdx) {
                         boneIdx = Max(seg + v, 0);
