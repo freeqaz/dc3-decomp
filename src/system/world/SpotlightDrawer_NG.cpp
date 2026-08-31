@@ -712,8 +712,10 @@ void NgSpotlightDrawer::SetupXSection(Spotlight *sl, const Spotlight::BeamDef &d
     Normalize(leftPlane, leftPlane);
 
     // Plane constants: the eye lies on both planes, so d == dot(eye, n).
-    float rightD = Dot(camXfm.v, rightPlane);
-    float leftD = Dot(camXfm.v, leftPlane);
+    float rightD = camXfm.v.x * rightPlane.x
+        + (camXfm.v.y * rightPlane.y + camXfm.v.z * rightPlane.z);
+    float leftD = camXfm.v.x * leftPlane.x
+        + (camXfm.v.y * leftPlane.y + camXfm.v.z * leftPlane.z);
 
     // Bisector of the two silhouette planes.
     Vector3 bisector = rightPlane;
