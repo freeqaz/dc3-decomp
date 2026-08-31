@@ -40406,7 +40406,10 @@
     }
   ],
   "options": {
-    "functionRelocDiffs": "name_check"
+    "functionRelocDiffs": "name_check",
+    "combineDataSections": true,
+    "combineTextSections": true,
+    "ppc.calculatePoolRelocations": false
   },
   "map_file": "build/373307D9/icf_aliases.map"
 }

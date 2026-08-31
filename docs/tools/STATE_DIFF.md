@@ -144,8 +144,13 @@ paging re-walks the dir per window and emits only the ordinals in range.
 > was never in `object_list`: `DataArray::SortNodes` hardcoded **8** as the
 > `qsort` element size — `sizeof(DataNode)` on PPC32 but **16** on LP64 native
 > — so it strided over half-nodes, and `ObjectList` ends with `SortNodes(0)`.
-> Fixed in `8c73183d`; PPC codegen verified byte-identical, so no `HX_NATIVE`
-> gate. Any DTA in the game that sorted an array was affected, not just this.
+> Fixed in `8c73183d`. No `HX_NATIVE` gate is needed, and the reason is a
+> constant-folding argument rather than a measurement: `sizeof(DataNode)` is 8
+> on PPC32 — the literal `8` it replaced — so MSVC's codegen provably cannot
+> move. (This line used to claim "PPC codegen verified byte-identical"; see the
+> method correction later in this file — that check could not have been run
+> before `ee8902a22`.) Any DTA in the game that sorted an array was affected,
+> not just this.
 
 ### Class filters take **DTA** class names, not C++ class names
 
@@ -747,7 +752,18 @@ corrupted arrays that did not crash, and only ever covered half the array.
 `{object_list <dir> <Class> TRUE}` SIGSEGVed and three of them killed the
 engine. The blast radius is much wider than this tool: **any** in-game DTA that
 sorted an array was affected. Fixed with `sizeof(DataNode)`; PPC codegen
-verified byte-identical at the object-file level, so no `HX_NATIVE` gate.
+verified unmoved by `run_objdiff`, so no `HX_NATIVE` gate.
+
+> **Method correction (2026-08-31).** This used to read *"verified byte-identical
+> at the object-file level"*. That check could not have been run: until
+> `ee8902a22`, MSVC stamped a clock-derived COFF `TimeDateStamp` and CodeView
+> `S_OBJNAME` signature into every object, so 980 of 989 objects differed on every
+> rebuild and an object-file comparison would have said "differs" unconditionally.
+> The ruler that was actually available, and that the gate waiver should cite, is
+> objdiff. **The waiver itself is not in doubt** — `sizeof(DataNode)` is 8 on
+> PPC32, which is the literal `8` it replaced, so the codegen provably cannot
+> move; the bug was LP64-only, where `sizeof(DataNode)` is 16. State it that way:
+> a constant-folding argument beats a hash here, and it is checkable by reading.
 `object_list` is now this tool's default enumeration primitive.
 
 **0b. Not a bug: `iterate` "returning zero" against a `PanelDir`.** Reported

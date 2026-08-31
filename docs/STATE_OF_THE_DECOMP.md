@@ -451,7 +451,7 @@ this project has ever written rotted within weeks.
 
 ---
 
-## REFUTED (2026-08-19): the build *is* deterministic
+## REFUTED (2026-08-19): the build is deterministic *as measured* — and was NOT deterministic in its bytes until 2026-08-31
 
 This section previously claimed two clean builds of the same commit differ by
 roughly **±160 functions**, mostly 12–52-byte dynamic-initializer and atexit
@@ -460,10 +460,35 @@ thunks. **That does not reproduce.** Measured in the toolchain audit
 builds produce `cmp`-identical `report.json`, with **0 of 48,344 functions
 differing**.
 
-All 980 rebuilt `.obj` files *do* differ, but only by **2 bytes** — the COFF
-timestamp and the embedded path. That object-level churn is almost certainly
-what the ±160 figure was really measuring, via a metric that was reading the
-relocation-sensitive *fuzzy* percent rather than the canonical one.
+All 980 rebuilt `.obj` files *do* differ. That object-level churn is almost
+certainly what the ±160 figure was really measuring, via a metric that was
+reading the relocation-sensitive *fuzzy* percent rather than the canonical one.
+
+⚠️ **Corrected 2026-08-31.** This paragraph used to say the objects differ "only
+by **2 bytes** — the COFF timestamp and the embedded path", quoting the toolchain
+audit. **Both the count and the attribution were wrong**, and the attribution was
+the damaging half: naming *the path* as the second field made this look like a
+cross-worktree artifact, when in fact there are **two clock-derived fields** and
+the build was nondeterministic **in a single tree at a single path**. They are the
+COFF `TimeDateStamp` (offsets 4–7, every object) and the CodeView `S_OBJNAME`
+signature word in `.debug$S` (582 objects; verified present in `keygen_xbox.obj`
+at file offset `0x1e8`, which the original single-object diff walked past). The
+path is a genuine *third* difference, but it only appears across checkouts.
+Masking exactly the two clock fields makes all 980 compare equal with zero
+residual bytes. Fixed at the cause in `ee8902a22` by a sixth post-compile pass
+(`scripts/obj_build_metadata_patcher.py`): 0 of 989 differ afterwards, and
+`tree_sha256` is stable across rebuilds of one tree — though **not comparable
+across worktrees**, since MSVC writes the source path into `S_OBJNAME`'s name
+field.
+
+**The refutation itself stands, on the evidence it actually used** — two clean
+builds giving `cmp`-identical `report.json`, 0 of 48,344 functions differing, is
+an objdiff-score comparison that neither clock field can reach. What was wrong was
+the description of the object plane, not the conclusion about the measurement
+plane. **Do not read "the build is deterministic" as "an object rebuilt today has
+the same bytes as yesterday's":** a per-target `ninja <one>.obj` still produces an
+un-normalized object, because the metadata pass runs on the `post-compile` edge.
+Byte-A/B after a full `ninja`, or zero the two fields yourself. See `CLAUDE.md`.
 
 **Do not quote ±160, and do not dismiss a single-function delta as build
 noise.** If a function moves between two builds of the same commit, something

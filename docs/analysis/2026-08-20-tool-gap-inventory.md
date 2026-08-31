@@ -587,11 +587,24 @@ no measurement path checks the guard.
 
 **Measured** in `wt/toolgaps` on `default/lazer/game/BustAMovePanel`:
 
-| state | obj sha256 | `--check` | unit `matched_code_%` | `?SetUpMoveNames@BustAMovePanel@@AAAXXZ` |
+| state | ~~obj sha256~~ | `--check` | unit `matched_code_%` | `?SetUpMoveNames@BustAMovePanel@@AAAXXZ` |
 |---|---|---|---|---|
-| baseline (full-ninja tree) | `3069aa33` | exit 0 | **44.18098** | **100.0** |
-| after `ninja …/BustAMovePanel.obj` | `f7ba6649` | **FAILS** | **43.69392** | **99.868** |
-| after plain full `ninja` | `4637a9e9` | exit 0 | **44.18098** | **100.0** |
+| baseline (full-ninja tree) | ~~`3069aa33`~~ | exit 0 | **44.18098** | **100.0** |
+| after `ninja …/BustAMovePanel.obj` | ~~`f7ba6649`~~ | **FAILS** | **43.69392** | **99.868** |
+| after plain full `ninja` | ~~`4637a9e9`~~ | exit 0 | **44.18098** | **100.0** |
+
+> **The `obj sha256` column is struck (2026-08-31): it carries no information, and the
+> table refutes it in place.** Rows 1 and 3 are asserted to be the *same state* — same
+> `--check` verdict, same 44.18098, same 100.0 — yet their hashes differ (`3069aa33` vs
+> `4637a9e9`). That is not a state change; it is MSVC's clock. Until `ee8902a22` every
+> recompile rewrote the COFF `TimeDateStamp` and the CodeView `S_OBJNAME` signature, so
+> **any** rebuild changed the hash and the row-2 hash change proves nothing about the
+> patchers being skipped. **The −0.487 pp finding and everything downstream of it are
+> unaffected**, because they rest on `report.json` measures and on the named symbol-level
+> losses in the paragraph below — the anon-namespace hash, the guard storage class, the 13
+> `??__F` renames. Those are real, specific, and independent of any file hash. Post-fix a
+> hash column here would be meaningful, but only after a full `ninja`; a per-target build
+> still yields an un-normalized object.
 
 **Δ = −0.487 pp** of `matched_code_percent` from unpatching one object — the
 briefed "about 0.5 pp" is accurate to three digits. `matched_functions_percent`

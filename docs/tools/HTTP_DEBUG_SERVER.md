@@ -193,7 +193,17 @@ Two pieces of state still cannot be repaired because they are private to
 `Debug::mTry` (a crash inside a `MILO_TRY` leaves the try-depth incremented) and
 `gDataArrayConditional` (`#ifdef` nesting state, file-static in `DataArray.cpp`).
 Both are harmless in practice; fixing them needs an `HX_NATIVE`-gated accessor in
-`src/` with PPC codegen verified byte-identical.
+`src/` with PPC codegen verified unmoved by `run_objdiff` (equal-instruction counts
+before and after, not a rendered percentage).
+
+> **Do not read "verified byte-identical" into that** — this line used to say it, and
+> as an instruction it was unrunnable. A bare `sha256sum` of a rebuilt `.obj` is this
+> project's canonical test-that-cannot-fail: pre-`ee8902a22` every recompile changed
+> every object's bytes, and a per-target `ninja <one>.obj` still does today, because
+> the normalizing pass runs on the `post-compile` edge. If you genuinely need an
+> object-byte neutrality proof, compare after a full `ninja`, or zero both clock
+> fields with `scripts/obj_build_metadata_patcher.py`'s `plan()`/`normalize()`, and
+> keep a sabotage control that is supposed to move the hash. See `CLAUDE.md`.
 
 ### DTA Functions List
 

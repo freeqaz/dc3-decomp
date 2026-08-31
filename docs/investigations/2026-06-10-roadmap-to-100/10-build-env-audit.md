@@ -151,6 +151,21 @@ Authoritative check (obj older than its OWN .cpp = real ninja-needs-rebuild stal
   `652c296a`). Code, symbol table, and relocations are byte-identical. objdiff diffs
   sections/symbols, not the COFF timestamp, so this is invisible to measurement. **MSVC
   compilation is deterministic in every measurement-relevant respect.**
+  - ⚠️ **CORRECTED 2026-08-31 — this test under-reported, and the shape of the error is
+    the lesson.** Two tells were in the numbers all along: `TimeDateStamp` is a **4**-byte
+    field at offsets **4–7**, not 3 bytes at "offsets 4-6", and a byte differ that
+    mis-states the width of the one field it did find is summarising, not exhaustive.
+    `keygen_xbox.obj` also carries a clock-derived **CodeView `S_OBJNAME` signature word**
+    in `.debug$S` — verified 2026-08-31 at file offset **`0x1e8`** — which this comparison
+    never reported. So "differed at only 3 bytes" was never the whole difference, and the
+    conclusion drawn from it, **"MSVC compilation is deterministic in every
+    measurement-relevant respect"**, was overstated in exactly the way that matters: it is
+    true of the *objdiff* plane and false of the *object-bytes* plane. Measured 2026-08-31,
+    two full rebuilds of identical source in one tree at one path: **980 of 989 objects
+    differ.** Fixed at the cause in `ee8902a22`. The audit's downstream implication —
+    "measurement is trustworthy for the build-env dimension" — survives, because objdiff
+    scores genuinely cannot see either field; what does not survive is any byte-identity
+    A/B built on top of this row.
 
 ### 7. report.json vs decomp.db planes (measurement-correctness note)
 
