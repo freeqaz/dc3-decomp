@@ -314,7 +314,7 @@ void CharIKFingers::CalculateFingerDest(FingerNum num) {
                 Multiply(finger.mFinger03->LocalXfm(), f2Xfm, f3Xfm);
                 Multiply(finger.mFingertip->LocalXfm(), f3Xfm, tipXfm);
                 Vector3 targetPos;
-                if (Distance(tipXfm.v, finger.mTargetWorldPos) > Distance(tipXfm.v, finger.mRefWorldPos)) {
+                if (Distance(tipXfm.v, finger.mTargetWorldPos) < Distance(tipXfm.v, finger.mRefWorldPos)) {
                     targetPos = finger.mTargetWorldPos;
                 } else
                     targetPos = finger.mRefWorldPos;

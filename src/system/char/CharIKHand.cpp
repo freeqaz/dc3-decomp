@@ -291,7 +291,7 @@ void CharIKHand::Poll() {
         float *weightPtr = localWeights;
         auto endIt = mTargets.end();
         for (ObjVector<IKTarget>::iterator it = mTargets.begin(); it != endIt;
-             ++it) {
+             ++it, weightPtr++) {
             RndTransformable *targetTrans = it->mTarget;
             float extent = it->mExtent;
             if (targetTrans) {
@@ -304,7 +304,7 @@ void CharIKHand::Poll() {
                     targetVec.z = 0.0f;
                     *weightPtr = kMaxWeight / Max(kMinWeight, LengthSquared(targetVec));
                 }
-                totalWeight += *weightPtr++;
+                totalWeight += *weightPtr;
             }
         }
         if (totalWeight < 1.0f) {

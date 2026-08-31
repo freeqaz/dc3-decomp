@@ -113,7 +113,7 @@ void SpectralAnalysis::SetMode(unsigned int windowSize, unsigned int hop) {
     mFft2.SetMode((unsigned int)mFftSize >> 1);
 
     mData0.assign(mFftSize, 0.0f);
-    mData1.resize(((unsigned int)mFftSize >> 1) + 2, 0.0f);
+    mData1.resize((unsigned int)mFftSize + 2, 0.0f);
     mData4.resize(((unsigned int)mFftSize >> 1) + 1, 0.0f);
     mData5.resize(((unsigned int)mFftSize >> 1) + 1, 0.0f);
     mSinTable.resize((unsigned int)mFftSize >> 1, 0.0f);

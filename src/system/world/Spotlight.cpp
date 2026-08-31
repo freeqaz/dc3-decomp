@@ -1281,7 +1281,11 @@ void Spotlight::BuildNGCone(BeamDef &def, int numSegments) {
         do {
             flip = curFlip + 1;
             short nextRow = cur - 1 + sideWidth;
-            if (curFlip && 1) {
+            // Bitwise, not logical: the target emits `clrlwi. rN, rM, 31`
+            // (an explicit AND with 1), so the winding alternates every
+            // iteration. `curFlip && 1` compiles to `cmpwi rM, 0` instead and
+            // is true for every iteration after the first.
+            if (curFlip & 1) {
                 faces[iFace].Set(nextRow, cur - 1, nextRow + 1);
                 faces[iFace + 1].Set(nextRow + 1, cur - 1, cur);
             } else {

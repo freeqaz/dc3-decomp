@@ -320,7 +320,10 @@ void CharHair::SimulateInternal(float fps) {
                         float colRad = col->GetRadius(pt.pos, v164);
                         switch (col->GetShape()) {
                         case CharCollide::kCollidePlane:
-                            if (colRad < maxRad) {
+                            // Operand order is load-bearing: the target compares
+                            // (maxRad, colRad) in that order and branches `ble`.
+                            // `colRad < maxRad` is the same test but emits `bge`.
+                            if (maxRad > colRad) {
                                 ScaleAddEq(pt.pos, col->Axis(), maxRad - colRad);
                             }
                             break;
