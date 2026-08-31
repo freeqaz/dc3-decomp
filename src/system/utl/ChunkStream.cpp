@@ -273,9 +273,10 @@ int ChunkStream::Tell() {
 }
 
 EofType ChunkStream::Eof() {
+    int x;
+    int y;
     MILO_ASSERT(!mFail && mType == kRead, 0x22c);
     if (mChunkInfoPending) {
-        int x;
         if (mFile->ReadDone(x) == 0)
             return TempEof;
         mChunkInfoPending = false;
@@ -310,7 +311,7 @@ EofType ChunkStream::Eof() {
             else if (strstr(mFilename.c_str(), ".milo_3ds"))
                 SetPlatform(kPlatform3DS);
             else
-                SetPlatform(kPlatformXBox);
+                SetPlatform(kPlatformPC);
         } else {
             mIsCached = false;
             SetPlatform(kPlatformPC);
@@ -319,47 +320,45 @@ EofType ChunkStream::Eof() {
         mBufSize = mChunkInfo.mMaxChunkSize;
         if (mChunkInfo.mID != 0xCABEDEAF)
             mBufSize += 0x800;
-        int cap = Min(2, mChunkInfo.mNumChunks);
+        int cap = Min(3, mChunkInfo.mNumChunks);
         for (int i = 0; i < cap; i++) {
-            mBuffers[i] = (char *)_MemAllocTemp(mBufSize, __FILE__, 0x104, "ChunkStreamBuf", 0);
+            mBuffers[i] = (char *)_MemAllocTemp(mBufSize, __FILE__, 0x26f, "ChunkStreamBuf", 0);
         }
         int *chunks = mChunkInfo.mChunks;
-        mChunkEnd = chunks + mChunkInfo.mNumChunks;
         mCurChunk = chunks - 1;
+        mChunkEnd = chunks + mChunkInfo.mNumChunks;
         mCurBufOffset = mChunkInfo.mMaxChunkSize & kChunkSizeMask;
-        mCurBufferIdx = 1;
+        mCurBufferIdx = 2;
         mFile->Seek(mChunkInfo.mChunkInfoSize, 0);
         ReadChunkAsync();
+    }
+
+    {
+        if (mFile->ReadDone(y)) {
+            DecompressChunkAsync();
+            ReadChunkAsync();
+        }
     }
 
     if (mCurBufOffset < (*mCurChunk & kChunkSizeMask)) {
         return NotEof;
     } else {
-        MILO_ASSERT(mCurBufOffset == (*mCurChunk & kChunkSizeMask), 0x28B);
+        MILO_ASSERT(mCurBufOffset == (*mCurChunk & kChunkSizeMask), 0x291);
         if (mBuffersOffset[mCurBufferIdx] == mCurChunk) {
             mBuffersState[mCurBufferIdx] = kInvalid;
         }
-        if (mCurChunk + 1 == mChunkEnd)
+        int *next = mCurChunk + 1;
+        if (next == mChunkEnd)
             return RealEof;
         else {
-            int x;
-            if (mFile->ReadDone(x)) {
-                DecompressChunkAsync();
-                ReadChunkAsync();
-                PollDecompressionWorker();
-            }
-            int idx = (mCurBufferIdx + 1) % 2;
+            int idx = (mCurBufferIdx + 1) % 3;
             if (mBuffersState[idx] != kReady)
                 return TempEof;
             else {
                 mCurBufferIdx = idx;
-                mCurChunk++;
+                mCurChunk = next;
                 mCurBufOffset = 0;
                 mCurReadBuffer = mBuffers[idx];
-#ifdef HX_NATIVE
-                int chunkSz = *mCurChunk & kChunkSizeMask;
-                for (int dbg = 0; dbg < chunkSz && dbg < 8; dbg++)
-#endif
                 return NotEof;
             }
         }

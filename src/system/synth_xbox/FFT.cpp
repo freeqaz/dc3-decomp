@@ -341,6 +341,7 @@ extern "C" {
     extern unsigned char __vmx_00000000000000000000000000000000[];
 }
 
+#pragma float_control(precise, on, push)
 int fft_matrix_forward_columnwise(float* data, long size, float* context) {
     int ret = 0;
     int power = 1;
@@ -433,20 +434,20 @@ int fft_matrix_forward_columnwise(float* data, long size, float* context) {
     perm_swap.u[2] = 0x0C0D0E0F;
     perm_swap.u[3] = 0x08090A0B;
 
-    // Step 1: Twiddle factor multiplication + row FFT
-    int half_rows = rows / 2;
+    // Step 1: Row gather -> row FFT -> twiddle multiply + scatter
     int half_cols = cols / 2;
+    int iter = 0;
 
-    if (half_rows > 0 && half_cols > 0) {
-        float* temp2 = (float*)((char*)temp + half_cols * 0x10);
+    if (half_cols > 0) {
+        int half_rows = rows / 2;
+        float* temp2 = (float*)((char*)temp + half_rows * 0x10);
         int col_idx = 0;
         double two_d = 2.0;
         float* data_ptr = (float*)data;
         float one_f = 1.0f;
         float pi_f = (float)M_PI;
-        float total = (float)(double)((long long)(int)(rows * cols));
+        float total = (float)(double)((long long)(int)(cols * rows));
 
-        int iter = 0;
         do {
             // Compute twiddle angles
             float angle1 = ((float)(long long)col_idx * pi_f) / total;
@@ -455,13 +456,13 @@ int fft_matrix_forward_columnwise(float* data, long size, float* context) {
             // sin² recurrence parameters
             double s1d = sin(angle1);
             float sin2_1 = (float)(s1d * s1d * two_d);
-            float sin_2a1 = (float)sin((float)((double)angle1 * two_d));
+            float sin_2a1 = (float)sin(((double)angle1 * two_d));
             sv.f[0] = sin2_1;
             sv.f[2] = sin_2a1;
 
             double s2d = sin(angle2);
             float sin2_2 = (float)(s2d * s2d * two_d);
-            float sin_2a2 = (float)sin((float)((double)angle2 * two_d));
+            float sin_2a2 = (float)sin(((double)angle2 * two_d));
             sv.f[1] = sin2_2;
             sv.f[3] = sin_2a2;
             v_sin2a = __vmrglw(sv.v, sv.v);
@@ -477,130 +478,131 @@ int fft_matrix_forward_columnwise(float* data, long size, float* context) {
             sv.f[3] = (float)cos(angle2);
 
             v_cos_vec = __lvx(&sv, 0);
+
+            // Initialize running twiddle factors
+            w_im2 = v_sign;
+            w_im1 = v_zero;
             v_cos_splat = __vspltw(v_cos_vec, 0);
+            w_re1 = v_cos_splat;
 
             // Phase 3: Overwrite with sin values, load it
             sv.f[2] = (float)s1d;
+            v_cos_merged = __vmrglw(v_cos_vec, v_cos_vec);
+            w_re2 = v_cos_merged;
             sv.f[3] = (float)s2d;
 
             v_sin_vec = __lvx(&sv, 0);
             v_sin_merged = __vmrglw(v_sin_vec, v_sin_vec);
-
-            // Initialize running twiddle factors
-            v_cos_merged = __vmrglw(v_cos_vec, v_cos_vec);
-            w_re1 = v_cos_splat;
-            w_im1 = v_zero;
-            w_re2 = v_cos_merged;
-            w_im2 = __vmaddfp(v_sign, v_sin_merged, v_zero);
+            w_im2 = __vmaddfp(v_sin_merged, w_im2, v_zero);
 
             float* dst1 = temp;
             float* dst2 = temp2;
             char* src_data = (char*)data_ptr;
             int k = 0;
 
-            if (half_cols > 0) {
-                int data_stride = half_rows * 0x10;
-                pm_swap_v = *(XMVECTOR*)&perm_swap;
-                pm_lo_v = *(XMVECTOR*)&perm_lo;
-                pm_hi_v = *(XMVECTOR*)&perm_hi;
-
+            // Gather a pair of rows out of the column-major matrix into the
+            // contiguous scratch halves.
+            if (half_rows > 0) {
+                int data_stride = half_cols * 0x10;
                 do {
-                    // Load first data element (row 0)
-                    d0 = __lvx(src_data, 0);
+                    a = __lvx(src_data, 0);
                     src_data += data_stride;
-
-                    // Copy sin² values for this iteration
-                    sp_sin2 = v_sin2;
-                    sp_sin2_2 = v_sin2;
-                    sp_sin2_3 = v_sin2;
-
-                    // Begin twiddle recurrence
-                    new_re1 = __vnmsubfp(w_re1, sp_sin2, w_re1);
-                    t1 = __vmaddfp(w_re1, d0, v_zero);
-                    d_swap0 = __vperm(d0, d0, pm_swap_v);
-
-                    // Load second data element (row 1)
-                    d1 = __lvx(src_data, 0);
-                    new_re2 = __vnmsubfp(w_re2, sp_sin2_2, w_re2);
-                    d_swap1 = __vperm(d1, d1, pm_swap_v);
-
-                    p_im1 = __vnmsubfp(w_im1, sp_sin2, w_im1);
-                    t2 = __vmaddfp(w_re2, d1, v_zero);
-
-                    p_im2 = __vnmsubfp(w_im2, sp_sin2_3, w_im2);
-                    new_re1 = __vnmsubfp(w_im1, v_im_init, new_re1);
-                    r1 = __vmaddfp(w_im1, d_swap0, t1);
-                    new_im1 = __vmaddfp(w_re1, v_im_init, p_im1);
-                    r2 = __vmaddfp(w_im2, d_swap1, t2);
-                    new_re2 = __vnmsubfp(w_im2, v_im_init, new_re2);
-                    new_im2 = __vmaddfp(w_re2, v_im_init, p_im2);
-
-                    w_re1 = new_re1;
-                    w_re2 = new_re2;
-                    w_im1 = new_im1;
-                    w_im2 = new_im2;
-
                     k += 1;
-
-                    // Interleave results and store to temp
-                    out_lo = __vperm(r1, r2, pm_lo_v);
-                    out_hi = __vperm(r1, r2, pm_hi_v);
-
+                    b = __lvx(src_data, 0);
+                    src_data += data_stride;
+                    out_lo = __vperm(a, b, *(XMVECTOR*)&perm_lo);
+                    out_hi = __vperm(a, b, *(XMVECTOR*)&perm_hi);
                     __stvx(out_lo, dst1, 0);
                     dst1 += 4;
                     __stvx(out_hi, dst2, 0);
                     dst2 += 4;
-                    src_data += data_stride;
-                } while (k < half_cols);
+                } while (k < half_rows);
             }
 
             // Row FFT on temp buffer halves
-            ret = FFTComplex(temp, cols, -1, context);
+            ret = FFTComplex(temp, rows, -1, context);
             if (ret != 0) goto cleanup;
 
-            ret = FFTComplex((float*)((char*)temp + cols * 8), cols, -1, context);
+            ret = FFTComplex((float*)((char*)temp + rows * 8), rows, -1, context);
             if (ret != 0) goto cleanup;
 
-            // Deinterleave from temp back to data
+            // Twiddle-multiply the transformed rows and scatter them back.
             {
                 char* src1 = (char*)temp;
                 char* src2 = (char*)temp2;
                 char* out = (char*)data_ptr;
                 k = 0;
-                if (half_cols > 0) {
-                    int stride = half_rows * 0x10;
+                if (half_rows > 0) {
+                    int stride = half_cols * 0x10;
                     do {
                         a = __lvx(src1, 0);
                         b = __lvx(src2, 0);
+
+                        // Copy sin² values for this iteration
+                        sp_sin2 = v_sin2;
+                        sp_sin2_2 = v_sin2;
+                        sp_sin2_3 = v_sin2;
+
+                        pm_lo_v = *(XMVECTOR*)&perm_lo;
+                        pm_hi_v = *(XMVECTOR*)&perm_hi;
+                        pm_swap_v = *(XMVECTOR*)&perm_swap;
+
                         k += 1;
                         src1 += 0x10;
                         src2 += 0x10;
-                        hi = __vperm(a, b, *(XMVECTOR*)&perm_hi);
-                        __stvx(__vperm(a, b, *(XMVECTOR*)&perm_lo), out, 0);
+
+                        // Begin twiddle recurrence
+                        d0 = __vperm(a, b, pm_lo_v);
+                        new_re1 = __vnmsubfp(w_re1, sp_sin2, w_re1);
+                        d1 = __vperm(a, b, pm_hi_v);
+                        new_re2 = __vnmsubfp(w_re2, sp_sin2_2, w_re2);
+
+                        t1 = __vmaddfp(w_re1, d0, v_zero);
+                        d_swap0 = __vperm(d0, d0, pm_swap_v);
+                        p_im1 = __vnmsubfp(w_im1, sp_sin2, w_im1);
+
+                        t2 = __vmaddfp(w_re2, d1, v_zero);
+                        d_swap1 = __vperm(d1, d1, pm_swap_v);
+                        p_im2 = __vnmsubfp(w_im2, sp_sin2_3, w_im2);
+
+                        new_re1 = __vnmsubfp(w_im1, v_im_init, new_re1);
+                        new_re2 = __vnmsubfp(w_im2, v_im_init, new_re2);
+                        new_im1 = __vmaddfp(w_re1, v_im_init, p_im1);
+                        new_im2 = __vmaddfp(w_re2, v_im_init, p_im2);
+
+                        r1 = __vmaddfp(w_im1, d_swap0, t1);
+                        r2 = __vmaddfp(w_im2, d_swap1, t2);
+
+                        w_re1 = new_re1;
+                        w_re2 = new_re2;
+                        w_im1 = new_im1;
+                        w_im2 = new_im2;
+
+                        __stvx(r1, out, 0);
                         out += stride;
-                        __stvx(hi, out, 0);
+                        __stvx(r2, out, 0);
                         out += stride;
-                    } while (k < half_cols);
+                    } while (k < half_rows);
                 }
             }
 
             iter += 1;
             col_idx += 4;
             data_ptr += 4;
-        } while (iter < half_rows);
+        } while (iter < half_cols);
     }
 
-    // Step 2: Column FFT (forward) on each column, cols-1 down to 0
-    int col_i = cols - 1;
+    // Step 2: Column FFT (forward) on each column, rows-1 down to 0
+    int col_i = rows - 1;
     if (col_i >= 0) {
-        int neg_stride = -rows;
+        int neg_stride = -cols;
         int stride8 = neg_stride * 8;
-        float* col_ptr = (float*)((char*)data + col_i * rows * 8);
+        float* col_ptr = (float*)((char*)data + col_i * cols * 8);
         do {
-            ret = FFTComplex(col_ptr, rows, -1, context);
+            ret = FFTComplex(col_ptr, cols, -1, context);
             if (ret != 0) goto cleanup;
             col_i -= 1;
-            col_ptr = (float*)((char*)col_ptr + stride8);
+            col_ptr = (float*)(stride8 + (char*)col_ptr);
         } while (col_i >= 0);
     }
 
@@ -609,6 +611,7 @@ cleanup:
     free(temp);
     return ret;
 }
+#pragma float_control(pop)
 
 #pragma float_control(precise, on, push)
 int fft_matrix_inverse_columnwise(float *data, long size, float *scratch) {
