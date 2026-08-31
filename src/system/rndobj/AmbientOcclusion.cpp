@@ -960,14 +960,15 @@ void RndAmbientOcclusion::SmoothResults(RndMesh *mesh) const {
                 if (totalAngle > 0.0f) {
                     float invAngle = 1.0f / totalAngle;
                     RndMesh::Vert &vert = mesh->Verts(v);
+                    Hmx::Color &vertColor = vert.color;
                     float wA = accA * invAngle;
                     float wR = invAngle * accR;
                     float wB = accB * invAngle;
                     float wG = accG * invAngle;
-                    vert.color.alpha = (wA + vert.color.alpha) * 0.5f;
-                    vert.color.red = (wR + vert.color.red) * 0.5f;
-                    vert.color.blue = (wB + vert.color.blue) * 0.5f;
-                    vert.color.green = (wG + vert.color.green) * 0.5f;
+                    vertColor.alpha = (wA + vertColor.alpha) * 0.5f;
+                    vertColor.red = (wR + vertColor.red) * 0.5f;
+                    vertColor.blue = (wB + vertColor.blue) * 0.5f;
+                    vertColor.green = (wG + vertColor.green) * 0.5f;
                 }
             }
             v++;
