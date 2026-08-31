@@ -16,6 +16,7 @@ restores and that would take your uncommitted work with it.
 """
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -141,10 +142,39 @@ def dirty() -> list[str]:
     return [l for l in out.splitlines() if l.strip()]
 
 
+def drop_bytecode() -> None:
+    """Delete every `__pycache__` this harness's edits could have staled.
+
+    NOT hygiene -- a MEASURED defect.  CPython validates a cached `.pyc` against
+    the source's (mtime, size), and several sabotages here are byte-length
+    preserving: S10b is `gate.cleared[...]` -> `gate.blocked[...]`, and "cleared"
+    and "blocked" are both seven characters, so the file is the same 34,766 bytes
+    before and after.  Patch and restore land within the same second, mtime
+    granularity is one second, so the interpreter would sometimes load the
+    STALE bytecode and the sabotage silently never ran.  Measured 2026-08-31:
+    S10b alternated CAUGHT / NOT CAUGHT across consecutive whole-harness runs
+    with nothing else changed, while applying the identical patch by hand and
+    running pytest went red every time.
+
+    It failed SAFE -- an unloaded sabotage looks green and is reported NOT
+    CAUGHT, i.e. as a harness failure -- but a flaky verifier is a verifier
+    people learn to re-run until it agrees with them, which is how a real NOT
+    CAUGHT gets waved through.
+    """
+    for pycache in ROOT.rglob("__pycache__"):
+        if "venv" in pycache.parts or ".git" in pycache.parts:
+            continue
+        for f in pycache.glob("*.pyc"):
+            f.unlink(missing_ok=True)
+
+
 def run(node: str) -> bool:
     """True = GREEN."""
-    r = subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider",
-                        f"{TESTS}::{node}"], cwd=ROOT, capture_output=True, text=True)
+    drop_bytecode()
+    env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+    r = subprocess.run([sys.executable, "-B", "-m", "pytest", "-q",
+                        "-p", "no:cacheprovider", f"{TESTS}::{node}"],
+                       cwd=ROOT, capture_output=True, text=True, env=env)
     return r.returncode == 0
 
 
