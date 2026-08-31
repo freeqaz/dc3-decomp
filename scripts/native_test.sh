@@ -55,11 +55,20 @@
 #   7  milo_test_required_targets.txt missing/empty — CMake's target list did not
 #      reach this script, and guessing one is the bug that cost milo-viewer's
 #      5 tests to a skip
-#   8  NO CONFIGURED BUILD, and it could not be configured. ZERO tests ran.
+#   8  RESERVED — this is CTEST's own exit status when tests failed, passed
+#      through by the `exit "$rc"` at the bottom. Verified empirically, not
+#      assumed: a two-test CTest project with one failing test exits 8. Do not
+#      allocate 8 to anything here; "some tests failed" and any wrapper-level
+#      condition sharing one number is precisely the ambiguity this table exists
+#      to remove. (Caught while adding 9 below, which was written as 8 first.)
+#   9  NO CONFIGURED BUILD, and it could not be configured. ZERO tests ran.
 #      This is the "the gate never executed" code and it exists because that
 #      state used to be a bare exit 1, indistinguishable in a lane's report from
 #      any other hiccup — and indistinguishable from a pass to anyone reading
 #      only a summary. "Examined zero things" must never look like success.
+#      (scripts/native_configure.sh has its own space: 9 = a required external
+#      dependency is missing, 10 = cmake failed. Its code is printed in the
+#      banner, never returned from here.)
 #   *  anything else is ctest's own exit status
 #
 # WHY THIS SCRIPT BUILDS
@@ -141,7 +150,7 @@ if [ ! -f "$BUILD_DIR/CTestTestfile.cmake" ]; then
             echo " Auto-configure failed (exit $configure_rc); see the error above." >&2
             echo " Do not report this run as green: nothing was examined." >&2
             echo "==============================================================" >&2
-            exit 8
+            exit 9
         fi
     fi
 fi
@@ -164,7 +173,7 @@ if [ ! -f "$BUILD_DIR/CTestTestfile.cmake" ]; then
         echo " (--no-configure was given, so no attempt was made.)" >&2
     fi
     echo "==============================================================" >&2
-    exit 8
+    exit 9
 fi
 
 # Build BEFORE testing. A stale build dir silently narrows the suite: the tests
