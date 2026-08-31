@@ -295,7 +295,10 @@ void RndSpline::SyncDeformedCtrlPoints(int iStartIndex, int iEndIndex) const {
                 pt.mCoeff0.w += nnr * 0.5f;
 
                 // mCoeff1 = prev - 2.5*cur + 2.0*next - 0.5*nextNext
-                pt.mCoeff1 = Vector4(px, py, pz, pr);
+                pt.mCoeff1.x = px;
+                pt.mCoeff1.y = py;
+                pt.mCoeff1.z = pz;
+                pt.mCoeff1.w = pr;
                 pt.mCoeff1.x -= cx * 2.5f;
                 pt.mCoeff1.y -= cy * 2.5f;
                 pt.mCoeff1.z -= cz * 2.5f;
@@ -321,7 +324,10 @@ void RndSpline::SyncDeformedCtrlPoints(int iStartIndex, int iEndIndex) const {
                 pt.mCoeff2.w += nr * 0.5f;
 
                 // mCoeff3 = cur
-                pt.mCoeff3 = Vector4(cx, cy, cz, cr);
+                pt.mCoeff3.x = cx;
+                pt.mCoeff3.y = cy;
+                pt.mCoeff3.z = cz;
+                pt.mCoeff3.w = cr;
             }
         }
     }
