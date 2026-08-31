@@ -111,7 +111,16 @@ Deliberately narrow, so this cannot become a way to launder a red:
   * The build must be in **this** tree.  A `ninja` in another worktree is not
     detected and excuses nothing (`comm == "ninja"` plus either `cwd ==
     project_dir` or an open fd on this tree's `.ninja_log`/`.ninja_deps`).
-  * `--ordered-after-compile` disables it entirely.
+  * `--ordered-after-compile` disables it **only for the ninja that invoked
+    us**.  It is an assertion about one build graph, and the ninja that owns
+    that graph is necessarily an ancestor of this process.  A second ninja
+    building the same tree -- a concurrent lane in the shared main checkout --
+    ordered nothing on our behalf, so its 58 ms zero-byte windows still exit 6.
+    That was the #149 residual, measured 2026-08-31: polling this checker
+    through one in-flight build, `--ordered-after-compile` returned **190 red
+    of 446 polls** where the unflagged run returned 185 exit-6 refusals. The
+    flag had turned off the only defence against precisely the case it was
+    never true about. See `foreign_builds`.
 
 What was measured and REJECTED: probing `/proc/*/fd` for the process writing the
 object.  It sounds like a positive signal rather than a timing guess, but over
@@ -150,6 +159,7 @@ import argparse
 import hashlib
 import json
 import os
+import shlex
 import sys
 from pathlib import Path
 
@@ -324,6 +334,83 @@ def ninja_builds_in_flight(project_dir: Path) -> list[str]:
     return sorted(found)
 
 
+def own_ninja_ancestors() -> set[int]:
+    """Pids of every ancestor of this process, walking `/proc/<pid>/stat`.
+
+    `--ordered-after-compile` is an assertion about ONE ninja: the one whose
+    dependency graph put this edge after `all_source` and `post-compile`.  That
+    ninja is, necessarily, an ancestor of this process.  A ninja that is NOT an
+    ancestor scheduled nothing on our behalf and guarantees nothing about
+    quiescence -- see `foreign_builds` below for why that distinction is the
+    whole of the #149 residual.
+
+    Returns the empty set on any platform without `/proc` and on any read
+    error, which makes every in-flight ninja read as foreign: "no signal"
+    degrades to indeterminate, never to a claim.
+    """
+    proc = Path("/proc")
+    if not proc.is_dir():
+        return set()
+    out: set[int] = set()
+    pid = os.getpid()
+    # Bounded: a cycle or a pathological chain must not spin.
+    for _ in range(64):
+        if pid <= 0 or pid in out:
+            break
+        out.add(pid)
+        try:
+            stat = (proc / str(pid) / "stat").read_text()
+        except OSError:
+            break
+        # Field 4 is ppid; comm (field 2) may contain spaces and parentheses,
+        # so split after the LAST ')'.
+        try:
+            pid = int(stat[stat.rindex(")") + 1:].split()[1])
+        except (ValueError, IndexError):
+            break
+    return out
+
+
+def _entry_pid(entry: str) -> int:
+    """The pid out of a `ninja_builds_in_flight` entry (`"1234 (cwd)"`)."""
+    try:
+        return int(entry.split(None, 1)[0])
+    except (ValueError, IndexError):
+        return -1
+
+
+def foreign_builds(in_flight: list[str]) -> list[str]:
+    """The in-flight ninjas that did NOT invoke us.
+
+    THE #149 RESIDUAL, measured 2026-08-31 in a worktree.  The primary fix --
+    `order_only` on `all_source` and `post-compile`, plus this edge asserting
+    `--ordered-after-compile` -- holds for a lone build: 8 of 8 parallel
+    incremental builds clean, guard edge confirmed to have run in all 8.
+
+    It does NOT hold when a SECOND ninja builds the same tree, which is exactly
+    the "concurrent lane's build" case in this repo, where several agents share
+    the main checkout.  Ninja's ordering covers the edges ninja scheduled; it
+    says nothing about another process's `cl.exe`.  And `--ordered-after-compile`
+    turns the mid-write tolerance OFF, so the foreign build's 58 ms zero-byte
+    windows land as exit 1 with a message naming a unit as having stopped
+    emitting an object.
+
+    Polling this checker through one in-flight build, both ways, 446 polls:
+
+        --ordered-after-compile     256 exit 0, 190 exit 1   <- false red
+        (no flag)                   261 exit 0, 185 exit 6   <- correct refusal
+
+    So the flag was not merely unhelpful under contention, it was the only
+    thing standing between the race and a red build, and it was switched off.
+    Scoping the assertion to the ninja that actually ordered us keeps the
+    strictness it was introduced for (a genuine task-#142 object during our own
+    build is still exit 1, naming the unit) and restores exit 6 for the one
+    case the assertion was never true about.
+    """
+    own = own_ninja_ancestors()
+    return [e for e in in_flight if _entry_pid(e) not in own]
+
+
 def audit(project_dir: Path) -> tuple[str, list[Offender]]:
     """Return (note, offenders).  Raises on an unestablishable state.
 
@@ -413,13 +500,22 @@ def check(project_dir: Path, ordered_after_compile: bool = False) -> str:
     # the config offender's sake.
     all_disk = all(o.shape in DISK_SHAPES for o in offenders)
     in_flight = ninja_builds_in_flight(project_dir)
+    # `--ordered-after-compile` is an assertion about the ninja that ORDERED
+    # us, so it can only excuse that ninja's writes.  A build we are not a
+    # descendant of ordered nothing on our behalf (#149 residual).
+    foreign = foreign_builds(in_flight)
+    blind = in_flight if not ordered_after_compile else foreign
 
-    if all_disk and in_flight and not ordered_after_compile:
+    if all_disk and blind:
+        scope = ("a ninja is building this tree right now"
+                 if not ordered_after_compile else
+                 "a ninja that did NOT invoke this check is building this tree "
+                 "right now, so --ordered-after-compile does not cover it")
         raise BuildInFlightError(
             f"CANNOT ESTABLISH STATE FOR {project_dir}: {len(offenders)} "
             f"`complete: true` unit(s) have a missing or ZERO-BYTE base object, "
-            f"but a ninja is building this tree right now "
-            f"(pid {', '.join(in_flight)}).\n\n"
+            f"but {scope} "
+            f"(pid {', '.join(blind)}).\n\n"
             + "\n".join(str(o) for o in offenders)
             + f"\n\n{note}\n\n"
             f"An object being written by cl.exe is present at zero bytes for a "
@@ -428,18 +524,30 @@ def check(project_dir: Path, ordered_after_compile: bool = False) -> str:
             f"shape as a .cpp that stopped emitting an object. This is NOT a "
             f"pass -- it is a refusal to guess which of the two it is. Re-run "
             f"once the build is quiescent: you will get 0 or 1, and 1 is real.\n"
-            f"(The ninja edge in tools/project.py does not reach this branch: "
-            f"it is order-only after `all_source` and `post-compile` and passes "
-            f"--ordered-after-compile, so it gets the strict answer.)"
+            + (
+                "(The ninja edge in tools/project.py reaches this branch ONLY "
+                "when a SECOND ninja is building the same tree. Its own "
+                "compiles are order-only-before it and it passes "
+                "--ordered-after-compile, so against a lone build it gets the "
+                "strict answer. A concurrent lane's build is the one thing "
+                "that ordering cannot cover -- #149 residual, fixed "
+                "2026-08-31 -- and refusing is correct there.)"
+                if ordered_after_compile else
+                "(The ninja edge in tools/project.py does not reach this "
+                "branch for its own build: it is order-only after "
+                "`all_source` and `post-compile` and passes "
+                "--ordered-after-compile, so it gets the strict answer.)"
+            )
         )
 
     context = ""
     if in_flight:
         why = []
-        if ordered_after_compile:
+        if ordered_after_compile and not foreign:
             why.append(
-                "this run asserted --ordered-after-compile, so quiescence was "
-                "already established by the build graph")
+                "this run asserted --ordered-after-compile and every ninja in "
+                "flight is an ancestor of this process, so quiescence was "
+                "already established by the build graph that scheduled us")
         if not all_disk:
             why.append(
                 "at least one offender is a missing `base_path` KEY, which no "
@@ -673,8 +781,9 @@ def _selftest() -> int:
         *zero_byte, UncreditedCompleteUnitError,
     )
     run_case(
-        "...and --ordered-after-compile is RED even with a build in flight",
-        *zero_byte, UncreditedCompleteUnitError,
+        "...and --ordered-after-compile does NOT excuse a FOREIGN build "
+        "(#149 residual): still INDETERMINATE, not red",
+        *zero_byte, BuildInFlightError,
         in_flight=True, ordered_after_compile=True,
     )
     run_case(
@@ -684,7 +793,83 @@ def _selftest() -> int:
         UncreditedCompleteUnitError, in_flight=True,
     )
 
-    total = 11
+    # The other half of the same distinction, and the one that keeps the fix
+    # from being a way to go quiet: when the in-flight ninja IS our ancestor --
+    # which is what the real build edge looks like -- the answer must stay
+    # STRICT (exit 1, unit named), not become exit 6.  This needs a real
+    # process tree, so it runs the checker as a SUBPROCESS under a real
+    # executable named `ninja`, in the same spirit as fake_ninja_build: nothing
+    # stubbed or injected.
+    def run_ancestor_case():
+        import shutil
+        import subprocess
+        label = ("an OWN-ANCESTOR ninja + --ordered-after-compile stays STRICT "
+                 "(exit 1), so the #149 fix is not a mute button")
+        sh = shutil.which("sh")
+        if not Path("/proc").is_dir() or not sh:
+            print(f"  [skip] {label}: no /proc or no `sh` to build the "
+                  f"own-ancestor control with -- NOT counted as a pass")
+            skipped.append(label)
+            return
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "b").mkdir(parents=True, exist_ok=True)
+            (root / "b" / "a.obj").write_bytes(b"")
+            (root / CONFIG_NAME).write_text(json.dumps(zero_byte[0]))
+            fake = root / "ninja"
+            shutil.copy2(sh, fake)
+            fake.chmod(0o755)
+            # `sh` copied to the name `ninja` => comm == "ninja", cwd == root,
+            # and it must STAY ALIVE as the parent of the python that runs the
+            # check.  Two traps, both hit while writing this and both left
+            # here as comments because each one made the case pass for the
+            # wrong reason:
+            #
+            #  (1) `sh -c '<one simple command>'` ELIDES THE FORK and execs the
+            #      command in place, so the process named `ninja` ceases to
+            #      exist.  The trailing `; exit $?` makes it a list, which
+            #      forces the fork.
+            #  (2) `shlex.quote` is SHELL quoting.  Using it to build a PYTHON
+            #      literal emitted `ninja_builds_in_flight(/tmp/xyz)` -- a
+            #      SyntaxError, whose interpreter exit code is 1, which is
+            #      EXIT_UNCREDITED, which is what this case expects.  It
+            #      "passed" while executing none of its own logic, and survived
+            #      a sabotage of `foreign_builds`.  `repr()` for the Python
+            #      layer, `shlex.quote` for the shell layer.
+            #
+            # And the exit-7 self check: the control must PROVE the detector
+            # sees it, from inside the very process under test, or the case
+            # FAILS.  Without it neither trap above is visible.
+            scripts_dir = str(Path(__file__).resolve().parent)
+            inner = (
+                "import sys;"
+                f"sys.path.insert(0, {scripts_dir!r});"
+                "import verify_complete_units as v;"
+                f"sys.exit(7 if not v.ninja_builds_in_flight({str(root)!r})"
+                f" else v.main(['--check','--quiet','--project-dir',"
+                f"{str(root)!r},'--ordered-after-compile']))"
+            )
+            cmd = (f"{shlex.quote(sys.executable)} -c {shlex.quote(inner)}"
+                   f"; exit $?")
+            proc = subprocess.run([str(fake), "-c", cmd], cwd=str(root),
+                                  capture_output=True, text=True)
+            rc = proc.returncode
+            ok = rc == EXIT_UNCREDITED
+            why = ""
+            if rc == 7:
+                why = ("  -- the control was NOT VISIBLE to the detector "
+                       "(no live ancestor named `ninja`), so this case would "
+                       "have proved nothing")
+            elif not ok:
+                why = "  -- " + (proc.stderr.strip().splitlines() or [""])[-1][:90]
+            print(f"  [{'ok' if ok else 'FAIL'}] {label}: "
+                  f"expected exit {EXIT_UNCREDITED}, got exit {rc}{why}")
+            if not ok:
+                failures.append(label)
+
+    run_ancestor_case()
+
+    total = 12
     if failures:
         print(f"SELFTEST FAILED: {len(failures)} case(s): {', '.join(failures)}")
         return 1
@@ -692,9 +877,10 @@ def _selftest() -> int:
         print(f"SELFTEST INCOMPLETE: {len(skipped)}/{total} case(s) skipped "
               f"(no in-flight control on this platform): {', '.join(skipped)}")
         return 3
-    print(f"SELFTEST PASSED: {total}/{total} cases -- 1 that must pass, 9 that "
-          f"must FAIL the checker, and 1 that must fail it DIFFERENTLY "
-          f"(indeterminate, not red) because a build was in flight.")
+    print(f"SELFTEST PASSED: {total}/{total} cases -- 1 that must pass, 8 that "
+          f"must FAIL the checker red, 2 that must fail it DIFFERENTLY "
+          f"(indeterminate, not red) because a build we do not own was in "
+          f"flight, and 1 that must stay RED under a build we DO own.")
     return 0
 
 

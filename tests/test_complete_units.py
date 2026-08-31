@@ -28,6 +28,8 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -343,16 +345,80 @@ class MidWriteRaceTest(unittest.TestCase):
             self.assertIn("default/delta", str(cm.exception))
             self.assertIn("default/alpha", str(cm.exception))
 
-    def test_ordered_after_compile_is_red_even_during_a_build(self):
-        """What the ninja edge passes, having bought quiescence with deps."""
+    def test_ordered_after_compile_does_not_excuse_a_FOREIGN_build(self):
+        """#149 residual, fixed 2026-08-31.
+
+        `--ordered-after-compile` is an assertion about ONE build graph: the
+        one whose ninja scheduled this edge, and which is therefore an ancestor
+        of this process.  It used to disable the mid-write tolerance for EVERY
+        ninja, including a second one belonging to a concurrent lane -- which
+        is the case ordering can never cover, because ninja orders its own
+        edges and knows nothing of another process's cl.exe.
+
+        Measured in a worktree 2026-08-31, polling the checker through one
+        in-flight build, 446 polls: with the flag, 190 exit-1 FALSE REDS; with
+        the flag off, 185 correct exit-6 refusals. The flag was switched off
+        precisely the defence that the race needed.  After the fix, 445 polls:
+        192 exit-6, ZERO exit-1.
+
+        `fake_ninja_build` is not our ancestor, so this is the foreign case.
+        """
         with tempfile.TemporaryDirectory() as td:
             root = self._zero_byte_fixture(Path(td))
             with vcu.fake_ninja_build(root) as pid:
                 self._require_control(pid, root)
-                with self.assertRaises(vcu.UncreditedCompleteUnitError) as cm:
+                self.assertNotIn(pid, vcu.own_ninja_ancestors())
+                with self.assertRaises(vcu.BuildInFlightError) as cm:
                     vcu.check(root, ordered_after_compile=True)
-            self.assertIn("ZERO BYTES", str(cm.exception))
-            self.assertIn("--ordered-after-compile", str(cm.exception))
+            msg = str(cm.exception)
+            self.assertIn("CANNOT ESTABLISH STATE", msg)
+            self.assertIn("did NOT invoke this check", msg)
+            self.assertNotIn("REFUSING TO VOUCH", msg)
+
+    def test_ordered_after_compile_stays_RED_under_our_OWN_ninja(self):
+        """The other half: the fix must not be a mute button.
+
+        When the in-flight ninja IS our ancestor -- what the real build edge
+        looks like -- the strict answer the flag was introduced for must
+        survive: a genuine task-#142 object is exit 1 naming the unit, not exit
+        6 "indeterminate".
+
+        Needs a real process tree, so the checker runs as a SUBPROCESS under a
+        real executable named `ninja`.  Two traps, both hit while writing this,
+        both now guarded: `sh -c '<one simple command>'` elides the fork and
+        execs the command in place (hence the trailing `; exit $?`), and
+        shell-quoting a path into a PYTHON literal yields a SyntaxError whose
+        exit code is 1 -- the very value being asserted, so the case passed
+        while executing none of its own logic.  The exit-7 probe below makes
+        an invisible control a FAILURE rather than a pass.
+        """
+        sh = shutil.which("sh")
+        if not Path("/proc").is_dir() or not sh:
+            self.skipTest("no /proc or no `sh` to build the own-ancestor control")
+        with tempfile.TemporaryDirectory() as td:
+            root = self._zero_byte_fixture(Path(td))
+            fake = root / "ninja"
+            shutil.copy2(sh, fake)
+            fake.chmod(0o755)
+            inner = (
+                "import sys;"
+                f"sys.path.insert(0, {str(CHECKER.parent)!r});"
+                "import verify_complete_units as v;"
+                f"sys.exit(7 if not v.ninja_builds_in_flight({str(root)!r})"
+                f" else v.main(['--check','--quiet','--project-dir',"
+                f"{str(root)!r},'--ordered-after-compile']))"
+            )
+            cmd = (f"{shlex.quote(sys.executable)} -c {shlex.quote(inner)}"
+                   f"; exit $?")
+            rc = subprocess.run([str(fake), "-c", cmd], cwd=str(root),
+                                capture_output=True).returncode
+            self.assertNotEqual(
+                rc, 7, "the own-ancestor control was invisible to the "
+                       "detector, so this test proved nothing")
+            self.assertEqual(
+                rc, 1, "an in-flight ninja that IS our ancestor must still get "
+                       "the strict answer; exit 6 here means the #149 fix "
+                       "became a mute button")
 
     def test_a_build_in_ANOTHER_tree_excuses_nothing(self):
         """Six lanes build here at once. Only THIS tree's build is an excuse."""
@@ -387,9 +453,13 @@ class MidWriteRaceTest(unittest.TestCase):
             with vcu.fake_ninja_build(root) as pid:
                 self._require_control(pid, root)
                 self.assertEqual(subprocess.run(base, capture_output=True).returncode, 6)
+                # FOREIGN build (the control is not our ancestor): the flag no
+                # longer excuses it -- #149 residual.  The own-ancestor exit-1
+                # path is asserted by
+                # test_ordered_after_compile_stays_RED_under_our_OWN_ninja.
                 self.assertEqual(
                     subprocess.run(base + ["--ordered-after-compile"],
-                                   capture_output=True).returncode, 1)
+                                   capture_output=True).returncode, 6)
             self.assertEqual(subprocess.run(base, capture_output=True).returncode, 1)
 
 
