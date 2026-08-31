@@ -88,6 +88,23 @@ alone as worth up to 14.75 pp on 118 of 1,639 named sub-100 rows. That is why
 source (1) — which carries all of them — is strongly preferred over "just drop
 the `-c` flags".
 
+⚠ **2026-08-31: `objdiff.json`'s `options` block now pins all four keys**
+(`tools/project.py`), so on THIS tree `diff` and `report generate` resolve the
+same ruler with no `-c` at all, and `bin/objdiff-cli diff` with no flags now
+reproduces `report.json` exactly (whole-binary check: 31,812 of 31,812 agree;
+the only 143 remaining disagreements all carry `base_unit`, the batch path's
+cross-unit COMDAT fallback, which the report does not do). The four-key layering
+above is still the correct model and this module is still the right way to read
+the ruler — but the reason it MATTERED here is closed. The population it was
+protecting against was measured at 155 functions / 120,728 B, all scored LOW by
+`diff`; 49 of them read 100.0 in report.json. **This module was never imported
+by the orchestrator MCP tools** (`run_objdiff`, `run_diff_inspect`,
+`run_symbol_sweep`), only by `scripts/analysis/*`, which is why the defect
+survived being documented here. Guard: `scripts/verify_ruler_agreement.py`.
+Write-up: `docs/decomp/patterns/two-objdiff-entry-points-two-rulers.md`.
+(Line numbers above are pre-4.2.8: the sites are now report.rs:581 and
+diff.rs:1070, plus the `--batch` path at diff.rs:1807.)
+
 ⚠ `map_file` needs no handling here: `diff.rs:964` already loads `objdiff.json`'s
 `map_file` on its own, so the ICF alias equivalences (7,174 entries) are shared
 with the grader automatically.
