@@ -359,6 +359,41 @@ config.pch_eligible_dirs = {
     "world", "meta", "obj", "os", "utl", "movie",
 }
 
+# *** ONE PASS RUNS INSIDE THE COMPILE EDGE, NOT ONLY AFTER IT. ***
+# Everything in `post-compile` below hangs off a phony keyed on `all_source`,
+# which `ninja <one>.obj` never reaches.  That is a documented gap for the five
+# name/storage patchers (a per-target object is raw, and
+# verify_objs_patched.py --verify-manifest is what detects a tree left that
+# way).  For the build-metadata pass it was not merely a gap: MSVC stamps the
+# wall clock into every object it writes, so a per-target rebuild of UNCHANGED
+# source produced a DIFFERENT hash every time -- measured on TypeProps.obj as
+# dfeda314... then e14ac6e8... .  Every control of the shape "I edited
+# something, rebuilt, the object hash moved, therefore the mechanism works"
+# passed whether or not the mechanism worked.
+#
+# So the metadata pass is appended to all three MSVC compile rules (see
+# `obj_postprocess_cmd` in tools/project.py).  It is chained with `&&`: a
+# failure fails the compile edge.  The batch pass below STAYS -- it is
+# idempotent once the compile edge has run, and it is the only thing that
+# covers objects which never went through a compile edge (the .obj files
+# create_data_stubs.py mints).  Neither location is redundant.
+#
+# Absolute path because the compile command `cd`s into the source directory
+# first (for __FILE__), and `{obj}` is substituted with the object's own
+# absolute path.
+#
+# The script is deliberately NOT an implicit input of the 956 compile edges --
+# that would recompile the whole tree on every edit to it.  Editing it does
+# re-fire the `--batch` stamp below (configure.py derives that dependency from
+# the step's own `cmd`), and `verify_objs_patched.py --check` then asserts the
+# whole tree is a fixed point of the new logic, so a changed pass cannot leave
+# a stale object behind unnoticed; only the per-target path lags until the next
+# full `ninja`.
+config.obj_postprocess_cmd = (
+    f"$python {Path('scripts/obj_build_metadata_patcher.py').resolve()} "
+    f"--obj {{obj}}"
+)
+
 # Post-compile patchers: run after all .obj files are compiled, before linking.
 # These patch decomp .obj files to match original binary patterns.
 #
@@ -500,11 +535,19 @@ config.custom_build_steps = {
             # fails the build unless the object tree is a fixed point of all
             # six, then records a content manifest so a consumer can detect a
             # single-TU compile that bypassed the graph entirely.
+            #
+            # `--check-compile-edge` runs FIRST and covers the one thing the
+            # other two cannot see: the per-object metadata pass lives in the
+            # MSVC compile rules, and a full build would still end up
+            # normalised if that wiring were dropped (the batch pass follows
+            # it), so `--check` would stay green while the per-target path went
+            # back to measuring the wall clock.
             "outputs": str(stamp_dir / "objs_patched_verified.stamp"),
             "rule": "run_script",
             "implicit": [str(stamp_dir / "build_metadata_normalized.stamp"), "all_source"],
             "variables": {
-                "cmd": "python3 scripts/verify_objs_patched.py --check --emit",
+                "cmd": "python3 scripts/verify_objs_patched.py "
+                       "--check-compile-edge --check --emit",
                 "desc": "VERIFY every .obj carries the post-compile patches",
             },
         },

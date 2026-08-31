@@ -59,9 +59,43 @@ information rather than clock noise.  This is why the first A/B run for #150
 (main repo objects vs worktree rebuild) showed 980/989 differing for a
 *second*, unrelated reason and had to be discarded.
 
+Where this runs, and why in TWO places
+--------------------------------------
+`--batch` is the `post-compile` pass, keyed on `all_source`.  That fixed the
+FULL build and left the PER-TARGET build vacuous: `ninja <one>.obj` does not
+pull in any post-compile edge, so it handed back a raw object whose bytes
+carried the wall clock.  Two rebuilds of `TypeProps.obj` with no source edit
+gave `dfeda314...` then `e14ac6e8...`.  Any control shaped *"I edited
+something, rebuilt one object, the hash moved, therefore the mechanism works"*
+therefore PASSED WHATEVER IT WAS TESTING -- and a per-target build is exactly
+what an agent reaches for when running a quick spelling experiment.
+
+So `--obj` exists and `tools/project.py` appends it to all three MSVC compile
+rules (`msvc`, `msvc_pch`, `msvc_pch_create`), making a single-object build
+byte-reproducible at the point the object is produced.  `--batch` stays in the
+chain: it is idempotent (it finds 0 pending once the compile edge has run), and
+it still covers objects that never went through a compile edge at all -- the
+`.obj` files `scripts/create_data_stubs.py` MINTS, and any object copied in by
+hand.  Neither place is redundant; each covers a population the other does not.
+
+⚠ A per-target object is byte-STABLE, not fully PATCHED.  The other five passes
+(anon-ns, dynamic-init, guard, bool-mangle, atexit-scope) still do not run on a
+`ninja <one>.obj`; that is the older, separately documented gap, and
+`scripts/verify_objs_patched.py --verify-manifest` is what detects a tree left
+in that state.  For a fully patched single object, use
+`scripts/obj_patch_chain.py --apply --unit <rel>`.  Comparing two RAW objects
+is conservative in the safe direction: the five passes are deterministic
+functions of the object's own bytes (plus the fixed target object), so raw
+byte-equality implies patched byte-equality, while raw INequality can in
+principle survive into patched equality (an anon-namespace hash that both sides
+get overwritten with).  An inertness claim ("byte-identical") is therefore
+sound; a "my edit did something" claim from raw bytes can over-fire.
+
 Usage:
     python3 scripts/obj_build_metadata_patcher.py --batch [--apply] [--verbose]
     python3 scripts/obj_build_metadata_patcher.py --batch --check   # exit 2 if pending
+    python3 scripts/obj_build_metadata_patcher.py --obj PATH        # one object, in place
+    python3 scripts/obj_build_metadata_patcher.py --obj PATH --check # exit 2 if pending
 """
 
 import argparse
@@ -82,6 +116,54 @@ DEBUG_S_SYMBOLS = 0xF1
 S_OBJNAME = 0x1101
 #: CodeView signature this compiler emits at the head of `.debug$S`.
 CV_SIGNATURE_C13 = 4
+
+#: `IMAGE_FILE_MACHINE_POWERPCBE`.  Every one of this project's objects carries
+#: it -- verified over all 989 decomp objects and all 2,223 target objects.
+COFF_MACHINE_POWERPCBE = 0x01F2
+
+#: Exit code for "--obj was pointed at something that is not a COFF object".
+#: Distinct from 1 (missing/unreadable) and 2 (--check found pending work) so a
+#: caller can tell "the instrument had nothing to normalise" from "the
+#: instrument normalised nothing because there was nothing to do".  Without
+#: this, a zero-byte or truncated file falls straight through `plan()` -- which
+#: reads `len(data) >= 8` and a section count -- and reports the same "0 fields
+#: pending" a perfectly normalised object reports.
+EXIT_NOT_AN_OBJECT = 4
+
+
+class NotACoffObjectError(RuntimeError):
+    """`--obj` was pointed at a file that is not a PowerPC COFF object."""
+
+
+def require_coff(path: Path, data: bytes) -> None:
+    """REFUSE a file that cannot carry the fields this pass normalises.
+
+    `plan()` is deliberately permissive -- it returns `[]` for anything it
+    cannot parse, which over an empty file is indistinguishable from "already
+    normalised".  Single-object mode is wired into a compile edge, where the
+    only correct input is a real object, so it asserts that here instead of
+    inheriting the batch pass's tolerance.
+    """
+    if len(data) < 20:
+        raise NotACoffObjectError(
+            f"{path}: {len(data)} bytes -- too small to be a COFF object "
+            f"(need at least a 20-byte file header). An empty or truncated "
+            f"file reports '0 fields pending', which is the same answer a "
+            f"perfectly normalised object gives, so this is a REFUSAL rather "
+            f"than a pass.")
+    machine = struct.unpack_from("<H", data, 0)[0]
+    if machine != COFF_MACHINE_POWERPCBE:
+        raise NotACoffObjectError(
+            f"{path}: COFF machine 0x{machine:04x}, expected "
+            f"0x{COFF_MACHINE_POWERPCBE:04x} (IMAGE_FILE_MACHINE_POWERPCBE). "
+            f"This is not an object produced by this project's cl.exe.")
+    nsec = struct.unpack_from("<H", data, 2)[0]
+    if 20 + 40 * nsec > len(data):
+        raise NotACoffObjectError(
+            f"{path}: section table claims {nsec} sections "
+            f"({20 + 40 * nsec} bytes) but the file is {len(data)} bytes -- "
+            f"truncated. Every `.debug$S` this pass would have visited is "
+            f"unreachable, so it would silently normalise nothing.")
 
 
 def _debug_s_sections(data: bytes):
@@ -149,6 +231,44 @@ def normalize(data: bytes, offsets) -> bytes:
     return bytes(out)
 
 
+def process_one(args) -> int:
+    """Normalise exactly one object, in place.
+
+    SILENT on success unless `--verbose`: this runs inside every MSVC compile
+    edge, whose stdout ninja parses as `deps = msvc`, and 956 lines of chatter
+    per full build is how a diagnostic gets tuned out.  Failure is loud and
+    fails the compile edge, because it is chained with `&&`.
+    """
+    path = Path(args.obj)
+    if not path.exists():
+        print(f"ERROR: --obj {path} does not exist.", file=sys.stderr)
+        return 1
+    data = path.read_bytes()
+    try:
+        require_coff(path, data)
+    except NotACoffObjectError as exc:
+        print(f"ERROR[build_metadata]: {exc}", file=sys.stderr)
+        return EXIT_NOT_AN_OBJECT
+    offsets = plan(data)
+    if args.check:
+        if offsets:
+            print(f"FAIL[build_metadata]: {path} still carries "
+                  f"{len(offsets)} clock-derived field(s) at {offsets} "
+                  f"(offset 4 is the COFF TimeDateStamp; the rest are CodeView "
+                  f"S_OBJNAME signatures). Two builds of identical source will "
+                  f"not agree byte for byte.", file=sys.stderr)
+            return 2
+        if args.verbose:
+            print(f"[build_metadata] {path}: already normalized")
+        return 0
+    if offsets:
+        write_patched_obj(str(path), normalize(data, offsets))
+    if args.verbose:
+        print(f"[build_metadata] {path}: normalized {len(offsets)} field(s) "
+              f"at {offsets}")
+    return 0
+
+
 def process_batch(args) -> int:
     src = Path(args.src_dir) if args.src_dir else SRC_DIR
     if not src.exists():
@@ -203,14 +323,26 @@ def main() -> int:
     ap = argparse.ArgumentParser(
         description="Zero MSVC's clock-derived build metadata in decomp .obj files")
     ap.add_argument("--batch", action="store_true", help="Process all decomp .obj files")
+    ap.add_argument("--obj", help="Normalize exactly this one object, in place. "
+                                  "Used by the MSVC compile edges, so a "
+                                  "`ninja <one>.obj` is byte-reproducible. "
+                                  "Writes by default (there is no dry run to "
+                                  "default to for a single file); pair with "
+                                  "--check for the dry run.")
     ap.add_argument("--apply", action="store_true", help="Actually write (default: dry run)")
     ap.add_argument("--check", action="store_true",
                     help="Dry-run and EXIT 2 if any object still carries the metadata")
     ap.add_argument("--verbose", "-v", action="store_true")
     ap.add_argument("--src-dir", help="Decomp .obj directory (default: build/373307D9/src)")
     args = ap.parse_args()
+    if args.batch and args.obj:
+        print("ERROR: --batch and --obj are mutually exclusive.", file=sys.stderr)
+        return 1
+    if args.obj:
+        return process_one(args)
     if not args.batch:
-        print("ERROR: only --batch mode is supported.", file=sys.stderr)
+        print("ERROR: pass --batch (whole tree) or --obj PATH (one object).",
+              file=sys.stderr)
         return 1
     return process_batch(args)
 
