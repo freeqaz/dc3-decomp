@@ -215,12 +215,34 @@ typedef struct in_addr {
     } s_un;
 } IN_ADDR;
 
+/* sin_zero was declared [0], which made sizeof(sockaddr_in) 8 instead of the
+   Winsock-mandated 16.  Two consequences, and the dangerous one is not the
+   codegen: every `bind`/`connect`/`getsockname`/`recvfrom` call that passes
+   sizeof(struct sockaddr_in) as the address length let the socket layer write
+   16 bytes into an 8-byte object -- the same shape as the WSASYS_STATUS_LEN
+   defect in WSADATA below.  The visible half is an immediate: Curl_he2ai and
+   bindlocal load `li r,8` where the shipped image loads `li r,16`. */
 struct sockaddr_in {
     short sin_family;
     unsigned short sin_port;
     struct in_addr sin_addr;
-    char sin_zero[0];
+    char sin_zero[8];
 };
+
+/* Xenon is big-endian, so network byte order is host byte order and the Xbox
+   SDK's winsock header defines these as identity macros.  They are absent from
+   ham_xbox_r.map for that reason -- the shipped image has no htons/ntohs
+   symbol at all.  With no declaration in scope, connect.c / ftp.c /
+   curl_addrinfo.c emitted `bl htons` against an implicit int(), and
+   link_glue.cpp aliased htons and ntohs to __link_glue_noop.  (On PPC a
+   no-op leaf is a bare `blr`, so r3 passes through and the *value* happened to
+   survive; the call did not.) */
+#ifndef htons
+#define htons(x) ((unsigned short)(x))
+#endif
+#ifndef ntohs
+#define ntohs(x) ((unsigned short)(x))
+#endif
 
 #define _SS_MAXSIZE 128
 #define _SS_ALIGNSIZE (sizeof(long long))
