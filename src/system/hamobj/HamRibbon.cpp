@@ -370,9 +370,9 @@ void HamRibbon::ConstructMesh() {
             }
         }
 
+        RndMesh::VertVector &verts = mMesh->Verts();
         float radius = mWidth * 0.5f;
         float angleStep = 6.2831855f / mNumSides;
-        RndMesh::VertVector &verts = mMesh->Verts();
         Vector3 norm(0.0f, 0.0f, 0.0f);
 
         for (int seg = 0; seg < mNumSegments; seg++) {
