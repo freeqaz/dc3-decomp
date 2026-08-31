@@ -488,7 +488,7 @@ elif [ -x "$WORKTREE_PATH/scripts/native_configure.sh" ]; then
     echo "==> Configuring native build (so scripts/native_test.sh just works)"
     if ! ( cd "$WORKTREE_PATH" && ./scripts/native_configure.sh ) ; then
         echo "  WARN: native configure failed (non-fatal for decomp work)." >&2
-        echo "        scripts/native_test.sh here will exit 8 ('gate did not run')" >&2
+        echo "        scripts/native_test.sh here will exit 9 ('gate did not run')" >&2
         echo "        rather than report a pass. Fix the cause above to use it." >&2
     fi
 else
