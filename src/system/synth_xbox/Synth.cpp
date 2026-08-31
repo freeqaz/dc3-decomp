@@ -1,4 +1,5 @@
 #include "synth_xbox\Synth.h"
+#include "synth\CompressionEffect.h"
 #include "synth_xbox\HeadsetXferEffect.h"
 #include "FxSendBitCrush.h"
 #include "FxSendChorus.h"
@@ -494,4 +495,16 @@ StreamReader *Synth360::NewStreamDecoder(File *file, StandardStream *stream, Sym
         TheDebug.Fail(MakeString("bad decoder type: %s", ext), nullptr);
         return nullptr;
     }
+}
+
+// The target links CompressionEffect's whole CSampleXAPOBase instantiation --
+// all 18 symbols, vtables and RTTI included -- out of Synth.obj, not out of
+// FxSendCompress.obj where FxSendCompress360::CreateFx lives. So something in
+// Synth.cpp instantiated StandardEffect<CompressionEffect> first and won the
+// COMDAT. That call site has not been identified yet; until it is, instantiate
+// the registration block explicitly so this object defines the symbol the
+// target's does. The copy FxSendCompress.obj also emits folds against it.
+namespace ATG {
+template XAPO_REGISTRATION_PROPERTIES
+    CSampleXAPOBase<CompressionEffect, CompressionEffect::Params>::m_regProps;
 }

@@ -1,7 +1,7 @@
 #pragma once
 #include "xdk\xaudio2\xapobase.h"
 
-class HeadsetXferEffect;
+class __declspec(uuid("b4d4c8aa-a20d-40a1-84a7-64193551a9be")) HeadsetXferEffect;
 
 // The parameter block is a single pointer: the ctor publishes `this` through
 // SetParameters so the consumer side can reach the ring buffer below.

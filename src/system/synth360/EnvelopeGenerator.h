@@ -12,7 +12,7 @@ struct EnvelopeGeneratorParams {
     POOL_OVERLOAD(EnvelopeGeneratorParams, 0x1E);
 };
 
-class EnvelopeGenerator
+class __declspec(uuid("b4d4c8aa-a20d-40a1-84a7-64193551a9bc")) EnvelopeGenerator
     : public ATG::CSampleXAPOBase<EnvelopeGenerator, EnvelopeGeneratorParams> {
 public:
     EnvelopeGenerator();

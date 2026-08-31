@@ -497,10 +497,6 @@ extern "C" const char __link_glue_empty_str[] = "";
     linker,                                                                                                                                                                                         \
     "/ALTERNATENAME:??__E?mMicMasters@ExternalMicClientMgr@@0V?$vector@PAVExternalMicClientProxy@@V?$StlNodeAlloc@PAVExternalMicClientProxy@@@stlpmtx_std@@@stlpmtx_std@@A@@YAXXZ=__link_glue_noop" \
 )
-#pragma comment(                                                                                                                                      \
-    linker,                                                                                                                                           \
-    "/ALTERNATENAME:??__E?m_regProps@?$CSampleXAPOBase@VCompressionEffect@@UParams@1@@ATG@@0UXAPO_REGISTRATION_PROPERTIES@@A@@YAXXZ=__link_glue_noop" \
-)
 #pragma comment(linker, "/ALTERNATENAME:??__EgInput@?A0x49b544a7@@YAXXZ=__link_glue_noop")
 #pragma comment(                                                                         \
     linker, "/ALTERNATENAME:??__EgJoypadData@?A0xca10770b@@YAXXZ=__link_glue_noop"       \
@@ -510,34 +506,6 @@ extern "C" const char __link_glue_empty_str[] = "";
 #pragma comment(linker, "/ALTERNATENAME:??__Es_voiceGCInProgress@@YAXXZ=__link_glue_noop")
 // sFlipYZ: removed stub — Cam.cpp now has unconditional static initializer
 // Removed: ??__EsIdentityXfm — Env_NG.cpp now has static initializer
-#pragma comment(                                                                                                                                   \
-    linker,                                                                                                                                        \
-    "/ALTERNATENAME:??__E?m_regProps@?$CSampleXAPOBase@VBitCrushEffect@@UParams@1@@ATG@@0UXAPO_REGISTRATION_PROPERTIES@@A@@YAXXZ=__link_glue_noop" \
-)
-#pragma comment(                                                                                                                                     \
-    linker,                                                                                                                                          \
-    "/ALTERNATENAME:??__E?m_regProps@?$CSampleXAPOBase@VDistortionEffect@@UParams@1@@ATG@@0UXAPO_REGISTRATION_PROPERTIES@@A@@YAXXZ=__link_glue_noop" \
-)
-#pragma comment(                                                                                                                                \
-    linker,                                                                                                                                     \
-    "/ALTERNATENAME:??__E?m_regProps@?$CSampleXAPOBase@VDelayEffect@@UParams@1@@ATG@@0UXAPO_REGISTRATION_PROPERTIES@@A@@YAXXZ=__link_glue_noop" \
-)
-#pragma comment(                                                                                                                                  \
-    linker,                                                                                                                                       \
-    "/ALTERNATENAME:??__E?m_regProps@?$CSampleXAPOBase@VFlangerEffect@@UParams@1@@ATG@@0UXAPO_REGISTRATION_PROPERTIES@@A@@YAXXZ=__link_glue_noop" \
-)
-#pragma comment(                                                                                                                             \
-    linker,                                                                                                                                  \
-    "/ALTERNATENAME:??__E?m_regProps@?$CSampleXAPOBase@VEQEffect@@UParams@1@@ATG@@0UXAPO_REGISTRATION_PROPERTIES@@A@@YAXXZ=__link_glue_noop" \
-)
-#pragma comment(                                                                                                                              \
-    linker,                                                                                                                                   \
-    "/ALTERNATENAME:??__E?m_regProps@?$CSampleXAPOBase@VWahEffect@@UParams@1@@ATG@@0UXAPO_REGISTRATION_PROPERTIES@@A@@YAXXZ=__link_glue_noop" \
-)
-#pragma comment(                                                                                                                                          \
-    linker,                                                                                                                                               \
-    "/ALTERNATENAME:??__E?m_regProps@?$CSampleXAPOBase@VMeterEffect@@UMeterEffectParams@@@ATG@@0UXAPO_REGISTRATION_PROPERTIES@@A@@YAXXZ=__link_glue_noop" \
-)
 #pragma comment(linker, "/ALTERNATENAME:except_data_82918780=__link_glue_zero")
 
 // ============================================================================
@@ -546,30 +514,6 @@ extern "C" const char __link_glue_empty_str[] = "";
 // ============================================================================
 
 // -- Dynamic initializers (76 symbols) --
-#pragma comment(                                                                                                                                                      \
-    linker,                                                                                                                                                           \
-    "/ALTERNATENAME:??__E?m_regProps@?$CSampleXAPOBase@VEnvelopeGenerator@@UEnvelopeGeneratorParams@@@ATG@@0UXAPO_REGISTRATION_PROPERTIES@@A@@YAXXZ=__link_glue_noop" \
-)
-#pragma comment(                                                                                                                                        \
-    linker,                                                                                                                                             \
-    "/ALTERNATENAME:??__E?m_regProps@?$CSampleXAPOBase@VGainEffect@@UGainEffectParams@@@ATG@@0UXAPO_REGISTRATION_PROPERTIES@@A@@YAXXZ=__link_glue_noop" \
-)
-#pragma comment(                                                                                                                                                              \
-    linker,                                                                                                                                                                   \
-    "/ALTERNATENAME:??__E?m_regProps@?$CSampleXAPOBase@VHeadsetPlaybackEffect@@UHeadsetPlaybackEffectParams@@@ATG@@0UXAPO_REGISTRATION_PROPERTIES@@A@@YAXXZ=__link_glue_noop" \
-)
-#pragma comment(                                                                                                                                                      \
-    linker,                                                                                                                                                           \
-    "/ALTERNATENAME:??__E?m_regProps@?$CSampleXAPOBase@VHeadsetXferEffect@@UHeadsetXferEffectParams@@@ATG@@0UXAPO_REGISTRATION_PROPERTIES@@A@@YAXXZ=__link_glue_noop" \
-)
-#pragma comment(                                                                                                                                                    \
-    linker,                                                                                                                                                         \
-    "/ALTERNATENAME:??__E?m_regProps@?$CSampleXAPOBase@VPitchShiftEffect@@UPitchShiftEffectParams@@@ATG@@0UXAPO_REGISTRATION_PROPERTIES@@A@@YAXXZ=__link_glue_noop" \
-)
-#pragma comment(                                                                                                                                             \
-    linker,                                                                                                                                                  \
-    "/ALTERNATENAME:??__E?m_regProps@?$CSampleXAPOBase@VSynapseAPO@DSP@@USynapseAPOParams@2@@ATG@@0UXAPO_REGISTRATION_PROPERTIES@@A@@YAXXZ=__link_glue_noop" \
-)
 #pragma comment(linker, "/ALTERNATENAME:??__EgCrit@@YAXXZ=__link_glue_noop")
 // Removed: ??__EgChildPolys — symbol exists in matching Utl.obj
 // Removed: ??__EgParentPolys — symbol exists in matching Utl.obj

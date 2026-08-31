@@ -19,7 +19,7 @@ struct GainEffectParams {};
 //   0x40  CSampleXAPOBase::mParams[3] (3 * 1)
 //   0x44  CSampleXAPOBase::mWav       (WAVEFORMATEX, 0x12)
 // Total 0x58.
-class GainEffect : public ATG::CSampleXAPOBase<GainEffect, GainEffectParams> {
+class __declspec(uuid("b4d4c8aa-a20d-40a1-84a7-64193551a9bc")) GainEffect : public ATG::CSampleXAPOBase<GainEffect, GainEffectParams> {
     friend class MicManagerXbox;
     friend DataNode SetRemoteGain(DataArray *);
 
