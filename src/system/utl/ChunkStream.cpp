@@ -332,6 +332,14 @@ EofType ChunkStream::Eof() {
         ReadChunkAsync();
     }
 
+    {
+        int y;
+        if (mFile->ReadDone(y)) {
+            DecompressChunkAsync();
+            ReadChunkAsync();
+        }
+    }
+
     if (mCurBufOffset < (*mCurChunk & kChunkSizeMask)) {
         return NotEof;
     } else {
@@ -339,27 +347,18 @@ EofType ChunkStream::Eof() {
         if (mBuffersOffset[mCurBufferIdx] == mCurChunk) {
             mBuffersState[mCurBufferIdx] = kInvalid;
         }
-        if (mCurChunk + 1 == mChunkEnd)
+        int *next = mCurChunk + 1;
+        if (next == mChunkEnd)
             return RealEof;
         else {
-            int x;
-            if (mFile->ReadDone(x)) {
-                DecompressChunkAsync();
-                ReadChunkAsync();
-                PollDecompressionWorker();
-            }
             int idx = (mCurBufferIdx + 1) % 3;
             if (mBuffersState[idx] != kReady)
                 return TempEof;
             else {
                 mCurBufferIdx = idx;
-                mCurChunk++;
+                mCurChunk = next;
                 mCurBufOffset = 0;
                 mCurReadBuffer = mBuffers[idx];
-#ifdef HX_NATIVE
-                int chunkSz = *mCurChunk & kChunkSizeMask;
-                for (int dbg = 0; dbg < chunkSz && dbg < 8; dbg++)
-#endif
                 return NotEof;
             }
         }
