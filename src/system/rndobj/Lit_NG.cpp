@@ -60,64 +60,64 @@ RndTex *NgLight::CreateShadowTex() {
 bool NgLight::SphereConeTest(const Vector3 &sphereCenter, float sphereRadius) {
     const Transform &xfm1 = WorldXfm();
     const Transform &xfm2 = WorldXfm();
+
     Vector3 sc = sphereCenter;
+    sc -= xfm1.v;
 
-    float proj = xfm2.m.y.x * (sc.x - xfm1.v.x)
-        + xfm2.m.y.z * (sc.z - xfm1.v.z)
-        + xfm2.m.y.y * (sc.y - xfm1.v.y);
-
-    if (proj < -sphereRadius) {
+    if (xfm2.m.y.x * sc.x + xfm2.m.y.z * sc.z + xfm2.m.y.y * sc.y < -sphereRadius) {
         return false;
     }
 
     float range = mRange;
-    if (proj > range + sphereRadius) {
+    if (xfm2.m.y.x * sc.x + xfm2.m.y.z * sc.z + xfm2.m.y.y * sc.y
+        > range + sphereRadius) {
         return false;
     }
 
-    Vector3 axis = xfm2.m.y;
-    Vector3 origin = xfm1.v;
+    Vector3 axisProj = xfm2.m.y;
+    axisProj *= xfm2.m.y.x * sc.x + xfm2.m.y.z * sc.z + xfm2.m.y.y * sc.y;
 
-    Vector3 perp;
-    perp.y = (sc.y - origin.y) - axis.y * proj;
-    perp.x = (sc.x - origin.x) - axis.x * proj;
-    perp.z = (sc.z - origin.z) - axis.z * proj;
+    Vector3 perp = sc;
+    perp -= axisProj;
 
-    Normalize(perp, perp);
+    Vector3 dir = perp;
+    Normalize(dir, dir);
 
     float topR = mTopRadius;
     float botR = mBotRadius;
 
-    Vector3 perpTop = perp;
-    perpTop *= topR;
-
-    Vector3 perpBot = perp;
-    perpBot *= botR;
-
-    Vector3 topPoint = origin;
-    topPoint += perpTop;
-
+    Vector3 topPoint = xfm1.v;
+    Vector3 dirTop = dir;
+    Vector3 dirBot = dir;
+    Vector3 axisRange = xfm2.m.y;
+    Vector3 botPoint = xfm1.v;
     Vector3 toSphere = sphereCenter;
+
+    dirTop *= topR;
+    topPoint += dirTop;
+
+    axisRange *= range;
+    botPoint += axisRange;
+
     toSphere -= topPoint;
 
-    Vector3 botPoint = origin;
-    botPoint.x += (float)((double)axis.x * range);
-    botPoint.y += (float)((double)axis.y * range);
-    botPoint.z += (float)((double)axis.z * range);
-    botPoint += perpBot;
+    dirBot *= botR;
+    Vector3 conePoint = botPoint;
+    conePoint += dirBot;
 
-    Vector3 edgeDir = botPoint;
+    Vector3 closest = toSphere;
+
+    Vector3 edgeDir = conePoint;
     edgeDir -= topPoint;
 
     float t = (1.0f / Dot(edgeDir, edgeDir)) * Dot(toSphere, edgeDir);
 
-    Vector3 closest = toSphere;
-    closest.x -= t * edgeDir.x;
-    closest.y -= t * edgeDir.y;
-    closest.z -= t * edgeDir.z;
+    Vector3 scaled = edgeDir;
+    scaled *= t;
+    closest -= scaled;
 
     bool _result = true;
-    if (Dot(perp, closest) >= 0.0f) {
+    if (Dot(dir, closest) >= 0.0f) {
         _result = Length(closest) < sphereRadius;
     }
     return _result;
