@@ -74,9 +74,15 @@ def _write_map(root: Path) -> Path:
 
 
 def _make_db(path: Path, *, tool_version: str, tree_verified: int = 1,
-             ruler: str = "name_check",
+             ruler: str = "name_check", project_dir: str | None = None,
              patterns: list[tuple[str, str, str, str | None]] = ()) -> None:
-    """A minimal v17-shaped DB.  `patterns` = (symbol, pattern, fixability, details)."""
+    """A minimal v17-shaped DB.  `patterns` = (symbol, pattern, fixability, details).
+
+    `project_dir` defaults to the DB's OWN directory, which is the state
+    `check_scan_tree` requires: a scan describes the tree that owns the database
+    it lands in.  Pass a different path to build the unmoored fixture.
+    """
+    project_dir = project_dir or str(Path(path).resolve().parent)
     con = sqlite3.connect(path)
     con.executescript("""
         CREATE TABLE functions (id INTEGER PRIMARY KEY, symbol TEXT, demangled TEXT,
@@ -100,7 +106,7 @@ def _make_db(path: Path, *, tool_version: str, tree_verified: int = 1,
         con.execute(
             "INSERT INTO pattern_scans (id, ruler, tool_version, project_dir, build_rev,"
             " tree_verified, universe, examined, finished_at) VALUES (1,?,?,?,?,?,?,?,?)",
-            (ruler, tool_version, "/fake/tree", "abc1234", tree_verified,
+            (ruler, tool_version, project_dir, "abc1234", tree_verified,
              10, 10, "2026-08-22 00:00:00"))
     for i, (symbol, pattern, fixability, details) in enumerate(patterns, start=1):
         con.execute("INSERT OR IGNORE INTO functions (id, symbol, unit) VALUES (?,?,?)",
@@ -278,6 +284,179 @@ def test_verify_pattern_scan_current_check_exit_codes(tmp_path: Path):
     assert r.returncode == 0, r.stdout + r.stderr
 
 
+TRIPWIRE_TEXT = (
+    "This is NOT a database. It is a tripwire, planted by "
+    "scripts/setup_worktree.sh.\n"
+)
+
+
+def _fake_worktree(tmp_path: Path, *, main_tool_version: str,
+                   shadow: str | None = "tripwire") -> tuple[Path, Path]:
+    """A main checkout with a real decomp.db + a linked worktree beside it.
+
+    `shadow` picks what sits at `<worktree>/decomp.db`:
+      "tripwire" -- the non-SQLite file setup_worktree.sh plants;
+      "sqlite"   -- a VALID but verdict-less shadow, the shape a worktree
+                    `ninja` used to grow.  This one opens cleanly and returns
+                    no scan rows, so it reaches the same wrong diagnosis with no
+                    sqlite error to catch -- which is why the guard also checks
+                    by PATH.
+    Returns (main_db, worktree_db).
+    """
+    main = tmp_path / "main"
+    (main / ".git").mkdir(parents=True)
+    main_db = main / "decomp.db"
+    _make_db(main_db, tool_version=main_tool_version)
+
+    wt = tmp_path / "wt"
+    wt.mkdir()
+    (wt / ".git").write_text(f"gitdir: {main}/.git/worktrees/wt\n")
+    wt_db = wt / "decomp.db"
+    if shadow == "tripwire":
+        wt_db.write_text(TRIPWIRE_TEXT)
+    else:
+        _make_db(wt_db, tool_version=None)     # valid schema, zero scan rows
+    return main_db, wt_db
+
+
+@pytest.mark.parametrize("shadow", ["tripwire", "sqlite"])
+def test_a_worktree_db_is_diagnosed_as_the_wrong_database_not_a_stale_scan(
+        tmp_path: Path, shadow: str):
+    """The guard must name the condition it is actually in.
+
+    Run from a worktree, `verify_pattern_scan_current.py --check` used to report
+    `no pattern scan recorded for ruler='name_check'` -- a STALENESS verdict for
+    a WRONG-DIRECTORY condition, with a "re-derive it" command that would have
+    changed nothing.  A lane lost time to exactly that on 2026-08-31.
+
+    Both shadow shapes are covered because they fail differently: the tripwire
+    raises `file is not a database` on the first statement, while a valid shadow
+    answers the query with zero rows and no error at all.
+
+    SABOTAGE (either one turns this red):
+      * restore `except sqlite3.Error: return None` in `latest_scan` -- the
+        "tripwire" case falls back to "no pattern scan recorded", exit 1;
+      * delete the path-based shadow check at the top of `ensure_current_scan`
+        -- the "sqlite" case does the same.
+    The two negative controls below keep it from being satisfied by a guard that
+    simply exits 2 on everything.
+    """
+    installed = installed_objdiff_version(REPO_ROOT)
+    script = REPO_ROOT / "scripts" / "verify_pattern_scan_current.py"
+    main_db, wt_db = _fake_worktree(tmp_path, main_tool_version=installed,
+                                    shadow=shadow)
+
+    r = subprocess.run([sys.executable, str(script), "--db", str(wt_db), "--check"],
+                       capture_output=True, text=True)
+    assert r.returncode == 2, f"expected the wrong-DB exit code\n{r.stdout}{r.stderr}"
+    assert "UNREADABLE DATABASE" in r.stderr
+    # it must name the real database, or the diagnosis is not actionable
+    assert str(main_db) in r.stderr
+    # and it must NOT make the claim that sent the lane to the census
+    assert "no pattern scan recorded" not in r.stderr
+    assert "STALE PATTERN SCAN" not in r.stderr
+
+    # NEGATIVE CONTROL 1 -- the same script on the MAIN checkout's DB, with a
+    # genuinely stale scan, must still give the STALENESS verdict.  Without this
+    # half, a guard that returned 2 unconditionally would pass.
+    stale_main, _ = _fake_worktree(tmp_path / "b", main_tool_version=
+                                   "objdiff-cli 1.0.0 (deadbeef, xxh3 0)")
+    r = subprocess.run([sys.executable, str(script), "--db", str(stale_main), "--check"],
+                       capture_output=True, text=True)
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert "STALE PATTERN SCAN" in r.stderr
+    assert "UNREADABLE DATABASE" not in r.stderr
+
+    # NEGATIVE CONTROL 2 -- main checkout, current scan: still a clean pass.
+    r = subprocess.run([sys.executable, str(script), "--db", str(main_db), "--check"],
+                       capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_a_scan_written_from_another_tree_is_refused_and_named(tmp_path: Path):
+    """A census run from a WORKTREE must not read green from main.
+
+    `pattern_census.py --apply` from a worktree records `project_dir` = that
+    worktree.  The row lands in the shared main `decomp.db`, outlives the
+    directory and the branch, and becomes the latest scan for its ruler.
+    Measured in the real DB on 2026-08-31: four of eleven scans are of that
+    shape, three of those directories are gone, and scan 9 was latest for
+    fifteen minutes while the guard reported green.
+
+    SABOTAGE: delete the `check_scan_tree(...)` call in `ensure_current_scan`.
+    The first two halves go red.  The third half is the negative control: a scan
+    recorded against the DB's own tree must still pass, so a guard that refused
+    every scan would fail here.
+    """
+    from orchestrator.callee_gate import UnmooredPatternScanError
+    installed = installed_objdiff_version(REPO_ROOT)
+    script = REPO_ROOT / "scripts" / "verify_pattern_scan_current.py"
+
+    # A worktree path that does not exist -- the common real state (three of the
+    # four recorded worktree scans name directories that are already gone).
+    ghost = tmp_path / "wt-callee5"
+    db = tmp_path / "decomp_main.db"
+    _make_db(db, tool_version=installed, project_dir=str(ghost))
+
+    con = sqlite3.connect(db)
+    with pytest.raises(UnmooredPatternScanError) as e:
+        ensure_current_scan(con, repo_root=REPO_ROOT)
+    con.close()
+    assert str(ghost) in str(e.value)              # names the scan's tree
+    assert str(tmp_path.resolve()) in str(e.value)  # and the DB's tree
+    assert "no longer exists" in str(e.value)
+    # it must remain catchable as staleness -- sync_objdiff catches that type
+    assert isinstance(e.value, StalePatternScanError)
+
+    r = subprocess.run([sys.executable, str(script), "--db", str(db), "--check"],
+                       capture_output=True, text=True)
+    assert r.returncode == 3, r.stdout + r.stderr
+    assert "UNMOORED PATTERN SCAN" in r.stderr
+
+    # NEGATIVE CONTROL: same fixture, scan recorded against the DB's own tree.
+    ok = tmp_path / "ok" / "decomp.db"
+    ok.parent.mkdir()
+    _make_db(ok, tool_version=installed)
+    con = sqlite3.connect(ok)
+    assert ensure_current_scan(con, repo_root=REPO_ROOT)["id"] == 1
+    con.close()
+    r = subprocess.run([sys.executable, str(script), "--db", str(ok), "--check"],
+                       capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_unreadable_database_is_not_a_stale_scan_error(tmp_path: Path):
+    """The two conditions must be two exception TYPES, not two strings.
+
+    `sync_objdiff.py` branches on the type name when it reports why the gate is
+    unavailable, and a caller must be able to tell "wrong database" from
+    "re-run the census" without parsing prose.
+
+    SABOTAGE: make `UnreadableDatabaseError` subclass `StalePatternScanError`.
+    The first assertion goes red.  The second is the control: a real staleness
+    refusal must NOT be an `UnreadableDatabaseError`.
+    """
+    from orchestrator.callee_gate import UnreadableDatabaseError
+
+    assert not issubclass(UnreadableDatabaseError, StalePatternScanError)
+    assert not issubclass(StalePatternScanError, UnreadableDatabaseError)
+
+    junk = tmp_path / "not-a-db.sqlite"
+    junk.write_text("plainly not SQLite\n")
+    con = sqlite3.connect(junk)
+    with pytest.raises(UnreadableDatabaseError, match="NOT a stale scan"):
+        ensure_current_scan(con, repo_root=REPO_ROOT)
+    con.close()
+
+    # NEGATIVE CONTROL: a readable DB with an aged scan raises the OTHER type.
+    stale = tmp_path / "stale.db"
+    _make_db(stale, tool_version="objdiff-cli 1.0.0 (deadbeef, xxh3 0)")
+    con = sqlite3.connect(stale)
+    with pytest.raises(StalePatternScanError):
+        ensure_current_scan(con, repo_root=REPO_ROOT)
+    con.close()
+
+
 # --------------------------------------------------------------------------
 # the adjudicator
 # --------------------------------------------------------------------------
@@ -445,6 +624,12 @@ def test_positive_control_on_the_real_population_both_directions(tmp_path: Path)
     con.execute("UPDATE pattern_scans SET tool_version = ?, tree_verified = 1 "
                 " WHERE id = (SELECT MAX(id) FROM pattern_scans WHERE ruler='name_check')",
                 (installed_objdiff_version(REPO_ROOT),))
+    # Copying the DB out of its checkout is itself an unmoored state (see
+    # `check_scan_tree`); re-point the scan at the copy so the axis under test
+    # stays the adjudication, not the provenance.
+    con.execute("UPDATE pattern_scans SET project_dir = ? "
+                " WHERE id = (SELECT MAX(id) FROM pattern_scans WHERE ruler='name_check')",
+                (str(tmp_path.resolve()),))
     con.commit()
 
     present = {r[0] for r in con.execute(
@@ -517,6 +702,11 @@ def test_sync_objdiff_refuses_to_certify_from_a_stale_scan_end_to_end(tmp_path: 
     con = sqlite3.connect(fresh)
     con.execute("UPDATE pattern_scans SET tool_version = ?, tree_verified = 1 "
                 " WHERE ruler = 'name_check'", (installed_objdiff_version(REPO_ROOT),))
+    # The copy moved the database out of the checkout it describes, which
+    # `check_scan_tree` correctly refuses.  Re-point the scan at the copy's own
+    # directory so the ONE axis under test here stays the tool version.
+    con.execute("UPDATE pattern_scans SET project_dir = ? WHERE ruler = 'name_check'",
+                (str(tmp_path.resolve()),))
     con.commit(); con.close()
     r = subprocess.run([sys.executable, str(script), "--db", str(fresh), *argv],
                        capture_output=True, text=True)

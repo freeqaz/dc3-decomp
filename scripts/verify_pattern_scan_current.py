@@ -26,8 +26,38 @@ So the refresh stays manual and the READ refuses.  A stale scan is an exception
 naming both version strings, never a smaller result set -- and a smaller result
 set is exactly what "no wrong callees here" looks like.
 
+RUN IT FROM THE MAIN CHECKOUT -- AND IT NOW SAYS SO ITSELF
+==========================================================
+`decomp.db` deliberately does not exist in a worktree.  Until 2026-08-31 this
+script, run from one, opened the tripwire `setup_worktree.sh` plants, swallowed
+sqlite's `file is not a database`, and printed
+
+    STALE PATTERN SCAN (name_check): no pattern scan recorded for ruler=...
+
+-- a *stale-scan* diagnosis for a *wrong-directory* condition, complete with a
+"re-derive it" command that would have done nothing.  That is this project's
+recurring defect class: an instrument reporting a plausible wrong thing instead
+of refusing.  The two conditions are now separate exceptions with separate exit
+codes, and the message names the real one.
+
+A SECOND, MIRROR-IMAGE FAILURE: A SCAN *WRITTEN* FROM A WORKTREE
+================================================================
+`pattern_census.py --apply` run from a worktree records `project_dir` = that
+worktree.  The row lands in the MAIN checkout's shared `decomp.db`, outlives the
+directory it names and the branch it was taken on, becomes the latest scan for
+its ruler, and reads GREEN from main.  Four of this database's eleven scans are
+of that shape (ids 1, 5, 6, 9) and three of those four directories are already
+gone; scan 9 was the latest `name_check` scan for fifteen minutes on 2026-08-31
+and nothing surfaced it.  That is now exit 3.
+
+Exit codes:
+    0   the recorded scan was taken by the installed objdiff-cli
+    1   STALE PATTERN SCAN     -- a real staleness/provenance refusal
+    2   UNREADABLE DATABASE    -- wrong DB: worktree shadow/tripwire, or not SQLite
+    3   UNMOORED PATTERN SCAN  -- the scan was taken from a different tree
+
 Usage:
-    python3 scripts/verify_pattern_scan_current.py --check          # exit 0/1
+    python3 scripts/verify_pattern_scan_current.py --check          # exit 0/1/2
     python3 scripts/verify_pattern_scan_current.py                  # describe
     python3 scripts/verify_pattern_scan_current.py --ruler all --check
 """
@@ -41,7 +71,10 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
-from orchestrator.callee_gate import (DEFAULT_RULER, StalePatternScanError,  # noqa: E402
+from orchestrator.callee_gate import (DEFAULT_RULER,  # noqa: E402
+                                      StalePatternScanError,
+                                      UnmooredPatternScanError,
+                                      UnreadableDatabaseError,
                                       ensure_current_scan,
                                       installed_objdiff_version)
 
@@ -57,9 +90,27 @@ def main(argv=None) -> int:
                     help="exit 1 with the reason on stderr instead of describing")
     a = ap.parse_args(argv)
 
-    con = sqlite3.connect(f"file:{a.db}?mode=ro", uri=True)
+    # `sqlite3.connect(..., mode=ro)` on a non-database SUCCEEDS -- the header is
+    # not read until the first statement -- so there is nothing to catch here.
+    # The discrimination lives in `ensure_current_scan`, which knows the
+    # connection's path and the shape of the failure.
+    try:
+        con = sqlite3.connect(f"file:{a.db}?mode=ro", uri=True)
+    except sqlite3.Error as e:
+        print(f"UNREADABLE DATABASE: cannot open {a.db}: {e}", file=sys.stderr)
+        return 2
     try:
         scan = ensure_current_scan(con, ruler=a.ruler, repo_root=a.repo_root)
+    except UnreadableDatabaseError as e:
+        # NOT a staleness verdict.  Wrong database, most often because the
+        # command was run from a worktree.  Exit code differs so a caller can
+        # branch without parsing prose.
+        print(f"UNREADABLE DATABASE ({a.ruler}): {e}", file=sys.stderr)
+        return 2
+    except UnmooredPatternScanError as e:
+        # Must be caught BEFORE StalePatternScanError -- it is a subclass.
+        print(f"UNMOORED PATTERN SCAN ({a.ruler}): {e}", file=sys.stderr)
+        return 3
     except StalePatternScanError as e:
         print(f"STALE PATTERN SCAN ({a.ruler}): {e}", file=sys.stderr)
         return 1

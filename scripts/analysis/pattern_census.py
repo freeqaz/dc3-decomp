@@ -389,6 +389,24 @@ def main() -> int:
             print("--apply needs --db (the MAIN checkout's decomp.db; a worktree "
                   "has a deliberate tripwire at that path)", file=sys.stderr)
             return 2
+        # The scan must describe the tree that owns the database it lands in.
+        # `decomp.db` is a per-checkout artefact and a worktree is transient, so
+        # a row written from one outlives both the directory it names and the
+        # branch it was taken on, becomes the LATEST scan for its ruler, and
+        # reads green from main.  Four of this DB's eleven scans are of that
+        # shape (ids 1, 5, 6, 9) and three of those directories are already gone.
+        # `callee_gate.check_scan_tree` refuses to READ such a row; refusing to
+        # WRITE it is the same rule one step earlier, where the fix is cheap.
+        owner = Path(args.db).resolve().parent
+        if project_dir.resolve() != owner:
+            print(f"--apply refused: this scan describes {project_dir}, but "
+                  f"--db belongs to {owner}.\n"
+                  f"A scan recorded against another tree (typically a worktree) "
+                  f"becomes the latest scan for ruler={args.ruler} and cannot be "
+                  f"re-attached to the tree it measured.  Run the census from "
+                  f"{owner}, or keep this run's output with --out and do not "
+                  f"stamp it.", file=sys.stderr)
+            return 2
         write_scan(Path(args.db), args, res, rows_out, uni, universe, examined,
                    tree_verified, project_dir, started)
 
