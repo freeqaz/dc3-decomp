@@ -64,6 +64,11 @@ bool NgLight::SphereConeTest(const Vector3 &sphereCenter, float sphereRadius) {
     Vector3 sc = sphereCenter;
     sc -= xfm1.v;
 
+    // The projection of sc onto the cone axis is spelled out at each of its
+    // three use sites rather than named once. MSVC CSEs the three copies, but
+    // the shape of what it keeps alive across the two early-outs differs, and
+    // spelling it out is what the target's register allocation reflects
+    // (54.3% -> 57.2%; naming it costs ~3.6pp).
     if (xfm2.m.y.x * sc.x + xfm2.m.y.z * sc.z + xfm2.m.y.y * sc.y < -sphereRadius) {
         return false;
     }
