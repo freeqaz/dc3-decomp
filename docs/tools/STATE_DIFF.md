@@ -144,8 +144,13 @@ paging re-walks the dir per window and emits only the ordinals in range.
 > was never in `object_list`: `DataArray::SortNodes` hardcoded **8** as the
 > `qsort` element size — `sizeof(DataNode)` on PPC32 but **16** on LP64 native
 > — so it strided over half-nodes, and `ObjectList` ends with `SortNodes(0)`.
-> Fixed in `8c73183d`; PPC codegen verified byte-identical, so no `HX_NATIVE`
-> gate. Any DTA in the game that sorted an array was affected, not just this.
+> Fixed in `8c73183d`. No `HX_NATIVE` gate is needed, and the reason is a
+> constant-folding argument rather than a measurement: `sizeof(DataNode)` is 8
+> on PPC32 — the literal `8` it replaced — so MSVC's codegen provably cannot
+> move. (This line used to claim "PPC codegen verified byte-identical"; see the
+> method correction later in this file — that check could not have been run
+> before `ee8902a22`.) Any DTA in the game that sorted an array was affected,
+> not just this.
 
 ### Class filters take **DTA** class names, not C++ class names
 
