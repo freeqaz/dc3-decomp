@@ -356,7 +356,8 @@ void NgEnviron::Select(const Vector3 *pos) {
     }
 
     if (mUseColorAdjust) {
-        TheShaderMgr.SetPConstant4x3((PShaderConstant)0x6d, Hmx::Matrix4(ColorXfm()));
+        const Transform &colorXfm = ColorXfm();
+        TheShaderMgr.SetPConstant4x3((PShaderConstant)0x6d, Hmx::Matrix4(colorXfm));
     }
 
     if (mAOEnabled) {
