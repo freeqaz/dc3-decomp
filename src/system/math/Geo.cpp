@@ -203,8 +203,7 @@ bool CheckBSPTree(const BSPNode *node, const Box &box) {
     polygon70.points[1] = Vector2(box68.mMax.x, -box68.mMax.y);
     polygon70.points[2] = Vector2(box68.mMax.x, -box68.mMin.y);
     polygon70.points[3] = Vector2(box68.mMin.x, -box68.mMin.y);
-    float negone = -1.0f;
-    tf50.m.Set(1.0f, 0.0f, 0.0f, 0.0f, negone, 0.0f, 0.0f, 0.0f, 0.0f);
+    tf50.m.Set(1.0f, 0.0f, 0.0f, 0.0f, -1.0f, 0.0f, 0.0f, 0.0f, -1.0f);
     tf50.v.Set(0, 0, box68.mMax.z);
     if (Intersect(tf50, polygon70, node))
         return false;
@@ -216,7 +215,7 @@ bool CheckBSPTree(const BSPNode *node, const Box &box) {
     polygon70.points[1] = Vector2(box68.mMax.y, box68.mMin.z);
     polygon70.points[2] = Vector2(box68.mMax.y, box68.mMax.z);
     polygon70.points[3] = Vector2(box68.mMin.y, box68.mMax.z);
-    tf50.m.Set(1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+    tf50.m.Set(0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 0.0f);
     tf50.v.Set(box68.mMin.x, 0, 0);
     if (Intersect(tf50, polygon70, node))
         return false;
@@ -228,7 +227,7 @@ bool CheckBSPTree(const BSPNode *node, const Box &box) {
     polygon70.points[1] = Vector2(-box68.mMin.y, box68.mMin.z);
     polygon70.points[2] = Vector2(-box68.mMin.y, box68.mMax.z);
     polygon70.points[3] = Vector2(-box68.mMax.y, box68.mMax.z);
-    tf50.m.Set(1.0f, 0.0f, 0.0f, 0.0f, -1.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+    tf50.m.Set(0.0f, -1.0f, 0.0f, 0.0f, 0.0f, 1.0f, -1.0f, 0.0f, 0.0f);
     tf50.v.Set(box68.mMax.x, 0, 0);
     if (Intersect(tf50, polygon70, node))
         return false;
@@ -240,7 +239,7 @@ bool CheckBSPTree(const BSPNode *node, const Box &box) {
     polygon70.points[1] = Vector2(box68.mMax.x, box68.mMin.z);
     polygon70.points[2] = Vector2(box68.mMax.x, box68.mMax.z);
     polygon70.points[3] = Vector2(box68.mMin.x, box68.mMax.z);
-    tf50.m.Set(1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+    tf50.m.Set(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, -1.0f, 0.0f);
     tf50.v.Set(0, box68.mMax.y, 0);
     if (Intersect(tf50, polygon70, node))
         return false;
@@ -252,7 +251,7 @@ bool CheckBSPTree(const BSPNode *node, const Box &box) {
     polygon70.points[1] = Vector2(-box68.mMin.x, box68.mMin.z);
     polygon70.points[2] = Vector2(-box68.mMin.x, box68.mMax.z);
     polygon70.points[3] = Vector2(-box68.mMax.x, box68.mMax.z);
-    tf50.m.Set(-1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+    tf50.m.Set(-1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f);
     tf50.v.Set(0, box68.mMin.y, 0);
     if (Intersect(tf50, polygon70, node))
         return false;
