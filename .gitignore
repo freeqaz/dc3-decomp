@@ -70,6 +70,11 @@ archive/
 # invisible to `git status` until this was fixed) — `git mv` only got its
 # files in because a mv stages explicitly.
 !docs/archive/
+# Same trailing-slash blind spot as native/third_party below: `archive/` does
+# not match the ROOT-LEVEL SYMLINK setup_worktree.sh plants, so every worktree
+# showed `?? archive`. Anchored with a leading slash so docs/archive/ and
+# native/archive/ are untouched by this line.
+/archive
 tmp/
 logs/
 ghidra_projects/
@@ -142,6 +147,13 @@ imgui.ini
 # Native ML models and third-party installs
 native/models/
 native/third_party/
+# ...and the SYMLINKS scripts/setup_worktree.sh plants at those paths in a
+# worktree. A trailing-slash pattern matches directories only, and a symlink to
+# a directory is not a directory to gitignore — so without these anchored,
+# slash-less forms every worktree carries permanent `?? native/third_party`
+# noise and one blind `git add -A` commits a /home/free-specific symlink.
+/native/models
+/native/third_party
 
 # Wave-3 Lane B unicorn-refresh worktree artifacts (results, not source)
 /unicorn_refresh.db
