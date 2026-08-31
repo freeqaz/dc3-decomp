@@ -194,6 +194,16 @@ class ProjectConfig:
         self.pch_header: Optional[str] = None  # PCH boundary header name (e.g. "decomp_pch.h")
         self.pch_source: Optional[Path] = None  # PCH source file (e.g. Path("src/system/decomp_pch.cpp"))
         self.pch_eligible_dirs: Optional[Set[str]] = None  # Directory basenames eligible for PCH
+
+        # Command appended (with `&&`) to every MSVC compile edge, with the
+        # object's absolute path substituted for `{obj}`.  It exists so a
+        # single-object build -- `ninja build/.../Foo.obj`, which pulls in NO
+        # post-compile edge -- still produces the same bytes a full build
+        # would.  See scripts/obj_build_metadata_patcher.py: without it, two
+        # rebuilds of identical source gave different objects, and every
+        # control of the form "I changed X, the hash moved, so X matters"
+        # passed regardless.
+        self.obj_postprocess_cmd: Optional[str] = None
         self.scratch_preset_id: Optional[int] = (
             None  # Default decomp.me preset ID for scratches
         )
@@ -811,6 +821,26 @@ def generate_build_ninja(
         msvc_deps = "msvc"
     else:
         msvc_cmd_with_deps = msvc_cmd
+
+    # Per-object post-processing, INSIDE the compile edge.
+    #
+    # The post-compile patcher chain hangs off a phony keyed on `all_source`,
+    # so `ninja <one>.obj` reaches none of it and used to hand back raw
+    # compiler output.  For the five name/storage patchers that is a known,
+    # separately-guarded gap (verify_objs_patched.py --verify-manifest).  For
+    # the build-metadata pass it was worse than a gap: it made the object's
+    # HASH move on every rebuild of unchanged source, so a per-target build
+    # could not be used to test anything at all, and any control shaped "the
+    # bytes changed, therefore my edit did something" was vacuous.
+    #
+    # This is chained with `&&`, so a failure fails the compile edge -- the
+    # degraded state is loud rather than silent, which is the whole point.
+    # `$abs_out` is the object's absolute path (the command has already `cd`ed
+    # into the source directory for __FILE__), so the substitution is
+    # position-independent.
+    if config.obj_postprocess_cmd:
+        msvc_cmd_with_deps += " && " + config.obj_postprocess_cmd.replace(
+            "{obj}", "$abs_out")
 
     n.comment("MSVC build")
     n.rule(

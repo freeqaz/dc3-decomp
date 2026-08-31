@@ -39,6 +39,19 @@ Two checks, because there are two ways to reach the degraded state
     ADDR_IDENTITY witness -- can check the manifest without a toolchain and
     without parsing an object.
 
+`--check-compile-edge` (same edge, before `--check`)
+    Asserts that every MSVC compile rule in `build.ninja` still carries the
+    per-object build-metadata normalisation.  That pass is the one thing in the
+    chain that runs INSIDE the compile edge rather than after it, because
+    `ninja <one>.obj` reaches no post-compile edge and MSVC stamps the wall
+    clock into every object it writes -- so without it a per-target rebuild of
+    unchanged source yields a different hash every time, and any control of the
+    shape "I edited something, the bytes moved, therefore it matters" passes
+    regardless.  Nothing else in this repo would notice the wiring being
+    dropped: a full build would still end up normalised (the batch pass
+    follows), `--check` would still pass, and only the per-target path would
+    quietly go back to measuring the clock.
+
 The manifest is content-keyed on purpose: `scripts/obj_patch_io.py` preserves
 each object's mtime across the in-place rewrite (see its docstring for why),
 so the patch state of this tree is NOT visible in any timestamp.
@@ -102,8 +115,109 @@ MANIFEST_VERSION = 1
 EXIT_EMPTY_UNIVERSE = 3
 
 
+#: The MSVC compile rules `tools/project.py` emits.  Each must carry the
+#: per-object normalisation, or `ninja <one>.obj` goes back to being
+#: unmeasurable.  Named explicitly rather than "every rule matching msvc*" so
+#: that ADDING a compile rule without wiring it is a failure, not a silent
+#: widening of the exemption.
+COMPILE_RULES = ("msvc", "msvc_pch", "msvc_pch_create")
+
+#: What each of those commands must invoke.
+COMPILE_EDGE_PASS = "obj_build_metadata_patcher.py"
+
+#: Exit code for "the compile edges no longer carry the per-object pass".
+#: Distinct from 1 (tree drift) because the tree can be perfectly patched while
+#: this is broken -- the batch pass still runs on a full build.
+EXIT_COMPILE_EDGE = 4
+
+
 class EmptyObjectTreeError(RuntimeError):
     """`build/<version>/src` holds no objects, so nothing can be vouched for."""
+
+
+class CompileEdgeUnwiredError(RuntimeError):
+    """A `build.ninja` MSVC rule lost the per-object build-metadata pass."""
+
+
+def ninja_rule_commands(text: str) -> dict:
+    """`{rule_name: command}` for every `rule` block in a build.ninja.
+
+    Ninja continues a line with a trailing `$`, and every rule body line is
+    indented; both are handled here rather than by a regex over the raw text,
+    because the commands this checks are long enough to always be wrapped.
+    """
+    # Join ninja's `$`-continuations first, so a `command =` value that spans
+    # eight physical lines is one logical line.
+    logical, buf = [], ""
+    for raw in text.splitlines():
+        if raw.endswith("$") and not raw.endswith("$$"):
+            buf += raw[:-1]
+            continue
+        logical.append(buf + raw)
+        buf = ""
+    if buf:
+        logical.append(buf)
+
+    out, current = {}, None
+    for line in logical:
+        if line.startswith("rule "):
+            current = line[5:].strip()
+            continue
+        if not line[:1].isspace():
+            if line.strip():
+                current = None
+            continue
+        if current is None:
+            continue
+        stripped = line.strip()
+        if stripped.startswith("command"):
+            key, _, value = stripped.partition("=")
+            if key.strip() == "command":
+                out[current] = " ".join(value.split())
+    return out
+
+
+def check_compile_edge(repo: Path, quiet: bool = False) -> int:
+    """Assert every MSVC compile rule still runs the per-object pass."""
+    ninja_file = repo / "build.ninja"
+    if not ninja_file.exists():
+        print(f"REFUSE: {ninja_file} is absent, so nothing can be said about "
+              f"the compile edges. Run `python3 configure.py` first. This is a "
+              f"refusal and not a pass: an absent build.ninja contains zero "
+              f"unwired rules, which is the same count a correctly wired one "
+              f"reports.", file=sys.stderr)
+        return EXIT_COMPILE_EDGE
+    commands = ninja_rule_commands(ninja_file.read_text())
+    missing_rules = [r for r in COMPILE_RULES if r not in commands]
+    unwired = [r for r in COMPILE_RULES
+               if r in commands and COMPILE_EDGE_PASS not in commands[r]]
+    if not missing_rules and not unwired:
+        if not quiet:
+            print(f"[patch-state] compile edges wired: {len(COMPILE_RULES)} of "
+                  f"{len(COMPILE_RULES)} MSVC rules in build.ninja run "
+                  f"{COMPILE_EDGE_PASS} on their own output")
+        return 0
+    print("=" * 72, file=sys.stderr)
+    print("MSVC COMPILE EDGES NO LONGER NORMALIZE BUILD METADATA", file=sys.stderr)
+    print("=" * 72, file=sys.stderr)
+    if missing_rules:
+        print(f"  rules absent from build.ninja entirely: "
+              f"{', '.join(missing_rules)}", file=sys.stderr)
+    if unwired:
+        print(f"  rules that do not run {COMPILE_EDGE_PASS}: "
+              f"{', '.join(unwired)}", file=sys.stderr)
+    print("\nMSVC stamps the wall clock into every object it writes (COFF "
+          "TimeDateStamp, CodeView S_OBJNAME signature). The post-compile "
+          "batch pass zeroes them, but it hangs off `all_source` and a "
+          "targeted `ninja build/.../Foo.obj` reaches none of it. Without the "
+          "per-object pass in the compile rule, rebuilding ONE object from "
+          "UNCHANGED source produces a DIFFERENT hash every time -- so any "
+          "control shaped 'I edited something, the object hash moved, "
+          "therefore the mechanism works' passes whether or not it does. "
+          "Measured on TypeProps.obj: dfeda314... then e14ac6e8... .\n"
+          "Fix: restore `config.obj_postprocess_cmd` in configure.py and "
+          "re-run `python3 configure.py`.", file=sys.stderr)
+    return EXIT_COMPILE_EDGE
 
 
 def src_dir(repo: Path) -> Path:
@@ -282,6 +396,9 @@ def main() -> int:
     ap.add_argument("--repo", default=str(REPO), help="repo root (default: this checkout)")
     ap.add_argument("--check", action="store_true",
                     help="dry-run every patcher; fail if the tree is not a fixed point")
+    ap.add_argument("--check-compile-edge", action="store_true",
+                    help="fail if build.ninja's MSVC rules no longer run the "
+                         "per-object build-metadata pass")
     ap.add_argument("--emit", action="store_true",
                     help="write build/<version>/patch_state.json")
     ap.add_argument("--verify-manifest", action="store_true",
@@ -289,9 +406,13 @@ def main() -> int:
     ap.add_argument("--quiet", action="store_true")
     a = ap.parse_args()
     repo = Path(a.repo).resolve()
-    if not (a.check or a.emit or a.verify_manifest):
+    if not (a.check or a.emit or a.verify_manifest or a.check_compile_edge):
         a.check = a.emit = True
     rc = 0
+    if a.check_compile_edge:
+        rc = check_compile_edge(repo, quiet=a.quiet)
+        if rc:
+            return rc
     try:
         if a.check:
             rc = run_check(repo)
