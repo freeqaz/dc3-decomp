@@ -112,6 +112,12 @@ BEGIN_HANDLERS(Synth360)
     HANDLE_SUPERCLASS(Synth)
 END_HANDLERS
 
+// Not reconstructed (0x564 bytes at 0x82E30650). It builds the LevelData table,
+// calls XAudio2Create, creates the mastering voice and attaches its effect chain
+// -- a StandardEffect<CompressionEffect> plus a MeterEffect -- then reads the
+// limiter settings out of SystemConfig("limiter", "synth"). See the note at the
+// bottom of this file: this stub is why CompressionEffect's instantiation has to
+// be forced by hand here.
 void Synth360::PreInit() {}
 
 void Synth360::Poll() {
@@ -499,11 +505,30 @@ StreamReader *Synth360::NewStreamDecoder(File *file, StandardStream *stream, Sym
 
 // The target links CompressionEffect's whole CSampleXAPOBase instantiation --
 // all 18 symbols, vtables and RTTI included -- out of Synth.obj, not out of
-// FxSendCompress.obj where FxSendCompress360::CreateFx lives. So something in
-// Synth.cpp instantiated StandardEffect<CompressionEffect> first and won the
-// COMDAT. That call site has not been identified yet; until it is, instantiate
-// the registration block explicitly so this object defines the symbol the
-// target's does. The copy FxSendCompress.obj also emits folds against it.
+// FxSendCompress.obj where FxSendCompress360::CreateFx lives.
+//
+// THE CALL SITE IS Synth360::PreInit, which is still a stub above. In the target
+// it builds the master voice's effect chain, and its first descriptor is a
+// heap-allocated StandardEffect<CompressionEffect> -- the "limiter":
+//
+//     82E3075C  li      r3, 0xd4                    ; sizeof(StandardEffect<CompressionEffect>)
+//     82E30760  bl      ??2@YAPAXI@Z                ; operator new
+//     82E30774  bl      ??0?$StandardEffect@VCompressionEffect@@@@QAA@XZ
+//     82E30788  stw     r3,  0x80(r31)              ; desc.pEffect
+//     82E3078C  stw     r29, 0x84(r31)              ; desc.InitialState = 1
+//     82E30794  stw     r28, 0x88(r31)              ; desc.OutputChannels = 6
+//
+// (the next descriptor is a MeterEffect, `li r3, 0x94` at 82E30790, and the
+// chain is followed by the SystemConfig("limiter", "synth") reads at 82E30804).
+// That is the only reference to the class anywhere in Synth.obj, and it is why
+// Synth.obj wins the COMDAT for the whole instantiation: FxSendCompress360::
+// CreateFx only emits a folding copy. It is NOT a factory, a registration table
+// or a sizeof -- it is one `new` in the master chain.
+//
+// Synth360::PreInit is 0x564 bytes and is not reconstructed, so the reference
+// does not exist in this build yet. Until it does, instantiate the registration
+// block explicitly so this object defines the symbol the target's does. THIS IS
+// A PLACEHOLDER FOR PreInit, not source truth -- delete it when PreInit lands.
 namespace ATG {
 template XAPO_REGISTRATION_PROPERTIES
     CSampleXAPOBase<CompressionEffect, CompressionEffect::Params>::m_regProps;
