@@ -623,6 +623,26 @@ restore the natural order.
 
 These cost real hours. They are recorded so the next person does not repeat them.
 
+> ### ⚠️ Method correction (2026-08-31) — read before quoting "byte-identical" out of this table
+>
+> **What these rows measured was `run_objdiff`, not object bytes.** Every "Byte-identical `.obj`" in this file (and in the eleven restatements across `fixable-declarations.md`, `unfixable-compiler.md`, `PERMUTER_ROI_ANALYSIS.md`, `at-limit-systemic.md` and `INDEX.md`) is a rhetorical restatement of *"same normalized score, same mismatch set"*. It was never a `sha256sum`, and it could not have been: until `ee8902a22` (2026-08-31) MSVC stamped a clock-derived COFF `TimeDateStamp` and CodeView `S_OBJNAME` signature into every object, so **980 of 989 objects differed on every rebuild** and a literal byte A/B would have said "differs" every single time. The substitution matters, because objdiff's normalized ruler forgives **register permutation and relocation names** — an edit can change the object materially and score identically (see [relocation-names-are-unmetered.md](relocation-names-are-unmetered.md) and [rounded-100-hides-real-bugs.md](rounded-100-hides-real-bugs.md)). So as written these rows claimed more than they measured.
+>
+> **Re-established at the byte level, for the first time, on a post-`ee8902a22` tree.** Worktree at `ee8902a22`, full `ninja` first, then per-target rebuilds, each object hashed with the two clock fields zeroed (`obj_build_metadata_patcher.plan()`/`.normalize()` — the same normalization the post-compile pass writes). Every step below carries its own sabotage control, because a bare `sha256sum` on a per-target build is *still* a test that cannot fail: `ninja <one>.obj` does not run the post-compile patchers, so the raw hash is clock noise to this day.
+>
+> | Function | Edit | masked sha256 | verdict |
+> |---|---|---|---|
+> | `ObjectDir::Iterate` (`Dir.obj`) | baseline, no edit | `49b0396d0def81c6` | — |
+> | | swap `Symbol s2;` / `Symbol s8;` | `49b0396d0def81c6` | **genuinely inert** |
+> | | + hoist `Symbol first;` above `DataNode *var` | `49b0396d0def81c6` | **genuinely inert** |
+> | | *sabotage:* `arr->Var(3)` → `Var(2)` | `d6e396a3ae4e929d` | instrument works |
+> | | restore | `49b0396d0def81c6` | reverses cleanly |
+> | `LabelShrinkWrapper::UpdateAndDrawWrapper` | baseline, no edit | `0aec645977d018bb` | — |
+> | | reorder both 3-term flat sums | `0aec645977d018bb` | **genuinely inert** |
+> | | *sabotage:* one `+` → `-` | `35eb83dd63af05d0` | instrument works |
+> | | restore | `0aec645977d018bb` | reverses cleanly |
+>
+> **So the conclusions stand and the routing rules below are safe to follow** — declaration reorder and flat-sum term order really are no-ops on these functions, at the level of actual emitted object bytes. What was wrong was the *evidence*, not the answer. Note the scope: this re-establishes the two named functions, not the full "12+ variants across three functions" population, which remains objdiff-measured.
+
 | Function | Lever tried | Variants | Result |
 |----------|-------------|---------:|--------|
 | `ObjectDir::Iterate` | Declaration reorder / scope moves of `{var, b, arr, s2, first, key}` | 6 | **Byte-identical `.obj`** — not "no improvement", literally the same bytes |

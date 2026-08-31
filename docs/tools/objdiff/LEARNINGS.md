@@ -163,8 +163,12 @@ bool HasData() { return data ? true : false; }        // Still generates clrlwi
 > `RndTransformable::Load` reached byte-exact 100% with 54 swapped instructions across 8
 > pairs and **not one register-motivated edit**.
 >
-> Declaration reorder — Attempts 1-3 below — was measured **byte-identical** across 12+
-> variants on three functions. Start at
+> Declaration reorder — Attempts 1-3 below — was measured **inert** across 12+
+> variants on three functions: same `run_objdiff` score, same mismatch set. (This line
+> used to say "byte-identical"; corrected 2026-08-31 — the measurement was objdiff, not
+> object bytes, and a real byte A/B was not obtainable before `ee8902a22`. The
+> conclusion holds, and two of the functions have since been re-established at the byte
+> level — see the method-correction block in `fixable-liveness.md`.) Start at
 > [fixable-liveness.md: Diagnostic Order](../../decomp/patterns/fixable-liveness.md#diagnostic-order-for-a-register-swap-residual)
 > instead, and treat the reorder attempts as the *stack-slot* lever they actually are
 > (reach for them when `OFFSET_SWAP` / `[off:-N]` diffs are also present).

@@ -291,6 +291,37 @@ sizes: 6349 6349        differing byte count: 2
 Neither reaches any measurement. **If the old ±160 figure is ever quoted again,
 it should be quoted as historical.**
 
+> ### ⚠️ CORRECTION (2026-08-31): this diff under-counted, and the under-count mattered
+>
+> **`differing byte count: 2` is wrong — it is at least 3, and the third field is the
+> one that made the whole thing a *same-tree* problem rather than a cross-path
+> curiosity.** This object carries a clock-derived **CodeView `S_OBJNAME` signature
+> word** in `.debug$S`, which this diff did not report. Verified directly on
+> 2026-08-31: `objname_signature_offsets()` finds it in `keygen_xbox.obj` at file
+> offset **`0x1e8`** — 37 bytes *before* the `0x20d` the table above stops at, because
+> `0x20d` is 33 bytes into `S_OBJNAME`'s *name* field. The differ found the path and
+> did not walk back to the record header. (Second tell nobody chased: `TimeDateStamp`
+> is a 4-byte field at offsets 4–7, and the companion audit at
+> `docs/investigations/2026-06-10-roadmap-to-100/10-build-env-audit.md` reported it as
+> "3 bytes at offsets 4-6" — a summarising differ, not an exhaustive one.)
+>
+> **Consequence.** The story this section tells is "the two differing fields are the
+> clock and *the path*, so it only bites across worktrees." The real second field is
+> also clock-derived, so **two rebuilds in the same tree at the same path differed
+> too** — measured 2026-08-31 as **980 of 989 objects**, the 9 survivors being exactly
+> the ones ninja did not rebuild. Fixed at the cause in `ee8902a22` by a sixth
+> post-compile pass (`scripts/obj_build_metadata_patcher.py`) that zeroes both fields;
+> after it, 0 of 989 differ and `tree_sha256` is stable across rebuilds.
+>
+> **What survives, and what does not.** The section's *headline* survives on its own
+> evidence: `cmp`-identical `report.json`, 0 of 48,344 functions differing, is an
+> objdiff-score comparison that neither field can reach. What does not survive is the
+> licence this paragraph granted for twelve days — that object-byte churn was fully
+> understood and bounded at "2 bytes, one of them the path". It was not, and in that
+> window every byte-identity A/B spanning an MSVC recompile was unsound in one
+> direction and unmeasurable in the other. See the population audit in `CLAUDE.md`
+> ("A PCH-reached header has NO per-TU dependency record") for the corrected method.
+
 ### 2. `run_objdiff` percent honesty
 
 The formatter is live and demonstrably in the path. The exact function named in
@@ -387,6 +418,31 @@ is documented in the right place — `docs/tools/BUILD_SYSTEM.md` names
 **Operationally important and not obvious:** `run_objdiff`'s own
 "Building incremental" *is* that path. After seven measurements my worktree had
 seven un-patched objects. Measuring degrades the tree you are measuring.
+
+> ### ⚠️ CORRECTION (2026-08-31): the transcript above is a vacuous positive control
+>
+> `--verify-manifest` is a whole-file sha256 of every `.obj` against `patch_state.json`.
+> Pre-`ee8902a22`, **any** `ninja <one>.obj` changed that object's hash unconditionally —
+> the COFF `TimeDateStamp` and the CodeView `S_OBJNAME` signature are clock-derived — so
+> the transcript would have printed `content differs` **even if the patchers had run
+> perfectly**. The demonstration could not have failed, and "seven un-patched objects" is,
+> on this evidence alone, only "seven recompiled objects". The audit's own verdict row
+> flagged the *magnitude* as `NO-CONTROL`; the **direction** was not flagged, and that is
+> the part that made the check unfalsifiable.
+>
+> **The conclusion survives on independent evidence** — the single-object path really does
+> skip the patchers, proven at the symbol level rather than by hashing: 224 unpromoted
+> `??__E` symbols across 125 objects, a static guard's storage class left at 3 instead of
+> 2, and 13 missing `??__F` atexit renames (`docs/tools/BUILD_SYSTEM.md`,
+> `docs/analysis/2026-08-20-tool-gap-inventory.md`). Those are specific, named, and no
+> clock can manufacture them.
+>
+> **The guard is also now more precise than it was**, since `ee8902a22` added
+> `obj_build_metadata_patcher` as `PATCHERS[5]` and a full `ninja` leaves both fields
+> zeroed: a `content differs` today is much closer to meaning what it says. It still is
+> not exact — the manifest is rewritten by `--emit` on the same ninja edge — and
+> `--verify-manifest` has **no test anywhere in the repo**, so by this project's own rule
+> it is a guard nobody has watched fail.
 
 **The "~0.5 pp low" magnitude is NO-CONTROL.** On the one unit I could exercise
 end to end, the reading was **identical** patched vs unpatched (80.4% both

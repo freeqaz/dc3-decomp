@@ -157,6 +157,21 @@ original line.
 **Proof:** built `PanelDir.obj` from `HEAD` source and from the edited source with the
 same ninja rule; the two objs are **byte-identical after zeroing the COFF TimeDateStamp**
 (357,288 bytes each, only the timestamp word differs). The PPC machine code is unchanged.
+
+⚠️ **The proof as stated could not have been run (corrected 2026-08-31); the claim is
+nevertheless sound, on the argument in the paragraph above rather than on this
+measurement.** `PanelDir.obj` carries a *second* clock-derived field — the CodeView
+`S_OBJNAME` signature word in `.debug$S`, verified 2026-08-31 at file offset `0xca38` —
+so two builds seconds apart must have differed in **two** words, not one, and zeroing
+only the `TimeDateStamp` could not have produced equality. Either a second masked field
+went unrecorded or the comparison was not whole-file; the masking tool is not named, so
+it cannot be reconstructed. **What actually licenses "no PPC regression" here is the
+preceding sentence, which is airtight and needs no build:** the edit is entirely inside
+`#ifdef HX_NATIVE`, and MSVC never defines `HX_NATIVE`, so the compiler cannot see it.
+Cite that. If a future edit needs a real object-byte neutrality proof, note that until
+`ee8902a22` one was not obtainable at all (980 of 989 objects differed on every rebuild);
+post-fix, compare after a full `ninja`, or zero **both** fields with
+`scripts/obj_build_metadata_patcher.py`'s `plan()`/`normalize()`.
 (An apparent 98.8% vs 99.2% objdiff reading between the worktree and main planes is a
 fresh-worktree PCH/header-order build artifact — it reproduces identically for the HEAD
 source and is not caused by this change.)

@@ -747,7 +747,18 @@ corrupted arrays that did not crash, and only ever covered half the array.
 `{object_list <dir> <Class> TRUE}` SIGSEGVed and three of them killed the
 engine. The blast radius is much wider than this tool: **any** in-game DTA that
 sorted an array was affected. Fixed with `sizeof(DataNode)`; PPC codegen
-verified byte-identical at the object-file level, so no `HX_NATIVE` gate.
+verified unmoved by `run_objdiff`, so no `HX_NATIVE` gate.
+
+> **Method correction (2026-08-31).** This used to read *"verified byte-identical
+> at the object-file level"*. That check could not have been run: until
+> `ee8902a22`, MSVC stamped a clock-derived COFF `TimeDateStamp` and CodeView
+> `S_OBJNAME` signature into every object, so 980 of 989 objects differed on every
+> rebuild and an object-file comparison would have said "differs" unconditionally.
+> The ruler that was actually available, and that the gate waiver should cite, is
+> objdiff. **The waiver itself is not in doubt** — `sizeof(DataNode)` is 8 on
+> PPC32, which is the literal `8` it replaced, so the codegen provably cannot
+> move; the bug was LP64-only, where `sizeof(DataNode)` is 16. State it that way:
+> a constant-folding argument beats a hash here, and it is checkable by reading.
 `object_list` is now this tool's default enumeration primitive.
 
 **0b. Not a bug: `iterate` "returning zero" against a `PanelDir`.** Reported
