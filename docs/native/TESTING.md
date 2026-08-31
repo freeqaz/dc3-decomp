@@ -2,13 +2,32 @@
 
 ## Framework
 
-Tests use [Google Test](https://google.github.io/googletest/) with `gtest_discover_tests`. Build and run:
+Tests use [Google Test](https://google.github.io/googletest/) with `gtest_discover_tests`.
+
+**Run the suite through the wrapper, never bare `ctest`** — `ctest` scores skipped
+tests as passed and prints "100% tests passed" either way:
 
 ```bash
-cd native/build && cmake .. && cmake --build .
-./milo-tests                              # Run all tests
-./milo-tests --gtest_filter='Suite.Test'  # Run specific test
-./milo-tests --gtest_list_tests           # List available tests
+scripts/native_test.sh                    # configures if needed, builds, runs, reports skips
+```
+
+It configures a missing build dir automatically (via `scripts/native_configure.sh`,
+which derives `Dawn_DIR` and the rest from the main checkout), so this works in a
+fresh worktree with no manual steps. If it cannot configure one it exits **9** —
+"NATIVE GATE DID NOT RUN" — rather than a generic failure, because a run that
+examined zero tests must not be reportable as a pass. See the exit-code table in
+the script header.
+
+To configure or drive the binary by hand:
+
+```bash
+scripts/native_configure.sh               # cmake configure; NOT plain `cmake ..`
+                                          # (find_package(Dawn REQUIRED) needs -DDawn_DIR)
+cmake --build native/build --target milo-tests
+cd orig-assets                            # tests resolve assets relative to cwd
+../native/build/milo-tests                            # Run all tests
+../native/build/milo-tests --gtest_filter='Suite.Test' # Run specific test
+../native/build/milo-tests --gtest_list_tests         # List available tests
 ```
 
 ## Fixture Hierarchy
