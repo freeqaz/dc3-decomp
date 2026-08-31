@@ -360,13 +360,13 @@ void HamRibbon::ConstructMesh() {
             int base = seg * mNumSides * 2;
             for (int side = 0; side < mNumSides; side++) {
                 int nextSide = (side + 1) % mNumSides;
-                int idx = base + side;
-                int nextIdx = base + nextSide;
+                unsigned short idx = base + side;
+                unsigned short nextIdx = base + nextSide;
+                unsigned short nextIdxUp = mNumSides + (base + nextSide);
+                unsigned short idxUp = (base + side) + mNumSides;
                 int faceIdx = base + side * 2;
-                mMesh->Faces()[faceIdx].Set(idx, nextIdx, mNumSides + nextIdx);
-                mMesh->Faces()[faceIdx + 1].Set(
-                    mNumSides + nextIdx, idx + mNumSides, idx
-                );
+                mMesh->Faces()[faceIdx].Set(idx, nextIdx, nextIdxUp);
+                mMesh->Faces()[faceIdx + 1].Set(nextIdxUp, idxUp, idx);
             }
         }
 
