@@ -845,25 +845,22 @@ void RndAmbientOcclusion::SmoothResults(RndMesh *mesh) const {
             unsigned short i2 = face.v3;
 
             // Average position of the 3 face vertices
+            const Vector3 &p0 = mesh->Verts(i0).pos;
+            const Vector3 &p1 = mesh->Verts(i1).pos;
+            const Vector3 &p2 = mesh->Verts(i2).pos;
             Vector3 center;
-            center.z = ((mesh->Verts(i2).pos.z
-                         + (mesh->Verts(i1).pos.z + mesh->Verts(i0).pos.z)))
-                * oneThird;
-            center.y = ((mesh->Verts(i2).pos.y
-                         + (mesh->Verts(i1).pos.y + mesh->Verts(i0).pos.y)))
-                * oneThird;
-            center.x = ((mesh->Verts(i2).pos.x
-                         + (mesh->Verts(i1).pos.x + mesh->Verts(i0).pos.x)))
-                * oneThird;
+            center.z = (p2.z + (p1.z + p0.z)) * oneThird;
+            center.y = (p2.y + (p1.y + p0.y)) * oneThird;
+            center.x = (p2.x + (p1.x + p0.x)) * oneThird;
 
             // Average normal of the 3 face vertices
+            const Vector3 &n0 = mesh->Verts(i0).norm;
+            const Vector3 &n1 = mesh->Verts(i1).norm;
+            const Vector3 &n2 = mesh->Verts(i2).norm;
             Vector3 faceNorm;
-            faceNorm.z = mesh->Verts(i2).norm.z
-                + (mesh->Verts(i1).norm.z + mesh->Verts(i0).norm.z);
-            faceNorm.y = mesh->Verts(i2).norm.y
-                + (mesh->Verts(i1).norm.y + mesh->Verts(i0).norm.y);
-            faceNorm.x = mesh->Verts(i2).norm.x
-                + (mesh->Verts(i1).norm.x + mesh->Verts(i0).norm.x);
+            faceNorm.z = n2.z + (n1.z + n0.z);
+            faceNorm.y = n2.y + (n1.y + n0.y);
+            faceNorm.x = n2.x + (n1.x + n0.x);
             Normalize(faceNorm, faceNorm);
 
             // Transform to world space and calculate AO
