@@ -357,60 +357,57 @@ void HamRibbon::ConstructMesh() {
         mMesh->Faces().resize(mNumSides * mNumSegments * 2);
 
         for (int seg = 0; seg < mNumSegments; seg++) {
+            int base = seg * mNumSides * 2;
             for (int side = 0; side < mNumSides; side++) {
                 int nextSide = (side + 1) % mNumSides;
-                int base = seg * mNumSides * 2;
-
-                int faceIdx = (seg * mNumSides + side) * 2;
-                mMesh->Faces()[faceIdx].v1 = base + side;
-                mMesh->Faces()[faceIdx].v2 = base + nextSide;
-                mMesh->Faces()[faceIdx].v3 = base + mNumSides + nextSide;
-
-                int faceIdx1 = faceIdx + 1;
-                mMesh->Faces()[faceIdx1].v1 = base + mNumSides + nextSide;
-                mMesh->Faces()[faceIdx1].v2 = base + mNumSides + side;
-                mMesh->Faces()[faceIdx1].v3 = base + side;
+                int idx = base + side;
+                int nextIdx = base + nextSide;
+                int nextIdxUp = mNumSides + nextIdx;
+                int idxUp = idx + mNumSides;
+                int faceIdx = base + side * 2;
+                mMesh->Faces()[faceIdx].Set(idx, nextIdx, nextIdxUp);
+                mMesh->Faces()[faceIdx + 1].Set(nextIdxUp, idxUp, idx);
             }
         }
 
-        float angleStep = 6.2831855f / mNumSides;
+        RndMesh::VertVector &verts = mMesh->Verts();
         float radius = mWidth * 0.5f;
-        float uStep = 1.0f / mNumSides;
-        Vector3 zeroVec(0.0f, 0.0f, 0.0f);
+        float angleStep = 6.2831855f / mNumSides;
+        Vector3 norm(0.0f, 0.0f, 0.0f);
 
         for (int seg = 0; seg < mNumSegments; seg++) {
-            for (int side = 0; side < mNumSides; side++) {
+            float uStep = 1.0f / mNumSides;
+            int vertBase = seg * mNumSides * 2;
+            for (int side = 0; side < mNumSides; side++, vertBase++) {
+                Vector4 boneWeights(1.0f, 0.0f, 0.0f, 0.0f);
                 float angle = side * angleStep;
                 float u = side * uStep;
-                Vector3 norm;
 
                 for (int v = 0; v < 2; v++) {
-                    int vertIdx = seg * mNumSides * 2 + v * mNumSides + side;
-
-                    Transform xfm = Transform::IDXfm();
+                    int vertIdx = mNumSides * v + vertBase;
+                    int boneIdx = mMesh->NumBones() - 1;
+                    if (seg + v <= boneIdx) {
+                        boneIdx = Max(seg + v, 0);
+                    }
 
                     float cosA = std::cos(angle);
                     float sinA = std::sin(angle);
 
-                    float scale = (v == 0) ? 1.0f : (0.5f - u);
-                    Vector3 pos(sinA * radius * scale, 0.0f, cosA * radius * scale);
+                    Vector3 pos(sinA * radius, 0.0f, cosA * radius);
+                    Transform xfm = Transform::IDXfm();
                     Multiply(pos, xfm, pos);
 
-                    mMesh->Verts()[vertIdx].pos = pos;
+                    verts[vertIdx].pos = pos;
 
                     if (v == 0) {
-                        Subtract(pos, zeroVec, norm);
+                        Subtract(pos, xfm.v, norm);
                         Normalize(norm, norm);
                     }
-                    mMesh->Verts()[vertIdx].norm = norm;
+                    verts[vertIdx].norm = norm;
 
-                    int boneIdx = mMesh->NumBones() - 1;
-                    if (seg + v <= boneIdx) {
-                        boneIdx = seg + v;
-                    }
-                    mMesh->Verts()[vertIdx].boneIndices[0] = (short)boneIdx;
-                    mMesh->Verts()[vertIdx].tex.x = (float)boneIdx / (float)mNumSegments;
-                    mMesh->Verts()[vertIdx].tex.y = u;
+                    verts[vertIdx].boneIndices[0] = (short)boneIdx;
+                    verts[vertIdx].boneWeights = boneWeights;
+                    verts[vertIdx].tex.Set((float)boneIdx / (float)mNumSegments, u);
                 }
             }
         }
