@@ -1769,12 +1769,26 @@ def generate_build_ninja(
         # objects afterwards -- and objdiff reads the PATCHED objects.
         #
         # Having bought quiescence structurally, the edge spends it:
-        # `--ordered-after-compile` turns OFF the checker's out-of-ninja
-        # tolerance for a build in flight, so a genuine task-#142 object is
-        # reported as exit 1 naming the unit rather than as exit 6
-        # "indeterminate". The flag and these two order-only deps are only
-        # correct together, and tests/test_complete_units.py parses the
-        # generated build.ninja to assert they stay together.
+        # `--ordered-after-compile` turns OFF the checker's tolerance for a
+        # build in flight, so a genuine task-#142 object is reported as exit 1
+        # naming the unit rather than as exit 6 "indeterminate". The flag and
+        # these two order-only deps are only correct together, and
+        # tests/test_complete_units.py parses the generated build.ninja to
+        # assert they stay together.
+        #
+        # SCOPE, fixed 2026-08-31 (#149 residual): what these deps buy is
+        # quiescence with respect to THIS ninja, and that is all the flag is
+        # now allowed to assert. A SECOND ninja building the same tree -- a
+        # concurrent lane in the shared main checkout -- is not ordered by this
+        # graph and its 58 ms zero-byte windows still reach the checker. The
+        # flag used to excuse those too, which is how a lone red appeared
+        # during a concurrent lane's build: measured by polling the checker
+        # through one in-flight build, 446 polls, 190 exit-1 false reds with
+        # the flag against 185 correct exit-6 refusals without it. The checker
+        # now excuses only ninjas that are ANCESTORS of the checking process
+        # (verify_complete_units.foreign_builds), so this edge keeps its strict
+        # answer -- 8 of 8 parallel builds clean, guard confirmed to have run
+        # in all 8 -- and a foreign build gets exit 6 rather than a false red.
         ###
         n.comment("Assert every `complete: true` unit has a base object")
         n.rule(
