@@ -880,9 +880,11 @@ void RndAmbientOcclusion::SmoothResults(RndMesh *mesh) const {
             int equiv = 0;
             if (0 < v) {
                 do {
-                    float dx = mesh->Verts(v).pos.x - mesh->Verts(equiv).pos.x;
-                    float dy = mesh->Verts(v).pos.y - mesh->Verts(equiv).pos.y;
-                    float dz = mesh->Verts(v).pos.z - mesh->Verts(equiv).pos.z;
+                    const Vector3 &posV = mesh->Verts(v).pos;
+                    const Vector3 &posE = mesh->Verts(equiv).pos;
+                    float dx = posV.x - posE.x;
+                    float dy = posV.y - posE.y;
+                    float dz = posV.z - posE.z;
                     if (dx * dx + dy * dy + dz * dz <= 0.001f)
                         break;
                     equiv++;
