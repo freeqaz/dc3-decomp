@@ -228,8 +228,140 @@ void NgEnviron::Select(const Vector3 *pos) {
     }
 
     ReclassifyLights();
+
+    NgLight *pointLights[3];
+    NgLight *projLights[1];
+    int numPoint = 0;
+    int numProj = 0;
+    for (ObjPtrList<RndLight>::iterator it = mLightsReal.begin();
+         it != mLightsReal.end();
+         ++it) {
+        NgLight *light = (NgLight *)(RndLight *)*it;
+        RndLight::Type type = light->GetType();
+        if (type == RndLight::kPoint) {
+            if (numPoint < 3 && CheckPointLight(*light)) {
+                pointLights[numPoint++] = light;
+            }
+        } else if (type == RndLight::kFakeSpot) {
+            if (numProj < 1 && CheckProjLight(*light)) {
+                if (numProj == 0) {
+                    mProjectedBlend =
+                        (RndLight::ProjectedBlend)light->GetProjectedBlend();
+                } else if (mProjectedBlend != light->GetProjectedBlend()) {
+                    MILO_NOTIFY(
+                        "%s: projected light has different blend mode than another light already in the environment (%s)",
+                        light->Name(),
+                        PathName(this)
+                    );
+                }
+                projLights[numProj++] = light;
+            }
+        } else {
+            MILO_NOTIFY_ONCE("%s: Invalid real light", PathName(light));
+        }
+    }
+
     RndEnviron::Select(pos);
+    ClearPointCubeTex();
+    ClearLightTransforms();
+    for (int i = 0; i < 4; i++) {
+        ClearLightRegisters(i);
+    }
+
+    int projLightIdx = 3;
+    for (int i = 0; i < numProj; i++) {
+        if (SetProjLightRegisters(projLightIdx, projLightIdx - 3, *projLights[i])) {
+            mNumLightsProj++;
+            mNumLightsReal++;
+        }
+        projLightIdx--;
+    }
+
+    for (int i = 0; i < numPoint; i++) {
+        bool hasPointCubeTex;
+        if (SetPointLightRegisters(mNumLightsPoint, *pointLights[i], hasPointCubeTex)) {
+            mNumLightsPoint++;
+            mNumLightsReal++;
+            if (hasPointCubeTex) {
+                mHasPointCubeTex = true;
+            }
+        }
+    }
+
+    UpdateApproxLighting(pos);
     NgMat::SetCurrent(0);
-    TheNgStats->mLightsApprox += mNumLightsApprox;
     TheNgStats->mLightsReal += mNumLightsReal;
+    TheNgStats->mLightsApprox += mNumLightsApprox;
+
+    if (FogEnable()) {
+        Vector4 fogParams(FogEnd(), 1.0f / (FogEnd() - FogStart()), 0.0f, 1.0f);
+        TheShaderMgr.SetVConstant((VShaderConstant)0x5b, fogParams);
+        const Hmx::Color &fogColor = FogColor();
+        Vector4 fogColorVec(fogColor.red, fogColor.green, fogColor.blue, fogColor.alpha);
+        TheShaderMgr.SetPConstant((PShaderConstant)0x5a, fogColorVec);
+    } else {
+        Vector4 fogParams(0.0f, 0.0f, 0.0f, 1.0f);
+        TheShaderMgr.SetVConstant((VShaderConstant)0x5b, fogParams);
+        Vector4 fogColorVec(0.0f, 0.0f, 0.0f, 0.0f);
+        TheShaderMgr.SetPConstant((PShaderConstant)0x5a, fogColorVec);
+    }
+
+    if (mFadeOut && mFadeEnd != mFadeStart) {
+        float fadeDelta = mFadeEnd - mFadeStart;
+        float invFadeDelta;
+        if (fadeDelta < 0.001f && fadeDelta > -0.001f) {
+            invFadeDelta = fadeDelta >= 0.0f ? 1.0f / 0.001f : -1.0f / 0.001f;
+        } else {
+            invFadeDelta = 1.0f / fadeDelta;
+        }
+        Vector4 fadeParams(mFadeEnd, invFadeDelta, mFadeMax, 0.0f);
+        TheShaderMgr.SetVConstant((VShaderConstant)0x37, fadeParams);
+        TheShaderMgr.SetPConstant((PShaderConstant)0x37, fadeParams);
+
+        Vector4 lrFade = mLRFade;
+        Transform fadeRef = LRFadeRef();
+        Vector3 fadeDir = fadeRef.m.x;
+        Normalize(fadeDir, fadeDir);
+        float fadeRefDot = Dot(fadeRef.v, fadeDir);
+
+        Vector4 leftPlane(0.0f, 0.0f, 0.0f, 1.0f);
+        if (lrFade.x != lrFade.y) {
+            float scale = 1.0f / (lrFade.y - lrFade.x);
+            leftPlane.Set(
+                fadeDir.x * scale,
+                fadeDir.y * scale,
+                fadeDir.z * scale,
+                -((lrFade.x + fadeRefDot) * scale)
+            );
+        }
+        Vector4 rightPlane(0.0f, 0.0f, 0.0f, 1.0f);
+        if (lrFade.z != lrFade.w) {
+            float scale = 1.0f / (lrFade.z - lrFade.w);
+            rightPlane.Set(
+                scale * fadeDir.x,
+                scale * fadeDir.y,
+                scale * fadeDir.z,
+                -((lrFade.w + fadeRefDot) * scale)
+            );
+        }
+        TheShaderMgr.SetVConstant((VShaderConstant)0x35, leftPlane);
+        TheShaderMgr.SetVConstant((VShaderConstant)0x36, rightPlane);
+        TheShaderMgr.SetPConstant((PShaderConstant)0x35, leftPlane);
+        TheShaderMgr.SetPConstant((PShaderConstant)0x36, rightPlane);
+    }
+
+    if (mUseColorAdjust) {
+        TheShaderMgr.SetPConstant4x3((PShaderConstant)0x6d, Hmx::Matrix4(ColorXfm()));
+    }
+
+    if (mAOEnabled) {
+        float ao = mAOStrength;
+        Vector4 aoParams(ao, ao, ao, ao);
+        TheShaderMgr.SetVConstant((VShaderConstant)0x18, aoParams);
+    }
+
+    if (mUseToneMapping) {
+        Vector4 toneParams(mIntensityAverage, mExposure, mWhitePoint, 0.0f);
+        TheShaderMgr.SetPConstant((PShaderConstant)0x7c, toneParams);
+    }
 }
