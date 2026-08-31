@@ -675,10 +675,18 @@ unsigned long StartVoiceThreadEntry(void *) {
         // Process voice garbage collection
         gVoiceGC.Enter();
         int gcCount = 0;
-        while (!s_voiceGC.empty() && gcCount < 4) {
+        unsigned int now = GetTickCount() - 500000;
+        while (s_voiceGC.begin() != s_voiceGC.end()) {
+            unsigned int elapsed = now - s_voiceGC.front().disposeTick;
+            if (elapsed < 50 && elapsed != 0) {
+                break;
+            }
             s_voiceGCInProgress.push_back(s_voiceGC.front());
             s_voiceGC.pop_front();
-            gcCount++;
+            gVoiceCounters[1]--;
+            if (++gcCount >= 4) {
+                break;
+            }
         }
         gVoiceGC.Exit();
 
