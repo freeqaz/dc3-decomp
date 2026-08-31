@@ -23,6 +23,33 @@ The three usual causes, in order of how often they bite here:
 PYTHONHASHSEED is varied between the two runs on purpose: with it pinned, set
 iteration looks stable and the bug hides.
 
+WHAT THIS HARNESS IS NOT ABOUT: BUILD OUTPUTS
+---------------------------------------------
+Issue #150 ("`OptionsPanel.obj` is byte-nondeterministic") was reported against
+a green run of this file, and this file was rated SOUND by the cannot-fail
+audit.  Both are true and neither is a contradiction: **the subject of every
+case below is a Python scanner's STDOUT, and no case in this file has ever
+looked at a byte of `build/`.**  It could not have caught #150 at any sample
+size, under any PYTHONHASHSEED, because it does not read the artifact.
+
+That is the sound-but-checking-something-else failure, and it is worth naming
+because a "determinism check" that is green reads as "this project's outputs
+are deterministic" when it means "these thirteen scanners' text output is".
+
+The real number, measured 2026-08-31 in a worktree, two full rebuilds of
+identical source in the same tree: **980 of 989 objects differed**, the other
+nine only because ninja did not rebuild them.  Cause: MSVC's clock-derived
+COFF `TimeDateStamp` and CodeView `S_OBJNAME` signature -- not a patcher, and
+not one object.  Masking those two fields made all 980 compare equal with zero
+residual bytes.
+
+Build-output determinism is now covered where it belongs -- inside the build:
+`scripts/obj_build_metadata_patcher.py` zeroes both fields as the last
+post-compile pass, and `scripts/verify_objs_patched.py --check` (a default
+build edge) runs its `--check` and fails the build if any object still carries
+them.  Do NOT add a 2x-full-rebuild case here; this harness is read-only and
+must stay cheap.
+
 Usage:
     python3 scripts/analysis/determinism_check.py                 # the curated set
     python3 scripts/analysis/determinism_check.py --only home_store_census
@@ -175,6 +202,10 @@ def main() -> int:
     # never about them.
     print("NOT CHECKED (too expensive to run twice here — UNCHECKED, not clean): "
           + ", ".join(UNCHECKED_TOO_EXPENSIVE))
+    print("OUT OF SCOPE: build outputs. This harness compares SCANNER STDOUT and "
+          "reads no byte of build/. Object-byte reproducibility is enforced by "
+          "scripts/obj_build_metadata_patcher.py --check, via "
+          "verify_objs_patched.py in the default build (see #150).")
     # An inconclusive run is a failure of the harness, not a clean bill of
     # health for the scanner, so it must not exit 0.
     return 1 if (diff or inc) else 0
