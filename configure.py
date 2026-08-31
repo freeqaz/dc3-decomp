@@ -460,14 +460,31 @@ config.custom_build_steps = {
             },
         },
         {
+            # LAST of the rewrite passes, deliberately: it zeroes MSVC's
+            # clock-derived COFF TimeDateStamp and CodeView S_OBJNAME
+            # signature, and the earlier passes must not be able to reintroduce
+            # them.  Without this, two rebuilds of identical source in one tree
+            # produced 980 differing objects of 989 (issue #150) -- so every
+            # byte-identity control this project runs over compiled objects was
+            # comparing the wall clock.  Score-neutral: neither field is in a
+            # section objdiff diffs.
+            "outputs": str(stamp_dir / "build_metadata_normalized.stamp"),
+            "rule": "run_script",
+            "implicit": [str(stamp_dir / "atexit_scope_patched.stamp"), "all_source"],
+            "variables": {
+                "cmd": "python3 scripts/obj_build_metadata_patcher.py --batch --apply",
+                "desc": "NORMALIZE clock-derived .obj build metadata",
+            },
+        },
+        {
             # The patch passes are only half of the fix: a build that omits
             # one has to SAY SO.  This re-runs every patcher in dry-run and
             # fails the build unless the object tree is a fixed point of all
-            # five, then records a content manifest so a consumer can detect a
+            # six, then records a content manifest so a consumer can detect a
             # single-TU compile that bypassed the graph entirely.
             "outputs": str(stamp_dir / "objs_patched_verified.stamp"),
             "rule": "run_script",
-            "implicit": [str(stamp_dir / "atexit_scope_patched.stamp"), "all_source"],
+            "implicit": [str(stamp_dir / "build_metadata_normalized.stamp"), "all_source"],
             "variables": {
                 "cmd": "python3 scripts/verify_objs_patched.py --check --emit",
                 "desc": "VERIFY every .obj carries the post-compile patches",

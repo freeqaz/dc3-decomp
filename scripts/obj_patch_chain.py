@@ -76,17 +76,21 @@ SCRIPTS_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPTS_DIR.parent
 BUILD_ID = os.environ.get("DC3_VERSION", "373307D9")
 
-#: The five, in configure.py's order.  Kept in step with
-#: verify_objs_patched.py's PATCHERS list, which is the build's own statement of
-#: what a fully patched tree is a fixed point of.
+#: In configure.py's order.  Kept in step with verify_objs_patched.py's
+#: PATCHERS list, which is the build's own statement of what a fully patched
+#: tree is a fixed point of.  `obj_build_metadata_patcher` is last there and
+#: last here: it zeroes MSVC's clock-derived fields and the earlier passes must
+#: not be able to reintroduce them (#150).
 PATCHER_MODULES = [
     "obj_anon_ns_patcher",
     "obj_dynamic_init_patcher",
     "obj_guard_patcher",
     "obj_bool_mangle_patcher",
     "obj_atexit_scope_patcher",
+    "obj_build_metadata_patcher",
 ]
-COUNT_KEYS = ["anon_ns", "dynamic_init", "guard", "bool_mangle", "atexit_scope"]
+COUNT_KEYS = ["anon_ns", "dynamic_init", "guard", "bool_mangle", "atexit_scope",
+              "build_metadata"]
 
 #: Bumped whenever the pickle's shape or the index derivation changes, so a
 #: cache written by an older script can never be read as if it were current.
@@ -107,6 +111,7 @@ dynamic_init = _load("obj_dynamic_init_patcher")
 guard = _load("obj_guard_patcher")
 bool_mangle = _load("obj_bool_mangle_patcher")
 atexit_scope = _load("obj_atexit_scope_patcher")
+build_metadata = _load("obj_build_metadata_patcher")
 
 
 # ── obj_anon_ns_patcher's cross-object index ────────────────────────────────
@@ -261,6 +266,15 @@ def patch_one(obj_path: Path, unit_rel: str, obj_dir: Path,
                 print(f"  atexit_scope ERROR on {unit_rel}: {exc}", file=sys.stderr)
     else:
         counts["guard"] = counts["bool_mangle"] = counts["atexit_scope"] = 0
+
+    # Unconditionally last, and unpaired: nothing about it needs the retail
+    # object, and every rewrite above leaves the compiler's clock fields alone.
+    data = obj_path.read_bytes()
+    offsets = build_metadata.plan(data)
+    if offsets:
+        build_metadata.write_patched_obj(
+            str(obj_path), build_metadata.normalize(data, offsets))
+    counts["build_metadata"] = len(offsets)
     return counts
 
 

@@ -86,6 +86,12 @@ PATCHERS = [
     "obj_guard_patcher.py",
     "obj_bool_mangle_patcher.py",
     "obj_atexit_scope_patcher.py",
+    # Not a name/storage-class rewrite like the five above -- it zeroes MSVC's
+    # clock-derived COFF TimeDateStamp and CodeView S_OBJNAME signature.  It is
+    # in this list because it is in the same chain and has the same failure
+    # mode: a tree that skipped it looks finished and is not byte-reproducible,
+    # which silently degrades every byte-identity control run over it (#150).
+    "obj_build_metadata_patcher.py",
 ]
 
 MANIFEST_VERSION = 1
