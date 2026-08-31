@@ -586,14 +586,13 @@ void RndAmbientOcclusion::BurnTransform(
         return;
     meshes.erase(found);
 
-    const Transform &meshXfm = mesh->WorldXfm();
+    const Transform &meshXfm = mesh->LocalXfm();
     float det = Det(meshXfm.m);
-    bool overThreshold = Abs(1.0f - det) > 0.0001f;
-    bool canBurn;
+    bool canBurn = Abs(1.0f - det) > 0.0001f;
     if (mQuality == 0) {
         canBurn = CanBurnXfm(mesh);
     } else {
-        if (overThreshold) {
+        if (canBurn) {
             MILO_NOTIFY_ONCE(
                 "%s: Mesh has scale or mirroring applied. Re-export mesh to ensure accurate AO calculation.",
                 PathName(mesh)
@@ -603,11 +602,6 @@ void RndAmbientOcclusion::BurnTransform(
     }
 
     if (canBurn) {
-        // Build a zero-translation copy of parent world rotation matrix
-        Transform parentRot;
-        memcpy(&parentRot, &meshXfm, 0x30);
-        parentRot.v.Set(0.0f, 0.0f, 0.0f);
-
         const std::list<RndTransformable *> &children = mesh->Children();
         for (std::list<RndTransformable *>::const_iterator it = children.begin();
              it != children.end(); ++it) {
@@ -615,26 +609,24 @@ void RndAmbientOcclusion::BurnTransform(
             if (childMesh) {
                 BurnTransform(childMesh, meshes);
 
+                // Zero-translation copy of the parent's local rotation matrix.
+                Transform parentRot(meshXfm.m, Vector3(0.0f, 0.0f, 0.0f));
+
                 Transform childXfm;
                 RndTransformable::Constraint constraint = childMesh->TransConstraint();
-                if (constraint == 0) {
-                    Multiply(childMesh->WorldXfm(), parentRot, childXfm);
-                    childMesh->SetWorldXfm(childXfm);
-                } else if (constraint == 2) {
-                    memcpy(&childXfm, &mesh->WorldXfm(), 0x40);
-                    childMesh->SetWorldXfm(childXfm);
+                if (constraint == RndTransformable::kConstraintNone) {
+                    Multiply(childMesh->LocalXfm(), parentRot, childXfm);
+                } else if (constraint == RndTransformable::kConstraintParentWorld) {
+                    memcpy(&childXfm, &parentRot, 0x40);
                     childMesh->SetTransConstraint(
-                        childMesh->TransConstraint(),
+                        RndTransformable::kConstraintNone,
                         childMesh->mTarget,
                         childMesh->mPreserveScale
                     );
                 } else {
-                    memcpy(&childXfm, &childMesh->WorldXfm(), 0x40);
-                    childMesh->SetWorldXfm(childXfm);
+                    memcpy(&childXfm, &childMesh->LocalXfm(), 0x40);
                 }
-                if (!childMesh->mPreserveScale) {
-                    childMesh->SetDirty_Force();
-                }
+                childMesh->SetLocalXfm(childXfm);
             }
         }
         BurnXfm(mesh, true);
