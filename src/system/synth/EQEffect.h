@@ -21,7 +21,7 @@
 // Maximum crossover filter coefficients per stage
 #define EQ_XOVER_MAX_COEFFS 4
 
-class EQEffect {
+class __declspec(uuid("0e0f3600-b28e-4434-810d-21b8be740619")) EQEffect {
 public:
     struct Params {
         // Field-0 is a 1-byte bool "bypass" slot in the DC3 target layout (SyncEffectParams

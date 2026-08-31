@@ -3,13 +3,8 @@
 
 namespace ATG {
 
-// The shipped image emits ??__E?m_regProps@?$CSampleXAPOBase@VHeadsetXferEffect@@...
-// as a dynamic initializer; link_glue.cpp /ALTERNATENAMEs the one we do not
-// produce. The values themselves were never recovered for this effect.
-template <>
-XAPO_REGISTRATION_PROPERTIES
-    CSampleXAPOBase<HeadsetXferEffect, HeadsetXferEffectParams>::m_regProps = {};
-
+// m_regProps comes from the primary template in xdk/xaudio2/xapobase.h via
+// __uuidof(HeadsetXferEffect); see HeadsetXferEffect.h for the uuid attribute.
 template class CSampleXAPOBase<HeadsetXferEffect, HeadsetXferEffectParams>;
 
 } // namespace ATG

@@ -15,7 +15,7 @@ class Synapse;
 //   0x154  CSampleXAPOBase::mWav      (WAVEFORMATEX, 0x12 padded to 0x14)
 //   0x168  mSynapse
 //   0x16c  mCurrentParams             (0x5c)
-class SynapseAPO : public ATG::CSampleXAPOBase<SynapseAPO, SynapseAPOParams> {
+class __declspec(uuid("03004d97-d165-4cc0-abdd-6a98f04e6eb7")) SynapseAPO : public ATG::CSampleXAPOBase<SynapseAPO, SynapseAPOParams> {
 public:
     SynapseAPO();
     virtual ~SynapseAPO();

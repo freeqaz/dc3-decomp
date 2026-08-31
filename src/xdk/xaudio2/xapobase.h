@@ -100,8 +100,10 @@ namespace ATG {
     template <class Effect, typename Params>
     class CSampleXAPOBase : public CXAPOParametersBase {
     private:
-        // TODO: how am i supposed to instantiate this
-        // if every Effect has a different guid?
+        // One definition serves all fourteen effects: the CLSID comes from
+        // __uuidof(Effect), so each instantiation picks up the uuid attribute on
+        // its own effect class. See the definition below the class for why the
+        // uuid spelling (rather than a literal GUID) is load-bearing.
         static XAPO_REGISTRATION_PROPERTIES m_regProps;
 
     public:
@@ -162,5 +164,38 @@ namespace ATG {
 
         Params mParams[3]; // 0x40
         WAVEFORMATEX mWav; // 0x58
+    };
+
+    // The XAPO registration block, recovered from the shipped image. Without it
+    // every effect registered with a null CLSID, an empty FriendlyName, version
+    // 0.0, no flags and a buffer-count range of [0,0] -- i.e. non-functional.
+    //
+    // The values were read out of the target: the CLSID and L"SampleAPO" sit in
+    // .data (e.g. 0x82F488A0 for SynapseAPO), and everything from +0x24 onward is
+    // written by the per-effect ??__E?m_regProps dynamic initializer (0x90 bytes
+    // each, 0x82EDFAF0..0x82EE04D0) -- memset(+0x24, 0, 0x1ec), memcpy of the
+    // pooled 0x50-byte L"Copyright (C)2008 Microsoft Corporation" literal into
+    // CopyrightInfo, memset(+0x260, 0, 0x1b0), then the seven scalars below.
+    //
+    // __uuidof(Effect) IS THE REASON THAT SPLIT EXISTS, and swapping it for a
+    // literal GUID silently destroys the match. MSVC constant-folds an aggregate
+    // initializer up to the first element it cannot fold; a __uuidof operand is
+    // not foldable here, so the compiler emits only the leading 0x24 bytes into
+    // .data and generates the dynamic initializer for the rest -- exactly the
+    // shipped shape. With a literal GUID the whole 0x42c block folds into .data,
+    // no ??__E is emitted at all, and link_glue.cpp has to /ALTERNATENAME the
+    // missing initializer to a no-op (which is what this build used to do).
+    template <class Effect, typename Params>
+    XAPO_REGISTRATION_PROPERTIES CSampleXAPOBase<Effect, Params>::m_regProps = {
+        __uuidof(Effect),
+        L"SampleAPO",
+        L"Copyright (C)2008 Microsoft Corporation",
+        1, // MajorVersion
+        0, // MinorVersion
+        0x3f, // all six XAPO_FLAG_* bits: XAPOBASE_DEFAULT_FLAG | INPLACE_REQUIRED
+        1, // MinInputBufferCount
+        1, // MaxInputBufferCount
+        1, // MinOutputBufferCount
+        1, // MaxOutputBufferCount
     };
 }

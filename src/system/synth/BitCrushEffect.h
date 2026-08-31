@@ -1,7 +1,7 @@
 #pragma once
 
 #include "xdk\xaudio2\xaudio2.h"
-class BitCrushEffect {
+class __declspec(uuid("d794c77c-d14d-470c-9346-b9be9ac4860b")) BitCrushEffect {
 public:
     struct Params {
         Params() : unk0(false) {}
