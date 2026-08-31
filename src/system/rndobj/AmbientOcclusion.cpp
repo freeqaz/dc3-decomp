@@ -21,8 +21,8 @@
 void BuildSphereStratified(unsigned int, std::vector<Vector3> &);
 
 // Quality parameters: [samples_q0, samples_q1, splitPlane_q0, splitPlane_q1]
-// Values are guesses; exact values in .rdata at 0x820A658C (16 bytes)
-static const int kQualityLUT[] = { 256, 1024, 0, 2 };
+// Values read from the target's .rdata at 0x820A658C (16 bytes).
+static const int kQualityLUT[] = { 300, 150, 2, 0 };
 
 // PPC: Edge::operator< lives in Utl.cpp (matching original link unit).
 // Native: define it here since AmbientOcclusion.cpp is the natural home.
