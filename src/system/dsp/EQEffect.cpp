@@ -194,8 +194,9 @@ void EQEffect::Process(float *samples, int numSamples, int numChans) {
                         xd[2] = *s / mXoverGain[0];
                         mXoverOutputDelay[chan][0] = mXoverOutputDelay[chan][1];
                         mXoverOutputDelay[chan][1] = mXoverOutputDelay[chan][2];
-                        float fVar2 = mXoverCoeffs[0][0] * mXoverOutputDelay[chan][0] + mXoverCoeffs[0][1] * mXoverOutputDelay[chan][1]
-                            + (xd[0] + xd[2]) + xd[1] * 2.0f;
+                        float acc0 = mXoverCoeffs[0][0] * mXoverOutputDelay[chan][0]
+                            + mXoverCoeffs[0][1] * mXoverOutputDelay[chan][1];
+                        float fVar2 = acc0 + (xd[0] + xd[2]) + xd[1] * 2.0f;
                         mXoverOutputDelay[chan][2] = fVar2;
 
                         // Stage 0, pass 2
@@ -204,8 +205,9 @@ void EQEffect::Process(float *samples, int numSamples, int numChans) {
                         xd[7] = fVar2 / mXoverGain[0];
                         mXoverOutputDelay[chan][5] = mXoverOutputDelay[chan][6];
                         mXoverOutputDelay[chan][6] = mXoverOutputDelay[chan][7];
-                        float fVar3 = mXoverCoeffs[0][0] * mXoverOutputDelay[chan][5] + mXoverCoeffs[0][1] * mXoverOutputDelay[chan][6]
-                            + (xd[5] + xd[7]) + xd[6] * 2.0f;
+                        float acc1 = mXoverCoeffs[0][0] * mXoverOutputDelay[chan][5]
+                            + mXoverCoeffs[0][1] * mXoverOutputDelay[chan][6];
+                        float fVar3 = acc1 + (xd[5] + xd[7]) + xd[6] * 2.0f;
                         mXoverOutputDelay[chan][7] = fVar3;
 
                         // Stage 1 (bandpass), pass 1
