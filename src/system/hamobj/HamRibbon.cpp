@@ -373,44 +373,41 @@ void HamRibbon::ConstructMesh() {
             }
         }
 
-        float angleStep = 6.2831855f / mNumSides;
         float radius = mWidth * 0.5f;
-        float uStep = 1.0f / mNumSides;
-        Vector3 zeroVec(0.0f, 0.0f, 0.0f);
+        float angleStep = 6.2831855f / mNumSides;
+        RndMesh::VertVector &verts = mMesh->Verts();
+        Vector3 norm(0.0f, 0.0f, 0.0f);
 
         for (int seg = 0; seg < mNumSegments; seg++) {
+            float uStep = 1.0f / mNumSides;
             for (int side = 0; side < mNumSides; side++) {
+                Vector4 boneWeights(1.0f, 0.0f, 0.0f, 0.0f);
                 float angle = side * angleStep;
                 float u = side * uStep;
-                Vector3 norm;
 
                 for (int v = 0; v < 2; v++) {
                     int vertIdx = seg * mNumSides * 2 + v * mNumSides + side;
-
-                    Transform xfm = Transform::IDXfm();
+                    int boneIdx = Clamp(0, mMesh->NumBones() - 1, seg + v);
 
                     float cosA = std::cos(angle);
                     float sinA = std::sin(angle);
 
-                    float scale = (v == 0) ? 1.0f : (0.5f - u);
-                    Vector3 pos(sinA * radius * scale, 0.0f, cosA * radius * scale);
+                    Vector3 pos(sinA * radius, 0.0f, cosA * radius);
+                    Transform xfm = Transform::IDXfm();
                     Multiply(pos, xfm, pos);
 
-                    mMesh->Verts()[vertIdx].pos = pos;
+                    verts[vertIdx].pos = pos;
 
                     if (v == 0) {
-                        Subtract(pos, zeroVec, norm);
+                        Subtract(pos, xfm.v, norm);
                         Normalize(norm, norm);
                     }
-                    mMesh->Verts()[vertIdx].norm = norm;
+                    verts[vertIdx].norm = norm;
 
-                    int boneIdx = mMesh->NumBones() - 1;
-                    if (seg + v <= boneIdx) {
-                        boneIdx = seg + v;
-                    }
-                    mMesh->Verts()[vertIdx].boneIndices[0] = (short)boneIdx;
-                    mMesh->Verts()[vertIdx].tex.x = (float)boneIdx / (float)mNumSegments;
-                    mMesh->Verts()[vertIdx].tex.y = u;
+                    verts[vertIdx].boneIndices[0] = (short)boneIdx;
+                    verts[vertIdx].boneWeights = boneWeights;
+                    verts[vertIdx].tex.x = (float)boneIdx / (float)mNumSegments;
+                    verts[vertIdx].tex.y = u;
                 }
             }
         }
