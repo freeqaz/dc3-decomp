@@ -130,15 +130,14 @@ fi
 # ─── Configure (if needed) ──────────────────────────────────────────────────
 if [[ $CONFIGURE -eq 1 || ! -f "${BUILD_DIR}/build.ninja" ]]; then
     echo "=== Configuring native build (${BUILD_TYPE}) ==="
-    cmake -S "${NATIVE_DIR}" \
-          -B "${BUILD_DIR}" \
-          -G Ninja \
-          -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
-          -DCMAKE_C_COMPILER=clang \
-          -DCMAKE_CXX_COMPILER=clang++ \
-          -DMILO_ENGINE_PATH="${MILO_ENGINE_PATH}" \
-          -DDawn_DIR="${DAWN_DIR:-/home/free/code/milohax/dc3-decomp-deps/dawn/lib/cmake/Dawn}" \
-          2>&1
+    # The configure line lives in ONE place now: scripts/native_configure.sh.
+    # This used to inline it, with a hardcoded /home/free fallback for Dawn_DIR
+    # and no ncnn — so it produced a subtly different build dir from the one
+    # scripts/native_test.sh uses, on the same tree. One derivation, several
+    # consumers; -DMILO_ENGINE_PATH is passed through as an extra arg.
+    MILO_BUILD_TYPE="${BUILD_TYPE}" \
+        "${REPO_ROOT}/scripts/native_configure.sh" "${BUILD_DIR}" \
+        -DMILO_ENGINE_PATH="${MILO_ENGINE_PATH}" 2>&1
 fi
 
 # ─── Build ──────────────────────────────────────────────────────────────────

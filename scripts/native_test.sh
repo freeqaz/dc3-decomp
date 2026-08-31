@@ -39,7 +39,28 @@
 # That is ~2 minutes for the same 48 assertions.
 #   scripts/native_test.sh -R SomeRegex     # extra args pass through to ctest
 #   scripts/native_test.sh --no-build       # test what is already built (see below)
+#   scripts/native_test.sh --no-configure   # do NOT auto-configure a missing build dir
 #   SKIP_BUDGET_UPDATE=1 scripts/native_test.sh   # rewrite the budget file
+#
+# EXIT CODES — each failure mode is its own number, deliberately.
+#   0  all executed tests passed and the skip count equals the budget
+#   2  MORE tests skipped than the budget: coverage shrank
+#   3  FEWER tests skipped than the budget: coverage improved, lock it in
+#   4  the ctest summary line could not be parsed (this script's own instrument
+#      is broken; refusing to report a number)
+#   5  the skip budget file is missing or unparseable — the ratchet would be
+#      disarmed, and a disarmed ratchet exits 0 because ctest scores skips as
+#      passes. Also: refusing to LOOSEN the budget without ALLOW_BUDGET_LOOSEN=1
+#   6  the build failed (so ctest was NOT run against the previous binary)
+#   7  milo_test_required_targets.txt missing/empty — CMake's target list did not
+#      reach this script, and guessing one is the bug that cost milo-viewer's
+#      5 tests to a skip
+#   8  NO CONFIGURED BUILD, and it could not be configured. ZERO tests ran.
+#      This is the "the gate never executed" code and it exists because that
+#      state used to be a bare exit 1, indistinguishable in a lane's report from
+#      any other hiccup — and indistinguishable from a pass to anyone reading
+#      only a summary. "Examined zero things" must never look like success.
+#   *  anything else is ctest's own exit status
 #
 # WHY THIS SCRIPT BUILDS
 # ----------------------
@@ -73,6 +94,7 @@ BUDGET_FILE="$REPO_ROOT/native/tests/skip_budget.txt"
 CTEST_ARGS=()
 ALL_GATES=0
 DO_BUILD=1
+DO_CONFIGURE=1
 for arg in "$@"; do
     case "$arg" in
         --all-gates)
@@ -82,14 +104,67 @@ for arg in "$@"; do
             ALL_GATES=1
             ;;
         --no-build) DO_BUILD=0 ;;
+        --no-configure) DO_CONFIGURE=0 ;;
         *) CTEST_ARGS+=("$arg") ;;
     esac
 done
 
+# ---------------------------------------------------------------------------
+# "No configured build" is a DISTINCT outcome, not a generic failure.
+# ---------------------------------------------------------------------------
+# This used to be `exit 1` with "configure it first" and no hint as to how. In a
+# fresh worktree that was the *only* thing standing between a lane and its
+# native gate, because scripts/setup_worktree.sh never configured the native
+# build — so `scripts/native_test.sh` in a worktree failed instantly, every
+# time, and three lanes on 2026-08-31 either configured by hand or gave up.
+#
+# A lane that gives up here has EXAMINED ZERO TESTS, and exit 1 buried among
+# every other exit 1 in a shell pipeline is indistinguishable from noise. So:
+#   * try to configure automatically (scripts/native_configure.sh derives every
+#     path, including Dawn_DIR, from the main checkout);
+#   * if that is impossible, exit 8 — a code used for nothing else — under a
+#     banner that says the gate DID NOT RUN, in the words a reader of a lane
+#     report needs to see.
 if [ ! -f "$BUILD_DIR/CTestTestfile.cmake" ]; then
-    echo "error: no configured build at $BUILD_DIR" >&2
-    echo "       configure it first, or set MILO_TEST_BUILD_DIR." >&2
-    exit 1
+    CONFIGURE_SH="$REPO_ROOT/scripts/native_configure.sh"
+    if [ "$DO_CONFIGURE" = "1" ] && [ -x "$CONFIGURE_SH" ]; then
+        echo "==> no configured build at $BUILD_DIR; configuring it now"
+        echo "    ($CONFIGURE_SH — pass --no-configure to refuse this)"
+        "$CONFIGURE_SH" "$BUILD_DIR"
+        configure_rc=$?
+        if [ "$configure_rc" -ne 0 ]; then
+            echo >&2
+            echo "==============================================================" >&2
+            echo " NATIVE GATE DID NOT RUN — this is NOT a pass." >&2
+            echo "--------------------------------------------------------------" >&2
+            echo " 0 tests were registered, 0 executed, 0 skipped." >&2
+            echo " Auto-configure failed (exit $configure_rc); see the error above." >&2
+            echo " Do not report this run as green: nothing was examined." >&2
+            echo "==============================================================" >&2
+            exit 8
+        fi
+    fi
+fi
+if [ ! -f "$BUILD_DIR/CTestTestfile.cmake" ]; then
+    echo >&2
+    echo "==============================================================" >&2
+    echo " NATIVE GATE DID NOT RUN — this is NOT a pass." >&2
+    echo "--------------------------------------------------------------" >&2
+    echo " No configured build at:" >&2
+    echo "   $BUILD_DIR" >&2
+    echo " 0 tests were registered, 0 executed, 0 skipped. A report saying" >&2
+    echo " \"native tests pass\" on the strength of this run would be false." >&2
+    echo >&2
+    echo " Configure it:" >&2
+    echo "   $REPO_ROOT/scripts/native_configure.sh" >&2
+    echo " or point at an existing build dir:" >&2
+    echo "   MILO_TEST_BUILD_DIR=<dir> $0" >&2
+    if [ "$DO_CONFIGURE" != "1" ]; then
+        echo >&2
+        echo " (--no-configure was given, so no attempt was made.)" >&2
+    fi
+    echo "==============================================================" >&2
+    exit 8
 fi
 
 # Build BEFORE testing. A stale build dir silently narrows the suite: the tests

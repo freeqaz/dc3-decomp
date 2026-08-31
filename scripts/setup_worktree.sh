@@ -214,6 +214,23 @@ if [ -e "$MAIN_REPO/archive" ] && [ ! -e "$WORKTREE_PATH/archive" ]; then
     ln -s "$MAIN_REPO/archive" "$WORKTREE_PATH/archive"
 fi
 
+# ---- native/third_party, native/models : symlinks (gitignored build inputs) --
+# Same family of bug as archive/ above, found the same way: diff the main
+# checkout's native/build/CMakeCache.txt against what a bare cmake produces in a
+# worktree. `native/third_party/` is in .gitignore (line 144), so a worktree has
+# no ncnn — and the main checkout configures with -DENABLE_NCNN=ON. Absence is
+# SILENT: find_package(ncnn QUIET) fails, CMakeLists sets ENABLE_NCNN OFF, cmake
+# exits 0, and the worktree quietly builds a dc3-native without the internal
+# pose estimator. The gate then compares a different binary against main's.
+# native/models/ (also gitignored) holds the pose model that
+# GestureMgr_Native.cpp opens by relative path at runtime.
+for d in third_party models; do
+    if [ -e "$MAIN_REPO/native/$d" ] && [ ! -e "$WORKTREE_PATH/native/$d" ]; then
+        echo "==> native/$d  (symlink — gitignored native build input, read-only)"
+        ln -s "$MAIN_REPO/native/$d" "$WORKTREE_PATH/native/$d"
+    fi
+done
+
 # ---- build/compilers, build/tools : symlinks (read-only toolchain) ----------
 mkdir -p "$WORKTREE_PATH/build"
 for d in compilers tools binutils; do
@@ -445,6 +462,39 @@ echo "==> Priming ninja state (scoped to config.json — no object builds)"
 )
 fi
 
+# ---- native build : configure it, so the native gate actually runs ----------
+# Every lane touching src/ is told to gate its change with
+# scripts/native_test.sh, because a PPC-matching fix can be a native segfault --
+# ChunkStream.cpp landed a *correct* decompilation on 2026-08-31 and produced
+# 233 native failures. Until now this script configured the decomp build and
+# stopped, so native_test.sh in a fresh worktree died on "no configured build"
+# before running a single test. A gate that is awkward to run is a gate that
+# gets skipped, and a skipped gate is indistinguishable from a passed one in a
+# lane's report.
+#
+# The configure is CHEAP (~1s: no compilation, and imgui is reused from the main
+# checkout instead of re-cloned), so it is unconditional. The first
+# native_test.sh in the worktree still pays a full native build -- that is
+# inherent, since a CMake build dir records absolute source paths and reflinking
+# main's would make the worktree compile MAIN's sources, i.e. gate the wrong
+# tree. Correctness over speed, same call as the warm-cache guard above.
+#
+# Non-fatal, deliberately: a box without Dawn should still get a usable DECOMP
+# worktree. But it is loud, and native_test.sh will exit 8 rather than pretend.
+# WT_SKIP_NATIVE=1 skips it.
+if [ "${WT_SKIP_NATIVE:-0}" -eq 1 ]; then
+    echo "==> WT_SKIP_NATIVE=1 : skipping native build configure"
+elif [ -x "$WORKTREE_PATH/scripts/native_configure.sh" ]; then
+    echo "==> Configuring native build (so scripts/native_test.sh just works)"
+    if ! ( cd "$WORKTREE_PATH" && ./scripts/native_configure.sh ) ; then
+        echo "  WARN: native configure failed (non-fatal for decomp work)." >&2
+        echo "        scripts/native_test.sh here will exit 8 ('gate did not run')" >&2
+        echo "        rather than report a pass. Fix the cause above to use it." >&2
+    fi
+else
+    echo "==> No scripts/native_configure.sh at this base ref; native build not configured"
+fi
+
 # ---------------------------------------------------------------------------
 # decomp.db tripwire
 # ---------------------------------------------------------------------------
@@ -501,6 +551,7 @@ echo ""
 echo "Next:"
 echo "  cd $WORKTREE_PATH"
 echo "  ninja build/$VERSION/src/<File>.obj   # warm cache = fast"
+echo "  scripts/native_test.sh                # native gate (first run builds ~10 min)"
 echo ""
 echo "Usage with MCP orchestrator:"
 echo "  run_objdiff(symbol, project_dir=\"$WORKTREE_PATH\")"
