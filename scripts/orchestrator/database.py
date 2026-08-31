@@ -833,14 +833,18 @@ def ingest_report(
             demangled = func.get("metadata", {}).get("demangled_name", "") or func.get("demangled", func.get("name", ""))
             size = int(func.get("size", 0) or 0)
 
-            # Calculate match percentage from fuzzy_match_percent or match_percent
-            # NOTE: report.json match% is unreliable for stubs (base_size=0 bug
-            # returns 100% for unimplemented functions). We ingest it as-is but
-            # do NOT set verdicts from it. Verdicts come from sync_objdiff.py
-            # (which runs actual objdiff diff) or from agents/humans.
-            percent = func.get("fuzzy_match_percent")
-            if percent is None:
-                percent = func.get("match_percent")
+            # report.json's match% is DELIBERATELY NOT READ HERE, and the local
+            # that used to hold it has been removed so nothing looks half-wired.
+            # `report generate` returns fuzzy_match_percent: 100.0 for
+            # unimplemented stubs (a base_size=0 divide-by-zero guard); ingesting
+            # it minted thousands of false COMPLETE verdicts, fixed 2026-03-04.
+            # `ninja` re-ingests on every build, so a percent written here would
+            # also overwrite every measurement sync_objdiff.py made, on a
+            # schedule.  current_percent and verdict have exactly one writer:
+            # sync_objdiff.py, which runs a real objdiff diff.
+            # Guarded by tests/test_ingest_report.py:
+            #   test_mix_of_implemented_and_unimplemented
+            #   test_reingest_does_not_clobber_a_measured_percent
 
             # Check if function exists
             existing = conn.execute(

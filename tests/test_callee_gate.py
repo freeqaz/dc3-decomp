@@ -21,9 +21,11 @@ Each test's docstring names the sabotage that must turn it red.
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import subprocess
 import sys
+from collections import defaultdict
 from pathlib import Path
 
 import pytest
@@ -38,13 +40,26 @@ from orchestrator.callee_gate import (  # noqa: E402
 
 REAL_DB = Path("/home/free/code/milohax/dc3-decomp/decomp.db")
 
-#: the row the 4.2.6-scan-read-by-a-4.2.7-binary hole hid: byte-identical but
-#: for one relocation naming a function at a DIFFERENT address.  172 B, and it
-#: was sitting at COMPLETE with reason "auto: all mismatches unfixable".
-FIXABLE_CONTROL = "?Copy@FxSend@@UAAXPBVObject@Hmx@@W4CopyType@23@@Z"
-#: the genuine refusal-class row: our side calls a synthesised merged_* stub,
-#: which is config work in symbols.txt and no source edit can move.
-UNFIXABLE_CONTROL = "?DoVelocity@NgPostProc@@IAAXXZ"
+# THE POSITIVE CONTROL USED TO NAME TWO SYMBOLS.  IT NO LONGER DOES, AND THAT
+# IS THE POINT -- see `test_positive_control_on_the_real_population_both_directions`.
+#
+# `?Copy@FxSend@@UAAXPBVObject@Hmx@@W4CopyType@23@@Z` was the hardcoded fixable
+# specimen: the row the 4.2.6-scan-read-by-a-4.2.7-binary hole hid, 172 B,
+# byte-identical but for one relocation.  On 2026-08-31 it left the callee
+# population entirely -- not reclassified, CLOSED.  It reads 100.0% with 43/43
+# instructions equal under `name_check` on objdiff 4.2.8, and its census pair
+# (`ObjRefConcrete<AnimTask>::SetObjConcrete` vs `ObjRefConcrete<FxSend>::SetObj`)
+# is now resolved by the widened `icf_aliases.map`.  A control whose specimen can
+# be *fixed* by the work the control exists to protect is a control with a
+# built-in expiry date, and this one expired ten days after it was written.
+#
+# `?DoVelocity@NgPostProc@@IAAXXZ` was the hardcoded unfixable specimen (#112's
+# merged_* refusal class).  It is still in the population and still cleared, but
+# it is subject to exactly the same expiry: it is a one-member class and a single
+# `symbols.txt` edit removes it.
+#
+# Both are now DERIVED from the scan the gate actually reads, by a rule fixed in
+# advance, and the derivation must FAIL LOUDLY when it yields nothing.
 
 
 # --------------------------------------------------------------------------
@@ -597,27 +612,226 @@ def test_unverifiable_pairing_clears_only_when_every_finding_is_unverifiable(
 # the required positive control, on the real evidence
 # --------------------------------------------------------------------------
 
+#: The independent re-adjudication's OWN parse of the shipped linker map.
+#: Deliberately not `load_linker_map`: if the control shared the gate's parser,
+#: a defect in that parser would move both sides of the comparison together and
+#: the control would agree with the bug.  Re-stated from the map's line format.
+_MAP_LINE_RE = re.compile(
+    r"^\s*[0-9a-fA-F]{4}:[0-9a-fA-F]{8}\s+(\S+)\s+([0-9a-fA-F]{8})\s")
+
+REAL_MAP = REPO_ROOT / "orig" / "373307D9" / "ham_xbox_r.map"
+
+#: every reason string the gate is allowed to emit.  A disposition outside this
+#: set is a new silent behaviour, not a pass.
+_KNOWN_REASONS = {"real_other_address", "unresolved", "no_evidence",
+                  "icf_fold", "merged_stub", "unverifiable_pairing"}
+
+
+def _independent_map(path: Path) -> dict[str, set[str]]:
+    """symbol -> every address the map lists it at (>1 means not adjudicable)."""
+    seen: defaultdict[str, set[str]] = defaultdict(set)
+    for line in path.open(errors="replace"):
+        m = _MAP_LINE_RE.match(line)
+        if m:
+            seen[m.group(1)].add(m.group(2))
+    return dict(seen)
+
+
+def _independently_adjudicate(con: sqlite3.Connection, scan_id: int,
+                              map_path: Path
+                              ) -> tuple[dict[str, int], set[str], dict[str, str],
+                                         set[str]]:
+    """Re-derive from the RAW scan rows what the gate MUST say.
+
+    THE RULE, FIXED BEFORE ANY CANDIDATE WAS LOOKED AT.  Nothing here consults
+    `classify_pair`, `_PAIR_DISPOSITION`, `_pairs`, `_callee_rows` or
+    `load_linker_map`; it reads `function_patterns.details` and the shipped map
+    and applies the specification in this module's docstring from scratch.
+
+    A pair ``(target, base)`` is called
+
+    * *merged* when either name contains ``merged_`` -- dtk's synthesised name
+      for a fold survivor, #112's config-not-source refusal class;
+    * *folded* when both names appear in the map at exactly ONE address each and
+      those addresses are EQUAL -- /OPT:ICF put them on the same bytes;
+    * *elsewhere* when both appear at exactly one address each and those
+      addresses DIFFER, and neither name is merged -- we provably call other
+      code;
+    * *unadjudicable* otherwise (a name absent from the map, or listed at more
+      than one address).
+
+    Returns ``(sizes, expected_block, expected_clear, names_merged)``:
+
+    ``expected_block``
+        the function has at least one ACTIONABLE callee row (objdiff fixability
+        != 'unverifiable'), every actionable row carries a readable
+        ``divergent_callees`` payload, and some pair is *elsewhere*.  A
+        certificate saying "no source edit reaches 100%" would be false.
+
+    ``expected_clear``  symbol -> the reason the gate must give
+        ``unverifiable_pairing``  every callee row on the function carries
+            objdiff's own ``Fixability::Unverifiable``: the enclosing symbol pair
+            was guessed by byte signature, so the differing ``bl`` is not
+            evidence about our source at all.
+        ``merged_stub`` / ``icf_fold``  every pair is *merged* or *folded* --
+            ``merged_stub`` when any is merged, since that is the more specific
+            statement.
+
+    ``names_merged``
+        every function with a merged pair -- an upper bound on the gate's
+        ``merged_stub`` class.
+
+    Functions with an unadjudicable pair, or with an unreadable payload, are in
+    neither set: the gate blocks them (``unresolved`` / ``no_evidence``) and an
+    adjudication that cannot be made is not part of a control.
+    """
+    lmap = _independent_map(map_path)
+    con.row_factory = sqlite3.Row
+    rows = con.execute(
+        "SELECT f.symbol AS symbol, f.size AS size, p.fixability, p.details"
+        "  FROM function_patterns p JOIN functions f ON f.id = p.function_id"
+        " WHERE p.scan_id = ? AND p.pattern IN (%s)"
+        % ",".join("?" * len(CALLEE_PATTERNS)),
+        (scan_id, *CALLEE_PATTERNS)).fetchall()
+
+    by_symbol: defaultdict[str, list[sqlite3.Row]] = defaultdict(list)
+    sizes: dict[str, int] = {}
+    for r in rows:
+        by_symbol[r["symbol"]].append(r)
+        sizes[r["symbol"]] = r["size"] or 0
+
+    def one_address(name: str) -> str | None:
+        a = lmap.get(name, ())
+        return next(iter(a)) if len(a) == 1 else None
+
+    expected_block: set[str] = set()
+    expected_clear: dict[str, str] = {}
+    names_merged: set[str] = set()
+
+    for symbol, srows in by_symbol.items():
+        actionable = [r for r in srows if (r["fixability"] or "") != "unverifiable"]
+        if not actionable:
+            expected_clear[symbol] = "unverifiable_pairing"
+            continue
+        pairs: list[tuple[str, str]] = []
+        readable = True
+        for r in actionable:
+            try:
+                payload = json.loads(r["details"] or "")
+            except (ValueError, TypeError):
+                readable = False
+                break
+            dc = payload.get("divergent_callees")
+            if not isinstance(dc, list) or not dc:
+                readable = False
+                break
+            for c in dc:
+                t, b = c.get("target_symbol"), c.get("base_symbol")
+                if not t or not b:
+                    readable = False
+                    break
+                pairs.append((t, b))
+            if not readable:
+                break
+        if not readable or not pairs:
+            continue                       # `no_evidence`: blocked, not controlled
+
+        merged, folded, elsewhere = [], [], []
+        for t, b in pairs:
+            if "merged_" in t or "merged_" in b:
+                merged.append((t, b))
+                continue
+            at, ab = one_address(t), one_address(b)
+            if at is None or ab is None:
+                continue                   # unadjudicable
+            (folded if at == ab else elsewhere).append((t, b))
+        if merged:
+            names_merged.add(symbol)
+        if elsewhere:
+            expected_block.add(symbol)
+        elif len(merged) + len(folded) == len(pairs):
+            expected_clear[symbol] = "merged_stub" if merged else "icf_fold"
+    return sizes, expected_block, expected_clear, names_merged
+
+
+def _specimen(symbols: set[str], sizes: dict[str, int]) -> str:
+    """One named member, chosen deterministically -- largest, then lexical.
+
+    Purely for legibility in a failure message.  The assertions are on the whole
+    set; naming a specimen is what lets a human act on a red without re-running
+    the derivation by hand.
+    """
+    return min(sorted(symbols), key=lambda s: (-sizes.get(s, 0), s)) if symbols else "<none>"
+
+
 @pytest.mark.skipif(not REAL_DB.exists(), reason="main checkout's decomp.db absent")
 def test_positive_control_on_the_real_population_both_directions(tmp_path: Path):
-    """Certify a row that is genuinely unfixable; refuse one that is fixable.
+    """The gate must agree with an INDEPENDENT re-adjudication, both directions.
 
-    `?Copy@FxSend@@` is the canonical fixable row (it crossed to 100.0 the
-    moment the callee was corrected, af06c725b) and MUST be blocked.
-    `?DoVelocity@NgPostProc@@` calls a synthesised `merged_*` stub -- #112's
-    refusal class, config work rather than source work -- and MUST be cleared.
-    Asserting both in one call is the negative control: a gate that returned a
-    constant fails one half whichever constant it picks.
+    WHY THIS IS NO LONGER TWO NAMED SYMBOLS
+    ---------------------------------------
+    It was, and the fixable one expired.  `?Copy@FxSend@@` was hardcoded on
+    2026-08-22 as "the canonical fixable row"; on 2026-08-31 it was gone from the
+    population -- 100.0%, 43/43 instructions equal under `name_check` on objdiff
+    4.2.8, its census pair resolved by the widened `icf_aliases.map`.  The row was
+    CLOSED, not reclassified, and objdiff is not at fault.
 
-    The scan's `tool_version` is rewritten to the installed one in a COPY of the
+    The old vacuity guard did not catch that, and the reason is worth keeping:
+    it asked whether the symbol appeared in `function_patterns` AT ALL, with no
+    `scan_id` filter, so it found the row in scan 5 (objdiff 4.2.7, 2026-08-21)
+    and passed, while the gate reads only the LATEST scan and saw nothing.  A
+    vacuity guard measured against a different population than the assertion is
+    not a vacuity guard.  Everything here is scoped to the one scan the gate
+    reads.
+
+    WHAT IS ASSERTED
+    ----------------
+    `_independently_adjudicate` re-derives, from the raw `function_patterns`
+    rows and its own parse of `ham_xbox_r.map`, the two sets the gate has no
+    freedom about, by a rule fixed in advance (see that function).  Then:
+
+      * both derived sets must be NON-EMPTY.  This is the whole point: a control
+        that silently passes on an empty set is the same defect in a new costume,
+        so an empty derivation is a LOUD failure naming the scan it derived from.
+      * every `must_block` member is blocked, and blocked as `real_other_address`;
+      * every `must_clear` member is cleared, and cleared as `unverifiable_pairing`;
+      * `blocked` and `cleared` are disjoint and together are EXACTLY the scan's
+        callee population -- so no row can be dropped rather than judged;
+      * every reason emitted is in the declared vocabulary.
+
+    Asserting both directions in one call is the negative control: a gate that
+    returned a constant fails one half whichever constant it picks, and a gate
+    that judged nothing fails the coverage assertion.
+
+    The population COUNTS are deliberately not asserted.  The old test froze
+    `138` rows and a five-way breakdown; they were 80 and a four-way breakdown
+    ten days later, because lanes closed rows -- which is the work succeeding.
+    A frozen count turns progress into a red and teaches people to edit the
+    number, which is how a control stops being read.
+
+    The scan's `tool_version`/`project_dir` are rewritten in a COPY of the
     database, deliberately and only here: this test is about the adjudication,
     and the provenance guard has its own tests above.  Without that the test
     would silently start skipping whenever the shared objdiff binary moves --
     which it did, mid-session, on 2026-08-22.
 
-    SABOTAGE: make `classify_pair` return `ICF_FOLD` whenever both names are in
-    the map.  The FxSend half goes red.  SABOTAGE 2: drop the `merged_*` case.
-    The DoVelocity half goes red.
+    SABOTAGE.  All five are wired into `tests/sabotage_callee_gate.py`, which
+    applies them one at a time to a clean checkout, asserts RED, restores and
+    asserts GREEN -- and reports NOT CAUGHT as its own non-zero exit:
+
+      S6b  `classify_pair` returns `ICF_FOLD` whenever both names are in the map
+           -- the blocking direction goes red (16 functions stop being blocked);
+      S8b  `_PAIR_DISPOSITION["REAL_OTHER_ADDR"] = (False, "icf_fold")` -- the
+           same direction, via the table instead of the classifier;
+      S10b a function with no actionable rows is blocked instead of cleared --
+           the clearing direction goes red (59 objdiff-Unverifiable functions);
+      S11  the `merged_*` case is dropped -- the clearing direction goes red on
+           the merged class specifically;
+      S13  `_callee_rows` silently drops one symbol -- the coverage assertion
+           goes red, which is the one a narrower control would not catch.
     """
+    assert REAL_MAP.exists(), f"{REAL_MAP} absent -- cannot adjudicate independently"
+
     db = tmp_path / "real.db"
     db.write_bytes(REAL_DB.read_bytes())
     con = sqlite3.connect(db)
@@ -632,35 +846,87 @@ def test_positive_control_on_the_real_population_both_directions(tmp_path: Path)
                 (str(tmp_path.resolve()),))
     con.commit()
 
-    present = {r[0] for r in con.execute(
-        "SELECT f.symbol FROM function_patterns p JOIN functions f ON f.id=p.function_id"
-        " WHERE p.pattern IN (%s)" % ",".join("?" * len(CALLEE_PATTERNS)),
-        CALLEE_PATTERNS)}
-    assert FIXABLE_CONTROL in present, \
-        "the fixable control is not in the scan -- the test would be vacuous"
-    assert UNFIXABLE_CONTROL in present, \
-        "the unfixable control is not in the scan -- the test would be vacuous"
+    scan_id = con.execute("SELECT MAX(id) FROM pattern_scans "
+                          "WHERE ruler = 'name_check'").fetchone()[0]
+    assert scan_id is not None, "no name_check scan in the real DB at all"
+
+    sizes, expected_block, expected_clear, names_merged = _independently_adjudicate(
+        con, scan_id, REAL_MAP)
+    population = {r[0] for r in con.execute(
+        "SELECT DISTINCT f.symbol FROM function_patterns p"
+        "  JOIN functions f ON f.id = p.function_id"
+        " WHERE p.scan_id = ? AND p.pattern IN (%s)"
+        % ",".join("?" * len(CALLEE_PATTERNS)), (scan_id, *CALLEE_PATTERNS))}
+    guessed = {s for s, r in expected_clear.items() if r == "unverifiable_pairing"}
+
+    # --- THE VACUITY GATE.  An empty derivation must be LOUD, never a pass. ---
+    where = (f"scan id={scan_id} (ruler=name_check), callee population "
+             f"{len(population)}, map {REAL_MAP}")
+    assert expected_block, (
+        "the independent re-adjudication found NO function that provably calls "
+        "code at a different address, so the blocking direction of this control "
+        "is unproven and the gate is UNVERIFIED.  This is not a licence to pass.\n"
+        f"  {where}\n"
+        "Either every wrong callee in the binary is genuinely closed (check with "
+        "`python3 scripts/analysis/pattern_census.py --ruler name_check` and say "
+        "so in the commit), or the scan is not describing the tree you think.")
+    assert guessed, (
+        "the independent re-adjudication found NO function whose every callee "
+        "row is objdiff-Unverifiable, so the clearing direction of this control "
+        "is unproven and the gate is UNVERIFIED.\n"
+        f"  {where}")
+    # a check on the ORACLE, not on the gate: the two rules cannot both hold
+    assert not (expected_block & set(expected_clear)), \
+        "the independent rule contradicts itself -- fix the rule, not the gate"
 
     gate = build_callee_gate(con, repo_root=REPO_ROOT, project_dir=REPO_ROOT)
     con.close()
 
-    assert gate.blocks(FIXABLE_CONTROL), \
-        f"{FIXABLE_CONTROL} is fixable and must NOT be certifiable"
-    assert gate.blocked[FIXABLE_CONTROL] == "real_other_address"
+    # ---- direction 1: fixable rows must NOT be certifiable ----
+    missed = sorted(expected_block - set(gate.blocked))
+    assert not missed, (
+        f"{len(missed)} function(s) provably call code at a DIFFERENT address and "
+        f"the gate would let auto-AT_LIMIT certify them as unfixable.\n"
+        f"  specimen: {_specimen(set(missed), sizes)}\n"
+        f"  {where}\n  all: {missed[:10]}")
+    for symbol in sorted(expected_block):
+        assert gate.blocked[symbol] == "real_other_address", (
+            f"{symbol} is blocked for the wrong stated reason "
+            f"{gate.blocked[symbol]!r}; the evidence sentence is what makes the "
+            f"class greppable")
 
-    assert not gate.blocks(UNFIXABLE_CONTROL), \
-        f"{UNFIXABLE_CONTROL} is #112's refusal class and should be certifiable"
-    assert gate.cleared[UNFIXABLE_CONTROL] == "merged_stub"
+    # ---- direction 2: non-actionable findings must BE certifiable ----
+    wrongly_blocked = sorted(set(expected_clear) & set(gate.blocked))
+    assert not wrongly_blocked, (
+        f"{len(wrongly_blocked)} function(s) carry only non-actionable findings "
+        f"-- objdiff-guessed pairs, /OPT:ICF folds, or dtk merged_* stubs -- and "
+        f"the gate is still refusing them.\n"
+        f"  specimen: {_specimen(set(wrongly_blocked), sizes)}\n"
+        f"  reasons: {[(s, gate.blocked[s], expected_clear[s]) for s in wrongly_blocked[:5]]}\n"
+        f"  {where}")
+    for symbol, reason in sorted(expected_clear.items()):
+        assert gate.cleared[symbol] == reason, (
+            f"{symbol} is cleared as {gate.cleared[symbol]!r} where the evidence "
+            f"says {reason!r}; the reason is what makes the class greppable")
 
-    # and the population is the one the 2026-08-21 re-adjudication measured
-    assert len(gate.blocked) + len(gate.cleared) == 138
-    assert sorted(gate.counts().items()) == [
-        ("block:real_other_address", 63),
-        ("block:unresolved", 3),
-        ("clear:icf_fold", 13),
-        ("clear:merged_stub", 1),
-        ("clear:unverifiable_pairing", 58),
-    ]
+    # ---- the merged_* class is bounded by the names that actually appear ----
+    gate_merged = {s for s, r in gate.cleared.items() if r == "merged_stub"}
+    assert gate_merged <= names_merged, (
+        f"the gate cleared {sorted(gate_merged - names_merged)} as `merged_stub` "
+        f"with no `merged_` symbol on the row -- that is #112's refusal class "
+        f"being claimed for something else")
+
+    # ---- coverage: every row is judged, none is dropped, none is both ----
+    assert not (set(gate.blocked) & set(gate.cleared)), \
+        "a function is both blocked and cleared"
+    assert set(gate.blocked) | set(gate.cleared) == population, (
+        "the gate's population is not the scan's callee population; "
+        f"dropped={sorted(population - set(gate.blocked) - set(gate.cleared))[:10]} "
+        f"invented={sorted((set(gate.blocked) | set(gate.cleared)) - population)[:10]}")
+    assert sum(gate.counts().values()) == len(population)
+    unknown = {r for r in (*gate.blocked.values(), *gate.cleared.values())
+               } - _KNOWN_REASONS
+    assert not unknown, f"undeclared gate disposition(s): {sorted(unknown)}"
 
 
 @pytest.mark.skipif(not REAL_DB.exists(), reason="main checkout's decomp.db absent")
