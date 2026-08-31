@@ -1206,6 +1206,14 @@ const char *CacheResource(const char *cc, const Hmx::Object *o) {
 //     rather than merging the two destructor calls -- objdiff classifies this as
 //     DEAD_STORE_ELIMINATION / destructor-merging, RarelyHandFixable.
 //
+//     RE-MEASURED 2026-08-31 WITHOUT THE CONFOUND.  The note above described one
+//     experiment that changed BOTH things at once, so the destructor-merge had never
+//     actually been measured on its own.  It has been now: the `ret` hoist ALONE, with
+//     the block placement left exactly as it is, moves 71.537 -> 67.9 -- the same 3.6pp
+//     regression the combined experiment produced.  Both levers are independently bad,
+//     and the dismissal survives de-confounding.  Do not re-open this one on the
+//     "a dismissal is a lead" principle a third time without a NEW mechanism.
+//
 // The census WRONG_CALLEE charge here (target MovieExtension vs base ~String) is a
 // consequence of 1: both sides call MovieExtension exactly once, at different points in
 // the function, so the aligner pairs our ~String against it.  It is not a wrong callee.

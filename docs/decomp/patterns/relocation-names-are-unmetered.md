@@ -146,6 +146,35 @@ it — reading *before* the array — and the block's second word is a relocatio
 **Left unfixed** — the row is a config artifact but the correct name is not
 recoverable, and deleting a name is destructive.
 
+**4. A config anonymous-namespace hash the shipped image never had.**
+Three `WRONG_CALLEE` rows (`__uninitialized_copy`, `__uninitialized_fill_n` x2,
+over `` `anonymous namespace'::Unlockable ``, all at 91.5% with byte-identical
+bodies) charge target `_Copy_Construct` against our `_Param_Construct`. Both are
+placement-new one-liners, so `/OPT:ICF` folds them — and the shipped map says so
+outright, carrying **both** names at `0x828B5998`:
+
+```
+0005:00585998  ??$_Copy_Construct@UUnlockable@?A0xf8e4b4b5@@…   828b5998  meta_ham:MetagameRank.obj
+0005:00585998  ??$_Param_Construct@UUnlockable@?A0xf8e4b4b5@@…  828b5998  meta_ham:MetagameRank.obj
+```
+
+Our build emits the `?A0xf8e4b4b5` spelling, i.e. a member of that very group,
+so the call is the same bytes to the same code. The row survives only because
+**`symbols.txt` names that address with a different anon-namespace hash**,
+`?A0x9d17dd81`, which the map does not contain at any address. The counts settle
+it: `9d17dd81` appears **3 times in `config/373307D9/symbols.txt` and 0 times in
+`orig/373307D9/ham_xbox_r.map`**, while `f8e4b4b5` appears 70 and 81 times
+respectively. The three mis-hashed entries are exactly the two `_Copy_Construct`
+and one `__destroy_range` symbols behind these rows.
+
+This is why `gen_icf_alias_map.py`'s retail-map widening cannot reach them: the
+group is keyed by name, and the target-side name is not in the map to be
+grouped. **Adjudicate these three as PROVEN FOLD, not source work.** Renaming
+them in `symbols.txt` would make the name honest but would not close the rows —
+our objects reference only one member of the group, so the widening gate ("two
+or more names our own objects reference") still declines — and it re-triggers
+the split for no metric gain. Left as a documented instrument defect.
+
 Both instrument checks now run inside
 `scripts/analysis/reloc_name_gate.py`, before any row is adjudicated.
 
