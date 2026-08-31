@@ -547,6 +547,16 @@ fi
 echo ""
 echo "Worktree ready:  $WORKTREE_PATH"
 echo "  branch:        $BRANCH  (from $BASE_COMMIT on $BASE_BRANCH)"
+# State the native gate's readiness at CREATION time, positively. Its absence
+# used to be discovered at first use, by a lane already mid-task, which is how
+# it got skipped. An unconfigured tree says so here, in the same breath as
+# "ready", rather than being quietly ready-for-decomp-only.
+if [ -f "$WORKTREE_PATH/native/build/CTestTestfile.cmake" ]; then
+    echo "  native gate:   configured (scripts/native_test.sh will run)"
+else
+    echo "  native gate:   NOT CONFIGURED — scripts/native_test.sh will exit 9,"
+    echo "                 'NATIVE GATE DID NOT RUN'. See the warning above."
+fi
 echo ""
 echo "Next:"
 echo "  cd $WORKTREE_PATH"
