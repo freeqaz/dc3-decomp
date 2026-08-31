@@ -47,34 +47,44 @@ void RndSoftParticleBuffer::BlurSurface() {
     workMat->SetZMode(kZModeDisable);
     workMat->SetTexWrap(kTexWrapClamp);
 
-    static float kBlurOffsets[10] = {
-        -1.5f, 0.25f,
-        -0.5f, 0.3f,
-         0.5f, 0.25f,
-         1.5f, 0.1f,
-         2.5f, 0.0f
-    };
-
     for (unsigned int pass = 0; pass < 2; pass++) {
-        RndTex *srcTex = mSurfaces[(pass - 1) & 1];
-        RndTex *dstTex = mSurfaces[pass & 1];
+        // The pass's render target is the surface the *previous* pass sampled;
+        // the surface indexed by the pass itself is what this pass reads.
+        RndTex *dstTex = mSurfaces[(pass - 1) & 1];
 
-        workMat->SetDiffuseTex(srcTex);
+        workMat->SetDiffuseTex(mSurfaces[pass & 1]);
         workMat->MarkDirty(2);
+        dstTex->MakeDrawTarget();
 
-        float texW = (float)(long long)srcTex->Width();
-        float texH = (float)(long long)srcTex->Height();
-        float invW = 1.0f / texW;
+        // (weight, offset) pairs for the five taps.
+        static Vector2 kBlurTaps[5] = {
+            Vector2(0.0f, -1.5f),
+            Vector2(0.25f, -0.5f),
+            Vector2(0.3f, 0.5f),
+            Vector2(0.25f, 1.5f),
+            Vector2(0.1f, 2.5f)
+        };
+
+        float texW = dstTex->Width();
+        float texH = dstTex->Height();
+        Hmx::Rect rect(0.0f, 0.0f, texW, texH);
         float invH = 1.0f / texH;
+        float invW = 1.0f / texW;
 
         for (int i = 0; i < 5; i++) {
-            float weight = kBlurOffsets[i * 2 + 0];
-            float offset = kBlurOffsets[i * 2 + 1];
+            float weight = kBlurTaps[i].x;
+            float offset = kBlurTaps[i].y;
 
-            float scaleU = (pass & 1) ? 0.5f : offset;
-            float scaleV = (pass & 1) ? offset : 0.5f;
+            float scaleU, scaleV;
+            if (!(pass & 1)) {
+                scaleU = offset * invW;
+                scaleV = invH * 0.5f;
+            } else {
+                scaleU = invW * 0.5f;
+                scaleV = offset * invH;
+            }
 
-            Vector4 uvScale(scaleU * invW, scaleV * invH, 1.0f, 1.0f);
+            Vector4 uvScale(scaleU, scaleV, 1.0f, 1.0f);
             TheShaderMgr.SetPConstant((PShaderConstant)(0x8a + i), uvScale);
 
             Vector4 uvWeight(weight, weight, weight, weight);
@@ -82,9 +92,7 @@ void RndSoftParticleBuffer::BlurSurface() {
         }
 
         TheShaderMgr.SetNumTaps(5);
-        Hmx::Rect rect(0.0f, 0.0f, (float)dstTex->Width(), (float)dstTex->Height());
-        dstTex->MakeDrawTarget();
-        TheNgRnd.DrawRect(rect, workMat, kBlurShader, Hmx::Color(1, 1, 1), nullptr, nullptr);
+        TheNgRnd.DrawRect(rect, workMat, kBlurShader, Hmx::Color(), nullptr, nullptr);
         TheShaderMgr.SetNumTaps(1);
         dstTex->FinishDrawTarget();
     }
