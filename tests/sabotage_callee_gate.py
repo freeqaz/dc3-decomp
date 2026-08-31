@@ -109,6 +109,22 @@ SABOTAGES = [
      '        return "MERGED_STUB"',
      "test_positive_control_on_the_real_population_both_directions"),
 
+    # S14/S15 sabotage the TEST rather than the gate.  The positive control now
+    # derives its specimens from the live census, which removes an expiry date
+    # and introduces a worse failure mode if the vacuity gate is ever softened:
+    # an empty derivation would pass every `for s in <empty>: assert ...` and
+    # leave the gate unverified with no red.  These prove the empty case is
+    # still loud.
+    ("S14 empty blocking derivation passes quietly", TESTS,
+     "    assert expected_block, (",
+     "    assert True or expected_block, (",
+     "test_the_positive_control_fails_loudly_when_the_census_yields_no_specimen"),
+
+    ("S15 empty clearing derivation passes quietly", TESTS,
+     "    assert guessed, (",
+     "    assert True or guessed, (",
+     "test_the_positive_control_fails_loudly_when_the_census_yields_no_specimen"),
+
     ("S12 sync_objdiff warns instead of exiting 5", SYNC,
      '            print(f"\\nREFUSING to issue auto-AT_LIMIT certificates:\\n{gate_refusal}\\n",\n'
      '                  file=sys.stderr)\n            sys.exit(5)',
@@ -133,8 +149,11 @@ def run(node: str) -> bool:
 
 
 def restore() -> None:
+    # TESTS is restored too: S14/S15 sabotage the control's own vacuity gate,
+    # which lives in the test file.  `dirty()` has always covered TESTS, so this
+    # cannot take uncommitted work that the refusal above would have allowed.
     subprocess.run(["git", "-C", str(ROOT), "checkout", "--",
-                    str(GATE), str(VERIFY), str(SYNC)], check=True)
+                    str(GATE), str(VERIFY), str(SYNC), str(TESTS)], check=True)
 
 
 def main() -> int:

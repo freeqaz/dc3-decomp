@@ -930,6 +930,78 @@ def test_positive_control_on_the_real_population_both_directions(tmp_path: Path)
 
 
 @pytest.mark.skipif(not REAL_DB.exists(), reason="main checkout's decomp.db absent")
+@pytest.mark.parametrize("emptied", ["blocking", "clearing"])
+def test_the_positive_control_fails_loudly_when_the_census_yields_no_specimen(
+        tmp_path: Path, monkeypatch, emptied: str):
+    """The control above must go RED on an empty derivation, not quietly green.
+
+    This is the assertion that makes the rewrite worth anything.  Deriving the
+    specimen from the live census removes the expiry date that killed
+    `?Copy@FxSend@@`, but it introduces a worse failure if it is done carelessly:
+    a derivation that yields nothing would satisfy `for s in <empty>: assert ...`
+    perfectly, print a green tick, and leave the gate exactly as unverified as a
+    hardcoded specimen that no longer exists -- with no red to tell anyone.  A
+    control that silently skips when it finds nothing is the same defect in a
+    new costume, so the empty case is tested rather than reasoned about.
+
+    Both halves of the control are emptied in turn, in a COPY of the database,
+    by deleting the rows that feed one direction:
+
+      "blocking"  every actionable callee row -> `expected_block` is empty;
+      "clearing"  every unverifiable callee row -> `guessed` is empty.
+
+    NEGATIVE CONTROL, inside the test: the same call on the UNDOCTORED database
+    must pass.  Without it a control function that raised unconditionally --
+    or one broken in some unrelated way -- would satisfy both halves.
+
+    SABOTAGE: change either vacuity `assert` in the control to `if X: pass`, or
+    reword it so the message no longer says UNVERIFIED.  The matching half here
+    goes red.
+    """
+    # bound BEFORE the monkeypatch: `REAL_DB` in this function is the module
+    # global the patch replaces, so re-reading it below would restore `doctored`
+    # over itself and the negative control would silently test nothing.
+    real_db = REAL_DB
+
+    doctored = tmp_path / "doctored.db"
+    doctored.write_bytes(real_db.read_bytes())
+    con = sqlite3.connect(doctored)
+    scan_id = con.execute("SELECT MAX(id) FROM pattern_scans "
+                          "WHERE ruler = 'name_check'").fetchone()[0]
+    # empty the BLOCKING direction by deleting the actionable rows, and the
+    # CLEARING direction by deleting the unverifiable ones.
+    drop, expect = (("!=", "blocking direction") if emptied == "blocking"
+                    else ("=", "clearing direction"))
+    con.execute(
+        "DELETE FROM function_patterns WHERE scan_id = ? AND pattern IN (%s)"
+        "   AND COALESCE(fixability, '') %s 'unverifiable'"
+        % (",".join("?" * len(CALLEE_PATTERNS)), drop),
+        (scan_id, *CALLEE_PATTERNS))
+    con.commit()
+    con.close()
+
+    (tmp_path / "run").mkdir()
+    (tmp_path / "control").mkdir()
+    monkeypatch.setattr(sys.modules[__name__], "REAL_DB", doctored)
+    with pytest.raises(AssertionError) as e:
+        test_positive_control_on_the_real_population_both_directions(
+            tmp_path / "run")
+    assert "UNVERIFIED" in str(e.value), (
+        "the control failed for some reason OTHER than the empty derivation, so "
+        f"this test proves nothing about the vacuity gate:\n{e.value}")
+    assert expect in str(e.value), (
+        f"emptying the {emptied} direction must be reported as the {expect} "
+        f"being unproven, not as some other refusal:\n{e.value}")
+    assert f"scan id={scan_id}" in str(e.value), \
+        "an empty-derivation refusal must name the scan it derived from"
+
+    # NEGATIVE CONTROL: the real database, undoctored, still passes.
+    monkeypatch.setattr(sys.modules[__name__], "REAL_DB", real_db)
+    test_positive_control_on_the_real_population_both_directions(
+        tmp_path / "control")
+
+
+@pytest.mark.skipif(not REAL_DB.exists(), reason="main checkout's decomp.db absent")
 def test_sync_objdiff_refuses_to_certify_from_a_stale_scan_end_to_end(tmp_path: Path):
     """`sync_objdiff.py --auto-at-limit` must EXIT 5, not warn and carry on.
 
