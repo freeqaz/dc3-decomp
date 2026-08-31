@@ -357,19 +357,16 @@ void HamRibbon::ConstructMesh() {
         mMesh->Faces().resize(mNumSides * mNumSegments * 2);
 
         for (int seg = 0; seg < mNumSegments; seg++) {
+            int base = seg * mNumSides * 2;
             for (int side = 0; side < mNumSides; side++) {
                 int nextSide = (side + 1) % mNumSides;
-                int base = seg * mNumSides * 2;
-
-                int faceIdx = (seg * mNumSides + side) * 2;
-                mMesh->Faces()[faceIdx].v1 = base + side;
-                mMesh->Faces()[faceIdx].v2 = base + nextSide;
-                mMesh->Faces()[faceIdx].v3 = base + mNumSides + nextSide;
-
-                int faceIdx1 = faceIdx + 1;
-                mMesh->Faces()[faceIdx1].v1 = base + mNumSides + nextSide;
-                mMesh->Faces()[faceIdx1].v2 = base + mNumSides + side;
-                mMesh->Faces()[faceIdx1].v3 = base + side;
+                int faceIdx = base + side * 2;
+                mMesh->Faces()[faceIdx].Set(
+                    base + side, base + nextSide, mNumSides + base + nextSide
+                );
+                mMesh->Faces()[faceIdx + 1].Set(
+                    mNumSides + base + nextSide, base + side + mNumSides, base + side
+                );
             }
         }
 
@@ -380,14 +377,18 @@ void HamRibbon::ConstructMesh() {
 
         for (int seg = 0; seg < mNumSegments; seg++) {
             float uStep = 1.0f / mNumSides;
+            int base = seg * mNumSides * 2;
             for (int side = 0; side < mNumSides; side++) {
                 Vector4 boneWeights(1.0f, 0.0f, 0.0f, 0.0f);
                 float angle = side * angleStep;
                 float u = side * uStep;
 
                 for (int v = 0; v < 2; v++) {
-                    int vertIdx = seg * mNumSides * 2 + v * mNumSides + side;
-                    int boneIdx = Clamp(0, mMesh->NumBones() - 1, seg + v);
+                    int vertIdx = base + side + v * mNumSides;
+                    int boneIdx = mMesh->NumBones() - 1;
+                    if (seg + v <= boneIdx) {
+                        boneIdx = Max(0, seg + v);
+                    }
 
                     float cosA = std::cos(angle);
                     float sinA = std::sin(angle);
@@ -406,8 +407,7 @@ void HamRibbon::ConstructMesh() {
 
                     verts[vertIdx].boneIndices[0] = (short)boneIdx;
                     verts[vertIdx].boneWeights = boneWeights;
-                    verts[vertIdx].tex.x = (float)boneIdx / (float)mNumSegments;
-                    verts[vertIdx].tex.y = u;
+                    verts[vertIdx].tex.Set((float)boneIdx / (float)mNumSegments, u);
                 }
             }
         }
