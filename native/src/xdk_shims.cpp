@@ -799,7 +799,17 @@ DWORD XShowNuiDirtyDiscErrorUI(DWORD, DWORD) { exit(1); }
 DWORD XShowDirtyDiscErrorUI(DWORD) { exit(1); }
 DWORD XMarketplaceCreateOfferEnumerator(DWORD, DWORD, ULONGLONG, DWORD, DWORD *, HANDLE *) { return 1; }
 DWORD XMarketplaceCreateOfferEnumeratorByOffering(DWORD, DWORD, ULONGLONG *, WORD, DWORD *, HANDLE *) { return 1; }
-HANDLE XNotifyCreateListener(DWORD) { return nullptr; }
+// NOTE: the parameter is QWORD, not DWORD. xbox.h declares
+//   HANDLE XNotifyCreateListener(QWORD qwAreas);
+// inside an extern "C" block. A definition here with a *different* parameter
+// type is not a redefinition error in C++ -- it is a new overload, and since
+// only one overload can carry C linkage, the DWORD version silently mangled to
+// _Z21XNotifyCreateListenerj while App.cpp's call kept referencing the
+// unmangled extern "C" symbol. The result was an undefined symbol that
+// -Wl,--unresolved-symbols=ignore-all swallowed, leaving KinectGuideThread to
+// die with "symbol lookup error" on first call. Keep this signature in sync
+// with xbox.h.
+HANDLE XNotifyCreateListener(QWORD) { return nullptr; }
 BOOL XNotifyGetNext(HANDLE, DWORD, DWORD *, ULONG_PTR *) { return 0; }
 
 // ============================================================================

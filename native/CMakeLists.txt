@@ -58,6 +58,19 @@ set(DC3_MSVC_COMPAT_FLAGS
     # Not needed on macOS (uses libc++, not libstdc++).
     $<$<NOT:$<PLATFORM_ID:Darwin>>:-D__GNUC_STDC_INLINE__>
     $<$<NOT:$<PLATFORM_ID:Darwin>>:-D__GCC_ATOMIC_TEST_AND_SET_TRUEVAL=1>
+    # Same class of bug as the two above, and it produced an undefined symbol
+    # rather than a compile error. -fms-compatibility makes clang stop defining
+    # __GXX_WEAK__; libstdc++'s <typeinfo> reads that macro to decide whether
+    # std::type_info::operator== is inline, so in MSVC mode it becomes an
+    # out-of-line call to _ZNKSt9type_infoeqERKS_ -- which libstdc++.so.6.0.36
+    # does not export. Every MS-compat TU comparing type_info (std::regex
+    # collation, shared_ptr's _M_get_deleter) emitted a reference nothing could
+    # satisfy. <typeinfo> documents this macro as the supported override.
+    # Reproduce: clang++ -std=gnu++17 -fms-compatibility on `a == b` over two
+    # type_infos leaves an undefined reference; adding this define removes it.
+    # This also makes MS-compat TUs agree with the rest of the build, which was
+    # already using the inline form.
+    $<$<NOT:$<PLATFORM_ID:Darwin>>:-D__GXX_TYPEINFO_EQUALITY_INLINE=1>
     # macOS: -fms-compatibility changes __builtin_va_list from void* to char*,
     # conflicting with the SDK's va_list typedef. Force-include <stdarg.h> so
     # clang's definition wins first, then suppress the SDK's redefinition.
@@ -194,10 +207,39 @@ if(NOT EMSCRIPTEN)
         set(DC3_METAL_SURFACE_SOURCE src/gfx/MetalSurface.mm)
     else()
         # Linux: GNU ld flags
+        #
+        # --no-undefined (== -z defs) is load-bearing. It replaced
+        # `--unresolved-symbols=ignore-all` + `--warn-unresolved-symbols`, a
+        # pair that between them made the link incapable of reporting a missing
+        # symbol at all:
+        #
+        #   * --unresolved-symbols=ignore-all SUPPRESSES
+        #     --warn-unresolved-symbols, so the link was completely silent.
+        #     Measured: 24 symbols were undefined in dc3-native with zero
+        #     diagnostics.
+        #   * --warn-unresolved-symbols DEMOTES --no-undefined's errors back to
+        #     warnings. Adding --no-undefined while leaving the warn flag in
+        #     place still links successfully and still produces a binary. Both
+        #     had to go for the check to have any effect. Do not re-add it.
+        #
+        # Undefined symbols here are not a theoretical concern: they are lazily
+        # bound, so the link succeeds, the binary boots, and the process dies
+        # with `symbol lookup error` / exit 127 on the FIRST call. Verified on
+        # the pre-fix binary with `LD_BIND_NOW=1 ./dc3-native` (exit 127 on
+        # BinkRegisterFrameBuffers).
+        #
+        # If this fires, add a definition (native/src/xbox_link_stubs.cpp is the
+        # home for Xbox-only entry points). Do not silence it — a green link is
+        # the only thing standing between a missing symbol and a crash on a code
+        # path nobody has walked yet.
+        #
+        # --allow-multiple-definition stays: the decomp has intentional
+        # stub/real symbol pairs. Note it is why weak stubs can shadow real
+        # bodies; scripts/native/check_stub_shadow.py is the gate for that
+        # separate failure mode.
         set(DC3_PLATFORM_LINK_OPTIONS
             -rdynamic
-            -Wl,--unresolved-symbols=ignore-all
-            -Wl,--warn-unresolved-symbols
+            -Wl,--no-undefined
             -Wl,--allow-multiple-definition
         )
         set(DC3_PLATFORM_LIBS
@@ -1108,6 +1150,7 @@ set(DC3_ENGINE_SOURCES
 # Native platform sources (no entry point — shared by dc3-native and milo-viewer)
 set(DC3_NATIVE_CORE_SOURCES
     src/xdk_shims.cpp
+    src/xbox_link_stubs.cpp
     src/telemetry/GameplayTelemetry.cpp
     src/platform/Memory_Native.cpp
     src/platform/PlatformMgr_Native.cpp
@@ -1182,8 +1225,18 @@ set(DC3_NATIVE_SOURCES
 # Engine-clean core files now provided by libmilo-engine.a. Targets that LINK
 # the engine (dc3-native, milo-viewer, render-test, milo-tests) use this
 # filtered core list and additionally drop the moved gfx set + CharTwistSolver
-# + ImGuiBackend + DebugPanel + VideoEncoder (all in the engine). Other targets
-# (export tools, dc3-web) are unchanged and still compile everything locally.
+# + ImGuiBackend + DebugPanel + VideoEncoder (all in the engine). Only dc3-web
+# is unchanged and still compiles everything locally -- the export tools
+# (milo-tex-export, milo-mat-export, milo2gltf) link milo-engine too and use
+# this same filtered list via DC3_EXPORT_TOOL_SOURCES.
+#
+# Consequence worth knowing: several files in DC3_NATIVE_CORE_SOURCES are
+# removed again immediately below and so compile to NO OBJECT in any native
+# target. src/platform/Tex_Wgpu.cpp is one of them -- it is byte-identical to
+# ${MILO_ENGINE_PATH}/src/platform/Tex_Wgpu.cpp, which is what every native
+# target actually links. The DC3 copy is still live for dc3-web (see
+# DC3_WEB_CORE_SOURCES), so it cannot simply be deleted; if you edit either
+# copy, edit both or the web and native texture paths will diverge silently.
 # (FFmpeg*.cpp are genex list items and stay in both; allow-multiple-definition
 #  tolerates the duplicate.)
 set(DC3_NATIVE_CORE_SOURCES_ENGINE ${DC3_NATIVE_CORE_SOURCES})
@@ -1221,6 +1274,19 @@ list(REMOVE_ITEM DC3_NATIVE_CORE_SOURCES_ENGINE
     src/platform/TransparentQueue.cpp
     src/platform/VirtualKeyboard_Stub.cpp
 )
+
+# DebugPanel.cpp is "deferred glue": the engine deliberately does NOT compile it
+# (see milo-native-engine/CMakeLists.txt — it reaches TheHttpServer under
+# DC3_HTTP_SERVER, so each consumer supplies it), yet libmilo-engine.a's
+# Rnd_Wgpu.cpp calls DebugPanel::Toggle() from WgpuRnd::BeginDrawing. So EVERY
+# target that links the engine needs this TU, and it belongs in the shared
+# engine-linking list rather than being repeated per target — it was listed on
+# dc3-native, milo-viewer and dc3-web but missing from milo-tests, render-test
+# and all three export tools, which linked with DebugPanel::Toggle() undefined
+# until -Wl,--no-undefined was turned on. DC3_HTTP_SERVER is defined only on
+# dc3-native, so for the other targets this pulls in no HTTP dependency.
+# (dc3-web keeps its own entry: it does not use this list.)
+list(APPEND DC3_NATIVE_CORE_SOURCES_ENGINE src/platform/DebugPanel.cpp)
 
 # ============================================================================
 # Graphics subsystem sources (WebGPU/Dawn)
