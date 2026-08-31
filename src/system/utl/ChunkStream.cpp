@@ -273,9 +273,10 @@ int ChunkStream::Tell() {
 }
 
 EofType ChunkStream::Eof() {
+    int x;
+    int y;
     MILO_ASSERT(!mFail && mType == kRead, 0x22c);
     if (mChunkInfoPending) {
-        int x;
         if (mFile->ReadDone(x) == 0)
             return TempEof;
         mChunkInfoPending = false;
@@ -333,7 +334,6 @@ EofType ChunkStream::Eof() {
     }
 
     {
-        int y;
         if (mFile->ReadDone(y)) {
             DecompressChunkAsync();
             ReadChunkAsync();
