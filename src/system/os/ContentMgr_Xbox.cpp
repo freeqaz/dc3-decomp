@@ -13,8 +13,8 @@
 
 // Forward declarations for XContent functions
 extern "C" {
-    long XContentCreateCrossTitleEnumerator(int, void*, int, int, int, int, void*);
-    long XEnumerateCrossTitle(void*, void*, int, int, void*);
+    unsigned long XContentCreateCrossTitleEnumerator(int, void*, int, int, int, int, void*);
+    unsigned long XEnumerateCrossTitle(void*, void*, int, int, void*);
 }
 
 std::vector<String> gIgnoredContent;
@@ -233,22 +233,41 @@ void XboxContentMgr::StartRefresh() {
             (*it)->ContentStarted();
         }
         for (int i = 0; i < kNumberOfBuffers; i++) {
-            if (i >= 4
-                || ThePlatformMgr.IsSignedIn(i)
-                    && (i != 5 || mEnumerateSaveGameExports)) {
-                int flags = i == 4 ? 2 : i == 5 ? 1 : i == 6 ? 0x7000 : 2;
-                int param = i == 4 || i == 5 ? 0xff : i;
-                void* dataPtr = &mXDatas[i];
-
-                if (i == 4) dataPtr = &mEnumHandles[4];
-                else if (i == 5) dataPtr = &mEnumHandles[5];
-                else if (i == 6) dataPtr = &mEnumHandles[6];
-
-                void* enumHandle = operator new(0x1c);
-                memset(enumHandle, 0, 0x1c);
-
-                if (XContentCreateCrossTitleEnumerator(param, 0, flags, 0, 1, 0, dataPtr) == 0) {
-                    XEnumerateCrossTitle(enumHandle, &mXDatas[i], 0x138, 0, mOverlappeds[i]);
+            if ((i >= 4 || ThePlatformMgr.IsSignedIn(i))
+                && (i != 5 || mEnumerateSaveGameExports)) {
+                int param;
+                int flags;
+                void **handle;
+                if (i == 4) {
+                    handle = &mEnumHandles[4];
+                    param = 0xff;
+                    flags = 2;
+                } else if (i == 5) {
+                    handle = &mEnumHandles[5];
+                    flags = 1;
+                    param = 0xff;
+                } else if (i == 6) {
+                    handle = &mEnumHandles[6];
+                    flags = 0x7000;
+                    param = 0xff;
+                } else {
+                    handle = &mEnumHandles[i];
+                    param = i;
+                    flags = 2;
+                }
+                // The `== 0` and `!= 0 { continue; }` spellings compile
+                // byte-identically here; the readable one is kept.
+                if (XContentCreateCrossTitleEnumerator(param, 0, flags, 0, 1, 0, handle)
+                    == 0) {
+                    mOverlappeds[i] = new XOVERLAPPED;
+                    memset(mOverlappeds[i], 0, sizeof(XOVERLAPPED));
+                    if (XEnumerateCrossTitle(
+                            mEnumHandles[i], &mXDatas[i], 0x138, 0, mOverlappeds[i]
+                        )
+                        != 0x3E5) {
+                        RELEASE(mOverlappeds[i]);
+                        CloseHandle(mEnumHandles[i]);
+                    }
                 }
             }
         }
