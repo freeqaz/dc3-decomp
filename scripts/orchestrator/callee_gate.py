@@ -189,6 +189,47 @@ class StalePatternScanError(RuntimeError):
     """
 
 
+class UnreadableDatabaseError(RuntimeError):
+    """The connection is not a decomp.db this gate may answer from.
+
+    Deliberately NOT a subclass of `StalePatternScanError`.  Until 2026-08-31
+    it effectively was one: `latest_scan()` caught every `sqlite3.Error` and
+    returned ``None`` (the comment said "pre-v17 schema"), so opening the
+    worktree tripwire -- a file that is deliberately not SQLite, precisely so a
+    reader gets `file is not a database` -- surfaced as
+
+        STALE PATTERN SCAN (name_check): no pattern scan recorded ...
+
+    which is a domain-level diagnosis of a wrong-directory condition.  A lane
+    lost time chasing a census refresh that was never stale.  The two conditions
+    now have two exception types and two exit codes.
+    """
+
+
+class UnmooredPatternScanError(StalePatternScanError):
+    """The scan describes a TREE OTHER THAN the one that owns this database.
+
+    `decomp.db` lives in the main checkout and is shared; a git worktree is not.
+    `pattern_census.py --apply` run from a worktree therefore writes a row whose
+    `project_dir` points at a directory that can be deleted, and whose
+    `build_rev` sits on a branch that can be rebased away -- while the row
+    survives, becomes the latest scan for its ruler, and reads GREEN from main.
+
+    Measured in this database on 2026-08-31: of eleven recorded scans, FOUR
+    (ids 1, 5, 6, 9) were taken from worktrees, and three of those four
+    directories no longer exist.  Scan 9 (`.../wt-callee5 @ 15a64d92f`) was the
+    latest `name_check` scan for fifteen minutes; the guard read green on it,
+    and only stopped doing so because a different lane happened to write scan 10
+    from the main checkout.  Nothing surfaced any of it.
+
+    A subclass of `StalePatternScanError` on purpose: it IS a staleness
+    condition, so existing `except StalePatternScanError` handlers keep
+    refusing.  It is a distinct class so a caller can tell "re-run the census"
+    from "re-run the census FROM THE MAIN CHECKOUT", and it is deliberately NOT
+    an `UnreadableDatabaseError` -- the database is fine, the scan is not.
+    """
+
+
 class LinkerMapError(RuntimeError):
     """The shipped linker map could not be read or parsed."""
 
@@ -216,16 +257,139 @@ def installed_objdiff_version(repo_root: Path | str = REPO_ROOT) -> str:
     return out.stdout.strip()
 
 
+def connection_path(db: sqlite3.Connection) -> Path | None:
+    """The file backing `db`'s `main` schema, or None for `:memory:`/unknown.
+
+    `ensure_current_scan` takes a connection, not a path, so this is how the
+    guard recovers enough identity to tell "wrong database" from "stale scan".
+    """
+    try:
+        for _seq, name, file in db.execute("PRAGMA database_list"):
+            if name == "main" and file:
+                return Path(file)
+    except sqlite3.Error:
+        return None
+    return None
+
+
+def _shadow_main_db(path: Path) -> Path | None:
+    """The main checkout's decomp.db if `path` is a worktree-local one.
+
+    Delegates to `orchestrator.database.shadow_target` so there is ONE
+    definition of "this is a worktree shadow" in the tree.  Imported lazily:
+    `database` is a much heavier module and this gate is on `sync_objdiff`'s
+    hot path.
+    """
+    try:
+        from orchestrator.database import shadow_target
+    except Exception:                         # pragma: no cover - packaging only
+        return None
+    try:
+        return shadow_target(path)
+    except Exception:                         # pragma: no cover - defensive
+        return None
+
+
+def _unreadable(path: Path | None,
+                cause: Exception | str | None) -> UnreadableDatabaseError:
+    """Build the refusal for a connection this gate must not answer from."""
+    main_db = _shadow_main_db(path) if path is not None else None
+    where = str(path) if path is not None else "<in-memory or unknown>"
+    if main_db is not None:
+        return UnreadableDatabaseError(
+            f"refusing to read a pattern scan from a WORKTREE-LOCAL decomp.db.\n"
+            f"  opened       : {where}\n"
+            f"  real DB      : {main_db}\n"
+            f"  sqlite says  : {cause}\n"
+            f"This is NOT a stale scan.  `scripts/setup_worktree.sh` plants a "
+            f"tripwire at <worktree>/decomp.db that is deliberately not a valid "
+            f"SQLite file, and a worktree `ninja` would otherwise grow a shadow DB "
+            f"with every row and ZERO verdicts.  Either way the pattern-scan tables "
+            f"are absent, and reporting that as 'no scan recorded' diagnoses the "
+            f"wrong thing -- it sends you to re-run a census that is perfectly "
+            f"current.\n"
+            f"Fix: point the reader at the main checkout:\n"
+            f"  --db {main_db}")
+    return UnreadableDatabaseError(
+        f"refusing to read a pattern scan: the database is unreadable.\n"
+        f"  opened       : {where}\n"
+        f"  sqlite says  : {cause}\n"
+        f"This is NOT a stale scan.  Nothing can be concluded about the callee "
+        f"population from a database that cannot be queried, and an empty result "
+        f"would read as 'no wrong callees here'.")
+
+
 def latest_scan(db: sqlite3.Connection, ruler: str = DEFAULT_RULER) -> dict | None:
-    """The newest recorded scan for `ruler`, or None."""
+    """The newest recorded scan for `ruler`, or None.
+
+    None means *this database has no such scan* -- and only that.  A database
+    that cannot answer the question at all (not SQLite, encrypted, truncated,
+    a worktree tripwire) raises `UnreadableDatabaseError`; the pre-v17 case the
+    old blanket `except sqlite3.Error` was written for is exactly one message,
+    `no such table`, and it is the only one still swallowed.
+    """
     db.row_factory = sqlite3.Row
     try:
         row = db.execute(
             "SELECT * FROM v_latest_pattern_scan WHERE ruler = ?", (ruler,)
         ).fetchone()
-    except sqlite3.Error:                     # pre-v17 schema
-        return None
+    except sqlite3.OperationalError as e:
+        # pre-v17 schema: the view/table genuinely does not exist in a real DB.
+        if "no such table" in str(e).lower() or "no such view" in str(e).lower():
+            return None
+        raise _unreadable(connection_path(db), e) from e
+    except sqlite3.DatabaseError as e:
+        # "file is not a database", "database disk image is malformed", ...
+        raise _unreadable(connection_path(db), e) from e
     return dict(row) if row else None
+
+
+def owning_tree(db_path: Path) -> Path:
+    """The checkout a `decomp.db` belongs to -- simply the directory holding it.
+
+    `decomp.db` is a per-checkout artefact by construction: `setup_worktree.sh`
+    plants a tripwire rather than a second copy, and `orchestrator.database`
+    refuses a worktree-local one.  So "which tree does this database describe?"
+    has exactly one answer and it needs no git.
+    """
+    return db_path.resolve().parent
+
+
+def check_scan_tree(scan: dict, db_path: Path, *,
+                    ruler: str = DEFAULT_RULER) -> None:
+    """Refuse a scan taken from a tree other than the one owning the database.
+
+    This is the ONLY check for the unmoored class, and it is deliberately total
+    rather than clever: with it in force, no scan written from a worktree can
+    ever be read, so the "its branch got rebased away" failure it exists to catch
+    is closed upstream and needs no reachability test of its own.  A reachability
+    test would also have been the weaker instrument -- a rebased-away commit
+    still `rev-parse`s until git gc runs, so "the commit resolves" would have
+    read green on exactly the state it was meant to catch.
+    """
+    recorded_raw = scan.get("project_dir") or ""
+    owner = owning_tree(db_path)
+    try:
+        recorded = Path(recorded_raw).resolve()
+    except (OSError, RuntimeError):
+        recorded = Path(recorded_raw)
+    if recorded == owner:
+        return
+    gone = "" if Path(recorded_raw).is_dir() else "  (that directory no longer exists)"
+    raise UnmooredPatternScanError(
+        f"pattern scan id={scan['id']} (ruler={ruler}) was taken from a DIFFERENT "
+        f"TREE than the one this database belongs to.\n"
+        f"  scan's tree : {recorded_raw} @ {scan.get('build_rev')}{gone}\n"
+        f"  db's tree   : {owner}\n"
+        f"  db          : {db_path}\n"
+        f"`decomp.db` lives in the main checkout and is shared; a worktree is not. "
+        f"A census run from a worktree writes a row that outlives the directory it "
+        f"names and the branch it was taken on, then becomes the latest scan and "
+        f"reads GREEN from main.  Four of this database's eleven scans are of that "
+        f"shape and three of those four directories are already gone.\n"
+        f"Re-derive it FROM THE MAIN CHECKOUT:\n"
+        f"  cd {owner} && python3 scripts/analysis/pattern_census.py "
+        f"--ruler {ruler} --apply")
 
 
 def ensure_current_scan(db: sqlite3.Connection, *, ruler: str = DEFAULT_RULER,
@@ -237,8 +401,25 @@ def ensure_current_scan(db: sqlite3.Connection, *, ruler: str = DEFAULT_RULER,
     * no scan at all for this ruler -- there is nothing to certify from;
     * ``tool_version`` != the installed ``objdiff-cli --version``;
     * ``tree_verified = 0`` -- the census did not assert a post-compile fixed
-      point, so its pattern set was measured on an unsettled tree.
+      point, so its pattern set was measured on an unsettled tree;
+    * ``project_dir`` is not the checkout that owns this database -- an
+      `UnmooredPatternScanError`, see `check_scan_tree`.
+
+    Before any of those it establishes WHICH database it is holding, and raises
+    `UnreadableDatabaseError` for a worktree-local `decomp.db`.  That check is by
+    PATH and runs even when the file opens cleanly: a shadow DB grown by a
+    worktree `ninja` is valid SQLite with the tables present and no scan rows, so
+    the read succeeds and returns None -- the same wrong "no scan recorded"
+    diagnosis, arrived at without a single sqlite error to catch.
     """
+    path = connection_path(db)
+    if path is None:
+        raise _unreadable(None, "the connection names no file, so the tree that "
+                                "owns it cannot be established")
+    main_db = _shadow_main_db(path)
+    if main_db is not None:
+        raise _unreadable(path, "path is a worktree-local decomp.db "
+                                "(checked before opening it)")
     installed = installed_objdiff_version(repo_root)
     scan = latest_scan(db, ruler)
     if scan is None:
@@ -298,6 +479,7 @@ def ensure_current_scan(db: sqlite3.Connection, *, ruler: str = DEFAULT_RULER,
             f"the census did not assert a post-compile fixed point, so its pattern "
             f"set was measured on an unsettled tree.  Re-derive it:\n"
             f"  python3 scripts/analysis/pattern_census.py --ruler {ruler} --apply")
+    check_scan_tree(scan, path, ruler=ruler)
     return scan
 
 

@@ -839,6 +839,7 @@ def main():
         sys.path.insert(0, str(REPO_ROOT / "scripts"))
         from orchestrator.callee_gate import (LinkerMapError,
                                               StalePatternScanError,
+                                              UnreadableDatabaseError,
                                               build_callee_gate)
         _c = sqlite3.connect(str(args.db))
         try:
@@ -850,7 +851,12 @@ def main():
         stats["callee_gate_cleared"] = len(callee_gate.cleared)
         for k, v in callee_gate.counts().items():
             stats[f"callee_gate_{k.replace(':', '_')}"] = v
-    except (StalePatternScanError, LinkerMapError, sqlite3.Error) as e:
+    except (StalePatternScanError, UnreadableDatabaseError, LinkerMapError,
+            sqlite3.Error) as e:
+        # The exception TYPE is carried into the message deliberately:
+        # `UnreadableDatabaseError` means "wrong database" (a worktree shadow or
+        # tripwire) and `StalePatternScanError` means "re-run the census".  They
+        # used to be the same message, and the wrong one.
         gate_refusal = f"{type(e).__name__}: {e}"
         stats["callee_gate_blocked"] = -1
         if args.auto_at_limit:
