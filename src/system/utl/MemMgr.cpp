@@ -572,7 +572,7 @@ void MemPopHeap() {
 }
 
 void MemPushTemp() {
-    bool proceed = gNumHeaps != 0 && gNumHeaps > 0;
+    bool proceed = gInitted && gNumHeaps > 0;
     if (proceed) {
         MemHeapStack &s = ThreadMemStack(true);
         s.mTempRefs++;
@@ -580,7 +580,7 @@ void MemPushTemp() {
 }
 
 void MemPopTemp() {
-    bool proceed = gNumHeaps != 0 && gNumHeaps > 0;
+    bool proceed = gInitted && gNumHeaps > 0;
     if (proceed) {
         MemHeapStack &s = ThreadMemStack(true);
         MILO_ASSERT(s.mTempRefs > 0, 0x209);
