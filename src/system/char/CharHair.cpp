@@ -300,7 +300,7 @@ void CharHair::SimulateInternal(float fps) {
                 float rsa = RecipSqrtAccurate(LengthSquared(m128.y));
                 float rsalen = pt.length * rsa - 1.0f;
                 if (j > 0) {
-                    ScaleAddEq(points[j - 1].force, m128.y, -sixtyOver * 0.5f * rsalen);
+                    ScaleAddEq(points[j - 1].force, m128.y, halfWeight * rsalen);
                 }
                 ScaleAddEq(pt.pos, m128.y, rsalen);
                 Vector3 idealPos;
