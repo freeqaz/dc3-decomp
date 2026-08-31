@@ -157,6 +157,22 @@ a template. Standing check: `scripts/analysis/reloc_name_gate.py` (with a
 its "Check the instrument first" section before triaging a row, because three of
 the loudest findings there were config defects rather than source bugs.
 
+### A per-function number below `report.json`'s was, until 2026-08-31, often the tool
+
+`objdiff-cli diff` and `objdiff-cli report generate` carry **different hardcoded
+base configs**, so on 155 functions / 120,728 B the per-function path scored
+LOWER than the canonical report — 49 of them (28,240 B) reading exactly 100.0 in
+`report.json` and <100 through `run_objdiff`, whose charged row was two
+*textually identical* instructions. Cause: `ppc.calculatePoolRelocations`
+(schema default **true**; the report sets it **false**) synthesizes fake
+`R_PPC_NONE` relocations for pooled data loads, reconstructed per object, and a
+target-only relocation is charged under every ruler except `none`. Fixed by
+pinning all four divergent keys in `objdiff.json`'s `options`, which both entry
+points layer — no recorded number changed. Guard:
+`scripts/verify_ruler_agreement.py --check` / `--selftest`. Full write-up with
+the sweep, the mechanism at file:line, and both controls:
+**[two-objdiff-entry-points-two-rulers.md](two-objdiff-entry-points-two-rulers.md)**.
+
 ## Fixable Patterns
 
 These patterns can often be fixed with source changes. Sorted by ROI (impact x success rate).

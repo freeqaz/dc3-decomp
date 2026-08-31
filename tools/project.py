@@ -2231,8 +2231,49 @@ def generate_objdiff_config(
         # point: it is the part of the corpus that was being credited without
         # being checked. Measured at the flip, dc3 goes 43.7276% -> 40.3618%
         # matched_code, exposing 1,166 of 29,182 complete functions.
+        # The other three keys pin the ruler that `report generate` was ALREADY
+        # using, so that `objdiff-cli diff` uses it too. They change no recorded
+        # number; they make the per-function tools agree with the canonical one.
+        #
+        # `objdiff-cli report generate` and `objdiff-cli diff` carry DIFFERENT
+        # hardcoded base configs, and neither is the schema default
+        # (objdiff-cli/src/cmd/report.rs:581 vs objdiff-cli/src/cmd/diff.rs:1070):
+        #
+        #     report generate   functionRelocDiffs=none, combineDataSections=true,
+        #                       combineTextSections=true,
+        #                       ppc.calculatePoolRelocations=false
+        #     diff              functionRelocDiffs=data_value, the other three at
+        #                       their schema defaults (false / false / TRUE)
+        #
+        # Both then layer this `options` block on top, so before this change the
+        # block fixed `functionRelocDiffs` for both paths and left `diff`
+        # disagreeing with the grader on the other three. `ppc.calculatePoolRelocations`
+        # is the one that bites: it SYNTHESIZES `R_PPC_NONE` "fake" relocations for
+        # pooled data loads (objdiff-core/src/arch/ppc/mod.rs:819 `make_fake_pool_reloc`,
+        # schema: "Display pooled data references in functions as fake relocations"),
+        # reconstructed per object from that object's own symbol table. A dtk-carved
+        # target obj (whole linked data section, anonymous `lbl_*` labels) and our
+        # MSVC per-TU COMDAT obj do not reconstruct the same set, and
+        # `reloc_eq` (objdiff-core/src/diff/code.rs:1338) charges a relocation
+        # present on one side and absent on the other under EVERY ruler except
+        # `none` -- including `name_check`. The result is a charged row whose two
+        # sides are textually identical, e.g. `SetVHBlurWeights`:
+        #     [128] replace: `subi r28, r11, 0x8` vs `subi r28, r11, 0x8`
+        # scoring 99.675674 through `diff`/`run_objdiff` against 100.0 in
+        # report.json. Whole-binary sweep, 2026-08-31: 155 functions / 120,728
+        # bytes were scored LOWER by the per-function path than by the report
+        # (never higher), 49 of them (28,240 B) reading 100.0 in report.json and
+        # <100 through `diff`.
+        #
+        # Turning the annotation off hides nothing: a pooled datum really being
+        # wrong still moves the REAL relocations that both objects carry
+        # (control: swapping one `weights[]` constant in SetVHBlurWeights is
+        # charged 7 rows / 98.5% with the annotation off).
         "options": {
             "functionRelocDiffs": "name_check",
+            "combineDataSections": True,
+            "combineTextSections": True,
+            "ppc.calculatePoolRelocations": False,
         },
     }
 
