@@ -124,28 +124,55 @@ bool NgLight::SphereConeTest(const Vector3 &sphereCenter, float sphereRadius) {
 }
 
 namespace Hmx {
+    /** Dot product of a row of the left-hand transform with a column of the
+     * right-hand Matrix4 -- the inner loop of Transform * Matrix4.
+     *
+     * Same shape (and same reason) as Dot4 in math/Mtx.h: the row comes first
+     * so that the caller's `Dot3(t.m.x, b.Col3(0))` evaluates the Col3 call
+     * before taking the address of the row. MSVC evaluates arguments right to
+     * left, and with the column first the `&t.m.x` computation is hoisted above
+     * the call and has to live in a callee-saved register.
+     *
+     * MSVC swaps the leading pair, so the y term seeds the accumulator to get
+     * the z term emitted first. Row z of the transform is the exception -- it
+     * comes out z-first from this same spelling, so it uses Dot3ZSeed below. */
+    inline float Dot3(const Vector3 &row, const Vector3 &col) {
+        float d = col.y * row.y;
+        d += col.z * row.z;
+        d += col.x * row.x;
+        return d;
+    }
+
+    /** Dot3 with the seed the other way round; see the note above. */
+    inline float Dot3ZSeed(const Vector3 &row, const Vector3 &col) {
+        float d = col.z * row.z;
+        d += col.y * row.y;
+        d += col.x * row.x;
+        return d;
+    }
+
     Matrix4 operator*(const Transform &t, const Matrix4 &b) {
         Matrix4 out;
 
-        { const Vector3 &ca = b.Col3(0); out.x.x = ca.z * t.m.x.z + ca.y * t.m.x.y + ca.x * t.m.x.x; }
-        { const Vector3 &cb = b.Col3(1); out.x.y = cb.z * t.m.x.z + cb.y * t.m.x.y + cb.x * t.m.x.x; }
-        { const Vector3 &ca = b.Col3(2); out.x.z = ca.z * t.m.x.z + ca.y * t.m.x.y + ca.x * t.m.x.x; }
-        { const Vector3 &cb = b.Col3(3); out.x.w = cb.z * t.m.x.z + cb.y * t.m.x.y + cb.x * t.m.x.x; }
+        out.x.x = Dot3(t.m.x, b.Col3(0));
+        out.x.y = Dot3(t.m.x, b.Col3(1));
+        out.x.z = Dot3(t.m.x, b.Col3(2));
+        out.x.w = Dot3(t.m.x, b.Col3(3));
 
-        { const Vector3 &ca = b.Col3(0); out.y.x = ca.z * t.m.y.z + ca.y * t.m.y.y + ca.x * t.m.y.x; }
-        { const Vector3 &cb = b.Col3(1); out.y.y = cb.z * t.m.y.z + cb.y * t.m.y.y + cb.x * t.m.y.x; }
-        { const Vector3 &ca = b.Col3(2); out.y.z = ca.z * t.m.y.z + ca.y * t.m.y.y + ca.x * t.m.y.x; }
-        { const Vector3 &cb = b.Col3(3); out.y.w = cb.z * t.m.y.z + cb.y * t.m.y.y + cb.x * t.m.y.x; }
+        out.y.x = Dot3(t.m.y, b.Col3(0));
+        out.y.y = Dot3(t.m.y, b.Col3(1));
+        out.y.z = Dot3(t.m.y, b.Col3(2));
+        out.y.w = Dot3(t.m.y, b.Col3(3));
 
-        { const Vector3 &ca = b.Col3(0); out.z.x = ca.z * t.m.z.z + ca.y * t.m.z.y + ca.x * t.m.z.x; }
-        { const Vector3 &cb = b.Col3(1); out.z.y = cb.z * t.m.z.z + cb.y * t.m.z.y + cb.x * t.m.z.x; }
-        { const Vector3 &ca = b.Col3(2); out.z.z = ca.z * t.m.z.z + ca.y * t.m.z.y + ca.x * t.m.z.x; }
-        { const Vector3 &cb = b.Col3(3); out.z.w = cb.z * t.m.z.z + cb.y * t.m.z.y + cb.x * t.m.z.x; }
+        out.z.x = Dot3ZSeed(t.m.z, b.Col3(0));
+        out.z.y = Dot3ZSeed(t.m.z, b.Col3(1));
+        out.z.z = Dot3ZSeed(t.m.z, b.Col3(2));
+        out.z.w = Dot3ZSeed(t.m.z, b.Col3(3));
 
-        { const Vector3 &ca = b.Col3(0); out.w.x = ca.z * t.v.z + ca.y * t.v.y + ca.x * t.v.x + b.w.x; }
-        { const Vector3 &cb = b.Col3(1); out.w.y = cb.z * t.v.z + cb.y * t.v.y + cb.x * t.v.x + b.w.y; }
-        { const Vector3 &ca = b.Col3(2); out.w.z = ca.z * t.v.z + ca.y * t.v.y + ca.x * t.v.x + b.w.z; }
-        { const Vector3 &cb = b.Col3(3); out.w.w = cb.z * t.v.z + cb.y * t.v.y + cb.x * t.v.x + b.w.w; }
+        out.w.x = Dot3(t.v, b.Col3(0)) + b.w.x;
+        out.w.y = Dot3(t.v, b.Col3(1)) + b.w.y;
+        out.w.z = Dot3(t.v, b.Col3(2)) + b.w.z;
+        out.w.w = Dot3(t.v, b.Col3(3)) + b.w.w;
 
         return out;
     }
