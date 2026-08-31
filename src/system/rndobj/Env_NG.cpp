@@ -238,11 +238,13 @@ void NgEnviron::Select(const Vector3 *pos) {
          ++it) {
         NgLight *light = (NgLight *)(RndLight *)*it;
         RndLight::Type type = light->GetType();
-        if (type == RndLight::kPoint) {
+        switch (type) {
+        case RndLight::kPoint:
             if (numPoint < 3 && CheckPointLight(*light)) {
                 pointLights[numPoint++] = light;
             }
-        } else if (type == RndLight::kFakeSpot) {
+            break;
+        case RndLight::kFakeSpot:
             if (numProj < 1 && CheckProjLight(*light)) {
                 if (numProj == 0) {
                     mProjectedBlend =
@@ -256,20 +258,22 @@ void NgEnviron::Select(const Vector3 *pos) {
                 }
                 projLights[numProj++] = light;
             }
-        } else {
+            break;
+        default:
             MILO_NOTIFY_ONCE("%s: Invalid real light", PathName(light));
+            break;
         }
     }
 
     RndEnviron::Select(pos);
     ClearPointCubeTex();
     ClearLightTransforms();
-    for (int i = 0; i < 4; i++) {
+    for (unsigned int i = 0; i < 4; i++) {
         ClearLightRegisters(i);
     }
 
     int projLightIdx = 3;
-    for (int i = 0; i < numProj; i++) {
+    for (int i = 0; i != numProj; i++) {
         if (SetProjLightRegisters(projLightIdx, projLightIdx - 3, *projLights[i])) {
             mNumLightsProj++;
             mNumLightsReal++;
@@ -277,7 +281,7 @@ void NgEnviron::Select(const Vector3 *pos) {
         projLightIdx--;
     }
 
-    for (int i = 0; i < numPoint; i++) {
+    for (int i = 0; i != numPoint; i++) {
         bool hasPointCubeTex;
         if (SetPointLightRegisters(mNumLightsPoint, *pointLights[i], hasPointCubeTex)) {
             mNumLightsPoint++;
@@ -306,7 +310,8 @@ void NgEnviron::Select(const Vector3 *pos) {
         TheShaderMgr.SetPConstant((PShaderConstant)0x5a, fogColorVec);
     }
 
-    if (mFadeOut && mFadeEnd != mFadeStart) {
+    bool fading = mFadeOut && mFadeEnd != mFadeStart;
+    if (fading) {
         float fadeDelta = mFadeEnd - mFadeStart;
         float invFadeDelta;
         if (fadeDelta < 0.001f && fadeDelta > -0.001f) {
