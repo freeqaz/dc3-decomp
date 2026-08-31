@@ -52,7 +52,7 @@ struct WSADATA {
     WORD wVersion;
     WORD wHighVersion;
     char szDescription[257];
-    char szSystemStatus[1];
+    char szSystemStatus[129];
     unsigned short iMaxSockets;
     unsigned short iMaxUdpDg;
     char *lpVendorInfo;
@@ -242,7 +242,11 @@ typedef struct hostent {
 } HOSTENT, *PHOSTEND, *LPHOSTENT;
 
 #define WSADESCRIPTION_LEN 256
-#define WSASYS_STATUS_LEN
+/* Was defined EMPTY, which made szSystemStatus[WSASYS_STATUS_LEN + 1] expand
+   to szSystemStatus[1] and shrank WSADATA from 0x190 to 0x110 -- 128 bytes
+   short of what WSAStartup writes.  curl_global_init's frame is 0x200 in the
+   shipped image and was 0x180 here; that difference is exactly this. */
+#define WSASYS_STATUS_LEN 128
 typedef struct WSADATA {
     WORD wVersion;
     WORD wHighVersion;

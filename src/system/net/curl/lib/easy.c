@@ -77,9 +77,15 @@
 /* The last #include file should be: */
 #include "memdebug.h"
 
+#if defined(_MSC_VER)
+#define CURL_FORCEINLINE __forceinline
+#else
+#define CURL_FORCEINLINE inline
+#endif
+
 /* win32_cleanup() is for win32 socket cleanup functionality, the opposite
    of win32_init() */
-static void win32_cleanup(void)
+static CURL_FORCEINLINE void win32_cleanup(void)
 {
 #ifdef USE_WINSOCK
   WSACleanup();
@@ -91,7 +97,12 @@ static void win32_cleanup(void)
 
 /* win32_init() performs win32 socket initialization to properly setup the
    stack to allow networking */
-static CURLcode win32_init(void)
+/* The shipped image has NO win32_init symbol (nor win32_cleanup): the linker
+   map shows curl_global_init calling WSAStartup/WSACleanup directly, with the
+   0x190-byte WSADATA in its own 0x200 frame.  MSVC will not inline it here on
+   cost grounds -- the large local is exactly what its heuristic penalises --
+   so say so explicitly. */
+static CURL_FORCEINLINE CURLcode win32_init(void)
 {
 #ifdef USE_WINSOCK
   WORD wVersionRequested;
