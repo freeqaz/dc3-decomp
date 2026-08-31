@@ -282,7 +282,12 @@ bool ParseNode() {
 
         if (gCachingFile) {
             PushBack(DataNode(kDataDefine, macro.Str()));
-            PushBack(DataNode(array, kDataArray));
+            // Named local, not an unnamed temporary: the target re-materializes
+            // this object's address before the PushBack call (`addi r3, r31,
+            // 0xe8` twice) instead of reusing the constructor's return in r3,
+            // which is what pins a stack slot rather than taking the ctor's.
+            DataNode node(array, kDataArray);
+            PushBack(node);
         } else {
             DataSetMacro(macro, array);
         }
@@ -361,7 +366,10 @@ bool ParseNode() {
 
         Symbol sym(text);
         DataArray *macro = DataGetMacro(sym);
-        bool b = macro && !gCachingFile;
+        bool b = false;
+        if (macro && !gCachingFile) {
+            b = true;
+        }
         if (b) {
             for (int i = 0; i < macro->Size(); i++) {
                 PushBack(macro->Node(i));

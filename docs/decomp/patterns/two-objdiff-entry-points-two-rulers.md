@@ -214,3 +214,60 @@ divergent key is pinned in `objdiff.json`.
 `--all` — it does not report success from a probe that examined nothing.
 Measured on the fixed tree: 411 witness functions, 411 agree as configured,
 **19 disagree** under the control flip.
+
+## What the defect actually cost, re-derived after the fix (2026-08-31)
+
+The scope section above was measured on `edcb3279f`. Re-derived independently on
+`ea3f5a226` after a full `ninja`, same objdiff-cli 4.2.8
+(`358c715835cc`, xxh3 `9b2bb6f1f3a21062`), with
+`scripts/analysis/pool_reloc_population.py`:
+
+* universe **48,323** uniquely-named report functions (16 dropped: defined in >1 unit)
+* examined **31,811** · **agree_now 31,811 · disagree_now 0** — the pin holds
+* unpaired 16,318 · unresolved 50 · cross-unit `base_unit` fallback 144
+* **population 158 functions / 126,320 bytes**, report higher on 158, `diff` on 0
+* **52 (34,868 B)** read exactly 100.0 in `report.json`
+
+158/126,320 **supersedes** 155/120,728. The delta is source movement between the
+two trees, not drift in the defect — do not read it as the defect growing.
+
+### Row counts, which is what a verdict was actually decided on
+
+`scripts/analysis/pool_reloc_rows.py` counts charged rows under both configs.
+A percentage does not adjudicate a verdict; a row count does, because
+`sync_objdiff.py`'s `"auto: all mismatches unfixable"` walked rows.
+
+* **774 phantom rows removed**, 7,229 real rows remain (was 8,003)
+* entire mismatch set was phantom on **50** functions (34,044 B)
+
+### Two claims about this population that are FALSE
+
+Both were plausible and both were checked before being written down:
+
+1. **"AT_LIMIT rows are sitting on functions the canonical ruler scores 100.0."**
+   No. All 52 rows reading 100.0 are already `verdict='COMPLETE'`. Not one
+   AT_LIMIT row in the population reads 100.0. There is no such class to repair.
+2. **"The functions whose entire mismatch set was phantom are promotion
+   candidates."** They are the *same already-COMPLETE rows*. Zero AT_LIMIT rows
+   sit at zero real mismatches.
+
+### How the 74 AT_LIMIT rows actually divide
+
+| bucket | n | meaning |
+|---|--:|---|
+| phantom rows = 0 | 55 | the row **set** was identical under both configs; only the score moved, because the synthesized annotation lands in `arg_diff_score` without creating a row. The verdict never rested on this defect. |
+| evidence set shrank | 19 | the verdict cited rows that partly did not exist. Worst two: `?ParseNode@@YA_NXZ` 24 of 38 phantom (63%), `yylex` 33 of 54 (61%). |
+| zero real mismatches | 0 | — |
+
+That 55/19 split is the useful correction: the defect was real and worth fixing,
+but it invalidated a *minority* of the verdicts it touched, and the majority
+needed no action. Re-adjudicated with
+`scripts/analysis/pool_reloc_readjudicate.py --apply`.
+
+### Two rows read 100.0 in report.json *with* real charged rows
+
+`?ReadEmbeddedFile@@YAPAVDataArray@@PBD_N@Z` (8 rows) and
+`?NewFile@@YAPAVFile@@PBDH@Z` (17). That is the canonical ruler forgiving
+register permutation, not this defect. They are **complete modulo register
+permutation** — never write "byte-identical" for a row you have not checked at
+`raw`.

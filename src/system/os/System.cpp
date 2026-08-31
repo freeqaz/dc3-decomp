@@ -62,8 +62,8 @@ bool gHostCached;
 static DataArray *gSystemConfig;
 static DataArray *gSystemTitles;
 static int gUsingCD;
-static int gSystemMs;
 static float gSystemFrac;
+static int gSystemMs;
 const char *gHostFile;
 static Symbol gSystemLanguage;
 
