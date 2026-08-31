@@ -81,6 +81,15 @@ int _strnicmp(const char *, const char *, unsigned int) { return 0; }
 int strnicmp(const char *, const char *, int) { return 0; }
 char *itoa(int, char *, int) { return 0; }
 long long _64time(long *) { return 0; }
+// wmemcpy: absent from ham_xbox_r.map (the original inlined it), but SpeechMgr
+// instantiates basic_string<wchar_t>, and STLport's char_traits<wchar_t>::copy
+// is a straight `return wmemcpy(...)`.  Aliased to __link_glue_noop, every
+// wide-string copy, assign and range-construct in SpeechMgr silently copied
+// nothing and returned its own destination pointer, so the caller could not
+// tell.  A real body, not a stub: this one has a correct answer.
+wchar_t *wmemcpy(wchar_t *dest, const wchar_t *src, unsigned int count) {
+    return (wchar_t *)memcpy(dest, src, count * sizeof(wchar_t));
+}
 
 struct _stati64_s {
     char _pad[128];
@@ -106,6 +115,15 @@ void *Curl_str2addr(const char *) { return 0; }
 // garbage local hostname instead of taking their failure path.
 int Curl_gethostname(char *, int) { return -1; }
 char *curl_getenv(const char *) { return 0; }
+// Same shape as Curl_gethostname, and it was aliased to __link_glue_noop.
+// ham_xbox_r.map puts Curl_if2ip at 0x82AEAE70, whose body is `li r3,0; blr`
+// -- the `#else` arm of if2ip.c, i.e. "this platform cannot enumerate
+// interfaces".  On PPC a no-op leaf is a bare `blr`, so the caller got r3
+// back unchanged -- the *first argument*, `af`.  connect.c:268 does
+// `if(Curl_if2ip(af, dev, myhost, sizeof(myhost)))`, and AF_INET is 2, so the
+// test was not merely wrong, it was inverted: every call reported success and
+// handed curl the uninitialised stack buffer `myhost` as an interface address.
+char *Curl_if2ip(int, const char *, char *, int) { return 0; }
 
 } // extern "C"
 
@@ -358,8 +376,20 @@ extern "C" const char __link_glue_empty_str[] = "";
 // ============================================================================
 
 // -- ObjPtr/ObjRef template instantiations --
+// merged_ObjPtrListPopBack is an invented name (it appears in no config file
+// and in no map); PostProc_NG.cpp declares it and calls it inside
+// NgPostProc::DoVelocity's drain loop.  Bound to __link_glue_noop that loop
+// HANGS: it re-reads the list head from the same address every iteration and
+// the no-op never advances it, so a non-empty mMotionBlurDrawList spins
+// forever.  The shipped image calls a real function there --
+// build/373307D9/asm/system/rndobj/PostProc_NG.s, 0x826AB720:
+//     bl "?pop_back@?$ObjPtrList@VRndMesh@@VObjectDir@@@@QAAXXZ"
+// -- which our link inputs already define (map: 0x823912C8), same
+// this-in-r3 signature.  Point the alias at it.
 #pragma comment(                                                                         \
-    linker, "/ALTERNATENAME:?merged_ObjPtrListPopBack@@YAXPAX@Z=__link_glue_noop"        \
+    linker,                                                                              \
+    "/ALTERNATENAME:?merged_ObjPtrListPopBack@@YAXPAX@Z="                                \
+    "?pop_back@?$ObjPtrList@VRndMesh@@VObjectDir@@@@QAAXXZ"                              \
 )
 
 // -- BinStream operators --
@@ -430,14 +460,20 @@ extern "C" const char __link_glue_empty_str[] = "";
 // -- BinStream operator<< template instantiations --
 
 // -- C runtime / third-party library symbols --
-#pragma comment(linker, "/ALTERNATENAME:Curl_if2ip=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:HIBYTE=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:LOBYTE=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:MAKEWORD=__link_glue_noop")
+// Removed: HIBYTE / LOBYTE / MAKEWORD -- now macros in xdk/win_types.h, so
+// nothing references them.  Removed: htons / ntohs -- now identity macros in
+// xdk/xnet/winsockx.h (Xenon is big-endian and the shipped image contains no
+// htons/ntohs symbol).  Removed: RtlDeleteCriticalSection -- now an inline
+// no-op in xdk/XBOXKRNL.h.  If any of those five ever comes back as an
+// unresolved external, the header fix regressed; do not re-add the alias.
+//
+// `read` and `_close` are real LIBCMT bodies in the shipped image, and the
+// split objects supply them under their ICF-canonical spellings (_read at
+// 0x829A8550, close at 0x829A65F8 -- same address, same object).  Point the
+// aliases at those instead of at a no-op: a no-op `read` returns its own fd
+// and leaves the caller's buffer untouched.
 #pragma comment(linker, "/ALTERNATENAME:_fstati64=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:htons=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:ntohs=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:read=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:read=_read")
 #pragma comment(linker, "/ALTERNATENAME:strncasecmp=__link_glue_noop")
 
 // -- BinStream operator<< non-template targets (decomp compiler ALTERNATENAME chains) --
@@ -689,9 +725,23 @@ extern "C" const char __link_glue_empty_str[] = "";
 //     expand          -> ?expand@@YAXQAUcomplex@@H0@Z synth:filterdesign.obj
 // The D3DTexture_* entries below are NOT of that shape -- the map carries them
 // unmangled (d3d9i:texture.obj), so they are genuine C symbols.
-#pragma comment(linker, "/ALTERNATENAME:D3DTexture_GetLevelDesc=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:D3DTexture_LockRect=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:D3DTexture_UnlockRect=__link_glue_noop")
+// ...and they are not missing either.  All three ICF-fold in the shipped image
+// with a sibling that the split d3d9i:texture.obj DOES define under the
+// canonical name, so the real body was in the link the whole time and these
+// three references were being answered with `blr`:
+//     D3DTexture_GetLevelDesc  == D3DLineTexture_GetLevelDesc  @0x82B9BC88
+//     D3DTexture_LockRect      == D3DLineTexture_LockRect      @0x82B9C018
+//     D3DTexture_UnlockRect    == D3DCubeTexture_UnlockRect    @0x82B9BEC0
+// A no-op D3DTexture_LockRect is worse than inert: RndTex::Lock and
+// Rnd_Xbox's front-buffer readback pass a D3DLOCKED_RECT by address and then
+// write pixels through rect.pBits, which the no-op leaves as whatever was on
+// the stack.  Same shape for GetLevelDesc (Tex.cpp:258 reads the descriptor
+// back).  Equality is by map address, not by name similarity.
+#pragma comment(                                                                         \
+    linker, "/ALTERNATENAME:D3DTexture_GetLevelDesc=D3DLineTexture_GetLevelDesc"         \
+)
+#pragma comment(linker, "/ALTERNATENAME:D3DTexture_LockRect=D3DLineTexture_LockRect")
+#pragma comment(linker, "/ALTERNATENAME:D3DTexture_UnlockRect=D3DCubeTexture_UnlockRect")
 // MSVC spells a literal-pool constant `__real@<hex>` / `__vmx@<hex>`; `@` is
 // not a valid identifier character, so src/system/synth_xbox/FFT.cpp declares
 // the VMX ones with `_`.  Pointing that spelling at __link_glue_noop meant
@@ -717,9 +767,14 @@ extern "C" const char __link_glue_empty_str[] = "";
 )
 // The six `__real_<hex>` entries that stood here were dead: no translation unit
 // in the tree references that spelling (only link_glue named them).  Removed.
-#pragma comment(linker, "/ALTERNATENAME:_close=__link_glue_noop")
+// _close: same story as `read` above -- LIBCMT:close.obj defines `close` and
+// `_close` at the same address (0x829A65F8), and the split object carries the
+// `close` spelling, so the real body was already linked in.
+#pragma comment(linker, "/ALTERNATENAME:_close=close")
 #pragma comment(linker, "/ALTERNATENAME:hypot=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:wmemcpy=__link_glue_noop")
+// Removed: wmemcpy -- link_glue.cpp now defines it for real (see the CRT block
+// near the top).  If it reappears as an unresolved external, that definition
+// stopped matching xdk/LIBCMT/wchar.h's declaration.
 
 // -- ICF fold-group aliases (2026-08-23) --
 // Each alias target is the symbols.txt name that survived at the fold address;
