@@ -71,12 +71,13 @@ void RndSoftParticleBuffer::BlurSurface() {
             Vector2(0.1f, 2.5f)
         };
 
+        bool horizontal = !(pass & 1);
         for (int i = 0; i < 5; i++) {
             float weight = kBlurTaps[i].x;
             float offset = kBlurTaps[i].y;
 
             float scaleU, scaleV;
-            if (!(pass & 1)) {
+            if (horizontal) {
                 scaleU = offset * invW;
                 scaleV = invH * 0.5f;
             } else {
