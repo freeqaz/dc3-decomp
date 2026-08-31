@@ -75,6 +75,11 @@ SABOTAGES = [
      '"REAL_OTHER_ADDR":   (False, "icf_fold"),',
      "test_gate_judges_folds_and_pairing_artifacts_but_blocks_a_different_address"),
 
+    ("S8b the same, vs the REAL population", GATE,
+     '"REAL_OTHER_ADDR":   (True,  "real_other_address"),',
+     '"REAL_OTHER_ADDR":   (False, "icf_fold"),',
+     "test_positive_control_on_the_real_population_both_directions"),
+
     ("S9  clear when ANY pair folds instead of ALL", GATE,
      "        if blocking:\n",
      "        if blocking and len(blocking) == len(verdicts):\n",
@@ -85,6 +90,17 @@ SABOTAGES = [
      'actionable = [] if any((r["fixability"] or "") == UNVERIFIABLE for r in rows) '
      'else list(rows)',
      "test_unverifiable_pairing_clears_only_when_every_finding_is_unverifiable"),
+
+    ("S10b a guessed-pair function is blocked, vs REAL", GATE,
+     '            gate.cleared[symbol] = "unverifiable_pairing"',
+     '            gate.blocked[symbol] = "unverifiable_pairing"',
+     "test_positive_control_on_the_real_population_both_directions"),
+
+    ("S13 _callee_rows silently drops a symbol", GATE,
+     "    for r in rows:\n        out[r[\"symbol\"]].append(r)\n    return dict(out)",
+     "    for r in rows:\n        out[r[\"symbol\"]].append(r)\n"
+     "    out.pop(sorted(out)[0], None)\n    return dict(out)",
+     "test_positive_control_on_the_real_population_both_directions"),
 
     ("S11 merged_* stub no longer recognised", GATE,
      "    if MERGED_STUB_RE.search(base) or MERGED_STUB_RE.search(target):\n"
