@@ -341,6 +341,7 @@ extern "C" {
     extern unsigned char __vmx_00000000000000000000000000000000[];
 }
 
+#pragma float_control(precise, on, push)
 int fft_matrix_forward_columnwise(float* data, long size, float* context) {
     int ret = 0;
     int power = 1;
@@ -455,13 +456,13 @@ int fft_matrix_forward_columnwise(float* data, long size, float* context) {
             // sin² recurrence parameters
             double s1d = sin(angle1);
             float sin2_1 = (float)(s1d * s1d * two_d);
-            float sin_2a1 = (float)sin((float)((double)angle1 * two_d));
+            float sin_2a1 = (float)sin(((double)angle1 * two_d));
             sv.f[0] = sin2_1;
             sv.f[2] = sin_2a1;
 
             double s2d = sin(angle2);
             float sin2_2 = (float)(s2d * s2d * two_d);
-            float sin_2a2 = (float)sin((float)((double)angle2 * two_d));
+            float sin_2a2 = (float)sin(((double)angle2 * two_d));
             sv.f[1] = sin2_2;
             sv.f[3] = sin_2a2;
             v_sin2a = __vmrglw(sv.v, sv.v);
@@ -609,6 +610,7 @@ cleanup:
     free(temp);
     return ret;
 }
+#pragma float_control(pop)
 
 #pragma float_control(precise, on, push)
 int fft_matrix_inverse_columnwise(float *data, long size, float *scratch) {
