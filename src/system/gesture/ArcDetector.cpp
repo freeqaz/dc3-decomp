@@ -347,10 +347,11 @@ void ArcDetector::Update(const Skeleton &skeleton, int elapsed) {
     if (!skeleton.IsTracked()) {
         Clear();
     } else {
-        const TrackedJoint *joints = skeleton.TrackedJoints();
-        float dx = joints[mPrimaryJoint].mJointPos[0].x - joints[mSecondaryJoint].mJointPos[0].x;
-        float dy = joints[mPrimaryJoint].mJointPos[0].y - joints[mSecondaryJoint].mJointPos[0].y;
-        float dz = joints[mPrimaryJoint].mJointPos[0].z - joints[mSecondaryJoint].mJointPos[0].z;
+        const TrackedJoint &secondary = skeleton.TrackedJoints()[mSecondaryJoint];
+        const TrackedJoint &primary = skeleton.TrackedJoints()[mPrimaryJoint];
+        float dx = primary.mJointPos[0].x - secondary.mJointPos[0].x;
+        float dy = primary.mJointPos[0].y - secondary.mJointPos[0].y;
+        float dz = primary.mJointPos[0].z - secondary.mJointPos[0].z;
         Vector3 boneVec(dx, dy, dz);
         unk40 = boneVec;
 
@@ -375,11 +376,14 @@ void ArcDetector::Update(const Skeleton &skeleton, int elapsed) {
             if (distY * distY + distZ * distZ + distX * distX > 0.0001f) {
                 mJointPath.insert(mJointPath.begin(), boneVec);
             }
-            float armDx = joints[mPrimaryJoint].mJointPos[0].x - joints[mSecondaryJoint].mJointPos[0].x;
-            float armDz = joints[mPrimaryJoint].mJointPos[0].z - joints[mSecondaryJoint].mJointPos[0].z;
+            const TrackedJoint &armSecondary = skeleton.TrackedJoints()[mSecondaryJoint];
+            const TrackedJoint &armPrimary = skeleton.TrackedJoints()[mPrimaryJoint];
+            float armDx = armPrimary.mJointPos[0].x - armSecondary.mJointPos[0].x;
+            float armDz = armPrimary.mJointPos[0].z - armSecondary.mJointPos[0].z;
             mSwipeExtentX = (sqrtf(armDx * armDx + armDz * armDz) + mSwipeExtentX) * 0.5f;
         }
-        mSwipeExtentY = joints[mPrimaryJoint].mJointPos[0].y - joints[mSecondaryJoint].mJointPos[0].y;
+        mSwipeExtentY = skeleton.TrackedJoints()[mPrimaryJoint].mJointPos[0].y
+            - skeleton.TrackedJoints()[mSecondaryJoint].mJointPos[0].y;
         CullPath();
         float swipe = GetSwipeAmount();
         mCurrentSwipeAmt = mCurrentSwipeAmt - swipe >= 0.0f ? mCurrentSwipeAmt : swipe;
