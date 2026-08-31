@@ -77,11 +77,7 @@ void ChunkStream::ReadChunkAsync() {
     int bufIdx = 1;
     int idx;
     for (; bufIdx < 4; bufIdx++) {
-#ifdef HX_NATIVE
-        idx = (mCurBufferIdx + bufIdx) % 2;
-#else
         idx = (mCurBufferIdx + bufIdx) % 3;
-#endif
         if (mBuffersState[idx] == kInvalid)
             break;
     }
@@ -440,11 +436,7 @@ void ChunkStream::DecompressChunkAsync() {
     int bufIdx = 1;
     int idx;
     for (; bufIdx < 4; bufIdx++) {
-#ifdef HX_NATIVE
-        idx = (mCurBufferIdx + bufIdx) % 2;
-#else
         idx = (mCurBufferIdx + bufIdx) % 3;
-#endif
         if (mBuffersState[idx] == kReading)
             break;
     }
