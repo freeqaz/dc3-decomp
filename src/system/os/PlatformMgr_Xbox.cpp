@@ -475,13 +475,16 @@ namespace {
                 wcstombs(charBuf, wcharBuf, 0x100);
             }
 
+            // Case-body layout order is source order, and the target lays
+            // kJSONTokenFieldName out FIRST.
             switch (tokenType) {
+            case kJSONTokenFieldName:
+                fieldName = new DataArray(2);
+                fieldName->Node(0) = DataNode(Symbol(charBuf));
+                continue;
             case kJSONTokenBeginArray:
                 node = DataNode(JsonToDta(reader, false));
                 break;
-            case kJSONTokenEndArray:
-            case kJSONTokenEndMap:
-                return container;
             case kJSONTokenBeginMap:
                 node = DataNode(JsonToDta(reader, false));
                 break;
@@ -504,15 +507,22 @@ namespace {
             case kJSONTokenNull:
                 node = DataNode(0);
                 break;
-            case kJSONTokenFieldName:
-                fieldName = new DataArray(2);
-                fieldName->Node(0) = DataNode(Symbol(charBuf));
-                continue;
+            // Written out one label at a time: the target's byte jump table
+            // covers 0..0xd with three separate `b` thunks for these, which a
+            // fall-through group onto `default` collapses (turning the bounds
+            // check into subi/cmplwi 9).
             case kJSONTokenEnd:
+                continue;
             case kJSONTokenComment:
+                continue;
             case kJSONTokenError:
+                continue;
             default:
                 continue;
+            case kJSONTokenEndArray:
+                return container;
+            case kJSONTokenEndMap:
+                return container;
             }
 
             if (fieldName) {
