@@ -301,29 +301,33 @@ const char *XboxMapFile::GetFunction(unsigned int ui, bool b2) {
     if (b2) {
         mFile->Seek(mStart, 0);
     }
-    char local1440[2048];
-    char localC40[1024];
-    char *cur = local1440;
-    sprintf(localC40, "%8x", ui);
-    int oldTell = mFile->Tell();
-    char *b4 = "";
+    // Two line buffers are used alternately so that the previous line's symbol
+    // name is still valid when the current line overshoots the wanted address.
+    char lineA[2048];
+    char wantedAddr[1024];
+    char lineB[2048];
+    char *cur = lineA;
+    sprintf(wantedAddr, "%8x", ui);
+    int prevTell = mFile->Tell();
+    const char *prevName = "";
     while (!mFile->Eof()) {
-                                cur = cur == local1440 ? localC40 : local1440;
+        cur = cur == lineA ? lineB : lineA;
         int curTell = mFile->Tell();
         ReadLine(cur, 0x800);
-        char c2 = cur[0x15];
-        char *pCur = &cur[0x15];
+        char *name = &cur[0x15];
+        char *pCur = name;
+        char c2 = *pCur;
         while (c2 != 0x20) {
             pCur++;
             c2 = *pCur;
         }
         *pCur = 0;
-        while (*pCur++ == 0x20)
+        while (*++pCur == 0x20)
             ;
-        pCur--;
+        pCur[8] = 0;
 
         // String comparison
-        char *cmpBuf = localC40;
+        const char *cmpBuf = wantedAddr;
         char b3 = *cmpBuf;
         char b4_1 = *pCur;
 
@@ -334,11 +338,15 @@ const char *XboxMapFile::GetFunction(unsigned int ui, bool b2) {
             b4_1 = *pCur;
         }
 
-        if ((int)((unsigned char)b3 - (unsigned char)b4_1) >= 0) {
-            TryDemangleFunc(sBuffer, &cur[0x15]);
-            mFile->Seek(oldTell, 0);
+        if ((int)((unsigned char)b3 - (unsigned char)b4_1) < 0) {
+            // The map is address-sorted: this line is past `ui`, so the symbol
+            // that contains it is the one on the previous line.
+            TryDemangleFunc(sBuffer, prevName);
+            mFile->Seek(prevTell, 0);
             return sBuffer;
         }
+        prevName = name;
+        prevTell = curTell;
     }
     return "(unknown)";
 }

@@ -178,16 +178,16 @@ void NgPostProc::DoBloom() {
                 bloomTex = sBloom.mTextures[0].mBloomTexture[0];
                 finalSlot = kPS_BloomParams;
             } else if (!mBloomStreak || mBloomGlare) {
-                Bloom_Downsample(kBloomShader, preprocess, sBloom.mTextures[0].mBloomTexture[1]);
-                Bloom_Blur(sBloom.mTextures[0].mBloomTexture[1], sBloom.mTextures[0].mBloomTexture[0], kBloomBlurNormal, kBloomBlurHorizontal, 0, 0.0f, 0.0f);
-                Bloom_Blur(sBloom.mTextures[0].mBloomTexture[0], sBloom.mTextures[0].mBloomTexture[1], kBloomBlurNormal, kBloomBlurVertical, 0, 0.0f, 0.0f);
-                Bloom_Downsample(kDownsample4xShader, sBloom.mTextures[0].mBloomTexture[1], sBloom.mTextures[1].mBloomTexture[0]);
+                Bloom_Downsample(kBloomShader, preprocess, sBloom.mTextures[0].mBloomTexture[0]);
+                Bloom_Blur(sBloom.mTextures[0].mBloomTexture[0], sBloom.mTextures[0].mBloomTexture[1], kBloomBlurNormal, kBloomBlurHorizontal, 0, 0.0f, 0.0f);
+                Bloom_Blur(sBloom.mTextures[0].mBloomTexture[1], sBloom.mTextures[0].mBloomTexture[0], kBloomBlurNormal, kBloomBlurVertical, 0, 0.0f, 0.0f);
+                Bloom_Downsample(kDownsample4xShader, sBloom.mTextures[0].mBloomTexture[0], sBloom.mTextures[1].mBloomTexture[0]);
                 Bloom_Blur(sBloom.mTextures[1].mBloomTexture[0], sBloom.mTextures[1].mBloomTexture[1], kBloomBlurNormal, kBloomBlurHorizontal, 0, 0.0f, 0.0f);
                 Bloom_Blur(sBloom.mTextures[1].mBloomTexture[1], sBloom.mTextures[1].mBloomTexture[0], kBloomBlurNormal, kBloomBlurVertical, 0, 0.0f, 0.0f);
                 Bloom_Downsample(kDownsample4xShader, sBloom.mTextures[1].mBloomTexture[0], sBloom.mTextures[2].mBloomTexture[0]);
                 Bloom_Blur(sBloom.mTextures[2].mBloomTexture[0], sBloom.mTextures[2].mBloomTexture[1], kBloomBlurNormal, kBloomBlurHorizontal, 0, 0.0f, 0.0f);
                 Bloom_Blur(sBloom.mTextures[2].mBloomTexture[1], sBloom.mTextures[2].mBloomTexture[0], kBloomBlurNormal, kBloomBlurVertical, 0, 0.0f, 0.0f);
-                TheShaderMgr.SetPConstant((PShaderConstant)kPS_BloomParams, sBloom.mTextures[0].mBloomTexture[1]);
+                TheShaderMgr.SetPConstant((PShaderConstant)kPS_BloomParams, sBloom.mTextures[0].mBloomTexture[0]);
                 TheShaderMgr.SetPConstant((PShaderConstant)kPS_SpotlightTex, sBloom.mTextures[1].mBloomTexture[0]);
                 bloomTex = sBloom.mTextures[2].mBloomTexture[0];
                 finalSlot = kPS_NgMatCustom;

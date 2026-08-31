@@ -56,27 +56,26 @@ float DetectFracToRatingFrac(float detect_frac, const std::vector<float> *rating
     MILO_ASSERT(detect_frac >= 0 && detect_frac <= 1.0f, 0x2f);
     if (!ratings)
         ratings = &sDefaultRatingThresholds;
-    unsigned int i = 0;
     unsigned int size = ratings->size();
     float prevThresh = 1.0f;
-    float result = 0.0f;
+    int i = 0;
+    float lastIdx = (float)(int)(size - 1);
+    float invLastIdx = 1.0f / lastIdx;
     if (size != 0) {
         do {
             float thresh = (*ratings)[i];
             if (detect_frac >= thresh) {
-                result = 1.0f;
-                if (i != 0) {
-                    result = ((detect_frac - thresh) / (prevThresh - thresh)
-                              + (float)(int)(size - 1) - (float)(int)i)
-                        * (1.0f / (float)(int)(size - 1));
-                }
-                break;
+                if (i == 0)
+                    return 1.0f;
+                return ((detect_frac - thresh) / (prevThresh - thresh) + lastIdx
+                        - (float)i)
+                    * invLastIdx;
             }
             i++;
             prevThresh = thresh;
         } while (i < size);
     }
-    return result;
+    return 0.0f;
 }
 
 float RatingToDetectFrac(Symbol rating, const std::vector<float> *thresholds) {
