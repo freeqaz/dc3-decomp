@@ -840,30 +840,24 @@ void RndAmbientOcclusion::SmoothResults(RndMesh *mesh) const {
         float oneThird = 1.0f / 3.0f;
         do {
             RndMesh::Face &face = mesh->Faces(f);
-            unsigned short i0 = face.v1;
-            unsigned short i1 = face.v2;
-            unsigned short i2 = face.v3;
 
             // Average position of the 3 face vertices
+            const Vector3 &p0 = mesh->Verts(face.v1).pos;
+            const Vector3 &p1 = mesh->Verts(face.v2).pos;
+            const Vector3 &p2 = mesh->Verts(face.v3).pos;
             Vector3 center;
-            center.z = ((mesh->Verts(i2).pos.z
-                         + (mesh->Verts(i1).pos.z + mesh->Verts(i0).pos.z)))
-                * oneThird;
-            center.y = ((mesh->Verts(i2).pos.y
-                         + (mesh->Verts(i1).pos.y + mesh->Verts(i0).pos.y)))
-                * oneThird;
-            center.x = ((mesh->Verts(i2).pos.x
-                         + (mesh->Verts(i1).pos.x + mesh->Verts(i0).pos.x)))
-                * oneThird;
+            center.z = (p2.z + (p1.z + p0.z)) * oneThird;
+            center.y = (p2.y + (p1.y + p0.y)) * oneThird;
+            center.x = (p2.x + (p1.x + p0.x)) * oneThird;
 
             // Average normal of the 3 face vertices
+            const Vector3 &n0 = mesh->Verts(face.v1).norm;
+            const Vector3 &n1 = mesh->Verts(face.v2).norm;
+            const Vector3 &n2 = mesh->Verts(face.v3).norm;
             Vector3 faceNorm;
-            faceNorm.z = mesh->Verts(i2).norm.z + mesh->Verts(i1).norm.z
-                + mesh->Verts(i0).norm.z;
-            faceNorm.y = mesh->Verts(i2).norm.y + mesh->Verts(i1).norm.y
-                + mesh->Verts(i0).norm.y;
-            faceNorm.x = mesh->Verts(i2).norm.x + mesh->Verts(i1).norm.x
-                + mesh->Verts(i0).norm.x;
+            faceNorm.z = n2.z + (n1.z + n0.z);
+            faceNorm.y = n2.y + (n1.y + n0.y);
+            faceNorm.x = n2.x + (n1.x + n0.x);
             Normalize(faceNorm, faceNorm);
 
             // Transform to world space and calculate AO
@@ -886,9 +880,11 @@ void RndAmbientOcclusion::SmoothResults(RndMesh *mesh) const {
             int equiv = 0;
             if (0 < v) {
                 do {
-                    float dx = mesh->Verts(v).pos.x - mesh->Verts(equiv).pos.x;
-                    float dy = mesh->Verts(v).pos.y - mesh->Verts(equiv).pos.y;
-                    float dz = mesh->Verts(v).pos.z - mesh->Verts(equiv).pos.z;
+                    const Vector3 &posV = mesh->Verts(v).pos;
+                    const Vector3 &posE = mesh->Verts(equiv).pos;
+                    float dx = posV.x - posE.x;
+                    float dy = posV.y - posE.y;
+                    float dz = posV.z - posE.z;
                     if (dx * dx + dy * dy + dz * dz <= 0.001f)
                         break;
                     equiv++;
@@ -906,12 +902,12 @@ void RndAmbientOcclusion::SmoothResults(RndMesh *mesh) const {
         int *mapPtr = &vertMap[0];
         do {
             unsigned int fNum = 0;
+            float accR = 0.0f;
+            float accG = 0.0f;
+            float accB = 0.0f;
+            float accA = 0.0f;
+            float totalAngle = 0.0f;
             if (mesh->Faces().size() != 0) {
-                float accR = 0.0f;
-                float accG = 0.0f;
-                float accB = 0.0f;
-                float accA = 0.0f;
-                float totalAngle = 0.0f;
                 do {
                     int j = 0;
                     unsigned short *faceVerts = (unsigned short *)&mesh->Faces(fNum);
@@ -944,11 +940,15 @@ void RndAmbientOcclusion::SmoothResults(RndMesh *mesh) const {
                             float dot = (float)(edge2.y * edge1.y
                                 + edge2.x * edge1.x + edge2.z * edge1.z);
                             float angle = (float)acos((double)dot);
-                            totalAngle = totalAngle + angle;
-                            accG = accG + faceColor->green * angle;
-                            accR = accR + angle * faceColor->red;
-                            accA = accA + faceColor->alpha * angle;
-                            accB = accB + faceColor->blue * angle;
+                            float wG = faceColor->green * angle;
+                            float wR = angle * faceColor->red;
+                            float wA = faceColor->alpha * angle;
+                            float wB = faceColor->blue * angle;
+                            totalAngle = angle + totalAngle;
+                            accG = accG + wG;
+                            accR = wR + accR;
+                            accA = accA + wA;
+                            accB = accB + wB;
                         }
                         j++;
                         fvPtr++;
@@ -960,10 +960,15 @@ void RndAmbientOcclusion::SmoothResults(RndMesh *mesh) const {
                 if (totalAngle > 0.0f) {
                     float invAngle = 1.0f / totalAngle;
                     RndMesh::Vert &vert = mesh->Verts(v);
-                    vert.color.alpha = (accA * invAngle + vert.color.alpha) * 0.5f;
-                    vert.color.red = (invAngle * accR + vert.color.red) * 0.5f;
-                    vert.color.blue = (accB * invAngle + vert.color.blue) * 0.5f;
-                    vert.color.green = (accG * invAngle + vert.color.green) * 0.5f;
+                    Hmx::Color &vertColor = vert.color;
+                    float wA = accA * invAngle;
+                    float wR = invAngle * accR;
+                    float wB = accB * invAngle;
+                    float wG = accG * invAngle;
+                    vertColor.alpha = (wA + vertColor.alpha) * 0.5f;
+                    vertColor.red = (wR + vertColor.red) * 0.5f;
+                    vertColor.blue = (wB + vertColor.blue) * 0.5f;
+                    vertColor.green = (wG + vertColor.green) * 0.5f;
                 }
             }
             v++;
