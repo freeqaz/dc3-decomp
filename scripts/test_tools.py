@@ -151,11 +151,18 @@ STATIC_ROOTS: list[dict] = [
     {"path": "tools/state_diff/tests", "timeout": 600},
 ]
 
-# NOTE: there is deliberately no ``scripts`` root. All three tracked
-# scripts/test_*.py files are main()-style, so a pytest process over that
-# directory would collect zero tests and report BROKEN. They are covered by
-# SCRIPT_ARM and EXCLUDED below; a NEW scripts/test_*.py would show up as
+# NOTE: there is deliberately no ``scripts`` root. ``scripts/`` holds production
+# modules, so a pytest process over that directory would try to collect them.
+# The tracked ``scripts/test_*.py`` files (excluding this runner, which is SELF)
+# are covered one by one via SCRIPT_ARM and EXCLUDED below; a NEW one shows up as
 # UNCOVERED, which is the intended prompt to decide which arm it belongs in.
+#
+# That prompt fired and went unanswered once: 6e6d542be added
+# scripts/test_progress_metrics.py without an arm, and the lane exited 1 with
+# ``uncovered=1`` from then until 2026-09-01. Do not read a count here as
+# current -- this comment used to say "all three ... are main()-style", which
+# was wrong in both halves by the time anyone read it (there are four, and the
+# newest is an ordinary pytest module that merely ALSO has a __main__ runner).
 
 # ── script mode ───────────────────────────────────────────────────────────────
 # ``main()``-style self-checks: pytest collects 0 tests (rc=5), but running them
@@ -178,6 +185,14 @@ SCRIPT_ARM: list[dict] = [
     # adding scripts/__init__.py would, and both change import semantics for
     # every test tree under scripts/. Script mode is the honest answer.
     {"path": "scripts/unicorn/test_refresh.py", "timeout": 300},
+    # The odd one out: 6 ordinary pytest functions over progress_metrics.py's
+    # link-glue dedup, four of them negative controls, PLUS a __main__ runner
+    # that reports each and returns 0/1. Both arms work -- measured 2026-09-01,
+    # `python3 scripts/test_progress_metrics.py` rc=0 and `pytest` 6 passed in
+    # 0.02s. Script mode is chosen only because there is no ``scripts`` root to
+    # put it in and inventing one would drag in every production module beside
+    # it. If a ``scripts/tests/`` package ever exists, move it there.
+    {"path": "scripts/test_progress_metrics.py", "timeout": 300},
 ]
 
 # ── deliberate exclusions ─────────────────────────────────────────────────────

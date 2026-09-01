@@ -25,6 +25,28 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from orchestrator import symbol_sweep as S  # noqa: E402
 
+#: Bound at import, BEFORE any fixture patches it -- the shape that makes a
+#: restore mean something. Re-reading `S._load_coffx` after a patch would
+#: compare the stub against itself.
+_REAL_LOAD_COFFX = S._load_coffx
+
+
+def tearDownModule():
+    """No fixture in this file may leak its stub into the rest of the process.
+
+    `TestEnumeration.setUp` replaced `S._load_coffx` with a lambda and
+    for a while never put it back; `sys.modules["coffx"]` WAS restored, which
+    made the teardown look symmetrical. Anything importing symbol_sweep later
+    in the same pytest process then read the fake loader and would have kept
+    passing had the real one broken.
+
+    SABOTAGE: delete the `S._load_coffx = self._saved_loader` line in that
+    tearDown; this goes red. Verified 2026-09-01 -- it does.
+    """
+    assert S._load_coffx is _REAL_LOAD_COFFX, (
+        "a fixture in this file left symbol_sweep._load_coffx monkeypatched; "
+        "every later test in this process is now reading a stub")
+
 
 def _uncollected_testcases() -> set:
     """TestCase classes present in this FILE that the loader did not collect.
@@ -248,13 +270,21 @@ class TestEnumeration(unittest.TestCase):
             ]
         }
         fake.read_coff = lambda data: (None, table[data])  # noqa: E731
-        self._saved = sys.modules.get("coffx")
+        # BIND BEFORE PATCHING, both of them. `_load_coffx` used to be replaced
+        # here and never restored, so the fake loader leaked into every later
+        # test in the same process -- a test that had nothing to do with coffx
+        # would still be reading this stub, and would keep passing if the real
+        # loader broke. Restoring only the `sys.modules` half looked complete
+        # because the visible entry was symmetrical.
+        self._saved_module = sys.modules.get("coffx")
+        self._saved_loader = S._load_coffx
         sys.modules["coffx"] = fake
         S._load_coffx = lambda: fake
 
     def tearDown(self):
-        if self._saved is not None:
-            sys.modules["coffx"] = self._saved
+        S._load_coffx = self._saved_loader
+        if self._saved_module is not None:
+            sys.modules["coffx"] = self._saved_module
         else:
             sys.modules.pop("coffx", None)
 
