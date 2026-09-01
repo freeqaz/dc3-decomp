@@ -22,6 +22,7 @@ public:
 
     bool DecodeThreadPoll();
     bool Unk24() const { return unk24; }
+    void SetUnk24(bool b) { unk24 = b; }
 
 private:
     bool TryReadHeader();

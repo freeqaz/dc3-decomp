@@ -35,7 +35,7 @@ namespace {
             WaitForSingleObject(gEvent, -1);
             gLock.Enter();
             if (!gNewReaders.empty()) {
-                gReaders.insert(gReaders.end(), gNewReaders.begin(), gNewReaders.end());
+                gReaders.splice(gReaders.begin(), gNewReaders);
             }
             gLock.Exit();
 
@@ -46,10 +46,10 @@ namespace {
                     VorbisReader *cur = *it;
                     if (cur->Unk24()) {
                         it = gReaders.erase(it);
-                        // set unk24 to false
+                        cur->SetUnk24(false);
                     } else {
                         ++it;
-                        b2 = cur->DecodeThreadPoll() || !b2;
+                        b2 = cur->DecodeThreadPoll() || b2;
                     }
                 }
             } while (b2);
@@ -188,7 +188,7 @@ void VorbisReader::Poll(float until) {
             } else {
                 i8 = unk100 + unk108;
             }
-            int ret = ConsumeData((void **)&shorts, unkf4[0].size() - unk108, i8);
+            int ret = ConsumeData((void **)&shorts[0], unkf4[0].size() - unk108, i8);
             i12 += ret;
             unk108 += ret;
             if (ret == 0)
@@ -607,8 +607,11 @@ bool VorbisReader::DecodeThreadPoll() {
     if (!unked) {
         return false;
     }
+    // Drop only the samples the audio thread has already consumed, not the
+    // whole queue.
     for (int i = 0; i < mNumChannels; i++) {
-        unkf4[i].clear(); // ???
+        std::vector<short> &samples = unkf4[i];
+        samples.erase(samples.begin(), samples.begin() + unk108);
     }
     if (unk100 != -1) {
         unk100 += unk108;
@@ -617,9 +620,33 @@ bool VorbisReader::DecodeThreadPoll() {
     bool ret = TryDecode();
     if (QueuedOutputSamples() > 0) {
         float **pcmPtr;
-        vorbis_synthesis_pcmout(mVorbisDsp, &pcmPtr);
-        // more
+        int got = vorbis_synthesis_pcmout(mVorbisDsp, &pcmPtr);
+        int queued = unkf4[0].size();
+        int space = 0x1000 - queued;
+        int consumed = Min(space, got);
+        if (consumed > 0) {
+            s64 pos = mVorbisDsp->granulepos - got;
+            if (unk100 == -1 && pos >= 0) {
+                unk100 = pos - queued;
+            }
+            if (unk100 != -1 && pos >= 0 && pos != unk100 + queued) {
+                printf("start = %i cur = %i got = %i\n", (int)unk100, queued, (int)pos);
+            }
+            space = Min(space, got);
+            for (int c = 0; c < mNumChannels; c++) {
+                unkf4[c].resize(queued + space);
+                for (int i = 0; i < space; i++) {
+                    unkf4[c][queued + i] =
+                        (short)Clamp(-32767.0f, 32767.0f, pcmPtr[c][i] * 32767.0f);
+                }
+            }
+            ret = true;
+        } else {
+            ret = space != 0 ? ret : false;
+        }
+        vorbis_synthesis_read(mVorbisDsp, consumed);
     }
+    return ret;
 }
 
 #else // HX_NATIVE
