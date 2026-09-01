@@ -1220,7 +1220,7 @@ const char *CacheResource(const char *cc, const Hmx::Object *o) {
 const char *CacheResource(const char *cc, CacheResourceResult &res) {
     Platform thisPlatform = TheLoadMgr.GetPlatform();
     res = kCacheUnnecessary;
-    char buf[320];
+    char buf[256];
     const char *localized = FileLocalize(cc, buf);
     bool isLocal = FileIsLocal(localized);
     const char *ext = FileGetExt(localized);

@@ -56,6 +56,33 @@ namespace {
     char gShareName[NETBIOS_NAME_MAX] = { 0 };
     bool gStackTraced;
 
+// HolmesClientInitOpcode reaches gShareName the way the TARGET reaches it:
+// through a single base pointer materialized for gMachineName. The target reads
+//
+//     lis  r11, ?gMachineName@?A0x49b544a7@@3PADA@h
+//     addi r26, r11, ?gMachineName@?A0x49b544a7@@3PADA@l   ; r26 = &gMachineName[0]
+//     addi r4,  r26, 0x40                                  ; -> gShareName
+//     ...
+//     lbz  r11, 0x40(r26)                                  ; gShareName[0]
+//     mr   r4,  r26                                        ; gMachineName
+//
+// i.e. MSVC shares ONE base register across the two adjacent anonymous-namespace
+// statics. Spelling the two sites `gShareName` / `gShareName[0]` (which is what
+// rb3-xenon's copy of this file does) makes MSVC materialize gShareName as the
+// base instead and reach gMachineName backwards from it: measured on this tree,
+// 0 -> 7 mismatch instructions on ?HolmesClientInitOpcode@@YA_N_N@Z.
+//
+// So the PPC path has to index one PAST the end of gMachineName. That is only
+// in bounds because gShareName happens to follow it -- a layout accident, not a
+// guarantee. It is fine for the Xenon build (objdiff proves the target does the
+// same arithmetic on the same two objects) but it is a genuine out-of-bounds
+// read for any other layout, so the native port uses the honest spelling.
+#ifdef HX_NATIVE
+#define HOLMES_SHARE_NAME (gShareName)
+#else
+#define HOLMES_SHARE_NAME (&gMachineName[NETBIOS_NAME_MAX])
+#endif
+
     Holmes::Protocol gPendingResponse = Holmes::kInvalidOpcode;
     int gRealMaxBufferSize;
     HolmesProfileData gProfile[20]; // to match protocol count
@@ -355,7 +382,7 @@ bool HolmesClientInitOpcode(bool quiet) {
     *gStreamBuffer << u8(Holmes::kVersion) << HOLMES_CURRENT_VERSION;
     *gStreamBuffer << HolmesClient::PlatformGetHostName();
     *gStreamBuffer << gHolmesTarget;
-    *gStreamBuffer << &gMachineName[0x40];
+    *gStreamBuffer << HOLMES_SHARE_NAME;
     *gStreamBuffer << FileSystemRoot();
     *gStreamBuffer << u8(TheLoadMgr.GetPlatform());
     *gStreamBuffer << u8(GetGfxMode());
@@ -400,7 +427,7 @@ bool HolmesClientInitOpcode(bool quiet) {
             MILO_FAIL("Failed to find holmes target '%s'", gHolmesTarget);
         }
     }
-    if (!fail && gMachineName[0x40] == 0) {
+    if (!fail && HOLMES_SHARE_NAME[0] == 0) {
         String my_name(gMachineName), host_name;
         *gHolmesStream >> host_name;
         if (host_name.c_str()[0] == 0) {
@@ -825,6 +852,16 @@ bool HolmesClientCacheFile(char *arg0, const char *arg1) {
     int attrResult = GetFileAttributesExA(arg0, (GET_FILEEX_INFO_LEVELS)0, fileInfo);
     bool result = false;
     bool fileExists = (attrResult - 1) != (-1);
+    // `==` is correct here and is NOT the rb3-xenon drift bug it looks like.
+    // rb3-xenon spells this `!=`; dc3's target settles it. The target calls
+    // ??8String@@QBA_NABVFixedString@@@Z (operator==) at this site. The branch
+    // polarity is NOT the discriminator -- operator!= is a separate function
+    // that returns the inverted bool, so the following `beq` is identical
+    // either way. Negative control on this tree: spelling it `!=` swaps the
+    // callee to ??9String@@QBA_NABVFixedString@@@Z, which name_check charges as
+    // WRONG_CALLEE, 32 -> 33 mismatch rows. Read the callee, not the score --
+    // the whole flip costs 0.043pp (normalized 93.034485 -> 92.99138), far below
+    // what anyone watching a percentage would notice.
     if ((str == gLastCachedResource) && (gLastCacheResult > 0 || fileExists)) {
         EndCmd(Holmes::kCacheFile);
         return true;
