@@ -36,8 +36,13 @@ public:
     // reference across all 11 of its functions, ours carried exactly one, on
     // XMemNew.  (src/xdk/ is excluded from the native build -- native
     // CMakeLists.txt:364 -- so no native TU sees this specification.)
+    //
+    // The DESTRUCTOR deliberately does NOT carry one: measured, it moves
+    // nothing (XMemNew 100.0 / XMemDelete 67.1 / Destroy 100.0 /
+    // CreateRegressor 93.1 with and without it), and an exception
+    // specification that buys no codegen is semantic surface for free.
     LDARegressor() throw();
-    ~LDARegressor() throw();
+    ~LDARegressor();
     long LoadLDA(const char *path);
     long LoadKNN(const char *path);
     bool compute(unsigned char *data, float prevAngle, bool useFilter, float *outAngle);
