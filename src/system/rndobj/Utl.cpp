@@ -2317,11 +2317,11 @@ void TessellateMesh(RndMesh *mesh) {
     // v0/v1 are re-stamped per face, and `midpoint` is seeded to -1 a single
     // time (it is never read before being overwritten on either path).
     Edge e12, e23, e31;
-    e12.midpoint = -1;
-    e23.midpoint = -1;
-    e31.midpoint = -1;
 
     for (unsigned int i = 0; i < (unsigned int)geomOwner->Faces().size(); i++) {
+        e12.midpoint = -1;
+        e23.midpoint = -1;
+        e31.midpoint = -1;
         // Retail keeps a POINTER to the face and re-reads v1/v2/v3 from it when
         // the four child faces are built (lhz 0x0/0x2/0x4(r29)); a by-value copy
         // parks them in registers across the find/insert calls instead.
