@@ -126,67 +126,76 @@ DWORD NuiCameraAdjustTilt(
     NUI_TILT_OBJECTS *pTiltObjects,
     XOVERLAPPED *pOverlapped
 ) {
+    float space;
+    DWORD tracked;
+    DWORD i;
+    DWORD elapsed;
+    DWORD requests;
+
     DWORD now = GetTickCount();
 
     if ((TiltFlags & 0x18) == 0x18)
-        return 0x57; // ERROR_INVALID_PARAMETER
+        goto InvalidParameter;
 
-    float space = SpaceAboveHeadMeters * 0.001f;
+    space = SpaceAboveHeadMeters * 0.001f;
     if (space > 0.5f)
-        return 0x57;
+        goto InvalidParameter;
     if (space < -0.15)
-        return 0x57;
+        goto InvalidParameter;
 
     if (pTiltObjects != 0) {
-        if (pTiltObjects->Count > 6)
-            return 0x57;
+        if (pTiltObjects->Count > 6) {
+        InvalidParameter:
+            return 0x57; // ERROR_INVALID_PARAMETER
+        }
         if (pTiltObjects->Count != 0) {
-            DWORD tracked = 0;
-            for (DWORD i = 0; i < pTiltObjects->Count; i++) {
+            // At most one object may be flagged as the preferred playspace.
+            tracked = 0;
+            for (i = 0; i < pTiltObjects->Count; i++) {
                 if (pTiltObjects->Objects[i].Flags & 0x40000000) {
                     tracked++;
                     if (tracked > 1)
-                        return 0x57;
+                        goto InvalidParameter;
                 }
             }
         }
     }
 
-    if (NuipDetroitRuntimeState.TiltInProgress != 0)
-        return 0xaa; // ERROR_BUSY
+    if (NuipDetroitRuntimeState.TiltInProgress == 0) {
+        // Throttle: at most 16 tilt requests inside any 20 second window,
+        // unless the caller asks to bypass the throttle.
+        elapsed = now - NuipDetroitRuntimeState.LastTiltTime;
+        if (elapsed > 20000) {
+            requests = 0;
+            NuipDetroitRuntimeState.TiltCount = requests;
+        } else {
+            requests = NuipDetroitRuntimeState.TiltCount;
+        }
 
-    DWORD elapsed = now - NuipDetroitRuntimeState.LastTiltTime;
-    DWORD count;
-    if (elapsed > 20000) {
-        NuipDetroitRuntimeState.TiltCount = 0;
-        count = 0;
-    } else {
-        count = NuipDetroitRuntimeState.TiltCount;
-    }
-
-    if (NuipRuntimeState.DeviceState != 0)
+        if (NuipRuntimeState.DeviceState == 0) {
+            if (NuipDetroitRuntimeState.CalibrationValid != 0) {
+                if (elapsed >= 1000 || (TiltFlags & 0x20) != 0) {
+                    if (requests > 15 && (TiltFlags & 0x20) == 0) {
+                        NuipDetroitRuntimeState.LastTiltTime = now;
+                        return 0x38; // ERROR_TOO_MANY_CMDS
+                    }
+                    NuipDetroitRuntimeState.LastTiltFlags = TiltFlags;
+                    NuipDetroitGetXConfigSettings();
+                    NuipDetroitRuntimeState.TiltStatus = 0;
+                    return NuipCameraAdjustTilt(
+                        TiltFlags,
+                        SpaceAboveHeadMeters,
+                        FarSpaceDistanceMeters,
+                        PreferredPlayspaceDistanceMeters,
+                        pTiltObjects,
+                        pOverlapped
+                    );
+                }
+            }
+        }
         return 0x4d5; // ERROR_RETRY
-    if (NuipDetroitRuntimeState.CalibrationValid == 0)
-        return 0x4d5;
-    if (elapsed < 1000 && (TiltFlags & 0x20) == 0)
-        return 0x4d5;
-
-    if (count > 15 && (TiltFlags & 0x20) == 0) {
-        NuipDetroitRuntimeState.LastTiltTime = now;
-        return 0x38;
     }
-
-    NuipDetroitRuntimeState.LastTiltFlags = TiltFlags;
-    NuipDetroitGetXConfigSettings();
-    NuipDetroitRuntimeState.TiltStatus = 0;
-    return NuipCameraAdjustTilt(
-        TiltFlags,
-        SpaceAboveHeadMeters,
-        FarSpaceDistanceMeters,
-        PreferredPlayspaceDistanceMeters,
-        pTiltObjects,
-        pOverlapped
-    );
+    return 0xaa; // ERROR_BUSY
 }
 
 #ifdef __cplusplus
