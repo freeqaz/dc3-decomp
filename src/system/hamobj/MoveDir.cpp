@@ -143,14 +143,21 @@ namespace {
         return TheRnd.DrawStringScreen(str.c_str(), Vector2(0.01f, y), sLightGray, true).y;
     }
 
-    struct DetectFrameSecondsCmp {
-        bool operator()(const DetectFrame &frame, float seconds) const {
-            return frame.Seconds() < seconds;
-        }
-        bool operator()(float seconds, const DetectFrame &frame) const {
-            return seconds < frame.Seconds();
-        }
-    };
+    // The image mangles this comparator with a DOUBLY-nested anonymous
+    // namespace scope -- `UDetectFrameSecondsCmp@?A0xe50ea9df@3@`, where the
+    // backref `3` resolves to the same `?A0x` fragment (MSVC gives every
+    // anonymous namespace in a TU the same per-TU hash). A single `namespace{}`
+    // emits `?A0xe50ea9df@@`. Hence the extra nesting.
+    namespace {
+        struct DetectFrameSecondsCmp {
+            bool operator()(const DetectFrame &frame, float seconds) const {
+                return frame.Seconds() < seconds;
+            }
+            bool operator()(float seconds, const DetectFrame &frame) const {
+                return seconds < frame.Seconds();
+            }
+        };
+    }
 
 }
 
@@ -2058,9 +2065,9 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
         float startSeconds = BeatToSeconds(beatOffset - gBeatLineData.rangeOffset);
         float endSeconds =
             BeatToSeconds((float)(measureStart + 4) + gBeatLineData.rangeScale);
-        DetectFrame *endFrame = &_ref0[0].mDetectFrames.back() + 1;
-        DetectFrame *it = std::lower_bound(
-            &_ref0[0].mDetectFrames.front(),
+        const DetectFrame *endFrame = &_ref0[0].mDetectFrames.back() + 1;
+        const DetectFrame *it = std::lower_bound(
+            (const DetectFrame *)&_ref0[0].mDetectFrames.front(),
             endFrame,
             startSeconds,
             DetectFrameSecondsCmp()
@@ -2200,9 +2207,14 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
         }
     } else {
         // No closest frame - draw async detector count
-        int asyncCount = (int)unkf88.size();
+        int asyncCount = unkf88.size();
+        // The image instantiates MakeString<unsigned int> here
+        // (??$MakeString@I@@..., 0x823b2008) while `asyncCount` itself is
+        // signed -- it is compared with cmpwi and sign-extended with extsw
+        // below. Passing size() straight through reproduces both: one load of
+        // the size, spilled once as the const-unsigned& temp.
         TheRnd.DrawStringScreen(
-            MakeString("asyc: %d", asyncCount), textPos, sLightGray, true
+            MakeString("asyc: %d", unkf88.size()), textPos, sLightGray, true
         );
         if (asyncCount != 0) {
             mDancerViz->SetUsePhysicalCam(true);

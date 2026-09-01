@@ -556,11 +556,12 @@ void EQEffect::SetParameter(int param, float value) {
         double sinWc = sin((double)wcPi);
         float alpha = (float)((float)sinWc * invGainF) * half;
         float k = (one - alpha) * half / (alpha + one);
+        float kHalf = k + half;
         double cosWc = cos((double)wcPi);
         mBand3A2 = k * 2.0f;
-        float cosKhalf = (float)cosWc * (k + half);
+        float cosKhalf = (float)cosWc * kHalf;
         mBand3A1 = cosKhalf * -2.0f;
-        float fk4 = (k + half) - cosKhalf;
+        float fk4 = (kHalf - cosKhalf) * 0.25f;
         float fk2 = fk4 * 2.0f;
         mBand3B0 = fk2;
         mBand3B1 = fk4 * 4.0f;
@@ -594,23 +595,23 @@ void EQEffect::SetParameter(int param, float value) {
         float f1 = mBand2Q * freqScale;
         createFilter(kFilterButterworth, kFilterLowpass, 0, f1, f1, &filter, 2);
         mXoverGain[0] = filter.gain;
-        if (filter.numCoeffs > 0) {
-            memcpy(&mXoverCoeffs[0], &filter.coeffs[0], filter.numCoeffs * 4);
+        for (int i = 0; i < filter.numCoeffs; i++) {
+            mXoverCoeffs[0][i] = filter.coeffs[i];
         }
 
         // Bandpass crossover filter (band 2)
         createFilter(kFilterButterworth, kFilterBandpass, 0, mBand2Q * freqScale, mBand1Freq * freqScale, &filter, 2);
         mXoverGain[1] = filter.gain;
-        if (filter.numCoeffs > 0) {
-            memcpy(&mXoverCoeffs[1], &filter.coeffs[0], filter.numCoeffs * 4);
+        for (int i = 0; i < filter.numCoeffs; i++) {
+            mXoverCoeffs[1][i] = filter.coeffs[i];
         }
 
         // Highpass crossover filter (band 1)
         float f3 = mBand1Freq * freqScale;
         createFilter(kFilterButterworth, kFilterHighpass, 0, f3, f3, &filter, 2);
         mXoverGain[2] = filter.gain;
-        if (filter.numCoeffs > 0) {
-            memcpy(&mXoverCoeffs[2], &filter.coeffs[0], filter.numCoeffs * 4);
+        for (int i = 0; i < filter.numCoeffs; i++) {
+            mXoverCoeffs[2][i] = filter.coeffs[i];
         }
 
         Reset();
