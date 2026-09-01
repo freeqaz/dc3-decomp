@@ -70,12 +70,17 @@ bool gbUseLowestMip = false; // +0xbd2
 // The target packs four byte-sized globals into +0xbd0..+0xbd3, two of them
 // unnamed. gInitted is one: it lives at 0x830E56D9, proved by the three
 // functions whose relocations point there -- MemInit, MemPushHeap and
-// MemFindHeap, exactly the three that read or write it. The other unnamed byte
-// is unrecoverable (no instruction anywhere in the split image forms its
-// address). We only need those four bytes to exist, not to be named: one real
-// bool plus three bytes of alignment padding in front of the 4-aligned
-// gThreadBufCurrentIndex gets the same +0xbd4 / +0xbd8 displacements.
-static bool gInitted; // +0xbd0
+// MemFindHeap, exactly the three that read or write it.
+static bool gInitted; // +0xbd1
+// +0xbd0. The fourth byte is NOT padding and it is not unrecoverable -- nothing
+// forms its address because nothing needs to: both of its users reach it by a
+// compile-time displacement off a neighbour. MemInit writes it with
+// `stb r11, -0x1(r21)` where r21 = &gInitted (immediately after the "tiny" heap
+// is added, well before the trailing `gInitted = true`), and MemAlloc reads it
+// with `lbz r11, -0x14(r26)` where r26 = &gNumHeaps (0xbe4 - 0x14 = 0xbd0) to
+// gate the tiny-heap fast path. So it is the flag that says "gHeaps[gNumHeaps-1]
+// is the tiny heap and is ready to serve small allocations".
+static bool gTinyHeapReady; // +0xbd0
 MemHeap gHeaps[MAX_HEAPS]; // +0x950 (8-aligned)
 // +0x94c. gHeaps is 8-aligned so a four-byte hole opens up behind gSingleHeap,
 // and it has to be an int that fills it. MSVC's .bss packer will otherwise
@@ -335,13 +340,104 @@ void AddHeap(int i1, int i2, DataArray *arr) {
     );
 }
 
-// Stub: MemHeap::Alloc and ThreadMemStack are not yet decompiled, so route
-// through malloc() which uses the CRT heap (NtAllocateVirtualMemory in Xenia).
-__declspec(noinline) void *
-MemAlloc(int size, const char *file, int line, const char *name, int align) {
-    if (size <= 0)
+void *MemAlloc(int iSizeBytes, const char *file, int line, const char *name, int align) {
+#ifdef HX_NATIVE
+    // Native keeps the host allocator: gHeaps/MemHeap are Xbox boot state that
+    // never gets built here, so the heap walk below has nothing to walk.
+    if (iSizeBytes <= 0)
         return nullptr;
-    return malloc(size);
+    return malloc(iSizeBytes);
+#else
+    MILO_ASSERT(iSizeBytes >= 0, 0x384);
+    CritSecTracker tracker(gMemLock);
+    MemHeapStack &stack = ThreadMemStack(false);
+    int heapNum =
+        stack.mSize != 0 ? stack.mStack[stack.mSize - 1] : MemHeapStack::sDefaultHeap;
+    MemHeap *heap = heapNum > -1 ? &gHeaps[heapNum] : nullptr;
+    bool temp = stack.mTempRefs != 0 ||
+        (heap != nullptr && heap->GetStrategy() == MemHeap::kLastFit);
+    void *allocated_mem;
+    // Fast path: once MemInit has stood the "tiny" heap up as the last heap,
+    // every small allocation gets one cheap TryAlloc against it before any of
+    // the temp/strategy machinery below runs.
+    if (gTinyHeapReady && gSingleHeap == 0 && iSizeBytes <= 0x6000) {
+        int sizeWords = MemHeap::GetSizeWords(iSizeBytes);
+        int alignWords = MemHeap::GetAlignWords(align);
+        int allocatedWords;
+        allocated_mem =
+            gHeaps[gNumHeaps - 1].TryAlloc(sizeWords, alignWords, allocatedWords);
+        if (allocated_mem != nullptr) {
+            if (gMemTracker) {
+                MemTrackAlloc(
+                    iSizeBytes, iSizeBytes, name, allocated_mem, false, 0, file, line
+                );
+            }
+            return allocated_mem;
+        }
+    }
+    if (temp && heap != nullptr && !heap->AllowTemp()) {
+        // The current heap forbids temp allocations, so unwind the thread's heap
+        // stack until one that permits them is on top, retry the whole request
+        // there, then put the stack back exactly as it was.
+        MemHeapStack &tempStack = ThreadMemStack(true);
+        int savedSize = tempStack.mSize;
+        while (tempStack.mSize > 0) {
+            tempStack.mSize--;
+            int poppedHeap = tempStack.mSize != 0
+                ? tempStack.mStack[tempStack.mSize - 1]
+                : MemHeapStack::sDefaultHeap;
+            heap = poppedHeap > -1 ? &gHeaps[poppedHeap] : nullptr;
+            if (heap->AllowTemp())
+                break;
+        }
+        MILO_ASSERT(heap->AllowTemp(), 0x3C1);
+        tempStack.mTempRefs++;
+        void *tempAlloc = MemAlloc(iSizeBytes, file, line, name, align);
+        tempStack.mSize = savedSize;
+        tempStack.mTempRefs--;
+        return tempAlloc;
+    }
+    if (heap == nullptr) {
+        if (heapNum == -2) {
+            allocated_mem = PhysicalAlloc(iSizeBytes);
+        } else {
+            MILO_ASSERT_FMT(
+                align == 0 || align <= 8, "Can't align to %d bytes on PC", align
+            );
+            allocated_mem = malloc(iSizeBytes);
+        }
+        if (gMemTracker) {
+            MemTrackAlloc(
+                iSizeBytes, iSizeBytes, name, allocated_mem, false, 0, file, line
+            );
+        }
+    } else {
+        int sizeWords = MemHeap::GetSizeWords(iSizeBytes);
+        int alignWords = MemHeap::GetAlignWords(align);
+        MemHeap::Strategy newStrategy =
+            temp ? MemHeap::kLastFit : heap->GetStrategy();
+        MemHeap::Strategy oldStrategy = heap->GetStrategy();
+        heap->SetStrategy(newStrategy);
+        int allocatedWords;
+        allocated_mem = heap->Alloc(sizeWords, alignWords, allocatedWords);
+        if (gMemTracker) {
+            MemTrackAlloc(
+                iSizeBytes,
+                allocatedWords * 4,
+                name,
+                allocated_mem,
+                false,
+                heap->GetStrategy(),
+                file,
+                line
+            );
+        }
+        heap->SetStrategy(oldStrategy);
+        MILO_ASSERT(allocated_mem, 0x427);
+        MILO_ASSERT(allocated_mem != (void *)0x01000000, 0x428);
+    }
+    return allocated_mem;
+#endif
 }
 
 void *_MemAllocTemp(int size, const char *file, int line, const char *name, int align) {
@@ -429,7 +525,8 @@ void MemInit() {
         Symbol size("size");
         int totalBytes = 0;
         AddHeap(heapArr->Size() - 1, 0x2500000, "tiny", false, 0, (MemHeap::Strategy)0, 0, false);
-        gInitted = true;
+        // Opens MemAlloc's tiny-heap fast path -- gHeaps[gNumHeaps-1] now exists.
+        gTinyHeapReady = true;
         int i = heapArr->Size() - 1;
         if (i > 0) {
             do {
