@@ -448,10 +448,8 @@ void StandardStream::PollStream() {
     }
 
     if (mState != kInit && mJumpFromSamples != 0) {
-        if (mJumpFromSamples < 0) {
-            if (mRdr->Done()) {
-                DoJump();
-            }
+        if (mJumpFromSamples < 0 && mRdr->Done()) {
+            DoJump();
         } else if (mJumpFromSamples > 0) {
             if (mJumpFromSamples < mJumpToSamples) {
                 if (mCurrentSamp >= mJumpFromSamples && mCurrentSamp < mJumpToSamples) {
@@ -601,10 +599,12 @@ void StandardStream::InitInfo(int i1, int sampleRate, bool floatSamples, int i4)
             mFloatSamples = floatSamples;
             mSampleRate = sampleRate;
             int bufBytes = mBufSecs * sampleRate * 2.0f;
-#ifndef HX_NATIVE
+            // Round the byte count up to a whole pair of stream buffers so the
+            // resulting buffer count is always even (StreamReceiver::Poll uses
+            // mNumBuffers / 2 as the send trigger).
+            bufBytes = bufBytes - bufBytes % (2 * kStreamBufSize) + 2 * kStreamBufSize;
             MILO_ASSERT(bufBytes % (2*kStreamBufSize) == 0, 0x13F);
-#endif
-            bufBytes >>= 0xE;
+            bufBytes /= kStreamBufSize;
             SystemConfig("synth", "iop")->FindInt("max_slip");
             for (int i = 0; i < numChannels; i++) {
                 bool slip = mChanParams[i]->mSlipEnabled;
@@ -621,7 +621,7 @@ void StandardStream::InitInfo(int i1, int sampleRate, bool floatSamples, int i4)
 #endif
             for (int i = 0; i < mVirtualChans; i++) {
                 void *buf = MemAlloc(
-                    mFloatSamples ? 0x1000 : 0x800, __FILE__, 0x159, "stream mVirtBufs"
+                    (mFloatSamples ? 4 : 2) * 0x800, __FILE__, 0x159, "stream mVirtBufs"
                 );
                 mVirtBufs.push_back(buf);
             }
@@ -868,9 +868,11 @@ int StandardStream::ConsumeData(void **v, int numSamples, int startSamp) {
     if ((unsigned int)samplesToConsume != 0) {
         bool floatSamples = mFloatSamples;
         std::vector<std::pair<int, int> >::iterator mapIt = mChanMaps.begin();
-        int copySize = samplesToConsume * (floatSamples ? 4 : 2);
+        int bytesPerSample = floatSamples ? 4 : 2;
         while (mapIt != mChanMaps.end()) {
-            memcpy(pcm[mapIt->second], pcm[mapIt->first], copySize);
+            memcpy(
+                pcm[mapIt->second], pcm[mapIt->first], samplesToConsume * bytesPerSample
+            );
             mapIt++;
         }
 
@@ -879,14 +881,12 @@ int StandardStream::ConsumeData(void **v, int numSamples, int startSamp) {
         while (chIdx < numChannels) {
             void *data;
             if (mFloatSamples) {
-                if ((unsigned int)samplesToConsume != 0) {
-                    int j = 0;
-                    while (j < samplesToConsume) {
-                        float f = ((float *)pcm[chIdx])[j] * 32767.0f;
-                        f = Clamp(-32767.0f, 32767.0f, f);
-                        convBuf[j] = (short)f;
-                        j++;
-                    }
+                unsigned int j = 0;
+                while (j < (unsigned int)samplesToConsume) {
+                    float f = ((float *)pcm[chIdx])[j] * 32767.0f;
+                    f = Clamp(-32767.0f, 32767.0f, f);
+                    convBuf[j] = (short)f;
+                    j++;
                 }
                 data = convBuf;
             } else {
