@@ -207,8 +207,8 @@ void Voice::UpdateMix() {
         }
         float angle = ((mPan + 1.0f) * 0.5f) * 1.5707964f;
         if (destChannels == 6 || destChannels == 2) {
-            levels[0] = (float)cos(angle) * mVolume;
-            levels[3] = (float)sin(angle) * mVolume;
+            levels[0] = mVolume * (float)cos(angle);
+            levels[3] = mVolume * (float)sin(angle);
         } else {
             for (int i = 0; i < 12; i++) {
                 levels[i] = 1.0f;
@@ -276,12 +276,12 @@ void Voice::UpdateMix() {
         }
         float angle = (mPan - loPan) / (hiPan - loPan) * 1.5707964f;
         if (destChannels == 6) {
-            levels[loChannel] = (float)cos(angle) * mVolume;
-            levels[hiChannel] = (float)sin(angle) * mVolume;
+            levels[loChannel] = mVolume * (float)cos(angle);
+            levels[hiChannel] = mVolume * (float)sin(angle);
         } else {
             MILO_ASSERT(-1.0 <= mPan && mPan <= 1.0, 0x3c2);
-            levels[0] = (float)cos(((mPan + 1.0f) * 0.5f) * 1.5707964f) * mVolume;
-            levels[1] = (float)sin(((mPan + 1.0f) * 0.5f) * 1.5707964f) * mVolume;
+            levels[0] = mVolume * (float)cos(((mPan + 1.0f) * 0.5f) * 1.5707964f);
+            levels[1] = mVolume * (float)sin(((mPan + 1.0f) * 0.5f) * 1.5707964f);
         }
     } else if (destChannels == 1) {
         levels[0] = mVolume;
