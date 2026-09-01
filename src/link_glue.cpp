@@ -914,16 +914,27 @@ ONSETPARAMS_ALIAS("VWahEffect@@UParams@1@")
 
 #undef BINSTREAM_OP_OBJDIRPTR
 
-// Explicit ObjDirPtr<T> operator<< specializations (2026-08-23).  These are
-// ??$-mangled, so they cannot be ALTERNATENAME'd (see the section header) and
-// need compiled bodies.  In the original all of them fold to one body at
-// 0x82793CA8 that writes the directory's name; this body is that body.
+// Explicit ObjDirPtr<T> operator<< specializations. These are ??$-mangled, so
+// they cannot be ALTERNATENAME'd (see the section header) and need compiled
+// bodies. In the original all of them fold to one body at 0x82793CA8.
+//
+// ⚠ THE PREVIOUS BODY HERE WAS WRONG, and its comment asserted the opposite.
+// It wrote `dir->Name()`; the target at 0x82793CA8 writes the directory's
+// FILE PATH, relative to FilePath::sRoot, resolved through ObjDirPtr::GetFile()
+// -- 144 bytes against this body's 92, and all five instantiations scored 0.0.
+// Read straight out of the target's own listing: mObject (+0xc) -> Loader()
+// (+0x4c) -> LoaderFile() (+0xc), else mLoader (+0x10) -> LoaderFile(), else
+// mObject->StoredFile() (+0x68), else FilePath::sNull -- which is exactly
+// ObjDirPtr::GetFile() in obj/Dir.h -- then
+// `bs << FileRelativePath(FilePath::Root().c_str(), path.c_str())`, i.e. the
+// FilePath operator<< in utl/FilePath.h.
+//
+// This is a BEHAVIOURAL fix as well as a matching one: a saved ObjDirPtr is a
+// path the loader can reopen, not a name.
 #define BINSTREAM_OP_OBJDIRPTR_SPEC(T)                                                   \
     template <>                                                                          \
     BinStream &operator<<(BinStream &bs, const ObjDirPtr<T> &ptr) {                      \
-        T *dir = ptr;                                                                    \
-        const char *name = dir ? dir->Name() : "";                                       \
-        bs << name;                                                                      \
+        bs << ptr.GetFile();                                                             \
         return bs;                                                                       \
     }
 BINSTREAM_OP_OBJDIRPTR_SPEC(ObjectDir)
@@ -931,6 +942,7 @@ BINSTREAM_OP_OBJDIRPTR_SPEC(RndDir)
 BINSTREAM_OP_OBJDIRPTR_SPEC(UIListDir)
 BINSTREAM_OP_OBJDIRPTR_SPEC(UILabelDir)
 BINSTREAM_OP_OBJDIRPTR_SPEC(HamListRibbon)
+BINSTREAM_OP_OBJDIRPTR_SPEC(HamScrollSpeedIndicator)
 #undef BINSTREAM_OP_OBJDIRPTR_SPEC
 
 // -- PropSync<T> for ObjPtrVec<T> --
