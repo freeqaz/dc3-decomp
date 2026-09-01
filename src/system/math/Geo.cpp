@@ -1014,7 +1014,11 @@ bool MakeBSPTree(BSPNode *&node, std::list<BSPFace> &faces, int depth) {
         return false;
     }
     node = new BSPNode();
-    stlpmtx_std::_S_sort<BSPFace, stlpmtx_std::StlNodeAlloc<BSPFace>, stlpmtx_std::less<BSPFace>>(faces, stlpmtx_std::less<BSPFace>());
+    // NB: default-initialised, NOT a value-initialised temporary. The target
+    // passes the empty comparator without first storing a zero byte to its
+    // stack slot; `less<BSPFace>()` emits that `stb`.
+    stlpmtx_std::less<BSPFace> cmp;
+    stlpmtx_std::_S_sort<BSPFace, stlpmtx_std::StlNodeAlloc<BSPFace>, stlpmtx_std::less<BSPFace>>(faces, cmp);
 
     int totalFaces = 0;
     for (std::list<BSPFace>::iterator it = faces.begin(); it != faces.end(); ++it)
@@ -1036,19 +1040,20 @@ bool MakeBSPTree(BSPNode *&node, std::list<BSPFace> &faces, int depth) {
             float frontArea = zero, backArea = zero;
             std::list<BSPFace>::iterator jt;
             for (jt = faces.begin(); jt != faces.end(); ++jt) {
-                bool front, back;
+                bool back, front;
                 jt->OnSide(*planeIt, front, back);
                 if (!front && !back) {
                     if (fabs(planeIt->a * jt->t.m.z.x + planeIt->b * jt->t.m.z.y + planeIt->c * jt->t.m.z.z) < gBSPDirTol)
                         break;
                 } else {
+                    float area = jt->area;
                     if (back) {
-                        backArea += jt->area;
+                        backArea += area;
                         backCount++;
                         if (!front) continue;
                         spanCount++;
                     }
-                    frontArea += jt->area;
+                    frontArea += area;
                     frontCount++;
                 }
             }
@@ -1056,8 +1061,10 @@ bool MakeBSPTree(BSPNode *&node, std::list<BSPFace> &faces, int depth) {
                 candidateIdx--;
                 continue;
             }
-            float powBack = (float)pow((double)(spanCount + backCount), powExp);
-            float score = (float)pow((double)(spanCount + frontCount), powExp) * frontArea
+            // (float), not (double): the target emits `fcfid; frsp` before the
+            // implicit promotion to pow's double parameter.
+            float powBack = (float)pow((float)(spanCount + backCount), powExp);
+            float score = (float)pow((float)(spanCount + frontCount), powExp) * frontArea
                         + powBack * backArea;
             if (frontCount < totalFaces && backCount < totalFaces && (bestScore < zero || score < bestScore)) {
                 node->plane = *planeIt;
@@ -1076,7 +1083,7 @@ bool MakeBSPTree(BSPNode *&node, std::list<BSPFace> &faces, int depth) {
     std::list<BSPFace>::iterator it = faces.begin();
     while (it != faces.end()) {
         std::list<BSPFace>::iterator cur = it++;
-        bool front, back;
+        bool back, front;
         cur->OnSide(node->plane, front, back);
         if (!front && !back) {
             faces.erase(cur);
@@ -1105,8 +1112,8 @@ bool MakeBSPTree(BSPNode *&node, std::list<BSPFace> &faces, int depth) {
 
     bool ok = MakeBSPTree(node->left, frontFaces, nextDepth);
     if (!ok) {
-        backFaces.clear();
         frontFaces.clear();
+        backFaces.clear();
         return false;
     }
     ok = MakeBSPTree(node->right, backFaces, nextDepth);
