@@ -16,12 +16,6 @@ private:
 };
 }  // namespace DSP
 
-void FxSendSynapse360::Recreate(std::vector<FxSend *> &sends) { FxSend360::Refresh(sends); }
-
-void FxSendSynapse360::UpdateMix() { FxSend360::UpdateVolumes(); }
-
-void FxSendSynapse360::OnParametersChanged() { FxSend360::SyncEffectParams(); }
-
 IUnknown *FxSendSynapse360::CreateFx() { return (IUnknown *)new DSP::SynapseAPO(); }
 
 void FxSendSynapse360::SyncEffectParams(IXAudio2SubmixVoice *voice) const {
