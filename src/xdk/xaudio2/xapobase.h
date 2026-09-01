@@ -157,7 +157,13 @@ namespace ATG {
             XMemSet((VOID *)mParams, 0, sizeof(mParams));
         }
         virtual ~CSampleXAPOBase() {}
-        virtual void OnSetParameters(const void *, unsigned int);
+        // The untyped IXAPOParameters entry point: reinterpret the block and
+        // hand it to the typed overload, which the effect subclasses override.
+        // The target's body is four instructions -- a vtable load and a tail
+        // branch -- so the typed call must stay virtual and must be a tail call.
+        virtual void OnSetParameters(const void *pParameters, unsigned int) {
+            OnSetParameters(*static_cast<const Params *>(pParameters));
+        }
         virtual void OnSetParameters(const Params &) {}
         virtual void
         DoProcess(const Params &, float *__restrict, unsigned int, unsigned int) = 0;

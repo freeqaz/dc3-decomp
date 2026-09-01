@@ -620,6 +620,12 @@ Stream *Synth360::NewStream(const char *name, float volume, float pan, bool b) {
     return new StreamNull(volume);
 }
 
+// The XAPO base-class bodies the target keeps in this object. `Release` is a
+// pure forward to CXAPOBase's: CXAPOParametersBase overrides it only so that
+// the IXAPOParameters vtable (at +0x20) has a slot of its own, and the body is
+// a single tail branch.
+ULONG CXAPOParametersBase::Release() { return CXAPOBase::Release(); }
+
 Stream *Synth360::NewBufStream(const void *buf, int size, Symbol ext, float startMs, bool b) {
     return new StandardStream(new BufFile(buf, size), startMs, 0.0f, ext, false, b, false);
 }

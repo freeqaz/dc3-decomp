@@ -835,6 +835,18 @@ void D3DDevice_SetVertexShaderConstantFN(
     DWORD Vector4fCount,
     UINT64 PendingMask3
 );
+void D3DDevice_SetVertexShaderConstantB(
+    D3DDevice *pDevice, DWORD StartRegister, const BOOL *pConstantData, DWORD BoolCount
+);
+void D3DDevice_SetPixelShaderConstantB(
+    D3DDevice *pDevice, DWORD StartRegister, const BOOL *pConstantData, DWORD BoolCount
+);
+void D3DDevice_SetVertexShaderConstantI(
+    D3DDevice *pDevice, DWORD StartRegister, const INT *pConstantData, DWORD Vector4iCount
+);
+void D3DDevice_SetPixelShaderConstantI(
+    D3DDevice *pDevice, DWORD StartRegister, const INT *pConstantData, DWORD Vector4iCount
+);
 D3DSurface *D3DDevice_GetRenderTarget(D3DDevice *pDevice, DWORD RenderTargetIndex);
 D3DBaseTexture *D3DDevice_CreateTexture(
     UINT Width,

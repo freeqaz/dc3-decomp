@@ -265,6 +265,169 @@ void DxShaderMgr::SetVConstant(VShaderConstant vsc, const float *__restrict data
     D3DDevice_SetVertexShaderConstantFN(TheDxRnd.Device(), vsc, data, count, mask);
 }
 
+/** The dirty bit(s) the GPU command buffer needs when `count` float4 constants
+ * starting at register `reg` are written straight into D3DDevice::m_Constants.
+ * Each mask bit covers a block of four registers, so a write spanning more than
+ * one block sets more than one bit -- hence the arithmetic shift, which smears
+ * the top bit down across `span` extra blocks before the logical shift moves it
+ * to `start`. Identical to the mask SetVConstant(const float*, unsigned int)
+ * hands to D3DDevice_SetVertexShaderConstantFN. */
+static inline UINT64 ShaderConstantDirtyMask(unsigned int reg) {
+    return (UINT64)0x8000000000000000 >> (reg >> 2);
+}
+
+static inline UINT64 ShaderConstantDirtyMask(unsigned int reg, unsigned int count) {
+    unsigned int start = reg >> 2;
+    unsigned int span = ((reg + count - 1) >> 2) - start;
+    return (UINT64)((INT64)0x8000000000000000 >> span) >> start;
+}
+
+void DxShaderMgr::SetVConstant(VShaderConstant vsc, bool b) {
+    BOOL val = b;
+    D3DDevice_SetVertexShaderConstantB(TheDxRnd.Device(), vsc, &val, 1);
+}
+
+void DxShaderMgr::SetPConstant(PShaderConstant psc, bool b) {
+    BOOL val = b;
+    D3DDevice_SetPixelShaderConstantB(TheDxRnd.Device(), psc, &val, 1);
+}
+
+void DxShaderMgr::SetVConstant(VShaderConstant vsc, int i) {
+    D3DDevice_SetVertexShaderConstantI(TheDxRnd.Device(), vsc, &i, 1);
+}
+
+void DxShaderMgr::SetPConstant(PShaderConstant psc, int i) {
+    D3DDevice_SetPixelShaderConstantI(TheDxRnd.Device(), psc, &i, 1);
+}
+
+void DxShaderMgr::SetVConstant(VShaderConstant vsc, const Vector4 &v) {
+    D3DDevice *dev = TheDxRnd.Device();
+    float x = v.x, y = v.y, z = v.z, w = v.w;
+    float *dst = (float *)&dev->m_Constants.VertexShaderF[vsc];
+    unsigned int start = (unsigned int)vsc >> 2;
+    dev->m_Pending.m_Mask[0] |= (UINT64)0x8000000000000000 >> start;
+    dst[0] = x;
+    dst[1] = y;
+    dst[2] = z;
+    dst[3] = w;
+}
+
+void DxShaderMgr::SetPConstant(PShaderConstant psc, const Vector4 &v) {
+    D3DDevice *dev = TheDxRnd.Device();
+    float x = v.x, y = v.y, z = v.z, w = v.w;
+    float *dst = (float *)&dev->m_Constants.PixelShaderF[psc];
+    unsigned int start = (unsigned int)psc >> 2;
+    dev->m_Pending.m_Mask[1] |= (UINT64)0x8000000000000000 >> start;
+    dst[0] = x;
+    dst[1] = y;
+    dst[2] = z;
+    dst[3] = w;
+}
+
+/** Shader constants are column-major, Hmx::Matrix4 is row-major, so every
+ * upload here is a transpose. 4x3 drops the fourth column. */
+void DxShaderMgr::SetVConstant4x3(VShaderConstant vsc, const Hmx::Matrix4 &mtx) {
+    D3DDevice *dev = TheDxRnd.Device();
+    float c00 = mtx.x.x, c01 = mtx.y.x, c02 = mtx.z.x, c03 = mtx.w.x;
+    float c10 = mtx.x.y, c11 = mtx.y.y, c12 = mtx.z.y, c13 = mtx.w.y;
+    float c20 = mtx.x.z, c21 = mtx.y.z, c22 = mtx.z.z, c23 = mtx.w.z;
+    float *dst = (float *)&dev->m_Constants.VertexShaderF[vsc];
+    dev->m_Pending.m_Mask[0] |= ShaderConstantDirtyMask(vsc, 3);
+    dst[0] = c00;
+    dst[1] = c01;
+    dst[2] = c02;
+    dst[3] = c03;
+    dst[4] = c10;
+    dst[5] = c11;
+    dst[6] = c12;
+    dst[7] = c13;
+    dst[8] = c20;
+    dst[9] = c21;
+    dst[10] = c22;
+    dst[11] = c23;
+}
+
+void DxShaderMgr::SetPConstant4x3(PShaderConstant psc, const Hmx::Matrix4 &mtx) {
+    D3DDevice *dev = TheDxRnd.Device();
+    float c00 = mtx.x.x, c01 = mtx.y.x, c02 = mtx.z.x, c03 = mtx.w.x;
+    float c10 = mtx.x.y, c11 = mtx.y.y, c12 = mtx.z.y, c13 = mtx.w.y;
+    float c20 = mtx.x.z, c21 = mtx.y.z, c22 = mtx.z.z, c23 = mtx.w.z;
+    float *dst = (float *)&dev->m_Constants.PixelShaderF[psc];
+    dev->m_Pending.m_Mask[1] |= ShaderConstantDirtyMask(psc, 3);
+    dst[0] = c00;
+    dst[1] = c01;
+    dst[2] = c02;
+    dst[3] = c03;
+    dst[4] = c10;
+    dst[5] = c11;
+    dst[6] = c12;
+    dst[7] = c13;
+    dst[8] = c20;
+    dst[9] = c21;
+    dst[10] = c22;
+    dst[11] = c23;
+}
+
+void DxShaderMgr::SetVConstant(VShaderConstant vsc, const Hmx::Matrix4 &mtx) {
+    D3DDevice *dev = TheDxRnd.Device();
+    float c00 = mtx.x.x, c01 = mtx.y.x, c02 = mtx.z.x, c03 = mtx.w.x;
+    float c10 = mtx.x.y, c11 = mtx.y.y, c12 = mtx.z.y, c13 = mtx.w.y;
+    float c20 = mtx.x.z, c21 = mtx.y.z, c22 = mtx.z.z, c23 = mtx.w.z;
+    float c30 = mtx.x.w, c31 = mtx.y.w, c32 = mtx.z.w, c33 = mtx.w.w;
+    float *dst = (float *)&dev->m_Constants.VertexShaderF[vsc];
+    dev->m_Pending.m_Mask[0] |= ShaderConstantDirtyMask(vsc, 4);
+    dst[0] = c00;
+    dst[1] = c01;
+    dst[2] = c02;
+    dst[3] = c03;
+    dst[4] = c10;
+    dst[5] = c11;
+    dst[6] = c12;
+    dst[7] = c13;
+    dst[8] = c20;
+    dst[9] = c21;
+    dst[10] = c22;
+    dst[11] = c23;
+    dst[12] = c30;
+    dst[13] = c31;
+    dst[14] = c32;
+    dst[15] = c33;
+}
+
+void DxShaderMgr::SetPConstant(PShaderConstant psc, const Hmx::Matrix4 &mtx) {
+    D3DDevice *dev = TheDxRnd.Device();
+    float c00 = mtx.x.x, c01 = mtx.y.x, c02 = mtx.z.x, c03 = mtx.w.x;
+    float c10 = mtx.x.y, c11 = mtx.y.y, c12 = mtx.z.y, c13 = mtx.w.y;
+    float c20 = mtx.x.z, c21 = mtx.y.z, c22 = mtx.z.z, c23 = mtx.w.z;
+    float c30 = mtx.x.w, c31 = mtx.y.w, c32 = mtx.z.w, c33 = mtx.w.w;
+    float *dst = (float *)&dev->m_Constants.PixelShaderF[psc];
+    dev->m_Pending.m_Mask[1] |= ShaderConstantDirtyMask(psc, 4);
+    dst[0] = c00;
+    dst[1] = c01;
+    dst[2] = c02;
+    dst[3] = c03;
+    dst[4] = c10;
+    dst[5] = c11;
+    dst[6] = c12;
+    dst[7] = c13;
+    dst[8] = c20;
+    dst[9] = c21;
+    dst[10] = c22;
+    dst[11] = c23;
+    dst[12] = c30;
+    dst[13] = c31;
+    dst[14] = c32;
+    dst[15] = c33;
+}
+
+void DxShaderMgr::SetPConstant(PShaderConstant psc, RndCubeTex *tex) {
+    if (tex) {
+        tex->Select(psc);
+    } else {
+        TheRnd.GetNullTexture()->Select(psc);
+    }
+}
+
 void DxShaderMgr::SetVConstant(VShaderConstant vsc, RndTex *tex) {
     if (tex) {
         tex->Select(vsc);

@@ -16,6 +16,7 @@ int fft_recursive(float* data, unsigned long size, long sign, float* context);
 int fft_scalar(float* a, float* b, unsigned long size, long sign, float* twiddle);
 int fft_altivec(float* a, float* b, unsigned long size, long sign, float* twiddle);
 int fft_real_forward_altivec(float* data, long size, float* context);
+void SquareComplexTransposeVector(float* data, long size);
 
 // Lazily-grown ping-pong scratch buffer shared by fft_pingpong / fft_recursive.
 struct FftScratch {
@@ -847,4 +848,105 @@ int FFTRealForward(float* data, unsigned long size, float* context) {
         return fft_real_forward_scalar(data, size, context);
     }
     return fft_real_forward_altivec(data, (long)size, context);
+}
+
+// In-place transpose of a square complex matrix held as 2x2 blocks of
+// XMVECTORs: `size` is the matrix dimension, one vector holds two adjacent
+// complex samples, and one "row step" is therefore two matrix rows (size * 16
+// bytes). The two permute controls split/merge the halves of a pair of vectors,
+// which is what turns a 2x2 block swap into four vperms. The diagonal block of
+// each row is transposed in place after the inner loop.
+void SquareComplexTransposeVector(float* data, long size) {
+    XMVECTORU32 perm_lo = { 0x00010203, 0x04050607, 0x10111213, 0x14151617 };
+    XMVECTORU32 perm_hi = { 0x08090A0B, 0x0C0D0E0F, 0x18191A1B, 0x1C1D1E1F };
+
+    long i = 0;
+    long blocks = size / 2;
+    if (blocks <= 0) {
+        return;
+    }
+
+    long rowStep = size * 16;
+    long halfStep = blocks * 16;
+    XMVECTOR pm_lo = *(XMVECTOR*)&perm_lo;
+    XMVECTOR pm_hi = *(XMVECTOR*)&perm_hi;
+
+    char* row = (char*)data;
+    char* col = (char*)data;
+    do {
+        char* rowLo = row;
+        char* rowHi = row + halfStep;
+        char* colLo = col;
+        char* colHi = col + halfStep;
+        for (long j = 0; j < i; j++) {
+            XMVECTOR cHi = __lvx(colHi, 0);
+            XMVECTOR cLo = __lvx(colLo, 0);
+            XMVECTOR rLo = __lvx(rowLo, 0);
+            XMVECTOR rHi = __lvx(rowHi, 0);
+            XMVECTOR outRowLo = __vperm(cLo, cHi, pm_lo);
+            XMVECTOR outRowHi = __vperm(cLo, cHi, pm_hi);
+            XMVECTOR outColLo = __vperm(rLo, rHi, pm_lo);
+            XMVECTOR outColHi = __vperm(rLo, rHi, pm_hi);
+            __stvx(outRowLo, rowLo, 0);
+            rowLo += 16;
+            __stvx(outRowHi, rowHi, 0);
+            rowHi += 16;
+            __stvx(outColLo, colLo, 0);
+            colLo += rowStep;
+            __stvx(outColHi, colHi, 0);
+            colHi += rowStep;
+        }
+        XMVECTOR dLo = __lvx(rowLo, 0);
+        XMVECTOR dHi = __lvx(rowHi, 0);
+        i += 1;
+        row += rowStep;
+        col += 16;
+        __stvx(__vperm(dLo, dHi, pm_lo), rowLo, 0);
+        __stvx(__vperm(dLo, dHi, pm_hi), rowHi, 0);
+    } while (i < blocks);
+}
+
+// Square-matrix (four-step) complex FFT, used by FFTComplex when the transform
+// is too big for the ping-pong path and log2(size) is even. Both directions run
+// the column-wise pass and a square complex transpose; the forward direction
+// transposes afterwards, the inverse before. `inverse == -1` selects the
+// inverse. Returns 0x16 (EINVAL) when size is not a power of two, or when
+// log2(size) is odd -- i.e. when the data is not a square matrix of complex
+// pairs. `inverse == -1` is the FORWARD direction -- the argument is the FFT
+// sign convention, not a boolean, and reading it as a boolean inverts the
+// transform.
+int fft_square_matrix(float* data, long size, long inverse, float* context) {
+    long power;
+    long bits = 1;
+    if (size == 1) {
+        power = 0;
+    } else {
+        long p2 = 2;
+        if (size > 2) {
+            do {
+                p2 *= 2;
+                bits += 1;
+            } while (p2 < size);
+        }
+        power = bits;
+    }
+
+    if ((1L << power) != size) {
+        return 0x16;
+    }
+    if (power & 1) {
+        return 0x16;
+    }
+
+    long ret;
+    if (inverse == -1) {
+        ret = fft_matrix_forward_columnwise(data, size, context);
+        if (ret == 0) {
+            SquareComplexTransposeVector(data, 1L << (power / 2));
+        }
+    } else {
+        SquareComplexTransposeVector(data, 1L << (power / 2));
+        ret = fft_matrix_inverse_columnwise(data, size, context);
+    }
+    return ret;
 }
