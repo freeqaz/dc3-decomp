@@ -1,5 +1,8 @@
 #include "synth_xbox\ExternalMic.h"
 #include "os\Debug.h"
+#include "obj\Data.h"
+#include "obj\Object.h"
+#include "utl\Symbol.h"
 #include <string.h>
 #include <vector>
 #include "synth_xbox\Mic.h"
@@ -7,6 +10,7 @@
 #include "xdk\xapilibi\processthreadsapi.h"
 #include "xdk\xapilibi\synchapi.h"
 #include "xdk\xapilibi\xbox.h"
+#include "xdk\xapilibi\winerror.h"
 
 std::vector<ExternalMicClientProxy *> ExternalMicClientMgr::mMicMasters;
 std::vector<unsigned long> ExternalMicClientMgr::mDevToMicMaster;
@@ -124,14 +128,19 @@ ExternalMic::~ExternalMic() {
 }
 
 namespace {
+    // Field names recovered from ExternalMic::sampleProcessThread, which builds
+    // two of these per connected mic: +0x04 is handed to XMicRequestData as its
+    // XOVERLAPPED*, +0x14 is the raw operator-new[] block whose +0x80 is +0x10,
+    // and +0x28 is the owning ExternalMic (dataReadyEntry reads it).
     struct XMicData {
-        HANDLE hMic;             // 0x0
-        unsigned long clientId;  // 0x4
-        unsigned long numFrames; // 0x8
-        unsigned long stride;    // 0xc
-        unsigned char *pData;    // 0x10
-        unsigned long unk14;     // 0x14
-        unsigned short aFrameSizes[1]; // 0x18
+        DWORD deviceId; // 0x0
+        XOVERLAPPED *pOverlapped; // 0x4
+        DWORD numFrames; // 0x8
+        DWORD stride; // 0xc
+        unsigned char *pData; // 0x10
+        unsigned char *pAlloc; // 0x14
+        unsigned short aFrameSizes[8]; // 0x18
+        ExternalMic *owner; // 0x28
     };
 }
 
@@ -163,12 +172,145 @@ void ExternalMic::dataReady(unsigned long, unsigned long, _XOVERLAPPED *pOverlap
                 ExternalMicClientMgr::AddAudio(mDeviceId, buf, total);
             }
         }
-        if (XMicGetStatus(data->hMic) == 2) {
+        if (XMicGetStatus(data->deviceId) == 2) {
             XMicRequestData(
-                data->hMic, data->numFrames, data->pData, data->aFrameSizes, data->clientId
+                data->deviceId,
+                data->numFrames,
+                data->pData,
+                data->aFrameSizes,
+                data->pOverlapped
             );
         }
     }
+}
+
+namespace {
+    void dataReadyEntry(unsigned long a, unsigned long b, _XOVERLAPPED *pOverlapped) {
+        XMicData *data = (XMicData *)pOverlapped->dwCompletionContext;
+        data->owner->dataReady(a, b, pOverlapped);
+    }
+}
+
+unsigned long ExternalMic::sampleProcessThread() {
+    DWORD deviceId = mDeviceId | 0x04000000;
+    DWORD frameBytes = 0;
+    XMIC_CAPABILITIES caps;
+    XMicData first;
+    XMicData second;
+    while (!mQuit) {
+        memset(&first, 0, sizeof(first));
+        memset(&second, 0, sizeof(second));
+        do {
+            Sleep(10);
+        } while (XMicGetStatus(deviceId) != 1 && !mQuit);
+        unk9 = true;
+        if (XMicGetCapabilities(deviceId, &caps) == 0) {
+            DWORD multiMic = caps.dwFlags & 1;
+            if (XMicStart(deviceId, 0x100, &frameBytes, 0) == 0) {
+                long hr = gatherGainAttribs(deviceId);
+                if (hr >= 0) {
+                    static Symbol generic_usb("generic_usb");
+                    Symbol micName = generic_usb;
+                    DataArray *cfg = SystemConfig("synth", "mic_types", "xbox");
+                    for (int i = 1; i < cfg->Size(); i++) {
+                        DataArray *entry = cfg->Array(i);
+                        DataArray *capsCfg = entry->FindArray("capabilities", true);
+                        if (capsCfg->Int(1) == caps.dwFlags && capsCfg->Int(2) == caps.wFormatTag
+                            && capsCfg->Int(3) == caps.nChannels
+                            && capsCfg->Int(4) == caps.nSamplesPerSec
+                            && capsCfg->Int(5) == caps.nBlockAlign
+                            && capsCfg->Int(6) == caps.wBitsPerSample) {
+                            DataArray *minGain = entry->FindArray("min_gain", true);
+                            if (minGain->Float(1) == mGainLeft) {
+                                DataArray *maxGain = entry->FindArray("max_gain", true);
+                                if (maxGain->Float(1) == mGainRight) {
+                                    micName = entry->Sym(0);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    ExternalMicClientProxy *master =
+                        ExternalMicClientMgr::GetMasterForIndex(mDeviceId);
+                    if (master) {
+                        hr = master->OnMicConnected(0x100, multiMic, micName);
+                        if (hr >= 0) {
+                            XOVERLAPPED firstOverlapped;
+                            XOVERLAPPED secondOverlapped;
+                            DWORD numFrames = multiMic ? 1 : 2;
+                            first.deviceId = deviceId;
+                            first.pOverlapped = &firstOverlapped;
+                            first.numFrames = numFrames;
+                            first.stride = frameBytes;
+                            first.pAlloc = new unsigned char[numFrames * frameBytes + 0x100];
+                            first.pData = first.pAlloc + 0x80;
+                            first.owner = this;
+                            second.deviceId = deviceId;
+                            second.pOverlapped = &secondOverlapped;
+                            second.numFrames = numFrames;
+                            second.stride = frameBytes;
+                            second.pAlloc = new unsigned char[numFrames * frameBytes + 0x100];
+                            second.pData = second.pAlloc + 0x80;
+                            second.owner = this;
+                            firstOverlapped.dwExtendedError = 0;
+                            firstOverlapped.hEvent = 0;
+                            firstOverlapped.pCompletionRoutine = dataReadyEntry;
+                            firstOverlapped.dwCompletionContext = (DWORD_PTR)&first;
+                            secondOverlapped.dwExtendedError = 0;
+                            secondOverlapped.hEvent = 0;
+                            secondOverlapped.pCompletionRoutine = dataReadyEntry;
+                            secondOverlapped.dwCompletionContext = (DWORD_PTR)&second;
+                            if (XMicRequestData(
+                                    first.deviceId,
+                                    first.numFrames,
+                                    first.pData,
+                                    first.aFrameSizes,
+                                    first.pOverlapped
+                                ) != ERROR_IO_PENDING) {
+                                hr = 0x80004005;
+                            }
+                            if (hr >= 0) {
+                                if (XMicRequestData(
+                                        second.deviceId,
+                                        second.numFrames,
+                                        second.pData,
+                                        second.aFrameSizes,
+                                        second.pOverlapped
+                                    ) != ERROR_IO_PENDING) {
+                                    hr = 0x80004005;
+                                }
+                                if (hr >= 0) {
+                                    while (!mQuit) {
+                                        SleepEx(10, true);
+                                        hr = processGain(deviceId);
+                                        MILO_ASSERT(SUCCEEDED(hr), 0x149);
+                                        if (XMicGetStatus(deviceId) != 2) {
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        XMicStop(deviceId, 0);
+        unk9 = false;
+        ExternalMicClientMgr::OnMicDisconnected(mDeviceId);
+        mLastGain = -1.0f;
+        if (first.pAlloc) {
+            delete[] first.pAlloc;
+        }
+        first.pData = 0;
+        first.pAlloc = 0;
+        if (second.pAlloc) {
+            delete[] second.pAlloc;
+        }
+        second.pData = 0;
+        second.pAlloc = 0;
+    }
+    return 0;
 }
 
 long ExternalMic::processGain(unsigned long deviceId) {
