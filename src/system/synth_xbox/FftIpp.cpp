@@ -71,11 +71,17 @@ void FftIpp::SetMode(int mode) {
     mSize = mode;
     mOrder = 1;
     if (mSize > 2) {
+        // Semantically `do { mOrder++; } while ((1 << mOrder) < mSize);` --
+        // smallest order whose power of two covers mSize.  The target reloads
+        // both members from memory on every iteration and evaluates mSize
+        // BEFORE mOrder, so the volatile spellings are load-order scaffolding,
+        // not semantics.  The volatile *store* is what pins the mSize read
+        // below the increment; without it MSVC hoists the read out of the loop.
         do {
-            mOrder = mOrder + 1;
-            int o = *(volatile int *)&mOrder;
+            *(volatile int *)&mOrder = mOrder + 1;
             int s = *(volatile int *)&mSize;
-            if (s > (1 << o)) continue;
+            int o = *(volatile int *)&mOrder;
+            if ((1 << o) < s) continue;
             break;
         } while (true);
     }
