@@ -300,7 +300,7 @@ void Synth::DestroyPitchShift(FxSendPitchShift *shift) { delete shift; }
 
 float Synth::UpdateOverlay(RndOverlay *o, float y) {
     Hmx::Color white(1, 1, 1, 1);
-    float f24 = (float)TheRnd.Width() * (y + 0.265f);
+    float f24 = (float)TheRnd.Height() * (y + 0.265f);
     if (mDebugStream) {
         DrawMeterScale(f24);
         float volume = mDebugStream->Faders()->GetVolume();
@@ -336,7 +336,7 @@ float Synth::UpdateOverlay(RndOverlay *o, float y) {
             f12 += 12.0f;
         }
     }
-    return f12 / (float)TheRnd.Width();
+    return f12 / (float)TheRnd.Height();
 }
 
 void Synth::SetMasterVolume(float volume) { mMasterFader->SetVolume(volume); }
