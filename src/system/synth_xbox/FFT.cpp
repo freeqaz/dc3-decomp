@@ -872,119 +872,119 @@ XMVECTOR __vsubfp(XMVECTOR vSrcA, XMVECTOR vSrcB);
 int fft_real_forward_altivec(float* data, long size, float* context) {
     int ret = FFTComplex(data, size / 2, -1, context);
     if (ret == 0) {
-    XMVECTORU32 sel_hi = { 0xFFFFFFFF, 0xFFFFFFFF, 0x00000000, 0x00000000 };
-    XMVECTORU32 perm_a = { 0x00010203, 0x14151617, 0x08090A0B, 0x1C1D1E1F };
-    XMVECTORU32 perm_b = { 0x04050607, 0x10111213, 0x0C0D0E0F, 0x18191A1B };
-    XMVECTORU32 perm_c = { 0x10111213, 0x04050607, 0x18191A1B, 0x0C0D0E0F };
-    XMVECTORU32 perm_d = { 0x04050607, 0x04050607, 0x14151617, 0x14151617 };
-    XMVECTORU32 perm_e = { 0x00010203, 0x00010203, 0x1C1D1E1F, 0x1C1D1E1F };
+        XMVECTORU32 sel_hi = { 0xFFFFFFFF, 0xFFFFFFFF, 0x00000000, 0x00000000 };
+        XMVECTORU32 perm_a = { 0x00010203, 0x14151617, 0x08090A0B, 0x1C1D1E1F };
+        XMVECTORU32 perm_b = { 0x04050607, 0x10111213, 0x0C0D0E0F, 0x18191A1B };
+        XMVECTORU32 perm_c = { 0x10111213, 0x04050607, 0x18191A1B, 0x0C0D0E0F };
+        XMVECTORU32 perm_d = { 0x04050607, 0x04050607, 0x14151617, 0x14151617 };
+        XMVECTORU32 perm_e = { 0x00010203, 0x00010203, 0x1C1D1E1F, 0x1C1D1E1F };
 
-    XMVECTOR v_zero = { 0.0f, 0.0f, 0.0f, 0.0f };
-    XMVECTOR v_half = { 0.5f, 0.5f, 0.5f, 0.5f };
-    XMVECTOR v_sign_lo = { 1.0f, -1.0f, 1.0f, -1.0f };
-    XMVECTOR v_sign_hi = { -1.0f, 1.0f, -1.0f, 1.0f };
+        XMVECTOR v_zero = { 0.0f, 0.0f, 0.0f, 0.0f };
+        XMVECTOR v_half = { 0.5f, 0.5f, 0.5f, 0.5f };
+        XMVECTOR v_sign_lo = { 1.0f, -1.0f, 1.0f, -1.0f };
+        XMVECTOR v_sign_hi = { -1.0f, 1.0f, -1.0f, 1.0f };
 
-    float inv_n = 1.0f / (float)(long long)size;
-    float angle1 = inv_n * (float)(2.0 * M_PI);
-    float sin_a = (float)sin(angle1);
-    float angle2 = inv_n * (float)(4.0 * M_PI);
-    double cc = (double)sin_a * (double)sin_a;
-    cc = cc * 2.0;
-    double ss = (float)sin(angle2);
+        float inv_n = 1.0f / (float)(long long)size;
+        float angle1 = inv_n * (float)(2.0 * M_PI);
+        float sin_a = (float)sin(angle1);
+        float angle2 = inv_n * (float)(4.0 * M_PI);
+        double cc = (double)sin_a * (double)sin_a;
+        cc = cc * 2.0;
+        double ss = (float)sin(angle2);
 
-    XMVECTORF32 sv;
-    sv.f[0] = 1.0f;
-    sv.f[1] = 1.0f;
-    double c1 = (float)cos(angle1);
-    sv.f[2] = (float)c1;
-    sv.f[3] = (float)c1;
-    XMVECTOR cLo = sv.v;
-    double c2 = (float)cos(angle2);
-    sv.f[0] = (float)c2;
-    sv.f[1] = (float)c2;
-    XMVECTOR cHi = sv.v;
-
-    sv.f[0] = 0.0f;
-    sv.f[1] = 0.0f;
-    double s1 = (float)sin(angle1);
-    sv.f[2] = (float)s1;
-    sv.f[3] = (float)s1;
-    XMVECTOR sLo = sv.v;
-    double s2 = (float)sin(angle2);
-    sv.f[0] = (float)s2;
-    sv.f[1] = (float)s2;
-    XMVECTOR sHi = sv.v;
-
-    XMVECTOR loCur = __lvx(data, 0);
-    XMVECTOR hiPrev = loCur;
-    float dc_re = data[0];
-    float dc_im = data[1];
-
-    float* loWrite = data;
-    float* loRead = data + 4;
-    float* hiRead = data + (size / 4) * 4 - 4;
-    float* hiWrite = hiRead;
-
-    long pairs = size / 8;
-    for (long i = 0; i < pairs; i++) {
-        XMVECTOR hiNew = __lvx(hiRead, 0);
-        XMVECTOR loNext = __lvx(loRead, 0);
-        XMVECTOR hiPair = __vsel(hiNew, hiPrev, *(XMVECTOR*)&sel_hi);
-        hiPrev = hiNew;
-        XMVECTOR loPair = __vsel(loCur, loNext, *(XMVECTOR*)&sel_hi);
-
-        XMVECTOR cLoSigned = __vmaddfp(cLo, v_sign_lo, v_zero);
-        XMVECTOR sumLo = __vaddfp(loCur, hiPair);
-        XMVECTOR diffLo = __vsubfp(loCur, hiPair);
-        XMVECTOR cHiSigned = __vmaddfp(cHi, v_sign_hi, v_zero);
-        XMVECTOR sumHi = __vaddfp(hiNew, loPair);
-        XMVECTOR diffHi = __vsubfp(hiNew, loPair);
-        loCur = loNext;
-
-        double uc1 = c1 * cc + s1 * ss;
-        double uc2 = c2 * cc + s2 * ss;
-        double us1 = s1 * cc - c1 * ss;
-        double us2 = s2 * cc - c2 * ss;
-
-        XMVECTOR loAdd = __vperm(sumLo, diffLo, *(XMVECTOR*)&perm_a);
-        XMVECTOR loMulC = __vperm(sumLo, diffLo, *(XMVECTOR*)&perm_b);
-        XMVECTOR loMulS = __vperm(sumLo, diffLo, *(XMVECTOR*)&perm_c);
-        XMVECTOR hiAdd = __vperm(sumHi, diffHi, *(XMVECTOR*)&perm_a);
-        XMVECTOR hiMulC = __vperm(sumHi, diffHi, *(XMVECTOR*)&perm_b);
-        XMVECTOR hiMulS = __vperm(sumHi, diffHi, *(XMVECTOR*)&perm_c);
-
-        XMVECTOR outLo = __vmaddfp(cLoSigned, loMulC, loAdd);
-        XMVECTOR outHi = __vmaddfp(cHiSigned, hiMulC, hiAdd);
-
-        c1 = c1 - uc1;
-        c2 = c2 - uc2;
-        s1 = s1 - us1;
-        s2 = s2 - us2;
-
-        outLo = __vnmsubfp(sLo, loMulS, outLo);
-        outHi = __vnmsubfp(sHi, hiMulS, outHi);
-
-        sv.f[1] = (float)c1;
+        XMVECTORF32 sv;
+        sv.f[0] = 1.0f;
+        sv.f[1] = 1.0f;
+        double c1 = (float)cos(angle1);
+        sv.f[2] = (float)c1;
+        sv.f[3] = (float)c1;
+        XMVECTOR cLo = sv.v;
+        double c2 = (float)cos(angle2);
         sv.f[0] = (float)c2;
+        sv.f[1] = (float)c2;
+        XMVECTOR cHi = sv.v;
+
+        sv.f[0] = 0.0f;
+        sv.f[1] = 0.0f;
+        double s1 = (float)sin(angle1);
+        sv.f[2] = (float)s1;
         sv.f[3] = (float)s1;
-        sv.f[2] = (float)s2;
-        XMVECTOR trig = sv.v;
+        XMVECTOR sLo = sv.v;
+        double s2 = (float)sin(angle2);
+        sv.f[0] = (float)s2;
+        sv.f[1] = (float)s2;
+        XMVECTOR sHi = sv.v;
 
-        __stvx(__vmaddfp(outLo, v_half, v_zero), loWrite, 0);
-        loWrite += 4;
-        __stvx(__vmaddfp(v_half, outHi, v_zero), hiWrite, 0);
-        hiWrite -= 4;
+        XMVECTOR loCur = __lvx(data, 0);
+        XMVECTOR hiPrev = loCur;
+        float dc_re = data[0];
+        float dc_im = data[1];
 
-        cHi = __vmrghw(trig, trig);
-        sLo = __vperm(sHi, trig, *(XMVECTOR*)&perm_e);
-        cLo = __vperm(cHiSigned, trig, *(XMVECTOR*)&perm_d);
-        sHi = __vmrglw(trig, trig);
+        float* loWrite = data;
+        float* loRead = data + 4;
+        float* hiRead = data + (size / 4) * 4 - 4;
+        float* hiWrite = hiRead;
 
-        loRead += 4;
-        hiRead -= 4;
-    }
+        long pairs = size / 8;
+        for (long i = 0; i < pairs; i++) {
+            XMVECTOR hiNew = __lvx(hiRead, 0);
+            XMVECTOR loNext = __lvx(loRead, 0);
+            XMVECTOR hiPair = __vsel(hiNew, hiPrev, *(XMVECTOR*)&sel_hi);
+            hiPrev = hiNew;
+            XMVECTOR loPair = __vsel(loCur, loNext, *(XMVECTOR*)&sel_hi);
 
-    data[1] = dc_re - dc_im;
+            XMVECTOR cLoSigned = __vmaddfp(cLo, v_sign_lo, v_zero);
+            XMVECTOR sumLo = __vaddfp(loCur, hiPair);
+            XMVECTOR diffLo = __vsubfp(loCur, hiPair);
+            XMVECTOR cHiSigned = __vmaddfp(cHi, v_sign_hi, v_zero);
+            XMVECTOR sumHi = __vaddfp(hiNew, loPair);
+            XMVECTOR diffHi = __vsubfp(hiNew, loPair);
+            loCur = loNext;
+
+            double uc1 = s1 * ss + c1 * cc;
+            double uc2 = s2 * ss + c2 * cc;
+            double us1 = s1 * cc - c1 * ss;
+            double us2 = s2 * cc - c2 * ss;
+
+            XMVECTOR loAdd = __vperm(sumLo, diffLo, *(XMVECTOR*)&perm_a);
+            XMVECTOR loMulC = __vperm(sumLo, diffLo, *(XMVECTOR*)&perm_b);
+            XMVECTOR loMulS = __vperm(sumLo, diffLo, *(XMVECTOR*)&perm_c);
+            XMVECTOR hiAdd = __vperm(sumHi, diffHi, *(XMVECTOR*)&perm_a);
+            XMVECTOR hiMulC = __vperm(sumHi, diffHi, *(XMVECTOR*)&perm_b);
+            XMVECTOR hiMulS = __vperm(sumHi, diffHi, *(XMVECTOR*)&perm_c);
+
+            XMVECTOR outLo = __vmaddfp(cLoSigned, loMulC, loAdd);
+            XMVECTOR outHi = __vmaddfp(cHiSigned, hiMulC, hiAdd);
+
+            c1 = c1 - uc1;
+            c2 = c2 - uc2;
+            s1 = s1 - us1;
+            s2 = s2 - us2;
+
+            outLo = __vnmsubfp(sLo, loMulS, outLo);
+            outHi = __vnmsubfp(sHi, hiMulS, outHi);
+
+            sv.f[1] = (float)c1;
+            sv.f[0] = (float)c2;
+            sv.f[3] = (float)s1;
+            sv.f[2] = (float)s2;
+            XMVECTOR trig = sv.v;
+
+            __stvx(__vmaddfp(outLo, v_half, v_zero), loWrite, 0);
+            loWrite += 4;
+            __stvx(__vmaddfp(v_half, outHi, v_zero), hiWrite, 0);
+            hiWrite -= 4;
+
+            cHi = __vmrghw(trig, trig);
+            sLo = __vperm(sHi, trig, *(XMVECTOR*)&perm_e);
+            cLo = __vperm(cHiSigned, trig, *(XMVECTOR*)&perm_d);
+            sHi = __vmrglw(trig, trig);
+
+            loRead += 4;
+            hiRead -= 4;
+        }
+
+        data[1] = dc_re - dc_im;
     }
     return ret;
 }
