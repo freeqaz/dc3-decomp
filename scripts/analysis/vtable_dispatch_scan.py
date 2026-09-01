@@ -274,12 +274,21 @@ def gather_candidates(report_path, min_norm, all_gap, cov=None):
     0.0` — there is no body on our side, so there is no vtable slot load to
     compare and nothing for this lens to see.
 
-    ...but the justification is NOT universal, and the code says so.  Exactly
-    one row breaks the "all of them are norm == 0.0" claim:
-    `RndShaderDepthVolume::CalcShaderOpts` (default/system/rndobj/Shader) has
-    `match_percent_normalized == 3.59375` and no `fuzzy_match_percent`.  It gets
-    its own drop slug so that a future reader can see the exception exists
+    ...but the justification is NOT universal, and the code says so.  When this
+    was written exactly one row broke the "all of them are norm == 0.0" claim:
+    `RndShaderDepthVolume::CalcShaderOpts` (default/system/rndobj/Shader), at
+    `match_percent_normalized == 3.59375` with no `fuzzy_match_percent`.  It got
+    its own drop slug so that a future reader would see the exception exists
     instead of inheriting a rounded-off generalisation.
+
+    ⚠ That row is GONE -- it was matched to 100.0 and now carries a fuzzy score,
+    so as of 2026-09-01 the live report has 16,520 no-fuzzy rows and all of them
+    really are norm == 0.0.  The slug STAYS, and is not a dead branch: "no row
+    currently exhibits the exception" and "the exception is impossible" are
+    different claims, and only the second would justify deleting it.  The
+    counted-bucket behaviour is pinned by a fixture in
+    tests/test_honesty_pattern_vtable.py so it is checked whether or not the
+    live build happens to contain such a row.
     """
     rep = json.load(open(report_path))
     out = []

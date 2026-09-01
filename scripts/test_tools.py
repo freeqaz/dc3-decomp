@@ -53,6 +53,14 @@ and exits non-zero — so adding a test directory is a two-line change here, not
 silent escape. A manifest entry that now PASSES is reported as STALE, so the
 manifest cannot rot in the other direction either.
 
+...and an entry that names **no collectable test** is reported as PHANTOM,
+separately, because "it was fixed" and "it was renamed out from under the
+manifest" are indistinguishable to a runner that only watches for failures.
+Measured 2026-09-01: 6 of 9 entries then being advertised as "STALE — these
+PASSED" had been RENAMED by ``57e6e20dd``. Deleting a line on that basis is
+acting on evidence nobody gathered; it was safe by luck here, and a rename
+carrying a still-failing test would have read exactly the same.
+
 Usage
 -----
     python3 scripts/test_tools.py                 # whole lane
@@ -295,6 +303,34 @@ def load_manifest() -> list[str]:
     return entries
 
 
+def _collectable(entry: str, python: str) -> bool:
+    """Does *entry* still name at least one collectable test?
+
+    Only ever called for entries the run already decided were not observed
+    failing, so this costs one short ``--collect-only`` per such entry rather
+    than one per manifest line.
+
+    A collection ERROR counts as COLLECTABLE (returns True). The question here
+    is "did this id get renamed away", and a file that cannot be imported has
+    not answered it — calling that a phantom would turn a broken import into
+    advice to delete the manifest entry that documents it.
+    """
+    path = entry.split("::", 1)[0]
+    if not (REPO_ROOT / path).exists():
+        return False
+    proc = subprocess.run(
+        [python, "-m", "pytest", "--collect-only", "-q", "--no-header",
+         "-p", "no:cacheprovider", path],
+        cwd=REPO_ROOT, capture_output=True, text=True)
+    if proc.returncode not in (0, 5):
+        return True          # could not decide; do not accuse
+    ids = {ln.strip() for ln in _strip_ansi(proc.stdout).splitlines()
+           if "::" in ln}
+    if entry == path:                     # whole-file entry
+        return any(i.split("::", 1)[0] == path for i in ids)
+    return any(manifest_match(entry, i) for i in ids)
+
+
 def manifest_match(entry: str, observed: str) -> bool:
     """An entry matches a failure id exactly, or covers a whole file/class.
 
@@ -524,6 +560,21 @@ def main() -> int:
         return False
 
     stale = [e for e in known_bad if e not in expected_hit and _in_scope(e)]
+
+    # ...and now split that list, because "the test passes now" and "there is
+    # no such test" are different facts and only the first is good news.
+    #
+    # Measured 2026-09-01: 6 of the 9 entries this run called STALE named
+    # scripts/unicorn_runner/tests/test_comparator.py::TestClassifyDivergence::
+    # test_logic_* — ids that 57e6e20dd RENAMED (test_logic_fpr_mismatch ->
+    # test_fpr_mismatch, ...) five months after the manifest was written. The
+    # entry stopped matching anything, the runner saw no failure for it, and
+    # printed "these PASSED". Following that line deletes a manifest entry on
+    # evidence that was never gathered. It happened to be safe here (the
+    # renamed tests really were fixed in the same commit) and it is safe by
+    # luck: a rename that carried a still-failing test would read identically.
+    phantom = sorted(e for e in stale if not _collectable(e, args.python))
+    stale = [e for e in stale if e not in set(phantom)]
     shielded = sorted(e for e in known_bad
                       if e not in expected_hit and not _in_scope(e)
                       and any(e == u or e.startswith(u.rstrip("/") + "/")
@@ -541,9 +592,18 @@ def main() -> int:
             print(f"    {e}")
         print()
     if stale:
-        print(f"STALE known-bad entries — these PASSED, drop them from "
+        print(f"STALE known-bad entries — these RAN and PASSED, drop them from "
               f"{MANIFEST.relative_to(REPO_ROOT)} ({len(stale)}):")
         for e in sorted(stale):
+            print(f"    {e}")
+        print()
+    if phantom:
+        print(f"PHANTOM known-bad entries — these name NO collectable test, so "
+              f"this run learned nothing about them. Renamed, moved or "
+              f"deleted; find where the test went before dropping the line, "
+              f"because 'it was renamed' and 'it was fixed' look identical "
+              f"from here ({len(phantom)}):")
+        for e in phantom:
             print(f"    {e}")
         print()
     if shielded:
@@ -592,11 +652,12 @@ def main() -> int:
                 print(f"───── {res['path']} ─────\n{_strip_ansi(body)}\n")
 
     bad = bool(new_failures or gaps or timeouts or broken or script_failed
-               or (args.strict_manifest and stale))
+               or (args.strict_manifest and (stale or phantom)))
     print("RESULT: " + ("FAIL" if bad else "PASS")
           + f"  (new={len(new_failures)} timeout={len(timeouts)} "
             f"broken={len(broken)} script-fail={len(script_failed)} "
             f"uncovered={len(gaps)} stale={len(stale)} "
+            f"phantom={len(phantom)} "
             f"known-bad-hit={len(expected_hit)})")
     return 1 if bad else 0
 

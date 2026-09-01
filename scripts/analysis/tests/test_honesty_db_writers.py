@@ -273,10 +273,30 @@ def test_batch_check_prefers_the_match_ruler_over_instruction_equality():
     }
     old = payload["instruction_summary"]["equal_percent"]   # what it used to use
     new, ruler = bc.match_percent_from_diff(payload)
-    assert ruler == "normalized"
     assert new == pytest.approx(99.9801)
     assert new != pytest.approx(old), "the two rulers really do disagree here"
     assert abs(new - old) > 0.3
+    # ...and the number must not be reachable from instruction_summary at all,
+    # by any arithmetic the old chain used.
+    isum = payload["instruction_summary"]
+    assert new != pytest.approx(100.0 * isum["equal"] / isum["total"])
+
+    # RULER LABEL.  This assertion used to read `ruler == "normalized"` and was
+    # refuted by measurement in 2426c8790: objdiff-cli's own DiffOutput calls
+    # `normalized_match_percent` a MISNOMER for the fuzzy score under a relaxed
+    # relocation mode, and 4.2.4 added `canonical_match_percent` to carry the
+    # real one.  308 of 31,813 report.json rows are canonical-100 with fuzzy
+    # below 100; 0 are the reverse.  The payload above predates 4.2.4, so the
+    # honest answer here is a NAMED fallback -- never the word "normalized"
+    # printed over a fuzzy number, which is how the original bug survived.
+    assert "normalized" not in ruler, \
+        "labelling a fuzzy score 'normalized' is the mislabelling 2426c8790 removed"
+    assert "fuzzy" in ruler and "4.2.4" in ruler
+
+    # A 4.2.4+ record of the same function: canonical wins, by NAME.
+    modern = dict(payload, canonical_match_percent=99.99783)
+    pct, ruler = bc.match_percent_from_diff(modern)
+    assert (pct, ruler) == (pytest.approx(99.99783), "canonical")
 
 
 def test_batch_check_round_pct_cannot_manufacture_a_hundred():
@@ -334,30 +354,60 @@ def test_batch_check_boilerplate_like_escaping_is_correct_against_sqlite():
 # sync_objdiff.py
 # =========================================================================== #
 
-def test_sync_objdiff_reads_the_normalized_key_by_name():
-    """The two files use the key name `fuzzy_match_percent` for DIFFERENT rulers.
+def test_sync_objdiff_pins_the_canonical_key_by_name():
+    """One key name means different rulers in different files; pin it by NAME.
 
-    objdiff-cli `diff` copies the normalized score into `fuzzy_match_percent`
-    (diff.rs:1262) and exposes the relocation-sensitive one as
-    `raw_match_percent`. report.json uses `fuzzy_match_percent` for the RAW
-    score and `match_percent_normalized` for the canonical one. Reading
-    `normalized_match_percent` first pins the ruler by NAME, so an upstream
-    rename cannot silently swap it.
+    The principle is unchanged and the KEY it names was wrong.  This test used
+    to assert that reading `normalized_match_percent` first "pins the ruler by
+    NAME".  objdiff-cli's own `DiffOutput` documents that field as a MISNOMER --
+    the FUZZY score under a relaxed relocation mode -- and 4.2.4 added
+    `canonical_match_percent` to carry objdiff-core's `match_percent_normalized`,
+    the number `report generate` publishes and every promotion gate here reads.
+    Measured (2426c8790, 2026-08-23) under the `-c functionRelocDiffs=none` this
+    script actually passes: `?roll@@YAHH@Z` is normalized 94.583336 / canonical
+    100.0, and across report.json 308 of 31,813 rows are canonical-100 with the
+    fuzzy score below 100 while **0** are the reverse.  So the old expectation
+    was not merely mislabelled: it suppressed 308 promotable rows and made this
+    script's demotion arm fight `sync_match_percent.py --promote` over exactly
+    that population.
+
+    Held here (not only in test_diff_payload_ruler.py) because this file's
+    subject is what the DB WRITERS put in a column gated at 100.
     """
-    diff_payload = {"fuzzy_match_percent": 98.5,
-                    "normalized_match_percent": 98.5,
+    # The 308-row shape: canonical and the misnomer disagree, canonical wins.
+    diff_payload = {"fuzzy_match_percent": 94.583336,
+                    "normalized_match_percent": 94.583336,
+                    "canonical_match_percent": 100.0,
                     "raw_match_percent": 91.0}
     pct, ruler = so.match_percent_from_diff(diff_payload)
-    assert (pct, ruler) == (98.5, "normalized")
-    assert pct != diff_payload["raw_match_percent"], \
-        "normalized and raw are different numbers on this payload"
+    assert (pct, ruler) == (100.0, "canonical")
+    assert pct != diff_payload["raw_match_percent"]
 
-    # If objdiff ever drops the explicit key, fall back -- and SAY so.
-    pct, ruler = so.match_percent_from_diff({"fuzzy_match_percent": 98.5})
-    assert (pct, ruler) == (98.5, "normalized-via-fuzzy-key")
+    # Preference is by NAME, not by "whichever is larger" -- under name_check a
+    # vetted relocation-name charge can put canonical BELOW fuzzy, and a max()
+    # would look right on all 308 live rows and be wrong here.
+    pct, ruler = so.match_percent_from_diff(
+        {"normalized_match_percent": 100.0, "fuzzy_match_percent": 100.0,
+         "canonical_match_percent": 84.7})
+    assert (pct, ruler) == (84.7, "canonical")
+
+    # Pre-4.2.4 binary: fall back -- and SAY which ruler you fell back to.
+    # The label may not contain "normalized"; that word names a fuzzy score in
+    # objdiff's vocabulary and printing it over one is the original defect.
+    for payload in ({"normalized_match_percent": 98.5, "fuzzy_match_percent": 98.5},
+                    {"fuzzy_match_percent": 98.5}):
+        pct, ruler = so.match_percent_from_diff(payload)
+        assert pct == 98.5
+        assert "normalized" not in ruler, ruler
+        assert "fuzzy" in ruler and "4.2.4" in ruler, ruler
 
     pct, ruler = so.match_percent_from_diff({})
     assert (pct, ruler) == (None, "none")
+
+    # Both writers of this column must answer identically, or the column holds
+    # two rulers again -- which is this file's whole subject.
+    for payload in (diff_payload, {"fuzzy_match_percent": 98.5}, {}):
+        assert bc.match_percent_from_diff(payload) == so.match_percent_from_diff(payload)
 
 
 def test_divergent_filter_also_excludes_never_tested_rows_real_sqlite():
