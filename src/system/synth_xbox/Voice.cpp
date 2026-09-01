@@ -179,7 +179,6 @@ void Voice::UpdateSends() {
     if (mPoolVoice.sourceVoice != 0) {
         XAUDIO2_VOICE_SENDS voiceSends;
         XAUDIO2_SEND_DESCRIPTOR mainDesc;
-        XAUDIO2_SEND_DESCRIPTOR reverbDesc;
         mainDesc.Flags = 0;
         IXAudio2Voice *targetVoice =
             mFxSend ? mFxSend->GetOutputVoice() : TheXboxSynth->OutputVoice();
@@ -187,10 +186,17 @@ void Voice::UpdateSends() {
         voiceSends.SendCount = 1;
         voiceSends.pSends = &mainDesc;
         if (mReverbEnabled) {
-            reverbDesc.Flags = 0;
-            reverbDesc.pOutputVoice = TheXboxSynth->UnkF8();
+            // Two descriptors: the target reserves 16 bytes here (frame slot
+            // 0x50..0x5f, with 0x58 never written) and SendCount can reach 2
+            // below.  reverbDesc[1] is left UNINITIALISED by the shipping
+            // game -- when the second send is enabled XAudio2 reads a garbage
+            // descriptor.  Reproduced as-is; do not "fix" without a matching
+            // instruction budget.
+            XAUDIO2_SEND_DESCRIPTOR reverbDesc[2];
+            reverbDesc[0].Flags = 0;
+            reverbDesc[0].pOutputVoice = TheXboxSynth->UnkF8();
             voiceSends.SendCount = 1;
-            voiceSends.pSends = &reverbDesc;
+            voiceSends.pSends = reverbDesc;
             IXAudio2Voice *target2 =
                 mFxSend ? mFxSend->GetOutputVoice() : TheXboxSynth->OutputVoice();
             if (target2) {
@@ -199,9 +205,10 @@ void Voice::UpdateSends() {
         }
         HRESULT hr;
         if (targetVoice == 0 && !mReverbEnabled) {
-            reverbDesc.Flags = 0;
-            reverbDesc.pOutputVoice = 0;
-            hr = voice->SetOutputVoices((XAUDIO2_VOICE_SENDS *)&reverbDesc);
+            XAUDIO2_VOICE_SENDS noSends;
+            noSends.SendCount = 0;
+            noSends.pSends = 0;
+            hr = voice->SetOutputVoices(&noSends);
             unk54 = false;
             unk48 = false;
         } else {
