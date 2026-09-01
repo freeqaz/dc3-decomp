@@ -102,8 +102,8 @@ NgPostProc *NgPostProc::s_BloomSetter;
 
 void NgPostProc::DoBloom() {
     float bloomIntensity = BloomIntensity();
-    bool doBloom = (0.0f < bloomIntensity) || (0.0f < mBloomColor.alpha);
-    bool doGlare = mBloomGlare && !TheHiResScreen.IsActive();
+    const bool doBloom = (0.0f < bloomIntensity) || (0.0f < mBloomColor.alpha);
+    const bool doGlare = mBloomGlare && !TheHiResScreen.IsActive();
 
     if (!doBloom && s_BloomSetter) {
         RndOverlay *overlay = RndOverlay::Find("postproc", true);
@@ -138,9 +138,9 @@ void NgPostProc::DoBloom() {
                 TextStream *prevReflect = TheDebug.SetReflect(overlay);
                 const char *worldName = PathName(activePostProc);
                 float intensity = BloomIntensity();
-                int r = (int)(mBloomColor.red * 256.0);
-                int g = (int)(mBloomColor.green * 256.0);
                 int b = (int)(mBloomColor.blue * 256.0);
+                int g = (int)(mBloomColor.green * 256.0);
+                int r = (int)(mBloomColor.red * 256.0);
                 int counter = sBloomDebugCounter % 100;
                 sBloomDebugCounter++;
                 TheDebug << MakeString("%03d:BLOOM: C=<%3d,%3d,%3d> I=%5.2f : %s\n", counter, r, g, b, intensity, worldName);
