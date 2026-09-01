@@ -1463,8 +1463,13 @@ void MakeTangentsLate(RndMesh *m) {
                    < 0.0f)
             ? -1.0f
             : 1.0f;
+        // Retail normalizes into a STACK TEMP (r31+0x80), copies all four words
+        // into faceTangents[i] (lwz/stw x4), and only then stores w at +0xc --
+        // it does not normalize straight into the vector element.
+        Vector4 tangent;
+        Normalize(basis.x, *(Vector3 *)&tangent);
+        faceTangents[i] = tangent;
         faceTangents[i].w = w;
-        Normalize(basis.x, *(Vector3 *)&faceTangents[i]);
     }
 
     double zeroThresh = 0.0;
@@ -1479,34 +1484,42 @@ void MakeTangentsLate(RndMesh *m) {
                     break;
             }
             if (3 != k) {
+                // Retail keeps &faceTangents[f] in one register across all three
+                // component adds; re-subscripting reloads the vector base
+                // (lwz 0x58(r31) + add) between each one.
+                Vector4 &ft = faceTangents[f];
                 if (first) {
                     first = false;
-                    v.tangent = faceTangents[f];
+                    v.tangent = ft;
                 } else {
-                    if ((double)(faceTangents[f].w * v.tangent.w) < zeroThresh) {
+                    if ((double)(ft.w * v.tangent.w) < zeroThresh) {
                         TheDebug << MakeString(
                             "NOTIFY: %s has previously welded vertex tangents with opposite handedness; re-export from Max for more accurate normal mapping.\n",
                             PathName(m)
                         );
                     } else {
-                        v.tangent.x += faceTangents[f].x;
-                        v.tangent.y += faceTangents[f].y;
-                        v.tangent.z += faceTangents[f].z;
+                        v.tangent.x += ft.x;
+                        v.tangent.y += ft.y;
+                        v.tangent.z += ft.z;
                     }
                 }
             }
         }
         Normalize(*(Vector3 *)&v.tangent, *(Vector3 *)&v.tangent);
 
-        float tx = v.tangent.x, ty = v.tangent.y, tz = v.tangent.z;
-        float tDotN = v.norm.x * tx + v.norm.z * tz + v.norm.y * ty;
+        // Retail copies the whole tangent into a stack temp (lwz/stw x4 into
+        // r31+0x70) and reads tx/ty/tz back out of that temp, then builds the
+        // orthogonalised result as a Vector3 at r31+0x80.
+        Vector4 t = v.tangent;
+        float tDotN = v.norm.y * t.y + v.norm.z * t.z + v.norm.x * t.x;
         float scaleX = v.norm.x * tDotN;
         float scaleY = v.norm.y * tDotN;
         float scaleZ = v.norm.z * tDotN;
-        float ox = tx - scaleX;
-        float oy = ty - scaleY;
-        float oz = tz - scaleZ;
-        Normalize(*(Vector3 *)&ox, *(Vector3 *)&v.tangent);
+        Vector3 ortho;
+        ortho.x = t.x - scaleX;
+        ortho.y = t.y - scaleY;
+        ortho.z = t.z - scaleZ;
+        Normalize(ortho, *(Vector3 *)&v.tangent);
     }
     TheDebug
         << MakeString("NOTIFY: %s MakingTangentsLate, resave this file!", PathName(m));
@@ -2184,19 +2197,29 @@ void FixVertOrder(const RndMesh *src, RndMesh *dst) {
     int mismatchCount = 0;
     RndMesh::VertVector &srcVerts = const_cast<RndMesh *>(src)->Verts();
     RndMesh::VertVector &dstVerts = dst->Verts();
+    // Retail loads dst's geom owner once (lwz r25, 0x148(r4)) and reaches both
+    // Verts (0x100) and Faces (0x110/0x114) through it; 'dst->Faces()' inside
+    // the loop re-derefs 0x148 every time.
+    std::vector<RndMesh::Face> &dstFaces = dst->Faces();
     int srcCount = srcVerts.mNumVerts;
     float tolerance = 1e-5f;
-    RndMesh::Vert tmp;
+    // Raw swap buffer, NOT a constructed Vert: the target function contains no
+    // ??0Vert@RndMesh@@QAA@XZ call at all (only 3x memcpy + the MakeString
+    // notify), so declaring a Vert here emits a constructor the retail code
+    // never runs.
+    char tmp[sizeof(RndMesh::Vert)];
     if (srcCount > 0) {
         unsigned int i = 0;
         do {
             unsigned int j = 0;
-            float stx = srcVerts.mVerts[i].tex.x;
-            float sty = srcVerts.mVerts[i].tex.y;
+            // Retail copies the whole Vector2 into a stack temp with an integer
+            // ld/std pair and reads the two floats back out of it; two separate
+            // float loads do not produce that shape.
+            Vector2 srcTex = srcVerts.mVerts[i].tex;
             if (dstVerts.mNumVerts > 0) {
                 do {
-                    if (fabsf(stx - dstVerts.mVerts[j].tex.x) < tolerance
-                        && fabsf(sty - dstVerts.mVerts[j].tex.y) < tolerance)
+                    if (fabsf(srcTex.x - dstVerts.mVerts[j].tex.x) < tolerance
+                        && fabsf(srcTex.y - dstVerts.mVerts[j].tex.y) < tolerance)
                         goto found;
                     j++;
                 } while ((int)j < dstVerts.mNumVerts);
@@ -2212,9 +2235,9 @@ void FixVertOrder(const RndMesh *src, RndMesh *dst) {
                         &dstVerts.mVerts[js], &dstVerts.mVerts[ii], sizeof(RndMesh::Vert)
                     );
                     memcpy(&dstVerts.mVerts[ii], &tmp, sizeof(RndMesh::Vert));
-                    int numFaces = (int)dst->Faces().size();
+                    int numFaces = (int)dstFaces.size();
                     if (numFaces > 0) {
-                        unsigned short *faceData = &dst->Faces()[0].v1;
+                        unsigned short *faceData = &dstFaces[0].v1;
                         int n = numFaces;
                         do {
                             if (faceData[0] == js)
@@ -2297,114 +2320,118 @@ void BurnXfm(RndMesh *mesh, bool keepTranslation) {
 void TessellateMesh(RndMesh *mesh) {
     typedef RndAmbientOcclusion::Edge Edge;
     std::set<Edge> edges;
-    RndMesh *geomOwner = mesh->GetGeomOwner();
     std::vector<RndMesh::Face> newFaces;
 
     std::vector<RndMesh::Vert> newVerts;
 
-    auto _tmp0 = geomOwner->Faces().size();
+    auto _tmp0 = mesh->Faces().size();
     newFaces.reserve(_tmp0 * 4);
-    auto vertCount = geomOwner->Verts().size();
+    auto vertCount = mesh->Verts().size();
     newVerts.reserve(vertCount * 3);
 
-    unsigned int nextVert = (unsigned short)geomOwner->Verts().size();
+    // Retail reads Verts().size() exactly ONCE, before the loop, and keeps it in
+    // two registers: r21 (origNumVerts, still live after the loop) and r23
+    // (nextVert) -- 'lwz r21, 0x104(r11)' immediately followed by 'mr r23, r21'.
+    int origNumVerts = mesh->Verts().size();
+    unsigned int nextVert = origNumVerts;
 
-    for (unsigned int i = 0; i < (unsigned int)geomOwner->Faces().size(); i++) {
-        auto face = geomOwner->Faces()[i];
-        unsigned short v2 = face.v2;
-        unsigned short v1 = face.v1;
-        unsigned short v3 = face.v3;
+    // Retail declares the three probe edges once, outside the loop: only their
+    // v0/v1 are re-stamped per face, and `midpoint` is seeded to -1 a single
+    // time (it is never read before being overwritten on either path).
+    Edge e12, e23, e31;
+
+    for (unsigned int i = 0; i < (unsigned int)mesh->Faces().size(); i++) {
+        e12.midpoint = -1;
+        e23.midpoint = -1;
+        e31.midpoint = -1;
+        // Retail keeps a POINTER to the face and re-reads v1/v2/v3 from it when
+        // the four child faces are built (lhz 0x0/0x2/0x4(r29)); a by-value copy
+        // parks them in registers across the find/insert calls instead.
+        RndMesh::Face &face = mesh->Faces()[i];
 
 #ifdef HX_NATIVE
-        intptr_t vertsBase = (intptr_t)geomOwner->Verts().mVerts;
+        intptr_t vertsBase = (intptr_t)mesh->Verts().mVerts;
 
-        RndMesh::Vert *pv1 = (RndMesh::Vert *)((uintptr_t)v1 * 0x60 + vertsBase);
-        RndMesh::Vert *pv2 = (RndMesh::Vert *)((uintptr_t)v2 * 0x60 + vertsBase);
-        RndMesh::Vert *pv3 = (RndMesh::Vert *)((uintptr_t)v3 * 0x60 + vertsBase);
+        RndMesh::Vert *pv1 = (RndMesh::Vert *)((uintptr_t)face.v1 * 0x60 + vertsBase);
+        RndMesh::Vert *pv2 = (RndMesh::Vert *)((uintptr_t)face.v2 * 0x60 + vertsBase);
+        RndMesh::Vert *pv3 = (RndMesh::Vert *)((uintptr_t)face.v3 * 0x60 + vertsBase);
 #else
-        int vertsBase = (int)(unsigned int)geomOwner->Verts().mVerts;
+        int vertsBase = (int)(unsigned int)mesh->Verts().mVerts;
 
-        RndMesh::Vert *pv1 = (RndMesh::Vert *)((unsigned int)v1 * 0x60 + vertsBase);
-        RndMesh::Vert *pv2 = (RndMesh::Vert *)((unsigned int)v2 * 0x60 + vertsBase);
-        RndMesh::Vert *pv3 = (RndMesh::Vert *)((unsigned int)v3 * 0x60 + vertsBase);
+        RndMesh::Vert *pv1 =
+            (RndMesh::Vert *)((unsigned int)face.v1 * 0x60 + vertsBase);
+        RndMesh::Vert *pv2 =
+            (RndMesh::Vert *)((unsigned int)face.v2 * 0x60 + vertsBase);
+        RndMesh::Vert *pv3 =
+            (RndMesh::Vert *)((unsigned int)face.v3 * 0x60 + vertsBase);
 #endif
+
+        e12.v0 = face.v1;
+        e12.v1 = face.v2;
+        e23.v0 = face.v2;
+        e23.v1 = face.v3;
+        e31.v0 = face.v3;
+        e31.v1 = face.v1;
 
         RndMesh::Vert blend12, blend23, blend31;
         RndAmbientOcclusion::BlendVert(*pv1, *pv2, blend12);
         RndAmbientOcclusion::BlendVert(*pv2, *pv3, blend23);
         RndAmbientOcclusion::BlendVert(*pv3, *pv1, blend31);
 
-        unsigned short mid12, mid23, mid31;
-
-        Edge e12;
-        e12.v0 = v1;
-        e12.v1 = v2;
-        e12.midpoint = -1;
         std::set<Edge>::iterator it12 = edges.find(e12);
         if (it12 == edges.end()) {
-            mid12 = nextVert++;
-            e12.midpoint = mid12;
+            e12.midpoint = nextVert++;
             edges.insert(e12);
             newVerts.push_back(blend12);
         } else {
-            mid12 = it12->midpoint;
+            e12 = *it12;
         }
 
-        Edge e23;
-        e23.v0 = v2;
-        e23.v1 = v3;
-        e23.midpoint = -1;
         std::set<Edge>::iterator it23 = edges.find(e23);
         if (it23 == edges.end()) {
-            mid23 = nextVert++;
-            e23.midpoint = mid23;
+            e23.midpoint = nextVert++;
             edges.insert(e23);
             newVerts.push_back(blend23);
         } else {
-            mid23 = it23->midpoint;
+            e23 = *it23;
         }
 
-        Edge e31;
-        e31.v0 = v3;
-        e31.v1 = v1;
-        e31.midpoint = -1;
         std::set<Edge>::iterator it31 = edges.find(e31);
         if (it31 == edges.end()) {
-            mid31 = nextVert++;
-            e31.midpoint = mid31;
+            e31.midpoint = nextVert++;
             edges.insert(e31);
             newVerts.push_back(blend31);
         } else {
-            mid31 = it31->midpoint;
+            e31 = *it31;
         }
 
         RndMesh::Face f1, f2, f3, f4;
-        f1.Set(v1, mid12, mid31);
-        f2.Set(mid31, mid12, mid23);
-        f3.Set(mid12, v2, mid23);
-        f4.Set(mid23, v3, mid31);
+        f1.Set(face.v1, e12.midpoint, e31.midpoint);
+        f2.Set(e31.midpoint, e12.midpoint, e23.midpoint);
+        f3.Set(e12.midpoint, face.v2, e23.midpoint);
+        f4.Set(e23.midpoint, face.v3, e31.midpoint);
         newFaces.push_back(f1);
         newFaces.push_back(f2);
         newFaces.push_back(f3);
         newFaces.push_back(f4);
     }
 
-    geomOwner->Faces().assign(newFaces.begin(), newFaces.end());
+    mesh->Faces().assign(newFaces.begin(), newFaces.end());
 
-    int origNumVerts = geomOwner->Verts().size();
-    geomOwner->Verts().resize(origNumVerts + (int)newVerts.size());
+    // The resize argument re-reads size() (target: lwz r10, 0x104(r11) at the
+    // call site); only the guard and the copy-back offset use the pre-loop r21.
+    mesh->Verts().resize(mesh->Verts().size() + (int)newVerts.size());
 
-    bool hasNewVerts = (nextVert & 0xFFFF) != 0;
-    if ((unsigned int)origNumVerts < (unsigned int)(hasNewVerts)) {
+    if ((unsigned int)origNumVerts < nextVert) {
         int offset = origNumVerts * 0x60;
-        int count = (nextVert & 0xFFFF) - origNumVerts;
+        int count = nextVert - origNumVerts;
         RndMesh::Vert *src = &newVerts[0];
         do {
             memcpy(
 #ifdef HX_NATIVE
-                (void *)((intptr_t)geomOwner->Verts().mVerts + offset),
+                (void *)((intptr_t)mesh->Verts().mVerts + offset),
 #else
-                (void *)((int)(unsigned int)geomOwner->Verts().mVerts + offset),
+                (void *)((int)(unsigned int)mesh->Verts().mVerts + offset),
 #endif
                 src,
                 sizeof(RndMesh::Vert)
