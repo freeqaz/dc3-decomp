@@ -19,9 +19,7 @@
 #include "world\SpotlightDrawer.h"
 #include <math.h>
 
-#ifdef HX_NATIVE
 NgSpotlightDrawer::SpotlightResources *NgSpotlightDrawer::sSharedResources;
-#endif
 
 // The tuning scalars below live as function-local statics on purpose -- do not
 // hoist them back to file scope.  MSVC-PPC emits every file-scope initialised

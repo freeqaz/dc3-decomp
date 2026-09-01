@@ -14,7 +14,6 @@
 
 float HamScrollBehavior::sScrollSettleTime = 0.1;
 
-#ifdef HX_NATIVE
 float HamScrollBehavior::mNeutralToSlowDownDelay;
 float HamScrollBehavior::mSlowDownFirstTickDelay;
 float HamScrollBehavior::mSlowDownTickDelay;
@@ -30,7 +29,6 @@ float HamScrollBehavior::mFastScrollSpeedScalar;
 float HamScrollBehavior::mScrollUpCap;
 float HamScrollBehavior::mScrollDownCap;
 float HamScrollBehavior::mSlowFastThreshold;
-#endif
 
 HamScrollBehavior::HamScrollBehavior(HamNavList *nav, UIListState *state)
     : mSettleTimer(0), mInputUp(0), mInputDown(0), mScrollStep(1), mScrollTimeAccum(0), mScrollSpeed(0.3), mTickDelay(0), mScrollCooldown(0),

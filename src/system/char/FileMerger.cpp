@@ -18,9 +18,7 @@
 #include "utl\MemMgr.h"
 #include "utl\PoolAlloc.h"
 
-#ifdef HX_NATIVE
 bool FileMerger::sDisableAll;
-#endif
 Hmx::Object *FileMerger::sFmDeleting;
 
 class NullLoader : public Loader {

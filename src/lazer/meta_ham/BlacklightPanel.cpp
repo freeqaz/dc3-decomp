@@ -7,9 +7,7 @@
 #include "obj/Object.h"
 #include "ui\PanelDir.h"
 
-#ifdef HX_NATIVE
 BlacklightPanel *BlacklightPanel::sInstance;
-#endif
 
 BlacklightPanel::BlacklightPanel() { sInstance = this; }
 

@@ -6,9 +6,7 @@
 #include "ui\UIListWidget.h"
 #include "utl/Loader.h"
 
-#ifdef HX_NATIVE
-int UIListSubList::sNextFillSelection;
-#endif
+int UIListSubList::sNextFillSelection = -1;
 
 #pragma region UIListSubList
 

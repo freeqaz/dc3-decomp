@@ -10,9 +10,7 @@
 #include "rndobj\Mesh.h"
 #include "rndobj\Trans.h"
 
-#ifdef HX_NATIVE
 std::list<Waypoint *> *Waypoint::sWaypoints;
-#endif
 
 Waypoint::Waypoint()
     : mFlags(0), mRadius(12), mYRadius(0), mAngRadius(0), mPad(0), mStrictAngDelta(0),

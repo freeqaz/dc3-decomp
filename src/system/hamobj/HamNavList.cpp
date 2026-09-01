@@ -48,11 +48,9 @@ bool HamNavList::sForceDisengage;
 /** Distinct file-scope gate the retail build reads before running the scroll
  *  behavior (data:0x82F5FFE8) - NOT HamNavList::sForceDisengage (0x82F5FE64). */
 static bool sSuppressScrollBehavior;
-#ifdef HX_NATIVE
-float HamNavList::sSlideTrendAmount;
-float HamNavList::sSlideSmoothAmount;
+float HamNavList::sSlideTrendAmount = 10.0f;
+float HamNavList::sSlideSmoothAmount = 10.0f;
 bool HamNavList::sLastSelectInControllerMode;
-#endif
 
 NavSelectMsg::NavSelectMsg(Symbol sym, int index, HamNavList *list, bool selecting)
     : Message(Type(), sym, index, (Hmx::Object *)list, selecting) {}

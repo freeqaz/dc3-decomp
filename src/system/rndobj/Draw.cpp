@@ -11,11 +11,9 @@
 #include "rndobj\Utl.h"
 #include "utl/BinStream.h"
 
-#ifdef HX_NATIVE
 HighlightStyle RndDrawable::sHighlightStyle;
-float RndDrawable::sNormalDisplayLength;
+float RndDrawable::sNormalDisplayLength = 1.0f;
 bool RndDrawable::sForceSubpartSelection;
-#endif
 
 RndDrawable::RndDrawable()
     : mShowing(true), mOrder(0), mClipPlanes(this, (EraseMode)0, kObjListNoNull) {

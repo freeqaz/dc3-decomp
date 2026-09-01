@@ -7,12 +7,10 @@ DataNode GlitchFindScriptImpl(DataArray *arr, int iii);
 
 GlitchFinder TheGlitchFinder;
 std::vector<float> GlitchPoker::smNestedStartTimes;
-#ifdef HX_NATIVE
 float GlitchPoker::smThreshold;
 bool GlitchPoker::smDumpLeaves;
 float GlitchPoker::smLastDumpTime;
 float GlitchPoker::smTotalLeafTime;
-#endif
 
 GlitchPoker::GlitchPoker() {}
 
