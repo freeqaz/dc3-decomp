@@ -11,6 +11,7 @@
 #include "stl\_list.h"
 #include "utl\DataPointMgr.h"
 #include "utl\Locale.h"
+#include "os\ThreadCall.h"
 #include "utl\GlitchFinder.h"
 #include "xdk\XAPILIB.h"
 #include "xdk\xparty\xparty.h"
@@ -66,6 +67,10 @@ namespace {
     int GetPadNumFromXuid(unsigned __int64 xuid);
     void SmartGlassInit();
 }
+
+Hmx::Object *PlatformMgr::spShowControllerObject;
+DWORD PlatformMgr::sdwShowControllerTrackingID;
+int PlatformMgr::snShowControllerPadNum;
 
 PlatformMgr::PlatformMgr() : mSigninMask(0) {
     mScreenSaver = true;
@@ -235,7 +240,38 @@ void PlatformMgr::SetBackgroundDownloadPriority(bool highPriority) {
         XBACKGROUND_DOWNLOAD_MODE_AUTO);
 }
 
-// int __cdecl ShowControllerRequiredUIThreaded(void)
+int ShowControllerRequiredUIThreaded() {
+    return XShowNuiControllerRequiredUI(
+        PlatformMgr::sdwShowControllerTrackingID, PlatformMgr::snShowControllerPadNum
+    );
+}
+
+void ShowControllerRequiredUIThreadedCB(int result) {
+    static ControllerReqOpCompleteMsg msg(true);
+    msg.SetSuccess(result == 0);
+    if (PlatformMgr::spShowControllerObject) {
+        PlatformMgr::spShowControllerObject->Handle(msg, false);
+    }
+}
+
+void PlatformMgr::ShowControllerRequiredUI(Hmx::Object *obj) {
+    sdwShowControllerTrackingID = 0;
+    snShowControllerPadNum = 0;
+    spShowControllerObject = 0;
+    unsigned long trackingID;
+    if (sXShowCallback(trackingID)) {
+        sdwShowControllerTrackingID = trackingID;
+        snShowControllerPadNum = 0xFF;
+        spShowControllerObject = obj;
+        ThreadCall(ShowControllerRequiredUIThreaded, ShowControllerRequiredUIThreadedCB);
+    } else {
+        static ControllerReqOpCompleteMsg msg(true);
+        msg.SetSuccess(true);
+        if (obj) {
+            obj->Handle(msg, false);
+        }
+    }
+}
 
 bool PlatformMgr::ShowPartyUI(int padNum) {
     unsigned long ul;

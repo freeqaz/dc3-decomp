@@ -14,7 +14,7 @@
 # entry points and middleware the decomp calls but does not contain. The
 # classification is for the reader; --check ignores it and compares names only.
 #
-# counts: 798 total = 161 GAP + 637 EXT
+# counts: 798 total = 160 GAP + 638 EXT
 
 GAP ??$?6VHamScrollSpeedIndicator@@@@YAAAVBinStream@@AAV0@ABV?$ObjDirPtr@VHamScrollSpeedIndicator@@@@@Z  # target defines it in system/ui/UILabel.obj
 GAP ??0GranularSynth@Synapse@DSP@@QAA@ABV?$vector@MV?$StlNodeAlloc@M@stlpmtx_std@@@stlpmtx_std@@III@Z  # target defines it in system/synth_xbox/GranularSynth.obj
@@ -52,7 +52,6 @@ GAP ?ReleaseAutoRelease@DxRnd@@QAAXXZ  # target defines it in system/rnddx9/Rnd_
 GAP ?ResolveMipChain@DxTex@@AAAXXZ  # target defines it in system/rnddx9/Tex.obj
 GAP ?RunXinputJoypadLoop@?A0x439b694a@@YAXXZ  # target defines it in system/os/Joypad_Xbox.obj
 GAP ?SendRawData@@YAXHEEEEEEE@Z  # target defines it in system/os/Joypad_Xbox.obj
-GAP ?ShowControllerRequiredUI@PlatformMgr@@QAAXPAVObject@Hmx@@@Z  # target defines it in system/os/PlatformMgr_Xbox.obj
 GAP ?SyncBitmap@DxTex@@MAAXXZ  # target defines it in system/rnddx9/Tex.obj
 GAP ?SyncEffectParams@FxSendChorus360@@UBAXPAUIXAudio2SubmixVoice@@@Z  # target defines it in system/synth_xbox/FxSendChorus.obj
 GAP ?Synthesize@GranularSynth@Synapse@DSP@@QAAXIPBQAM@Z  # target defines it in system/synth_xbox/GranularSynth.obj
@@ -579,6 +578,7 @@ EXT XShowGamerCardUI
 EXT XShowKeyboardUI
 EXT XShowMarketplaceDownloadItemsUI
 EXT XShowMarketplaceUI
+EXT XShowNuiControllerRequiredUI
 EXT XShowNuiDeviceSelectorUI
 EXT XShowNuiDirtyDiscErrorUI
 EXT XShowNuiFitnessBodyProfileUI
