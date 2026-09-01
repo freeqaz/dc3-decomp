@@ -587,7 +587,9 @@ extern "C" const char __link_glue_empty_str[] = "";
 
 // -- Game/engine data (810 symbols) --
 // Removed: gDebugDepth — defined in LiveCameraInput.cpp
-#pragma comment(linker, "/ALTERNATENAME:?lbl_82F14008@@3HA=__link_glue_zero")
+// Removed: lbl_82F14008 — defined in rndobj/Draw.cpp (matching unit).  The
+// alias was also wrong: __link_glue_zero is 0, and Draw.obj .data:0x44
+// (0x82F14008) is 0xFFFFFFFF.
 // Removed: sHamMaster@MetaPanel — defined in MetaPanel.cpp (matching unit)
 // Removed: sSongDB@MetaPanel — defined in MetaPanel.cpp (matching unit)
 
