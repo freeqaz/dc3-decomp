@@ -1082,16 +1082,18 @@ bool MakeBSPTree(BSPNode *&node, std::list<BSPFace> &faces, int depth) {
     std::list<BSPFace> backFaces, frontFaces;
     std::list<BSPFace>::iterator it = faces.begin();
     while (it != faces.end()) {
-        std::list<BSPFace>::iterator cur = it++;
         bool back, front;
-        cur->OnSide(node->plane, front, back);
+        it->OnSide(node->plane, front, back);
         if (!front && !back) {
-            faces.erase(cur);
+            it = faces.erase(it);
         } else if (!back) {
+            std::list<BSPFace>::iterator cur = it++;
             frontFaces.splice(frontFaces.begin(), faces, cur);
         } else if (!front) {
+            std::list<BSPFace>::iterator cur = it++;
             backFaces.splice(backFaces.begin(), faces, cur);
         } else {
+            std::list<BSPFace>::iterator cur = it++;
             Hmx::Ray ray;
             Intersect(cur->t, node->plane, ray);
             BSPFace frontFace;
