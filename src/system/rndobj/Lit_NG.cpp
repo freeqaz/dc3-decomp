@@ -93,8 +93,8 @@ bool NgLight::SphereConeTest(const Vector3 &sphereCenter, float sphereRadius) {
     float botR = mBotRadius;
 
     Vector3 topPoint = xfm1.v;
-    Vector3 dirTop = dir;
     Vector3 dirBot = dir;
+    Vector3 dirTop = dir;
     Vector3 axisRange = xfm2.m.y;
     Vector3 botPoint = xfm1.v;
     Vector3 toSphere = sphereCenter;
