@@ -121,11 +121,10 @@ bool NgLight::SphereConeTest(const Vector3 &sphereCenter, float sphereRadius) {
     scaled *= t;
     closest -= scaled;
 
-    bool _result = true;
-    if (Dot(dir, closest) >= 0.0f) {
-        _result = Length(closest) < sphereRadius;
+    if (Dot(dir, closest) < 0.0f) {
+        return true;
     }
-    return _result;
+    return Length(closest) < sphereRadius;
 }
 
 namespace Hmx {
