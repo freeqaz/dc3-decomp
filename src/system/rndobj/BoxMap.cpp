@@ -14,7 +14,7 @@ static inline float RecipSqrtEst(float x) {
 #endif
 }
 
-static int gLightIndex = 0;
+static unsigned int gLightIndex = 0;
 static Hmx::Color gLightBuffer1[150];
 static Hmx::Color gLightBuffer2[150];
 
@@ -67,9 +67,8 @@ void BoxMapLighting::ApplyQueuedLights(Hmx::Color * __restrict color, const Vect
         ApplyLight(mQueued_Point, *v3);
     }
     ApplyLight(mQueued_Directional);
-    unsigned int idx = gLightIndex;
 
-    if (idx != 0) {
+    if (gLightIndex != 0) {
         float c0r = color[0].red;
         float c0g = color[0].green;
         float c0b = color[0].blue;
@@ -91,7 +90,7 @@ void BoxMapLighting::ApplyQueuedLights(Hmx::Color * __restrict color, const Vect
 
         float *lightBuf1 = (float *)gLightBuffer1 - 2;
         float *lightBuf2 = (float *)gLightBuffer2 - 2;
-        for (unsigned int counter = idx; counter != 0; counter--) {
+        for (unsigned int counter = gLightIndex; counter != 0; counter--) {
             float x1 = lightBuf1[2];
             float y1 = lightBuf1[3];
             lightBuf1 += 4;
