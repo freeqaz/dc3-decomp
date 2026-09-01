@@ -3,7 +3,11 @@
 namespace DSP {
 
 struct SynapseBand {
-    char enabled;       // 0x00
+    // bool, not char: SynapseAPO::OnSetParameters compares two of these with an
+    // unsigned cmplw and passes the raw byte straight to
+    // Synapse::SetVoiceEnabled(unsigned, bool). Declared char, MSVC sign-extends
+    // both sides (extsb/extsb/cmpw) and then materialises a 0/1 with subic/subfe.
+    bool enabled;       // 0x00
     char pad[3];        // 0x01-0x03
     float freq;         // 0x04 - center frequency
     float gain;         // 0x08 - gain in dB
