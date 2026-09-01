@@ -43,9 +43,20 @@ void FxSendMeterEffect360::InitParams(IXAudio2SubmixVoice *voice, int numChannel
         break;
     }
     RELEASE(mParams);
-    mParams = new MeterEffectParams();
-    mParams->mLevelData = &channels[0];
-    voice->SetEffectParameters(0, mParams, sizeof(MeterEffectParams), 0);
+    // No parentheses: the target has no null-check-then-zero-store after the
+    // allocation, which is what `new MeterEffectParams()` value-initialisation
+    // emits for a POD.
+    MeterEffectParams *created = new MeterEffectParams;
+    LevelData *levels = &channels[0];
+    mParams = created;
+    created->mLevelData = levels;
+    // &mParams, not mParams -- reproduced from the target, which passes the
+    // ADDRESS OF THE MEMBER POINTER (addi rN, this, 0x40) as pParameters. Since
+    // sizeof(MeterEffectParams) is 4, the effect receives the heap pointer
+    // itself as its LevelData*, one indirection short. SyncEffectParams
+    // (100% matched) passes a local by address correctly, so this is a shipped
+    // defect, not a decomp artifact.
+    voice->SetEffectParameters(0, &mParams, sizeof(MeterEffectParams), 0);
 }
 
 IUnknown *FxSendMeterEffect360::CreateFx() {
