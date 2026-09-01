@@ -14,7 +14,7 @@
 # entry points and middleware the decomp calls but does not contain. The
 # classification is for the reader; --check ignores it and compares names only.
 #
-# counts: 823 total = 175 GAP + 648 EXT
+# counts: 809 total = 174 GAP + 635 EXT
 
 GAP ??$?6VHamScrollSpeedIndicator@@@@YAAAVBinStream@@AAV0@ABV?$ObjDirPtr@VHamScrollSpeedIndicator@@@@@Z  # target defines it in system/ui/UILabel.obj
 GAP ??0GranularSynth@Synapse@DSP@@QAA@ABV?$vector@MV?$StlNodeAlloc@M@stlpmtx_std@@@stlpmtx_std@@III@Z  # target defines it in system/synth_xbox/GranularSynth.obj
@@ -53,11 +53,10 @@ GAP ?InitXinputJoypadThreadData@?A0x439b694a@@YAXXZ  # target defines it in syst
 GAP ?IsFinished@SingleItemEnumJob@@UAA_NXZ  # target defines it in system/os/PlatformMgr_Xbox.obj
 GAP ?LockBitmap@DxTex@@UAAXAAVRndBitmap@@H@Z  # target defines it in system/rnddx9/Tex.obj
 GAP ?OnCompletion@SingleItemEnumJob@@UAAXPAVObject@Hmx@@@Z  # target defines it in system/os/PlatformMgr_Xbox.obj
-GAP ?OnSetParameters@?$CSampleXAPOBase@VGainEffect@@UGainEffectParams@@@ATG@@MAAXPBXI@Z  # target defines it in system/synth_xbox/HeadsetPlaybackEffect.obj
 GAP ?Poll@MicXbox@@QAAXXZ  # target defines it in system/synth_xbox/Mic.obj
 GAP ?Poll@PlatformMgr@@QAAXXZ  # target defines it in system/os/PlatformMgr_Xbox.obj
 GAP ?QueryInterface@CXAPOParametersBase@@UAAJABU_GUID@@PAPAX@Z  # target defines it in system/synth_xbox/Synth.obj
-GAP ?Release@CXAPOParametersBase@@UAAKXZ  # target defines it in system/synth_xbox/Synth.obj
+GAP ?Release@CXAPOBase@@UAAKXZ  # target defines it in system/synth_xbox/Synth.obj
 GAP ?ReleaseAutoRelease@DxRnd@@QAAXXZ  # target defines it in system/rnddx9/Rnd_Xbox.obj
 GAP ?ResolveMipChain@DxTex@@AAAXXZ  # target defines it in system/rnddx9/Tex.obj
 GAP ?RunXinputJoypadLoop@?A0x439b694a@@YAXXZ  # target defines it in system/os/Joypad_Xbox.obj
@@ -220,19 +219,6 @@ EXT ?LoadKNN@LDARegressor@HeadOrientation@@QAAJPBD@Z
 EXT ?LoadLDA@LDARegressor@HeadOrientation@@QAAJPBD@Z
 EXT ?LockForProcess@CXAPOBase@@UAAJIPBUXAPO_LOCKFORPROCESS_BUFFER_PARAMETERS@@I0@Z
 EXT ?NuiTransformMatrixLevel@@YA?AU_XMMATRIX@@U__vector4@@@Z
-EXT ?OnSetParameters@?$CSampleXAPOBase@VBitCrushEffect@@UParams@1@@ATG@@MAAXPBXI@Z
-EXT ?OnSetParameters@?$CSampleXAPOBase@VCompressionEffect@@UParams@1@@ATG@@MAAXPBXI@Z
-EXT ?OnSetParameters@?$CSampleXAPOBase@VDelayEffect@@UParams@1@@ATG@@MAAXPBXI@Z
-EXT ?OnSetParameters@?$CSampleXAPOBase@VDistortionEffect@@UParams@1@@ATG@@MAAXPBXI@Z
-EXT ?OnSetParameters@?$CSampleXAPOBase@VEQEffect@@UParams@1@@ATG@@MAAXPBXI@Z
-EXT ?OnSetParameters@?$CSampleXAPOBase@VEnvelopeGenerator@@UEnvelopeGeneratorParams@@@ATG@@MAAXPBXI@Z
-EXT ?OnSetParameters@?$CSampleXAPOBase@VFlangerEffect@@UParams@1@@ATG@@MAAXPBXI@Z
-EXT ?OnSetParameters@?$CSampleXAPOBase@VHeadsetPlaybackEffect@@UHeadsetPlaybackEffectParams@@@ATG@@MAAXPBXI@Z
-EXT ?OnSetParameters@?$CSampleXAPOBase@VHeadsetXferEffect@@UHeadsetXferEffectParams@@@ATG@@MAAXPBXI@Z
-EXT ?OnSetParameters@?$CSampleXAPOBase@VMeterEffect@@UMeterEffectParams@@@ATG@@MAAXPBXI@Z
-EXT ?OnSetParameters@?$CSampleXAPOBase@VPitchShiftEffect@@UPitchShiftEffectParams@@@ATG@@MAAXPBXI@Z
-EXT ?OnSetParameters@?$CSampleXAPOBase@VSynapseAPO@DSP@@USynapseAPOParams@2@@ATG@@MAAXPBXI@Z
-EXT ?OnSetParameters@?$CSampleXAPOBase@VWahEffect@@UParams@1@@ATG@@MAAXPBXI@Z
 EXT ?Reset@CXAPOBase@@UAAXXZ
 EXT ?SetParameters@CXAPOParametersBase@@UAAXPBXI@Z
 EXT ?SpewInit@@YAXXZ
