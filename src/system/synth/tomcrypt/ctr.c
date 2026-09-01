@@ -54,32 +54,48 @@ int ctr_reinit(int cipher, unsigned char *r4, symmetric_CTR *ctr) {
 int ctr_encrypt_fast(
     const unsigned char *src, unsigned char *dst, unsigned long len, symmetric_CTR *ctr
 ) {
-    int *srcUI = (int *)src;
     int x0, x1, x2, x3;
-    for (; len != 0; len -= 0x10) {
-        int *dstUI = (int *)dst;
+    unsigned long n;
+    for (n = 0; n < len; n += 0x10) {
         int i;
         for (i = 0; i < ctr->blocklen; i++) {
             if (++ctr->ctr[i] != '\0')
                 break;
         }
-        if (ctr)
-            cipher_descriptor[ctr->cipher].ecb_encrypt(ctr->ctr, ctr->pad, &ctr->key);
+        cipher_descriptor[ctr->cipher].ecb_encrypt(ctr->ctr, ctr->pad, &ctr->key);
 
-        x0 = *srcUI++;
-        x1 = *srcUI++;
-        x2 = *srcUI++;
-        x3 = *srcUI++;
+        /* The `int *d` local is CODEGEN-LOAD-BEARING, not a tidy-up (established
+         * in rb3-xenon by lane DK-2d, same Xenon MSVC toolchain). Retail makes
+         * `src` the update-form induction variable (`lwzu 0x10(r29)` on
+         * r29 = src-0x10) and advances `dst` with a plain `addi`. Writing the
+         * stores as `((int *)(dst + n))[i]` makes MSVC pick the MIRROR IMAGE --
+         * dst becomes the update pointer and src the plain one. Hoisting only the
+         * dst address into a local flips the IV selection to src and the whole
+         * body falls into retail's schedule. The word order is equally
+         * load-bearing: retail emits loads and stores in word order 1,2,3,0 and
+         * MSVC rotates the source order by +1, so the source must read 0,1,2,3. */
+        x0 = ((const int *)(src + n))[0];
+        x1 = ((const int *)(src + n))[1];
+        x2 = ((const int *)(src + n))[2];
+        x3 = ((const int *)(src + n))[3];
 
         x0 ^= ((int *)ctr->pad)[0];
+        /* RESIDUAL (1 instruction): retail's word-1 xor is `xor r8,r8,r11`
+         * (pad as rS) where ours is `xor r8,r11,r8`. Same registers, same dest,
+         * only the rS/rB encoding differs. Measured NOT source-steerable here:
+         * spelling it `((int *)ctr->pad)[1] ^ x1` emits byte-identical output.
+         * Register-allocation class; same residual rb3-xenon reached. */
         x1 ^= ((int *)ctr->pad)[1];
         x2 ^= ((int *)ctr->pad)[2];
         x3 ^= ((int *)ctr->pad)[3];
 
-        *dstUI++ = x0;
-        *dstUI++ = x1;
-        *dstUI++ = x2;
-        *dstUI++ = x3;
+        {
+            int *d = (int *)(dst + n);
+            d[0] = x0;
+            d[1] = x1;
+            d[2] = x2;
+            d[3] = x3;
+        }
     }
     return 0;
 }

@@ -34,8 +34,6 @@ void SampleData::SetAllocator(SampleDataAllocFunc a, SampleDataFreeFunc f) {
 }
 
 void SampleData::Dealloc() {
-    Hmx::CRC crc;
-    crc.mCRC = mCRC.mCRC;
 #ifdef HX_NATIVE
     if (!sFree) {
         free(mData);
@@ -44,7 +42,11 @@ void SampleData::Dealloc() {
         return;
     }
 #endif
-    if (crc.mCRC == 0 || !TheWavMgr->ReleaseRes(crc)) {
+    // Pass the member straight to ReleaseRes: the by-value parameter is an
+    // UNNAMED temporary, which retail materialises in its own frame slot
+    // (stw/addi/lwz at r1+0x50, +0x10 of frame). A named `Hmx::CRC crc` copy
+    // gets held in a register instead and loses those three instructions.
+    if (mCRC.mCRC == 0 || !TheWavMgr->ReleaseRes(mCRC)) {
         sFree(mData, "SampleData.cpp", 196, "SampleData");
     }
     mData = 0;
@@ -102,10 +104,11 @@ void SampleData::LoadWAV(BinStream &bs, const FilePath &fp, bool bigEndian) {
         MILO_NOTIFY("Wave file %s is compressed", fp);
         return;
     }
-    Hmx::CRC crc;
-    if (!bigEndian) {
-        crc = Hmx::CRC(FileRelativePath(FileExecRoot(), fp.c_str()));
-    }
+    // Retail constructs `crc` IN PLACE on both arms (one frame slot, ctor-return
+    // read) rather than defaulting it and then overwriting from a temporary.
+    Hmx::CRC crc = !bigEndian
+        ? Hmx::CRC(FileRelativePath(FileExecRoot(), fp.c_str()))
+        : Hmx::CRC();
     mFormat = kPCM;
     mCRC.mCRC = crc.mCRC;
     mNumChannels = wav.NumChannels();
@@ -113,6 +116,14 @@ void SampleData::LoadWAV(BinStream &bs, const FilePath &fp, bool bigEndian) {
     mSampleRate = wav.SamplesPerSec();
     mSizeBytes = SizeAs(mFormat);
     if (mCRC.mCRC != 0) {
+        // NOTE: `mCRC`, not the equal local `crc`. Passing the local scores
+        // marginally higher (97.3 vs 97.0) but explodes into a 16-instruction
+        // r28/r29 permutation cascade -- 27 mismatch rows against 7.
+        // The 7 residual rows are all retail materialising this by-value
+        // Hmx::CRC argument in a frame slot (stw/addi/lwz at r31+0x50) where we
+        // pass it in a register. Adding a user-declared CRC copy constructor
+        // reproduces that here but costs 5 functions / 756 bytes binary-wide
+        // (measured), so it is not the mechanism.
         if (!TheWavMgr->CreateSample(mCRC, mData, mSizeBytes)) {
             WaveFileData wavdata(wav);
             wavdata.Read(mData, mSizeBytes);

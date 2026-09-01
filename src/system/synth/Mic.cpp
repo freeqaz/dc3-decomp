@@ -3,6 +3,7 @@
 #include "os\Debug.h"
 #include "obj\Data.h"
 #include "utl\MemMgr.h"
+#include <algorithm>
 #include <cstring>
 
 void Mic::Set(const DataArray *data) {
@@ -41,53 +42,45 @@ void RingBuffer::Init(int size) {
 
 int RingBuffer::Peek(void *data, int len) {
     MILO_ASSERT(len <= mSize, 0x62);
-    int i2 = ((mWriteIx - len) + mSize) % mSize;
-    int i30 = mSize - i2;
-    i30 = Min(len, i30);
-    memcpy(data, (char *)mBuffer + i2, i30);
-    if (i30 != len) {
-        memcpy((char *)data + i30, mBuffer, len - i30);
+    // Start `len` bytes behind the write head, wrapping.
+    int startIx = ((mWriteIx - len) + mSize) % mSize;
+    // NOTE: std::min, not Min(). Retail binds both operands by const reference:
+    // it homes the `len` parameter to its caller stack slot, spills `chunk1` to
+    // a frame slot, selects between the two ADDRESSES and reloads. Milo's
+    // Min(T, T) is by value and compiles to a register select instead.
+    int chunk1 = std::min(mSize - startIx, len);
+    memcpy(data, (char *)mBuffer + startIx, chunk1);
+    if (chunk1 != len) {
+        memcpy((char *)data + chunk1, mBuffer, len - chunk1);
     }
     return len;
 }
 
 int RingBuffer::Write(void *data, int len) {
-    char *src = (char *)data;
-    int writeLen = len;
-
-    if (writeLen > mSize) {
-        src = src + len - mSize;
-        writeLen = mSize;
+    // More than the buffer holds: keep only the last mSize bytes. Retail reuses
+    // the `len` parameter's own home slot here rather than a separate local.
+    if (len > mSize) {
+        data = (char *)data + len - mSize;
+        len = mSize;
     }
+    char *src = (char *)data;
 
     int available = mSize - mWriteIx;
-    int returnVal = (mTotal - mSize) + writeLen;
-    int *pChunk;
-    int chunkSize = writeLen;
-    if (writeLen < available) {
-        pChunk = &chunkSize;
-    } else {
-        pChunk = &available;
-    }
-    int chunk1 = *pChunk;
+    int returnVal = (mTotal - mSize) + len;
+    // std::min, not Min(): retail binds by const reference and selects between
+    // the two operands' addresses. See the note in Peek().
+    int chunk1 = std::min(available, len);
 
     memcpy((char *)mBuffer + mWriteIx, src, chunk1);
 
-    if (chunk1 != writeLen) {
-        memcpy(mBuffer, src + chunk1, writeLen - chunk1);
+    if (chunk1 != len) {
+        memcpy(mBuffer, src + chunk1, len - chunk1);
     }
 
-    int *pTotal;
-    int tempTotal = mTotal + writeLen;
-    pTotal = &tempTotal;
-    mWriteIx = (mWriteIx + writeLen) % mSize;
-    if (tempTotal >= mSize) {
-        pTotal = &mSize;
-    }
-    int newTotal = *pTotal;
-    mTotal = newTotal;
+    mWriteIx = (mWriteIx + len) % mSize;
+    mTotal = std::min(mSize, mTotal + len);
 
-    if (newTotal == mSize) {
+    if (mTotal == mSize) {
         mReadIx = mWriteIx;
     }
 
@@ -101,21 +94,14 @@ int RingBuffer::Read(void *data, int len) {
     } else {
         readLen = mTotal;
     }
-    int stk[2];
-    stk[0] = readLen;
 
     if (readLen == 0) {
         return 0;
     }
 
     int available = mSize - mReadIx;
-    int *pChunk = &stk[0];
-    if (readLen < available) {
-        pChunk = &readLen;
-    } else {
-        pChunk = &available;
-    }
-    int chunk1 = *pChunk;
+    // std::min, not Min(): see the note in Peek().
+    int chunk1 = std::min(available, readLen);
 
     memcpy(data, mReadIx + (char *)mBuffer, chunk1);
 

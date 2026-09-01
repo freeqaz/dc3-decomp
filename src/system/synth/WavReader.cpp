@@ -11,9 +11,9 @@ WavReader::WavReader(File *file, StandardStream *stream) {
     MILO_ASSERT(mInWaveFile->SamplesPerSec() == 44100, 0x21);
     MILO_ASSERT(mInWaveFile->BitsPerSample() == 16, 0x22);
     MILO_ASSERT(mInWaveFile->NumChannels() <= 2, 0x23);
-    mSamplesLeft = mInWaveFile->NumSamples();
-    mSampleRate = mInWaveFile->SamplesPerSec();
-    mNumChannels = mInWaveFile->NumChannels();
+    mNumChannels = mInWaveFile->mNumChannels;
+    mSampleRate = mInWaveFile->mSamplesPerSec;
+    mSamplesLeft = mInWaveFile->mNumSamples;
     for (int i = 0; i < mInWaveFile->NumMarkers(); i++) {
         WaveFileMarker &wfm = mInWaveFile->Markers()[i];
         int frame = wfm.mFrame;
@@ -78,15 +78,20 @@ void WavReader::Poll(float dt) {
     }
     if (mEnableReads) {
         while (mSamplesLeft != 0) {
-            if (!(mNumChannels <= mSamplesLeft)) {
-                mBufNumSamples = 0;
-            } else {
-                int tmp = mSamplesLeft / mNumChannels;
-                if (tmp > 0x1000) {
-                    tmp = 0x1000;
-                }
-                mBufNumSamples = tmp;
+            // A partial final frame drains the reader and ENDS the loop. The
+            // previous source set mBufNumSamples = 0 here and fell through, which
+            // left mSamplesLeft untouched -- an infinite loop for any
+            // 0 < mSamplesLeft < mNumChannels. Retail stores 0 to mSamplesLeft
+            // (0x20) and branches to the epilogue, not to mBufNumSamples (0x30).
+            if (mSamplesLeft < mNumChannels) {
+                mSamplesLeft = 0;
+                break;
             }
+            int tmp = mSamplesLeft / mNumChannels;
+            if (tmp > 0x1000) {
+                tmp = 0x1000;
+            }
+            mBufNumSamples = tmp;
             mInWaveFileData->Read(mRawInputBuffer, mNumChannels * mBufNumSamples * 2);
             mBufOffset = 0;
             mSamplesLeft -= mBufNumSamples;
