@@ -2318,31 +2318,34 @@ void TessellateMesh(RndMesh *mesh) {
     e31.midpoint = -1;
 
     for (unsigned int i = 0; i < (unsigned int)geomOwner->Faces().size(); i++) {
-        auto face = geomOwner->Faces()[i];
-        unsigned short v2 = face.v2;
-        unsigned short v1 = face.v1;
-        unsigned short v3 = face.v3;
+        // Retail keeps a POINTER to the face and re-reads v1/v2/v3 from it when
+        // the four child faces are built (lhz 0x0/0x2/0x4(r29)); a by-value copy
+        // parks them in registers across the find/insert calls instead.
+        RndMesh::Face &face = geomOwner->Faces()[i];
 
 #ifdef HX_NATIVE
         intptr_t vertsBase = (intptr_t)geomOwner->Verts().mVerts;
 
-        RndMesh::Vert *pv1 = (RndMesh::Vert *)((uintptr_t)v1 * 0x60 + vertsBase);
-        RndMesh::Vert *pv2 = (RndMesh::Vert *)((uintptr_t)v2 * 0x60 + vertsBase);
-        RndMesh::Vert *pv3 = (RndMesh::Vert *)((uintptr_t)v3 * 0x60 + vertsBase);
+        RndMesh::Vert *pv1 = (RndMesh::Vert *)((uintptr_t)face.v1 * 0x60 + vertsBase);
+        RndMesh::Vert *pv2 = (RndMesh::Vert *)((uintptr_t)face.v2 * 0x60 + vertsBase);
+        RndMesh::Vert *pv3 = (RndMesh::Vert *)((uintptr_t)face.v3 * 0x60 + vertsBase);
 #else
         int vertsBase = (int)(unsigned int)geomOwner->Verts().mVerts;
 
-        RndMesh::Vert *pv1 = (RndMesh::Vert *)((unsigned int)v1 * 0x60 + vertsBase);
-        RndMesh::Vert *pv2 = (RndMesh::Vert *)((unsigned int)v2 * 0x60 + vertsBase);
-        RndMesh::Vert *pv3 = (RndMesh::Vert *)((unsigned int)v3 * 0x60 + vertsBase);
+        RndMesh::Vert *pv1 =
+            (RndMesh::Vert *)((unsigned int)face.v1 * 0x60 + vertsBase);
+        RndMesh::Vert *pv2 =
+            (RndMesh::Vert *)((unsigned int)face.v2 * 0x60 + vertsBase);
+        RndMesh::Vert *pv3 =
+            (RndMesh::Vert *)((unsigned int)face.v3 * 0x60 + vertsBase);
 #endif
 
-        e12.v0 = v1;
-        e12.v1 = v2;
-        e23.v0 = v2;
-        e23.v1 = v3;
-        e31.v0 = v3;
-        e31.v1 = v1;
+        e12.v0 = face.v1;
+        e12.v1 = face.v2;
+        e23.v0 = face.v2;
+        e23.v1 = face.v3;
+        e31.v0 = face.v3;
+        e31.v1 = face.v1;
 
         RndMesh::Vert blend12, blend23, blend31;
         RndAmbientOcclusion::BlendVert(*pv1, *pv2, blend12);
@@ -2377,10 +2380,10 @@ void TessellateMesh(RndMesh *mesh) {
         }
 
         RndMesh::Face f1, f2, f3, f4;
-        f1.Set(v1, e12.midpoint, e31.midpoint);
+        f1.Set(face.v1, e12.midpoint, e31.midpoint);
         f2.Set(e31.midpoint, e12.midpoint, e23.midpoint);
-        f3.Set(e12.midpoint, v2, e23.midpoint);
-        f4.Set(e23.midpoint, v3, e31.midpoint);
+        f3.Set(e12.midpoint, face.v2, e23.midpoint);
+        f4.Set(e23.midpoint, face.v3, e31.midpoint);
         newFaces.push_back(f1);
         newFaces.push_back(f2);
         newFaces.push_back(f3);
