@@ -193,6 +193,8 @@ void Sound::SynthPoll() {
         }
     }
     for (auto it = mSamples.begin(); it != mSamples.end();) {
+        // cur must be read through the SAVED iterator after the increment, not
+        // through the live one before it: the target's load is based on curIt.
         auto curIt = it;
         it++;
         PlayableSample *cur = *curIt;
@@ -207,9 +209,12 @@ void Sound::SynthPoll() {
     }
     if (mFaders.Dirty()) {
         FOREACH (it, mSamples) {
+            // Declaration order is deliberate: these are GetVal out-params and
+            // the target assigns faderPan the lower stack slot (0x50) of the two.
             float faderPan, faderVol, faderTranspose;
             mFaders.GetVal(faderVol, faderPan, faderTranspose);
             (*it)->SetVolume(mVolume + faderVol);
+            // sSpeedCaps[1] is 4.0f; this is the +/-4 pan range, not a speed cap.
             faderPan = Clamp(-4.0f, sSpeedCaps[1], mPan + faderPan);
             (*it)->SetPan(faderPan);
             float faderSpeed = Clamp(
@@ -487,6 +492,11 @@ DataNode Sound::OnPlay(DataArray *a) {
 
 SynthSample *Sound::Sample() { return mSynthSample; }
 
+// It is the `speed` PARAMETER that gets clamped, not the fader transpose. The
+// target saves f1 into f31 across the GetTranspose/CalcSpeedFromTranspose calls
+// purely so the fsel chain can consume it; a version that clamps
+// CalcSpeedFromTranspose(mFaders.GetTranspose()) instead ignores the argument
+// entirely and still scores ~90%.
 void Sound::SetSpeed(float speed, Hmx::Object *obj) {
     float speedTranspose = CalcSpeedFromTranspose(mFaders.GetTranspose());
     float clamped = Clamp(sSpeedCaps[0], sSpeedCaps[1], speed);

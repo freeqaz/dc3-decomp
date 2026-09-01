@@ -616,6 +616,9 @@ void GroupSeqInst::SetTranspose(float f) {
 RandomGroupSeqInst::RandomGroupSeqInst(RandomGroupSeq *seq)
     : GroupSeqInst(seq, false), mIt(mSeqs.end()) {
     ObjPtrList<Sequence> &children = seq->Children();
+    // mNumSeqs deliberately keeps the UNCLAMPED GetNumSimul() value -- the target
+    // never stores the clamped count back into the member, and nothing outside
+    // this ctor reads mNumSeqs.
     mNumSeqs = seq->GetNumSimul();
     int childrenSize = children.size();
     int numSeqs = Min(mNumSeqs, childrenSize);
