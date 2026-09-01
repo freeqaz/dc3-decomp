@@ -503,45 +503,38 @@ StoreError StorePanel::UpdateOffers(std::list<EnumProduct> const &enumList, bool
     }
 
     std::vector<StoreOffer *>::iterator it;
-    auto offersEnd = offers->end();
-    for (it = offers->begin(); it != offersEnd; ++it) {
+    for (it = offers->begin(); it != offers->end(); ++it) {
         StoreOffer *offer = *it;
+        std::list<EnumProduct>::const_iterator enumIt = enumList.end();
         bool _cond = offer->Exists();
         if (_cond) {
             // Check if offer matches enum list
-            std::list<EnumProduct>::const_iterator enumIt;
-            enumIt = enumList.begin();
             bool match = false;
+            enumIt = enumList.begin();
             while (enumIt != enumList.end()) {
-                if (offer->songID == enumIt->mOfferID) {
-                    match = true;
+                match = enumIt->mOfferID == offer->songID;
+                if (match) {
                     break;
                 }
                 ++enumIt;
             }
+        }
 
-            if (match) {
-                result = kStoreErrorSuccess;
-                // Call virtual function at offset 0x70 (ILP32)
+        if (enumIt != enumList.end()) {
+            result = kStoreErrorSuccess;
+            // Virtual call through vtable slot 0x70 (ILP32), passing the
+            // matched EnumProduct.
 #ifdef HX_NATIVE
-                // On LP64, vtable offsets shift — skip this call, offer handling is stubbed
+            // On LP64, vtable offsets shift — skip this call, offer handling is stubbed
 #else
-                void (*func)(void *, void *, void *) = (void (*)(void *, void *, void *))*(void **)((u32)this + 0x70);
-                func(this, offer, (void *)((u32)offer + 0x38));
+            typedef void (*UpdateFn)(void *, void *, const void *);
+            UpdateFn func = (UpdateFn)(*(void ***)this)[0x70 / 4];
+            func(this, offer, &*enumIt);
 #endif
-            } else {
-                if (offer->IsTest()) {
-                    offer->isAvailable = false;
-                    offer->isPurchased = false;
-                    offer->cost = 0x270f;
-                }
-            }
-        } else {
-            if (offer->IsTest()) {
-                offer->isAvailable = false;
-                offer->isPurchased = false;
-                offer->cost = 0x270f;
-            }
+        } else if (offer->IsTest()) {
+            offer->isAvailable = false;
+            offer->isPurchased = false;
+            offer->cost = 0x270f;
         }
     }
 
