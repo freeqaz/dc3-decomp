@@ -992,6 +992,11 @@ D3DDevice_CreateQueryTiled(D3DDevice *pDevice, D3DQUERYTYPE Type, UINT TileCapac
 void D3DDevice_SetVertexShader(D3DDevice *pDevice, D3DVertexShader *pShader);
 void D3DDevice_SetPixelShader(D3DDevice *pDevice, D3DPixelShader *pShader);
 
+// PIX capture control (xapilib). Unmangled in the retail map, so it is
+// declared inside this extern "C" block; DxRnd::BeginDrawing relocates the
+// plain name `PIXCaptureGpuFrame`.
+void PIXCaptureGpuFrame(const char *pstrFileName);
+
 #ifdef __cplusplus
 }
 #endif

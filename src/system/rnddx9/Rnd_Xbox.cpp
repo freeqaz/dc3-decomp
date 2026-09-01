@@ -907,6 +907,59 @@ void DxRnd::ReleaseAutoRelease() {
     mPendingDeletes.swap(stillBoundTextures);
 }
 
+void DxRnd::BeginDrawing() {
+    {
+        static Timer *cpuStop = AutoTimer::GetTimer("cpu");
+        if (cpuStop)
+            cpuStop->Stop();
+    }
+    static Timer *cpuTimer = AutoTimer::GetTimer("cpu");
+    if (mSuspended) {
+        Resume();
+    } else if (mPrintGlitches && cpuTimer->Ms() > 66.0f) {
+        MILO_LOG("GLITCH: %i ms\n", (int)cpuTimer->Ms());
+    }
+    if (mCaptureNextFrame) {
+        PIXCaptureGpuFrame("capture.pix2");
+        mCaptureNextFrame = false;
+    }
+    Present();
+    if (MainThread())
+        ReleaseAutoRelease();
+    Rnd::BeginDrawing();
+    if (mGSTiming) {
+        PerfCountersInit();
+        PerfCountersStart();
+    }
+    DrawPreClear();
+    Hmx::Color clearColor = mClearColor;
+    D3DDevice_Clear(
+        mD3DDevice,
+        0,
+        nullptr,
+        0x31,
+        ((unsigned long)(clearColor.red * 255.0f) & 0xFF) << 16
+            | ((unsigned long)(clearColor.green * 255.0f) & 0xFF) << 8
+            | ((unsigned long)(clearColor.blue * 255.0f) & 0xFF),
+        0,
+        0,
+        0
+    );
+    SetShaderRegisterAlloc((RegisterAlloc)1);
+    ResetStats();
+    {
+        static Timer *cpuStart = AutoTimer::GetTimer("cpu");
+        if (cpuStart)
+            cpuStart->Start();
+    }
+    {
+        static Timer *drawStart = AutoTimer::GetTimer("draw");
+        if (drawStart)
+            drawStart->Start();
+    }
+    NgMat::SetCurrent(nullptr);
+}
+
 static DWORD sPointTestFence = -1;
 
 void DxRnd::DoPointTests() {
