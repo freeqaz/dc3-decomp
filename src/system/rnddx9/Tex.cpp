@@ -359,6 +359,73 @@ void DxTex::Select(int x) {
     D3DDevice_SetTexture(TheDxRnd.Device(), x, tex, (1ULL << 63) >> (unsigned int)(x + 32));
 }
 
+void DxTex::ResolveMipChain() {
+    if (mType != kShadowMap) {
+        D3DDevice_Resolve(
+            TheDxRnd.Device(), 0, nullptr, mTexture, nullptr, 0, 0, nullptr, 1.0f, 0,
+            nullptr
+        );
+        D3DDevice_SetRenderTarget_External(TheDxRnd.Device(), 0, mRenderTarget);
+        D3DDevice_SetDepthStencilSurface(TheDxRnd.Device(), nullptr);
+    } else {
+        D3DDevice_Resolve(
+            TheDxRnd.Device(), 4, nullptr, mTexture, nullptr, 0, 0, nullptr, 1.0f, 0,
+            nullptr
+        );
+        MILO_ASSERT(!mRenderTarget, 0x237);
+        D3DDevice_SetRenderTarget_External(TheDxRnd.Device(), 0, nullptr);
+        D3DDevice_SetDepthStencilSurface(TheDxRnd.Device(), mDepthRT);
+        D3DDevice_SetSamplerState_MinFilter(TheDxRnd.Device(), 0, 1);
+        D3DDevice_SetSamplerState_MagFilter(TheDxRnd.Device(), 0, 1);
+        D3DDevice_SetSamplerState_MipFilter3(TheDxRnd.Device(), 0, 1, 0x80000000);
+    }
+    if (mNumMips != 0) {
+        unsigned int numLevels = D3DBaseTexture_GetLevelCount(mTexture);
+        for (unsigned int level = 1; level < numLevels; level++) {
+            D3DDevice_SetSamplerState_MinMipLevel(TheDxRnd.Device(), 0, level - 1);
+            D3DDevice_SetSamplerState_MaxMipLevel(TheDxRnd.Device(), 0, level - 1);
+            D3DSURFACE_DESC desc;
+            D3DLineTexture_GetLevelDesc((D3DLineTexture *)mTexture, level, &desc);
+            D3DRECT rect;
+            rect.x1 = rect.y1 = 0;
+            rect.x2 = desc.Width;
+            rect.y2 = desc.Height;
+            RndMat *mat = TheShaderMgr.GetWork();
+            mat->SetDiffuseTex(this);
+            mat->SetTexWrap(kTexWrapClamp);
+            mat->SetBlend(RndMat::kBlendSrc);
+            if (mType == kShadowMap) {
+                mat->SetZMode(kZModeForce);
+            } else {
+                mat->SetZMode(kZModeDisable);
+            }
+            Hmx::Rect quad(0.0f, 0.0f, desc.Width, desc.Height);
+            if (mType != kShadowMap) {
+                TheDxRnd.DrawRect(
+                    quad, mat, kDownsampleShader, Hmx::Color(), nullptr, nullptr
+                );
+                D3DDevice_Resolve(
+                    TheDxRnd.Device(), 0, &rect, mTexture, nullptr, level, 0, nullptr,
+                    1.0f, 0, nullptr
+                );
+            } else {
+                TheDxRnd.DrawRect(
+                    quad, mat, kDownsampleDepthShader, Hmx::Color(), nullptr, nullptr
+                );
+                D3DDevice_Resolve(
+                    TheDxRnd.Device(), 4, &rect, mTexture, nullptr, level, 0, nullptr,
+                    1.0f, 0, nullptr
+                );
+            }
+        }
+        D3DDevice_SetSamplerState_MinMipLevel(TheDxRnd.Device(), 0, 13);
+        D3DDevice_SetSamplerState_MaxMipLevel(TheDxRnd.Device(), 0, 0);
+        D3DDevice_SetSamplerState_MinFilter(TheDxRnd.Device(), 0, 1);
+        D3DDevice_SetSamplerState_MagFilter(TheDxRnd.Device(), 0, 1);
+        D3DDevice_SetSamplerState_MipFilter3(TheDxRnd.Device(), 0, 1, 0x80000000);
+    }
+}
+
 void DxTex::FinishDrawTarget() {
     MILO_ASSERT(mType & kRendered, 0x122);
     ResolveMipChain();

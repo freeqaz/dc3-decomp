@@ -805,6 +805,18 @@ inline void D3DDevice_SetSamplerState_MipFilter(D3DDevice *pDevice, DWORD Sample
     *pWord = (*pWord & ~0x1C00) | ((Value & 7) << 10);
     pDevice->m_Pending.m_Mask[3] |= PendingMask3;
 }
+void D3DDevice_SetSamplerState_MinMipLevel(D3DDevice *pDevice, DWORD Sampler, DWORD Value);
+void D3DDevice_SetSamplerState_MaxMipLevel(D3DDevice *pDevice, DWORD Sampler, DWORD Value);
+// NOTE: the mip filter lives in fetch-constant word 3, bits 23-24 -- the same word
+// that carries MinFilter (21-22) and MagFilter (19-20). The two inlines named
+// _MipFilter and _AddressU below write word 0's ClampX/ClampY fields instead, so
+// they are really AddressU/AddressV; they are left under their present names
+// because their call sites in Rnd_Xbox.cpp match the target byte for byte.
+inline void D3DDevice_SetSamplerState_MipFilter3(D3DDevice *pDevice, DWORD Sampler, DWORD Value, UINT64 PendingMask3) {
+    DWORD *pWord = &pDevice->m_Constants.TextureFetch[Sampler].dword[3];
+    *pWord = (*pWord & ~0x01800000) | ((Value & 3) << 23);
+    pDevice->m_Pending.m_Mask[3] |= PendingMask3;
+}
 inline void D3DDevice_SetSamplerState_AddressU(D3DDevice *pDevice, DWORD Sampler, DWORD Value, UINT64 PendingMask3) {
     DWORD *pWord = &pDevice->m_Constants.TextureFetch[Sampler].dword[0];
     *pWord = (*pWord & ~0xE000) | ((Value & 7) << 13);
