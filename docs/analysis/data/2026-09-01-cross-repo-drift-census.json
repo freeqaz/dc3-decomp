@@ -1,0 +1,1742 @@
+{
+ "provenance": {
+  "repo_a": "/home/free/scratch/wt-classify-184",
+  "repo_a_rev": "10dc2a23b89e636bd30af27d4048d9e81a592557",
+  "repo_b": "/home/free/code/milohax/rb3-xenon",
+  "repo_b_rev": "26bfd7246456c28611a93dbdbde0a1315e5a6523",
+  "subdir": "src/system",
+  "files_compared": 2340
+ },
+ "counts": {
+  "NEAR_IDENTICAL_EDIT": 4382,
+  "CONST_RETUNE": 735,
+  "COMPARISON_FLIP": 29,
+  "OPERAND_REORDER": 88,
+  "ONE_SIDED_GUARD": 16,
+  "SIGN_FLIP": 4
+ },
+ "counts_legacy": {
+  "NEAR_IDENTICAL_EDIT": 4350,
+  "CONST_RETUNE": 735,
+  "COMPARISON_FLIP": 91,
+  "OPERAND_REORDER": 88,
+  "ONE_SIDED_GUARD": 16,
+  "SIGN_FLIP": 6
+ },
+ "note": "hunks[] omits the bulk buckets CONST_RETUNE, NEAR_IDENTICAL_EDIT; regenerate the full census with --out",
+ "hunks": [
+  {
+   "file": "char/CharEyes.cpp",
+   "kind": "COMPARISON_FLIP",
+   "line_a": 1051,
+   "line_b": 1169,
+   "a": [
+    "            <= 0.0f;"
+   ],
+   "b": [
+    "            > 0.0f;"
+   ]
+  },
+  {
+   "file": "char/CharEyes.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 1273,
+   "line_b": 1405,
+   "a": [
+    "    float cang = Dot(facingDir, targetDir);"
+   ],
+   "b": [
+    "    float cang = Dot(targetDir, facingDir);"
+   ]
+  },
+  {
+   "file": "char/CharHair.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 330,
+   "line_b": 326,
+   "a": [
+    "                        case CharCollide::kCollideSphere:",
+    "                        case CharCollide::kCollideCigar: {"
+   ],
+   "b": [
+    "                        case CharCollide::kCollideCigar:",
+    "                        case CharCollide::kCollideSphere: {"
+   ]
+  },
+  {
+   "file": "char/CharHair.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 355,
+   "line_b": 351,
+   "a": [
+    "                        case CharCollide::kCollideInsideSphere:",
+    "                        case CharCollide::kCollideInsideCigar: {"
+   ],
+   "b": [
+    "                        case CharCollide::kCollideInsideCigar:",
+    "                        case CharCollide::kCollideInsideSphere: {"
+   ]
+  },
+  {
+   "file": "char/CharIKHand.cpp",
+   "kind": "ONE_SIDED_GUARD",
+   "line_a": 355,
+   "line_b": 388,
+   "a": [
+    "#else",
+    "    if (!mMoveElbow)",
+    "        shoulderParent = 0;",
+    "#endif"
+   ],
+   "b": []
+  },
+  {
+   "file": "char/CharIKHand.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 473,
+   "line_b": 490,
+   "a": [
+    "    MultiplyTranspose(mHand->WorldXfm().v, shoulder->WorldXfm(), handPos);",
+    "    MultiplyTranspose(mWorldDst, shoulder->WorldXfm(), targetPos);"
+   ],
+   "b": [
+    "    MultiplyTranspose(shoulder->WorldXfm(), mHand->WorldXfm().v, handPos);",
+    "    MultiplyTranspose(shoulder->WorldXfm(), mWorldDst, targetPos);"
+   ]
+  },
+  {
+   "file": "char/CharIKHand.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 487,
+   "line_b": 504,
+   "a": [
+    "        MultiplyTranspose(mHand->WorldXfm().v, shoulder->WorldXfm(), handPos);"
+   ],
+   "b": [
+    "        MultiplyTranspose(shoulder->WorldXfm(), mHand->WorldXfm().v, handPos);"
+   ]
+  },
+  {
+   "file": "char/CharIKHand.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 558,
+   "line_b": 573,
+   "a": [
+    "                MultiplyTranspose(elbow->WorldXfm().v, shoulder->WorldXfm(), elbowLocal);"
+   ],
+   "b": [
+    "                MultiplyTranspose(shoulder->WorldXfm(), elbow->WorldXfm().v, elbowLocal);"
+   ]
+  },
+  {
+   "file": "char/CharIKHand.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 560,
+   "line_b": 575,
+   "a": [
+    "                    MultiplyTranspose(v2, shoulder->WorldXfm(), targetLocal);"
+   ],
+   "b": [
+    "                    MultiplyTranspose(shoulder->WorldXfm(), v2, targetLocal);"
+   ]
+  },
+  {
+   "file": "char/CharIKHand.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 562,
+   "line_b": 577,
+   "a": [
+    "                    MultiplyTranspose(v1, shoulder->WorldXfm(), targetLocal);"
+   ],
+   "b": [
+    "                    MultiplyTranspose(shoulder->WorldXfm(), v1, targetLocal);"
+   ]
+  },
+  {
+   "file": "char/CharIKHand.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 568,
+   "line_b": 583,
+   "a": [
+    "                MultiplyTranspose(mHand->WorldXfm().v, elbow->WorldXfm(), elbowLocal);",
+    "                MultiplyTranspose(mWorldDst, elbow->WorldXfm(), targetLocal);"
+   ],
+   "b": [
+    "                MultiplyTranspose(elbow->WorldXfm(), mHand->WorldXfm().v, elbowLocal);",
+    "                MultiplyTranspose(elbow->WorldXfm(), mWorldDst, targetLocal);"
+   ]
+  },
+  {
+   "file": "char/CharLookAt.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 238,
+   "line_b": 285,
+   "a": [
+    "                Multiply(lookDir, mPivot->TransParent()->WorldXfm().m, lookDir);"
+   ],
+   "b": [
+    "                Multiply(mPivot->TransParent()->WorldXfm().m, lookDir, lookDir);"
+   ]
+  },
+  {
+   "file": "char/CharLookAt.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 294,
+   "line_b": 308,
+   "a": [
+    "                    Multiply(sourceFilter, mPivot->TransParent()->WorldXfm().m, sourceFilter);"
+   ],
+   "b": [
+    "                    Multiply(mPivot->TransParent()->WorldXfm().m, sourceFilter, sourceFilter);"
+   ]
+  },
+  {
+   "file": "char/CharUpperTwist.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 11,
+   "line_b": 11,
+   "a": [
+    "CharUpperTwist::CharUpperTwist() : mUpperArm(this), mTwist1(this), mTwist2(this) {}"
+   ],
+   "b": [
+    "CharUpperTwist::CharUpperTwist() : mTwist1(this), mTwist2(this), mUpperArm(this) {}"
+   ]
+  },
+  {
+   "file": "char/CharUpperTwist.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 62,
+   "line_b": 59,
+   "a": [
+    "    if (!mTwist2 || !mTwist1 || !mUpperArm)"
+   ],
+   "b": [
+    "    if (!mUpperArm || !mTwist2 || !mTwist1)"
+   ]
+  },
+  {
+   "file": "char/Character.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 786,
+   "line_b": 828,
+   "a": [
+    "    MultiplyTranspose(s18.center, trans->WorldXfm(), s18.center);"
+   ],
+   "b": [
+    "    MultiplyTranspose(trans->WorldXfm(), s18.center, s18.center);"
+   ]
+  },
+  {
+   "file": "char/ClipDistMap.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 192,
+   "line_b": 200,
+   "a": [
+    "                float cellError = mDists(rowIdx, startCol);"
+   ],
+   "b": [
+    "                float cellError = mDists(startCol, rowIdx);"
+   ]
+  },
+  {
+   "file": "char/ClipDistMap.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 518,
+   "line_b": 548,
+   "a": [
+    "        rect.y = ((beat - mBStart) * (float)mSamplesPerBeat - (float)(mDists.mHeight - 1)) * 2.0f + y;"
+   ],
+   "b": [
+    "        rect.y = ((float)(mDists.mHeight - 1) - (beat - mBStart) * (float)mSamplesPerBeat) * 2.0f + y;"
+   ]
+  },
+  {
+   "file": "char/FileMerger.cpp",
+   "kind": "ONE_SIDED_GUARD",
+   "line_a": 621,
+   "line_b": 693,
+   "a": [
+    "    }",
+    "    if (!b3 && dl && !dl->IsLoaded()) {",
+    "        dl->SetDeleteSelf(true);"
+   ],
+   "b": []
+  },
+  {
+   "file": "flow/DrivenPropertyMathOps.cpp",
+   "kind": "COMPARISON_FLIP",
+   "line_a": 60,
+   "line_b": 73,
+   "a": [
+    "    if (d.rev < 3 && mOp > 2) {",
+    "        mOp = (MathOpType)((int)mOp + 1);"
+   ],
+   "b": [
+    "    if (d.rev < 3) {",
+    "        if (mOp > 2) {",
+    "            mOp = (MathOpType)((int)mOp + 1);",
+    "        }"
+   ]
+  },
+  {
+   "file": "flow/FlowNode.cpp",
+   "kind": "COMPARISON_FLIP",
+   "line_a": 491,
+   "line_b": 490,
+   "a": [
+    "        if (flow != nullptr) {"
+   ],
+   "b": [
+    "        if (flow) {"
+   ]
+  },
+  {
+   "file": "flow/FlowNode.cpp",
+   "kind": "COMPARISON_FLIP",
+   "line_a": 493,
+   "line_b": 492,
+   "a": [
+    "            if (parentDir != nullptr) {"
+   ],
+   "b": [
+    "            if (parentDir) {"
+   ]
+  },
+  {
+   "file": "flow/FlowNode.cpp",
+   "kind": "COMPARISON_FLIP",
+   "line_a": 497,
+   "line_b": 496,
+   "a": [
+    "                    if (parentFlow != nullptr) {"
+   ],
+   "b": [
+    "                    if (parentFlow) {"
+   ]
+  },
+  {
+   "file": "flow/FlowNode.cpp",
+   "kind": "COMPARISON_FLIP",
+   "line_a": 499,
+   "line_b": 498,
+   "a": [
+    "                        if (gpDir != nullptr) {"
+   ],
+   "b": [
+    "                        if (gpDir) {"
+   ]
+  },
+  {
+   "file": "gesture/ArcDetector.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 266,
+   "line_b": 250,
+   "a": [
+    "        if (fabsf(boneDir.y * dir.y + boneDir.z * dir.z + boneDir.x * dir.x) < 0.2f) {"
+   ],
+   "b": [
+    "        if (fabsf(boneDir.x * dir.x + boneDir.z * dir.z + boneDir.y * dir.y) < 0.2f) {"
+   ]
+  },
+  {
+   "file": "gesture/ArcDetector.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 376,
+   "line_b": 357,
+   "a": [
+    "            if (distY * distY + distZ * distZ + distX * distX > 0.0001f) {"
+   ],
+   "b": [
+    "            if (distX * distX + distZ * distZ + distY * distY > 0.0001f) {"
+   ]
+  },
+  {
+   "file": "gesture/ArcDetector.cpp",
+   "kind": "COMPARISON_FLIP",
+   "line_a": 427,
+   "line_b": 412,
+   "a": [
+    "            if (comp > 0.0f) {"
+   ],
+   "b": [
+    "            if (0.0f < comp) {"
+   ]
+  },
+  {
+   "file": "gesture/ArchiveSkeleton.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 35,
+   "line_b": 35,
+   "a": [
+    "        MultiplyTranspose(mJointPoses[joint], xfm, pos);"
+   ],
+   "b": [
+    "        MultiplyTranspose(xfm, mJointPoses[joint], pos);"
+   ]
+  },
+  {
+   "file": "gesture/DrawUtl.cpp",
+   "kind": "COMPARISON_FLIP",
+   "line_a": 285,
+   "line_b": 154,
+   "a": [
+    "        MILO_ASSERT(gm, 0x191);"
+   ],
+   "b": [
+    "        MILO_ASSERT(gm != nullptr, 0x191);"
+   ]
+  },
+  {
+   "file": "gesture/FreestyleMotionFilter.cpp",
+   "kind": "COMPARISON_FLIP",
+   "line_a": 40,
+   "line_b": 40,
+   "a": [
+    "    Skeleton *skeleton;",
+    "    if (player->IsPlaying() && (skeleton = *skeletonData.mSkeletonsLeft) != 0) {"
+   ],
+   "b": [
+    "    if (player->IsPlaying() && skeletonData.mSkeletonsLeft) {",
+    "        Skeleton *skeleton = *skeletonData.mSkeletonsLeft;"
+   ]
+  },
+  {
+   "file": "gesture/LiveCameraInput.cpp",
+   "kind": "COMPARISON_FLIP",
+   "line_a": 430,
+   "line_b": 394,
+   "a": [
+    "                            *(unsigned short *)(((int)(x >> 1) + (unsigned int)((int)x < 0 & (x & 1) != 0)) * 2 + srcBase);"
+   ],
+   "b": [
+    "                            *(unsigned short *)(((int)(x >> 1) + (unsigned int)((int)x < 0 && (x & 1) != 0)) * 2 + srcBase);"
+   ]
+  },
+  {
+   "file": "gesture/SkeletonClip.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 114,
+   "line_b": 108,
+   "a": [
+    "    const std::vector<RecordedFrame> &frames, float seconds, int &frameIdx, int &loopCount"
+   ],
+   "b": [
+    "    const std::vector<RecordedFrame> &frames, float seconds, int &loopCount, int &frameIdx"
+   ]
+  },
+  {
+   "file": "gesture/SkeletonClip.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 140,
+   "line_b": 136,
+   "a": [
+    "const RecordedFrame *SkeletonClip::CurRecordedFrame(int &frameIdx, int &loopCount) const {"
+   ],
+   "b": [
+    "const RecordedFrame *SkeletonClip::CurRecordedFrame(int &loopCount, int &frameIdx) const {"
+   ]
+  },
+  {
+   "file": "gesture/SkeletonClip.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 143,
+   "line_b": 139,
+   "a": [
+    "            return RecordedFrameAt(*mRecordedFrames, MoveDir::SongSeconds(), frameIdx, loopCount);"
+   ],
+   "b": [
+    "            return RecordedFrameAt(*mRecordedFrames, MoveDir::SongSeconds(), loopCount, frameIdx);"
+   ]
+  },
+  {
+   "file": "gesture/SkeletonClip.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 148,
+   "line_b": 144,
+   "a": [
+    "                loopCount = 0;",
+    "                frameIdx = (int)frame;"
+   ],
+   "b": [
+    "                frameIdx = 0;",
+    "                loopCount = (int)frame;"
+   ]
+  },
+  {
+   "file": "gesture/SkeletonClip.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 269,
+   "line_b": 263,
+   "a": [
+    "        int frameIdx, loopCount;",
+    "        const RecordedFrame *curRecorded = CurRecordedFrame(frameIdx, loopCount);"
+   ],
+   "b": [
+    "        int loopCount, frameIdx;",
+    "        const RecordedFrame *curRecorded = CurRecordedFrame(loopCount, frameIdx);"
+   ]
+  },
+  {
+   "file": "gesture/SkeletonClip.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 277,
+   "line_b": 271,
+   "a": [
+    "                RecordedFrameAt(*mRecordedFrames, prevTime, frameIdx, loopCount);"
+   ],
+   "b": [
+    "                RecordedFrameAt(*mRecordedFrames, prevTime, loopCount, frameIdx);"
+   ]
+  },
+  {
+   "file": "hamobj/ClipPlayer.cpp",
+   "kind": "COMPARISON_FLIP",
+   "line_a": 476,
+   "line_b": 550,
+   "a": [
+    "    if (arr) {"
+   ],
+   "b": [
+    "    if (arr != NULL) {"
+   ]
+  },
+  {
+   "file": "hamobj/DancerSkeleton.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 93,
+   "line_b": 93,
+   "a": [
+    "        MultiplyTranspose(mCamJointPositions[joint], xfm, pos);"
+   ],
+   "b": [
+    "        MultiplyTranspose(xfm, mCamJointPositions[joint], pos);"
+   ]
+  },
+  {
+   "file": "hamobj/FilterQueue.cpp",
+   "kind": "ONE_SIDED_GUARD",
+   "line_a": 108,
+   "line_b": 87,
+   "a": [
+    "#ifdef HX_NATIVE",
+    "        if (!selfTest && (skel == nullptr || !skel->IsTracked())) {",
+    "#else"
+   ],
+   "b": []
+  },
+  {
+   "file": "hamobj/HamCamShot.cpp",
+   "kind": "SIGN_FLIP",
+   "line_a": 269,
+   "line_b": 266,
+   "a": [
+    "                    if (flipped) {"
+   ],
+   "b": [
+    "                    if (!flipped) {"
+   ]
+  },
+  {
+   "file": "hamobj/HamDirector.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 2187,
+   "line_b": 2187,
+   "a": [
+    "            int movesDirHash = moveMgrDir->HashTableSize() + movesDir->HashTableSize();"
+   ],
+   "b": [
+    "            int movesDirHash = movesDir->HashTableSize() + moveMgrDir->HashTableSize();"
+   ]
+  },
+  {
+   "file": "hamobj/HamIKEffector.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 1106,
+   "line_b": 567,
+   "a": [
+    "    MultiplyTranspose(targetPos, parentXfm, localTarget);"
+   ],
+   "b": [
+    "    MultiplyTranspose(parentXfm, targetPos, localTarget);"
+   ]
+  },
+  {
+   "file": "hamobj/HamIKEffector.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 1248,
+   "line_b": 709,
+   "a": [
+    "    MultiplyTranspose(v, xfm, v40);"
+   ],
+   "b": [
+    "    MultiplyTranspose(xfm, v, v40);"
+   ]
+  },
+  {
+   "file": "hamobj/HamNavList.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 977,
+   "line_b": 966,
+   "a": [
+    "    float clamped = Min(slideVal, 1.0f);"
+   ],
+   "b": [
+    "    float clamped = Min(1.0f, slideVal);"
+   ]
+  },
+  {
+   "file": "hamobj/HamNavList.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 1595,
+   "line_b": 1570,
+   "a": [
+    "    Hmx::Rect rect(sRectX, 0.05f - sRectY, sRectW, sRectH + 0.05f);"
+   ],
+   "b": [
+    "    Hmx::Rect rect(sRectX, sRectY - 0.05f, sRectW, sRectH + 0.05f);"
+   ]
+  },
+  {
+   "file": "hamobj/HamNavProvider.h",
+   "kind": "OPERAND_REORDER",
+   "line_a": 19,
+   "line_b": 19,
+   "a": [
+    "            : mLabel(gNullStr), mCheckboxState(kCheckbox_None), mStarMode(0), mEnabled(1),"
+   ],
+   "b": [
+    "            : mLabel(gNullStr), mStarMode(0), mCheckboxState(kCheckbox_None), mEnabled(1),"
+   ]
+  },
+  {
+   "file": "hamobj/HamNavProvider.h",
+   "kind": "OPERAND_REORDER",
+   "line_a": 22,
+   "line_b": 22,
+   "a": [
+    "            : mLabel(other.mLabel), mCheckboxState(other.mCheckboxState),",
+    "              mSongID(other.mSongID), mStarMode(other.mStarMode), mEnabled(other.mEnabled),",
+    "              mHidden(other.mHidden), mFormatArgs(other.mFormatArgs), mLabels(other.mLabels),",
+    "              mSubListProvider(other.mSubListProvider) {"
+   ],
+   "b": [
+    "            : mLabel(other.mLabel), mLabels(other.mLabels), mSongID(other.mSongID),",
+    "              mStarMode(other.mStarMode), mCheckboxState(other.mCheckboxState),",
+    "              mEnabled(other.mEnabled), mHidden(other.mHidden),",
+    "              mFormatArgs(other.mFormatArgs), mSubListProvider(other.mSubListProvider) {"
+   ]
+  },
+  {
+   "file": "hamobj/MoveDir.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 824,
+   "line_b": 803,
+   "a": [
+    "                    nullptr, kCoordCamera, (SkeletonJoint)i, disp_ms, vdisp, actual_ms"
+   ],
+   "b": [
+    "                    nullptr, kCoordCamera, (SkeletonJoint)i, actual_ms, vdisp, disp_ms"
+   ]
+  },
+  {
+   "file": "hamobj/MoveDir.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 826,
+   "line_b": 805,
+   "a": [
+    "                MILO_ASSERT(disp_ms == actual_ms, 0x50F);"
+   ],
+   "b": [
+    "                MILO_ASSERT(actual_ms == disp_ms, 0x50F);"
+   ]
+  },
+  {
+   "file": "hamobj/MoveDir.cpp",
+   "kind": "SIGN_FLIP",
+   "line_a": 2185,
+   "line_b": 2112,
+   "a": [
+    "    if (closest) {"
+   ],
+   "b": [
+    "    if (!(!closest)) {"
+   ]
+  },
+  {
+   "file": "hamobj/RhythmDetector.cpp",
+   "kind": "COMPARISON_FLIP",
+   "line_a": 279,
+   "line_b": 279,
+   "a": [
+    "        start = start > 0 ? start : 0;"
+   ],
+   "b": [
+    "        start = start < 0 ? 0 : start;"
+   ]
+  },
+  {
+   "file": "hamobj/SongCollision.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 35,
+   "line_b": 35,
+   "a": [
+    "        MultiplyTranspose((*it)->WorldXfm().v, xfm, v40);"
+   ],
+   "b": [
+    "        MultiplyTranspose(xfm, (*it)->WorldXfm().v, v40);"
+   ]
+  },
+  {
+   "file": "hamobj/TransConstraint.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 211,
+   "line_b": 211,
+   "a": [
+    "                    float step = mSpeed * dir[i];"
+   ],
+   "b": [
+    "                    float step = dir[i] * mSpeed;"
+   ]
+  },
+  {
+   "file": "math/Geo.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 298,
+   "line_b": 327,
+   "a": [
+    "    MultiplyTranspose(on, trans, point);"
+   ],
+   "b": [
+    "    MultiplyTranspose(trans, on, point);"
+   ]
+  },
+  {
+   "file": "math/Geo.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 936,
+   "line_b": 1007,
+   "a": [
+    "    MultiplyTranspose(p1, t, v);"
+   ],
+   "b": [
+    "    MultiplyTranspose(t, p1, v);"
+   ]
+  },
+  {
+   "file": "math/Geo.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 940,
+   "line_b": 1011,
+   "a": [
+    "    MultiplyTranspose(p2, t, v);"
+   ],
+   "b": [
+    "    MultiplyTranspose(t, p2, v);"
+   ]
+  },
+  {
+   "file": "math/Geo.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 944,
+   "line_b": 1015,
+   "a": [
+    "    MultiplyTranspose(p3, t, v);"
+   ],
+   "b": [
+    "    MultiplyTranspose(t, p3, v);"
+   ]
+  },
+  {
+   "file": "math/Mtx.h",
+   "kind": "OPERAND_REORDER",
+   "line_a": 522,
+   "line_b": 499,
+   "a": [
+    "        out.m.x.y * inV.x + out.m.y.y * inV.y + out.m.z.y * inV.z,",
+    "        out.m.x.z * inV.x + out.m.y.z * inV.y + out.m.z.z * inV.z"
+   ],
+   "b": [
+    "        out.m.y.y * inV.y + out.m.z.y * inV.z + out.m.x.y * inV.x,",
+    "        out.m.y.z * inV.y + out.m.z.z * inV.z + out.m.x.z * inV.x"
+   ]
+  },
+  {
+   "file": "math/Mtx.h",
+   "kind": "OPERAND_REORDER",
+   "line_a": 533,
+   "line_b": 510,
+   "a": [
+    "        out.m.x.y * inV.x + out.m.y.y * inV.y + out.m.z.y * inV.z,",
+    "        out.m.x.z * inV.x + out.m.y.z * inV.y + out.m.z.z * inV.z"
+   ],
+   "b": [
+    "        out.m.y.y * inV.y + out.m.z.y * inV.z + out.m.x.y * inV.x,",
+    "        out.m.y.z * inV.y + out.m.z.z * inV.z + out.m.x.z * inV.x"
+   ]
+  },
+  {
+   "file": "meta/MemcardMgr.h",
+   "kind": "OPERAND_REORDER",
+   "line_a": 45,
+   "line_b": 55,
+   "a": [
+    "    void SelectDevice(Profile *, Hmx::Object *, int, bool);"
+   ],
+   "b": [
+    "    void SelectDevice(Profile *, bool, Hmx::Object *, int);"
+   ]
+  },
+  {
+   "file": "meta/MemcardMgr_Xbox.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 183,
+   "line_b": 181,
+   "a": [
+    "    Profile *pProfile, Hmx::Object *callbackObj, int i3, bool waiting"
+   ],
+   "b": [
+    "    Profile *pProfile, bool waiting, Hmx::Object *callbackObj, int i3"
+   ]
+  },
+  {
+   "file": "meta/MemcardMgr_Xbox.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 195,
+   "line_b": 193,
+   "a": [
+    "        TheMC.ShowDeviceSelector(mContainerIDs[mPadNum], this, i3, waiting);"
+   ],
+   "b": [
+    "        TheMC.ShowDeviceSelector(mContainerIDs[mPadNum], waiting, this, i3);"
+   ]
+  },
+  {
+   "file": "meta/MemcardMgr_Xbox.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 330,
+   "line_b": 328,
+   "a": [
+    "            TheMC.ShowDeviceSelector(mContainerIDs[mPadNum], this, mPendingDeviceSelectorIndex, false);"
+   ],
+   "b": [
+    "            TheMC.ShowDeviceSelector(mContainerIDs[mPadNum], false, this, mPendingDeviceSelectorIndex);"
+   ]
+  },
+  {
+   "file": "midi/MidiParser.cpp",
+   "kind": "COMPARISON_FLIP",
+   "line_a": 267,
+   "line_b": 291,
+   "a": [
+    "        if (mGems && mGems->GetGem(mGemIndex, loc48, loc4c, loc50) && loc48 < startTick) {"
+   ],
+   "b": [
+    "        if (mGems && mGems->GetGem(mGemIndex, loc48, loc4c, loc50)",
+    "            && MinEq(startTick, loc48)) {"
+   ]
+  },
+  {
+   "file": "net/DingoSvr.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 129,
+   "line_b": 129,
+   "a": [
+    "    mDelayedJobs.erase(mDelayedJobs.end(), mDelayedJobs.begin());"
+   ],
+   "b": [
+    "    mDelayedJobs.erase(mDelayedJobs.begin(), mDelayedJobs.end());"
+   ]
+  },
+  {
+   "file": "net/HttpGet.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 411,
+   "line_b": 396,
+   "a": [
+    "        mRecvBufPos = mRecvBufPos + recvd;"
+   ],
+   "b": [
+    "        mRecvBufPos = recvd + mRecvBufPos;"
+   ]
+  },
+  {
+   "file": "net/json-c/json_tokener.c",
+   "kind": "COMPARISON_FLIP",
+   "line_a": 197,
+   "line_b": 197,
+   "a": [
+    "            if (tok && c == '/') {"
+   ],
+   "b": [
+    "            if (c == '/') {"
+   ]
+  },
+  {
+   "file": "obj/DataArray.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 542,
+   "line_b": 492,
+   "a": [
+    "        if (DataArrayDefined() || node.Type() == kDataIfdef || node.Type() == kDataElse",
+    "            || node.Type() == kDataEndif || node.Type() == kDataIfndef) {"
+   ],
+   "b": [
+    "        if (DataArrayDefined() || node.Type() == kDataIfdef || node.Type() == kDataIfndef",
+    "            || node.Type() == kDataElse || node.Type() == kDataEndif) {"
+   ]
+  },
+  {
+   "file": "obj/DataNode.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 669,
+   "line_b": 716,
+   "a": [
+    "            res = first.UncheckedInt() == second.UncheckedInt();"
+   ],
+   "b": [
+    "            res = second.UncheckedInt() == first.UncheckedInt();"
+   ]
+  },
+  {
+   "file": "obj/Object.cpp",
+   "kind": "ONE_SIDED_GUARD",
+   "line_a": 703,
+   "line_b": 688,
+   "a": [],
+   "b": [
+    "    if (!s.Null()) {"
+   ]
+  },
+  {
+   "file": "obj/Object.cpp",
+   "kind": "ONE_SIDED_GUARD",
+   "line_a": 717,
+   "line_b": 692,
+   "a": [
+    "    if (!s.Null()) {",
+    "        MILO_ASSERT_EXPR(mSinks, 0x17F);"
+   ],
+   "b": []
+  },
+  {
+   "file": "obj/Object.h",
+   "kind": "OPERAND_REORDER",
+   "line_a": 804,
+   "line_b": 1329,
+   "a": [
+    "                    \"%s:%s couldn't find type %s\", ClassName(), PathName(this), classname \\"
+   ],
+   "b": [
+    "                    \"%s:%s couldn't find type %s\", PathName(this), ClassName(), classname \\"
+   ]
+  },
+  {
+   "file": "oggvorbis/mdct.c",
+   "kind": "OPERAND_REORDER",
+   "line_a": 68,
+   "line_b": 68,
+   "a": [
+    "    T[i*2]=FLOAT_CONV(cos((M_PI/n)*(4*i)));",
+    "    T[i*2+1]=FLOAT_CONV(-sin((M_PI/n)*(4*i)));",
+    "    T[n2+i*2]=FLOAT_CONV(cos((M_PI/(2*n))*(2*i+1)));",
+    "    T[n2+i*2+1]=FLOAT_CONV(sin((M_PI/(2*n))*(2*i+1)));"
+   ],
+   "b": [
+    "    T[i*2+1]=FLOAT_CONV(cos((M_PI/n)*(4*i)));",
+    "    T[i*2]=FLOAT_CONV(-sin((M_PI/n)*(4*i)));",
+    "    T[n2+i*2+1]=FLOAT_CONV(cos((M_PI/(2*n))*(2*i+1)));",
+    "    T[n2+i*2]=FLOAT_CONV(sin((M_PI/(2*n))*(2*i+1)));"
+   ]
+  },
+  {
+   "file": "oggvorbis/mdct.c",
+   "kind": "OPERAND_REORDER",
+   "line_a": 74,
+   "line_b": 74,
+   "a": [
+    "    T[n+i*2]=FLOAT_CONV(cos((M_PI/n)*(4*i+2))*.5);",
+    "    T[n+i*2+1]=FLOAT_CONV(-sin((M_PI/n)*(4*i+2))*.5);"
+   ],
+   "b": [
+    "    T[n+i*2+1]=FLOAT_CONV(cos((M_PI/n)*(4*i+2))*.5);",
+    "    T[n+i*2]=FLOAT_CONV(-sin((M_PI/n)*(4*i+2))*.5);"
+   ]
+  },
+  {
+   "file": "os/ContentMgr_Xbox.cpp",
+   "kind": "COMPARISON_FLIP",
+   "line_a": 545,
+   "line_b": 535,
+   "a": [
+    "                allDone = (state != Content::kNeedsMounting) & allDone;"
+   ],
+   "b": [
+    "                allDone = (state != Content::kNeedsMounting) && allDone;"
+   ]
+  },
+  {
+   "file": "os/HolmesClient.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 172,
+   "line_b": 147,
+   "a": [
+    "                Holmes::ProtocolDebugString(gPendingResponse),",
+    "                Holmes::ProtocolDebugString(prot)"
+   ],
+   "b": [
+    "                Holmes::ProtocolDebugString(prot),",
+    "                Holmes::ProtocolDebugString(gPendingResponse)"
+   ]
+  },
+  {
+   "file": "os/HolmesClient.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 176,
+   "line_b": 151,
+   "a": [
+    "        return gPendingResponse == prot;"
+   ],
+   "b": [
+    "",
+    "        return prot == gPendingResponse;"
+   ]
+  },
+  {
+   "file": "os/HolmesClient.cpp",
+   "kind": "COMPARISON_FLIP",
+   "line_a": 828,
+   "line_b": 847,
+   "a": [
+    "    if ((str == gLastCachedResource) && (gLastCacheResult > 0 || fileExists)) {"
+   ],
+   "b": [
+    "    if ((str != gLastCachedResource) && (gLastCacheResult > 0 || fileExists)) {"
+   ]
+  },
+  {
+   "file": "os/Joypad.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 165,
+   "line_b": 159,
+   "a": [
+    "            return (int)data.mType == detect_cfg->Int(1);"
+   ],
+   "b": [
+    "            return detect_cfg->Int(1) == (int)data.mType;"
+   ]
+  },
+  {
+   "file": "os/Joypad.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 179,
+   "line_b": 173,
+   "a": [
+    "            return data.mSticks[i3][i4] == f7;"
+   ],
+   "b": [
+    "            return f7 == data.mSticks[i3][i4];"
+   ]
+  },
+  {
+   "file": "os/Joypad.h",
+   "kind": "OPERAND_REORDER",
+   "line_a": 352,
+   "line_b": 335,
+   "a": [
+    "    return btn == kPad_LStickUp || btn == kPad_LStickRight || btn == kPad_LStickDown",
+    "        || btn == kPad_LStickLeft;"
+   ],
+   "b": [
+    "    return btn == kPad_LStickUp || btn == kPad_LStickDown || btn == kPad_LStickLeft",
+    "        || btn == kPad_LStickRight;"
+   ]
+  },
+  {
+   "file": "os/JoypadClient.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 107,
+   "line_b": 104,
+   "a": [
+    "    if (mUser && mUser != btnUser)"
+   ],
+   "b": [
+    "    if (mUser && btnUser != mUser)"
+   ]
+  },
+  {
+   "file": "os/JoypadClient.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 126,
+   "line_b": 122,
+   "a": [
+    "        if (!((act != kAction_Up) && (act != kAction_Right)",
+    "           && (act != kAction_Down) && (act != kAction_Left))) {"
+   ],
+   "b": [
+    "        if (!((act != kAction_Down) && (act != kAction_Up)",
+    "           && (act != kAction_Left) && (act != kAction_Right))) {"
+   ]
+  },
+  {
+   "file": "os/JoypadClient.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 133,
+   "line_b": 129,
+   "a": [
+    "                    if (!((otherAct != kAction_Up) && (otherAct != kAction_Right)",
+    "                       && (otherAct != kAction_Down) && (otherAct != kAction_Left))) {"
+   ],
+   "b": [
+    "                    if (!((otherAct != kAction_Up) && (otherAct != kAction_Down)",
+    "                       && (otherAct != kAction_Right) && (otherAct != kAction_Left))) {"
+   ]
+  },
+  {
+   "file": "os/MapFile_Xbox.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 325,
+   "line_b": 321,
+   "a": [
+    "        while (*++pCur == 0x20)"
+   ],
+   "b": [
+    "        while (*pCur++ == 0x20)"
+   ]
+  },
+  {
+   "file": "os/Memcard.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 9,
+   "line_b": 9,
+   "a": [
+    "void Memcard::ShowDeviceSelector(const ContainerId &, Hmx::Object *obj, int, bool) {"
+   ],
+   "b": [
+    "void Memcard::ShowDeviceSelector(const ContainerId &, bool, Hmx::Object *obj, int) {"
+   ]
+  },
+  {
+   "file": "os/Memcard_Xbox.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 422,
+   "line_b": 415,
+   "a": [
+    "    const ContainerId &c, Hmx::Object *o, int i3, bool b4"
+   ],
+   "b": [
+    "    const ContainerId &c, bool b4, Hmx::Object *o, int i3"
+   ]
+  },
+  {
+   "file": "os/Memcard_Xbox.h",
+   "kind": "OPERAND_REORDER",
+   "line_a": 58,
+   "line_b": 58,
+   "a": [
+    "    virtual void ShowDeviceSelector(const ContainerId &, Hmx::Object *, int, bool);"
+   ],
+   "b": [
+    "    virtual void ShowDeviceSelector(const ContainerId &, bool, Hmx::Object *, int);"
+   ]
+  },
+  {
+   "file": "os/UsbMidiGuitar.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 177,
+   "line_b": 177,
+   "a": [
+    "                int programChange = (pgRaw[0xb] >> 6 & 2)",
+    "                    + (pgRaw[0xc] >> 5 & 4) + (pgRaw[0xa] >> 7);"
+   ],
+   "b": [
+    "                int programChange = (pgRaw[0xa] >> 7)",
+    "                    + (pgRaw[0xb] >> 6 & 2) + (pgRaw[0xc] >> 5 & 4);"
+   ]
+  },
+  {
+   "file": "rndobj/AmbientOcclusion.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 1115,
+   "line_b": 1196,
+   "a": [
+    "                    float d01 = sqrtf((wp0.y - wp1.y) * (wp0.y - wp1.y) + (wp0.x - wp1.x) * (wp0.x - wp1.x) + (wp0.z - wp1.z) * (wp0.z - wp1.z));",
+    "                    float d02 = sqrtf((wp0.y - wp2.y) * (wp0.y - wp2.y) + (wp0.x - wp2.x) * (wp0.x - wp2.x) + (wp0.z - wp2.z) * (wp0.z - wp2.z));",
+    "                    float d12 = sqrtf((wp1.y - wp2.y) * (wp1.y - wp2.y) + (wp1.x - wp2.x) * (wp1.x - wp2.x) + (wp1.z - wp2.z) * (wp1.z - wp2.z));"
+   ],
+   "b": [
+    "                    float d12 = sqrtf((wp1.x - wp2.x) * (wp1.x - wp2.x) + (wp1.y - wp2.y) * (wp1.y - wp2.y) + (wp1.z - wp2.z) * (wp1.z - wp2.z));",
+    "                    float d02 = sqrtf((wp0.x - wp2.x) * (wp0.x - wp2.x) + (wp0.y - wp2.y) * (wp0.y - wp2.y) + (wp0.z - wp2.z) * (wp0.z - wp2.z));",
+    "                    float d01 = sqrtf((wp0.x - wp1.x) * (wp0.x - wp1.x) + (wp0.y - wp1.y) * (wp0.y - wp1.y) + (wp0.z - wp1.z) * (wp0.z - wp1.z));"
+   ]
+  },
+  {
+   "file": "rndobj/AmbientOcclusion.cpp",
+   "kind": "COMPARISON_FLIP",
+   "line_a": 1519,
+   "line_b": 1618,
+   "a": [
+    "            if (newFacesThisIter <= maxIter || totalNewFaces > halfBudget",
+    "                || newFacesThisIter >= (unsigned int)totalBudget) {"
+   ],
+   "b": [
+    "            if (newFacesThisIter <= maxIter || halfBudget < totalNewFaces",
+    "                || (unsigned int)totalBudget <= newFacesThisIter) {"
+   ]
+  },
+  {
+   "file": "rndobj/DOFProc_NG.cpp",
+   "kind": "COMPARISON_FLIP",
+   "line_a": 67,
+   "line_b": 74,
+   "a": [
+    "    if (farFocal >= nearPlane) {"
+   ],
+   "b": [
+    "    if (nearPlane <= farFocal) {"
+   ]
+  },
+  {
+   "file": "rndobj/Flare.cpp",
+   "kind": "COMPARISON_FLIP",
+   "line_a": 299,
+   "line_b": 315,
+   "a": [
+    "    if (i1 < 1) {"
+   ],
+   "b": [
+    "    if (i1 <= 1) {"
+   ]
+  },
+  {
+   "file": "rndobj/Graph.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 130,
+   "line_b": 127,
+   "a": [
+    "    for (std::list<FakeGraph>::iterator it = sFakes.begin(); it != sFakes.end(); ++it) {"
+   ],
+   "b": [
+    "    for (std::list<FakeGraph>::iterator it = sFakes.begin(); sFakes.end() != it; ++it) {"
+   ]
+  },
+  {
+   "file": "rndobj/HiResScreen.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 308,
+   "line_b": 309,
+   "a": [
+    "                            blend = sqrtf(blendY * blendY + blendX * blendX);"
+   ],
+   "b": [
+    "                            blend = sqrtf(blendX * blendX + blendY * blendY);"
+   ]
+  },
+  {
+   "file": "rndobj/Mat.cpp",
+   "kind": "ONE_SIDED_GUARD",
+   "line_a": 85,
+   "line_b": 75,
+   "a": [
+    "            Symbol action(#s \"_edit_action\");                                            \\",
+    "            if (!(_op & (kPropSize | kPropGet)) && !IsEditable(action)) {                \\",
+    "                return true;                                                             \\",
+    "            }                                                                            \\"
+   ],
+   "b": []
+  },
+  {
+   "file": "rndobj/Mesh.cpp",
+   "kind": "SIGN_FLIP",
+   "line_a": 1319,
+   "line_b": 1382,
+   "a": [
+    "        if (mGeomOwner) {"
+   ],
+   "b": [
+    "        if (!(!mGeomOwner)) {"
+   ]
+  },
+  {
+   "file": "rndobj/Mesh.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 1441,
+   "line_b": 1496,
+   "a": [
+    "    MultiplyTranspose(v, WorldXfm(), v);"
+   ],
+   "b": [
+    "    MultiplyTranspose(WorldXfm(), v, v);"
+   ]
+  },
+  {
+   "file": "rndobj/PropAnim.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 353,
+   "line_b": 395,
+   "a": [
+    "        frame = Min(frame, (*it)->StartFrame());"
+   ],
+   "b": [
+    "        frame = Min((*it)->StartFrame(), frame);"
+   ]
+  },
+  {
+   "file": "rndobj/ShaderProgram.cpp",
+   "kind": "COMPARISON_FLIP",
+   "line_a": 184,
+   "line_b": 182,
+   "a": [
+    "            if (gModTime > psModTime) {"
+   ],
+   "b": [
+    "            if (psModTime < gModTime) {"
+   ]
+  },
+  {
+   "file": "rndobj/Spline.cpp",
+   "kind": "COMPARISON_FLIP",
+   "line_a": 159,
+   "line_b": 164,
+   "a": [
+    "    for (int i = mCtrlPoints.size() - 1; 0 <= i; i--) {"
+   ],
+   "b": [
+    "    int size = mCtrlPoints.size();",
+    "    for (int i = size - 1; i >= 0; i--) {"
+   ]
+  },
+  {
+   "file": "rndobj/Text.cpp",
+   "kind": "ONE_SIDED_GUARD",
+   "line_a": 582,
+   "line_b": 1946,
+   "a": [],
+   "b": [
+    "    if (!(align & 4))",
+    "        return ret;",
+    "    return ret - line.mWidth;"
+   ]
+  },
+  {
+   "file": "rndobj/Utl.cpp",
+   "kind": "COMPARISON_FLIP",
+   "line_a": 672,
+   "line_b": 738,
+   "a": [
+    "    if (f3 && anim->RotKeys().size() > 2) {"
+   ],
+   "b": [
+    "    if (f3) {",
+    "        if (anim->RotKeys().size() > 2) {"
+   ]
+  },
+  {
+   "file": "rndobj/Utl.cpp",
+   "kind": "COMPARISON_FLIP",
+   "line_a": 692,
+   "line_b": 759,
+   "a": [
+    "    if (f4 && anim->ScaleKeys().size() > 2) {"
+   ],
+   "b": [
+    "    }",
+    "    if (f4) {",
+    "        if (anim->ScaleKeys().size() > 2) {"
+   ]
+  },
+  {
+   "file": "rndobj/Utl.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 2433,
+   "line_b": 2482,
+   "a": [
+    "    float lenSq = plane.b * plane.b + plane.a * plane.a + plane.c * plane.c;"
+   ],
+   "b": [
+    "    float lenSq = plane.a * plane.a + plane.b * plane.b + plane.c * plane.c;"
+   ]
+  },
+  {
+   "file": "rndobj/Wind.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 47,
+   "line_b": 47,
+   "a": [
+    "    result.x = GetWind(mTimeRate.x * time + mSpaceRate.x * pos.x + sOffset.x) * mRandom.x"
+   ],
+   "b": [
+    "    result.x = mRandom.x * GetWind(time * mTimeRate.x + pos.x * mSpaceRate.x + sOffset.x)"
+   ]
+  },
+  {
+   "file": "rndobj/Wind.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 49,
+   "line_b": 49,
+   "a": [
+    "    result.y = GetWind(mTimeRate.y * time + mSpaceRate.y * pos.y + sOffset.y) * mRandom.y"
+   ],
+   "b": [
+    "    result.y = mRandom.y * GetWind(time * mTimeRate.y + pos.y * mSpaceRate.y + sOffset.y)"
+   ]
+  },
+  {
+   "file": "rndobj/Wind.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 51,
+   "line_b": 51,
+   "a": [
+    "    result.z = GetWind(mSpaceRate.z * pos.z + mTimeRate.z * time + sOffset.z) * mRandom.z"
+   ],
+   "b": [
+    "    result.z = mRandom.z * GetWind(time * mTimeRate.z + pos.z * mSpaceRate.z + sOffset.z)"
+   ]
+  },
+  {
+   "file": "synth/Mic.h",
+   "kind": "ONE_SIDED_GUARD",
+   "line_a": 22,
+   "line_b": 20,
+   "a": [],
+   "b": [
+    "    bool IsConnected() const { return GetType() != 0; }"
+   ]
+  },
+  {
+   "file": "synth/SampleData.cpp",
+   "kind": "ONE_SIDED_GUARD",
+   "line_a": 105,
+   "line_b": 102,
+   "a": [
+    "    Hmx::CRC crc;",
+    "    if (!bigEndian) {",
+    "        crc = Hmx::CRC(FileRelativePath(FileExecRoot(), fp.c_str()));",
+    "    }"
+   ],
+   "b": []
+  },
+  {
+   "file": "synth/SampleInst.cpp",
+   "kind": "COMPARISON_FLIP",
+   "line_a": 36,
+   "line_b": 59,
+   "a": [
+    "    bool ret = unka1 && !IsPlaying();"
+   ],
+   "b": [
+    "    bool ret = !IsPlaying();"
+   ]
+  },
+  {
+   "file": "synth/StreamReceiver.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 10,
+   "line_b": 10,
+   "a": [
+    "    : mSlipEnabled(slip), mNumBuffers(numBuffers), mBuffer(), mRingFreeSpace(0),"
+   ],
+   "b": [
+    "    : mSlipEnabled(slip), mBuffer(), mNumBuffers(numBuffers), mRingFreeSpace(0),"
+   ]
+  },
+  {
+   "file": "synth/Synth.cpp",
+   "kind": "ONE_SIDED_GUARD",
+   "line_a": 234,
+   "line_b": 234,
+   "a": [
+    "    }",
+    "    if (!mZombieInsts.empty()) {",
+    "        CullZombies();"
+   ],
+   "b": []
+  },
+  {
+   "file": "synth_xbox/FFT.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 449,
+   "line_b": 490,
+   "a": [
+    "        float total = (float)(double)((long long)(int)(cols * rows));"
+   ],
+   "b": [
+    "        float total = (float)(double)((long long)(int)(rows * cols));"
+   ]
+  },
+  {
+   "file": "synth_xbox/FFT.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 535,
+   "line_b": 613,
+   "a": [
+    "                if (half_rows > 0) {",
+    "                    int stride = half_cols * 0x10;"
+   ],
+   "b": [
+    "                if (half_cols > 0) {",
+    "                    int stride = half_rows * 0x10;"
+   ]
+  },
+  {
+   "file": "synth_xbox/FFT.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 605,
+   "line_b": 646,
+   "a": [
+    "            col_ptr = (float*)(stride8 + (char*)col_ptr);"
+   ],
+   "b": [
+    "            col_ptr = (float*)((char*)col_ptr + stride8);"
+   ]
+  },
+  {
+   "file": "synth_xbox/Synth.cpp",
+   "kind": "ONE_SIDED_GUARD",
+   "line_a": 552,
+   "line_b": 477,
+   "a": [
+    "    if ((unsigned int)unkf0 == 0)",
+    "        return;"
+   ],
+   "b": []
+  },
+  {
+   "file": "synth_xbox/Voice.cpp",
+   "kind": "COMPARISON_FLIP",
+   "line_a": 347,
+   "line_b": 212,
+   "a": [
+    "    if (gShutdownVoiceThread || !gHasPendingStopCommits)"
+   ],
+   "b": [
+    "    if (!gHasPendingStopCommits)"
+   ]
+  },
+  {
+   "file": "ui/UI.cpp",
+   "kind": "ONE_SIDED_GUARD",
+   "line_a": 96,
+   "line_b": 100,
+   "a": [
+    "                } else if (std::strcmp(env, \"widened\") == 0) {",
+    "                    cached = kNativeUICamWidened;"
+   ],
+   "b": []
+  },
+  {
+   "file": "ui/UI.cpp",
+   "kind": "COMPARISON_FLIP",
+   "line_a": 1198,
+   "line_b": 1277,
+   "a": [
+    "            if (mUIManager.CurrentScreen() && screen.Null()) {",
+    "                screen = CurRecordScreen();"
+   ],
+   "b": [
+    "            if (mUIManager.CurrentScreen()) {",
+    "                if (screen.Null()) {",
+    "                    screen = CurRecordScreen();",
+    "                }"
+   ]
+  },
+  {
+   "file": "ui/UILabel.cpp",
+   "kind": "ONE_SIDED_GUARD",
+   "line_a": 744,
+   "line_b": 807,
+   "a": [],
+   "b": [
+    "    } else",
+    "        mObjDirPtr = nullptr;",
+    "    if (!b) {",
+    "        Update();"
+   ]
+  },
+  {
+   "file": "ui/UIListMesh.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 166,
+   "line_b": 168,
+   "a": [
+    "        mMat->SetAlpha(alpha * f);"
+   ],
+   "b": [
+    "        mMat->SetAlpha(f * alpha);"
+   ]
+  },
+  {
+   "file": "ui/UIListState.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 533,
+   "line_b": 504,
+   "a": [
+    "            int dir = showing - nowrap > 0 ? 1 : -1;"
+   ],
+   "b": [
+    "            int dir = nowrap - showing > 0 ? 1 : -1;"
+   ]
+  },
+  {
+   "file": "utl/Cache_Xbox.cpp",
+   "kind": "COMPARISON_FLIP",
+   "line_a": 360,
+   "line_b": 409,
+   "a": [
+    "    if (success != 0) {"
+   ],
+   "b": [
+    "    if (success) {"
+   ]
+  },
+  {
+   "file": "utl/Loader.cpp",
+   "kind": "SIGN_FLIP",
+   "line_a": 57,
+   "line_b": 62,
+   "a": [
+    "    } else if (mPos == kLoadStayBack) {"
+   ],
+   "b": [
+    "    } else if (!(!(mPos == kLoadStayBack))) {"
+   ]
+  },
+  {
+   "file": "utl/LocaleOrdinal.cpp",
+   "kind": "COMPARISON_FLIP",
+   "line_a": 22,
+   "line_b": 13,
+   "a": [
+    "    if (len > 0)"
+   ],
+   "b": [
+    "    if (len != 0)"
+   ]
+  },
+  {
+   "file": "utl/NetCacheMgr.cpp",
+   "kind": "ONE_SIDED_GUARD",
+   "line_a": 35,
+   "line_b": 31,
+   "a": [
+    "    if (!mServiceIDObtained) {",
+    "        mServiceIDObtained = ThePlatformMgr.GetServiceID(\"store\", mServiceId);",
+    "    }"
+   ],
+   "b": []
+  },
+  {
+   "file": "utl/Str.cpp",
+   "kind": "ONE_SIDED_GUARD",
+   "line_a": 252,
+   "line_b": 300,
+   "a": [],
+   "b": [
+    "bool String::operator!=(const String &str) const { return strcmp(str.mStr, mStr); }",
+    "",
+    "bool String::operator==(const String &str) const { return strcmp(str.mStr, mStr) == 0; }",
+    ""
+   ]
+  },
+  {
+   "file": "utl/UrlEncode.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 18,
+   "line_b": 18,
+   "a": [
+    "    char const *reserved = \"$&+,/:;=?@\";",
+    "    char const *unsafe = \" \\\"<>#%{}|\\\\^~[]`\";"
+   ],
+   "b": [
+    "    char const *reserved = \"$&+,/:;=?@\\\"<>\";",
+    "    char const *unsafe = \"#%{}|\\\\^~[]`\";"
+   ]
+  },
+  {
+   "file": "world/CameraManager.cpp",
+   "kind": "ONE_SIDED_GUARD",
+   "line_a": 130,
+   "line_b": 90,
+   "a": [
+    "    if (!mParent) {",
+    "        MILO_NOTIFY(\"%s can't make free cam without parent\", PathName(this));",
+    "        return nullptr;",
+    "    }"
+   ],
+   "b": []
+  },
+  {
+   "file": "world/CameraShot.cpp",
+   "kind": "COMPARISON_FLIP",
+   "line_a": 487,
+   "line_b": 523,
+   "a": [
+    "    if (mBlendEase != 0) {"
+   ],
+   "b": [
+    "    if (mBlendEase) {"
+   ]
+  },
+  {
+   "file": "world/Spotlight.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 1123,
+   "line_b": 1172,
+   "a": [
+    "    bottomBorderLen = (float)__fsel(bottomBorderLen - len, bottomBorderLen, len);"
+   ],
+   "b": [
+    "    bottomBorderLen = (float)__fsel(len - bottomBorderLen, bottomBorderLen, len);"
+   ]
+  },
+  {
+   "file": "world/SpotlightDrawer.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 196,
+   "line_b": 214,
+   "a": [
+    "    for (; spotIter != spotEnd; ++spotIter) {"
+   ],
+   "b": [
+    "    for (; spotEnd != spotIter; ++spotIter) {"
+   ]
+  },
+  {
+   "file": "world/SpotlightDrawer.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 212,
+   "line_b": 231,
+   "a": [
+    "    for (; spotEnd != spotIter; ++spotIter) {"
+   ],
+   "b": [
+    "    for (; spotIter != spotEnd; ++spotIter) {"
+   ]
+  },
+  {
+   "file": "world/SpotlightDrawer.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 214,
+   "line_b": 233,
+   "a": [
+    "        if (Spotlight::sDiskMesh) {",
+    "            MILO_ASSERT(sl->LensMesh(), 0x2b9);"
+   ],
+   "b": [
+    "        if (sl->LensMesh()) {",
+    "            MILO_ASSERT(Spotlight::sDiskMesh, 0x2b9);"
+   ]
+  },
+  {
+   "file": "world/ThreeDSoundManager.cpp",
+   "kind": "OPERAND_REORDER",
+   "line_a": 95,
+   "line_b": 98,
+   "a": [
+    "    MultiplyTranspose(sound->WorldXfm().v, xfm, vout);"
+   ],
+   "b": [
+    "    MultiplyTranspose(xfm, sound->WorldXfm().v, vout);"
+   ]
+  }
+ ]
+}
