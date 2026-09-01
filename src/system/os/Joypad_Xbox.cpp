@@ -6,20 +6,65 @@
 #include "os\Joypad_Xinput.h"
 #include "os\System.h"
 #include "xdk\XAPILIB.h"
+#include "xdk\LIBCMT\ppcintrinsics.h"
 
+// The order of this block is load bearing. The original .bss run is
+//
+//   tRawOutput    0x82f68ac0  0x08
+//   tRawPending   0x82f68ac8  0x04 (+4 pad)
+//   tUpstreamData 0x82f68ad0  0x40
+//   tRawData      0x82f68b10  0x40
+//   tInputStates  0x82f68b50  0x40
+//   tBreed        0x82f68b90  0x30
+//   sThreadData   0x82f68bc0  0x08
+//   tButtonStatesCurr 0x82f68bc8 0x10
+//   tButtonStatesPrev 0x82f68bd8 0x10
+//   tNeedCaps     0x82f68be8  0x04
+//   tCritSection  0x82f68bec  0x20
+//
+// and several functions address one of these through another with a baked-in
+// displacement (ReadSingleJoypad reaches tRawData as tRawPending + 0x48,
+// InitXinputJoypadThreadData reaches tNeedCaps as tInputStates + 0x98,
+// ParseRawData reaches tRawPending as tRawData - 0x48). Reordering these
+// declarations changes those immediates.
+// MSVC lays .bss out in REVERSE declaration order (with alignment packing),
+// so this block is written back-to-front relative to the original data run:
+//
+//   tRawOutput    0x82f68ac0  0x08   tBreed            0x82f68b90 0x30
+//   tRawPending   0x82f68ac8  0x04   sThreadData       0x82f68bc0 0x08
+//   tUpstreamData 0x82f68ad0  0x40   tButtonStatesCurr 0x82f68bc8 0x10
+//   tRawData      0x82f68b10  0x40   tButtonStatesPrev 0x82f68bd8 0x10
+//   tInputStates  0x82f68b50  0x40   tNeedCaps         0x82f68be8 0x04
+//                                    tCritSection      0x82f68bec 0x20
+//
+// The order is load bearing: these are internal-linkage statics, so MSVC
+// reaches one through another with a baked-in displacement rather than a
+// second relocation (ReadSingleJoypad reads tRawData as tRawPending + 0x48,
+// InitXinputJoypadThreadData writes tNeedCaps as tInputStates + 0x98,
+// ParseRawData writes tRawPending as tRawData - 0x48). Anonymous-namespace
+// variables are external in MSVC and never get folded that way, which is why
+// only tBreed and sThreadData -- the two the target names -- live in one.
+static CriticalSection tCritSection;
+// Pad needs its XInput capabilities re-queried before it can be read.
+static bool tNeedCaps[kNumJoypads];
+static unsigned int tButtonStatesPrev[kNumJoypads];
+static unsigned int tButtonStatesCurr[kNumJoypads];
 namespace {
-    BreedData tBreed[kNumJoypads];
     // Thread handle and termination flag grouped for proper codegen
     // The struct layout is required to match the original binary's data layout
     struct {
         HANDLE tThread;
         bool tNoHandle;
     } sThreadData;
-    unsigned int tButtonStatesPrev[kNumJoypads];
-    unsigned int tButtonStatesCurr[kNumJoypads];
-    XINPUT_STATE tInputStates[kNumJoypads];
-    CriticalSection tCritSection;
+    BreedData tBreed[kNumJoypads];
 }
+static XINPUT_STATE tInputStates[kNumJoypads];
+static unsigned char tRawData[kNumJoypads][16];
+static unsigned char tUpstreamData[kNumJoypads][16];
+// Set when a pad has an unread upstream response waiting in tUpstreamData.
+static bool tRawPending[kNumJoypads];
+// Downstream packet staged by SendRawData: report id + seven payload bytes.
+static unsigned char tRawOutput[8];
 
 // Macros to access thread data - required for matching symbol offsets
 #define tThread sThreadData.tThread
@@ -59,6 +104,35 @@ void JoypadPoll() { JoypadPollCommon(); }
 // body is a single instruction -- `b XamInputSendStayAliveRequest` -- i.e. a
 // tail call that forwards the pad bitmask untouched and discards the result.
 void JoypadSendKeepAlive(int pad_mask) { XamInputSendStayAliveRequest(pad_mask); }
+
+// Hands the caller the raw HID report last parked by ParseRawData and then
+// defers to the shared XInput reader for everything else. Declared extern "C"
+// in Joypad.h, so this is the unmangled `ReadSingleJoypad`.
+int ReadSingleJoypad(
+    int pad,
+    unsigned int *buttons,
+    char *lx,
+    char *ly,
+    char *rx,
+    char *ry,
+    char *lt,
+    char *rt,
+    float *sensors,
+    float *pressures,
+    unsigned char *pro_guitar
+) {
+    if (pad >= kNumJoypads)
+        return kJoypadNone;
+    for (int i = 0; i < 16; i++) {
+        pro_guitar[i] = tRawData[pad][i];
+    }
+    if (tRawPending[pad]) {
+        tRawPending[pad] = false;
+    }
+    return ReadSingleXinputJoypad(
+        pad, pad, buttons, lx, ly, rx, ry, lt, rt, sensors, pressures, pro_guitar
+    );
+}
 
 JoypadType SetupHXKeytar(int, const XINPUT_CAPABILITIES &c) {
     if ((c.Gamepad.sThumbLY & 0xFFF0U) == 0x1730) {
@@ -292,6 +366,27 @@ bool ReceiveUpstreamResponse(int pad, unsigned char *data) {
     return true;
 }
 
+// Stashes the 16-byte HID report the pad just sent. Reports with bit 7 of
+// byte 14 set are upstream responses to a downstream command: those go to the
+// upstream mailbox (and are dispatched immediately), everything else is the
+// ordinary per-frame raw state ReadSingleJoypad hands back. Returns true when
+// the report was consumed as an upstream response.
+bool ParseRawData(int pad, unsigned char *data) {
+    if ((data[14] & 0x80) == 0x80) {
+        for (int i = 0; i < 16; i++) {
+            tUpstreamData[pad][i] = data[i];
+        }
+        __lwsync();
+        tRawPending[pad] = true;
+        if (ReceiveUpstreamResponse(pad, data))
+            return true;
+    }
+    for (int i = 0; i < 16; i++) {
+        tRawData[pad][i] = data[i];
+    }
+    return false;
+}
+
 namespace {
     void InitXinputJoypadThreadData();
 
@@ -301,6 +396,19 @@ namespace {
         InitXinputJoypadThreadData();
         RunXinputJoypadLoop();
         return 0;
+    }
+
+    // Puts every pad into the "nothing known yet" state the polling loop
+    // expects: capabilities must be re-queried, the breed data is stale, and
+    // no XInput packet has been seen.
+    void InitXinputJoypadThreadData() {
+        for (int i = 0; i < kNumJoypads; i++) {
+            tNeedCaps[i] = true;
+        }
+        for (int i = 0; i < kNumJoypads; i++) {
+            tBreed[i].mPending = true;
+            tInputStates[i].dwPacketNumber = 0;
+        }
     }
 }
 
