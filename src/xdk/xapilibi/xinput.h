@@ -71,6 +71,15 @@ DWORD XInputGetKeystrokeEx(
 DWORD XInputGetState(DWORD dwUserIndex, XINPUT_STATE *pState);
 DWORD XInputSetState(DWORD dwUserIndex, XINPUT_VIBRATION *pVibration);
 
+// Xam-side input entry point (import __imp_XamInputSendStayAliveRequest,
+// .rdata:0x82000704; thunk .text:0x82EE5A84). Not part of the public XInput
+// surface, but the title imports and calls it: JoypadSendKeepAlive
+// (.text:0x825EC908) is a four-byte `b XamInputSendStayAliveRequest` tail
+// call, which fixes the arity at one argument -- a second argument would
+// have needed an `li r4` ahead of the branch and the function would not be
+// one instruction long.
+DWORD XamInputSendStayAliveRequest(DWORD dwUserMask);
+
 #ifdef __cplusplus
 }
 #endif

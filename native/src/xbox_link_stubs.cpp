@@ -149,6 +149,20 @@ int ReadSingleJoypad(
     return 0; // kJoypadNone
 }
 
+// The PPC body is `b XamInputSendStayAliveRequest`, a Xam call that tells the
+// wireless stack to keep an idle pad associated. There is no off-console
+// equivalent and nothing to emulate, so this is a pure no-op.
+//
+// It was NOT surfaced by -Wl,--no-undefined, and that is the whole point of
+// project task #172: clang at -O2 proves the only call site unreachable
+// (`gPadsToKeepAlive` has internal linkage in Joypad.cpp and nothing ever
+// stores a non-zero value into it) and deletes the reference before the
+// linker sees it. The symbol was undefined for as long as the file has
+// existed and the link stayed green. At -O0 the reference survives and the
+// link fails. See scripts/check_undefined_decomp_symbols.py, which reads the
+// MSVC objects instead and does not depend on an optimizer decision.
+void JoypadSendKeepAlive(int) { HX_STUB_TRACE("JoypadSendKeepAlive"); }
+
 } // extern "C"
 
 bool requestBreedWrite(int, unsigned char *) {

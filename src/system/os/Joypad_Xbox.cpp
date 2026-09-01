@@ -54,6 +54,12 @@ void JoypadTerminate() {
 
 void JoypadPoll() { JoypadPollCommon(); }
 
+// Declared extern "C" in Joypad.h, so this gets C linkage and matches the
+// target's unmangled `JoypadSendKeepAlive` at .text:0x825EC908. The target
+// body is a single instruction -- `b XamInputSendStayAliveRequest` -- i.e. a
+// tail call that forwards the pad bitmask untouched and discards the result.
+void JoypadSendKeepAlive(int pad_mask) { XamInputSendStayAliveRequest(pad_mask); }
+
 JoypadType SetupHXKeytar(int, const XINPUT_CAPABILITIES &c) {
     if ((c.Gamepad.sThumbLY & 0xFFF0U) == 0x1730) {
         return kJoypadXboxMidiBoxKeyboard;

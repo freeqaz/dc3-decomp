@@ -551,6 +551,34 @@ config.custom_build_steps = {
                 "desc": "VERIFY every .obj carries the post-compile patches",
             },
         },
+        {
+            # Catch "declared, called, defined nowhere" -- the defect class that
+            # `-Wl,--no-undefined` on the native link is STRUCTURALLY unable to
+            # see, because clang at -O2 can delete the only call site before the
+            # linker runs.  JoypadSendKeepAlive lived here undetected for the
+            # whole life of the file.  Reads the MSVC COFF symbol tables, which
+            # keep the reference regardless of what any optimizer concluded;
+            # ~1.3 s over 990 objects, no link, no extra build.
+            #
+            # Runs LAST, after every patcher, because the patchers rewrite
+            # symbol NAMES (anonymous-namespace hashes, ??__E/??__F scope
+            # counters) and this compares names.  Running it earlier would
+            # compare a pre-patch spelling against a post-patch inventory.
+            #
+            # Deliberately advisory-on-improvement (exit 3, non-fatal here): a
+            # newly IMPLEMENTED body shrinks the inventory, and implementing
+            # bodies is the entire job of this repo -- failing every other
+            # lane's build for it would get the gate disabled within a day.  A
+            # NEW undefined symbol is exit 1 and does fail.
+            "outputs": str(stamp_dir / "undefined_symbols_checked.stamp"),
+            "rule": "run_script",
+            "implicit": [str(stamp_dir / "objs_patched_verified.stamp"), "all_source"],
+            "variables": {
+                "cmd": "python3 scripts/check_undefined_decomp_symbols.py --check "
+                       "|| test $$? -eq 3",
+                "desc": "VERIFY no symbol is called but defined nowhere",
+            },
+        },
     ],
 }
 
