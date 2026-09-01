@@ -14,7 +14,7 @@
 # entry points and middleware the decomp calls but does not contain. The
 # classification is for the reader; --check ignores it and compares names only.
 #
-# counts: 831 total = 187 GAP + 644 EXT
+# counts: 830 total = 186 GAP + 644 EXT
 
 GAP ??$?6VHamScrollSpeedIndicator@@@@YAAAVBinStream@@AAV0@ABV?$ObjDirPtr@VHamScrollSpeedIndicator@@@@@Z  # target defines it in system/ui/UILabel.obj
 GAP ??0GranularSynth@Synapse@DSP@@QAA@ABV?$vector@MV?$StlNodeAlloc@M@stlpmtx_std@@@stlpmtx_std@@III@Z  # target defines it in system/synth_xbox/GranularSynth.obj
@@ -33,7 +33,6 @@ GAP ?Cancel@SingleItemEnumJob@@UAAXPAVObject@Hmx@@@Z  # target defines it in sys
 GAP ?ConnectedForClient@ExternalMicClientMgr@@SA_NPBVMicXbox@@@Z  # target defines it in system/synth_xbox/ExternalMic.obj
 GAP ?Detect@PeakDetector@Synapse@DSP@@QAAXI@Z  # target defines it in system/synth_xbox/PeakDetector.obj
 GAP ?DoCompress@DxTex@@QAAXPAX@Z  # target defines it in system/rnddx9/Tex.obj
-GAP ?DoProcess@MeterEffect@@UAAXABUMeterEffectParams@@PIAMII@Z  # target defines it in system/synth_xbox/MeterEffect.obj
 GAP ?DrawFacesInRange@DxMesh@@UAAXHH@Z  # target defines it in system/rnddx9/Mesh.obj
 GAP ?DrawFur@DxMesh@@IAAPAVDxMat@@PAV2@@Z  # target defines it in system/rnddx9/Mesh.obj
 GAP ?DrawRect@DxRnd@@UAAXABVRect@Hmx@@PAVRndMat@@W4ShaderType@@ABVColor@3@PBV63@4@Z  # target defines it in system/rnddx9/Rnd.obj
