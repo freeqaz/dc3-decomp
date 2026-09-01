@@ -81,7 +81,7 @@ bool NgLight::SphereConeTest(const Vector3 &sphereCenter, float sphereRadius) {
     }
 
     Vector3 axisProj = xfm2.m.y;
-    axisProj *= px + pz + py;
+    axisProj *= pz + (px + py);
 
     Vector3 perp = sc;
     perp -= axisProj;
