@@ -1,3 +1,4 @@
+#include "xdk\LIBCMT\math.h"
 #include "xdk\LIBCMT\vectorintrinsics.h"
 #include "xdk\nui\nuidetroit.h"
 #include "xdk\xapilibi\sysinfoapi.h"
@@ -52,19 +53,35 @@ XMMATRIX XMMatrixRotationX(float Angle) {
 // Internal runtime state blocks. Only the fields these three entry points
 // touch are named; the rest is padding so the offsets line up with the
 // original 0x200 / 0xe9f0 byte objects.
+// The 0x1c-byte blob XConfig category 7 / setting 9 fills in. Only the two
+// fields the entry points below touch are named.
+struct NUIP_DETROIT_TILT_XCONFIG { /* Size=0x1c */
+    /* 0x0000 */ DWORD Flags;
+    /* 0x0004 */ FLOAT FarSpaceMillimeters;
+    /* 0x0008 */ int ElevationAngleDegrees;
+    /* 0x000c */ DWORD Reservedc[4];
+};
+
 struct NUIP_DETROIT_RUNTIME_STATE { /* Size=0x200 */
-    /* 0x0000 */ BYTE Reserved0[0x2c];
+    /* 0x0000 */ BYTE Reserved0[0x1c];
+    /* 0x001c */ FLOAT CameraHeightMillimeters;
+    /* 0x0020 */ BYTE Reserved20[0x2c - 0x20];
     /* 0x002c */ int CalibrationValid;
     /* 0x0030 */ BYTE Reserved30[0x50 - 0x30];
     /* 0x0050 */ DWORD TiltInProgress;
-    /* 0x0054 */ BYTE Reserved54[0x190 - 0x54];
+    /* 0x0054 */ BYTE Reserved54[0x64 - 0x54];
+    /* 0x0064 */ int TargetElevationDegrees;
+    /* 0x0068 */ FLOAT FarSpaceMillimeters;
+    /* 0x006c */ BYTE Reserved6c[0x18c - 0x6c];
+    /* 0x018c */ FLOAT FloorHeightMillimeters;
     /* 0x0190 */ DWORD ElevationFlags;
     /* 0x0194 */ BYTE Reserved194[0x1a0 - 0x194];
     /* 0x01a0 */ DWORD TiltStatus;
-    /* 0x01a4 */ BYTE Reserved1a4[0x1a8 - 0x1a4];
+    /* 0x01a4 */ DWORD LastElevationTime;
     /* 0x01a8 */ DWORD LastTiltTime;
     /* 0x01ac */ DWORD TiltCount;
-    /* 0x01b0 */ BYTE Reserved1b0[0x1d0 - 0x1b0];
+    /* 0x01b0 */ DWORD Reserved1b0;
+    /* 0x01b4 */ NUIP_DETROIT_TILT_XCONFIG TiltXConfig;
     /* 0x01d0 */ NUI_TILT_FLAGS LastTiltFlags;
     /* 0x01d4 */ BYTE Reserved1d4[0x200 - 0x1d4];
 };
@@ -78,6 +95,8 @@ struct NUIP_RUNTIME_STATE { /* Size=0xe9f0 */
 extern NUIP_DETROIT_RUNTIME_STATE NuipDetroitRuntimeState;
 extern NUIP_RUNTIME_STATE NuipRuntimeState;
 
+void NuipDetroitCalculateFarSpace();
+
 LONG NuipCameraElevationSetAngle(LONG lAngleDegrees);
 void NuipDetroitGetXConfigSettings();
 DWORD NuipCameraAdjustTilt(
@@ -88,6 +107,92 @@ DWORD NuipCameraAdjustTilt(
     NUI_TILT_OBJECTS *pTiltObjects,
     XOVERLAPPED *pOverlapped
 );
+
+extern "C" HRESULT XamNuiCameraElevationSetAngle(LONG lAngleDegrees);
+extern "C" DWORD
+ExGetXConfigSetting(WORD CategoryNum, WORD SettingNum, PVOID Buffer, WORD SizeOfBuffer, WORD *pSizeNeeded);
+
+// The Xam layer reports "no elevation hardware present" as 0x10000000, which
+// the internal worker -- like the public wrapper below -- surfaces as success.
+LONG NuipCameraElevationSetAngle(LONG lAngleDegrees) {
+    if (lAngleDegrees <= 27 && lAngleDegrees >= -27) {
+        NuipDetroitRuntimeState.LastElevationTime = GetTickCount();
+        HRESULT hr = XamNuiCameraElevationSetAngle(lAngleDegrees);
+        return hr == 0x10000000 ? 0 : hr;
+    }
+    return 0x80070057; // E_INVALIDARG
+}
+
+// Re-read the tilt tuning blob out of XConfig. A missing or opted-out setting,
+// or a far-space distance below 500mm, falls back to the 1800mm default.
+void NuipDetroitGetXConfigSettings() {
+    WORD cbNeeded;
+    DWORD *pXConfig;
+    int i;
+
+    pXConfig = (DWORD *)&NuipDetroitRuntimeState.TiltXConfig;
+    for (i = 0; i < 7; i++) {
+        pXConfig[i] = 0;
+    }
+
+    cbNeeded = 0;
+    if (ExGetXConfigSetting(
+            7, 9, &NuipDetroitRuntimeState.TiltXConfig,
+            sizeof(NuipDetroitRuntimeState.TiltXConfig), &cbNeeded
+        ) != 0
+        || (NuipDetroitRuntimeState.LastTiltFlags & 0x40) != 0
+        || NuipDetroitRuntimeState.TiltXConfig.FarSpaceMillimeters < 500.0f) {
+        NuipDetroitRuntimeState.TiltXConfig.FarSpaceMillimeters = 1800.0f;
+    }
+    NuipDetroitRuntimeState.FarSpaceMillimeters =
+        NuipDetroitRuntimeState.TiltXConfig.FarSpaceMillimeters;
+    NuipDetroitCalculateFarSpace();
+}
+
+// The sensor sits 2200mm back from the play space. Given a known floor height
+// this solves for the elevation angle that puts the far edge of the requested
+// play space at the bottom of frame; with the floor still unknown it works the
+// other way and derives the far space from the calibrated angle.
+void NuipDetroitCalculateFarSpace() {
+    LONG lAngleDegrees;
+
+    if (NuipDetroitRuntimeState.FloorHeightMillimeters != 0.0f) {
+        if (NuipDetroitRuntimeState.TiltStatus != 3) {
+            if (NuipDetroitRuntimeState.TiltXConfig.FarSpaceMillimeters < 500.0f) {
+                NuipDetroitRuntimeState.TiltXConfig.FarSpaceMillimeters = 1800.0f;
+            }
+            float drop = (NuipDetroitRuntimeState.CameraHeightMillimeters +
+                          NuipDetroitRuntimeState.TiltXConfig.FarSpaceMillimeters) -
+                NuipDetroitRuntimeState.FloorHeightMillimeters;
+            float degrees = (float)atan(drop / 2200.0f) * 57.2957764f - 22.3654f;
+            lAngleDegrees = (LONG)floor(degrees + 0.5);
+        } else {
+            // Floor known and calibration finished: report the far space the
+            // current elevation angle actually reaches.
+            float radians = (float)(NuipDetroitRuntimeState.TiltXConfig.ElevationAngleDegrees +
+                                    22.3654f) *
+                0.0174532924f;
+            NuipDetroitRuntimeState.FarSpaceMillimeters =
+                (float)tan(radians) * 2200.0f + NuipDetroitRuntimeState.FloorHeightMillimeters;
+            goto Done;
+        }
+    } else {
+        // Floor unknown: aim at the camera height alone, offset by whatever the
+        // calibration blob already knows.
+        float cameraHeight = NuipDetroitRuntimeState.CameraHeightMillimeters;
+        int elevationOffset = NuipDetroitRuntimeState.TiltXConfig.ElevationAngleDegrees;
+        float radians = (float)atan2(cameraHeight, 2200.0);
+        lAngleDegrees = (LONG)floor(radians * 57.29577951308232 + 0.5) + elevationOffset;
+    }
+
+    if (lAngleDegrees >= 27) {
+        lAngleDegrees = 27;
+    } else if (lAngleDegrees <= -27) {
+        lAngleDegrees = -27;
+    }
+    NuipDetroitRuntimeState.TargetElevationDegrees = lAngleDegrees;
+Done:;
+}
 
 #ifdef __cplusplus
 extern "C" {
