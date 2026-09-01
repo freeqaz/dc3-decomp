@@ -1511,7 +1511,7 @@ void MakeTangentsLate(RndMesh *m) {
         // r31+0x70) and reads tx/ty/tz back out of that temp, then builds the
         // orthogonalised result as a Vector3 at r31+0x80.
         Vector4 t = v.tangent;
-        float tDotN = v.norm.x * t.x + v.norm.z * t.z + v.norm.y * t.y;
+        float tDotN = v.norm.y * t.y + v.norm.z * t.z + v.norm.x * t.x;
         float scaleX = v.norm.x * tDotN;
         float scaleY = v.norm.y * tDotN;
         float scaleZ = v.norm.z * tDotN;
