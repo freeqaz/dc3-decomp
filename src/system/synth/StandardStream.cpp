@@ -448,10 +448,8 @@ void StandardStream::PollStream() {
     }
 
     if (mState != kInit && mJumpFromSamples != 0) {
-        if (mJumpFromSamples < 0) {
-            if (mRdr->Done()) {
-                DoJump();
-            }
+        if (mJumpFromSamples < 0 && mRdr->Done()) {
+            DoJump();
         } else if (mJumpFromSamples > 0) {
             if (mJumpFromSamples < mJumpToSamples) {
                 if (mCurrentSamp >= mJumpFromSamples && mCurrentSamp < mJumpToSamples) {
