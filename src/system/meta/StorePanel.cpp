@@ -290,37 +290,27 @@ void StorePanel::ExitError(StoreError e) {
 }
 
 void StorePanel::HandleNetCacheMgrFailure() {
-    StoreError err;
-    NetCacheMgrFailType failTy;
-
-    err = kStoreErrorSuccess;
-    failTy = TheNetCacheMgr->GetFailType();
+    StoreError err = kStoreErrorCacheRemoved;
+    NetCacheMgrFailType failTy = TheNetCacheMgr->GetFailType();
     switch (failTy) {
     case kNCMFT_StoreServer:
-    case kNCMFT_ClientError:
-        // NOTE: RB3 logs MILO_WARN("Failure %d in NetCacheMgr.\n", failTy) here
-        // and this port inherited it, but the literal
-        // ??_C@_0BM@PEBBLAJE@Failure?5?$CFd?5in?5NetCacheMgr?4?6?$AA@ appears
-        // NOWHERE in orig/373307D9/ham_xbox_r.map -- DC3's build has no such
-        // string.  The target function is also 200 B against our 144 B and
-        // calls DingoServer::GetHostName and PlatformMgr::IsSignedIntoLive,
-        // neither of which this body has, so the whole switch needs rebuilding
-        // rather than a one-line edit.  Left as-is: deleting the notify alone
-        // costs 4.8 normalized points and closes nothing.
-        MILO_NOTIFY("Failure %d in NetCacheMgr.\n", failTy);
+    case kNCMFT_ClientError: {
+        Profile *profile = StoreProfile();
+        bool signedIn = ThePlatformMgr.IsSignedIntoLive(profile->GetPadNum());
+        err = (StoreError)((!signedIn ^ 1) + kStoreErrorCacheNoSpace);
         break;
+    }
     case kNCMFT_NoEthernetCable:
-        err = kStoreErrorNoMetadata;
-        break;
+        goto no_metadata;
     default:
         MILO_NOTIFY("Unknown failure %d in NetCacheMgr.", failTy);
         break;
     }
-    if (err != kStoreErrorNoMetadata && !ThePlatformMgr.IsEthernetCableConnected()) {
+    if (!ThePlatformMgr.IsEthernetCableConnected()) {
+no_metadata:
         err = kStoreErrorNoMetadata;
     }
-    if (err != kStoreErrorSuccess)
-        ExitError(err);
+    ExitError(err);
 }
 
 void StorePanel::HandleNetCacheLoaderFailure(int failType) {
@@ -513,45 +503,38 @@ StoreError StorePanel::UpdateOffers(std::list<EnumProduct> const &enumList, bool
     }
 
     std::vector<StoreOffer *>::iterator it;
-    auto offersEnd = offers->end();
-    for (it = offers->begin(); it != offersEnd; ++it) {
+    for (it = offers->begin(); it != offers->end(); ++it) {
         StoreOffer *offer = *it;
+        std::list<EnumProduct>::const_iterator enumIt = enumList.end();
         bool _cond = offer->Exists();
         if (_cond) {
             // Check if offer matches enum list
-            std::list<EnumProduct>::const_iterator enumIt;
-            enumIt = enumList.begin();
             bool match = false;
+            enumIt = enumList.begin();
             while (enumIt != enumList.end()) {
-                if (offer->songID == enumIt->mOfferID) {
-                    match = true;
+                match = enumIt->mOfferID == offer->songID;
+                if (match) {
                     break;
                 }
                 ++enumIt;
             }
+        }
 
-            if (match) {
-                result = kStoreErrorSuccess;
-                // Call virtual function at offset 0x70 (ILP32)
+        if (enumIt != enumList.end()) {
+            result = kStoreErrorSuccess;
+            // Virtual call through vtable slot 0x70 (ILP32), passing the
+            // matched EnumProduct.
 #ifdef HX_NATIVE
-                // On LP64, vtable offsets shift — skip this call, offer handling is stubbed
+            // On LP64, vtable offsets shift — skip this call, offer handling is stubbed
 #else
-                void (*func)(void *, void *, void *) = (void (*)(void *, void *, void *))*(void **)((u32)this + 0x70);
-                func(this, offer, (void *)((u32)offer + 0x38));
+            typedef void (*UpdateFn)(void *, void *, const void *);
+            UpdateFn func = (UpdateFn)(*(void ***)this)[0x70 / 4];
+            func(this, offer, &*enumIt);
 #endif
-            } else {
-                if (offer->IsTest()) {
-                    offer->isAvailable = false;
-                    offer->isPurchased = false;
-                    offer->cost = 0x270f;
-                }
-            }
-        } else {
-            if (offer->IsTest()) {
-                offer->isAvailable = false;
-                offer->isPurchased = false;
-                offer->cost = 0x270f;
-            }
+        } else if (offer->IsTest()) {
+            offer->isAvailable = false;
+            offer->isPurchased = false;
+            offer->cost = 0x270f;
         }
     }
 

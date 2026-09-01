@@ -269,65 +269,60 @@ void RndSpline::SyncDeformedCtrlPoints(int iStartIndex, int iEndIndex) const {
                 const CtrlPoint &next = GetDeformedCtrlPointOrDummy(i + 1);
                 const CtrlPoint &nextNext = GetDeformedCtrlPointOrDummy(i + 2);
 
-                float px = prev.mPos.x, py = prev.mPos.y, pz = prev.mPos.z, pr = prev.mRoll;
-                float nx = next.mPos.x, ny = next.mPos.y, nz = next.mPos.z, nr = next.mRoll;
-                float nnx = nextNext.mPos.x, nny = nextNext.mPos.y,
-                      nnz = nextNext.mPos.z, nnr = nextNext.mRoll;
+                Vector4 prevVec(prev.mPos.x, prev.mPos.y, prev.mPos.z, prev.mRoll);
+                Vector4 nextVec(next.mPos.x, next.mPos.y, next.mPos.z, next.mRoll);
+                Vector4 nextNextVec(
+                    nextNext.mPos.x, nextNext.mPos.y, nextNext.mPos.z, nextNext.mRoll
+                );
 
                 // mCoeff0 = -0.5*prev + 1.5*cur - 1.5*next + 0.5*nextNext
                 pt.mCoeff0 = Vector4::ZeroVec();
-                float cx = pt.mPos.x, cy = pt.mPos.y, cz = pt.mPos.z, cr = pt.mRoll;
-                pt.mCoeff0.x -= px * 0.5f;
-                pt.mCoeff0.y -= py * 0.5f;
-                pt.mCoeff0.z -= pz * 0.5f;
-                pt.mCoeff0.w -= pr * 0.5f;
-                pt.mCoeff0.x += cx * 1.5f;
-                pt.mCoeff0.y += cy * 1.5f;
-                pt.mCoeff0.z += cz * 1.5f;
-                pt.mCoeff0.w += cr * 1.5f;
-                pt.mCoeff0.x -= nx * 1.5f;
-                pt.mCoeff0.y -= ny * 1.5f;
-                pt.mCoeff0.z -= nz * 1.5f;
-                pt.mCoeff0.w -= nr * 1.5f;
-                pt.mCoeff0.x += nnx * 0.5f;
-                pt.mCoeff0.y += nny * 0.5f;
-                pt.mCoeff0.z += nnz * 0.5f;
-                pt.mCoeff0.w += nnr * 0.5f;
+                Vector4 curVec(pt.mPos.x, pt.mPos.y, pt.mPos.z, pt.mRoll);
+                pt.mCoeff0.x -= prevVec.x * 0.5f;
+                pt.mCoeff0.y -= prevVec.y * 0.5f;
+                pt.mCoeff0.z -= prevVec.z * 0.5f;
+                pt.mCoeff0.w -= prevVec.w * 0.5f;
+                pt.mCoeff0.x += curVec.x * 1.5f;
+                pt.mCoeff0.y += curVec.y * 1.5f;
+                pt.mCoeff0.z += curVec.z * 1.5f;
+                pt.mCoeff0.w += curVec.w * 1.5f;
+                pt.mCoeff0.x -= nextVec.x * 1.5f;
+                pt.mCoeff0.y -= nextVec.y * 1.5f;
+                pt.mCoeff0.z -= nextVec.z * 1.5f;
+                pt.mCoeff0.w -= nextVec.w * 1.5f;
+                pt.mCoeff0.x += nextNextVec.x * 0.5f;
+                pt.mCoeff0.y += nextNextVec.y * 0.5f;
+                pt.mCoeff0.z += nextNextVec.z * 0.5f;
+                pt.mCoeff0.w += nextNextVec.w * 0.5f;
 
                 // mCoeff1 = prev - 2.5*cur + 2.0*next - 0.5*nextNext
-                pt.mCoeff1.x = px;
-                pt.mCoeff1.y = py;
-                pt.mCoeff1.z = pz;
-                pt.mCoeff1.w = pr;
-                pt.mCoeff1.x -= cx * 2.5f;
-                pt.mCoeff1.y -= cy * 2.5f;
-                pt.mCoeff1.z -= cz * 2.5f;
-                pt.mCoeff1.w -= cr * 2.5f;
-                pt.mCoeff1.x += nx * 2.0f;
-                pt.mCoeff1.y += ny * 2.0f;
-                pt.mCoeff1.z += nz * 2.0f;
-                pt.mCoeff1.w += nr * 2.0f;
-                pt.mCoeff1.x -= nnx * 0.5f;
-                pt.mCoeff1.y -= nny * 0.5f;
-                pt.mCoeff1.z -= nnz * 0.5f;
-                pt.mCoeff1.w -= nnr * 0.5f;
+                pt.mCoeff1 = prevVec;
+                pt.mCoeff1.x -= curVec.x * 2.5f;
+                pt.mCoeff1.y -= curVec.y * 2.5f;
+                pt.mCoeff1.z -= curVec.z * 2.5f;
+                pt.mCoeff1.w -= curVec.w * 2.5f;
+                pt.mCoeff1.x += nextVec.x * 2.0f;
+                pt.mCoeff1.y += nextVec.y * 2.0f;
+                pt.mCoeff1.z += nextVec.z * 2.0f;
+                pt.mCoeff1.w += nextVec.w * 2.0f;
+                pt.mCoeff1.x -= nextNextVec.x * 0.5f;
+                pt.mCoeff1.y -= nextNextVec.y * 0.5f;
+                pt.mCoeff1.z -= nextNextVec.z * 0.5f;
+                pt.mCoeff1.w -= nextNextVec.w * 0.5f;
 
                 // mCoeff2 = -0.5*prev + 0.5*next
                 pt.mCoeff2 = Vector4::ZeroVec();
-                pt.mCoeff2.x -= px * 0.5f;
-                pt.mCoeff2.y -= py * 0.5f;
-                pt.mCoeff2.z -= pz * 0.5f;
-                pt.mCoeff2.w -= pr * 0.5f;
-                pt.mCoeff2.x += nx * 0.5f;
-                pt.mCoeff2.y += ny * 0.5f;
-                pt.mCoeff2.z += nz * 0.5f;
-                pt.mCoeff2.w += nr * 0.5f;
+                pt.mCoeff2.x -= prevVec.x * 0.5f;
+                pt.mCoeff2.y -= prevVec.y * 0.5f;
+                pt.mCoeff2.z -= prevVec.z * 0.5f;
+                pt.mCoeff2.w -= prevVec.w * 0.5f;
+                pt.mCoeff2.x += nextVec.x * 0.5f;
+                pt.mCoeff2.y += nextVec.y * 0.5f;
+                pt.mCoeff2.z += nextVec.z * 0.5f;
+                pt.mCoeff2.w += nextVec.w * 0.5f;
 
                 // mCoeff3 = cur
-                pt.mCoeff3.x = cx;
-                pt.mCoeff3.y = cy;
-                pt.mCoeff3.z = cz;
-                pt.mCoeff3.w = cr;
+                pt.mCoeff3 = curVec;
             }
         }
     }

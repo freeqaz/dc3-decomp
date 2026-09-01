@@ -970,27 +970,33 @@ bool LiveCameraInput::SetTweakedAutoexposure(bool enable) {
 }
 
 bool LiveCameraInput::GetTweakedAutoexposure() const {
-    long val = GetColorCameraProperty(NUI_CAMERA_PROPERTY_AE_FRAME_RATE_MIN);
+    bool frameRateOk = GetColorCameraProperty(NUI_CAMERA_PROPERTY_AE_FRAME_RATE_MIN) == 2;
     NUI_CAMERA_AE_ROI currentRegion;
-    HRESULT hr = NuiCameraGetExposureRegionOfInterest(NUI_CAMERA_TYPE_COLOR, &currentRegion);
-    if (!SUCCEEDED(hr)) {
-        MILO_FAIL(
-            "NuiCameraGetExposureRegionOfInterest failed (0x%x)", hr
-        );
+    unsigned int hr = NuiCameraGetExposureRegionOfInterest(NUI_CAMERA_TYPE_COLOR, &currentRegion);
+    if (!SUCCEEDED((HRESULT)hr)) {
+        MILO_FAIL("NuiCameraGetExposureRegionOfInterest failed (0x%x)", hr);
     }
     NUI_CAMERA_AE_ROI configRegion;
-    bool gotRegion = GetExposureRegion(configRegion);
-    if (gotRegion) {
-        if (val != 2
-            || Abs(currentRegion.Left - configRegion.Left) >= 0.0001f
-            || Abs(currentRegion.Top - configRegion.Top) >= 0.0001f
-            || Abs(currentRegion.Width - configRegion.Width) >= 0.0001f
-            || Abs(currentRegion.Height - configRegion.Height) >= 0.0001f) {
-            return false;
-        }
-        return true;
+    if (!GetExposureRegion(configRegion)) {
+        return false;
     }
-    return false;
+    if (!frameRateOk) {
+        return false;
+    }
+    bool leftOk = NearlyEqual(currentRegion.Left, configRegion.Left);
+    if (!leftOk) {
+        return false;
+    }
+    bool topOk = NearlyEqual(currentRegion.Top, configRegion.Top);
+    if (!topOk) {
+        return false;
+    }
+    bool widthOk = NearlyEqual(currentRegion.Width, configRegion.Width);
+    if (!widthOk) {
+        return false;
+    }
+    bool heightOk = NearlyEqual(currentRegion.Height, configRegion.Height);
+    return heightOk;
 }
 
 #define NUI_CAMERA_AE_ROI_MINIMUM_WIDTH 0.15f

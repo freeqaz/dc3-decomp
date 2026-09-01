@@ -890,8 +890,6 @@ void RndAmbientOcclusion::SmoothResults(RndMesh *mesh) const {
     // Phase 3: Smooth AO by accumulating angle-weighted face AO per vertex
     v = 0;
     if (0 < mesh->Verts().size()) {
-        int vertOffset = 0;
-        int *mapPtr = &vertMap[0];
         do {
             unsigned int fNum = 0;
             float accR = 0.0f;
@@ -904,9 +902,8 @@ void RndAmbientOcclusion::SmoothResults(RndMesh *mesh) const {
                     int j = 0;
                     unsigned short *faceVerts = (unsigned short *)&mesh->Faces(fNum);
                     Hmx::Color *faceColor = &faceAO[fNum];
-                    unsigned short *fvPtr = faceVerts;
                     do {
-                        if (vertMap[*fvPtr] == *mapPtr) {
+                        if (vertMap[faceVerts[j]] == vertMap[v]) {
                             // Get the two edges adjacent to this vertex
                             int cur = j % 3;
                             int next = (j + 1) % 3;
@@ -943,7 +940,6 @@ void RndAmbientOcclusion::SmoothResults(RndMesh *mesh) const {
                             accB = accB + wB;
                         }
                         j++;
-                        fvPtr++;
                     } while (j < 3);
                     fNum++;
                 } while (fNum < (unsigned int)mesh->Faces().size());
@@ -964,8 +960,6 @@ void RndAmbientOcclusion::SmoothResults(RndMesh *mesh) const {
                 }
             }
             v++;
-            mapPtr++;
-            vertOffset += 0x60;
         } while (v < mesh->Verts().size());
     }
 }
