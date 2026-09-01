@@ -334,6 +334,51 @@ mean writing a call the program does not make. The gap is that
 regenerated through decomp-synth's validated
 `tools/il_witness/build_icf_alias_inputs.py`.
 
+### …but an alias group does NOT rescue an *unpaired* symbol, and that has been assumed twice
+
+⚠ An alias group makes two names compare equal as **relocation targets**. It
+does **not** pair two differently-spelled **symbols**, so it cannot move a
+function that reads `0.0%` because the target defines the ICF survivor's
+spelling while our object defines the folded one. Adding the fold is still the
+right thing to record — it is true, and it is what stops the row being
+re-reported as a wrong-callee bug — but **do not expect a percentage for it.**
+
+Measured on `main` at `a5eefa51d` (2026-09-01), whole binary: **118 functions /
+8,172 B sit at `match_percent_normalized == 0.0` while their name is ALREADY a
+member of an alias group.** Among them are `??_E?$CSampleXAPOBase@
+VCompressionEffect@@UParams@1@@ATG@@MAAPAXI@Z` (100 B) and
+`??_E?$StandardEffect@VCompressionEffect@@@@UAAPAXI@Z` (76 B), members long
+before the 2026-09-01 harvest ran, and `?Process@?$CSampleXAPOBase@VWahEffect@@
+UParams@1@@ATG@@UAAXIPBU…@Z` (132 B). Adding the two missing `??_E` siblings
+(`GainEffect`, `HeadsetPlaybackEffect`) left them at `0.0%` too — 
+`matched_code`, `matched_functions` and `fuzzy_match_percent` were byte-for-byte
+unchanged across that widening.
+
+The mechanism that *would* pair them exists in the fork —
+`diff::reconcile_global_byte_matches` (`objdiff-core/src/diff/mod.rs`), which
+does consult `SymbolEquivalences` for pairing — but it is gated on
+`objdiff-cli report generate --global-byte-eq`, and this project's report edge
+does not pass it (`grep -c global-byte-eq build.ninja` → 0). So the headline is
+structurally unreachable for this row class regardless of how complete the
+alias set is.
+
+Where the alias set *does* pay is the relocation charge, and that is
+measurable: the same widening took the charged population from **386 rows to
+383 (−288 B)** with **0 rows entering and 0 scores dropping**
+(`scripts/analysis/reloc_name_gate.py`, before/after on one tree).
+
+Re-derive both tiers whole-binary, with printed denominators, from:
+
+* `scripts/retail_map_fold_reconcile.py` — linker-map address sharing + a
+  byte-identity gate; reaches any name our objects **define**.
+* `scripts/weak_alias_reconcile.py` — the COFF `IMAGE_WEAK_EXTERN_SEARCH_ALIAS`
+  aux record; the only tier that can speak about a name our objects merely
+  **reference**, which is why the retail-map tier's gate 5 drops those as
+  "no body to check". Both are ledgered, both are `--apply`-idempotent, and each
+  re-attaches the other's members rather than clobbering them (the 2026-09-01
+  failure mode: a retail re-mint silently dropped two weak-tier names while the
+  weak ledger still claimed they were installed).
+
 ## Two families that look like bugs and are register permutation
 
 Worth knowing before re-mining this population, because both are visually loud:
