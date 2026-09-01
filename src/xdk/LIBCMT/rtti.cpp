@@ -139,7 +139,7 @@ const _s_RTTIBaseClassDescriptor *FindMITargetTypeInstance(
     const _s_RTTIBaseClassDescriptor *pTargetBase = 0;
     const _s_RTTIBaseClassDescriptor *pSrcBase = 0;
     unsigned long numTargetContained = 0;
-    int iTarget = -1;
+    unsigned long iTarget = (unsigned long)-1;
     unsigned long numBaseClasses = pCompleteLocator->pClassDescriptor->numBaseClasses;
     unsigned long i;
 
@@ -166,9 +166,8 @@ const _s_RTTIBaseClassDescriptor *FindMITargetTypeInstance(
         if (TYPEIDS_EQ(pBase->pTypeDescriptor, pSrcType)) {
             int adjustment = 0;
             if (pBase->where.pdisp >= 0) {
-                adjustment = *(int *)(*(char **)((char *)pCompleteObject + pBase->where.pdisp) +
-                                      pBase->where.vdisp) +
-                    pBase->where.pdisp;
+                char *pVirtualBaseTable = *(char **)((char *)pCompleteObject + pBase->where.pdisp);
+                adjustment = *(int *)(pVirtualBaseTable + pBase->where.vdisp) + pBase->where.pdisp;
             }
             if (adjustment + pBase->where.mdisp == SrcOffset) {
                 if (pTargetBase) {
@@ -213,7 +212,7 @@ const _s_RTTIBaseClassDescriptor *FindVITargetTypeInstance(
     const _s_RTTIBaseClassDescriptor *pTargetBase = 0;
     unsigned long numTargetContained = 0;
     unsigned long numBaseClasses = pCompleteLocator->pClassDescriptor->numBaseClasses;
-    int iTarget = -1;
+    unsigned long iTarget = (unsigned long)-1;
     bool isVisible = true;
     int matchOffset = -1;
     unsigned long i;
@@ -240,24 +239,27 @@ const _s_RTTIBaseClassDescriptor *FindVITargetTypeInstance(
                     pBase->where.pdisp;
             }
             if (pBase->where.mdisp + adjustment == SrcOffset) {
-                if (i - iTarget > numTargetContained) {
-                    // Source sub-object sits outside the last target we saw.
-                    if (!(pBase->attributes & (BCD_NOTVISIBLE | BCD_PRIVORPROTBASE))) {
-                        pSrcOutsideTarget = pBase;
+                if (i - iTarget <= numTargetContained) {
+                    // The source sub-object lives inside the target one.
+                    if (!isVisible) {
+                        continue;
                     }
-                } else if (isVisible) {
                     bool isAccessible;
-                    if (pTargetBase->attributes & BCD_HASPCHD) {
+                    if (!(pTargetBase->attributes & BCD_HASPCHD)) {
+                        if (iTarget == 0) {
+                            if (pBase->attributes & BCD_NOTVISIBLE) {
+                                isVisible = false;
+                            }
+                        }
+                        isAccessible = true;
+                    } else {
                         const _s_RTTIBaseClassDescriptor *pContained =
                             pTargetBase->pClassDescriptor->pBaseClassArray
                                 ->arrayOfBaseClassDescriptors[i - iTarget];
-                        isVisible = isVisible && !(pContained->attributes & BCD_NOTVISIBLE);
-                        isAccessible = !(pContained->attributes & BCD_PRIVORPROTBASE);
-                    } else {
-                        if (iTarget == 0) {
-                            isVisible = isVisible && !(pBase->attributes & BCD_NOTVISIBLE);
+                        if (pContained->attributes & BCD_NOTVISIBLE) {
+                            isVisible = false;
                         }
-                        isAccessible = true;
+                        isAccessible = !(pContained->attributes & BCD_PRIVORPROTBASE);
                     }
                     if (isVisible && isAccessible) {
                         int targetAdjustment = 0;
@@ -275,6 +277,9 @@ const _s_RTTIBaseClassDescriptor *FindVITargetTypeInstance(
                         pMatch = pTargetBase;
                         matchOffset = offset;
                     }
+                } else if (!(pBase->attributes & (BCD_NOTVISIBLE | BCD_PRIVORPROTBASE))) {
+                    // Source sub-object sits outside the last target we saw.
+                    pSrcOutsideTarget = pBase;
                 }
             }
         }
