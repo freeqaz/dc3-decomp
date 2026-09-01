@@ -625,33 +625,42 @@ void NgSpotlightDrawer::RenderScene() {
 
 namespace {
 
-// Slides a beam corner along `dir` by `scale`.  `dir` arrives by value: retail
-// copies the whole 16-byte Vector3 (padding included) into a fresh stack slot
-// at every one of the five corner sites, which is what produces the
-// lwz/lwz/lwz/lwz + stw/stw/stw/stw runs that dominate this function.
+// Slides a beam corner along `dir` by `scale`.  `dir` arrives by value AND IS
+// SCALED IN PLACE -- that is what makes the copy survive.  Xenon MSVC at /O1
+// folds an *unmodified* local-to-local 16-byte Vector3 copy unconditionally,
+// but a by-value parameter the callee writes to is a distinct object it has to
+// materialise.  Each of the five corner sites therefore keeps its own
+// lwz/lwz/lwz/lwz + stw/stw/stw/stw run, exactly as retail does.  (The scaled
+// stores themselves are dead and get removed, so all five copies can share
+// stack slots with one another.)
 void SlideCorner(Vector3 &pt, Vector3 dir, float scale) {
-    pt.x += dir.x * scale;
-    pt.y += dir.y * scale;
-    pt.z += dir.z * scale;
+    dir *= scale;
+    pt += dir;
 }
 
 void SlideCornerBack(Vector3 &pt, Vector3 dir, float scale) {
-    pt.x -= dir.x * scale;
-    pt.y -= dir.y * scale;
-    pt.z -= dir.z * scale;
+    dir *= scale;
+    pt -= dir;
 }
 
 // Normal of the plane through the eye and the silhouette edge a..b.  Both
-// endpoints arrive by value for the same reason as above.
+// endpoints arrive by value and are rebased onto the eye in place, for the same
+// reason as above -- that keeps both 16-byte copies.
 void EyeEdgePlane(Vector3 a, Vector3 b, const Vector3 &eye, Vector3 &dst) {
-    dst.Set(
-        (a.y - eye.y) * (b.z - eye.z) - (a.z - eye.z) * (b.y - eye.y),
-        (a.z - eye.z) * (b.x - eye.x) - (a.x - eye.x) * (b.z - eye.z),
-        (a.x - eye.x) * (b.y - eye.y) - (a.y - eye.y) * (b.x - eye.x)
-    );
+    a -= eye;
+    b -= eye;
+    Cross(a, b, dst);
 }
 
 void NormalizeCopy(Vector3 v, Vector3 &dst) { Normalize(v, dst); }
+
+// Divides a silhouette plane through by its projection onto the bisector and
+// packs it as a shader plane equation.  `n` is by value and scaled in place for
+// the same copy-preserving reason as SlideCorner.
+void PlaneEquation(Vector3 n, float inv, float d, Vector4 &out) {
+    n *= inv;
+    out.Set(n.x, n.y, n.z, inv * d);
+}
 
 }
 
@@ -740,18 +749,10 @@ void NgSpotlightDrawer::SetupXSection(Spotlight *sl, const Spotlight::BeamDef &d
         invLeft = 1.0f / leftCos;
     }
 
-    Vector4 leftEq(
-        leftPlane.x * invLeft,
-        leftPlane.y * invLeft,
-        leftPlane.z * invLeft,
-        invLeft * leftD
-    );
-    Vector4 rightEq(
-        rightPlane.x * invRight,
-        rightPlane.y * invRight,
-        rightPlane.z * invRight,
-        invRight * rightD
-    );
+    Vector4 leftEq;
+    PlaneEquation(leftPlane, invLeft, leftD, leftEq);
+    Vector4 rightEq;
+    PlaneEquation(rightPlane, invRight, rightD, rightEq);
 
     // Narrow end of the cone, and the distance from the apex to the light.
     float minR = botR;
@@ -975,4 +976,6 @@ SpotMeshEntry* vector<SpotMeshEntry, StlNodeAlloc<SpotMeshEntry>>::_M_erase(
 
 }  // namespace stlpmtx_std
 #endif // HX_NATIVE
+
+
 
