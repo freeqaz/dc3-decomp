@@ -31,9 +31,9 @@ public:
         double mNextTime;    // 0x18
         int mVoice;          // 0x20 index into mVoices / the output channel
         int mWindow;         // 0x24 index into mWindows
-        int mWindowLen;      // 0x28
+        unsigned int mWindowLen;  // 0x28
         int mStartOffset;    // 0x2c first sample of the block this grain writes
-        int mFadeIn;         // 0x30 (uninitialised by the ctor, see above)
+        unsigned int mFadeIn; // 0x30 (uninitialised by the ctor, see above)
         int mDelay;          // 0x34
         int mLifetime;       // 0x38
         float mPhase;        // 0x3c read cursor into mInput
@@ -58,8 +58,13 @@ public:
     ~GranularSynth();
 
     void ExtractGranules();
-    void Synthesize(unsigned int count, const float *const *out);
+    void Synthesize(unsigned int count, float *const *out);
     void Flush();
+
+private:
+    unsigned int Size() const { return (unsigned int)(mInput->end() - mInput->begin()); }
+
+public:
 
     const FloatVec *mInput;  // 0x00
     float mHopF;             // 0x04 (float)mHop
@@ -83,6 +88,14 @@ namespace stlpmtx_std {
 template <>
 _Vector_base<DSP::Synapse::GranularSynth::Voice, StlNodeAlloc<DSP::Synapse::GranularSynth::Voice>>::_Vector_base(
     size_t __n,
+    const StlNodeAlloc<DSP::Synapse::GranularSynth::Voice>& __a
+);
+
+// Explicit specialization of vector constructor for Voice
+template <>
+vector<DSP::Synapse::GranularSynth::Voice, StlNodeAlloc<DSP::Synapse::GranularSynth::Voice>>::vector(
+    unsigned int __n,
+    const DSP::Synapse::GranularSynth::Voice& __val,
     const StlNodeAlloc<DSP::Synapse::GranularSynth::Voice>& __a
 );
 
