@@ -55,8 +55,8 @@ void BoxMapLighting::ApplyQueuedLights(Hmx::Color * __restrict color, const Vect
         ApplyLight(mQueued_Spot, *v3);
         ApplyLight(mQueued_Point, *v3);
     }
-    unsigned int idx = gLightIndex;
     ApplyLight(mQueued_Directional);
+    unsigned int idx = gLightIndex;
 
     if (idx != 0) {
         float c0r = color[0].red;
@@ -78,7 +78,7 @@ void BoxMapLighting::ApplyQueuedLights(Hmx::Color * __restrict color, const Vect
         float c20g = color[5].green;
         float c20b = color[5].blue;
 
-        float *lightBuf1 = (float *)&gLightIndex;
+        float *lightBuf1 = (float *)gLightBuffer1 - 2;
         float *lightBuf2 = (float *)gLightBuffer2 - 2;
         for (unsigned int counter = idx; counter != 0; counter--) {
             float x1 = lightBuf1[2];
@@ -91,38 +91,41 @@ void BoxMapLighting::ApplyQueuedLights(Hmx::Color * __restrict color, const Vect
             lightBuf2 += 4;
             float z2 = *lightBuf2;
 
-            float abs_nx1 = (-z1 >= 0.0f) ? -z1 : 0.0f;
-            float abs_ny1 = (-x1 >= 0.0f) ? -x1 : 0.0f;
-            float abs_nz1 = (-y1 >= 0.0f) ? -y1 : 0.0f;
-            float abs_nw1 = (z1 >= 0.0f) ? z1 : 0.0f;
-            float abs_nx2 = (x1 >= 0.0f) ? x1 : 0.0f;
-            float abs_ny2 = (y1 >= 0.0f) ? y1 : 0.0f;
+            // Six box-map axes: +Z, +X, +Y, -X, -Y, -Z. Each face accumulates the
+            // light colour weighted by the squared clamped projection of the light
+            // direction onto that face's axis.
+            float posZ = Max(0.0f, z1);
+            float posX = Max(0.0f, x1);
+            float posY = Max(0.0f, y1);
+            float negX = Max(0.0f, -x1);
+            float negY = Max(0.0f, -y1);
+            float negZ = Max(0.0f, -z1);
 
-            float sq1 = abs_nx1 * abs_nx1;
-            float sq2 = abs_ny1 * abs_ny1;
-            float sq3 = abs_nz1 * abs_nz1;
-            float sq4 = abs_nw1 * abs_nw1;
-            float sq5 = abs_nx2 * abs_nx2;
-            float sq6 = abs_ny2 * abs_ny2;
+            float wPosZ = posZ * posZ;
+            float wPosX = posX * posX;
+            float wPosY = posY * posY;
+            float wNegX = negX * negX;
+            float wNegY = negY * negY;
+            float wNegZ = negZ * negZ;
 
-            c16b += sq1 * z2;
-            c0b += sq2 * z2;
-            c8b += sq3 * z2;
-            c0r += sq2 * x2;
-            c0g += sq2 * y2;
-            c8r += sq3 * x2;
-            c8g += sq3 * y2;
-            c4b += sq4 * z2;
-            c12b += sq5 * z2;
-            c20g = sq6 * y2 + c20g;
-            c20b = sq6 * z2 + c20b;
-            c16r += sq1 * x2;
-            c4r += sq4 * x2;
-            c4g += sq4 * y2;
-            c12r += sq5 * x2;
-            c12g += sq5 * y2;
-            c20r = sq6 * x2 + c20r;
-            c16g = sq1 * y2 + c16g;
+            c16b += wPosZ * z2;
+            c0b += wPosX * z2;
+            c8b += wPosY * z2;
+            c0r += wPosX * x2;
+            c0g += wPosX * y2;
+            c8r += wPosY * x2;
+            c8g += wPosY * y2;
+            c4b += wNegX * z2;
+            c12b += wNegY * z2;
+            c20g = wNegZ * y2 + c20g;
+            c20b = wNegZ * z2 + c20b;
+            c20r = wNegZ * x2 + c20r;
+            c16r += wPosZ * x2;
+            c4r += wNegX * x2;
+            c4g += wNegX * y2;
+            c12r += wNegY * x2;
+            c12g += wNegY * y2;
+            c16g = wPosZ * y2 + c16g;
         }
 
         color[0].red = c0r;
@@ -176,43 +179,39 @@ bool BoxMapLighting::CacheData(LightParams_Spot &spot) {
 void BoxMapLighting::ApplyLight(
     const BoxLightArray<LightParams_Directional, 50> &arr
 ) const {
-    int idx = gLightIndex;
     for (unsigned int i = 0; i < arr.NumElements(); i++) {
         const Hmx::Color *src = (const Hmx::Color *)&arr[i];
-        gLightBuffer1[idx] = src[0];
-        gLightBuffer2[idx] = src[1];
-        idx++;
+        gLightBuffer1[gLightIndex] = src[0];
+        gLightBuffer2[gLightIndex] = src[1];
+        gLightIndex++;
     }
-    gLightIndex = idx;
 }
 
 void BoxMapLighting::ApplyLight(
     const BoxLightArray<LightParams_Point, 50> &arr, const Vector3 &viewPos
 ) const {
-    int idx = gLightIndex;
     for (unsigned int i = 0; i < arr.NumElements(); i++) {
         const LightParams_Point &light = arr[i];
         if (light.mFalloffStart < light.mRange) {
             float dx = light.mPosition.x - viewPos.x;
             float dy = light.mPosition.y - viewPos.y;
             float dz = light.mPosition.z - viewPos.z;
-            float *buf1 = (float *)&gLightBuffer1[idx];
+            float *buf1 = (float *)&gLightBuffer1[gLightIndex];
             buf1[0] = dx;
             buf1[1] = dy;
             buf1[2] = dz;
-            float distSq = dx * dx + dy * dy + dz * dz;
+            float distSq = dy * dy + dx * dx + dz * dz;
             if (0.0f < distSq) {
                 float invDist = 1.0f / sqrtf(distSq);
                 float dist = Max(0.0f, invDist * distSq - light.mFalloffStart);
                 float atten = Max(0.0f, 1.0f - dist / (light.mRange - light.mFalloffStart));
-                gLightBuffer2[idx].red = light.mColor.red * atten;
-                gLightBuffer2[idx].green = light.mColor.green * atten;
-                gLightIndex = idx + 1;
-                buf1[2] = dz * invDist;
-                gLightBuffer2[idx].blue = light.mColor.blue * atten;
+                gLightBuffer2[gLightIndex].red = light.mColor.red * atten;
+                gLightBuffer2[gLightIndex].green = light.mColor.green * atten;
+                gLightBuffer2[gLightIndex].blue = light.mColor.blue * atten;
                 buf1[0] = dx * invDist;
                 buf1[1] = dy * invDist;
-                idx++;
+                buf1[2] = dz * invDist;
+                gLightIndex++;
             }
         }
     }
@@ -221,29 +220,30 @@ void BoxMapLighting::ApplyLight(
 void BoxMapLighting::ApplyLight(
     const BoxLightArray<LightParams_Spot, 50> &arr, const Vector3 &viewPos
 ) const {
-    int idx = gLightIndex;
     for (unsigned int i = 0; i < arr.NumElements(); i++) {
         const LightParams_Spot &light = arr[i];
         float dz = viewPos.z - light.mApex.z;
         float dx = viewPos.x - light.mApex.x;
         float dy = viewPos.y - light.mApex.y;
-        float distSq = dy * dy + dx * dx + dz * dz;
+        float distSq = dz * dz + dx * dx + dy * dy;
         float invDist = 1.0f / sqrtf(distSq);
+        float ndz = dz * invDist;
+        float ndx = dx * invDist;
+        float ndy = dy * invDist;
         float dist = invDist * distSq * light.mHalfLengthRecip - light.mOffsetFactor;
-        float cone = light.mDirection.y * dy * invDist
-            + light.mDirection.x * dx * invDist + light.mDirection.z * dz * invDist;
+        float cone = light.mDirection.y * ndy
+            + (light.mDirection.x * ndx + light.mDirection.z * ndz);
         dist = Min(1.0f, dist);
         float coneClamped = Min(1.0f, cone) - light.mConeAngleFactor;
         float distAtten = Max(0.0f, 1.0f - dist);
         float coneAtten = Max(0.0f, coneClamped);
-        float atten = distAtten * coneAtten * light.mConeAngleInverse;
-        gLightBuffer2[idx].red = atten * light.mColor.red;
-        gLightBuffer2[idx].green = atten * light.mColor.green;
-        gLightBuffer2[idx].blue = atten * light.mColor.blue;
-        gLightBuffer1[idx].red = -(dx * invDist);
-        gLightBuffer1[idx].green = -(dy * invDist);
-        gLightBuffer1[idx].blue = -(dz * invDist);
-        gLightIndex = idx + 1;
-        idx++;
+        float atten = distAtten * (coneAtten * light.mConeAngleInverse);
+        gLightBuffer2[gLightIndex].red = atten * light.mColor.red;
+        gLightBuffer2[gLightIndex].green = atten * light.mColor.green;
+        gLightBuffer1[gLightIndex].red = -ndx;
+        gLightBuffer1[gLightIndex].green = -ndy;
+        gLightBuffer1[gLightIndex].blue = -ndz;
+        gLightBuffer2[gLightIndex].blue = atten * light.mColor.blue;
+        gLightIndex++;
     }
 }
