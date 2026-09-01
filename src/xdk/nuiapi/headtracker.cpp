@@ -26,8 +26,18 @@ struct PrevFrameAngles {
 
 class LDARegressor {
 public:
-    LDARegressor();
-    ~LDARegressor();
+    // throw() is load-bearing, not decoration.  Without it MSVC cannot prove
+    // the placement-new loop in FaceCommon::XMemNew<T> is nothrow, emits a C++
+    // EH state to destroy the already-constructed elements, and that state
+    // costs an r31 frame pointer, one extra callee-saved GPR and two live
+    // frame slots tracking the loop cursor -- 8 of XMemNew's 11 mismatch rows.
+    // The evidence that the original source said so: the TARGET headtracker.obj
+    // carries ZERO __unwind$/__ehhandler symbols and no __CxxFrameHandler
+    // reference across all 11 of its functions, ours carried exactly one, on
+    // XMemNew.  (src/xdk/ is excluded from the native build -- native
+    // CMakeLists.txt:364 -- so no native TU sees this specification.)
+    LDARegressor() throw();
+    ~LDARegressor() throw();
     long LoadLDA(const char *path);
     long LoadKNN(const char *path);
     bool compute(unsigned char *data, float prevAngle, bool useFilter, float *outAngle);
@@ -129,15 +139,20 @@ namespace FaceCommon {
 template <typename T>
 T *XMemNew(unsigned long allocAttrs, unsigned int count) {
     T *ptr = (T *)XMemAlloc(count * sizeof(T), allocAttrs);
+    // `count` IS the loop counter -- a separate `unsigned int i = count` costs a
+    // second register (`mr r30, r31`) the target does not spend, and the guarded
+    // do-while is how MSVC lays the target's loop out: the `cur = ptr` init sits
+    // AFTER the zero-count test, not before it.
     if (ptr != 0) {
-        unsigned int i = count;
-        T *cur = ptr;
-        while (i != 0) {
-            if (cur != 0) {
-                new (cur) T();
-            }
-            cur++;
-            i--;
+        if (count != 0) {
+            T *cur = ptr;
+            do {
+                if (cur != 0) {
+                    new (cur) T();
+                }
+                cur++;
+                count--;
+            } while (count != 0);
         }
     }
     return ptr;
