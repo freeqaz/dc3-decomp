@@ -1,0 +1,850 @@
+# Undefined-symbol inventory -- GENERATED, do not hand-edit.
+#
+# Every external symbol some object under build/373307D9/src (or the PCH) REFERENCES
+# and no object of ours DEFINES. Regenerate after a full `ninja` with:
+#
+#     python3 scripts/check_undefined_decomp_symbols.py --write
+#
+# This file is EVIDENCE, not a threshold. Adding a name to it by hand to make
+# `--check` pass is exactly the defect the check exists to find; the diff will
+# show you doing it.
+#
+# GAP lines are symbols the ORIGINAL binary defines in a unit we also compile --
+# a body the decomp still owes, and a worklist. EXT lines are XDK imports, CRT
+# entry points and middleware the decomp calls but does not contain. The
+# classification is for the reader; --check ignores it and compares names only.
+#
+# counts: 831 total = 187 GAP + 644 EXT
+
+GAP ??$?6VHamScrollSpeedIndicator@@@@YAAAVBinStream@@AAV0@ABV?$ObjDirPtr@VHamScrollSpeedIndicator@@@@@Z  # target defines it in system/ui/UILabel.obj
+GAP ??0GranularSynth@Synapse@DSP@@QAA@ABV?$vector@MV?$StlNodeAlloc@M@stlpmtx_std@@@stlpmtx_std@@III@Z  # target defines it in system/synth_xbox/GranularSynth.obj
+GAP ??0PeakDetector@Synapse@DSP@@QAA@ABV?$vector@MV?$StlNodeAlloc@M@stlpmtx_std@@@stlpmtx_std@@II@Z  # target defines it in system/synth_xbox/PeakDetector.obj
+GAP ??0SingleItemEnumJob@@QAA@PAVObject@Hmx@@H_K@Z  # target defines it in system/os/PlatformMgr_Xbox.obj
+GAP ??0SpectralAnalysis@DSP@@QAA@XZ  # target defines it in system/synth_xbox/PitchDetector.obj
+GAP ??1GranularSynth@Synapse@DSP@@QAA@XZ  # target defines it in system/synth_xbox/GranularSynth.obj
+GAP ??1PitchDetector@Synapse@DSP@@QAA@XZ  # target defines it in system/synth_xbox/PitchDetector.obj
+GAP ??1PlatformMgr@@UAA@XZ  # target defines it in system/os/PlatformMgr_Xbox.obj
+GAP ??1SingleItemEnumJob@@UAA@XZ  # target defines it in system/os/PlatformMgr_Xbox.obj
+GAP ?AddAudio@ExternalMicClientMgr@@SAXKPAEK@Z  # target defines it in system/synth_xbox/ExternalMic.obj
+GAP ?AllocatePageBlock@CXboxHeap@NUISPEECH@@AAAPAU_BLOCK_ENTRY@12@I@Z  # target defines it in xdk/nuispeech/xboxheap.obj
+GAP ?Associate@ExternalMicClientMgr@@SAXHPAVMicXbox@@@Z  # target defines it in system/synth_xbox/ExternalMic.obj
+GAP ?BeginDrawing@DxRnd@@UAAXXZ  # target defines it in system/rnddx9/Rnd_Xbox.obj
+GAP ?Cancel@SingleItemEnumJob@@UAAXPAVObject@Hmx@@@Z  # target defines it in system/os/PlatformMgr_Xbox.obj
+GAP ?ConnectedForClient@ExternalMicClientMgr@@SA_NPBVMicXbox@@@Z  # target defines it in system/synth_xbox/ExternalMic.obj
+GAP ?Detect@PeakDetector@Synapse@DSP@@QAAXI@Z  # target defines it in system/synth_xbox/PeakDetector.obj
+GAP ?DoCompress@DxTex@@QAAXPAX@Z  # target defines it in system/rnddx9/Tex.obj
+GAP ?DoProcess@MeterEffect@@UAAXABUMeterEffectParams@@PIAMII@Z  # target defines it in system/synth_xbox/MeterEffect.obj
+GAP ?DrawFacesInRange@DxMesh@@UAAXHH@Z  # target defines it in system/rnddx9/Mesh.obj
+GAP ?DrawFur@DxMesh@@IAAPAVDxMat@@PAV2@@Z  # target defines it in system/rnddx9/Mesh.obj
+GAP ?DrawRect@DxRnd@@UAAXABVRect@Hmx@@PAVRndMat@@W4ShaderType@@ABVColor@3@PBV63@4@Z  # target defines it in system/rnddx9/Rnd.obj
+GAP ?DrawShowing@DxMultiMesh@@UAAXXZ  # target defines it in system/rnddx9/MultiMesh.obj
+GAP ?DrawShowing@DxParticleSys@@UAAXXZ  # target defines it in system/rnddx9/Part.obj
+GAP ?DrawString@DxRnd@@UAAAAVVector2@@PBDABV2@ABVColor@Hmx@@_N@Z  # target defines it in system/rnddx9/Rnd_Xbox.obj
+GAP ?EndDrawing@DxRnd@@UAAXXZ  # target defines it in system/rnddx9/Rnd_Xbox.obj
+GAP ?EnumerateFriends@PlatformMgr@@QAAXHAAV?$vector@PAVFriend@@V?$StlNodeAlloc@PAVFriend@@@stlpmtx_std@@@stlpmtx_std@@PAVObject@Hmx@@@Z  # target defines it in system/os/PlatformMgr_Xbox.obj
+GAP ?ExtractGranules@GranularSynth@Synapse@DSP@@QAAXXZ  # target defines it in system/synth_xbox/GranularSynth.obj
+GAP ?Flush@GranularSynth@Synapse@DSP@@QAAXXZ  # target defines it in system/synth_xbox/GranularSynth.obj
+GAP ?FreeHandle@@YAXPAX@Z  # target defines it in xdk/nuispeech/mmio.obj
+GAP ?GetName@PlatformMgr@@QBAPBDH@Z  # target defines it in system/os/PlatformMgr_Xbox.obj
+GAP ?GetRequiredGain@ExternalMicClientMgr@@SAMK@Z  # target defines it in system/synth_xbox/ExternalMic.obj
+GAP ?Init@ExternalMic@@SAXXZ  # target defines it in system/synth_xbox/ExternalMic.obj
+GAP ?Init@MicManagerXbox@@QAAXXZ  # target defines it in system/synth_xbox/Mic.obj
+GAP ?Init@PlatformMgr@@QAAXXZ  # target defines it in system/os/PlatformMgr_Xbox.obj
+GAP ?InitXinputJoypadThreadData@?A0x439b694a@@YAXXZ  # target defines it in system/os/Joypad_Xbox.obj
+GAP ?IsFinished@SingleItemEnumJob@@UAA_NXZ  # target defines it in system/os/PlatformMgr_Xbox.obj
+GAP ?LockBitmap@DxTex@@UAAXAAVRndBitmap@@H@Z  # target defines it in system/rnddx9/Tex.obj
+GAP ?OnCompletion@SingleItemEnumJob@@UAAXPAVObject@Hmx@@@Z  # target defines it in system/os/PlatformMgr_Xbox.obj
+GAP ?OnSetParameters@?$CSampleXAPOBase@VGainEffect@@UGainEffectParams@@@ATG@@MAAXPBXI@Z  # target defines it in system/synth_xbox/HeadsetPlaybackEffect.obj
+GAP ?Poll@MicXbox@@QAAXXZ  # target defines it in system/synth_xbox/Mic.obj
+GAP ?Poll@PlatformMgr@@QAAXXZ  # target defines it in system/os/PlatformMgr_Xbox.obj
+GAP ?QueryInterface@CXAPOParametersBase@@UAAJABU_GUID@@PAPAX@Z  # target defines it in system/synth_xbox/Synth.obj
+GAP ?Release@CXAPOParametersBase@@UAAKXZ  # target defines it in system/synth_xbox/Synth.obj
+GAP ?ReleaseAutoRelease@DxRnd@@QAAXXZ  # target defines it in system/rnddx9/Rnd_Xbox.obj
+GAP ?ResolveMipChain@DxTex@@AAAXXZ  # target defines it in system/rnddx9/Tex.obj
+GAP ?RunXinputJoypadLoop@?A0x439b694a@@YAXXZ  # target defines it in system/os/Joypad_Xbox.obj
+GAP ?SendRawData@@YAXHEEEEEEE@Z  # target defines it in system/os/Joypad_Xbox.obj
+GAP ?SetBorderColor@RndRenderState@@QAAXI_N@Z  # target defines it in system/rnddx9/RenderState.obj
+GAP ?SetGlobalReverbPreset@Synth360@@QAAXPBD@Z  # target defines it in system/synth_xbox/Synth.obj
+GAP ?SetPConstant4x3@DxShaderMgr@@UAAXW4PShaderConstant@@ABVMatrix4@Hmx@@@Z  # target defines it in system/rnddx9/ShaderMgr.obj
+GAP ?SetPConstant@DxShaderMgr@@UAAXW4PShaderConstant@@ABVMatrix4@Hmx@@@Z  # target defines it in system/rnddx9/ShaderMgr.obj
+GAP ?SetPConstant@DxShaderMgr@@UAAXW4PShaderConstant@@ABVVector4@@@Z  # target defines it in system/rnddx9/ShaderMgr.obj
+GAP ?SetPConstant@DxShaderMgr@@UAAXW4PShaderConstant@@H@Z  # target defines it in system/rnddx9/ShaderMgr.obj
+GAP ?SetPConstant@DxShaderMgr@@UAAXW4PShaderConstant@@PAVRndCubeTex@@@Z  # target defines it in system/rnddx9/ShaderMgr.obj
+GAP ?SetPConstant@DxShaderMgr@@UAAXW4PShaderConstant@@_N@Z  # target defines it in system/rnddx9/ShaderMgr.obj
+GAP ?SetVConstant4x3@DxShaderMgr@@UAAXW4VShaderConstant@@ABVMatrix4@Hmx@@@Z  # target defines it in system/rnddx9/ShaderMgr.obj
+GAP ?SetVConstant@DxShaderMgr@@UAAXW4VShaderConstant@@ABVMatrix4@Hmx@@@Z  # target defines it in system/rnddx9/ShaderMgr.obj
+GAP ?SetVConstant@DxShaderMgr@@UAAXW4VShaderConstant@@ABVVector4@@@Z  # target defines it in system/rnddx9/ShaderMgr.obj
+GAP ?SetVConstant@DxShaderMgr@@UAAXW4VShaderConstant@@H@Z  # target defines it in system/rnddx9/ShaderMgr.obj
+GAP ?SetVConstant@DxShaderMgr@@UAAXW4VShaderConstant@@_N@Z  # target defines it in system/rnddx9/ShaderMgr.obj
+GAP ?ShowControllerRequiredUI@PlatformMgr@@QAAXPAVObject@Hmx@@@Z  # target defines it in system/os/PlatformMgr_Xbox.obj
+GAP ?Start@SingleItemEnumJob@@UAAXXZ  # target defines it in system/os/PlatformMgr_Xbox.obj
+GAP ?SyncBitmap@DxTex@@MAAXXZ  # target defines it in system/rnddx9/Tex.obj
+GAP ?SyncEffectParams@FxSendChorus360@@UBAXPAUIXAudio2SubmixVoice@@@Z  # target defines it in system/synth_xbox/FxSendChorus.obj
+GAP ?Synthesize@GranularSynth@Synapse@DSP@@QAAXIPBQAM@Z  # target defines it in system/synth_xbox/GranularSynth.obj
+GAP ?Terminate@ExternalMic@@SAXXZ  # target defines it in system/synth_xbox/ExternalMic.obj
+GAP ?TheChallengeSortMgr@@3PAVChallengeSortMgr@@A  # target defines it in lazer/meta_ham/ChallengeSortMgr.obj
+GAP ?TheContentMgr@@3AAVContentMgr@@A  # target defines it in system/os/ContentMgr_Xbox.obj
+GAP ?TheFitnessGoalMgr@@3PAVFitnessGoalMgr@@A  # target defines it in lazer/meta_ham/FitnessGoalMgr.obj
+GAP ?TheGameMode@@3PAVGameMode@@A  # target defines it in lazer/game/GameMode.obj
+GAP ?TheHAQMgr@@3PAVHAQManager@@A  # target defines it in system/meta/HAQManager.obj
+GAP ?TheLeaderboards@@3PAVLeaderboards@@A  # target defines it in lazer/meta_ham/Leaderboards.obj
+GAP ?TheMQSongSortMgr@@3PAVMQSongSortMgr@@A  # target defines it in lazer/meta_ham/MQSongSortMgr.obj
+GAP ?TheMaster@@3PAVHamMaster@@A  # target defines it in system/hamobj/HamMaster.obj
+GAP ?TheMovieSys@@3AAVMovieSys@@A  # target defines it in system/moviebink/BinkMovieSys.obj
+GAP ?TheNgRnd@@3AAVNgRnd@@A  # target defines it in system/rnddx9/Rnd.obj
+GAP ?TheRnd@@3AAVRnd@@A  # target defines it in system/rnddx9/Rnd.obj
+GAP ?TheSkeletonIdentifier@@3PAVSkeletonIdentifier@@A  # target defines it in lazer/meta_ham/SkeletonIdentifier.obj
+GAP ?TheSkeletonViz@@3PAVSkeletonViz@@A  # target defines it in system/gesture/DrawUtl.obj
+GAP ?TheSongSortMgr@@3PAVSongSortMgr@@A  # target defines it in lazer/meta_ham/SongSortMgr.obj
+GAP ?TheUI@@3PAVUIManager@@A  # target defines it in lazer/meta_ham/HamUI.obj
+GAP ?UpdateMix@Voice@@AAAXXZ  # target defines it in system/synth_xbox/Voice.obj
+GAP ?UpdateVoiceMatrices@FxSend360@@AAAXXZ  # target defines it in system/synth_xbox/FxSend.obj
+GAP ?fft_altivec@@YAHPAM0KJ0@Z  # target defines it in system/synth_xbox/FFT.obj
+GAP ?fft_real_forward_altivec@@YAHPAMJ0@Z  # target defines it in system/synth_xbox/FFT.obj
+GAP ?fft_recursive@@YAHPAMKJ0@Z  # target defines it in system/synth_xbox/FFT.obj
+GAP ?fft_square_matrix@@YAHPAMJJ0@Z  # target defines it in system/synth_xbox/FFT.obj
+GAP ?gCharHighlightY@@3MA  # target defines it in system/char/Char.obj
+GAP ?gMemStackLock@@3PAVCriticalSection@@A  # target defines it in system/utl/MemMgr.obj
+GAP ?lbl_82F14008@@3HA  # target defines it in system/rndobj/Draw.obj
+GAP ?mFastDownTickDelay@HamScrollBehavior@@2MA  # target defines it in system/hamobj/HamScrollBehavior.obj
+GAP ?mFastScrollSpeedBase@HamScrollBehavior@@2MA  # target defines it in system/hamobj/HamScrollBehavior.obj
+GAP ?mFastScrollSpeedScalar@HamScrollBehavior@@2MA  # target defines it in system/hamobj/HamScrollBehavior.obj
+GAP ?mFastUpTickDelay@HamScrollBehavior@@2MA  # target defines it in system/hamobj/HamScrollBehavior.obj
+GAP ?mModalCallback@RndShader@@1P6AXAAW4ModalType@Debug@@AAVFixedString@@_N@ZA  # target defines it in system/rndobj/Shader.obj
+GAP ?mNeutralToSlowDownDelay@HamScrollBehavior@@2MA  # target defines it in system/hamobj/HamScrollBehavior.obj
+GAP ?mNeutralToSlowUpDelay@HamScrollBehavior@@2MA  # target defines it in system/hamobj/HamScrollBehavior.obj
+GAP ?mNormalScrollSpeed@HamScrollBehavior@@2MA  # target defines it in system/hamobj/HamScrollBehavior.obj
+GAP ?mScrollDownCap@HamScrollBehavior@@2MA  # target defines it in system/hamobj/HamScrollBehavior.obj
+GAP ?mScrollUpCap@HamScrollBehavior@@2MA  # target defines it in system/hamobj/HamScrollBehavior.obj
+GAP ?mSlowDownFirstTickDelay@HamScrollBehavior@@2MA  # target defines it in system/hamobj/HamScrollBehavior.obj
+GAP ?mSlowDownTickDelay@HamScrollBehavior@@2MA  # target defines it in system/hamobj/HamScrollBehavior.obj
+GAP ?mSlowFastThreshold@HamScrollBehavior@@2MA  # target defines it in system/hamobj/HamScrollBehavior.obj
+GAP ?mSlowScrollSpeed@HamScrollBehavior@@2MA  # target defines it in system/hamobj/HamScrollBehavior.obj
+GAP ?mSlowUpFirstTickDelay@HamScrollBehavior@@2MA  # target defines it in system/hamobj/HamScrollBehavior.obj
+GAP ?mSlowUpTickDelay@HamScrollBehavior@@2MA  # target defines it in system/hamobj/HamScrollBehavior.obj
+GAP ?npos@FixedString@@2IB  # target defines it in system/utl/Str.obj
+GAP ?sActiveFrame@NgSpotlightDrawer@@1_NA  # target defines it in system/world/SpotlightDrawer_NG.obj
+GAP ?sAlloc@WavMgr@@1P6APAXHPBDH0H@ZA  # target defines it in system/synth/WavMgr.obj
+GAP ?sAlwaysNeedFocus@PanelDir@@0_NA  # target defines it in system/ui/PanelDir.obj
+GAP ?sAnimTarget@CamShot@@1PAVObject@Hmx@@A  # target defines it in system/world/CameraShot.obj
+GAP ?sBloomLocFactor@RndPostProc@@1MA  # target defines it in system/rndobj/PostProc.obj
+GAP ?sCache@PreloadPanel@@2PAVFileCache@@A  # target defines it in system/meta/PreloadPanel.obj
+GAP ?sCheatFinale@MetaPerformer@@0_NA  # target defines it in lazer/meta_ham/MetaPerformer.obj
+GAP ?sCollisionTolerance@SongCollision@@0MA  # target defines it in system/hamobj/SongCollision.obj
+GAP ?sCurrent@RndCam@@1PAV1@A  # target defines it in system/rndobj/Cam.obj
+GAP ?sCurrent@RndPostProc@@1PAV1@A  # target defines it in system/rndobj/PostProc.obj
+GAP ?sCurrent@SpotlightDrawer@@1PAV1@A  # target defines it in system/world/SpotlightDrawer.obj
+GAP ?sCurrentShader@RndShader@@1W4ShaderType@@A  # target defines it in system/rndobj/Shader.obj
+GAP ?sCurrentSkinned@RndShader@@1_NA  # target defines it in system/rndobj/Shader.obj
+GAP ?sCurrentUseAO@RndShader@@1_NA  # target defines it in system/rndobj/Shader.obj
+GAP ?sDOFOverride@RndPostProc@@1VDOFOverrideParams@@A  # target defines it in system/rndobj/PostProc.obj
+GAP ?sDebugHighlight@UILabel@@1_NA  # target defines it in system/ui/UILabel.obj
+GAP ?sDefaultHeap@MemHeapStack@@2HA  # target defines it in system/utl/MemMgr.obj
+GAP ?sDeleting@Object@Hmx@@1PAV12@A  # target defines it in system/obj/Object.obj
+GAP ?sDisableAll@FileMerger@@1_NA  # target defines it in system/char/FileMerger.obj
+GAP ?sDiskMesh@Spotlight@@1PAVRndMesh@@A  # target defines it in system/world/Spotlight.obj
+GAP ?sEDRamChecksEnabled@DxTex@@0_NA  # target defines it in system/rnddx9/Tex.obj
+GAP ?sFactory@StreamReceiver@@1P6APAV1@HH_NH@ZA  # target defines it in system/synth/StreamReceiver.obj
+GAP ?sFakeLeaderboardUploadFailure@SongStatusMgr@@2_NA  # target defines it in lazer/meta_ham/SongStatusMgr.obj
+GAP ?sFileOpenCallback@LoadMgr@@0P6A_NPBD@ZA  # target defines it in system/utl/Loader.obj
+GAP ?sForceSubpartSelection@RndDrawable@@1_NA  # target defines it in system/rndobj/Draw.obj
+GAP ?sFree@WavMgr@@1P6AXPAXPBDH1@ZA  # target defines it in system/synth/WavMgr.obj
+GAP ?sHighlightStyle@RndDrawable@@1W4HighlightStyle@@A  # target defines it in system/rndobj/Draw.obj
+GAP ?sInstance@BlacklightPanel@@2PAV1@A  # target defines it in lazer/meta_ham/BlacklightPanel.obj
+GAP ?sInstance@HelpBarPanel@@2PAV1@A  # target defines it in lazer/meta_ham/HelpBarPanel.obj
+GAP ?sInstance@LetterboxPanel@@2PAV1@A  # target defines it in lazer/meta_ham/LetterboxPanel.obj
+GAP ?sInstance@MicManagerXbox@@0PAV1@A  # target defines it in system/synth_xbox/Mic.obj
+GAP ?sIsFinalDrawPass@UIPanel@@0_NA  # target defines it in system/ui/UIPanel.obj
+GAP ?sLastSelectInControllerMode@HamNavList@@2_NA  # target defines it in system/hamobj/HamNavList.obj
+GAP ?sLoadVO@HamCharacter@@2_NA  # target defines it in system/hamobj/HamCharacter.obj
+GAP ?sMatShadersOK@RndShader@@1_NA  # target defines it in system/rndobj/Shader.obj
+GAP ?sMaxPanelId@UIPanel@@0HA  # target defines it in system/ui/UIPanel.obj
+GAP ?sMaxScreenId@UIScreen@@1HA  # target defines it in system/ui/UIScreen.obj
+GAP ?sMetaMaterials@RndMat@@1PAVObjectDir@@A  # target defines it in system/rndobj/Mat.obj
+GAP ?sMotdCheat@MetaPanel@@2_NA  # target defines it in lazer/meta_ham/MetaPanel.obj
+GAP ?sMutableSkinnedVertexDecl@DxMesh@@1PAUD3DVertexDeclaration@@A  # target defines it in system/rnddx9/Mesh.obj
+GAP ?sMutableVertexDecl@DxMesh@@1PAUD3DVertexDeclaration@@A  # target defines it in system/rnddx9/Mesh.obj
+GAP ?sMutableVertexDecl@DxMultiMesh@@0PAUD3DVertexDeclaration@@A  # target defines it in system/rnddx9/MultiMesh.obj
+GAP ?sNeedDraw@SpotlightDrawer@@1_NA  # target defines it in system/world/SpotlightDrawer.obj
+GAP ?sNextFillSelection@UIListSubList@@2HA  # target defines it in system/ui/UIListSubList.obj
+GAP ?sNormalDisplayLength@RndDrawable@@1MA  # target defines it in system/rndobj/Draw.obj
+GAP ?sNumHam2Nodes@FilterVersion@@1HA  # target defines it in system/hamobj/FilterVersion.obj
+GAP ?sPathEval@DirLoader@@0P6A_NPBD@ZA  # target defines it in system/obj/DirLoader.obj
+GAP ?sPostProcPanelCount@Rnd@@2HA  # target defines it in system/rndobj/Rnd.obj
+GAP ?sRequireFixedLength@UILabel@@2_NA  # target defines it in system/ui/UILabel.obj
+GAP ?sResourceCacheHelper@FileCache@@1PAVFileCacheHelper@@A  # target defines it in system/os/FileCache.obj
+GAP ?sShaders@RndShader@@1PAPAV1@A  # target defines it in system/rndobj/Shader.obj
+GAP ?sShadowPlane@RndTransformable@@0VPlane@@A  # target defines it in system/rndobj/Trans.obj
+GAP ?sSharedResources@NgSpotlightDrawer@@1PAVSpotlightResources@1@A  # target defines it in system/world/SpotlightDrawer_NG.obj
+GAP ?sShowing@PhysicsVolume@@2_NA  # target defines it in system/world/PhysicsVolume.obj
+GAP ?sSkeletonClips@HamCharacter@@1PAPAVCharClip@@A  # target defines it in system/hamobj/HamCharacter.obj
+GAP ?sSlideSmoothAmount@HamNavList@@0MA  # target defines it in system/hamobj/HamNavList.obj
+GAP ?sSlideTrendAmount@HamNavList@@0MA  # target defines it in system/hamobj/HamNavList.obj
+GAP ?sUnlockAll@MetaPanel@@2_NA  # target defines it in lazer/meta_ham/MetaPanel.obj
+GAP ?sVertexDecl@DxMesh@@1PAUD3DVertexDeclaration@@A  # target defines it in system/rnddx9/Mesh.obj
+GAP ?sVertexDecl@DxMultiMesh@@0PAUD3DVertexDeclaration@@A  # target defines it in system/rnddx9/MultiMesh.obj
+GAP ?sWavCacheHelper@FileCache@@1PAVFileCacheHelper@@A  # target defines it in system/os/FileCache.obj
+GAP ?sWaypoints@Waypoint@@0PAV?$list@PAVWaypoint@@V?$StlNodeAlloc@PAVWaypoint@@@stlpmtx_std@@@stlpmtx_std@@A  # target defines it in system/char/Waypoint.obj
+GAP ?sXShowCallback@PlatformMgr@@2P6A_NAAK@ZA  # target defines it in system/os/PlatformMgr_Xbox.obj
+GAP ?sampleProcessThread@ExternalMic@@QAAKXZ  # target defines it in system/synth_xbox/ExternalMic.obj
+GAP ?smDumpLeaves@GlitchPoker@@2_NA  # target defines it in system/utl/GlitchFinder.obj
+GAP ?smLastDumpTime@GlitchPoker@@2MA  # target defines it in system/utl/GlitchFinder.obj
+GAP ?smThreshold@GlitchPoker@@2MA  # target defines it in system/utl/GlitchFinder.obj
+GAP ?smTotalLeafTime@GlitchPoker@@2MA  # target defines it in system/utl/GlitchFinder.obj
+GAP NuiCameraAdjustTilt  # target defines it in xdk/nuiapi/nuidetroit.obj
+GAP NuiCameraElevationGetAngle  # target defines it in xdk/nuiapi/nuidetroit.obj
+GAP NuiCameraElevationSetAngle  # target defines it in xdk/nuiapi/nuidetroit.obj
+GAP ReadSingleJoypad  # target defines it in system/os/Joypad_Xbox.obj
+GAP XGSurfaceSize  # target defines it in system/rnddx9/Tex.obj
+GAP __RTDynamicCast  # target defines it in xdk/LIBCMT/rtti.obj
+GAP __RTtypeid  # target defines it in xdk/LIBCMT/rtti.obj
+GAP _vsnprintf_helper  # target defines it in xdk/LIBCMT/vsnprnc.obj
+GAP _vswprintf_helper  # target defines it in xdk/LIBCMT/vswprnc.obj
+GAP lbl_82F0BE80  # target defines it in system/gesture/SkeletonUpdate.obj
+GAP lbl_8316C860  # target defines it in system/synth_xbox/Mic.obj
+GAP lbl_8316C864  # target defines it in system/synth_xbox/Mic.obj
+
+EXT ??0CXAPOParametersBase@@QAA@PBUXAPO_REGISTRATION_PROPERTIES@@PAEIH@Z
+EXT ??0ID3DXInclude@@QAA@XZ
+EXT ??0LDARegressor@HeadOrientation@@QAA@XZ
+EXT ??0_XMMATRIX@@QAA@XZ
+EXT ??1CXAPOParametersBase@@UAA@XZ
+EXT ??1LDARegressor@HeadOrientation@@QAA@XZ
+EXT ??1PeakDetector@Synapse@DSP@@QAA@XZ
+EXT ??1PitchCorrectedVoice@Synapse@DSP@@QAA@XZ
+EXT ??_7type_info@@6B@
+EXT ??_L@YAXPAXIHP6AX0@Z1@Z
+EXT ??_M@YAXPAXIHP6AX0@Z@Z
+EXT ?AddRef@CXAPOParametersBase@@UAAKXZ
+EXT ?BeginProcess@CXAPOParametersBase@@QAAPAEXZ
+EXT ?CalcInputFrames@CXAPOBase@@UAAII@Z
+EXT ?CalcOutputFrames@CXAPOBase@@UAAII@Z
+EXT ?CreateClient@CXLrcImpl@@YAPAVCXLrcClient@@PAI@Z
+EXT ?D3DXSetDXT3DXT5@@YAXH@Z
+EXT ?EndProcess@CXAPOParametersBase@@QAAXXZ
+EXT ?GetParameters@CXAPOParametersBase@@UAAXPAXI@Z
+EXT ?GetRegistrationProperties@CXAPOBase@@UAAJPAPAUXAPO_REGISTRATION_PROPERTIES@@@Z
+EXT ?Highlight@WorldReflection@@UAAXXZ
+EXT ?Initialize@CXAPOBase@@UAAJPBXI@Z
+EXT ?IsInputFormatSupported@CXAPOBase@@UAAJPBUtWAVEFORMATEX@@0PAPAU2@@Z
+EXT ?IsOutputFormatSupported@CXAPOBase@@UAAJPBUtWAVEFORMATEX@@0PAPAU2@@Z
+EXT ?LoadKNN@LDARegressor@HeadOrientation@@QAAJPBD@Z
+EXT ?LoadLDA@LDARegressor@HeadOrientation@@QAAJPBD@Z
+EXT ?LockForProcess@CXAPOBase@@UAAJIPBUXAPO_LOCKFORPROCESS_BUFFER_PARAMETERS@@I0@Z
+EXT ?NuiTransformMatrixLevel@@YA?AU_XMMATRIX@@U__vector4@@@Z
+EXT ?OnSetParameters@?$CSampleXAPOBase@VBitCrushEffect@@UParams@1@@ATG@@MAAXPBXI@Z
+EXT ?OnSetParameters@?$CSampleXAPOBase@VCompressionEffect@@UParams@1@@ATG@@MAAXPBXI@Z
+EXT ?OnSetParameters@?$CSampleXAPOBase@VDelayEffect@@UParams@1@@ATG@@MAAXPBXI@Z
+EXT ?OnSetParameters@?$CSampleXAPOBase@VDistortionEffect@@UParams@1@@ATG@@MAAXPBXI@Z
+EXT ?OnSetParameters@?$CSampleXAPOBase@VEQEffect@@UParams@1@@ATG@@MAAXPBXI@Z
+EXT ?OnSetParameters@?$CSampleXAPOBase@VEnvelopeGenerator@@UEnvelopeGeneratorParams@@@ATG@@MAAXPBXI@Z
+EXT ?OnSetParameters@?$CSampleXAPOBase@VFlangerEffect@@UParams@1@@ATG@@MAAXPBXI@Z
+EXT ?OnSetParameters@?$CSampleXAPOBase@VHeadsetPlaybackEffect@@UHeadsetPlaybackEffectParams@@@ATG@@MAAXPBXI@Z
+EXT ?OnSetParameters@?$CSampleXAPOBase@VHeadsetXferEffect@@UHeadsetXferEffectParams@@@ATG@@MAAXPBXI@Z
+EXT ?OnSetParameters@?$CSampleXAPOBase@VMeterEffect@@UMeterEffectParams@@@ATG@@MAAXPBXI@Z
+EXT ?OnSetParameters@?$CSampleXAPOBase@VPitchShiftEffect@@UPitchShiftEffectParams@@@ATG@@MAAXPBXI@Z
+EXT ?OnSetParameters@?$CSampleXAPOBase@VSynapseAPO@DSP@@USynapseAPOParams@2@@ATG@@MAAXPBXI@Z
+EXT ?OnSetParameters@?$CSampleXAPOBase@VWahEffect@@UParams@1@@ATG@@MAAXPBXI@Z
+EXT ?Reset@CXAPOBase@@UAAXXZ
+EXT ?SetParameters@CXAPOParametersBase@@UAAXPBXI@Z
+EXT ?SpewInit@@YAXXZ
+EXT ?SpewTerminate@@YAXXZ
+EXT ?SyncProperty@WorldCrowd3DCharHandle@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z
+EXT ?UnlockForProcess@CXAPOBase@@UAAXXZ
+EXT ?ValidateFormatDefault@CXAPOBase@@MAAJPAUtWAVEFORMATEX@@H@Z
+EXT ?XJSONBeginArray@@YAJPAUHJSONWRITER__@@@Z
+EXT ?XJSONCloseWriter@@YAJPAUHJSONWRITER__@@@Z
+EXT ?XJSONCreateWriter@@YAPAUHJSONWRITER__@@XZ
+EXT ?XJSONEndArray@@YAJPAUHJSONWRITER__@@@Z
+EXT ?XJSONGetTokenValue@@YAJPAUHJSONREADER__@@PA_WK@Z
+EXT ?XJSONReadToken@@YAJPAUHJSONREADER__@@PAW4_JSONTokenType@@PAK2@Z
+EXT ?XJSONWriteNullValue@@YAJPAUHJSONWRITER__@@@Z
+EXT ?XJSONWriteNumberValue@@YAJPAUHJSONWRITER__@@N@Z
+EXT ?XJSONWriteStringValue@@YAJPAUHJSONWRITER__@@PBDK@Z
+EXT ?XbcDoWork@@YAJXZ
+EXT ?XbcInitialize@@YAJP6AXJPAU_XBC_EVENT_PARAMS@@PAX@Z1@Z
+EXT ?XbcSendJSON@@YAJW4_XBC_DELIVERY_METHOD@@KPAUHJSONWRITER__@@PAX@Z
+EXT ?__pop_heap_aux@stlpmtx_std@@YAXPAUMemDiffEntry@@0HU?$less@UMemDiffEntry@@@1@@Z
+EXT ?__type_info_root_node@@3U__type_info_node@@A
+EXT ?_open@@YAHPBDHH@Z
+EXT ?gHeapManager@@3V_HeapManager@@A
+EXT ?getMemory@_HeapManager@@QAAPAXHH@Z
+EXT ?lbl_82066608@@3PBDB
+EXT ?lbl_82F0E8A4@@3HA
+EXT ?lbl_82F5E180@@3JC
+EXT ?lbl_830A4100@@3PAVDataArray@@A
+EXT ?lbl_830A4104@@3HA
+EXT ?merged_ObjPtrListPopBack@@YAXPAX@Z
+EXT ?name@type_info@@QBAPBDPAU__type_info_node@@@Z
+EXT ?pairNode_vtable@@3PAXA
+EXT BinkClose
+EXT BinkCloseTrack
+EXT BinkDoFrame
+EXT BinkDoFrameAsync
+EXT BinkDoFrameAsyncWait
+EXT BinkGetError
+EXT BinkGetFrameBuffersInfo
+EXT BinkGetSummary
+EXT BinkGetTrackData
+EXT BinkGoto
+EXT BinkNextFrame
+EXT BinkOpen
+EXT BinkOpenTrack
+EXT BinkOpenXAudio2
+EXT BinkPause
+EXT BinkRegisterFrameBuffers
+EXT BinkSetIO
+EXT BinkSetMemory
+EXT BinkSetSoundOnOff
+EXT BinkSetSoundSystem
+EXT BinkSetSoundTrack
+EXT BinkSetVideoOnOff
+EXT BinkSetVolume
+EXT BinkShouldSkip
+EXT BinkStartAsyncThread
+EXT BinkWait
+EXT CXLrcClient_CreateTransport
+EXT CloseHandle
+EXT CompareFileTime
+EXT CreateAudioReverb
+EXT CreateDirectoryA
+EXT CreateEventA
+EXT CreateFileA
+EXT CreateSemaphoreA
+EXT CreateThread
+EXT D3DBaseTexture_GetLevelCount
+EXT D3DCubeTexture_LockRect
+EXT D3DCubeTexture_UnlockRect
+EXT D3DDevice_BeginTiling
+EXT D3DDevice_BlockOnFence
+EXT D3DDevice_BlockUntilIdle
+EXT D3DDevice_Clear
+EXT D3DDevice_CreateIndexBuffer
+EXT D3DDevice_CreatePerfCounters
+EXT D3DDevice_CreatePixelShader
+EXT D3DDevice_CreateQueryTiled
+EXT D3DDevice_CreateSurface
+EXT D3DDevice_CreateTexture
+EXT D3DDevice_CreateVertexBuffer
+EXT D3DDevice_CreateVertexDeclaration
+EXT D3DDevice_CreateVertexShader
+EXT D3DDevice_DrawIndexedVertices
+EXT D3DDevice_DrawVerticesUP
+EXT D3DDevice_EnablePerfCounters
+EXT D3DDevice_EndTiling
+EXT D3DDevice_GetDepthStencilSurface
+EXT D3DDevice_GetRenderTarget
+EXT D3DDevice_InsertFence
+EXT D3DDevice_QueryPerfCounters
+EXT D3DDevice_QuerySwapStatus
+EXT D3DDevice_Release
+EXT D3DDevice_Reset
+EXT D3DDevice_Resolve
+EXT D3DDevice_Resume
+EXT D3DDevice_SetClipPlane
+EXT D3DDevice_SetDepthStencilSurface
+EXT D3DDevice_SetFVF
+EXT D3DDevice_SetGammaRamp
+EXT D3DDevice_SetIndices
+EXT D3DDevice_SetPerfCounterEvents
+EXT D3DDevice_SetPixelShader
+EXT D3DDevice_SetPredication
+EXT D3DDevice_SetRenderState_AlphaBlendEnable
+EXT D3DDevice_SetRenderState_AlphaFunc
+EXT D3DDevice_SetRenderState_AlphaRef
+EXT D3DDevice_SetRenderState_AlphaTestEnable
+EXT D3DDevice_SetRenderState_BlendOp
+EXT D3DDevice_SetRenderState_BlendOpAlpha
+EXT D3DDevice_SetRenderState_ClipPlaneEnable
+EXT D3DDevice_SetRenderState_ColorWriteEnable
+EXT D3DDevice_SetRenderState_CullMode
+EXT D3DDevice_SetRenderState_DestBlend
+EXT D3DDevice_SetRenderState_DestBlendAlpha
+EXT D3DDevice_SetRenderState_FillMode
+EXT D3DDevice_SetRenderState_HalfPixelOffset
+EXT D3DDevice_SetRenderState_PointSize
+EXT D3DDevice_SetRenderState_PointSizeMax
+EXT D3DDevice_SetRenderState_PresentImmediateThreshold
+EXT D3DDevice_SetRenderState_PresentInterval
+EXT D3DDevice_SetRenderState_SeparateAlphaBlendEnable
+EXT D3DDevice_SetRenderState_SrcBlend
+EXT D3DDevice_SetRenderState_SrcBlendAlpha
+EXT D3DDevice_SetRenderState_StencilEnable
+EXT D3DDevice_SetRenderState_StencilFail
+EXT D3DDevice_SetRenderState_StencilFunc
+EXT D3DDevice_SetRenderState_StencilPass
+EXT D3DDevice_SetRenderState_StencilRef
+EXT D3DDevice_SetRenderState_StencilZFail
+EXT D3DDevice_SetRenderState_ViewportEnable
+EXT D3DDevice_SetRenderState_ZEnable
+EXT D3DDevice_SetRenderState_ZFunc
+EXT D3DDevice_SetRenderState_ZWriteEnable
+EXT D3DDevice_SetRenderTarget_External
+EXT D3DDevice_SetSamplerState_MagFilter
+EXT D3DDevice_SetSamplerState_MinFilter
+EXT D3DDevice_SetShaderGPRAllocation
+EXT D3DDevice_SetStreamSource
+EXT D3DDevice_SetSwapMode
+EXT D3DDevice_SetTexture
+EXT D3DDevice_SetVertexDeclaration
+EXT D3DDevice_SetVertexShader
+EXT D3DDevice_SetVertexShaderConstantFN
+EXT D3DDevice_SetViewport
+EXT D3DDevice_Suspend
+EXT D3DDevice_Swap
+EXT D3DDevice_SynchronizeToPresentationInterval
+EXT D3DIndexBuffer_GetDesc
+EXT D3DIndexBuffer_Lock
+EXT D3DIndexBuffer_Unlock
+EXT D3DLineTexture_LockRect
+EXT D3DLineTexture_UnlockRect
+EXT D3DPerfCounters_GetValues
+EXT D3DPixelShader_GetFunction
+EXT D3DQuery_GetData
+EXT D3DQuery_Issue
+EXT D3DQuery_Release
+EXT D3DResource_AddRef
+EXT D3DResource_IsSet
+EXT D3DResource_Release
+EXT D3DSurface_GetDesc
+EXT D3DSurface_LockRect
+EXT D3DSurface_UnlockRect
+EXT D3DTexture_GetLevelDesc
+EXT D3DTexture_GetSurfaceLevel
+EXT D3DTexture_LockRect
+EXT D3DTexture_UnlockRect
+EXT D3DVertexBuffer_GetDesc
+EXT D3DVertexBuffer_Lock
+EXT D3DVertexBuffer_Unlock
+EXT D3DXCompileShaderExA
+EXT D3DXCreateBuffer
+EXT D3DXFilterTexture
+EXT DebugBreak
+EXT DeleteFileA
+EXT Direct3D_CreateDevice
+EXT Direct3D_GetDeviceCaps
+EXT DmCaptureStackBackTrace
+EXT DmGetSystemInfo
+EXT DmGetXboxName
+EXT DmIsDebuggerPresent
+EXT DmMapDevkitDrive
+EXT FileTimeToLocalFileTime
+EXT FileTimeToSystemTime
+EXT FindFirstFileA
+EXT FindNextFileA
+EXT GetCommandLineA
+EXT GetCurrentThreadId
+EXT GetDiskFreeSpaceExA
+EXT GetExitCodeThread
+EXT GetFileAttributesA
+EXT GetFileAttributesExA
+EXT GetFileSize
+EXT GetLastError
+EXT GetLocalTime
+EXT GetOverlappedResult
+EXT GetSystemTime
+EXT GetSystemTimeAsFileTime
+EXT GetTickCount
+EXT GetTimeZoneInformation
+EXT GlobalMemoryStatus
+EXT MultiByteToWideChar
+EXT NuiAudioCreate
+EXT NuiAudioRegisterCallbacks
+EXT NuiAudioRelease
+EXT NuiAudioUnregisterCallbacks
+EXT NuiCameraGetExposureRegionOfInterest
+EXT NuiCameraGetProperty
+EXT NuiCameraGetPropertyF
+EXT NuiCameraSetExposureRegionOfInterest
+EXT NuiCameraSetProperty
+EXT NuiFitnessGetCurrentFitnessData
+EXT NuiFitnessPauseTracking
+EXT NuiFitnessResumeTracking
+EXT NuiFitnessStartTracking
+EXT NuiFitnessStopTracking
+EXT NuiIdentityAbort
+EXT NuiIdentityEnroll
+EXT NuiIdentityGetEnrollmentInformation
+EXT NuiIdentityIdentify
+EXT NuiImageStreamGetNextFrame
+EXT NuiImageStreamOpen
+EXT NuiImageStreamReleaseFrame
+EXT NuiInitialize
+EXT NuiShutdown
+EXT NuiSkeletonGetNextFrame
+EXT NuiSkeletonSetTrackedSkeletons
+EXT NuiSkeletonTrackingDisable
+EXT NuiSkeletonTrackingEnable
+EXT NuiSpeechAddWordTransition
+EXT NuiSpeechCommitGrammar
+EXT NuiSpeechCreateGrammar
+EXT NuiSpeechCreateRule
+EXT NuiSpeechCreateState
+EXT NuiSpeechDestroyEvent
+EXT NuiSpeechDisable
+EXT NuiSpeechEmulateRecognition
+EXT NuiSpeechEnable
+EXT NuiSpeechGetEvents
+EXT NuiSpeechLoadGrammar
+EXT NuiSpeechSetEventInterest
+EXT NuiSpeechSetGrammarState
+EXT NuiSpeechSetRuleState
+EXT NuiSpeechStartRecognition
+EXT NuiSpeechStopRecognition
+EXT NuiSpeechUnloadGrammar
+EXT NuiWaveGetGestureOwnerProgress
+EXT NuiWaveSetEnabled
+EXT OpenThread
+EXT OutputDebugStringA
+EXT PIXGetCaptureState
+EXT RADTimerRead
+EXT ReadFile
+EXT ReleaseSemaphore
+EXT RemoveDirectoryA
+EXT ResetEvent
+EXT ResumeThread
+EXT RtlAllocateHeap
+EXT RtlEnterCriticalSection
+EXT RtlFreeHeap
+EXT RtlInitializeCriticalSection
+EXT RtlLeaveCriticalSection
+EXT RtlSizeHeap
+EXT RtlTryEnterCriticalSection
+EXT SetEndOfFile
+EXT SetEvent
+EXT SetFilePointer
+EXT SetLastError
+EXT SetThreadPriority
+EXT SetUnhandledExceptionFilter
+EXT Sleep
+EXT WSACleanup
+EXT WSACreateEvent
+EXT WSAGetLastError
+EXT WSASetLastError
+EXT WSAStartup
+EXT WaitForSingleObject
+EXT WideCharToMultiByte
+EXT WriteFile
+EXT XAudio2Create
+EXT XAudioGetSpeakerConfig
+EXT XAudioOverrideSpeakerConfig
+EXT XBackgroundDownloadSetMode
+EXT XCancelOverlapped
+EXT XContentCalculateSize
+EXT XContentClose
+EXT XContentCreateCrossTitleEnumerator
+EXT XContentCreateEnumerator
+EXT XContentCreateEx
+EXT XContentCrossTitleCreate
+EXT XContentCrossTitleDelete
+EXT XContentDelete
+EXT XContentFlush
+EXT XContentGetCreator
+EXT XContentGetDeviceData
+EXT XContentGetDeviceState
+EXT XEnableScreenSaver
+EXT XEnumerate
+EXT XEnumerateCrossTitle
+EXT XGEstimateIdealShaderCost
+EXT XGGetTextureDesc
+EXT XGGetTextureLayout
+EXT XGOffsetResourceAddress
+EXT XGRegisterPixelShader
+EXT XGRegisterVertexShader
+EXT XGSetTextureHeader
+EXT XGTileTextureLevel
+EXT XGetGameRegion
+EXT XGetLocale
+EXT XGetOverlappedExtendedError
+EXT XGetOverlappedResult
+EXT XGetVideoMode
+EXT XInputGetCapabilities
+EXT XInputGetKeystroke
+EXT XLaunchNewImage
+EXT XMPOverrideBackgroundMusic
+EXT XMPRestoreBackgroundMusic
+EXT XMScalarSinCos
+EXT XMarketplaceCreateOfferEnumerator
+EXT XMarketplaceCreateOfferEnumeratorByOffering
+EXT XMemAllocDefault
+EXT XMemCpy
+EXT XMemFreeDefault
+EXT XMemSet
+EXT XMemSizeDefault
+EXT XMicGetGain
+EXT XMicGetStatus
+EXT XMicRequestData
+EXT XMicSetGain
+EXT XNetConnect
+EXT XNetDnsLookup
+EXT XNetDnsRelease
+EXT XNetGetConnectStatus
+EXT XNetGetEthernetLinkStatus
+EXT XNetGetTitleXnAddr
+EXT XNetInAddrToString
+EXT XNetRandom
+EXT XNetServerToInAddr
+EXT XNetStartup
+EXT XNetUnregisterInAddr
+EXT XNetXnAddrToMachineId
+EXT XNotifyCreateListener
+EXT XNotifyGetNext
+EXT XNotifyPositionUI
+EXT XNuiDelayUI
+EXT XPartyGetUserList
+EXT XPartySendGameInvites
+EXT XPhysicalAlloc
+EXT XPhysicalFree
+EXT XPhysicalSize
+EXT XSessionCreate
+EXT XSessionDelete
+EXT XSessionEnd
+EXT XSessionJoinLocal
+EXT XSessionLeaveLocal
+EXT XSessionStart
+EXT XSessionWriteStats
+EXT XSetThreadProcessor
+EXT XShowDeviceSelectorUI
+EXT XShowDirtyDiscErrorUI
+EXT XShowFitnessBodyProfileUI
+EXT XShowFriendsUI
+EXT XShowGamerCardUI
+EXT XShowKeyboardUI
+EXT XShowMarketplaceDownloadItemsUI
+EXT XShowMarketplaceUI
+EXT XShowNuiDeviceSelectorUI
+EXT XShowNuiDirtyDiscErrorUI
+EXT XShowNuiFitnessBodyProfileUI
+EXT XShowNuiFriendsUI
+EXT XShowNuiGamerCardUI
+EXT XShowNuiGuideUI
+EXT XShowNuiMarketplaceUI
+EXT XShowNuiPartyUI
+EXT XShowNuiSigninUI
+EXT XShowNuiSocialNetworkImagePostUI
+EXT XShowNuiSocialNetworkLinkPostUI
+EXT XShowNuiTroubleshooterUI
+EXT XShowPartyUI
+EXT XShowSigninUI
+EXT XShowSocialNetworkImagePostUI
+EXT XShowSocialNetworkLinkPostUI
+EXT XShowTokenRedemptionUI
+EXT XSocialGetCapabilities
+EXT XTLGetLanguage
+EXT XTitleServerCreateEnumerator
+EXT XUserAreUsersFriends
+EXT XUserAwardAvatarAssets
+EXT XUserAwardGamerPicture
+EXT XUserCheckPrivilege
+EXT XUserGetName
+EXT XUserGetSigninInfo
+EXT XUserGetSigninState
+EXT XUserGetXUID
+EXT XUserSetContext
+EXT XUserSetPropertyEx
+EXT XUserWriteAchievements
+EXT XamInputSendStayAliveRequest
+EXT _CxxThrowException
+EXT _RtlCheckStack12
+EXT __CxxFrameHandler
+EXT __WSAFDIsSet
+EXT __doserrno
+EXT __iob_func
+EXT __pioinfo
+EXT __restfpr_14
+EXT __restfpr_15
+EXT __restfpr_16
+EXT __restfpr_17
+EXT __restfpr_18
+EXT __restfpr_19
+EXT __restfpr_20
+EXT __restfpr_21
+EXT __restfpr_22
+EXT __restfpr_23
+EXT __restfpr_24
+EXT __restfpr_25
+EXT __restfpr_26
+EXT __restfpr_27
+EXT __restfpr_28
+EXT __restgprlr_14
+EXT __restgprlr_15
+EXT __restgprlr_16
+EXT __restgprlr_17
+EXT __restgprlr_18
+EXT __restgprlr_19
+EXT __restgprlr_20
+EXT __restgprlr_21
+EXT __restgprlr_22
+EXT __restgprlr_23
+EXT __restgprlr_24
+EXT __restgprlr_25
+EXT __restgprlr_26
+EXT __restgprlr_27
+EXT __restgprlr_28
+EXT __restgprlr_29
+EXT __restvmx_120
+EXT __restvmx_124
+EXT __savefpr_14
+EXT __savefpr_15
+EXT __savefpr_16
+EXT __savefpr_17
+EXT __savefpr_18
+EXT __savefpr_19
+EXT __savefpr_20
+EXT __savefpr_21
+EXT __savefpr_22
+EXT __savefpr_23
+EXT __savefpr_24
+EXT __savefpr_25
+EXT __savefpr_26
+EXT __savefpr_27
+EXT __savefpr_28
+EXT __savegprlr_14
+EXT __savegprlr_15
+EXT __savegprlr_16
+EXT __savegprlr_17
+EXT __savegprlr_18
+EXT __savegprlr_19
+EXT __savegprlr_20
+EXT __savegprlr_21
+EXT __savegprlr_22
+EXT __savegprlr_23
+EXT __savegprlr_24
+EXT __savegprlr_25
+EXT __savegprlr_26
+EXT __savegprlr_27
+EXT __savegprlr_28
+EXT __savegprlr_29
+EXT __savevmx_120
+EXT __savevmx_124
+EXT __security_check_cookie
+EXT __security_cookie
+EXT __u64tod
+EXT __vmx_00000000000000000000000000000000
+EXT __vmx_bf8000003f800000bf8000003f800000
+EXT _beginthreadex
+EXT _blkmov
+EXT _close
+EXT _errno
+EXT _fltused
+EXT _fstat64
+EXT _gmtime64
+EXT _hypot
+EXT _invalid_parameter_noinfo
+EXT _lseek
+EXT _lseeki64
+EXT _nhandle
+EXT _output_s_l
+EXT _purecall
+EXT _snprintf
+EXT _stat64
+EXT _strlwr
+EXT _strtoi64
+EXT _strtoui64
+EXT _time64
+EXT _woutput_s_l
+EXT _write
+EXT _xhv_voicechat_mode
+EXT accept
+EXT acos
+EXT asin
+EXT atan
+EXT atan2
+EXT atexit
+EXT atof
+EXT atoi
+EXT bind
+EXT calloc
+EXT ceil
+EXT close
+EXT closesocket
+EXT connect
+EXT cos
+EXT cosh
+EXT createFilter
+EXT exit
+EXT exp
+EXT fclose
+EXT fflush
+EXT fgets
+EXT fileno
+EXT floor
+EXT fmod
+EXT fopen
+EXT fprintf
+EXT fputc
+EXT fputs
+EXT fread
+EXT free
+EXT frexp
+EXT fseek
+EXT fwrite
+EXT getenv
+EXT getpeername
+EXT getsockname
+EXT getsockopt
+EXT inet_addr
+EXT ioctlsocket
+EXT isalnum
+EXT isalpha
+EXT isdigit
+EXT isgraph
+EXT islower
+EXT isprint
+EXT isspace
+EXT isupper
+EXT isxdigit
+EXT ldexp
+EXT listen
+EXT log
+EXT log10
+EXT malloc
+EXT mbstowcs_s
+EXT memchr
+EXT memcpy
+EXT memmove
+EXT memset
+EXT modf
+EXT open
+EXT pow
+EXT printf
+EXT qsort
+EXT rand
+EXT read
+EXT realloc
+EXT recv
+EXT recvfrom
+EXT select
+EXT send
+EXT sendto
+EXT setsockopt
+EXT shutdown
+EXT sin
+EXT sinh
+EXT socket
+EXT sprintf
+EXT sprintf_s
+EXT sscanf
+EXT strchr
+EXT strcpy_s
+EXT strdup
+EXT strerror
+EXT strncat
+EXT strncmp
+EXT strncpy
+EXT strrchr
+EXT strstr
+EXT strtok
+EXT strtol
+EXT strtoul
+EXT swscanf
+EXT tan
+EXT tolower
+EXT toupper
+EXT vprintf
+EXT vsprintf
+EXT wcschr
+EXT wcscpy
+EXT wcslen
+EXT wcsncpy
+EXT wcstombs
