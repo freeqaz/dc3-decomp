@@ -14,7 +14,7 @@
 # entry points and middleware the decomp calls but does not contain. The
 # classification is for the reader; --check ignores it and compares names only.
 #
-# counts: 678 total = 28 GAP + 650 EXT
+# counts: 693 total = 25 GAP + 668 EXT
 
 GAP ?BeginDrawing@DxRnd@@UAAXXZ  # target defines it in system/rnddx9/Rnd_Xbox.obj
 GAP ?DrawFacesInRange@DxMesh@@UAAXHH@Z  # target defines it in system/rnddx9/Mesh.obj
@@ -28,22 +28,19 @@ GAP ?FindMITargetTypeInstance@@YAPBU_s_RTTIBaseClassDescriptor@@PAXPBU_s_RTTICom
 GAP ?FindSITargetTypeInstance@@YAPBU_s_RTTIBaseClassDescriptor@@PBU_s_RTTICompleteObjectLocator@@PAUTypeDescriptor@@1@Z  # target defines it in xdk/LIBCMT/rtti.obj
 GAP ?FindVITargetTypeInstance@@YAPBU_s_RTTIBaseClassDescriptor@@PAXPBU_s_RTTICompleteObjectLocator@@PAUTypeDescriptor@@H2@Z  # target defines it in xdk/LIBCMT/rtti.obj
 GAP ?Init@MicManagerXbox@@QAAXXZ  # target defines it in system/synth_xbox/Mic.obj
-GAP ?InitXinputJoypadThreadData@?A0x439b694a@@YAXXZ  # target defines it in system/os/Joypad_Xbox.obj
+GAP ?NuipCameraAdjustTilt@@YAKIMMMPAU_NUI_TILT_OBJECTS@@PAU_XOVERLAPPED@@@Z  # target defines it in xdk/nuiapi/nuidetroit.obj
+GAP ?NuipCameraElevationSetAngle@@YAJJ@Z  # target defines it in xdk/nuiapi/nuidetroit.obj
+GAP ?NuipDetroitGetXConfigSettings@@YAXXZ  # target defines it in xdk/nuiapi/nuidetroit.obj
+GAP ?NuipDetroitRuntimeState@@3UNUIP_DETROIT_RUNTIME_STATE@@A  # target defines it in xdk/nuiapi/nuidetroit.obj
 GAP ?Poll@MicXbox@@QAAXXZ  # target defines it in system/synth_xbox/Mic.obj
 GAP ?Poll@PlatformMgr@@QAAXXZ  # target defines it in system/os/PlatformMgr_Xbox.obj
 GAP ?ReleaseAutoRelease@DxRnd@@QAAXXZ  # target defines it in system/rnddx9/Rnd_Xbox.obj
-GAP ?RunXinputJoypadLoop@?A0x439b694a@@YAXXZ  # target defines it in system/os/Joypad_Xbox.obj
-GAP ?SendRawData@@YAXHEEEEEEE@Z  # target defines it in system/os/Joypad_Xbox.obj
 GAP ?SyncBitmap@DxTex@@MAAXXZ  # target defines it in system/rnddx9/Tex.obj
 GAP ?UpdateMix@Voice@@AAAXXZ  # target defines it in system/synth_xbox/Voice.obj
 GAP ?UpdateVoiceMatrices@FxSend360@@AAAXXZ  # target defines it in system/synth_xbox/FxSend.obj
 GAP ?fft_altivec@@YAHPAM0KJ0@Z  # target defines it in system/synth_xbox/FFT.obj
 GAP ?fft_real_forward_altivec@@YAHPAMJ0@Z  # target defines it in system/synth_xbox/FFT.obj
 GAP ?fft_recursive@@YAHPAMKJ0@Z  # target defines it in system/synth_xbox/FFT.obj
-GAP NuiCameraAdjustTilt  # target defines it in xdk/nuiapi/nuidetroit.obj
-GAP NuiCameraElevationGetAngle  # target defines it in xdk/nuiapi/nuidetroit.obj
-GAP NuiCameraElevationSetAngle  # target defines it in xdk/nuiapi/nuidetroit.obj
-GAP ReadSingleJoypad  # target defines it in system/os/Joypad_Xbox.obj
 
 EXT ??0CXAPOParametersBase@@QAA@PBUXAPO_REGISTRATION_PROPERTIES@@PAEIH@Z
 EXT ??0ID3DXInclude@@QAA@XZ
@@ -73,6 +70,7 @@ EXT ?LoadKNN@LDARegressor@HeadOrientation@@QAAJPBD@Z
 EXT ?LoadLDA@LDARegressor@HeadOrientation@@QAAJPBD@Z
 EXT ?LockForProcess@CXAPOBase@@UAAJIPBUXAPO_LOCKFORPROCESS_BUFFER_PARAMETERS@@I0@Z
 EXT ?NuiTransformMatrixLevel@@YA?AU_XMMATRIX@@U__vector4@@@Z
+EXT ?NuipRuntimeState@@3UNUIP_RUNTIME_STATE@@A
 EXT ?Reset@CXAPOBase@@UAAXXZ
 EXT ?SetParameters@CXAPOParametersBase@@UAAXPBXI@Z
 EXT ?SpewInit@@YAXXZ
@@ -397,8 +395,23 @@ EXT XGetLocale
 EXT XGetOverlappedExtendedError
 EXT XGetOverlappedResult
 EXT XGetVideoMode
+EXT XINPUTID_0F_CONTROLLER
+EXT XINPUTID_19_CONTROLLER
+EXT XINPUTID_OUT_UNSPECIFIED_DWORD_0
+EXT XINPUTID_OUT_UNSPECIFIED_DWORD_1
+EXT XINPUTID_UNSPECIFIED_DWORD_0
+EXT XINPUTID_UNSPECIFIED_DWORD_1
+EXT XINPUTID_UNSPECIFIED_DWORD_2
+EXT XINPUTID_UNSPECIFIED_DWORD_3
+EXT XInput2BeginUpdate
+EXT XInput2EndUpdate
+EXT XInput2GetDWord
+EXT XInput2GetDeviceId
+EXT XInput2Sample
+EXT XInput2SetDWord
 EXT XInputGetCapabilities
 EXT XInputGetKeystroke
+EXT XInputGetState
 EXT XLaunchNewImage
 EXT XMPOverrideBackgroundMusic
 EXT XMPRestoreBackgroundMusic
@@ -489,6 +502,8 @@ EXT XUserSetContext
 EXT XUserSetPropertyEx
 EXT XUserWriteAchievements
 EXT XamInputSendStayAliveRequest
+EXT XamNuiCameraElevationGetAngle
+EXT XexCheckExecutablePrivilege
 EXT _CxxThrowException
 EXT _RtlCheckStack12
 EXT __C_specific_handler

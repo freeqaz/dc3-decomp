@@ -24120,7 +24120,7 @@
       "scratch": {
         "platform": "xbox360",
         "compiler": "msvc_ppc_16.00.11886.00",
-        "c_flags": "/nologo /wd4355 /wd4164 /c /GR /O1 /Oi /EHsc /TP",
+        "c_flags": "/nologo /wd4355 /wd4164 /c /GR /O1 /Oi /EHsc /TP /O2",
         "ctx_path": "build/373307D9/src/xdk/nuiapi/nuidetroit.ctx",
         "build_ctx": true
       },

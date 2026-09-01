@@ -704,12 +704,16 @@
             "system/synth/filterdesign.cpp": "Matching",
             "system/synth/tomcrypt/aes.c": {
                 "status": "Matching",
-                "extra_cflags": ["/TP"]
+                "extra_cflags": [
+                    "/TP"
+                ]
             },
             "system/synth/tomcrypt/crypt.c": "Matching",
             "system/synth/tomcrypt/ctr.c": {
                 "status": "Matching",
-                "extra_cflags": ["/TP"]
+                "extra_cflags": [
+                    "/TP"
+                ]
             },
             "system/synth/tomcrypt/TomCryptLicense.cpp": "Matching",
             "system/synth_xbox/Biquad.cpp": "Matching",
@@ -901,7 +905,9 @@
         "objects": {
             "system/zlib/ZlibLicense.c": {
                 "status": "Matching",
-                "extra_cflags": ["/TP"]
+                "extra_cflags": [
+                    "/TP"
+                ]
             },
             "system/zlib/adler32.c": "Matching",
             "system/zlib/crc32.c": "Matching",
@@ -1390,7 +1396,12 @@
             "xdk/nuiapi/muscletracking.cpp": "MISSING",
             "xdk/nuiapi/neuralnet.cpp": "MISSING",
             "xdk/nuiapi/neuralnet_classifier.cpp": "MISSING",
-            "xdk/nuiapi/nuidetroit.cpp": "MISSING",
+            "xdk/nuiapi/nuidetroit.cpp": {
+                "status": "MISSING",
+                "extra_cflags": [
+                    "/O2"
+                ]
+            },
             "xdk/nuiapi/nuidiagnostics.cpp": "MISSING",
             "xdk/nuiapi/nuifitnesscommon.cpp": "MISSING",
             "xdk/nuiapi/nuifitnesslib.cpp": "MISSING",
