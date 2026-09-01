@@ -57,19 +57,31 @@ VICTIM = 'VERDICT = "cleared"\n'
 PROBE = ("import sys, victim\n"
          "sys.exit(0 if victim.VERDICT == 'cleared' else 1)\n")
 
-#: Below this much of a second remaining, a cycle would straddle the boundary
-#: and the hazard would not reproduce.  Cycles measure ~0.05-0.2 s.
-_BUDGET = 0.55
+#: How many times to re-try arming the hazard before giving up.  Arming is
+#: cheap (one `py_compile`); only a pathologically loaded box should need more
+#: than one attempt.
+_ARM_ATTEMPTS = 8
 
 
 def _align_to_second() -> None:
     """Block until just after a whole-second tick.
 
-    The hazard needs the prime, the sabotage and the run to share one
-    `int(st_mtime)`.  Without this the test is a coin flip on where in the
-    second it happened to start.
+    The hazard needs the prime and the sabotage to share one `int(st_mtime)`.
+    Without this the test is a coin flip on where in the second it started.
     """
     time.sleep(1.0 - (time.time() % 1.0) + 0.01)
+
+
+def _pyc_source_mtime(pyc: Path) -> int:
+    """The source mtime CPython recorded in *pyc*: bytes 8..12, little-endian.
+
+    Read directly rather than inferred from a wall-clock budget.  An earlier
+    draft skipped when a cycle took longer than 0.55 s, which is a PROXY for
+    the condition -- and a proxy that turns "the machine is busy" into a silent
+    skip of the one control this file exists for.  This is the condition
+    itself, so the fixture can assert it is armed instead of hoping.
+    """
+    return int.from_bytes(pyc.read_bytes()[8:12], "little")
 
 
 def _write_fixture(tmp_path: Path) -> tuple[Path, Path]:
@@ -97,87 +109,83 @@ def _run(tmp_path: Path, probe: Path, *, protected: bool) -> int:
                           capture_output=True, text=True).returncode
 
 
-def _require_same_second(started: float, what: str) -> None:
-    spent = time.time() - started
-    if spent > _BUDGET:
-        pytest.skip(f"{what} took {spent:.2f}s of the 1s mtime window -- this "
-                    f"box is too slow/loaded to hold the hazard open, so the "
-                    f"result would be uninterpretable rather than green")
+def _arm(tmp_path: Path, victim: Path, probe: Path, clean: str) -> Path:
+    """Prime the cache, then write the sabotage in the SAME whole second.
+
+    Returns the `.pyc`, having ASSERTED that it is now stale-but-valid: same
+    recorded source mtime, same file size.  That is the hazard, stated as the
+    two fields CPython actually compares, so a cycle can never proceed while
+    silently un-armed.
+    """
+    sabotaged = clean.replace(CLEAN, SABOTAGED)
+    assert len(sabotaged.encode()) == len(clean.encode())
+    for attempt in range(_ARM_ATTEMPTS):
+        drop_bytecode(tmp_path)
+        _align_to_second()
+        victim.write_text(clean)
+        _prime(tmp_path, probe)
+        pyc, = (tmp_path / "__pycache__").glob("victim*.pyc")
+        recorded, size_before = _pyc_source_mtime(pyc), victim.stat().st_size
+        victim.write_text(sabotaged)
+        if (int(victim.stat().st_mtime) == recorded
+                and victim.stat().st_size == size_before):
+            return pyc
+    pytest.skip(f"could not arm the stale-.pyc hazard in {_ARM_ATTEMPTS} "
+                f"attempts: every prime+sabotage pair straddled a second "
+                f"boundary. This box is too loaded to hold a 1s window open; "
+                f"the result would be uninterpretable, NOT green.")
 
 
 # ── READ side ────────────────────────────────────────────────────────────────
 
 def test_a_length_preserving_same_second_sabotage_is_missed_without_the_sweep(
         tmp_path: Path) -> None:
-    """THE CONTROL.  The hazard must still be reproducible, or nothing below counts."""
+    """THE CONTROL.  The hazard must still be reproducible, or nothing below counts.
+
+    Three armed cycles.  `_arm` has already asserted the `.pyc` is stale-but-
+    valid, so a "caught" here is CPython's behaviour changing, not the fixture
+    drifting -- which is the difference between a control and a coin flip.
+    """
     victim, probe = _write_fixture(tmp_path)
-    original = victim.read_text()
+    original = VICTIM
     misses = 0
     for _ in range(3):
-        drop_bytecode(tmp_path)
-        # ORDER MATTERS: align FIRST, then write the clean source.  An earlier
-        # draft wrote it before aligning, so the prime recorded second S while
-        # the sabotage landed in S+1 -- the mtimes differed, the sabotage was
-        # caught every time, and the control failed because the fixture, not
-        # CPython, had stopped reproducing the hazard.
-        _align_to_second()
-        victim.write_text(original)
-        t0 = time.time()
-        _prime(tmp_path, probe)
-        victim.write_text(original.replace(CLEAN, SABOTAGED))
+        _arm(tmp_path, victim, probe, original)
         try:
             caught = _run(tmp_path, probe, protected=False) != 0
         finally:
             victim.write_text(original)
-        _require_same_second(t0, "a prime+sabotage+run cycle")
         misses += not caught
     assert misses == 3, (
         f"the unprotected arm CAUGHT the sabotage on {3 - misses}/3 cycles "
-        f"inside a single second.  Either CPython no longer validates a .pyc by "
-        f"(mtime, size), or this fixture no longer caches -- either way the "
-        f"protected tests below are now vacuous and this file needs REWRITING, "
-        f"not deleting.")
+        f"with the .pyc PROVEN stale-but-valid.  Either CPython no longer "
+        f"validates by (mtime, size), or the import no longer reads the cache "
+        f"-- either way the protected tests below are now vacuous and this "
+        f"file needs REWRITING, not deleting.")
 
 
 def test_dropping_the_bytecode_makes_the_same_sabotage_land(tmp_path: Path) -> None:
-    """The READ-side fix, on the identical fixture the control just missed on."""
+    """The READ-side fix, on the identical armed fixture the control just missed on."""
     victim, probe = _write_fixture(tmp_path)
-    original = victim.read_text()
+    original = VICTIM
     for _ in range(3):
-        drop_bytecode(tmp_path)
-        # ORDER MATTERS: align FIRST, then write the clean source.  An earlier
-        # draft wrote it before aligning, so the prime recorded second S while
-        # the sabotage landed in S+1 -- the mtimes differed, the sabotage was
-        # caught every time, and the control failed because the fixture, not
-        # CPython, had stopped reproducing the hazard.
-        _align_to_second()
-        victim.write_text(original)
-        t0 = time.time()
-        _prime(tmp_path, probe)
-        victim.write_text(original.replace(CLEAN, SABOTAGED))
+        _arm(tmp_path, victim, probe, original)
         assert drop_bytecode(tmp_path) >= 1, "nothing was swept; fixture is wrong"
         try:
             caught = _run(tmp_path, probe, protected=True) != 0
         finally:
             victim.write_text(original)
-        _require_same_second(t0, "a prime+sabotage+run cycle")
         assert caught, "the sabotage still did not land after dropping the .pyc"
 
 
 def test_run_python_does_the_sweep_for_you(tmp_path: Path) -> None:
-    """`run_python()` is the shape harnesses should call; it must be sufficient alone."""
+    """`run_python()` is the shape harnesses should call; it must suffice alone."""
     victim, probe = _write_fixture(tmp_path)
-    original = victim.read_text()
-    _align_to_second()
-    victim.write_text(original)
-    t0 = time.time()
-    _prime(tmp_path, probe)
-    victim.write_text(original.replace(CLEAN, SABOTAGED))
+    _arm(tmp_path, victim, probe, VICTIM)
     try:
         rc = run_python([str(probe)], root=tmp_path, cwd=tmp_path).returncode
     finally:
-        victim.write_text(original)
-    _require_same_second(t0, "a prime+sabotage+run_python cycle")
+        victim.write_text(VICTIM)
     assert rc != 0, "run_python() did not invalidate the stale bytecode"
 
 
@@ -196,29 +204,17 @@ def test_without_B_the_sabotage_run_poisons_the_RESTORE_check(tmp_path: Path) ->
     restore being broken.
     """
     victim, probe = _write_fixture(tmp_path)
-    original = victim.read_text()
 
-    def cycle(protected: bool) -> tuple[bool, bool, float]:
-        drop_bytecode(tmp_path)
-        # ORDER MATTERS: align FIRST, then write the clean source.  An earlier
-        # draft wrote it before aligning, so the prime recorded second S while
-        # the sabotage landed in S+1 -- the mtimes differed, the sabotage was
-        # caught every time, and the control failed because the fixture, not
-        # CPython, had stopped reproducing the hazard.
-        _align_to_second()
-        victim.write_text(original)
-        t0 = time.time()
-        _prime(tmp_path, probe)
-        victim.write_text(original.replace(CLEAN, SABOTAGED))
-        drop_bytecode(tmp_path)                       # swept ONCE, as a naive harness would
+    def cycle(protected: bool) -> tuple[bool, bool]:
+        _arm(tmp_path, victim, probe, VICTIM)
+        drop_bytecode(tmp_path)                    # swept ONCE, as a naive harness would
         red = _run(tmp_path, probe, protected=protected) != 0
-        victim.write_text(original)                   # restore: same second, same size
+        victim.write_text(VICTIM)                  # restore: same second, same size
         green = _run(tmp_path, probe, protected=protected) == 0
-        return red, green, time.time() - t0
+        return red, green
 
     for _ in range(3):
-        red, green, spent = cycle(protected=False)
-        _require_same_second(time.time() - spent, "an unprotected patch/restore cycle")
+        red, green = cycle(protected=False)
         assert red, "the sabotage did not land even after a sweep; fixture is wrong"
         assert not green, (
             "the unprotected restore check came back GREEN, so `-B` and "
@@ -226,8 +222,7 @@ def test_without_B_the_sabotage_run_poisons_the_RESTORE_check(tmp_path: Path) ->
             "before dropping them from run_python()")
 
     for _ in range(3):
-        red, green, spent = cycle(protected=True)
-        _require_same_second(time.time() - spent, "a protected patch/restore cycle")
+        red, green = cycle(protected=True)
         assert red and green, (
             f"with -B + PYTHONDONTWRITEBYTECODE the cycle must be RED then "
             f"GREEN; got red={red} green={green}")
@@ -258,7 +253,34 @@ def test_child_env_reaches_GRANDchildren_where_B_does_not(tmp_path: Path) -> Non
         "PYTHONDONTWRITEBYTECODE did not reach the grandchild"
 
 
-# ── helper surface ───────────────────────────────────────────────────────────
+# ── the fixture's own arming, and the helper surface ─────────────────────────
+
+def test_arm_refuses_to_proceed_on_an_unarmed_fixture(tmp_path: Path) -> None:
+    """`_arm` must assert the hazard, not assume it.
+
+    SABOTAGE, applied here rather than described: make the edit length-CHANGING.
+    The `.pyc` size field then differs, the hazard is not armed, and `_arm`
+    must skip rather than hand back a fixture that would make every test above
+    pass for the wrong reason.
+    """
+    victim, probe = _write_fixture(tmp_path)
+    pyc = _arm(tmp_path, victim, probe, VICTIM)
+    assert _pyc_source_mtime(pyc) == int(victim.stat().st_mtime), \
+        "_arm returned a fixture whose recorded mtime does not match the source"
+
+    victim.write_text(VICTIM)
+    drop_bytecode(tmp_path)
+    _align_to_second()
+    victim.write_text(VICTIM)
+    _prime(tmp_path, probe)
+    pyc, = (tmp_path / "__pycache__").glob("victim*.pyc")
+    victim.write_text(VICTIM.replace(CLEAN, SABOTAGED + "!"))   # length CHANGES
+    assert victim.stat().st_size != len(VICTIM.encode()), "fixture edit did not grow"
+    assert _run(tmp_path, probe, protected=False) != 0, (
+        "a length-CHANGING edit was still masked by the stale .pyc -- then size "
+        "is not part of the validation and this whole file rests on a false "
+        "premise")
+
 
 def test_drop_bytecode_reports_what_it_removed(tmp_path: Path) -> None:
     """The count is the caller's evidence that it invalidated anything."""
@@ -272,7 +294,7 @@ def test_is_length_preserving_labels_the_dangerous_shape() -> None:
     assert is_length_preserving("cleared", "blocked")
     assert not is_length_preserving("return 1", "return 0\n")
     # Bytes, not characters: the .pyc validator compares file SIZE.
-    assert not is_length_preserving("a", "é")
+    assert not is_length_preserving("a", "\u00e9")
 
 
 if __name__ == "__main__":
