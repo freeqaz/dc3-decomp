@@ -852,6 +852,16 @@ bool HolmesClientCacheFile(char *arg0, const char *arg1) {
     int attrResult = GetFileAttributesExA(arg0, (GET_FILEEX_INFO_LEVELS)0, fileInfo);
     bool result = false;
     bool fileExists = (attrResult - 1) != (-1);
+    // `==` is correct here and is NOT the rb3-xenon drift bug it looks like.
+    // rb3-xenon spells this `!=`; dc3's target settles it. The target calls
+    // ??8String@@QBA_NABVFixedString@@@Z (operator==) at this site. The branch
+    // polarity is NOT the discriminator -- operator!= is a separate function
+    // that returns the inverted bool, so the following `beq` is identical
+    // either way. Negative control on this tree: spelling it `!=` swaps the
+    // callee to ??9String@@QBA_NABVFixedString@@@Z, which name_check charges as
+    // WRONG_CALLEE, 32 -> 33 mismatch rows. Read the callee, not the score --
+    // the whole flip costs 0.043pp (normalized 93.034485 -> 92.99138), far below
+    // what anyone watching a percentage would notice.
     if ((str == gLastCachedResource) && (gLastCacheResult > 0 || fileExists)) {
         EndCmd(Holmes::kCacheFile);
         return true;
