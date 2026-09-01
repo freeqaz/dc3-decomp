@@ -726,23 +726,51 @@ scheduling**, the same phenomenon exploited in `XMemNew` above — moving
 member subscripts as pointers" as a *scheduling* permutation to try, not as an
 aliasing fix, and do not expect it to move a load across a store.
 
-### The inverse lever — 13 functions, unworked
+### The inverse lever — 13 functions, and it is the productive one
 
 The census's other direction is functions where the **target** has an `r31` EH
 frame and we do not: the original source had something destructible live across
-a throwing call and we wrote something that cannot throw. Adjudicated examples:
-`CamShot::GetCam` (98.91%) differs *only* in the addressing base — the target's
-`0x50(r31)` and our `0x50(r1)` are the same byte — and
-`StreamReceiver360::SetSlipOffset` (95.26%) shows the target storing
-`PoolAlloc`'s result into a frame slot, the signature of a `new`-expression
-whose cleanup must free the block if the constructor throws.
+a call that can throw, and we wrote something that cannot. **This population is
+13× larger than the forward one and the first candidate worked immediately.**
 
-Full list, worth a lane: `MemAlloc` 1.48%, `BinkFileIdle` 73.03%,
+**`Voice::dispose` — 92.31% → 100.0%, 0 of 52 mismatch rows**
+(`default/system/synth_xbox/Voice`; synth_xbox is excluded from the native
+build). We had written a bare lock pair:
+
+```cpp
+gVoiceGC.Enter();
+s_voiceGC.push_back(*pv);      // deque::push_back ALLOCATES -- it can throw
+gVoiceCounters[0]--;
+gVoiceCounters[1]++;
+gVoiceGC.Exit();
+```
+
+The target's listing says otherwise: `mr r3, r28` / **`stw r28, 0x50(r31)`** /
+`bl Enter`, and a matching `mr r3, r28` / `bl Exit` at the end. That store is
+`CritSecTracker::mCritSec` being written by the guard's constructor — a stack
+object whose destructor must run if `push_back` throws. Replacing the pair with
+a scoped `CritSecTracker` (`src/system/os/CritSec.h`) reproduces the frame
+pointer, the extra callee-saved register and the store together. A statement
+reorder (`gVoiceCounters[1]++` before `[0]--`, which is a load-order tell, not
+scheduling noise) closed the last 6 rows.
+
+**How to read this direction:** a target-only `stw <ptr>, <slot>(r31)` right
+before a lock/alloc call names the *guard object* the original source had. A
+target-only store of an allocator's return value into a frame slot is instead
+the signature of a `new`-expression, whose EH cleanup must free the block if the
+constructor throws — that is what `StreamReceiver360::SetSlipOffset` (95.26%)
+shows after its `PoolAlloc`. And `CamShot::GetCam` (98.91%) differs *only* in
+the addressing base: the target's `0x50(r31)` and our `0x50(r1)` are the same
+byte.
+
+Remaining 12, worth a lane: `MemAlloc` 1.48%, `BinkFileIdle` 73.03%,
 `StartVoiceThreadEntry` 76.69%, `Rnd::DrawPreClear` 85.56%,
 `BinkFileReadFrame` 88.34%, `RndText::ConvertTextToWide` 91.86%,
-`Voice::dispose` 92.31%, `Rnd::DrawTimers` 95.02%, `_MemAllocTemp` 95.14%,
+`Rnd::DrawTimers` 95.02%, `_MemAllocTemp` 95.14%,
 `StreamReceiver360::SetSlipOffset` 95.26%, `MemOrPoolAllocSTL` 96.71%,
-`RndMesh::LoadVertices` 96.99%, `CamShot::GetCam` 98.91%.
+`RndMesh::LoadVertices` 96.99%, `CamShot::GetCam` 98.91%. ⚠ Several are in
+`utl/MemMgr` and `rndobj/`, which the native port **does** compile — a guard
+object added there is a real semantic change, not a matching trick.
 
 ---
 
