@@ -28,8 +28,6 @@ Hmx::Color NgPostProc::s_prevBloomColor(-1, -1, -1, -1);
 float NgPostProc::s_prevBloomIntensity = -1;
 NgPostProc::BloomTextures<3> NgPostProc::sBloom;
 
-static RndOverlay *sPostProcOverlay;
-
 static int sBloomDebugCounter;
 
 void Bloom_Downsample(ShaderType shader, RndTex *texSrc, RndTex *texDst) {
@@ -109,16 +107,13 @@ void NgPostProc::DoBloom() {
 
     if (!doBloom && s_BloomSetter) {
         RndOverlay *overlay = RndOverlay::Find("postproc", true);
-        RndOverlay *prevOverlay = sPostProcOverlay;
         if (overlay->Showing()) {
-            sPostProcOverlay = overlay;
+            TextStream *prevReflect = TheDebug.SetReflect(overlay);
             FormatString fmt("BLOOM : NONE\n");
             TheDebug << fmt.Str();
+            TheDebug.SetReflect(prevReflect);
         }
         s_BloomSetter = nullptr;
-        s_prevBloomIntensity = -1.0f;
-        s_prevBloomColor = Hmx::Color(-1, -1, -1, -1);
-        sPostProcOverlay = prevOverlay;
     }
 
     if (doBloom) {
@@ -137,9 +132,8 @@ void NgPostProc::DoBloom() {
             s_BloomSetter = this;
 
             RndOverlay *overlay = RndOverlay::Find("postproc", true);
-            RndOverlay *prevOverlay = sPostProcOverlay;
             if (overlay->Showing()) {
-                sPostProcOverlay = overlay;
+                TextStream *prevReflect = TheDebug.SetReflect(overlay);
                 const char *worldName = PathName(TheHamDirector->GetActivePostProc());
                 float intensity = BloomIntensity();
                 int r = (int)(mBloomColor.red * 256.0f);
@@ -148,8 +142,8 @@ void NgPostProc::DoBloom() {
                 int counter = sBloomDebugCounter % 100;
                 sBloomDebugCounter++;
                 TheDebug << MakeString("%03d:BLOOM: C=<%3d,%3d,%3d> I=%5.2f : %s\n", counter, r, g, b, intensity, worldName);
+                TheDebug.SetReflect(prevReflect);
             }
-            sPostProcOverlay = prevOverlay;
         }
 
         Vector4 bloomColorVec(redScaled, greenScaled, blueScaled, 0.0f);
