@@ -41,6 +41,28 @@ struct CompressDesc {
     CompressLevel levels[16]; // 0x14
 };
 
+// Size of a surface in EDRAM tiles. A tile is 80x16 pixels; the returned value
+// is (aligned bytes) / 5120.
+extern "C" UINT
+XGSurfaceSize(UINT Width, UINT Height, D3DFORMAT Format, D3DMULTISAMPLE_TYPE MultiSample) {
+    int gpuFormat = Format & 0x3f;
+    UINT bytesPerPixel = 4;
+    UINT width = Width;
+    UINT height = Height;
+    if ((int)MultiSample >= 1) {
+        height = Height * 2;
+    }
+    if ((int)MultiSample == 2) {
+        width = Width * 2;
+    }
+    UINT alignedWidth = ((width + 79) / 80) * 80;
+    UINT alignedHeight = (height + 15) & ~15;
+    if (gpuFormat == 0x15 || gpuFormat == 0x20 || gpuFormat == 0x25) {
+        bytesPerPixel = 8;
+    }
+    return alignedHeight * alignedWidth * bytesPerPixel / 0x1400;
+}
+
 DxTex::DxTex()
     : mFormat((D3DFORMAT)-1), mTexture(0), unk84(0), mRenderTarget(0), mDepthRT(0),
       mMovieBufIdx(0), mLockedRect(), unka4(0), unka8(0), unkac(0) {
@@ -102,6 +124,49 @@ void *DxTex::StartCompress(AlphaCompress alpha) {
         );
     }
     return desc;
+}
+
+void DxTex::DoCompress(void *p) {
+    CompressDesc *desc = (CompressDesc *)p;
+    int numLevels = D3DBaseTexture_GetLevelCount(mTexture);
+    for (int i = 0; i < numLevels; i++) {
+        CompressLevel &level = desc->levels[i];
+        int rowPitch = level.scratchDesc.Width * 4;
+        XGUntileTextureLevel(
+            level.scratchDesc.Width,
+            level.scratchDesc.Height,
+            desc->unk8,
+            mFormat & 0x3f,
+            1,
+            desc->tiledBuffer,
+            rowPitch,
+            nullptr,
+            level.scratchLock.pBits,
+            nullptr
+        );
+        if ((int)desc->alpha == 0) {
+            unsigned int *texel = (unsigned int *)desc->tiledBuffer;
+            unsigned int *end =
+                texel + level.scratchDesc.Width * level.scratchDesc.Height;
+            for (; texel < end; texel++) {
+                *texel |= 0xff000000;
+            }
+        }
+        XGCompressSurface(
+            level.textureLock.pBits,
+            level.textureLock.Pitch,
+            level.textureDesc.Width,
+            level.textureDesc.Height,
+            desc->format,
+            0,
+            desc->tiledBuffer,
+            rowPitch,
+            (D3DFORMAT)0x18280086,
+            0,
+            0,
+            0.5f
+        );
+    }
 }
 
 void DxTex::FinishCompress(void *p) {
