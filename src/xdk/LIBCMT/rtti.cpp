@@ -166,8 +166,9 @@ const _s_RTTIBaseClassDescriptor *FindMITargetTypeInstance(
         if (TYPEIDS_EQ(pBase->pTypeDescriptor, pSrcType)) {
             int adjustment = 0;
             if (pBase->where.pdisp >= 0) {
-                char *pVirtualBaseTable = *(char **)((char *)pCompleteObject + pBase->where.pdisp);
-                adjustment = *(int *)(pVirtualBaseTable + pBase->where.vdisp) + pBase->where.pdisp;
+                adjustment = *(int *)(*(char **)((char *)pCompleteObject + pBase->where.pdisp) +
+                                      pBase->where.vdisp);
+                adjustment += pBase->where.pdisp;
             }
             if (adjustment + pBase->where.mdisp == SrcOffset) {
                 if (pTargetBase) {
@@ -235,8 +236,8 @@ const _s_RTTIBaseClassDescriptor *FindVITargetTypeInstance(
             int adjustment = 0;
             if (pBase->where.pdisp >= 0) {
                 adjustment = *(int *)(*(char **)((char *)pCompleteObject + pBase->where.pdisp) +
-                                      pBase->where.vdisp) +
-                    pBase->where.pdisp;
+                                      pBase->where.vdisp);
+                adjustment += pBase->where.pdisp;
             }
             if (pBase->where.mdisp + adjustment == SrcOffset) {
                 if (i - iTarget <= numTargetContained) {
@@ -267,8 +268,8 @@ const _s_RTTIBaseClassDescriptor *FindVITargetTypeInstance(
                             targetAdjustment =
                                 *(int *)(*(char **)((char *)pCompleteObject +
                                                     pTargetBase->where.pdisp) +
-                                         pTargetBase->where.vdisp) +
-                                pTargetBase->where.pdisp;
+                                         pTargetBase->where.vdisp);
+                            targetAdjustment += pTargetBase->where.pdisp;
                         }
                         int offset = pTargetBase->where.mdisp + targetAdjustment;
                         if (pMatch && matchOffset != offset) {
