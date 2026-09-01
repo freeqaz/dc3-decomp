@@ -11,9 +11,9 @@ WavReader::WavReader(File *file, StandardStream *stream) {
     MILO_ASSERT(mInWaveFile->SamplesPerSec() == 44100, 0x21);
     MILO_ASSERT(mInWaveFile->BitsPerSample() == 16, 0x22);
     MILO_ASSERT(mInWaveFile->NumChannels() <= 2, 0x23);
-    mSamplesLeft = mInWaveFile->NumSamples();
-    mSampleRate = mInWaveFile->SamplesPerSec();
-    mNumChannels = mInWaveFile->NumChannels();
+    mNumChannels = mInWaveFile->mNumChannels;
+    mSampleRate = mInWaveFile->mSamplesPerSec;
+    mSamplesLeft = mInWaveFile->mNumSamples;
     for (int i = 0; i < mInWaveFile->NumMarkers(); i++) {
         WaveFileMarker &wfm = mInWaveFile->Markers()[i];
         int frame = wfm.mFrame;
