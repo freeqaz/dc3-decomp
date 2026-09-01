@@ -612,6 +612,70 @@ RndTex *DxRnd::GetCurrentFrameTex(bool resolvePreProcess) {
     return PostProcessTexture();
 }
 
+// Debug text: each glyph is a list of polylines held in the `font` DataArray,
+// indexed by character code, each point a pair of floats scaled to a 9x12 cell
+// on a 13.5 x 18 pixel grid.  Returns a reference to a shared cursor holding
+// the end of the string, which DrawStringScreen scales back to 0..1.
+Vector2 &DxRnd::DrawString(
+    const char *str, const Vector2 &pos, const Hmx::Color &color, bool drawGlyphs
+) {
+    MILO_ASSERT(str, 0x11F);
+    D3DDevice_SetFVF(mD3DDevice, 0x42);
+    Transform screenXfm;
+    screenXfm.Reset();
+    TheShaderMgr.SetVConstant(kVS_ViewProjMatrix, Hmx::Matrix4(screenXfm));
+    TheShaderMgr.SetTransform(screenXfm);
+    RndShader::SelectConfig(nullptr, kLineNozShader, false);
+    D3DDevice_SetRenderState_ViewportEnable(TheDxRnd.Device(), 0);
+    static Vector2 cursor;
+    cursor = pos;
+    float widest = pos.x;
+    while (*str) {
+        char c = *str;
+        if (c == '\n') {
+            str++;
+            if (*str) {
+                widest = Max(widest, cursor.x);
+                cursor.y += 18.0f;
+                cursor.x = pos.x;
+            }
+            continue;
+        }
+        if (drawGlyphs && c > 0 && c + 1 < Font()->Size()) {
+            DataArray *glyph = Font()->Node(c + 1).UncheckedArray();
+            for (int i = 0; i < glyph->Size(); i++) {
+                DataArray *stroke = glyph->Node(i).UncheckedArray();
+                struct StrokeVert {
+                    float x, y, z;
+                    unsigned long color;
+                } verts[12];
+                int numVerts = 0;
+                for (int j = 0; j < stroke->Size(); j += 2) {
+                    verts[numVerts].x = stroke->Float(j) * 9.0f + cursor.x;
+                    verts[numVerts].y = stroke->Float(j + 1) * 12.0f + cursor.y;
+                    verts[numVerts].z = 1.0f;
+                    verts[numVerts].color = MakeColor(color);
+                    numVerts++;
+                }
+                D3DDevice_DrawVerticesUP(
+                    mD3DDevice, D3DPT_LINESTRIP, numVerts, verts, 0x10
+                );
+            }
+        }
+        cursor.x += 13.5f;
+        str++;
+    }
+    D3DDevice_SetRenderState_ViewportEnable(TheDxRnd.Device(), 1);
+    if (RndCam::Current()) {
+        TheShaderMgr.SetVConstant(
+            kVS_ViewProjMatrix, RndCam::Current()->GetViewProjMatrix()
+        );
+    }
+    cursor.y += 18.0f;
+    cursor.x = Max(cursor.x, widest);
+    return cursor;
+}
+
 bool DxRnd::CanModal(Debug::ModalType t) {
     if (mTilingActive) {
         if (t == Debug::kModalFail) {
