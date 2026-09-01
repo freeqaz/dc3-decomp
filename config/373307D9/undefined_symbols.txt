@@ -541,7 +541,7 @@ EXT __restgprlr_27
 EXT __restgprlr_28
 EXT __restgprlr_29
 EXT __restvmx_120
-EXT __restvmx_122
+EXT __restvmx_121
 EXT __restvmx_124
 EXT __savefpr_14
 EXT __savefpr_15
@@ -575,7 +575,7 @@ EXT __savegprlr_27
 EXT __savegprlr_28
 EXT __savegprlr_29
 EXT __savevmx_120
-EXT __savevmx_122
+EXT __savevmx_121
 EXT __savevmx_124
 EXT __security_check_cookie
 EXT __security_cookie

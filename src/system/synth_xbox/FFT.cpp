@@ -871,18 +871,7 @@ XMVECTOR __vsubfp(XMVECTOR vSrcA, XMVECTOR vSrcB);
 // the real and imaginary lane of its complex slot.
 int fft_real_forward_altivec(float* data, long size, float* context) {
     int ret = FFTComplex(data, size / 2, -1, context);
-    if (ret != 0) {
-        return ret;
-    }
-
-    float inv_n = 1.0f / (float)(long long)size;
-    float angle1 = inv_n * (float)(2.0 * M_PI);
-    float sin_a = (float)sin(angle1);
-    float angle2 = inv_n * (float)(4.0 * M_PI);
-    double cc = (double)sin_a * (double)sin_a;
-    double ss = (float)sin(angle2);
-    cc = cc * 2.0;
-
+    if (ret == 0) {
     XMVECTORU32 sel_hi = { 0xFFFFFFFF, 0xFFFFFFFF, 0x00000000, 0x00000000 };
     XMVECTORU32 perm_a = { 0x00010203, 0x14151617, 0x08090A0B, 0x1C1D1E1F };
     XMVECTORU32 perm_b = { 0x04050607, 0x10111213, 0x0C0D0E0F, 0x18191A1B };
@@ -895,25 +884,33 @@ int fft_real_forward_altivec(float* data, long size, float* context) {
     XMVECTOR v_sign_lo = { 1.0f, -1.0f, 1.0f, -1.0f };
     XMVECTOR v_sign_hi = { -1.0f, 1.0f, -1.0f, 1.0f };
 
+    float inv_n = 1.0f / (float)(long long)size;
+    float angle1 = inv_n * (float)(2.0 * M_PI);
+    float sin_a = (float)sin(angle1);
+    float angle2 = inv_n * (float)(4.0 * M_PI);
+    double cc = (double)sin_a * (double)sin_a;
+    cc = cc * 2.0;
+    double ss = (float)sin(angle2);
+
     XMVECTORF32 sv;
-    double c1 = (float)cos(angle1);
-    double c2 = (float)cos(angle2);
     sv.f[0] = 1.0f;
     sv.f[1] = 1.0f;
+    double c1 = (float)cos(angle1);
     sv.f[2] = (float)c1;
     sv.f[3] = (float)c1;
     XMVECTOR cLo = sv.v;
+    double c2 = (float)cos(angle2);
     sv.f[0] = (float)c2;
     sv.f[1] = (float)c2;
     XMVECTOR cHi = sv.v;
 
-    double s1 = (float)sin(angle1);
-    double s2 = (float)sin(angle2);
     sv.f[0] = 0.0f;
     sv.f[1] = 0.0f;
+    double s1 = (float)sin(angle1);
     sv.f[2] = (float)s1;
     sv.f[3] = (float)s1;
     XMVECTOR sLo = sv.v;
+    double s2 = (float)sin(angle2);
     sv.f[0] = (float)s2;
     sv.f[1] = (float)s2;
     XMVECTOR sHi = sv.v;
@@ -988,6 +985,7 @@ int fft_real_forward_altivec(float* data, long size, float* context) {
     }
 
     data[1] = dc_re - dc_im;
+    }
     return ret;
 }
 
