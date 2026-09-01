@@ -137,14 +137,11 @@ void QuatSpline(
         float fsq = ref * ref;
         float fcubed = fsq * ref;
         int idx1 = idx + 1;
-        Hmx::Quat q58;
-        Hmx::Quat nextQuat;
-        Hmx::Quat prevQuat;
         Hmx::Quat q88;
-        prevQuat = prev->value;
-        nextQuat = next->value;
+        Hmx::Quat prevQuat = prev->value;
+        Hmx::Quat nextQuat = next->value;
         q88 = idx == 0 ? prevQuat : keys[idx - 1].value;
-        q58 = idx1 == keys.size() - 1 ? nextQuat : keys[idx1 + 1].value;
+        Hmx::Quat q58 = idx1 == keys.size() - 1 ? nextQuat : keys[idx1 + 1].value;
         NormalizeTo(prevQuat, q88);
         NormalizeTo(prevQuat, nextQuat);
         NormalizeTo(prevQuat, q58);
@@ -154,7 +151,12 @@ void QuatSpline(
             float pp = q88[i];
             float n = nextQuat[i];
             float nn = q58[i];
-            qout[i] = 0.5f * ((fcubed * (nn - (3.0f * n - (3.0f * p - pp))) + (fsq * ((4.0f * n + (2.0f * pp - 5.0f * p)) - nn) + (2.0f * p + ref * (n - pp)))));
+            // Catmull-Rom, evaluated as a flat sum (cubic, quadratic, linear,
+            // constant) -- the nested/right-associated spelling costs 2.6pp.
+            qout[i] = 0.5f
+                * (fcubed * (nn - (3.0f * n - (3.0f * p - pp)))
+                   + fsq * ((4.0f * n + (2.0f * pp - 5.0f * p)) - nn) + ref * (n - pp)
+                   + 2.0f * p);
             i++;
         }
         Normalize(qout, qout);
