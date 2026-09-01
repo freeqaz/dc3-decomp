@@ -788,6 +788,51 @@ void DxRnd::CreatePostTextures() {
     mPostProcessTex->SetDeviceTex(mPostProcessBuffer);
 }
 
+void DxRnd::EndDrawing() {
+    EndWorld();
+    if (mShowSafeArea) {
+        Hmx::Color titleSafeColor(1.0f, 0.0f, 0.0f, 1.0f);
+        Hmx::Color actionSafeColor(0.0f, 1.0f, 0.0f, 1.0f);
+        if (mAspect == kWidescreen)
+            DrawSafeArea(0.9f, true, titleSafeColor);
+        DrawSafeArea(0.9f, false, titleSafeColor);
+        if (mAspect == kWidescreen)
+            DrawSafeArea(0.95f, true, actionSafeColor);
+        DrawSafeArea(0.95f, false, actionSafeColor);
+    }
+    Rnd::EndDrawing();
+    mPostProcDone = false;
+    EndTiling(FrontBuffer(), 0);
+    D3DDevice_SetRenderTarget_External(mD3DDevice, 0, mBackBuffer);
+    // 2/172 instructions from byte-identity: the target schedules the
+    // mD3DDevice load (r3) ahead of the mWorldDepth load (r4) here and we
+    // schedule them the other way round.  Neither a Device() accessor nor a
+    // named D3DDevice* local moves it.
+    D3DDevice_SetDepthStencilSurface(mD3DDevice, mWorldDepth);
+    if (mRegAlloc != 0) {
+        mRegAlloc = (RegisterAlloc)0;
+        D3DDevice_SetShaderGPRAllocation(mD3DDevice, 0, 0, 0);
+    }
+    {
+        static Timer *drawStop = AutoTimer::GetTimer("draw");
+        if (drawStop)
+            drawStop->Stop();
+    }
+    if (mGSTiming) {
+        {
+            static Timer *cpuStop = AutoTimer::GetTimer("cpu");
+            if (cpuStop)
+                cpuStop->Stop();
+        }
+        PerfCountersStop();
+        {
+            static Timer *cpuStart = AutoTimer::GetTimer("cpu");
+            if (cpuStart)
+                cpuStart->Start();
+        }
+    }
+}
+
 // Retires everything AutoRelease()/AutoDelete() queued while mReleaseImmediate
 // was false.  A resource that is still bound to the device cannot be freed yet,
 // so it is carried over into the next frame's pending list.
