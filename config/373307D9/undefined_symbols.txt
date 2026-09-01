@@ -14,7 +14,7 @@
 # entry points and middleware the decomp calls but does not contain. The
 # classification is for the reader; --check ignores it and compares names only.
 #
-# counts: 807 total = 172 GAP + 635 EXT
+# counts: 808 total = 167 GAP + 641 EXT
 
 GAP ??$?6VHamScrollSpeedIndicator@@@@YAAAVBinStream@@AAV0@ABV?$ObjDirPtr@VHamScrollSpeedIndicator@@@@@Z  # target defines it in system/ui/UILabel.obj
 GAP ??0GranularSynth@Synapse@DSP@@QAA@ABV?$vector@MV?$StlNodeAlloc@M@stlpmtx_std@@@stlpmtx_std@@III@Z  # target defines it in system/synth_xbox/GranularSynth.obj
@@ -32,7 +32,6 @@ GAP ?BeginDrawing@DxRnd@@UAAXXZ  # target defines it in system/rnddx9/Rnd_Xbox.o
 GAP ?Cancel@SingleItemEnumJob@@UAAXPAVObject@Hmx@@@Z  # target defines it in system/os/PlatformMgr_Xbox.obj
 GAP ?ConnectedForClient@ExternalMicClientMgr@@SA_NPBVMicXbox@@@Z  # target defines it in system/synth_xbox/ExternalMic.obj
 GAP ?Detect@PeakDetector@Synapse@DSP@@QAAXI@Z  # target defines it in system/synth_xbox/PeakDetector.obj
-GAP ?DoCompress@DxTex@@QAAXPAX@Z  # target defines it in system/rnddx9/Tex.obj
 GAP ?DrawFacesInRange@DxMesh@@UAAXHH@Z  # target defines it in system/rnddx9/Mesh.obj
 GAP ?DrawFur@DxMesh@@IAAPAVDxMat@@PAV2@@Z  # target defines it in system/rnddx9/Mesh.obj
 GAP ?DrawRect@DxRnd@@UAAXABVRect@Hmx@@PAVRndMat@@W4ShaderType@@ABVColor@3@PBV63@4@Z  # target defines it in system/rnddx9/Rnd.obj
@@ -51,17 +50,14 @@ GAP ?Init@MicManagerXbox@@QAAXXZ  # target defines it in system/synth_xbox/Mic.o
 GAP ?Init@PlatformMgr@@QAAXXZ  # target defines it in system/os/PlatformMgr_Xbox.obj
 GAP ?InitXinputJoypadThreadData@?A0x439b694a@@YAXXZ  # target defines it in system/os/Joypad_Xbox.obj
 GAP ?IsFinished@SingleItemEnumJob@@UAA_NXZ  # target defines it in system/os/PlatformMgr_Xbox.obj
-GAP ?LockBitmap@DxTex@@UAAXAAVRndBitmap@@H@Z  # target defines it in system/rnddx9/Tex.obj
 GAP ?OnCompletion@SingleItemEnumJob@@UAAXPAVObject@Hmx@@@Z  # target defines it in system/os/PlatformMgr_Xbox.obj
 GAP ?Poll@MicXbox@@QAAXXZ  # target defines it in system/synth_xbox/Mic.obj
 GAP ?Poll@PlatformMgr@@QAAXXZ  # target defines it in system/os/PlatformMgr_Xbox.obj
 GAP ?QueryInterface@CXAPOParametersBase@@UAAJABU_GUID@@PAPAX@Z  # target defines it in system/synth_xbox/Synth.obj
 GAP ?Release@CXAPOBase@@UAAKXZ  # target defines it in system/synth_xbox/Synth.obj
 GAP ?ReleaseAutoRelease@DxRnd@@QAAXXZ  # target defines it in system/rnddx9/Rnd_Xbox.obj
-GAP ?ResolveMipChain@DxTex@@AAAXXZ  # target defines it in system/rnddx9/Tex.obj
 GAP ?RunXinputJoypadLoop@?A0x439b694a@@YAXXZ  # target defines it in system/os/Joypad_Xbox.obj
 GAP ?SendRawData@@YAXHEEEEEEE@Z  # target defines it in system/os/Joypad_Xbox.obj
-GAP ?SetGlobalReverbPreset@Synth360@@QAAXPBD@Z  # target defines it in system/synth_xbox/Synth.obj
 GAP ?ShowControllerRequiredUI@PlatformMgr@@QAAXPAVObject@Hmx@@@Z  # target defines it in system/os/PlatformMgr_Xbox.obj
 GAP ?Start@SingleItemEnumJob@@UAAXXZ  # target defines it in system/os/PlatformMgr_Xbox.obj
 GAP ?SyncBitmap@DxTex@@MAAXXZ  # target defines it in system/rnddx9/Tex.obj
@@ -180,7 +176,6 @@ GAP NuiCameraAdjustTilt  # target defines it in xdk/nuiapi/nuidetroit.obj
 GAP NuiCameraElevationGetAngle  # target defines it in xdk/nuiapi/nuidetroit.obj
 GAP NuiCameraElevationSetAngle  # target defines it in xdk/nuiapi/nuidetroit.obj
 GAP ReadSingleJoypad  # target defines it in system/os/Joypad_Xbox.obj
-GAP XGSurfaceSize  # target defines it in system/rnddx9/Tex.obj
 GAP __RTDynamicCast  # target defines it in xdk/LIBCMT/rtti.obj
 GAP __RTtypeid  # target defines it in xdk/LIBCMT/rtti.obj
 GAP _vsnprintf_helper  # target defines it in xdk/LIBCMT/vsnprnc.obj
@@ -355,7 +350,9 @@ EXT D3DDevice_SetRenderState_ZFunc
 EXT D3DDevice_SetRenderState_ZWriteEnable
 EXT D3DDevice_SetRenderTarget_External
 EXT D3DDevice_SetSamplerState_MagFilter
+EXT D3DDevice_SetSamplerState_MaxMipLevel
 EXT D3DDevice_SetSamplerState_MinFilter
+EXT D3DDevice_SetSamplerState_MinMipLevel
 EXT D3DDevice_SetShaderGPRAllocation
 EXT D3DDevice_SetStreamSource
 EXT D3DDevice_SetSwapMode
@@ -372,6 +369,7 @@ EXT D3DDevice_SynchronizeToPresentationInterval
 EXT D3DIndexBuffer_GetDesc
 EXT D3DIndexBuffer_Lock
 EXT D3DIndexBuffer_Unlock
+EXT D3DLineTexture_GetLevelDesc
 EXT D3DLineTexture_LockRect
 EXT D3DLineTexture_UnlockRect
 EXT D3DPerfCounters_GetValues
@@ -521,6 +519,7 @@ EXT XContentGetDeviceState
 EXT XEnableScreenSaver
 EXT XEnumerate
 EXT XEnumerateCrossTitle
+EXT XGCompressSurface
 EXT XGEstimateIdealShaderCost
 EXT XGGetTextureDesc
 EXT XGGetTextureLayout
@@ -529,6 +528,8 @@ EXT XGRegisterPixelShader
 EXT XGRegisterVertexShader
 EXT XGSetTextureHeader
 EXT XGTileTextureLevel
+EXT XGUntileSurface
+EXT XGUntileTextureLevel
 EXT XGetGameRegion
 EXT XGetLocale
 EXT XGetOverlappedExtendedError
