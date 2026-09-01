@@ -6,6 +6,9 @@
 extern "C" void XMemCpy(void *, const void *, int);
 #endif
 
+// Target: StreamReceiver.obj .bss:0x0 (0x830E3284), zero.
+StreamReceiverFactoryFunc *StreamReceiver::sFactory;
+
 StreamReceiver::StreamReceiver(int numBuffers, bool slip)
     : mSlipEnabled(slip), mNumBuffers(numBuffers), mBuffer(), mRingFreeSpace(0),
       mState(kInit), mSendTarget(0), mWantToSend(false), mSending(false), mBuffersSent(0),

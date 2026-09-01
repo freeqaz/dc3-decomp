@@ -13,13 +13,15 @@
 #include "utl/BinStream.h"
 #include "utl\Symbol.h"
 
+// Target: Object.obj .bss:0x0 (0x82F64AEC), zero-initialised.
+Hmx::Object *Hmx::Object::sDeleting;
+
 #ifdef HX_NATIVE
 #include <vector>
 // Declared at global scope: a block-scope extern inside a Hmx::Object member
 // would bind to Hmx::SoundAudioTraceOn (unresolved) instead of the global
 // definition in Sound.cpp.
 extern bool SoundAudioTraceOn();
-Hmx::Object *Hmx::Object::sDeleting;
 bool Hmx::Object::sRingsDirty = false;
 bool gInReplaceList = false;
 

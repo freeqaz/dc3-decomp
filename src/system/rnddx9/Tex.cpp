@@ -20,6 +20,9 @@
 
 DataNode DebugPrintAllTextures(DataArray *);
 
+// Target: Tex.obj .data:0x0 (0x82F130B0) = .byte 0x01.
+bool DxTex::sEDRamChecksEnabled = true;
+
 std::vector<DxTex *> gAllTextures;
 int gTexDumpCalls;
 

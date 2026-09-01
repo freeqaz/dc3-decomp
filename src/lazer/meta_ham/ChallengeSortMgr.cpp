@@ -20,6 +20,9 @@
 #include "utl\Std.h"
 #include "utl\Symbol.h"
 
+// Target: ChallengeSortMgr.obj .bss:0x0 (0x83119E28), zero.
+ChallengeSortMgr *TheChallengeSortMgr;
+
 ChallengeRecord::ChallengeRecord(const ChallengeRecord &other)
     : mRow(other.mRow), mSongShortName(other.mSongShortName), mSongTitle(other.mSongTitle),
       mChallengerGamertag(other.mChallengerGamertag), mMissionInfo(other.mMissionInfo),

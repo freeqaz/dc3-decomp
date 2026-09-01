@@ -20,6 +20,9 @@ extern "C" {
 std::vector<String> gIgnoredContent;
 XboxContentMgr gContentMgr;
 const char *kContentRootFormat = "cnt%08x";
+// Target: ContentMgr_Xbox.obj .data:0x4 (0x82F123BC) -> ?gContentMgr@@3VXboxContentMgr@@A,
+// immediately after kContentRootFormat at .data:0x0.
+ContentMgr &TheContentMgr = gContentMgr;
 
 XboxContent::XboxContent(const XCONTENT_CROSS_TITLE_DATA &data, int i2, int i3, bool b4)
     : mOverlapped(0), mLicenseBits(0), mValidLicenseBits(0),

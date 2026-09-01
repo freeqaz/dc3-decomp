@@ -19,9 +19,7 @@
 #include "utl\TextStream.h"
 #include <map>
 
-#ifdef HX_NATIVE
 bool (*DirLoader::sPathEval)(const char *);
-#endif
 bool DirLoader::sPrintTimes;
 bool DirLoader::sCacheMode;
 ObjectDir *DirLoader::sTopSaveDir;

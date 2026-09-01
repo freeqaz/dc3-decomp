@@ -4,6 +4,9 @@
 #include "gesture\SkeletonUpdate.h"
 #include "rndobj\Utl.h"
 
+// Target: DrawUtl.obj .bss:0x0 (0x82F5F8EC), zero, immediately before DrawUtlRect.
+SkeletonViz *TheSkeletonViz;
+
 Vector3 DrawUtlVec3(0.5f, 0.05f, 0.4f);
 
 Hmx::Rect DrawUtlRect;

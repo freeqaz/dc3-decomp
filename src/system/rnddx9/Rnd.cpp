@@ -19,6 +19,10 @@
 #include "xdk\d3d9i\d3d9types.h"
 
 DxRnd TheDxRnd;
+// Target: Rnd.obj .data:0x0/0x4 (0x82F12F50/54), both -> ?TheDxRnd@@3VDxRnd@@A,
+// addend 0 (DxRnd : NgRnd : Rnd, single inheritance, bases at offset 0).
+Rnd &TheRnd = TheDxRnd;
+NgRnd &TheNgRnd = TheDxRnd;
 
 void Multiply(const Vector4 &a, const Hmx::Matrix4 &m, Vector4 &out) {
     float x = m.x.x * a.x + m.y.x * a.y + m.z.x * a.z + m.w.x * a.w;

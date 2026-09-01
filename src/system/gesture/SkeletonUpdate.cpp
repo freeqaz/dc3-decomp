@@ -98,7 +98,10 @@ const SkeletonHistory *SkeletonUpdateHandle::History() const {
 #pragma region SkeletonUpdate
 
 static bool sBool878;
-extern "C" float lbl_82F0BE80;
+// Target: SkeletonUpdate.obj .data:0xA0 (0x82F0BE80) = .float 2.
+extern "C" {
+float lbl_82F0BE80 = 2.0f;
+}
 SkeletonUpdate *SkeletonUpdate::sInstance;
 HANDLE SkeletonUpdate::sNewSkeletonEvent;
 HANDLE SkeletonUpdate::sSkeletonUpdatedEvent;

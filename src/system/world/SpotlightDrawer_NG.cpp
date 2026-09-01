@@ -20,6 +20,8 @@
 #include <math.h>
 
 NgSpotlightDrawer::SpotlightResources *NgSpotlightDrawer::sSharedResources;
+// Target: SpotlightDrawer_NG.obj .bss:0x4 (0x8311692C) = 0, right after sSharedResources.
+bool NgSpotlightDrawer::sActiveFrame;
 
 // The tuning scalars below live as function-local statics on purpose -- do not
 // hoist them back to file scope.  MSVC-PPC emits every file-scope initialised

@@ -14,7 +14,7 @@
 # entry points and middleware the decomp calls but does not contain. The
 # classification is for the reader; --check ignores it and compares names only.
 #
-# counts: 736 total = 101 GAP + 635 EXT
+# counts: 703 total = 68 GAP + 635 EXT
 
 GAP ??$?6VHamScrollSpeedIndicator@@@@YAAAVBinStream@@AAV0@ABV?$ObjDirPtr@VHamScrollSpeedIndicator@@@@@Z  # target defines it in system/ui/UILabel.obj
 GAP ??0GranularSynth@Synapse@DSP@@QAA@ABV?$vector@MV?$StlNodeAlloc@M@stlpmtx_std@@@stlpmtx_std@@III@Z  # target defines it in system/synth_xbox/GranularSynth.obj
@@ -68,41 +68,11 @@ GAP ?SyncBitmap@DxTex@@MAAXXZ  # target defines it in system/rnddx9/Tex.obj
 GAP ?SyncEffectParams@FxSendChorus360@@UBAXPAUIXAudio2SubmixVoice@@@Z  # target defines it in system/synth_xbox/FxSendChorus.obj
 GAP ?Synthesize@GranularSynth@Synapse@DSP@@QAAXIPBQAM@Z  # target defines it in system/synth_xbox/GranularSynth.obj
 GAP ?Terminate@ExternalMic@@SAXXZ  # target defines it in system/synth_xbox/ExternalMic.obj
-GAP ?TheChallengeSortMgr@@3PAVChallengeSortMgr@@A  # target defines it in lazer/meta_ham/ChallengeSortMgr.obj
-GAP ?TheContentMgr@@3AAVContentMgr@@A  # target defines it in system/os/ContentMgr_Xbox.obj
-GAP ?TheFitnessGoalMgr@@3PAVFitnessGoalMgr@@A  # target defines it in lazer/meta_ham/FitnessGoalMgr.obj
-GAP ?TheHAQMgr@@3PAVHAQManager@@A  # target defines it in system/meta/HAQManager.obj
-GAP ?TheLeaderboards@@3PAVLeaderboards@@A  # target defines it in lazer/meta_ham/Leaderboards.obj
-GAP ?TheMQSongSortMgr@@3PAVMQSongSortMgr@@A  # target defines it in lazer/meta_ham/MQSongSortMgr.obj
-GAP ?TheMaster@@3PAVHamMaster@@A  # target defines it in system/hamobj/HamMaster.obj
-GAP ?TheMovieSys@@3AAVMovieSys@@A  # target defines it in system/moviebink/BinkMovieSys.obj
-GAP ?TheNgRnd@@3AAVNgRnd@@A  # target defines it in system/rnddx9/Rnd.obj
-GAP ?TheRnd@@3AAVRnd@@A  # target defines it in system/rnddx9/Rnd.obj
-GAP ?TheSkeletonIdentifier@@3PAVSkeletonIdentifier@@A  # target defines it in lazer/meta_ham/SkeletonIdentifier.obj
-GAP ?TheSkeletonViz@@3PAVSkeletonViz@@A  # target defines it in system/gesture/DrawUtl.obj
-GAP ?TheSongSortMgr@@3PAVSongSortMgr@@A  # target defines it in lazer/meta_ham/SongSortMgr.obj
-GAP ?TheUI@@3PAVUIManager@@A  # target defines it in lazer/meta_ham/HamUI.obj
 GAP ?UpdateMix@Voice@@AAAXXZ  # target defines it in system/synth_xbox/Voice.obj
 GAP ?UpdateVoiceMatrices@FxSend360@@AAAXXZ  # target defines it in system/synth_xbox/FxSend.obj
 GAP ?fft_altivec@@YAHPAM0KJ0@Z  # target defines it in system/synth_xbox/FFT.obj
 GAP ?fft_real_forward_altivec@@YAHPAMJ0@Z  # target defines it in system/synth_xbox/FFT.obj
 GAP ?fft_recursive@@YAHPAMKJ0@Z  # target defines it in system/synth_xbox/FFT.obj
-GAP ?gCharHighlightY@@3MA  # target defines it in system/char/Char.obj
-GAP ?gMemStackLock@@3PAVCriticalSection@@A  # target defines it in system/utl/MemMgr.obj
-GAP ?lbl_82F14008@@3HA  # target defines it in system/rndobj/Draw.obj
-GAP ?sActiveFrame@NgSpotlightDrawer@@1_NA  # target defines it in system/world/SpotlightDrawer_NG.obj
-GAP ?sDefaultHeap@MemHeapStack@@2HA  # target defines it in system/utl/MemMgr.obj
-GAP ?sDeleting@Object@Hmx@@1PAV12@A  # target defines it in system/obj/Object.obj
-GAP ?sEDRamChecksEnabled@DxTex@@0_NA  # target defines it in system/rnddx9/Tex.obj
-GAP ?sFactory@StreamReceiver@@1P6APAV1@HH_NH@ZA  # target defines it in system/synth/StreamReceiver.obj
-GAP ?sFileOpenCallback@LoadMgr@@0P6A_NPBD@ZA  # target defines it in system/utl/Loader.obj
-GAP ?sInstance@MicManagerXbox@@0PAV1@A  # target defines it in system/synth_xbox/Mic.obj
-GAP ?sMutableSkinnedVertexDecl@DxMesh@@1PAUD3DVertexDeclaration@@A  # target defines it in system/rnddx9/Mesh.obj
-GAP ?sMutableVertexDecl@DxMesh@@1PAUD3DVertexDeclaration@@A  # target defines it in system/rnddx9/Mesh.obj
-GAP ?sMutableVertexDecl@DxMultiMesh@@0PAUD3DVertexDeclaration@@A  # target defines it in system/rnddx9/MultiMesh.obj
-GAP ?sPathEval@DirLoader@@0P6A_NPBD@ZA  # target defines it in system/obj/DirLoader.obj
-GAP ?sVertexDecl@DxMesh@@1PAUD3DVertexDeclaration@@A  # target defines it in system/rnddx9/Mesh.obj
-GAP ?sVertexDecl@DxMultiMesh@@0PAUD3DVertexDeclaration@@A  # target defines it in system/rnddx9/MultiMesh.obj
 GAP ?sXShowCallback@PlatformMgr@@2P6A_NAAK@ZA  # target defines it in system/os/PlatformMgr_Xbox.obj
 GAP ?sampleProcessThread@ExternalMic@@QAAKXZ  # target defines it in system/synth_xbox/ExternalMic.obj
 GAP NuiCameraAdjustTilt  # target defines it in xdk/nuiapi/nuidetroit.obj
@@ -114,9 +84,6 @@ GAP __RTDynamicCast  # target defines it in xdk/LIBCMT/rtti.obj
 GAP __RTtypeid  # target defines it in xdk/LIBCMT/rtti.obj
 GAP _vsnprintf_helper  # target defines it in xdk/LIBCMT/vsnprnc.obj
 GAP _vswprintf_helper  # target defines it in xdk/LIBCMT/vswprnc.obj
-GAP lbl_82F0BE80  # target defines it in system/gesture/SkeletonUpdate.obj
-GAP lbl_8316C860  # target defines it in system/synth_xbox/Mic.obj
-GAP lbl_8316C864  # target defines it in system/synth_xbox/Mic.obj
 
 EXT ??0CXAPOParametersBase@@QAA@PBUXAPO_REGISTRATION_PROPERTIES@@PAEIH@Z
 EXT ??0ID3DXInclude@@QAA@XZ

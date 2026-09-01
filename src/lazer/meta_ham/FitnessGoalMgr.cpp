@@ -19,6 +19,9 @@
 #include "utl\Std.h"
 #include "utl\Symbol.h"
 
+// Target: FitnessGoalMgr.obj .bss:0x0 (0x8311AA44), zero.
+FitnessGoalMgr *TheFitnessGoalMgr;
+
 FitnessGoalMgr::FitnessGoalMgr() {
     SetName("fitness_goal_mgr", ObjectDir::Main());
     mProfileName = gNullStr;

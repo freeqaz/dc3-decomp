@@ -16,6 +16,7 @@
 #endif
 
 BinkMovieSys gBinkMovieSys;
+MovieSys &TheMovieSys = gBinkMovieSys;
 BinkMovieSys &TheBinkMovieSys = gBinkMovieSys;
 
 namespace {

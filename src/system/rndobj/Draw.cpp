@@ -14,6 +14,9 @@
 HighlightStyle RndDrawable::sHighlightStyle;
 float RndDrawable::sNormalDisplayLength = 1.0f;
 bool RndDrawable::sForceSubpartSelection;
+// Target: Draw.obj .data:0x44 (0x82F14008) = 0xFFFFFFFF.  Unnamed in the map, so
+// dtk calls it lbl_82F14008; declared `extern int lbl_82F14008;` in rndobj/Rnd.cpp.
+int lbl_82F14008 = -1;
 
 RndDrawable::RndDrawable()
     : mShowing(true), mOrder(0), mClipPlanes(this, (EraseMode)0, kObjListNoNull) {

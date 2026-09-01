@@ -22,6 +22,12 @@ extern MemTracker *gMemTracker;
 #define MAX_HEAPS 16
 #define MAX_BUF_THREADS 32
 
+// Target: MemMgr.obj .data:0x0 (0x82F189A0) = 0xFFFFFFFF, immediately before
+// gStlAllocName at .data:0x4.
+int MemHeapStack::sDefaultHeap = -1;
+// Target: MemMgr.obj .bss (0x830E5700), zero.
+CriticalSection *gMemStackLock;
+
 const char *gStlAllocName = "StlAlloc";
 
 extern bool gMemoryUsageTest;

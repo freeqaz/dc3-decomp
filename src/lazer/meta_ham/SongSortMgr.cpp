@@ -24,6 +24,10 @@
 #include "ui\UIPanel.h"
 #include "utl\Std.h"
 #include "utl\Symbol.h"
+
+// Target: SongSortMgr.obj .bss:0x0 (0x8311AB44), zero.
+SongSortMgr *TheSongSortMgr;
+
 BEGIN_HANDLERS(SongSortMgr)
     HANDLE_ACTION(get_setlist_mode, 0)
     HANDLE_ACTION(set_setlist_mode, SetSetlistMode(_msg->Int(2) != 0))

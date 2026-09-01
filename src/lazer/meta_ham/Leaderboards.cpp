@@ -23,6 +23,9 @@
 #include "ui\UIPanel.h"
 #include "utl\Symbol.h"
 
+// Target: Leaderboards.obj .bss:0x0 (0x83117E08), zero.
+Leaderboards *TheLeaderboards;
+
 Leaderboards::Leaderboards() : unk7c(100), mLoading(0), mType(0), mMode(2) {
     mUploadProfile = 0;
     mFetchingScores = 0;

@@ -10,6 +10,10 @@
 #include "os\Debug.h"
 #include "Memory.h"
 
+// Target: MultiMesh.obj .bss:0x0/0x4 (0x830A182C/30), both zero, in this order.
+D3DVertexDeclaration *DxMultiMesh::sVertexDecl;
+D3DVertexDeclaration *DxMultiMesh::sMutableVertexDecl;
+
 DxMultiMesh::DxMultiMesh() : mGeomDirtyFlags(0), mBufferCycleIndex(0) {
     for (int i = 0; i < 3; i++) {
         mVertexBuffers[i] = mIndexBuffers[i] = nullptr;
