@@ -32,16 +32,21 @@ void MeterEffect::DoProcess(
     unsigned int channelCount
 ) {
     for (unsigned int channel = 0; channel < channelCount; channel++) {
+        // Through `this->mSumSquares[channel]` / `this->mPeak[channel]` MSVC
+        // proves the two accesses are distinct fields and hoists the mPeak load
+        // above the mSumSquares store. Through two plain float* it cannot, so
+        // the load stays where the target has it -- after the store. That one
+        // ordering edge was 9 of this function's 10 mismatched rows; the
+        // remaining register numbering falls out of it.
+        float *sums = &mSumSquares[channel];
+        float *peak = &mPeak[channel];
         for (unsigned int frame = 0; frame < frameCount; frame++) {
             float sample = buffer[channel * frameCount + frame];
             float magnitude = fabsf(sample);
-            mSumSquares[channel] += sample * sample;
+            *sums += sample * sample;
             // Spelled as an explicit subtraction so MSVC emits fsubs/fsel
-            // rather than fcmpu/bge/fmr -- the target has no branch here. Read
-            // mPeak[] inline rather than through a temp: a temp is hoisted above
-            // the mSumSquares store, and the target loads it after.
-            mPeak[channel] =
-                mPeak[channel] - magnitude >= 0 ? mPeak[channel] : magnitude;
+            // rather than fcmpu/bge/fmr -- the target has no branch here.
+            *peak = *peak - magnitude >= 0 ? *peak : magnitude;
         }
         if (params.mLevelData) {
             params.mLevelData[channel].mPeak = mPeak[channel];

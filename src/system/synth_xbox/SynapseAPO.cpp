@@ -5,6 +5,15 @@
 
 namespace DSP {
 
+// The two-row residual in this constructor is a scheduling floor: the target
+// interleaves the implicit `this` computation for the mCurrentParams
+// constructor between the two implicit vtable-pointer stores, and we emit both
+// stores first. Neither row has a source-level expression -- both the second
+// vtable store (IXAPOParameters at +0x20) and the `addi r3, this, 0x16c` are
+// compiler-generated. Controls: adding an explicit `mCurrentParams()` to the
+// initialiser list is byte-inert, and rb3-xenon's independently-written
+// SynapseAPO.cpp -- a different class spelling with padding members instead of
+// real ones -- lands on the identical 93.3333% with the same two rows.
 SynapseAPO::SynapseAPO() : ATG::CSampleXAPOBase<SynapseAPO, SynapseAPOParams>(), mSynapse(nullptr) {
     SetSamplingRate(48000.0f);
 }
@@ -30,26 +39,28 @@ void SynapseAPO::SetSamplingRate(float rate) {
 
 void SynapseAPO::OnSetParameters(const SynapseAPOParams& params) {
     for (unsigned int i = 0; i < 3; i++) {
-        if (mCurrentParams.bands[i].enabled != params.bands[i].enabled) {
-            mSynapse->SetVoiceEnabled(i, params.bands[i].enabled);
+        SynapseBand *cur = &mCurrentParams.bands[i];
+        const SynapseBand *neu = &params.bands[i];
+        if (cur->enabled != neu->enabled) {
+            mSynapse->SetVoiceEnabled(i, neu->enabled);
         }
-        if (mCurrentParams.bands[i].gain != params.bands[i].gain) {
-            mSynapse->SetVoiceGain(i, params.bands[i].gain);
+        if (cur->gain != neu->gain) {
+            mSynapse->SetVoiceGain(i, neu->gain);
         }
-        if (mCurrentParams.bands[i].freq != params.bands[i].freq) {
-            mSynapse->SetVoiceTargetNote(i, params.bands[i].freq);
+        if (cur->freq != neu->freq) {
+            mSynapse->SetVoiceTargetNote(i, neu->freq);
         }
-        if (mCurrentParams.bands[i].q != params.bands[i].q) {
-            mSynapse->SetVoiceTransposition(i, params.bands[i].q);
+        if (cur->q != neu->q) {
+            mSynapse->SetVoiceTransposition(i, neu->q);
         }
-        if (mCurrentParams.bands[i].coeff0 != params.bands[i].coeff0) {
-            mSynapse->SetVoiceAmount(i, params.bands[i].coeff0);
+        if (cur->coeff0 != neu->coeff0) {
+            mSynapse->SetVoiceAmount(i, neu->coeff0);
         }
-        if (mCurrentParams.bands[i].coeff1 != params.bands[i].coeff1) {
-            mSynapse->SetVoiceProximityEffect(i, params.bands[i].coeff1);
+        if (cur->coeff1 != neu->coeff1) {
+            mSynapse->SetVoiceProximityEffect(i, neu->coeff1);
         }
-        if (mCurrentParams.bands[i].coeff2 != params.bands[i].coeff2) {
-            mSynapse->SetVoiceProximityFocus(i, params.bands[i].coeff2);
+        if (cur->coeff2 != neu->coeff2) {
+            mSynapse->SetVoiceProximityFocus(i, neu->coeff2);
         }
     }
     if (mCurrentParams.lowCutoffFreq != params.lowCutoffFreq) {

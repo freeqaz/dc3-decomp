@@ -18,6 +18,30 @@ private:
 
 IUnknown *FxSendSynapse360::CreateFx() { return (IUnknown *)new DSP::SynapseAPO(); }
 
+// NOT YET 100% (96.4%, 32 rows of 89), and the residual is a *build-model*
+// finding rather than a source one.  Every remaining row follows from register
+// allocation: the target spends two callee-saved registers (r30 = voice,
+// r31 = this) and a 0xd0 frame, while we keep `this` in the VOLATILE r8 across
+// the `bl ??0SynapseAPOParams` and need only r31 and a 0xc0 frame.  That is
+// only legal if the compiler knows the callee's clobber set -- MSVC's whole-TU
+// register-usage propagation -- and it does, because the ctor is defined in
+// this file.  Measured, one variable at a time:
+//
+//   ctor defined in this TU, at the bottom (as shipped here)   96.4%
+//   ctor defined in this TU, between CreateFx and here          96.4%  (inert:
+//       the analysis is whole-TU, not emission-order dependent)
+//   ctor moved to SynapseAPO.cpp (a different TU)               98.8%
+//
+// So the original compiled SyncEffectParams without the ctor body in scope,
+// i.e. in a separate object -- exactly how rb3-xenon splits the same engine
+// code (synth_xbox/FxSendSynapse.cpp holds only the Params ctor;
+// synth_xbox/FxSendSynapse360.cpp holds these methods).  Acting on that here
+// needs config/373307D9/splits.txt to model two objects whose .text
+// interleaves (CreateFx, ctor, SyncEffectParams by address), including a
+// correct .rdata/.pdata division, so it is left for a lane that can validate
+// the split.  Moving the ctor alone is a net loss: it costs the 80 bytes
+// ??0SynapseAPOParams currently matches in this unit and SyncEffectParams
+// still does not reach 100%.
 void FxSendSynapse360::SyncEffectParams(IXAudio2SubmixVoice *voice) const {
     DSP::SynapseAPOParams params;
 
@@ -35,14 +59,17 @@ void FxSendSynapse360::SyncEffectParams(IXAudio2SubmixVoice *voice) const {
     params.bands[1].coeff2 = mProximityFocus;
     params.lowCutoffFreq = mAttackSmoothing;
     params.highCutoffFreq = mReleaseSmoothing;
+    float band1Gain = 1.0f;
     if (mNote2Hz == 0.0f) {
-        params.bands[1].gain = mUnisonTrio ? 1.0f : 0.0f;
+        if (!mUnisonTrio)
+            band1Gain = 0.0f;
         params.bands[1].coeff1 = mProximityEffect;
         params.bands[1].freq = mNote1Hz * 0.9904912114143372f;
     } else {
         params.bands[1].coeff1 = 0.0f;
         params.bands[1].freq = mNote2Hz * 0.9960159659385681f;
     }
+    params.bands[1].gain = band1Gain;
 
     // Band 2: target note 3 (or a detuned copy of note 1 when note 3 is unset).
     params.bands[2].enabled = 1;
@@ -65,7 +92,7 @@ void FxSendSynapse360::SyncEffectParams(IXAudio2SubmixVoice *voice) const {
 
 namespace DSP {
 
-SynapseAPOParams::SynapseAPOParams() {
+SynapseAPOParams::SynapseAPOParams() throw() {
     for (int i = 0; i < 3; i++) {
         bands[i].freq = 220.0f;
         bands[i].gain = 0.0f;
