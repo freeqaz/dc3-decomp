@@ -64,23 +64,24 @@ bool NgLight::SphereConeTest(const Vector3 &sphereCenter, float sphereRadius) {
     Vector3 sc = sphereCenter;
     sc -= xfm1.v;
 
-    // The projection of sc onto the cone axis is spelled out at each of its
-    // three use sites rather than named once. MSVC CSEs the three copies, but
-    // the shape of what it keeps alive across the two early-outs differs, and
-    // spelling it out is what the target's register allocation reflects
-    // (54.3% -> 57.2%; naming it costs ~3.6pp).
-    if (xfm2.m.y.x * sc.x + xfm2.m.y.z * sc.z + xfm2.m.y.y * sc.y < -sphereRadius) {
+    // MSVC materialises each of the three products once and re-derives the
+    // sum at every use site; naming the products is what stops it contracting
+    // them into fmadds.
+    float px = xfm2.m.y.x * sc.x;
+    float pz = xfm2.m.y.z * sc.z;
+    float py = xfm2.m.y.y * sc.y;
+
+    if (px + pz + py < -sphereRadius) {
         return false;
     }
 
     float range = mRange;
-    if (xfm2.m.y.x * sc.x + xfm2.m.y.z * sc.z + xfm2.m.y.y * sc.y
-        > range + sphereRadius) {
+    if (px + pz + py > range + sphereRadius) {
         return false;
     }
 
     Vector3 axisProj = xfm2.m.y;
-    axisProj *= xfm2.m.y.x * sc.x + xfm2.m.y.z * sc.z + xfm2.m.y.y * sc.y;
+    axisProj *= px + pz + py;
 
     Vector3 perp = sc;
     perp -= axisProj;
@@ -115,7 +116,7 @@ bool NgLight::SphereConeTest(const Vector3 &sphereCenter, float sphereRadius) {
     Vector3 edgeDir = conePoint;
     edgeDir -= topPoint;
 
-    float t = (1.0f / Dot(edgeDir, edgeDir)) * Dot(toSphere, edgeDir);
+    float t = Dot(toSphere, edgeDir) / Dot(edgeDir, edgeDir);
 
     Vector3 scaled = edgeDir;
     scaled *= t;
