@@ -116,7 +116,10 @@ struct NUIP_RUNTIME_STATE { /* Size=0xe9f0 */
     /* 0x0088 */ BYTE Reserved88[0xe9f0 - 0x88];
 };
 
-extern NUIP_DETROIT_RUNTIME_STATE NuipDetroitRuntimeState;
+// Zero-initialised .bss in the target (0x200 bytes at 0x8311C650, all zero),
+// defined here rather than declared: nuidetroit.obj is where the target puts
+// it. NuipRuntimeState lives in nuiruntime.obj and stays a declaration.
+NUIP_DETROIT_RUNTIME_STATE NuipDetroitRuntimeState;
 extern NUIP_RUNTIME_STATE NuipRuntimeState;
 
 void NuipDetroitCalculateFarSpace();
