@@ -126,11 +126,8 @@ void NgPostProc::DoBloom() {
             0.0f
         );
 
-        bool paramsChanged = !(mBloomColor == s_prevBloomColor)
-            || BloomIntensity() != s_prevBloomIntensity
-            || s_BloomSetter != this;
-
-        if (paramsChanged) {
+        if (!(mBloomColor == s_prevBloomColor)
+            || BloomIntensity() != s_prevBloomIntensity || s_BloomSetter != this) {
             s_prevBloomColor = mBloomColor;
             s_prevBloomIntensity = BloomIntensity();
             s_BloomSetter = this;
@@ -140,9 +137,9 @@ void NgPostProc::DoBloom() {
                 TextStream *prevReflect = TheDebug.SetReflect(overlay);
                 const char *worldName = PathName(TheHamDirector->GetActivePostProc());
                 float intensity = BloomIntensity();
-                int r = (int)(mBloomColor.red * 256.0f);
-                int g = (int)(mBloomColor.green * 256.0f);
-                int b = (int)(mBloomColor.blue * 256.0f);
+                int r = (int)(mBloomColor.red * 256.0);
+                int g = (int)(mBloomColor.green * 256.0);
+                int b = (int)(mBloomColor.blue * 256.0);
                 int counter = sBloomDebugCounter % 100;
                 sBloomDebugCounter++;
                 TheDebug << MakeString("%03d:BLOOM: C=<%3d,%3d,%3d> I=%5.2f : %s\n", counter, r, g, b, intensity, worldName);
@@ -209,14 +206,12 @@ void NgPostProc::DoBloom() {
         s_prevBloomColor = Hmx::Color(-1, -1, -1, -1);
     }
 
-    if (doBloom) {
-        if (doGlare) {
-            TheShaderMgr.unk28 = true;
-            TheShaderMgr.unk27 = false;
-        } else {
-            TheShaderMgr.unk28 = false;
-            TheShaderMgr.unk27 = true;
-        }
+    if (doBloom && doGlare) {
+        TheShaderMgr.unk28 = true;
+        TheShaderMgr.unk27 = false;
+    } else if (doBloom) {
+        TheShaderMgr.unk28 = false;
+        TheShaderMgr.unk27 = true;
     } else {
         TheShaderMgr.unk27 = false;
         TheShaderMgr.unk28 = false;
