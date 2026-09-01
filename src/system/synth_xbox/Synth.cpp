@@ -1,6 +1,8 @@
 #include "synth_xbox\Synth.h"
 #include "synth\CompressionEffect.h"
 #include "synth_xbox\HeadsetXferEffect.h"
+#include "synth_xbox\MeterEffect.h"
+#include "dsp\StandardEffect.h"
 #include "FxSendBitCrush.h"
 #include "FxSendChorus.h"
 #include "FxSendCompress.h"
@@ -42,6 +44,47 @@
 #include "xdk\xaudio2\xaudio2.h"
 #include "xdk\xaudio2\xaudio2fx.h"
 #include "xdk\LIBCMT\math.h"
+
+// The XAudio2 engine interface. Only the three factory slots this file needs are
+// spelled out; slots 0-7 (IUnknown + GetDeviceCount/GetDeviceDetails/Initialize/
+// RegisterForCallbacks/UnregisterForCallbacks) are padded so CreateSourceVoice
+// lands on vtable index 8 (0x20), CreateSubmixVoice on 9 (0x24) and
+// CreateMasteringVoice on 10 (0x28) -- the slots Synth360::PreInit and
+// Synth360::SetupHeadsetSubmixes call. Abstract and never constructed, so no
+// vtable or RTTI is emitted for it.
+struct IXAudio2 {
+    virtual HRESULT QueryInterface(const void *, void **) = 0;
+    virtual UINT32 AddRef() = 0;
+    virtual UINT32 Release() = 0;
+    virtual HRESULT GetDeviceCount(UINT32 *) = 0;
+    virtual HRESULT GetDeviceDetails(UINT32, void *) = 0;
+    virtual HRESULT Initialize(UINT32, UINT32) = 0;
+    virtual HRESULT RegisterForCallbacks(void *) = 0;
+    virtual void UnregisterForCallbacks(void *) = 0;
+    virtual HRESULT CreateSourceVoice(
+        IXAudio2Voice **,
+        const void *,
+        UINT32,
+        float,
+        void *,
+        const XAUDIO2_VOICE_SENDS *,
+        const XAUDIO2_EFFECT_CHAIN *
+    ) = 0;
+    virtual HRESULT CreateSubmixVoice(
+        IXAudio2Voice **,
+        UINT32,
+        UINT32,
+        UINT32,
+        UINT32,
+        const XAUDIO2_VOICE_SENDS *,
+        const XAUDIO2_EFFECT_CHAIN *
+    ) = 0;
+    virtual HRESULT CreateMasteringVoice(
+        IXAudio2Voice **, UINT32, UINT32, UINT32, UINT32, const XAUDIO2_EFFECT_CHAIN *
+    ) = 0;
+};
+
+extern "C" HRESULT XAudio2Create(IXAudio2 **, UINT32, UINT32);
 
 Synth360 *TheXboxSynth;
 
@@ -112,13 +155,104 @@ BEGIN_HANDLERS(Synth360)
     HANDLE_SUPERCLASS(Synth)
 END_HANDLERS
 
-// Not reconstructed (0x564 bytes at 0x82E30650). It builds the LevelData table,
-// calls XAudio2Create, creates the mastering voice and attaches its effect chain
-// -- a StandardEffect<CompressionEffect> plus a MeterEffect -- then reads the
-// limiter settings out of SystemConfig("limiter", "synth"). See the note at the
-// bottom of this file: this stub is why CompressionEffect's instantiation has to
-// be forced by hand here.
-void Synth360::PreInit() {}
+void Synth360::PreInit() {
+    TheXboxSynth = this;
+
+    // One meter bus per speaker, in the order MeterEffect writes them. The two
+    // trailing entries are the downmixed stereo pair Poll() synthesizes; index 6
+    // is unused and its name is the shared empty literal.
+    {
+        const char *busNames[9] = { "  FL", "  FR", "   C", " LFE", "  SL",
+                                    "  SR", "",     " DML", " DMR" };
+        for (int i = 0; i < 9; i++) {
+            mLevelData.push_back(LevelData(busNames[i]));
+        }
+    }
+
+    XAudio2Create((IXAudio2 **)&unkec, 0, 0x3c);
+    ((IXAudio2 *)unkec)->CreateMasteringVoice((IXAudio2Voice **)&unkf0, 0, 0, 0, 0, 0);
+
+    {
+        XAUDIO2_EFFECT_DESCRIPTOR effectDescs[2];
+        XAUDIO2_EFFECT_CHAIN effectChain;
+        XAUDIO2_VOICE_SENDS voiceSends;
+        XAUDIO2_SEND_DESCRIPTOR sendDesc;
+
+        effectDescs[0].pEffect =
+            static_cast<CXAPOBase *>(new StandardEffect<CompressionEffect>());
+        effectDescs[0].InitialState = 1;
+        effectDescs[0].OutputChannels = 6;
+        effectDescs[1].pEffect = static_cast<CXAPOBase *>(new MeterEffect());
+        effectDescs[1].InitialState = 1;
+        effectDescs[1].OutputChannels = 6;
+
+        // The MeterEffect reads the bus levels through one indirection that Poll()
+        // hands back to it every frame; point it at mLevelData's element array.
+        unk13c = (int)new int;
+        *(int *)unk13c = *(int *)&mLevelData;
+
+        effectChain.EffectCount = 2;
+        effectChain.pEffectDescriptors = effectDescs;
+        if ((IXAudio2Voice *)unkf0) {
+            ((IXAudio2Voice *)unkf0)->SetEffectChain(&effectChain);
+        }
+
+        DataArray *limiterCfg = SystemConfig(Symbol("synth"), Symbol("limiter"));
+        float threshold = limiterCfg->FindArray(Symbol("threshold"), true)->Float(1);
+        float ratio = limiterCfg->FindArray(Symbol("ratio"), true)->Float(1);
+        float attack = limiterCfg->FindArray(Symbol("attack_ms"), true)->Float(1) * 0.001f;
+        float release =
+            limiterCfg->FindArray(Symbol("release_ms"), true)->Float(1) * 0.001f;
+        float outputDb = limiterCfg->FindArray(Symbol("output_db"), true)->Float(1);
+
+        CompressionEffect::Params params;
+        if ((IXAudio2Voice *)unkf0) {
+            ((IXAudio2Voice *)unkf0)->GetEffectParameters(0, &params, sizeof(params));
+        }
+        params.mThresholdDb = threshold;
+        params.mRatio = ratio;
+        params.mAttackTime = attack;
+        params.mReleaseTime = release;
+        params.mGateThreshDb = -140.0f;
+        params.mOutputGainDb = (1.0f - 1.0f / ratio) * threshold + outputDb;
+        if ((IXAudio2Voice *)unkf0) {
+            ((IXAudio2Voice *)unkf0)->SetEffectParameters(0, &params, sizeof(params), 0);
+        }
+
+        if ((IXAudio2 *)unkec && (IXAudio2Voice *)unkf0) {
+            // The global reverb pair: a 2-channel submix carrying the reverb APO,
+            // fed by a 6-channel submix that everything else sends into.
+            CreateAudioReverb((IUnknown **)&unk100);
+            effectDescs[0].pEffect = (IUnknown *)unk100;
+            effectDescs[0].InitialState = 1;
+            effectDescs[0].OutputChannels = 2;
+            effectChain.EffectCount = 1;
+            effectChain.pEffectDescriptors = effectDescs;
+            ((IXAudio2 *)unkec)
+                ->CreateSubmixVoice(
+                    (IXAudio2Voice **)&unkf4, 2, 48000, 0, 0x8000, 0, &effectChain
+                );
+
+            sendDesc.Flags = 0;
+            sendDesc.pOutputVoice = (IXAudio2Voice *)unkf4;
+            voiceSends.SendCount = 1;
+            voiceSends.pSends = &sendDesc;
+            ((IXAudio2 *)unkec)
+                ->CreateSubmixVoice(
+                    (IXAudio2Voice **)&unkf8, 6, 48000, 0, 0x7fff, &voiceSends, 0
+                );
+
+            ((IXAudio2Voice *)unkf4)->SetVolume(4.0f, 0);
+
+            String preset;
+            DataArray *synthCfg = SystemConfig(Symbol("synth"));
+            synthCfg->FindData(Symbol("reverb_environment"), preset, false);
+            SetGlobalReverbPreset(preset.c_str());
+        }
+    }
+
+    EnableLevels(mTrackLevels);
+}
 
 void Synth360::Poll() {
     START_AUTO_TIMER("synth");
@@ -503,33 +637,3 @@ StreamReader *Synth360::NewStreamDecoder(File *file, StandardStream *stream, Sym
     }
 }
 
-// The target links CompressionEffect's whole CSampleXAPOBase instantiation --
-// all 18 symbols, vtables and RTTI included -- out of Synth.obj, not out of
-// FxSendCompress.obj where FxSendCompress360::CreateFx lives.
-//
-// THE CALL SITE IS Synth360::PreInit, which is still a stub above. In the target
-// it builds the master voice's effect chain, and its first descriptor is a
-// heap-allocated StandardEffect<CompressionEffect> -- the "limiter":
-//
-//     82E3075C  li      r3, 0xd4                    ; sizeof(StandardEffect<CompressionEffect>)
-//     82E30760  bl      ??2@YAPAXI@Z                ; operator new
-//     82E30774  bl      ??0?$StandardEffect@VCompressionEffect@@@@QAA@XZ
-//     82E30788  stw     r3,  0x80(r31)              ; desc.pEffect
-//     82E3078C  stw     r29, 0x84(r31)              ; desc.InitialState = 1
-//     82E30794  stw     r28, 0x88(r31)              ; desc.OutputChannels = 6
-//
-// (the next descriptor is a MeterEffect, `li r3, 0x94` at 82E30790, and the
-// chain is followed by the SystemConfig("limiter", "synth") reads at 82E30804).
-// That is the only reference to the class anywhere in Synth.obj, and it is why
-// Synth.obj wins the COMDAT for the whole instantiation: FxSendCompress360::
-// CreateFx only emits a folding copy. It is NOT a factory, a registration table
-// or a sizeof -- it is one `new` in the master chain.
-//
-// Synth360::PreInit is 0x564 bytes and is not reconstructed, so the reference
-// does not exist in this build yet. Until it does, instantiate the registration
-// block explicitly so this object defines the symbol the target's does. THIS IS
-// A PLACEHOLDER FOR PreInit, not source truth -- delete it when PreInit lands.
-namespace ATG {
-template XAPO_REGISTRATION_PROPERTIES
-    CSampleXAPOBase<CompressionEffect, CompressionEffect::Params>::m_regProps;
-}
