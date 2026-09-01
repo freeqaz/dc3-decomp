@@ -636,4 +636,3 @@ StreamReader *Synth360::NewStreamDecoder(File *file, StandardStream *stream, Sym
         return nullptr;
     }
 }
-

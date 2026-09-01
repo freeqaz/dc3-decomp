@@ -46,6 +46,11 @@ public:
     float mFilterState1;
     float mFilterState2;
     float mFilterState3;
-    float mLastInput;
-    float mLastOutput;
+    float mLastInput; // 0x44
+    float mLastOutput; // 0x48
+    // 0x4c. sizeof(WahEffect) is 0x50 in the target -- StandardEffect<WahEffect>'s
+    // ctor allocates `li r3, 0x50` -- but no WahEffect member function touches
+    // this slot: the ctor, Reset, SetParameters and Process between them reach
+    // 0x48 and stop. Kept as an explicit trailing field so the size is right.
+    float unk4c;
 };

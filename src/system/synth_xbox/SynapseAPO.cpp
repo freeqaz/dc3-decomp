@@ -10,8 +10,13 @@ SynapseAPO::SynapseAPO() : ATG::CSampleXAPOBase<SynapseAPO, SynapseAPOParams>(),
 }
 
 SynapseAPO::~SynapseAPO() {
-    if (mSynapse) {
-        delete mSynapse;
+    // Read the member into a local before deleting, exactly as SetSamplingRate
+    // does. Deleting the member expression directly makes MSVC emit an
+    // out-of-line ??3@YAXPAX@Z call plus a spill; through a local it inlines
+    // operator delete to the direct RadFree the target has.
+    Synapse::Synapse *synapse = mSynapse;
+    if (synapse) {
+        delete synapse;
     }
 }
 
