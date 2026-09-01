@@ -42,15 +42,21 @@ void FftIpp::FftReal(
         float *packed = &mBuf3[0];
         int byteOff = 8;
         float *im = outIm + 1;
-        long reBias = outRe - outIm;
+        // BYTE bias, not an element count: the target computes outRe - outIm
+        // with a single subf and feeds it straight to stfsx.  Spelling it as a
+        // float* difference costs an extra srawi/slwi pair that cancel out.
+        long reBias = (char *)outRe - (char *)outIm;
         int i = 1;
         do {
-            // Even slot -> real out, odd slot -> imag out.
-            float *cur = (float *)((char *)packed + byteOff);
-            im[reBias] = cur[0];
+            // Even slot -> real out, odd slot -> imag out.  Both reads are
+            // written as (packed + byteOff) rather than through a `cur`
+            // pointer: naming the intermediate lets MSVC strength-reduce
+            // byteOff away into a single running pointer, which costs the
+            // target's lfsx/add pair.
+            *(float *)((char *)im + reBias) = *(float *)((char *)packed + byteOff);
             ++i;
             byteOff += 8;
-            im[0] = cur[1];
+            im[0] = *(float *)((char *)packed + byteOff - 4);
             im += 1;
         } while ((unsigned int)i < (unsigned int)half);
     }
