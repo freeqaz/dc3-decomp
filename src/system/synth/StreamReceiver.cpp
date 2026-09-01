@@ -100,23 +100,26 @@ void StreamReceiver::Poll() {
         mDoneBufferCounter++;
     }
 #else
-    if ((unsigned int)mState < kReady) {
-        mWantToSend = true;
-    } else if ((unsigned int)mState == kReady) {
-    } else if ((unsigned int)mState >= 4) {
-        MILO_FAIL("bad state logic.\n");
+    if ((unsigned int)mState >= kReady) {
+        if ((unsigned int)mState == kReady) {
+            // Already primed; nothing to poll.
+        } else if ((unsigned int)mState >= kStopped + 1) {
+            MILO_FAIL("bad state logic.\n");
+        } else {
+            int playCursor = GetPlayCursor();
+            int activeBuf = playCursor / 0x4000;
+            mLastPlayCursor = playCursor;
+            MILO_ASSERT(activeBuf >= 0 && activeBuf < mNumBuffers, 0xc2);
+            if (!mSlipEnabled && activeBuf != mSendTarget) {
+                mWantToSend = true;
+            }
+            int diff = activeBuf - mSendTarget;
+            if (diff == mNumBuffers / 2 || diff == -(mNumBuffers / 2)) {
+                mWantToSend = true;
+            }
+        }
     } else {
-        int playCursor = GetPlayCursor();
-        int activeBuf = playCursor / 0x4000;
-        mLastPlayCursor = playCursor;
-        MILO_ASSERT(activeBuf >= 0 && activeBuf < mNumBuffers, 0xc2);
-        if (!mSlipEnabled && activeBuf != mSendTarget) {
-            mWantToSend = true;
-        }
-        int diff = activeBuf - mSendTarget;
-        if (diff == mNumBuffers / 2 || diff == -(mNumBuffers / 2)) {
-            mWantToSend = true;
-        }
+        mWantToSend = true;
     }
     if (mWantToSend && mState != kInit && kStreamRcvrBufSize - mRingFreeSpace != 0) {
         mStarving = true;
