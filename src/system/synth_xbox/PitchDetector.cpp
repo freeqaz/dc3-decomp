@@ -5,6 +5,13 @@
 
 namespace DSP {
 
+// The target parks SpectralAnalysis's ctor/dtor in PitchDetector.obj (Analyze
+// and SetMode live in SpectralAnalysis.obj).  Both are implicit: the ctor only
+// default-constructs the two FftIpp members and the six float vectors, and the
+// dtor only runs their destructors in reverse.
+SpectralAnalysis::SpectralAnalysis() {
+}
+
 SpectralAnalysis::~SpectralAnalysis() {
 }
 
@@ -40,6 +47,9 @@ PitchDetector::PitchDetector(const stlpmtx_std::vector<float, stlpmtx_std::StlNo
         float c = 1.0f - (float)cos((double)(angle / size));
         mWeight[i] = c * 4.0f + 1.0f;
     }
+}
+
+PitchDetector::~PitchDetector() {
 }
 
 void PitchDetector::Detect(unsigned int frame) {
