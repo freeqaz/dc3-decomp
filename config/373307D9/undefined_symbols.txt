@@ -14,7 +14,7 @@
 # entry points and middleware the decomp calls but does not contain. The
 # classification is for the reader; --check ignores it and compares names only.
 #
-# counts: 694 total = 19 GAP + 675 EXT
+# counts: 691 total = 16 GAP + 675 EXT
 
 GAP ?BeginDrawing@DxRnd@@UAAXXZ  # target defines it in system/rnddx9/Rnd_Xbox.obj
 GAP ?DrawFacesInRange@DxMesh@@UAAXHH@Z  # target defines it in system/rnddx9/Mesh.obj
@@ -24,9 +24,6 @@ GAP ?DrawShowing@DxMultiMesh@@UAAXXZ  # target defines it in system/rnddx9/Multi
 GAP ?DrawShowing@DxParticleSys@@UAAXXZ  # target defines it in system/rnddx9/Part.obj
 GAP ?DrawString@DxRnd@@UAAAAVVector2@@PBDABV2@ABVColor@Hmx@@_N@Z  # target defines it in system/rnddx9/Rnd_Xbox.obj
 GAP ?EndDrawing@DxRnd@@UAAXXZ  # target defines it in system/rnddx9/Rnd_Xbox.obj
-GAP ?FindMITargetTypeInstance@@YAPBU_s_RTTIBaseClassDescriptor@@PAXPBU_s_RTTICompleteObjectLocator@@PAUTypeDescriptor@@H2@Z  # target defines it in xdk/LIBCMT/rtti.obj
-GAP ?FindSITargetTypeInstance@@YAPBU_s_RTTIBaseClassDescriptor@@PBU_s_RTTICompleteObjectLocator@@PAUTypeDescriptor@@1@Z  # target defines it in xdk/LIBCMT/rtti.obj
-GAP ?FindVITargetTypeInstance@@YAPBU_s_RTTIBaseClassDescriptor@@PAXPBU_s_RTTICompleteObjectLocator@@PAUTypeDescriptor@@H2@Z  # target defines it in xdk/LIBCMT/rtti.obj
 GAP ?Poll@PlatformMgr@@QAAXXZ  # target defines it in system/os/PlatformMgr_Xbox.obj
 GAP ?ReleaseAutoRelease@DxRnd@@QAAXXZ  # target defines it in system/rnddx9/Rnd_Xbox.obj
 GAP ?SyncBitmap@DxTex@@MAAXXZ  # target defines it in system/rnddx9/Tex.obj
