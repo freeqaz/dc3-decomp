@@ -14,7 +14,7 @@
 # entry points and middleware the decomp calls but does not contain. The
 # classification is for the reader; --check ignores it and compares names only.
 #
-# counts: 809 total = 174 GAP + 635 EXT
+# counts: 807 total = 172 GAP + 635 EXT
 
 GAP ??$?6VHamScrollSpeedIndicator@@@@YAAAVBinStream@@AAV0@ABV?$ObjDirPtr@VHamScrollSpeedIndicator@@@@@Z  # target defines it in system/ui/UILabel.obj
 GAP ??0GranularSynth@Synapse@DSP@@QAA@ABV?$vector@MV?$StlNodeAlloc@M@stlpmtx_std@@@stlpmtx_std@@III@Z  # target defines it in system/synth_xbox/GranularSynth.obj
@@ -61,7 +61,6 @@ GAP ?ReleaseAutoRelease@DxRnd@@QAAXXZ  # target defines it in system/rnddx9/Rnd_
 GAP ?ResolveMipChain@DxTex@@AAAXXZ  # target defines it in system/rnddx9/Tex.obj
 GAP ?RunXinputJoypadLoop@?A0x439b694a@@YAXXZ  # target defines it in system/os/Joypad_Xbox.obj
 GAP ?SendRawData@@YAXHEEEEEEE@Z  # target defines it in system/os/Joypad_Xbox.obj
-GAP ?SetBorderColor@RndRenderState@@QAAXI_N@Z  # target defines it in system/rnddx9/RenderState.obj
 GAP ?SetGlobalReverbPreset@Synth360@@QAAXPBD@Z  # target defines it in system/synth_xbox/Synth.obj
 GAP ?ShowControllerRequiredUI@PlatformMgr@@QAAXPAVObject@Hmx@@@Z  # target defines it in system/os/PlatformMgr_Xbox.obj
 GAP ?Start@SingleItemEnumJob@@UAAXXZ  # target defines it in system/os/PlatformMgr_Xbox.obj
@@ -89,7 +88,6 @@ GAP ?UpdateVoiceMatrices@FxSend360@@AAAXXZ  # target defines it in system/synth_
 GAP ?fft_altivec@@YAHPAM0KJ0@Z  # target defines it in system/synth_xbox/FFT.obj
 GAP ?fft_real_forward_altivec@@YAHPAMJ0@Z  # target defines it in system/synth_xbox/FFT.obj
 GAP ?fft_recursive@@YAHPAMKJ0@Z  # target defines it in system/synth_xbox/FFT.obj
-GAP ?fft_square_matrix@@YAHPAMJJ0@Z  # target defines it in system/synth_xbox/FFT.obj
 GAP ?gCharHighlightY@@3MA  # target defines it in system/char/Char.obj
 GAP ?gMemStackLock@@3PAVCriticalSection@@A  # target defines it in system/utl/MemMgr.obj
 GAP ?lbl_82F14008@@3HA  # target defines it in system/rndobj/Draw.obj

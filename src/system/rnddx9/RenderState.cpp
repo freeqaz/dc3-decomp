@@ -112,6 +112,15 @@ void RndRenderState::SetTextureClamp(uint sampler, ClampMode clamp) {
     TheDxRnd.Device()->m_Pending.m_Mask[3] |= mask;
 }
 
+// dword[5] bits 0-1 of the fetch constant select the border-colour source
+// (transparent black vs opaque black); the rest of the dword is untouched.
+void RndRenderState::SetBorderColor(uint sampler, bool border) {
+    D3DDevice *dev = TheDxRnd.Device();
+    DWORD *pWord = &dev->m_Constants.TextureFetch[sampler].dword[5];
+    *pWord = (*pWord & ~0x00000003) | ((border != 0) & 3);
+    dev->m_Pending.m_Mask[3] |= 0x8000000000000000ull >> (sampler + 0x20);
+}
+
 void RndRenderState::Init(void) {
     SetTextureClamp(4, (ClampMode)2);
     SetTextureClamp(5, (ClampMode)2);
