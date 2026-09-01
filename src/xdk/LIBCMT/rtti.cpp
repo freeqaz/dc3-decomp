@@ -174,14 +174,15 @@ const _s_RTTIBaseClassDescriptor *FindMITargetTypeInstance(
                 if (pTargetBase) {
                     if (i - iTarget <= numTargetContained) {
                         // The source sub-object lives inside the target one.
-                        if (pTargetBase->attributes & BCD_HASPCHD) {
+                        if (!(pTargetBase->attributes & BCD_HASPCHD)) {
+                            if (iTarget != 0) {
+                                return pTargetBase;
+                            }
+                        } else {
                             const _s_RTTIBaseClassDescriptor *pContained =
                                 pTargetBase->pClassDescriptor->pBaseClassArray
                                     ->arrayOfBaseClassDescriptors[i - iTarget];
                             return (pContained->attributes & BCD_NOTVISIBLE) ? 0 : pTargetBase;
-                        }
-                        if (iTarget != 0) {
-                            return pTargetBase;
                         }
                     } else if (pTargetBase->attributes & (BCD_NOTVISIBLE | BCD_AMBIGUOUS)) {
                         return 0;
