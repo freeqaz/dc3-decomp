@@ -118,9 +118,13 @@ void NgPostProc::DoBloom() {
 
     if (doBloom) {
         bloomIntensity = BloomIntensity();
-        float redScaled = mBloomColor.red * sBloomLocFactor * bloomIntensity;
-        float greenScaled = mBloomColor.green * sBloomLocFactor * bloomIntensity;
-        float blueScaled = mBloomColor.blue * sBloomLocFactor * bloomIntensity;
+        float bloomScale = sBloomLocFactor * bloomIntensity;
+        Vector4 bloomColorVec(
+            mBloomColor.red * bloomScale,
+            mBloomColor.green * bloomScale,
+            mBloomColor.blue * bloomScale,
+            0.0f
+        );
 
         bool paramsChanged = !(mBloomColor == s_prevBloomColor)
             || BloomIntensity() != s_prevBloomIntensity
@@ -146,7 +150,6 @@ void NgPostProc::DoBloom() {
             }
         }
 
-        Vector4 bloomColorVec(redScaled, greenScaled, blueScaled, 0.0f);
         TheShaderMgr.SetPConstant((PShaderConstant)6, bloomColorVec);
         TheShaderMgr.SetPConstant((PShaderConstant)kPS_BloomParams, TheRnd.GetDefaultTex(Rnd::kDefaultTex_Black));
         TheShaderMgr.SetPConstant((PShaderConstant)kPS_SpotlightTex, TheRnd.GetDefaultTex(Rnd::kDefaultTex_Black));
