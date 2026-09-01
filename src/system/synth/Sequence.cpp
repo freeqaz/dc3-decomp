@@ -615,17 +615,19 @@ void GroupSeqInst::SetTranspose(float f) {
 
 RandomGroupSeqInst::RandomGroupSeqInst(RandomGroupSeq *seq)
     : GroupSeqInst(seq, false), mIt(mSeqs.end()) {
+    ObjPtrList<Sequence> &children = seq->Children();
+    // mNumSeqs deliberately keeps the UNCLAMPED GetNumSimul() value -- the target
+    // never stores the clamped count back into the member, and nothing outside
+    // this ctor reads mNumSeqs.
     mNumSeqs = seq->GetNumSimul();
-    int childrenSize = seq->Children().size();
-    if (childrenSize < mNumSeqs)
-        mNumSeqs = childrenSize;
-    if (mNumSeqs == 1) {
+    int childrenSize = children.size();
+    int numSeqs = Min(mNumSeqs, childrenSize);
+    if (numSeqs == 1) {
         int next = seq->NextIndex();
         int target = next % childrenSize;
         seq->PickNextIndex();
         int n = 0;
-        for (ObjPtrList<Sequence>::iterator it = seq->Children().begin();
-             it != seq->Children().end();
+        for (ObjPtrList<Sequence>::iterator it = children.begin(); it != children.end();
              ++it) {
             if (n == target) {
                 SeqInst *si = (*it)->MakeInst();
@@ -639,23 +641,21 @@ RandomGroupSeqInst::RandomGroupSeqInst(RandomGroupSeq *seq)
         }
         mIt = mSeqs.begin();
     } else {
-        int seqsLeft = mNumSeqs;
-        int childrenLeft = childrenSize;
-        ObjPtrList<Sequence>::iterator it = seq->Children().begin();
-        while (it != seq->Children().end()) {
-            if (seqsLeft == childrenLeft || RandomFloat() <= (float)seqsLeft / (float)childrenLeft) {
-                SeqInst *si = (*it)->MakeInst();
-                if (si) {
-                    mSeqs.push_back();
-                    mSeqs.back() = si;
+        while (numSeqs != 0) {
+            for (ObjPtrList<Sequence>::iterator it = children.begin();
+                 it != children.end();
+                 ++it) {
+                if (numSeqs == childrenSize
+                    || RandomFloat() <= (float)numSeqs / (float)childrenSize) {
+                    SeqInst *si = (*it)->MakeInst();
+                    if (si) {
+                        mSeqs.push_back();
+                        mSeqs.back() = si;
+                    }
+                    numSeqs--;
                 }
-                seqsLeft--;
+                childrenSize--;
             }
-            ++it;
-            childrenLeft--;
-            if (seqsLeft != 0)
-                continue;
-            break;
         }
         mIt = mSeqs.begin();
     }
@@ -702,9 +702,13 @@ RandomIntervalGroupSeqInst::RandomIntervalGroupSeqInst(RandomIntervalGroupSeq *s
 
 void RandomIntervalGroupSeqInst::ComputeNextTime(int idx) {
     if (idx < mNextPlayTimes.size()) {
-        float interval = mAvgIntervalSecs;
-        if (mIntervalSpread != 0.0f) {
-            interval = RandomFloat(mAvgIntervalSecs - mIntervalSpread, mAvgIntervalSecs + mIntervalSpread);
+        float spread = mIntervalSpread;
+        float avg = mAvgIntervalSecs;
+        float interval;
+        if (spread == 0.0f) {
+            interval = avg;
+        } else {
+            interval = RandomFloat(avg - spread, avg + spread);
         }
         mNextPlayTimes[idx] = TheTaskMgr.Seconds(TaskMgr::kRealTime) + interval;
     }
@@ -731,7 +735,8 @@ bool RandomIntervalGroupSeqInst::IsRunning() { return unk54; }
 void RandomIntervalGroupSeqInst::Poll() {
     ObjVector<ObjPtr<SeqInst> >::iterator it = mSeqs.begin();
     while (it != mSeqs.end()) {
-        if (*it == NULL || !(*it)->IsRunning()) {
+        SeqInst *inst = *it;
+        if (inst == nullptr || !inst->IsRunning()) {
             it = mSeqs.erase(it);
         } else {
             it++;

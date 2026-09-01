@@ -310,15 +310,21 @@ void MoggClip::LoadNumChannels() {
     }
 
     // Poll to initialize stream.
-    // NOTE: the target binary calls Play(0) here (PlayableSample vtable slot 0xc,
-    // float 0.0 arg) rather than SynthPoll() (slot 0x8). Play(0) is the PPC-correct
-    // form (og-dc3 verified) and would take this function to 100%, but on the native
-    // port it drives a real StandardStream init through StreamReceiver::New, whose
-    // engine-side factory (StreamReceiver::sFactory, milo-native-engine
-    // StreamReceiver_Native.cpp:44) is unregistered in the asset-loading test harness
-    // -> NULL-pointer SegFault in 27 native tests. Until the engine registers the
-    // factory in that harness, SynthPoll() is kept so the native suite stays 418/418.
+    // The target binary calls Play(0) here (PlayableSample vtable slot 0xc, float
+    // 0.0 arg) rather than SynthPoll() (SynthPollable slot 0x8). Play(0) is the
+    // PPC-correct form (og-dc3 verified) and is what the matching build must emit,
+    // but on the native port it drives a real StandardStream init through
+    // StreamReceiver::New, whose engine-side factory (StreamReceiver::sFactory,
+    // milo-native-engine StreamReceiver_Native.cpp:44) is unregistered in the
+    // asset-loading test harness -> NULL-pointer SegFault in 27 native tests. The
+    // substitution is therefore a native-only workaround and lives behind
+    // HX_NATIVE so the PPC codegen stays byte-identical to the target; drop the
+    // guard once the engine registers the factory in that harness.
+#ifdef HX_NATIVE
     SynthPoll();
+#else
+    Play(0);
+#endif
     if (!mStream) {
         mNumChannels = -1;
         return;
@@ -344,7 +350,7 @@ void MoggClip::LoadNumChannels() {
     if (mNumChannels < 0) {
         TheDebug.Notify(
             MakeString("[GetNumChannels] Ret = %d.  Unable to get the number of channels from mogg: %s!",
-                       mNumChannels, mMoggFile));
+                       mNumChannels, (const String &)mMoggFile));
         mNumChannels = -1;
     }
 }
@@ -425,11 +431,29 @@ void MoggClip::SetPan(int i1, float f2) {
     }
 }
 
-void MoggClip::SetupPanInfo(float f1, float f2, bool stereo) {
+// The target loads TWO DISTINCT SINGLE-precision constants here -- __real@bf000000
+// (-0.5f) ahead of the `li r4, 0` SetPan and __real@3f000000 (+0.5f) ahead of the
+// `li r4, 1` one -- so the channel/sign pairing below is the right way round and
+// the arithmetic is float, not double.
+//
+// This does NOT reach 100%: MSVC /fp:fast canonicalises `x * -0.5f` into
+// `-(x * 0.5f)` and then CSEs the multiply into f30 across the intervening SetPan
+// call, collapsing the target's two independent fmadds into one fmuls + fsubs +
+// fadds. rb3-xenon adjudicated the identical function and refuted four source
+// spellings (`-f2/2.0f`, `f2/-2.0f`, explicit `f2 * -0.5f`, and both channels as
+// explicit multiplies at once) -- all byte-identical. Codegen wall; do not re-dig.
+//
+// ⚠ Writing the channel-0 divisor as a `2.0` DOUBLE literal scores HIGHER (92.9%,
+// 3 mismatches vs 78.7%, 7) because objdiff masks the constant as a relocation
+// argument. It is provably not the original source -- it emits an lfd of a double
+// 0.5 plus an frsp that the target does not contain, and the target's .rdata holds
+// no double here. The row contributes 0 matched bytes at either score, so the
+// honest spelling is free.
+void MoggClip::SetupPanInfo(float pan, float panWidth, bool stereo) {
     if (stereo) {
-        SetPan(0, -f2 / 2.0 + f1);
-        SetPan(1, f2 / 2.0f + f1);
+        SetPan(0, -panWidth / 2.0f + pan);
+        SetPan(1, panWidth / 2.0f + pan);
     } else {
-        SetPan(0, f1);
+        SetPan(0, pan);
     }
 }
