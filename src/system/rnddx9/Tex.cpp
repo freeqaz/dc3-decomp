@@ -241,6 +241,87 @@ DataNode DebugPrintAllTextures(DataArray *) {
 
 void DxTex::Init() { DataRegisterFunc("dump_tex", DebugPrintAllTextures); }
 
+void DxTex::LockBitmap(RndBitmap &bm, int flags) {
+    if (!mTexture) {
+        RndTex::LockBitmap(bm, flags);
+        return;
+    }
+    bool wantRead = (flags & 1) > 0;
+    bool wantWrite = (flags & 4) > 0;
+    if (!wantRead && !wantWrite) {
+        return;
+    }
+    bool renderTarget = (mType & kRendered) > 0;
+    bool frontBuffer = (mType & kFrontBuffer) > 0;
+    if ((renderTarget || frontBuffer) && wantRead) {
+        if (frontBuffer) {
+            unka4 = D3DTexture_GetSurfaceLevel(TheDxRnd.NotFrontBuffer(), 0);
+        } else {
+            unka4 = GetSurfaceLevel(0);
+        }
+    } else if ((mType & kBackBuffer) > 0 && wantRead) {
+        D3DDevice_Resolve(
+            TheDxRnd.Device(), 0, nullptr, mTexture, nullptr, 0, 0, nullptr, 1.0f, 0,
+            nullptr
+        );
+        unka4 = GetSurfaceLevel(0);
+    } else if ((mType & kMovie) > 0) {
+        unka4 = nullptr;
+    } else if ((mType & (kRegular | kScratch)) > 0) {
+        unka4 = GetSurfaceLevel(0);
+    }
+    if (!unka4) {
+        return;
+    }
+    unka8 = flags;
+    if (wantRead && !wantWrite) {
+        bm.Create(
+            mWidth,
+            mHeight,
+            0,
+            D3DFORMAT_BitsPerPixel(mFormat),
+            TheDxRnd.BitmapOrderForD3DFormat(mFormat),
+            nullptr,
+            nullptr,
+            nullptr
+        );
+        D3DSurface_LockRect(unka4, &mLockedRect, nullptr, 0x10);
+        XGTEXTURE_DESC desc;
+        XGGetTextureDesc((D3DBaseTexture *)unka4, 0, &desc);
+        if (desc.Format & 0x100) {
+            XGUntileSurface(
+                bm.Pixels(),
+                bm.DxtRowBytes(),
+                nullptr,
+                mLockedRect.pBits,
+                desc.WidthInBlocks,
+                desc.HeightInBlocks,
+                nullptr,
+                desc.BytesPerBlock
+            );
+        } else {
+            memcpy(bm.Pixels(), mLockedRect.pBits, bm.PixelBytes());
+        }
+        D3DSurface_UnlockRect(unka4);
+        if (unka4) {
+            D3DResource_Release(unka4);
+            unka4 = nullptr;
+        }
+    } else if (wantWrite) {
+        D3DSurface_LockRect(unka4, &mLockedRect, nullptr, 0);
+        bm.Create(
+            mWidth,
+            mHeight,
+            0,
+            D3DFORMAT_BitsPerPixel(mFormat),
+            TheDxRnd.BitmapOrderForD3DFormat(mFormat),
+            nullptr,
+            mLockedRect.pBits,
+            mLockedRect.pBits
+        );
+    }
+}
+
 void DxTex::UnlockBitmap() {
     if (mTexture) {
         if (unka4) {
