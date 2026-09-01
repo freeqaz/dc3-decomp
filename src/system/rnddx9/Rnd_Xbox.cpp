@@ -788,6 +788,80 @@ void DxRnd::CreatePostTextures() {
     mPostProcessTex->SetDeviceTex(mPostProcessBuffer);
 }
 
+// Retires everything AutoRelease()/AutoDelete() queued while mReleaseImmediate
+// was false.  A resource that is still bound to the device cannot be freed yet,
+// so it is carried over into the next frame's pending list.
+//
+// The two shift expressions are the XDK's D3DTAG "pending mask" arithmetic with
+// a *runtime* index: for a literal stream/sampler MSVC folds it to a constant
+// (see the 0x80000000 / 0x8000 / 1 literals elsewhere in this file), but inside
+// these loops the whole expansion survives into the code.
+void DxRnd::ReleaseAutoRelease() {
+    D3DDevice_SetVertexShader(mD3DDevice, nullptr);
+    D3DDevice_SetPixelShader(mD3DDevice, nullptr);
+    D3DDevice_SetIndices(mD3DDevice, nullptr);
+    for (int sampler = 0; sampler < 16; sampler++) {
+        D3DDevice_SetTexture(
+            mD3DDevice, sampler, nullptr, 0x8000000000000000 >> (sampler + 0x20U)
+        );
+    }
+    for (int stream = 0; stream < 4; stream++) {
+        D3DDevice_SetStreamSource(
+            mD3DDevice,
+            stream,
+            nullptr,
+            0,
+            0,
+            0x8000000000000000 >> (((0x5FU - stream) * 0x5556U >> 16) + 0x20U)
+        );
+    }
+
+    std::vector<D3DResource *> stillBoundResources;
+    for (std::vector<D3DResource *>::iterator it = mPendingReleases.begin();
+         it != mPendingReleases.end();
+         ++it) {
+        if (D3DResource_IsSet(*it, mD3DDevice)) {
+            stillBoundResources.push_back(*it);
+        } else if (*it) {
+            (*it)->Release();
+            *it = nullptr;
+        }
+    }
+    mPendingReleases.clear();
+    mPendingReleases.swap(stillBoundResources);
+
+    std::vector<D3DBaseTexture *> stillBoundTextures;
+    for (std::vector<D3DBaseTexture *>::iterator it = mPendingDeletes.begin();
+         it != mPendingDeletes.end();
+         ++it) {
+        D3DBaseTexture *tex = *it;
+        if (tex) {
+            if (D3DResource_IsSet(tex, mD3DDevice)) {
+                stillBoundTextures.push_back(tex);
+            } else {
+                UINT data;
+                XGGetTextureLayout(
+                    tex,
+                    &data,
+                    nullptr,
+                    nullptr,
+                    nullptr,
+                    0,
+                    nullptr,
+                    nullptr,
+                    nullptr,
+                    nullptr,
+                    0
+                );
+                PhysicalFreeTracked((void *)data, __FILE__, 0x452, "");
+                delete tex;
+            }
+        }
+    }
+    mPendingDeletes.clear();
+    mPendingDeletes.swap(stillBoundTextures);
+}
+
 static DWORD sPointTestFence = -1;
 
 void DxRnd::DoPointTests() {
