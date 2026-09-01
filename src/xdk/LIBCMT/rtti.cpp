@@ -70,3 +70,78 @@ extern "C" void *__RTtypeid(void *inptr) {
         throw std::__non_rtti_object("Access violation - no RTTI data!");
     }
 }
+
+#define CHD_MULTINH 0x01
+#define CHD_VIRTINH 0x02
+
+const _s_RTTIBaseClassDescriptor *FindSITargetTypeInstance(
+    const _s_RTTICompleteObjectLocator *, TypeDescriptor *, TypeDescriptor *
+);
+const _s_RTTIBaseClassDescriptor *FindMITargetTypeInstance(
+    void *, const _s_RTTICompleteObjectLocator *, TypeDescriptor *, int, TypeDescriptor *
+);
+const _s_RTTIBaseClassDescriptor *FindVITargetTypeInstance(
+    void *, const _s_RTTICompleteObjectLocator *, TypeDescriptor *, int, TypeDescriptor *
+);
+
+extern "C" void *__RTDynamicCast(
+    void *inptr, long VfDelta, void *SrcType, void *TargetType, int isReference
+) {
+    void *pResult;
+    const _s_RTTICompleteObjectLocator *pCompleteLocator;
+    void *pCompleteObject;
+    const _s_RTTIBaseClassDescriptor *pBaseClass;
+    int myoffset;
+
+    if (!inptr) {
+        return 0;
+    }
+
+    __try {
+        pCompleteLocator = (const _s_RTTICompleteObjectLocator *)((*((void ***)inptr))[-1]);
+        pCompleteObject = (char *)inptr - pCompleteLocator->offset;
+        if (pCompleteLocator->cdOffset != 0) {
+            pCompleteObject =
+                (char *)pCompleteObject - *(int *)((char *)inptr - pCompleteLocator->cdOffset);
+        }
+
+        char *pvfptr = (char *)inptr - VfDelta;
+        myoffset = (int)(pvfptr - (char *)pCompleteObject);
+
+        if (!(pCompleteLocator->pClassDescriptor->attributes & CHD_MULTINH)) {
+            pBaseClass = FindSITargetTypeInstance(
+                pCompleteLocator, (TypeDescriptor *)SrcType, (TypeDescriptor *)TargetType
+            );
+        } else if (!(pCompleteLocator->pClassDescriptor->attributes & CHD_VIRTINH)) {
+            pBaseClass = FindMITargetTypeInstance(
+                pCompleteObject, pCompleteLocator, (TypeDescriptor *)SrcType, myoffset,
+                (TypeDescriptor *)TargetType
+            );
+        } else {
+            pBaseClass = FindVITargetTypeInstance(
+                pCompleteObject, pCompleteLocator, (TypeDescriptor *)SrcType, myoffset,
+                (TypeDescriptor *)TargetType
+            );
+        }
+
+        if (pBaseClass) {
+            int adj = 0;
+            if (pBaseClass->where.pdisp >= 0) {
+                adj = pBaseClass->where.pdisp +
+                    *(int *)(*(char **)((char *)pCompleteObject + pBaseClass->where.pdisp) +
+                             pBaseClass->where.vdisp);
+            }
+            pResult = (char *)pCompleteObject + pBaseClass->where.mdisp + adj;
+        } else {
+            pResult = 0;
+            if (isReference) {
+                throw std::bad_cast("Bad dynamic_cast!");
+            }
+        }
+    } __except (GetExceptionCode() == EXCEPTION_ACCESS_VIOLATION) {
+        pResult = 0;
+        throw std::__non_rtti_object("Access violation - no RTTI data!");
+    }
+
+    return pResult;
+}
