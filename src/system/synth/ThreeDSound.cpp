@@ -288,15 +288,15 @@ void ThreeDSound::SetDistance(float mDistance, float radius) {
     unk210 = radius;
     CalculateFaderVolume();
     if (mIsLooping && mDistanceFader->DuckedValue() > kDbSilence) {
-        if (mSamples.empty() && mDelayArgs.empty()) {
+        if (!Sound::IsPlaying()) {
             Sound::Play(
                 mDelayedVolume, mDelayedPan, mDelayedTranspose, mDelayedOwner, mDelayMs
             );
+            return;
         }
-        return;
     }
     if (mIsLooping && mDistanceFader->DuckedValue() <= kDbSilence) {
-        if (!mSamples.empty() || !mDelayArgs.empty()) {
+        if (Sound::IsPlaying()) {
             Sound::Stop(nullptr, true);
         }
     }
