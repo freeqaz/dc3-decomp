@@ -159,9 +159,12 @@ done
 # every other exit 1 in a shell pipeline is indistinguishable from noise. So:
 #   * try to configure automatically (scripts/native_configure.sh derives every
 #     path, including Dawn_DIR, from the main checkout);
-#   * if that is impossible, exit 8 — a code used for nothing else — under a
+#   * if that is impossible, exit 9 — a code used for nothing else — under a
 #     banner that says the gate DID NOT RUN, in the words a reader of a lane
 #     report needs to see.
+#     (This prose said "exit 8" until 2026-09-01, contradicting both the code
+#     below and the table above, which reserves 8 for ctest's own "tests
+#     failed". The table was right; 8 was this block's first draft.)
 if [ ! -f "$BUILD_DIR/CTestTestfile.cmake" ]; then
     CONFIGURE_SH="$REPO_ROOT/scripts/native_configure.sh"
     if [ "$DO_CONFIGURE" = "1" ] && [ -x "$CONFIGURE_SH" ]; then
