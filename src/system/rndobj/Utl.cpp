@@ -2307,7 +2307,15 @@ void TessellateMesh(RndMesh *mesh) {
     auto vertCount = geomOwner->Verts().size();
     newVerts.reserve(vertCount * 3);
 
-    unsigned int nextVert = (unsigned short)geomOwner->Verts().size();
+    unsigned int nextVert = geomOwner->Verts().size();
+
+    // Retail declares the three probe edges once, outside the loop: only their
+    // v0/v1 are re-stamped per face, and `midpoint` is seeded to -1 a single
+    // time (it is never read before being overwritten on either path).
+    Edge e12, e23, e31;
+    e12.midpoint = -1;
+    e23.midpoint = -1;
+    e31.midpoint = -1;
 
     for (unsigned int i = 0; i < (unsigned int)geomOwner->Faces().size(); i++) {
         auto face = geomOwner->Faces()[i];
@@ -2329,60 +2337,50 @@ void TessellateMesh(RndMesh *mesh) {
         RndMesh::Vert *pv3 = (RndMesh::Vert *)((unsigned int)v3 * 0x60 + vertsBase);
 #endif
 
+        e12.v0 = v1;
+        e12.v1 = v2;
+        e23.v0 = v2;
+        e23.v1 = v3;
+        e31.v0 = v3;
+        e31.v1 = v1;
+
         RndMesh::Vert blend12, blend23, blend31;
         RndAmbientOcclusion::BlendVert(*pv1, *pv2, blend12);
         RndAmbientOcclusion::BlendVert(*pv2, *pv3, blend23);
         RndAmbientOcclusion::BlendVert(*pv3, *pv1, blend31);
 
-        unsigned short mid12, mid23, mid31;
-
-        Edge e12;
-        e12.v0 = v1;
-        e12.v1 = v2;
-        e12.midpoint = -1;
         std::set<Edge>::iterator it12 = edges.find(e12);
         if (it12 == edges.end()) {
-            mid12 = nextVert++;
-            e12.midpoint = mid12;
+            e12.midpoint = nextVert++;
             edges.insert(e12);
             newVerts.push_back(blend12);
         } else {
-            mid12 = it12->midpoint;
+            e12 = *it12;
         }
 
-        Edge e23;
-        e23.v0 = v2;
-        e23.v1 = v3;
-        e23.midpoint = -1;
         std::set<Edge>::iterator it23 = edges.find(e23);
         if (it23 == edges.end()) {
-            mid23 = nextVert++;
-            e23.midpoint = mid23;
+            e23.midpoint = nextVert++;
             edges.insert(e23);
             newVerts.push_back(blend23);
         } else {
-            mid23 = it23->midpoint;
+            e23 = *it23;
         }
 
-        Edge e31;
-        e31.v0 = v3;
-        e31.v1 = v1;
-        e31.midpoint = -1;
         std::set<Edge>::iterator it31 = edges.find(e31);
         if (it31 == edges.end()) {
-            mid31 = nextVert++;
-            e31.midpoint = mid31;
+            e31.midpoint = nextVert++;
             edges.insert(e31);
             newVerts.push_back(blend31);
         } else {
-            mid31 = it31->midpoint;
+            e31 = *it31;
         }
 
         RndMesh::Face f1, f2, f3, f4;
-        f1.Set(v1, mid12, mid31);
-        f2.Set(mid31, mid12, mid23);
-        f3.Set(mid12, v2, mid23);
-        f4.Set(mid23, v3, mid31);
+        f1.Set(v1, e12.midpoint, e31.midpoint);
+        f2.Set(e31.midpoint, e12.midpoint, e23.midpoint);
+        f3.Set(e12.midpoint, v2, e23.midpoint);
+        f4.Set(e23.midpoint, v3, e31.midpoint);
         newFaces.push_back(f1);
         newFaces.push_back(f2);
         newFaces.push_back(f3);
@@ -2394,10 +2392,9 @@ void TessellateMesh(RndMesh *mesh) {
     int origNumVerts = geomOwner->Verts().size();
     geomOwner->Verts().resize(origNumVerts + (int)newVerts.size());
 
-    bool hasNewVerts = (nextVert & 0xFFFF) != 0;
-    if ((unsigned int)origNumVerts < (unsigned int)(hasNewVerts)) {
+    if ((unsigned int)origNumVerts < nextVert) {
         int offset = origNumVerts * 0x60;
-        int count = (nextVert & 0xFFFF) - origNumVerts;
+        int count = nextVert - origNumVerts;
         RndMesh::Vert *src = &newVerts[0];
         do {
             memcpy(
