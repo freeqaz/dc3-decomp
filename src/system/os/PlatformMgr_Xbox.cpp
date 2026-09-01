@@ -724,6 +724,99 @@ void MultipleItemsEnumJob::Cancel(Hmx::Object *) {
     MILO_FAIL("MultipleItemsEnumJob::Cancel called");
 }
 
+SingleItemEnumJob::SingleItemEnumJob(Hmx::Object *callback, int pad, u64 itemID)
+    : mObject(callback), mUserIndex(pad), mItemID(itemID), mStatus(0), mSuccess(false),
+      mEnumBuffer(0), mEnumHandle(0) {}
+
+SingleItemEnumJob::~SingleItemEnumJob() {
+    if (mStatus == 1 && mOverlapped.InternalLow == 0x3e5) {
+        unsigned int result = XCancelOverlapped(&mOverlapped);
+        if (result != 0) {
+            TheDebug.Fail(MakeString("Error cancelling enum %d", result), 0);
+        }
+    }
+    if (mEnumHandle != 0) {
+        CloseHandle(mEnumHandle);
+        mEnumHandle = 0;
+    }
+    ::operator delete(mEnumBuffer);
+    mEnumBuffer = 0;
+}
+
+void SingleItemEnumJob::Start() {
+    mStatus = 1;
+    DWORD bufSize = 0;
+    unsigned int result = XMarketplaceCreateOfferEnumeratorByOffering(
+        mUserIndex, 1, &mItemID, 1, &bufSize, &mEnumHandle
+    );
+    if (result != 0) {
+        if (mEnumHandle != 0) {
+            CloseHandle(mEnumHandle);
+            mEnumHandle = 0;
+        }
+        TheDebug.Notify(MakeString("Error creating enumerator after purchase: %d", result));
+        mStatus = 3;
+        return;
+    }
+    mEnumBuffer = new char[bufSize];
+    memset(mEnumBuffer, 0, bufSize);
+    memset(&mOverlapped, 0, sizeof(mOverlapped));
+    result = XEnumerate(mEnumHandle, mEnumBuffer, bufSize, 0, &mOverlapped);
+    if (result == 0x3e5) {
+        return;
+    }
+    if (mEnumHandle != 0) {
+        CloseHandle(mEnumHandle);
+        mEnumHandle = 0;
+    }
+    ::operator delete(mEnumBuffer);
+    mEnumBuffer = 0;
+    TheDebug.Notify(MakeString("Error enumerating after purchase: %d", result));
+    mStatus = 3;
+}
+
+void SingleItemEnumJob::Poll() {
+    if (mStatus == 1 && mOverlapped.InternalLow != 0x3e5) {
+        DWORD numEnumerated;
+        unsigned int result = XGetOverlappedResult(&mOverlapped, &numEnumerated, 0);
+        if (numEnumerated == 1 && result == 0) {
+            mStatus = 2;
+            mSuccess = *(int *)((u64 *)mEnumBuffer + 9) != 0;
+        } else {
+            mStatus = 3;
+            TheDebug.Notify(MakeString("Error enumerating after purchase: %d", result));
+        }
+        if (mEnumHandle != 0) {
+            CloseHandle(mEnumHandle);
+            mEnumHandle = 0;
+        }
+        ::operator delete(mEnumBuffer);
+        mEnumBuffer = 0;
+    }
+}
+
+bool SingleItemEnumJob::IsFinished() {
+    if (mStatus == 1) {
+        Poll();
+    }
+    return mStatus != 1;
+}
+
+void SingleItemEnumJob::Cancel(Hmx::Object *) {
+    MILO_FAIL("SingleItemEnumJob::Cancel called");
+}
+
+void SingleItemEnumJob::OnCompletion(Hmx::Object *) {
+    if (mObject) {
+        static SingleItemEnumCompleteMsg msg(false, false, gNullStr);
+        msg.SetSuccess(mStatus == 2);
+        msg.SetPurchaseMade(mSuccess);
+        String itemStr(MakeString("%016llX", mItemID));
+        msg.SetOfferID(itemStr);
+        mObject->Handle(msg, true);
+    }
+}
+
 PostPurchaseEnumJob::PostPurchaseEnumJob(Hmx::Object *obj, int userIndex, u64 itemID, Symbol offerSym, unsigned int purchaserID)
     : SingleItemEnumJob(obj, userIndex, itemID), mOfferSymbol(offerSym), mPurchaserID(purchaserID) {
 }

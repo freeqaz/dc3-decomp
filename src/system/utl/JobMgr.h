@@ -52,13 +52,15 @@ public:
     virtual void OnCompletion(Hmx::Object *);
 
 protected:
+    void Poll();
+
     Hmx::Object *mObject;           // 0x8
-    int mUnkc;                      // 0xc
+    int mUserIndex;                 // 0xc
     u64 mItemID;                    // 0x10
     int mStatus;                    // 0x18
     bool mSuccess;                  // 0x1c
-    int unk20;
-    int unk24;
+    void *mEnumBuffer;              // 0x20
+    HANDLE mEnumHandle;             // 0x24
     XOVERLAPPED mOverlapped;        // 0x28
 };
 
@@ -113,6 +115,7 @@ SingleItemEnumCompleteMsg(bool success, bool purchaseMade, const String &offerID
 bool Success() const { return mData->Int(2); }
 bool HasOfferID() const { return mData->Int(3); }
 unsigned long long OfferID() const;
+void SetSuccess(bool b) { mData->Node(2) = b; }
 void SetPurchaseMade(bool b) { mData->Node(3) = b; }
 void SetOfferID(const String &s) { mData->Node(4) = DataNode(s); }
 END_MESSAGE
