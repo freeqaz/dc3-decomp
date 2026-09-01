@@ -732,7 +732,8 @@ bool RandomIntervalGroupSeqInst::IsRunning() { return unk54; }
 void RandomIntervalGroupSeqInst::Poll() {
     ObjVector<ObjPtr<SeqInst> >::iterator it = mSeqs.begin();
     while (it != mSeqs.end()) {
-        if (*it == NULL || !(*it)->IsRunning()) {
+        SeqInst *inst = *it;
+        if (inst == nullptr || !inst->IsRunning()) {
             it = mSeqs.erase(it);
         } else {
             it++;
