@@ -5,7 +5,13 @@
 #include <cstring>
 #include <cwchar>
 #include "os\OnlineID.h"
+#include "os\NetworkSocket_Win.h"
+#include "os\Timer.h"
+#include "obj\Dir.h"
+#include "stl\_list.h"
 #include "utl\DataPointMgr.h"
+#include "utl\Locale.h"
+#include "os\ThreadCall.h"
 #include "utl\GlitchFinder.h"
 #include "xdk\XAPILIB.h"
 #include "xdk\xparty\xparty.h"
@@ -39,6 +45,7 @@ namespace {
     XOVERLAPPED *mServiceIDOverlapped;
     XOVERLAPPED *mServiceIDOverlapped2;
     ServiceIdState mServiceIdState;
+    float mRetryTime;
     Hmx::Object *mFriendsCallback;
     void *mFriendsAsync;
     void *mFriendsBuffer;
@@ -48,10 +55,32 @@ namespace {
     int gNumSmartGlassClients;
     int gNumSmartGlassSendsInProgress;
     std::vector<Friend *> *mFriendsList;
+
+    // One outstanding PlatformMgr::EnumerateFriends request.  Allocated with
+    // MEM_OVERLOAD so the allocation is attributed to this file.
+    class FriendEnumRequest {
+    public:
+        FriendEnumRequest(int padNum, std::vector<Friend *> *list, Hmx::Object *callback)
+            : mPadNum(padNum), mList(list), mCallback(callback) {}
+
+        MEM_OVERLOAD(FriendEnumRequest, 0x3E);
+
+        int mPadNum; // 0x0
+        std::vector<Friend *> *mList; // 0x4
+        Hmx::Object *mCallback; // 0x8
+    };
+
+    std::list<FriendEnumRequest *> mFriendEnumRequests;
+    Timer mTime;
     std::map<String, unsigned int> mServiceIdMap;
 
     int GetPadNumFromXuid(unsigned __int64 xuid);
+    void SmartGlassInit();
 }
+
+Hmx::Object *PlatformMgr::spShowControllerObject;
+DWORD PlatformMgr::sdwShowControllerTrackingID;
+int PlatformMgr::snShowControllerPadNum;
 
 PlatformMgr::PlatformMgr() : mSigninMask(0) {
     mScreenSaver = true;
@@ -82,6 +111,26 @@ PlatformMgr::PlatformMgr() : mSigninMask(0) {
     mUserID = -1;
     mResult = 0;
     mOverlapped.hEvent = nullptr;
+}
+
+PlatformMgr::~PlatformMgr() {
+    DWORD ret = CloseHandle(mListener);
+    MILO_ASSERT(ret == ERROR_SUCCESS, 0x3E7);
+    ret = XOnlineCleanup();
+    MILO_ASSERT(ret == ERROR_SUCCESS, 0x3EA);
+}
+
+void PlatformMgr::Init() {
+    SetName("platform_mgr", ObjectDir::Main());
+    WinSockSocket::Init();
+    DWORD ret = XOnlineStartup();
+    MILO_ASSERT(ret == ERROR_SUCCESS, 0x419);
+    mListener = XNotifyCreateListener(0xA7);
+    MILO_ASSERT(mListener, 0x41C);
+    UpdateSigninState();
+    SmartGlassInit();
+    mTime.Start();
+    mRetryTime = mTime.Ms() + 300000.0f;
 }
 
 bool PlatformMgr::IsEthernetCableConnected() { return XNetGetEthernetLinkStatus() != 0; }
@@ -201,7 +250,38 @@ void PlatformMgr::SetBackgroundDownloadPriority(bool highPriority) {
         XBACKGROUND_DOWNLOAD_MODE_AUTO);
 }
 
-// int __cdecl ShowControllerRequiredUIThreaded(void)
+int ShowControllerRequiredUIThreaded() {
+    return XShowNuiControllerRequiredUI(
+        PlatformMgr::sdwShowControllerTrackingID, PlatformMgr::snShowControllerPadNum
+    );
+}
+
+void ShowControllerRequiredUIThreadedCB(int result) {
+    static ControllerReqOpCompleteMsg msg(true);
+    msg.SetSuccess(result == 0);
+    if (PlatformMgr::spShowControllerObject) {
+        PlatformMgr::spShowControllerObject->Handle(msg, false);
+    }
+}
+
+void PlatformMgr::ShowControllerRequiredUI(Hmx::Object *obj) {
+    sdwShowControllerTrackingID = 0;
+    snShowControllerPadNum = 0;
+    spShowControllerObject = 0;
+    unsigned long trackingID;
+    if (sXShowCallback(trackingID)) {
+        sdwShowControllerTrackingID = trackingID;
+        snShowControllerPadNum = 0xFF;
+        spShowControllerObject = obj;
+        ThreadCall(ShowControllerRequiredUIThreaded, ShowControllerRequiredUIThreadedCB);
+    } else {
+        static ControllerReqOpCompleteMsg msg(true);
+        msg.SetSuccess(true);
+        if (obj) {
+            obj->Handle(msg, false);
+        }
+    }
+}
 
 bool PlatformMgr::ShowPartyUI(int padNum) {
     unsigned long ul;
@@ -726,12 +806,123 @@ void PlatformMgr::SmartGlassSend(unsigned long clientID, const DataArray *arr) {
     XbcSendMsg(clientID, arr);
 }
 
+const char *PlatformMgr::GetName(int padNum) const {
+    if (IsSignedIn(padNum)) {
+        char name[16];
+        int ret = XUserGetName(padNum, name, 16);
+        if (ret == 0) {
+            return MakeString(name);
+        }
+    }
+    static Symbol player("player");
+    return MakeString("%s %i", Localize(player, 0, TheLocale), padNum + 1);
+}
+
+void PlatformMgr::EnumerateFriends(
+    int padNum, std::vector<Friend *> &friends, Hmx::Object *callback
+) {
+    mFriendEnumRequests.push_back(new FriendEnumRequest(padNum, &friends, callback));
+}
+
 #include "utl/JobMgr.h"
 #include "meta\StorePanel.h"
 #include "lazer\meta_ham\OptionsPanel.h"
 
 void MultipleItemsEnumJob::Cancel(Hmx::Object *) {
     MILO_FAIL("MultipleItemsEnumJob::Cancel called");
+}
+
+SingleItemEnumJob::SingleItemEnumJob(Hmx::Object *callback, int pad, u64 itemID)
+    : mObject(callback), mUserIndex(pad), mItemID(itemID), mStatus(0), mSuccess(false),
+      mEnumBuffer(0), mEnumHandle(0) {}
+
+SingleItemEnumJob::~SingleItemEnumJob() {
+    if (mStatus == 1 && mOverlapped.InternalLow == 0x3e5) {
+        unsigned int result = XCancelOverlapped(&mOverlapped);
+        if (result != 0) {
+            TheDebug.Fail(MakeString("Error cancelling enum %d", result), 0);
+        }
+    }
+    if (mEnumHandle != 0) {
+        CloseHandle(mEnumHandle);
+        mEnumHandle = 0;
+    }
+    ::operator delete(mEnumBuffer);
+    mEnumBuffer = 0;
+}
+
+void SingleItemEnumJob::Start() {
+    mStatus = 1;
+    DWORD bufSize = 0;
+    unsigned int result = XMarketplaceCreateOfferEnumeratorByOffering(
+        mUserIndex, 1, &mItemID, 1, &bufSize, &mEnumHandle
+    );
+    if (result != 0) {
+        if (mEnumHandle != 0) {
+            CloseHandle(mEnumHandle);
+            mEnumHandle = 0;
+        }
+        TheDebug.Notify(MakeString("Error creating enumerator after purchase: %d", result));
+        mStatus = 3;
+        return;
+    }
+    mEnumBuffer = new char[bufSize];
+    memset(mEnumBuffer, 0, bufSize);
+    memset(&mOverlapped, 0, sizeof(mOverlapped));
+    result = XEnumerate(mEnumHandle, mEnumBuffer, bufSize, 0, &mOverlapped);
+    if (result == 0x3e5) {
+        return;
+    }
+    if (mEnumHandle != 0) {
+        CloseHandle(mEnumHandle);
+        mEnumHandle = 0;
+    }
+    ::operator delete(mEnumBuffer);
+    mEnumBuffer = 0;
+    TheDebug.Notify(MakeString("Error enumerating after purchase: %d", result));
+    mStatus = 3;
+}
+
+void SingleItemEnumJob::Poll() {
+    if (mStatus == 1 && mOverlapped.InternalLow != 0x3e5) {
+        DWORD numEnumerated;
+        unsigned int result = XGetOverlappedResult(&mOverlapped, &numEnumerated, 0);
+        if (numEnumerated == 1 && result == 0) {
+            mStatus = 2;
+            mSuccess = *(int *)((u64 *)mEnumBuffer + 9) != 0;
+        } else {
+            mStatus = 3;
+            TheDebug.Notify(MakeString("Error enumerating after purchase: %d", result));
+        }
+        if (mEnumHandle != 0) {
+            CloseHandle(mEnumHandle);
+            mEnumHandle = 0;
+        }
+        ::operator delete(mEnumBuffer);
+        mEnumBuffer = 0;
+    }
+}
+
+bool SingleItemEnumJob::IsFinished() {
+    if (mStatus == 1) {
+        Poll();
+    }
+    return mStatus != 1;
+}
+
+void SingleItemEnumJob::Cancel(Hmx::Object *) {
+    MILO_FAIL("SingleItemEnumJob::Cancel called");
+}
+
+void SingleItemEnumJob::OnCompletion(Hmx::Object *) {
+    if (mObject) {
+        static SingleItemEnumCompleteMsg msg(false, false, gNullStr);
+        msg.SetSuccess(mStatus == 2);
+        msg.SetPurchaseMade(mSuccess);
+        String itemStr(MakeString("%016llX", mItemID));
+        msg.SetOfferID(itemStr);
+        mObject->Handle(msg, true);
+    }
 }
 
 PostPurchaseEnumJob::PostPurchaseEnumJob(Hmx::Object *obj, int userIndex, u64 itemID, Symbol offerSym, unsigned int purchaserID)

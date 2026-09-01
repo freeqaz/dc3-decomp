@@ -74,6 +74,9 @@ public:
     virtual DataNode Handle(DataArray *, bool);
 
     static XCallbackFunc *sXShowCallback;
+    static Hmx::Object *spShowControllerObject;
+    static DWORD sdwShowControllerTrackingID;
+    static int snShowControllerPadNum;
 
     PlatformMgr();
     PlatformRegion GetRegion() const;
@@ -161,4 +164,10 @@ int GetChangedMask() const { return mData->Int(3); }
 END_MESSAGE
 
 DECLARE_MESSAGE(StorageChangedMsg, "storage_changed")
+END_MESSAGE
+
+DECLARE_MESSAGE(ControllerReqOpCompleteMsg, "controller_req_op_complete")
+ControllerReqOpCompleteMsg(bool success) : Message(Type(), success) {}
+bool Success() const { return mData->Int(2); }
+void SetSuccess(bool b) { mData->Node(2) = b; }
 END_MESSAGE
