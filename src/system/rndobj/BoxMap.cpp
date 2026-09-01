@@ -249,12 +249,14 @@ void BoxMapLighting::ApplyLight(
         float distAtten = Max(0.0f, 1.0f - dist);
         float coneAtten = Max(0.0f, coneClamped);
         float atten = distAtten * (coneAtten * light.mConeAngleInverse);
-        gLightBuffer2[gLightIndex].red = atten * light.mColor.red;
-        gLightBuffer2[gLightIndex].green = atten * light.mColor.green;
-        gLightBuffer1[gLightIndex].red = -ndx;
-        gLightBuffer1[gLightIndex].green = -ndy;
-        gLightBuffer1[gLightIndex].blue = -ndz;
-        gLightBuffer2[gLightIndex].blue = atten * light.mColor.blue;
+        Hmx::Color &col = gLightBuffer2[gLightIndex];
+        Hmx::Color &dir = gLightBuffer1[gLightIndex];
+        col.red = atten * light.mColor.red;
+        col.green = atten * light.mColor.green;
+        dir.red = -ndx;
+        dir.green = -ndy;
+        dir.blue = -ndz;
+        col.blue = atten * light.mColor.blue;
         gLightIndex++;
     }
 }
