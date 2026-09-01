@@ -208,4 +208,12 @@ if [ ! -f "$BUILD_DIR/CTestTestfile.cmake" ]; then
     exit 10
 fi
 
+# Record what the SYSTEM toolchain looked like at configure time, by content
+# hash. ninja tracks these files but compares mtimes, and pacman restores
+# upstream mtimes -- so a newer package can install OLDER files and no
+# mtime-based rule can ever notice. See scripts/native_toolchain_check.py.
+if [ -f "$REPO_ROOT/scripts/native_toolchain_check.py" ]; then
+    python3 "$REPO_ROOT/scripts/native_toolchain_check.py" --record "$BUILD_DIR" || true
+fi
+
 echo "==> native build configured: $BUILD_DIR"
