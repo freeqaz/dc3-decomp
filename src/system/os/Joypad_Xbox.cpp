@@ -46,7 +46,14 @@
 // only tBreed and sThreadData -- the two the target names -- live in one.
 static CriticalSection tCritSection;
 // Pad needs its XInput capabilities re-queried before it can be read.
-static bool tNeedCaps[kNumJoypads];
+// The align(8) is a PLACEMENT WORKAROUND, not something recovered from the
+// target: tRawOutput(8) + tRawPending(4) leaves a four byte hole ahead of the
+// 8-aligned tUpstreamData, and MSVC packs the only four byte static it can
+// find -- this one -- into it, which puts tNeedCaps 0x84 *below* tInputStates
+// instead of 0x98 above it and breaks InitXinputJoypadThreadData's baked-in
+// displacement. The original TU leaves that hole empty; presumably it had no
+// candidate to fill it. Over-aligning is how we say "not there" in source.
+__declspec(align(8)) static bool tNeedCaps[kNumJoypads];
 static unsigned int tButtonStatesPrev[kNumJoypads];
 static unsigned int tButtonStatesCurr[kNumJoypads];
 namespace {
