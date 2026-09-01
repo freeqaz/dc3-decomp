@@ -1,5 +1,6 @@
 #pragma once
 #include "obj\Data.h"
+#include "obj\Msg.h"
 #include "os\CritSec.h"
 #include "os\Timer.h"
 #include "stl\_vector.h"
@@ -12,6 +13,14 @@
 #include "xdk\xvh2\xvh2.h"
 
 class MemStream;
+
+// Broadcast to ThePlatformMgr whenever a mic's Mic::Type changes. The payload
+// is whether the mic was connected *before* the change. Both the
+// "microphones_changed" literal and Type()'s function-local static live in
+// Mic.obj in the target, so this belongs in this header rather than a shared one.
+DECLARE_MESSAGE(MicrophonesChangedMsg, "microphones_changed")
+MicrophonesChangedMsg(bool);
+END_MESSAGE
 
 class ChatReceiver {
     friend class MicManagerXbox;

@@ -7,6 +7,7 @@
 #include "os\CritSec.h"
 #include "os\Debug.h"
 #include "os\Joypad.h"
+#include "os\PlatformMgr.h"
 #include "os\System.h"
 #include "rnddx9\Rnd.h"
 #include "synth\MicClientMapper.h"
@@ -15,6 +16,8 @@
 #include "synth_xbox\ExternalMic.h"
 #include "synth_xbox\FxSend.h"
 #include "synth_xbox\GainEffect.h"
+#include "synth_xbox\HeadsetPlaybackEffect.h"
+#include "synth_xbox\HeadsetXferEffect.h"
 #include "synth_xbox\Voice.h"
 #include "utl\MemStream.h"
 #include "utl\Std.h"
@@ -269,6 +272,65 @@ short *MicXbox::GetContinuousBuf(int &iref) {
     return (short *)unk3054;
 }
 
+MicrophonesChangedMsg::MicrophonesChangedMsg(bool wasConnected) : Message(Type(), wasConnected) {}
+
+// Keeps the playback voice's read cursor a fixed distance behind our write
+// cursor by nudging its playback speed. The nominal lead is 1800 samples on a
+// wired headset and 2700 on a wireless one (unkc); both the 6144-sample
+// wrap window and the +-12288 unwrap match the 6144-sample playback buffer.
+void MicXbox::Poll() {
+    if (mPlaybackVoice && mPlaybackVoice->IsPlaying()) {
+        int written = (char *)unk301c - (char *)mPlaybackBuffer;
+        int lag = written - mPlaybackVoice->GetAddr();
+
+        unk905c = ModRange(unk905c - 6144.0f, unk905c + 6144.0f, (float)lag);
+        unk9058 = unk9058 * 0.9f + unk905c * 0.1f;
+        if (unk905c > 12288.0f && unk9058 > 12288.0f) {
+            unk905c -= 12288.0f;
+            unk9058 -= 12288.0f;
+        }
+        if (unk905c < -12288.0f && unk9058 < -12288.0f) {
+            unk905c += 12288.0f;
+            unk9058 += 12288.0f;
+        }
+
+        float lead = ModRange(
+            (unkc ? 2700.0f : 1800.0f) - 600.0f,
+            (unkc ? 2700.0f : 1800.0f) - 600.0f + 12288.0f, unk9058
+        );
+        float volume = mMute ? 0.0f : mVolume;
+
+        if (lead > (unkc ? 2700.0f : 1800.0f) + 600.0f) {
+            // Far out of range: jump hard in whichever direction we are already
+            // heading and mute until it settles.
+            unk9054 = unk9054 > 1.0f ? 1.08f : 0.92f;
+            volume = 0.0f;
+        } else if (lead > (unkc ? 2700.0f : 1800.0f) + 150.0f) {
+            unk9054 = 1.0002f;
+        } else if (lead < (unkc ? 2700.0f : 1800.0f) - 150.0f) {
+            unk9054 = 0.99979f;
+        } else if (lead > (unkc ? 2700.0f : 1800.0f) + 300.0f) {
+            unk9054 = 1.00059f;
+        } else if (lead < (unkc ? 2700.0f : 1800.0f) - 300.0f) {
+            unk9054 = 0.99941f;
+        } else if ((unk9054 > 1.0f && lead < (unkc ? 2700.0f : 1800.0f) * 0.5f)
+                   || (unk9054 < 1.0f && lead > (unkc ? 2700.0f : 1800.0f) * 0.5f)) {
+            unk9054 = 1.0f;
+        }
+
+        mPlaybackVoice->SetVolume(volume);
+        mPlaybackVoice->SetSpeed(unk9054);
+    }
+
+    if (mChangeNotify) {
+        if (GetType() != unk10) {
+            MicrophonesChangedMsg msg(unk10 != 0);
+            ThePlatformMgr.Handle(msg, false);
+            unk10 = GetType();
+        }
+    }
+}
+
 bool MicXbox::IsRunning() const { return mRunning; }
 void MicXbox::SetDMA(bool b) {}
 bool MicXbox::GetDMA() const { return false; }
@@ -411,6 +473,58 @@ MicManagerXbox::MicManagerXbox()
     synthConfig->FindData("local_gain", gLocalGain);
     synthConfig->FindData("remote_gain", gRemoteGain);
     GainEffect::sGain = DbToRatio(gRemoteGain);
+}
+
+void MicManagerXbox::Init() {
+    MILO_ASSERT(this == sInstance, 0xB8);
+
+    void *processingModes[2];
+    XAUDIO2_EFFECT_CHAIN chain;
+    XAUDIO2_EFFECT_DESCRIPTOR desc;
+    HeadsetXferEffect *xfer[4];
+    XHV2INIT init;
+
+    processingModes[0] = _xhv_voicechat_mode;
+    processingModes[1] = _xhv_loopback_mode;
+
+    memset(&init, 0, sizeof(init));
+    init.MaxRemoteTalkers = 5;
+    init.MaxLocalTalkers = 4;
+    init.LocalProcessingModes = processingModes;
+    init.NumLocalProcessingModes = 2;
+    init.RemoteProcessingModes = processingModes;
+    init.NumRemoteProcessingModes = 1;
+    init.MaxNumPackets = 1;
+    init.Unk1c = 1;
+    init.pfnMicrophoneRawDataReady = DataReadyCallback;
+    init.Unk30 = TheXboxSynth->unkec;
+
+    HRESULT hr = XHV2CreateEngine(&init, (DWORD *)&unk2c, &mXHVEngine);
+    DX_ASSERT_CODE(hr, 0xCD);
+
+    if (!TheXboxSynth->mHeadsetSubmixes.empty()) {
+        // One HeadsetXferEffect capture ring per player, pulled back out of the
+        // submix it was installed on.
+        for (int i = 0; i < 4; i++) {
+            IXAudio2SubmixVoice *submix = TheXboxSynth->GetHeadsetSubmix(i);
+            HeadsetXferEffect *effect;
+            HRESULT hr = submix->GetEffectParameters(0, &effect, sizeof(effect));
+            MILO_ASSERT(SUCCEEDED(hr), 0xD9);
+            xfer[i] = effect;
+        }
+        HeadsetPlaybackEffect *playback = new HeadsetPlaybackEffect(xfer);
+
+        desc.pEffect = static_cast<IXAPO *>(playback);
+        desc.InitialState = 0;
+        desc.OutputChannels = 1;
+        chain.EffectCount = 1;
+        chain.pEffectDescriptors = &desc;
+        AddRemoteMic(0x00DEADBEEFFACEF0ULL, &chain);
+    }
+
+    for (int i = 0; i < 4; i++) {
+        unkc[i] = new ChatReceiver(mXHVEngine, i);
+    }
 }
 
 MicManagerXbox::~MicManagerXbox() {}
