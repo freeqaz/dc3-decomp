@@ -2297,20 +2297,19 @@ void BurnXfm(RndMesh *mesh, bool keepTranslation) {
 void TessellateMesh(RndMesh *mesh) {
     typedef RndAmbientOcclusion::Edge Edge;
     std::set<Edge> edges;
-    RndMesh *geomOwner = mesh->GetGeomOwner();
     std::vector<RndMesh::Face> newFaces;
 
     std::vector<RndMesh::Vert> newVerts;
 
-    auto _tmp0 = geomOwner->Faces().size();
+    auto _tmp0 = mesh->Faces().size();
     newFaces.reserve(_tmp0 * 4);
-    auto vertCount = geomOwner->Verts().size();
+    auto vertCount = mesh->Verts().size();
     newVerts.reserve(vertCount * 3);
 
     // Retail reads Verts().size() exactly ONCE, before the loop, and keeps it in
     // two registers: r21 (origNumVerts, still live after the loop) and r23
     // (nextVert) -- 'lwz r21, 0x104(r11)' immediately followed by 'mr r23, r21'.
-    int origNumVerts = geomOwner->Verts().size();
+    int origNumVerts = mesh->Verts().size();
     unsigned int nextVert = origNumVerts;
 
     // Retail declares the three probe edges once, outside the loop: only their
@@ -2318,23 +2317,23 @@ void TessellateMesh(RndMesh *mesh) {
     // time (it is never read before being overwritten on either path).
     Edge e12, e23, e31;
 
-    for (unsigned int i = 0; i < (unsigned int)geomOwner->Faces().size(); i++) {
+    for (unsigned int i = 0; i < (unsigned int)mesh->Faces().size(); i++) {
         e12.midpoint = -1;
         e23.midpoint = -1;
         e31.midpoint = -1;
         // Retail keeps a POINTER to the face and re-reads v1/v2/v3 from it when
         // the four child faces are built (lhz 0x0/0x2/0x4(r29)); a by-value copy
         // parks them in registers across the find/insert calls instead.
-        RndMesh::Face &face = geomOwner->Faces()[i];
+        RndMesh::Face &face = mesh->Faces()[i];
 
 #ifdef HX_NATIVE
-        intptr_t vertsBase = (intptr_t)geomOwner->Verts().mVerts;
+        intptr_t vertsBase = (intptr_t)mesh->Verts().mVerts;
 
         RndMesh::Vert *pv1 = (RndMesh::Vert *)((uintptr_t)face.v1 * 0x60 + vertsBase);
         RndMesh::Vert *pv2 = (RndMesh::Vert *)((uintptr_t)face.v2 * 0x60 + vertsBase);
         RndMesh::Vert *pv3 = (RndMesh::Vert *)((uintptr_t)face.v3 * 0x60 + vertsBase);
 #else
-        int vertsBase = (int)(unsigned int)geomOwner->Verts().mVerts;
+        int vertsBase = (int)(unsigned int)mesh->Verts().mVerts;
 
         RndMesh::Vert *pv1 =
             (RndMesh::Vert *)((unsigned int)face.v1 * 0x60 + vertsBase);
@@ -2394,11 +2393,11 @@ void TessellateMesh(RndMesh *mesh) {
         newFaces.push_back(f4);
     }
 
-    geomOwner->Faces().assign(newFaces.begin(), newFaces.end());
+    mesh->Faces().assign(newFaces.begin(), newFaces.end());
 
     // The resize argument re-reads size() (target: lwz r10, 0x104(r11) at the
     // call site); only the guard and the copy-back offset use the pre-loop r21.
-    geomOwner->Verts().resize(geomOwner->Verts().size() + (int)newVerts.size());
+    mesh->Verts().resize(mesh->Verts().size() + (int)newVerts.size());
 
     if ((unsigned int)origNumVerts < nextVert) {
         int offset = origNumVerts * 0x60;
@@ -2407,9 +2406,9 @@ void TessellateMesh(RndMesh *mesh) {
         do {
             memcpy(
 #ifdef HX_NATIVE
-                (void *)((intptr_t)geomOwner->Verts().mVerts + offset),
+                (void *)((intptr_t)mesh->Verts().mVerts + offset),
 #else
-                (void *)((int)(unsigned int)geomOwner->Verts().mVerts + offset),
+                (void *)((int)(unsigned int)mesh->Verts().mVerts + offset),
 #endif
                 src,
                 sizeof(RndMesh::Vert)
