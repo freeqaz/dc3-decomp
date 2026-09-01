@@ -3,6 +3,17 @@
 #include "os\Timer.h"
 #include "rndobj\Lit.h"
 
+// The original uses the raw PowerPC reciprocal-square-root estimate (frsqrte,
+// ~5 bits of mantissa) with no Newton refinement -- see CharHair.cpp for the
+// refined variant. Native has no such instruction, so use the exact form there.
+static inline float RecipSqrtEst(float x) {
+#ifdef HX_NATIVE
+    return 1.0f / sqrtf(x);
+#else
+    return __frsqrte(x);
+#endif
+}
+
 static int gLightIndex = 0;
 static Hmx::Color gLightBuffer1[150];
 static Hmx::Color gLightBuffer2[150];
@@ -193,16 +204,16 @@ void BoxMapLighting::ApplyLight(
     for (unsigned int i = 0; i < arr.NumElements(); i++) {
         const LightParams_Point &light = arr[i];
         if (light.mRange > light.mFalloffStart) {
+            float dz = light.mPosition.z - viewPos.z;
             float dy = light.mPosition.y - viewPos.y;
             float dx = light.mPosition.x - viewPos.x;
-            float dz = light.mPosition.z - viewPos.z;
             Hmx::Color &dir = gLightBuffer1[gLightIndex];
             dir.red = dx;
             dir.green = dy;
             dir.blue = dz;
             float distSq = dy * dy + dx * dx + dz * dz;
             if (0.0f < distSq) {
-                float invDist = 1.0f / sqrtf(distSq);
+                float invDist = RecipSqrtEst(distSq);
                 float dist = Max(0.0f, invDist * distSq - light.mFalloffStart);
                 float atten = Max(0.0f, 1.0f - dist / (light.mRange - light.mFalloffStart));
                 Hmx::Color &col = gLightBuffer2[gLightIndex];
@@ -223,11 +234,11 @@ void BoxMapLighting::ApplyLight(
 ) const {
     for (unsigned int i = 0; i < arr.NumElements(); i++) {
         const LightParams_Spot &light = arr[i];
+        float dy = viewPos.y - light.mApex.y;
         float dz = viewPos.z - light.mApex.z;
         float dx = viewPos.x - light.mApex.x;
-        float dy = viewPos.y - light.mApex.y;
         float distSq = dz * dz + dx * dx + dy * dy;
-        float invDist = 1.0f / sqrtf(distSq);
+        float invDist = RecipSqrtEst(distSq);
         float dist = invDist * distSq * light.mHalfLengthRecip - light.mOffsetFactor;
         float ndz = dz * invDist;
         float ndx = dx * invDist;
