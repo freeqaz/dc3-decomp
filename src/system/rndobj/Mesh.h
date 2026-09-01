@@ -278,5 +278,5 @@ protected:
     int GreaterEq(int) const;
 
     Vector3 mCentroid; // 0x0
-    std::vector<int> mPatchVerts; // 0xc
+    std::vector<int> mPatchVerts; // 0x10
 };

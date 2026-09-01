@@ -178,3 +178,6 @@ uv-cache/
 
 # MSVC/preprocessor expansion dumps (e.g. src/system/net/curl/lib/formdata.i)
 *.i
+
+# class_layout_report per-TU layout cache (tools/header_offset_audit_par.py)
+.layout_cache/

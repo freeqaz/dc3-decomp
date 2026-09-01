@@ -27,9 +27,9 @@ protected:
 
     /** "File containing the screenshot to display.  This file will only be loaded in
      * Milo, not in game." */
-    FilePath mTexPath; // 0x20
-    RndTex *mTex; // 0x2c
-    RndMat *mMat; // 0x30
+    FilePath mTexPath; // 0x40
+    RndTex *mTex; // 0x48
+    RndMat *mMat; // 0x4C
 
 private:
     void Sync();

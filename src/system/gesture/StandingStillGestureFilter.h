@@ -32,6 +32,6 @@ private:
     int mRaisedMs; // 0x30
     int mRequiredMs; // 0x34
     Vector3 unk38; // 0x38
-    float mForwardFacingCutoff; // 0x44
+    float mForwardFacingCutoff; // 0x48
     bool unk48;
 };

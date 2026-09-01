@@ -200,6 +200,16 @@ void Voice::UpdateSends() {
             IXAudio2Voice *target2 =
                 mFxSend ? mFxSend->GetOutputVoice() : TheXboxSynth->OutputVoice();
             if (target2) {
+#ifdef HX_NATIVE
+                // The shipping game never writes reverbDesc[1], but sets
+                // SendCount = 2 here -- so XAudio2 reads an uninitialised
+                // descriptor.  On PPC that is reproduced faithfully (see
+                // above); natively it is a live read of uninitialised stack,
+                // so initialise the second send to what the code plainly
+                // intended: the voice's own output target.
+                reverbDesc[1].Flags = 0;
+                reverbDesc[1].pOutputVoice = target2;
+#endif
                 voiceSends.SendCount = 2;
             }
         }

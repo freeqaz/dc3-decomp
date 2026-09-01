@@ -29,9 +29,9 @@ public:
     NEW_OBJ(CharMirror);
 
     ObjPtr<CharServoBone> mServo; // 0x28
-    ObjPtr<CharServoBone> mMirrorServo; // 0x2c
+    ObjPtr<CharServoBone> mMirrorServo; // 0x3C
     CharBonesAlloc mBones; // 0x50
-    std::vector<MirrorOp> mOps; // 0xdc
+    std::vector<MirrorOp> mOps; // 0xD4
 
     void SetServo(CharServoBone *);
     void SetMirrorServo(CharServoBone *);

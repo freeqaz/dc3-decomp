@@ -9,7 +9,7 @@
 
 struct OldMMInst {
     Transform mOldXfm; // 0x0
-    Hmx::Color mOldColor; // 0x30
+    Hmx::Color mOldColor; // 0x40
 };
 
 inline BinStream &operator>>(BinStream &bs, OldMMInst &inst) {
@@ -173,9 +173,9 @@ protected:
     static std::list<std::pair<class RndMultiMeshProxy *, int> > sProxyPool;
 
     /** The simple mesh to draw. */
-    ObjPtr<RndMesh> mMesh; // 0x20
+    ObjPtr<RndMesh> mMesh; // 0x40
     /** The locations at which the mesh should be drawn. */
-    InstanceList mInstances; // 0x2C
+    InstanceList mInstances; // 0x54
 };
 
 typedef std::list<RndMultiMesh::Instance, std::TransformListAlloc<RndMultiMesh::Instance> >

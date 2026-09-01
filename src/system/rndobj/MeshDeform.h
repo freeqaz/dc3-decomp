@@ -109,7 +109,7 @@ protected:
     ObjPtr<RndMesh> mMesh; // 0x2c
     Transform mMeshInverse; // 0x40
     ObjVector<BoneDesc> mBones; // 0x80
-    VertArray mVerts; // 0x94
+    VertArray mVerts; // 0x90
     bool mSkipInverse;
     bool mDeformed;
 };

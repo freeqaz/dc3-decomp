@@ -197,6 +197,6 @@ protected:
     float mUpperBlinkAngle; // 0x198
     float mLowerBlinkAngle; // 0x19c
     Vector3 mHeadForward; // 0x1a0
-    bool mEnabled; // 0x1ac
-    bool mHeadIKActive; // 0x1ad
+    bool mEnabled; // 0x1B0
+    bool mHeadIKActive; // 0x1B1
 };

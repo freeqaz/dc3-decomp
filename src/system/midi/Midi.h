@@ -195,8 +195,8 @@ private:
     /** The name of the current track we're reading. */
     class String mCurTrackName; // offset 0x34, size 0xC
     /** The list of track names in the midi. */
-    std::vector<String> mTrackNames; // 0x40
-    std::vector<Midi> mMidiList; // 0x48
+    std::vector<String> mTrackNames; // 0x38
+    std::vector<Midi> mMidiList; // 0x44
     int mMidiListTick; // 0x50
     /** The sort function to use for the read midi list. */
     bool (*mLessFunc)(const struct Midi &, const struct Midi &); // 0x54

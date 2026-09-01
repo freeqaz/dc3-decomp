@@ -48,7 +48,7 @@ private:
 
         Symbol mName; // 0x0
         String mFile; // 0x4
-        NUI_SPEECH_GRAMMAR mGrammar; // 0x8
+        NUI_SPEECH_GRAMMAR mGrammar; // 0xC
         bool mLoaded; // 0x14
     };
 

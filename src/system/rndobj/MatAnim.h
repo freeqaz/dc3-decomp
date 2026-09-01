@@ -69,15 +69,15 @@ protected:
     /** The collection of Color keys. */
     Keys<Hmx::Color, Hmx::Color> mColorKeys; // 0x38
     /** The collection of alpha keys. */
-    Keys<float, float> mAlphaKeys; // 0x50
+    Keys<float, float> mAlphaKeys; // 0x44
     /** The collection of position keys. */
-    Keys<Vector3, Vector3> mTransKeys; // 0x5c
+    Keys<Vector3, Vector3> mTransKeys; // 0x50
     /** The collection of scale keys. */
-    Keys<Vector3, Vector3> mScaleKeys; // 0x68
+    Keys<Vector3, Vector3> mScaleKeys; // 0x5C
     /** The collection of rotation keys. */
-    Keys<Vector3, Vector3> mRotKeys; // 0x74
+    Keys<Vector3, Vector3> mRotKeys; // 0x68
     /** The collection of texture keys. */
-    TexKeys mTexKeys; // 0x50
+    TexKeys mTexKeys; // 0x74
 };
 
 void Interp(const RndMatAnim::TexPtr &, const RndMatAnim::TexPtr &, float, RndTex *&);

@@ -27,7 +27,7 @@ class ObjKeys : public Keys<ObjectStage, Hmx::Object *> {
 public:
     ObjKeys(Hmx::Object *o) : mOwner(o) {}
     ~ObjKeys() {}
-    Hmx::Object *mOwner; // 0x8
+    Hmx::Object *mOwner; // 0xC
 
     void operator=(const ObjKeys &keys) {
         if (this != &keys) {
@@ -526,7 +526,7 @@ public:
     virtual Keys<Hmx::Quat, Hmx::Quat> *AsQuatKeys() { return this ? this : nullptr; }
     virtual int QuatAt(float, Hmx::Quat &);
 
-    Vector3 mVec; // 0x28
+    Vector3 mVec; // 0x44
 };
 
 /** A collection of Vector3 keys to animate on its target object's properties. */
@@ -626,7 +626,7 @@ public:
     virtual Keys<Symbol, Symbol> *AsSymbolKeys() { return this ? this : nullptr; }
     virtual int SymbolAt(float, Symbol &);
 
-    int mPrevRangeFirst; // 0x28
-    int mPrevRangeLast; // 0x2c
-    bool mClampToPrevRange; // 0x30
+    int mPrevRangeFirst; // 0x44
+    int mPrevRangeLast; // 0x48
+    bool mClampToPrevRange; // 0x4C
 };
