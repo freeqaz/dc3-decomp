@@ -39,12 +39,13 @@ GranularSynth::GranularSynth(const FloatVec &input, unsigned int numVoices, unsi
         float longest = (float)mMaxLength;
         float step = (Util::Log(longest) - Util::Log(shortest)) * (float)i / (float)mWindows.size();
         float length = (float)exp(Util::Log(shortest) + step);
-        int n = (int)(length + (length >= 0.0f ? 0.5f : -0.5f));
-        mWindows[i].resize(n);
+        unsigned int n = (unsigned int)(length + (length >= 0.0f ? 0.5f : -0.5f));
+        FloatVec &window = mWindows[i];
+        window.resize(n);
 
-        for (unsigned int j = 0; j < mWindows[i].size(); j++) {
+        for (unsigned int j = 0; j < window.size(); j++) {
             float angle = ((float)j + 0.5f) * 3.1415927410125732f;
-            mWindows[i][j] = ((float)cos(angle / (float)mWindows[i].size()) + 1.0f) * 0.5f;
+            window[j] = ((float)cos(angle / (float)window.size()) + 1.0f) * 0.5f;
         }
     }
 
@@ -92,24 +93,24 @@ void GranularSynth::ExtractGranules() {
                 gr.mLength = longest;
             }
 
+            float length = gr.mLength;
             gr.mGain = vo.mGain;
             gr.mActive = true;
             gr.mVoice = v;
-            gr.mFadeIn = (unsigned int)(gr.mLength + (gr.mLength >= 0.0f ? 0.5f : -0.5f));
+            gr.mFadeIn = (unsigned int)(length + (length >= 0.0f ? 0.5f : -0.5f));
             gr.mStartOffset = mBlock;
             gr.mPhase = (float)((double)mFrame - gr.mStartTime + gr.mOffset);
 
             // Pick the largest window that still fits inside 0.7 of the grain.
             gr.mWindow = mWindows.size() - 1;
             while (gr.mWindow != 0) {
-                if ((float)mWindows[gr.mWindow].size() <= gr.mLength * 0.7f) {
+                if ((float)mWindows[gr.mWindow].size() <= length * 0.7f) {
                     break;
                 }
                 gr.mWindow = gr.mWindow - 1;
             }
 
-            unsigned int rounded =
-                (unsigned int)(gr.mLength + (gr.mLength >= 0.0f ? 0.5f : -0.5f));
+            unsigned int rounded = (unsigned int)(length + (length >= 0.0f ? 0.5f : -0.5f));
             gr.mWindowLen = mWindows[gr.mWindow].size();
 
             float delay = (float)(rounded + gr.mWindowLen) - gr.mPhase + gr.mOffset - 1.0f +
@@ -117,9 +118,9 @@ void GranularSynth::ExtractGranules() {
             if (delay < 0.0f) {
                 delay = 0.0f;
             }
-            gr.mDelay = (int)delay;
+            gr.mDelay = (unsigned int)delay;
 
-            float life = (float)(span + gr.mWindowLen) - gr.mPhase + gr.mOffset - 1.0f +
+            float life = (float)(gr.mWindowLen + span) - gr.mPhase + gr.mOffset - 1.0f +
                          (float)(unsigned int)gr.mStartOffset;
             if (life < 0.0f) {
                 life = 0.0f;
@@ -147,7 +148,7 @@ void GranularSynth::Synthesize(unsigned int count, float *const *out) {
             continue;
         }
 
-        int window = gr.mWindow;
+        unsigned int window = gr.mWindow;
         unsigned int windowLen = gr.mWindowLen;
         unsigned int avail = (unsigned int)(gr.mDelay > 0 ? gr.mDelay : 0);
         unsigned int limit = stlpmtx_std::min(avail, count);

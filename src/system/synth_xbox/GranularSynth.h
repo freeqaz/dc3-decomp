@@ -30,7 +30,7 @@ public:
         double mStartTime;   // 0x10
         double mNextTime;    // 0x18
         int mVoice;          // 0x20 index into mVoices / the output channel
-        int mWindow;         // 0x24 index into mWindows
+        unsigned int mWindow; // 0x24 index into mWindows
         unsigned int mWindowLen;  // 0x28
         int mStartOffset;    // 0x2c first sample of the block this grain writes
         unsigned int mFadeIn; // 0x30 (uninitialised by the ctor, see above)
