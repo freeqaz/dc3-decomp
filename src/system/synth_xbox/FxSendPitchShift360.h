@@ -6,7 +6,8 @@
 class FxSendPitchShift360 : public FxSendPitchShift, public FxSend360 {
 public:
     FxSendPitchShift360() : FxSend360(this) {}
-    virtual ~FxSendPitchShift360() {}
+    // No user-declared destructor: the target's (like FxSendWah360's) is the
+    // implicit one, which MSVC emits without the two vtable-pointer resets.
     OBJ_CLASSNAME(FxSendPitchShift)
     OBJ_SET_TYPE(FxSendPitchShift360)
     virtual void Recreate(std::vector<FxSend *> &);

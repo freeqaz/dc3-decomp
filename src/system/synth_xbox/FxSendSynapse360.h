@@ -6,7 +6,8 @@
 class FxSendSynapse360 : public FxSendSynapse, public FxSend360 {
 public:
     FxSendSynapse360() : FxSend360(this) {}
-    virtual ~FxSendSynapse360() {}
+    // No user-declared destructor: the target's (like FxSendWah360's) is the
+    // implicit one, which MSVC emits without the two vtable-pointer resets.
     OBJ_CLASSNAME(FxSendSynapse)
     OBJ_SET_TYPE(FxSendSynapse360)
     virtual void Recreate(std::vector<FxSend *> &);
