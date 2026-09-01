@@ -1,4 +1,6 @@
 #include "synth_xbox\Synth.h"
+#include "xdk\LIBCMT\intrin.h"
+#include <string.h>
 #include "synth\CompressionEffect.h"
 #include "synth_xbox\HeadsetXferEffect.h"
 #include "synth_xbox\MeterEffect.h"
@@ -692,6 +694,59 @@ Stream *Synth360::NewStream(const char *name, float volume, float pan, bool b) {
 // the IXAPOParameters vtable (at +0x20) has a slot of its own, and the body is
 // a single tail branch.
 ULONG CXAPOParametersBase::Release() { return CXAPOBase::Release(); }
+
+// The reference-count pair. Both bodies hinge on _InterlockedDecrement /
+// _InterlockedIncrement lowering to the interrupt-masked reservation idiom
+// (mfmsr / mtmsrd r13,1 / lwarx / stwcx. / mtmsrd / bne) -- see
+// xdk/LIBCMT/intrin.h, where that lowering is measured rather than assumed.
+ULONG CXAPOBase::Release() {
+    ULONG count = _InterlockedDecrement((long volatile *)&m_lReferenceCount);
+    if (count == 0) {
+        delete this;
+    }
+    return count;
+}
+
+HRESULT CXAPOBase::QueryInterface(const _GUID &riid, void **ppvInterface) {
+    // Hoisting the short-circuit test into a named BOOL is load-bearing, not
+    // style. Written inline as `if (a == 0 || b == 0)`, MSVC lays the reject
+    // block out FIRST and branches to the accept path; the target does the
+    // opposite (`beq accept` / `bne reject`, accept falling through to a `b`
+    // over the reject block). Measured: inline = 79.5% / 11 mismatch rows,
+    // named temp = 100.0% / 0. Four other spellings (&&-of-negatives, !(&&),
+    // nested ifs, a pointer temp) all reproduce the inline layout.
+    HRESULT hr = 0;
+    BOOL match = memcmp(&riid, &__uuidof(IXAPO), sizeof(_GUID)) == 0 ||
+                 memcmp(&riid, &__uuidof(IUnknown), sizeof(_GUID)) == 0;
+    if (match) {
+        *ppvInterface = static_cast<IXAPO *>(this);
+        AddRef();
+    } else {
+        *ppvInterface = 0;
+        hr = 0x80004002; // E_NOINTERFACE
+    }
+    return hr;
+}
+
+HRESULT CXAPOParametersBase::QueryInterface(const _GUID &riid, void **ppvInterface) {
+    // Same named-BOOL lever as CXAPOBase::QueryInterface above, and the same
+    // measurement: with the comparison inline in the `if`, MSVC emits the
+    // CXAPOBase tail call as the fall-through and branches to the accept path
+    // (87.3% / 5 rows); hoisting it into a named temp puts the tail call last,
+    // as the target does (100.0% / 0 rows). `hr = CXAPOBase::QueryInterface(...)`
+    // in the else still lowers to a real tail branch.
+    HRESULT hr = 0;
+    BOOL match = memcmp(&riid, &__uuidof(IXAPOParameters), sizeof(_GUID)) == 0;
+    if (match) {
+        *ppvInterface = static_cast<IXAPOParameters *>(this);
+        // AddRef() inlined -- this body is a leaf in the target, so there is no
+        // virtual call, only the reservation sequence.
+        _InterlockedIncrement((long volatile *)&m_lReferenceCount);
+    } else {
+        hr = CXAPOBase::QueryInterface(riid, ppvInterface);
+    }
+    return hr;
+}
 
 Stream *Synth360::NewBufStream(const void *buf, int size, Symbol ext, float startMs, bool b) {
     return new StandardStream(new BufFile(buf, size), startMs, 0.0f, ext, false, b, false);

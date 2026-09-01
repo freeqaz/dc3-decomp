@@ -5,7 +5,7 @@
 extern "C" {
 #endif
 
-struct IUnknown { /* Size=0x4 */
+struct __declspec(uuid("00000000-0000-0000-c000-000000000046")) IUnknown { /* Size=0x4 */
     virtual HRESULT QueryInterface(const _GUID &riid, void **ppvObject);
     virtual ULONG AddRef();
     virtual ULONG Release();

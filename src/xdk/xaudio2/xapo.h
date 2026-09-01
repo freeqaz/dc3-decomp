@@ -50,7 +50,10 @@ struct XAPO_LOCKFORPROCESS_BUFFER_PARAMETERS { /* Size=0x8 */
     /* 0x0004 */ UINT MaxFrameCount;
 };
 
-struct IXAPO : public IUnknown { /* Size=0x4 */
+// uuid read back out of CXAPOBase::QueryInterface's relocation name
+// (_GUID_a90bc001_e897_e897_55e4_9e4700000000); see IXAPOParameters below.
+struct __declspec(uuid("a90bc001-e897-e897-55e4-9e4700000000")) IXAPO
+    : public IUnknown { /* Size=0x4 */
     /* 0x0000: fields for IUnknown */
 
     virtual HRESULT
@@ -88,7 +91,13 @@ struct IXAPO : public IUnknown { /* Size=0x4 */
     IXAPO &operator=(const IXAPO &);
 };
 
-struct IXAPOParameters : public IUnknown { /* Size=0x4 */
+// The uuid attribute is load-bearing, not decoration: CXAPOParametersBase::
+// QueryInterface compares against the compiler-generated symbol
+// `_GUID_a90bc001_e897_e897_55e4_9e4700000001`, which only exists if the
+// interface is spelled with __uuidof. Value read back out of the target's
+// relocation name.
+struct __declspec(uuid("a90bc001-e897-e897-55e4-9e4700000001")) IXAPOParameters
+    : public IUnknown { /* Size=0x4 */
     /* 0x0000: fields for IUnknown */
 
     virtual void SetParameters(const void *pParameters, UINT32 ParameterByteSize);
