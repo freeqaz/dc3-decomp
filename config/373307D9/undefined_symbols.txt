@@ -14,7 +14,7 @@
 # entry points and middleware the decomp calls but does not contain. The
 # classification is for the reader; --check ignores it and compares names only.
 #
-# counts: 830 total = 186 GAP + 644 EXT
+# counts: 823 total = 175 GAP + 648 EXT
 
 GAP ??$?6VHamScrollSpeedIndicator@@@@YAAAVBinStream@@AAV0@ABV?$ObjDirPtr@VHamScrollSpeedIndicator@@@@@Z  # target defines it in system/ui/UILabel.obj
 GAP ??0GranularSynth@Synapse@DSP@@QAA@ABV?$vector@MV?$StlNodeAlloc@M@stlpmtx_std@@@stlpmtx_std@@III@Z  # target defines it in system/synth_xbox/GranularSynth.obj
@@ -64,17 +64,6 @@ GAP ?RunXinputJoypadLoop@?A0x439b694a@@YAXXZ  # target defines it in system/os/J
 GAP ?SendRawData@@YAXHEEEEEEE@Z  # target defines it in system/os/Joypad_Xbox.obj
 GAP ?SetBorderColor@RndRenderState@@QAAXI_N@Z  # target defines it in system/rnddx9/RenderState.obj
 GAP ?SetGlobalReverbPreset@Synth360@@QAAXPBD@Z  # target defines it in system/synth_xbox/Synth.obj
-GAP ?SetPConstant4x3@DxShaderMgr@@UAAXW4PShaderConstant@@ABVMatrix4@Hmx@@@Z  # target defines it in system/rnddx9/ShaderMgr.obj
-GAP ?SetPConstant@DxShaderMgr@@UAAXW4PShaderConstant@@ABVMatrix4@Hmx@@@Z  # target defines it in system/rnddx9/ShaderMgr.obj
-GAP ?SetPConstant@DxShaderMgr@@UAAXW4PShaderConstant@@ABVVector4@@@Z  # target defines it in system/rnddx9/ShaderMgr.obj
-GAP ?SetPConstant@DxShaderMgr@@UAAXW4PShaderConstant@@H@Z  # target defines it in system/rnddx9/ShaderMgr.obj
-GAP ?SetPConstant@DxShaderMgr@@UAAXW4PShaderConstant@@PAVRndCubeTex@@@Z  # target defines it in system/rnddx9/ShaderMgr.obj
-GAP ?SetPConstant@DxShaderMgr@@UAAXW4PShaderConstant@@_N@Z  # target defines it in system/rnddx9/ShaderMgr.obj
-GAP ?SetVConstant4x3@DxShaderMgr@@UAAXW4VShaderConstant@@ABVMatrix4@Hmx@@@Z  # target defines it in system/rnddx9/ShaderMgr.obj
-GAP ?SetVConstant@DxShaderMgr@@UAAXW4VShaderConstant@@ABVMatrix4@Hmx@@@Z  # target defines it in system/rnddx9/ShaderMgr.obj
-GAP ?SetVConstant@DxShaderMgr@@UAAXW4VShaderConstant@@ABVVector4@@@Z  # target defines it in system/rnddx9/ShaderMgr.obj
-GAP ?SetVConstant@DxShaderMgr@@UAAXW4VShaderConstant@@H@Z  # target defines it in system/rnddx9/ShaderMgr.obj
-GAP ?SetVConstant@DxShaderMgr@@UAAXW4VShaderConstant@@_N@Z  # target defines it in system/rnddx9/ShaderMgr.obj
 GAP ?ShowControllerRequiredUI@PlatformMgr@@QAAXPAVObject@Hmx@@@Z  # target defines it in system/os/PlatformMgr_Xbox.obj
 GAP ?Start@SingleItemEnumJob@@UAAXXZ  # target defines it in system/os/PlatformMgr_Xbox.obj
 GAP ?SyncBitmap@DxTex@@MAAXXZ  # target defines it in system/rnddx9/Tex.obj
@@ -347,6 +336,8 @@ EXT D3DDevice_SetGammaRamp
 EXT D3DDevice_SetIndices
 EXT D3DDevice_SetPerfCounterEvents
 EXT D3DDevice_SetPixelShader
+EXT D3DDevice_SetPixelShaderConstantB
+EXT D3DDevice_SetPixelShaderConstantI
 EXT D3DDevice_SetPredication
 EXT D3DDevice_SetRenderState_AlphaBlendEnable
 EXT D3DDevice_SetRenderState_AlphaFunc
@@ -387,7 +378,9 @@ EXT D3DDevice_SetSwapMode
 EXT D3DDevice_SetTexture
 EXT D3DDevice_SetVertexDeclaration
 EXT D3DDevice_SetVertexShader
+EXT D3DDevice_SetVertexShaderConstantB
 EXT D3DDevice_SetVertexShaderConstantFN
+EXT D3DDevice_SetVertexShaderConstantI
 EXT D3DDevice_SetViewport
 EXT D3DDevice_Suspend
 EXT D3DDevice_Swap
