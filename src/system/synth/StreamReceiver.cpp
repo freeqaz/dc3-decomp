@@ -100,14 +100,12 @@ void StreamReceiver::Poll() {
         mDoneBufferCounter++;
     }
 #else
-    if (kInit != (unsigned int)mState) {
-        if (mState == kReady) {
-            goto ready;
-        }
-        if ((unsigned int)mState > kStopped) {
-            MILO_FAIL("bad state logic.\n");
-            goto ready;
-        }
+    if ((unsigned int)mState < kReady) {
+        mWantToSend = true;
+    } else if ((unsigned int)mState == kReady) {
+    } else if ((unsigned int)mState >= 4) {
+        MILO_FAIL("bad state logic.\n");
+    } else {
         int playCursor = GetPlayCursor();
         int activeBuf = playCursor / 0x4000;
         mLastPlayCursor = playCursor;
@@ -115,15 +113,12 @@ void StreamReceiver::Poll() {
         if (!mSlipEnabled && activeBuf != mSendTarget) {
             mWantToSend = true;
         }
-        int halfBufs = mNumBuffers / 2;
         int diff = activeBuf - mSendTarget;
-        if (diff != halfBufs && diff != -halfBufs) {
-            goto ready;
+        if (diff == mNumBuffers / 2 || diff == -(mNumBuffers / 2)) {
+            mWantToSend = true;
         }
     }
-    mWantToSend = true;
-ready:
-    if (mWantToSend && mState != kInit && mRingFreeSpace != kStreamRcvrBufSize) {
+    if (mWantToSend && mState != kInit && kStreamRcvrBufSize - mRingFreeSpace != 0) {
         mStarving = true;
     }
     if (mWantToSend && mRingFreeSpace >= 0x4000 && !mSending) {
@@ -153,10 +148,9 @@ ready:
             if (overflow != 0) {
                 XMemCpy(mBuffer, mBuffer + 0x4000, overflow);
             }
-            int ringFreeSpace = mRingFreeSpace;
-            mRingFreeSpace = ringFreeSpace - 0x4000;
+            mRingFreeSpace -= 0x4000;
             if (mEndData) {
-                memset(&mBuffer[ringFreeSpace - 0x4000], 0, kStreamRcvrBufSize - (ringFreeSpace - 0x4000));
+                memset(&mBuffer[mRingFreeSpace], 0, kStreamRcvrBufSize - mRingFreeSpace);
                 mRingFreeSpace = kStreamRcvrBufSize;
                 mDoneBufferCounter++;
             }
