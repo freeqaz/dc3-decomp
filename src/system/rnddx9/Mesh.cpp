@@ -297,6 +297,61 @@ float DxMesh::FurWeight(RndMat *mat) {
     return -1.0f;
 }
 
+// Target: Mesh.obj .data:0xA0 (0x82F136C4), the single 0xBF800000 word.
+static float sFurLodBias = -1.0f;
+
+DxMat *DxMesh::DrawFur(DxMat *mat) {
+    if (TheRnd.DrawMode() != Rnd::kDrawNormal) {
+        return static_cast<DxMat *>(dynamic_cast<RndMat *>(mat->NextPass()));
+    }
+    DxMesh *owner = static_cast<DxMesh *>(GetGeomOwner());
+    MILO_ASSERT(owner && owner->CanDraw(), 0x21B);
+    MILO_ASSERT(mat, 0x21D);
+    // Each bone costs two 4x3 transform slots (the regular one plus the fur
+    // one), and only 43 constant registers are available from
+    // kVS_WorldTransform on.
+    if (NumBones() * 2 >= 43) {
+        MILO_NOTIFY_ONCE(
+            "%s: Too many bones for fur (%d > %d)", PathName(this), NumBones(), 21
+        );
+        return static_cast<DxMat *>(dynamic_cast<RndMat *>(mat->NextPass()));
+    }
+    RndFur *fur = mat->GetFur();
+    MILO_ASSERT(fur, 0x227);
+    int numBones = NumBones();
+    if (numBones == 0)
+        numBones = 1;
+    MILO_ASSERT(mTransformCache.size() == numBones, 0x22A);
+    for (int i = 0; i < numBones; i++) {
+        TheShaderMgr.SetVConstant4x3(
+            (VShaderConstant)(kVS_WorldTransform + (numBones + i) * 3),
+            Hmx::Matrix4(mTransformCache[i])
+        );
+    }
+    fur->Prep(owner, mat);
+    DWORD savedLod12 = D3DDevice_GetSamplerState_MipMapLodBias(TheDxRnd.Device(), 0xC);
+    DWORD savedLod0 = D3DDevice_GetSamplerState_MipMapLodBias(TheDxRnd.Device(), 0);
+    D3DDevice_SetSamplerState_MipMapLodBias(
+        TheDxRnd.Device(), 0xC, *(DWORD *)&sFurLodBias
+    );
+    D3DDevice_SetSamplerState_MipMapLodBias(
+        TheDxRnd.Device(), 0, *(DWORD *)&sFurLodBias
+    );
+    int numPasses = fur->Layers();
+    MILO_ASSERT(numPasses > 0, 0x243);
+    DxMat *next = static_cast<DxMat *>(dynamic_cast<RndMat *>(mat->NextPass()));
+    for (int i = 0; i < numPasses; i++) {
+        fur->Shell(i, owner, mat);
+        owner->DrawFacesInRange(0, -1);
+    }
+    D3DDevice_SetSamplerState_MipMapLodBias(TheDxRnd.Device(), 0xC, savedLod12);
+    D3DDevice_SetSamplerState_MipMapLodBias(TheDxRnd.Device(), 0, savedLod0);
+    // Sampler 6 is restored to sampler 0's saved bias, not its own -- that is
+    // what the shipped code does.
+    D3DDevice_SetSamplerState_MipMapLodBias(TheDxRnd.Device(), 6, savedLod0);
+    return next;
+}
+
 void DxMesh::OnSync(int flags) {
     PhysMemTypeTracker tracker("D3D(phys):Mesh");
     RndMesh *geom = GetGeomOwner();
@@ -451,6 +506,67 @@ void DxMesh::DrawShowing() {
         geom->DrawFacesInRange(0, -1);
         mat = next;
     } while (mat);
+}
+
+void DxMesh::DrawFacesInRange(int startFace, int numFaces) {
+    D3DDevice *device = TheDxRnd.Device();
+    if (mMutable) {
+        // Mutable meshes have no persistent buffers: the geometry is streamed
+        // straight into the command buffer every draw.
+        if (Faces().empty())
+            return;
+        TheNgStats->mMutMeshes++;
+        D3DDevice_SetVertexDeclaration(
+            device, IsSkinned() ? sMutableSkinnedVertexDecl : sMutableVertexDecl
+        );
+        void *indexData = nullptr;
+        void *vertexData = nullptr;
+        HRESULT hr = D3DDevice_BeginIndexedVertices(
+            device,
+            D3DPT_TRIANGLELIST,
+            0,
+            Verts().size(),
+            Faces().size() * 3,
+            D3DFMT_INDEX16,
+            0x60,
+            &indexData,
+            &vertexData
+        );
+        if (hr) {
+            MILO_FAIL(
+                "File: %s Line: %d Error: %s\n", __FILE__, 0x35C, DxRnd::Error(hr)
+            );
+        }
+        void *vertexDest = vertexData;
+        RndMesh::Face *faceData = Faces().begin();
+        RndMesh::Vert *vertData = Verts().begin();
+        XMemCpyStreaming_WriteCombined(indexData, faceData, Faces().size() * 6);
+        XMemCpyStreaming_WriteCombined(vertexDest, vertData, Verts().size() * 0x60);
+        D3DDevice_EndIndexedVertices(device);
+        TheNgStats->mFaces += Faces().size();
+    } else {
+        if (numFaces == -1)
+            numFaces = mNumFaces;
+        D3DDevice_SetIndices(device, (D3DIndexBuffer *)unk1ac);
+        // The buffer has to be read before VertSize() is called, not as part of
+        // the (right-to-left) argument evaluation that follows it.
+        D3DVertexBuffer *vertexBuffer = unk1a4.buffer;
+        unsigned int vertSize = VertSize();
+        D3DDevice_SetStreamSource(device, 0, vertexBuffer, 0, vertSize, 1);
+        D3DDevice_SetVertexDeclaration(device, sVertexDecl);
+        TheNgStats->mRegMeshes++;
+        TheNgStats->mFaces += numFaces;
+        if (mNumFaces == 0) {
+            MILO_NOTIFY_ONCE(
+                "%s (%s): Trying to draw mesh with no faces", Name(), PathName(this)
+            );
+        } else {
+            D3DDevice_DrawIndexedVertices(
+                device, D3DPT_TRIANGLELIST, 0, startFace * 3, numFaces * 3
+            );
+        }
+        D3DDevice_SetIndices(device, nullptr);
+    }
 }
 
 void _fake(void) {

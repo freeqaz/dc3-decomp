@@ -805,6 +805,10 @@ inline void D3DDevice_SetSamplerState_MipFilter(D3DDevice *pDevice, DWORD Sample
     *pWord = (*pWord & ~0x1C00) | ((Value & 7) << 10);
     pDevice->m_Pending.m_Mask[3] |= PendingMask3;
 }
+void D3DDevice_SetSamplerState_MipMapLodBias(
+    D3DDevice *pDevice, DWORD Sampler, DWORD Value
+);
+DWORD D3DDevice_GetSamplerState_MipMapLodBias(D3DDevice *pDevice, DWORD Sampler);
 void D3DDevice_SetSamplerState_MinMipLevel(D3DDevice *pDevice, DWORD Sampler, DWORD Value);
 void D3DDevice_SetSamplerState_MaxMipLevel(D3DDevice *pDevice, DWORD Sampler, DWORD Value);
 // NOTE: the mip filter lives in fetch-constant word 3, bits 23-24 -- the same word
@@ -898,6 +902,18 @@ void D3DDevice_DrawIndexedVertices(
     UINT StartIndex,
     UINT IndexCount
 );
+HRESULT D3DDevice_BeginIndexedVertices(
+    D3DDevice *pDevice,
+    D3DPRIMITIVETYPE PrimitiveType,
+    INT BaseVertexIndex,
+    UINT VertexCount,
+    UINT IndexCount,
+    D3DFORMAT IndexDataFormat,
+    UINT VertexStreamZeroStride,
+    void **ppIndexData,
+    void **ppVertexData
+);
+void D3DDevice_EndIndexedVertices(D3DDevice *pDevice);
 HRESULT D3DDevice_Reset(D3DDevice *pDevice, D3DPRESENT_PARAMETERS *);
 void D3DDevice_Clear(
     D3DDevice *pDevice,
@@ -991,6 +1007,11 @@ D3DDevice_CreateQueryTiled(D3DDevice *pDevice, D3DQUERYTYPE Type, UINT TileCapac
 
 void D3DDevice_SetVertexShader(D3DDevice *pDevice, D3DVertexShader *pShader);
 void D3DDevice_SetPixelShader(D3DDevice *pDevice, D3DPixelShader *pShader);
+
+// PIX capture control (xapilib). Unmangled in the retail map, so it is
+// declared inside this extern "C" block; DxRnd::BeginDrawing relocates the
+// plain name `PIXCaptureGpuFrame`.
+void PIXCaptureGpuFrame(const char *pstrFileName);
 
 #ifdef __cplusplus
 }

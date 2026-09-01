@@ -14,18 +14,12 @@
 # entry points and middleware the decomp calls but does not contain. The
 # classification is for the reader; --check ignores it and compares names only.
 #
-# counts: 690 total = 13 GAP + 677 EXT
+# counts: 690 total = 7 GAP + 683 EXT
 
-GAP ?BeginDrawing@DxRnd@@UAAXXZ  # target defines it in system/rnddx9/Rnd_Xbox.obj
-GAP ?DrawFacesInRange@DxMesh@@UAAXHH@Z  # target defines it in system/rnddx9/Mesh.obj
-GAP ?DrawFur@DxMesh@@IAAPAVDxMat@@PAV2@@Z  # target defines it in system/rnddx9/Mesh.obj
 GAP ?DrawRect@DxRnd@@UAAXABVRect@Hmx@@PAVRndMat@@W4ShaderType@@ABVColor@3@PBV63@4@Z  # target defines it in system/rnddx9/Rnd.obj
 GAP ?DrawShowing@DxMultiMesh@@UAAXXZ  # target defines it in system/rnddx9/MultiMesh.obj
 GAP ?DrawShowing@DxParticleSys@@UAAXXZ  # target defines it in system/rnddx9/Part.obj
-GAP ?DrawString@DxRnd@@UAAAAVVector2@@PBDABV2@ABVColor@Hmx@@_N@Z  # target defines it in system/rnddx9/Rnd_Xbox.obj
-GAP ?EndDrawing@DxRnd@@UAAXXZ  # target defines it in system/rnddx9/Rnd_Xbox.obj
 GAP ?Poll@PlatformMgr@@QAAXXZ  # target defines it in system/os/PlatformMgr_Xbox.obj
-GAP ?ReleaseAutoRelease@DxRnd@@QAAXXZ  # target defines it in system/rnddx9/Rnd_Xbox.obj
 GAP ?SyncBitmap@DxTex@@MAAXXZ  # target defines it in system/rnddx9/Tex.obj
 GAP ?fft_altivec@@YAHPAM0KJ0@Z  # target defines it in system/synth_xbox/FFT.obj
 GAP ?fft_recursive@@YAHPAMKJ0@Z  # target defines it in system/synth_xbox/FFT.obj
@@ -129,6 +123,7 @@ EXT CreateThread
 EXT D3DBaseTexture_GetLevelCount
 EXT D3DCubeTexture_LockRect
 EXT D3DCubeTexture_UnlockRect
+EXT D3DDevice_BeginIndexedVertices
 EXT D3DDevice_BeginTiling
 EXT D3DDevice_BlockOnFence
 EXT D3DDevice_BlockUntilIdle
@@ -145,9 +140,11 @@ EXT D3DDevice_CreateVertexShader
 EXT D3DDevice_DrawIndexedVertices
 EXT D3DDevice_DrawVerticesUP
 EXT D3DDevice_EnablePerfCounters
+EXT D3DDevice_EndIndexedVertices
 EXT D3DDevice_EndTiling
 EXT D3DDevice_GetDepthStencilSurface
 EXT D3DDevice_GetRenderTarget
+EXT D3DDevice_GetSamplerState_MipMapLodBias
 EXT D3DDevice_InsertFence
 EXT D3DDevice_QueryPerfCounters
 EXT D3DDevice_QuerySwapStatus
@@ -200,6 +197,7 @@ EXT D3DDevice_SetSamplerState_MagFilter
 EXT D3DDevice_SetSamplerState_MaxMipLevel
 EXT D3DDevice_SetSamplerState_MinFilter
 EXT D3DDevice_SetSamplerState_MinMipLevel
+EXT D3DDevice_SetSamplerState_MipMapLodBias
 EXT D3DDevice_SetShaderGPRAllocation
 EXT D3DDevice_SetStreamSource
 EXT D3DDevice_SetSwapMode
@@ -320,6 +318,7 @@ EXT NuiWaveGetGestureOwnerProgress
 EXT NuiWaveSetEnabled
 EXT OpenThread
 EXT OutputDebugStringA
+EXT PIXCaptureGpuFrame
 EXT PIXGetCaptureState
 EXT RADTimerRead
 EXT ReadFile
@@ -413,6 +412,7 @@ EXT XMarketplaceCreateOfferEnumerator
 EXT XMarketplaceCreateOfferEnumeratorByOffering
 EXT XMemAllocDefault
 EXT XMemCpy
+EXT XMemCpyStreaming_WriteCombined
 EXT XMemFreeDefault
 EXT XMemSet
 EXT XMemSizeDefault

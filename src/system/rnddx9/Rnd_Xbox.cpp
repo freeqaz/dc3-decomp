@@ -612,6 +612,70 @@ RndTex *DxRnd::GetCurrentFrameTex(bool resolvePreProcess) {
     return PostProcessTexture();
 }
 
+// Debug text: each glyph is a list of polylines held in the `font` DataArray,
+// indexed by character code, each point a pair of floats scaled to a 9x12 cell
+// on a 13.5 x 18 pixel grid.  Returns a reference to a shared cursor holding
+// the end of the string, which DrawStringScreen scales back to 0..1.
+Vector2 &DxRnd::DrawString(
+    const char *str, const Vector2 &pos, const Hmx::Color &color, bool drawGlyphs
+) {
+    MILO_ASSERT(str, 0x11F);
+    D3DDevice_SetFVF(mD3DDevice, 0x42);
+    Transform screenXfm;
+    screenXfm.Reset();
+    TheShaderMgr.SetVConstant(kVS_ViewProjMatrix, Hmx::Matrix4(screenXfm));
+    TheShaderMgr.SetTransform(screenXfm);
+    RndShader::SelectConfig(nullptr, kLineNozShader, false);
+    D3DDevice_SetRenderState_ViewportEnable(TheDxRnd.Device(), 0);
+    static Vector2 cursor;
+    cursor = pos;
+    float widest = pos.x;
+    while (*str) {
+        char c = *str;
+        if (c == '\n') {
+            str++;
+            if (*str) {
+                widest = Max(widest, cursor.x);
+                cursor.y += 18.0f;
+                cursor.x = pos.x;
+            }
+            continue;
+        }
+        if (drawGlyphs && c > 0 && c + 1 < Font()->Size()) {
+            DataArray *glyph = Font()->Node(c + 1).UncheckedArray();
+            for (int i = 0; i < glyph->Size(); i++) {
+                DataArray *stroke = glyph->Node(i).UncheckedArray();
+                struct StrokeVert {
+                    float x, y, z;
+                    unsigned long color;
+                } verts[12];
+                int numVerts = 0;
+                for (int j = 0; j < stroke->Size(); j += 2) {
+                    verts[numVerts].x = stroke->Float(j) * 9.0f + cursor.x;
+                    verts[numVerts].y = stroke->Float(j + 1) * 12.0f + cursor.y;
+                    verts[numVerts].z = 1.0f;
+                    verts[numVerts].color = MakeColor(color);
+                    numVerts++;
+                }
+                D3DDevice_DrawVerticesUP(
+                    mD3DDevice, D3DPT_LINESTRIP, numVerts, verts, 0x10
+                );
+            }
+        }
+        cursor.x += 13.5f;
+        str++;
+    }
+    D3DDevice_SetRenderState_ViewportEnable(TheDxRnd.Device(), 1);
+    if (RndCam::Current()) {
+        TheShaderMgr.SetVConstant(
+            kVS_ViewProjMatrix, RndCam::Current()->GetViewProjMatrix()
+        );
+    }
+    cursor.y += 18.0f;
+    cursor.x = Max(cursor.x, widest);
+    return cursor;
+}
+
 bool DxRnd::CanModal(Debug::ModalType t) {
     if (mTilingActive) {
         if (t == Debug::kModalFail) {
@@ -786,6 +850,178 @@ void DxRnd::CreatePostTextures() {
     RELEASE(mPostProcessTex);
     mPostProcessTex = Hmx::Object::New<DxTex>();
     mPostProcessTex->SetDeviceTex(mPostProcessBuffer);
+}
+
+void DxRnd::EndDrawing() {
+    EndWorld();
+    if (mShowSafeArea) {
+        Hmx::Color titleSafeColor(1.0f, 0.0f, 0.0f, 1.0f);
+        Hmx::Color actionSafeColor(0.0f, 1.0f, 0.0f, 1.0f);
+        if (mAspect == kWidescreen)
+            DrawSafeArea(0.9f, true, titleSafeColor);
+        DrawSafeArea(0.9f, false, titleSafeColor);
+        if (mAspect == kWidescreen)
+            DrawSafeArea(0.95f, true, actionSafeColor);
+        DrawSafeArea(0.95f, false, actionSafeColor);
+    }
+    Rnd::EndDrawing();
+    mPostProcDone = false;
+    EndTiling(FrontBuffer(), 0);
+    D3DDevice_SetRenderTarget_External(mD3DDevice, 0, mBackBuffer);
+    // 2/172 instructions from byte-identity: the target schedules the
+    // mD3DDevice load (r3) ahead of the mWorldDepth load (r4) here and we
+    // schedule them the other way round.  Neither a Device() accessor nor a
+    // named D3DDevice* local moves it.
+    D3DDevice_SetDepthStencilSurface(mD3DDevice, mWorldDepth);
+    if (mRegAlloc != 0) {
+        mRegAlloc = (RegisterAlloc)0;
+        D3DDevice_SetShaderGPRAllocation(mD3DDevice, 0, 0, 0);
+    }
+    {
+        static Timer *drawStop = AutoTimer::GetTimer("draw");
+        if (drawStop)
+            drawStop->Stop();
+    }
+    if (mGSTiming) {
+        {
+            static Timer *cpuStop = AutoTimer::GetTimer("cpu");
+            if (cpuStop)
+                cpuStop->Stop();
+        }
+        PerfCountersStop();
+        {
+            static Timer *cpuStart = AutoTimer::GetTimer("cpu");
+            if (cpuStart)
+                cpuStart->Start();
+        }
+    }
+}
+
+// Retires everything AutoRelease()/AutoDelete() queued while mReleaseImmediate
+// was false.  A resource that is still bound to the device cannot be freed yet,
+// so it is carried over into the next frame's pending list.
+//
+// The two shift expressions are the XDK's D3DTAG "pending mask" arithmetic with
+// a *runtime* index: for a literal stream/sampler MSVC folds it to a constant
+// (see the 0x80000000 / 0x8000 / 1 literals elsewhere in this file), but inside
+// these loops the whole expansion survives into the code.
+void DxRnd::ReleaseAutoRelease() {
+    D3DDevice_SetVertexShader(mD3DDevice, nullptr);
+    D3DDevice_SetPixelShader(mD3DDevice, nullptr);
+    D3DDevice_SetIndices(mD3DDevice, nullptr);
+    for (int sampler = 0; sampler < 16; sampler++) {
+        D3DDevice_SetTexture(
+            mD3DDevice, sampler, nullptr, 0x8000000000000000 >> (sampler + 0x20U)
+        );
+    }
+    for (int stream = 0; stream < 4; stream++) {
+        D3DDevice_SetStreamSource(
+            mD3DDevice,
+            stream,
+            nullptr,
+            0,
+            0,
+            0x8000000000000000 >> (((0x5FU - stream) * 0x5556U >> 16) + 0x20U)
+        );
+    }
+
+    std::vector<D3DResource *> stillBoundResources;
+    for (std::vector<D3DResource *>::iterator it = mPendingReleases.begin();
+         it != mPendingReleases.end();
+         ++it) {
+        if (D3DResource_IsSet(*it, mD3DDevice)) {
+            stillBoundResources.push_back(*it);
+        } else if (*it) {
+            (*it)->Release();
+            *it = nullptr;
+        }
+    }
+    mPendingReleases.clear();
+    mPendingReleases.swap(stillBoundResources);
+
+    std::vector<D3DBaseTexture *> stillBoundTextures;
+    for (std::vector<D3DBaseTexture *>::iterator it = mPendingDeletes.begin();
+         it != mPendingDeletes.end();
+         ++it) {
+        D3DBaseTexture *tex = *it;
+        if (tex) {
+            if (D3DResource_IsSet(tex, mD3DDevice)) {
+                stillBoundTextures.push_back(tex);
+            } else {
+                UINT data;
+                XGGetTextureLayout(
+                    tex,
+                    &data,
+                    nullptr,
+                    nullptr,
+                    nullptr,
+                    0,
+                    nullptr,
+                    nullptr,
+                    nullptr,
+                    nullptr,
+                    0
+                );
+                PhysicalFreeTracked((void *)data, __FILE__, 0x452, "");
+                delete tex;
+            }
+        }
+    }
+    mPendingDeletes.clear();
+    mPendingDeletes.swap(stillBoundTextures);
+}
+
+void DxRnd::BeginDrawing() {
+    {
+        static Timer *cpuStop = AutoTimer::GetTimer("cpu");
+        if (cpuStop)
+            cpuStop->Stop();
+    }
+    static Timer *cpuTimer = AutoTimer::GetTimer("cpu");
+    if (mSuspended) {
+        Resume();
+    } else if (mPrintGlitches && cpuTimer->Ms() > 66.0f) {
+        MILO_LOG("GLITCH: %i ms\n", (int)cpuTimer->Ms());
+    }
+    if (mCaptureNextFrame) {
+        PIXCaptureGpuFrame("capture.pix2");
+        mCaptureNextFrame = false;
+    }
+    Present();
+    if (MainThread())
+        ReleaseAutoRelease();
+    Rnd::BeginDrawing();
+    if (mGSTiming) {
+        PerfCountersInit();
+        PerfCountersStart();
+    }
+    DrawPreClear();
+    Hmx::Color clearColor = mClearColor;
+    D3DDevice_Clear(
+        mD3DDevice,
+        0,
+        nullptr,
+        0x31,
+        ((unsigned long)(clearColor.red * 255.0f) & 0xFF) << 16
+            | ((unsigned long)(clearColor.green * 255.0f) & 0xFF) << 8
+            | ((unsigned long)(clearColor.blue * 255.0f) & 0xFF),
+        0,
+        0,
+        0
+    );
+    SetShaderRegisterAlloc((RegisterAlloc)1);
+    ResetStats();
+    {
+        static Timer *cpuStart = AutoTimer::GetTimer("cpu");
+        if (cpuStart)
+            cpuStart->Start();
+    }
+    {
+        static Timer *drawStart = AutoTimer::GetTimer("draw");
+        if (drawStart)
+            drawStart->Start();
+    }
+    NgMat::SetCurrent(nullptr);
 }
 
 static DWORD sPointTestFence = -1;
