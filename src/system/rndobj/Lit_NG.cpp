@@ -67,9 +67,9 @@ bool NgLight::SphereConeTest(const Vector3 &sphereCenter, float sphereRadius) {
     // MSVC materialises each of the three products once and re-derives the
     // sum at every use site; naming the products is what stops it contracting
     // them into fmadds.
-    float px = xfm2.m.y.x * sc.x;
-    float pz = xfm2.m.y.z * sc.z;
     float py = xfm2.m.y.y * sc.y;
+    float pz = xfm2.m.y.z * sc.z;
+    float px = xfm2.m.y.x * sc.x;
 
     if (px + pz + py < -sphereRadius) {
         return false;
