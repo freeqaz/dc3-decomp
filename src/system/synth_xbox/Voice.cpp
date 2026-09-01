@@ -205,10 +205,10 @@ void Voice::UpdateMix() {
         for (int i = 0; i < 12; i++) {
             levels[i] = 0.0f;
         }
-        float angle = (mPan + 1.0f) * 0.5f * 1.5707964f;
+        float angle = ((mPan + 1.0f) * 0.5f) * 1.5707964f;
         if (destChannels == 6 || destChannels == 2) {
-            levels[0] = mVolume * cos(angle);
-            levels[3] = mVolume * sin(angle);
+            levels[0] = (float)cos(angle) * mVolume;
+            levels[3] = (float)sin(angle) * mVolume;
         } else {
             for (int i = 0; i < 12; i++) {
                 levels[i] = 1.0f;
@@ -276,12 +276,12 @@ void Voice::UpdateMix() {
         }
         float angle = (mPan - loPan) / (hiPan - loPan) * 1.5707964f;
         if (destChannels == 6) {
-            levels[loChannel] = mVolume * cos(angle);
-            levels[hiChannel] = mVolume * sin(angle);
+            levels[loChannel] = (float)cos(angle) * mVolume;
+            levels[hiChannel] = (float)sin(angle) * mVolume;
         } else {
             MILO_ASSERT(-1.0 <= mPan && mPan <= 1.0, 0x3c2);
-            levels[0] = mVolume * cos((mPan + 1.0f) * 0.5f * 1.5707964f);
-            levels[1] = mVolume * sin((mPan + 1.0f) * 0.5f * 1.5707964f);
+            levels[0] = (float)cos(((mPan + 1.0f) * 0.5f) * 1.5707964f) * mVolume;
+            levels[1] = (float)sin(((mPan + 1.0f) * 0.5f) * 1.5707964f) * mVolume;
         }
     } else if (destChannels == 1) {
         levels[0] = mVolume;
@@ -312,16 +312,16 @@ void Voice::UpdateMix() {
         }
         float angle = (mPan - loPan) / (hiPan - loPan) * 1.5707964f;
         if (destChannels == 6) {
-            levels[loChannel] = cos(angle) * reverbRatio;
-            levels[hiChannel] = sin(angle) * reverbRatio;
+            levels[loChannel] = (float)cos(angle) * reverbRatio;
+            levels[hiChannel] = (float)sin(angle) * reverbRatio;
         } else {
             MILO_ASSERT(-1.0 <= mPan && mPan <= 1.0, 0x3ee);
-            levels[0] = cos(angle) * reverbRatio;
+            levels[0] = (float)cos(angle) * reverbRatio;
             // Shipping-game bug, reproduced verbatim: the right channel is fed
             // cos() again instead of sin(), so a stereo reverb send is
             // correlated rather than panned.  Both call sites resolve to the
             // same `cos` in the target (0x829A09B8).
-            levels[1] = cos(angle) * reverbRatio;
+            levels[1] = (float)cos(angle) * reverbRatio;
         }
         HRESULT hr =
             GetVoice()->SetOutputMatrix(TheXboxSynth->UnkF8(), 1, destChannels, levels, 0);
