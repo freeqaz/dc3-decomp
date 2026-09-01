@@ -1503,15 +1503,19 @@ void MakeTangentsLate(RndMesh *m) {
         }
         Normalize(*(Vector3 *)&v.tangent, *(Vector3 *)&v.tangent);
 
-        float tx = v.tangent.x, ty = v.tangent.y, tz = v.tangent.z;
-        float tDotN = v.norm.x * tx + v.norm.z * tz + v.norm.y * ty;
+        // Retail copies the whole tangent into a stack temp (lwz/stw x4 into
+        // r31+0x70) and reads tx/ty/tz back out of that temp, then builds the
+        // orthogonalised result as a Vector3 at r31+0x80.
+        Vector4 t = v.tangent;
+        float tDotN = v.norm.x * t.x + v.norm.z * t.z + v.norm.y * t.y;
         float scaleX = v.norm.x * tDotN;
         float scaleY = v.norm.y * tDotN;
         float scaleZ = v.norm.z * tDotN;
-        float ox = tx - scaleX;
-        float oy = ty - scaleY;
-        float oz = tz - scaleZ;
-        Normalize(*(Vector3 *)&ox, *(Vector3 *)&v.tangent);
+        Vector3 ortho;
+        ortho.x = t.x - scaleX;
+        ortho.y = t.y - scaleY;
+        ortho.z = t.z - scaleZ;
+        Normalize(ortho, *(Vector3 *)&v.tangent);
     }
     TheDebug
         << MakeString("NOTIFY: %s MakingTangentsLate, resave this file!", PathName(m));
