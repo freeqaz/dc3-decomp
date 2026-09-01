@@ -290,37 +290,27 @@ void StorePanel::ExitError(StoreError e) {
 }
 
 void StorePanel::HandleNetCacheMgrFailure() {
-    StoreError err;
-    NetCacheMgrFailType failTy;
-
-    err = kStoreErrorSuccess;
-    failTy = TheNetCacheMgr->GetFailType();
+    StoreError err = kStoreErrorCacheRemoved;
+    NetCacheMgrFailType failTy = TheNetCacheMgr->GetFailType();
     switch (failTy) {
     case kNCMFT_StoreServer:
-    case kNCMFT_ClientError:
-        // NOTE: RB3 logs MILO_WARN("Failure %d in NetCacheMgr.\n", failTy) here
-        // and this port inherited it, but the literal
-        // ??_C@_0BM@PEBBLAJE@Failure?5?$CFd?5in?5NetCacheMgr?4?6?$AA@ appears
-        // NOWHERE in orig/373307D9/ham_xbox_r.map -- DC3's build has no such
-        // string.  The target function is also 200 B against our 144 B and
-        // calls DingoServer::GetHostName and PlatformMgr::IsSignedIntoLive,
-        // neither of which this body has, so the whole switch needs rebuilding
-        // rather than a one-line edit.  Left as-is: deleting the notify alone
-        // costs 4.8 normalized points and closes nothing.
-        MILO_NOTIFY("Failure %d in NetCacheMgr.\n", failTy);
+    case kNCMFT_ClientError: {
+        Profile *profile = StoreProfile();
+        bool signedIn = ThePlatformMgr.IsSignedIntoLive(profile->GetPadNum());
+        err = (StoreError)((!signedIn ^ 1) + kStoreErrorCacheNoSpace);
         break;
+    }
     case kNCMFT_NoEthernetCable:
-        err = kStoreErrorNoMetadata;
-        break;
+        goto no_metadata;
     default:
         MILO_NOTIFY("Unknown failure %d in NetCacheMgr.", failTy);
         break;
     }
-    if (err != kStoreErrorNoMetadata && !ThePlatformMgr.IsEthernetCableConnected()) {
+    if (!ThePlatformMgr.IsEthernetCableConnected()) {
+no_metadata:
         err = kStoreErrorNoMetadata;
     }
-    if (err != kStoreErrorSuccess)
-        ExitError(err);
+    ExitError(err);
 }
 
 void StorePanel::HandleNetCacheLoaderFailure(int failType) {
