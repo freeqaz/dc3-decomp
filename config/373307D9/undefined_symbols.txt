@@ -14,7 +14,7 @@
 # entry points and middleware the decomp calls but does not contain. The
 # classification is for the reader; --check ignores it and compares names only.
 #
-# counts: 703 total = 68 GAP + 635 EXT
+# counts: 702 total = 67 GAP + 635 EXT
 
 GAP ??$?6VHamScrollSpeedIndicator@@@@YAAAVBinStream@@AAV0@ABV?$ObjDirPtr@VHamScrollSpeedIndicator@@@@@Z  # target defines it in system/ui/UILabel.obj
 GAP ??0GranularSynth@Synapse@DSP@@QAA@ABV?$vector@MV?$StlNodeAlloc@M@stlpmtx_std@@@stlpmtx_std@@III@Z  # target defines it in system/synth_xbox/GranularSynth.obj
@@ -73,7 +73,6 @@ GAP ?UpdateVoiceMatrices@FxSend360@@AAAXXZ  # target defines it in system/synth_
 GAP ?fft_altivec@@YAHPAM0KJ0@Z  # target defines it in system/synth_xbox/FFT.obj
 GAP ?fft_real_forward_altivec@@YAHPAMJ0@Z  # target defines it in system/synth_xbox/FFT.obj
 GAP ?fft_recursive@@YAHPAMKJ0@Z  # target defines it in system/synth_xbox/FFT.obj
-GAP ?sXShowCallback@PlatformMgr@@2P6A_NAAK@ZA  # target defines it in system/os/PlatformMgr_Xbox.obj
 GAP ?sampleProcessThread@ExternalMic@@QAAKXZ  # target defines it in system/synth_xbox/ExternalMic.obj
 GAP NuiCameraAdjustTilt  # target defines it in xdk/nuiapi/nuidetroit.obj
 GAP NuiCameraElevationGetAngle  # target defines it in xdk/nuiapi/nuidetroit.obj
