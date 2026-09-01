@@ -1484,19 +1484,23 @@ void MakeTangentsLate(RndMesh *m) {
                     break;
             }
             if (3 != k) {
+                // Retail keeps &faceTangents[f] in one register across all three
+                // component adds; re-subscripting reloads the vector base
+                // (lwz 0x58(r31) + add) between each one.
+                Vector4 &ft = faceTangents[f];
                 if (first) {
                     first = false;
-                    v.tangent = faceTangents[f];
+                    v.tangent = ft;
                 } else {
-                    if ((double)(faceTangents[f].w * v.tangent.w) < zeroThresh) {
+                    if ((double)(ft.w * v.tangent.w) < zeroThresh) {
                         TheDebug << MakeString(
                             "NOTIFY: %s has previously welded vertex tangents with opposite handedness; re-export from Max for more accurate normal mapping.\n",
                             PathName(m)
                         );
                     } else {
-                        v.tangent.x += faceTangents[f].x;
-                        v.tangent.y += faceTangents[f].y;
-                        v.tangent.z += faceTangents[f].z;
+                        v.tangent.x += ft.x;
+                        v.tangent.y += ft.y;
+                        v.tangent.z += ft.z;
                     }
                 }
             }
