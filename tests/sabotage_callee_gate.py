@@ -16,12 +16,15 @@ restores and that would take your uncommitted work with it.
 """
 from __future__ import annotations
 
-import os
 import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "scripts"))
+
+from pyc_hygiene import is_length_preserving, run_python  # noqa: E402
+
 GATE = ROOT / "scripts/orchestrator/callee_gate.py"
 VERIFY = ROOT / "scripts/verify_pattern_scan_current.py"
 SYNC = ROOT / "scripts/sync_objdiff.py"
@@ -135,6 +138,14 @@ SABOTAGES = [
 ]
 
 
+#: Sabotages whose edit leaves the file's byte length unchanged -- the exact
+#: shape the bytecode cache cannot see.  Derived, never hand-maintained, so a
+#: sabotage added later joins the list by itself.  Printed on every run: the
+#: mitigation in `run()` is invisible when it works, and a list nobody sees is
+#: a list nobody checks.
+LENGTH_PRESERVING = [s for s in SABOTAGES if is_length_preserving(s[2], s[3])]
+
+
 def dirty() -> list[str]:
     out = subprocess.run(["git", "-C", str(ROOT), "status", "--porcelain", "--",
                           str(GATE), str(VERIFY), str(SYNC), str(TESTS)],
@@ -142,16 +153,20 @@ def dirty() -> list[str]:
     return [l for l in out.splitlines() if l.strip()]
 
 
-def drop_bytecode() -> None:
-    """Delete every `__pycache__` this harness's edits could have staled.
+def run(node: str) -> bool:
+    """True = GREEN.
 
-    NOT hygiene -- a MEASURED defect.  CPython validates a cached `.pyc` against
-    the source's (mtime, size), and several sabotages here are byte-length
-    preserving: S10b is `gate.cleared[...]` -> `gate.blocked[...]`, and "cleared"
-    and "blocked" are both seven characters, so the file is the same 34,766 bytes
-    before and after.  Patch and restore land within the same second, mtime
-    granularity is one second, so the interpreter would sometimes load the
-    STALE bytecode and the sabotage silently never ran.  Measured 2026-08-31:
+    Goes through `pyc_hygiene.run_python`, which drops every stale `.pyc` under
+    ROOT and runs the child with `-B` + PYTHONDONTWRITEBYTECODE.
+
+    NOT hygiene -- a MEASURED defect, and the reason that helper exists.  CPython
+    validates a cached `.pyc` against the source's (mtime, size), storing mtime
+    as `int(st_mtime)` -- whole seconds.  Two of the sabotages below are
+    byte-length preserving (see LENGTH_PRESERVING): S10b is `gate.cleared[...]`
+    -> `gate.blocked[...]`, both seven characters, so `callee_gate.py` is the
+    same 34,766 bytes before and after.  Patch and restore land within one
+    second, so neither validation field moves and the interpreter loads the
+    STALE bytecode: the sabotage silently never runs.  Measured 2026-08-31,
     S10b alternated CAUGHT / NOT CAUGHT across consecutive whole-harness runs
     with nothing else changed, while applying the identical patch by hand and
     running pytest went red every time.
@@ -160,21 +175,15 @@ def drop_bytecode() -> None:
     CAUGHT, i.e. as a harness failure -- but a flaky verifier is a verifier
     people learn to re-run until it agrees with them, which is how a real NOT
     CAUGHT gets waved through.
+
+    The two halves close different directions and both are needed; each is held
+    by its own sabotage in `tests/test_pyc_hygiene.py`.  Dropping the `.pyc`
+    makes the sabotage RUN; `-B` + the env var stop the sabotage's own compile
+    from caching bytecode that the RESTORE (same second, same size) would leave
+    stale, which reads back as a spurious "RESTORE FAILED".
     """
-    for pycache in ROOT.rglob("__pycache__"):
-        if "venv" in pycache.parts or ".git" in pycache.parts:
-            continue
-        for f in pycache.glob("*.pyc"):
-            f.unlink(missing_ok=True)
-
-
-def run(node: str) -> bool:
-    """True = GREEN."""
-    drop_bytecode()
-    env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
-    r = subprocess.run([sys.executable, "-B", "-m", "pytest", "-q",
-                        "-p", "no:cacheprovider", f"{TESTS}::{node}"],
-                       cwd=ROOT, capture_output=True, text=True, env=env)
+    r = run_python(["-m", "pytest", "-q", "-p", "no:cacheprovider",
+                    f"{TESTS}::{node}"], root=ROOT, cwd=ROOT)
     return r.returncode == 0
 
 
@@ -192,6 +201,14 @@ def main() -> int:
               "restores with `git checkout --` and would destroy them:", file=sys.stderr)
         print("\n".join(dirty()), file=sys.stderr)
         return 2
+
+    if LENGTH_PRESERVING:
+        print(f"{len(LENGTH_PRESERVING)} of {len(SABOTAGES)} sabotages are "
+              f"BYTE-LENGTH PRESERVING and are only visible to the interpreter "
+              f"because run() drops the bytecode cache (see tests/test_pyc_hygiene.py):")
+        for label, path, _o, _n, _node in LENGTH_PRESERVING:
+            print(f"    {label:46} {path.relative_to(ROOT)}")
+        print()
 
     print("baseline: every sabotaged test must be GREEN before we start")
     for label, _f, _o, _n, node in SABOTAGES:
