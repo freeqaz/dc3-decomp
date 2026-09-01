@@ -5,7 +5,12 @@
 #include <cstring>
 #include <cwchar>
 #include "os\OnlineID.h"
+#include "os\NetworkSocket_Win.h"
+#include "os\Timer.h"
+#include "obj\Dir.h"
+#include "stl\_list.h"
 #include "utl\DataPointMgr.h"
+#include "utl\Locale.h"
 #include "utl\GlitchFinder.h"
 #include "xdk\XAPILIB.h"
 #include "xdk\xparty\xparty.h"
@@ -29,6 +34,7 @@ namespace {
     XOVERLAPPED *mServiceIDOverlapped;
     XOVERLAPPED *mServiceIDOverlapped2;
     ServiceIdState mServiceIdState;
+    float mRetryTime;
     Hmx::Object *mFriendsCallback;
     void *mFriendsAsync;
     void *mFriendsBuffer;
@@ -38,9 +44,27 @@ namespace {
     int gNumSmartGlassClients;
     int gNumSmartGlassSendsInProgress;
     std::vector<Friend *> *mFriendsList;
+
+    // One outstanding PlatformMgr::EnumerateFriends request.  Allocated with
+    // MEM_OVERLOAD so the allocation is attributed to this file.
+    class FriendEnumRequest {
+    public:
+        FriendEnumRequest(int padNum, std::vector<Friend *> *list, Hmx::Object *callback)
+            : mPadNum(padNum), mList(list), mCallback(callback) {}
+
+        MEM_OVERLOAD(FriendEnumRequest, 0x3E);
+
+        int mPadNum; // 0x0
+        std::vector<Friend *> *mList; // 0x4
+        Hmx::Object *mCallback; // 0x8
+    };
+
+    std::list<FriendEnumRequest *> mFriendEnumRequests;
+    Timer mTime;
     std::map<String, unsigned int> mServiceIdMap;
 
     int GetPadNumFromXuid(unsigned __int64 xuid);
+    void SmartGlassInit();
 }
 
 PlatformMgr::PlatformMgr() : mSigninMask(0) {
@@ -72,6 +96,26 @@ PlatformMgr::PlatformMgr() : mSigninMask(0) {
     mUserID = -1;
     mResult = 0;
     mOverlapped.hEvent = nullptr;
+}
+
+PlatformMgr::~PlatformMgr() {
+    DWORD ret = CloseHandle(mListener);
+    MILO_ASSERT(ret == ERROR_SUCCESS, 0x3E7);
+    ret = XOnlineCleanup();
+    MILO_ASSERT(ret == ERROR_SUCCESS, 0x3EA);
+}
+
+void PlatformMgr::Init() {
+    SetName("platform_mgr", ObjectDir::Main());
+    WinSockSocket::Init();
+    DWORD ret = XOnlineStartup();
+    MILO_ASSERT(ret == ERROR_SUCCESS, 0x419);
+    mListener = XNotifyCreateListener(0xA7);
+    MILO_ASSERT(mListener, 0x41C);
+    UpdateSigninState();
+    SmartGlassInit();
+    mTime.Start();
+    mRetryTime = mTime.Ms() + 300000.0f;
 }
 
 bool PlatformMgr::IsEthernetCableConnected() { return XNetGetEthernetLinkStatus() != 0; }
@@ -714,6 +758,24 @@ bool PlatformMgr::GetServiceID(const String &name, unsigned int &serviceId) {
 
 void PlatformMgr::SmartGlassSend(unsigned long clientID, const DataArray *arr) {
     XbcSendMsg(clientID, arr);
+}
+
+const char *PlatformMgr::GetName(int padNum) const {
+    if (IsSignedIn(padNum)) {
+        char name[16];
+        int ret = XUserGetName(padNum, name, 16);
+        if (ret == 0) {
+            return MakeString(name);
+        }
+    }
+    static Symbol player("player");
+    return MakeString("%s %i", Localize(player, 0, TheLocale), padNum + 1);
+}
+
+void PlatformMgr::EnumerateFriends(
+    int padNum, std::vector<Friend *> &friends, Hmx::Object *callback
+) {
+    mFriendEnumRequests.push_back(new FriendEnumRequest(padNum, &friends, callback));
 }
 
 #include "utl/JobMgr.h"
