@@ -24,6 +24,12 @@
 class __declspec(uuid("0e0f3600-b28e-4434-810d-21b8be740619")) EQEffect {
 public:
     struct Params {
+        // Only the bypass slot is default-initialised: the target's
+        // ??0?$CSampleXAPOBase@VEQEffect@@UParams@1@@ATG@@IAA@XZ runs a 3-trip
+        // loop (stride 0x38 = sizeof(Params)) whose whole body is one
+        // `stbu 0` -- no float stores. The bands are left indeterminate and
+        // filled in by FxSendEQ360::SyncEffectParams.
+        Params() : unk0(false) {}
         // Field-0 is a 1-byte bool "bypass" slot in the DC3 target layout (SyncEffectParams
         // emits `stb` at Params+0x0; SetParameters never reads offset 0x0). Named `unk0` to
         // match every other effect's Params and the StandardEffect<T> template's bypass slot.
