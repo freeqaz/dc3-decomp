@@ -188,7 +188,7 @@ void VorbisReader::Poll(float until) {
             } else {
                 i8 = unk100 + unk108;
             }
-            int ret = ConsumeData((void **)&shorts, unkf4[0].size() - unk108, i8);
+            int ret = ConsumeData((void **)&shorts[0], unkf4[0].size() - unk108, i8);
             i12 += ret;
             unk108 += ret;
             if (ret == 0)
