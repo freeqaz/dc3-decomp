@@ -354,13 +354,58 @@ UParams@1@@ATG@@UAAXIPBU…@Z` (132 B). Adding the two missing `??_E` siblings
 `matched_code`, `matched_functions` and `fuzzy_match_percent` were byte-for-byte
 unchanged across that widening.
 
-The mechanism that *would* pair them exists in the fork —
-`diff::reconcile_global_byte_matches` (`objdiff-core/src/diff/mod.rs`), which
-does consult `SymbolEquivalences` for pairing — but it is gated on
-`objdiff-cli report generate --global-byte-eq`, and this project's report edge
-does not pass it (`grep -c global-byte-eq build.ninja` → 0). So the headline is
-structurally unreachable for this row class regardless of how complete the
-alias set is.
+⚠ **The mechanism named here as the one that "would pair them" does NOT pair
+them, and enabling it would be a mistake. Measured 2026-09-01, task #185 — do
+not re-open this.** `diff::reconcile_global_byte_matches`
+(`objdiff-core/src/diff/mod.rs:1136`), gated on `objdiff-cli report generate
+--global-byte-eq`, is **not** an alias-pairing pass at all. It is the rb3-xenon
+**case-B identity transfer**: it promotes an unmatched base-defined method to
+100% when its reloc-masked + reloc-name signature uniquely matches a body
+carved into *some other unit's* target obj. Three independent reasons it is
+wrong here:
+
+1. **It is a measured no-op on DC3.** `report generate` run with and without
+   the flag over the *same* prebuilt objects, worktree `globaleq-185` @
+   `10dc2a23b`, objdiff-cli `4.2.8 (358c715835cc, xxh3 9b2bb6f1f3a21062)`:
+   the two `report.json` files are **byte-identical** (sha256 `03627c37d1361fa4…`),
+   **0 promotions**, headline unchanged in every field (`matched_code`
+   5,074,704 / 11,373,948; `matched_functions` 29,971 / 48,357; `fuzzy`
+   54.481575; `masked_equal` 1,351). The pass's own funnel
+   (`OBJDIFF_CASEB_DEBUG=1`) says why: its retail index needs a per-symbol
+   retail VA, the carved COFF objs carry no `.note.split` VA array, so the only
+   indexable bodies are the still-anonymous `fn_<VA>` ones — **168 of 38,416**
+   target code symbols >44 B. `sig_in_retail_index=0` of 1,870 signed base
+   methods. DC3's `symbols.txt` coverage is too *good* for this pass: only
+   1,690 of 456,643 target symbols (0.37%) are still anonymous.
+2. **Its honesty gate is unsatisfiable here.** Rule 3 requires
+   `--global-byte-eq-oracle`, a per-VA **rb3-Wii BinDiff** attribution
+   (`unified_id_rb3wii.json`); the CLI refuses to run without it. No DC3 oracle
+   exists. rb3-xenon's covers rb3 VAs `0x82260000`–`0x82c221e8`, which
+   **numerically overlap DC3's code range** — pointing it here would
+   mis-attribute silently rather than error.
+3. **Relaxing it manufactures false 100%s.** Counterfactual, probe binary
+   `4.2.8 (210aab60ca30-dirty, xxh3 d88dbd70c9514e19)` built in an isolated
+   worktree (deployed `bin/objdiff-cli` untouched), index relaxed to accept
+   named retail bodies, oracle bypassed: **3 promotions, and 2 of the 3 are
+   false** — `__uninitialized_copy<XAUDIO2_SEND_DESCRIPTOR>` (Synth) paired to
+   `__uninitialized_copy<KernInfo>` (Font), retail `0x82e2f6d8` vs
+   `0x82704b70`; `__uninitialized_fill_n<XAUDIO2_SEND_DESCRIPTOR>` (Synth) to
+   `__uninitialized_fill_n<HamMoveKey>` (HamDirector), `0x82e2f880` vs
+   `0x8246e2f0`. Different types, different units, different retail addresses.
+   Rules 1 (>44 B), 2 (injectivity both sides) and 5 (reloc-name-carrying
+   signature) all passed; **only the oracle would have caught them**, exactly as
+   that function's own comment warns ("verified: 4 un-oracle'd STL folds").
+   **The worst part:** the Synth *target* obj defines both of those symbols
+   under their own correct names. The per-unit diff had already paired them
+   correctly, at **49.29%** and **42.00%**. The pass would overwrite two
+   genuinely-wrong decompilations with 100% — laundering, not recovery.
+   Only the third promotion (`?MemOrPoolFreeSTL@@YAXHPAXPBDH1@Z` → 
+   `?MemOrPoolFree@@YAXHPAXPBDH1@Z`, both at `0x827cb500`, already an alias
+   group) was legitimate: **60 B of the 8,172**, 0.7% of the target population,
+   bought at the price of two fabricated matches.
+
+So the headline is structurally unreachable for this row class, and that is the
+correct outcome, not a gap to close. The 8,172 B stays unbooked.
 
 Where the alias set *does* pay is the relocation charge, and that is
 measurable: the same widening took the charged population from **386 rows to
