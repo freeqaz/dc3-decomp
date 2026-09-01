@@ -46,9 +46,16 @@ const char *CacheWav(const char *file, CacheResourceResult &result) {
     }
     String qualifiedName;
     FileQualifiedFilename(qualifiedName, localized);
-    CacheResourceResult cacheResult = HolmesClientCacheResource(qualifiedName.c_str(), sCacheWavBuf);
-    result = cacheResult;
-    if ((int)cacheResult > 0)
+    result = HolmesClientCacheResource(qualifiedName.c_str(), sCacheWavBuf);
+    // RESIDUAL (7 rows, 93.3%): retail branches here --
+    //   cmpwi r3,0 / ble / li r29,0
+    // -- while MSVC if-converts our assignment into a branchless
+    //   subic / srwi / subfze / and.
+    // Measured NOT fixable by: dropping the `cacheResult` temp (inert), or
+    // rewriting as two returns `if (>0) return nullptr; return sCacheWavBuf;`
+    // (90.7%, 17 rows -- MSVC then duplicates the ~String call instead of
+    // sharing the epilogue, which retail does share).
+    if ((int)result > 0)
         dst = nullptr;
     return dst;
 }
