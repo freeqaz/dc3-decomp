@@ -122,7 +122,7 @@ struct NUIP_RUNTIME_STATE { /* Size=0xe9f0 */
 NUIP_DETROIT_RUNTIME_STATE NuipDetroitRuntimeState;
 extern NUIP_RUNTIME_STATE NuipRuntimeState;
 
-void NuipDetroitCalculateFarSpace();
+__declspec(noinline) void NuipDetroitCalculateFarSpace();
 void NuipDetroitBeginFloorSearch();
 
 LONG NuipCameraElevationSetAngle(LONG lAngleDegrees);
@@ -153,37 +153,20 @@ LONG NuipCameraElevationSetAngle(LONG lAngleDegrees) {
     return 0x80070057; // E_INVALIDARG
 }
 
-// Re-read the tilt tuning blob out of XConfig. A missing or opted-out setting,
-// or a far-space distance below 500mm, falls back to the 1800mm default.
-void NuipDetroitGetXConfigSettings() {
-    WORD cbNeeded;
-    DWORD *pXConfig;
-    int i;
-
-    pXConfig = (DWORD *)&NuipDetroitRuntimeState.TiltXConfig;
-    for (i = 0; i < 7; i++) {
-        pXConfig[i] = 0;
-    }
-
-    cbNeeded = 0;
-    if (ExGetXConfigSetting(
-            7, 9, &NuipDetroitRuntimeState.TiltXConfig,
-            sizeof(NuipDetroitRuntimeState.TiltXConfig), &cbNeeded
-        ) != 0
-        || (NuipDetroitRuntimeState.LastTiltFlags & 0x40) != 0
-        || NuipDetroitRuntimeState.TiltXConfig.FarSpaceMillimeters < 500.0f) {
-        NuipDetroitRuntimeState.TiltXConfig.FarSpaceMillimeters = 1800.0f;
-    }
-    NuipDetroitRuntimeState.FarSpaceMillimeters =
-        NuipDetroitRuntimeState.TiltXConfig.FarSpaceMillimeters;
-    NuipDetroitCalculateFarSpace();
-}
-
 // The sensor sits 2200mm back from the play space. Given a known floor height
 // this solves for the elevation angle that puts the far edge of the requested
 // play space at the bottom of frame; with the floor still unknown it works the
 // other way and derives the far space from the calibrated angle.
-void NuipDetroitCalculateFarSpace() {
+//
+// __declspec(noinline) because our /O2 inlines this 90-instruction body into
+// NuipDetroitGetXConfigSettings and the original does not -- the target's
+// GetXConfigSettings is a 40-instruction function ending in a `bl` to this one.
+// Measured: without it GetXConfigSettings reads 1.5% (120 instructions, 80
+// inserts), with it 100.0% with all 40 equal. Giving it a second real call site
+// (NuipCameraAdjustTilt) did NOT stop the inlining, and neither did moving the
+// definition above the caller to match the target's .text order; both were
+// tried. This function's own codegen is unaffected either way (100.0%, 94/94).
+__declspec(noinline) void NuipDetroitCalculateFarSpace() {
     LONG lAngleDegrees;
 
     if (NuipDetroitRuntimeState.FloorHeightMillimeters != 0.0f) {
@@ -222,6 +205,32 @@ void NuipDetroitCalculateFarSpace() {
     }
     NuipDetroitRuntimeState.TargetElevationDegrees = lAngleDegrees;
 Done:;
+}
+
+// Re-read the tilt tuning blob out of XConfig. A missing or opted-out setting,
+// or a far-space distance below 500mm, falls back to the 1800mm default.
+void NuipDetroitGetXConfigSettings() {
+    WORD cbNeeded;
+    DWORD *pXConfig;
+    int i;
+
+    pXConfig = (DWORD *)&NuipDetroitRuntimeState.TiltXConfig;
+    for (i = 0; i < 7; i++) {
+        pXConfig[i] = 0;
+    }
+
+    cbNeeded = 0;
+    if (ExGetXConfigSetting(
+            7, 9, &NuipDetroitRuntimeState.TiltXConfig,
+            sizeof(NuipDetroitRuntimeState.TiltXConfig), &cbNeeded
+        ) != 0
+        || (NuipDetroitRuntimeState.LastTiltFlags & 0x40) != 0
+        || NuipDetroitRuntimeState.TiltXConfig.FarSpaceMillimeters < 500.0f) {
+        NuipDetroitRuntimeState.TiltXConfig.FarSpaceMillimeters = 1800.0f;
+    }
+    NuipDetroitRuntimeState.FarSpaceMillimeters =
+        NuipDetroitRuntimeState.TiltXConfig.FarSpaceMillimeters;
+    NuipDetroitCalculateFarSpace();
 }
 
 // Park the camera at its lowest angle and give the floor detector 60 frames to
