@@ -42,7 +42,7 @@ public:
     Play(float volume, float pan, float transpose, Hmx::Object *, float delayMs);
     virtual void Stop(Hmx::Object *, bool);
     virtual void Pause(bool);
-    virtual bool IsPlaying() const;
+    virtual bool IsPlaying() const { return !mSamples.empty() || !mDelayArgs.empty(); }
 
     void SetVolume(float, Hmx::Object *);
     void SetSpeed(float, Hmx::Object *);

@@ -356,8 +356,6 @@ void Sound::Pause(bool b1) {
     }
 }
 
-bool Sound::IsPlaying() const { return !mSamples.empty() || !mDelayArgs.empty(); }
-
 void Sound::SetVolume(float vol, Hmx::Object *obj) {
     float faderVol = mFaders.GetVolume();
     if (obj) {
