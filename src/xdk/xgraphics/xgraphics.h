@@ -72,6 +72,42 @@ VOID XGTileTextureLevel(
     UINT RowPitch,
     const tagRECT *pRect
 );
+VOID XGUntileTextureLevel(
+    UINT Width,
+    UINT Height,
+    UINT Level,
+    DWORD GpuFormat,
+    DWORD Flags,
+    VOID *pDestination,
+    UINT RowPitch,
+    const tagPOINT *pPoint,
+    const VOID *pSource,
+    const tagRECT *pRect
+);
+VOID XGUntileSurface(
+    VOID *pDestination,
+    UINT DestRowPitch,
+    const tagPOINT *pDestPoint,
+    const VOID *pSource,
+    UINT SrcWidth,
+    UINT SrcHeight,
+    const tagRECT *pSrcRect,
+    UINT TexelPitch
+);
+VOID XGCompressSurface(
+    VOID *pDestination,
+    UINT DestRowPitch,
+    UINT Width,
+    UINT Height,
+    D3DFORMAT DestFormat,
+    DWORD DestFlags,
+    const VOID *pSource,
+    UINT SrcRowPitch,
+    D3DFORMAT SrcFormat,
+    DWORD SrcFlags,
+    DWORD Flags,
+    FLOAT AlphaRef
+);
 
 void XGGetTextureLayout(
     D3DBaseTexture *pTexture,

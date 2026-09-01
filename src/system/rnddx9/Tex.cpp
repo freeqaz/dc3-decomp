@@ -44,6 +44,28 @@ struct CompressDesc {
     CompressLevel levels[16]; // 0x14
 };
 
+// Size of a surface in EDRAM tiles. A tile is 80x16 pixels; the returned value
+// is (aligned bytes) / 5120.
+extern "C" UINT
+XGSurfaceSize(UINT Width, UINT Height, D3DFORMAT Format, D3DMULTISAMPLE_TYPE MultiSample) {
+    int gpuFormat = Format & 0x3f;
+    UINT bytesPerPixel = 4;
+    UINT width = Width;
+    UINT height = Height;
+    if ((int)MultiSample >= 1) {
+        height = Height * 2;
+    }
+    if ((int)MultiSample == 2) {
+        width = Width * 2;
+    }
+    UINT alignedWidth = ((width + 79) / 80) * 80;
+    UINT alignedHeight = (height + 15) & ~15;
+    if (gpuFormat == 0x15 || gpuFormat == 0x20 || gpuFormat == 0x25) {
+        bytesPerPixel = 8;
+    }
+    return alignedHeight * alignedWidth * bytesPerPixel / 0x1400;
+}
+
 DxTex::DxTex()
     : mFormat((D3DFORMAT)-1), mTexture(0), unk84(0), mRenderTarget(0), mDepthRT(0),
       mMovieBufIdx(0), mLockedRect(), unka4(0), unka8(0), unkac(0) {
@@ -105,6 +127,49 @@ void *DxTex::StartCompress(AlphaCompress alpha) {
         );
     }
     return desc;
+}
+
+void DxTex::DoCompress(void *p) {
+    CompressDesc *desc = (CompressDesc *)p;
+    int numLevels = D3DBaseTexture_GetLevelCount(mTexture);
+    for (int i = 0; i < numLevels; i++) {
+        CompressLevel &level = desc->levels[i];
+        int rowPitch = level.scratchDesc.Width * 4;
+        XGUntileTextureLevel(
+            level.scratchDesc.Width,
+            level.scratchDesc.Height,
+            desc->unk8,
+            mFormat & 0x3f,
+            1,
+            desc->tiledBuffer,
+            rowPitch,
+            nullptr,
+            level.scratchLock.pBits,
+            nullptr
+        );
+        if ((int)desc->alpha == 0) {
+            unsigned int *texel = (unsigned int *)desc->tiledBuffer;
+            unsigned int *end =
+                texel + level.scratchDesc.Width * level.scratchDesc.Height;
+            for (; texel < end; texel++) {
+                *texel |= 0xff000000;
+            }
+        }
+        XGCompressSurface(
+            level.textureLock.pBits,
+            level.textureLock.Pitch,
+            level.textureDesc.Width,
+            level.textureDesc.Height,
+            desc->format,
+            0,
+            desc->tiledBuffer,
+            rowPitch,
+            (D3DFORMAT)0x18280086,
+            0,
+            0,
+            0.5f
+        );
+    }
 }
 
 void DxTex::FinishCompress(void *p) {
@@ -179,6 +244,87 @@ DataNode DebugPrintAllTextures(DataArray *) {
 
 void DxTex::Init() { DataRegisterFunc("dump_tex", DebugPrintAllTextures); }
 
+void DxTex::LockBitmap(RndBitmap &bm, int flags) {
+    if (!mTexture) {
+        RndTex::LockBitmap(bm, flags);
+        return;
+    }
+    bool wantRead = (flags & 1) > 0;
+    bool wantWrite = (flags & 4) > 0;
+    if (!wantRead && !wantWrite) {
+        return;
+    }
+    bool renderTarget = (mType & kRendered) > 0;
+    bool frontBuffer = (mType & kFrontBuffer) > 0;
+    if ((renderTarget || frontBuffer) && wantRead) {
+        if (frontBuffer) {
+            unka4 = D3DTexture_GetSurfaceLevel(TheDxRnd.NotFrontBuffer(), 0);
+        } else {
+            unka4 = GetSurfaceLevel(0);
+        }
+    } else if ((mType & kBackBuffer) > 0 && wantRead) {
+        D3DDevice_Resolve(
+            TheDxRnd.Device(), 0, nullptr, mTexture, nullptr, 0, 0, nullptr, 1.0f, 0,
+            nullptr
+        );
+        unka4 = GetSurfaceLevel(0);
+    } else if ((mType & kMovie) > 0) {
+        unka4 = nullptr;
+    } else if ((mType & (kRegular | kScratch)) > 0) {
+        unka4 = GetSurfaceLevel(0);
+    }
+    if (!unka4) {
+        return;
+    }
+    unka8 = flags;
+    if (wantRead && !wantWrite) {
+        bm.Create(
+            mWidth,
+            mHeight,
+            0,
+            D3DFORMAT_BitsPerPixel(mFormat),
+            TheDxRnd.BitmapOrderForD3DFormat(mFormat),
+            nullptr,
+            nullptr,
+            nullptr
+        );
+        D3DSurface_LockRect(unka4, &mLockedRect, nullptr, 0x10);
+        XGTEXTURE_DESC desc;
+        XGGetTextureDesc((D3DBaseTexture *)unka4, 0, &desc);
+        if (desc.Format & 0x100) {
+            XGUntileSurface(
+                bm.Pixels(),
+                bm.DxtRowBytes(),
+                nullptr,
+                mLockedRect.pBits,
+                desc.WidthInBlocks,
+                desc.HeightInBlocks,
+                nullptr,
+                desc.BytesPerBlock
+            );
+        } else {
+            memcpy(bm.Pixels(), mLockedRect.pBits, bm.PixelBytes());
+        }
+        D3DSurface_UnlockRect(unka4);
+        if (unka4) {
+            D3DResource_Release(unka4);
+            unka4 = nullptr;
+        }
+    } else if (wantWrite) {
+        D3DSurface_LockRect(unka4, &mLockedRect, nullptr, 0);
+        bm.Create(
+            mWidth,
+            mHeight,
+            0,
+            D3DFORMAT_BitsPerPixel(mFormat),
+            TheDxRnd.BitmapOrderForD3DFormat(mFormat),
+            nullptr,
+            mLockedRect.pBits,
+            mLockedRect.pBits
+        );
+    }
+}
+
 void DxTex::UnlockBitmap() {
     if (mTexture) {
         if (unka4) {
@@ -214,6 +360,73 @@ void DxTex::Select(int x) {
         }
     }
     D3DDevice_SetTexture(TheDxRnd.Device(), x, tex, (1ULL << 63) >> (unsigned int)(x + 32));
+}
+
+void DxTex::ResolveMipChain() {
+    if (mType != kShadowMap) {
+        D3DDevice_Resolve(
+            TheDxRnd.Device(), 0, nullptr, mTexture, nullptr, 0, 0, nullptr, 1.0f, 0,
+            nullptr
+        );
+        D3DDevice_SetRenderTarget_External(TheDxRnd.Device(), 0, mRenderTarget);
+        D3DDevice_SetDepthStencilSurface(TheDxRnd.Device(), nullptr);
+    } else {
+        D3DDevice_Resolve(
+            TheDxRnd.Device(), 4, nullptr, mTexture, nullptr, 0, 0, nullptr, 1.0f, 0,
+            nullptr
+        );
+        MILO_ASSERT(!mRenderTarget, 0x237);
+        D3DDevice_SetRenderTarget_External(TheDxRnd.Device(), 0, nullptr);
+        D3DDevice_SetDepthStencilSurface(TheDxRnd.Device(), mDepthRT);
+        D3DDevice_SetSamplerState_MinFilter(TheDxRnd.Device(), 0, 1);
+        D3DDevice_SetSamplerState_MagFilter(TheDxRnd.Device(), 0, 1);
+        D3DDevice_SetSamplerState_MipFilter3(TheDxRnd.Device(), 0, 1, 0x80000000);
+    }
+    if (mNumMips != 0) {
+        unsigned int numLevels = D3DBaseTexture_GetLevelCount(mTexture);
+        for (unsigned int level = 1; level < numLevels; level++) {
+            D3DDevice_SetSamplerState_MinMipLevel(TheDxRnd.Device(), 0, level - 1);
+            D3DDevice_SetSamplerState_MaxMipLevel(TheDxRnd.Device(), 0, level - 1);
+            D3DSURFACE_DESC desc;
+            D3DLineTexture_GetLevelDesc((D3DLineTexture *)mTexture, level, &desc);
+            D3DRECT rect;
+            rect.x1 = rect.y1 = 0;
+            rect.x2 = desc.Width;
+            rect.y2 = desc.Height;
+            RndMat *mat = TheShaderMgr.GetWork();
+            mat->SetDiffuseTex(this);
+            mat->SetTexWrap(kTexWrapClamp);
+            mat->SetBlend(RndMat::kBlendSrc);
+            if (mType == kShadowMap) {
+                mat->SetZMode(kZModeForce);
+            } else {
+                mat->SetZMode(kZModeDisable);
+            }
+            Hmx::Rect quad(0.0f, 0.0f, desc.Width, desc.Height);
+            if (mType != kShadowMap) {
+                TheDxRnd.DrawRect(
+                    quad, mat, kDownsampleShader, Hmx::Color(), nullptr, nullptr
+                );
+                D3DDevice_Resolve(
+                    TheDxRnd.Device(), 0, &rect, mTexture, nullptr, level, 0, nullptr,
+                    1.0f, 0, nullptr
+                );
+            } else {
+                TheDxRnd.DrawRect(
+                    quad, mat, kDownsampleDepthShader, Hmx::Color(), nullptr, nullptr
+                );
+                D3DDevice_Resolve(
+                    TheDxRnd.Device(), 4, &rect, mTexture, nullptr, level, 0, nullptr,
+                    1.0f, 0, nullptr
+                );
+            }
+        }
+        D3DDevice_SetSamplerState_MinMipLevel(TheDxRnd.Device(), 0, 13);
+        D3DDevice_SetSamplerState_MaxMipLevel(TheDxRnd.Device(), 0, 0);
+        D3DDevice_SetSamplerState_MinFilter(TheDxRnd.Device(), 0, 1);
+        D3DDevice_SetSamplerState_MagFilter(TheDxRnd.Device(), 0, 1);
+        D3DDevice_SetSamplerState_MipFilter3(TheDxRnd.Device(), 0, 1, 0x80000000);
+    }
 }
 
 void DxTex::FinishDrawTarget() {

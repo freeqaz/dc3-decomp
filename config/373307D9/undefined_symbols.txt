@@ -14,21 +14,24 @@
 # entry points and middleware the decomp calls but does not contain. The
 # classification is for the reader; --check ignores it and compares names only.
 #
-# counts: 798 total = 160 GAP + 638 EXT
+# counts: 808 total = 167 GAP + 641 EXT
 
 GAP ??$?6VHamScrollSpeedIndicator@@@@YAAAVBinStream@@AAV0@ABV?$ObjDirPtr@VHamScrollSpeedIndicator@@@@@Z  # target defines it in system/ui/UILabel.obj
 GAP ??0GranularSynth@Synapse@DSP@@QAA@ABV?$vector@MV?$StlNodeAlloc@M@stlpmtx_std@@@stlpmtx_std@@III@Z  # target defines it in system/synth_xbox/GranularSynth.obj
 GAP ??0PeakDetector@Synapse@DSP@@QAA@ABV?$vector@MV?$StlNodeAlloc@M@stlpmtx_std@@@stlpmtx_std@@II@Z  # target defines it in system/synth_xbox/PeakDetector.obj
+GAP ??0SingleItemEnumJob@@QAA@PAVObject@Hmx@@H_K@Z  # target defines it in system/os/PlatformMgr_Xbox.obj
 GAP ??0SpectralAnalysis@DSP@@QAA@XZ  # target defines it in system/synth_xbox/PitchDetector.obj
 GAP ??1GranularSynth@Synapse@DSP@@QAA@XZ  # target defines it in system/synth_xbox/GranularSynth.obj
 GAP ??1PitchDetector@Synapse@DSP@@QAA@XZ  # target defines it in system/synth_xbox/PitchDetector.obj
+GAP ??1PlatformMgr@@UAA@XZ  # target defines it in system/os/PlatformMgr_Xbox.obj
+GAP ??1SingleItemEnumJob@@UAA@XZ  # target defines it in system/os/PlatformMgr_Xbox.obj
 GAP ?AddAudio@ExternalMicClientMgr@@SAXKPAEK@Z  # target defines it in system/synth_xbox/ExternalMic.obj
 GAP ?AllocatePageBlock@CXboxHeap@NUISPEECH@@AAAPAU_BLOCK_ENTRY@12@I@Z  # target defines it in xdk/nuispeech/xboxheap.obj
 GAP ?Associate@ExternalMicClientMgr@@SAXHPAVMicXbox@@@Z  # target defines it in system/synth_xbox/ExternalMic.obj
 GAP ?BeginDrawing@DxRnd@@UAAXXZ  # target defines it in system/rnddx9/Rnd_Xbox.obj
+GAP ?Cancel@SingleItemEnumJob@@UAAXPAVObject@Hmx@@@Z  # target defines it in system/os/PlatformMgr_Xbox.obj
 GAP ?ConnectedForClient@ExternalMicClientMgr@@SA_NPBVMicXbox@@@Z  # target defines it in system/synth_xbox/ExternalMic.obj
 GAP ?Detect@PeakDetector@Synapse@DSP@@QAAXI@Z  # target defines it in system/synth_xbox/PeakDetector.obj
-GAP ?DoCompress@DxTex@@QAAXPAX@Z  # target defines it in system/rnddx9/Tex.obj
 GAP ?DrawFacesInRange@DxMesh@@UAAXHH@Z  # target defines it in system/rnddx9/Mesh.obj
 GAP ?DrawFur@DxMesh@@IAAPAVDxMat@@PAV2@@Z  # target defines it in system/rnddx9/Mesh.obj
 GAP ?DrawRect@DxRnd@@UAAXABVRect@Hmx@@PAVRndMat@@W4ShaderType@@ABVColor@3@PBV63@4@Z  # target defines it in system/rnddx9/Rnd.obj
@@ -36,22 +39,27 @@ GAP ?DrawShowing@DxMultiMesh@@UAAXXZ  # target defines it in system/rnddx9/Multi
 GAP ?DrawShowing@DxParticleSys@@UAAXXZ  # target defines it in system/rnddx9/Part.obj
 GAP ?DrawString@DxRnd@@UAAAAVVector2@@PBDABV2@ABVColor@Hmx@@_N@Z  # target defines it in system/rnddx9/Rnd_Xbox.obj
 GAP ?EndDrawing@DxRnd@@UAAXXZ  # target defines it in system/rnddx9/Rnd_Xbox.obj
+GAP ?EnumerateFriends@PlatformMgr@@QAAXHAAV?$vector@PAVFriend@@V?$StlNodeAlloc@PAVFriend@@@stlpmtx_std@@@stlpmtx_std@@PAVObject@Hmx@@@Z  # target defines it in system/os/PlatformMgr_Xbox.obj
 GAP ?ExtractGranules@GranularSynth@Synapse@DSP@@QAAXXZ  # target defines it in system/synth_xbox/GranularSynth.obj
 GAP ?Flush@GranularSynth@Synapse@DSP@@QAAXXZ  # target defines it in system/synth_xbox/GranularSynth.obj
 GAP ?FreeHandle@@YAXPAX@Z  # target defines it in xdk/nuispeech/mmio.obj
+GAP ?GetName@PlatformMgr@@QBAPBDH@Z  # target defines it in system/os/PlatformMgr_Xbox.obj
 GAP ?GetRequiredGain@ExternalMicClientMgr@@SAMK@Z  # target defines it in system/synth_xbox/ExternalMic.obj
 GAP ?Init@ExternalMic@@SAXXZ  # target defines it in system/synth_xbox/ExternalMic.obj
 GAP ?Init@MicManagerXbox@@QAAXXZ  # target defines it in system/synth_xbox/Mic.obj
+GAP ?Init@PlatformMgr@@QAAXXZ  # target defines it in system/os/PlatformMgr_Xbox.obj
 GAP ?InitXinputJoypadThreadData@?A0x439b694a@@YAXXZ  # target defines it in system/os/Joypad_Xbox.obj
-GAP ?LockBitmap@DxTex@@UAAXAAVRndBitmap@@H@Z  # target defines it in system/rnddx9/Tex.obj
+GAP ?IsFinished@SingleItemEnumJob@@UAA_NXZ  # target defines it in system/os/PlatformMgr_Xbox.obj
+GAP ?OnCompletion@SingleItemEnumJob@@UAAXPAVObject@Hmx@@@Z  # target defines it in system/os/PlatformMgr_Xbox.obj
 GAP ?Poll@MicXbox@@QAAXXZ  # target defines it in system/synth_xbox/Mic.obj
 GAP ?Poll@PlatformMgr@@QAAXXZ  # target defines it in system/os/PlatformMgr_Xbox.obj
 GAP ?QueryInterface@CXAPOParametersBase@@UAAJABU_GUID@@PAPAX@Z  # target defines it in system/synth_xbox/Synth.obj
 GAP ?Release@CXAPOBase@@UAAKXZ  # target defines it in system/synth_xbox/Synth.obj
 GAP ?ReleaseAutoRelease@DxRnd@@QAAXXZ  # target defines it in system/rnddx9/Rnd_Xbox.obj
-GAP ?ResolveMipChain@DxTex@@AAAXXZ  # target defines it in system/rnddx9/Tex.obj
 GAP ?RunXinputJoypadLoop@?A0x439b694a@@YAXXZ  # target defines it in system/os/Joypad_Xbox.obj
 GAP ?SendRawData@@YAXHEEEEEEE@Z  # target defines it in system/os/Joypad_Xbox.obj
+GAP ?ShowControllerRequiredUI@PlatformMgr@@QAAXPAVObject@Hmx@@@Z  # target defines it in system/os/PlatformMgr_Xbox.obj
+GAP ?Start@SingleItemEnumJob@@UAAXXZ  # target defines it in system/os/PlatformMgr_Xbox.obj
 GAP ?SyncBitmap@DxTex@@MAAXXZ  # target defines it in system/rnddx9/Tex.obj
 GAP ?SyncEffectParams@FxSendChorus360@@UBAXPAUIXAudio2SubmixVoice@@@Z  # target defines it in system/synth_xbox/FxSendChorus.obj
 GAP ?Synthesize@GranularSynth@Synapse@DSP@@QAAXIPBQAM@Z  # target defines it in system/synth_xbox/GranularSynth.obj
@@ -168,7 +176,6 @@ GAP NuiCameraAdjustTilt  # target defines it in xdk/nuiapi/nuidetroit.obj
 GAP NuiCameraElevationGetAngle  # target defines it in xdk/nuiapi/nuidetroit.obj
 GAP NuiCameraElevationSetAngle  # target defines it in xdk/nuiapi/nuidetroit.obj
 GAP ReadSingleJoypad  # target defines it in system/os/Joypad_Xbox.obj
-GAP XGSurfaceSize  # target defines it in system/rnddx9/Tex.obj
 GAP __RTDynamicCast  # target defines it in xdk/LIBCMT/rtti.obj
 GAP __RTtypeid  # target defines it in xdk/LIBCMT/rtti.obj
 GAP _vsnprintf_helper  # target defines it in xdk/LIBCMT/vsnprnc.obj
@@ -343,7 +350,9 @@ EXT D3DDevice_SetRenderState_ZFunc
 EXT D3DDevice_SetRenderState_ZWriteEnable
 EXT D3DDevice_SetRenderTarget_External
 EXT D3DDevice_SetSamplerState_MagFilter
+EXT D3DDevice_SetSamplerState_MaxMipLevel
 EXT D3DDevice_SetSamplerState_MinFilter
+EXT D3DDevice_SetSamplerState_MinMipLevel
 EXT D3DDevice_SetShaderGPRAllocation
 EXT D3DDevice_SetStreamSource
 EXT D3DDevice_SetSwapMode
@@ -360,6 +369,7 @@ EXT D3DDevice_SynchronizeToPresentationInterval
 EXT D3DIndexBuffer_GetDesc
 EXT D3DIndexBuffer_Lock
 EXT D3DIndexBuffer_Unlock
+EXT D3DLineTexture_GetLevelDesc
 EXT D3DLineTexture_LockRect
 EXT D3DLineTexture_UnlockRect
 EXT D3DPerfCounters_GetValues
@@ -509,6 +519,7 @@ EXT XContentGetDeviceState
 EXT XEnableScreenSaver
 EXT XEnumerate
 EXT XEnumerateCrossTitle
+EXT XGCompressSurface
 EXT XGEstimateIdealShaderCost
 EXT XGGetTextureDesc
 EXT XGGetTextureLayout
@@ -517,6 +528,8 @@ EXT XGRegisterPixelShader
 EXT XGRegisterVertexShader
 EXT XGSetTextureHeader
 EXT XGTileTextureLevel
+EXT XGUntileSurface
+EXT XGUntileTextureLevel
 EXT XGetGameRegion
 EXT XGetLocale
 EXT XGetOverlappedExtendedError
@@ -555,8 +568,6 @@ EXT XNotifyCreateListener
 EXT XNotifyGetNext
 EXT XNotifyPositionUI
 EXT XNuiDelayUI
-EXT XOnlineCleanup
-EXT XOnlineStartup
 EXT XPartyGetUserList
 EXT XPartySendGameInvites
 EXT XPhysicalAlloc
@@ -578,7 +589,6 @@ EXT XShowGamerCardUI
 EXT XShowKeyboardUI
 EXT XShowMarketplaceDownloadItemsUI
 EXT XShowMarketplaceUI
-EXT XShowNuiControllerRequiredUI
 EXT XShowNuiDeviceSelectorUI
 EXT XShowNuiDirtyDiscErrorUI
 EXT XShowNuiFitnessBodyProfileUI
