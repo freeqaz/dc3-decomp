@@ -681,8 +681,14 @@ void NgSpotlightDrawer::SetupXSection(Spotlight *sl, const Spotlight::BeamDef &d
     // The beam points down the spotlight's local +Y axis.
     const Vector3 &beamDir = sl->WorldXfm().m.y;
 
+    // Component-wise on purpose: `toCam -= camXfm.v` makes MSVC materialise
+    // &camXfm.v into a GPR for operator-=' reference parameter, and that
+    // address computation is dead by the time the loads are folded back to
+    // 0x30/0x34/0x38(r30).  Retail has no such addi.
     Vector3 toCam = lightPos;
-    toCam -= camXfm.v;
+    toCam.x -= camXfm.v.x;
+    toCam.y -= camXfm.v.y;
+    toCam.z -= camXfm.v.z;
 
     Vector3 viewDir = toCam;
     Normalize(viewDir, viewDir);
