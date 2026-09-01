@@ -9,6 +9,9 @@
 #include "ui\UISlider.h"
 #include "utl\Str.h"
 
+// Target: HAQManager.obj .bss:0x0 (0x8316B32C), zero.
+HAQManager *TheHAQMgr;
+
 UIComponent *HAQManager::GetUIFocusComponent() const {
     UIComponent *ret = 0;
     UIScreen *screen = TheUI->CurrentScreen();

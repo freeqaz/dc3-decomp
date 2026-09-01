@@ -9,6 +9,9 @@
 #include "ProfileMgr.h"
 #include "obj\Dir.h"
 
+// Target: MQSongSortMgr.obj .bss:0x0 (0x8311AD48), zero.
+MQSongSortMgr *TheMQSongSortMgr;
+
 MQSongSortMgr::MQSongSortMgr(SongPreview &sp) : NavListSortMgr(sp) {
     SetName("mq_song_provider", ObjectDir::Main());
     mSorts.push_back(new MQSongSortByCharacter());

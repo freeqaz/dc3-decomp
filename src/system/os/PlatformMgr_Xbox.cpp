@@ -16,6 +16,16 @@
 #include "xdk\xapilibi\winerror.h"
 #include "xdk\xapilibi\xbox.h"
 
+// PlatformMgr_Xbox.obj .data:0x0 (0x82F11F58) holds a relocation to 0x82AEAE70,
+// whose whole body is `li r3, 0x0; blr` -- a `return false` stub that the linker
+// folded with 511 other functions (icf_aliases.map group `SetEngine@0x82aeae70`,
+// which is why dtk labels the slot ?SetEngine@CTrigramStore@NUISPEECH@@...).
+// So the shipped default is a callback that always answers "no XShow pending";
+// App.cpp overwrites it with XShowNuiCallback during startup.  The stub's own
+// name is unrecoverable -- ICF deleted it -- so only the behaviour is claimed.
+static bool DefaultXShowCallback(unsigned long &) { return false; }
+XCallbackFunc *PlatformMgr::sXShowCallback = DefaultXShowCallback;
+
 enum ServiceIdState {};
 
 namespace {

@@ -17,9 +17,7 @@
 #include "ui\UIPanel.h"
 #include "utl\Symbol.h"
 
-#ifdef HX_NATIVE
 LetterboxPanel *LetterboxPanel::sInstance;
-#endif
 
 LetterboxPanel::LetterboxPanel()
     : mSyncedPanel(0), mLetterboxGroup(0), mIsBlacklightMode(false), mBlacklightActive(false), mBlacklightPhase(0), mBlacklightTimeout(13000) {

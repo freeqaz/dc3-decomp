@@ -24,9 +24,7 @@ extern void FlushTransparentDraws();
 extern void FlushPostProcessingForOverlay();
 #endif
 
-#ifdef HX_NATIVE
-bool PanelDir::sAlwaysNeedFocus;
-#endif
+bool PanelDir::sAlwaysNeedFocus = true;
 
 bool gSendFocusMsg = true;
 

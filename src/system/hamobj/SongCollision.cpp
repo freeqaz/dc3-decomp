@@ -17,9 +17,7 @@
 #include "utl\TimeConversion.h"
 #include <float.h>
 
-#ifdef HX_NATIVE
 float SongCollision::sCollisionTolerance;
-#endif
 
 std::vector<const char *> sCollisionUsefulBoneNames;
 float sCollisionToleranceValue = 0.0f;

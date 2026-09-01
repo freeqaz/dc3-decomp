@@ -88,10 +88,8 @@ private:
     int mPos; // 0x10
 };
 
-#ifdef HX_NATIVE
 FileCacheHelper *FileCache::sWavCacheHelper;
 FileCacheHelper *FileCache::sResourceCacheHelper;
-#endif
 
 std::list<FileCache *> gCaches;
 

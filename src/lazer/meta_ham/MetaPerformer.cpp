@@ -39,9 +39,7 @@
 #include "utl\Std.h"
 #include "utl\Symbol.h"
 
-#ifdef HX_NATIVE
 bool MetaPerformer::sCheatFinale;
-#endif
 
 bool CharConflict(Symbol s1, Symbol s2) {
     bool symsEqual = s1 == s2;

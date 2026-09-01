@@ -48,6 +48,8 @@
 #include "xdk\xapilibi\xbox.h"
 
 HamUI TheHamUI;
+// Target: HamUI.obj .data:0x0 (0x82F1A8E0) -> ?TheHamUI@@3VHamUI@@A, addend 0.
+UIManager *TheUI = &TheHamUI;
 
 namespace {
     UIPanel *FindPanel(const char *name) {

@@ -12,12 +12,6 @@
 #include "os\Debug.h"
 #include "utl\MemMgr.h"
 
-#ifdef HX_NATIVE
-#include "moviebink\BinkMovieSys.h"
-extern BinkMovieSys gBinkMovieSys;
-MovieSys &TheMovieSys = gBinkMovieSys;
-#endif
-
 MovieSys::MovieSys() : isInitalized(false) {}
 
 MovieSys::~MovieSys() {}

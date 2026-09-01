@@ -66,6 +66,9 @@
 #include "world\Dir.h"
 #include <cstring>
 
+// Target: Char.obj .data:0x0 (0x82F08480) = .float -1.
+float gCharHighlightY = -1.0f;
+
 CharDebug TheCharDebug;
 
 void CharInit() {

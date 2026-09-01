@@ -23,6 +23,9 @@ template int sprintf_s<200>(char (&)[200], const char *, ...);
 #include "utl\Symbol.h"
 #include "xdk\NUI.h"
 
+// Target: SkeletonIdentifier.obj .bss:0x0 (0x83119860), zero.
+SkeletonIdentifier *TheSkeletonIdentifier;
+
 String EnrollmentIndexString(int idx) {
     String str = MakeString("enrollment index %d", idx);
     if (idx == -1) {

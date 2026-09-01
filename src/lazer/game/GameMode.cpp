@@ -2,9 +2,7 @@
 
 bool (*g_LoaderModeCallback)(const Symbol &);
 
-#ifdef HX_NATIVE
 GameMode *TheGameMode = nullptr;
-#endif
 
 #include "char\FileMerger.h"
 #include "flow\PropertyEventProvider.h"

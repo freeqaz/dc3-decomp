@@ -12,9 +12,7 @@
 #include "utl\Std.h"
 #include "utl\Symbol.h"
 
-#ifdef HX_NATIVE
 FileCache *PreloadPanel::sCache;
-#endif
 
 #pragma region Hmx::Object
 

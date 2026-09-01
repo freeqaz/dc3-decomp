@@ -24,7 +24,19 @@
 
 extern "C" void XMemCpy(void *, const void *, int);
 
-MicManagerXbox *sInstance;
+// Target: Mic.obj .bss:0x0 (0x8316C854), zero.  This was a file-scope global that
+// no code could reach: every use is inside a MicManagerXbox member, where
+// unqualified lookup finds the class member first -- which was declared and
+// defined nowhere.
+MicManagerXbox *MicManagerXbox::sInstance;
+
+// Target: Mic.obj .bss:0xC/0x10 (0x8316C860/64), both zero, in this order.
+// Unnamed in the map (dtk names them lbl_<addr>); the Poll() counters declared
+// `extern "C" int` in synth_xbox/StreamReceiver360.cpp.
+extern "C" {
+int lbl_8316C860;
+int lbl_8316C864;
+}
 
 // Headset config values. The target lays these out as 5 separate statics that
 // the linker places contiguously at lbl_82F474C8 (noiseThreshold@0x0,

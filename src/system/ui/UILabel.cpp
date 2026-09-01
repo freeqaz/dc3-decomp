@@ -53,10 +53,8 @@ bool IsChooseModeToken(Symbol token) {
 }
 #endif
 
-#ifdef HX_NATIVE
 bool UILabel::sDebugHighlight;
 bool UILabel::sRequireFixedLength;
-#endif
 
 bool UILabel::sDeferUpdate = false;
 bool UILabel::sInDebugHighlight = false;

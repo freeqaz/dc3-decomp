@@ -38,10 +38,8 @@
 #include "utl/Loader.h"
 #include "utl\Symbol.h"
 
-#ifdef HX_NATIVE
-bool HamCharacter::sLoadVO;
+bool HamCharacter::sLoadVO = true;
 CharClip *HamCharacter::sSkeletonClips[HamCharacter::kNumSkeletons];
-#endif
 
 extern "C" char *_strlwr(char *);
 

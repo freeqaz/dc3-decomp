@@ -22,6 +22,11 @@
 #include "xdk\D3D9.h"
 #include "xdk\d3d9i\d3d9.h"
 
+// Target: Mesh.obj .bss:0x0/0x4/0x8 (0x830A1800/04/08), all zero, in this order.
+D3DVertexDeclaration *DxMesh::sVertexDecl;
+D3DVertexDeclaration *DxMesh::sMutableVertexDecl;
+D3DVertexDeclaration *DxMesh::sMutableSkinnedVertexDecl;
+
 DxMesh::DxMesh() : mNumVerts(0), mNumFaces(0), unk1ac(0), unk1b0(0) {
     // clang-format off
     static D3DVERTEXELEMENT9 sVertexElements[] = {

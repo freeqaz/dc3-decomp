@@ -20,6 +20,9 @@
 #include "utl\SongPos.h"
 #include "utl\TimeConversion.h"
 
+// Target: HamMaster.obj .bss:0x0 (0x82F61D54), zero.
+HamMaster *TheMaster;
+
 HamMaster::HamMaster(HamSongData *data, MidiParserMgr *mgr)
     : mSongData(data), mAudio(nullptr), mMidiParserMgr(mgr), mSongInfo(nullptr),
       mLoader(0), mLoaded(0), mSongMs(0), mStreamMs(-1), mStreamJumped(0), mPreJumpMs(-1), mPostJumpMs(-1),

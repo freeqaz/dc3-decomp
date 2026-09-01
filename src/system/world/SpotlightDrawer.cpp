@@ -26,10 +26,8 @@ std::vector<SpotlightDrawer::SpotlightEntry> SpotlightDrawer::sLights;
 std::vector<SpotlightDrawer::SpotMeshEntry> SpotlightDrawer::sCans;
 std::vector<Spotlight *> SpotlightDrawer::sShadowSpots;
 bool SpotlightDrawer::sNoBeams;
-#ifdef HX_NATIVE
 SpotlightDrawer *SpotlightDrawer::sCurrent;
 bool SpotlightDrawer::sNeedDraw;
-#endif
 
 SpotlightDrawer::SpotlightDrawer() : mParams(this) { mOrder = -100000; }
 

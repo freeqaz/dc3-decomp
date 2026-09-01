@@ -82,9 +82,7 @@
 #include "os\PlatformMgr.h"
 #include "xdk\XAPILIB.h"
 
-#ifdef HX_NATIVE
 int Rnd::sPostProcPanelCount;
-#endif
 
 // Rnd & TheRnd;
 bool gNotifyKeepGoing;
