@@ -1188,7 +1188,12 @@ static float ComputeSpotBlend(int i, float f) {
     else if (i % 5 > min)
         return 0.0f;
     else
-        return Min(Max((f - i / 5.0f) * 5.0f, 0.0f), 1.0f);
+        // Blend across the quintile `min`, not across the raw spotlight index.
+        // In this arm `min == i % 5`, so the two agree only for i < 5. Target
+        // sign-extends and converts r11 (the clamped Min<int>((int)(f*5),4)),
+        // not r30 (the loop counter): `extsw r11,r11 / fcfid / fnmsubs f0,f0,
+        // 0.2f,f`.
+        return Min(Max((f - min / 5.0f) * 5.0f, 0.0f), 1.0f);
 }
 
 void LightPreset::Animate(float f) {

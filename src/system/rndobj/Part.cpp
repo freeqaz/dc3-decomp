@@ -1440,7 +1440,12 @@ void RndParticleSys::RunFastForward() {
 }
 
 void RndParticleSys::UpdateParticles() {
-    if (mPreserveParticles == 0) {
+    // Return early when the flag is SET: preserving particles means this update
+    // (which creates and reaps them) must not run. Target emits
+    // `lbz r11, 0x218(r3); cmplwi r11, 0x0; bne <epilogue>` -- branch out when
+    // non-zero. Corroborated by every other use in this file: SetPool and the
+    // reaping loop are both guarded by !mPreserveParticles.
+    if (mPreserveParticles != 0) {
         return;
     }
 
