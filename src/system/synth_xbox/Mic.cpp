@@ -7,6 +7,7 @@
 #include "os\CritSec.h"
 #include "os\Debug.h"
 #include "os\Joypad.h"
+#include "os\PlatformMgr.h"
 #include "os\System.h"
 #include "rnddx9\Rnd.h"
 #include "synth\MicClientMapper.h"
@@ -269,6 +270,65 @@ short *MicXbox::GetContinuousBuf(int &iref) {
     CritSecTracker t(&MicManagerXbox::GetInstance()->unk68);
     iref = unk3040.Read(unk3054, 0x6000) / sizeof(short);
     return (short *)unk3054;
+}
+
+MicrophonesChangedMsg::MicrophonesChangedMsg(bool wasConnected) : Message(Type(), wasConnected) {}
+
+// Keeps the playback voice's read cursor a fixed distance behind our write
+// cursor by nudging its playback speed. The nominal lead is 1800 samples on a
+// wired headset and 2700 on a wireless one (unkc); both the 6144-sample
+// wrap window and the +-12288 unwrap match the 6144-sample playback buffer.
+void MicXbox::Poll() {
+    if (mPlaybackVoice && mPlaybackVoice->IsPlaying()) {
+        int written = (char *)unk301c - (char *)mPlaybackBuffer;
+        int lag = written - mPlaybackVoice->GetAddr();
+
+        unk905c = ModRange(unk905c - 6144.0f, unk905c + 6144.0f, (float)lag);
+        unk9058 = unk9058 * 0.9f + unk905c * 0.1f;
+        if (unk905c > 12288.0f && unk9058 > 12288.0f) {
+            unk905c -= 12288.0f;
+            unk9058 -= 12288.0f;
+        }
+        if (unk905c < -12288.0f && unk9058 < -12288.0f) {
+            unk905c += 12288.0f;
+            unk9058 += 12288.0f;
+        }
+
+        float lead = ModRange(
+            (unkc ? 2700.0f : 1800.0f) - 600.0f,
+            (unkc ? 2700.0f : 1800.0f) - 600.0f + 12288.0f, unk9058
+        );
+        float volume = mMute ? 0.0f : mVolume;
+
+        if (lead > (unkc ? 2700.0f : 1800.0f) + 600.0f) {
+            // Far out of range: jump hard in whichever direction we are already
+            // heading and mute until it settles.
+            unk9054 = unk9054 > 1.0f ? 1.08f : 0.92f;
+            volume = 0.0f;
+        } else if (lead > (unkc ? 2700.0f : 1800.0f) + 150.0f) {
+            unk9054 = 1.0002f;
+        } else if (lead < (unkc ? 2700.0f : 1800.0f) - 150.0f) {
+            unk9054 = 0.99979f;
+        } else if (lead > (unkc ? 2700.0f : 1800.0f) + 300.0f) {
+            unk9054 = 1.00059f;
+        } else if (lead < (unkc ? 2700.0f : 1800.0f) - 300.0f) {
+            unk9054 = 0.99941f;
+        } else if ((unk9054 > 1.0f && lead < (unkc ? 2700.0f : 1800.0f) * 0.5f)
+                   || (unk9054 < 1.0f && lead > (unkc ? 2700.0f : 1800.0f) * 0.5f)) {
+            unk9054 = 1.0f;
+        }
+
+        mPlaybackVoice->SetVolume(volume);
+        mPlaybackVoice->SetSpeed(unk9054);
+    }
+
+    if (mChangeNotify) {
+        if (GetType() != unk10) {
+            MicrophonesChangedMsg msg(unk10 != 0);
+            ThePlatformMgr.Handle(msg, false);
+            unk10 = GetType();
+        }
+    }
 }
 
 bool MicXbox::IsRunning() const { return mRunning; }
