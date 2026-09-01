@@ -453,6 +453,67 @@ void DxMesh::DrawShowing() {
     } while (mat);
 }
 
+void DxMesh::DrawFacesInRange(int startFace, int numFaces) {
+    D3DDevice *device = TheDxRnd.Device();
+    if (mMutable) {
+        // Mutable meshes have no persistent buffers: the geometry is streamed
+        // straight into the command buffer every draw.
+        if (Faces().empty())
+            return;
+        TheNgStats->mMutMeshes++;
+        D3DDevice_SetVertexDeclaration(
+            device, IsSkinned() ? sMutableSkinnedVertexDecl : sMutableVertexDecl
+        );
+        void *indexData = nullptr;
+        void *vertexData = nullptr;
+        HRESULT hr = D3DDevice_BeginIndexedVertices(
+            device,
+            D3DPT_TRIANGLELIST,
+            0,
+            Verts().size(),
+            Faces().size() * 3,
+            D3DFMT_INDEX16,
+            0x60,
+            &indexData,
+            &vertexData
+        );
+        if (hr) {
+            MILO_FAIL(
+                "File: %s Line: %d Error: %s\n", __FILE__, 0x35C, DxRnd::Error(hr)
+            );
+        }
+        void *vertexDest = vertexData;
+        RndMesh::Face *faceData = Faces().begin();
+        RndMesh::Vert *vertData = Verts().begin();
+        XMemCpyStreaming_WriteCombined(indexData, faceData, Faces().size() * 6);
+        XMemCpyStreaming_WriteCombined(vertexDest, vertData, Verts().size() * 0x60);
+        D3DDevice_EndIndexedVertices(device);
+        TheNgStats->mFaces += Faces().size();
+    } else {
+        if (numFaces == -1)
+            numFaces = mNumFaces;
+        D3DDevice_SetIndices(device, (D3DIndexBuffer *)unk1ac);
+        // The buffer has to be read before VertSize() is called, not as part of
+        // the (right-to-left) argument evaluation that follows it.
+        D3DVertexBuffer *vertexBuffer = unk1a4.buffer;
+        unsigned int vertSize = VertSize();
+        D3DDevice_SetStreamSource(device, 0, vertexBuffer, 0, vertSize, 1);
+        D3DDevice_SetVertexDeclaration(device, sVertexDecl);
+        TheNgStats->mRegMeshes++;
+        TheNgStats->mFaces += numFaces;
+        if (mNumFaces == 0) {
+            MILO_NOTIFY_ONCE(
+                "%s (%s): Trying to draw mesh with no faces", Name(), PathName(this)
+            );
+        } else {
+            D3DDevice_DrawIndexedVertices(
+                device, D3DPT_TRIANGLELIST, 0, startFace * 3, numFaces * 3
+            );
+        }
+        D3DDevice_SetIndices(device, nullptr);
+    }
+}
+
 void _fake(void) {
     BufLock<struct D3DVertexBuffer> buf(nullptr, 0);
     BufLock<struct D3DIndexBuffer> buf2(nullptr, 0);

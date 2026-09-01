@@ -898,6 +898,18 @@ void D3DDevice_DrawIndexedVertices(
     UINT StartIndex,
     UINT IndexCount
 );
+HRESULT D3DDevice_BeginIndexedVertices(
+    D3DDevice *pDevice,
+    D3DPRIMITIVETYPE PrimitiveType,
+    INT BaseVertexIndex,
+    UINT VertexCount,
+    UINT IndexCount,
+    D3DFORMAT IndexDataFormat,
+    UINT VertexStreamZeroStride,
+    void **ppIndexData,
+    void **ppVertexData
+);
+void D3DDevice_EndIndexedVertices(D3DDevice *pDevice);
 HRESULT D3DDevice_Reset(D3DDevice *pDevice, D3DPRESENT_PARAMETERS *);
 void D3DDevice_Clear(
     D3DDevice *pDevice,

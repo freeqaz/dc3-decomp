@@ -14,9 +14,8 @@
 # entry points and middleware the decomp calls but does not contain. The
 # classification is for the reader; --check ignores it and compares names only.
 #
-# counts: 691 total = 22 GAP + 669 EXT
+# counts: 693 total = 21 GAP + 672 EXT
 
-GAP ?DrawFacesInRange@DxMesh@@UAAXHH@Z  # target defines it in system/rnddx9/Mesh.obj
 GAP ?DrawFur@DxMesh@@IAAPAVDxMat@@PAV2@@Z  # target defines it in system/rnddx9/Mesh.obj
 GAP ?DrawRect@DxRnd@@UAAXABVRect@Hmx@@PAVRndMat@@W4ShaderType@@ABVColor@3@PBV63@4@Z  # target defines it in system/rnddx9/Rnd.obj
 GAP ?DrawShowing@DxMultiMesh@@UAAXXZ  # target defines it in system/rnddx9/MultiMesh.obj
@@ -138,6 +137,7 @@ EXT CreateThread
 EXT D3DBaseTexture_GetLevelCount
 EXT D3DCubeTexture_LockRect
 EXT D3DCubeTexture_UnlockRect
+EXT D3DDevice_BeginIndexedVertices
 EXT D3DDevice_BeginTiling
 EXT D3DDevice_BlockOnFence
 EXT D3DDevice_BlockUntilIdle
@@ -154,6 +154,7 @@ EXT D3DDevice_CreateVertexShader
 EXT D3DDevice_DrawIndexedVertices
 EXT D3DDevice_DrawVerticesUP
 EXT D3DDevice_EnablePerfCounters
+EXT D3DDevice_EndIndexedVertices
 EXT D3DDevice_EndTiling
 EXT D3DDevice_GetDepthStencilSurface
 EXT D3DDevice_GetRenderTarget
@@ -418,6 +419,7 @@ EXT XMarketplaceCreateOfferEnumerator
 EXT XMarketplaceCreateOfferEnumeratorByOffering
 EXT XMemAllocDefault
 EXT XMemCpy
+EXT XMemCpyStreaming_WriteCombined
 EXT XMemFreeDefault
 EXT XMemSet
 EXT XMemSizeDefault
