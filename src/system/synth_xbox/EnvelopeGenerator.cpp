@@ -116,6 +116,10 @@ void EnvelopeGenerator::DoProcess(
         } else {
             unk90 = 3;
             gain = 0.0f;
+            // Deliberately asymmetric: the mono fill is a counted (ctr) loop
+            // so its counter is a separate variable, while the stereo fill
+            // walks the loop counter itself -- reusing `frame` there is what
+            // removes the target-absent `mr` that a fresh variable costs.
             if (channels == 1) {
                 for (unsigned int tail = frame; tail < validFrameCount; tail++) {
                     buffer[tail] = 0;
