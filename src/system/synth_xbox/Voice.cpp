@@ -2,6 +2,7 @@
 #include "synth360\EnvelopeGenerator.h"
 #include "synth_xbox\FxSend.h"
 #include "synth_xbox\Synth.h"
+#include "math\Decibels.h"
 #include "math\Utl.h"
 #include "os\CritSec.h"
 #include "os\Debug.h"
@@ -181,6 +182,151 @@ long Voice::createOrReuse(
     }
     MemPopTemp();
     return result;
+}
+
+void Voice::UpdateMix() {
+    if (mPoolVoice.sourceVoice == 0)
+        return;
+
+    if (mChannels > 1) {
+        // Stereo source: no panning law, the two channels go straight out.
+        MILO_ASSERT(mChannels == 2, 0x349);
+        GetVoice()->SetVolume(1.0f, 0);
+
+        int destChannels = 6;
+        if ((mFxSend ? mFxSend->GetOutputVoice() : TheXboxSynth->OutputVoice()) != nullptr) {
+            XAUDIO2_VOICE_DETAILS details;
+            (mFxSend ? mFxSend->GetOutputVoice() : TheXboxSynth->OutputVoice())
+                ->GetVoiceDetails(&details);
+            destChannels = details.InputChannels;
+        }
+
+        float levels[12];
+        for (int i = 0; i < 12; i++) {
+            levels[i] = 0.0f;
+        }
+        float angle = (mPan + 1.0f) * 0.5f * 1.5707964f;
+        if (destChannels == 6 || destChannels == 2) {
+            levels[0] = mVolume * cos(angle);
+            levels[3] = mVolume * sin(angle);
+        } else {
+            for (int i = 0; i < 12; i++) {
+                levels[i] = 1.0f;
+            }
+        }
+        HRESULT hr = GetVoice()->SetOutputMatrix(
+            mFxSend ? mFxSend->GetOutputVoice() : TheXboxSynth->OutputVoice(),
+            mChannels,
+            destChannels,
+            levels,
+            0
+        );
+        MILO_ASSERT(SUCCEEDED(hr), 0x37a);
+        return;
+    }
+
+    // Mono source: constant-power pan around the 5.1 ring.  mPan runs -4..4;
+    // the ring is split into six arcs, each interpolating between two speakers.
+    int destChannels = 6;
+    if ((mFxSend ? mFxSend->GetOutputVoice() : TheXboxSynth->OutputVoice()) != nullptr) {
+        XAUDIO2_VOICE_DETAILS details;
+        (mFxSend ? mFxSend->GetOutputVoice() : TheXboxSynth->OutputVoice())
+            ->GetVoiceDetails(&details);
+        destChannels = details.InputChannels;
+    }
+
+    float levels[6];
+    for (int i = 0; i < 6; i++) {
+        levels[i] = 0.0f;
+    }
+
+    int loChannel, hiChannel;
+    float loPan, hiPan;
+    if (destChannels == 6 || destChannels == 2) {
+        if (mPan < -3.0f) {
+            loPan = -3.0f;
+            loChannel = 4;
+            hiChannel = 5;
+            hiPan = -5.0f;
+        } else if (mPan < -1.0f) {
+            loPan = -1.0f;
+            loChannel = 0;
+            hiChannel = 4;
+            hiPan = -3.0f;
+        } else if (mPan < 0.0f) {
+            loPan = -1.0f;
+            loChannel = 0;
+            hiChannel = 2;
+            hiPan = 0.0f;
+        } else if (mPan < 1.0f) {
+            loPan = 0.0f;
+            loChannel = 2;
+            hiChannel = 1;
+            hiPan = 1.0f;
+        } else if (mPan < 3.0f) {
+            loPan = 1.0f;
+            loChannel = 1;
+            hiChannel = 5;
+            hiPan = 3.0f;
+        } else {
+            loPan = 3.0f;
+            loChannel = 5;
+            hiChannel = 4;
+            hiPan = 5.0f;
+        }
+        float angle = (mPan - loPan) / (hiPan - loPan) * 1.5707964f;
+        if (destChannels == 6) {
+            levels[loChannel] = mVolume * cos(angle);
+            levels[hiChannel] = mVolume * sin(angle);
+        } else {
+            MILO_ASSERT(-1.0 <= mPan && mPan <= 1.0, 0x3c2);
+            levels[0] = mVolume * cos((mPan + 1.0f) * 0.5f * 1.5707964f);
+            levels[1] = mVolume * sin((mPan + 1.0f) * 0.5f * 1.5707964f);
+        }
+    } else if (destChannels == 1) {
+        levels[0] = mVolume;
+    } else {
+        MILO_NOTIFY("Output voice has unexpected number of channels %d", destChannels);
+    }
+
+    if ((mFxSend ? mFxSend->GetOutputVoice() : TheXboxSynth->OutputVoice()) == nullptr) {
+        if (unk54) {
+            HRESULT hr = GetVoice()->SetOutputMatrix(nullptr, 1, 6, levels, 0);
+            MILO_ASSERT(SUCCEEDED(hr), 0x3d9);
+        }
+    } else {
+        HRESULT hr = GetVoice()->SetOutputMatrix(
+            mFxSend ? mFxSend->GetOutputVoice() : TheXboxSynth->OutputVoice(),
+            1,
+            destChannels,
+            levels,
+            0
+        );
+        MILO_ASSERT(SUCCEEDED(hr), 0x3d9);
+    }
+
+    if (mReverbEnabled && unk48) {
+        float reverbRatio = DbToRatio(mReverbMixDb);
+        for (int i = 0; i < 6; i++) {
+            levels[i] = 0.0f;
+        }
+        float angle = (mPan - loPan) / (hiPan - loPan) * 1.5707964f;
+        if (destChannels == 6) {
+            levels[loChannel] = cos(angle) * reverbRatio;
+            levels[hiChannel] = sin(angle) * reverbRatio;
+        } else {
+            MILO_ASSERT(-1.0 <= mPan && mPan <= 1.0, 0x3ee);
+            levels[0] = cos(angle) * reverbRatio;
+            // Shipping-game bug, reproduced verbatim: the right channel is fed
+            // cos() again instead of sin(), so a stereo reverb send is
+            // correlated rather than panned.  Both call sites resolve to the
+            // same `cos` in the target (0x829A09B8).
+            levels[1] = cos(angle) * reverbRatio;
+        }
+        HRESULT hr =
+            GetVoice()->SetOutputMatrix(TheXboxSynth->UnkF8(), 1, destChannels, levels, 0);
+        MILO_ASSERT(SUCCEEDED(hr), 0x3f5);
+    }
 }
 
 void Voice::UpdateSends() {
