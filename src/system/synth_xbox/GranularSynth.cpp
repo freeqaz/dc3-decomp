@@ -18,19 +18,26 @@ template float Log<float>(const float &);
 
 namespace DSP {
 namespace Synapse {
-namespace GranularSynth {
 
-// Forward declaration of Voice struct
-struct Voice {
-    u8 _pad[0x18];
-};
+GranularSynth::~GranularSynth() {
+}
 
-// Forward declaration of Granule struct
-struct Granule {
-    u8 _pad[0x18];
-};
+// Compact the granule pool: keep the active grains at the front (in order) and
+// clear the active flag on every slot they no longer occupy.
+void GranularSynth::Flush() {
+    unsigned int kept = 0;
+    for (unsigned int i = 0; i < mGranules.size(); i++) {
+        if (mGranules[i].mActive) {
+            mGranules[kept] = mGranules[i];
+            kept++;
+        }
+    }
 
-} // namespace GranularSynth
+    for (unsigned int j = kept; j < mGranules.size(); j++) {
+        mGranules[j].mActive = false;
+    }
+}
+
 } // namespace Synapse
 } // namespace DSP
 
