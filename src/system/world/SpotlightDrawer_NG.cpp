@@ -635,12 +635,16 @@ namespace {
 // stack slots with one another.)
 void SlideCorner(Vector3 &pt, Vector3 dir, float scale) {
     dir *= scale;
-    pt += dir;
+    pt.x += dir.x;
+    pt.y += dir.y;
+    pt.z += dir.z;
 }
 
 void SlideCornerBack(Vector3 &pt, Vector3 dir, float scale) {
     dir *= scale;
-    pt -= dir;
+    pt.x -= dir.x;
+    pt.y -= dir.y;
+    pt.z -= dir.z;
 }
 
 // Normal of the plane through the eye and the silhouette edge a..b.  Both
@@ -658,7 +662,9 @@ void NormalizeCopy(Vector3 v, Vector3 &dst) { Normalize(v, dst); }
 // packs it as a shader plane equation.  `n` is by value and scaled in place for
 // the same copy-preserving reason as SlideCorner.
 void PlaneEquation(Vector3 n, float inv, float d, Vector4 &out) {
-    n *= inv;
+    n.x *= inv;
+    n.y *= inv;
+    n.z *= inv;
     out.Set(n.x, n.y, n.z, inv * d);
 }
 
