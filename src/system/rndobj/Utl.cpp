@@ -2307,7 +2307,11 @@ void TessellateMesh(RndMesh *mesh) {
     auto vertCount = geomOwner->Verts().size();
     newVerts.reserve(vertCount * 3);
 
-    unsigned int nextVert = geomOwner->Verts().size();
+    // Retail reads Verts().size() exactly ONCE, before the loop, and keeps it in
+    // two registers: r21 (origNumVerts, still live after the loop) and r23
+    // (nextVert) -- 'lwz r21, 0x104(r11)' immediately followed by 'mr r23, r21'.
+    int origNumVerts = geomOwner->Verts().size();
+    unsigned int nextVert = origNumVerts;
 
     // Retail declares the three probe edges once, outside the loop: only their
     // v0/v1 are re-stamped per face, and `midpoint` is seeded to -1 a single
@@ -2392,8 +2396,9 @@ void TessellateMesh(RndMesh *mesh) {
 
     geomOwner->Faces().assign(newFaces.begin(), newFaces.end());
 
-    int origNumVerts = geomOwner->Verts().size();
-    geomOwner->Verts().resize(origNumVerts + (int)newVerts.size());
+    // The resize argument re-reads size() (target: lwz r10, 0x104(r11) at the
+    // call site); only the guard and the copy-back offset use the pre-loop r21.
+    geomOwner->Verts().resize(geomOwner->Verts().size() + (int)newVerts.size());
 
     if ((unsigned int)origNumVerts < nextVert) {
         int offset = origNumVerts * 0x60;
