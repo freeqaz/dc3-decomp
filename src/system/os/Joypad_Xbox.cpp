@@ -247,16 +247,47 @@ void ReceiveUpstreamEEPROMWriteResponse(int pad, unsigned char *data) {
     JoypadHandleEepromWriteResponse(pad, (JoypadBreedDataStatus)(data[4] != 0));
 }
 
+// Stages an eight byte downstream HID report (report id 0x11 plus seven
+// payload bytes) and pushes it to the pad as two DWORD writes.
 void SendRawData(
-    int,
-    unsigned char,
-    unsigned char,
-    unsigned char,
-    unsigned char,
-    unsigned char,
-    unsigned char,
-    unsigned char
-);
+    int pad,
+    unsigned char b1,
+    unsigned char b2,
+    unsigned char b3,
+    unsigned char b4,
+    unsigned char b5,
+    unsigned char b6,
+    unsigned char b7
+) {
+    XINPUT2_HANDLE sample;
+    DWORD flags;
+    if (!XInput2Sample(pad, &sample, &flags)) {
+        MILO_LOG(
+            "No sample available in SendRawData, error 0x%08\n",
+            (unsigned int)GetLastError()
+        );
+        return;
+    }
+    tRawOutput[0] = 0x11;
+    tRawOutput[1] = b1;
+    tRawOutput[2] = b2;
+    tRawOutput[3] = b3;
+    tRawOutput[4] = b4;
+    tRawOutput[5] = b5;
+    tRawOutput[6] = b6;
+    tRawOutput[7] = b7;
+    XInput2BeginUpdate(sample);
+    if (!XInput2SetDWord(
+            sample, XINPUTID_OUT_UNSPECIFIED_DWORD_0, ((DWORD *)tRawOutput)[0]
+        )) {
+        MILO_LOG("Error 0x%08x writing data 0\n", (unsigned int)GetLastError());
+    } else if (!XInput2SetDWord(
+                   sample, XINPUTID_OUT_UNSPECIFIED_DWORD_1, ((DWORD *)tRawOutput)[1]
+               )) {
+        MILO_LOG("Error 0x%08x writing data 1\n", (unsigned int)GetLastError());
+    }
+    XInput2EndUpdate(sample, 0);
+}
 
 BreedData *GetBreedData(int pad) {
     if (tBreed[pad].mPending) {

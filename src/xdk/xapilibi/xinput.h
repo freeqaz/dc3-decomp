@@ -80,6 +80,37 @@ DWORD XInputSetState(DWORD dwUserIndex, XINPUT_VIBRATION *pVibration);
 // one instruction long.
 DWORD XamInputSendStayAliveRequest(DWORD dwUserMask);
 
+// XInput2 ("sample") surface. A sample is a snapshot handle opened over one
+// pad; fields are addressed with 16-byte semantic ids passed BY VALUE -- the
+// target loads them with two `ld`s into r4/r5, which fixes the layout at two
+// 64-bit words.
+typedef void *XINPUT2_HANDLE;
+
+typedef struct _XINPUT2_ID { /* Size=0x10 */
+    /* 0x0000 */ ULONGLONG Lo;
+    /* 0x0008 */ ULONGLONG Hi;
+} XINPUT2_ID;
+
+typedef struct _XINPUT2_DEVICE_ID { /* Size=0x10 */
+    /* 0x0000 */ BYTE Id[16];
+} XINPUT2_DEVICE_ID;
+
+BOOL XInput2Sample(DWORD dwUserIndex, XINPUT2_HANDLE *phSample, DWORD *pdwFlags);
+BOOL XInput2BeginUpdate(XINPUT2_HANDLE hSample);
+BOOL XInput2EndUpdate(XINPUT2_HANDLE hSample, BOOL fCancel);
+BOOL XInput2SetDWord(XINPUT2_HANDLE hSample, XINPUT2_ID Id, DWORD dwValue);
+BOOL XInput2GetDWord(XINPUT2_HANDLE hSample, XINPUT2_ID Id, DWORD *pdwValue);
+BOOL XInput2GetDeviceId(XINPUT2_HANDLE hSample, XINPUT2_DEVICE_ID *pDeviceId);
+
+extern const XINPUT2_ID XINPUTID_OUT_UNSPECIFIED_DWORD_0;
+extern const XINPUT2_ID XINPUTID_OUT_UNSPECIFIED_DWORD_1;
+extern const XINPUT2_ID XINPUTID_UNSPECIFIED_DWORD_0;
+extern const XINPUT2_ID XINPUTID_UNSPECIFIED_DWORD_1;
+extern const XINPUT2_ID XINPUTID_UNSPECIFIED_DWORD_2;
+extern const XINPUT2_ID XINPUTID_UNSPECIFIED_DWORD_3;
+extern const XINPUT2_DEVICE_ID XINPUTID_0F_CONTROLLER;
+extern const XINPUT2_DEVICE_ID XINPUTID_19_CONTROLLER;
+
 #ifdef __cplusplus
 }
 #endif
