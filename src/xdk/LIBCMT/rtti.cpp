@@ -109,14 +109,15 @@ const _s_RTTIBaseClassDescriptor *FindSITargetTypeInstance(
     unsigned long i;
 
     for (i = 0; i < numBaseClasses; i++) {
-        if (TYPEIDS_EQ(pBases[i]->pTypeDescriptor, pTargetType)) {
-            const _s_RTTIBaseClassDescriptor *pTargetBase = pBases[i];
+        const _s_RTTIBaseClassDescriptor *pTargetBase = pBases[i];
+        if (TYPEIDS_EQ(pTargetBase->pTypeDescriptor, pTargetType)) {
             unsigned long j;
             for (j = i + 1; j < numBaseClasses; j++) {
-                if (pBases[j]->attributes & BCD_PRIVORPROTBASE) {
+                const _s_RTTIBaseClassDescriptor *pBase = pBases[j];
+                if (pBase->attributes & BCD_PRIVORPROTBASE) {
                     return 0;
                 }
-                if (TYPEIDS_EQ(pBases[j]->pTypeDescriptor, pSrcType)) {
+                if (TYPEIDS_EQ(pBase->pTypeDescriptor, pSrcType)) {
                     return pTargetBase;
                 }
             }
@@ -171,18 +172,19 @@ const _s_RTTIBaseClassDescriptor *FindMITargetTypeInstance(
             }
             if (adjustment + pBase->where.mdisp == SrcOffset) {
                 if (pTargetBase) {
-                    if (i - iTarget > numTargetContained) {
-                        // The source is outside the target sub-object.
-                        if (pTargetBase->attributes & (BCD_NOTVISIBLE | BCD_AMBIGUOUS)) {
-                            return 0;
+                    if (i - iTarget <= numTargetContained) {
+                        // The source sub-object lives inside the target one.
+                        if (pTargetBase->attributes & BCD_HASPCHD) {
+                            const _s_RTTIBaseClassDescriptor *pContained =
+                                pTargetBase->pClassDescriptor->pBaseClassArray
+                                    ->arrayOfBaseClassDescriptors[i - iTarget];
+                            return (pContained->attributes & BCD_NOTVISIBLE) ? 0 : pTargetBase;
                         }
-                    } else if (pTargetBase->attributes & BCD_HASPCHD) {
-                        const _s_RTTIBaseClassDescriptor *pContained =
-                            pTargetBase->pClassDescriptor->pBaseClassArray
-                                ->arrayOfBaseClassDescriptors[i - iTarget];
-                        return (pContained->attributes & BCD_NOTVISIBLE) ? 0 : pTargetBase;
-                    } else if (iTarget != 0) {
-                        return pTargetBase;
+                        if (iTarget != 0) {
+                            return pTargetBase;
+                        }
+                    } else if (pTargetBase->attributes & (BCD_NOTVISIBLE | BCD_AMBIGUOUS)) {
+                        return 0;
                     }
                     if (pBase->attributes & BCD_NOTVISIBLE) {
                         return 0;
