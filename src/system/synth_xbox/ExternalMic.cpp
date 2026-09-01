@@ -2,10 +2,16 @@
 #include "os\Debug.h"
 #include <string.h>
 #include <vector>
+#include "synth_xbox\Mic.h"
 #include "xdk\xapilibi\handleapi.h"
 #include "xdk\xapilibi\processthreadsapi.h"
 #include "xdk\xapilibi\synchapi.h"
 #include "xdk\xapilibi\xbox.h"
+
+std::vector<ExternalMicClientProxy *> ExternalMicClientMgr::mMicMasters;
+std::vector<unsigned long> ExternalMicClientMgr::mDevToMicMaster;
+std::vector<unsigned long> ExternalMicClientMgr::mMicMasterToDev;
+std::vector<MicXbox *> ExternalMicClientMgr::mAssocMicXbox;
 
 namespace {
     unsigned long ExternalMicThreadEntry(void *v) {
@@ -23,6 +29,83 @@ int ExternalMic::NumConnectedMics() {
         }
     }
     return count;
+}
+
+ExternalMicClientProxy *ExternalMicClientMgr::GetMasterForIndex(unsigned long deviceId) {
+    unsigned long master = mDevToMicMaster[deviceId];
+    if (master != -1) {
+        return mMicMasters[master];
+    }
+    for (unsigned int i = 0; i < mMicMasters.size(); i++) {
+        if (mMicMasters[i] == 0) {
+            mMicMasters[i] = new ExternalMicClientProxy(i);
+        }
+        if (mMicMasterToDev[i] == -1) {
+            mDevToMicMaster[deviceId] = i;
+            mMicMasterToDev[i] = deviceId;
+            return mMicMasters[i];
+        }
+    }
+    return 0;
+}
+
+void ExternalMicClientMgr::Associate(int index, MicXbox *mic) { mAssocMicXbox[index] = mic; }
+
+bool ExternalMicClientMgr::ConnectedForClient(const MicXbox *mic) {
+    for (unsigned int i = 0; i < mAssocMicXbox.size(); i++) {
+        if (mAssocMicXbox[i] == mic && mMicMasters[i] != 0 && mMicMasters[i]->mConnected) {
+            return true;
+        }
+    }
+    return false;
+}
+
+long ExternalMicClientProxy::OnMicConnected(unsigned long deviceId, bool b, const Symbol &name) {
+    mConnected = true;
+    MicXbox *mic = ExternalMicClientMgr::mAssocMicXbox[mIndex];
+    if (mic) {
+        mic->OnMicConnected(deviceId, b, name);
+        return 0;
+    }
+    return 0x8000FFFF;
+}
+
+void ExternalMicClientMgr::AddAudio(
+    unsigned long deviceId, unsigned char *data, unsigned long bytes
+) {
+    ExternalMicClientProxy *master = GetMasterForIndex(deviceId);
+    if (master) {
+        MicXbox *mic = mAssocMicXbox[master->mIndex];
+        if (mic) {
+            mic->AddData(data, bytes);
+        }
+    }
+}
+
+float ExternalMicClientMgr::GetRequiredGain(unsigned long deviceId) {
+    ExternalMicClientProxy *master = GetMasterForIndex(deviceId);
+    if (master) {
+        MicXbox *mic = mAssocMicXbox[master->mIndex];
+        if (mic) {
+            return mic->GetGain();
+        }
+    }
+    return 1.0f;
+}
+
+void ExternalMicClientMgr::OnMicDisconnected(unsigned long deviceId) {
+    ExternalMicClientProxy *master = GetMasterForIndex(deviceId);
+    if (master) {
+        master->mConnected = false;
+        MicXbox *mic = mAssocMicXbox[master->mIndex];
+        if (mic) {
+            mic->OnMicDisconnected();
+        }
+        if (mDevToMicMaster[deviceId] != -1) {
+            mMicMasterToDev[mDevToMicMaster[deviceId]] = -1;
+            mDevToMicMaster[deviceId] = -1;
+        }
+    }
 }
 
 ExternalMic::ExternalMic(unsigned long ul)
@@ -108,4 +191,42 @@ long ExternalMic::gatherGainAttribs(unsigned long deviceId) {
     }
     DWORD result = XMicGetGain(deviceId, 2, &mGainRight);
     return 0 != result ? 0x80004005 : 0;
+}
+
+void ExternalMicClientMgr::Terminate() {
+    for (unsigned int i = 0; i < mMicMasters.size(); i++) {
+        if (mMicMasters[i] != 0) {
+            delete mMicMasters[i];
+        }
+    }
+    mMicMasters.clear();
+}
+
+void ExternalMic::Terminate() {
+    for (unsigned int i = 0; i < gMics.size(); i++) {
+        delete gMics[i];
+    }
+    gMics.clear();
+    ExternalMicClientMgr::Terminate();
+}
+
+void ExternalMicClientMgr::Init() {
+    mAssocMicXbox.reserve(4);
+    mMicMasters.reserve(4);
+    mDevToMicMaster.reserve(4);
+    mMicMasterToDev.reserve(4);
+    for (int i = 0; i < 4; i++) {
+        mDevToMicMaster.push_back(-1);
+        mMicMasterToDev.push_back(-1);
+        mMicMasters.push_back(0);
+        mAssocMicXbox.push_back(0);
+    }
+}
+
+void ExternalMic::Init() {
+    MILO_ASSERT(gMics.empty(), 0x3b);
+    ExternalMicClientMgr::Init();
+    for (unsigned int i = 0; i < 4; i++) {
+        gMics.push_back(new ExternalMic(i));
+    }
 }
