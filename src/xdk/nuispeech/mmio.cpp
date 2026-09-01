@@ -1,7 +1,51 @@
 #include "xdk\nui\mmio.h"
+#include "xdk\XBOXKRNL.h"
+#include "xdk\xapilibi\rtlheap.h"
 #include <cstring>
 
-void FreeHandle(HANDLE);
+// The winmm-style handle table this TU owns: every HANDLE it hands out points
+// 0x2c bytes past a tagHNDL header, and the headers are chained through pNext
+// off the pHandleList singly-linked list.  Sizes come from FreeHandle itself --
+// it does `subi r31, r3, 0x2c` and zeroes +0x0/+0x4/+0x8 before RtlFreeHeap.
+struct tagHNDL {
+    tagHNDL *pNext; // 0x0
+    void *pOwner; // 0x4
+    unsigned long dwFlags; // 0x8
+    unsigned char reserved[0x20]; // 0xc, payload starts at 0x2c
+};
+
+extern "C" {
+RTL_CRITICAL_SECTION HandleListCritSec;
+void *hHeap;
+}
+tagHNDL *pHandleList;
+
+void FreeHandle(HANDLE h) {
+    if (h == nullptr) {
+        return;
+    }
+
+    tagHNDL *hndl = (tagHNDL *)((unsigned char *)h - 0x2c);
+
+    RtlEnterCriticalSection(&HandleListCritSec);
+
+    tagHNDL **ppLink = &pHandleList;
+    while (*ppLink != nullptr) {
+        tagHNDL *cur = *ppLink;
+        if (cur == hndl) {
+            *ppLink = hndl->pNext;
+            RtlLeaveCriticalSection(&HandleListCritSec);
+            hndl->pOwner = nullptr;
+            hndl->dwFlags = 0;
+            hndl->pNext = nullptr;
+            RtlFreeHeap(hHeap, 0, hndl);
+            return;
+        }
+        ppLink = &cur->pNext;
+    }
+
+    RtlLeaveCriticalSection(&HandleListCritSec);
+}
 
 MMRESULT mmioGetInfo(HMMIO hmmio, LPMMIOINFO pmmioinfo, UINT fuInfo) {
     if (hmmio == nullptr) {
