@@ -19,7 +19,7 @@ void FxSendMeterEffect360::OnParametersChanged() { FxSend360::SyncEffectParams()
 void FxSendMeterEffect360::SyncEffectParams(IXAudio2SubmixVoice *voice) const {
     MeterEffectParams p;
     if (mParams) {
-        p.unk0 = mParams->unk0;
+        p.mLevelData = mParams->mLevelData;
     }
     voice->SetEffectParameters(0, &p, sizeof(p), 0);
 }
@@ -44,7 +44,7 @@ void FxSendMeterEffect360::InitParams(IXAudio2SubmixVoice *voice, int numChannel
     }
     RELEASE(mParams);
     mParams = new MeterEffectParams();
-    mParams->unk0 = (void *)&channels[0];
+    mParams->mLevelData = &channels[0];
     voice->SetEffectParameters(0, mParams, sizeof(MeterEffectParams), 0);
 }
 
