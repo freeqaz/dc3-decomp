@@ -487,14 +487,14 @@ DataNode Sound::OnPlay(DataArray *a) {
 
 SynthSample *Sound::Sample() { return mSynthSample; }
 
-void Sound::SetSpeed(float f1, Hmx::Object *o2) {
+void Sound::SetSpeed(float speed, Hmx::Object *obj) {
     float speedTranspose = CalcSpeedFromTranspose(mFaders.GetTranspose());
-    float clamped = Clamp(sSpeedCaps[0], sSpeedCaps[1], speedTranspose);
-    if (o2) {
+    float clamped = Clamp(sSpeedCaps[0], sSpeedCaps[1], speed);
+    if (obj) {
         FOREACH (it, mSamples) {
-            if ((*it)->GetEventReceiver() == o2) {
+            if ((*it)->GetEventReceiver() == obj) {
                 (*it)->SetSpeed(
-                    Clamp(sSpeedCaps[0], sSpeedCaps[1], clamped * speedTranspose)
+                    Clamp(sSpeedCaps[0], sSpeedCaps[1], speedTranspose * clamped)
                 );
                 return;
             }
