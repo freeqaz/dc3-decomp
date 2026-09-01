@@ -193,9 +193,9 @@ void Sound::SynthPoll() {
         }
     }
     for (auto it = mSamples.begin(); it != mSamples.end();) {
-        PlayableSample *cur = *it;
         auto curIt = it;
         it++;
+        PlayableSample *cur = *curIt;
         if (mIsSynthSample || mMoggClip) {
             if (cur->DonePlaying()) {
                 mSamples.erase(curIt);
@@ -207,15 +207,17 @@ void Sound::SynthPoll() {
     }
     if (mFaders.Dirty()) {
         FOREACH (it, mSamples) {
-            float faderVol, faderPan, faderTranspose;
+            float faderPan, faderVol, faderTranspose;
             mFaders.GetVal(faderVol, faderPan, faderTranspose);
             (*it)->SetVolume(mVolume + faderVol);
-            (*it)->SetPan(Clamp(-4.0f, sSpeedCaps[1], mPan + faderPan));
-            (*it)->SetSpeed(Clamp(
+            faderPan = Clamp(-4.0f, sSpeedCaps[1], mPan + faderPan);
+            (*it)->SetPan(faderPan);
+            float faderSpeed = Clamp(
                 sSpeedCaps[0],
                 sSpeedCaps[1],
                 CalcSpeedFromTranspose(faderTranspose) * mSpeed
-            ));
+            );
+            (*it)->SetSpeed(faderSpeed);
         }
         mFaders.ClearDirty();
     }
