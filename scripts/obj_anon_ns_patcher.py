@@ -106,7 +106,17 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 OBJ_DIR = PROJECT_ROOT / "build" / "373307D9" / "obj"
 SRC_DIR = PROJECT_ROOT / "build" / "373307D9" / "src"
 
-ANON_NS_PATTERN = re.compile(rb'\?A0x([0-9a-fA-F]{8})@@')
+#: ⚠ The trailing scope is `@@` (global) for a top-level `namespace {}`, but a
+#: NESTED anonymous namespace mangles as `?A0x<hash>@<backref digit>@` -- MSVC
+#: gives every anonymous namespace in a TU the same `?A0x` fragment, so the
+#: enclosing one is emitted as a back-reference.  Anchoring on `@@` made this
+#: pass blind to those: `MoveDir.obj`'s
+#: `??$__lower_bound@...UDetectFrameSecondsCmp@?A0xe50ea9de@3@H@...` carried an
+#: UNPATCHED hash while the object reported "already correct", because 5 of its
+#: 19 occurrences were never scanned.  The lookahead accepts both shapes and
+#: still ends the match at the first `@`, so `template_of`/`apply_edits`
+#: offsets are unchanged.
+ANON_NS_PATTERN = re.compile(rb'\?A0x([0-9a-fA-F]{8})@(?=[@0-9])')
 #: The hashless spelling.  `(?!0x)` keeps it from eating the hashed one.
 HASHLESS_PATTERN = re.compile(rb'\?A(?!0x)@@')
 #: Placeholder a template puts where a hash was.  Same length is not required;
@@ -351,7 +361,12 @@ def apply_edits(data: bytes, edits: dict) -> bytes:
     for offset, new in edits.items():
         assert len(new) == 8, new
         assert out[offset - 4:offset] == b'?A0x', offset
-        assert out[offset + 8:offset + 10] == b'@@', offset
+        # `@@` for a top-level anonymous namespace, `@<backref digit>@` for a
+        # nested one -- same shape ANON_NS_PATTERN accepts.  Still a real
+        # guard: anything else means the offset is not a hash site.
+        assert out[offset + 8:offset + 9] == b'@', offset
+        assert out[offset + 9:offset + 10].isdigit() \
+            or out[offset + 9:offset + 10] == b'@', offset
         out[offset:offset + 8] = new
     return bytes(out)
 
