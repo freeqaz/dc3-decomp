@@ -132,6 +132,37 @@ FRESH_TIER = "retailmap-fn:"
 # rendered map by ADDRESS, so it moves no equivalence class either way.
 FOREIGN_TIER_PREFIXES = ("retailmap-data:",)
 
+# Members another LEDGERED tool put into a group this one owns. Measured
+# 2026-09-01: `scripts/weak_alias_reconcile.py` extends two `retailmap-fn:`
+# groups with names only a COFF weak-external aux record can evidence (the name
+# is a REFERENCE, so gate 5 has no body to check and drops it unproven). Those
+# groups are minted FRESH here, so `revert` deletes them whole and `apply`
+# re-mints them from this tool's own admitted set -- silently dropping the other
+# tool's names while its ledger still claimed they were installed. That is the
+# landmine FOREIGN_TIER_PREFIXES above warns about, arriving from the other
+# direction. Re-attaching by ledger is the fix: this tool does not have to judge
+# the foreign evidence, only to stop deleting a record it did not write.
+FOREIGN_LEDGER_KEYS = ("weak_alias_reconcile",)
+
+
+def foreign_ledger_members(doc: dict) -> dict:
+    """{address -> [names]} that another ledgered tool installed into a group.
+
+    Read BEFORE `revert`, re-attached AFTER `apply` rebuilds the groups.
+    """
+    out = {}
+    prov = doc.get("_provenance") or {}
+    for key in FOREIGN_LEDGER_KEYS:
+        led = prov.get(key)
+        if not led:
+            continue
+        for e in led.get("extends", []) or []:
+            addr = str(e.get("address", "")).lower()
+            if addr and e.get("add"):
+                out.setdefault(addr, []).append(
+                    (e["add"], "weak_alias_extended", e.get("group_record")))
+    return out
+
 IMAGE_SYM_CLASS_EXTERNAL = 2
 IMAGE_SYM_CLASS_STATIC = 3
 EH_FUNCLET = re.compile(r"^(?:__unwind\$|__catch\$)")
@@ -471,6 +502,7 @@ def revert(doc: dict) -> dict:
 
 
 def apply(doc: dict, result: dict) -> dict:
+    foreign = foreign_ledger_members(doc)
     doc = revert(doc)
     doc = json.loads(json.dumps(doc))
     by_addr = {}
@@ -514,6 +546,27 @@ def apply(doc: dict, result: dict) -> dict:
             g["survivor"] = w["survivor"]
         g["folded"] = sorted(folded)
         g["reconciled"] = ev
+
+    # Re-attach members another ledgered tool owns. Only ever ADDS a name back
+    # to the group already sitting at that address; if no group is there the
+    # name is left out rather than anchored somewhere it was not evidenced.
+    if foreign:
+        at = {}
+        for g in doc["groups"]:
+            if g.get("address"):
+                at[str(g["address"]).lower()] = g
+        for addr, entries in foreign.items():
+            g = at.get(addr)
+            if not g:
+                continue
+            folded = set(g.get("folded") or [])
+            for name, field, record in entries:
+                if name == g["survivor"]:
+                    continue
+                folded.add(name)
+                if record is not None and record not in g.setdefault(field, []):
+                    g[field].append(record)
+            g["folded"] = sorted(folded)
 
     comment = [c for c in doc.get("_comment", []) if c not in COMMENT_ADDITION]
     anchor = next((i for i, c in enumerate(comment)
@@ -643,6 +696,50 @@ def selftest() -> int:
           set(back["groups"][0]["folded"]) == {"F1"}, str(back["groups"][0]["folded"]))
     check("revert removes the ledger", LEDGER_KEY not in back["_provenance"])
     check("apply is idempotent", dumps(apply(applied, res)) == dumps(applied))
+
+    print("foreign ledger (a member another tool installed here):")
+    # Both fixtures carry THIS tool's own ledger, so `revert` really does delete
+    # the fresh group and `apply` really does re-mint it. Without that the fresh
+    # branch appends a SECOND group at the same address and the assertion reads
+    # the untouched original -- a vacuous pass.
+    own_led = {"added": {}, "reanchored": {}, "fresh_groups": ["0x82000000"]}
+    fbase = {"_comment": ["x"],
+             "_provenance": {LEDGER_KEY: dict(own_led),
+                             "weak_alias_reconcile": {"extends": [
+                                 {"group": "retailmap-fn:S@0x82000000",
+                                  "address": "0x82000000", "add": "W1",
+                                  "group_record": {"added": "W1",
+                                                   "evidence": "fixture"}}]}},
+             "groups": [{"name": "retailmap-fn:S@0x82000000",
+                         "address": "0x82000000", "survivor": "S",
+                         "folded": ["F1", "W1"]}]}
+    fres = {"identity_mode": "align", "census": {}, "name_census": {},
+            "refusals": [], "n_target_objs": 0, "n_base_objs": 0,
+            "actions": [{"mode": "fresh", "va": 0x82000000, "survivor": "S",
+                         "offer": ["F1"], "admitted": ["F1"], "gi": None,
+                         "reanchor_from": None, "n_map_names_at_addr": 3,
+                         "kind": "code"}]}
+    fapplied = apply(fbase, fres)
+    fgs = [g for g in fapplied["groups"] if g["address"] == "0x82000000"]
+    check("the fresh group is re-minted, not duplicated", len(fgs) == 1,
+          str([g["name"] for g in fgs]))
+    fg = fgs[0]
+    check("a fresh re-mint KEEPS the foreign ledger's member",
+          "W1" in fg["folded"], str(fg["folded"]))
+    check("...and still installs its own", "F1" in fg["folded"], str(fg["folded"]))
+    check("...and re-attaches the foreign tool's own provenance record verbatim",
+          fg.get("weak_alias_extended") == [{"added": "W1",
+                                             "evidence": "fixture"}],
+          str(fg.get("weak_alias_extended")))
+    # negative control: with the foreign ledger absent the same re-mint DROPS it,
+    # which is the behaviour that lost two names on 2026-09-01.
+    nbase = json.loads(json.dumps(fbase))
+    nbase["_provenance"] = {LEDGER_KEY: dict(own_led)}
+    ngs = [g for g in apply(nbase, fres)["groups"]
+           if g["address"] == "0x82000000"]
+    check("...and drops it when no ledger claims it (control)",
+          len(ngs) == 1 and "W1" not in ngs[0]["folded"],
+          str([g["folded"] for g in ngs]))
 
     print(f"\n{len(fails)} failure(s)")
     return 1 if fails else 0

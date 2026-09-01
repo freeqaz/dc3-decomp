@@ -142,14 +142,109 @@
     "names_withheld_gate4": 251
    }
   ],
+  "weak_alias_reconcile": {
+   "tool": "scripts/weak_alias_reconcile.py",
+   "n_base_objs": 980,
+   "n_weak_records": 1391,
+   "census": {
+    "already in one alias group": 1384,
+    "EXTEND an installed group": 2,
+    "refused (LEAD): neither name is in the retail map": 5
+   },
+   "extends": [
+    {
+     "group": "retailmap-fn:??_EGainEffect@@UAAPAXI@Z@0x82e440f0",
+     "address": "0x82e440f0",
+     "add": "??_E?$CSampleXAPOBase@VGainEffect@@UGainEffectParams@@@ATG@@MAAPAXI@Z",
+     "declared_by": "??_E?$CSampleXAPOBase@VGainEffect@@UGainEffectParams@@@ATG@@MAAPAXI@Z",
+     "resolves_to": "??_G?$CSampleXAPOBase@VGainEffect@@UGainEffectParams@@@ATG@@MAAPAXI@Z",
+     "group_record": {
+      "added": "??_E?$CSampleXAPOBase@VGainEffect@@UGainEffectParams@@@ATG@@MAAPAXI@Z",
+      "declared_by": "??_E?$CSampleXAPOBase@VGainEffect@@UGainEffectParams@@@ATG@@MAAPAXI@Z",
+      "resolves_to": "??_G?$CSampleXAPOBase@VGainEffect@@UGainEffectParams@@@ATG@@MAAPAXI@Z",
+      "evidence": "COFF weak external, IMAGE_WEAK_EXTERN_SEARCH_ALIAS: our own object declares this name as an undefined weak external whose auxiliary record names the group member it resolves to (characteristics 2), i.e. the compiler states the alias. Anchored additionally on orig/373307D9/ham_xbox_r.map, which places both names at the same address; a pair the map splits across two addresses is refused. The retail-map tier cannot reach this name -- the weak external is a REFERENCE, so our objects define no body and its byte-identity gate 5 drops it unproven. Re-derive with scripts/weak_alias_reconcile.py.",
+      "what_would_drop_it": "our objects ceasing to emit the IMAGE_WEAK_EXTERN_SEARCH_ALIAS record, or the retail map ceasing to place both names at 0x82e440f0"
+     }
+    },
+    {
+     "group": "retailmap-fn:??_E?$CSampleXAPOBase@VHeadsetPlaybackEf@0x82e44360",
+     "address": "0x82e44360",
+     "add": "??_EHeadsetPlaybackEffect@@UAAPAXI@Z",
+     "declared_by": "??_EHeadsetPlaybackEffect@@UAAPAXI@Z",
+     "resolves_to": "??_GHeadsetPlaybackEffect@@UAAPAXI@Z",
+     "group_record": {
+      "added": "??_EHeadsetPlaybackEffect@@UAAPAXI@Z",
+      "declared_by": "??_EHeadsetPlaybackEffect@@UAAPAXI@Z",
+      "resolves_to": "??_GHeadsetPlaybackEffect@@UAAPAXI@Z",
+      "evidence": "COFF weak external, IMAGE_WEAK_EXTERN_SEARCH_ALIAS: our own object declares this name as an undefined weak external whose auxiliary record names the group member it resolves to (characteristics 2), i.e. the compiler states the alias. Anchored additionally on orig/373307D9/ham_xbox_r.map, which places both names at the same address; a pair the map splits across two addresses is refused. The retail-map tier cannot reach this name -- the weak external is a REFERENCE, so our objects define no body and its byte-identity gate 5 drops it unproven. Re-derive with scripts/weak_alias_reconcile.py.",
+      "what_would_drop_it": "our objects ceasing to emit the IMAGE_WEAK_EXTERN_SEARCH_ALIAS record, or the retail map ceasing to place both names at 0x82e44360"
+     }
+    }
+   ],
+   "fresh": [],
+   "fresh_tier_prefix": "weakalias:",
+   "n_names_added": 2,
+   "leads_not_installed": [
+    {
+     "weak": "??_EDirectionGestureFilter@@UAAPAXI@Z",
+     "default": "??_GDirectionGestureFilter@@UAAPAXI@Z",
+     "units": [
+      "default/system/gesture/DirectionGestureFilter"
+     ],
+     "why": "no address in orig/373307D9/ham_xbox_r.map, so nothing anchors a group and gen_icf_alias_map would skip it"
+    },
+    {
+     "weak": "??_ERateTransposerInteger@@UAAPAXI@Z",
+     "default": "??_GRateTransposerInteger@@UAAPAXI@Z",
+     "units": [
+      "default/system/synth_xbox/soundtouch/source/SoundTouch/RateTransposer"
+     ],
+     "why": "no address in orig/373307D9/ham_xbox_r.map, so nothing anchors a group and gen_icf_alias_map would skip it"
+    },
+    {
+     "weak": "??_EStringStoppedMsg@@UAAPAXI@Z",
+     "default": "??_GStringStoppedMsg@@UAAPAXI@Z",
+     "units": [
+      "default/system/os/UsbMidiGuitarMsgs"
+     ],
+     "why": "no address in orig/373307D9/ham_xbox_r.map, so nothing anchors a group and gen_icf_alias_map would skip it"
+    },
+    {
+     "weak": "??_ETask@@UAAPAXI@Z",
+     "default": "??_GTask@@UAAPAXI@Z",
+     "units": [
+      "default/system/flow/FlowTimer",
+      "default/system/flow/FlowSetProperty",
+      "default/system/rndobj/Anim",
+      "default/system/obj/Task"
+     ],
+     "why": "no address in orig/373307D9/ham_xbox_r.map, so nothing anchors a group and gen_icf_alias_map would skip it"
+    },
+    {
+     "weak": "??_ETexMgr@@UAAPAXI@Z",
+     "default": "??_GTexMgr@@UAAPAXI@Z",
+     "units": [
+      "default/system/rnddx9/TexMgr"
+     ],
+     "why": "no address in orig/373307D9/ham_xbox_r.map, so nothing anchors a group and gen_icf_alias_map would skip it"
+    }
+   ],
+   "what": "Evidence class 2, re-derived against the CURRENT tree. MSVC declares ??_E<Class> as an undefined weak external whose aux record names ??_G<Class> (characteristics 2, IMAGE_WEAK_EXTERN_SEARCH_ALIAS); the pair is admitted only when orig/373307D9/ham_xbox_r.map ALSO places both names at one address. The retail-map tier structurally cannot reach these names: a weak external is a reference, our objects define no body, and its byte-identity gate drops them unproven. --apply reverts this ledger, re-derives and re-applies."
+  },
   "retail_map_reconcile": {
    "tool": "scripts/retail_map_fold_reconcile.py",
    "identity_mode": "align",
    "n_target_objs": 2223,
    "n_base_objs": 980,
    "added": {
+    "0x8298dff0": [
+     "?SetItemCountString@ChallengeHeaderNode@@UBAXPAVUILabel@@@Z"
+    ],
     "0x8299d110": [
      "??_GDataPointJob@?A0x698c11de@@UAAPAXI@Z"
+    ],
+    "0x82e2ab00": [
+     "?ShouldRemoveReq@AuthenticateReqJob@@MAA_NXZ"
     ]
    },
    "reanchored": {
@@ -1663,41 +1758,39 @@
     }
    },
    "fresh_groups": [
-    "0x8205f1d0"
+    "0x8205f1d0",
+    "0x828b3c08",
+    "0x828b5998",
+    "0x82e43fb0",
+    "0x82e440f0",
+    "0x82e44250",
+    "0x82e44360"
    ],
    "fresh_tier_prefix": "retailmap-fn:",
-   "n_names_added": 1,
-   "n_groups_extended": 1,
+   "n_names_added": 3,
+   "n_groups_extended": 3,
    "n_groups_reanchored": 377,
-   "n_groups_fresh": 1,
+   "n_groups_fresh": 7,
    "census": {
     "map addresses examined": 107649,
-    "drop: fewer than two members either side uses": 800,
+    "drop: fewer than two members either side uses": 793,
     "drop: fewer than two non-annotation names in the map": 104781,
     "drop: the group belongs to another tier's own installer": 110,
-    "FRESH": 4,
-    "installed and already complete": 1560,
-    "RE-ANCHOR only": 376,
+    "FRESH": 10,
+    "installed and already complete": 1561,
+    "RE-ANCHOR only": 375,
     "drop: target objects define none of the members": 10,
-    "EXTEND": 2,
-    "  ...of which also RE-ANCHOR": 1,
+    "EXTEND": 3,
+    "  ...of which also RE-ANCHOR": 2,
     "drop: target objects define several of the members": 6,
     "fresh group dropped: no offered name survived gate 5": 3
    },
    "name_census": {
-    "names offered": 18,
-    "admitted: identical": 2,
-    "REFUSED by byte identity: relocation targets differ": 1,
-    "dropped unproven: our objects define no body for this name": 15
+    "names offered": 30,
+    "admitted: identical": 12,
+    "dropped unproven: our objects define no body for this name": 18
    },
-   "refused_by_byte_identity": [
-    {
-     "address": "0x8298dff0",
-     "ours": "?SetItemCountString@ChallengeHeaderNode@@UBAXPAVUILabel@@@Z",
-     "survivor": "?SetItemCountString@PlaylistHeaderNode@@UBAXPAVUILabel@@@Z",
-     "why": "relocation targets differ"
-    }
-   ],
+   "refused_by_byte_identity": [],
    "what": "The alias file records fold classes by NAME, and two of the things those names were derived from moved afterwards: config/373307D9/symbols.txt (which spelling dtk stamps on the survivor address) and our own object set (which spellings we emit). Nothing re-derived the file, and every generator treats an installed address as taken, so a class could never be extended or re-anchored. This ledger is that re-derivation. Re-run --apply after a rebuild or a symbols.txt change; it reverts itself first, so it converges."
   }
  },
@@ -9536,6 +9629,7 @@
     "?PollEnabled@RndPollable@@UBA_NXZ",
     "?SendDoneImpl@StreamReceiverFile@@MAA_NXZ",
     "?ShouldDrawPanel@Rnd@@UAA_NPBVUIPanel@@@Z",
+    "?ShouldRemoveReq@AuthenticateReqJob@@MAA_NXZ",
     "?ShouldUseLocalNavlist@HamPanel@@UBA_NXZ",
     "?SkipFirstFrame@BaseDisplacementNode@@UBA_NXZ",
     "?SupportsScrolling@FontMap@RndText@@UBA_NXZ",
@@ -25976,6 +26070,7 @@
    "survivor": "?SetItemCountString@PlaylistHeaderNode@@UBAXPAVUILabel@@@Z",
    "address": "0x8298dff0",
    "folded": [
+    "?SetItemCountString@ChallengeHeaderNode@@UBAXPAVUILabel@@@Z",
     "?SetItemCountString@MQSongHeaderNode@@UBAXPAVUILabel@@@Z",
     "merged_8298DFF0"
    ],
@@ -28805,6 +28900,94 @@
    "n_map_names_at_addr": 2,
    "kind": "data",
    "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x8205f1d0; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. The target objects define exactly one member (??_C@_01LOCGONAA@?$AA?$AA@), which is therefore the survivor. Every name added here additionally passed the byte-identity gate: our COMDAT equals the survivor's with relocation-patched fields masked and relocation targets equal by name (both sides cut at their first EH funclet). Names our objects do not DEFINE were dropped, not admitted."
+  },
+  {
+   "name": "retailmap-fn:??$_Copy_Construct@V?$vector@PAUUnlockab@0x828b3c08",
+   "address": "0x828b3c08",
+   "survivor": "??$_Copy_Construct@V?$vector@PAUUnlockable@?A0xf8e4b4b5@@V?$StlNodeAlloc@PAUUnlockable@?A0xf8e4b4b5@@@stlpmtx_std@@@stlpmtx_std@@@stlpmtx_std@@YAXPAV?$vector@PAUUnlockable@?A0xf8e4b4b5@@V?$StlNodeAlloc@PAUUnlockable@?A0xf8e4b4b5@@@stlpmtx_std@@@0@ABV10@@Z",
+   "folded": [
+    "??$_Param_Construct@V?$vector@PAUUnlockable@?A0xf8e4b4b5@@V?$StlNodeAlloc@PAUUnlockable@?A0xf8e4b4b5@@@stlpmtx_std@@@stlpmtx_std@@V12@@stlpmtx_std@@YAXPAV?$vector@PAUUnlockable@?A0xf8e4b4b5@@V?$StlNodeAlloc@PAUUnlockable@?A0xf8e4b4b5@@@stlpmtx_std@@@0@ABV10@@Z"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "code",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x828b3c08; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. The target objects define exactly one member (??$_Copy_Construct@V?$vector@PAUUnlockable@?A0xf8e4b4b5@@V?$StlNodeAlloc@PAUUnlockable@?A0xf8e4b4b5@@@stlpmtx_std@@@stlpmtx_std@@@stlpmtx_std@@YAXPAV?$vector@PAUUnlockable@?A0xf8e4b4b5@@V?$StlNodeAlloc@PAUUnlockable@?A0xf8e4b4b5@@@stlpmtx_std@@@0@ABV10@@Z), which is therefore the survivor. Every name added here additionally passed the byte-identity gate: our COMDAT equals the survivor's with relocation-patched fields masked and relocation targets equal by name (both sides cut at their first EH funclet). Names our objects do not DEFINE were dropped, not admitted."
+  },
+  {
+   "name": "retailmap-fn:??$_Copy_Construct@UUnlockable@?A0xf8e4b@0x828b5998",
+   "address": "0x828b5998",
+   "survivor": "??$_Copy_Construct@UUnlockable@?A0xf8e4b4b5@@@stlpmtx_std@@YAXPAUUnlockable@?A0xf8e4b4b5@@ABU12@@Z",
+   "folded": [
+    "??$_Param_Construct@UUnlockable@?A0xf8e4b4b5@@U12@@stlpmtx_std@@YAXPAUUnlockable@?A0xf8e4b4b5@@ABU12@@Z"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "code",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x828b5998; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. The target objects define exactly one member (??$_Copy_Construct@UUnlockable@?A0xf8e4b4b5@@@stlpmtx_std@@YAXPAUUnlockable@?A0xf8e4b4b5@@ABU12@@Z), which is therefore the survivor. Every name added here additionally passed the byte-identity gate: our COMDAT equals the survivor's with relocation-patched fields masked and relocation targets equal by name (both sides cut at their first EH funclet). Names our objects do not DEFINE were dropped, not admitted."
+  },
+  {
+   "name": "retailmap-fn:?Process@?$CSampleXAPOBase@VHeadsetPlayb@0x82e43fb0",
+   "address": "0x82e43fb0",
+   "survivor": "?Process@?$CSampleXAPOBase@VHeadsetPlaybackEffect@@UHeadsetPlaybackEffectParams@@@ATG@@UAAXIPBUXAPO_PROCESS_BUFFER_PARAMETERS@@IPAU3@H@Z",
+   "folded": [
+    "?Process@?$CSampleXAPOBase@VGainEffect@@UGainEffectParams@@@ATG@@UAAXIPBUXAPO_PROCESS_BUFFER_PARAMETERS@@IPAU3@H@Z"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "code",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x82e43fb0; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. The target objects define exactly one member (?Process@?$CSampleXAPOBase@VHeadsetPlaybackEffect@@UHeadsetPlaybackEffectParams@@@ATG@@UAAXIPBUXAPO_PROCESS_BUFFER_PARAMETERS@@IPAU3@H@Z), which is therefore the survivor. Every name added here additionally passed the byte-identity gate: our COMDAT equals the survivor's with relocation-patched fields masked and relocation targets equal by name (both sides cut at their first EH funclet). Names our objects do not DEFINE were dropped, not admitted."
+  },
+  {
+   "name": "retailmap-fn:??_EGainEffect@@UAAPAXI@Z@0x82e440f0",
+   "address": "0x82e440f0",
+   "survivor": "??_EGainEffect@@UAAPAXI@Z",
+   "folded": [
+    "??_E?$CSampleXAPOBase@VGainEffect@@UGainEffectParams@@@ATG@@MAAPAXI@Z",
+    "??_G?$CSampleXAPOBase@VGainEffect@@UGainEffectParams@@@ATG@@MAAPAXI@Z",
+    "??_GGainEffect@@UAAPAXI@Z"
+   ],
+   "n_map_names_at_addr": 4,
+   "kind": "code",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 4 public name(s) share 0x82e440f0; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. The target objects define exactly one member (??_EGainEffect@@UAAPAXI@Z), which is therefore the survivor. Every name added here additionally passed the byte-identity gate: our COMDAT equals the survivor's with relocation-patched fields masked and relocation targets equal by name (both sides cut at their first EH funclet). Names our objects do not DEFINE were dropped, not admitted.",
+   "weak_alias_extended": [
+    {
+     "added": "??_E?$CSampleXAPOBase@VGainEffect@@UGainEffectParams@@@ATG@@MAAPAXI@Z",
+     "declared_by": "??_E?$CSampleXAPOBase@VGainEffect@@UGainEffectParams@@@ATG@@MAAPAXI@Z",
+     "resolves_to": "??_G?$CSampleXAPOBase@VGainEffect@@UGainEffectParams@@@ATG@@MAAPAXI@Z",
+     "evidence": "COFF weak external, IMAGE_WEAK_EXTERN_SEARCH_ALIAS: our own object declares this name as an undefined weak external whose auxiliary record names the group member it resolves to (characteristics 2), i.e. the compiler states the alias. Anchored additionally on orig/373307D9/ham_xbox_r.map, which places both names at the same address; a pair the map splits across two addresses is refused. The retail-map tier cannot reach this name -- the weak external is a REFERENCE, so our objects define no body and its byte-identity gate 5 drops it unproven. Re-derive with scripts/weak_alias_reconcile.py.",
+     "what_would_drop_it": "our objects ceasing to emit the IMAGE_WEAK_EXTERN_SEARCH_ALIAS record, or the retail map ceasing to place both names at 0x82e440f0"
+    }
+   ]
+  },
+  {
+   "name": "retailmap-fn:?LockForProcess@?$CSampleXAPOBase@VHeads@0x82e44250",
+   "address": "0x82e44250",
+   "survivor": "?LockForProcess@?$CSampleXAPOBase@VHeadsetPlaybackEffect@@UHeadsetPlaybackEffectParams@@@ATG@@UAAJIPBUXAPO_LOCKFORPROCESS_BUFFER_PARAMETERS@@I0@Z",
+   "folded": [
+    "?LockForProcess@?$CSampleXAPOBase@VGainEffect@@UGainEffectParams@@@ATG@@UAAJIPBUXAPO_LOCKFORPROCESS_BUFFER_PARAMETERS@@I0@Z"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "code",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x82e44250; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. The target objects define exactly one member (?LockForProcess@?$CSampleXAPOBase@VHeadsetPlaybackEffect@@UHeadsetPlaybackEffectParams@@@ATG@@UAAJIPBUXAPO_LOCKFORPROCESS_BUFFER_PARAMETERS@@I0@Z), which is therefore the survivor. Every name added here additionally passed the byte-identity gate: our COMDAT equals the survivor's with relocation-patched fields masked and relocation targets equal by name (both sides cut at their first EH funclet). Names our objects do not DEFINE were dropped, not admitted."
+  },
+  {
+   "name": "retailmap-fn:??_E?$CSampleXAPOBase@VHeadsetPlaybackEf@0x82e44360",
+   "address": "0x82e44360",
+   "survivor": "??_E?$CSampleXAPOBase@VHeadsetPlaybackEffect@@UHeadsetPlaybackEffectParams@@@ATG@@MAAPAXI@Z",
+   "folded": [
+    "??_EHeadsetPlaybackEffect@@UAAPAXI@Z",
+    "??_G?$CSampleXAPOBase@VHeadsetPlaybackEffect@@UHeadsetPlaybackEffectParams@@@ATG@@MAAPAXI@Z",
+    "??_GHeadsetPlaybackEffect@@UAAPAXI@Z"
+   ],
+   "n_map_names_at_addr": 4,
+   "kind": "code",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 4 public name(s) share 0x82e44360; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. The target objects define exactly one member (??_E?$CSampleXAPOBase@VHeadsetPlaybackEffect@@UHeadsetPlaybackEffectParams@@@ATG@@MAAPAXI@Z), which is therefore the survivor. Every name added here additionally passed the byte-identity gate: our COMDAT equals the survivor's with relocation-patched fields masked and relocation targets equal by name (both sides cut at their first EH funclet). Names our objects do not DEFINE were dropped, not admitted.",
+   "weak_alias_extended": [
+    {
+     "added": "??_EHeadsetPlaybackEffect@@UAAPAXI@Z",
+     "declared_by": "??_EHeadsetPlaybackEffect@@UAAPAXI@Z",
+     "resolves_to": "??_GHeadsetPlaybackEffect@@UAAPAXI@Z",
+     "evidence": "COFF weak external, IMAGE_WEAK_EXTERN_SEARCH_ALIAS: our own object declares this name as an undefined weak external whose auxiliary record names the group member it resolves to (characteristics 2), i.e. the compiler states the alias. Anchored additionally on orig/373307D9/ham_xbox_r.map, which places both names at the same address; a pair the map splits across two addresses is refused. The retail-map tier cannot reach this name -- the weak external is a REFERENCE, so our objects define no body and its byte-identity gate 5 drops it unproven. Re-derive with scripts/weak_alias_reconcile.py.",
+     "what_would_drop_it": "our objects ceasing to emit the IMAGE_WEAK_EXTERN_SEARCH_ALIAS record, or the retail map ceasing to place both names at 0x82e44360"
+    }
+   ]
   }
  ]
 }
