@@ -27,4 +27,10 @@ protected:
 
     unsigned char *mTargetBuffer; // 0x802c
     int mBufSize; // 0x8030
+    // The target's `new StreamReceiverFile` passes 0x8038 to
+    // StreamReceiver::operator new, but the constructor only initialises
+    // 0x802c and 0x8030 and no StreamReceiverFile method reads 0x8034.  So the
+    // class carries one more 4-byte member here that this build never touches;
+    // it still has to be present or every allocation is 4 bytes short.
+    int unk8034; // 0x8034
 };
