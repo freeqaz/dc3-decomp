@@ -64,6 +64,8 @@ void NetStream::WriteImpl(const void *v, int i) {
 
 void NetStream::SeekImpl(int i, SeekType ty) { MILO_ASSERT(false, 0x7A); }
 
+static float kClientConnectTimeoutMs = 1000.0f;
+
 void NetStream::ClientConnect(const NetAddress &addr) {
     MILO_ASSERT(mSocket, 0x38);
     Timer timer;
@@ -77,7 +79,7 @@ void NetStream::ClientConnect(const NetAddress &addr) {
                 mFail = true;
                 break;
             }
-            if (timer.SplitMs() > 1000) {
+            if (timer.SplitMs() > kClientConnectTimeoutMs) {
                 mFail = true;
                 break;
             }
