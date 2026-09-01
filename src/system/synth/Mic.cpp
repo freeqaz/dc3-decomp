@@ -57,14 +57,13 @@ int RingBuffer::Peek(void *data, int len) {
 }
 
 int RingBuffer::Write(void *data, int len) {
-    char *src = (char *)data;
-
     // More than the buffer holds: keep only the last mSize bytes. Retail reuses
     // the `len` parameter's own home slot here rather than a separate local.
     if (len > mSize) {
-        src = src + len - mSize;
+        data = (char *)data + len - mSize;
         len = mSize;
     }
+    char *src = (char *)data;
 
     int available = mSize - mWriteIx;
     int returnVal = (mTotal - mSize) + len;
@@ -95,21 +94,14 @@ int RingBuffer::Read(void *data, int len) {
     } else {
         readLen = mTotal;
     }
-    int stk[2];
-    stk[0] = readLen;
 
     if (readLen == 0) {
         return 0;
     }
 
     int available = mSize - mReadIx;
-    int *pChunk = &stk[0];
-    if (readLen < available) {
-        pChunk = &readLen;
-    } else {
-        pChunk = &available;
-    }
-    int chunk1 = *pChunk;
+    // std::min, not Min(): see the note in Peek().
+    int chunk1 = std::min(available, readLen);
 
     memcpy(data, mReadIx + (char *)mBuffer, chunk1);
 
