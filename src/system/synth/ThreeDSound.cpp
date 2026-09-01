@@ -217,7 +217,7 @@ void ThreeDSound::Stop(Hmx::Object *obj, bool b2) {
 }
 
 bool ThreeDSound::IsPlaying() const {
-    return !mIsLooping && (!mSamples.empty() || !mDelayArgs.empty());
+    return mIsLooping || Sound::IsPlaying();
 }
 
 void ThreeDSound::SaveWorldXfm() { mSavedWorldTransform = WorldXfm(); }
