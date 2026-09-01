@@ -95,9 +95,9 @@ void ReverbConvertI3DL2ToNative(
     pNative->PositionMatrixRight = 27;
     pNative->PositionLeft = 6;
     pNative->PositionRight = 6;
-    pNative->HighEQCutoff = 6;
     pNative->RoomSize = 100.0f;
     pNative->RearDelay = 5;
+    pNative->HighEQCutoff = 6;
     pNative->LowEQCutoff = 4;
     pNative->RoomFilterMain = pI3DL2->Room * 0.01f;
     pNative->RoomFilterHF = pI3DL2->RoomHF * 0.01f;
@@ -108,13 +108,16 @@ void ReverbConvertI3DL2ToNative(
             gain = -8;
         pNative->LowEQGain = (gain < 0) ? gain + 8 : 8;
         pNative->HighEQGain = 8;
+        // The remaining 5 mismatches live here: the target loads DecayHFRatio before
+        // DecayTime and emits `fmuls f0, f13, f0`. Operand swap and a lifted temp are
+        // both byte-inert -- MSVC canonicalises this. Backend floor.
         pNative->DecayTime = pI3DL2->DecayTime * pI3DL2->DecayHFRatio;
     } else {
         int gain = (int)((float)log10(pI3DL2->DecayHFRatio) * 4.0);
         if (gain < -8)
             gain = -8;
         pNative->LowEQGain = 8;
-        pNative->HighEQGain = (gain < 0) ? gain + 8 : 8;
+        pNative->HighEQGain = (gain < 0) ? 8 + gain : 8;
         pNative->DecayTime = pI3DL2->DecayTime;
     }
 
@@ -134,12 +137,13 @@ void ReverbConvertI3DL2ToNative(
 
     pNative->ReflectionsGain = pI3DL2->Reflections * 0.01f;
     pNative->ReverbGain = pI3DL2->Reverb * 0.01f;
-    pNative->EarlyDiffusion = (BYTE)(pI3DL2->Diffusion * 0.15f);
+    int earlyDiffusion = (BYTE)(pI3DL2->Diffusion * 0.15f);
+    pNative->EarlyDiffusion = earlyDiffusion;
     pNative->LateDiffusion = pNative->EarlyDiffusion;
     pNative->Density = pI3DL2->Density;
     pNative->RoomFilterFreq = pI3DL2->HFReference;
-    pNative->WetDryMixPct = 0;
     pNative->WetDryMix = pI3DL2->WetDryMix;
+    pNative->WetDryMixPct = 0;
 }
 
 namespace {
@@ -433,7 +437,7 @@ void Synth360::Init() {
 
     // The lookup Symbol is a temporary, not a named local: the target reuses the same
     // stack slot the REGISTER_OBJ_FACTORY temporaries above already used.
-    if (SystemConfig(Symbol("synth"))->FindArray(Symbol("enable_headset_output"), true)->Int(1)) {
+    if (SystemConfig(Symbol("synth"))->FindInt(Symbol("enable_headset_output"))) {
         SetupHeadsetSubmixes();
     }
 
