@@ -10,8 +10,8 @@
 _XMMATRIX::_XMMATRIX() { std::memset(this, 0, sizeof(*this)); }
 
 SingleItemEnumJob::SingleItemEnumJob(Hmx::Object *obj, int idx, u64 id)
-    : Job(), mObject(obj), mUnkc(idx), mItemID(id), mStatus(0), mSuccess(false),
-      unk20(0), unk24(0), mOverlapped() {
+    : Job(), mObject(obj), mUserIndex(idx), mItemID(id), mStatus(0), mSuccess(false),
+      mEnumBuffer(nullptr), mEnumHandle(nullptr), mOverlapped() {
     std::memset(&mOverlapped, 0, sizeof(mOverlapped));
 }
 SingleItemEnumJob::~SingleItemEnumJob() {}
