@@ -94,6 +94,10 @@ void Multiply(const Transform &a, const Transform &b, Transform &out) {
     float fVar10 = b.m.x.y * fVar2 + b.m.y.y * fVar1;
 
     float fVar5;
+    // MEASURED NEGATIVE (2026-09-01): binding `Vector3 &ov = out.v;` here and
+    // writing ov.x/.y/.z -- to chase the target's otherwise-unexplained
+    // `addi r11, r5, 0x30` (= &out.v) at index 13 -- costs 11.3pp
+    // (67.77 -> 56.5, 63 -> 65 mismatch instructions). Do not retry.
     if (&b != &out) {
         float bzx = b.m.z.x;
         float byx = b.m.y.x;
@@ -175,6 +179,22 @@ float Det(const Hmx::Matrix4 &m) {
     return det;
 }
 
+// AT_LIMIT as of 2026-09-01, 70.67% normalized, with codegen evidence:
+// 759 instruction rows, `diff_op: none`, and ALL 245 diff_arg rows are
+// accounted for by register renaming (477 swaps over 207 pairs, e.g.
+// f0<->f13 x40, f20<->f28 x23) plus stack-offset shift -- 0 unexplained.
+// The 41 `replace` rows are spill placement, not different work: they pair
+// `stfs f?, 0x??(r1)` against `lfs`/`fmuls` at the same index, i.e. the two
+// sides spill the same values at different points in the same expression.
+//
+// The DECOMPOSITION STRUCTURE already matches the target and is not the
+// residual: the target calls Det(Matrix4) first (that function is at 100%),
+// tests `fabs` against __real@38d1b717 (= 0.0001f), forms the reciprocal as a
+// plain `fdivs` (one division, so no /fp:fast reciprocal folding to undo), and
+// materialises row base pointers `addi r29,r31,0x20 / r28,r31,0x10 /
+// r30,r31,0x30` matching the row1/row2/row3 references below.
+// The residual is register allocation and spill scheduling inside expressions
+// that exceed the FPR file. Do not permute operand order here.
 void Invert(const Hmx::Matrix4 &m, Hmx::Matrix4 &out) {
     float det = Det(m);
     bool small = std::fabs(det) < 0.0001f;
