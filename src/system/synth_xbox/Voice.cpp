@@ -92,11 +92,20 @@ void Voice::dispose(PoolVoice *pv, unsigned int) {
         unk54 = false;
     }
     pv->disposeTick = GetTickCount() - 500000;
-    gVoiceGC.Enter();
-    s_voiceGC.push_back(*pv);
-    gVoiceCounters[0]--;
-    gVoiceCounters[1]++;
-    gVoiceGC.Exit();
+    {
+        // A scoped CritSecTracker, not a bare Enter()/Exit() pair: deque::push_back
+        // allocates, so the guard's destructor has to run on the unwind path.  That
+        // EH state is what buys the target's r31 frame pointer, its extra
+        // callee-saved register and the `stw r28, 0x50(r31)` that materialises
+        // CritSecTracker::mCritSec -- see the inverse lever in
+        // docs/decomp/patterns/fixable-inline-boundary.md.
+        CritSecTracker lock(&gVoiceGC);
+        s_voiceGC.push_back(*pv);
+        // [1]++ before [0]--: the target loads gVoiceCounters[1] into the lower
+        // scratch register, which is a statement-order tell, not scheduling noise.
+        gVoiceCounters[1]++;
+        gVoiceCounters[0]--;
+    }
     pv->eg = 0;
     pv->egParams = 0;
     pv->sourceVoice = 0;
