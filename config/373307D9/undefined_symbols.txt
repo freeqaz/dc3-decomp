@@ -14,7 +14,7 @@
 # entry points and middleware the decomp calls but does not contain. The
 # classification is for the reader; --check ignores it and compares names only.
 #
-# counts: 691 total = 16 GAP + 675 EXT
+# counts: 692 total = 22 GAP + 670 EXT
 
 GAP ?BeginDrawing@DxRnd@@UAAXXZ  # target defines it in system/rnddx9/Rnd_Xbox.obj
 GAP ?DrawFacesInRange@DxMesh@@UAAXHH@Z  # target defines it in system/rnddx9/Mesh.obj
@@ -24,13 +24,19 @@ GAP ?DrawShowing@DxMultiMesh@@UAAXXZ  # target defines it in system/rnddx9/Multi
 GAP ?DrawShowing@DxParticleSys@@UAAXXZ  # target defines it in system/rnddx9/Part.obj
 GAP ?DrawString@DxRnd@@UAAAAVVector2@@PBDABV2@ABVColor@Hmx@@_N@Z  # target defines it in system/rnddx9/Rnd_Xbox.obj
 GAP ?EndDrawing@DxRnd@@UAAXXZ  # target defines it in system/rnddx9/Rnd_Xbox.obj
+GAP ?FindMITargetTypeInstance@@YAPBU_s_RTTIBaseClassDescriptor@@PAXPBU_s_RTTICompleteObjectLocator@@PAUTypeDescriptor@@H2@Z  # target defines it in xdk/LIBCMT/rtti.obj
+GAP ?FindSITargetTypeInstance@@YAPBU_s_RTTIBaseClassDescriptor@@PBU_s_RTTICompleteObjectLocator@@PAUTypeDescriptor@@1@Z  # target defines it in xdk/LIBCMT/rtti.obj
+GAP ?FindVITargetTypeInstance@@YAPBU_s_RTTIBaseClassDescriptor@@PAXPBU_s_RTTICompleteObjectLocator@@PAUTypeDescriptor@@H2@Z  # target defines it in xdk/LIBCMT/rtti.obj
+GAP ?Init@MicManagerXbox@@QAAXXZ  # target defines it in system/synth_xbox/Mic.obj
+GAP ?NuipCameraAdjustTilt@@YAKIMMMPAU_NUI_TILT_OBJECTS@@PAU_XOVERLAPPED@@@Z  # target defines it in xdk/nuiapi/nuidetroit.obj
+GAP ?NuipCameraElevationSetAngle@@YAJJ@Z  # target defines it in xdk/nuiapi/nuidetroit.obj
+GAP ?NuipDetroitGetXConfigSettings@@YAXXZ  # target defines it in xdk/nuiapi/nuidetroit.obj
+GAP ?NuipDetroitRuntimeState@@3UNUIP_DETROIT_RUNTIME_STATE@@A  # target defines it in xdk/nuiapi/nuidetroit.obj
+GAP ?Poll@MicXbox@@QAAXXZ  # target defines it in system/synth_xbox/Mic.obj
 GAP ?Poll@PlatformMgr@@QAAXXZ  # target defines it in system/os/PlatformMgr_Xbox.obj
 GAP ?ReleaseAutoRelease@DxRnd@@QAAXXZ  # target defines it in system/rnddx9/Rnd_Xbox.obj
 GAP ?SyncBitmap@DxTex@@MAAXXZ  # target defines it in system/rnddx9/Tex.obj
-GAP ?UpdateMix@Voice@@AAAXXZ  # target defines it in system/synth_xbox/Voice.obj
-GAP ?UpdateVoiceMatrices@FxSend360@@AAAXXZ  # target defines it in system/synth_xbox/FxSend.obj
 GAP ?fft_altivec@@YAHPAM0KJ0@Z  # target defines it in system/synth_xbox/FFT.obj
-GAP ?fft_real_forward_altivec@@YAHPAMJ0@Z  # target defines it in system/synth_xbox/FFT.obj
 GAP ?fft_recursive@@YAHPAMKJ0@Z  # target defines it in system/synth_xbox/FFT.obj
 
 EXT ??0CXAPOParametersBase@@QAA@PBUXAPO_REGISTRATION_PROPERTIES@@PAEIH@Z
@@ -252,7 +258,6 @@ EXT DmGetSystemInfo
 EXT DmGetXboxName
 EXT DmIsDebuggerPresent
 EXT DmMapDevkitDrive
-EXT ExGetXConfigSetting
 EXT FileTimeToLocalFileTime
 EXT FileTimeToSystemTime
 EXT FindFirstFileA
@@ -272,8 +277,6 @@ EXT GetSystemTimeAsFileTime
 EXT GetTickCount
 EXT GetTimeZoneInformation
 EXT GlobalMemoryStatus
-EXT KfAcquireSpinLock
-EXT KfReleaseSpinLock
 EXT MultiByteToWideChar
 EXT NuiAudioCreate
 EXT NuiAudioRegisterCallbacks
@@ -351,7 +354,6 @@ EXT WSAGetLastError
 EXT WSASetLastError
 EXT WSAStartup
 EXT WaitForSingleObject
-EXT WaitForSingleObjectEx
 EXT WideCharToMultiByte
 EXT WriteFile
 EXT XAudio2Create
@@ -390,7 +392,6 @@ EXT XGetLocale
 EXT XGetOverlappedExtendedError
 EXT XGetOverlappedResult
 EXT XGetVideoMode
-EXT XHV2CreateEngine
 EXT XINPUTID_0F_CONTROLLER
 EXT XINPUTID_19_CONTROLLER
 EXT XINPUTID_OUT_UNSPECIFIED_DWORD_0
@@ -499,7 +500,6 @@ EXT XUserSetPropertyEx
 EXT XUserWriteAchievements
 EXT XamInputSendStayAliveRequest
 EXT XamNuiCameraElevationGetAngle
-EXT XamNuiCameraElevationSetAngle
 EXT XexCheckExecutablePrivilege
 EXT _CxxThrowException
 EXT _RtlCheckStack12
@@ -541,6 +541,7 @@ EXT __restgprlr_27
 EXT __restgprlr_28
 EXT __restgprlr_29
 EXT __restvmx_120
+EXT __restvmx_122
 EXT __restvmx_124
 EXT __savefpr_14
 EXT __savefpr_15
@@ -574,6 +575,7 @@ EXT __savegprlr_27
 EXT __savegprlr_28
 EXT __savegprlr_29
 EXT __savevmx_120
+EXT __savevmx_122
 EXT __savevmx_124
 EXT __security_check_cookie
 EXT __security_cookie
@@ -603,7 +605,6 @@ EXT _strtoui64
 EXT _time64
 EXT _woutput_s_l
 EXT _write
-EXT _xhv_loopback_mode
 EXT _xhv_voicechat_mode
 EXT accept
 EXT acos

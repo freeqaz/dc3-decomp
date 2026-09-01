@@ -841,6 +841,156 @@ cleanup:
 }
 #pragma float_control(pop)
 
+// VMX128 intrinsics used only by the AltiVec real-forward kernel below.  The
+// shared header (xdk/LIBCMT/vectorintrinsics.h) is reached through the PCH, so
+// they are declared here rather than there: adding a declaration is all MSVC
+// needs to emit the opcode.
+extern "C" {
+XMVECTOR __vsel(XMVECTOR vSrcA, XMVECTOR vSrcB, XMVECTOR vMask);
+XMVECTOR __vaddfp(XMVECTOR vSrcA, XMVECTOR vSrcB);
+XMVECTOR __vsubfp(XMVECTOR vSrcA, XMVECTOR vSrcB);
+}
+
+// Real-input forward FFT (AltiVec), the large-transform sibling of
+// fft_real_forward_scalar.  Runs a size/2-point complex FFT and then does the
+// same conjugate-symmetric recombination, but four floats -- two complex bins
+// -- at a time, and from BOTH ends of the spectrum at once:
+//
+//   out[k]        = 0.5 * ((X[k] + conj X[N/2-k]) - i*W^k*(X[k] - conj X[N/2-k]))
+//
+// The two halves need bins k, k+1 walking up and bins N/2-k-1, N/2-k walking
+// down, and a descending 16-byte load never lands on the pair you want, so
+// each end keeps the previous vector and __vsel's the straddling pair out of
+// the two.  hiPrev starts as data[0..3] because bin N/2 aliases bin 0.
+//
+// The twiddles are carried in the same trig recurrence the scalar kernel uses
+// (cc = 2 sin^2(theta/2), ss = sin theta, theta = 4*pi/N so each scalar pair
+// advances two bins per iteration), in double precision, and re-vectorised
+// through a stack XMVECTORF32 at the end of every iteration: cLo/sLo carry
+// bins (2i, 2i+1) and cHi/sHi bins (2i+2, 2i+1), each value duplicated across
+// the real and imaginary lane of its complex slot.
+int fft_real_forward_altivec(float* data, long size, float* context) {
+    int ret = FFTComplex(data, size / 2, -1, context);
+    if (ret != 0) {
+        return ret;
+    }
+
+    float inv_n = 1.0f / (float)(long long)size;
+    float angle1 = inv_n * (float)(2.0 * M_PI);
+    float sin_a = (float)sin(angle1);
+    float angle2 = inv_n * (float)(4.0 * M_PI);
+    double cc = (double)sin_a * (double)sin_a;
+    double ss = (float)sin(angle2);
+    cc = cc * 2.0;
+
+    XMVECTORU32 sel_hi = { 0xFFFFFFFF, 0xFFFFFFFF, 0x00000000, 0x00000000 };
+    XMVECTORU32 perm_a = { 0x00010203, 0x14151617, 0x08090A0B, 0x1C1D1E1F };
+    XMVECTORU32 perm_b = { 0x04050607, 0x10111213, 0x0C0D0E0F, 0x18191A1B };
+    XMVECTORU32 perm_c = { 0x10111213, 0x04050607, 0x18191A1B, 0x0C0D0E0F };
+    XMVECTORU32 perm_d = { 0x04050607, 0x04050607, 0x14151617, 0x14151617 };
+    XMVECTORU32 perm_e = { 0x00010203, 0x00010203, 0x1C1D1E1F, 0x1C1D1E1F };
+
+    XMVECTOR v_zero = { 0.0f, 0.0f, 0.0f, 0.0f };
+    XMVECTOR v_half = { 0.5f, 0.5f, 0.5f, 0.5f };
+    XMVECTOR v_sign_lo = { 1.0f, -1.0f, 1.0f, -1.0f };
+    XMVECTOR v_sign_hi = { -1.0f, 1.0f, -1.0f, 1.0f };
+
+    XMVECTORF32 sv;
+    double c1 = (float)cos(angle1);
+    double c2 = (float)cos(angle2);
+    sv.f[0] = 1.0f;
+    sv.f[1] = 1.0f;
+    sv.f[2] = (float)c1;
+    sv.f[3] = (float)c1;
+    XMVECTOR cLo = sv.v;
+    sv.f[0] = (float)c2;
+    sv.f[1] = (float)c2;
+    XMVECTOR cHi = sv.v;
+
+    double s1 = (float)sin(angle1);
+    double s2 = (float)sin(angle2);
+    sv.f[0] = 0.0f;
+    sv.f[1] = 0.0f;
+    sv.f[2] = (float)s1;
+    sv.f[3] = (float)s1;
+    XMVECTOR sLo = sv.v;
+    sv.f[0] = (float)s2;
+    sv.f[1] = (float)s2;
+    XMVECTOR sHi = sv.v;
+
+    XMVECTOR loCur = __lvx(data, 0);
+    XMVECTOR hiPrev = loCur;
+    float dc_re = data[0];
+    float dc_im = data[1];
+
+    float* loWrite = data;
+    float* loRead = data + 4;
+    float* hiRead = data + (size / 4) * 4 - 4;
+    float* hiWrite = hiRead;
+
+    long pairs = size / 8;
+    for (long i = 0; i < pairs; i++) {
+        XMVECTOR hiNew = __lvx(hiRead, 0);
+        XMVECTOR loNext = __lvx(loRead, 0);
+        XMVECTOR hiPair = __vsel(hiNew, hiPrev, *(XMVECTOR*)&sel_hi);
+        hiPrev = hiNew;
+        XMVECTOR loPair = __vsel(loCur, loNext, *(XMVECTOR*)&sel_hi);
+
+        XMVECTOR cLoSigned = __vmaddfp(cLo, v_sign_lo, v_zero);
+        XMVECTOR sumLo = __vaddfp(loCur, hiPair);
+        XMVECTOR diffLo = __vsubfp(loCur, hiPair);
+        XMVECTOR cHiSigned = __vmaddfp(cHi, v_sign_hi, v_zero);
+        XMVECTOR sumHi = __vaddfp(hiNew, loPair);
+        XMVECTOR diffHi = __vsubfp(hiNew, loPair);
+        loCur = loNext;
+
+        double uc1 = c1 * cc + s1 * ss;
+        double uc2 = c2 * cc + s2 * ss;
+        double us1 = s1 * cc - c1 * ss;
+        double us2 = s2 * cc - c2 * ss;
+
+        XMVECTOR loAdd = __vperm(sumLo, diffLo, *(XMVECTOR*)&perm_a);
+        XMVECTOR loMulC = __vperm(sumLo, diffLo, *(XMVECTOR*)&perm_b);
+        XMVECTOR loMulS = __vperm(sumLo, diffLo, *(XMVECTOR*)&perm_c);
+        XMVECTOR hiAdd = __vperm(sumHi, diffHi, *(XMVECTOR*)&perm_a);
+        XMVECTOR hiMulC = __vperm(sumHi, diffHi, *(XMVECTOR*)&perm_b);
+        XMVECTOR hiMulS = __vperm(sumHi, diffHi, *(XMVECTOR*)&perm_c);
+
+        XMVECTOR outLo = __vmaddfp(cLoSigned, loMulC, loAdd);
+        XMVECTOR outHi = __vmaddfp(cHiSigned, hiMulC, hiAdd);
+
+        c1 = c1 - uc1;
+        c2 = c2 - uc2;
+        s1 = s1 - us1;
+        s2 = s2 - us2;
+
+        outLo = __vnmsubfp(sLo, loMulS, outLo);
+        outHi = __vnmsubfp(sHi, hiMulS, outHi);
+
+        sv.f[1] = (float)c1;
+        sv.f[0] = (float)c2;
+        sv.f[3] = (float)s1;
+        sv.f[2] = (float)s2;
+        XMVECTOR trig = sv.v;
+
+        __stvx(__vmaddfp(outLo, v_half, v_zero), loWrite, 0);
+        loWrite += 4;
+        __stvx(__vmaddfp(v_half, outHi, v_zero), hiWrite, 0);
+        hiWrite -= 4;
+
+        cHi = __vmrghw(trig, trig);
+        sLo = __vperm(sHi, trig, *(XMVECTOR*)&perm_e);
+        cLo = __vperm(cHiSigned, trig, *(XMVECTOR*)&perm_d);
+        sHi = __vmrglw(trig, trig);
+
+        loRead += 4;
+        hiRead -= 4;
+    }
+
+    data[1] = dc_re - dc_im;
+    return ret;
+}
+
 // Real-input forward FFT dispatcher: small transforms (< 32) use the scalar
 // kernel, larger ones the AltiVec kernel.
 int FFTRealForward(float* data, unsigned long size, float* context) {
