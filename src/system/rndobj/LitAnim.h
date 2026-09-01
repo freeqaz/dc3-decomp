@@ -39,7 +39,7 @@ protected:
     /** "The light whose color we will animate" */
     ObjPtr<RndLight> mLight; // 0x10
     /** "The frames and corresponding color at each frame" */
-    Keys<Hmx::Color, Hmx::Color> mColorKeys; // 0x1c
+    Keys<Hmx::Color, Hmx::Color> mColorKeys; // 0x24
     /** "Owner of the keys, usually myself" */
-    ObjOwnerPtr<RndLightAnim> mKeysOwner; // 0x24
+    ObjOwnerPtr<RndLightAnim> mKeysOwner; // 0x30
 };

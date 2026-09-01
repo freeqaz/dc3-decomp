@@ -74,7 +74,7 @@ protected:
         such as an exo bone" */
     ObjPtr<RndMesh> mMesh; // 0xc8
     CSHA1::Digest mDigest; // 0xdc
-    CharCollideStruct unkStructs[8]; // 0xe0
+    CharCollideStruct unkStructs[8]; // 0xF0
     /** radius0: "Radius of the sphere, or of length0 hemisphere if cigar" */
     /** radius1: "cigar: Radius of length1 hemisphere" */
     float mOrigRadius[2]; // 0x190

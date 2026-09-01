@@ -20,8 +20,8 @@ public:
 protected:
     virtual void StartImpl();
 
-    float mWaitMs; // 0x34
-    float mEndTime; // 0x38
+    float mWaitMs; // 0x44
+    float mEndTime; // 0x48
 };
 
 class GroupSeqInst : public SeqInst {
@@ -36,7 +36,7 @@ public:
     POOL_OVERLOAD(GroupSeqInst, 0x34);
 
 protected:
-    ObjVector<ObjPtr<SeqInst> > mSeqs; // 0x34
+    ObjVector<ObjPtr<SeqInst> > mSeqs; // 0x44
 };
 
 class RandomGroupSeqInst : public GroupSeqInst {
@@ -52,8 +52,8 @@ protected:
     virtual void Poll();
     virtual void StartImpl();
 
-    int mNumSeqs; // 0x40
-    ObjVector<ObjPtr<SeqInst> >::iterator mIt; // 0x44
+    int mNumSeqs; // 0x54
+    ObjVector<ObjPtr<SeqInst> >::iterator mIt; // 0x58
 };
 
 class RandomIntervalGroupSeqInst : public GroupSeqInst {
@@ -92,7 +92,7 @@ protected:
     virtual void Poll();
     virtual void StartImpl();
 
-    ObjVector<ObjPtr<SeqInst> >::iterator mIt; // 0x40
+    ObjVector<ObjPtr<SeqInst> >::iterator mIt; // 0x54
 };
 
 class ParallelGroupSeqInst : public GroupSeqInst {
@@ -108,5 +108,5 @@ protected:
     virtual void Poll();
     virtual void StartImpl();
 
-    ObjVector<ObjPtr<SeqInst> >::iterator mIt; // 0x40
+    ObjVector<ObjPtr<SeqInst> >::iterator mIt; // 0x54
 };

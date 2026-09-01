@@ -15,7 +15,7 @@ public:
         /** "object to constrain" */
         ObjPtr<RndTransformable> mTarget; // 0x0
         /** "influence value, from 0 to 1" */
-        float mWeight; // 0xc
+        float mWeight; // 0x14
     };
 
     // Hmx::Object

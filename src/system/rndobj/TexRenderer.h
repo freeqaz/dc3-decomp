@@ -68,7 +68,7 @@ protected:
     /** "If [draw] will not get enter, exit, or poll automatically,
         it will be up to script hooks to do any of that" */
     bool mNoPoll; // 0x5D / -0x87
-    bool unk_0x5E, unk_0x5F; // 0x5E/5F; -0x86/85
+    bool unk_0x5E, unk_0x5F; // 0x5F/5F; -0x86/85
     /** "Height for imposter rendering with current camera" */
     float mImpostorHeight; // 0x60; -0x84
     /** "Texture to write to" */

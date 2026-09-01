@@ -177,8 +177,8 @@ protected:
     HamMove *filler[2]; // 0x3c8
     HamMove *mCurMove[2]; // 0x3d0
     float mCurMoveNormalizedResult[2]; // 0x3d8
-    float mPrevMoveNormalizedResult[2]; // 0x3e8
-    MoveRating mCurMoveRating[2]; // 0x3e0
+    float mPrevMoveNormalizedResult[2]; // 0x3E0
+    MoveRating mCurMoveRating[2]; // 0x3E8
     int mPrevMoveRating[2]; // 0x3f0
 
     int mFinishingMoveMeasure; // 0x3f8

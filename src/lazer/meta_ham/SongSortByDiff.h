@@ -16,9 +16,9 @@ public:
     virtual int Compare(const NavListItemSortCmp *, NavListNodeType) const;
     virtual const DifficultyCmp *GetDifficultyCmp() const { return this; }
 
-    int mTier; // 0x0
-    float mRank; // 0x4
-    const char *mName; // 0x8
+    int mTier; // 0x4
+    float mRank; // 0x8
+    const char *mName; // 0xC
 };
 
 class SongSortByDiff : public SongSort {

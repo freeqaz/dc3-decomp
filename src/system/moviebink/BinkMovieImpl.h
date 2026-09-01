@@ -45,7 +45,7 @@ public:
     virtual bool IsLoading() const; // 0x28
     virtual bool CheckOpen(bool); // 0x2c
     virtual void SetPaused(bool); // 0x30
-    virtual bool Paused() const { return mPaused; } // 0x34
+    virtual bool Paused() const { return mPaused; } // 0x4C
     virtual void UnlockThread(); // 0x38
     virtual void LockThread(); // 0x3c
     virtual int GetFrame() const; // 0x40

@@ -45,12 +45,12 @@ protected:
     void UpdateTexture(FilePath const &);
 
     /** "Mesh to show loaded tex on (should have Mat)" */
-    ObjPtr<RndMesh> mMesh; // 0x12c
+    ObjPtr<RndMesh> mMesh; // 0x78
     /** "Path of texture to load" */
-    FilePath mTexFile; // 0x138
-    FilePath mLoadedFile; // 0x144
-    RndTex *mTex; // 0x150
-    FileLoader *mLoader; // 0x154
-    bool mHookTex; // 0x158
-    FilePath mDelayedTexFile; // 0x15c
+    FilePath mTexFile; // 0x8C
+    FilePath mLoadedFile; // 0x94
+    RndTex *mTex; // 0x9C
+    FileLoader *mLoader; // 0xA0
+    bool mHookTex; // 0xA4
+    FilePath mDelayedTexFile; // 0xA8
 };

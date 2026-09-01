@@ -59,5 +59,5 @@ protected:
 
     FilePath mFile; // 0x2c
     SampleData mSampleData; // 0x34
-    std::list<SampleInst *> mSampleInsts; // 0x50
+    std::list<SampleInst *> mSampleInsts; // 0x5C
 };

@@ -161,7 +161,7 @@ public:
 
     virtual ~Message() { mData->Release(); }
 
-    DataArray *mData; // 0x0
+    DataArray *mData; // 0x4
 
     operator DataArray *() const { return mData; }
     DataArray *operator->() const { return mData; }

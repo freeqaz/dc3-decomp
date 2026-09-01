@@ -121,9 +121,9 @@ public:
         /** "Trigger to fire when keyframe starts blending (deprecated)" */
         ObjPtrList<EventTrigger> mTriggers; // 0x3c
         std::vector<bool> mSpotlightChanges; // 0x50
-        std::vector<bool> mEnvironmentChanges; // 0x5c
-        std::vector<bool> mLightChanges; // 0x68
-        std::vector<bool> mSpotlightDrawerChanges; // 0x74
+        std::vector<bool> mEnvironmentChanges; // 0x64
+        std::vector<bool> mLightChanges; // 0x78
+        std::vector<bool> mSpotlightDrawerChanges; // 0x8C
         /** "Duration of the keyframe" */
         float mDuration; // 0xa0
         /** "Fade-out time of the keyframe" */

@@ -47,7 +47,7 @@ protected:
     ObjPtrList<RndDrawable> mHideList; // 0x13c
     /** "List of objects to show in the reflection,
         hides them when reflection has finished drawing." */
-    ObjPtrList<RndDrawable> mShowList; // 0x15c
+    ObjPtrList<RndDrawable> mShowList; // 0x150
     ObjPtrList<RndDrawable> mPreviouslyShownDrawables; // 0x164
     ObjPtrList<RndDrawable> mPreviouslyHiddenDrawables; // 0x178
 };

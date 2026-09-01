@@ -226,7 +226,7 @@ public:
     class LocalUser *mUser; // 0x44
     bool mConnected; // 0x48
     bool mVibrateEnabled; // 0x49
-    bool mHasCapFlag1, mIsWireless, unk4c; // 0x4a, 0x4b, 0x4c
+    bool mHasCapFlag1, mIsWireless, unk4c; // 0x4C, 0x4b, 0x4c
     int mNumAnalogSticks; // 0x50
     bool mTranslateSticks; // 0x54
     int mIgnoreButtonMask; // 0x58

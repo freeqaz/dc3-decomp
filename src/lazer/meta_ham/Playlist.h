@@ -82,14 +82,14 @@ public:
     virtual ~CustomPlaylist();
     virtual bool IsCustom() const { return true; } // 0x4
     virtual void SetOnlineID(int id) { mOnlineID = id; } // 0x8
-    virtual int GetOnlineID() { return mOnlineID; } // 0xc
+    virtual int GetOnlineID() { return mOnlineID; } // 0x28
     /** ?IsDirty@CustomPlaylist@@UAA_NXZ is a REAL body at 0x825FA5C8 --
      * `lbz r3, 0x24(r3); blr` -- not the `li r3,0` fold at 0x82AEAE70 that
      * ?IsDirty@Playlist@@ (the base) sits on.  Offset 0x24 is mDirty, which
      * HandleChange() sets and SaveFixed() clears after posting
      * PlaylistChangedJob.  With this hardcoded false,
      * PlaylistSortMgr.cpp's `IsCustom() && IsDirty()` branch was dead. */
-    virtual bool IsDirty() { return mDirty; } // 0x10
+    virtual bool IsDirty() { return mDirty; } // 0x24
     // FixedSizeSaveable
     virtual void SaveFixed(FixedSizeSaveableStream &) const;
     virtual void LoadFixed(FixedSizeSaveableStream &, int);

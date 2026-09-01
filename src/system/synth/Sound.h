@@ -88,7 +88,7 @@ protected:
     float mReverbMixDb; // 0x38
     /** "Enable reverb send (SynthSample only)" */
     bool mReverbEnable; // 0x3c
-    bool unk3d; // 0x3c
+    bool unk3d; // 0x3D
     /** "Which sample to play" */
     ObjPtr<SynthSample> mSynthSample; // 0x40
     /** "Which sample to play" */
