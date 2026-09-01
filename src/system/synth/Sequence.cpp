@@ -699,9 +699,13 @@ RandomIntervalGroupSeqInst::RandomIntervalGroupSeqInst(RandomIntervalGroupSeq *s
 
 void RandomIntervalGroupSeqInst::ComputeNextTime(int idx) {
     if (idx < mNextPlayTimes.size()) {
-        float interval = mAvgIntervalSecs;
-        if (mIntervalSpread != 0.0f) {
-            interval = RandomFloat(mAvgIntervalSecs - mIntervalSpread, mAvgIntervalSecs + mIntervalSpread);
+        float spread = mIntervalSpread;
+        float avg = mAvgIntervalSecs;
+        float interval;
+        if (spread == 0.0f) {
+            interval = avg;
+        } else {
+            interval = RandomFloat(avg - spread, avg + spread);
         }
         mNextPlayTimes[idx] = TheTaskMgr.Seconds(TaskMgr::kRealTime) + interval;
     }
