@@ -1043,7 +1043,8 @@ bool MakeBSPTree(BSPNode *&node, std::list<BSPFace> &faces, int depth) {
                 bool back, front;
                 jt->OnSide(*planeIt, front, back);
                 if (!front && !back) {
-                    if (fabs(planeIt->a * jt->t.m.z.x + planeIt->b * jt->t.m.z.y + planeIt->c * jt->t.m.z.z) < gBSPDirTol)
+                    const Vector3 &faceNormal = jt->t.m.z;
+                    if (fabs(planeIt->a * faceNormal.x + planeIt->b * faceNormal.y + planeIt->c * faceNormal.z) < gBSPDirTol)
                         break;
                 } else {
                     float area = jt->area;
