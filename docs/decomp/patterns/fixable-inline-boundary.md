@@ -436,7 +436,10 @@ of the following hold:
 
 1. The function carries a **C++ EH state** — `__CxxFrameHandler` /
    `__ehfuncinfo$`, i.e. at least one local with a non-trivial destructor, or a
-   try/catch.
+   try/catch. ⚠ **This condition is not just something to check — it is
+   editable from source**, and this page used to present it as a fixed property
+   of the function. See
+   [Condition 1 is a source lever](#condition-1-is-a-source-lever--the-callee-msvc-cannot-prove-nothrow).
 2. An inlined member call's `this` is a **computed sub-object address**
    (`&obj->member`) — not a pointer already in a register, and not the
    enclosing object at offset 0.
@@ -522,6 +525,227 @@ and re-measure every other caller before landing a header edit.
 
 ---
 
+## Condition 1 is a source lever — the callee MSVC cannot prove nothrow
+
+**Three symptoms, one cause.** An `r31` frame pointer, a dead `this` home-slot
+store and one extra callee-saved GPR are not three independent facts about a
+function. They are the *price of a C++ EH state*, and they appear and disappear
+together. The lever that moves them is not in the function you are looking at —
+it is in the **declaration of something it calls**.
+
+Landed 2026-09-01 in the worktree `nothrow-lever`; the finding it generalises is
+`fbf51fd8f`, where `throw()` on `DSP::SynapseAPOParams`' constructor took
+`ATG::CSampleXAPOBase<DSP::SynapseAPO,…>`'s constructor from 81.29% to 100.0%
+by removing 18 of its 34 mismatch rows.
+
+### Mechanism — measured, not assumed
+
+Controlled probe, 2026-09-01: the project's real compiler (`cl.exe
+16.00.11886.00` through wibo) with the compile line copied verbatim out of
+`build.ninja` (`/nologo /c /GR /O1 /Oi /EHsc /TP`). Each row is a real object;
+`EH` means the object carries an `__unwind$` funclet for the function.
+
+MSVC emits the EH state when — **and only when** — at a program point where
+some sub-object or local **with a non-trivial destructor** is already
+constructed, it makes a call it cannot prove nothrow.
+
+| probe | EH? | len | r31 frame | callee-saved |
+|---|---|---:|---|---|
+| ctor calls `Params()`, base has a dtor | **EH** | 22 | yes | r30, r31 |
+| …with `Params() throw()` | — | 18 | no | r31 |
+| …with `__declspec(nothrow) Params()` | — | 18 | no | r31 |
+| nothing anywhere has a destructor | — | 17 | no | r31 |
+| the only destructor is constructed *last* | — | 17 | no | r31 |
+| plain function, local with dtor, then a call | **EH** | 16 | yes | r31 |
+| …that call marked `throw()` | — | 13 | no | — |
+
+`throw()` and `__declspec(nothrow)` are **exactly equivalent** here — identical
+object bytes.
+
+### Which callees can be proven nothrow
+
+| callee form | provable? |
+|---|---|
+| direct call to a declaration with `throw()` | **yes** |
+| direct call to `__declspec(nothrow)` | **yes** |
+| **any `extern "C"` function, unannotated** | **yes** — MSVC's `/EHsc` assumes C code does not throw |
+| non-virtual member function with `throw()` | yes |
+| virtual function with `throw()`, called **through a pointer** | **no** — the spec is ignored on an indirect call |
+| the same virtual, called on an **object** (devirtualised) | yes |
+| function **pointer** whose type carries `throw()` | **no** |
+| `throw(...)`, `throw(int)` — any non-empty spec | no |
+| `operator new` | no |
+
+**One unproven call anywhere in the function pays for the whole EH state.** A
+probe marking one of two calls `throw()` still emits the funclet. This is the
+single biggest reason the lever does not apply: most functions in this codebase
+call `String`, `Symbol`, `MakeString`, `DataArray` or an STL container, and
+those genuinely allocate.
+
+### Declaration or definition?
+
+**The declaration is what matters, and MSVC does not check them against each
+other.** A `throw()` on the declaration with a bare definition in the same TU
+compiles **silently even at `/W4`**; so does the reverse. Only the declaration
+the caller sees affects the caller's codegen.
+
+⚠ **clang makes the same mismatch a hard error** —
+`'P' is missing exception specification 'throw()'`. Any TU the native port
+compiles must carry the specification on **both**. Get this wrong and the
+decomp build stays green while the native build stops compiling.
+
+### Semantics — read this before adding one
+
+`throw()` is an exception *specification*, not a hint.
+
+- **MSVC does not enforce it at runtime.** A probe whose `throw()` function
+  throws emits `_CxxThrowException` and **no** `__std_unexpected` / terminate
+  call. The failure mode on Xbox is therefore not a clean abort — it is an
+  exception unwinding through callers whose tables say it cannot happen.
+- **clang does enforce it.** In C++11 and later `throw()` *is* `noexcept`, so on
+  the native port a violation is `std::terminate()`. A specification added for
+  PPC matching becomes a crash on native.
+- Therefore: only add it where the callee **genuinely cannot throw**, verified
+  by reading it; and say per file whether that file reaches the native build.
+- Anything that allocates (`operator new`, `MakeString`, `String`, `ObjPtr`,
+  container growth) is a **candidate thrower**. Be conservative.
+- **The target's own codegen is admissible evidence.** If the target object
+  carries no `__unwind$` / `__ehhandler` symbol and no `__CxxFrameHandler`
+  reference for a function that constructs then calls, the original declaration
+  said nothrow (or that TU was built without `/EHsc`). Say which object you
+  read.
+
+### Census — whole binary, and the answer is "one"
+
+`scripts/analysis/home_store_census.py --nothrow` looks for the three symptoms
+co-occurring **in our build and absent from the target**. `--min-score` is how
+many of the three must agree (3 = the full signature).
+
+```bash
+python3 scripts/analysis/home_store_census.py --nothrow --all --min-score 3
+```
+
+Two detector corrections were needed before it could see the known-positive
+function *at all*, both worth keeping in mind for any similar scanner:
+
+- **Saved registers on this target go through `bl __savegprlr_N`**, not explicit
+  `std rN, -D(r1)`. Counting only explicit stores read **0 saved registers on
+  both sides** of the calibration function and silently threw away one of the
+  three symptoms. `function_bodies(want_relocs=True)` now resolves every `bl`
+  through the section relocation table — which also hands each candidate its
+  **callee list**, i.e. the actual worklist of declarations to consider.
+- **The dead-argument-store scan stopped at the first `bl`.** On this target the
+  first `bl` *is* `__savegprlr_N`, at instruction 1, so the scan ended before
+  the prologue did.
+
+Two-way control on `??0?$CSampleXAPOBase@VSynapseAPO@DSP@@…`: `throw()`
+reverted → score **3**; `throw()` restored → score **0**.
+
+**Result, whole binary, 2026-09-01** (denominator: **30,524** target/base
+function pairs, from 979 of 2,224 units with both objects on disk; 23,013
+further target bodies have no body of ours to compare against):
+
+| r31 frame (target, ours) | count |
+|---|---:|
+| both | 7,397 |
+| neither | 23,113 |
+| **ours only — the nothrow signature** | **1** |
+| target only — the *inverse* lever | 13 |
+
+- **Full three-symptom signature: 0 rows.** `SynapseAPOParams` was the last one
+  and `fbf51fd8f` closed it.
+- **Score ≥ 2: 2 rows.** Score ≥ 1: 87 rows, of which **82 are the
+  extra-callee-saved bit alone** — ordinary register-allocation pressure, not an
+  EH state, since `r31` agrees on both sides.
+- The one true candidate was worked to 100.0% (below).
+
+**So this is a class of size one, not a sweep.** That is the honest answer, and
+it is only trustworthy because the census states its denominator.
+
+### The one candidate, worked
+
+`FaceCommon::XMemNew<HeadOrientation::LDARegressor>`,
+`default/xdk/nuiapi/headtracker`, 88 B: **69.909% → 100.0%, 22 instructions,
+all equal.**
+
+The function is a placement-new loop. MSVC cannot prove
+`LDARegressor::LDARegressor()` nothrow, so it emits an EH state to destroy the
+already-constructed elements — `subi r31, r1, 0x80`, `__savegprlr_28` instead of
+`_29`, and two frame slots tracking the loop cursor.
+
+Evidence the original said nothrow: **the target `headtracker.obj` carries zero
+`__unwind$` / `__ehhandler` symbols and no `__CxxFrameHandler` reference across
+all 11 of its functions**; ours carried exactly one, on `XMemNew`.
+
+| step | match | mismatch rows |
+|---|---:|---:|
+| baseline | 69.909% | 11 |
+| `LDARegressor() throw()` / `~LDARegressor() throw()` | 90.9% | 9 |
+| guarded do-while, `count` reused as the counter | **100.0%** | **0** |
+
+`throw()` alone removed the frame pointer, the extra saved register and both
+tracking stores, leaving a pure `r30`↔`r31` renaming; the loop rewrite closed
+that. `src/xdk/` is excluded from the native build
+(`native/CMakeLists.txt:364`), so no native TU sees either specification.
+
+### Where the lever does NOT apply
+
+1. **Everywhere the target pays the same EH state we do** — 7,397 functions have
+   an `r31` frame on both sides. Nothing to remove.
+2. **Functions whose callees genuinely allocate.** The four `+dead` rows the
+   census turns up all have `r31` on *both* sides and call
+   `vector::_M_fill_insert`, `MakeString`, `String`, `DataArray` — real
+   throwers. Marking those `throw()` would be a lie.
+3. **Indirect calls.** A `throw()` on a virtual function reached through a
+   pointer, or on a function-pointer type, is ignored by MSVC — measured above.
+   Any function whose only unproven call is a `bctrl` is out of reach.
+4. **`extern "C"` callees**, which MSVC already treats as nothrow — so a
+   function calling only C is never in this population to begin with.
+5. **The 82 "extra callee-saved register only" rows.** One saved register more
+   than the target, with the frame pointer agreeing, is regalloc pressure. It is
+   the *symptom* the EH state also produces, which is exactly why the signature
+   needs all three symptoms and not one.
+6. **Any TU the native port compiles**, unless you can show the callee cannot
+   throw *and* you put the specification on the declaration and the definition.
+
+### Adjacent claim, partly refuted: "pointer locals defeat alias disambiguation"
+
+The same lane reported that walking two member arrays through plain `float*`
+locals, instead of `this->mSumSquares[c]` / `this->mPeak[c]`, stops MSVC hoisting
+a load above a store (9 of 10 rows on `MeterEffect::DoProcess`). **Two controlled
+probes on the real compiler and flags do not reproduce an aliasing difference**:
+a load/`Absf`/compare/store loop, and a loop with a genuinely aliasing
+`out[i] = *sum` store between two member reads. In both, the two spellings
+produce **identical loop bodies**; what differs is only where the address
+computations and the zero-trip guard sit relative to each other in the
+preheader.
+
+So the effect is real but the explanation is not: it is **preheader
+scheduling**, the same phenomenon exploited in `XMemNew` above — moving
+`cur = ptr` across the count guard was worth 4 rows there. Treat "rewrite the
+member subscripts as pointers" as a *scheduling* permutation to try, not as an
+aliasing fix, and do not expect it to move a load across a store.
+
+### The inverse lever — 13 functions, unworked
+
+The census's other direction is functions where the **target** has an `r31` EH
+frame and we do not: the original source had something destructible live across
+a throwing call and we wrote something that cannot throw. Adjudicated examples:
+`CamShot::GetCam` (98.91%) differs *only* in the addressing base — the target's
+`0x50(r31)` and our `0x50(r1)` are the same byte — and
+`StreamReceiver360::SetSlipOffset` (95.26%) shows the target storing
+`PoolAlloc`'s result into a frame slot, the signature of a `new`-expression
+whose cleanup must free the block if the constructor throws.
+
+Full list, worth a lane: `MemAlloc` 1.48%, `BinkFileIdle` 73.03%,
+`StartVoiceThreadEntry` 76.69%, `Rnd::DrawPreClear` 85.56%,
+`BinkFileReadFrame` 88.34%, `RndText::ConvertTextToWide` 91.86%,
+`Voice::dispose` 92.31%, `Rnd::DrawTimers` 95.02%, `_MemAllocTemp` 95.14%,
+`StreamReceiver360::SetSlipOffset` 95.26%, `MemOrPoolAllocSTL` 96.71%,
+`RndMesh::LoadVertices` 96.99%, `CamShot::GetCam` 98.91%.
+
+---
+
 ## Empirical yield (2026-08-06) — census tool and measured results
 
 ### The census tool
@@ -549,6 +773,17 @@ candidates — keep them if you ever reimplement this:
 - **`addi rX, rFrame, D` must count as a use of slot `D`.** Taking a slot's
   address (an sret buffer, an outgoing const-ref argument) makes it live with
   no load naming it.
+
+Two more, found 2026-09-01 while adding `--nothrow`, which apply to *any*
+prologue scanner on this target — see
+[Condition 1 is a source lever](#condition-1-is-a-source-lever--the-callee-msvc-cannot-prove-nothrow):
+callee-saved registers go through `bl __savegprlr_N` rather than explicit
+`std`, and that helper call is instruction **1**, so a scan that stops at the
+first `bl` never reaches the prologue.
+
+`--nothrow` switches the tool to the EH-state signature instead of the
+sub-object-address one, and `function_bodies(want_relocs=True)` gives every
+row its resolved callee list.
 
 ### Population reality check — read this before planning a sweep
 
